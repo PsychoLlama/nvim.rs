@@ -250,8 +250,7 @@ pub unsafe extern "C" fn rs_update_curswant_force() {
         return;
     }
 
-    // Note: validate_virtcol must be called before this.
-    // The caller is responsible for ensuring virtcol is valid.
+    rs_validate_virtcol(wp);
     let virtcol = nvim_win_get_virtcol(wp);
     nvim_win_set_curswant(wp, virtcol);
     nvim_win_set_set_curswant(wp, 0);
@@ -820,6 +819,36 @@ extern "C" {
         cache: c_int,
         limit_winheight: c_int,
     ) -> c_int;
+
+    // getvvcol wrapper
+    fn nvim_getvvcol(
+        wp: WinHandle,
+        pos: *const PosT,
+        scol: *mut ColnrT,
+        ccol: *mut ColnrT,
+        ecol: *mut ColnrT,
+    );
+
+    // check_cursor_lnum (from cursor crate)
+    fn rs_check_cursor_lnum(wp: WinHandle);
+
+    // comp_botline wrapper
+    fn nvim_comp_botline(wp: WinHandle);
+
+    // curs_columns wrapper
+    fn nvim_curs_columns(wp: WinHandle, may_scroll: c_int);
+
+    // virtcol setter
+    fn nvim_win_set_virtcol(wp: WinHandle, val: ColnrT);
+}
+
+/// Position type (matches `pos_T` in Neovim).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PosT {
+    pub lnum: LinenrT,
+    pub col: ColnrT,
+    pub coladd: ColnrT,
 }
 
 /// `kOptCuloptFlagScreenline` constant.
@@ -966,6 +995,127 @@ pub unsafe extern "C" fn rs_plines_correct_topline(
     }
 
     n
+}
+
+// =============================================================================
+// Validation Functions
+// =============================================================================
+
+/// Validate `w_virtcol` only.
+///
+/// Computes the virtual column position of the cursor.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_virtcol(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    rs_check_cursor_moved(wp);
+
+    let valid = nvim_win_get_valid(wp);
+    if (valid & VALID_VIRTCOL) != 0 {
+        return;
+    }
+
+    // Get cursor position
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let cursor_col = nvim_win_get_cursor_col(wp);
+    let cursor_coladd = nvim_win_get_cursor_coladd(wp);
+    let pos = PosT {
+        lnum: cursor_lnum,
+        col: cursor_col,
+        coladd: cursor_coladd,
+    };
+
+    let mut virtcol: ColnrT = 0;
+    nvim_getvvcol(
+        wp,
+        std::ptr::addr_of!(pos),
+        std::ptr::null_mut(),
+        std::ptr::addr_of_mut!(virtcol),
+        std::ptr::null_mut(),
+    );
+    nvim_win_set_virtcol(wp, virtcol);
+
+    rs_redraw_for_cursorcolumn(wp);
+    nvim_win_set_valid(wp, valid | VALID_VIRTCOL);
+}
+
+/// Validate `w_cline_height` only.
+///
+/// Computes the height (in screen lines) of the cursor line.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_cheight(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    rs_check_cursor_moved(wp);
+
+    let valid = nvim_win_get_valid(wp);
+    if (valid & VALID_CHEIGHT) != 0 {
+        return;
+    }
+
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let mut folded: c_int = 0;
+    let height = nvim_plines_win_full(
+        wp,
+        cursor_lnum,
+        std::ptr::null_mut(),
+        std::ptr::addr_of_mut!(folded),
+        1,
+        1,
+    );
+
+    nvim_win_set_cline_height(wp, height);
+    nvim_win_set_cline_folded(wp, folded);
+    nvim_win_set_valid(wp, valid | VALID_CHEIGHT);
+}
+
+/// Make sure the value of `w_botline` is valid.
+///
+/// Calls `comp_botline` if botline is not currently valid.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_botline(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    let valid = nvim_win_get_valid(wp);
+    if (valid & VALID_BOTLINE) == 0 {
+        nvim_comp_botline(wp);
+    }
+}
+
+/// Validate cursor position. Makes sure `w_wrow` and `w_wcol` are valid.
+///
+/// Note: `w_topline` must be valid, you may need to call `update_topline()` first!
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_cursor(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    rs_check_cursor_lnum(wp);
+    rs_check_cursor_moved(wp);
+
+    let valid = nvim_win_get_valid(wp);
+    if (valid & (VALID_WCOL | VALID_WROW)) != (VALID_WCOL | VALID_WROW) {
+        nvim_curs_columns(wp, 1);
+    }
 }
 
 // =============================================================================
@@ -2426,9 +2576,6 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
 // =============================================================================
 
 extern "C" {
-    // Virtcol setter
-    fn nvim_win_set_virtcol(wp: WinHandle, val: ColnrT);
-
     // Redraw for cursorcolumn wrapper
     fn nvim_redraw_for_cursorcolumn(wp: WinHandle);
 }

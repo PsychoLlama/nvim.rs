@@ -90,6 +90,12 @@ extern void rs_redraw_for_cursorline(win_T *wp);
 extern void rs_redraw_for_cursorcolumn(win_T *wp);
 extern int rs_plines_correct_topline(win_T *wp, linenr_T lnum, linenr_T *nextp,
                                      int limit_winheight, int *foldedp);
+extern void rs_validate_virtcol(win_T *wp);
+extern void rs_validate_cheight(win_T *wp);
+extern void rs_validate_botline(win_T *wp);
+extern void rs_validate_cursor(win_T *wp);
+extern void rs_update_curswant(void);
+extern void rs_update_curswant_force(void);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -439,17 +445,13 @@ static bool check_top_offset(win_T *wp)
 /// Update w_curswant.
 void update_curswant_force(void)
 {
-  validate_virtcol(curwin);
-  curwin->w_curswant = curwin->w_virtcol;
-  curwin->w_set_curswant = false;
+  rs_update_curswant_force();
 }
 
 /// Update w_curswant if w_set_curswant is set.
 void update_curswant(void)
 {
-  if (curwin->w_set_curswant) {
-    update_curswant_force();
-  }
+  rs_update_curswant();
 }
 
 // Rust implementation of check_cursor_moved
@@ -518,9 +520,7 @@ void changed_line_abv_curs_win(win_T *wp)
 // Make sure the value of wp->w_botline is valid.
 void validate_botline(win_T *wp)
 {
-  if (!(wp->w_valid & VALID_BOTLINE)) {
-    comp_botline(wp);
-  }
+  rs_validate_botline(wp);
 }
 
 // Mark wp->w_botline as invalid (because of some change in the buffer).
@@ -547,11 +547,7 @@ int cursor_valid(win_T *wp)
 // w_topline must be valid, you may need to call update_topline() first!
 void validate_cursor(win_T *wp)
 {
-  check_cursor_lnum(wp);
-  check_cursor_moved(wp);
-  if ((wp->w_valid & (VALID_WCOL|VALID_WROW)) != (VALID_WCOL|VALID_WROW)) {
-    curs_columns(wp, true);
-  }
+  rs_validate_cursor(wp);
 }
 
 // Compute wp->w_cline_row and wp->w_cline_height, based on the current value
@@ -628,30 +624,13 @@ static void curs_rows(win_T *wp)
 // Validate wp->w_virtcol only.
 void validate_virtcol(win_T *wp)
 {
-  check_cursor_moved(wp);
-
-  if (wp->w_valid & VALID_VIRTCOL) {
-    return;
-  }
-
-  getvvcol(wp, &wp->w_cursor, NULL, &(wp->w_virtcol), NULL);
-  redraw_for_cursorcolumn(wp);
-  wp->w_valid |= VALID_VIRTCOL;
+  rs_validate_virtcol(wp);
 }
 
 // Validate wp->w_cline_height only.
 void validate_cheight(win_T *wp)
 {
-  check_cursor_moved(wp);
-
-  if (wp->w_valid & VALID_CHEIGHT) {
-    return;
-  }
-
-  wp->w_cline_height = plines_win_full(wp, wp->w_cursor.lnum,
-                                       NULL, &wp->w_cline_folded,
-                                       true, true);
-  wp->w_valid |= VALID_CHEIGHT;
+  rs_validate_cheight(wp);
 }
 
 // Validate w_wcol and w_virtcol only.
@@ -1426,6 +1405,18 @@ linenr_T nvim_curbuf_line_count(void)
 void nvim_redraw_for_cursorcolumn(win_T *wp)
 {
   redraw_for_cursorcolumn(wp);
+}
+
+/// Wrapper for comp_botline() (accessor for Rust).
+void nvim_comp_botline(win_T *wp)
+{
+  comp_botline(wp);
+}
+
+/// Wrapper for curs_columns() (accessor for Rust).
+void nvim_curs_columns(win_T *wp, int may_scroll)
+{
+  curs_columns(wp, may_scroll);
 }
 
 // =============================================================================
