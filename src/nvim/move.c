@@ -101,6 +101,8 @@ extern void rs_topline_back_winheight(win_T *wp, lineoff_T *lp, int winheight);
 extern void rs_topline_back(win_T *wp, lineoff_T *lp);
 extern void rs_botline_forw(win_T *wp, lineoff_T *lp);
 extern int rs_virtcol2col(win_T *wp, linenr_T lnum, int vcol);
+extern void rs_textpos2screenpos(win_T *wp, pos_T *pos, int *rowp, int *scolp,
+                                  int *ccolp, int *ecolp, int local);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -870,74 +872,7 @@ void curs_columns(win_T *wp, int may_scroll)
 void textpos2screenpos(win_T *wp, pos_T *pos, int *rowp, int *scolp, int *ccolp, int *ecolp,
                        bool local)
 {
-  colnr_T scol = 0;
-  colnr_T ccol = 0;
-  colnr_T ecol = 0;
-  int row = 0;
-  colnr_T coloff = 0;
-  bool visible_row = false;
-  bool is_folded = false;
-
-  linenr_T lnum = pos->lnum;
-  if (lnum >= wp->w_topline && lnum <= wp->w_botline) {
-    is_folded = hasFolding(wp, lnum, &lnum, NULL);
-    row = plines_m_win(wp, wp->w_topline, lnum - 1, INT_MAX);
-    // "row" should be the screen line where line "lnum" begins, which can
-    // be negative if "lnum" is "w_topline" and "w_skipcol" is non-zero.
-    row -= adjust_plines_for_skipcol(wp);
-    // Add filler lines above this buffer line.
-    row += lnum == wp->w_topline ? wp->w_topfill : win_get_fill(wp, lnum);
-    visible_row = true;
-  } else if (!local || lnum < wp->w_topline) {
-    row = 0;
-  } else {
-    row = wp->w_view_height - 1;
-  }
-
-  bool existing_row = (lnum > 0 && lnum <= wp->w_buffer->b_ml.ml_line_count);
-
-  if ((local || visible_row) && existing_row) {
-    const colnr_T off = win_col_off(wp);
-    if (is_folded) {
-      row += (local ? 0 : wp->w_winrow + wp->w_winrow_off) + 1;
-      coloff = (local ? 0 : wp->w_wincol + wp->w_wincol_off) + 1 + off;
-    } else {
-      assert(lnum == pos->lnum);
-      getvcol(wp, pos, &scol, &ccol, &ecol);
-
-      // similar to what is done in validate_cursor_col()
-      colnr_T col = scol;
-      col += off;
-      int width = wp->w_view_width - off + win_col_off2(wp);
-
-      // long line wrapping, adjust row
-      if (wp->w_p_wrap && col >= (colnr_T)wp->w_view_width && width > 0) {
-        // use same formula as what is used in curs_columns()
-        int rowoff = visible_row ? ((col - wp->w_view_width) / width + 1) : 0;
-        col -= rowoff * width;
-        row += rowoff;
-      }
-
-      col -= wp->w_leftcol;
-
-      if (col >= 0 && col < wp->w_view_width && row >= 0 && row < wp->w_view_height) {
-        coloff = col - scol + (local ? 0 : wp->w_wincol + wp->w_wincol_off) + 1;
-        row += (local ? 0 : wp->w_winrow + wp->w_winrow_off) + 1;
-      } else {
-        // character is left, right or below of the window
-        scol = ccol = ecol = 0;
-        if (local) {
-          coloff = col < 0 ? -1 : wp->w_view_width + 1;
-        } else {
-          row = 0;
-        }
-      }
-    }
-  }
-  *rowp = row;
-  *scolp = scol + coloff;
-  *ccolp = ccol + coloff;
-  *ecolp = ecol + coloff;
+  rs_textpos2screenpos(wp, pos, rowp, scolp, ccolp, ecolp, local ? 1 : 0);
 }
 
 /// "screenpos({winid}, {lnum}, {col})" function

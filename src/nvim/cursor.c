@@ -452,6 +452,14 @@ void nvim_getvvcol(win_T *wp, pos_T *pos, colnr_T *scol, colnr_T *ccol, colnr_T 
   getvvcol(wp, pos, scol, ccol, ecol);
 }
 
+/// Wrapper for getvcol() callable from Rust.
+/// Returns the start column in `scol`, cursor column in `ccol`, end column in `ecol`.
+/// Pass NULL for any column you don't need.
+void nvim_getvcol(win_T *wp, pos_T *pos, colnr_T *scol, colnr_T *ccol, colnr_T *ecol)
+{
+  getvcol(wp, pos, scol, ccol, ecol);
+}
+
 /// Wrapper for set_valid_virtcol() callable from Rust.
 void nvim_set_valid_virtcol(win_T *wp, colnr_T vcol)
 {

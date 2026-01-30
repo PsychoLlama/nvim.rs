@@ -1149,6 +1149,18 @@ int nvim_win_get_wincol(win_T *wp)
   return wp->w_wincol;
 }
 
+/// Get the w_winrow_off field from a window.
+int nvim_win_get_winrow_off(win_T *wp)
+{
+  return wp->w_winrow_off;
+}
+
+/// Get the w_wincol_off field from a window.
+int nvim_win_get_wincol_off(win_T *wp)
+{
+  return wp->w_wincol_off;
+}
+
 /// Set the w_winrow field of a window.
 void nvim_win_set_winrow(win_T *wp, int val)
 {

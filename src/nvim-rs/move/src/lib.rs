@@ -3651,6 +3651,185 @@ extern "C" {
 
     /// Get the UTF-8 head byte offset.
     fn rs_utf_head_off(base: *const std::ffi::c_char, p: *const std::ffi::c_char) -> c_int;
+
+    /// Get virtual columns for a position (getvcol wrapper).
+    fn nvim_getvcol(
+        wp: WinHandle,
+        pos: *const PosT,
+        scol: *mut ColnrT,
+        ccol: *mut ColnrT,
+        ecol: *mut ColnrT,
+    );
+
+    /// Get window row position.
+    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
+
+    /// Get window column position.
+    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
+
+    /// Get window row offset.
+    fn nvim_win_get_winrow_off(wp: WinHandle) -> c_int;
+
+    /// Get window column offset.
+    fn nvim_win_get_wincol_off(wp: WinHandle) -> c_int;
+}
+
+/// Compute the screen position of text character at "pos" in window "wp".
+///
+/// The resulting values are one-based, zero when character is not visible.
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `pos` - Position in buffer
+/// * `rowp` - Output: screen row
+/// * `scolp` - Output: start screen column
+/// * `ccolp` - Output: cursor screen column
+/// * `ecolp` - Output: end screen column
+/// * `local` - If true, use window-local coordinates
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::if_not_else)]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_textpos2screenpos(
+    wp: WinHandle,
+    pos: *const PosT,
+    rowp: *mut c_int,
+    scolp: *mut c_int,
+    ccolp: *mut c_int,
+    ecolp: *mut c_int,
+    local: c_int,
+) {
+    if wp.is_null()
+        || pos.is_null()
+        || rowp.is_null()
+        || scolp.is_null()
+        || ccolp.is_null()
+        || ecolp.is_null()
+    {
+        return;
+    }
+
+    let local = local != 0;
+    let mut scol: ColnrT = 0;
+    let mut ccol: ColnrT = 0;
+    let mut ecol: ColnrT = 0;
+    let mut coloff: ColnrT = 0;
+    let mut visible_row = false;
+    let mut is_folded = false;
+
+    let pos = &*pos;
+    let mut lnum = pos.lnum;
+    let topline = nvim_win_get_topline(wp);
+    let botline = nvim_win_get_botline(wp);
+
+    let mut row: c_int = if lnum >= topline && lnum <= botline {
+        let mut first_lnum = lnum;
+        is_folded = nvim_hasFolding(
+            wp,
+            lnum,
+            std::ptr::addr_of_mut!(first_lnum),
+            std::ptr::null_mut(),
+        ) != 0;
+        if is_folded {
+            lnum = first_lnum;
+        }
+
+        let mut r = nvim_plines_m_win(wp, topline, lnum - 1, i32::MAX);
+        // "row" should be the screen line where line "lnum" begins, which can
+        // be negative if "lnum" is "w_topline" and "w_skipcol" is non-zero.
+        r -= rs_adjust_plines_for_skipcol(wp);
+        // Add filler lines above this buffer line.
+        let topfill = nvim_win_get_topfill(wp);
+        r += if lnum == topline {
+            topfill
+        } else {
+            nvim_win_get_fill(wp, lnum)
+        };
+        visible_row = true;
+        r
+    } else if !local || lnum < topline {
+        0
+    } else {
+        let view_height = nvim_win_get_view_height(wp);
+        view_height - 1
+    };
+
+    let line_count = nvim_win_buf_line_count(wp);
+    let existing_row = lnum > 0 && lnum <= line_count;
+
+    if (local || visible_row) && existing_row {
+        let off = rs_win_col_off(wp);
+        if is_folded {
+            let winrow = nvim_win_get_winrow(wp);
+            let winrow_off = nvim_win_get_winrow_off(wp);
+            let wincol = nvim_win_get_wincol(wp);
+            let wincol_off = nvim_win_get_wincol_off(wp);
+
+            row += if local { 0 } else { winrow + winrow_off } + 1;
+            coloff = if local { 0 } else { wincol + wincol_off } + 1 + off;
+        } else {
+            // assert(lnum == pos.lnum) - we've preserved this by only setting lnum when folded
+            nvim_getvcol(
+                wp,
+                pos,
+                std::ptr::addr_of_mut!(scol),
+                std::ptr::addr_of_mut!(ccol),
+                std::ptr::addr_of_mut!(ecol),
+            );
+
+            // similar to what is done in validate_cursor_col()
+            let mut col = scol;
+            col += off;
+            let view_width = nvim_win_get_view_width(wp);
+            let width = view_width - off + rs_win_col_off2(wp);
+
+            // long line wrapping, adjust row
+            let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+            if p_wrap && col >= view_width && width > 0 {
+                // use same formula as what is used in curs_columns()
+                let rowoff = if visible_row {
+                    (col - view_width) / width + 1
+                } else {
+                    0
+                };
+                col -= rowoff * width;
+                row += rowoff;
+            }
+
+            let leftcol = nvim_win_get_leftcol(wp);
+            col -= leftcol;
+
+            let view_height = nvim_win_get_view_height(wp);
+            if col >= 0 && col < view_width && row >= 0 && row < view_height {
+                let winrow = nvim_win_get_winrow(wp);
+                let winrow_off = nvim_win_get_winrow_off(wp);
+                let wincol = nvim_win_get_wincol(wp);
+                let wincol_off = nvim_win_get_wincol_off(wp);
+
+                coloff = col - scol + if local { 0 } else { wincol + wincol_off } + 1;
+                row += if local { 0 } else { winrow + winrow_off } + 1;
+            } else {
+                // character is left, right or below of the window
+                scol = 0;
+                ccol = 0;
+                ecol = 0;
+                if local {
+                    coloff = if col < 0 { -1 } else { view_width + 1 };
+                } else {
+                    row = 0;
+                }
+            }
+        }
+    }
+
+    *rowp = row;
+    *scolp = scol + coloff;
+    *ccolp = ccol + coloff;
+    *ecolp = ecol + coloff;
 }
 
 /// Convert a virtual (screen) column to a character column.
