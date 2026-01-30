@@ -51,6 +51,7 @@
 #include "nvim/mark.h"
 #include "nvim/mark_defs.h"
 #include "nvim/match.h"
+#include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/mouse.h"
@@ -1873,6 +1874,12 @@ int nvim_win_hl_attr(win_T *wp, int hlf)
 buf_T *nvim_win_get_buffer(win_T *wp)
 {
   return wp->w_buffer;
+}
+
+/// Get a line from a window's buffer (for Rust FFI).
+const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum)
+{
+  return ml_get_buf(wp->w_buffer, lnum);
 }
 
 /// Check if UI has tabline extension.

@@ -3639,6 +3639,68 @@ pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int
 }
 
 // =============================================================================
+// Virtual Column to Character Column Conversion
+// =============================================================================
+
+extern "C" {
+    /// Convert virtual column to byte offset (0-indexed).
+    fn nvim_vcol2col(wp: WinHandle, lnum: LinenrT, vcol: ColnrT, coladdp: *mut ColnrT) -> ColnrT;
+
+    /// Get a line from a window's buffer.
+    fn nvim_win_ml_get_buf(wp: WinHandle, lnum: LinenrT) -> *const std::ffi::c_char;
+
+    /// Get the UTF-8 head byte offset.
+    fn rs_utf_head_off(base: *const std::ffi::c_char, p: *const std::ffi::c_char) -> c_int;
+}
+
+/// Convert a virtual (screen) column to a character column.
+///
+/// The first column is one (1-indexed). For a multibyte character, the column
+/// number of the first byte is returned.
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `lnum` - Line number
+/// * `vcol` - Virtual column (1-indexed)
+///
+/// # Returns
+/// Character column (1-indexed), or 0 for empty line
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_virtcol2col(wp: WinHandle, lnum: LinenrT, vcol: c_int) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    // vcol2col expects 0-indexed virtual column
+    let offset = nvim_vcol2col(wp, lnum, vcol - 1, std::ptr::null_mut());
+    let line = nvim_win_ml_get_buf(wp, lnum);
+    if line.is_null() {
+        return 0;
+    }
+
+    let p = line.offset(offset as isize);
+
+    // Check if at end of string (NUL byte)
+    if *p == 0 {
+        if p == line {
+            // Empty line
+            return 0;
+        }
+        // Move to the first byte of the last char (MB_PTR_BACK equivalent)
+        let head_off = rs_utf_head_off(line, p.sub(1));
+        let new_p = p.sub((head_off + 1) as usize);
+        return (new_p.offset_from(line) + 1) as c_int;
+    }
+
+    // Return 1-indexed column
+    (p.offset_from(line) + 1) as c_int
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

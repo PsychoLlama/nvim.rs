@@ -1831,6 +1831,12 @@ colnr_T vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
   return (colnr_T)(ci.ptr - line);
 }
 
+/// Accessor for vcol2col() for Rust FFI.
+colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
+{
+  return vcol2col(wp, lnum, vcol, coladdp);
+}
+
 /// Set UI mouse depending on current mode and 'mouse'.
 ///
 /// Emits mouse_on/mouse_off UI event (unless 'mouse' is empty).

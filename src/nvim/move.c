@@ -100,6 +100,7 @@ extern void rs_comp_botline(win_T *wp);
 extern void rs_topline_back_winheight(win_T *wp, lineoff_T *lp, int winheight);
 extern void rs_topline_back(win_T *wp, lineoff_T *lp);
 extern void rs_botline_forw(win_T *wp, lineoff_T *lp);
+extern int rs_virtcol2col(win_T *wp, linenr_T lnum, int vcol);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -977,18 +978,7 @@ void f_screenpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// returned.
 static int virtcol2col(win_T *wp, linenr_T lnum, int vcol)
 {
-  int offset = vcol2col(wp, lnum, vcol - 1, NULL);
-  char *line = ml_get_buf(wp->w_buffer, lnum);
-  char *p = line + offset;
-
-  if (*p == NUL) {
-    if (p == line) {  // empty line
-      return 0;
-    }
-    // Move to the first byte of the last char.
-    MB_PTR_BACK(line, p);
-  }
-  return (int)(p - line + 1);
+  return rs_virtcol2col(wp, lnum, vcol);
 }
 
 /// "virtcol2col({winid}, {lnum}, {col})" function
