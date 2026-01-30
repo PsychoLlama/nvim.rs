@@ -11,6 +11,7 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 nvim-collections = { path = "../collections" }
+nvim-mbyte = { path = "../mbyte" }
 
 [lints]
 workspace = true

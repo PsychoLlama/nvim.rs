@@ -10,6 +10,8 @@
 //! functions.
 
 #![allow(clippy::doc_markdown)]
+// Allow dead code for functions that will be used in later migration phases
+#![allow(dead_code)]
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -34,6 +36,7 @@ extern "C" {
     fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int);
     fn ga_clear(gap: *mut GArray);
     fn ga_concat(gap: *mut GArray, s: *const c_char);
+    fn ga_append(gap: *mut GArray, c: u8);
 
     // Sourcing information - for error location
     fn estack_sfile(which: c_int) -> *mut c_char;
@@ -140,6 +143,163 @@ fn format_line_number(buf: &mut [u8; 64], lnum: i64) -> usize {
 }
 
 // =============================================================================
+// String escaping functions
+// =============================================================================
+
+// ASCII control character constants
+const BS: u8 = 0x08; // Backspace
+const TAB: u8 = 0x09; // Tab
+const NL: u8 = 0x0A; // Newline
+const FF: u8 = 0x0C; // Form feed
+const CAR: u8 = 0x0D; // Carriage return
+const ESC: u8 = 0x1B; // Escape
+
+/// Append a character (possibly multi-byte) to the GArray, escaping unprintable characters.
+/// Changes NL to \n, CR to \r, etc.
+///
+/// This mirrors the C `ga_concat_esc` function.
+fn ga_concat_esc(gap: *mut GArray, p: *const u8, clen: usize) {
+    unsafe {
+        // Multi-byte character: copy as-is
+        if clen > 1 {
+            let mut buf = [0u8; 8];
+            let copy_len = clen.min(7);
+            std::ptr::copy_nonoverlapping(p, buf.as_mut_ptr(), copy_len);
+            buf[copy_len] = 0;
+            ga_concat(gap, buf.as_ptr().cast());
+            return;
+        }
+
+        let c = *p;
+        match c {
+            BS => ga_concat(gap, c"\\b".as_ptr()),
+            ESC => ga_concat(gap, c"\\e".as_ptr()),
+            FF => ga_concat(gap, c"\\f".as_ptr()),
+            NL => ga_concat(gap, c"\\n".as_ptr()),
+            TAB => ga_concat(gap, c"\\t".as_ptr()),
+            CAR => ga_concat(gap, c"\\r".as_ptr()),
+            b'\\' => ga_concat(gap, c"\\\\".as_ptr()),
+            _ => {
+                if c < b' ' || c == 0x7f {
+                    // Format as \xNN
+                    let mut buf = [0u8; 8];
+                    buf[0] = b'\\';
+                    buf[1] = b'x';
+                    buf[2] = hex_digit(c >> 4);
+                    buf[3] = hex_digit(c & 0x0f);
+                    buf[4] = 0;
+                    ga_concat(gap, buf.as_ptr().cast());
+                } else {
+                    ga_append(gap, c);
+                }
+            }
+        }
+    }
+}
+
+/// Convert a nibble (0-15) to a hex digit.
+#[inline]
+const fn hex_digit(n: u8) -> u8 {
+    if n < 10 {
+        b'0' + n
+    } else {
+        b'a' + (n - 10)
+    }
+}
+
+/// Format an integer into a buffer. Returns the length written (excluding NUL).
+fn format_int(buf: &mut [u8], value: i32) -> usize {
+    let mut num = value;
+    let mut digits = [0u8; 12];
+    let mut digit_count = 0;
+
+    if num == 0 {
+        digit_count = 1;
+        digits[0] = b'0';
+    } else {
+        let negative = num < 0;
+        if negative {
+            num = -num;
+        }
+
+        while num > 0 {
+            digits[digit_count] = b'0' + (num % 10) as u8;
+            digit_count += 1;
+            num /= 10;
+        }
+
+        if negative {
+            digits[digit_count] = b'-';
+            digit_count += 1;
+        }
+    }
+
+    // Copy digits in reverse order
+    let mut pos = 0;
+    for i in (0..digit_count).rev() {
+        if pos < buf.len() - 1 {
+            buf[pos] = digits[i];
+            pos += 1;
+        }
+    }
+    if pos < buf.len() {
+        buf[pos] = 0;
+    }
+
+    pos
+}
+
+/// Append a string to the GArray, escaping unprintable characters.
+/// If the same character appears more than 20 times, it's shortened.
+///
+/// This mirrors the C `ga_concat_shorten_esc` function.
+fn ga_concat_shorten_esc(gap: *mut GArray, s: *const c_char) {
+    unsafe {
+        if s.is_null() {
+            ga_concat(gap, c"NULL".as_ptr());
+            return;
+        }
+
+        let mut p = s.cast::<u8>();
+
+        while *p != 0 {
+            // Get the character and its byte length
+            let (c, clen) = nvim_mbyte::mb_cptr2char_adv(std::slice::from_raw_parts(p, 6));
+            let clen = clen.max(1); // Ensure at least 1 byte
+
+            // Count consecutive occurrences of the same character
+            let mut same_len = 1;
+            let mut scan = p.add(clen);
+            while *scan != 0 {
+                let scan_c = nvim_mbyte::utf_ptr2char(std::slice::from_raw_parts(scan, 6));
+                if scan_c != c {
+                    break;
+                }
+                same_len += 1;
+                scan = scan.add(clen);
+            }
+
+            if same_len > 20 {
+                // Shorten: "\[<char> occurs <n> times]"
+                ga_concat(gap, c"\\[".as_ptr());
+                ga_concat_esc(gap, p, clen);
+                ga_concat(gap, c" occurs ".as_ptr());
+
+                let mut buf = [0u8; 16];
+                format_int(&mut buf, same_len);
+                ga_concat(gap, buf.as_ptr().cast());
+
+                ga_concat(gap, c" times]".as_ptr());
+                p = scan;
+            } else {
+                ga_concat_esc(gap, p, clen);
+                p = p.add(clen);
+            }
+        }
+    }
+}
+
+// =============================================================================
 // VimL function implementations
 // =============================================================================
 
@@ -233,5 +393,26 @@ mod tests {
         format_line_number(&mut buf, 12345);
         let s = std::str::from_utf8(&buf[..11]).unwrap();
         assert_eq!(s, "line 12345\0");
+    }
+
+    #[test]
+    fn test_hex_digit() {
+        assert_eq!(hex_digit(0), b'0');
+        assert_eq!(hex_digit(9), b'9');
+        assert_eq!(hex_digit(10), b'a');
+        assert_eq!(hex_digit(15), b'f');
+    }
+
+    #[test]
+    fn test_format_int() {
+        let mut buf = [0u8; 16];
+        format_int(&mut buf, 42);
+        assert_eq!(&buf[..3], b"42\0");
+
+        format_int(&mut buf, 0);
+        assert_eq!(&buf[..2], b"0\0");
+
+        format_int(&mut buf, 12345);
+        assert_eq!(&buf[..6], b"12345\0");
     }
 }
