@@ -44,6 +44,11 @@ extern colnr_T rs_get_cursor_line_len(void);
 extern colnr_T rs_get_cursor_pos_len(void);
 extern int rs_char_before_cursor(void);
 extern void rs_adjust_cursor_col(void);
+extern void rs_check_pos(buf_T *buf, pos_T *pos);
+extern void rs_check_cursor_lnum(win_T *win);
+extern void rs_check_cursor_col(win_T *win);
+extern void rs_check_cursor(win_T *wp);
+extern void rs_check_visual_pos(void);
 
 // =============================================================================
 // Screen Column Functions
@@ -304,109 +309,33 @@ linenr_T get_cursor_rel_lnum(win_T *wp, linenr_T lnum)
 /// This allows for the col to be on the NUL byte.
 void check_pos(buf_T *buf, pos_T *pos)
 {
-  pos->lnum = MIN(pos->lnum, buf->b_ml.ml_line_count);
-  if (pos->col > 0) {
-    pos->col = MIN(pos->col, ml_get_buf_len(buf, pos->lnum));
-  }
+  rs_check_pos(buf, pos);
 }
 
 /// Make sure curwin->w_cursor.lnum is valid.
 void check_cursor_lnum(win_T *win)
 {
-  buf_T *buf = win->w_buffer;
-  if (win->w_cursor.lnum > buf->b_ml.ml_line_count) {
-    // If there is a closed fold at the end of the file, put the cursor in
-    // its first line.  Otherwise in the last line.
-    if (!hasFolding(win, buf->b_ml.ml_line_count, &win->w_cursor.lnum, NULL)) {
-      win->w_cursor.lnum = buf->b_ml.ml_line_count;
-    }
-  }
-  if (win->w_cursor.lnum <= 0) {
-    win->w_cursor.lnum = 1;
-  }
+  rs_check_cursor_lnum(win);
 }
 
 /// Make sure win->w_cursor.col is valid. Special handling of insert-mode.
 /// @see mb_check_adjust_col
 void check_cursor_col(win_T *win)
 {
-  colnr_T oldcol = win->w_cursor.col;
-  colnr_T oldcoladd = win->w_cursor.col + win->w_cursor.coladd;
-  unsigned cur_ve_flags = get_ve_flags(win);
-
-  colnr_T len = ml_get_buf_len(win->w_buffer, win->w_cursor.lnum);
-  if (len == 0) {
-    win->w_cursor.col = 0;
-  } else if (win->w_cursor.col >= len) {
-    // Allow cursor past end-of-line when:
-    // - in Insert mode or restarting Insert mode
-    // - in Terminal mode
-    // - in Visual mode and 'selection' isn't "old"
-    // - 'virtualedit' is set
-    if ((State & MODE_INSERT) || restart_edit
-        || (State & MODE_TERMINAL)
-        || (VIsual_active && *p_sel != 'o')
-        || (cur_ve_flags & kOptVeFlagOnemore)
-        || virtual_active(win)) {
-      win->w_cursor.col = len;
-    } else {
-      win->w_cursor.col = len - 1;
-      // Move the cursor to the head byte.
-      mark_mb_adjustpos(win->w_buffer, &win->w_cursor);
-    }
-  } else if (win->w_cursor.col < 0) {
-    win->w_cursor.col = 0;
-  }
-
-  // If virtual editing is on, we can leave the cursor on the old position,
-  // only we must set it to virtual.  But don't do it when at the end of the
-  // line.
-  if (oldcol == MAXCOL) {
-    win->w_cursor.coladd = 0;
-  } else if (cur_ve_flags == kOptVeFlagAll) {
-    if (oldcoladd > win->w_cursor.col) {
-      win->w_cursor.coladd = oldcoladd - win->w_cursor.col;
-
-      // Make sure that coladd is not more than the char width.
-      // Not for the last character, coladd is then used when the cursor
-      // is actually after the last character.
-      if (win->w_cursor.col + 1 < len) {
-        assert(win->w_cursor.coladd > 0);
-        int cs, ce;
-
-        getvcol(win, &win->w_cursor, &cs, NULL, &ce);
-        win->w_cursor.coladd = MIN(win->w_cursor.coladd, ce - cs);
-      }
-    } else {
-      // avoid weird number when there is a miscalculation or overflow
-      win->w_cursor.coladd = 0;
-    }
-  }
+  rs_check_cursor_col(win);
 }
 
 /// Make sure curwin->w_cursor in on a valid character
 void check_cursor(win_T *wp)
 {
-  check_cursor_lnum(wp);
-  check_cursor_col(wp);
+  rs_check_cursor(wp);
 }
 
 /// Check if VIsual position is valid, correct it if not.
 /// Can be called when in Visual mode and a change has been made.
 void check_visual_pos(void)
 {
-  if (VIsual.lnum > curbuf->b_ml.ml_line_count) {
-    VIsual.lnum = curbuf->b_ml.ml_line_count;
-    VIsual.col = 0;
-    VIsual.coladd = 0;
-  } else {
-    int len = ml_get_len(VIsual.lnum);
-
-    if (VIsual.col > len) {
-      VIsual.col = len;
-      VIsual.coladd = 0;
-    }
-  }
+  rs_check_visual_pos();
 }
 
 /// Make sure curwin->w_cursor is not on the NUL at the end of the line.
@@ -602,4 +531,76 @@ colnr_T nvim_cursor_get_pos_len(void)
 void nvim_curwin_set_cursor_col(colnr_T col)
 {
   curwin->w_cursor.col = col;
+}
+
+// =============================================================================
+// Check Validation Accessor Functions (for Rust migration)
+// =============================================================================
+
+/// Get line count from buffer (for Rust).
+int64_t nvim_buf_get_ml_line_count_i64(buf_T *buf)
+{
+  return buf->b_ml.ml_line_count;
+}
+
+/// Get line length from buffer (for Rust).
+colnr_T nvim_buf_get_line_len_pos(buf_T *buf, linenr_T lnum)
+{
+  return ml_get_buf_len(buf, lnum);
+}
+
+/// Get VIsual position pointer (for Rust).
+pos_T *nvim_get_visual_pos(void)
+{
+  return &VIsual;
+}
+
+/// Set VIsual position (for Rust).
+void nvim_set_visual_pos(linenr_T lnum, colnr_T col, colnr_T coladd)
+{
+  VIsual.lnum = lnum;
+  VIsual.col = col;
+  VIsual.coladd = coladd;
+}
+
+/// Get curbuf pointer (for Rust).
+buf_T *nvim_cursor_get_curbuf(void)
+{
+  return curbuf;
+}
+
+/// Get buffer from window (for check_cursor_lnum).
+buf_T *nvim_win_get_buffer_ptr(win_T *wp)
+{
+  return wp->w_buffer;
+}
+
+/// Check if line is folded at end of buffer (for check_cursor_lnum).
+/// Returns the first line of the fold if found, or 0 if not folded.
+linenr_T nvim_check_folding_at_end(win_T *win)
+{
+  linenr_T first_lnum;
+  buf_T *buf = win->w_buffer;
+  if (hasFolding(win, buf->b_ml.ml_line_count, &first_lnum, NULL)) {
+    return first_lnum;
+  }
+  return 0;
+}
+
+/// Set window cursor coladd (for Rust).
+void nvim_win_set_cursor_coladd(win_T *wp, colnr_T coladd)
+{
+  wp->w_cursor.coladd = coladd;
+}
+
+/// Wrapper for mark_mb_adjustpos (for Rust).
+void nvim_mark_mb_adjustpos(buf_T *buf, pos_T *lp)
+{
+  mark_mb_adjustpos(buf, lp);
+}
+
+/// Get getvcol start and end columns (for check_cursor_col virtualedit).
+void nvim_get_vcol_range(win_T *wp, pos_T *pos, colnr_T *start, colnr_T *end)
+{
+  getvcol(wp, pos, start, NULL, end);
 }

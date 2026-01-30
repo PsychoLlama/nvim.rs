@@ -65,6 +65,20 @@ impl CursorPos {
     }
 }
 
+/// Opaque buffer handle type matching C `buf_T *`.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct BufHandle(*mut std::ffi::c_void);
+
+impl BufHandle {
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 // =============================================================================
 // Cursor Validation Constants
 // =============================================================================
@@ -200,6 +214,47 @@ extern "C" {
 
     /// Set current window cursor column
     fn nvim_curwin_set_cursor_col(col: i32);
+
+    // -------------------------------------------------------------------------
+    // Check Validation Functions (for check_pos, check_cursor_lnum, etc.)
+    // -------------------------------------------------------------------------
+
+    /// Get line count from buffer (i64 version)
+    fn nvim_buf_get_ml_line_count_i64(buf: BufHandle) -> i64;
+
+    /// Get line length from buffer
+    fn nvim_buf_get_line_len_pos(buf: BufHandle, lnum: i64) -> i32;
+
+    /// Get `VIsual` position pointer
+    fn nvim_get_visual_pos() -> *mut CursorPos;
+
+    /// Set `VIsual` position
+    fn nvim_set_visual_pos(lnum: i64, col: i32, coladd: i32);
+
+    /// Get curbuf pointer
+    fn nvim_cursor_get_curbuf() -> BufHandle;
+
+    /// Get buffer from window
+    fn nvim_win_get_buffer_ptr(wp: WinHandle) -> BufHandle;
+
+    /// Check if line is folded at end of buffer
+    /// Returns the first line of the fold if found, or 0 if not folded
+    fn nvim_check_folding_at_end(win: WinHandle) -> i64;
+
+    /// Set window cursor line number
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: i64);
+
+    /// Set window cursor column
+    fn nvim_win_set_cursor_col(wp: WinHandle, col: i32);
+
+    /// Set window cursor coladd
+    fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: i32);
+
+    /// Wrapper for `mark_mb_adjustpos`
+    fn nvim_mark_mb_adjustpos(buf: BufHandle, lp: *mut CursorPos);
+
+    /// Get vcol range (start and end columns) for virtualedit
+    fn nvim_get_vcol_range(wp: WinHandle, pos: *const CursorPos, start: *mut i32, end: *mut i32);
 }
 
 // =============================================================================
@@ -699,6 +754,189 @@ pub unsafe extern "C" fn rs_adjust_cursor_col() {
             if nvim_gchar_cursor() == 0 {
                 nvim_curwin_set_cursor_col(col - 1);
             }
+        }
+    }
+}
+
+// =============================================================================
+// Cursor Validation Functions
+// =============================================================================
+
+/// Make sure `pos.lnum` and `pos.col` are valid in `buf`.
+/// This allows for the col to be on the NUL byte.
+///
+/// # Safety
+/// `buf` and `pos` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_pos(buf: BufHandle, pos: *mut CursorPos) {
+    if buf.is_null() || pos.is_null() {
+        return;
+    }
+
+    let line_count = nvim_buf_get_ml_line_count_i64(buf);
+
+    // Clamp line number to buffer range
+    if (*pos).lnum > line_count {
+        (*pos).lnum = line_count;
+    }
+
+    // Clamp column to line length (allowing position on NUL)
+    if (*pos).col > 0 {
+        let line_len = nvim_buf_get_line_len_pos(buf, (*pos).lnum);
+        if (*pos).col > line_len {
+            (*pos).col = line_len;
+        }
+    }
+}
+
+/// Make sure `win->w_cursor.lnum` is valid.
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_cursor_lnum(win: WinHandle) {
+    let buf = nvim_win_get_buffer_ptr(win);
+    if buf.is_null() {
+        return;
+    }
+
+    let cursor_lnum = nvim_win_get_cursor_lnum(win);
+    let line_count = nvim_buf_get_ml_line_count_i64(buf);
+
+    if cursor_lnum > line_count {
+        // If there is a closed fold at the end of the file, put the cursor in
+        // its first line. Otherwise in the last line.
+        let fold_first = nvim_check_folding_at_end(win);
+        if fold_first > 0 {
+            nvim_win_set_cursor_lnum(win, fold_first);
+        } else {
+            nvim_win_set_cursor_lnum(win, line_count);
+        }
+    }
+
+    // Re-read in case it was modified above
+    let cursor_lnum = nvim_win_get_cursor_lnum(win);
+    if cursor_lnum <= 0 {
+        nvim_win_set_cursor_lnum(win, 1);
+    }
+}
+
+/// Make sure `win->w_cursor.col` is valid. Special handling of insert-mode.
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_cursor_col(win: WinHandle) {
+    let buf = nvim_win_get_buffer_ptr(win);
+    if buf.is_null() {
+        return;
+    }
+
+    let oldcol = nvim_win_get_cursor_col(win);
+    let oldcoladd = oldcol + nvim_win_get_cursor_coladd(win);
+    let cur_ve_flags = nvim_get_ve_flags(win);
+    let cursor_lnum = nvim_win_get_cursor_lnum(win);
+
+    let len = nvim_buf_get_line_len_pos(buf, cursor_lnum);
+
+    if len == 0 {
+        nvim_win_set_cursor_col(win, 0);
+    } else if oldcol >= len {
+        // Allow cursor past end-of-line when:
+        // - in Insert mode or restarting Insert mode
+        // - in Terminal mode
+        // - in Visual mode and 'selection' isn't "old"
+        // - 'virtualedit' is set
+        let state = nvim_get_state();
+        let restart_edit = nvim_get_restart_edit();
+        let visual_active = nvim_get_visual_active();
+        let sel_first = nvim_get_p_sel_first();
+        let virtual_active = nvim_virtual_active_win(win);
+
+        if (state & MODE_INSERT) != 0
+            || restart_edit != 0
+            || (state & MODE_TERMINAL) != 0
+            || (visual_active && sel_first != i32::from(b'o'))
+            || (cur_ve_flags & VE_ONEMORE) != 0
+            || virtual_active
+        {
+            nvim_win_set_cursor_col(win, len);
+        } else {
+            nvim_win_set_cursor_col(win, len - 1);
+            // Move the cursor to the head byte.
+            let cursor = nvim_win_get_cursor_ptr(win);
+            nvim_mark_mb_adjustpos(buf, cursor);
+        }
+    } else if oldcol < 0 {
+        nvim_win_set_cursor_col(win, 0);
+    }
+
+    // If virtual editing is on, we can leave the cursor on the old position,
+    // only we must set it to virtual. But don't do it when at the end of the
+    // line.
+    let newcol = nvim_win_get_cursor_col(win);
+    if oldcol == MAXCOL {
+        nvim_win_set_cursor_coladd(win, 0);
+    } else if cur_ve_flags == VE_ALL {
+        if oldcoladd > newcol {
+            let mut coladd = oldcoladd - newcol;
+
+            // Make sure that coladd is not more than the char width.
+            // Not for the last character, coladd is then used when the cursor
+            // is actually after the last character.
+            if newcol + 1 < len {
+                let cursor = nvim_win_get_cursor_ptr(win);
+                let mut cs: i32 = 0;
+                let mut ce: i32 = 0;
+                nvim_get_vcol_range(win, cursor, &raw mut cs, &raw mut ce);
+                let char_width = ce - cs;
+                if coladd > char_width {
+                    coladd = char_width;
+                }
+            }
+            nvim_win_set_cursor_coladd(win, coladd);
+        } else {
+            // avoid weird number when there is a miscalculation or overflow
+            nvim_win_set_cursor_coladd(win, 0);
+        }
+    }
+}
+
+/// Make sure `win->w_cursor` is on a valid character.
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_cursor(win: WinHandle) {
+    rs_check_cursor_lnum(win);
+    rs_check_cursor_col(win);
+}
+
+/// Check if `VIsual` position is valid, correct it if not.
+/// Can be called when in Visual mode and a change has been made.
+///
+/// # Safety
+/// Requires valid global state (curbuf).
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_visual_pos() {
+    let curbuf = nvim_cursor_get_curbuf();
+    if curbuf.is_null() {
+        return;
+    }
+
+    let visual = nvim_get_visual_pos();
+    if visual.is_null() {
+        return;
+    }
+
+    let line_count = nvim_buf_get_ml_line_count_i64(curbuf);
+
+    if (*visual).lnum > line_count {
+        nvim_set_visual_pos(line_count, 0, 0);
+    } else {
+        let len = nvim_buf_get_line_len_pos(curbuf, (*visual).lnum);
+        if (*visual).col > len {
+            nvim_set_visual_pos((*visual).lnum, len, 0);
         }
     }
 }
