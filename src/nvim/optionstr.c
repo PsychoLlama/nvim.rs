@@ -112,6 +112,7 @@ extern const char *rs_lcs_field_name(int idx);
 extern const char *rs_fcs_default(int idx);
 extern const char *rs_fcs_fallback(int idx);
 extern schar_T rs_get_encoded_char_adv(const char **p);
+extern bool rs_is_valid_chars_option(const char *value, bool is_listchars);
 
 static const char e_illegal_character_after_chr[]
   = N_("E535: Illegal character after <%c>");

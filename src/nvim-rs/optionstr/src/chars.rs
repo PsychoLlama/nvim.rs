@@ -301,11 +301,7 @@ impl Default for CharsFieldResult {
 
 /// Find field index by name
 fn find_field_index(name: &[u8], is_listchars: bool) -> Option<usize> {
-    let fields: &[&str] = if is_listchars {
-        LCS_FIELDS
-    } else {
-        FCS_FIELDS
-    };
+    let fields: &[&str] = if is_listchars { LCS_FIELDS } else { FCS_FIELDS };
 
     // Convert name slice to str for comparison
     let name_str = std::str::from_utf8(name).ok()?;
@@ -580,6 +576,113 @@ pub unsafe extern "C" fn rs_parse_multispace_chars(
     }
 
     count
+}
+
+/// Validation result for a chars option value
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CharsValidateResult {
+    /// Error code (0 = success)
+    pub error: CharsParseError,
+    /// Index of the field that caused the error (-1 if no specific field)
+    pub error_field_idx: c_int,
+    /// Byte offset where error occurred
+    pub error_offset: c_int,
+    /// Length needed for multispace array (if any)
+    pub multispace_len: c_int,
+    /// Length needed for leadmultispace array (if any)
+    pub leadmultispace_len: c_int,
+}
+
+impl Default for CharsValidateResult {
+    fn default() -> Self {
+        Self {
+            error: CharsParseError::Ok,
+            error_field_idx: -1,
+            error_offset: 0,
+            multispace_len: 0,
+            leadmultispace_len: 0,
+        }
+    }
+}
+
+/// Validate a complete fillchars or listchars option value.
+///
+/// This function parses the entire comma-separated option string and validates
+/// each field:value pair without storing the results.
+///
+/// # Arguments
+/// * `value` - The option value string (null-terminated)
+/// * `is_listchars` - true for 'listchars', false for 'fillchars'
+/// * `result` - Output struct with validation results
+///
+/// # Safety
+/// - `value` must point to a valid null-terminated C string
+/// - `result` must point to valid memory
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_chars_option(
+    value: *const c_char,
+    is_listchars: bool,
+    result: *mut CharsValidateResult,
+) {
+    if result.is_null() {
+        return;
+    }
+
+    let res = &mut *result;
+    *res = CharsValidateResult::default();
+
+    // Handle null or empty value
+    if value.is_null() || *value == 0 {
+        return; // Empty value is valid
+    }
+
+    let mut p = value;
+    let start = value;
+
+    while *p != 0 {
+        // Parse this field
+        let mut field_result = CharsFieldResult::default();
+        rs_parse_chars_field(p, is_listchars, &mut field_result);
+
+        if field_result.error != CharsParseError::Ok {
+            res.error = field_result.error;
+            res.error_field_idx = field_result.field_idx;
+            res.error_offset = p.offset_from(start) as c_int;
+            return;
+        }
+
+        // Track multispace lengths
+        if is_listchars && field_result.field_idx == LCS_MULTISPACE_IDX as c_int {
+            res.multispace_len = field_result.multispace_len;
+        } else if is_listchars && field_result.field_idx == LCS_LEADMULTISPACE_IDX as c_int {
+            res.leadmultispace_len = field_result.multispace_len;
+        }
+
+        // Advance past this field
+        p = p.add(field_result.bytes_consumed as usize);
+
+        // Skip comma separator
+        if *p == b',' as c_char {
+            p = p.add(1);
+        }
+    }
+}
+
+/// Simple validation function that just returns true/false.
+///
+/// Use `rs_validate_chars_option()` for detailed error information.
+///
+/// # Safety
+/// - `value` must point to a valid null-terminated C string or be null
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_valid_chars_option(
+    value: *const c_char,
+    is_listchars: bool,
+) -> bool {
+    let mut result = CharsValidateResult::default();
+    rs_validate_chars_option(value, is_listchars, &mut result);
+    result.error == CharsParseError::Ok
 }
 
 #[cfg(test)]
