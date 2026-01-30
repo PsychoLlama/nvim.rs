@@ -8235,3 +8235,23 @@ int nvim_win_grid_has_target(win_T *wp)
 {
   return (wp && wp->w_grid.target) ? 1 : 0;
 }
+
+/// Get the scroll binding position (accessor for Rust).
+int nvim_win_get_scbind_pos(win_T *wp)
+{
+  return wp ? wp->w_scbind_pos : 0;
+}
+
+/// Set the scroll binding position (accessor for Rust).
+void nvim_win_set_scbind_pos(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_scbind_pos = val;
+  }
+}
+
+/// Check if window's buffer is empty (accessor for Rust).
+int nvim_win_buf_is_empty(win_T *wp)
+{
+  return (wp && wp->w_buffer) ? buf_is_empty(wp->w_buffer) : 1;
+}
