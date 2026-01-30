@@ -132,67 +132,16 @@ extern bool rs_preprocs_left(void);
 extern bool rs_use_indentexpr_for_lisp(void);
 extern int rs_lisp_match(const char *p);
 
+// Phase: Tabstop parsing (indent/lib.rs)
+extern bool rs_tabstop_set(const char *var, colnr_T **array);
+
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
 ///
 /// @return  false for an error.
 bool tabstop_set(char *var, colnr_T **array)
 {
-  int valcount = 1;
-
-  if (var[0] == NUL || (var[0] == '0' && var[1] == NUL)) {
-    *array = NULL;
-    return true;
-  }
-
-  for (char *cp = var; *cp != NUL; cp++) {
-    if (cp == var || cp[-1] == ',') {
-      char *end;
-
-      if (strtol(cp, &end, 10) <= 0) {
-        if (cp != end) {
-          emsg(_(e_positive));
-        } else {
-          semsg(_(e_invarg2), cp);
-        }
-        return false;
-      }
-    }
-
-    if (ascii_isdigit(*cp)) {
-      continue;
-    }
-    if (cp[0] == ',' && cp > var && cp[-1] != ',' && cp[1] != NUL) {
-      valcount++;
-      continue;
-    }
-    semsg(_(e_invarg2), var);
-    return false;
-  }
-
-  *array = (colnr_T *)xmalloc((unsigned)(valcount + 1) * sizeof(int));
-  (*array)[0] = (colnr_T)valcount;
-
-  int t = 1;
-  for (char *cp = var; *cp != NUL;) {
-    int n = atoi(cp);
-
-    // Catch negative values, overflow and ridiculous big values.
-    if (n <= 0 || n > TABSTOP_MAX) {
-      semsg(_(e_invarg2), cp);
-      XFREE_CLEAR(*array);
-      return false;
-    }
-    (*array)[t++] = n;
-    while (*cp != NUL && *cp != ',') {
-      cp++;
-    }
-    if (*cp != NUL) {
-      cp++;
-    }
-  }
-
-  return true;
+  return rs_tabstop_set(var, array);
 }
 
 /// Calculate the number of screen spaces a tab will occupy.

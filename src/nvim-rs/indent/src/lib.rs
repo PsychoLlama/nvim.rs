@@ -14,6 +14,7 @@ use std::ffi::c_char;
 use std::ffi::c_int;
 
 use nvim_buffer::BufHandle;
+use nvim_memory::xmalloc;
 
 // C accessor functions for buffer properties
 extern "C" {
@@ -25,6 +26,32 @@ extern "C" {
     fn nvim_curbuf_get_inde_nonempty() -> c_int;
     fn nvim_curbuf_get_p_si() -> c_int;
 }
+
+// Error message functions
+extern "C" {
+    fn emsg(s: *const c_char) -> c_int;
+    fn semsg(fmt: *const c_char, ...) -> c_int;
+    fn gettext(msgid: *const c_char) -> *const c_char;
+}
+
+// Error message constants (need gettext translation)
+extern "C" {
+    // "E487: Argument must be positive"
+    static e_positive: *const c_char;
+    // "E475: Invalid argument: %s"
+    static e_invarg2: *const c_char;
+}
+
+/// Translate a gettext message.
+///
+/// # Safety
+/// The pointer must be a valid C string from error constants.
+unsafe fn translate(msgid: *const c_char) -> *const c_char {
+    gettext(msgid)
+}
+
+/// Maximum allowed tabstop value
+const TABSTOP_MAX: c_int = 9999;
 
 // Type aliases matching C types
 // colnr_T = int (i32)
@@ -463,6 +490,133 @@ pub unsafe extern "C" fn rs_indent_size_no_ts(ptr: *const c_char) -> c_int {
             return vcol;
         }
     }
+}
+
+// ============================================================================
+// Tabstop Parsing
+// ============================================================================
+
+/// Helper to check if a byte is an ASCII digit.
+fn is_ascii_digit(c: c_char) -> bool {
+    c >= b'0' as c_char && c <= b'9' as c_char
+}
+
+/// Parse a vartabstop string and set the integer values array.
+///
+/// Parses a comma-separated string of tabstop values (e.g., "4,8,12") and
+/// allocates an array where `array[0]` is the count and `array[1..]` are the values.
+///
+/// # Arguments
+/// * `var` - Null-terminated string containing comma-separated tabstop values
+/// * `array` - Output pointer for the allocated array (caller must free)
+///
+/// # Returns
+/// * `true` if successful
+/// * `false` if there was an error (invalid format, non-positive value, etc.)
+///
+/// # Safety
+/// * `var` must be a valid null-terminated C string
+/// * `array` must be a valid pointer to a `*mut c_int` (output parameter)
+/// * The returned array must be freed by the caller using `xfree`
+#[no_mangle]
+pub unsafe extern "C" fn rs_tabstop_set(var: *const c_char, array: *mut *mut c_int) -> bool {
+    if var.is_null() || array.is_null() {
+        return false;
+    }
+
+    // Empty string or "0" -> no vartabstops
+    if *var == 0 || (*var == b'0' as c_char && *var.add(1) == 0) {
+        *array = std::ptr::null_mut();
+        return true;
+    }
+
+    // First pass: validate and count values
+    let mut valcount = 1;
+    let mut cp = var;
+
+    while *cp != 0 {
+        // At start of string or after comma: parse a number
+        if cp == var || *cp.sub(1) == b',' as c_char {
+            // Parse the number
+            let mut num: i64 = 0;
+            let start = cp;
+            let mut has_digits = false;
+
+            while is_ascii_digit(*cp) {
+                has_digits = true;
+                num = num * 10 + i64::from(*cp - b'0' as c_char);
+                cp = cp.add(1);
+            }
+
+            if num <= 0 {
+                if has_digits {
+                    // Number was parsed but <= 0
+                    emsg(translate(e_positive));
+                } else {
+                    // No digits found
+                    semsg(translate(e_invarg2), start);
+                }
+                return false;
+            }
+
+            continue;
+        }
+
+        if is_ascii_digit(*cp) {
+            cp = cp.add(1);
+            continue;
+        }
+
+        // Check for valid comma
+        if *cp == b',' as c_char && cp > var && *cp.sub(1) != b',' as c_char && *cp.add(1) != 0 {
+            valcount += 1;
+            cp = cp.add(1);
+            continue;
+        }
+
+        // Invalid character
+        semsg(translate(e_invarg2), var);
+        return false;
+    }
+
+    // Allocate the array: count + values
+    let size = (valcount + 1) as usize * std::mem::size_of::<c_int>();
+    let arr = xmalloc(size).cast::<c_int>();
+    *arr = valcount;
+
+    // Second pass: fill the array
+    let mut t = 1;
+    cp = var;
+    while *cp != 0 {
+        // Parse the number
+        let mut n: c_int = 0;
+        while is_ascii_digit(*cp) {
+            n = n * 10 + (*cp - b'0' as c_char) as c_int;
+            cp = cp.add(1);
+        }
+
+        // Validate: catch negative, overflow, ridiculously big values
+        if n <= 0 || n > TABSTOP_MAX {
+            semsg(translate(e_invarg2), var);
+            nvim_memory::xfree(arr.cast());
+            *array = std::ptr::null_mut();
+            return false;
+        }
+
+        *arr.add(t) = n;
+        t += 1;
+
+        // Skip to next number (past comma)
+        while *cp != 0 && *cp != b',' as c_char {
+            cp = cp.add(1);
+        }
+        if *cp != 0 {
+            cp = cp.add(1);
+        }
+    }
+
+    *array = arr;
+    true
 }
 
 // ============================================================================

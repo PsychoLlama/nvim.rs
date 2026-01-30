@@ -11,3 +11,4 @@ crate-type = ["staticlib", "rlib"]
 [dependencies]
 nvim-buffer = { path = "../buffer" }
 nvim-charset = { path = "../charset" }
+nvim-memory = { path = "../memory" }
