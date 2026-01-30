@@ -1,42 +1,41 @@
-Plan: ~/.claude/plans/quizzical-dreaming-firefly.md
+Plan: ~/.claude/plans/compressed-puzzling-dream.md
 
-I have successfully completed the migration plan. Here's a summary of what was done:
+The migration is complete. Here's a summary of what was accomplished:
 
 ## Summary
 
-Successfully migrated `cursor_shape.c` parsing logic to Rust:
+Successfully migrated the core logging logic from `log.c` to Rust in the `nvim-log` crate:
 
-### Phase 1: Added C Setter Accessors
-Added the following setter functions to `cursor_shape.c`:
-- `nvim_set_shape_table_shape()`, `nvim_set_shape_table_percentage()`
-- `nvim_set_shape_table_blinkwait()`, `nvim_set_shape_table_blinkon()`, `nvim_set_shape_table_blinkoff()`
-- `nvim_set_shape_table_id()`, `nvim_set_shape_table_id_lm()`
-- Additional accessors: `nvim_get_p_guicursor()`, `nvim_syn_check_group()`, `nvim_ui_mode_info_set()`
+### Changes Made
 
-### Phase 2: Migrated `clear_shape_table()`
-Implemented `rs_clear_shape_table()` in Rust that resets all shape_table entries to defaults.
+1. **Added C Accessor Functions** (`src/nvim/log.c`):
+   - `nvim_log_get_file_path()` / `nvim_log_set_file_path()` - log file path access
+   - `nvim_log_is_initialized()` / `nvim_log_set_initialized()` - initialization state
+   - `nvim_log_get_ui_client_channel_id()` - UI client detection
+   - `nvim_log_get_servername()` / `nvim_log_get_parent_nvim()` - instance naming
+   - `nvim_log_get_localtime()` / `nvim_log_get_millis()` - timestamp access
+   - Various utility functions for path/env operations
 
-### Phase 3: Migrated `parse_shape_opt()`
-Implemented `rs_parse_shape_opt()` in Rust with full guicursor parsing:
-- Two-pass validation (check errors first, then apply changes)
-- Mode string parsing (n, v, i, r, c, ci, cr, o, ve, a for "all")
-- Shape parsing (block, ver25, hor50)
-- Blink timing parsing (blinkwait, blinkon, blinkoff)
-- Highlight group parsing with langmap support (group/lm_group)
-- Proper error messages matching C (E545, E546, E548, E549)
+2. **Created Rust Core Module** (`src/nvim-rs/log/src/core.rs`):
+   - `rs_log_path_init()` - log file path initialization (replaces `log_path_init()`)
+   - `rs_do_log_to_file()` - log message formatting and output (replaces `v_do_log_to_file()`)
+   - Instance name generation with caching
+   - Thread-local state for recursion detection
 
-### Phase 4: Updated C Wrappers
-Replaced C implementations with thin wrappers calling the Rust functions.
+3. **Updated C Wrappers** (`src/nvim/log.c`):
+   - `log_init()` now calls `rs_log_path_init()`
+   - `logmsg()` formats the message then calls `rs_do_log_to_file()`
+   - `do_log_to_file()` calls `rs_do_log_to_file()`
+   - Removed the now-unused `v_do_log_to_file()` function
+
+4. **Kept in C**:
+   - Backtrace functionality (`log_callstack`, `log_callstack_to_file`) - depends on libuv/execinfo
+   - `log_uv_handles()` - prints libuv handles directly
+   - Variadic formatting (handled via `vsnprintf` before calling Rust)
+   - Mutex locking (`log_lock`/`log_unlock`)
 
 ### Verification
-- `just build` - passed
-- `just rust-test` - 3717 tests passed
-- `just rust-fmt-check` - passed
-- `just rust-clippy` - passed
-- Manual guicursor tests - all error cases work correctly
-
-The `cursor_shape.c` file now contains only:
-- `shape_table[]` definition
-- Accessor functions (getters/setters)
-- `mode_style_array()` for API serialization (kept in C due to Arena allocation complexity)
-- Thin wrappers calling `rs_*` functions
+- `just build` ✓
+- `just rust-test` ✓ (3717 tests passed)
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓
