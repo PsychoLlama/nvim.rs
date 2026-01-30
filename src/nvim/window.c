@@ -1520,6 +1520,20 @@ void nvim_win_set_topline(win_T *wp, linenr_T val)
   wp->w_topline = val;
 }
 
+/// Get the window's topline_was_set flag.
+int nvim_win_get_topline_was_set(win_T *wp)
+{
+  return wp ? wp->w_topline_was_set : 0;
+}
+
+/// Set the window's topline_was_set flag.
+void nvim_win_set_topline_was_set(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_topline_was_set = val != 0;
+  }
+}
+
 /// Get the window's botline (line below the bottom of the window).
 linenr_T nvim_win_get_botline(win_T *wp)
 {

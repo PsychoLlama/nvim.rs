@@ -2277,6 +2277,59 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
 // Scroll Clamping Functions
 // =============================================================================
 
+// =============================================================================
+// Set Topline Function
+// =============================================================================
+
+extern "C" {
+    // Topline was set flag
+    fn nvim_win_set_topline_was_set(wp: WinHandle, val: c_int);
+}
+
+/// Set wp->w_topline to a certain number.
+///
+/// Handles folding, updates botline approximation, and triggers redraw.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_topline(wp: WinHandle, lnum: LinenrT) {
+    if wp.is_null() {
+        return;
+    }
+
+    let prev_topline = nvim_win_get_topline(wp);
+
+    // Go to first of folded lines
+    let mut folded_lnum = lnum;
+    nvim_hasFolding(
+        wp,
+        lnum,
+        std::ptr::addr_of_mut!(folded_lnum),
+        std::ptr::null_mut(),
+    );
+
+    // Approximate the value of w_botline
+    let botline = nvim_win_get_botline(wp);
+    let topline = nvim_win_get_topline(wp);
+    nvim_win_set_botline(wp, botline + (folded_lnum - topline));
+    nvim_win_set_topline(wp, folded_lnum);
+    nvim_win_set_topline_was_set(wp, 1);
+
+    if folded_lnum != prev_topline {
+        // Keep the filler lines when the topline didn't change.
+        nvim_win_set_topfill(wp, 0);
+    }
+
+    nvim_win_clear_valid_bits(wp, VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_TOPLINE);
+    // Don't set VALID_TOPLINE here, 'scrolloff' needs to be checked.
+    nvim_redraw_later(wp, upd::VALID);
+}
+
+// =============================================================================
+// Scroll Clamping Functions
+// =============================================================================
+
 extern "C" {
     // Buffer line count accessor for curbuf
     fn nvim_curbuf_line_count() -> LinenrT;

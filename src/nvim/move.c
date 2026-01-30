@@ -80,6 +80,7 @@ extern void rs_scrolldown_clamp(void);
 extern void rs_scrollup_clamp(void);
 extern void rs_cursor_correct_sms(win_T *wp);
 extern void rs_adjust_skipcol(void);
+extern void rs_set_topline(win_T *wp, linenr_T lnum);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -501,21 +502,7 @@ void changed_window_setting_all(void)
 // Set wp->w_topline to a certain number.
 void set_topline(win_T *wp, linenr_T lnum)
 {
-  linenr_T prev_topline = wp->w_topline;
-
-  // go to first of folded lines
-  hasFolding(wp, lnum, &lnum, NULL);
-  // Approximate the value of w_botline
-  wp->w_botline += lnum - wp->w_topline;
-  wp->w_topline = lnum;
-  wp->w_topline_was_set = true;
-  if (lnum != prev_topline) {
-    // Keep the filler lines when the topline didn't change.
-    wp->w_topfill = 0;
-  }
-  wp->w_valid &= ~(VALID_WROW|VALID_CROW|VALID_BOTLINE|VALID_TOPLINE);
-  // Don't set VALID_TOPLINE here, 'scrolloff' needs to be checked.
-  redraw_later(wp, UPD_VALID);
+  rs_set_topline(wp, lnum);
 }
 
 // Rust implementations of validity flag functions
