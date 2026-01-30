@@ -1,39 +1,31 @@
-Plan: ~/.claude/plans/dreamy-floating-elephant.md
+Plan: ~/.claude/plans/greedy-humming-peach.md
 
-Let me provide a summary of the migration:
+All tasks in the plan have been completed. Here's a summary of what was implemented:
 
-## Plan Execution Complete
+## Summary
 
-Successfully completed the cursor.c migration plan. Here's a summary:
+I successfully executed the plan to migrate 6 cursor functions from C to Rust.
 
-### Migrated Functions (5 new)
-1. **`rs_gchar_cursor()`** - Get character at cursor position
-2. **`rs_getviscol()`** - Get screen column of cursor  
-3. **`rs_getviscol2(col, coladd)`** - Get screen column for arbitrary position
-4. **`rs_getvpos(wp, pos, wcol)`** - Advance position to screen column
-5. **`rs_coladvance(wp, wcol)`** - Advance cursor with virtcol validation
+### Phase 1: Line Accessors (4 functions)
+- `get_cursor_line_ptr()` - Returns pointer to cursor line
+- `get_cursor_pos_ptr()` - Returns pointer to cursor position in line  
+- `get_cursor_line_len()` - Returns length of cursor line
+- `get_cursor_pos_len()` - Returns length from cursor position to end of line
 
-### C Accessor Functions Added (8 new)
-- `nvim_getvvcol()` - Wrapper for getvvcol
-- `nvim_set_valid_virtcol()` - Wrapper for set_valid_virtcol
-- `nvim_virtual_active_win()` - Wrapper for virtual_active(win)
-- `nvim_cursor_get_curwin()` - Get curwin pointer
-- `nvim_cursor_get_curwin_cursor()` - Get cursor position pointer
-- `nvim_getvpos()` - Core getvpos implementation
-- `nvim_char_at_pos_is_tab()` - Check if char at position is TAB
-- `nvim_win_clear_valid_virtcol()` - Clear VALID_VIRTCOL flag
-- `nvim_win_get_cursor_ptr()` - Get window cursor pointer
+### Phase 2: Character Access (2 functions)
+- `char_before_cursor()` - Returns the character immediately before the cursor, using UTF-8 aware functions from nvim-mbyte
+- `adjust_cursor_col()` - Ensures cursor isn't positioned on the line-ending NUL
 
-### Design Decision
-**`coladvance_force` remains in C** because it modifies the buffer (`addspaces=true` path calls `ml_replace`, `inserted_bytes`). The complex `coladvance2` logic also stays in C, but the read-only functions call into it via the accessor pattern.
+### Files Modified
+| File | Changes |
+|------|---------|
+| `src/nvim/cursor.c` | Added 5 C accessor functions, updated 6 functions to call Rust |
+| `src/nvim-rs/cursor/src/lib.rs` | Added 6 extern declarations, implemented 6 rs_* functions |
+| `src/nvim-rs/cursor/Cargo.toml` | Added nvim-mbyte dependency |
 
 ### Verification
-- ✅ `just build` - Compiles and links successfully
-- ✅ `just rust-fmt-check` - Formatting passes
-- ✅ `just rust-clippy` - No warnings
-- ✅ `just rust-test` - All 3672 tests pass
-
-### Commits
-1. `f36f8a16db` - feat(cursor): migrate gchar_cursor, getviscol, getviscol2 to Rust
-2. `efa14f11ee` - feat(cursor): migrate getvpos and coladvance to Rust
-3. `89ffcd5f0f` - test(cursor): add test for OK/FAIL return value constants
+- ✅ `just build` - Full build passes
+- ✅ `just rust-fmt-check` - Formatting check passes
+- ✅ `just rust-clippy` - Lints pass
+- ✅ `just rust-test` - All 3672 unit tests pass
+- ✅ Manual verification - Neovim starts correctly
