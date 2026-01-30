@@ -24,8 +24,8 @@ extern int rs_cursor_is_block_during_visual(int exclusive);
 extern int rs_cursor_mode_uses_syn_id(int syn_id);
 extern int rs_cursor_get_mode_idx(void);
 extern int rs_cursor_mode_str2int(const char *mode);
-
-static const char e_digit_expected[] = N_("E548: Digit expected");
+extern void rs_clear_shape_table(void);
+extern const char *rs_parse_shape_opt(int what);
 
 /// Handling of cursor and mouse pointer shapes in various modes.
 cursorentry_T shape_table[SHAPE_IDX_COUNT] = {
@@ -105,175 +105,7 @@ Array mode_style_array(Arena *arena)
 /// @returns error message for an illegal option, NULL otherwise.
 const char *parse_shape_opt(int what)
 {
-  char *p = NULL;
-  int idx = 0;                          // init for GCC
-  int len;
-  bool found_ve = false;                 // found "ve" flag
-
-  // First round: check for errors; second round: do it for real.
-  for (int round = 1; round <= 2; round++) {
-    if (round == 2 || *p_guicursor == NUL) {
-      // Set all entries to default (block, blinkon0, default color).
-      // This is the default for anything that is not set.
-      clear_shape_table();
-      if (*p_guicursor == NUL) {
-        ui_mode_info_set();
-        return NULL;
-      }
-    }
-    // Repeat for all comma separated parts.
-    char *modep = p_guicursor;
-    while (modep != NULL && *modep != NUL) {
-      char *colonp = vim_strchr(modep, ':');
-      char *commap = vim_strchr(modep, ',');
-
-      if (colonp == NULL || (commap != NULL && commap < colonp)) {
-        return N_("E545: Missing colon");
-      }
-      if (colonp == modep) {
-        return N_("E546: Illegal mode");
-      }
-
-      // Repeat for all modes before the colon.
-      // For the 'a' mode, we loop to handle all the modes.
-      int all_idx = -1;
-      while (modep < colonp || all_idx >= 0) {
-        if (all_idx < 0) {
-          // Find the mode
-          if (modep[1] == '-' || modep[1] == ':') {
-            len = 1;
-          } else {
-            len = 2;
-          }
-
-          if (len == 1 && TOLOWER_ASC(modep[0]) == 'a') {
-            all_idx = SHAPE_IDX_COUNT - 1;
-          } else {
-            for (idx = 0; idx < SHAPE_IDX_COUNT; idx++) {
-              if (STRNICMP(modep, shape_table[idx].name, len) == 0) {
-                break;
-              }
-            }
-            if (idx == SHAPE_IDX_COUNT
-                || (shape_table[idx].used_for & what) == 0) {
-              return N_("E546: Illegal mode");
-            }
-            if (len == 2 && modep[0] == 'v' && modep[1] == 'e') {
-              found_ve = true;
-            }
-          }
-          modep += len + 1;
-        }
-
-        if (all_idx >= 0) {
-          idx = all_idx--;
-        }
-
-        // Parse the part after the colon
-        for (p = colonp + 1; *p && *p != ',';) {
-          {
-            // First handle the ones with a number argument.
-            int i = (uint8_t)(*p);
-            len = 0;
-            if (STRNICMP(p, "ver", 3) == 0) {
-              len = 3;
-            } else if (STRNICMP(p, "hor", 3) == 0) {
-              len = 3;
-            } else if (STRNICMP(p, "blinkwait", 9) == 0) {
-              len = 9;
-            } else if (STRNICMP(p, "blinkon", 7) == 0) {
-              len = 7;
-            } else if (STRNICMP(p, "blinkoff", 8) == 0) {
-              len = 8;
-            }
-            if (len != 0) {
-              p += len;
-              if (!ascii_isdigit(*p)) {
-                return e_digit_expected;
-              }
-              int n = getdigits_int(&p, false, 0);
-              if (len == 3) {               // "ver" or "hor"
-                if (n == 0) {
-                  return N_("E549: Illegal percentage");
-                }
-                if (round == 2) {
-                  if (TOLOWER_ASC(i) == 'v') {
-                    shape_table[idx].shape = SHAPE_VER;
-                  } else {
-                    shape_table[idx].shape = SHAPE_HOR;
-                  }
-                  shape_table[idx].percentage = n;
-                }
-              } else if (round == 2) {
-                if (len == 9) {
-                  shape_table[idx].blinkwait = n;
-                } else if (len == 7) {
-                  shape_table[idx].blinkon = n;
-                } else {
-                  shape_table[idx].blinkoff = n;
-                }
-              }
-            } else if (STRNICMP(p, "block", 5) == 0) {
-              if (round == 2) {
-                shape_table[idx].shape = SHAPE_BLOCK;
-              }
-              p += 5;
-            } else {          // must be a highlight group name then
-              char *endp = vim_strchr(p, '-');
-              if (commap == NULL) {                       // last part
-                if (endp == NULL) {
-                  endp = p + strlen(p);                  // find end of part
-                }
-              } else if (endp > commap || endp == NULL) {
-                endp = commap;
-              }
-              char *slashp = vim_strchr(p, '/');
-              if (slashp != NULL && slashp < endp) {
-                // "group/langmap_group"
-                i = syn_check_group(p, (size_t)(slashp - p));
-                p = slashp + 1;
-              }
-              if (round == 2) {
-                shape_table[idx].id = syn_check_group(p, (size_t)(endp - p));
-                shape_table[idx].id_lm = shape_table[idx].id;
-                if (slashp != NULL && slashp < endp) {
-                  shape_table[idx].id = i;
-                }
-              }
-              p = endp;
-            }
-          }           // if (what != SHAPE_MOUSE)
-
-          if (*p == '-') {
-            p++;
-          }
-        }
-      }
-      modep = p;
-      if (modep != NULL && *modep == ',') {
-        modep++;
-      }
-    }
-  }
-
-  // If the 's' flag is not given, use the 'v' cursor for 's'
-  if (!found_ve) {
-    {
-      shape_table[SHAPE_IDX_VE].shape = shape_table[SHAPE_IDX_V].shape;
-      shape_table[SHAPE_IDX_VE].percentage =
-        shape_table[SHAPE_IDX_V].percentage;
-      shape_table[SHAPE_IDX_VE].blinkwait =
-        shape_table[SHAPE_IDX_V].blinkwait;
-      shape_table[SHAPE_IDX_VE].blinkon =
-        shape_table[SHAPE_IDX_V].blinkon;
-      shape_table[SHAPE_IDX_VE].blinkoff =
-        shape_table[SHAPE_IDX_V].blinkoff;
-      shape_table[SHAPE_IDX_VE].id = shape_table[SHAPE_IDX_V].id;
-      shape_table[SHAPE_IDX_VE].id_lm = shape_table[SHAPE_IDX_V].id_lm;
-    }
-  }
-  ui_mode_info_set();
-  return NULL;
+  return rs_parse_shape_opt(what);
 }
 
 /// Returns true if the cursor is non-blinking "block" shape during
@@ -316,14 +148,7 @@ int cursor_get_mode_idx(void)
 /// Clears all entries in shape_table to block, blinkon0, and default color.
 static void clear_shape_table(void)
 {
-  for (int idx = 0; idx < SHAPE_IDX_COUNT; idx++) {
-    shape_table[idx].shape = SHAPE_BLOCK;
-    shape_table[idx].blinkwait = 0;
-    shape_table[idx].blinkon = 0;
-    shape_table[idx].blinkoff = 0;
-    shape_table[idx].id = 0;
-    shape_table[idx].id_lm = 0;
-  }
+  rs_clear_shape_table();
 }
 
 // Rust FFI accessor functions for shape_table
@@ -393,4 +218,83 @@ void nvim_set_restart_edit(int val)
 const char *nvim_get_shape_table_name(int idx)
 {
   return shape_table[idx].full_name;
+}
+
+const char *nvim_get_shape_table_short_name(int idx)
+{
+  return shape_table[idx].name;
+}
+
+int nvim_get_shape_table_percentage(int idx)
+{
+  return shape_table[idx].percentage;
+}
+
+int nvim_get_shape_table_blinkwait(int idx)
+{
+  return shape_table[idx].blinkwait;
+}
+
+int nvim_get_shape_table_blinkoff(int idx)
+{
+  return shape_table[idx].blinkoff;
+}
+
+int nvim_get_shape_table_used_for(int idx)
+{
+  return shape_table[idx].used_for;
+}
+
+// Setter accessors for Rust FFI
+
+void nvim_set_shape_table_shape(int idx, int shape)
+{
+  shape_table[idx].shape = (CursorShape)shape;
+}
+
+void nvim_set_shape_table_percentage(int idx, int pct)
+{
+  shape_table[idx].percentage = pct;
+}
+
+void nvim_set_shape_table_blinkwait(int idx, int val)
+{
+  shape_table[idx].blinkwait = val;
+}
+
+void nvim_set_shape_table_blinkon(int idx, int val)
+{
+  shape_table[idx].blinkon = val;
+}
+
+void nvim_set_shape_table_blinkoff(int idx, int val)
+{
+  shape_table[idx].blinkoff = val;
+}
+
+void nvim_set_shape_table_id(int idx, int id)
+{
+  shape_table[idx].id = id;
+}
+
+void nvim_set_shape_table_id_lm(int idx, int id)
+{
+  shape_table[idx].id_lm = id;
+}
+
+// Additional accessors for parse_shape_opt
+
+const char *nvim_get_p_guicursor(void)
+{
+  return p_guicursor;
+}
+
+int nvim_syn_check_group(const char *name, size_t len)
+{
+  return syn_check_group(name, len);
+}
+
+void nvim_ui_mode_info_set(void)
+{
+  ui_mode_info_set();
 }
