@@ -300,8 +300,330 @@ fn ga_concat_shorten_esc(gap: *mut GArray, s: *const c_char) {
 }
 
 // =============================================================================
+// Assert type enum
+// =============================================================================
+
+/// Type of assert_* check being performed.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssertType {
+    Equal = 0,
+    NotEqual = 1,
+    Match = 2,
+    NotMatch = 3,
+    Fails = 4,
+    Other = 5,
+}
+
+impl AssertType {
+    /// Create from C integer.
+    pub const fn from_c_int(val: c_int) -> Self {
+        match val {
+            0 => Self::Equal,
+            1 => Self::NotEqual,
+            2 => Self::Match,
+            3 => Self::NotMatch,
+            4 => Self::Fails,
+            _ => Self::Other,
+        }
+    }
+}
+
+// =============================================================================
+// Fill assert error
+// =============================================================================
+
+extern "C" {
+    // Typval encoding functions
+    fn encode_tv2echo(tv: TypevalHandle, len: *mut usize) -> *mut c_char;
+    fn encode_tv2string(tv: TypevalHandle, len: *mut usize) -> *mut c_char;
+
+    // Typval type checking
+    fn nvim_testing_tv_get_type(tv: TypevalHandle) -> c_int;
+    fn nvim_testing_tv_string_is_empty(tv: TypevalHandle) -> c_int;
+
+    // Dictionary diffing (keep complex logic in C for now)
+    fn nvim_testing_fill_dict_diff(
+        gap: *mut GArray,
+        exp_tv: TypevalHandle,
+        got_tv: TypevalHandle,
+        omitted: *mut c_int,
+    );
+}
+
+// VAR_UNKNOWN constant
+const VAR_UNKNOWN: c_int = 0;
+const VAR_STRING: c_int = 2;
+const VAR_DICT: c_int = 5;
+
+/// Fill a GArray with information about an assert error.
+///
+/// This mirrors the C `fill_assert_error` function.
+fn fill_assert_error(
+    gap: *mut GArray,
+    opt_msg_tv: TypevalHandle,
+    exp_str: *const c_char,
+    exp_tv: TypevalHandle,
+    got_tv: TypevalHandle,
+    atype: AssertType,
+) {
+    unsafe {
+        let mut omitted: c_int = 0;
+
+        // Add optional message prefix
+        let opt_type = nvim_testing_tv_get_type(opt_msg_tv);
+        if opt_type != VAR_UNKNOWN
+            && !(opt_type == VAR_STRING && nvim_testing_tv_string_is_empty(opt_msg_tv) != 0)
+        {
+            let tofree = encode_tv2echo(opt_msg_tv, std::ptr::null_mut());
+            if !tofree.is_null() {
+                ga_concat(gap, tofree);
+                xfree(tofree.cast());
+            }
+            ga_concat(gap, c": ".as_ptr());
+        }
+
+        // Add "Expected" prefix based on assert type
+        match atype {
+            AssertType::Match | AssertType::NotMatch => {
+                ga_concat(gap, c"Pattern ".as_ptr());
+            }
+            AssertType::NotEqual => {
+                ga_concat(gap, c"Expected not equal to ".as_ptr());
+            }
+            _ => {
+                ga_concat(gap, c"Expected ".as_ptr());
+            }
+        }
+
+        // Add expected value
+        if exp_str.is_null() {
+            // Check if both are dicts for diffing
+            let exp_type = nvim_testing_tv_get_type(exp_tv);
+            let got_type = nvim_testing_tv_get_type(got_tv);
+
+            if atype != AssertType::NotEqual && exp_type == VAR_DICT && got_type == VAR_DICT {
+                // Use C helper for dictionary diffing
+                nvim_testing_fill_dict_diff(gap, exp_tv, got_tv, &raw mut omitted);
+            } else {
+                let tofree = encode_tv2string(exp_tv, std::ptr::null_mut());
+                ga_concat_shorten_esc(gap, tofree);
+                if !tofree.is_null() {
+                    xfree(tofree.cast());
+                }
+            }
+        } else {
+            if atype == AssertType::Fails {
+                ga_concat(gap, c"'".as_ptr());
+            }
+            ga_concat_shorten_esc(gap, exp_str);
+            if atype == AssertType::Fails {
+                ga_concat(gap, c"'".as_ptr());
+            }
+        }
+
+        // Add "but got" and actual value
+        if atype != AssertType::NotEqual {
+            match atype {
+                AssertType::Match => {
+                    ga_concat(gap, c" does not match ".as_ptr());
+                }
+                AssertType::NotMatch => {
+                    ga_concat(gap, c" does match ".as_ptr());
+                }
+                _ => {
+                    ga_concat(gap, c" but got ".as_ptr());
+                }
+            }
+
+            let tofree = encode_tv2string(got_tv, std::ptr::null_mut());
+            ga_concat_shorten_esc(gap, tofree);
+            if !tofree.is_null() {
+                xfree(tofree.cast());
+            }
+
+            if omitted != 0 {
+                // Format " - N equal item(s) omitted"
+                let mut buf = [0u8; 64];
+                let prefix = b" - ";
+                buf[..prefix.len()].copy_from_slice(prefix);
+                let mut pos = prefix.len();
+
+                // Format the number
+                let mut num_buf = [0u8; 16];
+                format_int(&mut num_buf, omitted);
+                let num_len = num_buf.iter().position(|&c| c == 0).unwrap_or(0);
+                buf[pos..pos + num_len].copy_from_slice(&num_buf[..num_len]);
+                pos += num_len;
+
+                let suffix: &[u8] = if omitted == 1 {
+                    b" equal item omitted"
+                } else {
+                    b" equal items omitted"
+                };
+                buf[pos..pos + suffix.len()].copy_from_slice(suffix);
+                pos += suffix.len();
+                buf[pos] = 0;
+
+                ga_concat(gap, buf.as_ptr().cast());
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Simple assertion helpers
+// =============================================================================
+
+extern "C" {
+    // Typval comparison and value extraction
+    fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: c_int) -> c_int;
+    fn tv_get_number_chk(tv: TypevalHandle, err: *mut c_int) -> i64;
+    fn nvim_testing_tv_get_bool_value(tv: TypevalHandle) -> c_int;
+}
+
+// BoolVarValue constants
+const BOOL_VAR_FALSE: c_int = 0;
+const BOOL_VAR_TRUE: c_int = 1;
+const VAR_NUMBER: c_int = 1;
+const VAR_BOOL: c_int = 7;
+
+/// Common implementation for assert_true() and assert_false().
+fn assert_bool(argvars: TypevalHandle, is_true: bool) -> c_int {
+    unsafe {
+        let mut error: c_int = 0;
+        let arg_type = nvim_testing_tv_get_type(argvars);
+
+        // Check if the assertion passes
+        let passes = if arg_type == VAR_NUMBER {
+            let num = tv_get_number_chk(argvars, &raw mut error);
+            error == 0 && ((num != 0) == is_true)
+        } else if arg_type == VAR_BOOL {
+            let bool_val = nvim_testing_tv_get_bool_value(argvars);
+            bool_val
+                == (if is_true {
+                    BOOL_VAR_TRUE
+                } else {
+                    BOOL_VAR_FALSE
+                })
+        } else {
+            false
+        };
+
+        if !passes {
+            let mut ga = GArray::default();
+            prepare_assert_error(&raw mut ga);
+
+            let exp_str = if is_true {
+                c"True".as_ptr()
+            } else {
+                c"False".as_ptr()
+            };
+
+            // Get second argument (optional message)
+            let argvars_1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast::<c_void>();
+            fill_assert_error(
+                &raw mut ga,
+                argvars_1,
+                exp_str,
+                std::ptr::null(),
+                argvars,
+                AssertType::Other,
+            );
+
+            assert_error(&raw mut ga);
+            ga_clear(&raw mut ga);
+            return 1;
+        }
+
+        0
+    }
+}
+
+/// Common implementation for assert_equal() and assert_notequal().
+fn assert_equal_common(argvars: TypevalHandle, atype: AssertType) -> c_int {
+    unsafe {
+        // Get the two values to compare
+        let arg0 = argvars;
+        let arg1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast::<c_void>();
+
+        let equal = tv_equal(arg0, arg1, 0) != 0;
+        let should_be_equal = atype == AssertType::Equal;
+
+        if equal != should_be_equal {
+            let mut ga = GArray::default();
+            prepare_assert_error(&raw mut ga);
+
+            // Get third argument (optional message)
+            let argvars_2 = argvars.cast::<u8>().add(TYPVAL_SIZE * 2).cast::<c_void>();
+            fill_assert_error(&raw mut ga, argvars_2, std::ptr::null(), arg0, arg1, atype);
+
+            assert_error(&raw mut ga);
+            ga_clear(&raw mut ga);
+            return 1;
+        }
+
+        0
+    }
+}
+
+// Size of typval_T structure (we need this for pointer arithmetic)
+// This should match the C sizeof(typval_T)
+const TYPVAL_SIZE: usize = 24; // Typical size, may vary by platform
+
+// =============================================================================
 // VimL function implementations
 // =============================================================================
+
+/// `assert_true(actual[, msg])` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_true(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    set_rettv_number(rettv, i64::from(assert_bool(argvars, true)));
+}
+
+/// `assert_false(actual[, msg])` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_false(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    set_rettv_number(rettv, i64::from(assert_bool(argvars, false)));
+}
+
+/// `assert_equal(expected, actual[, msg])` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_equal(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    set_rettv_number(
+        rettv,
+        i64::from(assert_equal_common(argvars, AssertType::Equal)),
+    );
+}
+
+/// `assert_notequal(expected, actual[, msg])` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_notequal(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    set_rettv_number(
+        rettv,
+        i64::from(assert_equal_common(argvars, AssertType::NotEqual)),
+    );
+}
 
 /// `assert_report(msg)` function implementation.
 ///

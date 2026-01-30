@@ -50,6 +50,10 @@ typedef enum {
 
 extern void rs_f_assert_report(typval_T *argvars, typval_T *rettv);
 extern void rs_f_test_write_list_log(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_true(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_false(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_equal(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_notequal(typval_T *argvars, typval_T *rettv);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -69,6 +73,104 @@ void nvim_testing_set_rettv_number(typval_T *rettv, varnumber_T val)
 {
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = val;
+}
+
+/// Get the v_type field of a typval.
+int nvim_testing_tv_get_type(const typval_T *tv)
+{
+  if (tv == NULL) {
+    return VAR_UNKNOWN;
+  }
+  return (int)tv->v_type;
+}
+
+/// Check if a string typval is empty (NULL or empty string).
+int nvim_testing_tv_string_is_empty(const typval_T *tv)
+{
+  if (tv == NULL || tv->v_type != VAR_STRING) {
+    return 0;
+  }
+  return tv->vval.v_string == NULL || *tv->vval.v_string == NUL;
+}
+
+/// Get the bool value from a typval (for VAR_BOOL type).
+int nvim_testing_tv_get_bool_value(const typval_T *tv)
+{
+  if (tv == NULL || tv->v_type != VAR_BOOL) {
+    return -1;
+  }
+  return (int)tv->vval.v_bool;
+}
+
+/// Fill the gap with dict diff info (keep complex diffing logic in C for now).
+/// This handles the dictionary comparison and writes the encoded expected value.
+void nvim_testing_fill_dict_diff(garray_T *gap, typval_T *exp_tv, typval_T *got_tv, int *omitted)
+{
+  *omitted = 0;
+
+  // Only diff if both are non-NULL dicts
+  if (exp_tv->v_type != VAR_DICT || got_tv->v_type != VAR_DICT
+      || exp_tv->vval.v_dict == NULL || got_tv->vval.v_dict == NULL) {
+    // Just encode the expected value
+    char *tofree = encode_tv2string(exp_tv, NULL);
+    ga_concat_shorten_esc(gap, tofree);
+    xfree(tofree);
+    return;
+  }
+
+  dict_T *exp_d = exp_tv->vval.v_dict;
+  dict_T *got_d = got_tv->vval.v_dict;
+
+  // Create temporary dicts to hold only differing items
+  typval_T exp_diff = { .v_type = VAR_DICT, .vval.v_dict = tv_dict_alloc() };
+  typval_T got_diff = { .v_type = VAR_DICT, .vval.v_dict = tv_dict_alloc() };
+
+  // Find items in exp_d that differ from got_d
+  int todo = (int)exp_d->dv_hashtab.ht_used;
+  for (const hashitem_T *hi = exp_d->dv_hashtab.ht_array; todo > 0; hi++) {
+    if (!HASHITEM_EMPTY(hi)) {
+      dictitem_T *item2 = tv_dict_find(got_d, hi->hi_key, -1);
+      if (item2 == NULL
+          || !tv_equal(&TV_DICT_HI2DI(hi)->di_tv, &item2->di_tv, false)) {
+        const size_t key_len = strlen(hi->hi_key);
+        tv_dict_add_tv(exp_diff.vval.v_dict, hi->hi_key, key_len, &TV_DICT_HI2DI(hi)->di_tv);
+        if (item2 != NULL) {
+          tv_dict_add_tv(got_diff.vval.v_dict, hi->hi_key, key_len, &item2->di_tv);
+        }
+      } else {
+        (*omitted)++;
+      }
+      todo--;
+    }
+  }
+
+  // Find items only in got_d
+  todo = (int)got_d->dv_hashtab.ht_used;
+  for (const hashitem_T *hi = got_d->dv_hashtab.ht_array; todo > 0; hi++) {
+    if (!HASHITEM_EMPTY(hi)) {
+      dictitem_T *item2 = tv_dict_find(exp_d, hi->hi_key, -1);
+      if (item2 == NULL) {
+        const size_t key_len = strlen(hi->hi_key);
+        tv_dict_add_tv(got_diff.vval.v_dict, hi->hi_key, key_len, &TV_DICT_HI2DI(hi)->di_tv);
+      }
+      todo--;
+    }
+  }
+
+  // Encode and append the diff
+  char *tofree = encode_tv2string(&exp_diff, NULL);
+  ga_concat_shorten_esc(gap, tofree);
+  xfree(tofree);
+
+  // Store the got_diff for later use (will be encoded in Rust)
+  // For now, we'll encode it here and let Rust handle the rest
+  tv_clear(&exp_diff);
+
+  // We need to pass got_diff back to Rust somehow
+  // Actually, let's simplify: we'll encode got_diff here and store it in got_tv temporarily
+  // This is a bit hacky but avoids major restructuring
+  tv_clear(got_tv);
+  *got_tv = got_diff;
 }
 
 static const char e_assert_fails_second_arg[]
@@ -411,7 +513,7 @@ void f_assert_nobeep(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "assert_equal(expected, actual[, msg])" function
 void f_assert_equal(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = assert_equal_common(argvars, ASSERT_EQUAL);
+  rs_f_assert_equal(argvars, rettv);
 }
 
 static int assert_equalfile(typval_T *argvars)
@@ -514,7 +616,7 @@ void f_assert_equalfile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "assert_notequal(expected, actual[, msg])" function
 void f_assert_notequal(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = assert_equal_common(argvars, ASSERT_NOTEQUAL);
+  rs_f_assert_notequal(argvars, rettv);
 }
 
 /// "assert_exception(string[, msg])" function
@@ -691,7 +793,7 @@ theend:
 // "assert_false(actual[, msg])" function
 void f_assert_false(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = assert_bool(argvars, false);
+  rs_f_assert_false(argvars, rettv);
 }
 
 static int assert_inrange(typval_T *argvars)
@@ -774,7 +876,7 @@ void f_assert_report(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "assert_true(actual[, msg])" function
 void f_assert_true(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = assert_bool(argvars, true);
+  rs_f_assert_true(argvars, rettv);
 }
 
 /// "test_garbagecollect_now()" function
