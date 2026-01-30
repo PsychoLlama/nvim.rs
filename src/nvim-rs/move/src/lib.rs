@@ -832,9 +832,6 @@ extern "C" {
     // check_cursor_lnum (from cursor crate)
     fn rs_check_cursor_lnum(wp: WinHandle);
 
-    // comp_botline wrapper
-    fn nvim_comp_botline(wp: WinHandle);
-
     // curs_columns wrapper
     fn nvim_curs_columns(wp: WinHandle, may_scroll: c_int);
 
@@ -997,6 +994,82 @@ pub unsafe extern "C" fn rs_plines_correct_topline(
     n
 }
 
+/// Compute `w_botline` for the current `w_topline`.
+///
+/// Can be called after `w_topline` changed. Updates botline, `cline_row`,
+/// `cline_height`, and `empty_rows`.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_comp_botline(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    // If w_cline_row is valid, start there.
+    // Otherwise have to start at w_topline.
+    rs_check_cursor_moved(wp);
+    let valid = nvim_win_get_valid(wp);
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+
+    let (mut lnum, mut done) = if (valid & VALID_CROW) != 0 {
+        (cursor_lnum, nvim_win_get_cline_row(wp))
+    } else {
+        (nvim_win_get_topline(wp), 0)
+    };
+
+    let line_count = nvim_win_buf_line_count(wp);
+    let view_height = nvim_win_get_view_height(wp);
+
+    while lnum <= line_count {
+        let mut last = lnum;
+        let mut folded: c_int = 0;
+        let n = nvim_plines_win_full(
+            wp,
+            lnum,
+            std::ptr::addr_of_mut!(last),
+            std::ptr::addr_of_mut!(folded),
+            1,
+            1,
+        );
+
+        // Topline adjustment for skipcol
+        let topline = nvim_win_get_topline(wp);
+        let n = if lnum == topline {
+            n - rs_adjust_plines_for_skipcol(wp)
+        } else {
+            n
+        };
+
+        // If cursor is on this line range, update cline info
+        if lnum <= cursor_lnum && last >= cursor_lnum {
+            nvim_win_set_cline_row(wp, done);
+            nvim_win_set_cline_height(wp, n);
+            nvim_win_set_cline_folded(wp, folded);
+            rs_redraw_for_cursorline(wp);
+            let valid = nvim_win_get_valid(wp);
+            nvim_win_set_valid(wp, valid | VALID_CROW | VALID_CHEIGHT);
+        }
+
+        if done + n > view_height {
+            break;
+        }
+        done += n;
+        lnum = last + 1;
+    }
+
+    // wp->w_botline is the line that is just below the window
+    nvim_win_set_botline(wp, lnum);
+    let valid = nvim_win_get_valid(wp);
+    nvim_win_set_valid(wp, valid | VALID_BOTLINE | VALID_BOTLINE_AP);
+    nvim_win_set_viewport_invalid(wp, 1);
+
+    rs_set_empty_rows(wp, done);
+
+    nvim_win_check_anchored_floats(wp);
+}
+
 // =============================================================================
 // Validation Functions
 // =============================================================================
@@ -1093,7 +1166,7 @@ pub unsafe extern "C" fn rs_validate_botline(wp: WinHandle) {
 
     let valid = nvim_win_get_valid(wp);
     if (valid & VALID_BOTLINE) == 0 {
-        nvim_comp_botline(wp);
+        rs_comp_botline(wp);
     }
 }
 

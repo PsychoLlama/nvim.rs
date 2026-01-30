@@ -96,6 +96,7 @@ extern void rs_validate_botline(win_T *wp);
 extern void rs_validate_cursor(win_T *wp);
 extern void rs_update_curswant(void);
 extern void rs_update_curswant_force(void);
+extern void rs_comp_botline(win_T *wp);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -127,46 +128,7 @@ int plines_correct_topline(win_T *wp, linenr_T lnum, linenr_T *nextp, bool limit
 // wp->w_topline changed.
 static void comp_botline(win_T *wp)
 {
-  linenr_T lnum;
-  int done;
-
-  // If w_cline_row is valid, start there.
-  // Otherwise have to start at w_topline.
-  check_cursor_moved(wp);
-  if (wp->w_valid & VALID_CROW) {
-    lnum = wp->w_cursor.lnum;
-    done = wp->w_cline_row;
-  } else {
-    lnum = wp->w_topline;
-    done = 0;
-  }
-
-  for (; lnum <= wp->w_buffer->b_ml.ml_line_count; lnum++) {
-    linenr_T last = lnum;
-    bool folded;
-    int n = plines_correct_topline(wp, lnum, &last, true, &folded);
-    if (lnum <= wp->w_cursor.lnum && last >= wp->w_cursor.lnum) {
-      wp->w_cline_row = done;
-      wp->w_cline_height = n;
-      wp->w_cline_folded = folded;
-      redraw_for_cursorline(wp);
-      wp->w_valid |= (VALID_CROW|VALID_CHEIGHT);
-    }
-    if (done + n > wp->w_view_height) {
-      break;
-    }
-    done += n;
-    lnum = last;
-  }
-
-  // wp->w_botline is the line that is just below the window
-  wp->w_botline = lnum;
-  wp->w_valid |= VALID_BOTLINE|VALID_BOTLINE_AP;
-  wp->w_viewport_invalid = true;
-
-  set_empty_rows(wp, done);
-
-  win_check_anchored_floats(wp);
+  rs_comp_botline(wp);
 }
 
 /// Redraw when w_cline_row changes and 'relativenumber' or 'cursorline' is set.
