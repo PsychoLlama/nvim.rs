@@ -1181,3 +1181,459 @@ mod phase1_tests {
         assert_eq!(restored_topline, 50);
     }
 }
+
+// =============================================================================
+// Phase 2: Mark Structures and Validation
+// =============================================================================
+
+/// Timestamp type matching Neovim's time_defs.h
+pub type Timestamp = u64;
+
+/// colnr_T equivalent from Neovim
+pub type ColnrT = i32;
+
+/// MAXCOL value - represents maximum column
+pub const MAXCOL: ColnrT = 0x7fffffff;
+
+/// Opaque pointer to AdditionalData from C
+#[repr(C)]
+pub struct AdditionalData {
+    _private: [u8; 0],
+}
+
+/// fmark_T structure matching Neovim's mark_defs.h
+/// Structure defining single local mark
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FmarkT {
+    /// Cursor position
+    pub mark: PosT,
+    /// File number
+    pub fnum: c_int,
+    /// Time when this mark was last set
+    pub timestamp: Timestamp,
+    /// View the mark was created on
+    pub view: FmarkvT,
+    /// Additional data from ShaDa file (opaque pointer)
+    pub additional_data: *mut AdditionalData,
+}
+
+impl Default for FmarkT {
+    fn default() -> Self {
+        FmarkT {
+            mark: PosT::default(),
+            fnum: 0,
+            timestamp: 0,
+            view: FmarkvT {
+                topline_offset: MAXLNUM,
+            },
+            additional_data: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// xfmark_T structure matching Neovim's mark_defs.h
+/// Structure defining extended mark (mark with file name attached)
+#[repr(C)]
+pub struct XfmarkT {
+    /// Actual mark
+    pub fmark: FmarkT,
+    /// File name, used when fnum == 0
+    pub fname: *mut std::ffi::c_char,
+}
+
+/// Mark validation result codes
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkValidation {
+    /// Mark is valid
+    Valid = 0,
+    /// Mark pointer is NULL (unknown mark)
+    NullMark = 1,
+    /// Mark line number is 0 (mark not set)
+    NotSet = 2,
+    /// Mark line number is negative (invalid)
+    Negative = 3,
+    /// Mark line number exceeds buffer line count
+    OutOfBounds = 4,
+}
+
+/// Validate a mark's position.
+///
+/// Checks for:
+/// - Line number <= 0 (mark not set or invalid)
+///
+/// # Arguments
+/// * `mark_lnum` - The mark's line number
+///
+/// # Returns
+/// MarkValidation indicating the result
+#[no_mangle]
+pub extern "C" fn rs_mark_validate_lnum(mark_lnum: LinenrT) -> MarkValidation {
+    if mark_lnum == 0 {
+        MarkValidation::NotSet
+    } else if mark_lnum < 0 {
+        MarkValidation::Negative
+    } else {
+        MarkValidation::Valid
+    }
+}
+
+/// Validate a mark's line number against buffer bounds.
+///
+/// # Arguments
+/// * `mark_lnum` - The mark's line number
+/// * `buf_line_count` - The buffer's line count
+///
+/// # Returns
+/// MarkValidation indicating the result
+#[no_mangle]
+pub extern "C" fn rs_mark_validate_bounds(
+    mark_lnum: LinenrT,
+    buf_line_count: LinenrT,
+) -> MarkValidation {
+    let lnum_valid = rs_mark_validate_lnum(mark_lnum);
+    if lnum_valid != MarkValidation::Valid {
+        return lnum_valid;
+    }
+    if mark_lnum > buf_line_count {
+        MarkValidation::OutOfBounds
+    } else {
+        MarkValidation::Valid
+    }
+}
+
+/// Check if a mark line number is valid (> 0).
+#[no_mangle]
+pub extern "C" fn rs_mark_lnum_is_valid(mark_lnum: LinenrT) -> c_int {
+    c_int::from(mark_lnum > 0)
+}
+
+/// Check if a mark line number is within buffer bounds.
+#[no_mangle]
+pub extern "C" fn rs_mark_lnum_in_bounds(mark_lnum: LinenrT, buf_line_count: LinenrT) -> c_int {
+    c_int::from(mark_lnum > 0 && mark_lnum <= buf_line_count)
+}
+
+/// Initialize an fmark_T with default values.
+///
+/// # Safety
+/// The pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fmark_init(fm: *mut FmarkT) {
+    if fm.is_null() {
+        return;
+    }
+    (*fm).mark = PosT::default();
+    (*fm).fnum = 0;
+    (*fm).timestamp = 0;
+    (*fm).view.topline_offset = MAXLNUM;
+    (*fm).additional_data = std::ptr::null_mut();
+}
+
+/// Check if an fmark_T has a valid mark position (lnum > 0).
+#[no_mangle]
+pub extern "C" fn rs_fmark_is_set(fm: FmarkT) -> c_int {
+    c_int::from(fm.mark.lnum > 0)
+}
+
+/// Get the line number from an fmark_T.
+#[no_mangle]
+pub extern "C" fn rs_fmark_get_lnum(fm: FmarkT) -> LinenrT {
+    fm.mark.lnum
+}
+
+/// Get the column from an fmark_T.
+#[no_mangle]
+pub extern "C" fn rs_fmark_get_col(fm: FmarkT) -> ColnrT {
+    fm.mark.col
+}
+
+/// Get the file number from an fmark_T.
+#[no_mangle]
+pub extern "C" fn rs_fmark_get_fnum(fm: FmarkT) -> c_int {
+    fm.fnum
+}
+
+/// Get the timestamp from an fmark_T.
+#[no_mangle]
+pub extern "C" fn rs_fmark_get_timestamp(fm: FmarkT) -> Timestamp {
+    fm.timestamp
+}
+
+/// Set the mark position in an fmark_T.
+///
+/// # Safety
+/// The pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fmark_set_pos(fm: *mut FmarkT, lnum: LinenrT, col: ColnrT) {
+    if fm.is_null() {
+        return;
+    }
+    (*fm).mark.lnum = lnum;
+    (*fm).mark.col = col;
+}
+
+/// Set the file number in an fmark_T.
+///
+/// # Safety
+/// The pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fmark_set_fnum(fm: *mut FmarkT, fnum: c_int) {
+    if fm.is_null() {
+        return;
+    }
+    (*fm).fnum = fnum;
+}
+
+/// Set the timestamp in an fmark_T.
+///
+/// # Safety
+/// The pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fmark_set_timestamp(fm: *mut FmarkT, timestamp: Timestamp) {
+    if fm.is_null() {
+        return;
+    }
+    (*fm).timestamp = timestamp;
+}
+
+/// Copy an fmark_T from source to destination.
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fmark_copy(dst: *mut FmarkT, src: *const FmarkT) {
+    if dst.is_null() || src.is_null() {
+        return;
+    }
+    // Don't copy additional_data pointer - that needs special handling
+    (*dst).mark = (*src).mark;
+    (*dst).fnum = (*src).fnum;
+    (*dst).timestamp = (*src).timestamp;
+    (*dst).view = (*src).view;
+}
+
+/// Compare two positions and determine visual order.
+/// Returns which position should be considered "start" vs "end" for visual selection.
+///
+/// This implements the logic: if name == '<', return the lesser position;
+/// if name == '>', return the greater position.
+///
+/// # Arguments
+/// * `start_lnum`, `start_col` - First position (vi_start)
+/// * `end_lnum`, `end_col` - Second position (vi_end)
+/// * `name` - Mark name ('<' or '>')
+///
+/// # Returns
+/// 0 to use start position, 1 to use end position
+#[no_mangle]
+pub extern "C" fn rs_visual_mark_select(
+    start_lnum: LinenrT,
+    start_col: ColnrT,
+    end_lnum: LinenrT,
+    end_col: ColnrT,
+    name: c_int,
+) -> c_int {
+    let start = PosT {
+        lnum: start_lnum,
+        col: start_col,
+        coladd: 0,
+    };
+    let end = PosT {
+        lnum: end_lnum,
+        col: end_col,
+        coladd: 0,
+    };
+
+    let start_is_less = rs_lt(start, end) != 0;
+
+    // '<' wants the lesser position, '>' wants the greater
+    // But also handle edge cases: if end.lnum == 0 or start.lnum == 0
+    let name_is_less = name == c_int::from(b'<');
+
+    if end_lnum == 0 && start_lnum != 0 {
+        // End is invalid, use start
+        return 0;
+    }
+
+    if (name_is_less == start_is_less || end_lnum == 0) && start_lnum != 0 {
+        0 // use start
+    } else {
+        1 // use end
+    }
+}
+
+// =============================================================================
+// Phase 2 Tests
+// =============================================================================
+
+#[cfg(test)]
+mod phase2_tests {
+    use super::*;
+
+    #[test]
+    fn test_mark_validate_lnum() {
+        assert_eq!(rs_mark_validate_lnum(1), MarkValidation::Valid);
+        assert_eq!(rs_mark_validate_lnum(100), MarkValidation::Valid);
+        assert_eq!(rs_mark_validate_lnum(0), MarkValidation::NotSet);
+        assert_eq!(rs_mark_validate_lnum(-1), MarkValidation::Negative);
+    }
+
+    #[test]
+    fn test_mark_validate_bounds() {
+        // Valid cases
+        assert_eq!(rs_mark_validate_bounds(1, 100), MarkValidation::Valid);
+        assert_eq!(rs_mark_validate_bounds(100, 100), MarkValidation::Valid);
+
+        // Out of bounds
+        assert_eq!(
+            rs_mark_validate_bounds(101, 100),
+            MarkValidation::OutOfBounds
+        );
+
+        // Invalid lnum
+        assert_eq!(rs_mark_validate_bounds(0, 100), MarkValidation::NotSet);
+        assert_eq!(rs_mark_validate_bounds(-1, 100), MarkValidation::Negative);
+    }
+
+    #[test]
+    fn test_mark_lnum_checks() {
+        assert_ne!(rs_mark_lnum_is_valid(1), 0);
+        assert_eq!(rs_mark_lnum_is_valid(0), 0);
+        assert_eq!(rs_mark_lnum_is_valid(-1), 0);
+
+        assert_ne!(rs_mark_lnum_in_bounds(1, 100), 0);
+        assert_ne!(rs_mark_lnum_in_bounds(100, 100), 0);
+        assert_eq!(rs_mark_lnum_in_bounds(101, 100), 0);
+        assert_eq!(rs_mark_lnum_in_bounds(0, 100), 0);
+    }
+
+    #[test]
+    fn test_fmark_default() {
+        let fm = FmarkT::default();
+        assert_eq!(fm.mark.lnum, 0);
+        assert_eq!(fm.mark.col, 0);
+        assert_eq!(fm.fnum, 0);
+        assert_eq!(fm.timestamp, 0);
+        assert_eq!(fm.view.topline_offset, MAXLNUM);
+        assert!(fm.additional_data.is_null());
+    }
+
+    #[test]
+    fn test_fmark_init() {
+        let mut fm = FmarkT {
+            mark: PosT {
+                lnum: 10,
+                col: 5,
+                coladd: 2,
+            },
+            fnum: 1,
+            timestamp: 12345,
+            view: FmarkvT { topline_offset: 3 },
+            additional_data: std::ptr::null_mut(),
+        };
+
+        unsafe { rs_fmark_init(&mut fm) };
+
+        assert_eq!(fm.mark.lnum, 0);
+        assert_eq!(fm.mark.col, 0);
+        assert_eq!(fm.fnum, 0);
+        assert_eq!(fm.timestamp, 0);
+        assert_eq!(fm.view.topline_offset, MAXLNUM);
+    }
+
+    #[test]
+    fn test_fmark_is_set() {
+        let mut fm = FmarkT::default();
+        assert_eq!(rs_fmark_is_set(fm), 0);
+
+        fm.mark.lnum = 1;
+        assert_ne!(rs_fmark_is_set(fm), 0);
+
+        fm.mark.lnum = -1;
+        assert_eq!(rs_fmark_is_set(fm), 0);
+    }
+
+    #[test]
+    fn test_fmark_getters() {
+        let fm = FmarkT {
+            mark: PosT {
+                lnum: 10,
+                col: 5,
+                coladd: 2,
+            },
+            fnum: 3,
+            timestamp: 12345,
+            view: FmarkvT { topline_offset: 3 },
+            additional_data: std::ptr::null_mut(),
+        };
+
+        assert_eq!(rs_fmark_get_lnum(fm), 10);
+        assert_eq!(rs_fmark_get_col(fm), 5);
+        assert_eq!(rs_fmark_get_fnum(fm), 3);
+        assert_eq!(rs_fmark_get_timestamp(fm), 12345);
+    }
+
+    #[test]
+    fn test_fmark_setters() {
+        let mut fm = FmarkT::default();
+
+        unsafe {
+            rs_fmark_set_pos(&mut fm, 10, 5);
+            rs_fmark_set_fnum(&mut fm, 3);
+            rs_fmark_set_timestamp(&mut fm, 12345);
+        }
+
+        assert_eq!(fm.mark.lnum, 10);
+        assert_eq!(fm.mark.col, 5);
+        assert_eq!(fm.fnum, 3);
+        assert_eq!(fm.timestamp, 12345);
+    }
+
+    #[test]
+    fn test_fmark_copy() {
+        let src = FmarkT {
+            mark: PosT {
+                lnum: 10,
+                col: 5,
+                coladd: 2,
+            },
+            fnum: 3,
+            timestamp: 12345,
+            view: FmarkvT { topline_offset: 7 },
+            additional_data: std::ptr::null_mut(),
+        };
+        let mut dst = FmarkT::default();
+
+        unsafe { rs_fmark_copy(&mut dst, &src) };
+
+        assert_eq!(dst.mark.lnum, 10);
+        assert_eq!(dst.mark.col, 5);
+        assert_eq!(dst.mark.coladd, 2);
+        assert_eq!(dst.fnum, 3);
+        assert_eq!(dst.timestamp, 12345);
+        assert_eq!(dst.view.topline_offset, 7);
+    }
+
+    #[test]
+    fn test_visual_mark_select() {
+        // '<' should select lesser position
+        // start < end, name = '<' -> use start (0)
+        assert_eq!(rs_visual_mark_select(1, 0, 10, 0, c_int::from(b'<')), 0);
+
+        // start > end, name = '<' -> use end (1)
+        assert_eq!(rs_visual_mark_select(10, 0, 1, 0, c_int::from(b'<')), 1);
+
+        // '>' should select greater position
+        // start < end, name = '>' -> use end (1)
+        assert_eq!(rs_visual_mark_select(1, 0, 10, 0, c_int::from(b'>')), 1);
+
+        // start > end, name = '>' -> use start (0)
+        assert_eq!(rs_visual_mark_select(10, 0, 1, 0, c_int::from(b'>')), 0);
+
+        // Edge case: end.lnum == 0, start.lnum != 0 -> use start
+        assert_eq!(rs_visual_mark_select(5, 0, 0, 0, c_int::from(b'<')), 0);
+        assert_eq!(rs_visual_mark_select(5, 0, 0, 0, c_int::from(b'>')), 0);
+    }
+}

@@ -115,6 +115,22 @@ extern fmarkv_T rs_mark_view_make(linenr_T topline, linenr_T pos_lnum);
 extern linenr_T rs_mark_view_calc_topline(linenr_T mark_lnum, linenr_T topline_offset);
 extern int rs_fmarkv_has_view(fmarkv_T view);
 
+// Mark validation functions
+extern int rs_mark_lnum_is_valid(linenr_T mark_lnum);
+extern int rs_mark_lnum_in_bounds(linenr_T mark_lnum, linenr_T buf_line_count);
+
+// fmark_T functions
+extern int rs_fmark_is_set(fmark_T fm);
+extern linenr_T rs_fmark_get_lnum(fmark_T fm);
+extern colnr_T rs_fmark_get_col(fmark_T fm);
+extern int rs_fmark_get_fnum(fmark_T fm);
+extern void rs_fmark_set_pos(fmark_T *fm, linenr_T lnum, colnr_T col);
+extern void rs_fmark_set_fnum(fmark_T *fm, int fnum);
+
+// Visual mark selection
+extern int rs_visual_mark_select(linenr_T start_lnum, colnr_T start_col,
+                                  linenr_T end_lnum, colnr_T end_col, int name);
+
 // =============================================================================
 // Rust wrapper functions
 // =============================================================================
@@ -837,8 +853,10 @@ fmark_T *mark_get_visual(buf_T *buf, int name)
     // start/end of visual area
     pos_T startp = buf->b_visual.vi_start;
     pos_T endp = buf->b_visual.vi_end;
-    if (((name == '<') == lt(startp, endp) || endp.lnum == 0)
-        && startp.lnum != 0) {
+    // Use Rust implementation to determine which position to use
+    int use_end = rs_visual_mark_select(startp.lnum, startp.col,
+                                        endp.lnum, endp.col, name);
+    if (use_end == 0) {
       mark = pos_to_mark(buf, NULL, startp);
     } else {
       mark = pos_to_mark(buf, NULL, endp);
