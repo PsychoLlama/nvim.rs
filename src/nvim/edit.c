@@ -4708,3 +4708,15 @@ int nvim_scroll_cursor_down(int n, int upd_topline)
 {
   return cursor_down(n, upd_topline != 0);
 }
+
+/// Get the dollar_vcol global variable (accessor for Rust).
+colnr_T nvim_get_dollar_vcol(void)
+{
+  return dollar_vcol;
+}
+
+/// Set the dollar_vcol global variable (accessor for Rust).
+void nvim_set_dollar_vcol(colnr_T val)
+{
+  dollar_vcol = val;
+}

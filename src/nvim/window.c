@@ -8229,3 +8229,9 @@ void nvim_win_set_botfill(win_T *wp, int val)
     wp->w_botfill = (val != 0);
   }
 }
+
+/// Check if window's w_grid.target is non-NULL (accessor for Rust).
+int nvim_win_grid_has_target(win_T *wp)
+{
+  return (wp && wp->w_grid.target) ? 1 : 0;
+}

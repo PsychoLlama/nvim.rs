@@ -2784,3 +2784,15 @@ void nvim_win_set_old_visual_col(win_T *wp, colnr_T val)
     wp->w_old_visual_col = val;
   }
 }
+
+/// Check if redrawing is currently being done (accessor for Rust).
+int nvim_redrawing(void)
+{
+  return redrawing() ? 1 : 0;
+}
+
+/// Scroll lines in window (wrapper for win_scroll_lines for Rust FFI).
+void nvim_win_scroll_lines(win_T *wp, int row, int line_count)
+{
+  win_scroll_lines(wp, row, line_count);
+}

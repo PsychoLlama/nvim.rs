@@ -7021,3 +7021,9 @@ const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
   return set_option(opt_idx, value, opt_flags, set_sid, direct != 0, value_replaced != 0, errbuf,
                     errbuflen);
 }
+
+/// Get the 'sidescroll' option value (accessor for Rust).
+OptInt nvim_get_p_ss(void)
+{
+  return p_ss;
+}

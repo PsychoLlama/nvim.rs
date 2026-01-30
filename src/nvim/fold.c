@@ -2627,6 +2627,18 @@ bool nvim_wline_get_folded(wline_T *wl)
   return wl->wl_folded;
 }
 
+/// Get the wl_size field from a wline_T.
+uint16_t nvim_wline_get_size(wline_T *wl)
+{
+  return wl->wl_size;
+}
+
+/// Get the wl_lastlnum field from a wline_T.
+linenr_T nvim_wline_get_lastlnum(wline_T *wl)
+{
+  return wl->wl_lastlnum;
+}
+
 // ============================================================================
 // Phase 1: Accessors for recursive functions
 // ============================================================================
