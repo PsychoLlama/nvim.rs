@@ -991,6 +991,24 @@ int nvim_win_get_p_diff(win_T *wp)
   return wp->w_p_diff;
 }
 
+/// Get the 'cursorbind' option value for a window.
+int nvim_win_get_p_crb(win_T *wp)
+{
+  return wp->w_p_crb;
+}
+
+/// Set the curwin global.
+void nvim_set_curwin(win_T *wp)
+{
+  curwin = wp;
+}
+
+/// Set the curbuf global.
+void nvim_set_curbuf(buf_T *buf)
+{
+  curbuf = buf;
+}
+
 /// Check if there are virtual lines in the window's buffer.
 int nvim_win_buf_meta_total_lines(win_T *wp)
 {

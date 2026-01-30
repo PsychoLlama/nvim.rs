@@ -103,6 +103,7 @@ extern void rs_botline_forw(win_T *wp, lineoff_T *lp);
 extern int rs_virtcol2col(win_T *wp, linenr_T lnum, int vcol);
 extern void rs_textpos2screenpos(win_T *wp, pos_T *pos, int *rowp, int *scolp,
                                   int *ccolp, int *ecolp, int local);
+extern void rs_do_check_cursorbind(void);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -1107,75 +1108,7 @@ int pagescroll(Direction dir, int count, bool half)
 
 void do_check_cursorbind(void)
 {
-  static win_T *prev_curwin = NULL;
-  static pos_T prev_cursor = { 0, 0, 0 };
-
-  if (curwin == prev_curwin && equalpos(curwin->w_cursor, prev_cursor)) {
-    return;
-  }
-  prev_curwin = curwin;
-  prev_cursor = curwin->w_cursor;
-
-  linenr_T line = curwin->w_cursor.lnum;
-  colnr_T col = curwin->w_cursor.col;
-  colnr_T coladd = curwin->w_cursor.coladd;
-  colnr_T curswant = curwin->w_curswant;
-  bool set_curswant = curwin->w_set_curswant;
-  win_T *old_curwin = curwin;
-  buf_T *old_curbuf = curbuf;
-  int old_VIsual_select = VIsual_select;
-  int old_VIsual_active = VIsual_active;
-
-  // loop through the cursorbound windows
-  VIsual_select = VIsual_active = false;
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    curwin = wp;
-    curbuf = curwin->w_buffer;
-    // skip original window and windows with 'nocursorbind'
-    if (curwin != old_curwin && curwin->w_p_crb) {
-      if (curwin->w_p_diff) {
-        curwin->w_cursor.lnum =
-          diff_get_corresponding_line(old_curbuf, line);
-      } else {
-        curwin->w_cursor.lnum = line;
-      }
-      curwin->w_cursor.col = col;
-      curwin->w_cursor.coladd = coladd;
-      curwin->w_curswant = curswant;
-      curwin->w_set_curswant = set_curswant;
-
-      // Make sure the cursor is in a valid position.  Temporarily set
-      // "restart_edit" to allow the cursor to be beyond the EOL.
-      {
-        int restart_edit_save = restart_edit;
-        restart_edit = true;
-        check_cursor(curwin);
-
-        // Avoid a scroll here for the cursor position, 'scrollbind' is
-        // more important.
-        if (!curwin->w_p_scb) {
-          validate_cursor(curwin);
-        }
-
-        restart_edit = restart_edit_save;
-      }
-      // Correct cursor for multi-byte character.
-      mb_adjust_cursor();
-      redraw_later(curwin, UPD_VALID);
-
-      // Only scroll when 'scrollbind' hasn't done this.
-      if (!curwin->w_p_scb) {
-        update_topline(curwin);
-      }
-      curwin->w_redr_status = true;
-    }
-  }
-
-  // reset current-window
-  VIsual_select = old_VIsual_select;
-  VIsual_active = old_VIsual_active;
-  curwin = old_curwin;
-  curbuf = old_curbuf;
+  rs_do_check_cursorbind();
 }
 
 // =============================================================================
@@ -1276,6 +1209,12 @@ void nvim_comp_botline(win_T *wp)
 void nvim_curs_columns(win_T *wp, int may_scroll)
 {
   curs_columns(wp, may_scroll);
+}
+
+/// Wrapper for update_topline() (accessor for Rust).
+void nvim_update_topline(win_T *wp)
+{
+  update_topline(wp);
 }
 
 // =============================================================================

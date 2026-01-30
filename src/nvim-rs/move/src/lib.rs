@@ -3880,6 +3880,180 @@ pub unsafe extern "C" fn rs_virtcol2col(wp: WinHandle, lnum: LinenrT, vcol: c_in
 }
 
 // =============================================================================
+// Cursor Bind Synchronization
+// =============================================================================
+
+/// Tabpage handle type (opaque pointer to `tabpage_T`).
+type TabpageHandle = *mut std::ffi::c_void;
+
+extern "C" {
+    /// Get the current tabpage.
+    fn nvim_get_curtab() -> TabpageHandle;
+
+    /// Get the first window in a tabpage.
+    fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
+
+    /// Get next window in linked list.
+    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
+
+    /// Get 'cursorbind' option for a window.
+    fn nvim_win_get_p_crb(wp: WinHandle) -> c_int;
+
+    /// Get 'diff' option for a window.
+    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
+
+    /// Get 'scrollbind' option for a window.
+    fn nvim_win_get_p_scb(wp: WinHandle) -> c_int;
+
+    /// Set curwin global.
+    fn nvim_set_curwin(wp: WinHandle);
+
+    /// Set curbuf global.
+    fn nvim_set_curbuf(buf: *mut std::ffi::c_void);
+
+    /// Get `VIsual_select` global.
+    fn nvim_get_VIsual_select() -> c_int;
+
+    /// Set `VIsual_select` global.
+    fn nvim_set_VIsual_select(val: c_int);
+
+    /// Set `VIsual_active` global.
+    fn nvim_set_VIsual_active(val: c_int);
+
+    /// Get diff corresponding line.
+    fn nvim_diff_get_corresponding_line(buf: *mut std::ffi::c_void, lnum: LinenrT) -> LinenrT;
+
+    /// Check cursor position (uses curwin global).
+    fn nvim_check_cursor();
+
+    /// Adjust cursor for multi-byte character.
+    fn nvim_mb_adjust_cursor();
+
+    /// Get `restart_edit` global.
+    fn nvim_get_restart_edit() -> c_int;
+
+    /// Set `restart_edit` global.
+    fn nvim_set_restart_edit(val: c_int);
+
+    /// Update topline.
+    fn nvim_update_topline(wp: WinHandle);
+
+    /// Set `w_redr_status` for a window.
+    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
+}
+
+/// Static storage for cursor bind tracking.
+static mut PREV_CURWIN: WinHandle = WinHandle::null();
+static mut PREV_CURSOR_LNUM: LinenrT = 0;
+static mut PREV_CURSOR_COL: ColnrT = 0;
+static mut PREV_CURSOR_COLADD: ColnrT = 0;
+
+/// Check and synchronize cursorbind windows.
+///
+/// When the cursor has moved since the last call, this function synchronizes
+/// the cursor position in all windows with 'cursorbind' set to match
+/// the current window's cursor position.
+///
+/// # Safety
+/// Modifies global state (curwin, curbuf, `VIsual_select`, `VIsual_active`).
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_do_check_cursorbind() {
+    let curwin = nvim_get_curwin();
+    if curwin.is_null() {
+        return;
+    }
+
+    let cursor_lnum = nvim_win_get_cursor_lnum(curwin);
+    let cursor_col = nvim_win_get_cursor_col(curwin);
+    let cursor_coladd = nvim_win_get_cursor_coladd(curwin);
+
+    // Check if cursor has moved since last call
+    if curwin == PREV_CURWIN
+        && cursor_lnum == PREV_CURSOR_LNUM
+        && cursor_col == PREV_CURSOR_COL
+        && cursor_coladd == PREV_CURSOR_COLADD
+    {
+        return;
+    }
+
+    // Update static state
+    PREV_CURWIN = curwin;
+    PREV_CURSOR_LNUM = cursor_lnum;
+    PREV_CURSOR_COL = cursor_col;
+    PREV_CURSOR_COLADD = cursor_coladd;
+
+    let line = cursor_lnum;
+    let col = cursor_col;
+    let coladd = cursor_coladd;
+    let curswant = nvim_win_get_curswant(curwin);
+    let set_curswant = nvim_win_get_set_curswant(curwin);
+    let old_curwin = curwin;
+    let old_curbuf = nvim_get_curbuf();
+    let old_visual_select = nvim_get_VIsual_select();
+    let old_visual_active = nvim_VIsual_active();
+
+    // loop through the cursorbound windows
+    nvim_set_VIsual_select(0);
+    nvim_set_VIsual_active(0);
+
+    let curtab = nvim_get_curtab();
+    let mut wp = nvim_tabpage_get_firstwin(curtab);
+
+    while !wp.is_null() {
+        nvim_set_curwin(wp);
+        nvim_set_curbuf(nvim_win_get_buffer(wp));
+
+        // skip original window and windows with 'nocursorbind'
+        if wp != old_curwin && nvim_win_get_p_crb(wp) != 0 {
+            // Set cursor line number
+            if nvim_win_get_p_diff(wp) != 0 {
+                let new_lnum = nvim_diff_get_corresponding_line(old_curbuf, line);
+                nvim_win_set_cursor_lnum(wp, new_lnum);
+            } else {
+                nvim_win_set_cursor_lnum(wp, line);
+            }
+            nvim_win_set_cursor_col(wp, col);
+            nvim_win_set_cursor_coladd(wp, coladd);
+            nvim_win_set_curswant(wp, curswant);
+            nvim_win_set_set_curswant(wp, set_curswant);
+
+            // Make sure the cursor is in a valid position.
+            // Temporarily set "restart_edit" to allow the cursor to be beyond EOL.
+            let restart_edit_save = nvim_get_restart_edit();
+            nvim_set_restart_edit(1);
+            nvim_check_cursor(); // Uses curwin global which we just set
+
+            // Avoid a scroll here for the cursor position, 'scrollbind' is
+            // more important.
+            if nvim_win_get_p_scb(wp) == 0 {
+                rs_validate_cursor(wp);
+            }
+
+            nvim_set_restart_edit(restart_edit_save);
+
+            // Correct cursor for multi-byte character.
+            nvim_mb_adjust_cursor();
+            nvim_redraw_later(wp, upd::VALID);
+
+            // Only scroll when 'scrollbind' hasn't done this.
+            if nvim_win_get_p_scb(wp) == 0 {
+                nvim_update_topline(wp);
+            }
+            nvim_win_set_redr_status(wp, 1);
+        }
+
+        wp = nvim_win_get_next(wp);
+    }
+
+    // reset current-window
+    nvim_set_VIsual_select(old_visual_select);
+    nvim_set_VIsual_active(old_visual_active);
+    nvim_set_curwin(old_curwin);
+    nvim_set_curbuf(old_curbuf);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
