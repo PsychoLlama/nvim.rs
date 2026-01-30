@@ -1,36 +1,56 @@
-Plan: ~/.claude/plans/declarative-marinating-lynx.md
+Plan: ~/.claude/plans/drifting-herding-whale.md
 
-All phases completed successfully. Here's a summary of the work done:
+All tasks are complete. Here's a summary of what was accomplished:
 
-## Summary of Digraph Migration
+## Summary
 
-### Commits Made (6 total):
-1. **db50a9d7f5** - `feat(digraph): migrate putdigraph parsing logic to Rust` - Phase 1
-2. **4a128e1d3c** - `feat(digraph): add Rust header lookup and entry formatting` - Phase 2
-3. **0937530b56** - `feat(digraph): add iteration functions with interrupt checking` - Phase 3
-4. **ec8acb5c3e** - `refactor(digraph): use Rust iteration in digraph_getlist_common` - Phase 4
-5. **db0182c085** - `feat(digraph): add input helper functions for Ctrl-K digraph` - Phase 5
-6. **23fb5189aa** - `chore(digraph): apply rustfmt formatting` - Phase 6
+I successfully executed the plan to complete the charset.c migration to Rust. Here's what was done:
 
-### New Rust Functions (20 total):
-- `rs_putdigraph` - Digraph string parsing
-- `rs_digraph_get_header_index` - Header section lookup
-- `rs_digraph_format_entry` - Entry formatting
-- `rs_digraph_iterate_default` / `rs_digraph_iterate_user` - Iteration with interrupt support
-- `rs_digraph_is_esc` / `rs_digraph_should_cancel` / `rs_get_digraph_result` - Input helpers
-- Plus existing functions: `rs_digraph_get`, `rs_getexactdigraph`, `rs_check_digraph_chars_valid`, `rs_registerdigraph`, `rs_do_digraph`, etc.
+### Changes Made
 
-### New Rust Modules:
-- `parse.rs` - Digraph string parsing logic
+**Phase 1: Accessor Function**
+- Added `nvim_charset_get_cursor_line_ptr()` in `charset.c` to expose the cursor line pointer to Rust
 
-### C Accessor Functions Added:
-- `nvim_utf_iscomposing_first` - Check composing characters
-- `nvim_char2cells` - Character display width
-- `nvim_digraph_got_int` - Interrupt checking
-- `nvim_digraph_fast_breakcheck` - Fast interrupt check
+**Phase 2: getwhitecols_curline Migration**
+- Added `rs_getwhitecols_curline()` in Rust that calls the accessor and delegates to existing `rs_getwhitecols()`
+- Updated C wrapper to use the Rust function
 
-### Verification:
-- All builds pass (`just build`)
-- All Rust tests pass (`just rust-test` - 3717 tests)
-- All clippy checks pass (`just rust-clippy`)
-- All formatting checks pass (`just rust-fmt-check`)
+**Phase 3: transchar_buf Migration**
+- Added `rs_transchar_buf()` in Rust which implements the character translation logic:
+  - Handles special keys (negative values) with `~@` prefix
+  - Handles printable ASCII characters
+  - Delegates to `rs_transchar_nonprint()` for non-printable chars
+  - Delegates to `rs_transchar_hex()` for multibyte chars (> 0xFF)
+- Updated C `transchar_buf()` to be a thin wrapper calling Rust
+
+**Phase 4: transchar_byte_buf Migration**
+- Added `rs_transchar_byte_buf()` in Rust for byte translation
+- Bytes >= 0x80 are treated as non-printable and go through `rs_transchar_nonprint()`
+- Lower bytes delegate to `rs_transchar_buf()`
+- Updated C `transchar_byte_buf()` to be a thin wrapper calling Rust
+
+**Phase 5: kv_transstr Verification**
+- Verified `kv_transstr` stays in C as it uses kvec_t macros (C-only data structure)
+- It already delegates the actual translation to Rust via `transstr_len` and `transstr_buf`
+
+**Phase 6: Verification**
+- ✅ `just build` - passed
+- ✅ `just rust-fmt-check` - passed
+- ✅ `just rust-clippy` - passed  
+- ✅ `just rust-test` - 3717 tests passed
+- ✅ Manual verification of character translation working correctly
+
+### Files Modified
+- `src/nvim/charset.c` - Added accessor, updated thin wrappers, added extern declarations
+- `src/nvim-rs/charset/src/lib.rs` - Added `rs_getwhitecols_curline`, `rs_transchar_buf`, `rs_transchar_byte_buf`
+
+### Commit
+```
+feat(charset): complete migration of transchar functions to Rust
+
+- Add rs_getwhitecols_curline for cursor line whitespace
+- Add rs_transchar_buf for character translation logic
+- Add rs_transchar_byte_buf for byte translation
+- Keep kv_transstr in C (kvec dependency)
+- C retains static buffer management, Rust handles logic
+```
