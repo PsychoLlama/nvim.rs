@@ -2172,3 +2172,375 @@ mod phase4_tests {
         assert_eq!(rs_getnextmark_is_better(5, 5, 10, 5, 20, 5, BACKWARD), 0);
     }
 }
+
+// =============================================================================
+// Phase 6: Mark Adjustment Functions
+// =============================================================================
+
+/// Result of a line number adjustment.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LineAdjustResult {
+    /// New line number after adjustment
+    pub new_lnum: LinenrT,
+    /// Whether the line was modified
+    pub modified: c_int,
+}
+
+/// Adjust a line number based on line deletion/insertion.
+///
+/// Implements ONE_ADJUST logic:
+/// - If lnum in [line1, line2]: add amount (or set to 0 if amount is MAXLNUM)
+/// - If lnum > line2: add amount_after
+///
+/// # Arguments
+/// * `lnum` - The line number to adjust
+/// * `line1` - Start of affected range
+/// * `line2` - End of affected range
+/// * `amount` - Amount to add for lines in range (MAXLNUM means delete)
+/// * `amount_after` - Amount to add for lines after range
+///
+/// # Returns
+/// LineAdjustResult with the new line number and modification flag
+#[no_mangle]
+pub extern "C" fn rs_mark_adjust_lnum(
+    lnum: LinenrT,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+) -> LineAdjustResult {
+    if lnum >= line1 && lnum <= line2 {
+        // Line is in the affected range
+        if amount == MAXLNUM {
+            // Deletion: set to 0
+            LineAdjustResult {
+                new_lnum: 0,
+                modified: 1,
+            }
+        } else {
+            LineAdjustResult {
+                new_lnum: lnum + amount,
+                modified: 1,
+            }
+        }
+    } else if amount_after != 0 && lnum > line2 {
+        // Line is after the range
+        LineAdjustResult {
+            new_lnum: lnum + amount_after,
+            modified: 1,
+        }
+    } else {
+        // No change
+        LineAdjustResult {
+            new_lnum: lnum,
+            modified: 0,
+        }
+    }
+}
+
+/// Adjust a line number with no-delete behavior.
+///
+/// Implements ONE_ADJUST_NODEL logic:
+/// - If lnum in [line1, line2]: add amount (or set to line1 if amount is MAXLNUM)
+/// - If lnum > line2: add amount_after
+///
+/// # Arguments
+/// * `lnum` - The line number to adjust
+/// * `line1` - Start of affected range
+/// * `line2` - End of affected range
+/// * `amount` - Amount to add for lines in range (MAXLNUM means set to line1)
+/// * `amount_after` - Amount to add for lines after range
+///
+/// # Returns
+/// LineAdjustResult with the new line number and modification flag
+#[no_mangle]
+pub extern "C" fn rs_mark_adjust_lnum_nodel(
+    lnum: LinenrT,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+) -> LineAdjustResult {
+    if lnum >= line1 && lnum <= line2 {
+        // Line is in the affected range
+        if amount == MAXLNUM {
+            // No delete: set to line1
+            LineAdjustResult {
+                new_lnum: line1,
+                modified: 1,
+            }
+        } else {
+            LineAdjustResult {
+                new_lnum: lnum + amount,
+                modified: 1,
+            }
+        }
+    } else if amount_after != 0 && lnum > line2 {
+        // Line is after the range
+        LineAdjustResult {
+            new_lnum: lnum + amount_after,
+            modified: 1,
+        }
+    } else {
+        // No change
+        LineAdjustResult {
+            new_lnum: lnum,
+            modified: 0,
+        }
+    }
+}
+
+/// Result of a cursor position adjustment.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CursorAdjustResult {
+    /// New line number after adjustment
+    pub new_lnum: LinenrT,
+    /// New column after adjustment
+    pub new_col: ColnrT,
+    /// Whether the position was modified
+    pub modified: c_int,
+}
+
+/// Adjust a cursor position based on line deletion/insertion.
+///
+/// Implements ONE_ADJUST_CURSOR logic:
+/// - If lnum in [line1, line2] and amount is MAXLNUM: move to max(line1-1, 1), col 0
+/// - If lnum in [line1, line2]: add amount to lnum
+/// - If lnum > line2: add amount_after
+///
+/// # Arguments
+/// * `lnum` - The line number to adjust
+/// * `col` - The column to adjust
+/// * `line1` - Start of affected range
+/// * `line2` - End of affected range
+/// * `amount` - Amount to add for lines in range (MAXLNUM means delete)
+/// * `amount_after` - Amount to add for lines after range
+///
+/// # Returns
+/// CursorAdjustResult with the new position and modification flag
+#[no_mangle]
+pub extern "C" fn rs_mark_adjust_cursor(
+    lnum: LinenrT,
+    col: ColnrT,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+) -> CursorAdjustResult {
+    if lnum >= line1 && lnum <= line2 {
+        // Cursor is in the affected range
+        if amount == MAXLNUM {
+            // Line with cursor is deleted
+            let new_lnum = std::cmp::max(line1 - 1, 1);
+            CursorAdjustResult {
+                new_lnum,
+                new_col: 0,
+                modified: 1,
+            }
+        } else {
+            // Keep cursor on the same line
+            CursorAdjustResult {
+                new_lnum: lnum + amount,
+                new_col: col,
+                modified: 1,
+            }
+        }
+    } else if amount_after != 0 && lnum > line2 {
+        // Cursor is after the range
+        CursorAdjustResult {
+            new_lnum: lnum + amount_after,
+            new_col: col,
+            modified: 1,
+        }
+    } else {
+        // No change
+        CursorAdjustResult {
+            new_lnum: lnum,
+            new_col: col,
+            modified: 0,
+        }
+    }
+}
+
+/// Result of a column adjustment.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ColAdjustResult {
+    /// New line number after adjustment
+    pub new_lnum: LinenrT,
+    /// New column after adjustment
+    pub new_col: ColnrT,
+    /// Whether the position was modified
+    pub modified: c_int,
+}
+
+/// Adjust a position's column based on column changes.
+///
+/// Implements COL_ADJUST logic for mark_col_adjust.
+///
+/// # Arguments
+/// * `pos_lnum` - Position's line number
+/// * `pos_col` - Position's column
+/// * `lnum` - Line being modified
+/// * `mincol` - Minimum column affected
+/// * `lnum_amount` - Amount to add to line number
+/// * `col_amount` - Amount to add to column
+/// * `spaces_removed` - Number of spaces removed
+///
+/// # Returns
+/// ColAdjustResult with the new position and modification flag
+#[no_mangle]
+pub extern "C" fn rs_mark_col_adjust(
+    pos_lnum: LinenrT,
+    pos_col: ColnrT,
+    lnum: LinenrT,
+    mincol: ColnrT,
+    lnum_amount: LinenrT,
+    col_amount: ColnrT,
+    spaces_removed: c_int,
+) -> ColAdjustResult {
+    if pos_lnum != lnum || pos_col < mincol {
+        // Position not affected
+        return ColAdjustResult {
+            new_lnum: pos_lnum,
+            new_col: pos_col,
+            modified: 0,
+        };
+    }
+
+    let new_lnum = pos_lnum + lnum_amount;
+    let new_col = if col_amount < 0 && pos_col <= -col_amount {
+        0
+    } else if pos_col < spaces_removed {
+        col_amount + spaces_removed
+    } else {
+        pos_col + col_amount
+    };
+
+    ColAdjustResult {
+        new_lnum,
+        new_col,
+        modified: 1,
+    }
+}
+
+/// Check if mark adjustment should be skipped.
+///
+/// # Arguments
+/// * `line1` - Start of range
+/// * `line2` - End of range
+/// * `amount_after` - Amount for lines after range
+///
+/// # Returns
+/// Non-zero if adjustment should be skipped
+#[no_mangle]
+pub extern "C" fn rs_mark_adjust_should_skip(
+    line1: LinenrT,
+    line2: LinenrT,
+    amount_after: LinenrT,
+) -> c_int {
+    c_int::from(line2 < line1 && amount_after == 0)
+}
+
+// =============================================================================
+// Phase 6 Tests
+// =============================================================================
+
+#[cfg(test)]
+mod phase6_tests {
+    use super::*;
+
+    #[test]
+    fn test_mark_adjust_lnum_in_range() {
+        // Line in range, add amount
+        let result = rs_mark_adjust_lnum(5, 3, 7, 2, 0);
+        assert_eq!(result.new_lnum, 7); // 5 + 2
+        assert_ne!(result.modified, 0);
+
+        // Line in range, MAXLNUM (delete)
+        let result = rs_mark_adjust_lnum(5, 3, 7, MAXLNUM, 0);
+        assert_eq!(result.new_lnum, 0);
+        assert_ne!(result.modified, 0);
+    }
+
+    #[test]
+    fn test_mark_adjust_lnum_after_range() {
+        // Line after range
+        let result = rs_mark_adjust_lnum(10, 3, 7, 2, 3);
+        assert_eq!(result.new_lnum, 13); // 10 + 3
+        assert_ne!(result.modified, 0);
+    }
+
+    #[test]
+    fn test_mark_adjust_lnum_no_change() {
+        // Line before range
+        let result = rs_mark_adjust_lnum(2, 3, 7, 2, 3);
+        assert_eq!(result.new_lnum, 2);
+        assert_eq!(result.modified, 0);
+
+        // Line after range but amount_after is 0
+        let result = rs_mark_adjust_lnum(10, 3, 7, 2, 0);
+        assert_eq!(result.new_lnum, 10);
+        assert_eq!(result.modified, 0);
+    }
+
+    #[test]
+    fn test_mark_adjust_lnum_nodel() {
+        // Line in range, MAXLNUM (no delete - set to line1)
+        let result = rs_mark_adjust_lnum_nodel(5, 3, 7, MAXLNUM, 0);
+        assert_eq!(result.new_lnum, 3);
+        assert_ne!(result.modified, 0);
+    }
+
+    #[test]
+    fn test_mark_adjust_cursor() {
+        // Cursor in range, deleted
+        let result = rs_mark_adjust_cursor(5, 10, 3, 7, MAXLNUM, 0);
+        assert_eq!(result.new_lnum, 2); // max(3-1, 1) = 2
+        assert_eq!(result.new_col, 0);
+        assert_ne!(result.modified, 0);
+
+        // Edge case: line1 is 1
+        let result = rs_mark_adjust_cursor(5, 10, 1, 7, MAXLNUM, 0);
+        assert_eq!(result.new_lnum, 1); // max(1-1, 1) = 1
+        assert_eq!(result.new_col, 0);
+    }
+
+    #[test]
+    fn test_mark_col_adjust() {
+        // Position on affected line, col >= mincol
+        let result = rs_mark_col_adjust(5, 10, 5, 5, 0, 3, 0);
+        assert_eq!(result.new_lnum, 5);
+        assert_eq!(result.new_col, 13); // 10 + 3
+        assert_ne!(result.modified, 0);
+
+        // Position on different line - no change
+        let result = rs_mark_col_adjust(4, 10, 5, 5, 0, 3, 0);
+        assert_eq!(result.new_lnum, 4);
+        assert_eq!(result.new_col, 10);
+        assert_eq!(result.modified, 0);
+
+        // Position col < mincol - no change
+        let result = rs_mark_col_adjust(5, 3, 5, 5, 0, 3, 0);
+        assert_eq!(result.new_lnum, 5);
+        assert_eq!(result.new_col, 3);
+        assert_eq!(result.modified, 0);
+
+        // Negative col_amount, col would go negative
+        let result = rs_mark_col_adjust(5, 3, 5, 0, 0, -5, 0);
+        assert_eq!(result.new_col, 0);
+
+        // spaces_removed case
+        let result = rs_mark_col_adjust(5, 2, 5, 0, 0, 5, 4);
+        assert_eq!(result.new_col, 9); // col_amount + spaces_removed = 5 + 4
+    }
+
+    #[test]
+    fn test_mark_adjust_should_skip() {
+        assert_ne!(rs_mark_adjust_should_skip(5, 3, 0), 0); // line2 < line1, amount_after == 0
+        assert_eq!(rs_mark_adjust_should_skip(3, 5, 0), 0); // line2 >= line1
+        assert_eq!(rs_mark_adjust_should_skip(5, 3, 1), 0); // amount_after != 0
+    }
+}

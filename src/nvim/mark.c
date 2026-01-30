@@ -149,6 +149,28 @@ extern int rs_getnextmark_is_better(linenr_T candidate_lnum, colnr_T candidate_c
                                      linenr_T current_best_lnum, colnr_T current_best_col,
                                      linenr_T start_lnum, colnr_T start_col, int dir);
 
+// Mark adjustment result structures
+typedef struct {
+  linenr_T new_lnum;
+  int modified;
+} LineAdjustResult;
+
+typedef struct {
+  linenr_T new_lnum;
+  colnr_T new_col;
+  int modified;
+} ColAdjustResult;
+
+// Mark adjustment functions
+extern LineAdjustResult rs_mark_adjust_lnum(linenr_T lnum, linenr_T line1, linenr_T line2,
+                                             linenr_T amount, linenr_T amount_after);
+extern LineAdjustResult rs_mark_adjust_lnum_nodel(linenr_T lnum, linenr_T line1, linenr_T line2,
+                                                   linenr_T amount, linenr_T amount_after);
+extern ColAdjustResult rs_mark_col_adjust(linenr_T pos_lnum, colnr_T pos_col, linenr_T lnum,
+                                           colnr_T mincol, linenr_T lnum_amount,
+                                           colnr_T col_amount, int spaces_removed);
+extern int rs_mark_adjust_should_skip(linenr_T line1, linenr_T line2, linenr_T amount_after);
+
 // =============================================================================
 // Rust wrapper functions
 // =============================================================================
