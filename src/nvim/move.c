@@ -189,214 +189,13 @@ static void reset_skipcol(win_T *wp)
   rs_reset_skipcol(wp);
 }
 
+// Rust implementation
+extern void rs_update_topline(win_T *wp);
+
 // Update wp->w_topline to move the cursor onto the screen.
 void update_topline(win_T *wp)
 {
-  bool check_botline = false;
-  OptInt *so_ptr = wp->w_p_so >= 0 ? &wp->w_p_so : &p_so;
-  OptInt save_so = *so_ptr;
-
-  // Cursor is updated instead when this is true for 'splitkeep'.
-  if (skip_update_topline) {
-    return;
-  }
-
-  // If there is no valid screen and when the window height is zero just use
-  // the cursor line.
-  if (!default_grid.chars || wp->w_view_height == 0) {
-    wp->w_topline = wp->w_cursor.lnum;
-    wp->w_botline = wp->w_topline;
-    wp->w_viewport_invalid = true;
-    wp->w_scbind_pos = 1;
-    return;
-  }
-
-  check_cursor_moved(wp);
-  if (wp->w_valid & VALID_TOPLINE) {
-    return;
-  }
-
-  // When dragging with the mouse, don't scroll that quickly
-  if (mouse_dragging > 0) {
-    *so_ptr = mouse_dragging - 1;
-  }
-
-  linenr_T old_topline = wp->w_topline;
-  int old_topfill = wp->w_topfill;
-
-  // If the buffer is empty, always set topline to 1.
-  if (buf_is_empty(wp->w_buffer)) {  // special case - file is empty
-    if (wp->w_topline != 1) {
-      redraw_later(wp, UPD_NOT_VALID);
-    }
-    wp->w_topline = 1;
-    wp->w_botline = 2;
-    wp->w_skipcol = 0;
-    wp->w_valid |= VALID_BOTLINE|VALID_BOTLINE_AP;
-    wp->w_viewport_invalid = true;
-    wp->w_scbind_pos = 1;
-  } else {
-    bool check_topline = false;
-    // If the cursor is above or near the top of the window, scroll the window
-    // to show the line the cursor is in, with 'scrolloff' context.
-    if (wp->w_topline > 1 || wp->w_skipcol > 0) {
-      // If the cursor is above topline, scrolling is always needed.
-      // If the cursor is far below topline and there is no folding,
-      // scrolling down is never needed.
-      if (wp->w_cursor.lnum < wp->w_topline) {
-        check_topline = true;
-      } else if (check_top_offset(wp)) {
-        check_topline = true;
-      } else if (wp->w_skipcol > 0 && wp->w_cursor.lnum == wp->w_topline) {
-        colnr_T vcol;
-
-        // Check that the cursor position is visible.  Add columns for
-        // the marker displayed in the top-left if needed.
-        getvvcol(wp, &wp->w_cursor, &vcol, NULL, NULL);
-        int overlap = sms_marker_overlap(wp, -1);
-        if (wp->w_skipcol + overlap > vcol) {
-          check_topline = true;
-        }
-      }
-    }
-    // Check if there are more filler lines than allowed.
-    if (!check_topline && wp->w_topfill > win_get_fill(wp, wp->w_topline)) {
-      check_topline = true;
-    }
-
-    if (check_topline) {
-      int halfheight = wp->w_view_height / 2 - 1;
-      if (halfheight < 2) {
-        halfheight = 2;
-      }
-      int64_t n;
-      if (win_lines_concealed(wp)) {
-        // Count the number of logical lines between the cursor and
-        // topline + p_so (approximation of how much will be
-        // scrolled).
-        n = 0;
-        for (linenr_T lnum = wp->w_cursor.lnum; lnum < wp->w_topline + *so_ptr; lnum++) {
-          // stop at end of file or when we know we are far off
-          assert(wp->w_buffer != 0);
-          if (lnum >= wp->w_buffer->b_ml.ml_line_count
-              || (n += !decor_conceal_line(wp, lnum, false)) >= halfheight) {
-            break;
-          }
-          hasFolding(wp, lnum, NULL, &lnum);
-        }
-      } else {
-        n = wp->w_topline + *so_ptr - wp->w_cursor.lnum;
-      }
-
-      // If we weren't very close to begin with, we scroll to put the
-      // cursor in the middle of the window.  Otherwise put the cursor
-      // near the top of the window.
-      if (n >= halfheight) {
-        scroll_cursor_halfway(wp, false, false);
-      } else {
-        scroll_cursor_top(wp, scrolljump_value(wp), false);
-        check_botline = true;
-      }
-    } else {
-      // Make sure topline is the first line of a fold.
-      hasFolding(wp, wp->w_topline, &wp->w_topline, NULL);
-      check_botline = true;
-    }
-  }
-
-  // If the cursor is below the bottom of the window, scroll the window
-  // to put the cursor on the window.
-  // When w_botline is invalid, recompute it first, to avoid a redraw later.
-  // If w_botline was approximated, we might need a redraw later in a few
-  // cases, but we don't want to spend (a lot of) time recomputing w_botline
-  // for every small change.
-  if (check_botline) {
-    if (!(wp->w_valid & VALID_BOTLINE_AP)) {
-      validate_botline(wp);
-    }
-
-    assert(wp->w_buffer != 0);
-    if (wp->w_botline <= wp->w_buffer->b_ml.ml_line_count) {
-      if (wp->w_cursor.lnum < wp->w_botline) {
-        if ((wp->w_cursor.lnum >= wp->w_botline - *so_ptr || win_lines_concealed(wp))) {
-          lineoff_T loff;
-
-          // Cursor is (a few lines) above botline, check if there are
-          // 'scrolloff' window lines below the cursor.  If not, need to
-          // scroll.
-          int n = wp->w_empty_rows;
-          loff.lnum = wp->w_cursor.lnum;
-          // In a fold go to its last line.
-          hasFolding(wp, loff.lnum, NULL, &loff.lnum);
-          loff.fill = 0;
-          n += wp->w_filler_rows;
-          loff.height = 0;
-          while (loff.lnum < wp->w_botline
-                 && (loff.lnum + 1 < wp->w_botline || loff.fill == 0)) {
-            n += loff.height;
-            if (n >= *so_ptr) {
-              break;
-            }
-            botline_forw(wp, &loff);
-          }
-          if (n >= *so_ptr) {
-            // sufficient context, no need to scroll
-            check_botline = false;
-          }
-        } else {
-          // sufficient context, no need to scroll
-          check_botline = false;
-        }
-      }
-      if (check_botline) {
-        int n = 0;
-        if (win_lines_concealed(wp)) {
-          // Count the number of logical lines between the cursor and
-          // botline - p_so (approximation of how much will be
-          // scrolled).
-          for (linenr_T lnum = wp->w_cursor.lnum; lnum >= wp->w_botline - *so_ptr; lnum--) {
-            // stop at end of file or when we know we are far off
-            if (lnum <= 0
-                || (n += !decor_conceal_line(wp, lnum - 1, false)) > wp->w_view_height + 1) {
-              break;
-            }
-            hasFolding(wp, lnum, &lnum, NULL);
-          }
-        } else {
-          n = wp->w_cursor.lnum - wp->w_botline + 1 + (int)(*so_ptr);
-        }
-        if (n <= wp->w_view_height + 1) {
-          scroll_cursor_bot(wp, scrolljump_value(wp), false);
-        } else {
-          scroll_cursor_halfway(wp, false, false);
-        }
-      }
-    }
-  }
-  wp->w_valid |= VALID_TOPLINE;
-  wp->w_viewport_invalid = true;
-  win_check_anchored_floats(wp);
-
-  // Need to redraw when topline changed.
-  if (wp->w_topline != old_topline
-      || wp->w_topfill != old_topfill) {
-    dollar_vcol = -1;
-    redraw_later(wp, UPD_VALID);
-
-    // When 'smoothscroll' is not set, should reset w_skipcol.
-    if (!wp->w_p_sms) {
-      reset_skipcol(wp);
-    } else if (wp->w_skipcol != 0) {
-      redraw_later(wp, UPD_SOME_VALID);
-    }
-
-    // May need to set w_skipcol when cursor in w_topline.
-    if (wp->w_cursor.lnum == wp->w_topline) {
-      validate_cursor(wp);
-    }
-  }
-
-  *so_ptr = save_so;
+  rs_update_topline(wp);
 }
 
 /// Return the scrolljump value to use for the window "wp".
@@ -1012,4 +811,10 @@ int nvim_plines_correct_topline(win_T *wp, linenr_T lnum, int limit_winheight)
 int nvim_plines_m_win(win_T *wp, linenr_T first, linenr_T last, int max)
 {
   return plines_m_win(wp, first, last, max);
+}
+
+/// Get skip_update_topline flag (accessor for Rust).
+int nvim_get_skip_update_topline(void)
+{
+  return skip_update_topline ? 1 : 0;
 }
