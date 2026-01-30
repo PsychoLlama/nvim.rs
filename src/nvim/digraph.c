@@ -1759,48 +1759,47 @@ void listdigraphs(bool use_headers)
   }
 }
 
-static void digraph_getlist_appendpair(const digr_T *dp, list_T *l)
-{
-  list_T *l2 = tv_list_alloc(2);
-  tv_list_append_list(l, l2);
+/// Context for digraph_getlist iteration callback.
+typedef struct {
+  list_T *list;
+} DigraphGetlistCtx;
 
+/// Callback for digraph_getlist iteration.
+static int digraph_getlist_callback(uint8_t char1, uint8_t char2, int result, void *ctx)
+{
+  DigraphGetlistCtx *gctx = (DigraphGetlistCtx *)ctx;
+
+  // Create a 2-element sublist ["{c1}{c2}", "{result}"]
+  list_T *l2 = tv_list_alloc(2);
+  tv_list_append_list(gctx->list, l2);
+
+  // Append digraph characters
   char buf[30];
-  buf[0] = (char)dp->char1;
-  buf[1] = (char)dp->char2;
+  buf[0] = (char)char1;
+  buf[1] = (char)char2;
   buf[2] = NUL;
   tv_list_append_string(l2, buf, -1);
 
+  // Append result as UTF-8
   char *p = buf;
-  p += utf_char2bytes(dp->result, p);
+  p += utf_char2bytes(result, p);
   *p = NUL;
   tv_list_append_string(l2, buf, -1);
+
+  // Continue iteration if not interrupted
+  return !got_int;
 }
 
 void digraph_getlist_common(bool list_all, typval_T *rettv)
 {
   tv_list_alloc_ret(rettv, (int)sizeof(digraphdefault) + user_digraphs.ga_len);
 
-  const digr_T *dp;
+  DigraphGetlistCtx ctx = { .list = rettv->vval.v_list };
 
   if (list_all) {
-    dp = digraphdefault;
-    while (dp->char1 != NUL && !got_int) {
-      digr_T tmp;
-      tmp.char1 = dp->char1;
-      tmp.char2 = dp->char2;
-      tmp.result = getexactdigraph(tmp.char1, tmp.char2, false);
-      if (tmp.result != 0 && tmp.result != tmp.char2) {
-        digraph_getlist_appendpair(&tmp, rettv->vval.v_list);
-      }
-      dp++;
-    }
+    rs_digraph_iterate_default(digraph_getlist_callback, &ctx);
   }
-
-  dp = (const digr_T *)user_digraphs.ga_data;
-  for (int i = 0; i < user_digraphs.ga_len && !got_int; i++) {
-    digraph_getlist_appendpair(dp, rettv->vval.v_list);
-    dp++;
-  }
+  rs_digraph_iterate_user(digraph_getlist_callback, &ctx);
 }
 
 static struct dg_header_entry {
