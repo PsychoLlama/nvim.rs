@@ -44,6 +44,7 @@ extern const char *rs_skiptohex(const char *q);
 extern const char *rs_skiptowhite(const char *p);
 extern const char *rs_skiptowhite_esc(const char *p);
 extern intptr_t rs_getwhitecols(const char *p);
+extern intptr_t rs_getwhitecols_curline(void);
 extern int rs_hex2nr(int c);
 extern int rs_hexhex2nr(const char *p);
 extern unsigned rs_nr2hex(unsigned n);
@@ -78,6 +79,8 @@ extern void rs_vim_str2nr(const char *start, int *prep, int *len, int what,
                           varnumber_T *nptr, uvarnumber_T *unptr, int maxlen,
                           bool strict, bool *overflow);
 extern void rs_transchar_nonprint(char *charbuf, int c, bool use_uhex, int fileformat);
+extern void rs_transchar_buf(char *buf, int c, bool chartab_initialized, bool use_uhex, int fileformat);
+extern void rs_transchar_byte_buf(char *buf, int c, bool chartab_initialized, bool use_uhex, int fileformat);
 extern char *rs_str_foldcase(const char *str, int orglen, char *buf, int buflen,
                              int (*tolower_fn)(int));
 extern int rs_parse_isopt(const char *var, buf_T *buf, bool only_check);
@@ -151,6 +154,12 @@ int nvim_charset_mb_isupper(int c)
 uint8_t *nvim_charset_get_g_chartab(void)
 {
   return g_chartab;
+}
+
+/// Get pointer to the cursor line.
+const char *nvim_charset_get_cursor_line_ptr(void)
+{
+  return get_cursor_line_ptr();
 }
 
 /// Check if chartab is initialized.
@@ -349,25 +358,9 @@ char *transchar(int c)
 
 char *transchar_buf(const buf_T *buf, int c)
 {
-  int i = 0;
-  if (IS_SPECIAL(c)) {
-    // special key code, display as ~@ char
-    transchar_charbuf[0] = '~';
-    transchar_charbuf[1] = '@';
-    i = 2;
-    c = K_SECOND(c);
-  }
-
-  if ((!chartab_initialized && (c >= ' ' && c <= '~'))
-      || ((c <= 0xFF) && vim_isprintc(c))) {
-    // printable character
-    transchar_charbuf[i] = (uint8_t)c;
-    transchar_charbuf[i + 1] = NUL;
-  } else if (c <= 0xFF) {
-    transchar_nonprint(buf, (char *)transchar_charbuf + i, c);
-  } else {
-    transchar_hex((char *)transchar_charbuf + i, c);
-  }
+  bool use_uhex = (dy_flags & kOptDyFlagUhex) != 0;
+  int fileformat = (buf != NULL) ? get_fileformat(buf) : -1;
+  rs_transchar_buf((char *)transchar_charbuf, c, chartab_initialized, use_uhex, fileformat);
   return (char *)transchar_charbuf;
 }
 
@@ -394,11 +387,10 @@ char *transchar_byte(const int c)
 char *transchar_byte_buf(const buf_T *buf, const int c)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (c >= 0x80) {
-    transchar_nonprint(buf, (char *)transchar_charbuf, c);
-    return (char *)transchar_charbuf;
-  }
-  return transchar_buf(buf, c);
+  bool use_uhex = (dy_flags & kOptDyFlagUhex) != 0;
+  int fileformat = (buf != NULL) ? get_fileformat(buf) : -1;
+  rs_transchar_byte_buf((char *)transchar_charbuf, c, chartab_initialized, use_uhex, fileformat);
+  return (char *)transchar_charbuf;
 }
 
 /// Convert non-printable characters to 2..4 printable ones
@@ -661,7 +653,7 @@ char *skipwhite_len(const char *p, size_t len)
 // columns (bytes) at the start of a given line
 intptr_t getwhitecols_curline(void)
 {
-  return getwhitecols(get_cursor_line_ptr());
+  return rs_getwhitecols_curline();
 }
 
 intptr_t getwhitecols(const char *p)

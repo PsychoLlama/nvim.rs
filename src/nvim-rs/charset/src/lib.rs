@@ -255,6 +255,18 @@ pub unsafe extern "C" fn rs_getwhitecols(p: *const c_char) -> isize {
     result.offset_from(p)
 }
 
+/// Return the number of whitespace columns (bytes) at the start of the current line.
+///
+/// This function gets the cursor line pointer from C and returns the count
+/// of whitespace characters at the start of that line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getwhitecols_curline() -> isize {
+    extern "C" {
+        fn nvim_charset_get_cursor_line_ptr() -> *const c_char;
+    }
+    rs_getwhitecols(nvim_charset_get_cursor_line_ptr())
+}
+
 /// Skip over text until '\n' (newline) or NUL.
 ///
 /// Returns a pointer to the next '\n' or the NUL terminator.
@@ -451,6 +463,100 @@ pub unsafe extern "C" fn rs_transchar_nonprint(
         // DEL (0x7f) displayed as ^?, other control chars as ^@ through ^_
         *charbuf.add(1) = (c ^ 0x40) as c_char;
         *charbuf.add(2) = 0; // NUL terminator
+    }
+}
+
+// ============================================================================
+// Character translation functions
+// ============================================================================
+
+/// Translate a character into a printable form, writing to a buffer.
+///
+/// For special keys (c < 0), writes "~@" prefix followed by the second byte.
+/// For printable ASCII, writes the character as-is.
+/// For non-printable characters, uses transchar_nonprint.
+/// For multi-byte characters (> 0xFF), uses transchar_hex.
+///
+/// # Arguments
+/// * `buf` - Buffer to write the result (must have space for at least 11 bytes)
+/// * `c` - Character to translate
+/// * `chartab_initialized` - Whether g_chartab has been initialized
+/// * `use_uhex` - Whether to use hex format for non-printable chars
+/// * `fileformat` - File format for transchar_nonprint (-1 if buf is NULL)
+///
+/// # Safety
+/// - `buf` must be valid and have space for at least 11 bytes
+/// - g_chartab must be initialized if chartab_initialized is true
+#[no_mangle]
+pub unsafe extern "C" fn rs_transchar_buf(
+    buf: *mut c_char,
+    c: c_int,
+    chartab_initialized: bool,
+    use_uhex: bool,
+    fileformat: c_int,
+) {
+    if buf.is_null() {
+        return;
+    }
+
+    let mut i = 0usize;
+    let mut c = c;
+
+    // Handle special keys (c < 0)
+    if is_special(c) {
+        // special key code, display as ~@ char
+        *buf = b'~' as c_char;
+        *buf.add(1) = b'@' as c_char;
+        i = 2;
+        c = k_second(c);
+    }
+
+    if (!chartab_initialized && (c >= b' ' as c_int && c <= b'~' as c_int))
+        || (c <= 0xFF && rs_vim_isprintc(c) != 0)
+    {
+        // printable character
+        *buf.add(i) = c as c_char;
+        *buf.add(i + 1) = 0; // NUL terminator
+    } else if c <= 0xFF {
+        rs_transchar_nonprint(buf.add(i), c, use_uhex, fileformat);
+    } else {
+        rs_transchar_hex(buf.add(i), c);
+    }
+}
+
+/// Translate a byte into a printable form, writing to a buffer.
+///
+/// Like transchar_buf, but for bytes that might be illegal UTF-8 sequences.
+/// Bytes >= 0x80 are treated as non-printable.
+///
+/// # Arguments
+/// * `buf` - Buffer to write the result (must have space for at least 11 bytes)
+/// * `c` - Byte to translate (0-255)
+/// * `chartab_initialized` - Whether g_chartab has been initialized
+/// * `use_uhex` - Whether to use hex format for non-printable chars
+/// * `fileformat` - File format for transchar_nonprint (-1 if buf is NULL)
+///
+/// # Safety
+/// - `buf` must be valid and have space for at least 11 bytes
+/// - g_chartab must be initialized if chartab_initialized is true
+#[no_mangle]
+pub unsafe extern "C" fn rs_transchar_byte_buf(
+    buf: *mut c_char,
+    c: c_int,
+    chartab_initialized: bool,
+    use_uhex: bool,
+    fileformat: c_int,
+) {
+    if buf.is_null() {
+        return;
+    }
+
+    if c >= 0x80 {
+        // High-bit byte - always non-printable
+        rs_transchar_nonprint(buf, c, use_uhex, fileformat);
+    } else {
+        // Low byte - use regular transchar_buf logic
+        rs_transchar_buf(buf, c, chartab_initialized, use_uhex, fileformat);
     }
 }
 
