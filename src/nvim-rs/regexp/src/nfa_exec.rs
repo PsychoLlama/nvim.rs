@@ -1197,6 +1197,19 @@ extern "C" {
         listids_len: *mut c_int,
     ) -> c_int;
 
+    // Copy submatch info (not main match position) - Phase 8
+    fn nvim_nfa_copy_sub_off(to: *mut c_void, from: *const c_void);
+
+    // Copy \ze end position if present - Phase 8
+    fn nvim_nfa_copy_ze_off(to: *mut c_void, from: *const c_void);
+
+    // Check if state is in list (for NFA_START_PATTERN optimization) - Phase 8
+    fn nvim_nfa_state_in_list(
+        list: *const c_void,
+        state: *const c_void,
+        subs: *const c_void,
+    ) -> c_int;
+
     // State processing callback - Phase 3 will move this to Rust
     // Uses void* for FFI compatibility
     fn nfa_regmatch_process_state(
@@ -1612,9 +1625,11 @@ use crate::nfa_states::{
     NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_NALPHA,
     NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER,
     NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_RANGE_MIN, NFA_SFNAME,
-    NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_START_COLL, NFA_START_NEG_COLL, NFA_UPPER,
-    NFA_UPPER_IC, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_WHITE, NFA_WORD, NFA_ZREF1,
-    NFA_ZREF9,
+    NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_START_COLL, NFA_START_INVISIBLE,
+    NFA_START_INVISIBLE_BEFORE, NFA_START_INVISIBLE_BEFORE_FIRST, NFA_START_INVISIBLE_BEFORE_NEG,
+    NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_INVISIBLE_FIRST, NFA_START_INVISIBLE_NEG,
+    NFA_START_INVISIBLE_NEG_FIRST, NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_UPPER, NFA_UPPER_IC,
+    NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_WHITE, NFA_WORD, NFA_ZREF1, NFA_ZREF9,
 };
 
 // Import check_char_class for POSIX classes in collections
@@ -2317,6 +2332,247 @@ unsafe fn process_backref(
     true
 }
 
+/// Check if state_c is a _FIRST variant that requires direct processing
+#[inline]
+fn is_first_invisible_state(state_c: c_int) -> bool {
+    state_c == NFA_START_INVISIBLE_FIRST
+        || state_c == NFA_START_INVISIBLE_NEG_FIRST
+        || state_c == NFA_START_INVISIBLE_BEFORE_FIRST
+        || state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+}
+
+/// Check if state_c is a negative (NEG) invisible state
+#[inline]
+fn is_neg_invisible_state(state_c: c_int) -> bool {
+    state_c == NFA_START_INVISIBLE_NEG
+        || state_c == NFA_START_INVISIBLE_NEG_FIRST
+        || state_c == NFA_START_INVISIBLE_BEFORE_NEG
+        || state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+}
+
+/// Process NFA_START_INVISIBLE* states - lookahead/lookbehind matching.
+///
+/// This handles only the DIRECT EXECUTION case (when there's already a PIM
+/// or it's a _FIRST state). The POSTPONED case (creating a new PIM) is left
+/// to C because it requires complex PIM handling.
+///
+/// Returns:
+/// - true with add_state set: handled, add the state
+/// - true with add_state NULL: handled (match failed or postponed to C)
+/// - return_code -1: error (NFA_TOO_EXPENSIVE)
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+unsafe fn process_start_invisible(
+    state_c: c_int,
+    t: *const NfaThread,
+    prog: *mut c_void,
+    submatch: *mut RegSubs,
+    m: *mut RegSubs,
+    listids: *mut *mut c_int,
+    listids_len: *mut c_int,
+    result: &mut StateProcessResult,
+) -> bool {
+    let state = (*t).state;
+
+    // Check if we should execute directly or let C handle it (postpone case)
+    // Execute directly if:
+    // 1. There already is a PIM (t->pim.result != NFA_PIM_UNUSED)
+    // 2. The state is a _FIRST variant (nfa_postprocess detected it works better)
+    let pim_unused = (*t).pim.result == NFA_PIM_UNUSED;
+    let is_first = is_first_invisible_state(state_c);
+
+    if pim_unused && !is_first {
+        // Postponed case - let C handle it because it needs to create a PIM
+        // Return false so C's switch statement handles this state
+        return false;
+    }
+
+    // Direct execution case - call recursive_regmatch
+    let in_use = (*m).norm.in_use;
+
+    // Copy submatch info for the recursive call
+    nvim_nfa_copy_sub_off(
+        &mut (*m).norm as *mut _ as *mut c_void,
+        &(*t).subs.norm as *const _ as *const c_void,
+    );
+    if nvim_rex_get_nfa_has_zsubexpr() != 0 {
+        nvim_nfa_copy_sub_off(
+            &mut (*m).synt as *mut _ as *mut c_void,
+            &(*t).subs.synt as *const _ as *const c_void,
+        );
+    }
+
+    // First try matching the invisible match, then what follows
+    let recursive_result = nvim_nfa_recursive_regmatch(
+        state as *mut c_void,
+        ptr::null(),
+        prog,
+        submatch as *mut c_void,
+        m as *mut c_void,
+        listids,
+        listids_len,
+    );
+
+    if recursive_result == NFA_TOO_EXPENSIVE {
+        result.return_code = -1; // Signal error
+        return true;
+    }
+
+    // For \@! and \@<! it is a match when the result is false
+    let is_neg = is_neg_invisible_state(state_c);
+    let matched = (recursive_result != 0) != is_neg;
+
+    if matched {
+        // Copy submatch info from the recursive call
+        // Note: We cast t to *mut to modify subs, matching C behavior
+        let t_mut = t as *mut NfaThread;
+        nvim_nfa_copy_sub_off(
+            &mut (*t_mut).subs.norm as *mut _ as *mut c_void,
+            &(*m).norm as *const _ as *const c_void,
+        );
+        if nvim_rex_get_nfa_has_zsubexpr() != 0 {
+            nvim_nfa_copy_sub_off(
+                &mut (*t_mut).subs.synt as *mut _ as *mut c_void,
+                &(*m).synt as *const _ as *const c_void,
+            );
+        }
+        // If the pattern has \ze and it matched in the sub pattern, use it
+        nvim_nfa_copy_ze_off(
+            &mut (*t_mut).subs.norm as *mut _ as *mut c_void,
+            &(*m).norm as *const _ as *const c_void,
+        );
+
+        // t->state->out1 is the corresponding END_INVISIBLE node;
+        // Add its out to the current list (zero-width match)
+        result.add_here = 1;
+        result.add_state = (*(*state).out1).out;
+    }
+
+    (*m).norm.in_use = in_use;
+    true
+}
+
+/// Process NFA_START_PATTERN state - \@> match.
+///
+/// Returns true if the state was handled, false to let C handle it.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+unsafe fn process_start_pattern(
+    t: *const NfaThread,
+    clen: c_int,
+    prog: *mut c_void,
+    thislist: *mut NfaList,
+    nextlist: *mut NfaList,
+    submatch: *mut RegSubs,
+    m: *mut RegSubs,
+    listids: *mut *mut c_int,
+    listids_len: *mut c_int,
+    result: &mut StateProcessResult,
+) -> bool {
+    let state = (*t).state;
+
+    // There is no point in trying to match the pattern if the
+    // output state is not going to be added to the list.
+    let skip = nvim_nfa_state_in_list(
+        nextlist as *const c_void,
+        (*(*state).out1).out as *const c_void,
+        &(*t).subs as *const _ as *const c_void,
+    ) != 0
+        || nvim_nfa_state_in_list(
+            nextlist as *const c_void,
+            (*(*(*state).out1).out).out as *const c_void,
+            &(*t).subs as *const _ as *const c_void,
+        ) != 0
+        || nvim_nfa_state_in_list(
+            thislist as *const c_void,
+            (*(*(*state).out1).out).out as *const c_void,
+            &(*t).subs as *const _ as *const c_void,
+        ) != 0;
+
+    if skip {
+        // Output state is already in list, skip matching
+        // Return true with no add_state to indicate "handled but no state to add"
+        return true;
+    }
+
+    // Copy submatch info to the recursive call
+    nvim_nfa_copy_sub_off(
+        &mut (*m).norm as *mut _ as *mut c_void,
+        &(*t).subs.norm as *const _ as *const c_void,
+    );
+    if nvim_rex_get_nfa_has_zsubexpr() != 0 {
+        nvim_nfa_copy_sub_off(
+            &mut (*m).synt as *mut _ as *mut c_void,
+            &(*t).subs.synt as *const _ as *const c_void,
+        );
+    }
+
+    // First try matching the pattern
+    let recursive_result = nvim_nfa_recursive_regmatch(
+        state as *mut c_void,
+        ptr::null(),
+        prog,
+        submatch as *mut c_void,
+        m as *mut c_void,
+        listids,
+        listids_len,
+    );
+
+    if recursive_result == NFA_TOO_EXPENSIVE {
+        result.return_code = -1;
+        return true;
+    }
+
+    if recursive_result != 0 {
+        // Copy submatch info from the recursive call
+        let t_mut = t as *mut NfaThread;
+        nvim_nfa_copy_sub_off(
+            &mut (*t_mut).subs.norm as *mut _ as *mut c_void,
+            &(*m).norm as *const _ as *const c_void,
+        );
+        if nvim_rex_get_nfa_has_zsubexpr() != 0 {
+            nvim_nfa_copy_sub_off(
+                &mut (*t_mut).subs.synt as *mut _ as *mut c_void,
+                &(*m).synt as *const _ as *const c_void,
+            );
+        }
+
+        // Now we need to skip over the matched text and then continue
+        let bytelen = if nvim_rex_is_multi() != 0 {
+            // Multi-line match
+            (*m).norm.list.multi[0].end_col
+                - (nvim_rex_get_input() as isize - nvim_rex_get_line() as isize) as ColNr
+        } else {
+            ((*m).norm.list.line[0].end as isize - nvim_rex_get_input() as isize) as c_int
+        };
+
+        if bytelen == 0 {
+            // Empty match, output of corresponding NFA_END_PATTERN/NFA_SKIP
+            // to be used at current position
+            result.add_here = 1;
+            result.add_state = (*(*(*state).out1).out).out;
+        } else if bytelen <= clen {
+            // Match current character, output of corresponding
+            // NFA_END_PATTERN to be used at next position
+            result.add_state = (*(*(*state).out1).out).out;
+            result.add_off = clen;
+        } else {
+            // Skip over the matched characters, set character count in NFA_SKIP
+            result.add_state = (*(*state).out1).out;
+            result.add_off = bytelen;
+            result.add_count = bytelen - clen;
+        }
+    }
+
+    true
+}
+
 /// Process literal character matching (default case).
 ///
 /// Returns true if this is a positive character state (c > 0) and was handled.
@@ -2392,14 +2648,14 @@ pub unsafe extern "C" fn rs_nfa_process_state(
     t: *const NfaThread,
     curc: c_int,
     clen: c_int,
-    _prog: *mut c_void,
-    _thislist: *mut NfaList,
+    prog: *mut c_void,
+    thislist: *mut NfaList,
     nextlist: *mut NfaList,
     _start: *mut NfaState,
     submatch: *mut RegSubs,
     m: *mut RegSubs,
-    _listids: *mut *mut c_int,
-    _listids_len: *mut c_int,
+    listids: *mut *mut c_int,
+    listids_len: *mut c_int,
     add_state_out: *mut *mut NfaState,
     add_here_out: *mut c_int,
     add_count_out: *mut c_int,
@@ -2445,11 +2701,47 @@ pub unsafe extern "C" fn rs_nfa_process_state(
             }
             NFA_NEWL => process_newl(curc, state, &mut result),
             NFA_SKIP => process_skip(t, clen, state, &mut result),
+            // Invisible states - handle direct execution, let C handle postponed
+            NFA_START_INVISIBLE
+            | NFA_START_INVISIBLE_FIRST
+            | NFA_START_INVISIBLE_NEG
+            | NFA_START_INVISIBLE_NEG_FIRST
+            | NFA_START_INVISIBLE_BEFORE
+            | NFA_START_INVISIBLE_BEFORE_FIRST
+            | NFA_START_INVISIBLE_BEFORE_NEG
+            | NFA_START_INVISIBLE_BEFORE_NEG_FIRST => {
+                // Returns false if this should be handled by C (postponed case)
+                if !process_start_invisible(
+                    state_c,
+                    t,
+                    prog,
+                    submatch,
+                    m,
+                    listids,
+                    listids_len,
+                    &mut result,
+                ) {
+                    // Let C handle it - return with no add_state
+                }
+            }
+            NFA_START_PATTERN => {
+                process_start_pattern(
+                    t,
+                    clen,
+                    prog,
+                    thislist,
+                    nextlist,
+                    submatch,
+                    m,
+                    listids,
+                    listids_len,
+                    &mut result,
+                );
+            }
             _ => {
                 // Try literal character matching (positive state values)
                 if !process_literal(state_c, curc, clen, state, &mut result) {
                     // Not a literal character, return 0 to continue with C fallback
-                    // for complex cases (NFA_START_INVISIBLE, NFA_START_PATTERN, etc.)
                 }
             }
         }

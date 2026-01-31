@@ -8527,6 +8527,26 @@ int nvim_nfa_match_zref(int subidx, int *bytelen) {
   return match_zref(subidx, bytelen);
 }
 
+// Forward declarations for helper functions used by Rust wrappers
+static void copy_sub_off(regsub_T *to, regsub_T *from);
+static void copy_ze_off(regsub_T *to, regsub_T *from);
+static bool state_in_list(nfa_list_T *l, nfa_state_T *state, regsubs_T *subs);
+
+// Wrapper for copy_sub_off for Rust (Phase 8)
+void nvim_nfa_copy_sub_off(void *to, const void *from) {
+  copy_sub_off((regsub_T *)to, (regsub_T *)from);
+}
+
+// Wrapper for copy_ze_off for Rust (Phase 8)
+void nvim_nfa_copy_ze_off(void *to, const void *from) {
+  copy_ze_off((regsub_T *)to, (regsub_T *)from);
+}
+
+// Wrapper for state_in_list for Rust (Phase 8)
+int nvim_nfa_state_in_list(const void *list, const void *state, const void *subs) {
+  return state_in_list((nfa_list_T *)list, (nfa_state_T *)state, (regsubs_T *)subs) ? 1 : 0;
+}
+
 // Rust state processing function (Phase 4)
 extern int rs_nfa_process_state(
     const void *t_ptr, int curc, int clen,
