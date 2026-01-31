@@ -1077,10 +1077,16 @@ extern "C" {
 // addstate_here
 // =============================================================================
 
+// Error message for maxmempattern
+static E_MAXMEMPATTERN: &[u8] = b"E363: pattern uses more memory than 'maxmempattern'\0";
+
+// xmalloc, xfree, and emsg are declared in the nfa_regmatch FFI section below
+
 /// Add a state at a specific position in the current list.
 ///
 /// This is used when adding states during processing of the current list,
 /// to ensure they are processed in the current pass rather than the next.
+/// The listidx pointer is updated to point before the inserted states.
 ///
 /// # Safety
 /// All pointers must be valid.
@@ -1089,10 +1095,85 @@ pub unsafe fn addstate_here(
     state: *mut NfaState,
     subs: *mut RegSubs,
     pim: *const NfaPim,
-    listidx: c_int,
+    ip: *mut c_int,
 ) -> *mut RegSubs {
-    // The negative offset signals to addstate to insert at listidx
-    addstate(list, state, subs, pim, -listidx - ADDSTATE_HERE_OFFSET)
+    let tlen = (*list).n;
+    let listidx = *ip;
+
+    // First add the state(s) at the end, so that we know how many there are.
+    // Pass the listidx as offset (avoids adding another argument to addstate).
+    let r = addstate(list, state, subs, pim, -listidx - ADDSTATE_HERE_OFFSET);
+    if r.is_null() {
+        return ptr::null_mut();
+    }
+
+    // When "*ip" was at the end of the list, nothing to do
+    if listidx + 1 == tlen {
+        return r;
+    }
+
+    // Re-order to put the new state at the current position
+    let count = (*list).n - tlen;
+    if count == 0 {
+        return r; // no state got added
+    }
+
+    if count == 1 {
+        // Overwrite the current state
+        *(*list).t.add(listidx as usize) = ptr::read((*list).t.add(((*list).n - 1) as usize));
+    } else if count > 1 {
+        if (*list).n + count > (*list).len {
+            // Not enough space to move the new states, reallocate the list
+            // and move the states to the right position
+            let newlen = (*list).len * 3 / 2 + 50;
+            let newsize = (newlen as usize) * std::mem::size_of::<NfaThread>();
+
+            let p_mmp = nvim_get_p_mmp();
+            if (newsize >> 10) as i64 >= p_mmp {
+                emsg(E_MAXMEMPATTERN.as_ptr() as *const i8);
+                return ptr::null_mut();
+            }
+
+            let newl = xmalloc(newsize) as *mut NfaThread;
+            (*list).len = newlen;
+
+            // Copy threads before listidx
+            ptr::copy_nonoverlapping((*list).t, newl, listidx as usize);
+
+            // Copy new threads to listidx position
+            ptr::copy_nonoverlapping(
+                (*list).t.add(((*list).n - count) as usize),
+                newl.add(listidx as usize),
+                count as usize,
+            );
+
+            // Copy threads after listidx
+            ptr::copy_nonoverlapping(
+                (*list).t.add((listidx + 1) as usize),
+                newl.add((listidx + count) as usize),
+                ((*list).n - count - listidx - 1) as usize,
+            );
+
+            xfree((*list).t as *mut std::ffi::c_void);
+            (*list).t = newl;
+        } else {
+            // Make space for new states, then move them from the end to current position
+            ptr::copy(
+                (*list).t.add((listidx + 1) as usize),
+                (*list).t.add((listidx + count) as usize),
+                ((*list).n - listidx - 1) as usize,
+            );
+            ptr::copy_nonoverlapping(
+                (*list).t.add(((*list).n - 1) as usize),
+                (*list).t.add(listidx as usize),
+                count as usize,
+            );
+        }
+    }
+    (*list).n -= 1;
+    *ip = listidx - 1;
+
+    r
 }
 
 // =============================================================================
@@ -1299,9 +1380,9 @@ pub unsafe extern "C" fn rs_addstate_here(
     state: *mut NfaState,
     subs: *mut RegSubs,
     pim: *const NfaPim,
-    listidx: c_int,
+    ip: *mut c_int,
 ) -> *mut RegSubs {
-    addstate_here(list, state, subs, pim, listidx)
+    addstate_here(list, state, subs, pim, ip)
 }
 
 /// Check if two PIMs are equal.
@@ -1428,9 +1509,10 @@ extern "C" {
     // NFA endp for invisible matches
     fn nvim_rex_get_nfa_endp() -> *const c_void;
 
-    // Memory allocation - matching existing declarations in nfa_states.rs
+    // Memory allocation and error reporting
     fn xmalloc(size: usize) -> *mut i8;
     fn xfree(ptr: *mut c_void);
+    fn emsg(s: *const i8);
 
     // Interrupt checking
     fn rs_reg_breakcheck();
@@ -1734,7 +1816,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         add_state_typed,
                         &mut (*(*t)).subs,
                         &(*(*t)).pim,
-                        listidx,
+                        &mut listidx,
                     )
                     .is_null()
                     {

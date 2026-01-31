@@ -11624,74 +11624,14 @@ skip_add:
 /// @param state  state to update
 /// @param subs   pointers to subexpressions
 /// @param pim    postponed look-behind match
+extern regsubs_T *rs_addstate_here(nfa_list_T *l, nfa_state_T *state, regsubs_T *subs,
+                                   nfa_pim_T *pim, int *ip);
+
 static regsubs_T *addstate_here(nfa_list_T *l, nfa_state_T *state, regsubs_T *subs, nfa_pim_T *pim,
                                 int *ip)
   FUNC_ATTR_NONNULL_ARG(1, 2, 5) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  int tlen = l->n;
-  int count;
-  int listidx = *ip;
-
-  // First add the state(s) at the end, so that we know how many there are.
-  // Pass the listidx as offset (avoids adding another argument to
-  // addstate()).
-  regsubs_T *r = addstate(l, state, subs, pim, -listidx - ADDSTATE_HERE_OFFSET);
-  if (r == NULL) {
-    return NULL;
-  }
-
-  // when "*ip" was at the end of the list, nothing to do
-  if (listidx + 1 == tlen) {
-    return r;
-  }
-
-  // re-order to put the new state at the current position
-  count = l->n - tlen;
-  if (count == 0) {
-    return r;  // no state got added
-  }
-  if (count == 1) {
-    // overwrite the current state
-    l->t[listidx] = l->t[l->n - 1];
-  } else if (count > 1) {
-    if (l->n + count - 1 >= l->len) {
-      // not enough space to move the new states, reallocate the list
-      // and move the states to the right position
-      const int newlen = l->len * 3 / 2 + 50;
-      const size_t newsize = (size_t)newlen * sizeof(nfa_thread_T);
-
-      if ((int64_t)(newsize >> 10) >= p_mmp) {
-        emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
-        return NULL;
-      }
-      nfa_thread_T *const newl = xmalloc(newsize);
-      l->len = newlen;
-      memmove(&(newl[0]),
-              &(l->t[0]),
-              sizeof(nfa_thread_T) * (size_t)listidx);
-      memmove(&(newl[listidx]),
-              &(l->t[l->n - count]),
-              sizeof(nfa_thread_T) * (size_t)count);
-      memmove(&(newl[listidx + count]),
-              &(l->t[listidx + 1]),
-              sizeof(nfa_thread_T) * (size_t)(l->n - count - listidx - 1));
-      xfree(l->t);
-      l->t = newl;
-    } else {
-      // make space for new states, then move them from the
-      // end to the current position
-      memmove(&(l->t[listidx + count]),
-              &(l->t[listidx + 1]),
-              sizeof(nfa_thread_T) * (size_t)(l->n - listidx - 1));
-      memmove(&(l->t[listidx]),
-              &(l->t[l->n - 1]),
-              sizeof(nfa_thread_T) * (size_t)count);
-    }
-  }
-  l->n--;
-  *ip = listidx - 1;
-
-  return r;
+  return rs_addstate_here(l, state, subs, pim, ip);
 }
 
 // Check character class "class" against current character c.
