@@ -3101,6 +3101,218 @@ pub unsafe extern "C" fn rs_nfa_process_state(
     result.return_code
 }
 
+// =============================================================================
+// Phase 12a: NFA Execution Wrapper Helpers
+// =============================================================================
+
+/// OK/FAIL return values matching C definitions.
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+extern "C" {
+    /// Get the length of a UTF-8 character.
+    fn utf_char2len(c: c_int) -> c_int;
+
+    /// Cleanup subexpressions if needed.
+    fn nvim_cleanup_subexpr();
+
+    /// Check if timeout has been reached.
+    fn profile_passed_limit(tm: ProfTime) -> c_int;
+}
+
+// Import rs_cstrchr from helpers module
+use crate::helpers::rs_cstrchr;
+
+/// Opaque proftime_T type from C.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ProfTime {
+    _data: [u8; 8], // sizeof(proftime_T) is typically 8 bytes (int64_t or struct timespec)
+}
+
+/// Skip until the character 'c' we know a match must start with.
+///
+/// Searches rex.line starting at column *colp for character c.
+/// Updates *colp to point to the found character.
+///
+/// Returns OK if found, FAIL otherwise.
+///
+/// # Safety
+/// colp must be a valid pointer. rex.line must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_to_start(c: c_int, colp: *mut ColNr) -> c_int {
+    if colp.is_null() {
+        return FAIL;
+    }
+
+    let line = nvim_rex_get_line();
+    if line.is_null() {
+        return FAIL;
+    }
+
+    let start = line.add(*colp as usize);
+    let found = rs_cstrchr(start as *const c_char, c);
+
+    if found.is_null() {
+        return FAIL;
+    }
+
+    *colp = (found as usize - line as usize) as ColNr;
+    OK
+}
+
+/// Check for a match with match_text.
+///
+/// Called after skip_to_start() has found regstart.
+/// This is a fast-path for literal text matching.
+///
+/// Returns 0 for no match, 1 for a match.
+/// Updates *startcol to the match start column.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_match_text(
+    startcol: *mut ColNr,
+    regstart: c_int,
+    match_text: *const u8,
+) -> c_int {
+    if startcol.is_null() || match_text.is_null() {
+        return 0;
+    }
+
+    let mut col = *startcol;
+    let regstart_len = utf_char2len(regstart);
+
+    loop {
+        let line = nvim_rex_get_line();
+        if line.is_null() {
+            break;
+        }
+
+        let mut is_match = true;
+        let mut s1 = match_text;
+
+        // Calculate actual regstart_len - may differ due to case-folding
+        let mut regstart_len2 = regstart_len;
+        if regstart_len2 > 1 {
+            let ptr_at_col = line.add(col as usize);
+            let actual_len = utf_ptr2len(ptr_at_col as *const c_char);
+            if actual_len != regstart_len2 {
+                // Case-folding may have changed the byte length
+                regstart_len2 = utf_char2len(utf_fold(regstart));
+            }
+        }
+
+        // s2 points past the regstart character
+        let mut s2 = line.add((col + regstart_len2) as usize);
+
+        // Compare match_text with text after regstart
+        while *s1 != 0 {
+            let c1_len = utf_ptr2len(s1 as *const c_char);
+            let c1 = utf_ptr2char(s1 as *const c_char);
+            let c2_len = utf_ptr2len(s2 as *const c_char);
+            let c2 = utf_ptr2char(s2 as *const c_char);
+
+            // Check if characters match (case-insensitive if rex.reg_ic)
+            if c1 != c2 && (!nvim_rex_get_reg_ic() || utf_fold(c1) != utf_fold(c2)) {
+                is_match = false;
+                break;
+            }
+            s1 = s1.add(c1_len as usize);
+            s2 = s2.add(c2_len as usize);
+        }
+
+        // Check that no composing character follows (for a proper match boundary)
+        if is_match && utf_iscomposing_legacy(utf_ptr2char(s2 as *const c_char)) == 0 {
+            nvim_cleanup_subexpr();
+
+            if nvim_rex_is_multi() != 0 {
+                // Multi-line: set startpos and endpos
+                let lnum = nvim_rex_get_lnum();
+                let startpos = nvim_rex_get_reg_startpos();
+                let endpos = nvim_rex_get_reg_endpos();
+                if !startpos.is_null() && !endpos.is_null() {
+                    // startpos[0] and endpos[0]
+                    let sp = startpos as *mut LPos;
+                    let ep = endpos as *mut LPos;
+                    (*sp).lnum = lnum;
+                    (*sp).col = col;
+                    (*ep).lnum = lnum;
+                    (*ep).col = (s2 as usize - line as usize) as ColNr;
+                }
+            } else {
+                // Single-line: set startp and endp
+                let startp = nvim_rex_get_reg_startp();
+                let endp = nvim_rex_get_reg_endp();
+                if !startp.is_null() && !endp.is_null() {
+                    *startp = line.add(col as usize);
+                    *endp = s2;
+                }
+            }
+
+            *startcol = col;
+            return 1;
+        }
+
+        // Try finding regstart after the current match
+        col += regstart_len; // skip regstart
+        if rs_skip_to_start(regstart, &mut col) == FAIL {
+            break;
+        }
+    }
+
+    *startcol = col;
+    0
+}
+
+/// Check if NFA execution timed out.
+///
+/// This is the Rust implementation of nfa_did_time_out().
+/// Checks if the time limit has been reached.
+///
+/// Returns true if timed out, false otherwise.
+///
+/// # Safety
+/// Must be called with valid nfa_time_limit if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_did_time_out() -> c_int {
+    let time_limit = nvim_nfa_get_time_limit();
+    if time_limit.is_null() {
+        return 0;
+    }
+
+    if profile_passed_limit(*time_limit) != 0 {
+        let timed_out = nvim_nfa_get_timed_out_ptr();
+        if !timed_out.is_null() {
+            *timed_out = 1;
+        }
+        return 1;
+    }
+
+    0
+}
+
+extern "C" {
+    /// Get nfa_time_limit pointer.
+    fn nvim_nfa_get_time_limit() -> *mut ProfTime;
+
+    /// Get nfa_timed_out pointer.
+    fn nvim_nfa_get_timed_out_ptr() -> *mut c_int;
+
+    /// Get rex.reg_startp array.
+    fn nvim_rex_get_reg_startp() -> *mut *mut u8;
+
+    /// Get rex.reg_endp array.
+    fn nvim_rex_get_reg_endp() -> *mut *mut u8;
+
+    /// Get rex.reg_startpos array.
+    fn nvim_rex_get_reg_startpos() -> *mut c_void;
+
+    /// Get rex.reg_endpos array.
+    fn nvim_rex_get_reg_endpos() -> *mut c_void;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

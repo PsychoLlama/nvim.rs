@@ -580,6 +580,11 @@ extern int rs_reg_prev_class(void);
 extern void rs_reg_nextline(void);
 extern int rs_regrepeat(uint8_t *p, int64_t maxcount);
 
+// Rust implementations for NFA execution helpers (Phase 12a)
+extern int rs_skip_to_start(int c, colnr_T *colp);
+extern int rs_find_match_text(colnr_T *startcol, int regstart, uint8_t *match_text);
+extern int rs_nfa_did_time_out(void);
+
 // Wrapper for get_equi_class (used by Rust)
 int nvim_get_equi_class(char **pp) { return rs_get_equi_class(pp); }
 
@@ -1179,6 +1184,12 @@ static void cleanup_zsubexpr(void)
   }
   rex.need_clear_zsubexpr = false;
 }
+
+// Exposed for Rust - wraps static cleanup_subexpr()
+void nvim_cleanup_subexpr(void) { cleanup_subexpr(); }
+
+// Exposed for Rust - wraps static cleanup_zsubexpr()
+void nvim_cleanup_zsubexpr(void) { cleanup_zsubexpr(); }
 
 // Advance rex.lnum, rex.line and rex.input to the next line.
 static void reg_nextline(void)
@@ -11500,12 +11511,7 @@ static int failure_chance(nfa_state_T *state, int depth)
 // Skip until the char "c" we know a match must start with.
 static int skip_to_start(int c, colnr_T *colp)
 {
-  const uint8_t *const s = (uint8_t *)cstrchr((char *)rex.line + *colp, c);
-  if (s == NULL) {
-    return FAIL;
-  }
-  *colp = (int)(s - rex.line);
-  return OK;
+  return rs_skip_to_start(c, colp);
 }
 
 // Check for a match with match_text.
@@ -11513,69 +11519,12 @@ static int skip_to_start(int c, colnr_T *colp)
 // Returns zero for no match, 1 for a match.
 static int find_match_text(colnr_T *startcol, int regstart, uint8_t *match_text)
 {
-  colnr_T col = *startcol;
-  const int regstart_len = utf_char2len(regstart);
-
-  while (true) {
-    bool match = true;
-    uint8_t *s1 = match_text;
-    // skip regstart
-    int regstart_len2 = regstart_len;
-    if (regstart_len2 > 1 && utf_ptr2len((char *)rex.line + col) != regstart_len2) {
-      // because of case-folding of the previously matched text, we may need
-      // to skip fewer bytes than utf_char2len(regstart)
-      regstart_len2 = utf_char2len(utf_fold(regstart));
-    }
-    uint8_t *s2 = rex.line + col + regstart_len2;
-    while (*s1) {
-      int c1_len = utf_ptr2len((char *)s1);
-      int c1 = utf_ptr2char((char *)s1);
-      int c2_len = utf_ptr2len((char *)s2);
-      int c2 = utf_ptr2char((char *)s2);
-      if (c1 != c2 && (!rex.reg_ic || utf_fold(c1) != utf_fold(c2))) {
-        match = false;
-        break;
-      }
-      s1 += c1_len;
-      s2 += c2_len;
-    }
-    if (match
-        // check that no composing char follows
-        && !utf_iscomposing_legacy(utf_ptr2char((char *)s2))) {
-      cleanup_subexpr();
-      if (REG_MULTI) {
-        rex.reg_startpos[0].lnum = rex.lnum;
-        rex.reg_startpos[0].col = col;
-        rex.reg_endpos[0].lnum = rex.lnum;
-        rex.reg_endpos[0].col = (colnr_T)(s2 - rex.line);
-      } else {
-        rex.reg_startp[0] = rex.line + col;
-        rex.reg_endp[0] = s2;
-      }
-      *startcol = col;
-      return 1L;
-    }
-
-    // Try finding regstart after the current match.
-    col += regstart_len;  // skip regstart
-    if (skip_to_start(regstart, &col) == FAIL) {
-      break;
-    }
-  }
-
-  *startcol = col;
-  return 0L;
+  return rs_find_match_text(startcol, regstart, match_text);
 }
 
 static int nfa_did_time_out(void)
 {
-  if (nfa_time_limit != NULL && profile_passed_limit(*nfa_time_limit)) {
-    if (nfa_timed_out != NULL) {
-      *nfa_timed_out = true;
-    }
-    return true;
-  }
-  return false;
+  return rs_nfa_did_time_out();
 }
 
 // Exposed for Rust - wraps static nfa_did_time_out()
