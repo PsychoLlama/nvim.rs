@@ -25,10 +25,10 @@ use std::ffi::c_int;
 use std::ptr;
 
 use crate::nfa_states::{
-    ColNr, LPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_MATCH, NFA_MCLOSE,
-    NFA_MCLOSE9, NFA_MOPEN, NFA_NCLOSE, NFA_NOPEN, NFA_PIM_MATCH, NFA_PIM_NOMATCH, NFA_PIM_TODO,
-    NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9,
-    NFA_ZSTART, NSUBEXP,
+    ColNr, LPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_BOF, NFA_BOL,
+    NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE9, NFA_MOPEN, NFA_NCLOSE, NFA_NOPEN, NFA_PIM_MATCH,
+    NFA_PIM_NOMATCH, NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9,
+    NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NSUBEXP,
 };
 
 // =============================================================================
@@ -61,6 +61,7 @@ extern "C" {
     fn nvim_rex_get_lnum() -> c_int;
     fn nvim_rex_get_nfa_has_backref() -> c_int;
     fn nvim_rex_get_nfa_has_zsubexpr() -> c_int;
+    // nvim_rex_get_nfa_endp is declared in the nfa_regmatch FFI section below
 
     // Memory limit
     fn nvim_get_p_mmp() -> i64;
@@ -805,6 +806,27 @@ unsafe fn addstate_impl(
             // End of capturing group
             let n = c - NFA_MCLOSE;
             return handle_mclose(list, state, subs_in, pim, off, depth, n);
+        }
+
+        NFA_BOL | NFA_BOF => {
+            // "^" won't match past end-of-line, don't bother trying.
+            // Except when at the end of the line, or when we are going to the
+            // next line for a look-behind match.
+            let input = nvim_rex_get_input();
+            let line = nvim_rex_get_line();
+
+            if input > line && *input != 0 {
+                // Check if we have nfa_endp (look-behind match)
+                let nfa_endp = nvim_rex_get_nfa_endp();
+                if nfa_endp.is_null()
+                    || nvim_rex_is_multi() == 0
+                    || nvim_rex_get_lnum() == (*(nfa_endp as *const LPos)).lnum
+                {
+                    // Skip adding this state - BOL/BOF can't match here
+                    return subs_in as *mut RegSubs;
+                }
+            }
+            // Fall through to add to list
         }
 
         _ => {
@@ -1858,17 +1880,17 @@ extern "C" {
 // Use Rust implementations from ascii crate
 use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite};
 
-// Import state constants
+// Import state constants (NFA_BOL, NFA_BOF already imported at top of file)
 use crate::nfa_states::{
-    NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF, NFA_BOL, NFA_BOW,
-    NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_DIGIT, NFA_END_COLL,
-    NFA_END_COMPOSING, NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG, NFA_END_PATTERN, NFA_EOF, NFA_EOL,
-    NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LNUM, NFA_LNUM_GT,
-    NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_NALPHA,
-    NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER,
-    NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_RANGE_MIN, NFA_SFNAME,
-    NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_START_COLL, NFA_START_INVISIBLE,
-    NFA_START_INVISIBLE_BEFORE, NFA_START_INVISIBLE_BEFORE_FIRST, NFA_START_INVISIBLE_BEFORE_NEG,
+    NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOW, NFA_COL,
+    NFA_COL_GT, NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_DIGIT, NFA_END_COLL, NFA_END_COMPOSING,
+    NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG, NFA_END_PATTERN, NFA_EOF, NFA_EOL, NFA_EOW,
+    NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT,
+    NFA_LOWER, NFA_LOWER_IC, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_NALPHA, NFA_NDIGIT, NFA_NEWL,
+    NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER, NFA_NUPPER_IC,
+    NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_RANGE_MIN, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD,
+    NFA_SPRINT, NFA_START_COLL, NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE,
+    NFA_START_INVISIBLE_BEFORE_FIRST, NFA_START_INVISIBLE_BEFORE_NEG,
     NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_INVISIBLE_FIRST, NFA_START_INVISIBLE_NEG,
     NFA_START_INVISIBLE_NEG_FIRST, NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_UPPER, NFA_UPPER_IC,
     NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_WHITE, NFA_WORD, NFA_ZREF1, NFA_ZREF9,
