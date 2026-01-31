@@ -1785,16 +1785,16 @@ pub unsafe extern "C" fn rs_add_pathsep(p: *mut c_char) -> c_int {
 /// - The buffer pointed to by `path` must have at least `max_len` bytes capacity
 ///
 /// # Returns
-/// - 0 (OK) on success
-/// - 1 (FAIL) if not enough space
+/// - 1 (OK) on success
+/// - 0 (FAIL) if not enough space
 #[no_mangle]
 pub unsafe extern "C" fn rs_append_path(
     path: *mut c_char,
     to_append: *const c_char,
     max_len: usize,
 ) -> c_int {
-    const OK: c_int = 0;
-    const FAIL: c_int = 1;
+    const OK: c_int = 1;
+    const FAIL: c_int = 0;
 
     if path.is_null() || to_append.is_null() {
         return FAIL;
@@ -2064,7 +2064,7 @@ mod append_path_tests {
         }
         let to_append = std::ffi::CString::new("user").unwrap();
         let result = unsafe { rs_append_path(buf.as_mut_ptr(), to_append.as_ptr(), 100) };
-        assert_eq!(result, 0); // OK
+        assert_eq!(result, 1); // OK
         let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
         assert_eq!(result_str.to_str().unwrap(), "/home/user");
     }
@@ -2078,7 +2078,7 @@ mod append_path_tests {
         }
         let to_append = std::ffi::CString::new("user").unwrap();
         let result = unsafe { rs_append_path(buf.as_mut_ptr(), to_append.as_ptr(), 100) };
-        assert_eq!(result, 0); // OK
+        assert_eq!(result, 1); // OK
         let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
         assert_eq!(result_str.to_str().unwrap(), "/home/user");
     }
@@ -2092,7 +2092,7 @@ mod append_path_tests {
         }
         let to_append = std::ffi::CString::new("").unwrap();
         let result = unsafe { rs_append_path(buf.as_mut_ptr(), to_append.as_ptr(), 100) };
-        assert_eq!(result, 0); // OK - does nothing
+        assert_eq!(result, 1); // OK - does nothing
         let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
         assert_eq!(result_str.to_str().unwrap(), "/home");
     }
@@ -2106,7 +2106,7 @@ mod append_path_tests {
         }
         let to_append = std::ffi::CString::new(".").unwrap();
         let result = unsafe { rs_append_path(buf.as_mut_ptr(), to_append.as_ptr(), 100) };
-        assert_eq!(result, 0); // OK - does nothing
+        assert_eq!(result, 1); // OK - does nothing
         let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
         assert_eq!(result_str.to_str().unwrap(), "/home");
     }
@@ -2120,7 +2120,7 @@ mod append_path_tests {
         }
         let to_append = std::ffi::CString::new("very_long_name").unwrap();
         let result = unsafe { rs_append_path(buf.as_mut_ptr(), to_append.as_ptr(), 10) };
-        assert_eq!(result, 1); // FAIL
+        assert_eq!(result, 0); // FAIL
     }
 }
 
