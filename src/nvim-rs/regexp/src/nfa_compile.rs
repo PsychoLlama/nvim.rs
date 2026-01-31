@@ -784,22 +784,34 @@ unsafe fn nfa_get_match_text_impl(start: *mut NfaState) -> *mut u8 {
     }
 }
 
+extern "C" {
+    fn nvim_nfa_regprog_get_nstate(prog: *const std::ffi::c_void) -> c_int;
+    fn nvim_nfa_regprog_get_state(
+        prog: *const std::ffi::c_void,
+        idx: c_int,
+    ) -> *mut std::ffi::c_void;
+}
+
 /// Post-process the NFA for optimization.
 ///
 /// This function is called after NFA construction to apply optimizations
-/// such as detecting patterns that can use simpler matching.
+/// such as deciding whether to execute invisible match states directly
+/// or postpone them based on failure chance heuristics.
 ///
 /// # Safety
 /// `prog_ptr` must be a valid nfa_regprog_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nfa_postprocess(prog_ptr: *mut std::ffi::c_void) {
-    // The actual post-processing is complex and modifies the NFA states
-    // For now, this is a stub that allows the C code to call it
-    // The full implementation would optimize things like:
-    // - Detecting patterns that always match empty string
-    // - Marking states that can be skipped
-    // - Pre-computing character class membership
-    let _ = prog_ptr;
+    if prog_ptr.is_null() {
+        return;
+    }
+
+    let nstate = nvim_nfa_regprog_get_nstate(prog_ptr);
+    let states = nvim_nfa_regprog_get_state(prog_ptr, 0) as *mut NfaState;
+
+    if nstate > 0 && !states.is_null() {
+        crate::nfa_compiler::nfa_postprocess_states(states, nstate);
+    }
 }
 
 // =============================================================================

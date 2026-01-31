@@ -33,22 +33,28 @@ use std::ptr;
 
 use crate::nfa_compile::{append, frag, list1, patch, FragStack};
 use crate::nfa_states::{
-    Frag, NfaState, NFA_ANY, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF, NFA_BOL, NFA_BOW,
-    NFA_CLASS_ALNUM, NFA_CLASS_ALPHA, NFA_CLASS_BACKSPACE, NFA_CLASS_BLANK, NFA_CLASS_CNTRL,
-    NFA_CLASS_DIGIT, NFA_CLASS_ESCAPE, NFA_CLASS_FNAME, NFA_CLASS_GRAPH, NFA_CLASS_IDENT,
-    NFA_CLASS_KEYWORD, NFA_CLASS_LOWER, NFA_CLASS_PRINT, NFA_CLASS_PUNCT, NFA_CLASS_RETURN,
-    NFA_CLASS_SPACE, NFA_CLASS_TAB, NFA_CLASS_UPPER, NFA_CLASS_XDIGIT, NFA_COL, NFA_COL_GT,
-    NFA_COL_LT, NFA_COMPOSING, NFA_CONCAT, NFA_CURSOR, NFA_EMPTY, NFA_END_COLL, NFA_END_COMPOSING,
-    NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG, NFA_END_NEG_COLL, NFA_END_PATTERN, NFA_EOF, NFA_EOL,
-    NFA_EOW, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_MATCH,
-    NFA_MCLOSE, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN1, NFA_MOPEN9, NFA_NCLOSE, NFA_NOPEN,
-    NFA_OPT_CHARS, NFA_OR, NFA_PREV_ATOM_JUST_BEFORE, NFA_PREV_ATOM_JUST_BEFORE_NEG,
-    NFA_PREV_ATOM_LIKE_PATTERN, NFA_PREV_ATOM_NO_WIDTH, NFA_PREV_ATOM_NO_WIDTH_NEG, NFA_QUEST,
-    NFA_QUEST_NONGREEDY, NFA_RANGE, NFA_RANGE_MAX, NFA_RANGE_MIN, NFA_SKIP, NFA_SPLIT, NFA_STAR,
-    NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE, NFA_START_INVISIBLE_BEFORE_NEG,
-    NFA_START_INVISIBLE_NEG, NFA_START_PATTERN, NFA_STAR_NONGREEDY, NFA_VCOL, NFA_VCOL_GT,
-    NFA_VCOL_LT, NFA_VISUAL, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF1,
-    NFA_ZREF9, NFA_ZSTART, NSUBEXP,
+    Frag, NfaState, NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF,
+    NFA_BOL, NFA_BOW, NFA_CLASS_ALNUM, NFA_CLASS_ALPHA, NFA_CLASS_BACKSPACE, NFA_CLASS_BLANK,
+    NFA_CLASS_CNTRL, NFA_CLASS_DIGIT, NFA_CLASS_ESCAPE, NFA_CLASS_FNAME, NFA_CLASS_GRAPH,
+    NFA_CLASS_IDENT, NFA_CLASS_KEYWORD, NFA_CLASS_LOWER, NFA_CLASS_PRINT, NFA_CLASS_PUNCT,
+    NFA_CLASS_RETURN, NFA_CLASS_SPACE, NFA_CLASS_TAB, NFA_CLASS_UPPER, NFA_CLASS_XDIGIT, NFA_COL,
+    NFA_COL_GT, NFA_COL_LT, NFA_COMPOSING, NFA_CONCAT, NFA_CURSOR, NFA_DIGIT, NFA_EMPTY,
+    NFA_END_COLL, NFA_END_COMPOSING, NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG, NFA_END_NEG_COLL,
+    NFA_END_PATTERN, NFA_EOF, NFA_EOL, NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD,
+    NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_MARK, NFA_MARK_GT,
+    NFA_MARK_LT, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN1, NFA_MOPEN9, NFA_NALPHA,
+    NFA_NCLOSE, NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL,
+    NFA_NOPEN, NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_OPT_CHARS, NFA_OR,
+    NFA_PREV_ATOM_JUST_BEFORE, NFA_PREV_ATOM_JUST_BEFORE_NEG, NFA_PREV_ATOM_LIKE_PATTERN,
+    NFA_PREV_ATOM_NO_WIDTH, NFA_PREV_ATOM_NO_WIDTH_NEG, NFA_PRINT, NFA_QUEST, NFA_QUEST_NONGREEDY,
+    NFA_RANGE, NFA_RANGE_MAX, NFA_RANGE_MIN, NFA_SFNAME, NFA_SIDENT, NFA_SKIP, NFA_SKWORD,
+    NFA_SPLIT, NFA_SPRINT, NFA_STAR, NFA_START_COLL, NFA_START_INVISIBLE,
+    NFA_START_INVISIBLE_BEFORE, NFA_START_INVISIBLE_BEFORE_FIRST, NFA_START_INVISIBLE_BEFORE_NEG,
+    NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_INVISIBLE_FIRST, NFA_START_INVISIBLE_NEG,
+    NFA_START_INVISIBLE_NEG_FIRST, NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_STAR_NONGREEDY,
+    NFA_UPPER, NFA_UPPER_IC, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_WHITE, NFA_WORD,
+    NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF1, NFA_ZREF9, NFA_ZSTART,
+    NSUBEXP,
 };
 
 // =============================================================================
@@ -1079,6 +1085,193 @@ pub unsafe fn nfa_max_width(startstate: *mut NfaState, depth: c_int) -> c_int {
 }
 
 // =============================================================================
+// NFA Post-processing Optimization
+// =============================================================================
+
+/// Maximum recursion depth for match_follows
+const MATCH_FOLLOWS_MAX_DEPTH: c_int = 10;
+
+/// Maximum recursion depth for failure_chance
+const FAILURE_CHANCE_MAX_DEPTH: c_int = 4;
+
+/// Check if a match immediately follows the current state.
+///
+/// Returns true if the pattern could match without consuming input.
+///
+/// # Safety
+/// `startstate` must be a valid NFA state pointer or null.
+pub unsafe fn match_follows(startstate: *const NfaState, depth: c_int) -> bool {
+    if startstate.is_null() || depth > MATCH_FOLLOWS_MAX_DEPTH {
+        return false;
+    }
+
+    let mut state = startstate;
+    while !state.is_null() {
+        let c = (*state).c;
+
+        match c {
+            NFA_MATCH
+            | NFA_MCLOSE
+            | NFA_END_INVISIBLE
+            | NFA_END_INVISIBLE_NEG
+            | NFA_END_PATTERN => {
+                return true;
+            }
+
+            NFA_SPLIT => {
+                return match_follows((*state).out, depth + 1)
+                    || match_follows((*state).out1, depth + 1);
+            }
+
+            NFA_START_INVISIBLE
+            | NFA_START_INVISIBLE_FIRST
+            | NFA_START_INVISIBLE_BEFORE
+            | NFA_START_INVISIBLE_BEFORE_FIRST
+            | NFA_START_INVISIBLE_NEG
+            | NFA_START_INVISIBLE_NEG_FIRST
+            | NFA_START_INVISIBLE_BEFORE_NEG
+            | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+            | NFA_COMPOSING => {
+                // Skip ahead to next state
+                state = (*(*state).out1).out;
+                continue;
+            }
+
+            // States that advance input
+            NFA_ANY | NFA_IDENT | NFA_SIDENT | NFA_KWORD | NFA_SKWORD | NFA_FNAME | NFA_SFNAME
+            | NFA_PRINT | NFA_SPRINT | NFA_WHITE | NFA_NWHITE | NFA_DIGIT | NFA_NDIGIT
+            | NFA_HEX | NFA_NHEX | NFA_OCTAL | NFA_NOCTAL | NFA_WORD | NFA_NWORD | NFA_HEAD
+            | NFA_NHEAD | NFA_ALPHA | NFA_NALPHA | NFA_LOWER | NFA_NLOWER | NFA_UPPER
+            | NFA_NUPPER | NFA_LOWER_IC | NFA_NLOWER_IC | NFA_UPPER_IC | NFA_NUPPER_IC
+            | NFA_START_COLL | NFA_START_NEG_COLL | NFA_NEWL => {
+                return false;
+            }
+
+            _ => {
+                if c > 0 {
+                    // State will advance input
+                    return false;
+                }
+                // Zero-width, continue looking
+            }
+        }
+        state = (*state).out;
+    }
+    false
+}
+
+/// Estimate the failure chance of a pattern.
+///
+/// Returns a value from 0 (always succeeds) to 99 (likely to fail).
+///
+/// # Safety
+/// `state` must be a valid NFA state pointer or null.
+pub unsafe fn failure_chance(state: *mut NfaState, depth: c_int) -> c_int {
+    if state.is_null() || depth > FAILURE_CHANCE_MAX_DEPTH {
+        return 1;
+    }
+
+    let c = (*state).c;
+
+    match c {
+        NFA_SPLIT => {
+            if (*(*state).out).c == NFA_SPLIT || (*(*state).out1).c == NFA_SPLIT {
+                // Avoid recursive stuff
+                return 1;
+            }
+            // Two alternatives, use the lowest failure chance
+            let l = failure_chance((*state).out, depth + 1);
+            let r = failure_chance((*state).out1, depth + 1);
+            if l < r {
+                l
+            } else {
+                r
+            }
+        }
+
+        NFA_ANY => 1, // Matches anything, unlikely to fail
+
+        NFA_MATCH | NFA_MCLOSE | NFA_ANY_COMPOSING => 0, // Empty match works always
+
+        NFA_START_INVISIBLE
+        | NFA_START_INVISIBLE_FIRST
+        | NFA_START_INVISIBLE_NEG
+        | NFA_START_INVISIBLE_NEG_FIRST
+        | NFA_START_INVISIBLE_BEFORE
+        | NFA_START_INVISIBLE_BEFORE_FIRST
+        | NFA_START_INVISIBLE_BEFORE_NEG
+        | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+        | NFA_START_PATTERN => 5, // Recursive regmatch is expensive
+
+        NFA_BOL | NFA_EOL | NFA_BOF | NFA_EOF | NFA_NEWL => 99,
+
+        NFA_BOW | NFA_EOW => 90,
+
+        // Transparent states
+        NFA_MOPEN..=NFA_MOPEN9
+        | NFA_ZOPEN..=NFA_ZOPEN9
+        | NFA_ZCLOSE..=NFA_ZCLOSE9
+        | NFA_NOPEN
+        | NFA_MCLOSE..=NFA_MCLOSE9
+        | NFA_NCLOSE => failure_chance((*state).out, depth + 1),
+
+        // Backreferences
+        NFA_BACKREF1..=NFA_BACKREF9 | NFA_ZREF1..=NFA_ZREF9 => 40,
+
+        NFA_LNUM | NFA_VCOL | NFA_COL | NFA_MARK | NFA_CURSOR | NFA_VISUAL => 90,
+
+        // Default: unknown
+        _ => 50,
+    }
+}
+
+/// Post-process NFA to add optimization hints.
+///
+/// This examines invisible match states and decides whether to execute
+/// them immediately or postpone them based on failure chance heuristics.
+///
+/// # Safety
+/// `states` must point to an array of `nstate` NfaState structs.
+pub unsafe fn nfa_postprocess(states: *mut NfaState, nstate: c_int) {
+    for i in 0..nstate {
+        let state = states.add(i as usize);
+        let c = (*state).c;
+
+        if c == NFA_START_INVISIBLE
+            || c == NFA_START_INVISIBLE_NEG
+            || c == NFA_START_INVISIBLE_BEFORE
+            || c == NFA_START_INVISIBLE_BEFORE_NEG
+        {
+            // Determine whether to execute directly or postpone
+            let directly = if match_follows((*(*state).out1).out, 0) {
+                // Do it directly when what follows is possibly the end of the match
+                true
+            } else {
+                let ch_invisible = failure_chance((*state).out, 0);
+                let ch_follows = failure_chance((*(*state).out1).out, 0);
+
+                if c == NFA_START_INVISIBLE_BEFORE || c == NFA_START_INVISIBLE_BEFORE_NEG {
+                    // "before" matches are very expensive when unbounded
+                    if (*state).val <= 0 && ch_follows > 0 {
+                        false
+                    } else {
+                        ch_follows * 10 < ch_invisible
+                    }
+                } else {
+                    // Normal invisible, first do the one with highest failure chance
+                    ch_follows < ch_invisible
+                }
+            };
+
+            if directly {
+                // Switch to the _FIRST state variant
+                (*state).c += 1;
+            }
+        }
+    }
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -1139,6 +1332,18 @@ pub unsafe extern "C" fn rs_nfa_get_match_text_full(start: *mut NfaState) -> *mu
 #[no_mangle]
 pub unsafe extern "C" fn rs_nfa_max_width(startstate: *mut NfaState, depth: c_int) -> c_int {
     nfa_max_width(startstate, depth)
+}
+
+/// Post-process NFA for optimization on raw state array.
+///
+/// This is the core implementation that operates directly on the state array.
+/// Use `rs_nfa_postprocess` (in nfa_compile.rs) for the FFI entry point that
+/// takes a prog pointer.
+///
+/// # Safety
+/// `states` must point to an array of `nstate` NfaState structs.
+pub unsafe fn nfa_postprocess_states(states: *mut NfaState, nstate: c_int) {
+    nfa_postprocess(states, nstate)
 }
 
 // =============================================================================
