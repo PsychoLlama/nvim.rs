@@ -796,6 +796,12 @@ extern bool rs_qf_is_file_handler(char prefix);
 extern bool rs_qf_type_is_printable(char type_char);
 extern char rs_qf_normalize_type(char type_char);
 
+// Entry creation
+extern int rs_qf_add_entry(void *qfl, char *dir, const char *fname, const char *module,
+                           int bufnum, const char *mesg, linenr_T lnum, linenr_T end_lnum,
+                           int col, int end_col, char vis_col, const char *pattern, int nr,
+                           char type, const void *user_data, char valid);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -1447,6 +1453,26 @@ void nvim_qfline_set_pattern(void *qfp_void, const char *pattern)
   qfline_T *qfp = (qfline_T *)qfp_void;
   xfree(qfp->qf_pattern);
   qfp->qf_pattern = (pattern != NULL && *pattern != NUL) ? xstrdup(pattern) : NULL;
+}
+
+/// Set qf_user_data field (copies the typval)
+void nvim_qfline_set_user_data(void *qfp_void, void *qfl_void, const void *user_data_void)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  const typval_T *user_data = (const typval_T *)user_data_void;
+
+  if (user_data == NULL || user_data->v_type == VAR_UNKNOWN) {
+    qfp->qf_user_data.v_type = VAR_UNKNOWN;
+  } else {
+    tv_copy(user_data, &qfp->qf_user_data);
+    if (qfl_void != NULL) {
+      qf_list_T *qfl = (qf_list_T *)qfl_void;
+      qfl->qf_has_user_data = true;
+    }
+  }
 }
 
 /// Mark buffer as having quickfix/location list entry
@@ -3790,84 +3816,8 @@ static int qf_add_entry(qf_list_T *qfl, char *dir, char *fname, char *module, in
                         char vis_col, char *pattern, int nr, char type, typval_T *user_data,
                         char valid)
 {
-  buf_T *buf;
-  qfline_T *qfp = xmalloc(sizeof(qfline_T));
-  char *fullname = NULL;
-  char *p = NULL;
-
-  if (bufnum != 0) {
-    buf = buflist_findnr(bufnum);
-    qfp->qf_fnum = bufnum;
-    if (buf != NULL) {
-      buf->b_has_qf_entry |=
-        IS_QF_LIST(qfl) ? BUF_HAS_QF_ENTRY : BUF_HAS_LL_ENTRY;
-    }
-  } else {
-    qfp->qf_fnum = qf_get_fnum(qfl, dir, fname);
-    buf = buflist_findnr(qfp->qf_fnum);
-  }
-  if (fname != NULL) {
-    fullname = fix_fname(fname);
-  }
-  qfp->qf_fname = NULL;
-  if (buf != NULL && buf->b_ffname != NULL && fullname != NULL) {
-    if (path_fnamecmp(fullname, buf->b_ffname) != 0) {
-      p = path_try_shorten_fname(fullname);
-      if (p != NULL) {
-        qfp->qf_fname = xstrdup(p);
-      }
-    }
-  }
-  xfree(fullname);
-  qfp->qf_text = xstrdup(mesg);
-  qfp->qf_lnum = lnum;
-  qfp->qf_end_lnum = end_lnum;
-  qfp->qf_col = col;
-  qfp->qf_end_col = end_col;
-  qfp->qf_viscol = vis_col;
-  if (user_data == NULL || user_data->v_type == VAR_UNKNOWN) {
-    qfp->qf_user_data.v_type = VAR_UNKNOWN;
-  } else {
-    tv_copy(user_data, &qfp->qf_user_data);
-    qfl->qf_has_user_data = true;
-  }
-  if (pattern == NULL || *pattern == NUL) {
-    qfp->qf_pattern = NULL;
-  } else {
-    qfp->qf_pattern = xstrdup(pattern);
-  }
-  if (module == NULL || *module == NUL) {
-    qfp->qf_module = NULL;
-  } else {
-    qfp->qf_module = xstrdup(module);
-  }
-  qfp->qf_nr = nr;
-  qfp->qf_type = rs_qf_normalize_type(type);  // only printable chars allowed
-  qfp->qf_valid = valid;
-
-  qfline_T **lastp = &qfl->qf_last;
-  if (qf_list_empty(qfl)) {
-    // first element in the list
-    qfl->qf_start = qfp;
-    qfl->qf_ptr = qfp;
-    qfl->qf_index = 0;
-    qfp->qf_prev = NULL;
-  } else {
-    assert(*lastp);
-    qfp->qf_prev = *lastp;
-    (*lastp)->qf_next = qfp;
-  }
-  qfp->qf_next = NULL;
-  qfp->qf_cleared = false;
-  *lastp = qfp;
-  qfl->qf_count++;
-  if (qfl->qf_index == 0 && qfp->qf_valid) {
-    // first valid entry
-    qfl->qf_index = qfl->qf_count;
-    qfl->qf_ptr = qfp;
-  }
-
-  return QF_OK;
+  return rs_qf_add_entry(qfl, dir, fname, module, bufnum, mesg, lnum, end_lnum,
+                         col, end_col, vis_col, pattern, nr, type, user_data, valid);
 }
 
 /// Resize quickfix stack to be able to hold n amount of lists.

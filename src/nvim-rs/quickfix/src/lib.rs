@@ -1789,6 +1789,11 @@ extern "C" {
     fn nvim_qfline_set_module(qfp: QfLineHandleMut, module: *const c_char);
     fn nvim_qfline_set_fname(qfp: QfLineHandleMut, fname: *const c_char);
     fn nvim_qfline_set_pattern(qfp: QfLineHandleMut, pattern: *const c_char);
+    fn nvim_qfline_set_user_data(
+        qfp: QfLineHandleMut,
+        qfl: QfListHandleMut,
+        user_data: *const c_void,
+    );
     fn nvim_qf_mark_buf_has_entry(bufnum: c_int, is_location_list: bool);
     fn nvim_qf_get_fnum_for_entry(
         qfl: QfListHandleMut,
@@ -2286,6 +2291,7 @@ pub const QF_FAIL: c_int = 0;
 /// * `pattern` - Search pattern (may be NULL)
 /// * `nr` - Error number
 /// * `type_char` - Error type character ('E', 'W', etc.)
+/// * `user_data` - Custom user data typval pointer (may be NULL)
 /// * `valid` - Whether this is a valid entry
 ///
 /// # Returns
@@ -2312,6 +2318,7 @@ pub unsafe extern "C" fn rs_qf_add_entry(
     pattern: *const c_char,
     nr: c_int,
     type_char: c_char,
+    user_data: *const c_void,
     valid: c_char,
 ) -> c_int {
     if qfl.is_null() {
@@ -2362,6 +2369,9 @@ pub unsafe extern "C" fn rs_qf_add_entry(
     // Set module and pattern
     nvim_qfline_set_module(qfp, module);
     nvim_qfline_set_pattern(qfp, pattern);
+
+    // Set user data (copies the typval if provided)
+    nvim_qfline_set_user_data(qfp, qfl, user_data);
 
     // Set error number
     nvim_qfline_set_nr(qfp, nr);
