@@ -1,41 +1,42 @@
-Plan: ~/.claude/plans/tender-spinning-wolf.md
+Plan: ~/.claude/plans/warm-popping-haven.md
 
-I have completed executing the plan. Here's a summary of what was accomplished:
+All steps complete. Here's a summary:
 
 ## Summary
 
-### Phase 8a: Partial Completion ✓
+Successfully executed Phase 9 of the migration plan:
 
-I implemented **direct-execution invisible state handling** in Rust for lookahead/lookbehind patterns. This covers:
+### Changes Made
 
-**States handled in Rust:**
-- `NFA_START_INVISIBLE` / `NFA_START_INVISIBLE_FIRST`
-- `NFA_START_INVISIBLE_NEG` / `NFA_START_INVISIBLE_NEG_FIRST`  
-- `NFA_START_INVISIBLE_BEFORE` / `NFA_START_INVISIBLE_BEFORE_FIRST`
-- `NFA_START_INVISIBLE_BEFORE_NEG` / `NFA_START_INVISIBLE_BEFORE_NEG_FIRST`
-- `NFA_START_PATTERN`
+1. **Updated call sites** in `nfa_regcomp()` (regexp.c):
+   - Changed two `post2nfa()` calls to `rs_post2nfa()` with explicit parameters
+   - Removed now-unused `state_ptr = prog->state` and `state_ptr = NULL` lines
 
-**What was migrated:**
-- Direct execution case (when there's already a PIM or it's a `_FIRST` variant)
-- These cases call `recursive_regmatch` via C wrapper and handle the result
+2. **Deleted C code** (~876 lines from regexp.c):
+   - `alloc_state()` - NFA state allocator
+   - `frag()` - NFA fragment constructor
+   - `list1()` - Pointer list creator
+   - `patch()` - Output list patcher
+   - `append()` - List concatenation
+   - `st_error()` - Stack error reporter
+   - `st_push()` - Stack push
+   - `st_pop()` - Stack pop
+   - `nfa_max_width()` - Maximum width estimator
+   - `post2nfa()` - Main postfix-to-NFA converter
 
-**What remains in C:**
-- Postponed case (creating a new PIM and passing it to `addstate_here`)
-- This requires complex PIM handling that doesn't fit the current callback architecture
+3. **Removed unused globals**:
+   - `istate` - State allocation index
+   - `state_ptr` - State array pointer
+   - `empty` - Empty fragment sentinel
 
-### Phases 8b-8f: Deferred
+4. **Fixed Rust code**:
+   - Added NULL checks for `out_nstate` parameter in `rs_post2nfa` to prevent crashes when called with NULL
 
-The remaining phases require significant architectural changes:
-- Phase 8b (recursive_regmatch) depends on having rs_nfa_regmatch as primary
-- Phases 8c-8d require coordinated changes
-- The current architecture works well for most patterns
+### Verification
 
-### Files Modified
-- `src/nvim-rs/regexp/src/nfa_exec.rs` - Added ~310 lines for invisible/pattern state processing
-- `src/nvim/regexp.c` - Added ~20 lines of C wrappers
-
-### Testing
-- All 3718 Rust unit tests pass
-- Clippy clean
-- Formatting clean
-- Functional tests for lookahead/lookbehind patterns pass
+- ✅ `just build` - passes
+- ✅ `just rust-fmt-check` - passes
+- ✅ `just rust-clippy` - passes
+- ✅ `just rust-test` - 3718 tests pass
+- ✅ Functional tests (substitution, matching, groups, quantifiers) - all work correctly
+- ✅ Line count reduced from 14,634 to 13,758 (-876 lines)
