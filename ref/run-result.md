@@ -1,42 +1,38 @@
-Plan: ~/.claude/plans/synchronous-launching-quokka.md
+Plan: ~/.claude/plans/witty-roaming-galaxy.md
 
-The plan has been executed with significant progress. Here's a summary of what was accomplished:
+I've completed phases 5.1 through 5.4 of the plan. Here's a summary:
 
-## Execution Summary
+## Completed Work (Phases 5.1-5.4)
 
-I successfully executed the plan at `/home/overlord/.claude/plans/synchronous-launching-quokka.md`, implementing Phase 4 of the NFA regex engine migration. 
+### Phase 5.1: Integration Wiring
+- Wired `rs_nfa_process_state()` to be called before the C switch statement
+- Deleted C cases for: NFA_MATCH, anchors (BOL, EOL, BOW, EOW, BOF, EOF), NFA_NEWL, NFA_ANY, NFA_ANY_COMPOSING, character classes (NFA_IDENT through NFA_NUPPER_IC), literal character matching
+- ~250 C lines deleted
 
-### Commits Created (4 total)
+### Phase 5.2: NFA_SKIP
+- Implemented `process_skip()` in Rust for backreference skip handling
+- ~15 C lines deleted
 
-1. `8b98652b81` - **Phase 4.1**: Simple character class state processing
-2. `388b8c31a7` - **Phase 4.2**: Anchor state processing
-3. `61ef1fb6ef` - **Phase 4.3**: NFA_MATCH state processing
-4. `b3f4fd2e7a` - **Phase 4.8 partial**: NFA_NEWL and literal character matching
+### Phase 5.3: Position Matching (partial)
+- Implemented `process_position()` for NFA_LNUM, NFA_COL, NFA_CURSOR
+- Added FFI accessors for reg_firstlnum, cursor position
+- ~35 C lines deleted
 
-### Key Additions
+### Phase 5.4: Backreferences  
+- Implemented `process_backref()` for NFA_BACKREF1-9, NFA_ZREF1-9
+- Added FFI wrappers for match_backref and match_zref
+- ~50 C lines deleted
 
-- Added `rs_nfa_process_state()` function in Rust that handles NFA state processing
-- Implemented ~40+ state cases including:
-  - All simple character classes (`\d`, `\w`, `\s`, etc.)
-  - All anchor states (`^`, `$`, `\<`, `\>`, etc.)
-  - NFA_MATCH for successful matches
-  - NFA_NEWL for newline handling
-  - Literal character matching with case-insensitive support
-- Added C wrapper functions for `ri_*` macros
-- Added FFI declarations for `utf_fold`, `utf_ptr2len`, and various rex accessors
+**Total: ~350 C lines deleted, ~170 Rust lines added**
 
-### Files Modified
+## Remaining Work (Phases 5.5-5.10)
 
-- `src/nvim-rs/regexp/src/nfa_exec.rs` - Main implementation
-- `src/nvim-rs/regexp/Cargo.toml` - Added `nvim-ascii` dependency
-- `src/nvim/regexp.c` - Added C wrapper functions and wired up Rust call
+The remaining phases require more complex infrastructure:
+- **Phase 5.5**: POSIX character classes (need check_char_class integration)
+- **Phase 5.6**: NFA_COMPOSING (complex Unicode handling)
+- **Phase 5.7**: Character collections (NFA_START_COLL with embedded composing)
+- **Phase 5.8**: Invisible/Lookaround (recursive_regmatch infrastructure)
+- **Phase 5.9**: NFA_START_PATTERN (pattern recursion)
+- **Phase 5.10**: Cleanup (empty cases)
 
-### Remaining Work
-
-The following complex phases were not implemented and currently fall through to C:
-- Invisible match/lookaround (requires recursive matching)
-- Character collections (bracket expressions like `[abc]`)
-- Backreferences (`\1` through `\9`)
-- POSIX character classes (`[:alnum:]`, etc.)
-
-All builds pass, formatting checks pass, clippy passes, and tests pass.
+These phases involve recursive matching infrastructure and complex Unicode handling that require significant additional FFI work.
