@@ -807,6 +807,157 @@ pub unsafe extern "C" fn rs_qf_find_closest_entry(
 }
 
 // =============================================================================
+// Phase 8: Nth Adjacent Entry Navigation
+// =============================================================================
+
+/// Get the nth quickfix entry below the specified entry.
+///
+/// Searches forward in the list. If `linewise` is true, treats multiple entries
+/// on a single line as one.
+///
+/// Updates `errornr` to the final entry's 1-based index.
+///
+/// # Safety
+///
+/// - `entry` must be a valid pointer to a `qfline_T` struct
+/// - `errornr` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_nth_below_entry(
+    entry: QfLineHandle,
+    n: LinenrT,
+    linewise: bool,
+    errornr: *mut c_int,
+) {
+    if entry.is_null() || errornr.is_null() || n <= 0 {
+        return;
+    }
+
+    let mut current = entry;
+    let mut remaining = n;
+    let current_fnum = nvim_qfline_get_fnum(entry);
+
+    while remaining > 0 {
+        let first_errornr = *errornr;
+
+        if linewise {
+            // Treat all entries on the same line as one
+            current = rs_qf_find_last_entry_on_line(current, *errornr, errornr);
+        }
+
+        // Check if we can move to next entry in same file
+        let next = nvim_qfline_get_next(current);
+        if next.is_null() || nvim_qfline_get_fnum(next) != current_fnum {
+            if linewise {
+                *errornr = first_errornr;
+            }
+            break;
+        }
+
+        current = next;
+        *errornr += 1;
+        remaining -= 1;
+    }
+}
+
+/// Get the nth quickfix entry above the specified entry.
+///
+/// Searches backward in the list. If `linewise` is true, treats multiple entries
+/// on a single line as one.
+///
+/// Updates `errornr` to the final entry's 1-based index.
+///
+/// # Safety
+///
+/// - `entry` must be a valid pointer to a `qfline_T` struct
+/// - `errornr` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_nth_above_entry(
+    entry: QfLineHandle,
+    n: LinenrT,
+    linewise: bool,
+    errornr: *mut c_int,
+) {
+    if entry.is_null() || errornr.is_null() || n <= 0 {
+        return;
+    }
+
+    let mut current = entry;
+    let mut remaining = n;
+    let current_fnum = nvim_qfline_get_fnum(entry);
+
+    while remaining > 0 {
+        // Check if we can move to previous entry in same file
+        let prev = nvim_qfline_get_prev(current);
+        if prev.is_null() || nvim_qfline_get_fnum(prev) != current_fnum {
+            break;
+        }
+
+        current = prev;
+        *errornr -= 1;
+
+        if linewise {
+            // Find first entry on this line
+            current = rs_qf_find_first_entry_on_line(current, *errornr, errornr);
+        }
+
+        remaining -= 1;
+    }
+}
+
+/// Find the nth adjacent quickfix entry to position in the specified direction.
+///
+/// Returns the 1-based error number of the found entry, or 0 if not found.
+///
+/// # Arguments
+///
+/// * `qfl` - Quickfix list handle
+/// * `bnr` - Buffer number to search in
+/// * `pos` - Position to search from
+/// * `n` - Number of entries to skip (0 means find closest)
+/// * `dir` - Direction (>0 for forward, <0 for backward)
+/// * `linewise` - If true, treat multiple entries on same line as one
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `pos` must be a valid pointer to a `pos_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_find_nth_adj_entry(
+    qfl: QfListHandle,
+    bnr: c_int,
+    pos: PosHandle,
+    n: LinenrT,
+    dir: c_int,
+    linewise: bool,
+) -> c_int {
+    if qfl.is_null() || pos.is_null() {
+        return 0;
+    }
+
+    let mut errornr: c_int = 0;
+
+    // Find the closest entry to the specified position
+    let adj_entry = rs_qf_find_closest_entry(qfl, bnr, pos, dir, linewise, &raw mut errornr);
+    if adj_entry.is_null() {
+        return 0;
+    }
+
+    // If n > 1, go to the nth entry in the current buffer
+    let remaining = n - 1;
+    if remaining > 0 {
+        if dir > 0 {
+            // FORWARD
+            rs_qf_get_nth_below_entry(adj_entry, remaining, linewise, &raw mut errornr);
+        } else {
+            // BACKWARD
+            rs_qf_get_nth_above_entry(adj_entry, remaining, linewise, &raw mut errornr);
+        }
+    }
+
+    errornr
+}
+
+// =============================================================================
 // Phase 4: Quickfix List Management Functions
 // =============================================================================
 
