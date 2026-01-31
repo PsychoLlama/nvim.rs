@@ -37,8 +37,8 @@ impl ScreenGridHandle {
 /// Type alias for screen character (matches C's `schar_T` which is `uint32_t`).
 pub type ScharT = u32;
 
-/// Type alias for screen attribute (matches C's `sattr_T` which is `int16_t`).
-pub type SattrT = i16;
+/// Type alias for screen attribute (matches C's `sattr_T` which is `int32_t`).
+pub type SattrT = i32;
 
 /// Z-index constants for grid layering
 pub mod zindex {
@@ -878,8 +878,8 @@ mod tests {
     fn test_type_alias_sizes() {
         // ScharT should be 4 bytes (uint32_t)
         assert_eq!(std::mem::size_of::<ScharT>(), 4);
-        // SattrT should be 2 bytes (int16_t)
-        assert_eq!(std::mem::size_of::<SattrT>(), 2);
+        // SattrT should be 4 bytes (int32_t)
+        assert_eq!(std::mem::size_of::<SattrT>(), 4);
         // HandleT should be c_int size (typically 4 bytes)
         assert_eq!(std::mem::size_of::<HandleT>(), std::mem::size_of::<c_int>());
     }
