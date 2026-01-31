@@ -36,6 +36,7 @@ use crate::nfa_states::{
 extern "C" {
     fn nvim_rex_is_multi() -> c_int;
     fn nvim_rex_get_nfa_has_zend() -> c_int;
+    fn nvim_rex_get_nfa_nsubexpr() -> c_int;
 }
 
 // =============================================================================
@@ -260,6 +261,8 @@ pub unsafe fn init_thread(
 
 /// Copy submatch positions from one RegSub to another.
 ///
+/// Matches C behavior: only copies in_use entries, not the whole union.
+///
 /// # Safety
 /// Both pointers must be valid.
 pub unsafe fn copy_sub(to: *mut crate::nfa_states::RegSub, from: *const crate::nfa_states::RegSub) {
@@ -267,15 +270,26 @@ pub unsafe fn copy_sub(to: *mut crate::nfa_states::RegSub, from: *const crate::n
         return;
     }
     (*to).in_use = (*from).in_use;
-    if (*from).in_use > 0 {
-        // Copy the submatch positions
+    if (*from).in_use <= 0 {
+        return;
+    }
+
+    // Copy only the match start and end positions that are in use
+    let in_use = (*from).in_use as usize;
+    if nvim_rex_is_multi() != 0 {
         ptr::copy_nonoverlapping(
-            &(*from).list,
-            &mut (*to).list,
-            1, // Copy the union as a whole
+            (*from).list.multi.as_ptr(),
+            (*to).list.multi.as_mut_ptr(),
+            in_use,
+        );
+        (*to).orig_start_col = (*from).orig_start_col;
+    } else {
+        ptr::copy_nonoverlapping(
+            (*from).list.line.as_ptr(),
+            (*to).list.line.as_mut_ptr(),
+            in_use,
         );
     }
-    (*to).orig_start_col = (*from).orig_start_col;
 }
 
 /// Copy full submatch info (normal + syntax subexpressions).
@@ -292,7 +306,13 @@ pub unsafe fn copy_subs(to: *mut RegSubs, from: *const RegSubs, has_zsubexpr: bo
     }
 }
 
+extern "C" {
+    fn nvim_rex_get_nfa_has_zsubexpr() -> c_int;
+}
+
 /// Copy PIM (Postponed Invisible Match) info.
+///
+/// Matches C behavior: copies result, state, subs (conditionally for synt), and end.
 ///
 /// # Safety
 /// Both pointers must be valid.
@@ -300,10 +320,19 @@ pub unsafe fn copy_pim(to: *mut NfaPim, from: *const NfaPim) {
     if to.is_null() || from.is_null() {
         return;
     }
-    ptr::copy_nonoverlapping(from, to, 1);
+    (*to).result = (*from).result;
+    (*to).state = (*from).state;
+    copy_sub(&mut (*to).subs.norm, &(*from).subs.norm);
+    if nvim_rex_get_nfa_has_zsubexpr() != 0 {
+        copy_sub(&mut (*to).subs.synt, &(*from).subs.synt);
+    }
+    (*to).end = (*from).end;
 }
 
 /// Clear submatch positions.
+///
+/// Matches C behavior: for multi-line mode, fills list.multi with 0xff
+/// (setting lnum to -1); for single-line mode, fills list.line with 0.
 ///
 /// # Safety
 /// Pointer must be valid.
@@ -311,8 +340,19 @@ pub unsafe fn clear_sub(sub: *mut crate::nfa_states::RegSub) {
     if sub.is_null() {
         return;
     }
+    let nsubexpr = nvim_rex_get_nfa_nsubexpr() as usize;
+    if nvim_rex_is_multi() != 0 {
+        // Use 0xff to set lnum to -1
+        let multi_ptr = (*sub).list.multi.as_mut_ptr() as *mut u8;
+        let multi_size = std::mem::size_of::<crate::nfa_states::MultiPos>() * nsubexpr;
+        ptr::write_bytes(multi_ptr, 0xff, multi_size);
+    } else {
+        // Zero out line positions
+        let line_ptr = (*sub).list.line.as_mut_ptr() as *mut u8;
+        let line_size = std::mem::size_of::<crate::nfa_states::LinePos>() * nsubexpr;
+        ptr::write_bytes(line_ptr, 0, line_size);
+    }
     (*sub).in_use = 0;
-    (*sub).orig_start_col = 0;
 }
 
 /// Clear all submatch info.
@@ -771,6 +811,27 @@ pub unsafe extern "C" fn rs_copy_ze_off(
     from: *const crate::nfa_states::RegSub,
 ) {
     copy_ze_off(to, from);
+}
+
+/// Copy submatch positions from one RegSub to another.
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_sub(
+    to: *mut crate::nfa_states::RegSub,
+    from: *const crate::nfa_states::RegSub,
+) {
+    copy_sub(to, from);
+}
+
+/// Clear submatch positions in a RegSub.
+///
+/// # Safety
+/// Pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_sub(sub: *mut crate::nfa_states::RegSub) {
+    clear_sub(sub);
 }
 
 // =============================================================================

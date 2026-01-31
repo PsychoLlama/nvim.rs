@@ -722,6 +722,7 @@ pub struct RegSubs {
 
 /// Postponed Invisible Match position union.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub union PimEnd {
     /// Position for multi-line matching.
     pub pos: LPos,

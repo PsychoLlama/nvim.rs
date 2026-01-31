@@ -10951,85 +10951,40 @@ void nvim_nfa_set_timed_out_ptr(int *p) { nfa_timed_out = p; }
 int nvim_nfa_get_time_count(void) { return nfa_time_count; }
 void nvim_nfa_set_time_count(int v) { nfa_time_count = v; }
 
+// Rust FFI declarations for copy/clear functions
+extern void rs_copy_pim(nfa_pim_T *to, const nfa_pim_T *from);
+extern void rs_copy_sub(regsub_T *to, const regsub_T *from);
+extern void rs_clear_sub(regsub_T *sub);
+extern void rs_copy_sub_off(regsub_T *to, const regsub_T *from);
+extern void rs_copy_ze_off(regsub_T *to, const regsub_T *from);
+
 // Copy postponed invisible match info from "from" to "to".
 static void copy_pim(nfa_pim_T *to, nfa_pim_T *from)
 {
-  to->result = from->result;
-  to->state = from->state;
-  copy_sub(&to->subs.norm, &from->subs.norm);
-  if (rex.nfa_has_zsubexpr) {
-    copy_sub(&to->subs.synt, &from->subs.synt);
-  }
-  to->end = from->end;
+  rs_copy_pim(to, from);
 }
 
 static void clear_sub(regsub_T *sub)
 {
-  if (REG_MULTI) {
-    // Use 0xff to set lnum to -1
-    memset(sub->list.multi, 0xff, sizeof(struct multipos) * (size_t)rex.nfa_nsubexpr);
-  } else {
-    memset(sub->list.line, 0, sizeof(struct linepos) * (size_t)rex.nfa_nsubexpr);
-  }
-  sub->in_use = 0;
+  rs_clear_sub(sub);
 }
 
 // Copy the submatches from "from" to "to".
 static void copy_sub(regsub_T *to, regsub_T *from)
 {
-  to->in_use = from->in_use;
-  if (from->in_use <= 0) {
-    return;
-  }
-
-  // Copy the match start and end positions.
-  if (REG_MULTI) {
-    memmove(&to->list.multi[0], &from->list.multi[0],
-            sizeof(struct multipos) * (size_t)from->in_use);
-    to->orig_start_col = from->orig_start_col;
-  } else {
-    memmove(&to->list.line[0], &from->list.line[0],
-            sizeof(struct linepos) * (size_t)from->in_use);
-  }
+  rs_copy_sub(to, from);
 }
 
 // Like copy_sub() but exclude the main match.
 static void copy_sub_off(regsub_T *to, regsub_T *from)
 {
-  if (to->in_use < from->in_use) {
-    to->in_use = from->in_use;
-  }
-  if (from->in_use <= 1) {
-    return;
-  }
-
-  // Copy the match start and end positions.
-  if (REG_MULTI) {
-    memmove(&to->list.multi[1], &from->list.multi[1],
-            sizeof(struct multipos) * (size_t)(from->in_use - 1));
-  } else {
-    memmove(&to->list.line[1], &from->list.line[1],
-            sizeof(struct linepos) * (size_t)(from->in_use - 1));
-  }
+  rs_copy_sub_off(to, from);
 }
 
 // Like copy_sub() but only do the end of the main match if \ze is present.
 static void copy_ze_off(regsub_T *to, regsub_T *from)
 {
-  if (!rex.nfa_has_zend) {
-    return;
-  }
-
-  if (REG_MULTI) {
-    if (from->list.multi[0].end_lnum >= 0) {
-      to->list.multi[0].end_lnum = from->list.multi[0].end_lnum;
-      to->list.multi[0].end_col = from->list.multi[0].end_col;
-    }
-  } else {
-    if (from->list.line[0].end != NULL) {
-      to->list.line[0].end = from->list.line[0].end;
-    }
-  }
+  rs_copy_ze_off(to, from);
 }
 
 // Return true if "sub1" and "sub2" have the same start positions.
@@ -11102,7 +11057,16 @@ static bool has_state_with_pos(nfa_list_T *l, nfa_state_T *state, regsubs_T *sub
 }
 
 // Return true if "state" leads to a NFA_MATCH without advancing the input.
+extern int rs_match_follows(const nfa_state_T *state, int depth);
+
 static bool match_follows(const nfa_state_T *startstate, int depth)
+  FUNC_ATTR_NONNULL_ALL
+{
+  return rs_match_follows(startstate, depth) != 0;
+}
+
+#if 0  // Replaced by rs_match_follows
+static bool match_follows_OLD(const nfa_state_T *startstate, int depth)
   FUNC_ATTR_NONNULL_ALL
 {
   const nfa_state_T *state = startstate;
@@ -11121,8 +11085,8 @@ static bool match_follows(const nfa_state_T *startstate, int depth)
       return true;
 
     case NFA_SPLIT:
-      return match_follows(state->out, depth + 1)
-             || match_follows(state->out1, depth + 1);
+      return match_follows_OLD(state->out, depth + 1)
+             || match_follows_OLD(state->out1, depth + 1);
 
     case NFA_START_INVISIBLE:
     case NFA_START_INVISIBLE_FIRST:
@@ -11188,6 +11152,7 @@ static bool match_follows(const nfa_state_T *startstate, int depth)
   }
   return false;
 }
+#endif  // End of match_follows_OLD
 
 /// @param l      runtime state list
 /// @param state  state to update

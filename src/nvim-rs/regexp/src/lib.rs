@@ -155,15 +155,16 @@ pub use nfa_compiler::{
     rs_nfa_max_width, rs_post2nfa,
 };
 pub use nfa_exec::{
-    rs_addstate, rs_addstate_here, rs_has_state_with_pos, rs_nfa_addstate_here_offset,
-    rs_nfa_empty_const, rs_nfa_match_const, rs_nfa_match_error, rs_nfa_match_found,
-    rs_nfa_no_match, rs_nfa_should_continue, rs_nfa_skip_const, rs_nfa_split_const, rs_pim_equal,
-    rs_sub_equal,
+    rs_addstate, rs_addstate_here, rs_has_state_with_pos, rs_match_follows,
+    rs_nfa_addstate_here_offset, rs_nfa_empty_const, rs_nfa_match_const, rs_nfa_match_error,
+    rs_nfa_match_found, rs_nfa_no_match, rs_nfa_should_continue, rs_nfa_skip_const,
+    rs_nfa_split_const, rs_pim_equal, rs_sub_equal,
 };
 pub use nfa_match::{
     rs_check_bof, rs_check_bol, rs_check_bow, rs_check_eof, rs_check_eol, rs_check_eow,
-    rs_clear_subs, rs_copy_pim, rs_copy_subs, rs_init_thread, rs_is_match_state, rs_is_split_state,
-    rs_list_has_match, rs_mark_state_in_list, rs_match_context_advance, rs_match_context_at_eol,
+    rs_clear_sub, rs_clear_subs, rs_copy_pim, rs_copy_sub, rs_copy_sub_off, rs_copy_subs,
+    rs_copy_ze_off, rs_init_thread, rs_is_match_state, rs_is_split_state, rs_list_has_match,
+    rs_mark_state_in_list, rs_match_context_advance, rs_match_context_at_eol,
     rs_match_context_current_byte, rs_match_context_new, rs_match_context_new_multi,
     rs_pim_matched, rs_pim_needs_exec, rs_set_pim_matched, rs_set_pim_nomatch, rs_state_in_list,
 };

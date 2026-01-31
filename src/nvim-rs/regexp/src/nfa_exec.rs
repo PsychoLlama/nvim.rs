@@ -25,10 +25,18 @@ use std::ffi::c_int;
 use std::ptr;
 
 use crate::nfa_states::{
-    ColNr, LPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_BOF, NFA_BOL,
-    NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE9, NFA_MOPEN, NFA_NCLOSE, NFA_NOPEN, NFA_PIM_MATCH,
-    NFA_PIM_NOMATCH, NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9,
-    NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NSUBEXP,
+    ColNr, LPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_ALPHA, NFA_ANY,
+    NFA_ANY_COMPOSING, NFA_BOF, NFA_BOL, NFA_COMPOSING, NFA_DIGIT, NFA_END_INVISIBLE,
+    NFA_END_INVISIBLE_NEG, NFA_END_PATTERN, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD,
+    NFA_LOWER, NFA_LOWER_IC, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE9, NFA_MOPEN, NFA_NALPHA, NFA_NCLOSE,
+    NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NOPEN,
+    NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PIM_MATCH, NFA_PIM_NOMATCH,
+    NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKIP, NFA_SKWORD,
+    NFA_SPLIT, NFA_SPRINT, NFA_START_COLL, NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE,
+    NFA_START_INVISIBLE_BEFORE_FIRST, NFA_START_INVISIBLE_BEFORE_NEG,
+    NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_INVISIBLE_FIRST, NFA_START_INVISIBLE_NEG,
+    NFA_START_INVISIBLE_NEG_FIRST, NFA_START_NEG_COLL, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE,
+    NFA_WORD, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NSUBEXP,
 };
 
 // =============================================================================
@@ -1348,6 +1356,77 @@ pub unsafe fn has_state_with_pos(
     false
 }
 
+/// Check if the given state leads to a match without advancing input.
+///
+/// This is used to determine if a zero-width assertion might match
+/// at the current position.
+///
+/// # Safety
+/// State pointer must be valid.
+pub unsafe fn match_follows(startstate: *const NfaState, depth: c_int) -> bool {
+    // Avoid too much recursion
+    if depth > 10 {
+        return false;
+    }
+
+    let mut state = startstate;
+    while !state.is_null() {
+        match (*state).c {
+            // These states indicate a match without consuming input
+            NFA_MATCH
+            | NFA_MCLOSE
+            | NFA_END_INVISIBLE
+            | NFA_END_INVISIBLE_NEG
+            | NFA_END_PATTERN => {
+                return true;
+            }
+
+            // Split: recurse on both branches
+            NFA_SPLIT => {
+                return match_follows((*state).out, depth + 1)
+                    || match_follows((*state).out1, depth + 1);
+            }
+
+            // Invisible match states: skip ahead to the continuation
+            NFA_START_INVISIBLE
+            | NFA_START_INVISIBLE_FIRST
+            | NFA_START_INVISIBLE_BEFORE
+            | NFA_START_INVISIBLE_BEFORE_FIRST
+            | NFA_START_INVISIBLE_NEG
+            | NFA_START_INVISIBLE_NEG_FIRST
+            | NFA_START_INVISIBLE_BEFORE_NEG
+            | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+            | NFA_COMPOSING => {
+                // Skip ahead to next state
+                state = (*(*state).out1).out;
+                continue;
+            }
+
+            // Character classes and character matching - will advance input
+            NFA_ANY | NFA_ANY_COMPOSING | NFA_IDENT | NFA_SIDENT | NFA_KWORD | NFA_SKWORD
+            | NFA_FNAME | NFA_SFNAME | NFA_PRINT | NFA_SPRINT | NFA_WHITE | NFA_NWHITE
+            | NFA_DIGIT | NFA_NDIGIT | NFA_HEX | NFA_NHEX | NFA_OCTAL | NFA_NOCTAL | NFA_WORD
+            | NFA_NWORD | NFA_HEAD | NFA_NHEAD | NFA_ALPHA | NFA_NALPHA | NFA_LOWER
+            | NFA_NLOWER | NFA_UPPER | NFA_NUPPER | NFA_LOWER_IC | NFA_NLOWER_IC | NFA_UPPER_IC
+            | NFA_NUPPER_IC | NFA_START_COLL | NFA_START_NEG_COLL | NFA_NEWL => {
+                // State will advance input
+                return false;
+            }
+
+            c => {
+                if c > 0 {
+                    // Positive character code means it matches a character
+                    return false;
+                }
+                // Others: zero-width or possibly zero-width, might still find
+                // a match at the same position, keep looking.
+            }
+        }
+        state = (*state).out;
+    }
+    false
+}
+
 // =============================================================================
 // addstate FFI Export
 // =============================================================================
@@ -1415,6 +1494,15 @@ pub unsafe extern "C" fn rs_has_state_with_pos(
 #[no_mangle]
 pub unsafe extern "C" fn rs_sub_equal(sub1: *const RegSub, sub2: *const RegSub) -> c_int {
     c_int::from(sub_equal(sub1, sub2))
+}
+
+/// Check if a state leads to a match without advancing input.
+///
+/// # Safety
+/// State pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_follows(state: *const NfaState, depth: c_int) -> c_int {
+    c_int::from(match_follows(state, depth))
 }
 
 // =============================================================================
@@ -1962,20 +2050,12 @@ extern "C" {
 // Use Rust implementations from ascii crate
 use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite};
 
-// Import state constants (NFA_BOL, NFA_BOF already imported at top of file)
+// Import additional state constants (many already imported at top of file)
 use crate::nfa_states::{
-    NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOW, NFA_COL,
-    NFA_COL_GT, NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_DIGIT, NFA_END_COLL, NFA_END_COMPOSING,
-    NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG, NFA_END_PATTERN, NFA_EOF, NFA_EOL, NFA_EOW,
-    NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT,
-    NFA_LOWER, NFA_LOWER_IC, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_NALPHA, NFA_NDIGIT, NFA_NEWL,
-    NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER, NFA_NUPPER_IC,
-    NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_RANGE_MIN, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD,
-    NFA_SPRINT, NFA_START_COLL, NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE,
-    NFA_START_INVISIBLE_BEFORE_FIRST, NFA_START_INVISIBLE_BEFORE_NEG,
-    NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_INVISIBLE_FIRST, NFA_START_INVISIBLE_NEG,
-    NFA_START_INVISIBLE_NEG_FIRST, NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_UPPER, NFA_UPPER_IC,
-    NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_WHITE, NFA_WORD, NFA_ZREF1, NFA_ZREF9,
+    NFA_BACKREF1, NFA_BACKREF9, NFA_BOW, NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_CURSOR, NFA_END_COLL,
+    NFA_END_COMPOSING, NFA_EOF, NFA_EOL, NFA_EOW, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_MARK,
+    NFA_MARK_GT, NFA_MARK_LT, NFA_RANGE_MIN, NFA_START_PATTERN, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT,
+    NFA_VISUAL, NFA_ZREF1, NFA_ZREF9,
 };
 
 // Import check_char_class for POSIX classes in collections
