@@ -3311,6 +3311,163 @@ extern "C" {
 
     /// Get rex.reg_endpos array.
     fn nvim_rex_get_reg_endpos() -> *mut c_void;
+
+    /// Set nfa_time_limit pointer.
+    fn nvim_nfa_set_time_limit(p: *mut ProfTime);
+
+    /// Set nfa_timed_out pointer.
+    fn nvim_nfa_set_timed_out_ptr(p: *mut c_int);
+
+    /// Set nfa_time_count.
+    fn nvim_nfa_set_time_count(v: c_int);
+
+    /// Get rex.reg_mmatch.
+    fn nvim_rex_get_reg_mmatch() -> *mut c_void;
+
+    /// Get regmmatch_T.rmm_matchcol accessor - sets the field.
+    fn nvim_regmmatch_set_rmm_matchcol(m: *mut c_void, col: ColNr);
+
+    /// Clear submatch info.
+    fn rs_clear_sub(sub: *mut c_void);
+
+    /// Handle extmatch results for \z() patterns (Phase 12b helper).
+    /// This packages found \z(...\) matches for export.
+    fn nvim_nfa_handle_extmatch(prog: *mut c_void, subs_synt: *const c_void);
+}
+
+// =============================================================================
+// Phase 12b: nfa_regtry migration
+// =============================================================================
+
+/// Try match of "prog" at rex.line["col"].
+///
+/// This is the Rust implementation of nfa_regtry().
+///
+/// @param prog       NFA program
+/// @param col        Column to start matching
+/// @param tm         Timeout limit or NULL
+/// @param timed_out  Flag set on timeout or NULL
+///
+/// @return <= 0 for failure, number of lines contained in the match otherwise.
+///
+/// # Safety
+/// All pointers must be valid. prog must be a valid nfa_regprog_T*.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_regtry(
+    prog: *mut c_void,
+    col: ColNr,
+    tm: *mut ProfTime,
+    timed_out: *mut c_int,
+) -> c_int {
+    if prog.is_null() {
+        return 0;
+    }
+
+    // Set up rex.input and timing
+    let line = nvim_rex_get_line();
+    nvim_rex_set_input(line.add(col as usize));
+    nvim_nfa_set_time_limit(tm);
+    nvim_nfa_set_timed_out_ptr(timed_out);
+    nvim_nfa_set_time_count(0);
+
+    // Get start state from prog
+    let start = nvim_nfa_regprog_get_start(prog);
+
+    // Initialize submatch structures
+    let mut subs = RegSubs::default();
+    let mut m = RegSubs::default();
+
+    // Clear submatch info
+    rs_clear_sub(&mut subs.norm as *mut _ as *mut c_void);
+    rs_clear_sub(&mut m.norm as *mut _ as *mut c_void);
+    rs_clear_sub(&mut subs.synt as *mut _ as *mut c_void);
+    rs_clear_sub(&mut m.synt as *mut _ as *mut c_void);
+
+    // Run the NFA match
+    let result = nvim_nfa_regmatch(
+        prog,
+        start,
+        &mut subs as *mut _ as *mut c_void,
+        &mut m as *mut _ as *mut c_void,
+    );
+
+    if result == 0 {
+        return 0;
+    } else if result == NFA_TOO_EXPENSIVE {
+        return result;
+    }
+
+    // Copy results to rex state
+    nvim_cleanup_subexpr();
+
+    let is_multi = nvim_rex_is_multi() != 0;
+
+    if is_multi {
+        // Multi-line mode: copy to reg_startpos/reg_endpos
+        let startpos = nvim_rex_get_reg_startpos() as *mut LPos;
+        let endpos = nvim_rex_get_reg_endpos() as *mut LPos;
+
+        for i in 0..subs.norm.in_use as usize {
+            let sp = startpos.add(i);
+            let ep = endpos.add(i);
+            (*sp).lnum = subs.norm.list.multi[i].start_lnum;
+            (*sp).col = subs.norm.list.multi[i].start_col;
+            (*ep).lnum = subs.norm.list.multi[i].end_lnum;
+            (*ep).col = subs.norm.list.multi[i].end_col;
+        }
+
+        // Set rmm_matchcol
+        let mmatch = nvim_rex_get_reg_mmatch();
+        if !mmatch.is_null() {
+            nvim_regmmatch_set_rmm_matchcol(mmatch, subs.norm.orig_start_col);
+        }
+
+        // Fix up startpos[0] if it wasn't set
+        let sp0 = startpos;
+        if (*sp0).lnum < 0 {
+            (*sp0).lnum = 0;
+            (*sp0).col = col;
+        }
+
+        // Fix up endpos[0] if it wasn't set (pattern has \ze but didn't match)
+        let ep0 = endpos;
+        if (*ep0).lnum < 0 {
+            (*ep0).lnum = nvim_rex_get_lnum();
+            (*ep0).col = (nvim_rex_get_input() as usize - line as usize) as ColNr;
+        } else {
+            // Use line number of "\ze"
+            nvim_rex_set_lnum((*ep0).lnum);
+        }
+    } else {
+        // Single-line mode: copy to reg_startp/reg_endp
+        let startp = nvim_rex_get_reg_startp();
+        let endp = nvim_rex_get_reg_endp();
+
+        for i in 0..subs.norm.in_use as usize {
+            *startp.add(i) = subs.norm.list.line[i].start;
+            *endp.add(i) = subs.norm.list.line[i].end;
+        }
+
+        // Fix up startp[0] if NULL
+        if (*startp).is_null() {
+            *startp = line.add(col as usize);
+        }
+
+        // Fix up endp[0] if NULL
+        if (*endp).is_null() {
+            *endp = nvim_rex_get_input();
+        }
+    }
+
+    // Handle \z() external matches - delegate to C for memory management
+    nvim_nfa_handle_extmatch(prog, &subs.synt as *const _ as *const c_void);
+
+    1 + nvim_rex_get_lnum()
+}
+
+extern "C" {
+    /// Get NFA program start state.
+    fn nvim_nfa_regprog_get_start(prog: *const c_void) -> *mut c_void;
 }
 
 #[cfg(test)]

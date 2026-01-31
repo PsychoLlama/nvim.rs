@@ -157,7 +157,7 @@ pub use nfa_compiler::{
 pub use nfa_exec::{
     rs_addstate, rs_addstate_here, rs_find_match_text, rs_has_state_with_pos, rs_match_follows,
     rs_nfa_addstate_here_offset, rs_nfa_did_time_out, rs_nfa_empty_const, rs_nfa_match_const,
-    rs_nfa_match_error, rs_nfa_match_found, rs_nfa_no_match, rs_nfa_should_continue,
+    rs_nfa_match_error, rs_nfa_match_found, rs_nfa_no_match, rs_nfa_regtry, rs_nfa_should_continue,
     rs_nfa_skip_const, rs_nfa_split_const, rs_pim_equal, rs_recursive_regmatch, rs_skip_to_start,
     rs_sub_equal,
 };
