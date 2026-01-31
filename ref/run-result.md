@@ -1,42 +1,31 @@
-Plan: ~/.claude/plans/warm-popping-haven.md
+Plan: ~/.claude/plans/glowing-baking-lamport.md
 
-All steps complete. Here's a summary:
+Let me provide a summary of what was accomplished:
 
-## Summary
+## Phase 10f Cleanup - Completed
 
-Successfully executed Phase 9 of the migration plan:
+Successfully completed the Phase 10f cleanup with two commits:
 
-### Changes Made
+### Commit 1: `c81a8f2557` - Remove dead rs_nfa_regmatch code
+- Removed ~440 lines of dead Rust code from `nfa_exec.rs`
+- Deleted the unused `rs_nfa_regmatch` function
+- Removed associated FFI declarations that were only used by that function
+- Fixed FFI signature consistency (`c_char` vs `u8` for string pointer types)
 
-1. **Updated call sites** in `nfa_regcomp()` (regexp.c):
-   - Changed two `post2nfa()` calls to `rs_post2nfa()` with explicit parameters
-   - Removed now-unused `state_ptr = prog->state` and `state_ptr = NULL` lines
+### Commit 2: `77416f3168` - Delete unused C wrapper functions  
+- Removed `nvim_nfa_rex_get_nfa_listid` and `nvim_nfa_rex_set_nfa_listid`
+- Removed `nvim_reg_nextline`
+- Removed `nvim_nfa_copy_sub` (the `_off` variant is still used)
+- 15 lines deleted from `regexp.c`
 
-2. **Deleted C code** (~876 lines from regexp.c):
-   - `alloc_state()` - NFA state allocator
-   - `frag()` - NFA fragment constructor
-   - `list1()` - Pointer list creator
-   - `patch()` - Output list patcher
-   - `append()` - List concatenation
-   - `st_error()` - Stack error reporter
-   - `st_push()` - Stack push
-   - `st_pop()` - Stack pop
-   - `nfa_max_width()` - Maximum width estimator
-   - `post2nfa()` - Main postfix-to-NFA converter
+### Final Line Counts
+- `regexp.c`: 13,265 lines (down from original 13,758 = 493 lines deleted across all phases)
+- `nfa_exec.rs`: 3,144 lines (net reduction due to dead code removal)
 
-3. **Removed unused globals**:
-   - `istate` - State allocation index
-   - `state_ptr` - State array pointer
-   - `empty` - Empty fragment sentinel
+### All Checks Pass
+- `just build` ✓
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓
+- `just rust-test` ✓ (3718 tests passing)
 
-4. **Fixed Rust code**:
-   - Added NULL checks for `out_nstate` parameter in `rs_post2nfa` to prevent crashes when called with NULL
-
-### Verification
-
-- ✅ `just build` - passes
-- ✅ `just rust-fmt-check` - passes
-- ✅ `just rust-clippy` - passes
-- ✅ `just rust-test` - 3718 tests pass
-- ✅ Functional tests (substitution, matching, groups, quantifiers) - all work correctly
-- ✅ Line count reduced from 14,634 to 13,758 (-876 lines)
+Phase 10 is now complete. The NFA execution engine migration has successfully moved significant portions of the regex matching logic from C to Rust while maintaining full compatibility and passing all tests.
