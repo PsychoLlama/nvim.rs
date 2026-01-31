@@ -448,6 +448,7 @@ extern bool rs_qf_entry_in_file(const void *qfp, int bnr);
 extern bool rs_qf_entry_is_active(const void *qfp);
 extern bool rs_qf_entry_has_type(const void *qfp, char type_char);
 extern int rs_qf_id2nr(const void *qi, unsigned qf_id);
+extern int rs_qf_restore_list(void *qi, unsigned save_qfid);
 
 // Phase 6: ID and metadata functions from Rust
 extern unsigned rs_qf_get_id(const void *qfl);
@@ -6270,20 +6271,11 @@ static int qf_id2nr(const qf_info_T *const qi, const unsigned qfid)
 /// This is used when autocommands may have changed the current list.
 /// Returns OK if successfully restored the list. Returns FAIL if the list with
 /// the specified identifier (save_qfid) is not found in the stack.
+/// Rust implementation.
 static int qf_restore_list(qf_info_T *qi, unsigned save_qfid)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (qf_get_curlist(qi)->qf_id == save_qfid) {
-    return OK;
-  }
-
-  const int curlist = qf_id2nr(qi, save_qfid);
-  if (curlist < 0) {
-    // list is not present
-    return FAIL;
-  }
-  qi->qf_curlist = curlist;
-  return OK;
+  return rs_qf_restore_list(qi, save_qfid);
 }
 
 // Jump to the first entry if there is one.

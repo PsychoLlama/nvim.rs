@@ -446,6 +446,41 @@ pub unsafe extern "C" fn rs_qf_id2nr(qi: QfInfoHandle, qf_id: u32) -> c_int {
     rs_qf_find_list_by_id(qi, qf_id)
 }
 
+/// Restore the current quickfix list to one with the given ID.
+///
+/// If the current list already has the specified ID, returns OK (1).
+/// If the list with that ID is not found, returns FAIL (0).
+/// Otherwise, sets the current list to the one with the specified ID.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_restore_list(qi: QfInfoHandleMut, save_qfid: u32) -> c_int {
+    if qi.is_null() {
+        return 0; // FAIL
+    }
+
+    // Check if current list already has the specified ID
+    let curlist = nvim_qf_get_curlist(qi);
+    if !curlist.is_null() {
+        let cur_id = nvim_qf_get_id(curlist);
+        if cur_id == save_qfid {
+            return 1; // OK - already on the right list
+        }
+    }
+
+    // Find the list with the specified ID
+    let idx = rs_qf_id2nr(qi, save_qfid);
+    if idx < 0 {
+        return 0; // FAIL - list not found
+    }
+
+    // Set the current list
+    nvim_qf_set_curlist_idx(qi, idx);
+    1 // OK
+}
+
 /// Get the error type string for display.
 ///
 /// Returns a formatted string like " error", " warning", " info", " note",
