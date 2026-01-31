@@ -8287,6 +8287,31 @@ int nvim_nfa_get_time_count(void);
 void nvim_nfa_set_time_count(int v);
 int nvim_nfa_did_time_out(void);
 
+// Additional accessors for rs_nfa_regmatch (Phase 2+3)
+// Note: These use void* for types not exposed in public headers
+int nvim_nfa_rex_get_nfa_listid(void) { return rex.nfa_listid; }
+void nvim_nfa_rex_set_nfa_listid(int v) { rex.nfa_listid = v; }
+
+// Forward declarations for wrapper functions
+static void copy_sub(regsub_T *to, regsub_T *from);
+static int recursive_regmatch(nfa_state_T *state, nfa_pim_T *pim,
+                              nfa_regprog_T *prog, regsubs_T *submatch,
+                              regsubs_T *m, int **listids, int *listids_len);
+
+// Wrapper for copy_sub (static function) - uses void* for FFI
+void nvim_nfa_copy_sub(void *to, const void *from) {
+  copy_sub((regsub_T *)to, (regsub_T *)from);
+}
+
+// Wrapper for recursive_regmatch (static function) - uses void* for FFI
+int nvim_nfa_recursive_regmatch(void *state, const void *pim,
+                                void *prog, void *submatch,
+                                void *m, int **listids, int *listids_len) {
+  return recursive_regmatch((nfa_state_T *)state, (nfa_pim_T *)pim,
+                            (nfa_regprog_T *)prog, (regsubs_T *)submatch,
+                            (regsubs_T *)m, listids, listids_len);
+}
+
 // NFA postfix output accessors for Rust
 int *nvim_nfa_get_post_ptr(void) { return post_ptr; }
 int *nvim_nfa_get_post_start(void) { return post_start; }
