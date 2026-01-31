@@ -8434,6 +8434,56 @@ int nvim_nfa_match_backref(void *sub, int subidx, int *bytelen) {
   return match_backref((regsub_T *)sub, subidx, bytelen);
 }
 
+// =============================================================================
+// Invisible/lookaround wrappers for Rust (Phase 5.9)
+// =============================================================================
+
+/// Check NFA_END_INVISIBLE match.
+/// Returns:
+/// - 0: No match (break)
+/// - 1: Match found, set nfa_match = true and goto nextchar
+///
+/// Parameters:
+/// - state_c: The state code (NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG, NFA_END_PATTERN)
+/// - t_subs: Thread submatches (regsubs_T*)
+/// - m: Output match info (regsubs_T*)
+/// - nextlist_n: Number of items in nextlist (unused, for future use)
+/// - nfa_endp_ptr: The nfa_endp pointer (may be NULL)
+int nvim_nfa_check_end_invisible(int state_c, const void *t_subs, void *m,
+                                 int nextlist_n, const void *nfa_endp_ptr)
+{
+  (void)nextlist_n;  // Currently unused
+  const regsubs_T *subs = (const regsubs_T *)t_subs;
+  regsubs_T *out_m = (regsubs_T *)m;
+  const save_se_T *endp = (const save_se_T *)nfa_endp_ptr;
+
+  // If "nfa_endp" is set it's only a match if it ends at "nfa_endp"
+  if (endp != NULL) {
+    if (REG_MULTI) {
+      if (rex.lnum != endp->se_u.pos.lnum
+          || (int)(rex.input - rex.line) != endp->se_u.pos.col) {
+        return 0;  // No match
+      }
+    } else {
+      if (rex.input != endp->se_u.ptr) {
+        return 0;  // No match
+      }
+    }
+  }
+
+  // Do not set submatches for \@!
+  if (state_c != NFA_END_INVISIBLE_NEG) {
+    copy_sub(&out_m->norm, (regsub_T *)&subs->norm);
+    if (rex.nfa_has_zsubexpr) {
+      copy_sub(&out_m->synt, (regsub_T *)&subs->synt);
+    }
+  }
+
+  // Match found!
+  // The caller sets nfa_match = true and handles the nextlist check for clen
+  return 1;
+}
+
 // Wrapper for match_zref (static function) for Rust
 // Returns match result (0/1), sets bytelen output parameter
 int nvim_nfa_match_zref(int subidx, int *bytelen) {
@@ -14073,61 +14123,8 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
       switch (t->state->c) {
       // NFA_MATCH is handled by Rust (rs_nfa_process_state)
 
-      case NFA_END_INVISIBLE:
-      case NFA_END_INVISIBLE_NEG:
-      case NFA_END_PATTERN:
-        // This is only encountered after a NFA_START_INVISIBLE or
-        // NFA_START_INVISIBLE_BEFORE node.
-        // They surround a zero-width group, used with "\@=", "\&",
-        // "\@!", "\@<=" and "\@<!".
-        // If we got here, it means that the current "invisible" group
-        // finished successfully, so return control to the parent
-        // nfa_regmatch().  For a look-behind match only when it ends
-        // in the position in "nfa_endp".
-        // Submatches are stored in *m, and used in the parent call.
-#ifdef REGEXP_DEBUG
-        if (nfa_endp != NULL) {
-          if (REG_MULTI) {
-            fprintf(log_fd,
-                    "Current lnum: %d, endp lnum: %d;"
-                    " current col: %d, endp col: %d\n",
-                    (int)rex.lnum,
-                    (int)nfa_endp->se_u.pos.lnum,
-                    (int)(rex.input - rex.line),
-                    nfa_endp->se_u.pos.col);
-          } else {
-            fprintf(log_fd, "Current col: %d, endp col: %d\n",
-                    (int)(rex.input - rex.line),
-                    (int)(nfa_endp->se_u.ptr - rex.input));
-          }
-        }
-#endif
-        // If "nfa_endp" is set it's only a match if it ends at
-        // "nfa_endp"
-        if (nfa_endp != NULL
-            && (REG_MULTI
-                ? (rex.lnum != nfa_endp->se_u.pos.lnum
-                   || (int)(rex.input - rex.line) != nfa_endp->se_u.pos.col)
-                : rex.input != nfa_endp->se_u.ptr)) {
-          break;
-        }
-        // do not set submatches for \@!
-        if (t->state->c != NFA_END_INVISIBLE_NEG) {
-          copy_sub(&m->norm, &t->subs.norm);
-          if (rex.nfa_has_zsubexpr) {
-            copy_sub(&m->synt, &t->subs.synt);
-          }
-        }
-#ifdef REGEXP_DEBUG
-        fprintf(log_fd, "Match found:\n");
-        log_subsexpr(m);
-#endif
-        nfa_match = true;
-        // See comment above at "goto nextchar".
-        if (nextlist->n == 0) {
-          clen = 0;
-        }
-        goto nextchar;
+      // NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG, NFA_END_PATTERN are handled
+      // by Rust (rs_nfa_process_state)
 
       case NFA_START_INVISIBLE:
       case NFA_START_INVISIBLE_FIRST:

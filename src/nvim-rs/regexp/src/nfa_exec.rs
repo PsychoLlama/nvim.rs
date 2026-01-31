@@ -1588,6 +1588,16 @@ extern "C" {
     fn nvim_nfa_check_vcol(val: c_int, op: c_int) -> bool;
     fn nvim_nfa_check_mark(mark_id: c_int, op: c_int) -> bool;
     fn nvim_nfa_check_visual() -> bool;
+
+    // Invisible/lookaround wrappers (Phase 5.9)
+    fn nvim_nfa_check_end_invisible(
+        state_c: c_int,
+        t_subs: *const c_void,
+        m: *mut c_void,
+        nextlist_n: c_int,
+        nfa_endp_ptr: *const c_void,
+    ) -> c_int;
+    // nvim_rex_get_nfa_endp already declared earlier in this file
 }
 
 // Use Rust implementations from ascii crate
@@ -1597,13 +1607,14 @@ use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite};
 use crate::nfa_states::{
     NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF, NFA_BOL, NFA_BOW,
     NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_DIGIT, NFA_END_COLL,
-    NFA_END_COMPOSING, NFA_EOF, NFA_EOL, NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT,
-    NFA_KWORD, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_MARK, NFA_MARK_GT,
-    NFA_MARK_LT, NFA_NALPHA, NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC,
-    NFA_NOCTAL, NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT,
-    NFA_RANGE_MIN, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_START_COLL,
-    NFA_START_NEG_COLL, NFA_UPPER, NFA_UPPER_IC, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL,
-    NFA_WHITE, NFA_WORD, NFA_ZREF1, NFA_ZREF9,
+    NFA_END_COMPOSING, NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG, NFA_END_PATTERN, NFA_EOF, NFA_EOL,
+    NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LNUM, NFA_LNUM_GT,
+    NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_NALPHA,
+    NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER,
+    NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_RANGE_MIN, NFA_SFNAME,
+    NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_START_COLL, NFA_START_NEG_COLL, NFA_UPPER,
+    NFA_UPPER_IC, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_WHITE, NFA_WORD, NFA_ZREF1,
+    NFA_ZREF9,
 };
 
 // Import check_char_class for POSIX classes in collections
@@ -2013,6 +2024,53 @@ unsafe fn process_collection(
     true
 }
 
+/// Process NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG, NFA_END_PATTERN states.
+///
+/// These states mark the end of a lookahead/lookbehind pattern.
+/// When matched, set nfa_match and return control to the parent nfa_regmatch().
+///
+/// Returns: true if handled
+/// Sets result.return_code to 2 (goto nextchar) on match.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_end_invisible(
+    state_c: c_int,
+    t: *const NfaThread,
+    m: *mut RegSubs,
+    nextlist_n: c_int,
+    result: &mut StateProcessResult,
+) -> bool {
+    let nfa_endp = nvim_rex_get_nfa_endp();
+
+    // Call the C wrapper which handles the complex endp comparison
+    let check_result = nvim_nfa_check_end_invisible(
+        state_c,
+        &(*t).subs as *const _ as *const c_void,
+        m as *mut c_void,
+        nextlist_n,
+        nfa_endp,
+    );
+
+    match check_result {
+        0 => {
+            // No match (break in C code)
+            // result remains default (no add_state)
+        }
+        1 => {
+            // Match found! Set nfa_match and goto nextchar
+            nvim_nfa_set_match(1);
+            result.return_code = 2; // goto nextchar
+        }
+        _ => {
+            // Unexpected result - shouldn't happen
+        }
+    }
+
+    true
+}
+
 /// Process anchor states (BOL, EOL, BOW, EOW, BOF, EOF).
 ///
 /// Returns true if the state was an anchor and was handled, false otherwise.
@@ -2339,7 +2397,7 @@ pub unsafe extern "C" fn rs_nfa_process_state(
     nextlist: *mut NfaList,
     _start: *mut NfaState,
     submatch: *mut RegSubs,
-    _m: *mut RegSubs,
+    m: *mut RegSubs,
     _listids: *mut *mut c_int,
     _listids_len: *mut c_int,
     add_state_out: *mut *mut NfaState,
@@ -2382,13 +2440,16 @@ pub unsafe extern "C" fn rs_nfa_process_state(
             NFA_START_COLL | NFA_START_NEG_COLL => {
                 process_collection(state_c, curc, clen, state, &mut result);
             }
+            NFA_END_INVISIBLE | NFA_END_INVISIBLE_NEG | NFA_END_PATTERN => {
+                process_end_invisible(state_c, t, m, (*nextlist).n, &mut result);
+            }
             NFA_NEWL => process_newl(curc, state, &mut result),
             NFA_SKIP => process_skip(t, clen, state, &mut result),
             _ => {
                 // Try literal character matching (positive state values)
                 if !process_literal(state_c, curc, clen, state, &mut result) {
                     // Not a literal character, return 0 to continue with C fallback
-                    // for complex cases (lookaround, etc.)
+                    // for complex cases (NFA_START_INVISIBLE, NFA_START_PATTERN, etc.)
                 }
             }
         }
