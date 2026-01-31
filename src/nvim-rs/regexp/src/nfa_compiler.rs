@@ -688,7 +688,9 @@ pub unsafe fn post2nfa(
 
     if nfa_calc_size {
         // Add one for the match state
-        *out_nstate = istate + 1;
+        if !out_nstate.is_null() {
+            *out_nstate = istate + 1;
+        }
         // Return non-null to indicate success (actual pointer doesn't matter)
         return std::ptr::dangling_mut::<NfaState>();
     }
@@ -731,7 +733,9 @@ pub unsafe fn post2nfa(
     // Patch final fragment to match state
     patch(e.out, matchstate);
 
-    *out_nstate = istate;
+    if !out_nstate.is_null() {
+        *out_nstate = istate;
+    }
     e.start
 }
 
