@@ -1573,12 +1573,15 @@ use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite};
 
 // Import state constants
 use crate::nfa_states::{
-    NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_DIGIT, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT,
-    NFA_KWORD, NFA_LOWER, NFA_LOWER_IC, NFA_NALPHA, NFA_NDIGIT, NFA_NHEAD, NFA_NHEX, NFA_NLOWER,
-    NFA_NLOWER_IC, NFA_NOCTAL, NFA_NWHITE, NFA_NWORD, NFA_NUPPER, NFA_NUPPER_IC, NFA_OCTAL,
-    NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE,
-    NFA_WORD,
+    NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BOF, NFA_BOL, NFA_BOW, NFA_DIGIT, NFA_EOF, NFA_EOL,
+    NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LOWER, NFA_LOWER_IC,
+    NFA_NALPHA, NFA_NDIGIT, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER,
+    NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD,
+    NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE, NFA_WORD,
 };
+
+// Import anchor checking functions
+use crate::nfa_match::{rs_check_bof, rs_check_bol, rs_check_bow, rs_check_eof, rs_check_eow};
 
 /// Result of state processing.
 #[repr(C)]
@@ -1728,6 +1731,36 @@ unsafe fn process_any_composing(
     result.add_state = (*state).out;
 }
 
+/// Process anchor states (BOL, EOL, BOW, EOW, BOF, EOF).
+///
+/// Returns true if the state was an anchor and was handled, false otherwise.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_anchor(
+    state_c: c_int,
+    curc: c_int,
+    state: *mut NfaState,
+    result: &mut StateProcessResult,
+) -> bool {
+    let matched = match state_c {
+        NFA_BOL => rs_check_bol() != 0,
+        NFA_EOL => curc == 0,
+        NFA_BOW => rs_check_bow(curc) != 0,
+        NFA_EOW => rs_check_eow() != 0,
+        NFA_BOF => rs_check_bof() != 0,
+        NFA_EOF => rs_check_eof(curc) != 0,
+        _ => return false, // Not an anchor
+    };
+
+    if matched {
+        result.add_here = 1;
+        result.add_state = (*state).out;
+    }
+    true
+}
+
 /// Main state processing function for NFA execution.
 ///
 /// This function implements the large switch statement from C's nfa_regmatch.
@@ -1789,7 +1822,9 @@ pub unsafe extern "C" fn rs_nfa_process_state(
 
     // Try character classes first (most common case)
     if process_char_class(state_c, curc, clen, state, &mut result) {
-        // Handled
+        // Handled by character class processing
+    } else if process_anchor(state_c, curc, state, &mut result) {
+        // Handled by anchor processing
     } else {
         // Handle other state types
         match state_c {
