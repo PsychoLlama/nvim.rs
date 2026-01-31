@@ -13919,32 +13919,47 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
       add_state = NULL;
       add_here = false;
       add_count = 0;
+
+      // Try Rust state processing first
+      {
+        int add_off_rs = 0;
+        int add_here_rs = 0;
+        int add_count_rs = 0;
+        nfa_state_T *add_state_rs = NULL;
+        int rs_result = rs_nfa_process_state(
+            t, curc, clen,
+            prog, thislist, nextlist,
+            start, submatch, m,
+            &listids, &listids_len,
+            (void **)&add_state_rs, &add_here_rs, &add_count_rs, &add_off_rs);
+
+        if (rs_result == 2) {
+          // Rust handled NFA_MATCH, goto nextchar
+          if (nextlist->n == 0) {
+            clen = 0;
+          }
+          goto nextchar;
+        } else if (rs_result == -1) {
+          // Error (NFA_TOO_EXPENSIVE)
+          nfa_match = NFA_TOO_EXPENSIVE;
+          goto theend;
+        } else if (add_state_rs != NULL) {
+          // Rust handled this state
+          add_state = add_state_rs;
+          add_here = add_here_rs;
+          add_count = add_count_rs;
+          add_off = add_off_rs;
+          // NFA_NEWL uses add_off = -1 to signal go_to_nextline
+          if (add_off_rs == -1) {
+            go_to_nextline = true;
+          }
+          goto state_handled;
+        }
+        // Otherwise fall through to C switch
+      }
+
       switch (t->state->c) {
-      case NFA_MATCH:
-        // If the match is not at the start of the line, ends before a
-        // composing characters and rex.reg_icombine is not set, that
-        // is not really a match.
-        if (!rex.reg_icombine
-            && rex.input != rex.line
-            && utf_iscomposing_legacy(curc)) {
-          break;
-        }
-        nfa_match = true;
-        copy_sub(&submatch->norm, &t->subs.norm);
-        if (rex.nfa_has_zsubexpr) {
-          copy_sub(&submatch->synt, &t->subs.synt);
-        }
-#ifdef REGEXP_DEBUG
-        log_subsexpr(&t->subs);
-#endif
-        // Found the left-most longest match, do not look at any other
-        // states at this position.  When the list of states is going
-        // to be empty quit without advancing, so that "rex.input" is
-        // correct.
-        if (nextlist->n == 0) {
-          clen = 0;
-        }
-        goto nextchar;
+      // NFA_MATCH is handled by Rust (rs_nfa_process_state)
 
       case NFA_END_INVISIBLE:
       case NFA_END_INVISIBLE_NEG:
@@ -14187,77 +14202,8 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
         break;
       }
 
-      case NFA_BOL:
-        if (rex.input == rex.line) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-        break;
-
-      case NFA_EOL:
-        if (curc == NUL) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-        break;
-
-      case NFA_BOW:
-        result = true;
-
-        if (curc == NUL) {
-          result = false;
-        } else {
-          int this_class;
-
-          // Get class of current and previous char (if it exists).
-          this_class = mb_get_class_tab((char *)rex.input, rex.reg_buf->b_chartab);
-          if (this_class <= 1) {
-            result = false;
-          } else if (reg_prev_class() == this_class) {
-            result = false;
-          }
-        }
-        if (result) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-        break;
-
-      case NFA_EOW:
-        result = true;
-        if (rex.input == rex.line) {
-          result = false;
-        } else {
-          int this_class, prev_class;
-
-          // Get class of current and previous char (if it exists).
-          this_class = mb_get_class_tab((char *)rex.input, rex.reg_buf->b_chartab);
-          prev_class = reg_prev_class();
-          if (this_class == prev_class
-              || prev_class == 0 || prev_class == 1) {
-            result = false;
-          }
-        }
-        if (result) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-        break;
-
-      case NFA_BOF:
-        if (rex.lnum == 0 && rex.input == rex.line
-            && (!REG_MULTI || rex.reg_firstlnum == 1)) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-        break;
-
-      case NFA_EOF:
-        if (rex.lnum == rex.reg_maxline && curc == NUL) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-        break;
+      // Anchors (NFA_BOL, NFA_EOL, NFA_BOW, NFA_EOW, NFA_BOF, NFA_EOF)
+      // are handled by Rust (rs_nfa_process_state)
 
       case NFA_COMPOSING: {
         int mc = curc;
@@ -14330,20 +14276,7 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
         break;
       }
 
-      case NFA_NEWL:
-        if (curc == NUL && !rex.reg_line_lbr && REG_MULTI
-            && rex.lnum <= rex.reg_maxline) {
-          go_to_nextline = true;
-          // Pass -1 for the offset, which means taking the position
-          // at the start of the next line.
-          add_state = t->state->out;
-          add_off = -1;
-        } else if (curc == '\n' && rex.reg_line_lbr) {
-          // match \n as if it is an ordinary character
-          add_state = t->state->out;
-          add_off = 1;
-        }
-        break;
+      // NFA_NEWL is handled by Rust (rs_nfa_process_state)
 
       case NFA_START_COLL:
       case NFA_START_NEG_COLL: {
@@ -14483,179 +14416,10 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
         break;
       }
 
-      case NFA_ANY:
-        // Any char except NUL, (end of input) does not match.
-        if (curc > 0) {
-          add_state = t->state->out;
-          add_off = clen;
-        }
-        break;
+      // NFA_ANY and NFA_ANY_COMPOSING are handled by Rust (rs_nfa_process_state)
 
-      case NFA_ANY_COMPOSING:
-        // On a composing character skip over it.  Otherwise do
-        // nothing.  Always matches.
-        if (utf_iscomposing_legacy(curc)) {
-          add_off = clen;
-        } else {
-          add_here = true;
-          add_off = 0;
-        }
-        add_state = t->state->out;
-        break;
-
-      // Character classes like \a for alpha, \d for digit etc.
-      case NFA_IDENT:           //  \i
-        result = vim_isIDc(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_SIDENT:          //  \I
-        result = !ascii_isdigit(curc) && vim_isIDc(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_KWORD:           //  \k
-        result = vim_iswordp_buf((char *)rex.input, rex.reg_buf);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_SKWORD:          //  \K
-        result = !ascii_isdigit(curc)
-                 && vim_iswordp_buf((char *)rex.input, rex.reg_buf);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_FNAME:           //  \f
-        result = vim_isfilec(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_SFNAME:          //  \F
-        result = !ascii_isdigit(curc) && vim_isfilec(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_PRINT:           //  \p
-        result = vim_isprintc(utf_ptr2char((char *)rex.input));
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_SPRINT:          //  \P
-        result = !ascii_isdigit(curc) && vim_isprintc(utf_ptr2char((char *)rex.input));
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_WHITE:           //  \s
-        result = ascii_iswhite(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NWHITE:          //  \S
-        result = curc != NUL && !ascii_iswhite(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_DIGIT:           //  \d
-        result = ri_digit(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NDIGIT:          //  \D
-        result = curc != NUL && !ri_digit(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_HEX:             //  \x
-        result = ri_hex(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NHEX:            //  \X
-        result = curc != NUL && !ri_hex(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_OCTAL:           //  \o
-        result = ri_octal(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NOCTAL:          //  \O
-        result = curc != NUL && !ri_octal(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_WORD:            //  \w
-        result = ri_word(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NWORD:           //  \W
-        result = curc != NUL && !ri_word(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_HEAD:            //  \h
-        result = ri_head(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NHEAD:           //  \H
-        result = curc != NUL && !ri_head(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_ALPHA:           //  \a
-        result = ri_alpha(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NALPHA:          //  \A
-        result = curc != NUL && !ri_alpha(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_LOWER:           //  \l
-        result = ri_lower(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NLOWER:          //  \L
-        result = curc != NUL && !ri_lower(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_UPPER:           //  \u
-        result = ri_upper(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NUPPER:          // \U
-        result = curc != NUL && !ri_upper(curc);
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_LOWER_IC:        // [a-z]
-        result = ri_lower(curc) || (rex.reg_ic && ri_upper(curc));
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NLOWER_IC:       // [^a-z]
-        result = curc != NUL
-                 && !(ri_lower(curc) || (rex.reg_ic && ri_upper(curc)));
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_UPPER_IC:        // [A-Z]
-        result = ri_upper(curc) || (rex.reg_ic && ri_lower(curc));
-        ADD_STATE_IF_MATCH(t->state);
-        break;
-
-      case NFA_NUPPER_IC:       // [^A-Z]
-        result = curc != NUL
-                 && !(ri_upper(curc) || (rex.reg_ic && ri_lower(curc)));
-        ADD_STATE_IF_MATCH(t->state);
-        break;
+      // Character classes (NFA_IDENT through NFA_NUPPER_IC) are handled
+      // by Rust (rs_nfa_process_state)
 
       case NFA_BACKREF1:
       case NFA_BACKREF2:
@@ -14878,32 +14642,19 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
         // they are added again, nothing is to be done.
         break;
 
-      default:          // regular character
-      {
-        int c = t->state->c;
-
+      default:
+        // Literal character matching is handled by Rust (rs_nfa_process_state)
+        // If we get here with a positive c, Rust should have handled it.
+        // Negative values that aren't handled above are internal errors.
 #ifdef REGEXP_DEBUG
-        if (c < 0) {
-          siemsg("INTERNAL: Negative state char: %" PRId64, (int64_t)c);
+        if (t->state->c < 0) {
+          siemsg("INTERNAL: Negative state char: %" PRId64, (int64_t)t->state->c);
         }
 #endif
-        result = (c == curc);
-
-        if (!result && rex.reg_ic) {
-          result = utf_fold(c) == utf_fold(curc);
-        }
-
-        // If rex.reg_icombine is not set only skip over the character
-        // itself.  When it is set skip over composing characters.
-        if (result && !rex.reg_icombine) {
-          clen = utf_ptr2len((char *)rex.input);
-        }
-
-        ADD_STATE_IF_MATCH(t->state);
         break;
-      }
       }       // switch (t->state->c)
 
+state_handled:
       if (add_state != NULL) {
         nfa_pim_T *pim;
         nfa_pim_T pim_copy;
