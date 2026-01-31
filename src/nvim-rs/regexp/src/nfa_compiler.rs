@@ -870,7 +870,12 @@ pub unsafe fn nfa_get_regstart(start: *mut NfaState, depth: c_int) -> c_int {
 
 /// Extract literal match text from NFA if pattern is simple enough.
 ///
-/// Returns pointer to allocated match text, or null if pattern is complex.
+/// Returns pointer to allocated match text (excluding the first char which
+/// goes into regstart), or null if pattern is complex.
+///
+/// This function returns text that can be used for quick prefix matching
+/// before running the full NFA. The first character is NOT included because
+/// it's already stored in `regstart` for initial character filtering.
 ///
 /// # Safety
 /// `start` must be a valid NFA state pointer or null.
@@ -879,62 +884,44 @@ pub unsafe fn nfa_get_match_text(start: *mut NfaState) -> *mut u8 {
         return ptr::null_mut();
     }
 
-    // Skip transparent states at start
     let mut p = start;
-    loop {
-        if p.is_null() {
-            return ptr::null_mut();
-        }
-        let c = (*p).c;
 
-        // Skip MOPEN/NOPEN/ZOPEN
-        if c == NFA_MOPEN
-            || c == NFA_NOPEN
-            || (NFA_MOPEN..=NFA_MOPEN9).contains(&c)
-            || (NFA_ZOPEN..=NFA_ZOPEN9).contains(&c)
-        {
-            p = (*p).out;
-            continue;
-        }
-
-        // Found a non-transparent state
-        break;
+    // Must start with NFA_MOPEN
+    if (*p).c != NFA_MOPEN {
+        return ptr::null_mut();
     }
+    p = (*p).out;
 
-    // Check if it's a simple sequence of literals
+    // Count length of literal sequence (all chars after first)
     let mut len = 0;
     let mut check = p;
-    while !check.is_null() {
-        let c = (*check).c;
+    while !check.is_null() && (*check).c > 0 {
+        len += utf_char2len((*check).c);
+        check = (*check).out;
+    }
 
-        // Only accept literal characters
-        if c > 0 && c < 0x10000 {
-            len += utf_char2len(c);
-            check = (*check).out;
+    // Must end with NFA_MCLOSE -> NFA_MATCH
+    if check.is_null() || (*check).c != NFA_MCLOSE {
+        return ptr::null_mut();
+    }
+    if (*check).out.is_null() || (*(*check).out).c != NFA_MATCH {
+        return ptr::null_mut();
+    }
 
-            // Check for end states
-            if !check.is_null() {
-                let next_c = (*check).c;
-                if next_c == NFA_MCLOSE
-                    || (NFA_MCLOSE..=NFA_MCLOSE9).contains(&next_c)
-                    || next_c == NFA_NCLOSE
-                    || (NFA_ZCLOSE..=NFA_ZCLOSE9).contains(&next_c)
-                {
-                    check = (*check).out;
-                    if !check.is_null() && (*check).c == NFA_MATCH {
-                        break;
-                    }
-                    return ptr::null_mut();
-                }
-            }
-        } else if c == NFA_MATCH {
-            break;
-        } else {
-            return ptr::null_mut();
-        }
+    // Skip first char - it goes into regstart
+    // Start from start->out->out (skip NFA_MOPEN and first literal)
+    p = (*(*start).out).out;
+
+    // Recalculate length for remaining chars
+    len = 0;
+    check = p;
+    while !check.is_null() && (*check).c > 0 {
+        len += utf_char2len((*check).c);
+        check = (*check).out;
     }
 
     if len == 0 {
+        // Only one character in pattern, no match_text needed
         return ptr::null_mut();
     }
 
@@ -946,26 +933,22 @@ pub unsafe fn nfa_get_match_text(start: *mut NfaState) -> *mut u8 {
 
     let mut pos = 0;
     check = p;
-    while !check.is_null() {
+    while !check.is_null() && (*check).c > 0 {
         let c = (*check).c;
-        if c > 0 && c < 0x10000 {
-            // Write UTF-8 encoded character
-            let clen = utf_char2len(c) as usize;
-            if c < 0x80 {
-                *text.add(pos) = c as u8;
-            } else if c < 0x800 {
-                *text.add(pos) = (0xC0 | (c >> 6)) as u8;
-                *text.add(pos + 1) = (0x80 | (c & 0x3F)) as u8;
-            } else if c < 0x10000 {
-                *text.add(pos) = (0xE0 | (c >> 12)) as u8;
-                *text.add(pos + 1) = (0x80 | ((c >> 6) & 0x3F)) as u8;
-                *text.add(pos + 2) = (0x80 | (c & 0x3F)) as u8;
-            }
-            pos += clen;
-            check = (*check).out;
-        } else {
-            break;
+        // Write UTF-8 encoded character
+        let clen = utf_char2len(c) as usize;
+        if c < 0x80 {
+            *text.add(pos) = c as u8;
+        } else if c < 0x800 {
+            *text.add(pos) = (0xC0 | (c >> 6)) as u8;
+            *text.add(pos + 1) = (0x80 | (c & 0x3F)) as u8;
+        } else if c < 0x10000 {
+            *text.add(pos) = (0xE0 | (c >> 12)) as u8;
+            *text.add(pos + 1) = (0x80 | ((c >> 6) & 0x3F)) as u8;
+            *text.add(pos + 2) = (0x80 | (c & 0x3F)) as u8;
         }
+        pos += clen;
+        check = (*check).out;
     }
     *text.add(pos) = 0;
 

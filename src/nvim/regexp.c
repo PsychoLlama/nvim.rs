@@ -8759,6 +8759,14 @@ static void realloc_post_list(void)
 // Rust implementation
 extern int rs_nfa_recognize_char_class(const uint8_t *start, const uint8_t *end, int extra_newl);
 
+// Rust NFA compilation functions (Phase 6)
+extern nfa_state_T *rs_post2nfa(int *postfix, int *end, int nfa_calc_size,
+                                nfa_state_T *state_ptr, int nstate, int *out_nstate);
+extern void rs_nfa_postprocess(void *prog_ptr);
+extern int rs_nfa_get_reganch_full(nfa_state_T *start, int depth);
+extern int rs_nfa_get_regstart_full(nfa_state_T *start, int depth);
+extern uint8_t *rs_nfa_get_match_text_full(nfa_state_T *start);
+
 // Recognize a character class in expanded form. For example [0-9].
 // On success, return the id the character class to be emitted.
 // On failure, return 0 (=FAIL)
@@ -14906,11 +14914,11 @@ static regprog_T *nfa_regcomp(uint8_t *expr, int re_flags)
   prog->has_backref = rex.nfa_has_backref;
   prog->nsubexp = regnpar;
 
-  nfa_postprocess(prog);
+  rs_nfa_postprocess(prog);
 
-  prog->reganch = nfa_get_reganch(prog->start, 0);
-  prog->regstart = nfa_get_regstart(prog->start, 0);
-  prog->match_text = nfa_get_match_text(prog->start);
+  prog->reganch = rs_nfa_get_reganch_full(prog->start, 0);
+  prog->regstart = rs_nfa_get_regstart_full(prog->start, 0);
+  prog->match_text = rs_nfa_get_match_text_full(prog->start);
 
 #ifdef REGEXP_DEBUG
   nfa_postfix_dump(expr, OK);
