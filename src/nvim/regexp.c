@@ -5047,6 +5047,94 @@ void nvim_regexp_emsg_maxmempattern(void)
   emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
 }
 
+// =============================================================================
+// Position matching wrappers for Rust (Phase 5.8)
+// =============================================================================
+
+/// Check NFA_VCOL match. Returns true if the position matches.
+/// op: 0 = exact, 1 = greater than, 2 = less than
+bool nvim_nfa_check_vcol(int val, int op)
+{
+  colnr_T col = (colnr_T)(rex.input - rex.line);
+
+  // Bail out quickly when there can't be a match, avoid the overhead of
+  // win_linetabsize() on long lines.
+  if (op != 1 && col > val * MB_MAXBYTES) {
+    return false;
+  }
+
+  bool result = false;
+  win_T *wp = rex.reg_win == NULL ? curwin : rex.reg_win;
+  if (op == 1 && col - 1 > val && col > 100) {
+    int64_t ts = (int64_t)wp->w_buffer->b_p_ts;
+
+    // Guess that a character won't use more columns than 'tabstop',
+    // with a minimum of 4.
+    if (ts < 4) {
+      ts = 4;
+    }
+    result = col > val * ts;
+  }
+  if (!result) {
+    linenr_T lnum = REG_MULTI ? rex.reg_firstlnum + rex.lnum : 1;
+    if (REG_MULTI && (lnum <= 0 || lnum > wp->w_buffer->b_ml.ml_line_count)) {
+      lnum = 1;
+    }
+    int vcol = win_linetabsize(wp, lnum, (char *)rex.line, col);
+    assert(val >= 0);
+    result = nfa_re_num_cmp((uintmax_t)val, op, (uintmax_t)vcol + 1);
+  }
+  return result;
+}
+
+/// Check NFA_MARK match. Returns true if the position matches.
+/// mark_id: the mark identifier (state->val)
+/// op: 0 = exact, 1 = greater than, 2 = less than
+bool nvim_nfa_check_mark(int mark_id, int op)
+{
+  size_t col = REG_MULTI ? (size_t)(rex.input - rex.line) : 0;
+  fmark_T *fm = mark_get(rex.reg_buf, curwin, NULL, kMarkBufLocal, mark_id);
+
+  // Line may have been freed, get it again.
+  if (REG_MULTI) {
+    rex.line = (uint8_t *)reg_getline(rex.lnum);
+    rex.input = rex.line + col;
+  }
+
+  // Compare the mark position to the match position, if the mark
+  // exists and mark is set in reg_buf.
+  if (fm == NULL || fm->mark.lnum <= 0) {
+    return false;
+  }
+
+  pos_T *pos = &fm->mark;
+  const colnr_T pos_col = pos->lnum == rex.lnum + rex.reg_firstlnum
+                          && pos->col == MAXCOL
+                          ? reg_getline_len(pos->lnum - rex.reg_firstlnum)
+                          : pos->col;
+
+  // op: 0 = NFA_MARK (exact), 1 = NFA_MARK_GT, 2 = NFA_MARK_LT
+  if (pos->lnum == rex.lnum + rex.reg_firstlnum) {
+    if (pos_col == (colnr_T)(rex.input - rex.line)) {
+      return op == 0;  // NFA_MARK
+    }
+    if (pos_col < (colnr_T)(rex.input - rex.line)) {
+      return op == 1;  // NFA_MARK_GT
+    }
+    return op == 2;  // NFA_MARK_LT
+  }
+  if (pos->lnum < rex.lnum + rex.reg_firstlnum) {
+    return op == 1;  // NFA_MARK_GT
+  }
+  return op == 2;  // NFA_MARK_LT
+}
+
+/// Check NFA_VISUAL match. Returns true if the position is in the visual area.
+bool nvim_nfa_check_visual(void)
+{
+  return reg_match_visual();
+}
+
 // wants_nfa - pattern requires NFA engine (for BT-only patterns like [[:upper:]])
 int nvim_parse_get_wants_nfa(void) { return wants_nfa; }
 void nvim_parse_set_wants_nfa(int v) { wants_nfa = v; }
@@ -14241,96 +14329,8 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
       // by Rust (rs_nfa_process_state)
 
       // Backreferences (NFA_BACKREF1-9, NFA_ZREF1-9), NFA_SKIP, NFA_LNUM,
-      // NFA_COL, NFA_CURSOR are handled by Rust
+      // NFA_COL, NFA_CURSOR, NFA_VCOL, NFA_MARK, NFA_VISUAL are handled by Rust
       // (rs_nfa_process_state)
-
-      case NFA_VCOL:
-      case NFA_VCOL_GT:
-      case NFA_VCOL_LT: {
-        int op = t->state->c - NFA_VCOL;
-        colnr_T col = (colnr_T)(rex.input - rex.line);
-
-        // Bail out quickly when there can't be a match, avoid the overhead of
-        // win_linetabsize() on long lines.
-        if (op != 1 && col > t->state->val * MB_MAXBYTES) {
-          break;
-        }
-
-        result = false;
-        win_T *wp = rex.reg_win == NULL ? curwin : rex.reg_win;
-        if (op == 1 && col - 1 > t->state->val && col > 100) {
-          int64_t ts = (int64_t)wp->w_buffer->b_p_ts;
-
-          // Guess that a character won't use more columns than 'tabstop',
-          // with a minimum of 4.
-          if (ts < 4) {
-            ts = 4;
-          }
-          result = col > t->state->val * ts;
-        }
-        if (!result) {
-          linenr_T lnum = REG_MULTI ? rex.reg_firstlnum + rex.lnum : 1;
-          if (REG_MULTI && (lnum <= 0 || lnum > wp->w_buffer->b_ml.ml_line_count)) {
-            lnum = 1;
-          }
-          int vcol = win_linetabsize(wp, lnum, (char *)rex.line, col);
-          assert(t->state->val >= 0);
-          result = nfa_re_num_cmp((uintmax_t)t->state->val, op, (uintmax_t)vcol + 1);
-        }
-        if (result) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-      }
-      break;
-
-      case NFA_MARK:
-      case NFA_MARK_GT:
-      case NFA_MARK_LT: {
-        size_t col = REG_MULTI ? (size_t)(rex.input - rex.line) : 0;
-        fmark_T *fm = mark_get(rex.reg_buf, curwin, NULL, kMarkBufLocal, t->state->val);
-
-        // Line may have been freed, get it again.
-        if (REG_MULTI) {
-          rex.line = (uint8_t *)reg_getline(rex.lnum);
-          rex.input = rex.line + col;
-        }
-
-        // Compare the mark position to the match position, if the mark
-        // exists and mark is set in reg_buf.
-        if (fm != NULL && fm->mark.lnum > 0) {
-          pos_T *pos = &fm->mark;
-          const colnr_T pos_col = pos->lnum == rex.lnum + rex.reg_firstlnum
-                                  && pos->col == MAXCOL
-                                  ? reg_getline_len(pos->lnum - rex.reg_firstlnum)
-                                  : pos->col;
-
-          result = pos->lnum == rex.lnum + rex.reg_firstlnum
-                   ? (pos_col == (colnr_T)(rex.input - rex.line)
-                      ? t->state->c == NFA_MARK
-                      : (pos_col < (colnr_T)(rex.input - rex.line)
-                         ? t->state->c == NFA_MARK_GT
-                         : t->state->c == NFA_MARK_LT))
-                   : (pos->lnum < rex.lnum + rex.reg_firstlnum
-                      ? t->state->c == NFA_MARK_GT
-                      : t->state->c == NFA_MARK_LT);
-          if (result) {
-            add_here = true;
-            add_state = t->state->out;
-          }
-        }
-        break;
-      }
-
-      // NFA_CURSOR is handled by Rust (rs_nfa_process_state)
-
-      case NFA_VISUAL:
-        result = reg_match_visual();
-        if (result) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-        break;
 
       case NFA_MOPEN1:
       case NFA_MOPEN2:

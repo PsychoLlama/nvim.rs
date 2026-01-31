@@ -1583,6 +1583,11 @@ extern "C" {
     // Backreference matching
     fn nvim_nfa_match_backref(sub: *const c_void, subidx: c_int, bytelen: *mut c_int) -> c_int;
     fn nvim_nfa_match_zref(subidx: c_int, bytelen: *mut c_int) -> c_int;
+
+    // Position matching wrappers (Phase 5.8)
+    fn nvim_nfa_check_vcol(val: c_int, op: c_int) -> bool;
+    fn nvim_nfa_check_mark(mark_id: c_int, op: c_int) -> bool;
+    fn nvim_nfa_check_visual() -> bool;
 }
 
 // Use Rust implementations from ascii crate
@@ -1593,11 +1598,12 @@ use crate::nfa_states::{
     NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF, NFA_BOL, NFA_BOW,
     NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_DIGIT, NFA_END_COLL,
     NFA_END_COMPOSING, NFA_EOF, NFA_EOL, NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT,
-    NFA_KWORD, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_NALPHA, NFA_NDIGIT,
-    NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER,
-    NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_RANGE_MIN, NFA_SFNAME,
-    NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_START_COLL, NFA_START_NEG_COLL, NFA_UPPER,
-    NFA_UPPER_IC, NFA_WHITE, NFA_WORD, NFA_ZREF1, NFA_ZREF9,
+    NFA_KWORD, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_MARK, NFA_MARK_GT,
+    NFA_MARK_LT, NFA_NALPHA, NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC,
+    NFA_NOCTAL, NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT,
+    NFA_RANGE_MIN, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_START_COLL,
+    NFA_START_NEG_COLL, NFA_UPPER, NFA_UPPER_IC, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL,
+    NFA_WHITE, NFA_WORD, NFA_ZREF1, NFA_ZREF9,
 };
 
 // Import check_char_class for POSIX classes in collections
@@ -2179,6 +2185,17 @@ unsafe fn process_position(
                 lnum + firstlnum == cursor_lnum && col == cursor_col
             }
         }
+        NFA_VCOL | NFA_VCOL_GT | NFA_VCOL_LT => {
+            let val = (*state).val;
+            let op = state_c - NFA_VCOL;
+            nvim_nfa_check_vcol(val, op)
+        }
+        NFA_MARK | NFA_MARK_GT | NFA_MARK_LT => {
+            let mark_id = (*state).val;
+            let op = state_c - NFA_MARK;
+            nvim_nfa_check_mark(mark_id, op)
+        }
+        NFA_VISUAL => nvim_nfa_check_visual(),
         _ => return false, // Not a position state we handle
     };
 
