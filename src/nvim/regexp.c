@@ -4974,6 +4974,14 @@ buf_T *nvim_rex_get_reg_buf(void) { return rex.reg_buf; }
 void nvim_rex_set_reg_buf(buf_T *buf) { rex.reg_buf = buf; }
 uint64_t *nvim_rex_get_reg_buf_chartab(void) { return rex.reg_buf ? rex.reg_buf->b_chartab : NULL; }
 linenr_T nvim_rex_get_reg_firstlnum(void) { return rex.reg_firstlnum; }
+
+// Cursor position accessors for position matching (NFA_CURSOR)
+linenr_T nvim_rex_get_cursor_lnum(void) {
+  return rex.reg_win != NULL ? rex.reg_win->w_cursor.lnum : 0;
+}
+colnr_T nvim_rex_get_cursor_col(void) {
+  return rex.reg_win != NULL ? rex.reg_win->w_cursor.col : 0;
+}
 void nvim_rex_set_reg_firstlnum(linenr_T lnum) { rex.reg_firstlnum = lnum; }
 linenr_T nvim_rex_get_reg_maxline(void) { return rex.reg_maxline; }
 void nvim_rex_set_reg_maxline(linenr_T lnum) { rex.reg_maxline = lnum; }
@@ -14473,41 +14481,8 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
         }
         break;
       }
-      // NFA_SKIP is handled by Rust (rs_nfa_process_state)
-
-      case NFA_LNUM:
-      case NFA_LNUM_GT:
-      case NFA_LNUM_LT:
-        assert(t->state->val >= 0
-               && !((rex.reg_firstlnum > 0
-                     && rex.lnum > LONG_MAX - rex.reg_firstlnum)
-                    || (rex.reg_firstlnum < 0
-                        && rex.lnum < LONG_MIN + rex.reg_firstlnum))
-               && rex.lnum + rex.reg_firstlnum >= 0);
-        result = (REG_MULTI
-                  && nfa_re_num_cmp((uintmax_t)t->state->val,
-                                    t->state->c - NFA_LNUM,
-                                    (uintmax_t)rex.lnum + (uintmax_t)rex.reg_firstlnum));
-        if (result) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-        break;
-
-      case NFA_COL:
-      case NFA_COL_GT:
-      case NFA_COL_LT:
-        assert(t->state->val >= 0
-               && rex.input >= rex.line
-               && (uintmax_t)(rex.input - rex.line) <= UINTMAX_MAX - 1);
-        result = nfa_re_num_cmp((uintmax_t)t->state->val,
-                                t->state->c - NFA_COL,
-                                (uintmax_t)(rex.input - rex.line + 1));
-        if (result) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-        break;
+      // NFA_SKIP, NFA_LNUM, NFA_COL, NFA_CURSOR are handled by Rust
+      // (rs_nfa_process_state)
 
       case NFA_VCOL:
       case NFA_VCOL_GT:
@@ -14587,15 +14562,7 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
         break;
       }
 
-      case NFA_CURSOR:
-        result = rex.reg_win != NULL
-                 && (rex.lnum + rex.reg_firstlnum == rex.reg_win->w_cursor.lnum)
-                 && ((colnr_T)(rex.input - rex.line) == rex.reg_win->w_cursor.col);
-        if (result) {
-          add_here = true;
-          add_state = t->state->out;
-        }
-        break;
+      // NFA_CURSOR is handled by Rust (rs_nfa_process_state)
 
       case NFA_VISUAL:
         result = reg_match_visual();

@@ -1568,6 +1568,10 @@ extern "C" {
     fn nvim_rex_get_reg_buf() -> *mut c_void;
     fn nvim_rex_get_reg_line_lbr() -> bool;
     fn nvim_rex_get_reg_maxline() -> c_int;
+    fn nvim_rex_get_reg_firstlnum() -> c_int;
+    fn nvim_rex_get_reg_win() -> *mut c_void;
+    fn nvim_rex_get_cursor_lnum() -> c_int;
+    fn nvim_rex_get_cursor_col() -> c_int;
 
     // Character folding
     fn utf_fold(a: c_int) -> c_int;
@@ -1579,15 +1583,19 @@ use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite};
 
 // Import state constants
 use crate::nfa_states::{
-    NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BOF, NFA_BOL, NFA_BOW, NFA_DIGIT, NFA_EOF, NFA_EOL,
-    NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LOWER, NFA_LOWER_IC,
-    NFA_NALPHA, NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL,
-    NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME, NFA_SIDENT,
-    NFA_SKWORD, NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE, NFA_WORD,
+    NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BOF, NFA_BOL, NFA_BOW, NFA_COL, NFA_COL_GT,
+    NFA_COL_LT, NFA_CURSOR, NFA_DIGIT, NFA_EOF, NFA_EOL, NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX,
+    NFA_IDENT, NFA_KWORD, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_NALPHA,
+    NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER,
+    NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD,
+    NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE, NFA_WORD,
 };
 
 // Import anchor checking functions
 use crate::nfa_match::{rs_check_bof, rs_check_bol, rs_check_bow, rs_check_eof, rs_check_eow};
+
+// Import number comparison for position matching
+use crate::parser::nfa_re_num_cmp;
 
 /// Result of state processing.
 #[repr(C)]
@@ -1860,6 +1868,65 @@ unsafe fn process_skip(
     }
 }
 
+/// Process position matching states (NFA_LNUM, NFA_COL, NFA_CURSOR).
+///
+/// Returns true if the state was handled, false if it should be handled by C.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_position(
+    state_c: c_int,
+    state: *mut NfaState,
+    result: &mut StateProcessResult,
+) -> bool {
+    let matched = match state_c {
+        NFA_LNUM | NFA_LNUM_GT | NFA_LNUM_LT => {
+            // Only works in multi-line mode
+            if nvim_rex_is_multi() == 0 {
+                return true; // Handled but no match
+            }
+            let val = (*state).val as u64;
+            let lnum = nvim_rex_get_lnum();
+            let firstlnum = nvim_rex_get_reg_firstlnum();
+            let pos = (lnum + firstlnum) as u64;
+            let op = state_c - NFA_LNUM;
+            nfa_re_num_cmp(val, op, pos)
+        }
+        NFA_COL | NFA_COL_GT | NFA_COL_LT => {
+            let val = (*state).val as u64;
+            let input = nvim_rex_get_input();
+            let line = nvim_rex_get_line();
+            let col = input.offset_from(line) as u64 + 1;
+            let op = state_c - NFA_COL;
+            nfa_re_num_cmp(val, op, col)
+        }
+        NFA_CURSOR => {
+            // Check if we're at cursor position
+            let reg_win = nvim_rex_get_reg_win();
+            if reg_win.is_null() {
+                false
+            } else {
+                let lnum = nvim_rex_get_lnum();
+                let firstlnum = nvim_rex_get_reg_firstlnum();
+                let cursor_lnum = nvim_rex_get_cursor_lnum();
+                let input = nvim_rex_get_input();
+                let line = nvim_rex_get_line();
+                let col = input.offset_from(line) as c_int;
+                let cursor_col = nvim_rex_get_cursor_col();
+                lnum + firstlnum == cursor_lnum && col == cursor_col
+            }
+        }
+        _ => return false, // Not a position state we handle
+    };
+
+    if matched {
+        result.add_here = 1;
+        result.add_state = (*state).out;
+    }
+    true
+}
+
 /// Process literal character matching (default case).
 ///
 /// Returns true if this is a positive character state (c > 0) and was handled.
@@ -1965,6 +2032,8 @@ pub unsafe extern "C" fn rs_nfa_process_state(
         // Handled by character class processing
     } else if process_anchor(state_c, curc, state, &mut result) {
         // Handled by anchor processing
+    } else if process_position(state_c, state, &mut result) {
+        // Handled by position matching (NFA_LNUM, NFA_COL, NFA_CURSOR)
     } else {
         // Handle other state types
         match state_c {
