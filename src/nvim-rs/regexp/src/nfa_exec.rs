@@ -1566,6 +1566,12 @@ extern "C" {
     // Rex state accessors
     fn nvim_rex_get_reg_ic() -> bool;
     fn nvim_rex_get_reg_buf() -> *mut c_void;
+    fn nvim_rex_get_reg_line_lbr() -> bool;
+    fn nvim_rex_get_reg_maxline() -> c_int;
+
+    // Character folding
+    fn utf_fold(a: c_int) -> c_int;
+    fn utf_ptr2len(p: *const i8) -> c_int;
 }
 
 // Use Rust implementations from ascii crate
@@ -1575,9 +1581,9 @@ use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite};
 use crate::nfa_states::{
     NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BOF, NFA_BOL, NFA_BOW, NFA_DIGIT, NFA_EOF, NFA_EOL,
     NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LOWER, NFA_LOWER_IC,
-    NFA_NALPHA, NFA_NDIGIT, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER,
-    NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD,
-    NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE, NFA_WORD,
+    NFA_NALPHA, NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL,
+    NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME, NFA_SIDENT,
+    NFA_SKWORD, NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE, NFA_WORD,
 };
 
 // Import anchor checking functions
@@ -1806,6 +1812,69 @@ unsafe fn process_match(
     true
 }
 
+/// Process NFA_NEWL state - match newline.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_newl(curc: c_int, state: *mut NfaState, result: &mut StateProcessResult) {
+    if curc == 0 && !nvim_rex_get_reg_line_lbr() && nvim_rex_is_multi() != 0 {
+        let lnum = nvim_rex_get_lnum();
+        let maxline = nvim_rex_get_reg_maxline();
+        if lnum <= maxline {
+            // Pass -1 for the offset, which signals go_to_nextline = true
+            // The Rust execution loop will handle this special offset.
+            result.add_state = (*state).out;
+            result.add_off = -1;
+        }
+    } else if curc == i32::from(b'\n') && nvim_rex_get_reg_line_lbr() {
+        // match \n as if it is an ordinary character
+        result.add_state = (*state).out;
+        result.add_off = 1;
+    }
+}
+
+/// Process literal character matching (default case).
+///
+/// Returns true if this is a positive character state (c > 0) and was handled.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_literal(
+    state_c: c_int,
+    curc: c_int,
+    clen: c_int,
+    state: *mut NfaState,
+    result: &mut StateProcessResult,
+) -> bool {
+    // Only handle positive character values (literal characters)
+    if state_c <= 0 {
+        return false;
+    }
+
+    let mut matched = state_c == curc;
+
+    if !matched && nvim_rex_get_reg_ic() {
+        matched = utf_fold(state_c) == utf_fold(curc);
+    }
+
+    if matched {
+        // If rex.reg_icombine is not set only skip over the character
+        // itself. When it is set skip over composing characters.
+        let actual_clen = if !nvim_rex_get_reg_icombine() {
+            let input = nvim_rex_get_input();
+            utf_ptr2len(input as *const i8)
+        } else {
+            clen
+        };
+        result.add_state = (*state).out;
+        result.add_off = actual_clen;
+    }
+
+    true
+}
+
 /// Main state processing function for NFA execution.
 ///
 /// This function implements the large switch statement from C's nfa_regmatch.
@@ -1878,9 +1947,13 @@ pub unsafe extern "C" fn rs_nfa_process_state(
             }
             NFA_ANY => process_any(curc, clen, state, &mut result),
             NFA_ANY_COMPOSING => process_any_composing(curc, clen, state, &mut result),
+            NFA_NEWL => process_newl(curc, state, &mut result),
             _ => {
-                // For now, return 0 to continue processing with C fallback
-                // More cases will be added in subsequent phases
+                // Try literal character matching (positive state values)
+                if !process_literal(state_c, curc, clen, state, &mut result) {
+                    // Not a literal character, return 0 to continue with C fallback
+                    // for complex cases (collections, backrefs, lookaround, etc.)
+                }
             }
         }
     }
