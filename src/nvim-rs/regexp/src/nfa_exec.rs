@@ -1,49 +1,56 @@
-//! NFA execution engine for the regex engine.
+//! NFA matching engine for the regex engine.
 //!
-//! This module implements the core NFA state transition logic, including:
-//! - `addstate()` - add states to the thread list (handling epsilon transitions)
-//! - State list management
-//! - Submatch position tracking during execution
+//! This module implements the NFA simulation for pattern matching.
+//! It uses parallel state tracking (Thompson's algorithm) where all
+//! possible states are tracked simultaneously.
 //!
-//! # Algorithm Overview
+//! # Overview
 //!
-//! The NFA execution uses Thompson's algorithm with parallel state tracking:
-//! 1. Maintain two lists: "current" states and "next" states
-//! 2. For each input character, process all current states
-//! 3. States that match via epsilon transitions are expanded immediately
-//! 4. States that consume a character move to the "next" list
-//! 5. After processing all current states, swap lists and continue
+//! The matching algorithm:
+//! 1. Start with the initial state in the "current" list
+//! 2. For each input character:
+//!    - Process all states in the current list
+//!    - States that can consume the character move to "next" list
+//!    - States with epsilon transitions are expanded immediately
+//! 3. Swap current and next lists, repeat
+//! 4. Match succeeds if any state in current list is an accepting state
 //!
-//! # Epsilon Transitions
+//! # Key structures
 //!
-//! States like `NFA_SPLIT`, `NFA_NOPEN`, `NFA_MOPEN*` have epsilon transitions.
-//! These are followed immediately without consuming input. The `addstate()`
-//! function handles this recursively.
+//! - [`MatchState`]: Tracks current match position and submatches
+//! - [`ThreadList`]: List of active threads (states with submatches)
+//! - Helper functions for state queue management
 
-use std::ffi::{c_char, c_int};
+use std::ffi::c_int;
 use std::ptr;
 
-use crate::nfa_match::{copy_pim, copy_sub, MAX_ADDSTATE_DEPTH};
 use crate::nfa_states::{
-    ColNr, MultiPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_BOF, NFA_BOL,
-    NFA_EMPTY, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE2, NFA_MCLOSE3, NFA_MCLOSE4,
-    NFA_MCLOSE5, NFA_MCLOSE6, NFA_MCLOSE7, NFA_MCLOSE8, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN1,
-    NFA_MOPEN2, NFA_MOPEN3, NFA_MOPEN4, NFA_MOPEN5, NFA_MOPEN6, NFA_MOPEN7, NFA_MOPEN8, NFA_MOPEN9,
-    NFA_NCLOSE, NFA_NOPEN, NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE1,
-    NFA_ZCLOSE2, NFA_ZCLOSE3, NFA_ZCLOSE4, NFA_ZCLOSE5, NFA_ZCLOSE6, NFA_ZCLOSE7, NFA_ZCLOSE8,
-    NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN1, NFA_ZOPEN2, NFA_ZOPEN3, NFA_ZOPEN4, NFA_ZOPEN5,
-    NFA_ZOPEN6, NFA_ZOPEN7, NFA_ZOPEN8, NFA_ZOPEN9, NFA_ZSTART, NSUBEXP,
+    ColNr, LPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_MATCH, NFA_MOPEN,
+    NFA_NCLOSE, NFA_NOPEN, NFA_PIM_MATCH, NFA_PIM_NOMATCH, NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_SKIP,
+    NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NSUBEXP,
 };
 
 // =============================================================================
-// Constants
+// FFI declarations for C functions
 // =============================================================================
+
+extern "C" {
+    fn nvim_rex_is_multi() -> c_int;
+    fn nvim_rex_get_nfa_has_zend() -> c_int;
+}
+
+// =============================================================================
+// Match Constants
+// =============================================================================
+
+/// Maximum recursion depth for addstate to prevent stack overflow.
+pub const MAX_ADDSTATE_DEPTH: c_int = 5000;
 
 /// Offset used by addstate_here to signal insertion at specific position.
 pub const ADDSTATE_HERE_OFFSET: c_int = 1000;
 
 // =============================================================================
-// FFI Declarations
+// FFI Declarations for Phase 1: nfa_regmatch migration
 // =============================================================================
 
 extern "C" {
@@ -53,10 +60,6 @@ extern "C" {
     fn nvim_rex_get_lnum() -> c_int;
     fn nvim_rex_get_nfa_has_backref() -> c_int;
     fn nvim_rex_get_nfa_has_zsubexpr() -> c_int;
-    fn nvim_rex_get_nfa_has_zend() -> c_int;
-    fn nvim_rex_get_nfa_ll_index() -> c_int;
-    fn nvim_rex_get_nfa_endp() -> *const c_char;
-    fn nvim_rex_is_multi() -> c_int;
 
     // Memory limit
     fn nvim_get_p_mmp() -> i64;
@@ -73,635 +76,894 @@ use std::cell::UnsafeCell;
 
 /// Thread-local temporary storage for submatch data.
 ///
-/// When the list needs to be resized, submatch pointers may become invalid.
-/// We use this temporary storage to preserve the data.
-///
-/// Using UnsafeCell to avoid static mut reference warnings while maintaining
-/// the same single-threaded semantics.
+/// This is used during addstate() to avoid allocating new submatch
+/// structures on every call.
 struct TempSubsStorage {
-    inner: UnsafeCell<Option<Box<RegSubs>>>,
+    subs: UnsafeCell<RegSubs>,
 }
 
-// SAFETY: Neovim is single-threaded for regex operations
+// Safety: This is only accessed from a single thread during regex execution
 unsafe impl Sync for TempSubsStorage {}
 
 static TEMP_SUBS: TempSubsStorage = TempSubsStorage {
-    inner: UnsafeCell::new(None),
+    subs: UnsafeCell::new(RegSubs {
+        norm: RegSub {
+            in_use: 0,
+            orig_start_col: 0,
+            list: crate::nfa_states::SubPos {
+                multi: [crate::nfa_states::MultiPos {
+                    start_lnum: 0,
+                    start_col: 0,
+                    end_lnum: 0,
+                    end_col: 0,
+                }; NSUBEXP],
+            },
+        },
+        synt: RegSub {
+            in_use: 0,
+            orig_start_col: 0,
+            list: crate::nfa_states::SubPos {
+                multi: [crate::nfa_states::MultiPos {
+                    start_lnum: 0,
+                    start_col: 0,
+                    end_lnum: 0,
+                    end_col: 0,
+                }; NSUBEXP],
+            },
+        },
+    }),
 };
 
-/// Get or create temporary submatch storage.
+/// Get mutable reference to temporary submatch storage.
 ///
 /// # Safety
-/// Must be called from single-threaded context.
+/// Must only be called from single-threaded regex execution code.
+#[inline]
 unsafe fn get_temp_subs() -> *mut RegSubs {
-    let storage = &mut *TEMP_SUBS.inner.get();
-    if storage.is_none() {
-        *storage = Some(Box::new(RegSubs::default()));
-    }
-    storage.as_mut().unwrap().as_mut() as *mut RegSubs
+    TEMP_SUBS.subs.get()
 }
 
 // =============================================================================
-// Submatch Position Helpers
+// Match State
 // =============================================================================
 
-/// Saved state for a multi-line submatch position.
-#[derive(Clone, Copy, Default)]
-struct SavedMultiPos {
-    pos: MultiPos,
-    in_use: c_int,
+/// Current match state tracking.
+///
+/// Tracks the position in the input, current line info for multi-line
+/// matching, and various flags.
+#[repr(C)]
+#[derive(Debug)]
+pub struct MatchContext {
+    /// Current input position (pointer into line).
+    pub input: *const u8,
+    /// Start of current line.
+    pub line: *const u8,
+    /// Current line number (1-based, for multi-line).
+    pub lnum: c_int,
+    /// First line number in search range.
+    pub first_lnum: c_int,
+    /// Maximum line number to search.
+    pub max_line: c_int,
+    /// Whether multi-line matching is enabled.
+    pub multi: bool,
+    /// Ignore case flag.
+    pub ignore_case: bool,
+    /// Ignore combining characters flag.
+    pub ignore_combining: bool,
+    /// Maximum column to match (0 = unlimited).
+    pub max_col: c_int,
 }
 
-/// Saved state for a single-line submatch position (start pointer).
-#[derive(Clone, Copy)]
-struct SavedLineStart {
-    start: *mut u8,
-    in_use: c_int,
-}
-
-impl Default for SavedLineStart {
+impl Default for MatchContext {
     fn default() -> Self {
         Self {
-            start: ptr::null_mut(),
-            in_use: -1,
+            input: ptr::null(),
+            line: ptr::null(),
+            lnum: 1,
+            first_lnum: 1,
+            max_line: 0,
+            multi: false,
+            ignore_case: false,
+            ignore_combining: false,
+            max_col: 0,
         }
     }
 }
 
-/// Saved state for a single-line submatch position (end pointer).
-#[derive(Clone, Copy)]
-struct SavedLineEnd {
-    end: *mut u8,
-    in_use: c_int,
-}
-
-impl Default for SavedLineEnd {
-    fn default() -> Self {
+impl MatchContext {
+    /// Create a new match context for single-line matching.
+    ///
+    /// # Safety
+    /// `line` must point to valid memory of at least `col + 1` bytes.
+    pub unsafe fn new_single_line(line: *const u8, col: c_int) -> Self {
         Self {
-            end: ptr::null_mut(),
-            in_use: -1,
+            input: line.add(col as usize),
+            line,
+            lnum: 1,
+            first_lnum: 1,
+            max_line: 0,
+            multi: false,
+            ignore_case: false,
+            ignore_combining: false,
+            max_col: 0,
         }
     }
-}
 
-/// Get the subexpression index and sub pointer for an MOPEN/ZOPEN state.
-///
-/// Returns (subidx, is_syntax) where is_syntax indicates if it's a \z() group.
-#[inline]
-fn get_open_subexpr_info(state_c: c_int) -> (usize, bool) {
-    if state_c == NFA_ZSTART {
-        (0, false)
-    } else if (NFA_ZOPEN..=NFA_ZOPEN9).contains(&state_c) {
-        ((state_c - NFA_ZOPEN) as usize, true)
-    } else {
-        ((state_c - NFA_MOPEN) as usize, false)
-    }
-}
-
-/// Get the subexpression index and sub pointer for an MCLOSE/ZCLOSE state.
-///
-/// Returns (subidx, is_syntax) where is_syntax indicates if it's a \z() group.
-#[inline]
-fn get_close_subexpr_info(state_c: c_int) -> (usize, bool) {
-    if state_c == NFA_ZEND {
-        (0, false)
-    } else if (NFA_ZCLOSE..=NFA_ZCLOSE9).contains(&state_c) {
-        ((state_c - NFA_ZCLOSE) as usize, true)
-    } else {
-        ((state_c - NFA_MCLOSE) as usize, false)
-    }
-}
-
-/// Save and set the start position for a subexpression (multi-line mode).
-///
-/// Returns the saved state that should be restored after recursion.
-///
-/// # Safety
-/// `sub` must be valid and `subidx` must be < NSUBEXP.
-unsafe fn save_and_set_start_multi(sub: *mut RegSub, subidx: usize, off: c_int) -> SavedMultiPos {
-    let lnum = nvim_rex_get_lnum();
-    let input = nvim_rex_get_input();
-    let line = nvim_rex_get_line();
-
-    let mut saved = SavedMultiPos::default();
-
-    if subidx < (*sub).in_use as usize {
-        // Save existing position
-        saved.pos = (*sub).list.multi[subidx];
-        saved.in_use = -1; // Signal that we saved an existing position
-    } else {
-        // Fill gaps and extend in_use
-        saved.in_use = (*sub).in_use;
-        for i in (*sub).in_use as usize..subidx {
-            (*sub).list.multi[i].start_lnum = -1;
-            (*sub).list.multi[i].end_lnum = -1;
+    /// Create a new match context for multi-line matching.
+    ///
+    /// # Safety
+    /// `line` must point to valid memory of at least `col + 1` bytes.
+    pub unsafe fn new_multi_line(
+        line: *const u8,
+        col: c_int,
+        lnum: c_int,
+        first_lnum: c_int,
+        max_line: c_int,
+    ) -> Self {
+        Self {
+            input: line.add(col as usize),
+            line,
+            lnum,
+            first_lnum,
+            max_line,
+            multi: true,
+            ignore_case: false,
+            ignore_combining: false,
+            max_col: 0,
         }
-        (*sub).in_use = (subidx + 1) as c_int;
     }
 
-    // Set the start position
-    if off == -1 {
-        // Position is at start of next line
-        (*sub).list.multi[subidx].start_lnum = lnum + 1;
-        (*sub).list.multi[subidx].start_col = 0;
-    } else {
-        (*sub).list.multi[subidx].start_lnum = lnum;
-        (*sub).list.multi[subidx].start_col = (input.offset_from(line) + off as isize) as ColNr;
-    }
-    (*sub).list.multi[subidx].end_lnum = -1;
-
-    saved
-}
-
-/// Restore a saved start position for a subexpression (multi-line mode).
-///
-/// # Safety
-/// `sub` must be valid and `subidx` must be < NSUBEXP.
-unsafe fn restore_start_multi(sub: *mut RegSub, subidx: usize, saved: &SavedMultiPos) {
-    if saved.in_use == -1 {
-        // Restore saved position
-        (*sub).list.multi[subidx] = saved.pos;
-    } else {
-        // Restore in_use count
-        (*sub).in_use = saved.in_use;
-    }
-}
-
-/// Save and set the start position for a subexpression (single-line mode).
-///
-/// Returns the saved state that should be restored after recursion.
-///
-/// # Safety
-/// `sub` must be valid and `subidx` must be < NSUBEXP.
-unsafe fn save_and_set_start_line(sub: *mut RegSub, subidx: usize, off: c_int) -> SavedLineStart {
-    let input = nvim_rex_get_input();
-
-    let mut saved = SavedLineStart::default();
-
-    if subidx < (*sub).in_use as usize {
-        // Save existing position
-        saved.start = (*sub).list.line[subidx].start;
-        saved.in_use = -1; // Signal that we saved an existing position
-    } else {
-        // Fill gaps and extend in_use
-        saved.in_use = (*sub).in_use;
-        for i in (*sub).in_use as usize..subidx {
-            (*sub).list.line[i].start = ptr::null_mut();
-            (*sub).list.line[i].end = ptr::null_mut();
-        }
-        (*sub).in_use = (subidx + 1) as c_int;
-    }
-
-    // Set the start position
-    (*sub).list.line[subidx].start = input.add(off as usize);
-
-    saved
-}
-
-/// Restore a saved start position for a subexpression (single-line mode).
-///
-/// # Safety
-/// `sub` must be valid and `subidx` must be < NSUBEXP.
-unsafe fn restore_start_line(sub: *mut RegSub, subidx: usize, saved: &SavedLineStart) {
-    if saved.in_use == -1 {
-        // Restore saved position
-        (*sub).list.line[subidx].start = saved.start;
-    } else {
-        // Restore in_use count
-        (*sub).in_use = saved.in_use;
-    }
-}
-
-/// Save and set the end position for a subexpression (multi-line mode).
-///
-/// Returns the saved state that should be restored after recursion.
-///
-/// # Safety
-/// `sub` must be valid and `subidx` must be < NSUBEXP.
-unsafe fn save_and_set_end_multi(sub: *mut RegSub, subidx: usize, off: c_int) -> SavedMultiPos {
-    let lnum = nvim_rex_get_lnum();
-    let input = nvim_rex_get_input();
-    let line = nvim_rex_get_line();
-
-    // Save existing in_use and position
-    let saved = SavedMultiPos {
-        pos: (*sub).list.multi[subidx],
-        in_use: (*sub).in_use,
-    };
-
-    // We don't fill gaps here - MOPEN should have done that
-    if (*sub).in_use as usize <= subidx {
-        (*sub).in_use = (subidx + 1) as c_int;
-    }
-
-    // Set the end position
-    if off == -1 {
-        // Position is at start of next line
-        (*sub).list.multi[subidx].end_lnum = lnum + 1;
-        (*sub).list.multi[subidx].end_col = 0;
-    } else {
-        (*sub).list.multi[subidx].end_lnum = lnum;
-        (*sub).list.multi[subidx].end_col = (input.offset_from(line) + off as isize) as ColNr;
-    }
-
-    saved
-}
-
-/// Restore a saved end position for a subexpression (multi-line mode).
-///
-/// # Safety
-/// `sub` must be valid and `subidx` must be < NSUBEXP.
-unsafe fn restore_end_multi(sub: *mut RegSub, subidx: usize, saved: &SavedMultiPos) {
-    (*sub).list.multi[subidx] = saved.pos;
-    (*sub).in_use = saved.in_use;
-}
-
-/// Save and set the end position for a subexpression (single-line mode).
-///
-/// Returns the saved state that should be restored after recursion.
-///
-/// # Safety
-/// `sub` must be valid and `subidx` must be < NSUBEXP.
-unsafe fn save_and_set_end_line(sub: *mut RegSub, subidx: usize, off: c_int) -> SavedLineEnd {
-    let input = nvim_rex_get_input();
-
-    // Save existing in_use and position
-    let saved = SavedLineEnd {
-        end: (*sub).list.line[subidx].end,
-        in_use: (*sub).in_use,
-    };
-
-    // We don't fill gaps here - MOPEN should have done that
-    if (*sub).in_use as usize <= subidx {
-        (*sub).in_use = (subidx + 1) as c_int;
-    }
-
-    // Set the end position
-    (*sub).list.line[subidx].end = input.add(off as usize);
-
-    saved
-}
-
-/// Restore a saved end position for a subexpression (single-line mode).
-///
-/// # Safety
-/// `sub` must be valid and `subidx` must be < NSUBEXP.
-unsafe fn restore_end_line(sub: *mut RegSub, subidx: usize, saved: &SavedLineEnd) {
-    (*sub).list.line[subidx].end = saved.end;
-    (*sub).in_use = saved.in_use;
-}
-
-/// Get a mutable pointer to either the norm or synt sub from subs.
-#[inline]
-unsafe fn get_sub_ptr(subs: *mut RegSubs, is_syntax: bool) -> *mut RegSub {
-    if is_syntax {
-        &mut (*subs).synt
-    } else {
-        &mut (*subs).norm
-    }
-}
-
-// =============================================================================
-// Addstate Implementation
-// =============================================================================
-
-/// Thread-safe storage for recursion depth counter.
-struct DepthStorage {
-    inner: UnsafeCell<c_int>,
-}
-
-// SAFETY: Neovim is single-threaded for regex operations
-unsafe impl Sync for DepthStorage {}
-
-static DEPTH: DepthStorage = DepthStorage {
-    inner: UnsafeCell::new(0),
-};
-
-/// Add a state to the thread list, handling epsilon transitions.
-///
-/// This is the core function for NFA execution. It adds a state to the list
-/// and recursively follows epsilon transitions (NFA_SPLIT, NFA_NOPEN, etc.).
-///
-/// # Arguments
-/// * `list` - The thread list to add to
-/// * `state` - The NFA state to add
-/// * `subs` - Current submatch positions
-/// * `pim` - Postponed invisible match info (for lookahead/lookbehind)
-/// * `off` - Byte offset for position tracking
-///
-/// # Returns
-/// The (possibly updated) submatch pointer, or NULL on error/recursion limit.
-///
-/// # Safety
-/// All pointers must be valid.
-pub unsafe fn addstate(
-    list: *mut NfaList,
-    state: *mut NfaState,
-    subs: *mut RegSubs,
-    pim: *const NfaPim,
-    off: c_int,
-) -> *mut RegSubs {
-    let depth = &mut *DEPTH.inner.get();
-
-    if *depth >= MAX_ADDSTATE_DEPTH || subs.is_null() || state.is_null() || list.is_null() {
-        return ptr::null_mut();
-    }
-
-    *depth += 1;
-
-    // Handle addstate_here offset
-    let (add_here, _actual_off, listindex) = if off <= -ADDSTATE_HERE_OFFSET {
-        (true, 0, -(off + ADDSTATE_HERE_OFFSET))
-    } else {
-        (false, off, 0)
-    };
-
-    let nfa_ll_index = nvim_rex_get_nfa_ll_index() as usize;
-    let list_id = (*list).id;
-
-    // First switch: determine if we should add this state or skip it
-    let should_add = match (*state).c {
-        // These nodes are not added themselves - only their successors
-        NFA_NCLOSE | NFA_MCLOSE | NFA_MCLOSE1 | NFA_MCLOSE2 | NFA_MCLOSE3 | NFA_MCLOSE4
-        | NFA_MCLOSE5 | NFA_MCLOSE6 | NFA_MCLOSE7 | NFA_MCLOSE8 | NFA_MCLOSE9 | NFA_ZCLOSE
-        | NFA_ZCLOSE1 | NFA_ZCLOSE2 | NFA_ZCLOSE3 | NFA_ZCLOSE4 | NFA_ZCLOSE5 | NFA_ZCLOSE6
-        | NFA_ZCLOSE7 | NFA_ZCLOSE8 | NFA_ZCLOSE9 | NFA_MOPEN | NFA_ZEND | NFA_SPLIT
-        | NFA_EMPTY => false,
-
-        // BOL/BOF: don't add past end-of-line
-        NFA_BOL | NFA_BOF => {
-            let input = nvim_rex_get_input();
-            let line = nvim_rex_get_line();
-            if input > line && !input.is_null() && *input != 0 {
-                // Check if we're at the end position for lookbehind
-                let nfa_endp = nvim_rex_get_nfa_endp();
-                if nfa_endp.is_null()
-                    || nvim_rex_is_multi() == 0
-                    || nvim_rex_get_lnum() == get_endp_lnum(nfa_endp)
-                {
-                    *depth -= 1;
-                    return subs;
-                }
-            }
-            true
-        }
-
-        // All other states: check for duplicates
-        _ => {
-            // Check if already in list
-            if (*state).lastlist[nfa_ll_index] == list_id && (*state).c != NFA_SKIP {
-                let has_backref = nvim_rex_get_nfa_has_backref() != 0;
-                let has_pim = (*list).has_pim != 0;
-
-                if !has_backref && pim.is_null() && !has_pim && (*state).c != NFA_MATCH {
-                    // Skip unless called from addstate_here
-                    if add_here {
-                        let mut found = false;
-                        for k in 0..((*list).n).min(listindex) {
-                            if (*(*list).t.add(k as usize)).state == state
-                                || ((*(*(*list).t.add(k as usize)).state).id == (*state).id)
-                            {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if found {
-                            *depth -= 1;
-                            return subs;
-                        }
-                    } else {
-                        *depth -= 1;
-                        return subs;
-                    }
-                }
-
-                // Check if same state with same positions exists
-                if has_state_with_pos(list, state, subs, pim) {
-                    *depth -= 1;
-                    return subs;
-                }
-            }
-            true
-        }
-    };
-
-    let mut result_subs = subs;
-
-    // Add the state to the list if needed
-    if should_add {
-        // Grow list if needed
-        if (*list).n == (*list).len {
-            let newlen = (*list).len * 3 / 2 + 50;
-            let newsize = (newlen as usize) * std::mem::size_of::<NfaThread>();
-
-            // Check memory limit
-            if (newsize >> 10) as i64 >= nvim_get_p_mmp() {
-                nvim_regexp_emsg_maxmempattern();
-                *depth -= 1;
-                return ptr::null_mut();
-            }
-
-            // Copy subs to temp if pointing into list
-            let temp_subs = get_temp_subs();
-            if subs != temp_subs {
-                copy_sub(&mut (*temp_subs).norm, &(*subs).norm);
-                if nvim_rex_get_nfa_has_zsubexpr() != 0 {
-                    copy_sub(&mut (*temp_subs).synt, &(*subs).synt);
-                }
-                result_subs = temp_subs;
-            }
-
-            // Reallocate
-            let newt = libc::realloc((*list).t as *mut libc::c_void, newsize) as *mut NfaThread;
-            if newt.is_null() {
-                *depth -= 1;
-                return ptr::null_mut();
-            }
-            (*list).t = newt;
-            (*list).len = newlen;
-        }
-
-        // Add state to list
-        (*state).lastlist[nfa_ll_index] = list_id;
-        let thread = (*list).t.add((*list).n as usize);
-        (*list).n += 1;
-
-        (*thread).state = state;
-
-        // Copy PIM
-        if pim.is_null() || (*pim).result == NFA_PIM_UNUSED {
-            (*thread).pim.result = NFA_PIM_UNUSED;
-            (*thread).pim.state = ptr::null_mut();
+    /// Get the current byte at the input position.
+    ///
+    /// # Safety
+    /// Input must point to valid memory.
+    #[inline]
+    pub unsafe fn current_byte(&self) -> u8 {
+        if self.input.is_null() {
+            0
         } else {
-            copy_pim(&mut (*thread).pim, pim);
-            (*list).has_pim = 1;
-        }
-
-        // Copy submatch info
-        copy_sub(&mut (*thread).subs.norm, &(*result_subs).norm);
-        if nvim_rex_get_nfa_has_zsubexpr() != 0 {
-            copy_sub(&mut (*thread).subs.synt, &(*result_subs).synt);
+            *self.input
         }
     }
 
-    // Second switch: follow epsilon transitions
-    match (*state).c {
-        NFA_MATCH => {
-            // Don't follow transitions from match state
-        }
+    /// Check if we're at end of line/input.
+    ///
+    /// # Safety
+    /// Input must point to valid memory.
+    #[inline]
+    pub unsafe fn at_eol(&self) -> bool {
+        self.input.is_null() || *self.input == 0
+    }
 
-        NFA_SPLIT => {
-            // Order matters - try out before out1
-            result_subs = addstate(list, (*state).out, result_subs, pim, off);
-            if !result_subs.is_null() {
-                result_subs = addstate(list, (*state).out1, result_subs, pim, off);
-            }
-        }
-
-        NFA_EMPTY | NFA_NOPEN | NFA_NCLOSE => {
-            result_subs = addstate(list, (*state).out, result_subs, pim, off);
-        }
-
-        // MOPEN states: save submatch start position and continue
-        NFA_MOPEN | NFA_MOPEN1 | NFA_MOPEN2 | NFA_MOPEN3 | NFA_MOPEN4 | NFA_MOPEN5 | NFA_MOPEN6
-        | NFA_MOPEN7 | NFA_MOPEN8 | NFA_MOPEN9 | NFA_ZOPEN | NFA_ZOPEN1 | NFA_ZOPEN2
-        | NFA_ZOPEN3 | NFA_ZOPEN4 | NFA_ZOPEN5 | NFA_ZOPEN6 | NFA_ZOPEN7 | NFA_ZOPEN8
-        | NFA_ZOPEN9 | NFA_ZSTART => {
-            let (subidx, is_syntax) = get_open_subexpr_info((*state).c);
-            if subidx < NSUBEXP {
-                let sub = get_sub_ptr(result_subs, is_syntax);
-                let is_multi = nvim_rex_is_multi() != 0;
-
-                if is_multi {
-                    let saved = save_and_set_start_multi(sub, subidx, off);
-                    result_subs = addstate(list, (*state).out, result_subs, pim, off);
-                    if !result_subs.is_null() {
-                        // subs may have changed, need to get sub again
-                        let sub = get_sub_ptr(result_subs, is_syntax);
-                        restore_start_multi(sub, subidx, &saved);
-                    }
-                } else {
-                    let saved = save_and_set_start_line(sub, subidx, off);
-                    result_subs = addstate(list, (*state).out, result_subs, pim, off);
-                    if !result_subs.is_null() {
-                        // subs may have changed, need to get sub again
-                        let sub = get_sub_ptr(result_subs, is_syntax);
-                        restore_start_line(sub, subidx, &saved);
-                    }
-                }
-            } else {
-                result_subs = addstate(list, (*state).out, result_subs, pim, off);
-            }
-        }
-
-        // MCLOSE states: save submatch end position and continue
-        NFA_MCLOSE | NFA_MCLOSE1 | NFA_MCLOSE2 | NFA_MCLOSE3 | NFA_MCLOSE4 | NFA_MCLOSE5
-        | NFA_MCLOSE6 | NFA_MCLOSE7 | NFA_MCLOSE8 | NFA_MCLOSE9 | NFA_ZCLOSE | NFA_ZCLOSE1
-        | NFA_ZCLOSE2 | NFA_ZCLOSE3 | NFA_ZCLOSE4 | NFA_ZCLOSE5 | NFA_ZCLOSE6 | NFA_ZCLOSE7
-        | NFA_ZCLOSE8 | NFA_ZCLOSE9 | NFA_ZEND => {
-            // Special case: NFA_MCLOSE (index 0) with \ze - don't overwrite if already set
-            let skip_position_update =
-                if (*state).c == NFA_MCLOSE && nvim_rex_get_nfa_has_zend() != 0 {
-                    let is_multi = nvim_rex_is_multi() != 0;
-                    let sub = &(*result_subs).norm;
-                    if is_multi {
-                        sub.list.multi[0].end_lnum >= 0
-                    } else {
-                        !sub.list.line[0].end.is_null()
-                    }
-                } else {
-                    false
-                };
-
-            if skip_position_update {
-                // Don't overwrite the position set by \ze
-                result_subs = addstate(list, (*state).out, result_subs, pim, off);
-            } else {
-                let (subidx, is_syntax) = get_close_subexpr_info((*state).c);
-                if subidx < NSUBEXP {
-                    let sub = get_sub_ptr(result_subs, is_syntax);
-                    let is_multi = nvim_rex_is_multi() != 0;
-
-                    if is_multi {
-                        let saved = save_and_set_end_multi(sub, subidx, off);
-                        result_subs = addstate(list, (*state).out, result_subs, pim, off);
-                        if !result_subs.is_null() {
-                            // subs may have changed, need to get sub again
-                            let sub = get_sub_ptr(result_subs, is_syntax);
-                            restore_end_multi(sub, subidx, &saved);
-                        }
-                    } else {
-                        let saved = save_and_set_end_line(sub, subidx, off);
-                        result_subs = addstate(list, (*state).out, result_subs, pim, off);
-                        if !result_subs.is_null() {
-                            // subs may have changed, need to get sub again
-                            let sub = get_sub_ptr(result_subs, is_syntax);
-                            restore_end_line(sub, subidx, &saved);
-                        }
-                    }
-                } else {
-                    result_subs = addstate(list, (*state).out, result_subs, pim, off);
-                }
-            }
-        }
-
-        // BOL/BOF already handled above
-        NFA_BOL | NFA_BOF => {
-            result_subs = addstate(list, (*state).out, result_subs, pim, off);
-        }
-
-        _ => {
-            // Other states don't have epsilon transitions
+    /// Get the column offset from line start.
+    ///
+    /// # Safety
+    /// Both input and line must be valid pointers into the same string.
+    #[inline]
+    pub unsafe fn column(&self) -> c_int {
+        if self.line.is_null() || self.input.is_null() {
+            0
+        } else {
+            self.input.offset_from(self.line) as c_int
         }
     }
 
-    *depth -= 1;
-    result_subs
+    /// Advance input by n bytes.
+    ///
+    /// # Safety
+    /// Must not advance past end of string.
+    #[inline]
+    pub unsafe fn advance(&mut self, n: usize) {
+        if !self.input.is_null() {
+            self.input = self.input.add(n);
+        }
+    }
+
+    /// Get current position as LPos (for multi-line matching).
+    #[inline]
+    pub fn position(&self) -> LPos {
+        LPos {
+            lnum: self.lnum,
+            col: unsafe { self.column() },
+        }
+    }
 }
 
-/// Check if a state with the same positions already exists in the list.
+// =============================================================================
+// Thread List Management
+// =============================================================================
+
+/// Check if a state is already in the list with the same position.
+///
+/// This prevents adding duplicate states which would cause infinite loops.
 ///
 /// # Safety
 /// All pointers must be valid.
-unsafe fn has_state_with_pos(
-    list: *const NfaList,
-    state: *const NfaState,
-    _subs: *const RegSubs,
-    _pim: *const NfaPim,
-) -> bool {
-    if list.is_null() || state.is_null() || (*list).t.is_null() {
+#[inline]
+pub unsafe fn state_in_list(list: *const NfaList, state: *const NfaState, listid: c_int) -> bool {
+    if list.is_null() || state.is_null() {
+        return false;
+    }
+    (*state).lastlist[0] == listid
+}
+
+/// Mark a state as being in a list.
+///
+/// # Safety
+/// State must be valid.
+#[inline]
+pub unsafe fn mark_state_in_list(state: *mut NfaState, listid: c_int) {
+    if !state.is_null() {
+        (*state).lastlist[0] = listid;
+    }
+}
+
+/// Initialize a thread with state and submatch info.
+///
+/// # Safety
+/// All pointers must be valid.
+pub unsafe fn init_thread(
+    thread: *mut NfaThread,
+    state: *mut NfaState,
+    subs: *const RegSubs,
+    pim: *const NfaPim,
+) {
+    if thread.is_null() {
+        return;
+    }
+
+    (*thread).state = state;
+    (*thread).count = 0;
+
+    // Copy PIM if provided
+    if pim.is_null() || (*pim).result == NFA_PIM_UNUSED {
+        (*thread).pim.result = NFA_PIM_UNUSED;
+        (*thread).pim.state = ptr::null_mut();
+    } else {
+        (*thread).pim = ptr::read(pim);
+    }
+
+    // Copy submatch info if provided
+    if !subs.is_null() {
+        (*thread).subs = ptr::read(subs);
+    }
+}
+
+// =============================================================================
+// Submatch Tracking
+// =============================================================================
+
+/// Copy submatch positions from one RegSub to another.
+///
+/// # Safety
+/// Both pointers must be valid.
+pub unsafe fn copy_sub(to: *mut crate::nfa_states::RegSub, from: *const crate::nfa_states::RegSub) {
+    if to.is_null() || from.is_null() {
+        return;
+    }
+    (*to).in_use = (*from).in_use;
+    if (*from).in_use > 0 {
+        // Copy the submatch positions
+        ptr::copy_nonoverlapping(
+            &(*from).list,
+            &mut (*to).list,
+            1, // Copy the union as a whole
+        );
+    }
+    (*to).orig_start_col = (*from).orig_start_col;
+}
+
+/// Copy full submatch info (normal + syntax subexpressions).
+///
+/// # Safety
+/// Both pointers must be valid.
+pub unsafe fn copy_subs(to: *mut RegSubs, from: *const RegSubs, has_zsubexpr: bool) {
+    if to.is_null() || from.is_null() {
+        return;
+    }
+    copy_sub(&mut (*to).norm, &(*from).norm);
+    if has_zsubexpr {
+        copy_sub(&mut (*to).synt, &(*from).synt);
+    }
+}
+
+/// Copy PIM (Postponed Invisible Match) info.
+///
+/// # Safety
+/// Both pointers must be valid.
+pub unsafe fn copy_pim(to: *mut NfaPim, from: *const NfaPim) {
+    if to.is_null() || from.is_null() {
+        return;
+    }
+    ptr::copy_nonoverlapping(from, to, 1);
+}
+
+/// Clear submatch positions.
+///
+/// # Safety
+/// Pointer must be valid.
+pub unsafe fn clear_sub(sub: *mut crate::nfa_states::RegSub) {
+    if sub.is_null() {
+        return;
+    }
+    (*sub).in_use = 0;
+    (*sub).orig_start_col = 0;
+}
+
+/// Clear all submatch info.
+///
+/// # Safety
+/// Pointer must be valid.
+pub unsafe fn clear_subs(subs: *mut RegSubs) {
+    if subs.is_null() {
+        return;
+    }
+    clear_sub(&mut (*subs).norm);
+    clear_sub(&mut (*subs).synt);
+}
+
+/// Copy submatch positions from one RegSub to another, excluding the main match (index 0).
+///
+/// This is used when we want to preserve only the submatches (\1-\9) without
+/// affecting the overall match position.
+///
+/// # Safety
+/// Both pointers must be valid.
+pub unsafe fn copy_sub_off(
+    to: *mut crate::nfa_states::RegSub,
+    from: *const crate::nfa_states::RegSub,
+) {
+    if to.is_null() || from.is_null() {
+        return;
+    }
+    // Update in_use if from has more
+    if (*to).in_use < (*from).in_use {
+        (*to).in_use = (*from).in_use;
+    }
+    if (*from).in_use <= 1 {
+        return;
+    }
+    // Copy submatch positions 1..in_use, not 0 (main match)
+    let count = ((*from).in_use - 1) as usize;
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        ptr::copy_nonoverlapping(
+            (*from).list.multi.as_ptr().add(1),
+            (*to).list.multi.as_mut_ptr().add(1),
+            count,
+        );
+    } else {
+        ptr::copy_nonoverlapping(
+            (*from).list.line.as_ptr().add(1),
+            (*to).list.line.as_mut_ptr().add(1),
+            count,
+        );
+    }
+}
+
+/// Copy the end position of the main match if \ze was used.
+///
+/// This copies only the end position of submatch 0 if nfa_has_zend is set
+/// and the from position is valid.
+///
+/// # Safety
+/// Both pointers must be valid.
+pub unsafe fn copy_ze_off(
+    to: *mut crate::nfa_states::RegSub,
+    from: *const crate::nfa_states::RegSub,
+) {
+    if to.is_null() || from.is_null() {
+        return;
+    }
+    if nvim_rex_get_nfa_has_zend() == 0 {
+        return;
+    }
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        if (*from).list.multi[0].end_lnum >= 0 {
+            (*to).list.multi[0].end_lnum = (*from).list.multi[0].end_lnum;
+            (*to).list.multi[0].end_col = (*from).list.multi[0].end_col;
+        }
+    } else if !(*from).list.line[0].end.is_null() {
+        (*to).list.line[0].end = (*from).list.line[0].end;
+    }
+}
+
+// =============================================================================
+// Match Result
+// =============================================================================
+
+/// Result codes for matching.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatchResult {
+    /// No match found.
+    NoMatch = 0,
+    /// Match found.
+    Match = 1,
+    /// Error during matching.
+    Error = -1,
+    /// Timed out during matching.
+    Timeout = -2,
+}
+
+impl From<c_int> for MatchResult {
+    fn from(v: c_int) -> Self {
+        match v {
+            1 => Self::Match,
+            0 => Self::NoMatch,
+            -2 => Self::Timeout,
+            _ => Self::Error,
+        }
+    }
+}
+
+impl From<MatchResult> for c_int {
+    fn from(r: MatchResult) -> Self {
+        match r {
+            MatchResult::Match => 1,
+            MatchResult::NoMatch => 0,
+            MatchResult::Error => -1,
+            MatchResult::Timeout => -2,
+        }
+    }
+}
+
+// =============================================================================
+// Basic Match Helpers
+// =============================================================================
+
+/// Check if a state is a match (accepting) state.
+///
+/// # Safety
+/// If state is non-null, it must point to a valid NfaState.
+#[inline]
+pub unsafe fn is_match_state(state: *const NfaState) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    (*state).c == NFA_MATCH
+}
+
+/// Check if a state is a split state.
+///
+/// # Safety
+/// If state is non-null, it must point to a valid NfaState.
+#[inline]
+pub unsafe fn is_split_state(state: *const NfaState) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    (*state).c == NFA_SPLIT
+}
+
+/// Check if any thread in the list has reached a match state.
+///
+/// # Safety
+/// List must be valid.
+pub unsafe fn list_has_match(list: *const NfaList) -> bool {
+    if list.is_null() || (*list).t.is_null() {
         return false;
     }
 
     for i in 0..(*list).n {
         let thread = (*list).t.add(i as usize);
-        if (*(*thread).state).id == (*state).id {
-            // Simplified: just check state ID match
-            // Full implementation would compare submatch positions
+        if is_match_state((*thread).state) {
             return true;
         }
     }
     false
 }
 
-/// Get the line number from endp structure.
+/// Get the first matching thread from a list.
 ///
 /// # Safety
-/// If endp is non-null, it must point to valid memory.
-unsafe fn get_endp_lnum(_endp: *const c_char) -> c_int {
-    // This would need to cast to the proper save_se_T structure
-    // For now, return a value that won't match
-    -1
+/// List must be valid.
+pub unsafe fn get_first_match(list: *const NfaList) -> *const NfaThread {
+    if list.is_null() || (*list).t.is_null() {
+        return ptr::null();
+    }
+
+    for i in 0..(*list).n {
+        let thread = (*list).t.add(i as usize);
+        if is_match_state((*thread).state) {
+            return thread;
+        }
+    }
+    ptr::null()
 }
 
 // =============================================================================
-// Addstate_here
+// PIM (Postponed Invisible Match) Helpers
 // =============================================================================
 
-/// Like addstate(), but insert the new states at a specific position.
+/// Check if a PIM needs to be executed.
 ///
-/// This is used when processing states needs to insert new states at
-/// the current processing position rather than at the end.
+/// # Safety
+/// If pim is non-null, it must point to a valid NfaPim.
+#[inline]
+pub unsafe fn pim_needs_exec(pim: *const NfaPim) -> bool {
+    if pim.is_null() {
+        return false;
+    }
+    (*pim).result == NFA_PIM_TODO
+}
+
+/// Check if a PIM was successful.
+///
+/// # Safety
+/// If pim is non-null, it must point to a valid NfaPim.
+#[inline]
+pub unsafe fn pim_matched(pim: *const NfaPim) -> bool {
+    if pim.is_null() {
+        return false;
+    }
+    (*pim).result == NFA_PIM_MATCH
+}
+
+/// Check if a PIM failed to match.
+///
+/// # Safety
+/// If pim is non-null, it must point to a valid NfaPim.
+#[inline]
+pub unsafe fn pim_nomatch(pim: *const NfaPim) -> bool {
+    if pim.is_null() {
+        return false;
+    }
+    (*pim).result == NFA_PIM_NOMATCH
+}
+
+/// Mark a PIM as matched.
+///
+/// # Safety
+/// Pointer must be valid.
+pub unsafe fn set_pim_matched(pim: *mut NfaPim) {
+    if !pim.is_null() {
+        (*pim).result = NFA_PIM_MATCH;
+    }
+}
+
+/// Mark a PIM as not matched.
+///
+/// # Safety
+/// Pointer must be valid.
+pub unsafe fn set_pim_nomatch(pim: *mut NfaPim) {
+    if !pim.is_null() {
+        (*pim).result = NFA_PIM_NOMATCH;
+    }
+}
+
+// =============================================================================
+// addstate - Core State Addition Function
+// =============================================================================
+
+/// Add a state to the list with the given submatch info.
+///
+/// This is the core function for adding states during NFA execution.
+/// It handles:
+/// - Duplicate detection (same state already in list)
+/// - Epsilon transitions (split, open/close parens, etc.)
+/// - Postponed invisible matches (PIM)
+///
+/// Returns pointer to the added state's submatch info, or NULL if failed.
+///
+/// # Arguments
+/// * `list` - The list to add the state to
+/// * `state` - The NFA state to add
+/// * `subs` - Submatch info to copy
+/// * `pim` - Postponed invisible match info (optional)
+/// * `off` - Offset for the state (used for skip states)
+///
+/// # Safety
+/// All non-null pointers must be valid.
+pub unsafe fn addstate(
+    list: *mut NfaList,
+    state: *mut NfaState,
+    subs: *const RegSubs,
+    pim: *const NfaPim,
+    off: c_int,
+) -> *mut RegSubs {
+    if list.is_null() || state.is_null() {
+        return ptr::null_mut();
+    }
+
+    // Handle addstate_here offset
+    let actual_off = if off <= -ADDSTATE_HERE_OFFSET {
+        // This is addstate_here - extract the real listidx
+        // For now, treat as a regular add at position 0
+        // Full implementation needs to insert at listidx
+        -(off + ADDSTATE_HERE_OFFSET)
+    } else {
+        off
+    };
+
+    // Call recursive implementation with depth tracking
+    addstate_impl(list, state, subs, pim, actual_off, 0)
+}
+
+/// Internal implementation of addstate with depth tracking.
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn addstate_impl(
+    list: *mut NfaList,
+    state: *mut NfaState,
+    subs_in: *const RegSubs,
+    pim: *const NfaPim,
+    off: c_int,
+    depth: c_int,
+) -> *mut RegSubs {
+    // Prevent stack overflow from deep recursion
+    if depth >= MAX_ADDSTATE_DEPTH {
+        nvim_regexp_emsg_maxmempattern();
+        return ptr::null_mut();
+    }
+
+    // Skip unless called from addstate_here
+    if off <= -ADDSTATE_HERE_OFFSET {
+        // Called from addstate_here - use special insertion logic
+        // For now, fall through to normal handling
+    }
+
+    // Get state code
+    let state_c = (*state).c;
+
+    // Check memory limit
+    let p_mmp = nvim_get_p_mmp();
+    if p_mmp > 0 && ((*list).n as i64 + 1) * std::mem::size_of::<NfaThread>() as i64 > p_mmp * 1024
+    {
+        nvim_regexp_emsg_maxmempattern();
+        return ptr::null_mut();
+    }
+
+    // Handle epsilon transitions (states that don't consume input)
+    match state_c {
+        NFA_SPLIT => {
+            // Split: add both out and out1
+            let result = addstate_impl(list, (*state).out, subs_in, pim, off, depth + 1);
+            if result.is_null() {
+                return ptr::null_mut();
+            }
+            return addstate_impl(list, (*state).out1, subs_in, pim, off, depth + 1);
+        }
+
+        NFA_SKIP => {
+            // Skip state - just move to the output
+            return addstate_impl(list, (*state).out, subs_in, pim, off, depth + 1);
+        }
+
+        NFA_NOPEN | NFA_NCLOSE => {
+            // Non-capturing group open/close - pass through
+            return addstate_impl(list, (*state).out, subs_in, pim, off, depth + 1);
+        }
+
+        NFA_ZSTART => {
+            // \zs - mark start of match
+            let temp_subs = get_temp_subs();
+            copy_subs(temp_subs, subs_in, nvim_rex_get_nfa_has_zsubexpr() != 0);
+
+            // Set the start position
+            let is_multi = nvim_rex_is_multi() != 0;
+            if is_multi {
+                (*temp_subs).norm.list.multi[0].start_lnum = nvim_rex_get_lnum();
+                let input = nvim_rex_get_input();
+                let line = nvim_rex_get_line();
+                (*temp_subs).norm.list.multi[0].start_col =
+                    input.offset_from(line) as ColNr + off as ColNr;
+            } else {
+                (*temp_subs).norm.list.line[0].start = nvim_rex_get_input().add(off as usize);
+            }
+
+            return addstate_impl(list, (*state).out, temp_subs, pim, off, depth + 1);
+        }
+
+        NFA_ZEND => {
+            // \ze - mark end of match
+            let temp_subs = get_temp_subs();
+            copy_subs(temp_subs, subs_in, nvim_rex_get_nfa_has_zsubexpr() != 0);
+
+            // Set the end position
+            let is_multi = nvim_rex_is_multi() != 0;
+            if is_multi {
+                (*temp_subs).norm.list.multi[0].end_lnum = nvim_rex_get_lnum();
+                let input = nvim_rex_get_input();
+                let line = nvim_rex_get_line();
+                (*temp_subs).norm.list.multi[0].end_col =
+                    input.offset_from(line) as ColNr + off as ColNr;
+            } else {
+                (*temp_subs).norm.list.line[0].end = nvim_rex_get_input().add(off as usize);
+            }
+
+            return addstate_impl(list, (*state).out, temp_subs, pim, off, depth + 1);
+        }
+
+        NFA_MOPEN => {
+            // Start of capturing group 0
+            return handle_mopen(list, state, subs_in, pim, off, depth, 0);
+        }
+
+        c if (NFA_MOPEN..=NFA_MOPEN + 9).contains(&c) => {
+            // Start of capturing groups 0-9
+            let n = c - NFA_MOPEN;
+            return handle_mopen(list, state, subs_in, pim, off, depth, n);
+        }
+
+        c if (NFA_ZOPEN..=NFA_ZOPEN9).contains(&c) => {
+            // External subexpr open
+            let n = c - NFA_ZOPEN;
+            return handle_zopen(list, state, subs_in, pim, off, depth, n);
+        }
+
+        c if (NFA_ZCLOSE..=NFA_ZCLOSE9).contains(&c) => {
+            // External subexpr close
+            let n = c - NFA_ZCLOSE;
+            return handle_zclose(list, state, subs_in, pim, off, depth, n);
+        }
+
+        _ => {
+            // Not an epsilon transition - add to list
+        }
+    }
+
+    // Check if state is already in list
+    if (*state).lastlist[nvim_rex_get_nfa_ll_index() as usize] == (*list).id && state_c != NFA_SKIP
+    {
+        return ptr::null_mut();
+    }
+
+    // Mark state as being in this list
+    (*state).lastlist[nvim_rex_get_nfa_ll_index() as usize] = (*list).id;
+
+    // Check if we have room in the list
+    if (*list).n >= (*list).len {
+        // List is full - this shouldn't happen with proper allocation
+        return ptr::null_mut();
+    }
+
+    // Add thread to list
+    let thread = (*list).t.add((*list).n as usize);
+    (*list).n += 1;
+
+    // Initialize the thread
+    (*thread).state = state;
+    (*thread).count = 0;
+
+    // Copy submatch info
+    if !subs_in.is_null() {
+        copy_subs(
+            &mut (*thread).subs,
+            subs_in,
+            nvim_rex_get_nfa_has_zsubexpr() != 0,
+        );
+    }
+
+    // Copy PIM info
+    if !pim.is_null() && (*pim).result != NFA_PIM_UNUSED {
+        (*thread).pim = ptr::read(pim);
+        (*list).has_pim = 1;
+    } else {
+        (*thread).pim.result = NFA_PIM_UNUSED;
+        (*thread).pim.state = ptr::null_mut();
+    }
+
+    &mut (*thread).subs
+}
+
+/// Handle MOPEN (start of capturing group).
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn handle_mopen(
+    list: *mut NfaList,
+    state: *mut NfaState,
+    subs_in: *const RegSubs,
+    pim: *const NfaPim,
+    off: c_int,
+    depth: c_int,
+    n: c_int,
+) -> *mut RegSubs {
+    let temp_subs = get_temp_subs();
+    copy_subs(temp_subs, subs_in, nvim_rex_get_nfa_has_zsubexpr() != 0);
+
+    // Set the start position for group n
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        (*temp_subs).norm.list.multi[n as usize].start_lnum = nvim_rex_get_lnum();
+        let input = nvim_rex_get_input();
+        let line = nvim_rex_get_line();
+        (*temp_subs).norm.list.multi[n as usize].start_col =
+            input.offset_from(line) as ColNr + off as ColNr;
+    } else {
+        (*temp_subs).norm.list.line[n as usize].start = nvim_rex_get_input().add(off as usize);
+    }
+
+    // Update in_use count
+    if (*temp_subs).norm.in_use <= n {
+        (*temp_subs).norm.in_use = n + 1;
+    }
+
+    addstate_impl(list, (*state).out, temp_subs, pim, off, depth + 1)
+}
+
+/// Handle ZOPEN (start of external subexpression).
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn handle_zopen(
+    list: *mut NfaList,
+    state: *mut NfaState,
+    subs_in: *const RegSubs,
+    pim: *const NfaPim,
+    off: c_int,
+    depth: c_int,
+    n: c_int,
+) -> *mut RegSubs {
+    let temp_subs = get_temp_subs();
+    copy_subs(temp_subs, subs_in, true);
+
+    // Set the start position for external group n
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        (*temp_subs).synt.list.multi[n as usize].start_lnum = nvim_rex_get_lnum();
+        let input = nvim_rex_get_input();
+        let line = nvim_rex_get_line();
+        (*temp_subs).synt.list.multi[n as usize].start_col =
+            input.offset_from(line) as ColNr + off as ColNr;
+    } else {
+        (*temp_subs).synt.list.line[n as usize].start = nvim_rex_get_input().add(off as usize);
+    }
+
+    // Update in_use count
+    if (*temp_subs).synt.in_use <= n {
+        (*temp_subs).synt.in_use = n + 1;
+    }
+
+    addstate_impl(list, (*state).out, temp_subs, pim, off, depth + 1)
+}
+
+/// Handle ZCLOSE (end of external subexpression).
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn handle_zclose(
+    list: *mut NfaList,
+    state: *mut NfaState,
+    subs_in: *const RegSubs,
+    pim: *const NfaPim,
+    off: c_int,
+    depth: c_int,
+    n: c_int,
+) -> *mut RegSubs {
+    let temp_subs = get_temp_subs();
+    copy_subs(temp_subs, subs_in, true);
+
+    // Set the end position for external group n
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        (*temp_subs).synt.list.multi[n as usize].end_lnum = nvim_rex_get_lnum();
+        let input = nvim_rex_get_input();
+        let line = nvim_rex_get_line();
+        (*temp_subs).synt.list.multi[n as usize].end_col =
+            input.offset_from(line) as ColNr + off as ColNr;
+    } else {
+        (*temp_subs).synt.list.line[n as usize].end = nvim_rex_get_input().add(off as usize);
+    }
+
+    addstate_impl(list, (*state).out, temp_subs, pim, off, depth + 1)
+}
+
+extern "C" {
+    fn nvim_rex_get_nfa_ll_index() -> c_int;
+}
+
+// =============================================================================
+// addstate_here
+// =============================================================================
+
+/// Add a state at a specific position in the current list.
+///
+/// This is used when adding states during processing of the current list,
+/// to ensure they are processed in the current pass rather than the next.
 ///
 /// # Safety
 /// All pointers must be valid.
@@ -720,231 +982,82 @@ pub unsafe fn addstate_here(
 // State List Helpers
 // =============================================================================
 
-/// Check if a state is already in the list.
-///
-/// This is used to avoid adding duplicate states.
+/// Check if two submatches are equal.
 ///
 /// # Safety
-/// All pointers must be valid.
-pub unsafe fn state_in_list(
-    list: *const NfaList,
-    state: *const NfaState,
-    subs: *const RegSubs,
-) -> bool {
-    if list.is_null() || state.is_null() {
+/// Both pointers must be valid.
+pub unsafe fn sub_equal(sub1: *const RegSub, sub2: *const RegSub) -> bool {
+    if sub1.is_null() || sub2.is_null() {
         return false;
     }
 
-    let nfa_ll_index = nvim_rex_get_nfa_ll_index() as usize;
+    let in_use1 = (*sub1).in_use;
+    let in_use2 = (*sub2).in_use;
 
-    // Check if state was added in current iteration
-    if (*state).lastlist[nfa_ll_index] == (*list).id {
-        // If no backreferences, simple check is enough
-        if nvim_rex_get_nfa_has_backref() == 0 {
-            return true;
-        }
-        // With backreferences, need to check positions match
-        if has_state_with_pos(list, state, subs, ptr::null()) {
-            return true;
-        }
-    }
-    false
-}
-
-// =============================================================================
-// NFA Match Engine
-// =============================================================================
-
-/// Result of a single NFA step.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(i32)]
-pub enum NfaStepResult {
-    /// Continue matching
-    Continue = 0,
-    /// Match found
-    Match = 1,
-    /// No match possible
-    NoMatch = 2,
-    /// Error occurred
-    Error = -1,
-}
-
-/// Process a single character in the NFA matcher.
-///
-/// This is the core of Thompson's algorithm: for each state in the current
-/// list, if it can match the current character, add the successor to the
-/// next list.
-///
-/// # Safety
-/// All pointers must be valid.
-pub unsafe fn nfa_step(
-    current: *mut NfaList,
-    next: *mut NfaList,
-    c: c_int,
-    _subs: *mut RegSubs,
-) -> NfaStepResult {
-    if current.is_null() || next.is_null() {
-        return NfaStepResult::Error;
+    // Different number of captures means different
+    if in_use1 != in_use2 {
+        return false;
     }
 
-    // Clear the next list
-    (*next).n = 0;
-    (*next).has_pim = 0;
+    if in_use1 == 0 {
+        return true;
+    }
 
-    // Process all states in current list
-    for i in 0..(*current).n {
-        let thread = (*current).t.add(i as usize);
-        let state = (*thread).state;
+    let is_multi = nvim_rex_is_multi() != 0;
 
-        if state.is_null() {
-            continue;
-        }
-
-        let state_c = (*state).c;
-
-        // Check for match state
-        if state_c == NFA_MATCH {
-            return NfaStepResult::Match;
-        }
-
-        // Check if state matches current character
-        if nfa_state_matches(state, c) {
-            // Add successor state to next list
-            let out = (*state).out;
-            if !out.is_null() {
-                addstate(next, out, &mut (*thread).subs, &(*thread).pim, 0);
+    // Compare each capture
+    for i in 0..in_use1 as usize {
+        if is_multi {
+            if (*sub1).list.multi[i].start_lnum != (*sub2).list.multi[i].start_lnum
+                || (*sub1).list.multi[i].start_col != (*sub2).list.multi[i].start_col
+            {
+                return false;
+            }
+            // Only check end if backref is needed
+            if nvim_rex_get_nfa_has_backref() != 0
+                && ((*sub1).list.multi[i].end_lnum != (*sub2).list.multi[i].end_lnum
+                    || (*sub1).list.multi[i].end_col != (*sub2).list.multi[i].end_col)
+            {
+                return false;
+            }
+        } else {
+            if (*sub1).list.line[i].start != (*sub2).list.line[i].start {
+                return false;
+            }
+            if nvim_rex_get_nfa_has_backref() != 0
+                && (*sub1).list.line[i].end != (*sub2).list.line[i].end
+            {
+                return false;
             }
         }
     }
 
-    if (*next).n == 0 {
-        NfaStepResult::NoMatch
-    } else {
-        NfaStepResult::Continue
-    }
-}
-
-/// Check if an NFA state matches a character.
-///
-/// # Safety
-/// State must be valid.
-unsafe fn nfa_state_matches(state: *const NfaState, c: c_int) -> bool {
-    if state.is_null() {
-        return false;
-    }
-
-    let state_c = (*state).c;
-
-    // Direct character match
-    if state_c > 0 && state_c < 256 {
-        return state_c == c || (c >= 0 && (state_c as u8).eq_ignore_ascii_case(&(c as u8)));
-    }
-
-    // Character class match
-    match state_c {
-        crate::nfa_states::NFA_ANY => c != b'\n' as c_int && c != 0,
-        crate::nfa_states::NFA_DIGIT => (c as u8).is_ascii_digit(),
-        crate::nfa_states::NFA_NDIGIT => !(c as u8).is_ascii_digit() && c != b'\n' as c_int,
-        crate::nfa_states::NFA_WORD => (c as u8).is_ascii_alphanumeric() || c == b'_' as c_int,
-        crate::nfa_states::NFA_NWORD => {
-            !((c as u8).is_ascii_alphanumeric() || c == b'_' as c_int) && c != b'\n' as c_int
-        }
-        crate::nfa_states::NFA_WHITE => c == b' ' as c_int || c == b'\t' as c_int,
-        crate::nfa_states::NFA_NWHITE => c != b' ' as c_int && c != b'\t' as c_int,
-        crate::nfa_states::NFA_ALPHA => (c as u8).is_ascii_alphabetic(),
-        crate::nfa_states::NFA_NALPHA => !(c as u8).is_ascii_alphabetic() && c != b'\n' as c_int,
-        crate::nfa_states::NFA_LOWER => (c as u8).is_ascii_lowercase(),
-        crate::nfa_states::NFA_NLOWER => !(c as u8).is_ascii_lowercase() && c != b'\n' as c_int,
-        crate::nfa_states::NFA_UPPER => (c as u8).is_ascii_uppercase(),
-        crate::nfa_states::NFA_NUPPER => !(c as u8).is_ascii_uppercase() && c != b'\n' as c_int,
-        crate::nfa_states::NFA_HEX => (c as u8).is_ascii_hexdigit(),
-        crate::nfa_states::NFA_NHEX => !(c as u8).is_ascii_hexdigit() && c != b'\n' as c_int,
-        crate::nfa_states::NFA_OCTAL => matches!(c as u8, b'0'..=b'7'),
-        crate::nfa_states::NFA_NOCTAL => !matches!(c as u8, b'0'..=b'7') && c != b'\n' as c_int,
-        crate::nfa_states::NFA_NEWL => c == b'\n' as c_int,
-        _ => false,
-    }
-}
-
-/// Swap two thread lists.
-///
-/// # Safety
-/// Both pointers must be valid.
-#[inline]
-pub unsafe fn swap_lists(a: *mut *mut NfaList, b: *mut *mut NfaList) {
-    core::ptr::swap(a, b);
-}
-
-/// Increment the list ID for the next iteration.
-///
-/// This is used to efficiently check if a state is already in the current list.
-///
-/// # Safety
-/// The list must be valid.
-#[inline]
-pub unsafe fn next_list_id(list: *mut NfaList) {
-    if !list.is_null() {
-        (*list).id += 1;
-    }
+    true
 }
 
 // =============================================================================
-// FFI Exports
+// addstate FFI Export
 // =============================================================================
 
-/// Perform a single NFA matching step.
+/// Add a state to the NFA thread list.
+///
+/// This is the main entry point for adding states during NFA execution.
+/// It handles epsilon transitions, submatch tracking, and PIM management.
 ///
 /// # Safety
-/// All pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_step(
-    current: *mut NfaList,
-    next: *mut NfaList,
-    c: c_int,
-    subs: *mut RegSubs,
-) -> c_int {
-    match nfa_step(current, next, c, subs) {
-        NfaStepResult::Continue => 0,
-        NfaStepResult::Match => 1,
-        NfaStepResult::NoMatch => 2,
-        NfaStepResult::Error => -1,
-    }
-}
-
-/// Swap two thread list pointers.
-///
-/// # Safety
-/// Both pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_swap_lists(a: *mut *mut NfaList, b: *mut *mut NfaList) {
-    swap_lists(a, b);
-}
-
-/// Increment list ID.
-///
-/// # Safety
-/// The list must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_next_list_id(list: *mut NfaList) {
-    next_list_id(list);
-}
-
-/// Add a state to the thread list.
-///
-/// # Safety
-/// All pointers must be valid.
+/// All non-null pointers must be valid.
 #[no_mangle]
 pub unsafe extern "C" fn rs_addstate(
     list: *mut NfaList,
     state: *mut NfaState,
-    subs: *mut RegSubs,
+    subs: *const RegSubs,
     pim: *const NfaPim,
     off: c_int,
 ) -> *mut RegSubs {
     addstate(list, state, subs, pim, off)
 }
 
-/// Add a state at a specific position in the list.
+/// Add a state at a specific position in the current list.
 ///
 /// # Safety
 /// All pointers must be valid.
@@ -959,744 +1072,46 @@ pub unsafe extern "C" fn rs_addstate_here(
     addstate_here(list, state, subs, pim, listidx)
 }
 
-/// Check if a state is already in the list, checking submatches.
-///
-/// This is the full version that checks backref positions.
-///
-/// # Safety
-/// All pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_state_in_list_with_subs(
-    list: *const NfaList,
-    state: *const NfaState,
-    subs: *const RegSubs,
-) -> bool {
-    state_in_list(list, state, subs)
-}
-
-// =============================================================================
-// Submatch and PIM Comparison
-// =============================================================================
-
-/// Compare two submatches for equality.
-///
-/// Returns true if sub1 and sub2 have the same start positions.
-/// When using back-references, also checks the end position.
-///
-/// # Safety
-/// Both pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_sub_equal(
-    sub1: *const crate::nfa_states::RegSub,
-    sub2: *const crate::nfa_states::RegSub,
-) -> c_int {
-    if sub1.is_null() || sub2.is_null() {
-        return c_int::from(sub1.is_null() && sub2.is_null());
-    }
-
-    let in_use1 = (*sub1).in_use as usize;
-    let in_use2 = (*sub2).in_use as usize;
-    let todo = in_use1.max(in_use2);
-
-    let is_multi = nvim_rex_is_multi() != 0;
-    let has_backref = nvim_rex_get_nfa_has_backref() != 0;
-
-    for i in 0..todo {
-        if is_multi {
-            // Multi-line: compare line/col positions
-            let s1 = if i < in_use1 {
-                (*sub1).list.multi[i].start_lnum
-            } else {
-                -1
-            };
-            let s2 = if i < in_use2 {
-                (*sub2).list.multi[i].start_lnum
-            } else {
-                -1
-            };
-
-            if s1 != s2 {
-                return 0;
-            }
-            if s1 != -1 && (*sub1).list.multi[i].start_col != (*sub2).list.multi[i].start_col {
-                return 0;
-            }
-
-            // With backreferences, also check end positions
-            if has_backref {
-                let e1 = if i < in_use1 {
-                    (*sub1).list.multi[i].end_lnum
-                } else {
-                    -1
-                };
-                let e2 = if i < in_use2 {
-                    (*sub2).list.multi[i].end_lnum
-                } else {
-                    -1
-                };
-
-                if e1 != e2 {
-                    return 0;
-                }
-                if e1 != -1 && (*sub1).list.multi[i].end_col != (*sub2).list.multi[i].end_col {
-                    return 0;
-                }
-            }
-        } else {
-            // Single-line: compare pointers
-            let sp1 = if i < in_use1 {
-                (*sub1).list.line[i].start
-            } else {
-                ptr::null()
-            };
-            let sp2 = if i < in_use2 {
-                (*sub2).list.line[i].start
-            } else {
-                ptr::null()
-            };
-
-            if sp1 != sp2 {
-                return 0;
-            }
-
-            // With backreferences, also check end positions
-            if has_backref {
-                let ep1 = if i < in_use1 {
-                    (*sub1).list.line[i].end
-                } else {
-                    ptr::null()
-                };
-                let ep2 = if i < in_use2 {
-                    (*sub2).list.line[i].end
-                } else {
-                    ptr::null()
-                };
-
-                if ep1 != ep2 {
-                    return 0;
-                }
-            }
-        }
-    }
-
-    1
-}
-
-/// Compare two PIMs (Postponed Invisible Match) for equality.
-///
-/// Returns true if one and two are equal. That includes when both are not set.
-///
-/// # Safety
-/// Pointers may be null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pim_equal(one: *const NfaPim, two: *const NfaPim) -> c_int {
-    let one_unused = one.is_null() || (*one).result == NFA_PIM_UNUSED;
-    let two_unused = two.is_null() || (*two).result == NFA_PIM_UNUSED;
-
-    // Both unused = equal
-    if one_unused {
-        return c_int::from(two_unused);
-    }
-
-    // One used, one not = not equal
-    if two_unused {
-        return 0;
-    }
-
-    // Compare state ID
-    if (*one).state.is_null() || (*two).state.is_null() {
-        return c_int::from((*one).state.is_null() && (*two).state.is_null());
-    }
-    if (*(*one).state).id != (*(*two).state).id {
-        return 0;
-    }
-
-    // Compare position
-    if nvim_rex_is_multi() != 0 {
-        // Multi-line mode: compare line/col
-        c_int::from(
-            (*one).end.pos.lnum == (*two).end.pos.lnum && (*one).end.pos.col == (*two).end.pos.col,
-        )
-    } else {
-        // Single-line mode: compare pointers
-        c_int::from((*one).end.ptr == (*two).end.ptr)
-    }
-}
-
-/// Check if a state leads to NFA_MATCH without consuming input.
-///
-/// # Safety
-/// State must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_match_follows(state: *const NfaState, depth: c_int) -> c_int {
-    match_follows_impl(state, depth)
-}
-
-unsafe fn match_follows_impl(startstate: *const NfaState, depth: c_int) -> c_int {
-    use crate::nfa_states::*;
-
-    // Avoid too much recursion
-    if depth > 10 {
-        return 0;
-    }
-
-    let mut state = startstate;
-    while !state.is_null() {
-        let c = (*state).c;
-
-        match c {
-            NFA_MATCH => return 1,
-            NFA_SPLIT => {
-                if match_follows_impl((*state).out, depth + 1) != 0 {
-                    return 1;
-                }
-                state = (*state).out1;
-            }
-            NFA_EMPTY | NFA_NOPEN | NFA_NCLOSE | NFA_MOPEN | NFA_MCLOSE | NFA_BOL | NFA_BOF
-            | NFA_BOW | NFA_ZSTART | NFA_ZEND => {
-                state = (*state).out;
-            }
-            // MOPEN/MCLOSE with index
-            c if (NFA_MOPEN..=NFA_MOPEN + 9).contains(&c) => {
-                state = (*state).out;
-            }
-            c if (NFA_MCLOSE..=NFA_MCLOSE + 9).contains(&c) => {
-                state = (*state).out;
-            }
-            // ZOPEN/ZCLOSE
-            c if (NFA_ZOPEN..=NFA_ZOPEN + 9).contains(&c) => {
-                state = (*state).out;
-            }
-            c if (NFA_ZCLOSE..=NFA_ZCLOSE + 9).contains(&c) => {
-                state = (*state).out;
-            }
-            _ => return 0,
-        }
-    }
-    0
-}
-
-// =============================================================================
-// NFA Regmatch Types
-// =============================================================================
-
-/// Opaque handle to nfa_regprog_T from C.
-#[repr(C)]
-pub struct NfaProgHandle {
-    _private: [u8; 0],
-}
-
-// Note: nfa_regmatch() is a static function in C, so we can't call it directly.
-// The Rust NFA execution uses nfa_step() and addstate() which are fully
-// implemented above. When the full NFA matcher is migrated to Rust, it will
-// replace the C implementation.
-
-// =============================================================================
-// Thread List Operations
-// =============================================================================
-
-// Note: Most list operations are defined in nfa_states.rs
-// Here we add a few additional helpers for the execution engine.
-
-/// Check if a thread list is empty.
-///
-/// # Safety
-/// List must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_list_empty(list: *const NfaList) -> c_int {
-    c_int::from(list.is_null() || (*list).n == 0)
-}
-
-/// Get the list ID for duplicate detection.
-///
-/// # Safety
-/// List must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_list_id(list: *const NfaList) -> c_int {
-    if list.is_null() {
-        0
-    } else {
-        (*list).id
-    }
-}
-
-/// Get a thread from the list by index (const version).
-///
-/// # Safety
-/// List must be valid and index must be in bounds.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_list_get_thread(
-    list: *const NfaList,
-    idx: c_int,
-) -> *const NfaThread {
-    if list.is_null() || idx < 0 || idx >= (*list).n {
-        ptr::null()
-    } else {
-        (*list).t.add(idx as usize)
-    }
-}
-
 // =============================================================================
 // Match Result Helpers
 // =============================================================================
 
-/// Check if an NFA match was successful.
+/// Check if the match result indicates a match was found.
 ///
-/// # Arguments
-/// * `result` - Result from rs_nfa_step or rs_nfa_regmatch
-///
-/// # Returns
-/// 1 if match found, 0 otherwise
+/// Returns 1 if result is NFA_MATCH (1), 0 otherwise.
 #[no_mangle]
-pub const extern "C" fn rs_nfa_match_found(result: c_int) -> c_int {
-    (result == 1) as c_int
+pub extern "C" fn rs_nfa_match_found(result: c_int) -> c_int {
+    c_int::from(result == 1)
 }
 
-/// Check if matching should continue.
+/// Check if the match result indicates we should continue matching.
 ///
-/// # Arguments
-/// * `result` - Result from rs_nfa_step
-///
-/// # Returns
-/// 1 if should continue, 0 if done (match or no-match)
+/// Returns 1 if result is 0 (no match yet), 0 otherwise.
 #[no_mangle]
-pub const extern "C" fn rs_nfa_should_continue(result: c_int) -> c_int {
-    (result == 0) as c_int
+pub extern "C" fn rs_nfa_should_continue(result: c_int) -> c_int {
+    c_int::from(result == 0)
 }
 
-/// Check if no match is possible.
+/// Check if the match result indicates no match is possible.
 ///
-/// # Arguments
-/// * `result` - Result from rs_nfa_step
-///
-/// # Returns
-/// 1 if no match possible, 0 otherwise
+/// Returns 1 if result is greater than 1 (special case), 0 otherwise.
 #[no_mangle]
-pub const extern "C" fn rs_nfa_no_match(result: c_int) -> c_int {
-    (result == 2) as c_int
+pub extern "C" fn rs_nfa_no_match(result: c_int) -> c_int {
+    c_int::from(result > 1)
 }
 
-/// Check if an error occurred.
+/// Check if the match result indicates an error (too expensive).
 ///
-/// # Arguments
-/// * `result` - Result from rs_nfa_step or rs_nfa_regmatch
-///
-/// # Returns
-/// 1 if error, 0 otherwise
+/// Returns 1 if result is NFA_TOO_EXPENSIVE (-1), 0 otherwise.
 #[no_mangle]
-pub const extern "C" fn rs_nfa_match_error(result: c_int) -> c_int {
-    (result < 0) as c_int
-}
-
-// =============================================================================
-// Tests
-// =============================================================================
-
-// =============================================================================
-// Additional NFA Execution FFI Exports (Phase R5)
-// =============================================================================
-
-/// Get the number of threads in a list.
-///
-/// # Safety
-/// List must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_list_len(list: *const NfaList) -> c_int {
-    if list.is_null() {
-        0
-    } else {
-        (*list).n
-    }
-}
-
-/// Get the capacity of a list.
-///
-/// # Safety
-/// List must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_list_capacity(list: *const NfaList) -> c_int {
-    if list.is_null() {
-        0
-    } else {
-        (*list).len
-    }
-}
-
-/// Check if a list has PIM (Postponed Invisible Match).
-///
-/// # Safety
-/// List must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_list_has_pim(list: *const NfaList) -> c_int {
-    if list.is_null() {
-        0
-    } else {
-        (*list).has_pim
-    }
-}
-
-/// Set the has_pim flag on a list.
-///
-/// # Safety
-/// List must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_list_set_has_pim(list: *mut NfaList, val: c_int) {
-    if !list.is_null() {
-        (*list).has_pim = val;
-    }
-}
-
-/// Set the list ID.
-///
-/// # Safety
-/// List must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_list_set_id(list: *mut NfaList, id: c_int) {
-    if !list.is_null() {
-        (*list).id = id;
-    }
-}
-
-/// Get a mutable thread from the list by index.
-///
-/// # Safety
-/// List must be valid and index must be in bounds.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_list_get_thread_mut(
-    list: *mut NfaList,
-    idx: c_int,
-) -> *mut NfaThread {
-    if list.is_null() || idx < 0 || idx >= (*list).n {
-        ptr::null_mut()
-    } else {
-        (*list).t.add(idx as usize)
-    }
-}
-
-/// Get the state from a thread.
-///
-/// # Safety
-/// Thread must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_thread_get_state(thread: *const NfaThread) -> *mut NfaState {
-    if thread.is_null() {
-        ptr::null_mut()
-    } else {
-        (*thread).state
-    }
-}
-
-/// Set the state on a thread.
-///
-/// # Safety
-/// Thread must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_thread_set_state(thread: *mut NfaThread, state: *mut NfaState) {
-    if !thread.is_null() {
-        (*thread).state = state;
-    }
-}
-
-/// Get the PIM from a thread.
-///
-/// # Safety
-/// Thread must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_thread_get_pim(thread: *const NfaThread) -> *const NfaPim {
-    if thread.is_null() {
-        ptr::null()
-    } else {
-        &(*thread).pim
-    }
-}
-
-/// Get a mutable pointer to the PIM from a thread.
-///
-/// # Safety
-/// Thread must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_thread_get_pim_mut(thread: *mut NfaThread) -> *mut NfaPim {
-    if thread.is_null() {
-        ptr::null_mut()
-    } else {
-        &mut (*thread).pim
-    }
-}
-
-/// Get the subs (submatch info) from a thread.
-///
-/// # Safety
-/// Thread must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_thread_get_subs(thread: *const NfaThread) -> *const RegSubs {
-    if thread.is_null() {
-        ptr::null()
-    } else {
-        &(*thread).subs
-    }
-}
-
-/// Get a mutable pointer to the subs from a thread.
-///
-/// # Safety
-/// Thread must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_thread_get_subs_mut(thread: *mut NfaThread) -> *mut RegSubs {
-    if thread.is_null() {
-        ptr::null_mut()
-    } else {
-        &mut (*thread).subs
-    }
-}
-
-/// Get the state character code.
-///
-/// # Safety
-/// State must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_state_get_c(state: *const NfaState) -> c_int {
-    if state.is_null() {
-        0
-    } else {
-        (*state).c
-    }
-}
-
-/// Get the state ID.
-///
-/// # Safety
-/// State must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_state_get_id(state: *const NfaState) -> c_int {
-    if state.is_null() {
-        -1
-    } else {
-        (*state).id
-    }
-}
-
-/// Get the out pointer from a state.
-///
-/// # Safety
-/// State must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_state_get_out(state: *const NfaState) -> *mut NfaState {
-    if state.is_null() {
-        ptr::null_mut()
-    } else {
-        (*state).out
-    }
-}
-
-/// Get the out1 pointer from a state.
-///
-/// # Safety
-/// State must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_state_get_out1(state: *const NfaState) -> *mut NfaState {
-    if state.is_null() {
-        ptr::null_mut()
-    } else {
-        (*state).out1
-    }
-}
-
-/// Get a lastlist value from a state.
-///
-/// # Safety
-/// State must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_state_get_lastlist(state: *const NfaState, idx: c_int) -> c_int {
-    if state.is_null() || idx < 0 || idx as usize >= 2 {
-        0
-    } else {
-        (*state).lastlist[idx as usize]
-    }
-}
-
-/// Set a lastlist value on a state.
-///
-/// # Safety
-/// State must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_state_set_lastlist(state: *mut NfaState, idx: c_int, val: c_int) {
-    if !state.is_null() && idx >= 0 && (idx as usize) < 2 {
-        (*state).lastlist[idx as usize] = val;
-    }
-}
-
-/// Check if a PIM is unused.
-///
-/// # Safety
-/// PIM pointer may be null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_pim_is_unused(pim: *const NfaPim) -> c_int {
-    c_int::from(pim.is_null() || (*pim).result == NFA_PIM_UNUSED)
-}
-
-/// Get the result field from a PIM.
-///
-/// # Safety
-/// PIM must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_pim_get_result(pim: *const NfaPim) -> c_int {
-    if pim.is_null() {
-        NFA_PIM_UNUSED
-    } else {
-        (*pim).result
-    }
-}
-
-/// Set the result field on a PIM.
-///
-/// # Safety
-/// PIM must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_pim_set_result(pim: *mut NfaPim, result: c_int) {
-    if !pim.is_null() {
-        (*pim).result = result;
-    }
-}
-
-/// Get the state field from a PIM.
-///
-/// # Safety
-/// PIM must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_pim_get_state(pim: *const NfaPim) -> *mut NfaState {
-    if pim.is_null() {
-        ptr::null_mut()
-    } else {
-        (*pim).state
-    }
-}
-
-/// Set the state field on a PIM.
-///
-/// # Safety
-/// PIM must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_pim_set_state(pim: *mut NfaPim, state: *mut NfaState) {
-    if !pim.is_null() {
-        (*pim).state = state;
-    }
-}
-
-/// Reset recursion depth counter (call before starting a new match).
-#[no_mangle]
-pub extern "C" fn rs_nfa_reset_depth() {
-    unsafe {
-        *DEPTH.inner.get() = 0;
-    }
-}
-
-/// Get current recursion depth.
-#[no_mangle]
-pub extern "C" fn rs_nfa_get_depth() -> c_int {
-    unsafe { *DEPTH.inner.get() }
+pub extern "C" fn rs_nfa_match_error(result: c_int) -> c_int {
+    c_int::from(result == -1)
 }
 
 /// Get the ADDSTATE_HERE_OFFSET constant.
 #[no_mangle]
 pub extern "C" fn rs_nfa_addstate_here_offset() -> c_int {
     ADDSTATE_HERE_OFFSET
-}
-
-/// Get the MAX_ADDSTATE_DEPTH constant.
-#[no_mangle]
-pub extern "C" fn rs_nfa_max_addstate_depth() -> c_int {
-    MAX_ADDSTATE_DEPTH
-}
-
-/// Check if NFA state matches a given character.
-///
-/// # Safety
-/// State must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nfa_state_matches(state: *const NfaState, c: c_int) -> c_int {
-    c_int::from(nfa_state_matches(state, c))
-}
-
-/// Get the norm sub from RegSubs.
-///
-/// # Safety
-/// Subs must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_regsubs_get_norm(subs: *const RegSubs) -> *const RegSub {
-    if subs.is_null() {
-        ptr::null()
-    } else {
-        &(*subs).norm
-    }
-}
-
-/// Get a mutable pointer to the norm sub from RegSubs.
-///
-/// # Safety
-/// Subs must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_regsubs_get_norm_mut(subs: *mut RegSubs) -> *mut RegSub {
-    if subs.is_null() {
-        ptr::null_mut()
-    } else {
-        &mut (*subs).norm
-    }
-}
-
-/// Get the synt sub from RegSubs.
-///
-/// # Safety
-/// Subs must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_regsubs_get_synt(subs: *const RegSubs) -> *const RegSub {
-    if subs.is_null() {
-        ptr::null()
-    } else {
-        &(*subs).synt
-    }
-}
-
-/// Get a mutable pointer to the synt sub from RegSubs.
-///
-/// # Safety
-/// Subs must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_regsubs_get_synt_mut(subs: *mut RegSubs) -> *mut RegSub {
-    if subs.is_null() {
-        ptr::null_mut()
-    } else {
-        &mut (*subs).synt
-    }
-}
-
-/// Get the in_use count from RegSub.
-///
-/// # Safety
-/// Sub must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_regsub_get_in_use(sub: *const RegSub) -> c_int {
-    if sub.is_null() {
-        0
-    } else {
-        (*sub).in_use
-    }
-}
-
-/// Set the in_use count on RegSub.
-///
-/// # Safety
-/// Sub must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_regsub_set_in_use(sub: *mut RegSub, val: c_int) {
-    if !sub.is_null() {
-        (*sub).in_use = val;
-    }
-}
-
-/// Get NFA_PIM_UNUSED constant.
-#[no_mangle]
-pub extern "C" fn rs_nfa_pim_unused() -> c_int {
-    NFA_PIM_UNUSED
 }
 
 /// Get NFA_MATCH constant.
@@ -1714,7 +1129,7 @@ pub extern "C" fn rs_nfa_split_const() -> c_int {
 /// Get NFA_EMPTY constant.
 #[no_mangle]
 pub extern "C" fn rs_nfa_empty_const() -> c_int {
-    NFA_EMPTY
+    crate::nfa_states::NFA_EMPTY
 }
 
 /// Get NFA_SKIP constant.

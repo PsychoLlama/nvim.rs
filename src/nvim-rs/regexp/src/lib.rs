@@ -150,8 +150,9 @@ pub use nfa_compile::{
     rs_state_allocator_free, rs_state_allocator_new, rs_state_allocator_reset,
 };
 pub use nfa_exec::{
-    rs_addstate, rs_addstate_here, rs_match_follows, rs_next_list_id, rs_nfa_step, rs_pim_equal,
-    rs_state_in_list_with_subs, rs_sub_equal, rs_swap_lists,
+    rs_addstate, rs_addstate_here, rs_nfa_addstate_here_offset, rs_nfa_empty_const,
+    rs_nfa_match_const, rs_nfa_match_error, rs_nfa_match_found, rs_nfa_no_match,
+    rs_nfa_should_continue, rs_nfa_skip_const, rs_nfa_split_const,
 };
 pub use nfa_match::{
     rs_check_bof, rs_check_bol, rs_check_bow, rs_check_eof, rs_check_eol, rs_check_eow,

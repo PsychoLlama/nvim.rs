@@ -5189,6 +5189,11 @@ int nvim_nfa_regprog_get_nstate(const regprog_T *prog)
   return ((const nfa_regprog_T *)prog)->nstate;
 }
 
+unsigned nvim_nfa_regprog_get_re_engine(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->re_engine;
+}
+
 void *nvim_nfa_regprog_get_state(const regprog_T *prog, int idx)
 {
   const nfa_regprog_T *nfa = (const nfa_regprog_T *)prog;
@@ -8270,6 +8275,17 @@ void *nvim_rex_get_nfa_endp(void) { return nfa_endp; }
 void nvim_rex_set_nfa_endp(void *p) { nfa_endp = p; }
 int nvim_parse_get_nfa_re_flags(void) { return nfa_re_flags; }
 void nvim_parse_set_nfa_re_flags(int f) { nfa_re_flags = f; }
+
+// NFA execution globals accessors for Rust (Phase 1: nfa_regmatch migration)
+int nvim_nfa_get_match(void);  // Forward declaration - defined after nfa_match
+void nvim_nfa_set_match(int v);
+proftime_T *nvim_nfa_get_time_limit(void);
+void nvim_nfa_set_time_limit(proftime_T *p);
+int *nvim_nfa_get_timed_out_ptr(void);
+void nvim_nfa_set_timed_out_ptr(int *p);
+int nvim_nfa_get_time_count(void);
+void nvim_nfa_set_time_count(int v);
+int nvim_nfa_did_time_out(void);
 
 // NFA postfix output accessors for Rust
 int *nvim_nfa_get_post_ptr(void) { return post_ptr; }
@@ -12275,6 +12291,16 @@ static proftime_T *nfa_time_limit;
 static int *nfa_timed_out;
 static int nfa_time_count;
 
+// NFA execution globals accessor definitions for Rust (Phase 1: nfa_regmatch migration)
+int nvim_nfa_get_match(void) { return nfa_match; }
+void nvim_nfa_set_match(int v) { nfa_match = v; }
+proftime_T *nvim_nfa_get_time_limit(void) { return nfa_time_limit; }
+void nvim_nfa_set_time_limit(proftime_T *p) { nfa_time_limit = p; }
+int *nvim_nfa_get_timed_out_ptr(void) { return nfa_timed_out; }
+void nvim_nfa_set_timed_out_ptr(int *p) { nfa_timed_out = p; }
+int nvim_nfa_get_time_count(void) { return nfa_time_count; }
+void nvim_nfa_set_time_count(int v) { nfa_time_count = v; }
+
 // Copy postponed invisible match info from "from" to "to".
 static void copy_pim(nfa_pim_T *to, nfa_pim_T *from)
 {
@@ -13625,6 +13651,9 @@ static int nfa_did_time_out(void)
   }
   return false;
 }
+
+// Exposed for Rust - wraps static nfa_did_time_out()
+int nvim_nfa_did_time_out(void) { return nfa_did_time_out(); }
 
 /// Main matching routine.
 ///
