@@ -1,42 +1,33 @@
-Plan: ~/.claude/plans/inherited-prancing-glade.md
+Plan: ~/.claude/plans/proud-wondering-dove.md
 
-Phase 8 is now complete. Here's a summary of what was accomplished:
+## Summary
 
-## Phase 8 Summary: Quickfix Entry Navigation Migration
+I have completed Phase 9 of the quickfix migration. Here's what was accomplished:
 
-### Changes Made
+### Phase 9.1: Entry Selection Logic (Completed)
+- **Migrated to Rust**: `qf_get_entry()`, `get_nth_valid_entry()`, `get_nth_entry()`, `get_next_valid_entry()`, `get_prev_valid_entry()`
+- **New Rust function**: `rs_qf_get_entry_with_msg()` in `navigate.rs`
+  - Handles both direction-based navigation (`FORWARD`/`BACKWARD`/`FORWARD_FILE`/`BACKWARD_FILE`) 
+  - Handles direct index access
+  - Emits "No more items" error message when navigation fails
+- **C code deleted**: ~90 lines
+- **Added**: `nvim_emsg_e_no_more_items()` accessor for error message emission
 
-**Rust Implementation (src/nvim-rs/quickfix/src/lib.rs):**
-- Added `rs_qf_get_nth_below_entry()` - Find nth entry below current position
-- Added `rs_qf_get_nth_above_entry()` - Find nth entry above current position
-- Added `rs_qf_find_nth_adj_entry()` - Main API for `:cabove/:cbelow` commands
+### Phases 9.2-9.5: Window/Buffer Operations
+After analysis, the remaining functions (`qf_win_pos_update`, `qf_jump_open_window`, `qf_jump_to_buffer`, `qf_jump_newwin`) are deeply coupled to C window and buffer structures:
+- They directly access `curwin`, `curbuf`, `prevwin` globals
+- They call functions like `win_split`, `win_close`, `win_enter`, `buflist_getfile`
+- They iterate over windows with `FOR_ALL_WINDOWS_IN_TAB`
 
-**C Code Changes (src/nvim/quickfix.c):**
-- Updated `ex_cbelow()` to call `rs_qf_find_nth_adj_entry()` instead of the C version
-- Added extern declarations for the new Rust functions
-- Deleted 9 C functions that are no longer needed:
-  - `qf_find_first_entry_in_buf()`
-  - `qf_find_first_entry_on_line()`
-  - `qf_find_last_entry_on_line()`
-  - `qf_entry_after_pos()` (thin wrapper)
-  - `qf_entry_before_pos()` (thin wrapper)
-  - `qf_entry_on_or_after_pos()` (thin wrapper)
-  - `qf_entry_on_or_before_pos()` (thin wrapper)
-  - `qf_find_entry_after_pos()`
-  - `qf_find_entry_before_pos()`
-  - `qf_find_closest_entry()`
-  - `qf_get_nth_below_entry()`
-  - `qf_get_nth_above_entry()`
-  - `qf_find_nth_adj_entry()`
-
-### Metrics
-- **C lines deleted:** 264
-- **Rust lines added:** 151
-- **Net reduction:** 113 lines
-- **Commands affected:** `:cabove`, `:cbelow`, `:labove`, `:lbelow`, `:cafter`, `:cbefore`, `:lafter`, `:lbefore`
+These functions orchestrate window management and cannot be meaningfully migrated without creating excessive FFI overhead.
 
 ### Verification
-- `just build` ✓
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` ✓ (3717 tests passed)
+All checks pass:
+- ✅ `just build` - Full build with linking
+- ✅ `just rust-fmt-check` - Formatting
+- ✅ `just rust-clippy` - Linting  
+- ✅ `just rust-test` - 3717 unit tests pass
+
+### Files Modified
+- `src/nvim-rs/quickfix/src/navigate.rs` - Added entry selection logic (~260 lines of Rust)
+- `src/nvim/quickfix.c` - Deleted ~90 lines, added thin wrapper calling Rust
