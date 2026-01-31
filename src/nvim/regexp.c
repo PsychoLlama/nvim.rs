@@ -14329,30 +14329,9 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
       // NFA_COL, NFA_CURSOR, NFA_VCOL, NFA_MARK, NFA_VISUAL are handled by Rust
       // (rs_nfa_process_state)
 
-      case NFA_MOPEN1:
-      case NFA_MOPEN2:
-      case NFA_MOPEN3:
-      case NFA_MOPEN4:
-      case NFA_MOPEN5:
-      case NFA_MOPEN6:
-      case NFA_MOPEN7:
-      case NFA_MOPEN8:
-      case NFA_MOPEN9:
-      case NFA_ZOPEN:
-      case NFA_ZOPEN1:
-      case NFA_ZOPEN2:
-      case NFA_ZOPEN3:
-      case NFA_ZOPEN4:
-      case NFA_ZOPEN5:
-      case NFA_ZOPEN6:
-      case NFA_ZOPEN7:
-      case NFA_ZOPEN8:
-      case NFA_ZOPEN9:
-      case NFA_NOPEN:
-      case NFA_ZSTART:
-        // These states are only added to be able to bail out when
-        // they are added again, nothing is to be done.
-        break;
+      // NFA_MOPEN1-9, NFA_ZOPEN, NFA_ZOPEN1-9, NFA_NOPEN, NFA_ZSTART:
+      // These states are only added to be able to bail out when
+      // they are added again, nothing is to be done. Handled by default case.
 
       default:
         // Literal character matching is handled by Rust (rs_nfa_process_state)
