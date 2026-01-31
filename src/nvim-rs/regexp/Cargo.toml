@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2"
+nvim-ascii = { path = "../ascii" }
 nvim-charset = { path = "../charset" }
 
 [lib]

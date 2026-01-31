@@ -5020,6 +5020,16 @@ void nvim_rex_set_in_use(bool in_use) { rex_in_use = in_use; }
 // REG_MULTI check
 int nvim_rex_is_multi(void) { return rex.reg_match == NULL; }
 
+// Character classification wrappers for Rust (these are macros in C)
+int nvim_ri_digit(int c) { return ri_digit(c); }
+int nvim_ri_hex(int c) { return ri_hex(c); }
+int nvim_ri_octal(int c) { return ri_octal(c); }
+int nvim_ri_word(int c) { return ri_word(c); }
+int nvim_ri_head(int c) { return ri_head(c); }
+int nvim_ri_alpha(int c) { return ri_alpha(c); }
+int nvim_ri_lower(int c) { return ri_lower(c); }
+int nvim_ri_upper(int c) { return ri_upper(c); }
+
 // Memory limit (p_mmp)
 int64_t nvim_get_p_mmp(void) { return p_mmp; }
 
@@ -8318,32 +8328,26 @@ void nvim_reg_nextline(void) {
   reg_nextline();
 }
 
-// State processing stub for rs_nfa_regmatch - Phase 3 will implement the actual logic
+// Rust state processing function (Phase 4)
+extern int rs_nfa_process_state(
+    const void *t_ptr, int curc, int clen,
+    void *prog_ptr, void *thislist_ptr, void *nextlist_ptr,
+    void *start_ptr, void *submatch_ptr, void *m_ptr,
+    int **listids, int *listids_len,
+    void **add_state_ptr, int *add_here, int *add_count, int *add_off);
+
+// State processing for rs_nfa_regmatch - delegates to Rust
 // Uses void* for FFI compatibility (internal types not in public header)
-// This is a placeholder that returns 0 (continue processing)
 int nfa_regmatch_process_state(
     const void *t_ptr, int curc, int clen,
     void *prog_ptr, void *thislist_ptr, void *nextlist_ptr,
     void *start_ptr, void *submatch_ptr, void *m_ptr,
     int **listids, int *listids_len,
     void **add_state_ptr, int *add_here, int *add_count, int *add_off) {
-  (void)t_ptr;
-  (void)curc;
-  (void)clen;
-  (void)prog_ptr;
-  (void)thislist_ptr;
-  (void)nextlist_ptr;
-  (void)start_ptr;
-  (void)submatch_ptr;
-  (void)m_ptr;
-  (void)listids;
-  (void)listids_len;
-  // Placeholder - returns 0 to continue processing, -1 for error, 2 for nextchar
-  *add_state_ptr = NULL;
-  *add_here = 0;
-  *add_count = 0;
-  *add_off = 0;
-  return 0;
+  return rs_nfa_process_state(t_ptr, curc, clen, prog_ptr, thislist_ptr,
+                              nextlist_ptr, start_ptr, submatch_ptr, m_ptr,
+                              listids, listids_len, add_state_ptr, add_here,
+                              add_count, add_off);
 }
 
 // NFA postfix output accessors for Rust

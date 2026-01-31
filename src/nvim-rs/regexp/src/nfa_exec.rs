@@ -1541,6 +1541,276 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
     nvim_nfa_get_match()
 }
 
+// =============================================================================
+// State Processing - Phase 4: NFA State Machine Implementation
+// =============================================================================
+
+// Additional FFI declarations for state processing
+extern "C" {
+    // Character classification functions (wrappers for C macros)
+    fn nvim_ri_digit(c: c_int) -> c_int;
+    fn nvim_ri_hex(c: c_int) -> c_int;
+    fn nvim_ri_octal(c: c_int) -> c_int;
+    fn nvim_ri_word(c: c_int) -> c_int;
+    fn nvim_ri_head(c: c_int) -> c_int;
+    fn nvim_ri_alpha(c: c_int) -> c_int;
+    fn nvim_ri_lower(c: c_int) -> c_int;
+    fn nvim_ri_upper(c: c_int) -> c_int;
+
+    // Vim character classification
+    fn vim_isIDc(c: c_int) -> c_int;
+    fn vim_iswordp_buf(ptr: *const u8, buf: *mut c_void) -> c_int;
+    fn vim_isfilec(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> c_int;
+
+    // Rex state accessors
+    fn nvim_rex_get_reg_ic() -> bool;
+    fn nvim_rex_get_reg_buf() -> *mut c_void;
+}
+
+// Use Rust implementations from ascii crate
+use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite};
+
+// Import state constants
+use crate::nfa_states::{
+    NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_DIGIT, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT,
+    NFA_KWORD, NFA_LOWER, NFA_LOWER_IC, NFA_NALPHA, NFA_NDIGIT, NFA_NHEAD, NFA_NHEX, NFA_NLOWER,
+    NFA_NLOWER_IC, NFA_NOCTAL, NFA_NWHITE, NFA_NWORD, NFA_NUPPER, NFA_NUPPER_IC, NFA_OCTAL,
+    NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE,
+    NFA_WORD,
+};
+
+/// Result of state processing.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StateProcessResult {
+    /// The state to add (NULL if none).
+    pub add_state: *mut NfaState,
+    /// Whether to add using addstate_here.
+    pub add_here: c_int,
+    /// Count for NFA_SKIP states.
+    pub add_count: c_int,
+    /// Offset for addstate.
+    pub add_off: c_int,
+    /// Return code: 0 = continue, 2 = goto nextchar, -1 = NFA_TOO_EXPENSIVE.
+    pub return_code: c_int,
+}
+
+impl Default for StateProcessResult {
+    fn default() -> Self {
+        Self {
+            add_state: ptr::null_mut(),
+            add_here: 0,
+            add_count: 0,
+            add_off: 0,
+            return_code: 0,
+        }
+    }
+}
+
+/// Process simple character class states.
+///
+/// Returns true if the state was handled, false if it should be handled elsewhere.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_char_class(
+    state_c: c_int,
+    curc: c_int,
+    clen: c_int,
+    state: *mut NfaState,
+    result: &mut StateProcessResult,
+) -> bool {
+    let matched = match state_c {
+        NFA_IDENT => vim_isIDc(curc) != 0,
+        NFA_SIDENT => rs_ascii_isdigit(curc) == 0 && vim_isIDc(curc) != 0,
+        NFA_KWORD => {
+            let input = nvim_rex_get_input();
+            let buf = nvim_rex_get_reg_buf();
+            vim_iswordp_buf(input, buf) != 0
+        }
+        NFA_SKWORD => {
+            let input = nvim_rex_get_input();
+            let buf = nvim_rex_get_reg_buf();
+            rs_ascii_isdigit(curc) == 0 && vim_iswordp_buf(input, buf) != 0
+        }
+        NFA_FNAME => vim_isfilec(curc) != 0,
+        NFA_SFNAME => rs_ascii_isdigit(curc) == 0 && vim_isfilec(curc) != 0,
+        NFA_PRINT => {
+            let input = nvim_rex_get_input();
+            vim_isprintc(utf_ptr2char(input as *const i8)) != 0
+        }
+        NFA_SPRINT => {
+            let input = nvim_rex_get_input();
+            rs_ascii_isdigit(curc) == 0 && vim_isprintc(utf_ptr2char(input as *const i8)) != 0
+        }
+        NFA_WHITE => rs_ascii_iswhite(curc) != 0,
+        NFA_NWHITE => curc != 0 && rs_ascii_iswhite(curc) == 0,
+        NFA_DIGIT => nvim_ri_digit(curc) != 0,
+        NFA_NDIGIT => curc != 0 && nvim_ri_digit(curc) == 0,
+        NFA_HEX => nvim_ri_hex(curc) != 0,
+        NFA_NHEX => curc != 0 && nvim_ri_hex(curc) == 0,
+        NFA_OCTAL => nvim_ri_octal(curc) != 0,
+        NFA_NOCTAL => curc != 0 && nvim_ri_octal(curc) == 0,
+        NFA_WORD => nvim_ri_word(curc) != 0,
+        NFA_NWORD => curc != 0 && nvim_ri_word(curc) == 0,
+        NFA_HEAD => nvim_ri_head(curc) != 0,
+        NFA_NHEAD => curc != 0 && nvim_ri_head(curc) == 0,
+        NFA_ALPHA => nvim_ri_alpha(curc) != 0,
+        NFA_NALPHA => curc != 0 && nvim_ri_alpha(curc) == 0,
+        NFA_LOWER => nvim_ri_lower(curc) != 0,
+        NFA_NLOWER => curc != 0 && nvim_ri_lower(curc) == 0,
+        NFA_UPPER => nvim_ri_upper(curc) != 0,
+        NFA_NUPPER => curc != 0 && nvim_ri_upper(curc) == 0,
+        NFA_LOWER_IC => {
+            let reg_ic = nvim_rex_get_reg_ic();
+            nvim_ri_lower(curc) != 0 || (reg_ic && nvim_ri_upper(curc) != 0)
+        }
+        NFA_NLOWER_IC => {
+            let reg_ic = nvim_rex_get_reg_ic();
+            curc != 0 && !(nvim_ri_lower(curc) != 0 || (reg_ic && nvim_ri_upper(curc) != 0))
+        }
+        NFA_UPPER_IC => {
+            let reg_ic = nvim_rex_get_reg_ic();
+            nvim_ri_upper(curc) != 0 || (reg_ic && nvim_ri_lower(curc) != 0)
+        }
+        NFA_NUPPER_IC => {
+            let reg_ic = nvim_rex_get_reg_ic();
+            curc != 0 && !(nvim_ri_upper(curc) != 0 || (reg_ic && nvim_ri_lower(curc) != 0))
+        }
+        _ => return false, // Not a simple character class
+    };
+
+    if matched {
+        result.add_state = (*state).out;
+        result.add_off = clen;
+    }
+    true
+}
+
+/// Process NFA_ANY state (matches any character except NUL).
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_any(
+    curc: c_int,
+    clen: c_int,
+    state: *mut NfaState,
+    result: &mut StateProcessResult,
+) {
+    if curc > 0 {
+        result.add_state = (*state).out;
+        result.add_off = clen;
+    }
+}
+
+/// Process NFA_ANY_COMPOSING state.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_any_composing(
+    curc: c_int,
+    clen: c_int,
+    state: *mut NfaState,
+    result: &mut StateProcessResult,
+) {
+    // On a composing character skip over it. Otherwise do nothing.
+    // Always matches.
+    if utf_iscomposing_legacy(curc) != 0 {
+        result.add_off = clen;
+    } else {
+        result.add_here = 1;
+        result.add_off = 0;
+    }
+    result.add_state = (*state).out;
+}
+
+/// Main state processing function for NFA execution.
+///
+/// This function implements the large switch statement from C's nfa_regmatch.
+/// It processes a single NFA state and returns information about what state
+/// to add next.
+///
+/// # Arguments
+/// * `t` - Current thread being processed
+/// * `curc` - Current character (Unicode codepoint)
+/// * `clen` - Length of current character in bytes
+/// * `prog` - NFA program
+/// * `thislist` - Current state list
+/// * `nextlist` - Next state list
+/// * `start` - Start state
+/// * `submatch` - Submatch info (output)
+/// * `m` - Match info
+/// * `listids` - List IDs for recursive matching
+/// * `listids_len` - Length of listids array
+///
+/// # Returns
+/// A StateProcessResult containing:
+/// * `add_state` - State to add, or NULL
+/// * `add_here` - True if using addstate_here
+/// * `add_count` - Count for NFA_SKIP
+/// * `add_off` - Offset for addstate
+/// * `return_code` - 0=continue, 2=goto nextchar, -1=error
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_process_state(
+    t: *const NfaThread,
+    curc: c_int,
+    clen: c_int,
+    _prog: *mut c_void,
+    _thislist: *mut NfaList,
+    _nextlist: *mut NfaList,
+    _start: *mut NfaState,
+    _submatch: *mut RegSubs,
+    _m: *mut RegSubs,
+    _listids: *mut *mut c_int,
+    _listids_len: *mut c_int,
+    add_state_out: *mut *mut NfaState,
+    add_here_out: *mut c_int,
+    add_count_out: *mut c_int,
+    add_off_out: *mut c_int,
+) -> c_int {
+    if t.is_null() {
+        return 0;
+    }
+
+    let state = (*t).state;
+    if state.is_null() {
+        return 0;
+    }
+
+    let state_c = (*state).c;
+    let mut result = StateProcessResult::default();
+
+    // Try character classes first (most common case)
+    if process_char_class(state_c, curc, clen, state, &mut result) {
+        // Handled
+    } else {
+        // Handle other state types
+        match state_c {
+            NFA_ANY => process_any(curc, clen, state, &mut result),
+            NFA_ANY_COMPOSING => process_any_composing(curc, clen, state, &mut result),
+            _ => {
+                // For now, return 0 to continue processing with C fallback
+                // More cases will be added in subsequent phases
+            }
+        }
+    }
+
+    // Write output
+    *add_state_out = result.add_state;
+    *add_here_out = result.add_here;
+    *add_count_out = result.add_count;
+    *add_off_out = result.add_off;
+
+    result.return_code
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
