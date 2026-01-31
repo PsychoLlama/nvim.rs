@@ -447,6 +447,7 @@ extern bool rs_qf_entry_is_closer_to_target(const void *entry, const void *other
 extern bool rs_qf_entry_in_file(const void *qfp, int bnr);
 extern bool rs_qf_entry_is_active(const void *qfp);
 extern bool rs_qf_entry_has_type(const void *qfp, char type_char);
+extern int rs_qf_id2nr(const void *qi, unsigned qf_id);
 
 // Phase 6: ID and metadata functions from Rust
 extern unsigned rs_qf_get_id(const void *qfl);
@@ -6257,16 +6258,11 @@ static void qf_list_changed(qf_list_T *qfl)
 }
 
 /// Return the quickfix/location list number with the given identifier.
-///
+/// Rust implementation.
 /// @returns -1 if list is not found.
 static int qf_id2nr(const qf_info_T *const qi, const unsigned qfid)
 {
-  for (int qf_idx = 0; qf_idx < qi->qf_listcount; qf_idx++) {
-    if (qi->qf_lists[qf_idx].qf_id == qfid) {
-      return qf_idx;
-    }
-  }
-  return INVALID_QFIDX;
+  return rs_qf_id2nr(qi, qfid);
 }
 
 /// If the current list is not "save_qfid" and we can find the list with that ID
