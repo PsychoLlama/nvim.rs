@@ -1208,6 +1208,103 @@ pub unsafe extern "C" fn rs_qf_cmp_entries(a: QfLineHandle, b: QfLineHandle) -> 
     nr_a - nr_b
 }
 
+/// Check if `entry` is closer to a target position than `other_entry`.
+///
+/// Only returns true if `entry` is definitively closer. If it's further
+/// away, or there's not enough information to tell, returns false.
+///
+/// Comparison order:
+/// 1. File number - entries in the target file are closer
+/// 2. Line number - smaller distance to target line is closer
+/// 3. Column number - smaller distance to target column is closer
+///
+/// # Safety
+///
+/// - `entry` and `other_entry` must be valid pointers to `qfline_T` structs
+#[no_mangle]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_qf_entry_is_closer_to_target(
+    entry: QfLineHandle,
+    other_entry: QfLineHandle,
+    target_fnum: c_int,
+    target_lnum: c_int,
+    target_col: c_int,
+) -> bool {
+    if entry.is_null() || other_entry.is_null() {
+        return false;
+    }
+
+    // Without a target file, we can't know which is closer
+    if target_fnum == 0 {
+        return false;
+    }
+
+    // Compare entries to target file
+    let entry_fnum = nvim_qfline_get_fnum(entry);
+    let other_fnum = nvim_qfline_get_fnum(other_entry);
+    let is_target_file = entry_fnum != 0 && entry_fnum == target_fnum;
+    let other_is_target_file = other_fnum != 0 && other_fnum == target_fnum;
+
+    if !is_target_file && other_is_target_file {
+        return false;
+    } else if is_target_file && !other_is_target_file {
+        return true;
+    }
+
+    // Both entries point at the same file. Now compare line numbers.
+    if target_lnum == 0 {
+        // Without a target line number, we can't know which is closer
+        return false;
+    }
+
+    let entry_lnum = nvim_qfline_get_lnum(entry);
+    let other_lnum = nvim_qfline_get_lnum(other_entry);
+    let line_distance = if entry_lnum != 0 {
+        (entry_lnum - target_lnum).abs()
+    } else {
+        i32::MAX
+    };
+    let other_line_distance = if other_lnum != 0 {
+        (other_lnum - target_lnum).abs()
+    } else {
+        i32::MAX
+    };
+
+    if line_distance > other_line_distance {
+        return false;
+    } else if line_distance < other_line_distance {
+        return true;
+    }
+
+    // Both entries point at the same line number. Now compare columns.
+    if target_col == 0 {
+        // Without a target column, we can't know which is closer
+        return false;
+    }
+
+    let entry_col = nvim_qfline_get_col(entry);
+    let other_col = nvim_qfline_get_col(other_entry);
+    let column_distance = if entry_col != 0 {
+        (entry_col - target_col).abs()
+    } else {
+        c_int::MAX
+    };
+    let other_column_distance = if other_col != 0 {
+        (other_col - target_col).abs()
+    } else {
+        c_int::MAX
+    };
+
+    if column_distance > other_column_distance {
+        return false;
+    } else if column_distance < other_column_distance {
+        return true;
+    }
+
+    // Complete tie: same file, line, and column
+    false
+}
+
 /// Check if a quickfix entry matches a file buffer number.
 ///
 /// # Safety

@@ -442,6 +442,8 @@ extern void *rs_qf_get_entry_at_idx(const void *qfl, int idx);
 extern void *rs_qf_find_first_of_type(const void *qfl, char type_char);
 extern void *rs_qf_find_last_of_type(const void *qfl, char type_char);
 extern int rs_qf_cmp_entries(const void *a, const void *b);
+extern bool rs_qf_entry_is_closer_to_target(const void *entry, const void *other_entry,
+                                            int target_fnum, int target_lnum, int target_col);
 extern bool rs_qf_entry_in_file(const void *qfp, int bnr);
 extern bool rs_qf_entry_is_active(const void *qfp);
 extern bool rs_qf_entry_has_type(const void *qfp, char type_char);
@@ -8429,61 +8431,11 @@ static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry, b
 }
 
 /// Check if `entry` is closer to the target than `other_entry`.
-///
-/// Only returns true if `entry` is definitively closer. If it's further
-/// away, or there's not enough information to tell, return false.
+/// Rust implementation.
 static bool entry_is_closer_to_target(qfline_T *entry, qfline_T *other_entry, int target_fnum,
                                       int target_lnum, int target_col)
 {
-  // First, compare entries to target file.
-  if (!target_fnum) {
-    // Without a target file, we can't know which is closer.
-    return false;
-  }
-
-  bool is_target_file = entry->qf_fnum && entry->qf_fnum == target_fnum;
-  bool other_is_target_file = other_entry->qf_fnum && other_entry->qf_fnum == target_fnum;
-  if (!is_target_file && other_is_target_file) {
-    return false;
-  } else if (is_target_file && !other_is_target_file) {
-    return true;
-  }
-
-  // Both entries are pointing at the exact same file. Now compare line numbers.
-  if (!target_lnum) {
-    // Without a target line number, we can't know which is closer.
-    return false;
-  }
-
-  int line_distance = entry->qf_lnum
-                      ? abs(entry->qf_lnum - target_lnum) : INT_MAX;
-  int other_line_distance = other_entry->qf_lnum
-                            ? abs(other_entry->qf_lnum - target_lnum) : INT_MAX;
-  if (line_distance > other_line_distance) {
-    return false;
-  } else if (line_distance < other_line_distance) {
-    return true;
-  }
-
-  // Both entries are pointing at the exact same line number (or no line
-  // number at all). Now compare columns.
-  if (!target_col) {
-    // Without a target column, we can't know which is closer.
-    return false;
-  }
-
-  int column_distance = entry->qf_col
-                        ? abs(entry->qf_col - target_col) : INT_MAX;
-  int other_column_distance = other_entry->qf_col
-                              ? abs(other_entry->qf_col - target_col) : INT_MAX;
-  if (column_distance > other_column_distance) {
-    return false;
-  } else if (column_distance < other_column_distance) {
-    return true;
-  }
-
-  // It's a complete tie! The exact same file, line, and column.
-  return false;
+  return rs_qf_entry_is_closer_to_target(entry, other_entry, target_fnum, target_lnum, target_col);
 }
 
 /// Add list of entries to quickfix/location list. Each list entry is
