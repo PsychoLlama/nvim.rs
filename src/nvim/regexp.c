@@ -14229,76 +14229,7 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
       // Anchors (NFA_BOL, NFA_EOL, NFA_BOW, NFA_EOW, NFA_BOF, NFA_EOF)
       // are handled by Rust (rs_nfa_process_state)
 
-      case NFA_COMPOSING: {
-        int mc = curc;
-        int len = 0;
-        nfa_state_T *end;
-        nfa_state_T *sta;
-        int cchars[MAX_MCO];
-        int ccount = 0;
-        int j;
-
-        sta = t->state->out;
-        len = 0;
-        if (utf_iscomposing_legacy(sta->c)) {
-          // Only match composing character(s), ignore base
-          // character.  Used for ".{composing}" and "{composing}"
-          // (no preceding character).
-          len += utf_char2len(mc);
-        }
-        if (rex.reg_icombine && len == 0) {
-          // If \Z was present, then ignore composing characters.
-          // When ignoring the base character this always matches.
-          if (sta->c != curc) {
-            result = FAIL;
-          } else {
-            result = OK;
-          }
-          while (sta->c != NFA_END_COMPOSING) {
-            sta = sta->out;
-          }
-        } else if (len > 0 || mc == sta->c) {
-          // Check base character matches first, unless ignored.
-          if (len == 0) {
-            len += utf_char2len(mc);
-            sta = sta->out;
-          }
-
-          // We don't care about the order of composing characters.
-          // Get them into cchars[] first.
-          while (len < clen) {
-            mc = utf_ptr2char((char *)rex.input + len);
-            cchars[ccount++] = mc;
-            len += utf_char2len(mc);
-            if (ccount == MAX_MCO) {
-              break;
-            }
-          }
-
-          // Check that each composing char in the pattern matches a
-          // composing char in the text.  We do not check if all
-          // composing chars are matched.
-          result = OK;
-          while (sta->c != NFA_END_COMPOSING) {
-            for (j = 0; j < ccount; j++) {
-              if (cchars[j] == sta->c) {
-                break;
-              }
-            }
-            if (j == ccount) {
-              result = FAIL;
-              break;
-            }
-            sta = sta->out;
-          }
-        } else {
-          result = FAIL;
-        }
-
-        end = t->state->out1;               // NFA_END_COMPOSING
-        ADD_STATE_IF_MATCH(end);
-        break;
-      }
+      // NFA_COMPOSING is handled by Rust (rs_nfa_process_state)
 
       // NFA_NEWL is handled by Rust (rs_nfa_process_state)
 

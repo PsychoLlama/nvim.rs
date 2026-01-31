@@ -1577,6 +1577,9 @@ extern "C" {
     fn utf_fold(a: c_int) -> c_int;
     fn utf_ptr2len(p: *const i8) -> c_int;
 
+    // UTF-8 character length from codepoint
+    fn rs_utf_char2len(c: c_int) -> c_int;
+
     // Backreference matching
     fn nvim_nfa_match_backref(sub: *const c_void, subidx: c_int, bytelen: *mut c_int) -> c_int;
     fn nvim_nfa_match_zref(subidx: c_int, bytelen: *mut c_int) -> c_int;
@@ -1588,12 +1591,12 @@ use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite};
 // Import state constants
 use crate::nfa_states::{
     NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF, NFA_BOL, NFA_BOW,
-    NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_CURSOR, NFA_DIGIT, NFA_EOF, NFA_EOL, NFA_EOW, NFA_FNAME,
-    NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER,
-    NFA_LOWER_IC, NFA_NALPHA, NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC,
-    NFA_NOCTAL, NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME,
-    NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE, NFA_WORD, NFA_ZREF1,
-    NFA_ZREF9,
+    NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_DIGIT, NFA_END_COMPOSING,
+    NFA_EOF, NFA_EOL, NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LNUM,
+    NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_NALPHA, NFA_NDIGIT, NFA_NEWL, NFA_NHEAD,
+    NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE,
+    NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_UPPER,
+    NFA_UPPER_IC, NFA_WHITE, NFA_WORD, NFA_ZREF1, NFA_ZREF9,
 };
 
 // Import anchor checking functions
@@ -1748,6 +1751,107 @@ unsafe fn process_any_composing(
         result.add_off = 0;
     }
     result.add_state = (*state).out;
+}
+
+/// Maximum combining characters (fixed value for 'maxcombine').
+const MAX_MCO: usize = 6;
+
+/// Process NFA_COMPOSING state - match composing character sequences.
+///
+/// Handles matching of patterns that involve composing characters,
+/// such as `\Z` mode or explicit composing character patterns.
+///
+/// Returns true if the state was handled (match or no match),
+/// false if this is not a composing state.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_composing(
+    curc: c_int,
+    clen: c_int,
+    state: *mut NfaState,
+    result: &mut StateProcessResult,
+) -> bool {
+    // Get the first state in the composing chain (state->out)
+    let mut sta = (*state).out;
+    let mut len: c_int = 0;
+    let mc = curc;
+
+    // Check if pattern starts with a composing character
+    if utf_iscomposing_legacy((*sta).c) != 0 {
+        // Only match composing character(s), ignore base character.
+        // Used for ".{composing}" and "{composing}" (no preceding character).
+        len += rs_utf_char2len(mc);
+    }
+
+    // Check for \Z mode (rex.reg_icombine)
+    if nvim_rex_get_reg_icombine() && len == 0 {
+        // If \Z was present, then ignore composing characters.
+        // When ignoring the base character this always matches.
+        let matched = (*sta).c == curc;
+
+        // Skip to NFA_END_COMPOSING
+        while (*sta).c != NFA_END_COMPOSING {
+            sta = (*sta).out;
+        }
+
+        if matched {
+            // Match - use out1 (NFA_END_COMPOSING state)
+            result.add_state = (*state).out1;
+            result.add_off = clen;
+        }
+        return true;
+    }
+
+    // Check if base character matches (or was already skipped due to composing)
+    if len > 0 || mc == (*sta).c {
+        // Check base character matches first, unless ignored.
+        if len == 0 {
+            len += rs_utf_char2len(mc);
+            sta = (*sta).out;
+        }
+
+        // Collect composing characters from input.
+        // We don't care about the order of composing characters.
+        let mut cchars: [c_int; MAX_MCO] = [0; MAX_MCO];
+        let mut ccount: usize = 0;
+
+        let input = nvim_rex_get_input();
+        while len < clen {
+            let char_mc = utf_ptr2char(input.add(len as usize) as *const i8);
+            if ccount < MAX_MCO {
+                cchars[ccount] = char_mc;
+                ccount += 1;
+            }
+            len += rs_utf_char2len(char_mc);
+            if ccount == MAX_MCO {
+                break;
+            }
+        }
+
+        // Check that each composing char in the pattern matches a
+        // composing char in the text. We do not check if all
+        // composing chars are matched.
+        let mut matched = true;
+        while (*sta).c != NFA_END_COMPOSING {
+            let found = cchars[..ccount].iter().any(|&c| c == (*sta).c);
+            if !found {
+                matched = false;
+                break;
+            }
+            sta = (*sta).out;
+        }
+
+        if matched {
+            // Match - use out1 (NFA_END_COMPOSING state)
+            result.add_state = (*state).out1;
+            result.add_off = clen;
+        }
+    }
+    // If we didn't match, add_state remains NULL (no match)
+
+    true
 }
 
 /// Process anchor states (BOL, EOL, BOW, EOW, BOF, EOF).
@@ -2102,6 +2206,9 @@ pub unsafe extern "C" fn rs_nfa_process_state(
             }
             NFA_ANY => process_any(curc, clen, state, &mut result),
             NFA_ANY_COMPOSING => process_any_composing(curc, clen, state, &mut result),
+            NFA_COMPOSING => {
+                process_composing(curc, clen, state, &mut result);
+            }
             NFA_NEWL => process_newl(curc, state, &mut result),
             NFA_SKIP => process_skip(t, clen, state, &mut result),
             _ => {
