@@ -453,6 +453,7 @@ extern bool rs_qf_entry_is_active(const void *qfp);
 extern bool rs_qf_entry_has_type(const void *qfp, char type_char);
 extern int rs_qf_id2nr(const void *qi, unsigned qf_id);
 extern int rs_qf_restore_list(void *qi, unsigned save_qfid);
+extern void *rs_qf_get_nth_entry(const void *qfl, int errornr, int *new_qfidx);
 
 // Phase 6: ID and metadata functions from Rust
 extern unsigned rs_qf_get_id(const void *qfl);
@@ -1189,6 +1190,12 @@ bool nvim_qf_entry_present(const void *qfl_void, const void *qf_ptr_void)
 const char *nvim_qf_types(int c, int nr)
 {
   return qf_types(c, nr);
+}
+
+/// Emit the "No more items" error message (E553) for Rust
+void nvim_emsg_e_no_more_items(void)
+{
+  emsg(_(e_no_more_items));
 }
 
 // =============================================================================
@@ -4185,107 +4192,19 @@ static bool is_qf_entry_present(qf_list_T *qfl, qfline_T *qf_ptr)
   return true;
 }
 
-/// Get the next valid entry in the current quickfix/location list. The search
-/// starts from the current entry. Returns NULL on failure.
-static qfline_T *get_next_valid_entry(qf_list_T *qfl, qfline_T *qf_ptr, int *qf_index, int dir)
-{
-  int idx = *qf_index;
-  int old_qf_fnum = qf_ptr->qf_fnum;
+// =============================================================================
+// Phase 9.1: Entry selection logic (migrated to Rust)
+// =============================================================================
 
-  do {
-    if (idx == qfl->qf_count || qf_ptr->qf_next == NULL) {
-      return NULL;
-    }
-    idx++;
-    qf_ptr = qf_ptr->qf_next;
-  } while ((!qfl->qf_nonevalid && !qf_ptr->qf_valid)
-           || (dir == FORWARD_FILE && qf_ptr->qf_fnum == old_qf_fnum));
+/// Result of getting an entry from the quickfix list (from Rust)
+typedef struct {
+  void *qf_ptr;       ///< Pointer to the entry (null if not found)
+  int qf_index;       ///< New index (1-based)
+  bool errored;       ///< Whether an error message was emitted
+} QfGetEntryResult;
 
-  *qf_index = idx;
-  return qf_ptr;
-}
-
-/// Get the previous valid entry in the current quickfix/location list. The
-/// search starts from the current entry. Returns NULL on failure.
-static qfline_T *get_prev_valid_entry(qf_list_T *qfl, qfline_T *qf_ptr, int *qf_index, int dir)
-{
-  int idx = *qf_index;
-  int old_qf_fnum = qf_ptr->qf_fnum;
-
-  do {
-    if (idx == 1 || qf_ptr->qf_prev == NULL) {
-      return NULL;
-    }
-    idx--;
-    qf_ptr = qf_ptr->qf_prev;
-  } while ((!qfl->qf_nonevalid && !qf_ptr->qf_valid)
-           || (dir == BACKWARD_FILE && qf_ptr->qf_fnum == old_qf_fnum));
-
-  *qf_index = idx;
-  return qf_ptr;
-}
-
-/// Get the n'th (errornr) previous/next valid entry from the current entry in
-/// the quickfix list.
-///   dir == FORWARD or FORWARD_FILE: next valid entry
-///   dir == BACKWARD or BACKWARD_FILE: previous valid entry
-static qfline_T *get_nth_valid_entry(qf_list_T *qfl, int errornr, int dir, int *new_qfidx)
-{
-  qfline_T *qf_ptr = qfl->qf_ptr;
-  int qf_idx = qfl->qf_index;
-  const char *err = e_no_more_items;
-
-  while (errornr--) {
-    qfline_T *prev_qf_ptr = qf_ptr;
-    int prev_index = qf_idx;
-
-    if (dir == FORWARD || dir == FORWARD_FILE) {
-      qf_ptr = get_next_valid_entry(qfl, qf_ptr, &qf_idx, dir);
-    } else {
-      qf_ptr = get_prev_valid_entry(qfl, qf_ptr, &qf_idx, dir);
-    }
-
-    if (qf_ptr == NULL) {
-      qf_ptr = prev_qf_ptr;
-      qf_idx = prev_index;
-      if (err != NULL) {
-        emsg(_(err));
-        return NULL;
-      }
-      break;
-    }
-
-    err = NULL;
-  }
-
-  *new_qfidx = qf_idx;
-  return qf_ptr;
-}
-
-/// Get n'th (errornr) quickfix entry from the current entry in the quickfix
-/// list 'qfl'. Returns a pointer to the new entry and the index in 'new_qfidx'
-static qfline_T *get_nth_entry(qf_list_T *qfl, int errornr, int *new_qfidx)
-{
-  qfline_T *qf_ptr = qfl->qf_ptr;
-  int qf_idx = qfl->qf_index;
-
-  // New error number is less than the current error number
-  while (errornr < qf_idx && qf_idx > 1 && qf_ptr->qf_prev != NULL) {
-    qf_idx--;
-    qf_ptr = qf_ptr->qf_prev;
-  }
-
-  // New error number is greater than the current error number
-  while (errornr > qf_idx
-         && qf_idx < qfl->qf_count
-         && qf_ptr->qf_next != NULL) {
-    qf_idx++;
-    qf_ptr = qf_ptr->qf_next;
-  }
-
-  *new_qfidx = qf_idx;
-  return qf_ptr;
-}
+/// Rust implementation of entry selection (with error message emission)
+extern QfGetEntryResult rs_qf_get_entry_with_msg(const void *qfl, int errornr, int dir);
 
 /// Get a entry specified by 'errornr' and 'dir' from the current
 /// quickfix/location list. 'errornr' specifies the index of the entry and 'dir'
@@ -4294,17 +4213,9 @@ static qfline_T *get_nth_entry(qf_list_T *qfl, int errornr, int *new_qfidx)
 /// 'new_qfidx'.
 static qfline_T *qf_get_entry(qf_list_T *qfl, int errornr, int dir, int *new_qfidx)
 {
-  qfline_T *qf_ptr = qfl->qf_ptr;
-  int qfidx = qfl->qf_index;
-
-  if (dir != 0) {  // next/prev valid entry
-    qf_ptr = get_nth_valid_entry(qfl, errornr, dir, &qfidx);
-  } else if (errornr != 0) {  // go to specified number
-    qf_ptr = get_nth_entry(qfl, errornr, &qfidx);
-  }
-
-  *new_qfidx = qfidx;
-  return qf_ptr;
+  QfGetEntryResult result = rs_qf_get_entry_with_msg(qfl, errornr, dir);
+  *new_qfidx = result.qf_index;
+  return (qfline_T *)result.qf_ptr;
 }
 
 // Find a window displaying a Vim help file in the current tab page.
@@ -8243,7 +8154,7 @@ static int qf_setprop_curidx(qf_info_T *qi, qf_list_T *qfl, const dictitem_T *di
   }
   newidx = MIN(newidx, qfl->qf_count);
   const int old_qfidx = qfl->qf_index;
-  qfline_T *const qf_ptr = get_nth_entry(qfl, newidx, &newidx);
+  qfline_T *const qf_ptr = rs_qf_get_nth_entry(qfl, newidx, &newidx);
   if (qf_ptr == NULL) {
     return FAIL;
   }

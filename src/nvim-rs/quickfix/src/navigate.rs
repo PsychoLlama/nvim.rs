@@ -44,6 +44,12 @@ extern "C" {
     fn nvim_qfline_get_fnum(qfp: QfLineHandle) -> c_int;
     fn nvim_qfline_get_valid(qfp: QfLineHandle) -> bool;
 
+    // List state accessors
+    fn nvim_qf_get_nonevalid(qfl: QfListHandle) -> bool;
+
+    // Error message function
+    fn nvim_emsg_e_no_more_items();
+
     // Position accessors
     fn nvim_pos_get_lnum(pos: PosHandle) -> LinenrT;
     fn nvim_pos_get_col(pos: PosHandle) -> c_int;
@@ -909,6 +915,275 @@ pub unsafe extern "C" fn rs_qf_current_valid_position(qfl: QfListHandle) -> c_in
 }
 
 // =============================================================================
+// Phase 9.1: Entry Selection Logic for qf_jump
+// =============================================================================
+
+/// Navigation direction constants (matching `vim_defs.h`)
+pub const FORWARD: c_int = 1;
+pub const BACKWARD: c_int = -1;
+pub const FORWARD_FILE: c_int = 3;
+pub const BACKWARD_FILE: c_int = -3;
+
+/// Result of getting an entry from the quickfix list.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct QfGetEntryResult {
+    /// Pointer to the entry (null if not found)
+    pub qf_ptr: QfLineHandle,
+    /// New index (1-based)
+    pub qf_index: c_int,
+    /// Whether an error message was emitted
+    pub errored: bool,
+}
+
+impl Default for QfGetEntryResult {
+    fn default() -> Self {
+        Self {
+            qf_ptr: std::ptr::null(),
+            qf_index: 0,
+            errored: false,
+        }
+    }
+}
+
+/// Get the next valid entry in the quickfix list.
+///
+/// If `dir` is `FORWARD_FILE`, skip entries in the same file.
+///
+/// Returns the next valid entry or null if at the end.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `qf_ptr` must be a valid pointer to a `qfline_T` struct
+unsafe fn get_next_valid_entry(
+    qfl: QfListHandle,
+    mut qf_ptr: QfLineHandle,
+    qf_index: &mut c_int,
+    dir: c_int,
+) -> QfLineHandle {
+    let count = nvim_qf_get_count(qfl);
+    let old_qf_fnum = if qf_ptr.is_null() {
+        0
+    } else {
+        nvim_qfline_get_fnum(qf_ptr)
+    };
+    let nonevalid = nvim_qf_get_nonevalid(qfl);
+
+    loop {
+        if *qf_index == count || qf_ptr.is_null() {
+            return std::ptr::null();
+        }
+
+        let next = nvim_qfline_get_next(qf_ptr);
+        if next.is_null() {
+            return std::ptr::null();
+        }
+
+        *qf_index += 1;
+        qf_ptr = next;
+
+        // Check if this entry is acceptable
+        let valid = nvim_qfline_get_valid(qf_ptr);
+        let fnum = nvim_qfline_get_fnum(qf_ptr);
+
+        // Continue if:
+        // - Entry is not valid (and not in "nonevalid" mode)
+        // - OR dir is FORWARD_FILE and we're still in the same file
+        if (!nonevalid && !valid) || (dir == FORWARD_FILE && fnum == old_qf_fnum) {
+            continue;
+        }
+
+        return qf_ptr;
+    }
+}
+
+/// Get the previous valid entry in the quickfix list.
+///
+/// If `dir` is `BACKWARD_FILE`, skip entries in the same file.
+///
+/// Returns the previous valid entry or null if at the beginning.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `qf_ptr` must be a valid pointer to a `qfline_T` struct
+unsafe fn get_prev_valid_entry(
+    qfl: QfListHandle,
+    mut qf_ptr: QfLineHandle,
+    qf_index: &mut c_int,
+    dir: c_int,
+) -> QfLineHandle {
+    let old_qf_fnum = if qf_ptr.is_null() {
+        0
+    } else {
+        nvim_qfline_get_fnum(qf_ptr)
+    };
+    let nonevalid = nvim_qf_get_nonevalid(qfl);
+
+    loop {
+        if *qf_index == 1 || qf_ptr.is_null() {
+            return std::ptr::null();
+        }
+
+        let prev = nvim_qfline_get_prev(qf_ptr);
+        if prev.is_null() {
+            return std::ptr::null();
+        }
+
+        *qf_index -= 1;
+        qf_ptr = prev;
+
+        // Check if this entry is acceptable
+        let valid = nvim_qfline_get_valid(qf_ptr);
+        let fnum = nvim_qfline_get_fnum(qf_ptr);
+
+        // Continue if:
+        // - Entry is not valid (and not in "nonevalid" mode)
+        // - OR dir is BACKWARD_FILE and we're still in the same file
+        if (!nonevalid && !valid) || (dir == BACKWARD_FILE && fnum == old_qf_fnum) {
+            continue;
+        }
+
+        return qf_ptr;
+    }
+}
+
+/// Get the n'th (errornr) previous/next valid entry from the current entry.
+///
+/// - `dir == FORWARD` or `FORWARD_FILE`: next valid entry
+/// - `dir == BACKWARD` or `BACKWARD_FILE`: previous valid entry
+///
+/// Returns the found entry, or null if not found (with error message emitted).
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+unsafe fn get_nth_valid_entry(
+    qfl: QfListHandle,
+    mut errornr: c_int,
+    dir: c_int,
+    new_qfidx: &mut c_int,
+) -> (QfLineHandle, bool) {
+    let mut qf_ptr = nvim_qf_get_ptr(qfl);
+    let mut qf_idx = nvim_qf_get_index(qfl);
+    let mut should_emit_error = true;
+
+    while errornr > 0 {
+        errornr -= 1;
+
+        let prev_qf_ptr = qf_ptr;
+        let prev_index = qf_idx;
+
+        qf_ptr = if dir == FORWARD || dir == FORWARD_FILE {
+            get_next_valid_entry(qfl, qf_ptr, &mut qf_idx, dir)
+        } else {
+            get_prev_valid_entry(qfl, qf_ptr, &mut qf_idx, dir)
+        };
+
+        if qf_ptr.is_null() {
+            qf_ptr = prev_qf_ptr;
+            qf_idx = prev_index;
+            if should_emit_error {
+                nvim_emsg_e_no_more_items();
+                *new_qfidx = qf_idx;
+                return (std::ptr::null(), true);
+            }
+            break;
+        }
+
+        should_emit_error = false;
+    }
+
+    *new_qfidx = qf_idx;
+    (qf_ptr, false)
+}
+
+/// Get n'th (errornr) quickfix entry from the current entry.
+///
+/// Returns the entry at the given index (1-based).
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+unsafe fn get_nth_entry(qfl: QfListHandle, errornr: c_int, new_qfidx: &mut c_int) -> QfLineHandle {
+    let mut qf_ptr = nvim_qf_get_ptr(qfl);
+    let mut qf_idx = nvim_qf_get_index(qfl);
+    let count = nvim_qf_get_count(qfl);
+
+    // New error number is less than the current error number
+    while errornr < qf_idx && qf_idx > 1 {
+        let prev = nvim_qfline_get_prev(qf_ptr);
+        if prev.is_null() {
+            break;
+        }
+        qf_idx -= 1;
+        qf_ptr = prev;
+    }
+
+    // New error number is greater than the current error number
+    while errornr > qf_idx && qf_idx < count {
+        let next = nvim_qfline_get_next(qf_ptr);
+        if next.is_null() {
+            break;
+        }
+        qf_idx += 1;
+        qf_ptr = next;
+    }
+
+    *new_qfidx = qf_idx;
+    qf_ptr
+}
+
+/// Get an entry specified by 'errornr' and 'dir' from the current quickfix/location list.
+///
+/// This version emits the "No more items" error message when navigation fails,
+/// matching the original C behavior of `qf_get_entry`.
+///
+/// - `errornr` specifies the index of the entry (1-based) or count
+/// - `dir` specifies the direction (`FORWARD`/`BACKWARD`/`FORWARD_FILE`/`BACKWARD_FILE`, or 0 for direct index)
+///
+/// Returns a pointer to the entry and the new index.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns default result)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_entry_with_msg(
+    qfl: QfListHandle,
+    errornr: c_int,
+    dir: c_int,
+) -> QfGetEntryResult {
+    if qfl.is_null() {
+        return QfGetEntryResult::default();
+    }
+
+    let mut new_qfidx = 0;
+    let (qf_ptr, errored);
+
+    if dir != 0 {
+        // next/prev valid entry
+        (qf_ptr, errored) = get_nth_valid_entry(qfl, errornr, dir, &mut new_qfidx);
+    } else if errornr != 0 {
+        // go to specified number
+        qf_ptr = get_nth_entry(qfl, errornr, &mut new_qfidx);
+        errored = false;
+    } else {
+        // stay at current entry
+        qf_ptr = nvim_qf_get_ptr(qfl);
+        new_qfidx = nvim_qf_get_index(qfl);
+        errored = false;
+    }
+
+    QfGetEntryResult {
+        qf_ptr,
+        qf_index: new_qfidx,
+        errored,
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1084,5 +1359,32 @@ mod tests {
         unsafe {
             assert_eq!(rs_qf_current_valid_position(std::ptr::null()), 0);
         }
+    }
+
+    // Phase 9.1: Tests for qf_get_entry
+    #[test]
+    fn test_null_qf_get_entry_with_msg() {
+        unsafe {
+            let result = rs_qf_get_entry_with_msg(std::ptr::null(), 1, 0);
+            assert!(result.qf_ptr.is_null());
+            assert_eq!(result.qf_index, 0);
+            assert!(!result.errored);
+        }
+    }
+
+    #[test]
+    fn test_qf_get_entry_result_default() {
+        let result = QfGetEntryResult::default();
+        assert!(result.qf_ptr.is_null());
+        assert_eq!(result.qf_index, 0);
+        assert!(!result.errored);
+    }
+
+    #[test]
+    fn test_direction_constants() {
+        assert_eq!(FORWARD, 1);
+        assert_eq!(BACKWARD, -1);
+        assert_eq!(FORWARD_FILE, 3);
+        assert_eq!(BACKWARD_FILE, -3);
     }
 }
