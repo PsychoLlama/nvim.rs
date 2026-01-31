@@ -1591,13 +1591,17 @@ use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite};
 // Import state constants
 use crate::nfa_states::{
     NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF, NFA_BOL, NFA_BOW,
-    NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_DIGIT, NFA_END_COMPOSING,
-    NFA_EOF, NFA_EOL, NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LNUM,
-    NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_NALPHA, NFA_NDIGIT, NFA_NEWL, NFA_NHEAD,
-    NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE,
-    NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_UPPER,
+    NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_DIGIT, NFA_END_COLL,
+    NFA_END_COMPOSING, NFA_EOF, NFA_EOL, NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT,
+    NFA_KWORD, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_NALPHA, NFA_NDIGIT,
+    NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER,
+    NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_RANGE_MIN, NFA_SFNAME,
+    NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_START_COLL, NFA_START_NEG_COLL, NFA_UPPER,
     NFA_UPPER_IC, NFA_WHITE, NFA_WORD, NFA_ZREF1, NFA_ZREF9,
 };
+
+// Import check_char_class for POSIX classes in collections
+use crate::nfa_states::check_char_class_impl;
 
 // Import anchor checking functions
 use crate::nfa_match::{rs_check_bof, rs_check_bol, rs_check_bow, rs_check_eof, rs_check_eow};
@@ -1850,6 +1854,155 @@ unsafe fn process_composing(
         }
     }
     // If we didn't match, add_state remains NULL (no match)
+
+    true
+}
+
+/// Process NFA_START_COLL and NFA_START_NEG_COLL - character collection matching.
+///
+/// Handles patterns like [abc], [^abc], [a-z], [:alpha:], etc.
+/// Collection matching walks through a chain of states until NFA_END_COLL.
+///
+/// Returns true if the state was handled.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_collection(
+    state_c: c_int,
+    curc: c_int,
+    clen: c_int,
+    state: *mut NfaState,
+    result: &mut StateProcessResult,
+) -> bool {
+    // Never match EOL. If it's part of the collection it is added
+    // as a separate state with an OR.
+    if curc == 0 {
+        return true; // Handled but no match
+    }
+
+    let result_if_matched = state_c == NFA_START_COLL;
+    let mut coll_state = (*state).out;
+    let mut matched = false;
+
+    loop {
+        let sc = (*coll_state).c;
+
+        // Handle NFA_COMPOSING within collection
+        if sc == NFA_COMPOSING {
+            // This handles composing characters in collections - complex case
+            // We need to check if the composing sequence matches
+            let mut sta = (*(*state).out).out;
+            let mut len: c_int = 0;
+            let mc = curc;
+
+            if utf_iscomposing_legacy((*sta).c) != 0 {
+                len += rs_utf_char2len(mc);
+            }
+
+            if nvim_rex_get_reg_icombine() && len == 0 {
+                // \Z mode - ignore composing characters
+                matched = (*sta).c == curc;
+                while (*sta).c != NFA_END_COMPOSING {
+                    sta = (*sta).out;
+                }
+            } else if len > 0 || mc == (*sta).c {
+                if len == 0 {
+                    len += rs_utf_char2len(mc);
+                    sta = (*sta).out;
+                }
+
+                // Collect composing characters from input
+                let mut cchars: [c_int; MAX_MCO] = [0; MAX_MCO];
+                let mut ccount: usize = 0;
+                let input = nvim_rex_get_input();
+                while len < clen {
+                    let char_mc = utf_ptr2char(input.add(len as usize) as *const i8);
+                    if ccount < MAX_MCO {
+                        cchars[ccount] = char_mc;
+                        ccount += 1;
+                    }
+                    len += rs_utf_char2len(char_mc);
+                    if ccount == MAX_MCO {
+                        break;
+                    }
+                }
+
+                // Check that each composing char in the pattern matches one in input
+                matched = true;
+                while (*sta).c != NFA_END_COMPOSING {
+                    if !cchars[..ccount].iter().any(|&c| c == (*sta).c) {
+                        matched = false;
+                        break;
+                    }
+                    sta = (*sta).out;
+                }
+            }
+
+            // Check if out1 of collection's out is NFA_END_COMPOSING
+            if (*(*(*state).out).out1).c == NFA_END_COMPOSING && matched == result_if_matched {
+                result.add_state = (*(*(*state).out).out1).out;
+                result.add_off = clen;
+            }
+            return true;
+        }
+
+        // Check for end of collection
+        if sc == NFA_END_COLL {
+            // Did not match anything - XOR with result_if_matched
+            matched = !result_if_matched;
+            break;
+        }
+
+        // Check for character range: NFA_RANGE_MIN followed by NFA_RANGE_MAX
+        if sc == NFA_RANGE_MIN {
+            let c1 = (*coll_state).val;
+            coll_state = (*coll_state).out; // advance to NFA_RANGE_MAX
+            let c2 = (*coll_state).val;
+
+            // Direct range check
+            if curc >= c1 && curc <= c2 {
+                matched = result_if_matched;
+                break;
+            }
+
+            // Case-insensitive range check
+            if nvim_rex_get_reg_ic() {
+                let curc_low = utf_fold(curc);
+                let mut c1_iter = c1;
+                while c1_iter <= c2 {
+                    if utf_fold(c1_iter) == curc_low {
+                        matched = result_if_matched;
+                        break;
+                    }
+                    c1_iter += 1;
+                }
+                if matched == result_if_matched {
+                    break;
+                }
+            }
+        } else if sc < 0 {
+            // POSIX character class (negative state value)
+            if check_char_class_impl(sc, curc) != 0 {
+                matched = result_if_matched;
+                break;
+            }
+        } else {
+            // Literal character match
+            if curc == sc || (nvim_rex_get_reg_ic() && utf_fold(curc) == utf_fold(sc)) {
+                matched = result_if_matched;
+                break;
+            }
+        }
+
+        coll_state = (*coll_state).out;
+    }
+
+    if matched {
+        // Next state is in out of the NFA_END_COLL, out1 of START points to END
+        result.add_state = (*(*state).out1).out;
+        result.add_off = clen;
+    }
 
     true
 }
@@ -2209,13 +2362,16 @@ pub unsafe extern "C" fn rs_nfa_process_state(
             NFA_COMPOSING => {
                 process_composing(curc, clen, state, &mut result);
             }
+            NFA_START_COLL | NFA_START_NEG_COLL => {
+                process_collection(state_c, curc, clen, state, &mut result);
+            }
             NFA_NEWL => process_newl(curc, state, &mut result),
             NFA_SKIP => process_skip(t, clen, state, &mut result),
             _ => {
                 // Try literal character matching (positive state values)
                 if !process_literal(state_c, curc, clen, state, &mut result) {
                     // Not a literal character, return 0 to continue with C fallback
-                    // for complex cases (collections, lookaround, etc.)
+                    // for complex cases (lookaround, etc.)
                 }
             }
         }
