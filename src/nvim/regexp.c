@@ -300,25 +300,13 @@ typedef struct {
 
 typedef void (*fptr_T)(int *, int);
 
-// Rust implementation
+// Rust implementations
 extern int rs_no_magic(int x);
-
-static int no_Magic(int x)
-{
-  return rs_no_magic(x);
-}
+extern int rs_toggle_magic(int x);
 
 // Rust implementations for BT optimization (Phase 1)
 extern uint8_t *rs_bt_find_regmust(uint8_t *scan, int flags, int *out_len);
 extern int rs_bt_get_regstart(uint8_t *scan);
-
-// Rust implementation
-extern int rs_toggle_magic(int x);
-
-static int toggle_Magic(int x)
-{
-  return rs_toggle_magic(x);
-}
 
 // The first byte of the BT regexp internal "program" is actually this magic
 // number; the start node begins in the second byte.  It's used to catch the
@@ -388,14 +376,6 @@ static const char e_unicode_val_too_large[]
 // Rust implementation
 extern int rs_re_multi_type(int c);
 
-/// Return NOT_MULTI if c is not a "multi" operator.
-/// Return MULTI_ONE if c is a single "multi" operator.
-/// Return MULTI_MULT if c is a multi "multi" operator.
-static int re_multi_type(int c)
-{
-  return rs_re_multi_type(c);
-}
-
 static char *reg_prev_sub = NULL;
 static size_t reg_prev_sublen = 0;
 
@@ -418,12 +398,6 @@ static char REGEXP_ABBR[] = "nrtebdoxuU";
 
 // Rust implementation
 extern int rs_backslash_trans(int c);
-
-// Translate '\x' to its control character, except "\n", which is Magic.
-static int backslash_trans(int c)
-{
-  return rs_backslash_trans(c);
-}
 
 enum {
   CLASS_ALNUM = 0,
@@ -450,14 +424,6 @@ enum {
 
 // Rust implementation
 extern int rs_get_char_class(char **pp);
-
-/// Check for a character class name "[:name:]".  "pp" points to the '['.
-/// Returns one of the CLASS_ items. CLASS_NONE means that no item was
-/// recognized.  Otherwise "pp" is advanced to after the item.
-static int get_char_class(char **pp)
-{
-  return rs_get_char_class(pp);
-}
 
 // Non-static wrapper for other C code
 int nvim_get_char_class(char **pp)
@@ -613,28 +579,11 @@ extern int rs_reg_iswordc(int c);
 extern int rs_reg_prev_class(void);
 extern void rs_reg_nextline(void);
 
-// Check for an equivalence class name "[=a=]".  "pp" points to the '['.
-// Returns a character representing the class. Zero means that no item was
-// recognized.  Otherwise "pp" is advanced to after the item.
-static int get_equi_class(char **pp)
-{
-  return rs_get_equi_class(pp);
-}
-
-// Check for a collating element "[.a.]".  "pp" points to the '['.
-// Returns a character. Zero means that no item was recognized.  Otherwise
-// "pp" is advanced to after the item.
-// Currently only single characters are recognized!
-static int get_coll_element(char **pp)
-{
-  return rs_get_coll_element(pp);
-}
-
 // Wrapper for get_equi_class (used by Rust)
-int nvim_get_equi_class(char **pp) { return get_equi_class(pp); }
+int nvim_get_equi_class(char **pp) { return rs_get_equi_class(pp); }
 
 // Wrapper for get_coll_element (used by Rust)
-int nvim_get_coll_element(char **pp) { return get_coll_element(pp); }
+int nvim_get_coll_element(char **pp) { return rs_get_coll_element(pp); }
 
 static int reg_cpo_lit;  // 'cpoptions' contains 'l' flag
 
@@ -1312,7 +1261,7 @@ static int match_with_backref(linenr_T start_lnum, colnr_T start_col, linenr_T e
 /// Used in a place where no * or \+ can follow.
 static bool re_mult_next(char *what)
 {
-  if (re_multi_type(peekchr()) == MULTI_MULT) {
+  if (rs_re_multi_type(peekchr()) == MULTI_MULT) {
     semsg(_("E888: (NFA regexp) cannot repeat %s"), what);
     rc_did_emsg = true;
     return false;
@@ -3692,7 +3641,7 @@ static uint8_t *regatom(int *flagp)
     break;
 
   case Magic('_'):
-    c = no_Magic(getchr());
+    c = rs_no_magic(getchr());
     if (c == '^') {             // "\_^" is start-of-line
       ret = regnode(BOL);
       break;
@@ -3742,7 +3691,7 @@ static uint8_t *regatom(int *flagp)
   case Magic('L'):
   case Magic('u'):
   case Magic('U'):
-    p = (uint8_t *)vim_strchr((char *)classchars, no_Magic(c));
+    p = (uint8_t *)vim_strchr((char *)classchars, rs_no_magic(c));
     if (p == NULL) {
       EMSG_RET_NULL(_(e_invalid_use_of_underscore));
     }
@@ -3798,7 +3747,7 @@ static uint8_t *regatom(int *flagp)
   case Magic('@'):
   case Magic('{'):
   case Magic('*'):
-    c = no_Magic(c);
+    c = rs_no_magic(c);
     EMSG3_RET_NULL(_("E64: %s%c follows nothing"),
                    (c == '*' ? reg_magic >= MAGIC_ON : reg_magic == MAGIC_ALL), c);
   // NOTREACHED
@@ -3844,7 +3793,7 @@ static uint8_t *regatom(int *flagp)
   break;
 
   case Magic('z'):
-    c = no_Magic(getchr());
+    c = rs_no_magic(getchr());
     switch (c) {
     case '(':
       if ((reg_do_extmatch & REX_SET) == 0) {
@@ -3897,7 +3846,7 @@ static uint8_t *regatom(int *flagp)
     break;
 
   case Magic('%'):
-    c = no_Magic(getchr());
+    c = rs_no_magic(getchr());
     switch (c) {
     // () without a back reference
     case '(':
@@ -4053,7 +4002,7 @@ static uint8_t *regatom(int *flagp)
         if (cmp == '<' || cmp == '>') {
           c = getchr();
         }
-        if (no_Magic(c) == '.') {
+        if (rs_no_magic(c) == '.') {
           cur = true;
           c = getchr();
         }
@@ -4062,7 +4011,7 @@ static uint8_t *regatom(int *flagp)
           n = n * 10 + (uint32_t)(c - '0');
           c = getchr();
         }
-        if (no_Magic(c) == '\'' && n == 0) {
+        if (rs_no_magic(c) == '\'' && n == 0) {
           // "\%'m", "\%<'m" and "\%>'m": Mark
           c = getchr();
           ret = regnode(RE_MARK);
@@ -4075,7 +4024,7 @@ static uint8_t *regatom(int *flagp)
           break;
         } else if ((c == 'l' || c == 'c' || c == 'v') && (cur || got_digit)) {
           if (cur && n) {
-            semsg(_(e_regexp_number_after_dot_pos_search_chr), no_Magic(c));
+            semsg(_(e_regexp_number_after_dot_pos_search_chr), rs_no_magic(c));
             rc_did_emsg = true;
             return NULL;
           }
@@ -4159,7 +4108,7 @@ collection:
               // Also accept "a-[.z.]"
               endc = 0;
               if (*regparse == '[') {
-                endc = get_coll_element(&regparse);
+                endc = rs_get_coll_element(&regparse);
               }
               if (endc == 0) {
                 endc = mb_ptr2char_adv((const char **)&regparse);
@@ -4229,23 +4178,23 @@ collection:
                 regmbc(startc);
               }
             } else {
-              startc = backslash_trans(*regparse++);
+              startc = rs_backslash_trans(*regparse++);
               regc(startc);
             }
           } else if (*regparse == '[') {
             int c_class;
             int cu;
 
-            c_class = get_char_class(&regparse);
+            c_class = rs_get_char_class(&regparse);
             startc = -1;
             // Characters assumed to be 8 bits!
             switch (c_class) {
             case CLASS_NONE:
-              c_class = get_equi_class(&regparse);
+              c_class = rs_get_equi_class(&regparse);
               if (c_class != 0) {
                 // produce equivalence class
                 reg_equi_class(c_class);
-              } else if ((c_class = get_coll_element(&regparse)) != 0) {
+              } else if ((c_class = rs_get_coll_element(&regparse)) != 0) {
                 // produce a collating element
                 regmbc(c_class);
               } else {
@@ -4419,10 +4368,10 @@ do_multibyte:
     // But always emit at least one character.  Might be a Multi,
     // e.g., a "[" without matching "]".
     for (len = 0; c != NUL && (len == 0
-                               || (re_multi_type(peekchr()) == NOT_MULTI
+                               || (rs_re_multi_type(peekchr()) == NOT_MULTI
                                    && !one_exactly
                                    && !is_Magic(c))); len++) {
-      c = no_Magic(c);
+      c = rs_no_magic(c);
       {
         regmbc(c);
         {
@@ -4478,7 +4427,7 @@ static uint8_t *regpiece(int *flagp)
   }
 
   op = peekchr();
-  if (re_multi_type(op) == NOT_MULTI) {
+  if (rs_re_multi_type(op) == NOT_MULTI) {
     *flagp = flags;
     return ret;
   }
@@ -4518,7 +4467,7 @@ static uint8_t *regpiece(int *flagp)
     int lop = END;
     int64_t nr = getdecchrs();
 
-    switch (no_Magic(getchr())) {
+    switch (rs_no_magic(getchr())) {
     case '=':
       lop = MATCH; break;                                 // \@=
     case '!':
@@ -4526,7 +4475,7 @@ static uint8_t *regpiece(int *flagp)
     case '>':
       lop = SUBPAT; break;                                // \@>
     case '<':
-      switch (no_Magic(getchr())) {
+      switch (rs_no_magic(getchr())) {
       case '=':
         lop = BEHIND; break;                               // \@<=
       case '!':
@@ -4587,12 +4536,12 @@ static uint8_t *regpiece(int *flagp)
     }
     break;
   }
-  if (re_multi_type(peekchr()) != NOT_MULTI) {
+  if (rs_re_multi_type(peekchr()) != NOT_MULTI) {
     // Can't have a multi follow a multi.
     if (peekchr() == Magic('*')) {
       EMSG2_RET_NULL(_("E61: Nested %s*"), reg_magic >= MAGIC_ON);
     }
-    EMSG3_RET_NULL(_("E62: Nested %s%c"), reg_magic == MAGIC_ALL, no_Magic(peekchr()));
+    EMSG3_RET_NULL(_("E62: Nested %s%c"), reg_magic == MAGIC_ALL, rs_no_magic(peekchr()));
   }
 
   return ret;
@@ -9987,7 +9936,7 @@ static int nfa_regpiece(void)
     return FAIL;            // cascaded error
   }
   op = peekchr();
-  if (re_multi_type(op) == NOT_MULTI) {
+  if (rs_re_multi_type(op) == NOT_MULTI) {
     return OK;
   }
 
@@ -10019,7 +9968,7 @@ static int nfa_regpiece(void)
 
   case Magic('@'):
     c2 = getdecchrs();
-    op = no_Magic(getchr());
+    op = rs_no_magic(getchr());
     i = 0;
     switch (op) {
     case '=':
@@ -10031,7 +9980,7 @@ static int nfa_regpiece(void)
       i = NFA_PREV_ATOM_NO_WIDTH_NEG;
       break;
     case '<':
-      op = no_Magic(getchr());
+      op = rs_no_magic(getchr());
       if (op == '=') {
         // \@<=
         i = NFA_PREV_ATOM_JUST_BEFORE;
@@ -10157,7 +10106,7 @@ static int nfa_regpiece(void)
     break;
   }     // end switch
 
-  if (re_multi_type(peekchr()) != NOT_MULTI) {
+  if (rs_re_multi_type(peekchr()) != NOT_MULTI) {
     // Can't have a multi follow a multi.
     EMSG_RET_FAIL(_("E871: (NFA regexp) Can't have a multi follow a multi"));
   }
