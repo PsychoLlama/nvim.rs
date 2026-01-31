@@ -8445,15 +8445,6 @@ void nvim_nfa_copy_sub(void *to, const void *from) {
   copy_sub((regsub_T *)to, (regsub_T *)from);
 }
 
-// Wrapper for recursive_regmatch (static function) - uses void* for FFI
-int nvim_nfa_recursive_regmatch(void *state, const void *pim,
-                                void *prog, void *submatch,
-                                void *m, int **listids, int *listids_len) {
-  return recursive_regmatch((nfa_state_T *)state, (nfa_pim_T *)pim,
-                            (nfa_regprog_T *)prog, (regsubs_T *)submatch,
-                            (regsubs_T *)m, listids, listids_len);
-}
-
 // Wrapper for reg_nextline (static function) for Rust
 static void reg_nextline(void);  // Forward declaration
 void nvim_reg_nextline(void) {

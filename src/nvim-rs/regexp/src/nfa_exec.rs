@@ -1859,17 +1859,6 @@ extern "C" {
     // C copy_sub function (uses void* for FFI)
     fn nvim_nfa_copy_sub(to: *mut c_void, from: *const c_void);
 
-    // Recursive regmatch for invisible matches (uses void* for FFI)
-    fn nvim_nfa_recursive_regmatch(
-        state: *mut c_void,
-        pim: *const c_void,
-        prog: *mut c_void,
-        submatch: *mut c_void,
-        m: *mut c_void,
-        listids: *mut *mut c_int,
-        listids_len: *mut c_int,
-    ) -> c_int;
-
     // Copy submatch info (not main match position) - Phase 8
     fn nvim_nfa_copy_sub_off(to: *mut c_void, from: *const c_void);
 
@@ -3071,12 +3060,12 @@ unsafe fn process_start_invisible(
     }
 
     // First try matching the invisible match, then what follows
-    let recursive_result = nvim_nfa_recursive_regmatch(
-        state as *mut c_void,
+    let recursive_result = recursive_regmatch(
+        state,
         ptr::null(),
         prog,
-        submatch as *mut c_void,
-        m as *mut c_void,
+        submatch,
+        m,
         listids,
         listids_len,
     );
@@ -3179,12 +3168,12 @@ unsafe fn process_start_pattern(
     }
 
     // First try matching the pattern
-    let recursive_result = nvim_nfa_recursive_regmatch(
-        state as *mut c_void,
+    let recursive_result = recursive_regmatch(
+        state,
         ptr::null(),
         prog,
-        submatch as *mut c_void,
-        m as *mut c_void,
+        submatch,
+        m,
         listids,
         listids_len,
     );
