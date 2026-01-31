@@ -1856,6 +1856,547 @@ pub extern "C" fn rs_bt_get_nsubexp() -> c_int {
     NSUBEXP as c_int
 }
 
+// =============================================================================
+// FFI for regrepeat
+// =============================================================================
+
+use std::ffi::c_char;
+
+extern "C" {
+    // Rex state accessors
+    fn nvim_rex_get_input() -> *mut u8;
+    fn nvim_rex_set_input(input: *mut u8);
+    fn nvim_rex_get_lnum() -> c_int;
+    fn nvim_rex_get_reg_maxline() -> c_int;
+    fn nvim_rex_get_reg_line_lbr() -> bool;
+    fn nvim_rex_is_multi() -> c_int;
+    fn nvim_rex_get_reg_ic() -> bool;
+    fn nvim_rex_get_reg_buf() -> *mut std::ffi::c_void;
+    fn nvim_get_got_int() -> c_int;
+
+    // Character classification functions
+    fn vim_isIDc(c: c_int) -> c_int;
+    fn vim_iswordp_buf(p: *const u8, buf: *mut std::ffi::c_void) -> c_int;
+    fn vim_isfilec(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> c_int;
+
+    // UTF-8 functions
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn utf_fold(c: c_int) -> c_int;
+    fn mb_toupper(c: c_int) -> c_int;
+    fn mb_tolower(c: c_int) -> c_int;
+
+    // String search - use Rust helper
+    fn rs_cstrchr(s: *const c_char, c: c_int) -> *mut c_char;
+
+    // Next line - use Rust helper
+    fn rs_reg_nextline();
+}
+
+/// Character class flags for the class table (matching C's RI_* constants)
+const RI_DIGIT: i16 = 0x01;
+const RI_HEX: i16 = 0x02;
+const RI_OCTAL: i16 = 0x04;
+const RI_WORD: i16 = 0x08;
+const RI_HEAD: i16 = 0x10;
+const RI_ALPHA: i16 = 0x20;
+const RI_LOWER: i16 = 0x40;
+const RI_UPPER: i16 = 0x80;
+const RI_WHITE: i16 = 0x100;
+
+/// Lazily initialized character class table
+static CLASS_TAB: std::sync::OnceLock<[i16; 256]> = std::sync::OnceLock::new();
+
+fn init_class_tab_local() -> [i16; 256] {
+    let mut tab = [0i16; 256];
+    for (i, entry) in tab.iter_mut().enumerate() {
+        *entry = match i as u8 {
+            b'0'..=b'7' => RI_DIGIT | RI_HEX | RI_OCTAL | RI_WORD,
+            b'8'..=b'9' => RI_DIGIT | RI_HEX | RI_WORD,
+            b'a'..=b'f' => RI_HEX | RI_WORD | RI_HEAD | RI_ALPHA | RI_LOWER,
+            b'g'..=b'z' => RI_WORD | RI_HEAD | RI_ALPHA | RI_LOWER,
+            b'A'..=b'F' => RI_HEX | RI_WORD | RI_HEAD | RI_ALPHA | RI_UPPER,
+            b'G'..=b'Z' => RI_WORD | RI_HEAD | RI_ALPHA | RI_UPPER,
+            b'_' => RI_WORD | RI_HEAD,
+            b' ' | b'\t' => RI_WHITE,
+            _ => 0,
+        };
+    }
+    tab
+}
+
+#[inline]
+fn class_tab_local() -> &'static [i16; 256] {
+    CLASS_TAB.get_or_init(init_class_tab_local)
+}
+
+/// Check if opcode includes ADD_NL for newline matching.
+/// This checks if the opcode is in the range [FIRST_NL, LAST_NL].
+#[inline]
+fn with_nl(opcode: c_int) -> bool {
+    (FIRST_NL..=LAST_NL).contains(&opcode)
+}
+
+/// Get the base opcode (without ADD_NL offset).
+#[inline]
+fn base_opcode(opcode: c_int) -> c_int {
+    if with_nl(opcode) {
+        opcode - ADD_NL
+    } else {
+        opcode
+    }
+}
+
+/// Advance scan pointer by one multi-byte character.
+/// Returns the new pointer position.
+#[inline]
+unsafe fn mb_ptr_adv(scan: *mut u8) -> *mut u8 {
+    let len = utfc_ptr2len(scan as *const c_char);
+    if len > 0 {
+        scan.add(len as usize)
+    } else {
+        scan.add(1)
+    }
+}
+
+/// Count the number of times a simple regexp atom matches.
+///
+/// This is the full implementation matching the C regrepeat() function.
+/// It handles:
+/// - Multi-line matching (REG_MULTI, WITH_NL)
+/// - Multi-byte characters (UTF-8)
+/// - Case-insensitive matching
+/// - Buffer-local 'iskeyword'
+/// - Interrupt checking (got_int)
+///
+/// # Safety
+/// `p` must point to valid BT regex bytecode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regrepeat(p: *mut u8, maxcount: i64) -> c_int {
+    let mut count: i64 = 0;
+    let mut scan = nvim_rex_get_input();
+    let opnd = operand(p);
+    let opcode = op(p);
+
+    // Check for invalid input
+    if p.is_null() || scan.is_null() {
+        return 0;
+    }
+
+    // Helper closures for checking conditions
+    let is_multi = nvim_rex_is_multi() != 0;
+    let line_lbr = nvim_rex_get_reg_line_lbr();
+    let maxline = nvim_rex_get_reg_maxline();
+    let lnum = || nvim_rex_get_lnum();
+    let got_int = || nvim_get_got_int() != 0;
+
+    // Handle each opcode case - use base_opcode to strip ADD_NL if present
+    match base_opcode(opcode) {
+        ANY => {
+            // ANY matches any character (except newline, unless ADD_NL)
+            while count < maxcount {
+                while *scan != 0 && count < maxcount {
+                    count += 1;
+                    scan = mb_ptr_adv(scan);
+                }
+                if !is_multi
+                    || !with_nl(opcode)
+                    || lnum() > maxline
+                    || line_lbr
+                    || count == maxcount
+                {
+                    break;
+                }
+                count += 1; // count the line-break
+                rs_reg_nextline();
+                scan = nvim_rex_get_input();
+                if got_int() {
+                    break;
+                }
+            }
+        }
+
+        IDENT => {
+            // IDENT: identifier character (vim_isIDc)
+            let include_digit = true;
+            while count < maxcount {
+                let c = utf_ptr2char(scan as *const c_char);
+                if vim_isIDc(c) != 0 && (include_digit || !(*scan).is_ascii_digit()) {
+                    scan = mb_ptr_adv(scan);
+                } else if *scan == 0 {
+                    if !is_multi || !with_nl(opcode) || lnum() > maxline || line_lbr {
+                        break;
+                    }
+                    rs_reg_nextline();
+                    scan = nvim_rex_get_input();
+                    if got_int() {
+                        break;
+                    }
+                } else if line_lbr && *scan == b'\n' && with_nl(opcode) {
+                    scan = scan.add(1);
+                } else {
+                    break;
+                }
+                count += 1;
+            }
+        }
+
+        SIDENT => {
+            // SIDENT: identifier character excluding leading digit
+            while count < maxcount {
+                let c = utf_ptr2char(scan as *const c_char);
+                if vim_isIDc(c) != 0 && !(*scan).is_ascii_digit() {
+                    scan = mb_ptr_adv(scan);
+                } else if *scan == 0 {
+                    if !is_multi || !with_nl(opcode) || lnum() > maxline || line_lbr {
+                        break;
+                    }
+                    rs_reg_nextline();
+                    scan = nvim_rex_get_input();
+                    if got_int() {
+                        break;
+                    }
+                } else if line_lbr && *scan == b'\n' && with_nl(opcode) {
+                    scan = scan.add(1);
+                } else {
+                    break;
+                }
+                count += 1;
+            }
+        }
+
+        KWORD => {
+            // KWORD: keyword character (vim_iswordp_buf)
+            let buf = nvim_rex_get_reg_buf();
+            let include_digit = true;
+            while count < maxcount {
+                if vim_iswordp_buf(scan, buf) != 0 && (include_digit || !(*scan).is_ascii_digit()) {
+                    scan = mb_ptr_adv(scan);
+                } else if *scan == 0 {
+                    if !is_multi || !with_nl(opcode) || lnum() > maxline || line_lbr {
+                        break;
+                    }
+                    rs_reg_nextline();
+                    scan = nvim_rex_get_input();
+                    if got_int() {
+                        break;
+                    }
+                } else if line_lbr && *scan == b'\n' && with_nl(opcode) {
+                    scan = scan.add(1);
+                } else {
+                    break;
+                }
+                count += 1;
+            }
+        }
+
+        SKWORD => {
+            // SKWORD: keyword character excluding leading digit
+            let buf = nvim_rex_get_reg_buf();
+            while count < maxcount {
+                if vim_iswordp_buf(scan, buf) != 0 && !(*scan).is_ascii_digit() {
+                    scan = mb_ptr_adv(scan);
+                } else if *scan == 0 {
+                    if !is_multi || !with_nl(opcode) || lnum() > maxline || line_lbr {
+                        break;
+                    }
+                    rs_reg_nextline();
+                    scan = nvim_rex_get_input();
+                    if got_int() {
+                        break;
+                    }
+                } else if line_lbr && *scan == b'\n' && with_nl(opcode) {
+                    scan = scan.add(1);
+                } else {
+                    break;
+                }
+                count += 1;
+            }
+        }
+
+        FNAME => {
+            // FNAME: filename character (vim_isfilec)
+            let include_digit = true;
+            while count < maxcount {
+                let c = utf_ptr2char(scan as *const c_char);
+                if vim_isfilec(c) != 0 && (include_digit || !(*scan).is_ascii_digit()) {
+                    scan = mb_ptr_adv(scan);
+                } else if *scan == 0 {
+                    if !is_multi || !with_nl(opcode) || lnum() > maxline || line_lbr {
+                        break;
+                    }
+                    rs_reg_nextline();
+                    scan = nvim_rex_get_input();
+                    if got_int() {
+                        break;
+                    }
+                } else if line_lbr && *scan == b'\n' && with_nl(opcode) {
+                    scan = scan.add(1);
+                } else {
+                    break;
+                }
+                count += 1;
+            }
+        }
+
+        SFNAME => {
+            // SFNAME: filename character excluding leading digit
+            while count < maxcount {
+                let c = utf_ptr2char(scan as *const c_char);
+                if vim_isfilec(c) != 0 && !(*scan).is_ascii_digit() {
+                    scan = mb_ptr_adv(scan);
+                } else if *scan == 0 {
+                    if !is_multi || !with_nl(opcode) || lnum() > maxline || line_lbr {
+                        break;
+                    }
+                    rs_reg_nextline();
+                    scan = nvim_rex_get_input();
+                    if got_int() {
+                        break;
+                    }
+                } else if line_lbr && *scan == b'\n' && with_nl(opcode) {
+                    scan = scan.add(1);
+                } else {
+                    break;
+                }
+                count += 1;
+            }
+        }
+
+        PRINT => {
+            // PRINT: printable character (vim_isprintc)
+            let include_digit = true;
+            while count < maxcount {
+                if *scan == 0 {
+                    if !is_multi || !with_nl(opcode) || lnum() > maxline || line_lbr {
+                        break;
+                    }
+                    rs_reg_nextline();
+                    scan = nvim_rex_get_input();
+                    if got_int() {
+                        break;
+                    }
+                } else {
+                    let c = utf_ptr2char(scan as *const c_char);
+                    if vim_isprintc(c) == 1 && (include_digit || !(*scan).is_ascii_digit()) {
+                        scan = mb_ptr_adv(scan);
+                    } else if line_lbr && *scan == b'\n' && with_nl(opcode) {
+                        scan = scan.add(1);
+                    } else {
+                        break;
+                    }
+                }
+                count += 1;
+            }
+        }
+
+        SPRINT => {
+            // SPRINT: printable character excluding leading digit
+            while count < maxcount {
+                if *scan == 0 {
+                    if !is_multi || !with_nl(opcode) || lnum() > maxline || line_lbr {
+                        break;
+                    }
+                    rs_reg_nextline();
+                    scan = nvim_rex_get_input();
+                    if got_int() {
+                        break;
+                    }
+                } else {
+                    let c = utf_ptr2char(scan as *const c_char);
+                    if vim_isprintc(c) == 1 && !(*scan).is_ascii_digit() {
+                        scan = mb_ptr_adv(scan);
+                    } else if line_lbr && *scan == b'\n' && with_nl(opcode) {
+                        scan = scan.add(1);
+                    } else {
+                        break;
+                    }
+                }
+                count += 1;
+            }
+        }
+
+        // Character class matching using class_tab
+        WHITE | NWHITE | DIGIT | NDIGIT | HEX | NHEX | OCTAL | NOCTAL | WORD | NWORD | HEAD
+        | NHEAD | ALPHA | NALPHA | LOWER | NLOWER | UPPER | NUPPER => {
+            let (testval, mask) = match base_opcode(opcode) {
+                WHITE => (RI_WHITE, RI_WHITE),
+                NWHITE => (0, RI_WHITE),
+                DIGIT => (RI_DIGIT, RI_DIGIT),
+                NDIGIT => (0, RI_DIGIT),
+                HEX => (RI_HEX, RI_HEX),
+                NHEX => (0, RI_HEX),
+                OCTAL => (RI_OCTAL, RI_OCTAL),
+                NOCTAL => (0, RI_OCTAL),
+                WORD => (RI_WORD, RI_WORD),
+                NWORD => (0, RI_WORD),
+                HEAD => (RI_HEAD, RI_HEAD),
+                NHEAD => (0, RI_HEAD),
+                ALPHA => (RI_ALPHA, RI_ALPHA),
+                NALPHA => (0, RI_ALPHA),
+                LOWER => (RI_LOWER, RI_LOWER),
+                NLOWER => (0, RI_LOWER),
+                UPPER => (RI_UPPER, RI_UPPER),
+                NUPPER => (0, RI_UPPER),
+                _ => (0, 0),
+            };
+
+            let tab = class_tab_local();
+            while count < maxcount {
+                if *scan == 0 {
+                    if !is_multi || !with_nl(opcode) || lnum() > maxline || line_lbr {
+                        break;
+                    }
+                    rs_reg_nextline();
+                    scan = nvim_rex_get_input();
+                    if got_int() {
+                        break;
+                    }
+                } else {
+                    let len = utfc_ptr2len(scan as *const c_char);
+                    if len > 1 {
+                        // Multi-byte character
+                        if testval != 0 {
+                            break; // Multi-byte doesn't match single-byte class
+                        }
+                        scan = scan.add(len as usize);
+                    } else if (tab[*scan as usize] & mask) == testval
+                        || (line_lbr && *scan == b'\n' && with_nl(opcode))
+                    {
+                        scan = scan.add(1);
+                    } else {
+                        break;
+                    }
+                }
+                count += 1;
+            }
+        }
+
+        EXACTLY => {
+            // EXACTLY: match exact character
+            let reg_ic = nvim_rex_get_reg_ic();
+            if reg_ic {
+                let cu = mb_toupper(*opnd as c_int);
+                let cl = mb_tolower(*opnd as c_int);
+                while count < maxcount && (*scan as c_int == cu || *scan as c_int == cl) {
+                    count += 1;
+                    scan = scan.add(1);
+                }
+            } else {
+                let cu = *opnd;
+                while count < maxcount && *scan == cu {
+                    count += 1;
+                    scan = scan.add(1);
+                }
+            }
+        }
+
+        MULTIBYTECODE => {
+            // MULTIBYTECODE: match multi-byte character
+            let len = utfc_ptr2len(opnd as *const c_char);
+            if len > 1 {
+                let reg_ic = nvim_rex_get_reg_ic();
+                let cf = if reg_ic {
+                    utf_fold(utf_ptr2char(opnd as *const c_char))
+                } else {
+                    0
+                };
+
+                while count < maxcount && utfc_ptr2len(scan as *const c_char) >= len {
+                    // Compare byte by byte
+                    let mut i = 0;
+                    while i < len {
+                        if *opnd.add(i as usize) != *scan.add(i as usize) {
+                            break;
+                        }
+                        i += 1;
+                    }
+                    if i < len && (!reg_ic || utf_fold(utf_ptr2char(scan as *const c_char)) != cf) {
+                        break;
+                    }
+                    scan = scan.add(len as usize);
+                    count += 1;
+                }
+            }
+        }
+
+        ANYOF | ANYBUT => {
+            // ANYOF/ANYBUT: match character in/not in set
+            let is_anyof = (base_opcode(opcode)) == ANYOF;
+            let testval = if is_anyof { 1 } else { 0 };
+
+            while count < maxcount {
+                if *scan == 0 {
+                    if !is_multi || !with_nl(opcode) || lnum() > maxline || line_lbr {
+                        break;
+                    }
+                    rs_reg_nextline();
+                    scan = nvim_rex_get_input();
+                    if got_int() {
+                        break;
+                    }
+                } else if line_lbr && *scan == b'\n' && with_nl(opcode) {
+                    scan = scan.add(1);
+                } else {
+                    let len = utfc_ptr2len(scan as *const c_char);
+                    if len > 1 {
+                        // Multi-byte character
+                        let c = utf_ptr2char(scan as *const c_char);
+                        let found = !rs_cstrchr(opnd as *const c_char, c).is_null();
+                        if found as i32 == testval {
+                            break;
+                        }
+                        scan = scan.add(len as usize);
+                    } else {
+                        let found = !rs_cstrchr(opnd as *const c_char, *scan as c_int).is_null();
+                        if found as i32 == testval {
+                            break;
+                        }
+                        scan = scan.add(1);
+                    }
+                }
+                count += 1;
+            }
+        }
+
+        NEWL => {
+            // NEWL: match newline
+            while count < maxcount
+                && ((*scan == 0 && lnum() <= maxline && !line_lbr && is_multi)
+                    || (*scan == b'\n' && line_lbr))
+            {
+                count += 1;
+                if line_lbr {
+                    // Advance rex.input by one byte (the newline char)
+                    let new_input = scan.add(1);
+                    nvim_rex_set_input(new_input);
+                } else {
+                    rs_reg_nextline();
+                }
+                scan = nvim_rex_get_input();
+                if got_int() {
+                    break;
+                }
+            }
+        }
+
+        _ => {
+            // Unknown opcode - this shouldn't happen
+            // In C this calls iemsg(), we just return 0
+            return 0;
+        }
+    }
+
+    // Update rex.input with final position
+    nvim_rex_set_input(scan);
+
+    count as c_int
+}
+
+// Import opcodes which may not be in scope
+use crate::bt_opcodes::{FIRST_NL, KWORD, LAST_NL, NOCTAL, SIDENT};
+
 #[cfg(test)]
 mod tests {
     use super::*;

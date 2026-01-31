@@ -406,6 +406,69 @@ pub unsafe extern "C" fn rs_reg_nextline() {
 }
 
 // =============================================================================
+// Character class checking FFI bindings for regrepeat
+// =============================================================================
+
+extern "C" {
+    /// Check if character is an identifier character.
+    pub fn vim_isIDc(c: c_int) -> c_int;
+
+    /// Check if pointer points to a word character in the given buffer.
+    pub fn vim_iswordp_buf(p: *const u8, buf: BufHandle) -> c_int;
+
+    /// Check if character is a filename character.
+    pub fn vim_isfilec(c: c_int) -> c_int;
+
+    /// Check if character is printable.
+    pub fn vim_isprintc(c: c_int) -> c_int;
+
+    /// Get got_int (interrupt flag).
+    fn nvim_get_got_int() -> c_int;
+
+    /// Convert character to uppercase.
+    pub fn mb_toupper(c: c_int) -> c_int;
+
+    /// Convert character to lowercase.
+    pub fn mb_tolower(c: c_int) -> c_int;
+
+    /// Get the byte length of a UTF-8 character (including composing chars).
+    pub fn utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int;
+
+    /// Get rex.reg_maxline.
+    pub fn nvim_rex_get_reg_maxline() -> c_int;
+
+    /// Get rex.reg_line_lbr (line break mode).
+    pub fn nvim_rex_get_reg_line_lbr() -> bool;
+
+    /// Check if multi-line matching is enabled.
+    pub fn nvim_rex_is_multi() -> c_int;
+}
+
+/// Check if got_int is set (CTRL-C pressed).
+#[inline]
+pub fn got_int() -> bool {
+    unsafe { nvim_get_got_int() != 0 }
+}
+
+/// Check if multi-line mode is active.
+#[inline]
+pub fn reg_multi() -> bool {
+    unsafe { nvim_rex_is_multi() != 0 }
+}
+
+/// Get the maximum line number for multi-line matching.
+#[inline]
+pub fn reg_maxline() -> c_int {
+    unsafe { nvim_rex_get_reg_maxline() }
+}
+
+/// Check if line break mode is active.
+#[inline]
+pub fn reg_line_lbr() -> bool {
+    unsafe { nvim_rex_get_reg_line_lbr() }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
