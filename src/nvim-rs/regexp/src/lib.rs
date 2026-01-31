@@ -65,6 +65,7 @@ pub mod line_fetch;
 pub mod match_helpers;
 pub mod multiline;
 pub mod nfa_compile;
+pub mod nfa_compiler;
 pub mod nfa_exec;
 pub mod nfa_match;
 pub mod nfa_parser;
@@ -148,6 +149,10 @@ pub use nfa_compile::{
     rs_frag_stack_pop, rs_frag_stack_push, rs_list1, rs_nfa_get_match_text, rs_nfa_get_reganch,
     rs_nfa_get_regstart, rs_nfa_postprocess, rs_patch, rs_state_allocator_count,
     rs_state_allocator_free, rs_state_allocator_new, rs_state_allocator_reset,
+};
+pub use nfa_compiler::{
+    rs_nfa_get_match_text_full, rs_nfa_get_reganch_full, rs_nfa_get_regstart_full,
+    rs_nfa_max_width, rs_post2nfa,
 };
 pub use nfa_exec::{
     rs_addstate, rs_addstate_here, rs_nfa_addstate_here_offset, rs_nfa_empty_const,
