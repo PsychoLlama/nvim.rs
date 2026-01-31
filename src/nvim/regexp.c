@@ -14473,19 +14473,7 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
         }
         break;
       }
-      case NFA_SKIP:
-        // character of previous matching \1 .. \9  or \@>
-        if (t->count - clen <= 0) {
-          // end of match, go to what follows
-          add_state = t->state->out;
-          add_off = clen;
-        } else {
-          // add state again with decremented count
-          add_state = t->state;
-          add_off = 0;
-          add_count = t->count - clen;
-        }
-        break;
+      // NFA_SKIP is handled by Rust (rs_nfa_process_state)
 
       case NFA_LNUM:
       case NFA_LNUM_GT:

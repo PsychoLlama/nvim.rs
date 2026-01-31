@@ -1834,6 +1834,32 @@ unsafe fn process_newl(curc: c_int, state: *mut NfaState, result: &mut StateProc
     }
 }
 
+/// Process NFA_SKIP state - skip over matched characters.
+///
+/// Used for backreferences (\1..\9) and \@> when skipping matched text.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_skip(
+    t: *const NfaThread,
+    clen: c_int,
+    state: *mut NfaState,
+    result: &mut StateProcessResult,
+) {
+    let count = (*t).count;
+    if count - clen <= 0 {
+        // End of match, go to what follows
+        result.add_state = (*state).out;
+        result.add_off = clen;
+    } else {
+        // Add state again with decremented count
+        result.add_state = state;
+        result.add_off = 0;
+        result.add_count = count - clen;
+    }
+}
+
 /// Process literal character matching (default case).
 ///
 /// Returns true if this is a positive character state (c > 0) and was handled.
@@ -1948,6 +1974,7 @@ pub unsafe extern "C" fn rs_nfa_process_state(
             NFA_ANY => process_any(curc, clen, state, &mut result),
             NFA_ANY_COMPOSING => process_any_composing(curc, clen, state, &mut result),
             NFA_NEWL => process_newl(curc, state, &mut result),
+            NFA_SKIP => process_skip(t, clen, state, &mut result),
             _ => {
                 // Try literal character matching (positive state values)
                 if !process_literal(state_c, curc, clen, state, &mut result) {
