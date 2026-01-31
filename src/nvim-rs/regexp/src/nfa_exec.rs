@@ -1635,7 +1635,8 @@ unsafe fn recursive_regmatch(
         endposp = &mut endpos;
         if nvim_rex_is_multi() != 0 {
             if pim.is_null() {
-                endpos.se_u.pos.col = nvim_rex_get_input().offset_from(nvim_rex_get_line()) as c_int;
+                endpos.se_u.pos.col =
+                    nvim_rex_get_input().offset_from(nvim_rex_get_line()) as c_int;
                 endpos.se_u.pos.lnum = nvim_rex_get_lnum();
             } else {
                 endpos.se_u.pos = (*pim).end.pos;
@@ -1726,7 +1727,12 @@ unsafe fn recursive_regmatch(
 
     // Call nfa_regmatch() to check if the current concat matches at this position
     nvim_rex_set_nfa_endp(endposp as *mut c_void);
-    let result = nvim_nfa_regmatch(prog, (*state).out as *mut c_void, submatch as *mut c_void, m as *mut c_void);
+    let result = nvim_nfa_regmatch(
+        prog,
+        (*state).out as *mut c_void,
+        submatch as *mut c_void,
+        m as *mut c_void,
+    );
 
     // Restore listids
     if need_restore {
@@ -3006,13 +3012,14 @@ fn is_neg_invisible_state(state_c: c_int) -> bool {
 
 /// Process NFA_START_INVISIBLE* states - lookahead/lookbehind matching.
 ///
-/// This handles only the DIRECT EXECUTION case (when there's already a PIM
-/// or it's a _FIRST state). The POSTPONED case (creating a new PIM) is left
-/// to C because it requires complex PIM handling.
+/// This handles both:
+/// - DIRECT EXECUTION case (when there's already a PIM or it's a _FIRST state)
+/// - POSTPONED case (creates a new PIM and calls addstate_here)
 ///
 /// Returns:
-/// - true with add_state set: handled, add the state
-/// - true with add_state NULL: handled (match failed or postponed to C)
+/// - true with add_state set: handled, add the state via state_handled
+/// - true with add_state NULL and return_code 3: fully handled (addstate_here called)
+/// - true with add_state NULL and return_code 0: handled but no state to add
 /// - return_code -1: error (NFA_TOO_EXPENSIVE)
 ///
 /// # Safety
@@ -3022,6 +3029,8 @@ fn is_neg_invisible_state(state_c: c_int) -> bool {
 unsafe fn process_start_invisible(
     state_c: c_int,
     t: *const NfaThread,
+    thislist: *mut NfaList,
+    listidx: *mut c_int,
     prog: *mut c_void,
     submatch: *mut RegSubs,
     m: *mut RegSubs,
@@ -3031,7 +3040,7 @@ unsafe fn process_start_invisible(
 ) -> bool {
     let state = (*t).state;
 
-    // Check if we should execute directly or let C handle it (postpone case)
+    // Check if we should execute directly or create a postponed match
     // Execute directly if:
     // 1. There already is a PIM (t->pim.result != NFA_PIM_UNUSED)
     // 2. The state is a _FIRST variant (nfa_postprocess detected it works better)
@@ -3039,12 +3048,78 @@ unsafe fn process_start_invisible(
     let is_first = is_first_invisible_state(state_c);
 
     if pim_unused && !is_first {
-        // Postponed case - let C handle it because it needs to create a PIM
-        // Return false so C's switch statement handles this state
-        return false;
+        // POSTPONED case - create a PIM and call addstate_here
+        // If listidx is null, we can't handle this case (called from old code path)
+        if listidx.is_null() {
+            // Let C handle it via the old code path
+            return false;
+        }
+        // First try matching what follows. Only if a match is found
+        // verify the invisible match matches.
+        let mut pim = NfaPim {
+            state,
+            result: NFA_PIM_TODO,
+            subs: RegSubs {
+                norm: RegSub {
+                    in_use: 0,
+                    orig_start_col: 0,
+                    list: crate::nfa_states::SubPos {
+                        multi: [crate::nfa_states::MultiPos {
+                            start_lnum: 0,
+                            start_col: 0,
+                            end_lnum: 0,
+                            end_col: 0,
+                        }; NSUBEXP],
+                    },
+                },
+                synt: RegSub {
+                    in_use: 0,
+                    orig_start_col: 0,
+                    list: crate::nfa_states::SubPos {
+                        multi: [crate::nfa_states::MultiPos {
+                            start_lnum: 0,
+                            start_col: 0,
+                            end_lnum: 0,
+                            end_col: 0,
+                        }; NSUBEXP],
+                    },
+                },
+            },
+            end: crate::nfa_states::PimEnd {
+                ptr: ptr::null_mut(),
+            },
+        };
+
+        // Set the end position
+        if nvim_rex_is_multi() != 0 {
+            let input = nvim_rex_get_input();
+            let line = nvim_rex_get_line();
+            pim.end.pos.col = (input as isize - line as isize) as ColNr;
+            pim.end.pos.lnum = nvim_rex_get_lnum();
+        } else {
+            pim.end.ptr = nvim_rex_get_input();
+        }
+
+        // t->state->out1 is the corresponding END_INVISIBLE node;
+        // Add its out to the current list (zero-width match).
+        let r = addstate_here(
+            thislist,
+            (*(*state).out1).out,
+            &(*t).subs as *const RegSubs as *mut RegSubs,
+            &pim,
+            listidx,
+        );
+        if r.is_null() {
+            result.return_code = -1; // NFA_TOO_EXPENSIVE
+            return true;
+        }
+
+        // State was fully handled via addstate_here, return code 3
+        result.return_code = 3;
+        return true;
     }
 
-    // Direct execution case - call recursive_regmatch
+    // DIRECT EXECUTION case - call recursive_regmatch
     let in_use = (*m).norm.in_use;
 
     // Copy submatch info for the recursive call
@@ -3060,15 +3135,8 @@ unsafe fn process_start_invisible(
     }
 
     // First try matching the invisible match, then what follows
-    let recursive_result = recursive_regmatch(
-        state,
-        ptr::null(),
-        prog,
-        submatch,
-        m,
-        listids,
-        listids_len,
-    );
+    let recursive_result =
+        recursive_regmatch(state, ptr::null(), prog, submatch, m, listids, listids_len);
 
     if recursive_result == NFA_TOO_EXPENSIVE {
         result.return_code = -1; // Signal error
@@ -3168,15 +3236,8 @@ unsafe fn process_start_pattern(
     }
 
     // First try matching the pattern
-    let recursive_result = recursive_regmatch(
-        state,
-        ptr::null(),
-        prog,
-        submatch,
-        m,
-        listids,
-        listids_len,
-    );
+    let recursive_result =
+        recursive_regmatch(state, ptr::null(), prog, submatch, m, listids, listids_len);
 
     if recursive_result == NFA_TOO_EXPENSIVE {
         result.return_code = -1;
@@ -3286,6 +3347,7 @@ unsafe fn process_literal(
 /// * `m` - Match info
 /// * `listids` - List IDs for recursive matching
 /// * `listids_len` - Length of listids array
+/// * `listidx` - Current list index (modified by addstate_here)
 ///
 /// # Returns
 /// A StateProcessResult containing:
@@ -3293,7 +3355,7 @@ unsafe fn process_literal(
 /// * `add_here` - True if using addstate_here
 /// * `add_count` - Count for NFA_SKIP
 /// * `add_off` - Offset for addstate
-/// * `return_code` - 0=continue, 2=goto nextchar, -1=error
+/// * `return_code` - 0=continue, 2=goto nextchar, 3=state handled (skip state_handled), -1=error
 ///
 /// # Safety
 /// All pointers must be valid.
@@ -3310,6 +3372,7 @@ pub unsafe extern "C" fn rs_nfa_process_state(
     m: *mut RegSubs,
     listids: *mut *mut c_int,
     listids_len: *mut c_int,
+    listidx: *mut c_int,
     add_state_out: *mut *mut NfaState,
     add_here_out: *mut c_int,
     add_count_out: *mut c_int,
@@ -3355,7 +3418,7 @@ pub unsafe extern "C" fn rs_nfa_process_state(
             }
             NFA_NEWL => process_newl(curc, state, &mut result),
             NFA_SKIP => process_skip(t, clen, state, &mut result),
-            // Invisible states - handle direct execution, let C handle postponed
+            // Invisible states - handle both direct and postponed cases
             NFA_START_INVISIBLE
             | NFA_START_INVISIBLE_FIRST
             | NFA_START_INVISIBLE_NEG
@@ -3364,19 +3427,18 @@ pub unsafe extern "C" fn rs_nfa_process_state(
             | NFA_START_INVISIBLE_BEFORE_FIRST
             | NFA_START_INVISIBLE_BEFORE_NEG
             | NFA_START_INVISIBLE_BEFORE_NEG_FIRST => {
-                // Returns false if this should be handled by C (postponed case)
-                if !process_start_invisible(
+                process_start_invisible(
                     state_c,
                     t,
+                    thislist,
+                    listidx,
                     prog,
                     submatch,
                     m,
                     listids,
                     listids_len,
                     &mut result,
-                ) {
-                    // Let C handle it - return with no add_state
-                }
+                );
             }
             NFA_START_PATTERN => {
                 process_start_pattern(

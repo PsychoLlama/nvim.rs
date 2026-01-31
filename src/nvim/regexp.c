@@ -8572,25 +8572,27 @@ int nvim_nfa_state_in_list(const void *list, const void *state, const void *subs
   return state_in_list((nfa_list_T *)list, (nfa_state_T *)state, (regsubs_T *)subs) ? 1 : 0;
 }
 
-// Rust state processing function (Phase 4)
+// Rust state processing function (Phase 4, updated in Phase 10e)
 extern int rs_nfa_process_state(
     const void *t_ptr, int curc, int clen,
     void *prog_ptr, void *thislist_ptr, void *nextlist_ptr,
     void *start_ptr, void *submatch_ptr, void *m_ptr,
     int **listids, int *listids_len,
+    int *listidx,
     void **add_state_ptr, int *add_here, int *add_count, int *add_off);
 
-// State processing for rs_nfa_regmatch - delegates to Rust
-// Uses void* for FFI compatibility (internal types not in public header)
+// Compatibility wrapper for rs_nfa_regmatch (old interface without listidx)
+// TODO: Remove in Phase 10f when rs_nfa_regmatch is deleted
 int nfa_regmatch_process_state(
     const void *t_ptr, int curc, int clen,
     void *prog_ptr, void *thislist_ptr, void *nextlist_ptr,
     void *start_ptr, void *submatch_ptr, void *m_ptr,
     int **listids, int *listids_len,
     void **add_state_ptr, int *add_here, int *add_count, int *add_off) {
+  // Pass NULL for listidx - the old code path doesn't support return_code 3
   return rs_nfa_process_state(t_ptr, curc, clen, prog_ptr, thislist_ptr,
                               nextlist_ptr, start_ptr, submatch_ptr, m_ptr,
-                              listids, listids_len, add_state_ptr, add_here,
+                              listids, listids_len, NULL, add_state_ptr, add_here,
                               add_count, add_off);
 }
 
@@ -12214,6 +12216,7 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
             prog, thislist, nextlist,
             start, submatch, m,
             &listids, &listids_len,
+            &listidx,
             (void **)&add_state_rs, &add_here_rs, &add_count_rs, &add_off_rs);
 
         if (rs_result == 2) {
@@ -12222,6 +12225,10 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
             clen = 0;
           }
           goto nextchar;
+        } else if (rs_result == 3) {
+          // Rust fully handled this state (e.g., addstate_here was called)
+          // Skip to next iteration, don't go through state_handled
+          continue;
         } else if (rs_result == -1) {
           // Error (NFA_TOO_EXPENSIVE)
           nfa_match = NFA_TOO_EXPENSIVE;
@@ -12247,190 +12254,9 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
       // NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG, NFA_END_PATTERN are handled
       // by Rust (rs_nfa_process_state)
 
-      case NFA_START_INVISIBLE:
-      case NFA_START_INVISIBLE_FIRST:
-      case NFA_START_INVISIBLE_NEG:
-      case NFA_START_INVISIBLE_NEG_FIRST:
-      case NFA_START_INVISIBLE_BEFORE:
-      case NFA_START_INVISIBLE_BEFORE_FIRST:
-      case NFA_START_INVISIBLE_BEFORE_NEG:
-      case NFA_START_INVISIBLE_BEFORE_NEG_FIRST:
-#ifdef REGEXP_DEBUG
-        fprintf(log_fd, "Failure chance invisible: %d, what follows: %d\n",
-                failure_chance(t->state->out, 0),
-                failure_chance(t->state->out1->out, 0));
-#endif
-        // Do it directly if there already is a PIM or when
-        // nfa_postprocess() detected it will work better.
-        if (t->pim.result != NFA_PIM_UNUSED
-            || t->state->c == NFA_START_INVISIBLE_FIRST
-            || t->state->c == NFA_START_INVISIBLE_NEG_FIRST
-            || t->state->c == NFA_START_INVISIBLE_BEFORE_FIRST
-            || t->state->c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST) {
-          int in_use = m->norm.in_use;
+      // NFA_START_INVISIBLE* variants are handled by Rust (rs_nfa_process_state)
 
-          // Copy submatch info for the recursive call, opposite
-          // of what happens on success below.
-          copy_sub_off(&m->norm, &t->subs.norm);
-          if (rex.nfa_has_zsubexpr) {
-            copy_sub_off(&m->synt, &t->subs.synt);
-          }
-          // First try matching the invisible match, then what
-          // follows.
-          result = recursive_regmatch(t->state, NULL, prog, submatch, m,
-                                      &listids, &listids_len);
-          if (result == NFA_TOO_EXPENSIVE) {
-            nfa_match = result;
-            goto theend;
-          }
-
-          // for \@! and \@<! it is a match when the result is
-          // false
-          if (result != (t->state->c == NFA_START_INVISIBLE_NEG
-                         || t->state->c == NFA_START_INVISIBLE_NEG_FIRST
-                         || t->state->c
-                         == NFA_START_INVISIBLE_BEFORE_NEG
-                         || t->state->c
-                         == NFA_START_INVISIBLE_BEFORE_NEG_FIRST)) {
-            // Copy submatch info from the recursive call
-            copy_sub_off(&t->subs.norm, &m->norm);
-            if (rex.nfa_has_zsubexpr) {
-              copy_sub_off(&t->subs.synt, &m->synt);
-            }
-            // If the pattern has \ze and it matched in the
-            // sub pattern, use it.
-            copy_ze_off(&t->subs.norm, &m->norm);
-
-            // t->state->out1 is the corresponding
-            // END_INVISIBLE node; Add its out to the current
-            // list (zero-width match).
-            add_here = true;
-            add_state = t->state->out1->out;
-          }
-          m->norm.in_use = in_use;
-        } else {
-          nfa_pim_T pim;
-
-          // First try matching what follows.  Only if a match
-          // is found verify the invisible match matches.  Add a
-          // nfa_pim_T to the following states, it contains info
-          // about the invisible match.
-          pim.state = t->state;
-          pim.result = NFA_PIM_TODO;
-          pim.subs.norm.in_use = 0;
-          pim.subs.synt.in_use = 0;
-          if (REG_MULTI) {
-            pim.end.pos.col = (int)(rex.input - rex.line);
-            pim.end.pos.lnum = rex.lnum;
-          } else {
-            pim.end.ptr = rex.input;
-          }
-          // t->state->out1 is the corresponding END_INVISIBLE
-          // node; Add its out to the current list (zero-width
-          // match).
-          if (addstate_here(thislist, t->state->out1->out, &t->subs,
-                            &pim, &listidx) == NULL) {
-            nfa_match = NFA_TOO_EXPENSIVE;
-            goto theend;
-          }
-        }
-        break;
-
-      case NFA_START_PATTERN: {
-        nfa_state_T *skip = NULL;
-#ifdef REGEXP_DEBUG
-        int skip_lid = 0;
-#endif
-
-        // There is no point in trying to match the pattern if the
-        // output state is not going to be added to the list.
-        if (state_in_list(nextlist, t->state->out1->out, &t->subs)) {
-          skip = t->state->out1->out;
-#ifdef REGEXP_DEBUG
-          skip_lid = nextlist->id;
-#endif
-        } else if (state_in_list(nextlist,
-                                 t->state->out1->out->out, &t->subs)) {
-          skip = t->state->out1->out->out;
-#ifdef REGEXP_DEBUG
-          skip_lid = nextlist->id;
-#endif
-        } else if (state_in_list(thislist,
-                                 t->state->out1->out->out, &t->subs)) {
-          skip = t->state->out1->out->out;
-#ifdef REGEXP_DEBUG
-          skip_lid = thislist->id;
-#endif
-        }
-        if (skip != NULL) {
-#ifdef REGEXP_DEBUG
-          nfa_set_code(skip->c);
-          fprintf(log_fd,
-                  "> Not trying to match pattern, output state %d is already in list %d. char %d: %s\n",
-                  abs(skip->id), skip_lid, skip->c, code);
-#endif
-          break;
-        }
-        // Copy submatch info to the recursive call, opposite of what
-        // happens afterwards.
-        copy_sub_off(&m->norm, &t->subs.norm);
-        if (rex.nfa_has_zsubexpr) {
-          copy_sub_off(&m->synt, &t->subs.synt);
-        }
-
-        // First try matching the pattern.
-        result = recursive_regmatch(t->state, NULL, prog, submatch, m,
-                                    &listids, &listids_len);
-        if (result == NFA_TOO_EXPENSIVE) {
-          nfa_match = result;
-          goto theend;
-        }
-        if (result) {
-          int bytelen;
-
-#ifdef REGEXP_DEBUG
-          fprintf(log_fd, "NFA_START_PATTERN matches:\n");
-          log_subsexpr(m);
-#endif
-          // Copy submatch info from the recursive call
-          copy_sub_off(&t->subs.norm, &m->norm);
-          if (rex.nfa_has_zsubexpr) {
-            copy_sub_off(&t->subs.synt, &m->synt);
-          }
-          // Now we need to skip over the matched text and then
-          // continue with what follows.
-          if (REG_MULTI) {
-            // TODO(RE): multi-line match
-            bytelen = m->norm.list.multi[0].end_col
-                      - (int)(rex.input - rex.line);
-          } else {
-            bytelen = (int)(m->norm.list.line[0].end - rex.input);
-          }
-
-#ifdef REGEXP_DEBUG
-          fprintf(log_fd, "NFA_START_PATTERN length: %d\n", bytelen);
-#endif
-          if (bytelen == 0) {
-            // empty match, output of corresponding
-            // NFA_END_PATTERN/NFA_SKIP to be used at current
-            // position
-            add_here = true;
-            add_state = t->state->out1->out->out;
-          } else if (bytelen <= clen) {
-            // match current character, output of corresponding
-            // NFA_END_PATTERN to be used at next position.
-            add_state = t->state->out1->out->out;
-            add_off = clen;
-          } else {
-            // skip over the matched characters, set character
-            // count in NFA_SKIP
-            add_state = t->state->out1->out;
-            add_off = bytelen;
-            add_count = bytelen - clen;
-          }
-        }
-        break;
-      }
+      // NFA_START_PATTERN is handled by Rust (rs_nfa_process_state)
 
       // Anchors (NFA_BOL, NFA_EOL, NFA_BOW, NFA_EOW, NFA_BOF, NFA_EOF)
       // are handled by Rust (rs_nfa_process_state)
