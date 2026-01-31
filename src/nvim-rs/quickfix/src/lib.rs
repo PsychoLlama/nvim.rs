@@ -10,6 +10,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 pub mod api;
 pub mod commands;
+pub mod dirstack;
 pub mod display;
 pub mod errorformat;
 pub mod external;
@@ -1840,14 +1841,6 @@ extern "C" {
     fn nvim_qf_set_directory(qfl: QfListHandleMut, dir: *mut c_char);
     fn nvim_qf_get_currfile(qfl: QfListHandle) -> *const c_char;
     fn nvim_qf_set_currfile(qfl: QfListHandleMut, file: *mut c_char);
-    fn nvim_qf_push_dir(
-        qfl: QfListHandleMut,
-        dirbuf: *mut c_char,
-        is_file_stack: bool,
-    ) -> *const c_char;
-    fn nvim_qf_pop_dir(qfl: QfListHandleMut, is_file_stack: bool) -> *const c_char;
-    fn nvim_qf_clean_dir_stack(qfl: QfListHandleMut, is_file_stack: bool);
-    fn nvim_qf_guess_filepath(qfl: QfListHandleMut, filename: *mut c_char) -> *const c_char;
     fn nvim_qf_get_fnum(qfl: QfListHandleMut, directory: *mut c_char, fname: *mut c_char) -> c_int;
 
     // Phase 5: Error Format Parsing accessors
@@ -2230,10 +2223,17 @@ pub unsafe extern "C" fn rs_qf_free_items(qfl: QfListHandleMut) {
     nvim_qf_set_count(qfl, 0);
     nvim_qf_set_nonevalid(qfl, true);
 
-    // Clean directory stacks
-    nvim_qf_clean_dir_stack(qfl, false); // dir stack
+    // Clean directory stacks using Rust implementation
+    let dir_stack = nvim_qf_get_dir_stack(qfl);
+    let mut stack = dir_stack.cast::<dirstack::DirStackNode>();
+    dirstack::clean_dir_stack_raw(&raw mut stack);
+    nvim_qf_set_dir_stack(qfl, stack.cast::<c_void>());
     nvim_qf_set_directory(qfl, std::ptr::null_mut());
-    nvim_qf_clean_dir_stack(qfl, true); // file stack
+
+    let file_stack = nvim_qf_get_file_stack(qfl);
+    let mut stack = file_stack.cast::<dirstack::DirStackNode>();
+    dirstack::clean_dir_stack_raw(&raw mut stack);
+    nvim_qf_set_file_stack(qfl, stack.cast::<c_void>());
     nvim_qf_set_currfile(qfl, std::ptr::null_mut());
 
     // Reset multiline flags
@@ -2689,7 +2689,26 @@ pub unsafe extern "C" fn rs_qf_push_dir(
     if qfl.is_null() || dirbuf.is_null() {
         return std::ptr::null();
     }
-    nvim_qf_push_dir(qfl, dirbuf, is_file_stack)
+
+    // Get the appropriate stack pointer from the qf_list_T
+    let stack_ptr = if is_file_stack {
+        nvim_qf_get_file_stack(qfl)
+    } else {
+        nvim_qf_get_dir_stack(qfl)
+    };
+
+    // Cast to the Rust type and call the Rust implementation
+    let mut stack = stack_ptr.cast::<dirstack::DirStackNode>();
+    let result = dirstack::push_dir_raw(dirbuf, &raw mut stack, is_file_stack);
+
+    // Update the stack pointer in qf_list_T
+    if is_file_stack {
+        nvim_qf_set_file_stack(qfl, stack.cast::<c_void>());
+    } else {
+        nvim_qf_set_dir_stack(qfl, stack.cast::<c_void>());
+    }
+
+    result
 }
 
 /// Pop a directory from the directory or file stack.
@@ -2705,7 +2724,26 @@ pub unsafe extern "C" fn rs_qf_pop_dir(qfl: QfListHandleMut, is_file_stack: bool
     if qfl.is_null() {
         return std::ptr::null();
     }
-    nvim_qf_pop_dir(qfl, is_file_stack)
+
+    // Get the appropriate stack pointer from the qf_list_T
+    let stack_ptr = if is_file_stack {
+        nvim_qf_get_file_stack(qfl)
+    } else {
+        nvim_qf_get_dir_stack(qfl)
+    };
+
+    // Cast to the Rust type and call the Rust implementation
+    let mut stack = stack_ptr.cast::<dirstack::DirStackNode>();
+    let result = dirstack::pop_dir_raw(&raw mut stack);
+
+    // Update the stack pointer in qf_list_T
+    if is_file_stack {
+        nvim_qf_set_file_stack(qfl, stack.cast::<c_void>());
+    } else {
+        nvim_qf_set_dir_stack(qfl, stack.cast::<c_void>());
+    }
+
+    result
 }
 
 /// Clean up a directory or file stack, freeing all entries.
@@ -2720,7 +2758,24 @@ pub unsafe extern "C" fn rs_qf_clean_dir_stack(qfl: QfListHandleMut, is_file_sta
     if qfl.is_null() {
         return;
     }
-    nvim_qf_clean_dir_stack(qfl, is_file_stack);
+
+    // Get the appropriate stack pointer from the qf_list_T
+    let stack_ptr = if is_file_stack {
+        nvim_qf_get_file_stack(qfl)
+    } else {
+        nvim_qf_get_dir_stack(qfl)
+    };
+
+    // Cast to the Rust type and call the Rust implementation
+    let mut stack = stack_ptr.cast::<dirstack::DirStackNode>();
+    dirstack::clean_dir_stack_raw(&raw mut stack);
+
+    // Update the stack pointer in qf_list_T (should now be NULL)
+    if is_file_stack {
+        nvim_qf_set_file_stack(qfl, stack.cast::<c_void>());
+    } else {
+        nvim_qf_set_dir_stack(qfl, stack.cast::<c_void>());
+    }
 }
 
 /// Guess the filepath by searching the directory stack.
@@ -2740,7 +2795,13 @@ pub unsafe extern "C" fn rs_qf_guess_filepath(
     if qfl.is_null() || filename.is_null() {
         return std::ptr::null();
     }
-    nvim_qf_guess_filepath(qfl, filename)
+
+    // Get the directory stack from the qf_list_T
+    let stack_ptr = nvim_qf_get_dir_stack(qfl);
+
+    // Cast to the Rust type and call the Rust implementation
+    let stack = stack_ptr.cast::<dirstack::DirStackNode>();
+    dirstack::guess_filepath_raw(stack, filename)
 }
 
 /// Get the buffer number for a file, creating the buffer if needed.

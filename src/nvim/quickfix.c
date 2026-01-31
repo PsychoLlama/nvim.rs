@@ -806,6 +806,12 @@ extern int rs_qf_add_entry(void *qfl, char *dir, const char *fname, const char *
                            int col, int end_col, char vis_col, const char *pattern, int nr,
                            char type, const void *user_data, char valid);
 
+// Directory stack operations (Phase 7)
+extern const char *rs_qf_push_dir(void *qfl, char *dirbuf, bool is_file_stack);
+extern const char *rs_qf_pop_dir(void *qfl, bool is_file_stack);
+extern void rs_qf_clean_dir_stack(void *qfl, bool is_file_stack);
+extern const char *rs_qf_guess_filepath(void *qfl, char *filename);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -1690,13 +1696,8 @@ void nvim_qf_decr_listcount(void *qi_void)
 
 // =============================================================================
 // Phase 4: File Stack and Path Resolution accessor functions for Rust
-// Forward declarations
 // =============================================================================
 
-static char *qf_push_dir(char *dirbuf, struct dir_stack_T **stackptr, bool is_file_stack);
-static char *qf_pop_dir(struct dir_stack_T **stackptr);
-static void qf_clean_dir_stack(struct dir_stack_T **stackptr);
-static char *qf_guess_filepath(qf_list_T *qfl, char *filename);
 static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname);
 
 /// Get the directory stack pointer from a quickfix list
@@ -1777,51 +1778,6 @@ void nvim_qf_set_currfile(void *qfl_void, char *file)
   }
   qf_list_T *qfl = (qf_list_T *)qfl_void;
   qfl->qf_currfile = file;
-}
-
-/// Push a directory onto the directory stack
-/// Returns pointer to the actual directory name or NULL on error
-const char *nvim_qf_push_dir(void *qfl_void, char *dirbuf, bool is_file_stack)
-{
-  if (qfl_void == NULL || dirbuf == NULL) {
-    return NULL;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  struct dir_stack_T **stackptr = is_file_stack ? &qfl->qf_file_stack : &qfl->qf_dir_stack;
-  return qf_push_dir(dirbuf, stackptr, is_file_stack);
-}
-
-/// Pop a directory from the directory stack
-/// Returns the new top directory or NULL if stack is empty
-const char *nvim_qf_pop_dir(void *qfl_void, bool is_file_stack)
-{
-  if (qfl_void == NULL) {
-    return NULL;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  struct dir_stack_T **stackptr = is_file_stack ? &qfl->qf_file_stack : &qfl->qf_dir_stack;
-  return qf_pop_dir(stackptr);
-}
-
-/// Clean up a directory stack
-void nvim_qf_clean_dir_stack(void *qfl_void, bool is_file_stack)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  struct dir_stack_T **stackptr = is_file_stack ? &qfl->qf_file_stack : &qfl->qf_dir_stack;
-  qf_clean_dir_stack(stackptr);
-}
-
-/// Guess the filepath by searching the directory stack
-/// Returns the directory where the file can be found or NULL
-const char *nvim_qf_guess_filepath(void *qfl_void, char *filename)
-{
-  if (qfl_void == NULL || filename == NULL) {
-    return NULL;
-  }
-  return qf_guess_filepath((qf_list_T *)qfl_void, filename);
 }
 
 /// Get the buffer number for a file, creating the buffer if needed
@@ -3550,12 +3506,12 @@ static int qf_parse_dir_pfx(int idx, qffields_T *fields, qf_list_T *qfl)
       emsg(_("E379: Missing or empty directory name"));
       return QF_FAIL;
     }
-    qfl->qf_directory = qf_push_dir(fields->namebuf, &qfl->qf_dir_stack, false);
+    qfl->qf_directory = (char *)rs_qf_push_dir(qfl, fields->namebuf, false);
     if (qfl->qf_directory == NULL) {
       return QF_FAIL;
     }
   } else if (idx == 'X') {  // leave directory
-    qfl->qf_directory = qf_pop_dir(&qfl->qf_dir_stack);
+    qfl->qf_directory = (char *)rs_qf_pop_dir(qfl, false);
   }
 
   return QF_OK;
@@ -3567,9 +3523,9 @@ static int qf_parse_file_pfx(int idx, qffields_T *fields, qf_list_T *qfl, char *
   fields->valid = false;
   if (*fields->namebuf == NUL || os_path_exists(fields->namebuf)) {
     if (*fields->namebuf && idx == 'P') {
-      qfl->qf_currfile = qf_push_dir(fields->namebuf, &qfl->qf_file_stack, true);
+      qfl->qf_currfile = (char *)rs_qf_push_dir(qfl, fields->namebuf, true);
     } else if (idx == 'Q') {
-      qfl->qf_currfile = qf_pop_dir(&qfl->qf_file_stack);
+      qfl->qf_currfile = (char *)rs_qf_pop_dir(qfl, true);
     }
     *fields->namebuf = NUL;
     if (tail && *tail) {
@@ -4146,7 +4102,7 @@ static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname)
     // directory change.
     if (!os_path_exists(ptr)) {
       xfree(ptr);
-      directory = qf_guess_filepath(qfl, fname);
+      directory = (char *)rs_qf_guess_filepath(qfl, fname);
       if (directory) {
         ptr = concat_fnames(directory, fname, true);
       } else {
@@ -4176,145 +4132,6 @@ static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname)
   buf->b_has_qf_entry =
     IS_QF_LIST(qfl) ? BUF_HAS_QF_ENTRY : BUF_HAS_LL_ENTRY;
   return buf->b_fnum;
-}
-
-// Push dirbuf onto the directory stack and return pointer to actual dir or
-// NULL on error.
-static char *qf_push_dir(char *dirbuf, struct dir_stack_T **stackptr, bool is_file_stack)
-{
-  struct dir_stack_T *ds_ptr;
-
-  // allocate new stack element and hook it in
-  struct dir_stack_T *ds_new = xmalloc(sizeof(struct dir_stack_T));
-
-  ds_new->next = *stackptr;
-  *stackptr = ds_new;
-
-  // store directory on the stack
-  if (vim_isAbsName(dirbuf)
-      || (*stackptr)->next == NULL
-      || is_file_stack) {
-    (*stackptr)->dirname = xstrdup(dirbuf);
-  } else {
-    // Okay we don't have an absolute path.
-    // dirbuf must be a subdir of one of the directories on the stack.
-    // Let's search...
-    ds_new = (*stackptr)->next;
-    (*stackptr)->dirname = NULL;
-    while (ds_new) {
-      xfree((*stackptr)->dirname);
-      (*stackptr)->dirname = concat_fnames(ds_new->dirname, dirbuf, true);
-      if (os_isdir((*stackptr)->dirname)) {
-        break;
-      }
-
-      ds_new = ds_new->next;
-    }
-
-    // clean up all dirs we already left
-    while ((*stackptr)->next != ds_new) {
-      ds_ptr = (*stackptr)->next;
-      (*stackptr)->next = (*stackptr)->next->next;
-      xfree(ds_ptr->dirname);
-      xfree(ds_ptr);
-    }
-
-    // Nothing found -> it must be on top level
-    if (ds_new == NULL) {
-      xfree((*stackptr)->dirname);
-      (*stackptr)->dirname = xstrdup(dirbuf);
-    }
-  }
-
-  if ((*stackptr)->dirname != NULL) {
-    return (*stackptr)->dirname;
-  }
-  ds_ptr = *stackptr;
-  *stackptr = (*stackptr)->next;
-  xfree(ds_ptr);
-  return NULL;
-}
-
-// pop dirbuf from the directory stack and return previous directory or NULL if
-// stack is empty
-static char *qf_pop_dir(struct dir_stack_T **stackptr)
-{
-  // TODO(vim): Should we check if dirbuf is the directory on top of the stack?
-  // What to do if it isn't?
-
-  // pop top element and free it
-  if (*stackptr != NULL) {
-    struct dir_stack_T *ds_ptr = *stackptr;
-    *stackptr = (*stackptr)->next;
-    xfree(ds_ptr->dirname);
-    xfree(ds_ptr);
-  }
-
-  // return NEW top element as current dir or NULL if stack is empty
-  return *stackptr ? (*stackptr)->dirname : NULL;
-}
-
-// clean up directory stack
-static void qf_clean_dir_stack(struct dir_stack_T **stackptr)
-{
-  struct dir_stack_T *ds_ptr;
-
-  while ((ds_ptr = *stackptr) != NULL) {
-    *stackptr = (*stackptr)->next;
-    xfree(ds_ptr->dirname);
-    xfree(ds_ptr);
-  }
-}
-
-/// Check in which directory of the directory stack the given file can be
-/// found.
-/// Returns a pointer to the directory name or NULL if not found.
-/// Cleans up intermediate directory entries.
-///
-/// TODO(vim): How to solve the following problem?
-/// If we have this directory tree:
-///     ./
-///     ./aa
-///     ./aa/bb
-///     ./bb
-///     ./bb/x.c
-/// and make says:
-///     making all in aa
-///     making all in bb
-///     x.c:9: Error
-/// Then qf_push_dir thinks we are in ./aa/bb, but we are in ./bb.
-/// qf_guess_filepath will return NULL.
-static char *qf_guess_filepath(qf_list_T *qfl, char *filename)
-{
-  // no dirs on the stack - there's nothing we can do
-  if (qfl->qf_dir_stack == NULL) {
-    return NULL;
-  }
-
-  struct dir_stack_T *ds_ptr = qfl->qf_dir_stack->next;
-  char *fullname = NULL;
-  while (ds_ptr) {
-    xfree(fullname);
-    fullname = concat_fnames(ds_ptr->dirname, filename, true);
-
-    if (os_path_exists(fullname)) {
-      break;
-    }
-
-    ds_ptr = ds_ptr->next;
-  }
-
-  xfree(fullname);
-
-  // clean up all dirs we already left
-  while (qfl->qf_dir_stack->next != ds_ptr) {
-    struct dir_stack_T *ds_tmp = qfl->qf_dir_stack->next;
-    qfl->qf_dir_stack->next = qfl->qf_dir_stack->next->next;
-    xfree(ds_tmp->dirname);
-    xfree(ds_tmp);
-  }
-
-  return ds_ptr == NULL ? NULL : ds_ptr->dirname;
 }
 
 /// Returns true, if a quickfix/location list with the given identifier exists.
