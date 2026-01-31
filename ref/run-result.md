@@ -1,56 +1,37 @@
-Plan: ~/.claude/plans/drifting-herding-whale.md
+Plan: ~/.claude/plans/serialized-yawning-steele.md
 
-All tasks are complete. Here's a summary of what was accomplished:
+I've made significant progress on the nfa_regmatch migration plan. Here's the current status:
 
-## Summary
+## Completed Phases
 
-I successfully executed the plan to complete the charset.c migration to Rust. Here's what was done:
+**Phase 1: FFI Infrastructure** ✅
+- Added C accessor functions for NFA execution globals
+- Added forward declarations and definitions for `nfa_match`, `nfa_time_limit`, `nfa_timed_out`, `nfa_time_count`
 
-### Changes Made
+**Phase 2: C Wrapper Functions** ✅  
+- Added `nvim_nfa_copy_sub`, `nvim_nfa_recursive_regmatch` wrappers
+- Added `nvim_reg_nextline` wrapper
+- Added `nfa_regmatch_process_state` stub for state processing callback
 
-**Phase 1: Accessor Function**
-- Added `nvim_charset_get_cursor_line_ptr()` in `charset.c` to expose the cursor line pointer to Rust
+**Phase 3: Core Execution Loop** ✅
+- Implemented `rs_nfa_regmatch()` with:
+  - Thread list allocation and initialization
+  - Main character loop with list swapping
+  - Timeout and interrupt checking
+  - Integration with existing `addstate()` infrastructure
 
-**Phase 2: getwhitecols_curline Migration**
-- Added `rs_getwhitecols_curline()` in Rust that calls the accessor and delegates to existing `rs_getwhitecols()`
-- Updated C wrapper to use the Rust function
+## Remaining Phases
 
-**Phase 3: transchar_buf Migration**
-- Added `rs_transchar_buf()` in Rust which implements the character translation logic:
-  - Handles special keys (negative values) with `~@` prefix
-  - Handles printable ASCII characters
-  - Delegates to `rs_transchar_nonprint()` for non-printable chars
-  - Delegates to `rs_transchar_hex()` for multibyte chars (> 0xFF)
-- Updated C `transchar_buf()` to be a thin wrapper calling Rust
+**Phase 4: State Machine Implementation** (Pending)
+- The `nfa_regmatch_process_state()` function is currently a stub that returns 0
+- This is where the ~1000-line switch statement handling all NFA state types would be implemented
+- Due to Rust const pattern matching limitations, this would need to use if-else chains
 
-**Phase 4: transchar_byte_buf Migration**
-- Added `rs_transchar_byte_buf()` in Rust for byte translation
-- Bytes >= 0x80 are treated as non-printable and go through `rs_transchar_nonprint()`
-- Lower bytes delegate to `rs_transchar_buf()`
-- Updated C `transchar_byte_buf()` to be a thin wrapper calling Rust
+**Phase 5: Wire Up C Wrapper** (Pending)
+- Replace the C `nfa_regmatch()` body with a call to `rs_nfa_regmatch()`
 
-**Phase 5: kv_transstr Verification**
-- Verified `kv_transstr` stays in C as it uses kvec_t macros (C-only data structure)
-- It already delegates the actual translation to Rust via `transstr_len` and `transstr_buf`
+**Phase 6: Testing** (Pending)
+- Run Neovim test suite for regex tests
+- Verify behavioral compatibility
 
-**Phase 6: Verification**
-- ✅ `just build` - passed
-- ✅ `just rust-fmt-check` - passed
-- ✅ `just rust-clippy` - passed  
-- ✅ `just rust-test` - 3717 tests passed
-- ✅ Manual verification of character translation working correctly
-
-### Files Modified
-- `src/nvim/charset.c` - Added accessor, updated thin wrappers, added extern declarations
-- `src/nvim-rs/charset/src/lib.rs` - Added `rs_getwhitecols_curline`, `rs_transchar_buf`, `rs_transchar_byte_buf`
-
-### Commit
-```
-feat(charset): complete migration of transchar functions to Rust
-
-- Add rs_getwhitecols_curline for cursor line whitespace
-- Add rs_transchar_buf for character translation logic
-- Add rs_transchar_byte_buf for byte translation
-- Keep kv_transstr in C (kvec dependency)
-- C retains static buffer management, Rust handles logic
-```
+The code compiles, all Rust checks pass, and the full build succeeds. However, the regex engine is not yet functional because the state machine logic hasn't been migrated - it's using a stub that effectively does nothing.
