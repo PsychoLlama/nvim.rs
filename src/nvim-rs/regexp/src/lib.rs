@@ -155,9 +155,10 @@ pub use nfa_compiler::{
     rs_nfa_max_width, rs_post2nfa,
 };
 pub use nfa_exec::{
-    rs_addstate, rs_addstate_here, rs_nfa_addstate_here_offset, rs_nfa_empty_const,
-    rs_nfa_match_const, rs_nfa_match_error, rs_nfa_match_found, rs_nfa_no_match,
-    rs_nfa_should_continue, rs_nfa_skip_const, rs_nfa_split_const,
+    rs_addstate, rs_addstate_here, rs_has_state_with_pos, rs_nfa_addstate_here_offset,
+    rs_nfa_empty_const, rs_nfa_match_const, rs_nfa_match_error, rs_nfa_match_found,
+    rs_nfa_no_match, rs_nfa_should_continue, rs_nfa_skip_const, rs_nfa_split_const, rs_pim_equal,
+    rs_sub_equal,
 };
 pub use nfa_match::{
     rs_check_bof, rs_check_bol, rs_check_bow, rs_check_eof, rs_check_eol, rs_check_eow,

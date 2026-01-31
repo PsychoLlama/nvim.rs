@@ -11034,89 +11034,11 @@ static void copy_ze_off(regsub_T *to, regsub_T *from)
 
 // Return true if "sub1" and "sub2" have the same start positions.
 // When using back-references also check the end position.
+extern int rs_sub_equal(regsub_T *sub1, regsub_T *sub2);
+
 static bool sub_equal(regsub_T *sub1, regsub_T *sub2)
 {
-  int i;
-  int todo;
-  linenr_T s1;
-  linenr_T s2;
-  uint8_t *sp1;
-  uint8_t *sp2;
-
-  todo = sub1->in_use > sub2->in_use ? sub1->in_use : sub2->in_use;
-  if (REG_MULTI) {
-    for (i = 0; i < todo; i++) {
-      if (i < sub1->in_use) {
-        s1 = sub1->list.multi[i].start_lnum;
-      } else {
-        s1 = -1;
-      }
-      if (i < sub2->in_use) {
-        s2 = sub2->list.multi[i].start_lnum;
-      } else {
-        s2 = -1;
-      }
-      if (s1 != s2) {
-        return false;
-      }
-      if (s1 != -1 && sub1->list.multi[i].start_col
-          != sub2->list.multi[i].start_col) {
-        return false;
-      }
-      if (rex.nfa_has_backref) {
-        if (i < sub1->in_use) {
-          s1 = sub1->list.multi[i].end_lnum;
-        } else {
-          s1 = -1;
-        }
-        if (i < sub2->in_use) {
-          s2 = sub2->list.multi[i].end_lnum;
-        } else {
-          s2 = -1;
-        }
-        if (s1 != s2) {
-          return false;
-        }
-        if (s1 != -1
-            && sub1->list.multi[i].end_col != sub2->list.multi[i].end_col) {
-          return false;
-        }
-      }
-    }
-  } else {
-    for (i = 0; i < todo; i++) {
-      if (i < sub1->in_use) {
-        sp1 = sub1->list.line[i].start;
-      } else {
-        sp1 = NULL;
-      }
-      if (i < sub2->in_use) {
-        sp2 = sub2->list.line[i].start;
-      } else {
-        sp2 = NULL;
-      }
-      if (sp1 != sp2) {
-        return false;
-      }
-      if (rex.nfa_has_backref) {
-        if (i < sub1->in_use) {
-          sp1 = sub1->list.line[i].end;
-        } else {
-          sp1 = NULL;
-        }
-        if (i < sub2->in_use) {
-          sp2 = sub2->list.line[i].end;
-        } else {
-          sp2 = NULL;
-        }
-        if (sp1 != sp2) {
-          return false;
-        }
-      }
-    }
-  }
-
-  return true;
+  return rs_sub_equal(sub1, sub2) != 0;
 }
 
 #ifdef REGEXP_DEBUG
@@ -11156,6 +11078,14 @@ static void report_state(char *action, regsub_T *sub, nfa_state_T *state, int li
 
 #endif
 
+// Return true if "one" and "two" are equal.  That includes when both are not set.
+extern int rs_pim_equal(const nfa_pim_T *one, const nfa_pim_T *two);
+
+static bool pim_equal(const nfa_pim_T *one, const nfa_pim_T *two)
+{
+  return rs_pim_equal(one, two) != 0;
+}
+
 /// @param l      runtime state list
 /// @param state  state to update
 /// @param subs   pointers to subexpressions
@@ -11163,47 +11093,12 @@ static void report_state(char *action, regsub_T *sub, nfa_state_T *state, int li
 ///
 /// @return  true if the same state is already in list "l" with the same
 ///          positions as "subs".
+extern int rs_has_state_with_pos(nfa_list_T *l, nfa_state_T *state, regsubs_T *subs, nfa_pim_T *pim);
+
 static bool has_state_with_pos(nfa_list_T *l, nfa_state_T *state, regsubs_T *subs, nfa_pim_T *pim)
   FUNC_ATTR_NONNULL_ARG(1, 2, 3)
 {
-  for (int i = 0; i < l->n; i++) {
-    nfa_thread_T *thread = &l->t[i];
-    if (thread->state->id == state->id
-        && sub_equal(&thread->subs.norm, &subs->norm)
-        && (!rex.nfa_has_zsubexpr
-            || sub_equal(&thread->subs.synt, &subs->synt))
-        && pim_equal(&thread->pim, pim)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Return true if "one" and "two" are equal.  That includes when both are not
-// set.
-static bool pim_equal(const nfa_pim_T *one, const nfa_pim_T *two)
-{
-  const bool one_unused = (one == NULL || one->result == NFA_PIM_UNUSED);
-  const bool two_unused = (two == NULL || two->result == NFA_PIM_UNUSED);
-
-  if (one_unused) {
-    // one is unused: equal when two is also unused
-    return two_unused;
-  }
-  if (two_unused) {
-    // one is used and two is not: not equal
-    return false;
-  }
-  // compare the state id
-  if (one->state->id != two->state->id) {
-    return false;
-  }
-  // compare the position
-  if (REG_MULTI) {
-    return one->end.pos.lnum == two->end.pos.lnum
-           && one->end.pos.col == two->end.pos.col;
-  }
-  return one->end.ptr == two->end.ptr;
+  return rs_has_state_with_pos(l, state, subs, pim) != 0;
 }
 
 // Return true if "state" leads to a NFA_MATCH without advancing the input.

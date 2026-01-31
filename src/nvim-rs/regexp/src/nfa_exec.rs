@@ -25,9 +25,10 @@ use std::ffi::c_int;
 use std::ptr;
 
 use crate::nfa_states::{
-    ColNr, LPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_MATCH, NFA_MOPEN,
-    NFA_NCLOSE, NFA_NOPEN, NFA_PIM_MATCH, NFA_PIM_NOMATCH, NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_SKIP,
-    NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NSUBEXP,
+    ColNr, LPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_MATCH, NFA_MCLOSE,
+    NFA_MCLOSE9, NFA_MOPEN, NFA_NCLOSE, NFA_NOPEN, NFA_PIM_MATCH, NFA_PIM_NOMATCH, NFA_PIM_TODO,
+    NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9,
+    NFA_ZSTART, NSUBEXP,
 };
 
 // =============================================================================
@@ -800,6 +801,12 @@ unsafe fn addstate_impl(
             return handle_zclose(list, state, subs_in, pim, off, depth, n);
         }
 
+        c if (NFA_MCLOSE..=NFA_MCLOSE9).contains(&c) => {
+            // End of capturing group
+            let n = c - NFA_MCLOSE;
+            return handle_mclose(list, state, subs_in, pim, off, depth, n);
+        }
+
         _ => {
             // Not an epsilon transition - add to list
         }
@@ -952,6 +959,94 @@ unsafe fn handle_zclose(
     addstate_impl(list, (*state).out, temp_subs, pim, off, depth + 1)
 }
 
+/// Handle MCLOSE (end of capturing group).
+///
+/// This sets the end position for the capturing group and then recurses
+/// on the output state. The end position is saved and restored to allow
+/// backtracking.
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn handle_mclose(
+    list: *mut NfaList,
+    state: *mut NfaState,
+    subs_in: *const RegSubs,
+    pim: *const NfaPim,
+    off: c_int,
+    depth: c_int,
+    n: c_int,
+) -> *mut RegSubs {
+    // Special case for MCLOSE (group 0): if \ze was used, don't overwrite
+    if n == 0 && nvim_rex_get_nfa_has_zend() != 0 {
+        let is_multi = nvim_rex_is_multi() != 0;
+        let has_end = if is_multi {
+            (*subs_in).norm.list.multi[0].end_lnum >= 0
+        } else {
+            !(*subs_in).norm.list.line[0].end.is_null()
+        };
+
+        if has_end {
+            // \ze already set the end position, don't overwrite it
+            return addstate_impl(list, (*state).out, subs_in, pim, off, depth + 1);
+        }
+    }
+
+    let temp_subs = get_temp_subs();
+    copy_subs(temp_subs, subs_in, nvim_rex_get_nfa_has_zsubexpr() != 0);
+
+    // Save the current end position and in_use count for restoration
+    let save_in_use = (*temp_subs).norm.in_use;
+
+    // Update in_use if needed
+    if (*temp_subs).norm.in_use <= n {
+        (*temp_subs).norm.in_use = n + 1;
+    }
+
+    // Set the end position for group n
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        let save_multipos = (*temp_subs).norm.list.multi[n as usize];
+
+        if off == -1 {
+            // Going to next line
+            (*temp_subs).norm.list.multi[n as usize].end_lnum = nvim_rex_get_lnum() + 1;
+            (*temp_subs).norm.list.multi[n as usize].end_col = 0;
+        } else {
+            (*temp_subs).norm.list.multi[n as usize].end_lnum = nvim_rex_get_lnum();
+            let input = nvim_rex_get_input();
+            let line = nvim_rex_get_line();
+            (*temp_subs).norm.list.multi[n as usize].end_col =
+                input.offset_from(line) as ColNr + off as ColNr;
+        }
+
+        let result = addstate_impl(list, (*state).out, temp_subs, pim, off, depth + 1);
+        if result.is_null() {
+            return ptr::null_mut();
+        }
+
+        // Restore the end position
+        (*result).norm.list.multi[n as usize] = save_multipos;
+        (*result).norm.in_use = save_in_use;
+
+        result
+    } else {
+        let save_end = (*temp_subs).norm.list.line[n as usize].end;
+
+        (*temp_subs).norm.list.line[n as usize].end = nvim_rex_get_input().add(off as usize);
+
+        let result = addstate_impl(list, (*state).out, temp_subs, pim, off, depth + 1);
+        if result.is_null() {
+            return ptr::null_mut();
+        }
+
+        // Restore the end position
+        (*result).norm.list.line[n as usize].end = save_end;
+        (*result).norm.in_use = save_in_use;
+
+        result
+    }
+}
+
 extern "C" {
     fn nvim_rex_get_nfa_ll_index() -> c_int;
 }
@@ -984,6 +1079,10 @@ pub unsafe fn addstate_here(
 
 /// Check if two submatches are equal.
 ///
+/// Returns true if both have the same start positions. When using back-references,
+/// also checks the end position. Handles the case where in_use differs by treating
+/// missing entries as unset (-1/NULL).
+///
 /// # Safety
 /// Both pointers must be valid.
 pub unsafe fn sub_equal(sub1: *const RegSub, sub2: *const RegSub) -> bool {
@@ -993,46 +1092,157 @@ pub unsafe fn sub_equal(sub1: *const RegSub, sub2: *const RegSub) -> bool {
 
     let in_use1 = (*sub1).in_use;
     let in_use2 = (*sub2).in_use;
-
-    // Different number of captures means different
-    if in_use1 != in_use2 {
-        return false;
-    }
-
-    if in_use1 == 0 {
-        return true;
-    }
+    let todo = if in_use1 > in_use2 { in_use1 } else { in_use2 };
 
     let is_multi = nvim_rex_is_multi() != 0;
+    let has_backref = nvim_rex_get_nfa_has_backref() != 0;
 
-    // Compare each capture
-    for i in 0..in_use1 as usize {
-        if is_multi {
-            if (*sub1).list.multi[i].start_lnum != (*sub2).list.multi[i].start_lnum
-                || (*sub1).list.multi[i].start_col != (*sub2).list.multi[i].start_col
-            {
+    if is_multi {
+        for i in 0..todo as usize {
+            // Get start_lnum for sub1 (treat missing as -1)
+            let s1 = if (i as c_int) < in_use1 {
+                (*sub1).list.multi[i].start_lnum
+            } else {
+                -1
+            };
+            // Get start_lnum for sub2 (treat missing as -1)
+            let s2 = if (i as c_int) < in_use2 {
+                (*sub2).list.multi[i].start_lnum
+            } else {
+                -1
+            };
+            if s1 != s2 {
                 return false;
             }
-            // Only check end if backref is needed
-            if nvim_rex_get_nfa_has_backref() != 0
-                && ((*sub1).list.multi[i].end_lnum != (*sub2).list.multi[i].end_lnum
-                    || (*sub1).list.multi[i].end_col != (*sub2).list.multi[i].end_col)
-            {
+            // Compare start_col if both have valid start_lnum
+            if s1 != -1 && (*sub1).list.multi[i].start_col != (*sub2).list.multi[i].start_col {
                 return false;
             }
-        } else {
-            if (*sub1).list.line[i].start != (*sub2).list.line[i].start {
+
+            // Check end position if backrefs are used
+            if has_backref {
+                let e1 = if (i as c_int) < in_use1 {
+                    (*sub1).list.multi[i].end_lnum
+                } else {
+                    -1
+                };
+                let e2 = if (i as c_int) < in_use2 {
+                    (*sub2).list.multi[i].end_lnum
+                } else {
+                    -1
+                };
+                if e1 != e2 {
+                    return false;
+                }
+                if e1 != -1 && (*sub1).list.multi[i].end_col != (*sub2).list.multi[i].end_col {
+                    return false;
+                }
+            }
+        }
+    } else {
+        for i in 0..todo as usize {
+            // Get start ptr for sub1 (treat missing as NULL)
+            let sp1 = if (i as c_int) < in_use1 {
+                (*sub1).list.line[i].start
+            } else {
+                ptr::null_mut()
+            };
+            // Get start ptr for sub2 (treat missing as NULL)
+            let sp2 = if (i as c_int) < in_use2 {
+                (*sub2).list.line[i].start
+            } else {
+                ptr::null_mut()
+            };
+            if sp1 != sp2 {
                 return false;
             }
-            if nvim_rex_get_nfa_has_backref() != 0
-                && (*sub1).list.line[i].end != (*sub2).list.line[i].end
-            {
-                return false;
+
+            // Check end position if backrefs are used
+            if has_backref {
+                let ep1 = if (i as c_int) < in_use1 {
+                    (*sub1).list.line[i].end
+                } else {
+                    ptr::null_mut()
+                };
+                let ep2 = if (i as c_int) < in_use2 {
+                    (*sub2).list.line[i].end
+                } else {
+                    ptr::null_mut()
+                };
+                if ep1 != ep2 {
+                    return false;
+                }
             }
         }
     }
 
     true
+}
+
+/// Check if two PIMs are equal.
+///
+/// Returns true if both are unused, or if both have the same state ID
+/// and end position.
+///
+/// # Safety
+/// If pointers are non-null, they must point to valid NfaPim structs.
+pub unsafe fn pim_equal(one: *const NfaPim, two: *const NfaPim) -> bool {
+    let one_unused = one.is_null() || (*one).result == NFA_PIM_UNUSED;
+    let two_unused = two.is_null() || (*two).result == NFA_PIM_UNUSED;
+
+    if one_unused {
+        // one is unused: equal when two is also unused
+        return two_unused;
+    }
+    if two_unused {
+        // one is used and two is not: not equal
+        return false;
+    }
+
+    // Compare the state id
+    if (*(*one).state).id != (*(*two).state).id {
+        return false;
+    }
+
+    // Compare the position
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        (*one).end.pos.lnum == (*two).end.pos.lnum && (*one).end.pos.col == (*two).end.pos.col
+    } else {
+        (*one).end.ptr == (*two).end.ptr
+    }
+}
+
+/// Check if a state is already in the list with the same positions.
+///
+/// This prevents adding duplicate states which would cause infinite loops
+/// or unnecessary work.
+///
+/// # Safety
+/// All pointers must be valid.
+pub unsafe fn has_state_with_pos(
+    list: *const NfaList,
+    state: *const NfaState,
+    subs: *const RegSubs,
+    pim: *const NfaPim,
+) -> bool {
+    if list.is_null() || state.is_null() || subs.is_null() {
+        return false;
+    }
+
+    let has_zsubexpr = nvim_rex_get_nfa_has_zsubexpr() != 0;
+
+    for i in 0..(*list).n {
+        let thread = (*list).t.add(i as usize);
+        if (*(*thread).state).id == (*state).id
+            && sub_equal(&(*thread).subs.norm, &(*subs).norm)
+            && (!has_zsubexpr || sub_equal(&(*thread).subs.synt, &(*subs).synt))
+            && pim_equal(&(*thread).pim, pim)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 // =============================================================================
@@ -1070,6 +1280,38 @@ pub unsafe extern "C" fn rs_addstate_here(
     listidx: c_int,
 ) -> *mut RegSubs {
     addstate_here(list, state, subs, pim, listidx)
+}
+
+/// Check if two PIMs are equal.
+///
+/// # Safety
+/// If pointers are non-null, they must point to valid NfaPim structs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pim_equal(one: *const NfaPim, two: *const NfaPim) -> c_int {
+    c_int::from(pim_equal(one, two))
+}
+
+/// Check if a state is already in the list with the same positions.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_state_with_pos(
+    list: *const NfaList,
+    state: *const NfaState,
+    subs: *const RegSubs,
+    pim: *const NfaPim,
+) -> c_int {
+    c_int::from(has_state_with_pos(list, state, subs, pim))
+}
+
+/// Check if two submatches are equal.
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sub_equal(sub1: *const RegSub, sub2: *const RegSub) -> c_int {
+    c_int::from(sub_equal(sub1, sub2))
 }
 
 // =============================================================================
