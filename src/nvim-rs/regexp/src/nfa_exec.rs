@@ -1138,6 +1138,409 @@ pub extern "C" fn rs_nfa_skip_const() -> c_int {
     NFA_SKIP
 }
 
+// =============================================================================
+// Main NFA Matching Function - Phase 2: Core Execution Loop
+// =============================================================================
+
+// Additional FFI declarations for rs_nfa_regmatch
+#[allow(dead_code, clashing_extern_declarations)]
+extern "C" {
+    // Rex state accessors for main loop
+    fn nvim_nfa_rex_get_nfa_listid() -> c_int;
+    fn nvim_nfa_rex_set_nfa_listid(v: c_int);
+    fn nvim_rex_get_reg_icombine() -> bool;
+
+    // NFA regprog accessors
+    fn nvim_nfa_regprog_get_nstate(prog: *const c_void) -> c_int;
+    fn nvim_nfa_regprog_get_re_engine(prog: *const c_void) -> c_uint;
+
+    // NFA execution globals
+    fn nvim_nfa_get_match() -> c_int;
+    fn nvim_nfa_set_match(v: c_int);
+    fn nvim_nfa_did_time_out() -> c_int;
+    fn nvim_nfa_get_time_count() -> c_int;
+    fn nvim_nfa_set_time_count(v: c_int);
+
+    // NFA endp for invisible matches
+    fn nvim_rex_get_nfa_endp() -> *const c_void;
+
+    // Memory allocation - matching existing declarations in nfa_states.rs
+    fn xmalloc(size: usize) -> *mut i8;
+    fn xfree(ptr: *mut c_void);
+
+    // Interrupt checking
+    fn rs_reg_breakcheck();
+    fn nvim_get_got_int() -> c_int;
+
+    // UTF-8 helpers
+    fn utf_ptr2char(ptr: *const i8) -> c_int;
+    fn utfc_ptr2len(ptr: *const i8) -> c_int;
+    fn utf_iscomposing_legacy(c: c_int) -> c_int;
+
+    // Line navigation for multi-line matching
+    fn nvim_reg_nextline();
+
+    // Input advancing
+    fn nvim_rex_set_input(ptr: *mut u8);
+
+    // C copy_sub function (uses void* for FFI)
+    fn nvim_nfa_copy_sub(to: *mut c_void, from: *const c_void);
+
+    // Recursive regmatch for invisible matches (uses void* for FFI)
+    fn nvim_nfa_recursive_regmatch(
+        state: *mut c_void,
+        pim: *const c_void,
+        prog: *mut c_void,
+        submatch: *mut c_void,
+        m: *mut c_void,
+        listids: *mut *mut c_int,
+        listids_len: *mut c_int,
+    ) -> c_int;
+
+    // State processing callback - Phase 3 will move this to Rust
+    // Uses void* for FFI compatibility
+    fn nfa_regmatch_process_state(
+        t: *const c_void,
+        curc: c_int,
+        clen: c_int,
+        prog: *mut c_void,
+        thislist: *mut c_void,
+        nextlist: *mut c_void,
+        start: *mut c_void,
+        submatch: *mut c_void,
+        m: *mut c_void,
+        listids: *mut *mut c_int,
+        listids_len: *mut c_int,
+        add_state: *mut *mut c_void,
+        add_here: *mut c_int,
+        add_count: *mut c_int,
+        add_off: *mut c_int,
+    ) -> c_int;
+}
+
+use std::ffi::{c_uint, c_void};
+
+/// Result constants for nfa_regmatch
+pub const NFA_TOO_EXPENSIVE: c_int = -1;
+
+/// Maximum states before switching to backtracking engine
+pub const NFA_MAX_STATES: c_int = 100000;
+
+/// Automatic engine constant
+pub const AUTOMATIC_ENGINE: c_uint = 0;
+
+/// Main NFA matching routine.
+///
+/// Run NFA to determine whether it matches rex.input.
+///
+/// When "nfa_endp" is not NULL it is a required end-of-match position.
+///
+/// Return true if there is a match, false if there is no match,
+/// NFA_TOO_EXPENSIVE if we end up with too many states.
+/// When there is a match "submatch" contains the positions.
+///
+/// # Safety
+/// - `prog` must be a valid pointer to nfa_regprog_T
+/// - `start` must be a valid pointer to nfa_state_T
+/// - `submatch` and `m` must be valid pointers to regsubs_T
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_regmatch(
+    prog: *mut c_void,
+    start: *mut NfaState,
+    submatch: *mut RegSubs,
+    m: *mut RegSubs,
+) -> c_int {
+    // Check for interrupts and timeout before starting
+    rs_reg_breakcheck();
+    if nvim_get_got_int() != 0 {
+        return 0; // false = no match
+    }
+    if nvim_nfa_did_time_out() != 0 {
+        return 0;
+    }
+
+    // Initialize match result
+    nvim_nfa_set_match(0);
+
+    // Get number of states for allocation
+    let nstate = nvim_nfa_regprog_get_nstate(prog);
+
+    // Allocate memory for the lists of nodes
+    let size = ((nstate + 1) as usize) * std::mem::size_of::<NfaThread>();
+    let list0_t = xmalloc(size) as *mut NfaThread;
+    let list1_t = xmalloc(size) as *mut NfaThread;
+
+    if list0_t.is_null() || list1_t.is_null() {
+        if !list0_t.is_null() {
+            xfree(list0_t as *mut c_void);
+        }
+        if !list1_t.is_null() {
+            xfree(list1_t as *mut c_void);
+        }
+        return NFA_TOO_EXPENSIVE;
+    }
+
+    // Initialize the two lists
+    let mut list: [NfaList; 2] = [
+        NfaList {
+            t: list0_t,
+            n: 0,
+            id: 0,
+            has_pim: 0,
+            len: nstate + 1,
+        },
+        NfaList {
+            t: list1_t,
+            n: 0,
+            id: 0,
+            has_pim: 0,
+            len: nstate + 1,
+        },
+    ];
+
+    let mut flag = 0;
+    let mut listids: *mut c_int = ptr::null_mut();
+    let mut listids_len: c_int = 0;
+    let mut go_to_nextline = false;
+
+    // Set up initial list
+    let thislist = &mut list[0] as *mut NfaList;
+    let nextlist = &mut list[1] as *mut NfaList;
+
+    (*thislist).n = 0;
+    (*thislist).has_pim = 0;
+    (*nextlist).n = 0;
+    (*nextlist).has_pim = 0;
+
+    // Initialize list IDs
+    let initial_listid = nvim_nfa_rex_get_nfa_listid() + 1;
+    (*thislist).id = initial_listid;
+    nvim_nfa_rex_set_nfa_listid(initial_listid);
+
+    // Check if start is an MOPEN state for optimized initialization
+    let toplevel = (*start).c == NFA_MOPEN;
+
+    // Initialize the first state
+    let r = if toplevel {
+        // Inline optimized code for first MOPEN
+        let input = nvim_rex_get_input();
+        let line = nvim_rex_get_line();
+        let lnum = nvim_rex_get_lnum();
+
+        if nvim_rex_is_multi() != 0 {
+            (*m).norm.list.multi[0].start_lnum = lnum;
+            (*m).norm.list.multi[0].start_col = (input as isize - line as isize) as ColNr;
+            (*m).norm.orig_start_col = (*m).norm.list.multi[0].start_col;
+        } else {
+            (*m).norm.list.line[0].start = input;
+        }
+        (*m).norm.in_use = 1;
+        addstate(thislist, (*start).out, m, ptr::null(), 0)
+    } else {
+        addstate(thislist, start, m, ptr::null(), 0)
+    };
+
+    if r.is_null() {
+        nvim_nfa_set_match(NFA_TOO_EXPENSIVE);
+        xfree(list[0].t as *mut c_void);
+        xfree(list[1].t as *mut c_void);
+        xfree(listids as *mut c_void);
+        return NFA_TOO_EXPENSIVE;
+    }
+
+    // Main character loop
+    loop {
+        let input = nvim_rex_get_input();
+        let curc = utf_ptr2char(input as *const i8);
+        let mut clen = utfc_ptr2len(input as *const i8);
+        if curc == 0 {
+            // NUL byte - end of line
+            clen = 0;
+            go_to_nextline = false;
+        }
+
+        // Swap lists
+        let thislist = &mut list[flag] as *mut NfaList;
+        flag ^= 1;
+        let nextlist = &mut list[flag] as *mut NfaList;
+
+        (*nextlist).n = 0;
+        (*nextlist).has_pim = 0;
+
+        // Increment list ID
+        let new_listid = nvim_nfa_rex_get_nfa_listid() + 1;
+        nvim_nfa_rex_set_nfa_listid(new_listid);
+
+        // Check for too many states (automatic engine switching)
+        let re_engine = nvim_nfa_regprog_get_re_engine(prog);
+        if re_engine == AUTOMATIC_ENGINE && new_listid >= NFA_MAX_STATES {
+            nvim_nfa_set_match(NFA_TOO_EXPENSIVE);
+            break;
+        }
+
+        (*thislist).id = new_listid;
+        (*nextlist).id = new_listid + 1;
+
+        // If the state lists are empty we can stop
+        if (*thislist).n == 0 {
+            break;
+        }
+
+        // Process all states in thislist
+        let mut listidx = 0;
+        while listidx < (*thislist).n {
+            // Allow interrupting with CTRL-C
+            rs_reg_breakcheck();
+            if nvim_get_got_int() != 0 {
+                break;
+            }
+
+            // Check timeout periodically
+            let time_count = nvim_nfa_get_time_count() + 1;
+            if time_count >= 20 {
+                nvim_nfa_set_time_count(0);
+                if nvim_nfa_did_time_out() != 0 {
+                    break;
+                }
+            } else {
+                nvim_nfa_set_time_count(time_count);
+            }
+
+            let t = &(*thislist).t.add(listidx as usize);
+
+            // Process this state - Phase 3 will move this logic to Rust
+            // For now, call back to C
+            let mut add_state: *mut c_void = ptr::null_mut();
+            let mut add_here: c_int = 0;
+            let mut add_count: c_int = 0;
+            let mut add_off: c_int = 0;
+
+            let process_result = nfa_regmatch_process_state(
+                (*t) as *const NfaThread as *const c_void,
+                curc,
+                clen,
+                prog,
+                thislist as *mut c_void,
+                nextlist as *mut c_void,
+                start as *mut c_void,
+                submatch as *mut c_void,
+                m as *mut c_void,
+                &mut listids,
+                &mut listids_len,
+                &mut add_state,
+                &mut add_here,
+                &mut add_count,
+                &mut add_off,
+            );
+
+            // Handle special return values
+            if process_result == 2 {
+                // goto nextchar
+                // Update clen if needed
+                if (*nextlist).n == 0 {
+                    clen = 0;
+                }
+                break;
+            } else if process_result == -1 {
+                // NFA_TOO_EXPENSIVE
+                nvim_nfa_set_match(NFA_TOO_EXPENSIVE);
+                break;
+            }
+
+            // Handle add_state from the switch statement
+            let add_state_typed = add_state as *mut NfaState;
+            if !add_state_typed.is_null() {
+                if add_here != 0 {
+                    // Insert at current position using addstate_here
+                    if addstate_here(
+                        thislist,
+                        add_state_typed,
+                        &mut (*(*t)).subs,
+                        &(*(*t)).pim,
+                        listidx,
+                    )
+                    .is_null()
+                    {
+                        nvim_nfa_set_match(NFA_TOO_EXPENSIVE);
+                        break;
+                    }
+                } else if add_count > 0 {
+                    // Add multiple times (for lookbehind)
+                    for _ in 0..add_count {
+                        if addstate(
+                            nextlist,
+                            add_state_typed,
+                            &(*(*t)).subs,
+                            &(*(*t)).pim,
+                            add_off,
+                        )
+                        .is_null()
+                        {
+                            nvim_nfa_set_match(NFA_TOO_EXPENSIVE);
+                            break;
+                        }
+                    }
+                } else {
+                    // Normal case - add to nextlist
+                    if addstate(
+                        nextlist,
+                        add_state_typed,
+                        &(*(*t)).subs,
+                        &(*(*t)).pim,
+                        add_off,
+                    )
+                    .is_null()
+                    {
+                        nvim_nfa_set_match(NFA_TOO_EXPENSIVE);
+                        break;
+                    }
+                }
+            }
+
+            listidx += 1;
+        }
+
+        // Advance to the next character, or advance to the next line, or finish
+        if clen != 0 {
+            let input = nvim_rex_get_input();
+            nvim_rex_set_input(input.add(clen as usize));
+        } else if go_to_nextline
+            || (!nvim_rex_get_nfa_endp().is_null()
+                && nvim_rex_is_multi() != 0
+                && nvim_rex_get_lnum() < (*(nvim_rex_get_nfa_endp() as *const LPos)).lnum as c_int)
+        {
+            nvim_reg_nextline();
+        } else {
+            break;
+        }
+
+        // Allow interrupting with CTRL-C
+        rs_reg_breakcheck();
+        if nvim_get_got_int() != 0 {
+            break;
+        }
+
+        // Check for timeout
+        let time_count = nvim_nfa_get_time_count() + 1;
+        if time_count >= 20 {
+            nvim_nfa_set_time_count(0);
+            if nvim_nfa_did_time_out() != 0 {
+                break;
+            }
+        } else {
+            nvim_nfa_set_time_count(time_count);
+        }
+    }
+
+    // Cleanup
+    xfree(list[0].t as *mut c_void);
+    xfree(list[1].t as *mut c_void);
+    xfree(listids as *mut c_void);
+
+    // Return the match result
+    nvim_nfa_get_match()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

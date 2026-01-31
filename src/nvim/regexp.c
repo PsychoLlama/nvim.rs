@@ -8312,6 +8312,40 @@ int nvim_nfa_recursive_regmatch(void *state, const void *pim,
                             (regsubs_T *)m, listids, listids_len);
 }
 
+// Wrapper for reg_nextline (static function) for Rust
+static void reg_nextline(void);  // Forward declaration
+void nvim_reg_nextline(void) {
+  reg_nextline();
+}
+
+// State processing stub for rs_nfa_regmatch - Phase 3 will implement the actual logic
+// Uses void* for FFI compatibility (internal types not in public header)
+// This is a placeholder that returns 0 (continue processing)
+int nfa_regmatch_process_state(
+    const void *t_ptr, int curc, int clen,
+    void *prog_ptr, void *thislist_ptr, void *nextlist_ptr,
+    void *start_ptr, void *submatch_ptr, void *m_ptr,
+    int **listids, int *listids_len,
+    void **add_state_ptr, int *add_here, int *add_count, int *add_off) {
+  (void)t_ptr;
+  (void)curc;
+  (void)clen;
+  (void)prog_ptr;
+  (void)thislist_ptr;
+  (void)nextlist_ptr;
+  (void)start_ptr;
+  (void)submatch_ptr;
+  (void)m_ptr;
+  (void)listids;
+  (void)listids_len;
+  // Placeholder - returns 0 to continue processing, -1 for error, 2 for nextchar
+  *add_state_ptr = NULL;
+  *add_here = 0;
+  *add_count = 0;
+  *add_off = 0;
+  return 0;
+}
+
 // NFA postfix output accessors for Rust
 int *nvim_nfa_get_post_ptr(void) { return post_ptr; }
 int *nvim_nfa_get_post_start(void) { return post_start; }
