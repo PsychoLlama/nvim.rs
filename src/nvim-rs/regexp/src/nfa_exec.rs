@@ -1761,6 +1761,51 @@ unsafe fn process_anchor(
     true
 }
 
+/// Process NFA_MATCH state - we found a match!
+///
+/// Returns true if this was an NFA_MATCH state and was handled.
+/// Sets result.return_code to 2 (goto nextchar) on success.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_match(
+    curc: c_int,
+    t: *const NfaThread,
+    submatch: *mut RegSubs,
+    nextlist: *const NfaList,
+    result: &mut StateProcessResult,
+) -> bool {
+    // Check for composing character edge case
+    // If match is not at start of line, ends before a composing character,
+    // and rex.reg_icombine is not set, it's not really a match.
+    let line = nvim_rex_get_line();
+    let input = nvim_rex_get_input();
+    if !nvim_rex_get_reg_icombine() && input != line && utf_iscomposing_legacy(curc) != 0 {
+        return true; // Not a real match, but we handled it
+    }
+
+    // Found a match!
+    nvim_nfa_set_match(1);
+
+    // Copy submatch info
+    copy_sub(&mut (*submatch).norm, &(*t).subs.norm);
+    if nvim_rex_get_nfa_has_zsubexpr() != 0 {
+        copy_sub(&mut (*submatch).synt, &(*t).subs.synt);
+    }
+
+    // Found the left-most longest match. When the list of states is going
+    // to be empty, quit without advancing so rex.input is correct.
+    // Return code 2 means "goto nextchar"
+    result.return_code = 2;
+
+    // Check if nextlist is empty (clen should be set to 0 by caller)
+    // The clen=0 is handled in the Rust caller when return_code == 2
+    let _ = nextlist; // Used for comment documentation
+
+    true
+}
+
 /// Main state processing function for NFA execution.
 ///
 /// This function implements the large switch statement from C's nfa_regmatch.
@@ -1797,9 +1842,9 @@ pub unsafe extern "C" fn rs_nfa_process_state(
     clen: c_int,
     _prog: *mut c_void,
     _thislist: *mut NfaList,
-    _nextlist: *mut NfaList,
+    nextlist: *mut NfaList,
     _start: *mut NfaState,
-    _submatch: *mut RegSubs,
+    submatch: *mut RegSubs,
     _m: *mut RegSubs,
     _listids: *mut *mut c_int,
     _listids_len: *mut c_int,
@@ -1828,6 +1873,9 @@ pub unsafe extern "C" fn rs_nfa_process_state(
     } else {
         // Handle other state types
         match state_c {
+            NFA_MATCH => {
+                process_match(curc, t, submatch, nextlist, &mut result);
+            }
             NFA_ANY => process_any(curc, clen, state, &mut result),
             NFA_ANY_COMPOSING => process_any_composing(curc, clen, state, &mut result),
             _ => {
