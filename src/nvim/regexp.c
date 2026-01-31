@@ -8336,6 +8336,22 @@ void nvim_reg_nextline(void) {
   reg_nextline();
 }
 
+// Forward declarations for backref functions
+static int match_backref(regsub_T *sub, int subidx, int *bytelen);
+static int match_zref(int subidx, int *bytelen);
+
+// Wrapper for match_backref (static function) for Rust
+// Returns match result (0/1), sets bytelen output parameter
+int nvim_nfa_match_backref(void *sub, int subidx, int *bytelen) {
+  return match_backref((regsub_T *)sub, subidx, bytelen);
+}
+
+// Wrapper for match_zref (static function) for Rust
+// Returns match result (0/1), sets bytelen output parameter
+int nvim_nfa_match_zref(int subidx, int *bytelen) {
+  return match_zref(subidx, bytelen);
+}
+
 // Rust state processing function (Phase 4)
 extern int rs_nfa_process_state(
     const void *t_ptr, int curc, int clen,
@@ -14429,59 +14445,8 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
       // Character classes (NFA_IDENT through NFA_NUPPER_IC) are handled
       // by Rust (rs_nfa_process_state)
 
-      case NFA_BACKREF1:
-      case NFA_BACKREF2:
-      case NFA_BACKREF3:
-      case NFA_BACKREF4:
-      case NFA_BACKREF5:
-      case NFA_BACKREF6:
-      case NFA_BACKREF7:
-      case NFA_BACKREF8:
-      case NFA_BACKREF9:
-      case NFA_ZREF1:
-      case NFA_ZREF2:
-      case NFA_ZREF3:
-      case NFA_ZREF4:
-      case NFA_ZREF5:
-      case NFA_ZREF6:
-      case NFA_ZREF7:
-      case NFA_ZREF8:
-      case NFA_ZREF9:
-        // \1 .. \9  \z1 .. \z9
-      {
-        int subidx;
-        int bytelen;
-
-        if (t->state->c >= NFA_BACKREF1 && t->state->c <= NFA_BACKREF9) {
-          subidx = t->state->c - NFA_BACKREF1 + 1;
-          result = match_backref(&t->subs.norm, subidx, &bytelen);
-        } else {
-          subidx = t->state->c - NFA_ZREF1 + 1;
-          result = match_zref(subidx, &bytelen);
-        }
-
-        if (result) {
-          if (bytelen == 0) {
-            // empty match always works, output of NFA_SKIP to be
-            // used next
-            add_here = true;
-            add_state = t->state->out->out;
-          } else if (bytelen <= clen) {
-            // match current character, jump ahead to out of
-            // NFA_SKIP
-            add_state = t->state->out->out;
-            add_off = clen;
-          } else {
-            // skip over the matched characters, set character
-            // count in NFA_SKIP
-            add_state = t->state->out;
-            add_off = bytelen;
-            add_count = bytelen - clen;
-          }
-        }
-        break;
-      }
-      // NFA_SKIP, NFA_LNUM, NFA_COL, NFA_CURSOR are handled by Rust
+      // Backreferences (NFA_BACKREF1-9, NFA_ZREF1-9), NFA_SKIP, NFA_LNUM,
+      // NFA_COL, NFA_CURSOR are handled by Rust
       // (rs_nfa_process_state)
 
       case NFA_VCOL:

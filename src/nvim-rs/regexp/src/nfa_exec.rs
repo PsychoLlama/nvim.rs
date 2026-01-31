@@ -1576,6 +1576,10 @@ extern "C" {
     // Character folding
     fn utf_fold(a: c_int) -> c_int;
     fn utf_ptr2len(p: *const i8) -> c_int;
+
+    // Backreference matching
+    fn nvim_nfa_match_backref(sub: *const c_void, subidx: c_int, bytelen: *mut c_int) -> c_int;
+    fn nvim_nfa_match_zref(subidx: c_int, bytelen: *mut c_int) -> c_int;
 }
 
 // Use Rust implementations from ascii crate
@@ -1583,12 +1587,13 @@ use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite};
 
 // Import state constants
 use crate::nfa_states::{
-    NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BOF, NFA_BOL, NFA_BOW, NFA_COL, NFA_COL_GT,
-    NFA_COL_LT, NFA_CURSOR, NFA_DIGIT, NFA_EOF, NFA_EOL, NFA_EOW, NFA_FNAME, NFA_HEAD, NFA_HEX,
-    NFA_IDENT, NFA_KWORD, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER, NFA_LOWER_IC, NFA_NALPHA,
-    NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NUPPER,
-    NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD,
-    NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE, NFA_WORD,
+    NFA_ALPHA, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF, NFA_BOL, NFA_BOW,
+    NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_CURSOR, NFA_DIGIT, NFA_EOF, NFA_EOL, NFA_EOW, NFA_FNAME,
+    NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_LOWER,
+    NFA_LOWER_IC, NFA_NALPHA, NFA_NDIGIT, NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC,
+    NFA_NOCTAL, NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME,
+    NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE, NFA_WORD, NFA_ZREF1,
+    NFA_ZREF9,
 };
 
 // Import anchor checking functions
@@ -1927,6 +1932,59 @@ unsafe fn process_position(
     true
 }
 
+/// Process backreference states (NFA_BACKREF1-9, NFA_ZREF1-9).
+///
+/// Returns true if the state was handled, false if it should be handled by C.
+///
+/// # Safety
+/// All pointers must be valid.
+#[inline]
+unsafe fn process_backref(
+    state_c: c_int,
+    clen: c_int,
+    t: *const NfaThread,
+    state: *mut NfaState,
+    result: &mut StateProcessResult,
+) -> bool {
+    let (bytelen, matched) = if (NFA_BACKREF1..=NFA_BACKREF9).contains(&state_c) {
+        // Normal backreference \1..\9
+        let subidx = state_c - NFA_BACKREF1 + 1;
+        let mut bytelen: c_int = 0;
+        let matched = nvim_nfa_match_backref(
+            &(*t).subs.norm as *const _ as *const c_void,
+            subidx,
+            &mut bytelen,
+        ) != 0;
+        (bytelen, matched)
+    } else if (NFA_ZREF1..=NFA_ZREF9).contains(&state_c) {
+        // External submatch reference \z1..\z9
+        let subidx = state_c - NFA_ZREF1 + 1;
+        let mut bytelen: c_int = 0;
+        let matched = nvim_nfa_match_zref(subidx, &mut bytelen) != 0;
+        (bytelen, matched)
+    } else {
+        return false; // Not a backref state
+    };
+
+    if matched {
+        if bytelen == 0 {
+            // Empty match always works, output of NFA_SKIP to be used next
+            result.add_here = 1;
+            result.add_state = (*(*state).out).out;
+        } else if bytelen <= clen {
+            // Match current character, jump ahead to out of NFA_SKIP
+            result.add_state = (*(*state).out).out;
+            result.add_off = clen;
+        } else {
+            // Skip over matched characters, set character count in NFA_SKIP
+            result.add_state = (*state).out;
+            result.add_off = bytelen;
+            result.add_count = bytelen - clen;
+        }
+    }
+    true
+}
+
 /// Process literal character matching (default case).
 ///
 /// Returns true if this is a positive character state (c > 0) and was handled.
@@ -2034,6 +2092,8 @@ pub unsafe extern "C" fn rs_nfa_process_state(
         // Handled by anchor processing
     } else if process_position(state_c, state, &mut result) {
         // Handled by position matching (NFA_LNUM, NFA_COL, NFA_CURSOR)
+    } else if process_backref(state_c, clen, t, state, &mut result) {
+        // Handled by backreference matching (NFA_BACKREF1-9, NFA_ZREF1-9)
     } else {
         // Handle other state types
         match state_c {
@@ -2048,7 +2108,7 @@ pub unsafe extern "C" fn rs_nfa_process_state(
                 // Try literal character matching (positive state values)
                 if !process_literal(state_c, curc, clen, state, &mut result) {
                     // Not a literal character, return 0 to continue with C fallback
-                    // for complex cases (collections, backrefs, lookaround, etc.)
+                    // for complex cases (collections, lookaround, etc.)
                 }
             }
         }
