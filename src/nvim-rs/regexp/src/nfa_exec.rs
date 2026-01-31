@@ -1077,10 +1077,6 @@ unsafe fn handle_mclose(
     }
 }
 
-extern "C" {
-    fn nvim_rex_get_nfa_ll_index() -> c_int;
-}
-
 // =============================================================================
 // addstate_here
 // =============================================================================
@@ -1572,6 +1568,214 @@ pub extern "C" fn rs_nfa_skip_const() -> c_int {
 }
 
 // =============================================================================
+// Recursive Regmatch - Phase 10d
+// =============================================================================
+
+/// Recursively call nfa_regmatch() for invisible/lookahead matches.
+///
+/// This function handles the setup and teardown for recursive matching,
+/// including saving/restoring rex state and managing listids.
+///
+/// # Safety
+/// All pointers must be valid. The listids pointer may be reallocated.
+#[no_mangle]
+pub unsafe extern "C" fn rs_recursive_regmatch(
+    state: *mut NfaState,
+    pim: *const NfaPim,
+    prog: *mut c_void,
+    submatch: *mut RegSubs,
+    m: *mut RegSubs,
+    listids: *mut *mut c_int,
+    listids_len: *mut c_int,
+) -> c_int {
+    recursive_regmatch(state, pim, prog, submatch, m, listids, listids_len)
+}
+
+/// Internal implementation of recursive_regmatch.
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn recursive_regmatch(
+    state: *mut NfaState,
+    pim: *const NfaPim,
+    prog: *mut c_void,
+    submatch: *mut RegSubs,
+    m: *mut RegSubs,
+    listids: *mut *mut c_int,
+    listids_len: *mut c_int,
+) -> c_int {
+    // Save current rex state
+    let save_reginput_col = nvim_rex_get_input().offset_from(nvim_rex_get_line()) as c_int;
+    let save_reglnum = nvim_rex_get_lnum();
+    let save_nfa_match = nvim_nfa_get_match();
+    let save_nfa_listid = nvim_rex_get_nfa_listid();
+    let save_nfa_endp = nvim_rex_get_nfa_endp();
+    let mut endpos = SaveSe::default();
+    let mut endposp: *mut SaveSe = std::ptr::null_mut();
+    let mut need_restore = false;
+
+    // If pim is set, start at the position where the postponed match was
+    if !pim.is_null() {
+        if nvim_rex_is_multi() != 0 {
+            let line = nvim_rex_get_line();
+            nvim_rex_set_input(line.add((*pim).end.pos.col as usize));
+        } else {
+            nvim_rex_set_input((*pim).end.ptr);
+        }
+    }
+
+    // Check if this is a BEFORE variant (lookbehind)
+    let state_c = (*state).c;
+    if state_c == NFA_START_INVISIBLE_BEFORE
+        || state_c == NFA_START_INVISIBLE_BEFORE_FIRST
+        || state_c == NFA_START_INVISIBLE_BEFORE_NEG
+        || state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+    {
+        // The recursive match must end at the current position
+        endposp = &mut endpos;
+        if nvim_rex_is_multi() != 0 {
+            if pim.is_null() {
+                endpos.se_u.pos.col = nvim_rex_get_input().offset_from(nvim_rex_get_line()) as c_int;
+                endpos.se_u.pos.lnum = nvim_rex_get_lnum();
+            } else {
+                endpos.se_u.pos = (*pim).end.pos;
+            }
+        } else if pim.is_null() {
+            endpos.se_u.ptr = nvim_rex_get_input();
+        } else {
+            endpos.se_u.ptr = (*pim).end.ptr;
+        }
+
+        // Go back the specified number of bytes
+        let state_val = (*state).val;
+        if state_val <= 0 {
+            if nvim_rex_is_multi() != 0 {
+                let new_lnum = nvim_rex_get_lnum() - 1;
+                let line = nvim_reg_getline(new_lnum);
+                if line.is_null() {
+                    // Can't go before the first line
+                    let cur_line = nvim_reg_getline(nvim_rex_get_lnum());
+                    nvim_rex_set_line(cur_line);
+                } else {
+                    nvim_rex_set_lnum(new_lnum);
+                    nvim_rex_set_line(line);
+                }
+            }
+            nvim_rex_set_input(nvim_rex_get_line());
+        } else {
+            let input = nvim_rex_get_input();
+            let line = nvim_rex_get_line();
+            let offset = input.offset_from(line) as c_int;
+
+            if nvim_rex_is_multi() != 0 && offset < state_val {
+                // Not enough bytes in this line, go to end of previous line
+                let new_lnum = nvim_rex_get_lnum() - 1;
+                let prev_line = nvim_reg_getline(new_lnum);
+                if prev_line.is_null() {
+                    // Can't go before the first line
+                    let cur_line = nvim_reg_getline(nvim_rex_get_lnum());
+                    nvim_rex_set_line(cur_line);
+                    nvim_rex_set_input(cur_line);
+                } else {
+                    nvim_rex_set_lnum(new_lnum);
+                    nvim_rex_set_line(prev_line);
+                    let len = nvim_reg_getline_len(new_lnum);
+                    nvim_rex_set_input(prev_line.add(len as usize));
+                }
+            }
+
+            // Now go back state_val bytes (if possible)
+            let input = nvim_rex_get_input();
+            let line = nvim_rex_get_line();
+            let offset = input.offset_from(line) as c_int;
+
+            if offset >= state_val {
+                let new_input = input.sub(state_val as usize);
+                // Adjust for UTF-8 head offset
+                let head_off = utf_head_off(line as *const i8, new_input as *const i8);
+                nvim_rex_set_input(new_input.sub(head_off as usize));
+            } else {
+                nvim_rex_set_input(line);
+            }
+        }
+    }
+
+    // Handle listids for recursive calls
+    let nfa_ll_index = nvim_rex_get_nfa_ll_index();
+    if nfa_ll_index == 1 {
+        // Already calling nfa_regmatch() recursively. Save the lastlist[1]
+        // values and clear them.
+        let nstate = nvim_nfa_prog_get_nstate(prog);
+        if (*listids).is_null() || *listids_len < nstate {
+            xfree(*listids as *mut c_void);
+            *listids = xmalloc(std::mem::size_of::<c_int>() * nstate as usize) as *mut c_int;
+            *listids_len = nstate;
+        }
+        nvim_nfa_save_listids(prog, *listids);
+        need_restore = true;
+        // Any value of rex.nfa_listid will do
+    } else {
+        // First recursive nfa_regmatch() call, switch to the second lastlist entry
+        nvim_rex_set_nfa_ll_index(nfa_ll_index + 1);
+        let nfa_listid = nvim_rex_get_nfa_listid();
+        let nfa_alt_listid = nvim_rex_get_nfa_alt_listid();
+        if nfa_listid <= nfa_alt_listid {
+            nvim_rex_set_nfa_listid(nfa_alt_listid);
+        }
+    }
+
+    // Call nfa_regmatch() to check if the current concat matches at this position
+    nvim_rex_set_nfa_endp(endposp as *mut c_void);
+    let result = nvim_nfa_regmatch(prog, (*state).out as *mut c_void, submatch as *mut c_void, m as *mut c_void);
+
+    // Restore listids
+    if need_restore {
+        nvim_nfa_restore_listids(prog, *listids);
+    } else {
+        nvim_rex_set_nfa_ll_index(nvim_rex_get_nfa_ll_index() - 1);
+        nvim_rex_set_nfa_alt_listid(nvim_rex_get_nfa_listid());
+    }
+
+    // Restore position in input text
+    nvim_rex_set_lnum(save_reglnum);
+    if nvim_rex_is_multi() != 0 {
+        let line = nvim_reg_getline(save_reglnum);
+        nvim_rex_set_line(line);
+    }
+    nvim_rex_set_input(nvim_rex_get_line().add(save_reginput_col as usize));
+
+    if result != NFA_TOO_EXPENSIVE {
+        nvim_nfa_set_match(save_nfa_match);
+        nvim_rex_set_nfa_listid(save_nfa_listid);
+    }
+    nvim_rex_set_nfa_endp(save_nfa_endp as *mut c_void);
+
+    result
+}
+
+/// save_se_T equivalent structure
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct SaveSe {
+    se_u: SaveSeUnion,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+union SaveSeUnion {
+    ptr: *mut u8,
+    pos: LPos,
+}
+
+impl Default for SaveSeUnion {
+    fn default() -> Self {
+        SaveSeUnion {
+            ptr: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
 // Main NFA Matching Function - Phase 2: Core Execution Loop
 // =============================================================================
 
@@ -1596,6 +1800,41 @@ extern "C" {
 
     // NFA endp for invisible matches
     fn nvim_rex_get_nfa_endp() -> *const c_void;
+    fn nvim_rex_set_nfa_endp(p: *mut c_void);
+
+    // NFA ll_index for recursive calls
+    fn nvim_rex_get_nfa_ll_index() -> c_int;
+    fn nvim_rex_set_nfa_ll_index(v: c_int);
+
+    // Rex state setters for recursive regmatch
+    fn nvim_rex_set_line(ptr: *mut u8);
+    fn nvim_rex_set_lnum(lnum: c_int);
+    fn nvim_rex_get_nfa_listid() -> c_int;
+    fn nvim_rex_set_nfa_listid(v: c_int);
+    fn nvim_rex_get_nfa_alt_listid() -> c_int;
+    fn nvim_rex_set_nfa_alt_listid(v: c_int);
+
+    // Line navigation
+    fn nvim_reg_getline(lnum: c_int) -> *mut u8;
+    fn nvim_reg_getline_len(lnum: c_int) -> c_int;
+
+    // UTF-8 helpers
+    fn utf_head_off(base: *const i8, ptr: *const i8) -> c_int;
+
+    // Listid save/restore
+    fn nvim_nfa_save_listids(prog: *mut c_void, list: *mut c_int);
+    fn nvim_nfa_restore_listids(prog: *mut c_void, list: *const c_int);
+
+    // Program accessors
+    fn nvim_nfa_prog_get_nstate(prog: *const c_void) -> c_int;
+
+    // nfa_regmatch - calls back into C main loop
+    fn nvim_nfa_regmatch(
+        prog: *mut c_void,
+        start: *mut c_void,
+        submatch: *mut c_void,
+        m: *mut c_void,
+    ) -> c_int;
 
     // Memory allocation and error reporting
     fn xmalloc(size: usize) -> *mut i8;
@@ -1606,7 +1845,7 @@ extern "C" {
     fn rs_reg_breakcheck();
     fn nvim_get_got_int() -> c_int;
 
-    // UTF-8 helpers
+    // UTF-8 helpers for character handling
     fn utf_ptr2char(ptr: *const i8) -> c_int;
     fn utfc_ptr2len(ptr: *const i8) -> c_int;
     fn utf_iscomposing_legacy(c: c_int) -> c_int;

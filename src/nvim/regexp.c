@@ -8460,6 +8460,41 @@ void nvim_reg_nextline(void) {
   reg_nextline();
 }
 
+// Wrapper for reg_getline_len for Rust
+static colnr_T reg_getline_len(linenr_T lnum);  // Forward declaration
+colnr_T nvim_reg_getline_len(linenr_T lnum) {
+  return reg_getline_len(lnum);
+}
+
+// Forward declarations for listid save/restore
+static void nfa_save_listids(nfa_regprog_T *prog, int *list);
+static void nfa_restore_listids(nfa_regprog_T *prog, const int *list);
+
+// Wrapper for nfa_save_listids for Rust
+void nvim_nfa_save_listids(void *prog, int *list) {
+  nfa_save_listids((nfa_regprog_T *)prog, list);
+}
+
+// Wrapper for nfa_restore_listids for Rust
+void nvim_nfa_restore_listids(void *prog, const int *list) {
+  nfa_restore_listids((nfa_regprog_T *)prog, list);
+}
+
+// Forward declaration for nfa_regmatch
+static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start,
+                        regsubs_T *submatch, regsubs_T *m);
+
+// Wrapper for nfa_regmatch for Rust (calls into C main loop)
+int nvim_nfa_regmatch(void *prog, void *start, void *submatch, void *m) {
+  return nfa_regmatch((nfa_regprog_T *)prog, (nfa_state_T *)start,
+                      (regsubs_T *)submatch, (regsubs_T *)m);
+}
+
+// Accessor for nfa_regprog_T.nstate for Rust
+int nvim_nfa_prog_get_nstate(const void *prog) {
+  return ((const nfa_regprog_T *)prog)->nstate;
+}
+
 // Forward declarations for backref functions
 static int match_backref(regsub_T *sub, int subidx, int *bytelen);
 static int match_zref(int subidx, int *bytelen);
@@ -11721,146 +11756,16 @@ static bool nfa_re_num_cmp(uintmax_t val, int op, uintmax_t pos)
   return rs_nfa_re_num_cmp((uint64_t)val, op, (uint64_t)pos) != 0;
 }
 
-// Recursively call nfa_regmatch()
-// "pim" is NULL or contains info about a Postponed Invisible Match (start
-// position).
+// Recursively call nfa_regmatch() - now calls Rust implementation
+extern int rs_recursive_regmatch(nfa_state_T *state, const nfa_pim_T *pim,
+                                 void *prog, regsubs_T *submatch,
+                                 regsubs_T *m, int **listids, int *listids_len);
+
 static int recursive_regmatch(nfa_state_T *state, nfa_pim_T *pim, nfa_regprog_T *prog,
                               regsubs_T *submatch, regsubs_T *m, int **listids, int *listids_len)
   FUNC_ATTR_NONNULL_ARG(1, 3, 5, 6, 7)
 {
-  const int save_reginput_col = (int)(rex.input - rex.line);
-  const int save_reglnum = rex.lnum;
-  const int save_nfa_match = nfa_match;
-  const int save_nfa_listid = rex.nfa_listid;
-  save_se_T *const save_nfa_endp = nfa_endp;
-  save_se_T endpos;
-  save_se_T *endposp = NULL;
-  int need_restore = false;
-
-  if (pim != NULL) {
-    // start at the position where the postponed match was
-    if (REG_MULTI) {
-      rex.input = rex.line + pim->end.pos.col;
-    } else {
-      rex.input = pim->end.ptr;
-    }
-  }
-
-  if (state->c == NFA_START_INVISIBLE_BEFORE
-      || state->c == NFA_START_INVISIBLE_BEFORE_FIRST
-      || state->c == NFA_START_INVISIBLE_BEFORE_NEG
-      || state->c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST) {
-    // The recursive match must end at the current position. When "pim" is
-    // not NULL it specifies the current position.
-    endposp = &endpos;
-    if (REG_MULTI) {
-      if (pim == NULL) {
-        endpos.se_u.pos.col = (int)(rex.input - rex.line);
-        endpos.se_u.pos.lnum = rex.lnum;
-      } else {
-        endpos.se_u.pos = pim->end.pos;
-      }
-    } else {
-      if (pim == NULL) {
-        endpos.se_u.ptr = rex.input;
-      } else {
-        endpos.se_u.ptr = pim->end.ptr;
-      }
-    }
-
-    // Go back the specified number of bytes, or as far as the
-    // start of the previous line, to try matching "\@<=" or
-    // not matching "\@<!". This is very inefficient, limit the number of
-    // bytes if possible.
-    if (state->val <= 0) {
-      if (REG_MULTI) {
-        rex.line = (uint8_t *)reg_getline(--rex.lnum);
-        if (rex.line == NULL) {
-          // can't go before the first line
-          rex.line = (uint8_t *)reg_getline(++rex.lnum);
-        }
-      }
-      rex.input = rex.line;
-    } else {
-      if (REG_MULTI && (int)(rex.input - rex.line) < state->val) {
-        // Not enough bytes in this line, go to end of
-        // previous line.
-        rex.line = (uint8_t *)reg_getline(--rex.lnum);
-        if (rex.line == NULL) {
-          // can't go before the first line
-          rex.line = (uint8_t *)reg_getline(++rex.lnum);
-          rex.input = rex.line;
-        } else {
-          rex.input = rex.line + reg_getline_len(rex.lnum);
-        }
-      }
-      if ((int)(rex.input - rex.line) >= state->val) {
-        rex.input -= state->val;
-        rex.input -= utf_head_off((char *)rex.line, (char *)rex.input);
-      } else {
-        rex.input = rex.line;
-      }
-    }
-  }
-
-#ifdef REGEXP_DEBUG
-  if (log_fd != stderr) {
-    fclose(log_fd);
-  }
-  log_fd = NULL;
-#endif
-  // Have to clear the lastlist field of the NFA nodes, so that
-  // nfa_regmatch() and addstate() can run properly after recursion.
-  if (nfa_ll_index == 1) {
-    // Already calling nfa_regmatch() recursively.  Save the lastlist[1]
-    // values and clear them.
-    if (*listids == NULL || *listids_len < prog->nstate) {
-      xfree(*listids);
-      *listids = xmalloc(sizeof(**listids) * (size_t)prog->nstate);
-      *listids_len = prog->nstate;
-    }
-    nfa_save_listids(prog, *listids);
-    need_restore = true;
-    // any value of rex.nfa_listid will do
-  } else {
-    // First recursive nfa_regmatch() call, switch to the second lastlist
-    // entry.  Make sure rex.nfa_listid is different from a previous
-    // recursive call, because some states may still have this ID.
-    nfa_ll_index++;
-    if (rex.nfa_listid <= rex.nfa_alt_listid) {
-      rex.nfa_listid = rex.nfa_alt_listid;
-    }
-  }
-
-  // Call nfa_regmatch() to check if the current concat matches at this
-  // position. The concat ends with the node NFA_END_INVISIBLE
-  nfa_endp = endposp;
-  const int result = nfa_regmatch(prog, state->out, submatch, m);
-
-  if (need_restore) {
-    nfa_restore_listids(prog, *listids);
-  } else {
-    nfa_ll_index--;
-    rex.nfa_alt_listid = rex.nfa_listid;
-  }
-
-  // restore position in input text
-  rex.lnum = save_reglnum;
-  if (REG_MULTI) {
-    rex.line = (uint8_t *)reg_getline(rex.lnum);
-  }
-  rex.input = rex.line + save_reginput_col;
-  if (result != NFA_TOO_EXPENSIVE) {
-    nfa_match = save_nfa_match;
-    rex.nfa_listid = save_nfa_listid;
-  }
-  nfa_endp = save_nfa_endp;
-
-#ifdef REGEXP_DEBUG
-  open_debug_log(result);
-#endif
-
-  return result;
+  return rs_recursive_regmatch(state, pim, prog, submatch, m, listids, listids_len);
 }
 
 // Estimate the chance of a match with "state" failing.
