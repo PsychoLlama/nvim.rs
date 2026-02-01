@@ -4481,6 +4481,50 @@ int nvim_parse_get_reg_do_extmatch(void) { return reg_do_extmatch; }
 int nvim_parse_get_had_eol(void) { return had_eol; }
 void nvim_parse_set_had_eol(int v) { had_eol = v; }
 
+// Parse state save/restore stack for Rust's nfa_regpiece (handles \+ quantifier)
+// Needs to be a stack because nfa_regpiece can be called recursively (nested groups)
+#define RUST_PARSE_STATE_STACK_SIZE 32
+static parse_state_T rust_state_stack[RUST_PARSE_STATE_STACK_SIZE];
+static int rust_state_stack_idx = 0;
+
+// Secondary state for brace quantifiers (stores position after {})
+static parse_state_T rust_new_state;
+
+void nvim_save_parse_state(void) {
+  if (rust_state_stack_idx < RUST_PARSE_STATE_STACK_SIZE) {
+    save_parse_state(&rust_state_stack[rust_state_stack_idx++]);
+  }
+}
+
+void nvim_restore_parse_state(void) {
+  if (rust_state_stack_idx > 0) {
+    restore_parse_state(&rust_state_stack[--rust_state_stack_idx]);
+  }
+}
+
+// Pop the saved state without restoring (for when \+ was not found)
+void nvim_discard_parse_state(void) {
+  if (rust_state_stack_idx > 0) {
+    rust_state_stack_idx--;
+  }
+}
+
+// Secondary state for brace quantifier - saves position after {}
+void nvim_save_new_state(void) {
+  save_parse_state(&rust_new_state);
+}
+
+void nvim_restore_new_state(void) {
+  restore_parse_state(&rust_new_state);
+}
+
+// Peek and restore - restore old_state without popping (for re-parsing atom in loop)
+void nvim_peek_restore_parse_state(void) {
+  if (rust_state_stack_idx > 0) {
+    restore_parse_state(&rust_state_stack[rust_state_stack_idx - 1]);
+  }
+}
+
 // classchars - character class characters (for nfa_regatom)
 const uint8_t *nvim_parse_get_classchars(void) { return classchars; }
 
@@ -6302,6 +6346,8 @@ int nfa_regmatch_process_state(
 // NFA postfix output accessors for Rust
 int *nvim_nfa_get_post_ptr(void) { return post_ptr; }
 int *nvim_nfa_get_post_start(void) { return post_start; }
+void nvim_nfa_set_post_ptr_offset(int offset) { post_ptr = post_start + offset; }
+int nvim_nfa_get_post_ptr_offset(void) { return (int)(post_ptr - post_start); }
 
 // Emit a token to the NFA postfix output
 void nvim_nfa_emit(int c)

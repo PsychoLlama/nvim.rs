@@ -37,10 +37,12 @@ use crate::nfa_states::{
     NFA_COMPOSING, NFA_CONCAT, NFA_CURSOR, NFA_EMPTY, NFA_END_COLL, NFA_END_NEG_COLL, NFA_EOF,
     NFA_EOL, NFA_EOW, NFA_FIRST_NL, NFA_LAST_NL, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_MARK,
     NFA_MARK_GT, NFA_MARK_LT, NFA_MOPEN, NFA_NEWL, NFA_NOPEN, NFA_OPT_CHARS, NFA_OR,
-    NFA_PREV_ATOM_NO_WIDTH, NFA_QUEST, NFA_QUEST_NONGREEDY, NFA_RANGE, NFA_STAR, NFA_START_COLL,
-    NFA_START_NEG_COLL, NFA_STAR_NONGREEDY, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL,
-    NFA_ZEND, NFA_ZOPEN, NFA_ZREF1, NFA_ZSTART,
+    NFA_PREV_ATOM_JUST_BEFORE, NFA_PREV_ATOM_JUST_BEFORE_NEG, NFA_PREV_ATOM_LIKE_PATTERN,
+    NFA_PREV_ATOM_NO_WIDTH, NFA_PREV_ATOM_NO_WIDTH_NEG, NFA_QUEST, NFA_QUEST_NONGREEDY, NFA_RANGE,
+    NFA_STAR, NFA_START_COLL, NFA_START_NEG_COLL, NFA_STAR_NONGREEDY, NFA_VCOL, NFA_VCOL_GT,
+    NFA_VCOL_LT, NFA_VISUAL, NFA_ZEND, NFA_ZOPEN, NFA_ZREF1, NFA_ZSTART,
 };
+use crate::parser::{read_limits, MAX_LIMIT};
 use crate::scanner::{getchr, peekchr, skipchr, ungetchr};
 
 // =============================================================================
@@ -99,6 +101,7 @@ const MAGIC_OPEN_BRACKET: c_int = magic(b'[' as c_int);
 const MAGIC_PERCENT: c_int = magic(b'%' as c_int);
 const MAGIC_AT: c_int = magic(b'@' as c_int);
 const MAGIC_EQUAL: c_int = magic(b'=' as c_int);
+const MAGIC_MINUS: c_int = magic(b'-' as c_int);
 
 /// NUL character
 const NUL: c_int = 0;
@@ -182,6 +185,20 @@ extern "C" {
     fn nvim_parse_get_had_eol() -> c_int;
     fn nvim_parse_set_had_eol(v: c_int);
     fn nvim_parse_get_save_prev_at_start() -> c_int;
+
+    // Parse state save/restore stack for quantifier handling (handles nested groups)
+    fn nvim_save_parse_state();
+    fn nvim_restore_parse_state();
+    fn nvim_discard_parse_state();
+    fn nvim_peek_restore_parse_state(); // Restore without popping (for brace loops)
+
+    // Secondary state for brace quantifier - saves position after {}
+    fn nvim_save_new_state();
+    fn nvim_restore_new_state();
+
+    // Postfix position tracking for brace quantifiers
+    fn nvim_nfa_set_post_ptr_offset(offset: c_int);
+    fn nvim_nfa_get_post_ptr_offset() -> c_int;
     fn nvim_parse_set_at_start(v: c_int);
     fn nvim_parse_set_wants_nfa(v: c_int);
 
@@ -1357,8 +1374,16 @@ unsafe fn parse_literal_char(c: c_int, old_regparse: *mut u8) -> c_int {
 /// # Safety
 /// Must be called with valid parser state.
 pub unsafe fn nfa_regpiece() -> c_int {
+    // Save parse state before atom - needed for \+ and \{} which re-parse the atom.
+    // This uses a stack because nfa_regpiece can be called recursively (nested groups).
+    nvim_save_parse_state();
+
+    // Save postfix position before atom - needed for \{} to discard the atom
+    let my_post_start = nvim_nfa_get_post_ptr_offset();
+
     // Parse the atom first
     if nfa_regatom() == FAIL {
+        nvim_discard_parse_state(); // Clean up stack on failure
         return FAIL;
     }
 
@@ -1366,6 +1391,7 @@ pub unsafe fn nfa_regpiece() -> c_int {
     let c = peekchr();
 
     if c == MAGIC_STAR {
+        nvim_discard_parse_state(); // Don't need saved state for *
         skipchr();
         // Check for non-greedy variant
         if peekchr() == MAGIC_QUESTION {
@@ -1375,18 +1401,27 @@ pub unsafe fn nfa_regpiece() -> c_int {
             emit(NFA_STAR);
         }
     } else if c == MAGIC_PLUS {
-        skipchr();
-        // a+ is same as aa*
-        emit(NFA_CONCAT);
+        // a+ is same as aa* - need to re-parse atom to emit it twice
+        // Restore parse state to before the atom (pops from stack)
+        nvim_restore_parse_state();
+        // Re-parse atom (emits second copy)
+        if nfa_regatom() == FAIL {
+            return FAIL;
+        }
+        skipchr(); // skip the \+
+                   // Check for non-greedy variant
         if peekchr() == MAGIC_QUESTION {
             skipchr();
             emit(NFA_STAR_NONGREEDY);
         } else {
             emit(NFA_STAR);
         }
-    } else if c == MAGIC_QUESTION {
+        emit(NFA_CONCAT);
+    } else if c == MAGIC_QUESTION || c == MAGIC_EQUAL {
+        // \? and \= both mean zero-or-one (optional)
+        nvim_discard_parse_state(); // Don't need saved state for ?/=
         skipchr();
-        // Check for non-greedy variant
+        // Check for non-greedy variant (\?? or \=?)
         if peekchr() == MAGIC_QUESTION {
             skipchr();
             emit(NFA_QUEST_NONGREEDY);
@@ -1394,8 +1429,145 @@ pub unsafe fn nfa_regpiece() -> c_int {
             emit(NFA_QUEST);
         }
     } else if c == MAGIC_OPEN_BRACE {
-        // Brace quantifier {n,m} - handled by calling into C for now
-        // The full brace handling is complex and will be migrated later
+        // Brace quantifier {n,m}
+        // Skip the opening brace
+        skipchr();
+
+        // Check for non-greedy: \{-n,m}
+        // Note: read_limits() handles the '-' internally, so we just need to call it
+        let greedy = {
+            let c2 = peekchr();
+            !(c2 == b'-' as c_int || c2 == MAGIC_MINUS)
+        };
+
+        // Read the limits
+        let mut minval: c_int = 0;
+        let mut maxval: c_int = 0;
+        if read_limits(&mut minval, &mut maxval) == FAIL {
+            nvim_discard_parse_state();
+            static E_READ_LIMITS: &[u8] = b"E870: (NFA regexp) Error reading repetition limits\0";
+            emsg(E_READ_LIMITS.as_ptr() as *const c_char);
+            return FAIL;
+        }
+
+        // Special case: {0,} or {} is equivalent to *
+        if minval == 0 && maxval == MAX_LIMIT {
+            nvim_discard_parse_state();
+            if greedy {
+                emit(NFA_STAR);
+            } else {
+                emit(NFA_STAR_NONGREEDY);
+            }
+            return OK;
+        }
+
+        // Special case: {0} - discard the atom entirely
+        if maxval == 0 {
+            nvim_discard_parse_state();
+            // Reset postfix to before atom was parsed
+            nvim_nfa_set_post_ptr_offset(my_post_start);
+            emit(NFA_EMPTY);
+            return OK;
+        }
+
+        // General case: expand {n,m} to aaa?a?... (n required, m-n optional)
+        // Discard the atom we already parsed - we'll re-parse it multiple times
+        nvim_nfa_set_post_ptr_offset(my_post_start);
+
+        // Save parse state AFTER the {} - this is where we'll continue after the loop
+        // The stack already has old_state (before atom), use secondary slot for new_state
+        nvim_save_new_state();
+
+        let quest = if greedy {
+            NFA_QUEST
+        } else {
+            NFA_QUEST_NONGREEDY
+        };
+
+        for i in 0..maxval {
+            // Restore parse state to before the atom (without popping)
+            nvim_peek_restore_parse_state();
+
+            let old_post_pos = nvim_nfa_get_post_ptr_offset();
+            if nfa_regatom() == FAIL {
+                nvim_discard_parse_state(); // Clean up stack
+                return FAIL;
+            }
+
+            // After minval times, atoms become optional
+            if i + 1 > minval {
+                if maxval == MAX_LIMIT {
+                    // Unbounded max: use STAR for remaining
+                    if greedy {
+                        emit(NFA_STAR);
+                    } else {
+                        emit(NFA_STAR_NONGREEDY);
+                    }
+                } else {
+                    emit(quest);
+                }
+            }
+
+            // Add CONCAT if not first atom
+            if old_post_pos != my_post_start {
+                emit(NFA_CONCAT);
+            }
+
+            // If we're past minval and maxval is unlimited, we're done
+            // (the STAR handles the rest)
+            if i + 1 > minval && maxval == MAX_LIMIT {
+                break;
+            }
+        }
+
+        // Clean up the stack (pop old_state) and restore to after {}
+        nvim_discard_parse_state();
+        nvim_restore_new_state();
+
+        return OK;
+    } else if c == MAGIC_AT {
+        // Zero-width assertions: \@=, \@!, \@<=, \@<!, \@>
+        nvim_discard_parse_state();
+
+        // Get optional count (e.g., \@123=)
+        let c2 = rs_getdecchrs();
+
+        // Skip the @ and get the operator
+        skipchr();
+        let op = no_magic(getchr());
+
+        let nfa_state = match op as u8 {
+            b'=' => NFA_PREV_ATOM_NO_WIDTH,     // \@=
+            b'!' => NFA_PREV_ATOM_NO_WIDTH_NEG, // \@!
+            b'<' => {
+                // Look-behind: \@<= or \@<!
+                let op2 = no_magic(getchr());
+                match op2 as u8 {
+                    b'=' => NFA_PREV_ATOM_JUST_BEFORE,     // \@<=
+                    b'!' => NFA_PREV_ATOM_JUST_BEFORE_NEG, // \@<!
+                    _ => {
+                        static E_UNKNOWN: &[u8] = b"E869: (NFA) Unknown operator '\\@<%c'\0";
+                        semsg(E_UNKNOWN.as_ptr() as *const c_char, op2);
+                        return FAIL;
+                    }
+                }
+            }
+            b'>' => NFA_PREV_ATOM_LIKE_PATTERN, // \@>
+            _ => {
+                static E_UNKNOWN: &[u8] = b"E869: (NFA) Unknown operator '\\@%c'\0";
+                semsg(E_UNKNOWN.as_ptr() as *const c_char, op);
+                return FAIL;
+            }
+        };
+
+        // Emit optional count
+        if c2 > 0 {
+            emit(c2 as c_int);
+        }
+        emit(nfa_state);
+    } else {
+        // No quantifier - discard the saved state
+        nvim_discard_parse_state();
     }
 
     OK
