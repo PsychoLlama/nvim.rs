@@ -1078,6 +1078,9 @@ pub unsafe fn nfa_max_width(startstate: *mut NfaState, depth: c_int) -> c_int {
 /// Maximum recursion depth for match_follows
 const MATCH_FOLLOWS_MAX_DEPTH: c_int = 10;
 
+/// Maximum iterations for match_follows while loop to prevent infinite loops
+const MATCH_FOLLOWS_MAX_ITER: u32 = 10000;
+
 /// Maximum recursion depth for failure_chance
 const FAILURE_CHANCE_MAX_DEPTH: c_int = 4;
 
@@ -1093,7 +1096,14 @@ pub unsafe fn match_follows(startstate: *const NfaState, depth: c_int) -> bool {
     }
 
     let mut state = startstate;
+    let mut iter_count: u32 = 0;
     while !state.is_null() {
+        // Prevent infinite loop in case of cyclic NFA graph
+        iter_count += 1;
+        if iter_count > MATCH_FOLLOWS_MAX_ITER {
+            // Cycle detected - return false to be safe
+            return false;
+        }
         let c = (*state).c;
 
         match c {
