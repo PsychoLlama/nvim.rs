@@ -397,6 +397,12 @@ pub const fn get_backref_num(op: c_int) -> c_int {
     op - BACKREF
 }
 
+/// Get the zref number from a ZREF opcode.
+#[inline]
+pub const fn get_zref_num(op: c_int) -> c_int {
+    op - ZREF
+}
+
 /// Get the subexpr number from a ZOPEN opcode.
 #[inline]
 pub const fn get_zopen_num(op: c_int) -> c_int {

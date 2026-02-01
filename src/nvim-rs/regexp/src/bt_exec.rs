@@ -28,14 +28,14 @@ use std::ptr;
 
 use crate::bt_compile::{next, op, operand};
 use crate::bt_opcodes::{
-    get_backref_num, get_mclose_num, get_mopen_num, get_zclose_num, get_zopen_num, is_backref,
-    is_mclose, is_mopen, is_zclose, is_zopen, operand_cmp, operand_max, operand_min, ADD_NL, ALPHA,
-    ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE,
-    BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FIRST_NL, FNAME, HEAD, HEX, IDENT, LAST_NL,
-    LOWER, MATCH, MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND,
-    NOCTAL, NOMATCH, NOPEN, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL,
-    RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR,
-    SUBPAT, UPPER, WHITE, WORD,
+    get_backref_num, get_mclose_num, get_mopen_num, get_zclose_num, get_zopen_num, get_zref_num,
+    is_backref, is_mclose, is_mopen, is_zclose, is_zopen, is_zref, operand_cmp, operand_max,
+    operand_min, ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX,
+    BRACE_LIMITS, BRACE_SIMPLE, BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FIRST_NL, FNAME,
+    HEAD, HEX, IDENT, LAST_NL, LOWER, MATCH, MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD,
+    NHEX, NLOWER, NOBEHIND, NOCTAL, NOMATCH, NOPEN, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS,
+    PRINT, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME,
+    SKWORD, SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
 };
 use crate::bt_state::{
     BackPosTable, RegBehind, RegItem, RegSave, RegStack, RegStar, RegState, NSUBEXP,
@@ -4635,7 +4635,187 @@ unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int, next_out: *mut *mut
         }
 
         // =====================================================================
-        // Tier 5: Simple opcodes (NOTHING)
+        // Tier 5: Submatch markers (Phase 17c)
+        // =====================================================================
+        op if is_mopen(op) => {
+            let no = get_mopen_num(op) as c_int;
+            nvim_cleanup_subexpr();
+            let rp = nvim_regstack_push_item(RS_MOPEN, scan);
+            if rp.is_null() {
+                return RA_FAIL;
+            }
+            nvim_regitem_set_no(rp, no as i16);
+
+            // Save current start position
+            let sesave = nvim_regitem_get_sesave(rp);
+            if is_multi {
+                let startpos = nvim_rex_get_reg_startpos();
+                nvim_bt_save_se_multi(
+                    sesave,
+                    (startpos as *mut u8).add(no as usize * std::mem::size_of::<LPosBt>())
+                        as *mut c_void,
+                );
+                // Set the new position
+                let lnum = nvim_rex_get_lnum();
+                let input = nvim_rex_get_input();
+                let line = nvim_rex_get_line();
+                let col = input.offset_from(line) as c_int;
+                nvim_set_reg_startpos(no, lnum, col);
+            } else {
+                let startp = nvim_rex_get_reg_startp();
+                nvim_bt_save_se_one(sesave, startp.add(no as usize));
+                let input = nvim_rex_get_input();
+                nvim_set_reg_startp(no, input);
+            }
+            RA_CONT
+        }
+
+        op if is_mclose(op) => {
+            let no = get_mclose_num(op) as c_int;
+            nvim_cleanup_subexpr();
+            let rp = nvim_regstack_push_item(RS_MCLOSE, scan);
+            if rp.is_null() {
+                return RA_FAIL;
+            }
+            nvim_regitem_set_no(rp, no as i16);
+
+            // Save current end position
+            let sesave = nvim_regitem_get_sesave(rp);
+            if is_multi {
+                let endpos = nvim_rex_get_reg_endpos();
+                nvim_bt_save_se_multi(
+                    sesave,
+                    (endpos as *mut u8).add(no as usize * std::mem::size_of::<LPosBt>())
+                        as *mut c_void,
+                );
+                let lnum = nvim_rex_get_lnum();
+                let input = nvim_rex_get_input();
+                let line = nvim_rex_get_line();
+                let col = input.offset_from(line) as c_int;
+                nvim_set_reg_endpos(no, lnum, col);
+            } else {
+                let endp = nvim_rex_get_reg_endp();
+                nvim_bt_save_se_one(sesave, endp.add(no as usize));
+                let input = nvim_rex_get_input();
+                nvim_set_reg_endp(no, input);
+            }
+            RA_CONT
+        }
+
+        NOPEN | NCLOSE => {
+            // Non-capturing group - just push state for tracking
+            if nvim_regstack_push_item(RS_NOPEN, scan).is_null() {
+                return RA_FAIL;
+            }
+            RA_CONT
+        }
+
+        op if is_backref(op) => {
+            let no = get_backref_num(op) as c_int;
+            nvim_cleanup_subexpr();
+
+            if !is_multi {
+                // Single-line mode
+                let startp = nvim_rex_get_reg_startp();
+                let endp = nvim_rex_get_reg_endp();
+                let sp = *startp.add(no as usize);
+                let ep = *endp.add(no as usize);
+
+                if sp.is_null() || ep.is_null() {
+                    // No match yet, treat as empty string
+                    return RA_CONT;
+                }
+
+                let mut len = ep.offset_from(sp) as c_int;
+                let input = nvim_rex_get_input();
+                if rs_cstrncmp(sp as *const c_char, input as *const c_char, &mut len) != 0 {
+                    return RA_NOMATCH;
+                }
+                nvim_rex_set_input(input.add(len as usize));
+            } else {
+                // Multi-line mode
+                let startpos = nvim_rex_get_reg_startpos() as *const LPosBt;
+                let endpos = nvim_rex_get_reg_endpos() as *const LPosBt;
+                let sp = startpos.add(no as usize);
+                let ep = endpos.add(no as usize);
+
+                if (*sp).lnum < 0 || (*ep).lnum < 0 {
+                    // No match yet
+                    return RA_CONT;
+                }
+
+                let lnum = nvim_rex_get_lnum();
+                if (*sp).lnum == lnum && (*ep).lnum == lnum {
+                    // Same line - simple comparison
+                    let mut len = (*ep).col - (*sp).col;
+                    let line = nvim_rex_get_line();
+                    let input = nvim_rex_get_input();
+                    let src = line.add((*sp).col as usize);
+                    if rs_cstrncmp(src as *const c_char, input as *const c_char, &mut len) != 0 {
+                        return RA_NOMATCH;
+                    }
+                    nvim_rex_set_input(input.add(len as usize));
+                } else {
+                    // Multi-line backref
+                    let mut len: c_int = 0;
+                    let r = nvim_match_with_backref(
+                        (*sp).lnum,
+                        (*sp).col,
+                        (*ep).lnum,
+                        (*ep).col,
+                        &mut len,
+                    );
+                    if r != RA_MATCH {
+                        return r;
+                    }
+                    let input = nvim_rex_get_input();
+                    nvim_rex_set_input(input.add(len as usize));
+                }
+            }
+            RA_CONT
+        }
+
+        op if is_zref(op) => {
+            nvim_cleanup_zsubexpr();
+            let no = get_zref_num(op) as c_int;
+
+            let match_ptr = nvim_extmatch_in_get_match(no);
+            if !match_ptr.is_null() {
+                let mut len = libc::strlen(match_ptr as *const c_char) as c_int;
+                let input = nvim_rex_get_input();
+                if rs_cstrncmp(match_ptr as *const c_char, input as *const c_char, &mut len) != 0 {
+                    return RA_NOMATCH;
+                }
+                nvim_rex_set_input(input.add(len as usize));
+            }
+            RA_CONT
+        }
+
+        BACK => {
+            // Check for infinite loop by looking up this scan position
+            let idx = nvim_backpos_lookup(scan);
+            if idx < 0 {
+                // Not seen before - add to table
+                nvim_backpos_add(scan);
+                // Save current position at the new index
+                let new_idx = nvim_backpos_lookup(scan);
+                if new_idx >= 0 {
+                    nvim_backpos_save(new_idx);
+                }
+            } else {
+                // Seen before - check if position is the same
+                if nvim_backpos_equal(idx) {
+                    // Same position - would loop forever
+                    return RA_NOMATCH;
+                }
+                // Different position - save new position
+                nvim_backpos_save(idx);
+            }
+            RA_CONT
+        }
+
+        // =====================================================================
+        // Tier 6: Simple opcodes (NOTHING)
         // Note: END is handled in rs_regmatch_full before calling this function
         // Note: NEWL requires full multiline handling, delegated to C
         // =====================================================================
@@ -4683,6 +4863,24 @@ extern "C" {
     fn utf_iscomposing_legacy(c: c_int) -> c_int;
     fn utf_ptr2len(p: *const c_char) -> c_int;
     fn nvim_rex_get_reg_icombine() -> bool;
+
+    // Submatch support (Phase 17c)
+    fn nvim_set_reg_startpos(idx: c_int, lnum: c_int, col: c_int);
+    fn nvim_set_reg_endpos(idx: c_int, lnum: c_int, col: c_int);
+    fn nvim_set_reg_startp(idx: c_int, p: *mut u8);
+    fn nvim_set_reg_endp(idx: c_int, p: *mut u8);
+    fn nvim_extmatch_in_get_match(idx: c_int) -> *const u8;
+    fn nvim_match_with_backref(
+        start_lnum: c_int,
+        start_col: c_int,
+        end_lnum: c_int,
+        end_col: c_int,
+        len: *mut c_int,
+    ) -> c_int;
+    fn nvim_backpos_lookup(scan: *const u8) -> c_int;
+    fn nvim_backpos_add(scan: *const u8);
+    fn nvim_backpos_save(idx: c_int);
+    fn nvim_backpos_equal(idx: c_int) -> bool;
 }
 
 /// Advance rex.input by one multibyte character (equivalent to ADVANCE_REGINPUT macro).

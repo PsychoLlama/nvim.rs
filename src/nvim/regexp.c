@@ -5088,6 +5088,82 @@ void nvim_set_reg_endzp(int idx, uint8_t *p)
   }
 }
 
+// Rex reg_startpos/reg_endpos setters (Phase 17c)
+void nvim_set_reg_startpos(int idx, linenr_T lnum, colnr_T col)
+{
+  if (idx >= 0 && idx < NSUBEXP) {
+    rex.reg_startpos[idx].lnum = lnum;
+    rex.reg_startpos[idx].col = col;
+  }
+}
+
+void nvim_set_reg_endpos(int idx, linenr_T lnum, colnr_T col)
+{
+  if (idx >= 0 && idx < NSUBEXP) {
+    rex.reg_endpos[idx].lnum = lnum;
+    rex.reg_endpos[idx].col = col;
+  }
+}
+
+void nvim_set_reg_startp(int idx, uint8_t *p)
+{
+  if (idx >= 0 && idx < NSUBEXP) {
+    rex.reg_startp[idx] = p;
+  }
+}
+
+void nvim_set_reg_endp(int idx, uint8_t *p)
+{
+  if (idx >= 0 && idx < NSUBEXP) {
+    rex.reg_endp[idx] = p;
+  }
+}
+
+// Extmatch in match accessor for ZREF
+uint8_t *nvim_extmatch_in_get_match(int idx)
+{
+  if (re_extmatch_in != NULL && idx >= 0 && idx < NSUBEXP) {
+    return re_extmatch_in->matches[idx];
+  }
+  return NULL;
+}
+
+// Backpos lookup and save for BACK opcode (Phase 17c)
+// Returns index if found, -1 if not found (and adds entry)
+int nvim_backpos_lookup(const uint8_t *scan)
+{
+  backpos_T *bp = (backpos_T *)backpos.ga_data;
+  for (int i = 0; i < backpos.ga_len; i++) {
+    if (bp[i].bp_scan == scan) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void nvim_backpos_add(const uint8_t *scan)
+{
+  backpos_T *p = GA_APPEND_VIA_PTR(backpos_T, &backpos);
+  p->bp_scan = (uint8_t *)scan;
+}
+
+void nvim_backpos_save(int idx)
+{
+  if (idx >= 0 && idx < backpos.ga_len) {
+    backpos_T *bp = (backpos_T *)backpos.ga_data;
+    reg_save(&bp[idx].bp_pos, &backpos);
+  }
+}
+
+bool nvim_backpos_equal(int idx)
+{
+  if (idx >= 0 && idx < backpos.ga_len) {
+    backpos_T *bp = (backpos_T *)backpos.ga_data;
+    return reg_save_equal(&bp[idx].bp_pos);
+  }
+  return false;
+}
+
 // Extmatch accessors
 reg_extmatch_T *nvim_make_extmatch(void) { return make_extmatch(); }
 void nvim_unref_extmatch(reg_extmatch_T *em) { unref_extmatch(em); }
@@ -5109,6 +5185,13 @@ uint8_t *nvim_extmatch_get_match(reg_extmatch_T *em, int idx)
     return em->matches[idx];
   }
   return NULL;
+}
+
+// Wrapper for match_with_backref (Phase 17c)
+int nvim_match_with_backref(linenr_T start_lnum, colnr_T start_col,
+                            linenr_T end_lnum, colnr_T end_col, int *len)
+{
+  return match_with_backref(start_lnum, start_col, end_lnum, end_col, len);
 }
 
 // Regstack and backpos accessors
