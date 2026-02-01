@@ -36,7 +36,9 @@ use crate::bt_opcodes::{
     RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD,
     SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
 };
-use crate::bt_state::{BackPosTable, RegSave, RegStack, RegStar, RegState, NSUBEXP};
+use crate::bt_state::{
+    BackPosTable, RegBehind, RegItem, RegSave, RegStack, RegStar, RegState, NSUBEXP,
+};
 use crate::rs_cstrncmp;
 
 // =============================================================================
@@ -324,8 +326,45 @@ impl MatchState {
     }
 
     /// Pop a backtrack item from the stack
-    pub fn pop_backtrack(&mut self) -> Option<*mut u8> {
+    ///
+    /// Returns (state, scan pointer) from the popped item.
+    pub fn pop_backtrack(&mut self) -> Option<(RegState, *mut u8)> {
         self.stack.pop_item()
+    }
+
+    /// Pop a full backtrack item from the stack (includes all fields).
+    pub fn pop_backtrack_full(&mut self) -> Option<RegItem> {
+        self.stack.pop_item_full()
+    }
+
+    /// Peek at the top backtrack item without popping.
+    pub fn peek_backtrack(&self) -> Option<&RegItem> {
+        self.stack.peek_item()
+    }
+
+    /// Peek at the top backtrack item mutably.
+    pub fn peek_backtrack_mut(&mut self) -> Option<&mut RegItem> {
+        self.stack.peek_item_mut()
+    }
+
+    /// Push a RegStar onto the stack (for STAR/PLUS/BRACE_SIMPLE).
+    pub fn push_star(&mut self, star: RegStar) -> bool {
+        self.stack.push_star(star)
+    }
+
+    /// Pop a RegStar from the stack.
+    pub fn pop_star(&mut self) -> Option<RegStar> {
+        self.stack.pop_star()
+    }
+
+    /// Push a RegBehind onto the stack (for BEHIND/NOBEHIND).
+    pub fn push_behind(&mut self, behind: RegBehind) -> bool {
+        self.stack.push_behind(behind)
+    }
+
+    /// Pop a RegBehind from the stack.
+    pub fn pop_behind(&mut self) -> Option<RegBehind> {
+        self.stack.pop_behind()
     }
 
     /// Check if backtrack stack is empty
@@ -532,7 +571,7 @@ pub unsafe fn regmatch(state: &mut MatchState, program: *const u8) -> MatchResul
             }
             MatchStatus::NoMatch => {
                 // Try backtracking
-                if let Some(back_scan) = state.pop_backtrack() {
+                if let Some((_state, back_scan)) = state.pop_backtrack() {
                     scan = back_scan;
                 } else {
                     return MatchResult::NoMatch;
@@ -1266,6 +1305,8 @@ pub unsafe extern "C" fn rs_bt_push_backtrack(
 
 /// Pop a backtrack item.
 ///
+/// Returns the scan pointer from the popped item (state is discarded).
+///
 /// # Safety
 /// `state` must be valid.
 #[no_mangle]
@@ -1273,7 +1314,36 @@ pub unsafe extern "C" fn rs_bt_pop_backtrack(state: *mut MatchState) -> *mut u8 
     if state.is_null() {
         ptr::null_mut()
     } else {
-        (*state).pop_backtrack().unwrap_or(ptr::null_mut())
+        (*state)
+            .pop_backtrack()
+            .map(|(_state, scan)| scan)
+            .unwrap_or(ptr::null_mut())
+    }
+}
+
+/// Pop a backtrack item with state.
+///
+/// Returns the state type via `out_state` and the scan pointer as return value.
+///
+/// # Safety
+/// `state` and `out_state` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_pop_backtrack_with_state(
+    state: *mut MatchState,
+    out_state: *mut c_int,
+) -> *mut u8 {
+    if state.is_null() || out_state.is_null() {
+        return ptr::null_mut();
+    }
+    match (*state).pop_backtrack() {
+        Some((rs_state, scan)) => {
+            *out_state = rs_state as c_int;
+            scan
+        }
+        None => {
+            *out_state = RegState::Nopen as c_int;
+            ptr::null_mut()
+        }
     }
 }
 
@@ -3051,10 +3121,10 @@ mod tests {
 
         // Pop items (LIFO order)
         let popped1 = state.pop_backtrack();
-        assert_eq!(popped1, Some(scan2));
+        assert_eq!(popped1, Some((RegState::StarLong, scan2)));
 
         let popped2 = state.pop_backtrack();
-        assert_eq!(popped2, Some(scan1));
+        assert_eq!(popped2, Some((RegState::Branch, scan1)));
 
         assert!(state.backtrack_empty());
         assert!(state.pop_backtrack().is_none());

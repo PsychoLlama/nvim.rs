@@ -5744,6 +5744,210 @@ static void restore_subexpr(regbehind_T *bp)
     }
   }
 }
+
+// =============================================================================
+// regmatch() support accessors for Rust (Phase 14)
+// =============================================================================
+
+// bl_minval/bl_maxval accessors
+int64_t nvim_get_bl_minval(void) { return bl_minval; }
+void nvim_set_bl_minval(int64_t v) { bl_minval = v; }
+int64_t nvim_get_bl_maxval(void) { return bl_maxval; }
+void nvim_set_bl_maxval(int64_t v) { bl_maxval = v; }
+
+// brace_min/max/count array accessors
+int64_t nvim_get_brace_min(int idx) { return (idx >= 0 && idx < 10) ? brace_min[idx] : 0; }
+void nvim_set_brace_min(int idx, int64_t v) { if (idx >= 0 && idx < 10) brace_min[idx] = v; }
+int64_t nvim_get_brace_max(int idx) { return (idx >= 0 && idx < 10) ? brace_max[idx] : 0; }
+void nvim_set_brace_max(int idx, int64_t v) { if (idx >= 0 && idx < 10) brace_max[idx] = v; }
+int nvim_get_brace_count(int idx) { return (idx >= 0 && idx < 10) ? brace_count[idx] : 0; }
+void nvim_set_brace_count(int idx, int v) { if (idx >= 0 && idx < 10) brace_count[idx] = v; }
+
+// behind_pos accessor (for BEHIND/NOBEHIND) - returns opaque pointer
+void *nvim_get_behind_pos(void) { return &behind_pos; }
+
+// regstack push/pop wrappers that mirror regstack_push/regstack_pop
+// Returns opaque pointer to regitem_T
+void *nvim_regstack_push_item(int state, uint8_t *scan)
+{
+  return regstack_push((regstate_T)state, scan);
+}
+
+void nvim_regstack_pop_item(uint8_t **scan)
+{
+  regstack_pop(scan);
+}
+
+// Get top regitem from stack (without popping) - returns opaque pointer
+void *nvim_regstack_top(void)
+{
+  if (GA_EMPTY(&regstack)) {
+    return NULL;
+  }
+  return (regitem_T *)((char *)regstack.ga_data + regstack.ga_len) - 1;
+}
+
+// Check if regstack is empty
+bool nvim_regstack_empty(void)
+{
+  return GA_EMPTY(&regstack);
+}
+
+// Get regstack length in bytes
+int nvim_regstack_len(void)
+{
+  return regstack.ga_len;
+}
+
+// Set regstack length (for shrinking)
+void nvim_regstack_set_len(int len)
+{
+  regstack.ga_len = len;
+}
+
+// reg_save/reg_restore wrappers - takes opaque pointer
+void nvim_bt_reg_save(void *save)
+{
+  reg_save(save, &backpos);
+}
+
+void nvim_bt_reg_restore(void *save)
+{
+  reg_restore(save, &backpos);
+}
+
+// reg_save_equal wrapper
+bool nvim_bt_reg_save_equal(const void *save)
+{
+  return reg_save_equal(save);
+}
+
+// save_se/restore_se wrappers - takes opaque pointers
+void nvim_bt_save_se_multi(void *savep, lpos_T *posp)
+{
+  save_se_multi(savep, posp);
+}
+
+void nvim_bt_save_se_one(void *savep, uint8_t **pp)
+{
+  save_se_one(savep, pp);
+}
+
+void nvim_bt_restore_se_multi(const void *savep, lpos_T *posp)
+{
+  *posp = ((const save_se_T *)savep)->se_u.pos;
+}
+
+void nvim_bt_restore_se_one(const void *savep, uint8_t **pp)
+{
+  *pp = ((const save_se_T *)savep)->se_u.ptr;
+}
+
+// save_subexpr/restore_subexpr for BEHIND - takes opaque pointer
+void nvim_bt_save_subexpr(void *bp)
+{
+  save_subexpr(bp);
+}
+
+void nvim_bt_restore_subexpr(void *bp)
+{
+  restore_subexpr(bp);
+}
+
+// regitem_T field accessors (since regitem_T is not exported)
+int nvim_regitem_get_state(const void *rp)
+{
+  return ((const regitem_T *)rp)->rs_state;
+}
+
+int16_t nvim_regitem_get_no(const void *rp)
+{
+  return ((const regitem_T *)rp)->rs_no;
+}
+
+void nvim_regitem_set_no(void *rp, int16_t no)
+{
+  ((regitem_T *)rp)->rs_no = no;
+}
+
+uint8_t *nvim_regitem_get_scan(const void *rp)
+{
+  return ((const regitem_T *)rp)->rs_scan;
+}
+
+void nvim_regitem_set_scan(void *rp, uint8_t *scan)
+{
+  ((regitem_T *)rp)->rs_scan = scan;
+}
+
+// Get pointer to rs_un.regsave in a regitem
+void *nvim_regitem_get_regsave(void *rp)
+{
+  return &((regitem_T *)rp)->rs_un.regsave;
+}
+
+// Get pointer to rs_un.sesave in a regitem
+void *nvim_regitem_get_sesave(void *rp)
+{
+  return &((regitem_T *)rp)->rs_un.sesave;
+}
+
+// Grow regstack by size bytes (for regstar_T/regbehind_T)
+bool nvim_regstack_grow(int size)
+{
+  if ((int64_t)((unsigned)regstack.ga_len >> 10) >= p_mmp) {
+    emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
+    return false;
+  }
+  ga_grow(&regstack, size);
+  regstack.ga_len += size;
+  return true;
+}
+
+// Shrink regstack by size bytes
+void nvim_regstack_shrink(int size)
+{
+  regstack.ga_len -= size;
+}
+
+// Get sizeof(regstar_T) - needed for pushing/popping regstar
+int nvim_sizeof_regstar(void)
+{
+  return (int)sizeof(regstar_T);
+}
+
+// Get sizeof(regbehind_T) - needed for pushing/popping regbehind
+int nvim_sizeof_regbehind(void)
+{
+  return (int)sizeof(regbehind_T);
+}
+
+// Get pointer to regstar just before current regitem (for RS_STAR_* handlers)
+void *nvim_regstack_get_regstar(void)
+{
+  regitem_T *rp = (regitem_T *)((char *)regstack.ga_data + regstack.ga_len) - 1;
+  return ((regstar_T *)rp) - 1;
+}
+
+// Get pointer to regbehind just before current regitem (for RS_BEHIND* handlers)
+void *nvim_regstack_get_regbehind(void)
+{
+  regitem_T *rp = (regitem_T *)((char *)regstack.ga_data + regstack.ga_len) - 1;
+  return ((regbehind_T *)rp) - 1;
+}
+
+// regstar_T field accessors
+int64_t nvim_regstar_get_count(const void *rst) { return ((const regstar_T *)rst)->count; }
+void nvim_regstar_set_count(void *rst, int64_t v) { ((regstar_T *)rst)->count = v; }
+int64_t nvim_regstar_get_minval(const void *rst) { return ((const regstar_T *)rst)->minval; }
+int64_t nvim_regstar_get_maxval(const void *rst) { return ((const regstar_T *)rst)->maxval; }
+int nvim_regstar_get_nextb(const void *rst) { return ((const regstar_T *)rst)->nextb; }
+int nvim_regstar_get_nextb_ic(const void *rst) { return ((const regstar_T *)rst)->nextb_ic; }
+
+// regbehind_T field accessors
+void *nvim_regbehind_get_save_after(void *rb) { return &((regbehind_T *)rb)->save_after; }
+void *nvim_regbehind_get_save_behind(void *rb) { return &((regbehind_T *)rb)->save_behind; }
+
 /// Main matching routine
 ///
 /// Conceptually the strategy is simple: Check to see whether the current node

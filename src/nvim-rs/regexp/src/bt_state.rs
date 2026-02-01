@@ -182,9 +182,13 @@ impl Copy for SaveSe {}
 // =============================================================================
 
 /// Union for regitem data storage.
+///
+/// Matches C union: `union { save_se_T sesave; regsave_T regsave; }`
 #[repr(C)]
 pub union RegItemData {
-    /// Saved position for restoring.
+    /// Saved subexpr position for MOPEN/MCLOSE/ZOPEN/ZCLOSE.
+    pub sesave: SaveSe,
+    /// Saved input position for BRANCH/STAR/etc.
     pub regsave: RegSave,
 }
 
@@ -208,11 +212,15 @@ impl Copy for RegItemData {}
 ///
 /// Each item on the regstack represents a point where backtracking might
 /// be needed. When a match fails, we pop items and retry alternatives.
+///
+/// Matches C struct `regitem_T`.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RegItem {
     /// Type of stack item (what operation was being attempted).
     pub rs_state: c_int,
+    /// Submatch number (for MOPEN/MCLOSE) or opcode (for NOMATCH).
+    pub rs_no: i16,
     /// Current scan position in bytecode.
     pub rs_scan: *mut u8,
     /// Additional data for restoring state.
@@ -223,6 +231,7 @@ impl Default for RegItem {
     fn default() -> Self {
         Self {
             rs_state: RegState::Nopen as c_int,
+            rs_no: 0,
             rs_scan: ptr::null_mut(),
             rs_un: RegItemData::default(),
         }
@@ -234,6 +243,17 @@ impl RegItem {
     pub fn new(state: RegState, scan: *mut u8) -> Self {
         Self {
             rs_state: state as c_int,
+            rs_no: 0,
+            rs_scan: scan,
+            rs_un: RegItemData::default(),
+        }
+    }
+
+    /// Create a new stack item with submatch number.
+    pub fn new_with_no(state: RegState, no: i16, scan: *mut u8) -> Self {
+        Self {
+            rs_state: state as c_int,
+            rs_no: no,
             rs_scan: scan,
             rs_un: RegItemData::default(),
         }
@@ -242,6 +262,11 @@ impl RegItem {
     /// Get the state as an enum.
     pub fn state(&self) -> RegState {
         RegState::from(self.rs_state)
+    }
+
+    /// Get the submatch number.
+    pub fn no(&self) -> i16 {
+        self.rs_no
     }
 }
 
@@ -401,15 +426,30 @@ impl RegStack {
 
     /// Pop a RegItem from the stack.
     ///
-    /// Returns the scan pointer from the popped item.
-    pub fn pop_item(&mut self) -> Option<*mut u8> {
+    /// Returns the (state, scan pointer) from the popped item.
+    pub fn pop_item(&mut self) -> Option<(RegState, *mut u8)> {
         let size = std::mem::size_of::<RegItem>();
         if self.len >= size {
             self.len -= size;
             // SAFETY: We just verified there's enough data
             unsafe {
                 let ptr = self.data.as_ptr().add(self.len) as *const RegItem;
-                Some((*ptr).rs_scan)
+                Some(((*ptr).state(), (*ptr).rs_scan))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Pop a full RegItem from the stack (includes all fields).
+    pub fn pop_item_full(&mut self) -> Option<RegItem> {
+        let size = std::mem::size_of::<RegItem>();
+        if self.len >= size {
+            self.len -= size;
+            // SAFETY: We just verified there's enough data
+            unsafe {
+                let ptr = self.data.as_ptr().add(self.len) as *const RegItem;
+                Some(*ptr)
             }
         } else {
             None
@@ -424,6 +464,20 @@ impl RegStack {
             unsafe {
                 let ptr = self.data.as_ptr().add(self.len - size) as *const RegItem;
                 Some(&*ptr)
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get the top RegItem mutably without popping.
+    pub fn peek_item_mut(&mut self) -> Option<&mut RegItem> {
+        let size = std::mem::size_of::<RegItem>();
+        if self.len >= size {
+            // SAFETY: We just verified there's enough data
+            unsafe {
+                let ptr = self.data.as_mut_ptr().add(self.len - size) as *mut RegItem;
+                Some(&mut *ptr)
             }
         } else {
             None
