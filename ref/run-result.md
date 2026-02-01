@@ -1,37 +1,36 @@
-Plan: ~/.claude/plans/starry-twirling-conway.md
+Plan: ~/.claude/plans/snappy-soaring-otter.md
 
-All checks pass. Let me provide a summary of what was accomplished:
+All checks pass:
+- `just build` ✓
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓
+- `just rust-test` (3718 tests) ✓
 
 ## Summary
 
-I have successfully executed the plan at `/home/overlord/.claude/plans/starry-twirling-conway.md`, implementing Phase 14e and Phase 14f of the regexp migration.
+I've completed the execution of Phase 15 from the plan. Here's what was accomplished:
 
 ### What was implemented:
 
-**Phase 14e: All backtrack state handlers in Rust**
-- `RS_ZOPEN/RS_ZCLOSE`: External z-submatch (\z(...\)) save/restore
-- `RS_BRCPLX_MORE/LONG/SHORT`: Complex brace counting for quantifiers
-- `RS_NOMATCH`: NOMATCH/MATCH/SUBPAT handling with zero-width restore
-- `RS_STAR_LONG/RS_STAR_SHORT`: Greedy/non-greedy repetition with multi-line backtracking
-- `RS_BEHIND1/RS_BEHIND2`: Lookbehind assertion with multi-line support
+1. **Phase 15a - Infrastructure**: Added FFI declarations for character class predicates (`nvim_ri_digit`, `nvim_ri_hex`, etc.) and the `advance_reginput()` helper function.
 
-**Phase 14f: Wiring infrastructure**
-- Created `rs_regmatch_full()` function in Rust that handles all backtrack states
-- Added necessary C accessor functions for FFI:
-  - `nvim_reg_save/restore/save_equal` for backpos table operations
-  - `nvim_set_behind_pos`, `nvim_copy_regsave` for behind position management
-  - `nvim_reg_breakcheck`, `mb_ptr_back_any` for interrupt and UTF-8 support
-  - `nvim_regsave_get/set_lnum/col/ptr` for regsave field access
-  - `nvim_profile_passed_limit` for timeout checking
-  - `nvim_regitem_set_state` for state transitions
+2. **Phase 15b - Tier 1 opcodes**: Implemented Rust handlers for zero-width assertions: `BOL`, `EOL`, `RE_BOF`, `RE_EOF`
 
-**Note on Phase 14g (Delete C code)**: This phase was not executed because the Rust `rs_regmatch_full` function currently delegates opcode processing to C via `nvim_bt_match_op()`. The C `regmatch()` function cannot be deleted until the opcode handling is also migrated to Rust. This will be done in a future phase.
+3. **Phase 15c - Tier 2 opcodes**: Implemented Rust handlers for basic character classes: `ANY`, `DIGIT`/`NDIGIT`, `HEX`/`NHEX`, `OCTAL`/`NOCTAL`, `WORD`/`NWORD`, `HEAD`/`NHEAD`, `ALPHA`/`NALPHA`, `LOWER`/`NLOWER`, `UPPER`/`NUPPER`, `WHITE`/`NWHITE`
 
-### Verification:
-- ✓ `just build` - Full build passes
-- ✓ `just rust-fmt-check` - Formatting passes  
-- ✓ `just rust-clippy` - Lints pass
-- ✓ `just rust-test` - All 3718 tests pass
+4. **Phase 15d - Tier 3 opcodes**: Implemented Rust handler for `NOTHING`
 
-### Commit:
-`3b31933718` - feat(regexp): add rs_regmatch_full with all backtrack handlers (Phase 14e)
+5. **Phase 15e - Wiring**: Updated `nvim_bt_match_op` stub (for future use when the Rust `rs_regmatch_full` becomes the primary entry point)
+
+### Important Note:
+
+The Rust opcode handlers in `rs_match_one_op_full()` are infrastructure for future phases. Currently, the C `regmatch()` function is still the primary entry point via `nvim_bt_regmatch()`. The C switch cases were preserved because deleting them would break the current execution path.
+
+To activate the Rust handlers, a future phase would need to:
+1. Switch `rs_bt_regtry()` to call `rs_regmatch_full()` instead of `nvim_bt_regmatch()`
+2. Implement proper C-to-Rust delegation in `nvim_bt_match_op()` for unmigrated opcodes
+3. Only then delete the migrated C switch cases
+
+### Files Modified:
+- `src/nvim-rs/regexp/src/bt_exec.rs`: +311 lines (opcode handlers and FFI)
+- `src/nvim/regexp.c`: +10 lines (updated stub function comment)
