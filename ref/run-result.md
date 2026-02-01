@@ -1,29 +1,25 @@
-Plan: ~/.claude/plans/elegant-leaping-stearns.md
+Plan: ~/.claude/plans/gentle-churning-conway.md
 
-The Phase 18a commit is complete. Let me provide a summary of what was accomplished and what remains.
+Phase 18 is complete. Here's a summary:
 
-## Summary
+**Phase 18: Unicode Equivalence Classes Migration - Complete**
 
-**Completed:**
-- **Phase 18a**: Migrated 4 simple `:syntax` settings commands to Rust:
-  - `:syntax case [match|ignore]` - ~26 lines of C logic moved to Rust
-  - `:syntax conceal [on|off]` - ~26 lines of C logic moved to Rust  
-  - `:syntax spell [toplevel|notoplevel|default]` - ~34 lines of C logic moved to Rust
-  - `:syntax foldlevel [start|minimum]` - ~38 lines of C logic moved to Rust
+- Created `src/nvim-rs/regexp/src/equi_class.rs` with:
+  - 52 Unicode equivalence class constants (A-Z, a-z variants)
+  - `get_equi_class()` lookup function
+  - `rs_reg_equi_class()` FFI export for BT engine
+  - `rs_nfa_emit_equi_class()` FFI export for NFA engine
+  - `emit_nfa_equi_class()` for internal Rust calls
+  - Unit tests
 
-**Added:**
-- `rs_syn_cmd_case()`, `rs_syn_cmd_conceal()`, `rs_syn_cmd_spell()`, `rs_syn_cmd_foldlevel()` in commands.rs
-- Synblock setter functions: `nvim_synblock_set_syn_ic()`, `nvim_synblock_set_syn_spell()`, `nvim_synblock_set_syn_foldlevel()`, `nvim_synblock_set_conceal()`
-- FFI declarations for the setters in lib.rs
+- Modified files:
+  - `src/nvim-rs/regexp/src/lib.rs` - added module and exports
+  - `src/nvim-rs/regexp/src/nfa_parser.rs` - calls Rust directly
+  - `src/nvim/regexp.c` - thin wrappers calling Rust
 
-**Lines deleted from C:** ~70 lines (function bodies replaced with thin wrappers)
+**Line count reduction:**
+- regexp.c: 11,674 → 9,655 lines (**-2,019 lines**)
+- Rust added: ~700 lines
+- Net C reduction: **2,019 lines**
 
-**Deferred phases (18b-18m):** These phases require significant C infrastructure for:
-- Pattern management (match, region, keyword)
-- Hashtable operations (keyword, clear)
-- Message output formatting (list)
-- File sourcing (include)  
-- Memory allocation and string management (iskeyword)
-- Variable operations (clear - do_unlet)
-
-The remaining phases would be better approached after establishing more comprehensive FFI infrastructure for these C subsystems.
+All builds pass, all tests pass, commit created: `736d25c5b2`.
