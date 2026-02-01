@@ -312,6 +312,13 @@ extern int rs_bt_get_regstart(uint8_t *scan);
 extern int rs_bt_regtry(void *prog, int col, proftime_T *tm, int *timed_out);
 extern int rs_bt_regexec_both(uint8_t *line, int startcol, proftime_T *tm, int *timed_out);
 
+// Rust implementations for state save/restore (Phase 24)
+extern void rs_reg_save(void *savep);
+extern void rs_reg_restore(const void *savep);
+extern bool rs_reg_save_equal(const void *savep);
+extern void rs_save_subexpr(void *bp);
+extern void rs_restore_subexpr(void *bp);
+
 // The first byte of the BT regexp internal "program" is actually this magic
 // number; the start node begins in the second byte.  It's used to catch the
 // most severe mutilation of the program by the caller.
@@ -4195,7 +4202,7 @@ void nvim_backpos_save(int idx)
 {
   if (idx >= 0 && idx < backpos.ga_len) {
     backpos_T *bp = (backpos_T *)backpos.ga_data;
-    reg_save(&bp[idx].bp_pos, &backpos);
+    rs_reg_save(&bp[idx].bp_pos);
   }
 }
 
@@ -4203,7 +4210,7 @@ bool nvim_backpos_equal(int idx)
 {
   if (idx >= 0 && idx < backpos.ga_len) {
     backpos_T *bp = (backpos_T *)backpos.ga_data;
-    return reg_save_equal(&bp[idx].bp_pos);
+    return rs_reg_save_equal(&bp[idx].bp_pos);
   }
   return false;
 }
@@ -4761,47 +4768,8 @@ static void bt_regfree(regprog_T *prog)
 static int64_t bl_minval;
 static int64_t bl_maxval;
 
-// Save the input line and position in a regsave_T.
-static void reg_save(regsave_T *save, garray_T *gap)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (REG_MULTI) {
-    save->rs_u.pos.col = (colnr_T)(rex.input - rex.line);
-    save->rs_u.pos.lnum = rex.lnum;
-  } else {
-    save->rs_u.ptr = rex.input;
-  }
-  save->rs_len = gap->ga_len;
-}
-
-// Restore the input line and position from a regsave_T.
-static void reg_restore(regsave_T *save, garray_T *gap)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (REG_MULTI) {
-    if (rex.lnum != save->rs_u.pos.lnum) {
-      // only call reg_getline() when the line number changed to save
-      // a bit of time
-      rex.lnum = save->rs_u.pos.lnum;
-      rex.line = (uint8_t *)reg_getline(rex.lnum);
-    }
-    rex.input = rex.line + save->rs_u.pos.col;
-  } else {
-    rex.input = save->rs_u.ptr;
-  }
-  gap->ga_len = save->rs_len;
-}
-
-// Return true if current position is equal to saved position.
-static bool reg_save_equal(const regsave_T *save)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (REG_MULTI) {
-    return rex.lnum == save->rs_u.pos.lnum
-           && rex.input == rex.line + save->rs_u.pos.col;
-  }
-  return rex.input == save->rs_u.ptr;
-}
+// Phase 24: reg_save/reg_restore/reg_save_equal now implemented in Rust
+// See rs_reg_save(), rs_reg_restore(), rs_reg_save_equal() in exec_state.rs
 
 // Save the sub-expressions before attempting a match.
 #define save_se(savep, posp, pp) \
@@ -4872,49 +4840,8 @@ static void regstack_pop(uint8_t **scan)
   regstack.ga_len -= (int)sizeof(regitem_T);
 }
 
-// Save the current subexpr to "bp", so that they can be restored
-// later by restore_subexpr().
-static void save_subexpr(regbehind_T *bp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // When "rex.need_clear_subexpr" is set we don't need to save the values, only
-  // remember that this flag needs to be set again when restoring.
-  bp->save_need_clear_subexpr = rex.need_clear_subexpr;
-  if (rex.need_clear_subexpr) {
-    return;
-  }
-
-  for (int i = 0; i < NSUBEXP; i++) {
-    if (REG_MULTI) {
-      bp->save_start[i].se_u.pos = rex.reg_startpos[i];
-      bp->save_end[i].se_u.pos = rex.reg_endpos[i];
-    } else {
-      bp->save_start[i].se_u.ptr = rex.reg_startp[i];
-      bp->save_end[i].se_u.ptr = rex.reg_endp[i];
-    }
-  }
-}
-
-// Restore the subexpr from "bp".
-static void restore_subexpr(regbehind_T *bp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Only need to restore saved values when they are not to be cleared.
-  rex.need_clear_subexpr = bp->save_need_clear_subexpr;
-  if (rex.need_clear_subexpr) {
-    return;
-  }
-
-  for (int i = 0; i < NSUBEXP; i++) {
-    if (REG_MULTI) {
-      rex.reg_startpos[i] = bp->save_start[i].se_u.pos;
-      rex.reg_endpos[i] = bp->save_end[i].se_u.pos;
-    } else {
-      rex.reg_startp[i] = bp->save_start[i].se_u.ptr;
-      rex.reg_endp[i] = bp->save_end[i].se_u.ptr;
-    }
-  }
-}
+// Phase 24: save_subexpr/restore_subexpr now implemented in Rust
+// See rs_save_subexpr(), rs_restore_subexpr() in exec_state.rs
 
 // =============================================================================
 // regmatch() support accessors for Rust (Phase 14)
@@ -5030,21 +4957,21 @@ void nvim_regstack_set_len(int len)
   regstack.ga_len = len;
 }
 
-// reg_save/reg_restore wrappers - takes opaque pointer
+// reg_save/reg_restore wrappers - now call Rust (Phase 24)
 void nvim_bt_reg_save(void *save)
 {
-  reg_save(save, &backpos);
+  rs_reg_save(save);
 }
 
 void nvim_bt_reg_restore(void *save)
 {
-  reg_restore(save, &backpos);
+  rs_reg_restore(save);
 }
 
-// reg_save_equal wrapper
+// reg_save_equal wrapper - now calls Rust (Phase 24)
 bool nvim_bt_reg_save_equal(const void *save)
 {
-  return reg_save_equal(save);
+  return rs_reg_save_equal(save);
 }
 
 // save_se/restore_se wrappers - takes opaque pointers
@@ -5090,10 +5017,10 @@ void *nvim_regstack_get_regbehind_before(void *rp)
   return ((regbehind_T *)rp) - 1;
 }
 
-// Save subexpr for BEHIND/NOBEHIND
+// Save subexpr for BEHIND/NOBEHIND - now calls Rust (Phase 24)
 void nvim_save_subexpr_behind(void *bp)
 {
-  save_subexpr((regbehind_T *)bp);
+  rs_save_subexpr(bp);
 }
 
 // Check CURSOR position
@@ -5202,15 +5129,15 @@ void nvim_bt_restore_se_one(const void *savep, uint8_t **pp)
   *pp = ((const save_se_T *)savep)->se_u.ptr;
 }
 
-// save_subexpr/restore_subexpr for BEHIND - takes opaque pointer
+// save_subexpr/restore_subexpr for BEHIND - now call Rust implementations (Phase 24)
 void nvim_bt_save_subexpr(void *bp)
 {
-  save_subexpr(bp);
+  rs_save_subexpr(bp);
 }
 
 void nvim_bt_restore_subexpr(void *bp)
 {
-  restore_subexpr(bp);
+  rs_restore_subexpr(bp);
 }
 
 // regitem_T field accessors (since regitem_T is not exported)
@@ -5307,10 +5234,68 @@ int nvim_regstar_get_nextb_ic(const void *rst) { return ((const regstar_T *)rst)
 void *nvim_regbehind_get_save_after(void *rb) { return &((regbehind_T *)rb)->save_after; }
 void *nvim_regbehind_get_save_behind(void *rb) { return &((regbehind_T *)rb)->save_behind; }
 
-// Additional accessors for rs_regmatch_full (Phase 14e)
-void nvim_reg_save(void *savep) { reg_save((regsave_T *)savep, &backpos); }
-void nvim_reg_restore(const void *savep) { reg_restore((regsave_T *)savep, &backpos); }
-bool nvim_reg_save_equal(const void *savep) { return reg_save_equal((regsave_T *)savep); }
+// regbehind_T save_start/save_end accessors (Phase 24)
+void *nvim_regbehind_get_save_start(void *rb, int idx)
+{
+  if (idx >= 0 && idx < NSUBEXP) {
+    return &((regbehind_T *)rb)->save_start[idx];
+  }
+  return NULL;
+}
+
+void *nvim_regbehind_get_save_end(void *rb, int idx)
+{
+  if (idx >= 0 && idx < NSUBEXP) {
+    return &((regbehind_T *)rb)->save_end[idx];
+  }
+  return NULL;
+}
+
+int nvim_regbehind_get_save_need_clear(const void *rb)
+{
+  return ((const regbehind_T *)rb)->save_need_clear_subexpr;
+}
+
+void nvim_regbehind_set_save_need_clear(void *rb, int v)
+{
+  ((regbehind_T *)rb)->save_need_clear_subexpr = v;
+}
+
+// backpos ga_len accessors (Phase 24)
+int nvim_get_backpos_len(void) { return backpos.ga_len; }
+void nvim_set_backpos_len(int len) { backpos.ga_len = len; }
+
+// regsave_T rs_len field accessors (Phase 24)
+int nvim_regsave_get_len(const void *rs) { return ((const regsave_T *)rs)->rs_len; }
+void nvim_regsave_set_len(void *rs, int len) { ((regsave_T *)rs)->rs_len = len; }
+
+// save_se_T field accessors (Phase 24)
+void nvim_save_se_set_pos(void *se, linenr_T lnum, colnr_T col)
+{
+  ((save_se_T *)se)->se_u.pos.lnum = lnum;
+  ((save_se_T *)se)->se_u.pos.col = col;
+}
+
+void nvim_save_se_get_pos(const void *se, linenr_T *lnum, colnr_T *col)
+{
+  *lnum = ((const save_se_T *)se)->se_u.pos.lnum;
+  *col = ((const save_se_T *)se)->se_u.pos.col;
+}
+
+void nvim_save_se_set_ptr(void *se, uint8_t *ptr)
+{
+  ((save_se_T *)se)->se_u.ptr = ptr;
+}
+
+uint8_t *nvim_save_se_get_ptr(const void *se)
+{
+  return ((const save_se_T *)se)->se_u.ptr;
+}
+
+// Wrappers for rs_regmatch_full - now call Rust implementations (Phase 24)
+void nvim_reg_save(void *savep) { rs_reg_save(savep); }
+void nvim_reg_restore(const void *savep) { rs_reg_restore(savep); }
+bool nvim_reg_save_equal(const void *savep) { return rs_reg_save_equal(savep); }
 
 void nvim_set_behind_pos(const void *pos)
 {

@@ -122,7 +122,8 @@ pub use errors::{
 pub use exec_state::{
     rs_exec_state_advance, rs_exec_state_at_bol, rs_exec_state_at_eol, rs_exec_state_current_byte,
     rs_exec_state_free, rs_exec_state_init_multi, rs_exec_state_init_single,
-    rs_exec_state_load_from_rex, rs_exec_state_save_to_rex, rs_rex_in_use, rs_rex_set_in_use,
+    rs_exec_state_load_from_rex, rs_exec_state_save_to_rex, rs_reg_restore, rs_reg_save,
+    rs_reg_save_equal, rs_restore_subexpr, rs_rex_in_use, rs_rex_set_in_use, rs_save_subexpr,
 };
 pub use helpers::{
     rs_cstrchr, rs_cstrncmp, rs_reg_breakcheck, rs_reg_iswordc, rs_reg_nextline, rs_reg_prev_class,

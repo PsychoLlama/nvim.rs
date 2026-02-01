@@ -14,6 +14,7 @@
 use std::ffi::{c_int, c_void};
 use std::ptr;
 
+use crate::nfa_states::LPos;
 use crate::{BufHandle, LposHandle, RegmatchHandle, RegmmatchHandle, WinHandle};
 
 /// Number of subexpressions supported.
@@ -134,6 +135,30 @@ extern "C" {
     fn nvim_nfa_state_get_lastlist(state: *const c_void, idx: c_int) -> c_int;
     fn nvim_nfa_state_set_lastlist(state: *mut c_void, idx: c_int, val: c_int);
     fn nvim_nfa_state_get_val(state: *const c_void) -> c_int;
+
+    // Phase 24: State save/restore accessors
+    fn nvim_get_backpos_len() -> c_int;
+    fn nvim_set_backpos_len(len: c_int);
+    fn nvim_regsave_get_len(rs: *const c_void) -> c_int;
+    fn nvim_regsave_set_len(rs: *mut c_void, len: c_int);
+    fn nvim_regsave_get_lnum(rs: *const c_void) -> LineNr;
+    fn nvim_regsave_set_lnum(rs: *mut c_void, lnum: LineNr);
+    fn nvim_regsave_get_col(rs: *const c_void) -> ColNr;
+    fn nvim_regsave_set_col(rs: *mut c_void, col: ColNr);
+    fn nvim_regsave_get_ptr(rs: *const c_void) -> *mut u8;
+    fn nvim_regsave_set_ptr(rs: *mut c_void, ptr: *mut u8);
+    fn nvim_regbehind_get_save_need_clear(rb: *const c_void) -> c_int;
+    fn nvim_regbehind_set_save_need_clear(rb: *mut c_void, v: c_int);
+    fn nvim_regbehind_get_save_start(rb: *mut c_void, idx: c_int) -> *mut c_void;
+    fn nvim_regbehind_get_save_end(rb: *mut c_void, idx: c_int) -> *mut c_void;
+    fn nvim_save_se_set_pos(se: *mut c_void, lnum: LineNr, col: ColNr);
+    fn nvim_save_se_get_pos(se: *const c_void, lnum: *mut LineNr, col: *mut ColNr);
+    fn nvim_save_se_set_ptr(se: *mut c_void, ptr: *mut u8);
+    fn nvim_save_se_get_ptr(se: *const c_void) -> *mut u8;
+    fn nvim_reg_getline(lnum: LineNr) -> *mut std::ffi::c_char;
+
+    // REG_MULTI check
+    fn nvim_rex_is_multi() -> c_int;
 }
 
 // =============================================================================
@@ -664,6 +689,195 @@ pub extern "C" fn rs_rex_in_use() -> c_int {
 pub extern "C" fn rs_rex_set_in_use(in_use: c_int) {
     unsafe {
         nvim_rex_set_in_use(in_use != 0);
+    }
+}
+
+// =============================================================================
+// Phase 24: State Save/Restore Functions
+// =============================================================================
+
+/// Save the input line and position in a regsave_T.
+///
+/// Saves the current rex.input position (as ptr or lnum/col depending on
+/// REG_MULTI) and the current backpos.ga_len into the save structure.
+///
+/// # Safety
+/// `savep` must point to a valid regsave_T structure.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_save(savep: *mut c_void) {
+    if savep.is_null() {
+        return;
+    }
+
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        let col = nvim_rex_get_input().offset_from(nvim_rex_get_line()) as ColNr;
+        nvim_regsave_set_col(savep, col);
+        nvim_regsave_set_lnum(savep, nvim_rex_get_lnum());
+    } else {
+        nvim_regsave_set_ptr(savep, nvim_rex_get_input());
+    }
+    nvim_regsave_set_len(savep, nvim_get_backpos_len());
+}
+
+/// Restore the input line and position from a regsave_T.
+///
+/// Restores rex.input position and backpos.ga_len from the save structure.
+/// For multi-line mode, also updates rex.line if the line number changed.
+///
+/// # Safety
+/// `savep` must point to a valid regsave_T structure.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_restore(savep: *const c_void) {
+    if savep.is_null() {
+        return;
+    }
+
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        let saved_lnum = nvim_regsave_get_lnum(savep);
+        if nvim_rex_get_lnum() != saved_lnum {
+            // Only call reg_getline when the line number changed
+            nvim_rex_set_lnum(saved_lnum);
+            nvim_rex_set_line(nvim_reg_getline(saved_lnum) as *mut u8);
+        }
+        let line = nvim_rex_get_line();
+        let col = nvim_regsave_get_col(savep);
+        nvim_rex_set_input(line.add(col as usize));
+    } else {
+        nvim_rex_set_input(nvim_regsave_get_ptr(savep));
+    }
+    nvim_set_backpos_len(nvim_regsave_get_len(savep));
+}
+
+/// Return true if current position is equal to saved position.
+///
+/// # Safety
+/// `savep` must point to a valid regsave_T structure.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_save_equal(savep: *const c_void) -> bool {
+    if savep.is_null() {
+        return false;
+    }
+
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        let line = nvim_rex_get_line();
+        let input = nvim_rex_get_input();
+        let saved_lnum = nvim_regsave_get_lnum(savep);
+        let saved_col = nvim_regsave_get_col(savep);
+
+        nvim_rex_get_lnum() == saved_lnum && input == line.add(saved_col as usize)
+    } else {
+        nvim_rex_get_input() == nvim_regsave_get_ptr(savep)
+    }
+}
+
+/// Save the current subexpr positions to regbehind_T.
+///
+/// When rex.need_clear_subexpr is set, we don't need to save the values,
+/// only remember that this flag needs to be set again when restoring.
+///
+/// # Safety
+/// `bp` must point to a valid regbehind_T structure.
+#[no_mangle]
+pub unsafe extern "C" fn rs_save_subexpr(bp: *mut c_void) {
+    if bp.is_null() {
+        return;
+    }
+
+    // Save the need_clear_subexpr flag
+    let need_clear = nvim_rex_get_need_clear_subexpr();
+    nvim_regbehind_set_save_need_clear(bp, need_clear);
+
+    if need_clear != 0 {
+        return;
+    }
+
+    let is_multi = nvim_rex_is_multi() != 0;
+    // Cast LposHandle to raw pointers for array indexing
+    let startpos = nvim_rex_get_reg_startpos().as_ptr() as *mut LPos;
+    let endpos = nvim_rex_get_reg_endpos().as_ptr() as *mut LPos;
+    let startp = nvim_rex_get_reg_startp();
+    let endp = nvim_rex_get_reg_endp();
+
+    for i in 0..NSUBEXP as c_int {
+        let save_start = nvim_regbehind_get_save_start(bp, i);
+        let save_end = nvim_regbehind_get_save_end(bp, i);
+
+        if is_multi {
+            // Access startpos[i] and endpos[i] as lpos_T
+            let start_lpos = startpos.add(i as usize);
+            let end_lpos = endpos.add(i as usize);
+
+            // Get lnum and col from the C lpos_T structures
+            let start_lnum = (*start_lpos).lnum;
+            let start_col = (*start_lpos).col;
+            let end_lnum = (*end_lpos).lnum;
+            let end_col = (*end_lpos).col;
+
+            nvim_save_se_set_pos(save_start, start_lnum, start_col);
+            nvim_save_se_set_pos(save_end, end_lnum, end_col);
+        } else {
+            nvim_save_se_set_ptr(save_start, *startp.add(i as usize));
+            nvim_save_se_set_ptr(save_end, *endp.add(i as usize));
+        }
+    }
+}
+
+/// Restore the subexpr positions from regbehind_T.
+///
+/// Only restores saved values when they are not to be cleared.
+///
+/// # Safety
+/// `bp` must point to a valid regbehind_T structure.
+#[no_mangle]
+pub unsafe extern "C" fn rs_restore_subexpr(bp: *mut c_void) {
+    if bp.is_null() {
+        return;
+    }
+
+    // Restore the need_clear_subexpr flag
+    let save_need_clear = nvim_regbehind_get_save_need_clear(bp);
+    nvim_rex_set_need_clear_subexpr(save_need_clear);
+
+    if save_need_clear != 0 {
+        return;
+    }
+
+    let is_multi = nvim_rex_is_multi() != 0;
+    // Cast LposHandle to raw pointers for array indexing
+    let startpos = nvim_rex_get_reg_startpos().as_ptr() as *mut LPos;
+    let endpos = nvim_rex_get_reg_endpos().as_ptr() as *mut LPos;
+    let startp = nvim_rex_get_reg_startp();
+    let endp = nvim_rex_get_reg_endp();
+
+    for i in 0..NSUBEXP as c_int {
+        let save_start = nvim_regbehind_get_save_start(bp, i);
+        let save_end = nvim_regbehind_get_save_end(bp, i);
+
+        if is_multi {
+            // Access startpos[i] and endpos[i] as lpos_T
+            let start_lpos = startpos.add(i as usize);
+            let end_lpos = endpos.add(i as usize);
+
+            let mut start_lnum: LineNr = 0;
+            let mut start_col: ColNr = 0;
+            let mut end_lnum: LineNr = 0;
+            let mut end_col: ColNr = 0;
+
+            nvim_save_se_get_pos(save_start, &mut start_lnum, &mut start_col);
+            nvim_save_se_get_pos(save_end, &mut end_lnum, &mut end_col);
+
+            // Write directly to lpos_T struct fields
+            (*start_lpos).lnum = start_lnum;
+            (*start_lpos).col = start_col;
+            (*end_lpos).lnum = end_lnum;
+            (*end_lpos).col = end_col;
+        } else {
+            *startp.add(i as usize) = nvim_save_se_get_ptr(save_start);
+            *endp.add(i as usize) = nvim_save_se_get_ptr(save_end);
+        }
     }
 }
 
