@@ -2670,7 +2670,7 @@ pub unsafe extern "C" fn rs_bt_regtry(
 
     // Call the Rust regmatch function (starting after REGMAGIC)
     // Rust handles the main loop, calling rs_match_one_op_full for each opcode.
-    // Migrated opcodes are handled in Rust, others fall back to nvim_bt_match_op.
+    // All opcodes are handled in Rust.
     let program_start = program.add(1) as *mut u8;
     if rs_regmatch_full(program_start, tm, timed_out) == 0 {
         return 0;
@@ -5099,17 +5099,16 @@ unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int, next_out: *mut *mut
             }
         }
 
-        // For other opcodes, call the existing C nvim_bt_match_op
+        // Unknown opcode - should not reach here
         _ => {
-            // Delegate to C for remaining opcodes
-            nvim_bt_match_op(scan, opcode, next_out)
+            // Invalid opcode - all valid opcodes should be handled above
+            RA_FAIL
         }
     }
 }
 
-// FFI declaration for C match_op helper
+// FFI declaration for C helpers
 extern "C" {
-    fn nvim_bt_match_op(scan: *mut u8, opcode: c_int, nextp: *mut *mut u8) -> c_int;
     fn nvim_set_reg_startzpos(idx: c_int, lnum: c_int, col: c_int);
     fn nvim_set_reg_endzpos(idx: c_int, lnum: c_int, col: c_int);
     fn nvim_set_reg_startzp(idx: c_int, p: *mut u8);
