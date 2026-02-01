@@ -5975,6 +5975,140 @@ void nvim_bt_restore_se_multi(const void *savep, lpos_T *posp)
   *posp = ((const save_se_T *)savep)->se_u.pos;
 }
 
+// =============================================================================
+// Look-around and position check wrappers for Rust (Phase 17e)
+// =============================================================================
+
+// Grow regstack for regbehind_T
+bool nvim_regstack_grow_regbehind(void)
+{
+  if ((int64_t)((unsigned)regstack.ga_len >> 10) >= p_mmp) {
+    emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
+    return false;
+  }
+  ga_grow(&regstack, sizeof(regbehind_T));
+  return true;
+}
+
+// Add regbehind_T size to regstack length
+void nvim_regstack_add_regbehind_len(void)
+{
+  regstack.ga_len += (int)sizeof(regbehind_T);
+}
+
+// Get pointer to regbehind_T before a regitem_T (takes/returns void*)
+void *nvim_regstack_get_regbehind_before(void *rp)
+{
+  return ((regbehind_T *)rp) - 1;
+}
+
+// Save subexpr for BEHIND/NOBEHIND
+void nvim_save_subexpr_behind(void *bp)
+{
+  save_subexpr((regbehind_T *)bp);
+}
+
+// Check CURSOR position
+bool nvim_bt_check_cursor(void)
+{
+  if (rex.reg_win == NULL
+      || (rex.lnum + rex.reg_firstlnum != rex.reg_win->w_cursor.lnum)
+      || ((colnr_T)(rex.input - rex.line) != rex.reg_win->w_cursor.col)) {
+    return false;
+  }
+  return true;
+}
+
+// Check RE_MARK position
+bool nvim_bt_check_re_mark(const uint8_t *scan)
+{
+  int mark = OPERAND(scan)[0];
+  int cmp = OPERAND(scan)[1];
+  size_t col = REG_MULTI ? (size_t)(rex.input - rex.line) : 0;
+  fmark_T *fm = mark_get(rex.reg_buf, curwin, NULL, kMarkBufLocal, mark);
+
+  // Line may have been freed, get it again.
+  if (REG_MULTI) {
+    rex.line = (uint8_t *)reg_getline(rex.lnum);
+    rex.input = rex.line + col;
+  }
+
+  if (fm == NULL || fm->mark.lnum <= 0) {
+    return false;
+  }
+
+  pos_T *pos = &fm->mark;
+  const colnr_T pos_col = pos->lnum == rex.lnum + rex.reg_firstlnum
+                          && pos->col == MAXCOL
+                          ? reg_getline_len(pos->lnum - rex.reg_firstlnum)
+                          : pos->col;
+
+  if (pos->lnum == rex.lnum + rex.reg_firstlnum
+      ? (pos_col == (colnr_T)(rex.input - rex.line)
+         ? (cmp == '<' || cmp == '>')
+         : (pos_col < (colnr_T)(rex.input - rex.line)
+            ? cmp != '>'
+            : cmp != '<'))
+      : (pos->lnum < rex.lnum + rex.reg_firstlnum
+         ? cmp != '>'
+         : cmp != '<')) {
+    return false;
+  }
+  return true;
+}
+
+// Check RE_VISUAL
+bool nvim_bt_check_re_visual(void)
+{
+  return reg_match_visual();
+}
+
+// Check RE_LNUM
+bool nvim_bt_check_re_lnum(const uint8_t *scan)
+{
+  if (!REG_MULTI) {
+    return false;
+  }
+  assert(rex.lnum + rex.reg_firstlnum >= 0
+         && (uintmax_t)(rex.lnum + rex.reg_firstlnum) <= UINT32_MAX);
+  return re_num_cmp((uint32_t)(rex.lnum + rex.reg_firstlnum), (uint8_t *)scan);
+}
+
+// Check RE_COL
+bool nvim_bt_check_re_col(const uint8_t *scan)
+{
+  assert(rex.input - rex.line + 1 >= 0
+         && (uintmax_t)(rex.input - rex.line + 1) <= UINT32_MAX);
+  return re_num_cmp((uint32_t)(rex.input - rex.line + 1), (uint8_t *)scan);
+}
+
+// Check RE_VCOL
+bool nvim_bt_check_re_vcol(const uint8_t *scan)
+{
+  win_T *wp = rex.reg_win == NULL ? curwin : rex.reg_win;
+  linenr_T lnum = REG_MULTI ? rex.reg_firstlnum + rex.lnum : 1;
+  if (REG_MULTI && (lnum <= 0 || lnum > wp->w_buffer->b_ml.ml_line_count)) {
+    lnum = 1;
+  }
+  int vcol = win_linetabsize(wp, lnum, (char *)rex.line,
+                             (colnr_T)(rex.input - rex.line));
+  return re_num_cmp((uint32_t)vcol + 1, (uint8_t *)scan);
+}
+
+// Check BHPOS
+bool nvim_bt_check_bhpos(void)
+{
+  if (REG_MULTI) {
+    if (behind_pos.rs_u.pos.col != (colnr_T)(rex.input - rex.line)
+        || behind_pos.rs_u.pos.lnum != rex.lnum) {
+      return false;
+    }
+  } else if (behind_pos.rs_u.ptr != rex.input) {
+    return false;
+  }
+  return true;
+}
+
 void nvim_bt_restore_se_one(const void *savep, uint8_t **pp)
 {
   *pp = ((const save_se_T *)savep)->se_u.ptr;

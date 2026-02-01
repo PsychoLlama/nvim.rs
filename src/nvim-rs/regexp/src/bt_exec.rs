@@ -4990,6 +4990,115 @@ unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int, next_out: *mut *mut
             RA_CONT
         }
 
+        // =====================================================================
+        // Tier 8: Look-around and position checks (Phase 17e)
+        // =====================================================================
+        NOMATCH | MATCH | SUBPAT => {
+            let rp = nvim_regstack_push_item(RS_NOMATCH_STATE, scan);
+            if rp.is_null() {
+                return RA_FAIL;
+            }
+            nvim_regitem_set_no(rp, opcode as i16);
+            let regsave = nvim_regitem_get_regsave(rp);
+            nvim_reg_save(regsave);
+            *next_out = operand(scan) as *mut u8;
+            RA_CONT
+        }
+
+        BEHIND | NOBEHIND => {
+            if !nvim_regstack_grow_regbehind() {
+                return RA_FAIL;
+            }
+            nvim_regstack_add_regbehind_len();
+            let rp = nvim_regstack_push_item(RS_BEHIND1, scan);
+            if rp.is_null() {
+                return RA_FAIL;
+            }
+            // Save subexpr in regbehind_T before the regitem_T
+            let bp = nvim_regstack_get_regbehind_before(rp);
+            nvim_save_subexpr_behind(bp);
+            nvim_regitem_set_no(rp, opcode as i16);
+            let regsave = nvim_regitem_get_regsave(rp);
+            nvim_reg_save(regsave);
+            RA_CONT
+        }
+
+        BHPOS => {
+            if !nvim_bt_check_bhpos() {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
+        NEWL => {
+            let input = nvim_rex_get_input();
+            let c = *input as c_int;
+            let reg_line_lbr = nvim_rex_get_reg_line_lbr();
+            let lnum = nvim_rex_get_lnum();
+            let maxline = nvim_rex_get_reg_maxline();
+
+            if (c != 0 || !is_multi || lnum > maxline || reg_line_lbr)
+                && (c != b'\n' as c_int || !reg_line_lbr)
+            {
+                RA_NOMATCH
+            } else if reg_line_lbr {
+                advance_reginput();
+                RA_CONT
+            } else {
+                rs_reg_nextline();
+                RA_CONT
+            }
+        }
+
+        CURSOR => {
+            if !nvim_bt_check_cursor() {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
+        RE_MARK => {
+            if !nvim_bt_check_re_mark(scan) {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
+        RE_VISUAL => {
+            if !nvim_bt_check_re_visual() {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
+        RE_LNUM => {
+            if !nvim_bt_check_re_lnum(scan) {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
+        RE_COL => {
+            if !nvim_bt_check_re_col(scan) {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
+        RE_VCOL => {
+            if !nvim_bt_check_re_vcol(scan) {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
         // For other opcodes, call the existing C nvim_bt_match_op
         _ => {
             // Delegate to C for remaining opcodes
@@ -5067,6 +5176,19 @@ extern "C" {
         count: i64,
     );
     fn nvim_regstack_get_regstar_before(rp: *mut c_void) -> *mut c_void;
+
+    // Look-around and position check support (Phase 17e)
+    fn nvim_regstack_grow_regbehind() -> bool;
+    fn nvim_regstack_add_regbehind_len();
+    fn nvim_regstack_get_regbehind_before(rp: *mut c_void) -> *mut c_void;
+    fn nvim_save_subexpr_behind(bp: *mut c_void);
+    fn nvim_bt_check_cursor() -> bool;
+    fn nvim_bt_check_re_mark(scan: *const u8) -> bool;
+    fn nvim_bt_check_re_visual() -> bool;
+    fn nvim_bt_check_re_lnum(scan: *const u8) -> bool;
+    fn nvim_bt_check_re_col(scan: *const u8) -> bool;
+    fn nvim_bt_check_re_vcol(scan: *const u8) -> bool;
+    fn nvim_bt_check_bhpos() -> bool;
 }
 
 /// Advance rex.input by one multibyte character (equivalent to ADVANCE_REGINPUT macro).
