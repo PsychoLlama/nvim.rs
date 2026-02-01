@@ -5846,6 +5846,60 @@ void nvim_set_brace_max(int idx, int64_t v) { if (idx >= 0 && idx < 10) brace_ma
 int nvim_get_brace_count(int idx) { return (idx >= 0 && idx < 10) ? brace_count[idx] : 0; }
 void nvim_set_brace_count(int idx, int v) { if (idx >= 0 && idx < 10) brace_count[idx] = v; }
 
+// Initialize BRACE_COMPLEX state (Phase 17d)
+void nvim_init_brace_complex(int no, int64_t min, int64_t max)
+{
+  if (no >= 0 && no < 10) {
+    brace_min[no] = min;
+    brace_max[no] = max;
+    brace_count[no] = 0;
+  }
+}
+
+// Increment brace_count and return new value (Phase 17d)
+int nvim_inc_brace_count(int no)
+{
+  if (no >= 0 && no < 10) {
+    return ++brace_count[no];
+  }
+  return 0;
+}
+
+// Grow regstack for regstar_T (Phase 17d)
+bool nvim_regstack_grow_regstar(void)
+{
+  if ((int64_t)((unsigned)regstack.ga_len >> 10) >= p_mmp) {
+    emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
+    return false;
+  }
+  ga_grow(&regstack, sizeof(regstar_T));
+  return true;
+}
+
+// Add regstar_T size to regstack length (Phase 17d)
+void nvim_regstack_add_regstar_len(void)
+{
+  regstack.ga_len += (int)sizeof(regstar_T);
+}
+
+// Initialize a regstar_T structure (Phase 17d - takes void* to avoid exposing internal type)
+void nvim_regstar_init(void *rst_ptr, int nextb, int nextb_ic,
+                       int64_t minval, int64_t maxval, int64_t count)
+{
+  regstar_T *rst = (regstar_T *)rst_ptr;
+  rst->nextb = nextb;
+  rst->nextb_ic = nextb_ic;
+  rst->minval = minval;
+  rst->maxval = maxval;
+  rst->count = count;
+}
+
+// Get pointer to regstar_T before a regitem_T (Phase 17d - takes/returns void*)
+void *nvim_regstack_get_regstar_before(void *rp)
+{
+  return ((regstar_T *)rp) - 1;
+}
+
 // behind_pos accessor (for BEHIND/NOBEHIND) - returns opaque pointer
 void *nvim_get_behind_pos(void) { return &behind_pos; }
 

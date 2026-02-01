@@ -29,13 +29,13 @@ use std::ptr;
 use crate::bt_compile::{next, op, operand};
 use crate::bt_opcodes::{
     get_backref_num, get_mclose_num, get_mopen_num, get_zclose_num, get_zopen_num, get_zref_num,
-    is_backref, is_mclose, is_mopen, is_zclose, is_zopen, is_zref, operand_cmp, operand_max,
-    operand_min, ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX,
-    BRACE_LIMITS, BRACE_SIMPLE, BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FIRST_NL, FNAME,
-    HEAD, HEX, IDENT, LAST_NL, LOWER, MATCH, MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD,
-    NHEX, NLOWER, NOBEHIND, NOCTAL, NOMATCH, NOPEN, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS,
-    PRINT, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME,
-    SKWORD, SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
+    is_backref, is_brace_complex, is_mclose, is_mopen, is_zclose, is_zopen, is_zref, operand_cmp,
+    operand_max, operand_min, ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW,
+    BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY,
+    FIRST_NL, FNAME, HEAD, HEX, IDENT, LAST_NL, LOWER, MATCH, MULTIBYTECODE, NALPHA, NCLOSE,
+    NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND, NOCTAL, NOMATCH, NOPEN, NOTHING, NUPPER, NWHITE,
+    NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL,
+    RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
 };
 use crate::bt_state::{
     BackPosTable, RegBehind, RegItem, RegSave, RegStack, RegStar, RegState, NSUBEXP,
@@ -4815,7 +4815,173 @@ unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int, next_out: *mut *mut
         }
 
         // =====================================================================
-        // Tier 6: Simple opcodes (NOTHING)
+        // Tier 6: Control flow opcodes (Phase 17d)
+        // =====================================================================
+        BRANCH => {
+            let next_ptr = next(scan);
+            if !next_ptr.is_null() && op(next_ptr) != BRANCH {
+                // No choice - avoid recursion, just go to operand
+                *next_out = operand(scan) as *mut u8;
+                RA_CONT
+            } else {
+                // Multiple branches - push state
+                let rp = nvim_regstack_push_item(RS_BRANCH, scan);
+                if rp.is_null() {
+                    return RA_FAIL;
+                }
+                // Set next to first branch's operand
+                *next_out = operand(scan) as *mut u8;
+                // Store next branch for backtracking
+                nvim_regitem_set_scan(rp, next_ptr as *mut u8);
+                RA_BREAK
+            }
+        }
+
+        BRACE_LIMITS => {
+            // Set up limits for following BRACE_SIMPLE or BRACE_COMPLEX
+            let next_ptr = next(scan);
+            if next_ptr.is_null() {
+                return RA_FAIL;
+            }
+            let next_op = op(next_ptr);
+
+            if next_op == BRACE_SIMPLE {
+                nvim_set_bl_minval(operand_min(scan));
+                nvim_set_bl_maxval(operand_max(scan));
+            } else if is_brace_complex(next_op) {
+                let no = next_op - BRACE_COMPLEX;
+                nvim_init_brace_complex(no, operand_min(scan), operand_max(scan));
+            } else {
+                // Internal error
+                return RA_FAIL;
+            }
+            RA_CONT
+        }
+
+        op if is_brace_complex(op) => {
+            let no = op - BRACE_COMPLEX;
+            let count = nvim_inc_brace_count(no) as i64;
+            let brace_min_val = nvim_get_brace_min(no);
+            let brace_max_val = nvim_get_brace_max(no);
+
+            // Determine minimum based on greedy vs non-greedy
+            let min_required = if brace_min_val <= brace_max_val {
+                brace_min_val
+            } else {
+                brace_max_val
+            };
+
+            if count <= min_required {
+                // Need more matches
+                let rp = nvim_regstack_push_item(RS_BRCPLX_MORE, scan);
+                if rp.is_null() {
+                    return RA_FAIL;
+                }
+                nvim_regitem_set_no(rp, no as i16);
+                let regsave = nvim_regitem_get_regsave(rp);
+                nvim_reg_save(regsave);
+                *next_out = operand(scan) as *mut u8;
+                return RA_CONT;
+            }
+
+            // Already have minimum matches
+            if brace_min_val <= brace_max_val {
+                // Greedy: try for more
+                if count <= brace_max_val {
+                    let rp = nvim_regstack_push_item(RS_BRCPLX_LONG, scan);
+                    if rp.is_null() {
+                        return RA_FAIL;
+                    }
+                    nvim_regitem_set_no(rp, no as i16);
+                    let regsave = nvim_regitem_get_regsave(rp);
+                    nvim_reg_save(regsave);
+                    *next_out = operand(scan) as *mut u8;
+                }
+            } else {
+                // Non-greedy: try to continue
+                if count <= brace_min_val {
+                    let rp = nvim_regstack_push_item(RS_BRCPLX_SHORT, scan);
+                    if rp.is_null() {
+                        return RA_FAIL;
+                    }
+                    let regsave = nvim_regitem_get_regsave(rp);
+                    nvim_reg_save(regsave);
+                }
+            }
+            RA_CONT
+        }
+
+        BRACE_SIMPLE | STAR | PLUS => {
+            let next_ptr = next(scan);
+
+            // Determine nextb/nextb_ic for optimization
+            let (nextb, nextb_ic) = if !next_ptr.is_null() && op(next_ptr) == EXACTLY {
+                let exactly_opnd = operand(next_ptr);
+                let nb = *exactly_opnd as c_int;
+                let nb_ic = if nvim_rex_get_reg_ic() {
+                    if mb_isupper(nb) != 0 {
+                        mb_tolower(nb)
+                    } else {
+                        mb_toupper(nb)
+                    }
+                } else {
+                    nb
+                };
+                (nb, nb_ic)
+            } else {
+                (0, 0)
+            };
+
+            // Determine min/max
+            let (minval, maxval) = if opcode != BRACE_SIMPLE {
+                let min = if opcode == STAR { 0 } else { 1 };
+                (min, i64::MAX)
+            } else {
+                (nvim_get_bl_minval(), nvim_get_bl_maxval())
+            };
+
+            // Count how many times operand matches
+            let count = rs_regrepeat(operand(scan) as *mut u8, maxval) as i64;
+            if nvim_get_got_int() != 0 {
+                return RA_FAIL;
+            }
+
+            // Check if we have enough matches
+            let enough = if minval <= maxval {
+                count >= minval
+            } else {
+                count >= maxval
+            };
+
+            if enough {
+                // Grow regstack for regstar_T
+                if !nvim_regstack_grow_regstar() {
+                    return RA_FAIL;
+                }
+                nvim_regstack_add_regstar_len();
+
+                let state = if minval <= maxval {
+                    RS_STAR_LONG
+                } else {
+                    RS_STAR_SHORT
+                };
+                let rp = nvim_regstack_push_item(state, scan);
+                if rp.is_null() {
+                    return RA_FAIL;
+                }
+
+                // Initialize regstar_T before the regitem_T
+                let rst = nvim_regstack_get_regstar_before(rp);
+                nvim_regstar_init(rst, nextb, nextb_ic, minval, maxval, count);
+
+                RA_BREAK
+            } else {
+                RA_NOMATCH
+            }
+        }
+
+        // =====================================================================
+        // Tier 7: Simple opcodes (NOTHING)
         // Note: END is handled in rs_regmatch_full before calling this function
         // Note: NEWL requires full multiline handling, delegated to C
         // =====================================================================
@@ -4881,6 +5047,26 @@ extern "C" {
     fn nvim_backpos_add(scan: *const u8);
     fn nvim_backpos_save(idx: c_int);
     fn nvim_backpos_equal(idx: c_int) -> bool;
+
+    // Control flow support (Phase 17d)
+    fn nvim_get_bl_minval() -> i64;
+    fn nvim_get_bl_maxval() -> i64;
+    fn nvim_set_bl_minval(v: i64);
+    fn nvim_set_bl_maxval(v: i64);
+    fn nvim_init_brace_complex(no: c_int, min: i64, max: i64);
+    fn nvim_inc_brace_count(no: c_int) -> c_int;
+    fn mb_isupper(c: c_int) -> c_int;
+    fn nvim_regstack_grow_regstar() -> bool;
+    fn nvim_regstack_add_regstar_len();
+    fn nvim_regstar_init(
+        rst: *mut c_void,
+        nextb: c_int,
+        nextb_ic: c_int,
+        minval: i64,
+        maxval: i64,
+        count: i64,
+    );
+    fn nvim_regstack_get_regstar_before(rp: *mut c_void) -> *mut c_void;
 }
 
 /// Advance rex.input by one multibyte character (equivalent to ADVANCE_REGINPUT macro).
