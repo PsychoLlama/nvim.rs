@@ -4490,7 +4490,152 @@ unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int, next_out: *mut *mut
         }
 
         // =====================================================================
-        // Tier 4: Simple opcodes (NOTHING)
+        // Tier 4: Exact match opcodes (Phase 17b)
+        // =====================================================================
+        EXACTLY => {
+            let opnd = operand(scan);
+            let input = nvim_rex_get_input();
+            let reg_ic = nvim_rex_get_reg_ic();
+
+            // Fast path: first char mismatch with case-sensitive
+            if *opnd != *input && !reg_ic {
+                return RA_NOMATCH;
+            }
+
+            // Empty operand always matches
+            if *opnd == 0 {
+                return RA_CONT;
+            }
+
+            // Calculate length and do comparison
+            let mut len: c_int;
+            if *opnd.add(1) == 0 && !reg_ic {
+                // Single char, case-sensitive - already matched above
+                len = 1;
+            } else {
+                // Get string length
+                len = libc::strlen(opnd as *const c_char) as c_int;
+                // Use cstrncmp for case-insensitive comparison
+                if rs_cstrncmp(opnd as *const c_char, input as *const c_char, &mut len) != 0 {
+                    return RA_NOMATCH;
+                }
+            }
+
+            // Check for composing characters that would extend the match
+            let next_ptr = next(scan);
+            if utf_composinglike(
+                input as *const c_char,
+                input.add(len as usize) as *const c_char,
+                ptr::null(),
+            ) != 0
+                && !nvim_rex_get_reg_icombine()
+                && !next_ptr.is_null()
+                && op(next_ptr) != RE_COMPOSING
+            {
+                return RA_NOMATCH;
+            }
+
+            nvim_rex_set_input(input.add(len as usize));
+            RA_CONT
+        }
+
+        ANYOF | ANYBUT => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            let q = operand(scan);
+
+            if c == 0 {
+                return RA_NOMATCH;
+            }
+
+            // Check if character is in the set
+            let found = rs_cstrchr(q as *const c_char, c);
+            let in_set = !found.is_null();
+
+            // ANYOF requires in set, ANYBUT requires not in set
+            if in_set != (opcode == ANYOF) {
+                return RA_NOMATCH;
+            }
+
+            // Handle composing characters in the class
+            let compose_len = utfc_ptr2len(q as *const c_char) - utf_ptr2len(q as *const c_char);
+
+            // Advance past base character
+            let base_len = utf_ptr2len(input as *const c_char);
+            let mut new_input = input.add(base_len as usize);
+
+            // Match any composing characters from the class
+            if compose_len > 0 {
+                let q_compose = q.add(utf_ptr2len(q as *const c_char) as usize);
+                for i in 0..compose_len {
+                    if *q_compose.add(i as usize) != *new_input.add(i as usize) {
+                        return RA_NOMATCH;
+                    }
+                }
+                new_input = new_input.add(compose_len as usize);
+            }
+
+            nvim_rex_set_input(new_input);
+            RA_CONT
+        }
+
+        MULTIBYTECODE => {
+            let opnd = operand(scan);
+            let input = nvim_rex_get_input();
+
+            // Get length of operand (must be >= 2 for multibyte)
+            let len = utfc_ptr2len(opnd as *const c_char);
+            if len < 2 {
+                return RA_NOMATCH;
+            }
+
+            let opndc = utf_ptr2char(opnd as *const c_char);
+
+            if utf_iscomposing_legacy(opndc) != 0 {
+                // Operand is a composing character - search for it in input
+                let mut i: usize = 0;
+                loop {
+                    if *input.add(i) == 0 {
+                        return RA_NOMATCH;
+                    }
+                    let inpc = utf_ptr2char(input.add(i) as *const c_char);
+                    if utf_iscomposing_legacy(inpc) == 0 {
+                        // Found base character
+                        if i > 0 {
+                            // Already past first char, stop
+                            return RA_NOMATCH;
+                        }
+                    } else if opndc == inpc {
+                        // Found matching composing char
+                        let match_len = i + utfc_ptr2len(input.add(i) as *const c_char) as usize;
+                        nvim_rex_set_input(input.add(match_len));
+                        return RA_CONT;
+                    }
+                    i += utf_ptr2len(input.add(i) as *const c_char) as usize;
+                }
+            } else {
+                // Normal multibyte character - use cstrncmp
+                let mut cmp_len = len;
+                if rs_cstrncmp(opnd as *const c_char, input as *const c_char, &mut cmp_len) != 0 {
+                    return RA_NOMATCH;
+                }
+                nvim_rex_set_input(input.add(cmp_len as usize));
+                RA_CONT
+            }
+        }
+
+        RE_COMPOSING => {
+            // Skip over composing characters
+            let mut input = nvim_rex_get_input();
+            while utf_iscomposing_legacy(utf_ptr2char(input as *const c_char)) != 0 {
+                input = input.add(utf_ptr2len(input as *const c_char) as usize);
+            }
+            nvim_rex_set_input(input);
+            RA_CONT
+        }
+
+        // =====================================================================
+        // Tier 5: Simple opcodes (NOTHING)
         // Note: END is handled in rs_regmatch_full before calling this function
         // Note: NEWL requires full multiline handling, delegated to C
         // =====================================================================
@@ -4532,6 +4677,12 @@ extern "C" {
     fn mb_get_class_tab(p: *const u8, chartab: *const u64) -> c_int;
     fn nvim_buf_get_chartab(buf: *mut c_void) -> *const u64;
     fn nvim_rex_reg_prev_class() -> c_int;
+
+    // Exact match support (Phase 17b)
+    fn utf_composinglike(s1: *const c_char, s2: *const c_char, s3: *const c_char) -> c_int;
+    fn utf_iscomposing_legacy(c: c_int) -> c_int;
+    fn utf_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_rex_get_reg_icombine() -> bool;
 }
 
 /// Advance rex.input by one multibyte character (equivalent to ADVANCE_REGINPUT macro).
