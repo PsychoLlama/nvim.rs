@@ -58,6 +58,7 @@ pub mod bt_state;
 pub mod char_class;
 pub mod debug;
 pub mod decompose;
+pub mod equi_class;
 pub mod errors;
 pub mod exec_state;
 pub mod helpers;
@@ -112,6 +113,7 @@ pub use debug::{
     rs_regexp_get_transitions, rs_regexp_reset_profile, rs_regexp_set_debug_level,
 };
 pub use decompose::rs_mb_decompose;
+pub use equi_class::{rs_nfa_emit_equi_class, rs_reg_equi_class};
 pub use errors::{
     rs_evaluate_complexity, rs_regex_check_abort, rs_regex_error_message, rs_regex_report_error,
     rs_regex_should_abort,

@@ -27,6 +27,7 @@
 #![allow(clippy::doc_markdown)]
 use std::ffi::{c_char, c_int};
 
+use crate::equi_class::emit_nfa_equi_class;
 use crate::nfa_states::{
     NFA_ADD_NL, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BOF, NFA_BOL, NFA_BOW, NFA_CLASS_ALNUM,
     NFA_CLASS_ALPHA, NFA_CLASS_BACKSPACE, NFA_CLASS_BLANK, NFA_CLASS_CNTRL, NFA_CLASS_DIGIT,
@@ -194,7 +195,6 @@ extern "C" {
     fn nvim_get_equi_class(pp: *mut *mut c_char) -> c_int;
     fn nvim_get_coll_element(pp: *mut *mut c_char) -> c_int;
     fn nvim_skip_anyof(p: *const c_char) -> *const c_char;
-    fn nvim_nfa_emit_equi_class(c: c_int);
     fn nvim_coll_get_char() -> c_int;
 
     // Substitute pattern
@@ -1108,7 +1108,7 @@ unsafe fn parse_collection(old_regparse: *mut u8, extra: c_int) -> c_int {
                 let equiclass = nvim_get_equi_class(&mut pp);
                 if equiclass != 0 {
                     nvim_parse_set_regparse(pp);
-                    nvim_nfa_emit_equi_class(equiclass);
+                    emit_nfa_equi_class(equiclass);
                     continue;
                 }
 
