@@ -181,10 +181,12 @@ fn get_maximum_wincount_impl(frp: *const Frame, height: c_int) -> c_int {
             return height / (p_wmh + STATUS_HEIGHT + 1);
         }
 
-        // Column layout - sum up children
+        // Column layout - count children that fit, then add remaining capacity
         let mut total_wincount = 0;
+        let mut remaining_height = height;
         let mut child = frame.fr_child;
 
+        // First, try to fit all child frames into the height
         while !child.is_null() {
             let child_frame = &*child;
             let wp = frame2win(child);
@@ -195,18 +197,18 @@ fn get_maximum_wincount_impl(frp: *const Frame, height: c_int) -> c_int {
             };
 
             let child_min = p_wmh + STATUS_HEIGHT + winbar_height;
-            if child_min > 0 {
-                // Each child contributes at least one window worth of count
-                total_wincount += height / child_min;
+            if remaining_height < child_min {
+                break;
             }
+            remaining_height -= child_min;
+            total_wincount += 1;
 
             child = child_frame.fr_next;
         }
 
-        // Return at least 1 if there are any children
-        if total_wincount == 0 && !frame.fr_child.is_null() {
-            return 1;
-        }
+        // If we still have enough room for more windows, add the count
+        // using the default winbar height (0)
+        total_wincount += remaining_height / (p_wmh + STATUS_HEIGHT);
 
         total_wincount
     }
