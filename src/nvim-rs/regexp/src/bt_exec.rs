@@ -532,6 +532,9 @@ pub enum MatchStatus {
 /// Tries to match the compiled pattern against the input at the current position.
 /// Uses a stack-based approach to handle backtracking.
 ///
+/// This implements a simplified version that handles the basic states.
+/// The full implementation with all state handlers is in the C regmatch().
+///
 /// # Safety
 /// state must be valid with valid program pointer.
 pub unsafe fn regmatch(state: &mut MatchState, program: *const u8) -> MatchResult {
@@ -539,55 +542,144 @@ pub unsafe fn regmatch(state: &mut MatchState, program: *const u8) -> MatchResul
         return MatchResult::Error;
     }
 
+    // Clear stacks at start
+    state.clear_backtrack();
+    state.clear_backpos();
+
     // Start at the first instruction (skip REGMAGIC byte)
     let mut scan = program.add(1);
+    let mut status;
 
+    // Outer loop: continue until regstack is empty or we have a final result
     loop {
-        if scan.is_null() {
-            return MatchResult::Error;
-        }
-
-        let opcode = op(scan);
-
-        // Check for END first
-        if opcode == END {
-            return MatchResult::Match;
-        }
-
-        let next_scan = next(scan);
-        let status = match_one_op(state, scan, opcode);
-
-        match status {
-            MatchStatus::Continue => {
-                // Move to next instruction
-                scan = if next_scan.is_null() {
-                    scan.add(3) // Default: advance past node
-                } else {
-                    next_scan
-                };
+        // Inner loop: match opcodes sequentially until we need to backtrack
+        loop {
+            if scan.is_null() {
+                status = MatchStatus::Fail;
+                break;
             }
-            MatchStatus::Match => {
-                return MatchResult::Match;
+
+            let opcode = op(scan);
+
+            // Check for END first
+            if opcode == END {
+                status = MatchStatus::Match;
+                break;
             }
-            MatchStatus::NoMatch => {
-                // Try backtracking
-                if let Some((_state, back_scan)) = state.pop_backtrack() {
-                    scan = back_scan;
-                } else {
-                    return MatchResult::NoMatch;
+
+            let next_scan = next(scan);
+            status = match_one_op(state, scan, opcode);
+
+            match status {
+                MatchStatus::Continue => {
+                    // Move to next instruction
+                    scan = if next_scan.is_null() {
+                        scan.add(3) // Default: advance past node
+                    } else {
+                        next_scan
+                    };
+                }
+                MatchStatus::Match | MatchStatus::NoMatch | MatchStatus::Fail => {
+                    // Break inner loop to handle state
+                    break;
+                }
+                MatchStatus::Break => {
+                    // RA_BREAK: skip to state handling (used after pushing for BRANCH/STAR)
+                    break;
                 }
             }
-            MatchStatus::Fail => {
-                return MatchResult::Error;
+        }
+
+        // Process backtrack states
+        while !state.backtrack_empty() && status != MatchStatus::Fail {
+            if let Some(rp) = state.peek_backtrack() {
+                let rs_state = rp.state();
+                let rs_scan = rp.rs_scan;
+
+                match rs_state {
+                    RegState::Nopen => {
+                        // RS_NOPEN: Result is passed on as-is, simply pop
+                        state.pop_backtrack();
+                        scan = rs_scan;
+                    }
+
+                    RegState::Mopen => {
+                        // RS_MOPEN: Pop, restore startp on no match
+                        // Note: Full implementation would restore saved position
+                        state.pop_backtrack();
+                        scan = rs_scan;
+                    }
+
+                    RegState::Mclose => {
+                        // RS_MCLOSE: Pop, restore endp on no match
+                        state.pop_backtrack();
+                        scan = rs_scan;
+                    }
+
+                    RegState::Branch => {
+                        // RS_BRANCH: Handle alternation
+                        if status == MatchStatus::Match {
+                            // This branch matched, use it
+                            state.pop_backtrack();
+                            scan = rs_scan;
+                        } else {
+                            // Try next branch
+                            let branch_scan = rs_scan;
+                            if branch_scan.is_null() || op(branch_scan) != BRANCH {
+                                // No more branches
+                                status = MatchStatus::NoMatch;
+                                state.pop_backtrack();
+                                scan = rs_scan;
+                            } else {
+                                // Prepare to try next branch
+                                if let Some(rp_mut) = state.peek_backtrack_mut() {
+                                    rp_mut.rs_scan = next(branch_scan) as *mut u8;
+                                }
+                                scan = operand(branch_scan);
+                                status = MatchStatus::Continue;
+                            }
+                        }
+                    }
+
+                    // For complex states, fall back to simple behavior
+                    RegState::Zopen
+                    | RegState::Zclose
+                    | RegState::BrcplxMore
+                    | RegState::BrcplxLong
+                    | RegState::BrcplxShort
+                    | RegState::Nomatch
+                    | RegState::Behind1
+                    | RegState::Behind2
+                    | RegState::StarLong
+                    | RegState::StarShort => {
+                        // Pop and continue (simplified handling)
+                        state.pop_backtrack();
+                        scan = rs_scan;
+                    }
+                }
+            } else {
+                break;
             }
-            MatchStatus::Break => {
-                // Move to next instruction (used for branches that need continuation)
-                scan = if next_scan.is_null() {
-                    scan.add(3)
-                } else {
-                    next_scan
-                };
+
+            // If we want to continue the inner loop, break out of state handling
+            if status == MatchStatus::Continue {
+                break;
             }
+        }
+
+        // Check for final result
+        if status == MatchStatus::Match {
+            return MatchResult::Match;
+        }
+        if status == MatchStatus::Fail {
+            return MatchResult::Error;
+        }
+        if state.backtrack_empty() {
+            return if status == MatchStatus::Match {
+                MatchResult::Match
+            } else {
+                MatchResult::NoMatch
+            };
         }
     }
 }
