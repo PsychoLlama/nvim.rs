@@ -1,33 +1,34 @@
-Plan: ~/.claude/plans/swift-knitting-yao.md
-
-The plan has been fully executed. Here's a summary of what was accomplished:
+Plan: ~/.claude/plans/lazy-scribbling-minsky.md
 
 ## Summary
 
-Successfully migrated NFA debug functions from C to Rust (Phase 19 of the regexp migration plan):
+I have successfully executed Phase 20 of the plan - migrating the NFA pattern parsing pipeline to Rust. Here's what was accomplished:
 
 ### Changes Made
 
-1. **Phase 19a - nfa_states.rs**: Added `nfa_opcode_name()` function that maps NFA opcodes to human-readable names (~200 lines of Rust replacing ~340 lines of C switch statement). Also added `rs_nfa_set_code()` FFI export.
+1. **Updated `src/nvim-rs/regexp/src/nfa_parser.rs`** (+90 lines):
+   - Added `skipchr_keepstart` import from scanner module
+   - Added magic mode constants (`MAGIC_NONE`, `MAGIC_MODE_OFF`, `MAGIC_MODE_ON`, `MAGIC_ALL`)
+   - Added regflags constants (`RF_ICASE`, `RF_NOICASE`, `RF_ICOMBINE`)
+   - Added FFI declarations for `nvim_parse_set_reg_magic` and `nvim_parse_set_curchr`
+   - Updated `nfa_regconcat()` to handle magic mode switches (`\Z`, `\c`, `\C`, `\v`, `\m`, `\M`, `\V`)
+   - Added `is_magic()` helper function
 
-2. **Phase 19b - debug.rs**: Added debug dump functions:
-   - `nfa_dump_impl()` - dumps entire NFA state machine to log file
-   - `nfa_print_state_impl()` - prints NFA state tree recursively  
-   - `nfa_postfix_dump_impl()` - prints postfix notation of regexp
-   - Supporting `IndentBuffer` struct for tree indentation
+2. **Updated `src/nvim/regexp.c`** (-345 lines):
+   - Added extern declarations for Rust functions (`rs_nfa_regpiece`, `rs_nfa_regconcat`, `rs_nfa_regbranch`, `rs_nfa_reg`)
+   - Replaced ~345 lines of C implementations with thin wrappers calling Rust
 
-3. **Phase 19c - lib.rs**: Exported new FFI functions `rs_nfa_dump`, `rs_nfa_postfix_dump`, `rs_nfa_print_state`, and `rs_nfa_set_code`.
+### Test Results
+- ✅ `just build` - compilation successful
+- ✅ `just smoke-test` - nvim starts without crashing
+- ✅ `just rust-fmt-check` - formatting passes
+- ✅ `just rust-clippy` - no lint warnings
+- ✅ `just rust-test` - all 3,735 tests pass
+- ✅ Manual regex tests with alternation, repetition, very magic, and case-insensitive patterns
 
-4. **Phase 19d - regexp.c**: Replaced the original C debug functions with thin wrappers that call Rust implementations. The `nfa_print_state2()` function remains in C since it needs to modify state IDs for visited tracking.
-
-### Build Verification
-- ✅ `just build` - passed
-- ✅ `just smoke-test` - passed
-- ✅ `just rust-fmt-check` - passed
-- ✅ `just rust-clippy` - passed
-- ✅ `just rust-test` - all 3735 tests passed
-
-### Statistics
-- 4 files changed
-- 828 insertions, 379 deletions
-- Net reduction of ~450 lines of C code
+### Line Count Impact
+| Metric | Before | After | Delta |
+|--------|--------|-------|-------|
+| regexp.c lines | ~9,372 | 9,027 | **-345** |
+| nfa_parser.rs lines | ~1,573 | 1,663 | +90 |
+| Net C reduction | - | - | **-345** |
