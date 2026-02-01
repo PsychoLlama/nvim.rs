@@ -37,6 +37,7 @@ use crate::bt_opcodes::{
     SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
 };
 use crate::bt_state::{BackPosTable, RegSave, RegStack, RegStar, RegState, NSUBEXP};
+use crate::rs_cstrncmp;
 
 // =============================================================================
 // Match Result
@@ -2603,6 +2604,334 @@ pub unsafe extern "C" fn rs_bt_regtry(
     }
 
     1 + nvim_rex_get_lnum()
+}
+
+// =============================================================================
+// bt_regexec_both implementation (Phase 13c)
+// =============================================================================
+
+/// Flag constants for regflags
+const RF_ICASE: c_int = 1; // \c in pattern
+const RF_NOICASE: c_int = 2; // \C in pattern
+const RF_ICOMBINE: c_int = 4; // \Z in pattern
+
+// These extern declarations are ONLY for functions not declared elsewhere
+// in the crate. Use raw c_void pointers to avoid type conflicts.
+// Allow clashing extern declarations since nfa_exec.rs has different signatures
+// for some of the same functions (ProfTime vs *const c_void, etc.)
+#[allow(clippy::missing_safety_doc)]
+#[allow(clashing_extern_declarations)]
+extern "C" {
+    // New accessors specific to bt_regexec_both (not in lib.rs)
+    fn nvim_init_regstack();
+    fn nvim_init_backpos();
+    fn nvim_cleanup_regstack();
+    fn nvim_cleanup_backpos();
+    fn nvim_cleanup_reg_tofree();
+    fn nvim_set_reg_toolong(v: bool);
+
+    // BT-specific prog accessors (not in lib.rs)
+    fn nvim_bt_regprog_get_regmust(prog: *const c_void) -> *const u8;
+    fn nvim_bt_regprog_get_regmlen(prog: *const c_void) -> c_int;
+    fn nvim_bt_regprog_get_reganch(prog: *const c_void) -> c_int;
+    fn nvim_bt_regprog_get_regstart(prog: *const c_void) -> c_int;
+
+    // Rex setters (not in lib.rs or using void pointers)
+    fn nvim_rex_set_reg_startpos(p: *mut c_void);
+    fn nvim_rex_set_reg_endpos(p: *mut c_void);
+    fn nvim_rex_set_reg_startp(p: *mut *mut u8);
+    fn nvim_rex_set_reg_endp(p: *mut *mut u8);
+    fn nvim_rex_set_reg_ic(ic: bool);
+    fn nvim_rex_set_reg_icombine(ic: bool);
+    fn nvim_rex_set_line(line: *mut u8);
+
+    // Regmatch/Regmmatch accessors with void pointers (to avoid conflicts)
+    #[link_name = "nvim_regmatch_get_regprog"]
+    fn nvim_regmatch_get_regprog_ptr(m: *const c_void) -> *const c_void;
+    #[link_name = "nvim_regmatch_get_startp"]
+    fn nvim_regmatch_get_startp_ptr(m: *const c_void) -> *mut *mut u8;
+    #[link_name = "nvim_regmatch_get_endp"]
+    fn nvim_regmatch_get_endp_ptr(m: *const c_void) -> *mut *mut u8;
+    #[link_name = "nvim_regmatch_set_rm_matchcol"]
+    fn nvim_regmatch_set_rm_matchcol_ptr(m: *mut c_void, col: c_int);
+    #[link_name = "nvim_regmmatch_get_regprog"]
+    fn nvim_regmmatch_get_regprog_ptr(m: *const c_void) -> *const c_void;
+    #[link_name = "nvim_regmmatch_get_startpos"]
+    fn nvim_regmmatch_get_startpos_ptr(m: *const c_void) -> *mut c_void;
+    #[link_name = "nvim_regmmatch_get_endpos"]
+    fn nvim_regmmatch_get_endpos_ptr(m: *const c_void) -> *mut c_void;
+    #[link_name = "nvim_regmmatch_set_rmm_matchcol"]
+    fn nvim_regmmatch_set_rmm_matchcol_ptr(m: *mut c_void, col: c_int);
+
+    // Rex accessors with void pointers
+    #[link_name = "nvim_rex_get_reg_mmatch"]
+    fn nvim_rex_get_reg_mmatch_ptr() -> *mut c_void;
+    #[link_name = "nvim_rex_get_reg_match"]
+    fn nvim_rex_get_reg_match_ptr() -> *mut c_void;
+    #[link_name = "nvim_rex_get_reg_maxcol"]
+    fn nvim_rex_get_reg_maxcol_ptr() -> c_int;
+    #[link_name = "nvim_regprog_get_regflags"]
+    fn nvim_regprog_get_regflags_ptr(prog: *const c_void) -> c_int;
+
+    // Validation and error
+    fn nvim_prog_magic_wrong() -> c_int;
+    fn nvim_iemsg_null();
+
+    // String search
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+
+    // Timeout handling
+    fn profile_passed_limit(tm: *const c_void) -> c_int;
+}
+
+/// Match a regexp against a string or multiple lines.
+///
+/// This implements bt_regexec_both() in Rust.
+///
+/// @param line       string to match against (NULL for multi-line)
+/// @param startcol   column to start looking for match
+/// @param tm         timeout limit or NULL
+/// @param timed_out  flag set on timeout or NULL
+///
+/// @return 0 for failure, or number of lines contained in the match.
+///
+/// # Safety
+/// All pointers must be valid. Rex state must be properly initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_regexec_both(
+    line: *mut u8,
+    startcol: c_int,
+    tm: ProfTime,
+    timed_out: *mut c_int,
+) -> c_int {
+    let mut col = startcol;
+    let mut retval = 0;
+    let mut actual_line = line;
+
+    // Initialize regstack and backpos
+    nvim_init_regstack();
+    nvim_init_backpos();
+
+    // Get prog and set up match arrays based on REG_MULTI
+    let is_multi = nvim_rex_is_multi() != 0;
+    let prog: *const c_void;
+
+    if is_multi {
+        let mmatch = nvim_rex_get_reg_mmatch_ptr();
+        prog = nvim_regmmatch_get_regprog_ptr(mmatch);
+        actual_line = nvim_reg_getline(0) as *mut u8;
+        nvim_rex_set_reg_startpos(nvim_regmmatch_get_startpos_ptr(mmatch));
+        nvim_rex_set_reg_endpos(nvim_regmmatch_get_endpos_ptr(mmatch));
+    } else {
+        let m = nvim_rex_get_reg_match_ptr();
+        prog = nvim_regmatch_get_regprog_ptr(m);
+        nvim_rex_set_reg_startp(nvim_regmatch_get_startp_ptr(m));
+        nvim_rex_set_reg_endp(nvim_regmatch_get_endp_ptr(m));
+    };
+
+    // Be paranoid...
+    if prog.is_null() || actual_line.is_null() {
+        nvim_iemsg_null();
+        return cleanup_and_return(retval, col, is_multi);
+    }
+
+    // Check validity of program
+    if nvim_prog_magic_wrong() != 0 {
+        return cleanup_and_return(retval, col, is_multi);
+    }
+
+    // If the start column is past the maximum column: no need to try
+    let reg_maxcol = nvim_rex_get_reg_maxcol_ptr();
+    if reg_maxcol > 0 && col >= reg_maxcol {
+        return cleanup_and_return(retval, col, is_multi);
+    }
+
+    // If pattern contains "\c" or "\C": overrule value of rex.reg_ic
+    let regflags = nvim_regprog_get_regflags_ptr(prog);
+    if regflags & RF_ICASE != 0 {
+        nvim_rex_set_reg_ic(true);
+    } else if regflags & RF_NOICASE != 0 {
+        nvim_rex_set_reg_ic(false);
+    }
+
+    // If pattern contains "\Z" overrule value of rex.reg_icombine
+    if regflags & RF_ICOMBINE != 0 {
+        nvim_rex_set_reg_icombine(true);
+    }
+
+    // If there is a "must appear" string, look for it
+    let regmust = nvim_bt_regprog_get_regmust(prog);
+    if !regmust.is_null() {
+        let c = utf_ptr2char(regmust as *const c_char);
+        let mut s = actual_line.add(col as usize);
+
+        // Search for the must-appear string
+        let reg_ic = nvim_rex_get_reg_ic();
+        if !reg_ic {
+            // Case-sensitive search
+            while let Some(found) = ptr_from_result(vim_strchr(s as *const c_char, c)) {
+                let mut len = nvim_bt_regprog_get_regmlen(prog);
+                if rs_cstrncmp(found as *const c_char, regmust as *const c_char, &mut len) == 0 {
+                    s = found as *mut u8;
+                    break;
+                }
+                s = mb_ptr_adv(found as *mut u8);
+            }
+            if vim_strchr(s as *const c_char, c).is_null() {
+                // Didn't find it, need to search again
+                s = std::ptr::null_mut();
+            }
+        } else {
+            // Case-insensitive search
+            while let Some(found) = ptr_from_result(rs_cstrchr(s as *const c_char, c)) {
+                let mut len = nvim_bt_regprog_get_regmlen(prog);
+                if rs_cstrncmp(found as *const c_char, regmust as *const c_char, &mut len) == 0 {
+                    s = found as *mut u8;
+                    break;
+                }
+                s = mb_ptr_adv(found as *mut u8);
+            }
+            if rs_cstrchr(s as *const c_char, c).is_null() {
+                s = std::ptr::null_mut();
+            }
+        }
+
+        if s.is_null() {
+            // Not present
+            return cleanup_and_return(retval, col, is_multi);
+        }
+    }
+
+    // Set up rex state for matching
+    nvim_rex_set_line(actual_line);
+    nvim_rex_set_lnum(0);
+    nvim_set_reg_toolong(false);
+
+    let reganch = nvim_bt_regprog_get_reganch(prog);
+    let regstart = nvim_bt_regprog_get_regstart(prog);
+
+    if reganch != 0 {
+        // Simplest case: Anchored match need be tried only once
+        let c = utf_ptr2char((actual_line as *const u8).add(col as usize) as *const c_char);
+        let reg_ic = nvim_rex_get_reg_ic();
+
+        if regstart == 0
+            || regstart == c
+            || (reg_ic
+                && (utf_fold(regstart) == utf_fold(c)
+                    || (c < 255 && regstart < 255 && mb_tolower(regstart) == mb_tolower(c))))
+        {
+            retval = rs_bt_regtry(prog as *mut c_void, col, tm, timed_out);
+        }
+    } else {
+        // Messy cases: unanchored match
+        let mut tm_count = 0;
+        while nvim_get_got_int() == 0 {
+            if regstart != 0 {
+                // Skip until the char we know it must start with
+                let s = rs_cstrchr(
+                    (actual_line as *const u8).add(col as usize) as *const c_char,
+                    regstart,
+                );
+                if s.is_null() {
+                    retval = 0;
+                    break;
+                }
+                col = s.offset_from(actual_line as *const c_char) as c_int;
+            }
+
+            // Check for maximum column to try
+            if reg_maxcol > 0 && col >= reg_maxcol {
+                retval = 0;
+                break;
+            }
+
+            retval = rs_bt_regtry(prog as *mut c_void, col, tm, timed_out);
+            if retval > 0 {
+                break;
+            }
+
+            // If not currently on the first line, get it again
+            if nvim_rex_get_lnum() != 0 {
+                nvim_rex_set_lnum(0);
+                actual_line = nvim_reg_getline(0) as *mut u8;
+                nvim_rex_set_line(actual_line);
+            }
+
+            if *actual_line.add(col as usize) == 0 {
+                break;
+            }
+
+            col += utfc_ptr2len((actual_line as *const u8).add(col as usize) as *const c_char);
+
+            // Check for timeout once every 20 times to avoid overhead
+            if !tm.is_null() {
+                tm_count += 1;
+                if tm_count == 20 {
+                    tm_count = 0;
+                    if profile_passed_limit(tm) != 0 {
+                        if !timed_out.is_null() {
+                            *timed_out = 1;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    cleanup_and_return(retval, col, is_multi)
+}
+
+/// Helper to convert nullable pointer result
+#[inline]
+unsafe fn ptr_from_result(p: *mut c_char) -> Option<*mut c_char> {
+    if p.is_null() {
+        None
+    } else {
+        Some(p)
+    }
+}
+
+/// Clean up and fix up positions after match attempt
+unsafe fn cleanup_and_return(retval: c_int, col: c_int, is_multi: bool) -> c_int {
+    // Free reg_tofree when it's a bit big
+    nvim_cleanup_reg_tofree();
+
+    // Free regstack and backpos if they are bigger than their initial size
+    nvim_cleanup_regstack();
+    nvim_cleanup_backpos();
+
+    if retval > 0 {
+        // Make sure the end is never before the start (can happen with \zs and \ze)
+        if is_multi {
+            let mmatch = nvim_rex_get_reg_mmatch_ptr();
+            let startpos = nvim_regmmatch_get_startpos_ptr(mmatch) as *mut LPosBt;
+            let endpos = nvim_regmmatch_get_endpos_ptr(mmatch) as *mut LPosBt;
+
+            if (*endpos).lnum < (*startpos).lnum
+                || ((*endpos).lnum == (*startpos).lnum && (*endpos).col < (*startpos).col)
+            {
+                *endpos = *startpos;
+            }
+
+            // Set rmm_matchcol to the column where the whole pattern matched
+            nvim_regmmatch_set_rmm_matchcol_ptr(mmatch, col);
+        } else {
+            let m = nvim_rex_get_reg_match_ptr();
+            let startp = nvim_regmatch_get_startp_ptr(m);
+            let endp = nvim_regmatch_get_endp_ptr(m);
+
+            if !(*startp).is_null() && !(*endp).is_null() && (*endp) < (*startp) {
+                *endp = *startp;
+            }
+
+            // Set rm_matchcol to the column where the whole pattern matched
+            nvim_regmatch_set_rm_matchcol_ptr(m, col);
+        }
+    }
+
+    retval
 }
 
 #[cfg(test)]

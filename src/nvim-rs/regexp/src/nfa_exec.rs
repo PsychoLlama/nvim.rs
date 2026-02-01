@@ -3110,6 +3110,7 @@ pub unsafe extern "C" fn rs_nfa_process_state(
 const OK: c_int = 1;
 const FAIL: c_int = 0;
 
+#[allow(clashing_extern_declarations)]
 extern "C" {
     /// Get the length of a UTF-8 character.
     fn utf_char2len(c: c_int) -> c_int;
@@ -3466,6 +3467,7 @@ pub unsafe extern "C" fn rs_nfa_regtry(
     1 + nvim_rex_get_lnum()
 }
 
+#[allow(clashing_extern_declarations)]
 extern "C" {
     /// Get NFA program start state.
     fn nvim_nfa_regprog_get_start(prog: *const c_void) -> *mut c_void;

@@ -164,7 +164,7 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_bt_match_state_set_startp", "rs_bt_match_state_set_endp",
            "rs_bt_match_state_clear_submatches", "rs_bt_match_state_cleanup",
            "rs_bt_push_backtrack", "rs_bt_pop_backtrack", "rs_bt_backtrack_empty", "rs_bt_regrepeat",
-           "rs_bt_regtry",
+           "rs_bt_regtry", "rs_bt_regexec_both",
            # Unified regexp API (Phase 25.11)
            "rs_regprog_get_engine", "rs_is_nfa_prog", "rs_is_bt_prog", "rs_get_regflags",
            "rs_prog_in_use", "rs_set_prog_in_use", "rs_engine_to_int", "rs_int_to_engine",

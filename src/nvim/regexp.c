@@ -5166,6 +5166,12 @@ void nvim_cleanup_reg_tofree(void)
 bool nvim_get_reg_toolong(void) { return reg_toolong; }
 void nvim_set_reg_toolong(bool v) { reg_toolong = v; }
 
+// Error for null pointer
+void nvim_iemsg_null(void) { iemsg(_(e_null)); }
+
+// Wrapper for static prog_magic_wrong
+int nvim_prog_magic_wrong(void) { return prog_magic_wrong(); }
+
 // Memory limit (p_mmp)
 int64_t nvim_get_p_mmp(void) { return p_mmp; }
 

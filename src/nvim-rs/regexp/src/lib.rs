@@ -98,8 +98,8 @@ pub use bt_exec::{
     rs_bt_match_state_free, rs_bt_match_state_get_endp, rs_bt_match_state_get_startp,
     rs_bt_match_state_new, rs_bt_match_state_new_multi, rs_bt_match_state_set_endp,
     rs_bt_match_state_set_input, rs_bt_match_state_set_startp, rs_bt_pop_backtrack, rs_bt_pop_star,
-    rs_bt_push_backtrack, rs_bt_push_star, rs_bt_regrepeat, rs_bt_regtry, rs_bt_restore_pos,
-    rs_bt_save_pos, rs_bt_set_match_nl, rs_regrepeat,
+    rs_bt_push_backtrack, rs_bt_push_star, rs_bt_regexec_both, rs_bt_regrepeat, rs_bt_regtry,
+    rs_bt_restore_pos, rs_bt_save_pos, rs_bt_set_match_nl, rs_regrepeat,
 };
 pub use bt_state::{
     rs_backpos_clear, rs_backpos_free, rs_backpos_new, rs_regstack_clear, rs_regstack_free,
@@ -395,6 +395,7 @@ type ColNr = c_int; // colnr_T
 // =============================================================================
 
 #[allow(dead_code)] // Phase 4 accessors are infrastructure for future phases
+#[allow(clashing_extern_declarations)]
 extern "C" {
     /// Get the regflags field from a regprog_T.
     fn nvim_regprog_get_regflags(prog: RegprogHandle) -> c_int;
@@ -1387,6 +1388,7 @@ pub mod re_flags {
 
 // C API function declarations
 #[allow(dead_code)]
+#[allow(clashing_extern_declarations)]
 extern "C" {
     /// Compile a regular expression pattern.
     fn vim_regcomp(expr: *const c_char, re_flags: c_int) -> RegprogHandle;
