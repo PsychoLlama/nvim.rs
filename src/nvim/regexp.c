@@ -608,14 +608,6 @@ static void get_cpo_flags(void)
   reg_cpo_lit = vim_strchr(p_cpo, CPO_LITERAL) != NULL;
 }
 
-/// Skip over a "[]" range.
-/// "p" must point to the character after the '['.
-/// The returned pointer is on the matching ']', or the terminating NUL.
-static char *skip_anyof(char *p)
-{
-  return rs_skip_anyof(p);
-}
-
 /// Skip past regular expression.
 /// Stop at end of "startp" or where "delim" is found ('/', '?', etc).
 /// Take care of characters with a backslash in front of it.
@@ -664,7 +656,7 @@ char *skip_regexp_ex(char *startp, int dirc, int magic, char **newp, int *droppe
     }
     if ((p[0] == '[' && mymagic >= MAGIC_ON)
         || (p[0] == '\\' && p[1] == '[' && mymagic <= MAGIC_OFF)) {
-      p = skip_anyof(p + 1);
+      p = rs_skip_anyof(p + 1);
       if (p[0] == NUL) {
         break;
       }
@@ -2417,12 +2409,8 @@ void nvim_regmbc(int c)
 // Rust implementation for reg_equi_class
 extern void rs_reg_equi_class(int c);
 
-// Produce the bytes for equivalence class "c".
-// Currently only handles latin1, latin9 and utf-8.
-static void reg_equi_class(int c)
-{
-  rs_reg_equi_class(c);
-}
+// Rust implementation for re_put_uint32
+extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
 
 // Emit a node.
 // Return pointer to generated code.
@@ -2439,15 +2427,6 @@ static uint8_t *regnode(int op)
     *regcode++ = NUL;
   }
   return ret;
-}
-
-// Rust implementation for re_put_uint32
-extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
-
-// Write a four bytes number at "p" and return pointer to the next char.
-static uint8_t *re_put_uint32(uint8_t *p, uint32_t val)
-{
-  return rs_re_put_uint32(p, val);
 }
 
 // regnext - dig the "next" pointer out of a node
@@ -2571,7 +2550,7 @@ static void reginsert_nr(int op, int64_t val, uint8_t *opnd)
   *place++ = NUL;
   *place++ = NUL;
   assert(val >= 0 && (uintmax_t)val <= UINT32_MAX);
-  re_put_uint32(place, (uint32_t)val);
+  rs_re_put_uint32(place, (uint32_t)val);
 }
 
 // Insert an operator in front of already-emitted operand.
@@ -2600,9 +2579,9 @@ static void reginsert_limits(int op, int64_t minval, int64_t maxval, uint8_t *op
   *place++ = NUL;
   *place++ = NUL;
   assert(minval >= 0 && (uintmax_t)minval <= UINT32_MAX);
-  place = re_put_uint32(place, (uint32_t)minval);
+  place = rs_re_put_uint32(place, (uint32_t)minval);
   assert(maxval >= 0 && (uintmax_t)maxval <= UINT32_MAX);
-  place = re_put_uint32(place, (uint32_t)maxval);
+  place = rs_re_put_uint32(place, (uint32_t)maxval);
   regtail(opnd, place);
 }
 
@@ -3082,7 +3061,7 @@ static uint8_t *regatom(int *flagp)
           } else {
             // put the number and the optional
             // comparator after the opcode
-            regcode = re_put_uint32(regcode, n);
+            regcode = rs_re_put_uint32(regcode, n);
             *regcode++ = (uint8_t)cmp;
           }
           break;
@@ -3101,7 +3080,7 @@ collection:
 
       // If there is no matching ']', we assume the '[' is a normal
       // character.  This makes 'incsearch' and ":help [" work.
-      lp = (uint8_t *)skip_anyof(regparse);
+      lp = (uint8_t *)rs_skip_anyof(regparse);
       if (*lp == ']') {         // there is a matching ']'
         int startc = -1;                // > 0 when next '-' is a range
         int endc;
@@ -3220,7 +3199,7 @@ collection:
               c_class = rs_get_equi_class(&regparse);
               if (c_class != 0) {
                 // produce equivalence class
-                reg_equi_class(c_class);
+                rs_reg_equi_class(c_class);
               } else if ((c_class = rs_get_coll_element(&regparse)) != 0) {
                 // produce a collating element
                 regmbc(c_class);
@@ -4501,7 +4480,7 @@ int nvim_re_mult_next(const char *what) { return re_mult_next((char *)what); }
 int nvim_seen_endbrace(int refnum) { return seen_endbrace(refnum); }
 
 // Wrapper for skip_anyof
-const char *nvim_skip_anyof(const char *p) { return skip_anyof(p); }
+const char *nvim_skip_anyof(const char *p) { return rs_skip_anyof((char *)p); }
 
 // prev_at_start save/restore helper
 int nvim_parse_get_save_prev_at_start(void) { return prev_at_start; }
