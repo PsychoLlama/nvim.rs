@@ -1,32 +1,29 @@
-Plan: ~/.claude/plans/graceful-cuddling-wren.md
+Plan: ~/.claude/plans/elegant-leaping-stearns.md
 
-Phase 17 is now complete. Here's a summary of what was accomplished:
+The Phase 18a commit is complete. Let me provide a summary of what was accomplished and what remains.
 
-## Phase 17 Complete - BT Regex Opcode Migration
+## Summary
 
-All tasks from the plan at `/home/overlord/.claude/plans/graceful-cuddling-wren.md` have been completed.
+**Completed:**
+- **Phase 18a**: Migrated 4 simple `:syntax` settings commands to Rust:
+  - `:syntax case [match|ignore]` - ~26 lines of C logic moved to Rust
+  - `:syntax conceal [on|off]` - ~26 lines of C logic moved to Rust  
+  - `:syntax spell [toplevel|notoplevel|default]` - ~34 lines of C logic moved to Rust
+  - `:syntax foldlevel [start|minimum]` - ~38 lines of C logic moved to Rust
 
-### Summary
+**Added:**
+- `rs_syn_cmd_case()`, `rs_syn_cmd_conceal()`, `rs_syn_cmd_spell()`, `rs_syn_cmd_foldlevel()` in commands.rs
+- Synblock setter functions: `nvim_synblock_set_syn_ic()`, `nvim_synblock_set_syn_spell()`, `nvim_synblock_set_syn_foldlevel()`, `nvim_synblock_set_conceal()`
+- FFI declarations for the setters in lib.rs
 
-**1,845 lines of C code deleted** from `regexp.c`:
-- `nvim_bt_match_op()` (632 lines) - the C fallback dispatcher
-- `regmatch()` (1,188 lines) - the original C matching function
-- `nvim_bt_regmatch()` (4 lines) - the Rust wrapper
+**Lines deleted from C:** ~70 lines (function bodies replaced with thin wrappers)
 
-### Commits Made:
-1. `413ad90c2c` - Phase 17a: Word Boundaries and Character Classes
-2. `f59cc1ad93` - Phase 17b: Exact Match Opcodes
-3. `85b1740f49` - Phase 17c: Submatch Markers and Backreferences
-4. `28ae16074f` - Phase 17d: Control Flow Opcodes  
-5. `0d956dde63` - Phase 17e: Look-around and Position Checks
-6. `17054af068` - Phase 17g: Delete C Fallback Functions
-7. `69d5a0e101` - Update run-result documentation
+**Deferred phases (18b-18m):** These phases require significant C infrastructure for:
+- Pattern management (match, region, keyword)
+- Hashtable operations (keyword, clear)
+- Message output formatting (list)
+- File sourcing (include)  
+- Memory allocation and string management (iskeyword)
+- Variable operations (clear - do_unlet)
 
-### Verification:
-- `just build` ✓
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` ✓ (3718 tests)
-
-### Result:
-The BT regex engine's core matching loop is now **100% in Rust**. All opcodes are handled natively by `rs_match_one_op_full()` in Rust, with no remaining fallback to the C `regmatch()` function.
+The remaining phases would be better approached after establishing more comprehensive FFI infrastructure for these C subsystems.
