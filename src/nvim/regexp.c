@@ -5948,6 +5948,92 @@ int nvim_regstar_get_nextb_ic(const void *rst) { return ((const regstar_T *)rst)
 void *nvim_regbehind_get_save_after(void *rb) { return &((regbehind_T *)rb)->save_after; }
 void *nvim_regbehind_get_save_behind(void *rb) { return &((regbehind_T *)rb)->save_behind; }
 
+// Additional accessors for rs_regmatch_full (Phase 14e)
+void nvim_reg_save(void *savep) { reg_save((regsave_T *)savep, &backpos); }
+void nvim_reg_restore(const void *savep) { reg_restore((regsave_T *)savep, &backpos); }
+bool nvim_reg_save_equal(const void *savep) { return reg_save_equal((regsave_T *)savep); }
+
+void nvim_set_behind_pos(const void *pos)
+{
+  behind_pos = *(const regsave_T *)pos;
+}
+
+void nvim_copy_regsave(void *dst, const void *src)
+{
+  *(regsave_T *)dst = *(const regsave_T *)src;
+}
+
+// regsave_T field accessors (for multi-line mode: line/col, single-line: ptr)
+linenr_T nvim_regsave_get_lnum(const void *rs)
+{
+  return ((const regsave_T *)rs)->rs_u.pos.lnum;
+}
+
+void nvim_regsave_set_lnum(void *rs, linenr_T lnum)
+{
+  ((regsave_T *)rs)->rs_u.pos.lnum = lnum;
+}
+
+colnr_T nvim_regsave_get_col(const void *rs)
+{
+  return ((const regsave_T *)rs)->rs_u.pos.col;
+}
+
+void nvim_regsave_set_col(void *rs, colnr_T col)
+{
+  ((regsave_T *)rs)->rs_u.pos.col = col;
+}
+
+uint8_t *nvim_regsave_get_ptr(const void *rs)
+{
+  return ((const regsave_T *)rs)->rs_u.ptr;
+}
+
+void nvim_regsave_set_ptr(void *rs, uint8_t *ptr)
+{
+  ((regsave_T *)rs)->rs_u.ptr = ptr;
+}
+
+// Set regitem state (for RS_BEHIND1 -> RS_BEHIND2 transition)
+void nvim_regitem_set_state(void *rp, int state)
+{
+  ((regitem_T *)rp)->rs_state = (regstate_T)state;
+}
+
+// Brace count accessors for BRCPLX handlers (use existing functions at line ~5760)
+
+// reg_breakcheck wrapper for Rust
+void nvim_reg_breakcheck(void)
+{
+  reg_breakcheck();
+}
+
+// MB_PTR_BACK wrapper for Rust
+void mb_ptr_back_any(const uint8_t *start, uint8_t **p)
+{
+  MB_PTR_BACK(start, *p);
+}
+
+// Wrapper to check profile timeout
+bool nvim_profile_passed_limit(const void *tm)
+{
+  if (tm == NULL) {
+    return false;
+  }
+  return profile_passed_limit(*(const proftime_T *)tm);
+}
+
+// Match one opcode helper - returns RA_* status
+// This wraps the inner loop body of regmatch() for a single opcode
+int nvim_bt_match_op(uint8_t *scan, int opcode)
+{
+  // For now, just return RA_CONT to signal the Rust code should delegate
+  // This will be filled in as we migrate more opcodes
+  (void)scan;
+  (void)opcode;
+  return RA_CONT;
+}
+
 /// Main matching routine
 ///
 /// Conceptually the strategy is simple: Check to see whether the current node

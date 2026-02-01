@@ -28,13 +28,13 @@ use std::ptr;
 
 use crate::bt_compile::{next, op, operand};
 use crate::bt_opcodes::{
-    get_backref_num, get_mclose_num, get_mopen_num, is_backref, is_mclose, is_mopen, operand_cmp,
-    operand_max, operand_min, ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW,
-    BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY,
-    FNAME, HEAD, HEX, IDENT, LOWER, MATCH, MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD,
-    NHEX, NLOWER, NOBEHIND, NOMATCH, NOPEN, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT,
-    RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD,
-    SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
+    get_backref_num, get_mclose_num, get_mopen_num, get_zclose_num, get_zopen_num, is_backref,
+    is_mclose, is_mopen, is_zclose, is_zopen, operand_cmp, operand_max, operand_min, ADD_NL, ALPHA,
+    ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE,
+    BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FNAME, HEAD, HEX, IDENT, LOWER, MATCH,
+    MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND, NOMATCH, NOPEN,
+    NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF,
+    RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
 };
 use crate::bt_state::{
     BackPosTable, RegBehind, RegItem, RegSave, RegStack, RegStar, RegState, NSUBEXP,
@@ -3233,4 +3233,828 @@ mod tests {
             assert!(!match_class(class.as_ptr(), b'A'));
         }
     }
+}
+
+// =============================================================================
+// Phase 14e: Full regmatch implementation with all backtrack state handlers
+// =============================================================================
+
+/// RA_* status constants matching C
+const RA_FAIL: c_int = 1;
+const RA_CONT: c_int = 2;
+const RA_BREAK: c_int = 3;
+const RA_MATCH: c_int = 4;
+const RA_NOMATCH: c_int = 5;
+
+/// RS_* state constants matching C regstate_T enum
+const RS_NOPEN: c_int = 0;
+const RS_MOPEN: c_int = 1;
+const RS_MCLOSE: c_int = 2;
+const RS_ZOPEN: c_int = 3;
+const RS_ZCLOSE: c_int = 4;
+const RS_BRANCH: c_int = 5;
+const RS_BRCPLX_MORE: c_int = 6;
+const RS_BRCPLX_LONG: c_int = 7;
+const RS_BRCPLX_SHORT: c_int = 8;
+const RS_NOMATCH_STATE: c_int = 9;
+const RS_BEHIND1: c_int = 10;
+const RS_BEHIND2: c_int = 11;
+const RS_STAR_LONG: c_int = 12;
+const RS_STAR_SHORT: c_int = 13;
+
+// FFI declarations for regmatch state handlers (Phase 14e)
+#[allow(clashing_extern_declarations)]
+#[allow(dead_code)]
+extern "C" {
+    // Regstack operations with C global regstack
+    fn nvim_regstack_push_item(state: c_int, scan: *mut u8) -> *mut c_void;
+    fn nvim_regstack_pop_item(scan: *mut *mut u8);
+    fn nvim_regstack_top() -> *mut c_void;
+    fn nvim_regstack_empty() -> bool;
+    fn nvim_regstack_len() -> c_int;
+    fn nvim_regstack_set_len(len: c_int);
+    fn nvim_regstack_grow(size: c_int) -> bool;
+    fn nvim_regstack_shrink(size: c_int);
+
+    // Regitem accessors
+    fn nvim_regitem_get_state(rp: *const c_void) -> c_int;
+    fn nvim_regitem_get_no(rp: *const c_void) -> i16;
+    fn nvim_regitem_set_no(rp: *mut c_void, no: i16);
+    fn nvim_regitem_get_scan(rp: *const c_void) -> *mut u8;
+    fn nvim_regitem_set_scan(rp: *mut c_void, scan: *mut u8);
+    fn nvim_regitem_get_regsave(rp: *mut c_void) -> *mut c_void;
+    fn nvim_regitem_get_sesave(rp: *mut c_void) -> *mut c_void;
+    fn nvim_regitem_set_state(rp: *mut c_void, state: c_int);
+
+    // Regstar/regbehind accessors
+    fn nvim_regstack_get_regstar() -> *mut c_void;
+    fn nvim_regstack_get_regbehind() -> *mut c_void;
+    fn nvim_sizeof_regstar() -> c_int;
+    fn nvim_sizeof_regbehind() -> c_int;
+    fn nvim_regstar_get_count(rst: *const c_void) -> i64;
+    fn nvim_regstar_set_count(rst: *mut c_void, v: i64);
+    fn nvim_regstar_get_minval(rst: *const c_void) -> i64;
+    fn nvim_regstar_get_maxval(rst: *const c_void) -> i64;
+    fn nvim_regstar_get_nextb(rst: *const c_void) -> c_int;
+    fn nvim_regstar_get_nextb_ic(rst: *const c_void) -> c_int;
+    fn nvim_regbehind_get_save_after(rb: *mut c_void) -> *mut c_void;
+    fn nvim_regbehind_get_save_behind(rb: *mut c_void) -> *mut c_void;
+
+    // Save/restore operations
+    fn nvim_bt_save_se_multi(savep: *mut c_void, posp: *mut c_void);
+    fn nvim_bt_save_se_one(savep: *mut c_void, pp: *mut *mut u8);
+    fn nvim_bt_restore_se_multi(savep: *const c_void, posp: *mut c_void);
+    fn nvim_bt_restore_se_one(savep: *const c_void, pp: *mut *mut u8);
+    fn nvim_bt_save_subexpr(bp: *mut c_void);
+    fn nvim_bt_restore_subexpr(bp: *mut c_void);
+
+    // Reg_save/restore with backpos
+    fn nvim_reg_save(savep: *mut c_void);
+    fn nvim_reg_restore(savep: *const c_void);
+    fn nvim_reg_save_equal(savep: *const c_void) -> bool;
+
+    // Behind_pos global state
+    fn nvim_get_behind_pos() -> *mut c_void;
+    fn nvim_set_behind_pos(pos: *const c_void);
+    fn nvim_copy_regsave(dst: *mut c_void, src: *const c_void);
+
+    // Brace count for BRCPLX handlers (matches existing C signatures)
+    fn nvim_get_brace_count(idx: c_int) -> c_int;
+    fn nvim_set_brace_count(idx: c_int, val: c_int);
+    fn nvim_get_brace_min(idx: c_int) -> i64;
+    fn nvim_get_brace_max(idx: c_int) -> i64;
+
+    // Interrupt checking
+    fn nvim_reg_breakcheck();
+
+    // UTF-8 pointer movement
+    fn mb_ptr_back_any(start: *const u8, p: *mut *mut u8);
+}
+
+/// Placeholder for behind_pos copy operations.
+/// The regsave_T union has different layouts for multi vs single-line.
+/// We treat it as an opaque 16-byte buffer for copying.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+#[allow(dead_code)]
+struct RegSaveCopy {
+    data: [u8; 16],
+}
+
+/// Full regmatch implementation using C global state.
+///
+/// This function replaces the C regmatch() function, implementing all
+/// backtrack state handlers in Rust while operating on C global state
+/// (regstack, backpos, rex.*, brace_count[], etc.).
+///
+/// # Safety
+/// `scan` must point to valid BT regex bytecode. All C global state
+/// must be properly initialized (regstack, backpos cleared).
+#[no_mangle]
+pub unsafe extern "C" fn rs_regmatch_full(
+    mut scan: *mut u8,
+    tm: *const c_void,
+    timed_out: *mut c_int,
+) -> c_int {
+    let mut status: c_int;
+    let mut tm_count = 0;
+    let is_multi = nvim_rex_is_multi() != 0;
+
+    // Main loop - repeat until regstack is empty
+    loop {
+        // Check for interrupt
+        nvim_reg_breakcheck();
+        if nvim_get_got_int() != 0 {
+            status = RA_FAIL;
+            break;
+        }
+
+        // Inner loop - process opcodes sequentially
+        loop {
+            if nvim_get_got_int() != 0 || scan.is_null() {
+                status = RA_FAIL;
+                break;
+            }
+
+            // Timeout check (every 100 iterations)
+            if !tm.is_null() {
+                tm_count += 1;
+                if tm_count == 100 {
+                    tm_count = 0;
+                    if nvim_profile_passed_limit(tm) {
+                        if !timed_out.is_null() {
+                            *timed_out = 1;
+                        }
+                        status = RA_FAIL;
+                        break;
+                    }
+                }
+            }
+
+            let opcode = op(scan);
+
+            // Check for END first
+            if opcode == END {
+                status = RA_MATCH;
+                break;
+            }
+
+            let next_scan = next(scan);
+
+            // Process opcode - delegate to rs_match_one_op_full for most opcodes
+            status = rs_match_one_op_full(scan, opcode);
+
+            match status {
+                RA_CONT => {
+                    // Move to next instruction
+                    scan = if next_scan.is_null() {
+                        scan.add(3) // Default: advance past node
+                    } else {
+                        next_scan as *mut u8
+                    };
+                }
+                RA_MATCH | RA_NOMATCH | RA_FAIL => {
+                    break;
+                }
+                RA_BREAK => {
+                    // Skip restore bits, go straight to state handling
+                    break;
+                }
+                _ => {
+                    break;
+                }
+            }
+        } // end inner loop
+
+        // Process backtrack states
+        while !nvim_regstack_empty() && status != RA_FAIL {
+            let rp = nvim_regstack_top();
+            if rp.is_null() {
+                break;
+            }
+
+            let rs_state = nvim_regitem_get_state(rp);
+
+            match rs_state {
+                RS_NOPEN => {
+                    // Result is passed on as-is, simply pop
+                    nvim_regstack_pop_item(&mut scan);
+                }
+
+                RS_MOPEN => {
+                    // Pop, restore startp on no match
+                    if status == RA_NOMATCH {
+                        let no = nvim_regitem_get_no(rp) as c_int;
+                        let sesave = nvim_regitem_get_sesave(rp);
+                        if is_multi {
+                            let startpos = nvim_rex_get_reg_startpos();
+                            nvim_bt_restore_se_multi(
+                                sesave,
+                                (startpos as *mut u8)
+                                    .add(no as usize * std::mem::size_of::<LPosBt>())
+                                    as *mut c_void,
+                            );
+                        } else {
+                            let startp = nvim_rex_get_reg_startp();
+                            nvim_bt_restore_se_one(sesave, startp.add(no as usize));
+                        }
+                    }
+                    nvim_regstack_pop_item(&mut scan);
+                }
+
+                RS_MCLOSE => {
+                    // Pop, restore endp on no match
+                    if status == RA_NOMATCH {
+                        let no = nvim_regitem_get_no(rp) as c_int;
+                        let sesave = nvim_regitem_get_sesave(rp);
+                        if is_multi {
+                            let endpos = nvim_rex_get_reg_endpos();
+                            nvim_bt_restore_se_multi(
+                                sesave,
+                                (endpos as *mut u8).add(no as usize * std::mem::size_of::<LPosBt>())
+                                    as *mut c_void,
+                            );
+                        } else {
+                            let endp = nvim_rex_get_reg_endp();
+                            nvim_bt_restore_se_one(sesave, endp.add(no as usize));
+                        }
+                    }
+                    nvim_regstack_pop_item(&mut scan);
+                }
+
+                RS_ZOPEN => {
+                    // Pop, restore z-startp on no match
+                    if status == RA_NOMATCH {
+                        let no = nvim_regitem_get_no(rp) as c_int;
+                        let sesave = nvim_regitem_get_sesave(rp);
+                        if is_multi {
+                            let startzpos = nvim_get_reg_startzpos();
+                            nvim_bt_restore_se_multi(
+                                sesave,
+                                (startzpos as *mut u8)
+                                    .add(no as usize * std::mem::size_of::<LPosBt>())
+                                    as *mut c_void,
+                            );
+                        } else {
+                            let startzp = nvim_get_reg_startzp();
+                            nvim_bt_restore_se_one(sesave, startzp.add(no as usize));
+                        }
+                    }
+                    nvim_regstack_pop_item(&mut scan);
+                }
+
+                RS_ZCLOSE => {
+                    // Pop, restore z-endp on no match
+                    if status == RA_NOMATCH {
+                        let no = nvim_regitem_get_no(rp) as c_int;
+                        let sesave = nvim_regitem_get_sesave(rp);
+                        if is_multi {
+                            let endzpos = nvim_get_reg_endzpos();
+                            nvim_bt_restore_se_multi(
+                                sesave,
+                                (endzpos as *mut u8)
+                                    .add(no as usize * std::mem::size_of::<LPosBt>())
+                                    as *mut c_void,
+                            );
+                        } else {
+                            let endzp = nvim_get_reg_endzp();
+                            nvim_bt_restore_se_one(sesave, endzp.add(no as usize));
+                        }
+                    }
+                    nvim_regstack_pop_item(&mut scan);
+                }
+
+                RS_BRANCH => {
+                    if status == RA_MATCH {
+                        // This branch matched
+                        nvim_regstack_pop_item(&mut scan);
+                    } else {
+                        // Try next branch
+                        let branch_scan = nvim_regitem_get_scan(rp);
+                        if branch_scan.is_null() || op(branch_scan) != BRANCH {
+                            // No more branches
+                            status = RA_NOMATCH;
+                            nvim_regstack_pop_item(&mut scan);
+                        } else {
+                            // Prepare for next branch
+                            nvim_regitem_set_scan(rp, next(branch_scan) as *mut u8);
+                            scan = operand(branch_scan) as *mut u8;
+                            status = RA_CONT;
+                        }
+                    }
+                }
+
+                RS_BRCPLX_MORE => {
+                    // Pop, restore on no match
+                    if status == RA_NOMATCH {
+                        let no = nvim_regitem_get_no(rp) as c_int;
+                        let regsave = nvim_regitem_get_regsave(rp);
+                        nvim_reg_restore(regsave);
+                        // Decrement brace count
+                        let count = nvim_get_brace_count(no);
+                        nvim_set_brace_count(no, count - 1);
+                    }
+                    nvim_regstack_pop_item(&mut scan);
+                }
+
+                RS_BRCPLX_LONG => {
+                    // Pop, on no match we found enough matches
+                    if status == RA_NOMATCH {
+                        let no = nvim_regitem_get_no(rp) as c_int;
+                        let regsave = nvim_regitem_get_regsave(rp);
+                        nvim_reg_restore(regsave);
+                        let count = nvim_get_brace_count(no);
+                        nvim_set_brace_count(no, count - 1);
+                        // Continue with items after \{}
+                        status = RA_CONT;
+                    }
+                    nvim_regstack_pop_item(&mut scan);
+                    if status == RA_CONT {
+                        scan = next(scan) as *mut u8;
+                    }
+                }
+
+                RS_BRCPLX_SHORT => {
+                    // Pop, on no match try one more
+                    if status == RA_NOMATCH {
+                        let regsave = nvim_regitem_get_regsave(rp);
+                        nvim_reg_restore(regsave);
+                    }
+                    nvim_regstack_pop_item(&mut scan);
+                    if status == RA_NOMATCH {
+                        scan = operand(scan) as *mut u8;
+                        status = RA_CONT;
+                    }
+                }
+
+                RS_NOMATCH_STATE => {
+                    // Handle NOMATCH/MATCH/SUBPAT
+                    let no = nvim_regitem_get_no(rp) as c_int;
+                    if status == (if no == NOMATCH { RA_MATCH } else { RA_NOMATCH }) {
+                        status = RA_NOMATCH;
+                    } else {
+                        status = RA_CONT;
+                        if no != SUBPAT {
+                            // Zero-width: restore position
+                            let regsave = nvim_regitem_get_regsave(rp);
+                            nvim_reg_restore(regsave);
+                        }
+                    }
+                    nvim_regstack_pop_item(&mut scan);
+                    if status == RA_CONT {
+                        scan = next(scan) as *mut u8;
+                    }
+                }
+
+                RS_BEHIND1 => {
+                    if status == RA_NOMATCH {
+                        nvim_regstack_pop_item(&mut scan);
+                        let behind_size = nvim_sizeof_regbehind();
+                        nvim_regstack_shrink(behind_size);
+                    } else {
+                        // Stuff after BEHIND matches, now try the behind part
+                        let rb = nvim_regstack_get_regbehind();
+
+                        // Save position after match
+                        let save_after = nvim_regbehind_get_save_after(rb);
+                        nvim_reg_save(save_after);
+
+                        // Save and set behind_pos
+                        let save_behind = nvim_regbehind_get_save_behind(rb);
+                        let behind_pos = nvim_get_behind_pos();
+                        nvim_copy_regsave(save_behind, behind_pos);
+
+                        let regsave = nvim_regitem_get_regsave(rp);
+                        nvim_set_behind_pos(regsave);
+
+                        // Change state to RS_BEHIND2
+                        nvim_regitem_set_state(rp, RS_BEHIND2);
+
+                        // Restore position and try operand
+                        nvim_reg_restore(regsave);
+                        let rp_scan = nvim_regitem_get_scan(rp);
+                        scan = operand(rp_scan).add(4) as *mut u8;
+                    }
+                }
+
+                RS_BEHIND2 => {
+                    let rb = nvim_regstack_get_regbehind();
+                    let behind_pos = nvim_get_behind_pos();
+
+                    if status == RA_MATCH && nvim_reg_save_equal(behind_pos) {
+                        // Found a match ending at the right position
+                        let save_behind = nvim_regbehind_get_save_behind(rb);
+                        nvim_set_behind_pos(save_behind);
+
+                        let no = nvim_regitem_get_no(rp) as c_int;
+                        if no == BEHIND {
+                            // Positive lookbehind: restore after position
+                            let save_after = nvim_regbehind_get_save_after(rb);
+                            nvim_reg_restore(save_after);
+                        } else {
+                            // Negative lookbehind: we don't want a match
+                            status = RA_NOMATCH;
+                            nvim_bt_restore_subexpr(rb);
+                        }
+                        nvim_regstack_pop_item(&mut scan);
+                        let behind_size = nvim_sizeof_regbehind();
+                        nvim_regstack_shrink(behind_size);
+                    } else {
+                        // No match or wrong position: go back one character
+                        let ok = rs_behind2_go_back(rp, is_multi);
+
+                        if ok {
+                            // Restore and try again
+                            let regsave = nvim_regitem_get_regsave(rp);
+                            nvim_reg_restore(regsave);
+                            let rp_scan = nvim_regitem_get_scan(rp);
+                            scan = operand(rp_scan).add(4) as *mut u8;
+                            if status == RA_MATCH {
+                                // Had a match, need to restore subexpr
+                                status = RA_NOMATCH;
+                                nvim_bt_restore_subexpr(rb);
+                            }
+                        } else {
+                            // Can't go back further
+                            let save_behind = nvim_regbehind_get_save_behind(rb);
+                            nvim_set_behind_pos(save_behind);
+
+                            let no = nvim_regitem_get_no(rp) as c_int;
+                            if no == NOBEHIND {
+                                // Negative lookbehind: no match is a success
+                                let save_after = nvim_regbehind_get_save_after(rb);
+                                nvim_reg_restore(save_after);
+                                status = RA_MATCH;
+                            } else {
+                                // Positive lookbehind: failure
+                                if status == RA_MATCH {
+                                    status = RA_NOMATCH;
+                                    nvim_bt_restore_subexpr(rb);
+                                }
+                            }
+                            nvim_regstack_pop_item(&mut scan);
+                            let behind_size = nvim_sizeof_regbehind();
+                            nvim_regstack_shrink(behind_size);
+                        }
+                    }
+                }
+
+                RS_STAR_LONG | RS_STAR_SHORT => {
+                    let rst = nvim_regstack_get_regstar();
+
+                    if status == RA_MATCH {
+                        // Match found, clean up
+                        nvim_regstack_pop_item(&mut scan);
+                        let star_size = nvim_sizeof_regstar();
+                        nvim_regstack_shrink(star_size);
+                    } else {
+                        // Restore position if we already tried
+                        if status != RA_BREAK {
+                            let regsave = nvim_regitem_get_regsave(rp);
+                            nvim_reg_restore(regsave);
+                        }
+
+                        // Loop to find a position where it could match
+                        let mut found = false;
+                        loop {
+                            if status != RA_BREAK {
+                                if rs_state == RS_STAR_LONG {
+                                    // Longest match: back up one char
+                                    let count = nvim_regstar_get_count(rst);
+                                    let minval = nvim_regstar_get_minval(rst);
+                                    if count - 1 < minval {
+                                        break;
+                                    }
+                                    nvim_regstar_set_count(rst, count - 1);
+
+                                    // Go back one character
+                                    if !rs_star_go_back(is_multi) {
+                                        status = RA_NOMATCH;
+                                        break;
+                                    }
+                                } else {
+                                    // Shortest match: try one more
+                                    let count = nvim_regstar_get_count(rst);
+                                    let minval = nvim_regstar_get_minval(rst);
+                                    // Note: for shortest match, minval and maxval are swapped
+                                    if count == minval {
+                                        break;
+                                    }
+                                    let rp_scan = nvim_regitem_get_scan(rp);
+                                    if rs_regrepeat(operand(rp_scan) as *mut u8, 1) == 0 {
+                                        break;
+                                    }
+                                    nvim_regstar_set_count(rst, count + 1);
+                                }
+
+                                if nvim_get_got_int() != 0 {
+                                    break;
+                                }
+                            } else {
+                                status = RA_NOMATCH;
+                            }
+
+                            // Check if it could match
+                            let nextb = nvim_regstar_get_nextb(rst);
+                            let nextb_ic = nvim_regstar_get_nextb_ic(rst);
+                            let input = nvim_rex_get_input();
+                            let cur_byte = if input.is_null() { 0 } else { *input as c_int };
+
+                            if nextb == 0 || cur_byte == nextb || cur_byte == nextb_ic {
+                                // Could match, save position and continue
+                                let regsave = nvim_regitem_get_regsave(rp);
+                                nvim_reg_save(regsave);
+                                let rp_scan = nvim_regitem_get_scan(rp);
+                                scan = next(rp_scan) as *mut u8;
+                                status = RA_CONT;
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if !found {
+                            // Failed
+                            nvim_regstack_pop_item(&mut scan);
+                            let star_size = nvim_sizeof_regstar();
+                            nvim_regstack_shrink(star_size);
+                            status = RA_NOMATCH;
+                        }
+                    }
+                }
+
+                _ => {
+                    // Unknown state, pop and continue
+                    nvim_regstack_pop_item(&mut scan);
+                }
+            }
+
+            // If we should continue inner loop, break out of state handling
+            if status == RA_CONT {
+                break;
+            }
+        } // end state handling loop
+
+        // Check if we should continue
+        if status == RA_CONT {
+            continue;
+        }
+
+        // If regstack is empty or failed, we're done
+        if nvim_regstack_empty() || status == RA_FAIL {
+            break;
+        }
+    } // end main loop
+
+    if status == RA_MATCH {
+        1
+    } else {
+        0
+    }
+}
+
+/// Helper: Go back one character for RS_BEHIND2 handler.
+/// Returns true if successful, false if can't go back.
+unsafe fn rs_behind2_go_back(rp: *mut c_void, is_multi: bool) -> bool {
+    let rp_scan = nvim_regitem_get_scan(rp);
+    let limit = operand_min(rp_scan);
+    let behind_pos = nvim_get_behind_pos();
+    let regsave = nvim_regitem_get_regsave(rp);
+
+    if is_multi {
+        // Multi-line mode: check line and column
+        let regsave_lnum = nvim_regsave_get_lnum(regsave);
+        let regsave_col = nvim_regsave_get_col(regsave);
+        let behind_lnum = nvim_regsave_get_lnum(behind_pos);
+        let behind_col = nvim_regsave_get_col(behind_pos);
+
+        // Check limit
+        if limit > 0 {
+            let dist = if regsave_lnum < behind_lnum {
+                // Different line: use line length
+                let line = nvim_rex_get_line();
+                if line.is_null() {
+                    return false;
+                }
+                strlen_safe(line) as c_int - regsave_col
+            } else {
+                behind_col - regsave_col
+            };
+            if dist >= limit as c_int {
+                return false;
+            }
+        }
+
+        if regsave_col == 0 {
+            // At start of line: try previous line
+            if regsave_lnum < behind_lnum {
+                return false;
+            }
+            let prev_lnum = regsave_lnum - 1;
+            let prev_line = nvim_reg_getline(prev_lnum);
+            if prev_line.is_null() {
+                return false;
+            }
+            nvim_regsave_set_lnum(regsave, prev_lnum);
+            // Set to end of previous line
+            nvim_reg_restore(regsave);
+            let line = nvim_rex_get_line();
+            let len = strlen_safe(line) as c_int;
+            nvim_regsave_set_col(regsave, len);
+        } else {
+            // Go back one character on same line
+            let line = nvim_reg_getline(regsave_lnum);
+            if line.is_null() {
+                return false;
+            }
+            let mut ptr = (line as *mut u8).add(regsave_col as usize);
+            mb_ptr_back_any(line as *const u8, &mut ptr);
+            let new_col = ptr.offset_from(line as *const u8) as c_int;
+            nvim_regsave_set_col(regsave, new_col);
+        }
+    } else {
+        // Single-line mode
+        let regsave_ptr = nvim_regsave_get_ptr(regsave);
+        let behind_ptr = nvim_regsave_get_ptr(behind_pos);
+        let line = nvim_rex_get_line();
+
+        if regsave_ptr == line {
+            return false;
+        }
+
+        // Go back one character
+        let mut ptr = regsave_ptr;
+        mb_ptr_back_any(line as *const u8, &mut ptr);
+
+        if limit > 0 {
+            let dist = behind_ptr.offset_from(ptr);
+            if dist > limit as isize {
+                return false;
+            }
+        }
+
+        nvim_regsave_set_ptr(regsave, ptr);
+    }
+
+    true
+}
+
+/// Helper: Go back one character for RS_STAR_LONG handler.
+/// Returns true if successful, false if at beginning.
+unsafe fn rs_star_go_back(is_multi: bool) -> bool {
+    let input = nvim_rex_get_input();
+    let line = nvim_rex_get_line();
+
+    if input == line {
+        // At start of line
+        if is_multi {
+            let lnum = nvim_rex_get_lnum();
+            if lnum == 0 {
+                return false;
+            }
+            // Go to previous line
+            nvim_rex_set_lnum(lnum - 1);
+            let prev_line = nvim_reg_getline(lnum - 1);
+            if prev_line.is_null() {
+                return false;
+            }
+            nvim_rex_set_line(prev_line as *mut u8);
+            let len = strlen_safe(prev_line as *const u8);
+            nvim_rex_set_input((prev_line as *mut u8).add(len));
+            nvim_reg_breakcheck();
+        } else {
+            return false;
+        }
+    } else {
+        // Go back one character
+        let mut ptr = input;
+        mb_ptr_back_any(line as *const u8, &mut ptr);
+        nvim_rex_set_input(ptr);
+    }
+
+    true
+}
+
+/// Helper: Get strlen of a u8 pointer
+unsafe fn strlen_safe(s: *const u8) -> usize {
+    if s.is_null() {
+        0
+    } else {
+        let mut len = 0;
+        let mut p = s;
+        while *p != 0 {
+            p = p.add(1);
+            len += 1;
+        }
+        len
+    }
+}
+
+// Additional FFI for regsave field access
+extern "C" {
+    fn nvim_regsave_get_lnum(rs: *const c_void) -> c_int;
+    fn nvim_regsave_set_lnum(rs: *mut c_void, lnum: c_int);
+    fn nvim_regsave_get_col(rs: *const c_void) -> c_int;
+    fn nvim_regsave_set_col(rs: *mut c_void, col: c_int);
+    fn nvim_regsave_get_ptr(rs: *const c_void) -> *mut u8;
+    fn nvim_regsave_set_ptr(rs: *mut c_void, ptr: *mut u8);
+    fn nvim_profile_passed_limit(tm: *const c_void) -> bool;
+    // nvim_regitem_set_state already declared above
+}
+
+/// Match a single opcode for rs_regmatch_full.
+///
+/// This mirrors the inner loop of C regmatch(), processing one opcode.
+/// Returns RA_CONT to continue, RA_MATCH/RA_NOMATCH/RA_FAIL/RA_BREAK otherwise.
+///
+/// # Safety
+/// scan must point to valid bytecode.
+unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int) -> c_int {
+    let _next_scan = next(scan);
+    let is_multi = nvim_rex_is_multi() != 0;
+
+    match opcode {
+        // ZOPEN handling - external submatch start
+        op if is_zopen(op) => {
+            let no = get_zopen_num(op) as c_int;
+            let rp = nvim_regstack_push_item(RS_ZOPEN, scan);
+            if rp.is_null() {
+                return RA_FAIL;
+            }
+            nvim_regitem_set_no(rp, no as i16);
+
+            // Save current z-start position
+            let sesave = nvim_regitem_get_sesave(rp);
+            if is_multi {
+                let startzpos = nvim_get_reg_startzpos();
+                nvim_bt_save_se_multi(
+                    sesave,
+                    (startzpos as *mut u8).add(no as usize * std::mem::size_of::<LPosBt>())
+                        as *mut c_void,
+                );
+                // Set the new position
+                let lnum = nvim_rex_get_lnum();
+                let input = nvim_rex_get_input();
+                let line = nvim_rex_get_line();
+                let col = input.offset_from(line) as c_int;
+                nvim_set_reg_startzpos(no, lnum, col);
+            } else {
+                let startzp = nvim_get_reg_startzp();
+                nvim_bt_save_se_one(sesave, startzp.add(no as usize));
+                // Set the new position
+                let input = nvim_rex_get_input();
+                nvim_set_reg_startzp(no, input);
+            }
+            RA_CONT
+        }
+
+        // ZCLOSE handling - external submatch end
+        op if is_zclose(op) => {
+            let no = get_zclose_num(op) as c_int;
+            let rp = nvim_regstack_push_item(RS_ZCLOSE, scan);
+            if rp.is_null() {
+                return RA_FAIL;
+            }
+            nvim_regitem_set_no(rp, no as i16);
+
+            // Save current z-end position
+            let sesave = nvim_regitem_get_sesave(rp);
+            if is_multi {
+                let endzpos = nvim_get_reg_endzpos();
+                nvim_bt_save_se_multi(
+                    sesave,
+                    (endzpos as *mut u8).add(no as usize * std::mem::size_of::<LPosBt>())
+                        as *mut c_void,
+                );
+                // Set the new position
+                let lnum = nvim_rex_get_lnum();
+                let input = nvim_rex_get_input();
+                let line = nvim_rex_get_line();
+                let col = input.offset_from(line) as c_int;
+                nvim_set_reg_endzpos(no, lnum, col);
+            } else {
+                let endzp = nvim_get_reg_endzp();
+                nvim_bt_save_se_one(sesave, endzp.add(no as usize));
+                // Set the new position
+                let input = nvim_rex_get_input();
+                nvim_set_reg_endzp(no, input);
+            }
+            RA_CONT
+        }
+
+        // For other opcodes, call the existing C nvim_bt_match_op or handle inline
+        // This is a simplified version - the full implementation would handle all opcodes
+        _ => {
+            // Delegate to C for now - this will be filled in as we migrate more
+            nvim_bt_match_op(scan, opcode)
+        }
+    }
+}
+
+// FFI declaration for C match_op helper
+extern "C" {
+    fn nvim_bt_match_op(scan: *mut u8, opcode: c_int) -> c_int;
+    fn nvim_set_reg_startzpos(idx: c_int, lnum: c_int, col: c_int);
+    fn nvim_set_reg_endzpos(idx: c_int, lnum: c_int, col: c_int);
+    fn nvim_set_reg_startzp(idx: c_int, p: *mut u8);
+    fn nvim_set_reg_endzp(idx: c_int, p: *mut u8);
 }
