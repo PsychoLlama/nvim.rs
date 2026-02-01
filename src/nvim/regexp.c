@@ -1201,12 +1201,6 @@ void nvim_cleanup_subexpr(void) { cleanup_subexpr(); }
 // Exposed for Rust - wraps static cleanup_zsubexpr()
 void nvim_cleanup_zsubexpr(void) { cleanup_zsubexpr(); }
 
-// Advance rex.lnum, rex.line and rex.input to the next line.
-static void reg_nextline(void)
-{
-  rs_reg_nextline();
-}
-
 // Check whether a backreference matches.
 // Returns RA_FAIL, RA_NOMATCH or RA_MATCH.
 // If "bytelen" is not NULL, it is set to the byte length of the match in the
@@ -1249,7 +1243,7 @@ static int match_with_backref(linenr_T start_lnum, colnr_T start_col, linenr_T e
       len = reg_getline_len(clnum) - ccol;
     }
 
-    if ((!rex.reg_ic && cstrncmp(p + ccol, (char *)rex.input, &len) != 0)
+    if ((!rex.reg_ic && rs_cstrncmp(p + ccol, (char *)rex.input, &len) != 0)
         || (rex.reg_ic && mb_strnicmp(p + ccol, (char *)rex.input, (size_t)len) != 0)) {
       return RA_NOMATCH;  // doesn't match
     }
@@ -1264,7 +1258,7 @@ static int match_with_backref(linenr_T start_lnum, colnr_T start_col, linenr_T e
     }
 
     // Advance to next line.
-    reg_nextline();
+    rs_reg_nextline();
     if (bytelen != NULL) {
       *bytelen = 0;
     }
@@ -1289,40 +1283,6 @@ static bool re_mult_next(char *what)
     return false;
   }
   return true;
-}
-
-// Rust implementation for mb_decompose
-extern void rs_mb_decompose(int c, int *c1, int *c2, int *c3);
-
-static void mb_decompose(int c, int *c1, int *c2, int *c3)
-{
-  rs_mb_decompose(c, c1, c2, c3);
-}
-
-/// Compare two strings, ignore case if rex.reg_ic set.
-/// Return 0 if strings match, non-zero otherwise.
-/// Correct the length "*n" when composing characters are ignored
-/// or when both utf codepoints are considered equal because of
-/// case-folding but have different length (e.g. 's' and 'ſ')
-static int cstrncmp(char *s1, char *s2, int *n)
-{
-  return rs_cstrncmp(s1, s2, n);
-}
-
-/// Wrapper around strchr which accounts for case-insensitive searches and
-/// non-ASCII characters.
-///
-/// This function is used a lot for simple searches, keep it fast!
-///
-/// @param  s  string to search
-/// @param  c  character to find in @a s
-///
-/// @return  NULL if no match, otherwise pointer to the position in @a s
-static inline char *cstrchr(const char *const s, const int c)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-  FUNC_ATTR_ALWAYS_INLINE
-{
-  return rs_cstrchr(s, c);
 }
 
 ////////////////////////////////////////////////////////////////
@@ -6178,7 +6138,6 @@ static void copy_sub(regsub_T *to, regsub_T *from);
 static int recursive_regmatch(nfa_state_T *state, nfa_pim_T *pim,
                               nfa_regprog_T *prog, regsubs_T *submatch,
                               regsubs_T *m, int **listids, int *listids_len);
-static void reg_nextline(void);  // Forward declaration
 
 // Wrapper for reg_getline_len for Rust
 static colnr_T reg_getline_len(linenr_T lnum);  // Forward declaration
@@ -7278,8 +7237,8 @@ retempty:
         && sub->list.multi[subidx].end_lnum == rex.lnum) {
       len = sub->list.multi[subidx].end_col
             - sub->list.multi[subidx].start_col;
-      if (cstrncmp((char *)rex.line + sub->list.multi[subidx].start_col,
-                   (char *)rex.input, &len) == 0) {
+      if (rs_cstrncmp((char *)rex.line + sub->list.multi[subidx].start_col,
+                      (char *)rex.input, &len) == 0) {
         *bytelen = len;
         return true;
       }
@@ -7298,7 +7257,7 @@ retempty:
       goto retempty;
     }
     len = (int)(sub->list.line[subidx].end - sub->list.line[subidx].start);
-    if (cstrncmp((char *)sub->list.line[subidx].start, (char *)rex.input, &len) == 0) {
+    if (rs_cstrncmp((char *)sub->list.line[subidx].start, (char *)rex.input, &len) == 0) {
       *bytelen = len;
       return true;
     }
@@ -7323,7 +7282,7 @@ static int match_zref(int subidx, int *bytelen)
   }
 
   len = (int)strlen((char *)re_extmatch_in->matches[subidx]);
-  if (cstrncmp((char *)re_extmatch_in->matches[subidx], (char *)rex.input, &len) == 0) {
+  if (rs_cstrncmp((char *)re_extmatch_in->matches[subidx], (char *)rex.input, &len) == 0) {
     *bytelen = len;
     return true;
   }
@@ -7889,7 +7848,7 @@ nextchar:
       rex.input += clen;
     } else if (go_to_nextline || (nfa_endp != NULL && REG_MULTI
                                   && rex.lnum < nfa_endp->se_u.pos.lnum)) {
-      reg_nextline();
+      rs_reg_nextline();
     } else {
       break;
     }
@@ -7967,20 +7926,6 @@ static void nfa_handle_extmatch(nfa_regprog_T *prog, const regsub_T *subs_synt)
 void nvim_nfa_handle_extmatch(void *prog, const void *subs_synt)
 {
   nfa_handle_extmatch((nfa_regprog_T *)prog, (const regsub_T *)subs_synt);
-}
-
-// Rust implementation of nfa_regtry
-extern int rs_nfa_regtry(nfa_regprog_T *prog, colnr_T col, proftime_T *tm, int *timed_out);
-
-/// Try match of "prog" with at rex.line["col"].
-///
-/// @param tm         timeout limit or NULL
-/// @param timed_out  flag set on timeout or NULL
-///
-/// @return  <= 0 for failure, number of lines contained in the match otherwise.
-static int nfa_regtry(nfa_regprog_T *prog, colnr_T col, proftime_T *tm, int *timed_out)
-{
-  return rs_nfa_regtry(prog, col, tm, timed_out);
 }
 
 // Rust implementation of nfa_regexec_both
