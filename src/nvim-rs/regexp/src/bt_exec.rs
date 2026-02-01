@@ -31,11 +31,11 @@ use crate::bt_opcodes::{
     get_backref_num, get_mclose_num, get_mopen_num, get_zclose_num, get_zopen_num, is_backref,
     is_mclose, is_mopen, is_zclose, is_zopen, operand_cmp, operand_max, operand_min, ADD_NL, ALPHA,
     ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE,
-    BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FNAME, HEAD, HEX, IDENT, LOWER, MATCH,
-    MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND, NOCTAL, NOMATCH,
-    NOPEN, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL, RE_COMPOSING,
-    RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR, SUBPAT, UPPER,
-    WHITE, WORD,
+    BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FIRST_NL, FNAME, HEAD, HEX, IDENT, LAST_NL,
+    LOWER, MATCH, MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND,
+    NOCTAL, NOMATCH, NOPEN, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL,
+    RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR,
+    SUBPAT, UPPER, WHITE, WORD,
 };
 use crate::bt_state::{
     BackPosTable, RegBehind, RegItem, RegSave, RegStack, RegStar, RegState, NSUBEXP,
@@ -2559,7 +2559,7 @@ pub unsafe extern "C" fn rs_regrepeat(p: *mut u8, maxcount: i64) -> c_int {
 }
 
 // Import opcodes which may not be in scope
-use crate::bt_opcodes::{FIRST_NL, KWORD, LAST_NL, SIDENT};
+use crate::bt_opcodes::{KWORD, SIDENT};
 
 // =============================================================================
 // BT Execution Entry Points (Phase 13b)
@@ -2620,9 +2620,6 @@ extern "C" {
 
     // Memory allocation for extmatch strings
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
-
-    // C regmatch wrapper
-    fn nvim_bt_regmatch(scan: *mut u8, tm: ProfTime, timed_out: *mut c_int) -> c_int;
 }
 
 /// Try match of BT program at rex.line[col].
@@ -2671,10 +2668,11 @@ pub unsafe extern "C" fn rs_bt_regtry(
         return 0;
     }
 
-    // Call the C regmatch function (starting after REGMAGIC)
-    // The Rust-migrated opcodes are handled in rs_match_one_op_full via nvim_bt_match_op fallback
+    // Call the Rust regmatch function (starting after REGMAGIC)
+    // Rust handles the main loop, calling rs_match_one_op_full for each opcode.
+    // Migrated opcodes are handled in Rust, others fall back to nvim_bt_match_op.
     let program_start = program.add(1) as *mut u8;
-    if nvim_bt_regmatch(program_start, tm, timed_out) == 0 {
+    if rs_regmatch_full(program_start, tm, timed_out) == 0 {
         return 0;
     }
 
@@ -3393,7 +3391,7 @@ pub unsafe extern "C" fn rs_regmatch_full(
                 }
             }
 
-            let opcode = op(scan);
+            let mut opcode = op(scan);
 
             // Check for END first
             if opcode == END {
@@ -3401,10 +3399,45 @@ pub unsafe extern "C" fn rs_regmatch_full(
                 break;
             }
 
-            let next_scan = next(scan);
+            // Default next position (can be modified by opcode handler)
+            let mut next_scan = next(scan) as *mut u8;
+
+            // Check for character class with NL added (WITH_NL opcodes)
+            if (FIRST_NL..=LAST_NL).contains(&opcode) {
+                let input = nvim_rex_get_input();
+                let line_lbr = nvim_rex_get_reg_line_lbr();
+                if !line_lbr
+                    && is_multi
+                    && *input == 0
+                    && nvim_rex_get_lnum() <= nvim_rex_get_reg_maxline()
+                {
+                    // At end of line in multiline mode - advance to next line
+                    rs_reg_nextline();
+                    // Skip to next instruction without processing opcode
+                    scan = if next_scan.is_null() {
+                        scan.add(3)
+                    } else {
+                        next_scan
+                    };
+                    continue;
+                } else if line_lbr && *input == b'\n' {
+                    // At newline in line-break mode - advance input
+                    advance_reginput();
+                    // Skip to next instruction without processing opcode
+                    scan = if next_scan.is_null() {
+                        scan.add(3)
+                    } else {
+                        next_scan
+                    };
+                    continue;
+                } else {
+                    // Strip ADD_NL and process the base opcode
+                    opcode -= ADD_NL;
+                }
+            }
 
             // Process opcode - delegate to rs_match_one_op_full for most opcodes
-            status = rs_match_one_op_full(scan, opcode);
+            status = rs_match_one_op_full(scan, opcode, &mut next_scan);
 
             match status {
                 RA_CONT => {
@@ -3412,7 +3445,7 @@ pub unsafe extern "C" fn rs_regmatch_full(
                     scan = if next_scan.is_null() {
                         scan.add(3) // Default: advance past node
                     } else {
-                        next_scan as *mut u8
+                        next_scan
                     };
                 }
                 RA_MATCH | RA_NOMATCH | RA_FAIL => {
@@ -3967,11 +4000,12 @@ extern "C" {
 ///
 /// This mirrors the inner loop of C regmatch(), processing one opcode.
 /// Returns RA_CONT to continue, RA_MATCH/RA_NOMATCH/RA_FAIL/RA_BREAK otherwise.
+/// The next_out parameter can be modified by opcodes that need custom navigation
+/// (e.g., BRANCH sets next to OPERAND(scan) when there's no choice).
 ///
 /// # Safety
 /// scan must point to valid bytecode.
-unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int) -> c_int {
-    let _next_scan = next(scan);
+unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int, next_out: *mut *mut u8) -> c_int {
     let is_multi = nvim_rex_is_multi() != 0;
 
     match opcode {
@@ -4324,14 +4358,14 @@ unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int) -> c_int {
         // For other opcodes, call the existing C nvim_bt_match_op
         _ => {
             // Delegate to C for remaining opcodes
-            nvim_bt_match_op(scan, opcode)
+            nvim_bt_match_op(scan, opcode, next_out)
         }
     }
 }
 
 // FFI declaration for C match_op helper
 extern "C" {
-    fn nvim_bt_match_op(scan: *mut u8, opcode: c_int) -> c_int;
+    fn nvim_bt_match_op(scan: *mut u8, opcode: c_int, nextp: *mut *mut u8) -> c_int;
     fn nvim_set_reg_startzpos(idx: c_int, lnum: c_int, col: c_int);
     fn nvim_set_reg_endzpos(idx: c_int, lnum: c_int, col: c_int);
     fn nvim_set_reg_startzp(idx: c_int, p: *mut u8);

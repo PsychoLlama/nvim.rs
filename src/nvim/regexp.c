@@ -6024,17 +6024,636 @@ bool nvim_profile_passed_limit(const void *tm)
 }
 
 // Match one opcode helper - returns RA_* status
-// This wraps the inner loop body of regmatch() for a single opcode
+// This wraps the inner loop body of regmatch() for a single opcode.
 // This function is called by Rust when processing opcodes not yet migrated.
-// Currently unused since C regmatch() handles everything directly.
-// This will be used as more opcodes are migrated to call back to C.
-int nvim_bt_match_op(uint8_t *scan, int opcode)
+// The nextp parameter allows opcodes like BRANCH to modify the next pointer.
+int nvim_bt_match_op(uint8_t *scan, int op, uint8_t **nextp)
 {
-  (void)scan;
-  (void)opcode;
-  // Currently the C regmatch() handles all opcodes directly.
-  // This function will be expanded as we migrate more opcodes to Rust.
-  return RA_CONT;
+  int status = RA_CONT;
+  regitem_T *rp;
+  int no;
+  int c = utf_ptr2char((char *)rex.input);
+  uint8_t *next = regnext(scan);
+
+  switch (op) {
+  case CURSOR:
+    // Check if the buffer is in a window and compare the
+    // rex.reg_win->w_cursor position to the match position.
+    if (rex.reg_win == NULL
+        || (rex.lnum + rex.reg_firstlnum != rex.reg_win->w_cursor.lnum)
+        || ((colnr_T)(rex.input - rex.line) != rex.reg_win->w_cursor.col)) {
+      status = RA_NOMATCH;
+    }
+    break;
+
+  case RE_MARK: {
+    // Compare the mark position to the match position.
+    int mark = OPERAND(scan)[0];
+    int cmp = OPERAND(scan)[1];
+    pos_T *pos;
+    size_t col = REG_MULTI ? (size_t)(rex.input - rex.line) : 0;
+    fmark_T *fm = mark_get(rex.reg_buf, curwin, NULL, kMarkBufLocal, mark);
+
+    // Line may have been freed, get it again.
+    if (REG_MULTI) {
+      rex.line = (uint8_t *)reg_getline(rex.lnum);
+      rex.input = rex.line + col;
+    }
+
+    if (fm == NULL || fm->mark.lnum <= 0) {
+      status = RA_NOMATCH;
+    } else {
+      pos = &fm->mark;
+      const colnr_T pos_col = pos->lnum == rex.lnum + rex.reg_firstlnum
+                              && pos->col == MAXCOL
+                              ? reg_getline_len(pos->lnum - rex.reg_firstlnum)
+                              : pos->col;
+
+      if (pos->lnum == rex.lnum + rex.reg_firstlnum
+          ? (pos_col == (colnr_T)(rex.input - rex.line)
+             ? (cmp == '<' || cmp == '>')
+             : (pos_col < (colnr_T)(rex.input - rex.line)
+                ? cmp != '>'
+                : cmp != '<'))
+          : (pos->lnum < rex.lnum + rex.reg_firstlnum
+             ? cmp != '>'
+             : cmp != '<')) {
+        status = RA_NOMATCH;
+      }
+    }
+    break;
+  }
+
+  case RE_VISUAL:
+    if (!reg_match_visual()) {
+      status = RA_NOMATCH;
+    }
+    break;
+
+  case RE_LNUM:
+    assert(rex.lnum + rex.reg_firstlnum >= 0
+           && (uintmax_t)(rex.lnum + rex.reg_firstlnum) <= UINT32_MAX);
+    if (!REG_MULTI
+        || !re_num_cmp((uint32_t)(rex.lnum + rex.reg_firstlnum), scan)) {
+      status = RA_NOMATCH;
+    }
+    break;
+
+  case RE_COL:
+    assert(rex.input - rex.line + 1 >= 0
+           && (uintmax_t)(rex.input - rex.line + 1) <= UINT32_MAX);
+    if (!re_num_cmp((uint32_t)(rex.input - rex.line + 1), scan)) {
+      status = RA_NOMATCH;
+    }
+    break;
+
+  case RE_VCOL: {
+    win_T *wp = rex.reg_win == NULL ? curwin : rex.reg_win;
+    linenr_T lnum = REG_MULTI ? rex.reg_firstlnum + rex.lnum : 1;
+    if (REG_MULTI && (lnum <= 0 || lnum > wp->w_buffer->b_ml.ml_line_count)) {
+      lnum = 1;
+    }
+    int vcol = win_linetabsize(wp, lnum, (char *)rex.line,
+                               (colnr_T)(rex.input - rex.line));
+    if (!re_num_cmp((uint32_t)vcol + 1, scan)) {
+      status = RA_NOMATCH;
+    }
+    break;
+  }
+
+  case BOW:  // \<word; rex.input points to w
+    if (c == NUL) {
+      status = RA_NOMATCH;
+    } else {
+      const int this_class =
+        mb_get_class_tab((char *)rex.input, rex.reg_buf->b_chartab);
+      if (this_class <= 1) {
+        status = RA_NOMATCH;
+      } else if (reg_prev_class() == this_class) {
+        status = RA_NOMATCH;
+      }
+    }
+    break;
+
+  case EOW:  // word\>; rex.input points after d
+    if (rex.input == rex.line) {
+      status = RA_NOMATCH;
+    } else {
+      int this_class = mb_get_class_tab((char *)rex.input, rex.reg_buf->b_chartab);
+      int prev_class = reg_prev_class();
+      if (this_class == prev_class || prev_class == 0 || prev_class == 1) {
+        status = RA_NOMATCH;
+      }
+    }
+    break;
+
+  case IDENT:
+    if (!vim_isIDc(c)) {
+      status = RA_NOMATCH;
+    } else {
+      ADVANCE_REGINPUT();
+    }
+    break;
+
+  case SIDENT:
+    if (ascii_isdigit(*rex.input) || !vim_isIDc(c)) {
+      status = RA_NOMATCH;
+    } else {
+      ADVANCE_REGINPUT();
+    }
+    break;
+
+  case KWORD:
+    if (!vim_iswordp_buf((char *)rex.input, rex.reg_buf)) {
+      status = RA_NOMATCH;
+    } else {
+      ADVANCE_REGINPUT();
+    }
+    break;
+
+  case SKWORD:
+    if (ascii_isdigit(*rex.input)
+        || !vim_iswordp_buf((char *)rex.input, rex.reg_buf)) {
+      status = RA_NOMATCH;
+    } else {
+      ADVANCE_REGINPUT();
+    }
+    break;
+
+  case FNAME:
+    if (!vim_isfilec(c)) {
+      status = RA_NOMATCH;
+    } else {
+      ADVANCE_REGINPUT();
+    }
+    break;
+
+  case SFNAME:
+    if (ascii_isdigit(*rex.input) || !vim_isfilec(c)) {
+      status = RA_NOMATCH;
+    } else {
+      ADVANCE_REGINPUT();
+    }
+    break;
+
+  case PRINT:
+    if (!vim_isprintc(utf_ptr2char((char *)rex.input))) {
+      status = RA_NOMATCH;
+    } else {
+      ADVANCE_REGINPUT();
+    }
+    break;
+
+  case SPRINT:
+    if (ascii_isdigit(*rex.input) || !vim_isprintc(utf_ptr2char((char *)rex.input))) {
+      status = RA_NOMATCH;
+    } else {
+      ADVANCE_REGINPUT();
+    }
+    break;
+
+  case EXACTLY: {
+    int len;
+    uint8_t *opnd;
+
+    opnd = OPERAND(scan);
+    if (*opnd != *rex.input && !rex.reg_ic) {
+      status = RA_NOMATCH;
+    } else if (*opnd == NUL) {
+      // match empty string always works
+    } else {
+      if (opnd[1] == NUL && !rex.reg_ic) {
+        len = 1;
+      } else {
+        len = (int)strlen((char *)opnd);
+        if (cstrncmp((char *)opnd, (char *)rex.input, &len) != 0) {
+          status = RA_NOMATCH;
+        }
+      }
+      if (status != RA_NOMATCH
+          && utf_composinglike((char *)rex.input, (char *)rex.input + len, NULL)
+          && !rex.reg_icombine
+          && OP(next) != RE_COMPOSING) {
+        status = RA_NOMATCH;
+      }
+      if (status != RA_NOMATCH) {
+        rex.input += len;
+      }
+    }
+    break;
+  }
+
+  case ANYOF:
+  case ANYBUT: {
+    uint8_t *q = OPERAND(scan);
+
+    if (c == NUL) {
+      status = RA_NOMATCH;
+    } else if ((cstrchr((char *)q, c) == NULL) == (op == ANYOF)) {
+      status = RA_NOMATCH;
+    } else {
+      int len = utfc_ptr2len((char *)q) - utf_ptr2len((char *)q);
+
+      rex.input += utf_ptr2len((char *)rex.input);
+      q += utf_ptr2len((char *)q);
+
+      if (len != 0) {
+        for (int i = 0; i < len; i++) {
+          if (q[i] != rex.input[i]) {
+            status = RA_NOMATCH;
+            break;
+          }
+        }
+        rex.input += len;
+      }
+    }
+    break;
+  }
+
+  case MULTIBYTECODE: {
+    int i, len;
+
+    const uint8_t *opnd = OPERAND(scan);
+    if ((len = utfc_ptr2len((char *)opnd)) < 2) {
+      status = RA_NOMATCH;
+      break;
+    }
+    const int opndc = utf_ptr2char((char *)opnd);
+    if (utf_iscomposing_legacy(opndc)) {
+      status = RA_NOMATCH;
+      for (i = 0; rex.input[i] != NUL; i += utf_ptr2len((char *)rex.input + i)) {
+        const int inpc = utf_ptr2char((char *)rex.input + i);
+        if (!utf_iscomposing_legacy(inpc)) {
+          if (i > 0) {
+            break;
+          }
+        } else if (opndc == inpc) {
+          len = i + utfc_ptr2len((char *)rex.input + i);
+          status = RA_MATCH;
+          break;
+        }
+      }
+    } else {
+      if (cstrncmp((char *)opnd, (char *)rex.input, &len) != 0) {
+        status = RA_NOMATCH;
+        break;
+      }
+    }
+    rex.input += len;
+    break;
+  }
+
+  case RE_COMPOSING:
+    while (utf_iscomposing_legacy(utf_ptr2char((char *)rex.input))) {
+      rex.input += utf_ptr2len((char *)rex.input);
+    }
+    break;
+
+  case BACK: {
+    int i;
+    backpos_T *bp = (backpos_T *)backpos.ga_data;
+    for (i = 0; i < backpos.ga_len; i++) {
+      if (bp[i].bp_scan == scan) {
+        break;
+      }
+    }
+    if (i == backpos.ga_len) {
+      backpos_T *p = GA_APPEND_VIA_PTR(backpos_T, &backpos);
+      p->bp_scan = scan;
+    } else if (reg_save_equal(&bp[i].bp_pos)) {
+      status = RA_NOMATCH;
+    }
+
+    assert(status != RA_FAIL);
+    if (status != RA_NOMATCH) {
+      reg_save(&bp[i].bp_pos, &backpos);
+    }
+    break;
+  }
+
+  case MOPEN + 0:
+  case MOPEN + 1:
+  case MOPEN + 2:
+  case MOPEN + 3:
+  case MOPEN + 4:
+  case MOPEN + 5:
+  case MOPEN + 6:
+  case MOPEN + 7:
+  case MOPEN + 8:
+  case MOPEN + 9:
+    no = op - MOPEN;
+    cleanup_subexpr();
+    rp = regstack_push(RS_MOPEN, scan);
+    if (rp == NULL) {
+      status = RA_FAIL;
+    } else {
+      rp->rs_no = (int16_t)no;
+      save_se(&rp->rs_un.sesave, &rex.reg_startpos[no], &rex.reg_startp[no]);
+    }
+    break;
+
+  case NOPEN:
+  case NCLOSE:
+    if (regstack_push(RS_NOPEN, scan) == NULL) {
+      status = RA_FAIL;
+    }
+    break;
+
+  case MCLOSE + 0:
+  case MCLOSE + 1:
+  case MCLOSE + 2:
+  case MCLOSE + 3:
+  case MCLOSE + 4:
+  case MCLOSE + 5:
+  case MCLOSE + 6:
+  case MCLOSE + 7:
+  case MCLOSE + 8:
+  case MCLOSE + 9:
+    no = op - MCLOSE;
+    cleanup_subexpr();
+    rp = regstack_push(RS_MCLOSE, scan);
+    if (rp == NULL) {
+      status = RA_FAIL;
+    } else {
+      rp->rs_no = (int16_t)no;
+      save_se(&rp->rs_un.sesave, &rex.reg_endpos[no], &rex.reg_endp[no]);
+    }
+    break;
+
+  case BACKREF + 1:
+  case BACKREF + 2:
+  case BACKREF + 3:
+  case BACKREF + 4:
+  case BACKREF + 5:
+  case BACKREF + 6:
+  case BACKREF + 7:
+  case BACKREF + 8:
+  case BACKREF + 9: {
+    int len;
+
+    no = op - BACKREF;
+    cleanup_subexpr();
+    if (!REG_MULTI) {
+      if (rex.reg_startp[no] == NULL || rex.reg_endp[no] == NULL) {
+        len = 0;
+      } else {
+        len = (int)(rex.reg_endp[no] - rex.reg_startp[no]);
+        if (cstrncmp((char *)rex.reg_startp[no], (char *)rex.input, &len) != 0) {
+          status = RA_NOMATCH;
+        }
+      }
+    } else {
+      if (rex.reg_startpos[no].lnum < 0 || rex.reg_endpos[no].lnum < 0) {
+        len = 0;
+      } else {
+        if (rex.reg_startpos[no].lnum == rex.lnum
+            && rex.reg_endpos[no].lnum == rex.lnum) {
+          len = rex.reg_endpos[no].col - rex.reg_startpos[no].col;
+          if (cstrncmp((char *)rex.line + rex.reg_startpos[no].col,
+                       (char *)rex.input, &len) != 0) {
+            status = RA_NOMATCH;
+          }
+        } else {
+          int r = match_with_backref(rex.reg_startpos[no].lnum,
+                                     rex.reg_startpos[no].col,
+                                     rex.reg_endpos[no].lnum,
+                                     rex.reg_endpos[no].col,
+                                     &len);
+          if (r != RA_MATCH) {
+            status = r;
+          }
+        }
+      }
+    }
+    if (status == RA_CONT) {
+      rex.input += len;
+    }
+    break;
+  }
+
+  case ZREF + 1:
+  case ZREF + 2:
+  case ZREF + 3:
+  case ZREF + 4:
+  case ZREF + 5:
+  case ZREF + 6:
+  case ZREF + 7:
+  case ZREF + 8:
+  case ZREF + 9:
+    cleanup_zsubexpr();
+    no = op - ZREF;
+    if (re_extmatch_in != NULL && re_extmatch_in->matches[no] != NULL) {
+      int len = (int)strlen((char *)re_extmatch_in->matches[no]);
+      if (cstrncmp((char *)re_extmatch_in->matches[no], (char *)rex.input, &len) != 0) {
+        status = RA_NOMATCH;
+      } else {
+        rex.input += len;
+      }
+    }
+    break;
+
+  case BRANCH:
+    if (OP(next) != BRANCH) {
+      // No choice - avoid recursion
+      next = OPERAND(scan);
+    } else {
+      rp = regstack_push(RS_BRANCH, scan);
+      if (rp == NULL) {
+        status = RA_FAIL;
+      } else {
+        status = RA_BREAK;
+      }
+    }
+    break;
+
+  case BRACE_LIMITS:
+    if (OP(next) == BRACE_SIMPLE) {
+      bl_minval = OPERAND_MIN(scan);
+      bl_maxval = OPERAND_MAX(scan);
+    } else if (OP(next) >= BRACE_COMPLEX && OP(next) < BRACE_COMPLEX + 10) {
+      no = OP(next) - BRACE_COMPLEX;
+      brace_min[no] = OPERAND_MIN(scan);
+      brace_max[no] = OPERAND_MAX(scan);
+      brace_count[no] = 0;
+    } else {
+      internal_error("BRACE_LIMITS");
+      status = RA_FAIL;
+    }
+    break;
+
+  case BRACE_COMPLEX + 0:
+  case BRACE_COMPLEX + 1:
+  case BRACE_COMPLEX + 2:
+  case BRACE_COMPLEX + 3:
+  case BRACE_COMPLEX + 4:
+  case BRACE_COMPLEX + 5:
+  case BRACE_COMPLEX + 6:
+  case BRACE_COMPLEX + 7:
+  case BRACE_COMPLEX + 8:
+  case BRACE_COMPLEX + 9:
+    no = op - BRACE_COMPLEX;
+    brace_count[no]++;
+
+    if (brace_count[no] <= (brace_min[no] <= brace_max[no]
+                            ? brace_min[no] : brace_max[no])) {
+      rp = regstack_push(RS_BRCPLX_MORE, scan);
+      if (rp == NULL) {
+        status = RA_FAIL;
+      } else {
+        rp->rs_no = (int16_t)no;
+        reg_save(&rp->rs_un.regsave, &backpos);
+        next = OPERAND(scan);
+      }
+      break;
+    }
+
+    if (brace_min[no] <= brace_max[no]) {
+      if (brace_count[no] <= brace_max[no]) {
+        rp = regstack_push(RS_BRCPLX_LONG, scan);
+        if (rp == NULL) {
+          status = RA_FAIL;
+        } else {
+          rp->rs_no = (int16_t)no;
+          reg_save(&rp->rs_un.regsave, &backpos);
+          next = OPERAND(scan);
+        }
+      }
+    } else {
+      if (brace_count[no] <= brace_min[no]) {
+        rp = regstack_push(RS_BRCPLX_SHORT, scan);
+        if (rp == NULL) {
+          status = RA_FAIL;
+        } else {
+          reg_save(&rp->rs_un.regsave, &backpos);
+        }
+      }
+    }
+    break;
+
+  case BRACE_SIMPLE:
+  case STAR:
+  case PLUS: {
+    regstar_T rst;
+
+    if (OP(next) == EXACTLY) {
+      rst.nextb = *OPERAND(next);
+      if (rex.reg_ic) {
+        if (mb_isupper(rst.nextb)) {
+          rst.nextb_ic = mb_tolower(rst.nextb);
+        } else {
+          rst.nextb_ic = mb_toupper(rst.nextb);
+        }
+      } else {
+        rst.nextb_ic = rst.nextb;
+      }
+    } else {
+      rst.nextb = NUL;
+      rst.nextb_ic = NUL;
+    }
+    if (op != BRACE_SIMPLE) {
+      rst.minval = (op == STAR) ? 0 : 1;
+      rst.maxval = MAX_LIMIT;
+    } else {
+      rst.minval = bl_minval;
+      rst.maxval = bl_maxval;
+    }
+
+    rst.count = regrepeat(OPERAND(scan), rst.maxval);
+    if (got_int) {
+      status = RA_FAIL;
+      break;
+    }
+    if (rst.minval <= rst.maxval
+        ? rst.count >= rst.minval : rst.count >= rst.maxval) {
+      if ((int64_t)((unsigned)regstack.ga_len >> 10) >= p_mmp) {
+        emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
+        status = RA_FAIL;
+      } else {
+        ga_grow(&regstack, sizeof(regstar_T));
+        regstack.ga_len += (int)sizeof(regstar_T);
+        rp = regstack_push(rst.minval <= rst.maxval ? RS_STAR_LONG : RS_STAR_SHORT, scan);
+        if (rp == NULL) {
+          status = RA_FAIL;
+        } else {
+          *(((regstar_T *)rp) - 1) = rst;
+          status = RA_BREAK;
+        }
+      }
+    } else {
+      status = RA_NOMATCH;
+    }
+    break;
+  }
+
+  case NOMATCH:
+  case MATCH:
+  case SUBPAT:
+    rp = regstack_push(RS_NOMATCH, scan);
+    if (rp == NULL) {
+      status = RA_FAIL;
+    } else {
+      rp->rs_no = (int16_t)op;
+      reg_save(&rp->rs_un.regsave, &backpos);
+      next = OPERAND(scan);
+    }
+    break;
+
+  case BEHIND:
+  case NOBEHIND:
+    if ((int64_t)((unsigned)regstack.ga_len >> 10) >= p_mmp) {
+      emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
+      status = RA_FAIL;
+    } else {
+      ga_grow(&regstack, sizeof(regbehind_T));
+      regstack.ga_len += (int)sizeof(regbehind_T);
+      rp = regstack_push(RS_BEHIND1, scan);
+      if (rp == NULL) {
+        status = RA_FAIL;
+      } else {
+        save_subexpr(((regbehind_T *)rp) - 1);
+        rp->rs_no = (int16_t)op;
+        reg_save(&rp->rs_un.regsave, &backpos);
+      }
+    }
+    break;
+
+  case BHPOS:
+    if (REG_MULTI) {
+      if (behind_pos.rs_u.pos.col != (colnr_T)(rex.input - rex.line)
+          || behind_pos.rs_u.pos.lnum != rex.lnum) {
+        status = RA_NOMATCH;
+      }
+    } else if (behind_pos.rs_u.ptr != rex.input) {
+      status = RA_NOMATCH;
+    }
+    break;
+
+  case NEWL:
+    if ((c != NUL || !REG_MULTI || rex.lnum > rex.reg_maxline
+         || rex.reg_line_lbr) && (c != '\n' || !rex.reg_line_lbr)) {
+      status = RA_NOMATCH;
+    } else if (rex.reg_line_lbr) {
+      ADVANCE_REGINPUT();
+    } else {
+      reg_nextline();
+    }
+    break;
+
+  default:
+    iemsg(_(e_re_corr));
+#ifdef REGEXP_DEBUG
+    printf("Illegal op code %d\n", op);
+#endif
+    status = RA_FAIL;
+    break;
+  }
+
+  // Update nextp if opcode modified next
+  if (nextp != NULL) {
+    *nextp = next;
+  }
+
+  return status;
 }
 
 /// Main matching routine
@@ -6135,33 +6754,7 @@ static bool regmatch(uint8_t *scan, const proftime_T *tm, int *timed_out)
         }
         c = utf_ptr2char((char *)rex.input);
         switch (op) {
-        case BOL:
-          if (rex.input != rex.line) {
-            status = RA_NOMATCH;
-          }
-          break;
-
-        case EOL:
-          if (c != NUL) {
-            status = RA_NOMATCH;
-          }
-          break;
-
-        case RE_BOF:
-          // We're not at the beginning of the file when below the first
-          // line where we started, not at the start of the line or we
-          // didn't start at the first line of the buffer.
-          if (rex.lnum != 0 || rex.input != rex.line
-              || (REG_MULTI && rex.reg_firstlnum > 1)) {
-            status = RA_NOMATCH;
-          }
-          break;
-
-        case RE_EOF:
-          if (rex.lnum != rex.reg_maxline || c != NUL) {
-            status = RA_NOMATCH;
-          }
-          break;
+        // BOL, EOL, RE_BOF, RE_EOF handled by Rust
 
         case CURSOR:
           // Check if the buffer is in a window and compare the
@@ -6283,14 +6876,7 @@ static bool regmatch(uint8_t *scan, const proftime_T *tm, int *timed_out)
           }
           break;  // Matched with EOW
 
-        case ANY:
-          // ANY does not match new lines.
-          if (c == NUL) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
+        // ANY handled by Rust
 
         case IDENT:
           if (!vim_isIDc(c)) {
@@ -6357,149 +6943,9 @@ static bool regmatch(uint8_t *scan, const proftime_T *tm, int *timed_out)
           }
           break;
 
-        case WHITE:
-          if (!ascii_iswhite(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case NWHITE:
-          if (c == NUL || ascii_iswhite(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case DIGIT:
-          if (!ri_digit(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case NDIGIT:
-          if (c == NUL || ri_digit(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case HEX:
-          if (!ri_hex(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case NHEX:
-          if (c == NUL || ri_hex(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case OCTAL:
-          if (!ri_octal(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case NOCTAL:
-          if (c == NUL || ri_octal(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case WORD:
-          if (!ri_word(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case NWORD:
-          if (c == NUL || ri_word(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case HEAD:
-          if (!ri_head(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case NHEAD:
-          if (c == NUL || ri_head(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case ALPHA:
-          if (!ri_alpha(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case NALPHA:
-          if (c == NUL || ri_alpha(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case LOWER:
-          if (!ri_lower(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case NLOWER:
-          if (c == NUL || ri_lower(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case UPPER:
-          if (!ri_upper(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
-
-        case NUPPER:
-          if (c == NUL || ri_upper(c)) {
-            status = RA_NOMATCH;
-          } else {
-            ADVANCE_REGINPUT();
-          }
-          break;
+        // WHITE, NWHITE, DIGIT, NDIGIT, HEX, NHEX, OCTAL, NOCTAL,
+        // WORD, NWORD, HEAD, NHEAD, ALPHA, NALPHA, LOWER, NLOWER,
+        // UPPER, NUPPER handled by Rust
 
         case EXACTLY: {
           int len;
@@ -6616,8 +7062,7 @@ static bool regmatch(uint8_t *scan, const proftime_T *tm, int *timed_out)
           }
           break;
 
-        case NOTHING:
-          break;
+        // NOTHING handled by Rust
 
         case BACK: {
           int i;
