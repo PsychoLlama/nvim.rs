@@ -358,8 +358,7 @@ static const char e_empty_sb[] = N_("E70: Empty %s%%[]");
 static const char e_recursive[] = N_("E956: Cannot use pattern recursively");
 static const char e_regexp_number_after_dot_pos_search_chr[]
   = N_("E1204: No Number allowed after .: '\\%%%c'");
-static const char e_nfa_regexp_missing_value_in_chr[]
-  = N_("E1273: (NFA regexp) missing value in '\\%%%c'");
+// NOTE: e_nfa_regexp_missing_value_in_chr moved to Rust
 static const char e_atom_engine_must_be_at_start_of_pattern[]
   = N_("E1281: Atom '\\%%#=%c' must be at the start of the pattern");
 static const char e_substitute_nesting_too_deep[] = N_("E1290: substitute nesting too deep");
@@ -6145,10 +6144,8 @@ static int nfa_classcodes[] = {
   NFA_UPPER, NFA_NUPPER
 };
 
-static const char e_nul_found[] = N_("E865: (NFA) Regexp end encountered prematurely");
-static const char e_misplaced[] = N_("E866: (NFA regexp) Misplaced %c");
-static const char e_ill_char_class[] = N_("E877: (NFA regexp) Invalid character class: %" PRId64);
-static const char e_value_too_large[] = N_("E951: \\% value too large");
+// NOTE: Error messages for NFA parsing (e_nul_found, e_misplaced, etc.)
+// are now in Rust (src/nvim-rs/regexp/src/nfa_parser.rs)
 
 // Variables only used in nfa_regcomp() and descendants.
 static int nfa_re_flags;  ///< re_flags passed to nfa_regcomp().
@@ -6483,76 +6480,8 @@ static void nfa_emit_equi_class(int c)
   rs_nfa_emit_equi_class(c);
 }
 
-// Code to parse regular expression.
-//
-// We try to reuse parsing functions in regexp.c to
-// minimize surprise and keep the syntax consistent.
-// NOTE: nfa_regatom() is now implemented in Rust (src/nvim-rs/regexp/src/nfa_parser.rs)
-
-// Parse something followed by possible [*+=].
-//
-// A piece is an atom, possibly followed by a multi, an indication of how many
-// times the atom can be matched.  Example: "a*" matches any sequence of "a"
-// characters: "", "a", "aa", etc.
-//
-// piece   ::=      atom
-//      or  atom  multi
-//
-// Thin wrapper - calls Rust implementation
-static int nfa_regpiece(void)
-{
-  return rs_nfa_regpiece();
-}
-
-// Parse one or more pieces, concatenated.  It matches a match for the
-// first piece, followed by a match for the second piece, etc.  Example:
-// "f[0-9]b", first matches "f", then a digit and then "b".
-//
-// concat  ::=      piece
-//      or  piece piece
-//      or  piece piece piece
-//      etc.
-//
-// Thin wrapper - calls Rust implementation
-static int nfa_regconcat(void)
-{
-  return rs_nfa_regconcat();
-}
-
-// Parse a branch, one or more concats, separated by "\&".  It matches the
-// last concat, but only if all the preceding concats also match at the same
-// position.  Examples:
-//      "foobeep\&..." matches "foo" in "foobeep".
-//      ".*Peter\&.*Bob" matches in a line containing both "Peter" and "Bob"
-//
-// branch ::=       concat
-//              or  concat \& concat
-//              or  concat \& concat \& concat
-//              etc.
-//
-// Thin wrapper - calls Rust implementation
-static int nfa_regbranch(void)
-{
-  return rs_nfa_regbranch();
-}
-
-///  Parse a pattern, one or more branches, separated by "\|".  It matches
-///  anything that matches one of the branches.  Example: "foo\|beep" matches
-///  "foo" and matches "beep".  If more than one branch matches, the first one
-///  is used.
-///
-///  pattern ::=     branch
-///      or  branch \| branch
-///      or  branch \| branch \| branch
-///      etc.
-///
-/// @param paren  REG_NOPAREN, REG_PAREN, REG_NPAREN or REG_ZPAREN
-///
-/// Thin wrapper - calls Rust implementation
-static int nfa_reg(int paren)
-{
-  return rs_nfa_reg(paren);
-}
+// NOTE: NFA parsing functions (nfa_regatom, nfa_regpiece, nfa_regconcat,
+// nfa_regbranch, nfa_reg) are implemented in Rust (src/nvim-rs/regexp/src/nfa_parser.rs)
 
 #ifdef REGEXP_DEBUG
 // ============================================================================
@@ -6690,7 +6619,7 @@ static void nfa_dump(nfa_regprog_T *prog)
 // Return the postfix string on success, NULL otherwise.
 static int *re2post(void)
 {
-  if (nfa_reg(REG_NOPAREN) == FAIL) {
+  if (rs_nfa_reg(REG_NOPAREN) == FAIL) {
     return NULL;
   }
   EMIT(NFA_MOPEN);
