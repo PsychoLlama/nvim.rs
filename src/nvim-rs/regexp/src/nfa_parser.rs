@@ -43,7 +43,7 @@ use crate::nfa_states::{
     NFA_VCOL_LT, NFA_VISUAL, NFA_ZEND, NFA_ZOPEN, NFA_ZREF1, NFA_ZSTART,
 };
 use crate::parser::{read_limits, MAX_LIMIT};
-use crate::scanner::{getchr, peekchr, skipchr, ungetchr};
+use crate::scanner::{getchr, peekchr, skipchr, skipchr_keepstart, ungetchr};
 
 // =============================================================================
 // Constants
@@ -119,6 +119,21 @@ const REX_USE: c_int = 2;
 /// RF_HASNL flag (pattern contains newline)
 const RF_HASNL: c_int = 1;
 
+/// RF_ICASE flag (ignore case)
+const RF_ICASE: c_int = 1;
+
+/// RF_NOICASE flag (don't ignore case)
+const RF_NOICASE: c_int = 2;
+
+/// RF_ICOMBINE flag (ignore combining characters)
+const RF_ICOMBINE: c_int = 4;
+
+/// Magic mode constants
+const MAGIC_NONE: c_int = 1; // \V very nomagic
+const MAGIC_MODE_OFF: c_int = 2; // \M or magic off
+const MAGIC_MODE_ON: c_int = 3; // \m or magic (default)
+const MAGIC_ALL: c_int = 4; // \v very magic
+
 /// CLASS_NONE constant (no character class found)
 const CLASS_NONE: c_int = -1;
 
@@ -169,6 +184,8 @@ extern "C" {
     fn nvim_parse_get_regnzpar() -> c_int;
     fn nvim_parse_set_regnzpar(n: c_int);
     fn nvim_parse_get_reg_magic() -> c_int;
+    fn nvim_parse_set_reg_magic(v: c_int);
+    fn nvim_parse_set_curchr(v: c_int);
     #[allow(dead_code)]
     fn nvim_parse_get_had_endbrace(idx: c_int) -> c_int;
     fn nvim_parse_set_had_endbrace(idx: c_int, val: c_int);
@@ -405,9 +422,24 @@ pub unsafe fn nfa_regbranch() -> c_int {
     OK
 }
 
+/// Check if a character value is a magic character (negative value)
+#[inline]
+const fn is_magic(c: c_int) -> bool {
+    c < 0
+}
+
 /// Parse a concatenation of pieces.
 ///
 /// Concat -> piece | piece piece ...
+///
+/// Also handles mid-pattern magic mode switches:
+/// - \Z - ignore combining characters
+/// - \c - ignore case
+/// - \C - match case
+/// - \v - very magic mode
+/// - \m - magic mode (default)
+/// - \M - nomagic mode
+/// - \V - very nomagic mode
 ///
 /// # Returns
 /// OK on success, FAIL on error.
@@ -433,6 +465,63 @@ pub unsafe fn nfa_regconcat() -> c_int {
             || no_magic(c) == b')' as c_int
         {
             break;
+        }
+
+        // Handle magic mode switches (these don't emit anything, just change state)
+        let unmagic = no_magic(c);
+        if is_magic(c) {
+            match unmagic as u8 {
+                b'Z' => {
+                    // \Z - ignore combining characters
+                    let regflags = nvim_parse_get_regflags();
+                    nvim_parse_set_regflags(regflags | RF_ICOMBINE);
+                    skipchr_keepstart();
+                    continue;
+                }
+                b'c' => {
+                    // \c - ignore case
+                    let regflags = nvim_parse_get_regflags();
+                    nvim_parse_set_regflags(regflags | RF_ICASE);
+                    skipchr_keepstart();
+                    continue;
+                }
+                b'C' => {
+                    // \C - match case
+                    let regflags = nvim_parse_get_regflags();
+                    nvim_parse_set_regflags(regflags | RF_NOICASE);
+                    skipchr_keepstart();
+                    continue;
+                }
+                b'v' => {
+                    // \v - very magic mode
+                    nvim_parse_set_reg_magic(MAGIC_ALL);
+                    skipchr_keepstart();
+                    nvim_parse_set_curchr(-1);
+                    continue;
+                }
+                b'm' => {
+                    // \m - magic mode (default)
+                    nvim_parse_set_reg_magic(MAGIC_MODE_ON);
+                    skipchr_keepstart();
+                    nvim_parse_set_curchr(-1);
+                    continue;
+                }
+                b'M' => {
+                    // \M - nomagic mode
+                    nvim_parse_set_reg_magic(MAGIC_MODE_OFF);
+                    skipchr_keepstart();
+                    nvim_parse_set_curchr(-1);
+                    continue;
+                }
+                b'V' => {
+                    // \V - very nomagic mode
+                    nvim_parse_set_reg_magic(MAGIC_NONE);
+                    skipchr_keepstart();
+                    nvim_parse_set_curchr(-1);
+                    continue;
+                }
+                _ => {}
+            }
         }
 
         // Parse a piece

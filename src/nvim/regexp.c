@@ -6387,8 +6387,12 @@ int nvim_coll_get_char(void) { return coll_get_char(); }
 // Check if did_emsg was set (error occurred during parsing)
 int nvim_regexp_check_did_emsg(void) { return did_emsg; }
 
-// Rust implementation of nfa_regatom
+// Rust implementation of NFA parser functions
 extern int rs_nfa_regatom(void);
+extern int rs_nfa_regpiece(void);
+extern int rs_nfa_regconcat(void);
+extern int rs_nfa_regbranch(void);
+extern int rs_nfa_reg(int paren);
 
 // Wrapper to expose nfa_regatom - now calls Rust
 int nvim_nfa_regatom(void) { return rs_nfa_regatom(); }
@@ -6661,208 +6665,11 @@ static void nfa_emit_equi_class(int c)
 //
 // piece   ::=      atom
 //      or  atom  multi
+//
+// Thin wrapper - calls Rust implementation
 static int nfa_regpiece(void)
 {
-  int i;
-  int op;
-  int ret;
-  int minval, maxval;
-  bool greedy = true;  // Braces are prefixed with '-' ?
-  parse_state_T old_state;
-  parse_state_T new_state;
-  int64_t c2;
-  int old_post_pos;
-  int my_post_start;
-  int quest;
-
-  // Save the current parse state, so that we can use it if <atom>{m,n} is
-  // next.
-  save_parse_state(&old_state);
-
-  // store current pos in the postfix form, for \{m,n} involving 0s
-  my_post_start = (int)(post_ptr - post_start);
-
-  ret = rs_nfa_regatom();
-  if (ret == FAIL) {
-    return FAIL;            // cascaded error
-  }
-  op = peekchr();
-  if (rs_re_multi_type(op) == NOT_MULTI) {
-    return OK;
-  }
-
-  skipchr();
-  switch (op) {
-  case Magic('*'):
-    EMIT(NFA_STAR);
-    break;
-
-  case Magic('+'):
-    // Trick: Normally, (a*)\+ would match the whole input "aaa".  The
-    // first and only submatch would be "aaa". But the backtracking
-    // engine interprets the plus as "try matching one more time", and
-    // a* matches a second time at the end of the input, the empty
-    // string.
-    // The submatch will be the empty string.
-    //
-    // In order to be consistent with the old engine, we replace
-    // <atom>+ with <atom><atom>*
-    restore_parse_state(&old_state);
-    curchr = -1;
-    if (rs_nfa_regatom() == FAIL) {
-      return FAIL;
-    }
-    EMIT(NFA_STAR);
-    EMIT(NFA_CONCAT);
-    skipchr();                  // skip the \+
-    break;
-
-  case Magic('@'):
-    c2 = getdecchrs();
-    op = rs_no_magic(getchr());
-    i = 0;
-    switch (op) {
-    case '=':
-      // \@=
-      i = NFA_PREV_ATOM_NO_WIDTH;
-      break;
-    case '!':
-      // \@!
-      i = NFA_PREV_ATOM_NO_WIDTH_NEG;
-      break;
-    case '<':
-      op = rs_no_magic(getchr());
-      if (op == '=') {
-        // \@<=
-        i = NFA_PREV_ATOM_JUST_BEFORE;
-      } else if (op == '!') {
-        // \@<!
-        i = NFA_PREV_ATOM_JUST_BEFORE_NEG;
-      }
-      break;
-    case '>':
-      // \@>
-      i = NFA_PREV_ATOM_LIKE_PATTERN;
-      break;
-    }
-    if (i == 0) {
-      semsg(_("E869: (NFA) Unknown operator '\\@%c'"), op);
-      return FAIL;
-    }
-    EMIT(i);
-    if (i == NFA_PREV_ATOM_JUST_BEFORE
-        || i == NFA_PREV_ATOM_JUST_BEFORE_NEG) {
-      EMIT((int)c2);
-    }
-    break;
-
-  case Magic('?'):
-  case Magic('='):
-    EMIT(NFA_QUEST);
-    break;
-
-  case Magic('{'):
-    // a{2,5} will expand to 'aaa?a?a?'
-    // a{-1,3} will expand to 'aa??a??', where ?? is the nongreedy
-    // version of '?'
-    // \v(ab){2,3} will expand to '(ab)(ab)(ab)?', where all the
-    // parenthesis have the same id
-
-    greedy = true;
-    c2 = peekchr();
-    if (c2 == '-' || c2 == Magic('-')) {
-      skipchr();
-      greedy = false;
-    }
-    if (!read_limits(&minval, &maxval)) {
-      EMSG_RET_FAIL(_("E870: (NFA regexp) Error reading repetition limits"));
-    }
-
-    //  <atom>{0,inf}, <atom>{0,} and <atom>{}  are equivalent to
-    //  <atom>*
-    if (minval == 0 && maxval == MAX_LIMIT) {
-      if (greedy) {
-        // \{}, \{0,}
-        EMIT(NFA_STAR);
-      } else {
-        // \{-}, \{-0,}
-        EMIT(NFA_STAR_NONGREEDY);
-      }
-      break;
-    }
-
-    // Special case: x{0} or x{-0}
-    if (maxval == 0) {
-      // Ignore result of previous call to rs_nfa_regatom()
-      post_ptr = post_start + my_post_start;
-      // NFA_EMPTY is 0-length and works everywhere
-      EMIT(NFA_EMPTY);
-      return OK;
-    }
-
-    // The engine is very inefficient (uses too many states) when the
-    // maximum is much larger than the minimum and when the maximum is
-    // large.  However, when maxval is MAX_LIMIT, it is okay, as this
-    // will emit NFA_STAR.
-    // Bail out if we can use the other engine, but only, when the
-    // pattern does not need the NFA engine like (e.g. [[:upper:]]\{2,\}
-    // does not work with characters > 8 bit with the BT engine)
-    if ((nfa_re_flags & RE_AUTO)
-        && (maxval > 500 || maxval > minval + 200)
-        && (maxval != MAX_LIMIT && minval < 200)
-        && !wants_nfa) {
-      return FAIL;
-    }
-
-    // Ignore previous call to rs_nfa_regatom()
-    post_ptr = post_start + my_post_start;
-    // Save parse state after the repeated atom and the \{}
-    save_parse_state(&new_state);
-
-    quest = (greedy == true ? NFA_QUEST : NFA_QUEST_NONGREEDY);
-    for (i = 0; i < maxval; i++) {
-      // Goto beginning of the repeated atom
-      restore_parse_state(&old_state);
-      old_post_pos = (int)(post_ptr - post_start);
-      if (rs_nfa_regatom() == FAIL) {
-        return FAIL;
-      }
-      // after "minval" times, atoms are optional
-      if (i + 1 > minval) {
-        if (maxval == MAX_LIMIT) {
-          if (greedy) {
-            EMIT(NFA_STAR);
-          } else {
-            EMIT(NFA_STAR_NONGREEDY);
-          }
-        } else {
-          EMIT(quest);
-        }
-      }
-      if (old_post_pos != my_post_start) {
-        EMIT(NFA_CONCAT);
-      }
-      if (i + 1 > minval && maxval == MAX_LIMIT) {
-        break;
-      }
-    }
-
-    // Go to just after the repeated atom and the \{}
-    restore_parse_state(&new_state);
-    curchr = -1;
-
-    break;
-
-  default:
-    break;
-  }     // end switch
-
-  if (rs_re_multi_type(peekchr()) != NOT_MULTI) {
-    // Can't have a multi follow a multi.
-    EMSG_RET_FAIL(_("E871: (NFA regexp) Can't have a multi follow a multi"));
-  }
-
-  return OK;
+  return rs_nfa_regpiece();
 }
 
 // Parse one or more pieces, concatenated.  It matches a match for the
@@ -6873,67 +6680,11 @@ static int nfa_regpiece(void)
 //      or  piece piece
 //      or  piece piece piece
 //      etc.
+//
+// Thin wrapper - calls Rust implementation
 static int nfa_regconcat(void)
 {
-  bool cont = true;
-  bool first = true;
-
-  while (cont) {
-    switch (peekchr()) {
-    case NUL:
-    case Magic('|'):
-    case Magic('&'):
-    case Magic(')'):
-      cont = false;
-      break;
-
-    case Magic('Z'):
-      regflags |= RF_ICOMBINE;
-      skipchr_keepstart();
-      break;
-    case Magic('c'):
-      regflags |= RF_ICASE;
-      skipchr_keepstart();
-      break;
-    case Magic('C'):
-      regflags |= RF_NOICASE;
-      skipchr_keepstart();
-      break;
-    case Magic('v'):
-      reg_magic = MAGIC_ALL;
-      skipchr_keepstart();
-      curchr = -1;
-      break;
-    case Magic('m'):
-      reg_magic = MAGIC_ON;
-      skipchr_keepstart();
-      curchr = -1;
-      break;
-    case Magic('M'):
-      reg_magic = MAGIC_OFF;
-      skipchr_keepstart();
-      curchr = -1;
-      break;
-    case Magic('V'):
-      reg_magic = MAGIC_NONE;
-      skipchr_keepstart();
-      curchr = -1;
-      break;
-
-    default:
-      if (nfa_regpiece() == FAIL) {
-        return FAIL;
-      }
-      if (first == false) {
-        EMIT(NFA_CONCAT);
-      } else {
-        first = false;
-      }
-      break;
-    }
-  }
-
-  return OK;
+  return rs_nfa_regconcat();
 }
 
 // Parse a branch, one or more concats, separated by "\&".  It matches the
@@ -6946,43 +6697,11 @@ static int nfa_regconcat(void)
 //              or  concat \& concat
 //              or  concat \& concat \& concat
 //              etc.
+//
+// Thin wrapper - calls Rust implementation
 static int nfa_regbranch(void)
 {
-  int old_post_pos;
-
-  old_post_pos = (int)(post_ptr - post_start);
-
-  // First branch, possibly the only one
-  if (nfa_regconcat() == FAIL) {
-    return FAIL;
-  }
-
-  // Try next concats
-  while (peekchr() == Magic('&')) {
-    skipchr();
-    // if concat is empty do emit a node
-    if (old_post_pos == (int)(post_ptr - post_start)) {
-      EMIT(NFA_EMPTY);
-    }
-    EMIT(NFA_NOPEN);
-    EMIT(NFA_PREV_ATOM_NO_WIDTH);
-    old_post_pos = (int)(post_ptr - post_start);
-    if (nfa_regconcat() == FAIL) {
-      return FAIL;
-    }
-    // if concat is empty do emit a node
-    if (old_post_pos == (int)(post_ptr - post_start)) {
-      EMIT(NFA_EMPTY);
-    }
-    EMIT(NFA_CONCAT);
-  }
-
-  // if a branch is empty, emit one node for it
-  if (old_post_pos == (int)(post_ptr - post_start)) {
-    EMIT(NFA_EMPTY);
-  }
-
-  return OK;
+  return rs_nfa_regbranch();
 }
 
 ///  Parse a pattern, one or more branches, separated by "\|".  It matches
@@ -6996,58 +6715,11 @@ static int nfa_regbranch(void)
 ///      etc.
 ///
 /// @param paren  REG_NOPAREN, REG_PAREN, REG_NPAREN or REG_ZPAREN
+///
+/// Thin wrapper - calls Rust implementation
 static int nfa_reg(int paren)
 {
-  int parno = 0;
-
-  if (paren == REG_PAREN) {
-    if (regnpar >= NSUBEXP) {   // Too many `('
-      EMSG_RET_FAIL(_("E872: (NFA regexp) Too many '('"));
-    }
-    parno = regnpar++;
-  } else if (paren == REG_ZPAREN) {
-    // Make a ZOPEN node.
-    if (regnzpar >= NSUBEXP) {
-      EMSG_RET_FAIL(_("E879: (NFA regexp) Too many \\z("));
-    }
-    parno = regnzpar++;
-  }
-
-  if (nfa_regbranch() == FAIL) {
-    return FAIL;            // cascaded error
-  }
-  while (peekchr() == Magic('|')) {
-    skipchr();
-    if (nfa_regbranch() == FAIL) {
-      return FAIL;          // cascaded error
-    }
-    EMIT(NFA_OR);
-  }
-
-  // Check for proper termination.
-  if (paren != REG_NOPAREN && getchr() != Magic(')')) {
-    if (paren == REG_NPAREN) {
-      EMSG2_RET_FAIL(_(e_unmatchedpp), reg_magic == MAGIC_ALL);
-    } else {
-      EMSG2_RET_FAIL(_(e_unmatchedp), reg_magic == MAGIC_ALL);
-    }
-  } else if (paren == REG_NOPAREN && peekchr() != NUL) {
-    if (peekchr() == Magic(')')) {
-      EMSG2_RET_FAIL(_(e_unmatchedpar), reg_magic == MAGIC_ALL);
-    } else {
-      EMSG_RET_FAIL(_("E873: (NFA regexp) proper termination error"));
-    }
-  }
-  // Here we set the flag allowing back references to this set of
-  // parentheses.
-  if (paren == REG_PAREN) {
-    had_endbrace[parno] = true;  // have seen the close paren
-    EMIT(NFA_MOPEN + parno);
-  } else if (paren == REG_ZPAREN) {
-    EMIT(NFA_ZOPEN + parno);
-  }
-
-  return OK;
+  return rs_nfa_reg(paren);
 }
 
 #ifdef REGEXP_DEBUG
