@@ -6119,7 +6119,6 @@ static int recursive_regmatch(nfa_state_T *state, nfa_pim_T *pim,
                               regsubs_T *m, int **listids, int *listids_len);
 
 // Wrapper for reg_getline_len for Rust
-static colnr_T reg_getline_len(linenr_T lnum);  // Forward declaration
 colnr_T nvim_reg_getline_len(linenr_T lnum) {
   return reg_getline_len(lnum);
 }
