@@ -23,7 +23,7 @@
 //! This module integrates with [`crate::exec_state::ExecState`] for unified
 //! execution state management, and [`crate::line_fetch`] for buffer line access.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 use std::ptr;
 
 use crate::bt_compile::{next, op, operand};
@@ -2396,6 +2396,214 @@ pub unsafe extern "C" fn rs_regrepeat(p: *mut u8, maxcount: i64) -> c_int {
 
 // Import opcodes which may not be in scope
 use crate::bt_opcodes::{FIRST_NL, KWORD, LAST_NL, NOCTAL, SIDENT};
+
+// =============================================================================
+// BT Execution Entry Points (Phase 13b)
+// =============================================================================
+
+/// LPos structure for multi-line position (matches C lpos_T)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+struct LPosBt {
+    lnum: c_int,
+    col: c_int,
+}
+
+/// Opaque type for reg_extmatch_T*
+type ExtmatchHandle = *mut std::ffi::c_void;
+
+/// Opaque type for proftime_T*
+type ProfTime = *mut std::ffi::c_void;
+
+/// REX_SET constant - indicates \z(...) is used
+const REX_SET: c_int = 2;
+
+extern "C" {
+    // Additional rex state accessors
+    fn nvim_rex_get_line() -> *mut u8;
+    fn nvim_rex_set_need_clear_subexpr(v: c_int);
+    fn nvim_rex_set_need_clear_zsubexpr(v: c_int);
+    fn nvim_rex_get_reg_startp() -> *mut *mut u8;
+    fn nvim_rex_get_reg_endp() -> *mut *mut u8;
+    // Use void pointers to avoid redeclaration conflicts - cast to LPosBt internally
+    fn nvim_rex_get_reg_startpos() -> *mut c_void;
+    fn nvim_rex_get_reg_endpos() -> *mut c_void;
+    fn nvim_rex_set_lnum(lnum: c_int);
+
+    // BT regprog accessors
+    fn nvim_bt_regprog_get_reghasz(prog: *const c_void) -> c_int;
+    fn nvim_bt_regprog_get_program(prog: *const c_void) -> *const u8;
+
+    // Subexpr cleanup
+    fn nvim_cleanup_subexpr();
+    fn nvim_cleanup_zsubexpr();
+
+    // Z-subexpr accessors - use void pointers and cast
+    fn nvim_get_reg_startzpos() -> *mut c_void;
+    fn nvim_get_reg_endzpos() -> *mut c_void;
+    fn nvim_get_reg_startzp() -> *mut *mut u8;
+    fn nvim_get_reg_endzp() -> *mut *mut u8;
+
+    // Extmatch handling
+    fn nvim_make_extmatch() -> ExtmatchHandle;
+    fn nvim_unref_extmatch(em: ExtmatchHandle);
+    fn nvim_get_re_extmatch_out() -> ExtmatchHandle;
+    fn nvim_set_re_extmatch_out(em: ExtmatchHandle);
+    fn nvim_extmatch_set_match(em: ExtmatchHandle, idx: c_int, match_str: *mut u8);
+
+    // Line fetching
+    fn nvim_reg_getline(lnum: c_int) -> *mut c_char;
+
+    // Memory allocation for extmatch strings
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+
+    // The C regmatch wrapper function (calls static regmatch)
+    fn nvim_bt_regmatch(scan: *mut u8, tm: ProfTime, timed_out: *mut c_int) -> c_int;
+}
+
+/// Try match of BT program at rex.line[col].
+///
+/// This implements the BT version of regtry(), setting up state and calling
+/// the existing C regmatch() function.
+///
+/// @param prog      bt_regprog_T* pointer
+/// @param col       column to start matching at
+/// @param tm        timeout limit or NULL
+/// @param timed_out flag set on timeout or NULL
+///
+/// @return 0 for failure, or number of lines contained in the match.
+///
+/// # Safety
+/// prog must be a valid bt_regprog_T*. All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_regtry(
+    prog: *mut std::ffi::c_void,
+    col: c_int,
+    tm: ProfTime,
+    timed_out: *mut c_int,
+) -> c_int {
+    if prog.is_null() {
+        return 0;
+    }
+
+    let line = nvim_rex_get_line();
+    if line.is_null() {
+        return 0;
+    }
+
+    // Set rex.input = rex.line + col
+    nvim_rex_set_input(line.add(col as usize));
+
+    // Set rex.need_clear_subexpr = true
+    nvim_rex_set_need_clear_subexpr(1);
+
+    // Set rex.need_clear_zsubexpr = (prog->reghasz == REX_SET)
+    let reghasz = nvim_bt_regprog_get_reghasz(prog);
+    nvim_rex_set_need_clear_zsubexpr(c_int::from(reghasz == REX_SET));
+
+    // Get the program bytecode (skip REGMAGIC byte)
+    let program = nvim_bt_regprog_get_program(prog);
+    if program.is_null() {
+        return 0;
+    }
+
+    // Call the C regmatch function (starting after REGMAGIC)
+    let program_start = program.add(1) as *mut u8;
+    if nvim_bt_regmatch(program_start, tm, timed_out) == 0 {
+        return 0;
+    }
+
+    // Clean up subexpressions
+    nvim_cleanup_subexpr();
+
+    let is_multi = nvim_rex_is_multi() != 0;
+    let lnum = nvim_rex_get_lnum();
+
+    if is_multi {
+        // Multi-line mode: update reg_startpos/reg_endpos
+        let startpos = nvim_rex_get_reg_startpos() as *mut LPosBt;
+        let endpos = nvim_rex_get_reg_endpos() as *mut LPosBt;
+
+        // Fix up startpos[0] if not set
+        if (*startpos).lnum < 0 {
+            (*startpos).lnum = 0;
+            (*startpos).col = col;
+        }
+
+        // Fix up endpos[0] if not set
+        if (*endpos).lnum < 0 {
+            (*endpos).lnum = lnum;
+            let input = nvim_rex_get_input();
+            (*endpos).col = input.offset_from(line) as c_int;
+        } else {
+            // Use line number of "\ze"
+            nvim_rex_set_lnum((*endpos).lnum);
+        }
+    } else {
+        // Single-line mode: update reg_startp/reg_endp
+        let startp = nvim_rex_get_reg_startp();
+        let endp = nvim_rex_get_reg_endp();
+
+        // Fix up startp[0] if NULL
+        if (*startp).is_null() {
+            *startp = line.add(col as usize);
+        }
+
+        // Fix up endp[0] if NULL
+        if (*endp).is_null() {
+            *endp = nvim_rex_get_input();
+        }
+    }
+
+    // Package any found \z(...\) matches for export
+    nvim_unref_extmatch(nvim_get_re_extmatch_out());
+    nvim_set_re_extmatch_out(std::ptr::null_mut());
+
+    if reghasz == REX_SET {
+        nvim_cleanup_zsubexpr();
+        let extmatch = nvim_make_extmatch();
+        nvim_set_re_extmatch_out(extmatch);
+
+        if is_multi {
+            // Multi-line: copy from reg_startzpos/reg_endzpos
+            let startzpos = nvim_get_reg_startzpos() as *mut LPosBt;
+            let endzpos = nvim_get_reg_endzpos() as *mut LPosBt;
+
+            for i in 0..NSUBEXP {
+                let sp = startzpos.add(i);
+                let ep = endzpos.add(i);
+
+                // Only accept single line matches
+                if (*sp).lnum >= 0 && (*ep).lnum == (*sp).lnum && (*ep).col >= (*sp).col {
+                    let zline = nvim_reg_getline((*sp).lnum);
+                    if !zline.is_null() {
+                        let len = ((*ep).col - (*sp).col) as usize;
+                        let src = (zline as *const u8).add((*sp).col as usize);
+                        let match_str = xstrnsave(src as *const c_char, len);
+                        nvim_extmatch_set_match(extmatch, i as c_int, match_str as *mut u8);
+                    }
+                }
+            }
+        } else {
+            // Single-line: copy from reg_startzp/reg_endzp
+            let startzp = nvim_get_reg_startzp();
+            let endzp = nvim_get_reg_endzp();
+
+            for i in 0..NSUBEXP {
+                let sp = *startzp.add(i);
+                let ep = *endzp.add(i);
+
+                if !sp.is_null() && !ep.is_null() && ep >= sp {
+                    let len = ep.offset_from(sp) as usize;
+                    let match_str = xstrnsave(sp as *const c_char, len);
+                    nvim_extmatch_set_match(extmatch, i as c_int, match_str as *mut u8);
+                }
+            }
+        }
+    }
+
+    1 + nvim_rex_get_lnum()
+}
 
 #[cfg(test)]
 mod tests {

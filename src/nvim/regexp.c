@@ -7114,6 +7114,12 @@ static bool regmatch(uint8_t *scan, const proftime_T *tm, int *timed_out)
   // NOTREACHED
 }
 
+// Wrapper for Rust to call the static regmatch function
+int nvim_bt_regmatch(uint8_t *scan, proftime_T *tm, int *timed_out)
+{
+  return regmatch(scan, tm, timed_out) ? 1 : 0;
+}
+
 /// Try match of "prog" with at rex.line["col"].
 ///
 /// @param tm         timeout limit or NULL
