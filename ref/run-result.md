@@ -1,37 +1,30 @@
-Plan: ~/.claude/plans/graceful-sauteeing-balloon.md
+Plan: ~/.claude/plans/serialized-puzzling-hedgehog.md
 
-Phase 12 is complete. Here's a summary:
+Phase 13 is complete. Here's a summary of what was accomplished:
 
-## Phase 12 Summary: NFA Execution Wrapper Migration
+## Phase 13: BT Execution Path Migration - Complete
 
-### Completed Tasks
+### Summary
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 12a | Migrate helper functions (skip_to_start, find_match_text, nfa_did_time_out) | ✓ |
-| 12b | Migrate nfa_regtry() to Rust | ✓ |
-| 12c | Migrate nfa_regexec_both() to Rust | ✓ |
-| 12d | Update entry points to call Rust directly | ✓ |
+**Phases completed:**
+1. **Phase 13a** - Added C accessor functions for BT-specific state (regstack, backpos, Z-subexpr positions, extmatch handling)
+2. **Phase 13b** - Implemented `rs_bt_regtry()` in Rust, the match attempt function
+3. **Phase 13c** - Implemented `rs_bt_regexec_both()` in Rust, the main BT execution entry point
+4. **Phase 13d** - Updated `bt_regexec_nl()` and `bt_regexec_multi()` to call Rust, deleted C `regtry()` and `bt_regexec_both()` 
+5. **Phase 13e** - Verification complete
 
-### Results
+**Lines deleted from regexp.c:** 279 lines (was 12,646, now 12,510)
 
-- **regexp.c line count**: 12,646 lines (down from ~12,858, net reduction of 212 lines)
-- **Tests**: All 3,718 Rust tests pass
-- **Build**: Compiles with no errors
-- **Clippy/Format**: All checks pass
+**What was migrated:**
+- `regtry()` → `rs_bt_regtry()` 
+- `bt_regexec_both()` → `rs_bt_regexec_both()`
+- BT regex execution now flows through Rust for the outer execution loop
 
-### Key Migrations
+**What remains in C:**
+- `regmatch()` (~1,362 lines) - The core matching function is still in C because `rs_bt_regtry()` calls it through the `nvim_bt_regmatch` wrapper. To fully delete `regmatch()`, we would need to wire `rs_bt_regtry()` to use the Rust `rs_bt_regmatch()` function instead.
 
-New Rust functions in `nfa_exec.rs`:
-- `rs_skip_to_start` - Find first match start character
-- `rs_find_match_text` - Literal text fast-path matching
-- `rs_nfa_did_time_out` - Timeout detection
-- `rs_nfa_regtry` - Single match attempt execution
-- `rs_nfa_regexec_both` - Main NFA execution entry point
-
-### Commits
-
-1. `9ccc5f548e` - Phase 12a: NFA helper functions
-2. `405b8db2cc` - Phase 12b: nfa_regtry migration
-3. `3f0420f736` - Phase 12c: nfa_regexec_both migration
-4. `4152345b67` - Phase 12d: Update entry points
+**Commits made:**
+1. `a80e9ab89d` - feat(regexp): add BT execution accessors for Rust (Phase 13a)
+2. `6f785e7700` - feat(regexp): migrate regtry to Rust (Phase 13b)
+3. `2df0c32ea7` - feat(regexp): migrate bt_regexec_both to Rust (Phase 13c)
+4. `841fd34b7c` - refactor(regexp): use Rust BT execution, delete C functions (Phase 13d)
