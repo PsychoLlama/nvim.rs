@@ -6347,6 +6347,12 @@ extern int rs_nfa_regatom(void);
 // Wrapper to expose nfa_regatom - now calls Rust
 int nvim_nfa_regatom(void) { return rs_nfa_regatom(); }
 
+// Forward declaration
+static int nfa_reg(int paren);
+
+// Wrapper to expose nfa_reg to Rust for group parsing
+int nvim_nfa_reg(int paren) { return nfa_reg(paren); }
+
 // Helper functions used when doing re2post() ... regatom() parsing
 #define EMIT(c) \
   do { \

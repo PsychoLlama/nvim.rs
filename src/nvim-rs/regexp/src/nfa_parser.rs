@@ -227,6 +227,9 @@ extern "C" {
     // vim_strchr
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
+    // C's nfa_reg for group parsing (avoids using incomplete Rust parser)
+    fn nvim_nfa_reg(paren: c_int) -> c_int;
+
     // Cursor position for \%.l etc
     fn nvim_rex_get_cursor_lnum() -> c_int;
     fn nvim_rex_get_cursor_col() -> c_int;
@@ -605,8 +608,9 @@ pub unsafe fn nfa_regatom() -> c_int {
         }
 
         // \( - capturing group
+        // Use C's nfa_reg to avoid incomplete Rust parser for quantifiers
         c if c == MAGIC_OPEN_PAREN => {
-            if nfa_reg(REG_PAREN) == FAIL {
+            if nvim_nfa_reg(REG_PAREN) == FAIL {
                 return FAIL;
             }
         }
@@ -773,7 +777,8 @@ unsafe fn parse_z_sequence() -> c_int {
                 emsg(E_Z_NOT_ALLOWED.as_ptr() as *const c_char);
                 return FAIL;
             }
-            if nfa_reg(REG_ZPAREN) == FAIL {
+            // Use C's nfa_reg to avoid incomplete Rust parser for quantifiers
+            if nvim_nfa_reg(REG_ZPAREN) == FAIL {
                 return FAIL;
             }
             nvim_parse_set_re_has_z(REX_SET);
@@ -792,8 +797,9 @@ unsafe fn parse_percent_sequence(save_prev_at_start: c_int) -> c_int {
     let c = no_magic(getchr());
     match c as u8 {
         // \%( - non-capturing group
+        // Use C's nfa_reg to avoid incomplete Rust parser for quantifiers
         b'(' => {
-            if nfa_reg(REG_NPAREN) == FAIL {
+            if nvim_nfa_reg(REG_NPAREN) == FAIL {
                 return FAIL;
             }
             emit(NFA_NOPEN);
