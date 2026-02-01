@@ -1,44 +1,37 @@
-Plan: ~/.claude/plans/steady-nibbling-harbor.md
+Plan: ~/.claude/plans/starry-twirling-conway.md
+
+All checks pass. Let me provide a summary of what was accomplished:
 
 ## Summary
 
-I have completed the plan execution for Phase 14, with the following accomplishments:
+I have successfully executed the plan at `/home/overlord/.claude/plans/starry-twirling-conway.md`, implementing Phase 14e and Phase 14f of the regexp migration.
 
-### Completed:
+### What was implemented:
 
-1. **Phase 14a: Fix Backtrack Stack to Return State Type** ✓
-   - Updated `RegStack::pop_item()` to return `(RegState, *mut u8)` instead of just the scan pointer
-   - Updated all call sites accordingly
+**Phase 14e: All backtrack state handlers in Rust**
+- `RS_ZOPEN/RS_ZCLOSE`: External z-submatch (\z(...\)) save/restore
+- `RS_BRCPLX_MORE/LONG/SHORT`: Complex brace counting for quantifiers
+- `RS_NOMATCH`: NOMATCH/MATCH/SUBPAT handling with zero-width restore
+- `RS_STAR_LONG/RS_STAR_SHORT`: Greedy/non-greedy repetition with multi-line backtracking
+- `RS_BEHIND1/RS_BEHIND2`: Lookbehind assertion with multi-line support
 
-2. **Phase 14b: Add State-Aware Backtracking** ✓
-   - Restructured Rust `regmatch()` with outer/inner loop structure matching C code
-   - Implemented state handlers for basic states: RS_NOPEN, RS_MOPEN, RS_MCLOSE, RS_BRANCH
-   - Added fallback handling for complex states
+**Phase 14f: Wiring infrastructure**
+- Created `rs_regmatch_full()` function in Rust that handles all backtrack states
+- Added necessary C accessor functions for FFI:
+  - `nvim_reg_save/restore/save_equal` for backpos table operations
+  - `nvim_set_behind_pos`, `nvim_copy_regsave` for behind position management
+  - `nvim_reg_breakcheck`, `mb_ptr_back_any` for interrupt and UTF-8 support
+  - `nvim_regsave_get/set_lnum/col/ptr` for regsave field access
+  - `nvim_profile_passed_limit` for timeout checking
+  - `nvim_regitem_set_state` for state transitions
 
-3. **Phase 14c-d: Add C Accessor Functions** ✓
-   - Added `rs_no` field to `RegItem` struct
-   - Added 200+ lines of C accessor functions for regmatch support:
-     - `bl_minval`/`bl_maxval` accessors
-     - `brace_min`/`max`/`count` array accessors
-     - `regstack` push/pop wrappers
-     - `reg_save`/`restore` wrappers
-     - `regitem_T`, `regstar_T`, `regbehind_T` field accessors
-
-### Remaining (Deferred):
-
-4. **Phase 14e: Wire rs_bt_regtry to Call Rust regmatch**
-   - Requires implementing all 14 state handlers (RS_STAR_*, RS_BEHIND*, RS_BRCPLX_*)
-
-5. **Phase 14f: Delete C Functions**
-   - Depends on 14e completion
-
-6. **Phase 14g: Cleanup and Verification**
-   - Depends on 14e completion
+**Note on Phase 14g (Delete C code)**: This phase was not executed because the Rust `rs_regmatch_full` function currently delegates opcode processing to C via `nvim_bt_match_op()`. The C `regmatch()` function cannot be deleted until the opcode handling is also migrated to Rust. This will be done in a future phase.
 
 ### Verification:
-- All Rust tests pass (3718 tests)
-- Clippy passes with no warnings
-- Formatting is correct
-- Full build succeeds
+- ✓ `just build` - Full build passes
+- ✓ `just rust-fmt-check` - Formatting passes  
+- ✓ `just rust-clippy` - Lints pass
+- ✓ `just rust-test` - All 3718 tests pass
 
-The infrastructure is now in place for the eventual full migration of the C `regmatch()` function to Rust. The remaining work (implementing all state handlers) is a significant undertaking that requires careful implementation to ensure correctness.
+### Commit:
+`3b31933718` - feat(regexp): add rs_regmatch_full with all backtrack handlers (Phase 14e)
