@@ -5043,6 +5043,129 @@ int nvim_ri_alpha(int c) { return ri_alpha(c); }
 int nvim_ri_lower(int c) { return ri_lower(c); }
 int nvim_ri_upper(int c) { return ri_upper(c); }
 
+// =============================================================================
+// BT execution accessors for Rust (Phase 13a)
+// =============================================================================
+
+// Z-subexpr position accessors (for \z(...) matches)
+lpos_T *nvim_get_reg_startzpos(void) { return reg_startzpos; }
+lpos_T *nvim_get_reg_endzpos(void) { return reg_endzpos; }
+uint8_t **nvim_get_reg_startzp(void) { return reg_startzp; }
+uint8_t **nvim_get_reg_endzp(void) { return reg_endzp; }
+
+// Individual z-subexpr accessors
+void nvim_set_reg_startzpos(int idx, linenr_T lnum, colnr_T col)
+{
+  if (idx >= 0 && idx < NSUBEXP) {
+    reg_startzpos[idx].lnum = lnum;
+    reg_startzpos[idx].col = col;
+  }
+}
+
+void nvim_set_reg_endzpos(int idx, linenr_T lnum, colnr_T col)
+{
+  if (idx >= 0 && idx < NSUBEXP) {
+    reg_endzpos[idx].lnum = lnum;
+    reg_endzpos[idx].col = col;
+  }
+}
+
+void nvim_set_reg_startzp(int idx, uint8_t *p)
+{
+  if (idx >= 0 && idx < NSUBEXP) {
+    reg_startzp[idx] = p;
+  }
+}
+
+void nvim_set_reg_endzp(int idx, uint8_t *p)
+{
+  if (idx >= 0 && idx < NSUBEXP) {
+    reg_endzp[idx] = p;
+  }
+}
+
+// Extmatch accessors
+reg_extmatch_T *nvim_make_extmatch(void) { return make_extmatch(); }
+void nvim_unref_extmatch(reg_extmatch_T *em) { unref_extmatch(em); }
+reg_extmatch_T *nvim_get_re_extmatch_out(void) { return re_extmatch_out; }
+void nvim_set_re_extmatch_out(reg_extmatch_T *em) { re_extmatch_out = em; }
+reg_extmatch_T *nvim_get_re_extmatch_in(void) { return re_extmatch_in; }
+
+// Extmatch match string accessor
+void nvim_extmatch_set_match(reg_extmatch_T *em, int idx, uint8_t *match)
+{
+  if (em != NULL && idx >= 0 && idx < NSUBEXP) {
+    em->matches[idx] = match;
+  }
+}
+
+uint8_t *nvim_extmatch_get_match(reg_extmatch_T *em, int idx)
+{
+  if (em != NULL && idx >= 0 && idx < NSUBEXP) {
+    return em->matches[idx];
+  }
+  return NULL;
+}
+
+// Regstack and backpos accessors
+garray_T *nvim_get_regstack(void) { return &regstack; }
+garray_T *nvim_get_backpos(void) { return &backpos; }
+
+// Initialize regstack if needed
+void nvim_init_regstack(void)
+{
+  if (regstack.ga_data == NULL) {
+    ga_init(&regstack, 1, REGSTACK_INITIAL);
+    ga_grow(&regstack, REGSTACK_INITIAL);
+    ga_set_growsize(&regstack, REGSTACK_INITIAL * 8);
+  }
+}
+
+// Initialize backpos if needed
+void nvim_init_backpos(void)
+{
+  if (backpos.ga_data == NULL) {
+    ga_init(&backpos, sizeof(backpos_T), BACKPOS_INITIAL);
+    ga_grow(&backpos, BACKPOS_INITIAL);
+    ga_set_growsize(&backpos, BACKPOS_INITIAL * 8);
+  }
+}
+
+// Clear regstack and backpos for match attempt
+void nvim_clear_regstack_backpos(void)
+{
+  regstack.ga_len = 0;
+  backpos.ga_len = 0;
+}
+
+// Shrink regstack if grown
+void nvim_cleanup_regstack(void)
+{
+  if (regstack.ga_maxlen > REGSTACK_INITIAL) {
+    ga_clear(&regstack);
+  }
+}
+
+// Shrink backpos if grown
+void nvim_cleanup_backpos(void)
+{
+  if (backpos.ga_maxlen > BACKPOS_INITIAL) {
+    ga_clear(&backpos);
+  }
+}
+
+// reg_tofree management
+void nvim_cleanup_reg_tofree(void)
+{
+  if (reg_tofreelen > 400) {
+    XFREE_CLEAR(reg_tofree);
+  }
+}
+
+// reg_toolong accessor
+bool nvim_get_reg_toolong(void) { return reg_toolong; }
+void nvim_set_reg_toolong(bool v) { reg_toolong = v; }
+
 // Memory limit (p_mmp)
 int64_t nvim_get_p_mmp(void) { return p_mmp; }
 
