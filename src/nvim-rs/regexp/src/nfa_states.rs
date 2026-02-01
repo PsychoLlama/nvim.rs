@@ -1478,6 +1478,317 @@ pub unsafe extern "C" fn rs_check_char_class(cls: c_int, c: c_int) -> c_int {
 }
 
 // =============================================================================
+// NFA Opcode Name Mapping (for debug output)
+// =============================================================================
+
+/// Get a human-readable name for an NFA opcode.
+///
+/// This is a pure Rust implementation of the C `nfa_set_code` function.
+/// Returns a static string for the opcode name. For NL variants, use
+/// `nfa_opcode_name_with_nl` which appends " + NEWLINE".
+///
+/// # Arguments
+/// * `c` - The NFA opcode value
+///
+/// # Returns
+/// A static string describing the opcode
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::manual_range_contains)]
+pub fn nfa_opcode_name(c: c_int) -> &'static str {
+    // Handle NL variants by stripping NFA_ADD_NL
+    let c = if c >= NFA_FIRST_NL && c <= NFA_LAST_NL {
+        c - NFA_ADD_NL
+    } else {
+        c
+    };
+
+    match c {
+        NFA_MATCH => "NFA_MATCH ",
+        NFA_SPLIT => "NFA_SPLIT ",
+        NFA_CONCAT => "NFA_CONCAT ",
+        NFA_NEWL => "NFA_NEWL ",
+        NFA_ZSTART => "NFA_ZSTART",
+        NFA_ZEND => "NFA_ZEND",
+
+        NFA_BACKREF1 => "NFA_BACKREF1",
+        NFA_BACKREF2 => "NFA_BACKREF2",
+        NFA_BACKREF3 => "NFA_BACKREF3",
+        NFA_BACKREF4 => "NFA_BACKREF4",
+        NFA_BACKREF5 => "NFA_BACKREF5",
+        NFA_BACKREF6 => "NFA_BACKREF6",
+        NFA_BACKREF7 => "NFA_BACKREF7",
+        NFA_BACKREF8 => "NFA_BACKREF8",
+        NFA_BACKREF9 => "NFA_BACKREF9",
+
+        NFA_ZREF1 => "NFA_ZREF1",
+        NFA_ZREF2 => "NFA_ZREF2",
+        NFA_ZREF3 => "NFA_ZREF3",
+        NFA_ZREF4 => "NFA_ZREF4",
+        NFA_ZREF5 => "NFA_ZREF5",
+        NFA_ZREF6 => "NFA_ZREF6",
+        NFA_ZREF7 => "NFA_ZREF7",
+        NFA_ZREF8 => "NFA_ZREF8",
+        NFA_ZREF9 => "NFA_ZREF9",
+
+        NFA_SKIP => "NFA_SKIP",
+
+        NFA_PREV_ATOM_NO_WIDTH => "NFA_PREV_ATOM_NO_WIDTH",
+        NFA_PREV_ATOM_NO_WIDTH_NEG => "NFA_PREV_ATOM_NO_WIDTH_NEG",
+        NFA_PREV_ATOM_JUST_BEFORE => "NFA_PREV_ATOM_JUST_BEFORE",
+        NFA_PREV_ATOM_JUST_BEFORE_NEG => "NFA_PREV_ATOM_JUST_BEFORE_NEG",
+        NFA_PREV_ATOM_LIKE_PATTERN => "NFA_PREV_ATOM_LIKE_PATTERN",
+
+        NFA_NOPEN => "NFA_NOPEN",
+        NFA_NCLOSE => "NFA_NCLOSE",
+
+        NFA_START_INVISIBLE => "NFA_START_INVISIBLE",
+        NFA_START_INVISIBLE_FIRST => "NFA_START_INVISIBLE_FIRST",
+        NFA_START_INVISIBLE_NEG => "NFA_START_INVISIBLE_NEG",
+        NFA_START_INVISIBLE_NEG_FIRST => "NFA_START_INVISIBLE_NEG_FIRST",
+        NFA_START_INVISIBLE_BEFORE => "NFA_START_INVISIBLE_BEFORE",
+        NFA_START_INVISIBLE_BEFORE_FIRST => "NFA_START_INVISIBLE_BEFORE_FIRST",
+        NFA_START_INVISIBLE_BEFORE_NEG => "NFA_START_INVISIBLE_BEFORE_NEG",
+        NFA_START_INVISIBLE_BEFORE_NEG_FIRST => "NFA_START_INVISIBLE_BEFORE_NEG_FIRST",
+        NFA_START_PATTERN => "NFA_START_PATTERN",
+        NFA_END_INVISIBLE => "NFA_END_INVISIBLE",
+        NFA_END_INVISIBLE_NEG => "NFA_END_INVISIBLE_NEG",
+        NFA_END_PATTERN => "NFA_END_PATTERN",
+
+        NFA_COMPOSING => "NFA_COMPOSING",
+        NFA_END_COMPOSING => "NFA_END_COMPOSING",
+        NFA_OPT_CHARS => "NFA_OPT_CHARS",
+
+        // MOPEN states (0-9)
+        NFA_MOPEN => "NFA_MOPEN(0)",
+        NFA_MOPEN1 => "NFA_MOPEN(1)",
+        NFA_MOPEN2 => "NFA_MOPEN(2)",
+        NFA_MOPEN3 => "NFA_MOPEN(3)",
+        NFA_MOPEN4 => "NFA_MOPEN(4)",
+        NFA_MOPEN5 => "NFA_MOPEN(5)",
+        NFA_MOPEN6 => "NFA_MOPEN(6)",
+        NFA_MOPEN7 => "NFA_MOPEN(7)",
+        NFA_MOPEN8 => "NFA_MOPEN(8)",
+        NFA_MOPEN9 => "NFA_MOPEN(9)",
+
+        // MCLOSE states (0-9)
+        NFA_MCLOSE => "NFA_MCLOSE(0)",
+        NFA_MCLOSE1 => "NFA_MCLOSE(1)",
+        NFA_MCLOSE2 => "NFA_MCLOSE(2)",
+        NFA_MCLOSE3 => "NFA_MCLOSE(3)",
+        NFA_MCLOSE4 => "NFA_MCLOSE(4)",
+        NFA_MCLOSE5 => "NFA_MCLOSE(5)",
+        NFA_MCLOSE6 => "NFA_MCLOSE(6)",
+        NFA_MCLOSE7 => "NFA_MCLOSE(7)",
+        NFA_MCLOSE8 => "NFA_MCLOSE(8)",
+        NFA_MCLOSE9 => "NFA_MCLOSE(9)",
+
+        // ZOPEN states (0-9)
+        NFA_ZOPEN => "NFA_ZOPEN(0)",
+        NFA_ZOPEN1 => "NFA_ZOPEN(1)",
+        NFA_ZOPEN2 => "NFA_ZOPEN(2)",
+        NFA_ZOPEN3 => "NFA_ZOPEN(3)",
+        NFA_ZOPEN4 => "NFA_ZOPEN(4)",
+        NFA_ZOPEN5 => "NFA_ZOPEN(5)",
+        NFA_ZOPEN6 => "NFA_ZOPEN(6)",
+        NFA_ZOPEN7 => "NFA_ZOPEN(7)",
+        NFA_ZOPEN8 => "NFA_ZOPEN(8)",
+        NFA_ZOPEN9 => "NFA_ZOPEN(9)",
+
+        // ZCLOSE states (0-9)
+        NFA_ZCLOSE => "NFA_ZCLOSE(0)",
+        NFA_ZCLOSE1 => "NFA_ZCLOSE(1)",
+        NFA_ZCLOSE2 => "NFA_ZCLOSE(2)",
+        NFA_ZCLOSE3 => "NFA_ZCLOSE(3)",
+        NFA_ZCLOSE4 => "NFA_ZCLOSE(4)",
+        NFA_ZCLOSE5 => "NFA_ZCLOSE(5)",
+        NFA_ZCLOSE6 => "NFA_ZCLOSE(6)",
+        NFA_ZCLOSE7 => "NFA_ZCLOSE(7)",
+        NFA_ZCLOSE8 => "NFA_ZCLOSE(8)",
+        NFA_ZCLOSE9 => "NFA_ZCLOSE(9)",
+
+        // Anchors
+        NFA_EOL => "NFA_EOL ",
+        NFA_BOL => "NFA_BOL ",
+        NFA_EOW => "NFA_EOW ",
+        NFA_BOW => "NFA_BOW ",
+        NFA_EOF => "NFA_EOF ",
+        NFA_BOF => "NFA_BOF ",
+
+        // Position matching
+        NFA_LNUM => "NFA_LNUM ",
+        NFA_LNUM_GT => "NFA_LNUM_GT ",
+        NFA_LNUM_LT => "NFA_LNUM_LT ",
+        NFA_COL => "NFA_COL ",
+        NFA_COL_GT => "NFA_COL_GT ",
+        NFA_COL_LT => "NFA_COL_LT ",
+        NFA_VCOL => "NFA_VCOL ",
+        NFA_VCOL_GT => "NFA_VCOL_GT ",
+        NFA_VCOL_LT => "NFA_VCOL_LT ",
+        NFA_MARK => "NFA_MARK ",
+        NFA_MARK_GT => "NFA_MARK_GT ",
+        NFA_MARK_LT => "NFA_MARK_LT ",
+        NFA_CURSOR => "NFA_CURSOR ",
+        NFA_VISUAL => "NFA_VISUAL ",
+        NFA_ANY_COMPOSING => "NFA_ANY_COMPOSING ",
+
+        // Quantifiers
+        NFA_STAR => "NFA_STAR ",
+        NFA_STAR_NONGREEDY => "NFA_STAR_NONGREEDY ",
+        NFA_QUEST => "NFA_QUEST",
+        NFA_QUEST_NONGREEDY => "NFA_QUEST_NON_GREEDY",
+        NFA_EMPTY => "NFA_EMPTY",
+        NFA_OR => "NFA_OR",
+
+        // Collection states
+        NFA_START_COLL => "NFA_START_COLL",
+        NFA_END_COLL => "NFA_END_COLL",
+        NFA_START_NEG_COLL => "NFA_START_NEG_COLL",
+        NFA_END_NEG_COLL => "NFA_END_NEG_COLL",
+        NFA_RANGE => "NFA_RANGE",
+        NFA_RANGE_MIN => "NFA_RANGE_MIN",
+        NFA_RANGE_MAX => "NFA_RANGE_MAX",
+
+        // POSIX character classes
+        NFA_CLASS_ALNUM => "NFA_CLASS_ALNUM",
+        NFA_CLASS_ALPHA => "NFA_CLASS_ALPHA",
+        NFA_CLASS_BLANK => "NFA_CLASS_BLANK",
+        NFA_CLASS_CNTRL => "NFA_CLASS_CNTRL",
+        NFA_CLASS_DIGIT => "NFA_CLASS_DIGIT",
+        NFA_CLASS_GRAPH => "NFA_CLASS_GRAPH",
+        NFA_CLASS_LOWER => "NFA_CLASS_LOWER",
+        NFA_CLASS_PRINT => "NFA_CLASS_PRINT",
+        NFA_CLASS_PUNCT => "NFA_CLASS_PUNCT",
+        NFA_CLASS_SPACE => "NFA_CLASS_SPACE",
+        NFA_CLASS_UPPER => "NFA_CLASS_UPPER",
+        NFA_CLASS_XDIGIT => "NFA_CLASS_XDIGIT",
+        NFA_CLASS_TAB => "NFA_CLASS_TAB",
+        NFA_CLASS_RETURN => "NFA_CLASS_RETURN",
+        NFA_CLASS_BACKSPACE => "NFA_CLASS_BACKSPACE",
+        NFA_CLASS_ESCAPE => "NFA_CLASS_ESCAPE",
+        NFA_CLASS_IDENT => "NFA_CLASS_IDENT",
+        NFA_CLASS_KEYWORD => "NFA_CLASS_KEYWORD",
+        NFA_CLASS_FNAME => "NFA_CLASS_FNAME",
+
+        // Character classes
+        NFA_ANY => "NFA_ANY",
+        NFA_IDENT => "NFA_IDENT",
+        NFA_SIDENT => "NFA_SIDENT",
+        NFA_KWORD => "NFA_KWORD",
+        NFA_SKWORD => "NFA_SKWORD",
+        NFA_FNAME => "NFA_FNAME",
+        NFA_SFNAME => "NFA_SFNAME",
+        NFA_PRINT => "NFA_PRINT",
+        NFA_SPRINT => "NFA_SPRINT",
+        NFA_WHITE => "NFA_WHITE",
+        NFA_NWHITE => "NFA_NWHITE",
+        NFA_DIGIT => "NFA_DIGIT",
+        NFA_NDIGIT => "NFA_NDIGIT",
+        NFA_HEX => "NFA_HEX",
+        NFA_NHEX => "NFA_NHEX",
+        NFA_OCTAL => "NFA_OCTAL",
+        NFA_NOCTAL => "NFA_NOCTAL",
+        NFA_WORD => "NFA_WORD",
+        NFA_NWORD => "NFA_NWORD",
+        NFA_HEAD => "NFA_HEAD",
+        NFA_NHEAD => "NFA_NHEAD",
+        NFA_ALPHA => "NFA_ALPHA",
+        NFA_NALPHA => "NFA_NALPHA",
+        NFA_LOWER => "NFA_LOWER",
+        NFA_NLOWER => "NFA_NLOWER",
+        NFA_UPPER => "NFA_UPPER",
+        NFA_NUPPER => "NFA_NUPPER",
+        NFA_LOWER_IC => "NFA_LOWER_IC",
+        NFA_NLOWER_IC => "NFA_NLOWER_IC",
+        NFA_UPPER_IC => "NFA_UPPER_IC",
+        NFA_NUPPER_IC => "NFA_NUPPER_IC",
+
+        // Default: literal character
+        _ => "CHAR",
+    }
+}
+
+/// Check if an opcode is an NL variant.
+#[inline]
+pub const fn is_nfa_nl_variant(c: c_int) -> bool {
+    c >= NFA_FIRST_NL && c <= NFA_LAST_NL
+}
+
+/// Write opcode name to buffer, including " + NEWLINE" suffix for NL variants.
+///
+/// This matches the C `nfa_set_code` function behavior exactly, including the
+/// special handling of MOPEN/MCLOSE/ZOPEN/ZCLOSE with numeric indices.
+///
+/// # Safety
+/// `buf` must point to a buffer of at least `buf_len` bytes.
+///
+/// # Arguments
+/// * `c` - The NFA opcode value
+/// * `buf` - Buffer to write the name into
+/// * `buf_len` - Size of the buffer
+#[no_mangle]
+#[allow(clippy::manual_range_contains)]
+pub unsafe extern "C" fn rs_nfa_set_code(c: c_int, buf: *mut u8, buf_len: usize) {
+    if buf.is_null() || buf_len == 0 {
+        return;
+    }
+
+    let add_nl = is_nfa_nl_variant(c);
+    let base_c = if add_nl { c - NFA_ADD_NL } else { c };
+
+    // Get the base name
+    let name = nfa_opcode_name(base_c);
+    let name_bytes = name.as_bytes();
+
+    // For character literals not matching any opcode, format as CHAR(x)
+    let is_char = name == "CHAR" && base_c >= 0;
+
+    if is_char {
+        // Format: "CHAR(x)" where x is the character
+        let char_str = if base_c >= 32 && base_c < 127 {
+            // Printable ASCII
+            format!("CHAR({})", base_c as u8 as char)
+        } else {
+            format!("CHAR({})", base_c)
+        };
+        let char_bytes = char_str.as_bytes();
+        let copy_len = char_bytes.len().min(buf_len - 1);
+        std::ptr::copy_nonoverlapping(char_bytes.as_ptr(), buf, copy_len);
+
+        if add_nl {
+            let nl_suffix = b" + NEWLINE ";
+            let remaining = buf_len - copy_len - 1;
+            let nl_len = nl_suffix.len().min(remaining);
+            if nl_len > 0 {
+                std::ptr::copy_nonoverlapping(nl_suffix.as_ptr(), buf.add(copy_len), nl_len);
+                *buf.add(copy_len + nl_len) = 0;
+            } else {
+                *buf.add(copy_len) = 0;
+            }
+        } else {
+            *buf.add(copy_len) = 0;
+        }
+    } else {
+        // Copy the opcode name
+        let copy_len = name_bytes.len().min(buf_len - 1);
+        std::ptr::copy_nonoverlapping(name_bytes.as_ptr(), buf, copy_len);
+
+        if add_nl {
+            let nl_suffix = b" + NEWLINE ";
+            let remaining = buf_len - copy_len - 1;
+            let nl_len = nl_suffix.len().min(remaining);
+            if nl_len > 0 {
+                std::ptr::copy_nonoverlapping(nl_suffix.as_ptr(), buf.add(copy_len), nl_len);
+                *buf.add(copy_len + nl_len) = 0;
+            } else {
+                *buf.add(copy_len) = 0;
+            }
+        } else {
+            *buf.add(copy_len) = 0;
+        }
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1849,5 +2160,99 @@ mod tests {
         // Non-POSIX states
         assert_eq!(rs_nfa_is_posix_class(NFA_ANY), 0);
         assert_eq!(rs_nfa_is_posix_class(NFA_DIGIT), 0);
+    }
+
+    // =========================================================================
+    // NFA Opcode Name Tests
+    // =========================================================================
+
+    #[test]
+    fn test_nfa_opcode_name_basic() {
+        assert_eq!(nfa_opcode_name(NFA_MATCH), "NFA_MATCH ");
+        assert_eq!(nfa_opcode_name(NFA_SPLIT), "NFA_SPLIT ");
+        assert_eq!(nfa_opcode_name(NFA_CONCAT), "NFA_CONCAT ");
+        assert_eq!(nfa_opcode_name(NFA_EMPTY), "NFA_EMPTY");
+        assert_eq!(nfa_opcode_name(NFA_OR), "NFA_OR");
+    }
+
+    #[test]
+    fn test_nfa_opcode_name_backrefs() {
+        assert_eq!(nfa_opcode_name(NFA_BACKREF1), "NFA_BACKREF1");
+        assert_eq!(nfa_opcode_name(NFA_BACKREF5), "NFA_BACKREF5");
+        assert_eq!(nfa_opcode_name(NFA_BACKREF9), "NFA_BACKREF9");
+        assert_eq!(nfa_opcode_name(NFA_ZREF1), "NFA_ZREF1");
+        assert_eq!(nfa_opcode_name(NFA_ZREF9), "NFA_ZREF9");
+    }
+
+    #[test]
+    fn test_nfa_opcode_name_subexpr() {
+        assert_eq!(nfa_opcode_name(NFA_MOPEN), "NFA_MOPEN(0)");
+        assert_eq!(nfa_opcode_name(NFA_MOPEN1), "NFA_MOPEN(1)");
+        assert_eq!(nfa_opcode_name(NFA_MOPEN9), "NFA_MOPEN(9)");
+        assert_eq!(nfa_opcode_name(NFA_MCLOSE), "NFA_MCLOSE(0)");
+        assert_eq!(nfa_opcode_name(NFA_MCLOSE5), "NFA_MCLOSE(5)");
+        assert_eq!(nfa_opcode_name(NFA_ZOPEN), "NFA_ZOPEN(0)");
+        assert_eq!(nfa_opcode_name(NFA_ZCLOSE9), "NFA_ZCLOSE(9)");
+    }
+
+    #[test]
+    fn test_nfa_opcode_name_char_classes() {
+        assert_eq!(nfa_opcode_name(NFA_ANY), "NFA_ANY");
+        assert_eq!(nfa_opcode_name(NFA_DIGIT), "NFA_DIGIT");
+        assert_eq!(nfa_opcode_name(NFA_WORD), "NFA_WORD");
+        assert_eq!(nfa_opcode_name(NFA_ALPHA), "NFA_ALPHA");
+    }
+
+    #[test]
+    fn test_nfa_opcode_name_posix_classes() {
+        assert_eq!(nfa_opcode_name(NFA_CLASS_ALNUM), "NFA_CLASS_ALNUM");
+        assert_eq!(nfa_opcode_name(NFA_CLASS_DIGIT), "NFA_CLASS_DIGIT");
+        assert_eq!(nfa_opcode_name(NFA_CLASS_SPACE), "NFA_CLASS_SPACE");
+    }
+
+    #[test]
+    fn test_nfa_opcode_name_char() {
+        // Unknown opcodes return "CHAR"
+        assert_eq!(nfa_opcode_name(b'a' as c_int), "CHAR");
+        assert_eq!(nfa_opcode_name(b'X' as c_int), "CHAR");
+    }
+
+    #[test]
+    fn test_nfa_opcode_name_nl_variants() {
+        // NL variants should strip NFA_ADD_NL and return base name
+        assert_eq!(nfa_opcode_name(NFA_ANY + NFA_ADD_NL), "NFA_ANY");
+        assert_eq!(nfa_opcode_name(NFA_DIGIT + NFA_ADD_NL), "NFA_DIGIT");
+    }
+
+    #[test]
+    fn test_is_nfa_nl_variant() {
+        assert!(!is_nfa_nl_variant(NFA_ANY));
+        assert!(!is_nfa_nl_variant(NFA_DIGIT));
+        assert!(is_nfa_nl_variant(NFA_FIRST_NL));
+        assert!(is_nfa_nl_variant(NFA_LAST_NL));
+        assert!(is_nfa_nl_variant(NFA_ANY + NFA_ADD_NL));
+    }
+
+    #[test]
+    fn test_rs_nfa_set_code() {
+        unsafe {
+            let mut buf = [0u8; 64];
+
+            // Test basic opcode
+            rs_nfa_set_code(NFA_MATCH, buf.as_mut_ptr(), buf.len());
+            let result = std::ffi::CStr::from_ptr(buf.as_ptr() as *const i8);
+            assert_eq!(result.to_str().unwrap(), "NFA_MATCH ");
+
+            // Test NL variant
+            rs_nfa_set_code(NFA_DIGIT + NFA_ADD_NL, buf.as_mut_ptr(), buf.len());
+            let result = std::ffi::CStr::from_ptr(buf.as_ptr() as *const i8);
+            assert!(result.to_str().unwrap().contains("NFA_DIGIT"));
+            assert!(result.to_str().unwrap().contains("NEWLINE"));
+
+            // Test character literal
+            rs_nfa_set_code(b'a' as c_int, buf.as_mut_ptr(), buf.len());
+            let result = std::ffi::CStr::from_ptr(buf.as_ptr() as *const i8);
+            assert!(result.to_str().unwrap().contains("CHAR"));
+        }
     }
 }

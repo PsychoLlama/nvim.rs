@@ -108,9 +108,10 @@ pub use bt_state::{
 };
 pub use char_class::rs_get_char_class;
 pub use debug::{
-    rs_regexp_debug_enabled, rs_regexp_get_backtracks, rs_regexp_get_compilations,
-    rs_regexp_get_debug_level, rs_regexp_get_executions, rs_regexp_get_matches,
-    rs_regexp_get_transitions, rs_regexp_reset_profile, rs_regexp_set_debug_level,
+    rs_nfa_dump, rs_nfa_postfix_dump, rs_nfa_print_state, rs_regexp_debug_enabled,
+    rs_regexp_get_backtracks, rs_regexp_get_compilations, rs_regexp_get_debug_level,
+    rs_regexp_get_executions, rs_regexp_get_matches, rs_regexp_get_transitions,
+    rs_regexp_reset_profile, rs_regexp_set_debug_level,
 };
 pub use decompose::rs_mb_decompose;
 pub use equi_class::{rs_nfa_emit_equi_class, rs_reg_equi_class};
@@ -177,7 +178,7 @@ pub use nfa_states::{
     rs_check_char_class, rs_nfa_get_subexpr_idx, rs_nfa_is_char_class, rs_nfa_is_position_match,
     rs_nfa_is_posix_class, rs_nfa_list_clear, rs_nfa_list_count, rs_nfa_list_free, rs_nfa_list_get,
     rs_nfa_list_grow, rs_nfa_list_init, rs_nfa_list_next_id, rs_nfa_recognize_char_class,
-    rs_ptrlist_append, rs_ptrlist_patch, rs_ptrlist_single,
+    rs_nfa_set_code, rs_ptrlist_append, rs_ptrlist_patch, rs_ptrlist_single,
 };
 pub use parser::{
     rs_nfa_re_num_cmp, rs_re_get_uint16, rs_re_get_uint32, rs_re_num_cmp, rs_re_put_uint16,
