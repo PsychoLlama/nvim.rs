@@ -1353,6 +1353,9 @@ pub unsafe fn has_state_with_pos(
     false
 }
 
+/// Maximum iterations to prevent infinite loops in cyclic NFA graphs.
+const MATCH_FOLLOWS_MAX_ITER: u32 = 10000;
+
 /// Check if the given state leads to a match without advancing input.
 ///
 /// This is used to determine if a zero-width assertion might match
@@ -1367,7 +1370,13 @@ pub unsafe fn match_follows(startstate: *const NfaState, depth: c_int) -> bool {
     }
 
     let mut state = startstate;
+    let mut iter_count: u32 = 0;
     while !state.is_null() {
+        // Prevent infinite loop in case of cyclic NFA graph
+        iter_count += 1;
+        if iter_count > MATCH_FOLLOWS_MAX_ITER {
+            return false;
+        }
         match (*state).c {
             // These states indicate a match without consuming input
             NFA_MATCH
