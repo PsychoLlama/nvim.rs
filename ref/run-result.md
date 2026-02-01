@@ -1,23 +1,37 @@
-Plan: ~/.claude/plans/humble-hugging-stroustrup.md
+Plan: ~/.claude/plans/graceful-sauteeing-balloon.md
 
-## Phase 11 Complete
+Phase 12 is complete. Here's a summary:
 
-Both phases have been successfully completed and committed:
+## Phase 12 Summary: NFA Execution Wrapper Migration
 
-### Phase 11a (Commit `75fa45d385`)
-- Deleted 7 thin C wrapper functions
-- Replaced ~25 call sites with direct `rs_*` calls
-- Functions removed: `no_Magic`, `toggle_Magic`, `re_multi_type`, `backslash_trans`, `get_char_class`, `get_equi_class`, `get_coll_element`
+### Completed Tasks
 
-### Phase 11b (Commit `38c603ecbd`)
-- Migrated `regrepeat()` (~360 lines) from C to Rust
-- Added FFI bindings for character classification functions
-- C implementation replaced with thin wrapper calling `rs_regrepeat()`
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 12a | Migrate helper functions (skip_to_start, find_match_text, nfa_did_time_out) | ✓ |
+| 12b | Migrate nfa_regtry() to Rust | ✓ |
+| 12c | Migrate nfa_regexec_both() to Rust | ✓ |
+| 12d | Update entry points to call Rust directly | ✓ |
 
 ### Results
-| Metric | Before | After | Change |
-|--------|--------|-------|--------|
-| regexp.c lines | 13,265 | 12,858 | -407 lines |
-| Rust tests | 3,718 | 3,718 | All passing |
 
-The target reduction was ~440 lines; achieved ~407 lines (92% of target). The plan is complete.
+- **regexp.c line count**: 12,646 lines (down from ~12,858, net reduction of 212 lines)
+- **Tests**: All 3,718 Rust tests pass
+- **Build**: Compiles with no errors
+- **Clippy/Format**: All checks pass
+
+### Key Migrations
+
+New Rust functions in `nfa_exec.rs`:
+- `rs_skip_to_start` - Find first match start character
+- `rs_find_match_text` - Literal text fast-path matching
+- `rs_nfa_did_time_out` - Timeout detection
+- `rs_nfa_regtry` - Single match attempt execution
+- `rs_nfa_regexec_both` - Main NFA execution entry point
+
+### Commits
+
+1. `9ccc5f548e` - Phase 12a: NFA helper functions
+2. `405b8db2cc` - Phase 12b: nfa_regtry migration
+3. `3f0420f736` - Phase 12c: nfa_regexec_both migration
+4. `4152345b67` - Phase 12d: Update entry points
