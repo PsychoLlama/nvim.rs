@@ -40,6 +40,10 @@ unittest:
 run *ARGS:
     VIMRUNTIME=runtime ./build/bin/nvim {{ARGS}}
 
+# Smoke test: verify nvim starts and exits cleanly
+smoke-test:
+    VIMRUNTIME=runtime ./build/bin/nvim --headless +qa
+
 # Show nvim version
 version:
     VIMRUNTIME=runtime ./build/bin/nvim --version

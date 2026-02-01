@@ -4,6 +4,7 @@
 - Commit your work regularly.
 - Before committing, ensure these pass:
   - `just build` - full build with linking
+  - `just smoke-test` - verify nvim starts without crashing
   - `just rust-fmt-check` - formatting
   - `just rust-clippy` - lints
   - `just rust-test` - unit tests
