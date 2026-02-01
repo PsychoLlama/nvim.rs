@@ -4930,6 +4930,38 @@ void nvim_regmmatch_set_rmm_matchcol(regmmatch_T *m, colnr_T col)
   }
 }
 
+// regmatch_T accessors for Rust (Phase 12c)
+void *nvim_regmatch_get_regprog(regmatch_T *m) { return m ? m->regprog : NULL; }
+void **nvim_regmatch_get_startp(regmatch_T *m) { return m ? (void **)m->startp : NULL; }
+void **nvim_regmatch_get_endp(regmatch_T *m) { return m ? (void **)m->endp : NULL; }
+void nvim_regmatch_set_rm_matchcol(regmatch_T *m, colnr_T col)
+{
+  if (m != NULL) {
+    m->rm_matchcol = col;
+  }
+}
+
+// regmmatch_T accessors for Rust (Phase 12c)
+void *nvim_regmmatch_get_regprog(regmmatch_T *m) { return m ? m->regprog : NULL; }
+lpos_T *nvim_regmmatch_get_startpos(regmmatch_T *m) { return m ? m->startpos : NULL; }
+lpos_T *nvim_regmmatch_get_endpos(regmmatch_T *m) { return m ? m->endpos : NULL; }
+
+// Initialize NFA program states for execution (Phase 12c)
+static void nfa_init_prog_states(nfa_regprog_T *prog)
+{
+  for (int i = 0; i < prog->nstate; i++) {
+    prog->state[i].id = i;
+    prog->state[i].lastlist[0] = 0;
+    prog->state[i].lastlist[1] = 0;
+  }
+}
+
+// Exposed wrapper for Rust (uses void* to avoid header export issues)
+void nvim_nfa_init_prog_states(void *prog)
+{
+  nfa_init_prog_states((nfa_regprog_T *)prog);
+}
+
 // Submatch position accessors
 uint8_t **nvim_rex_get_reg_startp(void) { return rex.reg_startp; }
 void nvim_rex_set_reg_startp(uint8_t **p) { rex.reg_startp = p; }
@@ -8013,6 +8045,9 @@ static int *post_ptr;
 static bool wants_nfa;
 
 static int nstate;  ///< Number of states in the NFA. Also used when executing.
+
+// Global nstate accessor for Rust (Phase 12c)
+void nvim_set_nstate(int v) { nstate = v; }
 
 // If not NULL match must end at this position
 static save_se_T *nfa_endp = NULL;
@@ -12114,6 +12149,9 @@ static int nfa_regtry(nfa_regprog_T *prog, colnr_T col, proftime_T *tm, int *tim
   return rs_nfa_regtry(prog, col, tm, timed_out);
 }
 
+// Rust implementation of nfa_regexec_both
+extern int rs_nfa_regexec_both(uint8_t *line, colnr_T startcol, proftime_T *tm, int *timed_out);
+
 /// Match a regexp against a string ("line" points to the string) or multiple
 /// lines (if "line" is NULL, use reg_getline()).
 ///
@@ -12126,129 +12164,7 @@ static int nfa_regtry(nfa_regprog_T *prog, colnr_T col, proftime_T *tm, int *tim
 /// match otherwise.
 static int nfa_regexec_both(uint8_t *line, colnr_T startcol, proftime_T *tm, int *timed_out)
 {
-  nfa_regprog_T *prog;
-  int retval = 0;
-  colnr_T col = startcol;
-
-  if (REG_MULTI) {
-    prog = (nfa_regprog_T *)rex.reg_mmatch->regprog;
-    line = (uint8_t *)reg_getline(0);  // relative to the cursor
-    rex.reg_startpos = rex.reg_mmatch->startpos;
-    rex.reg_endpos = rex.reg_mmatch->endpos;
-  } else {
-    prog = (nfa_regprog_T *)rex.reg_match->regprog;
-    rex.reg_startp = (uint8_t **)rex.reg_match->startp;
-    rex.reg_endp = (uint8_t **)rex.reg_match->endp;
-  }
-
-  // Be paranoid...
-  if (prog == NULL || line == NULL) {
-    iemsg(_(e_null));
-    goto theend;
-  }
-
-  // If pattern contains "\c" or "\C": overrule value of rex.reg_ic
-  if (prog->regflags & RF_ICASE) {
-    rex.reg_ic = true;
-  } else if (prog->regflags & RF_NOICASE) {
-    rex.reg_ic = false;
-  }
-
-  // If pattern contains "\Z" overrule value of rex.reg_icombine
-  if (prog->regflags & RF_ICOMBINE) {
-    rex.reg_icombine = true;
-  }
-
-  rex.line = line;
-  rex.lnum = 0;  // relative to line
-
-  rex.nfa_has_zend = prog->has_zend;
-  rex.nfa_has_backref = prog->has_backref;
-  rex.nfa_nsubexpr = prog->nsubexp;
-  rex.nfa_listid = 1;
-  rex.nfa_alt_listid = 2;
-#ifdef REGEXP_DEBUG
-  nfa_regengine.expr = prog->pattern;
-#endif
-
-  if (prog->reganch && col > 0) {
-    return 0L;
-  }
-
-  rex.need_clear_subexpr = true;
-  // Clear the external match subpointers if necessary.
-  if (prog->reghasz == REX_SET) {
-    rex.nfa_has_zsubexpr = true;
-    rex.need_clear_zsubexpr = true;
-  } else {
-    rex.nfa_has_zsubexpr = false;
-    rex.need_clear_zsubexpr = false;
-  }
-
-  if (prog->regstart != NUL) {
-    // Skip ahead until a character we know the match must start with.
-    // When there is none there is no match.
-    if (skip_to_start(prog->regstart, &col) == FAIL) {
-      return 0L;
-    }
-
-    // If match_text is set it contains the full text that must match.
-    // Nothing else to try. Doesn't handle combining chars well.
-    if (prog->match_text != NULL && *prog->match_text != NUL && !rex.reg_icombine) {
-      retval = find_match_text(&col, prog->regstart, prog->match_text);
-      if (REG_MULTI) {
-        rex.reg_mmatch->rmm_matchcol = col;
-      } else {
-        rex.reg_match->rm_matchcol = col;
-      }
-      return retval;
-    }
-  }
-
-  // If the start column is past the maximum column: no need to try.
-  if (rex.reg_maxcol > 0 && col >= rex.reg_maxcol) {
-    goto theend;
-  }
-
-  // Set the "nstate" used by nfa_regcomp() to zero to trigger an error when
-  // it's accidentally used during execution.
-  nstate = 0;
-  for (int i = 0; i < prog->nstate; i++) {
-    prog->state[i].id = i;
-    prog->state[i].lastlist[0] = 0;
-    prog->state[i].lastlist[1] = 0;
-  }
-
-  retval = nfa_regtry(prog, col, tm, timed_out);
-
-#ifdef REGEXP_DEBUG
-  nfa_regengine.expr = NULL;
-#endif
-
-theend:
-  if (retval > 0) {
-    // Make sure the end is never before the start.  Can happen when \zs and
-    // \ze are used.
-    if (REG_MULTI) {
-      const lpos_T *const start = &rex.reg_mmatch->startpos[0];
-      const lpos_T *const end = &rex.reg_mmatch->endpos[0];
-
-      if (end->lnum < start->lnum
-          || (end->lnum == start->lnum && end->col < start->col)) {
-        rex.reg_mmatch->endpos[0] = rex.reg_mmatch->startpos[0];
-      }
-    } else {
-      if (rex.reg_match->endp[0] < rex.reg_match->startp[0]) {
-        rex.reg_match->endp[0] = rex.reg_match->startp[0];
-      }
-
-      // startpos[0] may be set by "\zs", also return the column where
-      // the whole pattern matched.
-      rex.reg_match->rm_matchcol = col;
-    }
-  }
-
-  return retval;
+  return rs_nfa_regexec_both(line, startcol, tm, timed_out);
 }
 
 // Compile a regular expression into internal code for the NFA matcher.

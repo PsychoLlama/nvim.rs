@@ -24,6 +24,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use crate::RegprogHandle;
 use crate::nfa_states::{
     ColNr, LPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_ALPHA, NFA_ANY,
     NFA_ANY_COMPOSING, NFA_BOF, NFA_BOL, NFA_COMPOSING, NFA_DIGIT, NFA_END_INVISIBLE,
@@ -3468,6 +3469,292 @@ pub unsafe extern "C" fn rs_nfa_regtry(
 extern "C" {
     /// Get NFA program start state.
     fn nvim_nfa_regprog_get_start(prog: *const c_void) -> *mut c_void;
+
+    /// Get regflags from program.
+    fn nvim_regprog_get_regflags(prog: RegprogHandle) -> c_int;
+
+    /// Get reganch from NFA program.
+    fn nvim_nfa_regprog_get_reganch(prog: *const c_void) -> c_int;
+
+    /// Get regstart from NFA program.
+    fn nvim_nfa_regprog_get_regstart(prog: *const c_void) -> c_int;
+
+    /// Get match_text from NFA program.
+    fn nvim_nfa_regprog_get_match_text(prog: *const c_void) -> *const u8;
+
+    /// Get has_zend from NFA program.
+    fn nvim_nfa_regprog_get_has_zend(prog: *const c_void) -> c_int;
+
+    /// Get has_backref from NFA program.
+    fn nvim_nfa_regprog_get_has_backref(prog: *const c_void) -> c_int;
+
+    /// Get nsubexp from NFA program.
+    fn nvim_nfa_regprog_get_nsubexp(prog: *const c_void) -> c_int;
+
+    /// Get reghasz from NFA program.
+    fn nvim_nfa_regprog_get_reghasz(prog: *const c_void) -> c_int;
+
+    /// Get regprog from regmatch_T.
+    fn nvim_regmatch_get_regprog(m: *mut c_void) -> *mut c_void;
+
+    /// Get startp from regmatch_T.
+    fn nvim_regmatch_get_startp(m: *mut c_void) -> *mut *mut u8;
+
+    /// Get endp from regmatch_T.
+    fn nvim_regmatch_get_endp(m: *mut c_void) -> *mut *mut u8;
+
+    /// Set rm_matchcol in regmatch_T.
+    fn nvim_regmatch_set_rm_matchcol(m: *mut c_void, col: ColNr);
+
+    /// Get regprog from regmmatch_T.
+    fn nvim_regmmatch_get_regprog(m: *mut c_void) -> *mut c_void;
+
+    /// Get startpos from regmmatch_T.
+    fn nvim_regmmatch_get_startpos(m: *mut c_void) -> *mut c_void;
+
+    /// Get endpos from regmmatch_T.
+    fn nvim_regmmatch_get_endpos(m: *mut c_void) -> *mut c_void;
+
+    /// Set global nstate.
+    fn nvim_set_nstate(v: c_int);
+
+    /// Initialize NFA program states for execution.
+    fn nvim_nfa_init_prog_states(prog: *mut c_void);
+
+    /// Report internal error.
+    fn iemsg(s: *const c_char);
+}
+
+// RF_ flags for regflags
+const RF_ICASE: c_int = 1;
+const RF_NOICASE: c_int = 2;
+const RF_ICOMBINE: c_int = 8;
+const REX_SET: c_int = 1;
+
+// =============================================================================
+// Phase 12c: nfa_regexec_both migration
+// =============================================================================
+
+/// Match a regexp against a string ("line" points to the string) or multiple
+/// lines (if "line" is NULL, use reg_getline()).
+///
+/// This is the Rust implementation of nfa_regexec_both().
+///
+/// # Arguments
+/// * `line` - String to match or NULL for multiline
+/// * `startcol` - Column to start looking for match
+/// * `tm` - Timeout limit or NULL
+/// * `timed_out` - Flag set on timeout or NULL
+///
+/// # Returns
+/// <= 0 if no match, number of lines contained in the match otherwise.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_regexec_both(
+    mut line: *mut u8,
+    startcol: ColNr,
+    tm: *mut ProfTime,
+    timed_out: *mut c_int,
+) -> c_int {
+    let prog: *mut c_void;
+    let mut col = startcol;
+    let is_multi = nvim_rex_is_multi() != 0;
+
+    // Get the program and set up pointers
+    if is_multi {
+        let mmatch = nvim_rex_get_reg_mmatch();
+        prog = nvim_regmmatch_get_regprog(mmatch);
+        line = nvim_reg_getline(0) as *mut u8; // relative to the cursor
+        let startpos = nvim_regmmatch_get_startpos(mmatch);
+        let endpos = nvim_regmmatch_get_endpos(mmatch);
+        nvim_rex_set_reg_startpos(startpos);
+        nvim_rex_set_reg_endpos(endpos);
+    } else {
+        let match_ = nvim_rex_get_reg_match();
+        prog = nvim_regmatch_get_regprog(match_);
+        let startp = nvim_regmatch_get_startp(match_);
+        let endp = nvim_regmatch_get_endp(match_);
+        nvim_rex_set_reg_startp(startp);
+        nvim_rex_set_reg_endp(endp);
+    }
+
+    // Be paranoid...
+    if prog.is_null() || line.is_null() {
+        // Using a static string for e_null error
+        static E_NULL: &[u8] = b"E685: Internal error: NULL\0";
+        iemsg(E_NULL.as_ptr() as *const c_char);
+        return finalize_match_result(0, col, is_multi);
+    }
+
+    // Get regflags and check for case sensitivity overrides
+    let regflags = nvim_regprog_get_regflags(RegprogHandle(prog));
+
+    if regflags & RF_ICASE != 0 {
+        nvim_rex_set_reg_ic(true);
+    } else if regflags & RF_NOICASE != 0 {
+        nvim_rex_set_reg_ic(false);
+    }
+
+    // If pattern contains "\Z" overrule value of rex.reg_icombine
+    if regflags & RF_ICOMBINE != 0 {
+        nvim_rex_set_reg_icombine(true);
+    }
+
+    nvim_rex_set_line(line);
+    nvim_rex_set_lnum(0); // relative to line
+
+    // Set up NFA execution state
+    nvim_rex_set_nfa_has_zend(nvim_nfa_regprog_get_has_zend(prog));
+    nvim_rex_set_nfa_has_backref(nvim_nfa_regprog_get_has_backref(prog));
+    nvim_rex_set_nfa_nsubexpr(nvim_nfa_regprog_get_nsubexp(prog));
+    nvim_rex_set_nfa_listid(1);
+    nvim_rex_set_nfa_alt_listid(2);
+
+    // Check for anchored pattern at col > 0
+    let reganch = nvim_nfa_regprog_get_reganch(prog);
+    if reganch != 0 && col > 0 {
+        return 0;
+    }
+
+    nvim_rex_set_need_clear_subexpr(1);
+
+    // Clear the external match subpointers if necessary
+    let reghasz = nvim_nfa_regprog_get_reghasz(prog);
+    if reghasz == REX_SET {
+        nvim_rex_set_nfa_has_zsubexpr(1);
+        nvim_rex_set_need_clear_zsubexpr(1);
+    } else {
+        nvim_rex_set_nfa_has_zsubexpr(0);
+        nvim_rex_set_need_clear_zsubexpr(0);
+    }
+
+    let regstart = nvim_nfa_regprog_get_regstart(prog);
+    if regstart != 0 {
+        // Skip ahead until a character we know the match must start with.
+        // When there is none there is no match.
+        if rs_skip_to_start(regstart, &mut col) == FAIL {
+            return 0;
+        }
+
+        // If match_text is set it contains the full text that must match.
+        // Nothing else to try. Doesn't handle combining chars well.
+        let match_text = nvim_nfa_regprog_get_match_text(prog);
+        if !match_text.is_null() && *match_text != 0 && !nvim_rex_get_reg_icombine() {
+            let retval = rs_find_match_text(&mut col, regstart, match_text);
+            if is_multi {
+                let mmatch = nvim_rex_get_reg_mmatch();
+                nvim_regmmatch_set_rmm_matchcol(mmatch, col);
+            } else {
+                let match_ = nvim_rex_get_reg_match();
+                nvim_regmatch_set_rm_matchcol(match_, col);
+            }
+            return retval;
+        }
+    }
+
+    // If the start column is past the maximum column: no need to try.
+    let maxcol = nvim_rex_get_reg_maxcol();
+    if maxcol > 0 && col >= maxcol {
+        return finalize_match_result(0, col, is_multi);
+    }
+
+    // Set the "nstate" used by nfa_regcomp() to zero to trigger an error when
+    // it's accidentally used during execution.
+    nvim_set_nstate(0);
+
+    // Initialize NFA program states
+    nvim_nfa_init_prog_states(prog);
+
+    // Call nfa_regtry
+    let retval = rs_nfa_regtry(prog, col, tm, timed_out);
+
+    finalize_match_result(retval, col, is_multi)
+}
+
+/// Finalize match result - ensure end is never before start.
+///
+/// # Safety
+/// Assumes rex state is valid.
+#[inline]
+unsafe fn finalize_match_result(retval: c_int, col: ColNr, is_multi: bool) -> c_int {
+    if retval > 0 {
+        // Make sure the end is never before the start. Can happen when \zs and
+        // \ze are used.
+        if is_multi {
+            let mmatch = nvim_rex_get_reg_mmatch();
+            let startpos = nvim_regmmatch_get_startpos(mmatch) as *const LPos;
+            let endpos = nvim_regmmatch_get_endpos(mmatch) as *mut LPos;
+
+            let start = &*startpos;
+            let end = &mut *endpos;
+
+            if end.lnum < start.lnum || (end.lnum == start.lnum && end.col < start.col) {
+                *end = *start;
+            }
+        } else {
+            let match_ = nvim_rex_get_reg_match();
+            let startp = nvim_regmatch_get_startp(match_);
+            let endp = nvim_regmatch_get_endp(match_);
+
+            if !startp.is_null() && !endp.is_null() {
+                if (*endp as usize) < (*startp as usize) {
+                    *endp = *startp;
+                }
+
+                // startpos[0] may be set by "\zs", also return the column where
+                // the whole pattern matched.
+                nvim_regmatch_set_rm_matchcol(match_, col);
+            }
+        }
+    }
+
+    retval
+}
+
+extern "C" {
+    /// Set rex.reg_startp.
+    fn nvim_rex_set_reg_startp(p: *mut *mut u8);
+
+    /// Set rex.reg_endp.
+    fn nvim_rex_set_reg_endp(p: *mut *mut u8);
+
+    /// Set rex.reg_startpos.
+    fn nvim_rex_set_reg_startpos(p: *mut c_void);
+
+    /// Set rex.reg_endpos.
+    fn nvim_rex_set_reg_endpos(p: *mut c_void);
+
+    /// Get rex.reg_match.
+    fn nvim_rex_get_reg_match() -> *mut c_void;
+
+    /// Set rex.reg_ic.
+    fn nvim_rex_set_reg_ic(ic: bool);
+
+    /// Set rex.reg_icombine.
+    fn nvim_rex_set_reg_icombine(v: bool);
+
+    /// Set rex.nfa_has_zend.
+    fn nvim_rex_set_nfa_has_zend(v: c_int);
+
+    /// Set rex.nfa_has_backref.
+    fn nvim_rex_set_nfa_has_backref(v: c_int);
+
+    /// Set rex.nfa_nsubexpr.
+    fn nvim_rex_set_nfa_nsubexpr(v: c_int);
+
+    /// Get rex.reg_maxcol.
+    fn nvim_rex_get_reg_maxcol() -> ColNr;
+
+    /// Set rex.need_clear_subexpr.
+    fn nvim_rex_set_need_clear_subexpr(v: c_int);
+
+    /// Set rex.nfa_has_zsubexpr.
+    fn nvim_rex_set_nfa_has_zsubexpr(v: c_int);
+
+    /// Set rex.need_clear_zsubexpr.
+    fn nvim_rex_set_need_clear_zsubexpr(v: c_int);
 }
 
 #[cfg(test)]
