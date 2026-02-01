@@ -4346,7 +4346,151 @@ unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int, next_out: *mut *mut
         }
 
         // =====================================================================
-        // Tier 3: Simple opcodes (NOTHING)
+        // Tier 3: Word boundaries and buffer-local character classes (Phase 17a)
+        // =====================================================================
+        BOW => {
+            // Beginning of word: current char is word char, previous is not
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if c == 0 {
+                RA_NOMATCH
+            } else {
+                let buf = nvim_rex_get_reg_buf();
+                let chartab = nvim_buf_get_chartab(buf);
+                let this_class = mb_get_class_tab(input, chartab);
+                if this_class <= 1 {
+                    // Not on a word at all (class 0 = non-word, 1 = blank)
+                    RA_NOMATCH
+                } else {
+                    let prev_class = nvim_rex_reg_prev_class();
+                    if prev_class == this_class {
+                        // Previous char is in same word
+                        RA_NOMATCH
+                    } else {
+                        RA_CONT
+                    }
+                }
+            }
+        }
+
+        EOW => {
+            // End of word: previous char is word char, current is not
+            let input = nvim_rex_get_input();
+            let line = nvim_rex_get_line();
+            if input == line {
+                // Can't match at start of line
+                RA_NOMATCH
+            } else {
+                let buf = nvim_rex_get_reg_buf();
+                let chartab = nvim_buf_get_chartab(buf);
+                let this_class = mb_get_class_tab(input, chartab);
+                let prev_class = nvim_rex_reg_prev_class();
+                if this_class == prev_class || prev_class == 0 || prev_class == 1 {
+                    RA_NOMATCH
+                } else {
+                    RA_CONT
+                }
+            }
+        }
+
+        IDENT => {
+            // Match identifier character (vim_isIDc)
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if vim_isIDc(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        SIDENT => {
+            // Match identifier character but not leading digit
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if (*input).is_ascii_digit() || vim_isIDc(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        KWORD => {
+            // Match keyword character (buffer-local 'iskeyword')
+            let input = nvim_rex_get_input();
+            let buf = nvim_rex_get_reg_buf();
+            if vim_iswordp_buf(input, buf) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        SKWORD => {
+            // Match keyword character but not leading digit
+            let input = nvim_rex_get_input();
+            let buf = nvim_rex_get_reg_buf();
+            if (*input).is_ascii_digit() || vim_iswordp_buf(input, buf) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        FNAME => {
+            // Match filename character
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if vim_isfilec(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        SFNAME => {
+            // Match filename character but not leading digit
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if (*input).is_ascii_digit() || vim_isfilec(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        PRINT => {
+            // Match printable character
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if vim_isprintc(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        SPRINT => {
+            // Match printable character but not leading digit
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if (*input).is_ascii_digit() || vim_isprintc(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        // =====================================================================
+        // Tier 4: Simple opcodes (NOTHING)
         // Note: END is handled in rs_regmatch_full before calling this function
         // Note: NEWL requires full multiline handling, delegated to C
         // =====================================================================
@@ -4383,6 +4527,11 @@ extern "C" {
 
     // Rex state accessors for opcode handlers
     fn nvim_rex_get_reg_firstlnum() -> c_int;
+
+    // Word boundary support (Phase 17a)
+    fn mb_get_class_tab(p: *const u8, chartab: *const u64) -> c_int;
+    fn nvim_buf_get_chartab(buf: *mut c_void) -> *const u64;
+    fn nvim_rex_reg_prev_class() -> c_int;
 }
 
 /// Advance rex.input by one multibyte character (equivalent to ADVANCE_REGINPUT macro).
