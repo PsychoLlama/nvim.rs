@@ -575,6 +575,22 @@ extern "C" {
     /// Get the syntax block's case ignore setting
     fn nvim_synblock_get_ic_setting(block: SynBlockHandle) -> c_int;
 
+    // -------------------------------------------------------------------------
+    // Phase 18a: Synblock setters for :syntax commands
+    // -------------------------------------------------------------------------
+
+    /// Set b_syn_ic (ignore case for :syn cmds)
+    fn nvim_synblock_set_syn_ic(block: SynBlockHandle, ic: c_int);
+
+    /// Set b_syn_spell (SYNSPL_ values)
+    fn nvim_synblock_set_syn_spell(block: SynBlockHandle, spell: c_int);
+
+    /// Set b_syn_foldlevel
+    fn nvim_synblock_set_syn_foldlevel(block: SynBlockHandle, foldlevel: c_int);
+
+    /// Set b_syn_conceal (auto-conceal for :syn cmds)
+    fn nvim_synblock_set_conceal(block: SynBlockHandle, conceal: c_int);
+
     /// Get the number of subcommands
     fn nvim_syn_get_subcommand_count() -> c_int;
 

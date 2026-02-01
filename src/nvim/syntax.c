@@ -109,6 +109,12 @@ extern int rs_stateitem_get_cchar(const void *item);
 extern int rs_stateitem_has_trans_cont(const void *item);
 extern int rs_stateitem_has_match(const void *item);
 
+// Phase 18a: Simple settings command functions from Rust
+extern int rs_syn_cmd_case(synblock_T *block, const char *arg, const char *arg_end);
+extern int rs_syn_cmd_conceal(synblock_T *block, const char *arg, const char *arg_end);
+extern int rs_syn_cmd_spell(synblock_T *block, const char *arg, const char *arg_end);
+extern int rs_syn_cmd_foldlevel(synblock_T *block, const char *arg, const char *arg_end);
+
 static bool did_syntax_onoff = false;
 
 // different types of offsets that are possible
@@ -2847,125 +2853,56 @@ static keyentry_T *match_keyword(char *keyword, hashtab_T *ht, stateitem_T *cur_
 static void syn_cmd_conceal(exarg_T *eap, int syncing)
 {
   char *arg = eap->arg;
-  char *next;
 
   eap->nextcmd = find_nextcmd(arg);
   if (eap->skip) {
     return;
   }
 
-  next = skiptowhite(arg);
-  if (*arg == NUL) {
-    if (curwin->w_s->b_syn_conceal) {
-      msg("syntax conceal on", 0);
-    } else {
-      msg("syntax conceal off", 0);
-    }
-  } else if (STRNICMP(arg, "on", 2) == 0 && next - arg == 2) {
-    curwin->w_s->b_syn_conceal = true;
-  } else if (STRNICMP(arg, "off", 3) == 0 && next - arg == 3) {
-    curwin->w_s->b_syn_conceal = false;
-  } else {
-    semsg(_(e_illegal_arg), arg);
-  }
+  char *next = skiptowhite(arg);
+  rs_syn_cmd_conceal(curwin->w_s, arg, next);
 }
 
 /// Handle ":syntax case" command.
 static void syn_cmd_case(exarg_T *eap, int syncing)
 {
   char *arg = eap->arg;
-  char *next;
 
   eap->nextcmd = find_nextcmd(arg);
   if (eap->skip) {
     return;
   }
 
-  next = skiptowhite(arg);
-  if (*arg == NUL) {
-    if (curwin->w_s->b_syn_ic) {
-      msg("syntax case ignore", 0);
-    } else {
-      msg("syntax case match", 0);
-    }
-  } else if (STRNICMP(arg, "match", 5) == 0 && next - arg == 5) {
-    curwin->w_s->b_syn_ic = false;
-  } else if (STRNICMP(arg, "ignore", 6) == 0 && next - arg == 6) {
-    curwin->w_s->b_syn_ic = true;
-  } else {
-    semsg(_(e_illegal_arg), arg);
-  }
+  char *next = skiptowhite(arg);
+  rs_syn_cmd_case(curwin->w_s, arg, next);
 }
 
 /// Handle ":syntax foldlevel" command.
 static void syn_cmd_foldlevel(exarg_T *eap, int syncing)
 {
   char *arg = eap->arg;
-  char *arg_end;
 
   eap->nextcmd = find_nextcmd(arg);
   if (eap->skip) {
     return;
   }
 
-  if (*arg == NUL) {
-    switch (curwin->w_s->b_syn_foldlevel) {
-    case SYNFLD_START:
-      msg("syntax foldlevel start", 0);   break;
-    case SYNFLD_MINIMUM:
-      msg("syntax foldlevel minimum", 0); break;
-    default:
-      break;
-    }
-    return;
-  }
-
-  arg_end = skiptowhite(arg);
-  if (STRNICMP(arg, "start", 5) == 0 && arg_end - arg == 5) {
-    curwin->w_s->b_syn_foldlevel = SYNFLD_START;
-  } else if (STRNICMP(arg, "minimum", 7) == 0 && arg_end - arg == 7) {
-    curwin->w_s->b_syn_foldlevel = SYNFLD_MINIMUM;
-  } else {
-    semsg(_(e_illegal_arg), arg);
-    return;
-  }
-
-  arg = skipwhite(arg_end);
-  if (*arg != NUL) {
-    semsg(_(e_illegal_arg), arg);
-  }
+  char *arg_end = skiptowhite(arg);
+  rs_syn_cmd_foldlevel(curwin->w_s, arg, arg_end);
 }
 
 /// Handle ":syntax spell" command.
 static void syn_cmd_spell(exarg_T *eap, int syncing)
 {
   char *arg = eap->arg;
-  char *next;
 
   eap->nextcmd = find_nextcmd(arg);
   if (eap->skip) {
     return;
   }
 
-  next = skiptowhite(arg);
-  if (*arg == NUL) {
-    if (curwin->w_s->b_syn_spell == SYNSPL_TOP) {
-      msg("syntax spell toplevel", 0);
-    } else if (curwin->w_s->b_syn_spell == SYNSPL_NOTOP) {
-      msg("syntax spell notoplevel", 0);
-    } else {
-      msg("syntax spell default", 0);
-    }
-  } else if (STRNICMP(arg, "toplevel", 8) == 0 && next - arg == 8) {
-    curwin->w_s->b_syn_spell = SYNSPL_TOP;
-  } else if (STRNICMP(arg, "notoplevel", 10) == 0 && next - arg == 10) {
-    curwin->w_s->b_syn_spell = SYNSPL_NOTOP;
-  } else if (STRNICMP(arg, "default", 7) == 0 && next - arg == 7) {
-    curwin->w_s->b_syn_spell = SYNSPL_DEFAULT;
-  } else {
-    semsg(_(e_illegal_arg), arg);
-    return;
-  }
+  char *next = skiptowhite(arg);
+  rs_syn_cmd_spell(curwin->w_s, arg, next);
 
   // assume spell checking changed, force a redraw
   redraw_later(curwin, UPD_NOT_VALID);
@@ -5788,16 +5725,34 @@ int nvim_synblock_get_syn_ic(synblock_T *block)
   return block->b_syn_ic;
 }
 
+/// Set b_syn_ic (ignore case for :syn cmds)
+void nvim_synblock_set_syn_ic(synblock_T *block, int ic)
+{
+  block->b_syn_ic = ic;
+}
+
 /// Get b_syn_spell (SYNSPL_ values)
 int nvim_synblock_get_syn_spell(synblock_T *block)
 {
   return block->b_syn_spell;
 }
 
+/// Set b_syn_spell (SYNSPL_ values)
+void nvim_synblock_set_syn_spell(synblock_T *block, int spell)
+{
+  block->b_syn_spell = spell;
+}
+
 /// Get b_syn_foldlevel
 int nvim_synblock_get_syn_foldlevel(synblock_T *block)
 {
   return block->b_syn_foldlevel;
+}
+
+/// Set b_syn_foldlevel
+void nvim_synblock_set_syn_foldlevel(synblock_T *block, int foldlevel)
+{
+  block->b_syn_foldlevel = foldlevel;
 }
 
 /// Get b_syn_containedin (true if any item has containedin)
@@ -5846,6 +5801,12 @@ int nvim_synblock_get_topgrp(synblock_T *block)
 int nvim_synblock_get_conceal(synblock_T *block)
 {
   return block->b_syn_conceal;
+}
+
+/// Set b_syn_conceal (auto-conceal for :syn cmds)
+void nvim_synblock_set_conceal(synblock_T *block, int conceal)
+{
+  block->b_syn_conceal = conceal;
 }
 
 /// Get b_syn_folditems (number of patterns with HL_FOLD)

@@ -34,6 +34,47 @@ extern "C" {
     // Running inc_tag for :syntax include
     fn nvim_syn_get_running_inc_tag() -> c_int;
     fn nvim_syn_set_running_inc_tag(tag: c_int);
+
+    // -------------------------------------------------------------------------
+    // Phase 18a: Synblock getters/setters for simple :syntax commands
+    // -------------------------------------------------------------------------
+
+    // Case mode
+    fn nvim_synblock_get_syn_ic(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_set_syn_ic(block: SynBlockHandle, ic: c_int);
+
+    // Spell mode
+    fn nvim_synblock_get_syn_spell(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_set_syn_spell(block: SynBlockHandle, spell: c_int);
+
+    // Foldlevel mode
+    fn nvim_synblock_get_syn_foldlevel(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_set_syn_foldlevel(block: SynBlockHandle, foldlevel: c_int);
+
+    // Conceal mode
+    fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_set_conceal(block: SynBlockHandle, conceal: c_int);
+
+    // -------------------------------------------------------------------------
+    // Message output functions
+    // -------------------------------------------------------------------------
+
+    /// Display a message with highlight
+    fn msg_keep(s: *const c_char, hl_id: c_int, keep: c_int, multiline: c_int) -> c_int;
+
+    /// Display an error message with format string
+    fn semsg(fmt: *const c_char, ...);
+
+    // -------------------------------------------------------------------------
+    // String helpers from C
+    // -------------------------------------------------------------------------
+
+    /// Skip whitespace
+    fn skipwhite(s: *const c_char) -> *mut c_char;
+
+    /// Skip to whitespace
+    fn skiptowhite(s: *const c_char) -> *mut c_char;
+
 }
 
 // =============================================================================
@@ -757,6 +798,276 @@ pub extern "C" fn rs_syn_expand_count(expand_type: c_int) -> c_int {
         expand_type::CLUSTER => 0, // Dynamic
         _ => 0,
     }
+}
+
+// =============================================================================
+// Phase 18a: Simple Settings Command Implementations
+// =============================================================================
+
+/// Foldlevel mode constants
+pub mod foldlevel_mode {
+    pub const START: i32 = 0;
+    pub const MINIMUM: i32 = 1;
+}
+
+// Static strings for messages
+static MSG_SYNTAX_CASE_IGNORE: &[u8] = b"syntax case ignore\0";
+static MSG_SYNTAX_CASE_MATCH: &[u8] = b"syntax case match\0";
+static MSG_SYNTAX_CONCEAL_ON: &[u8] = b"syntax conceal on\0";
+static MSG_SYNTAX_CONCEAL_OFF: &[u8] = b"syntax conceal off\0";
+static MSG_SYNTAX_SPELL_TOPLEVEL: &[u8] = b"syntax spell toplevel\0";
+static MSG_SYNTAX_SPELL_NOTOPLEVEL: &[u8] = b"syntax spell notoplevel\0";
+static MSG_SYNTAX_SPELL_DEFAULT: &[u8] = b"syntax spell default\0";
+static MSG_SYNTAX_FOLDLEVEL_START: &[u8] = b"syntax foldlevel start\0";
+static MSG_SYNTAX_FOLDLEVEL_MINIMUM: &[u8] = b"syntax foldlevel minimum\0";
+static MSG_E_ILLEGAL_ARG: &[u8] = b"E474: Invalid argument: %s\0";
+
+/// Helper: display a message
+#[inline]
+unsafe fn msg_display(s: *const c_char) {
+    msg_keep(s, 0, 0, 0);
+}
+
+/// Helper: display an error with argument
+#[inline]
+unsafe fn error_illegal_arg(arg: *const c_char) {
+    semsg(MSG_E_ILLEGAL_ARG.as_ptr().cast(), arg);
+}
+
+/// Helper: check if a C string equals another (case-insensitive) with exact length
+#[inline]
+unsafe fn strnicmp_exact(
+    s1: *const c_char,
+    s2: &[u8],
+    expected_len: usize,
+    actual_len: isize,
+) -> bool {
+    if actual_len as usize != expected_len {
+        return false;
+    }
+    // Case-insensitive comparison
+    for (i, &expected_byte) in s2.iter().enumerate().take(expected_len) {
+        let c1 = (*s1.add(i) as u8).to_ascii_lowercase();
+        let c2 = expected_byte.to_ascii_lowercase();
+        if c1 != c2 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Handle ":syntax case" command from Rust.
+///
+/// # Arguments
+/// * `block` - The synblock to modify
+/// * `arg` - Command argument (NUL-terminated)
+/// * `arg_end` - Pointer to end of word (result of skiptowhite)
+///
+/// # Returns
+/// 0 on success, -1 on error
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_case(
+    block: SynBlockHandle,
+    arg: *const c_char,
+    arg_end: *const c_char,
+) -> c_int {
+    if block.is_null() || arg.is_null() {
+        return -1;
+    }
+
+    let arg_len = arg_end.offset_from(arg);
+
+    // No argument: show current setting
+    if *arg == 0 {
+        if nvim_synblock_get_syn_ic(block) != 0 {
+            msg_display(MSG_SYNTAX_CASE_IGNORE.as_ptr().cast());
+        } else {
+            msg_display(MSG_SYNTAX_CASE_MATCH.as_ptr().cast());
+        }
+        return 0;
+    }
+
+    // Check for "match"
+    if strnicmp_exact(arg, b"match", 5, arg_len) {
+        nvim_synblock_set_syn_ic(block, 0);
+        return 0;
+    }
+
+    // Check for "ignore"
+    if strnicmp_exact(arg, b"ignore", 6, arg_len) {
+        nvim_synblock_set_syn_ic(block, 1);
+        return 0;
+    }
+
+    // Invalid argument
+    error_illegal_arg(arg);
+    -1
+}
+
+/// Handle ":syntax conceal" command from Rust.
+///
+/// # Arguments
+/// * `block` - The synblock to modify
+/// * `arg` - Command argument (NUL-terminated)
+/// * `arg_end` - Pointer to end of word (result of skiptowhite)
+///
+/// # Returns
+/// 0 on success, -1 on error
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_conceal(
+    block: SynBlockHandle,
+    arg: *const c_char,
+    arg_end: *const c_char,
+) -> c_int {
+    if block.is_null() || arg.is_null() {
+        return -1;
+    }
+
+    let arg_len = arg_end.offset_from(arg);
+
+    // No argument: show current setting
+    if *arg == 0 {
+        if nvim_synblock_get_conceal(block) != 0 {
+            msg_display(MSG_SYNTAX_CONCEAL_ON.as_ptr().cast());
+        } else {
+            msg_display(MSG_SYNTAX_CONCEAL_OFF.as_ptr().cast());
+        }
+        return 0;
+    }
+
+    // Check for "on"
+    if strnicmp_exact(arg, b"on", 2, arg_len) {
+        nvim_synblock_set_conceal(block, 1);
+        return 0;
+    }
+
+    // Check for "off"
+    if strnicmp_exact(arg, b"off", 3, arg_len) {
+        nvim_synblock_set_conceal(block, 0);
+        return 0;
+    }
+
+    // Invalid argument
+    error_illegal_arg(arg);
+    -1
+}
+
+/// Handle ":syntax spell" command from Rust.
+///
+/// # Arguments
+/// * `block` - The synblock to modify
+/// * `arg` - Command argument (NUL-terminated)
+/// * `arg_end` - Pointer to end of word (result of skiptowhite)
+///
+/// # Returns
+/// 0 on success, -1 on error
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_spell(
+    block: SynBlockHandle,
+    arg: *const c_char,
+    arg_end: *const c_char,
+) -> c_int {
+    if block.is_null() || arg.is_null() {
+        return -1;
+    }
+
+    let arg_len = arg_end.offset_from(arg);
+
+    // No argument: show current setting
+    if *arg == 0 {
+        let spell = nvim_synblock_get_syn_spell(block);
+        let msg = match spell {
+            spell_mode::TOP => MSG_SYNTAX_SPELL_TOPLEVEL.as_ptr().cast(),
+            spell_mode::NOTOP => MSG_SYNTAX_SPELL_NOTOPLEVEL.as_ptr().cast(),
+            _ => MSG_SYNTAX_SPELL_DEFAULT.as_ptr().cast(),
+        };
+        msg_display(msg);
+        return 0;
+    }
+
+    // Check for "toplevel"
+    if strnicmp_exact(arg, b"toplevel", 8, arg_len) {
+        nvim_synblock_set_syn_spell(block, spell_mode::TOP);
+        return 0;
+    }
+
+    // Check for "notoplevel"
+    if strnicmp_exact(arg, b"notoplevel", 10, arg_len) {
+        nvim_synblock_set_syn_spell(block, spell_mode::NOTOP);
+        return 0;
+    }
+
+    // Check for "default"
+    if strnicmp_exact(arg, b"default", 7, arg_len) {
+        nvim_synblock_set_syn_spell(block, spell_mode::DEFAULT);
+        return 0;
+    }
+
+    // Invalid argument
+    error_illegal_arg(arg);
+    -1
+}
+
+/// Handle ":syntax foldlevel" command from Rust.
+///
+/// # Arguments
+/// * `block` - The synblock to modify
+/// * `arg` - Command argument (NUL-terminated)
+/// * `arg_end` - Pointer to end of word (result of skiptowhite)
+///
+/// # Returns
+/// 0 on success, -1 on error (also returns -1 if extra args after valid keyword)
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_foldlevel(
+    block: SynBlockHandle,
+    arg: *const c_char,
+    arg_end: *const c_char,
+) -> c_int {
+    if block.is_null() || arg.is_null() {
+        return -1;
+    }
+
+    let arg_len = arg_end.offset_from(arg);
+
+    // No argument: show current setting
+    if *arg == 0 {
+        let foldlevel = nvim_synblock_get_syn_foldlevel(block);
+        let msg = match foldlevel {
+            foldlevel_mode::START => MSG_SYNTAX_FOLDLEVEL_START.as_ptr().cast(),
+            foldlevel_mode::MINIMUM => MSG_SYNTAX_FOLDLEVEL_MINIMUM.as_ptr().cast(),
+            _ => return 0,
+        };
+        msg_display(msg);
+        return 0;
+    }
+
+    // Check for "start"
+    if strnicmp_exact(arg, b"start", 5, arg_len) {
+        nvim_synblock_set_syn_foldlevel(block, foldlevel_mode::START);
+        // Check for extra arguments after the keyword
+        let after = skipwhite(arg_end);
+        if *after != 0 {
+            error_illegal_arg(after);
+            return -1;
+        }
+        return 0;
+    }
+
+    // Check for "minimum"
+    if strnicmp_exact(arg, b"minimum", 7, arg_len) {
+        nvim_synblock_set_syn_foldlevel(block, foldlevel_mode::MINIMUM);
+        // Check for extra arguments after the keyword
+        let after = skipwhite(arg_end);
+        if *after != 0 {
+            error_illegal_arg(after);
+            return -1;
+        }
+        return 0;
+    }
+
+    // Invalid argument
+    error_illegal_arg(arg);
+    -1
 }
 
 #[cfg(test)]
