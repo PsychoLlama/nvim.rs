@@ -6025,12 +6025,15 @@ bool nvim_profile_passed_limit(const void *tm)
 
 // Match one opcode helper - returns RA_* status
 // This wraps the inner loop body of regmatch() for a single opcode
+// This function is called by Rust when processing opcodes not yet migrated.
+// Currently unused since C regmatch() handles everything directly.
+// This will be used as more opcodes are migrated to call back to C.
 int nvim_bt_match_op(uint8_t *scan, int opcode)
 {
-  // For now, just return RA_CONT to signal the Rust code should delegate
-  // This will be filled in as we migrate more opcodes
   (void)scan;
   (void)opcode;
+  // Currently the C regmatch() handles all opcodes directly.
+  // This function will be expanded as we migrate more opcodes to Rust.
   return RA_CONT;
 }
 

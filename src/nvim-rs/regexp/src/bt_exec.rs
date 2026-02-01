@@ -32,9 +32,10 @@ use crate::bt_opcodes::{
     is_mclose, is_mopen, is_zclose, is_zopen, operand_cmp, operand_max, operand_min, ADD_NL, ALPHA,
     ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE,
     BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FNAME, HEAD, HEX, IDENT, LOWER, MATCH,
-    MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND, NOMATCH, NOPEN,
-    NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF,
-    RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
+    MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND, NOCTAL, NOMATCH,
+    NOPEN, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL, RE_COMPOSING,
+    RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR, SUBPAT, UPPER,
+    WHITE, WORD,
 };
 use crate::bt_state::{
     BackPosTable, RegBehind, RegItem, RegSave, RegStack, RegStar, RegState, NSUBEXP,
@@ -2558,7 +2559,7 @@ pub unsafe extern "C" fn rs_regrepeat(p: *mut u8, maxcount: i64) -> c_int {
 }
 
 // Import opcodes which may not be in scope
-use crate::bt_opcodes::{FIRST_NL, KWORD, LAST_NL, NOCTAL, SIDENT};
+use crate::bt_opcodes::{FIRST_NL, KWORD, LAST_NL, SIDENT};
 
 // =============================================================================
 // BT Execution Entry Points (Phase 13b)
@@ -2620,7 +2621,7 @@ extern "C" {
     // Memory allocation for extmatch strings
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
-    // The C regmatch wrapper function (calls static regmatch)
+    // C regmatch wrapper
     fn nvim_bt_regmatch(scan: *mut u8, tm: ProfTime, timed_out: *mut c_int) -> c_int;
 }
 
@@ -2671,6 +2672,7 @@ pub unsafe extern "C" fn rs_bt_regtry(
     }
 
     // Call the C regmatch function (starting after REGMAGIC)
+    // The Rust-migrated opcodes are handled in rs_match_one_op_full via nvim_bt_match_op fallback
     let program_start = program.add(1) as *mut u8;
     if nvim_bt_regmatch(program_start, tm, timed_out) == 0 {
         return 0;
@@ -4041,10 +4043,287 @@ unsafe fn rs_match_one_op_full(scan: *mut u8, opcode: c_int) -> c_int {
             RA_CONT
         }
 
-        // For other opcodes, call the existing C nvim_bt_match_op or handle inline
-        // This is a simplified version - the full implementation would handle all opcodes
+        // =====================================================================
+        // Tier 1: Zero-width assertions (BOL, EOL, RE_BOF, RE_EOF)
+        // =====================================================================
+        BOL => {
+            // Beginning of line
+            let input = nvim_rex_get_input();
+            let line = nvim_rex_get_line();
+            if input != line {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
+        EOL => {
+            // End of line - check for NUL byte
+            let input = nvim_rex_get_input();
+            let c = *input;
+            if c != 0 {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
+        RE_BOF => {
+            // Beginning of file
+            // Not at BOF when: below first line, not at start of line,
+            // or didn't start at first line of buffer
+            let lnum = nvim_rex_get_lnum();
+            let input = nvim_rex_get_input();
+            let line = nvim_rex_get_line();
+            let first_lnum = nvim_rex_get_reg_firstlnum();
+            if lnum != 0 || input != line || (is_multi && first_lnum > 1) {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
+        RE_EOF => {
+            // End of file
+            let lnum = nvim_rex_get_lnum();
+            let maxline = nvim_rex_get_reg_maxline();
+            let input = nvim_rex_get_input();
+            let c = *input;
+            if lnum != maxline || c != 0 {
+                RA_NOMATCH
+            } else {
+                RA_CONT
+            }
+        }
+
+        // =====================================================================
+        // Tier 2: Basic character classes
+        // =====================================================================
+        ANY => {
+            // ANY matches any character except NUL (newline handled by WITH_NL)
+            let input = nvim_rex_get_input();
+            let c = *input;
+            if c == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        DIGIT => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if nvim_ri_digit(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        NDIGIT => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if c == 0 || nvim_ri_digit(c) != 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        HEX => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if nvim_ri_hex(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        NHEX => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if c == 0 || nvim_ri_hex(c) != 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        OCTAL => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if nvim_ri_octal(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        NOCTAL => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if c == 0 || nvim_ri_octal(c) != 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        WORD => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if nvim_ri_word(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        NWORD => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if c == 0 || nvim_ri_word(c) != 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        HEAD => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if nvim_ri_head(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        NHEAD => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if c == 0 || nvim_ri_head(c) != 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        ALPHA => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if nvim_ri_alpha(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        NALPHA => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if c == 0 || nvim_ri_alpha(c) != 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        LOWER => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if nvim_ri_lower(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        NLOWER => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if c == 0 || nvim_ri_lower(c) != 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        UPPER => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if nvim_ri_upper(c) == 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        NUPPER => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            if c == 0 || nvim_ri_upper(c) != 0 {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        WHITE => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            // ascii_iswhite: space or tab
+            if c != b' ' as c_int && c != b'\t' as c_int {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        NWHITE => {
+            let input = nvim_rex_get_input();
+            let c = utf_ptr2char(input as *const c_char);
+            // NWHITE: not NUL and not whitespace
+            if c == 0 || c == b' ' as c_int || c == b'\t' as c_int {
+                RA_NOMATCH
+            } else {
+                advance_reginput();
+                RA_CONT
+            }
+        }
+
+        // =====================================================================
+        // Tier 3: Simple opcodes (NOTHING)
+        // Note: END is handled in rs_regmatch_full before calling this function
+        // Note: NEWL requires full multiline handling, delegated to C
+        // =====================================================================
+        NOTHING => {
+            // Match empty string - always succeeds
+            RA_CONT
+        }
+
+        // For other opcodes, call the existing C nvim_bt_match_op
         _ => {
-            // Delegate to C for now - this will be filled in as we migrate more
+            // Delegate to C for remaining opcodes
             nvim_bt_match_op(scan, opcode)
         }
     }
@@ -4057,4 +4336,33 @@ extern "C" {
     fn nvim_set_reg_endzpos(idx: c_int, lnum: c_int, col: c_int);
     fn nvim_set_reg_startzp(idx: c_int, p: *mut u8);
     fn nvim_set_reg_endzp(idx: c_int, p: *mut u8);
+
+    // Character class predicates
+    fn nvim_ri_digit(c: c_int) -> c_int;
+    fn nvim_ri_hex(c: c_int) -> c_int;
+    fn nvim_ri_octal(c: c_int) -> c_int;
+    fn nvim_ri_word(c: c_int) -> c_int;
+    fn nvim_ri_head(c: c_int) -> c_int;
+    fn nvim_ri_alpha(c: c_int) -> c_int;
+    fn nvim_ri_lower(c: c_int) -> c_int;
+    fn nvim_ri_upper(c: c_int) -> c_int;
+
+    // Rex state accessors for opcode handlers
+    fn nvim_rex_get_reg_firstlnum() -> c_int;
+}
+
+/// Advance rex.input by one multibyte character (equivalent to ADVANCE_REGINPUT macro).
+///
+/// # Safety
+/// rex.input must be valid.
+#[inline]
+unsafe fn advance_reginput() {
+    let input = nvim_rex_get_input();
+    let len = utfc_ptr2len(input as *const c_char);
+    let new_input = if len > 0 {
+        input.add(len as usize)
+    } else {
+        input.add(1)
+    };
+    nvim_rex_set_input(new_input);
 }
