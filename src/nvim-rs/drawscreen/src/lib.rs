@@ -55,7 +55,7 @@ pub enum WindowCorner {
 }
 
 /// Highlight group for WinSeparator (HLF_C in C).
-pub const HLF_C: c_int = 39;
+pub const HLF_C: c_int = 21;
 
 /// UPD_VALID constant from screen.h - redraw when scrolled or text changed
 const UPD_VALID: c_int = 20;
@@ -1828,9 +1828,9 @@ mod tests {
 
     #[test]
     fn test_hlf_c_constant() {
-        // HLF_C should be 39 (WinSeparator highlight group)
+        // HLF_C should be 21 (WinSeparator highlight group)
         let hlf_c = HLF_C;
-        assert_eq!(hlf_c, 39);
+        assert_eq!(hlf_c, 21);
     }
 
     #[test]
