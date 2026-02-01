@@ -12152,21 +12152,6 @@ static int nfa_regtry(nfa_regprog_T *prog, colnr_T col, proftime_T *tm, int *tim
 // Rust implementation of nfa_regexec_both
 extern int rs_nfa_regexec_both(uint8_t *line, colnr_T startcol, proftime_T *tm, int *timed_out);
 
-/// Match a regexp against a string ("line" points to the string) or multiple
-/// lines (if "line" is NULL, use reg_getline()).
-///
-/// @param line String in which to search or NULL
-/// @param startcol Column to start looking for match
-/// @param tm Timeout limit or NULL
-/// @param timed_out Flag set on timeout or NULL
-///
-/// @return <= 0 if there is no match and number of lines contained in the
-/// match otherwise.
-static int nfa_regexec_both(uint8_t *line, colnr_T startcol, proftime_T *tm, int *timed_out)
-{
-  return rs_nfa_regexec_both(line, startcol, tm, timed_out);
-}
-
 // Compile a regular expression into internal code for the NFA matcher.
 // Returns the program in allocated space.  Returns NULL for an error.
 static regprog_T *nfa_regcomp(uint8_t *expr, int re_flags)
@@ -12299,7 +12284,7 @@ static int nfa_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line
   rex.reg_icombine = false;
   rex.reg_nobreak = rmp->regprog->re_flags & RE_NOBREAK;
   rex.reg_maxcol = 0;
-  return nfa_regexec_both(line, col, NULL, NULL);
+  return rs_nfa_regexec_both(line, col, NULL, NULL);
 }
 
 /// Matches a regexp against multiple lines.
@@ -12341,7 +12326,7 @@ static int nfa_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T 
                              proftime_T *tm, int *timed_out)
 {
   init_regexec_multi(rmp, win, buf, lnum);
-  return nfa_regexec_both(NULL, col, tm, timed_out);
+  return rs_nfa_regexec_both(NULL, col, tm, timed_out);
 }
 // }}}1
 

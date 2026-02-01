@@ -24,7 +24,6 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
-use crate::RegprogHandle;
 use crate::nfa_states::{
     ColNr, LPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_ALPHA, NFA_ANY,
     NFA_ANY_COMPOSING, NFA_BOF, NFA_BOL, NFA_COMPOSING, NFA_DIGIT, NFA_END_INVISIBLE,
@@ -39,6 +38,7 @@ use crate::nfa_states::{
     NFA_START_INVISIBLE_NEG_FIRST, NFA_START_NEG_COLL, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE,
     NFA_WORD, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NSUBEXP,
 };
+use crate::RegprogHandle;
 
 // =============================================================================
 // FFI declarations for C functions
