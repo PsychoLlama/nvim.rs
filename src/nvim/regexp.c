@@ -308,6 +308,10 @@ extern int rs_toggle_magic(int x);
 extern uint8_t *rs_bt_find_regmust(uint8_t *scan, int flags, int *out_len);
 extern int rs_bt_get_regstart(uint8_t *scan);
 
+// Rust implementations for BT execution (Phase 13)
+extern int rs_bt_regtry(void *prog, int col, proftime_T *tm, int *timed_out);
+extern int rs_bt_regexec_both(uint8_t *line, int startcol, proftime_T *tm, int *timed_out);
+
 // The first byte of the BT regexp internal "program" is actually this magic
 // number; the start node begins in the second byte.  It's used to catch the
 // most severe mutilation of the program by the caller.
@@ -826,7 +830,7 @@ static int read_limits(int *minval, int *maxval)
 
 // Sometimes need to save a copy of a line.  Since alloc()/free() is very
 // slow, we keep one allocated piece of memory and only re-allocate it when
-// it's too small.  It's freed in bt_regexec_both() when finished.
+// it's too small.  It's freed in rs_bt_regexec_both() when finished.
 static uint8_t *reg_tofree = NULL;
 static unsigned reg_tofreelen;
 
@@ -5768,7 +5772,7 @@ static bool regmatch(uint8_t *scan, const proftime_T *tm, int *timed_out)
   int tm_count = 0;
 
   // Make "regstack" and "backpos" empty.  They are allocated and freed in
-  // bt_regexec_both() to reduce malloc()/free() calls.
+  // rs_bt_regexec_both() to reduce malloc()/free() calls.
   regstack.ga_len = 0;
   backpos.ga_len = 0;
 
@@ -7126,279 +7130,6 @@ int nvim_bt_regmatch(uint8_t *scan, proftime_T *tm, int *timed_out)
   return regmatch(scan, tm, timed_out) ? 1 : 0;
 }
 
-/// Try match of "prog" with at rex.line["col"].
-///
-/// @param tm         timeout limit or NULL
-/// @param timed_out  flag set on timeout or NULL
-///
-/// @return  0 for failure, or number of lines contained in the match.
-static int regtry(bt_regprog_T *prog, colnr_T col, proftime_T *tm, int *timed_out)
-{
-  rex.input = rex.line + col;
-  rex.need_clear_subexpr = true;
-  // Clear the external match subpointers if necessaey.
-  rex.need_clear_zsubexpr = (prog->reghasz == REX_SET);
-
-  if (regmatch(&prog->program[1], tm, timed_out) == 0) {
-    return 0;
-  }
-
-  cleanup_subexpr();
-  if (REG_MULTI) {
-    if (rex.reg_startpos[0].lnum < 0) {
-      rex.reg_startpos[0].lnum = 0;
-      rex.reg_startpos[0].col = col;
-    }
-    if (rex.reg_endpos[0].lnum < 0) {
-      rex.reg_endpos[0].lnum = rex.lnum;
-      rex.reg_endpos[0].col = (int)(rex.input - rex.line);
-    } else {
-      // Use line number of "\ze".
-      rex.lnum = rex.reg_endpos[0].lnum;
-    }
-  } else {
-    if (rex.reg_startp[0] == NULL) {
-      rex.reg_startp[0] = rex.line + col;
-    }
-    if (rex.reg_endp[0] == NULL) {
-      rex.reg_endp[0] = rex.input;
-    }
-  }
-  // Package any found \z(...\) matches for export. Default is none.
-  unref_extmatch(re_extmatch_out);
-  re_extmatch_out = NULL;
-
-  if (prog->reghasz == REX_SET) {
-    int i;
-
-    cleanup_zsubexpr();
-    re_extmatch_out = make_extmatch();
-    for (i = 0; i < NSUBEXP; i++) {
-      if (REG_MULTI) {
-        // Only accept single line matches.
-        if (reg_startzpos[i].lnum >= 0
-            && reg_endzpos[i].lnum == reg_startzpos[i].lnum
-            && reg_endzpos[i].col >= reg_startzpos[i].col) {
-          re_extmatch_out->matches[i] =
-            (uint8_t *)xstrnsave(reg_getline(reg_startzpos[i].lnum) + reg_startzpos[i].col,
-                                 (size_t)(reg_endzpos[i].col - reg_startzpos[i].col));
-        }
-      } else {
-        if (reg_startzp[i] != NULL && reg_endzp[i] != NULL) {
-          re_extmatch_out->matches[i] =
-            (uint8_t *)xstrnsave((char *)reg_startzp[i], (size_t)(reg_endzp[i] - reg_startzp[i]));
-        }
-      }
-    }
-  }
-  return 1 + rex.lnum;
-}
-
-/// Match a regexp against a string ("line" points to the string) or multiple
-/// lines (if "line" is NULL, use reg_getline()).
-///
-/// @param startcol   column to start looking for match
-/// @param tm         timeout limit or NULL
-/// @param timed_out  flag set on timeout or NULL
-///
-/// @return  0 for failure, or number of lines contained in the match.
-static int bt_regexec_both(uint8_t *line, colnr_T startcol, proftime_T *tm, int *timed_out)
-{
-  bt_regprog_T *prog;
-  uint8_t *s;
-  colnr_T col = startcol;
-  int retval = 0;
-
-  // Create "regstack" and "backpos" if they are not allocated yet.
-  // We allocate *_INITIAL amount of bytes first and then set the grow size
-  // to much bigger value to avoid many malloc calls in case of deep regular
-  // expressions.
-  if (regstack.ga_data == NULL) {
-    // Use an item size of 1 byte, since we push different things
-    // onto the regstack.
-    ga_init(&regstack, 1, REGSTACK_INITIAL);
-    ga_grow(&regstack, REGSTACK_INITIAL);
-    ga_set_growsize(&regstack, REGSTACK_INITIAL * 8);
-  }
-
-  if (backpos.ga_data == NULL) {
-    ga_init(&backpos, sizeof(backpos_T), BACKPOS_INITIAL);
-    ga_grow(&backpos, BACKPOS_INITIAL);
-    ga_set_growsize(&backpos, BACKPOS_INITIAL * 8);
-  }
-
-  if (REG_MULTI) {
-    prog = (bt_regprog_T *)rex.reg_mmatch->regprog;
-    line = (uint8_t *)reg_getline(0);
-    rex.reg_startpos = rex.reg_mmatch->startpos;
-    rex.reg_endpos = rex.reg_mmatch->endpos;
-  } else {
-    prog = (bt_regprog_T *)rex.reg_match->regprog;
-    rex.reg_startp = (uint8_t **)rex.reg_match->startp;
-    rex.reg_endp = (uint8_t **)rex.reg_match->endp;
-  }
-
-  // Be paranoid...
-  if (prog == NULL || line == NULL) {
-    iemsg(_(e_null));
-    goto theend;
-  }
-
-  // Check validity of program.
-  if (prog_magic_wrong()) {
-    goto theend;
-  }
-
-  // If the start column is past the maximum column: no need to try.
-  if (rex.reg_maxcol > 0 && col >= rex.reg_maxcol) {
-    goto theend;
-  }
-
-  // If pattern contains "\c" or "\C": overrule value of rex.reg_ic
-  if (prog->regflags & RF_ICASE) {
-    rex.reg_ic = true;
-  } else if (prog->regflags & RF_NOICASE) {
-    rex.reg_ic = false;
-  }
-
-  // If pattern contains "\Z" overrule value of rex.reg_icombine
-  if (prog->regflags & RF_ICOMBINE) {
-    rex.reg_icombine = true;
-  }
-
-  // If there is a "must appear" string, look for it.
-  if (prog->regmust != NULL) {
-    int c = utf_ptr2char((char *)prog->regmust);
-    s = line + col;
-
-    // This is used very often, esp. for ":global".  Use two versions of
-    // the loop to avoid overhead of conditions.
-    if (!rex.reg_ic) {
-      while ((s = (uint8_t *)vim_strchr((char *)s, c)) != NULL) {
-        if (cstrncmp((char *)s, (char *)prog->regmust, &prog->regmlen) == 0) {
-          break;  // Found it.
-        }
-        MB_PTR_ADV(s);
-      }
-    } else {
-      while ((s = (uint8_t *)cstrchr((char *)s, c)) != NULL) {
-        if (cstrncmp((char *)s, (char *)prog->regmust, &prog->regmlen) == 0) {
-          break;  // Found it.
-        }
-        MB_PTR_ADV(s);
-      }
-    }
-    if (s == NULL) {  // Not present.
-      goto theend;
-    }
-  }
-
-  rex.line = line;
-  rex.lnum = 0;
-  reg_toolong = false;
-
-  // Simplest case: Anchored match need be tried only once.
-  if (prog->reganch) {
-    int c = utf_ptr2char((char *)rex.line + col);
-    if (prog->regstart == NUL
-        || prog->regstart == c
-        || (rex.reg_ic
-            && (utf_fold(prog->regstart) == utf_fold(c)
-                || (c < 255 && prog->regstart < 255
-                    && mb_tolower(prog->regstart) == mb_tolower(c))))) {
-      retval = regtry(prog, col, tm, timed_out);
-    } else {
-      retval = 0;
-    }
-  } else {
-    int tm_count = 0;
-    // Messy cases:  unanchored match.
-    while (!got_int) {
-      if (prog->regstart != NUL) {
-        // Skip until the char we know it must start with.
-        s = (uint8_t *)cstrchr((char *)rex.line + col, prog->regstart);
-        if (s == NULL) {
-          retval = 0;
-          break;
-        }
-        col = (int)(s - rex.line);
-      }
-
-      // Check for maximum column to try.
-      if (rex.reg_maxcol > 0 && col >= rex.reg_maxcol) {
-        retval = 0;
-        break;
-      }
-
-      retval = regtry(prog, col, tm, timed_out);
-      if (retval > 0) {
-        break;
-      }
-
-      // if not currently on the first line, get it again
-      if (rex.lnum != 0) {
-        rex.lnum = 0;
-        rex.line = (uint8_t *)reg_getline(0);
-      }
-      if (rex.line[col] == NUL) {
-        break;
-      }
-      col += utfc_ptr2len((char *)rex.line + col);
-      // Check for timeout once in a twenty times to avoid overhead.
-      if (tm != NULL && ++tm_count == 20) {
-        tm_count = 0;
-        if (profile_passed_limit(*tm)) {
-          if (timed_out != NULL) {
-            *timed_out = true;
-          }
-          break;
-        }
-      }
-    }
-  }
-
-theend:
-  // Free "reg_tofree" when it's a bit big.
-  // Free regstack and backpos if they are bigger than their initial size.
-  if (reg_tofreelen > 400) {
-    XFREE_CLEAR(reg_tofree);
-  }
-  if (regstack.ga_maxlen > REGSTACK_INITIAL) {
-    ga_clear(&regstack);
-  }
-  if (backpos.ga_maxlen > BACKPOS_INITIAL) {
-    ga_clear(&backpos);
-  }
-
-  if (retval > 0) {
-    // Make sure the end is never before the start.  Can happen when \zs
-    // and \ze are used.
-    if (REG_MULTI) {
-      const lpos_T *const start = &rex.reg_mmatch->startpos[0];
-      const lpos_T *const end = &rex.reg_mmatch->endpos[0];
-
-      if (end->lnum < start->lnum
-          || (end->lnum == start->lnum && end->col < start->col)) {
-        rex.reg_mmatch->endpos[0] = rex.reg_mmatch->startpos[0];
-      }
-
-      // startpos[0] may be set by "\zs", also return the column where
-      // the whole pattern matched.
-      rex.reg_mmatch->rmm_matchcol = col;
-    } else {
-      if (rex.reg_match->endp[0] < rex.reg_match->startp[0]) {
-        rex.reg_match->endp[0] = rex.reg_match->startp[0];
-      }
-
-      // startpos[0] may be set by "\zs", also return the column where
-      // the whole pattern matched.
-      rex.reg_match->rm_matchcol = col;
-    }
-  }
-
-  return retval;
-}
-
 /// Match a regexp against a string.
 /// "rmp->regprog" is a compiled regexp as returned by vim_regcomp().
 /// Uses curbuf for line count and 'iskeyword'.
@@ -7421,9 +7152,7 @@ static int bt_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line_
   rex.reg_nobreak = rmp->regprog->re_flags & RE_NOBREAK;
   rex.reg_maxcol = 0;
 
-  int64_t r = bt_regexec_both(line, col, NULL, NULL);
-  assert(r <= INT_MAX);
-  return (int)r;
+  return rs_bt_regexec_both(line, col, NULL, NULL);
 }
 
 /// Matches a regexp against multiple lines.
@@ -7442,7 +7171,7 @@ static int bt_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T l
                             proftime_T *tm, int *timed_out)
 {
   init_regexec_multi(rmp, win, buf, lnum);
-  return bt_regexec_both(NULL, col, tm, timed_out);
+  return rs_bt_regexec_both(NULL, col, tm, timed_out);
 }
 
 // Rust implementation for re_num_cmp
