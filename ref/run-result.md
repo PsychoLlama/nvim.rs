@@ -1,44 +1,52 @@
-Plan: ~/.claude/plans/synchronous-yawning-llama.md
+Plan: ~/.claude/plans/merry-strolling-pearl.md
 
-All the work is committed. Let me provide a summary of what was accomplished.
+All the work is committed. Here's a summary of what was accomplished.
 
 ## Summary
 
-I have executed the plan at `/home/overlord/.claude/plans/synchronous-yawning-llama.md`. Here's what was completed:
+I have executed the plan at `/home/overlord/.claude/plans/merry-strolling-pearl.md`. Here's what was completed:
 
-### Phase 21: Fix Infinite Loop Bug ✓
-- Added `MATCH_FOLLOWS_MAX_ITER` constant (10,000) to `nfa_exec.rs`
-- Added iteration counter to the `match_follows()` while loop
-- Returns `false` when limit exceeded to prevent infinite loops on cyclic NFA graphs
-- **Commit**: `1bb5ba7dae`
+### Phase 24: Migrate State Save/Restore Functions ✓
+- Implemented Rust versions of BT engine state management functions:
+  - `rs_reg_save()` - saves current position for backtracking
+  - `rs_reg_restore()` - restores position after backtrack
+  - `rs_reg_save_equal()` - compares saved position with current
+  - `rs_save_subexpr()` - saves subexpression match positions
+  - `rs_restore_subexpr()` - restores subexpression match positions
+- Added C accessor functions for Rust FFI access to C structs
+- Updated C wrappers to call Rust implementations
+- Removed original C implementations (~84 lines)
+- **Commit**: `f3c2b2ab6a`
 
-### Phase 22: Remove Dead NFA Post-Processing Functions ✓
-- Removed C implementations that were replaced by Rust:
-  - `nfa_get_reganch()` (~55 lines)
-  - `nfa_get_regstart()` (~80 lines)
-  - `nfa_get_match_text()` (~35 lines)
-  - `nfa_postprocess()` (~47 lines)
-- The Rust implementations (`rs_nfa_*`) are already being called from `nfa_regcomp()`
-- **Lines removed**: ~217
-- **Commit**: `9c7c21b998`
+### Phase 25: Migrate failure_chance() ✓
+- Discovered `failure_chance()` was already implemented in Rust (`rs_failure_chance` in `nfa_compiler.rs`)
+- The C version was dead code since `nfa_postprocess()` calls `rs_nfa_postprocess()` which uses the Rust implementation
+- Simply removed the 155-line dead C function
+- **Commit**: `2444a485e9`
 
-### Phase 23: Remove Dead NFA Parsing Wrapper Functions ✓
-- Removed thin C wrapper functions that were calling Rust directly:
-  - `nfa_regpiece()`, `nfa_regconcat()`, `nfa_regbranch()`, `nfa_reg()`
-- Updated `re2post()` to call `rs_nfa_reg()` directly
-- Removed unused error message strings (moved to Rust)
-- **Lines removed**: ~71
-- **Commit**: `9b02c61745`
+### Phase 26: Migrate BT Code Emission Helpers - SKIPPED
+- Examined the BT code emission helpers (regc, regmbc, regtail, reginsert, etc.)
+- These are ~220 lines and heavily used by the BT compiler still in C
+- Skipped as MEDIUM risk requiring more extensive changes
+- Best migrated when the entire BT compiler is migrated
 
-### Phase 24 & 25: Deferred
-- **Phase 24** (state save/restore): Functions are still needed by the C backtracking (BT) engine. Cannot be removed until BT engine is migrated.
-- **Phase 25** (debug functions): Optional, inside `#ifdef REGEXP_DEBUG` blocks. Low priority.
+### Phase 27: Clean Up Dead Code and Wrappers ✓
+- Removed `#if 0` block containing `match_follows_OLD` (89 lines)
+- This function was replaced by `rs_match_follows` in Rust
+- Searched for other dead code - remaining wrappers are still needed for FFI
+- **Commit**: `d87a6d2bd6`
 
 ### Results
-- **Total C lines removed**: ~288 lines (from 9,027 to 8,739)
+- **Total C lines removed this session**: ~328 lines (from 8,739 to 8,480 - but note: 8,569 after phases 24-25, now 8,480 after phase 27)
+- **regexp.c current size**: 8,480 lines
 - **All verification steps pass**:
   - `just build` ✓
   - `just smoke-test` ✓
   - `just rust-test` (3,735 tests) ✓
   - `just rust-fmt-check` ✓
   - `just rust-clippy` ✓
+
+### Commits Made
+1. `f3c2b2ab6a` - refactor(regexp): migrate state save/restore functions to Rust (Phase 24)
+2. `2444a485e9` - refactor(regexp): remove dead failure_chance() C function (Phase 25)
+3. `d87a6d2bd6` - refactor(regexp): remove dead match_follows_OLD code (Phase 27)
