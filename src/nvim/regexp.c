@@ -6033,8 +6033,9 @@ int nvim_nfa_get_time_count(void);
 void nvim_nfa_set_time_count(int v);
 int nvim_nfa_did_time_out(void);
 
-// Forward declarations for wrapper functions
-static void copy_sub(regsub_T *to, regsub_T *from);
+// Rust FFI declarations for copy functions used in check_end_invisible
+extern void rs_copy_sub(regsub_T *to, const regsub_T *from);
+
 static int recursive_regmatch(nfa_state_T *state, nfa_pim_T *pim,
                               nfa_regprog_T *prog, regsubs_T *submatch,
                               regsubs_T *m, int **listids, int *listids_len);
@@ -6122,9 +6123,9 @@ int nvim_nfa_check_end_invisible(int state_c, const void *t_subs, void *m,
 
   // Do not set submatches for \@!
   if (state_c != NFA_END_INVISIBLE_NEG) {
-    copy_sub(&out_m->norm, (regsub_T *)&subs->norm);
+    rs_copy_sub(&out_m->norm, (regsub_T *)&subs->norm);
     if (rex.nfa_has_zsubexpr) {
-      copy_sub(&out_m->synt, (regsub_T *)&subs->synt);
+      rs_copy_sub(&out_m->synt, (regsub_T *)&subs->synt);
     }
   }
 
@@ -6139,19 +6140,21 @@ int nvim_nfa_match_zref(int subidx, int *bytelen) {
   return match_zref(subidx, bytelen);
 }
 
-// Forward declarations for helper functions used by Rust wrappers
-static void copy_sub_off(regsub_T *to, regsub_T *from);
-static void copy_ze_off(regsub_T *to, regsub_T *from);
+// Forward declaration for state_in_list used by Rust wrappers
 static bool state_in_list(nfa_list_T *l, nfa_state_T *state, regsubs_T *subs);
+
+// Rust FFI declarations for copy_sub_off and copy_ze_off (used by wrappers below)
+extern void rs_copy_sub_off(regsub_T *to, const regsub_T *from);
+extern void rs_copy_ze_off(regsub_T *to, const regsub_T *from);
 
 // Wrapper for copy_sub_off for Rust (Phase 8)
 void nvim_nfa_copy_sub_off(void *to, const void *from) {
-  copy_sub_off((regsub_T *)to, (regsub_T *)from);
+  rs_copy_sub_off((regsub_T *)to, (regsub_T *)from);
 }
 
 // Wrapper for copy_ze_off for Rust (Phase 8)
 void nvim_nfa_copy_ze_off(void *to, const void *from) {
-  copy_ze_off((regsub_T *)to, (regsub_T *)from);
+  rs_copy_ze_off((regsub_T *)to, (regsub_T *)from);
 }
 
 // Wrapper for state_in_list for Rust (Phase 8)
@@ -6551,44 +6554,7 @@ extern void rs_copy_sub(regsub_T *to, const regsub_T *from);
 extern void rs_clear_sub(regsub_T *sub);
 extern void rs_copy_sub_off(regsub_T *to, const regsub_T *from);
 extern void rs_copy_ze_off(regsub_T *to, const regsub_T *from);
-
-// Copy postponed invisible match info from "from" to "to".
-static void copy_pim(nfa_pim_T *to, nfa_pim_T *from)
-{
-  rs_copy_pim(to, from);
-}
-
-static void clear_sub(regsub_T *sub)
-{
-  rs_clear_sub(sub);
-}
-
-// Copy the submatches from "from" to "to".
-static void copy_sub(regsub_T *to, regsub_T *from)
-{
-  rs_copy_sub(to, from);
-}
-
-// Like copy_sub() but exclude the main match.
-static void copy_sub_off(regsub_T *to, regsub_T *from)
-{
-  rs_copy_sub_off(to, from);
-}
-
-// Like copy_sub() but only do the end of the main match if \ze is present.
-static void copy_ze_off(regsub_T *to, regsub_T *from)
-{
-  rs_copy_ze_off(to, from);
-}
-
-// Return true if "sub1" and "sub2" have the same start positions.
-// When using back-references also check the end position.
 extern int rs_sub_equal(regsub_T *sub1, regsub_T *sub2);
-
-static bool sub_equal(regsub_T *sub1, regsub_T *sub2)
-{
-  return rs_sub_equal(sub1, sub2) != 0;
-}
 
 #ifdef REGEXP_DEBUG
 static void open_debug_log(TriState result)
@@ -6629,11 +6595,6 @@ static void report_state(char *action, regsub_T *sub, nfa_state_T *state, int li
 
 // Return true if "one" and "two" are equal.  That includes when both are not set.
 extern int rs_pim_equal(const nfa_pim_T *one, const nfa_pim_T *two);
-
-static bool pim_equal(const nfa_pim_T *one, const nfa_pim_T *two)
-{
-  return rs_pim_equal(one, two) != 0;
-}
 
 /// @param l      runtime state list
 /// @param state  state to update
@@ -6847,9 +6808,9 @@ skip_add:
       if (subs != &temp_subs) {
         // "subs" may point into the current array, need to make a
         // copy before it becomes invalid.
-        copy_sub(&temp_subs.norm, &subs->norm);
+        rs_copy_sub(&temp_subs.norm, &subs->norm);
         if (rex.nfa_has_zsubexpr) {
-          copy_sub(&temp_subs.synt, &subs->synt);
+          rs_copy_sub(&temp_subs.synt, &subs->synt);
         }
         subs = &temp_subs;
       }
@@ -6866,12 +6827,12 @@ skip_add:
     if (pim == NULL) {
       thread->pim.result = NFA_PIM_UNUSED;
     } else {
-      copy_pim(&thread->pim, pim);
+      rs_copy_pim(&thread->pim, pim);
       l->has_pim = true;
     }
-    copy_sub(&thread->subs.norm, &subs->norm);
+    rs_copy_sub(&thread->subs.norm, &subs->norm);
     if (rex.nfa_has_zsubexpr) {
-      copy_sub(&thread->subs.synt, &subs->synt);
+      rs_copy_sub(&thread->subs.synt, &subs->synt);
     }
 #ifdef REGEXP_DEBUG
     report_state("Adding", &thread->subs.norm, state, l->id, pim);
@@ -7585,9 +7546,9 @@ state_handled:
                            || pim->state->c
                            == NFA_START_INVISIBLE_BEFORE_NEG_FIRST)) {
               // Copy submatch info from the recursive call
-              copy_sub_off(&pim->subs.norm, &m->norm);
+              rs_copy_sub_off(&pim->subs.norm, &m->norm);
               if (rex.nfa_has_zsubexpr) {
-                copy_sub_off(&pim->subs.synt, &m->synt);
+                rs_copy_sub_off(&pim->subs.synt, &m->synt);
               }
             }
           } else {
@@ -7610,9 +7571,9 @@ state_handled:
                          || pim->state->c
                          == NFA_START_INVISIBLE_BEFORE_NEG_FIRST)) {
             // Copy submatch info from the recursive call
-            copy_sub_off(&t->subs.norm, &pim->subs.norm);
+            rs_copy_sub_off(&t->subs.norm, &pim->subs.norm);
             if (rex.nfa_has_zsubexpr) {
-              copy_sub_off(&t->subs.synt, &pim->subs.synt);
+              rs_copy_sub_off(&t->subs.synt, &pim->subs.synt);
             }
           } else {
             // look-behind match failed, don't add the state
@@ -7628,7 +7589,7 @@ state_handled:
         // adding the state causes the list to be reallocated.  Make a
         // local copy to avoid that.
         if (pim == &t->pim) {
-          copy_pim(&pim_copy, pim);
+          rs_copy_pim(&pim_copy, pim);
           pim = &pim_copy;
         }
 
