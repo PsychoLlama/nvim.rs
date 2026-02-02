@@ -741,48 +741,7 @@ static void restore_parse_state(parse_state_T *ps)
 extern int64_t rs_gethexchrs(int maxinputlen);
 extern int64_t rs_getdecchrs(void);
 extern int64_t rs_getoctchrs(void);
-
-// Get and return the value of the hex string at the current position.
-// Return -1 if there is no valid hex number.
-// The position is updated:
-//     blahblah\%x20asdf
-//         before-^ ^-after
-// The parameter controls the maximum number of input characters. This will be
-// 2 when reading a \%x20 sequence and 4 when reading a \%u20AC sequence.
-static int64_t gethexchrs(int maxinputlen)
-{
-  return rs_gethexchrs(maxinputlen);
-}
-
-// Get and return the value of the decimal string immediately after the
-// current position. Return -1 for invalid.  Consumes all digits.
-static int64_t getdecchrs(void)
-{
-  return rs_getdecchrs();
-}
-
-// get and return the value of the octal string immediately after the current
-// position. Return -1 for invalid, or 0-255 for valid. Smart enough to handle
-// numbers > 377 correctly (for example, 400 is treated as 40) and doesn't
-// treat 8 or 9 as recognised characters. Position is updated:
-//     blahblah\%o210asdf
-//         before-^  ^-after
-static int64_t getoctchrs(void)
-{
-  return rs_getoctchrs();
-}
-
-// Rust implementation for read_limits (Phase 8)
 extern int rs_read_limits(int *minval, int *maxval);
-
-// read_limits - Read two integers to be taken as a minimum and maximum.
-// If the first character is '-', then the range is reversed.
-// Should end with 'end'.  If minval is missing, zero is default, if maxval is
-// missing, a very big number is the default.
-static int read_limits(int *minval, int *maxval)
-{
-  return rs_read_limits(minval, maxval);
-}
 
 // vim_regexec and friends
 
@@ -2927,15 +2886,15 @@ static uint8_t *regatom(int *flagp)
 
       switch (c) {
       case 'd':
-        i = getdecchrs(); break;
+        i = rs_getdecchrs(); break;
       case 'o':
-        i = getoctchrs(); break;
+        i = rs_getoctchrs(); break;
       case 'x':
-        i = gethexchrs(2); break;
+        i = rs_gethexchrs(2); break;
       case 'u':
-        i = gethexchrs(4); break;
+        i = rs_gethexchrs(4); break;
       case 'U':
-        i = gethexchrs(8); break;
+        i = rs_gethexchrs(8); break;
       default:
         i = -1; break;
       }
@@ -3433,7 +3392,7 @@ static uint8_t *regpiece(int *flagp)
 
   case Magic('@'): {
     int lop = END;
-    int64_t nr = getdecchrs();
+    int64_t nr = rs_getdecchrs();
 
     switch (rs_no_magic(rs_getchr())) {
     case '=':
@@ -3482,7 +3441,7 @@ static uint8_t *regpiece(int *flagp)
     break;
 
   case Magic('{'):
-    if (!read_limits(&minval, &maxval)) {
+    if (!rs_read_limits(&minval, &maxval)) {
       return NULL;
     }
     if (flags & SIMPLE) {
@@ -4633,15 +4592,15 @@ static int coll_get_char(void)
 
   switch (*regparse++) {
   case 'd':
-    nr = getdecchrs(); break;
+    nr = rs_getdecchrs(); break;
   case 'o':
-    nr = getoctchrs(); break;
+    nr = rs_getoctchrs(); break;
   case 'x':
-    nr = gethexchrs(2); break;
+    nr = rs_gethexchrs(2); break;
   case 'u':
-    nr = gethexchrs(4); break;
+    nr = rs_gethexchrs(4); break;
   case 'U':
-    nr = gethexchrs(8); break;
+    nr = rs_gethexchrs(8); break;
   }
   if (nr < 0) {
     // If getting the number fails be backwards compatible: the character
