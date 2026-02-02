@@ -825,18 +825,6 @@ typedef struct {
 static regexec_T rex;
 static bool rex_in_use = false;
 
-static void reg_breakcheck(void)
-{
-  rs_reg_breakcheck();
-}
-
-// Return true if character 'c' is included in 'iskeyword' option for
-// "reg_buf" buffer.
-static bool reg_iswordc(int c)
-{
-  return rs_reg_iswordc(c) != 0;
-}
-
 static bool can_f_submatch = false;  ///< true when submatch() can be used
 
 /// These pointers are used for reg_submatch().  Needed for when the
@@ -2294,13 +2282,6 @@ static void regcomp_start(uint8_t *expr, int re_flags)                        //
 // Rust implementation for use_multibytecode
 extern int rs_use_multibytecode(int c);
 
-// Return true if MULTIBYTECODE should be used instead of EXACTLY for
-// character "c".
-static bool use_multibytecode(int c)
-{
-  return rs_use_multibytecode(c) != 0;
-}
-
 // Emit (if appropriate) a byte of code
 static void regc(int b)
 {
@@ -2903,7 +2884,7 @@ static uint8_t *regatom(int *flagp)
         EMSG2_RET_NULL(_("E678: Invalid character after %s%%[dxouU]"),
                        reg_magic == MAGIC_ALL);
       }
-      if (use_multibytecode((int)i)) {
+      if (rs_use_multibytecode((int)i)) {
         ret = regnode(MULTIBYTECODE);
       } else {
         ret = regnode(EXACTLY);
@@ -3231,7 +3212,7 @@ collection:
               break;
             case CLASS_KEYWORD:
               for (cu = 1; cu <= 255; cu++) {
-                if (reg_iswordc(cu)) {
+                if (rs_reg_iswordc(cu)) {
                   regmbc(cu);
                 }
               }
@@ -3277,7 +3258,7 @@ collection:
 
     // A multi-byte character is handled as a separate atom if it's
     // before a multi and when it's a composing char.
-    if (use_multibytecode(c)) {
+    if (rs_use_multibytecode(c)) {
 do_multibyte:
       ret = regnode(MULTIBYTECODE);
       regmbc(c);
@@ -4183,6 +4164,9 @@ void nvim_regexp_emsg_maxmempattern(void)
 // Position matching wrappers for Rust (Phase 5.8)
 // =============================================================================
 
+// Rust implementation for nfa_re_num_cmp (used by nvim_nfa_check_vcol)
+extern int rs_nfa_re_num_cmp(uint64_t val, int op, uint64_t pos);
+
 /// Check NFA_VCOL match. Returns true if the position matches.
 /// op: 0 = exact, 1 = greater than, 2 = less than
 bool nvim_nfa_check_vcol(int val, int op)
@@ -4214,7 +4198,7 @@ bool nvim_nfa_check_vcol(int val, int op)
     }
     int vcol = win_linetabsize(wp, lnum, (char *)rex.line, col);
     assert(val >= 0);
-    result = nfa_re_num_cmp((uintmax_t)val, op, (uintmax_t)vcol + 1);
+    result = rs_nfa_re_num_cmp((uintmax_t)val, op, (uintmax_t)vcol + 1);
   }
   return result;
 }
@@ -5209,7 +5193,7 @@ void nvim_regitem_set_state(void *rp, int state)
 // reg_breakcheck wrapper for Rust
 void nvim_reg_breakcheck(void)
 {
-  reg_breakcheck();
+  rs_reg_breakcheck();
 }
 
 // MB_PTR_BACK wrapper for Rust
@@ -7065,12 +7049,6 @@ static regsubs_T *addstate_here(nfa_list_T *l, nfa_state_T *state, regsubs_T *su
   return rs_addstate_here(l, state, subs, pim, ip);
 }
 
-// Check character class "class" against current character c.
-static int check_char_class(int cls, int c)
-{
-  return rs_check_char_class(cls, c);
-}
-
 /// Check for a match with subexpression "subidx".
 ///
 /// @param sub      pointers to subexpressions
@@ -7182,11 +7160,6 @@ static void nfa_restore_listids(nfa_regprog_T *prog, const int *list)
 // Rust implementation for nfa_re_num_cmp
 extern int rs_nfa_re_num_cmp(uint64_t val, int op, uint64_t pos);
 
-static bool nfa_re_num_cmp(uintmax_t val, int op, uintmax_t pos)
-{
-  return rs_nfa_re_num_cmp((uint64_t)val, op, (uint64_t)pos) != 0;
-}
-
 // Recursively call nfa_regmatch() - now calls Rust implementation
 extern int rs_recursive_regmatch(nfa_state_T *state, const nfa_pim_T *pim,
                                  void *prog, regsubs_T *submatch,
@@ -7201,20 +7174,6 @@ static int recursive_regmatch(nfa_state_T *state, nfa_pim_T *pim, nfa_regprog_T 
 
 // Phase 25: failure_chance() is now implemented in Rust
 // See failure_chance() in nfa_compiler.rs
-
-// Skip until the char "c" we know a match must start with.
-static int skip_to_start(int c, colnr_T *colp)
-{
-  return rs_skip_to_start(c, colp);
-}
-
-// Check for a match with match_text.
-// Called after skip_to_start() has found regstart.
-// Returns zero for no match, 1 for a match.
-static int find_match_text(colnr_T *startcol, int regstart, uint8_t *match_text)
-{
-  return rs_find_match_text(startcol, regstart, match_text);
-}
 
 static int nfa_did_time_out(void)
 {
@@ -7256,7 +7215,7 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
   regsubs_T *r;
   // Some patterns may take a long time to match, especially when using
   // recursive_regmatch(). Allow interrupting them with CTRL-C.
-  reg_breakcheck();
+  rs_reg_breakcheck();
   if (got_int) {
     return false;
   }
@@ -7386,7 +7345,7 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
     for (listidx = 0; listidx < thislist->n; listidx++) {
       // If the list gets very long there probably is something wrong.
       // At least allow interrupting with CTRL-C.
-      reg_breakcheck();
+      rs_reg_breakcheck();
       if (got_int) {
         break;
       }
@@ -7643,7 +7602,7 @@ state_handled:
 
             // Nextlist is empty, we can skip ahead to the
             // character that must appear at the start.
-            if (skip_to_start(prog->regstart, &col) == FAIL) {
+            if (rs_skip_to_start(prog->regstart, &col) == FAIL) {
               break;
             }
 #ifdef REGEXP_DEBUG
@@ -7714,7 +7673,7 @@ nextchar:
     }
 
     // Allow interrupting with CTRL-C.
-    reg_breakcheck();
+    rs_reg_breakcheck();
     if (got_int) {
       break;
     }
@@ -8035,7 +7994,7 @@ regprog_T *vim_regcomp(const char *expr_arg, int re_flags)
   bt_regengine.expr = expr;
   nfa_regengine.expr = expr;
 #endif
-  // reg_iswordc() uses rex.reg_buf
+  // rs_reg_iswordc() uses rex.reg_buf
   rex.reg_buf = curbuf;
 
   //
