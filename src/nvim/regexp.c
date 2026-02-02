@@ -6017,7 +6017,7 @@ int nvim_nfa_get_time_count(void);
 void nvim_nfa_set_time_count(int v);
 int nvim_nfa_did_time_out(void);
 
-// Rust FFI declarations for copy functions used in check_end_invisible
+// Rust FFI declaration for rs_copy_sub (used in nvim_nfa_check_end_invisible)
 extern void rs_copy_sub(regsub_T *to, const regsub_T *from);
 
 static int recursive_regmatch(nfa_state_T *state, nfa_pim_T *pim,
@@ -6536,8 +6536,6 @@ void nvim_nfa_set_time_count(int v) { nfa_time_count = v; }
 extern void rs_copy_pim(nfa_pim_T *to, const nfa_pim_T *from);
 extern void rs_copy_sub(regsub_T *to, const regsub_T *from);
 extern void rs_clear_sub(regsub_T *sub);
-extern void rs_copy_sub_off(regsub_T *to, const regsub_T *from);
-extern void rs_copy_ze_off(regsub_T *to, const regsub_T *from);
 extern int rs_sub_equal(regsub_T *sub1, regsub_T *sub2);
 
 #ifdef REGEXP_DEBUG
@@ -7156,9 +7154,6 @@ static void nfa_restore_listids(nfa_regprog_T *prog, const int *list)
     p++;
   }
 }
-
-// Rust implementation for nfa_re_num_cmp
-extern int rs_nfa_re_num_cmp(uint64_t val, int op, uint64_t pos);
 
 // Recursively call nfa_regmatch() - now calls Rust implementation
 extern int rs_recursive_regmatch(nfa_state_T *state, const nfa_pim_T *pim,
