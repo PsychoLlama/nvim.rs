@@ -530,7 +530,7 @@ static int curchr;              // currently parsed character
 // because ^ was taken to be magic -- webb
 static int prevchr;
 static int prevprevchr;         // previous-previous character
-static int nextchr;             // used for ungetchr()
+static int nextchr;             // used for rs_ungetchr()
 
 // arguments for reg()
 #define REG_NOPAREN     0       // toplevel reg()
@@ -708,12 +708,6 @@ static int prevchr_len;    // byte length of previous char
 static int at_start;       // True when on the first character
 static int prev_at_start;  // True when on the second character
 
-// Start parsing at "str".
-static void initchr(char *str)
-{
-  rs_initchr(str);
-}
-
 // Save the current parse state, so that it can be restored and parsing
 // starts in the same state again.
 static void save_parse_state(parse_state_T *ps)
@@ -741,38 +735,6 @@ static void restore_parse_state(parse_state_T *ps)
   at_start = ps->at_start;
   prev_at_start = ps->prev_at_start;
   regnpar = ps->regnpar;
-}
-
-// Get the next character without advancing.
-static int peekchr(void)
-{
-  return rs_peekchr();
-}
-
-// Eat one lexed character.  Do this in a way that we can undo it.
-static void skipchr(void)
-{
-  rs_skipchr();
-}
-
-// Skip a character while keeping the value of prev_at_start for at_start.
-// prevchr and prevprevchr are also kept.
-static void skipchr_keepstart(void)
-{
-  rs_skipchr_keepstart();
-}
-
-// Get the next character from the pattern. We know about magic and such, so
-// therefore we need a lexical analyzer.
-static int getchr(void)
-{
-  return rs_getchr();
-}
-
-// put character back.  Works only once!
-static void ungetchr(void)
-{
-  rs_ungetchr();
 }
 
 // Rust implementations for number parsing
@@ -1269,7 +1231,7 @@ static int match_with_backref(linenr_T start_lnum, colnr_T start_col, linenr_T e
 /// Used in a place where no * or \+ can follow.
 static bool re_mult_next(char *what)
 {
-  if (rs_re_multi_type(peekchr()) == MULTI_MULT) {
+  if (rs_re_multi_type(rs_peekchr()) == MULTI_MULT) {
     semsg(_("E888: (NFA regexp) cannot repeat %s"), what);
     rc_did_emsg = true;
     return false;
@@ -2349,7 +2311,7 @@ static int regnarrate = 0;
 // Setup to parse the regexp.  Used once to get the length and once to do it.
 static void regcomp_start(uint8_t *expr, int re_flags)                        // see vim_regcomp()
 {
-  initchr((char *)expr);
+  rs_initchr((char *)expr);
   if (re_flags & RE_MAGIC) {
     reg_magic = MAGIC_ON;
   } else {
@@ -2627,7 +2589,7 @@ static uint8_t *regatom(int *flagp)
 
   *flagp = WORST;               // Tentatively.
 
-  c = getchr();
+  c = rs_getchr();
   switch (c) {
   case Magic('^'):
     ret = regnode(BOL);
@@ -2647,7 +2609,7 @@ static uint8_t *regatom(int *flagp)
     break;
 
   case Magic('_'):
-    c = rs_no_magic(getchr());
+    c = rs_no_magic(rs_getchr());
     if (c == '^') {             // "\_^" is start-of-line
       ret = regnode(BOL);
       break;
@@ -2703,8 +2665,8 @@ static uint8_t *regatom(int *flagp)
     }
     // When '.' is followed by a composing char ignore the dot, so that
     // the composing char is matched here.
-    if (c == Magic('.') && utf_iscomposing_legacy(peekchr())) {
-      c = getchr();
+    if (c == Magic('.') && utf_iscomposing_legacy(rs_peekchr())) {
+      c = rs_getchr();
       goto do_multibyte;
     }
     ret = regnode(classcodes[p - classchars] + extra);
@@ -2799,7 +2761,7 @@ static uint8_t *regatom(int *flagp)
   break;
 
   case Magic('z'):
-    c = rs_no_magic(getchr());
+    c = rs_no_magic(rs_getchr());
     switch (c) {
     case '(':
       if ((reg_do_extmatch & REX_SET) == 0) {
@@ -2852,7 +2814,7 @@ static uint8_t *regatom(int *flagp)
     break;
 
   case Magic('%'):
-    c = rs_no_magic(getchr());
+    c = rs_no_magic(rs_getchr());
     switch (c) {
     // () without a back reference
     case '(':
@@ -2905,7 +2867,7 @@ static uint8_t *regatom(int *flagp)
         uint8_t *br;
 
         ret = NULL;
-        while ((c = getchr()) != ']') {
+        while ((c = rs_getchr()) != ']') {
           if (c == NUL) {
             EMSG2_RET_NULL(_(e_missing_sb),
                            reg_magic == MAGIC_ALL);
@@ -2920,7 +2882,7 @@ static uint8_t *regatom(int *flagp)
             }
           }
 
-          ungetchr();
+          rs_ungetchr();
           one_exactly = true;
           lastnode = regatom(flagp);
           one_exactly = false;
@@ -3006,20 +2968,20 @@ static uint8_t *regatom(int *flagp)
 
         cmp = c;
         if (cmp == '<' || cmp == '>') {
-          c = getchr();
+          c = rs_getchr();
         }
         if (rs_no_magic(c) == '.') {
           cur = true;
-          c = getchr();
+          c = rs_getchr();
         }
         while (ascii_isdigit(c)) {
           got_digit = true;
           n = n * 10 + (uint32_t)(c - '0');
-          c = getchr();
+          c = rs_getchr();
         }
         if (rs_no_magic(c) == '\'' && n == 0) {
           // "\%'m", "\%<'m" and "\%>'m": Mark
-          c = getchr();
+          c = rs_getchr();
           ret = regnode(RE_MARK);
           if (ret == JUST_CALC_SIZE) {
             regsize += 2;
@@ -3342,7 +3304,7 @@ collection:
         if (*regparse != ']') {
           EMSG_RET_NULL(_(e_toomsbra));                 // Cannot happen?
         }
-        skipchr();                  // let's be friends with the lexer again
+        rs_skipchr();                  // let's be friends with the lexer again
         *flagp |= HASWIDTH | SIMPLE;
         break;
       } else if (reg_strict) {
@@ -3374,7 +3336,7 @@ do_multibyte:
     // But always emit at least one character.  Might be a Multi,
     // e.g., a "[" without matching "]".
     for (len = 0; c != NUL && (len == 0
-                               || (rs_re_multi_type(peekchr()) == NOT_MULTI
+                               || (rs_re_multi_type(rs_peekchr()) == NOT_MULTI
                                    && !one_exactly
                                    && !is_Magic(c))); len++) {
       c = rs_no_magic(c);
@@ -3391,13 +3353,13 @@ do_multibyte:
               break;
             }
             regmbc(utf_ptr2char(regparse));
-            skipchr();
+            rs_skipchr();
           }
         }
       }
-      c = getchr();
+      c = rs_getchr();
     }
-    ungetchr();
+    rs_ungetchr();
 
     regc(NUL);
     *flagp |= HASWIDTH;
@@ -3432,7 +3394,7 @@ static uint8_t *regpiece(int *flagp)
     return NULL;
   }
 
-  op = peekchr();
+  op = rs_peekchr();
   if (rs_re_multi_type(op) == NOT_MULTI) {
     *flagp = flags;
     return ret;
@@ -3440,7 +3402,7 @@ static uint8_t *regpiece(int *flagp)
   // default flags
   *flagp = (WORST | SPSTART | (flags & (HASNL | HASLOOKBH)));
 
-  skipchr();
+  rs_skipchr();
   switch (op) {
   case Magic('*'):
     if (flags & SIMPLE) {
@@ -3473,7 +3435,7 @@ static uint8_t *regpiece(int *flagp)
     int lop = END;
     int64_t nr = getdecchrs();
 
-    switch (rs_no_magic(getchr())) {
+    switch (rs_no_magic(rs_getchr())) {
     case '=':
       lop = MATCH; break;                                 // \@=
     case '!':
@@ -3481,7 +3443,7 @@ static uint8_t *regpiece(int *flagp)
     case '>':
       lop = SUBPAT; break;                                // \@>
     case '<':
-      switch (rs_no_magic(getchr())) {
+      switch (rs_no_magic(rs_getchr())) {
       case '=':
         lop = BEHIND; break;                               // \@<=
       case '!':
@@ -3542,12 +3504,12 @@ static uint8_t *regpiece(int *flagp)
     }
     break;
   }
-  if (rs_re_multi_type(peekchr()) != NOT_MULTI) {
+  if (rs_re_multi_type(rs_peekchr()) != NOT_MULTI) {
     // Can't have a multi follow a multi.
-    if (peekchr() == Magic('*')) {
+    if (rs_peekchr() == Magic('*')) {
       EMSG2_RET_NULL(_("E61: Nested %s*"), reg_magic >= MAGIC_ON);
     }
-    EMSG3_RET_NULL(_("E62: Nested %s%c"), reg_magic == MAGIC_ALL, rs_no_magic(peekchr()));
+    EMSG3_RET_NULL(_("E62: Nested %s%c"), reg_magic == MAGIC_ALL, rs_no_magic(rs_peekchr()));
   }
 
   return ret;
@@ -3566,7 +3528,7 @@ static uint8_t *regconcat(int *flagp)
   *flagp = WORST;               // Tentatively.
 
   while (cont) {
-    switch (peekchr()) {
+    switch (rs_peekchr()) {
     case NUL:
     case Magic('|'):
     case Magic('&'):
@@ -3575,34 +3537,34 @@ static uint8_t *regconcat(int *flagp)
       break;
     case Magic('Z'):
       regflags |= RF_ICOMBINE;
-      skipchr_keepstart();
+      rs_skipchr_keepstart();
       break;
     case Magic('c'):
       regflags |= RF_ICASE;
-      skipchr_keepstart();
+      rs_skipchr_keepstart();
       break;
     case Magic('C'):
       regflags |= RF_NOICASE;
-      skipchr_keepstart();
+      rs_skipchr_keepstart();
       break;
     case Magic('v'):
       reg_magic = MAGIC_ALL;
-      skipchr_keepstart();
+      rs_skipchr_keepstart();
       curchr = -1;
       break;
     case Magic('m'):
       reg_magic = MAGIC_ON;
-      skipchr_keepstart();
+      rs_skipchr_keepstart();
       curchr = -1;
       break;
     case Magic('M'):
       reg_magic = MAGIC_OFF;
-      skipchr_keepstart();
+      rs_skipchr_keepstart();
       curchr = -1;
       break;
     case Magic('V'):
       reg_magic = MAGIC_NONE;
-      skipchr_keepstart();
+      rs_skipchr_keepstart();
       curchr = -1;
       break;
     default:
@@ -3656,10 +3618,10 @@ static uint8_t *regbranch(int *flagp)
     if (chain != NULL) {
       regtail(chain, latest);
     }
-    if (peekchr() != Magic('&')) {
+    if (rs_peekchr() != Magic('&')) {
       break;
     }
-    skipchr();
+    rs_skipchr();
     regtail(latest, regnode(END));     // operand ends
     if (reg_toolong) {
       break;
@@ -3730,8 +3692,8 @@ static uint8_t *reg(int paren, int *flagp)
     *flagp &= ~HASWIDTH;
   }
   *flagp |= flags & (SPSTART | HASNL | HASLOOKBH);
-  while (peekchr() == Magic('|')) {
-    skipchr();
+  while (rs_peekchr() == Magic('|')) {
+    rs_skipchr();
     br = regbranch(&flags);
     if (br == NULL || reg_toolong) {
       return NULL;
@@ -3755,7 +3717,7 @@ static uint8_t *reg(int paren, int *flagp)
   }
 
   // Check for proper termination.
-  if (paren != REG_NOPAREN && getchr() != Magic(')')) {
+  if (paren != REG_NOPAREN && rs_getchr() != Magic(')')) {
     if (paren == REG_ZPAREN) {
       EMSG_RET_NULL(_("E52: Unmatched \\z("));
     } else if (paren == REG_NPAREN) {
@@ -3763,7 +3725,7 @@ static uint8_t *reg(int paren, int *flagp)
     } else {
       EMSG2_RET_NULL(_(e_unmatchedp), reg_magic == MAGIC_ALL);
     }
-  } else if (paren == REG_NOPAREN && peekchr() != NUL) {
+  } else if (paren == REG_NOPAREN && rs_peekchr() != NUL) {
     if (curchr == Magic(')')) {
       EMSG2_RET_NULL(_(e_unmatchedpar), reg_magic == MAGIC_ALL);
     } else {
@@ -4374,7 +4336,7 @@ void nvim_parse_set_prevchr(int c) { prevchr = c; }
 int nvim_parse_get_prevprevchr(void) { return prevprevchr; }
 void nvim_parse_set_prevprevchr(int c) { prevprevchr = c; }
 
-// nextchr - used for ungetchr()
+// nextchr - used for rs_ungetchr()
 int nvim_parse_get_nextchr(void) { return nextchr; }
 void nvim_parse_set_nextchr(int c) { nextchr = c; }
 
