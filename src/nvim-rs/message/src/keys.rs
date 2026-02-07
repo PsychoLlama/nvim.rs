@@ -17,8 +17,6 @@ pub const KS_MODIFIER: c_int = 253;
 /// KS_EXTRA - extra byte marker
 pub const KS_EXTRA: c_int = 254;
 
-// Note: rs_is_k_special is defined in regexp/regsub.rs
-
 /// Check if a byte is KS_MODIFIER.
 #[no_mangle]
 pub const extern "C" fn rs_is_ks_modifier(c: c_int) -> c_int {

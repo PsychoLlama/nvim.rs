@@ -72,7 +72,6 @@ members = [
     "src/nvim-rs/profile",
     "src/nvim-rs/quickfix",
     "src/nvim-rs/register",
-    "src/nvim-rs/regexp",
     "src/nvim-rs/search",
     "src/nvim-rs/sign",
     "src/nvim-rs/shada",

@@ -511,14 +511,14 @@ extern "C" {
 
     /// Skip regexp to find magic value.
     /// Returns pointer past pattern, sets magic_val.
-    fn nvim_skip_regexp_ex(
-        startp: *const std::ffi::c_char,
+    fn skip_regexp_ex(
+        startp: *mut std::ffi::c_char,
         dirc: c_int,
         magic: c_int,
         newp: *mut *mut std::ffi::c_char,
         dropped: *mut c_int,
         magic_val: *mut c_int,
-    ) -> *const std::ffi::c_char;
+    ) -> *mut std::ffi::c_char;
 
     /// Check if ctrl-x mode is not default.
     fn nvim_ctrl_x_mode_not_default() -> c_int;
@@ -555,8 +555,8 @@ pub unsafe fn pat_has_uppercase(pat: *const std::ffi::c_char) -> bool {
 
     // Get the magicness of the pattern
     let mut magic_val: c_int = magic::MAGIC_ON;
-    nvim_skip_regexp_ex(
-        pat,
+    skip_regexp_ex(
+        pat as *mut std::ffi::c_char,
         0, // NUL - no delimiter
         c_int::from(magic_isset()),
         std::ptr::null_mut(),
