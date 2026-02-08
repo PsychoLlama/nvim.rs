@@ -1499,6 +1499,121 @@ pub unsafe extern "C" fn rs_regtilde(
     newsub
 }
 
+// --- match_with_backref ---
+
+const RA_FAIL: c_int = 1;
+const RA_MATCH: c_int = 4;
+const RA_NOMATCH: c_int = 5;
+
+extern "C" {
+    fn nvim_regexp_get_reg_tofree() -> *mut u8;
+    fn nvim_regexp_set_reg_tofree(p: *mut u8);
+    fn nvim_regexp_get_reg_tofreelen() -> c_uint;
+    fn nvim_regexp_set_reg_tofreelen(v: c_uint);
+    fn nvim_regexp_set_rex_line(line: *mut u8);
+    fn nvim_regexp_set_rex_input(input: *mut u8);
+    fn nvim_regexp_get_got_int() -> c_int;
+    fn nvim_regexp_call_mb_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
+    fn nvim_regexp_get_rex_line_strlen() -> c_int;
+    fn nvim_regexp_call_reg_getline_len(lnum: i32) -> i32;
+}
+
+/// Check whether a backreference matches.
+/// Returns `RA_FAIL`, `RA_NOMATCH` or `RA_MATCH`.
+///
+/// # Panics
+/// Panics if `reg_getline` returns NULL for the requested line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_with_backref(
+    start_lnum: i32,
+    start_col: i32,
+    end_lnum: i32,
+    end_col: i32,
+    bytelen: *mut c_int,
+) -> c_int {
+    let mut clnum = start_lnum;
+    let mut ccol = start_col;
+
+    if !bytelen.is_null() {
+        *bytelen = 0;
+    }
+
+    loop {
+        // Since getting one line may invalidate the other, need to make copy.
+        let line = nvim_regexp_get_rex_line();
+        let reg_tofree = nvim_regexp_get_reg_tofree();
+        if line != reg_tofree {
+            let len = nvim_regexp_get_rex_line_strlen();
+            let reg_tofreelen = nvim_regexp_get_reg_tofreelen() as c_int;
+            if reg_tofree.is_null() || len >= reg_tofreelen {
+                let newlen = len + 50;
+                xfree(nvim_regexp_get_reg_tofree().cast());
+                let new_buf = xmalloc(newlen as usize).cast::<u8>();
+                nvim_regexp_set_reg_tofree(new_buf);
+                nvim_regexp_set_reg_tofreelen(newlen as c_uint);
+            }
+            let tofree = nvim_regexp_get_reg_tofree();
+            let cur_line = nvim_regexp_get_rex_line();
+            let cur_input = nvim_regexp_get_rex_input();
+            // STRCPY: copy including NUL
+            std::ptr::copy_nonoverlapping(cur_line, tofree, len as usize + 1);
+            // rex.input = reg_tofree + (rex.input - rex.line)
+            let input_offset = cur_input.offset_from(cur_line) as usize;
+            nvim_regexp_set_rex_input(tofree.add(input_offset));
+            nvim_regexp_set_rex_line(tofree);
+        }
+
+        // Get the line to compare with.
+        let p = nvim_regexp_call_reg_getline(clnum);
+        assert!(!p.is_null());
+
+        let mut len = if clnum == end_lnum {
+            end_col - ccol
+        } else {
+            nvim_regexp_call_reg_getline_len(clnum) - ccol
+        };
+
+        let input: *mut c_char = nvim_regexp_get_rex_input().cast();
+        let reg_ic = nvim_regexp_get_rex_reg_ic();
+        let p_ccol: *mut c_char = p.add(ccol as usize);
+
+        if reg_ic == 0 {
+            // case-sensitive compare
+            if rs_cstrncmp(p_ccol, input, &mut len) != 0 {
+                return RA_NOMATCH;
+            }
+        } else {
+            // case-insensitive compare
+            if nvim_regexp_call_mb_strnicmp(p_ccol, input, len as usize) != 0 {
+                return RA_NOMATCH;
+            }
+        }
+
+        if !bytelen.is_null() {
+            *bytelen += len;
+        }
+        if clnum == end_lnum {
+            break;
+        }
+        if nvim_regexp_get_rex_lnum() >= nvim_regexp_get_rex_reg_maxline() {
+            return RA_NOMATCH;
+        }
+
+        // Advance to next line.
+        rs_reg_nextline();
+        if !bytelen.is_null() {
+            *bytelen = 0;
+        }
+        clnum += 1;
+        ccol = 0;
+        if nvim_regexp_get_got_int() != 0 {
+            return RA_FAIL;
+        }
+    }
+
+    RA_MATCH
+}
+
 // --- do_upper / do_lower ---
 
 extern "C" {

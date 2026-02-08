@@ -939,6 +939,18 @@ void nvim_regexp_set_rex_line_and_input(uint8_t *line) { rex.line = line; rex.in
 char *nvim_regexp_call_reg_getline(int32_t lnum) { return reg_getline((linenr_T)lnum); }
 void nvim_regexp_call_reg_breakcheck(void) { reg_breakcheck(); }
 
+// match_with_backref accessors for Rust FFI
+uint8_t *nvim_regexp_get_reg_tofree(void) { return reg_tofree; }
+void nvim_regexp_set_reg_tofree(uint8_t *p) { reg_tofree = p; }
+unsigned nvim_regexp_get_reg_tofreelen(void) { return reg_tofreelen; }
+void nvim_regexp_set_reg_tofreelen(unsigned v) { reg_tofreelen = v; }
+void nvim_regexp_set_rex_line(uint8_t *line) { rex.line = line; }
+void nvim_regexp_set_rex_input(uint8_t *input) { rex.input = input; }
+int nvim_regexp_get_got_int(void) { return got_int; }
+int nvim_regexp_call_mb_strnicmp(const char *s1, const char *s2, size_t len) { return mb_strnicmp(s1, s2, len); }
+int nvim_regexp_get_rex_line_strlen(void) { return (int)strlen((char *)rex.line); }
+int32_t nvim_regexp_call_reg_getline_len(int32_t lnum) { return (int32_t)reg_getline_len((linenr_T)lnum); }
+
 // reg_getline_common accessors for Rust FFI
 int32_t nvim_regexp_get_rex_reg_firstlnum(void) { return (int32_t)rex.reg_firstlnum; }
 int32_t nvim_regexp_get_rex_reg_maxline(void) { return (int32_t)rex.reg_maxline; }
@@ -1094,72 +1106,14 @@ static void reg_nextline(void)
 // If "bytelen" is not NULL, it is set to the byte length of the match in the
 // last line.
 // Optional: ignore case if rex.reg_ic is set.
+extern int rs_match_with_backref(int32_t start_lnum, int32_t start_col, int32_t end_lnum,
+                                 int32_t end_col, int *bytelen);
+
 static int match_with_backref(linenr_T start_lnum, colnr_T start_col, linenr_T end_lnum,
                               colnr_T end_col, int *bytelen)
 {
-  linenr_T clnum = start_lnum;
-  colnr_T ccol = start_col;
-  int len;
-  char *p;
-
-  if (bytelen != NULL) {
-    *bytelen = 0;
-  }
-  while (true) {
-    // Since getting one line may invalidate the other, need to make copy.
-    // Slow!
-    if (rex.line != reg_tofree) {
-      len = (int)strlen((char *)rex.line);
-      if (reg_tofree == NULL || len >= (int)reg_tofreelen) {
-        len += 50;              // get some extra
-        xfree(reg_tofree);
-        reg_tofree = xmalloc((size_t)len);
-        reg_tofreelen = (unsigned)len;
-      }
-      STRCPY(reg_tofree, rex.line);
-      rex.input = reg_tofree + (rex.input - rex.line);
-      rex.line = reg_tofree;
-    }
-
-    // Get the line to compare with.
-    p = reg_getline(clnum);
-    assert(p);
-
-    if (clnum == end_lnum) {
-      len = end_col - ccol;
-    } else {
-      len = reg_getline_len(clnum) - ccol;
-    }
-
-    if ((!rex.reg_ic && cstrncmp(p + ccol, (char *)rex.input, &len) != 0)
-        || (rex.reg_ic && mb_strnicmp(p + ccol, (char *)rex.input, (size_t)len) != 0)) {
-      return RA_NOMATCH;  // doesn't match
-    }
-    if (bytelen != NULL) {
-      *bytelen += len;
-    }
-    if (clnum == end_lnum) {
-      break;  // match and at end!
-    }
-    if (rex.lnum >= rex.reg_maxline) {
-      return RA_NOMATCH;  // text too short
-    }
-
-    // Advance to next line.
-    reg_nextline();
-    if (bytelen != NULL) {
-      *bytelen = 0;
-    }
-    clnum++;
-    ccol = 0;
-    if (got_int) {
-      return RA_FAIL;
-    }
-  }
-
-  // found a match!  Note that rex.line may now point to a copy of the line,
-  // that should not matter.
-  return RA_MATCH;
+  return rs_match_with_backref((int32_t)start_lnum, (int32_t)start_col,
+                               (int32_t)end_lnum, (int32_t)end_col, bytelen);
 }
 
 /// Used in a place where no * or \+ can follow.
