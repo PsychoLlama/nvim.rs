@@ -4745,6 +4745,31 @@ void nvim_nfa_prog_set_nstate(void *prog, int v) { ((nfa_regprog_T *)prog)->nsta
 char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }
 // --- End Phase 7 accessor functions (part 1) ---
 
+// --- NFA Execution accessor functions (Phase 8: execution engine) ---
+
+// nfa_state_T id/lastlist accessors
+int nvim_nfa_state_get_id(void *s) { return ((nfa_state_T *)s)->id; }
+int nvim_nfa_state_get_lastlist(void *s, int idx) { return ((nfa_state_T *)s)->lastlist[idx]; }
+void nvim_nfa_state_set_lastlist(void *s, int idx, int val) { ((nfa_state_T *)s)->lastlist[idx] = val; }
+
+// nfa_regprog_T execution field accessors
+int nvim_nfa_prog_get_has_zend(void *prog) { return ((nfa_regprog_T *)prog)->has_zend; }
+int nvim_nfa_prog_get_has_backref(void *prog) { return ((nfa_regprog_T *)prog)->has_backref; }
+int nvim_nfa_prog_get_nsubexp(void *prog) { return ((nfa_regprog_T *)prog)->nsubexp; }
+int nvim_nfa_prog_get_reghasz(void *prog) { return ((nfa_regprog_T *)prog)->reghasz; }
+int nvim_nfa_prog_get_regflags(void *prog) { return (int)((nfa_regprog_T *)prog)->regflags; }
+int nvim_nfa_prog_get_regstart(void *prog) { return ((nfa_regprog_T *)prog)->regstart; }
+int nvim_nfa_prog_get_reganch(void *prog) { return ((nfa_regprog_T *)prog)->reganch; }
+uint8_t *nvim_nfa_prog_get_match_text(void *prog) { return ((nfa_regprog_T *)prog)->match_text; }
+
+// siemsg wrapper for check_char_class
+void nvim_regexp_siemsg_ill_char_class(int64_t cls)
+{
+  siemsg(_(e_ill_char_class), cls);
+}
+
+// --- End NFA Execution accessor functions ---
+
 // Variables only used in nfa_regcomp() and descendants.
 static int nfa_re_flags;  ///< re_flags passed to nfa_regcomp().
 static int *post_start;   ///< holds the postfix form of r.e.

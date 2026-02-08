@@ -9914,6 +9914,167 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
     prog
 }
 
+// ============================================================================
+// NFA Execution Engine — Phase 8: Pure helpers and accessor infrastructure
+// ============================================================================
+
+extern "C" {
+    // nfa_state_T id/lastlist accessors
+    fn nvim_nfa_state_get_id(s: NfaStateHandle) -> c_int;
+    fn nvim_nfa_state_get_lastlist(s: NfaStateHandle, idx: c_int) -> c_int;
+    fn nvim_nfa_state_set_lastlist(s: NfaStateHandle, idx: c_int, val: c_int);
+
+    // nfa_regprog_T execution field accessors
+    fn nvim_nfa_prog_get_has_zend(prog: NfaProgHandle) -> c_int;
+    fn nvim_nfa_prog_get_has_backref(prog: NfaProgHandle) -> c_int;
+    fn nvim_nfa_prog_get_nsubexp(prog: NfaProgHandle) -> c_int;
+    fn nvim_nfa_prog_get_reghasz(prog: NfaProgHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_nfa_prog_get_regflags(prog: NfaProgHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_nfa_prog_get_regstart(prog: NfaProgHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_nfa_prog_get_reganch(prog: NfaProgHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_nfa_prog_get_match_text(prog: NfaProgHandle) -> *mut u8;
+
+    // Error wrapper
+    fn nvim_regexp_siemsg_ill_char_class(cls: i64);
+}
+
+/// Check for a match with a character class.
+/// Returns OK if `c` matches the class `cls`, FAIL otherwise.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_check_char_class(cls: c_int, c: c_int) -> c_int {
+    match cls {
+        NFA_CLASS_ALNUM => {
+            if (1..128).contains(&c) && isalnum(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_ALPHA => {
+            if (1..128).contains(&c) && isalpha(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_BLANK => {
+            if c == b' ' as c_int || c == b'\t' as c_int {
+                return OK;
+            }
+        }
+        NFA_CLASS_CNTRL => {
+            if (1..=127).contains(&c) && iscntrl(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_DIGIT =>
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            if ascii_isdigit(c as u8) {
+                return OK;
+            }
+        }
+        NFA_CLASS_GRAPH => {
+            if (1..=127).contains(&c) && isgraph(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_LOWER => {
+            if mb_islower(c) != 0 && c != 170 && c != 186 {
+                return OK;
+            }
+        }
+        NFA_CLASS_PRINT => {
+            if vim_isprintc(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_PUNCT => {
+            if (1..128).contains(&c) && ispunct(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_SPACE => {
+            if (9..=13).contains(&c) || c == b' ' as c_int {
+                return OK;
+            }
+        }
+        NFA_CLASS_UPPER => {
+            if mb_isupper(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_XDIGIT =>
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            if ascii_isxdigit(c as u8) {
+                return OK;
+            }
+        }
+        NFA_CLASS_TAB => {
+            if c == b'\t' as c_int {
+                return OK;
+            }
+        }
+        NFA_CLASS_RETURN => {
+            if c == b'\r' as c_int {
+                return OK;
+            }
+        }
+        NFA_CLASS_BACKSPACE => {
+            if c == 0x08 {
+                return OK;
+            }
+        }
+        NFA_CLASS_ESCAPE => {
+            if c == ESC_CH {
+                return OK;
+            }
+        }
+        NFA_CLASS_IDENT => {
+            if vim_isIDc(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_KEYWORD => {
+            if rs_reg_iswordc(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_FNAME => {
+            if vim_isfilec(c) != 0 {
+                return OK;
+            }
+        }
+        _ => {
+            // should not be here
+            nvim_regexp_siemsg_ill_char_class(cls as i64);
+            return FAIL;
+        }
+    }
+    FAIL
+}
+
+/// Helper for ascii hex digit check (matches C `ascii_isxdigit`).
+const fn ascii_isxdigit(c: u8) -> bool {
+    (c >= b'0' && c <= b'9') || (c >= b'a' && c <= b'f') || (c >= b'A' && c <= b'F')
+}
+
+/// Numeric comparison helper used by NFA execution engine.
+/// op == 1: pos > val, op == 2: pos < val, else: val == pos
+#[no_mangle]
+pub const unsafe extern "C" fn rs_nfa_re_num_cmp(val: usize, op: c_int, pos: usize) -> c_int {
+    let result = if op == 1 {
+        pos > val
+    } else if op == 2 {
+        pos < val
+    } else {
+        val == pos
+    };
+    result as c_int
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -10622,4 +10783,77 @@ mod tests {
         let result = unsafe { rs_nfa_recognize_char_class(start, end, 0) };
         assert_eq!(result, FAIL);
     }
+
+    // --- NFA Execution Phase 8 tests ---
+
+    #[test]
+    fn test_nfa_re_num_cmp_greater() {
+        unsafe {
+            // op == 1 means pos > val
+            assert_eq!(rs_nfa_re_num_cmp(5, 1, 10), 1); // 10 > 5 => true
+            assert_eq!(rs_nfa_re_num_cmp(10, 1, 5), 0); // 5 > 10 => false
+            assert_eq!(rs_nfa_re_num_cmp(5, 1, 5), 0); // 5 > 5 => false
+        }
+    }
+
+    #[test]
+    fn test_nfa_re_num_cmp_less() {
+        unsafe {
+            // op == 2 means pos < val
+            assert_eq!(rs_nfa_re_num_cmp(10, 2, 5), 1); // 5 < 10 => true
+            assert_eq!(rs_nfa_re_num_cmp(5, 2, 10), 0); // 10 < 5 => false
+            assert_eq!(rs_nfa_re_num_cmp(5, 2, 5), 0); // 5 < 5 => false
+        }
+    }
+
+    #[test]
+    fn test_nfa_re_num_cmp_equal() {
+        unsafe {
+            // op == 0 (or anything else) means val == pos
+            assert_eq!(rs_nfa_re_num_cmp(5, 0, 5), 1); // 5 == 5 => true
+            assert_eq!(rs_nfa_re_num_cmp(5, 0, 10), 0); // 5 == 10 => false
+            assert_eq!(rs_nfa_re_num_cmp(0, 3, 0), 1); // 0 == 0 => true (op=3 is also equal)
+        }
+    }
+
+    #[test]
+    fn test_ascii_isxdigit() {
+        assert!(ascii_isxdigit(b'0'));
+        assert!(ascii_isxdigit(b'9'));
+        assert!(ascii_isxdigit(b'a'));
+        assert!(ascii_isxdigit(b'f'));
+        assert!(ascii_isxdigit(b'A'));
+        assert!(ascii_isxdigit(b'F'));
+        assert!(!ascii_isxdigit(b'g'));
+        assert!(!ascii_isxdigit(b'G'));
+        assert!(!ascii_isxdigit(b' '));
+        assert!(!ascii_isxdigit(b'z'));
+    }
+
+    #[test]
+    fn test_check_char_class_constants_sequential() {
+        // Verify all NFA_CLASS_* constants are sequential from NFA_CLASS_ALNUM to NFA_CLASS_FNAME
+        assert_eq!(NFA_CLASS_ALPHA, NFA_CLASS_ALNUM + 1);
+        assert_eq!(NFA_CLASS_BLANK, NFA_CLASS_ALNUM + 2);
+        assert_eq!(NFA_CLASS_CNTRL, NFA_CLASS_ALNUM + 3);
+        assert_eq!(NFA_CLASS_DIGIT, NFA_CLASS_ALNUM + 4);
+        assert_eq!(NFA_CLASS_GRAPH, NFA_CLASS_ALNUM + 5);
+        assert_eq!(NFA_CLASS_LOWER, NFA_CLASS_ALNUM + 6);
+        assert_eq!(NFA_CLASS_PRINT, NFA_CLASS_ALNUM + 7);
+        assert_eq!(NFA_CLASS_PUNCT, NFA_CLASS_ALNUM + 8);
+        assert_eq!(NFA_CLASS_SPACE, NFA_CLASS_ALNUM + 9);
+        assert_eq!(NFA_CLASS_UPPER, NFA_CLASS_ALNUM + 10);
+        assert_eq!(NFA_CLASS_XDIGIT, NFA_CLASS_ALNUM + 11);
+        assert_eq!(NFA_CLASS_TAB, NFA_CLASS_ALNUM + 12);
+        assert_eq!(NFA_CLASS_RETURN, NFA_CLASS_ALNUM + 13);
+        assert_eq!(NFA_CLASS_BACKSPACE, NFA_CLASS_ALNUM + 14);
+        assert_eq!(NFA_CLASS_ESCAPE, NFA_CLASS_ALNUM + 15);
+        assert_eq!(NFA_CLASS_IDENT, NFA_CLASS_ALNUM + 16);
+        assert_eq!(NFA_CLASS_KEYWORD, NFA_CLASS_ALNUM + 17);
+        assert_eq!(NFA_CLASS_FNAME, NFA_CLASS_ALNUM + 18);
+    }
+
+    // Note: rs_check_char_class tests that call Neovim C FFI (mb_islower,
+    // vim_isprintc, rs_reg_iswordc, etc.) cannot run in cargo test.
+    // They are validated via smoke-test and regexp-baseline integration testing.
 }

@@ -1111,3 +1111,15 @@ hello world	hello world test
 \v[0-9]{2,4}	test 1234 here
 \v(a(b(c)))	abcdef
 \%(\v\w+\)\s\+\%(\v\w+\)	hello world
+# Phase 8: NFA execution helpers - character class and numeric comparison patterns
+[[:alnum:]]\+	abc123XYZ
+[[:alpha:]]\+	ABCdef
+[[:blank:]]\+	 	 spaces and tabs
+[[:cntrl:]]	control\x01char
+[[:digit:]]\+	test42number
+[[:graph:]]\+	visible!chars
+[[:lower:]]\+	lowercaseonly
+[[:upper:]]\+	UPPERcase
+[[:punct:]]\+	hello!@#world
+[[:space:]]\+
+[[:xdigit:]]\+	0123456789abcdefABCDEF
