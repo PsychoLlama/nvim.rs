@@ -78,6 +78,9 @@ extern "C" {
     fn nvim_regexp_set_rc_did_emsg(v: c_int);
     fn nvim_regexp_semsg_e888(what: *const c_char);
 
+    // skip_regexp_err accessor
+    fn nvim_regexp_semsg_e654(startp: *const c_char);
+
     // reg_nextline accessors
     fn nvim_regexp_get_rex_lnum() -> i32;
     fn nvim_regexp_set_rex_lnum(v: i32);
@@ -1176,6 +1179,24 @@ pub unsafe extern "C" fn rs_reg_nextline() {
     let line = nvim_regexp_call_reg_getline(lnum).cast::<u8>();
     nvim_regexp_set_rex_line_and_input(line);
     nvim_regexp_call_reg_breakcheck();
+}
+
+// --- skip_regexp_err ---
+
+/// Call `skip_regexp` and check for delimiter mismatch. On mismatch, emit
+/// E654 and return null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_regexp_err(
+    startp: *mut c_char,
+    delim: c_int,
+    magic: c_int,
+) -> *mut c_char {
+    let p = rs_skip_regexp(startp, delim, magic);
+    if *p as u8 as c_int != delim {
+        nvim_regexp_semsg_e654(startp);
+        return std::ptr::null_mut();
+    }
+    p
 }
 
 #[cfg(test)]

@@ -70,6 +70,7 @@ extern void rs_cleanup_subexpr(void);
 extern void rs_cleanup_zsubexpr(void);
 extern int rs_reg_prev_class(void);
 extern void rs_reg_nextline(void);
+extern char *rs_skip_regexp_err(char *startp, int delim, int magic);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -727,6 +728,11 @@ static char *skip_anyof(char *p)
 /// Skip past regular expression.
 /// Stop at end of "startp" or where "delim" is found ('/', '?', etc).
 /// Take care of characters with a backslash in front of it.
+void nvim_regexp_semsg_e654(const char *startp)
+{
+  semsg(_(e_missing_delimiter_after_search_pattern_str), startp);
+}
+
 /// Skip strings inside [ and ].
 char *skip_regexp(char *startp, int delim, int magic)
 {
@@ -737,13 +743,7 @@ char *skip_regexp(char *startp, int delim, int magic)
 /// return NULL.
 char *skip_regexp_err(char *startp, int delim, int magic)
 {
-  char *p = skip_regexp(startp, delim, magic);
-
-  if (*p != delim) {
-    semsg(_(e_missing_delimiter_after_search_pattern_str), startp);
-    return NULL;
-  }
-  return p;
+  return rs_skip_regexp_err(startp, delim, magic);
 }
 
 /// skip_regexp() with extra arguments:
