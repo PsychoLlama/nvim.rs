@@ -410,6 +410,13 @@ static int re_multi_type(int c)
 static char *reg_prev_sub = NULL;
 static size_t reg_prev_sublen = 0;
 
+// regtilde accessors for Rust FFI
+char *nvim_regexp_get_reg_prev_sub(void) { return reg_prev_sub; }
+void nvim_regexp_set_reg_prev_sub(char *p) { reg_prev_sub = p; }
+size_t nvim_regexp_get_reg_prev_sublen(void) { return reg_prev_sublen; }
+void nvim_regexp_set_reg_prev_sublen(size_t v) { reg_prev_sublen = v; }
+void nvim_regexp_emsg_resulting_text_too_long(void) { emsg(_(e_resulting_text_too_long)); }
+
 // REGEXP_INRANGE contains all characters which are always special in a []
 // range after '\'.
 // REGEXP_ABBR contains all characters which act as abbreviations after '\'.
@@ -1201,94 +1208,11 @@ static void do_lower(int *d, int c)
 /// user to keep his hands off of "magic".
 ///
 /// The tildes are parsed once before the first call to vim_regsub().
+extern char *rs_regtilde(char *source, int magic, bool preview);
+
 char *regtilde(char *source, int magic, bool preview)
 {
-  char *newsub = source;
-  size_t newsublen = 0;
-  char tilde[3] = { '~', NUL, NUL };
-  size_t tildelen = 1;
-  bool error = false;
-
-  if (!magic) {
-    tilde[0] = '\\';
-    tilde[1] = '~';
-    tilde[2] = NUL;
-    tildelen = 2;
-  }
-
-  char *p;
-  for (p = newsub; *p; p++) {
-    if (strncmp(p, tilde, tildelen) == 0) {
-      size_t prefixlen = (size_t)(p - newsub);  // not including the tilde
-      char *postfix = p + tildelen;
-      size_t postfixlen;
-      size_t tmpsublen;
-
-      if (newsublen == 0) {
-        newsublen = strlen(newsub);
-      }
-      newsublen -= tildelen;
-      postfixlen = newsublen - prefixlen;
-      tmpsublen = prefixlen + reg_prev_sublen + postfixlen;
-
-      if (tmpsublen > 0 && reg_prev_sub != NULL) {
-        // Avoid making the text longer than MAXCOL, it will cause
-        // trouble at some point.
-        if (tmpsublen > MAXCOL) {
-          emsg(_(e_resulting_text_too_long));
-          error = true;
-          break;
-        }
-
-        char *tmpsub = xmalloc(tmpsublen + 1);
-        // copy prefix
-        memmove(tmpsub, newsub, prefixlen);
-        // interpret tilde
-        memmove(tmpsub + prefixlen, reg_prev_sub, reg_prev_sublen);
-        // copy postfix
-        STRCPY(tmpsub + prefixlen + reg_prev_sublen, postfix);
-
-        if (newsub != source) {  // allocated newsub before
-          xfree(newsub);
-        }
-        newsub = tmpsub;
-        newsublen = tmpsublen;
-        p = newsub + prefixlen + reg_prev_sublen;
-      } else {
-        memmove(p, postfix, postfixlen + 1);  // remove the tilde (+1 for the NUL)
-      }
-      p--;
-    } else {
-      if (*p == '\\' && p[1]) {  // skip escaped characters
-        p++;
-      }
-      p += utfc_ptr2len(p) - 1;
-    }
-  }
-
-  if (error) {
-    if (newsub != source) {
-      xfree(newsub);
-    }
-    return source;
-  }
-
-  // Only change reg_prev_sub when not previewing.
-  if (!preview) {
-    // Store a copy of newsub  in reg_prev_sub.  It is always allocated,
-    // because recursive calls may make the returned string invalid.
-    // Only store it if there something to store.
-    newsublen = (size_t)(p - newsub);
-    if (newsublen == 0) {
-      XFREE_CLEAR(reg_prev_sub);
-    } else {
-      xfree(reg_prev_sub);
-      reg_prev_sub = xstrnsave(newsub, newsublen);
-    }
-    reg_prev_sublen = newsublen;
-  }
-
-  return newsub;
+  return rs_regtilde(source, magic, preview);
 }
 
 /// Put the submatches in "argv[argskip]" which is a list passed into

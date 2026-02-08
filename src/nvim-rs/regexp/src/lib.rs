@@ -1386,6 +1386,119 @@ pub unsafe extern "C" fn rs_get_char_class(pp: *mut *mut c_char) -> c_int {
     get_char_class_impl(pp)
 }
 
+// --- regtilde ---
+
+const MAXCOL: usize = 0x7fff_ffff;
+
+extern "C" {
+    fn nvim_regexp_get_reg_prev_sub() -> *mut c_char;
+    fn nvim_regexp_set_reg_prev_sub(p: *mut c_char);
+    fn nvim_regexp_get_reg_prev_sublen() -> usize;
+    fn nvim_regexp_set_reg_prev_sublen(v: usize);
+    fn nvim_regexp_emsg_resulting_text_too_long();
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn strlen(s: *const c_char) -> usize;
+}
+
+/// Replace tildes in the pattern by the old pattern.
+/// Direct transliteration of C `regtilde()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regtilde(
+    source: *mut c_char,
+    magic: c_int,
+    preview: bool,
+) -> *mut c_char {
+    let mut newsub = source;
+    let mut newsublen: usize = 0;
+    let mut error = false;
+
+    let (tilde_0, tilde_1, tildelen): (u8, u8, usize) = if magic == 0 {
+        (b'\\', b'~', 2)
+    } else {
+        (b'~', 0, 1)
+    };
+
+    let mut p = newsub;
+    while *p != 0 {
+        let matches_tilde = *p as u8 == tilde_0 && (tildelen == 1 || *p.add(1) as u8 == tilde_1);
+
+        if matches_tilde {
+            let prefixlen = p.offset_from(newsub) as usize;
+            let postfix = p.add(tildelen);
+
+            if newsublen == 0 {
+                newsublen = strlen(newsub);
+            }
+            newsublen -= tildelen;
+            let postfixlen = newsublen - prefixlen;
+            let reg_prev_sub = nvim_regexp_get_reg_prev_sub();
+            let reg_prev_sublen = nvim_regexp_get_reg_prev_sublen();
+            let tmpsublen = prefixlen + reg_prev_sublen + postfixlen;
+
+            if tmpsublen > 0 && !reg_prev_sub.is_null() {
+                if tmpsublen > MAXCOL {
+                    nvim_regexp_emsg_resulting_text_too_long();
+                    error = true;
+                    break;
+                }
+
+                let tmpsub = xmalloc(tmpsublen + 1).cast::<c_char>();
+                // copy prefix
+                std::ptr::copy(newsub, tmpsub, prefixlen);
+                // interpret tilde
+                std::ptr::copy(reg_prev_sub, tmpsub.add(prefixlen), reg_prev_sublen);
+                // copy postfix (including NUL)
+                std::ptr::copy(
+                    postfix,
+                    tmpsub.add(prefixlen + reg_prev_sublen),
+                    postfixlen + 1,
+                );
+
+                if newsub != source {
+                    xfree(newsub.cast());
+                }
+                newsub = tmpsub;
+                newsublen = tmpsublen;
+                p = newsub.add(prefixlen + reg_prev_sublen);
+            } else {
+                // remove the tilde (+1 for the NUL)
+                std::ptr::copy(postfix, p, postfixlen + 1);
+            }
+            p = p.sub(1);
+        } else {
+            if *p == b'\\' as c_char && *p.add(1) != 0 {
+                p = p.add(1);
+            }
+            p = p.add(utfc_ptr2len(p) as usize - 1);
+        }
+        p = p.add(1);
+    }
+
+    if error {
+        if newsub != source {
+            xfree(newsub.cast());
+        }
+        return source;
+    }
+
+    // Only change reg_prev_sub when not previewing.
+    if !preview {
+        newsublen = p.offset_from(newsub) as usize;
+        let prev = nvim_regexp_get_reg_prev_sub();
+        if !prev.is_null() {
+            xfree(prev.cast());
+        }
+        if newsublen == 0 {
+            nvim_regexp_set_reg_prev_sub(std::ptr::null_mut());
+        } else {
+            nvim_regexp_set_reg_prev_sub(xstrnsave(newsub, newsublen));
+        }
+        nvim_regexp_set_reg_prev_sublen(newsublen);
+    }
+
+    newsub
+}
+
 // --- do_upper / do_lower ---
 
 extern "C" {
