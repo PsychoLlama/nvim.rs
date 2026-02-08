@@ -12143,7 +12143,9 @@ pub unsafe extern "C" fn rs_nfa_regtry(
     }
 
     // Handle \z(...\) extmatch
+    // C code: unref_extmatch(re_extmatch_out); re_extmatch_out = NULL;
     nvim_regexp_unref_re_extmatch_out();
+    nvim_regexp_set_re_extmatch_out(core::ptr::null_mut());
     let reghasz = nvim_nfa_prog_get_reghasz(prog);
     if reghasz == REX_SET as c_int {
         nvim_regexp_nfa_regtry_extract_extmatch(subs);

@@ -71,6 +71,13 @@ extern void rs_cleanup_zsubexpr(void);
 extern int rs_reg_prev_class(void);
 extern void rs_reg_nextline(void);
 extern char *rs_skip_regexp_err(char *startp, int delim, int magic);
+// Rust FFI: NFA execution engine entry points
+extern int rs_nfa_regmatch(void *prog, void *start, void *submatch, void *m);
+extern int rs_nfa_regtry(void *prog, int32_t col, void *tm, int *timed_out);
+extern int rs_nfa_regexec_both(uint8_t *line, int32_t startcol, void *tm, int *timed_out);
+extern int rs_nfa_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
+extern int rs_nfa_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
+                                int32_t col, void *tm, int *timed_out);
 // Rust FFI: node management and compilation infrastructure
 extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
 extern void rs_regc(int b);
@@ -10077,10 +10084,10 @@ static int recursive_regmatch(nfa_state_T *state, nfa_pim_T *pim, nfa_regprog_T 
     }
   }
 
-  // Call nfa_regmatch() to check if the current concat matches at this
-  // position. The concat ends with the node NFA_END_INVISIBLE
+  // Call rs_nfa_regmatch() (Rust) to check if the current concat matches at
+  // this position. The concat ends with the node NFA_END_INVISIBLE
   nfa_endp = endposp;
-  const int result = nfa_regmatch(prog, state->out, submatch, m);
+  const int result = rs_nfa_regmatch(prog, state->out, submatch, m);
 
   if (need_restore) {
     nfa_restore_listids(prog, *listids);
@@ -10467,11 +10474,19 @@ uint8_t *nvim_regexp_get_nfa_endp_ptr(void)
 // nfa_list_T memory management
 void *nvim_nfa_list_alloc_threads(int nstate)
 {
-  return (void *)xmalloc(sizeof(nfa_thread_T) * (size_t)nstate);
+  nfa_list_T *l = xcalloc(1, sizeof(nfa_list_T));
+  l->t = xmalloc(sizeof(nfa_thread_T) * (size_t)nstate);
+  l->n = 0;
+  l->has_pim = false;
+  l->id = 0;
+  return (void *)l;
 }
-void nvim_nfa_list_free_threads(void *t)
+void nvim_nfa_list_free_threads(void *l)
 {
-  xfree(t);
+  if (l) {
+    xfree(((nfa_list_T *)l)->t);
+    xfree(l);
+  }
 }
 
 // nfa_time_limit / nfa_timed_out / nfa_time_count accessors
