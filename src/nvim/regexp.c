@@ -758,6 +758,32 @@ char *skip_regexp_ex(char *startp, int dirc, int magic, char **newp, int *droppe
 static int prevchr_len;    // byte length of previous char
 static int at_start;       // True when on the first character
 static int prev_at_start;  // True when on the second character
+static int after_slash;    // for peekchr() recursive call depth tracking
+
+// --- Parse state accessors for Rust FFI ---
+
+char *nvim_regexp_get_regparse(void) { return regparse; }
+void nvim_regexp_set_regparse(char *p) { regparse = p; }
+int nvim_regexp_get_prevchr_len(void) { return prevchr_len; }
+void nvim_regexp_set_prevchr_len(int v) { prevchr_len = v; }
+int nvim_regexp_get_curchr(void) { return curchr; }
+void nvim_regexp_set_curchr(int v) { curchr = v; }
+int nvim_regexp_get_prevchr(void) { return prevchr; }
+void nvim_regexp_set_prevchr(int v) { prevchr = v; }
+int nvim_regexp_get_prevprevchr(void) { return prevprevchr; }
+void nvim_regexp_set_prevprevchr(int v) { prevprevchr = v; }
+int nvim_regexp_get_nextchr(void) { return nextchr; }
+void nvim_regexp_set_nextchr(int v) { nextchr = v; }
+int nvim_regexp_get_at_start(void) { return at_start; }
+void nvim_regexp_set_at_start(int v) { at_start = v; }
+int nvim_regexp_get_prev_at_start(void) { return prev_at_start; }
+void nvim_regexp_set_prev_at_start(int v) { prev_at_start = v; }
+int nvim_regexp_get_regnpar(void) { return regnpar; }
+void nvim_regexp_set_regnpar(int v) { regnpar = v; }
+int nvim_regexp_get_reg_magic(void) { return (int)reg_magic; }
+void nvim_regexp_set_reg_magic(int v) { reg_magic = (magic_T)v; }
+int nvim_regexp_get_after_slash(void) { return after_slash; }
+void nvim_regexp_set_after_slash(int v) { after_slash = v; }
 
 // Start parsing at "str".
 static void initchr(char *str)
@@ -801,8 +827,6 @@ static void restore_parse_state(parse_state_T *ps)
 // Get the next character without advancing.
 static int peekchr(void)
 {
-  static int after_slash = false;
-
   if (curchr != -1) {
     return curchr;
   }
@@ -1213,6 +1237,17 @@ typedef struct {
 
 static regexec_T rex;
 static bool rex_in_use = false;
+
+// --- Rex and error accessors for Rust FFI ---
+int nvim_regexp_get_rex_reg_ic(void) { return rex.reg_ic; }
+int nvim_regexp_get_rex_reg_icombine(void) { return rex.reg_icombine; }
+
+int nvim_regexp_emsg2_fail(const char *msg, int is_magic_all)
+{
+  semsg(msg, is_magic_all ? "" : "\\");
+  rc_did_emsg = true;
+  return FAIL;
+}
 
 static void reg_breakcheck(void)
 {
