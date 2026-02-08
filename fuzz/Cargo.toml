@@ -1,0 +1,23 @@
+[package]
+name = "nvim-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+# Uncomment when the regexp crate exists:
+# nvim-regexp = { path = "../src/nvim-rs/regexp" }
+
+[[bin]]
+name = "regexp_compile"
+path = "fuzz_targets/regexp_compile.rs"
+doc = false
+
+[[bin]]
+name = "regexp_match"
+path = "fuzz_targets/regexp_match.rs"
+doc = false

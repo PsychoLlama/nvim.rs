@@ -1,0 +1,782 @@
+# Regexp differential testing corpus
+# Format: PATTERN<tab>INPUT
+# Lines starting with # are comments, blank lines are ignored.
+#
+# Sources:
+#   - test/old/testdir/test_regexp_latin.vim
+#   - test/old/testdir/test_regexp_utf8.vim
+#   - runtime/syntax/{c,python,vim}.vim
+#   - Hand-crafted edge cases
+
+# === Basic literal matching ===
+abc	xabcx
+xyz	xyz
+hello	hello world
+foo	bar
+x	abcdef
+
+# === Anchors ===
+^abc	abc def
+^abc	xabc
+abc$	xyzabc
+abc$	abcx
+^$
+^$	notempty
+^hello$	hello
+^hello$	hello world
+
+# === Star (zero or more) ===
+ab*c	ac
+ab*c	abc
+ab*c	abbbc
+ab*c	adc
+a*	aaaa
+a*	bbbb
+bc*	abccccdef
+c*	ccc
+
+# === Plus (one or more) ===
+ab\+c	abc
+ab\+c	abbbc
+ab\+c	ac
+bc\+	abccccdef
+
+# === Optional ===
+ab\?c	abc
+ab\?c	ac
+ab\?c	abbc
+bc\?	abccd
+
+# === Count quantifiers ===
+a\{2}	aaaa
+a\{3}	aaaa
+a\{3,6}	aaaaaaaa
+a\{0,}	aaaaa aa
+a\{-2,7}	aaaaaaaaaaaaa
+a\{2,7}	aaaaaaaaaaaaaaaaaaaa
+a\{-}	aaaa
+a\{-1,3}	aaaa
+
+# === Dot (any character) ===
+a.c	abc
+a.c	aXc
+a.c	ac
+a..c	abbc
+
+# === Character classes ===
+[abc]	axyz
+[abc]	xyz
+[a-z]	Hello
+[A-Z]	hello World
+[0-9]	abc123
+[a-d][e-f][x-x]d	cexdxx
+[^abc]	abcdef
+[^abc]\+	abcdefgh
+[[:alpha:]]\+	abcdefghijklmnopqrstuvwxyz6
+[[:digit:]]	test 10e23 fd
+[[:upper:]]	abcDef
+[[:lower:]]	ABCdEF
+[[:space:]]	hello world
+[[:alnum:]]\+	abc123!@#
+
+# === POSIX character classes (extended) ===
+[[:xdigit:]]	ghijk0abc
+[[:print:]]	hello
+[[:punct:]]	abc!def
+
+# === Alternation ===
+abc\|def	abcdef
+abc\|def	defabc
+foo\|bar	foobar
+foo\|bar	barfoo
+a\|ab	cabd
+
+# === Groups and backreferences ===
+\(abc\)	xabcx
+\(abc\)\1	abcabc
+\(abc\)\1	abcdef
+\(a\+\)b\1	aabaa
+\(\i\+\) \1	 abc abc
+\(\d*\)a \1b	 a b
+^\(a*\)\1$	aaaaaaaa
+\(a\)\(b\)\(c\)\(d\)\(e\)\(f\)\(g\)\(h\)\(i\)\1\2\3\4\5\6\7\8\9	abcdefghiabcdefghi
+
+# === Group repetition ===
+\(abc\)*	abcabcabc
+\(ab\)\+	abababaaaaa
+\(ab\)\{2,3}	abababab
+
+# === Nested groups ===
+\(\(ab\)\+\)c	ababc
+\(a\(bc\)\)	abcx
+
+# === Very magic mode ===
+\v(abc)+	abcabc
+\v[0-9]+	abc123def
+\vfoo|bar	foobar
+\v^hello$	hello
+\v(a|b|c)+	aacb
+\v(ab){1,2}	ababc
+\va{1}	a
+
+# === Nomagic mode ===
+\Mabc	xabcx
+\M^abc	abcdef
+
+# === Very nomagic mode ===
+\Vabc	xabcx
+\V[abc]	x[abc]x
+\V.	a.b
+
+# === Magic mode switches in pattern ===
+\vfoo\V.bar	foo.bar
+abc\v(def)	abcdef
+
+# === Zero-width assertions: \zs and \ze ===
+abc\ze.	abcdef
+abc\zsdd	ddabcddxyzt
+\zsfoo	xfoox
+foo\ze	xfoox
+
+# === Lookahead ===
+abc\@=	abc
+abc\@=cd	abcd
+foo\(bar\)\@=	foobar
+foo\(bar\)\@=baz	foobaz
+
+# === Negative lookahead ===
+foo\(bar\)\@!	foobaz
+foo\(bar\)\@!	foobar
+
+# === Lookbehind ===
+\(foo\)\@<=bar	foobar
+\(foo\)\@<=bar	xbar
+<\@<=span.	xxspanxx<spanyyy
+
+# === Negative lookbehind ===
+\(foo\)\@<!bar	xbar
+\(foo\)\@<!bar	foobar
+
+# === Word boundaries ===
+\<word\>	a word here
+\<word\>	awordhere
+\<hello	hello world
+world\>	hello world
+
+# === Start/end of file ===
+\%^hello	hello world
+\%^hello	xhello
+world\%$	hello world
+
+# === Unicode escapes ===
+\%d32	yes no
+\%o40	yes no
+\%x20	yes no
+\%u0020	yes no
+\%U00000020	yes no
+\%d65	ABC
+\%x41	ABC
+
+# === Identifier/keyword/filename character classes ===
+\i\+	abc_123 xyz
+\I\+	abc_123 xyz
+\k\+	hello_world
+\f\+	/usr/bin/vim
+\p\+	hello world
+
+# === Whitespace classes ===
+\s\+	hello   world
+\S\+	hello   world
+
+# === Digit/hex classes ===
+\d\+	abc123def
+\D\+	abc123def
+\x\+	deadBEEF_xyz
+\X\+	deadBEEF_xyz
+
+# === Optional sequence \%[...] ===
+foo\%[bar]	foobar
+foo\%[bar]	foob
+foo\%[bar]	foo
+foo\%[bar]	foobax
+
+# === Collection ranges with special chars ===
+[\]a]	]xyz
+[\^a]	^xyz
+[a\-z]	a-z test
+[-az]	-test
+[az-]	test-
+
+# === Escaped special characters ===
+a\.b	a.b
+a\.b	axb
+a\*b	a*b
+a\\b	a\b
+
+# === Multi-line patterns (for multiline regexp engine) ===
+foo\nbar	foo\nbar
+hello\_.world	hello\nworld
+
+# === Case insensitive ===
+\cfoo	FOO
+\cFOO	foo
+\Cfoo	FOO
+\Cfoo	foo
+
+# === Combining patterns from syntax files ===
+
+# C-style format specifier (simplified)
+%[-+0 ]*\d*\.\?\d*[diouxXeEfFgGcs]	printf("%d", x)
+%[-+0 ]*\d*\.\?\d*[diouxXeEfFgGcs]	printf("%-10.2f", 3.14)
+
+# C-style escape sequences
+\\[abfnrtv'"\\]	a newline is \n
+\\x\x\{2}	hex escape \x1a here
+\\[0-7]\{1,3}	octal \012 here
+
+# Python-style numbers
+\<0[xX]\x\+\>	val = 0xFF
+\<0[oO][0-7]\+\>	val = 0o77
+\<0[bB][01]\+\>	val = 0b1010
+\<\d\+\.\d*\>	val = 3.14
+
+# Python decorator
+@\h\w*	@staticmethod
+
+# === Empty pattern edge cases ===
+\(a*\)*	cc
+\(a\?\)*	x
+
+# === Quantifier edge cases ===
+\(a\{0,0}\)	abc
+a\{1,1}	abc
+a\{0,1}	abc
+a\{0,0}	abc
+
+# === Patterns with NUL-adjacent behavior ===
+.$	abc
+^.	abc
+.\+	abc
+.\{-}	abc
+
+# === Complex real-world patterns ===
+# Vim function call
+\<\h\w*\s*(	call func(arg)
+# Email-like pattern
+\w\+@\w\+\.\w\+	user@host.com
+# IP-like pattern
+\d\+\.\d\+\.\d\+\.\d\+	192.168.1.1
+# Path-like pattern
+/\f\+	file is /usr/bin/vim
+
+# === Patterns with backslash sequences ===
+\n	line1\nline2
+\t	word1\tword2
+\r	text\rmore
+
+# === Tricky patterns that previously caused issues ===
+# Nested quantifiers (potential for exponential blowup)
+\(a\+\)\+b	aaaaaaaab
+\(a*\)\+b	b
+# Alternation with overlap
+\(ab\|a\)b	ab
+\(a\|ab\)b	abb
+# Greedy vs lazy
+a.\{-}b	aXbYb
+a.*b	aXbYb
+# Backreference to empty capture
+\(\)x\1	x
+# Pattern ending with quantifier
+a\+	aaaa
+a*
+[a-z]*	ABC
+
+# === UTF-8 patterns ===
+[[:alpha:]]\+	café
+ñ	mañana
+ü\+	Büücher
+[àáâãä]	crème brûlée
+
+# === Equivalence classes ===
+[[=a=]]	aàáâãä
+
+# === Large collection ===
+[abcdefghijklmnopqrstuvwxyz]	Hello World
+[^abcdefghijklmnopqrstuvwxyz ]	Hello World!
+
+# === Patterns from Vim help file matching ===
+\*\S\+\*	help *tag* here
+|\S\+|	see |option| for
+`\S\+`	use `command` here
+
+# === Column/line position assertions ===
+\%1c.	abcdef
+\%3c.	abcdef
+
+# === Additional syntax highlighting patterns ===
+# C preprocessor
+^\s*#\s*\(if\|ifdef\|ifndef\|else\|elif\|endif\)	#ifdef FOO
+# C string
+"[^"]*"	char *s = "hello"
+# C single-line comment
+//.*$	code // comment
+# C block comment start
+/\*	start /* comment
+
+# === Patterns that stress the NFA engine ===
+\(a\|b\)*c	aababababababababababc
+\(.\)\1	aabbc
+[a-z]\+[0-9]\+	abc123
+\(\w\+\)\s\+\1	the the
+
+# === Atomic grouping (\@>) ===
+\(a*\)\@>a	aaaa
+\(a*\)\@>b	aaab
+^\(.\{-}b\)\@>.	  abcbd
+\(.\{-}\)\(\)\@>$	abc
+\(a*\)\@>a\|a\+	aaaa
+
+# === Include-newline character classes (\_) ===
+\_.\+	a\nb\nc
+\_i\+	a\nb\n;\n2
+\_I\+	a\nb\n;\n2
+\_k\+	a\nb\n=\n2
+\_K\+	a\nb\n=\n2
+\_f\+	a\nb\n.\n5
+\_F\+	a\nb\n.\n5
+\_p\+	a\nb\n=\n4
+\_P\+	a\nb\n=\n4
+\_s\+	 \n \na\nb
+\_S\+	 \n \na\nb
+\_d\+	1\na\n2\nb\n3
+\_D\+	1\na\n2\nb\n3
+\_x\+	1\na\ng\n9\n8
+\_X\+	1\na\ng\n9\n8
+\_o\+	0\n7\n8\n9\n0
+\_O\+	0\n7\n8\n9\n0
+\_w\+	A\nB\n=\nC\nD
+\_W\+	A\nB\n=\nC\nD
+\_h\+	a\n1\nb\n2\nc
+\_H\+	a\n1\nb\n2\nc
+\_a\+	a\n1\nb\n2\nc
+\_A\+	a\n1\nb\n2\nc
+\_l\+	a\nA\nb\nB
+\_L\+	a\nA\nb\nB
+\_u\+	a\nA\nb\nB
+\_U\+	a\nA\nb\nB
+\_[a-z]\+	a\nA\nb\nB
+\_[^8-9]\+	asfi\n9888
+\_[^a]\+	asfi\n9888
+\_f	  \na
+\_f\+	  \na
+
+# === Position assertions (\%c, \%l, \%v) ===
+\%>3c.	ffooooo
+\%<3c.	zoooooo
+\%5c.	abcdef
+\%2c.	abcdef
+\%1l.*	first line
+
+# === Lookbehind with explicit width ===
+<\@1<=span.	xxspanxx<spanyyy
+<\@2<=span.	xxspanxx<spanyyy
+\(<<\)\@<=span.	xxspanxxxx<spanxx<<spanyyy
+\(<<\)\@1<=span.	xxspanxxxx<spanxx<<spanyyy
+\(<<\)\@2<=span.	xxspanxxxx<spanxx<<spanyyy
+\(foo\)\@<!bar.	xx foobar1 xbar2 xx
+
+# === UTF-8 multi-byte patterns ===
+[[:alpha:][=a=]]\+	879 aiaãâaiuvna
+[[=a=]]\+	ddaãâbcd
+[^[=a=]]\+	ddaãâbcd
+\p\+	ìa
+\p*	aあ
+
+# === Composing character patterns ===
+a\%C	cat
+
+# === Complex very-magic patterns ===
+\v(foo|bar)(baz|qux)	foobaz
+\v^\s*#	  # comment
+\v\d+\.\d+	version 1.23
+\v<\w+>	a word here
+\v\w+(\.\w+)*	foo.bar.baz
+\v(a{2,3}){2}	aaaa
+\v(a{2,3}){2}	aaaaaa
+
+# === Patterns with \%[] optional sequence variants ===
+foo\%[barbaz]	foobar
+foo\%[barbaz]	foob
+foo\%[barbaz]	foo
+\%[abc]d	abcd
+\%[abc]d	d
+
+# === Additional backreference patterns ===
+\(a\+\)\1	aaaa
+\(a\+\)\1	aaa
+\([abc]\)\1	aabb
+\(.\)\(.\)\2\1	abba
+\(.\)\(.\)\2\1	abbc
+
+# === Non-greedy quantifier variants ===
+a\{-}b	aaab
+a\{-1,}b	aaab
+a\{-,3}b	aaab
+a\{-2,4}b	aaab
+
+# === Pattern with multiple alternatives ===
+one\|two\|three	one
+one\|two\|three	two
+one\|two\|three	three
+one\|two\|three	four
+\(one\|two\)\+	onetwoonetwo
+
+# === Collection with escaped chars ===
+[\\]	backslash\here
+[\t]	has	tab
+[\/]	has/slash
+
+# === Very magic collections and groups ===
+\v[[:digit:]]+	abc123
+\v(\w+)\s+\1	the the cat
+\v^(\w+).*\1$	abcXXXabc
+
+# === Patterns from syntax highlighting (more complex) ===
+# Vim autocommand pattern
+\<\(BufRead\|BufNewFile\|FileType\)\>	autocmd BufRead *.txt
+# Help tag
+\*[^*]\+\*	see *help-tag* for info
+# Fold marker
+{{{	text {{{ fold start
+}}}	text }}} fold end
+
+# === Multi-byte word boundary ===
+\<café\>	the café is open
+\<über\>	an über cool thing
+
+# === Complex nested quantifier patterns ===
+\(\(a*\)\+\)	aaaa
+\(a\(b\(c\)\)\)	abc
+\(a\?\)\+	aaa
+\(a\?\(b\?\)\)\+	ab
+
+# === Patterns testing engine differences ===
+\%#=1\(e\)\1	threee
+\%#=2\(e\)\1	threee
+
+# === Additional edge cases ===
+# Delimiter chars in pattern
+\\	backslash
+\\.	a.b
+# Pattern that matches empty string
+\(\)	anything
+\(a*\)	nothing
+# Single-char patterns
+a	a
+.	x
+\d	5
+\w	_
+\s
+
+# === Patterns with \_ and collections ===
+\_[[:alpha:]]\+	hello\nworld
+\_[0-9]\+	12\n34\n56
+
+# === Additional C syntax patterns ===
+\<\(int\|char\|void\|double\|float\|long\|short\|unsigned\|signed\|struct\|enum\|union\)\>	int x = 0;
+0[xX][0-9a-fA-F]\+	int val = 0xFF;
+\<[A-Z_]\{2,}\>	use MAX_SIZE here
+
+# === Additional Python syntax patterns ===
+^\s*\(def\|class\)\>	  def my_function():
+\<\(True\|False\|None\)\>	x = True
+'''	text = '''hello'''
+"""	text = """hello"""
+
+# === Patterns with \zs and \ze combinations ===
+\<\zs\w\+\ze\>	a word here
+^\zs\s*\ze\S	   hello
+\d\+\zs\.\ze\d\+	version 1.23 is out
+
+# === Additional stress tests ===
+\(ab\|cd\)\+ef	abcdabcdef
+\(a\|b\)\{10}	aaaaaaaaaa
+\(a\|b\)\{10}	abababababc
+[a-zA-Z_][a-zA-Z0-9_]*	_my_var_123
+
+# === Edge cases for empty match handling ===
+a*b	b
+\(a*\)b	b
+\(a\?\)*b	b
+
+# === Systematic quantifier coverage with various inputs ===
+x\{0}y	xy
+x\{0}y	y
+x\{1}y	xy
+x\{1}y	y
+x\{1}y	xxy
+x\{2}y	xxy
+x\{2}y	xy
+x\{0,2}y	y
+x\{0,2}y	xy
+x\{0,2}y	xxy
+x\{0,2}y	xxxy
+x\{2,}y	xxy
+x\{2,}y	xxxxy
+x\{2,}y	xy
+x\{-0,2}y	y
+x\{-0,2}y	xy
+x\{-0,2}y	xxy
+
+# === More character class combinations ===
+[abc][def]	aexyz
+[abc][def]	bfxyz
+[abc][def]	abxyz
+[a-zA-Z]	123a456
+[^a-zA-Z]	abc1def
+[a-z-]	test-case
+[]-]	test-]
+[0-9a-f]\+	DEADBEEF
+[[:alpha:][:digit:]]\+	abc123
+[[:upper:]][[:lower:]]\+	Hello
+[[:blank:]]\+	word 	word
+
+# === Alternation edge cases ===
+\|foo	bar
+foo\|	foobar
+\(foo\|bar\|baz\|qux\)	qux is here
+a\|b\|c\|d\|e	testing e here
+\(a*\|b\)c	bc
+\(a*\|b\)c	ac
+\(a*\|b\)c	aac
+
+# === More group patterns ===
+\(a\)\(b\)\(c\)	xabcx
+\(a\).*\(b\)	a___b
+\(foo\)\?bar	foobar
+\(foo\)\?bar	bar
+\(foo\)\?bar	fobar
+
+# === Nested alternation ===
+\(\(a\|b\)\(c\|d\)\)\+	acbdac
+\(a\(b\|c\)d\)\+	abdacd
+
+# === Very magic alternation and grouping ===
+\v(a|b)(c|d)	ad
+\v(a|b)(c|d)	bc
+\va+|b+	aaabbb
+\v(a+b)+	aababaab
+
+# === Multi-line with \_ variants ===
+\_^abc	abc
+\_$abc	abc
+\_.	a
+
+# === Character class shorthand in various positions ===
+\d\d\d	phone 555 here
+\d\d\d-\d\d\d\d	phone 555-1234
+\a\+	123abc456
+\l\+	ABCdefGHI
+\u\+	ABCdefGHI
+\o\+	7890123
+\w\w\w\w	ab_d efgh
+
+# === Backreference edge cases ===
+\(a\)\1\1	aaa
+\(a\)\1\1	aa
+\(.\)\1\{2}	aaaa
+\(.\)\1\{2}	aaa
+\(ab\)\1	abab
+\(ab\)\1	abc
+
+# === Star/plus at start of grouped expressions ===
+\(a*b\)*	ababaab
+\(a\+b\)\+	aabab
+\(\s*\w\+\)\+	  hello   world
+
+# === Pattern with explicit newline matching ===
+\v.+	hello world
+\v.{5}	abcdefgh
+\v.{2,4}	abcdefgh
+
+# === Escape sequence coverage ===
+\e	text\x1bmore
+\b	word\bmore
+
+# === Additional \%[] optional sequence tests ===
+\%[foobar]x	fx
+\%[foobar]x	fox
+\%[foobar]x	foox
+\%[foobar]x	foobx
+\%[foobar]x	foobarx
+\%[foobar]x	x
+
+# === Patterns matching at various positions in string ===
+^abc	abcdef
+^abc	xabcdef
+abc$	xyzabc
+abc$	xyzabcx
+abc	abcabc
+abc	xxabcxx
+
+# === Patterns with literal special chars ===
+\[	test[bracket
+\]	test]bracket
+\(	test(paren
+\)	test)paren
+\{	test{brace
+\}	test}brace
+
+# === Patterns testing greediness ===
+a.*b	axbyb
+a.\{-}b	axbyb
+a\+	aaa
+a\{-1,}	aaa
+\(a\+\)\(b\+\)	aabbb
+\(a\{-1,}\)\(b\+\)	aabbb
+
+# === Additional position assertions ===
+\%>0c.	hello
+\%<5c.	hello
+\%>2c\%<5c.	hello
+\%>1c.\+\%<6c	hello world
+
+# === Patterns from real Vim syntax files ===
+# URL-like
+\<https\?://\S\+	visit https://example.com now
+# TODO/FIXME
+\<\(TODO\|FIXME\|XXX\|HACK\)\>	// TODO: fix this
+# Trailing whitespace
+\s\+$	line with trailing space
+# Leading whitespace
+^\s\+	   indented line
+
+# === Vim-specific regex features ===
+# Match buffer line number
+\%3l.*	this is line 3
+# Match column range
+\%>5c\%<10c\S\+	col  hello  world
+# Virtual column
+\%5v.	tab	here
+
+# === Systematic magic mode testing ===
+\m[abc]	axyz
+\m\(abc\)	xabcx
+\m.*	hello
+\M[abc]	[abc]
+\M\[abc\]	axyz
+\M\.\*	hello.*world
+\V[abc]	[abc]xyz
+\V\[abc\]	[abc]xyz
+\v[abc]	axyz
+\v(abc)	xabcx
+\v.*	hello
+
+# === Patterns with concatenated escapes ===
+\d\+\.\d\+\.\d\+	1.2.3
+\w\+\s\+\w\+\s\+\w\+	one two three
+\u\+\l\+\d\+	ABCdef123
+
+# === More complex real-world patterns ===
+# Variable assignment
+\<\h\w*\>\s*=[^=]	x = 5
+# Function definition
+^\s*\(function\|def\|fn\|func\)\s\+\h\w*	  function myFunc
+# String in quotes
+'[^']*'	she said 'hello' to him
+# Number with optional sign
+[+-]\?\d\+	answer is -42 or +7
+# Hexadecimal number
+0[xX][0-9a-fA-F]\+	value is 0xDEAD
+
+# === Engine selection patterns ===
+\%#=0abc	xabcx
+\%#=1abc	xabcx
+\%#=2abc	xabcx
+
+# === Multibyte in various positions ===
+^café$	café
+café\|latte	I want a latte
+\<café\>	drink café now
+[éèêë]	accent è here
+[àáâã]\+	aaáâã test
+
+# === More complex backreference patterns ===
+\(.\)\(.\).*\2\(.\).*\3	abcbdcd
+\(.\{2}\)\1	abab
+\(.\{2}\)\1	abcd
+\(.\{3}\)\1	abcabc
+
+# === Long literal patterns ===
+the quick brown fox	the quick brown fox jumps
+hello world	hello world and more
+
+# === Patterns with multiple zero-width assertions ===
+\<\w\+\>\zs\s\+\ze\<\w\+\>	first   second
+\(foo\)\@<=\(bar\)\@=bar	foobar
+
+# === Quantifier with groups and alternation ===
+\(foo\|bar\)\{2,4}	foobarfoo
+\(a\|bb\)\+	abbabba
+\([abc]\|[def]\)\+	abcdef
+
+# === Final stress patterns ===
+\(a\|b\|c\|d\|e\|f\)\+	abcdef
+\(\w\)\(\w\)\(\w\)\3\2\1	abccba
+\(\w\)\(\w\)\(\w\)\3\2\1	abcdef
+^\s*\zs\S\+\ze\s*$	  hello
+\v^\s*\zs\S+\ze\s*$	  hello
+
+# === Systematic exhaustive coverage additions ===
+# Every character class shorthand matched and unmatched
+\a	1
+\a	a
+\A	a
+\A	1
+\l	A
+\l	a
+\L	a
+\L	A
+\u	a
+\u	A
+\U	A
+\U	a
+\o	8
+\o	7
+\O	7
+\O	8
+\w	!
+\w	a
+\W	a
+\W	!
+\h	1
+\h	a
+\H	a
+\H	1
+
+# === Vim-specific character class shorthand variants ===
+\i	!
+\i	a
+\I	a
+\I	1
+\k	!
+\k	a
+\K	a
+\K	!
+\f
+\f	/
+\F	/
+\F	!
+\p	\x01
+\p	a
+\P	a
+
+# === Simple patterns with known outputs for regression testing ===
+^.\+$	hello
+^.\{3}$	abc
+^.\{3}$	ab
+^.\{3}$	abcd
+^[^ ]\+$	hello
+^[^ ]\+$	hello world
+^\S\+$	test
+^\S\+$	te st

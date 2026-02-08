@@ -103,6 +103,9 @@ members = [
     "src/nvim-rs/vars",
     "src/nvim-rs/vterm",
 ]
+exclude = [
+    "fuzz",
+]
 
 [workspace.package]
 version = "0.1.0"

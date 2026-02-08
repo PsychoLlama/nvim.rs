@@ -144,11 +144,21 @@ rust-fmt-check:
 rust-check: rust-fmt-check rust-clippy rust-test
 
 # Test Rust FFI from C (compares Rust vs C implementations)
-# Note: Only compare_math works standalone. Other tests need Neovim's C code
-# (utf8proc, global variables, accessor functions) - run them via `just test`
+# Note: Only compare_math and compare_regexp work standalone. Other tests need
+# Neovim's C code (utf8proc, global variables, accessor functions) - run them via `just test`
 rust-ffi-test: rust-build
     cc -o /tmp/compare_math src/nvim-rs/test/compare_math.c -L target/release -lnvim_rs -lpthread -ldl -lm
     /tmp/compare_math
+    cc -o /tmp/compare_regexp src/nvim-rs/test/compare_regexp.c -L target/release -lnvim_rs -lpthread -ldl -lm
+    /tmp/compare_regexp
+
+# Generate regexp baseline corpus from the C engine
+regexp-baseline: build
+    VIMRUNTIME=runtime ./build/bin/nvim --headless -S test/regexp_baseline.vim
+
+# Run regexp fuzz targets (requires cargo-fuzz)
+regexp-fuzz target='regexp_compile' duration='60':
+    cd fuzz && cargo +nightly fuzz run {{target}} -- -max_total_time={{duration}}
 
 # Full build: Rust + C
 build-all: rust-build build

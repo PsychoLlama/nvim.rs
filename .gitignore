@@ -88,6 +88,9 @@ CMakeUserPresets.json
 
 # Rust/Cargo
 /target/
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
 Cargo.lock
 
 # Claude Code loop state
