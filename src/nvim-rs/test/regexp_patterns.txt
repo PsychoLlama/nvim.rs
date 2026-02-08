@@ -840,3 +840,10 @@ a\@<!	xbcd
 # regbranch: branch parsing with & operator
 \(foo\&...\)	foobar
 \(a\&.\)\{3}	abc
+
+# reg: top-level parser with groups and alternation
+\(foo\)	foobar
+\%(foo\)	foobar
+\(a\|b\)	abc
+\(\(nested\)\)	nested
+\(a\(b\(c\)\)\)	abc

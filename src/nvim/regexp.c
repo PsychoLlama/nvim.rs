@@ -86,6 +86,7 @@ extern void rs_reginsert_limits(int op, int64_t minval, int64_t maxval, uint8_t 
 extern uint8_t *rs_regpiece(int *flagp);
 extern uint8_t *rs_regconcat(int *flagp);
 extern uint8_t *rs_regbranch(int *flagp);
+extern uint8_t *rs_reg(int paren, int *flagp);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -1879,6 +1880,44 @@ void nvim_regexp_emsg2_e61(int m)
 void nvim_regexp_emsg3_e62(int m, int c)
 {
   semsg(_("E62: Nested %s%c"), m ? "" : "\\", c);
+  rc_did_emsg = true;
+}
+int nvim_regexp_get_regnzpar(void) { return regnzpar; }
+void nvim_regexp_set_regnzpar(int v) { regnzpar = v; }
+void nvim_regexp_set_had_endbrace(int parno, int v) { had_endbrace[parno] = (uint8_t)v; }
+void nvim_regexp_emsg_e50(void)
+{
+  emsg(_("E50: Too many \\z("));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e51(int m)
+{
+  semsg(_("E51: Too many %s("), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e52(void)
+{
+  emsg(_("E52: Unmatched \\z("));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e53(int m)
+{
+  semsg(_(e_unmatchedpp), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e54(int m)
+{
+  semsg(_(e_unmatchedp), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e55(int m)
+{
+  semsg(_(e_unmatchedpar), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e488(void)
+{
+  emsg(_(e_trailing));
   rc_did_emsg = true;
 }
 
@@ -3915,101 +3954,7 @@ static uint8_t *regbranch(int *flagp)
 /// @param paren  REG_NOPAREN, REG_PAREN, REG_NPAREN or REG_ZPAREN
 static uint8_t *reg(int paren, int *flagp)
 {
-  uint8_t *ret;
-  uint8_t *br;
-  uint8_t *ender;
-  int parno = 0;
-  int flags;
-
-  *flagp = HASWIDTH;            // Tentatively.
-
-  if (paren == REG_ZPAREN) {
-    // Make a ZOPEN node.
-    if (regnzpar >= NSUBEXP) {
-      EMSG_RET_NULL(_("E50: Too many \\z("));
-    }
-    parno = regnzpar;
-    regnzpar++;
-    ret = regnode(ZOPEN + parno);
-  } else if (paren == REG_PAREN) {
-    // Make a MOPEN node.
-    if (regnpar >= NSUBEXP) {
-      EMSG2_RET_NULL(_("E51: Too many %s("), reg_magic == MAGIC_ALL);
-    }
-    parno = regnpar;
-    regnpar++;
-    ret = regnode(MOPEN + parno);
-  } else if (paren == REG_NPAREN) {
-    // Make a NOPEN node.
-    ret = regnode(NOPEN);
-  } else {
-    ret = NULL;
-  }
-
-  // Pick up the branches, linking them together.
-  br = regbranch(&flags);
-  if (br == NULL) {
-    return NULL;
-  }
-  if (ret != NULL) {
-    regtail(ret, br);           // [MZ]OPEN -> first.
-  } else {
-    ret = br;
-  }
-  // If one of the branches can be zero-width, the whole thing can.
-  // If one of the branches has * at start or matches a line-break, the
-  // whole thing can.
-  if (!(flags & HASWIDTH)) {
-    *flagp &= ~HASWIDTH;
-  }
-  *flagp |= flags & (SPSTART | HASNL | HASLOOKBH);
-  while (peekchr() == Magic('|')) {
-    skipchr();
-    br = regbranch(&flags);
-    if (br == NULL || reg_toolong) {
-      return NULL;
-    }
-    regtail(ret, br);           // BRANCH -> BRANCH.
-    if (!(flags & HASWIDTH)) {
-      *flagp &= ~HASWIDTH;
-    }
-    *flagp |= flags & (SPSTART | HASNL | HASLOOKBH);
-  }
-
-  // Make a closing node, and hook it on the end.
-  ender = regnode(paren == REG_ZPAREN ? ZCLOSE + parno
-                                      : paren == REG_PAREN ? MCLOSE + parno
-                                                           : paren == REG_NPAREN ? NCLOSE : END);
-  regtail(ret, ender);
-
-  // Hook the tails of the branches to the closing node.
-  for (br = ret; br != NULL; br = regnext(br)) {
-    regoptail(br, ender);
-  }
-
-  // Check for proper termination.
-  if (paren != REG_NOPAREN && getchr() != Magic(')')) {
-    if (paren == REG_ZPAREN) {
-      EMSG_RET_NULL(_("E52: Unmatched \\z("));
-    } else if (paren == REG_NPAREN) {
-      EMSG2_RET_NULL(_(e_unmatchedpp), reg_magic == MAGIC_ALL);
-    } else {
-      EMSG2_RET_NULL(_(e_unmatchedp), reg_magic == MAGIC_ALL);
-    }
-  } else if (paren == REG_NOPAREN && peekchr() != NUL) {
-    if (curchr == Magic(')')) {
-      EMSG2_RET_NULL(_(e_unmatchedpar), reg_magic == MAGIC_ALL);
-    } else {
-      EMSG_RET_NULL(_(e_trailing));             // "Can't happen".
-    }
-    // NOTREACHED
-  }
-  // Here we set the flag allowing back references to this set of
-  // parentheses.
-  if (paren == REG_PAREN) {
-    had_endbrace[parno] = true;  // have seen the close paren
-  }
-  return ret;
+  return rs_reg(paren, flagp);
 }
 
 // bt_regcomp() - compile a regular expression into internal code for the

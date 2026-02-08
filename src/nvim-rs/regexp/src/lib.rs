@@ -2842,6 +2842,137 @@ pub unsafe extern "C" fn rs_regbranch(flagp: *mut c_int) -> *mut u8 {
     ret
 }
 
+extern "C" {
+    fn nvim_regexp_get_regnzpar() -> c_int;
+    fn nvim_regexp_set_regnzpar(v: c_int);
+    fn nvim_regexp_set_had_endbrace(parno: c_int, v: c_int);
+    fn nvim_regexp_emsg_e50();
+    fn nvim_regexp_emsg2_e51(m: c_int);
+    fn nvim_regexp_emsg_e52();
+    fn nvim_regexp_emsg2_e53(m: c_int);
+    fn nvim_regexp_emsg2_e54(m: c_int);
+    fn nvim_regexp_emsg2_e55(m: c_int);
+    fn nvim_regexp_emsg_e488();
+}
+
+/// Parse regular expression, i.e. main body or parenthesized thing.
+/// Caller must absorb opening parenthesis.
+///
+/// `paren`: `REG_NOPAREN`, `REG_PAREN`, `REG_NPAREN` or `REG_ZPAREN`
+#[no_mangle]
+#[allow(clippy::similar_names, clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_reg(paren: c_int, flagp: *mut c_int) -> *mut u8 {
+    let mut parno: c_int = 0;
+    let mut flags: c_int = 0;
+
+    *flagp = HASWIDTH; // Tentatively.
+
+    let mut ret: *mut u8;
+    if paren == REG_ZPAREN {
+        // Make a ZOPEN node.
+        let nzpar = nvim_regexp_get_regnzpar();
+        if nzpar >= 10 {
+            nvim_regexp_emsg_e50();
+            return std::ptr::null_mut();
+        }
+        parno = nzpar;
+        nvim_regexp_set_regnzpar(nzpar + 1);
+        ret = rs_regnode(ZOPEN + parno);
+    } else if paren == REG_PAREN {
+        // Make a MOPEN node.
+        let npar = nvim_regexp_get_regnpar();
+        if npar >= 10 {
+            let reg_magic = nvim_regexp_get_reg_magic();
+            nvim_regexp_emsg2_e51(c_int::from(reg_magic == MAGIC_ALL));
+            return std::ptr::null_mut();
+        }
+        parno = npar;
+        nvim_regexp_set_regnpar(npar + 1);
+        ret = rs_regnode(MOPEN + parno);
+    } else if paren == REG_NPAREN {
+        // Make a NOPEN node.
+        ret = rs_regnode(NOPEN);
+    } else {
+        ret = std::ptr::null_mut();
+    }
+
+    // Pick up the branches, linking them together.
+    let mut br = rs_regbranch(&mut flags);
+    if br.is_null() {
+        return std::ptr::null_mut();
+    }
+    if ret.is_null() {
+        ret = br;
+    } else {
+        rs_regtail(ret, br); // [MZ]OPEN -> first.
+    }
+    // If one of the branches can be zero-width, the whole thing can.
+    // If one of the branches has * at start or matches a line-break, the
+    // whole thing can.
+    if flags & HASWIDTH == 0 {
+        *flagp &= !HASWIDTH;
+    }
+    *flagp |= flags & (SPSTART | HASNL | HASLOOKBH);
+    while rs_peekchr() == magic(b'|') {
+        rs_skipchr();
+        br = rs_regbranch(&mut flags);
+        if br.is_null() || nvim_regexp_get_reg_toolong() != 0 {
+            return std::ptr::null_mut();
+        }
+        rs_regtail(ret, br); // BRANCH -> BRANCH.
+        if flags & HASWIDTH == 0 {
+            *flagp &= !HASWIDTH;
+        }
+        *flagp |= flags & (SPSTART | HASNL | HASLOOKBH);
+    }
+
+    // Make a closing node, and hook it on the end.
+    let ender = rs_regnode(if paren == REG_ZPAREN {
+        ZCLOSE + parno
+    } else if paren == REG_PAREN {
+        MCLOSE + parno
+    } else if paren == REG_NPAREN {
+        NCLOSE
+    } else {
+        END
+    });
+    rs_regtail(ret, ender);
+
+    // Hook the tails of the branches to the closing node.
+    br = ret;
+    while !br.is_null() {
+        rs_regoptail(br, ender);
+        br = rs_regnext(br);
+    }
+
+    // Check for proper termination.
+    if paren != REG_NOPAREN && rs_getchr() != magic(b')') {
+        let reg_magic = nvim_regexp_get_reg_magic();
+        if paren == REG_ZPAREN {
+            nvim_regexp_emsg_e52();
+        } else if paren == REG_NPAREN {
+            nvim_regexp_emsg2_e53(c_int::from(reg_magic == MAGIC_ALL));
+        } else {
+            nvim_regexp_emsg2_e54(c_int::from(reg_magic == MAGIC_ALL));
+        }
+        return std::ptr::null_mut();
+    } else if paren == REG_NOPAREN && rs_peekchr() != 0 {
+        let reg_magic = nvim_regexp_get_reg_magic();
+        if nvim_regexp_get_curchr() == magic(b')') {
+            nvim_regexp_emsg2_e55(c_int::from(reg_magic == MAGIC_ALL));
+        } else {
+            nvim_regexp_emsg_e488(); // "Can't happen".
+        }
+        return std::ptr::null_mut();
+    }
+    // Here we set the flag allowing back references to this set of
+    // parentheses.
+    if paren == REG_PAREN {
+        nvim_regexp_set_had_endbrace(parno, 1); // have seen the close paren
+    }
+    ret
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
