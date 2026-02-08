@@ -50,6 +50,11 @@
 // Rust FFI: skip_regexp implementation
 extern char *rs_skip_regexp_ex(char *startp, int dirc, int magic, char **newp,
                                int *dropped, int *magic_val);
+// Rust FFI: regexp utility functions
+extern int rs_no_magic(int x);
+extern int rs_toggle_magic(int x);
+extern int rs_re_multi_type(int c);
+extern int rs_backslash_trans(int c);
 
 typedef enum {
   RGLF_LINE = 0x01,
@@ -306,18 +311,12 @@ typedef void (*fptr_T)(int *, int);
 
 static int no_Magic(int x)
 {
-  if (is_Magic(x)) {
-    return un_Magic(x);
-  }
-  return x;
+  return rs_no_magic(x);
 }
 
 static int toggle_Magic(int x)
 {
-  if (is_Magic(x)) {
-    return un_Magic(x);
-  }
-  return Magic(x);
+  return rs_toggle_magic(x);
 }
 
 // The first byte of the BT regexp internal "program" is actually this magic
@@ -390,13 +389,7 @@ static const char e_unicode_val_too_large[]
 /// Return MULTI_MULT if c is a multi "multi" operator.
 static int re_multi_type(int c)
 {
-  if (c == Magic('@') || c == Magic('=') || c == Magic('?')) {
-    return MULTI_ONE;
-  }
-  if (c == Magic('*') || c == Magic('+') || c == Magic('{')) {
-    return MULTI_MULT;
-  }
-  return NOT_MULTI;
+  return rs_re_multi_type(c);
 }
 
 static char *reg_prev_sub = NULL;
@@ -422,17 +415,7 @@ static char REGEXP_ABBR[] = "nrtebdoxuU";
 // Translate '\x' to its control character, except "\n", which is Magic.
 static int backslash_trans(int c)
 {
-  switch (c) {
-  case 'r':
-    return CAR;
-  case 't':
-    return TAB;
-  case 'e':
-    return ESC;
-  case 'b':
-    return BS;
-  }
-  return c;
+  return rs_backslash_trans(c);
 }
 
 enum {

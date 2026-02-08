@@ -109,8 +109,12 @@ char *xstrnsave(const char *s, size_t len) {
     return r;
 }
 
-// --- Rust FFI declaration ---
+// --- Rust FFI declarations ---
 extern char *rs_skip_regexp(char *startp, int delim, int magic);
+extern int rs_no_magic(int x);
+extern int rs_toggle_magic(int x);
+extern int rs_re_multi_type(int c);
+extern int rs_backslash_trans(int c);
 
 // --- Reference C implementation of skip_regexp (ASCII-only, simplified) ---
 // This mirrors the logic in src/nvim/regexp.c skip_regexp_ex() but without
@@ -462,6 +466,136 @@ void test_rust_vs_c_comparison(void) {
     compare_skip_regexp("only delimiter '/'", "/", '/', 1);
 }
 
+// --- Magic macros (matching regexp.c) ---
+#define Magic(x)        ((int)(x) - 256)
+#define un_Magic(x)     ((x) + 256)
+#define is_Magic(x)     ((x) < 0)
+
+// Multi-type constants
+#define NOT_MULTI       0
+#define MULTI_ONE       1
+#define MULTI_MULT      2
+
+// Control character constants
+#define C_BS    '\010'
+#define C_TAB   '\011'
+#define C_CAR   '\015'
+#define C_ESC   '\033'
+
+// --- C reference implementations ---
+
+static int c_no_Magic(int x)
+{
+    if (is_Magic(x)) {
+        return un_Magic(x);
+    }
+    return x;
+}
+
+static int c_toggle_Magic(int x)
+{
+    if (is_Magic(x)) {
+        return un_Magic(x);
+    }
+    return Magic(x);
+}
+
+static int c_re_multi_type(int c)
+{
+    if (c == Magic('@') || c == Magic('=') || c == Magic('?')) {
+        return MULTI_ONE;
+    }
+    if (c == Magic('*') || c == Magic('+') || c == Magic('{')) {
+        return MULTI_MULT;
+    }
+    return NOT_MULTI;
+}
+
+static int c_backslash_trans(int c)
+{
+    switch (c) {
+    case 'r': return C_CAR;
+    case 't': return C_TAB;
+    case 'e': return C_ESC;
+    case 'b': return C_BS;
+    }
+    return c;
+}
+
+// --- Comparison tests for Phase 1 functions ---
+
+void test_no_magic(void) {
+    printf("Testing no_Magic (C vs Rust, exhaustive [-512, 512)):\n");
+    int mismatches = 0;
+    for (int i = -512; i < 512; i++) {
+        int c_val = c_no_Magic(i);
+        int r_val = rs_no_magic(i);
+        if (c_val != r_val) {
+            if (mismatches < 5) {
+                printf("  MISMATCH at %d: C=%d Rust=%d\n", i, c_val, r_val);
+            }
+            mismatches++;
+        }
+    }
+    char name[128];
+    snprintf(name, sizeof(name), "no_Magic: %d/1024 values match", 1024 - mismatches);
+    TEST(name, mismatches == 0);
+}
+
+void test_toggle_magic(void) {
+    printf("Testing toggle_Magic (C vs Rust, exhaustive [-512, 512)):\n");
+    int mismatches = 0;
+    for (int i = -512; i < 512; i++) {
+        int c_val = c_toggle_Magic(i);
+        int r_val = rs_toggle_magic(i);
+        if (c_val != r_val) {
+            if (mismatches < 5) {
+                printf("  MISMATCH at %d: C=%d Rust=%d\n", i, c_val, r_val);
+            }
+            mismatches++;
+        }
+    }
+    char name[128];
+    snprintf(name, sizeof(name), "toggle_Magic: %d/1024 values match", 1024 - mismatches);
+    TEST(name, mismatches == 0);
+}
+
+void test_re_multi_type(void) {
+    printf("Testing re_multi_type (C vs Rust, exhaustive [-512, 512)):\n");
+    int mismatches = 0;
+    for (int i = -512; i < 512; i++) {
+        int c_val = c_re_multi_type(i);
+        int r_val = rs_re_multi_type(i);
+        if (c_val != r_val) {
+            if (mismatches < 5) {
+                printf("  MISMATCH at %d: C=%d Rust=%d\n", i, c_val, r_val);
+            }
+            mismatches++;
+        }
+    }
+    char name[128];
+    snprintf(name, sizeof(name), "re_multi_type: %d/1024 values match", 1024 - mismatches);
+    TEST(name, mismatches == 0);
+}
+
+void test_backslash_trans(void) {
+    printf("Testing backslash_trans (C vs Rust, all 256 byte values):\n");
+    int mismatches = 0;
+    for (int i = 0; i < 256; i++) {
+        int c_val = c_backslash_trans(i);
+        int r_val = rs_backslash_trans(i);
+        if (c_val != r_val) {
+            if (mismatches < 5) {
+                printf("  MISMATCH at %d: C=%d Rust=%d\n", i, c_val, r_val);
+            }
+            mismatches++;
+        }
+    }
+    char name[128];
+    snprintf(name, sizeof(name), "backslash_trans: %d/256 values match", 256 - mismatches);
+    TEST(name, mismatches == 0);
+}
+
 int main(void) {
     printf("=== Comparing C regexp utility implementations ===\n\n");
 
@@ -469,6 +603,10 @@ int main(void) {
     test_skip_regexp_magic();
     test_skip_regexp_edge_cases();
     test_rust_vs_c_comparison();
+    test_no_magic();
+    test_toggle_magic();
+    test_re_multi_type();
+    test_backslash_trans();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);

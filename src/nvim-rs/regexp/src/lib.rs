@@ -186,8 +186,157 @@ unsafe fn libc_strlen(s: *const c_char) -> usize {
     len
 }
 
+// --- Magic helpers (matching regexp.c macros) ---
+// Magic(x) = (int)(x) - 256; is_Magic(x) = (x) < 0; un_Magic(x) = (x) + 256
+
+/// Multi-type return values
+const NOT_MULTI: c_int = 0;
+const MULTI_ONE: c_int = 1;
+const MULTI_MULT: c_int = 2;
+
+/// Control character constants (matching `ascii_defs.h`)
+const BS_CH: c_int = 0o010;
+const TAB_CH: c_int = 0o011;
+const CAR_CH: c_int = 0o015;
+const ESC_CH: c_int = 0o033;
+
+/// Magic('x') = (x as i32) - 256
+const fn magic(x: u8) -> c_int {
+    (x as c_int) - 256
+}
+
+/// If x is Magic (negative), strip the magic to get the plain character.
+/// Otherwise return x unchanged.
+#[no_mangle]
+pub const extern "C" fn rs_no_magic(x: c_int) -> c_int {
+    if x < 0 {
+        x + 256
+    } else {
+        x
+    }
+}
+
+/// If x is Magic (negative), un-magic it. Otherwise make it Magic.
+#[no_mangle]
+pub const extern "C" fn rs_toggle_magic(x: c_int) -> c_int {
+    if x < 0 {
+        x + 256
+    } else {
+        x - 256
+    }
+}
+
+/// Return `NOT_MULTI` if c is not a "multi" operator.
+/// Return `MULTI_ONE` if c is a single "multi" operator.
+/// Return `MULTI_MULT` if c is a multi "multi" operator.
+#[no_mangle]
+pub const extern "C" fn rs_re_multi_type(c: c_int) -> c_int {
+    if c == magic(b'@') || c == magic(b'=') || c == magic(b'?') {
+        MULTI_ONE
+    } else if c == magic(b'*') || c == magic(b'+') || c == magic(b'{') {
+        MULTI_MULT
+    } else {
+        NOT_MULTI
+    }
+}
+
+/// Translate '\x' to its control character, except "\n", which is Magic.
+#[no_mangle]
+pub const extern "C" fn rs_backslash_trans(c: c_int) -> c_int {
+    match c {
+        0x72 => CAR_CH, // 'r'
+        0x74 => TAB_CH, // 't'
+        0x65 => ESC_CH, // 'e'
+        0x62 => BS_CH,  // 'b'
+        _ => c,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    // Tests require C FFI functions, so they run via compare_regexp.c
-    // and the `just rust-ffi-test` target.
+    use super::*;
+
+    #[test]
+    fn test_no_magic_positive() {
+        // Positive values pass through
+        assert_eq!(rs_no_magic(0), 0);
+        assert_eq!(rs_no_magic(65), 65); // 'A'
+        assert_eq!(rs_no_magic(255), 255);
+    }
+
+    #[test]
+    fn test_no_magic_negative() {
+        // Negative (magic) values get un-magicked: x + 256
+        assert_eq!(rs_no_magic(-1), 255);
+        assert_eq!(rs_no_magic(-192), 64); // Magic('@') -> '@'
+        assert_eq!(rs_no_magic(-256), 0);
+    }
+
+    #[test]
+    fn test_no_magic_boundary() {
+        // At the boundary
+        assert_eq!(rs_no_magic(-1), 255);
+        assert_eq!(rs_no_magic(0), 0);
+    }
+
+    #[test]
+    fn test_toggle_magic_positive() {
+        // Positive (non-magic) -> subtract 256
+        assert_eq!(rs_toggle_magic(65), 65 - 256); // 'A' -> Magic('A')
+        assert_eq!(rs_toggle_magic(0), -256);
+    }
+
+    #[test]
+    fn test_toggle_magic_negative() {
+        // Negative (magic) -> add 256
+        assert_eq!(rs_toggle_magic(-192), 64); // Magic('@') -> '@'
+        assert_eq!(rs_toggle_magic(-1), 255);
+    }
+
+    #[test]
+    fn test_toggle_magic_roundtrip() {
+        // toggle(toggle(x)) == x for values in the valid Magic range.
+        // Magic chars are in [-256, 0) and plain chars in [0, 256).
+        for x in -256..256 {
+            assert_eq!(rs_toggle_magic(rs_toggle_magic(x)), x);
+        }
+    }
+
+    #[test]
+    fn test_re_multi_type_one() {
+        assert_eq!(rs_re_multi_type(magic(b'@')), MULTI_ONE);
+        assert_eq!(rs_re_multi_type(magic(b'=')), MULTI_ONE);
+        assert_eq!(rs_re_multi_type(magic(b'?')), MULTI_ONE);
+    }
+
+    #[test]
+    fn test_re_multi_type_mult() {
+        assert_eq!(rs_re_multi_type(magic(b'*')), MULTI_MULT);
+        assert_eq!(rs_re_multi_type(magic(b'+')), MULTI_MULT);
+        assert_eq!(rs_re_multi_type(magic(b'{')), MULTI_MULT);
+    }
+
+    #[test]
+    fn test_re_multi_type_not() {
+        assert_eq!(rs_re_multi_type(0), NOT_MULTI);
+        assert_eq!(rs_re_multi_type(65), NOT_MULTI); // 'A'
+        assert_eq!(rs_re_multi_type(magic(b'a')), NOT_MULTI);
+        assert_eq!(rs_re_multi_type(-1), NOT_MULTI);
+    }
+
+    #[test]
+    fn test_backslash_trans_escapes() {
+        assert_eq!(rs_backslash_trans(b'r' as c_int), CAR_CH);
+        assert_eq!(rs_backslash_trans(b't' as c_int), TAB_CH);
+        assert_eq!(rs_backslash_trans(b'e' as c_int), ESC_CH);
+        assert_eq!(rs_backslash_trans(b'b' as c_int), BS_CH);
+    }
+
+    #[test]
+    fn test_backslash_trans_passthrough() {
+        assert_eq!(rs_backslash_trans(b'n' as c_int), b'n' as c_int);
+        assert_eq!(rs_backslash_trans(b'a' as c_int), b'a' as c_int);
+        assert_eq!(rs_backslash_trans(0), 0);
+        assert_eq!(rs_backslash_trans(255), 255);
+    }
 }
