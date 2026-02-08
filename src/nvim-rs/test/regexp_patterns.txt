@@ -780,3 +780,39 @@ hello world	hello world and more
 ^[^ ]\+$	hello world
 ^\S\+$	test
 ^\S\+$	te st
+
+# === Patterns exercising skip_regexp delimiter skipping ===
+# These test patterns that stress the skip_regexp/skip_regexp_ex code path:
+# collections with delimiters inside, magic mode switches, nested classes.
+
+# Collection containing / (delimiter must not match inside [])
+[a/b]	has/slash
+[/]	slash/here
+[^/]	noslash
+
+# Collection edge cases for skip_anyof
+[]abc]	bracket]test
+[^]abc]	negbracket]test
+[-abc]	dash-test
+[abc-]	trailing-dash
+
+# Nested POSIX character classes inside collections
+[[:alpha:][:digit:]]	mixed123abc
+[[:upper:]][[:lower:]]	Ab
+
+# Equivalence class and collation element inside collection
+[[=a=]]	accent test
+[[.a.]]	collation test
+
+# Magic mode switching mid-pattern
+\v(foo)	foox
+\V.	a.b
+\m\(abc\)	abcx
+\M\[abc\]	abc
+
+# Escaped bracket in nomagic mode (triggers skip_anyof)
+\M\[abc]	abcx
+
+# Complex backslash sequences near delimiters
+a\\/b	escaped/backslash
+\\[	escaped bracket
