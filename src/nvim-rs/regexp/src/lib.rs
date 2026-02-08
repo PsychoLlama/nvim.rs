@@ -4141,6 +4141,7 @@ pub union RegsaveUnion {
 
 /// `regsave_T` — saves input state for backtracking.
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct RegsaveT {
     pub rs_u: RegsaveUnion,
     pub rs_len: c_int,
@@ -4156,6 +4157,7 @@ pub union SaveSeUnion {
 
 /// `save_se_T` — saves sub-expression start/end pointer or position.
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct SaveSeT {
     pub se_u: SaveSeUnion,
 }
@@ -4800,6 +4802,307 @@ pub unsafe extern "C" fn rs_regrepeat(p: *mut u8, maxcount: i64) -> c_int {
     #[allow(clippy::cast_possible_truncation)]
     let result = count as c_int;
     result
+}
+
+// ==========================================================================
+// rs_regmatch — core backtracking engine
+// ==========================================================================
+
+// Additional RA_* status values (RA_FAIL=1, RA_MATCH=4, RA_NOMATCH=5 already defined)
+#[allow(dead_code)]
+const RA_CONT: c_int = 2;
+#[allow(dead_code)]
+const RA_BREAK: c_int = 3;
+
+// regstate_T equivalents (matching C enum exactly)
+#[allow(dead_code)]
+const RS_NOPEN: c_int = 0;
+#[allow(dead_code)]
+const RS_MOPEN: c_int = 1;
+#[allow(dead_code)]
+const RS_MCLOSE: c_int = 2;
+#[allow(dead_code)]
+const RS_ZOPEN: c_int = 3;
+#[allow(dead_code)]
+const RS_ZCLOSE: c_int = 4;
+#[allow(dead_code)]
+const RS_BRANCH: c_int = 5;
+#[allow(dead_code)]
+const RS_BRCPLX_MORE: c_int = 6;
+#[allow(dead_code)]
+const RS_BRCPLX_LONG: c_int = 7;
+#[allow(dead_code)]
+const RS_BRCPLX_SHORT: c_int = 8;
+#[allow(dead_code)]
+const RS_NOMATCH: c_int = 9;
+#[allow(dead_code)]
+const RS_BEHIND1: c_int = 10;
+#[allow(dead_code)]
+const RS_BEHIND2: c_int = 11;
+#[allow(dead_code)]
+const RS_STAR_LONG: c_int = 12;
+#[allow(dead_code)]
+const RS_STAR_SHORT: c_int = 13;
+
+// Stack/backpos constants
+#[allow(dead_code)]
+const REGSTACK_INITIAL: usize = 2048;
+#[allow(dead_code)]
+const BACKPOS_INITIAL: usize = 64;
+// MAX_LIMIT already defined above as c_int
+
+/// `regitem_T` — stack item for backtracking.
+#[repr(C)]
+#[allow(dead_code)]
+pub struct RegitemT {
+    pub rs_state: c_int,
+    pub rs_no: i16,
+    pub rs_scan: *mut u8,
+    pub rs_un: RegitemUnion,
+}
+
+/// Union inside `regitem_T`.
+#[repr(C)]
+#[allow(dead_code)]
+pub union RegitemUnion {
+    pub sesave: SaveSeT,
+    pub regsave: RegsaveT,
+}
+
+/// `regstar_T` — stored before a `regitem_T` for `STAR`/`PLUS`/`BRACE_SIMPLE`.
+#[repr(C)]
+#[allow(dead_code)]
+pub struct RegstarT {
+    pub nextb: c_int,
+    pub nextb_ic: c_int,
+    pub count: i64,
+    pub minval: i64,
+    pub maxval: i64,
+}
+
+/// `backpos_T` — BACK opcode position tracking.
+#[repr(C)]
+#[allow(dead_code)]
+pub struct BackposT {
+    pub bp_scan: *mut u8,
+    pub bp_pos: RegsaveT,
+}
+
+// C accessor extern declarations for rs_regmatch
+#[allow(dead_code)]
+extern "C" {
+    // Regstack/backpos management
+    fn nvim_regexp_get_regstack_data() -> *mut u8;
+    fn nvim_regexp_get_regstack_len() -> c_int;
+    fn nvim_regexp_get_regstack_maxlen() -> c_int;
+    fn nvim_regexp_set_regstack_len(v: c_int);
+    fn nvim_regexp_call_ga_grow_regstack(n: c_int);
+
+    fn nvim_regexp_get_backpos_data() -> *mut u8;
+    fn nvim_regexp_get_backpos_len() -> c_int;
+    fn nvim_regexp_set_backpos_len(v: c_int);
+    fn nvim_regexp_call_ga_grow_backpos(n: c_int);
+
+    // Brace statics
+    fn nvim_regexp_get_brace_min(no: c_int) -> i64;
+    fn nvim_regexp_set_brace_min(no: c_int, v: i64);
+    fn nvim_regexp_get_brace_max(no: c_int) -> i64;
+    fn nvim_regexp_set_brace_max(no: c_int, v: i64);
+    fn nvim_regexp_get_brace_count(no: c_int) -> c_int;
+    fn nvim_regexp_set_brace_count(no: c_int, v: c_int);
+
+    fn nvim_regexp_get_bl_minval() -> i64;
+    fn nvim_regexp_set_bl_minval(v: i64);
+    fn nvim_regexp_get_bl_maxval() -> i64;
+    fn nvim_regexp_set_bl_maxval(v: i64);
+
+    // Behind position (C returns void*, cast to RegsaveT* on Rust side)
+    fn nvim_regexp_get_behind_pos() -> *mut RegsaveT;
+
+    // maxmempattern
+    fn nvim_regexp_get_p_mmp() -> i64;
+
+    // External match
+    fn nvim_regexp_get_re_extmatch_in_match(no: c_int) -> *mut u8;
+
+    // Mark support
+    fn nvim_regexp_call_mark_get(mark: c_int) -> *mut c_void;
+    fn nvim_regexp_get_fmark_lnum(fm: *mut c_void) -> i32;
+    fn nvim_regexp_get_fmark_col(fm: *mut c_void) -> i32;
+
+    // Window/cursor
+    fn nvim_regexp_get_rex_reg_win_or_curwin() -> *mut c_void;
+    fn nvim_regexp_has_rex_reg_win() -> c_int;
+    fn nvim_regexp_get_rex_reg_win_cursor_lnum() -> i32;
+    fn nvim_regexp_get_rex_reg_win_cursor_col() -> i32;
+
+    // Virtual column: reuse existing nvim_regexp_call_win_linetabsize (declared above)
+    // reg_getline_len: reuse existing nvim_regexp_call_reg_getline_len (declared above)
+
+    // Error/utility
+    fn nvim_regexp_emsg_maxmempattern();
+    fn nvim_regexp_call_profile_passed_limit(tm: *const c_void) -> c_int;
+    // got_int: reuse existing nvim_regexp_get_got_int (declared above)
+    fn nvim_regexp_call_mb_isupper(c: c_int) -> c_int;
+    fn nvim_regexp_call_mb_tolower(c: c_int) -> c_int;
+    fn nvim_regexp_call_mb_toupper(c: c_int) -> c_int;
+
+    // mb_get_class_tab
+    fn nvim_regexp_call_mb_get_class_tab(p: *mut u8) -> c_int;
+
+    // cstrncmp / cstrchr: use rs_cstrncmp/rs_cstrchr directly from Rust
+    // rex.reg_firstlnum: reuse existing nvim_regexp_get_rex_reg_firstlnum (declared above)
+
+    // z-subexpr element-pointer accessors for save_se/restore_se
+    fn nvim_regexp_get_reg_startzpos_ptr(i: c_int) -> *mut LposT;
+    fn nvim_regexp_get_reg_endzpos_ptr(i: c_int) -> *mut LposT;
+    fn nvim_regexp_get_reg_startzp_ptr(i: c_int) -> *mut *mut u8;
+    fn nvim_regexp_get_reg_endzp_ptr(i: c_int) -> *mut *mut u8;
+
+    // internal_error
+    fn nvim_regexp_internal_error(msg: *const c_char);
+
+    // reg_breakcheck: use existing nvim_regexp_call_reg_breakcheck (declared at top)
+
+    // regrepeat: use rs_regrepeat() directly from Rust (no wrapper needed)
+
+    // regnext: use rs_regnext() directly from Rust (no wrapper needed)
+
+    // iemsg: use existing nvim_regexp_iemsg_re_corr (declared in regrepeat section)
+}
+
+// --- Helper inline functions for rs_regmatch ---
+
+/// `OP(p)` — get opcode at program position.
+#[inline]
+#[allow(dead_code)]
+const fn op(p: *const u8) -> c_int {
+    unsafe { *p as c_int }
+}
+
+/// `OPERAND(p)` — skip 3-byte header to get operand pointer.
+#[inline]
+#[allow(dead_code)]
+const fn operand(p: *mut u8) -> *mut u8 {
+    unsafe { p.add(3) }
+}
+
+/// `OPERAND_MIN(p)` — read 4-byte big-endian value from operand.
+#[inline]
+#[allow(dead_code)]
+fn operand_min(p: *const u8) -> i64 {
+    unsafe {
+        (i64::from(*p.add(3)) << 24)
+            + (i64::from(*p.add(4)) << 16)
+            + (i64::from(*p.add(5)) << 8)
+            + i64::from(*p.add(6))
+    }
+}
+
+/// `OPERAND_MAX(p)` — read 4-byte big-endian value from operand + 4.
+#[inline]
+#[allow(dead_code)]
+fn operand_max(p: *const u8) -> i64 {
+    operand_min(unsafe { p.add(4) })
+}
+
+/// `OPERAND_CMP(p)` — get comparison operator byte.
+#[inline]
+#[allow(dead_code)]
+const fn operand_cmp(p: *const u8) -> u8 {
+    unsafe { *p.add(7) }
+}
+
+/// `re_num_cmp` — compare a number with operand value using operand comparison operator.
+#[inline]
+#[allow(dead_code, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn re_num_cmp(val: u32, scan: *const u8) -> bool {
+    let n = operand_min(scan) as u32;
+    let cmp = operand_cmp(scan);
+    if cmp == b'>' {
+        val > n
+    } else if cmp == b'<' {
+        val < n
+    } else {
+        val == n
+    }
+}
+
+/// Push a state onto the regstack. Returns pointer to the new `RegitemT`, or null on OOM.
+#[inline]
+#[allow(dead_code, clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_ptr_alignment)]
+unsafe fn regstack_push(state: c_int, scan: *mut u8) -> *mut RegitemT {
+    if (nvim_regexp_get_regstack_len() as u32 >> 10) as i64 >= nvim_regexp_get_p_mmp() {
+        nvim_regexp_emsg_maxmempattern();
+        return std::ptr::null_mut();
+    }
+    nvim_regexp_call_ga_grow_regstack(std::mem::size_of::<RegitemT>() as c_int);
+
+    let rp = (nvim_regexp_get_regstack_data().add(nvim_regexp_get_regstack_len() as usize))
+        .cast::<RegitemT>();
+    (*rp).rs_state = state;
+    (*rp).rs_scan = scan;
+
+    nvim_regexp_set_regstack_len(
+        nvim_regexp_get_regstack_len() + std::mem::size_of::<RegitemT>() as c_int,
+    );
+    rp
+}
+
+/// Pop the top state from the regstack. Writes the saved scan pointer to `*scan_out`.
+#[inline]
+#[allow(dead_code, clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_ptr_alignment)]
+unsafe fn regstack_pop(scan_out: *mut *mut u8) {
+    let rp = (nvim_regexp_get_regstack_data().add(nvim_regexp_get_regstack_len() as usize))
+        .cast::<RegitemT>()
+        .sub(1);
+    *scan_out = (*rp).rs_scan;
+    nvim_regexp_set_regstack_len(
+        nvim_regexp_get_regstack_len() - std::mem::size_of::<RegitemT>() as c_int,
+    );
+}
+
+/// Save sub-expression start/end: multi-line or single-line.
+#[inline]
+#[allow(dead_code)]
+unsafe fn save_se(savep: *mut SaveSeT, posp: *mut LposT, pp: *mut *mut u8) {
+    if nvim_regexp_is_reg_multi() != 0 {
+        rs_save_se_multi(savep, posp);
+    } else {
+        rs_save_se_one(savep, pp);
+    }
+}
+
+/// Restore sub-expression start/end: multi-line or single-line.
+#[inline]
+#[allow(dead_code)]
+unsafe fn restore_se(savep: *const SaveSeT, posp: *mut LposT, pp: *mut *mut u8) {
+    if nvim_regexp_is_reg_multi() != 0 {
+        *posp = (*savep).se_u.pos;
+    } else {
+        *pp = (*savep).se_u.ptr;
+    }
+}
+
+/// `ADVANCE_REGINPUT()` — advance rex.input by one multi-byte character.
+#[inline]
+#[allow(dead_code)]
+unsafe fn advance_reginput() {
+    let inp = nvim_regexp_get_rex_input();
+    let len = utfc_ptr2len(inp.cast::<c_char>());
+    nvim_regexp_set_rex_input(inp.add(len as usize));
+}
+
+/// Skeleton `rs_regmatch` — currently just delegates to C `regmatch()` via the wrapper.
+/// This will be replaced incrementally in Phases 2-6.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regmatch(
+    scan: *mut u8,
+    tm: *const c_void,
+    timed_out: *mut c_int,
+) -> c_int {
+    // Pass-through to C regmatch for now
+    nvim_regexp_call_regmatch(scan, tm, timed_out)
 }
 
 #[cfg(test)]

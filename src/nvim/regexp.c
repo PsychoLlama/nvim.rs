@@ -4973,6 +4973,109 @@ int nvim_regexp_call_regmatch(uint8_t *scan, const void *tm, int *timed_out) {
   return regmatch(scan, (const proftime_T *)tm, timed_out) ? 1 : 0;
 }
 
+// --- regmatch accessor functions for Rust FFI (rs_regmatch) ---
+
+// Regstack/backpos management
+uint8_t *nvim_regexp_get_regstack_data(void) { return (uint8_t *)regstack.ga_data; }
+int nvim_regexp_get_regstack_len(void) { return regstack.ga_len; }
+int nvim_regexp_get_regstack_maxlen(void) { return regstack.ga_maxlen; }
+void nvim_regexp_set_regstack_len(int v) { regstack.ga_len = v; }
+void nvim_regexp_call_ga_grow_regstack(int n) { ga_grow(&regstack, n); }
+
+uint8_t *nvim_regexp_get_backpos_data(void) { return (uint8_t *)backpos.ga_data; }
+int nvim_regexp_get_backpos_len(void) { return backpos.ga_len; }
+void nvim_regexp_set_backpos_len(int v) { backpos.ga_len = v; }
+void nvim_regexp_call_ga_grow_backpos(int n) { ga_grow(&backpos, n); }
+
+// Brace static variable access
+int64_t nvim_regexp_get_brace_min(int no) { return brace_min[no]; }
+void nvim_regexp_set_brace_min(int no, int64_t v) { brace_min[no] = v; }
+int64_t nvim_regexp_get_brace_max(int no) { return brace_max[no]; }
+void nvim_regexp_set_brace_max(int no, int64_t v) { brace_max[no] = v; }
+int nvim_regexp_get_brace_count(int no) { return brace_count[no]; }
+void nvim_regexp_set_brace_count(int no, int v) { brace_count[no] = v; }
+
+int64_t nvim_regexp_get_bl_minval(void) { return bl_minval; }
+void nvim_regexp_set_bl_minval(int64_t v) { bl_minval = v; }
+int64_t nvim_regexp_get_bl_maxval(void) { return bl_maxval; }
+void nvim_regexp_set_bl_maxval(int64_t v) { bl_maxval = v; }
+
+// Behind position (return void* to avoid exposing local regsave_T type in generated header)
+void *nvim_regexp_get_behind_pos(void) { return (void *)&behind_pos; }
+
+// maxmempattern option
+int64_t nvim_regexp_get_p_mmp(void) { return p_mmp; }
+
+// External match
+uint8_t *nvim_regexp_get_re_extmatch_in_match(int no) {
+  if (re_extmatch_in != NULL && re_extmatch_in->matches[no] != NULL) {
+    return re_extmatch_in->matches[no];
+  }
+  return NULL;
+}
+
+// Mark support
+void *nvim_regexp_call_mark_get(int mark) {
+  return (void *)mark_get(rex.reg_buf, curwin, NULL, kMarkBufLocal, mark);
+}
+int32_t nvim_regexp_get_fmark_lnum(void *fm) { return (int32_t)((fmark_T *)fm)->mark.lnum; }
+int32_t nvim_regexp_get_fmark_col(void *fm) { return (int32_t)((fmark_T *)fm)->mark.col; }
+
+// Window/cursor support
+void *nvim_regexp_get_rex_reg_win_or_curwin(void) {
+  return (void *)(rex.reg_win == NULL ? curwin : rex.reg_win);
+}
+int nvim_regexp_has_rex_reg_win(void) { return rex.reg_win != NULL ? 1 : 0; }
+int32_t nvim_regexp_get_rex_reg_win_cursor_lnum(void) {
+  return rex.reg_win != NULL ? (int32_t)rex.reg_win->w_cursor.lnum : 0;
+}
+int32_t nvim_regexp_get_rex_reg_win_cursor_col(void) {
+  return rex.reg_win != NULL ? (int32_t)rex.reg_win->w_cursor.col : 0;
+}
+
+// nvim_regexp_call_win_linetabsize() already exists above — reuse it
+// nvim_regexp_call_reg_getline_len() already exists above — reuse it
+
+// Error/utility
+void nvim_regexp_emsg_maxmempattern(void) {
+  emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
+}
+int nvim_regexp_call_profile_passed_limit(const void *tm) {
+  return profile_passed_limit(*(const proftime_T *)tm) ? 1 : 0;
+}
+// nvim_regexp_get_got_int() already exists above — reuse it in rs_regmatch
+int nvim_regexp_call_mb_isupper(int c) { return mb_isupper(c); }
+int nvim_regexp_call_mb_tolower(int c) { return mb_tolower(c); }
+int nvim_regexp_call_mb_toupper(int c) { return mb_toupper(c); }
+
+// mb_get_class_tab accessor
+int nvim_regexp_call_mb_get_class_tab(uint8_t *p) {
+  return mb_get_class_tab((char *)p, rex.reg_buf->b_chartab);
+}
+
+// cstrncmp / cstrchr: rs_regmatch calls rs_cstrncmp/rs_cstrchr directly from Rust
+
+// nvim_regexp_get_rex_reg_firstlnum() already exists above — reuse it
+
+// internal_error wrapper
+void nvim_regexp_internal_error(const char *msg) { internal_error(msg); }
+
+// reg_breakcheck: rs_regmatch calls rs_reg_breakcheck() directly from Rust
+
+// regrepeat: rs_regmatch calls rs_regrepeat() directly from Rust
+
+// regnext: rs_regmatch calls rs_regnext() directly from Rust
+
+// iemsg: rs_regmatch uses existing nvim_regexp_iemsg_re_corr()
+
+// z-subexpr element-pointer accessors for save_se/restore_se in rs_regmatch
+lpos_T *nvim_regexp_get_reg_startzpos_ptr(int i) { return &reg_startzpos[i]; }
+lpos_T *nvim_regexp_get_reg_endzpos_ptr(int i) { return &reg_endzpos[i]; }
+uint8_t **nvim_regexp_get_reg_startzp_ptr(int i) { return &reg_startzp[i]; }
+uint8_t **nvim_regexp_get_reg_endzp_ptr(int i) { return &reg_endzp[i]; }
+
+// --- end regmatch accessor functions ---
+
 /// Try match of "prog" with at rex.line["col"].
 ///
 /// @param tm         timeout limit or NULL
