@@ -6,8 +6,8 @@
 //   - skip_regexp: skip past a regexp pattern to its delimiter
 //
 // These are the functions other crates (ex_docmd, search) already call via FFI.
-// Note: The full skip_regexp_ex depends on global state (cpo flags, multi-byte
-// functions), so we test a simplified version that covers the core logic.
+// The Rust rs_skip_regexp calls into C stub functions defined below for
+// standalone testing (utfc_ptr2len, nvim_get_p_cpo, etc.).
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +34,83 @@ static int tests_failed = 0;
         printf("  ✗ %s FAILED\n", name); \
     } \
 } while(0)
+
+// --- FFI stubs for standalone testing ---
+// rs_skip_regexp_ex calls these C functions. We provide simplified
+// implementations sufficient for ASCII-only test patterns.
+
+// Returns cpoptions string — empty means no CPO_LITERAL
+const char *nvim_get_p_cpo(void) { return ""; }
+
+// ASCII-only: each byte is one character
+int utfc_ptr2len(const char *p) { return (*p != '\0') ? 1 : 0; }
+
+// Simplified get_char_class: check for [:name:] patterns
+int nvim_regexp_get_char_class(char **pp) {
+    char *p = *pp;
+    if (p[0] == '[' && p[1] == ':') {
+        // Look for closing ":]"
+        char *q = p + 2;
+        while (*q != '\0') {
+            if (*q == ':' && q[1] == ']') {
+                *pp = q + 2;
+                return 0;  // Return non-CLASS_NONE (0 != 99)
+            }
+            q++;
+        }
+    }
+    return 99;  // CLASS_NONE
+}
+
+// Simplified: no equivalence classes in test data
+int nvim_regexp_get_equi_class(char **pp) {
+    char *p = *pp;
+    if (p[0] == '[' && p[1] == '=') {
+        char *q = p + 2;
+        while (*q != '\0') {
+            if (*q == '=' && q[1] == ']') {
+                *pp = q + 2;
+                return 1;  // non-zero = found
+            }
+            q++;
+        }
+    }
+    return 0;
+}
+
+// Simplified: no collating elements in test data
+int nvim_regexp_get_coll_element(char **pp) {
+    char *p = *pp;
+    if (p[0] == '[' && p[1] == '.') {
+        char *q = p + 2;
+        while (*q != '\0') {
+            if (*q == '.' && q[1] == ']') {
+                *pp = q + 2;
+                return 1;  // non-zero = found
+            }
+            q++;
+        }
+    }
+    return 0;
+}
+
+// ASCII strchr
+char *vim_strchr(const char *s, int c) {
+    return strchr(s, c);
+}
+
+// Allocate and copy n bytes
+char *xstrnsave(const char *s, size_t len) {
+    char *r = malloc(len + 1);
+    if (r) {
+        memcpy(r, s, len);
+        r[len] = '\0';
+    }
+    return r;
+}
+
+// --- Rust FFI declaration ---
+extern char *rs_skip_regexp(char *startp, int delim, int magic);
 
 // --- Reference C implementation of skip_regexp (ASCII-only, simplified) ---
 // This mirrors the logic in src/nvim/regexp.c skip_regexp_ex() but without
@@ -112,6 +189,28 @@ static char *c_skip_regexp(char *startp, int delim, int magic)
         }
     }
     return p;
+}
+
+// --- Helper: compare C and Rust skip_regexp results ---
+static void compare_skip_regexp(const char *desc, const char *input, int delim, int magic)
+{
+    // Make mutable copies since both functions take char*
+    char c_buf[256];
+    char r_buf[256];
+    strncpy(c_buf, input, sizeof(c_buf) - 1);
+    c_buf[sizeof(c_buf) - 1] = '\0';
+    strncpy(r_buf, input, sizeof(r_buf) - 1);
+    r_buf[sizeof(r_buf) - 1] = '\0';
+
+    char *c_result = c_skip_regexp(c_buf, delim, magic);
+    char *r_result = rs_skip_regexp(r_buf, delim, magic);
+
+    int c_offset = (int)(c_result - c_buf);
+    int r_offset = (int)(r_result - r_buf);
+
+    char name[512];
+    snprintf(name, sizeof(name), "C vs Rust: %s (offset C=%d R=%d)", desc, c_offset, r_offset);
+    TEST(name, c_offset == r_offset);
 }
 
 // --- Test cases ---
@@ -325,12 +424,51 @@ void test_skip_regexp_edge_cases(void) {
     }
 }
 
+void test_rust_vs_c_comparison(void) {
+    printf("Testing Rust rs_skip_regexp vs C reference:\n");
+
+    // Basic patterns
+    compare_skip_regexp("simple 'abc/rest'", "abc/rest", '/', 1);
+    compare_skip_regexp("escaped delimiter 'a\\/b/rest'", "a\\/b/rest", '/', 1);
+    compare_skip_regexp("collection '[abc]/rest'", "[abc]/rest", '/', 1);
+    compare_skip_regexp("collection with delim '[a/b]/rest'", "[a/b]/rest", '/', 1);
+    compare_skip_regexp("no delimiter 'abc'", "abc", '/', 1);
+    compare_skip_regexp("empty pattern '/rest'", "/rest", '/', 1);
+    compare_skip_regexp("empty string", "", '/', 1);
+    compare_skip_regexp("? delimiter 'abc?rest'", "abc?rest", '?', 1);
+    compare_skip_regexp("trailing backslash 'abc\\'", "abc\\", '/', 1);
+
+    // Collections
+    compare_skip_regexp("'] at start []abc]/rest'", "[]abc]/rest", '/', 1);
+    compare_skip_regexp("negated '] at start [^]abc]/rest'", "[^]abc]/rest", '/', 1);
+    compare_skip_regexp("range '[a-z]/rest'", "[a-z]/rest", '/', 1);
+    compare_skip_regexp("- at start '[-az]/rest'", "[-az]/rest", '/', 1);
+    compare_skip_regexp("char class '[[:alpha:]]/rest'", "[[:alpha:]]/rest", '/', 1);
+
+    // Magic modes
+    compare_skip_regexp("magic off '[abc]/rest'", "[abc]/rest", '/', 0);
+    compare_skip_regexp("magic off escaped '\\[abc]/rest'", "\\[abc]/rest", '/', 0);
+    compare_skip_regexp("\\v very magic 'abc\\v[def]/rest'", "abc\\v[def]/rest", '/', 1);
+    compare_skip_regexp("\\V very nomagic 'abc\\V[def]/rest'", "abc\\V[def]/rest", '/', 1);
+
+    // Edge cases
+    compare_skip_regexp("double backslash 'a\\\\b/rest'", "a\\\\b/rest", '/', 1);
+    compare_skip_regexp("escaped parens 'a\\(b\\)c/rest'", "a\\(b\\)c/rest", '/', 1);
+    compare_skip_regexp("alternation 'a\\|b/rest'", "a\\|b/rest", '/', 1);
+    compare_skip_regexp("very magic complex '\\v(foo|bar)[0-9]+/rest'",
+                        "\\v(foo|bar)[0-9]+/rest", '/', 1);
+    compare_skip_regexp("magic switches 'a\\vb\\Vc\\md\\Me/rest'",
+                        "a\\vb\\Vc\\md\\Me/rest", '/', 1);
+    compare_skip_regexp("only delimiter '/'", "/", '/', 1);
+}
+
 int main(void) {
     printf("=== Comparing C regexp utility implementations ===\n\n");
 
     test_skip_regexp_basic();
     test_skip_regexp_magic();
     test_skip_regexp_edge_cases();
+    test_rust_vs_c_comparison();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);
