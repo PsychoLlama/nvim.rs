@@ -1,25 +1,27 @@
-Plan: ~/.claude/plans/woolly-giggling-flurry.md
+Plan: ~/.claude/plans/parallel-dreaming-key.md
 
-All 8 phases of the `regatom` migration are complete. Here's a summary:
+All 4 phases of the BT regexp execution infrastructure migration are complete.
 
-## Migration Complete: `regatom` → `rs_regatom`
+## Migration Complete: BT Execution Support Functions
 
-The BT regexp recursive descent parser chain is now fully in Rust:
-`rs_reg → rs_regbranch → rs_regconcat → rs_regpiece → rs_regatom`
-
-### Commits (8 total):
-1. **d80ce005** — Phase 1: C accessor functions and error helpers
-2. **482cccef** — Phase 2: Rust constants, extern decls, and helpers (`use_multibytecode`, `coll_get_char`, `seen_endbrace`)
-3. **0a1959d8** — Phase 3: Position assertions (`^$<>`), char class shortcuts (`.iIkK...`), `\n`
-4. **72dba9ca** — Phase 4: Grouping `\(`, backreferences `\1-\9`, `\z`, `\~`, error cases
-5. **70c04ecc** — Phase 5: Percent operators `\%^$#VCd/o/x/u/U`, `\%[abc]`, `\%l/c/v`, `\%'m`
-6. **15a08696** — Phase 6: Collection parsing `[...]` with POSIX classes, ranges, equivalence classes
-7. **dbd7e3dc** — Phase 7: Default/literal EXACTLY case + wiring (55 lines Rust added, 822 lines C deleted)
-8. **ed408eea** — Phase 8: Test patterns + corpus regeneration (581 entries)
+### Commits (4 total):
+1. **39093bf8** — Phase 1: reg_save/reg_restore/reg_save_equal/save_se_multi/save_se_one
+2. **eba7bf31** — Phase 2: save_subexpr/restore_subexpr
+3. **7154d781** — Phase 3: regrepeat (~360 lines, largest target)
+4. **77cc725c** — Phase 4: regtry (sets up match, calls regmatch, packages results)
 
 ### Key metrics:
-- **59** `#[no_mangle]` exports in regexp crate (was 58)
-- **~800 lines** of C deleted from `regatom`
-- C `regatom` reduced to: `return rs_regatom(flagp);`
-- `seen_endbrace` and `coll_get_char` kept in C (shared with NFA engine)
-- All checks pass: build, smoke-test, fmt, clippy, 3486 Rust tests
+- **68** `#[no_mangle]` exports in regexp crate (was 59)
+- **~480 lines** of C replaced with thin wrappers
+- 18 new C accessor functions added
+- C functions reduced to thin wrappers:
+  - `reg_save` → `rs_reg_save(save, gap->ga_len)`
+  - `reg_restore` → `rs_reg_restore(save, &gap->ga_len)`
+  - `reg_save_equal` → `rs_reg_save_equal(save) != 0`
+  - `save_se_multi` → `rs_save_se_multi(savep, posp)`
+  - `save_se_one` → `rs_save_se_one(savep, pp)`
+  - `save_subexpr` → `rs_save_subexpr(bp)`
+  - `restore_subexpr` → `rs_restore_subexpr(bp)`
+  - `regrepeat` → `rs_regrepeat(p, maxcount)`
+  - `regtry` → `rs_regtry(prog, col, tm, timed_out)`
+- All checks pass: build, smoke-test, fmt, clippy, 3491 Rust tests, 628 regexp corpus entries
