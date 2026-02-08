@@ -11,7 +11,7 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::borrow_as_ptr)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
@@ -21,6 +21,7 @@ extern "C" {
     fn nvim_get_p_cpo() -> *const c_char;
     fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    fn nvim_regexp_get_regflags(prog: *const c_void) -> c_uint;
 }
 
 // Characters always special inside [] ranges
@@ -299,6 +300,21 @@ const CLASS_TAB: [i16; 256] = {
 #[no_mangle]
 pub const unsafe extern "C" fn rs_init_class_tab(out: *mut i16) {
     std::ptr::copy_nonoverlapping(CLASS_TAB.as_ptr(), out, 256);
+}
+
+// --- re_multiline (opaque handle pattern) ---
+
+/// `RF_HASNL` flag — regexp can match a newline.
+const RF_HASNL: c_uint = 4;
+
+/// Return non-zero if compiled regular expression `prog` can match a line break.
+///
+/// # Safety
+///
+/// `prog` must be a valid pointer to a `regprog_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_re_multiline(prog: *const c_void) -> c_int {
+    (nvim_regexp_get_regflags(prog) & RF_HASNL) as c_int
 }
 
 #[cfg(test)]

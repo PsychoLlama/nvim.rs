@@ -56,6 +56,7 @@ extern int rs_toggle_magic(int x);
 extern int rs_re_multi_type(int c);
 extern int rs_backslash_trans(int c);
 extern void rs_init_class_tab(int16_t *out);
+extern int rs_re_multiline(const regprog_T *prog);
 
 typedef enum {
   RGLF_LINE = 0x01,
@@ -616,7 +617,7 @@ static regengine_T nfa_regengine;
 int re_multiline(const regprog_T *prog)
   FUNC_ATTR_NONNULL_ALL
 {
-  return prog->regflags & RF_HASNL;
+  return rs_re_multiline(prog);
 }
 
 // Check for an equivalence class name "[=a=]".  "pp" points to the '['.
@@ -664,6 +665,12 @@ static int get_coll_element(char **pp)
 int nvim_regexp_get_char_class(char **pp) { return get_char_class(pp); }
 int nvim_regexp_get_equi_class(char **pp) { return get_equi_class(pp); }
 int nvim_regexp_get_coll_element(char **pp) { return get_coll_element(pp); }
+
+unsigned int nvim_regexp_get_regflags(const regprog_T *prog);
+unsigned int nvim_regexp_get_regflags(const regprog_T *prog)
+{
+  return prog->regflags;
+}
 
 static int reg_cpo_lit;  // 'cpoptions' contains 'l' flag
 

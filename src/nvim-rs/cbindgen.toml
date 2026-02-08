@@ -554,4 +554,5 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_skip_regexp", "rs_skip_regexp_ex",
            # Regexp utility functions
            "rs_no_magic", "rs_toggle_magic", "rs_re_multi_type", "rs_backslash_trans",
-           "rs_init_class_tab"]
+           "rs_init_class_tab",
+           "rs_re_multiline"]

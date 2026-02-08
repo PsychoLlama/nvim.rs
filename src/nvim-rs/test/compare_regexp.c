@@ -117,6 +117,7 @@ extern int rs_toggle_magic(int x);
 extern int rs_re_multi_type(int c);
 extern int rs_backslash_trans(int c);
 extern void rs_init_class_tab(int16_t *out);
+extern int rs_re_multiline(const void *prog);
 
 // --- Reference C implementation of skip_regexp (ASCII-only, simplified) ---
 // This mirrors the logic in src/nvim/regexp.c skip_regexp_ex() but without
@@ -658,6 +659,61 @@ void test_init_class_tab(void) {
     TEST(name, mismatches == 0);
 }
 
+// --- Mock regprog_T for re_multiline testing ---
+// Must match the layout of struct regprog in regexp.c:
+//   regengine_T *engine;   (pointer)
+//   unsigned regflags;
+//   unsigned re_engine;
+//   unsigned re_flags;
+//   bool re_in_use;
+struct mock_regprog {
+    void *engine;
+    unsigned int regflags;
+    unsigned int re_engine;
+    unsigned int re_flags;
+    int re_in_use;
+};
+
+#define RF_HASNL 4
+
+// Accessor stub — rs_re_multiline calls this via FFI
+unsigned int nvim_regexp_get_regflags(const void *prog) {
+    const struct mock_regprog *p = (const struct mock_regprog *)prog;
+    return p->regflags;
+}
+
+void test_re_multiline(void) {
+    printf("Testing re_multiline (mock regprog_T):\n");
+
+    // Test 1: RF_HASNL set
+    {
+        struct mock_regprog prog = { .engine = NULL, .regflags = RF_HASNL };
+        int result = rs_re_multiline(&prog);
+        TEST("RF_HASNL set -> non-zero", result != 0);
+    }
+
+    // Test 2: RF_HASNL not set
+    {
+        struct mock_regprog prog = { .engine = NULL, .regflags = 0 };
+        int result = rs_re_multiline(&prog);
+        TEST("no flags -> 0", result == 0);
+    }
+
+    // Test 3: RF_HASNL set among other flags
+    {
+        struct mock_regprog prog = { .engine = NULL, .regflags = 1 | RF_HASNL | 8 };
+        int result = rs_re_multiline(&prog);
+        TEST("mixed flags with RF_HASNL -> non-zero", result != 0);
+    }
+
+    // Test 4: other flags without RF_HASNL
+    {
+        struct mock_regprog prog = { .engine = NULL, .regflags = 1 | 2 | 8 };
+        int result = rs_re_multiline(&prog);
+        TEST("other flags without RF_HASNL -> 0", result == 0);
+    }
+}
+
 int main(void) {
     printf("=== Comparing C regexp utility implementations ===\n\n");
 
@@ -670,6 +726,7 @@ int main(void) {
     test_re_multi_type();
     test_backslash_trans();
     test_init_class_tab();
+    test_re_multiline();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);
