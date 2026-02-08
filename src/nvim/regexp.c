@@ -10636,6 +10636,206 @@ void nvim_regexp_xfree(void *p) { xfree(p); }
 
 // --- End Phase 8.4 ---
 
+// --- Phase 8.5: C accessors for nfa_regtry / nfa_regexec entry points ---
+
+// Allocate/free regsubs_T on the heap (Rust cannot stack-allocate opaque C structs)
+void *nvim_regexp_alloc_regsubs(void) { return xcalloc(1, sizeof(regsubs_T)); }
+void nvim_regexp_free_regsubs(void *s) { xfree(s); }
+
+// nfa_regtry setup: set rex.input and NFA time fields
+void nvim_regexp_nfa_regtry_setup(void *prog, int32_t col, void *tm, int *timed_out) {
+  rex.input = rex.line + col;
+  nfa_time_limit = (proftime_T *)tm;
+  nfa_timed_out = timed_out;
+  nfa_time_count = 0;
+}
+
+// nfa_regtry: extract submatch data from subs into rex fields (multi-line mode)
+void nvim_regexp_nfa_regtry_extract_multi(void *subs_ptr, int32_t col) {
+  regsubs_T *subs = (regsubs_T *)subs_ptr;
+  for (int i = 0; i < subs->norm.in_use; i++) {
+    rex.reg_startpos[i].lnum = subs->norm.list.multi[i].start_lnum;
+    rex.reg_startpos[i].col = subs->norm.list.multi[i].start_col;
+    rex.reg_endpos[i].lnum = subs->norm.list.multi[i].end_lnum;
+    rex.reg_endpos[i].col = subs->norm.list.multi[i].end_col;
+  }
+  if (rex.reg_mmatch != NULL) {
+    rex.reg_mmatch->rmm_matchcol = subs->norm.orig_start_col;
+  }
+  if (rex.reg_startpos[0].lnum < 0) {
+    rex.reg_startpos[0].lnum = 0;
+    rex.reg_startpos[0].col = col;
+  }
+  if (rex.reg_endpos[0].lnum < 0) {
+    rex.reg_endpos[0].lnum = rex.lnum;
+    rex.reg_endpos[0].col = (int)(rex.input - rex.line);
+  } else {
+    rex.lnum = rex.reg_endpos[0].lnum;
+  }
+}
+
+// nfa_regtry: extract submatch data (single-line mode)
+void nvim_regexp_nfa_regtry_extract_single(void *subs_ptr, int32_t col) {
+  regsubs_T *subs = (regsubs_T *)subs_ptr;
+  for (int i = 0; i < subs->norm.in_use; i++) {
+    rex.reg_startp[i] = subs->norm.list.line[i].start;
+    rex.reg_endp[i] = subs->norm.list.line[i].end;
+  }
+  if (rex.reg_startp[0] == NULL) {
+    rex.reg_startp[0] = rex.line + col;
+  }
+  if (rex.reg_endp[0] == NULL) {
+    rex.reg_endp[0] = rex.input;
+  }
+}
+
+// nfa_regtry: handle \z(...\) extmatch extraction
+void nvim_regexp_nfa_regtry_extract_extmatch(void *subs_ptr) {
+  regsubs_T *subs = (regsubs_T *)subs_ptr;
+  cleanup_zsubexpr();
+  re_extmatch_out = make_extmatch();
+  for (int i = 1; i < subs->synt.in_use; i++) {
+    if (REG_MULTI) {
+      struct multipos *mpos = &subs->synt.list.multi[i];
+      if (mpos->start_lnum >= 0
+          && mpos->start_lnum == mpos->end_lnum
+          && mpos->end_col >= mpos->start_col) {
+        re_extmatch_out->matches[i] =
+          (uint8_t *)xstrnsave(reg_getline(mpos->start_lnum) + mpos->start_col,
+                               (size_t)(mpos->end_col - mpos->start_col));
+      }
+    } else {
+      struct linepos *lpos = &subs->synt.list.line[i];
+      if (lpos->start != NULL && lpos->end != NULL) {
+        re_extmatch_out->matches[i] =
+          (uint8_t *)xstrnsave((char *)lpos->start, (size_t)(lpos->end - lpos->start));
+      }
+    }
+  }
+}
+
+// nfa_regexec_both: get the prog from rex.reg_match or rex.reg_mmatch
+void *nvim_regexp_nfa_regexec_both_get_prog(void) {
+  if (REG_MULTI) {
+    return (void *)rex.reg_mmatch->regprog;
+  } else {
+    return (void *)rex.reg_match->regprog;
+  }
+}
+
+// nfa_regexec_both: get line (calls reg_getline(0) for multi-line mode)
+uint8_t *nvim_regexp_nfa_regexec_both_get_line(uint8_t *line) {
+  if (REG_MULTI) {
+    return (uint8_t *)reg_getline(0);
+  }
+  return line;
+}
+
+// nfa_regexec_both: set up rex pointer fields from match structs
+void nvim_regexp_nfa_regexec_both_setup_pointers(void) {
+  if (REG_MULTI) {
+    rex.reg_startpos = rex.reg_mmatch->startpos;
+    rex.reg_endpos = rex.reg_mmatch->endpos;
+  } else {
+    rex.reg_startp = (uint8_t **)rex.reg_match->startp;
+    rex.reg_endp = (uint8_t **)rex.reg_match->endp;
+  }
+}
+
+// nfa_regexec_both: apply regflags overrides
+void nvim_regexp_nfa_regexec_both_apply_flags(void *prog_ptr) {
+  nfa_regprog_T *prog = (nfa_regprog_T *)prog_ptr;
+  if (prog->regflags & RF_ICASE) {
+    rex.reg_ic = true;
+  } else if (prog->regflags & RF_NOICASE) {
+    rex.reg_ic = false;
+  }
+  if (prog->regflags & RF_ICOMBINE) {
+    rex.reg_icombine = true;
+  }
+}
+
+// nfa_regexec_both: set up NFA-specific rex fields from prog
+void nvim_regexp_nfa_regexec_both_setup_nfa(void *prog_ptr) {
+  nfa_regprog_T *prog = (nfa_regprog_T *)prog_ptr;
+  rex.line = NULL;  // caller must set rex.line separately
+  rex.lnum = 0;
+  rex.nfa_has_zend = prog->has_zend;
+  rex.nfa_has_backref = prog->has_backref;
+  rex.nfa_nsubexpr = prog->nsubexp;
+  rex.nfa_listid = 1;
+  rex.nfa_alt_listid = 2;
+  rex.need_clear_subexpr = true;
+  if (prog->reghasz == REX_SET) {
+    rex.nfa_has_zsubexpr = true;
+    rex.need_clear_zsubexpr = true;
+  } else {
+    rex.nfa_has_zsubexpr = false;
+    rex.need_clear_zsubexpr = false;
+  }
+}
+
+// nfa_regexec_both: initialize state array (id and lastlist fields)
+void nvim_regexp_nfa_regexec_both_init_states(void *prog_ptr) {
+  nfa_regprog_T *prog = (nfa_regprog_T *)prog_ptr;
+  nstate = 0;
+  for (int i = 0; i < prog->nstate; i++) {
+    prog->state[i].id = i;
+    prog->state[i].lastlist[0] = 0;
+    prog->state[i].lastlist[1] = 0;
+  }
+}
+
+// nfa_regexec_both: post-match validation (ensure end >= start)
+void nvim_regexp_nfa_regexec_both_validate_match(void) {
+  if (REG_MULTI) {
+    const lpos_T *start = &rex.reg_mmatch->startpos[0];
+    const lpos_T *end = &rex.reg_mmatch->endpos[0];
+    if (end->lnum < start->lnum
+        || (end->lnum == start->lnum && end->col < start->col)) {
+      rex.reg_mmatch->endpos[0] = rex.reg_mmatch->startpos[0];
+    }
+  } else {
+    if (rex.reg_match->endp[0] < rex.reg_match->startp[0]) {
+      rex.reg_match->endp[0] = rex.reg_match->startp[0];
+    }
+  }
+}
+
+// nfa_regexec_both: set rmm_matchcol or rm_matchcol
+void nvim_regexp_nfa_regexec_both_set_matchcol(int32_t col) {
+  if (REG_MULTI) {
+    rex.reg_mmatch->rmm_matchcol = col;
+  } else {
+    rex.reg_match->rm_matchcol = col;
+  }
+}
+
+// nfa_regexec_nl: set up rex fields for single-line NFA matching
+void nvim_regexp_nfa_regexec_nl_setup(void *rmp, int line_lbr) {
+  regmatch_T *rm = (regmatch_T *)rmp;
+  rex.reg_match = rm;
+  rex.reg_mmatch = NULL;
+  rex.reg_maxline = 0;
+  rex.reg_line_lbr = (bool)line_lbr;
+  rex.reg_buf = curbuf;
+  rex.reg_win = NULL;
+  rex.reg_ic = rm->rm_ic;
+  rex.reg_icombine = false;
+  rex.reg_nobreak = rm->regprog->re_flags & RE_NOBREAK;
+  rex.reg_maxcol = 0;
+}
+
+// nfa_regexec_multi: wraps init_regexec_multi
+void nvim_regexp_call_init_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum) {
+  init_regexec_multi((regmmatch_T *)rmp, (win_T *)win, (buf_T *)buf, lnum);
+}
+
+// nfa_regexec_both: iemsg for null prog/line
+void nvim_regexp_call_iemsg_null(void) { iemsg(_(e_null)); }
+
+// --- End Phase 8.5 ---
+
 /// Main matching routine.
 ///
 /// Run NFA to determine whether it matches rex.input.

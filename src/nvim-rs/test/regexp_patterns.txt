@@ -1180,3 +1180,18 @@ abc\|def\|ghi	defxyz
 \v\w+\s+\w+	hello world
 \v[[:digit:]]+\.[[:digit:]]+	3.14159
 \v<\w+>	hello world test
+# Phase 8.5: Entry point patterns (nfa_regtry, nfa_regexec_both flow)
+# Anchored patterns (test reganch + col > 0 path)
+^hello	hello world
+^$
+# regstart skip optimization
+xfoo	xxfoobar
+# match_text fast path (regstart + match_text set, no icombine)
+foobar	xxfoobarxx
+# Case-insensitive \c and \C patterns (regflags override)
+\cfoobar	FOOBAR test
+\Cfoobar	foobar test
+\Cfoobar	FOOBAR test
+# Multi-group extraction (nfa_regtry submatch extraction)
+\(\w\+\) \(\w\+\) \(\w\+\)	one two three
+\v(\d+)-(\d+)-(\d+)	2026-02-08
