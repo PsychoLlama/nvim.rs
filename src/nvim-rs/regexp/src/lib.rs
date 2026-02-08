@@ -3093,7 +3093,245 @@ pub unsafe extern "C" fn rs_regatom(flagp: *mut c_int) -> *mut u8 {
         return std::ptr::null_mut();
     }
 
-    // Phases 5-7 handle remaining cases; for now fall through to C regatom
+    // --- Percent operators: \% ---
+    if c == magic(b'%') {
+        c = rs_no_magic(rs_getchr());
+
+        // \%( — non-capturing group
+        if c == b'(' as c_int {
+            if nvim_regexp_get_one_exactly() != 0 {
+                nvim_regexp_emsg2_e369(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+                return std::ptr::null_mut();
+            }
+            let mut flags: c_int = 0;
+            let ret = rs_reg(REG_NPAREN, &mut flags);
+            if ret.is_null() {
+                return std::ptr::null_mut();
+            }
+            *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
+            return ret;
+        }
+
+        // \%^ — beginning of file
+        if c == b'^' as c_int {
+            return rs_regnode(RE_BOF);
+        }
+
+        // \%$ — end of file
+        if c == b'$' as c_int {
+            return rs_regnode(RE_EOF);
+        }
+
+        // \%# — cursor position
+        if c == b'#' as c_int {
+            let regparse = nvim_regexp_get_regparse();
+            if *regparse == b'=' as c_char && *regparse.add(1) >= 48 && *regparse.add(1) <= 50 {
+                // misplaced \%#=1
+                nvim_regexp_semsg_e_atom_engine(*regparse.add(1) as c_int);
+                return std::ptr::null_mut();
+            }
+            return rs_regnode(CURSOR);
+        }
+
+        // \%V — visual area
+        if c == b'V' as c_int {
+            return rs_regnode(RE_VISUAL);
+        }
+
+        // \%C — composing character
+        if c == b'C' as c_int {
+            return rs_regnode(RE_COMPOSING);
+        }
+
+        // \%[abc] — optional sequence
+        if c == b'[' as c_int {
+            if nvim_regexp_get_one_exactly() != 0 {
+                nvim_regexp_emsg2_e369(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+                return std::ptr::null_mut();
+            }
+
+            let mut lastnode: *mut u8 = std::ptr::null_mut();
+            let mut ret: *mut u8 = std::ptr::null_mut();
+
+            loop {
+                c = rs_getchr();
+                if c == b']' as c_int {
+                    break;
+                }
+                if c == 0 {
+                    nvim_regexp_emsg2_e69(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+                    return std::ptr::null_mut();
+                }
+                let br = rs_regnode(BRANCH);
+                if ret.is_null() {
+                    ret = br;
+                } else {
+                    rs_regtail(lastnode, br);
+                    if nvim_regexp_get_reg_toolong() != 0 {
+                        return std::ptr::null_mut();
+                    }
+                }
+
+                rs_ungetchr();
+                nvim_regexp_set_one_exactly(1);
+                lastnode = rs_regatom(flagp);
+                nvim_regexp_set_one_exactly(0);
+                if lastnode.is_null() {
+                    return std::ptr::null_mut();
+                }
+            }
+            if ret.is_null() {
+                nvim_regexp_emsg2_e70(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+                return std::ptr::null_mut();
+            }
+            let lastbranch = rs_regnode(BRANCH);
+            let br = rs_regnode(NOTHING);
+            let just_calc_size = nvim_regexp_get_just_calc_size();
+            if ret != just_calc_size {
+                rs_regtail(lastnode, br);
+                rs_regtail(lastbranch, br);
+                // connect all branches to the NOTHING branch at the end
+                let mut scan = ret;
+                while scan != lastnode {
+                    if *scan as c_int == BRANCH {
+                        rs_regtail(scan, lastbranch);
+                        if nvim_regexp_get_reg_toolong() != 0 {
+                            return std::ptr::null_mut();
+                        }
+                        scan = scan.add(3); // OPERAND(scan)
+                    } else {
+                        scan = rs_regnext(scan);
+                        if scan.is_null() {
+                            break;
+                        }
+                    }
+                }
+            }
+            *flagp &= !(HASWIDTH | SIMPLE);
+            return ret;
+        }
+
+        // \%d, \%o, \%x, \%u, \%U — character by codepoint
+        if c == b'd' as c_int
+            || c == b'o' as c_int
+            || c == b'x' as c_int
+            || c == b'u' as c_int
+            || c == b'U' as c_int
+        {
+            let i: c_long = match c {
+                x if x == b'd' as c_int => rs_getdecchrs(),
+                x if x == b'o' as c_int => rs_getoctchrs(),
+                x if x == b'x' as c_int => rs_gethexchrs(2),
+                x if x == b'u' as c_int => rs_gethexchrs(4),
+                x if x == b'U' as c_int => rs_gethexchrs(8),
+                _ => -1,
+            };
+
+            if i < 0 || i > c_int::MAX as c_long {
+                nvim_regexp_emsg2_e678(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+                return std::ptr::null_mut();
+            }
+            #[allow(clippy::cast_possible_truncation)]
+            let i_int = i as c_int;
+            let ret = if use_multibytecode(i_int) {
+                rs_regnode(MULTIBYTECODE)
+            } else {
+                rs_regnode(EXACTLY)
+            };
+            if i_int == 0 {
+                rs_regc(0x0a);
+            } else {
+                rs_regmbc(i_int);
+            }
+            rs_regc(0);
+            *flagp |= HASWIDTH;
+            return ret;
+        }
+
+        // \%<N>l/c/v, \%'m — line/col/vcol/mark matchers
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        if (c as u8).is_ascii_digit()
+            || c == b'<' as c_int
+            || c == b'>' as c_int
+            || c == b'\'' as c_int
+            || c == b'.' as c_int
+        {
+            let mut n: u32 = 0;
+            let cmp = c;
+            let mut cur = false;
+            let mut got_digit = false;
+
+            if cmp == b'<' as c_int || cmp == b'>' as c_int {
+                c = rs_getchr();
+            }
+            if rs_no_magic(c) == b'.' as c_int {
+                cur = true;
+                c = rs_getchr();
+            }
+            while (rs_no_magic(c) as u8).is_ascii_digit() {
+                got_digit = true;
+                n = n * 10 + (rs_no_magic(c) - b'0' as c_int) as u32;
+                c = rs_getchr();
+            }
+            if rs_no_magic(c) == b'\'' as c_int && n == 0 {
+                // "\%'m", "\%<'m" and "\%>'m": Mark
+                c = rs_getchr();
+                let ret = rs_regnode(RE_MARK);
+                let just_calc_size = nvim_regexp_get_just_calc_size();
+                if ret == just_calc_size {
+                    nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 2);
+                } else {
+                    let regcode = nvim_regexp_get_regcode();
+                    *regcode = c as u8;
+                    *regcode.add(1) = cmp as u8;
+                    nvim_regexp_set_regcode(regcode.add(2));
+                }
+                return ret;
+            } else if (c == b'l' as c_int || c == b'c' as c_int || c == b'v' as c_int)
+                && (cur || got_digit)
+            {
+                if cur && n != 0 {
+                    nvim_regexp_semsg_e_dot_pos(rs_no_magic(c));
+                    return std::ptr::null_mut();
+                }
+                let ret;
+                if c == b'l' as c_int {
+                    if cur {
+                        n = nvim_regexp_get_curwin_lnum() as u32;
+                    }
+                    ret = rs_regnode(RE_LNUM);
+                    if save_prev_at_start != 0 {
+                        nvim_regexp_set_at_start(1);
+                    }
+                } else if c == b'c' as c_int {
+                    if cur {
+                        n = (nvim_regexp_get_curwin_col() + 1) as u32;
+                    }
+                    ret = rs_regnode(RE_COL);
+                } else {
+                    if cur {
+                        n = nvim_regexp_get_curwin_vcol() as u32;
+                    }
+                    ret = rs_regnode(RE_VCOL);
+                }
+                let just_calc_size = nvim_regexp_get_just_calc_size();
+                if ret == just_calc_size {
+                    nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 5);
+                } else {
+                    // put the number and the optional comparator after the opcode
+                    let regcode = rs_re_put_uint32(nvim_regexp_get_regcode(), n);
+                    *regcode = cmp as u8;
+                    nvim_regexp_set_regcode(regcode.add(1));
+                }
+                return ret;
+            }
+        }
+
+        nvim_regexp_emsg2_e71(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+        return std::ptr::null_mut();
+    }
+
+    // Phases 6-7 handle remaining cases; for now fall through to C regatom
     let _ = save_prev_at_start;
     rs_ungetchr();
     regatom(flagp)
