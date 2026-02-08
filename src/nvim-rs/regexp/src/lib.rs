@@ -8055,7 +8055,12 @@ pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
 
     // [...] — character collection
     if c == nfa_magic(b'[') {
-        return nfa_handle_collection(extra, old_regparse);
+        let result = nfa_handle_collection(extra, old_regparse);
+        if result != -1 {
+            return result;
+        }
+        // No closing ']' and not strict mode — fall through to handle '[' as literal
+        // (This mirrors the C FALLTHROUGH to default: nfa_do_multibyte)
     }
 
     // Default: literal character or multibyte/composing

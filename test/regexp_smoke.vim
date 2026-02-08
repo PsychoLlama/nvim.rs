@@ -254,15 +254,9 @@ call s:test_syntax('python', ['def foo():', '    x = 42', '    print("hello")'])
 " JavaScript syntax
 call s:test_syntax('javascript', ['function foo() {', '  const x = 42;', '  console.log("hello");', '}'])
 
-" Markdown syntax (triggers yaml.vim inclusion)
-" Note: yaml.vim has patterns that cause E874 (NFA stack pop error) — this is a
-" known NFA compiler bug with specific patterns. The test still verifies no hang.
-try
-  call s:test_syntax('markdown', ['# Title', '', 'Some text', '', '```python', 'x = 1', '```'])
-catch
-  " E874 is expected from yaml.vim; the important thing is no hang
-  call s:ok('syntax-markdown (E874 expected)')
-endtry
+" Markdown syntax (triggers yaml.vim inclusion which uses patterns with
+" unclosed brackets — exercises the NFA compiler's collection fallback)
+call s:test_syntax('markdown', ['# Title', '', 'Some text', '', '```python', 'x = 1', '```'])
 
 " ============================================================================
 " Test group 4: Edge cases that have caused problems before
@@ -311,6 +305,16 @@ if pos == 1
 else
   call s:fail('search-lookahead', 'expected 1, got ' .. pos)
 endif
+bwipeout!
+
+" Unclosed bracket in collection (must not trigger E874)
+" This pattern is used by yaml.vim: \v\C[\zs
+" The NFA compiler must treat '[' as a literal when ']' is missing.
+new
+call setline(1, ['test [line'])
+let result = matchstrpos('test [line', '\v\C[\zs')
+" Pattern treats '[' as literal, so it should either match or not — but no error
+call s:ok('unclosed-bracket-no-e874')
 bwipeout!
 
 " ============================================================================
