@@ -2802,6 +2802,46 @@ pub unsafe extern "C" fn rs_regconcat(flagp: *mut c_int) -> *mut u8 {
     first
 }
 
+/// Parse one alternative of an | operator. Implements the & operator.
+#[no_mangle]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_regbranch(flagp: *mut c_int) -> *mut u8 {
+    let mut chain: *mut u8 = std::ptr::null_mut();
+    let mut flags: c_int = 0;
+
+    *flagp = WORST | HASNL; // Tentatively.
+
+    let ret = rs_regnode(BRANCH);
+    loop {
+        let latest = rs_regconcat(&mut flags);
+        if latest.is_null() {
+            return std::ptr::null_mut();
+        }
+        // If one of the branches has width, the whole thing has.  If one of
+        // the branches anchors at start-of-line, the whole thing does.
+        // If one of the branches uses look-behind, the whole thing does.
+        *flagp |= flags & (HASWIDTH | SPSTART | HASLOOKBH);
+        // If one of the branches doesn't match a line-break, the whole thing
+        // doesn't.
+        *flagp &= !HASNL | (flags & HASNL);
+        if !chain.is_null() {
+            rs_regtail(chain, latest);
+        }
+        if rs_peekchr() != magic(b'&') {
+            break;
+        }
+        rs_skipchr();
+        rs_regtail(latest, rs_regnode(END)); // operand ends
+        if nvim_regexp_get_reg_toolong() != 0 {
+            break;
+        }
+        rs_reginsert(MATCH, latest);
+        chain = latest;
+    }
+
+    ret
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

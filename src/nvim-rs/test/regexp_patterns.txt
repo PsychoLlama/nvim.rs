@@ -836,3 +836,7 @@ a\@<!	xbcd
 \cfoo	FOO
 \Cfoo	foo
 \Zfoo	foo
+
+# regbranch: branch parsing with & operator
+\(foo\&...\)	foobar
+\(a\&.\)\{3}	abc

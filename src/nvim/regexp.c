@@ -85,6 +85,7 @@ extern void rs_reginsert_limits(int op, int64_t minval, int64_t maxval, uint8_t 
 // Rust FFI: recursive descent parser functions
 extern uint8_t *rs_regpiece(int *flagp);
 extern uint8_t *rs_regconcat(int *flagp);
+extern uint8_t *rs_regbranch(int *flagp);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -3900,42 +3901,7 @@ static uint8_t *regconcat(int *flagp)
 // Implements the & operator.
 static uint8_t *regbranch(int *flagp)
 {
-  uint8_t *ret;
-  uint8_t *chain = NULL;
-  uint8_t *latest;
-  int flags;
-
-  *flagp = WORST | HASNL;               // Tentatively.
-
-  ret = regnode(BRANCH);
-  while (true) {
-    latest = regconcat(&flags);
-    if (latest == NULL) {
-      return NULL;
-    }
-    // If one of the branches has width, the whole thing has.  If one of
-    // the branches anchors at start-of-line, the whole thing does.
-    // If one of the branches uses look-behind, the whole thing does.
-    *flagp |= flags & (HASWIDTH | SPSTART | HASLOOKBH);
-    // If one of the branches doesn't match a line-break, the whole thing
-    // doesn't.
-    *flagp &= ~HASNL | (flags & HASNL);
-    if (chain != NULL) {
-      regtail(chain, latest);
-    }
-    if (peekchr() != Magic('&')) {
-      break;
-    }
-    skipchr();
-    regtail(latest, regnode(END));     // operand ends
-    if (reg_toolong) {
-      break;
-    }
-    reginsert(MATCH, latest);
-    chain = latest;
-  }
-
-  return ret;
+  return rs_regbranch(flagp);
 }
 
 /// Parse regular expression, i.e. main body or parenthesized thing.
