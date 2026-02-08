@@ -1,13 +1,24 @@
-Plan: ~/.claude/plans/optimized-drifting-puffin.md
+Plan: ~/.claude/plans/lucky-splashing-music.md
 
-All 8 phases of the plan are complete. Here's a summary of what was done:
+All 3 phases are complete. Here's a summary:
 
-**4 commits:**
+## Summary
 
-1. **`facbf953`** - Core migration: Created `nvim-regexp` crate with `rs_skip_regexp` and `rs_skip_regexp_ex`, added C accessor wrappers for static helpers (`get_char_class`, `get_equi_class`, `get_coll_element`), wired `skip_regexp_ex` in regexp.c to delegate to Rust, and registered the crate in all build system touchpoints.
+Successfully migrated 6 regexp utility functions from C to Rust in 3 commits:
 
-2. **`9e07dc85`** - Test harness: Updated `compare_regexp.c` with FFI stubs for standalone testing and 24 comparison tests validating Rust matches C behavior.
+### Commit 1: Pure arithmetic functions
+- `rs_no_magic` — strip Magic encoding from a character
+- `rs_toggle_magic` — toggle Magic encoding on/off  
+- `rs_re_multi_type` — classify multi-match operators
+- `rs_backslash_trans` — translate backslash escape sequences
 
-3. **`313eea1c`** - Caller updates: Changed `ex_docmd`, `search`, and `tag` crates to call `rs_skip_regexp`/`rs_skip_regexp_ex` directly. Fixed tag crate's `magic: bool` → `magic: c_int`.
+### Commit 2: Class table initialization
+- `rs_init_class_tab` — compile-time const 256-entry class lookup table (replacing runtime initialization)
 
-4. **`f6b9e741`** - Test corpus: Added skip_regexp-focused patterns (collections with delimiters, POSIX classes, magic mode switches, edge cases) and regenerated corpus (545 entries).
+### Commit 3: Opaque handle function
+- `rs_re_multiline` — check if regexp can match newlines (uses C accessor `nvim_regexp_get_regflags` for opaque struct access)
+
+### Test results
+- 3451 Rust unit tests pass (17 new tests for the regexp crate)
+- 57 FFI comparison tests pass (9 new C-vs-Rust comparisons)
+- All build, smoke-test, formatting, and lint checks pass
