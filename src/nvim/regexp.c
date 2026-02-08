@@ -83,6 +83,7 @@ extern void rs_init_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum)
 extern int rs_bt_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
 extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                int32_t col, void *tm, int *timed_out);
+extern int rs_bt_regexec_both(uint8_t *line, int32_t startcol, void *tm, int *timed_out);
 // Rust FFI: node management and compilation infrastructure
 extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
 extern void rs_regc(int b);
@@ -3624,199 +3625,7 @@ static int regtry(bt_regprog_T *prog, colnr_T col, proftime_T *tm, int *timed_ou
 /// @return  0 for failure, or number of lines contained in the match.
 static int bt_regexec_both(uint8_t *line, colnr_T startcol, proftime_T *tm, int *timed_out)
 {
-  bt_regprog_T *prog;
-  uint8_t *s;
-  colnr_T col = startcol;
-  int retval = 0;
-
-  // Create "regstack" and "backpos" if they are not allocated yet.
-  // We allocate *_INITIAL amount of bytes first and then set the grow size
-  // to much bigger value to avoid many malloc calls in case of deep regular
-  // expressions.
-  if (regstack.ga_data == NULL) {
-    // Use an item size of 1 byte, since we push different things
-    // onto the regstack.
-    ga_init(&regstack, 1, REGSTACK_INITIAL);
-    ga_grow(&regstack, REGSTACK_INITIAL);
-    ga_set_growsize(&regstack, REGSTACK_INITIAL * 8);
-  }
-
-  if (backpos.ga_data == NULL) {
-    ga_init(&backpos, sizeof(backpos_T), BACKPOS_INITIAL);
-    ga_grow(&backpos, BACKPOS_INITIAL);
-    ga_set_growsize(&backpos, BACKPOS_INITIAL * 8);
-  }
-
-  if (REG_MULTI) {
-    prog = (bt_regprog_T *)rex.reg_mmatch->regprog;
-    line = (uint8_t *)reg_getline(0);
-    rex.reg_startpos = rex.reg_mmatch->startpos;
-    rex.reg_endpos = rex.reg_mmatch->endpos;
-  } else {
-    prog = (bt_regprog_T *)rex.reg_match->regprog;
-    rex.reg_startp = (uint8_t **)rex.reg_match->startp;
-    rex.reg_endp = (uint8_t **)rex.reg_match->endp;
-  }
-
-  // Be paranoid...
-  if (prog == NULL || line == NULL) {
-    iemsg(_(e_null));
-    goto theend;
-  }
-
-  // Check validity of program.
-  if (prog_magic_wrong()) {
-    goto theend;
-  }
-
-  // If the start column is past the maximum column: no need to try.
-  if (rex.reg_maxcol > 0 && col >= rex.reg_maxcol) {
-    goto theend;
-  }
-
-  // If pattern contains "\c" or "\C": overrule value of rex.reg_ic
-  if (prog->regflags & RF_ICASE) {
-    rex.reg_ic = true;
-  } else if (prog->regflags & RF_NOICASE) {
-    rex.reg_ic = false;
-  }
-
-  // If pattern contains "\Z" overrule value of rex.reg_icombine
-  if (prog->regflags & RF_ICOMBINE) {
-    rex.reg_icombine = true;
-  }
-
-  // If there is a "must appear" string, look for it.
-  if (prog->regmust != NULL) {
-    int c = utf_ptr2char((char *)prog->regmust);
-    s = line + col;
-
-    // This is used very often, esp. for ":global".  Use two versions of
-    // the loop to avoid overhead of conditions.
-    if (!rex.reg_ic) {
-      while ((s = (uint8_t *)vim_strchr((char *)s, c)) != NULL) {
-        if (cstrncmp((char *)s, (char *)prog->regmust, &prog->regmlen) == 0) {
-          break;  // Found it.
-        }
-        MB_PTR_ADV(s);
-      }
-    } else {
-      while ((s = (uint8_t *)cstrchr((char *)s, c)) != NULL) {
-        if (cstrncmp((char *)s, (char *)prog->regmust, &prog->regmlen) == 0) {
-          break;  // Found it.
-        }
-        MB_PTR_ADV(s);
-      }
-    }
-    if (s == NULL) {  // Not present.
-      goto theend;
-    }
-  }
-
-  rex.line = line;
-  rex.lnum = 0;
-  reg_toolong = false;
-
-  // Simplest case: Anchored match need be tried only once.
-  if (prog->reganch) {
-    int c = utf_ptr2char((char *)rex.line + col);
-    if (prog->regstart == NUL
-        || prog->regstart == c
-        || (rex.reg_ic
-            && (utf_fold(prog->regstart) == utf_fold(c)
-                || (c < 255 && prog->regstart < 255
-                    && mb_tolower(prog->regstart) == mb_tolower(c))))) {
-      retval = regtry(prog, col, tm, timed_out);
-    } else {
-      retval = 0;
-    }
-  } else {
-    int tm_count = 0;
-    // Messy cases:  unanchored match.
-    while (!got_int) {
-      if (prog->regstart != NUL) {
-        // Skip until the char we know it must start with.
-        s = (uint8_t *)cstrchr((char *)rex.line + col, prog->regstart);
-        if (s == NULL) {
-          retval = 0;
-          break;
-        }
-        col = (int)(s - rex.line);
-      }
-
-      // Check for maximum column to try.
-      if (rex.reg_maxcol > 0 && col >= rex.reg_maxcol) {
-        retval = 0;
-        break;
-      }
-
-      retval = regtry(prog, col, tm, timed_out);
-      if (retval > 0) {
-        break;
-      }
-
-      // if not currently on the first line, get it again
-      if (rex.lnum != 0) {
-        rex.lnum = 0;
-        rex.line = (uint8_t *)reg_getline(0);
-      }
-      if (rex.line[col] == NUL) {
-        break;
-      }
-      col += utfc_ptr2len((char *)rex.line + col);
-      // Check for timeout once in a twenty times to avoid overhead.
-      if (tm != NULL && ++tm_count == 20) {
-        tm_count = 0;
-        if (profile_passed_limit(*tm)) {
-          if (timed_out != NULL) {
-            *timed_out = true;
-          }
-          break;
-        }
-      }
-    }
-  }
-
-theend:
-  // Free "reg_tofree" when it's a bit big.
-  // Free regstack and backpos if they are bigger than their initial size.
-  if (reg_tofreelen > 400) {
-    XFREE_CLEAR(reg_tofree);
-  }
-  if (regstack.ga_maxlen > REGSTACK_INITIAL) {
-    ga_clear(&regstack);
-  }
-  if (backpos.ga_maxlen > BACKPOS_INITIAL) {
-    ga_clear(&backpos);
-  }
-
-  if (retval > 0) {
-    // Make sure the end is never before the start.  Can happen when \zs
-    // and \ze are used.
-    if (REG_MULTI) {
-      const lpos_T *const start = &rex.reg_mmatch->startpos[0];
-      const lpos_T *const end = &rex.reg_mmatch->endpos[0];
-
-      if (end->lnum < start->lnum
-          || (end->lnum == start->lnum && end->col < start->col)) {
-        rex.reg_mmatch->endpos[0] = rex.reg_mmatch->startpos[0];
-      }
-
-      // startpos[0] may be set by "\zs", also return the column where
-      // the whole pattern matched.
-      rex.reg_mmatch->rmm_matchcol = col;
-    } else {
-      if (rex.reg_match->endp[0] < rex.reg_match->startp[0]) {
-        rex.reg_match->endp[0] = rex.reg_match->startp[0];
-      }
-
-      // startpos[0] may be set by "\zs", also return the column where
-      // the whole pattern matched.
-      rex.reg_match->rm_matchcol = col;
-    }
-  }
-
-  return retval;
+  return rs_bt_regexec_both(line, startcol, (void *)tm, timed_out);
 }
 
 /// Match a regexp against a string.
@@ -10832,13 +10641,44 @@ void nvim_regexp_call_iemsg_null(void) { iemsg(_(e_null)); }
 
 // --- End Phase 8.5 ---
 
-// Phase 9.1: BT dispatch wrappers
-// Temporary accessor for bt_regexec_both (will be replaced in Phase 2)
-int nvim_regexp_call_bt_regexec_both(uint8_t *line, int32_t col, void *tm, int *timed_out) {
-  return bt_regexec_both(line, (colnr_T)col, (proftime_T *)tm, timed_out);
+// --- End Phase 9.1 ---
+
+// Phase 9.2: bt_regexec_both accessors
+
+// Init regstack and backpos if not allocated yet
+void nvim_regexp_bt_init_stacks(void) {
+  if (regstack.ga_data == NULL) {
+    ga_init(&regstack, 1, REGSTACK_INITIAL);
+    ga_grow(&regstack, REGSTACK_INITIAL);
+    ga_set_growsize(&regstack, REGSTACK_INITIAL * 8);
+  }
+  if (backpos.ga_data == NULL) {
+    ga_init(&backpos, sizeof(backpos_T), BACKPOS_INITIAL);
+    ga_grow(&backpos, BACKPOS_INITIAL);
+    ga_set_growsize(&backpos, BACKPOS_INITIAL * 8);
+  }
 }
 
-// --- End Phase 9.1 ---
+// Cleanup stacks and reg_tofree after bt_regexec_both
+void nvim_regexp_bt_cleanup_stacks(void) {
+  if (reg_tofreelen > 400) {
+    XFREE_CLEAR(reg_tofree);
+  }
+  if (regstack.ga_maxlen > REGSTACK_INITIAL) {
+    ga_clear(&regstack);
+  }
+  if (backpos.ga_maxlen > BACKPOS_INITIAL) {
+    ga_clear(&backpos);
+  }
+}
+
+// bt_regprog_T field getters
+uint8_t *nvim_bt_prog_get_regmust(const void *prog) { return ((const bt_regprog_T *)prog)->regmust; }
+int nvim_bt_prog_get_regmlen(const void *prog) { return ((const bt_regprog_T *)prog)->regmlen; }
+int nvim_bt_prog_get_regstart(const void *prog) { return ((const bt_regprog_T *)prog)->regstart; }
+int nvim_bt_prog_get_reganch(const void *prog) { return ((const bt_regprog_T *)prog)->reganch; }
+
+// --- End Phase 9.2 ---
 
 /// Main matching routine.
 ///

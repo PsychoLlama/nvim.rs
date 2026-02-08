@@ -12259,13 +12259,14 @@ pub unsafe extern "C" fn rs_nfa_regexec_multi(
 // --- Phase 9.1: BT dispatch wrappers ---
 
 extern "C" {
-    // Temporary accessor for bt_regexec_both (until Phase 2 ports it)
-    fn nvim_regexp_call_bt_regexec_both(
-        line: *mut u8,
-        col: i32,
-        tm: *mut c_void,
-        timed_out: *mut c_int,
-    ) -> c_int;
+    // Phase 9.2: bt_regexec_both accessors
+    fn nvim_regexp_bt_init_stacks();
+    fn nvim_regexp_bt_cleanup_stacks();
+    fn nvim_bt_prog_get_regmust(prog: *const c_void) -> *mut u8;
+    fn nvim_bt_prog_get_regmlen(prog: *const c_void) -> c_int;
+    fn nvim_bt_prog_get_regstart(prog: *const c_void) -> c_int;
+    fn nvim_bt_prog_get_reganch(prog: *const c_void) -> c_int;
+    fn nvim_regexp_call_prog_magic_wrong() -> c_int;
 }
 
 /// Initialize rex state for multi-line matching.
@@ -12288,7 +12289,7 @@ pub unsafe extern "C" fn rs_bt_regexec_nl(
     line_lbr: c_int,
 ) -> c_int {
     nvim_regexp_nfa_regexec_nl_setup(rmp, line_lbr);
-    nvim_regexp_call_bt_regexec_both(line, col, core::ptr::null_mut(), core::ptr::null_mut())
+    rs_bt_regexec_both(line, col, core::ptr::null_mut(), core::ptr::null_mut())
 }
 
 /// BT regexp execution for multi-line matching.
@@ -12303,10 +12304,224 @@ pub unsafe extern "C" fn rs_bt_regexec_multi(
     timed_out: *mut c_int,
 ) -> c_int {
     rs_init_regexec_multi(rmp, win, buf, lnum);
-    nvim_regexp_call_bt_regexec_both(core::ptr::null_mut(), col, tm, timed_out)
+    rs_bt_regexec_both(core::ptr::null_mut(), col, tm, timed_out)
 }
 
 // --- End Phase 9.1 ---
+
+// --- Phase 9.2: BT core execution engine ---
+
+/// Core BT regexp execution for both single-line and multi-line modes.
+///
+/// Initializes stacks, extracts prog, validates, runs regmust optimization,
+/// then loops calling `rs_regtry`. Cleans up stacks at the end.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_bt_regexec_both(
+    line: *mut u8,
+    startcol: i32,
+    tm: *mut c_void,
+    timed_out: *mut c_int,
+) -> c_int {
+    let mut col = startcol;
+
+    // Init regstack and backpos
+    nvim_regexp_bt_init_stacks();
+
+    // Get prog and line
+    let prog = nvim_regexp_nfa_regexec_both_get_prog();
+    let line = nvim_regexp_nfa_regexec_both_get_line(line);
+
+    // Set up rex pointer fields (startpos/endpos or startp/endp)
+    nvim_regexp_nfa_regexec_both_setup_pointers();
+
+    // Be paranoid...
+    if prog.is_null() || line.is_null() {
+        nvim_regexp_call_iemsg_null();
+        nvim_regexp_bt_cleanup_stacks();
+        return 0;
+    }
+
+    // Check validity of program
+    if nvim_regexp_call_prog_magic_wrong() != 0 {
+        nvim_regexp_bt_cleanup_stacks();
+        return 0;
+    }
+
+    // If the start column is past the maximum column: no need to try
+    let reg_maxcol = nvim_regexp_get_rex_reg_maxcol();
+    if reg_maxcol > 0 && col >= reg_maxcol {
+        nvim_regexp_bt_cleanup_stacks();
+        return 0;
+    }
+
+    // Apply regflags overrides (\c, \C, \Z) — works for bt_regprog_T too
+    nvim_regexp_nfa_regexec_both_apply_flags(prog);
+
+    // If there is a "must appear" string, look for it
+    let regmust = nvim_bt_prog_get_regmust(prog);
+    if !regmust.is_null() && !bt_regmust_search(line, col, prog, regmust) {
+        nvim_regexp_bt_cleanup_stacks();
+        return 0;
+    }
+
+    // Set rex.line, rex.lnum, reg_toolong
+    nvim_regexp_set_rex_line(line);
+    nvim_regexp_set_rex_lnum(0);
+    nvim_regexp_set_reg_toolong(0);
+
+    let regstart = nvim_bt_prog_get_regstart(prog);
+    let reganch = nvim_bt_prog_get_reganch(prog);
+
+    // Simplest case: Anchored match need be tried only once
+    let retval = if reganch != 0 {
+        bt_try_anchored(prog, regstart, col, tm, timed_out)
+    } else {
+        bt_try_unanchored(prog, regstart, &mut col, tm, timed_out)
+    };
+
+    // Cleanup stacks
+    nvim_regexp_bt_cleanup_stacks();
+
+    // Validate and set matchcol
+    if retval > 0 {
+        nvim_regexp_nfa_regexec_both_validate_match();
+        nvim_regexp_nfa_regexec_both_set_matchcol(col);
+    }
+
+    retval
+}
+
+/// Search for "must appear" string in BT matching.
+/// Returns true if found, false if not present.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn bt_regmust_search(
+    line: *mut u8,
+    col: i32,
+    prog: NfaProgHandle,
+    regmust: *mut u8,
+) -> bool {
+    let c = utf_ptr2char(regmust.cast::<c_char>());
+    let mut s = line.add(col as usize);
+
+    if nvim_regexp_get_rex_reg_ic() == 0 {
+        // Case-sensitive search
+        loop {
+            s = vim_strchr(s.cast_const().cast::<c_char>(), c).cast::<u8>();
+            if s.is_null() {
+                break;
+            }
+            let mut regmlen = nvim_bt_prog_get_regmlen(prog);
+            if rs_cstrncmp(s.cast::<c_char>(), regmust.cast::<c_char>(), &mut regmlen) == 0 {
+                return true;
+            }
+            s = s.add(utfc_ptr2len(s.cast_const().cast::<c_char>()) as usize);
+        }
+    } else {
+        // Case-insensitive search
+        loop {
+            s = rs_cstrchr(s.cast_const().cast::<c_char>(), c).cast::<u8>();
+            if s.is_null() {
+                break;
+            }
+            let mut regmlen = nvim_bt_prog_get_regmlen(prog);
+            if rs_cstrncmp(s.cast::<c_char>(), regmust.cast::<c_char>(), &mut regmlen) == 0 {
+                return true;
+            }
+            s = s.add(utfc_ptr2len(s.cast_const().cast::<c_char>()) as usize);
+        }
+    }
+    !s.is_null()
+}
+
+/// Try anchored BT match at a specific column.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn bt_try_anchored(
+    prog: NfaProgHandle,
+    regstart: c_int,
+    col: i32,
+    tm: *mut c_void,
+    timed_out: *mut c_int,
+) -> c_int {
+    let rex_line = nvim_regexp_get_rex_line();
+    let c = utf_ptr2char(rex_line.add(col as usize).cast_const().cast::<c_char>());
+    if regstart == 0
+        || regstart == c
+        || (nvim_regexp_get_rex_reg_ic() != 0
+            && (utf_fold(regstart) == utf_fold(c)
+                || (c < 255 && regstart < 255 && mb_tolower(regstart) == mb_tolower(c))))
+    {
+        rs_regtry(prog, col, tm, timed_out)
+    } else {
+        0
+    }
+}
+
+/// Try unanchored BT match, looping through columns.
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+unsafe fn bt_try_unanchored(
+    prog: NfaProgHandle,
+    regstart: c_int,
+    col: &mut i32,
+    tm: *mut c_void,
+    timed_out: *mut c_int,
+) -> c_int {
+    let mut retval: c_int;
+    let mut tm_count: c_int = 0;
+    while nvim_regexp_get_got_int() == 0 {
+        if regstart != 0 {
+            // Skip until the char we know it must start with
+            let rex_line = nvim_regexp_get_rex_line();
+            let s = rs_cstrchr(
+                rex_line.add(*col as usize).cast_const().cast::<c_char>(),
+                regstart,
+            );
+            if s.is_null() {
+                return 0;
+            }
+            *col = s.offset_from(rex_line.cast_const().cast::<c_char>()) as i32;
+        }
+
+        // Check for maximum column to try
+        let reg_maxcol = nvim_regexp_get_rex_reg_maxcol();
+        if reg_maxcol > 0 && *col >= reg_maxcol {
+            return 0;
+        }
+
+        retval = rs_regtry(prog, *col, tm, timed_out);
+        if retval > 0 {
+            return retval;
+        }
+
+        // If not currently on the first line, get it again
+        if nvim_regexp_get_rex_lnum() != 0 {
+            nvim_regexp_set_rex_lnum(0);
+            nvim_regexp_set_rex_line(nvim_regexp_call_reg_getline(0).cast::<u8>());
+        }
+        let rex_line = nvim_regexp_get_rex_line();
+        if *rex_line.add(*col as usize) == 0 {
+            break;
+        }
+        *col += utfc_ptr2len(rex_line.add(*col as usize).cast_const().cast::<c_char>());
+
+        // Check for timeout once in twenty times to avoid overhead
+        if !tm.is_null() {
+            tm_count += 1;
+            if tm_count == 20 {
+                tm_count = 0;
+                if nvim_regexp_call_profile_passed_limit(tm) != 0 {
+                    if !timed_out.is_null() {
+                        *timed_out = 1;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    0
+}
+
+// --- End Phase 9.2 ---
 
 #[cfg(test)]
 mod tests {
