@@ -9816,6 +9816,104 @@ pub unsafe extern "C" fn rs_nfa_get_match_text(start: NfaStateHandle) -> *mut u8
     ret
 }
 
+// ---------------------------------------------------------------------------
+// Phase 7: nfa_regcomp Entry Point
+// ---------------------------------------------------------------------------
+
+// ---- Phase 7 C accessors ----
+extern "C" {
+    fn nvim_regexp_get_rex_nfa_has_zend() -> c_int;
+    fn nvim_regexp_get_rex_nfa_has_backref() -> c_int;
+    fn nvim_regexp_alloc_nfa_prog(nstate_count: c_int) -> NfaProgHandle;
+    fn nvim_regexp_set_nfa_prog_engine(prog: NfaProgHandle);
+    fn nvim_nfa_prog_set_re_in_use(prog: NfaProgHandle, v: c_int);
+    fn nvim_nfa_prog_set_start(prog: NfaProgHandle, s: NfaStateHandle);
+    fn nvim_nfa_prog_set_nstate(prog: NfaProgHandle, v: c_int);
+    fn nvim_regexp_xstrdup(s: *const c_char) -> *mut c_char;
+}
+
+/// Compile a regular expression into internal code for the NFA matcher.
+/// Returns the program in allocated space.  Returns NULL for an error.
+///
+/// This is the Rust replacement for `nfa_regcomp()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaProgHandle {
+    if expr.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    nvim_regexp_set_nfa_re_flags(re_flags);
+    nvim_regexp_call_init_class_tab();
+    rs_nfa_regcomp_start(expr, re_flags);
+
+    // Build postfix form of the regexp. Needed to build the NFA (and count its size).
+    let postfix = rs_re2post();
+    if postfix.is_null() {
+        // Cascaded (syntax?) error — clean up and return NULL
+        let post_start = nvim_regexp_get_post_start();
+        xfree(post_start.cast());
+        nvim_regexp_set_post_start(core::ptr::null_mut());
+        nvim_regexp_set_post_ptr(core::ptr::null_mut());
+        nvim_regexp_set_post_end(core::ptr::null_mut());
+        nvim_regexp_set_state_ptr(core::ptr::null_mut());
+        return core::ptr::null_mut();
+    }
+
+    let post_ptr_val = nvim_regexp_get_post_ptr();
+
+    // PASS 1: Count number of NFA states in "nstate". Do not build the NFA.
+    rs_post2nfa(postfix, post_ptr_val, 1);
+
+    // Allocate the regprog with space for the compiled regexp.
+    // This also sets state_ptr = prog->state.
+    let nstate_val = nvim_regexp_get_nstate();
+    let prog = nvim_regexp_alloc_nfa_prog(nstate_val);
+    nvim_nfa_prog_set_re_in_use(prog, 0);
+
+    // PASS 2: Build the NFA.
+    let start = rs_post2nfa(postfix, post_ptr_val, 0);
+    if start.is_null() {
+        // Build failed — free prog, clean up, return NULL
+        xfree(prog);
+        let post_start = nvim_regexp_get_post_start();
+        xfree(post_start.cast());
+        nvim_regexp_set_post_start(core::ptr::null_mut());
+        nvim_regexp_set_post_ptr(core::ptr::null_mut());
+        nvim_regexp_set_post_end(core::ptr::null_mut());
+        nvim_regexp_set_state_ptr(core::ptr::null_mut());
+        return core::ptr::null_mut();
+    }
+
+    nvim_nfa_prog_set_start(prog, start);
+    nvim_nfa_prog_set_regflags(prog, nvim_regexp_get_regflags_compile() as c_int);
+    nvim_regexp_set_nfa_prog_engine(prog);
+    nvim_nfa_prog_set_nstate(prog, nstate_val);
+    nvim_nfa_prog_set_has_zend(prog, nvim_regexp_get_rex_nfa_has_zend());
+    nvim_nfa_prog_set_has_backref(prog, nvim_regexp_get_rex_nfa_has_backref());
+    nvim_nfa_prog_set_nsubexp(prog, nvim_regexp_get_regnpar());
+
+    rs_nfa_postprocess(prog);
+
+    let prog_start = nvim_nfa_prog_get_start(prog);
+    nvim_nfa_prog_set_reganch(prog, rs_nfa_get_reganch(prog_start, 0));
+    nvim_nfa_prog_set_regstart(prog, rs_nfa_get_regstart(prog_start, 0));
+    nvim_nfa_prog_set_match_text(prog, rs_nfa_get_match_text(prog_start));
+
+    // Remember whether this pattern has any \z specials in it.
+    nvim_nfa_prog_set_reghasz(prog, nvim_regexp_get_re_has_z());
+    nvim_nfa_prog_set_pattern(prog, nvim_regexp_xstrdup(expr.cast()));
+
+    // Clean up
+    let post_start = nvim_regexp_get_post_start();
+    xfree(post_start.cast());
+    nvim_regexp_set_post_start(core::ptr::null_mut());
+    nvim_regexp_set_post_ptr(core::ptr::null_mut());
+    nvim_regexp_set_post_end(core::ptr::null_mut());
+    nvim_regexp_set_state_ptr(core::ptr::null_mut());
+
+    prog
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4717,6 +4717,9 @@ extern int rs_nfa_get_reganch(void *start, int depth);
 extern int rs_nfa_get_regstart(void *start, int depth);
 extern uint8_t *rs_nfa_get_match_text(void *start);
 
+// Forward declaration of Phase 7 Rust function
+extern void *rs_nfa_regcomp(uint8_t *expr, int re_flags);
+
 // nfa_regprog_T field accessors
 int nvim_nfa_prog_get_nstate(void *prog) { return ((nfa_regprog_T *)prog)->nstate; }
 void *nvim_nfa_prog_get_state(void *prog, int i) { return (void *)&((nfa_regprog_T *)prog)->state[i]; }
@@ -4731,6 +4734,16 @@ void nvim_nfa_prog_set_match_text(void *prog, uint8_t *v) { ((nfa_regprog_T *)pr
 void nvim_nfa_prog_set_reghasz(void *prog, int v) { ((nfa_regprog_T *)prog)->reghasz = v; }
 void nvim_nfa_prog_set_pattern(void *prog, char *v) { ((nfa_regprog_T *)prog)->pattern = v; }
 // --- End Phase 6 accessor functions ---
+
+// --- Phase 7 accessor functions (part 1: no state_ptr dependency) ---
+int nvim_regexp_get_rex_nfa_has_zend(void) { return rex.nfa_has_zend; }
+int nvim_regexp_get_rex_nfa_has_backref(void) { return rex.nfa_has_backref; }
+void nvim_regexp_set_nfa_prog_engine(void *prog) { ((nfa_regprog_T *)prog)->engine = &nfa_regengine; }
+void nvim_nfa_prog_set_re_in_use(void *prog, int v) { ((nfa_regprog_T *)prog)->re_in_use = (bool)v; }
+void nvim_nfa_prog_set_start(void *prog, void *s) { ((nfa_regprog_T *)prog)->start = (nfa_state_T *)s; }
+void nvim_nfa_prog_set_nstate(void *prog, int v) { ((nfa_regprog_T *)prog)->nstate = v; }
+char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }
+// --- End Phase 7 accessor functions (part 1) ---
 
 // Variables only used in nfa_regcomp() and descendants.
 static int nfa_re_flags;  ///< re_flags passed to nfa_regcomp().
@@ -7817,6 +7830,15 @@ static nfa_state_T *state_ptr;  // points to nfa_prog->state
 void *nvim_regexp_get_state_ptr(void) { return (void *)state_ptr; }
 void nvim_regexp_set_state_ptr(void *v) { state_ptr = (nfa_state_T *)v; }
 void *nvim_regexp_state_ptr_add(int index) { return (void *)&state_ptr[index]; }
+
+// Phase 7 accessor function (part 2: needs state_ptr)
+void *nvim_regexp_alloc_nfa_prog(int nstate_count)
+{
+  size_t prog_size = offsetof(nfa_regprog_T, state) + sizeof(nfa_state_T) * (size_t)nstate_count;
+  nfa_regprog_T *prog = xmalloc(prog_size);
+  state_ptr = prog->state;
+  return prog;
+}
 
 // Thin wrapper: call Rust rs_post2nfa, cast void* back to nfa_state_T*.
 static nfa_state_T *post2nfa(int *postfix, int *end, int nfa_calc_size)
@@ -11952,6 +11974,13 @@ theend:
 // Returns the program in allocated space.  Returns NULL for an error.
 static regprog_T *nfa_regcomp(uint8_t *expr, int re_flags)
 {
+  return (regprog_T *)rs_nfa_regcomp(expr, re_flags);
+}
+
+#ifdef NEVER
+// Original nfa_regcomp — replaced by rs_nfa_regcomp (Phase 7)
+static regprog_T *nfa_regcomp_ORIG(uint8_t *expr, int re_flags)
+{
   nfa_regprog_T *prog = NULL;
   int *postfix;
 
@@ -12046,6 +12075,7 @@ fail:
 #endif
   goto out;
 }
+#endif // NEVER
 
 // Free a compiled regexp program, returned by nfa_regcomp().
 static void nfa_regfree(regprog_T *prog)
