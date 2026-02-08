@@ -92,6 +92,7 @@ extern int rs_vim_regexec_nl(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_prog(void **prog_ptr, int ignore_case, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                 int32_t col, void *tm, int *timed_out);
+extern void *rs_vim_regcomp(const uint8_t *expr, int re_flags);
 // Rust FFI: node management and compilation infrastructure
 extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
 extern void rs_regc(int b);
@@ -10800,6 +10801,41 @@ void nvim_regexp_init_regmatch(void *buf, void *prog, int rm_ic) {
 
 // --- End Phase 9.4 ---
 
+// Phase 9.5: vim_regcomp accessors
+
+// Forward declaration (defined later in file)
+static int regexp_engine;
+
+// regexp_engine variable
+int nvim_regexp_get_regexp_engine(void) { return regexp_engine; }
+void nvim_regexp_set_regexp_engine(int v) { regexp_engine = v; }
+
+// rex.reg_buf = curbuf
+void nvim_regexp_set_rex_reg_buf_curbuf(void) { rex.reg_buf = curbuf; }
+
+// called_emsg counter
+int nvim_regexp_get_called_emsg(void) { return called_emsg; }
+
+// Engine vtable compile dispatch
+void *nvim_regexp_call_nfa_regcomp(const uint8_t *expr, int re_flags) {
+  return nfa_regengine.regcomp(expr, re_flags);
+}
+
+void *nvim_regexp_call_bt_regcomp(const uint8_t *expr, int re_flags) {
+  return bt_regengine.regcomp(expr, re_flags);
+}
+
+// regprog_T field setters
+void nvim_regprog_set_re_engine(void *prog, unsigned v) { ((regprog_T *)prog)->re_engine = v; }
+void nvim_regprog_set_re_flags(void *prog, unsigned v) { ((regprog_T *)prog)->re_flags = v; }
+
+// E864 error message
+void nvim_regexp_call_emsg_e864(void) {
+  emsg(_("E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used "));
+}
+
+// --- End Phase 9.5 ---
+
 /// Main matching routine.
 ///
 /// Run NFA to determine whether it matches rex.input.
@@ -12692,82 +12728,7 @@ static uint8_t regname[][30] = {
 // Returns NULL for an error.
 regprog_T *vim_regcomp(const char *expr_arg, int re_flags)
 {
-  regprog_T *prog = NULL;
-  const char *expr = expr_arg;
-
-  regexp_engine = (int)p_re;
-
-  // Check for prefix "\%#=", that sets the regexp engine
-  if (strncmp(expr, "\\%#=", 4) == 0) {
-    int newengine = expr[4] - '0';
-
-    if (newengine == AUTOMATIC_ENGINE
-        || newengine == BACKTRACKING_ENGINE
-        || newengine == NFA_ENGINE) {
-      regexp_engine = expr[4] - '0';
-      expr += 5;
-#ifdef REGEXP_DEBUG
-      smsg(0, "New regexp mode selected (%d): %s",
-           regexp_engine,
-           regname[newengine]);
-#endif
-    } else {
-      emsg(_("E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used "));
-      regexp_engine = AUTOMATIC_ENGINE;
-    }
-  }
-#ifdef REGEXP_DEBUG
-  bt_regengine.expr = expr;
-  nfa_regengine.expr = expr;
-#endif
-  // reg_iswordc() uses rex.reg_buf
-  rex.reg_buf = curbuf;
-
-  //
-  // First try the NFA engine, unless backtracking was requested.
-  //
-  const int called_emsg_before = called_emsg;
-  if (regexp_engine != BACKTRACKING_ENGINE) {
-    prog = nfa_regengine.regcomp((uint8_t *)expr,
-                                 re_flags + (regexp_engine == AUTOMATIC_ENGINE ? RE_AUTO : 0));
-  } else {
-    prog = bt_regengine.regcomp((uint8_t *)expr, re_flags);
-  }
-
-  // Check for error compiling regexp with initial engine.
-  if (prog == NULL) {
-#ifdef BT_REGEXP_DEBUG_LOG
-    // Debugging log for BT engine.
-    if (regexp_engine != BACKTRACKING_ENGINE) {
-      FILE *f = fopen(BT_REGEXP_DEBUG_LOG_NAME, "a");
-      if (f) {
-        fprintf(f, "Syntax error in \"%s\"\n", expr);
-        fclose(f);
-      } else {
-        semsg("(NFA) Could not open \"%s\" to write !!!",
-              BT_REGEXP_DEBUG_LOG_NAME);
-      }
-    }
-#endif
-    // If the NFA engine failed, try the backtracking engine. The NFA engine
-    // also fails for patterns that it can't handle well but are still valid
-    // patterns, thus a retry should work.
-    // But don't try if an error message was given.
-    if (regexp_engine == AUTOMATIC_ENGINE && called_emsg == called_emsg_before) {
-      regexp_engine = BACKTRACKING_ENGINE;
-      report_re_switch(expr);
-      prog = bt_regengine.regcomp((uint8_t *)expr, re_flags);
-    }
-  }
-
-  if (prog != NULL) {
-    // Store the info needed to call regcomp() again when the engine turns out
-    // to be very slow when executing it.
-    prog->re_engine = (unsigned)regexp_engine;
-    prog->re_flags = (unsigned)re_flags;
-  }
-
-  return prog;
+  return (regprog_T *)rs_vim_regcomp((const uint8_t *)expr_arg, re_flags);
 }
 
 // Free a compiled regexp program, returned by vim_regcomp().

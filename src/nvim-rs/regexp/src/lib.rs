@@ -12816,6 +12816,89 @@ pub unsafe extern "C" fn rs_vim_regexec_multi(
 
 // --- End Phase 9.4 ---
 
+// --- Phase 9.5: vim_regcomp ---
+
+const NFA_ENGINE: c_int = 2;
+
+extern "C" {
+    fn nvim_regexp_get_regexp_engine() -> c_int;
+    fn nvim_regexp_set_regexp_engine(v: c_int);
+    fn nvim_regexp_set_rex_reg_buf_curbuf();
+    fn nvim_regexp_get_called_emsg() -> c_int;
+    fn nvim_regexp_call_nfa_regcomp(expr: *const u8, re_flags: c_int) -> *mut c_void;
+    fn nvim_regexp_call_bt_regcomp(expr: *const u8, re_flags: c_int) -> *mut c_void;
+    fn nvim_regprog_set_re_engine(prog: *mut c_void, v: c_uint);
+    fn nvim_regprog_set_re_flags(prog: *mut c_void, v: c_uint);
+    fn nvim_regexp_call_emsg_e864();
+}
+
+/// Top-level regexp compilation dispatch.
+///
+/// Selects BT vs NFA based on `p_re` and `\%#=` prefix,
+/// handles NFA-to-BT fallback on compile error.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) -> *mut c_void {
+    let mut expr = expr_arg;
+
+    // Set regexp_engine from p_re
+    nvim_regexp_set_regexp_engine(nvim_regexp_get_p_re());
+
+    // Check for prefix "\%#=", that sets the regexp engine
+    if strncmp(expr.cast::<c_char>(), c"\\%#=".as_ptr(), 4) == 0 {
+        let newengine = c_int::from(*expr.add(4)) - c_int::from(b'0');
+
+        if newengine == AUTOMATIC_ENGINE
+            || newengine == BACKTRACKING_ENGINE
+            || newengine == NFA_ENGINE
+        {
+            nvim_regexp_set_regexp_engine(newengine);
+            expr = expr.add(5);
+        } else {
+            nvim_regexp_call_emsg_e864();
+            nvim_regexp_set_regexp_engine(AUTOMATIC_ENGINE);
+        }
+    }
+
+    // reg_iswordc() uses rex.reg_buf
+    nvim_regexp_set_rex_reg_buf_curbuf();
+
+    // First try the NFA engine, unless backtracking was requested
+    let called_emsg_before = nvim_regexp_get_called_emsg();
+    let regexp_engine = nvim_regexp_get_regexp_engine();
+
+    let mut prog = if regexp_engine == BACKTRACKING_ENGINE {
+        nvim_regexp_call_bt_regcomp(expr, re_flags)
+    } else {
+        let auto_flag = if regexp_engine == AUTOMATIC_ENGINE {
+            RE_AUTO
+        } else {
+            0
+        };
+        nvim_regexp_call_nfa_regcomp(expr, re_flags + auto_flag)
+    };
+
+    // If NFA failed, try backtracking engine
+    if prog.is_null()
+        && regexp_engine == AUTOMATIC_ENGINE
+        && nvim_regexp_get_called_emsg() == called_emsg_before
+    {
+        nvim_regexp_set_regexp_engine(BACKTRACKING_ENGINE);
+        nvim_regexp_call_report_re_switch(expr.cast::<c_char>());
+        prog = nvim_regexp_call_bt_regcomp(expr, re_flags);
+    }
+
+    if !prog.is_null() {
+        // Store engine and flags for later re-compilation
+        let engine = nvim_regexp_get_regexp_engine();
+        nvim_regprog_set_re_engine(prog, engine as c_uint);
+        nvim_regprog_set_re_flags(prog, re_flags as c_uint);
+    }
+
+    prog
+}
+
+// --- End Phase 9.5 ---
+
 #[cfg(test)]
 mod tests {
     use super::*;
