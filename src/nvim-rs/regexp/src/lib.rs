@@ -547,6 +547,203 @@ pub unsafe extern "C" fn rs_restore_parse_state(ps: *const ParseStateT) {
     nvim_regexp_set_regnpar((*ps).regnpar);
 }
 
+// --- Core scanner: peekchr, skipchr, skipchr_keepstart, getchr, ungetchr ---
+
+/// `META_FLAGS` table — copied from regexp.c.
+/// Index by ASCII value; nonzero means the character may be magic after `\`.
+#[rustfmt::skip]
+const META_FLAGS: [u8; 127] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//                 %  &     (  )  *  +        .
+    0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0,
+//     1  2  3  4  5  6  7  8  9        <  =  >  ?
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1,
+//  @  A     C  D     F     H  I     K  L  M     O
+    1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1,
+//  P        S     U  V  W  X     Z  [           _
+    1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 1,
+//     a     c  d     f     h  i     k  l  m  n  o
+    0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1,
+//  p        s     u  v  w  x     z  {  |     ~
+    1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1,
+];
+
+/// Get the next character without advancing. Handles magic modes.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_peekchr() -> c_int {
+    let mut curchr = nvim_regexp_get_curchr();
+    if curchr != -1 {
+        return curchr;
+    }
+
+    let regparse = nvim_regexp_get_regparse();
+    let reg_magic = nvim_regexp_get_reg_magic();
+    let at_start = nvim_regexp_get_at_start();
+    let prev_at_start = nvim_regexp_get_prev_at_start();
+    let prevchr = nvim_regexp_get_prevchr();
+    let prevprevchr = nvim_regexp_get_prevprevchr();
+    let after_slash = nvim_regexp_get_after_slash();
+
+    curchr = *regparse as u8 as c_int;
+    #[allow(clippy::cast_possible_truncation)]
+    let c_byte = curchr as u8; // safe: came from u8 read above
+
+    match c_byte {
+        b'.' | b'[' | b'~' => {
+            if reg_magic >= MAGIC_ON {
+                curchr = magic(c_byte);
+            }
+        }
+        b'(' | b')' | b'{' | b'%' | b'+' | b'=' | b'?' | b'@' | b'!' | b'&' | b'|' | b'<'
+        | b'>' | b'#' | b'"' | b'\'' | b',' | b'-' | b':' | b';' | b'`' | b'/' => {
+            if reg_magic == MAGIC_ALL {
+                curchr = magic(c_byte);
+            }
+        }
+        b'*' => {
+            if reg_magic >= MAGIC_ON
+                && at_start == 0
+                && !(prev_at_start != 0 && prevchr == magic(b'^'))
+                && (after_slash != 0
+                    || (prevchr != magic(b'(') && prevchr != magic(b'&') && prevchr != magic(b'|')))
+            {
+                curchr = magic(b'*');
+            }
+        }
+        b'^' => {
+            if reg_magic >= MAGIC_OFF
+                && (at_start != 0
+                    || reg_magic == MAGIC_ALL
+                    || prevchr == magic(b'(')
+                    || prevchr == magic(b'|')
+                    || prevchr == magic(b'&')
+                    || prevchr == magic(b'n')
+                    || (rs_no_magic(prevchr) == b'(' as c_int && prevprevchr == magic(b'%')))
+            {
+                curchr = magic(b'^');
+                nvim_regexp_set_at_start(1);
+                nvim_regexp_set_prev_at_start(0);
+            }
+        }
+        b'$' => {
+            if reg_magic >= MAGIC_OFF {
+                let mut p = regparse.add(1) as *const u8;
+                let mut is_magic_all = reg_magic == MAGIC_ALL;
+
+                // ignore \c \C \m \M \v \V and \Z after '$'
+                while *p == b'\\'
+                    && matches!(*p.add(1), b'c' | b'C' | b'm' | b'M' | b'v' | b'V' | b'Z')
+                {
+                    if *p.add(1) == b'v' {
+                        is_magic_all = true;
+                    } else if matches!(*p.add(1), b'm' | b'M' | b'V') {
+                        is_magic_all = false;
+                    }
+                    p = p.add(2);
+                }
+                if *p == 0
+                    || (*p == b'\\' && matches!(*p.add(1), b'|' | b'&' | b')' | b'n'))
+                    || (is_magic_all && matches!(*p, b'|' | b'&' | b')'))
+                    || reg_magic == MAGIC_ALL
+                {
+                    curchr = magic(b'$');
+                }
+            }
+        }
+        b'\\' => {
+            let c = *regparse.add(1) as u8;
+
+            if c == 0 {
+                curchr = b'\\' as c_int; // trailing '\'
+            } else if c <= b'~' && META_FLAGS[c as usize] != 0 {
+                // META character after '\' — toggle magicness via recursive call
+                nvim_regexp_set_curchr(-1);
+                nvim_regexp_set_prev_at_start(nvim_regexp_get_at_start());
+                nvim_regexp_set_at_start(0); // be able to say "/\*ptr"
+                nvim_regexp_set_regparse(regparse.add(1));
+                nvim_regexp_set_after_slash(after_slash + 1);
+                rs_peekchr();
+                nvim_regexp_set_regparse(regparse);
+                nvim_regexp_set_after_slash(after_slash);
+                curchr = rs_toggle_magic(nvim_regexp_get_curchr());
+            } else if REGEXP_ABBR.contains(&c) {
+                // Handle abbreviations, like "\t" for TAB
+                curchr = rs_backslash_trans(c as c_int);
+            } else if reg_magic == MAGIC_NONE && (c == b'$' || c == b'^') {
+                curchr = rs_toggle_magic(c as c_int);
+            } else {
+                // Next character can never be (made) magic?
+                curchr = utf_ptr2char(regparse.add(1));
+            }
+        }
+        _ => {
+            curchr = utf_ptr2char(regparse);
+        }
+    }
+
+    nvim_regexp_set_curchr(curchr);
+    curchr
+}
+
+/// Eat one lexed character. Advances regparse and updates character state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skipchr() {
+    let regparse = nvim_regexp_get_regparse();
+    // peekchr() eats a backslash, do the same here
+    let mut prevchr_len = c_int::from(*regparse == b'\\' as c_char);
+    if *regparse.add(prevchr_len as usize) != 0 {
+        // Exclude composing chars that utfc_ptr2len does include.
+        prevchr_len += utf_ptr2len(regparse.add(prevchr_len as usize));
+    }
+    nvim_regexp_set_regparse(regparse.add(prevchr_len as usize));
+    nvim_regexp_set_prevchr_len(prevchr_len);
+    nvim_regexp_set_prev_at_start(nvim_regexp_get_at_start());
+    nvim_regexp_set_at_start(0);
+    nvim_regexp_set_prevprevchr(nvim_regexp_get_prevchr());
+    nvim_regexp_set_prevchr(nvim_regexp_get_curchr());
+    nvim_regexp_set_curchr(nvim_regexp_get_nextchr()); // use previously unget char, or -1
+    nvim_regexp_set_nextchr(-1);
+}
+
+/// Skip a character while keeping `prev_at_start`, `prevchr`, `prevprevchr`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skipchr_keepstart() {
+    let saved_as = nvim_regexp_get_prev_at_start();
+    let saved_pr = nvim_regexp_get_prevchr();
+    let saved_prpr = nvim_regexp_get_prevprevchr();
+
+    rs_skipchr();
+
+    nvim_regexp_set_at_start(saved_as);
+    nvim_regexp_set_prevchr(saved_pr);
+    nvim_regexp_set_prevprevchr(saved_prpr);
+}
+
+/// Get the next character and advance past it.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getchr() -> c_int {
+    let chr = rs_peekchr();
+    rs_skipchr();
+    chr
+}
+
+/// Put character back. Works only once!
+#[no_mangle]
+pub unsafe extern "C" fn rs_ungetchr() {
+    nvim_regexp_set_nextchr(nvim_regexp_get_curchr());
+    nvim_regexp_set_curchr(nvim_regexp_get_prevchr());
+    nvim_regexp_set_prevchr(nvim_regexp_get_prevprevchr());
+    nvim_regexp_set_at_start(nvim_regexp_get_prev_at_start());
+    nvim_regexp_set_prev_at_start(0);
+
+    // Backup regparse by prevchr_len
+    let regparse = nvim_regexp_get_regparse();
+    let prevchr_len = nvim_regexp_get_prevchr_len();
+    nvim_regexp_set_regparse(regparse.sub(prevchr_len as usize));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
