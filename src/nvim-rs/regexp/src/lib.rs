@@ -78,6 +78,13 @@ extern "C" {
     fn nvim_regexp_set_rc_did_emsg(v: c_int);
     fn nvim_regexp_semsg_e888(what: *const c_char);
 
+    // reg_prev_class accessors
+    fn nvim_regexp_get_rex_input() -> *mut u8;
+    fn nvim_regexp_get_rex_line() -> *mut u8;
+    fn nvim_regexp_get_rex_reg_buf_chartab() -> *mut i64;
+    fn mb_get_class_tab(p: *const c_char, chartab: *const i64) -> c_int;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+
     // cleanup_subexpr / cleanup_zsubexpr accessors
     fn nvim_regexp_get_rex_need_clear_subexpr() -> c_int;
     fn nvim_regexp_set_rex_need_clear_subexpr(v: c_int);
@@ -1131,6 +1138,25 @@ pub unsafe extern "C" fn rs_cleanup_zsubexpr() {
         nvim_regexp_clear_reg_endzp();
     }
     nvim_regexp_set_rex_need_clear_zsubexpr(0);
+}
+
+// --- reg_prev_class ---
+
+/// Get class of the character before `rex.input`.
+/// Returns -1 if at the start of the line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_prev_class() -> c_int {
+    let input = nvim_regexp_get_rex_input();
+    let line = nvim_regexp_get_rex_line();
+    if input > line {
+        let p = (input as *const c_char).sub(1);
+        let base = line as *const c_char;
+        let head = utf_head_off(base, p);
+        let start = p.sub(head as usize);
+        mb_get_class_tab(start, nvim_regexp_get_rex_reg_buf_chartab())
+    } else {
+        -1
+    }
 }
 
 #[cfg(test)]

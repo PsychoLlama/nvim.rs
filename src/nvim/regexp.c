@@ -68,6 +68,7 @@ extern void rs_unref_extmatch(reg_extmatch_T *em);
 extern bool rs_re_mult_next(const char *what);
 extern void rs_cleanup_subexpr(void);
 extern void rs_cleanup_zsubexpr(void);
+extern int rs_reg_prev_class(void);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -1038,6 +1039,11 @@ void nvim_regexp_clear_reg_endzpos(void) { memset(reg_endzpos, 0xff, sizeof(lpos
 void nvim_regexp_clear_reg_startzp(void) { memset(reg_startzp, 0, sizeof(char *) * NSUBEXP); }
 void nvim_regexp_clear_reg_endzp(void) { memset(reg_endzp, 0, sizeof(char *) * NSUBEXP); }
 
+// reg_prev_class accessors for Rust FFI
+uint8_t *nvim_regexp_get_rex_input(void) { return rex.input; }
+uint8_t *nvim_regexp_get_rex_line(void) { return rex.line; }
+int64_t *nvim_regexp_get_rex_reg_buf_chartab(void) { return rex.reg_buf->b_chartab; }
+
 // Create a new extmatch and mark it as referenced once.
 static reg_extmatch_T *make_extmatch(void)
   FUNC_ATTR_NONNULL_RET
@@ -1061,12 +1067,7 @@ void unref_extmatch(reg_extmatch_T *em)
 // Get class of previous character.
 static int reg_prev_class(void)
 {
-  if (rex.input > rex.line) {
-    return mb_get_class_tab((char *)rex.input - 1 -
-                            utf_head_off((char *)rex.line, (char *)rex.input - 1),
-                            rex.reg_buf->b_chartab);
-  }
-  return -1;
+  return rs_reg_prev_class();
 }
 
 // Return true if the current rex.input position matches the Visual area.
