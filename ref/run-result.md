@@ -1,19 +1,27 @@
-Plan: ~/.claude/plans/parallel-dreaming-key.md
+Plan: ~/.claude/plans/streamed-prancing-wall.md
 
-All 4 phases of the plan are complete. Here's the summary:
+All 7 phases of the regmatch migration plan are complete. Here's a summary:
 
-**Plan executed: `~/.claude/plans/parallel-dreaming-key.md`**
+## Results
 
-### Commits (5 total):
-1. **39093bf8** — Phase 1: `reg_save`/`reg_restore`/`reg_save_equal`/`save_se_multi`/`save_se_one` (~55 lines)
-2. **eba7bf31** — Phase 2: `save_subexpr`/`restore_subexpr` (~60 lines)
-3. **7154d781** — Phase 3: `regrepeat` (~360 lines, largest target)
-4. **77cc725c** — Phase 4: `regtry` (~60 lines, calls `regmatch` via C wrapper)
-5. **0bdecfc6** — Updated `ref/run-result.md`
+**Phases completed**: 1-7 (Phase 8 deferred per plan)
 
-### Results:
-- **68** `#[no_mangle]` regexp exports (was 59, +9 new functions)
-- **18** new C accessor functions added
-- **9** C functions reduced to thin wrappers calling Rust
-- **~480 lines** of C replaced
-- All checks pass: build, smoke-test, fmt, clippy, 3491 Rust tests, 628 regexp corpus entries
+**Commits created**:
+1. `feat(regexp): add regmatch infrastructure — accessors, types, constants` (Phase 1)
+2. `feat(regexp): add regmatch core loops + simple opcodes (Phase 2)` 
+3. `feat(regexp): add character classes, string matching, word boundaries (Phase 3)`
+4. `feat(regexp): add groups, branches, backrefs to regmatch (Phase 4)`
+5. `feat(regexp): add quantifiers to regmatch (Phase 5)`
+6. `feat(regexp): add lookaround + special position opcodes (Phase 6)`
+7. `feat(regexp): activate Rust rs_regmatch, delete C regmatch (Phase 7)`
+
+**Lines changed**:
+- **~1493 lines of C deleted** (regmatch + 9 helper functions)
+- **~1100 lines of Rust added** (rs_regmatch_impl with all opcodes + backtracking handlers)
+- **~125 lines of C accessors added** (for Rust FFI)
+
+**All opcodes implemented**: BOL, EOL, RE_BOF, RE_EOF, ANY, NOTHING, NEWL, BHPOS, RE_COMPOSING, BACK, END, 26 character classes, EXACTLY, ANYOF, ANYBUT, MULTIBYTECODE, BOW, EOW, MOPEN/MCLOSE, NOPEN/NCLOSE, ZOPEN/ZCLOSE, BACKREF, ZREF, BRANCH, BRACE_LIMITS, BRACE_COMPLEX, STAR, PLUS, BRACE_SIMPLE, NOMATCH, MATCH, SUBPAT, BEHIND, NOBEHIND, CURSOR, RE_MARK, RE_VISUAL, RE_LNUM, RE_COL, RE_VCOL
+
+**All backtracking handlers**: RS_NOPEN, RS_MOPEN, RS_MCLOSE, RS_ZOPEN, RS_ZCLOSE, RS_BRANCH, RS_NOMATCH, RS_BEHIND1, RS_BEHIND2, RS_BRCPLX_MORE, RS_BRCPLX_LONG, RS_BRCPLX_SHORT, RS_STAR_LONG, RS_STAR_SHORT
+
+**Validation**: All 3491 unit tests pass, regexp baseline (628 entries) unchanged, smoke test clean, clippy clean, formatting clean.
