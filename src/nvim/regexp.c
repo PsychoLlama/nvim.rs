@@ -873,53 +873,12 @@ static regsubmatch_T rsm;  ///< can only be used when can_f_submatch is true
 ///
 /// @param flags  a bitmask that controls what info is to be returned
 ///               and whether or not submatch is in effect.
+extern void rs_reg_getline_common(int32_t lnum, int flags, char **line, int32_t *length);
+
 static void reg_getline_common(linenr_T lnum, reg_getline_flags_T flags, char **line,
                                colnr_T *length)
 {
-  bool get_line = flags & RGLF_LINE;
-  bool get_length = flags & RGLF_LENGTH;
-  linenr_T firstlnum;
-  linenr_T maxline;
-
-  if (flags & RGLF_SUBMATCH) {
-    firstlnum = rsm.sm_firstlnum + lnum;
-    maxline = rsm.sm_maxline;
-  } else {
-    firstlnum = rex.reg_firstlnum + lnum;
-    maxline = rex.reg_maxline;
-  }
-
-  // when looking behind for a match/no-match lnum is negative. but we
-  // can't go before line 1.
-  if (firstlnum < 1) {
-    if (get_line) {
-      *line = NULL;
-    }
-    if (get_length) {
-      *length = 0;
-    }
-
-    return;
-  }
-
-  if (lnum > maxline) {
-    // must have matched the "\n" in the last line.
-    if (get_line) {
-      *line = "";
-    }
-    if (get_length) {
-      *length = 0;
-    }
-
-    return;
-  }
-
-  if (get_line) {
-    *line = ml_get_buf(rex.reg_buf, firstlnum);
-  }
-  if (get_length) {
-    *length = ml_get_buf_len(rex.reg_buf, firstlnum);
-  }
+  rs_reg_getline_common((int32_t)lnum, (int)flags, line, (int32_t *)length);
 }
 
 /// Get pointer to the line "lnum", which is relative to "reg_firstlnum".
@@ -972,6 +931,14 @@ void nvim_regexp_set_rex_lnum(int32_t v) { rex.lnum = (linenr_T)v; }
 void nvim_regexp_set_rex_line_and_input(uint8_t *line) { rex.line = line; rex.input = line; }
 char *nvim_regexp_call_reg_getline(int32_t lnum) { return reg_getline((linenr_T)lnum); }
 void nvim_regexp_call_reg_breakcheck(void) { reg_breakcheck(); }
+
+// reg_getline_common accessors for Rust FFI
+int32_t nvim_regexp_get_rex_reg_firstlnum(void) { return (int32_t)rex.reg_firstlnum; }
+int32_t nvim_regexp_get_rex_reg_maxline(void) { return (int32_t)rex.reg_maxline; }
+int32_t nvim_regexp_get_rsm_firstlnum(void) { return (int32_t)rsm.sm_firstlnum; }
+int32_t nvim_regexp_get_rsm_maxline(void) { return (int32_t)rsm.sm_maxline; }
+char *nvim_regexp_call_ml_get_buf(int32_t lnum) { return ml_get_buf(rex.reg_buf, (linenr_T)lnum); }
+int32_t nvim_regexp_call_ml_get_buf_len(int32_t lnum) { return (int32_t)ml_get_buf_len(rex.reg_buf, (linenr_T)lnum); }
 
 // Create a new extmatch and mark it as referenced once.
 static reg_extmatch_T *make_extmatch(void)

@@ -1227,6 +1227,79 @@ pub unsafe extern "C" fn rs_skip_regexp_err(
     p
 }
 
+// --- reg_getline_common ---
+
+// Flag constants for reg_getline_common (matches C enum reg_getline_flags_T)
+const RGLF_LINE: c_int = 0x01;
+const RGLF_LENGTH: c_int = 0x02;
+const RGLF_SUBMATCH: c_int = 0x04;
+
+extern "C" {
+    fn nvim_regexp_get_rex_reg_firstlnum() -> i32;
+    fn nvim_regexp_get_rex_reg_maxline() -> i32;
+    fn nvim_regexp_get_rsm_firstlnum() -> i32;
+    fn nvim_regexp_get_rsm_maxline() -> i32;
+    fn nvim_regexp_call_ml_get_buf(lnum: i32) -> *mut c_char;
+    fn nvim_regexp_call_ml_get_buf_len(lnum: i32) -> i32;
+}
+
+/// Empty C string returned when `lnum > maxline`.
+static mut EMPTY_CSTR: u8 = 0;
+
+/// Common code for `reg_getline`, `reg_getline_len`, and their submatch variants.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_getline_common(
+    lnum: i32,
+    flags: c_int,
+    line: *mut *mut c_char,
+    length: *mut i32,
+) {
+    let get_line = flags & RGLF_LINE != 0;
+    let get_length = flags & RGLF_LENGTH != 0;
+
+    let (firstlnum, maxline) = if flags & RGLF_SUBMATCH != 0 {
+        (
+            nvim_regexp_get_rsm_firstlnum() + lnum,
+            nvim_regexp_get_rsm_maxline(),
+        )
+    } else {
+        (
+            nvim_regexp_get_rex_reg_firstlnum() + lnum,
+            nvim_regexp_get_rex_reg_maxline(),
+        )
+    };
+
+    // When looking behind for a match/no-match lnum is negative, but we
+    // can't go before line 1.
+    if firstlnum < 1 {
+        if get_line {
+            *line = std::ptr::null_mut();
+        }
+        if get_length {
+            *length = 0;
+        }
+        return;
+    }
+
+    if lnum > maxline {
+        // Must have matched the "\n" in the last line.
+        if get_line {
+            *line = std::ptr::addr_of_mut!(EMPTY_CSTR).cast::<c_char>();
+        }
+        if get_length {
+            *length = 0;
+        }
+        return;
+    }
+
+    if get_line {
+        *line = nvim_regexp_call_ml_get_buf(firstlnum);
+    }
+    if get_length {
+        *length = nvim_regexp_call_ml_get_buf_len(firstlnum);
+    }
+}
+
 // --- get_char_class ---
 
 /// Sorted table of `[:name:]` character class names.
