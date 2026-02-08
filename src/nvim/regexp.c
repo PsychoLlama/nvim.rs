@@ -1921,6 +1921,132 @@ void nvim_regexp_emsg_e488(void)
   rc_did_emsg = true;
 }
 
+// --- Phase 1: regatom accessors ---
+int nvim_regexp_get_had_eol(void) { return had_eol; }
+void nvim_regexp_set_had_eol(int v) { had_eol = v; }
+int nvim_regexp_get_one_exactly(void) { return one_exactly; }
+void nvim_regexp_set_one_exactly(int v) { one_exactly = v; }
+int nvim_regexp_get_reg_string(void) { return reg_string; }
+int nvim_regexp_get_reg_do_extmatch(void) { return reg_do_extmatch; }
+int nvim_regexp_get_re_has_z(void) { return re_has_z; }
+void nvim_regexp_set_re_has_z(int v) { re_has_z = v; }
+int nvim_regexp_get_reg_strict(void) { return reg_strict; }
+int nvim_regexp_get_had_endbrace(int refnum) { return had_endbrace[refnum]; }
+int32_t nvim_regexp_get_curwin_lnum(void) { return (int32_t)curwin->w_cursor.lnum; }
+int32_t nvim_regexp_get_curwin_col(void) { return (int32_t)curwin->w_cursor.col; }
+int32_t nvim_regexp_get_curwin_vcol(void)
+{
+  colnr_T vcol = 0;
+  getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol);
+  return (int32_t)(++vcol);
+}
+char *nvim_regexp_get_reg_prev_sub_ptr(void) { return reg_prev_sub; }
+
+// --- Phase 1: regatom error helpers ---
+void nvim_regexp_emsg_e63_underscore(void)
+{
+  emsg(_(e_invalid_use_of_underscore));
+  rc_did_emsg = true;
+}
+void nvim_regexp_iemsg_internal(void)
+{
+  iemsg(_(e_internal_error_in_regexp));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg3_e64(int m, int c)
+{
+  semsg(_("E64: %s%c follows nothing"),
+        m ? "" : "\\", c);
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_nopresub(void)
+{
+  emsg(_(e_nopresub));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e65(void)
+{
+  emsg(_("E65: Illegal back reference"));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e66(void)
+{
+  emsg(_(e_z_not_allowed));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e67(void)
+{
+  emsg(_(e_z1_not_allowed));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e68(void)
+{
+  emsg(_("E68: Invalid character after \\z"));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e69(int m)
+{
+  semsg(_(e_missing_sb), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e70(int m)
+{
+  semsg(_(e_empty_sb), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e71(int m)
+{
+  semsg(_("E71: Invalid character after %s%%"),
+        m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e678(int m)
+{
+  semsg(_("E678: Invalid character after %s%%[dxouU]"),
+        m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e769(int m)
+{
+  semsg(_(e_missingbracket), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e944(void)
+{
+  emsg(_(e_reverse_range));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e945(void)
+{
+  emsg(_(e_large_class));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e949(void)
+{
+  emsg(_(e_unicode_val_too_large));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_toomsbra(void)
+{
+  emsg(_(e_toomsbra));
+  rc_did_emsg = true;
+}
+void nvim_regexp_semsg_e_atom_engine(int c)
+{
+  semsg(_(e_atom_engine_must_be_at_start_of_pattern), c);
+  rc_did_emsg = true;
+}
+void nvim_regexp_semsg_e_dot_pos(int c)
+{
+  semsg(_(e_regexp_number_after_dot_pos_search_chr), c);
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e369(int m)
+{
+  semsg(_(e_invalid_item_in_str_brackets), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+
 // used for STAR, PLUS and BRACE_SIMPLE matching
 typedef struct regstar_S {
   int nextb;            // next byte
