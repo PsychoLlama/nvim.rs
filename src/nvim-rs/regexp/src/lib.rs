@@ -5103,6 +5103,15 @@ unsafe fn advance_reginput() {
     nvim_regexp_set_rex_input(inp.add(len as usize));
 }
 
+/// `MB_PTR_BACK(s, p)` — back up `p` to the previous multi-byte character.
+/// Only valid when `p > s`.
+#[inline]
+#[allow(dead_code)]
+unsafe fn mb_ptr_back(s: *const u8, p: *mut u8) -> *mut u8 {
+    let offset = utf_head_off(s.cast::<c_char>(), p.sub(1).cast::<c_char>()) + 1;
+    p.sub(offset as usize)
+}
+
 /// `rs_regmatch` — core backtracking regexp matcher.
 ///
 /// NOT YET ACTIVE — still called via C `regmatch()`. This function is being
@@ -5837,6 +5846,155 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         }
                     }
 
+                    // --- Phase 5: Quantifiers ---
+                    BRACE_LIMITS => {
+                        if op(next) == BRACE_SIMPLE {
+                            nvim_regexp_set_bl_minval(operand_min(scan));
+                            nvim_regexp_set_bl_maxval(operand_max(scan));
+                        } else if op(next) >= BRACE_COMPLEX && op(next) < BRACE_COMPLEX + 10 {
+                            let no = op(next) - BRACE_COMPLEX;
+                            nvim_regexp_set_brace_min(no, operand_min(scan));
+                            nvim_regexp_set_brace_max(no, operand_max(scan));
+                            nvim_regexp_set_brace_count(no, 0);
+                        } else {
+                            nvim_regexp_internal_error(c"BRACE_LIMITS".as_ptr());
+                            status = RA_FAIL;
+                        }
+                    }
+
+                    x if (BRACE_COMPLEX..BRACE_COMPLEX + 10).contains(&x) => {
+                        let no = opc - BRACE_COMPLEX;
+                        nvim_regexp_set_brace_count(no, nvim_regexp_get_brace_count(no) + 1);
+
+                        // If not matched enough times yet, try one more.
+                        let min_of_range =
+                            if nvim_regexp_get_brace_min(no) <= nvim_regexp_get_brace_max(no) {
+                                nvim_regexp_get_brace_min(no)
+                            } else {
+                                nvim_regexp_get_brace_max(no)
+                            };
+                        if i64::from(nvim_regexp_get_brace_count(no)) <= min_of_range {
+                            let rp = regstack_push(RS_BRCPLX_MORE, scan);
+                            if rp.is_null() {
+                                status = RA_FAIL;
+                            } else {
+                                (*rp).rs_no = no as i16;
+                                rs_reg_save(
+                                    &mut (*rp).rs_un.regsave,
+                                    nvim_regexp_get_backpos_len(),
+                                );
+                                next = operand(scan);
+                                // Continue and handle the result when done.
+                            }
+                        } else if nvim_regexp_get_brace_min(no) <= nvim_regexp_get_brace_max(no) {
+                            // Range is the normal way around, use longest match.
+                            if i64::from(nvim_regexp_get_brace_count(no))
+                                <= nvim_regexp_get_brace_max(no)
+                            {
+                                let rp = regstack_push(RS_BRCPLX_LONG, scan);
+                                if rp.is_null() {
+                                    status = RA_FAIL;
+                                } else {
+                                    (*rp).rs_no = no as i16;
+                                    rs_reg_save(
+                                        &mut (*rp).rs_un.regsave,
+                                        nvim_regexp_get_backpos_len(),
+                                    );
+                                    next = operand(scan);
+                                }
+                            }
+                            // else: matched enough times, continue with next item.
+                        } else {
+                            // Range is backwards, use shortest match first.
+                            if i64::from(nvim_regexp_get_brace_count(no))
+                                <= nvim_regexp_get_brace_min(no)
+                            {
+                                let rp = regstack_push(RS_BRCPLX_SHORT, scan);
+                                if rp.is_null() {
+                                    status = RA_FAIL;
+                                } else {
+                                    rs_reg_save(
+                                        &mut (*rp).rs_un.regsave,
+                                        nvim_regexp_get_backpos_len(),
+                                    );
+                                    // Continue with next item (shortest first).
+                                }
+                            }
+                        }
+                    }
+
+                    BRACE_SIMPLE | STAR | PLUS => {
+                        // Lookahead to avoid useless match attempts.
+                        let mut rst = RegstarT {
+                            nextb: 0,
+                            nextb_ic: 0,
+                            count: 0,
+                            minval: 0,
+                            maxval: 0,
+                        };
+                        if op(next) == EXACTLY {
+                            rst.nextb = c_int::from(*operand(next));
+                            if nvim_regexp_get_rex_reg_ic() != 0 {
+                                if nvim_regexp_call_mb_isupper(rst.nextb) != 0 {
+                                    rst.nextb_ic = nvim_regexp_call_mb_tolower(rst.nextb);
+                                } else {
+                                    rst.nextb_ic = nvim_regexp_call_mb_toupper(rst.nextb);
+                                }
+                            } else {
+                                rst.nextb_ic = rst.nextb;
+                            }
+                        }
+                        // else: rst.nextb and rst.nextb_ic are already 0 (NUL)
+
+                        if opc == BRACE_SIMPLE {
+                            rst.minval = nvim_regexp_get_bl_minval();
+                            rst.maxval = nvim_regexp_get_bl_maxval();
+                        } else {
+                            rst.minval = i64::from(opc != STAR);
+                            rst.maxval = i64::from(MAX_LIMIT);
+                        }
+
+                        // Try matching as much as possible.
+                        rst.count = i64::from(rs_regrepeat(operand(scan), rst.maxval));
+                        if nvim_regexp_get_got_int() != 0 {
+                            status = RA_FAIL;
+                        } else if if rst.minval <= rst.maxval {
+                            rst.count >= rst.minval
+                        } else {
+                            rst.count >= rst.maxval
+                        } {
+                            // It could match. Push regstar_T + regitem_T.
+                            if (nvim_regexp_get_regstack_len() as u32 >> 10) as i64
+                                >= nvim_regexp_get_p_mmp()
+                            {
+                                nvim_regexp_emsg_maxmempattern();
+                                status = RA_FAIL;
+                            } else {
+                                nvim_regexp_call_ga_grow_regstack(
+                                    std::mem::size_of::<RegstarT>() as c_int
+                                );
+                                nvim_regexp_set_regstack_len(
+                                    nvim_regexp_get_regstack_len()
+                                        + std::mem::size_of::<RegstarT>() as c_int,
+                                );
+                                let state = if rst.minval <= rst.maxval {
+                                    RS_STAR_LONG
+                                } else {
+                                    RS_STAR_SHORT
+                                };
+                                let rp = regstack_push(state, scan);
+                                if rp.is_null() {
+                                    status = RA_FAIL;
+                                } else {
+                                    *(rp.cast::<RegstarT>().sub(1)) = rst;
+                                    status = RA_BREAK; // skip the restore bits
+                                }
+                            }
+                        } else {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
                     _ => {
                         // Unimplemented opcode — panic to catch missing cases during dev.
                         panic!("rs_regmatch: unimplemented opcode {opc}");
@@ -5938,6 +6096,153 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             (*rp).rs_scan = rs_regnext(scan);
                             rs_reg_save(&mut (*rp).rs_un.regsave, nvim_regexp_get_backpos_len());
                             scan = operand(scan);
+                        }
+                    }
+                }
+
+                // --- Phase 5: Quantifier backtracking handlers ---
+                RS_BRCPLX_MORE => {
+                    // Pop the state. Restore pointers when there is no match.
+                    if status == RA_NOMATCH {
+                        let mut bp_len = nvim_regexp_get_backpos_len();
+                        rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
+                        nvim_regexp_set_backpos_len(bp_len);
+                        let no = (*rp).rs_no as c_int;
+                        nvim_regexp_set_brace_count(no, nvim_regexp_get_brace_count(no) - 1);
+                    }
+                    regstack_pop(&mut scan);
+                }
+
+                RS_BRCPLX_LONG => {
+                    // Pop the state. Restore pointers when there is no match.
+                    if status == RA_NOMATCH {
+                        // There was no match, but we did find enough matches.
+                        let mut bp_len = nvim_regexp_get_backpos_len();
+                        rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
+                        nvim_regexp_set_backpos_len(bp_len);
+                        let no = (*rp).rs_no as c_int;
+                        nvim_regexp_set_brace_count(no, nvim_regexp_get_brace_count(no) - 1);
+                        // Continue with the items after "\{}".
+                        status = RA_CONT;
+                    }
+                    regstack_pop(&mut scan);
+                    if status == RA_CONT {
+                        scan = rs_regnext(scan);
+                    }
+                }
+
+                RS_BRCPLX_SHORT => {
+                    // Pop the state. Restore pointers when there is no match.
+                    if status == RA_NOMATCH {
+                        // There was no match, try to match one more item.
+                        let mut bp_len = nvim_regexp_get_backpos_len();
+                        rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
+                        nvim_regexp_set_backpos_len(bp_len);
+                    }
+                    regstack_pop(&mut scan);
+                    if status == RA_NOMATCH {
+                        scan = operand(scan);
+                        status = RA_CONT;
+                    }
+                }
+
+                RS_STAR_LONG | RS_STAR_SHORT => {
+                    let rst = (rp.cast::<RegstarT>()).sub(1);
+
+                    if status == RA_MATCH {
+                        regstack_pop(&mut scan);
+                        nvim_regexp_set_regstack_len(
+                            nvim_regexp_get_regstack_len()
+                                - std::mem::size_of::<RegstarT>() as c_int,
+                        );
+                    } else {
+                        // Tried once already, restore input pointers.
+                        if status == RA_BREAK {
+                            // First time through — skip restore.
+                        } else {
+                            let mut bp_len = nvim_regexp_get_backpos_len();
+                            rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
+                            nvim_regexp_set_backpos_len(bp_len);
+                        }
+
+                        // Repeat until we found a position where it could match.
+                        let mut found = false;
+                        loop {
+                            if status == RA_BREAK {
+                                status = RA_NOMATCH;
+                            } else {
+                                // Tried first position already, advance.
+                                if (*rp).rs_state == RS_STAR_LONG {
+                                    // Trying for longest match, but couldn't or
+                                    // didn't match — back up one char.
+                                    (*rst).count -= 1;
+                                    if (*rst).count < (*rst).minval {
+                                        break;
+                                    }
+                                    let inp = nvim_regexp_get_rex_input();
+                                    let line = nvim_regexp_get_rex_line();
+                                    if inp == line {
+                                        // Backup to last char of previous line.
+                                        if nvim_regexp_get_rex_lnum() == 0 {
+                                            status = RA_NOMATCH;
+                                            break;
+                                        }
+                                        let new_lnum = nvim_regexp_get_rex_lnum() - 1;
+                                        nvim_regexp_set_rex_lnum(new_lnum);
+                                        let new_line =
+                                            nvim_regexp_call_reg_getline(new_lnum).cast::<u8>();
+                                        // Just in case regrepeat() didn't count right.
+                                        if new_line.is_null() {
+                                            break;
+                                        }
+                                        nvim_regexp_set_rex_line(new_line);
+                                        nvim_regexp_set_rex_input(new_line.add(
+                                            nvim_regexp_call_reg_getline_len(new_lnum) as usize,
+                                        ));
+                                        rs_reg_breakcheck();
+                                    } else {
+                                        let backed = mb_ptr_back(line, inp);
+                                        nvim_regexp_set_rex_input(backed);
+                                    }
+                                } else {
+                                    // Range is backwards, use shortest match first.
+                                    // Careful: maxval and minval are exchanged!
+                                    // Couldn't or didn't match: try advancing one char.
+                                    if (*rst).count == (*rst).minval
+                                        || rs_regrepeat(operand((*rp).rs_scan), 1) == 0
+                                    {
+                                        break;
+                                    }
+                                    (*rst).count += 1;
+                                }
+                                if nvim_regexp_get_got_int() != 0 {
+                                    break;
+                                }
+                            }
+
+                            // If it could match, try it.
+                            if (*rst).nextb == 0
+                                || c_int::from(*nvim_regexp_get_rex_input()) == (*rst).nextb
+                                || c_int::from(*nvim_regexp_get_rex_input()) == (*rst).nextb_ic
+                            {
+                                rs_reg_save(
+                                    &mut (*rp).rs_un.regsave,
+                                    nvim_regexp_get_backpos_len(),
+                                );
+                                scan = rs_regnext((*rp).rs_scan);
+                                status = RA_CONT;
+                                found = true;
+                                break;
+                            }
+                        }
+                        if !found && status != RA_CONT {
+                            // Failed.
+                            regstack_pop(&mut scan);
+                            nvim_regexp_set_regstack_len(
+                                nvim_regexp_get_regstack_len()
+                                    - std::mem::size_of::<RegstarT>() as c_int,
+                            );
+                            status = RA_NOMATCH;
                         }
                     }
                 }
