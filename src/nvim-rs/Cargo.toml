@@ -96,6 +96,7 @@ nvim-plines = { path = "plines" }
 nvim-popupmenu = { path = "popupmenu" }
 nvim-profile = { path = "profile" }
 nvim-quickfix = { path = "quickfix" }
+nvim-regexp = { path = "regexp" }
 nvim-register = { path = "register" }
 nvim-runtime = { path = "runtime" }
 nvim-search = { path = "search" }

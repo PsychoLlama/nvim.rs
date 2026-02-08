@@ -47,6 +47,10 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+// Rust FFI: skip_regexp implementation
+extern char *rs_skip_regexp_ex(char *startp, int dirc, int magic, char **newp,
+                               int *dropped, int *magic_val);
+
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -695,6 +699,11 @@ static int get_coll_element(char **pp)
   return 0;
 }
 
+// Accessors for Rust FFI (static helpers exposed for the regexp crate)
+int nvim_regexp_get_char_class(char **pp) { return get_char_class(pp); }
+int nvim_regexp_get_equi_class(char **pp) { return get_equi_class(pp); }
+int nvim_regexp_get_coll_element(char **pp) { return get_coll_element(pp); }
+
 static int reg_cpo_lit;  // 'cpoptions' contains 'l' flag
 
 static void get_cpo_flags(void)
@@ -774,56 +783,7 @@ char *skip_regexp_err(char *startp, int delim, int magic)
 char *skip_regexp_ex(char *startp, int dirc, int magic, char **newp, int *dropped,
                      magic_T *magic_val)
 {
-  magic_T mymagic;
-  char *p = startp;
-  size_t startplen = 0;
-
-  if (magic) {
-    mymagic = MAGIC_ON;
-  } else {
-    mymagic = MAGIC_OFF;
-  }
-  get_cpo_flags();
-
-  for (; p[0] != NUL; MB_PTR_ADV(p)) {
-    if (p[0] == dirc) {         // found end of regexp
-      break;
-    }
-    if ((p[0] == '[' && mymagic >= MAGIC_ON)
-        || (p[0] == '\\' && p[1] == '[' && mymagic <= MAGIC_OFF)) {
-      p = skip_anyof(p + 1);
-      if (p[0] == NUL) {
-        break;
-      }
-    } else if (p[0] == '\\' && p[1] != NUL) {
-      if (dirc == '?' && newp != NULL && p[1] == '?') {
-        // change "\?" to "?", make a copy first.
-        if (startplen == 0) {
-          startplen = strlen(startp);
-        }
-        if (*newp == NULL) {
-          *newp = xstrnsave(startp, startplen);
-          p = *newp + (p - startp);
-          startp = *newp;
-        }
-        if (dropped != NULL) {
-          (*dropped)++;
-        }
-        memmove(p, p + 1, startplen - (size_t)((p + 1) - startp) + 1);
-      } else {
-        p++;            // skip next character
-      }
-      if (*p == 'v') {
-        mymagic = MAGIC_ALL;
-      } else if (*p == 'V') {
-        mymagic = MAGIC_NONE;
-      }
-    }
-  }
-  if (magic_val != NULL) {
-    *magic_val = mymagic;
-  }
-  return p;
+  return rs_skip_regexp_ex(startp, dirc, magic, newp, dropped, (int *)magic_val);
 }
 
 // variables used for parsing

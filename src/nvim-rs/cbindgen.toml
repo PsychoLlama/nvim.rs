@@ -549,4 +549,6 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "JsonType", "JsonToken", "JsonNumberResult", "UnescapeResult", "BlobFormat",
            # File search infrastructure (Phase 47)
            "rs_vim_findfile_init", "rs_vim_findfile", "rs_vim_findfile_cleanup",
-           "rs_vim_findfile_free_visited", "rs_vim_findfile_stopdir"]
+           "rs_vim_findfile_free_visited", "rs_vim_findfile_stopdir",
+           # Regexp pattern scanning (skip_regexp)
+           "rs_skip_regexp", "rs_skip_regexp_ex"]

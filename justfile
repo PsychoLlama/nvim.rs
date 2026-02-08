@@ -113,6 +113,7 @@ rust-test:
       -p nvim-os \
       -p nvim-plines \
       -p nvim-profile \
+      -p nvim-regexp \
       -p nvim-register \
       -p nvim-rs \
       -p nvim-search \

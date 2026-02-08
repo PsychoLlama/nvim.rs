@@ -89,6 +89,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | popupmenu      | Popup menu state                        |
 | profile        | Profiling utilities                     |
 | quickfix       | Quickfix and location lists             |
+| regexp         | Regexp pattern scanning utilities        |
 | register       | Register operations                     |
 | runtime        | Runtime file management and script sourcing |
 | search         | Search and substitution                 |
