@@ -1232,6 +1232,124 @@ pub unsafe extern "C" fn rs_reg_iswordc(c: c_int) -> c_int {
     vim_iswordc_buf(c, nvim_regexp_get_rex_reg_buf())
 }
 
+// --- reg_match_visual ---
+
+extern "C" {
+    fn nvim_regexp_visual_quick_check() -> c_int;
+    fn nvim_regexp_get_visual_area(
+        top_lnum: *mut i32,
+        top_col: *mut i32,
+        bot_lnum: *mut i32,
+        bot_col: *mut i32,
+        mode: *mut c_int,
+        curswant: *mut i32,
+    ) -> *mut c_void;
+    fn nvim_regexp_get_p_sel_char() -> c_int;
+    fn nvim_regexp_call_getvvcol(
+        wp: *mut c_void,
+        lnum: i32,
+        col: i32,
+        start_out: *mut i32,
+        end_out: *mut i32,
+    );
+    fn nvim_regexp_call_win_linetabsize(
+        wp: *mut c_void,
+        lnum: i32,
+        line: *const c_char,
+        col: i32,
+    ) -> i32;
+    fn nvim_regexp_set_rex_line(line: *mut u8);
+    fn nvim_regexp_set_rex_input(input: *mut u8);
+}
+
+/// `Ctrl_V` character value (0x16).
+const CTRL_V: c_int = 22;
+
+/// MAXCOL as i32 (matching C `colnr_T` MAXCOL = 0x7fffffff).
+const MAXCOL_I32: i32 = 0x7fff_ffff;
+
+/// Return true if the current `rex.input` position matches the Visual area.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_match_visual() -> c_int {
+    // Quick reject: wrong buffer, no visual lnum, or not multiline
+    if nvim_regexp_visual_quick_check() == 0 {
+        return 0;
+    }
+
+    let mut top_lnum: i32 = 0;
+    let mut top_col: i32 = 0;
+    let mut bot_lnum: i32 = 0;
+    let mut bot_col: i32 = 0;
+    let mut mode: c_int = 0;
+    let mut curswant: i32 = 0;
+
+    let wp = nvim_regexp_get_visual_area(
+        &mut top_lnum,
+        &mut top_col,
+        &mut bot_lnum,
+        &mut bot_col,
+        &mut mode,
+        &mut curswant,
+    );
+
+    let lnum = nvim_regexp_get_rex_lnum() + nvim_regexp_get_rex_reg_firstlnum();
+    if lnum < top_lnum || lnum > bot_lnum {
+        return 0;
+    }
+
+    let rex_input = nvim_regexp_get_rex_input();
+    let rex_line = nvim_regexp_get_rex_line();
+    #[allow(clippy::cast_possible_truncation)]
+    let col = rex_input.offset_from(rex_line) as i32;
+
+    if mode == b'v' as c_int {
+        let sel_inclusive = i32::from(nvim_regexp_get_p_sel_char() != b'e' as c_int);
+        if (lnum == top_lnum && col < top_col)
+            || (lnum == bot_lnum && col >= bot_col + sel_inclusive)
+        {
+            return 0;
+        }
+    } else if mode == CTRL_V {
+        let mut start: i32 = 0;
+        let mut end: i32 = 0;
+        let mut start2: i32 = 0;
+        let mut end2: i32 = 0;
+
+        nvim_regexp_call_getvvcol(wp, top_lnum, top_col, &mut start, &mut end);
+        nvim_regexp_call_getvvcol(wp, bot_lnum, bot_col, &mut start2, &mut end2);
+
+        if start2 < start {
+            start = start2;
+        }
+        if end2 > end {
+            end = end2;
+        }
+        if top_col == MAXCOL_I32 || bot_col == MAXCOL_I32 || curswant == MAXCOL_I32 {
+            end = MAXCOL_I32;
+        }
+
+        // getvvcol() flushes rex.line, need to get it again
+        let rex_lnum = nvim_regexp_get_rex_lnum();
+        let new_line = nvim_regexp_call_reg_getline(rex_lnum).cast::<u8>();
+        nvim_regexp_set_rex_line(new_line);
+        nvim_regexp_set_rex_input(new_line.add(col as usize));
+
+        let firstlnum = nvim_regexp_get_rex_reg_firstlnum();
+        let cols = nvim_regexp_call_win_linetabsize(
+            wp,
+            firstlnum + rex_lnum,
+            new_line.cast::<c_char>(),
+            col,
+        );
+        let sel_exclusive = i32::from(nvim_regexp_get_p_sel_char() == b'e' as c_int);
+        if cols < start || cols > end - sel_exclusive {
+            return 0;
+        }
+    }
+
+    1
+}
+
 // --- skip_regexp_err ---
 
 /// Call `skip_regexp` and check for delimiter mismatch. On mismatch, emit
@@ -1656,8 +1774,6 @@ extern "C" {
     fn nvim_regexp_set_reg_tofree(p: *mut u8);
     fn nvim_regexp_get_reg_tofreelen() -> c_uint;
     fn nvim_regexp_set_reg_tofreelen(v: c_uint);
-    fn nvim_regexp_set_rex_line(line: *mut u8);
-    fn nvim_regexp_set_rex_input(input: *mut u8);
     fn nvim_regexp_get_got_int() -> c_int;
     fn nvim_regexp_call_mb_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
     fn nvim_regexp_get_rex_line_strlen() -> c_int;

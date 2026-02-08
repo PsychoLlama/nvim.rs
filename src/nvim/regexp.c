@@ -967,6 +967,83 @@ int32_t nvim_regexp_get_rsm_sm_mmatch_startpos_col(int i) { return (int32_t)rsm.
 int32_t nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(int i) { return (int32_t)rsm.sm_mmatch->endpos[i].lnum; }
 int32_t nvim_regexp_get_rsm_sm_mmatch_endpos_col(int i) { return (int32_t)rsm.sm_mmatch->endpos[i].col; }
 
+// reg_match_visual accessors for Rust FFI
+
+// Returns 0 if quick-reject (rex.reg_buf != curbuf || VIsual.lnum == 0 || !REG_MULTI), 1 otherwise
+int nvim_regexp_visual_quick_check(void)
+{
+  return (rex.reg_buf == curbuf && VIsual.lnum != 0 && REG_MULTI) ? 1 : 0;
+}
+
+// Populate visual area top/bot/mode/curswant for reg_match_visual.
+// The caller passes output pointers.  Returns wp (window pointer) for getvvcol calls.
+void *nvim_regexp_get_visual_area(int32_t *top_lnum, int32_t *top_col,
+                                  int32_t *bot_lnum, int32_t *bot_col,
+                                  int *mode, int32_t *curswant_out)
+{
+  pos_T top, bot;
+  win_T *wp = rex.reg_win == NULL ? curwin : rex.reg_win;
+  int vmode;
+  colnr_T curswant;
+
+  if (VIsual_active) {
+    if (lt(VIsual, wp->w_cursor)) {
+      top = VIsual;
+      bot = wp->w_cursor;
+    } else {
+      top = wp->w_cursor;
+      bot = VIsual;
+    }
+    vmode = VIsual_mode;
+    curswant = wp->w_curswant;
+  } else {
+    if (lt(curbuf->b_visual.vi_start, curbuf->b_visual.vi_end)) {
+      top = curbuf->b_visual.vi_start;
+      bot = curbuf->b_visual.vi_end;
+    } else {
+      top = curbuf->b_visual.vi_end;
+      bot = curbuf->b_visual.vi_start;
+    }
+    // a substitute command may have removed some lines
+    if (bot.lnum > curbuf->b_ml.ml_line_count) {
+      bot.lnum = curbuf->b_ml.ml_line_count;
+    }
+    vmode = curbuf->b_visual.vi_mode;
+    curswant = curbuf->b_visual.vi_curswant;
+  }
+
+  *top_lnum = (int32_t)top.lnum;
+  *top_col = (int32_t)top.col;
+  *bot_lnum = (int32_t)bot.lnum;
+  *bot_col = (int32_t)bot.col;
+  *mode = vmode;
+  *curswant_out = (int32_t)curswant;
+  return (void *)wp;
+}
+
+int nvim_regexp_get_p_sel_char(void) { return *p_sel; }
+
+// Wrapper: calls getvvcol with a constructed pos_T, returns start and end.
+void nvim_regexp_call_getvvcol(void *wp, int32_t lnum, int32_t col,
+                               int32_t *start_out, int32_t *end_out)
+{
+  pos_T pos;
+  pos.lnum = (linenr_T)lnum;
+  pos.col = (colnr_T)col;
+  pos.coladd = 0;
+  colnr_T s, e;
+  getvvcol((win_T *)wp, &pos, &s, NULL, &e);
+  *start_out = (int32_t)s;
+  *end_out = (int32_t)e;
+}
+
+// Wrapper: calls win_linetabsize
+int32_t nvim_regexp_call_win_linetabsize(void *wp, int32_t lnum,
+                                         const char *line, int32_t col)
+{
+  return (int32_t)win_linetabsize((win_T *)wp, (linenr_T)lnum, (char *)line, (colnr_T)col);
+}
+
 // reg_getline_common accessors for Rust FFI
 int32_t nvim_regexp_get_rex_reg_firstlnum(void) { return (int32_t)rex.reg_firstlnum; }
 int32_t nvim_regexp_get_rex_reg_maxline(void) { return (int32_t)rex.reg_maxline; }
@@ -1001,82 +1078,12 @@ static int reg_prev_class(void)
   return rs_reg_prev_class();
 }
 
+extern int rs_reg_match_visual(void);
+
 // Return true if the current rex.input position matches the Visual area.
 static bool reg_match_visual(void)
 {
-  pos_T top, bot;
-  linenr_T lnum;
-  colnr_T col;
-  win_T *wp = rex.reg_win == NULL ? curwin : rex.reg_win;
-  int mode;
-  colnr_T start, end;
-  colnr_T start2, end2;
-  colnr_T curswant;
-
-  // Check if the buffer is the current buffer and not using a string.
-  if (rex.reg_buf != curbuf || VIsual.lnum == 0 || !REG_MULTI) {
-    return false;
-  }
-
-  if (VIsual_active) {
-    if (lt(VIsual, wp->w_cursor)) {
-      top = VIsual;
-      bot = wp->w_cursor;
-    } else {
-      top = wp->w_cursor;
-      bot = VIsual;
-    }
-    mode = VIsual_mode;
-    curswant = wp->w_curswant;
-  } else {
-    if (lt(curbuf->b_visual.vi_start, curbuf->b_visual.vi_end)) {
-      top = curbuf->b_visual.vi_start;
-      bot = curbuf->b_visual.vi_end;
-    } else {
-      top = curbuf->b_visual.vi_end;
-      bot = curbuf->b_visual.vi_start;
-    }
-    // a substitute command may have removed some lines
-    if (bot.lnum > curbuf->b_ml.ml_line_count) {
-      bot.lnum = curbuf->b_ml.ml_line_count;
-    }
-    mode = curbuf->b_visual.vi_mode;
-    curswant = curbuf->b_visual.vi_curswant;
-  }
-  lnum = rex.lnum + rex.reg_firstlnum;
-  if (lnum < top.lnum || lnum > bot.lnum) {
-    return false;
-  }
-
-  col = (colnr_T)(rex.input - rex.line);
-  if (mode == 'v') {
-    if ((lnum == top.lnum && col < top.col)
-        || (lnum == bot.lnum && col >= bot.col + (*p_sel != 'e'))) {
-      return false;
-    }
-  } else if (mode == Ctrl_V) {
-    getvvcol(wp, &top, &start, NULL, &end);
-    getvvcol(wp, &bot, &start2, NULL, &end2);
-    if (start2 < start) {
-      start = start2;
-    }
-    if (end2 > end) {
-      end = end2;
-    }
-    if (top.col == MAXCOL || bot.col == MAXCOL || curswant == MAXCOL) {
-      end = MAXCOL;
-    }
-
-    // getvvcol() flushes rex.line, need to get it again
-    rex.line = (uint8_t *)reg_getline(rex.lnum);
-    rex.input = rex.line + col;
-
-    colnr_T cols = win_linetabsize(wp, rex.reg_firstlnum + rex.lnum, (char *)rex.line, col);
-    if (cols < start || cols > end - (*p_sel == 'e')) {
-      return false;
-    }
-  }
-  return true;
+  return rs_reg_match_visual();
 }
 
 // Check the regexp program for its magic number.
