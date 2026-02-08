@@ -66,6 +66,8 @@ extern reg_extmatch_T *rs_make_extmatch(void);
 extern reg_extmatch_T *rs_ref_extmatch(reg_extmatch_T *em);
 extern void rs_unref_extmatch(reg_extmatch_T *em);
 extern bool rs_re_mult_next(const char *what);
+extern void rs_cleanup_subexpr(void);
+extern void rs_cleanup_zsubexpr(void);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -1021,6 +1023,21 @@ static lpos_T reg_endzpos[NSUBEXP];     // idem, end pos
 // true if using multi-line regexp.
 #define REG_MULTI       (rex.reg_match == NULL)
 
+// cleanup_subexpr / cleanup_zsubexpr accessors for Rust FFI
+int nvim_regexp_get_rex_need_clear_subexpr(void) { return rex.need_clear_subexpr; }
+void nvim_regexp_set_rex_need_clear_subexpr(int v) { rex.need_clear_subexpr = (bool)v; }
+int nvim_regexp_get_rex_need_clear_zsubexpr(void) { return rex.need_clear_zsubexpr; }
+void nvim_regexp_set_rex_need_clear_zsubexpr(int v) { rex.need_clear_zsubexpr = (bool)v; }
+int nvim_regexp_is_reg_multi(void) { return REG_MULTI; }
+void nvim_regexp_clear_rex_startpos(void) { memset(rex.reg_startpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
+void nvim_regexp_clear_rex_endpos(void) { memset(rex.reg_endpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
+void nvim_regexp_clear_rex_startp(void) { memset(rex.reg_startp, 0, sizeof(char *) * NSUBEXP); }
+void nvim_regexp_clear_rex_endp(void) { memset(rex.reg_endp, 0, sizeof(char *) * NSUBEXP); }
+void nvim_regexp_clear_reg_startzpos(void) { memset(reg_startzpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
+void nvim_regexp_clear_reg_endzpos(void) { memset(reg_endzpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
+void nvim_regexp_clear_reg_startzp(void) { memset(reg_startzp, 0, sizeof(char *) * NSUBEXP); }
+void nvim_regexp_clear_reg_endzp(void) { memset(reg_endzp, 0, sizeof(char *) * NSUBEXP); }
+
 // Create a new extmatch and mark it as referenced once.
 static reg_extmatch_T *make_extmatch(void)
   FUNC_ATTR_NONNULL_RET
@@ -1154,36 +1171,12 @@ static int prog_magic_wrong(void)
 // used (to increase speed).
 static void cleanup_subexpr(void)
 {
-  if (!rex.need_clear_subexpr) {
-    return;
-  }
-
-  if (REG_MULTI) {
-    // Use 0xff to set lnum to -1
-    memset(rex.reg_startpos, 0xff, sizeof(lpos_T) * NSUBEXP);
-    memset(rex.reg_endpos, 0xff, sizeof(lpos_T) * NSUBEXP);
-  } else {
-    memset(rex.reg_startp, 0, sizeof(char *) * NSUBEXP);
-    memset(rex.reg_endp, 0, sizeof(char *) * NSUBEXP);
-  }
-  rex.need_clear_subexpr = false;
+  rs_cleanup_subexpr();
 }
 
 static void cleanup_zsubexpr(void)
 {
-  if (!rex.need_clear_zsubexpr) {
-    return;
-  }
-
-  if (REG_MULTI) {
-    // Use 0xff to set lnum to -1
-    memset(reg_startzpos, 0xff, sizeof(lpos_T) * NSUBEXP);
-    memset(reg_endzpos, 0xff, sizeof(lpos_T) * NSUBEXP);
-  } else {
-    memset(reg_startzp, 0, sizeof(char *) * NSUBEXP);
-    memset(reg_endzp, 0, sizeof(char *) * NSUBEXP);
-  }
-  rex.need_clear_zsubexpr = false;
+  rs_cleanup_zsubexpr();
 }
 
 // Advance rex.lnum, rex.line and rex.input to the next line.

@@ -77,6 +77,21 @@ extern "C" {
     // re_mult_next accessors
     fn nvim_regexp_set_rc_did_emsg(v: c_int);
     fn nvim_regexp_semsg_e888(what: *const c_char);
+
+    // cleanup_subexpr / cleanup_zsubexpr accessors
+    fn nvim_regexp_get_rex_need_clear_subexpr() -> c_int;
+    fn nvim_regexp_set_rex_need_clear_subexpr(v: c_int);
+    fn nvim_regexp_get_rex_need_clear_zsubexpr() -> c_int;
+    fn nvim_regexp_set_rex_need_clear_zsubexpr(v: c_int);
+    fn nvim_regexp_is_reg_multi() -> c_int;
+    fn nvim_regexp_clear_rex_startpos();
+    fn nvim_regexp_clear_rex_endpos();
+    fn nvim_regexp_clear_rex_startp();
+    fn nvim_regexp_clear_rex_endp();
+    fn nvim_regexp_clear_reg_startzpos();
+    fn nvim_regexp_clear_reg_endzpos();
+    fn nvim_regexp_clear_reg_startzp();
+    fn nvim_regexp_clear_reg_endzp();
 }
 
 // Characters always special inside [] ranges
@@ -1082,6 +1097,40 @@ pub unsafe extern "C" fn rs_re_mult_next(what: *const c_char) -> bool {
         return false;
     }
     true
+}
+
+// --- cleanup_subexpr / cleanup_zsubexpr ---
+
+/// Clear subexpression match data if the flag is set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cleanup_subexpr() {
+    if nvim_regexp_get_rex_need_clear_subexpr() == 0 {
+        return;
+    }
+    if nvim_regexp_is_reg_multi() != 0 {
+        nvim_regexp_clear_rex_startpos();
+        nvim_regexp_clear_rex_endpos();
+    } else {
+        nvim_regexp_clear_rex_startp();
+        nvim_regexp_clear_rex_endp();
+    }
+    nvim_regexp_set_rex_need_clear_subexpr(0);
+}
+
+/// Clear z-subexpression match data if the flag is set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cleanup_zsubexpr() {
+    if nvim_regexp_get_rex_need_clear_zsubexpr() == 0 {
+        return;
+    }
+    if nvim_regexp_is_reg_multi() != 0 {
+        nvim_regexp_clear_reg_startzpos();
+        nvim_regexp_clear_reg_endzpos();
+    } else {
+        nvim_regexp_clear_reg_startzp();
+        nvim_regexp_clear_reg_endzp();
+    }
+    nvim_regexp_set_rex_need_clear_zsubexpr(0);
 }
 
 #[cfg(test)]
