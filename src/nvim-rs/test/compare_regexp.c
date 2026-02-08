@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 // Magic values matching src/nvim/regexp_defs.h
 typedef enum {
@@ -115,6 +116,7 @@ extern int rs_no_magic(int x);
 extern int rs_toggle_magic(int x);
 extern int rs_re_multi_type(int c);
 extern int rs_backslash_trans(int c);
+extern void rs_init_class_tab(int16_t *out);
 
 // --- Reference C implementation of skip_regexp (ASCII-only, simplified) ---
 // This mirrors the logic in src/nvim/regexp.c skip_regexp_ex() but without
@@ -596,6 +598,66 @@ void test_backslash_trans(void) {
     TEST(name, mismatches == 0);
 }
 
+// --- RI_* constants (matching regexp.c) ---
+#define RI_DIGIT    0x01
+#define RI_HEX      0x02
+#define RI_OCTAL    0x04
+#define RI_WORD     0x08
+#define RI_HEAD     0x10
+#define RI_ALPHA    0x20
+#define RI_LOWER    0x40
+#define RI_UPPER    0x80
+#define RI_WHITE    0x100
+
+// Build the C reference class table using the same logic as the original
+static void c_init_class_tab(int16_t *tab)
+{
+    for (int i = 0; i < 256; i++) {
+        if (i >= '0' && i <= '7') {
+            tab[i] = RI_DIGIT + RI_HEX + RI_OCTAL + RI_WORD;
+        } else if (i >= '8' && i <= '9') {
+            tab[i] = RI_DIGIT + RI_HEX + RI_WORD;
+        } else if (i >= 'a' && i <= 'f') {
+            tab[i] = RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER;
+        } else if (i >= 'g' && i <= 'z') {
+            tab[i] = RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER;
+        } else if (i >= 'A' && i <= 'F') {
+            tab[i] = RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER;
+        } else if (i >= 'G' && i <= 'Z') {
+            tab[i] = RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER;
+        } else if (i == '_') {
+            tab[i] = RI_WORD + RI_HEAD;
+        } else {
+            tab[i] = 0;
+        }
+    }
+    tab[' '] |= RI_WHITE;
+    tab['\t'] |= RI_WHITE;
+}
+
+void test_init_class_tab(void) {
+    printf("Testing init_class_tab (C vs Rust, all 256 entries):\n");
+
+    int16_t c_tab[256];
+    int16_t r_tab[256];
+    c_init_class_tab(c_tab);
+    rs_init_class_tab(r_tab);
+
+    int mismatches = 0;
+    for (int i = 0; i < 256; i++) {
+        if (c_tab[i] != r_tab[i]) {
+            if (mismatches < 5) {
+                printf("  MISMATCH at %d ('%c'): C=0x%03x Rust=0x%03x\n",
+                       i, (i >= 32 && i < 127) ? i : '.', c_tab[i], r_tab[i]);
+            }
+            mismatches++;
+        }
+    }
+    char name[128];
+    snprintf(name, sizeof(name), "init_class_tab: %d/256 entries match", 256 - mismatches);
+    TEST(name, mismatches == 0);
+}
+
 int main(void) {
     printf("=== Comparing C regexp utility implementations ===\n\n");
 
@@ -607,6 +669,7 @@ int main(void) {
     test_toggle_magic();
     test_re_multi_type();
     test_backslash_trans();
+    test_init_class_tab();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);

@@ -252,6 +252,55 @@ pub const extern "C" fn rs_backslash_trans(c: c_int) -> c_int {
     }
 }
 
+// --- Class table (matching `regexp.c` `init_class_tab`) ---
+
+const RI_DIGIT: i16 = 0x01;
+const RI_HEX: i16 = 0x02;
+const RI_OCTAL: i16 = 0x04;
+const RI_WORD: i16 = 0x08;
+const RI_HEAD: i16 = 0x10;
+const RI_ALPHA: i16 = 0x20;
+const RI_LOWER: i16 = 0x40;
+const RI_UPPER: i16 = 0x80;
+const RI_WHITE: i16 = 0x100;
+
+/// Compile-time class table matching C `init_class_tab()`.
+const CLASS_TAB: [i16; 256] = {
+    let mut tab = [0i16; 256];
+    let mut i = 0usize;
+    while i < 256 {
+        if i >= b'0' as usize && i <= b'7' as usize {
+            tab[i] = RI_DIGIT + RI_HEX + RI_OCTAL + RI_WORD;
+        } else if i >= b'8' as usize && i <= b'9' as usize {
+            tab[i] = RI_DIGIT + RI_HEX + RI_WORD;
+        } else if i >= b'a' as usize && i <= b'f' as usize {
+            tab[i] = RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER;
+        } else if i >= b'g' as usize && i <= b'z' as usize {
+            tab[i] = RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER;
+        } else if i >= b'A' as usize && i <= b'F' as usize {
+            tab[i] = RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER;
+        } else if i >= b'G' as usize && i <= b'Z' as usize {
+            tab[i] = RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER;
+        } else if i == b'_' as usize {
+            tab[i] = RI_WORD + RI_HEAD;
+        }
+        i += 1;
+    }
+    tab[b' ' as usize] |= RI_WHITE;
+    tab[b'\t' as usize] |= RI_WHITE;
+    tab
+};
+
+/// Copy the class table into a C-provided buffer.
+///
+/// # Safety
+///
+/// `out` must point to a buffer of at least 256 `i16` elements.
+#[no_mangle]
+pub const unsafe extern "C" fn rs_init_class_tab(out: *mut i16) {
+    std::ptr::copy_nonoverlapping(CLASS_TAB.as_ptr(), out, 256);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,5 +387,85 @@ mod tests {
         assert_eq!(rs_backslash_trans(b'a' as c_int), b'a' as c_int);
         assert_eq!(rs_backslash_trans(0), 0);
         assert_eq!(rs_backslash_trans(255), 255);
+    }
+
+    // --- CLASS_TAB tests ---
+
+    #[test]
+    fn test_class_tab_digits() {
+        // 0-7 have DIGIT + HEX + OCTAL + WORD
+        for c in b'0'..=b'7' {
+            let v = CLASS_TAB[c as usize];
+            assert!(v & RI_DIGIT != 0, "digit {c}");
+            assert!(v & RI_HEX != 0, "hex {c}");
+            assert!(v & RI_OCTAL != 0, "octal {c}");
+            assert!(v & RI_WORD != 0, "word {c}");
+        }
+        // 8-9 have DIGIT + HEX + WORD but NOT OCTAL
+        for c in b'8'..=b'9' {
+            let v = CLASS_TAB[c as usize];
+            assert!(v & RI_DIGIT != 0);
+            assert!(v & RI_HEX != 0);
+            assert!(v & RI_OCTAL == 0, "8-9 should not be OCTAL");
+            assert!(v & RI_WORD != 0);
+        }
+    }
+
+    #[test]
+    fn test_class_tab_hex() {
+        // a-f have HEX
+        for c in b'a'..=b'f' {
+            assert!(CLASS_TAB[c as usize] & RI_HEX != 0);
+        }
+        // A-F have HEX
+        for c in b'A'..=b'F' {
+            assert!(CLASS_TAB[c as usize] & RI_HEX != 0);
+        }
+        // g-z, G-Z do NOT have HEX
+        for c in b'g'..=b'z' {
+            assert!(CLASS_TAB[c as usize] & RI_HEX == 0);
+        }
+        for c in b'G'..=b'Z' {
+            assert!(CLASS_TAB[c as usize] & RI_HEX == 0);
+        }
+    }
+
+    #[test]
+    fn test_class_tab_alpha() {
+        for c in b'a'..=b'z' {
+            let v = CLASS_TAB[c as usize];
+            assert!(v & RI_ALPHA != 0);
+            assert!(v & RI_LOWER != 0);
+            assert!(v & RI_UPPER == 0);
+        }
+        for c in b'A'..=b'Z' {
+            let v = CLASS_TAB[c as usize];
+            assert!(v & RI_ALPHA != 0);
+            assert!(v & RI_UPPER != 0);
+            assert!(v & RI_LOWER == 0);
+        }
+    }
+
+    #[test]
+    fn test_class_tab_underscore() {
+        let v = CLASS_TAB[b'_' as usize];
+        assert!(v & RI_WORD != 0);
+        assert!(v & RI_HEAD != 0);
+        assert!(v & RI_ALPHA == 0, "underscore is not ALPHA");
+    }
+
+    #[test]
+    fn test_class_tab_white() {
+        assert!(CLASS_TAB[b' ' as usize] & RI_WHITE != 0);
+        assert!(CLASS_TAB[b'\t' as usize] & RI_WHITE != 0);
+    }
+
+    #[test]
+    fn test_class_tab_zero() {
+        // NUL and other non-matching chars
+        assert_eq!(CLASS_TAB[0], 0);
+        assert_eq!(CLASS_TAB[1], 0);
+        assert_eq!(CLASS_TAB[b'!' as usize], 0);
+        assert_eq!(CLASS_TAB[b'@' as usize], 0);
     }
 }

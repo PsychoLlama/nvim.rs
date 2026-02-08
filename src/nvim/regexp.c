@@ -55,6 +55,7 @@ extern int rs_no_magic(int x);
 extern int rs_toggle_magic(int x);
 extern int rs_re_multi_type(int c);
 extern int rs_backslash_trans(int c);
+extern void rs_init_class_tab(int16_t *out);
 
 typedef enum {
   RGLF_LINE = 0x01,
@@ -515,34 +516,11 @@ static int16_t class_tab[256];
 
 static void init_class_tab(void)
 {
-  int i;
   static int done = false;
-
   if (done) {
     return;
   }
-
-  for (i = 0; i < 256; i++) {
-    if (i >= '0' && i <= '7') {
-      class_tab[i] = RI_DIGIT + RI_HEX + RI_OCTAL + RI_WORD;
-    } else if (i >= '8' && i <= '9') {
-      class_tab[i] = RI_DIGIT + RI_HEX + RI_WORD;
-    } else if (i >= 'a' && i <= 'f') {
-      class_tab[i] = RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER;
-    } else if (i >= 'g' && i <= 'z') {
-      class_tab[i] = RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER;
-    } else if (i >= 'A' && i <= 'F') {
-      class_tab[i] = RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER;
-    } else if (i >= 'G' && i <= 'Z') {
-      class_tab[i] = RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER;
-    } else if (i == '_') {
-      class_tab[i] = RI_WORD + RI_HEAD;
-    } else {
-      class_tab[i] = 0;
-    }
-  }
-  class_tab[' '] |= RI_WHITE;
-  class_tab['\t'] |= RI_WHITE;
+  rs_init_class_tab(class_tab);
   done = true;
 }
 
