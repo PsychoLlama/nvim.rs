@@ -254,6 +254,13 @@ typedef struct regbehind_S {
   save_se_T save_end[NSUBEXP];
 } regbehind_T;
 
+// Rust FFI: position save/restore (Phase 1)
+extern void rs_reg_save(regsave_T *save, int ga_len);
+extern void rs_reg_restore(const regsave_T *save, int *ga_len);
+extern int rs_reg_save_equal(const regsave_T *save);
+extern void rs_save_se_multi(save_se_T *savep, lpos_T *posp);
+extern void rs_save_se_one(save_se_T *savep, uint8_t **pp);
+
 // Since the out pointers in the list are always
 // uninitialized, we use the pointers themselves
 // as storage for the Ptrlists.
@@ -3454,42 +3461,21 @@ static int64_t bl_maxval;
 static void reg_save(regsave_T *save, garray_T *gap)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (REG_MULTI) {
-    save->rs_u.pos.col = (colnr_T)(rex.input - rex.line);
-    save->rs_u.pos.lnum = rex.lnum;
-  } else {
-    save->rs_u.ptr = rex.input;
-  }
-  save->rs_len = gap->ga_len;
+  rs_reg_save(save, gap->ga_len);
 }
 
 // Restore the input line and position from a regsave_T.
 static void reg_restore(regsave_T *save, garray_T *gap)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (REG_MULTI) {
-    if (rex.lnum != save->rs_u.pos.lnum) {
-      // only call reg_getline() when the line number changed to save
-      // a bit of time
-      rex.lnum = save->rs_u.pos.lnum;
-      rex.line = (uint8_t *)reg_getline(rex.lnum);
-    }
-    rex.input = rex.line + save->rs_u.pos.col;
-  } else {
-    rex.input = save->rs_u.ptr;
-  }
-  gap->ga_len = save->rs_len;
+  rs_reg_restore(save, &gap->ga_len);
 }
 
 // Return true if current position is equal to saved position.
 static bool reg_save_equal(const regsave_T *save)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (REG_MULTI) {
-    return rex.lnum == save->rs_u.pos.lnum
-           && rex.input == rex.line + save->rs_u.pos.col;
-  }
-  return rex.input == save->rs_u.ptr;
+  return rs_reg_save_equal(save) != 0;
 }
 
 // Save the sub-expressions before attempting a match.
@@ -3510,15 +3496,12 @@ static bool reg_save_equal(const regsave_T *save)
 // depending on REG_MULTI.
 static void save_se_multi(save_se_T *savep, lpos_T *posp)
 {
-  savep->se_u.pos = *posp;
-  posp->lnum = rex.lnum;
-  posp->col = (colnr_T)(rex.input - rex.line);
+  rs_save_se_multi(savep, posp);
 }
 
 static void save_se_one(save_se_T *savep, uint8_t **pp)
 {
-  savep->se_u.ptr = *pp;
-  *pp = rex.input;
+  rs_save_se_one(savep, pp);
 }
 
 /// regrepeat - repeatedly match something simple, return how many.

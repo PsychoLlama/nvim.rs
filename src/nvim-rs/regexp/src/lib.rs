@@ -4120,9 +4120,164 @@ pub unsafe extern "C" fn rs_reg(paren: c_int, flagp: *mut c_int) -> *mut u8 {
     ret
 }
 
+// --- Position save/restore for BT regexp execution ---
+
+/// `lpos_T` — position as (lnum, col), matching C `lpos_T` in `pos_defs.h`.
+/// `linenr_T` and `colnr_T` are both `c_int` (i32).
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct LposT {
+    pub lnum: c_int,
+    pub col: c_int,
+}
+
+/// Union inside `regsave_T`: either a pointer (single-line) or position (multi-line).
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union RegsaveUnion {
+    pub ptr: *mut u8,
+    pub pos: LposT,
+}
+
+/// `regsave_T` — saves input state for backtracking.
+#[repr(C)]
+pub struct RegsaveT {
+    pub rs_u: RegsaveUnion,
+    pub rs_len: c_int,
+}
+
+/// Union inside `save_se_T`.
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union SaveSeUnion {
+    pub ptr: *mut u8,
+    pub pos: LposT,
+}
+
+/// `save_se_T` — saves sub-expression start/end pointer or position.
+#[repr(C)]
+pub struct SaveSeT {
+    pub se_u: SaveSeUnion,
+}
+
+/// Save the input line and position in a `regsave_T`.
+///
+/// The C wrapper passes `gap->ga_len` since `garray_T` stays in C:
+/// ```c
+/// static void reg_save(regsave_T *save, garray_T *gap) {
+///     rs_reg_save(save, gap->ga_len);
+/// }
+/// ```
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_save(save: *mut RegsaveT, ga_len: c_int) {
+    if nvim_regexp_is_reg_multi() != 0 {
+        #[allow(clippy::cast_possible_truncation)]
+        let col =
+            nvim_regexp_get_rex_input().offset_from(nvim_regexp_get_rex_line()) as c_int;
+        (*save).rs_u.pos.col = col;
+        (*save).rs_u.pos.lnum = nvim_regexp_get_rex_lnum();
+    } else {
+        (*save).rs_u.ptr = nvim_regexp_get_rex_input();
+    }
+    (*save).rs_len = ga_len;
+}
+
+/// Restore the input line and position from a `regsave_T`.
+///
+/// The C wrapper passes `&gap->ga_len` so Rust can write back:
+/// ```c
+/// static void reg_restore(regsave_T *save, garray_T *gap) {
+///     rs_reg_restore(save, &gap->ga_len);
+/// }
+/// ```
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_restore(save: *const RegsaveT, ga_len: *mut c_int) {
+    if nvim_regexp_is_reg_multi() != 0 {
+        if nvim_regexp_get_rex_lnum() != (*save).rs_u.pos.lnum {
+            // Only call reg_getline() when the line number changed to save
+            // a bit of time.
+            nvim_regexp_set_rex_lnum((*save).rs_u.pos.lnum);
+            let line = nvim_regexp_call_reg_getline((*save).rs_u.pos.lnum).cast::<u8>();
+            nvim_regexp_set_rex_line(line);
+        }
+        nvim_regexp_set_rex_input(nvim_regexp_get_rex_line().add((*save).rs_u.pos.col as usize));
+    } else {
+        nvim_regexp_set_rex_input((*save).rs_u.ptr);
+    }
+    *ga_len = (*save).rs_len;
+}
+
+/// Return 1 if current position equals saved position, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_save_equal(save: *const RegsaveT) -> c_int {
+    if nvim_regexp_is_reg_multi() != 0 {
+        let eq = nvim_regexp_get_rex_lnum() == (*save).rs_u.pos.lnum
+            && nvim_regexp_get_rex_input()
+                == nvim_regexp_get_rex_line().add((*save).rs_u.pos.col as usize);
+        eq as c_int
+    } else {
+        (nvim_regexp_get_rex_input() == (*save).rs_u.ptr) as c_int
+    }
+}
+
+/// Save sub-expression position (multi-line): save `*posp` then set it to current.
+#[no_mangle]
+pub unsafe extern "C" fn rs_save_se_multi(savep: *mut SaveSeT, posp: *mut LposT) {
+    (*savep).se_u.pos = *posp;
+    (*posp).lnum = nvim_regexp_get_rex_lnum();
+    #[allow(clippy::cast_possible_truncation)]
+    let col = nvim_regexp_get_rex_input().offset_from(nvim_regexp_get_rex_line()) as c_int;
+    (*posp).col = col;
+}
+
+/// Save sub-expression pointer (single-line): save `*pp` then set it to current input.
+#[no_mangle]
+pub unsafe extern "C" fn rs_save_se_one(savep: *mut SaveSeT, pp: *mut *mut u8) {
+    (*savep).se_u.ptr = *pp;
+    *pp = nvim_regexp_get_rex_input();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- Struct layout assertions for Phase 1 structs ---
+
+    #[test]
+    fn test_lpos_t_layout() {
+        // Must match C `lpos_T`: two `int` fields (linenr_T + colnr_T)
+        assert_eq!(std::mem::size_of::<LposT>(), 8);
+        assert_eq!(std::mem::align_of::<LposT>(), 4);
+    }
+
+    #[test]
+    fn test_regsave_union_layout() {
+        // Must be pointer-sized (larger of *mut u8 and LposT)
+        assert_eq!(std::mem::size_of::<RegsaveUnion>(), 8);
+    }
+
+    #[test]
+    fn test_regsave_t_layout() {
+        // rs_u (8 bytes) + rs_len (4 bytes) + padding = 12 on 64-bit
+        // C: union { ptr(8), lpos_T(8) } + int(4) => 8 + 4 = 12, padded to 16
+        // Actually: on 64-bit ptr is 8 bytes, lpos_T is 8 bytes, so union is 8.
+        // Then c_int is 4 bytes.  Total = 12, align 8 => 16.
+        let size = std::mem::size_of::<RegsaveT>();
+        let align = std::mem::align_of::<RegsaveT>();
+        assert_eq!(align, std::mem::align_of::<*mut u8>());
+        assert!(size >= 12); // at minimum, union(8) + int(4)
+        assert_eq!(size % align, 0);
+    }
+
+    #[test]
+    fn test_save_se_t_layout() {
+        // Just the union: pointer-sized
+        assert_eq!(
+            std::mem::size_of::<SaveSeT>(),
+            std::mem::size_of::<SaveSeUnion>()
+        );
+        assert_eq!(std::mem::size_of::<SaveSeT>(), 8);
+    }
 
     #[test]
     fn test_no_magic_positive() {

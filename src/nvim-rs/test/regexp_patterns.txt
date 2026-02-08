@@ -694,6 +694,17 @@ a\{-1,}	aaa
 \%#=1abc	xabcx
 \%#=2abc	xabcx
 
+# === Lookbehind stress (triggers reg_save/reg_restore) ===
+\(abc\)\@<=xyz	abcxyz
+\(abc\)\@<=xyz	defxyz
+\(a.\)\@<=c	abc
+\(ab\)\@<!cd	xcd
+\(ab\)\@<!cd	abcd
+\(\d\+\)\@<=px	100px
+\(\d\+\)\@<=px	px
+\(foo\)\@<=\(bar\)\@=bar	foobar
+\(foo\)\@<=\(bar\)\@=bar	foobaz
+
 # === Multibyte in various positions ===
 ^café$	café
 café\|latte	I want a latte
