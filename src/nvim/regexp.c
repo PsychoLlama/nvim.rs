@@ -84,6 +84,8 @@ extern int rs_bt_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr)
 extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                int32_t col, void *tm, int *timed_out);
 extern int rs_bt_regexec_both(uint8_t *line, int32_t startcol, void *tm, int *timed_out);
+extern void rs_vim_regfree(void *prog);
+extern void rs_free_regexp_stuff(void);
 // Rust FFI: node management and compilation infrastructure
 extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
 extern void rs_regc(int b);
@@ -10680,6 +10682,20 @@ int nvim_bt_prog_get_reganch(const void *prog) { return ((const bt_regprog_T *)p
 
 // --- End Phase 9.2 ---
 
+// Phase 9.3: vim_regfree + free_regexp_stuff accessors
+void nvim_regexp_call_engine_regfree(void *prog) {
+  ((regprog_T *)prog)->engine->regfree((regprog_T *)prog);
+}
+
+void nvim_regexp_call_free_regexp_stuff(void) {
+  ga_clear(&regstack);
+  ga_clear(&backpos);
+  xfree(reg_tofree);
+  xfree(reg_prev_sub);
+}
+
+// --- End Phase 9.3 ---
+
 /// Main matching routine.
 ///
 /// Run NFA to determine whether it matches rex.input.
@@ -12653,18 +12669,13 @@ regprog_T *vim_regcomp(const char *expr_arg, int re_flags)
 // Free a compiled regexp program, returned by vim_regcomp().
 void vim_regfree(regprog_T *prog)
 {
-  if (prog != NULL) {
-    prog->engine->regfree(prog);
-  }
+  rs_vim_regfree(prog);
 }
 
 #if defined(EXITFREE)
 void free_regexp_stuff(void)
 {
-  ga_clear(&regstack);
-  ga_clear(&backpos);
-  xfree(reg_tofree);
-  xfree(reg_prev_sub);
+  rs_free_regexp_stuff();
 }
 
 #endif

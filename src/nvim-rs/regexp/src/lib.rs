@@ -12523,6 +12523,29 @@ unsafe fn bt_try_unanchored(
 
 // --- End Phase 9.2 ---
 
+// --- Phase 9.3: vim_regfree + free_regexp_stuff ---
+
+extern "C" {
+    fn nvim_regexp_call_engine_regfree(prog: *mut c_void);
+    fn nvim_regexp_call_free_regexp_stuff();
+}
+
+/// Free a compiled regexp program.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regfree(prog: *mut c_void) {
+    if !prog.is_null() {
+        nvim_regexp_call_engine_regfree(prog);
+    }
+}
+
+/// Free all regexp-related allocations (for EXITFREE).
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_regexp_stuff() {
+    nvim_regexp_call_free_regexp_stuff();
+}
+
+// --- End Phase 9.3 ---
+
 #[cfg(test)]
 mod tests {
     use super::*;
