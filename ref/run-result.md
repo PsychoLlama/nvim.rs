@@ -1,21 +1,21 @@
-Plan: ~/.claude/plans/glimmering-hatching-waterfall.md
+Plan: ~/.claude/plans/synchronous-dazzling-karp.md
 
-All steps complete. Here's the summary:
+## Summary — Batch 3 Complete
 
-## Regexp Utility Functions Migration — Batch 2 Complete
+**6 commits**, each independently passing all checks (`build`, `smoke-test`, `rust-fmt-check`, `rust-clippy`, `rust-test`):
 
-**7 commits**, all passing `build`, `smoke-test`, `rust-fmt-check`, `rust-clippy`, and `rust-test`:
+| Commit | Functions | New Accessors |
+|--------|-----------|---------------|
+| `360a93d` | `do_upper`, `do_lower` | 0 |
+| `5045094` | `get_char_class` | 0 |
+| `7295ab4` | `skip_anyof` | 0 |
+| `10682dc` | `reg_getline_common` | 6 |
+| `b69be75` | `regtilde` | 5 |
+| `7584fa3` | `match_with_backref` | 10 |
 
-| Commit | Functions | Tests Added |
-|--------|-----------|-------------|
-| `f54114d` | Delete dead C `mb_decompose`, migrate `get_cpo_flags` | 4 (mb_decompose) |
-| `29ce130` | `make_extmatch`, `ref_extmatch`, `unref_extmatch` | 3 (layout) |
-| `f73818b` | `re_mult_next` | 2 (logic) |
-| `bec9176` | `cleanup_subexpr`, `cleanup_zsubexpr` | 0 (orchestration) |
-| `5f9d470` | `reg_prev_class` | 0 (FFI only) |
-| `e033b72` | `reg_nextline` | 0 (FFI only) |
-| `6ff569b` | `skip_regexp_err` | 0 (FFI only) |
-
-**Totals:** 11 functions migrated + 1 dead C function deleted, 32 `#[no_mangle]` functions in regexp crate (up from 20), 3472 unit tests passing (up from 3467), ~25 new C accessor/helper functions.
-
-Also fixed a symbol conflict: removed duplicate `rs_ref_extmatch`/`rs_unref_extmatch` wrappers from the syntax crate that conflicted with the new regexp crate implementations.
+**Totals:**
+- **8 functions migrated** (do_upper, do_lower, get_char_class, skip_anyof, reg_getline_common, regtilde, match_with_backref + get_char_class circular dep resolved)
+- **39 `#[no_mangle]` exports** in regexp crate (up from 32)
+- **21 new C accessors**
+- **3480 unit tests** passing (8 new tests for get_char_class)
+- **Deferred:** `reg_match_visual` — too many globals (15+) and `getvvcol` cache invalidation risk
