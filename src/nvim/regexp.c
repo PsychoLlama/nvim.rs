@@ -71,6 +71,10 @@ extern void rs_cleanup_zsubexpr(void);
 extern int rs_reg_prev_class(void);
 extern void rs_reg_nextline(void);
 extern char *rs_skip_regexp_err(char *startp, int delim, int magic);
+// Rust FFI: node management and compilation infrastructure
+extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
+extern void rs_regc(int b);
+extern void rs_regmbc(int c);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -1832,6 +1836,15 @@ static int classcodes[] = {
 // instead.
 #define JUST_CALC_SIZE  ((uint8_t *)-1)
 
+// --- Compilation global accessors for Rust FFI ---
+uint8_t *nvim_regexp_get_regcode(void) { return regcode; }
+void nvim_regexp_set_regcode(uint8_t *p) { regcode = p; }
+int64_t nvim_regexp_get_regsize(void) { return regsize; }
+void nvim_regexp_set_regsize(int64_t v) { regsize = v; }
+int nvim_regexp_get_reg_toolong(void) { return reg_toolong; }
+void nvim_regexp_set_reg_toolong(int v) { reg_toolong = v; }
+uint8_t *nvim_regexp_get_just_calc_size(void) { return JUST_CALC_SIZE; }
+
 // used for STAR, PLUS and BRACE_SIMPLE matching
 typedef struct regstar_S {
   int nextb;            // next byte
@@ -1964,21 +1977,13 @@ static bool use_multibytecode(int c)
 // Emit (if appropriate) a byte of code
 static void regc(int b)
 {
-  if (regcode == JUST_CALC_SIZE) {
-    regsize++;
-  } else {
-    *regcode++ = (uint8_t)b;
-  }
+  rs_regc(b);
 }
 
 // Emit (if appropriate) a multi-byte character of code
 static void regmbc(int c)
 {
-  if (regcode == JUST_CALC_SIZE) {
-    regsize += utf_char2len(c);
-  } else {
-    regcode += utf_char2bytes(c, (char *)regcode);
-  }
+  rs_regmbc(c);
 }
 
 // Produce the bytes for equivalence class "c".
@@ -2972,11 +2977,7 @@ static uint8_t *regnode(int op)
 // Write a four bytes number at "p" and return pointer to the next char.
 static uint8_t *re_put_uint32(uint8_t *p, uint32_t val)
 {
-  *p++ = (uint8_t)((val >> 24) & 0377);
-  *p++ = (uint8_t)((val >> 16) & 0377);
-  *p++ = (uint8_t)((val >> 8) & 0377);
-  *p++ = (uint8_t)(val & 0377);
-  return p;
+  return rs_re_put_uint32(p, val);
 }
 
 // regnext - dig the "next" pointer out of a node

@@ -109,6 +109,17 @@ extern "C" {
     fn nvim_regexp_clear_reg_endzpos();
     fn nvim_regexp_clear_reg_startzp();
     fn nvim_regexp_clear_reg_endzp();
+
+    // Compilation global accessors
+    fn nvim_regexp_get_regcode() -> *mut u8;
+    fn nvim_regexp_set_regcode(p: *mut u8);
+    fn nvim_regexp_get_regsize() -> i64;
+    fn nvim_regexp_set_regsize(v: i64);
+    fn nvim_regexp_get_reg_toolong() -> c_int;
+    fn nvim_regexp_set_reg_toolong(v: c_int);
+    fn nvim_regexp_get_just_calc_size() -> *mut u8;
+
+    // Multibyte helpers (utf_char2len/utf_char2bytes already declared below)
 }
 
 // Characters always special inside [] ranges
@@ -2280,6 +2291,53 @@ pub unsafe extern "C" fn rs_vim_regsub_literal(
     result
 }
 
+// ---------------------------------------------------------------------------
+// Node management & compilation infrastructure
+// ---------------------------------------------------------------------------
+
+/// Write a four-byte big-endian uint32 at `p` and return pointer past it.
+/// Pure helper — no globals touched.
+#[no_mangle]
+pub unsafe extern "C" fn rs_re_put_uint32(p: *mut u8, val: u32) -> *mut u8 {
+    let bytes = val.to_be_bytes();
+    *p = bytes[0];
+    *p.add(1) = bytes[1];
+    *p.add(2) = bytes[2];
+    *p.add(3) = bytes[3];
+    p.add(4)
+}
+
+/// Emit (if appropriate) a single byte of code.
+/// If `regcode == JUST_CALC_SIZE`, increments `regsize` instead.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regc(b: c_int) {
+    let regcode = nvim_regexp_get_regcode();
+    let just_calc_size = nvim_regexp_get_just_calc_size();
+    if regcode == just_calc_size {
+        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 1);
+    } else {
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            *regcode = b as u8;
+        }
+        nvim_regexp_set_regcode(regcode.add(1));
+    }
+}
+
+/// Emit (if appropriate) a multi-byte character of code.
+/// If `regcode == JUST_CALC_SIZE`, adds `utf_char2len(c)` to `regsize`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regmbc(c: c_int) {
+    let regcode = nvim_regexp_get_regcode();
+    let just_calc_size = nvim_regexp_get_just_calc_size();
+    if regcode == just_calc_size {
+        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + utf_char2len(c) as i64);
+    } else {
+        let written = utf_char2bytes(c, regcode.cast::<c_char>());
+        nvim_regexp_set_regcode(regcode.add(written as usize));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2728,6 +2786,38 @@ mod tests {
                 std::str::from_utf8(CHAR_CLASS_TAB[i].0),
             );
         }
+    }
+
+    // --- re_put_uint32 tests ---
+
+    #[test]
+    fn test_re_put_uint32_zero() {
+        let mut buf = [0xFFu8; 8];
+        let ret = unsafe { rs_re_put_uint32(buf.as_mut_ptr(), 0) };
+        assert_eq!(buf[0..4], [0, 0, 0, 0]);
+        assert_eq!(ret, unsafe { buf.as_mut_ptr().add(4) });
+    }
+
+    #[test]
+    fn test_re_put_uint32_max() {
+        let mut buf = [0u8; 8];
+        unsafe { rs_re_put_uint32(buf.as_mut_ptr(), 0xFFFF_FFFF) };
+        assert_eq!(buf[0..4], [0xFF, 0xFF, 0xFF, 0xFF]);
+    }
+
+    #[test]
+    fn test_re_put_uint32_known_value() {
+        let mut buf = [0u8; 8];
+        // 0x12345678 = 305419896
+        unsafe { rs_re_put_uint32(buf.as_mut_ptr(), 0x1234_5678) };
+        assert_eq!(buf[0..4], [0x12, 0x34, 0x56, 0x78]);
+    }
+
+    #[test]
+    fn test_re_put_uint32_single_byte() {
+        let mut buf = [0u8; 8];
+        unsafe { rs_re_put_uint32(buf.as_mut_ptr(), 42) };
+        assert_eq!(buf[0..4], [0, 0, 0, 42]);
     }
 
     // --- reg_breakcheck / reg_iswordc tests ---
