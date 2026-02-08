@@ -5030,7 +5030,12 @@ fn re_num_cmp(val: u32, scan: *const u8) -> bool {
 
 /// Push a state onto the regstack. Returns pointer to the new `RegitemT`, or null on OOM.
 #[inline]
-#[allow(dead_code, clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_ptr_alignment)]
+#[allow(
+    dead_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_ptr_alignment
+)]
 unsafe fn regstack_push(state: c_int, scan: *mut u8) -> *mut RegitemT {
     if (nvim_regexp_get_regstack_len() as u32 >> 10) as i64 >= nvim_regexp_get_p_mmp() {
         nvim_regexp_emsg_maxmempattern();
@@ -5051,7 +5056,12 @@ unsafe fn regstack_push(state: c_int, scan: *mut u8) -> *mut RegitemT {
 
 /// Pop the top state from the regstack. Writes the saved scan pointer to `*scan_out`.
 #[inline]
-#[allow(dead_code, clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_ptr_alignment)]
+#[allow(
+    dead_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_ptr_alignment
+)]
 unsafe fn regstack_pop(scan_out: *mut *mut u8) {
     let rp = (nvim_regexp_get_regstack_data().add(nvim_regexp_get_regstack_len() as usize))
         .cast::<RegitemT>()
@@ -5093,16 +5103,286 @@ unsafe fn advance_reginput() {
     nvim_regexp_set_rex_input(inp.add(len as usize));
 }
 
-/// Skeleton `rs_regmatch` — currently just delegates to C `regmatch()` via the wrapper.
-/// This will be replaced incrementally in Phases 2-6.
+/// `rs_regmatch` — core backtracking regexp matcher.
+///
+/// NOT YET ACTIVE — still called via C `regmatch()`. This function is being
+/// built incrementally and will be activated in Phase 7.
 #[no_mangle]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_ptr_alignment,
+    clippy::cognitive_complexity
+)]
 pub unsafe extern "C" fn rs_regmatch(
-    scan: *mut u8,
+    scan_arg: *mut u8,
     tm: *const c_void,
     timed_out: *mut c_int,
 ) -> c_int {
-    // Pass-through to C regmatch for now
-    nvim_regexp_call_regmatch(scan, tm, timed_out)
+    // Pass-through to C regmatch for now (will be replaced in Phase 7)
+    nvim_regexp_call_regmatch(scan_arg, tm, timed_out)
+}
+
+/// The actual Rust implementation of regmatch (dead code until Phase 7 swap).
+#[allow(
+    dead_code,
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_ptr_alignment,
+    clippy::cognitive_complexity
+)]
+unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut c_int) -> c_int {
+    let mut scan: *mut u8 = scan_arg;
+    let mut next: *mut u8;
+    let mut status: c_int;
+    let mut tm_count: c_int = 0;
+
+    // Make "regstack" and "backpos" empty.
+    nvim_regexp_set_regstack_len(0);
+    nvim_regexp_set_backpos_len(0);
+
+    // Cache flags that don't change during matching.
+    let is_reg_multi = nvim_regexp_is_reg_multi() != 0;
+    let reg_line_lbr = nvim_regexp_get_rex_reg_line_lbr() != 0;
+
+    // Repeat until "regstack" is empty.
+    loop {
+        // Allow interrupting long matches with CTRL-C.
+        rs_reg_breakcheck();
+
+        // Inner loop: match items sequentially without using the regstack.
+        loop {
+            if nvim_regexp_get_got_int() != 0 || scan.is_null() {
+                status = RA_FAIL;
+                break;
+            }
+            // Check for timeout once in a 100 times.
+            if !tm.is_null() {
+                tm_count += 1;
+                if tm_count == 100 {
+                    tm_count = 0;
+                    if nvim_regexp_call_profile_passed_limit(tm) != 0 {
+                        if !timed_out.is_null() {
+                            *timed_out = 1;
+                        }
+                        status = RA_FAIL;
+                        break;
+                    }
+                }
+            }
+            status = RA_CONT;
+
+            next = rs_regnext(scan);
+
+            let mut opc = op(scan);
+            // Check for character class with NL added.
+            if !reg_line_lbr
+                && with_nl(opc)
+                && is_reg_multi
+                && *nvim_regexp_get_rex_input() == 0
+                && nvim_regexp_get_rex_lnum() <= nvim_regexp_get_rex_reg_maxline()
+            {
+                rs_reg_nextline();
+            } else if reg_line_lbr && with_nl(opc) && *nvim_regexp_get_rex_input() == b'\n' {
+                advance_reginput();
+            } else {
+                if with_nl(opc) {
+                    opc -= ADD_NL;
+                }
+                let c = utf_ptr2char(nvim_regexp_get_rex_input().cast::<c_char>());
+
+                match opc {
+                    BOL => {
+                        if nvim_regexp_get_rex_input() != nvim_regexp_get_rex_line() {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
+                    EOL => {
+                        if c != 0 {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
+                    RE_BOF => {
+                        if nvim_regexp_get_rex_lnum() != 0
+                            || nvim_regexp_get_rex_input() != nvim_regexp_get_rex_line()
+                            || (is_reg_multi && nvim_regexp_get_rex_reg_firstlnum() > 1)
+                        {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
+                    RE_EOF => {
+                        if nvim_regexp_get_rex_lnum() != nvim_regexp_get_rex_reg_maxline() || c != 0
+                        {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
+                    ANY => {
+                        if c == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+
+                    NOTHING => {}
+
+                    NEWL => {
+                        if (c != 0
+                            || !is_reg_multi
+                            || nvim_regexp_get_rex_lnum() > nvim_regexp_get_rex_reg_maxline()
+                            || reg_line_lbr)
+                            && (c != NL || !reg_line_lbr)
+                        {
+                            status = RA_NOMATCH;
+                        } else if reg_line_lbr {
+                            advance_reginput();
+                        } else {
+                            rs_reg_nextline();
+                        }
+                    }
+
+                    BHPOS => {
+                        let bp = nvim_regexp_get_behind_pos();
+                        if is_reg_multi {
+                            if (*bp).rs_u.pos.col
+                                != (nvim_regexp_get_rex_input()
+                                    .offset_from(nvim_regexp_get_rex_line())
+                                    as c_int)
+                                || (*bp).rs_u.pos.lnum != nvim_regexp_get_rex_lnum()
+                            {
+                                status = RA_NOMATCH;
+                            }
+                        } else if (*bp).rs_u.ptr != nvim_regexp_get_rex_input() {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
+                    RE_COMPOSING => {
+                        // Skip composing characters.
+                        while utf_iscomposing_legacy(utf_ptr2char(
+                            nvim_regexp_get_rex_input().cast::<c_char>(),
+                        )) != 0
+                        {
+                            let inp = nvim_regexp_get_rex_input();
+                            let len = utf_ptr2len(inp.cast::<c_char>());
+                            nvim_regexp_set_rex_input(inp.add(len as usize));
+                        }
+                    }
+
+                    BACK => {
+                        // Check if we don't keep looping without matching input.
+                        let bp_data = nvim_regexp_get_backpos_data().cast::<BackposT>();
+                        let bp_len = nvim_regexp_get_backpos_len()
+                            / std::mem::size_of::<BackposT>() as c_int;
+                        let mut i = 0;
+                        while i < bp_len {
+                            if (*bp_data.add(i as usize)).bp_scan == scan {
+                                break;
+                            }
+                            i += 1;
+                        }
+                        if i == bp_len {
+                            // First time: add new entry.
+                            nvim_regexp_call_ga_grow_backpos(
+                                std::mem::size_of::<BackposT>() as c_int
+                            );
+                            let bp_data = nvim_regexp_get_backpos_data().cast::<BackposT>();
+                            (*bp_data.add(i as usize)).bp_scan = scan;
+                            nvim_regexp_set_backpos_len(
+                                nvim_regexp_get_backpos_len()
+                                    + std::mem::size_of::<BackposT>() as c_int,
+                            );
+                        } else if rs_reg_save_equal(std::ptr::from_ref::<RegsaveT>(
+                            &(*bp_data.add(i as usize)).bp_pos,
+                        )) != 0
+                        {
+                            // Still at same position, fail.
+                            status = RA_NOMATCH;
+                        }
+
+                        debug_assert!(status != RA_FAIL);
+                        if status != RA_NOMATCH {
+                            rs_reg_save(
+                                std::ptr::from_mut::<RegsaveT>(
+                                    &mut (*bp_data.add(i as usize)).bp_pos,
+                                ),
+                                nvim_regexp_get_backpos_len(),
+                            );
+                        }
+                    }
+
+                    END => {
+                        status = RA_MATCH;
+                    }
+
+                    _ => {
+                        // Unimplemented opcode — panic to catch missing cases during dev.
+                        panic!("rs_regmatch: unimplemented opcode {opc}");
+                    }
+                }
+            }
+
+            // If we can't continue sequentially, break the inner loop.
+            if status != RA_CONT {
+                break;
+            }
+
+            // Continue in inner loop, advance to next item.
+            scan = next;
+        } // end of inner loop
+
+        // If there is something on the regstack, execute backtracking handlers.
+        while nvim_regexp_get_regstack_len() > 0 && status != RA_FAIL {
+            let rp = (nvim_regexp_get_regstack_data().add(nvim_regexp_get_regstack_len() as usize))
+                .cast::<RegitemT>()
+                .sub(1);
+
+            match (*rp).rs_state {
+                RS_NOPEN => {
+                    // Result is passed on as-is, simply pop the state.
+                    regstack_pop(&mut scan);
+                }
+
+                _ => {
+                    // Unimplemented backtracking handler — panic.
+                    panic!(
+                        "rs_regmatch: unimplemented backtrack state {}",
+                        (*rp).rs_state
+                    );
+                }
+            }
+
+            // If we want to continue the inner loop or didn't pop a state, break.
+            if status == RA_CONT
+                || rp
+                    == (nvim_regexp_get_regstack_data()
+                        .add(nvim_regexp_get_regstack_len() as usize))
+                    .cast::<RegitemT>()
+                    .sub(1)
+            {
+                break;
+            }
+        }
+
+        // May need to continue with the inner loop.
+        if status == RA_CONT {
+            continue;
+        }
+
+        // If the regstack is empty or something failed we are done.
+        if nvim_regexp_get_regstack_len() == 0 || status == RA_FAIL {
+            if scan.is_null() {
+                nvim_regexp_iemsg_re_corr();
+            }
+            return c_int::from(status == RA_MATCH);
+        }
+    }
 }
 
 #[cfg(test)]
