@@ -1123,3 +1123,14 @@ hello world	hello world test
 [[:punct:]]\+	hello!@#world
 [[:space:]]\+
 [[:xdigit:]]\+	0123456789abcdefABCDEF
+# Phase 8.2: Submatch helpers and backref matching patterns
+\(foo\)\1	foofoo
+\(ab\)\(cd\)\1\2	abcdabcd
+\(hello\) \1	hello hello world
+\(a*\)\1	aaaa
+\(\w\+\) \1	the the quick
+\z(test\)	test
+\(.\{2,4}\)\1	abcabc
+\(a\|b\)\1	aa
+\([[:alpha:]]\+\)\1	abcabc
+\v(\w+) \1	hello hello

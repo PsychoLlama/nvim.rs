@@ -10075,6 +10075,187 @@ pub const unsafe extern "C" fn rs_nfa_re_num_cmp(val: usize, op: c_int, pos: usi
     result as c_int
 }
 
+// ============================================================================
+// NFA Execution Engine — Phase 8.2: Submatch helpers and backref matching
+// ============================================================================
+
+/// Opaque handle types for NFA execution data structures.
+type RegsubHandle = *mut c_void; // regsub_T*
+type NfaPimHandle = *mut c_void; // nfa_pim_T*
+type NfaListHandle = *mut c_void; // nfa_list_T*
+type RegsubsHandle = *mut c_void; // regsubs_T*
+
+/// NFA PIM result constants.
+const NFA_PIM_UNUSED: c_int = 0;
+
+extern "C" {
+    // regsub_T field accessors
+    fn nvim_regexp_regsub_get_in_use(sub: *mut c_void) -> c_int;
+    fn nvim_regexp_regsub_get_multi_start_lnum(sub: *mut c_void, idx: c_int) -> i32;
+    fn nvim_regexp_regsub_get_multi_start_col(sub: *mut c_void, idx: c_int) -> i32;
+    fn nvim_regexp_regsub_get_multi_end_lnum(sub: *mut c_void, idx: c_int) -> i32;
+    fn nvim_regexp_regsub_get_multi_end_col(sub: *mut c_void, idx: c_int) -> i32;
+    fn nvim_regexp_regsub_get_line_start(sub: *mut c_void, idx: c_int) -> *mut u8;
+    fn nvim_regexp_regsub_get_line_end(sub: *mut c_void, idx: c_int) -> *mut u8;
+
+    // nfa_pim_T field accessors
+    fn nvim_nfa_pim_get_result(pim: NfaPimHandle) -> c_int;
+    fn nvim_nfa_pim_get_state_id(pim: NfaPimHandle) -> c_int;
+    fn nvim_nfa_pim_get_end_pos_lnum(pim: NfaPimHandle) -> i32;
+    fn nvim_nfa_pim_get_end_pos_col(pim: NfaPimHandle) -> i32;
+    fn nvim_nfa_pim_get_end_ptr(pim: NfaPimHandle) -> *mut u8;
+
+    // nfa_list_T / nfa_thread_T read accessors
+    fn nvim_nfa_list_get_n(l: NfaListHandle) -> c_int;
+    fn nvim_nfa_thread_get_state_id(l: NfaListHandle, idx: c_int) -> c_int;
+    fn nvim_nfa_thread_get_subs_norm(l: NfaListHandle, idx: c_int) -> *mut c_void;
+    fn nvim_nfa_thread_get_subs_synt(l: NfaListHandle, idx: c_int) -> *mut c_void;
+    fn nvim_nfa_thread_get_pim_ptr(l: NfaListHandle, idx: c_int) -> NfaPimHandle;
+
+    // C wrapper functions for complex operations
+    fn nvim_regexp_call_sub_equal(sub1: *mut c_void, sub2: *mut c_void) -> c_int;
+    fn nvim_regexp_call_match_backref(
+        sub: *mut c_void,
+        subidx: c_int,
+        bytelen: *mut c_int,
+    ) -> c_int;
+    fn nvim_regexp_call_match_zref(subidx: c_int, bytelen: *mut c_int) -> c_int;
+    fn nvim_regexp_call_find_match_text(
+        startcol: *mut c_int,
+        regstart: c_int,
+        match_text: *mut u8,
+    ) -> c_int;
+    fn nvim_regexp_call_skip_to_start(c: c_int, colp: *mut c_int) -> c_int;
+    fn nvim_regexp_call_nfa_did_time_out() -> c_int;
+
+    // rex NFA state accessors
+    fn nvim_regexp_get_nfa_has_zsubexpr() -> c_int;
+    fn nvim_nfa_list_get_id(l: NfaListHandle) -> c_int;
+
+    // NFA execution globals
+    fn nvim_regexp_get_nfa_match() -> c_int;
+    fn nvim_regexp_set_nfa_match(v: c_int);
+    fn nvim_regexp_get_nfa_ll_index() -> c_int;
+    fn nvim_regexp_set_nfa_ll_index(v: c_int);
+}
+
+/// Return true if "one" and "two" PIM states are equal.
+/// That includes when both are unused (not set).
+#[no_mangle]
+pub unsafe extern "C" fn rs_pim_equal(one: NfaPimHandle, two: NfaPimHandle) -> c_int {
+    let one_unused = one.is_null() || nvim_nfa_pim_get_result(one) == NFA_PIM_UNUSED;
+    let two_unused = two.is_null() || nvim_nfa_pim_get_result(two) == NFA_PIM_UNUSED;
+
+    if one_unused {
+        return two_unused as c_int;
+    }
+    if two_unused {
+        return 0;
+    }
+    // compare state id
+    if nvim_nfa_pim_get_state_id(one) != nvim_nfa_pim_get_state_id(two) {
+        return 0;
+    }
+    // compare position
+    if nvim_regexp_is_reg_multi() != 0 {
+        return (nvim_nfa_pim_get_end_pos_lnum(one) == nvim_nfa_pim_get_end_pos_lnum(two)
+            && nvim_nfa_pim_get_end_pos_col(one) == nvim_nfa_pim_get_end_pos_col(two))
+            as c_int;
+    }
+    (nvim_nfa_pim_get_end_ptr(one) == nvim_nfa_pim_get_end_ptr(two)) as c_int
+}
+
+/// Check if "state" with "subs" is already in list "l", considering PIM.
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_state_with_pos(
+    l: NfaListHandle,
+    state_id: c_int,
+    subs_norm: *mut c_void,
+    subs_synt: *mut c_void,
+    pim: NfaPimHandle,
+) -> c_int {
+    let n = nvim_nfa_list_get_n(l);
+    for i in 0..n {
+        if nvim_nfa_thread_get_state_id(l, i) != state_id {
+            continue;
+        }
+        if nvim_regexp_call_sub_equal(nvim_nfa_thread_get_subs_norm(l, i), subs_norm) == 0 {
+            continue;
+        }
+        if nvim_regexp_get_nfa_has_zsubexpr() != 0
+            && nvim_regexp_call_sub_equal(nvim_nfa_thread_get_subs_synt(l, i), subs_synt) == 0
+        {
+            continue;
+        }
+        if rs_pim_equal(nvim_nfa_thread_get_pim_ptr(l, i), pim) != 0 {
+            return 1;
+        }
+    }
+    0
+}
+
+/// Return true if "state" is already in list "l".
+#[no_mangle]
+pub unsafe extern "C" fn rs_state_in_list(
+    l: NfaListHandle,
+    state: NfaStateHandle,
+    subs_norm: *mut c_void,
+    subs_synt: *mut c_void,
+) -> c_int {
+    let ll_index = nvim_regexp_get_nfa_ll_index();
+    if nvim_nfa_state_get_lastlist(state, ll_index) == nvim_nfa_list_get_id(l)
+        && (nvim_regexp_get_rex_nfa_has_backref() == 0
+            || rs_has_state_with_pos(
+                l,
+                nvim_nfa_state_get_id(state),
+                subs_norm,
+                subs_synt,
+                core::ptr::null_mut(),
+            ) != 0)
+    {
+        return 1;
+    }
+    0
+}
+
+/// Wrapper: check for a match with subexpression "subidx".
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_backref(
+    sub: *mut c_void,
+    subidx: c_int,
+    bytelen: *mut c_int,
+) -> c_int {
+    nvim_regexp_call_match_backref(sub, subidx, bytelen)
+}
+
+/// Wrapper: check for a match with \z subexpression "subidx".
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_zref(subidx: c_int, bytelen: *mut c_int) -> c_int {
+    nvim_regexp_call_match_zref(subidx, bytelen)
+}
+
+/// Wrapper: check for a match with `match_text`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_match_text(
+    startcol: *mut c_int,
+    regstart: c_int,
+    match_text: *mut u8,
+) -> c_int {
+    nvim_regexp_call_find_match_text(startcol, regstart, match_text)
+}
+
+/// Wrapper: skip until the char "c" we know a match must start with.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_to_start(c: c_int, colp: *mut c_int) -> c_int {
+    nvim_regexp_call_skip_to_start(c, colp)
+}
+
+/// Wrapper: check if NFA execution has timed out.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_did_time_out() -> c_int {
+    nvim_regexp_call_nfa_did_time_out()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

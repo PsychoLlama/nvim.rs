@@ -4768,7 +4768,38 @@ void nvim_regexp_siemsg_ill_char_class(int64_t cls)
   siemsg(_(e_ill_char_class), cls);
 }
 
-// --- End NFA Execution accessor functions ---
+// --- Phase 8.2: Submatch/comparison C wrappers for Rust FFI ---
+
+// regsub_T field accessors
+int nvim_regexp_regsub_get_in_use(void *sub) { return ((regsub_T *)sub)->in_use; }
+int32_t nvim_regexp_regsub_get_multi_start_lnum(void *sub, int idx) { return (int32_t)((regsub_T *)sub)->list.multi[idx].start_lnum; }
+int32_t nvim_regexp_regsub_get_multi_start_col(void *sub, int idx) { return (int32_t)((regsub_T *)sub)->list.multi[idx].start_col; }
+int32_t nvim_regexp_regsub_get_multi_end_lnum(void *sub, int idx) { return (int32_t)((regsub_T *)sub)->list.multi[idx].end_lnum; }
+int32_t nvim_regexp_regsub_get_multi_end_col(void *sub, int idx) { return (int32_t)((regsub_T *)sub)->list.multi[idx].end_col; }
+uint8_t *nvim_regexp_regsub_get_line_start(void *sub, int idx) { return ((regsub_T *)sub)->list.line[idx].start; }
+uint8_t *nvim_regexp_regsub_get_line_end(void *sub, int idx) { return ((regsub_T *)sub)->list.line[idx].end; }
+
+// nfa_pim_T field accessors
+int nvim_nfa_pim_get_result(void *pim) { return ((nfa_pim_T *)pim)->result; }
+int nvim_nfa_pim_get_state_id(void *pim) { return ((nfa_pim_T *)pim)->state->id; }
+int32_t nvim_nfa_pim_get_end_pos_lnum(void *pim) { return (int32_t)((nfa_pim_T *)pim)->end.pos.lnum; }
+int32_t nvim_nfa_pim_get_end_pos_col(void *pim) { return (int32_t)((nfa_pim_T *)pim)->end.pos.col; }
+uint8_t *nvim_nfa_pim_get_end_ptr(void *pim) { return ((nfa_pim_T *)pim)->end.ptr; }
+
+// nfa_list_T / nfa_thread_T read accessors
+int nvim_nfa_list_get_n(void *l) { return ((nfa_list_T *)l)->n; }
+int nvim_nfa_list_get_id(void *l) { return ((nfa_list_T *)l)->id; }
+int nvim_nfa_thread_get_state_id(void *l, int idx) { return ((nfa_list_T *)l)->t[idx].state->id; }
+void *nvim_nfa_thread_get_subs_norm(void *l, int idx) { return (void *)&((nfa_list_T *)l)->t[idx].subs.norm; }
+void *nvim_nfa_thread_get_subs_synt(void *l, int idx) { return (void *)&((nfa_list_T *)l)->t[idx].subs.synt; }
+void *nvim_nfa_thread_get_pim_ptr(void *l, int idx) { return (void *)&((nfa_list_T *)l)->t[idx].pim; }
+
+int nvim_regexp_get_nfa_has_zsubexpr(void) { return rex.nfa_has_zsubexpr; }
+
+// --- End Phase 8.2 accessor functions (part 1: field accessors) ---
+// NOTE: C wrapper functions and nfa_match/nfa_ll_index accessors are placed
+// after the static declarations and function definitions they reference.
+// See "Phase 8.2 (part 2)" below.
 
 // Variables only used in nfa_regcomp() and descendants.
 static int nfa_re_flags;  ///< re_flags passed to nfa_regcomp().
@@ -10315,6 +10346,42 @@ static int nfa_did_time_out(void)
   }
   return false;
 }
+
+// --- Phase 8.2 (part 2): C wrapper functions for Rust FFI ---
+// Placed here after the functions they wrap are defined.
+
+int nvim_regexp_call_sub_equal(void *sub1, void *sub2)
+{
+  return sub_equal((regsub_T *)sub1, (regsub_T *)sub2) ? 1 : 0;
+}
+int nvim_regexp_call_match_backref(void *sub, int subidx, int *bytelen)
+{
+  return match_backref((regsub_T *)sub, subidx, bytelen);
+}
+int nvim_regexp_call_match_zref(int subidx, int *bytelen)
+{
+  return match_zref(subidx, bytelen);
+}
+int nvim_regexp_call_find_match_text(int *startcol, int regstart, uint8_t *match_text)
+{
+  return find_match_text(startcol, regstart, match_text);
+}
+int nvim_regexp_call_skip_to_start(int c, int *colp)
+{
+  return skip_to_start(c, colp);
+}
+int nvim_regexp_call_nfa_did_time_out(void)
+{
+  return nfa_did_time_out();
+}
+
+// NFA execution globals accessors
+int nvim_regexp_get_nfa_match(void) { return nfa_match; }
+void nvim_regexp_set_nfa_match(int v) { nfa_match = v; }
+int nvim_regexp_get_nfa_ll_index(void) { return nfa_ll_index; }
+void nvim_regexp_set_nfa_ll_index(int v) { nfa_ll_index = v; }
+
+// --- End Phase 8.2 (part 2) ---
 
 /// Main matching routine.
 ///
