@@ -73,6 +73,10 @@ extern "C" {
     // Memory allocation
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
+
+    // re_mult_next accessors
+    fn nvim_regexp_set_rc_did_emsg(v: c_int);
+    fn nvim_regexp_semsg_e888(what: *const c_char);
 }
 
 // Characters always special inside [] ranges
@@ -1066,6 +1070,20 @@ pub unsafe extern "C" fn rs_unref_extmatch(em: *mut RegExtmatchT) {
     }
 }
 
+// --- re_mult_next ---
+
+/// Check that a multi-operator does not follow an invalid context.
+/// Returns `true` if OK, `false` if error (emits E888).
+#[no_mangle]
+pub unsafe extern "C" fn rs_re_mult_next(what: *const c_char) -> bool {
+    if rs_re_multi_type(rs_peekchr()) == MULTI_MULT {
+        nvim_regexp_semsg_e888(what);
+        nvim_regexp_set_rc_did_emsg(1);
+        return false;
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1317,6 +1335,24 @@ mod tests {
     fn test_getoctchrs_max3() {
         // At most 3 octal digits consumed
         assert_eq!(getoctchrs_core(b"1234"), (0o123, 3));
+    }
+
+    // --- re_mult_next logic tests ---
+
+    #[test]
+    fn test_re_mult_next_multi_mult_detected() {
+        // MULTI_MULT characters should trigger the error path
+        assert_eq!(rs_re_multi_type(magic(b'*')), MULTI_MULT);
+        assert_eq!(rs_re_multi_type(magic(b'+')), MULTI_MULT);
+        assert_eq!(rs_re_multi_type(magic(b'{')), MULTI_MULT);
+    }
+
+    #[test]
+    fn test_re_mult_next_non_multi_passes() {
+        // Non-MULTI_MULT characters should pass (re_mult_next returns true)
+        assert_ne!(rs_re_multi_type(magic(b'@')), MULTI_MULT); // MULTI_ONE
+        assert_ne!(rs_re_multi_type(b'a' as c_int), MULTI_MULT); // NOT_MULTI
+        assert_ne!(rs_re_multi_type(0), MULTI_MULT); // NOT_MULTI
     }
 
     // --- extmatch tests ---

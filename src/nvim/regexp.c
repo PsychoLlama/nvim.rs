@@ -65,6 +65,7 @@ extern void rs_get_cpo_flags(void);
 extern reg_extmatch_T *rs_make_extmatch(void);
 extern reg_extmatch_T *rs_ref_extmatch(reg_extmatch_T *em);
 extern void rs_unref_extmatch(reg_extmatch_T *em);
+extern bool rs_re_mult_next(const char *what);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -900,6 +901,12 @@ static bool rex_in_use = false;
 int nvim_regexp_get_rex_reg_ic(void) { return rex.reg_ic; }
 int nvim_regexp_get_rex_reg_icombine(void) { return rex.reg_icombine; }
 
+void nvim_regexp_set_rc_did_emsg(int v) { rc_did_emsg = (bool)v; }
+void nvim_regexp_semsg_e888(const char *what)
+{
+  semsg(_("E888: (NFA regexp) cannot repeat %s"), what);
+}
+
 int nvim_regexp_emsg2_fail(const char *msg, int is_magic_all)
 {
   semsg(msg, is_magic_all ? "" : "\\");
@@ -1263,12 +1270,7 @@ static int match_with_backref(linenr_T start_lnum, colnr_T start_col, linenr_T e
 /// Used in a place where no * or \+ can follow.
 static bool re_mult_next(char *what)
 {
-  if (re_multi_type(peekchr()) == MULTI_MULT) {
-    semsg(_("E888: (NFA regexp) cannot repeat %s"), what);
-    rc_did_emsg = true;
-    return false;
-  }
-  return true;
+  return rs_re_mult_next(what);
 }
 
 /// Compare two strings, ignore case if rex.reg_ic set.
