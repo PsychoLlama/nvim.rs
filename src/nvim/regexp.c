@@ -5026,6 +5026,9 @@ void *nvim_regexp_get_rex_reg_win_or_curwin(void) {
   return (void *)(rex.reg_win == NULL ? curwin : rex.reg_win);
 }
 int nvim_regexp_has_rex_reg_win(void) { return rex.reg_win != NULL ? 1 : 0; }
+int32_t nvim_regexp_get_win_line_count(void *wp) {
+  return (int32_t)((win_T *)wp)->w_buffer->b_ml.ml_line_count;
+}
 int32_t nvim_regexp_get_rex_reg_win_cursor_lnum(void) {
   return rex.reg_win != NULL ? (int32_t)rex.reg_win->w_cursor.lnum : 0;
 }

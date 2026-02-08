@@ -4935,6 +4935,7 @@ extern "C" {
     fn nvim_regexp_has_rex_reg_win() -> c_int;
     fn nvim_regexp_get_rex_reg_win_cursor_lnum() -> i32;
     fn nvim_regexp_get_rex_reg_win_cursor_col() -> i32;
+    fn nvim_regexp_get_win_line_count(wp: *mut c_void) -> i32;
 
     // Virtual column: reuse existing nvim_regexp_call_win_linetabsize (declared above)
     // reg_getline_len: reuse existing nvim_regexp_call_reg_getline_len (declared above)
@@ -5995,6 +5996,177 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         }
                     }
 
+                    // --- Phase 6: Lookaround ---
+                    NOMATCH | MATCH | SUBPAT => {
+                        let rp = regstack_push(RS_NOMATCH, scan);
+                        if rp.is_null() {
+                            status = RA_FAIL;
+                        } else {
+                            (*rp).rs_no = opc as i16;
+                            rs_reg_save(&mut (*rp).rs_un.regsave, nvim_regexp_get_backpos_len());
+                            next = operand(scan);
+                            // Continue and handle the result when done.
+                        }
+                    }
+
+                    BEHIND | NOBEHIND => {
+                        // Need a bit of room to store extra positions.
+                        if (nvim_regexp_get_regstack_len() as u32 >> 10) as i64
+                            >= nvim_regexp_get_p_mmp()
+                        {
+                            nvim_regexp_emsg_maxmempattern();
+                            status = RA_FAIL;
+                        } else {
+                            nvim_regexp_call_ga_grow_regstack(
+                                std::mem::size_of::<RegbehindT>() as c_int
+                            );
+                            nvim_regexp_set_regstack_len(
+                                nvim_regexp_get_regstack_len()
+                                    + std::mem::size_of::<RegbehindT>() as c_int,
+                            );
+                            let rp = regstack_push(RS_BEHIND1, scan);
+                            if rp.is_null() {
+                                status = RA_FAIL;
+                            } else {
+                                // Save subexpr to restore if match is not used.
+                                rs_save_subexpr(rp.cast::<RegbehindT>().sub(1));
+                                (*rp).rs_no = opc as i16;
+                                rs_reg_save(
+                                    &mut (*rp).rs_un.regsave,
+                                    nvim_regexp_get_backpos_len(),
+                                );
+                                // First try if what follows matches. If it does
+                                // then we check the behind match by looping.
+                            }
+                        }
+                    }
+
+                    // --- Phase 6: Special position opcodes ---
+                    CURSOR => {
+                        if nvim_regexp_has_rex_reg_win() == 0
+                            || nvim_regexp_get_rex_lnum() + nvim_regexp_get_rex_reg_firstlnum()
+                                != nvim_regexp_get_rex_reg_win_cursor_lnum()
+                            || (nvim_regexp_get_rex_input().offset_from(nvim_regexp_get_rex_line())
+                                as i32
+                                != nvim_regexp_get_rex_reg_win_cursor_col())
+                        {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
+                    RE_MARK => {
+                        let mark = c_int::from(*operand(scan));
+                        let cmp = c_int::from(*operand(scan).add(1));
+                        let col: usize = if is_reg_multi {
+                            nvim_regexp_get_rex_input().offset_from(nvim_regexp_get_rex_line())
+                                as usize
+                        } else {
+                            0
+                        };
+
+                        let fm = nvim_regexp_call_mark_get(mark);
+
+                        // Line may have been freed, get it again.
+                        if is_reg_multi {
+                            let new_line = nvim_regexp_call_reg_getline(nvim_regexp_get_rex_lnum())
+                                .cast::<u8>();
+                            nvim_regexp_set_rex_line(new_line);
+                            nvim_regexp_set_rex_input(new_line.add(col));
+                        }
+
+                        if fm.is_null() || nvim_regexp_get_fmark_lnum(fm) <= 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            let pos_lnum = nvim_regexp_get_fmark_lnum(fm);
+                            let pos_col_raw = nvim_regexp_get_fmark_col(fm);
+                            let rex_cur_lnum =
+                                nvim_regexp_get_rex_lnum() + nvim_regexp_get_rex_reg_firstlnum();
+                            #[allow(clippy::cast_possible_truncation)]
+                            let input_col = nvim_regexp_get_rex_input()
+                                .offset_from(nvim_regexp_get_rex_line())
+                                as i32;
+
+                            let pos_col = if pos_lnum == rex_cur_lnum && pos_col_raw == MAXCOL_I32 {
+                                nvim_regexp_call_reg_getline_len(
+                                    pos_lnum - nvim_regexp_get_rex_reg_firstlnum(),
+                                )
+                            } else {
+                                pos_col_raw
+                            };
+
+                            let fail = match pos_lnum.cmp(&rex_cur_lnum) {
+                                std::cmp::Ordering::Equal => match pos_col.cmp(&input_col) {
+                                    std::cmp::Ordering::Equal => {
+                                        cmp == i32::from(b'<') || cmp == i32::from(b'>')
+                                    }
+                                    std::cmp::Ordering::Less => cmp != i32::from(b'>'),
+                                    std::cmp::Ordering::Greater => cmp != i32::from(b'<'),
+                                },
+                                std::cmp::Ordering::Less => cmp != i32::from(b'>'),
+                                std::cmp::Ordering::Greater => cmp != i32::from(b'<'),
+                            };
+                            if fail {
+                                status = RA_NOMATCH;
+                            }
+                        }
+                    }
+
+                    RE_VISUAL => {
+                        if rs_reg_match_visual() == 0 {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
+                    RE_LNUM => {
+                        if !is_reg_multi
+                            || !re_num_cmp(
+                                (nvim_regexp_get_rex_lnum() + nvim_regexp_get_rex_reg_firstlnum())
+                                    as u32,
+                                scan,
+                            )
+                        {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
+                    RE_COL => {
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        let col = (nvim_regexp_get_rex_input()
+                            .offset_from(nvim_regexp_get_rex_line())
+                            + 1) as u32;
+                        if !re_num_cmp(col, scan) {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
+                    RE_VCOL => {
+                        let wp = nvim_regexp_get_rex_reg_win_or_curwin();
+                        let mut lnum = if is_reg_multi {
+                            nvim_regexp_get_rex_reg_firstlnum() + nvim_regexp_get_rex_lnum()
+                        } else {
+                            1
+                        };
+                        if is_reg_multi && (lnum <= 0 || lnum > nvim_regexp_get_win_line_count(wp))
+                        {
+                            lnum = 1;
+                        }
+                        #[allow(clippy::cast_possible_truncation)]
+                        let input_col = nvim_regexp_get_rex_input()
+                            .offset_from(nvim_regexp_get_rex_line())
+                            as i32;
+                        let vcol = nvim_regexp_call_win_linetabsize(
+                            wp,
+                            lnum,
+                            nvim_regexp_get_rex_line().cast::<c_char>(),
+                            input_col,
+                        );
+                        #[allow(clippy::cast_sign_loss)]
+                        let vcol_1 = (vcol + 1) as u32;
+                        if !re_num_cmp(vcol_1, scan) {
+                            status = RA_NOMATCH;
+                        }
+                    }
+
                     _ => {
                         // Unimplemented opcode — panic to catch missing cases during dev.
                         panic!("rs_regmatch: unimplemented opcode {opc}");
@@ -6096,6 +6268,186 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             (*rp).rs_scan = rs_regnext(scan);
                             rs_reg_save(&mut (*rp).rs_un.regsave, nvim_regexp_get_backpos_len());
                             scan = operand(scan);
+                        }
+                    }
+                }
+
+                // --- Phase 6: Lookaround backtracking handlers ---
+                RS_NOMATCH => {
+                    // If the operand matches for NOMATCH or doesn't match for
+                    // MATCH/SUBPAT, we fail. Otherwise backup (except SUBPAT)
+                    // and continue with the next item.
+                    let expected = if (*rp).rs_no == NOMATCH as i16 {
+                        RA_MATCH
+                    } else {
+                        RA_NOMATCH
+                    };
+                    if status == expected {
+                        status = RA_NOMATCH;
+                    } else {
+                        status = RA_CONT;
+                        if (*rp).rs_no != SUBPAT as i16 {
+                            // zero-width
+                            let mut bp_len = nvim_regexp_get_backpos_len();
+                            rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
+                            nvim_regexp_set_backpos_len(bp_len);
+                        }
+                    }
+                    regstack_pop(&mut scan);
+                    if status == RA_CONT {
+                        scan = rs_regnext(scan);
+                    }
+                }
+
+                RS_BEHIND1 => {
+                    if status == RA_NOMATCH {
+                        regstack_pop(&mut scan);
+                        nvim_regexp_set_regstack_len(
+                            nvim_regexp_get_regstack_len()
+                                - std::mem::size_of::<RegbehindT>() as c_int,
+                        );
+                    } else {
+                        // The stuff after BEHIND/NOBEHIND matches. Now try if
+                        // the behind part does (not) match before the current
+                        // position in the input.
+                        let rbp = rp.cast::<RegbehindT>().sub(1);
+
+                        // Save the position after the found match for next.
+                        rs_reg_save(&mut (*rbp).save_after, nvim_regexp_get_backpos_len());
+
+                        // Set behind_pos to where the match should end, BHPOS
+                        // will match it. Save the current value.
+                        let bp = nvim_regexp_get_behind_pos();
+                        (*rbp).save_behind = *bp;
+                        *bp = (*rp).rs_un.regsave;
+
+                        (*rp).rs_state = RS_BEHIND2;
+
+                        let mut bp_len = nvim_regexp_get_backpos_len();
+                        rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
+                        nvim_regexp_set_backpos_len(bp_len);
+                        scan = operand((*rp).rs_scan).add(4);
+                    }
+                }
+
+                RS_BEHIND2 => {
+                    // Looping for BEHIND / NOBEHIND match.
+                    let bp = nvim_regexp_get_behind_pos();
+                    let rbp = rp.cast::<RegbehindT>().sub(1);
+                    if status == RA_MATCH && rs_reg_save_equal(bp) != 0 {
+                        // Found a match that ends where "next" started.
+                        *bp = (*rbp).save_behind;
+                        if (*rp).rs_no == BEHIND as i16 {
+                            let mut bp_len = nvim_regexp_get_backpos_len();
+                            rs_reg_restore(&(*rbp).save_after, &mut bp_len);
+                            nvim_regexp_set_backpos_len(bp_len);
+                        } else {
+                            // NOBEHIND: we didn't want a match. Restore subexpr.
+                            status = RA_NOMATCH;
+                            rs_restore_subexpr(rbp);
+                        }
+                        regstack_pop(&mut scan);
+                        nvim_regexp_set_regstack_len(
+                            nvim_regexp_get_regstack_len()
+                                - std::mem::size_of::<RegbehindT>() as c_int,
+                        );
+                    } else {
+                        // No match or match doesn't end where we want it.
+                        // Go back one character. May go to previous line once.
+                        let mut no_advance = false;
+                        let limit = operand_min((*rp).rs_scan);
+                        if is_reg_multi {
+                            if limit > 0 {
+                                let ref_col =
+                                    if (*rp).rs_un.regsave.rs_u.pos.lnum < (*bp).rs_u.pos.lnum {
+                                        strlen(nvim_regexp_get_rex_line().cast::<c_char>()) as i32
+                                    } else {
+                                        (*bp).rs_u.pos.col
+                                    };
+                                if i64::from(ref_col - (*rp).rs_un.regsave.rs_u.pos.col) >= limit {
+                                    no_advance = true;
+                                }
+                            }
+                            if !no_advance && (*rp).rs_un.regsave.rs_u.pos.col == 0 {
+                                (*rp).rs_un.regsave.rs_u.pos.lnum -= 1;
+                                if (*rp).rs_un.regsave.rs_u.pos.lnum < (*bp).rs_u.pos.lnum
+                                    || nvim_regexp_call_reg_getline(
+                                        (*rp).rs_un.regsave.rs_u.pos.lnum,
+                                    )
+                                    .is_null()
+                                {
+                                    no_advance = true;
+                                } else {
+                                    let mut bp_len = nvim_regexp_get_backpos_len();
+                                    rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
+                                    nvim_regexp_set_backpos_len(bp_len);
+                                    #[allow(clippy::cast_possible_truncation)]
+                                    let line_len =
+                                        strlen(nvim_regexp_get_rex_line().cast::<c_char>()) as i32;
+                                    (*rp).rs_un.regsave.rs_u.pos.col = line_len;
+                                }
+                            } else if !no_advance {
+                                let line =
+                                    nvim_regexp_call_reg_getline((*rp).rs_un.regsave.rs_u.pos.lnum)
+                                        .cast::<u8>();
+                                let col = (*rp).rs_un.regsave.rs_u.pos.col;
+                                let head = utf_head_off(
+                                    line.cast::<c_char>(),
+                                    line.add(col as usize - 1).cast::<c_char>(),
+                                );
+                                (*rp).rs_un.regsave.rs_u.pos.col -= head + 1;
+                            }
+                        } else {
+                            // Single-line mode.
+                            if (*rp).rs_un.regsave.rs_u.ptr == nvim_regexp_get_rex_line() {
+                                no_advance = true;
+                            } else {
+                                let backed = mb_ptr_back(
+                                    nvim_regexp_get_rex_line(),
+                                    (*rp).rs_un.regsave.rs_u.ptr,
+                                );
+                                (*rp).rs_un.regsave.rs_u.ptr = backed;
+                                if limit > 0
+                                    && (*bp).rs_u.ptr.offset_from((*rp).rs_un.regsave.rs_u.ptr)
+                                        > limit as isize
+                                {
+                                    no_advance = true;
+                                }
+                            }
+                        }
+                        if no_advance {
+                            // Can't advance. For NOBEHIND that's a match.
+                            *bp = (*rbp).save_behind;
+                            if (*rp).rs_no == NOBEHIND as i16 {
+                                let mut bp_len = nvim_regexp_get_backpos_len();
+                                rs_reg_restore(&(*rbp).save_after, &mut bp_len);
+                                nvim_regexp_set_backpos_len(bp_len);
+                                status = RA_MATCH;
+                            } else {
+                                // We do want a proper match. Restore subexpr if
+                                // we had a match, because they may have been set.
+                                if status == RA_MATCH {
+                                    status = RA_NOMATCH;
+                                    rs_restore_subexpr(rp.cast::<RegbehindT>().sub(1));
+                                }
+                            }
+                            regstack_pop(&mut scan);
+                            nvim_regexp_set_regstack_len(
+                                nvim_regexp_get_regstack_len()
+                                    - std::mem::size_of::<RegbehindT>() as c_int,
+                            );
+                        } else {
+                            // Advanced, prepare for finding match again.
+                            let mut bp_len = nvim_regexp_get_backpos_len();
+                            rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
+                            nvim_regexp_set_backpos_len(bp_len);
+                            scan = operand((*rp).rs_scan).add(4);
+                            if status == RA_MATCH {
+                                // We did match, so subexpr may have been changed,
+                                // need to restore them for the next try.
+                                status = RA_NOMATCH;
+                                rs_restore_subexpr(rp.cast::<RegbehindT>().sub(1));
+                            }
                         }
                     }
                 }
