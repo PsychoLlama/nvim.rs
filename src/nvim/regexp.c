@@ -86,6 +86,12 @@ extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
 extern int rs_bt_regexec_both(uint8_t *line, int32_t startcol, void *tm, int *timed_out);
 extern void rs_vim_regfree(void *prog);
 extern void rs_free_regexp_stuff(void);
+extern int rs_vim_regexec_string(void *rmp, const uint8_t *line, int32_t col, int nl);
+extern int rs_vim_regexec(void *rmp, const uint8_t *line, int32_t col);
+extern int rs_vim_regexec_nl(void *rmp, const uint8_t *line, int32_t col);
+extern int rs_vim_regexec_prog(void **prog_ptr, int ignore_case, const uint8_t *line, int32_t col);
+extern int rs_vim_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
+                                int32_t col, void *tm, int *timed_out);
 // Rust FFI: node management and compilation infrastructure
 extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
 extern void rs_regc(int b);
@@ -10696,6 +10702,104 @@ void nvim_regexp_call_free_regexp_stuff(void) {
 
 // --- End Phase 9.3 ---
 
+// Phase 9.4: vim_regexec public API accessors
+
+// rex save/restore: opaque buffer approach
+// Rust stack-allocates a buffer of this size to save/restore rex + rex_in_use.
+size_t nvim_regexp_get_rex_save_size(void) {
+  return sizeof(regexec_T) + sizeof(bool);
+}
+
+void nvim_regexp_save_rex(void *out_buf) {
+  char *p = (char *)out_buf;
+  memcpy(p, &rex, sizeof(rex));
+  memcpy(p + sizeof(rex), &rex_in_use, sizeof(rex_in_use));
+}
+
+void nvim_regexp_restore_rex(const void *saved_buf) {
+  const char *p = (const char *)saved_buf;
+  memcpy(&rex, p, sizeof(rex));
+  memcpy(&rex_in_use, p + sizeof(rex), sizeof(rex_in_use));
+}
+
+int nvim_regexp_get_rex_in_use(void) { return rex_in_use ? 1 : 0; }
+void nvim_regexp_set_rex_in_use(int v) { rex_in_use = (bool)v; }
+
+// Clear rex pointer fields
+void nvim_regexp_clear_rex_pointers(void) {
+  rex.reg_startp = NULL;
+  rex.reg_endp = NULL;
+  rex.reg_startpos = NULL;
+  rex.reg_endpos = NULL;
+}
+
+// Engine vtable dispatch
+int nvim_regexp_call_engine_regexec_nl(void *prog, void *rmp, uint8_t *line, int32_t col, int nl) {
+  return ((regprog_T *)prog)->engine->regexec_nl(
+    (regmatch_T *)rmp, line, (colnr_T)col, (bool)nl);
+}
+
+int nvim_regexp_call_engine_regexec_multi(void *prog, void *rmp, void *win, void *buf,
+                                          int32_t lnum, int32_t col, void *tm, int *timed_out) {
+  return ((regprog_T *)prog)->engine->regexec_multi(
+    (regmmatch_T *)rmp, (win_T *)win, (buf_T *)buf, (linenr_T)lnum, (colnr_T)col,
+    (proftime_T *)tm, timed_out);
+}
+
+// regprog_T field accessors
+int nvim_regprog_get_re_in_use(const void *prog) { return ((const regprog_T *)prog)->re_in_use ? 1 : 0; }
+void nvim_regprog_set_re_in_use(void *prog, int v) { ((regprog_T *)prog)->re_in_use = (bool)v; }
+unsigned nvim_regprog_get_re_engine(const void *prog) { return ((const regprog_T *)prog)->re_engine; }
+unsigned nvim_regprog_get_re_flags(const void *prog) { return ((const regprog_T *)prog)->re_flags; }
+
+// regmatch_T field accessors
+void *nvim_regmatch_get_regprog(const void *rmp) { return ((const regmatch_T *)rmp)->regprog; }
+void nvim_regmatch_set_regprog(void *rmp, void *prog) { ((regmatch_T *)rmp)->regprog = (regprog_T *)prog; }
+int nvim_regmatch_get_rm_ic(const void *rmp) { return ((const regmatch_T *)rmp)->rm_ic ? 1 : 0; }
+
+// regmmatch_T field accessors
+void *nvim_regmmatch_get_regprog(const void *rmp) { return ((const regmmatch_T *)rmp)->regprog; }
+void nvim_regmmatch_set_regprog(void *rmp, void *prog) { ((regmmatch_T *)rmp)->regprog = (regprog_T *)prog; }
+
+// p_re option
+int32_t nvim_regexp_get_p_re(void) { return (int32_t)p_re; }
+void nvim_regexp_set_p_re(int32_t v) { p_re = (long)v; }
+
+// nfa_regprog_T pattern accessor
+const char *nvim_nfa_prog_get_pattern(const void *prog) {
+  return ((const nfa_regprog_T *)prog)->pattern;
+}
+
+// reg_do_extmatch setter
+void nvim_regexp_set_reg_do_extmatch(int v) { reg_do_extmatch = v; }
+
+// report_re_switch
+void nvim_regexp_call_report_re_switch(const char *pat) { report_re_switch(pat); }
+
+// vim_regcomp/vim_regfree calls (for NFA_TOO_EXPENSIVE recompile)
+void *nvim_regexp_call_vim_regcomp(const char *pat, int re_flags) {
+  return vim_regcomp(pat, re_flags);
+}
+void nvim_regexp_call_vim_regfree(void *prog) {
+  vim_regfree((regprog_T *)prog);
+}
+
+// Emit e_recursive error
+void nvim_regexp_call_emsg_recursive(void) { emsg(_(e_recursive)); }
+
+// regmatch_T size for Rust stack allocation
+size_t nvim_regexp_get_regmatch_size(void) { return sizeof(regmatch_T); }
+
+// Initialize a regmatch_T buffer with prog and rm_ic
+void nvim_regexp_init_regmatch(void *buf, void *prog, int rm_ic) {
+  regmatch_T *rmp = (regmatch_T *)buf;
+  memset(rmp, 0, sizeof(regmatch_T));
+  rmp->regprog = (regprog_T *)prog;
+  rmp->rm_ic = (bool)rm_ic;
+}
+
+// --- End Phase 9.4 ---
+
 /// Main matching routine.
 ///
 /// Run NFA to determine whether it matches rex.input.
@@ -12704,74 +12808,21 @@ static void report_re_switch(const char *pat)
 /// @return true if there is a match, false if not.
 static bool vim_regexec_string(regmatch_T *rmp, const char *line, colnr_T col, bool nl)
 {
-  regexec_T rex_save;
-  bool rex_in_use_save = rex_in_use;
-
-  // Cannot use the same prog recursively, it contains state.
-  if (rmp->regprog->re_in_use) {
-    emsg(_(e_recursive));
-    return false;
-  }
-  rmp->regprog->re_in_use = true;
-
-  if (rex_in_use) {
-    // Being called recursively, save the state.
-    rex_save = rex;
-  }
-  rex_in_use = true;
-
-  rex.reg_startp = NULL;
-  rex.reg_endp = NULL;
-  rex.reg_startpos = NULL;
-  rex.reg_endpos = NULL;
-
-  int result = rmp->regprog->engine->regexec_nl(rmp, (uint8_t *)line, col, nl);
-  rmp->regprog->re_in_use = false;
-
-  // NFA engine aborted because it's very slow, use backtracking engine instead.
-  if (rmp->regprog->re_engine == AUTOMATIC_ENGINE
-      && result == NFA_TOO_EXPENSIVE) {
-    int save_p_re = (int)p_re;
-    int re_flags = (int)rmp->regprog->re_flags;
-    char *pat = xstrdup(((nfa_regprog_T *)rmp->regprog)->pattern);
-
-    p_re = BACKTRACKING_ENGINE;
-    vim_regfree(rmp->regprog);
-    report_re_switch(pat);
-    rmp->regprog = vim_regcomp(pat, re_flags);
-    if (rmp->regprog != NULL) {
-      rmp->regprog->re_in_use = true;
-      result = rmp->regprog->engine->regexec_nl(rmp, (uint8_t *)line, col, nl);
-      rmp->regprog->re_in_use = false;
-    }
-
-    xfree(pat);
-    p_re = save_p_re;
-  }
-
-  rex_in_use = rex_in_use_save;
-  if (rex_in_use) {
-    rex = rex_save;
-  }
-
-  return result > 0;
+  return rs_vim_regexec_string(rmp, (const uint8_t *)line, col, nl) > 0;
 }
 
 // Note: "*prog" may be freed and changed.
 // Return true if there is a match, false if not.
 bool vim_regexec_prog(regprog_T **prog, bool ignore_case, const char *line, colnr_T col)
 {
-  regmatch_T regmatch = { .regprog = *prog, .rm_ic = ignore_case };
-  bool r = vim_regexec_string(&regmatch, line, col, false);
-  *prog = regmatch.regprog;
-  return r;
+  return rs_vim_regexec_prog((void **)prog, ignore_case, (const uint8_t *)line, col) > 0;
 }
 
 // Note: "rmp->regprog" may be freed and changed.
 // Return true if there is a match, false if not.
 bool vim_regexec(regmatch_T *rmp, const char *line, colnr_T col)
 {
-  return vim_regexec_string(rmp, line, col, false);
+  return rs_vim_regexec(rmp, (const uint8_t *)line, col) > 0;
 }
 
 // Like vim_regexec(), but consider a "\n" in "line" to be a line break.
@@ -12779,7 +12830,7 @@ bool vim_regexec(regmatch_T *rmp, const char *line, colnr_T col)
 // Return true if there is a match, false if not.
 bool vim_regexec_nl(regmatch_T *rmp, const char *line, colnr_T col)
 {
-  return vim_regexec_string(rmp, line, col, true);
+  return rs_vim_regexec_nl(rmp, (const uint8_t *)line, col) > 0;
 }
 
 /// Match a regexp against multiple lines.
@@ -12800,62 +12851,5 @@ int vim_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum, c
                       proftime_T *tm, int *timed_out)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  regexec_T rex_save;
-  bool rex_in_use_save = rex_in_use;
-
-  // Cannot use the same prog recursively, it contains state.
-  if (rmp->regprog->re_in_use) {
-    emsg(_(e_recursive));
-    return false;
-  }
-  rmp->regprog->re_in_use = true;
-
-  if (rex_in_use) {
-    // Being called recursively, save the state.
-    rex_save = rex;
-  }
-  rex_in_use = true;
-
-  int result = rmp->regprog->engine->regexec_multi(rmp, win, buf, lnum, col, tm, timed_out);
-  rmp->regprog->re_in_use = false;
-
-  // NFA engine aborted because it's very slow, use backtracking engine instead.
-  if (rmp->regprog->re_engine == AUTOMATIC_ENGINE
-      && result == NFA_TOO_EXPENSIVE) {
-    int save_p_re = (int)p_re;
-    int re_flags = (int)rmp->regprog->re_flags;
-    char *pat = xstrdup(((nfa_regprog_T *)rmp->regprog)->pattern);
-
-    p_re = BACKTRACKING_ENGINE;
-    regprog_T *prev_prog = rmp->regprog;
-
-    report_re_switch(pat);
-    // checking for \z misuse was already done when compiling for NFA,
-    // allow all here
-    reg_do_extmatch = REX_ALL;
-    rmp->regprog = vim_regcomp(pat, re_flags);
-    reg_do_extmatch = 0;
-
-    if (rmp->regprog == NULL) {
-      // Somehow compiling the pattern failed now, put back the
-      // previous one to avoid "regprog" becoming NULL.
-      rmp->regprog = prev_prog;
-    } else {
-      vim_regfree(prev_prog);
-
-      rmp->regprog->re_in_use = true;
-      result = rmp->regprog->engine->regexec_multi(rmp, win, buf, lnum, col, tm, timed_out);
-      rmp->regprog->re_in_use = false;
-    }
-
-    xfree(pat);
-    p_re = save_p_re;
-  }
-
-  rex_in_use = rex_in_use_save;
-  if (rex_in_use) {
-    rex = rex_save;
-  }
-
-  return result <= 0 ? 0 : result;
+  return rs_vim_regexec_multi(rmp, win, buf, lnum, col, (void *)tm, timed_out);
 }

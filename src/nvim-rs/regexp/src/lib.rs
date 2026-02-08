@@ -12546,6 +12546,276 @@ pub unsafe extern "C" fn rs_free_regexp_stuff() {
 
 // --- End Phase 9.3 ---
 
+// --- Phase 9.4: Public execution API ---
+
+const BACKTRACKING_ENGINE: c_int = 1;
+const REX_ALL: c_int = 3; // REX_SET(1) | REX_USE(2)
+
+extern "C" {
+    // Rex save/restore
+    fn nvim_regexp_get_rex_save_size() -> usize;
+    fn nvim_regexp_save_rex(out_buf: *mut c_void);
+    fn nvim_regexp_restore_rex(saved_buf: *const c_void);
+    fn nvim_regexp_get_rex_in_use() -> c_int;
+    fn nvim_regexp_set_rex_in_use(v: c_int);
+    fn nvim_regexp_clear_rex_pointers();
+
+    // Engine vtable dispatch
+    fn nvim_regexp_call_engine_regexec_nl(
+        prog: *mut c_void,
+        rmp: *mut c_void,
+        line: *const u8,
+        col: i32,
+        nl: c_int,
+    ) -> c_int;
+    fn nvim_regexp_call_engine_regexec_multi(
+        prog: *mut c_void,
+        rmp: *mut c_void,
+        win: *mut c_void,
+        buf: *mut c_void,
+        lnum: i32,
+        col: i32,
+        tm: *mut c_void,
+        timed_out: *mut c_int,
+    ) -> c_int;
+
+    // regprog_T field accessors
+    fn nvim_regprog_get_re_in_use(prog: *const c_void) -> c_int;
+    fn nvim_regprog_set_re_in_use(prog: *mut c_void, v: c_int);
+    fn nvim_regprog_get_re_engine(prog: *const c_void) -> c_uint;
+    fn nvim_regprog_get_re_flags(prog: *const c_void) -> c_uint;
+
+    // regmatch_T / regmmatch_T field accessors
+    fn nvim_regmatch_get_regprog(rmp: *const c_void) -> *mut c_void;
+    fn nvim_regmatch_set_regprog(rmp: *mut c_void, prog: *mut c_void);
+    fn nvim_regmmatch_get_regprog(rmp: *const c_void) -> *mut c_void;
+    fn nvim_regmmatch_set_regprog(rmp: *mut c_void, prog: *mut c_void);
+
+    // p_re option
+    fn nvim_regexp_get_p_re() -> i32;
+    fn nvim_regexp_set_p_re(v: i32);
+
+    // NFA pattern
+    fn nvim_nfa_prog_get_pattern(prog: *const c_void) -> *const c_char;
+
+    // reg_do_extmatch
+    fn nvim_regexp_set_reg_do_extmatch(v: c_int);
+
+    // Reporting and error
+    fn nvim_regexp_call_report_re_switch(pat: *const c_char);
+    fn nvim_regexp_call_vim_regcomp(pat: *const c_char, re_flags: c_int) -> *mut c_void;
+    fn nvim_regexp_call_vim_regfree(prog: *mut c_void);
+    fn nvim_regexp_call_emsg_recursive();
+
+    // regmatch_T handling for vim_regexec_prog
+    fn nvim_regexp_get_regmatch_size() -> usize;
+    fn nvim_regexp_init_regmatch(buf: *mut c_void, prog: *mut c_void, rm_ic: c_int);
+}
+
+/// Save rex state and set `rex_in_use`. Returns buffer on heap.
+unsafe fn save_rex_state() -> Vec<u8> {
+    let size = nvim_regexp_get_rex_save_size();
+    let mut buf = vec![0u8; size];
+    if nvim_regexp_get_rex_in_use() != 0 {
+        nvim_regexp_save_rex(buf.as_mut_ptr().cast::<c_void>());
+    }
+    nvim_regexp_set_rex_in_use(1);
+    buf
+}
+
+/// Restore rex state from saved buffer.
+unsafe fn restore_rex_state(buf: &[u8], was_in_use: bool) {
+    nvim_regexp_set_rex_in_use(was_in_use as c_int);
+    if was_in_use {
+        nvim_regexp_restore_rex(buf.as_ptr().cast::<c_void>());
+    }
+}
+
+/// Handle `NFA_TOO_EXPENSIVE` fallback for single-line matching.
+/// Returns the updated result after fallback attempt.
+#[allow(clippy::too_many_arguments)]
+unsafe fn handle_nfa_fallback_nl(rmp: *mut c_void, line: *const u8, col: i32, nl: c_int) -> c_int {
+    let prog = nvim_regmatch_get_regprog(rmp);
+    let save_p_re = nvim_regexp_get_p_re();
+    let re_flags = nvim_regprog_get_re_flags(prog) as c_int;
+    let pat = nvim_regexp_xstrdup(nvim_nfa_prog_get_pattern(prog));
+
+    nvim_regexp_set_p_re(BACKTRACKING_ENGINE);
+    nvim_regexp_call_vim_regfree(prog);
+    nvim_regexp_call_report_re_switch(pat);
+    let new_prog = nvim_regexp_call_vim_regcomp(pat, re_flags);
+    nvim_regmatch_set_regprog(rmp, new_prog);
+
+    let mut result: c_int = 0;
+    if !new_prog.is_null() {
+        nvim_regprog_set_re_in_use(new_prog, 1);
+        result = nvim_regexp_call_engine_regexec_nl(new_prog, rmp, line, col, nl);
+        nvim_regprog_set_re_in_use(new_prog, 0);
+    }
+
+    xfree(pat.cast::<c_void>());
+    nvim_regexp_set_p_re(save_p_re);
+    result
+}
+
+/// Handle `NFA_TOO_EXPENSIVE` fallback for multi-line matching.
+#[allow(clippy::too_many_arguments)]
+unsafe fn handle_nfa_fallback_multi(
+    rmp: *mut c_void,
+    win: *mut c_void,
+    buf: *mut c_void,
+    lnum: i32,
+    col: i32,
+    tm: *mut c_void,
+    timed_out: *mut c_int,
+) -> c_int {
+    let prog = nvim_regmmatch_get_regprog(rmp);
+    let save_p_re = nvim_regexp_get_p_re();
+    let re_flags = nvim_regprog_get_re_flags(prog) as c_int;
+    let pat = nvim_regexp_xstrdup(nvim_nfa_prog_get_pattern(prog));
+
+    nvim_regexp_set_p_re(BACKTRACKING_ENGINE);
+    let prev_prog = prog;
+
+    nvim_regexp_call_report_re_switch(pat);
+    nvim_regexp_set_reg_do_extmatch(REX_ALL);
+    let new_prog = nvim_regexp_call_vim_regcomp(pat, re_flags);
+    nvim_regexp_set_reg_do_extmatch(0);
+
+    let mut result: c_int = 0;
+    if new_prog.is_null() {
+        // Recompile failed, keep previous prog
+        nvim_regmmatch_set_regprog(rmp, prev_prog);
+    } else {
+        nvim_regmmatch_set_regprog(rmp, new_prog);
+        nvim_regexp_call_vim_regfree(prev_prog);
+
+        nvim_regprog_set_re_in_use(new_prog, 1);
+        result = nvim_regexp_call_engine_regexec_multi(
+            new_prog, rmp, win, buf, lnum, col, tm, timed_out,
+        );
+        nvim_regprog_set_re_in_use(new_prog, 0);
+    }
+
+    xfree(pat.cast::<c_void>());
+    nvim_regexp_set_p_re(save_p_re);
+    result
+}
+
+/// Core single-line regexp dispatch with recursive save/restore and NFA fallback.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regexec_string(
+    rmp: *mut c_void,
+    line: *const u8,
+    col: i32,
+    nl: c_int,
+) -> c_int {
+    let prog = nvim_regmatch_get_regprog(rmp);
+
+    // Cannot use the same prog recursively
+    if nvim_regprog_get_re_in_use(prog) != 0 {
+        nvim_regexp_call_emsg_recursive();
+        return 0;
+    }
+    nvim_regprog_set_re_in_use(prog, 1);
+
+    let was_in_use = nvim_regexp_get_rex_in_use() != 0;
+    let saved = save_rex_state();
+
+    nvim_regexp_clear_rex_pointers();
+
+    let mut result = nvim_regexp_call_engine_regexec_nl(prog, rmp, line, col, nl);
+    nvim_regprog_set_re_in_use(prog, 0);
+
+    // NFA_TOO_EXPENSIVE fallback
+    if nvim_regprog_get_re_engine(prog) == AUTOMATIC_ENGINE as c_uint && result == NFA_TOO_EXPENSIVE
+    {
+        result = handle_nfa_fallback_nl(rmp, line, col, nl);
+    }
+
+    restore_rex_state(&saved, was_in_use);
+
+    c_int::from(result > 0)
+}
+
+/// Public API: regexp match against a string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regexec(rmp: *mut c_void, line: *const u8, col: i32) -> c_int {
+    rs_vim_regexec_string(rmp, line, col, 0)
+}
+
+/// Public API: regexp match with "\n" as line break.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regexec_nl(rmp: *mut c_void, line: *const u8, col: i32) -> c_int {
+    rs_vim_regexec_string(rmp, line, col, 1)
+}
+
+/// Public API: regexp match with prog pointer indirection.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regexec_prog(
+    prog_ptr: *mut *mut c_void,
+    ignore_case: c_int,
+    line: *const u8,
+    col: i32,
+) -> c_int {
+    // Create a regmatch_T on stack via C accessor
+    let rmp_size = nvim_regexp_get_regmatch_size();
+    let mut rmp_buf = vec![0u8; rmp_size];
+    let rmp = rmp_buf.as_mut_ptr().cast::<c_void>();
+    nvim_regexp_init_regmatch(rmp, *prog_ptr, ignore_case);
+
+    let result = rs_vim_regexec_string(rmp, line, col, 0);
+
+    // Extract potentially-updated prog pointer
+    *prog_ptr = nvim_regmatch_get_regprog(rmp);
+
+    result
+}
+
+/// Public API: multi-line regexp match with NFA fallback.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regexec_multi(
+    rmp: *mut c_void,
+    win: *mut c_void,
+    buf: *mut c_void,
+    lnum: i32,
+    col: i32,
+    tm: *mut c_void,
+    timed_out: *mut c_int,
+) -> c_int {
+    let prog = nvim_regmmatch_get_regprog(rmp);
+
+    // Cannot use the same prog recursively
+    if nvim_regprog_get_re_in_use(prog) != 0 {
+        nvim_regexp_call_emsg_recursive();
+        return 0;
+    }
+    nvim_regprog_set_re_in_use(prog, 1);
+
+    let was_in_use = nvim_regexp_get_rex_in_use() != 0;
+    let saved = save_rex_state();
+
+    let mut result =
+        nvim_regexp_call_engine_regexec_multi(prog, rmp, win, buf, lnum, col, tm, timed_out);
+    nvim_regprog_set_re_in_use(prog, 0);
+
+    // NFA_TOO_EXPENSIVE fallback
+    if nvim_regprog_get_re_engine(prog) == AUTOMATIC_ENGINE as c_uint && result == NFA_TOO_EXPENSIVE
+    {
+        result = handle_nfa_fallback_multi(rmp, win, buf, lnum, col, tm, timed_out);
+    }
+
+    restore_rex_state(&saved, was_in_use);
+
+    if result <= 0 {
+        0
+    } else {
+        result
+    }
+}
+
+// --- End Phase 9.4 ---
+
 #[cfg(test)]
 mod tests {
     use super::*;
