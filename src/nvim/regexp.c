@@ -79,6 +79,9 @@ extern uint8_t *rs_regnode(int op);
 extern uint8_t *rs_regnext(uint8_t *p);
 extern void rs_regtail(uint8_t *p, const uint8_t *val);
 extern void rs_regoptail(uint8_t *p, uint8_t *val);
+extern void rs_reginsert(int op, uint8_t *opnd);
+extern void rs_reginsert_nr(int op, int64_t val, uint8_t *opnd);
+extern void rs_reginsert_limits(int op, int64_t minval, int64_t maxval, uint8_t *opnd);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -3000,52 +3003,14 @@ static void regoptail(uint8_t *p, uint8_t *val)
 // Means relocating the operand.
 static void reginsert(int op, uint8_t *opnd)
 {
-  uint8_t *src;
-  uint8_t *dst;
-  uint8_t *place;
-
-  if (regcode == JUST_CALC_SIZE) {
-    regsize += 3;
-    return;
-  }
-  src = regcode;
-  regcode += 3;
-  dst = regcode;
-  while (src > opnd) {
-    *--dst = *--src;
-  }
-
-  place = opnd;                 // Op node, where operand used to be.
-  *place++ = (uint8_t)op;
-  *place++ = NUL;
-  *place = NUL;
+  rs_reginsert(op, opnd);
 }
 
 // Insert an operator in front of already-emitted operand.
 // Add a number to the operator.
 static void reginsert_nr(int op, int64_t val, uint8_t *opnd)
 {
-  uint8_t *src;
-  uint8_t *dst;
-  uint8_t *place;
-
-  if (regcode == JUST_CALC_SIZE) {
-    regsize += 7;
-    return;
-  }
-  src = regcode;
-  regcode += 7;
-  dst = regcode;
-  while (src > opnd) {
-    *--dst = *--src;
-  }
-
-  place = opnd;                 // Op node, where operand used to be.
-  *place++ = (uint8_t)op;
-  *place++ = NUL;
-  *place++ = NUL;
-  assert(val >= 0 && (uintmax_t)val <= UINT32_MAX);
-  re_put_uint32(place, (uint32_t)val);
+  rs_reginsert_nr(op, val, opnd);
 }
 
 // Insert an operator in front of already-emitted operand.
@@ -3054,30 +3019,7 @@ static void reginsert_nr(int op, int64_t val, uint8_t *opnd)
 // Means relocating the operand.
 static void reginsert_limits(int op, int64_t minval, int64_t maxval, uint8_t *opnd)
 {
-  uint8_t *src;
-  uint8_t *dst;
-  uint8_t *place;
-
-  if (regcode == JUST_CALC_SIZE) {
-    regsize += 11;
-    return;
-  }
-  src = regcode;
-  regcode += 11;
-  dst = regcode;
-  while (src > opnd) {
-    *--dst = *--src;
-  }
-
-  place = opnd;                 // Op node, where operand used to be.
-  *place++ = (uint8_t)op;
-  *place++ = NUL;
-  *place++ = NUL;
-  assert(minval >= 0 && (uintmax_t)minval <= UINT32_MAX);
-  place = re_put_uint32(place, (uint32_t)minval);
-  assert(maxval >= 0 && (uintmax_t)maxval <= UINT32_MAX);
-  place = re_put_uint32(place, (uint32_t)maxval);
-  regtail(opnd, place);
+  rs_reginsert_limits(op, minval, maxval, opnd);
 }
 
 /// Return true if the back reference is legal. We must have seen the close

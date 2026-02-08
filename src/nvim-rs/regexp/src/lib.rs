@@ -2448,6 +2448,82 @@ pub unsafe extern "C" fn rs_regoptail(p: *mut u8, val: *mut u8) {
     rs_regtail(p.add(3), val);
 }
 
+/// Insert an operator in front of already-emitted operand.
+/// Shifts existing bytes forward by 3 using `ptr::copy` (memmove semantics),
+/// then writes the 3-byte operator node at `opnd`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reginsert(op: c_int, opnd: *mut u8) {
+    let regcode = nvim_regexp_get_regcode();
+    let just_calc_size = nvim_regexp_get_just_calc_size();
+    if regcode == just_calc_size {
+        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 3);
+        return;
+    }
+    let count = regcode.offset_from(opnd) as usize;
+    nvim_regexp_set_regcode(regcode.add(3));
+    // Shift bytes forward by 3 (overlapping — ptr::copy handles this)
+    std::ptr::copy(opnd, opnd.add(3), count);
+    // Write 3-byte operator node at opnd
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        *opnd = op as u8;
+    }
+    *opnd.add(1) = 0;
+    *opnd.add(2) = 0;
+}
+
+/// Insert an operator + 4-byte uint32 in front of already-emitted operand.
+/// Shifts existing bytes forward by 7.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reginsert_nr(op: c_int, val: i64, opnd: *mut u8) {
+    let regcode = nvim_regexp_get_regcode();
+    let just_calc_size = nvim_regexp_get_just_calc_size();
+    if regcode == just_calc_size {
+        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 7);
+        return;
+    }
+    let count = regcode.offset_from(opnd) as usize;
+    nvim_regexp_set_regcode(regcode.add(7));
+    std::ptr::copy(opnd, opnd.add(7), count);
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        *opnd = op as u8;
+    }
+    *opnd.add(1) = 0;
+    *opnd.add(2) = 0;
+    debug_assert!(u32::try_from(val).is_ok());
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    rs_re_put_uint32(opnd.add(3), val as u32);
+}
+
+/// Insert an operator + two 4-byte uint32s in front of already-emitted operand.
+/// Shifts existing bytes forward by 11, then calls `rs_regtail(opnd, place)`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reginsert_limits(op: c_int, minval: i64, maxval: i64, opnd: *mut u8) {
+    let regcode = nvim_regexp_get_regcode();
+    let just_calc_size = nvim_regexp_get_just_calc_size();
+    if regcode == just_calc_size {
+        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 11);
+        return;
+    }
+    let count = regcode.offset_from(opnd) as usize;
+    nvim_regexp_set_regcode(regcode.add(11));
+    std::ptr::copy(opnd, opnd.add(11), count);
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        *opnd = op as u8;
+    }
+    *opnd.add(1) = 0;
+    *opnd.add(2) = 0;
+    debug_assert!(u32::try_from(minval).is_ok());
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let place = rs_re_put_uint32(opnd.add(3), minval as u32);
+    debug_assert!(u32::try_from(maxval).is_ok());
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let place = rs_re_put_uint32(place, maxval as u32);
+    rs_regtail(opnd, place);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
