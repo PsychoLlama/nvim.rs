@@ -4579,8 +4579,9 @@ static const char e_ill_char_class[] = N_("E877: (NFA regexp) Invalid character 
 static const char e_value_too_large[] = N_("E951: \\% value too large");
 
 // --- Phase 3: NFA regatom accessor functions ---
-static int nfa_reg(int paren);  // forward declaration
 extern int rs_nfa_regatom(void);
+extern int rs_nfa_reg(int paren);
+extern int *rs_re2post(void);
 void nvim_regexp_emsg_nul_found(void)
 {
   emsg(_(e_nul_found));
@@ -4617,7 +4618,7 @@ void nvim_regexp_semsg_missing_value(int c)
 }
 int nvim_regexp_call_nfa_reg(int paren)
 {
-  return nfa_reg(paren);
+  return rs_nfa_reg(paren);
 }
 int nvim_regexp_call_nfa_regatom(void)
 {
@@ -4629,6 +4630,38 @@ char *nvim_regexp_get_regexp_inrange(void) { return REGEXP_INRANGE; }
 char *nvim_regexp_get_regexp_abbr(void) { return REGEXP_ABBR; }
 void nvim_regexp_set_rc_did_emsg_true(void) { rc_did_emsg = true; }
 // --- End Phase 3 accessor functions ---
+
+// --- Phase 4: NFA parser error message wrappers ---
+void nvim_regexp_semsg_e869(int op)
+{
+  semsg(_("E869: (NFA) Unknown operator '\\@%c'"), op);
+}
+void nvim_regexp_emsg_e870(void)
+{
+  emsg(_("E870: (NFA regexp) Error reading repetition limits"));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e871(void)
+{
+  emsg(_("E871: (NFA regexp) Can't have a multi follow a multi"));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e872(void)
+{
+  emsg(_("E872: (NFA regexp) Too many '('"));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e879(void)
+{
+  emsg(_("E879: (NFA regexp) Too many \\z("));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e873(void)
+{
+  emsg(_("E873: (NFA regexp) proper termination error"));
+  rc_did_emsg = true;
+}
+// --- End Phase 4 accessor functions ---
 
 // Variables only used in nfa_regcomp() and descendants.
 static int nfa_re_flags;  ///< re_flags passed to nfa_regcomp().
@@ -6792,7 +6825,20 @@ nfa_do_multibyte:
 //
 // piece   ::=      atom
 //      or  atom  multi
-static int nfa_regpiece(void)
+// nfa_reg thin wrapper — delegates to Rust
+static int nfa_reg(int paren)
+{
+  return rs_nfa_reg(paren);
+}
+
+// re2post thin wrapper — delegates to Rust
+static int *re2post(void)
+{
+  return rs_re2post();
+}
+
+#ifdef NEVER  // Kept as reference; now in Rust (Phase 4)
+static int nfa_regpiece_old(void)
 {
   int i;
   int op;
@@ -7180,6 +7226,7 @@ static int nfa_reg(int paren)
 
   return OK;
 }
+#endif  // NEVER - Phase 4 (nfa_regpiece, nfa_regconcat, nfa_regbranch, nfa_reg)
 
 #ifdef REGEXP_DEBUG
 static uint8_t code[50];
@@ -7659,9 +7706,10 @@ static void nfa_dump(nfa_regprog_T *prog)
 }
 #endif  // REGEXP_DEBUG
 
+#ifdef NEVER  // Kept as reference; now in Rust (Phase 4)
 // Parse r.e. @expr and convert it into postfix form.
 // Return the postfix string on success, NULL otherwise.
-static int *re2post(void)
+static int *re2post_old(void)
 {
   if (nfa_reg(REG_NOPAREN) == FAIL) {
     return NULL;
@@ -7669,6 +7717,7 @@ static int *re2post(void)
   EMIT(NFA_MOPEN);
   return post_start;
 }
+#endif  // NEVER - Phase 4 (re2post)
 
 // NB. Some of the code below is inspired by Russ's.
 

@@ -1030,3 +1030,39 @@ end$	end of line
 # Literal character and multibyte fallthrough
 é\+	éééfoo
 ñ	mañana
+
+# Phase 4: Quantifiers (nfa_regpiece)
+a*	aaa
+a\+	aaa
+a\?	abc
+a\{2,5}	aaaa
+a\{3}	aaaaa
+a\{2,}	aaaaaaa
+a\{,3}	aaaa
+a\{-2,5}	aaaa
+a\{-}	aaa
+# Lookahead / lookbehind (nfa_regpiece @= @! @<= @<!)
+foo\@=bar	foobar
+foo\@!baz	foobaz
+foo\@<=bar	foobar
+foo\@<!bar	bazbar
+# Concatenation (nfa_regconcat)
+abc	abcdef
+a\vb	abc
+a\Vb	a\\b
+a\mb	amb
+a\Mb	aMb
+# Branch separation (nfa_regbranch)
+a\&b	ab
+a\&a	abc
+# Alternation (nfa_reg / rs_nfa_reg)
+foo\|bar	foobar
+abc\|def\|ghi	defgh
+\(foo\|bar\)baz	foobaz
+\(foo\|bar\)baz	barbaz
+# Nested groups
+\(\(a\)\)	abc
+\(a\(b\(c\)\)\)	abcde
+# Subpattern edge cases (nfa_reg paren handling)
+\z(foo\)	foobar
+\%(foo\)bar	foobar

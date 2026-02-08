@@ -7532,10 +7532,6 @@ extern "C" {
     fn nvim_regexp_emsg_value_too_large();
     fn nvim_regexp_semsg_missing_value(c: c_int);
 
-    // Cross-language calls (temporary, resolved in Phase 4)
-    fn nvim_regexp_call_nfa_reg(paren: c_int) -> c_int;
-    fn nvim_regexp_call_nfa_regatom() -> c_int;
-
     // Data accessors
     fn nvim_regexp_get_classchars() -> *mut u8;
     fn nvim_regexp_get_nfa_classcodes(index: c_int) -> c_int;
@@ -7993,7 +7989,7 @@ pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
 
     // \(
     if c == nfa_magic(b'(') {
-        if nvim_regexp_call_nfa_reg(REG_PAREN) == FAIL {
+        if rs_nfa_reg(REG_PAREN) == FAIL {
             return FAIL;
         }
         return OK;
@@ -8134,7 +8130,7 @@ unsafe fn nfa_handle_z_atom() -> c_int {
                 nvim_regexp_emsg_e66();
                 return FAIL;
             }
-            if nvim_regexp_call_nfa_reg(REG_ZPAREN) == FAIL {
+            if rs_nfa_reg(REG_ZPAREN) == FAIL {
                 return FAIL;
             }
             nvim_regexp_set_re_has_z(REX_SET);
@@ -8155,7 +8151,7 @@ unsafe fn nfa_handle_percent_atom(save_prev_at_start: c_int) -> c_int {
 
     // \%(
     if c == b'(' as c_int {
-        if nvim_regexp_call_nfa_reg(REG_NPAREN) == FAIL {
+        if rs_nfa_reg(REG_NPAREN) == FAIL {
             return FAIL;
         }
         nfa_emit(NFA_NOPEN);
@@ -8236,7 +8232,7 @@ unsafe fn nfa_handle_percent_atom(save_prev_at_start: c_int) -> c_int {
                 return FAIL;
             }
             // recursive call
-            if nvim_regexp_call_nfa_regatom() == FAIL {
+            if rs_nfa_regatom() == FAIL {
                 return FAIL;
             }
             n += 1;
@@ -8358,6 +8354,340 @@ unsafe fn nfa_handle_percent_position(c_in: c_int, save_prev_at_start: c_int) ->
 
     nvim_regexp_semsg_e867_pct(rs_no_magic(c));
     FAIL
+}
+
+// === Phase 4: NFA Parser Functions + re2post ===
+
+const RE_AUTO: c_int = 8;
+
+extern "C" {
+    fn nvim_regexp_semsg_e869(op: c_int);
+    fn nvim_regexp_emsg_e870();
+    fn nvim_regexp_emsg_e871();
+    fn nvim_regexp_emsg_e872();
+    fn nvim_regexp_emsg_e879();
+    fn nvim_regexp_emsg_e873();
+}
+
+/// Helper: compute current postfix position index.
+#[inline]
+#[allow(clippy::cast_possible_truncation)] // postfix array index always fits in c_int
+unsafe fn post_pos() -> c_int {
+    let pos = (nvim_regexp_get_post_ptr() as usize - nvim_regexp_get_post_start() as usize)
+        / core::mem::size_of::<c_int>();
+    pos as c_int
+}
+
+/// Helper: set postfix pointer to a given index from start.
+#[inline]
+unsafe fn set_post_pos(index: c_int) {
+    nvim_regexp_set_post_ptr(nvim_regexp_get_post_start().add(index as usize));
+}
+
+/// Parse a piece (atom + optional quantifier).
+#[allow(clippy::too_many_lines, unused_assignments)]
+unsafe fn nfa_regpiece() -> c_int {
+    let mut greedy = true;
+    let mut old_state = core::mem::MaybeUninit::<ParseStateT>::uninit();
+    let mut new_state = core::mem::MaybeUninit::<ParseStateT>::uninit();
+
+    // Save parse state for \{m,n} handling
+    rs_save_parse_state(old_state.as_mut_ptr());
+
+    // Store current postfix position
+    let my_post_start = post_pos();
+
+    if rs_nfa_regatom() == FAIL {
+        return FAIL;
+    }
+
+    let mut op = rs_peekchr();
+    if rs_re_multi_type(op) == NOT_MULTI {
+        return OK;
+    }
+
+    rs_skipchr();
+    if op == nfa_magic(b'*') {
+        // *
+        nfa_emit(NFA_STAR);
+    } else if op == nfa_magic(b'+') {
+        // \+  — expand <atom>\+ to <atom><atom>*
+        rs_restore_parse_state(old_state.as_ptr());
+        nvim_regexp_set_curchr(-1);
+        if rs_nfa_regatom() == FAIL {
+            return FAIL;
+        }
+        nfa_emit(NFA_STAR);
+        nfa_emit(NFA_CONCAT);
+        rs_skipchr(); // skip the \+
+    } else if op == nfa_magic(b'@') {
+        // \@=, \@!, \@<=, \@<!, \@>
+        let c2 = rs_getdecchrs();
+        op = rs_no_magic(rs_getchr());
+        let mut i: c_int = 0;
+        if op == b'=' as c_int {
+            i = NFA_PREV_ATOM_NO_WIDTH;
+        } else if op == b'!' as c_int {
+            i = NFA_PREV_ATOM_NO_WIDTH_NEG;
+        } else if op == b'<' as c_int {
+            op = rs_no_magic(rs_getchr());
+            if op == b'=' as c_int {
+                i = NFA_PREV_ATOM_JUST_BEFORE;
+            } else if op == b'!' as c_int {
+                i = NFA_PREV_ATOM_JUST_BEFORE_NEG;
+            }
+        } else if op == b'>' as c_int {
+            i = NFA_PREV_ATOM_LIKE_PATTERN;
+        }
+        if i == 0 {
+            nvim_regexp_semsg_e869(op);
+            return FAIL;
+        }
+        nfa_emit(i);
+        if i == NFA_PREV_ATOM_JUST_BEFORE || i == NFA_PREV_ATOM_JUST_BEFORE_NEG {
+            #[allow(clippy::cast_possible_truncation)]
+            let c2_int = c2 as c_int;
+            nfa_emit(c2_int);
+        }
+    } else if op == nfa_magic(b'?') || op == nfa_magic(b'=') {
+        // \? or \=
+        nfa_emit(NFA_QUEST);
+    } else if op == nfa_magic(b'{') {
+        // \{m,n}
+        greedy = true;
+        let c2 = rs_peekchr();
+        if c2 == b'-' as c_int || c2 == nfa_magic(b'-') {
+            rs_skipchr();
+            greedy = false;
+        }
+        let mut minval: c_int = 0;
+        let mut maxval: c_int = 0;
+        if rs_read_limits(&mut minval, &mut maxval) == 0 {
+            nvim_regexp_emsg_e870();
+            return FAIL;
+        }
+
+        // <atom>{0,inf} etc. → <atom>*
+        if minval == 0 && maxval == MAX_LIMIT {
+            if greedy {
+                nfa_emit(NFA_STAR);
+            } else {
+                nfa_emit(NFA_STAR_NONGREEDY);
+            }
+        } else if maxval == 0 {
+            // Special case: x{0}
+            set_post_pos(my_post_start);
+            nfa_emit(NFA_EMPTY);
+            return OK;
+        } else {
+            // Check if too complex for NFA engine
+            if (nvim_regexp_get_nfa_re_flags() & RE_AUTO) != 0
+                && (maxval > 500 || maxval > minval + 200)
+                && (maxval != MAX_LIMIT && minval < 200)
+                && nvim_regexp_get_wants_nfa() == 0
+            {
+                return FAIL;
+            }
+
+            // Ignore previous call to nfa_regatom
+            set_post_pos(my_post_start);
+            rs_save_parse_state(new_state.as_mut_ptr());
+
+            let quest = if greedy {
+                NFA_QUEST
+            } else {
+                NFA_QUEST_NONGREEDY
+            };
+            for i in 0..maxval {
+                rs_restore_parse_state(old_state.as_ptr());
+                let old_post_pos = post_pos();
+                if rs_nfa_regatom() == FAIL {
+                    return FAIL;
+                }
+                // After minval times, atoms are optional
+                if i + 1 > minval {
+                    if maxval == MAX_LIMIT {
+                        if greedy {
+                            nfa_emit(NFA_STAR);
+                        } else {
+                            nfa_emit(NFA_STAR_NONGREEDY);
+                        }
+                    } else {
+                        nfa_emit(quest);
+                    }
+                }
+                if old_post_pos != my_post_start {
+                    nfa_emit(NFA_CONCAT);
+                }
+                if i + 1 > minval && maxval == MAX_LIMIT {
+                    break;
+                }
+            }
+
+            rs_restore_parse_state(new_state.as_ptr());
+            nvim_regexp_set_curchr(-1);
+        }
+    }
+
+    if rs_re_multi_type(rs_peekchr()) != NOT_MULTI {
+        nvim_regexp_emsg_e871();
+        return FAIL;
+    }
+
+    OK
+}
+
+/// Parse one or more pieces, concatenated.
+unsafe fn nfa_regconcat() -> c_int {
+    let mut first = true;
+
+    loop {
+        let c = rs_peekchr();
+        if c == 0 || c == nfa_magic(b'|') || c == nfa_magic(b'&') || c == nfa_magic(b')') {
+            break;
+        }
+        if c == nfa_magic(b'Z') {
+            nvim_regexp_set_regflags_compile(nvim_regexp_get_regflags_compile() | RF_ICOMBINE);
+            rs_skipchr_keepstart();
+        } else if c == nfa_magic(b'c') {
+            nvim_regexp_set_regflags_compile(nvim_regexp_get_regflags_compile() | RF_ICASE);
+            rs_skipchr_keepstart();
+        } else if c == nfa_magic(b'C') {
+            nvim_regexp_set_regflags_compile(nvim_regexp_get_regflags_compile() | RF_NOICASE);
+            rs_skipchr_keepstart();
+        } else if c == nfa_magic(b'v') {
+            nvim_regexp_set_reg_magic(MAGIC_ALL);
+            rs_skipchr_keepstart();
+            nvim_regexp_set_curchr(-1);
+        } else if c == nfa_magic(b'm') {
+            nvim_regexp_set_reg_magic(MAGIC_ON);
+            rs_skipchr_keepstart();
+            nvim_regexp_set_curchr(-1);
+        } else if c == nfa_magic(b'M') {
+            nvim_regexp_set_reg_magic(MAGIC_OFF);
+            rs_skipchr_keepstart();
+            nvim_regexp_set_curchr(-1);
+        } else if c == nfa_magic(b'V') {
+            nvim_regexp_set_reg_magic(MAGIC_NONE);
+            rs_skipchr_keepstart();
+            nvim_regexp_set_curchr(-1);
+        } else {
+            if nfa_regpiece() == FAIL {
+                return FAIL;
+            }
+            if first {
+                first = false;
+            } else {
+                nfa_emit(NFA_CONCAT);
+            }
+        }
+    }
+
+    OK
+}
+
+/// Parse a branch, one or more concats, separated by `\&`.
+unsafe fn nfa_regbranch() -> c_int {
+    let mut old_post_pos = post_pos();
+
+    if nfa_regconcat() == FAIL {
+        return FAIL;
+    }
+
+    while rs_peekchr() == nfa_magic(b'&') {
+        rs_skipchr();
+        if old_post_pos == post_pos() {
+            nfa_emit(NFA_EMPTY);
+        }
+        nfa_emit(NFA_NOPEN);
+        nfa_emit(NFA_PREV_ATOM_NO_WIDTH);
+        old_post_pos = post_pos();
+        if nfa_regconcat() == FAIL {
+            return FAIL;
+        }
+        if old_post_pos == post_pos() {
+            nfa_emit(NFA_EMPTY);
+        }
+        nfa_emit(NFA_CONCAT);
+    }
+
+    // If branch is empty, emit one node for it
+    if old_post_pos == post_pos() {
+        nfa_emit(NFA_EMPTY);
+    }
+
+    OK
+}
+
+/// Parse a pattern — one or more branches, separated by `\|`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_reg(paren: c_int) -> c_int {
+    #[allow(clippy::cast_possible_truncation)] // NSUBEXP is 10, always fits in c_int
+    const NSUBEXP_I: c_int = NSUBEXP as c_int;
+    let mut parno: c_int = 0;
+    if paren == REG_PAREN {
+        if nvim_regexp_get_regnpar() >= NSUBEXP_I {
+            nvim_regexp_emsg_e872();
+            return FAIL;
+        }
+        parno = nvim_regexp_get_regnpar();
+        nvim_regexp_set_regnpar(parno + 1);
+    } else if paren == REG_ZPAREN {
+        if nvim_regexp_get_regnzpar() >= NSUBEXP_I {
+            nvim_regexp_emsg_e879();
+            return FAIL;
+        }
+        parno = nvim_regexp_get_regnzpar();
+        nvim_regexp_set_regnzpar(parno + 1);
+    }
+
+    if nfa_regbranch() == FAIL {
+        return FAIL;
+    }
+
+    while rs_peekchr() == nfa_magic(b'|') {
+        rs_skipchr();
+        if nfa_regbranch() == FAIL {
+            return FAIL;
+        }
+        nfa_emit(NFA_OR);
+    }
+
+    // Check for proper termination
+    if paren != REG_NOPAREN && rs_getchr() != nfa_magic(b')') {
+        if paren == REG_NPAREN {
+            nvim_regexp_emsg2_e53(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+        } else {
+            nvim_regexp_emsg2_e54(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+        }
+        return FAIL;
+    } else if paren == REG_NOPAREN && rs_peekchr() != 0 {
+        if rs_peekchr() == nfa_magic(b')') {
+            nvim_regexp_emsg2_e55(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+        } else {
+            nvim_regexp_emsg_e873();
+        }
+        return FAIL;
+    }
+
+    if paren == REG_PAREN {
+        nvim_regexp_set_had_endbrace(parno, 1);
+        nfa_emit(NFA_MOPEN + parno);
+    } else if paren == REG_ZPAREN {
+        nfa_emit(NFA_ZOPEN + parno);
+    }
+
+    OK
+}
+
+/// Convert regexp to postfix form.
+#[no_mangle]
+pub unsafe extern "C" fn rs_re2post() -> *mut c_int {
+    if rs_nfa_reg(REG_NOPAREN) == FAIL {
+        return core::ptr::null_mut();
+    }
+    nfa_emit(NFA_MOPEN);
+    nvim_regexp_get_post_start()
 }
 
 #[cfg(test)]
