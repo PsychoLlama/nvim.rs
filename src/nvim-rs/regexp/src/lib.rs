@@ -8727,6 +8727,7 @@ extern "C" {
     fn nvim_nfa_state_set_out(s: NfaStateHandle, v: NfaStateHandle);
     fn nvim_nfa_state_get_out1(s: NfaStateHandle) -> NfaStateHandle;
     fn nvim_nfa_state_set_out1(s: NfaStateHandle, v: NfaStateHandle);
+    fn nvim_nfa_state_get_val(s: NfaStateHandle) -> c_int;
     fn nvim_nfa_state_set_val(s: NfaStateHandle, v: c_int);
     fn nvim_nfa_state_set_id(s: NfaStateHandle, v: c_int);
     fn nvim_nfa_state_clear_lastlist(s: NfaStateHandle);
@@ -9503,6 +9504,315 @@ pub unsafe extern "C" fn rs_post2nfa(
     let ret = e.start;
 
     xfree(stack.cast());
+    ret
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6: NFA Postprocessing Functions
+// ---------------------------------------------------------------------------
+
+/// Opaque handle to a C `nfa_regprog_T`.
+type NfaProgHandle = *mut c_void;
+
+// ---- Phase 6 C accessors ----
+extern "C" {
+    // nfa_regprog_T field accessors
+    fn nvim_nfa_prog_get_nstate(prog: NfaProgHandle) -> c_int;
+    fn nvim_nfa_prog_get_state(prog: NfaProgHandle, i: c_int) -> NfaStateHandle;
+    fn nvim_nfa_prog_get_start(prog: NfaProgHandle) -> NfaStateHandle;
+    fn nvim_nfa_prog_set_has_zend(prog: NfaProgHandle, v: c_int);
+    fn nvim_nfa_prog_set_has_backref(prog: NfaProgHandle, v: c_int);
+    fn nvim_nfa_prog_set_nsubexp(prog: NfaProgHandle, v: c_int);
+    fn nvim_nfa_prog_set_regflags(prog: NfaProgHandle, v: c_int);
+    fn nvim_nfa_prog_set_reganch(prog: NfaProgHandle, v: c_int);
+    fn nvim_nfa_prog_set_regstart(prog: NfaProgHandle, v: c_int);
+    fn nvim_nfa_prog_set_match_text(prog: NfaProgHandle, v: *mut u8);
+    fn nvim_nfa_prog_set_reghasz(prog: NfaProgHandle, v: c_int);
+    fn nvim_nfa_prog_set_pattern(prog: NfaProgHandle, v: *mut c_char);
+}
+
+/// Check if the match endpoint can directly follow a given NFA state.
+/// Used by `nfa_postprocess` to decide whether to try the invisible match first.
+#[allow(clippy::too_many_lines)]
+unsafe fn match_follows(startstate: NfaStateHandle, depth: c_int) -> bool {
+    if depth > 10 || startstate.is_null() {
+        return false;
+    }
+    let mut state = startstate;
+    while !state.is_null() {
+        let c = nvim_nfa_state_get_c(state);
+        match c {
+            NFA_MATCH
+            | NFA_MCLOSE
+            | NFA_END_INVISIBLE
+            | NFA_END_INVISIBLE_NEG
+            | NFA_END_PATTERN => return true,
+
+            NFA_SPLIT => {
+                return match_follows(nvim_nfa_state_get_out(state), depth + 1)
+                    || match_follows(nvim_nfa_state_get_out1(state), depth + 1);
+            }
+
+            NFA_START_INVISIBLE
+            | NFA_START_INVISIBLE_FIRST
+            | NFA_START_INVISIBLE_BEFORE
+            | NFA_START_INVISIBLE_BEFORE_FIRST
+            | NFA_START_INVISIBLE_NEG
+            | NFA_START_INVISIBLE_NEG_FIRST
+            | NFA_START_INVISIBLE_BEFORE_NEG
+            | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+            | NFA_COMPOSING => {
+                // skip ahead to next state
+                state = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(state));
+                continue;
+            }
+
+            NFA_ANY | NFA_ANY_COMPOSING | NFA_IDENT | NFA_SIDENT | NFA_KWORD | NFA_SKWORD
+            | NFA_FNAME | NFA_SFNAME | NFA_PRINT | NFA_SPRINT | NFA_WHITE | NFA_NWHITE
+            | NFA_DIGIT | NFA_NDIGIT | NFA_HEX | NFA_NHEX | NFA_OCTAL | NFA_NOCTAL | NFA_WORD
+            | NFA_NWORD | NFA_HEAD | NFA_NHEAD | NFA_ALPHA | NFA_NALPHA | NFA_LOWER
+            | NFA_NLOWER | NFA_UPPER | NFA_NUPPER | NFA_LOWER_IC | NFA_NLOWER_IC | NFA_UPPER_IC
+            | NFA_NUPPER_IC | NFA_START_COLL | NFA_START_NEG_COLL | NFA_NEWL => {
+                // state will advance input
+                return false;
+            }
+
+            _ => {
+                if c > 0 {
+                    return false;
+                }
+                // zero-width or possibly zero-width, keep looking
+            }
+        }
+        state = nvim_nfa_state_get_out(state);
+    }
+    false
+}
+
+/// Heuristic: estimate the failure chance (0-99) for an NFA state.
+/// Higher values mean more likely to fail (and thus cheaper to try first).
+#[allow(clippy::too_many_lines)]
+unsafe fn failure_chance(state: NfaStateHandle, depth: c_int) -> c_int {
+    let c = nvim_nfa_state_get_c(state);
+
+    // detect looping
+    if depth > 4 {
+        return 1;
+    }
+
+    match c {
+        NFA_SPLIT => {
+            let out = nvim_nfa_state_get_out(state);
+            let out1 = nvim_nfa_state_get_out1(state);
+            if nvim_nfa_state_get_c(out) == NFA_SPLIT || nvim_nfa_state_get_c(out1) == NFA_SPLIT {
+                return 1; // avoid recursive stuff
+            }
+            let l = failure_chance(out, depth + 1);
+            let r = failure_chance(out1, depth + 1);
+            if l < r {
+                l
+            } else {
+                r
+            }
+        }
+
+        NFA_ANY => 1, // matches anything, unlikely to fail
+
+        NFA_MATCH | NFA_MCLOSE | NFA_ANY_COMPOSING => 0, // empty match works always
+
+        NFA_START_INVISIBLE
+        | NFA_START_INVISIBLE_FIRST
+        | NFA_START_INVISIBLE_NEG
+        | NFA_START_INVISIBLE_NEG_FIRST
+        | NFA_START_INVISIBLE_BEFORE
+        | NFA_START_INVISIBLE_BEFORE_FIRST
+        | NFA_START_INVISIBLE_BEFORE_NEG
+        | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+        | NFA_START_PATTERN => {
+            5 // recursive regmatch is expensive
+        }
+
+        NFA_BOL | NFA_EOL | NFA_BOF | NFA_EOF | NFA_NEWL => 99,
+
+        NFA_BOW | NFA_EOW | NFA_LNUM => 90,
+
+        NFA_MOPEN | NFA_MOPEN1 | NFA_MOPEN2 | NFA_MOPEN3 | NFA_MOPEN4 | NFA_MOPEN5 | NFA_MOPEN6
+        | NFA_MOPEN7 | NFA_MOPEN8 | NFA_MOPEN9 | NFA_ZOPEN | NFA_ZOPEN1 | NFA_ZOPEN2
+        | NFA_ZOPEN3 | NFA_ZOPEN4 | NFA_ZOPEN5 | NFA_ZOPEN6 | NFA_ZOPEN7 | NFA_ZOPEN8
+        | NFA_ZOPEN9 | NFA_ZCLOSE | NFA_ZCLOSE1 | NFA_ZCLOSE2 | NFA_ZCLOSE3 | NFA_ZCLOSE4
+        | NFA_ZCLOSE5 | NFA_ZCLOSE6 | NFA_ZCLOSE7 | NFA_ZCLOSE8 | NFA_ZCLOSE9 | NFA_NOPEN
+        | NFA_MCLOSE1 | NFA_MCLOSE2 | NFA_MCLOSE3 | NFA_MCLOSE4 | NFA_MCLOSE5 | NFA_MCLOSE6
+        | NFA_MCLOSE7 | NFA_MCLOSE8 | NFA_MCLOSE9 | NFA_NCLOSE => {
+            failure_chance(nvim_nfa_state_get_out(state), depth + 1)
+        }
+
+        NFA_BACKREF1 | NFA_BACKREF2 | NFA_BACKREF3 | NFA_BACKREF4 | NFA_BACKREF5 | NFA_BACKREF6
+        | NFA_BACKREF7 | NFA_BACKREF8 | NFA_BACKREF9 | NFA_ZREF1 | NFA_ZREF2 | NFA_ZREF3
+        | NFA_ZREF4 | NFA_ZREF5 | NFA_ZREF6 | NFA_ZREF7 | NFA_ZREF8 | NFA_ZREF9 => 94, // backreferences don't match in many places
+
+        NFA_LNUM_GT | NFA_LNUM_LT | NFA_COL_GT | NFA_COL_LT | NFA_VCOL_GT | NFA_VCOL_LT
+        | NFA_MARK_GT | NFA_MARK_LT | NFA_VISUAL => 85,
+
+        NFA_CURSOR | NFA_COL | NFA_VCOL | NFA_MARK => 98, // specific positions rarely match
+
+        NFA_COMPOSING => 95,
+
+        _ => {
+            if c > 0 {
+                return 95; // character match fails often
+            }
+            50 // something else, includes character classes
+        }
+    }
+}
+
+/// After building the NFA program, inspect it to add optimization hints.
+/// Decides whether invisible matches should be tried first or postponed.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_postprocess(prog: NfaProgHandle) {
+    let nstate = nvim_nfa_prog_get_nstate(prog);
+    for i in 0..nstate {
+        let state = nvim_nfa_prog_get_state(prog, i);
+        let c = nvim_nfa_state_get_c(state);
+        if c == NFA_START_INVISIBLE
+            || c == NFA_START_INVISIBLE_NEG
+            || c == NFA_START_INVISIBLE_BEFORE
+            || c == NFA_START_INVISIBLE_BEFORE_NEG
+        {
+            let directly;
+            let out1 = nvim_nfa_state_get_out1(state);
+            let out1_out = nvim_nfa_state_get_out(out1);
+            if match_follows(out1_out, 0) {
+                directly = true;
+            } else {
+                let out = nvim_nfa_state_get_out(state);
+                let ch_invisible = failure_chance(out, 0);
+                let ch_follows = failure_chance(out1_out, 0);
+                if c == NFA_START_INVISIBLE_BEFORE || c == NFA_START_INVISIBLE_BEFORE_NEG {
+                    let val = nvim_nfa_state_get_val(state);
+                    directly = if val <= 0 && ch_follows > 0 {
+                        false
+                    } else {
+                        ch_follows * 10 < ch_invisible
+                    };
+                } else {
+                    directly = ch_follows < ch_invisible;
+                }
+            }
+            if directly {
+                // switch to the _FIRST state variant (c + 1)
+                nvim_nfa_state_set_c(state, c + 1);
+            }
+        }
+    }
+}
+
+/// Check if a pattern is anchored to the start of a line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_get_reganch(start: NfaStateHandle, depth: c_int) -> c_int {
+    if depth > 4 {
+        return 0;
+    }
+    let mut p = start;
+    while !p.is_null() {
+        let c = nvim_nfa_state_get_c(p);
+        match c {
+            NFA_BOL | NFA_BOF => return 1,
+
+            NFA_ZSTART | NFA_ZEND | NFA_CURSOR | NFA_VISUAL | NFA_MOPEN | NFA_MOPEN1
+            | NFA_MOPEN2 | NFA_MOPEN3 | NFA_MOPEN4 | NFA_MOPEN5 | NFA_MOPEN6 | NFA_MOPEN7
+            | NFA_MOPEN8 | NFA_MOPEN9 | NFA_NOPEN | NFA_ZOPEN | NFA_ZOPEN1 | NFA_ZOPEN2
+            | NFA_ZOPEN3 | NFA_ZOPEN4 | NFA_ZOPEN5 | NFA_ZOPEN6 | NFA_ZOPEN7 | NFA_ZOPEN8
+            | NFA_ZOPEN9 => {
+                p = nvim_nfa_state_get_out(p);
+            }
+
+            NFA_SPLIT => {
+                return (rs_nfa_get_reganch(nvim_nfa_state_get_out(p), depth + 1) != 0
+                    && rs_nfa_get_reganch(nvim_nfa_state_get_out1(p), depth + 1) != 0)
+                    as c_int;
+            }
+
+            _ => return 0,
+        }
+    }
+    0
+}
+
+/// Get the first character of a pattern, if it's a literal character.
+/// Returns 0 if unknown.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_get_regstart(start: NfaStateHandle, depth: c_int) -> c_int {
+    if depth > 4 {
+        return 0;
+    }
+    let mut p = start;
+    while !p.is_null() {
+        let c = nvim_nfa_state_get_c(p);
+        match c {
+            NFA_BOL | NFA_BOF | NFA_BOW | NFA_EOW | NFA_ZSTART | NFA_ZEND | NFA_CURSOR
+            | NFA_VISUAL | NFA_LNUM | NFA_LNUM_GT | NFA_LNUM_LT | NFA_COL | NFA_COL_GT
+            | NFA_COL_LT | NFA_VCOL | NFA_VCOL_GT | NFA_VCOL_LT | NFA_MARK | NFA_MARK_GT
+            | NFA_MARK_LT | NFA_MOPEN | NFA_MOPEN1 | NFA_MOPEN2 | NFA_MOPEN3 | NFA_MOPEN4
+            | NFA_MOPEN5 | NFA_MOPEN6 | NFA_MOPEN7 | NFA_MOPEN8 | NFA_MOPEN9 | NFA_NOPEN
+            | NFA_ZOPEN | NFA_ZOPEN1 | NFA_ZOPEN2 | NFA_ZOPEN3 | NFA_ZOPEN4 | NFA_ZOPEN5
+            | NFA_ZOPEN6 | NFA_ZOPEN7 | NFA_ZOPEN8 | NFA_ZOPEN9 => {
+                p = nvim_nfa_state_get_out(p);
+            }
+
+            NFA_SPLIT => {
+                let c1 = rs_nfa_get_regstart(nvim_nfa_state_get_out(p), depth + 1);
+                let c2 = rs_nfa_get_regstart(nvim_nfa_state_get_out1(p), depth + 1);
+                if c1 == c2 {
+                    return c1;
+                }
+                return 0;
+            }
+
+            _ => {
+                if c > 0 {
+                    return c;
+                }
+                return 0;
+            }
+        }
+    }
+    0
+}
+
+/// Get the literal match text when the pattern is pure literal characters.
+/// Returns a freshly allocated string (or NULL).
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_get_match_text(start: NfaStateHandle) -> *mut u8 {
+    if nvim_nfa_state_get_c(start) != NFA_MOPEN {
+        return core::ptr::null_mut();
+    }
+    let mut p = nvim_nfa_state_get_out(start);
+    let mut len: c_int = 0;
+
+    // Count total byte length of literal characters.
+    while nvim_nfa_state_get_c(p) > 0 {
+        len += utf_char2len(nvim_nfa_state_get_c(p));
+        p = nvim_nfa_state_get_out(p);
+    }
+
+    if nvim_nfa_state_get_c(p) != NFA_MCLOSE {
+        return core::ptr::null_mut();
+    }
+    let next = nvim_nfa_state_get_out(p);
+    if nvim_nfa_state_get_c(next) != NFA_MATCH {
+        return core::ptr::null_mut();
+    }
+
+    let ret = xmalloc(len as usize).cast::<u8>();
+    // Skip first char (it goes into regstart), start from out->out
+    p = nvim_nfa_state_get_out(nvim_nfa_state_get_out(start));
+    let mut s = ret;
+    while nvim_nfa_state_get_c(p) > 0 {
+        s = s.add(utf_char2bytes(nvim_nfa_state_get_c(p), s.cast::<c_char>()) as usize);
+        p = nvim_nfa_state_get_out(p);
+    }
+    *s = 0; // NUL terminate
     ret
 }
 

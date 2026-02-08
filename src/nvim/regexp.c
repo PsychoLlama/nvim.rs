@@ -4676,6 +4676,7 @@ void *nvim_nfa_state_get_out(void *s) { return (void *)((nfa_state_T *)s)->out; 
 void nvim_nfa_state_set_out(void *s, void *v) { ((nfa_state_T *)s)->out = (nfa_state_T *)v; }
 void *nvim_nfa_state_get_out1(void *s) { return (void *)((nfa_state_T *)s)->out1; }
 void nvim_nfa_state_set_out1(void *s, void *v) { ((nfa_state_T *)s)->out1 = (nfa_state_T *)v; }
+int nvim_nfa_state_get_val(void *s) { return ((nfa_state_T *)s)->val; }
 void nvim_nfa_state_set_val(void *s, int v) { ((nfa_state_T *)s)->val = v; }
 void nvim_nfa_state_set_id(void *s, int v) { ((nfa_state_T *)s)->id = v; }
 void nvim_nfa_state_clear_lastlist(void *s)
@@ -4708,6 +4709,28 @@ void nvim_regexp_emsg_e876(void)
   rc_did_emsg = true;
 }
 // --- End Phase 5 accessor functions ---
+
+// --- Phase 6 accessor functions (nfa_regprog_T fields) ---
+// Forward declarations of Phase 6 Rust functions
+extern void rs_nfa_postprocess(void *prog);
+extern int rs_nfa_get_reganch(void *start, int depth);
+extern int rs_nfa_get_regstart(void *start, int depth);
+extern uint8_t *rs_nfa_get_match_text(void *start);
+
+// nfa_regprog_T field accessors
+int nvim_nfa_prog_get_nstate(void *prog) { return ((nfa_regprog_T *)prog)->nstate; }
+void *nvim_nfa_prog_get_state(void *prog, int i) { return (void *)&((nfa_regprog_T *)prog)->state[i]; }
+void *nvim_nfa_prog_get_start(void *prog) { return (void *)((nfa_regprog_T *)prog)->start; }
+void nvim_nfa_prog_set_has_zend(void *prog, int v) { ((nfa_regprog_T *)prog)->has_zend = v; }
+void nvim_nfa_prog_set_has_backref(void *prog, int v) { ((nfa_regprog_T *)prog)->has_backref = v; }
+void nvim_nfa_prog_set_nsubexp(void *prog, int v) { ((nfa_regprog_T *)prog)->nsubexp = v; }
+void nvim_nfa_prog_set_regflags(void *prog, int v) { ((nfa_regprog_T *)prog)->regflags = (unsigned)v; }
+void nvim_nfa_prog_set_reganch(void *prog, int v) { ((nfa_regprog_T *)prog)->reganch = v; }
+void nvim_nfa_prog_set_regstart(void *prog, int v) { ((nfa_regprog_T *)prog)->regstart = v; }
+void nvim_nfa_prog_set_match_text(void *prog, uint8_t *v) { ((nfa_regprog_T *)prog)->match_text = v; }
+void nvim_nfa_prog_set_reghasz(void *prog, int v) { ((nfa_regprog_T *)prog)->reghasz = v; }
+void nvim_nfa_prog_set_pattern(void *prog, char *v) { ((nfa_regprog_T *)prog)->pattern = v; }
+// --- End Phase 6 accessor functions ---
 
 // Variables only used in nfa_regcomp() and descendants.
 static int nfa_re_flags;  ///< re_flags passed to nfa_regcomp().
@@ -4794,9 +4817,24 @@ static void nfa_regcomp_start(uint8_t *expr, int re_flags)
   rs_nfa_regcomp_start(expr, re_flags);
 }
 
+// Thin wrappers calling Rust Phase 6 functions.
+static int nfa_get_reganch(nfa_state_T *start, int depth)
+{
+  return rs_nfa_get_reganch((void *)start, depth);
+}
+static int nfa_get_regstart(nfa_state_T *start, int depth)
+{
+  return rs_nfa_get_regstart((void *)start, depth);
+}
+static uint8_t *nfa_get_match_text(nfa_state_T *start)
+{
+  return rs_nfa_get_match_text((void *)start);
+}
+
+#ifdef NEVER  // Phase 6: original C code replaced by Rust
 // Figure out if the NFA state list starts with an anchor, must match at start
 // of the line.
-static int nfa_get_reganch(nfa_state_T *start, int depth)
+static int nfa_get_reganch_ORIG(nfa_state_T *start, int depth)
 {
   nfa_state_T *p = start;
 
@@ -4961,6 +4999,7 @@ static uint8_t *nfa_get_match_text(nfa_state_T *start)
 
   return ret;
 }
+#endif  // NEVER — Phase 6 original C code (nfa_get_reganch/regstart/match_text)
 
 // Allocate more space for post_start.  Called when
 // running above the estimated number of states.
@@ -8655,6 +8694,12 @@ theend:
 // After building the NFA program, inspect it to add optimization hints.
 static void nfa_postprocess(nfa_regprog_T *prog)
 {
+  rs_nfa_postprocess((void *)prog);
+}
+
+#ifdef NEVER  // Phase 6: original C nfa_postprocess, match_follows, failure_chance
+static void nfa_postprocess_ORIG(nfa_regprog_T *prog)
+{
   int i;
   int c;
 
@@ -8700,6 +8745,7 @@ static void nfa_postprocess(nfa_regprog_T *prog)
     }
   }
 }
+#endif  // NEVER — Phase 6 original C nfa_postprocess
 
 /////////////////////////////////////////////////////////////////
 // NFA execution code.

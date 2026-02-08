@@ -1066,3 +1066,35 @@ abc\|def\|ghi	defgh
 # Subpattern edge cases (nfa_reg paren handling)
 \z(foo\)	foobar
 \%(foo\)bar	foobar
+
+# Phase 6: NFA Postprocessing Functions
+# nfa_get_reganch: BOL-anchored patterns
+^hello	hello world
+^abc	xabc
+^	empty line
+^\t	tab at start
+^[a-z]	abc
+^foo\|^bar	foobar
+# nfa_get_regstart: first literal character extraction
+hello	hello world
+abc	xyzabc
+a\+b	aaab
+# nfa_get_match_text: literal match text extraction
+hello	hello world
+test	testing
+foobar	xfoobar
+abc	abc
+# nfa_postprocess: invisible group optimization (\%(...\))
+\%(hello\)	hello world
+\%(abc\)def	abcdef
+\%(foo\|bar\)	foobar
+\%(foo\|bar\)	barbaz
+\%(\s\+\)	   spaces
+\%(^\)hello	hello
+\%(hello\)\%(world\)	helloworld
+# Patterns with match_follows / failure_chance characteristics
+\<word\>	a word here
+\zsfoo	xfoo
+foo\ze\n	foo then newline
+\%^start	start of file
+\%$	end of file
