@@ -2823,6 +2823,162 @@ unsafe fn seen_endbrace(refnum: c_int) -> bool {
     true
 }
 
+// --- rs_regatom: Parse the lowest level ---
+
+/// Parse a collection `[...]` or `[^...]`.
+/// `extra` is `ADD_NL` if preceded by `\_`.
+/// Returns the compiled node, or null on error.
+#[allow(dead_code, clippy::missing_const_for_fn)]
+unsafe fn parse_collection(_flagp: *mut c_int, _extra: c_int) -> *mut u8 {
+    // Placeholder — implemented in Phase 6
+    std::ptr::null_mut()
+}
+
+/// Emit a `MULTIBYTECODE` node for character `c`.
+#[allow(dead_code)]
+unsafe fn do_multibyte(c: c_int, flagp: *mut c_int) -> *mut u8 {
+    let ret = rs_regnode(MULTIBYTECODE);
+    rs_regmbc(c);
+    *flagp |= HASWIDTH | SIMPLE;
+    ret
+}
+
+/// Parse the lowest level.
+///
+/// Optimization: gobbles an entire sequence of ordinary characters so that
+/// it can turn them into a single node, which is smaller to store and
+/// faster to run.  Don't do this when `one_exactly` is set.
+#[no_mangle]
+#[allow(
+    clippy::too_many_lines,
+    clippy::similar_names,
+    clippy::cognitive_complexity,
+    clippy::fn_to_numeric_cast_any
+)]
+pub unsafe extern "C" fn rs_regatom(flagp: *mut c_int) -> *mut u8 {
+    let mut extra: c_int = 0;
+    let save_prev_at_start = nvim_regexp_get_prev_at_start();
+
+    *flagp = WORST; // Tentatively.
+
+    let mut c = rs_getchr();
+
+    // --- Position assertions ---
+    if c == magic(b'^') {
+        return rs_regnode(BOL);
+    }
+    if c == magic(b'$') {
+        nvim_regexp_set_had_eol(1);
+        return rs_regnode(EOL);
+    }
+    if c == magic(b'<') {
+        return rs_regnode(BOW);
+    }
+    if c == magic(b'>') {
+        return rs_regnode(EOW);
+    }
+
+    // --- Underscore prefix (\_) ---
+    if c == magic(b'_') {
+        c = rs_no_magic(rs_getchr());
+        if c == b'^' as c_int {
+            // "\_^" is start-of-line
+            return rs_regnode(BOL);
+        }
+        if c == b'$' as c_int {
+            // "\_$" is end-of-line
+            nvim_regexp_set_had_eol(1);
+            return rs_regnode(EOL);
+        }
+
+        extra = ADD_NL;
+        *flagp |= HASNL;
+
+        // "\_[" is character range plus newline
+        if c == b'[' as c_int {
+            return parse_collection(flagp, extra);
+        }
+
+        // "\_x" is character class plus newline — fall through to class handling
+    }
+
+    // --- Character classes: .iIkKfFpPsSdDxXoOwWhHaAlLuU ---
+    // (also reached via fallthrough from \_x above)
+    let is_class = if extra != 0 {
+        // Came from \_x: c is already un-magicked
+        true
+    } else {
+        c == magic(b'.')
+            || c == magic(b'i')
+            || c == magic(b'I')
+            || c == magic(b'k')
+            || c == magic(b'K')
+            || c == magic(b'f')
+            || c == magic(b'F')
+            || c == magic(b'p')
+            || c == magic(b'P')
+            || c == magic(b's')
+            || c == magic(b'S')
+            || c == magic(b'd')
+            || c == magic(b'D')
+            || c == magic(b'x')
+            || c == magic(b'X')
+            || c == magic(b'o')
+            || c == magic(b'O')
+            || c == magic(b'w')
+            || c == magic(b'W')
+            || c == magic(b'h')
+            || c == magic(b'H')
+            || c == magic(b'a')
+            || c == magic(b'A')
+            || c == magic(b'l')
+            || c == magic(b'L')
+            || c == magic(b'u')
+            || c == magic(b'U')
+    };
+
+    if is_class {
+        let plain_c = if extra != 0 { c } else { rs_no_magic(c) };
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let plain_byte = plain_c as u8;
+        let Some(p) = CLASSCHARS.iter().position(|&ch| ch == plain_byte) else {
+            nvim_regexp_emsg_e63_underscore();
+            return std::ptr::null_mut();
+        };
+        // When '.' is followed by a composing char ignore the dot, so that
+        // the composing char is matched here.
+        if c == magic(b'.') && utf_iscomposing_legacy(rs_peekchr()) != 0 {
+            c = rs_getchr();
+            return do_multibyte(c, flagp);
+        }
+        let ret = rs_regnode(CLASSCODES[p] + extra);
+        *flagp |= HASWIDTH | SIMPLE;
+        return ret;
+    }
+
+    // --- \n ---
+    if c == magic(b'n') {
+        if nvim_regexp_get_reg_string() != 0 {
+            // In a string "\n" matches a newline character.
+            let ret = rs_regnode(EXACTLY);
+            rs_regc(NL);
+            rs_regc(0);
+            *flagp |= HASWIDTH | SIMPLE;
+            return ret;
+        }
+        // In buffer text "\n" matches the end of a line.
+        let ret = rs_regnode(NEWL);
+        *flagp |= HASWIDTH | HASNL;
+        return ret;
+    }
+
+    // Phases 4-7 handle remaining cases; for now fall through to C regatom
+    let _ = save_prev_at_start;
+    // Restore state and call C regatom as fallback
+    rs_ungetchr();
+    regatom(flagp)
+}
+
 /// Parse something followed by possible [*+=].
 ///
 /// Calls `regatom` (still in C) to parse the atom, then handles quantifiers.
