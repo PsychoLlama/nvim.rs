@@ -1895,6 +1895,391 @@ pub unsafe extern "C" fn rs_do_lower(d: *mut c_int, c: c_int) {
     *d = mb_tolower(c);
 }
 
+// --- vim_regsub_both literal path ---
+
+// Constants matching C definitions (TAB_CH, CAR_CH already defined above)
+const K_SPECIAL: u8 = 0x80;
+const NL_CH: c_int = 0x0a;
+const CTRL_H_CH: c_int = 8;
+
+// REGSUB flag constants (matching regexp_defs.h)
+const REGSUB_COPY: c_int = 1;
+const REGSUB_MAGIC: c_int = 2;
+const REGSUB_BACKSLASH: c_int = 4;
+
+extern "C" {
+    fn nvim_regexp_get_rex_reg_match_startp(no: c_int) -> *const c_char;
+    fn nvim_regexp_get_rex_reg_match_endp(no: c_int) -> *const c_char;
+    fn nvim_regexp_get_rex_reg_mmatch_startpos_lnum(no: c_int) -> i32;
+    fn nvim_regexp_get_rex_reg_mmatch_startpos_col(no: c_int) -> i32;
+    fn nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no: c_int) -> i32;
+    fn nvim_regexp_get_rex_reg_mmatch_endpos_col(no: c_int) -> i32;
+    fn nvim_regexp_call_iemsg_not_enough_space();
+    fn nvim_regexp_call_iemsg_re_damg();
+    fn utf_char2len(c: c_int) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+}
+
+/// Case-conversion function type: 0=none, 1=upper, 2=lower
+#[derive(Clone, Copy, PartialEq)]
+enum CaseFunc {
+    None,
+    Upper,
+    Lower,
+}
+
+/// Apply case conversion and return the converted character.
+unsafe fn apply_case(func: CaseFunc, c: c_int) -> c_int {
+    match func {
+        CaseFunc::None => c,
+        CaseFunc::Upper => {
+            let mut d: c_int = 0;
+            rs_do_upper(&mut d, c);
+            d
+        }
+        CaseFunc::Lower => {
+            let mut d: c_int = 0;
+            rs_do_lower(&mut d, c);
+            d
+        }
+    }
+}
+
+/// Check if `out` has enough space, emit error if not.
+/// Returns `true` when there's NOT enough space.
+#[inline]
+unsafe fn regsub_check_space(out: *mut c_char, dest: *mut c_char, need: isize, lim: isize) -> bool {
+    if out.offset_from(dest) + need > lim {
+        nvim_regexp_call_iemsg_not_enough_space();
+        true
+    } else {
+        false
+    }
+}
+
+/// Expand a backreference (subgroup `no`) into `out`.
+/// Returns the new `out` pointer, or null on error.
+/// Sets `early_exit` when the caller should return `out - dest + 1`.
+#[allow(clippy::too_many_arguments)]
+unsafe fn regsub_expand_backref(
+    no: c_int,
+    out: *mut c_char,
+    dest: *mut c_char,
+    destlen: c_int,
+    flags: c_int,
+    copy: bool,
+    reg_multi: bool,
+    func_one: &mut CaseFunc,
+    func_all: &CaseFunc,
+    early_exit: &mut bool,
+) -> *mut c_char {
+    let mut out = out;
+    let mut s: *const c_char;
+    let mut len: c_int;
+    let mut clnum: i32 = 0;
+    let lim = destlen as isize;
+    *early_exit = false;
+
+    if reg_multi {
+        clnum = nvim_regexp_get_rex_reg_mmatch_startpos_lnum(no);
+        if clnum < 0 || nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no) < 0 {
+            return out;
+        }
+        let start_col = nvim_regexp_get_rex_reg_mmatch_startpos_col(no);
+        s = nvim_regexp_call_reg_getline(clnum).add(start_col as usize);
+        len = if nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no) == clnum {
+            nvim_regexp_get_rex_reg_mmatch_endpos_col(no) - start_col
+        } else {
+            nvim_regexp_call_reg_getline_len(clnum) - start_col
+        };
+    } else {
+        s = nvim_regexp_get_rex_reg_match_startp(no);
+        if nvim_regexp_get_rex_reg_match_endp(no).is_null() {
+            return out;
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            len = nvim_regexp_get_rex_reg_match_endp(no).offset_from(s) as c_int;
+        }
+    }
+
+    loop {
+        if len == 0 {
+            if !reg_multi || nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no) == clnum {
+                break;
+            }
+            if copy && regsub_check_space(out, dest, 1, lim) {
+                return std::ptr::null_mut();
+            }
+            #[allow(clippy::cast_possible_truncation)]
+            if copy {
+                *out = CAR_CH as c_char;
+            }
+            out = out.add(1);
+            clnum += 1;
+            s = nvim_regexp_call_reg_getline(clnum);
+            len = if nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no) == clnum {
+                nvim_regexp_get_rex_reg_mmatch_endpos_col(no)
+            } else {
+                nvim_regexp_call_reg_getline_len(clnum)
+            };
+        } else if *s == 0 {
+            if copy {
+                nvim_regexp_call_iemsg_re_damg();
+            }
+            *early_exit = true;
+            return out;
+        } else {
+            #[allow(clippy::cast_possible_truncation)]
+            let is_bs_special = (flags & REGSUB_BACKSLASH != 0)
+                && (*s == CAR_CH as c_char || *s == b'\\' as c_char);
+            if is_bs_special {
+                if copy && regsub_check_space(out, dest, 2, lim) {
+                    return std::ptr::null_mut();
+                }
+                if copy {
+                    *out = b'\\' as c_char;
+                    *out.add(1) = *s;
+                }
+                out = out.add(2);
+            } else {
+                let bc = utf_ptr2char(s);
+                let cc = if *func_one != CaseFunc::None {
+                    let r = apply_case(*func_one, bc);
+                    *func_one = CaseFunc::None;
+                    r
+                } else if *func_all != CaseFunc::None {
+                    apply_case(*func_all, bc)
+                } else {
+                    bc
+                };
+                let l = utf_ptr2len(s) - 1;
+                s = s.add(l as usize);
+                len -= l;
+                let charlen = utf_char2len(cc);
+                if copy && regsub_check_space(out, dest, charlen as isize, lim) {
+                    return std::ptr::null_mut();
+                }
+                if copy {
+                    utf_char2bytes(cc, out);
+                }
+                out = out.add((charlen - 1) as usize);
+                out = out.add(1);
+            }
+            s = s.add(1);
+            len -= 1;
+        }
+    }
+    out
+}
+
+/// Literal substitution path of `vim_regsub_both`.
+///
+/// Handles escape sequences, backreferences, case conversion,
+/// `K_SPECIAL` passthrough, multi-line backreference expansion,
+/// and composing character handling.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_vim_regsub_literal(
+    source: *mut c_char,
+    dest: *mut c_char,
+    destlen: c_int,
+    flags: c_int,
+) -> c_int {
+    let copy = flags & REGSUB_COPY != 0;
+    let reg_multi = nvim_regexp_is_reg_multi() != 0;
+    let lim = destlen as isize;
+
+    let mut src = source;
+    let mut out = dest;
+    let mut func_all = CaseFunc::None;
+    let mut func_one = CaseFunc::None;
+
+    loop {
+        let c_byte = *src as u8;
+        if c_byte == 0 {
+            break;
+        }
+        src = src.add(1);
+        let mut c = c_byte as c_int;
+        let mut no: c_int = -1;
+
+        // Check for backreferences
+        if c == b'&' as c_int && (flags & REGSUB_MAGIC != 0) {
+            no = 0;
+        } else if c == b'\\' as c_int && *src != 0 {
+            let next = *src as u8;
+            if next == b'&' && (flags & REGSUB_MAGIC == 0) {
+                src = src.add(1);
+                no = 0;
+            } else if next.is_ascii_digit() {
+                no = (next - b'0') as c_int;
+                src = src.add(1);
+            } else {
+                match next {
+                    b'u' => {
+                        func_one = CaseFunc::Upper;
+                        src = src.add(1);
+                        continue;
+                    }
+                    b'U' => {
+                        func_all = CaseFunc::Upper;
+                        src = src.add(1);
+                        continue;
+                    }
+                    b'l' => {
+                        func_one = CaseFunc::Lower;
+                        src = src.add(1);
+                        continue;
+                    }
+                    b'L' => {
+                        func_all = CaseFunc::Lower;
+                        src = src.add(1);
+                        continue;
+                    }
+                    b'e' | b'E' => {
+                        func_one = CaseFunc::None;
+                        func_all = CaseFunc::None;
+                        src = src.add(1);
+                        continue;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if no < 0 {
+            // Ordinary character
+            if c_byte == K_SPECIAL && *src != 0 && *src.add(1) != 0 {
+                if copy {
+                    if regsub_check_space(out, dest, 3, lim) {
+                        return 0;
+                    }
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        *out = c as c_char;
+                    }
+                    out = out.add(1);
+                    *out = *src;
+                    out = out.add(1);
+                    src = src.add(1);
+                    *out = *src;
+                    out = out.add(1);
+                    src = src.add(1);
+                } else {
+                    out = out.add(3);
+                    src = src.add(2);
+                }
+                continue;
+            }
+
+            if c == b'\\' as c_int && *src != 0 {
+                match *src as u8 {
+                    b'r' => {
+                        c = CAR_CH;
+                        src = src.add(1);
+                    }
+                    b'n' => {
+                        c = NL_CH;
+                        src = src.add(1);
+                    }
+                    b't' => {
+                        c = TAB_CH;
+                        src = src.add(1);
+                    }
+                    b'b' => {
+                        c = CTRL_H_CH;
+                        src = src.add(1);
+                    }
+                    _ => {
+                        if flags & REGSUB_BACKSLASH != 0 {
+                            if copy {
+                                if regsub_check_space(out, dest, 1, lim) {
+                                    return 0;
+                                }
+                                *out = b'\\' as c_char;
+                            }
+                            out = out.add(1);
+                        }
+                        c = *src as u8 as c_int;
+                        src = src.add(1);
+                    }
+                }
+            } else {
+                c = utf_ptr2char(src.sub(1));
+            }
+
+            // Apply case conversion
+            let cc = if func_one != CaseFunc::None {
+                let r = apply_case(func_one, c);
+                func_one = CaseFunc::None;
+                r
+            } else if func_all != CaseFunc::None {
+                apply_case(func_all, c)
+            } else {
+                c
+            };
+
+            let totlen = utfc_ptr2len(src.sub(1));
+            let charlen = utf_char2len(cc);
+
+            if copy {
+                if regsub_check_space(out, dest, charlen as isize, lim) {
+                    return 0;
+                }
+                utf_char2bytes(cc, out);
+            }
+            out = out.add((charlen - 1) as usize);
+            let clen = utf_ptr2len(src.sub(1));
+
+            // Composing characters: copy as-is
+            if clen < totlen {
+                let comp_len = (totlen - clen) as usize;
+                if copy {
+                    if regsub_check_space(out, dest, comp_len as isize, lim) {
+                        return 0;
+                    }
+                    std::ptr::copy(src.sub(1).add(clen as usize), out.add(1), comp_len);
+                }
+                out = out.add(comp_len);
+            }
+            src = src.add((totlen - 1) as usize);
+            out = out.add(1);
+        } else {
+            // Backreference expansion
+            let mut early_exit = false;
+            let result = regsub_expand_backref(
+                no,
+                out,
+                dest,
+                destlen,
+                flags,
+                copy,
+                reg_multi,
+                &mut func_one,
+                &func_all,
+                &mut early_exit,
+            );
+            if result.is_null() {
+                return 0;
+            }
+            out = result;
+            if early_exit {
+                #[allow(clippy::cast_possible_truncation)]
+                return (out.offset_from(dest) + 1) as c_int;
+            }
+        }
+    }
+
+    if copy {
+        *out = 0;
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    let result = (out.offset_from(dest) + 1) as c_int;
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

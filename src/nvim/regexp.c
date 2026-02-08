@@ -1044,6 +1044,19 @@ int32_t nvim_regexp_call_win_linetabsize(void *wp, int32_t lnum,
   return (int32_t)win_linetabsize((win_T *)wp, (linenr_T)lnum, (char *)line, (colnr_T)col);
 }
 
+// vim_regsub_both accessors for Rust FFI
+const char *nvim_regexp_get_rex_reg_match_startp(int no) { return rex.reg_match->startp[no]; }
+const char *nvim_regexp_get_rex_reg_match_endp(int no) { return rex.reg_match->endp[no]; }
+int32_t nvim_regexp_get_rex_reg_mmatch_startpos_lnum(int no) { return (int32_t)rex.reg_mmatch->startpos[no].lnum; }
+int32_t nvim_regexp_get_rex_reg_mmatch_startpos_col(int no) { return (int32_t)rex.reg_mmatch->startpos[no].col; }
+int32_t nvim_regexp_get_rex_reg_mmatch_endpos_lnum(int no) { return (int32_t)rex.reg_mmatch->endpos[no].lnum; }
+int32_t nvim_regexp_get_rex_reg_mmatch_endpos_col(int no) { return (int32_t)rex.reg_mmatch->endpos[no].col; }
+int nvim_regexp_call_prog_magic_wrong(void) { return prog_magic_wrong(); }
+void nvim_regexp_call_emsg_null(void) { emsg(_(e_null)); }
+void nvim_regexp_call_emsg_sub_nesting(void) { emsg(_(e_substitute_nesting_too_deep)); }
+void nvim_regexp_call_iemsg_not_enough_space(void) { iemsg("vim_regsub_both(): not enough space"); }
+void nvim_regexp_call_iemsg_re_damg(void) { iemsg(_(e_re_damg)); }
+
 // reg_getline_common accessors for Rust FFI
 int32_t nvim_regexp_get_rex_reg_firstlnum(void) { return (int32_t)rex.reg_firstlnum; }
 int32_t nvim_regexp_get_rex_reg_maxline(void) { return (int32_t)rex.reg_maxline; }
@@ -1316,16 +1329,7 @@ void free_resub_eval_result(void)
 
 static int vim_regsub_both(char *source, typval_T *expr, char *dest, int destlen, int flags)
 {
-  char *src;
-  char *dst;
   char *s;
-  int c;
-  int cc;
-  int no = -1;
-  fptr_T func_all = (fptr_T)NULL;
-  fptr_T func_one = (fptr_T)NULL;
-  linenr_T clnum = 0;           // init for GCC
-  int len = 0;                  // init for GCC
   static int nesting = 0;
   bool copy = flags & REGSUB_COPY;
 
@@ -1342,8 +1346,7 @@ static int vim_regsub_both(char *source, typval_T *expr, char *dest, int destlen
     return 0;
   }
   int nested = nesting;
-  src = source;
-  dst = dest;
+  char *dst = dest;
 
   // When the substitute part starts with "\=" evaluate it as an expression.
   if (expr != NULL || (source[0] == '\\' && source[1] == '=')) {
@@ -1464,240 +1467,13 @@ static int vim_regsub_both(char *source, typval_T *expr, char *dest, int destlen
       }
     }
   } else {
-    while ((c = (uint8_t)(*src++)) != NUL) {
-      if (c == '&' && (flags & REGSUB_MAGIC)) {
-        no = 0;
-      } else if (c == '\\' && *src != NUL) {
-        if (*src == '&' && !(flags & REGSUB_MAGIC)) {
-          src++;
-          no = 0;
-        } else if ('0' <= *src && *src <= '9') {
-          no = *src++ - '0';
-        } else if (vim_strchr("uUlLeE", (uint8_t)(*src))) {
-          switch (*src++) {
-          case 'u':
-            func_one = do_upper;
-            continue;
-          case 'U':
-            func_all = do_upper;
-            continue;
-          case 'l':
-            func_one = do_lower;
-            continue;
-          case 'L':
-            func_all = do_lower;
-            continue;
-          case 'e':
-          case 'E':
-            func_one = func_all = (fptr_T)NULL;
-            continue;
-          }
-        }
-      }
-      if (no < 0) {           // Ordinary character.
-        if (c == K_SPECIAL && src[0] != NUL && src[1] != NUL) {
-          // Copy a special key as-is.
-          if (copy) {
-            if (dst + 3 > dest + destlen) {
-              iemsg("vim_regsub_both(): not enough space");
-              return 0;
-            }
-            *dst++ = (char)c;
-            *dst++ = *src++;
-            *dst++ = *src++;
-          } else {
-            dst += 3;
-            src += 2;
-          }
-          continue;
-        }
-
-        if (c == '\\' && *src != NUL) {
-          // Check for abbreviations -- webb
-          switch (*src) {
-          case 'r':
-            c = CAR;        ++src;  break;
-          case 'n':
-            c = NL;         ++src;  break;
-          case 't':
-            c = TAB;        ++src;  break;
-          // Oh no!  \e already has meaning in subst pat :-(
-          // case 'e':   c = ESC;        ++src;  break;
-          case 'b':
-            c = Ctrl_H;     ++src;  break;
-
-          // If "backslash" is true the backslash will be removed
-          // later.  Used to insert a literal CR.
-          default:
-            if (flags & REGSUB_BACKSLASH) {
-              if (copy) {
-                if (dst + 1 > dest + destlen) {
-                  iemsg("vim_regsub_both(): not enough space");
-                  return 0;
-                }
-                *dst = '\\';
-              }
-              dst++;
-            }
-            c = (uint8_t)(*src++);
-          }
-        } else {
-          c = utf_ptr2char(src - 1);
-        }
-
-        // Write to buffer, if copy is set.
-        if (func_one != NULL) {
-          func_one(&cc, c);
-          func_one = NULL;
-        } else if (func_all != NULL) {
-          func_all(&cc, c);
-        } else {
-          // just copy
-          cc = c;
-        }
-
-        int totlen = utfc_ptr2len(src - 1);
-        int charlen = utf_char2len(cc);
-
-        if (copy) {
-          if (dst + charlen > dest + destlen) {
-            iemsg("vim_regsub_both(): not enough space");
-            return 0;
-          }
-          utf_char2bytes(cc, dst);
-        }
-        dst += charlen - 1;
-        int clen = utf_ptr2len(src - 1);
-
-        // If the character length is shorter than "totlen", there
-        // are composing characters; copy them as-is.
-        if (clen < totlen) {
-          if (copy) {
-            if (dst + totlen - clen > dest + destlen) {
-              iemsg("vim_regsub_both(): not enough space");
-              return 0;
-            }
-            memmove(dst + 1, src - 1 + clen, (size_t)(totlen - clen));
-          }
-          dst += totlen - clen;
-        }
-        src += totlen - 1;
-        dst++;
-      } else {
-        if (REG_MULTI) {
-          clnum = rex.reg_mmatch->startpos[no].lnum;
-          if (clnum < 0 || rex.reg_mmatch->endpos[no].lnum < 0) {
-            s = NULL;
-          } else {
-            s = reg_getline(clnum) + rex.reg_mmatch->startpos[no].col;
-            if (rex.reg_mmatch->endpos[no].lnum == clnum) {
-              len = rex.reg_mmatch->endpos[no].col
-                    - rex.reg_mmatch->startpos[no].col;
-            } else {
-              len = reg_getline_len(clnum) - rex.reg_mmatch->startpos[no].col;
-            }
-          }
-        } else {
-          s = rex.reg_match->startp[no];
-          if (rex.reg_match->endp[no] == NULL) {
-            s = NULL;
-          } else {
-            len = (int)(rex.reg_match->endp[no] - s);
-          }
-        }
-        if (s != NULL) {
-          while (true) {
-            if (len == 0) {
-              if (REG_MULTI) {
-                if (rex.reg_mmatch->endpos[no].lnum == clnum) {
-                  break;
-                }
-                if (copy) {
-                  if (dst + 1 > dest + destlen) {
-                    iemsg("vim_regsub_both(): not enough space");
-                    return 0;
-                  }
-                  *dst = CAR;
-                }
-                dst++;
-                s = reg_getline(++clnum);
-                if (rex.reg_mmatch->endpos[no].lnum == clnum) {
-                  len = rex.reg_mmatch->endpos[no].col;
-                } else {
-                  len = reg_getline_len(clnum);
-                }
-              } else {
-                break;
-              }
-            } else if (*s == NUL) {  // we hit NUL.
-              if (copy) {
-                iemsg(_(e_re_damg));
-              }
-              goto exit;
-            } else {
-              if ((flags & REGSUB_BACKSLASH) && (*s == CAR || *s == '\\')) {
-                // Insert a backslash in front of a CR, otherwise
-                // it will be replaced by a line break.
-                // Number of backslashes will be halved later,
-                // double them here.
-                if (copy) {
-                  if (dst + 2 > dest + destlen) {
-                    iemsg("vim_regsub_both(): not enough space");
-                    return 0;
-                  }
-                  dst[0] = '\\';
-                  dst[1] = *s;
-                }
-                dst += 2;
-              } else {
-                c = utf_ptr2char(s);
-
-                if (func_one != (fptr_T)NULL) {
-                  func_one(&cc, c);
-                  func_one = NULL;
-                } else if (func_all != (fptr_T)NULL) {
-                  func_all(&cc, c);
-                } else {  // just copy
-                  cc = c;
-                }
-
-                {
-                  int l;
-                  int charlen;
-
-                  // Copy composing characters separately, one
-                  // at a time.
-                  l = utf_ptr2len(s) - 1;
-
-                  s += l;
-                  len -= l;
-                  charlen = utf_char2len(cc);
-                  if (copy) {
-                    if (dst + charlen > dest + destlen) {
-                      iemsg("vim_regsub_both(): not enough space");
-                      return 0;
-                    }
-                    utf_char2bytes(cc, dst);
-                  }
-                  dst += charlen - 1;
-                }
-                dst++;
-              }
-
-              s++;
-              len--;
-            }
-          }
-        }
-        no = -1;
-      }
-    }
+    extern int rs_vim_regsub_literal(char *source, char *dest, int destlen, int flags);
+    return rs_vim_regsub_literal(source, dest, destlen, flags);
   }
   if (copy) {
     *dst = NUL;
   }
 
-exit:
   return (int)((dst - dest) + 1);
 }
 
