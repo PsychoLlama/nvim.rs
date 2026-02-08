@@ -597,6 +597,7 @@ extern void rs_skipchr(void);
 extern void rs_skipchr_keepstart(void);
 extern int rs_getchr(void);
 extern void rs_ungetchr(void);
+extern int rs_read_limits(int *minval, int *maxval);
 
 static regengine_T bt_regengine;
 static regengine_T nfa_regengine;
@@ -802,44 +803,7 @@ static int64_t getoctchrs(void) { return rs_getoctchrs(); }
 // missing, a very big number is the default.
 static int read_limits(int *minval, int *maxval)
 {
-  int reverse = false;
-  char *first_char;
-  int tmp;
-
-  if (*regparse == '-') {
-    // Starts with '-', so reverse the range later.
-    regparse++;
-    reverse = true;
-  }
-  first_char = regparse;
-  *minval = getdigits_int(&regparse, false, 0);
-  if (*regparse == ',') {           // There is a comma.
-    if (ascii_isdigit(*++regparse)) {
-      *maxval = getdigits_int(&regparse, false, MAX_LIMIT);
-    } else {
-      *maxval = MAX_LIMIT;
-    }
-  } else if (ascii_isdigit(*first_char)) {
-    *maxval = *minval;              // It was \{n} or \{-n}
-  } else {
-    *maxval = MAX_LIMIT;            // It was \{} or \{-}
-  }
-  if (*regparse == '\\') {
-    regparse++;         // Allow either \{...} or \{...\}
-  }
-  if (*regparse != '}') {
-    EMSG2_RET_FAIL(_("E554: Syntax error in %s{...}"), reg_magic == MAGIC_ALL);
-  }
-
-  // Reverse the range if there was a '-', or make sure it is in the right
-  // order otherwise.
-  if ((!reverse && *minval > *maxval) || (reverse && *minval < *maxval)) {
-    tmp = *minval;
-    *minval = *maxval;
-    *maxval = tmp;
-  }
-  skipchr();            // let's be friends with the lexer again
-  return OK;
+  return rs_read_limits(minval, maxval);
 }
 
 // vim_regexec and friends

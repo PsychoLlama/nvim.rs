@@ -744,6 +744,61 @@ pub unsafe extern "C" fn rs_ungetchr() {
     nvim_regexp_set_regparse(regparse.sub(prevchr_len as usize));
 }
 
+// --- Limit parser: read_limits ---
+
+/// Maximum limit value for `\{n,m}` ranges.
+const MAX_LIMIT: c_int = 32767 << 16;
+
+/// OK return code matching C definition.
+const OK: c_int = 1;
+
+/// Parse `\{n,m}` range limits. On success writes to `*minval` and `*maxval`
+/// and returns `OK`; on syntax error emits a message and returns `FAIL`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_read_limits(minval: *mut c_int, maxval: *mut c_int) -> c_int {
+    let mut regparse = nvim_regexp_get_regparse();
+
+    let reverse = if *regparse == b'-' as c_char {
+        regparse = regparse.add(1);
+        true
+    } else {
+        false
+    };
+    let first_char = regparse;
+    *minval = getdigits_int(&mut regparse, false, 0);
+    if *regparse == b',' as c_char {
+        regparse = regparse.add(1);
+        if (*regparse as u8).is_ascii_digit() {
+            *maxval = getdigits_int(&mut regparse, false, MAX_LIMIT);
+        } else {
+            *maxval = MAX_LIMIT;
+        }
+    } else if (*first_char as u8).is_ascii_digit() {
+        *maxval = *minval; // It was \{n} or \{-n}
+    } else {
+        *maxval = MAX_LIMIT; // It was \{} or \{-}
+    }
+    if *regparse == b'\\' as c_char {
+        regparse = regparse.add(1); // Allow either \{...} or \{...\}
+    }
+    if *regparse as u8 != b'}' {
+        nvim_regexp_set_regparse(regparse);
+        return nvim_regexp_emsg2_fail(
+            c"E554: Syntax error in %s{...}".as_ptr(),
+            c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL),
+        );
+    }
+
+    // Reverse the range if there was a '-', or make sure it is in the right
+    // order otherwise.
+    if (!reverse && *minval > *maxval) || (reverse && *minval < *maxval) {
+        core::ptr::swap(minval, maxval);
+    }
+    nvim_regexp_set_regparse(regparse);
+    rs_skipchr(); // let's be friends with the lexer again
+    OK
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
