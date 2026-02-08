@@ -110,6 +110,36 @@ char *xstrnsave(const char *s, size_t len) {
     return r;
 }
 
+// --- Mock globals for parse state accessors ---
+static char *mock_regparse = NULL;
+static int mock_curchr = -1;
+
+char *nvim_regexp_get_regparse(void) { return mock_regparse; }
+void nvim_regexp_set_regparse(char *p) { mock_regparse = p; }
+int nvim_regexp_get_curchr(void) { return mock_curchr; }
+void nvim_regexp_set_curchr(int v) { mock_curchr = v; }
+int nvim_regexp_get_prevchr_len(void) { return 0; }
+void nvim_regexp_set_prevchr_len(int v) { (void)v; }
+int nvim_regexp_get_prevchr(void) { return 0; }
+void nvim_regexp_set_prevchr(int v) { (void)v; }
+int nvim_regexp_get_prevprevchr(void) { return 0; }
+void nvim_regexp_set_prevprevchr(int v) { (void)v; }
+int nvim_regexp_get_nextchr(void) { return -1; }
+void nvim_regexp_set_nextchr(int v) { (void)v; }
+int nvim_regexp_get_at_start(void) { return 0; }
+void nvim_regexp_set_at_start(int v) { (void)v; }
+int nvim_regexp_get_prev_at_start(void) { return 0; }
+void nvim_regexp_set_prev_at_start(int v) { (void)v; }
+int nvim_regexp_get_regnpar(void) { return 0; }
+void nvim_regexp_set_regnpar(int v) { (void)v; }
+int nvim_regexp_get_reg_magic(void) { return 3; } // MAGIC_ON
+void nvim_regexp_set_reg_magic(int v) { (void)v; }
+int nvim_regexp_get_after_slash(void) { return 0; }
+void nvim_regexp_set_after_slash(int v) { (void)v; }
+int nvim_regexp_get_rex_reg_ic(void) { return 0; }
+int nvim_regexp_get_rex_reg_icombine(void) { return 0; }
+int nvim_regexp_emsg2_fail(const char *msg, int is_magic_all) { (void)msg; (void)is_magic_all; return 0; }
+
 // --- Rust FFI declarations ---
 extern char *rs_skip_regexp(char *startp, int delim, int magic);
 extern int rs_no_magic(int x);
@@ -118,6 +148,9 @@ extern int rs_re_multi_type(int c);
 extern int rs_backslash_trans(int c);
 extern void rs_init_class_tab(int16_t *out);
 extern int rs_re_multiline(const void *prog);
+extern int64_t rs_gethexchrs(int maxinputlen);
+extern int64_t rs_getdecchrs(void);
+extern int64_t rs_getoctchrs(void);
 
 // --- Reference C implementation of skip_regexp (ASCII-only, simplified) ---
 // This mirrors the logic in src/nvim/regexp.c skip_regexp_ex() but without
@@ -714,6 +747,152 @@ void test_re_multiline(void) {
     }
 }
 
+// --- C reference number parsers (matching regexp.c originals) ---
+
+static int c_ascii_isxdigit(int c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+static int c_hex2nr(int c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return 0;
+}
+
+static int64_t c_gethexchrs(char **pp, int maxinputlen) {
+    int64_t nr = 0;
+    int i;
+    for (i = 0; i < maxinputlen; i++) {
+        int c = (unsigned char)(*pp)[0];
+        if (!c_ascii_isxdigit(c)) break;
+        nr <<= 4;
+        nr |= c_hex2nr(c);
+        (*pp)++;
+    }
+    return (i == 0) ? -1 : nr;
+}
+
+static int64_t c_getdecchrs(char **pp) {
+    int64_t nr = 0;
+    int i;
+    for (i = 0; ; i++) {
+        int c = (unsigned char)(*pp)[0];
+        if (c < '0' || c > '9') break;
+        nr *= 10;
+        nr += c - '0';
+        (*pp)++;
+    }
+    return (i == 0) ? -1 : nr;
+}
+
+static int64_t c_getoctchrs(char **pp) {
+    int64_t nr = 0;
+    int i;
+    for (i = 0; i < 3 && nr < 040; i++) {
+        int c = (unsigned char)(*pp)[0];
+        if (c < '0' || c > '7') break;
+        nr <<= 3;
+        nr |= c_hex2nr(c);
+        (*pp)++;
+    }
+    return (i == 0) ? -1 : nr;
+}
+
+// --- Number parser comparison tests ---
+
+void test_gethexchrs(void) {
+    printf("Testing gethexchrs (C vs Rust):\n");
+
+    struct { const char *input; int maxlen; } cases[] = {
+        {"20", 2}, {"ff", 2}, {"FF", 2}, {"0a", 2},
+        {"20AC", 4}, {"20AC", 2},  // clipping
+        {"", 2}, {"gg", 2}, {"xyz", 4},  // no hex digits
+        {"2g", 2}, {"a_rest", 4},  // partial
+        {"12345678", 8},  // 8-digit
+    };
+
+    for (int t = 0; t < (int)(sizeof(cases)/sizeof(cases[0])); t++) {
+        char c_buf[64], r_buf[64];
+        strncpy(c_buf, cases[t].input, sizeof(c_buf) - 1);
+        c_buf[sizeof(c_buf)-1] = '\0';
+        strncpy(r_buf, cases[t].input, sizeof(r_buf) - 1);
+        r_buf[sizeof(r_buf)-1] = '\0';
+
+        char *c_ptr = c_buf;
+        int64_t c_val = c_gethexchrs(&c_ptr, cases[t].maxlen);
+        int c_consumed = (int)(c_ptr - c_buf);
+
+        mock_regparse = r_buf;
+        int64_t r_val = rs_gethexchrs(cases[t].maxlen);
+        int r_consumed = (int)(mock_regparse - r_buf);
+
+        char name[256];
+        snprintf(name, sizeof(name), "gethexchrs(\"%s\", %d): C=%ld/%d Rust=%ld/%d",
+                 cases[t].input, cases[t].maxlen, (long)c_val, c_consumed, (long)r_val, r_consumed);
+        TEST(name, c_val == r_val && c_consumed == r_consumed);
+    }
+}
+
+void test_getdecchrs(void) {
+    printf("Testing getdecchrs (C vs Rust):\n");
+
+    const char *cases[] = {
+        "123", "0", "42rest", "", "abc", "999999", "0000", "1",
+    };
+
+    for (int t = 0; t < (int)(sizeof(cases)/sizeof(cases[0])); t++) {
+        char c_buf[64], r_buf[64];
+        strncpy(c_buf, cases[t], sizeof(c_buf) - 1);
+        c_buf[sizeof(c_buf)-1] = '\0';
+        strncpy(r_buf, cases[t], sizeof(r_buf) - 1);
+        r_buf[sizeof(r_buf)-1] = '\0';
+
+        char *c_ptr = c_buf;
+        int64_t c_val = c_getdecchrs(&c_ptr);
+        int c_consumed = (int)(c_ptr - c_buf);
+
+        mock_regparse = r_buf;
+        int64_t r_val = rs_getdecchrs();
+        int r_consumed = (int)(mock_regparse - r_buf);
+
+        char name[256];
+        snprintf(name, sizeof(name), "getdecchrs(\"%s\"): C=%ld/%d Rust=%ld/%d",
+                 cases[t], (long)c_val, c_consumed, (long)r_val, r_consumed);
+        TEST(name, c_val == r_val && c_consumed == r_consumed);
+    }
+}
+
+void test_getoctchrs(void) {
+    printf("Testing getoctchrs (C vs Rust):\n");
+
+    const char *cases[] = {
+        "377", "210", "0", "7", "", "8", "9",
+        "400", "370", "1234", "77", "01",
+    };
+
+    for (int t = 0; t < (int)(sizeof(cases)/sizeof(cases[0])); t++) {
+        char c_buf[64], r_buf[64];
+        strncpy(c_buf, cases[t], sizeof(c_buf) - 1);
+        c_buf[sizeof(c_buf)-1] = '\0';
+        strncpy(r_buf, cases[t], sizeof(r_buf) - 1);
+        r_buf[sizeof(r_buf)-1] = '\0';
+
+        char *c_ptr = c_buf;
+        int64_t c_val = c_getoctchrs(&c_ptr);
+        int c_consumed = (int)(c_ptr - c_buf);
+
+        mock_regparse = r_buf;
+        int64_t r_val = rs_getoctchrs();
+        int r_consumed = (int)(mock_regparse - r_buf);
+
+        char name[256];
+        snprintf(name, sizeof(name), "getoctchrs(\"%s\"): C=%ld/%d Rust=%ld/%d",
+                 cases[t], (long)c_val, c_consumed, (long)r_val, r_consumed);
+        TEST(name, c_val == r_val && c_consumed == r_consumed);
+    }
+}
+
 int main(void) {
     printf("=== Comparing C regexp utility implementations ===\n\n");
 
@@ -727,6 +906,9 @@ int main(void) {
     test_backslash_trans();
     test_init_class_tab();
     test_re_multiline();
+    test_gethexchrs();
+    test_getdecchrs();
+    test_getoctchrs();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);

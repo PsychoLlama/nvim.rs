@@ -57,6 +57,10 @@ extern int rs_re_multi_type(int c);
 extern int rs_backslash_trans(int c);
 extern void rs_init_class_tab(int16_t *out);
 extern int rs_re_multiline(const regprog_T *prog);
+// Rust FFI: number parsers
+extern int64_t rs_gethexchrs(int maxinputlen);
+extern int64_t rs_getdecchrs(void);
+extern int64_t rs_getoctchrs(void);
 
 typedef enum {
   RGLF_LINE = 0x01,
@@ -1035,80 +1039,9 @@ static void ungetchr(void)
 //         before-^ ^-after
 // The parameter controls the maximum number of input characters. This will be
 // 2 when reading a \%x20 sequence and 4 when reading a \%u20AC sequence.
-static int64_t gethexchrs(int maxinputlen)
-{
-  int64_t nr = 0;
-  int c;
-  int i;
-
-  for (i = 0; i < maxinputlen; i++) {
-    c = (uint8_t)regparse[0];
-    if (!ascii_isxdigit(c)) {
-      break;
-    }
-    nr <<= 4;
-    nr |= hex2nr(c);
-    regparse++;
-  }
-
-  if (i == 0) {
-    return -1;
-  }
-  return nr;
-}
-
-// Get and return the value of the decimal string immediately after the
-// current position. Return -1 for invalid.  Consumes all digits.
-static int64_t getdecchrs(void)
-{
-  int64_t nr = 0;
-  int c;
-  int i;
-
-  for (i = 0;; i++) {
-    c = (uint8_t)regparse[0];
-    if (c < '0' || c > '9') {
-      break;
-    }
-    nr *= 10;
-    nr += c - '0';
-    regparse++;
-    curchr = -1;     // no longer valid
-  }
-
-  if (i == 0) {
-    return -1;
-  }
-  return nr;
-}
-
-// get and return the value of the octal string immediately after the current
-// position. Return -1 for invalid, or 0-255 for valid. Smart enough to handle
-// numbers > 377 correctly (for example, 400 is treated as 40) and doesn't
-// treat 8 or 9 as recognised characters. Position is updated:
-//     blahblah\%o210asdf
-//         before-^  ^-after
-static int64_t getoctchrs(void)
-{
-  int64_t nr = 0;
-  int c;
-  int i;
-
-  for (i = 0; i < 3 && nr < 040; i++) {
-    c = (uint8_t)regparse[0];
-    if (c < '0' || c > '7') {
-      break;
-    }
-    nr <<= 3;
-    nr |= hex2nr(c);
-    regparse++;
-  }
-
-  if (i == 0) {
-    return -1;
-  }
-  return nr;
-}
+static int64_t gethexchrs(int maxinputlen) { return rs_gethexchrs(maxinputlen); }
+static int64_t getdecchrs(void) { return rs_getdecchrs(); }
+static int64_t getoctchrs(void) { return rs_getoctchrs(); }
 
 // read_limits - Read two integers to be taken as a minimum and maximum.
 // If the first character is '-', then the range is reversed.

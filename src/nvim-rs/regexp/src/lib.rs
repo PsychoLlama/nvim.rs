@@ -13,6 +13,9 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
+use std::ffi::c_long;
+
+#[allow(dead_code)]
 extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_regexp_get_char_class(pp: *mut *mut c_char) -> c_int;
@@ -22,6 +25,44 @@ extern "C" {
     fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     fn nvim_regexp_get_regflags(prog: *const c_void) -> c_uint;
+
+    // Parse state accessors
+    fn nvim_regexp_get_regparse() -> *mut c_char;
+    fn nvim_regexp_set_regparse(p: *mut c_char);
+    fn nvim_regexp_get_prevchr_len() -> c_int;
+    fn nvim_regexp_set_prevchr_len(v: c_int);
+    fn nvim_regexp_get_curchr() -> c_int;
+    fn nvim_regexp_set_curchr(v: c_int);
+    fn nvim_regexp_get_prevchr() -> c_int;
+    fn nvim_regexp_set_prevchr(v: c_int);
+    fn nvim_regexp_get_prevprevchr() -> c_int;
+    fn nvim_regexp_set_prevprevchr(v: c_int);
+    fn nvim_regexp_get_nextchr() -> c_int;
+    fn nvim_regexp_set_nextchr(v: c_int);
+    fn nvim_regexp_get_at_start() -> c_int;
+    fn nvim_regexp_set_at_start(v: c_int);
+    fn nvim_regexp_get_prev_at_start() -> c_int;
+    fn nvim_regexp_set_prev_at_start(v: c_int);
+    fn nvim_regexp_get_regnpar() -> c_int;
+    fn nvim_regexp_set_regnpar(v: c_int);
+    fn nvim_regexp_get_reg_magic() -> c_int;
+    fn nvim_regexp_set_reg_magic(v: c_int);
+    fn nvim_regexp_get_after_slash() -> c_int;
+    fn nvim_regexp_set_after_slash(v: c_int);
+    fn nvim_regexp_get_rex_reg_ic() -> c_int;
+    fn nvim_regexp_get_rex_reg_icombine() -> c_int;
+    fn nvim_regexp_emsg2_fail(msg: *const c_char, is_magic_all: c_int) -> c_int;
+
+    // Multibyte helpers
+    fn utf_ptr2len(p: *const c_char) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
+
+    // Case-insensitive helpers
+    fn utf_fold(a: c_int) -> c_int;
+    fn utf_strnicmp(s1: *const c_char, s2: *const c_char, n1: usize, n2: usize) -> c_int;
+    fn mb_ptr2char_adv(pp: *const *const c_char) -> c_int;
+    fn mb_decompose(c: c_int, c1: *mut c_int, c2: *mut c_int, c3: *mut c_int);
 }
 
 // Characters always special inside [] ranges
@@ -317,6 +358,138 @@ pub unsafe extern "C" fn rs_re_multiline(prog: *const c_void) -> c_int {
     (nvim_regexp_get_regflags(prog) & RF_HASNL) as c_int
 }
 
+// --- Number parsers (pure-logic cores + FFI wrappers) ---
+
+/// Check if a byte is an ASCII hex digit.
+const fn is_xdigit(c: u8) -> bool {
+    c.is_ascii_hexdigit()
+}
+
+/// Convert a hex digit character to its numeric value (0-15).
+const fn hex2nr(c: u8) -> i64 {
+    match c {
+        b'0'..=b'9' => (c - b'0') as i64,
+        b'a'..=b'f' => (c - b'a' + 10) as i64,
+        b'A'..=b'F' => (c - b'A' + 10) as i64,
+        _ => 0,
+    }
+}
+
+/// Pure-logic hex parser: parse up to `maxinputlen` hex digits from `input`.
+/// Returns `(value, bytes_consumed)` or `(-1, 0)` if no hex digits found.
+fn gethexchrs_core(input: &[u8], maxinputlen: usize) -> (i64, usize) {
+    let mut nr: i64 = 0;
+    let mut i = 0;
+    while i < maxinputlen && i < input.len() {
+        let c = input[i];
+        if !is_xdigit(c) {
+            break;
+        }
+        nr <<= 4;
+        nr |= hex2nr(c);
+        i += 1;
+    }
+    if i == 0 {
+        (-1, 0)
+    } else {
+        (nr, i)
+    }
+}
+
+/// Pure-logic decimal parser: parse all consecutive decimal digits from `input`.
+/// Returns `(value, bytes_consumed)` or `(-1, 0)` if no digits found.
+fn getdecchrs_core(input: &[u8]) -> (i64, usize) {
+    let mut nr: i64 = 0;
+    let mut i = 0;
+    while i < input.len() {
+        let c = input[i];
+        if !c.is_ascii_digit() {
+            break;
+        }
+        nr *= 10;
+        nr += (c - b'0') as i64;
+        i += 1;
+    }
+    if i == 0 {
+        (-1, 0)
+    } else {
+        (nr, i)
+    }
+}
+
+/// Pure-logic octal parser: parse up to 3 octal digits, max value 255.
+/// Returns `(value, bytes_consumed)` or `(-1, 0)` if no digits found.
+fn getoctchrs_core(input: &[u8]) -> (i64, usize) {
+    let mut nr: i64 = 0;
+    let mut i = 0;
+    // Match C: `for (i = 0; i < 3 && nr < 040; i++)`
+    // 040 octal = 32 decimal
+    while i < 3 && nr < 0o40 && i < input.len() {
+        let c = input[i];
+        if !(b'0'..=b'7').contains(&c) {
+            break;
+        }
+        nr <<= 3;
+        nr |= hex2nr(c);
+        i += 1;
+    }
+    if i == 0 {
+        (-1, 0)
+    } else {
+        (nr, i)
+    }
+}
+
+/// FFI wrapper: get hex chars from regparse, advancing regparse.
+#[no_mangle]
+pub unsafe extern "C" fn rs_gethexchrs(maxinputlen: c_int) -> c_long {
+    let regparse = nvim_regexp_get_regparse();
+    let input = std::slice::from_raw_parts(regparse as *const u8, maxinputlen as usize + 1);
+    // Find actual available length (up to NUL)
+    let len = input.iter().position(|&b| b == 0).unwrap_or(input.len());
+    let (nr, consumed) = gethexchrs_core(&input[..len], maxinputlen as usize);
+    nvim_regexp_set_regparse(regparse.add(consumed));
+    nr as c_long
+}
+
+/// FFI wrapper: get decimal chars from regparse, advancing regparse.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getdecchrs() -> c_long {
+    let regparse = nvim_regexp_get_regparse();
+    // We need to scan forward; be generous with the slice length
+    // Find NUL to bound the slice
+    let mut len = 0;
+    while *regparse.add(len) != 0 {
+        len += 1;
+        if len > 64 {
+            break; // decimal numbers won't be this long
+        }
+    }
+    let input = std::slice::from_raw_parts(regparse as *const u8, len);
+    let (nr, consumed) = getdecchrs_core(input);
+    nvim_regexp_set_regparse(regparse.add(consumed));
+    // getdecchrs also sets curchr = -1 for each digit consumed
+    if consumed > 0 {
+        nvim_regexp_set_curchr(-1);
+    }
+    nr as c_long
+}
+
+/// FFI wrapper: get octal chars from regparse, advancing regparse.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getoctchrs() -> c_long {
+    let regparse = nvim_regexp_get_regparse();
+    // Octal is at most 3 chars
+    let mut len = 0;
+    while len < 4 && *regparse.add(len) != 0 {
+        len += 1;
+    }
+    let input = std::slice::from_raw_parts(regparse as *const u8, len);
+    let (nr, consumed) = getoctchrs_core(input);
+    nvim_regexp_set_regparse(regparse.add(consumed));
+    nr as c_long
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -483,5 +656,90 @@ mod tests {
         assert_eq!(CLASS_TAB[1], 0);
         assert_eq!(CLASS_TAB[b'!' as usize], 0);
         assert_eq!(CLASS_TAB[b'@' as usize], 0);
+    }
+
+    // --- Number parser tests ---
+
+    #[test]
+    fn test_gethexchrs_basic() {
+        assert_eq!(gethexchrs_core(b"20", 2), (0x20, 2));
+        assert_eq!(gethexchrs_core(b"ff", 2), (0xff, 2));
+        assert_eq!(gethexchrs_core(b"FF", 2), (0xFF, 2));
+        assert_eq!(gethexchrs_core(b"0a", 2), (0x0a, 2));
+        assert_eq!(gethexchrs_core(b"20AC", 4), (0x20AC, 4));
+    }
+
+    #[test]
+    fn test_gethexchrs_empty() {
+        assert_eq!(gethexchrs_core(b"", 2), (-1, 0));
+        assert_eq!(gethexchrs_core(b"gg", 2), (-1, 0));
+        assert_eq!(gethexchrs_core(b"xyz", 4), (-1, 0));
+    }
+
+    #[test]
+    fn test_gethexchrs_max_clipping() {
+        // maxinputlen=2 should only consume 2 hex chars
+        assert_eq!(gethexchrs_core(b"20AC", 2), (0x20, 2));
+        // maxinputlen=4 consumes all 4
+        assert_eq!(gethexchrs_core(b"20AC", 4), (0x20AC, 4));
+    }
+
+    #[test]
+    fn test_gethexchrs_partial() {
+        // Non-hex char stops parsing
+        assert_eq!(gethexchrs_core(b"2g", 2), (0x2, 1));
+        assert_eq!(gethexchrs_core(b"a_", 4), (0xa, 1));
+    }
+
+    #[test]
+    fn test_gethexchrs_8digit() {
+        assert_eq!(gethexchrs_core(b"12345678", 8), (0x1234_5678, 8));
+    }
+
+    #[test]
+    fn test_getdecchrs_basic() {
+        assert_eq!(getdecchrs_core(b"123"), (123, 3));
+        assert_eq!(getdecchrs_core(b"0"), (0, 1));
+        assert_eq!(getdecchrs_core(b"42rest"), (42, 2));
+    }
+
+    #[test]
+    fn test_getdecchrs_empty() {
+        assert_eq!(getdecchrs_core(b""), (-1, 0));
+        assert_eq!(getdecchrs_core(b"abc"), (-1, 0));
+    }
+
+    #[test]
+    fn test_getdecchrs_large() {
+        assert_eq!(getdecchrs_core(b"999999"), (999_999, 6));
+    }
+
+    #[test]
+    fn test_getoctchrs_basic() {
+        assert_eq!(getoctchrs_core(b"377"), (0xFF, 3)); // 255
+        assert_eq!(getoctchrs_core(b"210"), (0o210, 3)); // 136
+        assert_eq!(getoctchrs_core(b"0"), (0, 1));
+        assert_eq!(getoctchrs_core(b"7"), (7, 1));
+    }
+
+    #[test]
+    fn test_getoctchrs_empty() {
+        assert_eq!(getoctchrs_core(b""), (-1, 0));
+        assert_eq!(getoctchrs_core(b"8"), (-1, 0));
+        assert_eq!(getoctchrs_core(b"9"), (-1, 0));
+    }
+
+    #[test]
+    fn test_getoctchrs_truncation() {
+        // "400" — first two digits "40" = 0o40 = 32 >= 0o40, so loop stops after 2
+        assert_eq!(getoctchrs_core(b"400"), (0o40, 2));
+        // "37" = 31 < 32, so third char would be processed if available
+        assert_eq!(getoctchrs_core(b"370"), (0o370, 3)); // 248
+    }
+
+    #[test]
+    fn test_getoctchrs_max3() {
+        // At most 3 octal digits consumed
+        assert_eq!(getoctchrs_core(b"1234"), (0o123, 3));
     }
 }
