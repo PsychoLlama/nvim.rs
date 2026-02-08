@@ -846,18 +846,20 @@ int nvim_regexp_emsg2_fail(const char *msg, int is_magic_all)
   return FAIL;
 }
 
+extern void rs_reg_breakcheck(void);
+
 static void reg_breakcheck(void)
 {
-  if (!rex.reg_nobreak) {
-    fast_breakcheck();
-  }
+  rs_reg_breakcheck();
 }
+
+extern int rs_reg_iswordc(int c);
 
 // Return true if character 'c' is included in 'iskeyword' option for
 // "reg_buf" buffer.
 static bool reg_iswordc(int c)
 {
-  return vim_iswordc_buf(c, rex.reg_buf);
+  return rs_reg_iswordc(c);
 }
 
 static bool can_f_submatch = false;  ///< true when submatch() can be used
@@ -937,7 +939,7 @@ int32_t nvim_regexp_get_rex_lnum(void) { return (int32_t)rex.lnum; }
 void nvim_regexp_set_rex_lnum(int32_t v) { rex.lnum = (linenr_T)v; }
 void nvim_regexp_set_rex_line_and_input(uint8_t *line) { rex.line = line; rex.input = line; }
 char *nvim_regexp_call_reg_getline(int32_t lnum) { return reg_getline((linenr_T)lnum); }
-void nvim_regexp_call_reg_breakcheck(void) { reg_breakcheck(); }
+void nvim_regexp_call_reg_breakcheck(void) { rs_reg_breakcheck(); }
 
 // match_with_backref accessors for Rust FFI
 uint8_t *nvim_regexp_get_reg_tofree(void) { return reg_tofree; }
@@ -950,6 +952,10 @@ int nvim_regexp_get_got_int(void) { return got_int; }
 int nvim_regexp_call_mb_strnicmp(const char *s1, const char *s2, size_t len) { return mb_strnicmp(s1, s2, len); }
 int nvim_regexp_get_rex_line_strlen(void) { return (int)strlen((char *)rex.line); }
 int32_t nvim_regexp_call_reg_getline_len(int32_t lnum) { return (int32_t)reg_getline_len((linenr_T)lnum); }
+
+// reg_breakcheck / reg_iswordc accessors for Rust FFI
+int nvim_regexp_get_rex_reg_nobreak(void) { return rex.reg_nobreak; }
+void *nvim_regexp_get_rex_reg_buf(void) { return (void *)rex.reg_buf; }
 
 // reg_getline_common accessors for Rust FFI
 int32_t nvim_regexp_get_rex_reg_firstlnum(void) { return (int32_t)rex.reg_firstlnum; }
