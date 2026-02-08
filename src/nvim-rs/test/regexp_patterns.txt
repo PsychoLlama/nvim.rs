@@ -1195,3 +1195,12 @@ foobar	xxfoobarxx
 # Multi-group extraction (nfa_regtry submatch extraction)
 \(\w\+\) \(\w\+\) \(\w\+\)	one two three
 \v(\d+)-(\d+)-(\d+)	2026-02-08
+# Unclosed brackets — NFA compiler must treat '[' as literal (FALLTHROUGH)
+# yaml.vim uses this pattern; was triggering E874 before fix
+\v\C[\zs	test string
+\v[\zs	[bracket test
+\v[	simple bracket
+\v\C[	case bracket
+[	bare bracket
+\v[\ze	with ze
+\M[	nomagic bracket
