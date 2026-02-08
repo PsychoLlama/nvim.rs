@@ -5321,6 +5321,355 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         status = RA_MATCH;
                     }
 
+                    // --- Phase 3: Character classes ---
+                    IDENT => {
+                        if vim_isIDc(c) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    SIDENT => {
+                        if ascii_isdigit(*nvim_regexp_get_rex_input()) || vim_isIDc(c) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    KWORD => {
+                        if nvim_regexp_call_vim_iswordp_buf(
+                            nvim_regexp_get_rex_input().cast::<c_char>(),
+                        ) == 0
+                        {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    SKWORD => {
+                        if ascii_isdigit(*nvim_regexp_get_rex_input())
+                            || nvim_regexp_call_vim_iswordp_buf(
+                                nvim_regexp_get_rex_input().cast::<c_char>(),
+                            ) == 0
+                        {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    FNAME => {
+                        if vim_isfilec(c) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    SFNAME => {
+                        if ascii_isdigit(*nvim_regexp_get_rex_input()) || vim_isfilec(c) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    PRINT => {
+                        if vim_isprintc(utf_ptr2char(nvim_regexp_get_rex_input().cast::<c_char>()))
+                            == 0
+                        {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    SPRINT => {
+                        if ascii_isdigit(*nvim_regexp_get_rex_input())
+                            || vim_isprintc(utf_ptr2char(
+                                nvim_regexp_get_rex_input().cast::<c_char>(),
+                            )) == 0
+                        {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    WHITE => {
+                        if c > 0x7f || (CLASS_TAB[c as usize] & RI_WHITE) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    NWHITE => {
+                        if c == 0 || (c <= 0x7f && (CLASS_TAB[c as usize] & RI_WHITE) != 0) {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    DIGIT => {
+                        if c > 0x7f || (CLASS_TAB[c as usize] & RI_DIGIT) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    NDIGIT => {
+                        if c == 0 || (c <= 0x7f && (CLASS_TAB[c as usize] & RI_DIGIT) != 0) {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    HEX => {
+                        if c > 0x7f || (CLASS_TAB[c as usize] & RI_HEX) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    NHEX => {
+                        if c == 0 || (c <= 0x7f && (CLASS_TAB[c as usize] & RI_HEX) != 0) {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    OCTAL => {
+                        if c > 0x7f || (CLASS_TAB[c as usize] & RI_OCTAL) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    NOCTAL => {
+                        if c == 0 || (c <= 0x7f && (CLASS_TAB[c as usize] & RI_OCTAL) != 0) {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    WORD => {
+                        if c > 0x7f || (CLASS_TAB[c as usize] & RI_WORD) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    NWORD => {
+                        if c == 0 || (c <= 0x7f && (CLASS_TAB[c as usize] & RI_WORD) != 0) {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    HEAD => {
+                        if c > 0x7f || (CLASS_TAB[c as usize] & RI_HEAD) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    NHEAD => {
+                        if c == 0 || (c <= 0x7f && (CLASS_TAB[c as usize] & RI_HEAD) != 0) {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    ALPHA => {
+                        if c > 0x7f || (CLASS_TAB[c as usize] & RI_ALPHA) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    NALPHA => {
+                        if c == 0 || (c <= 0x7f && (CLASS_TAB[c as usize] & RI_ALPHA) != 0) {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    LOWER => {
+                        if c > 0x7f || (CLASS_TAB[c as usize] & RI_LOWER) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    NLOWER => {
+                        if c == 0 || (c <= 0x7f && (CLASS_TAB[c as usize] & RI_LOWER) != 0) {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    UPPER => {
+                        if c > 0x7f || (CLASS_TAB[c as usize] & RI_UPPER) == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+                    NUPPER => {
+                        if c == 0 || (c <= 0x7f && (CLASS_TAB[c as usize] & RI_UPPER) != 0) {
+                            status = RA_NOMATCH;
+                        } else {
+                            advance_reginput();
+                        }
+                    }
+
+                    // --- Phase 3: String matching ---
+                    EXACTLY => {
+                        let opnd = operand(scan);
+                        // Inline the first byte, for speed.
+                        if *opnd != *nvim_regexp_get_rex_input()
+                            && nvim_regexp_get_rex_reg_ic() == 0
+                        {
+                            status = RA_NOMATCH;
+                        } else if *opnd == 0 {
+                            // match empty string always works
+                        } else {
+                            let mut len: c_int;
+                            if *opnd.add(1) == 0 && nvim_regexp_get_rex_reg_ic() == 0 {
+                                len = 1; // matched a single byte above
+                            } else {
+                                len = strlen(opnd.cast::<c_char>()) as c_int;
+                                if rs_cstrncmp(
+                                    opnd.cast::<c_char>(),
+                                    nvim_regexp_get_rex_input().cast::<c_char>(),
+                                    &mut len,
+                                ) != 0
+                                {
+                                    status = RA_NOMATCH;
+                                }
+                            }
+                            // Check for following composing character, unless %C follows.
+                            if status != RA_NOMATCH
+                                && utf_composinglike(
+                                    nvim_regexp_get_rex_input().cast::<c_char>(),
+                                    nvim_regexp_get_rex_input()
+                                        .add(len as usize)
+                                        .cast::<c_char>(),
+                                    std::ptr::null_mut(),
+                                ) != 0
+                                && nvim_regexp_get_rex_reg_icombine() == 0
+                                && op(next) != RE_COMPOSING
+                            {
+                                status = RA_NOMATCH;
+                            }
+                            if status != RA_NOMATCH {
+                                nvim_regexp_set_rex_input(
+                                    nvim_regexp_get_rex_input().add(len as usize),
+                                );
+                            }
+                        }
+                    }
+
+                    #[allow(clippy::if_same_then_else)]
+                    ANYOF | ANYBUT => {
+                        let q = operand(scan);
+                        if c == 0 {
+                            status = RA_NOMATCH;
+                        } else if (rs_cstrchr(q.cast::<c_char>(), c).is_null()) == (opc == ANYOF) {
+                            status = RA_NOMATCH;
+                        } else {
+                            // Check following combining characters.
+                            let comb_len =
+                                utfc_ptr2len(q.cast::<c_char>()) - utf_ptr2len(q.cast::<c_char>());
+
+                            let inp = nvim_regexp_get_rex_input();
+                            nvim_regexp_set_rex_input(
+                                inp.add(utf_ptr2len(inp.cast::<c_char>()) as usize),
+                            );
+                            let q2 = q.add(utf_ptr2len(q.cast::<c_char>()) as usize);
+
+                            if comb_len > 0 {
+                                let inp2 = nvim_regexp_get_rex_input();
+                                let mut mismatch = false;
+                                for j in 0..comb_len {
+                                    if *q2.add(j as usize) != *inp2.add(j as usize) {
+                                        status = RA_NOMATCH;
+                                        mismatch = true;
+                                        break;
+                                    }
+                                }
+                                if !mismatch {
+                                    nvim_regexp_set_rex_input(inp2.add(comb_len as usize));
+                                }
+                            }
+                        }
+                    }
+
+                    MULTIBYTECODE => {
+                        let opnd = operand(scan);
+                        let mut mbc_len = utfc_ptr2len(opnd.cast::<c_char>());
+                        if mbc_len < 2 {
+                            status = RA_NOMATCH;
+                        } else {
+                            let opndc = utf_ptr2char(opnd.cast::<c_char>());
+                            if utf_iscomposing_legacy(opndc) != 0 {
+                                // Match composing char at any position.
+                                status = RA_NOMATCH;
+                                let inp = nvim_regexp_get_rex_input();
+                                let mut i: c_int = 0;
+                                while *inp.add(i as usize) != 0 {
+                                    let inpc = utf_ptr2char(inp.add(i as usize).cast::<c_char>());
+                                    if utf_iscomposing_legacy(inpc) == 0 {
+                                        if i > 0 {
+                                            break;
+                                        }
+                                    } else if opndc == inpc {
+                                        mbc_len =
+                                            i + utfc_ptr2len(inp.add(i as usize).cast::<c_char>());
+                                        status = RA_MATCH;
+                                        break;
+                                    }
+                                    i += utf_ptr2len(inp.add(i as usize).cast::<c_char>());
+                                }
+                            } else if rs_cstrncmp(
+                                opnd.cast::<c_char>(),
+                                nvim_regexp_get_rex_input().cast::<c_char>(),
+                                &mut mbc_len,
+                            ) != 0
+                            {
+                                status = RA_NOMATCH;
+                            }
+                            if status != RA_NOMATCH {
+                                nvim_regexp_set_rex_input(
+                                    nvim_regexp_get_rex_input().add(mbc_len as usize),
+                                );
+                            }
+                        }
+                    }
+
+                    // --- Phase 3: Word boundaries ---
+                    #[allow(clippy::if_same_then_else)]
+                    BOW => {
+                        if c == 0 {
+                            status = RA_NOMATCH;
+                        } else {
+                            let this_class =
+                                nvim_regexp_call_mb_get_class_tab(nvim_regexp_get_rex_input());
+                            if this_class <= 1 {
+                                status = RA_NOMATCH;
+                            } else if rs_reg_prev_class() == this_class {
+                                status = RA_NOMATCH;
+                            }
+                        }
+                    }
+                    EOW => {
+                        if nvim_regexp_get_rex_input() == nvim_regexp_get_rex_line() {
+                            status = RA_NOMATCH;
+                        } else {
+                            let this_class =
+                                nvim_regexp_call_mb_get_class_tab(nvim_regexp_get_rex_input());
+                            let prev_class = rs_reg_prev_class();
+                            if this_class == prev_class || prev_class == 0 || prev_class == 1 {
+                                status = RA_NOMATCH;
+                            }
+                        }
+                    }
+
                     _ => {
                         // Unimplemented opcode — panic to catch missing cases during dev.
                         panic!("rs_regmatch: unimplemented opcode {opc}");
