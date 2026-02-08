@@ -78,6 +78,11 @@ extern int rs_nfa_regexec_both(uint8_t *line, int32_t startcol, void *tm, int *t
 extern int rs_nfa_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
 extern int rs_nfa_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                 int32_t col, void *tm, int *timed_out);
+// Rust FFI: BT execution engine entry points
+extern void rs_init_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum);
+extern int rs_bt_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
+extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
+                               int32_t col, void *tm, int *timed_out);
 // Rust FFI: node management and compilation infrastructure
 extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
 extern void rs_regc(int b);
@@ -1626,17 +1631,7 @@ list_T *reg_submatch_list(int no)
 /// @param lnum  nr of line to start looking for match
 static void init_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum)
 {
-  rex.reg_match = NULL;
-  rex.reg_mmatch = rmp;
-  rex.reg_buf = buf;
-  rex.reg_win = win;
-  rex.reg_firstlnum = lnum;
-  rex.reg_maxline = rex.reg_buf->b_ml.ml_line_count - lnum;
-  rex.reg_line_lbr = false;
-  rex.reg_ic = rmp->rmm_ic;
-  rex.reg_icombine = false;
-  rex.reg_nobreak = rmp->regprog->re_flags & RE_NOBREAK;
-  rex.reg_maxcol = rmp->rmm_maxcol;
+  rs_init_regexec_multi(rmp, win, buf, lnum);
 }
 
 // regexp_bt.c {{{1
@@ -3835,20 +3830,7 @@ theend:
 /// @return  0 for failure, number of lines contained in the match otherwise.
 static int bt_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line_lbr)
 {
-  rex.reg_match = rmp;
-  rex.reg_mmatch = NULL;
-  rex.reg_maxline = 0;
-  rex.reg_line_lbr = line_lbr;
-  rex.reg_buf = curbuf;
-  rex.reg_win = NULL;
-  rex.reg_ic = rmp->rm_ic;
-  rex.reg_icombine = false;
-  rex.reg_nobreak = rmp->regprog->re_flags & RE_NOBREAK;
-  rex.reg_maxcol = 0;
-
-  int64_t r = bt_regexec_both(line, col, NULL, NULL);
-  assert(r <= INT_MAX);
-  return (int)r;
+  return rs_bt_regexec_nl(rmp, line, col, line_lbr);
 }
 
 /// Matches a regexp against multiple lines.
@@ -3866,8 +3848,7 @@ static int bt_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line_
 static int bt_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum, colnr_T col,
                             proftime_T *tm, int *timed_out)
 {
-  init_regexec_multi(rmp, win, buf, lnum);
-  return bt_regexec_both(NULL, col, tm, timed_out);
+  return rs_bt_regexec_multi(rmp, win, buf, lnum, col, tm, timed_out);
 }
 
 
@@ -10850,6 +10831,14 @@ void nvim_regexp_call_init_regexec_multi(void *rmp, void *win, void *buf, int32_
 void nvim_regexp_call_iemsg_null(void) { iemsg(_(e_null)); }
 
 // --- End Phase 8.5 ---
+
+// Phase 9.1: BT dispatch wrappers
+// Temporary accessor for bt_regexec_both (will be replaced in Phase 2)
+int nvim_regexp_call_bt_regexec_both(uint8_t *line, int32_t col, void *tm, int *timed_out) {
+  return bt_regexec_both(line, (colnr_T)col, (proftime_T *)tm, timed_out);
+}
+
+// --- End Phase 9.1 ---
 
 /// Main matching routine.
 ///

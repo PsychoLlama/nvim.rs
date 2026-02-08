@@ -12256,6 +12256,58 @@ pub unsafe extern "C" fn rs_nfa_regexec_multi(
 
 // --- End Phase 8.5 ---
 
+// --- Phase 9.1: BT dispatch wrappers ---
+
+extern "C" {
+    // Temporary accessor for bt_regexec_both (until Phase 2 ports it)
+    fn nvim_regexp_call_bt_regexec_both(
+        line: *mut u8,
+        col: i32,
+        tm: *mut c_void,
+        timed_out: *mut c_int,
+    ) -> c_int;
+}
+
+/// Initialize rex state for multi-line matching.
+#[no_mangle]
+pub unsafe extern "C" fn rs_init_regexec_multi(
+    rmp: *mut c_void,
+    win: *mut c_void,
+    buf: *mut c_void,
+    lnum: i32,
+) {
+    nvim_regexp_call_init_regexec_multi(rmp, win, buf, lnum);
+}
+
+/// BT regexp execution for single-line matching.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_regexec_nl(
+    rmp: *mut c_void,
+    line: *mut u8,
+    col: i32,
+    line_lbr: c_int,
+) -> c_int {
+    nvim_regexp_nfa_regexec_nl_setup(rmp, line_lbr);
+    nvim_regexp_call_bt_regexec_both(line, col, core::ptr::null_mut(), core::ptr::null_mut())
+}
+
+/// BT regexp execution for multi-line matching.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_regexec_multi(
+    rmp: *mut c_void,
+    win: *mut c_void,
+    buf: *mut c_void,
+    lnum: i32,
+    col: i32,
+    tm: *mut c_void,
+    timed_out: *mut c_int,
+) -> c_int {
+    rs_init_regexec_multi(rmp, win, buf, lnum);
+    nvim_regexp_call_bt_regexec_both(core::ptr::null_mut(), col, tm, timed_out)
+}
+
+// --- End Phase 9.1 ---
+
 #[cfg(test)]
 mod tests {
     use super::*;
