@@ -64,8 +64,8 @@ extern "C" {
     fn rs_vim_isIDc(c: c_int) -> c_int;
     fn rs_skiptowhite(p: *const c_char) -> *const c_char;
 
-    // Regex skipping from C regexp.c
-    fn skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
+    // Regex skipping from Rust regexp crate
+    fn rs_skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
 }
 
 /// Check if character ends an Ex command.
@@ -338,7 +338,7 @@ pub unsafe extern "C" fn rs_skip_vimgrep_pat(
     }
 
     let delim = first_char as c_int;
-    let mut ptr = skip_regexp(p.add(1), delim, 1);
+    let mut ptr = rs_skip_regexp(p.add(1), delim, 1);
 
     // Check if we found the closing delimiter
     if *ptr as u8 != first_char {

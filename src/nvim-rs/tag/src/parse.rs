@@ -28,7 +28,7 @@ extern "C" {
     fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
 
     /// Skip over a regexp pattern
-    fn skip_regexp(startp: *mut c_char, delim: c_int, magic: bool) -> *mut c_char;
+    fn rs_skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
 
     /// Skip over decimal digits
     fn skipdigits(p: *const c_char) -> *mut c_char;
@@ -203,7 +203,7 @@ pub unsafe extern "C" fn rs_find_extra(pp: *mut *mut c_char) -> c_int {
         if ascii_isdigit(*str as u8) {
             str = skipdigits(str.add(1));
         } else if *str == b'/' as c_char || *str == b'?' as c_char {
-            str = skip_regexp(str.add(1), *str as c_int, false);
+            str = rs_skip_regexp(str.add(1), *str as c_int, 0);
             if *str == first_char {
                 str = str.add(1);
             } else {
