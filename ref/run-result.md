@@ -1,24 +1,18 @@
-Plan: ~/.claude/plans/lucky-splashing-music.md
+Plan: ~/.claude/plans/tingly-fluttering-rain.md
 
-All 3 phases are complete. Here's a summary:
+All 6 phases of the plan are complete. Here's a summary:
 
-## Summary
+## Regexp Scanner/Lexer Migration — Complete
 
-Successfully migrated 6 regexp utility functions from C to Rust in 3 commits:
+**6 commits, 13 functions migrated to Rust:**
 
-### Commit 1: Pure arithmetic functions
-- `rs_no_magic` — strip Magic encoding from a character
-- `rs_toggle_magic` — toggle Magic encoding on/off  
-- `rs_re_multi_type` — classify multi-match operators
-- `rs_backslash_trans` — translate backslash escape sequences
+| Phase | Commit | Functions |
+|-------|--------|-----------|
+| 1 | `6477908` | 25 C accessor functions for parse state globals |
+| 2 | `f139f2c` | `gethexchrs`, `getdecchrs`, `getoctchrs` |
+| 3 | `5101872` | `initchr`, `save_parse_state`, `restore_parse_state` |
+| 4 | `043eaf8` | `peekchr`, `skipchr`, `skipchr_keepstart`, `getchr`, `ungetchr` |
+| 5 | `5410100` | `read_limits` |
+| 6 | `c49c304` | `cstrncmp`, `cstrchr` (+ `mb_decompose` inlined in Rust) |
 
-### Commit 2: Class table initialization
-- `rs_init_class_tab` — compile-time const 256-entry class lookup table (replacing runtime initialization)
-
-### Commit 3: Opaque handle function
-- `rs_re_multiline` — check if regexp can match newlines (uses C accessor `nvim_regexp_get_regflags` for opaque struct access)
-
-### Test results
-- 3451 Rust unit tests pass (17 new tests for the regexp crate)
-- 57 FFI comparison tests pass (9 new C-vs-Rust comparisons)
-- All build, smoke-test, formatting, and lint checks pass
+**All checks pass for every commit:** build, smoke-test, rust-fmt-check, rust-clippy, rust-test (3463 tests).
