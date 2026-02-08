@@ -10,6 +10,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::borrow_as_ptr)]
+#![allow(dead_code)] // NFA constants are used incrementally across phases
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -6631,6 +6632,417 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
     }
 }
 
+// ==========================================================================
+// NFA compiler constants and infrastructure
+// ==========================================================================
+
+// Added to NFA_ANY - NFA_NUPPER_IC to include a NL.
+const NFA_ADD_NL: c_int = 31;
+
+// NFA states — must match the C enum in regexp.c starting at NFA_SPLIT = -1024
+const NFA_SPLIT: c_int = -1024;
+const NFA_MATCH: c_int = -1023;
+const NFA_EMPTY: c_int = -1022;
+
+const NFA_START_COLL: c_int = -1021;
+const NFA_END_COLL: c_int = -1020;
+const NFA_START_NEG_COLL: c_int = -1019;
+const NFA_END_NEG_COLL: c_int = -1018;
+const NFA_RANGE: c_int = -1017;
+const NFA_RANGE_MIN: c_int = -1016;
+const NFA_RANGE_MAX: c_int = -1015;
+
+const NFA_CONCAT: c_int = -1014;
+const NFA_OR: c_int = -1013;
+const NFA_STAR: c_int = -1012;
+const NFA_STAR_NONGREEDY: c_int = -1011;
+const NFA_QUEST: c_int = -1010;
+const NFA_QUEST_NONGREEDY: c_int = -1009;
+
+const NFA_BOL: c_int = -1008;
+const NFA_EOL: c_int = -1007;
+const NFA_BOW: c_int = -1006;
+const NFA_EOW: c_int = -1005;
+const NFA_BOF: c_int = -1004;
+const NFA_EOF: c_int = -1003;
+const NFA_NEWL: c_int = -1002;
+const NFA_ZSTART: c_int = -1001;
+const NFA_ZEND: c_int = -1000;
+const NFA_NOPEN: c_int = -999;
+const NFA_NCLOSE: c_int = -998;
+const NFA_START_INVISIBLE: c_int = -997;
+const NFA_START_INVISIBLE_FIRST: c_int = -996;
+const NFA_START_INVISIBLE_NEG: c_int = -995;
+const NFA_START_INVISIBLE_NEG_FIRST: c_int = -994;
+const NFA_START_INVISIBLE_BEFORE: c_int = -993;
+const NFA_START_INVISIBLE_BEFORE_FIRST: c_int = -992;
+const NFA_START_INVISIBLE_BEFORE_NEG: c_int = -991;
+const NFA_START_INVISIBLE_BEFORE_NEG_FIRST: c_int = -990;
+const NFA_START_PATTERN: c_int = -989;
+const NFA_END_INVISIBLE: c_int = -988;
+const NFA_END_INVISIBLE_NEG: c_int = -987;
+const NFA_END_PATTERN: c_int = -986;
+const NFA_COMPOSING: c_int = -985;
+const NFA_END_COMPOSING: c_int = -984;
+const NFA_ANY_COMPOSING: c_int = -983;
+const NFA_OPT_CHARS: c_int = -982;
+
+const NFA_PREV_ATOM_NO_WIDTH: c_int = -981;
+const NFA_PREV_ATOM_NO_WIDTH_NEG: c_int = -980;
+const NFA_PREV_ATOM_JUST_BEFORE: c_int = -979;
+const NFA_PREV_ATOM_JUST_BEFORE_NEG: c_int = -978;
+const NFA_PREV_ATOM_LIKE_PATTERN: c_int = -977;
+
+const NFA_BACKREF1: c_int = -976;
+const NFA_BACKREF2: c_int = -975;
+const NFA_BACKREF3: c_int = -974;
+const NFA_BACKREF4: c_int = -973;
+const NFA_BACKREF5: c_int = -972;
+const NFA_BACKREF6: c_int = -971;
+const NFA_BACKREF7: c_int = -970;
+const NFA_BACKREF8: c_int = -969;
+const NFA_BACKREF9: c_int = -968;
+const NFA_ZREF1: c_int = -967;
+const NFA_ZREF2: c_int = -966;
+const NFA_ZREF3: c_int = -965;
+const NFA_ZREF4: c_int = -964;
+const NFA_ZREF5: c_int = -963;
+const NFA_ZREF6: c_int = -962;
+const NFA_ZREF7: c_int = -961;
+const NFA_ZREF8: c_int = -960;
+const NFA_ZREF9: c_int = -959;
+const NFA_SKIP: c_int = -958;
+
+const NFA_MOPEN: c_int = -957;
+const NFA_MOPEN1: c_int = -956;
+const NFA_MOPEN2: c_int = -955;
+const NFA_MOPEN3: c_int = -954;
+const NFA_MOPEN4: c_int = -953;
+const NFA_MOPEN5: c_int = -952;
+const NFA_MOPEN6: c_int = -951;
+const NFA_MOPEN7: c_int = -950;
+const NFA_MOPEN8: c_int = -949;
+const NFA_MOPEN9: c_int = -948;
+
+const NFA_MCLOSE: c_int = -947;
+const NFA_MCLOSE1: c_int = -946;
+const NFA_MCLOSE2: c_int = -945;
+const NFA_MCLOSE3: c_int = -944;
+const NFA_MCLOSE4: c_int = -943;
+const NFA_MCLOSE5: c_int = -942;
+const NFA_MCLOSE6: c_int = -941;
+const NFA_MCLOSE7: c_int = -940;
+const NFA_MCLOSE8: c_int = -939;
+const NFA_MCLOSE9: c_int = -938;
+
+const NFA_ZOPEN: c_int = -937;
+const NFA_ZOPEN1: c_int = -936;
+const NFA_ZOPEN2: c_int = -935;
+const NFA_ZOPEN3: c_int = -934;
+const NFA_ZOPEN4: c_int = -933;
+const NFA_ZOPEN5: c_int = -932;
+const NFA_ZOPEN6: c_int = -931;
+const NFA_ZOPEN7: c_int = -930;
+const NFA_ZOPEN8: c_int = -929;
+const NFA_ZOPEN9: c_int = -928;
+
+const NFA_ZCLOSE: c_int = -927;
+const NFA_ZCLOSE1: c_int = -926;
+const NFA_ZCLOSE2: c_int = -925;
+const NFA_ZCLOSE3: c_int = -924;
+const NFA_ZCLOSE4: c_int = -923;
+const NFA_ZCLOSE5: c_int = -922;
+const NFA_ZCLOSE6: c_int = -921;
+const NFA_ZCLOSE7: c_int = -920;
+const NFA_ZCLOSE8: c_int = -919;
+const NFA_ZCLOSE9: c_int = -918;
+
+// NFA_FIRST_NL
+const NFA_ANY: c_int = -917;
+const NFA_IDENT: c_int = -916;
+const NFA_SIDENT: c_int = -915;
+const NFA_KWORD: c_int = -914;
+const NFA_SKWORD: c_int = -913;
+const NFA_FNAME: c_int = -912;
+const NFA_SFNAME: c_int = -911;
+const NFA_PRINT: c_int = -910;
+const NFA_SPRINT: c_int = -909;
+const NFA_WHITE: c_int = -908;
+const NFA_NWHITE: c_int = -907;
+const NFA_DIGIT: c_int = -906;
+const NFA_NDIGIT: c_int = -905;
+const NFA_HEX: c_int = -904;
+const NFA_NHEX: c_int = -903;
+const NFA_OCTAL: c_int = -902;
+const NFA_NOCTAL: c_int = -901;
+const NFA_WORD: c_int = -900;
+const NFA_NWORD: c_int = -899;
+const NFA_HEAD: c_int = -898;
+const NFA_NHEAD: c_int = -897;
+const NFA_ALPHA: c_int = -896;
+const NFA_NALPHA: c_int = -895;
+const NFA_LOWER: c_int = -894;
+const NFA_NLOWER: c_int = -893;
+const NFA_UPPER: c_int = -892;
+const NFA_NUPPER: c_int = -891;
+const NFA_LOWER_IC: c_int = -890;
+const NFA_NLOWER_IC: c_int = -889;
+const NFA_UPPER_IC: c_int = -888;
+const NFA_NUPPER_IC: c_int = -887;
+
+const NFA_FIRST_NL: c_int = NFA_ANY + NFA_ADD_NL;
+const NFA_LAST_NL: c_int = NFA_NUPPER_IC + NFA_ADD_NL;
+
+// After NFA_LAST_NL, the enum continues
+const NFA_CURSOR: c_int = NFA_NUPPER_IC + NFA_ADD_NL + 1;
+const NFA_LNUM: c_int = NFA_CURSOR + 1;
+const NFA_LNUM_GT: c_int = NFA_CURSOR + 2;
+const NFA_LNUM_LT: c_int = NFA_CURSOR + 3;
+const NFA_COL: c_int = NFA_CURSOR + 4;
+const NFA_COL_GT: c_int = NFA_CURSOR + 5;
+const NFA_COL_LT: c_int = NFA_CURSOR + 6;
+const NFA_VCOL: c_int = NFA_CURSOR + 7;
+const NFA_VCOL_GT: c_int = NFA_CURSOR + 8;
+const NFA_VCOL_LT: c_int = NFA_CURSOR + 9;
+const NFA_MARK: c_int = NFA_CURSOR + 10;
+const NFA_MARK_GT: c_int = NFA_CURSOR + 11;
+const NFA_MARK_LT: c_int = NFA_CURSOR + 12;
+const NFA_VISUAL: c_int = NFA_CURSOR + 13;
+
+const NFA_CLASS_ALNUM: c_int = NFA_CURSOR + 14;
+const NFA_CLASS_ALPHA: c_int = NFA_CURSOR + 15;
+const NFA_CLASS_BLANK: c_int = NFA_CURSOR + 16;
+const NFA_CLASS_CNTRL: c_int = NFA_CURSOR + 17;
+const NFA_CLASS_DIGIT: c_int = NFA_CURSOR + 18;
+const NFA_CLASS_GRAPH: c_int = NFA_CURSOR + 19;
+const NFA_CLASS_LOWER: c_int = NFA_CURSOR + 20;
+const NFA_CLASS_PRINT: c_int = NFA_CURSOR + 21;
+const NFA_CLASS_PUNCT: c_int = NFA_CURSOR + 22;
+const NFA_CLASS_SPACE: c_int = NFA_CURSOR + 23;
+const NFA_CLASS_UPPER: c_int = NFA_CURSOR + 24;
+const NFA_CLASS_XDIGIT: c_int = NFA_CURSOR + 25;
+const NFA_CLASS_TAB: c_int = NFA_CURSOR + 26;
+const NFA_CLASS_RETURN: c_int = NFA_CURSOR + 27;
+const NFA_CLASS_BACKSPACE: c_int = NFA_CURSOR + 28;
+const NFA_CLASS_ESCAPE: c_int = NFA_CURSOR + 29;
+const NFA_CLASS_IDENT: c_int = NFA_CURSOR + 30;
+const NFA_CLASS_KEYWORD: c_int = NFA_CURSOR + 31;
+const NFA_CLASS_FNAME: c_int = NFA_CURSOR + 32;
+
+// Keep in sync with classchars in C.
+#[allow(dead_code)]
+const NFA_CLASSCODES: [c_int; 27] = [
+    NFA_ANY, NFA_IDENT, NFA_SIDENT, NFA_KWORD, NFA_SKWORD, NFA_FNAME, NFA_SFNAME, NFA_PRINT,
+    NFA_SPRINT, NFA_WHITE, NFA_NWHITE, NFA_DIGIT, NFA_NDIGIT, NFA_HEX, NFA_NHEX, NFA_OCTAL,
+    NFA_NOCTAL, NFA_WORD, NFA_NWORD, NFA_HEAD, NFA_NHEAD, NFA_ALPHA, NFA_NALPHA, NFA_LOWER,
+    NFA_NLOWER, NFA_UPPER, NFA_NUPPER,
+];
+
+// FAIL constant from vim_defs.h
+const FAIL: c_int = 0;
+
+#[allow(dead_code)]
+extern "C" {
+    // NFA postfix buffer accessors
+    fn nvim_regexp_get_post_start() -> *mut c_int;
+    fn nvim_regexp_set_post_start(p: *mut c_int);
+    fn nvim_regexp_get_post_ptr() -> *mut c_int;
+    fn nvim_regexp_set_post_ptr(p: *mut c_int);
+    fn nvim_regexp_get_post_end() -> *mut c_int;
+    fn nvim_regexp_set_post_end(p: *mut c_int);
+
+    // NFA state count accessors
+    fn nvim_regexp_get_nstate() -> c_int;
+    fn nvim_regexp_set_nstate(v: c_int);
+    fn nvim_regexp_get_istate() -> c_int;
+    fn nvim_regexp_set_istate(v: c_int);
+
+    // NFA flags accessors
+    fn nvim_regexp_get_nfa_re_flags() -> c_int;
+    fn nvim_regexp_set_nfa_re_flags(v: c_int);
+    fn nvim_regexp_get_wants_nfa() -> c_int;
+    fn nvim_regexp_set_wants_nfa(v: c_int);
+
+    // rex NFA fields
+    fn nvim_regexp_set_rex_nfa_has_zend(v: c_int);
+    fn nvim_regexp_set_rex_nfa_has_backref(v: c_int);
+
+    // Calls shared regcomp_start
+    fn nvim_regexp_call_regcomp_start(expr: *mut u8, re_flags: c_int);
+
+    // Calls init_class_tab
+    fn nvim_regexp_call_init_class_tab();
+
+    fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
+
+    // NFA constant validation accessor
+    fn nvim_regexp_get_nfa_constant(index: c_int) -> c_int;
+}
+
+/// Emit a value into the NFA postfix buffer, growing if needed.
+unsafe fn nfa_emit(c: c_int) {
+    let post_ptr = nvim_regexp_get_post_ptr();
+    let post_end = nvim_regexp_get_post_end();
+    if post_ptr >= post_end {
+        rs_realloc_post_list();
+    }
+    let post_ptr = nvim_regexp_get_post_ptr();
+    *post_ptr = c;
+    nvim_regexp_set_post_ptr(post_ptr.add(1));
+}
+
+/// Initialize internal variables before NFA compilation.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_regcomp_start(expr: *mut u8, re_flags: c_int) {
+    nvim_regexp_set_nstate(0);
+    nvim_regexp_set_istate(0);
+
+    // A reasonable estimation for maximum size
+    let nstate_max = (strlen(expr.cast::<c_char>()) + 1) * 25 + 1000;
+
+    // Size for postfix representation of expr.
+    let postfix_size = std::mem::size_of::<c_int>() * nstate_max;
+
+    let post_start = xmalloc(postfix_size).cast::<c_int>();
+    nvim_regexp_set_post_start(post_start);
+    nvim_regexp_set_post_ptr(post_start);
+    nvim_regexp_set_post_end(post_start.add(nstate_max));
+    nvim_regexp_set_wants_nfa(0);
+    nvim_regexp_set_rex_nfa_has_zend(0);
+    nvim_regexp_set_rex_nfa_has_backref(0);
+
+    // shared with BT engine
+    nvim_regexp_call_regcomp_start(expr, re_flags);
+}
+
+/// Grow the NFA postfix buffer by 1.5x.
+#[no_mangle]
+pub unsafe extern "C" fn rs_realloc_post_list() {
+    let post_start = nvim_regexp_get_post_start();
+    let post_ptr = nvim_regexp_get_post_ptr();
+    let post_end = nvim_regexp_get_post_end();
+
+    let old_max = post_end.offset_from(post_start) as usize;
+    let new_max = old_max * 3 / 2;
+    let new_start = xrealloc(
+        post_start.cast::<c_void>(),
+        new_max * std::mem::size_of::<c_int>(),
+    )
+    .cast::<c_int>();
+
+    let ptr_offset = post_ptr.offset_from(post_start) as usize;
+    nvim_regexp_set_post_ptr(new_start.add(ptr_offset));
+    nvim_regexp_set_post_end(new_start.add(new_max));
+    nvim_regexp_set_post_start(new_start);
+}
+
+/// Recognize a character class in expanded form (e.g. [0-9]).
+/// Returns the NFA class constant on success, or FAIL (0) on failure.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_recognize_char_class(
+    start: *mut u8,
+    end: *const u8,
+    extra_newl: c_int,
+) -> c_int {
+    const CLASS_NOT: u8 = 0x80;
+    const CLASS_AF: u8 = 0x40;
+    const CLASS_CAP_AF: u8 = 0x20;
+    const CLASS_AZ: u8 = 0x10;
+    const CLASS_CAP_AZ: u8 = 0x08;
+    const CLASS_O7: u8 = 0x04;
+    const CLASS_O9: u8 = 0x02;
+    const CLASS_UNDERSCORE: u8 = 0x01;
+
+    if *end != b']' {
+        return FAIL;
+    }
+
+    let mut config: u8 = 0;
+    let mut newl = extra_newl == 1;
+    let mut p = start;
+    let end_mut = end.cast_mut();
+
+    if *p == b'^' {
+        config |= CLASS_NOT;
+        p = p.add(1);
+    }
+
+    while (p as usize) < (end_mut as usize) {
+        if (p.add(2) as usize) < (end_mut as usize) && *p.add(1) == b'-' {
+            match *p {
+                b'0' => {
+                    if *p.add(2) == b'9' {
+                        config |= CLASS_O9;
+                    } else if *p.add(2) == b'7' {
+                        config |= CLASS_O7;
+                    } else {
+                        return FAIL;
+                    }
+                }
+                b'a' => {
+                    if *p.add(2) == b'z' {
+                        config |= CLASS_AZ;
+                    } else if *p.add(2) == b'f' {
+                        config |= CLASS_AF;
+                    } else {
+                        return FAIL;
+                    }
+                }
+                b'A' => {
+                    if *p.add(2) == b'Z' {
+                        config |= CLASS_CAP_AZ;
+                    } else if *p.add(2) == b'F' {
+                        config |= CLASS_CAP_AF;
+                    } else {
+                        return FAIL;
+                    }
+                }
+                _ => return FAIL,
+            }
+            p = p.add(3);
+        } else if (p.add(1) as usize) < (end_mut as usize) && *p == b'\\' && *p.add(1) == b'n' {
+            newl = true;
+            p = p.add(2);
+        } else if *p == b'_' {
+            config |= CLASS_UNDERSCORE;
+            p = p.add(1);
+        } else if *p == b'\n' {
+            newl = true;
+            p = p.add(1);
+        } else {
+            return FAIL;
+        }
+    }
+
+    if !std::ptr::eq(p, end) {
+        return FAIL;
+    }
+
+    let extra = if newl { NFA_ADD_NL } else { 0 };
+
+    match config {
+        x if x == CLASS_O9 => extra + NFA_DIGIT,
+        x if x == CLASS_NOT | CLASS_O9 => extra + NFA_NDIGIT,
+        x if x == CLASS_AF | CLASS_CAP_AF | CLASS_O9 => extra + NFA_HEX,
+        x if x == CLASS_NOT | CLASS_AF | CLASS_CAP_AF | CLASS_O9 => extra + NFA_NHEX,
+        x if x == CLASS_O7 => extra + NFA_OCTAL,
+        x if x == CLASS_NOT | CLASS_O7 => extra + NFA_NOCTAL,
+        x if x == CLASS_AZ | CLASS_CAP_AZ | CLASS_O9 | CLASS_UNDERSCORE => extra + NFA_WORD,
+        x if x == CLASS_NOT | CLASS_AZ | CLASS_CAP_AZ | CLASS_O9 | CLASS_UNDERSCORE => {
+            extra + NFA_NWORD
+        }
+        x if x == CLASS_AZ | CLASS_CAP_AZ | CLASS_UNDERSCORE => extra + NFA_HEAD,
+        x if x == CLASS_NOT | CLASS_AZ | CLASS_CAP_AZ | CLASS_UNDERSCORE => extra + NFA_NHEAD,
+        x if x == CLASS_AZ | CLASS_CAP_AZ => extra + NFA_ALPHA,
+        x if x == CLASS_NOT | CLASS_AZ | CLASS_CAP_AZ => extra + NFA_NALPHA,
+        x if x == CLASS_AZ => extra + NFA_LOWER_IC,
+        x if x == CLASS_NOT | CLASS_AZ => extra + NFA_NLOWER_IC,
+        x if x == CLASS_CAP_AZ => extra + NFA_UPPER_IC,
+        x if x == CLASS_NOT | CLASS_CAP_AZ => extra + NFA_NUPPER_IC,
+        _ => FAIL,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -7188,5 +7600,155 @@ mod tests {
         // This is a compile-time / linkage test — actual behavior
         // depends on buf_T.b_chartab which is set up at runtime.
         assert_eq!(1, 1); // placeholder - real testing via smoke-test
+    }
+
+    // --- NFA constant tests ---
+
+    #[test]
+    fn test_nfa_constants_basic() {
+        // Verify NFA_SPLIT is the base and subsequent constants increment by 1
+        assert_eq!(NFA_SPLIT, -1024);
+        assert_eq!(NFA_MATCH, NFA_SPLIT + 1);
+        assert_eq!(NFA_EMPTY, NFA_SPLIT + 2);
+    }
+
+    #[test]
+    fn test_nfa_constants_first_last_nl() {
+        // NFA_FIRST_NL = NFA_ANY + NFA_ADD_NL
+        assert_eq!(NFA_FIRST_NL, NFA_ANY + NFA_ADD_NL);
+        // NFA_LAST_NL = NFA_NUPPER_IC + NFA_ADD_NL
+        assert_eq!(NFA_LAST_NL, NFA_NUPPER_IC + NFA_ADD_NL);
+    }
+
+    #[test]
+    fn test_nfa_constants_mopen_mclose_ranges() {
+        // MOPEN0..MOPEN9 are contiguous
+        assert_eq!(NFA_MOPEN1, NFA_MOPEN + 1);
+        assert_eq!(NFA_MOPEN9, NFA_MOPEN + 9);
+        // MCLOSE0..MCLOSE9 are contiguous
+        assert_eq!(NFA_MCLOSE1, NFA_MCLOSE + 1);
+        assert_eq!(NFA_MCLOSE9, NFA_MCLOSE + 9);
+        // ZOPEN/ZCLOSE ranges too
+        assert_eq!(NFA_ZOPEN1, NFA_ZOPEN + 1);
+        assert_eq!(NFA_ZOPEN9, NFA_ZOPEN + 9);
+        assert_eq!(NFA_ZCLOSE1, NFA_ZCLOSE + 1);
+        assert_eq!(NFA_ZCLOSE9, NFA_ZCLOSE + 9);
+    }
+
+    #[test]
+    fn test_nfa_constants_backref_range() {
+        assert_eq!(NFA_BACKREF2, NFA_BACKREF1 + 1);
+        assert_eq!(NFA_BACKREF9, NFA_BACKREF1 + 8);
+        assert_eq!(NFA_ZREF2, NFA_ZREF1 + 1);
+        assert_eq!(NFA_ZREF9, NFA_ZREF1 + 8);
+    }
+
+    #[test]
+    fn test_nfa_constants_char_classes() {
+        // Character classes are contiguous after NFA_VISUAL
+        assert_eq!(NFA_CLASS_ALPHA, NFA_CLASS_ALNUM + 1);
+        assert_eq!(NFA_CLASS_FNAME, NFA_CLASS_ALNUM + 18);
+    }
+
+    // --- nfa_recognize_char_class tests ---
+
+    fn call_recognize(input: &[u8], extra_newl: c_int) -> c_int {
+        let mut buf = input.to_vec();
+        buf.push(b']');
+        let start = buf.as_mut_ptr();
+        let end = unsafe { start.add(buf.len() - 1) };
+        unsafe { rs_nfa_recognize_char_class(start, end, extra_newl) }
+    }
+
+    #[test]
+    fn test_recognize_digits() {
+        assert_eq!(call_recognize(b"0-9", 0), NFA_DIGIT);
+    }
+
+    #[test]
+    fn test_recognize_not_digits() {
+        assert_eq!(call_recognize(b"^0-9", 0), NFA_NDIGIT);
+    }
+
+    #[test]
+    fn test_recognize_hex() {
+        assert_eq!(call_recognize(b"0-9a-fA-F", 0), NFA_HEX);
+    }
+
+    #[test]
+    fn test_recognize_not_hex() {
+        assert_eq!(call_recognize(b"^0-9a-fA-F", 0), NFA_NHEX);
+    }
+
+    #[test]
+    fn test_recognize_octal() {
+        assert_eq!(call_recognize(b"0-7", 0), NFA_OCTAL);
+    }
+
+    #[test]
+    fn test_recognize_not_octal() {
+        assert_eq!(call_recognize(b"^0-7", 0), NFA_NOCTAL);
+    }
+
+    #[test]
+    fn test_recognize_word() {
+        assert_eq!(call_recognize(b"a-zA-Z0-9_", 0), NFA_WORD);
+    }
+
+    #[test]
+    fn test_recognize_not_word() {
+        assert_eq!(call_recognize(b"^a-zA-Z0-9_", 0), NFA_NWORD);
+    }
+
+    #[test]
+    fn test_recognize_head() {
+        assert_eq!(call_recognize(b"a-zA-Z_", 0), NFA_HEAD);
+    }
+
+    #[test]
+    fn test_recognize_alpha() {
+        assert_eq!(call_recognize(b"a-zA-Z", 0), NFA_ALPHA);
+    }
+
+    #[test]
+    fn test_recognize_lower_ic() {
+        assert_eq!(call_recognize(b"a-z", 0), NFA_LOWER_IC);
+    }
+
+    #[test]
+    fn test_recognize_upper_ic() {
+        assert_eq!(call_recognize(b"A-Z", 0), NFA_UPPER_IC);
+    }
+
+    #[test]
+    fn test_recognize_with_newl() {
+        // extra_newl = 1 means newline is included
+        assert_eq!(call_recognize(b"0-9", 1), NFA_DIGIT + NFA_ADD_NL);
+    }
+
+    #[test]
+    fn test_recognize_with_backslash_n() {
+        // \n in the pattern means newline
+        assert_eq!(call_recognize(b"0-9\\n", 0), NFA_DIGIT + NFA_ADD_NL);
+    }
+
+    #[test]
+    fn test_recognize_fail_bad_range() {
+        assert_eq!(call_recognize(b"0-5", 0), FAIL);
+    }
+
+    #[test]
+    fn test_recognize_fail_unknown_char() {
+        assert_eq!(call_recognize(b"x", 0), FAIL);
+    }
+
+    #[test]
+    fn test_recognize_fail_missing_bracket() {
+        // end does not point to ']'
+        let mut buf = b"0-9".to_vec();
+        let start = buf.as_mut_ptr();
+        let end = unsafe { start.add(buf.len()) };
+        let result = unsafe { rs_nfa_recognize_char_class(start, end, 0) };
+        assert_eq!(result, FAIL);
     }
 }

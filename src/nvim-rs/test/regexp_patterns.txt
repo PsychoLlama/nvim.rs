@@ -937,3 +937,26 @@ abc\+	abccc
 \%u00e9\+	éééfoo
 # NEWL quantifier
 \n	line1\nline2
+
+# === NFA Compiler Phase 1: Char class recognition ===
+# [0-9] recognized as NFA_DIGIT
+[0-9]	abc123def
+[0-9]\+	987xyz
+# [^0-9] recognized as NFA_NDIGIT
+[^0-9]	abc123
+# [a-zA-Z_] recognized as NFA_HEAD
+[a-zA-Z_]\+	_foo123
+# [a-zA-Z0-9_] recognized as NFA_WORD
+[a-zA-Z0-9_]\+	hello_world42
+# [^a-zA-Z0-9_] recognized as NFA_NWORD
+[^a-zA-Z0-9_]	hello world
+# [a-z] recognized as NFA_LOWER_IC
+[a-z]\+	abcDEF
+# [A-Z] recognized as NFA_UPPER_IC
+[A-Z]\+	ABCdef
+# [a-zA-Z] recognized as NFA_ALPHA
+[a-zA-Z]\+	hello123
+# [0-7] recognized as NFA_OCTAL
+[0-7]\+	01234567
+# [0-9a-fA-F] recognized as NFA_HEX
+[0-9a-fA-F]\+	deadBEEF42

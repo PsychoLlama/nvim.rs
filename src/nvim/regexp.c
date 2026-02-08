@@ -4597,44 +4597,69 @@ static save_se_T *nfa_endp = NULL;
 // 0 for first call to nfa_regmatch(), 1 for recursive call.
 static int nfa_ll_index = 0;
 
+// --- NFA accessor functions for Rust FFI ---
+int *nvim_regexp_get_post_start(void) { return post_start; }
+void nvim_regexp_set_post_start(int *p) { post_start = p; }
+int *nvim_regexp_get_post_ptr(void) { return post_ptr; }
+void nvim_regexp_set_post_ptr(int *p) { post_ptr = p; }
+int *nvim_regexp_get_post_end(void) { return post_end; }
+void nvim_regexp_set_post_end(int *p) { post_end = p; }
+
+int nvim_regexp_get_nstate(void) { return nstate; }
+void nvim_regexp_set_nstate(int v) { nstate = v; }
+int nvim_regexp_get_istate(void) { return istate; }
+void nvim_regexp_set_istate(int v) { istate = v; }
+
+int nvim_regexp_get_nfa_re_flags(void) { return nfa_re_flags; }
+void nvim_regexp_set_nfa_re_flags(int v) { nfa_re_flags = v; }
+int nvim_regexp_get_wants_nfa(void) { return (int)wants_nfa; }
+void nvim_regexp_set_wants_nfa(int v) { wants_nfa = (bool)v; }
+
+void nvim_regexp_set_rex_nfa_has_zend(int v) { rex.nfa_has_zend = v; }
+void nvim_regexp_set_rex_nfa_has_backref(int v) { rex.nfa_has_backref = v; }
+
+void nvim_regexp_call_regcomp_start(uint8_t *expr, int re_flags) { regcomp_start(expr, re_flags); }
+void nvim_regexp_call_init_class_tab(void) { init_class_tab(); }
+
+// Validation accessor: returns NFA constant by index for Rust tests.
+int nvim_regexp_get_nfa_constant(int index)
+{
+  // Map index to NFA constant for validation
+  static const int nfa_constants[] = {
+    NFA_SPLIT, NFA_MATCH, NFA_EMPTY,
+    NFA_START_COLL, NFA_END_COLL, NFA_START_NEG_COLL, NFA_END_NEG_COLL,
+    NFA_RANGE, NFA_RANGE_MIN, NFA_RANGE_MAX,
+    NFA_CONCAT, NFA_OR, NFA_STAR, NFA_STAR_NONGREEDY,
+    NFA_QUEST, NFA_QUEST_NONGREEDY,
+    NFA_BOL, NFA_EOL, NFA_BOW, NFA_EOW, NFA_BOF, NFA_EOF, NFA_NEWL,
+    NFA_ZSTART, NFA_ZEND, NFA_NOPEN, NFA_NCLOSE,
+    NFA_ANY, NFA_DIGIT, NFA_NDIGIT,
+    NFA_MOPEN, NFA_MCLOSE, NFA_CLASS_ALNUM, NFA_CLASS_FNAME,
+  };
+  if (index < 0 || index >= (int)(sizeof(nfa_constants) / sizeof(nfa_constants[0]))) {
+    return 0x7FFFFFFF;  // sentinel for out-of-range
+  }
+  return nfa_constants[index];
+}
+
 // Helper functions used when doing re2post() ... regatom() parsing
+extern void rs_realloc_post_list(void);
 #define EMIT(c) \
   do { \
     if (post_ptr >= post_end) { \
-      realloc_post_list(); \
+      rs_realloc_post_list(); \
     } \
     *post_ptr++ = c; \
   } while (0)
+
+extern void rs_nfa_regcomp_start(uint8_t *expr, int re_flags);
 
 /// Initialize internal variables before NFA compilation.
 ///
 /// @param re_flags  @see vim_regcomp()
 static void nfa_regcomp_start(uint8_t *expr, int re_flags)
 {
-  size_t postfix_size;
-  size_t nstate_max;
-
-  nstate = 0;
-  istate = 0;
-  // A reasonable estimation for maximum size
-  nstate_max = (strlen((char *)expr) + 1) * 25;
-
-  // Some items blow up in size, such as [A-z].  Add more space for that.
-  // When it is still not enough realloc_post_list() will be used.
-  nstate_max += 1000;
-
-  // Size for postfix representation of expr.
-  postfix_size = sizeof(int) * nstate_max;
-
-  post_start = (int *)xmalloc(postfix_size);
-  post_ptr = post_start;
-  post_end = post_start + nstate_max;
-  wants_nfa = false;
-  rex.nfa_has_zend = false;
-  rex.nfa_has_backref = false;
-
-  // shared with BT engine
-  regcomp_start(expr, re_flags);
+  rs_nfa_regcomp_start(expr, re_flags);
 }
 
 // Figure out if the NFA state list starts with an anchor, must match at start
@@ -4809,139 +4834,15 @@ static uint8_t *nfa_get_match_text(nfa_state_T *start)
 // running above the estimated number of states.
 static void realloc_post_list(void)
 {
-  // For weird patterns the number of states can be very high. Increasing by
-  // 50% seems a reasonable compromise between memory use and speed.
-  const size_t new_max = (size_t)(post_end - post_start) * 3 / 2;
-  int *new_start = xrealloc(post_start, new_max * sizeof(int));
-  post_ptr = new_start + (post_ptr - post_start);
-  post_end = new_start + new_max;
-  post_start = new_start;
+  rs_realloc_post_list();
 }
 
 // Search between "start" and "end" and try to recognize a
 // character class in expanded form. For example [0-9].
-// On success, return the id the character class to be emitted.
-// On failure, return 0 (=FAIL)
-// Start points to the first char of the range, while end should point
-// to the closing brace.
-// Keep in mind that 'ignorecase' applies at execution time, thus [a-z] may
-// need to be interpreted as [a-zA-Z].
+extern int rs_nfa_recognize_char_class(uint8_t *start, const uint8_t *end, int extra_newl);
 static int nfa_recognize_char_class(uint8_t *start, const uint8_t *end, int extra_newl)
 {
-#define CLASS_not            0x80
-#define CLASS_af             0x40
-#define CLASS_AF             0x20
-#define CLASS_az             0x10
-#define CLASS_AZ             0x08
-#define CLASS_o7             0x04
-#define CLASS_o9             0x02
-#define CLASS_underscore     0x01
-
-  uint8_t *p;
-  int config = 0;
-
-  bool newl = extra_newl == true;
-
-  if (*end != ']') {
-    return FAIL;
-  }
-  p = start;
-  if (*p == '^') {
-    config |= CLASS_not;
-    p++;
-  }
-
-  while (p < end) {
-    if (p + 2 < end && *(p + 1) == '-') {
-      switch (*p) {
-      case '0':
-        if (*(p + 2) == '9') {
-          config |= CLASS_o9;
-          break;
-        } else if (*(p + 2) == '7') {
-          config |= CLASS_o7;
-          break;
-        }
-        return FAIL;
-      case 'a':
-        if (*(p + 2) == 'z') {
-          config |= CLASS_az;
-          break;
-        } else if (*(p + 2) == 'f') {
-          config |= CLASS_af;
-          break;
-        }
-        return FAIL;
-      case 'A':
-        if (*(p + 2) == 'Z') {
-          config |= CLASS_AZ;
-          break;
-        } else if (*(p + 2) == 'F') {
-          config |= CLASS_AF;
-          break;
-        }
-        return FAIL;
-      default:
-        return FAIL;
-      }
-      p += 3;
-    } else if (p + 1 < end && *p == '\\' && *(p + 1) == 'n') {
-      newl = true;
-      p += 2;
-    } else if (*p == '_') {
-      config |= CLASS_underscore;
-      p++;
-    } else if (*p == '\n') {
-      newl = true;
-      p++;
-    } else {
-      return FAIL;
-    }
-  }   // while (p < end)
-
-  if (p != end) {
-    return FAIL;
-  }
-
-  if (newl == true) {
-    extra_newl = NFA_ADD_NL;
-  }
-
-  switch (config) {
-  case CLASS_o9:
-    return extra_newl + NFA_DIGIT;
-  case CLASS_not |  CLASS_o9:
-    return extra_newl + NFA_NDIGIT;
-  case CLASS_af | CLASS_AF | CLASS_o9:
-    return extra_newl + NFA_HEX;
-  case CLASS_not | CLASS_af | CLASS_AF | CLASS_o9:
-    return extra_newl + NFA_NHEX;
-  case CLASS_o7:
-    return extra_newl + NFA_OCTAL;
-  case CLASS_not | CLASS_o7:
-    return extra_newl + NFA_NOCTAL;
-  case CLASS_az | CLASS_AZ | CLASS_o9 | CLASS_underscore:
-    return extra_newl + NFA_WORD;
-  case CLASS_not | CLASS_az | CLASS_AZ | CLASS_o9 | CLASS_underscore:
-    return extra_newl + NFA_NWORD;
-  case CLASS_az | CLASS_AZ | CLASS_underscore:
-    return extra_newl + NFA_HEAD;
-  case CLASS_not | CLASS_az | CLASS_AZ | CLASS_underscore:
-    return extra_newl + NFA_NHEAD;
-  case CLASS_az | CLASS_AZ:
-    return extra_newl + NFA_ALPHA;
-  case CLASS_not | CLASS_az | CLASS_AZ:
-    return extra_newl + NFA_NALPHA;
-  case CLASS_az:
-    return extra_newl + NFA_LOWER_IC;
-  case CLASS_not | CLASS_az:
-    return extra_newl + NFA_NLOWER_IC;
-  case CLASS_AZ:
-    return extra_newl + NFA_UPPER_IC;
-  case CLASS_not | CLASS_AZ:
-    return extra_newl + NFA_NUPPER_IC;
-  }
-  return FAIL;
+  return rs_nfa_recognize_char_class(start, end, extra_newl);
 }
 
 // Produce the bytes for equivalence class "c".
