@@ -892,3 +892,48 @@ abcdef	xabcdefx
 \%'a	mark a here
 # Previous substitution
 ~	prev sub
+
+# === regrepeat coverage (Phase 3) ===
+# Character class quantifiers
+\d\+	abc123def456
+\D\+	abc123def456
+\w\+	hello_world!
+\W\+	hello_world!
+\h\+	abc123
+\H\+	abc123
+\a\+	abc123
+\A\+	abc123
+\l\+	ABCdefGHI
+\L\+	ABCdefGHI
+\u\+	ABCdefGHI
+\U\+	ABCdefGHI
+\s\+	hello   world
+\S\+	hello   world
+\x\+	deadBEEF_xyz
+\X\+	deadBEEF_xyz
+\o\+	7890123
+\O\+	7890123
+# IDENT/SIDENT quantifiers
+\i\+	abc_123 xyz!
+\I\+	abc_123 xyz!
+# KWORD/SKWORD quantifiers
+\k\+	hello_world!
+\K\+	hello_world!
+# FNAME/SFNAME quantifiers
+\f\+	/usr/bin/vim end
+\F\+	/usr/bin/vim end
+# PRINT/SPRINT quantifiers
+\p\+	hello world
+\P\+	hello world
+# ANYOF/ANYBUT quantifiers
+[abc]\{2,5}	aabbcc
+[^xyz]\+	xyzabc
+# ANY/ANY+ADD_NL
+.\+	hello world
+\_.\+	hello\nworld
+# EXACTLY quantifier (single char)
+abc\+	abccc
+# MULTIBYTECODE quantifier
+\%u00e9\+	éééfoo
+# NEWL quantifier
+\n	line1\nline2

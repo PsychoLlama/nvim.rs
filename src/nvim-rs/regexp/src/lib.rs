@@ -4308,6 +4308,394 @@ pub unsafe extern "C" fn rs_restore_subexpr(bp: *const RegbehindT) {
     }
 }
 
+// --- regrepeat: repeatedly match something simple ---
+
+// WITH_NL: opcode has ADD_NL set (matches newlines too)
+const FIRST_NL: c_int = ANY + ADD_NL;
+const LAST_NL: c_int = NUPPER + ADD_NL;
+
+#[inline]
+const fn with_nl(op: c_int) -> bool {
+    op >= FIRST_NL && op <= LAST_NL
+}
+
+#[inline]
+const fn regrepeat_op(p: *const u8) -> c_int {
+    unsafe { *p as c_int }
+}
+
+#[inline]
+const fn regrepeat_operand(p: *mut u8) -> *mut u8 {
+    unsafe { p.add(3) }
+}
+
+#[inline]
+const fn ascii_isdigit(c: u8) -> bool {
+    c >= b'0' && c <= b'9'
+}
+
+extern "C" {
+    fn nvim_regexp_get_rex_reg_line_lbr() -> c_int;
+    fn nvim_regexp_call_vim_iswordp_buf(p: *const c_char) -> c_int;
+    fn nvim_regexp_iemsg_re_corr();
+}
+
+/// Try to advance past a newline boundary (either in-line `\n` or multi-line).
+/// Returns the updated scan pointer and `true` if we crossed a newline,
+/// or `false` if we should stop.
+#[inline]
+unsafe fn try_newline_advance(
+    scan: *mut u8,
+    opcode: c_int,
+    is_reg_multi: bool,
+    reg_maxline: i32,
+    reg_line_lbr: bool,
+) -> (*mut u8, bool) {
+    if *scan == 0 {
+        if !is_reg_multi
+            || !with_nl(opcode)
+            || nvim_regexp_get_rex_lnum() > reg_maxline
+            || reg_line_lbr
+        {
+            return (scan, false);
+        }
+        rs_reg_nextline();
+        let new_scan = nvim_regexp_get_rex_input();
+        if nvim_regexp_get_got_int() != 0 {
+            return (new_scan, false);
+        }
+        return (new_scan, true);
+    } else if reg_line_lbr && *scan == b'\n' && with_nl(opcode) {
+        return (scan.add(1), true);
+    }
+    (scan, false)
+}
+
+/// `regrepeat` — repeatedly match something simple, return how many.
+/// Advances `rex.input` (and `rex.lnum`) to just after the matched chars.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_regrepeat(p: *mut u8, maxcount: i64) -> c_int {
+    let mut count: i64 = 0;
+    let mut scan = nvim_regexp_get_rex_input();
+    let opnd = regrepeat_operand(p);
+    let opcode = regrepeat_op(p);
+
+    // Cache frequently used values at function entry for performance.
+    let is_reg_multi = nvim_regexp_is_reg_multi() != 0;
+    let reg_ic = nvim_regexp_get_rex_reg_ic() != 0;
+    let reg_line_lbr = nvim_regexp_get_rex_reg_line_lbr() != 0;
+    let reg_maxline = nvim_regexp_get_rex_reg_maxline();
+
+    // Determine mask/testval for character class opcodes.
+    let (mask, testval) = match opcode {
+        x if x == WHITE || x == WHITE + ADD_NL => (RI_WHITE, RI_WHITE),
+        x if x == NWHITE || x == NWHITE + ADD_NL => (RI_WHITE, 0),
+        x if x == DIGIT || x == DIGIT + ADD_NL => (RI_DIGIT, RI_DIGIT),
+        x if x == NDIGIT || x == NDIGIT + ADD_NL => (RI_DIGIT, 0),
+        x if x == HEX || x == HEX + ADD_NL => (RI_HEX, RI_HEX),
+        x if x == NHEX || x == NHEX + ADD_NL => (RI_HEX, 0),
+        x if x == OCTAL || x == OCTAL + ADD_NL => (RI_OCTAL, RI_OCTAL),
+        x if x == NOCTAL || x == NOCTAL + ADD_NL => (RI_OCTAL, 0),
+        x if x == WORD || x == WORD + ADD_NL => (RI_WORD, RI_WORD),
+        x if x == NWORD || x == NWORD + ADD_NL => (RI_WORD, 0),
+        x if x == HEAD || x == HEAD + ADD_NL => (RI_HEAD, RI_HEAD),
+        x if x == NHEAD || x == NHEAD + ADD_NL => (RI_HEAD, 0),
+        x if x == ALPHA || x == ALPHA + ADD_NL => (RI_ALPHA, RI_ALPHA),
+        x if x == NALPHA || x == NALPHA + ADD_NL => (RI_ALPHA, 0),
+        x if x == LOWER || x == LOWER + ADD_NL => (RI_LOWER, RI_LOWER),
+        x if x == NLOWER || x == NLOWER + ADD_NL => (RI_LOWER, 0),
+        x if x == UPPER || x == UPPER + ADD_NL => (RI_UPPER, RI_UPPER),
+        x if x == NUPPER || x == NUPPER + ADD_NL => (RI_UPPER, 0),
+        _ => (0, 0), // not a class opcode
+    };
+
+    // Check if this is a character-class opcode handled by the do_class loop.
+    // Class opcodes: WHITE(31)..NUPPER(48) and their +ADD_NL variants (61..78).
+    let is_class_op = (WHITE..=NUPPER).contains(&opcode)
+        || ((WHITE + ADD_NL)..=(NUPPER + ADD_NL)).contains(&opcode);
+
+    if is_class_op {
+        // do_class loop
+        while count < maxcount {
+            if *scan == 0 {
+                let (new_scan, advanced) =
+                    try_newline_advance(scan, opcode, is_reg_multi, reg_maxline, reg_line_lbr);
+                scan = new_scan;
+                if !advanced {
+                    break;
+                }
+            } else {
+                let l = utfc_ptr2len(scan.cast::<c_char>());
+                if l > 1 {
+                    if testval != 0 {
+                        break;
+                    }
+                    scan = scan.add(l as usize);
+                } else if (CLASS_TAB[*scan as usize] & mask) == testval
+                    || (reg_line_lbr && *scan == b'\n' && with_nl(opcode))
+                {
+                    scan = scan.add(1);
+                } else {
+                    break;
+                }
+            }
+            count += 1;
+        }
+    } else {
+        match opcode {
+            x if x == ANY || x == ANY + ADD_NL => {
+                while count < maxcount {
+                    // Match anything until end-of-line (or end-of-file for ANY+ADD_NL).
+                    while *scan != 0 && count < maxcount {
+                        count += 1;
+                        scan = scan.add(utfc_ptr2len(scan.cast::<c_char>()) as usize);
+                    }
+                    if !is_reg_multi
+                        || !with_nl(opcode)
+                        || nvim_regexp_get_rex_lnum() > reg_maxline
+                        || reg_line_lbr
+                        || count == maxcount
+                    {
+                        break;
+                    }
+                    count += 1; // count the line-break
+                    rs_reg_nextline();
+                    scan = nvim_regexp_get_rex_input();
+                    if nvim_regexp_get_got_int() != 0 {
+                        break;
+                    }
+                }
+            }
+
+            x if x == IDENT || x == IDENT + ADD_NL || x == SIDENT || x == SIDENT + ADD_NL => {
+                let tv = opcode == IDENT || opcode == IDENT + ADD_NL;
+                while count < maxcount {
+                    if vim_isIDc(utf_ptr2char(scan.cast::<c_char>())) != 0
+                        && (tv || !ascii_isdigit(*scan))
+                    {
+                        scan = scan.add(utfc_ptr2len(scan.cast::<c_char>()) as usize);
+                    } else {
+                        let (new_scan, advanced) = try_newline_advance(
+                            scan,
+                            opcode,
+                            is_reg_multi,
+                            reg_maxline,
+                            reg_line_lbr,
+                        );
+                        scan = new_scan;
+                        if !advanced {
+                            break;
+                        }
+                    }
+                    count += 1;
+                }
+            }
+
+            x if x == KWORD || x == KWORD + ADD_NL || x == SKWORD || x == SKWORD + ADD_NL => {
+                let tv = opcode == KWORD || opcode == KWORD + ADD_NL;
+                while count < maxcount {
+                    if nvim_regexp_call_vim_iswordp_buf(scan.cast::<c_char>()) != 0
+                        && (tv || !ascii_isdigit(*scan))
+                    {
+                        scan = scan.add(utfc_ptr2len(scan.cast::<c_char>()) as usize);
+                    } else {
+                        let (new_scan, advanced) = try_newline_advance(
+                            scan,
+                            opcode,
+                            is_reg_multi,
+                            reg_maxline,
+                            reg_line_lbr,
+                        );
+                        scan = new_scan;
+                        if !advanced {
+                            break;
+                        }
+                    }
+                    count += 1;
+                }
+            }
+
+            x if x == FNAME || x == FNAME + ADD_NL || x == SFNAME || x == SFNAME + ADD_NL => {
+                let tv = opcode == FNAME || opcode == FNAME + ADD_NL;
+                while count < maxcount {
+                    if vim_isfilec(utf_ptr2char(scan.cast::<c_char>())) != 0
+                        && (tv || !ascii_isdigit(*scan))
+                    {
+                        scan = scan.add(utfc_ptr2len(scan.cast::<c_char>()) as usize);
+                    } else {
+                        let (new_scan, advanced) = try_newline_advance(
+                            scan,
+                            opcode,
+                            is_reg_multi,
+                            reg_maxline,
+                            reg_line_lbr,
+                        );
+                        scan = new_scan;
+                        if !advanced {
+                            break;
+                        }
+                    }
+                    count += 1;
+                }
+            }
+
+            x if x == PRINT || x == PRINT + ADD_NL || x == SPRINT || x == SPRINT + ADD_NL => {
+                let tv = opcode == PRINT || opcode == PRINT + ADD_NL;
+                while count < maxcount {
+                    if *scan == 0 {
+                        let (new_scan, advanced) = try_newline_advance(
+                            scan,
+                            opcode,
+                            is_reg_multi,
+                            reg_maxline,
+                            reg_line_lbr,
+                        );
+                        scan = new_scan;
+                        if !advanced {
+                            break;
+                        }
+                    } else if vim_isprintc(utf_ptr2char(scan.cast::<c_char>())) == 1
+                        && (tv || !ascii_isdigit(*scan))
+                    {
+                        scan = scan.add(utfc_ptr2len(scan.cast::<c_char>()) as usize);
+                    } else if reg_line_lbr && *scan == b'\n' && with_nl(opcode) {
+                        scan = scan.add(1);
+                    } else {
+                        break;
+                    }
+                    count += 1;
+                }
+            }
+
+            x if x == EXACTLY => {
+                // Single-byte character (multi-byte uses MULTIBYTECODE).
+                if reg_ic {
+                    let cu = mb_toupper(*opnd as c_int);
+                    let cl = mb_tolower(*opnd as c_int);
+                    while count < maxcount && (*scan as c_int == cu || *scan as c_int == cl) {
+                        count += 1;
+                        scan = scan.add(1);
+                    }
+                } else {
+                    let cu = *opnd;
+                    while count < maxcount && *scan == cu {
+                        count += 1;
+                        scan = scan.add(1);
+                    }
+                }
+            }
+
+            x if x == MULTIBYTECODE => {
+                let len = utfc_ptr2len(opnd.cast::<c_char>());
+                if len > 1 {
+                    let cf = if reg_ic {
+                        utf_fold(utf_ptr2char(opnd.cast::<c_char>()))
+                    } else {
+                        0
+                    };
+                    while count < maxcount && utfc_ptr2len(scan.cast::<c_char>()) >= len {
+                        // Compare bytes
+                        let mut i = 0;
+                        while i < len {
+                            if *opnd.add(i as usize) != *scan.add(i as usize) {
+                                break;
+                            }
+                            i += 1;
+                        }
+                        if i < len
+                            && (!reg_ic || utf_fold(utf_ptr2char(scan.cast::<c_char>())) != cf)
+                        {
+                            break;
+                        }
+                        scan = scan.add(len as usize);
+                        count += 1;
+                    }
+                }
+            }
+
+            x if x == ANYOF || x == ANYOF + ADD_NL || x == ANYBUT || x == ANYBUT + ADD_NL => {
+                let tv: c_int = c_int::from(opcode == ANYOF || opcode == ANYOF + ADD_NL);
+                while count < maxcount {
+                    if *scan == 0 {
+                        let (new_scan, advanced) = try_newline_advance(
+                            scan,
+                            opcode,
+                            is_reg_multi,
+                            reg_maxline,
+                            reg_line_lbr,
+                        );
+                        scan = new_scan;
+                        if !advanced {
+                            break;
+                        }
+                    } else if reg_line_lbr && *scan == b'\n' && with_nl(opcode) {
+                        scan = scan.add(1);
+                    } else {
+                        let len = utfc_ptr2len(scan.cast::<c_char>());
+                        if len > 1 {
+                            if (rs_cstrchr(
+                                opnd.cast::<c_char>(),
+                                utf_ptr2char(scan.cast::<c_char>()),
+                            )
+                            .is_null()) as c_int
+                                == tv
+                            {
+                                break;
+                            }
+                            scan = scan.add(len as usize);
+                        } else {
+                            if (rs_cstrchr(opnd.cast::<c_char>(), *scan as c_int).is_null())
+                                as c_int
+                                == tv
+                            {
+                                break;
+                            }
+                            scan = scan.add(1);
+                        }
+                    }
+                    count += 1;
+                }
+            }
+
+            x if x == NEWL => {
+                while count < maxcount
+                    && ((*scan == 0
+                        && nvim_regexp_get_rex_lnum() <= reg_maxline
+                        && !reg_line_lbr
+                        && is_reg_multi)
+                        || (*scan == b'\n' && reg_line_lbr))
+                {
+                    count += 1;
+                    if reg_line_lbr {
+                        // ADVANCE_REGINPUT() = MB_PTR_ADV(rex.input)
+                        let inp = nvim_regexp_get_rex_input();
+                        let adv = utfc_ptr2len(inp.cast::<c_char>()) as usize;
+                        nvim_regexp_set_rex_input(inp.add(adv));
+                    } else {
+                        rs_reg_nextline();
+                    }
+                    scan = nvim_regexp_get_rex_input();
+                    if nvim_regexp_get_got_int() != 0 {
+                        break;
+                    }
+                }
+            }
+
+            _ => {
+                // Oh dear. Called inappropriately.
+                nvim_regexp_iemsg_re_corr();
+            }
+        }
+    }
+
+    nvim_regexp_set_rex_input(scan);
+
+    #[allow(clippy::cast_possible_truncation)]
+    let result = count as c_int;
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
