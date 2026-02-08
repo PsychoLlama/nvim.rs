@@ -2526,6 +2526,12 @@ pub unsafe extern "C" fn rs_reginsert_limits(op: c_int, minval: i64, maxval: i64
 
 // --- Opcode and flag constants for the recursive descent parser ---
 const END: c_int = 0;
+#[allow(dead_code)]
+const BOL: c_int = 1;
+#[allow(dead_code)]
+const EOL: c_int = 2;
+#[allow(dead_code)]
+const EXACTLY: c_int = 5;
 const NOTHING: c_int = 6;
 const STAR: c_int = 7;
 const PLUS: c_int = 8;
@@ -2535,20 +2541,116 @@ const BEHIND: c_int = 11;
 const NOBEHIND: c_int = 12;
 const SUBPAT: c_int = 13;
 const BRACE_SIMPLE: c_int = 14;
+#[allow(dead_code)]
+const BOW: c_int = 15;
+#[allow(dead_code)]
+const EOW: c_int = 16;
 const BRACE_LIMITS: c_int = 17;
+#[allow(dead_code)]
+const NEWL: c_int = 18;
 const BHPOS: c_int = 19;
+#[allow(dead_code)]
+const ANY: c_int = 20;
+#[allow(dead_code)]
+const ANYOF: c_int = 21;
+#[allow(dead_code)]
+const ANYBUT: c_int = 22;
+#[allow(dead_code)]
+const IDENT: c_int = 23;
+#[allow(dead_code)]
+const SIDENT: c_int = 24;
+#[allow(dead_code)]
+const KWORD: c_int = 25;
+#[allow(dead_code)]
+const SKWORD: c_int = 26;
+#[allow(dead_code)]
+const FNAME: c_int = 27;
+#[allow(dead_code)]
+const SFNAME: c_int = 28;
+#[allow(dead_code)]
+const PRINT: c_int = 29;
+#[allow(dead_code)]
+const SPRINT: c_int = 30;
+#[allow(dead_code)]
+const WHITE: c_int = 31;
+#[allow(dead_code)]
+const NWHITE: c_int = 32;
+#[allow(dead_code)]
+const DIGIT: c_int = 33;
+#[allow(dead_code)]
+const NDIGIT: c_int = 34;
+#[allow(dead_code)]
+const HEX: c_int = 35;
+#[allow(dead_code)]
+const NHEX: c_int = 36;
+#[allow(dead_code)]
+const OCTAL: c_int = 37;
+#[allow(dead_code)]
+const NOCTAL: c_int = 38;
+#[allow(dead_code)]
+const WORD: c_int = 39;
+#[allow(dead_code)]
+const NWORD: c_int = 40;
+#[allow(dead_code)]
+const HEAD: c_int = 41;
+#[allow(dead_code)]
+const NHEAD: c_int = 42;
+#[allow(dead_code)]
+const ALPHA: c_int = 43;
+#[allow(dead_code)]
+const NALPHA: c_int = 44;
+#[allow(dead_code)]
+const LOWER: c_int = 45;
+#[allow(dead_code)]
+const NLOWER: c_int = 46;
+#[allow(dead_code)]
+const UPPER: c_int = 47;
+#[allow(dead_code)]
+const NUPPER: c_int = 48;
+#[allow(dead_code)]
+const ADD_NL: c_int = 30;
 #[allow(dead_code)]
 const MOPEN: c_int = 80;
 #[allow(dead_code)]
 const MCLOSE: c_int = 90;
 #[allow(dead_code)]
+const BACKREF: c_int = 100;
+#[allow(dead_code)]
 const ZOPEN: c_int = 110;
 #[allow(dead_code)]
 const ZCLOSE: c_int = 120;
 #[allow(dead_code)]
+const ZREF: c_int = 130;
+#[allow(dead_code)]
 const NOPEN: c_int = 150;
 #[allow(dead_code)]
 const NCLOSE: c_int = 151;
+#[allow(dead_code)]
+const MULTIBYTECODE: c_int = 200;
+#[allow(dead_code)]
+const RE_BOF: c_int = 201;
+#[allow(dead_code)]
+const RE_EOF: c_int = 202;
+#[allow(dead_code)]
+const CURSOR: c_int = 203;
+#[allow(dead_code)]
+const RE_LNUM: c_int = 204;
+#[allow(dead_code)]
+const RE_COL: c_int = 205;
+#[allow(dead_code)]
+const RE_VCOL: c_int = 206;
+#[allow(dead_code)]
+const RE_MARK: c_int = 207;
+#[allow(dead_code)]
+const RE_VISUAL: c_int = 208;
+#[allow(dead_code)]
+const RE_COMPOSING: c_int = 209;
+#[allow(dead_code)]
+const NL: c_int = 10; // '\n'
+#[allow(dead_code)]
+const REX_SET: c_int = 1;
+#[allow(dead_code)]
+const REX_USE: c_int = 2;
 
 // Parser flags
 const HASWIDTH: c_int = 0x1;
@@ -2576,6 +2678,16 @@ const REG_ZPAREN: c_int = 2;
 #[allow(dead_code)]
 const REG_NPAREN: c_int = 3;
 
+// Character class lookup tables (must match C classchars/classcodes)
+#[allow(dead_code)]
+const CLASSCHARS: &[u8] = b".iIkKfFpPsSdDxXoOwWhHaAlLuU";
+#[allow(dead_code)]
+const CLASSCODES: &[c_int] = &[
+    ANY, IDENT, SIDENT, KWORD, SKWORD, FNAME, SFNAME, PRINT, SPRINT, WHITE, NWHITE, DIGIT, NDIGIT,
+    HEX, NHEX, OCTAL, NOCTAL, WORD, NWORD, HEAD, NHEAD, ALPHA, NALPHA, LOWER, NLOWER, UPPER,
+    NUPPER,
+];
+
 extern "C" {
     fn regatom(flagp: *mut c_int) -> *mut u8;
     fn nvim_regexp_get_num_complex_braces() -> c_int;
@@ -2584,6 +2696,131 @@ extern "C" {
     fn nvim_regexp_emsg2_e60(m: c_int);
     fn nvim_regexp_emsg2_e61(m: c_int);
     fn nvim_regexp_emsg3_e62(m: c_int, c: c_int);
+}
+
+// --- regatom accessor/error extern declarations ---
+#[allow(dead_code)]
+extern "C" {
+    // Accessors for regatom globals
+    fn nvim_regexp_get_had_eol() -> c_int;
+    fn nvim_regexp_set_had_eol(v: c_int);
+    fn nvim_regexp_get_one_exactly() -> c_int;
+    fn nvim_regexp_set_one_exactly(v: c_int);
+    fn nvim_regexp_get_reg_string() -> c_int;
+    fn nvim_regexp_get_reg_do_extmatch() -> c_int;
+    fn nvim_regexp_get_re_has_z() -> c_int;
+    fn nvim_regexp_set_re_has_z(v: c_int);
+    fn nvim_regexp_get_reg_strict() -> c_int;
+    fn nvim_regexp_get_had_endbrace(refnum: c_int) -> c_int;
+    fn nvim_regexp_get_curwin_lnum() -> i32;
+    fn nvim_regexp_get_curwin_col() -> i32;
+    fn nvim_regexp_get_curwin_vcol() -> i32;
+    fn nvim_regexp_get_reg_prev_sub_ptr() -> *mut c_char;
+
+    // Character / multibyte helpers
+    fn utf_iscomposing_legacy(c: c_int) -> c_int;
+    fn utf_composinglike(p1: *const c_char, p2: *const c_char, state: *mut i32) -> c_int;
+    fn reg_equi_class(c: c_int);
+    fn vim_isIDc(c: c_int) -> c_int;
+    fn vim_isfilec(c: c_int) -> c_int;
+    fn reg_iswordc(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> c_int;
+    fn mb_islower(c: c_int) -> c_int;
+    fn mb_isupper(c: c_int) -> c_int;
+
+    // Error helpers for regatom
+    fn nvim_regexp_emsg_e63_underscore();
+    fn nvim_regexp_iemsg_internal();
+    fn nvim_regexp_emsg3_e64(m: c_int, c: c_int);
+    fn nvim_regexp_emsg_nopresub();
+    fn nvim_regexp_emsg_e65();
+    fn nvim_regexp_emsg_e66();
+    fn nvim_regexp_emsg_e67();
+    fn nvim_regexp_emsg_e68();
+    fn nvim_regexp_emsg2_e69(m: c_int);
+    fn nvim_regexp_emsg2_e70(m: c_int);
+    fn nvim_regexp_emsg2_e71(m: c_int);
+    fn nvim_regexp_emsg2_e678(m: c_int);
+    fn nvim_regexp_emsg2_e769(m: c_int);
+    fn nvim_regexp_emsg_e944();
+    fn nvim_regexp_emsg_e945();
+    fn nvim_regexp_emsg_e949();
+    fn nvim_regexp_emsg_toomsbra();
+    fn nvim_regexp_semsg_e_atom_engine(c: c_int);
+    fn nvim_regexp_semsg_e_dot_pos(c: c_int);
+    fn nvim_regexp_emsg2_e369(m: c_int);
+
+    // libc ctype helpers
+    fn isalnum(c: c_int) -> c_int;
+    fn isalpha(c: c_int) -> c_int;
+    fn iscntrl(c: c_int) -> c_int;
+    fn isgraph(c: c_int) -> c_int;
+    fn ispunct(c: c_int) -> c_int;
+}
+
+// --- Helper functions for regatom ---
+
+/// Return true if MULTIBYTECODE should be used instead of EXACTLY for
+/// character `c`.
+#[allow(dead_code)]
+unsafe fn use_multibytecode(c: c_int) -> bool {
+    utf_char2len(c) > 1
+        && (rs_re_multi_type(rs_peekchr()) != NOT_MULTI || utf_iscomposing_legacy(c) != 0)
+}
+
+/// Get a number after a backslash that is inside [].
+/// When nothing is recognized return a backslash.
+#[allow(dead_code)]
+unsafe fn coll_get_char() -> c_int {
+    let regparse = nvim_regexp_get_regparse();
+    let ch = *regparse as u8;
+    nvim_regexp_set_regparse(regparse.add(1));
+
+    let nr: c_long = match ch {
+        b'd' => rs_getdecchrs(),
+        b'o' => rs_getoctchrs(),
+        b'x' => rs_gethexchrs(2),
+        b'u' => rs_gethexchrs(4),
+        b'U' => rs_gethexchrs(8),
+        _ => {
+            // Put back the character we consumed
+            nvim_regexp_set_regparse(regparse);
+            return b'\\' as c_int;
+        }
+    };
+
+    if nr < 0 {
+        // If getting the number fails be backwards compatible: the character
+        // is a backslash.
+        // Undo the advance past the letter (d/o/x/u/U) — the number parsers
+        // already left regparse right after the letter when they fail.
+        nvim_regexp_set_regparse(regparse);
+        return b'\\' as c_int;
+    }
+    c_int::try_from(nr).unwrap_or(c_int::MAX)
+}
+
+/// Return true if the back reference is legal.  We must have seen the close
+/// brace.
+#[allow(dead_code)]
+unsafe fn seen_endbrace(refnum: c_int) -> bool {
+    if nvim_regexp_get_had_endbrace(refnum) == 0 {
+        // Trick: check if "@<=" or "@<!" follows, in which case
+        // the \1 can appear before the referenced match.
+        let regparse = nvim_regexp_get_regparse() as *const u8;
+        let mut p = regparse;
+        while *p != 0 {
+            if *p == b'@' && *p.add(1) == b'<' && (*p.add(2) == b'!' || *p.add(2) == b'=') {
+                break;
+            }
+            p = p.add(1);
+        }
+        if *p == 0 {
+            nvim_regexp_emsg_e65();
+            return false;
+        }
+    }
+    true
 }
 
 /// Parse something followed by possible [*+=].
