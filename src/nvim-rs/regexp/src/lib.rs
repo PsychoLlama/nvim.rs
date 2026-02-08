@@ -2338,6 +2338,54 @@ pub unsafe extern "C" fn rs_regmbc(c: c_int) {
     }
 }
 
+// Opcode constants (must match C #define values in regexp.c)
+const BACK: c_int = 4; // #define BACK 4 — Match "", "next" ptr points backward
+
+/// Emit a node. Return pointer to generated code.
+/// If `regcode == JUST_CALC_SIZE`, adds 3 to `regsize` and returns `JUST_CALC_SIZE`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regnode(op: c_int) -> *mut u8 {
+    let regcode = nvim_regexp_get_regcode();
+    let just_calc_size = nvim_regexp_get_just_calc_size();
+    if regcode == just_calc_size {
+        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 3);
+        return just_calc_size;
+    }
+    let ret = regcode;
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        *regcode = op as u8;
+    }
+    *regcode.add(1) = 0; // NUL "next" pointer
+    *regcode.add(2) = 0;
+    nvim_regexp_set_regcode(regcode.add(3));
+    ret
+}
+
+/// Dig the "next" pointer out of a node.
+/// Returns NULL when calculating size, when there is no next item, or on error.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regnext(p: *mut u8) -> *mut u8 {
+    let just_calc_size = nvim_regexp_get_just_calc_size();
+    if p == just_calc_size || nvim_regexp_get_reg_toolong() != 0 {
+        return std::ptr::null_mut();
+    }
+
+    // NEXT(p) = ((*((p) + 1) & 0377) << 8) + (*((p) + 2) & 0377)
+    let offset = (((*p.add(1) as c_int) & 0o377) << 8) + ((*p.add(2) as c_int) & 0o377);
+    if offset == 0 {
+        return std::ptr::null_mut();
+    }
+
+    // OP(p) = (int)(*(p))
+    let op = *p as c_int;
+    if op == BACK {
+        p.sub(offset as usize)
+    } else {
+        p.add(offset as usize)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

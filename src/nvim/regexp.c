@@ -75,6 +75,8 @@ extern char *rs_skip_regexp_err(char *startp, int delim, int magic);
 extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
 extern void rs_regc(int b);
 extern void rs_regmbc(int c);
+extern uint8_t *rs_regnode(int op);
+extern uint8_t *rs_regnext(uint8_t *p);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -2961,17 +2963,7 @@ static void reg_equi_class(int c)
 // Return pointer to generated code.
 static uint8_t *regnode(int op)
 {
-  uint8_t *ret;
-
-  ret = regcode;
-  if (ret == JUST_CALC_SIZE) {
-    regsize += 3;
-  } else {
-    *regcode++ = (uint8_t)op;
-    *regcode++ = NUL;                   // Null "next" pointer.
-    *regcode++ = NUL;
-  }
-  return ret;
+  return rs_regnode(op);
 }
 
 // Write a four bytes number at "p" and return pointer to the next char.
@@ -2986,22 +2978,7 @@ static uint8_t *re_put_uint32(uint8_t *p, uint32_t val)
 static uint8_t *regnext(uint8_t *p)
   FUNC_ATTR_NONNULL_ALL
 {
-  int offset;
-
-  if (p == JUST_CALC_SIZE || reg_toolong) {
-    return NULL;
-  }
-
-  offset = NEXT(p);
-  if (offset == 0) {
-    return NULL;
-  }
-
-  if (OP(p) == BACK) {
-    return p - offset;
-  } else {
-    return p + offset;
-  }
+  return rs_regnext(p);
 }
 
 // Set the next-pointer at the end of a node chain.
