@@ -966,3 +966,67 @@ abc\+	abccc
 [[=A=]]	ÀÁÂÃÄÅFOO
 [[=e=]]	éèêëfoo
 [[=o=]]	öòóôõøfoo
+
+# === NFA Compiler Phase 3: nfa_regatom ===
+# Groups
+\(ab\)	xabx
+\(ab\)\(cd\)	abcdef
+\(a\(b\(c\)\)\)	abcdef
+# Syntax-highlighting groups
+\z(\w\+)	hello world
+# Non-capturing groups
+\%(ab\)	xabx
+\%(a\|b\)\+	ababba
+# Backreferences via nfa_regatom
+\1	backreference orphan
+\(foo\)\1	foofoo
+\(foo\)\1	foobar
+# Zero-width assertions
+\zs	abc
+\ze	abc
+foo\zsbar	foobar
+foo\zebar	foobar
+# Collections via nfa_regatom
+[abc]	xbx
+[^abc]	xbx
+[a-z]\+	Hello World
+[[:digit:]]\+	abc42def
+[[:alpha:]][[:digit:]]	a1
+# Character class atoms via nfa_regatom
+\i\+	hello_world 42
+\I	_var
+\k\+	hello_world!
+\f\+	/usr/bin/vim
+\p\+	visible
+\s\+
+\d\+	12345
+\x\+	deadBEEF
+\o\+	01234567
+\w\+	hello_world
+\h\+	var_name
+\a\+	abcDEF
+\l\+	ABCdef
+\u\+	ABCdef
+# Anchors via nfa_regatom
+^start	start of line
+end$	end of line
+\<word\>	find a word here
+# \_x character classes with newline
+\_i\+	a_b\n!c
+\_s\+	 \n\n x
+\_d\+	1\n2\n3
+\_[a-z]\+	ab\nCD
+# Misplaced atoms (should trigger errors, NFA falls back to BT)
+# \% percent atoms via nfa_regatom
+\%^start	start
+\%$	end
+\%#	cursor position
+\%23l	line 23
+\%10c	column 10
+\%5v	virtual col 5
+# Previous substitute (~)
+# \n newline
+\n	line1\nline2
+# Literal character and multibyte fallthrough
+é\+	éééfoo
+ñ	mañana

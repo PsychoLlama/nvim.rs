@@ -7519,6 +7519,847 @@ pub unsafe extern "C" fn rs_nfa_recognize_char_class(
     }
 }
 
+// --- Phase 3: NFA regatom extern declarations ---
+#[allow(dead_code)]
+extern "C" {
+    // NFA-specific error helpers
+    fn nvim_regexp_emsg_nul_found();
+    fn nvim_regexp_semsg_misplaced(c: c_int);
+    fn nvim_regexp_semsg_ill_char_class(c: i64);
+    fn nvim_regexp_siemsg_unknown_class(c: i64);
+    fn nvim_regexp_semsg_e867_z(c: c_int);
+    fn nvim_regexp_semsg_e867_pct(c: c_int);
+    fn nvim_regexp_emsg_value_too_large();
+    fn nvim_regexp_semsg_missing_value(c: c_int);
+
+    // Cross-language calls (temporary, resolved in Phase 4)
+    fn nvim_regexp_call_nfa_reg(paren: c_int) -> c_int;
+    fn nvim_regexp_call_nfa_regatom() -> c_int;
+
+    // Data accessors
+    fn nvim_regexp_get_classchars() -> *mut u8;
+    fn nvim_regexp_get_nfa_classcodes(index: c_int) -> c_int;
+    fn nvim_regexp_get_regexp_inrange() -> *mut c_char;
+    fn nvim_regexp_get_regexp_abbr() -> *mut c_char;
+    fn nvim_regexp_set_rc_did_emsg_true();
+}
+
+// Phase 3 constant
+const MB_MAXBYTES: i64 = 21;
+
+// `Magic(x)` in C is `(int)(x) - 256`; equivalent to `magic()` without reg_magic check.
+const fn nfa_magic(x: u8) -> c_int {
+    x as c_int - 256
+}
+
+/// Get regparse as `*mut u8` for byte comparisons.
+#[inline]
+unsafe fn regparse_u8() -> *mut u8 {
+    nvim_regexp_get_regparse().cast::<u8>()
+}
+
+/// Set regparse from a `*mut u8`.
+#[inline]
+unsafe fn set_regparse_u8(p: *mut u8) {
+    nvim_regexp_set_regparse(p.cast::<c_char>());
+}
+
+/// Helper: `MB_PTR_ADV(regparse)` — advance regparse by one composing-aware character.
+unsafe fn mb_ptr_adv_regparse() {
+    let rp = nvim_regexp_get_regparse();
+    nvim_regexp_set_regparse(rp.add(utfc_ptr2len(rp) as usize));
+}
+
+/// Helper: `MB_PTR_BACK(base, regparse)` — back up regparse by one character.
+unsafe fn mb_ptr_back_regparse(base: *const u8) {
+    let rp = nvim_regexp_get_regparse();
+    let off = utf_head_off(base.cast::<c_char>(), rp.sub(1));
+    nvim_regexp_set_regparse(rp.sub((off + 1) as usize));
+}
+
+/// Handle the `nfa_do_multibyte:` label — composing/multibyte character handling.
+/// Returns OK on success, FAIL on failure (never in practice for this path).
+unsafe fn nfa_handle_multibyte(c_in: c_int, old_rp: *mut c_char) -> c_int {
+    let mut c = c_in;
+    let plen = utfc_ptr2len(old_rp);
+    if utf_char2len(c) != plen || utf_iscomposing_legacy(c) != 0 {
+        let mut i: c_int = 0;
+        // Composing characters: emit base + composing chars + NFA_COMPOSING
+        loop {
+            nfa_emit(c);
+            if i > 0 {
+                nfa_emit(NFA_CONCAT);
+            }
+            i += utf_char2len(c);
+            if i >= plen {
+                break;
+            }
+            c = utf_ptr2char(old_rp.add(i as usize));
+        }
+        nfa_emit(NFA_COMPOSING);
+        nvim_regexp_set_regparse(old_rp.add(plen as usize));
+    } else {
+        c = rs_no_magic(c);
+        nfa_emit(c);
+    }
+    OK
+}
+
+/// Handle the `collection:` label — character class `[...]` parsing.
+/// `extra` is `NFA_ADD_NL` if `\_[` was used, 0 otherwise.
+#[allow(clippy::too_many_lines, clippy::similar_names)]
+unsafe fn nfa_handle_collection(mut extra: c_int, old_rp: *mut c_char) -> c_int {
+    let p = nvim_regexp_get_regparse();
+    let endp = rs_skip_anyof(p);
+
+    if *endp.cast::<u8>() == b']' {
+        // Try to recognize a character class like [0-9] → \d
+        let result = rs_nfa_recognize_char_class(
+            p.cast::<u8>(),
+            endp.cast::<u8>(),
+            c_int::from(extra == NFA_ADD_NL),
+        );
+        if result != FAIL {
+            if (NFA_FIRST_NL..=NFA_LAST_NL).contains(&result) {
+                nfa_emit(result - NFA_ADD_NL);
+                nfa_emit(NFA_NEWL);
+                nfa_emit(NFA_OR);
+            } else {
+                nfa_emit(result);
+            }
+            nvim_regexp_set_regparse(endp);
+            mb_ptr_adv_regparse();
+            return OK;
+        }
+
+        // Not a recognized class — parse individual characters
+        let mut negated = false;
+        if *regparse_u8() == b'^' {
+            negated = true;
+            mb_ptr_adv_regparse();
+            nfa_emit(NFA_START_NEG_COLL);
+        } else {
+            nfa_emit(NFA_START_COLL);
+        }
+
+        if *regparse_u8() == b'-' {
+            nfa_emit(b'-' as c_int);
+            nfa_emit(NFA_CONCAT);
+            mb_ptr_adv_regparse();
+        }
+
+        let mut emit_range = false;
+        let mut startc: c_int = -1;
+        let mut c: c_int;
+
+        while (nvim_regexp_get_regparse() as usize) < (endp as usize) {
+            let oldstartc = startc;
+            startc = -1;
+            let mut got_coll_char = false;
+
+            if *regparse_u8() == b'[' {
+                // Check for [: :], [= =], [. .]
+                let mut rp = nvim_regexp_get_regparse();
+                let charclass = nvim_regexp_get_char_class(&mut rp);
+                nvim_regexp_set_regparse(rp);
+
+                if charclass == CLASS_NONE {
+                    let mut rp2 = nvim_regexp_get_regparse();
+                    let equiclass = nvim_regexp_get_equi_class(&mut rp2);
+                    nvim_regexp_set_regparse(rp2);
+
+                    if equiclass == 0 {
+                        let mut rp3 = nvim_regexp_get_regparse();
+                        let collclass = nvim_regexp_get_coll_element(&mut rp3);
+                        nvim_regexp_set_regparse(rp3);
+
+                        if collclass != 0 {
+                            startc = collclass; // allow [.a.]-x as a range
+                        }
+                    } else {
+                        // Equivalence class
+                        rs_nfa_emit_equi_class(equiclass);
+                        continue;
+                    }
+                } else {
+                    // Character class like [:alpha:]
+                    match charclass {
+                        x if x == CLASS_ALNUM => nfa_emit(NFA_CLASS_ALNUM),
+                        x if x == CLASS_ALPHA => nfa_emit(NFA_CLASS_ALPHA),
+                        x if x == CLASS_BLANK => nfa_emit(NFA_CLASS_BLANK),
+                        x if x == CLASS_CNTRL => nfa_emit(NFA_CLASS_CNTRL),
+                        x if x == CLASS_DIGIT => nfa_emit(NFA_CLASS_DIGIT),
+                        x if x == CLASS_GRAPH => nfa_emit(NFA_CLASS_GRAPH),
+                        x if x == CLASS_LOWER => {
+                            nvim_regexp_set_wants_nfa(1);
+                            nfa_emit(NFA_CLASS_LOWER);
+                        }
+                        x if x == CLASS_PRINT => nfa_emit(NFA_CLASS_PRINT),
+                        x if x == CLASS_PUNCT => nfa_emit(NFA_CLASS_PUNCT),
+                        x if x == CLASS_SPACE => nfa_emit(NFA_CLASS_SPACE),
+                        x if x == CLASS_UPPER => {
+                            nvim_regexp_set_wants_nfa(1);
+                            nfa_emit(NFA_CLASS_UPPER);
+                        }
+                        x if x == CLASS_XDIGIT => nfa_emit(NFA_CLASS_XDIGIT),
+                        x if x == CLASS_CC_TAB => nfa_emit(NFA_CLASS_TAB),
+                        x if x == CLASS_RETURN => nfa_emit(NFA_CLASS_RETURN),
+                        x if x == CLASS_BACKSPACE => nfa_emit(NFA_CLASS_BACKSPACE),
+                        x if x == CLASS_ESCAPE => nfa_emit(NFA_CLASS_ESCAPE),
+                        x if x == CLASS_IDENT => nfa_emit(NFA_CLASS_IDENT),
+                        x if x == CLASS_KEYWORD => nfa_emit(NFA_CLASS_KEYWORD),
+                        x if x == CLASS_FNAME => nfa_emit(NFA_CLASS_FNAME),
+                        _ => {}
+                    }
+                    nfa_emit(NFA_CONCAT);
+                    continue;
+                }
+            }
+
+            // Try a range like 'a-x'
+            if *regparse_u8() == b'-' && oldstartc != -1 {
+                emit_range = true;
+                startc = oldstartc;
+                mb_ptr_adv_regparse();
+                continue;
+            }
+
+            // Handle simple and escaped characters
+            let rp = regparse_u8();
+            if *rp == b'\\'
+                && (rp.add(1) as usize) <= (endp as usize)
+                && (!vim_strchr(nvim_regexp_get_regexp_inrange(), *rp.add(1) as c_int).is_null()
+                    || (nvim_regexp_get_reg_cpo_lit() == 0
+                        && !vim_strchr(nvim_regexp_get_regexp_abbr(), *rp.add(1) as c_int)
+                            .is_null()))
+            {
+                mb_ptr_adv_regparse();
+                let rp2 = regparse_u8();
+
+                if *rp2 == b'n' {
+                    startc =
+                        if nvim_regexp_get_reg_string() != 0 || emit_range || *rp2.add(1) == b'-' {
+                            NL
+                        } else {
+                            NFA_NEWL
+                        };
+                } else if *rp2 == b'd'
+                    || *rp2 == b'o'
+                    || *rp2 == b'x'
+                    || *rp2 == b'u'
+                    || *rp2 == b'U'
+                {
+                    startc = coll_get_char();
+                    if startc == c_int::MAX {
+                        nvim_regexp_emsg_e949();
+                        return FAIL;
+                    }
+                    got_coll_char = true;
+                    mb_ptr_back_regparse(old_rp.cast::<u8>());
+                } else {
+                    startc = rs_backslash_trans(*rp2 as c_int);
+                }
+            }
+
+            // Normal printable char
+            if startc == -1 {
+                startc = utf_ptr2char(nvim_regexp_get_regparse());
+            }
+
+            // Previous char was '-', so this char is end of range
+            if emit_range {
+                let endc = startc;
+                startc = oldstartc;
+                if startc > endc {
+                    nvim_regexp_emsg_e944();
+                    return FAIL;
+                }
+
+                if endc > startc + 2 {
+                    // Emit a range instead of individual characters
+                    if startc == 0 {
+                        // \x00 is translated to \x0a, start at \x01
+                        nfa_emit(1);
+                    } else {
+                        // Remove previous NFA_CONCAT
+                        let pp = nvim_regexp_get_post_ptr();
+                        nvim_regexp_set_post_ptr(pp.sub(1));
+                    }
+                    nfa_emit(endc);
+                    nfa_emit(NFA_RANGE);
+                    nfa_emit(NFA_CONCAT);
+                } else {
+                    // Emit the characters in the range
+                    c = startc + 1;
+                    while c <= endc {
+                        nfa_emit(c);
+                        nfa_emit(NFA_CONCAT);
+                        c += 1;
+                    }
+                }
+                emit_range = false;
+                startc = -1;
+            } else {
+                // Not part of a range
+                if startc == NFA_NEWL {
+                    if !negated {
+                        extra = NFA_ADD_NL;
+                    }
+                } else if got_coll_char && startc == 0 {
+                    nfa_emit(0x0a);
+                    nfa_emit(NFA_CONCAT);
+                } else {
+                    nfa_emit(startc);
+                    let rp3 = nvim_regexp_get_regparse();
+                    if utf_ptr2len(rp3) == utfc_ptr2len(rp3) {
+                        nfa_emit(NFA_CONCAT);
+                    }
+                }
+            }
+
+            // Handle composing characters within the collection
+            let rp4 = nvim_regexp_get_regparse();
+            let plen = utfc_ptr2len(rp4);
+            if utf_ptr2len(rp4) != plen {
+                let mut i = utf_ptr2len(rp4);
+                c = utf_ptr2char(rp4.add(i as usize));
+
+                loop {
+                    if c == 0 {
+                        nfa_emit(1);
+                    } else {
+                        nfa_emit(c);
+                    }
+                    nfa_emit(NFA_CONCAT);
+                    i += utf_char2len(c);
+                    if i >= plen {
+                        break;
+                    }
+                    c = utf_ptr2char(rp4.add(i as usize));
+                }
+                nfa_emit(NFA_COMPOSING);
+                nfa_emit(NFA_CONCAT);
+            }
+
+            mb_ptr_adv_regparse();
+        } // while regparse < endp
+
+        mb_ptr_back_regparse(old_rp.cast::<u8>());
+        if *regparse_u8() == b'-' {
+            nfa_emit(b'-' as c_int);
+            nfa_emit(NFA_CONCAT);
+        }
+
+        // Skip the trailing ]
+        nvim_regexp_set_regparse(endp);
+        mb_ptr_adv_regparse();
+
+        // Mark end of the collection
+        if negated {
+            nfa_emit(NFA_END_NEG_COLL);
+        } else {
+            nfa_emit(NFA_END_COLL);
+        }
+
+        // \_[] also matches \n but it's not negated
+        if extra == NFA_ADD_NL {
+            nfa_emit(if nvim_regexp_get_reg_string() != 0 {
+                NL
+            } else {
+                NFA_NEWL
+            });
+            nfa_emit(NFA_OR);
+        }
+
+        return OK;
+    } // if *endp == ']'
+
+    if nvim_regexp_get_reg_strict() != 0 {
+        nvim_regexp_emsg2_e769(c_int::from(nvim_regexp_get_reg_magic() > MAGIC_OFF));
+        return FAIL;
+    }
+    // Fall through to default (multibyte) handling — caller handles this
+    -1 // sentinel: caller should fall through to default
+}
+
+/// NFA regatom: parse a single atom in NFA regexp compilation.
+///
+/// Handles character classes, anchors, backreferences, groups, collections,
+/// and literal characters, emitting NFA postfix opcodes.
+#[no_mangle]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
+    let old_regparse = nvim_regexp_get_regparse();
+    let mut extra: c_int = 0;
+    let save_prev_at_start = nvim_regexp_get_prev_at_start();
+
+    let mut c = rs_getchr();
+
+    // NUL
+    if c == 0 {
+        nvim_regexp_emsg_nul_found();
+        return FAIL;
+    }
+
+    // ^
+    if c == nfa_magic(b'^') {
+        nfa_emit(NFA_BOL);
+        return OK;
+    }
+    // $
+    if c == nfa_magic(b'$') {
+        nfa_emit(NFA_EOL);
+        nvim_regexp_set_had_eol(1);
+        return OK;
+    }
+    // <
+    if c == nfa_magic(b'<') {
+        nfa_emit(NFA_BOW);
+        return OK;
+    }
+    // >
+    if c == nfa_magic(b'>') {
+        nfa_emit(NFA_EOW);
+        return OK;
+    }
+
+    // \_  prefix
+    if c == nfa_magic(b'_') {
+        c = rs_no_magic(rs_getchr());
+        if c == 0 {
+            nvim_regexp_emsg_nul_found();
+            return FAIL;
+        }
+        if c == b'^' as c_int {
+            nfa_emit(NFA_BOL);
+            return OK;
+        }
+        if c == b'$' as c_int {
+            nfa_emit(NFA_EOL);
+            nvim_regexp_set_had_eol(1);
+            return OK;
+        }
+        extra = NFA_ADD_NL;
+        if c == b'[' as c_int {
+            // \_[ is collection plus newline
+            return nfa_handle_collection(extra, old_regparse);
+        }
+        // \_x is character class plus newline — fall through to char class handling
+        return nfa_handle_char_class(c, extra, old_regparse);
+    }
+
+    // Character classes: . i I k K f F p P s S d D x X o O w W h H a A l L u U
+    if c == nfa_magic(b'.')
+        || c == nfa_magic(b'i')
+        || c == nfa_magic(b'I')
+        || c == nfa_magic(b'k')
+        || c == nfa_magic(b'K')
+        || c == nfa_magic(b'f')
+        || c == nfa_magic(b'F')
+        || c == nfa_magic(b'p')
+        || c == nfa_magic(b'P')
+        || c == nfa_magic(b's')
+        || c == nfa_magic(b'S')
+        || c == nfa_magic(b'd')
+        || c == nfa_magic(b'D')
+        || c == nfa_magic(b'x')
+        || c == nfa_magic(b'X')
+        || c == nfa_magic(b'o')
+        || c == nfa_magic(b'O')
+        || c == nfa_magic(b'w')
+        || c == nfa_magic(b'W')
+        || c == nfa_magic(b'h')
+        || c == nfa_magic(b'H')
+        || c == nfa_magic(b'a')
+        || c == nfa_magic(b'A')
+        || c == nfa_magic(b'l')
+        || c == nfa_magic(b'L')
+        || c == nfa_magic(b'u')
+        || c == nfa_magic(b'U')
+    {
+        return nfa_handle_char_class(c, extra, old_regparse);
+    }
+
+    // \n
+    if c == nfa_magic(b'n') {
+        if nvim_regexp_get_reg_string() != 0 {
+            nfa_emit(NL);
+        } else {
+            nfa_emit(NFA_NEWL);
+            nvim_regexp_set_regflags_compile(nvim_regexp_get_regflags_compile() | RF_HASNL);
+        }
+        return OK;
+    }
+
+    // \(
+    if c == nfa_magic(b'(') {
+        if nvim_regexp_call_nfa_reg(REG_PAREN) == FAIL {
+            return FAIL;
+        }
+        return OK;
+    }
+
+    // Misplaced \|, \&, \)
+    if c == nfa_magic(b'|') || c == nfa_magic(b'&') || c == nfa_magic(b')') {
+        nvim_regexp_semsg_misplaced(rs_no_magic(c));
+        return FAIL;
+    }
+
+    // Misplaced \=, \?, \+, \@, \*, \{
+    if c == nfa_magic(b'=')
+        || c == nfa_magic(b'?')
+        || c == nfa_magic(b'+')
+        || c == nfa_magic(b'@')
+        || c == nfa_magic(b'*')
+        || c == nfa_magic(b'{')
+    {
+        nvim_regexp_semsg_misplaced(rs_no_magic(c));
+        return FAIL;
+    }
+
+    // \~ — previous substitute pattern
+    if c == nfa_magic(b'~') {
+        let reg_prev_sub = nvim_regexp_get_reg_prev_sub_ptr();
+        if reg_prev_sub.is_null() {
+            nvim_regexp_emsg_nopresub();
+            return FAIL;
+        }
+        let mut lp = reg_prev_sub.cast::<u8>();
+        while *lp != 0 {
+            nfa_emit(utf_ptr2char(lp.cast::<c_char>()));
+            if lp != reg_prev_sub.cast::<u8>() {
+                nfa_emit(NFA_CONCAT);
+            }
+            lp = lp.add(utf_ptr2len(lp.cast::<c_char>()) as usize);
+        }
+        nfa_emit(NFA_NOPEN);
+        return OK;
+    }
+
+    // \1 through \9 — backreferences
+    if c >= nfa_magic(b'1') && c <= nfa_magic(b'9') {
+        let refnum = rs_no_magic(c) - b'1' as c_int;
+        if !seen_endbrace(refnum + 1) {
+            return FAIL;
+        }
+        nfa_emit(NFA_BACKREF1 + refnum);
+        nvim_regexp_set_rex_nfa_has_backref(1);
+        return OK;
+    }
+
+    // \z — zstart/zend/zref/zparen
+    if c == nfa_magic(b'z') {
+        return nfa_handle_z_atom();
+    }
+
+    // \% — percent atoms
+    if c == nfa_magic(b'%') {
+        return nfa_handle_percent_atom(save_prev_at_start);
+    }
+
+    // [...] — character collection
+    if c == nfa_magic(b'[') {
+        return nfa_handle_collection(extra, old_regparse);
+    }
+
+    // Default: literal character or multibyte/composing
+    nfa_handle_multibyte(c, old_regparse)
+}
+
+/// Handle character class atoms (`.`, `\i`, `\I`, etc.) and `\_x` variants.
+unsafe fn nfa_handle_char_class(c: c_int, extra: c_int, _old_regparse: *mut c_char) -> c_int {
+    let classchars = nvim_regexp_get_classchars();
+    let p = vim_strchr(classchars.cast::<c_char>(), rs_no_magic(c));
+    if p.is_null() {
+        if extra == NFA_ADD_NL {
+            nvim_regexp_semsg_ill_char_class(c as i64);
+            return FAIL;
+        }
+        nvim_regexp_siemsg_unknown_class(c as i64);
+        return FAIL;
+    }
+
+    // When '.' is followed by a composing char ignore the dot
+    if c == nfa_magic(b'.') && utf_iscomposing_legacy(rs_peekchr()) != 0 {
+        let new_old = nvim_regexp_get_regparse();
+        let c2 = rs_getchr();
+        return nfa_handle_multibyte(c2, new_old);
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    let index = ((p as usize) - (classchars as usize)) as c_int;
+    nfa_emit(nvim_regexp_get_nfa_classcodes(index));
+    if extra == NFA_ADD_NL {
+        nfa_emit(NFA_NEWL);
+        nfa_emit(NFA_OR);
+        nvim_regexp_set_regflags_compile(nvim_regexp_get_regflags_compile() | RF_HASNL);
+    }
+    OK
+}
+
+/// Handle `\z` atoms: `\zs`, `\ze`, `\z1`..`\z9`, `\z(`.
+unsafe fn nfa_handle_z_atom() -> c_int {
+    let c = rs_no_magic(rs_getchr());
+    match c {
+        // \zs
+        x if x == b's' as c_int => {
+            nfa_emit(NFA_ZSTART);
+            if !rs_re_mult_next(c"\\zs".as_ptr().cast::<c_char>()) {
+                return FAIL;
+            }
+            OK
+        }
+        // \ze
+        x if x == b'e' as c_int => {
+            nfa_emit(NFA_ZEND);
+            nvim_regexp_set_rex_nfa_has_zend(1);
+            if !rs_re_mult_next(c"\\ze".as_ptr().cast::<c_char>()) {
+                return FAIL;
+            }
+            OK
+        }
+        // \z1 .. \z9
+        x if x >= b'1' as c_int && x <= b'9' as c_int => {
+            if (nvim_regexp_get_reg_do_extmatch() & REX_USE) == 0 {
+                nvim_regexp_emsg_e67();
+                return FAIL;
+            }
+            nfa_emit(NFA_ZREF1 + (rs_no_magic(c) - b'1' as c_int));
+            nvim_regexp_set_re_has_z(REX_USE);
+            OK
+        }
+        // \z(
+        x if x == b'(' as c_int => {
+            if nvim_regexp_get_reg_do_extmatch() != REX_SET {
+                nvim_regexp_emsg_e66();
+                return FAIL;
+            }
+            if nvim_regexp_call_nfa_reg(REG_ZPAREN) == FAIL {
+                return FAIL;
+            }
+            nvim_regexp_set_re_has_z(REX_SET);
+            OK
+        }
+        _ => {
+            nvim_regexp_semsg_e867_z(rs_no_magic(c));
+            FAIL
+        }
+    }
+}
+
+/// Handle `\%` atoms: `\%(`, `\%d`, `\%o`, `\%x`, `\%u`, `\%U`,
+/// `\%^`, `\%$`, `\%#`, `\%V`, `\%C`, `\%[`, and position/mark atoms.
+#[allow(clippy::too_many_lines)]
+unsafe fn nfa_handle_percent_atom(save_prev_at_start: c_int) -> c_int {
+    let c = rs_no_magic(rs_getchr());
+
+    // \%(
+    if c == b'(' as c_int {
+        if nvim_regexp_call_nfa_reg(REG_NPAREN) == FAIL {
+            return FAIL;
+        }
+        nfa_emit(NFA_NOPEN);
+        return OK;
+    }
+
+    // \%d, \%o, \%x, \%u, \%U
+    if c == b'd' as c_int
+        || c == b'o' as c_int
+        || c == b'x' as c_int
+        || c == b'u' as c_int
+        || c == b'U' as c_int
+    {
+        let nr: c_long = match c {
+            x if x == b'd' as c_int => rs_getdecchrs(),
+            x if x == b'o' as c_int => rs_getoctchrs(),
+            x if x == b'x' as c_int => rs_gethexchrs(2),
+            x if x == b'u' as c_int => rs_gethexchrs(4),
+            x if x == b'U' as c_int => rs_gethexchrs(8),
+            _ => -1,
+        };
+        if nr < 0 || nr > c_long::from(c_int::MAX) {
+            nvim_regexp_emsg2_e678(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+            return FAIL;
+        }
+        // A NUL is stored as NL (nr is in range, checked above)
+        #[allow(clippy::cast_possible_truncation)]
+        let nr_int = nr as c_int;
+        nfa_emit(if nr == 0 { 0x0a } else { nr_int });
+        return OK;
+    }
+
+    // \%^
+    if c == b'^' as c_int {
+        nfa_emit(NFA_BOF);
+        return OK;
+    }
+
+    // \%$
+    if c == b'$' as c_int {
+        nfa_emit(NFA_EOF);
+        return OK;
+    }
+
+    // \%#
+    if c == b'#' as c_int {
+        let rp = nvim_regexp_get_regparse();
+        if *rp == b'=' as c_char && *rp.add(1) >= 48 && *rp.add(1) <= 50 {
+            nvim_regexp_semsg_e_atom_engine(*rp.add(1) as c_int);
+            return FAIL;
+        }
+        nfa_emit(NFA_CURSOR);
+        return OK;
+    }
+
+    // \%V
+    if c == b'V' as c_int {
+        nfa_emit(NFA_VISUAL);
+        return OK;
+    }
+
+    // \%C
+    if c == b'C' as c_int {
+        nfa_emit(NFA_ANY_COMPOSING);
+        return OK;
+    }
+
+    // \%[abc]
+    if c == b'[' as c_int {
+        let mut n: c_int = 0;
+        loop {
+            let pc = rs_peekchr();
+            if pc == b']' as c_int {
+                break;
+            }
+            if pc == 0 {
+                nvim_regexp_emsg2_e769(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+                return FAIL;
+            }
+            // recursive call
+            if nvim_regexp_call_nfa_regatom() == FAIL {
+                return FAIL;
+            }
+            n += 1;
+        }
+        rs_getchr(); // consume the ]
+        if n == 0 {
+            nvim_regexp_emsg2_e70(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+            return FAIL;
+        }
+        nfa_emit(NFA_OPT_CHARS);
+        nfa_emit(n);
+        nfa_emit(NFA_NOPEN);
+        return OK;
+    }
+
+    // \%'m marks, \%<'m, \%>'m, or \%{n}l/c/v
+    nfa_handle_percent_position(c, save_prev_at_start)
+}
+
+/// Handle `\%` position/mark atoms: `\%{n}l`, `\%{n}c`, `\%{n}v`,
+/// `\%.l`, `\%.c`, `\%.v`, `\%<{n}l`, `\%>{n}l`, `\%'m`, etc.
+unsafe fn nfa_handle_percent_position(c_in: c_int, save_prev_at_start: c_int) -> c_int {
+    let mut c = c_in;
+    let cmp = c;
+    let mut n: i64 = 0;
+    let mut cur = false;
+    let mut got_digit = false;
+
+    if c == b'<' as c_int || c == b'>' as c_int {
+        c = rs_getchr();
+    }
+    if rs_no_magic(c) == b'.' as c_int {
+        cur = true;
+        c = rs_getchr();
+    }
+    while c >= b'0' as c_int && c <= b'9' as c_int {
+        if cur {
+            nvim_regexp_semsg_e_dot_pos(rs_no_magic(c));
+            return FAIL;
+        }
+        if n > (i64::from(i32::MAX) - i64::from(c - b'0' as c_int)) / 10 {
+            nvim_regexp_emsg_value_too_large();
+            return FAIL;
+        }
+        n = n * 10 + i64::from(c - b'0' as c_int);
+        c = rs_getchr();
+        got_digit = true;
+    }
+
+    if c == b'l' as c_int || c == b'c' as c_int || c == b'v' as c_int {
+        let mut limit: i64 = i64::from(i32::MAX);
+        if !cur && !got_digit {
+            nvim_regexp_semsg_missing_value(rs_no_magic(c));
+            return FAIL;
+        }
+        if c == b'l' as c_int {
+            if cur {
+                n = i64::from(nvim_regexp_get_curwin_lnum());
+            }
+            nfa_emit(if cmp == b'<' as c_int {
+                NFA_LNUM_LT
+            } else if cmp == b'>' as c_int {
+                NFA_LNUM_GT
+            } else {
+                NFA_LNUM
+            });
+            if save_prev_at_start != 0 {
+                nvim_regexp_set_at_start(1);
+            }
+        } else if c == b'c' as c_int {
+            if cur {
+                n = i64::from(nvim_regexp_get_curwin_col());
+                n += 1;
+            }
+            nfa_emit(if cmp == b'<' as c_int {
+                NFA_COL_LT
+            } else if cmp == b'>' as c_int {
+                NFA_COL_GT
+            } else {
+                NFA_COL
+            });
+        } else {
+            // c == 'v'
+            if cur {
+                n = i64::from(nvim_regexp_get_curwin_vcol());
+                n += 1;
+            }
+            nfa_emit(if cmp == b'<' as c_int {
+                NFA_VCOL_LT
+            } else if cmp == b'>' as c_int {
+                NFA_VCOL_GT
+            } else {
+                NFA_VCOL
+            });
+            limit = i64::from(i32::MAX) / MB_MAXBYTES;
+        }
+        if n >= limit {
+            nvim_regexp_emsg_value_too_large();
+            return FAIL;
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        let n_int = n as c_int; // n < limit <= i32::MAX, safe
+        nfa_emit(n_int);
+        return OK;
+    }
+
+    if rs_no_magic(c) == b'\'' as c_int && n == 0 {
+        // \%'m  \%<'m  \%>'m
+        nfa_emit(if cmp == b'<' as c_int {
+            NFA_MARK_LT
+        } else if cmp == b'>' as c_int {
+            NFA_MARK_GT
+        } else {
+            NFA_MARK
+        });
+        nfa_emit(rs_getchr());
+        return OK;
+    }
+
+    nvim_regexp_semsg_e867_pct(rs_no_magic(c));
+    FAIL
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

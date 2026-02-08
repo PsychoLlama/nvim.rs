@@ -2075,6 +2075,7 @@ void nvim_regexp_emsg2_e369(int m)
   semsg(_(e_invalid_item_in_str_brackets), m ? "" : "\\");
   rc_did_emsg = true;
 }
+
 // used for STAR, PLUS and BRACE_SIMPLE matching
 typedef struct regstar_S {
   int nextb;            // next byte
@@ -4577,6 +4578,58 @@ static const char e_misplaced[] = N_("E866: (NFA regexp) Misplaced %c");
 static const char e_ill_char_class[] = N_("E877: (NFA regexp) Invalid character class: %" PRId64);
 static const char e_value_too_large[] = N_("E951: \\% value too large");
 
+// --- Phase 3: NFA regatom accessor functions ---
+static int nfa_reg(int paren);  // forward declaration
+extern int rs_nfa_regatom(void);
+void nvim_regexp_emsg_nul_found(void)
+{
+  emsg(_(e_nul_found));
+  rc_did_emsg = true;
+}
+void nvim_regexp_semsg_misplaced(int c)
+{
+  semsg(_(e_misplaced), (char)c);
+}
+void nvim_regexp_semsg_ill_char_class(int64_t c)
+{
+  semsg(_(e_ill_char_class), c);
+  rc_did_emsg = true;
+}
+void nvim_regexp_siemsg_unknown_class(int64_t c)
+{
+  siemsg("INTERNAL: Unknown character class char: %" PRId64, c);
+}
+void nvim_regexp_semsg_e867_z(int c)
+{
+  semsg(_("E867: (NFA) Unknown operator '\\z%c'"), c);
+}
+void nvim_regexp_semsg_e867_pct(int c)
+{
+  semsg(_("E867: (NFA) Unknown operator '\\%%%c'"), c);
+}
+void nvim_regexp_emsg_value_too_large(void)
+{
+  emsg(_(e_value_too_large));
+}
+void nvim_regexp_semsg_missing_value(int c)
+{
+  semsg(_(e_nfa_regexp_missing_value_in_chr), c);
+}
+int nvim_regexp_call_nfa_reg(int paren)
+{
+  return nfa_reg(paren);
+}
+int nvim_regexp_call_nfa_regatom(void)
+{
+  return rs_nfa_regatom();
+}
+uint8_t *nvim_regexp_get_classchars(void) { return classchars; }
+int nvim_regexp_get_nfa_classcodes(int index) { return nfa_classcodes[index]; }
+char *nvim_regexp_get_regexp_inrange(void) { return REGEXP_INRANGE; }
+char *nvim_regexp_get_regexp_abbr(void) { return REGEXP_ABBR; }
+void nvim_regexp_set_rc_did_emsg_true(void) { rc_did_emsg = true; }
+// --- End Phase 3 accessor functions ---
+
 // Variables only used in nfa_regcomp() and descendants.
 static int nfa_re_flags;  ///< re_flags passed to nfa_regcomp().
 static int *post_start;   ///< holds the postfix form of r.e.
@@ -5948,6 +6001,12 @@ static void nfa_emit_equi_class_old(int c)
 //     or  \z( pattern \)
 static int nfa_regatom(void)
 {
+  return rs_nfa_regatom();
+}
+
+#ifdef NEVER  // Kept as reference; now in Rust
+static int nfa_regatom_old(void)
+{
   int c;
   int charclass;
   int equiclass;
@@ -6723,6 +6782,7 @@ nfa_do_multibyte:
 
   return OK;
 }
+#endif  // NEVER - nfa_regatom_old
 
 // Parse something followed by possible [*+=].
 //
