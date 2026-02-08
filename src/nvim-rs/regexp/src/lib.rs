@@ -10621,9 +10621,9 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         if nvim_nfa_list_get_n(nextlist) == 0 {
                             clen = 0;
                         }
-                        // goto nextchar
-                        advance_input(clen, go_to_nextline, &mut go_to_nextline);
-                        listidx = nvim_nfa_list_get_n(thislist); // force end of inner loop
+                        // goto nextchar: break inner loop, let outer loop's
+                        // bottom-of-loop code do the input advancement
+                        listidx = nvim_nfa_list_get_n(thislist);
                         continue;
                     }
                 }
@@ -10668,8 +10668,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     if nvim_nfa_list_get_n(nextlist) == 0 {
                         clen = 0;
                     }
-                    // goto nextchar
-                    advance_input(clen, go_to_nextline, &mut go_to_nextline);
+                    // goto nextchar: break inner loop, let outer loop handle advancement
                     listidx = nvim_nfa_list_get_n(thislist);
                     continue;
                 }
@@ -12010,25 +12009,6 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
     }
 
     nvim_regexp_get_nfa_match()
-}
-
-/// Helper: advance input for nextchar label.
-/// This is extracted to handle the "goto nextchar" pattern from the C code.
-#[inline]
-unsafe fn advance_input(clen: c_int, go_to_nextline: bool, go_to_nextline_out: &mut bool) {
-    if clen != 0 {
-        let new_input = nvim_regexp_get_rex_input().offset(clen as isize);
-        nvim_regexp_set_rex_input(new_input);
-    } else if go_to_nextline
-        || (!nvim_regexp_get_nfa_endp().is_null()
-            && nvim_regexp_is_reg_multi() != 0
-            && nvim_regexp_get_rex_lnum() < nvim_regexp_get_nfa_endp_pos_lnum())
-    {
-        nvim_regexp_call_reg_nextline();
-    }
-    // Note: if neither condition holds, caller should break out of the outer loop,
-    // but for NFA_MATCH/NFA_END_INVISIBLE we just force end of inner loop.
-    *go_to_nextline_out = false;
 }
 
 /// Helper: check if `c` is an ASCII digit (0-9).

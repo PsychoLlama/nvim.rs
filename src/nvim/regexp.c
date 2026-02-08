@@ -12660,17 +12660,7 @@ static void nfa_regfree(regprog_T *prog)
 /// @return  <= 0 for failure, number of lines contained in the match otherwise.
 static int nfa_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line_lbr)
 {
-  rex.reg_match = rmp;
-  rex.reg_mmatch = NULL;
-  rex.reg_maxline = 0;
-  rex.reg_line_lbr = line_lbr;
-  rex.reg_buf = curbuf;
-  rex.reg_win = NULL;
-  rex.reg_ic = rmp->rm_ic;
-  rex.reg_icombine = false;
-  rex.reg_nobreak = rmp->regprog->re_flags & RE_NOBREAK;
-  rex.reg_maxcol = 0;
-  return nfa_regexec_both(line, col, NULL, NULL);
+  return rs_nfa_regexec_nl(rmp, line, col, line_lbr);
 }
 
 /// Matches a regexp against multiple lines.
@@ -12711,8 +12701,7 @@ static int nfa_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line
 static int nfa_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum, colnr_T col,
                              proftime_T *tm, int *timed_out)
 {
-  init_regexec_multi(rmp, win, buf, lnum);
-  return nfa_regexec_both(NULL, col, tm, timed_out);
+  return rs_nfa_regexec_multi(rmp, win, buf, lnum, col, tm, timed_out);
 }
 // }}}1
 
