@@ -2720,10 +2720,9 @@ extern "C" {
     // Character / multibyte helpers
     fn utf_iscomposing_legacy(c: c_int) -> c_int;
     fn utf_composinglike(p1: *const c_char, p2: *const c_char, state: *mut i32) -> c_int;
-    fn reg_equi_class(c: c_int);
+    fn nvim_regexp_reg_equi_class(c: c_int);
     fn vim_isIDc(c: c_int) -> c_int;
     fn vim_isfilec(c: c_int) -> c_int;
-    fn reg_iswordc(c: c_int) -> c_int;
     fn vim_isprintc(c: c_int) -> c_int;
     fn mb_islower(c: c_int) -> c_int;
     fn mb_isupper(c: c_int) -> c_int;
@@ -2825,13 +2824,350 @@ unsafe fn seen_endbrace(refnum: c_int) -> bool {
 
 // --- rs_regatom: Parse the lowest level ---
 
+/// Handle a POSIX character class like `[:alpha:]` inside a collection.
+/// `c_class` is the class constant from `get_char_class`.
+#[allow(dead_code, clippy::too_many_lines)]
+unsafe fn emit_posix_class(c_class: c_int, regparse_ptr: *mut *mut c_char) {
+    match c_class {
+        x if x == CLASS_NONE => {
+            let eq = nvim_regexp_get_equi_class(regparse_ptr);
+            if eq != 0 {
+                nvim_regexp_reg_equi_class(eq);
+            } else {
+                let coll = nvim_regexp_get_coll_element(regparse_ptr);
+                if coll != 0 {
+                    rs_regmbc(coll);
+                } else {
+                    // literal '[', allow [[-x] as a range — handled by caller via startc
+                }
+            }
+        }
+        x if x == CLASS_ALNUM => {
+            for cu in 1..128 {
+                if isalnum(cu) != 0 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_ALPHA => {
+            for cu in 1..128 {
+                if isalpha(cu) != 0 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_BLANK => {
+            rs_regc(b' ' as c_int);
+            rs_regc(b'\t' as c_int);
+        }
+        x if x == CLASS_CNTRL => {
+            for cu in 1..=127 {
+                if iscntrl(cu) != 0 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_DIGIT => {
+            for cu in 1_i32..=127 {
+                if u8::try_from(cu).is_ok_and(|b| b.is_ascii_digit()) {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_GRAPH => {
+            for cu in 1..=127 {
+                if isgraph(cu) != 0 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_LOWER => {
+            for cu in 1..=255 {
+                if mb_islower(cu) != 0 && cu != 170 && cu != 186 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_PRINT => {
+            for cu in 1..=255 {
+                if vim_isprintc(cu) != 0 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_PUNCT => {
+            for cu in 1..128 {
+                if ispunct(cu) != 0 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_SPACE => {
+            for cu in 9..=13 {
+                rs_regc(cu);
+            }
+            rs_regc(b' ' as c_int);
+        }
+        x if x == CLASS_UPPER => {
+            for cu in 1..=255 {
+                if mb_isupper(cu) != 0 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_XDIGIT => {
+            for cu in 1_i32..=255 {
+                if u8::try_from(cu).is_ok_and(|b| b.is_ascii_hexdigit()) {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_CC_TAB => rs_regc(b'\t' as c_int),
+        x if x == CLASS_RETURN => rs_regc(b'\r' as c_int),
+        x if x == CLASS_BACKSPACE => rs_regc(0o010), // '\b'
+        x if x == CLASS_ESCAPE => rs_regc(ESC_CH),
+        x if x == CLASS_IDENT => {
+            for cu in 1..=255 {
+                if vim_isIDc(cu) != 0 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_KEYWORD => {
+            for cu in 1..=255 {
+                if rs_reg_iswordc(cu) != 0 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        x if x == CLASS_FNAME => {
+            for cu in 1..=255 {
+                if vim_isfilec(cu) != 0 {
+                    rs_regmbc(cu);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Parse a collection `[...]` or `[^...]`.
 /// `extra` is `ADD_NL` if preceded by `\_`.
 /// Returns the compiled node, or null on error.
-#[allow(dead_code, clippy::missing_const_for_fn)]
-unsafe fn parse_collection(_flagp: *mut c_int, _extra: c_int) -> *mut u8 {
-    // Placeholder — implemented in Phase 6
-    std::ptr::null_mut()
+#[allow(dead_code, clippy::too_many_lines, clippy::cognitive_complexity)]
+unsafe fn parse_collection(flagp: *mut c_int, extra: c_int) -> *mut u8 {
+    let mut regparse = nvim_regexp_get_regparse();
+
+    // If there is no matching ']', we assume the '[' is a normal character.
+    // This makes 'incsearch' and ":help [" work.
+    let lp = rs_skip_anyof(regparse);
+    if *lp != b']' as c_char {
+        // No matching ']' — treated as literal in default/strict handling
+        if nvim_regexp_get_reg_strict() != 0 {
+            nvim_regexp_emsg2_e769(c_int::from(nvim_regexp_get_reg_magic() > MAGIC_OFF));
+            return std::ptr::null_mut();
+        }
+        // Fall through to literal handling — return null to signal caller
+        return std::ptr::null_mut();
+    }
+
+    // There is a matching ']'
+    let mut startc: c_int = -1;
+    let ret;
+
+    // In a character class, different parsing rules apply.
+    if *regparse == b'^' as c_char {
+        // Complement of range
+        ret = rs_regnode(ANYBUT + extra);
+        regparse = regparse.add(1);
+        nvim_regexp_set_regparse(regparse);
+    } else {
+        ret = rs_regnode(ANYOF + extra);
+    }
+
+    // At the start ']' and '-' mean the literal character.
+    if *regparse == b']' as c_char || *regparse == b'-' as c_char {
+        startc = *regparse as u8 as c_int;
+        rs_regc(*regparse as c_int);
+        regparse = regparse.add(1);
+        nvim_regexp_set_regparse(regparse);
+    }
+
+    while *regparse != 0 && *regparse != b']' as c_char {
+        if *regparse == b'-' as c_char {
+            regparse = regparse.add(1);
+            nvim_regexp_set_regparse(regparse);
+            // The '-' is not used for a range at the end and
+            // after or before a '\n'.
+            if *regparse == b']' as c_char
+                || *regparse == 0
+                || startc == -1
+                || (*regparse == b'\\' as c_char && *regparse.add(1) == b'n' as c_char)
+            {
+                rs_regc(b'-' as c_int);
+                startc = b'-' as c_int; // [--x] is a range
+            } else {
+                // Also accept "a-[.z.]"
+                let mut endc: c_int = 0;
+                if *regparse == b'[' as c_char {
+                    let mut rp = regparse;
+                    endc = nvim_regexp_get_coll_element(&mut rp);
+                    if endc != 0 {
+                        regparse = rp;
+                        nvim_regexp_set_regparse(regparse);
+                    }
+                }
+                if endc == 0 {
+                    let mut rp: *const c_char = regparse.cast_const();
+                    endc = mb_ptr2char_adv(&mut rp);
+                    regparse = rp.cast_mut();
+                    nvim_regexp_set_regparse(regparse);
+                }
+
+                // Handle \o40, \x20 and \u20AC style sequences
+                if endc == b'\\' as c_int && nvim_regexp_get_reg_cpo_lit() == 0 {
+                    endc = coll_get_char();
+                    regparse = nvim_regexp_get_regparse();
+                }
+
+                if startc > endc {
+                    nvim_regexp_emsg_e944();
+                    return std::ptr::null_mut();
+                }
+                if utf_char2len(startc) > 1 || utf_char2len(endc) > 1 {
+                    // Limit to a range of 256 chars
+                    if endc > startc + 256 {
+                        nvim_regexp_emsg_e945();
+                        return std::ptr::null_mut();
+                    }
+                    startc += 1;
+                    while startc <= endc {
+                        rs_regmbc(startc);
+                        startc += 1;
+                    }
+                } else {
+                    startc += 1;
+                    while startc <= endc {
+                        rs_regc(startc);
+                        startc += 1;
+                    }
+                }
+                startc = -1;
+            }
+        } else if *regparse == b'\\' as c_char
+            && (!vim_strchr(
+                REGEXP_INRANGE.as_ptr().cast::<c_char>(),
+                c_int::from(*regparse.add(1) as u8),
+            )
+            .is_null()
+                || (nvim_regexp_get_reg_cpo_lit() == 0
+                    && !vim_strchr(
+                        REGEXP_ABBR.as_ptr().cast::<c_char>(),
+                        c_int::from(*regparse.add(1) as u8),
+                    )
+                    .is_null()))
+        {
+            regparse = regparse.add(1);
+            nvim_regexp_set_regparse(regparse);
+            if *regparse == b'n' as c_char {
+                // '\n' in range: also match NL
+                let just_calc_size = nvim_regexp_get_just_calc_size();
+                if ret != just_calc_size {
+                    // Using \n inside [^] does not change what matches.
+                    // "[^\n]" is the same as ".".
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    if *ret == ANYOF as u8 {
+                        *ret = (ANYOF + ADD_NL) as u8;
+                        *flagp |= HASNL;
+                    }
+                    // else: must have had a \n already
+                }
+                regparse = regparse.add(1);
+                nvim_regexp_set_regparse(regparse);
+                startc = -1;
+            } else if *regparse == b'd' as c_char
+                || *regparse == b'o' as c_char
+                || *regparse == b'x' as c_char
+                || *regparse == b'u' as c_char
+                || *regparse == b'U' as c_char
+            {
+                startc = coll_get_char();
+                regparse = nvim_regexp_get_regparse();
+                // max UTF-8 Codepoint is U+10FFFF, but allow values until INT_MAX
+                if startc == c_int::MAX {
+                    nvim_regexp_emsg_e949();
+                    return std::ptr::null_mut();
+                }
+                if startc == 0 {
+                    rs_regc(0x0a);
+                } else {
+                    rs_regmbc(startc);
+                }
+            } else {
+                startc = rs_backslash_trans(*regparse as c_int);
+                regparse = regparse.add(1);
+                nvim_regexp_set_regparse(regparse);
+                rs_regc(startc);
+            }
+        } else if *regparse == b'[' as c_char {
+            let mut rp = regparse;
+            let c_class = nvim_regexp_get_char_class(&mut rp);
+            startc = -1;
+            // Characters assumed to be 8 bits!
+            if c_class == CLASS_NONE {
+                // Try equivalence class, then collating element, then literal '['
+                let eq = nvim_regexp_get_equi_class(&mut rp);
+                if eq != 0 {
+                    nvim_regexp_reg_equi_class(eq);
+                    regparse = rp;
+                    nvim_regexp_set_regparse(regparse);
+                } else {
+                    let coll = nvim_regexp_get_coll_element(&mut rp);
+                    if coll != 0 {
+                        rs_regmbc(coll);
+                        regparse = rp;
+                        nvim_regexp_set_regparse(regparse);
+                    } else {
+                        // literal '[', allow [[-x] as a range
+                        startc = *regparse as u8 as c_int;
+                        regparse = regparse.add(1);
+                        nvim_regexp_set_regparse(regparse);
+                        rs_regc(startc);
+                    }
+                }
+            } else {
+                regparse = rp;
+                nvim_regexp_set_regparse(regparse);
+                emit_posix_class(c_class, &mut regparse);
+                regparse = nvim_regexp_get_regparse();
+            }
+        } else {
+            // produce a multibyte character, including any following composing characters.
+            startc = utf_ptr2char(regparse);
+            let len = utfc_ptr2len(regparse);
+            if utf_char2len(startc) != len {
+                // composing chars
+                startc = -1;
+            }
+            let mut remaining = len;
+            while remaining > 0 {
+                rs_regc(*regparse as c_int);
+                regparse = regparse.add(1);
+                remaining -= 1;
+            }
+            nvim_regexp_set_regparse(regparse);
+        }
+    }
+    rs_regc(0); // NUL terminate
+    nvim_regexp_set_prevchr_len(1); // last char was the ']'
+    regparse = nvim_regexp_get_regparse();
+    if *regparse != b']' as c_char {
+        nvim_regexp_emsg_toomsbra(); // Cannot happen?
+        return std::ptr::null_mut();
+    }
+    rs_skipchr(); // let's be friends with the lexer again
+    *flagp |= HASWIDTH | SIMPLE;
+    ret
 }
 
 /// Emit a `MULTIBYTECODE` node for character `c`.
@@ -2896,7 +3232,11 @@ pub unsafe extern "C" fn rs_regatom(flagp: *mut c_int) -> *mut u8 {
 
         // "\_[" is character range plus newline
         if c == b'[' as c_int {
-            return parse_collection(flagp, extra);
+            let result = parse_collection(flagp, extra);
+            if !result.is_null() {
+                return result;
+            }
+            // No matching ']', fall through to literal handling
         }
 
         // "\_x" is character class plus newline — fall through to class handling
@@ -3331,7 +3671,18 @@ pub unsafe extern "C" fn rs_regatom(flagp: *mut c_int) -> *mut u8 {
         return std::ptr::null_mut();
     }
 
-    // Phases 6-7 handle remaining cases; for now fall through to C regatom
+    // --- Collection: [...] ---
+    if c == magic(b'[') {
+        let result = parse_collection(flagp, 0);
+        if !result.is_null() {
+            return result;
+        }
+        // parse_collection returns null when no matching ']' and not strict.
+        // In that case, fall through to literal handling below (Phase 7).
+        // If it was an error (strict mode), rc_did_emsg is set.
+    }
+
+    // Phases 7 handles the default/literal case; for now fall through to C regatom
     let _ = save_prev_at_start;
     rs_ungetchr();
     regatom(flagp)

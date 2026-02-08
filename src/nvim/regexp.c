@@ -2046,7 +2046,6 @@ void nvim_regexp_emsg2_e369(int m)
   semsg(_(e_invalid_item_in_str_brackets), m ? "" : "\\");
   rc_did_emsg = true;
 }
-
 // used for STAR, PLUS and BRACE_SIMPLE matching
 typedef struct regstar_S {
   int nextb;            // next byte
@@ -3216,6 +3215,9 @@ static void reginsert_limits(int op, int64_t minval, int64_t maxval, uint8_t *op
 {
   rs_reginsert_limits(op, minval, maxval, opnd);
 }
+
+// Wrapper for Rust FFI (reg_equi_class is static)
+void nvim_regexp_reg_equi_class(int c) { reg_equi_class(c); }
 
 /// Return true if the back reference is legal. We must have seen the close
 /// brace.
