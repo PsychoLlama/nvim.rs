@@ -61,8 +61,10 @@ extern "C" {
     // Case-insensitive helpers
     fn utf_fold(a: c_int) -> c_int;
     fn utf_strnicmp(s1: *const c_char, s2: *const c_char, n1: usize, n2: usize) -> c_int;
-    fn mb_ptr2char_adv(pp: *const *const c_char) -> c_int;
-    fn mb_decompose(c: c_int, c1: *mut c_int, c2: *mut c_int, c3: *mut c_int);
+    fn mb_ptr2char_adv(pp: *mut *const c_char) -> c_int;
+
+    // libc
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
 }
 
 // Characters always special inside [] ranges
@@ -797,6 +799,212 @@ pub unsafe extern "C" fn rs_read_limits(minval: *mut c_int, maxval: *mut c_int) 
     nvim_regexp_set_regparse(regparse);
     rs_skipchr(); // let's be friends with the lexer again
     OK
+}
+
+// --- Hebrew decomposition table (0xfb20..=0xfb4f) ---
+
+/// Decomposition entry: base character + up to 2 combining marks.
+struct DecompEntry {
+    a: c_int,
+    b: c_int,
+    c: c_int,
+}
+
+#[rustfmt::skip]
+const DECOMP_TABLE: [DecompEntry; 0xfb4f - 0xfb20 + 1] = [
+    DecompEntry { a: 0x5e2, b: 0,     c: 0 },      // 0xfb20  alt ayin
+    DecompEntry { a: 0x5d0, b: 0,     c: 0 },      // 0xfb21  alt alef
+    DecompEntry { a: 0x5d3, b: 0,     c: 0 },      // 0xfb22  alt dalet
+    DecompEntry { a: 0x5d4, b: 0,     c: 0 },      // 0xfb23  alt he
+    DecompEntry { a: 0x5db, b: 0,     c: 0 },      // 0xfb24  alt kaf
+    DecompEntry { a: 0x5dc, b: 0,     c: 0 },      // 0xfb25  alt lamed
+    DecompEntry { a: 0x5dd, b: 0,     c: 0 },      // 0xfb26  alt mem-sofit
+    DecompEntry { a: 0x5e8, b: 0,     c: 0 },      // 0xfb27  alt resh
+    DecompEntry { a: 0x5ea, b: 0,     c: 0 },      // 0xfb28  alt tav
+    DecompEntry { a: b'+' as c_int, b: 0, c: 0 },   // 0xfb29  alt plus
+    DecompEntry { a: 0x5e9, b: 0x5c1, c: 0 },      // 0xfb2a  shin+shin-dot
+    DecompEntry { a: 0x5e9, b: 0x5c2, c: 0 },      // 0xfb2b  shin+sin-dot
+    DecompEntry { a: 0x5e9, b: 0x5c1, c: 0x5bc },  // 0xfb2c  shin+shin-dot+dagesh
+    DecompEntry { a: 0x5e9, b: 0x5c2, c: 0x5bc },  // 0xfb2d  shin+sin-dot+dagesh
+    DecompEntry { a: 0x5d0, b: 0x5b7, c: 0 },      // 0xfb2e  alef+patah
+    DecompEntry { a: 0x5d0, b: 0x5b8, c: 0 },      // 0xfb2f  alef+qamats
+    DecompEntry { a: 0x5d0, b: 0x5b4, c: 0 },      // 0xfb30  alef+hiriq
+    DecompEntry { a: 0x5d1, b: 0x5bc, c: 0 },      // 0xfb31  bet+dagesh
+    DecompEntry { a: 0x5d2, b: 0x5bc, c: 0 },      // 0xfb32  gimel+dagesh
+    DecompEntry { a: 0x5d3, b: 0x5bc, c: 0 },      // 0xfb33  dalet+dagesh
+    DecompEntry { a: 0x5d4, b: 0x5bc, c: 0 },      // 0xfb34  he+dagesh
+    DecompEntry { a: 0x5d5, b: 0x5bc, c: 0 },      // 0xfb35  vav+dagesh
+    DecompEntry { a: 0x5d6, b: 0x5bc, c: 0 },      // 0xfb36  zayin+dagesh
+    DecompEntry { a: 0xfb37, b: 0,    c: 0 },      // 0xfb37  -- UNUSED
+    DecompEntry { a: 0x5d8, b: 0x5bc, c: 0 },      // 0xfb38  tet+dagesh
+    DecompEntry { a: 0x5d9, b: 0x5bc, c: 0 },      // 0xfb39  yud+dagesh
+    DecompEntry { a: 0x5da, b: 0x5bc, c: 0 },      // 0xfb3a  kaf sofit+dagesh
+    DecompEntry { a: 0x5db, b: 0x5bc, c: 0 },      // 0xfb3b  kaf+dagesh
+    DecompEntry { a: 0x5dc, b: 0x5bc, c: 0 },      // 0xfb3c  lamed+dagesh
+    DecompEntry { a: 0xfb3d, b: 0,    c: 0 },      // 0xfb3d  -- UNUSED
+    DecompEntry { a: 0x5de, b: 0x5bc, c: 0 },      // 0xfb3e  mem+dagesh
+    DecompEntry { a: 0xfb3f, b: 0,    c: 0 },      // 0xfb3f  -- UNUSED
+    DecompEntry { a: 0x5e0, b: 0x5bc, c: 0 },      // 0xfb40  nun+dagesh
+    DecompEntry { a: 0x5e1, b: 0x5bc, c: 0 },      // 0xfb41  samech+dagesh
+    DecompEntry { a: 0xfb42, b: 0,    c: 0 },      // 0xfb42  -- UNUSED
+    DecompEntry { a: 0x5e3, b: 0x5bc, c: 0 },      // 0xfb43  pe sofit+dagesh
+    DecompEntry { a: 0x5e4, b: 0x5bc, c: 0 },      // 0xfb44  pe+dagesh
+    DecompEntry { a: 0xfb45, b: 0,    c: 0 },      // 0xfb45  -- UNUSED
+    DecompEntry { a: 0x5e6, b: 0x5bc, c: 0 },      // 0xfb46  tsadi+dagesh
+    DecompEntry { a: 0x5e7, b: 0x5bc, c: 0 },      // 0xfb47  qof+dagesh
+    DecompEntry { a: 0x5e8, b: 0x5bc, c: 0 },      // 0xfb48  resh+dagesh
+    DecompEntry { a: 0x5e9, b: 0x5bc, c: 0 },      // 0xfb49  shin+dagesh
+    DecompEntry { a: 0x5ea, b: 0x5bc, c: 0 },      // 0xfb4a  tav+dagesh
+    DecompEntry { a: 0x5d5, b: 0x5b9, c: 0 },      // 0xfb4b  vav+holam
+    DecompEntry { a: 0x5d1, b: 0x5bf, c: 0 },      // 0xfb4c  bet+rafe
+    DecompEntry { a: 0x5db, b: 0x5bf, c: 0 },      // 0xfb4d  kaf+rafe
+    DecompEntry { a: 0x5e4, b: 0x5bf, c: 0 },      // 0xfb4e  pe+rafe
+    DecompEntry { a: 0x5d0, b: 0x5dc, c: 0 },      // 0xfb4f  alef-lamed
+];
+
+/// Decompose a Hebrew presentation form character into base + combining marks.
+#[allow(clippy::manual_range_contains)]
+const fn mb_decompose(ch: c_int, c1: &mut c_int, c2: &mut c_int, c3: &mut c_int) {
+    if ch >= 0xfb20 && ch <= 0xfb4f {
+        let d = &DECOMP_TABLE[(ch - 0xfb20) as usize];
+        *c1 = d.a;
+        *c2 = d.b;
+        *c3 = d.c;
+    } else {
+        *c1 = ch;
+        *c2 = 0;
+        *c3 = 0;
+    }
+}
+
+// --- Case-insensitive operations: cstrncmp, cstrchr ---
+
+/// Compare two strings, strncmp-like, with optional case-folding.
+///
+/// If `rex.reg_ic` is set, compare case-insensitively. `*n` may be adjusted
+/// downward if s2 is shorter (measured in characters) than the byte-length
+/// specified.
+///
+/// If `rex.reg_icombine` is set and the comparison fails, retry by
+/// decomposing characters and comparing base characters only.
+///
+/// Returns 0 for match, nonzero for mismatch.
+#[no_mangle]
+#[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_cstrncmp(s1: *mut c_char, s2: *mut c_char, n: *mut c_int) -> c_int {
+    let result;
+
+    if nvim_regexp_get_rex_reg_ic() == 0 {
+        // Case-sensitive compare
+        result = strncmp(s1, s2, *n as usize);
+    } else {
+        // Case-insensitive: count characters for byte-length of s1
+        let mut p = s1;
+        let mut n2 = 0_i32;
+        let mut n1 = *n;
+        while n1 > 0 && *p != 0 {
+            n1 -= utfc_ptr2len(s1);
+            p = p.add(utfc_ptr2len(p) as usize); // MB_PTR_ADV
+            n2 += 1;
+        }
+        // Count bytes to advance the same number of chars for s2
+        p = s2;
+        while n2 > 0 && *p != 0 {
+            p = p.add(utfc_ptr2len(p) as usize); // MB_PTR_ADV
+            n2 -= 1;
+        }
+
+        n2 = p.offset_from(s2) as c_int;
+
+        result = utf_strnicmp(s1, s2, *n as usize, n2 as usize);
+        if result == 0 && n2 < *n {
+            *n = n2;
+        }
+    }
+
+    // If it failed and it's utf8 and we want to combineignore:
+    if result != 0 && nvim_regexp_get_rex_reg_icombine() != 0 {
+        let mut str1: *const c_char = s1;
+        let mut str2: *const c_char = s2;
+        let mut c1;
+        let mut c2;
+
+        loop {
+            if (str1 as usize - s1 as usize) as c_int >= *n {
+                // Reached the end — match
+                *n = (str2 as usize - s2 as usize) as c_int;
+                return 0;
+            }
+            c1 = mb_ptr2char_adv(&mut str1);
+            c2 = mb_ptr2char_adv(&mut str2);
+
+            if c1 != c2 && (nvim_regexp_get_rex_reg_ic() == 0 || utf_fold(c1) != utf_fold(c2)) {
+                // Decomposition necessary?
+                let mut c11: c_int = 0;
+                let mut c12: c_int = 0;
+                let mut junk1: c_int = 0;
+                let mut junk2: c_int = 0;
+                mb_decompose(c1, &mut c11, &mut junk1, &mut junk2);
+                mb_decompose(c2, &mut c12, &mut junk1, &mut junk2);
+                c1 = c11;
+                c2 = c12;
+                if c11 != c12
+                    && (nvim_regexp_get_rex_reg_ic() == 0 || utf_fold(c11) != utf_fold(c12))
+                {
+                    break;
+                }
+            }
+        }
+        return c2 - c1;
+    }
+
+    result
+}
+
+/// Search for character `c` in string `s`, with optional case-insensitivity.
+///
+/// When `rex.reg_ic` is set, searches case-insensitively.
+/// Returns `NULL` if no match, otherwise pointer to the position in `s`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cstrchr(s: *const c_char, c: c_int) -> *mut c_char {
+    if nvim_regexp_get_rex_reg_ic() == 0 {
+        return vim_strchr(s, c);
+    }
+
+    let cc: c_int;
+    let lc: c_int;
+    if c > 0x80 {
+        let folded = utf_fold(c);
+        cc = folded;
+        lc = folded;
+    } else if c >= b'A' as c_int && c <= b'Z' as c_int {
+        // ASCII_ISUPPER
+        cc = c + (b'a' - b'A') as c_int; // TOLOWER_ASC
+        lc = cc;
+    } else if c >= b'a' as c_int && c <= b'z' as c_int {
+        // ASCII_ISLOWER
+        cc = c - (b'a' - b'A') as c_int; // TOUPPER_ASC
+        lc = c;
+    } else {
+        return vim_strchr(s, c);
+    }
+
+    let mut p = s;
+    while *p != 0 {
+        let uc = utf_ptr2char(p);
+        if c > 0x80 || uc > 0x80 {
+            // Do not match an illegal byte. E.g. 0xff matches 0xc3 0xbf, not 0xff.
+            // Compare with lower case of the character.
+            if (uc < 0x80 || uc != *p as u8 as c_int) && utf_fold(uc) == lc {
+                return p.cast_mut();
+            }
+        } else if *p as u8 as c_int == c || *p as u8 as c_int == cc {
+            return p.cast_mut();
+        }
+        p = p.add(utfc_ptr2len(p) as usize);
+    }
+
+    std::ptr::null_mut()
 }
 
 #[cfg(test)]
