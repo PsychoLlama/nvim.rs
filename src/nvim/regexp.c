@@ -69,6 +69,7 @@ extern bool rs_re_mult_next(const char *what);
 extern void rs_cleanup_subexpr(void);
 extern void rs_cleanup_zsubexpr(void);
 extern int rs_reg_prev_class(void);
+extern void rs_reg_nextline(void);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -1044,6 +1045,13 @@ uint8_t *nvim_regexp_get_rex_input(void) { return rex.input; }
 uint8_t *nvim_regexp_get_rex_line(void) { return rex.line; }
 int64_t *nvim_regexp_get_rex_reg_buf_chartab(void) { return rex.reg_buf->b_chartab; }
 
+// reg_nextline accessors for Rust FFI
+int32_t nvim_regexp_get_rex_lnum(void) { return (int32_t)rex.lnum; }
+void nvim_regexp_set_rex_lnum(int32_t v) { rex.lnum = (linenr_T)v; }
+void nvim_regexp_set_rex_line_and_input(uint8_t *line) { rex.line = line; rex.input = line; }
+char *nvim_regexp_call_reg_getline(int32_t lnum) { return reg_getline((linenr_T)lnum); }
+void nvim_regexp_call_reg_breakcheck(void) { reg_breakcheck(); }
+
 // Create a new extmatch and mark it as referenced once.
 static reg_extmatch_T *make_extmatch(void)
   FUNC_ATTR_NONNULL_RET
@@ -1183,9 +1191,7 @@ static void cleanup_zsubexpr(void)
 // Advance rex.lnum, rex.line and rex.input to the next line.
 static void reg_nextline(void)
 {
-  rex.line = (uint8_t *)reg_getline(++rex.lnum);
-  rex.input = rex.line;
-  reg_breakcheck();
+  rs_reg_nextline();
 }
 
 // Check whether a backreference matches.

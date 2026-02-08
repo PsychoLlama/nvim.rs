@@ -78,6 +78,13 @@ extern "C" {
     fn nvim_regexp_set_rc_did_emsg(v: c_int);
     fn nvim_regexp_semsg_e888(what: *const c_char);
 
+    // reg_nextline accessors
+    fn nvim_regexp_get_rex_lnum() -> i32;
+    fn nvim_regexp_set_rex_lnum(v: i32);
+    fn nvim_regexp_set_rex_line_and_input(line: *mut u8);
+    fn nvim_regexp_call_reg_getline(lnum: i32) -> *mut c_char;
+    fn nvim_regexp_call_reg_breakcheck();
+
     // reg_prev_class accessors
     fn nvim_regexp_get_rex_input() -> *mut u8;
     fn nvim_regexp_get_rex_line() -> *mut u8;
@@ -1157,6 +1164,18 @@ pub unsafe extern "C" fn rs_reg_prev_class() -> c_int {
     } else {
         -1
     }
+}
+
+// --- reg_nextline ---
+
+/// Advance rex.lnum, rex.line and rex.input to the next line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_nextline() {
+    let lnum = nvim_regexp_get_rex_lnum() + 1;
+    nvim_regexp_set_rex_lnum(lnum);
+    let line = nvim_regexp_call_reg_getline(lnum).cast::<u8>();
+    nvim_regexp_set_rex_line_and_input(line);
+    nvim_regexp_call_reg_breakcheck();
 }
 
 #[cfg(test)]
