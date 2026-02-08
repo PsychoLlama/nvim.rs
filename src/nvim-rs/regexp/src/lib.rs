@@ -490,6 +490,63 @@ pub unsafe extern "C" fn rs_getoctchrs() -> c_long {
     nr as c_long
 }
 
+// --- State management: initchr, save/restore_parse_state ---
+
+/// Matches C `parse_state_T` layout in `regexp.c`.
+#[repr(C)]
+pub struct ParseStateT {
+    pub regparse: *mut c_char,
+    pub prevchr_len: c_int,
+    pub curchr: c_int,
+    pub prevchr: c_int,
+    pub prevprevchr: c_int,
+    pub nextchr: c_int,
+    pub at_start: c_int,
+    pub prev_at_start: c_int,
+    pub regnpar: c_int,
+}
+
+/// Start parsing at `str`. Sets regparse and resets all character state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_initchr(str: *mut c_char) {
+    nvim_regexp_set_regparse(str);
+    nvim_regexp_set_prevchr_len(0);
+    nvim_regexp_set_curchr(-1);
+    nvim_regexp_set_prevprevchr(-1);
+    nvim_regexp_set_prevchr(-1);
+    nvim_regexp_set_nextchr(-1);
+    nvim_regexp_set_at_start(1); // true
+    nvim_regexp_set_prev_at_start(0); // false
+}
+
+/// Save the current parse state into `ps`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_save_parse_state(ps: *mut ParseStateT) {
+    (*ps).regparse = nvim_regexp_get_regparse();
+    (*ps).prevchr_len = nvim_regexp_get_prevchr_len();
+    (*ps).curchr = nvim_regexp_get_curchr();
+    (*ps).prevchr = nvim_regexp_get_prevchr();
+    (*ps).prevprevchr = nvim_regexp_get_prevprevchr();
+    (*ps).nextchr = nvim_regexp_get_nextchr();
+    (*ps).at_start = nvim_regexp_get_at_start();
+    (*ps).prev_at_start = nvim_regexp_get_prev_at_start();
+    (*ps).regnpar = nvim_regexp_get_regnpar();
+}
+
+/// Restore a previously saved parse state from `ps`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_restore_parse_state(ps: *const ParseStateT) {
+    nvim_regexp_set_regparse((*ps).regparse);
+    nvim_regexp_set_prevchr_len((*ps).prevchr_len);
+    nvim_regexp_set_curchr((*ps).curchr);
+    nvim_regexp_set_prevchr((*ps).prevchr);
+    nvim_regexp_set_prevprevchr((*ps).prevprevchr);
+    nvim_regexp_set_nextchr((*ps).nextchr);
+    nvim_regexp_set_at_start((*ps).at_start);
+    nvim_regexp_set_prev_at_start((*ps).prev_at_start);
+    nvim_regexp_set_regnpar((*ps).regnpar);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

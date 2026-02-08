@@ -61,7 +61,6 @@ extern int rs_re_multiline(const regprog_T *prog);
 extern int64_t rs_gethexchrs(int maxinputlen);
 extern int64_t rs_getdecchrs(void);
 extern int64_t rs_getoctchrs(void);
-
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -612,6 +611,11 @@ typedef struct {
   int regnpar;
 } parse_state_T;
 
+// Rust FFI: state management
+extern void rs_initchr(char *str);
+extern void rs_save_parse_state(parse_state_T *ps);
+extern void rs_restore_parse_state(const parse_state_T *ps);
+
 static regengine_T bt_regengine;
 static regengine_T nfa_regengine;
 
@@ -789,44 +793,9 @@ void nvim_regexp_set_reg_magic(int v) { reg_magic = (magic_T)v; }
 int nvim_regexp_get_after_slash(void) { return after_slash; }
 void nvim_regexp_set_after_slash(int v) { after_slash = v; }
 
-// Start parsing at "str".
-static void initchr(char *str)
-{
-  regparse = str;
-  prevchr_len = 0;
-  curchr = prevprevchr = prevchr = nextchr = -1;
-  at_start = true;
-  prev_at_start = false;
-}
-
-// Save the current parse state, so that it can be restored and parsing
-// starts in the same state again.
-static void save_parse_state(parse_state_T *ps)
-{
-  ps->regparse = regparse;
-  ps->prevchr_len = prevchr_len;
-  ps->curchr = curchr;
-  ps->prevchr = prevchr;
-  ps->prevprevchr = prevprevchr;
-  ps->nextchr = nextchr;
-  ps->at_start = at_start;
-  ps->prev_at_start = prev_at_start;
-  ps->regnpar = regnpar;
-}
-
-// Restore a previously saved parse state.
-static void restore_parse_state(parse_state_T *ps)
-{
-  regparse = ps->regparse;
-  prevchr_len = ps->prevchr_len;
-  curchr = ps->curchr;
-  prevchr = ps->prevchr;
-  prevprevchr = ps->prevprevchr;
-  nextchr = ps->nextchr;
-  at_start = ps->at_start;
-  prev_at_start = ps->prev_at_start;
-  regnpar = ps->regnpar;
-}
+static void initchr(char *str) { rs_initchr(str); }
+static void save_parse_state(parse_state_T *ps) { rs_save_parse_state(ps); }
+static void restore_parse_state(parse_state_T *ps) { rs_restore_parse_state(ps); }
 
 // Get the next character without advancing.
 static int peekchr(void)
