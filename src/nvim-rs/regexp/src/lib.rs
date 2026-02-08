@@ -2689,7 +2689,6 @@ const CLASSCODES: &[c_int] = &[
 ];
 
 extern "C" {
-    fn regatom(flagp: *mut c_int) -> *mut u8;
     fn nvim_regexp_get_num_complex_braces() -> c_int;
     fn nvim_regexp_set_num_complex_braces(v: c_int);
     fn nvim_regexp_emsg2_e59(m: c_int);
@@ -3171,7 +3170,6 @@ unsafe fn parse_collection(flagp: *mut c_int, extra: c_int) -> *mut u8 {
 }
 
 /// Emit a `MULTIBYTECODE` node for character `c`.
-#[allow(dead_code)]
 unsafe fn do_multibyte(c: c_int, flagp: *mut c_int) -> *mut u8 {
     let ret = rs_regnode(MULTIBYTECODE);
     rs_regmbc(c);
@@ -3682,20 +3680,67 @@ pub unsafe extern "C" fn rs_regatom(flagp: *mut c_int) -> *mut u8 {
         // If it was an error (strict mode), rc_did_emsg is set.
     }
 
-    // Phases 7 handles the default/literal case; for now fall through to C regatom
-    let _ = save_prev_at_start;
+    // --- Default/literal case ---
+    // A multi-byte character is handled as a separate atom if it's
+    // before a multi and when it's a composing char.
+    if use_multibytecode(c) {
+        return do_multibyte(c, flagp);
+    }
+
+    let ret = rs_regnode(EXACTLY);
+
+    // Append characters as long as:
+    // - there is no following multi, we then need the character in
+    //   front of it as a single character operand
+    // - not running into a Magic character
+    // - "one_exactly" is not set
+    // But always emit at least one character.  Might be a Multi,
+    // e.g., a "[" without matching "]".
+    let mut len = 0;
+    while c != 0
+        && (len == 0
+            || (rs_re_multi_type(rs_peekchr()) == NOT_MULTI
+                && nvim_regexp_get_one_exactly() == 0
+                && c >= 0))
+    {
+        // is_Magic(c) means c < 0, so c >= 0 means !is_Magic(c)
+        let plain_c = if c < 0 { c + 256 } else { c }; // no_Magic(c)
+        rs_regmbc(plain_c);
+
+        // Need to get composing character too.
+        let mut state: i32 = 0; // GRAPHEME_STATE_INIT
+        loop {
+            let regparse = nvim_regexp_get_regparse();
+            let l = utf_ptr2len(regparse);
+            if utf_composinglike(regparse, regparse.add(l as usize), &mut state) == 0 {
+                break;
+            }
+            rs_regmbc(utf_ptr2char(nvim_regexp_get_regparse()));
+            rs_skipchr();
+        }
+
+        c = rs_getchr();
+        len += 1;
+    }
     rs_ungetchr();
-    regatom(flagp)
+
+    rs_regc(0); // NUL terminator
+    *flagp |= HASWIDTH;
+    if len == 1 {
+        *flagp |= SIMPLE;
+    }
+
+    ret
 }
 
 /// Parse something followed by possible [*+=].
 ///
-/// Calls `regatom` (still in C) to parse the atom, then handles quantifiers.
+/// Calls `rs_regatom` to parse the atom, then handles quantifiers.
 #[no_mangle]
 #[allow(clippy::too_many_lines, clippy::similar_names)]
 pub unsafe extern "C" fn rs_regpiece(flagp: *mut c_int) -> *mut u8 {
     let mut flags: c_int = 0;
-    let ret = regatom(&mut flags);
+    let ret = rs_regatom(&mut flags);
     if ret.is_null() {
         return std::ptr::null_mut();
     }
