@@ -260,6 +260,9 @@ extern void rs_reg_restore(const regsave_T *save, int *ga_len);
 extern int rs_reg_save_equal(const regsave_T *save);
 extern void rs_save_se_multi(save_se_T *savep, lpos_T *posp);
 extern void rs_save_se_one(save_se_T *savep, uint8_t **pp);
+// Rust FFI: subexpression save/restore (Phase 2)
+extern void rs_save_subexpr(regbehind_T *bp);
+extern void rs_restore_subexpr(const regbehind_T *bp);
 
 // Since the out pointers in the list are always
 // uninitialized, we use the pointers themselves
@@ -946,6 +949,12 @@ void nvim_regexp_set_rex_need_clear_subexpr(int v) { rex.need_clear_subexpr = (b
 int nvim_regexp_get_rex_need_clear_zsubexpr(void) { return rex.need_clear_zsubexpr; }
 void nvim_regexp_set_rex_need_clear_zsubexpr(int v) { rex.need_clear_zsubexpr = (bool)v; }
 int nvim_regexp_is_reg_multi(void) { return REG_MULTI; }
+// Subexpression position/pointer array accessors for Rust FFI (Phase 2)
+lpos_T *nvim_regexp_get_rex_startpos_array(void) { return rex.reg_startpos; }
+lpos_T *nvim_regexp_get_rex_endpos_array(void) { return rex.reg_endpos; }
+uint8_t **nvim_regexp_get_rex_startp_array(void) { return (uint8_t **)rex.reg_startp; }
+uint8_t **nvim_regexp_get_rex_endp_array(void) { return (uint8_t **)rex.reg_endp; }
+
 void nvim_regexp_clear_rex_startpos(void) { memset(rex.reg_startpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
 void nvim_regexp_clear_rex_endpos(void) { memset(rex.reg_endpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
 void nvim_regexp_clear_rex_startp(void) { memset(rex.reg_startp, 0, sizeof(char *) * NSUBEXP); }
@@ -3906,43 +3915,14 @@ static void regstack_pop(uint8_t **scan)
 static void save_subexpr(regbehind_T *bp)
   FUNC_ATTR_NONNULL_ALL
 {
-  // When "rex.need_clear_subexpr" is set we don't need to save the values, only
-  // remember that this flag needs to be set again when restoring.
-  bp->save_need_clear_subexpr = rex.need_clear_subexpr;
-  if (rex.need_clear_subexpr) {
-    return;
-  }
-
-  for (int i = 0; i < NSUBEXP; i++) {
-    if (REG_MULTI) {
-      bp->save_start[i].se_u.pos = rex.reg_startpos[i];
-      bp->save_end[i].se_u.pos = rex.reg_endpos[i];
-    } else {
-      bp->save_start[i].se_u.ptr = rex.reg_startp[i];
-      bp->save_end[i].se_u.ptr = rex.reg_endp[i];
-    }
-  }
+  rs_save_subexpr(bp);
 }
 
 // Restore the subexpr from "bp".
 static void restore_subexpr(regbehind_T *bp)
   FUNC_ATTR_NONNULL_ALL
 {
-  // Only need to restore saved values when they are not to be cleared.
-  rex.need_clear_subexpr = bp->save_need_clear_subexpr;
-  if (rex.need_clear_subexpr) {
-    return;
-  }
-
-  for (int i = 0; i < NSUBEXP; i++) {
-    if (REG_MULTI) {
-      rex.reg_startpos[i] = bp->save_start[i].se_u.pos;
-      rex.reg_endpos[i] = bp->save_end[i].se_u.pos;
-    } else {
-      rex.reg_startp[i] = bp->save_start[i].se_u.ptr;
-      rex.reg_endp[i] = bp->save_end[i].se_u.ptr;
-    }
-  }
+  rs_restore_subexpr(bp);
 }
 /// Main matching routine
 ///

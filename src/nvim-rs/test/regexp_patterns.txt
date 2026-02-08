@@ -705,6 +705,13 @@ a\{-1,}	aaa
 \(foo\)\@<=\(bar\)\@=bar	foobar
 \(foo\)\@<=\(bar\)\@=bar	foobaz
 
+# === Lookbehind with subexpr save/restore (Phase 2) ===
+\(foo\)\@<=bar	foobar
+\(foo\)\@<!bar	xbar
+\(\w\+\)\@<=\d\+	abc123
+\(ab\(cd\)\)\@<=ef	abcdef
+\(ab\(cd\)\)\@<=ef	xyzef
+
 # === Multibyte in various positions ===
 ^café$	café
 café\|latte	I want a latte

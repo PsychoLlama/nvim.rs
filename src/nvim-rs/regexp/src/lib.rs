@@ -4172,8 +4172,7 @@ pub struct SaveSeT {
 pub unsafe extern "C" fn rs_reg_save(save: *mut RegsaveT, ga_len: c_int) {
     if nvim_regexp_is_reg_multi() != 0 {
         #[allow(clippy::cast_possible_truncation)]
-        let col =
-            nvim_regexp_get_rex_input().offset_from(nvim_regexp_get_rex_line()) as c_int;
+        let col = nvim_regexp_get_rex_input().offset_from(nvim_regexp_get_rex_line()) as c_int;
         (*save).rs_u.pos.col = col;
         (*save).rs_u.pos.lnum = nvim_regexp_get_rex_lnum();
     } else {
@@ -4237,6 +4236,78 @@ pub unsafe extern "C" fn rs_save_se_one(savep: *mut SaveSeT, pp: *mut *mut u8) {
     *pp = nvim_regexp_get_rex_input();
 }
 
+// --- Subexpression save/restore for BT regexp lookbehind ---
+
+extern "C" {
+    fn nvim_regexp_get_rex_startpos_array() -> *mut LposT;
+    fn nvim_regexp_get_rex_endpos_array() -> *mut LposT;
+    fn nvim_regexp_get_rex_startp_array() -> *mut *mut u8;
+    fn nvim_regexp_get_rex_endp_array() -> *mut *mut u8;
+}
+
+/// `regbehind_T` — used for BEHIND and NOBEHIND matching.
+#[repr(C)]
+pub struct RegbehindT {
+    pub save_after: RegsaveT,
+    pub save_behind: RegsaveT,
+    pub save_need_clear_subexpr: c_int,
+    pub save_start: [SaveSeT; NSUBEXP],
+    pub save_end: [SaveSeT; NSUBEXP],
+}
+
+/// Save the current subexpr to `bp`, so they can be restored by `rs_restore_subexpr`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_save_subexpr(bp: *mut RegbehindT) {
+    // When "rex.need_clear_subexpr" is set we don't need to save the values, only
+    // remember that this flag needs to be set again when restoring.
+    (*bp).save_need_clear_subexpr = nvim_regexp_get_rex_need_clear_subexpr();
+    if nvim_regexp_get_rex_need_clear_subexpr() != 0 {
+        return;
+    }
+
+    if nvim_regexp_is_reg_multi() != 0 {
+        let startpos = nvim_regexp_get_rex_startpos_array();
+        let endpos = nvim_regexp_get_rex_endpos_array();
+        for i in 0..NSUBEXP {
+            (*bp).save_start[i].se_u.pos = *startpos.add(i);
+            (*bp).save_end[i].se_u.pos = *endpos.add(i);
+        }
+    } else {
+        let startp = nvim_regexp_get_rex_startp_array();
+        let endp = nvim_regexp_get_rex_endp_array();
+        for i in 0..NSUBEXP {
+            (*bp).save_start[i].se_u.ptr = *startp.add(i);
+            (*bp).save_end[i].se_u.ptr = *endp.add(i);
+        }
+    }
+}
+
+/// Restore the subexpr from `bp`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_restore_subexpr(bp: *const RegbehindT) {
+    // Only need to restore saved values when they are not to be cleared.
+    nvim_regexp_set_rex_need_clear_subexpr((*bp).save_need_clear_subexpr);
+    if (*bp).save_need_clear_subexpr != 0 {
+        return;
+    }
+
+    if nvim_regexp_is_reg_multi() != 0 {
+        let startpos = nvim_regexp_get_rex_startpos_array();
+        let endpos = nvim_regexp_get_rex_endpos_array();
+        for i in 0..NSUBEXP {
+            *startpos.add(i) = (*bp).save_start[i].se_u.pos;
+            *endpos.add(i) = (*bp).save_end[i].se_u.pos;
+        }
+    } else {
+        let startp = nvim_regexp_get_rex_startp_array();
+        let endp = nvim_regexp_get_rex_endp_array();
+        for i in 0..NSUBEXP {
+            *startp.add(i) = (*bp).save_start[i].se_u.ptr;
+            *endp.add(i) = (*bp).save_end[i].se_u.ptr;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4277,6 +4348,25 @@ mod tests {
             std::mem::size_of::<SaveSeUnion>()
         );
         assert_eq!(std::mem::size_of::<SaveSeT>(), 8);
+    }
+
+    // --- Struct layout assertions for Phase 2 structs ---
+
+    #[test]
+    fn test_regbehind_t_layout() {
+        let size = std::mem::size_of::<RegbehindT>();
+        let align = std::mem::align_of::<RegbehindT>();
+        // RegbehindT = 2x RegsaveT + c_int + 2x [SaveSeT; 10]
+        // RegsaveT = 16 bytes each (on 64-bit), c_int = 4
+        // SaveSeT = 8 bytes each, [SaveSeT; 10] = 80 bytes
+        // Total: 16 + 16 + 4 + padding(4) + 80 + 80 = 200
+        // But actual layout depends on alignment rules
+        assert!(
+            size >= 2 * std::mem::size_of::<RegsaveT>()
+                + std::mem::size_of::<c_int>()
+                + 2 * std::mem::size_of::<SaveSeT>() * NSUBEXP
+        );
+        assert_eq!(size % align, 0);
     }
 
     #[test]
