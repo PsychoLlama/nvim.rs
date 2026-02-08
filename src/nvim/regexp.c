@@ -639,42 +639,11 @@ static void get_cpo_flags(void)
 /// Skip over a "[]" range.
 /// "p" must point to the character after the '['.
 /// The returned pointer is on the matching ']', or the terminating NUL.
+extern char *rs_skip_anyof(char *p);
+
 static char *skip_anyof(char *p)
 {
-  int l;
-
-  if (*p == '^') {  // Complement of range.
-    p++;
-  }
-  if (*p == ']' || *p == '-') {
-    p++;
-  }
-  while (*p != NUL && *p != ']') {
-    if ((l = utfc_ptr2len(p)) > 1) {
-      p += l;
-    } else if (*p == '-') {
-      p++;
-      if (*p != ']' && *p != NUL) {
-        MB_PTR_ADV(p);
-      }
-    } else if (*p == '\\'
-               && (vim_strchr(REGEXP_INRANGE, (uint8_t)p[1]) != NULL
-                   || (!reg_cpo_lit
-                       && vim_strchr(REGEXP_ABBR, (uint8_t)p[1]) != NULL))) {
-      p += 2;
-    } else if (*p == '[') {
-      if (get_char_class(&p) == CLASS_NONE
-          && get_equi_class(&p) == 0
-          && get_coll_element(&p) == 0
-          && *p != NUL) {
-        p++;          // It is not a class name and not NUL
-      }
-    } else {
-      p++;
-    }
-  }
-
-  return p;
+  return rs_skip_anyof(p);
 }
 
 /// Skip past regular expression.

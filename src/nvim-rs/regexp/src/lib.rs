@@ -149,8 +149,9 @@ const MAGIC_ALL: c_int = 4;
 /// Skip over a "[]" range. `p` must point to the character after the '['.
 /// The returned pointer is on the matching ']', or the terminating NUL.
 ///
-/// Mirrors `skip_anyof` in `regexp.c`.
-unsafe fn skip_anyof(mut p: *mut c_char, reg_cpo_lit: bool) -> *mut c_char {
+/// Shared implementation used by both `rs_skip_anyof` (FFI) and
+/// `rs_skip_regexp_ex` (which passes `reg_cpo_lit` from its own snapshot).
+unsafe fn skip_anyof_impl(mut p: *mut c_char, reg_cpo_lit: bool) -> *mut c_char {
     if *p == b'^' as c_char {
         p = p.add(1);
     }
@@ -187,6 +188,14 @@ unsafe fn skip_anyof(mut p: *mut c_char, reg_cpo_lit: bool) -> *mut c_char {
     p
 }
 
+/// Skip over a `[]` bracket expression — FFI export.
+/// Reads `reg_cpo_lit` from the C global via accessor.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_anyof(p: *mut c_char) -> *mut c_char {
+    let cpo_lit = nvim_regexp_get_reg_cpo_lit() != 0;
+    skip_anyof_impl(p, cpo_lit)
+}
+
 /// Skip past regular expression, extended version.
 ///
 /// Stop at end of `startp` or where `dirc` delimiter is found.
@@ -221,7 +230,7 @@ pub unsafe extern "C" fn rs_skip_regexp_ex(
         if (*p == b'[' as c_char && mymagic >= MAGIC_ON)
             || (*p == b'\\' as c_char && *p.add(1) == b'[' as c_char && mymagic <= MAGIC_OFF)
         {
-            p = skip_anyof(p.add(1), reg_cpo_lit);
+            p = skip_anyof_impl(p.add(1), reg_cpo_lit);
             if *p == 0 {
                 break;
             }
