@@ -40,9 +40,13 @@ unittest:
 run *ARGS:
     VIMRUNTIME=runtime ./build/bin/nvim {{ARGS}}
 
-# Smoke test: verify nvim starts and exits cleanly
+# Smoke test: verify nvim starts, exits cleanly, and can do basic regexp work.
+# The regexp smoke test has a 30s timeout to catch infinite loops without
+# leaving zombie processes. It exercises buffer search (vim_regexec_multi),
+# substitution, and syntax highlighting — paths the baseline test doesn't cover.
 smoke-test:
     VIMRUNTIME=runtime ./build/bin/nvim --headless +qa
+    timeout 30 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_smoke.vim 2>&1' || { echo "FAIL: regexp smoke test timed out or failed (exit $?)"; exit 1; }
 
 # Show nvim version
 version:
