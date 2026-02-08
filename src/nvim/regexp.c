@@ -10383,6 +10383,107 @@ void nvim_regexp_set_nfa_ll_index(int v) { nfa_ll_index = v; }
 
 // --- End Phase 8.2 (part 2) ---
 
+// --- Phase 8.3: C wrappers for addstate/addstate_here + submatch ops ---
+
+// addstate / addstate_here wrappers
+void *nvim_regexp_call_addstate(void *l, void *state, void *subs, void *pim, int off)
+{
+  return (void *)addstate((nfa_list_T *)l, (nfa_state_T *)state,
+                          (regsubs_T *)subs, (nfa_pim_T *)pim, off);
+}
+void *nvim_regexp_call_addstate_here(void *l, void *state, void *subs, void *pim, int *ip)
+{
+  return (void *)addstate_here((nfa_list_T *)l, (nfa_state_T *)state,
+                               (regsubs_T *)subs, (nfa_pim_T *)pim, ip);
+}
+
+// Submatch operations wrappers
+void nvim_regexp_call_copy_sub(void *to, void *from)
+{
+  copy_sub((regsub_T *)to, (regsub_T *)from);
+}
+void nvim_regexp_call_copy_sub_off(void *to, void *from)
+{
+  copy_sub_off((regsub_T *)to, (regsub_T *)from);
+}
+void nvim_regexp_call_copy_ze_off(void *to, void *from)
+{
+  copy_ze_off((regsub_T *)to, (regsub_T *)from);
+}
+void nvim_regexp_call_clear_sub(void *sub)
+{
+  clear_sub((regsub_T *)sub);
+}
+void nvim_regexp_call_copy_pim(void *to, void *from)
+{
+  copy_pim((nfa_pim_T *)to, (nfa_pim_T *)from);
+}
+
+// nfa_regmatch wrapper (for recursive_regmatch to call from Rust)
+int nvim_regexp_call_nfa_regmatch(void *prog, void *start, void *submatch, void *m)
+{
+  return nfa_regmatch((nfa_regprog_T *)prog, (nfa_state_T *)start,
+                      (regsubs_T *)submatch, (regsubs_T *)m);
+}
+
+// recursive_regmatch wrapper
+int nvim_regexp_call_recursive_regmatch(
+    void *state, void *pim, void *prog, void *submatch, void *m,
+    int **listids, int *listids_len)
+{
+  return recursive_regmatch((nfa_state_T *)state, (nfa_pim_T *)pim,
+                            (nfa_regprog_T *)prog, (regsubs_T *)submatch,
+                            (regsubs_T *)m, listids, listids_len);
+}
+
+// nfa_save_listids / nfa_restore_listids wrappers
+void nvim_regexp_call_nfa_save_listids(void *prog, int *list)
+{
+  nfa_save_listids((nfa_regprog_T *)prog, list);
+}
+void nvim_regexp_call_nfa_restore_listids(void *prog, const int *list)
+{
+  nfa_restore_listids((nfa_regprog_T *)prog, list);
+}
+
+// nfa_endp accessor
+void *nvim_regexp_get_nfa_endp(void) { return (void *)nfa_endp; }
+void nvim_regexp_set_nfa_endp(void *v) { nfa_endp = (save_se_T *)v; }
+
+// nfa_endp field accessors
+int32_t nvim_regexp_get_nfa_endp_pos_lnum(void)
+{
+  return nfa_endp ? (int32_t)nfa_endp->se_u.pos.lnum : -1;
+}
+int32_t nvim_regexp_get_nfa_endp_pos_col(void)
+{
+  return nfa_endp ? (int32_t)nfa_endp->se_u.pos.col : -1;
+}
+uint8_t *nvim_regexp_get_nfa_endp_ptr(void)
+{
+  return nfa_endp ? nfa_endp->se_u.ptr : NULL;
+}
+
+// nfa_list_T memory management
+void *nvim_nfa_list_alloc_threads(int nstate)
+{
+  return (void *)xmalloc(sizeof(nfa_thread_T) * (size_t)nstate);
+}
+void nvim_nfa_list_free_threads(void *t)
+{
+  xfree(t);
+}
+
+// nfa_time_limit / nfa_timed_out / nfa_time_count accessors
+void *nvim_regexp_get_nfa_time_limit(void) { return (void *)nfa_time_limit; }
+void nvim_regexp_set_nfa_time_limit(void *v) { nfa_time_limit = (proftime_T *)v; }
+int *nvim_regexp_get_nfa_timed_out(void) { return nfa_timed_out; }
+void nvim_regexp_set_nfa_timed_out(int *v) { nfa_timed_out = v; }
+int nvim_regexp_get_nfa_time_count(void) { return nfa_time_count; }
+void nvim_regexp_set_nfa_time_count(int v) { nfa_time_count = v; }
+
+// --- End Phase 8.3 ---
+
 /// Main matching routine.
 ///
 /// Run NFA to determine whether it matches rex.input.

@@ -10137,6 +10137,63 @@ extern "C" {
     fn nvim_regexp_set_nfa_match(v: c_int);
     fn nvim_regexp_get_nfa_ll_index() -> c_int;
     fn nvim_regexp_set_nfa_ll_index(v: c_int);
+
+    // Phase 8.3: addstate/addstate_here/submatch wrappers
+    fn nvim_regexp_call_addstate(
+        l: NfaListHandle,
+        state: NfaStateHandle,
+        subs: RegsubsHandle,
+        pim: NfaPimHandle,
+        off: c_int,
+    ) -> RegsubsHandle;
+    fn nvim_regexp_call_addstate_here(
+        l: NfaListHandle,
+        state: NfaStateHandle,
+        subs: RegsubsHandle,
+        pim: NfaPimHandle,
+        ip: *mut c_int,
+    ) -> RegsubsHandle;
+    fn nvim_regexp_call_copy_sub(to: *mut c_void, from: *mut c_void);
+    fn nvim_regexp_call_copy_sub_off(to: *mut c_void, from: *mut c_void);
+    fn nvim_regexp_call_copy_ze_off(to: *mut c_void, from: *mut c_void);
+    fn nvim_regexp_call_clear_sub(sub: *mut c_void);
+    fn nvim_regexp_call_copy_pim(to: NfaPimHandle, from: NfaPimHandle);
+    fn nvim_regexp_call_nfa_regmatch(
+        prog: NfaProgHandle,
+        start: NfaStateHandle,
+        submatch: RegsubsHandle,
+        m: RegsubsHandle,
+    ) -> c_int;
+    fn nvim_regexp_call_recursive_regmatch(
+        state: NfaStateHandle,
+        pim: NfaPimHandle,
+        prog: NfaProgHandle,
+        submatch: RegsubsHandle,
+        m: RegsubsHandle,
+        listids: *mut *mut c_int,
+        listids_len: *mut c_int,
+    ) -> c_int;
+    fn nvim_regexp_call_nfa_save_listids(prog: NfaProgHandle, list: *mut c_int);
+    fn nvim_regexp_call_nfa_restore_listids(prog: NfaProgHandle, list: *const c_int);
+
+    // nfa_endp accessor
+    fn nvim_regexp_get_nfa_endp() -> *mut c_void;
+    fn nvim_regexp_set_nfa_endp(v: *mut c_void);
+    fn nvim_regexp_get_nfa_endp_pos_lnum() -> i32;
+    fn nvim_regexp_get_nfa_endp_pos_col() -> i32;
+    fn nvim_regexp_get_nfa_endp_ptr() -> *mut u8;
+
+    // nfa_list_T memory management
+    fn nvim_nfa_list_alloc_threads(nstate: c_int) -> *mut c_void;
+    fn nvim_nfa_list_free_threads(t: *mut c_void);
+
+    // nfa_time_limit / nfa_timed_out / nfa_time_count
+    fn nvim_regexp_get_nfa_time_limit() -> *mut c_void;
+    fn nvim_regexp_set_nfa_time_limit(v: *mut c_void);
+    fn nvim_regexp_get_nfa_timed_out() -> *mut c_int;
+    fn nvim_regexp_set_nfa_timed_out(v: *mut c_int);
+    fn nvim_regexp_get_nfa_time_count() -> c_int;
+    fn nvim_regexp_set_nfa_time_count(v: c_int);
 }
 
 /// Return true if "one" and "two" PIM states are equal.

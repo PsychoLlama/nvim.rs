@@ -1134,3 +1134,14 @@ hello world	hello world test
 \(a\|b\)\1	aa
 \([[:alpha:]]\+\)\1	abcabc
 \v(\w+) \1	hello hello
+# Phase 8.3: Lookahead/lookbehind and zero-width assertion patterns
+\(foo\)\@=bar	foobar
+\(foo\)\@!bar	xbar
+\(foo\)\@<=bar	foobar
+\(foo\)\@<!bar	xbar
+\v(foo)@=bar	foobar
+\v(foo)@!bar	xbar
+\v(foo)@<=bar	foobar
+\v(foo)@<!bar	xbar
+\zsfoo\ze	foobar
+foo\zsbar\ze	foobar
