@@ -847,3 +847,30 @@ a\@<!	xbcd
 \(a\|b\)	abc
 \(\(nested\)\)	nested
 \(a\(b\(c\)\)\)	abc
+
+# === regatom: EXACTLY node with composing characters ===
+# Multi-char EXACTLY node (tests character gobbling loop)
+abcdef	xabcdefx
+# MULTIBYTECODE before quantifier
+é\+	éééx
+ñ*	ñññ
+# Composing characters (combining acute accent U+0301)
+à	àbc
+# Multibyte literal followed by quantifier (triggers MULTIBYTECODE path)
+ü\{2,3}	üüü
+# Collection with \n (ANYOF+ADD_NL)
+[a\n]	abc
+# Negated collection with \n (ANYBUT+ADD_NL)
+[^a\n]	abc
+# EXACTLY with one_exactly (via \%[...])
+\%[xyz]	xbc
+# Literal [ without matching ] (falls through to EXACTLY)
+\M[	test[here
+# \%V visual area assertion
+\%Vabc	abc
+# \%C composing assertion
+.\%C	abc
+# Mark position assertion
+\%'a	mark a here
+# Previous substitution
+~	prev sub
