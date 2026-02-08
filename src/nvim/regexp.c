@@ -82,6 +82,8 @@ extern void rs_regoptail(uint8_t *p, uint8_t *val);
 extern void rs_reginsert(int op, uint8_t *opnd);
 extern void rs_reginsert_nr(int op, int64_t val, uint8_t *opnd);
 extern void rs_reginsert_limits(int op, int64_t minval, int64_t maxval, uint8_t *opnd);
+// Rust FFI: recursive descent parser functions
+extern uint8_t *rs_regpiece(int *flagp);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -1851,6 +1853,30 @@ void nvim_regexp_set_regsize(int64_t v) { regsize = v; }
 int nvim_regexp_get_reg_toolong(void) { return reg_toolong; }
 void nvim_regexp_set_reg_toolong(int v) { reg_toolong = v; }
 uint8_t *nvim_regexp_get_just_calc_size(void) { return JUST_CALC_SIZE; }
+int nvim_regexp_get_num_complex_braces(void) { return num_complex_braces; }
+void nvim_regexp_set_num_complex_braces(int v) { num_complex_braces = v; }
+
+// Error helpers for Rust FFI (keeps gettext _() calls in C)
+void nvim_regexp_emsg2_e59(int m)
+{
+  semsg(_(e_invalid_character_after_str_at), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e60(int m)
+{
+  semsg(_("E60: Too many complex %s{...}s"), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg2_e61(int m)
+{
+  semsg(_("E61: Nested %s*"), m ? "" : "\\");
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg3_e62(int m, int c)
+{
+  semsg(_("E62: Nested %s%c"), m ? "" : "\\", c);
+  rc_did_emsg = true;
+}
 
 // used for STAR, PLUS and BRACE_SIMPLE matching
 typedef struct regstar_S {
@@ -3053,7 +3079,7 @@ static int seen_endbrace(int refnum)
 // Optimization:  gobbles an entire sequence of ordinary characters so that
 // it can turn them into a single node, which is smaller to store and
 // faster to run.  Don't do this when one_exactly is set.
-static uint8_t *regatom(int *flagp)
+uint8_t *regatom(int *flagp)
 {
   uint8_t *ret;
   int flags;
@@ -3857,137 +3883,7 @@ do_multibyte:
 // endmarker role is not redundant.
 static uint8_t *regpiece(int *flagp)
 {
-  uint8_t *ret;
-  int op;
-  uint8_t *next;
-  int flags;
-  int minval;
-  int maxval;
-
-  ret = regatom(&flags);
-  if (ret == NULL) {
-    return NULL;
-  }
-
-  op = peekchr();
-  if (re_multi_type(op) == NOT_MULTI) {
-    *flagp = flags;
-    return ret;
-  }
-  // default flags
-  *flagp = (WORST | SPSTART | (flags & (HASNL | HASLOOKBH)));
-
-  skipchr();
-  switch (op) {
-  case Magic('*'):
-    if (flags & SIMPLE) {
-      reginsert(STAR, ret);
-    } else {
-      // Emit x* as (x&|), where & means "self".
-      reginsert(BRANCH, ret);           // Either x
-      regoptail(ret, regnode(BACK));            // and loop
-      regoptail(ret, ret);              // back
-      regtail(ret, regnode(BRANCH));            // or
-      regtail(ret, regnode(NOTHING));           // null.
-    }
-    break;
-
-  case Magic('+'):
-    if (flags & SIMPLE) {
-      reginsert(PLUS, ret);
-    } else {
-      // Emit x+ as x(&|), where & means "self".
-      next = regnode(BRANCH);           // Either
-      regtail(ret, next);
-      regtail(regnode(BACK), ret);              // loop back
-      regtail(next, regnode(BRANCH));           // or
-      regtail(ret, regnode(NOTHING));           // null.
-    }
-    *flagp = (WORST | HASWIDTH | (flags & (HASNL | HASLOOKBH)));
-    break;
-
-  case Magic('@'): {
-    int lop = END;
-    int64_t nr = getdecchrs();
-
-    switch (no_Magic(getchr())) {
-    case '=':
-      lop = MATCH; break;                                 // \@=
-    case '!':
-      lop = NOMATCH; break;                               // \@!
-    case '>':
-      lop = SUBPAT; break;                                // \@>
-    case '<':
-      switch (no_Magic(getchr())) {
-      case '=':
-        lop = BEHIND; break;                               // \@<=
-      case '!':
-        lop = NOBEHIND; break;                             // \@<!
-      }
-    }
-    if (lop == END) {
-      EMSG2_RET_NULL(_(e_invalid_character_after_str_at),
-                     reg_magic == MAGIC_ALL);
-    }
-    // Look behind must match with behind_pos.
-    if (lop == BEHIND || lop == NOBEHIND) {
-      regtail(ret, regnode(BHPOS));
-      *flagp |= HASLOOKBH;
-    }
-    regtail(ret, regnode(END));             // operand ends
-    if (lop == BEHIND || lop == NOBEHIND) {
-      if (nr < 0) {
-        nr = 0;                 // no limit is same as zero limit
-      }
-      reginsert_nr(lop, (uint32_t)nr, ret);
-    } else {
-      reginsert(lop, ret);
-    }
-    break;
-  }
-
-  case Magic('?'):
-  case Magic('='):
-    // Emit x= as (x|)
-    reginsert(BRANCH, ret);                     // Either x
-    regtail(ret, regnode(BRANCH));              // or
-    next = regnode(NOTHING);                    // null.
-    regtail(ret, next);
-    regoptail(ret, next);
-    break;
-
-  case Magic('{'):
-    if (!read_limits(&minval, &maxval)) {
-      return NULL;
-    }
-    if (flags & SIMPLE) {
-      reginsert(BRACE_SIMPLE, ret);
-      reginsert_limits(BRACE_LIMITS, minval, maxval, ret);
-    } else {
-      if (num_complex_braces >= 10) {
-        EMSG2_RET_NULL(_("E60: Too many complex %s{...}s"),
-                       reg_magic == MAGIC_ALL);
-      }
-      reginsert(BRACE_COMPLEX + num_complex_braces, ret);
-      regoptail(ret, regnode(BACK));
-      regoptail(ret, ret);
-      reginsert_limits(BRACE_LIMITS, minval, maxval, ret);
-      num_complex_braces++;
-    }
-    if (minval > 0 && maxval > 0) {
-      *flagp = (HASWIDTH | (flags & (HASNL | HASLOOKBH)));
-    }
-    break;
-  }
-  if (re_multi_type(peekchr()) != NOT_MULTI) {
-    // Can't have a multi follow a multi.
-    if (peekchr() == Magic('*')) {
-      EMSG2_RET_NULL(_("E61: Nested %s*"), reg_magic >= MAGIC_ON);
-    }
-    EMSG3_RET_NULL(_("E62: Nested %s%c"), reg_magic == MAGIC_ALL, no_Magic(peekchr()));
-  }
-
-  return ret;
+  return rs_regpiece(flagp);
 }
 
 // Parse one alternative of an | or & operator.

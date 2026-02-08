@@ -2524,6 +2524,205 @@ pub unsafe extern "C" fn rs_reginsert_limits(op: c_int, minval: i64, maxval: i64
     rs_regtail(opnd, place);
 }
 
+// --- Opcode and flag constants for the recursive descent parser ---
+const END: c_int = 0;
+const NOTHING: c_int = 6;
+const STAR: c_int = 7;
+const PLUS: c_int = 8;
+const MATCH: c_int = 9;
+const NOMATCH: c_int = 10;
+const BEHIND: c_int = 11;
+const NOBEHIND: c_int = 12;
+const SUBPAT: c_int = 13;
+const BRACE_SIMPLE: c_int = 14;
+const BRACE_LIMITS: c_int = 17;
+const BHPOS: c_int = 19;
+#[allow(dead_code)]
+const MOPEN: c_int = 80;
+#[allow(dead_code)]
+const MCLOSE: c_int = 90;
+#[allow(dead_code)]
+const ZOPEN: c_int = 110;
+#[allow(dead_code)]
+const ZCLOSE: c_int = 120;
+#[allow(dead_code)]
+const NOPEN: c_int = 150;
+#[allow(dead_code)]
+const NCLOSE: c_int = 151;
+
+// Parser flags
+const HASWIDTH: c_int = 0x1;
+const SIMPLE: c_int = 0x2;
+const SPSTART: c_int = 0x4;
+const HASNL: c_int = 0x8;
+const HASLOOKBH: c_int = 0x10;
+const WORST: c_int = 0;
+
+// RF_ compile-time flags
+#[allow(dead_code)]
+const RF_ICASE: c_uint = 1;
+#[allow(dead_code)]
+const RF_NOICASE: c_uint = 2;
+#[allow(dead_code)]
+const RF_ICOMBINE: c_uint = 8;
+
+// Paren types
+#[allow(dead_code)]
+const REG_NOPAREN: c_int = 0;
+#[allow(dead_code)]
+const REG_PAREN: c_int = 1;
+#[allow(dead_code)]
+const REG_ZPAREN: c_int = 2;
+#[allow(dead_code)]
+const REG_NPAREN: c_int = 3;
+
+extern "C" {
+    fn regatom(flagp: *mut c_int) -> *mut u8;
+    fn nvim_regexp_get_num_complex_braces() -> c_int;
+    fn nvim_regexp_set_num_complex_braces(v: c_int);
+    fn nvim_regexp_emsg2_e59(m: c_int);
+    fn nvim_regexp_emsg2_e60(m: c_int);
+    fn nvim_regexp_emsg2_e61(m: c_int);
+    fn nvim_regexp_emsg3_e62(m: c_int, c: c_int);
+}
+
+/// Parse something followed by possible [*+=].
+///
+/// Calls `regatom` (still in C) to parse the atom, then handles quantifiers.
+#[no_mangle]
+#[allow(clippy::too_many_lines, clippy::similar_names)]
+pub unsafe extern "C" fn rs_regpiece(flagp: *mut c_int) -> *mut u8 {
+    let mut flags: c_int = 0;
+    let ret = regatom(&mut flags);
+    if ret.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let op = rs_peekchr();
+    if rs_re_multi_type(op) == NOT_MULTI {
+        *flagp = flags;
+        return ret;
+    }
+    // default flags
+    *flagp = WORST | SPSTART | (flags & (HASNL | HASLOOKBH));
+
+    rs_skipchr();
+    match op {
+        x if x == magic(b'*') => {
+            if flags & SIMPLE != 0 {
+                rs_reginsert(STAR, ret);
+            } else {
+                // Emit x* as (x&|), where & means "self".
+                rs_reginsert(BRANCH, ret); // Either x
+                rs_regoptail(ret, rs_regnode(BACK)); // and loop
+                rs_regoptail(ret, ret); // back
+                rs_regtail(ret, rs_regnode(BRANCH)); // or
+                rs_regtail(ret, rs_regnode(NOTHING)); // null.
+            }
+        }
+        x if x == magic(b'+') => {
+            if flags & SIMPLE != 0 {
+                rs_reginsert(PLUS, ret);
+            } else {
+                // Emit x+ as x(&|), where & means "self".
+                let next = rs_regnode(BRANCH); // Either
+                rs_regtail(ret, next);
+                rs_regtail(rs_regnode(BACK), ret); // loop back
+                rs_regtail(next, rs_regnode(BRANCH)); // or
+                rs_regtail(ret, rs_regnode(NOTHING)); // null.
+            }
+            *flagp = WORST | HASWIDTH | (flags & (HASNL | HASLOOKBH));
+        }
+        x if x == magic(b'@') => {
+            let mut lop = END;
+            let nr = rs_getdecchrs() as i64;
+
+            match rs_no_magic(rs_getchr()) {
+                x if x == b'=' as c_int => lop = MATCH,   // \@=
+                x if x == b'!' as c_int => lop = NOMATCH, // \@!
+                x if x == b'>' as c_int => lop = SUBPAT,  // \@>
+                x if x == b'<' as c_int => {
+                    match rs_no_magic(rs_getchr()) {
+                        x if x == b'=' as c_int => lop = BEHIND,   // \@<=
+                        x if x == b'!' as c_int => lop = NOBEHIND, // \@<!
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+            if lop == END {
+                let reg_magic = nvim_regexp_get_reg_magic();
+                nvim_regexp_emsg2_e59(c_int::from(reg_magic == MAGIC_ALL));
+                return std::ptr::null_mut();
+            }
+            // Look behind must match with behind_pos.
+            if lop == BEHIND || lop == NOBEHIND {
+                rs_regtail(ret, rs_regnode(BHPOS));
+                *flagp |= HASLOOKBH;
+            }
+            rs_regtail(ret, rs_regnode(END)); // operand ends
+            if lop == BEHIND || lop == NOBEHIND {
+                let nr = if nr < 0 { 0 } else { nr };
+                rs_reginsert_nr(lop, nr, ret);
+            } else {
+                rs_reginsert(lop, ret);
+            }
+        }
+        x if x == magic(b'?') || x == magic(b'=') => {
+            // Emit x= as (x|)
+            rs_reginsert(BRANCH, ret); // Either x
+            rs_regtail(ret, rs_regnode(BRANCH)); // or
+            let next = rs_regnode(NOTHING); // null.
+            rs_regtail(ret, next);
+            rs_regoptail(ret, next);
+        }
+        x if x == magic(b'{') => {
+            let mut minval: c_int = 0;
+            let mut maxval: c_int = 0;
+            if rs_read_limits(&mut minval, &mut maxval) != 1 {
+                // OK = 1 in Neovim
+                return std::ptr::null_mut();
+            }
+            if flags & SIMPLE != 0 {
+                rs_reginsert(BRACE_SIMPLE, ret);
+                rs_reginsert_limits(BRACE_LIMITS, minval as i64, maxval as i64, ret);
+            } else {
+                let ncb = nvim_regexp_get_num_complex_braces();
+                if ncb >= 10 {
+                    let reg_magic = nvim_regexp_get_reg_magic();
+                    nvim_regexp_emsg2_e60(c_int::from(reg_magic == MAGIC_ALL));
+                    return std::ptr::null_mut();
+                }
+                rs_reginsert(BRACE_COMPLEX + ncb, ret);
+                rs_regoptail(ret, rs_regnode(BACK));
+                rs_regoptail(ret, ret);
+                rs_reginsert_limits(BRACE_LIMITS, minval as i64, maxval as i64, ret);
+                nvim_regexp_set_num_complex_braces(ncb + 1);
+            }
+            if minval > 0 && maxval > 0 {
+                *flagp = HASWIDTH | (flags & (HASNL | HASLOOKBH));
+            }
+        }
+        _ => {}
+    }
+
+    if rs_re_multi_type(rs_peekchr()) != NOT_MULTI {
+        // Can't have a multi follow a multi.
+        let reg_magic = nvim_regexp_get_reg_magic();
+        if rs_peekchr() == magic(b'*') {
+            nvim_regexp_emsg2_e61(c_int::from(reg_magic >= MAGIC_ON));
+            return std::ptr::null_mut();
+        }
+        nvim_regexp_emsg3_e62(
+            c_int::from(reg_magic == MAGIC_ALL),
+            rs_no_magic(rs_peekchr()),
+        );
+        return std::ptr::null_mut();
+    }
+
+    ret
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

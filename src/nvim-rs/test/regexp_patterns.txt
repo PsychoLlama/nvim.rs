@@ -816,3 +816,17 @@ hello world	hello world and more
 # Complex backslash sequences near delimiters
 a\\/b	escaped/backslash
 \\[	escaped bracket
+
+# regpiece: quantifier parsing
+a*	aaa
+a\+	aaa
+a\?	abc
+a\{2,5}	aaaaaaa
+a\{3}	aaaa
+a\{,10}	aaa
+a\@=	abc
+a\@!	bcd
+a\@>	abc
+a\@<=	xabc
+a\@<!	xbcd
+\(abc\)\{2,4}	abcabcabc
