@@ -830,3 +830,9 @@ a\@>	abc
 a\@<=	xabc
 a\@<!	xbcd
 \(abc\)\{2,4}	abcabcabc
+
+# regconcat: concatenation and inline mode switches
+\vfoo+bar	foooobar
+\cfoo	FOO
+\Cfoo	foo
+\Zfoo	foo

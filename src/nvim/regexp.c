@@ -84,6 +84,7 @@ extern void rs_reginsert_nr(int op, int64_t val, uint8_t *opnd);
 extern void rs_reginsert_limits(int op, int64_t minval, int64_t maxval, uint8_t *opnd);
 // Rust FFI: recursive descent parser functions
 extern uint8_t *rs_regpiece(int *flagp);
+extern uint8_t *rs_regconcat(int *flagp);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -729,6 +730,8 @@ int nvim_regexp_get_reg_magic(void) { return (int)reg_magic; }
 void nvim_regexp_set_reg_magic(int v) { reg_magic = (magic_T)v; }
 int nvim_regexp_get_after_slash(void) { return after_slash; }
 void nvim_regexp_set_after_slash(int v) { after_slash = v; }
+unsigned int nvim_regexp_get_regflags_compile(void) { return regflags; }
+void nvim_regexp_set_regflags_compile(unsigned int v) { regflags = v; }
 
 static void initchr(char *str) { rs_initchr(str); }
 static void save_parse_state(parse_state_T *ps) { rs_save_parse_state(ps); }
@@ -3890,76 +3893,7 @@ static uint8_t *regpiece(int *flagp)
 // Implements the concatenation operator.
 static uint8_t *regconcat(int *flagp)
 {
-  uint8_t *first = NULL;
-  uint8_t *chain = NULL;
-  uint8_t *latest;
-  int flags;
-  int cont = true;
-
-  *flagp = WORST;               // Tentatively.
-
-  while (cont) {
-    switch (peekchr()) {
-    case NUL:
-    case Magic('|'):
-    case Magic('&'):
-    case Magic(')'):
-      cont = false;
-      break;
-    case Magic('Z'):
-      regflags |= RF_ICOMBINE;
-      skipchr_keepstart();
-      break;
-    case Magic('c'):
-      regflags |= RF_ICASE;
-      skipchr_keepstart();
-      break;
-    case Magic('C'):
-      regflags |= RF_NOICASE;
-      skipchr_keepstart();
-      break;
-    case Magic('v'):
-      reg_magic = MAGIC_ALL;
-      skipchr_keepstart();
-      curchr = -1;
-      break;
-    case Magic('m'):
-      reg_magic = MAGIC_ON;
-      skipchr_keepstart();
-      curchr = -1;
-      break;
-    case Magic('M'):
-      reg_magic = MAGIC_OFF;
-      skipchr_keepstart();
-      curchr = -1;
-      break;
-    case Magic('V'):
-      reg_magic = MAGIC_NONE;
-      skipchr_keepstart();
-      curchr = -1;
-      break;
-    default:
-      latest = regpiece(&flags);
-      if (latest == NULL || reg_toolong) {
-        return NULL;
-      }
-      *flagp |= flags & (HASWIDTH | HASNL | HASLOOKBH);
-      if (chain == NULL) {                      // First piece.
-        *flagp |= flags & SPSTART;
-      } else {
-        regtail(chain, latest);
-      }
-      chain = latest;
-      if (first == NULL) {
-        first = latest;
-      }
-      break;
-    }
-  }
-  if (first == NULL) {          // Loop ran zero times.
-    first = regnode(NOTHING);
-  }
-  return first;
+  return rs_regconcat(flagp);
 }
 
 // Parse one alternative of an | operator.

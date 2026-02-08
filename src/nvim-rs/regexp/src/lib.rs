@@ -2723,6 +2723,85 @@ pub unsafe extern "C" fn rs_regpiece(flagp: *mut c_int) -> *mut u8 {
     ret
 }
 
+extern "C" {
+    fn nvim_regexp_get_regflags_compile() -> c_uint;
+    fn nvim_regexp_set_regflags_compile(v: c_uint);
+}
+
+/// Parse one alternative of an | or & operator.
+/// Implements the concatenation operator.
+#[no_mangle]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_regconcat(flagp: *mut c_int) -> *mut u8 {
+    let mut first: *mut u8 = std::ptr::null_mut();
+    let mut chain: *mut u8 = std::ptr::null_mut();
+    let mut flags: c_int = 0;
+
+    *flagp = WORST; // Tentatively.
+
+    loop {
+        let chr = rs_peekchr();
+        match chr {
+            0 => break, // NUL
+            x if x == magic(b'|') || x == magic(b'&') || x == magic(b')') => break,
+            x if x == magic(b'Z') => {
+                nvim_regexp_set_regflags_compile(nvim_regexp_get_regflags_compile() | RF_ICOMBINE);
+                rs_skipchr_keepstart();
+            }
+            x if x == magic(b'c') => {
+                nvim_regexp_set_regflags_compile(nvim_regexp_get_regflags_compile() | RF_ICASE);
+                rs_skipchr_keepstart();
+            }
+            x if x == magic(b'C') => {
+                nvim_regexp_set_regflags_compile(nvim_regexp_get_regflags_compile() | RF_NOICASE);
+                rs_skipchr_keepstart();
+            }
+            x if x == magic(b'v') => {
+                nvim_regexp_set_reg_magic(MAGIC_ALL);
+                rs_skipchr_keepstart();
+                nvim_regexp_set_curchr(-1);
+            }
+            x if x == magic(b'm') => {
+                nvim_regexp_set_reg_magic(MAGIC_ON);
+                rs_skipchr_keepstart();
+                nvim_regexp_set_curchr(-1);
+            }
+            x if x == magic(b'M') => {
+                nvim_regexp_set_reg_magic(MAGIC_OFF);
+                rs_skipchr_keepstart();
+                nvim_regexp_set_curchr(-1);
+            }
+            x if x == magic(b'V') => {
+                nvim_regexp_set_reg_magic(MAGIC_NONE);
+                rs_skipchr_keepstart();
+                nvim_regexp_set_curchr(-1);
+            }
+            _ => {
+                let latest = rs_regpiece(&mut flags);
+                if latest.is_null() || nvim_regexp_get_reg_toolong() != 0 {
+                    return std::ptr::null_mut();
+                }
+                *flagp |= flags & (HASWIDTH | HASNL | HASLOOKBH);
+                if chain.is_null() {
+                    // First piece.
+                    *flagp |= flags & SPSTART;
+                } else {
+                    rs_regtail(chain, latest);
+                }
+                chain = latest;
+                if first.is_null() {
+                    first = latest;
+                }
+            }
+        }
+    }
+    if first.is_null() {
+        // Loop ran zero times.
+        first = rs_regnode(NOTHING);
+    }
+    first
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
