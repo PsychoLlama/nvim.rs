@@ -4313,7 +4313,6 @@ pub unsafe extern "C" fn rs_restore_subexpr(bp: *const RegbehindT) {
 // --- regtry: attempt match at a given column ---
 
 extern "C" {
-    fn nvim_regexp_call_regmatch(scan: *mut u8, tm: *const c_void, timed_out: *mut c_int) -> c_int;
     fn nvim_regexp_get_prog_reghasz(prog: *const c_void) -> u8;
     fn nvim_regexp_get_prog_program(prog: *mut c_void) -> *mut u8;
     fn nvim_regexp_unref_re_extmatch_out();
@@ -4344,7 +4343,7 @@ pub unsafe extern "C" fn rs_regtry(
 
     // program[1] = skip past the first byte (REGMAGIC)
     let program = nvim_regexp_get_prog_program(prog);
-    if nvim_regexp_call_regmatch(program.add(1), tm.cast(), timed_out) == 0 {
+    if rs_regmatch_impl(program.add(1), tm.cast(), timed_out) == 0 {
         return 0;
     }
 
@@ -5113,10 +5112,9 @@ unsafe fn mb_ptr_back(s: *const u8, p: *mut u8) -> *mut u8 {
     p.sub(offset as usize)
 }
 
-/// `rs_regmatch` — core backtracking regexp matcher.
+/// `rs_regmatch` — core backtracking regexp matcher (Rust implementation).
 ///
-/// NOT YET ACTIVE — still called via C `regmatch()`. This function is being
-/// built incrementally and will be activated in Phase 7.
+/// Called from `rs_regtry` and from C via `nvim_regexp_call_regmatch`.
 #[no_mangle]
 #[allow(
     clippy::too_many_lines,
@@ -5130,13 +5128,11 @@ pub unsafe extern "C" fn rs_regmatch(
     tm: *const c_void,
     timed_out: *mut c_int,
 ) -> c_int {
-    // Pass-through to C regmatch for now (will be replaced in Phase 7)
-    nvim_regexp_call_regmatch(scan_arg, tm, timed_out)
+    rs_regmatch_impl(scan_arg, tm, timed_out)
 }
 
-/// The actual Rust implementation of regmatch (dead code until Phase 7 swap).
+/// The core Rust implementation of `regmatch`.
 #[allow(
-    dead_code,
     clippy::too_many_lines,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
