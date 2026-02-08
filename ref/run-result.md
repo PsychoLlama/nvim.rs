@@ -1,18 +1,21 @@
-Plan: ~/.claude/plans/tingly-fluttering-rain.md
+Plan: ~/.claude/plans/glimmering-hatching-waterfall.md
 
-All 6 phases of the plan are complete. Here's a summary:
+All steps complete. Here's the summary:
 
-## Regexp Scanner/Lexer Migration — Complete
+## Regexp Utility Functions Migration — Batch 2 Complete
 
-**6 commits, 13 functions migrated to Rust:**
+**7 commits**, all passing `build`, `smoke-test`, `rust-fmt-check`, `rust-clippy`, and `rust-test`:
 
-| Phase | Commit | Functions |
-|-------|--------|-----------|
-| 1 | `6477908` | 25 C accessor functions for parse state globals |
-| 2 | `f139f2c` | `gethexchrs`, `getdecchrs`, `getoctchrs` |
-| 3 | `5101872` | `initchr`, `save_parse_state`, `restore_parse_state` |
-| 4 | `043eaf8` | `peekchr`, `skipchr`, `skipchr_keepstart`, `getchr`, `ungetchr` |
-| 5 | `5410100` | `read_limits` |
-| 6 | `c49c304` | `cstrncmp`, `cstrchr` (+ `mb_decompose` inlined in Rust) |
+| Commit | Functions | Tests Added |
+|--------|-----------|-------------|
+| `f54114d` | Delete dead C `mb_decompose`, migrate `get_cpo_flags` | 4 (mb_decompose) |
+| `29ce130` | `make_extmatch`, `ref_extmatch`, `unref_extmatch` | 3 (layout) |
+| `f73818b` | `re_mult_next` | 2 (logic) |
+| `bec9176` | `cleanup_subexpr`, `cleanup_zsubexpr` | 0 (orchestration) |
+| `5f9d470` | `reg_prev_class` | 0 (FFI only) |
+| `e033b72` | `reg_nextline` | 0 (FFI only) |
+| `6ff569b` | `skip_regexp_err` | 0 (FFI only) |
 
-**All checks pass for every commit:** build, smoke-test, rust-fmt-check, rust-clippy, rust-test (3463 tests).
+**Totals:** 11 functions migrated + 1 dead C function deleted, 32 `#[no_mangle]` functions in regexp crate (up from 20), 3472 unit tests passing (up from 3467), ~25 new C accessor/helper functions.
+
+Also fixed a symbol conflict: removed duplicate `rs_ref_extmatch`/`rs_unref_extmatch` wrappers from the syntax crate that conflicted with the new regexp crate implementations.
