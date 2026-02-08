@@ -960,3 +960,9 @@ abc\+	abccc
 [0-7]\+	01234567
 # [0-9a-fA-F] recognized as NFA_HEX
 [0-9a-fA-F]\+	deadBEEF42
+
+# === NFA Compiler Phase 2: Equivalence classes ===
+[[=a=]]	àáâãäåfoo
+[[=A=]]	ÀÁÂÃÄÅFOO
+[[=e=]]	éèêëfoo
+[[=o=]]	öòóôõøfoo

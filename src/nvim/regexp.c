@@ -4850,8 +4850,16 @@ static int nfa_recognize_char_class(uint8_t *start, const uint8_t *end, int extr
 // Emits bytes in postfix notation: 'a,b,NFA_OR,c,NFA_OR' is
 // equivalent to 'a OR b OR c'
 //
+extern void rs_nfa_emit_equi_class(int c);
+
 // NOTE! When changing this function, also update reg_equi_class()
 static void nfa_emit_equi_class(int c)
+{
+  rs_nfa_emit_equi_class(c);
+}
+
+#ifdef NEVER  // Kept as reference; now in Rust
+static void nfa_emit_equi_class_old(int c)
 {
 #define EMIT2(c)   EMIT(c); EMIT(NFA_CONCAT);
 
@@ -5920,6 +5928,7 @@ static void nfa_emit_equi_class(int c)
   EMIT2(c);
 #undef EMIT2
 }
+#endif  // NEVER
 
 // Code to parse regular expression.
 //
