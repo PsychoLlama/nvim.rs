@@ -1199,6 +1199,25 @@ pub unsafe extern "C" fn rs_skip_regexp_err(
     p
 }
 
+// --- do_upper / do_lower ---
+
+extern "C" {
+    fn mb_toupper(c: c_int) -> c_int;
+    fn mb_tolower(c: c_int) -> c_int;
+}
+
+/// Case-conversion wrapper used as `fptr_T` — writes uppercase of `c` into `*d`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_upper(d: *mut c_int, c: c_int) {
+    *d = mb_toupper(c);
+}
+
+/// Case-conversion wrapper used as `fptr_T` — writes lowercase of `c` into `*d`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_lower(d: *mut c_int, c: c_int) {
+    *d = mb_tolower(c);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1290,14 +1290,17 @@ static inline char *cstrchr(const char *const s, const int c)
 //                    regsub stuff                            //
 ////////////////////////////////////////////////////////////////
 
+extern void rs_do_upper(int *d, int c);
+extern void rs_do_lower(int *d, int c);
+
 static void do_upper(int *d, int c)
 {
-  *d = mb_toupper(c);
+  rs_do_upper(d, c);
 }
 
 static void do_lower(int *d, int c)
 {
-  *d = mb_tolower(c);
+  rs_do_lower(d, c);
 }
 
 /// regtilde(): Replace tildes in the pattern by the old pattern.
