@@ -8690,6 +8690,822 @@ pub unsafe extern "C" fn rs_re2post() -> *mut c_int {
     nvim_regexp_get_post_start()
 }
 
+// ---------------------------------------------------------------------------
+// Phase 5: Thompson NFA Construction (post2nfa)
+// ---------------------------------------------------------------------------
+
+/// Opaque handle to a C `nfa_state_T`.
+type NfaStateHandle = *mut c_void;
+
+/// Pointer list for the Thompson NFA construction.  Faithfully reproduces the
+/// C `Ptrlist` union: the `out`/`out1` fields of `nfa_state_T` are cast to
+/// `*mut Ptrlist` so they can be threaded into a singly-linked list of pending
+/// outputs.  `patch()` later fills them in with actual state pointers.
+#[repr(C)]
+union Ptrlist {
+    next: *mut Ptrlist,
+    s: NfaStateHandle,
+}
+
+/// A partially-built NFA fragment on the Thompson construction stack.
+#[derive(Clone, Copy)]
+struct FragT {
+    start: NfaStateHandle,
+    out_list: *mut Ptrlist,
+}
+
+// ---- Phase 5 C accessors ----
+extern "C" {
+    // state_ptr global (points into nfa_regprog_T.state[])
+    fn nvim_regexp_get_state_ptr() -> NfaStateHandle;
+    fn nvim_regexp_set_state_ptr(v: NfaStateHandle);
+
+    // nfa_state_T field accessors
+    fn nvim_nfa_state_get_c(s: NfaStateHandle) -> c_int;
+    fn nvim_nfa_state_set_c(s: NfaStateHandle, v: c_int);
+    fn nvim_nfa_state_get_out(s: NfaStateHandle) -> NfaStateHandle;
+    fn nvim_nfa_state_set_out(s: NfaStateHandle, v: NfaStateHandle);
+    fn nvim_nfa_state_get_out1(s: NfaStateHandle) -> NfaStateHandle;
+    fn nvim_nfa_state_set_out1(s: NfaStateHandle, v: NfaStateHandle);
+    fn nvim_nfa_state_set_val(s: NfaStateHandle, v: c_int);
+    fn nvim_nfa_state_set_id(s: NfaStateHandle, v: c_int);
+    fn nvim_nfa_state_clear_lastlist(s: NfaStateHandle);
+
+    // Address-of accessors for Ptrlist pointer punning.
+    // Returns `&s->out` / `&s->out1` as `nfa_state_T**`.
+    fn nvim_nfa_state_out_addr(s: NfaStateHandle) -> *mut NfaStateHandle;
+    fn nvim_nfa_state_out1_addr(s: NfaStateHandle) -> *mut NfaStateHandle;
+
+    // state_ptr[index] — returns pointer to the `index`-th state.
+    fn nvim_regexp_state_ptr_add(index: c_int) -> NfaStateHandle;
+
+    // Error messages for post2nfa
+    fn nvim_regexp_emsg_e874(); // E874: Could not pop the stack
+    fn nvim_regexp_emsg_e875(); // E875: too many states left on stack
+    fn nvim_regexp_emsg_e876(); // E876: Not enough space to store NFA
+}
+
+/// Allocate and initialize an NFA state from the pre-allocated state array.
+unsafe fn nfa_alloc_state(c: c_int, out: NfaStateHandle, out1: NfaStateHandle) -> NfaStateHandle {
+    let istate = nvim_regexp_get_istate();
+    if istate >= nvim_regexp_get_nstate() {
+        return core::ptr::null_mut();
+    }
+    let s = nvim_regexp_state_ptr_add(istate);
+    nvim_regexp_set_istate(istate + 1);
+    nvim_nfa_state_set_c(s, c);
+    nvim_nfa_state_set_out(s, out);
+    nvim_nfa_state_set_out1(s, out1);
+    nvim_nfa_state_set_val(s, 0);
+    nvim_nfa_state_set_id(s, istate + 1); // id = istate after increment
+    nvim_nfa_state_clear_lastlist(s);
+    s
+}
+
+/// Create an NFA fragment.
+#[inline]
+const fn frag_new(start: NfaStateHandle, out_list: *mut Ptrlist) -> FragT {
+    FragT { start, out_list }
+}
+
+/// Create a singleton `Ptrlist` from the address of an `out`/`out1` field.
+/// The pointer-punning: `nfa_state_T**` → `*mut Ptrlist`, set `next = NULL`.
+unsafe fn list1(outp: *mut NfaStateHandle) -> *mut Ptrlist {
+    let l = outp.cast::<Ptrlist>();
+    (*l).next = core::ptr::null_mut();
+    l
+}
+
+/// Patch every dangling output in the list to point to state `s`.
+unsafe fn nfa_patch(mut l: *mut Ptrlist, s: NfaStateHandle) {
+    while !l.is_null() {
+        let next = (*l).next;
+        (*l).s = s;
+        l = next;
+    }
+}
+
+/// Append `l2` to the end of `l1`, returning `l1`.
+unsafe fn ptrlist_append(l1: *mut Ptrlist, l2: *mut Ptrlist) -> *mut Ptrlist {
+    let old = l1;
+    let mut cur = l1;
+    while !(*cur).next.is_null() {
+        cur = (*cur).next;
+    }
+    (*cur).next = l2;
+    old
+}
+
+/// Push a fragment onto the construction stack.
+unsafe fn st_push(s: FragT, stackp: *mut *mut FragT, stack_end: *const FragT) {
+    let sp = *stackp;
+    if sp.cast_const() >= stack_end {
+        return;
+    }
+    *sp = s;
+    *stackp = sp.add(1);
+}
+
+/// Pop a fragment from the construction stack.
+unsafe fn st_pop(stackp: *mut *mut FragT, stack: *const FragT) -> FragT {
+    *stackp = (*stackp).sub(1);
+    let sp = *stackp;
+    if sp.cast_const() < stack {
+        return FragT {
+            start: core::ptr::null_mut(),
+            out_list: core::ptr::null_mut(),
+        };
+    }
+    *sp
+}
+
+/// Helper: pop with underflow check.  On underflow, emits E874, frees
+/// `stack`, and returns `true` (caller should return NULL).
+unsafe fn pop_or_fail(stackp: *mut *mut FragT, stack: *mut FragT, out: &mut FragT) -> bool {
+    *out = st_pop(stackp, stack);
+    if (*stackp).cast_const() < stack.cast_const() {
+        nvim_regexp_emsg_e874();
+        xfree(stack.cast::<c_void>());
+        return true;
+    }
+    false
+}
+
+/// Estimate the maximum byte length of anything matching `startstate`.
+/// Returns -1 when unknown or unlimited.
+#[allow(clippy::too_many_lines)]
+unsafe fn nfa_max_width(startstate: NfaStateHandle, depth: c_int) -> c_int {
+    // Detect looping in NFA_SPLIT
+    if depth > 4 {
+        return -1;
+    }
+
+    let mut state = startstate;
+    let mut len: c_int = 0;
+
+    while !state.is_null() {
+        let c = nvim_nfa_state_get_c(state);
+        match c {
+            NFA_END_INVISIBLE | NFA_END_INVISIBLE_NEG => return len,
+
+            NFA_SPLIT => {
+                let l = nfa_max_width(nvim_nfa_state_get_out(state), depth + 1);
+                let r = nfa_max_width(nvim_nfa_state_get_out1(state), depth + 1);
+                if l < 0 || r < 0 {
+                    return -1;
+                }
+                return len + if l > r { l } else { r };
+            }
+
+            NFA_ANY | NFA_START_COLL | NFA_START_NEG_COLL => {
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    len += MB_MAXBYTES as c_int;
+                }
+                if c != NFA_ANY {
+                    // Skip over the collection characters.
+                    let out1 = nvim_nfa_state_get_out1(state);
+                    state = nvim_nfa_state_get_out(out1);
+                    continue;
+                }
+            }
+
+            NFA_DIGIT | NFA_WHITE | NFA_HEX | NFA_OCTAL => {
+                len += 1;
+            }
+
+            NFA_IDENT | NFA_SIDENT | NFA_KWORD | NFA_SKWORD | NFA_FNAME | NFA_SFNAME
+            | NFA_PRINT | NFA_SPRINT | NFA_NWHITE | NFA_NDIGIT | NFA_NHEX | NFA_NOCTAL
+            | NFA_WORD | NFA_NWORD | NFA_HEAD | NFA_NHEAD | NFA_ALPHA | NFA_NALPHA | NFA_LOWER
+            | NFA_NLOWER | NFA_UPPER | NFA_NUPPER | NFA_LOWER_IC | NFA_NLOWER_IC | NFA_UPPER_IC
+            | NFA_NUPPER_IC | NFA_ANY_COMPOSING => {
+                // possibly non-ascii
+                len += 3;
+            }
+
+            NFA_START_INVISIBLE
+            | NFA_START_INVISIBLE_NEG
+            | NFA_START_INVISIBLE_BEFORE
+            | NFA_START_INVISIBLE_BEFORE_NEG => {
+                // zero-width, out1 points to the END state
+                state = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(state));
+                continue;
+            }
+
+            NFA_BACKREF1 | NFA_BACKREF2 | NFA_BACKREF3 | NFA_BACKREF4 | NFA_BACKREF5
+            | NFA_BACKREF6 | NFA_BACKREF7 | NFA_BACKREF8 | NFA_BACKREF9 | NFA_ZREF1 | NFA_ZREF2
+            | NFA_ZREF3 | NFA_ZREF4 | NFA_ZREF5 | NFA_ZREF6 | NFA_ZREF7 | NFA_ZREF8 | NFA_ZREF9
+            | NFA_NEWL | NFA_SKIP => {
+                return -1;
+            }
+
+            NFA_BOL | NFA_EOL | NFA_BOF | NFA_EOF | NFA_BOW | NFA_EOW | NFA_MOPEN | NFA_MOPEN1
+            | NFA_MOPEN2 | NFA_MOPEN3 | NFA_MOPEN4 | NFA_MOPEN5 | NFA_MOPEN6 | NFA_MOPEN7
+            | NFA_MOPEN8 | NFA_MOPEN9 | NFA_ZOPEN | NFA_ZOPEN1 | NFA_ZOPEN2 | NFA_ZOPEN3
+            | NFA_ZOPEN4 | NFA_ZOPEN5 | NFA_ZOPEN6 | NFA_ZOPEN7 | NFA_ZOPEN8 | NFA_ZOPEN9
+            | NFA_ZCLOSE | NFA_ZCLOSE1 | NFA_ZCLOSE2 | NFA_ZCLOSE3 | NFA_ZCLOSE4 | NFA_ZCLOSE5
+            | NFA_ZCLOSE6 | NFA_ZCLOSE7 | NFA_ZCLOSE8 | NFA_ZCLOSE9 | NFA_MCLOSE | NFA_MCLOSE1
+            | NFA_MCLOSE2 | NFA_MCLOSE3 | NFA_MCLOSE4 | NFA_MCLOSE5 | NFA_MCLOSE6 | NFA_MCLOSE7
+            | NFA_MCLOSE8 | NFA_MCLOSE9 | NFA_NOPEN | NFA_NCLOSE | NFA_LNUM_GT | NFA_LNUM_LT
+            | NFA_COL_GT | NFA_COL_LT | NFA_VCOL_GT | NFA_VCOL_LT | NFA_MARK_GT | NFA_MARK_LT
+            | NFA_VISUAL | NFA_LNUM | NFA_CURSOR | NFA_COL | NFA_VCOL | NFA_MARK | NFA_ZSTART
+            | NFA_ZEND | NFA_OPT_CHARS | NFA_EMPTY | NFA_START_PATTERN | NFA_END_PATTERN
+            | NFA_COMPOSING | NFA_END_COMPOSING => {
+                // zero-width
+            }
+
+            _ => {
+                if c < 0 {
+                    return -1;
+                }
+                // normal character
+                len += utf_char2len(c);
+            }
+        }
+
+        // normal way to continue
+        state = nvim_nfa_state_get_out(state);
+    }
+
+    // unrecognized, "cannot happen"
+    -1
+}
+
+/// Convert a postfix-form regexp to a Thompson NFA.
+///
+/// When `nfa_calc_size` is non-zero this is a size-counting pass that only
+/// increments `nstate`; no states are actually allocated.  When zero, states
+/// are allocated from `state_ptr[istate..]`.
+#[no_mangle]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+pub unsafe extern "C" fn rs_post2nfa(
+    postfix: *mut c_int,
+    end: *mut c_int,
+    nfa_calc_size: c_int,
+) -> NfaStateHandle {
+    if postfix.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    let sizing = nfa_calc_size != 0;
+
+    let (stack, mut stackp, stack_end) = if sizing {
+        (
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null(),
+        )
+    } else {
+        let nstate = nvim_regexp_get_nstate();
+        let count = (nstate + 1) as usize;
+        let s = xmalloc(count * core::mem::size_of::<FragT>()).cast::<FragT>();
+        (s, s, s.add(count).cast_const())
+    };
+
+    let mut p = postfix;
+
+    while p < end {
+        let op = *p;
+        match op {
+            NFA_CONCAT => {
+                if sizing {
+                    p = p.add(1);
+                    continue;
+                }
+                let mut e2 = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                let mut e1 = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                if pop_or_fail(&mut stackp, stack, &mut e2) {
+                    return core::ptr::null_mut();
+                }
+                if pop_or_fail(&mut stackp, stack, &mut e1) {
+                    return core::ptr::null_mut();
+                }
+                nfa_patch(e1.out_list, e2.start);
+                st_push(frag_new(e1.start, e2.out_list), &mut stackp, stack_end);
+            }
+
+            NFA_OR => {
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    p = p.add(1);
+                    continue;
+                }
+                let mut e2 = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                let mut e1 = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                if pop_or_fail(&mut stackp, stack, &mut e2) {
+                    return core::ptr::null_mut();
+                }
+                if pop_or_fail(&mut stackp, stack, &mut e1) {
+                    return core::ptr::null_mut();
+                }
+                let s = nfa_alloc_state(NFA_SPLIT, e1.start, e2.start);
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                st_push(
+                    frag_new(s, ptrlist_append(e1.out_list, e2.out_list)),
+                    &mut stackp,
+                    stack_end,
+                );
+            }
+
+            NFA_STAR => {
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    p = p.add(1);
+                    continue;
+                }
+                let mut e = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                if pop_or_fail(&mut stackp, stack, &mut e) {
+                    return core::ptr::null_mut();
+                }
+                let s = nfa_alloc_state(NFA_SPLIT, e.start, core::ptr::null_mut());
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                nfa_patch(e.out_list, s);
+                st_push(
+                    frag_new(s, list1(nvim_nfa_state_out1_addr(s))),
+                    &mut stackp,
+                    stack_end,
+                );
+            }
+
+            NFA_STAR_NONGREEDY => {
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    p = p.add(1);
+                    continue;
+                }
+                let mut e = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                if pop_or_fail(&mut stackp, stack, &mut e) {
+                    return core::ptr::null_mut();
+                }
+                let s = nfa_alloc_state(NFA_SPLIT, core::ptr::null_mut(), e.start);
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                nfa_patch(e.out_list, s);
+                st_push(
+                    frag_new(s, list1(nvim_nfa_state_out_addr(s))),
+                    &mut stackp,
+                    stack_end,
+                );
+            }
+
+            NFA_QUEST => {
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    p = p.add(1);
+                    continue;
+                }
+                let mut e = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                if pop_or_fail(&mut stackp, stack, &mut e) {
+                    return core::ptr::null_mut();
+                }
+                let s = nfa_alloc_state(NFA_SPLIT, e.start, core::ptr::null_mut());
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                st_push(
+                    frag_new(
+                        s,
+                        ptrlist_append(e.out_list, list1(nvim_nfa_state_out1_addr(s))),
+                    ),
+                    &mut stackp,
+                    stack_end,
+                );
+            }
+
+            NFA_QUEST_NONGREEDY => {
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    p = p.add(1);
+                    continue;
+                }
+                let mut e = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                if pop_or_fail(&mut stackp, stack, &mut e) {
+                    return core::ptr::null_mut();
+                }
+                let s = nfa_alloc_state(NFA_SPLIT, core::ptr::null_mut(), e.start);
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                st_push(
+                    frag_new(
+                        s,
+                        ptrlist_append(e.out_list, list1(nvim_nfa_state_out_addr(s))),
+                    ),
+                    &mut stackp,
+                    stack_end,
+                );
+            }
+
+            NFA_END_COLL | NFA_END_NEG_COLL => {
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    p = p.add(1);
+                    continue;
+                }
+                let mut e = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                if pop_or_fail(&mut stackp, stack, &mut e) {
+                    return core::ptr::null_mut();
+                }
+                let s = nfa_alloc_state(NFA_END_COLL, core::ptr::null_mut(), core::ptr::null_mut());
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                nfa_patch(e.out_list, s);
+                nvim_nfa_state_set_out1(e.start, s);
+                st_push(
+                    frag_new(e.start, list1(nvim_nfa_state_out_addr(s))),
+                    &mut stackp,
+                    stack_end,
+                );
+            }
+
+            NFA_RANGE => {
+                if sizing {
+                    p = p.add(1);
+                    continue;
+                }
+                let mut e2 = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                let mut e1 = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                if pop_or_fail(&mut stackp, stack, &mut e2) {
+                    return core::ptr::null_mut();
+                }
+                if pop_or_fail(&mut stackp, stack, &mut e1) {
+                    return core::ptr::null_mut();
+                }
+                // Move character code to val, set c to RANGE_MIN/MAX
+                let c2 = nvim_nfa_state_get_c(e2.start);
+                nvim_nfa_state_set_val(e2.start, c2);
+                nvim_nfa_state_set_c(e2.start, NFA_RANGE_MAX);
+                let c1 = nvim_nfa_state_get_c(e1.start);
+                nvim_nfa_state_set_val(e1.start, c1);
+                nvim_nfa_state_set_c(e1.start, NFA_RANGE_MIN);
+                nfa_patch(e1.out_list, e2.start);
+                st_push(frag_new(e1.start, e2.out_list), &mut stackp, stack_end);
+            }
+
+            NFA_EMPTY => {
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    p = p.add(1);
+                    continue;
+                }
+                let s = nfa_alloc_state(NFA_EMPTY, core::ptr::null_mut(), core::ptr::null_mut());
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                st_push(
+                    frag_new(s, list1(nvim_nfa_state_out_addr(s))),
+                    &mut stackp,
+                    stack_end,
+                );
+            }
+
+            NFA_OPT_CHARS => {
+                p = p.add(1);
+                let mut n = *p;
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + n);
+                    p = p.add(1);
+                    continue;
+                }
+                let mut s: NfaStateHandle = core::ptr::null_mut();
+                let mut e1_out: *mut Ptrlist = core::ptr::null_mut();
+                let mut s1: NfaStateHandle = core::ptr::null_mut();
+                while n > 0 {
+                    let mut e = FragT {
+                        start: core::ptr::null_mut(),
+                        out_list: core::ptr::null_mut(),
+                    };
+                    if pop_or_fail(&mut stackp, stack, &mut e) {
+                        return core::ptr::null_mut();
+                    }
+                    s = nfa_alloc_state(NFA_SPLIT, e.start, core::ptr::null_mut());
+                    if s.is_null() {
+                        xfree(stack.cast());
+                        return core::ptr::null_mut();
+                    }
+                    if e1_out.is_null() {
+                        e1_out = e.out_list;
+                    }
+                    nfa_patch(e.out_list, s1);
+                    e1_out = ptrlist_append(e1_out, list1(nvim_nfa_state_out1_addr(s)));
+                    s1 = s;
+                    n -= 1;
+                }
+                st_push(frag_new(s, e1_out), &mut stackp, stack_end);
+            }
+
+            NFA_PREV_ATOM_NO_WIDTH
+            | NFA_PREV_ATOM_NO_WIDTH_NEG
+            | NFA_PREV_ATOM_JUST_BEFORE
+            | NFA_PREV_ATOM_JUST_BEFORE_NEG
+            | NFA_PREV_ATOM_LIKE_PATTERN => {
+                let before = op == NFA_PREV_ATOM_JUST_BEFORE || op == NFA_PREV_ATOM_JUST_BEFORE_NEG;
+                let pattern = op == NFA_PREV_ATOM_LIKE_PATTERN;
+                let (start_state, end_state) = match op {
+                    NFA_PREV_ATOM_NO_WIDTH => (NFA_START_INVISIBLE, NFA_END_INVISIBLE),
+                    NFA_PREV_ATOM_NO_WIDTH_NEG => (NFA_START_INVISIBLE_NEG, NFA_END_INVISIBLE_NEG),
+                    NFA_PREV_ATOM_JUST_BEFORE => (NFA_START_INVISIBLE_BEFORE, NFA_END_INVISIBLE),
+                    NFA_PREV_ATOM_JUST_BEFORE_NEG => {
+                        (NFA_START_INVISIBLE_BEFORE_NEG, NFA_END_INVISIBLE_NEG)
+                    }
+                    _ => (NFA_START_PATTERN, NFA_END_PATTERN), // LIKE_PATTERN
+                };
+                let mut n: c_int = if before {
+                    p = p.add(1);
+                    *p
+                } else {
+                    0
+                };
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + if pattern { 4 } else { 2 });
+                    p = p.add(1);
+                    continue;
+                }
+                let mut e = FragT {
+                    start: core::ptr::null_mut(),
+                    out_list: core::ptr::null_mut(),
+                };
+                if pop_or_fail(&mut stackp, stack, &mut e) {
+                    return core::ptr::null_mut();
+                }
+                let s1 = nfa_alloc_state(end_state, core::ptr::null_mut(), core::ptr::null_mut());
+                if s1.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                let s = nfa_alloc_state(start_state, e.start, s1);
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                if pattern {
+                    let skip =
+                        nfa_alloc_state(NFA_SKIP, core::ptr::null_mut(), core::ptr::null_mut());
+                    if skip.is_null() {
+                        xfree(stack.cast());
+                        return core::ptr::null_mut();
+                    }
+                    let zend = nfa_alloc_state(NFA_ZEND, s1, core::ptr::null_mut());
+                    if zend.is_null() {
+                        xfree(stack.cast());
+                        return core::ptr::null_mut();
+                    }
+                    nvim_nfa_state_set_out(s1, skip);
+                    nfa_patch(e.out_list, zend);
+                    st_push(
+                        frag_new(s, list1(nvim_nfa_state_out_addr(skip))),
+                        &mut stackp,
+                        stack_end,
+                    );
+                } else {
+                    nfa_patch(e.out_list, s1);
+                    st_push(
+                        frag_new(s, list1(nvim_nfa_state_out_addr(s1))),
+                        &mut stackp,
+                        stack_end,
+                    );
+                    if before {
+                        if n <= 0 {
+                            n = nfa_max_width(e.start, 0);
+                        }
+                        nvim_nfa_state_set_val(s, n);
+                    }
+                }
+            }
+
+            NFA_COMPOSING | NFA_MOPEN | NFA_MOPEN1 | NFA_MOPEN2 | NFA_MOPEN3 | NFA_MOPEN4
+            | NFA_MOPEN5 | NFA_MOPEN6 | NFA_MOPEN7 | NFA_MOPEN8 | NFA_MOPEN9 | NFA_ZOPEN
+            | NFA_ZOPEN1 | NFA_ZOPEN2 | NFA_ZOPEN3 | NFA_ZOPEN4 | NFA_ZOPEN5 | NFA_ZOPEN6
+            | NFA_ZOPEN7 | NFA_ZOPEN8 | NFA_ZOPEN9 | NFA_NOPEN => {
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 2);
+                    p = p.add(1);
+                    continue;
+                }
+                let mopen = op;
+                #[allow(clippy::cast_possible_truncation)]
+                let mclose = match mopen {
+                    NFA_NOPEN => NFA_NCLOSE,
+                    NFA_ZOPEN => NFA_ZCLOSE,
+                    NFA_ZOPEN1 => NFA_ZCLOSE1,
+                    NFA_ZOPEN2 => NFA_ZCLOSE2,
+                    NFA_ZOPEN3 => NFA_ZCLOSE3,
+                    NFA_ZOPEN4 => NFA_ZCLOSE4,
+                    NFA_ZOPEN5 => NFA_ZCLOSE5,
+                    NFA_ZOPEN6 => NFA_ZCLOSE6,
+                    NFA_ZOPEN7 => NFA_ZCLOSE7,
+                    NFA_ZOPEN8 => NFA_ZCLOSE8,
+                    NFA_ZOPEN9 => NFA_ZCLOSE9,
+                    NFA_COMPOSING => NFA_END_COMPOSING,
+                    _ => mopen + NSUBEXP as c_int, // NFA_MOPEN .. NFA_MOPEN9
+                };
+                if stackp == stack {
+                    // Empty group: NFA_MOPEN → NFA_MCLOSE
+                    let s = nfa_alloc_state(mopen, core::ptr::null_mut(), core::ptr::null_mut());
+                    if s.is_null() {
+                        xfree(stack.cast());
+                        return core::ptr::null_mut();
+                    }
+                    let s1 = nfa_alloc_state(mclose, core::ptr::null_mut(), core::ptr::null_mut());
+                    if s1.is_null() {
+                        xfree(stack.cast());
+                        return core::ptr::null_mut();
+                    }
+                    nfa_patch(list1(nvim_nfa_state_out_addr(s)), s1);
+                    st_push(
+                        frag_new(s, list1(nvim_nfa_state_out_addr(s1))),
+                        &mut stackp,
+                        stack_end,
+                    );
+                } else {
+                    let mut e = FragT {
+                        start: core::ptr::null_mut(),
+                        out_list: core::ptr::null_mut(),
+                    };
+                    if pop_or_fail(&mut stackp, stack, &mut e) {
+                        return core::ptr::null_mut();
+                    }
+                    let s = nfa_alloc_state(mopen, e.start, core::ptr::null_mut());
+                    if s.is_null() {
+                        xfree(stack.cast());
+                        return core::ptr::null_mut();
+                    }
+                    let s1 = nfa_alloc_state(mclose, core::ptr::null_mut(), core::ptr::null_mut());
+                    if s1.is_null() {
+                        xfree(stack.cast());
+                        return core::ptr::null_mut();
+                    }
+                    nfa_patch(e.out_list, s1);
+                    if mopen == NFA_COMPOSING {
+                        nfa_patch(list1(nvim_nfa_state_out1_addr(s)), s1);
+                    }
+                    st_push(
+                        frag_new(s, list1(nvim_nfa_state_out_addr(s1))),
+                        &mut stackp,
+                        stack_end,
+                    );
+                }
+            }
+
+            NFA_BACKREF1 | NFA_BACKREF2 | NFA_BACKREF3 | NFA_BACKREF4 | NFA_BACKREF5
+            | NFA_BACKREF6 | NFA_BACKREF7 | NFA_BACKREF8 | NFA_BACKREF9 | NFA_ZREF1 | NFA_ZREF2
+            | NFA_ZREF3 | NFA_ZREF4 | NFA_ZREF5 | NFA_ZREF6 | NFA_ZREF7 | NFA_ZREF8 | NFA_ZREF9 => {
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 2);
+                    p = p.add(1);
+                    continue;
+                }
+                let s = nfa_alloc_state(op, core::ptr::null_mut(), core::ptr::null_mut());
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                let s1 = nfa_alloc_state(NFA_SKIP, core::ptr::null_mut(), core::ptr::null_mut());
+                if s1.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                nfa_patch(list1(nvim_nfa_state_out_addr(s)), s1);
+                st_push(
+                    frag_new(s, list1(nvim_nfa_state_out_addr(s1))),
+                    &mut stackp,
+                    stack_end,
+                );
+            }
+
+            NFA_LNUM | NFA_LNUM_GT | NFA_LNUM_LT | NFA_VCOL | NFA_VCOL_GT | NFA_VCOL_LT
+            | NFA_COL | NFA_COL_GT | NFA_COL_LT | NFA_MARK | NFA_MARK_GT | NFA_MARK_LT => {
+                p = p.add(1);
+                let n = *p; // lnum, col, or mark name
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    p = p.add(1);
+                    continue;
+                }
+                // p[-1] is the opcode (we already advanced p)
+                let s = nfa_alloc_state(*p.sub(1), core::ptr::null_mut(), core::ptr::null_mut());
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                nvim_nfa_state_set_val(s, n);
+                st_push(
+                    frag_new(s, list1(nvim_nfa_state_out_addr(s))),
+                    &mut stackp,
+                    stack_end,
+                );
+            }
+
+            // NFA_ZSTART, NFA_ZEND, and all other operands
+            _ => {
+                if sizing {
+                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    p = p.add(1);
+                    continue;
+                }
+                let s = nfa_alloc_state(op, core::ptr::null_mut(), core::ptr::null_mut());
+                if s.is_null() {
+                    xfree(stack.cast());
+                    return core::ptr::null_mut();
+                }
+                st_push(
+                    frag_new(s, list1(nvim_nfa_state_out_addr(s))),
+                    &mut stackp,
+                    stack_end,
+                );
+            }
+        }
+        p = p.add(1);
+    }
+
+    if sizing {
+        nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+        // Return value ignored during size-counting pass
+        return core::ptr::null_mut();
+    }
+
+    // Final POP — get the completed NFA
+    let mut e = FragT {
+        start: core::ptr::null_mut(),
+        out_list: core::ptr::null_mut(),
+    };
+    if pop_or_fail(&mut stackp, stack, &mut e) {
+        return core::ptr::null_mut();
+    }
+    if stackp != stack {
+        xfree(stack.cast());
+        nvim_regexp_emsg_e875();
+        return core::ptr::null_mut();
+    }
+
+    let istate = nvim_regexp_get_istate();
+    if istate >= nvim_regexp_get_nstate() {
+        xfree(stack.cast());
+        nvim_regexp_emsg_e876();
+        return core::ptr::null_mut();
+    }
+
+    // Create the match state
+    let matchstate = nvim_regexp_state_ptr_add(istate);
+    nvim_regexp_set_istate(istate + 1);
+    nvim_nfa_state_set_c(matchstate, NFA_MATCH);
+    nvim_nfa_state_set_out(matchstate, core::ptr::null_mut());
+    nvim_nfa_state_set_out1(matchstate, core::ptr::null_mut());
+    nvim_nfa_state_set_id(matchstate, 0);
+
+    nfa_patch(e.out_list, matchstate);
+    let ret = e.start;
+
+    xfree(stack.cast());
+    ret
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

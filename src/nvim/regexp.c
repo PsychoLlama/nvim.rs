@@ -4663,6 +4663,52 @@ void nvim_regexp_emsg_e873(void)
 }
 // --- End Phase 4 accessor functions ---
 
+// --- Phase 5 accessor functions (nfa_state_T, state_ptr, post2nfa) ---
+// Forward declarations of Phase 5 Rust functions
+extern nfa_state_T *rs_post2nfa(int *postfix, int *end, int nfa_calc_size);
+
+// state_ptr global — defined after state_ptr declaration (see below)
+
+// nfa_state_T field accessors
+int nvim_nfa_state_get_c(void *s) { return ((nfa_state_T *)s)->c; }
+void nvim_nfa_state_set_c(void *s, int v) { ((nfa_state_T *)s)->c = v; }
+void *nvim_nfa_state_get_out(void *s) { return (void *)((nfa_state_T *)s)->out; }
+void nvim_nfa_state_set_out(void *s, void *v) { ((nfa_state_T *)s)->out = (nfa_state_T *)v; }
+void *nvim_nfa_state_get_out1(void *s) { return (void *)((nfa_state_T *)s)->out1; }
+void nvim_nfa_state_set_out1(void *s, void *v) { ((nfa_state_T *)s)->out1 = (nfa_state_T *)v; }
+void nvim_nfa_state_set_val(void *s, int v) { ((nfa_state_T *)s)->val = v; }
+void nvim_nfa_state_set_id(void *s, int v) { ((nfa_state_T *)s)->id = v; }
+void nvim_nfa_state_clear_lastlist(void *s)
+{
+  ((nfa_state_T *)s)->lastlist[0] = 0;
+  ((nfa_state_T *)s)->lastlist[1] = 0;
+}
+
+// Address-of accessors for Ptrlist pointer punning
+void **nvim_nfa_state_out_addr(void *s) { return (void **)&((nfa_state_T *)s)->out; }
+void **nvim_nfa_state_out1_addr(void *s) { return (void **)&((nfa_state_T *)s)->out1; }
+
+// state_ptr indexing — defined after state_ptr declaration (see below)
+
+// Error messages for post2nfa
+void nvim_regexp_emsg_e874(void)
+{
+  emsg(_("E874: (NFA) Could not pop the stack!"));
+}
+void nvim_regexp_emsg_e875(void)
+{
+  emsg(_("E875: (NFA regexp) (While converting from postfix to NFA),"
+         "too many states left on stack"));
+  rc_did_emsg = true;
+}
+void nvim_regexp_emsg_e876(void)
+{
+  emsg(_("E876: (NFA regexp) "
+         "Not enough space to store the whole NFA "));
+  rc_did_emsg = true;
+}
+// --- End Phase 5 accessor functions ---
+
 // Variables only used in nfa_regcomp() and descendants.
 static int nfa_re_flags;  ///< re_flags passed to nfa_regcomp().
 static int *post_start;   ///< holds the postfix form of r.e.
@@ -7728,6 +7774,18 @@ static int *re2post_old(void)
 
 static nfa_state_T *state_ptr;  // points to nfa_prog->state
 
+// Phase 5 state_ptr accessors (placed after state_ptr declaration)
+void *nvim_regexp_get_state_ptr(void) { return (void *)state_ptr; }
+void nvim_regexp_set_state_ptr(void *v) { state_ptr = (nfa_state_T *)v; }
+void *nvim_regexp_state_ptr_add(int index) { return (void *)&state_ptr[index]; }
+
+// Thin wrapper: call Rust rs_post2nfa, cast void* back to nfa_state_T*.
+static nfa_state_T *post2nfa(int *postfix, int *end, int nfa_calc_size)
+{
+  return (nfa_state_T *)rs_post2nfa(postfix, end, nfa_calc_size);
+}
+
+#ifdef NEVER  // Phase 5: original C code replaced by Rust
 // Allocate and initialize nfa_state_T.
 static nfa_state_T *alloc_state(int c, nfa_state_T *out, nfa_state_T *out1)
 {
@@ -8592,6 +8650,7 @@ theend:
 #undef POP
 #undef PUSH
 }
+#endif  // NEVER — Phase 5 original C code
 
 // After building the NFA program, inspect it to add optimization hints.
 static void nfa_postprocess(nfa_regprog_T *prog)
