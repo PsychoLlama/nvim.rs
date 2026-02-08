@@ -69,6 +69,10 @@ extern "C" {
     // reg_cpo_lit accessors
     fn nvim_regexp_get_reg_cpo_lit() -> c_int;
     fn nvim_regexp_set_reg_cpo_lit(v: c_int);
+
+    // Memory allocation
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
 }
 
 // Characters always special inside [] ranges
@@ -1020,6 +1024,48 @@ pub unsafe extern "C" fn rs_get_cpo_flags() {
     nvim_regexp_set_reg_cpo_lit(cpo_lit as c_int);
 }
 
+// --- extmatch lifecycle ---
+
+const NSUBEXP: usize = 10;
+
+/// Matches C `reg_extmatch_T` layout in `regexp_defs.h`.
+#[repr(C)]
+pub struct RegExtmatchT {
+    pub refcnt: i16,
+    pub matches: [*mut u8; NSUBEXP],
+}
+
+/// Create a new extmatch and mark it as referenced once.
+#[no_mangle]
+pub unsafe extern "C" fn rs_make_extmatch() -> *mut RegExtmatchT {
+    let em = xcalloc(1, core::mem::size_of::<RegExtmatchT>()).cast::<RegExtmatchT>();
+    (*em).refcnt = 1;
+    em
+}
+
+/// Add a reference to an extmatch. Returns the pointer unchanged.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ref_extmatch(em: *mut RegExtmatchT) -> *mut RegExtmatchT {
+    if !em.is_null() {
+        (*em).refcnt += 1;
+    }
+    em
+}
+
+/// Remove a reference to an extmatch. If no references left, free it.
+#[no_mangle]
+pub unsafe extern "C" fn rs_unref_extmatch(em: *mut RegExtmatchT) {
+    if !em.is_null() {
+        (*em).refcnt -= 1;
+        if (*em).refcnt <= 0 {
+            for i in 0..NSUBEXP {
+                xfree((*em).matches[i].cast::<c_void>());
+            }
+            xfree(em.cast::<c_void>());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1271,6 +1317,28 @@ mod tests {
     fn test_getoctchrs_max3() {
         // At most 3 octal digits consumed
         assert_eq!(getoctchrs_core(b"1234"), (0o123, 3));
+    }
+
+    // --- extmatch tests ---
+
+    #[test]
+    fn test_nsubexp_value() {
+        assert_eq!(NSUBEXP, 10);
+    }
+
+    #[test]
+    fn test_reg_extmatch_t_layout() {
+        // Verify struct size is reasonable (i16 + padding + 10 pointers)
+        let expected = core::mem::size_of::<i16>()
+            + 6 // padding to align pointers
+            + NSUBEXP * core::mem::size_of::<*mut u8>();
+        assert_eq!(core::mem::size_of::<RegExtmatchT>(), expected);
+    }
+
+    #[test]
+    fn test_reg_extmatch_t_refcnt_offset() {
+        // refcnt should be at offset 0
+        assert_eq!(core::mem::offset_of!(RegExtmatchT, refcnt), 0);
     }
 
     // --- mb_decompose tests ---

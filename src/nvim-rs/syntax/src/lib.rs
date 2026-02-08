@@ -3665,24 +3665,6 @@ pub unsafe extern "C" fn rs_get_next_match_extmatch() -> ExtMatchHandle {
     nvim_syn_get_next_match_extmatch()
 }
 
-/// Reference an extmatch (increment refcount).
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle {
-    nvim_syn_ref_extmatch(em)
-}
-
-/// Unreference an extmatch (decrement refcount).
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_unref_extmatch(em: ExtMatchHandle) {
-    nvim_syn_unref_extmatch(em);
-}
-
 /// Update state item end position.
 ///
 /// # Safety

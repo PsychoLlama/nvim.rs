@@ -62,6 +62,9 @@ extern int64_t rs_gethexchrs(int maxinputlen);
 extern int64_t rs_getdecchrs(void);
 extern int64_t rs_getoctchrs(void);
 extern void rs_get_cpo_flags(void);
+extern reg_extmatch_T *rs_make_extmatch(void);
+extern reg_extmatch_T *rs_ref_extmatch(reg_extmatch_T *em);
+extern void rs_unref_extmatch(reg_extmatch_T *em);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -1015,32 +1018,20 @@ static lpos_T reg_endzpos[NSUBEXP];     // idem, end pos
 static reg_extmatch_T *make_extmatch(void)
   FUNC_ATTR_NONNULL_RET
 {
-  reg_extmatch_T *em = xcalloc(1, sizeof(reg_extmatch_T));
-  em->refcnt = 1;
-  return em;
+  return rs_make_extmatch();
 }
 
 // Add a reference to an extmatch.
 reg_extmatch_T *ref_extmatch(reg_extmatch_T *em)
 {
-  if (em != NULL) {
-    em->refcnt++;
-  }
-  return em;
+  return rs_ref_extmatch(em);
 }
 
 // Remove a reference to an extmatch.  If there are no references left, free
 // the info.
 void unref_extmatch(reg_extmatch_T *em)
 {
-  int i;
-
-  if (em != NULL && --em->refcnt <= 0) {
-    for (i = 0; i < NSUBEXP; i++) {
-      xfree(em->matches[i]);
-    }
-    xfree(em);
-  }
+  rs_unref_extmatch(em);
 }
 
 // Get class of previous character.
