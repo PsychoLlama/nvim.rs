@@ -2972,9 +2972,129 @@ pub unsafe extern "C" fn rs_regatom(flagp: *mut c_int) -> *mut u8 {
         return ret;
     }
 
-    // Phases 4-7 handle remaining cases; for now fall through to C regatom
+    // --- Grouping: \( ---
+    if c == magic(b'(') {
+        if nvim_regexp_get_one_exactly() != 0 {
+            nvim_regexp_emsg2_e369(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+            return std::ptr::null_mut();
+        }
+        let mut flags: c_int = 0;
+        let ret = rs_reg(REG_PAREN, &mut flags);
+        if ret.is_null() {
+            return std::ptr::null_mut();
+        }
+        *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
+        return ret;
+    }
+
+    // --- Internal errors: NUL, |, &, ) ---
+    if c == 0 || c == magic(b'|') || c == magic(b'&') || c == magic(b')') {
+        if nvim_regexp_get_one_exactly() != 0 {
+            nvim_regexp_emsg2_e369(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+            return std::ptr::null_mut();
+        }
+        // Supposed to be caught earlier.
+        nvim_regexp_iemsg_internal();
+        return std::ptr::null_mut();
+    }
+
+    // --- "follows nothing": =, ?, +, @, {, * ---
+    if c == magic(b'=')
+        || c == magic(b'?')
+        || c == magic(b'+')
+        || c == magic(b'@')
+        || c == magic(b'{')
+        || c == magic(b'*')
+    {
+        let plain = rs_no_magic(c);
+        let is_magic = if plain == b'*' as c_int {
+            nvim_regexp_get_reg_magic() >= MAGIC_ON
+        } else {
+            nvim_regexp_get_reg_magic() == MAGIC_ALL
+        };
+        nvim_regexp_emsg3_e64(c_int::from(is_magic), plain);
+        return std::ptr::null_mut();
+    }
+
+    // --- Previous substitute pattern: \~ ---
+    if c == magic(b'~') {
+        let prev_sub = nvim_regexp_get_reg_prev_sub_ptr();
+        if !prev_sub.is_null() {
+            let ret = rs_regnode(EXACTLY);
+            let mut lp = prev_sub as *const u8;
+            while *lp != 0 {
+                rs_regc(*lp as c_int);
+                lp = lp.add(1);
+            }
+            rs_regc(0);
+            if *prev_sub != 0 {
+                *flagp |= HASWIDTH;
+                if lp.offset_from(prev_sub as *const u8) == 1 {
+                    *flagp |= SIMPLE;
+                }
+            }
+            return ret;
+        }
+        nvim_regexp_emsg_nopresub();
+        return std::ptr::null_mut();
+    }
+
+    // --- Backreferences: \1 .. \9 ---
+    if c >= magic(b'1') && c <= magic(b'9') {
+        let refnum = c - magic(b'0');
+        if !seen_endbrace(refnum) {
+            return std::ptr::null_mut();
+        }
+        return rs_regnode(BACKREF + refnum);
+    }
+
+    // --- \z: extended match ---
+    if c == magic(b'z') {
+        c = rs_no_magic(rs_getchr());
+        if c == b'(' as c_int {
+            if (nvim_regexp_get_reg_do_extmatch() & REX_SET) == 0 {
+                nvim_regexp_emsg_e66();
+                return std::ptr::null_mut();
+            }
+            if nvim_regexp_get_one_exactly() != 0 {
+                nvim_regexp_emsg2_e369(c_int::from(nvim_regexp_get_reg_magic() == MAGIC_ALL));
+                return std::ptr::null_mut();
+            }
+            let mut flags: c_int = 0;
+            let ret = rs_reg(REG_ZPAREN, &mut flags);
+            if ret.is_null() {
+                return std::ptr::null_mut();
+            }
+            *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
+            nvim_regexp_set_re_has_z(REX_SET);
+            return ret;
+        } else if c >= b'1' as c_int && c <= b'9' as c_int {
+            if (nvim_regexp_get_reg_do_extmatch() & REX_USE) == 0 {
+                nvim_regexp_emsg_e67();
+                return std::ptr::null_mut();
+            }
+            let ret = rs_regnode(ZREF + c - b'0' as c_int);
+            nvim_regexp_set_re_has_z(REX_USE);
+            return ret;
+        } else if c == b's' as c_int {
+            let ret = rs_regnode(MOPEN);
+            if !rs_re_mult_next(c"\\zs".as_ptr()) {
+                return std::ptr::null_mut();
+            }
+            return ret;
+        } else if c == b'e' as c_int {
+            let ret = rs_regnode(MCLOSE);
+            if !rs_re_mult_next(c"\\ze".as_ptr()) {
+                return std::ptr::null_mut();
+            }
+            return ret;
+        }
+        nvim_regexp_emsg_e68();
+        return std::ptr::null_mut();
+    }
+
+    // Phases 5-7 handle remaining cases; for now fall through to C regatom
     let _ = save_prev_at_start;
-    // Restore state and call C regatom as fallback
     rs_ungetchr();
     regatom(flagp)
 }
