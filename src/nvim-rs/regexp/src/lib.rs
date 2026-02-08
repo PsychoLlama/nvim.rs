@@ -12899,6 +12899,143 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
 
 // --- End Phase 9.5 ---
 
+// --- Phase 9.6: bt_regcomp ---
+
+const REGMAGIC: c_int = 0o234;
+const RF_LOOKBH: c_uint = 8;
+
+extern "C" {
+    fn nvim_regexp_alloc_bt_regprog(regsize_val: i64) -> *mut c_void;
+    fn nvim_bt_prog_set_regstart(prog: *mut c_void, v: c_int);
+    fn nvim_bt_prog_set_reganch(prog: *mut c_void, v: c_int);
+    fn nvim_bt_prog_set_regmust(prog: *mut c_void, v: *mut u8);
+    fn nvim_bt_prog_set_regmlen(prog: *mut c_void, v: c_int);
+    fn nvim_bt_prog_set_regflags(prog: *mut c_void, v: c_uint);
+    fn nvim_bt_prog_set_reghasz(prog: *mut c_void, v: u8);
+    fn nvim_bt_prog_set_engine_bt(prog: *mut c_void);
+    fn nvim_regexp_call_emsg_e339();
+}
+
+/// BT compiler wrapper: two-pass compilation, allocation, optimization extraction.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c_void {
+    if expr.is_null() {
+        nvim_regexp_call_iemsg_null();
+        nvim_regexp_set_rc_did_emsg(1);
+        return std::ptr::null_mut();
+    }
+
+    nvim_regexp_call_init_class_tab();
+
+    // First pass: determine size, legality.
+    nvim_regexp_call_regcomp_start(expr, re_flags);
+    nvim_regexp_set_regcode(nvim_regexp_get_just_calc_size());
+    rs_regc(REGMAGIC);
+    let mut flags: c_int = 0;
+    if rs_reg(REG_NOPAREN, &mut flags).is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Allocate space.
+    let regsize_val = nvim_regexp_get_regsize();
+    let r = nvim_regexp_alloc_bt_regprog(regsize_val);
+
+    // Second pass: emit code.
+    nvim_regexp_call_regcomp_start(expr, re_flags);
+    nvim_regexp_set_regcode(nvim_regexp_get_prog_program(r));
+    rs_regc(REGMAGIC);
+    flags = 0;
+    if rs_reg(REG_NOPAREN, &mut flags).is_null() || nvim_regexp_get_reg_toolong() != 0 {
+        let was_toolong = nvim_regexp_get_reg_toolong() != 0;
+        nvim_regexp_xfree(r);
+        if was_toolong {
+            nvim_regexp_call_emsg_e339();
+        }
+        return std::ptr::null_mut();
+    }
+
+    // Dig out information for optimizations.
+    bt_extract_optimizations(r, flags);
+
+    nvim_bt_prog_set_engine_bt(r);
+    r
+}
+
+/// Extract optimization info from compiled BT program.
+unsafe fn bt_extract_optimizations(r: *mut c_void, flags: c_int) {
+    nvim_bt_prog_set_regstart(r, 0); // NUL = worst-case default
+    nvim_bt_prog_set_reganch(r, 0);
+    nvim_bt_prog_set_regmust(r, std::ptr::null_mut());
+    nvim_bt_prog_set_regmlen(r, 0);
+
+    let mut rflags = nvim_regexp_get_regflags_compile() as c_uint;
+    if flags & HASNL != 0 {
+        rflags |= RF_HASNL;
+    }
+    if flags & HASLOOKBH != 0 {
+        rflags |= RF_LOOKBH;
+    }
+    nvim_bt_prog_set_regflags(r, rflags);
+
+    // Remember whether this pattern has any \z specials in it.
+    #[allow(clippy::cast_possible_truncation)]
+    let re_has_z = nvim_regexp_get_re_has_z() as u8;
+    nvim_bt_prog_set_reghasz(r, re_has_z);
+
+    let program = nvim_regexp_get_prog_program(r);
+    let mut scan = program.add(1); // First BRANCH.
+
+    if op(rs_regnext(scan)) != END {
+        return; // More than one top-level choice — no optimizations.
+    }
+
+    scan = operand(scan);
+
+    // Starting-point info.
+    if op(scan) == BOL || op(scan) == RE_BOF {
+        nvim_bt_prog_set_reganch(r, 1);
+        scan = rs_regnext(scan);
+    }
+
+    if op(scan) == EXACTLY {
+        nvim_bt_prog_set_regstart(r, utf_ptr2char(operand(scan).cast::<c_char>()));
+    } else if op(scan) == BOW
+        || op(scan) == EOW
+        || op(scan) == NOTHING
+        || op(scan) == MOPEN
+        || op(scan) == NOPEN
+        || op(scan) == MCLOSE
+        || op(scan) == NCLOSE
+    {
+        let regnext_scan = rs_regnext(scan);
+        if op(regnext_scan) == EXACTLY {
+            nvim_bt_prog_set_regstart(r, utf_ptr2char(operand(regnext_scan).cast::<c_char>()));
+        }
+    }
+
+    // Find the longest literal string that must appear (regmust).
+    if (flags & SPSTART != 0 || op(scan) == BOW || op(scan) == EOW) && (flags & HASNL == 0) {
+        let mut longest: *mut u8 = std::ptr::null_mut();
+        let mut len: c_int = 0;
+        let mut s = scan;
+        while !s.is_null() {
+            if op(s) == EXACTLY {
+                let scanlen = strlen(operand(s).cast::<c_char>());
+                #[allow(clippy::cast_possible_truncation)]
+                if scanlen >= len as usize {
+                    longest = operand(s);
+                    len = scanlen as c_int;
+                }
+            }
+            s = rs_regnext(s);
+        }
+        nvim_bt_prog_set_regmust(r, longest);
+        nvim_bt_prog_set_regmlen(r, len);
+    }
+}
+
+// --- End Phase 9.6 ---
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -93,6 +93,7 @@ extern int rs_vim_regexec_prog(void **prog_ptr, int ignore_case, const uint8_t *
 extern int rs_vim_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                 int32_t col, void *tm, int *timed_out);
 extern void *rs_vim_regcomp(const uint8_t *expr, int re_flags);
+extern void *rs_bt_regcomp(uint8_t *expr, int re_flags);
 // Rust FFI: node management and compilation infrastructure
 extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
 extern void rs_regc(int b);
@@ -3344,109 +3345,7 @@ static uint8_t *reg(int paren, int *flagp)
 // "re_flags": RE_MAGIC and/or RE_STRING.
 static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
 {
-  uint8_t *scan;
-  uint8_t *longest;
-  int len;
-  int flags;
-
-  if (expr == NULL) {
-    IEMSG_RET_NULL(_(e_null));
-  }
-
-  init_class_tab();
-
-  // First pass: determine size, legality.
-  regcomp_start(expr, re_flags);
-  regcode = JUST_CALC_SIZE;
-  regc(REGMAGIC);
-  if (reg(REG_NOPAREN, &flags) == NULL) {
-    return NULL;
-  }
-
-  // Allocate space.
-  bt_regprog_T *r = xmalloc(offsetof(bt_regprog_T, program) + (size_t)regsize);
-  r->re_in_use = false;
-
-  // Second pass: emit code.
-  regcomp_start(expr, re_flags);
-  regcode = r->program;
-  regc(REGMAGIC);
-  if (reg(REG_NOPAREN, &flags) == NULL || reg_toolong) {
-    xfree(r);
-    if (reg_toolong) {
-      EMSG_RET_NULL(_("E339: Pattern too long"));
-    }
-    return NULL;
-  }
-
-  // Dig out information for optimizations.
-  r->regstart = NUL;            // Worst-case defaults.
-  r->reganch = 0;
-  r->regmust = NULL;
-  r->regmlen = 0;
-  r->regflags = regflags;
-  if (flags & HASNL) {
-    r->regflags |= RF_HASNL;
-  }
-  if (flags & HASLOOKBH) {
-    r->regflags |= RF_LOOKBH;
-  }
-  // Remember whether this pattern has any \z specials in it.
-  r->reghasz = (uint8_t)re_has_z;
-  scan = &r->program[1];  // First BRANCH.
-  if (OP(regnext(scan)) == END) {   // Only one top-level choice.
-    scan = OPERAND(scan);
-
-    // Starting-point info.
-    if (OP(scan) == BOL || OP(scan) == RE_BOF) {
-      r->reganch++;
-      scan = regnext(scan);
-    }
-
-    if (OP(scan) == EXACTLY) {
-      r->regstart = utf_ptr2char((char *)OPERAND(scan));
-    } else if (OP(scan) == BOW
-               || OP(scan) == EOW
-               || OP(scan) == NOTHING
-               || OP(scan) == MOPEN + 0 || OP(scan) == NOPEN
-               || OP(scan) == MCLOSE + 0 || OP(scan) == NCLOSE) {
-      uint8_t *regnext_scan = regnext(scan);
-      if (OP(regnext_scan) == EXACTLY) {
-        r->regstart = utf_ptr2char((char *)OPERAND(regnext_scan));
-      }
-    }
-
-    // If there's something expensive in the r.e., find the longest
-    // literal string that must appear and make it the regmust.  Resolve
-    // ties in favor of later strings, since the regstart check works
-    // with the beginning of the r.e. and avoiding duplication
-    // strengthens checking.  Not a strong reason, but sufficient in the
-    // absence of others.
-
-    // When the r.e. starts with BOW, it is faster to look for a regmust
-    // first. Used a lot for "#" and "*" commands. (Added by mool).
-    if ((flags & SPSTART || OP(scan) == BOW || OP(scan) == EOW)
-        && !(flags & HASNL)) {
-      longest = NULL;
-      len = 0;
-      for (; scan != NULL; scan = regnext(scan)) {
-        if (OP(scan) == EXACTLY) {
-          size_t scanlen = strlen((char *)OPERAND(scan));
-          if (scanlen >= (size_t)len) {
-            longest = OPERAND(scan);
-            len = (int)scanlen;
-          }
-        }
-      }
-      r->regmust = longest;
-      r->regmlen = len;
-    }
-  }
-#ifdef BT_REGEXP_DUMP
-  regdump(expr, r);
-#endif
-  r->engine = &bt_regengine;
-  return (regprog_T *)r;
+  return (regprog_T *)rs_bt_regcomp(expr, re_flags);
 }
 
 // Check if during the previous call to vim_regcomp the EOL item "$" has been
@@ -10835,6 +10734,32 @@ void nvim_regexp_call_emsg_e864(void) {
 }
 
 // --- End Phase 9.5 ---
+
+// Phase 9.6: bt_regcomp accessors
+
+// Allocate bt_regprog_T with flexible array member for program bytes
+void *nvim_regexp_alloc_bt_regprog(int64_t regsize_val) {
+  bt_regprog_T *r = xmalloc(offsetof(bt_regprog_T, program) + (size_t)regsize_val);
+  r->re_in_use = false;
+  return r;
+}
+
+// bt_regprog_T field setters
+void nvim_bt_prog_set_regstart(void *prog, int v) { ((bt_regprog_T *)prog)->regstart = v; }
+void nvim_bt_prog_set_reganch(void *prog, int v) { ((bt_regprog_T *)prog)->reganch = v; }
+void nvim_bt_prog_set_regmust(void *prog, uint8_t *v) { ((bt_regprog_T *)prog)->regmust = v; }
+void nvim_bt_prog_set_regmlen(void *prog, int v) { ((bt_regprog_T *)prog)->regmlen = v; }
+void nvim_bt_prog_set_regflags(void *prog, unsigned v) { ((bt_regprog_T *)prog)->regflags = v; }
+void nvim_bt_prog_set_reghasz(void *prog, uint8_t v) { ((bt_regprog_T *)prog)->reghasz = v; }
+void nvim_bt_prog_set_engine_bt(void *prog) { ((bt_regprog_T *)prog)->engine = &bt_regengine; }
+
+// E339 error + rc_did_emsg
+void nvim_regexp_call_emsg_e339(void) {
+  emsg(_("E339: Pattern too long"));
+  rc_did_emsg = true;
+}
+
+// --- End Phase 9.6 ---
 
 /// Main matching routine.
 ///
