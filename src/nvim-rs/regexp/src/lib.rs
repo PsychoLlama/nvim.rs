@@ -5670,6 +5670,173 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         }
                     }
 
+                    // --- Phase 4: Groups ---
+                    x if (MOPEN..MOPEN + 10).contains(&x) => {
+                        let no = opc - MOPEN;
+                        rs_cleanup_subexpr();
+                        let rp = regstack_push(RS_MOPEN, scan);
+                        if rp.is_null() {
+                            status = RA_FAIL;
+                        } else {
+                            (*rp).rs_no = no as i16;
+                            let startpos = nvim_regexp_get_rex_startpos_array().add(no as usize);
+                            let startp = nvim_regexp_get_rex_startp_array().add(no as usize);
+                            save_se(&mut (*rp).rs_un.sesave, startpos, startp);
+                        }
+                    }
+
+                    NOPEN | NCLOSE => {
+                        if regstack_push(RS_NOPEN, scan).is_null() {
+                            status = RA_FAIL;
+                        }
+                    }
+
+                    x if (ZOPEN + 1..ZOPEN + 10).contains(&x) => {
+                        let no = opc - ZOPEN;
+                        rs_cleanup_zsubexpr();
+                        let rp = regstack_push(RS_ZOPEN, scan);
+                        if rp.is_null() {
+                            status = RA_FAIL;
+                        } else {
+                            (*rp).rs_no = no as i16;
+                            save_se(
+                                &mut (*rp).rs_un.sesave,
+                                nvim_regexp_get_reg_startzpos_ptr(no),
+                                nvim_regexp_get_reg_startzp_ptr(no),
+                            );
+                        }
+                    }
+
+                    x if (MCLOSE..MCLOSE + 10).contains(&x) => {
+                        let no = opc - MCLOSE;
+                        rs_cleanup_subexpr();
+                        let rp = regstack_push(RS_MCLOSE, scan);
+                        if rp.is_null() {
+                            status = RA_FAIL;
+                        } else {
+                            (*rp).rs_no = no as i16;
+                            let endpos = nvim_regexp_get_rex_endpos_array().add(no as usize);
+                            let endp = nvim_regexp_get_rex_endp_array().add(no as usize);
+                            save_se(&mut (*rp).rs_un.sesave, endpos, endp);
+                        }
+                    }
+
+                    x if (ZCLOSE + 1..ZCLOSE + 10).contains(&x) => {
+                        let no = opc - ZCLOSE;
+                        rs_cleanup_zsubexpr();
+                        let rp = regstack_push(RS_ZCLOSE, scan);
+                        if rp.is_null() {
+                            status = RA_FAIL;
+                        } else {
+                            (*rp).rs_no = no as i16;
+                            save_se(
+                                &mut (*rp).rs_un.sesave,
+                                nvim_regexp_get_reg_endzpos_ptr(no),
+                                nvim_regexp_get_reg_endzp_ptr(no),
+                            );
+                        }
+                    }
+
+                    // --- Phase 4: Backrefs ---
+                    x if (BACKREF + 1..BACKREF + 10).contains(&x) => {
+                        let no = opc - BACKREF;
+                        rs_cleanup_subexpr();
+                        let mut len: c_int = 0;
+                        if is_reg_multi {
+                            // Multi-line regexp
+                            let start_lnum =
+                                (*nvim_regexp_get_rex_startpos_array().add(no as usize)).lnum;
+                            let start_col =
+                                (*nvim_regexp_get_rex_startpos_array().add(no as usize)).col;
+                            let end_lnum =
+                                (*nvim_regexp_get_rex_endpos_array().add(no as usize)).lnum;
+                            let end_col =
+                                (*nvim_regexp_get_rex_endpos_array().add(no as usize)).col;
+                            if start_lnum < 0 || end_lnum < 0 {
+                                len = 0; // Backref not set
+                            } else if start_lnum == nvim_regexp_get_rex_lnum()
+                                && end_lnum == nvim_regexp_get_rex_lnum()
+                            {
+                                // Compare within current line.
+                                len = end_col - start_col;
+                                if rs_cstrncmp(
+                                    nvim_regexp_get_rex_line()
+                                        .add(start_col as usize)
+                                        .cast::<c_char>(),
+                                    nvim_regexp_get_rex_input().cast::<c_char>(),
+                                    &mut len,
+                                ) != 0
+                                {
+                                    status = RA_NOMATCH;
+                                }
+                            } else {
+                                // Cross-line: use match_with_backref.
+                                let r = rs_match_with_backref(
+                                    start_lnum, start_col, end_lnum, end_col, &mut len,
+                                );
+                                if r != RA_MATCH {
+                                    status = r;
+                                }
+                            }
+                        } else {
+                            // Single-line regexp
+                            let startp = *nvim_regexp_get_rex_startp_array().add(no as usize);
+                            let endp = *nvim_regexp_get_rex_endp_array().add(no as usize);
+                            if startp.is_null() || endp.is_null() {
+                                len = 0; // Backref not set: empty string
+                            } else {
+                                len = endp.offset_from(startp) as c_int;
+                                if rs_cstrncmp(
+                                    startp.cast::<c_char>(),
+                                    nvim_regexp_get_rex_input().cast::<c_char>(),
+                                    &mut len,
+                                ) != 0
+                                {
+                                    status = RA_NOMATCH;
+                                }
+                            }
+                        }
+                        // Matched the backref, skip over it.
+                        nvim_regexp_set_rex_input(nvim_regexp_get_rex_input().add(len as usize));
+                    }
+
+                    x if (ZREF + 1..ZREF + 10).contains(&x) => {
+                        rs_cleanup_zsubexpr();
+                        let no = opc - ZREF;
+                        let ext_match = nvim_regexp_get_re_extmatch_in_match(no);
+                        if !ext_match.is_null() {
+                            let mut len = strlen(ext_match.cast::<c_char>()) as c_int;
+                            if rs_cstrncmp(
+                                ext_match.cast::<c_char>(),
+                                nvim_regexp_get_rex_input().cast::<c_char>(),
+                                &mut len,
+                            ) != 0
+                            {
+                                status = RA_NOMATCH;
+                            } else {
+                                nvim_regexp_set_rex_input(
+                                    nvim_regexp_get_rex_input().add(len as usize),
+                                );
+                            }
+                        }
+                        // else: Backref not set, match empty string.
+                    }
+
+                    // --- Phase 4: Branch ---
+                    BRANCH => {
+                        if op(next) == BRANCH {
+                            let rp = regstack_push(RS_BRANCH, scan);
+                            if rp.is_null() {
+                                status = RA_FAIL;
+                            } else {
+                                status = RA_BREAK; // rest is below
+                            }
+                        } else {
+                            // No choice, avoid recursion.
+                            next = operand(scan);
+                        }
+                    }
+
                     _ => {
                         // Unimplemented opcode — panic to catch missing cases during dev.
                         panic!("rs_regmatch: unimplemented opcode {opc}");
@@ -5696,6 +5863,83 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                 RS_NOPEN => {
                     // Result is passed on as-is, simply pop the state.
                     regstack_pop(&mut scan);
+                }
+
+                RS_MOPEN => {
+                    // Pop the state. Restore pointers when there is no match.
+                    if status == RA_NOMATCH {
+                        let no = (*rp).rs_no as usize;
+                        restore_se(
+                            &(*rp).rs_un.sesave,
+                            nvim_regexp_get_rex_startpos_array().add(no),
+                            nvim_regexp_get_rex_startp_array().add(no),
+                        );
+                    }
+                    regstack_pop(&mut scan);
+                }
+
+                RS_ZOPEN => {
+                    // Pop the state. Restore pointers when there is no match.
+                    if status == RA_NOMATCH {
+                        let no = (*rp).rs_no as c_int;
+                        restore_se(
+                            &(*rp).rs_un.sesave,
+                            nvim_regexp_get_reg_startzpos_ptr(no),
+                            nvim_regexp_get_reg_startzp_ptr(no),
+                        );
+                    }
+                    regstack_pop(&mut scan);
+                }
+
+                RS_MCLOSE => {
+                    // Pop the state. Restore pointers when there is no match.
+                    if status == RA_NOMATCH {
+                        let no = (*rp).rs_no as usize;
+                        restore_se(
+                            &(*rp).rs_un.sesave,
+                            nvim_regexp_get_rex_endpos_array().add(no),
+                            nvim_regexp_get_rex_endp_array().add(no),
+                        );
+                    }
+                    regstack_pop(&mut scan);
+                }
+
+                RS_ZCLOSE => {
+                    // Pop the state. Restore pointers when there is no match.
+                    if status == RA_NOMATCH {
+                        let no = (*rp).rs_no as c_int;
+                        restore_se(
+                            &(*rp).rs_un.sesave,
+                            nvim_regexp_get_reg_endzpos_ptr(no),
+                            nvim_regexp_get_reg_endzp_ptr(no),
+                        );
+                    }
+                    regstack_pop(&mut scan);
+                }
+
+                RS_BRANCH => {
+                    if status == RA_MATCH {
+                        // This branch matched, use it.
+                        regstack_pop(&mut scan);
+                    } else {
+                        if status != RA_BREAK {
+                            // After a non-matching branch: try next one.
+                            let mut bp_len = nvim_regexp_get_backpos_len();
+                            rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
+                            nvim_regexp_set_backpos_len(bp_len);
+                            scan = (*rp).rs_scan;
+                        }
+                        if scan.is_null() || op(scan) != BRANCH {
+                            // No more branches, didn't find a match.
+                            status = RA_NOMATCH;
+                            regstack_pop(&mut scan);
+                        } else {
+                            // Prepare to try a branch.
+                            (*rp).rs_scan = rs_regnext(scan);
+                            rs_reg_save(&mut (*rp).rs_un.regsave, nvim_regexp_get_backpos_len());
+                            scan = operand(scan);
+                        }
+                    }
                 }
 
                 _ => {
