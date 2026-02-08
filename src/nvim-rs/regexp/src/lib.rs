@@ -1323,6 +1323,129 @@ pub unsafe extern "C" fn rs_reg_getline_common(
     }
 }
 
+// --- reg_submatch ---
+
+extern "C" {
+    fn nvim_regexp_get_can_f_submatch() -> c_int;
+    fn nvim_regexp_is_rsm_sm_match_null() -> c_int;
+    fn nvim_regexp_get_rsm_sm_match_startp(i: c_int) -> *const c_char;
+    fn nvim_regexp_get_rsm_sm_match_endp(i: c_int) -> *const c_char;
+    fn nvim_regexp_get_rsm_sm_mmatch_startpos_lnum(i: c_int) -> i32;
+    fn nvim_regexp_get_rsm_sm_mmatch_startpos_col(i: c_int) -> i32;
+    fn nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(i: c_int) -> i32;
+    fn nvim_regexp_get_rsm_sm_mmatch_endpos_col(i: c_int) -> i32;
+}
+
+/// Helper: get submatch line text via `rs_reg_getline_common` with `RGLF_SUBMATCH`.
+unsafe fn reg_getline_submatch(lnum: i32) -> *mut c_char {
+    let mut line: *mut c_char = std::ptr::null_mut();
+    rs_reg_getline_common(
+        lnum,
+        RGLF_LINE | RGLF_SUBMATCH,
+        &mut line,
+        std::ptr::null_mut(),
+    );
+    line
+}
+
+/// Helper: get submatch line length via `rs_reg_getline_common` with `RGLF_SUBMATCH`.
+unsafe fn reg_getline_submatch_len(lnum: i32) -> i32 {
+    let mut length: i32 = 0;
+    rs_reg_getline_common(
+        lnum,
+        RGLF_LENGTH | RGLF_SUBMATCH,
+        std::ptr::null_mut(),
+        &mut length,
+    );
+    length
+}
+
+/// Return the submatch (strdup'd) for the `submatch()` function.
+/// Returns NULL when not in a `:s` command or for a non-existing submatch.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_submatch(no: c_int) -> *mut c_char {
+    if nvim_regexp_get_can_f_submatch() == 0 || no < 0 {
+        return std::ptr::null_mut();
+    }
+
+    if nvim_regexp_is_rsm_sm_match_null() != 0 {
+        // Multi-line match path (sm_mmatch)
+        let mut retval: *mut c_char = std::ptr::null_mut();
+
+        // Two passes: first measure, then copy
+        for round in 1..=2 {
+            let mut lnum = nvim_regexp_get_rsm_sm_mmatch_startpos_lnum(no);
+            if lnum < 0 || nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(no) < 0 {
+                return std::ptr::null_mut();
+            }
+
+            let s = reg_getline_submatch(lnum);
+            if s.is_null() {
+                // anti-crash check
+                break;
+            }
+            let start_col = nvim_regexp_get_rsm_sm_mmatch_startpos_col(no);
+            let s = s.add(start_col as usize);
+
+            let end_lnum = nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(no);
+            let end_col = nvim_regexp_get_rsm_sm_mmatch_endpos_col(no);
+
+            let len = if end_lnum == lnum {
+                // Within one line: take from start to end col
+                let span = (end_col - start_col) as usize;
+                if round == 2 {
+                    std::ptr::copy_nonoverlapping(s, retval, span);
+                    *retval.add(span) = 0;
+                }
+                span + 1 // +1 for NUL
+            } else {
+                // Multiple lines
+                let mut off = (reg_getline_submatch_len(lnum) - start_col) as usize;
+                if round == 2 {
+                    std::ptr::copy_nonoverlapping(s, retval, off);
+                    *retval.add(off) = b'\n' as c_char;
+                }
+                off += 1;
+                lnum += 1;
+
+                while lnum < end_lnum {
+                    let ml = reg_getline_submatch(lnum);
+                    let ml_len = reg_getline_submatch_len(lnum) as usize;
+                    if round == 2 {
+                        std::ptr::copy_nonoverlapping(ml, retval.add(off), ml_len);
+                        *retval.add(off + ml_len) = b'\n' as c_char;
+                    }
+                    off += ml_len + 1;
+                    lnum += 1;
+                }
+
+                // End line up to end col
+                if round == 2 {
+                    let el = reg_getline_submatch(lnum);
+                    std::ptr::copy_nonoverlapping(el, retval.add(off), end_col as usize);
+                    *retval.add(off + end_col as usize) = 0;
+                }
+                off + end_col as usize + 1
+            };
+
+            if retval.is_null() {
+                retval = xmalloc(len).cast::<c_char>();
+            }
+        }
+
+        retval
+    } else {
+        // Single-line match path (sm_match)
+        let s = nvim_regexp_get_rsm_sm_match_startp(no);
+        let e = nvim_regexp_get_rsm_sm_match_endp(no);
+        if s.is_null() || e.is_null() {
+            return std::ptr::null_mut();
+        }
+        let span = e.offset_from(s) as usize;
+        xstrnsave(s, span)
+    }
+}
+
 // --- get_char_class ---
 
 /// Sorted table of `[:name:]` character class names.

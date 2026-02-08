@@ -957,6 +957,16 @@ int32_t nvim_regexp_call_reg_getline_len(int32_t lnum) { return (int32_t)reg_get
 int nvim_regexp_get_rex_reg_nobreak(void) { return rex.reg_nobreak; }
 void *nvim_regexp_get_rex_reg_buf(void) { return (void *)rex.reg_buf; }
 
+// reg_submatch accessors for Rust FFI
+int nvim_regexp_get_can_f_submatch(void) { return can_f_submatch ? 1 : 0; }
+int nvim_regexp_is_rsm_sm_match_null(void) { return rsm.sm_match == NULL ? 1 : 0; }
+const char *nvim_regexp_get_rsm_sm_match_startp(int i) { return rsm.sm_match->startp[i]; }
+const char *nvim_regexp_get_rsm_sm_match_endp(int i) { return rsm.sm_match->endp[i]; }
+int32_t nvim_regexp_get_rsm_sm_mmatch_startpos_lnum(int i) { return (int32_t)rsm.sm_mmatch->startpos[i].lnum; }
+int32_t nvim_regexp_get_rsm_sm_mmatch_startpos_col(int i) { return (int32_t)rsm.sm_mmatch->startpos[i].col; }
+int32_t nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(int i) { return (int32_t)rsm.sm_mmatch->endpos[i].lnum; }
+int32_t nvim_regexp_get_rsm_sm_mmatch_endpos_col(int i) { return (int32_t)rsm.sm_mmatch->endpos[i].col; }
+
 // reg_getline_common accessors for Rust FFI
 int32_t nvim_regexp_get_rex_reg_firstlnum(void) { return (int32_t)rex.reg_firstlnum; }
 int32_t nvim_regexp_get_rex_reg_maxline(void) { return (int32_t)rex.reg_maxline; }
@@ -1702,88 +1712,11 @@ static colnr_T reg_getline_submatch_len(linenr_T lnum)
 /// allocated memory.
 ///
 /// @return  NULL when not in a ":s" command and for a non-existing submatch.
+extern char *rs_reg_submatch(int no);
+
 char *reg_submatch(int no)
 {
-  char *retval = NULL;
-  char *s;
-  int round;
-  linenr_T lnum;
-
-  if (!can_f_submatch || no < 0) {
-    return NULL;
-  }
-
-  if (rsm.sm_match == NULL) {
-    ssize_t len;
-
-    // First round: compute the length and allocate memory.
-    // Second round: copy the text.
-    for (round = 1; round <= 2; round++) {
-      lnum = rsm.sm_mmatch->startpos[no].lnum;
-      if (lnum < 0 || rsm.sm_mmatch->endpos[no].lnum < 0) {
-        return NULL;
-      }
-
-      s = reg_getline_submatch(lnum);
-      if (s == NULL) {  // anti-crash check, cannot happen?
-        break;
-      }
-      s += rsm.sm_mmatch->startpos[no].col;
-      if (rsm.sm_mmatch->endpos[no].lnum == lnum) {
-        // Within one line: take form start to end col.
-        len = rsm.sm_mmatch->endpos[no].col - rsm.sm_mmatch->startpos[no].col;
-        if (round == 2) {
-          xmemcpyz(retval, s, (size_t)len);
-        }
-        len++;
-      } else {
-        // Multiple lines: take start line from start col, middle
-        // lines completely and end line up to end col.
-        len = reg_getline_submatch_len(lnum) - rsm.sm_mmatch->startpos[no].col;
-        if (round == 2) {
-          STRCPY(retval, s);
-          retval[len] = '\n';
-        }
-        len++;
-        lnum++;
-        while (lnum < rsm.sm_mmatch->endpos[no].lnum) {
-          s = reg_getline_submatch(lnum);
-          if (round == 2) {
-            STRCPY(retval + len, s);
-          }
-          len += reg_getline_submatch_len(lnum);
-          if (round == 2) {
-            retval[len] = '\n';
-          }
-          len++;
-          lnum++;
-        }
-        if (round == 2) {
-          strncpy(retval + len,  // NOLINT(runtime/printf)
-                  reg_getline_submatch(lnum),
-                  (size_t)rsm.sm_mmatch->endpos[no].col);
-        }
-        len += rsm.sm_mmatch->endpos[no].col;
-        if (round == 2) {
-          retval[len] = NUL;
-        }
-        len++;
-      }
-
-      if (retval == NULL) {
-        retval = xmalloc((size_t)len);
-      }
-    }
-  } else {
-    s = rsm.sm_match->startp[no];
-    if (s == NULL || rsm.sm_match->endp[no] == NULL) {
-      retval = NULL;
-    } else {
-      retval = xstrnsave(s, (size_t)(rsm.sm_match->endp[no] - s));
-    }
-  }
-
-  return retval;
+  return rs_reg_submatch(no);
 }
 
 // Used for the submatch() function with the optional non-zero argument: get
