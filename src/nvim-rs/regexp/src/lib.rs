@@ -2339,7 +2339,9 @@ pub unsafe extern "C" fn rs_regmbc(c: c_int) {
 }
 
 // Opcode constants (must match C #define values in regexp.c)
+const BRANCH: c_int = 3; // #define BRANCH 3
 const BACK: c_int = 4; // #define BACK 4 — Match "", "next" ptr points backward
+const BRACE_COMPLEX: c_int = 140; // #define BRACE_COMPLEX 140 (range 140-149)
 
 /// Emit a node. Return pointer to generated code.
 /// If `regcode == JUST_CALC_SIZE`, adds 3 to `regsize` and returns `JUST_CALC_SIZE`.
@@ -2384,6 +2386,66 @@ pub unsafe extern "C" fn rs_regnext(p: *mut u8) -> *mut u8 {
     } else {
         p.add(offset as usize)
     }
+}
+
+/// Set the next-pointer at the end of a node chain.
+/// Walks via `rs_regnext` to find the last node, computes the offset to `val`,
+/// and writes it as a 16-bit value in bytes 1-2 of that node.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regtail(p: *mut u8, val: *const u8) {
+    let just_calc_size = nvim_regexp_get_just_calc_size();
+    if p == just_calc_size {
+        return;
+    }
+
+    // Find last node in the chain.
+    let mut scan = p;
+    loop {
+        let temp = rs_regnext(scan);
+        if temp.is_null() {
+            break;
+        }
+        scan = temp;
+    }
+
+    // OP(scan) = (int)(*(scan))
+    let op = *scan as c_int;
+    #[allow(clippy::cast_possible_truncation)]
+    let offset = if op == BACK {
+        // BACK nodes point backward: offset = scan - val
+        scan.offset_from(val) as c_int
+    } else {
+        // Forward: offset = val - scan
+        val.offset_from(scan) as c_int
+    };
+
+    // When the offset uses more than 16 bits it can no longer fit in the two
+    // bytes available.
+    if offset > 0xffff {
+        nvim_regexp_set_reg_toolong(1);
+    } else {
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            *scan.add(1) = ((offset as u32 >> 8) & 0o377) as u8;
+            *scan.add(2) = (offset as u32 & 0o377) as u8;
+        }
+    }
+}
+
+/// Like `rs_regtail`, on item after a BRANCH; nop if none.
+/// Only acts if `OP(p)` is `BRANCH` or `BRACE_COMPLEX+0..9`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regoptail(p: *mut u8, val: *mut u8) {
+    let just_calc_size = nvim_regexp_get_just_calc_size();
+    if p.is_null() || p == just_calc_size {
+        return;
+    }
+    let op = *p as c_int;
+    if op != BRANCH && !(BRACE_COMPLEX..=BRACE_COMPLEX + 9).contains(&op) {
+        return;
+    }
+    // OPERAND(p) = p + 3
+    rs_regtail(p.add(3), val);
 }
 
 #[cfg(test)]

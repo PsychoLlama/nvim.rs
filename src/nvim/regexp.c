@@ -77,6 +77,8 @@ extern void rs_regc(int b);
 extern void rs_regmbc(int c);
 extern uint8_t *rs_regnode(int op);
 extern uint8_t *rs_regnext(uint8_t *p);
+extern void rs_regtail(uint8_t *p, const uint8_t *val);
+extern void rs_regoptail(uint8_t *p, uint8_t *val);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -2984,48 +2986,13 @@ static uint8_t *regnext(uint8_t *p)
 // Set the next-pointer at the end of a node chain.
 static void regtail(uint8_t *p, const uint8_t *val)
 {
-  int offset;
-
-  if (p == JUST_CALC_SIZE) {
-    return;
-  }
-
-  // Find last node.
-  uint8_t *scan = p;
-  while (true) {
-    uint8_t *temp = regnext(scan);
-    if (temp == NULL) {
-      break;
-    }
-    scan = temp;
-  }
-
-  if (OP(scan) == BACK) {
-    offset = (int)(scan - val);
-  } else {
-    offset = (int)(val - scan);
-  }
-  // When the offset uses more than 16 bits it can no longer fit in the two
-  // bytes available.  Use a global flag to avoid having to check return
-  // values in too many places.
-  if (offset > 0xffff) {
-    reg_toolong = true;
-  } else {
-    *(scan + 1) = (uint8_t)(((unsigned)offset >> 8) & 0377);
-    *(scan + 2) = (uint8_t)(offset & 0377);
-  }
+  rs_regtail(p, val);
 }
 
 // Like regtail, on item after a BRANCH; nop if none.
 static void regoptail(uint8_t *p, uint8_t *val)
 {
-  // When op is neither BRANCH nor BRACE_COMPLEX0-9, it is "operandless"
-  if (p == NULL || p == JUST_CALC_SIZE
-      || (OP(p) != BRANCH
-          && (OP(p) < BRACE_COMPLEX || OP(p) > BRACE_COMPLEX + 9))) {
-    return;
-  }
-  regtail(OPERAND(p), val);
+  rs_regoptail(p, val);
 }
 
 // Insert an operator in front of already-emitted operand
