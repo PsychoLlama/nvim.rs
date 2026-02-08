@@ -117,7 +117,26 @@ const REGEXP_INRANGE: &[u8] = b"]^-n\\";
 const REGEXP_ABBR: &[u8] = b"nrtebdoxuU";
 // CPO_LITERAL flag character
 const CPO_LITERAL: c_int = b'l' as c_int;
-// CLASS_NONE return value from get_char_class
+// Character class constants (matches C enum in regexp.c)
+const CLASS_ALNUM: c_int = 0;
+const CLASS_ALPHA: c_int = 1;
+const CLASS_BLANK: c_int = 2;
+const CLASS_CNTRL: c_int = 3;
+const CLASS_DIGIT: c_int = 4;
+const CLASS_GRAPH: c_int = 5;
+const CLASS_LOWER: c_int = 6;
+const CLASS_PRINT: c_int = 7;
+const CLASS_PUNCT: c_int = 8;
+const CLASS_SPACE: c_int = 9;
+const CLASS_UPPER: c_int = 10;
+const CLASS_XDIGIT: c_int = 11;
+const CLASS_CC_TAB: c_int = 12;
+const CLASS_RETURN: c_int = 13;
+const CLASS_BACKSPACE: c_int = 14;
+const CLASS_ESCAPE: c_int = 15;
+const CLASS_IDENT: c_int = 16;
+const CLASS_KEYWORD: c_int = 17;
+const CLASS_FNAME: c_int = 18;
 const CLASS_NONE: c_int = 99;
 
 // Magic modes (matching regexp_defs.h)
@@ -154,7 +173,7 @@ unsafe fn skip_anyof(mut p: *mut c_char, reg_cpo_lit: bool) -> *mut c_char {
         {
             p = p.add(2);
         } else if *p == b'[' as c_char {
-            if nvim_regexp_get_char_class(&mut p) == CLASS_NONE
+            if get_char_class_impl(&mut p) == CLASS_NONE
                 && nvim_regexp_get_equi_class(&mut p) == 0
                 && nvim_regexp_get_coll_element(&mut p) == 0
                 && *p != 0
@@ -1199,6 +1218,92 @@ pub unsafe extern "C" fn rs_skip_regexp_err(
     p
 }
 
+// --- get_char_class ---
+
+/// Sorted table of `[:name:]` character class names.
+/// Each entry is `(suffix, class_value)` where suffix starts after the `[:`.
+/// Sorted by the suffix string for binary search.
+const CHAR_CLASS_TAB: &[(&[u8], c_int)] = &[
+    (b"alnum:]", CLASS_ALNUM),
+    (b"alpha:]", CLASS_ALPHA),
+    (b"backspace:]", CLASS_BACKSPACE),
+    (b"blank:]", CLASS_BLANK),
+    (b"cntrl:]", CLASS_CNTRL),
+    (b"digit:]", CLASS_DIGIT),
+    (b"escape:]", CLASS_ESCAPE),
+    (b"fname:]", CLASS_FNAME),
+    (b"graph:]", CLASS_GRAPH),
+    (b"ident:]", CLASS_IDENT),
+    (b"keyword:]", CLASS_KEYWORD),
+    (b"lower:]", CLASS_LOWER),
+    (b"print:]", CLASS_PRINT),
+    (b"punct:]", CLASS_PUNCT),
+    (b"return:]", CLASS_RETURN),
+    (b"space:]", CLASS_SPACE),
+    (b"tab:]", CLASS_CC_TAB),
+    (b"upper:]", CLASS_UPPER),
+    (b"xdigit:]", CLASS_XDIGIT),
+];
+
+/// Check for a character class name `[:name:]`. `pp` points to the `[`.
+/// Returns one of the `CLASS_*` values, or `CLASS_NONE`.
+/// On success, advances `*pp` past the closing `]`.
+///
+/// Pure-logic implementation shared by `rs_get_char_class` and `skip_anyof`.
+unsafe fn get_char_class_impl(pp: *mut *mut c_char) -> c_int {
+    let p = *pp;
+    // Quick reject: must have `[:` followed by at least two lowercase ASCII letters
+    if *p.add(1) != b':' as c_char {
+        return CLASS_NONE;
+    }
+    let c2 = *p.add(2) as u8;
+    let c3 = *p.add(3) as u8;
+    let c4 = *p.add(4) as u8;
+    if !c2.is_ascii_lowercase() || !c3.is_ascii_lowercase() || !c4.is_ascii_lowercase() {
+        return CLASS_NONE;
+    }
+
+    // Binary search over the sorted table
+    let needle = p.add(2) as *const u8;
+    let mut lo: usize = 0;
+    let mut hi: usize = CHAR_CLASS_TAB.len();
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        let (entry_name, _) = CHAR_CLASS_TAB[mid];
+        let cmp = compare_prefix(needle, entry_name);
+        match cmp.cmp(&0) {
+            std::cmp::Ordering::Less => hi = mid,
+            std::cmp::Ordering::Greater => lo = mid + 1,
+            std::cmp::Ordering::Equal => {
+                // Match found — advance pp past the `[:name:]`
+                // +2 for the leading `[:`
+                *pp = p.add(entry_name.len() + 2).cast::<c_char>();
+                return CHAR_CLASS_TAB[mid].1;
+            }
+        }
+    }
+    CLASS_NONE
+}
+
+/// Compare a NUL-terminated C string prefix against a byte slice.
+/// Returns <0 if needle < entry, >0 if needle > entry, 0 on match.
+unsafe fn compare_prefix(needle: *const u8, entry: &[u8]) -> c_int {
+    for (i, &eb) in entry.iter().enumerate() {
+        let nb = *needle.add(i);
+        if nb != eb {
+            return (nb as c_int) - (eb as c_int);
+        }
+    }
+    0
+}
+
+/// Check for a character class name `[:name:]`. `pp` points to the `[`.
+/// FFI export that delegates to `get_char_class_impl`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_char_class(pp: *mut *mut c_char) -> c_int {
+    get_char_class_impl(pp)
+}
+
 // --- do_upper / do_lower ---
 
 extern "C" {
@@ -1549,5 +1654,122 @@ mod tests {
 
         mb_decompose(0xfb50, &mut c1, &mut c2, &mut c3); // just above range
         assert_eq!((c1, c2, c3), (0xfb50, 0, 0));
+    }
+
+    // --- get_char_class tests ---
+
+    /// Helper: create a NUL-terminated C string on the stack, call
+    /// `get_char_class_impl`, and return `(class, bytes_advanced)`.
+    unsafe fn test_get_char_class(input: &[u8]) -> (c_int, usize) {
+        // Allocate with NUL terminator
+        let mut buf = vec![0u8; input.len() + 1];
+        buf[..input.len()].copy_from_slice(input);
+        let mut p = buf.as_mut_ptr().cast::<c_char>();
+        let orig = p;
+        let result = get_char_class_impl(&mut p);
+        let advanced = p.offset_from(orig) as usize;
+        (result, advanced)
+    }
+
+    #[test]
+    fn test_get_char_class_all_19_classes() {
+        let cases: &[(&[u8], c_int, usize)] = &[
+            (b"[:alnum:]", CLASS_ALNUM, 9),
+            (b"[:alpha:]", CLASS_ALPHA, 9),
+            (b"[:backspace:]", CLASS_BACKSPACE, 13),
+            (b"[:blank:]", CLASS_BLANK, 9),
+            (b"[:cntrl:]", CLASS_CNTRL, 9),
+            (b"[:digit:]", CLASS_DIGIT, 9),
+            (b"[:escape:]", CLASS_ESCAPE, 10),
+            (b"[:fname:]", CLASS_FNAME, 9),
+            (b"[:graph:]", CLASS_GRAPH, 9),
+            (b"[:ident:]", CLASS_IDENT, 9),
+            (b"[:keyword:]", CLASS_KEYWORD, 11),
+            (b"[:lower:]", CLASS_LOWER, 9),
+            (b"[:print:]", CLASS_PRINT, 9),
+            (b"[:punct:]", CLASS_PUNCT, 9),
+            (b"[:return:]", CLASS_RETURN, 10),
+            (b"[:space:]", CLASS_SPACE, 9),
+            (b"[:tab:]", CLASS_CC_TAB, 7),
+            (b"[:upper:]", CLASS_UPPER, 9),
+            (b"[:xdigit:]", CLASS_XDIGIT, 10),
+        ];
+        for &(input, expected_class, expected_advance) in cases {
+            let (cls, adv) = unsafe { test_get_char_class(input) };
+            assert_eq!(
+                cls,
+                expected_class,
+                "class mismatch for {:?}",
+                std::str::from_utf8(input).unwrap()
+            );
+            assert_eq!(
+                adv,
+                expected_advance,
+                "advance mismatch for {:?}",
+                std::str::from_utf8(input).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_char_class_no_colon() {
+        // Missing ':' after '['
+        let (cls, adv) = unsafe { test_get_char_class(b"[alnum:]") };
+        assert_eq!(cls, CLASS_NONE);
+        assert_eq!(adv, 0);
+    }
+
+    #[test]
+    fn test_get_char_class_uppercase_rejected() {
+        // Uppercase letters rejected by quick-reject
+        let (cls, adv) = unsafe { test_get_char_class(b"[:ALNUM:]") };
+        assert_eq!(cls, CLASS_NONE);
+        assert_eq!(adv, 0);
+    }
+
+    #[test]
+    fn test_get_char_class_unknown_name() {
+        // Valid format but unknown class name
+        let (cls, adv) = unsafe { test_get_char_class(b"[:foobar:]") };
+        assert_eq!(cls, CLASS_NONE);
+        assert_eq!(adv, 0);
+    }
+
+    #[test]
+    fn test_get_char_class_empty_name() {
+        // Empty name after `[:`
+        let (cls, adv) = unsafe { test_get_char_class(b"[:]") };
+        assert_eq!(cls, CLASS_NONE);
+        assert_eq!(adv, 0);
+    }
+
+    #[test]
+    fn test_get_char_class_short_name() {
+        // Only two lowercase letters (need at least 3 for quick-reject)
+        let (cls, adv) = unsafe { test_get_char_class(b"[:ab:]") };
+        assert_eq!(cls, CLASS_NONE);
+        assert_eq!(adv, 0);
+    }
+
+    #[test]
+    fn test_get_char_class_digit_in_name() {
+        // Digit in the name after `[:`
+        let (cls, adv) = unsafe { test_get_char_class(b"[:al1um:]") };
+        assert_eq!(cls, CLASS_NONE);
+        assert_eq!(adv, 0);
+    }
+
+    #[test]
+    fn test_char_class_tab_sorted() {
+        // Verify the table is sorted (binary search correctness depends on this)
+        for i in 1..CHAR_CLASS_TAB.len() {
+            assert!(
+                CHAR_CLASS_TAB[i - 1].0 < CHAR_CLASS_TAB[i].0,
+                "CHAR_CLASS_TAB not sorted at index {}: {:?} >= {:?}",
+                i,
+                std::str::from_utf8(CHAR_CLASS_TAB[i - 1].0),
+                std::str::from_utf8(CHAR_CLASS_TAB[i].0),
+            );
+        }
     }
 }
