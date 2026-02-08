@@ -1145,3 +1145,38 @@ hello world	hello world test
 \v(foo)@<!bar	xbar
 \zsfoo\ze	foobar
 foo\zsbar\ze	foobar
+# Phase 8.4: NFA execution engine patterns (composing, collections, position, classes, complex)
+# Composing characters (NFA_COMPOSING)
+e\%C	e\u0301
+a\%C	a\u0300b
+# Collections and negated collections (NFA_START_COLL, NFA_START_NEG_COLL)
+[abc]	xbx
+[^abc]	xbx
+[a-z]	Hello
+[^0-9]	123abc
+[[:alpha:]]	42hello
+[[:digit:]]	abc9def
+[[:space:]]	hello world
+# NFA_ANY and NFA_NEWL
+.	x
+.\+	hello
+\_.\+	hello
+# Identifier and keyword character classes (NFA_IDENT, NFA_WORD, etc.)
+\i\+	foo_bar
+\I\+	_foobar
+\k\+	keyword123
+\K\+	keyword123
+\f\+	/usr/bin/file
+\p\+	printable text
+# Case-insensitive matching (NFA_*_IC states)
+\cfoo	FOObar
+\cHello	hElLo World
+\CHELLO	HELLO world
+# NFA_SKIP (alternation branch skipping)
+foo\|bar	bar
+abc\|def\|ghi	defxyz
+\(a\|b\|c\)\+	abcba
+# Complex multi-state patterns exercising the execution engine
+\v\w+\s+\w+	hello world
+\v[[:digit:]]+\.[[:digit:]]+	3.14159
+\v<\w+>	hello world test

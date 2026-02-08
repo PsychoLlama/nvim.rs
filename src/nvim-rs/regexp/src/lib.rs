@@ -10313,6 +10313,1736 @@ pub unsafe extern "C" fn rs_nfa_did_time_out() -> c_int {
     nvim_regexp_call_nfa_did_time_out()
 }
 
+// --- Phase 8.4: nfa_regmatch — The Core Engine ---
+
+// Additional constants for nfa_regmatch
+#[allow(clippy::unreadable_literal)]
+const NFA_MAX_STATES: c_int = 100000;
+const AUTOMATIC_ENGINE: c_int = 0;
+const NFA_TOO_EXPENSIVE: c_int = -1;
+const NFA_PIM_TODO: c_int = 1;
+const NFA_PIM_MATCH: c_int = 2;
+const NFA_PIM_NOMATCH: c_int = 3;
+const MAX_MCO: usize = 6;
+
+// Extern declarations for Phase 8.4 C accessors
+extern "C" {
+    // Thread field accessors
+    fn nvim_nfa_thread_get_state_c(l: NfaListHandle, idx: c_int) -> c_int;
+    fn nvim_nfa_thread_get_state_ptr(l: NfaListHandle, idx: c_int) -> NfaStateHandle;
+    fn nvim_nfa_thread_get_state_out(l: NfaListHandle, idx: c_int) -> NfaStateHandle;
+    fn nvim_nfa_thread_get_state_out1(l: NfaListHandle, idx: c_int) -> NfaStateHandle;
+    fn nvim_nfa_thread_get_state_val(l: NfaListHandle, idx: c_int) -> c_int;
+    fn nvim_nfa_thread_get_count(l: NfaListHandle, idx: c_int) -> c_int;
+    fn nvim_nfa_thread_get_subs_ptr(l: NfaListHandle, idx: c_int) -> RegsubsHandle;
+
+    // Thread PIM field accessors
+    fn nvim_nfa_thread_get_pim_result(l: NfaListHandle, idx: c_int) -> c_int;
+    fn nvim_nfa_thread_get_pim_state(l: NfaListHandle, idx: c_int) -> NfaStateHandle;
+    fn nvim_nfa_thread_get_pim_state_c(l: NfaListHandle, idx: c_int) -> c_int;
+
+    // nfa_list_T management
+    fn nvim_nfa_list_set_n(l: NfaListHandle, n: c_int);
+    fn nvim_nfa_list_set_has_pim(l: NfaListHandle, v: c_int);
+    fn nvim_nfa_list_set_id(l: NfaListHandle, id: c_int);
+
+    // regsubs_T operations
+    fn nvim_regexp_regsubs_get_norm(s: RegsubsHandle) -> *mut c_void;
+    fn nvim_regexp_regsubs_get_synt(s: RegsubsHandle) -> *mut c_void;
+    fn nvim_regexp_regsubs_get_norm_in_use(s: RegsubsHandle) -> c_int;
+    fn nvim_regexp_regsubs_set_norm_in_use(s: RegsubsHandle, v: c_int);
+    fn nvim_regexp_regsubs_set_multi_start(s: RegsubsHandle, idx: c_int, lnum: i32, col: i32);
+    fn nvim_regexp_regsubs_get_multi_start_col(s: RegsubsHandle, idx: c_int) -> i32;
+    fn nvim_regexp_regsubs_get_multi_end_col(s: RegsubsHandle, idx: c_int) -> i32;
+    fn nvim_regexp_regsubs_set_norm_orig_start_col(s: RegsubsHandle, v: i32);
+    fn nvim_regexp_regsubs_set_line_start(s: RegsubsHandle, idx: c_int, ptr: *mut u8);
+    fn nvim_regexp_regsubs_get_line_end(s: RegsubsHandle, idx: c_int) -> *mut u8;
+
+    // rex execution field accessors
+    fn nvim_regexp_get_rex_nfa_listid() -> c_int;
+    fn nvim_regexp_set_rex_nfa_listid(v: c_int);
+    fn nvim_regexp_get_rex_reg_maxcol() -> i32;
+    fn nvim_regexp_get_rex_nfa_nsubexpr() -> c_int;
+
+    // Character/utility functions
+    fn nvim_regexp_call_ascii_iswhite(c: c_int) -> c_int;
+    fn nvim_regexp_call_ri_digit(c: c_int) -> c_int;
+    fn nvim_regexp_call_ri_hex(c: c_int) -> c_int;
+    fn nvim_regexp_call_ri_octal(c: c_int) -> c_int;
+    fn nvim_regexp_call_ri_word(c: c_int) -> c_int;
+    fn nvim_regexp_call_ri_head(c: c_int) -> c_int;
+    fn nvim_regexp_call_ri_alpha(c: c_int) -> c_int;
+    fn nvim_regexp_call_ri_lower(c: c_int) -> c_int;
+    fn nvim_regexp_call_ri_upper(c: c_int) -> c_int;
+    fn nvim_regexp_call_reg_prev_class() -> c_int;
+    fn nvim_regexp_call_reg_match_visual() -> c_int;
+    fn nvim_regexp_call_reg_nextline();
+    fn nvim_regexp_call_cleanup_subexpr();
+
+    // NFA prog field accessor
+    fn nvim_nfa_prog_get_re_engine(prog: NfaProgHandle) -> c_int;
+
+    // PIM operations
+    fn nvim_nfa_pim_set_result(pim: NfaPimHandle, v: c_int);
+    fn nvim_nfa_pim_get_state(pim: NfaPimHandle) -> NfaStateHandle;
+    fn nvim_nfa_pim_get_state_c(pim: NfaPimHandle) -> c_int;
+    fn nvim_nfa_pim_get_subs_norm(pim: NfaPimHandle) -> *mut c_void;
+    fn nvim_nfa_pim_get_subs_synt(pim: NfaPimHandle) -> *mut c_void;
+
+    // PIM allocation/init
+    fn nvim_regexp_alloc_pim() -> NfaPimHandle;
+    fn nvim_regexp_free_pim(p: NfaPimHandle);
+    fn nvim_regexp_pim_init(
+        p: NfaPimHandle,
+        state: NfaStateHandle,
+        result: c_int,
+        lnum: i32,
+        col: i32,
+        ptr: *mut u8,
+        is_multi: c_int,
+    );
+
+    // win_T and buffer accessors for VCOL/MARK
+    fn nvim_regexp_get_curwin() -> *mut c_void;
+    fn nvim_regexp_get_win_b_p_ts(wp: *mut c_void) -> i64;
+    fn nvim_regexp_get_win_buf_line_count(wp: *mut c_void) -> i32;
+
+    // Mark access
+    fn nvim_regexp_call_mark_get_for_nfa(
+        buf: *mut c_void,
+        win: *mut c_void,
+        mark_val: c_int,
+    ) -> *mut c_void;
+    fn nvim_regexp_fmark_is_set(fm: *mut c_void) -> c_int;
+    fn nvim_regexp_fmark_get_lnum(fm: *mut c_void) -> i32;
+    fn nvim_regexp_fmark_get_col(fm: *mut c_void) -> i32;
+    fn nvim_regexp_fmark_get_col_adj(fm: *mut c_void, lnum_match: i32) -> i32;
+
+    // List thread count setter
+    fn nvim_nfa_list_set_last_thread_count(l: NfaListHandle, count: c_int);
+
+    // Memory free wrapper
+    fn nvim_regexp_xfree(p: *mut c_void);
+}
+
+/// Main NFA matching routine.
+///
+/// Run NFA to determine whether it matches `rex.input`.
+///
+/// When `nfa_endp` is not NULL it is a required end-of-match position.
+///
+/// Return true if there is a match, false if there is no match,
+/// `NFA_TOO_EXPENSIVE` if we end up with too many states.
+/// When there is a match "submatch" contains the positions.
+#[no_mangle]
+#[allow(
+    clippy::too_many_lines,
+    clippy::similar_names,
+    clippy::suspicious_operation_groupings,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr,
+    clippy::branches_sharing_code,
+    clippy::needless_bool,
+    clippy::bool_to_int_with_if,
+    clippy::if_same_then_else,
+    clippy::collapsible_if,
+    clippy::needless_bool_assign,
+    clippy::unnecessary_operation,
+    clippy::nonminimal_bool,
+    clippy::manual_range_contains,
+    clippy::ptr_cast_constness,
+    clippy::needless_range_loop,
+    clippy::if_not_else,
+    clippy::comparison_chain,
+    unused_variables,
+    unused_assignments
+)]
+pub unsafe extern "C" fn rs_nfa_regmatch(
+    prog: NfaProgHandle,
+    start: NfaStateHandle,
+    submatch: RegsubsHandle,
+    m: RegsubsHandle,
+) -> c_int {
+    let mut result: c_int;
+    let mut flag: c_int = 0;
+    let mut go_to_nextline: bool = false;
+    let mut listids: *mut c_int = core::ptr::null_mut();
+    let mut listids_len: c_int = 0;
+    let mut add_state: NfaStateHandle;
+    let mut add_here: bool;
+    let mut add_count: c_int;
+    let mut add_off: c_int;
+    let toplevel: bool = nvim_nfa_state_get_c(start) == NFA_MOPEN;
+    let mut r: RegsubsHandle;
+
+    // Allow interrupting with CTRL-C.
+    nvim_regexp_call_reg_breakcheck();
+    if nvim_regexp_get_got_int() != 0 {
+        return 0; // false
+    }
+    if nvim_regexp_call_nfa_did_time_out() != 0 {
+        return 0; // false
+    }
+
+    nvim_regexp_set_nfa_match(0); // nfa_match = false
+
+    // Allocate memory for the lists of nodes.
+    let nstate = nvim_nfa_prog_get_nstate(prog);
+    let list0 = nvim_nfa_list_alloc_threads(nstate + 1);
+    let list1 = nvim_nfa_list_alloc_threads(nstate + 1);
+
+    // Initialize thislist and nextlist
+    let mut thislist = list0;
+    nvim_nfa_list_set_n(thislist, 0);
+    nvim_nfa_list_set_has_pim(thislist, 0);
+    let mut nextlist = list1;
+    nvim_nfa_list_set_n(nextlist, 0);
+    nvim_nfa_list_set_has_pim(nextlist, 0);
+
+    nvim_nfa_list_set_id(thislist, nvim_regexp_get_rex_nfa_listid() + 1);
+
+    // Inline optimized code for addstate(thislist, start, m, 0) if we know
+    // it's the first MOPEN.
+    if toplevel {
+        if nvim_regexp_is_reg_multi() != 0 {
+            let col = nvim_regexp_get_rex_input() as isize - nvim_regexp_get_rex_line() as isize;
+            nvim_regexp_regsubs_set_multi_start(m, 0, nvim_regexp_get_rex_lnum(), col as i32);
+            nvim_regexp_regsubs_set_norm_orig_start_col(m, col as i32);
+        } else {
+            nvim_regexp_regsubs_set_line_start(m, 0, nvim_regexp_get_rex_input());
+        }
+        nvim_regexp_regsubs_set_norm_in_use(m, 1);
+        r = nvim_regexp_call_addstate(
+            thislist,
+            nvim_nfa_state_get_out(start),
+            m,
+            core::ptr::null_mut(),
+            0,
+        );
+    } else {
+        r = nvim_regexp_call_addstate(thislist, start, m, core::ptr::null_mut(), 0);
+    }
+    if r.is_null() {
+        nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+        // goto theend
+        nvim_nfa_list_free_threads(list0);
+        nvim_nfa_list_free_threads(list1);
+        if !listids.is_null() {
+            nvim_regexp_xfree(listids as *mut c_void);
+        }
+        return nvim_regexp_get_nfa_match();
+    }
+
+    // Run for each character.
+    'outer: loop {
+        let curc = utf_ptr2char(nvim_regexp_get_rex_input() as *const c_char);
+        let mut clen = utfc_ptr2len(nvim_regexp_get_rex_input() as *const c_char);
+        if curc == 0 {
+            // NUL
+            clen = 0;
+            go_to_nextline = false;
+        }
+
+        // swap lists
+        thislist = if flag != 0 { list1 } else { list0 };
+        flag ^= 1;
+        nextlist = if flag != 0 { list1 } else { list0 };
+        nvim_nfa_list_set_n(nextlist, 0);
+        nvim_nfa_list_set_has_pim(nextlist, 0);
+
+        let nfa_listid = nvim_regexp_get_rex_nfa_listid() + 1;
+        nvim_regexp_set_rex_nfa_listid(nfa_listid);
+        if nvim_nfa_prog_get_re_engine(prog) == AUTOMATIC_ENGINE && nfa_listid >= NFA_MAX_STATES {
+            nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+            break 'outer;
+        }
+
+        nvim_nfa_list_set_id(thislist, nfa_listid);
+        nvim_nfa_list_set_id(nextlist, nfa_listid + 1);
+
+        // If the state lists are empty we can stop.
+        if nvim_nfa_list_get_n(thislist) == 0 {
+            break 'outer;
+        }
+
+        // compute nextlist
+        let mut listidx: c_int = 0;
+        while listidx < nvim_nfa_list_get_n(thislist) {
+            // Allow interrupting with CTRL-C.
+            nvim_regexp_call_reg_breakcheck();
+            if nvim_regexp_get_got_int() != 0 {
+                break;
+            }
+            if !nvim_regexp_get_nfa_time_limit().is_null() {
+                let tc = nvim_regexp_get_nfa_time_count() + 1;
+                nvim_regexp_set_nfa_time_count(tc);
+                if tc == 20 {
+                    nvim_regexp_set_nfa_time_count(0);
+                    if nvim_regexp_call_nfa_did_time_out() != 0 {
+                        break;
+                    }
+                }
+            }
+
+            // Handle the possible codes of the current state.
+            add_state = core::ptr::null_mut();
+            add_here = false;
+            add_count = 0;
+            add_off = 0;
+            result = 0;
+
+            let state_c = nvim_nfa_thread_get_state_c(thislist, listidx);
+
+            match state_c {
+                x if x == NFA_MATCH => {
+                    // If the match is not at the start of the line, ends before a
+                    // composing character and rex.reg_icombine is not set, that
+                    // is not really a match.
+                    if nvim_regexp_get_rex_reg_icombine() == 0
+                        && nvim_regexp_get_rex_input() != nvim_regexp_get_rex_line()
+                        && utf_iscomposing_legacy(curc) != 0
+                    {
+                        // break from match arm - continue to next state
+                    } else {
+                        nvim_regexp_set_nfa_match(1); // true
+                        nvim_regexp_call_copy_sub(
+                            nvim_regexp_regsubs_get_norm(submatch),
+                            nvim_nfa_thread_get_subs_norm(thislist, listidx),
+                        );
+                        if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                            nvim_regexp_call_copy_sub(
+                                nvim_regexp_regsubs_get_synt(submatch),
+                                nvim_nfa_thread_get_subs_synt(thislist, listidx),
+                            );
+                        }
+                        // Found left-most longest match.
+                        if nvim_nfa_list_get_n(nextlist) == 0 {
+                            clen = 0;
+                        }
+                        // goto nextchar
+                        advance_input(clen, go_to_nextline, &mut go_to_nextline);
+                        listidx = nvim_nfa_list_get_n(thislist); // force end of inner loop
+                        continue;
+                    }
+                }
+
+                x if x == NFA_END_INVISIBLE
+                    || x == NFA_END_INVISIBLE_NEG
+                    || x == NFA_END_PATTERN =>
+                {
+                    // Check if nfa_endp matches current position
+                    let endp = nvim_regexp_get_nfa_endp();
+                    if !endp.is_null() {
+                        if nvim_regexp_is_reg_multi() != 0 {
+                            if nvim_regexp_get_rex_lnum() != nvim_regexp_get_nfa_endp_pos_lnum()
+                                || (nvim_regexp_get_rex_input() as isize
+                                    - nvim_regexp_get_rex_line() as isize)
+                                    as i32
+                                    != nvim_regexp_get_nfa_endp_pos_col()
+                            {
+                                // no match at required position
+                                listidx += 1;
+                                continue;
+                            }
+                        } else if nvim_regexp_get_rex_input() != nvim_regexp_get_nfa_endp_ptr() {
+                            listidx += 1;
+                            continue;
+                        }
+                    }
+                    // do not set submatches for \@!
+                    if state_c != NFA_END_INVISIBLE_NEG {
+                        nvim_regexp_call_copy_sub(
+                            nvim_regexp_regsubs_get_norm(m),
+                            nvim_nfa_thread_get_subs_norm(thislist, listidx),
+                        );
+                        if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                            nvim_regexp_call_copy_sub(
+                                nvim_regexp_regsubs_get_synt(m),
+                                nvim_nfa_thread_get_subs_synt(thislist, listidx),
+                            );
+                        }
+                    }
+                    nvim_regexp_set_nfa_match(1); // true
+                    if nvim_nfa_list_get_n(nextlist) == 0 {
+                        clen = 0;
+                    }
+                    // goto nextchar
+                    advance_input(clen, go_to_nextline, &mut go_to_nextline);
+                    listidx = nvim_nfa_list_get_n(thislist);
+                    continue;
+                }
+
+                x if x == NFA_START_INVISIBLE
+                    || x == NFA_START_INVISIBLE_FIRST
+                    || x == NFA_START_INVISIBLE_NEG
+                    || x == NFA_START_INVISIBLE_NEG_FIRST
+                    || x == NFA_START_INVISIBLE_BEFORE
+                    || x == NFA_START_INVISIBLE_BEFORE_FIRST
+                    || x == NFA_START_INVISIBLE_BEFORE_NEG
+                    || x == NFA_START_INVISIBLE_BEFORE_NEG_FIRST =>
+                {
+                    let t_state = nvim_nfa_thread_get_state_ptr(thislist, listidx);
+                    let pim_result = nvim_nfa_thread_get_pim_result(thislist, listidx);
+
+                    if pim_result != NFA_PIM_UNUSED
+                        || state_c == NFA_START_INVISIBLE_FIRST
+                        || state_c == NFA_START_INVISIBLE_NEG_FIRST
+                        || state_c == NFA_START_INVISIBLE_BEFORE_FIRST
+                        || state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+                    {
+                        let in_use = nvim_regexp_regsubs_get_norm_in_use(m);
+
+                        // Copy submatch info for the recursive call
+                        nvim_regexp_call_copy_sub_off(
+                            nvim_regexp_regsubs_get_norm(m),
+                            nvim_nfa_thread_get_subs_norm(thislist, listidx),
+                        );
+                        if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                            nvim_regexp_call_copy_sub_off(
+                                nvim_regexp_regsubs_get_synt(m),
+                                nvim_nfa_thread_get_subs_synt(thislist, listidx),
+                            );
+                        }
+                        // First try matching the invisible match
+                        result = nvim_regexp_call_recursive_regmatch(
+                            t_state,
+                            core::ptr::null_mut(),
+                            prog,
+                            submatch,
+                            m,
+                            &mut listids,
+                            &mut listids_len,
+                        );
+                        if result == NFA_TOO_EXPENSIVE {
+                            nvim_regexp_set_nfa_match(result);
+                            break 'outer;
+                        }
+
+                        // for \@! and \@<! it is a match when result is false
+                        let is_neg = state_c == NFA_START_INVISIBLE_NEG
+                            || state_c == NFA_START_INVISIBLE_NEG_FIRST
+                            || state_c == NFA_START_INVISIBLE_BEFORE_NEG
+                            || state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST;
+                        if result != is_neg as c_int {
+                            // Copy submatch info from the recursive call
+                            nvim_regexp_call_copy_sub_off(
+                                nvim_nfa_thread_get_subs_norm(thislist, listidx),
+                                nvim_regexp_regsubs_get_norm(m),
+                            );
+                            if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                                nvim_regexp_call_copy_sub_off(
+                                    nvim_nfa_thread_get_subs_synt(thislist, listidx),
+                                    nvim_regexp_regsubs_get_synt(m),
+                                );
+                            }
+                            // If the pattern has \ze and it matched, use it.
+                            nvim_regexp_call_copy_ze_off(
+                                nvim_nfa_thread_get_subs_norm(thislist, listidx),
+                                nvim_regexp_regsubs_get_norm(m),
+                            );
+
+                            // t->state->out1 is the corresponding END_INVISIBLE node
+                            add_here = true;
+                            add_state = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(t_state));
+                        }
+                        nvim_regexp_regsubs_set_norm_in_use(m, in_use);
+                    } else {
+                        // First try matching what follows. Add a nfa_pim_T.
+                        let pim = nvim_regexp_alloc_pim();
+                        let input = nvim_regexp_get_rex_input();
+                        let line = nvim_regexp_get_rex_line();
+                        let is_multi = nvim_regexp_is_reg_multi();
+                        nvim_regexp_pim_init(
+                            pim,
+                            t_state,
+                            NFA_PIM_TODO,
+                            nvim_regexp_get_rex_lnum(),
+                            (input as isize - line as isize) as i32,
+                            input,
+                            is_multi,
+                        );
+
+                        // Add out1->out to thislist with PIM
+                        let out1_out = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(t_state));
+                        let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
+                        if nvim_regexp_call_addstate_here(
+                            thislist,
+                            out1_out,
+                            subs_ptr,
+                            pim,
+                            &mut listidx,
+                        )
+                        .is_null()
+                        {
+                            nvim_regexp_free_pim(pim);
+                            nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+                            break 'outer;
+                        }
+                        nvim_regexp_free_pim(pim);
+                    }
+                }
+
+                x if x == NFA_START_PATTERN => {
+                    let t_state = nvim_nfa_thread_get_state_ptr(thislist, listidx);
+                    let out1 = nvim_nfa_state_get_out1(t_state);
+                    let out1_out = nvim_nfa_state_get_out(out1);
+                    let out1_out_out = nvim_nfa_state_get_out(out1_out);
+                    let subs_norm = nvim_nfa_thread_get_subs_norm(thislist, listidx);
+                    let subs_synt = nvim_nfa_thread_get_subs_synt(thislist, listidx);
+                    let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
+
+                    // Check if output state is already in list
+                    let mut skip = false;
+                    if rs_state_in_list(nextlist, out1_out, subs_norm, subs_synt) != 0 {
+                        skip = true;
+                    } else if rs_state_in_list(nextlist, out1_out_out, subs_norm, subs_synt) != 0 {
+                        skip = true;
+                    } else if rs_state_in_list(thislist, out1_out_out, subs_norm, subs_synt) != 0 {
+                        skip = true;
+                    }
+                    if skip {
+                        // Don't try to match pattern
+                    } else {
+                        // Copy submatch info to the recursive call
+                        nvim_regexp_call_copy_sub_off(nvim_regexp_regsubs_get_norm(m), subs_norm);
+                        if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                            nvim_regexp_call_copy_sub_off(
+                                nvim_regexp_regsubs_get_synt(m),
+                                subs_synt,
+                            );
+                        }
+
+                        result = nvim_regexp_call_recursive_regmatch(
+                            t_state,
+                            core::ptr::null_mut(),
+                            prog,
+                            submatch,
+                            m,
+                            &mut listids,
+                            &mut listids_len,
+                        );
+                        if result == NFA_TOO_EXPENSIVE {
+                            nvim_regexp_set_nfa_match(result);
+                            break 'outer;
+                        }
+                        if result != 0 {
+                            // Copy submatch info from the recursive call
+                            nvim_regexp_call_copy_sub_off(
+                                nvim_nfa_thread_get_subs_norm(thislist, listidx),
+                                nvim_regexp_regsubs_get_norm(m),
+                            );
+                            if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                                nvim_regexp_call_copy_sub_off(
+                                    nvim_nfa_thread_get_subs_synt(thislist, listidx),
+                                    nvim_regexp_regsubs_get_synt(m),
+                                );
+                            }
+                            // Skip over matched text
+                            let bytelen = if nvim_regexp_is_reg_multi() != 0 {
+                                nvim_regexp_regsubs_get_multi_end_col(m, 0)
+                                    - (nvim_regexp_get_rex_input() as isize
+                                        - nvim_regexp_get_rex_line() as isize)
+                                        as i32
+                            } else {
+                                nvim_regexp_regsubs_get_line_end(m, 0) as isize as i32
+                                    - nvim_regexp_get_rex_input() as isize as i32
+                            };
+
+                            if bytelen == 0 {
+                                add_here = true;
+                                add_state = out1_out_out;
+                            } else if bytelen <= clen {
+                                add_state = out1_out_out;
+                                add_off = clen;
+                            } else {
+                                add_state = out1_out;
+                                add_off = bytelen;
+                                add_count = bytelen - clen;
+                            }
+                        }
+                    }
+                }
+
+                x if x == NFA_BOL => {
+                    if nvim_regexp_get_rex_input() == nvim_regexp_get_rex_line() {
+                        add_here = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    }
+                }
+
+                x if x == NFA_EOL => {
+                    if curc == 0 {
+                        add_here = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    }
+                }
+
+                x if x == NFA_BOW => {
+                    result = 1; // true
+                    if curc == 0 {
+                        result = 0;
+                    } else {
+                        let this_class =
+                            nvim_regexp_call_mb_get_class_tab(nvim_regexp_get_rex_input());
+                        if this_class <= 1 {
+                            result = 0;
+                        } else if nvim_regexp_call_reg_prev_class() == this_class {
+                            result = 0;
+                        }
+                    }
+                    if result != 0 {
+                        add_here = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    }
+                }
+
+                x if x == NFA_EOW => {
+                    result = 1; // true
+                    if nvim_regexp_get_rex_input() == nvim_regexp_get_rex_line() {
+                        result = 0;
+                    } else {
+                        let this_class =
+                            nvim_regexp_call_mb_get_class_tab(nvim_regexp_get_rex_input());
+                        let prev_class = nvim_regexp_call_reg_prev_class();
+                        if this_class == prev_class || prev_class == 0 || prev_class == 1 {
+                            result = 0;
+                        }
+                    }
+                    if result != 0 {
+                        add_here = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    }
+                }
+
+                x if x == NFA_BOF => {
+                    if nvim_regexp_get_rex_lnum() == 0
+                        && nvim_regexp_get_rex_input() == nvim_regexp_get_rex_line()
+                        && (nvim_regexp_is_reg_multi() == 0
+                            || nvim_regexp_get_rex_reg_firstlnum() == 1)
+                    {
+                        add_here = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    }
+                }
+
+                x if x == NFA_EOF => {
+                    if nvim_regexp_get_rex_lnum() == nvim_regexp_get_rex_reg_maxline() && curc == 0
+                    {
+                        add_here = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    }
+                }
+
+                x if x == NFA_COMPOSING => {
+                    let t_state = nvim_nfa_thread_get_state_ptr(thislist, listidx);
+                    let mc = curc;
+                    let mut len: c_int = 0;
+                    let mut sta = nvim_nfa_state_get_out(t_state);
+                    let mut cchars: [c_int; MAX_MCO] = [0; MAX_MCO];
+                    let mut ccount: usize = 0;
+
+                    if utf_iscomposing_legacy(nvim_nfa_state_get_c(sta)) != 0 {
+                        len += utf_char2len(mc);
+                    }
+                    if nvim_regexp_get_rex_reg_icombine() != 0 && len == 0 {
+                        if nvim_nfa_state_get_c(sta) != curc {
+                            result = FAIL;
+                        } else {
+                            result = OK;
+                        }
+                        while nvim_nfa_state_get_c(sta) != NFA_END_COMPOSING {
+                            sta = nvim_nfa_state_get_out(sta);
+                        }
+                    } else if len > 0 || mc == nvim_nfa_state_get_c(sta) {
+                        if len == 0 {
+                            len += utf_char2len(mc);
+                            sta = nvim_nfa_state_get_out(sta);
+                        }
+                        // Get composing chars into cchars[]
+                        while len < clen {
+                            let mc2 = utf_ptr2char(
+                                (nvim_regexp_get_rex_input() as *const u8).offset(len as isize)
+                                    as *const c_char,
+                            );
+                            if ccount < MAX_MCO {
+                                cchars[ccount] = mc2;
+                                ccount += 1;
+                            }
+                            len += utf_char2len(mc2);
+                            if ccount == MAX_MCO {
+                                break;
+                            }
+                        }
+                        // Check composing chars match
+                        result = OK;
+                        while nvim_nfa_state_get_c(sta) != NFA_END_COMPOSING {
+                            let mut found = false;
+                            for j in 0..ccount {
+                                if cchars[j] == nvim_nfa_state_get_c(sta) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if !found {
+                                result = FAIL;
+                                break;
+                            }
+                            sta = nvim_nfa_state_get_out(sta);
+                        }
+                    } else {
+                        result = FAIL;
+                    }
+
+                    // ADD_STATE_IF_MATCH(end)
+                    let end = nvim_nfa_state_get_out1(t_state); // NFA_END_COMPOSING
+                    if result != 0 {
+                        add_state = nvim_nfa_state_get_out(end);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NEWL => {
+                    if curc == 0
+                        && nvim_regexp_get_rex_reg_line_lbr() == 0
+                        && nvim_regexp_is_reg_multi() != 0
+                        && nvim_regexp_get_rex_lnum() <= nvim_regexp_get_rex_reg_maxline()
+                    {
+                        go_to_nextline = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = -1;
+                    } else if curc == b'\n' as c_int && nvim_regexp_get_rex_reg_line_lbr() != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = 1;
+                    }
+                }
+
+                x if x == NFA_START_COLL || x == NFA_START_NEG_COLL => {
+                    // Never match EOL
+                    if curc == 0 {
+                        // break - no match
+                    } else {
+                        let t_state = nvim_nfa_thread_get_state_ptr(thislist, listidx);
+                        let mut col_state = nvim_nfa_state_get_out(t_state);
+                        let result_if_matched = if state_c == NFA_START_COLL { 1 } else { 0 };
+                        result = 0;
+
+                        loop {
+                            let col_c = nvim_nfa_state_get_c(col_state);
+                            if col_c == NFA_COMPOSING {
+                                // Composing inside collection - complex case
+                                let mc = curc;
+                                let mut len: c_int = 0;
+                                let mut sta =
+                                    nvim_nfa_state_get_out(nvim_nfa_state_get_out(t_state));
+                                let mut cchars: [c_int; MAX_MCO] = [0; MAX_MCO];
+                                let mut ccount: usize = 0;
+
+                                if utf_iscomposing_legacy(nvim_nfa_state_get_c(sta)) != 0 {
+                                    len += utf_char2len(mc);
+                                }
+                                if nvim_regexp_get_rex_reg_icombine() != 0 && len == 0 {
+                                    if nvim_nfa_state_get_c(sta) != curc {
+                                        result = FAIL;
+                                    } else {
+                                        result = OK;
+                                    }
+                                    while nvim_nfa_state_get_c(sta) != NFA_END_COMPOSING {
+                                        sta = nvim_nfa_state_get_out(sta);
+                                    }
+                                } else if len > 0 || mc == nvim_nfa_state_get_c(sta) {
+                                    if len == 0 {
+                                        len += utf_char2len(mc);
+                                        sta = nvim_nfa_state_get_out(sta);
+                                    }
+                                    while len < clen {
+                                        let mc2 = utf_ptr2char(
+                                            (nvim_regexp_get_rex_input() as *const u8)
+                                                .offset(len as isize)
+                                                as *const c_char,
+                                        );
+                                        if ccount < MAX_MCO {
+                                            cchars[ccount] = mc2;
+                                            ccount += 1;
+                                        }
+                                        len += utf_char2len(mc2);
+                                        if ccount == MAX_MCO {
+                                            break;
+                                        }
+                                    }
+                                    result = OK;
+                                    while nvim_nfa_state_get_c(sta) != NFA_END_COMPOSING {
+                                        let mut found = false;
+                                        for j in 0..ccount {
+                                            if cchars[j] == nvim_nfa_state_get_c(sta) {
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                        if !found {
+                                            result = FAIL;
+                                            break;
+                                        }
+                                        sta = nvim_nfa_state_get_out(sta);
+                                    }
+                                } else {
+                                    result = FAIL;
+                                }
+
+                                let out_out1 =
+                                    nvim_nfa_state_get_out1(nvim_nfa_state_get_out(t_state));
+                                if nvim_nfa_state_get_c(out_out1) == NFA_END_COMPOSING {
+                                    if result != 0 {
+                                        add_state = nvim_nfa_state_get_out(out_out1);
+                                        add_off = clen;
+                                    }
+                                }
+                                break;
+                            }
+                            if col_c == NFA_END_COLL {
+                                result = if result_if_matched != 0 { 0 } else { 1 };
+                                break;
+                            }
+                            if col_c == NFA_RANGE_MIN {
+                                let c1 = nvim_nfa_state_get_val(col_state);
+                                col_state = nvim_nfa_state_get_out(col_state);
+                                let c2 = nvim_nfa_state_get_val(col_state);
+
+                                if curc >= c1 && curc <= c2 {
+                                    result = result_if_matched;
+                                    break;
+                                }
+                                if nvim_regexp_get_rex_reg_ic() != 0 {
+                                    let curc_low = utf_fold(curc);
+                                    let mut done = false;
+                                    let mut ci = c1;
+                                    while ci <= c2 {
+                                        if utf_fold(ci) == curc_low {
+                                            result = result_if_matched;
+                                            done = true;
+                                            break;
+                                        }
+                                        ci += 1;
+                                    }
+                                    if done {
+                                        break;
+                                    }
+                                }
+                            } else if col_c < 0 {
+                                if rs_check_char_class(col_c, curc) != 0 {
+                                    result = result_if_matched;
+                                    break;
+                                }
+                            } else if curc == col_c
+                                || (nvim_regexp_get_rex_reg_ic() != 0
+                                    && utf_fold(curc) == utf_fold(col_c))
+                            {
+                                result = result_if_matched;
+                                break;
+                            }
+                            col_state = nvim_nfa_state_get_out(col_state);
+                        }
+                        if result != 0 {
+                            add_state = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(t_state));
+                            add_off = clen;
+                        }
+                    }
+                }
+
+                x if x == NFA_ANY => {
+                    if curc > 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_ANY_COMPOSING => {
+                    if utf_iscomposing_legacy(curc) != 0 {
+                        add_off = clen;
+                    } else {
+                        add_here = true;
+                        add_off = 0;
+                    }
+                    add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                }
+
+                x if x == NFA_IDENT => {
+                    result = vim_isIDc(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_SIDENT => {
+                    result = if ascii_isdigit_i(curc) == 0 && vim_isIDc(curc) != 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_KWORD => {
+                    result = nvim_regexp_call_vim_iswordp_buf(
+                        nvim_regexp_get_rex_input() as *const c_char
+                    );
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_SKWORD => {
+                    result = if ascii_isdigit_i(curc) == 0
+                        && nvim_regexp_call_vim_iswordp_buf(
+                            nvim_regexp_get_rex_input() as *const c_char
+                        ) != 0
+                    {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_FNAME => {
+                    result = vim_isfilec(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_SFNAME => {
+                    result = if ascii_isdigit_i(curc) == 0 && vim_isfilec(curc) != 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_PRINT => {
+                    result =
+                        vim_isprintc(utf_ptr2char(nvim_regexp_get_rex_input() as *const c_char));
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_SPRINT => {
+                    result = if ascii_isdigit_i(curc) == 0
+                        && vim_isprintc(utf_ptr2char(nvim_regexp_get_rex_input() as *const c_char))
+                            != 0
+                    {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_WHITE => {
+                    result = nvim_regexp_call_ascii_iswhite(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NWHITE => {
+                    result = if curc != 0 && nvim_regexp_call_ascii_iswhite(curc) == 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_DIGIT => {
+                    result = nvim_regexp_call_ri_digit(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NDIGIT => {
+                    result = if curc != 0 && nvim_regexp_call_ri_digit(curc) == 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_HEX => {
+                    result = nvim_regexp_call_ri_hex(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NHEX => {
+                    result = if curc != 0 && nvim_regexp_call_ri_hex(curc) == 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_OCTAL => {
+                    result = nvim_regexp_call_ri_octal(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NOCTAL => {
+                    result = if curc != 0 && nvim_regexp_call_ri_octal(curc) == 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_WORD => {
+                    result = nvim_regexp_call_ri_word(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NWORD => {
+                    result = if curc != 0 && nvim_regexp_call_ri_word(curc) == 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_HEAD => {
+                    result = nvim_regexp_call_ri_head(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NHEAD => {
+                    result = if curc != 0 && nvim_regexp_call_ri_head(curc) == 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_ALPHA => {
+                    result = nvim_regexp_call_ri_alpha(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NALPHA => {
+                    result = if curc != 0 && nvim_regexp_call_ri_alpha(curc) == 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_LOWER => {
+                    result = nvim_regexp_call_ri_lower(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NLOWER => {
+                    result = if curc != 0 && nvim_regexp_call_ri_lower(curc) == 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_UPPER => {
+                    result = nvim_regexp_call_ri_upper(curc);
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NUPPER => {
+                    result = if curc != 0 && nvim_regexp_call_ri_upper(curc) == 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_LOWER_IC => {
+                    result = if nvim_regexp_call_ri_lower(curc) != 0
+                        || (nvim_regexp_get_rex_reg_ic() != 0
+                            && nvim_regexp_call_ri_upper(curc) != 0)
+                    {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NLOWER_IC => {
+                    result = if curc != 0
+                        && !(nvim_regexp_call_ri_lower(curc) != 0
+                            || (nvim_regexp_get_rex_reg_ic() != 0
+                                && nvim_regexp_call_ri_upper(curc) != 0))
+                    {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_UPPER_IC => {
+                    result = if nvim_regexp_call_ri_upper(curc) != 0
+                        || (nvim_regexp_get_rex_reg_ic() != 0
+                            && nvim_regexp_call_ri_lower(curc) != 0)
+                    {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if x == NFA_NUPPER_IC => {
+                    result = if curc != 0
+                        && !(nvim_regexp_call_ri_upper(curc) != 0
+                            || (nvim_regexp_get_rex_reg_ic() != 0
+                                && nvim_regexp_call_ri_lower(curc) != 0))
+                    {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+
+                x if (NFA_BACKREF1..=NFA_BACKREF9).contains(&x)
+                    || (NFA_ZREF1..=NFA_ZREF9).contains(&x) =>
+                {
+                    let mut bytelen: c_int = 0;
+                    let t_subs_norm = nvim_nfa_thread_get_subs_norm(thislist, listidx);
+
+                    if state_c >= NFA_BACKREF1 && state_c <= NFA_BACKREF9 {
+                        let subidx = state_c - NFA_BACKREF1 + 1;
+                        result = nvim_regexp_call_match_backref(t_subs_norm, subidx, &mut bytelen);
+                    } else {
+                        let subidx = state_c - NFA_ZREF1 + 1;
+                        result = nvim_regexp_call_match_zref(subidx, &mut bytelen);
+                    }
+
+                    if result != 0 {
+                        let t_state_out = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        if bytelen == 0 {
+                            add_here = true;
+                            add_state = nvim_nfa_state_get_out(t_state_out);
+                        } else if bytelen <= clen {
+                            add_state = nvim_nfa_state_get_out(t_state_out);
+                            add_off = clen;
+                        } else {
+                            add_state = t_state_out;
+                            add_off = bytelen;
+                            add_count = bytelen - clen;
+                        }
+                    }
+                }
+
+                x if x == NFA_SKIP => {
+                    let t_count = nvim_nfa_thread_get_count(thislist, listidx);
+                    if t_count - clen <= 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    } else {
+                        add_state = nvim_nfa_thread_get_state_ptr(thislist, listidx);
+                        add_off = 0;
+                        add_count = t_count - clen;
+                    }
+                }
+
+                x if x == NFA_LNUM || x == NFA_LNUM_GT || x == NFA_LNUM_LT => {
+                    let val = nvim_nfa_thread_get_state_val(thislist, listidx);
+                    result = if nvim_regexp_is_reg_multi() != 0 {
+                        rs_nfa_re_num_cmp(
+                            val as usize,
+                            state_c - NFA_LNUM,
+                            (nvim_regexp_get_rex_lnum() as usize)
+                                .wrapping_add(nvim_regexp_get_rex_reg_firstlnum() as usize),
+                        )
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_here = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    }
+                }
+
+                x if x == NFA_COL || x == NFA_COL_GT || x == NFA_COL_LT => {
+                    let val = nvim_nfa_thread_get_state_val(thislist, listidx);
+                    let col_offset = (nvim_regexp_get_rex_input() as usize)
+                        .wrapping_sub(nvim_regexp_get_rex_line() as usize);
+                    result = rs_nfa_re_num_cmp(
+                        val as usize,
+                        state_c - NFA_COL,
+                        col_offset.wrapping_add(1),
+                    );
+                    if result != 0 {
+                        add_here = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    }
+                }
+
+                x if x == NFA_VCOL || x == NFA_VCOL_GT || x == NFA_VCOL_LT => {
+                    let val = nvim_nfa_thread_get_state_val(thislist, listidx);
+                    let op = state_c - NFA_VCOL;
+                    let col = (nvim_regexp_get_rex_input() as isize
+                        - nvim_regexp_get_rex_line() as isize) as i32;
+
+                    // Bail out quickly when there can't be a match
+                    if op != 1 && col > val * MB_MAXBYTES as i32 {
+                        // no match possible
+                    } else {
+                        result = 0;
+                        let rex_reg_win = nvim_regexp_get_rex_reg_win_or_curwin();
+                        let wp = if rex_reg_win.is_null() {
+                            nvim_regexp_get_curwin()
+                        } else {
+                            rex_reg_win
+                        };
+                        if op == 1 && col - 1 > val && col > 100 {
+                            let mut ts = nvim_regexp_get_win_b_p_ts(wp);
+                            if ts < 4 {
+                                ts = 4;
+                            }
+                            result = if col > val * ts as i32 { 1 } else { 0 };
+                        }
+                        if result == 0 {
+                            let mut lnum = if nvim_regexp_is_reg_multi() != 0 {
+                                nvim_regexp_get_rex_reg_firstlnum() + nvim_regexp_get_rex_lnum()
+                            } else {
+                                1
+                            };
+                            if nvim_regexp_is_reg_multi() != 0
+                                && (lnum <= 0 || lnum > nvim_regexp_get_win_buf_line_count(wp))
+                            {
+                                lnum = 1;
+                            }
+                            let vcol = nvim_regexp_call_win_linetabsize(
+                                wp,
+                                lnum,
+                                nvim_regexp_get_rex_line() as *const c_char,
+                                col,
+                            );
+                            result = rs_nfa_re_num_cmp(val as usize, op, (vcol + 1) as usize);
+                        }
+                        if result != 0 {
+                            add_here = true;
+                            add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        }
+                    }
+                }
+
+                x if x == NFA_MARK || x == NFA_MARK_GT || x == NFA_MARK_LT => {
+                    let val = nvim_nfa_thread_get_state_val(thislist, listidx);
+                    let col_sz = if nvim_regexp_is_reg_multi() != 0 {
+                        (nvim_regexp_get_rex_input() as isize - nvim_regexp_get_rex_line() as isize)
+                            as usize
+                    } else {
+                        0
+                    };
+
+                    let fm = nvim_regexp_call_mark_get_for_nfa(
+                        nvim_regexp_get_rex_reg_buf() as *mut c_void,
+                        nvim_regexp_get_curwin(),
+                        val,
+                    );
+
+                    // Line may have been freed, get it again.
+                    if nvim_regexp_is_reg_multi() != 0 {
+                        let new_line =
+                            nvim_regexp_call_reg_getline(nvim_regexp_get_rex_lnum()) as *mut u8;
+                        nvim_regexp_set_rex_line(new_line);
+                        nvim_regexp_set_rex_input(new_line.add(col_sz));
+                    }
+
+                    if nvim_regexp_fmark_is_set(fm) != 0 {
+                        let pos_lnum = nvim_regexp_fmark_get_lnum(fm);
+                        let lnum_match =
+                            nvim_regexp_get_rex_lnum() + nvim_regexp_get_rex_reg_firstlnum();
+                        let pos_col = nvim_regexp_fmark_get_col_adj(fm, lnum_match);
+                        let input_col = (nvim_regexp_get_rex_input() as isize
+                            - nvim_regexp_get_rex_line() as isize)
+                            as i32;
+
+                        result = if pos_lnum == lnum_match {
+                            if pos_col == input_col {
+                                if state_c == NFA_MARK {
+                                    1
+                                } else {
+                                    0
+                                }
+                            } else if pos_col < input_col {
+                                if state_c == NFA_MARK_GT {
+                                    1
+                                } else {
+                                    0
+                                }
+                            } else if state_c == NFA_MARK_LT {
+                                1
+                            } else {
+                                0
+                            }
+                        } else if pos_lnum < lnum_match {
+                            if state_c == NFA_MARK_GT {
+                                1
+                            } else {
+                                0
+                            }
+                        } else if state_c == NFA_MARK_LT {
+                            1
+                        } else {
+                            0
+                        };
+                        if result != 0 {
+                            add_here = true;
+                            add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        }
+                    }
+                }
+
+                x if x == NFA_CURSOR => {
+                    result = if nvim_regexp_has_rex_reg_win() != 0
+                        && (nvim_regexp_get_rex_lnum() + nvim_regexp_get_rex_reg_firstlnum()
+                            == nvim_regexp_get_rex_reg_win_cursor_lnum())
+                        && ((nvim_regexp_get_rex_input() as isize
+                            - nvim_regexp_get_rex_line() as isize)
+                            as i32
+                            == nvim_regexp_get_rex_reg_win_cursor_col())
+                    {
+                        1
+                    } else {
+                        0
+                    };
+                    if result != 0 {
+                        add_here = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    }
+                }
+
+                x if x == NFA_VISUAL => {
+                    result = nvim_regexp_call_reg_match_visual();
+                    if result != 0 {
+                        add_here = true;
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    }
+                }
+
+                x if (NFA_MOPEN1..=NFA_MOPEN9).contains(&x)
+                    || (NFA_ZOPEN..=NFA_ZOPEN9).contains(&x)
+                    || x == NFA_NOPEN
+                    || x == NFA_ZSTART =>
+                {
+                    // These states are only added to be able to bail out when
+                    // they are added again, nothing is to be done.
+                }
+
+                _ => {
+                    // default: regular character
+                    let c = state_c;
+                    result = if c == curc { 1 } else { 0 };
+
+                    if result == 0 && nvim_regexp_get_rex_reg_ic() != 0 {
+                        result = if utf_fold(c) == utf_fold(curc) { 1 } else { 0 };
+                    }
+
+                    // If reg_icombine is not set only skip over the character itself.
+                    if result != 0 && nvim_regexp_get_rex_reg_icombine() == 0 {
+                        clen = utf_ptr2len(nvim_regexp_get_rex_input() as *const c_char);
+                    }
+
+                    // ADD_STATE_IF_MATCH(t->state)
+                    if result != 0 {
+                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_off = clen;
+                    }
+                }
+            } // match state_c
+
+            // Post-switch: handle add_state with PIM resolution
+            if !add_state.is_null() {
+                let pim_result = nvim_nfa_thread_get_pim_result(thislist, listidx);
+                let mut use_pim: bool = pim_result != NFA_PIM_UNUSED;
+                let mut pim_ptr: NfaPimHandle = core::ptr::null_mut();
+                let mut pim_copy: NfaPimHandle = core::ptr::null_mut();
+
+                if !use_pim {
+                    pim_ptr = core::ptr::null_mut();
+                } else {
+                    pim_ptr = nvim_nfa_thread_get_pim_ptr(thislist, listidx);
+                }
+
+                // Handle the postponed invisible match if the match might end
+                // without advancing and before the end of the line.
+                if use_pim && (clen == 0 || match_follows(add_state, 0)) {
+                    let pim_res = nvim_nfa_pim_get_result(pim_ptr);
+                    if pim_res == NFA_PIM_TODO {
+                        result = nvim_regexp_call_recursive_regmatch(
+                            nvim_nfa_pim_get_state(pim_ptr),
+                            pim_ptr,
+                            prog,
+                            submatch,
+                            m,
+                            &mut listids,
+                            &mut listids_len,
+                        );
+                        nvim_nfa_pim_set_result(
+                            pim_ptr,
+                            if result != 0 {
+                                NFA_PIM_MATCH
+                            } else {
+                                NFA_PIM_NOMATCH
+                            },
+                        );
+                        let pim_state_c = nvim_nfa_pim_get_state_c(pim_ptr);
+                        let is_neg = pim_state_c == NFA_START_INVISIBLE_NEG
+                            || pim_state_c == NFA_START_INVISIBLE_NEG_FIRST
+                            || pim_state_c == NFA_START_INVISIBLE_BEFORE_NEG
+                            || pim_state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST;
+                        if result != is_neg as c_int {
+                            // Copy submatch info from the recursive call
+                            nvim_regexp_call_copy_sub_off(
+                                nvim_nfa_pim_get_subs_norm(pim_ptr),
+                                nvim_regexp_regsubs_get_norm(m),
+                            );
+                            if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                                nvim_regexp_call_copy_sub_off(
+                                    nvim_nfa_pim_get_subs_synt(pim_ptr),
+                                    nvim_regexp_regsubs_get_synt(m),
+                                );
+                            }
+                        }
+                    } else {
+                        result = if pim_res == NFA_PIM_MATCH { 1 } else { 0 };
+                    }
+
+                    // for \@! and \@<! it is a match when result is false
+                    let pim_state_c = nvim_nfa_pim_get_state_c(pim_ptr);
+                    let is_neg = pim_state_c == NFA_START_INVISIBLE_NEG
+                        || pim_state_c == NFA_START_INVISIBLE_NEG_FIRST
+                        || pim_state_c == NFA_START_INVISIBLE_BEFORE_NEG
+                        || pim_state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST;
+                    if result != is_neg as c_int {
+                        // Copy submatch info
+                        nvim_regexp_call_copy_sub_off(
+                            nvim_nfa_thread_get_subs_norm(thislist, listidx),
+                            nvim_nfa_pim_get_subs_norm(pim_ptr),
+                        );
+                        if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                            nvim_regexp_call_copy_sub_off(
+                                nvim_nfa_thread_get_subs_synt(thislist, listidx),
+                                nvim_nfa_pim_get_subs_synt(pim_ptr),
+                            );
+                        }
+                    } else {
+                        // look-behind match failed, don't add the state
+                        listidx += 1;
+                        continue;
+                    }
+
+                    // Postponed invisible match was handled
+                    use_pim = false;
+                    pim_ptr = core::ptr::null_mut();
+                }
+
+                // If "pim" points into l->t it may become invalid when
+                // adding the state causes the list to be reallocated.
+                if use_pim {
+                    pim_copy = nvim_regexp_alloc_pim();
+                    nvim_regexp_call_copy_pim(pim_copy, pim_ptr);
+                    pim_ptr = pim_copy;
+                }
+
+                if add_here {
+                    let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
+                    r = nvim_regexp_call_addstate_here(
+                        thislist,
+                        add_state,
+                        subs_ptr,
+                        pim_ptr,
+                        &mut listidx,
+                    );
+                } else {
+                    let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
+                    r = nvim_regexp_call_addstate(nextlist, add_state, subs_ptr, pim_ptr, add_off);
+                    if add_count > 0 {
+                        nvim_nfa_list_set_last_thread_count(nextlist, add_count);
+                    }
+                }
+
+                if !pim_copy.is_null() {
+                    nvim_regexp_free_pim(pim_copy);
+                }
+
+                if r.is_null() {
+                    nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+                    break 'outer;
+                }
+            }
+
+            listidx += 1;
+        } // while listidx < thislist->n
+
+        // Look for the start of a match in the current position
+        if nvim_regexp_get_nfa_match() == 0
+            && ((toplevel
+                && nvim_regexp_get_rex_lnum() == 0
+                && clen != 0
+                && (nvim_regexp_get_rex_reg_maxcol() == 0
+                    || (nvim_regexp_get_rex_input() as isize
+                        - nvim_regexp_get_rex_line() as isize)
+                        < nvim_regexp_get_rex_reg_maxcol() as isize))
+                || (!nvim_regexp_get_nfa_endp().is_null()
+                    && (if nvim_regexp_is_reg_multi() != 0 {
+                        nvim_regexp_get_rex_lnum() < nvim_regexp_get_nfa_endp_pos_lnum()
+                            || (nvim_regexp_get_rex_lnum() == nvim_regexp_get_nfa_endp_pos_lnum()
+                                && ((nvim_regexp_get_rex_input() as isize
+                                    - nvim_regexp_get_rex_line() as isize)
+                                    as i32)
+                                    < nvim_regexp_get_nfa_endp_pos_col())
+                    } else {
+                        (nvim_regexp_get_rex_input() as usize)
+                            < (nvim_regexp_get_nfa_endp_ptr() as usize)
+                    })))
+        {
+            if toplevel {
+                let mut add = true;
+
+                if nvim_nfa_prog_get_regstart(prog) != 0 && clen != 0 {
+                    if nvim_nfa_list_get_n(nextlist) == 0 {
+                        let mut col = (nvim_regexp_get_rex_input() as isize
+                            - nvim_regexp_get_rex_line() as isize)
+                            as i32
+                            + clen;
+                        if nvim_regexp_call_skip_to_start(
+                            nvim_nfa_prog_get_regstart(prog),
+                            &mut col,
+                        ) == FAIL
+                        {
+                            break 'outer;
+                        }
+                        // rex.input = rex.line + col - clen
+                        let new_input = nvim_regexp_get_rex_line().offset((col - clen) as isize);
+                        nvim_regexp_set_rex_input(new_input);
+                    } else {
+                        let c = utf_ptr2char(
+                            nvim_regexp_get_rex_input().offset(clen as isize) as *const c_char
+                        );
+                        if c != nvim_nfa_prog_get_regstart(prog)
+                            && (nvim_regexp_get_rex_reg_ic() == 0
+                                || utf_fold(c) != utf_fold(nvim_nfa_prog_get_regstart(prog)))
+                        {
+                            add = false;
+                        }
+                    }
+                }
+
+                if add {
+                    if nvim_regexp_is_reg_multi() != 0 {
+                        let start_col = (nvim_regexp_get_rex_input() as isize
+                            - nvim_regexp_get_rex_line() as isize)
+                            as i32
+                            + clen;
+                        nvim_regexp_regsubs_set_multi_start(
+                            m,
+                            0,
+                            nvim_regexp_get_rex_lnum(),
+                            start_col,
+                        );
+                        nvim_regexp_regsubs_set_norm_orig_start_col(m, start_col);
+                    } else {
+                        nvim_regexp_regsubs_set_line_start(
+                            m,
+                            0,
+                            nvim_regexp_get_rex_input().offset(clen as isize),
+                        );
+                    }
+                    if nvim_regexp_call_addstate(
+                        nextlist,
+                        nvim_nfa_state_get_out(start),
+                        m,
+                        core::ptr::null_mut(),
+                        clen,
+                    )
+                    .is_null()
+                    {
+                        nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+                        break 'outer;
+                    }
+                }
+            } else if nvim_regexp_call_addstate(nextlist, start, m, core::ptr::null_mut(), clen)
+                .is_null()
+            {
+                nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+                break 'outer;
+            }
+        }
+
+        // nextchar: Advance to the next character
+        if clen != 0 {
+            let new_input = nvim_regexp_get_rex_input().offset(clen as isize);
+            nvim_regexp_set_rex_input(new_input);
+        } else if go_to_nextline
+            || (!nvim_regexp_get_nfa_endp().is_null()
+                && nvim_regexp_is_reg_multi() != 0
+                && nvim_regexp_get_rex_lnum() < nvim_regexp_get_nfa_endp_pos_lnum())
+        {
+            nvim_regexp_call_reg_nextline();
+        } else {
+            break 'outer;
+        }
+        go_to_nextline = false;
+
+        // Allow interrupting with CTRL-C.
+        nvim_regexp_call_reg_breakcheck();
+        if nvim_regexp_get_got_int() != 0 {
+            break 'outer;
+        }
+        // Check for timeout once every twenty times
+        if !nvim_regexp_get_nfa_time_limit().is_null() {
+            let tc = nvim_regexp_get_nfa_time_count() + 1;
+            nvim_regexp_set_nfa_time_count(tc);
+            if tc == 20 {
+                nvim_regexp_set_nfa_time_count(0);
+                if nvim_regexp_call_nfa_did_time_out() != 0 {
+                    break 'outer;
+                }
+            }
+        }
+    } // loop (outer)
+
+    // theend: Free memory
+    nvim_nfa_list_free_threads(list0);
+    nvim_nfa_list_free_threads(list1);
+    if !listids.is_null() {
+        nvim_regexp_xfree(listids as *mut c_void);
+    }
+
+    nvim_regexp_get_nfa_match()
+}
+
+/// Helper: advance input for nextchar label.
+/// This is extracted to handle the "goto nextchar" pattern from the C code.
+#[inline]
+unsafe fn advance_input(clen: c_int, go_to_nextline: bool, go_to_nextline_out: &mut bool) {
+    if clen != 0 {
+        let new_input = nvim_regexp_get_rex_input().offset(clen as isize);
+        nvim_regexp_set_rex_input(new_input);
+    } else if go_to_nextline
+        || (!nvim_regexp_get_nfa_endp().is_null()
+            && nvim_regexp_is_reg_multi() != 0
+            && nvim_regexp_get_rex_lnum() < nvim_regexp_get_nfa_endp_pos_lnum())
+    {
+        nvim_regexp_call_reg_nextline();
+    }
+    // Note: if neither condition holds, caller should break out of the outer loop,
+    // but for NFA_MATCH/NFA_END_INVISIBLE we just force end of inner loop.
+    *go_to_nextline_out = false;
+}
+
+/// Helper: check if `c` is an ASCII digit (0-9).
+#[inline]
+const fn ascii_isdigit_i(c: c_int) -> c_int {
+    if c >= b'0' as c_int && c <= b'9' as c_int {
+        1
+    } else {
+        0
+    }
+}
+
+// --- End Phase 8.4 ---
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -10484,6 +10484,158 @@ void nvim_regexp_set_nfa_time_count(int v) { nfa_time_count = v; }
 
 // --- End Phase 8.3 ---
 
+// --- Phase 8.4: C accessors for nfa_regmatch ---
+
+// Thread field accessors for the main loop
+int nvim_nfa_thread_get_state_c(void *l, int idx) { return ((nfa_list_T *)l)->t[idx].state->c; }
+void *nvim_nfa_thread_get_state_ptr(void *l, int idx) { return (void *)((nfa_list_T *)l)->t[idx].state; }
+void *nvim_nfa_thread_get_state_out(void *l, int idx) { return (void *)((nfa_list_T *)l)->t[idx].state->out; }
+void *nvim_nfa_thread_get_state_out1(void *l, int idx) { return (void *)((nfa_list_T *)l)->t[idx].state->out1; }
+int nvim_nfa_thread_get_state_val(void *l, int idx) { return ((nfa_list_T *)l)->t[idx].state->val; }
+int nvim_nfa_thread_get_count(void *l, int idx) { return ((nfa_list_T *)l)->t[idx].count; }
+void nvim_nfa_thread_set_count(void *l, int idx, int v) { ((nfa_list_T *)l)->t[idx].count = v; }
+void *nvim_nfa_thread_get_subs_ptr(void *l, int idx) { return (void *)&((nfa_list_T *)l)->t[idx].subs; }
+
+// Thread PIM field accessors
+int nvim_nfa_thread_get_pim_result(void *l, int idx) { return ((nfa_list_T *)l)->t[idx].pim.result; }
+void *nvim_nfa_thread_get_pim_state(void *l, int idx) { return (void *)((nfa_list_T *)l)->t[idx].pim.state; }
+int nvim_nfa_thread_get_pim_state_c(void *l, int idx) { return ((nfa_list_T *)l)->t[idx].pim.state->c; }
+
+// nfa_list_T management
+void nvim_nfa_list_set_n(void *l, int n) { ((nfa_list_T *)l)->n = n; }
+void nvim_nfa_list_set_has_pim(void *l, int v) { ((nfa_list_T *)l)->has_pim = v; }
+void nvim_nfa_list_set_id(void *l, int id) { ((nfa_list_T *)l)->id = id; }
+
+// regsubs_T operations (bulk operations on submatch/m params)
+void *nvim_regexp_regsubs_get_norm(void *s) { return (void *)&((regsubs_T *)s)->norm; }
+void *nvim_regexp_regsubs_get_synt(void *s) { return (void *)&((regsubs_T *)s)->synt; }
+int nvim_regexp_regsubs_get_norm_in_use(void *s) { return ((regsubs_T *)s)->norm.in_use; }
+void nvim_regexp_regsubs_set_norm_in_use(void *s, int v) { ((regsubs_T *)s)->norm.in_use = v; }
+
+// regsubs_T multi-line startpos operations for inline addstate optimization
+void nvim_regexp_regsubs_set_multi_start(void *s, int idx, int32_t lnum, int32_t col)
+{
+  ((regsubs_T *)s)->norm.list.multi[idx].start_lnum = lnum;
+  ((regsubs_T *)s)->norm.list.multi[idx].start_col = col;
+}
+int32_t nvim_regexp_regsubs_get_multi_start_col(void *s, int idx)
+{
+  return ((regsubs_T *)s)->norm.list.multi[idx].start_col;
+}
+int32_t nvim_regexp_regsubs_get_multi_end_col(void *s, int idx)
+{
+  return ((regsubs_T *)s)->norm.list.multi[idx].end_col;
+}
+void nvim_regexp_regsubs_set_norm_orig_start_col(void *s, int32_t v)
+{
+  ((regsubs_T *)s)->norm.orig_start_col = v;
+}
+void nvim_regexp_regsubs_set_line_start(void *s, int idx, uint8_t *ptr)
+{
+  ((regsubs_T *)s)->norm.list.line[idx].start = ptr;
+}
+uint8_t *nvim_regexp_regsubs_get_line_end(void *s, int idx)
+{
+  return ((regsubs_T *)s)->norm.list.line[idx].end;
+}
+
+// rex execution field accessors for nfa_regmatch
+int nvim_regexp_get_rex_nfa_listid(void) { return rex.nfa_listid; }
+void nvim_regexp_set_rex_nfa_listid(int v) { rex.nfa_listid = v; }
+int32_t nvim_regexp_get_rex_reg_maxcol(void) { return (int32_t)rex.reg_maxcol; }
+int nvim_regexp_get_rex_nfa_nsubexpr(void) { return rex.nfa_nsubexpr; }
+
+// Character/utility functions callable from Rust
+int nvim_regexp_call_ascii_iswhite(int c) { return ascii_iswhite(c); }
+int nvim_regexp_call_ri_digit(int c) { return ri_digit(c); }
+int nvim_regexp_call_ri_hex(int c) { return ri_hex(c); }
+int nvim_regexp_call_ri_octal(int c) { return ri_octal(c); }
+int nvim_regexp_call_ri_word(int c) { return ri_word(c); }
+int nvim_regexp_call_ri_head(int c) { return ri_head(c); }
+int nvim_regexp_call_ri_alpha(int c) { return ri_alpha(c); }
+int nvim_regexp_call_ri_lower(int c) { return ri_lower(c); }
+int nvim_regexp_call_ri_upper(int c) { return ri_upper(c); }
+int nvim_regexp_call_reg_prev_class(void) { return reg_prev_class(); }
+int nvim_regexp_call_reg_match_visual(void) { return reg_match_visual(); }
+void nvim_regexp_call_reg_nextline(void) { reg_nextline(); }
+void nvim_regexp_call_cleanup_subexpr(void) { cleanup_subexpr(); }
+
+// NFA prog field accessors for nfa_regmatch
+int nvim_nfa_prog_get_re_engine(void *prog) { return ((nfa_regprog_T *)prog)->re_engine; }
+
+// PIM operations for nfa_regmatch post-switch logic
+void nvim_nfa_pim_set_result(void *pim, int v) { ((nfa_pim_T *)pim)->result = v; }
+void *nvim_nfa_pim_get_state(void *pim) { return (void *)((nfa_pim_T *)pim)->state; }
+int nvim_nfa_pim_get_state_c(void *pim) { return ((nfa_pim_T *)pim)->state->c; }
+void *nvim_nfa_pim_get_subs_norm(void *pim) { return (void *)&((nfa_pim_T *)pim)->subs.norm; }
+void *nvim_nfa_pim_get_subs_synt(void *pim) { return (void *)&((nfa_pim_T *)pim)->subs.synt; }
+
+// Allocate/init a temporary nfa_pim_T on the C side (for the PIM deferral path)
+void *nvim_regexp_alloc_pim(void)
+{
+  nfa_pim_T *pim = xcalloc(1, sizeof(nfa_pim_T));
+  return (void *)pim;
+}
+void nvim_regexp_free_pim(void *p)
+{
+  xfree(p);
+}
+void nvim_regexp_pim_init(void *p, void *state, int result,
+                          int32_t lnum, int32_t col, uint8_t *ptr,
+                          int is_multi)
+{
+  nfa_pim_T *pim = (nfa_pim_T *)p;
+  pim->state = (nfa_state_T *)state;
+  pim->result = result;
+  pim->subs.norm.in_use = 0;
+  pim->subs.synt.in_use = 0;
+  if (is_multi) {
+    pim->end.pos.lnum = lnum;
+    pim->end.pos.col = col;
+  } else {
+    pim->end.ptr = ptr;
+  }
+}
+
+// win_T and buffer accessors for VCOL/MARK cases
+void *nvim_regexp_get_curwin(void) { return (void *)curwin; }
+int64_t nvim_regexp_get_win_b_p_ts(void *wp)
+{
+  return (int64_t)((win_T *)wp)->w_buffer->b_p_ts;
+}
+int32_t nvim_regexp_get_win_buf_line_count(void *wp)
+{
+  return (int32_t)((win_T *)wp)->w_buffer->b_ml.ml_line_count;
+}
+
+// Mark access for NFA_MARK cases
+void *nvim_regexp_call_mark_get_for_nfa(void *buf, void *win, int mark_val)
+{
+  return (void *)mark_get((buf_T *)buf, (win_T *)win, NULL, kMarkBufLocal, mark_val);
+}
+int nvim_regexp_fmark_is_set(void *fm) { return fm != NULL && ((fmark_T *)fm)->mark.lnum > 0; }
+int32_t nvim_regexp_fmark_get_lnum(void *fm) { return (int32_t)((fmark_T *)fm)->mark.lnum; }
+int32_t nvim_regexp_fmark_get_col(void *fm) { return (int32_t)((fmark_T *)fm)->mark.col; }
+int32_t nvim_regexp_fmark_get_col_adj(void *fm, int32_t lnum_match)
+{
+  fmark_T *f = (fmark_T *)fm;
+  if (f->mark.lnum == lnum_match && f->mark.col == MAXCOL) {
+    return (int32_t)reg_getline_len(f->mark.lnum - rex.reg_firstlnum);
+  }
+  return (int32_t)f->mark.col;
+}
+
+// Nextlist thread count setter (for add_count after addstate)
+void nvim_nfa_list_set_last_thread_count(void *l, int count)
+{
+  nfa_list_T *list = (nfa_list_T *)l;
+  list->t[list->n - 1].count = count;
+}
+
+void nvim_regexp_xfree(void *p) { xfree(p); }
+
+// --- End Phase 8.4 ---
+
 /// Main matching routine.
 ///
 /// Run NFA to determine whether it matches rex.input.
