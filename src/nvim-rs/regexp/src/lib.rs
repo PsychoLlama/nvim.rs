@@ -65,6 +65,10 @@ extern "C" {
 
     // libc
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+
+    // reg_cpo_lit accessors
+    fn nvim_regexp_get_reg_cpo_lit() -> c_int;
+    fn nvim_regexp_set_reg_cpo_lit(v: c_int);
 }
 
 // Characters always special inside [] ranges
@@ -1007,6 +1011,15 @@ pub unsafe extern "C" fn rs_cstrchr(s: *const c_char, c: c_int) -> *mut c_char {
     std::ptr::null_mut()
 }
 
+// --- get_cpo_flags ---
+
+/// Set `reg_cpo_lit` from `p_cpo`. Mirrors C `get_cpo_flags()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_cpo_flags() {
+    let cpo_lit = !vim_strchr(nvim_get_p_cpo(), CPO_LITERAL).is_null();
+    nvim_regexp_set_reg_cpo_lit(cpo_lit as c_int);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1258,5 +1271,45 @@ mod tests {
     fn test_getoctchrs_max3() {
         // At most 3 octal digits consumed
         assert_eq!(getoctchrs_core(b"1234"), (0o123, 3));
+    }
+
+    // --- mb_decompose tests ---
+
+    #[test]
+    fn test_mb_decompose_first_entry() {
+        // 0xfb20 — alt ayin → base 0x5e2, no combining marks
+        let (mut c1, mut c2, mut c3) = (0, 0, 0);
+        mb_decompose(0xfb20, &mut c1, &mut c2, &mut c3);
+        assert_eq!((c1, c2, c3), (0x5e2, 0, 0));
+    }
+
+    #[test]
+    fn test_mb_decompose_last_entry() {
+        // 0xfb4f — alef-lamed → base 0x5d0 + 0x5dc
+        let (mut c1, mut c2, mut c3) = (0, 0, 0);
+        mb_decompose(0xfb4f, &mut c1, &mut c2, &mut c3);
+        assert_eq!((c1, c2, c3), (0x5d0, 0x5dc, 0));
+    }
+
+    #[test]
+    fn test_mb_decompose_unused_entry() {
+        // 0xfb37 is UNUSED — maps to itself
+        let (mut c1, mut c2, mut c3) = (0, 0, 0);
+        mb_decompose(0xfb37, &mut c1, &mut c2, &mut c3);
+        assert_eq!((c1, c2, c3), (0xfb37, 0, 0));
+    }
+
+    #[test]
+    fn test_mb_decompose_out_of_range() {
+        // Characters outside 0xfb20..=0xfb4f pass through
+        let (mut c1, mut c2, mut c3) = (0, 0, 0);
+        mb_decompose(0x41, &mut c1, &mut c2, &mut c3); // 'A'
+        assert_eq!((c1, c2, c3), (0x41, 0, 0));
+
+        mb_decompose(0xfb1f, &mut c1, &mut c2, &mut c3); // just below range
+        assert_eq!((c1, c2, c3), (0xfb1f, 0, 0));
+
+        mb_decompose(0xfb50, &mut c1, &mut c2, &mut c3); // just above range
+        assert_eq!((c1, c2, c3), (0xfb50, 0, 0));
     }
 }
