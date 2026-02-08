@@ -4308,6 +4308,112 @@ pub unsafe extern "C" fn rs_restore_subexpr(bp: *const RegbehindT) {
     }
 }
 
+// --- regtry: attempt match at a given column ---
+
+extern "C" {
+    fn nvim_regexp_call_regmatch(scan: *mut u8, tm: *const c_void, timed_out: *mut c_int) -> c_int;
+    fn nvim_regexp_get_prog_reghasz(prog: *const c_void) -> u8;
+    fn nvim_regexp_get_prog_program(prog: *mut c_void) -> *mut u8;
+    fn nvim_regexp_unref_re_extmatch_out();
+    fn nvim_regexp_set_re_extmatch_out(em: *mut c_void);
+    fn nvim_regexp_get_reg_startzpos_lnum(i: c_int) -> i32;
+    fn nvim_regexp_get_reg_startzpos_col(i: c_int) -> i32;
+    fn nvim_regexp_get_reg_endzpos_lnum(i: c_int) -> i32;
+    fn nvim_regexp_get_reg_endzpos_col(i: c_int) -> i32;
+    fn nvim_regexp_get_reg_startzp(i: c_int) -> *mut u8;
+    fn nvim_regexp_get_reg_endzp(i: c_int) -> *mut u8;
+}
+
+/// Try match of "prog" at rex.line[col].
+///
+/// Returns 0 for failure, or number of lines contained in the match.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regtry(
+    prog: *mut c_void,
+    col: c_int,
+    tm: *mut c_void,
+    timed_out: *mut c_int,
+) -> c_int {
+    nvim_regexp_set_rex_input(nvim_regexp_get_rex_line().add(col as usize));
+    nvim_regexp_set_rex_need_clear_subexpr(1);
+    // Clear the external match subpointers if necessary.
+    let reghasz = nvim_regexp_get_prog_reghasz(prog) as c_int;
+    nvim_regexp_set_rex_need_clear_zsubexpr(c_int::from(reghasz == REX_SET));
+
+    // program[1] = skip past the first byte (REGMAGIC)
+    let program = nvim_regexp_get_prog_program(prog);
+    if nvim_regexp_call_regmatch(program.add(1), tm.cast(), timed_out) == 0 {
+        return 0;
+    }
+
+    rs_cleanup_subexpr();
+
+    if nvim_regexp_is_reg_multi() != 0 {
+        let startpos = nvim_regexp_get_rex_startpos_array();
+        let endpos = nvim_regexp_get_rex_endpos_array();
+        if (*startpos).lnum < 0 {
+            (*startpos).lnum = 0;
+            (*startpos).col = col;
+        }
+        if (*endpos).lnum < 0 {
+            (*endpos).lnum = nvim_regexp_get_rex_lnum();
+            #[allow(clippy::cast_possible_truncation)]
+            let input_col =
+                nvim_regexp_get_rex_input().offset_from(nvim_regexp_get_rex_line()) as c_int;
+            (*endpos).col = input_col;
+        } else {
+            // Use line number of "\ze".
+            nvim_regexp_set_rex_lnum((*endpos).lnum);
+        }
+    } else {
+        let startp = nvim_regexp_get_rex_startp_array();
+        let endp = nvim_regexp_get_rex_endp_array();
+        if (*startp).is_null() {
+            *startp = nvim_regexp_get_rex_line().add(col as usize);
+        }
+        if (*endp).is_null() {
+            *endp = nvim_regexp_get_rex_input();
+        }
+    }
+
+    // Package any found \z(...\) matches for export. Default is none.
+    nvim_regexp_unref_re_extmatch_out();
+    nvim_regexp_set_re_extmatch_out(std::ptr::null_mut());
+
+    if reghasz == REX_SET {
+        rs_cleanup_zsubexpr();
+        let em = rs_make_extmatch();
+        nvim_regexp_set_re_extmatch_out(em.cast());
+
+        for i in 0..NSUBEXP {
+            #[allow(clippy::cast_possible_truncation)]
+            let idx = i as c_int;
+            if nvim_regexp_is_reg_multi() != 0 {
+                // Only accept single line matches.
+                let start_lnum = nvim_regexp_get_reg_startzpos_lnum(idx);
+                let start_col = nvim_regexp_get_reg_startzpos_col(idx);
+                let end_lnum = nvim_regexp_get_reg_endzpos_lnum(idx);
+                let end_col = nvim_regexp_get_reg_endzpos_col(idx);
+                if start_lnum >= 0 && end_lnum == start_lnum && end_col >= start_col {
+                    let line = nvim_regexp_call_reg_getline(start_lnum);
+                    (*em).matches[i] =
+                        xstrnsave(line.add(start_col as usize), (end_col - start_col) as usize)
+                            .cast::<u8>();
+                }
+            } else {
+                let sp = nvim_regexp_get_reg_startzp(idx);
+                let ep = nvim_regexp_get_reg_endzp(idx);
+                if !sp.is_null() && !ep.is_null() {
+                    (*em).matches[i] =
+                        xstrnsave(sp.cast(), ep.offset_from(sp) as usize).cast::<u8>();
+                }
+            }
+        }
+    }
+
+    1 + nvim_regexp_get_rex_lnum()
+}
+
 // --- regrepeat: repeatedly match something simple ---
 
 // WITH_NL: opcode has ADD_NL set (matches newlines too)

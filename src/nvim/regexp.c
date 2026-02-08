@@ -265,6 +265,8 @@ extern void rs_save_subexpr(regbehind_T *bp);
 extern void rs_restore_subexpr(const regbehind_T *bp);
 // Rust FFI: regrepeat (Phase 3)
 extern int rs_regrepeat(uint8_t *p, int64_t maxcount);
+// Rust FFI: regtry (Phase 4)
+extern int rs_regtry(void *prog, int col, void *tm, int *timed_out);
 
 // Since the out pointers in the list are always
 // uninitialized, we use the pointers themselves
@@ -994,6 +996,18 @@ int32_t nvim_regexp_call_reg_getline_len(int32_t lnum) { return (int32_t)reg_get
 int nvim_regexp_get_rex_reg_line_lbr(void) { return rex.reg_line_lbr; }
 int nvim_regexp_call_vim_iswordp_buf(const char *p) { return vim_iswordp_buf(p, rex.reg_buf); }
 void nvim_regexp_iemsg_re_corr(void) { iemsg(_(e_re_corr)); }
+
+// regtry accessors for Rust FFI (Phase 4)
+uint8_t nvim_regexp_get_prog_reghasz(const void *prog) { return ((const bt_regprog_T *)prog)->reghasz; }
+uint8_t *nvim_regexp_get_prog_program(void *prog) { return ((bt_regprog_T *)prog)->program; }
+void nvim_regexp_unref_re_extmatch_out(void) { unref_extmatch(re_extmatch_out); }
+void nvim_regexp_set_re_extmatch_out(void *em) { re_extmatch_out = (reg_extmatch_T *)em; }
+int32_t nvim_regexp_get_reg_startzpos_lnum(int i) { return (int32_t)reg_startzpos[i].lnum; }
+int32_t nvim_regexp_get_reg_startzpos_col(int i) { return (int32_t)reg_startzpos[i].col; }
+int32_t nvim_regexp_get_reg_endzpos_lnum(int i) { return (int32_t)reg_endzpos[i].lnum; }
+int32_t nvim_regexp_get_reg_endzpos_col(int i) { return (int32_t)reg_endzpos[i].col; }
+uint8_t *nvim_regexp_get_reg_startzp(int i) { return reg_startzp[i]; }
+uint8_t *nvim_regexp_get_reg_endzp(int i) { return reg_endzp[i]; }
 
 // reg_breakcheck / reg_iswordc accessors for Rust FFI
 int nvim_regexp_get_rex_reg_nobreak(void) { return rex.reg_nobreak; }
@@ -4954,6 +4968,11 @@ static bool regmatch(uint8_t *scan, const proftime_T *tm, int *timed_out)
   // NOTREACHED
 }
 
+// Wrapper for Rust to call static regmatch() (Phase 4)
+int nvim_regexp_call_regmatch(uint8_t *scan, const void *tm, int *timed_out) {
+  return regmatch(scan, (const proftime_T *)tm, timed_out) ? 1 : 0;
+}
+
 /// Try match of "prog" with at rex.line["col"].
 ///
 /// @param tm         timeout limit or NULL
@@ -4962,64 +4981,7 @@ static bool regmatch(uint8_t *scan, const proftime_T *tm, int *timed_out)
 /// @return  0 for failure, or number of lines contained in the match.
 static int regtry(bt_regprog_T *prog, colnr_T col, proftime_T *tm, int *timed_out)
 {
-  rex.input = rex.line + col;
-  rex.need_clear_subexpr = true;
-  // Clear the external match subpointers if necessaey.
-  rex.need_clear_zsubexpr = (prog->reghasz == REX_SET);
-
-  if (regmatch(&prog->program[1], tm, timed_out) == 0) {
-    return 0;
-  }
-
-  cleanup_subexpr();
-  if (REG_MULTI) {
-    if (rex.reg_startpos[0].lnum < 0) {
-      rex.reg_startpos[0].lnum = 0;
-      rex.reg_startpos[0].col = col;
-    }
-    if (rex.reg_endpos[0].lnum < 0) {
-      rex.reg_endpos[0].lnum = rex.lnum;
-      rex.reg_endpos[0].col = (int)(rex.input - rex.line);
-    } else {
-      // Use line number of "\ze".
-      rex.lnum = rex.reg_endpos[0].lnum;
-    }
-  } else {
-    if (rex.reg_startp[0] == NULL) {
-      rex.reg_startp[0] = rex.line + col;
-    }
-    if (rex.reg_endp[0] == NULL) {
-      rex.reg_endp[0] = rex.input;
-    }
-  }
-  // Package any found \z(...\) matches for export. Default is none.
-  unref_extmatch(re_extmatch_out);
-  re_extmatch_out = NULL;
-
-  if (prog->reghasz == REX_SET) {
-    int i;
-
-    cleanup_zsubexpr();
-    re_extmatch_out = make_extmatch();
-    for (i = 0; i < NSUBEXP; i++) {
-      if (REG_MULTI) {
-        // Only accept single line matches.
-        if (reg_startzpos[i].lnum >= 0
-            && reg_endzpos[i].lnum == reg_startzpos[i].lnum
-            && reg_endzpos[i].col >= reg_startzpos[i].col) {
-          re_extmatch_out->matches[i] =
-            (uint8_t *)xstrnsave(reg_getline(reg_startzpos[i].lnum) + reg_startzpos[i].col,
-                                 (size_t)(reg_endzpos[i].col - reg_startzpos[i].col));
-        }
-      } else {
-        if (reg_startzp[i] != NULL && reg_endzp[i] != NULL) {
-          re_extmatch_out->matches[i] =
-            (uint8_t *)xstrnsave((char *)reg_startzp[i], (size_t)(reg_endzp[i] - reg_startzp[i]));
-        }
-      }
-    }
-  }
-  return 1 + rex.lnum;
+  return rs_regtry((void *)prog, col, (void *)tm, timed_out);
 }
 
 /// Match a regexp against a string ("line" points to the string) or multiple
