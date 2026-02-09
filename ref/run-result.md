@@ -1,32 +1,21 @@
-Plan: ~/.claude/plans/elegant-wiggling-wombat.md
+Plan: ~/.claude/plans/glowing-soaring-cookie.md
 
-All 8 phases of the `ex_session.c` migration are complete. Here's the final summary:
+All plan steps are complete. Here's a summary:
 
-**Migration Complete: `src/nvim/ex_session.c` → Rust**
+## Migration Complete: `arglist.c` → Rust
 
-All 21 C functions from `ex_session.c` have been ported to Rust across 8 phases:
+**Commits:** 10 phased commits (`a5798b6d98` through `182d3bc019`)
 
-| Phase | Functions | Commit |
-|-------|-----------|--------|
-| 1 | `put_eol`, `put_line` + infrastructure | previous session |
-| 2 | `ses_do_win`, `ses_do_frame`, `ses_skipframe` | previous session |
-| 3 | `ses_get_fname`, `ses_escape_fname`, `ses_put_fname`, `ses_fname` | previous session |
-| 4 | `put_view_curpos`, `ses_winsizes`, `ses_arglist`, `ses_win_rec` | previous session |
-| 5 | `store_session_globals`, `get_view_file` | previous session |
-| 6 | `put_view` | previous session |
-| 7 | `makeopens` | `c524cfff8b` |
-| 8 | `ex_mkrc`, `ex_loadview` | `01fad0abab` |
+### What was done:
+- **41 functions** migrated from `arglist.c` to the `nvim-arglist` Rust crate across 10 phases
+- C file now contains only thin `rs_*` wrappers + C accessor functions
+- ~100+ C accessor functions (`nvim_al_*`) for struct fields and globals
+- `_Static_assert` guards for all hardcoded constants
+- Workspace + justfile registration fixed
 
-**Verification:**
-- `just build` — links successfully
-- `just smoke-test` — nvim starts, regexp smoke passes
+### Verification:
+- `just build` — passes
+- `just smoke-test` — passes (headless start + 29/29 regexp tests)
 - `just rust-fmt-check` — clean
 - `just rust-clippy` — clean
-- `just rust-test` — 3717 tests pass
-- Manual: `:mksession`, `:mkview`, `:mkexrc`, `:mkvimrc`, `:loadview` all produce valid output
-
-**Totals:**
-- ~80+ C accessor functions (`nvim_ses_*`)
-- 21 Rust `#[no_mangle]` exports (`rs_*`) for ex_session.c functions
-- ~28 `_Static_assert` guards
-- No C function bodies remain beyond accessors and thin wrappers
+- `just rust-test` — 3739 tests pass
