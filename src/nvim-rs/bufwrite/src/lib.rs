@@ -10,6 +10,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_const_for_fn)]
 
+pub mod backup;
 pub mod convert;
 pub mod encoding;
 pub mod error;
