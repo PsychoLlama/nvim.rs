@@ -66,6 +66,13 @@ typedef struct {
 #define SET_INIT { MAPHASH_INIT, NULL }
 #define MAP_INIT { SET_INIT, NULL }
 
+// Cross-language struct size assertions (must match Rust #[repr(C)] layouts)
+STATIC_ASSERT_PRAGMA_START
+STATIC_ASSERT_STATEMENT(sizeof(MapHash) == 6 * sizeof(uint32_t) + sizeof(void *),
+                        "MapHash layout mismatch");
+STATIC_ASSERT_STATEMENT(sizeof(ColorKey) == 8, "ColorKey layout mismatch");
+STATIC_ASSERT_PRAGMA_END
+
 #define MH_TOMBSTONE UINT32_MAX
 
 #define mh_is_empty(h, i) ((h)->hash[i] == 0)

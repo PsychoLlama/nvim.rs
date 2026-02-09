@@ -22,4 +22,5 @@
 
 pub mod garray;
 pub mod hashtab;
+pub mod map;
 pub mod queue;

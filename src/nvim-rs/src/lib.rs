@@ -29,6 +29,7 @@ pub use nvim_cmdhist::*;
 pub use nvim_cmdline::*;
 pub use nvim_collections::garray::*;
 pub use nvim_collections::hashtab::*;
+pub use nvim_collections::map::*;
 pub use nvim_collections::queue::*;
 pub use nvim_compositor::*;
 pub use nvim_context::*;

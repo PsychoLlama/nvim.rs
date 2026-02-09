@@ -12,6 +12,7 @@ nvim-memory = { path = "../memory" }
 nvim-memutil = { path = "../memutil" }
 nvim-path = { path = "../path" }
 nvim-strings = { path = "../strings" }
+paste = "1"
 
 [lints]
 workspace = true
