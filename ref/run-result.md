@@ -1,13 +1,32 @@
-Plan: ~/.claude/plans/lucky-giggling-meerkat.md
+Plan: ~/.claude/plans/elegant-wiggling-wombat.md
 
-Migration of `src/nvim/ex_cmds2.c` is complete. All 8 phases executed successfully:
+All 8 phases of the `ex_session.c` migration are complete. Here's the final summary:
 
-- **53 `#[no_mangle]` exports** across 9 Rust modules (script_host, autowrite_impl, bufcheck, check_changed_any, compiler, dialog, drop, listdo_impl, + lib.rs constants)
-- **26 C functions** replaced with thin `rs_*()` wrappers
-- **~100+ C accessor functions** (`nvim_ex2_*`) for FFI access to struct fields and globals
-- **`_Static_assert` guards** for every hardcoded constant
-- **3626 unit tests** passing, all clippy/fmt/build/smoke checks green
+**Migration Complete: `src/nvim/ex_session.c` → Rust**
 
-Commits:
-1. `1204c2e` — refactor(ex_cmds2): migrate phases 1-5 to Rust
-2. `48b1d31` — refactor(ex_cmds2): migrate phases 6-8 to Rust
+All 21 C functions from `ex_session.c` have been ported to Rust across 8 phases:
+
+| Phase | Functions | Commit |
+|-------|-----------|--------|
+| 1 | `put_eol`, `put_line` + infrastructure | previous session |
+| 2 | `ses_do_win`, `ses_do_frame`, `ses_skipframe` | previous session |
+| 3 | `ses_get_fname`, `ses_escape_fname`, `ses_put_fname`, `ses_fname` | previous session |
+| 4 | `put_view_curpos`, `ses_winsizes`, `ses_arglist`, `ses_win_rec` | previous session |
+| 5 | `store_session_globals`, `get_view_file` | previous session |
+| 6 | `put_view` | previous session |
+| 7 | `makeopens` | `c524cfff8b` |
+| 8 | `ex_mkrc`, `ex_loadview` | `01fad0abab` |
+
+**Verification:**
+- `just build` — links successfully
+- `just smoke-test` — nvim starts, regexp smoke passes
+- `just rust-fmt-check` — clean
+- `just rust-clippy` — clean
+- `just rust-test` — 3717 tests pass
+- Manual: `:mksession`, `:mkview`, `:mkexrc`, `:mkvimrc`, `:loadview` all produce valid output
+
+**Totals:**
+- ~80+ C accessor functions (`nvim_ses_*`)
+- 21 Rust `#[no_mangle]` exports (`rs_*`) for ex_session.c functions
+- ~28 `_Static_assert` guards
+- No C function bodies remain beyond accessors and thin wrappers
