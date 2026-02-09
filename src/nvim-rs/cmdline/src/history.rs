@@ -70,17 +70,21 @@ extern "C" {
     fn nvim_strcpy_cmdbuff(src: *const c_char);
 }
 
-/// C structure for history entry
+/// C structure for history entry (must match histentry_T in cmdhist.h)
 #[repr(C)]
 pub struct HistoryEntry {
-    /// The history string
-    pub hisstr: *mut c_char,
-    /// Length of the history string
-    pub hisstrlen: usize,
-    /// History number
+    /// Entry identifier number
     pub hisnum: c_int,
-    /// Additional history separator for search
-    pub additional_elements: c_int,
+    // 4 bytes padding (alignment to 8-byte boundary for hisstr pointer)
+    _pad: [u8; 4],
+    /// Actual entry, separator char after the NUL
+    pub hisstr: *mut c_char,
+    /// Length of hisstr (excluding the NUL)
+    pub hisstrlen: usize,
+    /// Time when entry was added
+    pub timestamp: u64,
+    /// Additional entries from ShaDa file
+    pub additional_data: *mut std::ffi::c_void,
 }
 
 // =============================================================================

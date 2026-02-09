@@ -35,6 +35,9 @@
 extern HistoryType rs_hist_char2type(int c);
 extern int rs_get_hislen(void);
 
+_Static_assert(sizeof(histentry_T) == 40,
+               "sizeof(histentry_T) changed - update Rust HistoryEntry in cmdline/src/history.rs");
+
 static histentry_T *(history[HIST_COUNT]) = { NULL, NULL, NULL, NULL, NULL };
 static int hisidx[HIST_COUNT] = { -1, -1, -1, -1, -1 };  ///< lastused entry
 /// identifying (unique) number of newest history entry
