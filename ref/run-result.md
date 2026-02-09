@@ -1,28 +1,22 @@
-Plan: ~/.claude/plans/adaptive-juggling-pie.md
+Plan: ~/.claude/plans/polymorphic-humming-metcalfe.md
 
-All plan steps are complete. Here's a summary:
+All steps are complete. Here's a summary:
 
-## Clipboard Migration Complete
+## Migration Complete: `memfile.c` → Rust
 
-**Commit:** `23e001dc9b` — `refactor(clipboard): migrate clipboard.c logic to Rust`
+**What was done:**
+- Migrated all 25 functions (17 public + 8 static) from `src/nvim/memfile.c` to the `nvim-memfile` Rust crate
+- C file now contains only thin wrappers + accessor functions (~660 lines of wrappers vs 787 lines of logic before)
+- Rust crate grew from 370 lines of utility types to 1194 lines with full function implementations
 
-### What was done:
-- **7 functions** migrated from C to Rust: `adjust_clipboard_name`, `get_clipboard`, `set_clipboard`, `start_batch_changes`, `end_batch_changes`, `save_batch_count`, `restore_batch_count`
-- **4 static variables** moved to Rust `ClipboardModuleState`: `batch_change_count`, `clipboard_delay_update`, `clipboard_needs_update`, `clipboard_didwarn`
-- **C accessor functions** added for typval/eval operations (`nvim_clipboard_provider_get`, `nvim_clipboard_provider_set`, etc.) keeping complex VimL list manipulation in C
-- **`_Static_assert`** checks for all 9 constants used across FFI
-- **`nvim-clipboard`** added to `justfile` test list (was missing)
+**Key decisions:**
+- `mf_close_file` and `mf_release_all` use a split approach: C keeps `buf_T`/memline iteration, Rust handles per-memfile logic (avoids circular FFI)
+- Map iteration uses index-based `nvim_mf_hash_size`/`nvim_mf_hash_value_at` instead of `map_foreach_value` macro
+- Error messages are `c"..."` CStr literals in Rust; C wrappers apply `_()` for localization
 
-### Verification:
-- `just build` — passes
-- `just smoke-test` — passes (headless start + 29/29 regexp tests)
+**Verification (all pass):**
+- `just build` — links successfully
+- `just smoke-test` — nvim starts, regexp smoke tests pass
 - `just rust-fmt-check` — clean
 - `just rust-clippy` — clean
-- `just rust-test` — 3570 tests pass (32 new clipboard tests included)
-
-### Files modified:
-| File | Change |
-|------|--------|
-| `src/nvim-rs/clipboard/src/lib.rs` | +286 lines: module state, 7 FFI exports, core logic, 2 new tests |
-| `src/nvim/clipboard.c` | Rewritten: thin wrappers + C accessor functions |
-| `justfile` | Added `nvim-clipboard` to test list |
+- `just rust-test` — 3577 tests pass (including memfile tests)
