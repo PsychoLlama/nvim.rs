@@ -333,6 +333,71 @@ void nvim_al_emsg_invarg(void) { emsg(_(e_invarg)); }
 void nvim_al_emsg_invrange(void) { emsg(_(e_invrange)); }
 void nvim_al_emsg_E610(void) { emsg(_("E610: No argument to delete")); }
 
+// -- Phase 8 extra accessors --
+win_T *nvim_al_get_firstwin(void) { return firstwin; }
+win_T *nvim_al_get_lastwin(void) { return lastwin; }
+tabpage_T *nvim_al_get_first_tabpage(void) { return first_tabpage; }
+void nvim_al_goto_tabpage_tp(tabpage_T *tp, int trigger_enter, int trigger_leave)
+{
+  goto_tabpage_tp(tp, trigger_enter, trigger_leave);
+}
+int nvim_al_valid_tabpage(tabpage_T *tp) { return valid_tabpage(tp); }
+int nvim_al_win_valid(win_T *wp) { return win_valid(wp); }
+void nvim_al_win_close(win_T *wp, int free_buf, int force) { win_close(wp, free_buf, force); }
+void nvim_al_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync); }
+void nvim_al_win_move_after(win_T *wp, win_T *after) { win_move_after(wp, after); }
+win_T *nvim_al_lastwin_nofloating(void) { return lastwin_nofloating(); }
+int nvim_al_win_is_floating(win_T *wp) { return wp->w_floating; }
+win_T *nvim_al_win_get_prev(win_T *wp) { return wp->w_prev; }
+win_T *nvim_al_win_get_next(win_T *wp) { return wp->w_next; }
+int nvim_al_win_get_width(win_T *wp) { return wp->w_width; }
+void *nvim_al_win_get_frame_parent(win_T *wp) { return wp->w_frame->fr_parent; }
+int nvim_al_get_Columns(void) { return Columns; }
+int nvim_al_buf_get_nwindows(buf_T *buf) { return buf->b_nwindows; }
+int nvim_al_bufIsChanged(buf_T *buf) { return bufIsChanged(buf); }
+int nvim_al_buf_is_empty(buf_T *buf) { return buf_is_empty(buf); }
+int nvim_al_autowrite(buf_T *buf, int eap_forceit) { return autowrite(buf, eap_forceit); }
+void *nvim_al_bufref_create(buf_T *buf)
+{
+  bufref_T *br = xcalloc(1, sizeof(bufref_T));
+  set_bufref(br, buf);
+  return br;
+}
+int nvim_al_bufref_valid(void *br) { return bufref_valid((bufref_T *)br); }
+void nvim_al_bufref_destroy(void *br) { xfree(br); }
+void nvim_al_set_bufref(void *br, buf_T *buf) { set_bufref((bufref_T *)br, buf); }
+int nvim_al_ONE_WINDOW(void) { return ONE_WINDOW; }
+int nvim_al_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp); }
+void nvim_al_reset_VIsual_and_resel(void) { reset_VIsual_and_resel(); }
+void *nvim_al_xcalloc(size_t count, size_t size) { return xcalloc(count, size); }
+int nvim_al_tabpage_index(tabpage_T *tp) { return tabpage_index(tp); }
+int nvim_al_get_p_tpm(void) { return p_tpm; }
+int nvim_al_get_p_ea(void) { return p_ea; }
+void nvim_al_set_p_ea(int val) { p_ea = val; }
+void nvim_al_set_cmdmod_cmod_tab(int val) { cmdmod.cmod_tab = val; }
+int nvim_al_get_cmdwin_type(void) { return cmdwin_type; }
+int nvim_al_get_autocmd_no_enter(void) { return autocmd_no_enter; }
+void nvim_al_set_autocmd_no_enter(int val) { autocmd_no_enter = val; }
+int nvim_al_get_autocmd_no_leave(void) { return autocmd_no_leave; }
+void nvim_al_set_autocmd_no_leave(int val) { autocmd_no_leave = val; }
+int nvim_al_get_tabpage_move_disallowed(void) { return tabpage_move_disallowed; }
+void nvim_al_set_tabpage_move_disallowed(int val) { tabpage_move_disallowed = val; }
+tabpage_T *nvim_al_tp_get_next(tabpage_T *tp) { return tp->tp_next; }
+int nvim_al_buf_get_changed(buf_T *buf) { return buf->b_changed; }
+void nvim_al_set_lastused_tabpage(tabpage_T *tp) { lastused_tabpage = tp; }
+void nvim_al_emsg_e_cmdwin(void) { emsg(_(e_cmdwin)); }
+void nvim_al_emsg_e_window_layout(void) { emsg(_(e_window_layout_changed_unexpectedly)); }
+
+// Callback-based iteration over FOR_ALL_WINDOWS_IN_TAB
+void nvim_al_foreach_windows_in_tab(int (*callback)(win_T *wp, void *ud), tabpage_T *tp, void *ud)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, tp) {
+    if (callback(wp, ud)) {
+      return;
+    }
+  }
+}
+
 // Rust FFI declarations for Phase 2
 extern int rs_check_arglist_locked(void);
 extern void rs_alist_clear(alist_T *al);
@@ -371,6 +436,9 @@ extern void rs_ex_args(exarg_T *eap);
 extern void rs_ex_argedit(exarg_T *eap);
 extern void rs_ex_argadd(exarg_T *eap);
 extern void rs_ex_argdelete(exarg_T *eap);
+
+// Rust FFI declarations for Phase 8
+extern void rs_ex_all(exarg_T *eap);
 
 static int check_arglist_locked(void)
 {
@@ -477,318 +545,9 @@ char *get_arglist_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 /// Get the file name for an argument list entry.
 char *alist_name(aentry_T *aep) { return rs_alist_name(aep); }
 
-/// Close all the windows containing files which are not in the argument list.
-/// Used by the ":all" command.
-static void arg_all_close_unused_windows(arg_all_state_T *aall)
-{
-  win_T *old_curwin = curwin;
-  tabpage_T *old_curtab = curtab;
-
-  if (aall->had_tab > 0) {
-    goto_tabpage_tp(first_tabpage, true, true);
-  }
-
-  // moving tabpages around in an autocommand may cause an endless loop
-  tabpage_move_disallowed++;
-  while (true) {
-    win_T *wpnext = NULL;
-    tabpage_T *tpnext = curtab->tp_next;
-    // Try to close floating windows first
-    for (win_T *wp = lastwin->w_floating ? lastwin : firstwin; wp != NULL; wp = wpnext) {
-      int i;
-      wpnext = wp->w_floating
-               ? wp->w_prev->w_floating ? wp->w_prev : firstwin
-               : (wp->w_next == NULL || wp->w_next->w_floating) ? NULL : wp->w_next;
-      buf_T *buf = wp->w_buffer;
-      if (buf->b_ffname == NULL
-          || (!aall->keep_tabs
-              && (buf->b_nwindows > 1 || wp->w_width != Columns
-                  || (wp->w_floating && !is_aucmd_win(wp))))) {
-        i = aall->opened_len;
-      } else {
-        // check if the buffer in this window is in the arglist
-        for (i = 0; i < aall->opened_len; i++) {
-          if (i < aall->alist->al_ga.ga_len
-              && (AARGLIST(aall->alist)[i].ae_fnum == buf->b_fnum
-                  || path_full_compare(alist_name(&AARGLIST(aall->alist)[i]),
-                                       buf->b_ffname,
-                                       true, true) & kEqualFiles)) {
-            int weight = 1;
-
-            if (old_curtab == curtab) {
-              weight++;
-              if (old_curwin == wp) {
-                weight++;
-              }
-            }
-
-            if (weight > (int)aall->opened[i]) {
-              aall->opened[i] = (uint8_t)weight;
-              if (i == 0) {
-                if (aall->new_curwin != NULL) {
-                  aall->new_curwin->w_arg_idx = aall->opened_len;
-                }
-                aall->new_curwin = wp;
-                aall->new_curtab = curtab;
-              }
-            } else if (aall->keep_tabs) {
-              i = aall->opened_len;
-            }
-
-            if (wp->w_alist != aall->alist) {
-              // Use the current argument list for all windows
-              // containing a file from it.
-              alist_unlink(wp->w_alist);
-              wp->w_alist = aall->alist;
-              wp->w_alist->al_refcount++;
-            }
-            break;
-          }
-        }
-      }
-      wp->w_arg_idx = i;
-
-      if (i == aall->opened_len && !aall->keep_tabs) {  // close this window
-        if (buf_hide(buf) || aall->forceit || buf->b_nwindows > 1
-            || !bufIsChanged(buf)) {
-          // If the buffer was changed, and we would like to hide it, try autowriting.
-          if (!buf_hide(buf) && buf->b_nwindows <= 1 && bufIsChanged(buf)) {
-            bufref_T bufref;
-            set_bufref(&bufref, buf);
-            autowrite(buf, false);
-            // Check if autocommands removed the window.
-            if (!win_valid(wp) || !bufref_valid(&bufref)) {
-              wpnext = lastwin->w_floating ? lastwin : firstwin;  // Start all over...
-              continue;
-            }
-          }
-          // don't close last window
-          if (ONE_WINDOW
-              && (first_tabpage->tp_next == NULL || !aall->had_tab)) {
-            aall->use_firstwin = true;
-          } else {
-            win_close(wp, !buf_hide(buf) && !bufIsChanged(buf), false);
-            // check if autocommands removed the next window
-            if (!win_valid(wpnext)) {
-              // start all over...
-              wpnext = lastwin->w_floating ? lastwin : firstwin;
-            }
-          }
-        }
-      }
-    }
-
-    // Without the ":tab" modifier only do the current tab page.
-    if (aall->had_tab == 0 || tpnext == NULL) {
-      break;
-    }
-
-    // check if autocommands removed the next tab page
-    if (!valid_tabpage(tpnext)) {
-      tpnext = first_tabpage;           // start all over...
-    }
-    goto_tabpage_tp(tpnext, true, true);
-  }
-  tabpage_move_disallowed--;
-}
-
-/// Open up to "count" windows for the files in the argument list "aall->alist".
-static void arg_all_open_windows(arg_all_state_T *aall, int count)
-{
-  bool tab_drop_empty_window = false;
-
-  // ":tab drop file" should re-use an empty window to avoid "--remote-tab"
-  // leaving an empty tab page when executed locally.
-  if (aall->keep_tabs && buf_is_empty(curbuf) && curbuf->b_nwindows == 1
-      && curbuf->b_ffname == NULL && !curbuf->b_changed) {
-    aall->use_firstwin = true;
-    tab_drop_empty_window = true;
-  }
-
-  int split_ret = OK;
-
-  for (int i = 0; i < count && !got_int; i++) {
-    if (aall->alist == &global_alist && i == global_alist.al_ga.ga_len - 1) {
-      arg_had_last = true;
-    }
-    if (aall->opened[i] > 0) {
-      // Move the already present window to below the current window
-      if (curwin->w_arg_idx != i) {
-        FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-          if (wp->w_arg_idx == i) {
-            if (aall->keep_tabs) {
-              aall->new_curwin = wp;
-              aall->new_curtab = curtab;
-            } else if (wp->w_floating) {
-              break;
-            } else if (wp->w_frame->fr_parent != curwin->w_frame->fr_parent) {
-              emsg(_(e_window_layout_changed_unexpectedly));
-              i = count;
-              break;
-            } else {
-              win_move_after(wp, curwin);
-            }
-            break;
-          }
-        }
-      }
-    } else if (split_ret == OK) {
-      // trigger events for tab drop
-      if (tab_drop_empty_window && i == count - 1) {
-        autocmd_no_enter--;
-      }
-      if (!aall->use_firstwin) {        // split current window
-        bool p_ea_save = p_ea;
-        p_ea = true;                    // use space from all windows
-        split_ret = win_split(0, WSP_ROOM | WSP_BELOW);
-        p_ea = p_ea_save;
-        if (split_ret == FAIL) {
-          continue;
-        }
-      } else {      // first window: do autocmd for leaving this buffer
-        autocmd_no_leave--;
-      }
-
-      // edit file "i"
-      curwin->w_arg_idx = i;
-      if (i == 0) {
-        aall->new_curwin = curwin;
-        aall->new_curtab = curtab;
-      }
-      do_ecmd(0, alist_name(&AARGLIST(aall->alist)[i]), NULL, NULL, ECMD_ONE,
-              ((buf_hide(curwin->w_buffer)
-                || bufIsChanged(curwin->w_buffer)) ? ECMD_HIDE : 0) + ECMD_OLDBUF,
-              curwin);
-      if (tab_drop_empty_window && i == count - 1) {
-        autocmd_no_enter++;
-      }
-      if (aall->use_firstwin) {
-        autocmd_no_leave++;
-      }
-      aall->use_firstwin = false;
-    }
-    os_breakcheck();
-
-    // When ":tab" was used open a new tab for a new window repeatedly.
-    if (aall->had_tab > 0 && tabpage_index(NULL) <= p_tpm) {
-      cmdmod.cmod_tab = 9999;
-    }
-  }
-}
-
-/// do_arg_all(): Open up to 'count' windows, one for each argument.
-///
-/// @param forceit    hide buffers in current windows
-/// @param keep_tabs  keep current tabs, for ":tab drop file"
-static void do_arg_all(int count, int forceit, int keep_tabs)
-{
-  win_T *last_curwin;
-  tabpage_T *last_curtab;
-  bool prev_arglist_locked = arglist_locked;
-
-  assert(firstwin != NULL);  // satisfy coverity
-
-  if (cmdwin_type != 0) {
-    emsg(_(e_cmdwin));
-    return;
-  }
-  if (ARGCOUNT <= 0) {
-    // Don't give an error message.  We don't want it when the ":all"
-    // command is in the .vimrc.
-    return;
-  }
-  setpcmark();
-
-  arg_all_state_T aall = {
-    .use_firstwin = false,
-    .had_tab = cmdmod.cmod_tab,
-    .new_curwin = NULL,
-    .new_curtab = NULL,
-    .forceit = forceit,
-    .keep_tabs = keep_tabs,
-    .opened_len = ARGCOUNT,
-    .opened = xcalloc((size_t)ARGCOUNT, 1),
-  };
-
-  // Autocommands may do anything to the argument list.  Make sure it's not
-  // freed while we are working here by "locking" it.  We still have to
-  // watch out for its size to be changed.
-  aall.alist = curwin->w_alist;
-  aall.alist->al_refcount++;
-  arglist_locked = true;
-
-  tabpage_T *const new_lu_tp = curtab;
-
-  // Stop Visual mode, the cursor and "VIsual" may very well be invalid after
-  // switching to another buffer.
-  reset_VIsual_and_resel();
-
-  // Try closing all windows that are not in the argument list.
-  // Also close windows that are not full width;
-  // When 'hidden' or "forceit" set the buffer becomes hidden.
-  // Windows that have a changed buffer and can't be hidden won't be closed.
-  // When the ":tab" modifier was used do this for all tab pages.
-  arg_all_close_unused_windows(&aall);
-
-  // Open a window for files in the argument list that don't have one.
-  // ARGCOUNT may change while doing this, because of autocommands.
-  if (count > aall.opened_len || count <= 0) {
-    count = aall.opened_len;
-  }
-
-  // Don't execute Win/Buf Enter/Leave autocommands here.
-  autocmd_no_enter++;
-  autocmd_no_leave++;
-  last_curwin = curwin;
-  last_curtab = curtab;
-  // lastwin may be aucmd_win
-  win_enter(lastwin_nofloating(), false);
-
-  // Open up to "count" windows.
-  arg_all_open_windows(&aall, count);
-
-  // Remove the "lock" on the argument list.
-  alist_unlink(aall.alist);
-  arglist_locked = prev_arglist_locked;
-
-  autocmd_no_enter--;
-
-  // restore last referenced tabpage's curwin
-  if (last_curtab != aall.new_curtab) {
-    if (valid_tabpage(last_curtab)) {
-      goto_tabpage_tp(last_curtab, true, true);
-    }
-    if (win_valid(last_curwin)) {
-      win_enter(last_curwin, false);
-    }
-  }
-  // to window with first arg
-  if (valid_tabpage(aall.new_curtab)) {
-    goto_tabpage_tp(aall.new_curtab, true, true);
-  }
-
-  // Now set the last used tabpage to where we started.
-  if (valid_tabpage(new_lu_tp)) {
-    lastused_tabpage = new_lu_tp;
-  }
-
-  if (win_valid(aall.new_curwin)) {
-    win_enter(aall.new_curwin, false);
-  }
-
-  autocmd_no_leave--;
-  xfree(aall.opened);
-}
-
 /// ":all" and ":sall".
 /// Also used for ":tab drop file ..." after setting the argument list.
-void ex_all(exarg_T *eap)
-{
-  if (eap->addr_count == 0) {
-    eap->line2 = 9999;
-  }
-  do_arg_all((int)eap->line2, eap->forceit, eap->cmdidx == CMD_drop);
-}
+void ex_all(exarg_T *eap) { rs_ex_all(eap); }
 
 /// Concatenate all files in the argument list, separated by spaces, and return
 /// it in one allocated string.

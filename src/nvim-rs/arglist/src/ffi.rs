@@ -300,12 +300,13 @@ extern "C" {
     pub fn nvim_al_set_tabpage_move_disallowed(val: c_int);
     pub fn nvim_al_tp_get_next(tp: TabpagePtr) -> TabpagePtr;
     pub fn nvim_al_foreach_windows_in_tab(
-        cb: extern "C" fn(WinPtr, *mut c_void),
+        cb: unsafe extern "C" fn(WinPtr, *mut c_void) -> c_int,
         tp: TabpagePtr,
         ud: *mut c_void,
     );
     pub fn nvim_al_buf_get_changed(buf: BufPtr) -> c_int;
     pub fn nvim_al_set_lastused_tabpage(tp: TabpagePtr);
+    pub fn nvim_al_emsg_e_window_layout();
 }
 
 // =============================================================================
