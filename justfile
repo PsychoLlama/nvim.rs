@@ -74,6 +74,7 @@ rust-test:
       -p nvim-ascii \
       -p nvim-autocmd \
       -p nvim-charset \
+      -p nvim-clipboard \
       -p nvim-cmdline \
       -p nvim-cmdhist \
       -p nvim-collections \

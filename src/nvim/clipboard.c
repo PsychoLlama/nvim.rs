@@ -1,4 +1,5 @@
-// clipboard.c: Functions to handle the clipboard
+// clipboard.c: Thin wrappers delegating to Rust (src/nvim-rs/clipboard/src/lib.rs)
+// C accessor functions for typval/eval operations needed by Rust.
 
 #include <assert.h>
 
@@ -7,91 +8,57 @@
 #include "nvim/clipboard.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
+#include "nvim/message.h"
 #include "nvim/option_vars.h"
 #include "nvim/register.h"
 
 #include "clipboard.c.generated.h"
 
-// for behavior between start_batch_changes() and end_batch_changes())
-static int batch_change_count = 0;           // inside a script
-static bool clipboard_delay_update = false;  // delay clipboard update
-static bool clipboard_needs_update = false;  // clipboard was updated
-static bool clipboard_didwarn = false;
+// Static assertions for constants used in Rust
+_Static_assert(STAR_REGISTER == 37, "STAR_REGISTER mismatch");
+_Static_assert(PLUS_REGISTER == 38, "PLUS_REGISTER mismatch");
+_Static_assert(kMTCharWise == 0, "kMTCharWise mismatch");
+_Static_assert(kMTLineWise == 1, "kMTLineWise mismatch");
+_Static_assert(kMTBlockWise == 2, "kMTBlockWise mismatch");
+_Static_assert(kMTUnknown == -1, "kMTUnknown mismatch");
+_Static_assert(kOptCbFlagUnnamed == 0x01, "kOptCbFlagUnnamed mismatch");
+_Static_assert(kOptCbFlagUnnamedplus == 0x02, "kOptCbFlagUnnamedplus mismatch");
+_Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
 
-/// Determine if register `*name` should be used as a clipboard.
-/// In an unnamed operation, `*name` is `NUL` and will be adjusted to */+ if
-/// `clipboard=unnamed[plus]` is set.
-///
-/// @param name The name of register, or `NUL` if unnamed.
-/// @param quiet Suppress error messages
-/// @param writing if we're setting the contents of the clipboard
-///
-/// @returns the yankreg that should be written into, or `NULL`
-/// if the register isn't a clipboard or provider isn't available.
-yankreg_T *adjust_clipboard_name(int *name, bool quiet, bool writing)
+// Rust implementations
+extern yankreg_T *rs_adjust_clipboard_name(int *name, bool quiet, bool writing);
+extern bool rs_get_clipboard(int name, yankreg_T **target, bool quiet);
+extern void rs_set_clipboard(int name, yankreg_T *reg);
+extern void rs_start_batch_changes(void);
+extern void rs_end_batch_changes(void);
+extern int rs_save_batch_count(void);
+extern void rs_restore_batch_count(int save_count);
+
+// =============================================================================
+// C accessor functions for Rust to call back into
+// =============================================================================
+
+bool nvim_clipboard_eval_has_provider(void)
 {
-#define MSG_NO_CLIP "clipboard: No provider. " \
-  "Try \":checkhealth\" or \":h clipboard\"."
-
-  yankreg_T *target = NULL;
-  bool explicit_cb_reg = (*name == '*' || *name == '+');
-  bool implicit_cb_reg = (*name == NUL) && (cb_flags & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus));
-  if (!explicit_cb_reg && !implicit_cb_reg) {
-    goto end;
-  }
-
-  if (!eval_has_provider("clipboard", false)) {
-    if (batch_change_count <= 1 && !quiet
-        && (!clipboard_didwarn || (explicit_cb_reg && !redirecting()))) {
-      clipboard_didwarn = true;
-      // Do NOT error (emsg()) here--if it interrupts :redir we get into
-      // a weird state, stuck in "redirect mode".
-      msg(MSG_NO_CLIP, 0);
-    }
-    // ... else, be silent (don't flood during :while, :redir, etc.).
-    goto end;
-  }
-
-  if (explicit_cb_reg) {
-    target = get_y_register(*name == '*' ? STAR_REGISTER : PLUS_REGISTER);
-    if (writing && (cb_flags & (*name == '*' ? kOptCbFlagUnnamed : kOptCbFlagUnnamedplus))) {
-      clipboard_needs_update = false;
-    }
-    goto end;
-  } else {  // unnamed register: "implicit" clipboard
-    if (writing && clipboard_delay_update) {
-      // For "set" (copy), defer the clipboard call.
-      clipboard_needs_update = true;
-      goto end;
-    } else if (!writing && clipboard_needs_update) {
-      // For "get" (paste), use the internal value.
-      goto end;
-    }
-
-    if (cb_flags & kOptCbFlagUnnamedplus) {
-      *name = (cb_flags & kOptCbFlagUnnamed && writing) ? '"' : '+';
-      target = get_y_register(PLUS_REGISTER);
-    } else {
-      *name = '*';
-      target = get_y_register(STAR_REGISTER);
-    }
-    goto end;
-  }
-
-end:
-  return target;
+  return eval_has_provider("clipboard", false);
 }
 
-bool get_clipboard(int name, yankreg_T **target, bool quiet)
+void nvim_clipboard_msg(const char *s)
 {
-  // show message on error
-  bool errmsg = true;
+  msg(s, 0);
+}
 
-  yankreg_T *reg = adjust_clipboard_name(&name, quiet, false);
-  if (reg == NULL) {
-    return false;
-  }
-  free_register(reg);
+bool nvim_clipboard_redirecting(void)
+{
+  return redirecting() != 0;
+}
+
+/// Provider get: calls eval_call_provider("clipboard","get",...), parses the
+/// result, and populates reg.  Returns true on success.
+/// This keeps all typval manipulation in C.
+bool nvim_clipboard_provider_get(int name, yankreg_T *reg)
+{
+  bool errmsg = true;
 
   list_T *const args = tv_list_alloc(1);
   const char regname = (char)name;
@@ -101,7 +68,6 @@ bool get_clipboard(int name, yankreg_T **target, bool quiet)
 
   if (result.v_type != VAR_LIST) {
     if (result.v_type == VAR_NUMBER && result.vval.v_number == 0) {
-      // failure has already been indicated by provider
       errmsg = false;
     }
     goto err;
@@ -140,17 +106,14 @@ bool get_clipboard(int name, yankreg_T **target, bool quiet)
     }
   } else {
     lines = res;
-    // provider did not specify regtype, calculate it below
     reg->y_type = kMTUnknown;
   }
 
   reg->y_array = xcalloc((size_t)tv_list_len(lines), sizeof(String));
   reg->y_size = (size_t)tv_list_len(lines);
-  reg->y_width = 0;  // Will be updated by update_yankreg_width() below.
+  reg->y_width = 0;
   reg->additional_data = NULL;
   reg->timestamp = 0;
-  // Timestamp is not saved for clipboard registers because clipboard registers
-  // are not saved in the ShaDa file.
 
   size_t tv_idx = 0;
   TV_LIST_ITER_CONST(lines, li, {
@@ -162,8 +125,6 @@ bool get_clipboard(int name, yankreg_T **target, bool quiet)
   });
 
   if (reg->y_size > 0 && reg->y_array[reg->y_size - 1].size == 0) {
-    // a known-to-be charwise yank might have a final linebreak
-    // but otherwise there is no line after the final newline
     if (reg->y_type != kMTCharWise) {
       xfree(reg->y_array[reg->y_size - 1].data);
       reg->y_size--;
@@ -177,9 +138,6 @@ bool get_clipboard(int name, yankreg_T **target, bool quiet)
     }
   }
 
-  update_yankreg_width(reg);
-
-  *target = reg;
   return true;
 
 err:
@@ -196,16 +154,13 @@ err:
   if (errmsg) {
     emsg("clipboard: provider returned invalid data");
   }
-  *target = reg;
   return false;
 }
 
-void set_clipboard(int name, yankreg_T *reg)
+/// Provider set: builds a list from reg and calls eval_call_provider.
+/// This keeps all typval manipulation in C.
+void nvim_clipboard_provider_set(int name, yankreg_T *reg)
 {
-  if (!adjust_clipboard_name(&name, false, true)) {
-    return;
-  }
-
   list_T *const lines = tv_list_alloc((ptrdiff_t)reg->y_size + (reg->y_type != kMTCharWise));
 
   for (size_t i = 0; i < reg->y_size; i++) {
@@ -229,58 +184,49 @@ void set_clipboard(int name, yankreg_T *reg)
     abort();
   }
 
-  list_T *args = tv_list_alloc(3);
-  tv_list_append_list(args, lines);
-  tv_list_append_string(args, &regtype, 1);
-  tv_list_append_string(args, ((char[]) { (char)name }), 1);
+  list_T *args_list = tv_list_alloc(3);
+  tv_list_append_list(args_list, lines);
+  tv_list_append_string(args_list, &regtype, 1);
+  tv_list_append_string(args_list, ((char[]) { (char)name }), 1);
 
-  eval_call_provider("clipboard", "set", args, true);
+  eval_call_provider("clipboard", "set", args_list, true);
 }
 
-/// Avoid slow things (clipboard) during batch operations (while/for-loops).
+// =============================================================================
+// Thin wrappers delegating to Rust
+// =============================================================================
+
+yankreg_T *adjust_clipboard_name(int *name, bool quiet, bool writing)
+{
+  return rs_adjust_clipboard_name(name, quiet, writing);
+}
+
+bool get_clipboard(int name, yankreg_T **target, bool quiet)
+{
+  return rs_get_clipboard(name, target, quiet);
+}
+
+void set_clipboard(int name, yankreg_T *reg)
+{
+  rs_set_clipboard(name, reg);
+}
+
 void start_batch_changes(void)
 {
-  if (++batch_change_count > 1) {
-    return;
-  }
-  clipboard_delay_update = true;
+  rs_start_batch_changes();
 }
 
-/// Counterpart to start_batch_changes().
 void end_batch_changes(void)
 {
-  if (--batch_change_count > 0) {
-    // recursive
-    return;
-  }
-  clipboard_delay_update = false;
-  if (clipboard_needs_update) {
-    // must be before, as set_clipboard will invoke
-    // start/end_batch_changes recursively
-    clipboard_needs_update = false;
-    // unnamed ("implicit" clipboard)
-    set_clipboard(NUL, get_y_previous());
-  }
+  rs_end_batch_changes();
 }
 
 int save_batch_count(void)
 {
-  int save_count = batch_change_count;
-  batch_change_count = 0;
-  clipboard_delay_update = false;
-  if (clipboard_needs_update) {
-    clipboard_needs_update = false;
-    // unnamed ("implicit" clipboard)
-    set_clipboard(NUL, get_y_previous());
-  }
-  return save_count;
+  return rs_save_batch_count();
 }
 
 void restore_batch_count(int save_count)
 {
-  assert(batch_change_count == 0);
-  batch_change_count = save_count;
-  if (batch_change_count > 0) {
-    clipboard_delay_update = true;
-  }
+  rs_restore_batch_count(save_count);
 }

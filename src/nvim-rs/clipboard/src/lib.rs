@@ -9,12 +9,15 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(clippy::derivable_impls)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_panics_doc)]
 
 pub mod async_ops;
 pub mod provider;
 pub mod selection;
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_uint};
 
 // Re-export key types
 pub use async_ops::{ClipboardOperation, ClipboardRequest, ClipboardResult};
@@ -22,12 +25,29 @@ pub use provider::{ClipboardProvider, ProviderCapabilities, ProviderStatus};
 pub use selection::{ClipboardData, SelectionType};
 
 // =============================================================================
+// Opaque Handle Types
+// =============================================================================
+
+/// Opaque handle for yankreg_T pointers from C
+type YankregHandle = std::ffi::c_void;
+
+// =============================================================================
 // Clipboard Flags
 // =============================================================================
+
+/// kOptCbFlagUnnamed (from generated option_vars.h)
+const CB_FLAG_UNNAMED: c_uint = 0x01;
+/// kOptCbFlagUnnamedplus (from generated option_vars.h)
+const CB_FLAG_UNNAMEDPLUS: c_uint = 0x02;
 
 /// Clipboard flags (maps to cb_flags in C)
 pub const CB_UNNAMED: u32 = 0x0001;
 pub const CB_UNNAMEDPLUS: u32 = 0x0002;
+
+/// Register array index for '*' (from register_defs.h)
+const STAR_REG_INDEX: c_int = 37;
+/// Register array index for '+' (from register_defs.h)
+const PLUS_REG_INDEX: c_int = 38;
 
 /// Clipboard flags wrapper
 #[repr(C)]
@@ -184,10 +204,13 @@ impl BatchState {
 // Register Name
 // =============================================================================
 
-/// Special register constants
+/// Character code for '*' register
 pub const STAR_REGISTER: c_int = b'*' as c_int;
+/// Character code for '+' register
 pub const PLUS_REGISTER: c_int = b'+' as c_int;
+/// Character code for '"' register
 pub const UNNAMED_REGISTER: c_int = b'"' as c_int;
+/// NUL register (unnamed operation)
 pub const NUL_REGISTER: c_int = 0;
 
 /// Check if a register name is a clipboard register
@@ -295,7 +318,248 @@ impl AdjustResult {
 }
 
 // =============================================================================
-// FFI Exports
+// Module State (replaces C static variables)
+// =============================================================================
+
+struct ClipboardModuleState {
+    batch: BatchState,
+    didwarn: bool,
+}
+
+impl ClipboardModuleState {
+    const fn new() -> Self {
+        Self {
+            batch: BatchState::new(),
+            didwarn: false,
+        }
+    }
+}
+
+static mut CLIPBOARD_STATE: ClipboardModuleState = ClipboardModuleState::new();
+
+// =============================================================================
+// C Accessor Declarations (extern "C")
+// =============================================================================
+
+extern "C" {
+    /// Get cb_flags option value
+    fn nvim_option_get_cb_flags() -> c_uint;
+    /// Check if clipboard provider is available
+    fn nvim_clipboard_eval_has_provider() -> bool;
+    /// Show a non-error message
+    fn nvim_clipboard_msg(s: *const std::ffi::c_char);
+    /// Check if output is being redirected
+    fn nvim_clipboard_redirecting() -> bool;
+    /// Get register by array index (0-38)
+    fn get_y_register(reg: c_int) -> *mut YankregHandle;
+    /// Get previous yank register
+    fn get_y_previous() -> *mut YankregHandle;
+    /// Free a register's contents
+    fn nvim_free_register(reg: *mut YankregHandle);
+    /// Provider get: calls eval_call_provider("clipboard","get",...) and populates reg
+    fn nvim_clipboard_provider_get(name: c_int, reg: *mut YankregHandle) -> bool;
+    /// Provider set: builds list from reg and calls eval_call_provider("clipboard","set",...)
+    fn nvim_clipboard_provider_set(name: c_int, reg: *mut YankregHandle);
+    /// Update register width after populating y_array
+    fn update_yankreg_width(reg: *mut YankregHandle);
+}
+
+// =============================================================================
+// Core Logic
+// =============================================================================
+
+const MSG_NO_CLIP: &[u8] = b"clipboard: No provider. Try \":checkhealth\" or \":h clipboard\".\0";
+
+/// Internal implementation of adjust_clipboard_name.
+///
+/// Checks whether `name` refers to a clipboard register (explicit `*`/`+`
+/// or implicit via clipboard=unnamed[plus]) and returns the yankreg_T pointer
+/// if so, or null if not.
+///
+/// # Safety
+/// `name` must be a valid pointer.
+unsafe fn adjust_clipboard_name_impl(
+    name: *mut c_int,
+    quiet: bool,
+    writing: bool,
+) -> *mut YankregHandle {
+    let s = &raw mut CLIPBOARD_STATE;
+    let n = unsafe { *name };
+    let cb_flags = unsafe { nvim_option_get_cb_flags() };
+
+    let explicit_cb_reg = n == b'*' as c_int || n == b'+' as c_int;
+    let implicit_cb_reg = n == 0 && (cb_flags & (CB_FLAG_UNNAMED | CB_FLAG_UNNAMEDPLUS)) != 0;
+
+    if !explicit_cb_reg && !implicit_cb_reg {
+        return std::ptr::null_mut();
+    }
+
+    if !unsafe { nvim_clipboard_eval_has_provider() } {
+        let batch_count = unsafe { (*s).batch.count };
+        let didwarn = unsafe { (*s).didwarn };
+        if batch_count <= 1
+            && !quiet
+            && (!didwarn || (explicit_cb_reg && !unsafe { nvim_clipboard_redirecting() }))
+        {
+            unsafe { (*s).didwarn = true };
+            // Use msg() not emsg() — interrupting :redir causes a weird state
+            unsafe { nvim_clipboard_msg(MSG_NO_CLIP.as_ptr().cast()) };
+        }
+        return std::ptr::null_mut();
+    }
+
+    if explicit_cb_reg {
+        let reg_idx = if n == b'*' as c_int {
+            STAR_REG_INDEX
+        } else {
+            PLUS_REG_INDEX
+        };
+        let target = unsafe { get_y_register(reg_idx) };
+        if writing
+            && (cb_flags
+                & if n == b'*' as c_int {
+                    CB_FLAG_UNNAMED
+                } else {
+                    CB_FLAG_UNNAMEDPLUS
+                })
+                != 0
+        {
+            unsafe { (*s).batch.needs_update = false };
+        }
+        target
+    } else {
+        // Unnamed register: "implicit" clipboard
+        let delay_update = unsafe { (*s).batch.delay_update };
+        let needs_update = unsafe { (*s).batch.needs_update };
+        if writing && delay_update {
+            unsafe { (*s).batch.needs_update = true };
+            return std::ptr::null_mut();
+        } else if !writing && needs_update {
+            return std::ptr::null_mut();
+        }
+
+        if cb_flags & CB_FLAG_UNNAMEDPLUS != 0 {
+            unsafe {
+                *name = if cb_flags & CB_FLAG_UNNAMED != 0 && writing {
+                    b'"' as c_int
+                } else {
+                    b'+' as c_int
+                };
+            }
+            unsafe { get_y_register(PLUS_REG_INDEX) }
+        } else {
+            unsafe { *name = b'*' as c_int };
+            unsafe { get_y_register(STAR_REG_INDEX) }
+        }
+    }
+}
+
+/// Flush deferred clipboard set if needed
+unsafe fn flush_clipboard_if_needed() {
+    let s = &raw mut CLIPBOARD_STATE;
+    if unsafe { (*s).batch.needs_update } {
+        unsafe { (*s).batch.needs_update = false };
+        // unnamed ("implicit" clipboard)
+        let prev = unsafe { get_y_previous() };
+        unsafe { rs_set_clipboard(0, prev) };
+    }
+}
+
+// =============================================================================
+// FFI Exports — Main clipboard functions
+// =============================================================================
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_adjust_clipboard_name(
+    name: *mut c_int,
+    quiet: bool,
+    writing: bool,
+) -> *mut YankregHandle {
+    unsafe { adjust_clipboard_name_impl(name, quiet, writing) }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_clipboard(
+    name: c_int,
+    target: *mut *mut YankregHandle,
+    quiet: bool,
+) -> bool {
+    let mut name = name;
+    let reg = unsafe { adjust_clipboard_name_impl(&raw mut name, quiet, false) };
+    if reg.is_null() {
+        return false;
+    }
+    unsafe { nvim_free_register(reg) };
+
+    let ok = unsafe { nvim_clipboard_provider_get(name, reg) };
+    if ok {
+        unsafe { update_yankreg_width(reg) };
+    }
+    unsafe { *target = reg };
+    ok
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_clipboard(name: c_int, reg: *mut YankregHandle) {
+    let mut name = name;
+    let target = unsafe { adjust_clipboard_name_impl(&raw mut name, false, true) };
+    if target.is_null() {
+        return;
+    }
+    unsafe { nvim_clipboard_provider_set(name, reg) };
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_start_batch_changes() {
+    let s = &raw mut CLIPBOARD_STATE;
+    unsafe {
+        (*s).batch.count += 1;
+        if (*s).batch.count > 1 {
+            return;
+        }
+        (*s).batch.delay_update = true;
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_end_batch_changes() {
+    let s = &raw mut CLIPBOARD_STATE;
+    unsafe {
+        (*s).batch.count -= 1;
+        if (*s).batch.count > 0 {
+            return;
+        }
+        (*s).batch.delay_update = false;
+    }
+    unsafe { flush_clipboard_if_needed() };
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_save_batch_count() -> c_int {
+    let s = &raw mut CLIPBOARD_STATE;
+    let save_count = unsafe { (*s).batch.count };
+    unsafe {
+        (*s).batch.count = 0;
+        (*s).batch.delay_update = false;
+    }
+    unsafe { flush_clipboard_if_needed() };
+    save_count
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_restore_batch_count(save_count: c_int) {
+    let s = &raw mut CLIPBOARD_STATE;
+    unsafe {
+        assert!((*s).batch.count == 0);
+        (*s).batch.count = save_count;
+        if (*s).batch.count > 0 {
+            (*s).batch.delay_update = true;
+        }
+    }
+}
+
+// =============================================================================
+// FFI Exports — Utility (existing)
 // =============================================================================
 
 /// FFI export: Check if register is clipboard
@@ -510,5 +774,21 @@ mod tests {
 
         rs_clipboard_batch_start(&mut batch);
         assert_eq!(rs_clipboard_batch_in_batch(&batch), 1);
+    }
+
+    #[test]
+    fn test_register_index_constants() {
+        // Verify that our register index constants match the character-to-index mapping
+        assert_eq!(STAR_REG_INDEX, 37);
+        assert_eq!(PLUS_REG_INDEX, 38);
+        // Character constants
+        assert_eq!(STAR_REGISTER, 42); // b'*'
+        assert_eq!(PLUS_REGISTER, 43); // b'+'
+    }
+
+    #[test]
+    fn test_cb_flag_constants() {
+        assert_eq!(CB_FLAG_UNNAMED, 0x01);
+        assert_eq!(CB_FLAG_UNNAMEDPLUS, 0x02);
     }
 }
