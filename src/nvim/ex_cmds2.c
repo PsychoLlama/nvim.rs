@@ -112,6 +112,14 @@ extern bool rs_check_changed_any(bool hidden, bool unload);
 extern void rs_ex_checktime(exarg_T *eap);
 
 // =============================================================================
+// Rust extern declarations — compiler / drop
+// =============================================================================
+
+extern void rs_ex_compiler(exarg_T *eap);
+extern void rs_ex_drop(exarg_T *eap);
+extern void rs_ex_listdo(exarg_T *eap);
+
+// =============================================================================
 // C accessor functions for Rust (script host)
 // =============================================================================
 
@@ -534,8 +542,427 @@ void nvim_ex2_buf_check_timestamp(buf_T *buf)
   (void)buf_check_timestamp(buf);
 }
 
-static const char e_compiler_not_supported_str[]
-  = N_("E666: Compiler not supported: %s");
+// =============================================================================
+// C accessor functions for Rust (compiler)
+// =============================================================================
+
+_Static_assert(DIP_ALL == 0x01, "DIP_ALL mismatch");
+
+int nvim_ex2_eap_get_forceit(exarg_T *eap)
+{
+  return eap->forceit;
+}
+
+void nvim_ex2_do_cmdline_cmd(const char *cmd)
+{
+  do_cmdline_cmd(cmd);
+}
+
+char *nvim_ex2_get_var_value(const char *name)
+{
+  return get_var_value(name);
+}
+
+void nvim_ex2_set_internal_string_var(const char *name, const char *val)
+{
+  set_internal_string_var(name, (char *)val);
+}
+
+void nvim_ex2_do_unlet(const char *name, size_t name_len, bool forceit)
+{
+  do_unlet(name, name_len, forceit);
+}
+
+int nvim_ex2_source_runtime_vim_lua(const char *name, int flags)
+{
+  return source_runtime_vim_lua((char *)name, flags);
+}
+
+char *nvim_ex2_xstrdup(const char *s)
+{
+  return xstrdup(s);
+}
+
+void nvim_ex2_xfree(void *p)
+{
+  xfree(p);
+}
+
+char *nvim_ex2_xmalloc(size_t size)
+{
+  return xmalloc(size);
+}
+
+void nvim_ex2_snprintf(char *buf, size_t size, const char *fmt, const char *arg)
+{
+  snprintf(buf, size, fmt, arg);
+}
+
+size_t nvim_ex2_strlen(const char *s)
+{
+  return strlen(s);
+}
+
+// =============================================================================
+// C accessor functions for Rust (drop)
+// =============================================================================
+
+_Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
+_Static_assert(DOCMD_VERBOSE == 0x01, "DOCMD_VERBOSE mismatch");
+_Static_assert(DOCMD_NOWAIT == 0x02, "DOCMD_NOWAIT mismatch");
+
+void nvim_ex2_set_arglist(char *arg)
+{
+  set_arglist(arg);
+}
+
+int nvim_ex2_get_argcount(void)
+{
+  return ARGCOUNT;
+}
+
+int nvim_ex2_get_arglist_fnum(int idx)
+{
+  return ARGLIST[idx].ae_fnum;
+}
+
+void nvim_ex2_ex_all(exarg_T *eap)
+{
+  ex_all(eap);
+}
+
+void nvim_ex2_ex_rewind(exarg_T *eap)
+{
+  ex_rewind(eap);
+}
+
+win_T *nvim_ex2_get_curwin(void)
+{
+  return curwin;
+}
+
+int nvim_ex2_curwin_get_arg_idx(void)
+{
+  return curwin->w_arg_idx;
+}
+
+void nvim_ex2_curwin_set_arg_idx(int val)
+{
+  curwin->w_arg_idx = val;
+}
+
+int nvim_ex2_curbuf_get_b_p_ar(void)
+{
+  return curbuf->b_p_ar;
+}
+
+void nvim_ex2_curbuf_set_b_p_ar(int val)
+{
+  curbuf->b_p_ar = val;
+}
+
+int nvim_ex2_curbuf_get_ml_flags(void)
+{
+  return curbuf->b_ml.ml_flags;
+}
+
+char *nvim_ex2_eap_get_do_ecmd_cmd(exarg_T *eap)
+{
+  return eap->do_ecmd_cmd;
+}
+
+bool nvim_ex2_set_swapcommand(const char *cmd, int zero)
+{
+  return set_swapcommand(cmd, zero);
+}
+
+void nvim_ex2_do_cmdline(char *cmd, LineGetter getline_fn, void *cookie, int flags)
+{
+  do_cmdline(cmd, getline_fn, cookie, flags);
+}
+
+void nvim_ex2_clear_swapcommand(void)
+{
+  set_vim_var_string(VV_SWAPCOMMAND, NULL, -1);
+}
+
+void nvim_ex2_buf_check_timestamp_curbuf(void)
+{
+  (void)buf_check_timestamp(curbuf);
+}
+
+int nvim_ex2_get_emsg_off(void)
+{
+  return emsg_off;
+}
+
+void nvim_ex2_set_emsg_off(int val)
+{
+  emsg_off = val;
+}
+
+int nvim_ex2_get_cmod_tab(void)
+{
+  return cmdmod.cmod_tab;
+}
+
+void nvim_ex2_set_cmod_tab(int val)
+{
+  cmdmod.cmod_tab = val;
+}
+
+void nvim_ex2_eap_set_cmdidx(exarg_T *eap, int val)
+{
+  eap->cmdidx = (cmdidx_T)val;
+}
+
+void nvim_ex2_eap_set_cmd0(exarg_T *eap, int ch)
+{
+  eap->cmd[0] = (char)ch;
+}
+
+int nvim_ex2_get_cmd_sfirst(void)
+{
+  return (int)CMD_sfirst;
+}
+
+int nvim_ex2_get_cmd_first(void)
+{
+  return (int)CMD_first;
+}
+
+// =============================================================================
+// C accessor functions for Rust (listdo)
+// =============================================================================
+
+_Static_assert(BF_SYN_SET == 0x200, "BF_SYN_SET mismatch");
+_Static_assert(FORWARD == 1, "FORWARD mismatch");
+_Static_assert(DOBUF_FIRST == 1, "DOBUF_FIRST mismatch");
+
+int nvim_ex2_eap_get_cmdidx(exarg_T *eap)
+{
+  return (int)eap->cmdidx;
+}
+
+void *nvim_ex2_eap_get_ea_getline(exarg_T *eap)
+{
+  return (void *)eap->ea_getline;
+}
+
+void *nvim_ex2_eap_get_cookie(exarg_T *eap)
+{
+  return eap->cookie;
+}
+
+void nvim_ex2_eap_set_line2(exarg_T *eap, linenr_T val)
+{
+  eap->line2 = val;
+}
+
+int nvim_ex2_get_cmd_windo(void) { return (int)CMD_windo; }
+int nvim_ex2_get_cmd_tabdo(void) { return (int)CMD_tabdo; }
+int nvim_ex2_get_cmd_bufdo(void) { return (int)CMD_bufdo; }
+int nvim_ex2_get_cmd_argdo(void) { return (int)CMD_argdo; }
+int nvim_ex2_get_cmd_cdo(void) { return (int)CMD_cdo; }
+int nvim_ex2_get_cmd_ldo(void) { return (int)CMD_ldo; }
+int nvim_ex2_get_cmd_cfdo(void) { return (int)CMD_cfdo; }
+int nvim_ex2_get_cmd_lfdo(void) { return (int)CMD_lfdo; }
+
+bool nvim_ex2_get_curwin_w_p_wfb(void)
+{
+  return curwin->w_p_wfb;
+}
+
+win_T *nvim_ex2_get_prevwin(void)
+{
+  return prevwin;
+}
+
+bool nvim_ex2_win_get_w_p_wfb(win_T *win)
+{
+  return win->w_p_wfb;
+}
+
+void nvim_ex2_win_goto(win_T *win)
+{
+  win_goto(win);
+}
+
+int nvim_ex2_win_split(void)
+{
+  return win_split(0, 0);
+}
+
+void nvim_ex2_emsg_winfixbuf(void)
+{
+  emsg(_(e_winfixbuf_cannot_go_to_buffer));
+}
+
+void nvim_ex2_inc_msg_listdo_overwrite(void)
+{
+  msg_listdo_overwrite++;
+}
+
+void nvim_ex2_dec_msg_listdo_overwrite(void)
+{
+  msg_listdo_overwrite--;
+}
+
+char *nvim_ex2_au_event_disable_syntax(void)
+{
+  return au_event_disable(",Syntax");
+}
+
+void nvim_ex2_au_event_restore(char *save_ei)
+{
+  au_event_restore(save_ei);
+}
+
+bool nvim_ex2_win_valid(win_T *win)
+{
+  return win_valid(win);
+}
+
+void nvim_ex2_buf_clear_bf_syn_set(buf_T *buf)
+{
+  buf->b_flags &= ~BF_SYN_SET;
+}
+
+int nvim_ex2_buf_get_b_flags(buf_T *buf)
+{
+  return buf->b_flags;
+}
+
+bool nvim_ex2_buf_get_b_p_bl(buf_T *buf)
+{
+  return buf->b_p_bl;
+}
+
+char *nvim_ex2_buf_get_b_p_syn(buf_T *buf)
+{
+  return buf->b_p_syn;
+}
+
+size_t nvim_ex2_qf_get_valid_size(exarg_T *eap)
+{
+  return qf_get_valid_size(eap);
+}
+
+size_t nvim_ex2_qf_get_cur_idx(exarg_T *eap)
+{
+  return qf_get_cur_idx(eap);
+}
+
+void nvim_ex2_ex_cc(exarg_T *eap)
+{
+  ex_cc(eap);
+}
+
+void nvim_ex2_ex_cnext(exarg_T *eap)
+{
+  ex_cnext(eap);
+}
+
+bool nvim_ex2_get_got_int(void)
+{
+  return got_int;
+}
+
+void nvim_ex2_set_listcmd_busy(bool val)
+{
+  listcmd_busy = val;
+}
+
+void nvim_ex2_setpcmark(void)
+{
+  setpcmark();
+}
+
+bool nvim_ex2_editing_arg_idx(void)
+{
+  return editing_arg_idx(curwin);
+}
+
+void nvim_ex2_do_argfile(exarg_T *eap, int idx)
+{
+  do_argfile(eap, idx);
+}
+
+void nvim_ex2_goto_buffer(exarg_T *eap, int start, int dir, int fnum)
+{
+  goto_buffer(eap, start, dir, fnum);
+}
+
+bool nvim_ex2_win_get_w_floating(win_T *win)
+{
+  return win->w_floating;
+}
+
+bool nvim_ex2_win_get_w_config_hide(win_T *win)
+{
+  return win->w_config.hide;
+}
+
+bool nvim_ex2_win_get_w_config_focusable(win_T *win)
+{
+  return win->w_config.focusable;
+}
+
+bool nvim_ex2_valid_tabpage(tabpage_T *tp)
+{
+  return valid_tabpage(tp);
+}
+
+void nvim_ex2_goto_tabpage_tp(tabpage_T *tp, bool trigger_enter, bool trigger_leave)
+{
+  goto_tabpage_tp(tp, trigger_enter, trigger_leave);
+}
+
+void nvim_ex2_validate_cursor(void)
+{
+  validate_cursor(curwin);
+}
+
+bool nvim_ex2_curwin_get_w_p_scb(void)
+{
+  return curwin->w_p_scb;
+}
+
+void nvim_ex2_do_check_scrollbind(bool check)
+{
+  do_check_scrollbind(check);
+}
+
+/// Restore syntax autocommands after listdo.
+/// This handles the aco_save_T stack-local struct by keeping it entirely in C.
+void nvim_ex2_listdo_restore_syntax(char *save_ei)
+{
+  buf_T *bnext;
+  aco_save_T aco;
+
+  au_event_restore(save_ei);
+
+  for (buf_T *buf = firstbuf; buf != NULL; buf = bnext) {
+    bnext = buf->b_next;
+    if (buf->b_nwindows > 0 && (buf->b_flags & BF_SYN_SET)) {
+      buf->b_flags &= ~BF_SYN_SET;
+
+      // buffer was opened while Syntax autocommands were disabled,
+      // need to trigger them now.
+      if (buf == curbuf) {
+        apply_autocmds(EVENT_SYNTAX, curbuf->b_p_syn, curbuf->b_fname, true,
+                       curbuf);
+      } else {
+        aucmd_prepbuf(&aco, buf);
+        apply_autocmds(EVENT_SYNTAX, buf->b_p_syn, buf->b_fname, true, buf);
+        aucmd_restbuf(&aco);
+      }
+
+      // start over, in case autocommands messed things up.
+      bnext = firstbuf;
+    }
+  }
+}
 
 void ex_ruby(exarg_T *eap)
 {
@@ -664,321 +1091,13 @@ int buf_write_all(buf_T *buf, bool forceit)
 /// ":argdo", ":windo", ":bufdo", ":tabdo", ":cdo", ":ldo", ":cfdo" and ":lfdo"
 void ex_listdo(exarg_T *eap)
 {
-  if (curwin->w_p_wfb) {
-    if ((eap->cmdidx == CMD_ldo || eap->cmdidx == CMD_lfdo) && !eap->forceit) {
-      // Disallow :ldo if 'winfixbuf' is applied
-      emsg(_(e_winfixbuf_cannot_go_to_buffer));
-      return;
-    }
-
-    if (win_valid(prevwin) && !prevwin->w_p_wfb) {
-      // 'winfixbuf' is set; attempt to change to a window without it.
-      win_goto(prevwin);
-    }
-    if (curwin->w_p_wfb) {
-      // Split the window, which will be 'nowinfixbuf', and set curwin to that
-      (void)win_split(0, 0);
-
-      if (curwin->w_p_wfb) {
-        // Autocommands set 'winfixbuf' or sent us to another window
-        // with it set, or we failed to split the window. Give up.
-        emsg(_(e_winfixbuf_cannot_go_to_buffer));
-        return;
-      }
-    }
-  }
-
-  char *save_ei = NULL;
-
-  // Temporarily override SHM_OVER and SHM_OVERALL to avoid that file
-  // message overwrites output from the command.
-  msg_listdo_overwrite++;
-
-  if (eap->cmdidx != CMD_windo && eap->cmdidx != CMD_tabdo) {
-    // Don't do syntax HL autocommands.  Skipping the syntax file is a
-    // great speed improvement.
-    save_ei = au_event_disable(",Syntax");
-
-    FOR_ALL_BUFFERS(buf) {
-      buf->b_flags &= ~BF_SYN_SET;
-    }
-  }
-
-  if (eap->cmdidx == CMD_windo
-      || eap->cmdidx == CMD_tabdo
-      || buf_hide(curbuf)
-      || !check_changed(curbuf, CCGD_AW
-                        | (eap->forceit ? CCGD_FORCEIT : 0)
-                        | CCGD_EXCMD)) {
-    int next_fnum = 0;
-    int i = 0;
-    // start at the eap->line1 argument/window/buffer
-    win_T *wp = firstwin;
-    tabpage_T *tp = first_tabpage;
-    switch (eap->cmdidx) {
-    case CMD_windo:
-      for (; wp != NULL && i + 1 < eap->line1; wp = wp->w_next) {
-        i++;
-      }
-      break;
-    case CMD_tabdo:
-      for (; tp != NULL && i + 1 < eap->line1; tp = tp->tp_next) {
-        i++;
-      }
-      break;
-    case CMD_argdo:
-      i = (int)eap->line1 - 1;
-      break;
-    default:
-      break;
-    }
-
-    buf_T *buf = curbuf;
-    size_t qf_size = 0;
-
-    // set pcmark now
-    if (eap->cmdidx == CMD_bufdo) {
-      // Advance to the first listed buffer after "eap->line1".
-      for (buf = firstbuf;
-           buf != NULL && (buf->b_fnum < eap->line1 || !buf->b_p_bl);
-           buf = buf->b_next) {
-        if (buf->b_fnum > eap->line2) {
-          buf = NULL;
-          break;
-        }
-      }
-      if (buf != NULL) {
-        goto_buffer(eap, DOBUF_FIRST, FORWARD, buf->b_fnum);
-      }
-    } else if (eap->cmdidx == CMD_cdo || eap->cmdidx == CMD_ldo
-               || eap->cmdidx == CMD_cfdo || eap->cmdidx == CMD_lfdo) {
-      qf_size = qf_get_valid_size(eap);
-      assert(eap->line1 >= 0);
-      if (qf_size == 0 || (size_t)eap->line1 > qf_size) {
-        buf = NULL;
-      } else {
-        ex_cc(eap);
-
-        buf = curbuf;
-        i = (int)eap->line1 - 1;
-        if (eap->addr_count <= 0) {
-          // Default to all quickfix/location list entries.
-          assert(qf_size < MAXLNUM);
-          eap->line2 = (linenr_T)qf_size;
-        }
-      }
-    } else {
-      setpcmark();
-    }
-    listcmd_busy = true;            // avoids setting pcmark below
-
-    while (!got_int && buf != NULL) {
-      bool execute = true;
-      if (eap->cmdidx == CMD_argdo) {
-        // go to argument "i"
-        if (i == ARGCOUNT) {
-          break;
-        }
-        // Don't call do_argfile() when already there, it will try
-        // reloading the file.
-        if (curwin->w_arg_idx != i || !editing_arg_idx(curwin)) {
-          // Clear 'shm' to avoid that the file message overwrites
-          // any output from the command.
-          do_argfile(eap, i);
-        }
-        if (curwin->w_arg_idx != i) {
-          break;
-        }
-      } else if (eap->cmdidx == CMD_windo) {
-        // go to window "wp"
-        if (!win_valid(wp)) {
-          break;
-        }
-        assert(wp);
-        execute = !wp->w_floating || (!wp->w_config.hide && wp->w_config.focusable);
-        if (execute) {
-          win_goto(wp);
-          if (curwin != wp) {
-            break;    // something must be wrong
-          }
-        }
-        wp = wp->w_next;
-      } else if (eap->cmdidx == CMD_tabdo) {
-        // go to window "tp"
-        if (!valid_tabpage(tp)) {
-          break;
-        }
-        assert(tp);
-        goto_tabpage_tp(tp, true, true);
-        tp = tp->tp_next;
-      } else if (eap->cmdidx == CMD_bufdo) {
-        // Remember the number of the next listed buffer, in case
-        // ":bwipe" is used or autocommands do something strange.
-        next_fnum = -1;
-        for (buf_T *bp = curbuf->b_next; bp != NULL; bp = bp->b_next) {
-          if (bp->b_p_bl) {
-            next_fnum = bp->b_fnum;
-            break;
-          }
-        }
-      }
-
-      i++;
-      // execute the command
-      if (execute) {
-        do_cmdline(eap->arg, eap->ea_getline, eap->cookie, DOCMD_VERBOSE + DOCMD_NOWAIT);
-      }
-
-      if (eap->cmdidx == CMD_bufdo) {
-        // Done?
-        if (next_fnum < 0 || next_fnum > eap->line2) {
-          break;
-        }
-
-        // Check if the buffer still exists.
-        bool buf_still_exists = false;
-        FOR_ALL_BUFFERS(bp) {
-          if (bp->b_fnum == next_fnum) {
-            buf_still_exists = true;
-            break;
-          }
-        }
-        if (!buf_still_exists) {
-          break;
-        }
-
-        // Go to the next buffer.
-        goto_buffer(eap, DOBUF_FIRST, FORWARD, next_fnum);
-
-        // If autocommands took us elsewhere, quit here.
-        if (curbuf->b_fnum != next_fnum) {
-          break;
-        }
-      }
-
-      if (eap->cmdidx == CMD_cdo || eap->cmdidx == CMD_ldo
-          || eap->cmdidx == CMD_cfdo || eap->cmdidx == CMD_lfdo) {
-        assert(i >= 0);
-        if ((size_t)i >= qf_size || i >= eap->line2) {
-          break;
-        }
-
-        size_t qf_idx = qf_get_cur_idx(eap);
-
-        ex_cnext(eap);
-
-        // If jumping to the next quickfix entry fails, quit here.
-        if (qf_get_cur_idx(eap) == qf_idx) {
-          break;
-        }
-      }
-
-      if (eap->cmdidx == CMD_windo && execute) {
-        validate_cursor(curwin);              // cursor may have moved
-        // required when 'scrollbind' has been set
-        if (curwin->w_p_scb) {
-          do_check_scrollbind(true);
-        }
-      }
-      if (eap->cmdidx == CMD_windo || eap->cmdidx == CMD_tabdo) {
-        if (i + 1 > eap->line2) {
-          break;
-        }
-      }
-      if (eap->cmdidx == CMD_argdo && i >= eap->line2) {
-        break;
-      }
-    }
-    listcmd_busy = false;
-  }
-
-  msg_listdo_overwrite--;
-  if (save_ei != NULL) {
-    buf_T *bnext;
-    aco_save_T aco;
-
-    au_event_restore(save_ei);
-
-    for (buf_T *buf = firstbuf; buf != NULL; buf = bnext) {
-      bnext = buf->b_next;
-      if (buf->b_nwindows > 0 && (buf->b_flags & BF_SYN_SET)) {
-        buf->b_flags &= ~BF_SYN_SET;
-
-        // buffer was opened while Syntax autocommands were disabled,
-        // need to trigger them now.
-        if (buf == curbuf) {
-          apply_autocmds(EVENT_SYNTAX, curbuf->b_p_syn, curbuf->b_fname, true,
-                         curbuf);
-        } else {
-          aucmd_prepbuf(&aco, buf);
-          apply_autocmds(EVENT_SYNTAX, buf->b_p_syn, buf->b_fname, true, buf);
-          aucmd_restbuf(&aco);
-        }
-
-        // start over, in case autocommands messed things up.
-        bnext = firstbuf;
-      }
-    }
-  }
+  rs_ex_listdo(eap);
 }
 
 /// ":compiler[!] {name}"
 void ex_compiler(exarg_T *eap)
 {
-  char *old_cur_comp = NULL;
-
-  if (*eap->arg == NUL) {
-    // List all compiler scripts.
-    do_cmdline_cmd("echo globpath(&rtp, 'compiler/*.vim')");  // NOLINT
-    do_cmdline_cmd("echo globpath(&rtp, 'compiler/*.lua')");  // NOLINT
-    return;
-  }
-
-  size_t bufsize = strlen(eap->arg) + 14;
-  char *buf = xmalloc(bufsize);
-
-  if (eap->forceit) {
-    // ":compiler! {name}" sets global options
-    do_cmdline_cmd("command -nargs=* -keepscript CompilerSet set <args>");
-  } else {
-    // ":compiler! {name}" sets local options.
-    // To remain backwards compatible "current_compiler" is always
-    // used.  A user's compiler plugin may set it, the distributed
-    // plugin will then skip the settings.  Afterwards set
-    // "b:current_compiler" and restore "current_compiler".
-    // Explicitly prepend "g:" to make it work in a function.
-    old_cur_comp = get_var_value("g:current_compiler");
-    if (old_cur_comp != NULL) {
-      old_cur_comp = xstrdup(old_cur_comp);
-    }
-    do_cmdline_cmd("command -nargs=* -keepscript CompilerSet setlocal <args>");
-  }
-  do_unlet(S_LEN("g:current_compiler"), true);
-  do_unlet(S_LEN("b:current_compiler"), true);
-
-  snprintf(buf, bufsize, "compiler/%s.*", eap->arg);
-  if (source_runtime_vim_lua(buf, DIP_ALL) == FAIL) {
-    semsg(_(e_compiler_not_supported_str), eap->arg);
-  }
-  xfree(buf);
-
-  do_cmdline_cmd(":delcommand CompilerSet");
-
-  // Set "b:current_compiler" from "current_compiler".
-  char *p = get_var_value("g:current_compiler");
-  if (p != NULL) {
-    set_internal_string_var("b:current_compiler", p);
-  }
-
-  // Restore "current_compiler" for ":compiler {name}".
-  if (!eap->forceit) {
-    if (old_cur_comp != NULL) {
-      set_internal_string_var("g:current_compiler", old_cur_comp);
-      xfree(old_cur_comp);
-    } else {
-      do_unlet(S_LEN("g:current_compiler"), true);
-    }
-  }
+  rs_ex_compiler(eap);
 }
 
 /// ":checktime [buffer]"
@@ -994,84 +1113,5 @@ void ex_checktime(exarg_T *eap)
 /// Opens the first argument in a window, and the argument list is redefined.
 void ex_drop(exarg_T *eap)
 {
-  bool split = false;
-
-  // Check if the first argument is already being edited in a window.  If
-  // so, jump to that window.
-  // We would actually need to check all arguments, but that's complicated
-  // and mostly only one file is dropped.
-  // This also ignores wildcards, since it is very unlikely the user is
-  // editing a file name with a wildcard character.
-  set_arglist(eap->arg);
-
-  // Expanding wildcards may result in an empty argument list.  E.g. when
-  // editing "foo.pyc" and ".pyc" is in 'wildignore'.  Assume that we
-  // already did an error message for this.
-  if (ARGCOUNT == 0) {
-    return;
-  }
-
-  if (cmdmod.cmod_tab) {
-    // ":tab drop file ...": open a tab for each argument that isn't
-    // edited in a window yet.  It's like ":tab all" but without closing
-    // windows or tabs.
-    ex_all(eap);
-    cmdmod.cmod_tab = 0;
-    ex_rewind(eap);
-    return;
-  }
-
-  // ":drop file ...": Edit the first argument.  Jump to an existing
-  // window if possible, edit in current window if the current buffer
-  // can be abandoned, otherwise open a new window.
-  buf_T *buf = buflist_findnr(ARGLIST[0].ae_fnum);
-
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (wp->w_buffer == buf) {
-      goto_tabpage_win(tp, wp);
-      curwin->w_arg_idx = 0;
-      if (!bufIsChanged(curbuf)) {
-        const int save_ar = curbuf->b_p_ar;
-
-        // reload the file if it is newer
-        curbuf->b_p_ar = true;
-        buf_check_timestamp(curbuf);
-        curbuf->b_p_ar = save_ar;
-      }
-      if (curbuf->b_ml.ml_flags & ML_EMPTY) {
-        ex_rewind(eap);
-      }
-
-      // execute [+cmd]
-      if (eap->do_ecmd_cmd) {
-        bool did_set_swapcommand = set_swapcommand(eap->do_ecmd_cmd, 0);
-        do_cmdline(eap->do_ecmd_cmd, NULL, NULL, DOCMD_VERBOSE);
-        if (did_set_swapcommand) {
-          set_vim_var_string(VV_SWAPCOMMAND, NULL, -1);
-        }
-      }
-
-      // no need to execute [++opts] - they only apply for newly loaded buffers.
-      return;
-    }
-  }
-
-  // Check whether the current buffer is changed. If so, we will need
-  // to split the current window or data could be lost.
-  // Skip the check if the 'hidden' option is set, as in this case the
-  // buffer won't be lost.
-  if (!buf_hide(curbuf)) {
-    emsg_off++;
-    split = check_changed(curbuf, CCGD_AW | CCGD_EXCMD);
-    emsg_off--;
-  }
-
-  // Fake a ":sfirst" or ":first" command edit the first argument.
-  if (split) {
-    eap->cmdidx = CMD_sfirst;
-    eap->cmd[0] = 's';
-  } else {
-    eap->cmdidx = CMD_first;
-  }
-  ex_rewind(eap);
+  rs_ex_drop(eap);
 }

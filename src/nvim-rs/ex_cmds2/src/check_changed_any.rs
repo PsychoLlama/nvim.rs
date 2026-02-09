@@ -2,13 +2,11 @@
 //!
 //! Ports of `check_changed_any`, `add_bufnum`, and `ex_checktime`.
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int};
 
-use crate::autowrite_impl::BufHandle;
+use crate::autowrite_impl::{BufHandle, BufrefHandle};
 use crate::script_host::ExArgHandle;
 
-const OK: c_int = 1;
-const FAIL: c_int = 0;
 const DOBUF_UNLOAD: c_int = 2;
 const DOBUF_GOTO: c_int = 0;
 const CMOD_CONFIRM: u32 = 0x0080;
@@ -26,7 +24,6 @@ pub struct TabHandle {
 
 extern "C" {
     // --- already declared in other modules ---
-    fn nvim_ex2_buf_get_ffname(buf: *mut BufHandle) -> *const c_char;
     fn nvim_ex2_buf_get_fname(buf: *mut BufHandle) -> *const c_char;
     fn nvim_ex2_buf_get_nwindows(buf: *mut BufHandle) -> c_int;
     fn nvim_ex2_get_firstbuf() -> *mut BufHandle;
@@ -34,9 +31,9 @@ extern "C" {
     fn nvim_ex2_get_curbuf() -> *mut BufHandle;
     fn nvim_ex2_get_cmod_flags() -> u32;
     fn nvim_ex2_bufIsChanged(buf: *mut BufHandle) -> bool;
-    fn nvim_ex2_bufref_create(buf: *mut BufHandle) -> *mut c_void;
-    fn nvim_ex2_bufref_valid(br: *mut c_void) -> bool;
-    fn nvim_ex2_bufref_free(br: *mut c_void);
+    fn nvim_ex2_bufref_create(buf: *mut BufHandle) -> *mut BufrefHandle;
+    fn nvim_ex2_bufref_valid(br: *mut BufrefHandle) -> bool;
+    fn nvim_ex2_bufref_free(br: *mut BufrefHandle);
     fn nvim_ex2_gettext(s: *const c_char) -> *const c_char;
     fn nvim_ex2_buf_get_fnum(buf: *mut BufHandle) -> c_int;
     fn nvim_ex2_get_p_awa() -> bool;
@@ -46,7 +43,6 @@ extern "C" {
     fn rs_check_changed(buf: *mut BufHandle, flags: c_int) -> bool;
 
     // --- new accessors for check_changed_any ---
-    fn nvim_ex2_get_firstwin() -> *mut WinHandle;
     fn nvim_ex2_win_next(win: *mut WinHandle) -> *mut WinHandle;
     fn nvim_ex2_win_get_buffer(win: *mut WinHandle) -> *mut BufHandle;
     fn nvim_ex2_get_curtab() -> *mut TabHandle;
@@ -54,16 +50,13 @@ extern "C" {
     fn nvim_ex2_tp_next(tp: *mut TabHandle) -> *mut TabHandle;
     fn nvim_ex2_tp_firstwin(tp: *mut TabHandle) -> *mut WinHandle;
     fn nvim_ex2_get_vgetc_busy() -> c_int;
-    fn nvim_ex2_get_msg_row() -> c_int;
     fn nvim_ex2_set_msg_row(val: c_int);
-    fn nvim_ex2_get_msg_col() -> c_int;
     fn nvim_ex2_set_msg_col(val: c_int);
     fn nvim_ex2_set_msg_didout(val: bool);
     fn nvim_ex2_get_msg_didany() -> bool;
     fn nvim_ex2_get_cmdline_row() -> c_int;
     fn nvim_ex2_get_no_wait_return() -> c_int;
     fn nvim_ex2_set_no_wait_return(val: c_int);
-    fn nvim_ex2_get_exiting() -> bool;
     fn nvim_ex2_set_exiting(val: bool);
     fn nvim_ex2_buflist_findnr(nr: c_int) -> *mut BufHandle;
     fn nvim_ex2_set_curbuf(buf: *mut BufHandle, action: c_int, prevbuf: bool);
@@ -90,6 +83,7 @@ fn bufnum_add(bufnrs: &mut Vec<c_int>, nr: c_int) {
 }
 
 /// Port of `check_changed_any`
+#[allow(clippy::too_many_lines)]
 #[no_mangle]
 pub unsafe extern "C" fn rs_check_changed_any(hidden: bool, unload: bool) -> bool {
     let mut ret = false;
@@ -145,14 +139,11 @@ pub unsafe extern "C" fn rs_check_changed_any(hidden: bool, unload: bool) -> boo
         buf = unsafe { nvim_ex2_buf_next(buf) };
     }
 
-    let bufnum = bufnrs.len();
-
     // Find first changed buffer that can't be abandoned
     let mut found_buf: *mut BufHandle = std::ptr::null_mut();
-    let mut found_idx = bufnum; // index >= bufnum means not found
 
-    for i in 0..bufnum {
-        let b = unsafe { nvim_ex2_buflist_findnr(bufnrs[i]) };
+    for &nr in &bufnrs {
+        let b = unsafe { nvim_ex2_buflist_findnr(nr) };
         if b.is_null() {
             continue;
         }
@@ -162,13 +153,11 @@ pub unsafe extern "C" fn rs_check_changed_any(hidden: bool, unload: bool) -> boo
             let bufref = unsafe { nvim_ex2_bufref_create(b) };
 
             // Try auto-writing the buffer.
-            let ccgd_flags =
-                (if unsafe { nvim_ex2_get_p_awa() } { 1 } else { 0 }) | 2 | 8; // AW | MULTWIN | ALLBUF
+            let ccgd_flags = i32::from(unsafe { nvim_ex2_get_p_awa() }) | 2 | 8; // AW | MULTWIN | ALLBUF
             if unsafe { rs_check_changed(b, ccgd_flags) }
                 && unsafe { nvim_ex2_bufref_valid(bufref) }
             {
                 found_buf = b;
-                found_idx = i;
                 unsafe { nvim_ex2_bufref_free(bufref) };
                 break;
             }
@@ -176,7 +165,7 @@ pub unsafe extern "C" fn rs_check_changed_any(hidden: bool, unload: bool) -> boo
         }
     }
 
-    if found_idx >= bufnum {
+    if found_buf.is_null() {
         // No changed buffer found
         return ret;
     }

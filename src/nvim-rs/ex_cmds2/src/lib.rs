@@ -14,6 +14,7 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::borrow_as_ptr)]
 #![allow(clippy::manual_c_str_literals)]
+#![allow(clippy::similar_names)]
 
 use std::ffi::c_int;
 
@@ -21,16 +22,22 @@ mod autowrite;
 mod autowrite_impl;
 mod bufcheck;
 mod check_changed_any;
+mod compiler;
 mod dialog;
+mod drop;
 mod listdo;
+mod listdo_impl;
 mod script_host;
 
 pub use autowrite::*;
 pub use autowrite_impl::*;
 pub use bufcheck::*;
 pub use check_changed_any::*;
+pub use compiler::*;
 pub use dialog::*;
+pub use drop::*;
 pub use listdo::*;
+pub use listdo_impl::*;
 pub use script_host::*;
 
 // =============================================================================

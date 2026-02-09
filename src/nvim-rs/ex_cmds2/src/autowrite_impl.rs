@@ -129,13 +129,15 @@ unsafe fn autowrite_impl(buf: *mut BufHandle, forceit: bool) -> c_int {
     }
 
     let bufref = unsafe { nvim_ex2_bufref_create(buf) };
-    let mut r = unsafe { buf_write_all_impl(buf, forceit) };
+    let write_result = unsafe { buf_write_all_impl(buf, forceit) };
 
     // Writing may succeed but the buffer still changed, e.g., when there is a
     // conversion error. We do want to return FAIL then.
-    if unsafe { nvim_ex2_bufref_valid(bufref) } && unsafe { nvim_ex2_bufIsChanged(buf) } {
-        r = FAIL;
-    }
+    let r = if unsafe { nvim_ex2_bufref_valid(bufref) } && unsafe { nvim_ex2_bufIsChanged(buf) } {
+        FAIL
+    } else {
+        write_result
+    };
     unsafe { nvim_ex2_bufref_free(bufref) };
     r
 }
@@ -149,10 +151,8 @@ unsafe fn check_changed_impl(buf: *mut BufHandle, flags: c_int) -> bool {
 
     if !forceit
         && unsafe { nvim_ex2_bufIsChanged(buf) }
-        && (ccgd.contains(CcgdFlags::MULTWIN)
-            || unsafe { nvim_ex2_buf_get_nwindows(buf) } <= 1)
-        && (!ccgd.contains(CcgdFlags::AW)
-            || unsafe { autowrite_impl(buf, forceit) } == FAIL)
+        && (ccgd.contains(CcgdFlags::MULTWIN) || unsafe { nvim_ex2_buf_get_nwindows(buf) } <= 1)
+        && (!ccgd.contains(CcgdFlags::AW) || unsafe { autowrite_impl(buf, forceit) } == FAIL)
     {
         if (unsafe { nvim_ex2_get_p_confirm() }
             || (unsafe { nvim_ex2_get_cmod_flags() } & CMOD_CONFIRM) != 0)

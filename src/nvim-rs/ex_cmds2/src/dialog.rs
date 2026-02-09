@@ -113,12 +113,7 @@ pub unsafe extern "C" fn rs_dialog_changed(buf: *mut BufHandle, checkall: bool) 
         }
     } else {
         unsafe {
-            nvim_ex2_vim_dialog_yesnocancel(
-                VIM_QUESTION,
-                std::ptr::null(),
-                buff.as_ptr().cast(),
-                1,
-            )
+            nvim_ex2_vim_dialog_yesnocancel(VIM_QUESTION, std::ptr::null(), buff.as_ptr().cast(), 1)
         }
     };
 

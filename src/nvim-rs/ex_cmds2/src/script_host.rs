@@ -3,7 +3,7 @@
 //! Ports of `script_host_execute`, `script_host_execute_file`,
 //! `script_host_do_range` and the nine `ex_*` thin wrappers.
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int};
 
 /// Maximum path length (matches MAXPATHL in C)
 const MAXPATHL: usize = 4096;
