@@ -141,7 +141,6 @@ void mh_realloc(MapHash *h, uint32_t n_min_buckets);
 
 #define quasiquote(x, y) x##y
 
-MH_DECLS(glyph, char, String)
 KEY_DECLS(int)
 KEY_DECLS(cstr_t)
 KEY_DECLS(ptr_t)

@@ -26,7 +26,6 @@
 #include "nvim/grid.h"
 #include "nvim/highlight.h"
 #include "nvim/log.h"
-#include "nvim/map_defs.h"
 #include "nvim/mbyte.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
@@ -129,32 +128,6 @@ extern unsigned int rs_rdb_flag_invalid(void);
 // compared with previous contents to calculate smallest delta.
 // Per-cell attributes
 static size_t linebuf_size = 0;
-
-// Used to cache glyphs which doesn't fit an a sizeof(schar_T) length UTF-8 string.
-// Then it instead stores an index into glyph_cache.keys[] which is a flat char array.
-// The hash part is used by schar_from_buf() to quickly lookup glyphs which already
-// has been interned. schar_get() should used to convert a schar_T value
-// back to a string buffer.
-//
-// The maximum byte size of a glyph is MAX_SCHAR_SIZE (including the final NUL).
-static Set(glyph) glyph_cache = SET_INIT;
-
-/// C accessor for Rust to read from glyph cache
-/// @param idx Index into glyph_cache.keys
-/// @return Pointer to NUL-terminated string at idx, or NULL if out of bounds
-const char *nvim_glyph_cache_get(uint32_t idx)
-{
-  if (idx >= glyph_cache.h.n_keys) {
-    return NULL;
-  }
-  return &glyph_cache.keys[idx];
-}
-
-/// Get number of keys in glyph cache (for bounds checking)
-uint32_t nvim_glyph_cache_n_keys(void)
-{
-  return glyph_cache.h.n_keys;
-}
 
 /// C accessor for Rust to call decor_check_invalid_glyphs()
 void nvim_decor_check_invalid_glyphs(void)
@@ -633,12 +606,6 @@ bool schar_high(schar_T sc)
   return rs_schar_high(sc);
 }
 
-#ifdef ORDER_BIG_ENDIAN
-# define schar_idx(sc) (sc & (0x00FFFFFF))
-#else
-# define schar_idx(sc) (sc >> 8)
-#endif
-
 /// sets final NUL
 size_t schar_get(char *buf_out, schar_T sc)
 {
@@ -661,13 +628,6 @@ int schar_cells(schar_T sc)
   return rs_schar_cells(sc);
 }
 
-/// gets first raw UTF-8 byte of an schar
-static char schar_get_first_byte(schar_T sc)
-{
-  assert(!(schar_high(sc) && schar_idx(sc) >= glyph_cache.h.n_keys));
-  return schar_high(sc) ? glyph_cache.keys[schar_idx(sc)] : *(char *)&sc;
-}
-
 int schar_get_first_codepoint(schar_T sc)
 {
   return rs_schar_get_first_codepoint(sc);
@@ -677,27 +637,6 @@ int schar_get_first_codepoint(schar_T sc)
 char schar_get_ascii(schar_T sc)
 {
   return rs_schar_get_ascii(sc);
-}
-
-static bool schar_in_arabic_block(schar_T sc)
-{
-  char first_byte = schar_get_first_byte(sc);
-  return ((uint8_t)first_byte & 0xFE) == 0xD8;
-}
-
-/// Get the first two codepoints of an schar, or NUL when not available
-static void schar_get_first_two_codepoints(schar_T sc, int *c0, int *c1)
-{
-  char sc_buf[MAX_SCHAR_SIZE];
-  schar_get(sc_buf, sc);
-
-  *c0 = utf_ptr2char(sc_buf);
-  int len = utf_ptr2len(sc_buf);
-  if (*c0 == NUL) {
-    *c1 = NUL;
-  } else {
-    *c1 = utf_ptr2char(sc_buf + len);
-  }
 }
 
 void line_do_arabic_shape(schar_T *buf, int cols)
@@ -949,7 +888,6 @@ void grid_free_all_mem(void)
   xfree(linebuf_attr);
   xfree(linebuf_vcol);
   xfree(linebuf_scratch);
-  set_destroy(glyph, &glyph_cache);
 }
 #endif
 
