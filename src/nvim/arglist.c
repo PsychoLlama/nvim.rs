@@ -118,6 +118,63 @@ _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
 /// function that might trigger an autocommand.
 static bool arglist_locked = false;
 
+// =============================================================================
+// C accessor functions for Rust FFI
+// =============================================================================
+
+// -- Globals --
+int nvim_al_get_arglist_locked(void) { return arglist_locked; }
+void nvim_al_set_arglist_locked(int val) { arglist_locked = val; }
+alist_T *nvim_al_get_global_alist(void) { return &global_alist; }
+int nvim_al_get_arg_had_last(void) { return arg_had_last; }
+void nvim_al_set_arg_had_last(int val) { arg_had_last = val; }
+int nvim_al_get_max_alist_id(void) { return max_alist_id; }
+int nvim_al_inc_max_alist_id(void) { return ++max_alist_id; }
+win_T *nvim_al_get_curwin(void) { return curwin; }
+buf_T *nvim_al_get_curbuf(void) { return curbuf; }
+tabpage_T *nvim_al_get_curtab(void) { return curtab; }
+int nvim_al_get_got_int(void) { return got_int; }
+
+// -- Macros --
+int nvim_al_ARGCOUNT(void) { return ARGCOUNT; }
+aentry_T *nvim_al_ARGLIST(void) { return ARGLIST; }
+int nvim_al_GARGCOUNT(void) { return GARGCOUNT; }
+aentry_T *nvim_al_GARGLIST(void) { return GARGLIST; }
+alist_T *nvim_al_ALIST_curwin(void) { return ALIST(curwin); }
+int nvim_al_WARGCOUNT(win_T *wp) { return WARGCOUNT(wp); }
+aentry_T *nvim_al_WARGLIST(win_T *wp) { return WARGLIST(wp); }
+aentry_T *nvim_al_AARGLIST(alist_T *al, int i) { return &AARGLIST(al)[i]; }
+
+// -- alist_T fields --
+garray_T *nvim_al_ga_ptr(alist_T *al) { return &al->al_ga; }
+int nvim_al_get_refcount(alist_T *al) { return al->al_refcount; }
+void nvim_al_set_refcount(alist_T *al, int val) { al->al_refcount = val; }
+void nvim_al_inc_refcount(alist_T *al) { al->al_refcount++; }
+int nvim_al_dec_refcount(alist_T *al) { return --al->al_refcount; }
+int nvim_al_get_id(alist_T *al) { return al->id; }
+void nvim_al_set_id(alist_T *al, int val) { al->id = val; }
+
+// -- aentry_T fields --
+char *nvim_al_ae_get_fname(aentry_T *ae) { return ae->ae_fname; }
+void nvim_al_ae_set_fname(aentry_T *ae, char *fname) { ae->ae_fname = fname; }
+int nvim_al_ae_get_fnum(aentry_T *ae) { return ae->ae_fnum; }
+void nvim_al_ae_set_fnum(aentry_T *ae, int fnum) { ae->ae_fnum = fnum; }
+
+// -- garray_T ops --
+int nvim_al_ga_get_len(garray_T *ga) { return ga->ga_len; }
+void nvim_al_ga_set_len(garray_T *ga, int len) { ga->ga_len = len; }
+void *nvim_al_ga_get_data(garray_T *ga) { return ga->ga_data; }
+void nvim_al_ga_init_aentry(garray_T *ga) { ga_init(ga, (int)sizeof(aentry_T), 5); }
+void nvim_al_ga_grow(garray_T *ga, int n) { ga_grow(ga, n); }
+void nvim_al_ga_clear(garray_T *ga) { ga_clear(ga); }
+
+// -- curwin fields --
+int nvim_al_win_get_arg_idx(win_T *wp) { return wp->w_arg_idx; }
+void nvim_al_win_set_arg_idx(win_T *wp, int idx) { wp->w_arg_idx = idx; }
+alist_T *nvim_al_win_get_alist(win_T *wp) { return wp->w_alist; }
+void nvim_al_win_set_alist(win_T *wp, alist_T *al) { wp->w_alist = al; }
+void nvim_al_win_set_locked(win_T *wp, int val) { wp->w_locked = val; }
+
 static int check_arglist_locked(void)
 {
   if (arglist_locked) {
