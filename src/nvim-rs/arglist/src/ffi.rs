@@ -116,6 +116,7 @@ extern "C" {
     pub fn nvim_al_buflist_add(fname: *const c_char, flags: c_int) -> c_int;
     pub fn nvim_al_buf_set_name(fnum: c_int, name: *const c_char);
     pub fn nvim_al_os_breakcheck();
+    pub fn nvim_al_alloc_alist() -> AlistPtr;
     pub fn nvim_al_ga_init_charptr(ga: GarrayPtr);
     pub fn nvim_al_ga_append_charptr(ga: GarrayPtr, ptr: *mut c_char);
 }

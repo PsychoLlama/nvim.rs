@@ -8,6 +8,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
+pub mod core;
 pub mod entry;
 pub mod ffi;
 pub mod navigation;

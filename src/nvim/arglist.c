@@ -175,177 +175,66 @@ alist_T *nvim_al_win_get_alist(win_T *wp) { return wp->w_alist; }
 void nvim_al_win_set_alist(win_T *wp, alist_T *al) { wp->w_alist = al; }
 void nvim_al_win_set_locked(win_T *wp, int val) { wp->w_locked = val; }
 
-static int check_arglist_locked(void)
+// -- Phase 2 extra accessors --
+void nvim_al_emsg_arglist_locked(void) { emsg(_(e_cannot_change_arglist_recursively)); }
+void nvim_al_xfree(void *ptr) { xfree(ptr); }
+void *nvim_al_xmalloc(size_t size) { return xmalloc(size); }
+char *nvim_al_xstrdup(const char *s) { return xstrdup(s); }
+void nvim_al_deep_clear_aentry(alist_T *al)
 {
-  if (arglist_locked) {
-    emsg(_(e_cannot_change_arglist_recursively));
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Clear an argument list: free all file names and reset it to zero entries.
-void alist_clear(alist_T *al)
-{
-  if (check_arglist_locked() == FAIL) {
-    return;
-  }
 #define FREE_AENTRY_FNAME(arg) xfree((arg)->ae_fname)
   GA_DEEP_CLEAR(&al->al_ga, aentry_T, FREE_AENTRY_FNAME);
+#undef FREE_AENTRY_FNAME
+}
+int nvim_al_buflist_add(const char *fname, int flags)
+{
+  return buflist_add((char *)fname, flags);
+}
+void nvim_al_buf_set_name(int fnum, const char *name)
+{
+  buf_set_name(fnum, (char *)name);
+}
+void nvim_al_os_breakcheck(void) { os_breakcheck(); }
+alist_T *nvim_al_alloc_alist(void)
+{
+  return xmalloc(sizeof(alist_T));
 }
 
-/// Init an argument list.
-void alist_init(alist_T *al)
+// Rust FFI declarations for Phase 2
+extern int rs_check_arglist_locked(void);
+extern void rs_alist_clear(alist_T *al);
+extern void rs_alist_init(alist_T *al);
+extern void rs_alist_unlink(alist_T *al);
+extern void rs_alist_new(void);
+extern void rs_alist_add(alist_T *al, char *fname, int set_fnum);
+extern void rs_alist_set(alist_T *al, int count, char **files, int use_curbuf, int *fnum_list, int fnum_len);
+extern void rs_alist_expand(int *fnum_list, int fnum_len);
+
+static int check_arglist_locked(void)
 {
-  ga_init(&al->al_ga, (int)sizeof(aentry_T), 5);
+  return rs_check_arglist_locked();
 }
 
-/// Remove a reference from an argument list.
-/// Ignored when the argument list is the global one.
-/// If the argument list is no longer used by any window, free it.
-void alist_unlink(alist_T *al)
-{
-  if (al != &global_alist && --al->al_refcount <= 0) {
-    alist_clear(al);
-    xfree(al);
-  }
-}
+void alist_clear(alist_T *al) { rs_alist_clear(al); }
+void alist_init(alist_T *al) { rs_alist_init(al); }
+void alist_unlink(alist_T *al) { rs_alist_unlink(al); }
+void alist_new(void) { rs_alist_new(); }
 
-/// Create a new argument list and use it for the current window.
-void alist_new(void)
+void alist_add(alist_T *al, char *fname, int set_fnum) { rs_alist_add(al, fname, set_fnum); }
+
+void alist_set(alist_T *al, int count, char **files, int use_curbuf, int *fnum_list, int fnum_len)
 {
-  curwin->w_alist = xmalloc(sizeof(*curwin->w_alist));
-  curwin->w_alist->al_refcount = 1;
-  curwin->w_alist->id = ++max_alist_id;
-  alist_init(curwin->w_alist);
+  rs_alist_set(al, count, files, use_curbuf, fnum_list, fnum_len);
 }
 
 #if !defined(UNIX)
-
-/// Expand the file names in the global argument list.
-/// If "fnum_list" is not NULL, use "fnum_list[fnum_len]" as a list of buffer
-/// numbers to be re-used.
-void alist_expand(int *fnum_list, int fnum_len)
-{
-  char *save_p_su = p_su;
-
-  char **old_arg_files = xmalloc(sizeof(*old_arg_files) * GARGCOUNT);
-
-  // Don't use 'suffixes' here.  This should work like the shell did the
-  // expansion.  Also, the vimrc file isn't read yet, thus the user
-  // can't set the options.
-  p_su = empty_string_option;
-  for (int i = 0; i < GARGCOUNT; i++) {
-    old_arg_files[i] = xstrdup(GARGLIST[i].ae_fname);
-  }
-  int old_arg_count = GARGCOUNT;
-  char **new_arg_files;
-  int new_arg_file_count;
-  if (expand_wildcards(old_arg_count, old_arg_files,
-                       &new_arg_file_count, &new_arg_files,
-                       EW_FILE|EW_NOTFOUND|EW_ADDSLASH|EW_NOERROR) == OK
-      && new_arg_file_count > 0) {
-    alist_set(&global_alist, new_arg_file_count, new_arg_files,
-              true, fnum_list, fnum_len);
-    FreeWild(old_arg_count, old_arg_files);
-  }
-  p_su = save_p_su;
-}
+void alist_expand(int *fnum_list, int fnum_len) { rs_alist_expand(fnum_list, fnum_len); }
 #endif
-
-/// Set the argument list for the current window.
-/// Takes over the allocated files[] and the allocated fnames in it.
-void alist_set(alist_T *al, int count, char **files, int use_curbuf, int *fnum_list, int fnum_len)
-{
-  if (check_arglist_locked() == FAIL) {
-    return;
-  }
-
-  alist_clear(al);
-  ga_grow(&al->al_ga, count);
-  {
-    for (int i = 0; i < count; i++) {
-      if (got_int) {
-        // When adding many buffers this can take a long time.  Allow
-        // interrupting here.
-        while (i < count) {
-          xfree(files[i++]);
-        }
-        break;
-      }
-
-      // May set buffer name of a buffer previously used for the
-      // argument list, so that it's re-used by alist_add.
-      if (fnum_list != NULL && i < fnum_len) {
-        arglist_locked = true;
-        buf_set_name(fnum_list[i], files[i]);
-        arglist_locked = false;
-      }
-
-      alist_add(al, files[i], use_curbuf ? 2 : 1);
-      os_breakcheck();
-    }
-    xfree(files);
-  }
-
-  if (al == &global_alist) {
-    arg_had_last = false;
-  }
-}
-
-/// Add file "fname" to argument list "al".
-/// "fname" must have been allocated and "al" must have been checked for room.
-///
-/// May trigger Buf* autocommands
-///
-/// @param set_fnum  1: set buffer number; 2: re-use curbuf
-void alist_add(alist_T *al, char *fname, int set_fnum)
-{
-  if (fname == NULL) {          // don't add NULL file names
-    return;
-  }
-  if (check_arglist_locked() == FAIL) {
-    return;
-  }
-  arglist_locked = true;
-  curwin->w_locked = true;
-
-#ifdef BACKSLASH_IN_FILENAME
-  slash_adjust(fname);
-#endif
-  AARGLIST(al)[al->al_ga.ga_len].ae_fname = fname;
-  if (set_fnum > 0) {
-    AARGLIST(al)[al->al_ga.ga_len].ae_fnum =
-      buflist_add(fname, BLN_LISTED | (set_fnum == 2 ? BLN_CURBUF : 0));
-  }
-  al->al_ga.ga_len++;
-
-  arglist_locked = false;
-  curwin->w_locked = false;
-}
 
 #if defined(BACKSLASH_IN_FILENAME)
-
 /// Adjust slashes in file names.  Called after 'shellslash' was set.
-void alist_slash_adjust(void)
-{
-  for (int i = 0; i < GARGCOUNT; i++) {
-    if (GARGLIST[i].ae_fname != NULL) {
-      slash_adjust(GARGLIST[i].ae_fname);
-    }
-  }
-
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (wp->w_alist != &global_alist) {
-      for (int i = 0; i < WARGCOUNT(wp); i++) {
-        if (WARGLIST(wp)[i].ae_fname != NULL) {
-          slash_adjust(WARGLIST(wp)[i].ae_fname);
-        }
-      }
-    }
-  }
-}
-
+/// No-op on Linux — only relevant on Windows.
+void alist_slash_adjust(void) {}
 #endif
 
 /// Isolate one argument, taking backticks.
