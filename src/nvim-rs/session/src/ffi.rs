@@ -143,4 +143,39 @@ extern "C" {
     pub fn nvim_ses_makeset(fd: *mut libc::FILE, opt: c_int, local_only: bool) -> c_int;
     pub fn nvim_ses_makefoldset(fd: *mut libc::FILE) -> c_int;
     pub fn nvim_ses_put_folds(fd: *mut libc::FILE, wp: WinPtr) -> c_int;
+
+    // --- Phase 7: makeopens accessors ---
+
+    // Buffer iteration
+    pub fn nvim_ses_foreach_buffer(
+        cb: unsafe extern "C" fn(buf: BufPtr, only_save_windows: bool, ud: *mut c_void) -> c_int,
+        only_save_windows: bool,
+        ud: *mut c_void,
+    ) -> c_int;
+
+    // Buffer fields
+    pub fn nvim_ses_buf_get_nwindows(buf: BufPtr) -> c_int;
+    pub fn nvim_ses_buf_is_help(buf: BufPtr) -> bool;
+    pub fn nvim_ses_buf_get_wininfo_lnum(buf: BufPtr) -> i64;
+
+    // Global argument list
+    pub fn nvim_ses_get_global_alist_ga() -> GarrayPtr;
+
+    // Tabpage iteration and fields
+    pub fn nvim_ses_get_first_tabpage() -> TabpagePtr;
+    pub fn nvim_ses_get_curtab() -> TabpagePtr;
+    pub fn nvim_ses_tp_get_next(tp: TabpagePtr) -> TabpagePtr;
+    pub fn nvim_ses_tp_get_firstwin(tp: TabpagePtr) -> WinPtr;
+    pub fn nvim_ses_tp_get_topframe(tp: TabpagePtr) -> FramePtr;
+
+    // Window globals
+    pub fn nvim_ses_get_firstwin() -> WinPtr;
+    pub fn nvim_ses_tabpage_index(tp: TabpagePtr) -> c_int;
+
+    // Session option globals
+    pub fn nvim_ses_get_globaldir() -> *const c_char;
+    pub fn nvim_ses_get_p_wh() -> i64;
+    pub fn nvim_ses_get_p_wiw() -> i64;
+    pub fn nvim_ses_get_p_shm() -> *const c_char;
+    pub fn nvim_ses_get_p_stal() -> i64;
 }

@@ -871,3 +871,421 @@ pub unsafe extern "C" fn rs_put_view(
 
     OK
 }
+
+// =============================================================================
+// Phase 7: makeopens (Session Orchestrator)
+// =============================================================================
+
+/// Additional session option flag constants (verified via _Static_assert in C)
+pub const K_OPT_SSOP_FLAG_BUFFERS: c_uint = 0x01;
+pub const K_OPT_SSOP_FLAG_GLOBALS: c_uint = 0x100;
+pub const K_OPT_SSOP_FLAG_TABPAGES: c_uint = 0x8000;
+pub const K_OPT_SSOP_FLAG_RESIZE: c_uint = 0x04;
+
+/// State passed through buffer iteration callback.
+struct BufIterState {
+    fd: *mut libc::FILE,
+    ssop_flags: c_uint,
+    only_save_windows: bool,
+}
+
+/// Callback for `nvim_ses_foreach_buffer` — writes `badd +N fname` for each saveable buffer.
+unsafe extern "C" fn makeopens_buf_callback(
+    buf: ffi::BufPtr,
+    _only_save_windows: bool,
+    ud: *mut std::ffi::c_void,
+) -> c_int {
+    let state = &*(ud.cast::<BufIterState>());
+    let ssop = state.ssop_flags;
+
+    // Filter: skip buffers we don't want to save
+    if state.only_save_windows && ffi::nvim_ses_buf_get_nwindows(buf) == 0 {
+        return OK;
+    }
+    if ffi::nvim_ses_buf_is_help(buf) && (ssop & K_OPT_SSOP_FLAG_HELP) == 0 {
+        return OK;
+    }
+    if ffi::nvim_ses_bt_terminal(buf) && (ssop & K_OPT_SSOP_FLAG_TERMINAL) == 0 {
+        return OK;
+    }
+    if ffi::nvim_ses_buf_get_fname(buf).is_null() {
+        return OK;
+    }
+    if !ffi::nvim_ses_buf_get_p_bl(buf) {
+        return OK;
+    }
+
+    let mut w = crate::writer::SessionWriter::new(state.fd);
+    let lnum = ffi::nvim_ses_buf_get_wininfo_lnum(buf);
+    let header = format!("badd +{lnum} ");
+    if !w.write_bytes(header.as_bytes())
+        || rs_ses_fname(
+            state.fd,
+            buf,
+            ffi::nvim_ses_get_ssop_flags_ptr() as *mut c_uint,
+            true,
+        ) == FAIL
+    {
+        return FAIL;
+    }
+    OK
+}
+
+/// Write commands for restoring the current buffers/windows/tabs for :mksession.
+///
+/// # Safety
+/// `fd` must be a valid FILE*. `dirnow` must be a valid C string.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_makeopens(fd: *mut libc::FILE, dirnow: *mut c_char) -> c_int {
+    let mut w = crate::writer::SessionWriter::new(fd);
+    let ssop = ffi::nvim_ses_get_ssop_flags();
+    let ssop_ptr = ffi::nvim_ses_get_ssop_flags_ptr() as *mut c_uint;
+
+    let only_save_windows = (ssop & K_OPT_SSOP_FLAG_BUFFERS) == 0;
+    let mut restore_size = true;
+    let mut edited_win: ffi::WinPtr = std::ptr::null_mut();
+    let mut cur_arg_idx: c_int = 0;
+    let mut next_arg_idx: c_int = 0;
+
+    // Begin by setting v:this_session, and then other sessionable variables.
+    if w.put_line(b"let v:this_session=expand(\"<sfile>:p\")") == FAIL {
+        return FAIL;
+    }
+    if (ssop & K_OPT_SSOP_FLAG_GLOBALS) != 0 && rs_store_session_globals(fd) == FAIL {
+        return FAIL;
+    }
+
+    // Close all windows and tabs but one.
+    if w.put_line(b"silent only") == FAIL {
+        return FAIL;
+    }
+    if (ssop & K_OPT_SSOP_FLAG_TABPAGES) != 0 && w.put_line(b"silent tabonly") == FAIL {
+        return FAIL;
+    }
+
+    // Now a :cd command to the session directory or the current directory
+    if (ssop & K_OPT_SSOP_FLAG_SESDIR) != 0 {
+        if w.put_line(b"exe \"cd \" . escape(expand(\"<sfile>:p:h\"), ' ')") == FAIL {
+            return FAIL;
+        }
+    } else if (ssop & K_OPT_SSOP_FLAG_CURDIR) != 0 {
+        let gdir = ffi::nvim_ses_get_globaldir();
+        let dir = if gdir.is_null() {
+            dirnow
+        } else {
+            gdir as *mut c_char
+        };
+        let sname = ffi::nvim_ses_home_replace_save(dir);
+        let fname_esc = rs_ses_escape_fname(sname, ssop_ptr);
+        let fe = CStr::from_ptr(fname_esc).to_str().unwrap_or("");
+        let line = format!("cd {fe}\n");
+        let ok = w.write_bytes(line.as_bytes());
+        ffi::nvim_ses_xfree(fname_esc.cast());
+        ffi::nvim_ses_xfree(sname.cast());
+        if !ok {
+            return FAIL;
+        }
+    }
+
+    // Check for empty unnamed buffer
+    if !w.write_bytes(
+        b"if expand('%') == '' && !&modified && line('$') <= 1 && getline(1) == ''\n\
+  let s:wipebuf = bufnr('%')\nendif\n",
+    ) {
+        return FAIL;
+    }
+
+    // Save 'shortmess' if not storing options.
+    if (ssop & K_OPT_SSOP_FLAG_OPTIONS) == 0
+        && w.put_line(b"let s:shortmess_save = &shortmess") == FAIL
+    {
+        return FAIL;
+    }
+
+    if w.put_line(b"set shortmess+=aoO") == FAIL {
+        return FAIL;
+    }
+
+    // Save all buffers into the buffer list.
+    let mut buf_state = BufIterState {
+        fd,
+        ssop_flags: ssop,
+        only_save_windows,
+    };
+    if ffi::nvim_ses_foreach_buffer(
+        makeopens_buf_callback,
+        only_save_windows,
+        std::ptr::from_mut(&mut buf_state).cast(),
+    ) == FAIL
+    {
+        return FAIL;
+    }
+
+    // The global argument list
+    let ga = ffi::nvim_ses_get_global_alist_ga();
+    let fullname = (ssop & K_OPT_SSOP_FLAG_CURDIR) == 0;
+    if rs_ses_arglist(fd, c"argglobal".as_ptr(), ga, fullname, ssop_ptr) == FAIL {
+        return FAIL;
+    }
+
+    // Resize
+    if (ssop & K_OPT_SSOP_FLAG_RESIZE) != 0 {
+        let rows = i64::from(ffi::nvim_ses_get_Rows());
+        let cols = i64::from(ffi::nvim_ses_get_Columns());
+        let line = format!("set lines={rows} columns={cols}\n");
+        if !w.write_bytes(line.as_bytes()) {
+            return FAIL;
+        }
+    }
+
+    // Showtabline workaround
+    let mut restore_stal = false;
+    let first_tp = ffi::nvim_ses_get_first_tabpage();
+    if ffi::nvim_ses_get_p_stal() == 1 && !ffi::nvim_ses_tp_get_next(first_tp).is_null() {
+        if w.put_line(b"set stal=2") == FAIL {
+            return FAIL;
+        }
+        restore_stal = true;
+    }
+
+    // Pre-populate tab pages
+    let do_tabpages = (ssop & K_OPT_SSOP_FLAG_TABPAGES) != 0;
+    if do_tabpages {
+        let mut tp_iter = first_tp;
+        while !tp_iter.is_null() {
+            if !ffi::nvim_ses_tp_get_next(tp_iter).is_null()
+                && w.put_line(b"tabnew +setlocal\\ bufhidden=wipe") == FAIL
+            {
+                return FAIL;
+            }
+            tp_iter = ffi::nvim_ses_tp_get_next(tp_iter);
+        }
+        if !ffi::nvim_ses_tp_get_next(first_tp).is_null() && w.put_line(b"tabrewind") == FAIL {
+            return FAIL;
+        }
+    }
+
+    // Main tab page loop
+    let mut restore_height_width = false;
+    let curtab = ffi::nvim_ses_get_curtab();
+    let curwin_ptr = ffi::nvim_ses_get_curwin();
+    let mut tp = if do_tabpages { first_tp } else { curtab };
+
+    loop {
+        let mut need_tabnext = false;
+        let mut cnr: c_int = 1;
+        let tab_firstwin;
+        let tab_topframe;
+
+        if do_tabpages {
+            if std::ptr::eq(tp, curtab) {
+                tab_firstwin = ffi::nvim_ses_get_firstwin();
+                tab_topframe = ffi::nvim_ses_get_topframe();
+            } else {
+                tab_firstwin = ffi::nvim_ses_tp_get_firstwin(tp);
+                tab_topframe = ffi::nvim_ses_tp_get_topframe(tp);
+            }
+            if !std::ptr::eq(tp, first_tp) {
+                need_tabnext = true;
+            }
+        } else {
+            tab_firstwin = ffi::nvim_ses_get_firstwin();
+            tab_topframe = ffi::nvim_ses_get_topframe();
+        }
+
+        // Try loading one file first.
+        let mut wp = tab_firstwin;
+        while !wp.is_null() {
+            let buf = ffi::nvim_ses_win_get_buffer(wp);
+            if rs_ses_do_win(wp) != 0
+                && !ffi::nvim_ses_buf_get_ffname(buf).is_null()
+                && !ffi::nvim_ses_bt_help(buf)
+                && !ffi::nvim_ses_bt_nofilename(buf)
+            {
+                if need_tabnext && w.put_line(b"tabnext") == FAIL {
+                    return FAIL;
+                }
+                need_tabnext = false;
+
+                if !w.write_bytes(b"edit ") || rs_ses_fname(fd, buf, ssop_ptr, true) == FAIL {
+                    return FAIL;
+                }
+                if !ffi::nvim_ses_win_get_arg_idx_invalid(wp) {
+                    edited_win = wp;
+                }
+                break;
+            }
+            wp = ffi::nvim_ses_win_get_next(wp);
+        }
+
+        // If no file got edited create an empty tab page.
+        if need_tabnext && w.put_line(b"tabnext") == FAIL {
+            return FAIL;
+        }
+
+        if ffi::nvim_ses_frame_get_layout(tab_topframe) != FR_LEAF
+            && (w.put_line(b"let s:save_splitbelow = &splitbelow") == FAIL
+                || w.put_line(b"let s:save_splitright = &splitright") == FAIL
+                || w.put_line(b"set splitbelow splitright") == FAIL
+                || rs_ses_win_rec(fd, tab_topframe) == FAIL
+                || w.put_line(b"let &splitbelow = s:save_splitbelow") == FAIL
+                || w.put_line(b"let &splitright = s:save_splitright") == FAIL)
+        {
+            return FAIL;
+        }
+
+        // Count windows, check sizes can be restored
+        let mut nr: c_int = 0;
+        wp = tab_firstwin;
+        while !wp.is_null() {
+            if rs_ses_do_win(wp) != 0 {
+                nr += 1;
+            } else {
+                restore_size = false;
+            }
+            if std::ptr::eq(curwin_ptr, wp) {
+                cnr = nr;
+            }
+            wp = ffi::nvim_ses_win_get_next(wp);
+        }
+
+        if !tab_firstwin.is_null() && !ffi::nvim_ses_win_get_next(tab_firstwin).is_null() {
+            if w.put_line(b"wincmd t") == FAIL
+                || w.put_line(b"let s:save_winminheight = &winminheight") == FAIL
+                || w.put_line(b"let s:save_winminwidth = &winminwidth") == FAIL
+                || !w.write_bytes(
+                    b"set winminheight=0\nset winheight=1\nset winminwidth=0\nset winwidth=1\n",
+                )
+            {
+                return FAIL;
+            }
+            restore_height_width = true;
+        }
+        if nr > 1 && rs_ses_winsizes(fd, restore_size, tab_firstwin) == FAIL {
+            return FAIL;
+        }
+
+        // Tab-local working directory
+        if (ssop & K_OPT_SSOP_FLAG_CURDIR) != 0 && !ffi::nvim_ses_tp_get_localdir(tp).is_null() {
+            let tpdir = ffi::nvim_ses_tp_get_localdir(tp);
+            if !w.write_bytes(b"tcd ")
+                || rs_ses_put_fname(fd, tpdir, ssop_ptr) == FAIL
+                || w.put_eol() == FAIL
+            {
+                return FAIL;
+            }
+            ffi::nvim_ses_set_did_lcd(1);
+        }
+
+        // Restore view of each window
+        wp = tab_firstwin;
+        while !wp.is_null() {
+            if rs_ses_do_win(wp) == 0 {
+                wp = ffi::nvim_ses_win_get_next(wp);
+                continue;
+            }
+            if rs_put_view(
+                fd,
+                wp,
+                tp,
+                !std::ptr::eq(wp, edited_win),
+                ssop_ptr,
+                cur_arg_idx,
+            ) == FAIL
+            {
+                return FAIL;
+            }
+            if nr > 1 && w.put_line(b"wincmd w") == FAIL {
+                return FAIL;
+            }
+            next_arg_idx = ffi::nvim_ses_win_get_arg_idx(wp);
+            wp = ffi::nvim_ses_win_get_next(wp);
+        }
+
+        cur_arg_idx = next_arg_idx;
+
+        // Restore cursor to the current window
+        if cnr > 1 {
+            let line = format!("{cnr}wincmd w\n");
+            if !w.write_bytes(line.as_bytes()) {
+                return FAIL;
+            }
+        }
+
+        // Restore window sizes again
+        if nr > 1 && rs_ses_winsizes(fd, restore_size, tab_firstwin) == FAIL {
+            return FAIL;
+        }
+
+        if !do_tabpages {
+            break;
+        }
+        tp = ffi::nvim_ses_tp_get_next(tp);
+        if tp.is_null() {
+            break;
+        }
+    }
+
+    if do_tabpages {
+        let idx = ffi::nvim_ses_tabpage_index(curtab);
+        let line = format!("tabnext {idx}\n");
+        if !w.write_bytes(line.as_bytes()) {
+            return FAIL;
+        }
+    }
+    if restore_stal && w.put_line(b"set stal=1") == FAIL {
+        return FAIL;
+    }
+
+    // Wipe out an empty unnamed buffer we started in.
+    if !w.write_bytes(
+        b"if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0\
+ && getbufvar(s:wipebuf, '&buftype') isnot# 'terminal'\n\
+  silent exe 'bwipe ' . s:wipebuf\n\
+endif\n\
+unlet! s:wipebuf\n",
+    ) {
+        return FAIL;
+    }
+
+    // Re-apply 'winheight' and 'winwidth'.
+    let wh = ffi::nvim_ses_get_p_wh();
+    let wiw = ffi::nvim_ses_get_p_wiw();
+    let line = format!("set winheight={wh} winwidth={wiw}\n");
+    if !w.write_bytes(line.as_bytes()) {
+        return FAIL;
+    }
+
+    // Restore 'shortmess'.
+    if (ssop & K_OPT_SSOP_FLAG_OPTIONS) != 0 {
+        let shm = CStr::from_ptr(ffi::nvim_ses_get_p_shm())
+            .to_str()
+            .unwrap_or("");
+        let line = format!("set shortmess={shm}\n");
+        if !w.write_bytes(line.as_bytes()) {
+            return FAIL;
+        }
+    } else if w.put_line(b"let &shortmess = s:shortmess_save") == FAIL {
+        return FAIL;
+    }
+
+    if restore_height_width
+        && (w.put_line(b"let &winminheight = s:save_winminheight") == FAIL
+            || w.put_line(b"let &winminwidth = s:save_winminwidth") == FAIL)
+    {
+        return FAIL;
+    }
+
+    // Lastly, execute the x.vim file if it exists.
+    if !w.write_bytes(
+        b"let s:sx = expand(\"<sfile>:p:r\").\"x.vim\"\n\
+if filereadable(s:sx)\n\
+  exe \"source \" . fnameescape(s:sx)\n\
+endif\n",
+    ) {
+        return FAIL;
+    }
+
+    OK
+}

@@ -35,4 +35,7 @@ extern char *rs_get_view_file(char c);
 extern int rs_put_view(FILE *fd, win_T *wp, tabpage_T *tp, bool add_edit, unsigned *flagp,
                        int current_arg_idx);
 
+// Rust FFI: session orchestrator (Phase 7)
+extern int rs_makeopens(FILE *fd, char *dirnow);
+
 #include "ex_session.h.generated.h"

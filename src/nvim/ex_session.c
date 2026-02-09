@@ -278,6 +278,58 @@ _Static_assert(kOptSsopFlagLocaloptions == 0x10, "kOptSsopFlagLocaloptions");
 _Static_assert(kOptSsopFlagFolds == 0x2000, "kOptSsopFlagFolds");
 _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL");
 
+// --- Phase 7 accessors: makeopens ---
+
+// Buffer iteration callback
+int nvim_ses_foreach_buffer(
+    int (*cb)(buf_T *buf, bool only_save_windows, void *ud),
+    bool only_save_windows,
+    void *ud)
+{
+  FOR_ALL_BUFFERS(buf) {
+    int result = cb(buf, only_save_windows, ud);
+    if (result == FAIL) {
+      return FAIL;
+    }
+  }
+  return OK;
+}
+
+// Buffer fields for makeopens
+int nvim_ses_buf_get_nwindows(const buf_T *buf) { return buf->b_nwindows; }
+bool nvim_ses_buf_is_help(const buf_T *buf) { return buf->b_help; }
+int64_t nvim_ses_buf_get_wininfo_lnum(const buf_T *buf)
+{
+  return kv_size(buf->b_wininfo) == 0 ? 1 : (int64_t)kv_A(buf->b_wininfo, 0)->wi_mark.mark.lnum;
+}
+
+// Global argument list
+garray_T *nvim_ses_get_global_alist_ga(void) { return &global_alist.al_ga; }
+
+// Tabpage iteration and fields
+tabpage_T *nvim_ses_get_first_tabpage(void) { return first_tabpage; }
+tabpage_T *nvim_ses_get_curtab(void) { return curtab; }
+tabpage_T *nvim_ses_tp_get_next(const tabpage_T *tp) { return tp->tp_next; }
+win_T *nvim_ses_tp_get_firstwin(const tabpage_T *tp) { return tp->tp_firstwin; }
+frame_T *nvim_ses_tp_get_topframe(const tabpage_T *tp) { return tp->tp_topframe; }
+
+// Window globals
+win_T *nvim_ses_get_firstwin(void) { return firstwin; }
+int nvim_ses_tabpage_index(tabpage_T *tp) { return tabpage_index(tp); }
+
+// Session option globals
+const char *nvim_ses_get_globaldir(void) { return globaldir; }
+int64_t nvim_ses_get_p_wh(void) { return p_wh; }
+int64_t nvim_ses_get_p_wiw(void) { return p_wiw; }
+const char *nvim_ses_get_p_shm(void) { return p_shm; }
+int64_t nvim_ses_get_p_stal(void) { return p_stal; }
+
+// _Static_assert for Phase 7 constants
+_Static_assert(kOptSsopFlagBuffers == 0x01, "kOptSsopFlagBuffers");
+_Static_assert(kOptSsopFlagGlobals == 0x100, "kOptSsopFlagGlobals");
+_Static_assert(kOptSsopFlagTabpages == 0x8000, "kOptSsopFlagTabpages");
+_Static_assert(kOptSsopFlagResize == 0x04, "kOptSsopFlagResize");
+
 static int put_view_curpos(FILE *fd, const win_T *wp, char *spaces)
 {
   return rs_put_view_curpos(fd, (win_T *)wp, spaces);
@@ -353,348 +405,9 @@ static int store_session_globals(FILE *fd)
 }
 
 /// Writes commands for restoring the current buffers, for :mksession.
-///
-/// Legacy 'sessionoptions'/'viewoptions' flags kOptSsopFlagUnix, kOptSsopFlagSlash are
-/// always enabled.
-///
-/// @param dirnow  Current directory name
-/// @param fd  File descriptor to write to
-///
-/// @return FAIL on error, OK otherwise.
 static int makeopens(FILE *fd, char *dirnow)
 {
-  bool only_save_windows = true;
-  bool restore_size = true;
-  win_T *edited_win = NULL;
-  win_T *tab_firstwin;
-  frame_T *tab_topframe;
-  int cur_arg_idx = 0;
-  int next_arg_idx = 0;
-
-  if (ssop_flags & kOptSsopFlagBuffers) {
-    only_save_windows = false;  // Save ALL buffers
-  }
-
-  // Begin by setting v:this_session, and then other sessionable variables.
-  PUTLINE_FAIL("let v:this_session=expand(\"<sfile>:p\")");
-  if (ssop_flags & kOptSsopFlagGlobals) {
-    if (store_session_globals(fd) == FAIL) {
-      return FAIL;
-    }
-  }
-
-  // Close all windows and tabs but one.
-  PUTLINE_FAIL("silent only");
-  if ((ssop_flags & kOptSsopFlagTabpages)
-      && put_line(fd, "silent tabonly") == FAIL) {
-    return FAIL;
-  }
-
-  // Now a :cd command to the session directory or the current directory
-  if (ssop_flags & kOptSsopFlagSesdir) {
-    PUTLINE_FAIL("exe \"cd \" . escape(expand(\"<sfile>:p:h\"), ' ')");
-  } else if (ssop_flags & kOptSsopFlagCurdir) {
-    char *sname = home_replace_save(NULL, globaldir != NULL ? globaldir : dirnow);
-    char *fname_esc = ses_escape_fname(sname, &ssop_flags);
-    if (fprintf(fd, "cd %s\n", fname_esc) < 0) {
-      xfree(fname_esc);
-      xfree(sname);
-      return FAIL;
-    }
-    xfree(fname_esc);
-    xfree(sname);
-  }
-
-  if (fprintf(fd,
-              "%s",
-              // If there is an empty, unnamed buffer we will wipe it out later.
-              // Remember the buffer number.
-              "if expand('%') == '' && !&modified && line('$') <= 1"
-              " && getline(1) == ''\n"
-              "  let s:wipebuf = bufnr('%')\n"
-              "endif\n") < 0) {
-    return FAIL;
-  }
-
-  // Save 'shortmess' if not storing options.
-  if ((ssop_flags & kOptSsopFlagOptions) == 0) {
-    PUTLINE_FAIL("let s:shortmess_save = &shortmess");
-  }
-
-  // Set 'shortmess' for the following.
-  PUTLINE_FAIL("set shortmess+=aoO");
-
-  // Now save the current files, current buffer first.
-  // Put all buffers into the buffer list.
-  // Do it very early to preserve buffer order after loading session (which
-  // can be disrupted by prior `edit` or `tabedit` calls).
-  FOR_ALL_BUFFERS(buf) {
-    if (!(only_save_windows && buf->b_nwindows == 0)
-        && !(buf->b_help && !(ssop_flags & kOptSsopFlagHelp))
-        && !(bt_terminal(buf) && !(ssop_flags & kOptSsopFlagTerminal))
-        && buf->b_fname != NULL
-        && buf->b_p_bl) {
-      if (fprintf(fd, "badd +%" PRId64 " ",
-                  kv_size(buf->b_wininfo) == 0
-                  ? 1 : (int64_t)kv_A(buf->b_wininfo, 0)->wi_mark.mark.lnum) < 0
-          || ses_fname(fd, buf, &ssop_flags, true) == FAIL) {
-        return FAIL;
-      }
-    }
-  }
-
-  // the global argument list
-  if (ses_arglist(fd, "argglobal", &global_alist.al_ga,
-                  !(ssop_flags & kOptSsopFlagCurdir), &ssop_flags) == FAIL) {
-    return FAIL;
-  }
-
-  if (ssop_flags & kOptSsopFlagResize) {
-    // Note: after the restore we still check it worked!
-    if (fprintf(fd, "set lines=%" PRId64 " columns=%" PRId64 "\n",
-                (int64_t)Rows, (int64_t)Columns) < 0) {
-      return FAIL;
-    }
-  }
-
-  bool restore_stal = false;
-  // When there are two or more tabpages and 'showtabline' is 1 the tabline
-  // will be displayed when creating the next tab.  That resizes the windows
-  // in the first tab, which may cause problems.  Set 'showtabline' to 2
-  // temporarily to avoid that.
-  if (p_stal == 1 && first_tabpage->tp_next != NULL) {
-    PUTLINE_FAIL("set stal=2");
-    restore_stal = true;
-  }
-
-  if ((ssop_flags & kOptSsopFlagTabpages)) {
-    // "tabpages" is in 'sessionoptions': Similar to ses_win_rec() below,
-    // populate the tab pages first so later local options won't be copied
-    // to the new tabs.
-    FOR_ALL_TABS(tp) {
-      // Use `bufhidden=wipe` to remove empty "placeholder" buffers once
-      // they are not needed. This prevents creating extra buffers (see
-      // cause of Vim patch 8.1.0829)
-      if (tp->tp_next != NULL && put_line(fd, "tabnew +setlocal\\ bufhidden=wipe") == FAIL) {
-        return FAIL;
-      }
-    }
-
-    if (first_tabpage->tp_next != NULL && put_line(fd, "tabrewind") == FAIL) {
-      return FAIL;
-    }
-  }
-
-  // Assume "tabpages" is in 'sessionoptions'.  If not then we only do
-  // "curtab" and bail out of the loop.
-  bool restore_height_width = false;
-  FOR_ALL_TABS(tp) {
-    bool need_tabnext = false;
-    int cnr = 1;
-
-    // May repeat putting Windows for each tab, when "tabpages" is in
-    // 'sessionoptions'.
-    // Don't use goto_tabpage(), it may change directory and trigger
-    // autocommands.
-    if ((ssop_flags & kOptSsopFlagTabpages)) {
-      if (tp == curtab) {
-        tab_firstwin = firstwin;
-        tab_topframe = topframe;
-      } else {
-        tab_firstwin = tp->tp_firstwin;
-        tab_topframe = tp->tp_topframe;
-      }
-      if (tp != first_tabpage) {
-        need_tabnext = true;
-      }
-    } else {
-      tp = curtab;
-      tab_firstwin = firstwin;
-      tab_topframe = topframe;
-    }
-
-    // Before creating the window layout, try loading one file.  If this
-    // is aborted we don't end up with a number of useless windows.
-    // This may have side effects! (e.g., compressed or network file).
-    for (win_T *wp = tab_firstwin; wp != NULL; wp = wp->w_next) {
-      if (ses_do_win(wp)
-          && wp->w_buffer->b_ffname != NULL
-          && !bt_help(wp->w_buffer)
-          && !bt_nofilename(wp->w_buffer)) {
-        if (need_tabnext && put_line(fd, "tabnext") == FAIL) {
-          return FAIL;
-        }
-        need_tabnext = false;
-
-        if (fputs("edit ", fd) < 0
-            || ses_fname(fd, wp->w_buffer, &ssop_flags, true) == FAIL) {
-          return FAIL;
-        }
-        if (!wp->w_arg_idx_invalid) {
-          edited_win = wp;
-        }
-        break;
-      }
-    }
-
-    // If no file got edited create an empty tab page.
-    if (need_tabnext && put_line(fd, "tabnext") == FAIL) {
-      return FAIL;
-    }
-
-    if (tab_topframe->fr_layout != FR_LEAF) {
-      // Save current window layout.
-      PUTLINE_FAIL("let s:save_splitbelow = &splitbelow");
-      PUTLINE_FAIL("let s:save_splitright = &splitright");
-      PUTLINE_FAIL("set splitbelow splitright");
-      if (ses_win_rec(fd, tab_topframe) == FAIL) {
-        return FAIL;
-      }
-      PUTLINE_FAIL("let &splitbelow = s:save_splitbelow");
-      PUTLINE_FAIL("let &splitright = s:save_splitright");
-    }
-
-    // Check if window sizes can be restored (no windows omitted).
-    // Remember the window number of the current window after restoring.
-    int nr = 0;
-    for (win_T *wp = tab_firstwin; wp != NULL; wp = wp->w_next) {
-      if (ses_do_win(wp)) {
-        nr++;
-      } else {
-        restore_size = false;
-      }
-      if (curwin == wp) {
-        cnr = nr;
-      }
-    }
-
-    if (tab_firstwin != NULL && tab_firstwin->w_next != NULL) {
-      // Go to the first window.
-      PUTLINE_FAIL("wincmd t");
-
-      // If more than one window, see if sizes can be restored.
-      // First set 'winheight' and 'winwidth' to 1 to avoid the windows
-      // being resized when moving between windows.
-      // Do this before restoring the view, so that the topline and the
-      // cursor can be set.  This is done again below.
-      // winminheight and winminwidth need to be set to avoid an error if
-      // the user has set winheight or winwidth.
-      PUTLINE_FAIL("let s:save_winminheight = &winminheight");
-      PUTLINE_FAIL("let s:save_winminwidth = &winminwidth");
-      if (fprintf(fd,
-                  "set winminheight=0\n"
-                  "set winheight=1\n"
-                  "set winminwidth=0\n"
-                  "set winwidth=1\n") < 0) {
-        return FAIL;
-      }
-      restore_height_width = true;
-    }
-    if (nr > 1 && ses_winsizes(fd, restore_size, tab_firstwin) == FAIL) {
-      return FAIL;
-    }
-
-    // Restore the tab-local working directory if specified
-    // Do this before the windows, so that the window-local directory can
-    // override the tab-local directory.
-    if ((ssop_flags & kOptSsopFlagCurdir) && tp->tp_localdir != NULL) {
-      if (fputs("tcd ", fd) < 0
-          || ses_put_fname(fd, tp->tp_localdir, &ssop_flags) == FAIL
-          || put_eol(fd) == FAIL) {
-        return FAIL;
-      }
-      did_lcd = true;
-    }
-
-    // Restore the view of the window (options, file, cursor, etc.).
-    for (win_T *wp = tab_firstwin; wp != NULL; wp = wp->w_next) {
-      if (!ses_do_win(wp)) {
-        continue;
-      }
-      if (put_view(fd, wp, tp, wp != edited_win, &ssop_flags, cur_arg_idx)
-          == FAIL) {
-        return FAIL;
-      }
-      if (nr > 1 && put_line(fd, "wincmd w") == FAIL) {
-        return FAIL;
-      }
-      next_arg_idx = wp->w_arg_idx;
-    }
-
-    // The argument index in the first tab page is zero, need to set it in
-    // each window.  For further tab pages it's the window where we do
-    // "tabedit".
-    cur_arg_idx = next_arg_idx;
-
-    // Restore cursor to the current window if it's not the first one.
-    if (cnr > 1 && (fprintf(fd, "%dwincmd w\n", cnr) < 0)) {
-      return FAIL;
-    }
-
-    // Restore window sizes again after jumping around in windows, because
-    // the current window has a minimum size while others may not.
-    if (nr > 1 && ses_winsizes(fd, restore_size, tab_firstwin) == FAIL) {
-      return FAIL;
-    }
-
-    // Don't continue in another tab page when doing only the current one
-    // or when at the last tab page.
-    if (!(ssop_flags & kOptSsopFlagTabpages)) {
-      break;
-    }
-  }
-
-  if (ssop_flags & kOptSsopFlagTabpages) {
-    if (fprintf(fd, "tabnext %d\n", tabpage_index(curtab)) < 0) {
-      return FAIL;
-    }
-  }
-  if (restore_stal && put_line(fd, "set stal=1") == FAIL) {
-    return FAIL;
-  }
-
-  // Wipe out an empty unnamed buffer we started in.
-  if (fprintf(fd, "%s",
-              "if exists('s:wipebuf') "
-              "&& len(win_findbuf(s:wipebuf)) == 0 "
-              "&& getbufvar(s:wipebuf, '&buftype') isnot# 'terminal'\n"
-              "  silent exe 'bwipe ' . s:wipebuf\n"
-              "endif\n"
-              "unlet! s:wipebuf\n") < 0) {
-    return FAIL;
-  }
-
-  // Re-apply 'winheight' and 'winwidth'.
-  if (fprintf(fd, "set winheight=%" PRId64 " winwidth=%" PRId64 "\n",
-              (int64_t)p_wh, (int64_t)p_wiw) < 0) {
-    return FAIL;
-  }
-
-  // Restore 'shortmess'.
-  if (ssop_flags & kOptSsopFlagOptions) {
-    if (fprintf(fd, "set shortmess=%s\n", p_shm) < 0) {
-      return FAIL;
-    }
-  } else {
-    PUTLINE_FAIL("let &shortmess = s:shortmess_save");
-  }
-
-  if (restore_height_width) {
-    // Restore 'winminheight' and 'winminwidth'.
-    PUTLINE_FAIL("let &winminheight = s:save_winminheight");
-    PUTLINE_FAIL("let &winminwidth = s:save_winminwidth");
-  }
-
-  // Lastly, execute the x.vim file if it exists.
-  if (fprintf(fd, "%s",
-              "let s:sx = expand(\"<sfile>:p:r\").\"x.vim\"\n"
-              "if filereadable(s:sx)\n"
-              "  exe \"source \" . fnameescape(s:sx)\n"
-              "endif\n") < 0) {
-    return FAIL;
-  }
-
-  return OK;
+  return rs_makeopens(fd, dirnow);
 }
 
 /// ":loadview [nr]"
