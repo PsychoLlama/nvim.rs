@@ -407,16 +407,16 @@ pub const VISUAL_LINE: c_int = b'V' as c_int;
 pub const VISUAL_BLOCK: c_int = 0x16;
 
 /// Multi-click mask bits
-pub const MOD_MASK_MULTI_CLICK: c_int = 0x700;
+pub const MOD_MASK_MULTI_CLICK: c_int = 0x60;
 
 /// Double-click mask
-pub const MOD_MASK_2CLICK: c_int = 0x100;
+pub const MOD_MASK_2CLICK: c_int = 0x20;
 
 /// Triple-click mask
-pub const MOD_MASK_3CLICK: c_int = 0x200;
+pub const MOD_MASK_3CLICK: c_int = 0x40;
 
 /// Quadruple-click mask
-pub const MOD_MASK_4CLICK: c_int = 0x300;
+pub const MOD_MASK_4CLICK: c_int = 0x60;
 
 /// Alt modifier mask
 pub const MOD_MASK_ALT: c_int = 0x08;

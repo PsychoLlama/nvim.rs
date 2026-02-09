@@ -15,20 +15,28 @@ use crate::expand::ExpandContext;
 // Key Constants (from keycodes.h)
 // =============================================================================
 
+/// Encode a termcap key pair into a special key code.
+/// Equivalent to the C macro: TERMCAP2KEY(a, b) = -(a + (b << 8))
+const fn termcap2key(a: c_int, b: c_int) -> c_int {
+    -(a + (b << 8))
+}
+
 /// Key code constants used in wildmenu navigation
 pub mod keys {
     use std::ffi::c_int;
 
-    /// Left arrow key
-    pub const K_LEFT: c_int = 0x100 + 0x4B; // SPECIAL + KS_LEFT
-    /// Right arrow key
-    pub const K_RIGHT: c_int = 0x100 + 0x4C; // SPECIAL + KS_RIGHT
-    /// Up arrow key
-    pub const K_UP: c_int = 0x100 + 0x48; // SPECIAL + KS_UP
-    /// Down arrow key
-    pub const K_DOWN: c_int = 0x100 + 0x49; // SPECIAL + KS_DOWN
-    /// Keypad Enter
-    pub const K_KENTER: c_int = 0x100 + 0x5E; // SPECIAL + KS_EXTRA + KE_KENTER
+    use super::termcap2key;
+
+    /// Left arrow key - TERMCAP2KEY('k', 'l')
+    pub const K_LEFT: c_int = termcap2key(b'k' as c_int, b'l' as c_int);
+    /// Right arrow key - TERMCAP2KEY('k', 'r')
+    pub const K_RIGHT: c_int = termcap2key(b'k' as c_int, b'r' as c_int);
+    /// Up arrow key - TERMCAP2KEY('k', 'u')
+    pub const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
+    /// Down arrow key - TERMCAP2KEY('k', 'd')
+    pub const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
+    /// Keypad Enter - TERMCAP2KEY('K', 'A')
+    pub const K_KENTER: c_int = termcap2key(b'K' as c_int, b'A' as c_int);
 
     /// Ctrl+P (previous)
     pub const CTRL_P: c_int = 16; // 'P' - '@'

@@ -13,6 +13,15 @@ use std::ffi::{c_char, c_int};
 
 use crate::keys::{history_uses_prefix, is_history_newer_key};
 
+/// Encode a termcap key pair into a special key code.
+/// Equivalent to the C macro: TERMCAP2KEY(a, b) = -(a + (b << 8))
+const fn termcap2key(a: c_int, b: c_int) -> c_int {
+    -(a + (b << 8))
+}
+
+/// KS_EXTRA for keys with no termcap name.
+const KS_EXTRA: c_int = 253;
+
 // =============================================================================
 // History Type Constants
 // =============================================================================
@@ -360,14 +369,14 @@ pub enum HistoryResult {
 #[must_use]
 pub const fn key_to_history_direction(key: c_int) -> Option<HistoryDirection> {
     // Key codes from keycodes.h
-    const K_UP: c_int = 0x100 + 0x48;
-    const K_DOWN: c_int = 0x100 + 0x49;
-    const K_S_UP: c_int = 0x100 + 0x5E + 11; // KS_EXTRA + KE_S_UP
-    const K_S_DOWN: c_int = 0x100 + 0x5E + 12;
-    const K_PAGEUP: c_int = 0x100 + 0x5E + 7;
-    const K_PAGEDOWN: c_int = 0x100 + 0x5E + 8;
-    const K_KPAGEUP: c_int = 0x100 + 0x5E + 55;
-    const K_KPAGEDOWN: c_int = 0x100 + 0x5E + 56;
+    const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
+    const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
+    const K_S_UP: c_int = termcap2key(KS_EXTRA, 4); // KE_S_UP
+    const K_S_DOWN: c_int = termcap2key(KS_EXTRA, 5); // KE_S_DOWN
+    const K_PAGEUP: c_int = termcap2key(b'k' as c_int, b'P' as c_int);
+    const K_PAGEDOWN: c_int = termcap2key(b'k' as c_int, b'N' as c_int);
+    const K_KPAGEUP: c_int = termcap2key(b'K' as c_int, b'3' as c_int);
+    const K_KPAGEDOWN: c_int = termcap2key(b'K' as c_int, b'5' as c_int);
     const CTRL_P: c_int = 16;
     const CTRL_N: c_int = 14;
 
@@ -381,8 +390,8 @@ pub const fn key_to_history_direction(key: c_int) -> Option<HistoryDirection> {
 /// Check if a key uses prefix matching (Up/Down) vs full history (Page Up/Down).
 #[must_use]
 pub const fn key_uses_prefix_match(key: c_int) -> bool {
-    const K_UP: c_int = 0x100 + 0x48;
-    const K_DOWN: c_int = 0x100 + 0x49;
+    const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
+    const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
 
     key == K_UP || key == K_DOWN
 }
@@ -702,11 +711,11 @@ mod tests {
     #[test]
     fn test_history_direction() {
         // Up key codes
-        const K_UP: c_int = 0x100 + 0x48;
+        const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
         const CTRL_P: c_int = 16;
 
         // Down key codes
-        const K_DOWN: c_int = 0x100 + 0x49;
+        const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
         const CTRL_N: c_int = 14;
 
         assert_eq!(
@@ -730,8 +739,8 @@ mod tests {
 
     #[test]
     fn test_key_uses_prefix_match() {
-        const K_UP: c_int = 0x100 + 0x48;
-        const K_DOWN: c_int = 0x100 + 0x49;
+        const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
+        const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
         const CTRL_P: c_int = 16;
 
         assert!(key_uses_prefix_match(K_UP));

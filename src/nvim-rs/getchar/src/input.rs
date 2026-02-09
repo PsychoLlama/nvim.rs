@@ -243,26 +243,26 @@ pub mod keys {
     use std::ffi::c_int;
 
     // Keypad keys
-    pub const K_KPLUS: c_int = termcap2key(b'K' as c_int, b'1' as c_int);
-    pub const K_KMINUS: c_int = termcap2key(b'K' as c_int, b'2' as c_int);
-    pub const K_KDIVIDE: c_int = termcap2key(b'K' as c_int, b'3' as c_int);
-    pub const K_KMULTIPLY: c_int = termcap2key(b'K' as c_int, b'4' as c_int);
-    pub const K_KENTER: c_int = termcap2key(b'K' as c_int, b'5' as c_int);
-    pub const K_KPOINT: c_int = termcap2key(b'K' as c_int, b'6' as c_int);
-    pub const K_KCOMMA: c_int = termcap2key(b'K' as c_int, b'9' as c_int);
-    pub const K_KEQUAL: c_int = termcap2key(b'K' as c_int, b'=' as c_int);
+    pub const K_KPLUS: c_int = termcap2key(b'K' as c_int, b'6' as c_int);
+    pub const K_KMINUS: c_int = termcap2key(b'K' as c_int, b'7' as c_int);
+    pub const K_KDIVIDE: c_int = termcap2key(b'K' as c_int, b'8' as c_int);
+    pub const K_KMULTIPLY: c_int = termcap2key(b'K' as c_int, b'9' as c_int);
+    pub const K_KENTER: c_int = termcap2key(b'K' as c_int, b'A' as c_int);
+    pub const K_KPOINT: c_int = termcap2key(b'K' as c_int, b'B' as c_int);
+    pub const K_KCOMMA: c_int = termcap2key(b'K' as c_int, b'M' as c_int);
+    pub const K_KEQUAL: c_int = termcap2key(b'K' as c_int, b'N' as c_int);
 
     // Keypad number keys
-    pub const K_K0: c_int = termcap2key(b'K' as c_int, b'A' as c_int);
-    pub const K_K1: c_int = termcap2key(b'K' as c_int, b'B' as c_int);
-    pub const K_K2: c_int = termcap2key(b'K' as c_int, b'C' as c_int);
-    pub const K_K3: c_int = termcap2key(b'K' as c_int, b'D' as c_int);
-    pub const K_K4: c_int = termcap2key(b'K' as c_int, b'E' as c_int);
-    pub const K_K5: c_int = termcap2key(b'K' as c_int, b'F' as c_int);
-    pub const K_K6: c_int = termcap2key(b'K' as c_int, b'G' as c_int);
-    pub const K_K7: c_int = termcap2key(b'K' as c_int, b'H' as c_int);
-    pub const K_K8: c_int = termcap2key(b'K' as c_int, b'I' as c_int);
-    pub const K_K9: c_int = termcap2key(b'K' as c_int, b'J' as c_int);
+    pub const K_K0: c_int = termcap2key(b'K' as c_int, b'C' as c_int);
+    pub const K_K1: c_int = termcap2key(b'K' as c_int, b'D' as c_int);
+    pub const K_K2: c_int = termcap2key(b'K' as c_int, b'E' as c_int);
+    pub const K_K3: c_int = termcap2key(b'K' as c_int, b'F' as c_int);
+    pub const K_K4: c_int = termcap2key(b'K' as c_int, b'G' as c_int);
+    pub const K_K5: c_int = termcap2key(b'K' as c_int, b'H' as c_int);
+    pub const K_K6: c_int = termcap2key(b'K' as c_int, b'I' as c_int);
+    pub const K_K7: c_int = termcap2key(b'K' as c_int, b'J' as c_int);
+    pub const K_K8: c_int = termcap2key(b'K' as c_int, b'K' as c_int);
+    pub const K_K9: c_int = termcap2key(b'K' as c_int, b'L' as c_int);
 
     // Arrow keys
     pub const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
@@ -271,10 +271,10 @@ pub mod keys {
     pub const K_RIGHT: c_int = termcap2key(b'k' as c_int, b'r' as c_int);
 
     // Keypad arrow keys
-    pub const K_KUP: c_int = termcap2key(b'K' as c_int, b'7' as c_int);
-    pub const K_KDOWN: c_int = termcap2key(b'K' as c_int, b'8' as c_int);
-    pub const K_KLEFT: c_int = termcap2key(b'#' as c_int, b'4' as c_int);
-    pub const K_KRIGHT: c_int = termcap2key(b'%' as c_int, b'i' as c_int);
+    pub const K_KUP: c_int = termcap2key(b'K' as c_int, b'u' as c_int);
+    pub const K_KDOWN: c_int = termcap2key(b'K' as c_int, b'd' as c_int);
+    pub const K_KLEFT: c_int = termcap2key(b'K' as c_int, b'l' as c_int);
+    pub const K_KRIGHT: c_int = termcap2key(b'K' as c_int, b'r' as c_int);
 
     // X terminal keys
     pub const K_XUP: c_int = termcap2key(253, 65);
@@ -303,7 +303,7 @@ pub mod keys {
     pub const K_MOUSEMOVE: c_int = termcap2key(253, 100);
     pub const K_COMMAND: c_int = termcap2key(253, 104);
     pub const K_LUA: c_int = termcap2key(253, 103);
-    pub const K_PASTE_START: c_int = termcap2key(253, 111);
+    pub const K_PASTE_START: c_int = termcap2key(b'P' as c_int, b'S' as c_int);
 }
 
 /// Translate keypad key to its ASCII equivalent.

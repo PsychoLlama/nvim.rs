@@ -37,12 +37,12 @@ pub enum FloatRelative {
 }
 
 /// WSP (window split) flags
-pub const WSP_VERT: c_int = 0x01;
-pub const WSP_HOR: c_int = 0x02;
-pub const WSP_TOP: c_int = 0x04;
-pub const WSP_BOT: c_int = 0x08;
-pub const WSP_ABOVE: c_int = 0x10;
-pub const WSP_BELOW: c_int = 0x20;
+pub const WSP_VERT: c_int = 0x02;
+pub const WSP_HOR: c_int = 0x04;
+pub const WSP_TOP: c_int = 0x08;
+pub const WSP_BOT: c_int = 0x10;
+pub const WSP_ABOVE: c_int = 0x80;
+pub const WSP_BELOW: c_int = 0x40;
 
 /// kFloatAnchorEast flag
 pub const FLOAT_ANCHOR_EAST: u8 = 1;

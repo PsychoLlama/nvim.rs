@@ -49,9 +49,6 @@ const KE_MOUSERIGHT: c_int = 78;
 const KE_KDEL: c_int = 80;
 const KE_C_LEFT: c_int = 85;
 const KE_C_RIGHT: c_int = 86;
-const KE_KPAGEUP: c_int = 98;
-const KE_KPAGEDOWN: c_int = 99;
-const KE_KENTER: c_int = 100;
 const KE_WILD: c_int = 108;
 
 // Arrow keys: TERMCAP2KEY('k', 'u'), etc.
@@ -86,11 +83,11 @@ const K_KDEL: c_int = termcap2key(KS_EXTRA, KE_KDEL);
 // Page Up/Down
 const K_PAGEUP: c_int = termcap2key(b'k' as c_int, b'P' as c_int);
 const K_PAGEDOWN: c_int = termcap2key(b'k' as c_int, b'N' as c_int);
-const K_KPAGEUP: c_int = termcap2key(KS_EXTRA, KE_KPAGEUP);
-const K_KPAGEDOWN: c_int = termcap2key(KS_EXTRA, KE_KPAGEDOWN);
+const K_KPAGEUP: c_int = termcap2key(b'K' as c_int, b'3' as c_int);
+const K_KPAGEDOWN: c_int = termcap2key(b'K' as c_int, b'5' as c_int);
 
 // Enter keys
-const K_KENTER: c_int = termcap2key(KS_EXTRA, KE_KENTER);
+const K_KENTER: c_int = termcap2key(b'K' as c_int, b'A' as c_int);
 
 // Tab
 const K_TAB: c_int = termcap2key(KS_EXTRA, KE_TAB);

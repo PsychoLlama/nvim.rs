@@ -235,38 +235,43 @@ pub mod keys {
     /// Ctrl-Z
     pub const CTRL_Z: c_int = 26;
 
-    // Special key base
-    const K_SPECIAL: c_int = 0x100;
-    const KS_EXTRA: c_int = K_SPECIAL + 0x5E;
+    /// Encode a termcap key pair into a special key code.
+    /// Equivalent to the C macro: TERMCAP2KEY(a, b) = -(a + (b << 8))
+    const fn termcap2key(a: c_int, b: c_int) -> c_int {
+        -(a + (b << 8))
+    }
 
-    /// Up arrow
-    pub const K_UP: c_int = K_SPECIAL + 0x48;
-    /// Down arrow
-    pub const K_DOWN: c_int = K_SPECIAL + 0x49;
-    /// Left arrow
-    pub const K_LEFT: c_int = K_SPECIAL + 0x4A;
-    /// Right arrow
-    pub const K_RIGHT: c_int = K_SPECIAL + 0x4B;
-    /// Shift-Up
-    pub const K_S_UP: c_int = KS_EXTRA + 11;
-    /// Shift-Down
-    pub const K_S_DOWN: c_int = KS_EXTRA + 12;
-    /// Shift-Left
-    pub const K_S_LEFT: c_int = KS_EXTRA + 7;
-    /// Shift-Right
-    pub const K_S_RIGHT: c_int = KS_EXTRA + 8;
-    /// Home key
-    pub const K_HOME: c_int = KS_EXTRA + 1;
-    /// End key
-    pub const K_END: c_int = KS_EXTRA + 3;
-    /// Delete key
-    pub const K_DEL: c_int = KS_EXTRA + 9;
-    /// Insert key
-    pub const K_INS: c_int = KS_EXTRA + 10;
-    /// Page Up
-    pub const K_PAGEUP: c_int = KS_EXTRA + 7;
-    /// Page Down
-    pub const K_PAGEDOWN: c_int = KS_EXTRA + 8;
+    /// KS_EXTRA for keys with no termcap name.
+    const KS_EXTRA: c_int = 253;
+
+    /// Up arrow - TERMCAP2KEY('k', 'u')
+    pub const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
+    /// Down arrow - TERMCAP2KEY('k', 'd')
+    pub const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
+    /// Left arrow - TERMCAP2KEY('k', 'l')
+    pub const K_LEFT: c_int = termcap2key(b'k' as c_int, b'l' as c_int);
+    /// Right arrow - TERMCAP2KEY('k', 'r')
+    pub const K_RIGHT: c_int = termcap2key(b'k' as c_int, b'r' as c_int);
+    /// Shift-Up - TERMCAP2KEY(KS_EXTRA, KE_S_UP=4)
+    pub const K_S_UP: c_int = termcap2key(KS_EXTRA, 4);
+    /// Shift-Down - TERMCAP2KEY(KS_EXTRA, KE_S_DOWN=5)
+    pub const K_S_DOWN: c_int = termcap2key(KS_EXTRA, 5);
+    /// Shift-Left - TERMCAP2KEY('#', '4')
+    pub const K_S_LEFT: c_int = termcap2key(b'#' as c_int, b'4' as c_int);
+    /// Shift-Right - TERMCAP2KEY('%', 'i')
+    pub const K_S_RIGHT: c_int = termcap2key(b'%' as c_int, b'i' as c_int);
+    /// Home key - TERMCAP2KEY('k', 'h')
+    pub const K_HOME: c_int = termcap2key(b'k' as c_int, b'h' as c_int);
+    /// End key - TERMCAP2KEY('@', '7')
+    pub const K_END: c_int = termcap2key(b'@' as c_int, b'7' as c_int);
+    /// Delete key - TERMCAP2KEY('k', 'D')
+    pub const K_DEL: c_int = termcap2key(b'k' as c_int, b'D' as c_int);
+    /// Insert key - TERMCAP2KEY('k', 'I')
+    pub const K_INS: c_int = termcap2key(b'k' as c_int, b'I' as c_int);
+    /// Page Up - TERMCAP2KEY('k', 'P')
+    pub const K_PAGEUP: c_int = termcap2key(b'k' as c_int, b'P' as c_int);
+    /// Page Down - TERMCAP2KEY('k', 'N')
+    pub const K_PAGEDOWN: c_int = termcap2key(b'k' as c_int, b'N' as c_int);
 }
 
 // =============================================================================

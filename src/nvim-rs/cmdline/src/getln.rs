@@ -13,6 +13,15 @@ use std::ffi::c_int;
 
 use crate::viewstate::{IncsearchViewState, Position, ViewState};
 
+/// Encode a termcap key pair into a special key code.
+/// Equivalent to the C macro: TERMCAP2KEY(a, b) = -(a + (b << 8))
+const fn termcap2key(a: c_int, b: c_int) -> c_int {
+    -(a + (b << 8))
+}
+
+/// KS_EXTRA is used for keys that have no termcap name.
+const KS_EXTRA: c_int = 253;
+
 // =============================================================================
 // Return Codes
 // =============================================================================
@@ -394,16 +403,15 @@ impl HistoryDirection {
     /// Determine direction from key code.
     #[must_use]
     pub const fn from_key(key: c_int) -> Option<Self> {
-        // K_DOWN, K_S_DOWN, Ctrl_N, K_PAGEDOWN, K_KPAGEDOWN
-        const K_DOWN: c_int = 0x100 + 0x48; // Approximate values
-        const K_S_DOWN: c_int = 0x100 + 0x49;
-        const K_PAGEDOWN: c_int = 0x100 + 0x4a;
-        const K_KPAGEDOWN: c_int = 0x100 + 0x4b;
+        const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
+        const K_S_DOWN: c_int = termcap2key(KS_EXTRA, 5); // KE_S_DOWN
+        const K_PAGEDOWN: c_int = termcap2key(b'k' as c_int, b'N' as c_int);
+        const K_KPAGEDOWN: c_int = termcap2key(b'K' as c_int, b'5' as c_int);
         const CTRL_N: c_int = 14;
-        const K_UP: c_int = 0x100 + 0x44;
-        const K_S_UP: c_int = 0x100 + 0x45;
-        const K_PAGEUP: c_int = 0x100 + 0x46;
-        const K_KPAGEUP: c_int = 0x100 + 0x47;
+        const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
+        const K_S_UP: c_int = termcap2key(KS_EXTRA, 4); // KE_S_UP
+        const K_PAGEUP: c_int = termcap2key(b'k' as c_int, b'P' as c_int);
+        const K_KPAGEUP: c_int = termcap2key(b'K' as c_int, b'3' as c_int);
         const CTRL_P: c_int = 16;
 
         match key {
@@ -456,10 +464,10 @@ pub const fn movement_type_from_key(key: c_int, mod_mask: c_int) -> MovementType
     const MOD_MASK_SHIFT: c_int = 0x02;
     const MOD_MASK_CTRL: c_int = 0x04;
 
-    const K_S_LEFT: c_int = 0x100 + 0x40;
-    const K_S_RIGHT: c_int = 0x100 + 0x41;
-    const K_C_LEFT: c_int = 0x100 + 0x42;
-    const K_C_RIGHT: c_int = 0x100 + 0x43;
+    const K_S_LEFT: c_int = termcap2key(b'#' as c_int, b'4' as c_int);
+    const K_S_RIGHT: c_int = termcap2key(b'%' as c_int, b'i' as c_int);
+    const K_C_LEFT: c_int = termcap2key(KS_EXTRA, 85); // KE_C_LEFT
+    const K_C_RIGHT: c_int = termcap2key(KS_EXTRA, 86); // KE_C_RIGHT
 
     if key == K_S_LEFT || key == K_S_RIGHT || key == K_C_LEFT || key == K_C_RIGHT {
         return MovementType::Word;
@@ -479,6 +487,8 @@ pub const fn movement_type_from_key(key: c_int, mod_mask: c_int) -> MovementType
 /// Special key constants for command-line mode.
 pub mod keys {
     use std::ffi::c_int;
+
+    use super::{termcap2key, KS_EXTRA};
 
     // Control keys
     pub const CTRL_A: c_int = 1;
@@ -507,24 +517,24 @@ pub mod keys {
     pub const NUL: c_int = 0;
     pub const NL: c_int = 10;
 
-    // Special keys (approximate values)
-    pub const K_BS: c_int = 0x100 + 0x01;
-    pub const K_DEL: c_int = 0x100 + 0x02;
-    pub const K_KDEL: c_int = 0x100 + 0x03;
-    pub const K_INS: c_int = 0x100 + 0x04;
-    pub const K_KINS: c_int = 0x100 + 0x05;
-    pub const K_HOME: c_int = 0x100 + 0x06;
-    pub const K_KHOME: c_int = 0x100 + 0x07;
-    pub const K_END: c_int = 0x100 + 0x08;
-    pub const K_KEND: c_int = 0x100 + 0x09;
-    pub const K_LEFT: c_int = 0x100 + 0x10;
-    pub const K_RIGHT: c_int = 0x100 + 0x11;
-    pub const K_UP: c_int = 0x100 + 0x12;
-    pub const K_DOWN: c_int = 0x100 + 0x13;
-    pub const K_S_HOME: c_int = 0x100 + 0x14;
-    pub const K_S_END: c_int = 0x100 + 0x15;
-    pub const K_C_HOME: c_int = 0x100 + 0x16;
-    pub const K_C_END: c_int = 0x100 + 0x17;
+    // Special keys - using termcap2key encoding matching keycodes.h
+    pub const K_BS: c_int = termcap2key(b'k' as c_int, b'b' as c_int);
+    pub const K_DEL: c_int = termcap2key(b'k' as c_int, b'D' as c_int);
+    pub const K_KDEL: c_int = termcap2key(KS_EXTRA, 80); // KE_KDEL
+    pub const K_INS: c_int = termcap2key(b'k' as c_int, b'I' as c_int);
+    pub const K_KINS: c_int = termcap2key(KS_EXTRA, 79); // KE_KINS
+    pub const K_HOME: c_int = termcap2key(b'k' as c_int, b'h' as c_int);
+    pub const K_KHOME: c_int = termcap2key(b'K' as c_int, b'1' as c_int);
+    pub const K_END: c_int = termcap2key(b'@' as c_int, b'7' as c_int);
+    pub const K_KEND: c_int = termcap2key(b'K' as c_int, b'4' as c_int);
+    pub const K_LEFT: c_int = termcap2key(b'k' as c_int, b'l' as c_int);
+    pub const K_RIGHT: c_int = termcap2key(b'k' as c_int, b'r' as c_int);
+    pub const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
+    pub const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
+    pub const K_S_HOME: c_int = termcap2key(b'#' as c_int, b'2' as c_int);
+    pub const K_S_END: c_int = termcap2key(b'*' as c_int, b'7' as c_int);
+    pub const K_C_HOME: c_int = termcap2key(KS_EXTRA, 87); // KE_C_HOME
+    pub const K_C_END: c_int = termcap2key(KS_EXTRA, 88); // KE_C_END
 }
 
 /// Check if a key is a delete/backspace key.
