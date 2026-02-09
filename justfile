@@ -82,6 +82,7 @@ rust-test:
       -p nvim-context \
       -p nvim-cursor \
       -p nvim-cursor-shape \
+      -p nvim-debugger \
       -p nvim-decoration \
       -p nvim-drawline \
       -p nvim-edit \

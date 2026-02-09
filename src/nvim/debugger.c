@@ -1,6 +1,8 @@
 /// @file debugger.c
 ///
-/// Vim script debugger functions
+/// Vim script debugger functions — thin wrappers delegating to Rust
+/// (src/nvim-rs/debugger/src/vim_debugger.rs)
+/// C accessor functions for struct/global access needed by Rust.
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -42,12 +44,6 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
-/// batch mode debugging: don't save and restore typeahead.
-static bool debug_greedy = false;
-
-static char *debug_oldval = NULL;  // old and newval for debug expressions
-static char *debug_newval = NULL;
-
 /// The list of breakpoints: dbg_breakp.
 /// This is a grow-array of structs.
 struct debuggy {
@@ -63,423 +59,8 @@ struct debuggy {
 
 #include "debugger.c.generated.h"
 
-/// Debug mode. Repeatedly get Ex commands, until told to continue normal
-/// execution.
-void do_debug(char *cmd)
-{
-  int save_msg_scroll = msg_scroll;
-  int save_State = State;
-  int save_did_emsg = did_emsg;
-  const bool save_cmd_silent = cmd_silent;
-  int save_msg_silent = msg_silent;
-  int save_emsg_silent = emsg_silent;
-  bool save_redir_off = redir_off;
-  tasave_T typeaheadbuf;
-  bool typeahead_saved = false;
-  int save_ignore_script = 0;
-  char *cmdline = NULL;
-  char *p;
-  char *tail = NULL;
-  static int last_cmd = 0;
-#define CMD_CONT        1
-#define CMD_NEXT        2
-#define CMD_STEP        3
-#define CMD_FINISH      4
-#define CMD_QUIT        5
-#define CMD_INTERRUPT   6
-#define CMD_BACKTRACE   7
-#define CMD_FRAME       8
-#define CMD_UP          9
-#define CMD_DOWN        10
-
-  RedrawingDisabled++;          // don't redisplay the window
-  no_wait_return++;             // don't wait for return
-  did_emsg = false;             // don't use error from debugged stuff
-  cmd_silent = false;           // display commands
-  msg_silent = false;           // display messages
-  emsg_silent = false;          // display error messages
-  redir_off = true;             // don't redirect debug commands
-
-  State = MODE_NORMAL;
-  debug_mode = true;
-
-  if (!debug_did_msg) {
-    msg(_("Entering Debug mode.  Type \"cont\" to continue."), 0);
-  }
-  if (debug_oldval != NULL) {
-    smsg(0, _("Oldval = \"%s\""), debug_oldval);
-    XFREE_CLEAR(debug_oldval);
-  }
-  if (debug_newval != NULL) {
-    smsg(0, _("Newval = \"%s\""), debug_newval);
-    XFREE_CLEAR(debug_newval);
-  }
-  char *sname = estack_sfile(ESTACK_NONE);
-  if (sname != NULL) {
-    msg(sname, 0);
-  }
-  xfree(sname);
-  if (SOURCING_LNUM != 0) {
-    smsg(0, _("line %" PRId64 ": %s"), (int64_t)SOURCING_LNUM, cmd);
-  } else {
-    smsg(0, _("cmd: %s"), cmd);
-  }
-
-  // Repeat getting a command and executing it.
-  while (true) {
-    msg_scroll = true;
-    need_wait_return = false;
-
-    // Save the current typeahead buffer and replace it with an empty one.
-    // This makes sure we get input from the user here and don't interfere
-    // with the commands being executed.  Reset "ex_normal_busy" to avoid
-    // the side effects of using ":normal". Save the stuff buffer and make
-    // it empty. Set ignore_script to avoid reading from script input.
-    int save_ex_normal_busy = ex_normal_busy;
-    ex_normal_busy = 0;
-    if (!debug_greedy) {
-      save_typeahead(&typeaheadbuf);
-      typeahead_saved = true;
-      save_ignore_script = ignore_script;
-      ignore_script = true;
-    }
-
-    // don't debug any function call, e.g. from an expression mapping
-    int n = debug_break_level;
-    debug_break_level = -1;
-
-    xfree(cmdline);
-    cmdline = getcmdline_prompt('>', NULL, 0, EXPAND_NOTHING, NULL, CALLBACK_NONE, false, NULL);
-
-    debug_break_level = n;
-    if (typeahead_saved) {
-      restore_typeahead(&typeaheadbuf);
-      ignore_script = save_ignore_script;
-    }
-    ex_normal_busy = save_ex_normal_busy;
-
-    cmdline_row = msg_row;
-    msg_starthere();
-    if (cmdline != NULL) {
-      // If this is a debug command, set "last_cmd".
-      // If not, reset "last_cmd".
-      // For a blank line use previous command.
-      p = skipwhite(cmdline);
-      if (*p != NUL) {
-        switch (*p) {
-        case 'c':
-          last_cmd = CMD_CONT;
-          tail = "ont";
-          break;
-        case 'n':
-          last_cmd = CMD_NEXT;
-          tail = "ext";
-          break;
-        case 's':
-          last_cmd = CMD_STEP;
-          tail = "tep";
-          break;
-        case 'f':
-          last_cmd = 0;
-          if (p[1] == 'r') {
-            last_cmd = CMD_FRAME;
-            tail = "rame";
-          } else {
-            last_cmd = CMD_FINISH;
-            tail = "inish";
-          }
-          break;
-        case 'q':
-          last_cmd = CMD_QUIT;
-          tail = "uit";
-          break;
-        case 'i':
-          last_cmd = CMD_INTERRUPT;
-          tail = "nterrupt";
-          break;
-        case 'b':
-          last_cmd = CMD_BACKTRACE;
-          if (p[1] == 't') {
-            tail = "t";
-          } else {
-            tail = "acktrace";
-          }
-          break;
-        case 'w':
-          last_cmd = CMD_BACKTRACE;
-          tail = "here";
-          break;
-        case 'u':
-          last_cmd = CMD_UP;
-          tail = "p";
-          break;
-        case 'd':
-          last_cmd = CMD_DOWN;
-          tail = "own";
-          break;
-        default:
-          last_cmd = 0;
-        }
-        if (last_cmd != 0) {
-          // Check that the tail matches.
-          p++;
-          while (*p != NUL && *p == *tail) {
-            p++;
-            tail++;
-          }
-          if (ASCII_ISALPHA(*p) && last_cmd != CMD_FRAME) {
-            last_cmd = 0;
-          }
-        }
-      }
-
-      if (last_cmd != 0) {
-        // Execute debug command: decide where to break next and return.
-        switch (last_cmd) {
-        case CMD_CONT:
-          debug_break_level = -1;
-          break;
-        case CMD_NEXT:
-          debug_break_level = ex_nesting_level;
-          break;
-        case CMD_STEP:
-          debug_break_level = 9999;
-          break;
-        case CMD_FINISH:
-          debug_break_level = ex_nesting_level - 1;
-          break;
-        case CMD_QUIT:
-          got_int = true;
-          debug_break_level = -1;
-          break;
-        case CMD_INTERRUPT:
-          got_int = true;
-          debug_break_level = 9999;
-          // Do not repeat ">interrupt" cmd, continue stepping.
-          last_cmd = CMD_STEP;
-          break;
-        case CMD_BACKTRACE:
-          do_showbacktrace(cmd);
-          continue;
-        case CMD_FRAME:
-          if (*p == NUL) {
-            do_showbacktrace(cmd);
-          } else {
-            p = skipwhite(p);
-            do_setdebugtracelevel(p);
-          }
-          continue;
-        case CMD_UP:
-          debug_backtrace_level++;
-          do_checkbacktracelevel();
-          continue;
-        case CMD_DOWN:
-          debug_backtrace_level--;
-          do_checkbacktracelevel();
-          continue;
-        }
-        // Going out reset backtrace_level
-        debug_backtrace_level = 0;
-        break;
-      }
-
-      // don't debug this command
-      n = debug_break_level;
-      debug_break_level = -1;
-      do_cmdline(cmdline, getexline, NULL, DOCMD_VERBOSE|DOCMD_EXCRESET);
-      debug_break_level = n;
-    }
-    lines_left = Rows - 1;
-  }
-  xfree(cmdline);
-
-  RedrawingDisabled--;
-  no_wait_return--;
-  redraw_all_later(UPD_NOT_VALID);
-  need_wait_return = false;
-  msg_scroll = save_msg_scroll;
-  lines_left = Rows - 1;
-  State = save_State;
-  debug_mode = false;
-  did_emsg = save_did_emsg;
-  cmd_silent = save_cmd_silent;
-  msg_silent = save_msg_silent;
-  emsg_silent = save_emsg_silent;
-  redir_off = save_redir_off;
-
-  // Only print the message again when typing a command before coming back here.
-  debug_did_msg = true;
-}
-
-static int get_maxbacktrace_level(char *sname)
-{
-  int maxbacktrace = 0;
-
-  if (sname == NULL) {
-    return 0;
-  }
-
-  char *p = sname;
-  char *q;
-  while ((q = strstr(p, "..")) != NULL) {
-    p = q + 2;
-    maxbacktrace++;
-  }
-  return maxbacktrace;
-}
-
-static void do_setdebugtracelevel(char *arg)
-{
-  int level = atoi(arg);
-  if (*arg == '+' || level < 0) {
-    debug_backtrace_level += level;
-  } else {
-    debug_backtrace_level = level;
-  }
-
-  do_checkbacktracelevel();
-}
-
-static void do_checkbacktracelevel(void)
-{
-  if (debug_backtrace_level < 0) {
-    debug_backtrace_level = 0;
-    msg(_("frame is zero"), 0);
-  } else {
-    char *sname = estack_sfile(ESTACK_NONE);
-    int max = get_maxbacktrace_level(sname);
-
-    if (debug_backtrace_level > max) {
-      debug_backtrace_level = max;
-      smsg(0, _("frame at highest level: %d"), max);
-    }
-    xfree(sname);
-  }
-}
-
-static void do_showbacktrace(char *cmd)
-{
-  char *sname = estack_sfile(ESTACK_NONE);
-  int max = get_maxbacktrace_level(sname);
-  if (sname != NULL) {
-    int i = 0;
-    char *cur = sname;
-    while (!got_int) {
-      char *next = strstr(cur, "..");
-      if (next != NULL) {
-        *next = NUL;
-      }
-      if (i == max - debug_backtrace_level) {
-        smsg(0, "->%d %s", max - i, cur);
-      } else {
-        smsg(0, "  %d %s", max - i, cur);
-      }
-      i++;
-      if (next == NULL) {
-        break;
-      }
-      *next = '.';
-      cur = next + 2;
-    }
-    xfree(sname);
-  }
-
-  if (SOURCING_LNUM != 0) {
-    smsg(0, _("line %" PRId64 ": %s"), (int64_t)SOURCING_LNUM, cmd);
-  } else {
-    smsg(0, _("cmd: %s"), cmd);
-  }
-}
-
-/// ":debug".
-void ex_debug(exarg_T *eap)
-{
-  int debug_break_level_save = debug_break_level;
-
-  debug_break_level = 9999;
-  do_cmdline_cmd(eap->arg);
-  debug_break_level = debug_break_level_save;
-}
-
-static char *debug_breakpoint_name = NULL;
-static linenr_T debug_breakpoint_lnum;
-
-/// When debugging or a breakpoint is set on a skipped command, no debug prompt
-/// is shown by do_one_cmd().  This situation is indicated by debug_skipped, and
-/// debug_skipped_name is then set to the source name in the breakpoint case. If
-/// a skipped command decides itself that a debug prompt should be displayed, it
-/// can do so by calling dbg_check_skipped().
-static bool debug_skipped;
-static char *debug_skipped_name;
-
-/// Go to debug mode when a breakpoint was encountered or "ex_nesting_level" is
-/// at or below the break level.  But only when the line is actually
-/// executed.  Return true and set breakpoint_name for skipped commands that
-/// decide to execute something themselves.
-/// Called from do_one_cmd() before executing a command.
-void dbg_check_breakpoint(exarg_T *eap)
-{
-  debug_skipped = false;
-  if (debug_breakpoint_name != NULL) {
-    if (!eap->skip) {
-      char *p;
-      // replace K_SNR with "<SNR>"
-      if ((uint8_t)debug_breakpoint_name[0] == K_SPECIAL
-          && (uint8_t)debug_breakpoint_name[1] == KS_EXTRA
-          && debug_breakpoint_name[2] == KE_SNR) {
-        p = "<SNR>";
-      } else {
-        p = "";
-      }
-      smsg(0, _("Breakpoint in \"%s%s\" line %" PRId64),
-           p,
-           debug_breakpoint_name + (*p == NUL ? 0 : 3),
-           (int64_t)debug_breakpoint_lnum);
-      debug_breakpoint_name = NULL;
-      do_debug(eap->cmd);
-    } else {
-      debug_skipped = true;
-      debug_skipped_name = debug_breakpoint_name;
-      debug_breakpoint_name = NULL;
-    }
-  } else if (ex_nesting_level <= debug_break_level) {
-    if (!eap->skip) {
-      do_debug(eap->cmd);
-    } else {
-      debug_skipped = true;
-      debug_skipped_name = NULL;
-    }
-  }
-}
-
-/// Go to debug mode if skipped by dbg_check_breakpoint() because eap->skip was
-/// set.
-///
-/// @return true when the debug mode is entered this time.
-bool dbg_check_skipped(exarg_T *eap)
-{
-  if (!debug_skipped) {
-    return false;
-  }
-
-  // Save the value of got_int and reset it.  We don't want a previous
-  // interruption cause flushing the input buffer.
-  bool prev_got_int = got_int;
-  got_int = false;
-  debug_breakpoint_name = debug_skipped_name;
-  // eap->skip is true
-  eap->skip = false;
-  dbg_check_breakpoint(eap);
-  eap->skip = true;
-  got_int |= prev_got_int;
-  return true;
-}
-
 static garray_T dbg_breakp = { 0, 0, sizeof(struct debuggy), 4, NULL };
-#define BREAKP(idx)             (((struct debuggy *)dbg_breakp.ga_data)[idx])
 #define DEBUGGY(gap, idx)       (((struct debuggy *)(gap)->ga_data)[idx])
-static int last_breakp = 0;     // nr of last defined breakpoint
-static bool has_expr_breakpoint = false;
 
 // Profiling uses file and func names similar to breakpoints.
 static garray_T prof_ga = { 0, 0, sizeof(struct debuggy), 4, NULL };
@@ -487,395 +68,822 @@ static garray_T prof_ga = { 0, 0, sizeof(struct debuggy), 4, NULL };
 #define DBG_FILE        2
 #define DBG_EXPR        3
 
-/// Evaluate the "bp->dbg_name" expression and return the result.
-/// Disables error messages.
-static typval_T *eval_expr_no_emsg(struct debuggy *const bp)
-  FUNC_ATTR_NONNULL_ALL
+// =============================================================================
+// Static assertions for constants used in Rust
+// =============================================================================
+
+_Static_assert(DBG_FUNC == 1, "DBG_FUNC mismatch");
+_Static_assert(DBG_FILE == 2, "DBG_FILE mismatch");
+_Static_assert(DBG_EXPR == 3, "DBG_EXPR mismatch");
+_Static_assert(OK == 1, "OK mismatch");
+_Static_assert(FAIL == 0, "FAIL mismatch");
+_Static_assert(K_SPECIAL == 0x80, "K_SPECIAL mismatch");
+_Static_assert(KS_EXTRA == 253, "KS_EXTRA mismatch");
+_Static_assert(KE_SNR == 82, "KE_SNR mismatch");
+_Static_assert(ESTACK_NONE == 0, "ESTACK_NONE mismatch");
+_Static_assert(EXPAND_NOTHING == 0, "EXPAND_NOTHING mismatch");
+_Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL mismatch");
+_Static_assert(NUL == 0, "NUL mismatch");
+_Static_assert(RE_MAGIC == 1, "RE_MAGIC mismatch");
+_Static_assert(RE_STRING == 2, "RE_STRING mismatch");
+_Static_assert(UPD_NOT_VALID == 40, "UPD_NOT_VALID mismatch");
+_Static_assert(DOCMD_VERBOSE == 0x01, "DOCMD_VERBOSE mismatch");
+_Static_assert(DOCMD_EXCRESET == 0x10, "DOCMD_EXCRESET mismatch");
+_Static_assert(CMD_profile == 331, "CMD_profile mismatch");
+_Static_assert(CMD_profdel == 332, "CMD_profdel mismatch");
+_Static_assert(CMD_breakdel == 36, "CMD_breakdel mismatch");
+_Static_assert(CMD_breakadd == 35, "CMD_breakadd mismatch");
+_Static_assert(EXPR_IS == 9, "EXPR_IS mismatch");
+
+// =============================================================================
+// Rust function declarations
+// =============================================================================
+
+extern void rs_do_debug(char *cmd);
+extern void rs_ex_debug(exarg_T *eap);
+extern void rs_ex_debuggreedy(exarg_T *eap);
+extern void rs_dbg_check_breakpoint(exarg_T *eap);
+extern bool rs_dbg_check_skipped(exarg_T *eap);
+extern void rs_ex_breakadd(exarg_T *eap);
+extern void rs_ex_breakdel(exarg_T *eap);
+extern void rs_ex_breaklist(exarg_T *eap);
+extern linenr_T rs_dbg_find_breakpoint(bool file, char *fname, linenr_T after);
+extern bool rs_has_profiling(bool file, char *fname, bool *fp);
+extern void rs_dbg_breakpoint(char *name, linenr_T lnum);
+extern void rs_update_has_expr_breakpoint(void);
+
+// =============================================================================
+// C accessor functions for Rust to call back into
+// =============================================================================
+
+// --- garray_T gap handle getters ---
+
+garray_T *nvim_dbg_get_breakp_gap(void)
 {
-  // Disable error messages, a bad expression would make Vim unusable.
-  emsg_off++;
-  typval_T *const tv = eval_expr(bp->dbg_name, NULL);
-  emsg_off--;
-  return tv;
+  return &dbg_breakp;
 }
 
-/// Parse the arguments of ":profile", ":breakadd" or ":breakdel" and put them
-/// in the entry just after the last one in dbg_breakp.  Note that "dbg_name"
-/// is allocated.
-/// Returns FAIL for failure.
-///
-/// @param arg
-/// @param gap  either &dbg_breakp or &prof_ga
-static int dbg_parsearg(char *arg, garray_T *gap)
+garray_T *nvim_dbg_get_prof_gap(void)
 {
-  char *p = arg;
-  bool here = false;
-
-  ga_grow(gap, 1);
-
-  struct debuggy *bp = &DEBUGGY(gap, gap->ga_len);
-
-  // Find "func" or "file".
-  if (strncmp(p, "func", 4) == 0) {
-    bp->dbg_type = DBG_FUNC;
-  } else if (strncmp(p, "file", 4) == 0) {
-    bp->dbg_type = DBG_FILE;
-  } else if (gap != &prof_ga && strncmp(p, "here", 4) == 0) {
-    if (curbuf->b_ffname == NULL) {
-      emsg(_(e_noname));
-      return FAIL;
-    }
-    bp->dbg_type = DBG_FILE;
-    here = true;
-  } else if (gap != &prof_ga && strncmp(p, "expr", 4) == 0) {
-    bp->dbg_type = DBG_EXPR;
-  } else {
-    semsg(_(e_invarg2), p);
-    return FAIL;
-  }
-  p = skipwhite(p + 4);
-
-  // Find optional line number.
-  if (here) {
-    bp->dbg_lnum = curwin->w_cursor.lnum;
-  } else if (gap != &prof_ga && ascii_isdigit(*p)) {
-    bp->dbg_lnum = getdigits_int32(&p, true, 0);
-    p = skipwhite(p);
-  } else {
-    bp->dbg_lnum = 0;
-  }
-
-  // Find the function or file name.  Don't accept a function name with ().
-  if ((!here && *p == NUL)
-      || (here && *p != NUL)
-      || (bp->dbg_type == DBG_FUNC && strstr(p, "()") != NULL)) {
-    semsg(_(e_invarg2), arg);
-    return FAIL;
-  }
-
-  if (bp->dbg_type == DBG_FUNC) {
-    bp->dbg_name = xstrdup(strncmp(p, "g:", 2) == 0 ? p + 2 : p);
-  } else if (here) {
-    bp->dbg_name = xstrdup(curbuf->b_ffname);
-  } else if (bp->dbg_type == DBG_EXPR) {
-    bp->dbg_name = xstrdup(p);
-    bp->dbg_val = eval_expr_no_emsg(bp);
-  } else {
-    // Expand the file name in the same way as do_source().  This means
-    // doing it twice, so that $DIR/file gets expanded when $DIR is
-    // "~/dir".
-    char *q = expand_env_save(p);
-    if (q == NULL) {
-      return FAIL;
-    }
-    p = expand_env_save(q);
-    xfree(q);
-    if (p == NULL) {
-      return FAIL;
-    }
-    if (*p != '*') {
-      bp->dbg_name = fix_fname(p);
-      xfree(p);
-    } else {
-      bp->dbg_name = p;
-    }
-  }
-
-  if (bp->dbg_name == NULL) {
-    return FAIL;
-  }
-  return OK;
+  return &prof_ga;
 }
 
-/// ":breakadd".  Also used for ":profile".
-void ex_breakadd(exarg_T *eap)
+// --- garray_T operations ---
+
+int nvim_dbg_gap_len(garray_T *gap)
 {
-  garray_T *gap = &dbg_breakp;
-  if (eap->cmdidx == CMD_profile) {
-    gap = &prof_ga;
-  }
+  return gap->ga_len;
+}
 
-  if (dbg_parsearg(eap->arg, gap) != OK) {
-    return;
-  }
+void nvim_dbg_gap_set_len(garray_T *gap, int len)
+{
+  gap->ga_len = len;
+}
 
-  struct debuggy *bp = &DEBUGGY(gap, gap->ga_len);
-  bp->dbg_forceit = eap->forceit;
+void nvim_dbg_gap_grow(garray_T *gap, int n)
+{
+  ga_grow(gap, n);
+}
 
-  if (bp->dbg_type != DBG_EXPR) {
-    char *pat = file_pat_to_reg_pat(bp->dbg_name, NULL, NULL, false);
-    if (pat != NULL) {
-      bp->dbg_prog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-      xfree(pat);
-    }
-    if (pat == NULL || bp->dbg_prog == NULL) {
-      xfree(bp->dbg_name);
-    } else {
-      if (bp->dbg_lnum == 0) {           // default line number is 1
-        bp->dbg_lnum = 1;
-      }
-      if (eap->cmdidx != CMD_profile) {
-        DEBUGGY(gap, gap->ga_len).dbg_nr = ++last_breakp;
-        debug_tick++;
-      }
-      gap->ga_len++;
-    }
-  } else {
-    // DBG_EXPR
-    DEBUGGY(gap, gap->ga_len++).dbg_nr = ++last_breakp;
-    debug_tick++;
-    if (gap == &dbg_breakp) {
-      has_expr_breakpoint = true;
-    }
+void nvim_dbg_gap_clear(garray_T *gap)
+{
+  ga_clear(gap);
+}
+
+bool nvim_dbg_gap_is_empty(garray_T *gap)
+{
+  return GA_EMPTY(gap);
+}
+
+// --- struct debuggy per-field accessors (by index) ---
+
+int nvim_dbg_get_nr(garray_T *gap, int idx)
+{
+  return DEBUGGY(gap, idx).dbg_nr;
+}
+
+void nvim_dbg_set_nr(garray_T *gap, int idx, int val)
+{
+  DEBUGGY(gap, idx).dbg_nr = val;
+}
+
+int nvim_dbg_get_type(garray_T *gap, int idx)
+{
+  return DEBUGGY(gap, idx).dbg_type;
+}
+
+void nvim_dbg_set_type(garray_T *gap, int idx, int val)
+{
+  DEBUGGY(gap, idx).dbg_type = val;
+}
+
+char *nvim_dbg_get_name(garray_T *gap, int idx)
+{
+  return DEBUGGY(gap, idx).dbg_name;
+}
+
+void nvim_dbg_set_name(garray_T *gap, int idx, char *val)
+{
+  DEBUGGY(gap, idx).dbg_name = val;
+}
+
+regprog_T *nvim_dbg_get_prog(garray_T *gap, int idx)
+{
+  return DEBUGGY(gap, idx).dbg_prog;
+}
+
+void nvim_dbg_set_prog(garray_T *gap, int idx, regprog_T *val)
+{
+  DEBUGGY(gap, idx).dbg_prog = val;
+}
+
+linenr_T nvim_dbg_get_lnum(garray_T *gap, int idx)
+{
+  return DEBUGGY(gap, idx).dbg_lnum;
+}
+
+void nvim_dbg_set_lnum(garray_T *gap, int idx, linenr_T val)
+{
+  DEBUGGY(gap, idx).dbg_lnum = val;
+}
+
+int nvim_dbg_get_forceit(garray_T *gap, int idx)
+{
+  return DEBUGGY(gap, idx).dbg_forceit;
+}
+
+void nvim_dbg_set_forceit(garray_T *gap, int idx, int val)
+{
+  DEBUGGY(gap, idx).dbg_forceit = val;
+}
+
+typval_T *nvim_dbg_get_val(garray_T *gap, int idx)
+{
+  return DEBUGGY(gap, idx).dbg_val;
+}
+
+void nvim_dbg_set_val(garray_T *gap, int idx, typval_T *val)
+{
+  DEBUGGY(gap, idx).dbg_val = val;
+}
+
+int nvim_dbg_get_level(garray_T *gap, int idx)
+{
+  return DEBUGGY(gap, idx).dbg_level;
+}
+
+void nvim_dbg_set_level(garray_T *gap, int idx, int val)
+{
+  DEBUGGY(gap, idx).dbg_level = val;
+}
+
+// --- gap entry removal (memmove helper) ---
+
+void nvim_dbg_gap_remove_at(garray_T *gap, int idx)
+{
+  if (idx < gap->ga_len) {
+    memmove(&DEBUGGY(gap, idx), &DEBUGGY(gap, idx + 1),
+            (size_t)(gap->ga_len - idx) * sizeof(struct debuggy));
   }
 }
 
-/// ":debuggreedy".
+// --- Global variable accessors ---
+
+int nvim_dbg_get_debug_break_level(void)
+{
+  return debug_break_level;
+}
+
+void nvim_dbg_set_debug_break_level(int val)
+{
+  debug_break_level = val;
+}
+
+bool nvim_dbg_get_debug_did_msg(void)
+{
+  return debug_did_msg;
+}
+
+void nvim_dbg_set_debug_did_msg(bool val)
+{
+  debug_did_msg = val;
+}
+
+int nvim_dbg_get_debug_tick(void)
+{
+  return debug_tick;
+}
+
+void nvim_dbg_set_debug_tick(int val)
+{
+  debug_tick = val;
+}
+
+int nvim_dbg_get_debug_backtrace_level(void)
+{
+  return debug_backtrace_level;
+}
+
+void nvim_dbg_set_debug_backtrace_level(int val)
+{
+  debug_backtrace_level = val;
+}
+
+bool nvim_dbg_get_debug_mode(void)
+{
+  return debug_mode;
+}
+
+void nvim_dbg_set_debug_mode(bool val)
+{
+  debug_mode = val;
+}
+
+int nvim_dbg_get_msg_scroll(void)
+{
+  return msg_scroll;
+}
+
+void nvim_dbg_set_msg_scroll(int val)
+{
+  msg_scroll = val;
+}
+
+int nvim_dbg_get_State(void)
+{
+  return State;
+}
+
+void nvim_dbg_set_State(int val)
+{
+  State = val;
+}
+
+bool nvim_dbg_get_did_emsg(void)
+{
+  return did_emsg;
+}
+
+void nvim_dbg_set_did_emsg(bool val)
+{
+  did_emsg = val;
+}
+
+bool nvim_dbg_get_cmd_silent(void)
+{
+  return cmd_silent;
+}
+
+void nvim_dbg_set_cmd_silent(bool val)
+{
+  cmd_silent = val;
+}
+
+int nvim_dbg_get_msg_silent(void)
+{
+  return msg_silent;
+}
+
+void nvim_dbg_set_msg_silent(int val)
+{
+  msg_silent = val;
+}
+
+int nvim_dbg_get_emsg_silent(void)
+{
+  return emsg_silent;
+}
+
+void nvim_dbg_set_emsg_silent(int val)
+{
+  emsg_silent = val;
+}
+
+int nvim_dbg_get_emsg_off(void)
+{
+  return emsg_off;
+}
+
+void nvim_dbg_set_emsg_off(int val)
+{
+  emsg_off = val;
+}
+
+bool nvim_dbg_get_redir_off(void)
+{
+  return redir_off;
+}
+
+void nvim_dbg_set_redir_off(bool val)
+{
+  redir_off = val;
+}
+
+int nvim_dbg_get_RedrawingDisabled(void)
+{
+  return RedrawingDisabled;
+}
+
+void nvim_dbg_set_RedrawingDisabled(int val)
+{
+  RedrawingDisabled = val;
+}
+
+int nvim_dbg_get_no_wait_return(void)
+{
+  return no_wait_return;
+}
+
+void nvim_dbg_set_no_wait_return(int val)
+{
+  no_wait_return = val;
+}
+
+bool nvim_dbg_get_need_wait_return(void)
+{
+  return need_wait_return;
+}
+
+void nvim_dbg_set_need_wait_return(bool val)
+{
+  need_wait_return = val;
+}
+
+int nvim_dbg_get_ex_normal_busy(void)
+{
+  return ex_normal_busy;
+}
+
+void nvim_dbg_set_ex_normal_busy(int val)
+{
+  ex_normal_busy = val;
+}
+
+int nvim_dbg_get_ignore_script(void)
+{
+  return ignore_script;
+}
+
+void nvim_dbg_set_ignore_script(int val)
+{
+  ignore_script = val;
+}
+
+int nvim_dbg_get_lines_left(void)
+{
+  return lines_left;
+}
+
+void nvim_dbg_set_lines_left(int val)
+{
+  lines_left = val;
+}
+
+int nvim_dbg_get_Rows(void)
+{
+  return Rows;
+}
+
+int nvim_dbg_get_cmdline_row(void)
+{
+  return cmdline_row;
+}
+
+void nvim_dbg_set_cmdline_row(int val)
+{
+  cmdline_row = val;
+}
+
+int nvim_dbg_get_msg_row(void)
+{
+  return msg_row;
+}
+
+int nvim_dbg_get_ex_nesting_level(void)
+{
+  return ex_nesting_level;
+}
+
+bool nvim_dbg_get_got_int(void)
+{
+  return got_int;
+}
+
+void nvim_dbg_set_got_int(bool val)
+{
+  got_int = val;
+}
+
+int64_t nvim_dbg_get_sourcing_lnum(void)
+{
+  return (int64_t)SOURCING_LNUM;
+}
+
+// --- Buffer/window accessors ---
+
+char *nvim_dbg_curbuf_ffname(void)
+{
+  return curbuf->b_ffname;
+}
+
+linenr_T nvim_dbg_curwin_cursor_lnum(void)
+{
+  return curwin->w_cursor.lnum;
+}
+
+// --- ExArg accessors ---
+
+char *nvim_dbg_eap_get_arg(const exarg_T *eap)
+{
+  return eap->arg;
+}
+
+char *nvim_dbg_eap_get_cmd(const exarg_T *eap)
+{
+  return eap->cmd;
+}
+
+int nvim_dbg_eap_get_skip(const exarg_T *eap)
+{
+  return eap->skip;
+}
+
+void nvim_dbg_eap_set_skip(exarg_T *eap, int val)
+{
+  eap->skip = val;
+}
+
+int nvim_dbg_eap_get_forceit(const exarg_T *eap)
+{
+  return eap->forceit;
+}
+
+int nvim_dbg_eap_get_cmdidx(const exarg_T *eap)
+{
+  return (int)eap->cmdidx;
+}
+
+int nvim_dbg_eap_get_addr_count(const exarg_T *eap)
+{
+  return eap->addr_count;
+}
+
+linenr_T nvim_dbg_eap_get_line2(const exarg_T *eap)
+{
+  return eap->line2;
+}
+
+// =============================================================================
+// Message wrappers (keep gettext in C)
+// =============================================================================
+
+void nvim_dbg_msg_entering_debug(void)
+{
+  msg(_("Entering Debug mode.  Type \"cont\" to continue."), 0);
+}
+
+void nvim_dbg_smsg_oldval(const char *val)
+{
+  smsg(0, _("Oldval = \"%s\""), val);
+}
+
+void nvim_dbg_smsg_newval(const char *val)
+{
+  smsg(0, _("Newval = \"%s\""), val);
+}
+
+void nvim_dbg_smsg_line_cmd(int64_t lnum, const char *cmd)
+{
+  smsg(0, _("line %" PRId64 ": %s"), lnum, cmd);
+}
+
+void nvim_dbg_smsg_cmd(const char *cmd)
+{
+  smsg(0, _("cmd: %s"), cmd);
+}
+
+void nvim_dbg_smsg_breakpoint(const char *prefix, const char *name, int64_t lnum)
+{
+  smsg(0, _("Breakpoint in \"%s%s\" line %" PRId64), prefix, name, lnum);
+}
+
+void nvim_dbg_smsg_frame_arrow(int num, const char *name)
+{
+  smsg(0, "->%d %s", num, name);
+}
+
+void nvim_dbg_smsg_frame(int num, const char *name)
+{
+  smsg(0, "  %d %s", num, name);
+}
+
+void nvim_dbg_msg_frame_zero(void)
+{
+  msg(_("frame is zero"), 0);
+}
+
+void nvim_dbg_smsg_frame_highest(int max)
+{
+  smsg(0, _("frame at highest level: %d"), max);
+}
+
+void nvim_dbg_smsg_bp_func(int nr, const char *name, int64_t lnum)
+{
+  smsg(0, _("%3d  %s %s  line %" PRId64), nr, "func", name, lnum);
+}
+
+void nvim_dbg_smsg_bp_file(int nr, const char *name, int64_t lnum)
+{
+  smsg(0, _("%3d  %s %s  line %" PRId64), nr, "file", name, lnum);
+}
+
+void nvim_dbg_smsg_bp_expr(int nr, const char *name)
+{
+  smsg(0, _("%3d  expr %s"), nr, name);
+}
+
+void nvim_dbg_msg_no_breakpoints(void)
+{
+  msg(_("No breakpoints defined"), 0);
+}
+
+void nvim_dbg_emsg_noname(void)
+{
+  emsg(_(e_noname));
+}
+
+void nvim_dbg_semsg_invarg(const char *arg)
+{
+  semsg(_(e_invarg2), arg);
+}
+
+void nvim_dbg_semsg_bp_not_found(const char *arg)
+{
+  semsg(_("E161: Breakpoint not found: %s"), arg);
+}
+
+void nvim_dbg_msg_str(const char *s)
+{
+  msg(s, 0);
+}
+
+// =============================================================================
+// Eval wrappers
+// =============================================================================
+
+typval_T *nvim_dbg_eval_expr(const char *name)
+{
+  return eval_expr((char *)name, NULL);
+}
+
+int nvim_dbg_typval_compare(typval_T *tv1, typval_T *tv2, int ctype, bool ic)
+{
+  return typval_compare(tv1, tv2, (exprtype_T)ctype, ic);
+}
+
+int64_t nvim_dbg_typval_get_v_number(typval_T *tv)
+{
+  return (int64_t)tv->vval.v_number;
+}
+
+char *nvim_dbg_typval_tostring(typval_T *tv)
+{
+  return typval_tostring(tv, true);
+}
+
+void nvim_dbg_tv_free(typval_T *tv)
+{
+  tv_free(tv);
+}
+
+// =============================================================================
+// Command line wrappers
+// =============================================================================
+
+char *nvim_dbg_getcmdline_prompt(void)
+{
+  return getcmdline_prompt('>', NULL, 0, EXPAND_NOTHING, NULL, CALLBACK_NONE,
+                           false, NULL);
+}
+
+void nvim_dbg_do_cmdline(const char *cmd)
+{
+  do_cmdline((char *)cmd, getexline, NULL, DOCMD_VERBOSE|DOCMD_EXCRESET);
+}
+
+void nvim_dbg_do_cmdline_cmd(const char *cmd)
+{
+  do_cmdline_cmd((char *)cmd);
+}
+
+void nvim_dbg_msg_starthere(void)
+{
+  msg_starthere();
+}
+
+// =============================================================================
+// Typeahead wrappers
+// =============================================================================
+
+/// Save typeahead state. Returns allocated handle (caller must free via restore).
+void *nvim_dbg_save_typeahead(void)
+{
+  tasave_T *tp = xmalloc(sizeof(tasave_T));
+  save_typeahead(tp);
+  return tp;
+}
+
+/// Restore typeahead state and free the handle.
+void nvim_dbg_restore_typeahead(void *handle)
+{
+  tasave_T *tp = (tasave_T *)handle;
+  restore_typeahead(tp);
+  xfree(tp);
+}
+
+// =============================================================================
+// String/memory wrappers
+// =============================================================================
+
+char *nvim_dbg_xstrdup(const char *s)
+{
+  return xstrdup(s);
+}
+
+void nvim_dbg_xfree(void *p)
+{
+  xfree(p);
+}
+
+void *nvim_dbg_xmalloc(size_t size)
+{
+  return xmalloc(size);
+}
+
+char *nvim_dbg_skipwhite(const char *p)
+{
+  return skipwhite(p);
+}
+
+bool nvim_dbg_ascii_isdigit(int c)
+{
+  return ascii_isdigit(c);
+}
+
+int32_t nvim_dbg_getdigits_int32(char **pp)
+{
+  return getdigits_int32(pp, true, 0);
+}
+
+size_t nvim_dbg_strlen(const char *s)
+{
+  return strlen(s);
+}
+
+int nvim_dbg_strcmp(const char *a, const char *b)
+{
+  return strcmp(a, b);
+}
+
+int nvim_dbg_strncmp(const char *a, const char *b, size_t n)
+{
+  return strncmp(a, b, n);
+}
+
+char *nvim_dbg_strstr(const char *a, const char *b)
+{
+  return strstr(a, b);
+}
+
+// =============================================================================
+// Path/file wrappers
+// =============================================================================
+
+char *nvim_dbg_expand_env_save(const char *p)
+{
+  return expand_env_save((char *)p);
+}
+
+char *nvim_dbg_fix_fname(const char *p)
+{
+  return fix_fname((char *)p);
+}
+
+void nvim_dbg_home_replace(const char *name, char *buf, int buflen)
+{
+  home_replace(NULL, name, buf, buflen, true);
+}
+
+char *nvim_dbg_file_pat_to_reg_pat(const char *pat)
+{
+  return file_pat_to_reg_pat((char *)pat, NULL, NULL, false);
+}
+
+// =============================================================================
+// Regex wrappers
+// =============================================================================
+
+regprog_T *nvim_dbg_vim_regcomp(const char *pat, int flags)
+{
+  return vim_regcomp((char *)pat, flags);
+}
+
+void nvim_dbg_vim_regfree(regprog_T *prog)
+{
+  vim_regfree(prog);
+}
+
+bool nvim_dbg_vim_regexec_prog(regprog_T **prog_ptr, const char *name)
+{
+  return vim_regexec_prog(prog_ptr, false, (char *)name, 0);
+}
+
+// =============================================================================
+// Screen/misc wrappers
+// =============================================================================
+
+void nvim_dbg_redraw_all_later(int typ)
+{
+  redraw_all_later(typ);
+}
+
+char *nvim_dbg_estack_sfile(int which)
+{
+  return estack_sfile((estack_arg_T)which);
+}
+
+bool nvim_dbg_ascii_isalpha(int c)
+{
+  return ASCII_ISALPHA(c);
+}
+
+// --- NameBuff access ---
+
+char *nvim_dbg_get_namebuff(void)
+{
+  return NameBuff;
+}
+
+int nvim_dbg_get_maxpathl(void)
+{
+  return MAXPATHL;
+}
+
+// =============================================================================
+// Thin wrappers delegating to Rust
+// =============================================================================
+
+void do_debug(char *cmd)
+{
+  rs_do_debug(cmd);
+}
+
+void ex_debug(exarg_T *eap)
+{
+  rs_ex_debug(eap);
+}
+
 void ex_debuggreedy(exarg_T *eap)
 {
-  if (eap->addr_count == 0 || eap->line2 != 0) {
-    debug_greedy = true;
-  } else {
-    debug_greedy = false;
-  }
+  rs_ex_debuggreedy(eap);
 }
 
-static void update_has_expr_breakpoint(void)
+void dbg_check_breakpoint(exarg_T *eap)
 {
-  has_expr_breakpoint = false;
-  for (int i = 0; i < dbg_breakp.ga_len; i++) {
-    if (BREAKP(i).dbg_type == DBG_EXPR) {
-      has_expr_breakpoint = true;
-      break;
-    }
-  }
+  rs_dbg_check_breakpoint(eap);
 }
 
-/// ":breakdel" and ":profdel".
+bool dbg_check_skipped(exarg_T *eap)
+{
+  return rs_dbg_check_skipped(eap);
+}
+
+void ex_breakadd(exarg_T *eap)
+{
+  rs_ex_breakadd(eap);
+}
+
 void ex_breakdel(exarg_T *eap)
 {
-  int todel = -1;
-  bool del_all = false;
-  linenr_T best_lnum = 0;
-  garray_T *gap = &dbg_breakp;
-
-  if (eap->cmdidx == CMD_profdel) {
-    gap = &prof_ga;
-  }
-
-  if (ascii_isdigit(*eap->arg)) {
-    // ":breakdel {nr}"
-    int nr = atoi(eap->arg);
-    for (int i = 0; i < gap->ga_len; i++) {
-      if (DEBUGGY(gap, i).dbg_nr == nr) {
-        todel = i;
-        break;
-      }
-    }
-  } else if (*eap->arg == '*') {
-    todel = 0;
-    del_all = true;
-  } else {
-    // ":breakdel {func|file|expr} [lnum] {name}"
-    if (dbg_parsearg(eap->arg, gap) == FAIL) {
-      return;
-    }
-    struct debuggy *bp = &DEBUGGY(gap, gap->ga_len);
-    for (int i = 0; i < gap->ga_len; i++) {
-      struct debuggy *bpi = &DEBUGGY(gap, i);
-      if (bp->dbg_type == bpi->dbg_type
-          && strcmp(bp->dbg_name, bpi->dbg_name) == 0
-          && (bp->dbg_lnum == bpi->dbg_lnum
-              || (bp->dbg_lnum == 0
-                  && (best_lnum == 0
-                      || bpi->dbg_lnum < best_lnum)))) {
-        todel = i;
-        best_lnum = bpi->dbg_lnum;
-      }
-    }
-    xfree(bp->dbg_name);
-  }
-
-  if (todel < 0) {
-    semsg(_("E161: Breakpoint not found: %s"), eap->arg);
-    return;
-  }
-
-  while (!GA_EMPTY(gap)) {
-    xfree(DEBUGGY(gap, todel).dbg_name);
-    if (DEBUGGY(gap, todel).dbg_type == DBG_EXPR
-        && DEBUGGY(gap, todel).dbg_val != NULL) {
-      tv_free(DEBUGGY(gap, todel).dbg_val);
-    }
-    vim_regfree(DEBUGGY(gap, todel).dbg_prog);
-    gap->ga_len--;
-    if (todel < gap->ga_len) {
-      memmove(&DEBUGGY(gap, todel), &DEBUGGY(gap, todel + 1),
-              (size_t)(gap->ga_len - todel) * sizeof(struct debuggy));
-    }
-    if (eap->cmdidx == CMD_breakdel) {
-      debug_tick++;
-    }
-    if (!del_all) {
-      break;
-    }
-  }
-
-  // If all breakpoints were removed clear the array.
-  if (GA_EMPTY(gap)) {
-    ga_clear(gap);
-  }
-  if (gap == &dbg_breakp) {
-    update_has_expr_breakpoint();
-  }
+  rs_ex_breakdel(eap);
 }
 
-/// ":breaklist".
 void ex_breaklist(exarg_T *eap)
 {
-  if (GA_EMPTY(&dbg_breakp)) {
-    msg(_("No breakpoints defined"), 0);
-    return;
-  }
-
-  for (int i = 0; i < dbg_breakp.ga_len; i++) {
-    struct debuggy *bp = &BREAKP(i);
-    if (bp->dbg_type == DBG_FILE) {
-      home_replace(NULL, bp->dbg_name, NameBuff, MAXPATHL, true);
-    }
-    if (bp->dbg_type != DBG_EXPR) {
-      smsg(0, _("%3d  %s %s  line %" PRId64),
-           bp->dbg_nr,
-           bp->dbg_type == DBG_FUNC ? "func" : "file",
-           bp->dbg_type == DBG_FUNC ? bp->dbg_name : NameBuff,
-           (int64_t)bp->dbg_lnum);
-    } else {
-      smsg(0, _("%3d  expr %s"), bp->dbg_nr, bp->dbg_name);
-    }
-  }
+  rs_ex_breaklist(eap);
 }
 
-/// Find a breakpoint for a function or sourced file.
-/// Returns line number at which to break; zero when no matching breakpoint.
-///
-/// @param file  true for a file, false for a function
-/// @param fname  file or function name
-/// @param after  after this line number
 linenr_T dbg_find_breakpoint(bool file, char *fname, linenr_T after)
 {
-  return debuggy_find(file, fname, after, &dbg_breakp, NULL);
+  return rs_dbg_find_breakpoint(file, fname, after);
 }
 
-/// @param file     true for a file, false for a function
-/// @param fname    file or function name
-/// @param fp[out]  forceit
-///
-/// @returns true if profiling is on for a function or sourced file.
 bool has_profiling(bool file, char *fname, bool *fp)
 {
-  return debuggy_find(file, fname, 0, &prof_ga, fp)
-         != 0;
+  return rs_has_profiling(file, fname, fp);
 }
 
-/// Common code for dbg_find_breakpoint() and has_profiling().
-///
-/// @param file  true for a file, false for a function
-/// @param fname  file or function name
-/// @param after  after this line number
-/// @param gap  either &dbg_breakp or &prof_ga
-/// @param fp  if not NULL: return forceit
-static linenr_T debuggy_find(bool file, char *fname, linenr_T after, garray_T *gap, bool *fp)
-{
-  struct debuggy *bp;
-  linenr_T lnum = 0;
-  char *name = fname;
-
-  // Return quickly when there are no breakpoints.
-  if (GA_EMPTY(gap)) {
-    return 0;
-  }
-
-  // Replace K_SNR in function name with "<SNR>".
-  if (!file && (uint8_t)fname[0] == K_SPECIAL) {
-    name = xmalloc(strlen(fname) + 3);
-    STRCPY(name, "<SNR>");
-    STRCPY(name + 5, fname + 3);
-  }
-
-  for (int i = 0; i < gap->ga_len; i++) {
-    // Skip entries that are not useful or are for a line that is beyond
-    // an already found breakpoint.
-    bp = &DEBUGGY(gap, i);
-    if ((bp->dbg_type == DBG_FILE) == file
-        && bp->dbg_type != DBG_EXPR
-        && (gap == &prof_ga
-            || (bp->dbg_lnum > after && (lnum == 0 || bp->dbg_lnum < lnum)))) {
-      // Save the value of got_int and reset it.  We don't want a
-      // previous interruption cancel matching, only hitting CTRL-C
-      // while matching should abort it.
-      bool prev_got_int = got_int;
-      got_int = false;
-      if (vim_regexec_prog(&bp->dbg_prog, false, name, 0)) {
-        lnum = bp->dbg_lnum;
-        if (fp != NULL) {
-          *fp = bp->dbg_forceit;
-        }
-      }
-      got_int |= prev_got_int;
-    } else if (bp->dbg_type == DBG_EXPR) {
-      bool line = false;
-
-      typval_T *const tv = eval_expr_no_emsg(bp);
-      if (tv != NULL) {
-        if (bp->dbg_val == NULL) {
-          xfree(debug_oldval);
-          debug_oldval = typval_tostring(NULL, true);
-          bp->dbg_val = tv;
-          xfree(debug_newval);
-          debug_newval = typval_tostring(bp->dbg_val, true);
-          line = true;
-        } else {
-          if (typval_compare(tv, bp->dbg_val, EXPR_IS, false) == OK
-              && tv->vval.v_number == false) {
-            line = true;
-            xfree(debug_oldval);
-            debug_oldval = typval_tostring(bp->dbg_val, true);
-            // Need to evaluate again, typval_compare() overwrites "tv".
-            typval_T *const v = eval_expr_no_emsg(bp);
-            xfree(debug_newval);
-            debug_newval = typval_tostring(v, true);
-            tv_free(bp->dbg_val);
-            bp->dbg_val = v;
-          }
-          tv_free(tv);
-        }
-      } else if (bp->dbg_val != NULL) {
-        xfree(debug_oldval);
-        debug_oldval = typval_tostring(bp->dbg_val, true);
-        xfree(debug_newval);
-        debug_newval = typval_tostring(NULL, true);
-        tv_free(bp->dbg_val);
-        bp->dbg_val = NULL;
-        line = true;
-      }
-
-      if (line) {
-        lnum = after > 0 ? after : 1;
-        break;
-      }
-    }
-  }
-  if (name != fname) {
-    xfree(name);
-  }
-
-  return lnum;
-}
-
-/// Called when a breakpoint was encountered.
 void dbg_breakpoint(char *name, linenr_T lnum)
 {
-  // We need to check if this line is actually executed in do_one_cmd()
-  debug_breakpoint_name = name;
-  debug_breakpoint_lnum = lnum;
+  rs_dbg_breakpoint(name, lnum);
 }

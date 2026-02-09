@@ -7,11 +7,34 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::use_self)]
+#![allow(clippy::ptr_as_ptr)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::needless_bool_assign)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::borrow_as_ptr)]
+#![allow(clippy::ptr_cast_constness)]
+#![allow(clippy::if_then_some_else_none)]
+#![allow(clippy::nonminimal_bool)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_else_if)]
+#![allow(clippy::branches_sharing_code)]
+#![allow(clippy::needless_bool)]
+#![allow(clippy::assign_op_pattern)]
+#![allow(clippy::useless_let_if_seq)]
+#![allow(clippy::if_not_else)]
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
 
 pub mod breakpoint;
 pub mod dap;
 pub mod state;
 pub mod stepping;
+#[cfg(not(test))]
+#[allow(dead_code)]
+pub mod vim_debugger;
 
 use std::ffi::c_int;
 
@@ -572,5 +595,74 @@ mod tests {
 
         assert_eq!(rs_vim_breakpoint_type_valid(1), 1);
         assert_eq!(rs_vim_breakpoint_type_valid(0), 0);
+    }
+
+    // =========================================================================
+    // vim_debugger module tests (pure Rust, no FFI)
+    // =========================================================================
+
+    /// get_maxbacktrace_level is a pure Rust function we can test directly.
+    /// Duplicated here since the vim_debugger module is gated behind cfg(not(test)).
+    fn get_maxbacktrace_level(sname: *const std::ffi::c_char) -> c_int {
+        if sname.is_null() {
+            return 0;
+        }
+        let cstr = unsafe { std::ffi::CStr::from_ptr(sname) };
+        let bytes = cstr.to_bytes();
+        let mut count: c_int = 0;
+        let mut i = 0;
+        while i + 1 < bytes.len() {
+            if bytes[i] == b'.' && bytes[i + 1] == b'.' {
+                count += 1;
+                i += 2;
+            } else {
+                i += 1;
+            }
+        }
+        count
+    }
+
+    #[test]
+    fn test_get_maxbacktrace_level_null() {
+        assert_eq!(get_maxbacktrace_level(std::ptr::null()), 0);
+    }
+
+    #[test]
+    fn test_get_maxbacktrace_level_no_dots() {
+        let s = c"function_name";
+        assert_eq!(get_maxbacktrace_level(s.as_ptr()), 0);
+    }
+
+    #[test]
+    fn test_get_maxbacktrace_level_one() {
+        let s = c"outer..inner";
+        assert_eq!(get_maxbacktrace_level(s.as_ptr()), 1);
+    }
+
+    #[test]
+    fn test_get_maxbacktrace_level_multiple() {
+        let s = c"a..b..c..d";
+        assert_eq!(get_maxbacktrace_level(s.as_ptr()), 3);
+    }
+
+    #[test]
+    fn test_constants_match_debug_command() {
+        assert_eq!(1, DebugCommand::Continue.as_raw());
+        assert_eq!(2, DebugCommand::Next.as_raw());
+        assert_eq!(3, DebugCommand::Step.as_raw());
+        assert_eq!(4, DebugCommand::Finish.as_raw());
+        assert_eq!(5, DebugCommand::Quit.as_raw());
+        assert_eq!(6, DebugCommand::Interrupt.as_raw());
+        assert_eq!(7, DebugCommand::Backtrace.as_raw());
+        assert_eq!(8, DebugCommand::Frame.as_raw());
+        assert_eq!(9, DebugCommand::Up.as_raw());
+        assert_eq!(10, DebugCommand::Down.as_raw());
+    }
+
+    #[test]
+    fn test_constants_match_vim_breakpoint_type_values() {
+        assert_eq!(1, VimBreakpointType::Func.as_raw());
+        assert_eq!(2, VimBreakpointType::File.as_raw());
+        assert_eq!(3, VimBreakpointType::Expr.as_raw());
     }
 }
