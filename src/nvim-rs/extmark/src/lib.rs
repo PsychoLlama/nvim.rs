@@ -44,7 +44,7 @@ pub type BcountT = isize;
 pub type ColnrT = c_int;
 
 /// Line number type (int64_t in C).
-pub type LinenrT = i64;
+pub type LinenrT = i32;
 
 // ============================================================================
 // Enums
@@ -847,7 +847,7 @@ pub fn extmark_adjust(
     let old_row: c_int;
     let new_row: c_int;
 
-    const MAXLNUM: LinenrT = i64::MAX;
+    const MAXLNUM: LinenrT = 0x7fff_ffff;
 
     if amount == MAXLNUM {
         old_row = (line2 - line1 + 1) as c_int;
@@ -861,7 +861,7 @@ pub fn extmark_adjust(
 
     if new_row > 0 {
         new_byte = unsafe {
-            nvim_ml_find_line_or_offset(buf, line1 + i64::from(new_row), std::ptr::null_mut(), true)
+            nvim_ml_find_line_or_offset(buf, line1 + new_row as LinenrT, std::ptr::null_mut(), true)
         } - start_byte;
     }
 
@@ -914,7 +914,7 @@ pub fn extmark_splice(
     undo: ExtmarkOp,
 ) {
     let mut offset = unsafe {
-        nvim_ml_find_line_or_offset(buf, (start_row + 1).into(), std::ptr::null_mut(), true)
+        nvim_ml_find_line_or_offset(buf, start_row + 1, std::ptr::null_mut(), true)
     };
 
     // On empty buffers, when editing the first line, the line is buffered,

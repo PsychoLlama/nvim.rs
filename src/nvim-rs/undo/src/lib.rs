@@ -29,7 +29,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::{c_char, c_int, c_long, c_uchar, c_void, CStr};
+use std::ffi::{c_char, c_int, c_uchar, c_void, CStr};
 use std::ptr;
 
 use nvim_encoding::sha256::Sha256Context;
@@ -61,7 +61,7 @@ pub type TimeT = i64;
 pub type TimeT = i32;
 
 /// Type alias for linenr_T (line number type).
-pub type LinenrT = c_long;
+pub type LinenrT = i32;
 
 /// Type alias for colnr_T (column number type).
 pub type ColnrT = c_int;
@@ -135,7 +135,7 @@ extern "C" {
     fn nvim_buf_get_b_u_numhead(buf: BufHandle) -> c_int;
     fn nvim_buf_get_b_u_synced(buf: BufHandle) -> bool;
     fn nvim_buf_get_b_u_line_ptr(buf: BufHandle) -> *mut c_char;
-    fn nvim_buf_get_b_u_line_lnum(buf: BufHandle) -> c_long;
+    fn nvim_buf_get_b_u_line_lnum(buf: BufHandle) -> LinenrT;
 
     fn nvim_buf_set_b_u_oldhead(buf: BufHandle, val: UHeaderHandle);
     fn nvim_buf_set_b_u_newhead(buf: BufHandle, val: UHeaderHandle);
@@ -143,7 +143,7 @@ extern "C" {
     fn nvim_buf_set_b_u_numhead(buf: BufHandle, val: c_int);
     fn nvim_buf_set_b_u_synced(buf: BufHandle, val: bool);
     fn nvim_buf_set_b_u_line_ptr(buf: BufHandle, val: *mut c_char);
-    fn nvim_buf_set_b_u_line_lnum(buf: BufHandle, val: c_long);
+    fn nvim_buf_set_b_u_line_lnum(buf: BufHandle, val: LinenrT);
 
     // Buffer state accessors
     fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
@@ -2953,7 +2953,7 @@ unsafe fn undo_read_string(fp: FileHandle, len: usize) -> *mut c_char {
 #[allow(dead_code)]
 #[inline]
 unsafe fn serialize_pos(fp: FileHandle, lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> bool {
-    undo_write_4(fp, lnum as i32) && undo_write_4(fp, col) && undo_write_4(fp, coladd)
+    undo_write_4(fp, lnum) && undo_write_4(fp, col) && undo_write_4(fp, coladd)
 }
 
 /// Serialize visual info to the undo file.
@@ -4407,11 +4407,8 @@ mod tests {
 
     #[test]
     fn test_linenr_t_size() {
-        // LinenrT is c_long
-        assert_eq!(
-            std::mem::size_of::<LinenrT>(),
-            std::mem::size_of::<c_long>()
-        );
+        // LinenrT is i32 (matching C int32_t linenr_T)
+        assert_eq!(std::mem::size_of::<LinenrT>(), 4);
     }
 
     #[test]

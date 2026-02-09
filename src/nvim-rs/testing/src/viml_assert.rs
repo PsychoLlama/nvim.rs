@@ -611,8 +611,8 @@ const TYPVAL_SIZE: usize = 16;
 const NUMBUFLEN: usize = 65;
 
 // Vim variable indices
-const VV_EXCEPTION: c_int = 16; // v:exception
-const VV_TESTING: c_int = 35; // v:testing
+const VV_EXCEPTION: c_int = 30; // v:exception
+const VV_TESTING: c_int = 76; // v:testing
 
 /// Implementation for assert_beeps() and assert_nobeep().
 fn assert_beeps(argvars: TypevalHandle, no_beep: bool) -> c_int {

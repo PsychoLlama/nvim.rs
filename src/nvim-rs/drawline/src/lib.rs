@@ -24,7 +24,7 @@ use nvim_window::WinHandle;
 type ScharT = u32;
 
 /// Line number type.
-type LinenrT = i64;
+type LinenrT = i32;
 
 /// Column number type.
 type ColnrT = i32;
@@ -3265,7 +3265,7 @@ mod tests {
     fn test_type_alias_sizes() {
         // Verify type alias sizes match expected C types
         assert_eq!(std::mem::size_of::<ScharT>(), 4);
-        assert_eq!(std::mem::size_of::<LinenrT>(), 8);
+        assert_eq!(std::mem::size_of::<LinenrT>(), 4);
         assert_eq!(std::mem::size_of::<ColnrT>(), 4);
     }
 

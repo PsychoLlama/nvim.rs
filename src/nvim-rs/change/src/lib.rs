@@ -107,7 +107,7 @@ impl WinHandle {
 // =============================================================================
 
 /// Type alias for linenr_T (line number type).
-pub type LinenrT = c_long;
+pub type LinenrT = i32;
 
 /// Type alias for colnr_T (column number type).
 pub type ColnrT = c_int;
@@ -260,7 +260,7 @@ extern "C" {
 pub const HLF_W: c_int = 26;
 
 /// VimL variable index for v:warningmsg.
-pub const VV_WARNINGMSG: c_int = 38; // This matches the C definition
+pub const VV_WARNINGMSG: c_int = 4;
 
 /// Buffer flag: buffer never loaded.
 pub const BF_NEVERLOADED: c_int = 0x01;

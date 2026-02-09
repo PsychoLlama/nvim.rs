@@ -325,7 +325,7 @@ fn changed_lines_impl(
         if do_buf_event {
             let num_added = lnume + xtra - lnum;
             let num_removed = lnume - lnum;
-            nvim_buf_updates_send_changes(buf, lnum, num_added, num_removed);
+            nvim_buf_updates_send_changes(buf, lnum, num_added.into(), num_removed.into());
         }
     }
 }

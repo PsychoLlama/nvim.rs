@@ -711,7 +711,7 @@ const K_OPT_KEYMAP: c_int = 155; // This should match the actual index in C
 const HLF_W: c_int = 26;
 
 /// VimL variable index for v:warningmsg
-const VV_WARNINGMSG: c_int = 39;
+const VV_WARNINGMSG: c_int = 4;
 
 /// Callback for 'arabic' option.
 ///

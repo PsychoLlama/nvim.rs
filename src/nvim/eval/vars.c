@@ -50,6 +50,10 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
+_Static_assert(VV_WARNINGMSG == 4, "VV_WARNINGMSG changed - update Rust constants");
+_Static_assert(VV_EXCEPTION == 30, "VV_EXCEPTION changed - update Rust constants");
+_Static_assert(VV_TESTING == 76, "VV_TESTING changed - update Rust constants");
+
 typedef int (*ex_unletlock_callback)(lval_T *, char *, exarg_T *, int);
 
 #include "eval/vars.c.generated.h"
