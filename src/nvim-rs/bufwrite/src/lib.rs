@@ -13,6 +13,7 @@
 pub mod encoding;
 pub mod error;
 pub mod ffi;
+pub mod fileinfo;
 pub mod format;
 pub mod validation;
 
@@ -103,6 +104,18 @@ pub const FIO_ENDIAN_L: u32 = 0x80;
 pub const FIO_BOM: u32 = 0x100;
 /// FIO flag: Don't convert NUL to NL
 pub const FIO_NOSTRINGS: u32 = 0x200;
+/// FIO flag: Skip encoding conversion
+pub const FIO_NOCONVERT: u32 = 0x2000;
+/// FIO flag: Check for BOM at start of file
+pub const FIO_UCSBOM: u32 = 0x4000;
+/// FIO flag: Allow all formats
+pub const FIO_ALL: i32 = -1;
+
+/// Size of the normal write buffer
+pub const WRITEBUFSIZE: usize = 8192;
+
+/// Multiplier for iconv() buffer allocation
+pub const ICONV_MULT: usize = 8;
 
 // =============================================================================
 // BOM (Byte Order Mark)
