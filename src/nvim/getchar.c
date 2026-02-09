@@ -3632,6 +3632,16 @@ void nvim_set_allow_keys(int val)
   allow_keys = val;
 }
 
+int nvim_get_mapped_ctrl_c(void)
+{
+  return mapped_ctrl_c;
+}
+
+void nvim_set_mapped_ctrl_c(int val)
+{
+  mapped_ctrl_c = val;
+}
+
 int nvim_get_keytyped(void)
 {
   return KeyTyped ? 1 : 0;

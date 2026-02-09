@@ -567,6 +567,8 @@ int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 
 // Phase 3.4: Display state accessors (used by Rust display.rs)
 void nvim_set_cmdline_row(int val) { cmdline_row = val; }
+const char *nvim_get_keep_msg(void) { return keep_msg; }
+int nvim_get_keep_msg_hl_id(void) { return keep_msg_hl_id; }
 int nvim_get_did_wait_return(void) { return did_wait_return ? 1 : 0; }
 void nvim_set_did_wait_return(int val) { did_wait_return = (val != 0); }
 int nvim_get_msg_ext_overwrite(void) { return msg_ext_overwrite ? 1 : 0; }

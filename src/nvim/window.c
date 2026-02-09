@@ -961,6 +961,12 @@ int nvim_get_State(void)
   return State;
 }
 
+/// Set the global State variable.
+void nvim_set_State(int val)
+{
+  State = val;
+}
+
 /// Get the real state (calls get_real_state()).
 int nvim_get_real_state(void)
 {

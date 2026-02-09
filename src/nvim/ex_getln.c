@@ -5351,3 +5351,12 @@ int nvim_cmdline_win_height(void)
 {
   return cmdline_win ? cmdline_win->w_view_height : 0;
 }
+
+/// Simplified wrapper around getcmdline_prompt for FFI use.
+/// Avoids passing the complex Callback union across FFI boundary.
+char *nvim_getcmdline_prompt_simple(int firstc, const char *prompt, int hl_id,
+                                    int xp_context, bool one_key, bool *mouse_used)
+{
+  return getcmdline_prompt(firstc, prompt, hl_id, xp_context, NULL,
+                           CALLBACK_NONE, one_key, mouse_used);
+}

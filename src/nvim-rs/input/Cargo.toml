@@ -9,5 +9,8 @@ repository.workspace = true
 [lib]
 path = "src/lib.rs"
 
+[dependencies]
+libc = "0.2"
+
 [lints]
 workspace = true

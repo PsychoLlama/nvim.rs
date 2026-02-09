@@ -94,6 +94,7 @@ rust-test:
       -p nvim-fuzzy \
       -p nvim-grid \
       -p nvim-help \
+      -p nvim-input \
       -p nvim-highlight \
       -p nvim-indent \
       -p nvim-insexpand \

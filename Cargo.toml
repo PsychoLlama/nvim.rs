@@ -42,6 +42,7 @@ members = [
     "src/nvim-rs/highlight_group",
     "src/nvim-rs/indent",
     "src/nvim-rs/indent_c",
+    "src/nvim-rs/input",
     "src/nvim-rs/insexpand",
     "src/nvim-rs/keycodes",
     "src/nvim-rs/linematch",
