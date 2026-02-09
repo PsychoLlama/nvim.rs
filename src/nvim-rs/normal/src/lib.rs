@@ -728,9 +728,9 @@ const K_MT_LINE_WISE: c_int = 1;
 #[allow(dead_code)]
 const K_MT_BLOCK_WISE: c_int = 2;
 
-// Fold option flags (kOptFdoFlag*)
-const K_OPT_FDO_FLAG_HOR: c_uint = 0x0001;
-const K_OPT_FDO_FLAG_JUMP: c_uint = 0x0040;
+// Fold option flags (kOptFdoFlag*) - from build/src/nvim/auto/option_vars.generated.h
+const K_OPT_FDO_FLAG_HOR: c_uint = 0x04;
+const K_OPT_FDO_FLAG_JUMP: c_uint = 0x400;
 
 // Beginline flags (BL_*)
 const BL_SOL: c_int = 2; // go to start of line
@@ -1058,14 +1058,14 @@ extern "C" {
 /// Opaque handle to fmark_T*.
 pub type FmarkHandle = *mut std::ffi::c_void;
 
-// Operator type constant for OP_CHANGE
-const OP_CHANGE: c_int = 5;
+// Operator type constant for OP_CHANGE - from src/nvim/ops.h
+const OP_CHANGE: c_int = 3;
 
-// Fold option flag for block
-const K_OPT_FDO_FLAG_BLOCK: c_uint = 0x0002;
+// Fold option flag for block - from build/src/nvim/auto/option_vars.generated.h
+const K_OPT_FDO_FLAG_BLOCK: c_uint = 0x02;
 
-// Virtual edit flag for onemore
-const K_OPT_VE_FLAG_ONEMORE: c_uint = 0x0004;
+// Virtual edit flag for onemore - from build/src/nvim/auto/option_vars.generated.h
+const K_OPT_VE_FLAG_ONEMORE: c_uint = 0x08;
 
 // FAIL return value
 const FAIL: c_int = 0;
@@ -1299,11 +1299,11 @@ const K_MARK_SWITCHED_BUF: c_int = 0x02;
 const K_MARK_CHANGED_CURSOR: c_int = 0x04;
 const K_MARK_CHANGED_LINE: c_int = 0x08;
 
-// Jop flag for view
-const K_OPT_JOP_FLAG_VIEW: c_uint = 0x0004;
+// Jop flag for view - from build/src/nvim/auto/option_vars.generated.h
+const K_OPT_JOP_FLAG_VIEW: c_uint = 0x02;
 
-// Fold flag for mark
-const K_OPT_FDO_FLAG_MARK: c_uint = 0x0080;
+// Fold flag for mark - from build/src/nvim/auto/option_vars.generated.h
+const K_OPT_FDO_FLAG_MARK: c_uint = 0x08;
 
 // MOD_MASK_CTRL
 const MOD_MASK_CTRL_VALUE: c_int = 0x04;

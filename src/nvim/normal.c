@@ -925,6 +925,15 @@ bool nvim_get_KeyTyped(void)
 /// Get fdo_flags global.
 unsigned int nvim_get_fdo_flags(void)
 {
+  // Guards: ensure Rust constants match C kOptFdoFlag* values
+  _Static_assert(kOptFdoFlagHor == 0x04,
+                 "kOptFdoFlagHor changed - update K_OPT_FDO_FLAG_HOR in normal/src/lib.rs");
+  _Static_assert(kOptFdoFlagBlock == 0x02,
+                 "kOptFdoFlagBlock changed - update K_OPT_FDO_FLAG_BLOCK in normal/src/lib.rs");
+  _Static_assert(kOptFdoFlagJump == 0x400,
+                 "kOptFdoFlagJump changed - update K_OPT_FDO_FLAG_JUMP in normal/src/lib.rs");
+  _Static_assert(kOptFdoFlagMark == 0x08,
+                 "kOptFdoFlagMark changed - update K_OPT_FDO_FLAG_MARK in normal/src/lib.rs");
   return fdo_flags;
 }
 
