@@ -58,6 +58,42 @@ static int did_lcd;
 #define PUTLINE_FAIL(s) \
   do { if (FAIL == put_line(fd, (s))) { return FAIL; } } while (0)
 
+// =========================================================================
+// C accessor functions for Rust FFI
+// =========================================================================
+
+// --- Window accessors (Phase 2) ---
+bool nvim_ses_win_get_floating(const win_T *wp) { return wp->w_floating; }
+buf_T *nvim_ses_win_get_buffer(const win_T *wp) { return wp->w_buffer; }
+win_T *nvim_ses_win_get_next(const win_T *wp) { return wp->w_next; }
+
+// --- Buffer query accessors (Phase 2) ---
+const char *nvim_ses_buf_get_fname(const buf_T *buf) { return buf->b_fname; }
+bool nvim_ses_buf_is_terminal(const buf_T *buf) { return buf->terminal != NULL; }
+bool nvim_ses_bt_nofilename(const buf_T *buf) { return bt_nofilename(buf); }
+bool nvim_ses_bt_help(const buf_T *buf) { return bt_help(buf); }
+bool nvim_ses_bt_terminal(const buf_T *buf) { return bt_terminal(buf); }
+
+// --- Session flags accessors (Phase 2) ---
+unsigned nvim_ses_get_ssop_flags(void) { return ssop_flags; }
+unsigned *nvim_ses_get_ssop_flags_ptr(void) { return &ssop_flags; }
+
+// --- Frame accessors (Phase 2) ---
+int nvim_ses_frame_get_layout(const frame_T *fr) { return fr->fr_layout; }
+frame_T *nvim_ses_frame_get_child(const frame_T *fr) { return fr->fr_child; }
+frame_T *nvim_ses_frame_get_next(const frame_T *fr) { return fr->fr_next; }
+win_T *nvim_ses_frame_get_win(const frame_T *fr) { return fr->fr_win; }
+
+// _Static_assert for frame layout constants
+_Static_assert(FR_LEAF == 0, "FR_LEAF must be 0");
+_Static_assert(FR_ROW == 1, "FR_ROW must be 1");
+_Static_assert(FR_COL == 2, "FR_COL must be 2");
+
+// _Static_assert for session option flags used by Rust
+_Static_assert(kOptSsopFlagBlank == 0x80, "kOptSsopFlagBlank");
+_Static_assert(kOptSsopFlagHelp == 0x40, "kOptSsopFlagHelp");
+_Static_assert(kOptSsopFlagTerminal == 0x10000, "kOptSsopFlagTerminal");
+
 static int put_view_curpos(FILE *fd, const win_T *wp, char *spaces)
 {
   int r;
@@ -156,58 +192,20 @@ static int ses_win_rec(FILE *fd, frame_T *fr)
   return OK;
 }
 
-/// Skip frames that don't contain windows we want to save in the Session.
-///
-/// @return  NULL when there none.
 static frame_T *ses_skipframe(frame_T *fr)
 {
-  frame_T *frc;
-
-  FOR_ALL_FRAMES(frc, fr) {
-    if (ses_do_frame(frc)) {
-      break;
-    }
-  }
-  return frc;
+  return rs_ses_skipframe(fr);
 }
 
-/// @return  true if frame "fr" has a window somewhere that we want to save in
-///          the Session.
 static bool ses_do_frame(const frame_T *fr)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  const frame_T *frc;
-
-  if (fr->fr_layout == FR_LEAF) {
-    return ses_do_win(fr->fr_win);
-  }
-  FOR_ALL_FRAMES(frc, fr->fr_child) {
-    if (ses_do_frame(frc)) {
-      return true;
-    }
-  }
-  return false;
+  return rs_ses_do_frame((frame_T *)fr);
 }
 
-/// @return  non-zero if window "wp" is to be stored in the Session.
 static int ses_do_win(win_T *wp)
 {
-  // Skip floating windows to avoid issues when restoring the Session. #18432
-  if (wp->w_floating) {
-    return false;
-  }
-  if (wp->w_buffer->b_fname == NULL
-      // When 'buftype' is "nofile" can't restore the window contents.
-      || (!wp->w_buffer->terminal && bt_nofilename(wp->w_buffer))) {
-    return ssop_flags & kOptSsopFlagBlank;
-  }
-  if (bt_help(wp->w_buffer)) {
-    return ssop_flags & kOptSsopFlagHelp;
-  }
-  if (bt_terminal(wp->w_buffer)) {
-    return ssop_flags & kOptSsopFlagTerminal;
-  }
-  return true;
+  return rs_ses_do_win(wp);
 }
 
 /// Writes an :argument list to the session file.
