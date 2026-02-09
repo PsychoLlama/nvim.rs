@@ -116,10 +116,10 @@ impl SpellMoveBehavior {
     #[must_use]
     pub const fn matches_highlight(self, hlf: c_int) -> bool {
         // HLF values from highlight.h
-        const HLF_SPB: c_int = 0x2B; // 43 - SpellBad
-        const HLF_SPR: c_int = 0x2E; // 46 - SpellRare
-        const HLF_SPC: c_int = 0x2C; // 44 - SpellCap
-        const HLF_SPL: c_int = 0x2D; // 45 - SpellLocal
+        const HLF_SPB: c_int = 37; // SpellBad
+        const HLF_SPR: c_int = 39; // SpellRare
+        const HLF_SPC: c_int = 38; // SpellCap
+        const HLF_SPL: c_int = 40; // SpellLocal
 
         match self {
             Self::All => hlf == HLF_SPB || hlf == HLF_SPR || hlf == HLF_SPC || hlf == HLF_SPL,

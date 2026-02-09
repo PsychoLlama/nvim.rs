@@ -148,7 +148,7 @@ pub unsafe extern "C" fn rs_msg_set_col_silent(col: c_int) {
 // Note: HLF_W is defined in error.rs to avoid duplication
 
 /// Highlight face for info messages (HLF_MSG)
-pub const HLF_MSG: c_int = 57;
+pub const HLF_MSG: c_int = 63;
 
 /// Check if warning messages should be shown.
 ///

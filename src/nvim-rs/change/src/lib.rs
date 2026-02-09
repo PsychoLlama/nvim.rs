@@ -257,7 +257,7 @@ extern "C" {
 // =============================================================================
 
 /// Highlight attribute for warnings.
-pub const HLF_W: c_int = 16; // This matches the C definition
+pub const HLF_W: c_int = 26;
 
 /// VimL variable index for v:warningmsg.
 pub const VV_WARNINGMSG: c_int = 38; // This matches the C definition

@@ -117,6 +117,9 @@
 # include "nvim/arglist.h"
 #endif
 
+_Static_assert(sizeof(vimoption_T) == 160,
+               "sizeof(vimoption_T) changed - update Rust VIMOPTION_SIZE in option/src/accessors.rs");
+
 extern int rs_valid_name(const char *val, const char *allowed);
 extern const char *rs_find_tty_option_end(const char *arg);
 extern int rs_is_tty_option(const char *name);

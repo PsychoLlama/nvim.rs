@@ -171,7 +171,7 @@ extern "C" {
 const K_OPT_INVALID: c_int = -1;
 
 /// Size of vimoption_T struct (for array indexing)
-const VIMOPTION_SIZE: usize = 128;
+const VIMOPTION_SIZE: usize = 160;
 
 // =============================================================================
 // Unified Get/Set API

@@ -185,33 +185,33 @@ pub mod hlf {
     use std::ffi::c_int;
 
     /// StatusLine (current window)
-    pub const S: c_int = 27;
+    pub const S: c_int = 19;
     /// StatusLineNC (non-current windows)
-    pub const SNC: c_int = 28;
+    pub const SNC: c_int = 20;
     /// TabLine (not selected tab)
-    pub const TP: c_int = 34;
+    pub const TP: c_int = 52;
     /// TabLineSel (selected tab)
-    pub const TPS: c_int = 35;
+    pub const TPS: c_int = 53;
     /// TabLineFill (fill after last tab)
-    pub const TPF: c_int = 36;
+    pub const TPF: c_int = 54;
     /// WinBar (current window)
-    pub const WBR: c_int = 37;
+    pub const WBR: c_int = 65;
     /// WinBarNC (non-current windows)
-    pub const WBRNC: c_int = 38;
+    pub const WBRNC: c_int = 66;
     /// CursorLineNr
-    pub const CLN: c_int = 11;
+    pub const CLN: c_int = 15;
     /// CursorLineFold
-    pub const CLF: c_int = 12;
+    pub const CLF: c_int = 17;
     /// FoldColumn
-    pub const FC: c_int = 16;
+    pub const FC: c_int = 29;
     /// Message area
-    pub const MSG: c_int = 21;
+    pub const MSG: c_int = 63;
     /// LineNr
-    pub const N: c_int = 23;
+    pub const N: c_int = 12;
     /// SignColumn
-    pub const SC: c_int = 30;
+    pub const SC: c_int = 35;
     /// User1-9 start
-    pub const USER1: c_int = 61;
+    pub const USER1: c_int = 59;
 }
 
 /// Get the appropriate statusline highlight based on whether window is current.
@@ -526,11 +526,11 @@ mod tests {
     #[test]
     fn test_hlf_constants() {
         // Verify constants match expected values
-        assert_eq!(hlf::S, 27);
-        assert_eq!(hlf::SNC, 28);
-        assert_eq!(hlf::TP, 34);
-        assert_eq!(hlf::TPS, 35);
-        assert_eq!(hlf::TPF, 36);
+        assert_eq!(hlf::S, 19);
+        assert_eq!(hlf::SNC, 20);
+        assert_eq!(hlf::TP, 52);
+        assert_eq!(hlf::TPS, 53);
+        assert_eq!(hlf::TPF, 54);
     }
 
     #[test]

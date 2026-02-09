@@ -35,6 +35,13 @@
 
 #include "highlight.c.generated.h"
 
+_Static_assert(HLF_COUNT == 76, "HLF_COUNT changed - update Rust HLF_COUNT in highlight/src/lib.rs");
+_Static_assert(HLF_MSGSEP == 61, "HLF_MSGSEP changed - update Rust constants");
+_Static_assert(HLF_W == 26, "HLF_W changed - update Rust constants");
+_Static_assert(HLF_E == 6, "HLF_E changed - update Rust constants");
+_Static_assert(HLF_S == 19, "HLF_S changed - update Rust constants");
+_Static_assert(HLF_MSG == 63, "HLF_MSG changed - update Rust constants");
+
 // Rust FFI declarations - highlight storage and computation is handled by Rust
 
 // Input struct for rs_hl_combine_attrs_compute

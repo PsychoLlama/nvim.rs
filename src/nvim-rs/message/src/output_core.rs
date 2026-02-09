@@ -293,11 +293,11 @@ pub unsafe extern "C" fn rs_msg_puts_title(s: *const c_char) {
 }
 
 /// Highlight face for title
-const HLF_T: c_int = 25; // From highlight.h: HLF_T = 25
+const HLF_T: c_int = 23; // From highlight_defs.h: HLF_T = 23
 
 /// Highlight face for "8" (truncation indicator)
 #[allow(dead_code)]
-const HLF_8: c_int = 38; // From highlight.h: HLF_8 = 38
+const HLF_8: c_int = 1; // From highlight_defs.h: HLF_8 = 1
 
 // ============================================================================
 // Printf-Style Message Constants

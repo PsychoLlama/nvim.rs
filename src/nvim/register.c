@@ -71,6 +71,9 @@ extern yankreg_T *rs_copy_register(int name);
 extern void rs_str_to_reg(yankreg_T *y_ptr, MotionType yank_type, const char *str, size_t len,
                           colnr_T blocklen, bool str_list);
 
+_Static_assert(sizeof(yankreg_T) == 40,
+               "sizeof(yankreg_T) changed - update Rust yankreg_size in register/src/lib.rs");
+
 // Keep the last expression line here, for repeating.
 static char *expr_line = NULL;
 

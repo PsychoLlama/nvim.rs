@@ -321,7 +321,7 @@ impl Default for ColorItem {
 
 /// Number of UI highlight groups (HLF_COUNT from highlight_defs.h)
 /// This must match the C definition.
-pub const HLF_COUNT: usize = 78;
+pub const HLF_COUNT: usize = 76;
 
 /// Per-namespace UI highlight attribute array
 pub type NSHlAttr = [c_int; HLF_COUNT];

@@ -708,7 +708,7 @@ const UPD_NOT_VALID: c_int = 30;
 const K_OPT_KEYMAP: c_int = 155; // This should match the actual index in C
 
 /// Highlight type for warnings
-const HLF_W: c_int = 36;
+const HLF_W: c_int = 26;
 
 /// VimL variable index for v:warningmsg
 const VV_WARNINGMSG: c_int = 39;

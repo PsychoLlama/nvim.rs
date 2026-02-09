@@ -1850,7 +1850,7 @@ pub unsafe extern "C" fn rs_op_reg_iter(
     };
 
     // Calculate offset from base
-    let yankreg_size = std::mem::size_of::<std::ffi::c_void>() * 8; // Approximate size
+    let yankreg_size: usize = 40; // sizeof(yankreg_T) - verified against C
     let get_offset =
         |ptr: YankRegHandle| -> isize { (ptr.0 as isize - base as isize) / yankreg_size as isize };
 

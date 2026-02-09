@@ -10,27 +10,27 @@ pub mod hlf {
     use std::ffi::c_int;
 
     /// Popup menu normal item (unselected).
-    pub const HLF_PNI: c_int = 72;
+    pub const HLF_PNI: c_int = 41;
     /// Popup menu selected item.
-    pub const HLF_PSI: c_int = 73;
+    pub const HLF_PSI: c_int = 42;
     /// Popup menu normal kind column.
-    pub const HLF_PNK: c_int = 74;
+    pub const HLF_PNK: c_int = 45;
     /// Popup menu selected kind column.
-    pub const HLF_PSK: c_int = 75;
+    pub const HLF_PSK: c_int = 46;
     /// Popup menu normal extra column.
-    pub const HLF_PNX: c_int = 76;
+    pub const HLF_PNX: c_int = 47;
     /// Popup menu selected extra column.
-    pub const HLF_PSX: c_int = 77;
+    pub const HLF_PSX: c_int = 48;
     /// Popup menu match highlight (normal).
-    pub const HLF_PMNI: c_int = 115;
+    pub const HLF_PMNI: c_int = 43;
     /// Popup menu match highlight (selected).
-    pub const HLF_PMSI: c_int = 116;
+    pub const HLF_PMSI: c_int = 44;
     /// Popup menu scrollbar.
-    pub const HLF_PSB: c_int = 78;
+    pub const HLF_PSB: c_int = 49;
     /// Popup menu scrollbar thumb.
-    pub const HLF_PST: c_int = 79;
+    pub const HLF_PST: c_int = 50;
     /// Popup menu border.
-    pub const HLF_PBR: c_int = 80;
+    pub const HLF_PBR: c_int = 51;
 }
 
 // External C functions for rendering

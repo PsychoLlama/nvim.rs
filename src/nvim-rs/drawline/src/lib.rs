@@ -66,7 +66,7 @@ pub const HLF_CLN: c_int = 15; // CursorLineNr
 pub const HLF_CLS: c_int = 16; // CursorLineSign
 pub const HLF_CLF: c_int = 17; // CursorLineFold
 pub const HLF_FC: c_int = 29; // FoldColumn
-pub const HLF_DED: c_int = 31; // DiffDelete (deleted diff line)
+pub const HLF_DED: c_int = 32; // DiffDelete (deleted diff line)
 pub const HLF_SC: c_int = 35; // SignColumn
 
 // Cursorlineopt flags (from option_vars.generated.h)
@@ -3213,7 +3213,7 @@ mod tests {
         assert_eq!(HLF_CLS, 16); // CursorLineSign
         assert_eq!(HLF_CLF, 17); // CursorLineFold
         assert_eq!(HLF_FC, 29); // FoldColumn
-        assert_eq!(HLF_DED, 31); // DiffDelete
+        assert_eq!(HLF_DED, 32); // DiffDelete
         assert_eq!(HLF_SC, 35); // SignColumn
     }
 

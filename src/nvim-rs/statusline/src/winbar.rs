@@ -223,9 +223,9 @@ mod tests {
         let curwin = WinbarOptions::new(WinHandle::null(), 80, true);
         let notcurwin = WinbarOptions::new(WinHandle::null(), 80, false);
 
-        // Current window uses HLF_WBR (37), non-current uses HLF_WBRNC (38)
-        assert_eq!(curwin.highlight(), 37);
-        assert_eq!(notcurwin.highlight(), 38);
+        // Current window uses HLF_WBR (65), non-current uses HLF_WBRNC (66)
+        assert_eq!(curwin.highlight(), 65);
+        assert_eq!(notcurwin.highlight(), 66);
     }
 
     #[test]

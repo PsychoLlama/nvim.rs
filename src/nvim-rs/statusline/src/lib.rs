@@ -125,10 +125,10 @@ impl TabpageHandle {
 }
 
 /// Highlight group for StatusLine (current window).
-pub const HLF_S: c_int = 27;
+pub const HLF_S: c_int = 19;
 
 /// Highlight group for StatusLineNC (non-current windows).
-pub const HLF_SNC: c_int = 28;
+pub const HLF_SNC: c_int = 20;
 
 /// Line number type (linenr_T).
 type LinenrT = i32;
@@ -2057,8 +2057,8 @@ mod tests {
     #[test]
     fn test_highlight_group_constants() {
         // Verify highlight groups match C definitions
-        assert_eq!(HLF_S, 27); // StatusLine
-        assert_eq!(HLF_SNC, 28); // StatusLineNC
+        assert_eq!(HLF_S, 19); // StatusLine
+        assert_eq!(HLF_SNC, 20); // StatusLineNC
     }
 
     #[test]

@@ -563,7 +563,7 @@ extern "C" {
 }
 
 /// HLF_MSGSEP index (from highlight_defs.h)
-const HLF_MSGSEP: usize = 122; // MsgSeparator highlight group
+const HLF_MSGSEP: usize = 61; // MsgSeparator highlight group
 
 /// Get highlight attribute for a highlight group.
 #[inline]

@@ -570,7 +570,7 @@ pub unsafe extern "C" fn rs_reset_last_sourcing() {
 pub const HLF_E: c_int = 6;
 
 /// Highlight face for warning messages (HLF_W)
-pub const HLF_W: c_int = 44;
+pub const HLF_W: c_int = 26;
 
 /// Internal error message prefix
 pub const IEMSG_PREFIX: &[u8] = b"internal error: \0";
