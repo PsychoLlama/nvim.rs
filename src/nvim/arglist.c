@@ -323,6 +323,16 @@ void nvim_al_emsg_E163(void) { emsg(_("E163: There is only one file to edit")); 
 void nvim_al_emsg_E164(void) { emsg(_("E164: Cannot go before first file")); }
 void nvim_al_emsg_E165(void) { emsg(_("E165: Cannot go beyond last file")); }
 
+// -- Phase 7 extra accessors --
+void nvim_al_gotocmdline(int clr) { gotocmdline(clr); }
+void nvim_al_list_in_columns(char **items, int count, int current) { list_in_columns(items, count, current); }
+void nvim_al_maketitle(void) { maketitle(); }
+int nvim_al_curbuf_reusable(void) { return curbuf_reusable(); }
+int nvim_al_curbuf_ml_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) != 0; }
+void nvim_al_emsg_invarg(void) { emsg(_(e_invarg)); }
+void nvim_al_emsg_invrange(void) { emsg(_(e_invrange)); }
+void nvim_al_emsg_E610(void) { emsg(_("E610: No argument to delete")); }
+
 // Rust FFI declarations for Phase 2
 extern int rs_check_arglist_locked(void);
 extern void rs_alist_clear(alist_T *al);
@@ -355,6 +365,12 @@ extern void rs_ex_argument(exarg_T *eap);
 extern void rs_do_argfile(exarg_T *eap, int argn);
 extern void rs_ex_next(exarg_T *eap);
 extern void rs_ex_argdedupe(void);
+
+// Rust FFI declarations for Phase 7
+extern void rs_ex_args(exarg_T *eap);
+extern void rs_ex_argedit(exarg_T *eap);
+extern void rs_ex_argadd(exarg_T *eap);
+extern void rs_ex_argdelete(exarg_T *eap);
 
 static int check_arglist_locked(void)
 {
@@ -419,66 +435,7 @@ bool editing_arg_idx(win_T *win) { return rs_editing_arg_idx(win); }
 void check_arg_idx(win_T *win) { rs_check_arg_idx(win); }
 
 /// ":args", ":arglocal" and ":argglobal".
-void ex_args(exarg_T *eap)
-{
-  if (eap->cmdidx != CMD_args) {
-    if (check_arglist_locked() == FAIL) {
-      return;
-    }
-    alist_unlink(ALIST(curwin));
-    if (eap->cmdidx == CMD_argglobal) {
-      ALIST(curwin) = &global_alist;
-    } else {     // eap->cmdidx == CMD_arglocal
-      alist_new();
-    }
-  }
-
-  // ":args file ..": define new argument list, handle like ":next"
-  // Also for ":argslocal file .." and ":argsglobal file ..".
-  if (*eap->arg != NUL) {
-    if (check_arglist_locked() == FAIL) {
-      return;
-    }
-    ex_next(eap);
-    return;
-  }
-
-  // ":args": list arguments.
-  if (eap->cmdidx == CMD_args) {
-    if (ARGCOUNT <= 0) {
-      return;  // empty argument list
-    }
-
-    char **items = xmalloc(sizeof(char *) * (size_t)ARGCOUNT);
-
-    // Overwrite the command, for a short list there is no scrolling
-    // required and no wait_return().
-    gotocmdline(true);
-
-    for (int i = 0; i < ARGCOUNT; i++) {
-      items[i] = alist_name(&ARGLIST[i]);
-    }
-    list_in_columns(items, ARGCOUNT, curwin->w_arg_idx);
-    xfree(items);
-
-    return;
-  }
-
-  // ":argslocal": make a local copy of the global argument list.
-  if (eap->cmdidx == CMD_arglocal) {
-    garray_T *gap = &curwin->w_alist->al_ga;
-
-    ga_grow(gap, GARGCOUNT);
-
-    for (int i = 0; i < GARGCOUNT; i++) {
-      if (GARGLIST[i].ae_fname != NULL) {
-        AARGLIST(curwin->w_alist)[gap->ga_len].ae_fname = xstrdup(GARGLIST[i].ae_fname);
-        AARGLIST(curwin->w_alist)[gap->ga_len].ae_fnum = GARGLIST[i].ae_fnum;
-        gap->ga_len++;
-      }
-    }
-  }
-}
+void ex_args(exarg_T *eap) { rs_ex_args(eap); }
 
 /// ":previous", ":sprevious", ":Next" and ":sNext".
 void ex_previous(exarg_T *eap) { rs_ex_previous(eap); }
@@ -502,88 +459,13 @@ void ex_next(exarg_T *eap) { rs_ex_next(eap); }
 void ex_argdedupe(exarg_T *eap FUNC_ATTR_UNUSED) { rs_ex_argdedupe(); }
 
 /// ":argedit"
-void ex_argedit(exarg_T *eap)
-{
-  int i = eap->addr_count ? (int)eap->line2 : curwin->w_arg_idx + 1;
-  // Whether curbuf will be reused, curbuf->b_ffname will be set.
-  bool curbuf_is_reusable = curbuf_reusable();
-
-  if (do_arglist(eap->arg, AL_ADD, i, true) == FAIL) {
-    return;
-  }
-  maketitle();
-
-  if (curwin->w_arg_idx == 0
-      && (curbuf->b_ml.ml_flags & ML_EMPTY)
-      && (curbuf->b_ffname == NULL || curbuf_is_reusable)) {
-    i = 0;
-  }
-  // Edit the argument.
-  if (i < ARGCOUNT) {
-    do_argfile(eap, i);
-  }
-}
+void ex_argedit(exarg_T *eap) { rs_ex_argedit(eap); }
 
 /// ":argadd"
-void ex_argadd(exarg_T *eap)
-{
-  do_arglist(eap->arg, AL_ADD,
-             eap->addr_count > 0 ? (int)eap->line2 : curwin->w_arg_idx + 1,
-             false);
-  maketitle();
-}
+void ex_argadd(exarg_T *eap) { rs_ex_argadd(eap); }
 
 /// ":argdelete"
-void ex_argdelete(exarg_T *eap)
-{
-  if (check_arglist_locked() == FAIL) {
-    return;
-  }
-
-  if (eap->addr_count > 0 || *eap->arg == NUL) {
-    // ":argdel" works like ":.argdel"
-    if (eap->addr_count == 0) {
-      if (curwin->w_arg_idx >= ARGCOUNT) {
-        emsg(_("E610: No argument to delete"));
-        return;
-      }
-      eap->line1 = eap->line2 = curwin->w_arg_idx + 1;
-    } else if (eap->line2 > ARGCOUNT) {
-      // ":1,4argdel": Delete all arguments in the range.
-      eap->line2 = ARGCOUNT;
-    }
-    linenr_T n = eap->line2 - eap->line1 + 1;
-    if (*eap->arg != NUL) {
-      // Can't have both a range and an argument.
-      emsg(_(e_invarg));
-    } else if (n <= 0) {
-      // Don't give an error for ":%argdel" if the list is empty.
-      if (eap->line1 != 1 || eap->line2 != 0) {
-        emsg(_(e_invrange));
-      }
-    } else {
-      for (linenr_T i = eap->line1; i <= eap->line2; i++) {
-        xfree(ARGLIST[i - 1].ae_fname);
-      }
-      memmove(ARGLIST + eap->line1 - 1, ARGLIST + eap->line2,
-              (size_t)(ARGCOUNT - eap->line2) * sizeof(aentry_T));
-      ALIST(curwin)->al_ga.ga_len -= (int)n;
-      if (curwin->w_arg_idx >= eap->line2) {
-        curwin->w_arg_idx -= (int)n;
-      } else if (curwin->w_arg_idx > eap->line1) {
-        curwin->w_arg_idx = (int)eap->line1;
-      }
-      if (ARGCOUNT == 0) {
-        curwin->w_arg_idx = 0;
-      } else if (curwin->w_arg_idx >= ARGCOUNT) {
-        curwin->w_arg_idx = ARGCOUNT - 1;
-      }
-    }
-  } else {
-    do_arglist(eap->arg, AL_DEL, 0, false);
-  }
-  maketitle();
-}
+void ex_argdelete(exarg_T *eap) { rs_ex_argdelete(eap); }
 
 /// Function given to ExpandGeneric() to obtain the possible arguments of the
 /// argedit and argdelete commands.
