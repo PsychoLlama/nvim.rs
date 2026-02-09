@@ -37,7 +37,7 @@ impl BwError {
     pub const fn with_num(num: *const c_char, msg: *const c_char) -> Self {
         Self {
             num,
-            msg: msg as *mut c_char,
+            msg: msg.cast_mut(),
             arg: 0,
             alloc: false,
         }
@@ -48,7 +48,7 @@ impl BwError {
     pub const fn with_msg(msg: *const c_char) -> Self {
         Self {
             num: ptr::null(),
-            msg: msg as *mut c_char,
+            msg: msg.cast_mut(),
             arg: 0,
             alloc: false,
         }
@@ -59,7 +59,7 @@ impl BwError {
     pub const fn with_msg_arg(msg: *const c_char, arg: c_int) -> Self {
         Self {
             num: ptr::null(),
-            msg: msg as *mut c_char,
+            msg: msg.cast_mut(),
             arg,
             alloc: false,
         }
@@ -69,12 +69,7 @@ impl BwError {
 extern "C" {
     fn nvim_bw_emsg(msg: *const c_char);
     fn nvim_bw_semsg_2(fmt: *const c_char, a: *const c_char, b: *const c_char);
-    fn nvim_bw_semsg_3(
-        fmt: *const c_char,
-        a: *const c_char,
-        b: *const c_char,
-        c: *const c_char,
-    );
+    fn nvim_bw_semsg_3(fmt: *const c_char, a: *const c_char, b: *const c_char, c: *const c_char);
     fn nvim_bw_semsg_4(
         fmt: *const c_char,
         a: *const c_char,
@@ -182,7 +177,7 @@ mod tests {
         let msg = c"is a directory".as_ptr();
         let e = BwError::with_num(num, msg);
         assert_eq!(e.num, num);
-        assert_eq!(e.msg, msg as *mut c_char);
+        assert_eq!(e.msg, msg.cast_mut());
         assert_eq!(e.arg, 0);
         assert!(!e.alloc);
     }
@@ -192,7 +187,7 @@ mod tests {
         let msg = c"some error".as_ptr();
         let e = BwError::with_msg(msg);
         assert!(e.num.is_null());
-        assert_eq!(e.msg, msg as *mut c_char);
+        assert_eq!(e.msg, msg.cast_mut());
         assert_eq!(e.arg, 0);
         assert!(!e.alloc);
     }
@@ -202,7 +197,7 @@ mod tests {
         let msg = c"write failed: %s".as_ptr();
         let e = BwError::with_msg_arg(msg, 5);
         assert!(e.num.is_null());
-        assert_eq!(e.msg, msg as *mut c_char);
+        assert_eq!(e.msg, msg.cast_mut());
         assert_eq!(e.arg, 5);
         assert!(!e.alloc);
     }

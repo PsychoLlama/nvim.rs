@@ -302,7 +302,7 @@ pub unsafe extern "C" fn rs_make_bom(buf: *mut u8, name: *const std::ffi::c_char
 
     // Use ucs2bytes logic for other encodings (UCS-2, UCS-4, UTF-16)
     let mut p = buf;
-    let _error = unsafe { rs_ucs2bytes(0xFEFF, &mut p, flags) };
+    let _error = unsafe { rs_ucs2bytes(0xFEFF, &raw mut p, flags) };
     unsafe { p.offset_from(buf) as c_int }
 }
 
@@ -420,7 +420,13 @@ mod tests {
         let mut buf = [0u8; 4];
         let mut p = buf.as_mut_ptr();
         let original = p;
-        let error = unsafe { rs_ucs2bytes(0x41, &mut p, (crate::FIO_UCS4 | crate::FIO_ENDIAN_L) as c_int) };
+        let error = unsafe {
+            rs_ucs2bytes(
+                0x41,
+                &raw mut p,
+                (crate::FIO_UCS4 | crate::FIO_ENDIAN_L) as c_int,
+            )
+        };
         assert_eq!(error, 0);
         assert_eq!(unsafe { p.offset_from(original) }, 4);
         assert_eq!(buf, [0x41, 0x00, 0x00, 0x00]);
@@ -431,7 +437,7 @@ mod tests {
         let mut buf = [0u8; 4];
         let mut p = buf.as_mut_ptr();
         let original = p;
-        let error = unsafe { rs_ucs2bytes(0x1234, &mut p, crate::FIO_UCS2 as c_int) };
+        let error = unsafe { rs_ucs2bytes(0x1234, &raw mut p, crate::FIO_UCS2 as c_int) };
         assert_eq!(error, 0);
         assert_eq!(unsafe { p.offset_from(original) }, 2);
         assert_eq!(&buf[..2], &[0x12, 0x34]);
@@ -441,7 +447,7 @@ mod tests {
     fn test_rs_ucs2bytes_latin1_error() {
         let mut buf = [0u8; 4];
         let mut p = buf.as_mut_ptr();
-        let error = unsafe { rs_ucs2bytes(0x100, &mut p, crate::FIO_LATIN1 as c_int) };
+        let error = unsafe { rs_ucs2bytes(0x100, &raw mut p, crate::FIO_LATIN1 as c_int) };
         assert_eq!(error, 1); // error
         assert_eq!(buf[0], 0xBF);
     }

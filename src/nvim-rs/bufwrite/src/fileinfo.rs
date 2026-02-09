@@ -13,7 +13,9 @@ use crate::ffi::{BufHandle, FileInfoHandle, FAIL, OK};
 // Node type constants (from os/fs_defs.h)
 #[allow(dead_code)]
 const NODE_NORMAL: c_int = 0;
+#[allow(dead_code)]
 const NODE_WRITABLE: c_int = 1;
+#[allow(dead_code)]
 const NODE_OTHER: c_int = 2;
 
 extern "C" {
@@ -74,7 +76,7 @@ unsafe fn check_mtime_inner(buf: BufHandle, file_info: FileInfoHandle) -> c_int 
     if unsafe { nvim_bw_time_differs(file_info, mtime_read, mtime_read_ns) } != 0 {
         unsafe { nvim_bw_set_msg_scroll(1) }; // Don't overwrite messages here.
         unsafe { nvim_bw_set_msg_silent(0) }; // Must give this prompt.
-        // Don't use emsg() here, don't want to flush the buffers.
+                                              // Don't use emsg() here, don't want to flush the buffers.
         let msg_text = unsafe {
             nvim_bw_gettext(c"WARNING: The file has been changed since reading it!!!".as_ptr())
         };
