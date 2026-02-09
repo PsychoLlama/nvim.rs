@@ -130,53 +130,44 @@ int nvim_ses_utfc_ptr2len(const char *p)
 _Static_assert(kOptSsopFlagCurdir == 0x1000, "kOptSsopFlagCurdir");
 _Static_assert(kOptSsopFlagSesdir == 0x800, "kOptSsopFlagSesdir");
 
+// --- Window struct accessors (Phase 4) ---
+colnr_T nvim_ses_win_get_curswant(const win_T *wp) { return wp->w_curswant; }
+colnr_T nvim_ses_win_get_virtcol(const win_T *wp) { return wp->w_virtcol; }
+int nvim_ses_win_get_height(const win_T *wp) { return wp->w_height; }
+int nvim_ses_win_get_hsep_height(const win_T *wp) { return wp->w_hsep_height; }
+int nvim_ses_win_get_status_height(const win_T *wp) { return wp->w_status_height; }
+int nvim_ses_win_get_width(const win_T *wp) { return wp->w_width; }
+
+// --- Global variables (Phase 4) ---
+frame_T *nvim_ses_get_topframe(void) { return topframe; }
+int nvim_ses_topframe_get_height(void) { return topframe->fr_height; }
+int nvim_ses_get_Rows(void) { return Rows; }
+int nvim_ses_get_Columns(void) { return Columns; }
+
+// --- garray / arglist accessors (Phase 4) ---
+int nvim_ses_ga_get_len(const garray_T *gap) { return gap->ga_len; }
+char *nvim_ses_alist_name_at(garray_T *gap, int i)
+{
+  return alist_name(&((aentry_T *)gap->ga_data)[i]);
+}
+void *nvim_ses_xmalloc(size_t size) { return xmalloc(size); }
+int nvim_ses_vim_FullName(const char *fname, char *buf, size_t len, bool force)
+{
+  return vim_FullName(fname, buf, len, force);
+}
+
+// _Static_assert for Phase 4 constants
+_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL");
+_Static_assert(kOptSsopFlagWinsize == 0x08, "kOptSsopFlagWinsize");
+
 static int put_view_curpos(FILE *fd, const win_T *wp, char *spaces)
 {
-  int r;
-
-  if (wp->w_curswant == MAXCOL) {
-    r = fprintf(fd, "%snormal! $\n", spaces);
-  } else {
-    r = fprintf(fd, "%snormal! 0%d|\n", spaces, wp->w_virtcol + 1);
-  }
-  return r >= 0;
+  return rs_put_view_curpos(fd, (win_T *)wp, spaces);
 }
 
 static int ses_winsizes(FILE *fd, bool restore_size, win_T *tab_firstwin)
 {
-  if (restore_size && (ssop_flags & kOptSsopFlagWinsize)) {
-    int n = 0;
-    for (win_T *wp = tab_firstwin; wp != NULL; wp = wp->w_next) {
-      if (!ses_do_win(wp)) {
-        continue;
-      }
-      n++;
-
-      // restore height when not full height
-      if (wp->w_height + wp->w_hsep_height + wp->w_status_height < topframe->fr_height
-          && (fprintf(fd,
-                      "exe '%dresize ' . ((&lines * %" PRId64
-                      " + %" PRId64 ") / %" PRId64 ")\n",
-                      n, (int64_t)wp->w_height,
-                      (int64_t)Rows / 2, (int64_t)Rows) < 0)) {
-        return FAIL;
-      }
-
-      // restore width when not full width
-      if (wp->w_width < Columns
-          && (fprintf(fd,
-                      "exe 'vert %dresize ' . ((&columns * %" PRId64
-                      " + %" PRId64 ") / %" PRId64 ")\n",
-                      n, (int64_t)wp->w_width, (int64_t)Columns / 2,
-                      (int64_t)Columns) < 0)) {
-        return FAIL;
-      }
-    }
-  } else {
-    // Just equalize window sizes.
-    PUTLINE_FAIL("wincmd =");
-  }
-  return OK;
+  return rs_ses_winsizes(fd, restore_size, tab_firstwin);
 }
 
 /// Write commands to "fd" to recursively create windows for frame "fr",
@@ -186,46 +177,7 @@ static int ses_winsizes(FILE *fd, bool restore_size, win_T *tab_firstwin)
 /// @return  FAIL when writing the commands to "fd" fails.
 static int ses_win_rec(FILE *fd, frame_T *fr)
 {
-  int count = 0;
-
-  if (fr->fr_layout == FR_LEAF) {
-    return OK;
-  }
-
-  // Find first frame that's not skipped and then create a window for
-  // each following one (first frame is already there).
-  frame_T *frc = ses_skipframe(fr->fr_child);
-  if (frc != NULL) {
-    while ((frc = ses_skipframe(frc->fr_next)) != NULL) {
-      // Make window as big as possible so that we have lots of room
-      // to split.
-      if (fprintf(fd, "%s%s",
-                  "wincmd _ | wincmd |\n",
-                  (fr->fr_layout == FR_COL ? "split\n" : "vsplit\n")) < 0) {
-        return FAIL;
-      }
-      count++;
-    }
-  }
-
-  // Go back to the first window.
-  if (count > 0 && (fprintf(fd, fr->fr_layout == FR_COL
-                            ? "%dwincmd k\n" : "%dwincmd h\n", count) < 0)) {
-    return FAIL;
-  }
-
-  // Recursively create frames/windows in each window of this column or row.
-  frc = ses_skipframe(fr->fr_child);
-  while (frc != NULL) {
-    ses_win_rec(fd, frc);
-    frc = ses_skipframe(frc->fr_next);
-    // Go to next window.
-    if (frc != NULL && put_line(fd, "wincmd w") == FAIL) {
-      return FAIL;
-    }
-  }
-
-  return OK;
+  return rs_ses_win_rec(fd, fr);
 }
 
 static frame_T *ses_skipframe(frame_T *fr)
@@ -245,41 +197,9 @@ static int ses_do_win(win_T *wp)
 }
 
 /// Writes an :argument list to the session file.
-///
-/// @param fd
-/// @param cmd
-/// @param gap
-/// @param fullname  true: use full path name
-/// @param flagp
-///
-/// @returns FAIL if writing fails.
 static int ses_arglist(FILE *fd, char *cmd, garray_T *gap, bool fullname, unsigned *flagp)
 {
-  char *buf = NULL;
-
-  if (fprintf(fd, "%s\n%s\n", cmd, "%argdel") < 0) {
-    return FAIL;
-  }
-  for (int i = 0; i < gap->ga_len; i++) {
-    // NULL file names are skipped (only happens when out of memory).
-    char *s = alist_name(&((aentry_T *)gap->ga_data)[i]);
-    if (s != NULL) {
-      if (fullname) {
-        buf = xmalloc(MAXPATHL);
-        vim_FullName(s, buf, MAXPATHL, false);
-        s = buf;
-      }
-      char *fname_esc = ses_escape_fname(s, flagp);
-      if (fprintf(fd, "$argadd %s\n", fname_esc) < 0) {
-        xfree(fname_esc);
-        xfree(buf);
-        return FAIL;
-      }
-      xfree(fname_esc);
-      xfree(buf);
-    }
-  }
-  return OK;
+  return rs_ses_arglist(fd, cmd, gap, fullname, flagp);
 }
 
 static char *ses_get_fname(buf_T *buf, const unsigned *flagp)

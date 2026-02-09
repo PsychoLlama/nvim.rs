@@ -48,4 +48,29 @@ extern "C" {
     pub fn nvim_ses_vim_strsave_fnameescape(name: *const c_char) -> *mut c_char;
     pub fn nvim_ses_xfree(p: *mut c_void);
     pub fn nvim_ses_utfc_ptr2len(p: *const c_char) -> c_int;
+
+    // --- Window struct accessors (Phase 4) ---
+    pub fn nvim_ses_win_get_curswant(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_virtcol(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_height(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_hsep_height(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_status_height(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_width(wp: WinPtr) -> c_int;
+
+    // --- Global variables (Phase 4) ---
+    pub fn nvim_ses_get_topframe() -> FramePtr;
+    pub fn nvim_ses_topframe_get_height() -> c_int;
+    pub fn nvim_ses_get_Rows() -> c_int;
+    pub fn nvim_ses_get_Columns() -> c_int;
+
+    // --- garray / arglist accessors (Phase 4) ---
+    pub fn nvim_ses_ga_get_len(gap: GarrayPtr) -> c_int;
+    pub fn nvim_ses_alist_name_at(gap: GarrayPtr, i: c_int) -> *mut c_char;
+    pub fn nvim_ses_xmalloc(size: usize) -> *mut c_char;
+    pub fn nvim_ses_vim_FullName(
+        fname: *const c_char,
+        buf: *mut c_char,
+        len: usize,
+        force: bool,
+    ) -> c_int;
 }
