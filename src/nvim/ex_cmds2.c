@@ -51,52 +51,535 @@
 
 #include "ex_cmds2.c.generated.h"
 
+// =============================================================================
+// Static assertions for constants used by Rust
+// =============================================================================
+
+_Static_assert(CCGD_AW == 1, "CCGD_AW mismatch");
+_Static_assert(CCGD_MULTWIN == 2, "CCGD_MULTWIN mismatch");
+_Static_assert(CCGD_FORCEIT == 4, "CCGD_FORCEIT mismatch");
+_Static_assert(CCGD_ALLBUF == 8, "CCGD_ALLBUF mismatch");
+_Static_assert(CCGD_EXCMD == 16, "CCGD_EXCMD mismatch");
+_Static_assert(OK == 1, "OK mismatch");
+_Static_assert(FAIL == 0, "FAIL mismatch");
+_Static_assert(MAXPATHL >= 4096, "MAXPATHL too small");
+_Static_assert(CMOD_CONFIRM == 0x0080, "CMOD_CONFIRM mismatch");
+_Static_assert(HLF_W == 26, "HLF_W mismatch");
+_Static_assert(DIALOG_MSG_SIZE == 1000, "DIALOG_MSG_SIZE mismatch");
+_Static_assert(VIM_YES == 2, "VIM_YES mismatch");
+_Static_assert(VIM_NO == 3, "VIM_NO mismatch");
+_Static_assert(VIM_CANCEL == 4, "VIM_CANCEL mismatch");
+_Static_assert(VIM_ALL == 5, "VIM_ALL mismatch");
+_Static_assert(VIM_DISCARDALL == 6, "VIM_DISCARDALL mismatch");
+
+// =============================================================================
+// Rust extern declarations — script host functions
+// =============================================================================
+
+extern void rs_ex_ruby(exarg_T *eap);
+extern void rs_ex_rubyfile(exarg_T *eap);
+extern void rs_ex_rubydo(exarg_T *eap);
+extern void rs_ex_python3(exarg_T *eap);
+extern void rs_ex_py3file(exarg_T *eap);
+extern void rs_ex_pydo3(exarg_T *eap);
+extern void rs_ex_perl(exarg_T *eap);
+extern void rs_ex_perlfile(exarg_T *eap);
+extern void rs_ex_perldo(exarg_T *eap);
+
+// =============================================================================
+// Rust extern declarations — autowrite / buffer check functions
+// =============================================================================
+
+extern int rs_check_fname(void);
+extern int rs_buf_write_all(buf_T *buf, bool forceit);
+extern int rs_autowrite(buf_T *buf, bool forceit);
+extern void rs_autowrite_all(void);
+extern bool rs_can_abandon(buf_T *buf, bool forceit);
+extern bool rs_check_changed(buf_T *buf, int flags);
+
+// =============================================================================
+// Rust extern declarations — dialog functions
+// =============================================================================
+
+extern bool rs_dialog_close_terminal(buf_T *buf);
+extern void rs_dialog_changed(buf_T *buf, bool checkall);
+
+// =============================================================================
+// Rust extern declarations — check_changed_any / ex_checktime
+// =============================================================================
+
+extern bool rs_check_changed_any(bool hidden, bool unload);
+extern void rs_ex_checktime(exarg_T *eap);
+
+// =============================================================================
+// C accessor functions for Rust (script host)
+// =============================================================================
+
+char *nvim_ex2_eap_get_arg(exarg_T *eap)
+{
+  return eap->arg;
+}
+
+linenr_T nvim_ex2_eap_get_line1(exarg_T *eap)
+{
+  return eap->line1;
+}
+
+linenr_T nvim_ex2_eap_get_line2(exarg_T *eap)
+{
+  return eap->line2;
+}
+
+int nvim_ex2_eap_get_skip(exarg_T *eap)
+{
+  return eap->skip;
+}
+
+char *nvim_ex2_script_get(exarg_T *eap, size_t *lenp)
+{
+  return script_get(eap, lenp);
+}
+
+list_T *nvim_ex2_tv_list_alloc(ptrdiff_t len)
+{
+  return tv_list_alloc(len);
+}
+
+void nvim_ex2_tv_list_append_allocated_string(list_T *l, char *s)
+{
+  tv_list_append_allocated_string(l, s);
+}
+
+void nvim_ex2_tv_list_append_number(list_T *l, varnumber_T n)
+{
+  tv_list_append_number(l, n);
+}
+
+void nvim_ex2_tv_list_append_string(list_T *l, const char *s, ssize_t len)
+{
+  tv_list_append_string(l, s, len);
+}
+
+void nvim_ex2_eval_call_provider(char *provider, char *method, list_T *arguments, bool discard)
+{
+  eval_call_provider(provider, method, arguments, discard);
+}
+
+int nvim_ex2_vim_fullname(const char *fname, char *buf, size_t len, bool force)
+{
+  return vim_FullName(fname, buf, len, force);
+}
+
+// =============================================================================
+// C accessor functions for Rust (autowrite / buffer check)
+// =============================================================================
+
+const char *nvim_ex2_buf_get_ffname(buf_T *buf)
+{
+  return buf->b_ffname;
+}
+
+const char *nvim_ex2_buf_get_fname(buf_T *buf)
+{
+  return buf->b_fname;
+}
+
+int nvim_ex2_buf_get_b_p_ro(buf_T *buf)
+{
+  return buf->b_p_ro;
+}
+
+int nvim_ex2_buf_get_nwindows(buf_T *buf)
+{
+  return buf->b_nwindows;
+}
+
+linenr_T nvim_ex2_buf_get_ml_line_count(buf_T *buf)
+{
+  return buf->b_ml.ml_line_count;
+}
+
+buf_T *nvim_ex2_get_firstbuf(void)
+{
+  return firstbuf;
+}
+
+buf_T *nvim_ex2_buf_next(buf_T *buf)
+{
+  return buf->b_next;
+}
+
+bool nvim_ex2_get_p_aw(void)
+{
+  return p_aw;
+}
+
+bool nvim_ex2_get_p_awa(void)
+{
+  return p_awa;
+}
+
+bool nvim_ex2_get_p_write(void)
+{
+  return p_write;
+}
+
+bool nvim_ex2_get_p_confirm(void)
+{
+  return p_confirm;
+}
+
+buf_T *nvim_ex2_get_curbuf(void)
+{
+  return curbuf;
+}
+
+uint32_t nvim_ex2_get_cmod_flags(void)
+{
+  return cmdmod.cmod_flags;
+}
+
+bufref_T *nvim_ex2_bufref_create(buf_T *buf)
+{
+  bufref_T *br = xmalloc(sizeof(bufref_T));
+  set_bufref(br, buf);
+  return br;
+}
+
+bool nvim_ex2_bufref_valid(bufref_T *br)
+{
+  return bufref_valid(br);
+}
+
+void nvim_ex2_bufref_free(bufref_T *br)
+{
+  xfree(br);
+}
+
+bool nvim_ex2_bufIsChanged(buf_T *buf)
+{
+  return bufIsChanged(buf);
+}
+
+bool nvim_ex2_bt_dontwrite(buf_T *buf)
+{
+  return bt_dontwrite(buf);
+}
+
+bool nvim_ex2_buf_hide(buf_T *buf)
+{
+  return buf_hide(buf);
+}
+
+int nvim_ex2_buf_write(buf_T *buf, const char *ffname, const char *fname,
+                       linenr_T start, linenr_T end, exarg_T *eap,
+                       bool append, bool forceit, bool reset_changed,
+                       bool filtering)
+{
+  return buf_write(buf, (char *)ffname, (char *)fname, start, end, eap,
+                   append, forceit, reset_changed, filtering);
+}
+
+void nvim_ex2_msg_source(int hl)
+{
+  msg_source(hl);
+}
+
+void nvim_ex2_msg(const char *s, int attr)
+{
+  msg(s, attr);
+}
+
+void nvim_ex2_no_write_message(void)
+{
+  no_write_message();
+}
+
+void nvim_ex2_no_write_message_nobang(buf_T *buf)
+{
+  no_write_message_nobang(buf);
+}
+
+void nvim_ex2_dialog_changed(buf_T *buf, bool checkall)
+{
+  dialog_changed(buf, checkall);
+}
+
+bool nvim_ex2_emsg(const char *s)
+{
+  return emsg(s);
+}
+
+const char *nvim_ex2_gettext(const char *s)
+{
+  return _(s);
+}
+
+// =============================================================================
+// C accessor functions for Rust (dialog)
+// =============================================================================
+
+int nvim_ex2_buf_get_fnum(buf_T *buf)
+{
+  return buf->b_fnum;
+}
+
+void nvim_ex2_dialog_msg(char *buff, char *format, char *fname)
+{
+  dialog_msg(buff, format, fname);
+}
+
+int nvim_ex2_vim_dialog_yesnocancel(int type, char *title, char *message, int dflt)
+{
+  return vim_dialog_yesnocancel(type, title, message, dflt);
+}
+
+int nvim_ex2_vim_dialog_yesnoallcancel(int type, char *title, char *message, int dflt)
+{
+  return vim_dialog_yesnoallcancel(type, title, message, dflt);
+}
+
+int nvim_ex2_check_overwrite(buf_T *buf, const char *fname, const char *ffname)
+{
+  exarg_T ea = {
+    .append = false,
+    .forceit = false,
+  };
+  return check_overwrite(&ea, buf, (char *)fname, (char *)ffname, false);
+}
+
+void nvim_ex2_unchanged(buf_T *buf, bool ff, bool always_inc_changedtick)
+{
+  unchanged(buf, ff, always_inc_changedtick);
+}
+
+void nvim_ex2_buf_set_name(int fnum, const char *name)
+{
+  buf_set_name(fnum, (char *)name);
+}
+
+void nvim_ex2_buf_clear_names(buf_T *buf)
+{
+  XFREE_CLEAR(buf->b_ffname);
+  XFREE_CLEAR(buf->b_sfname);
+}
+
+void nvim_ex2_buf_set_fname_null(buf_T *buf)
+{
+  buf->b_fname = NULL;
+}
+
+// =============================================================================
+// C accessor functions for Rust (check_changed_any / ex_checktime)
+// =============================================================================
+
+_Static_assert(DOBUF_UNLOAD == 2, "DOBUF_UNLOAD mismatch");
+_Static_assert(DOBUF_GOTO == 0, "DOBUF_GOTO mismatch");
+
+win_T *nvim_ex2_get_firstwin(void)
+{
+  return firstwin;
+}
+
+win_T *nvim_ex2_win_next(win_T *win)
+{
+  return win->w_next;
+}
+
+buf_T *nvim_ex2_win_get_buffer(win_T *win)
+{
+  return win->w_buffer;
+}
+
+tabpage_T *nvim_ex2_get_curtab(void)
+{
+  return curtab;
+}
+
+tabpage_T *nvim_ex2_get_first_tabpage(void)
+{
+  return first_tabpage;
+}
+
+tabpage_T *nvim_ex2_tp_next(tabpage_T *tp)
+{
+  return tp->tp_next;
+}
+
+win_T *nvim_ex2_tp_firstwin(tabpage_T *tp)
+{
+  if (tp == curtab) {
+    return firstwin;
+  }
+  return tp->tp_firstwin;
+}
+
+int nvim_ex2_get_vgetc_busy(void)
+{
+  return vgetc_busy;
+}
+
+int nvim_ex2_get_msg_row(void)
+{
+  return msg_row;
+}
+
+void nvim_ex2_set_msg_row(int val)
+{
+  msg_row = val;
+}
+
+int nvim_ex2_get_msg_col(void)
+{
+  return msg_col;
+}
+
+void nvim_ex2_set_msg_col(int val)
+{
+  msg_col = val;
+}
+
+void nvim_ex2_set_msg_didout(bool val)
+{
+  msg_didout = val;
+}
+
+bool nvim_ex2_get_msg_didany(void)
+{
+  return msg_didany;
+}
+
+int nvim_ex2_get_cmdline_row(void)
+{
+  return cmdline_row;
+}
+
+int nvim_ex2_get_no_wait_return(void)
+{
+  return no_wait_return;
+}
+
+void nvim_ex2_set_no_wait_return(int val)
+{
+  no_wait_return = val;
+}
+
+bool nvim_ex2_get_exiting(void)
+{
+  return exiting;
+}
+
+void nvim_ex2_set_exiting(bool val)
+{
+  exiting = val;
+}
+
+buf_T *nvim_ex2_buflist_findnr(int nr)
+{
+  return buflist_findnr(nr);
+}
+
+void nvim_ex2_set_curbuf(buf_T *buf, int action, bool prevbuf)
+{
+  set_curbuf(buf, action, prevbuf);
+}
+
+const char *nvim_ex2_buf_spname(buf_T *buf)
+{
+  return buf_spname(buf);
+}
+
+void nvim_ex2_goto_tabpage_win(tabpage_T *tp, win_T *wp)
+{
+  goto_tabpage_win(tp, wp);
+}
+
+void nvim_ex2_wait_return(bool redraw)
+{
+  wait_return(redraw);
+}
+
+bool nvim_ex2_buf_has_running_job(buf_T *buf)
+{
+  return buf->terminal && channel_job_running((uint64_t)buf->b_p_channel);
+}
+
+bool nvim_ex2_semsg(const char *fmt, const char *arg)
+{
+  return semsg(fmt, arg);
+}
+
+int nvim_ex2_eap_get_addr_count(exarg_T *eap)
+{
+  return eap->addr_count;
+}
+
+int nvim_ex2_get_no_check_timestamps(void)
+{
+  return no_check_timestamps;
+}
+
+void nvim_ex2_set_no_check_timestamps(int val)
+{
+  no_check_timestamps = val;
+}
+
+void nvim_ex2_check_timestamps(bool focus)
+{
+  check_timestamps(focus);
+}
+
+void nvim_ex2_buf_check_timestamp(buf_T *buf)
+{
+  (void)buf_check_timestamp(buf);
+}
+
 static const char e_compiler_not_supported_str[]
   = N_("E666: Compiler not supported: %s");
 
 void ex_ruby(exarg_T *eap)
 {
-  script_host_execute("ruby", eap);
+  rs_ex_ruby(eap);
 }
 
 void ex_rubyfile(exarg_T *eap)
 {
-  script_host_execute_file("ruby", eap);
+  rs_ex_rubyfile(eap);
 }
 
 void ex_rubydo(exarg_T *eap)
 {
-  script_host_do_range("ruby", eap);
+  rs_ex_rubydo(eap);
 }
 
 void ex_python3(exarg_T *eap)
 {
-  script_host_execute("python3", eap);
+  rs_ex_python3(eap);
 }
 
 void ex_py3file(exarg_T *eap)
 {
-  script_host_execute_file("python3", eap);
+  rs_ex_py3file(eap);
 }
 
 void ex_pydo3(exarg_T *eap)
 {
-  script_host_do_range("python3", eap);
+  rs_ex_pydo3(eap);
 }
 
 void ex_perl(exarg_T *eap)
 {
-  script_host_execute("perl", eap);
+  rs_ex_perl(eap);
 }
 
 void ex_perlfile(exarg_T *eap)
 {
-  script_host_execute_file("perl", eap);
+  rs_ex_perlfile(eap);
 }
 
 void ex_perldo(exarg_T *eap)
 {
-  script_host_do_range("perl", eap);
+  rs_ex_perldo(eap);
 }
 
 /// If 'autowrite' option set, try to write the file.
@@ -105,86 +588,20 @@ void ex_perldo(exarg_T *eap)
 /// @return FAIL for failure, OK otherwise
 int autowrite(buf_T *buf, bool forceit)
 {
-  bufref_T bufref;
-
-  if (!(p_aw || p_awa) || !p_write
-      // never autowrite a "nofile" or "nowrite" buffer
-      || bt_dontwrite(buf)
-      || (!forceit && buf->b_p_ro) || buf->b_ffname == NULL) {
-    return FAIL;
-  }
-  set_bufref(&bufref, buf);
-  int r = buf_write_all(buf, forceit);
-
-  // Writing may succeed but the buffer still changed, e.g., when there is a
-  // conversion error.  We do want to return FAIL then.
-  if (bufref_valid(&bufref) && bufIsChanged(buf)) {
-    r = FAIL;
-  }
-  return r;
+  return rs_autowrite(buf, forceit);
 }
 
 /// Flush all buffers, except the ones that are readonly or are never written.
 void autowrite_all(void)
 {
-  if (!(p_aw || p_awa) || !p_write) {
-    return;
-  }
-
-  FOR_ALL_BUFFERS(buf) {
-    if (bufIsChanged(buf) && !buf->b_p_ro && !bt_dontwrite(buf)) {
-      bufref_T bufref;
-      set_bufref(&bufref, buf);
-      buf_write_all(buf, false);
-      // an autocommand may have deleted the buffer
-      if (!bufref_valid(&bufref)) {
-        buf = firstbuf;
-      }
-    }
-  }
+  rs_autowrite_all();
 }
 
 /// @return  true if buffer was changed and cannot be abandoned.
 /// For flags use the CCGD_ values.
 bool check_changed(buf_T *buf, int flags)
 {
-  bool forceit = (flags & CCGD_FORCEIT);
-  bufref_T bufref;
-  set_bufref(&bufref, buf);
-
-  if (!forceit
-      && bufIsChanged(buf)
-      && ((flags & CCGD_MULTWIN) || buf->b_nwindows <= 1)
-      && (!(flags & CCGD_AW) || autowrite(buf, forceit) == FAIL)) {
-    if ((p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) && p_write) {
-      int count = 0;
-
-      if (flags & CCGD_ALLBUF) {
-        FOR_ALL_BUFFERS(buf2) {
-          if (bufIsChanged(buf2) && (buf2->b_ffname != NULL)) {
-            count++;
-          }
-        }
-      }
-      if (!bufref_valid(&bufref)) {
-        // Autocommand deleted buffer, oops!  It's not changed now.
-        return false;
-      }
-      dialog_changed(buf, count > 1);
-      if (!bufref_valid(&bufref)) {
-        // Autocommand deleted buffer, oops!  It's not changed now.
-        return false;
-      }
-      return bufIsChanged(buf);
-    }
-    if (flags & CCGD_EXCMD) {
-      no_write_message();
-    } else {
-      no_write_message_nobang(curbuf);
-    }
-    return true;
-  }
-  return false;
+  return rs_check_changed(buf, flags);
 }
 
 /// Ask the user what to do when abandoning a changed buffer.
@@ -194,70 +611,7 @@ bool check_changed(buf_T *buf, int flags)
 /// @param checkall may abandon all changed buffers
 void dialog_changed(buf_T *buf, bool checkall)
 {
-  char buff[DIALOG_MSG_SIZE];
-  int ret;
-  // Init ea pseudo-structure, this is needed for the check_overwrite()
-  // function.
-  exarg_T ea = {
-    .append = false,
-    .forceit = false,
-  };
-
-  dialog_msg(buff, _("Save changes to \"%s\"?"), buf->b_fname);
-  if (checkall) {
-    ret = vim_dialog_yesnoallcancel(VIM_QUESTION, NULL, buff, 1);
-  } else {
-    ret = vim_dialog_yesnocancel(VIM_QUESTION, NULL, buff, 1);
-  }
-
-  if (ret == VIM_YES) {
-    bool empty_bufname = buf->b_fname == NULL;
-    if (empty_bufname) {
-      buf_set_name(buf->b_fnum, "Untitled");
-    }
-
-    if (check_overwrite(&ea, buf, buf->b_fname, buf->b_ffname, false) == OK) {
-      // didn't hit Cancel
-      if (buf_write_all(buf, false) == OK) {
-        return;
-      }
-    }
-
-    // restore to empty when write failed
-    if (empty_bufname) {
-      buf->b_fname = NULL;
-      XFREE_CLEAR(buf->b_ffname);
-      XFREE_CLEAR(buf->b_sfname);
-      unchanged(buf, true, false);
-    }
-  } else if (ret == VIM_NO) {
-    unchanged(buf, true, false);
-  } else if (ret == VIM_ALL) {
-    // Write all modified files that can be written.
-    // Skip readonly buffers, these need to be confirmed
-    // individually.
-    FOR_ALL_BUFFERS(buf2) {
-      if (bufIsChanged(buf2) && (buf2->b_ffname != NULL) && !buf2->b_p_ro) {
-        bufref_T bufref;
-        set_bufref(&bufref, buf2);
-
-        if (buf2->b_fname != NULL
-            && check_overwrite(&ea, buf2, buf2->b_fname, buf2->b_ffname, false) == OK) {
-          // didn't hit Cancel
-          buf_write_all(buf2, false);
-        }
-        // an autocommand may have deleted the buffer
-        if (!bufref_valid(&bufref)) {
-          buf2 = firstbuf;
-        }
-      }
-    }
-  } else if (ret == VIM_DISCARDALL) {
-    // mark all buffers as unchanged
-    FOR_ALL_BUFFERS(buf2) {
-      unchanged(buf2, true, false);
-    }
-  }
+  rs_dialog_changed(buf, checkall);
 }
 
 /// Ask the user whether to close the terminal buffer or not.
@@ -266,38 +620,17 @@ void dialog_changed(buf_T *buf, bool checkall)
 /// @return bool Whether to close the buffer or not.
 bool dialog_close_terminal(buf_T *buf)
 {
-  char buff[DIALOG_MSG_SIZE];
-
-  dialog_msg(buff, _("Close \"%s\"?"),
-             (buf->b_fname != NULL) ? buf->b_fname : "?");
-
-  int ret = vim_dialog_yesnocancel(VIM_QUESTION, NULL, buff, 1);
-
-  return ret == VIM_YES;
+  return rs_dialog_close_terminal(buf);
 }
 
 /// @return true if the buffer "buf" can be abandoned, either by making it
 /// hidden, autowriting it or unloading it.
 bool can_abandon(buf_T *buf, bool forceit)
 {
-  return buf_hide(buf)
-         || !bufIsChanged(buf)
-         || buf->b_nwindows > 1
-         || autowrite(buf, forceit) == OK
-         || forceit;
+  return rs_can_abandon(buf, forceit);
 }
 
-/// Add a buffer number to "bufnrs", unless it's already there.
-static void add_bufnum(int *bufnrs, int *bufnump, int nr)
-{
-  for (int i = 0; i < *bufnump; i++) {
-    if (bufnrs[i] == nr) {
-      return;
-    }
-  }
-  bufnrs[*bufnump] = nr;
-  *bufnump = *bufnump + 1;
-}
+// add_bufnum moved to Rust (Vec-based instead of xmalloc array)
 
 /// Check if any buffer was changed and cannot be abandoned.
 /// That changed buffer becomes the current buffer.
@@ -310,133 +643,14 @@ static void add_bufnum(int *bufnrs, int *bufnump, int nr)
 /// @returns          true if any buffer is changed and cannot be abandoned
 bool check_changed_any(bool hidden, bool unload)
 {
-  bool ret = false;
-  int i;
-  int bufnum = 0;
-  size_t bufcount = 0;
-
-  // Make a list of all buffers, with the most important ones first.
-  FOR_ALL_BUFFERS(buf) {
-    bufcount++;
-  }
-
-  if (bufcount == 0) {
-    return false;
-  }
-
-  int *bufnrs = xmalloc(sizeof(*bufnrs) * bufcount);
-
-  // curbuf
-  bufnrs[bufnum++] = curbuf->b_fnum;
-
-  // buffers in current tab
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_buffer != curbuf) {
-      add_bufnum(bufnrs, &bufnum, wp->w_buffer->b_fnum);
-    }
-  }
-
-  // buffers in other tabs
-  FOR_ALL_TABS(tp) {
-    if (tp != curtab) {
-      FOR_ALL_WINDOWS_IN_TAB(wp, tp) {
-        add_bufnum(bufnrs, &bufnum, wp->w_buffer->b_fnum);
-      }
-    }
-  }
-
-  // any other buffer
-  FOR_ALL_BUFFERS(buf) {
-    add_bufnum(bufnrs, &bufnum, buf->b_fnum);
-  }
-
-  buf_T *buf = NULL;
-  for (i = 0; i < bufnum; i++) {
-    buf = buflist_findnr(bufnrs[i]);
-    if (buf == NULL) {
-      continue;
-    }
-    if ((!hidden || buf->b_nwindows == 0) && bufIsChanged(buf)) {
-      bufref_T bufref;
-      set_bufref(&bufref, buf);
-
-      // Try auto-writing the buffer.  If this fails but the buffer no
-      // longer exists it's not changed, that's OK.
-      if (check_changed(buf, (p_awa ? CCGD_AW : 0)
-                        | CCGD_MULTWIN
-                        | CCGD_ALLBUF) && bufref_valid(&bufref)) {
-        break;    // didn't save - still changes
-      }
-    }
-  }
-
-  if (i >= bufnum) {
-    goto theend;
-  }
-
-  // Get here if "buf" cannot be abandoned.
-  ret = true;
-  exiting = false;
-  // When ":confirm" used, don't give an error message.
-  if (!(p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM))) {
-    // There must be a wait_return() for this message, do_buffer()
-    // may cause a redraw.  But wait_return() is a no-op when vgetc()
-    // is busy (Quit used from window menu), then make sure we don't
-    // cause a scroll up.
-    if (vgetc_busy > 0) {
-      msg_row = cmdline_row;
-      msg_col = 0;
-      msg_didout = false;
-    }
-    if (((buf->terminal && channel_job_running((uint64_t)buf->b_p_channel))
-         ? semsg(_("E947: Job still running in buffer \"%s\""), buf->b_fname)
-         : semsg(_("E162: No write since last change for buffer \"%s\""),
-                 buf_spname(buf) != NULL ? buf_spname(buf) : buf->b_fname))
-        // Only makes sense if error is shown, which cause_errthrow() may prevent.
-        && msg_didany) {
-      int save = no_wait_return;
-      no_wait_return = false;
-      wait_return(false);
-      no_wait_return = save;
-    }
-  }
-
-  // Try to find a window that contains the buffer.
-  if (buf != curbuf) {
-    FOR_ALL_TAB_WINDOWS(tp, wp) {
-      if (wp->w_buffer == buf) {
-        bufref_T bufref;
-        set_bufref(&bufref, buf);
-        goto_tabpage_win(tp, wp);
-        // Paranoia: did autocmds wipe out the buffer with changes?
-        if (!bufref_valid(&bufref)) {
-          goto theend;
-        }
-        goto buf_found;
-      }
-    }
-  }
-buf_found:
-
-  // Open the changed buffer in the current window.
-  if (buf != curbuf) {
-    set_curbuf(buf, unload ? DOBUF_UNLOAD : DOBUF_GOTO, true);
-  }
-
-theend:
-  xfree(bufnrs);
-  return ret;
+  return rs_check_changed_any(hidden, unload);
 }
 
 /// @return  FAIL if there is no file name, OK if there is one.
 ///          Give error message for FAIL.
 int check_fname(void)
 {
-  if (curbuf->b_ffname == NULL) {
-    emsg(_(e_noname));
-    return FAIL;
-  }
-  return OK;
+  return rs_check_fname();
 }
 
 /// Flush the contents of a buffer, unless it has no file name.
@@ -444,16 +658,7 @@ int check_fname(void)
 /// @return  FAIL for failure, OK otherwise
 int buf_write_all(buf_T *buf, bool forceit)
 {
-  buf_T *old_curbuf = curbuf;
-
-  int retval = (buf_write(buf, buf->b_ffname, buf->b_fname,
-                          1, buf->b_ml.ml_line_count, NULL,
-                          false, forceit, true, false));
-  if (curbuf != old_curbuf) {
-    msg_source(HLF_W);
-    msg(_("Warning: Entered other buffer unexpectedly (check autocommands)"), 0);
-  }
-  return retval;
+  return rs_buf_write_all(buf, forceit);
 }
 
 /// ":argdo", ":windo", ":bufdo", ":tabdo", ":cdo", ":ldo", ":cfdo" and ":lfdo"
@@ -779,63 +984,11 @@ void ex_compiler(exarg_T *eap)
 /// ":checktime [buffer]"
 void ex_checktime(exarg_T *eap)
 {
-  int save_no_check_timestamps = no_check_timestamps;
-
-  no_check_timestamps = 0;
-  if (eap->addr_count == 0) {    // default is all buffers
-    check_timestamps(false);
-  } else {
-    buf_T *buf = buflist_findnr((int)eap->line2);
-    if (buf != NULL) {           // cannot happen?
-      buf_check_timestamp(buf);
-    }
-  }
-  no_check_timestamps = save_no_check_timestamps;
+  rs_ex_checktime(eap);
 }
 
-static void script_host_execute(char *name, exarg_T *eap)
-{
-  size_t len;
-  char *const script = script_get(eap, &len);
-
-  if (script != NULL) {
-    list_T *const args = tv_list_alloc(3);
-    // script
-    tv_list_append_allocated_string(args, script);
-    // current range
-    tv_list_append_number(args, (int)eap->line1);
-    tv_list_append_number(args, (int)eap->line2);
-
-    eval_call_provider(name, "execute", args, true);
-  }
-}
-
-static void script_host_execute_file(char *name, exarg_T *eap)
-{
-  if (!eap->skip) {
-    uint8_t buffer[MAXPATHL];
-    vim_FullName(eap->arg, (char *)buffer, sizeof(buffer), false);
-
-    list_T *args = tv_list_alloc(3);
-    // filename
-    tv_list_append_string(args, (const char *)buffer, -1);
-    // current range
-    tv_list_append_number(args, (int)eap->line1);
-    tv_list_append_number(args, (int)eap->line2);
-    eval_call_provider(name, "execute_file", args, true);
-  }
-}
-
-static void script_host_do_range(char *name, exarg_T *eap)
-{
-  if (!eap->skip) {
-    list_T *args = tv_list_alloc(3);
-    tv_list_append_number(args, (int)eap->line1);
-    tv_list_append_number(args, (int)eap->line2);
-    tv_list_append_string(args, eap->arg, -1);
-    eval_call_provider(name, "do_range", args, true);
-  }
-}
+// script_host_execute, script_host_execute_file, script_host_do_range
+// moved to Rust: src/nvim-rs/ex_cmds2/src/script_host.rs
 
 /// ":drop"
 /// Opens the first argument in a window, and the argument list is redefined.

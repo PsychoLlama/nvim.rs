@@ -87,6 +87,7 @@ members = [
     "src/nvim-rs/eval",
     "src/nvim-rs/eval_exec",
     "src/nvim-rs/ex_cmds",
+    "src/nvim-rs/ex_cmds2",
     "src/nvim-rs/utf8proc",
     "src/nvim-rs/version",
     "src/nvim-rs/viewport",

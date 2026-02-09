@@ -13,26 +13,26 @@ use std::ffi::c_int;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DialogResponse {
     /// User chose Yes
-    Yes = 1,
+    Yes = 2,
     /// User chose No
-    No = 2,
+    No = 3,
     /// User chose Cancel
-    Cancel = 3,
+    Cancel = 4,
     /// User chose Yes to All
-    All = 4,
+    All = 5,
     /// User chose Discard All
-    DiscardAll = 5,
+    DiscardAll = 6,
 }
 
 impl DialogResponse {
     /// Create from integer value
     pub fn from_int(value: c_int) -> Option<Self> {
         match value {
-            1 => Some(Self::Yes),
-            2 => Some(Self::No),
-            3 => Some(Self::Cancel),
-            4 => Some(Self::All),
-            5 => Some(Self::DiscardAll),
+            2 => Some(Self::Yes),
+            3 => Some(Self::No),
+            4 => Some(Self::Cancel),
+            5 => Some(Self::All),
+            6 => Some(Self::DiscardAll),
             _ => None,
         }
     }
@@ -173,25 +173,25 @@ mod tests {
 
     #[test]
     fn test_dialog_response() {
-        assert_eq!(rs_vim_yes(), 1);
-        assert_eq!(rs_vim_no(), 2);
-        assert_eq!(rs_vim_cancel(), 3);
-        assert_eq!(rs_vim_all(), 4);
-        assert_eq!(rs_vim_discardall(), 5);
+        assert_eq!(rs_vim_yes(), 2);
+        assert_eq!(rs_vim_no(), 3);
+        assert_eq!(rs_vim_cancel(), 4);
+        assert_eq!(rs_vim_all(), 5);
+        assert_eq!(rs_vim_discardall(), 6);
     }
 
     #[test]
     fn test_dialog_predicates() {
-        assert!(rs_dialog_is_affirmative(1)); // VIM_YES
-        assert!(rs_dialog_is_affirmative(4)); // VIM_ALL
-        assert!(!rs_dialog_is_affirmative(2)); // VIM_NO
+        assert!(rs_dialog_is_affirmative(2)); // VIM_YES
+        assert!(rs_dialog_is_affirmative(5)); // VIM_ALL
+        assert!(!rs_dialog_is_affirmative(3)); // VIM_NO
 
-        assert!(rs_dialog_is_negative(2)); // VIM_NO
-        assert!(rs_dialog_is_negative(5)); // VIM_DISCARDALL
-        assert!(!rs_dialog_is_negative(1)); // VIM_YES
+        assert!(rs_dialog_is_negative(3)); // VIM_NO
+        assert!(rs_dialog_is_negative(6)); // VIM_DISCARDALL
+        assert!(!rs_dialog_is_negative(2)); // VIM_YES
 
-        assert!(rs_dialog_is_cancel(3));
-        assert!(!rs_dialog_is_cancel(1));
+        assert!(rs_dialog_is_cancel(4));
+        assert!(!rs_dialog_is_cancel(2));
     }
 
     #[test]

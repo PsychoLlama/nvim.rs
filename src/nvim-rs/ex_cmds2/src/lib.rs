@@ -18,12 +18,20 @@
 use std::ffi::c_int;
 
 mod autowrite;
+mod autowrite_impl;
 mod bufcheck;
+mod check_changed_any;
+mod dialog;
 mod listdo;
+mod script_host;
 
 pub use autowrite::*;
+pub use autowrite_impl::*;
 pub use bufcheck::*;
+pub use check_changed_any::*;
+pub use dialog::*;
 pub use listdo::*;
+pub use script_host::*;
 
 // =============================================================================
 // Check Changed Flags
@@ -36,14 +44,14 @@ bitflags::bitflags! {
     pub struct CcgdFlags: u32 {
         /// Do autowrite if buffer is modified
         const AW = 1;
-        /// Add '!' to cmdline
-        const FORCEIT = 2;
-        /// Buffer is in multiple windows
-        const MULTWIN = 4;
-        /// Error message is for ex command
-        const EXCMD = 8;
-        /// May write to any buffer
-        const ALLBUF = 16;
+        /// Check also when several wins for the buf
+        const MULTWIN = 2;
+        /// ! used
+        const FORCEIT = 4;
+        /// May write all buffers
+        const ALLBUF = 8;
+        /// May suggest using !
+        const EXCMD = 16;
     }
 }
 
@@ -82,7 +90,7 @@ pub extern "C" fn rs_ccgd_allbuf() -> c_int {
 // =============================================================================
 
 /// Size of dialog message buffer
-pub const DIALOG_MSG_SIZE: usize = 256;
+pub const DIALOG_MSG_SIZE: usize = 1000;
 
 /// Get dialog message buffer size
 #[no_mangle]
@@ -125,15 +133,15 @@ mod tests {
     #[test]
     fn test_ccgd_flags() {
         assert_eq!(rs_ccgd_aw(), 1);
-        assert_eq!(rs_ccgd_forceit(), 2);
-        assert_eq!(rs_ccgd_multwin(), 4);
-        assert_eq!(rs_ccgd_excmd(), 8);
-        assert_eq!(rs_ccgd_allbuf(), 16);
+        assert_eq!(rs_ccgd_multwin(), 2);
+        assert_eq!(rs_ccgd_forceit(), 4);
+        assert_eq!(rs_ccgd_allbuf(), 8);
+        assert_eq!(rs_ccgd_excmd(), 16);
     }
 
     #[test]
     fn test_dialog_msg_size() {
-        assert_eq!(rs_dialog_msg_size(), 256);
+        assert_eq!(rs_dialog_msg_size(), 1000);
     }
 
     #[test]
