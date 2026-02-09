@@ -1184,16 +1184,16 @@ int nvim_gchar_cursor_call(void)
   return gchar_cursor();
 }
 
-/// Wrapper for inc_cursor.
+/// Wrapper for inc_cursor — calls inc() directly to avoid circular FFI call.
 int nvim_inc_cursor(void)
 {
-  return inc_cursor();
+  return inc(&curwin->w_cursor);
 }
 
-/// Wrapper for dec_cursor.
+/// Wrapper for dec_cursor — calls dec() directly to avoid circular FFI call.
 int nvim_dec_cursor(void)
 {
-  return dec_cursor();
+  return dec(&curwin->w_cursor);
 }
 
 /// Check if 'cpo' contains CPO_CHANGEW.

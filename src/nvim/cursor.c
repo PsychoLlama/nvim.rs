@@ -269,7 +269,7 @@ int getvpos(win_T *wp, pos_T *pos, colnr_T wcol)
 /// Increment the cursor position.  See inc() for return values.
 int inc_cursor(void)
 {
-  return rs_inc_cursor();
+  return inc(&curwin->w_cursor);
 }
 
 /// Decrement the line pointer 'p' crossing line boundaries as necessary.
@@ -277,7 +277,7 @@ int inc_cursor(void)
 /// @return  1 when crossing a line, -1 when at start of file, 0 otherwise.
 int dec_cursor(void)
 {
-  return rs_dec_cursor();
+  return dec(&curwin->w_cursor);
 }
 
 /// Get the line number relative to the current cursor position, i.e. the
@@ -341,44 +341,51 @@ bool set_leftcol(colnr_T leftcol)
 
 int gchar_cursor(void)
 {
-  return rs_gchar_cursor();
+  return utf_ptr2char(get_cursor_pos_ptr());
 }
 
 /// Return the character immediately before the cursor.
 int char_before_cursor(void)
 {
-  return rs_char_before_cursor();
+  if (curwin->w_cursor.col == 0) {
+    return -1;
+  }
+
+  char *line = get_cursor_line_ptr();
+  char *p = line + curwin->w_cursor.col;
+  int prev_len = utf_head_off(line, p - 1) + 1;
+  return utf_ptr2char(p - prev_len);
 }
 
 /// Write a character at the current cursor position.
 /// It is directly written into the block.
 void pchar_cursor(char c)
 {
-  rs_pchar_cursor(c);
+  *(ml_get_buf_mut(curbuf, curwin->w_cursor.lnum) + curwin->w_cursor.col) = c;
 }
 
 /// @return  pointer to cursor line.
 char *get_cursor_line_ptr(void)
 {
-  return (char *)rs_get_cursor_line_ptr();
+  return ml_get_buf(curbuf, curwin->w_cursor.lnum);
 }
 
 /// @return  pointer to cursor position.
 char *get_cursor_pos_ptr(void)
 {
-  return (char *)rs_get_cursor_pos_ptr();
+  return ml_get_buf(curbuf, curwin->w_cursor.lnum) + curwin->w_cursor.col;
 }
 
 /// @return  length (excluding the NUL) of the cursor line.
 colnr_T get_cursor_line_len(void)
 {
-  return rs_get_cursor_line_len();
+  return ml_get_buf_len(curbuf, curwin->w_cursor.lnum);
 }
 
 /// @return  length (excluding the NUL) of the cursor position.
 colnr_T get_cursor_pos_len(void)
 {
-  return rs_get_cursor_pos_len();
+  return ml_get_buf_len(curbuf, curwin->w_cursor.lnum) - curwin->w_cursor.col;
 }
 
 // =============================================================================
