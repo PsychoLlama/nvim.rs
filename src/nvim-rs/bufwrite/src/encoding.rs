@@ -242,6 +242,70 @@ pub unsafe extern "C" fn rs_bufwrite_ucs_to_bytes(
     c_int::from(result.error)
 }
 
+/// Convert a Unicode character to bytes, advancing the output pointer.
+///
+/// Matches the C `ucs2bytes(unsigned c, char **pp, int flags)` calling convention.
+///
+/// # Safety
+///
+/// `pp` must point to a valid `*mut u8` pointer with at least 4 bytes available.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_ucs2bytes(c: u32, pp: *mut *mut u8, flags: c_int) -> c_int {
+    if pp.is_null() {
+        return 1; // error
+    }
+    let p = unsafe { *pp };
+    if p.is_null() {
+        return 1;
+    }
+    // SAFETY: caller guarantees at least 4 bytes at *pp
+    let slice = unsafe { std::slice::from_raw_parts_mut(p, 4) };
+    let result = unicode_to_bytes(c, flags as u32, slice);
+    // Advance pointer by bytes written
+    unsafe { *pp = p.add(result.bytes_written) };
+    c_int::from(result.error)
+}
+
+extern "C" {
+    fn nvim_bw_get_fio_flags(name: *const std::ffi::c_char) -> c_int;
+}
+
+/// Generate a BOM in `buf[4]` for encoding `name`.
+///
+/// Replaces C `make_bom()`. Returns the length of the BOM (0 when no BOM).
+///
+/// # Safety
+///
+/// `buf` must point to a buffer of at least 4 bytes.
+/// `name` must be a valid C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_make_bom(buf: *mut u8, name: *const std::ffi::c_char) -> c_int {
+    if buf.is_null() || name.is_null() {
+        return 0;
+    }
+    let flags = unsafe { nvim_bw_get_fio_flags(name) };
+
+    // Can't put a BOM in a non-Unicode file.
+    if flags == crate::FIO_LATIN1 as c_int || flags == 0 {
+        return 0;
+    }
+
+    if flags == crate::FIO_UTF8 as c_int {
+        // UTF-8 BOM
+        unsafe {
+            *buf = 0xEF;
+            *buf.add(1) = 0xBB;
+            *buf.add(2) = 0xBF;
+        }
+        return 3;
+    }
+
+    // Use ucs2bytes logic for other encodings (UCS-2, UCS-4, UTF-16)
+    let mut p = buf;
+    let _error = unsafe { rs_ucs2bytes(0xFEFF, &mut p, flags) };
+    unsafe { p.offset_from(buf) as c_int }
+}
+
 /// Check if codepoint needs surrogate pair in UTF-16.
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_bufwrite_needs_surrogate(c: u32) -> c_int {
@@ -348,6 +412,37 @@ mod tests {
         let mut buf = [0u8; 1];
         let result = latin1_to_bytes(0x100, &mut buf); // Out of range
         assert!(result.error);
+        assert_eq!(buf[0], 0xBF);
+    }
+
+    #[test]
+    fn test_rs_ucs2bytes_ucs4_le() {
+        let mut buf = [0u8; 4];
+        let mut p = buf.as_mut_ptr();
+        let original = p;
+        let error = unsafe { rs_ucs2bytes(0x41, &mut p, (crate::FIO_UCS4 | crate::FIO_ENDIAN_L) as c_int) };
+        assert_eq!(error, 0);
+        assert_eq!(unsafe { p.offset_from(original) }, 4);
+        assert_eq!(buf, [0x41, 0x00, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_rs_ucs2bytes_ucs2_be() {
+        let mut buf = [0u8; 4];
+        let mut p = buf.as_mut_ptr();
+        let original = p;
+        let error = unsafe { rs_ucs2bytes(0x1234, &mut p, crate::FIO_UCS2 as c_int) };
+        assert_eq!(error, 0);
+        assert_eq!(unsafe { p.offset_from(original) }, 2);
+        assert_eq!(&buf[..2], &[0x12, 0x34]);
+    }
+
+    #[test]
+    fn test_rs_ucs2bytes_latin1_error() {
+        let mut buf = [0u8; 4];
+        let mut p = buf.as_mut_ptr();
+        let error = unsafe { rs_ucs2bytes(0x100, &mut p, crate::FIO_LATIN1 as c_int) };
+        assert_eq!(error, 1); // error
         assert_eq!(buf[0], 0xBF);
     }
 

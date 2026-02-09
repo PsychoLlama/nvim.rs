@@ -149,6 +149,11 @@ void nvim_bw_xfree(char *ptr)
   xfree(ptr);
 }
 
+int nvim_bw_get_fio_flags(const char *name)
+{
+  return get_fio_flags(name);
+}
+
 // =============================================================================
 // Rust FFI declarations
 // =============================================================================
@@ -156,6 +161,8 @@ extern Error_T rs_set_err_num(const char *num, const char *msg);
 extern Error_T rs_set_err(const char *msg);
 extern Error_T rs_set_err_arg(const char *msg, int arg);
 extern void rs_emit_err(const Error_T *e);
+extern bool rs_ucs2bytes(unsigned c, char **pp, int flags);
+extern int rs_make_bom(char *buf, char *name);
 
 #include "bufwrite.c.generated.h"
 
@@ -169,61 +176,7 @@ extern void rs_emit_err(const Error_T *e);
 static bool ucs2bytes(unsigned c, char **pp, int flags)
   FUNC_ATTR_NONNULL_ALL
 {
-  uint8_t *p = (uint8_t *)(*pp);
-  bool error = false;
-
-  if (flags & FIO_UCS4) {
-    if (flags & FIO_ENDIAN_L) {
-      *p++ = (uint8_t)c;
-      *p++ = (uint8_t)(c >> 8);
-      *p++ = (uint8_t)(c >> 16);
-      *p++ = (uint8_t)(c >> 24);
-    } else {
-      *p++ = (uint8_t)(c >> 24);
-      *p++ = (uint8_t)(c >> 16);
-      *p++ = (uint8_t)(c >> 8);
-      *p++ = (uint8_t)c;
-    }
-  } else if (flags & (FIO_UCS2 | FIO_UTF16)) {
-    if (c >= 0x10000) {
-      if (flags & FIO_UTF16) {
-        // Make two words, ten bits of the character in each.  First
-        // word is 0xd800 - 0xdbff, second one 0xdc00 - 0xdfff
-        c -= 0x10000;
-        if (c >= 0x100000) {
-          error = true;
-        }
-        int cc = (int)(((c >> 10) & 0x3ff) + 0xd800);
-        if (flags & FIO_ENDIAN_L) {
-          *p++ = (uint8_t)cc;
-          *p++ = (uint8_t)(cc >> 8);
-        } else {
-          *p++ = (uint8_t)(cc >> 8);
-          *p++ = (uint8_t)cc;
-        }
-        c = (c & 0x3ff) + 0xdc00;
-      } else {
-        error = true;
-      }
-    }
-    if (flags & FIO_ENDIAN_L) {
-      *p++ = (uint8_t)c;
-      *p++ = (uint8_t)(c >> 8);
-    } else {
-      *p++ = (uint8_t)(c >> 8);
-      *p++ = (uint8_t)c;
-    }
-  } else {  // Latin1
-    if (c >= 0x100) {
-      error = true;
-      *p++ = 0xBF;
-    } else {
-      *p++ = (uint8_t)c;
-    }
-  }
-
-  *pp = (char *)p;
-  return error;
+  return rs_ucs2bytes(c, pp, flags);
 }
 
 static int buf_write_convert_with_iconv(struct bw_info *ip, char **bufp, int *lenp)
@@ -427,23 +380,7 @@ static int check_mtime(buf_T *buf, FileInfo *file_info)
 /// @return  the length of the BOM (zero when no BOM).
 static int make_bom(char *buf_in, char *name)
 {
-  uint8_t *buf = (uint8_t *)buf_in;
-  int flags = get_fio_flags(name);
-
-  // Can't put a BOM in a non-Unicode file.
-  if (flags == FIO_LATIN1 || flags == 0) {
-    return 0;
-  }
-
-  if (flags == FIO_UTF8) {      // UTF-8
-    buf[0] = 0xef;
-    buf[1] = 0xbb;
-    buf[2] = 0xbf;
-    return 3;
-  }
-  char *p = (char *)buf;
-  ucs2bytes(0xfeff, &p, flags);
-  return (int)((uint8_t *)p - buf);
+  return rs_make_bom(buf_in, name);
 }
 
 static int buf_write_do_autocmds(buf_T *buf, char **fnamep, char **sfnamep, char **ffnamep,
