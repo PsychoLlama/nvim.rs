@@ -73,4 +73,28 @@ extern "C" {
         len: usize,
         force: bool,
     ) -> c_int;
+
+    // --- Phase 5: store_session_globals callback ---
+    /// Iterate over session-flavoured global variables.
+    /// Calls `cb` for each variable. `var_type`: 0=number, 1=string, 2=float.
+    /// For type 0/1: `escaped_val` is the escaped string value.
+    /// For type 2: `float_val` and `float_sign` (' ' or '-') are set.
+    pub fn nvim_ses_foreach_session_global(
+        cb: unsafe extern "C" fn(
+            key: *const c_char,
+            var_type: c_int,
+            escaped_val: *const c_char,
+            float_val: f64,
+            float_sign: c_int,
+            ud: *mut c_void,
+        ) -> c_int,
+        ud: *mut c_void,
+    ) -> c_int;
+
+    // --- Phase 5: get_view_file accessors ---
+    pub fn nvim_ses_get_curbuf_ffname() -> *const c_char;
+    pub fn nvim_ses_emsg_noname();
+    pub fn nvim_ses_get_p_vdir() -> *const c_char;
+    pub fn nvim_ses_vim_ispathsep(c: c_int) -> bool;
+    pub fn nvim_ses_add_pathsep(p: *mut c_char) -> bool;
 }

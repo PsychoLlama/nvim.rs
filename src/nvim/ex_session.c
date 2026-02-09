@@ -160,6 +160,61 @@ int nvim_ses_vim_FullName(const char *fname, char *buf, size_t len, bool force)
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL");
 _Static_assert(kOptSsopFlagWinsize == 0x08, "kOptSsopFlagWinsize");
 
+// --- Phase 5 accessors: store_session_globals ---
+// Type constants for session global variable callback
+// 0 = VAR_NUMBER or VAR_STRING, 1 = VAR_FLOAT
+//
+// Callback signature: int (*cb)(const char *key, int var_type, const char *escaped_val,
+//                               double float_val, int float_sign, void *fd)
+// Returns FAIL if callback requests stop (write error).
+int nvim_ses_foreach_session_global(
+    int (*cb)(const char *key, int var_type, const char *escaped_val,
+              double float_val, int float_sign, void *ud),
+    void *ud)
+{
+  TV_DICT_ITER(get_globvar_dict(), this_var, {
+    if ((this_var->di_tv.v_type == VAR_NUMBER
+         || this_var->di_tv.v_type == VAR_STRING)
+        && var_flavour(this_var->di_key) == VAR_FLAVOUR_SESSION) {
+      // Escape special characters with a backslash. Turn LF/CR into \n and \r.
+      char *const p = vim_strsave_escaped(tv_get_string(&this_var->di_tv), "\\\"\n\r");
+      for (char *t = p; *t != NUL; t++) {
+        if (*t == '\n') {
+          *t = 'n';
+        } else if (*t == '\r') {
+          *t = 'r';
+        }
+      }
+      int is_string = (this_var->di_tv.v_type == VAR_STRING) ? 1 : 0;
+      int result = cb(this_var->di_key, is_string, p, 0.0, ' ', ud);
+      xfree(p);
+      if (result == FAIL) {
+        return FAIL;
+      }
+    } else if (this_var->di_tv.v_type == VAR_FLOAT
+               && var_flavour(this_var->di_key) == VAR_FLAVOUR_SESSION) {
+      float_T f = this_var->di_tv.vval.v_float;
+      int sign = ' ';
+      if (f < 0) {
+        f = -f;
+        sign = '-';
+      }
+      int result = cb(this_var->di_key, 2, NULL, f, sign, ud);
+      if (result == FAIL) {
+        return FAIL;
+      }
+    }
+  });
+  return OK;
+}
+
+// --- Phase 5 accessors: get_view_file ---
+const char *nvim_ses_get_curbuf_ffname(void) { return curbuf->b_ffname; }
+void nvim_ses_emsg_noname(void) { emsg(_(e_noname)); }
+const char *nvim_ses_get_p_vdir(void) { return p_vdir; }
+bool nvim_ses_vim_ispathsep(int c) { return vim_ispathsep(c); }
+bool nvim_ses_add_pathsep(char *p) { return add_pathsep(p); }
+
 static int put_view_curpos(FILE *fd, const win_T *wp, char *spaces)
 {
   return rs_put_view_curpos(fd, (win_T *)wp, spaces);
@@ -439,46 +494,7 @@ static int put_view(FILE *fd, win_T *wp, tabpage_T *tp, bool add_edit, unsigned 
 
 static int store_session_globals(FILE *fd)
 {
-  TV_DICT_ITER(get_globvar_dict(), this_var, {
-    if ((this_var->di_tv.v_type == VAR_NUMBER
-         || this_var->di_tv.v_type == VAR_STRING)
-        && var_flavour(this_var->di_key) == VAR_FLAVOUR_SESSION) {
-      // Escape special characters with a backslash.  Turn a LF and
-      // CR into \n and \r.
-      char *const p = vim_strsave_escaped(tv_get_string(&this_var->di_tv), "\\\"\n\r");
-      for (char *t = p; *t != NUL; t++) {
-        if (*t == '\n') {
-          *t = 'n';
-        } else if (*t == '\r') {
-          *t = 'r';
-        }
-      }
-      if ((fprintf(fd, "let %s = %c%s%c",
-                   this_var->di_key,
-                   ((this_var->di_tv.v_type == VAR_STRING) ? '"' : ' '),
-                   p,
-                   ((this_var->di_tv.v_type == VAR_STRING) ? '"' : ' ')) < 0)
-          || put_eol(fd) == FAIL) {
-        xfree(p);
-        return FAIL;
-      }
-      xfree(p);
-    } else if (this_var->di_tv.v_type == VAR_FLOAT
-               && var_flavour(this_var->di_key) == VAR_FLAVOUR_SESSION) {
-      float_T f = this_var->di_tv.vval.v_float;
-      int sign = ' ';
-
-      if (f < 0) {
-        f = -f;
-        sign = '-';
-      }
-      if ((fprintf(fd, "let %s = %c%f", this_var->di_key, sign, f) < 0)
-          || put_eol(fd) == FAIL) {
-        return FAIL;
-      }
-    }
-  });
-  return OK;
+  return rs_store_session_globals(fd);
 }
 
 /// Writes commands for restoring the current buffers, for :mksession.
@@ -1007,48 +1023,7 @@ void ex_mkrc(exarg_T *eap)
 /// @return  the name of the view file for the current buffer.
 static char *get_view_file(char c)
 {
-  if (curbuf->b_ffname == NULL) {
-    emsg(_(e_noname));
-    return NULL;
-  }
-  char *sname = home_replace_save(NULL, curbuf->b_ffname);
-
-  // We want a file name without separators, because we're not going to make
-  // a directory.
-  //    "normal" path separator   -> "=+"
-  //    "="                       -> "=="
-  //    ":" path separator        -> "=-"
-  size_t len = 0;
-  for (char *p = sname; *p; p++) {
-    if (*p == '=' || vim_ispathsep(*p)) {
-      len++;
-    }
-  }
-  char *retval = xmalloc(strlen(sname) + len + strlen(p_vdir) + 9);
-  STRCPY(retval, p_vdir);
-  add_pathsep(retval);
-  char *s = retval + strlen(retval);
-  for (char *p = sname; *p; p++) {
-    if (*p == '=') {
-      *s++ = '=';
-      *s++ = '=';
-    } else if (vim_ispathsep(*p)) {
-      *s++ = '=';
-#if defined(BACKSLASH_IN_FILENAME)
-      *s++ = (*p == ':') ? '-' : '+';
-#else
-      *s++ = '+';
-#endif
-    } else {
-      *s++ = *p;
-    }
-  }
-  *s++ = '=';
-  *s++ = c;
-  xmemcpyz(s, S_LEN(".vim"));
-
-  xfree(sname);
-  return retval;
+  return rs_get_view_file(c);
 }
 
 int put_eol(FILE *fd)

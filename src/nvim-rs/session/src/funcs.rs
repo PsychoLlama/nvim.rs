@@ -465,3 +465,149 @@ pub unsafe extern "C" fn rs_ses_arglist(
     }
     OK
 }
+
+// =============================================================================
+// Phase 5: Utility Functions
+// =============================================================================
+
+/// Callback function invoked by `nvim_ses_foreach_session_global` for each
+/// session-flavoured global variable.
+///
+/// `var_type`: 0 = number, 1 = string, 2 = float.
+/// For types 0/1, `escaped_val` is the escaped string representation.
+/// For type 2, `float_val` and `float_sign` are the float value and sign char.
+/// `ud` is the FILE* to write to.
+unsafe extern "C" fn session_global_callback(
+    key: *const c_char,
+    var_type: c_int,
+    escaped_val: *const c_char,
+    float_val: f64,
+    float_sign: c_int,
+    ud: *mut std::ffi::c_void,
+) -> c_int {
+    let fd = ud.cast::<libc::FILE>();
+    let mut w = crate::writer::SessionWriter::new(fd);
+    let key_str = CStr::from_ptr(key).to_str().unwrap_or("");
+
+    match var_type {
+        0 => {
+            // VAR_NUMBER: let key =  val
+            let val = CStr::from_ptr(escaped_val).to_str().unwrap_or("");
+            let line = format!("let {key_str} =  {val} \n");
+            if !w.write_bytes(line.as_bytes()) {
+                return FAIL;
+            }
+        }
+        1 => {
+            // VAR_STRING: let key = "val"
+            let val = CStr::from_ptr(escaped_val).to_str().unwrap_or("");
+            let line = format!("let {key_str} = \"{val}\"\n");
+            if !w.write_bytes(line.as_bytes()) {
+                return FAIL;
+            }
+        }
+        2 => {
+            // VAR_FLOAT: let key = <sign><f>
+            #[allow(clippy::cast_possible_truncation)]
+            let sign = char::from(float_sign as u8);
+            // Use .6 precision to match C's %f format
+            let line = format!("let {key_str} = {sign}{float_val:.6}\n");
+            if !w.write_bytes(line.as_bytes()) {
+                return FAIL;
+            }
+        }
+        _ => {}
+    }
+    OK
+}
+
+/// Store session-flavoured global variables to the session file.
+///
+/// # Safety
+/// `fd` must be a valid FILE*.
+#[no_mangle]
+pub unsafe extern "C" fn rs_store_session_globals(fd: *mut libc::FILE) -> c_int {
+    ffi::nvim_ses_foreach_session_global(session_global_callback, fd.cast())
+}
+
+/// Get the view file path for the current buffer.
+///
+/// Encodes the buffer's full filename into a safe path under 'viewdir':
+///   - path separators → "=+"
+///   - "=" → "=="
+///   - appends "=<c>.vim"
+///
+/// Returns an xmalloc'd string, or NULL on error (no file name).
+///
+/// # Safety
+/// Accesses global state (curbuf, p_vdir).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_view_file(c: c_char) -> *mut c_char {
+    let ffname = ffi::nvim_ses_get_curbuf_ffname();
+    if ffname.is_null() {
+        ffi::nvim_ses_emsg_noname();
+        return std::ptr::null_mut();
+    }
+
+    let sname = ffi::nvim_ses_home_replace_save(ffname);
+
+    // Count extra bytes needed for escaping
+    let mut extra: usize = 0;
+    let mut p = sname;
+    while *p != 0 {
+        if *p == b'=' as c_char || ffi::nvim_ses_vim_ispathsep(c_int::from(*p as u8)) {
+            extra += 1;
+        }
+        p = p.add(1);
+    }
+
+    let sname_len = p.offset_from(sname) as usize;
+    let vdir = ffi::nvim_ses_get_p_vdir();
+    let vdir_len = CStr::from_ptr(vdir).to_bytes().len();
+
+    // Allocate: vdir + separator + encoded_name + "=<c>.vim" + NUL
+    // The +9 accounts for separator(1) + "=" (1) + c(1) + ".vim"(4) + NUL(1) + spare(1)
+    let alloc_size = vdir_len + sname_len + extra + 9;
+    let retval = ffi::nvim_ses_xmalloc(alloc_size);
+
+    // Copy viewdir
+    std::ptr::copy_nonoverlapping(vdir.cast::<u8>(), retval.cast::<u8>(), vdir_len);
+    *retval.add(vdir_len) = 0; // NUL terminate for add_pathsep
+    ffi::nvim_ses_add_pathsep(retval);
+
+    // Find end of retval (after add_pathsep)
+    let mut s = retval;
+    while *s != 0 {
+        s = s.add(1);
+    }
+
+    // Encode sname
+    p = sname;
+    while *p != 0 {
+        if *p == b'=' as c_char {
+            *s = b'=' as c_char;
+            s = s.add(1);
+            *s = b'=' as c_char;
+        } else if ffi::nvim_ses_vim_ispathsep(c_int::from(*p as u8)) {
+            *s = b'=' as c_char;
+            s = s.add(1);
+            // On Unix, BACKSLASH_IN_FILENAME is not defined, always use '+'
+            *s = b'+' as c_char;
+        } else {
+            *s = *p;
+        }
+        s = s.add(1);
+        p = p.add(1);
+    }
+
+    // Append "=<c>.vim\0"
+    *s = b'=' as c_char;
+    s = s.add(1);
+    *s = c;
+    s = s.add(1);
+    let suffix = b".vim\0";
+    std::ptr::copy_nonoverlapping(suffix.as_ptr(), s.cast::<u8>(), suffix.len());
+
+    ffi::nvim_ses_xfree(sname.cast());
+    retval
+}

@@ -27,4 +27,8 @@ extern int rs_ses_winsizes(FILE *fd, bool restore_size, win_T *tab_firstwin);
 extern int rs_ses_arglist(FILE *fd, char *cmd, garray_T *gap, bool fullname, unsigned *flagp);
 extern int rs_ses_win_rec(FILE *fd, frame_T *fr);
 
+// Rust FFI: utility functions (Phase 5)
+extern int rs_store_session_globals(FILE *fd);
+extern char *rs_get_view_file(char c);
+
 #include "ex_session.h.generated.h"
