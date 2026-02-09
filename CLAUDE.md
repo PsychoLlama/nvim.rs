@@ -52,8 +52,7 @@ int foo(int x) { return rs_foo(x); }
 - Every regexp migration commit must add test cases to `src/nvim-rs/test/regexp_patterns.txt` and regenerate the corpus with `just regexp-baseline`.
 - `just regexp-baseline` must pass before committing regexp changes.
 - When the regexp crate exists: `just rust-test` must include regexp corpus tests.
-- During migration: use shadow mode (both C and Rust implementations run in parallel, assert equivalence). See `src/nvim-rs/test/shadow_regexp.md` for the strategy guide.
-- When creating the regexp crate: activate the fuzz targets in `fuzz/fuzz_targets/` (uncomment the real calls, add the crate dependency in `fuzz/Cargo.toml`).
+- Fuzz targets live in `fuzz/fuzz_targets/`. Run with `just regexp-fuzz` (requires nightly).
 - **Large file warning**: `src/nvim-rs/test/regexp_corpus.json` is a large generated file. Never read it directly - use `jq` via Bash to inspect or add entries (e.g., `jq length`, `jq '.[0:3]'`, `jq '.[-1]'`).
 
 ## Quick Commands
