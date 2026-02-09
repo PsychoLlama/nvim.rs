@@ -318,6 +318,14 @@ call s:ok('unclosed-bracket-no-e874')
 bwipeout!
 
 " ============================================================================
+" Test group 5: Findfile (exercises filesearch FFI)
+" ============================================================================
+
+" Test that findfile doesn't crash (ftplugin/rust.vim regression)
+call assert_equal('', findfile('nonexistent_file_xyz', '.;'))
+call s:ok('findfile-no-crash')
+
+" ============================================================================
 " Report results
 " ============================================================================
 

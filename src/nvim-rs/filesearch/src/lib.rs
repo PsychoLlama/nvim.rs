@@ -355,7 +355,7 @@ struct FfSearchCtx {
 
 /// Create a string from a C buffer.
 unsafe fn cbuf_to_string(data: *const c_char, len: usize) -> NvimString {
-    if data.is_null() || len == 0 {
+    if data.is_null() {
         return NvimString::NULL;
     }
     let ptr = xmemdupz(data.cast(), len);
