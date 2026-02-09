@@ -31,4 +31,8 @@ extern int rs_ses_win_rec(FILE *fd, frame_T *fr);
 extern int rs_store_session_globals(FILE *fd);
 extern char *rs_get_view_file(char c);
 
+// Rust FFI: view writer (Phase 6)
+extern int rs_put_view(FILE *fd, win_T *wp, tabpage_T *tp, bool add_edit, unsigned *flagp,
+                       int current_arg_idx);
+
 #include "ex_session.h.generated.h"

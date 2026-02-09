@@ -215,6 +215,69 @@ const char *nvim_ses_get_p_vdir(void) { return p_vdir; }
 bool nvim_ses_vim_ispathsep(int c) { return vim_ispathsep(c); }
 bool nvim_ses_add_pathsep(char *p) { return add_pathsep(p); }
 
+// --- Phase 6 accessors: put_view ---
+
+// Window accessors for argument list
+bool nvim_ses_win_uses_global_alist(const win_T *wp) { return wp->w_alist == &global_alist; }
+garray_T *nvim_ses_win_get_alist_ga(win_T *wp) { return &wp->w_alist->al_ga; }
+int nvim_ses_win_get_arg_idx(const win_T *wp) { return wp->w_arg_idx; }
+bool nvim_ses_win_get_arg_idx_invalid(const win_T *wp) { return wp->w_arg_idx_invalid; }
+int nvim_ses_win_wargcount(const win_T *wp) { return WARGCOUNT(wp); }
+
+// Window tag stack
+int nvim_ses_win_get_tagstackidx(const win_T *wp) { return wp->w_tagstackidx; }
+int nvim_ses_win_get_tagstacklen(const win_T *wp) { return wp->w_tagstacklen; }
+const char *nvim_ses_win_get_tagname(const win_T *wp, int idx)
+{
+  return wp->w_tagstack[idx].tagname;
+}
+
+// Window alternate file
+int nvim_ses_win_get_alt_fnum(const win_T *wp) { return wp->w_alt_fnum; }
+
+// Window cursor/view
+int32_t nvim_ses_win_get_cursor_lnum(const win_T *wp) { return wp->w_cursor.lnum; }
+int nvim_ses_win_get_cursor_col(const win_T *wp) { return wp->w_cursor.col; }
+int32_t nvim_ses_win_get_topline(const win_T *wp) { return wp->w_topline; }
+int nvim_ses_win_get_view_height(const win_T *wp) { return wp->w_view_height; }
+bool nvim_ses_win_get_p_wrap(const win_T *wp) { return wp->w_p_wrap; }
+int nvim_ses_win_get_leftcol(const win_T *wp) { return wp->w_leftcol; }
+char *nvim_ses_win_get_localdir(const win_T *wp) { return wp->w_localdir; }
+
+// Buffer query
+bool nvim_ses_buf_get_p_bl(const buf_T *buf) { return buf->b_p_bl; }
+bool nvim_ses_bt_normal(const buf_T *buf) { return bt_normal(buf); }
+
+// Tabpage accessors
+char *nvim_ses_tp_get_localdir(const tabpage_T *tp) { return tp->tp_localdir; }
+
+// Buffer lookup
+buf_T *nvim_ses_buflist_findnr(int nr) { return buflist_findnr(nr); }
+
+// Global state manipulation for local options
+win_T *nvim_ses_get_curwin(void) { return curwin; }
+void nvim_ses_set_curwin(win_T *wp)
+{
+  curwin = wp;
+  curbuf = curwin->w_buffer;
+}
+
+// C functions called from put_view that we wrap rather than migrate
+int nvim_ses_makemap(FILE *fd, buf_T *buf) { return makemap(fd, buf); }
+int nvim_ses_makeset(FILE *fd, int opt, bool local_only)
+{
+  return makeset(fd, opt, local_only);
+}
+int nvim_ses_makefoldset(FILE *fd) { return makefoldset(fd); }
+int nvim_ses_put_folds(FILE *fd, win_T *wp) { return put_folds(fd, wp); }
+
+// _Static_assert for Phase 6 constants
+_Static_assert(kOptSsopFlagCursor == 0x4000, "kOptSsopFlagCursor");
+_Static_assert(kOptSsopFlagOptions == 0x20, "kOptSsopFlagOptions");
+_Static_assert(kOptSsopFlagLocaloptions == 0x10, "kOptSsopFlagLocaloptions");
+_Static_assert(kOptSsopFlagFolds == 0x2000, "kOptSsopFlagFolds");
+_Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL");
+
 static int put_view_curpos(FILE *fd, const win_T *wp, char *spaces)
 {
   return rs_put_view_curpos(fd, (win_T *)wp, spaces);
@@ -278,218 +341,10 @@ static int ses_put_fname(FILE *fd, char *name, unsigned *flagp)
 }
 
 /// Write commands to "fd" to restore the view of a window.
-/// Caller must make sure 'scrolloff' is zero.
-///
-/// @param add_edit  add ":edit" command to view
-/// @param flagp  vop_flags or ssop_flags
-/// @param current_arg_idx  current argument index of the window, use -1 if unknown
 static int put_view(FILE *fd, win_T *wp, tabpage_T *tp, bool add_edit, unsigned *flagp,
                     int current_arg_idx)
 {
-  int f;
-  bool did_next = false;
-
-  // Always restore cursor position for ":mksession".  For ":mkview" only
-  // when 'viewoptions' contains "cursor".
-  bool do_cursor = (flagp == &ssop_flags || *flagp & kOptSsopFlagCursor);
-
-  // Local argument list.
-  if (wp->w_alist == &global_alist) {
-    PUTLINE_FAIL("argglobal");
-  } else {
-    if (ses_arglist(fd, "arglocal", &wp->w_alist->al_ga,
-                    flagp == &vop_flags
-                    || !(*flagp & kOptSsopFlagCurdir)
-                    || tp->tp_localdir != NULL
-                    || wp->w_localdir != NULL, flagp) == FAIL) {
-      return FAIL;
-    }
-  }
-
-  // Only when part of a session: restore the argument index.  Some
-  // arguments may have been deleted, check if the index is valid.
-  if (wp->w_arg_idx != current_arg_idx && wp->w_arg_idx < WARGCOUNT(wp)
-      && flagp == &ssop_flags) {
-    if (fprintf(fd, "%" PRId64 "argu\n", (int64_t)wp->w_arg_idx + 1) < 0) {
-      return FAIL;
-    }
-    did_next = true;
-  }
-
-  // Edit the file.  Skip this when ":next" already did it.
-  if (add_edit && (!did_next || wp->w_arg_idx_invalid)) {
-    char *fname_esc = ses_escape_fname(ses_get_fname(wp->w_buffer, flagp), flagp);
-    if (bt_help(wp->w_buffer)) {
-      char *curtag = "";
-
-      // A help buffer needs some options to be set.
-      // First, create a new empty buffer with "buftype=help".
-      // Then ":help" will re-use both the buffer and the window and set
-      // the options, even when "options" is not in 'sessionoptions'.
-      if (0 < wp->w_tagstackidx && wp->w_tagstackidx <= wp->w_tagstacklen) {
-        curtag = wp->w_tagstack[wp->w_tagstackidx - 1].tagname;
-      }
-
-      if (put_line(fd, "enew | setl bt=help") == FAIL
-          || fprintf(fd, "help %s", curtag) < 0 || put_eol(fd) == FAIL) {
-        xfree(fname_esc);
-        return FAIL;
-      }
-    } else if (wp->w_buffer->b_ffname != NULL
-               && (!bt_nofilename(wp->w_buffer) || wp->w_buffer->terminal)) {
-      // Load the file.
-
-      // Editing a file in this buffer: use ":edit file".
-      // This may have side effects! (e.g., compressed or network file).
-      //
-      // Note, if a buffer for that file already exists, use :badd to
-      // edit that buffer, to not lose folding information (:edit resets
-      // folds in other buffers)
-      if (fprintf(fd,
-                  "if bufexists(fnamemodify(\"%s\", \":p\")) | buffer %s | else | edit %s | endif\n"
-                  // Fixup :terminal buffer name. #7836
-                  "if &buftype ==# 'terminal'\n"
-                  "  silent file %s\n"
-                  "endif\n",
-                  fname_esc,
-                  fname_esc,
-                  fname_esc,
-                  fname_esc) < 0) {
-        xfree(fname_esc);
-        return FAIL;
-      }
-    } else {
-      // No file in this buffer, just make it empty.
-      PUTLINE_FAIL("enew");
-      if (wp->w_buffer->b_ffname != NULL) {
-        // The buffer does have a name, but it's not a file name.
-        if (fprintf(fd, "file %s\n", fname_esc) < 0) {
-          xfree(fname_esc);
-          return FAIL;
-        }
-      }
-      do_cursor = false;
-    }
-    xfree(fname_esc);
-  }
-
-  if (wp->w_alt_fnum) {
-    buf_T *const alt = buflist_findnr(wp->w_alt_fnum);
-
-    // Set the alternate file if the buffer is listed.
-    if ((flagp == &ssop_flags) && alt != NULL && alt->b_fname != NULL
-        && *alt->b_fname != NUL
-        && alt->b_p_bl
-        // do not set balt if buffer is terminal and "terminal" is not set in options
-        && !(bt_terminal(alt) && !(ssop_flags & kOptSsopFlagTerminal))
-        && (fputs("balt ", fd) < 0
-            || ses_fname(fd, alt, flagp, true) == FAIL)) {
-      return FAIL;
-    }
-  }
-
-  // Local mappings and abbreviations.
-  if ((*flagp & (kOptSsopFlagOptions | kOptSsopFlagLocaloptions))
-      && makemap(fd, wp->w_buffer) == FAIL) {
-    return FAIL;
-  }
-
-  // Local options.  Need to go to the window temporarily.
-  // Store only local values when using ":mkview" and when ":mksession" is
-  // used and 'sessionoptions' doesn't include "nvim/options".
-  // Some folding options are always stored when "folds" is included,
-  // otherwise the folds would not be restored correctly.
-  win_T *save_curwin = curwin;
-  curwin = wp;
-  curbuf = curwin->w_buffer;
-  if (*flagp & (kOptSsopFlagOptions | kOptSsopFlagLocaloptions)) {
-    f = makeset(fd, OPT_LOCAL,
-                flagp == &vop_flags || !(*flagp & kOptSsopFlagOptions));
-  } else if (*flagp & kOptSsopFlagFolds) {
-    f = makefoldset(fd);
-  } else {
-    f = OK;
-  }
-  curwin = save_curwin;
-  curbuf = curwin->w_buffer;
-  if (f == FAIL) {
-    return FAIL;
-  }
-
-  // Save Folds when 'buftype' is empty and for help files.
-  if ((*flagp & kOptSsopFlagFolds)
-      && wp->w_buffer->b_ffname != NULL
-      && (bt_normal(wp->w_buffer)
-          || bt_help(wp->w_buffer))) {
-    if (put_folds(fd, wp) == FAIL) {
-      return FAIL;
-    }
-  }
-
-  // Set the cursor after creating folds, since that moves the cursor.
-  if (do_cursor) {
-    // Restore the cursor line in the file and relatively in the
-    // window.  Don't use "G", it changes the jumplist.
-    if (wp->w_view_height <= 0) {
-      if (fprintf(fd, "let s:l = %" PRIdLINENR "\n", wp->w_cursor.lnum) < 0) {
-        return FAIL;
-      }
-    } else if (fprintf(fd,
-                       "let s:l = %" PRIdLINENR " - ((%" PRIdLINENR
-                       " * winheight(0) + %d) / %d)\n",
-                       wp->w_cursor.lnum,
-                       wp->w_cursor.lnum - wp->w_topline,
-                       (wp->w_view_height / 2),
-                       wp->w_view_height) < 0) {
-      return FAIL;
-    }
-    if (fprintf(fd,
-                "if s:l < 1 | let s:l = 1 | endif\n"
-                "keepjumps exe s:l\n"
-                "normal! zt\n"
-                "keepjumps %" PRIdLINENR "\n",
-                wp->w_cursor.lnum) < 0) {
-      return FAIL;
-    }
-    // Restore the cursor column and left offset when not wrapping.
-    if (wp->w_cursor.col == 0) {
-      PUTLINE_FAIL("normal! 0");
-    } else {
-      if (!wp->w_p_wrap && wp->w_leftcol > 0 && wp->w_width > 0) {
-        if (fprintf(fd,
-                    "let s:c = %" PRId64 " - ((%" PRId64
-                    " * winwidth(0) + %" PRId64 ") / %" PRId64 ")\n"
-                    "if s:c > 0\n"
-                    "  exe 'normal! ' . s:c . '|zs' . %" PRId64 " . '|'\n"
-                    "else\n",
-                    (int64_t)wp->w_virtcol + 1,
-                    (int64_t)(wp->w_virtcol - wp->w_leftcol),
-                    (int64_t)(wp->w_width / 2),
-                    (int64_t)wp->w_width,
-                    (int64_t)wp->w_virtcol + 1) < 0
-            || put_view_curpos(fd, wp, "  ") == FAIL
-            || put_line(fd, "endif") == FAIL) {
-          return FAIL;
-        }
-      } else if (put_view_curpos(fd, wp, "") == FAIL) {
-        return FAIL;
-      }
-    }
-  }
-
-  // Local directory, if the current flag is not view options or the "curdir"
-  // option is included.
-  if (wp->w_localdir != NULL
-      && (flagp != &vop_flags || (*flagp & kOptSsopFlagCurdir))) {
-    if (fputs("lcd ", fd) < 0
-        || ses_put_fname(fd, wp->w_localdir, flagp) == FAIL
-        || fprintf(fd, "\n") < 0) {
-      return FAIL;
-    }
-    did_lcd = true;
-  }
-
-  return OK;
+  return rs_put_view(fd, wp, tp, add_edit, flagp, current_arg_idx);
 }
 
 static int store_session_globals(FILE *fd)

@@ -97,4 +97,50 @@ extern "C" {
     pub fn nvim_ses_get_p_vdir() -> *const c_char;
     pub fn nvim_ses_vim_ispathsep(c: c_int) -> bool;
     pub fn nvim_ses_add_pathsep(p: *mut c_char) -> bool;
+
+    // --- Phase 6: put_view accessors ---
+
+    // Window argument list
+    pub fn nvim_ses_win_uses_global_alist(wp: WinPtr) -> bool;
+    pub fn nvim_ses_win_get_alist_ga(wp: WinPtr) -> GarrayPtr;
+    pub fn nvim_ses_win_get_arg_idx(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_arg_idx_invalid(wp: WinPtr) -> bool;
+    pub fn nvim_ses_win_wargcount(wp: WinPtr) -> c_int;
+
+    // Window tag stack
+    pub fn nvim_ses_win_get_tagstackidx(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_tagstacklen(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_tagname(wp: WinPtr, idx: c_int) -> *const c_char;
+
+    // Window alternate file
+    pub fn nvim_ses_win_get_alt_fnum(wp: WinPtr) -> c_int;
+
+    // Window cursor/view
+    pub fn nvim_ses_win_get_cursor_lnum(wp: WinPtr) -> i32;
+    pub fn nvim_ses_win_get_cursor_col(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_topline(wp: WinPtr) -> i32;
+    pub fn nvim_ses_win_get_view_height(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_p_wrap(wp: WinPtr) -> bool;
+    pub fn nvim_ses_win_get_leftcol(wp: WinPtr) -> c_int;
+    pub fn nvim_ses_win_get_localdir(wp: WinPtr) -> *mut c_char;
+
+    // Buffer query
+    pub fn nvim_ses_buf_get_p_bl(buf: BufPtr) -> bool;
+    pub fn nvim_ses_bt_normal(buf: BufPtr) -> bool;
+
+    // Tabpage
+    pub fn nvim_ses_tp_get_localdir(tp: TabpagePtr) -> *mut c_char;
+
+    // Buffer lookup
+    pub fn nvim_ses_buflist_findnr(nr: c_int) -> BufPtr;
+
+    // Global state
+    pub fn nvim_ses_get_curwin() -> WinPtr;
+    pub fn nvim_ses_set_curwin(wp: WinPtr);
+
+    // C functions wrapped for put_view
+    pub fn nvim_ses_makemap(fd: *mut libc::FILE, buf: BufPtr) -> c_int;
+    pub fn nvim_ses_makeset(fd: *mut libc::FILE, opt: c_int, local_only: bool) -> c_int;
+    pub fn nvim_ses_makefoldset(fd: *mut libc::FILE) -> c_int;
+    pub fn nvim_ses_put_folds(fd: *mut libc::FILE, wp: WinPtr) -> c_int;
 }

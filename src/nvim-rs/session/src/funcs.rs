@@ -611,3 +611,263 @@ pub unsafe extern "C" fn rs_get_view_file(c: c_char) -> *mut c_char {
     ffi::nvim_ses_xfree(sname.cast());
     retval
 }
+
+// =============================================================================
+// Phase 6: put_view (View Writer)
+// =============================================================================
+
+/// Additional session option flag constants (verified via _Static_assert in C)
+pub const K_OPT_SSOP_FLAG_CURSOR: c_uint = 0x4000;
+pub const K_OPT_SSOP_FLAG_OPTIONS: c_uint = 0x20;
+pub const K_OPT_SSOP_FLAG_LOCALOPTIONS: c_uint = 0x10;
+pub const K_OPT_SSOP_FLAG_FOLDS: c_uint = 0x2000;
+
+/// OPT_LOCAL flag for makeset (verified via _Static_assert in C)
+const OPT_LOCAL: c_int = 0x02;
+
+/// Write commands to restore the view of a window.
+///
+/// # Safety
+/// All pointers must be valid. `flagp` must point to either ssop_flags or vop_flags.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_put_view(
+    fd: *mut libc::FILE,
+    wp: ffi::WinPtr,
+    tp: ffi::TabpagePtr,
+    add_edit: bool,
+    flagp: *mut c_uint,
+    current_arg_idx: c_int,
+) -> c_int {
+    let mut w = crate::writer::SessionWriter::new(fd);
+    let ssop_ptr = ffi::nvim_ses_get_ssop_flags_ptr();
+    let vop_ptr = ffi::nvim_ses_get_vop_flags_ptr();
+    let opt_flags = *flagp;
+    let is_session = std::ptr::eq(flagp.cast_const(), ssop_ptr);
+
+    // Always restore cursor position for ":mksession". For ":mkview" only
+    // when 'viewoptions' contains "cursor".
+    let mut do_cursor = is_session || (opt_flags & K_OPT_SSOP_FLAG_CURSOR) != 0;
+
+    // Local argument list.
+    if ffi::nvim_ses_win_uses_global_alist(wp) {
+        if w.put_line(b"argglobal") == FAIL {
+            return FAIL;
+        }
+    } else {
+        let is_vop = std::ptr::eq(flagp.cast_const(), vop_ptr);
+        let fullname = is_vop
+            || (opt_flags & K_OPT_SSOP_FLAG_CURDIR) == 0
+            || !ffi::nvim_ses_tp_get_localdir(tp).is_null()
+            || !ffi::nvim_ses_win_get_localdir(wp).is_null();
+        let ga = ffi::nvim_ses_win_get_alist_ga(wp);
+        if rs_ses_arglist(fd, c"arglocal".as_ptr(), ga, fullname, flagp) == FAIL {
+            return FAIL;
+        }
+    }
+
+    // Restore the argument index (session mode only).
+    let mut did_next = false;
+    let arg_idx = ffi::nvim_ses_win_get_arg_idx(wp);
+    if arg_idx != current_arg_idx && arg_idx < ffi::nvim_ses_win_wargcount(wp) && is_session {
+        let mut buf = String::new();
+        let idx = i64::from(arg_idx) + 1;
+        let _ = writeln!(buf, "{idx}argu");
+        if !w.write_bytes(buf.as_bytes()) {
+            return FAIL;
+        }
+        did_next = true;
+    }
+
+    // Edit the file. Skip this when ":next" already did it.
+    let buf_handle = ffi::nvim_ses_win_get_buffer(wp);
+    if add_edit && (!did_next || ffi::nvim_ses_win_get_arg_idx_invalid(wp)) {
+        let fname_raw = rs_ses_get_fname(buf_handle, flagp);
+        let fname_esc = rs_ses_escape_fname(fname_raw as *mut c_char, flagp);
+
+        if ffi::nvim_ses_bt_help(buf_handle) {
+            // Help buffer
+            let mut curtag_ptr: *const c_char = c"".as_ptr();
+            let tsidx = ffi::nvim_ses_win_get_tagstackidx(wp);
+            let tslen = ffi::nvim_ses_win_get_tagstacklen(wp);
+            if tsidx > 0 && tsidx <= tslen {
+                curtag_ptr = ffi::nvim_ses_win_get_tagname(wp, tsidx - 1);
+            }
+
+            if w.put_line(b"enew | setl bt=help") == FAIL {
+                ffi::nvim_ses_xfree(fname_esc.cast());
+                return FAIL;
+            }
+            let curtag = CStr::from_ptr(curtag_ptr).to_str().unwrap_or("");
+            let line = format!("help {curtag}");
+            if !w.write_bytes(line.as_bytes()) || w.put_eol() == FAIL {
+                ffi::nvim_ses_xfree(fname_esc.cast());
+                return FAIL;
+            }
+        } else if !ffi::nvim_ses_buf_get_ffname(buf_handle).is_null()
+            && (!ffi::nvim_ses_bt_nofilename(buf_handle)
+                || ffi::nvim_ses_buf_is_terminal(buf_handle))
+        {
+            // File buffer: use :edit or :buffer
+            let fe = CStr::from_ptr(fname_esc).to_str().unwrap_or("");
+            let block = format!(
+                "if bufexists(fnamemodify(\"{fe}\", \":p\")) | buffer {fe} | else | edit {fe} | endif\n\
+                 if &buftype ==# 'terminal'\n\
+                   silent file {fe}\n\
+                 endif\n"
+            );
+            if !w.write_bytes(block.as_bytes()) {
+                ffi::nvim_ses_xfree(fname_esc.cast());
+                return FAIL;
+            }
+        } else {
+            // No file, just enew
+            if w.put_line(b"enew") == FAIL {
+                ffi::nvim_ses_xfree(fname_esc.cast());
+                return FAIL;
+            }
+            if !ffi::nvim_ses_buf_get_ffname(buf_handle).is_null() {
+                let fe = CStr::from_ptr(fname_esc).to_str().unwrap_or("");
+                let line = format!("file {fe}\n");
+                if !w.write_bytes(line.as_bytes()) {
+                    ffi::nvim_ses_xfree(fname_esc.cast());
+                    return FAIL;
+                }
+            }
+            do_cursor = false;
+        }
+        ffi::nvim_ses_xfree(fname_esc.cast());
+    }
+
+    // Alternate file
+    let alt_fnum = ffi::nvim_ses_win_get_alt_fnum(wp);
+    if alt_fnum != 0 {
+        let alt = ffi::nvim_ses_buflist_findnr(alt_fnum);
+        if is_session
+            && !alt.is_null()
+            && !ffi::nvim_ses_buf_get_fname(alt).is_null()
+            && *ffi::nvim_ses_buf_get_fname(alt) != 0
+            && ffi::nvim_ses_buf_get_p_bl(alt)
+            && !(ffi::nvim_ses_bt_terminal(alt)
+                && (ffi::nvim_ses_get_ssop_flags() & K_OPT_SSOP_FLAG_TERMINAL) == 0)
+            && (!w.write_bytes(b"balt ") || rs_ses_fname(fd, alt, flagp, true) == FAIL)
+        {
+            return FAIL;
+        }
+    }
+
+    // Local mappings and abbreviations.
+    if (opt_flags & (K_OPT_SSOP_FLAG_OPTIONS | K_OPT_SSOP_FLAG_LOCALOPTIONS)) != 0
+        && ffi::nvim_ses_makemap(fd, buf_handle) == FAIL
+    {
+        return FAIL;
+    }
+
+    // Local options. Need to go to the window temporarily.
+    let save_curwin = ffi::nvim_ses_get_curwin();
+    ffi::nvim_ses_set_curwin(wp);
+    let f = if (opt_flags & (K_OPT_SSOP_FLAG_OPTIONS | K_OPT_SSOP_FLAG_LOCALOPTIONS)) != 0 {
+        let is_vop = std::ptr::eq(flagp.cast_const(), vop_ptr);
+        let local_only = is_vop || (opt_flags & K_OPT_SSOP_FLAG_OPTIONS) == 0;
+        ffi::nvim_ses_makeset(fd, OPT_LOCAL, local_only)
+    } else if (opt_flags & K_OPT_SSOP_FLAG_FOLDS) != 0 {
+        ffi::nvim_ses_makefoldset(fd)
+    } else {
+        OK
+    };
+    ffi::nvim_ses_set_curwin(save_curwin);
+    if f == FAIL {
+        return FAIL;
+    }
+
+    // Save folds when 'buftype' is empty and for help files.
+    if (opt_flags & K_OPT_SSOP_FLAG_FOLDS) != 0
+        && !ffi::nvim_ses_buf_get_ffname(buf_handle).is_null()
+        && (ffi::nvim_ses_bt_normal(buf_handle) || ffi::nvim_ses_bt_help(buf_handle))
+        && ffi::nvim_ses_put_folds(fd, wp) == FAIL
+    {
+        return FAIL;
+    }
+
+    // Set the cursor after creating folds, since that moves the cursor.
+    if do_cursor {
+        let cursor_lnum = ffi::nvim_ses_win_get_cursor_lnum(wp);
+        let view_height = ffi::nvim_ses_win_get_view_height(wp);
+
+        if view_height <= 0 {
+            let line = format!("let s:l = {cursor_lnum}\n");
+            if !w.write_bytes(line.as_bytes()) {
+                return FAIL;
+            }
+        } else {
+            let topline = ffi::nvim_ses_win_get_topline(wp);
+            let diff = cursor_lnum - topline;
+            let half = view_height / 2;
+            let line = format!(
+                "let s:l = {cursor_lnum} - (({diff} * winheight(0) + {half}) / {view_height})\n"
+            );
+            if !w.write_bytes(line.as_bytes()) {
+                return FAIL;
+            }
+        }
+
+        let block = format!(
+            "if s:l < 1 | let s:l = 1 | endif\n\
+             keepjumps exe s:l\n\
+             normal! zt\n\
+             keepjumps {cursor_lnum}\n"
+        );
+        if !w.write_bytes(block.as_bytes()) {
+            return FAIL;
+        }
+
+        // Restore cursor column and left offset when not wrapping.
+        let cursor_col = ffi::nvim_ses_win_get_cursor_col(wp);
+        if cursor_col == 0 {
+            if w.put_line(b"normal! 0") == FAIL {
+                return FAIL;
+            }
+        } else {
+            let wrap = ffi::nvim_ses_win_get_p_wrap(wp);
+            let leftcol = ffi::nvim_ses_win_get_leftcol(wp);
+            let win_width = ffi::nvim_ses_win_get_width(wp);
+            let virtcol = ffi::nvim_ses_win_get_virtcol(wp);
+
+            if !wrap && leftcol > 0 && win_width > 0 {
+                let vc1 = i64::from(virtcol) + 1;
+                let vl = i64::from(virtcol - leftcol);
+                let wh = i64::from(win_width) / 2;
+                let ww = i64::from(win_width);
+                let block = format!(
+                    "let s:c = {vc1} - (({vl} * winwidth(0) + {wh}) / {ww})\n\
+                     if s:c > 0\n\
+                       exe 'normal! ' . s:c . '|zs' . {vc1} . '|'\n\
+                     else\n"
+                );
+                if !w.write_bytes(block.as_bytes())
+                    || rs_put_view_curpos(fd, wp, c"  ".as_ptr()) == 0
+                    || w.put_line(b"endif") == FAIL
+                {
+                    return FAIL;
+                }
+            } else if rs_put_view_curpos(fd, wp, c"".as_ptr()) == 0 {
+                return FAIL;
+            }
+        }
+    }
+
+    // Local directory
+    let localdir = ffi::nvim_ses_win_get_localdir(wp);
+    let is_vop = std::ptr::eq(flagp.cast_const(), vop_ptr);
+    if !localdir.is_null() && (!is_vop || (opt_flags & K_OPT_SSOP_FLAG_CURDIR) != 0) {
+        if !w.write_bytes(b"lcd ")
+            || rs_ses_put_fname(fd, localdir, flagp) == FAIL
+            || !w.write_bytes(b"\n")
+        {
+            return FAIL;
+        }
+        ffi::nvim_ses_set_did_lcd(1);
+    }
+
+    OK
+}
