@@ -1633,10 +1633,10 @@ extern "C" {
     fn nvim_typval_error_str_or_nr_unknown();
 }
 
-/// OK return value (0) matching C's OK.
-const OK: c_int = 0;
-/// FAIL return value (-1) matching C's FAIL.
-const FAIL: c_int = -1;
+/// OK return value (1) matching C's OK from vim_defs.h.
+const OK: c_int = 1;
+/// FAIL return value (0) matching C's FAIL from vim_defs.h.
+const FAIL: c_int = 0;
 
 /// Get the typval at args[idx] using the C accessor.
 /// This avoids needing to know sizeof(typval_T) in Rust.
