@@ -195,6 +195,24 @@ void nvim_al_buf_set_name(int fnum, const char *name)
   buf_set_name(fnum, (char *)name);
 }
 void nvim_al_os_breakcheck(void) { os_breakcheck(); }
+
+// -- Phase 3 extra accessors --
+int nvim_al_rem_backslash(const char *p) { return rem_backslash(p); }
+int nvim_al_ascii_isspace(int c) { return ascii_isspace(c); }
+char *nvim_al_skipwhite(const char *p) { return skipwhite(p); }
+int nvim_al_expand_wildcards(int num_pat, char **pat, int *num_files, char ***files, int flags)
+{
+  return expand_wildcards(num_pat, pat, num_files, files, flags);
+}
+int nvim_al_gen_expand_wildcards(int num_pat, char **pat, int *num_files, char ***files, int flags)
+{
+  return gen_expand_wildcards(num_pat, pat, num_files, files, flags);
+}
+void nvim_al_ga_init_charptr(garray_T *ga) { ga_init(ga, (int)sizeof(char *), 20); }
+void nvim_al_ga_append_charptr(garray_T *ga, char *ptr) { GA_APPEND(char *, ga, ptr); }
+garray_T *nvim_al_alloc_garray(void) { return xcalloc(1, sizeof(garray_T)); }
+void nvim_al_free_garray(garray_T *ga) { xfree(ga); }
+
 alist_T *nvim_al_alloc_alist(void)
 {
   return xmalloc(sizeof(alist_T));
@@ -209,6 +227,9 @@ extern void rs_alist_new(void);
 extern void rs_alist_add(alist_T *al, char *fname, int set_fnum);
 extern void rs_alist_set(alist_T *al, int count, char **files, int use_curbuf, int *fnum_list, int fnum_len);
 extern void rs_alist_expand(int *fnum_list, int fnum_len);
+
+// Rust FFI declarations for Phase 3
+extern int rs_get_arglist_exp(char *str, int *fcountp, char ***fnamesp, int wig);
 
 static int check_arglist_locked(void)
 {
@@ -293,21 +314,7 @@ static void get_arglist(garray_T *gap, char *str, bool escaped)
 /// @return  FAIL or OK.
 int get_arglist_exp(char *str, int *fcountp, char ***fnamesp, bool wig)
 {
-  garray_T ga;
-  int i;
-
-  get_arglist(&ga, str, true);
-
-  if (wig) {
-    i = expand_wildcards(ga.ga_len, ga.ga_data,
-                         fcountp, fnamesp, EW_FILE|EW_NOTFOUND|EW_NOTWILD);
-  } else {
-    i = gen_expand_wildcards(ga.ga_len, ga.ga_data,
-                             fcountp, fnamesp, EW_FILE|EW_NOTFOUND|EW_NOTWILD);
-  }
-
-  ga_clear(&ga);
-  return i;
+  return rs_get_arglist_exp(str, fcountp, fnamesp, wig);
 }
 
 /// Check the validity of the arg_idx for each other window.

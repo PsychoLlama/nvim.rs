@@ -13,6 +13,7 @@ pub mod entry;
 pub mod ffi;
 pub mod navigation;
 pub mod operations;
+pub mod parsing;
 
 use std::ffi::c_int;
 

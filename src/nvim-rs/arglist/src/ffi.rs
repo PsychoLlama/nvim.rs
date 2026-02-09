@@ -119,6 +119,8 @@ extern "C" {
     pub fn nvim_al_alloc_alist() -> AlistPtr;
     pub fn nvim_al_ga_init_charptr(ga: GarrayPtr);
     pub fn nvim_al_ga_append_charptr(ga: GarrayPtr, ptr: *mut c_char);
+    pub fn nvim_al_alloc_garray() -> GarrayPtr;
+    pub fn nvim_al_free_garray(ga: GarrayPtr);
 }
 
 // =============================================================================
