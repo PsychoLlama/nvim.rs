@@ -201,13 +201,13 @@ extern "C" {
     // exarg_T field getters/setters
     pub fn nvim_al_eap_get_cmd(eap: ExargPtr) -> *mut c_char;
     pub fn nvim_al_eap_get_arg(eap: ExargPtr) -> *mut c_char;
-    pub fn nvim_al_eap_get_line1(eap: ExargPtr) -> i64;
-    pub fn nvim_al_eap_get_line2(eap: ExargPtr) -> i64;
+    pub fn nvim_al_eap_get_line1(eap: ExargPtr) -> i32;
+    pub fn nvim_al_eap_get_line2(eap: ExargPtr) -> i32;
     pub fn nvim_al_eap_get_addr_count(eap: ExargPtr) -> c_int;
     pub fn nvim_al_eap_get_forceit(eap: ExargPtr) -> c_int;
     pub fn nvim_al_eap_get_cmdidx(eap: ExargPtr) -> c_int;
-    pub fn nvim_al_eap_set_line1(eap: ExargPtr, val: i64);
-    pub fn nvim_al_eap_set_line2(eap: ExargPtr, val: i64);
+    pub fn nvim_al_eap_set_line1(eap: ExargPtr, val: i32);
+    pub fn nvim_al_eap_set_line2(eap: ExargPtr, val: i32);
 
     // Buffer/window operations
     pub fn nvim_al_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
@@ -223,7 +223,7 @@ extern "C" {
         ffname: *const c_char,
         sfname: *const c_char,
         eap: ExargPtr,
-        newlnum: i64,
+        newlnum: i32,
         flags: c_int,
         old_curwin: WinPtr,
     ) -> c_int;
@@ -231,6 +231,9 @@ extern "C" {
     pub fn nvim_al_FullName_save(fname: *const c_char, force: c_int) -> *mut c_char;
     pub fn nvim_al_path_fnamecmp(s1: *const c_char, s2: *const c_char) -> c_int;
     pub fn nvim_al_get_cmdmod_cmod_tab() -> c_int;
+    pub fn nvim_al_emsg_E163();
+    pub fn nvim_al_emsg_E164();
+    pub fn nvim_al_emsg_E165();
 }
 
 // =============================================================================

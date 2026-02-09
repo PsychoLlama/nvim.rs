@@ -292,6 +292,37 @@ int nvim_al_path_full_compare(const char *s1, const char *s2, int check_name, in
 buf_T *nvim_al_win_get_buffer(win_T *wp) { return wp->w_buffer; }
 void nvim_al_win_set_arg_idx_invalid(win_T *wp, int val) { wp->w_arg_idx_invalid = val; }
 
+// -- Phase 6 extra accessors --
+char *nvim_al_eap_get_cmd(exarg_T *eap) { return eap->cmd; }
+char *nvim_al_eap_get_arg(exarg_T *eap) { return eap->arg; }
+linenr_T nvim_al_eap_get_line1(exarg_T *eap) { return eap->line1; }
+linenr_T nvim_al_eap_get_line2(exarg_T *eap) { return eap->line2; }
+int nvim_al_eap_get_addr_count(exarg_T *eap) { return eap->addr_count; }
+int nvim_al_eap_get_forceit(exarg_T *eap) { return eap->forceit; }
+int nvim_al_eap_get_cmdidx(exarg_T *eap) { return (int)eap->cmdidx; }
+void nvim_al_eap_set_line1(exarg_T *eap, linenr_T val) { eap->line1 = val; }
+void nvim_al_eap_set_line2(exarg_T *eap, linenr_T val) { eap->line2 = val; }
+int nvim_al_check_can_set_curbuf_forceit(int forceit) { return check_can_set_curbuf_forceit(forceit); }
+void nvim_al_setpcmark(void) { setpcmark(); }
+int nvim_al_win_split(int size, int flags) { return win_split(size, flags); }
+void nvim_al_reset_binding(win_T *wp) { RESET_BINDING(wp); }
+int nvim_al_buf_hide(buf_T *buf) { return buf_hide(buf); }
+char *nvim_al_fix_fname(const char *fname) { return fix_fname(fname); }
+int nvim_al_otherfile(const char *fname) { return otherfile((char *)fname); }
+int nvim_al_check_changed(buf_T *buf, int flags) { return check_changed(buf, flags); }
+int nvim_al_do_ecmd(int fnum, const char *ffname, const char *sfname, exarg_T *eap,
+                    linenr_T newlnum, int flags, win_T *oldwin)
+{
+  return do_ecmd(fnum, (char *)ffname, (char *)sfname, eap, newlnum, flags, oldwin);
+}
+void nvim_al_setmark(int c) { setmark(c); }
+char *nvim_al_FullName_save(const char *fname, int force) { return FullName_save(fname, force); }
+int nvim_al_path_fnamecmp(const char *s1, const char *s2) { return path_fnamecmp(s1, s2); }
+int nvim_al_get_cmdmod_cmod_tab(void) { return cmdmod.cmod_tab; }
+void nvim_al_emsg_E163(void) { emsg(_("E163: There is only one file to edit")); }
+void nvim_al_emsg_E164(void) { emsg(_("E164: Cannot go before first file")); }
+void nvim_al_emsg_E165(void) { emsg(_("E165: Cannot go beyond last file")); }
+
 // Rust FFI declarations for Phase 2
 extern int rs_check_arglist_locked(void);
 extern void rs_alist_clear(alist_T *al);
@@ -315,6 +346,15 @@ extern char *rs_get_arglist_name(void *xp, int idx);
 extern bool rs_editing_arg_idx(win_T *win);
 extern void rs_check_arg_idx(win_T *win);
 extern char *rs_arg_all(void);
+
+// Rust FFI declarations for Phase 6
+extern void rs_ex_previous(exarg_T *eap);
+extern void rs_ex_rewind(exarg_T *eap);
+extern void rs_ex_last(exarg_T *eap);
+extern void rs_ex_argument(exarg_T *eap);
+extern void rs_do_argfile(exarg_T *eap, int argn);
+extern void rs_ex_next(exarg_T *eap);
+extern void rs_ex_argdedupe(void);
 
 static int check_arglist_locked(void)
 {
@@ -441,167 +481,25 @@ void ex_args(exarg_T *eap)
 }
 
 /// ":previous", ":sprevious", ":Next" and ":sNext".
-void ex_previous(exarg_T *eap)
-{
-  // If past the last one already, go to the last one.
-  if (curwin->w_arg_idx - (int)eap->line2 >= ARGCOUNT) {
-    do_argfile(eap, ARGCOUNT - 1);
-  } else {
-    do_argfile(eap, curwin->w_arg_idx - (int)eap->line2);
-  }
-}
+void ex_previous(exarg_T *eap) { rs_ex_previous(eap); }
 
 /// ":rewind", ":first", ":sfirst" and ":srewind".
-void ex_rewind(exarg_T *eap)
-{
-  do_argfile(eap, 0);
-}
+void ex_rewind(exarg_T *eap) { rs_ex_rewind(eap); }
 
 /// ":last" and ":slast".
-void ex_last(exarg_T *eap)
-{
-  do_argfile(eap, ARGCOUNT - 1);
-}
+void ex_last(exarg_T *eap) { rs_ex_last(eap); }
 
 /// ":argument" and ":sargument".
-void ex_argument(exarg_T *eap)
-{
-  int i;
-
-  if (eap->addr_count > 0) {
-    i = (int)eap->line2 - 1;
-  } else {
-    i = curwin->w_arg_idx;
-  }
-  do_argfile(eap, i);
-}
+void ex_argument(exarg_T *eap) { rs_ex_argument(eap); }
 
 /// Edit file "argn" of the argument lists.
-void do_argfile(exarg_T *eap, int argn)
-{
-  bool is_split_cmd = *eap->cmd == 's';
-
-  int old_arg_idx = curwin->w_arg_idx;
-
-  if (argn < 0 || argn >= ARGCOUNT) {
-    if (ARGCOUNT <= 1) {
-      emsg(_("E163: There is only one file to edit"));
-    } else if (argn < 0) {
-      emsg(_("E164: Cannot go before first file"));
-    } else {
-      emsg(_("E165: Cannot go beyond last file"));
-    }
-
-    return;
-  }
-
-  if (!is_split_cmd
-      && (&ARGLIST[argn])->ae_fnum != curbuf->b_fnum
-      && !check_can_set_curbuf_forceit(eap->forceit)) {
-    return;
-  }
-
-  setpcmark();
-
-  // split window or create new tab page first
-  if (is_split_cmd || cmdmod.cmod_tab != 0) {
-    if (win_split(0, 0) == FAIL) {
-      return;
-    }
-    RESET_BINDING(curwin);
-  } else {
-    // if 'hidden' set, only check for changed file when re-editing
-    // the same buffer
-    int other = true;
-    if (buf_hide(curbuf)) {
-      char *p = fix_fname(alist_name(&ARGLIST[argn]));
-      other = otherfile(p);
-      xfree(p);
-    }
-    if ((!buf_hide(curbuf) || !other)
-        && check_changed(curbuf, CCGD_AW
-                         | (other ? 0 : CCGD_MULTWIN)
-                         | (eap->forceit ? CCGD_FORCEIT : 0)
-                         | CCGD_EXCMD)) {
-      return;
-    }
-  }
-
-  curwin->w_arg_idx = argn;
-  if (argn == ARGCOUNT - 1 && curwin->w_alist == &global_alist) {
-    arg_had_last = true;
-  }
-
-  // Edit the file; always use the last known line number.
-  // When it fails (e.g. Abort for already edited file) restore the
-  // argument index.
-  if (do_ecmd(0, alist_name(&ARGLIST[curwin->w_arg_idx]), NULL,
-              eap, ECMD_LAST,
-              (buf_hide(curwin->w_buffer) ? ECMD_HIDE : 0)
-              + (eap->forceit ? ECMD_FORCEIT : 0), curwin) == FAIL) {
-    curwin->w_arg_idx = old_arg_idx;
-  } else if (eap->cmdidx != CMD_argdo) {
-    // like Vi: set the mark where the cursor is in the file.
-    setmark('\'');
-  }
-}
+void do_argfile(exarg_T *eap, int argn) { rs_do_argfile(eap, argn); }
 
 /// ":next", and commands that behave like it.
-void ex_next(exarg_T *eap)
-{
-  // check for changed buffer now, if this fails the argument list is not
-  // redefined.
-  if (buf_hide(curbuf)
-      || eap->cmdidx == CMD_snext
-      || !check_changed(curbuf, CCGD_AW
-                        | (eap->forceit ? CCGD_FORCEIT : 0)
-                        | CCGD_EXCMD)) {
-    int i;
-    if (*eap->arg != NUL) {                 // redefine file list
-      if (do_arglist(eap->arg, AL_SET, 0, true) == FAIL) {
-        return;
-      }
-      i = 0;
-    } else {
-      i = curwin->w_arg_idx + (int)eap->line2;
-    }
-    do_argfile(eap, i);
-  }
-}
+void ex_next(exarg_T *eap) { rs_ex_next(eap); }
 
 /// ":argdedupe"
-void ex_argdedupe(exarg_T *eap FUNC_ATTR_UNUSED)
-{
-  for (int i = 0; i < ARGCOUNT; i++) {
-    // Expand each argument to a full path to catch different paths leading
-    // to the same file.
-    char *firstFullname = FullName_save(ARGLIST[i].ae_fname, false);
-
-    for (int j = i + 1; j < ARGCOUNT; j++) {
-      char *secondFullname = FullName_save(ARGLIST[j].ae_fname, false);
-      bool areNamesDuplicate = path_fnamecmp(firstFullname, secondFullname) == 0;
-      xfree(secondFullname);
-
-      if (areNamesDuplicate) {
-        // remove one duplicate argument
-        xfree(ARGLIST[j].ae_fname);
-        memmove(ARGLIST + j, ARGLIST + j + 1,
-                (size_t)(ARGCOUNT - j - 1) * sizeof(aentry_T));
-        ARGCOUNT--;
-
-        if (curwin->w_arg_idx == j) {
-          curwin->w_arg_idx = i;
-        } else if (curwin->w_arg_idx > j) {
-          curwin->w_arg_idx--;
-        }
-
-        j--;
-      }
-    }
-
-    xfree(firstFullname);
-  }
-}
+void ex_argdedupe(exarg_T *eap FUNC_ATTR_UNUSED) { rs_ex_argdedupe(); }
 
 /// ":argedit"
 void ex_argedit(exarg_T *eap)

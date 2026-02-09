@@ -8,6 +8,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
+pub mod commands;
 pub mod core;
 pub mod entry;
 pub mod ffi;
@@ -62,11 +63,11 @@ pub const CCGD_MULTWIN: c_int = 2;
 pub const CCGD_FORCEIT: c_int = 4;
 pub const CCGD_EXCMD: c_int = 16;
 
-pub const ECMD_LAST: i64 = -1;
+pub const ECMD_LAST: i32 = -1;
 pub const ECMD_HIDE: c_int = 0x01;
 pub const ECMD_OLDBUF: c_int = 0x04;
 pub const ECMD_FORCEIT: c_int = 0x08;
-pub const ECMD_ONE: i64 = 1;
+pub const ECMD_ONE: i32 = 1;
 
 pub const CMD_ARGS: c_int = 7;
 pub const CMD_ARGGLOBAL: c_int = 13;
