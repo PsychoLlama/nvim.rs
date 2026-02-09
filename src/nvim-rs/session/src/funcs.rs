@@ -8,7 +8,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::ptr_cast_constness)]
 
-use std::ffi::{c_char, c_int, c_uint, CStr};
+use std::ffi::{c_char, c_int, c_uint, c_void, CStr};
 use std::fmt::Write as _;
 
 use crate::ffi;
@@ -1288,4 +1288,205 @@ endif\n",
     }
 
     OK
+}
+
+// =============================================================================
+// Phase 8: Public Entry Points (ex_mkrc, ex_loadview)
+// =============================================================================
+
+/// Phase 8 constants (verified via _Static_assert in C)
+const K_OPT_SSOP_FLAG_SKIPRTP: c_uint = 0x20000;
+const OPT_GLOBAL: c_int = 0x01;
+const OPT_SKIPRTP: c_int = 0x80;
+
+/// `:loadview [nr]` — load a view file.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_loadview(eap: ffi::ExargPtr) {
+    let arg = ffi::nvim_ses_eap_get_arg(eap);
+    let c = *arg;
+    let fname = rs_get_view_file(c);
+    if fname.is_null() {
+        return;
+    }
+
+    if ffi::nvim_ses_do_source(fname) == FAIL {
+        let e_notopen = ffi::nvim_ses_get_e_notopen();
+        ffi::nvim_ses_semsg(e_notopen, fname);
+    }
+    ffi::nvim_ses_xfree(fname.cast::<c_void>());
+}
+
+/// `:mkexrc`, `:mkvimrc`, `:mkview`, `:mksession`.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
+    let cmd_mksession = ffi::nvim_ses_get_CMD_mksession();
+    let cmd_mkview = ffi::nvim_ses_get_CMD_mkview();
+    let cmd_mkvimrc = ffi::nvim_ses_get_CMD_mkvimrc();
+
+    let cmdidx = ffi::nvim_ses_eap_get_cmdidx(eap);
+
+    let view_session = cmdidx == cmd_mksession || cmdidx == cmd_mkview;
+
+    // Use the short file name until ":lcd" is used.
+    ffi::nvim_ses_set_did_lcd(0);
+
+    let mut view_file: *mut c_char = std::ptr::null_mut();
+    let mut using_vdir = false;
+
+    let arg = ffi::nvim_ses_eap_get_arg(eap);
+    let arg_byte = *arg as u8;
+
+    let fname: *mut c_char;
+
+    // ":mkview" or ":mkview 9": generate file name with 'viewdir'
+    if cmdidx == cmd_mkview && (arg_byte == 0 || (arg_byte.is_ascii_digit() && *arg.add(1) == 0)) {
+        ffi::nvim_ses_eap_set_forceit(eap, true);
+        let f = rs_get_view_file(*arg);
+        if f.is_null() {
+            return;
+        }
+        fname = f;
+        view_file = f;
+        using_vdir = true;
+    } else if arg_byte != 0 {
+        fname = arg;
+    } else if cmdidx == cmd_mkvimrc {
+        fname = ffi::nvim_ses_get_VIMRC_FILE() as *mut c_char;
+    } else if cmdidx == cmd_mksession {
+        fname = ffi::nvim_ses_get_SESSION_FILE() as *mut c_char;
+    } else {
+        fname = ffi::nvim_ses_get_EXRC_FILE() as *mut c_char;
+    }
+
+    // When using 'viewdir' may have to create the directory.
+    if using_vdir && !ffi::nvim_ses_os_isdir(ffi::nvim_ses_get_p_vdir()) {
+        ffi::nvim_ses_vim_mkdir_emsg(ffi::nvim_ses_get_p_vdir(), 0o755);
+    }
+
+    #[allow(clippy::as_ptr_cast_mut)]
+    let mode = c"wb".as_ptr() as *mut c_char;
+    let fd =
+        ffi::nvim_ses_open_exfile(fname, c_int::from(ffi::nvim_ses_eap_get_forceit(eap)), mode);
+    if !fd.is_null() {
+        let mut failed = false;
+        let flagp: *mut c_uint = if cmdidx == cmd_mkview {
+            ffi::nvim_ses_get_vop_flags_ptr() as *mut c_uint
+        } else {
+            ffi::nvim_ses_get_ssop_flags_ptr() as *mut c_uint
+        };
+
+        let mut w = crate::SessionWriter::new(fd);
+
+        // Write the version command for :mkvimrc
+        if cmdidx == cmd_mkvimrc {
+            w.put_line(b"version 6.0");
+        }
+
+        if cmdidx == cmd_mksession && w.put_line(b"let SessionLoad = 1") == FAIL {
+            failed = true;
+        }
+
+        if !view_session || (cmdidx == cmd_mksession && (*flagp & K_OPT_SSOP_FLAG_OPTIONS) != 0) {
+            let mut opt_flags = OPT_GLOBAL;
+            if cmdidx == cmd_mksession && (*flagp & K_OPT_SSOP_FLAG_SKIPRTP) != 0 {
+                opt_flags |= OPT_SKIPRTP;
+            }
+            failed |= ffi::nvim_ses_makemap(fd, std::ptr::null_mut()) == FAIL
+                || ffi::nvim_ses_makeset(fd, opt_flags, false) == FAIL;
+        }
+
+        if !failed && view_session {
+            if w.put_line(
+                b"let s:so_save = &g:so | let s:siso_save = &g:siso | setg so=0 siso=0 | setl so=-1 siso=-1",
+            ) == FAIL
+            {
+                failed = true;
+            }
+            if cmdidx == cmd_mksession {
+                let dirnow = ffi::nvim_ses_xmalloc(MAXPATHL);
+
+                // Change to session file's dir.
+                if ffi::nvim_ses_os_dirname(dirnow, MAXPATHL) == FAIL
+                    || ffi::nvim_ses_os_chdir(dirnow) != 0
+                {
+                    *dirnow = 0;
+                }
+
+                let ssop = ffi::nvim_ses_get_ssop_flags();
+                let gdir = ffi::nvim_ses_get_globaldir();
+
+                if *dirnow != 0 && (ssop & K_OPT_SSOP_FLAG_SESDIR) != 0 {
+                    if ffi::nvim_ses_vim_chdirfile(fname) == OK {
+                        ffi::nvim_ses_shorten_fnames(1);
+                    }
+                } else if *dirnow != 0
+                    && (ssop & K_OPT_SSOP_FLAG_CURDIR) != 0
+                    && !gdir.is_null()
+                    && ffi::nvim_ses_os_chdir(gdir) == 0
+                {
+                    ffi::nvim_ses_shorten_fnames(1);
+                }
+
+                failed |= rs_makeopens(fd, dirnow) == FAIL;
+
+                // restore original dir
+                if *dirnow != 0
+                    && ((ssop & K_OPT_SSOP_FLAG_SESDIR) != 0
+                        || ((ssop & K_OPT_SSOP_FLAG_CURDIR) != 0 && !gdir.is_null()))
+                {
+                    if ffi::nvim_ses_os_chdir(dirnow) != 0 {
+                        ffi::nvim_ses_emsg(ffi::nvim_ses_get_e_prev_dir());
+                    }
+                    ffi::nvim_ses_shorten_fnames(1);
+                }
+                ffi::nvim_ses_xfree(dirnow.cast::<c_void>());
+            } else {
+                let curwin = ffi::nvim_ses_get_curwin();
+                let curtab = ffi::nvim_ses_get_curtab();
+                failed |= rs_put_view(fd, curwin, curtab, !using_vdir, flagp, -1) == FAIL;
+            }
+            if !w.write_bytes(b"let &g:so = s:so_save | let &g:siso = s:siso_save\n") {
+                failed = true;
+            }
+            if ffi::nvim_ses_get_p_hls() && !w.write_bytes(b"set hlsearch\n") {
+                failed = true;
+            }
+            if ffi::nvim_ses_get_no_hlsearch() && !w.write_bytes(b"nohlsearch\n") {
+                failed = true;
+            }
+            if !w.write_bytes(b"doautoall SessionLoadPost\n") {
+                failed = true;
+            }
+            if cmdidx == cmd_mksession && !w.write_bytes(b"unlet SessionLoad\n") {
+                failed = true;
+            }
+        }
+        if w.put_line(b"\" vim: set ft=vim :") == FAIL {
+            failed = true;
+        }
+
+        failed |= ffi::nvim_ses_fclose(fd) != 0;
+
+        if failed {
+            ffi::nvim_ses_emsg(ffi::nvim_ses_get_e_write());
+        } else if cmdidx == cmd_mksession {
+            // successful session write - set v:this_session
+            let tbuf = ffi::nvim_ses_xmalloc(MAXPATHL);
+            if ffi::nvim_ses_vim_FullName(fname, tbuf, MAXPATHL, false) == OK {
+                ffi::nvim_ses_set_vim_var_string(tbuf);
+            }
+            ffi::nvim_ses_xfree(tbuf.cast::<c_void>());
+        }
+    }
+
+    ffi::nvim_ses_xfree(view_file.cast::<c_void>());
+
+    ffi::nvim_ses_apply_autocmds_session();
 }

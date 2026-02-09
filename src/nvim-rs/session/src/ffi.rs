@@ -178,4 +178,58 @@ extern "C" {
     pub fn nvim_ses_get_p_wiw() -> i64;
     pub fn nvim_ses_get_p_shm() -> *const c_char;
     pub fn nvim_ses_get_p_stal() -> i64;
+
+    // --- Phase 8: ex_mkrc, ex_loadview accessors ---
+
+    // exarg_T field accessors
+    pub fn nvim_ses_eap_get_cmdidx(eap: ExargPtr) -> c_int;
+    pub fn nvim_ses_eap_get_arg(eap: ExargPtr) -> *mut c_char;
+    pub fn nvim_ses_eap_get_forceit(eap: ExargPtr) -> bool;
+    pub fn nvim_ses_eap_set_forceit(eap: ExargPtr, val: bool);
+
+    // CMD enum accessors
+    pub fn nvim_ses_get_CMD_mksession() -> c_int;
+    pub fn nvim_ses_get_CMD_mkview() -> c_int;
+    pub fn nvim_ses_get_CMD_mkvimrc() -> c_int;
+    pub fn nvim_ses_get_CMD_mkexrc() -> c_int;
+
+    // File I/O wrappers
+    pub fn nvim_ses_open_exfile(
+        fname: *mut c_char,
+        forceit: c_int,
+        mode: *mut c_char,
+    ) -> *mut libc::FILE;
+    pub fn nvim_ses_fclose(fd: *mut libc::FILE) -> c_int;
+    pub fn nvim_ses_do_source(fname: *mut c_char) -> c_int;
+
+    // OS wrappers
+    pub fn nvim_ses_os_isdir(dir: *const c_char) -> bool;
+    pub fn nvim_ses_vim_mkdir_emsg(dir: *const c_char, perm: c_int) -> c_int;
+    pub fn nvim_ses_os_dirname(buf: *mut c_char, len: usize) -> c_int;
+    pub fn nvim_ses_os_chdir(dir: *const c_char) -> c_int;
+    pub fn nvim_ses_vim_chdirfile(fname: *mut c_char) -> c_int;
+    pub fn nvim_ses_shorten_fnames(force: c_int);
+
+    // Session-related global state
+    pub fn nvim_ses_get_p_hls() -> bool;
+    pub fn nvim_ses_get_no_hlsearch() -> bool;
+    pub fn nvim_ses_set_vim_var_string(val: *const c_char);
+    pub fn nvim_ses_apply_autocmds_session();
+    pub fn nvim_ses_emsg(s: *const c_char);
+    pub fn nvim_ses_semsg(fmt: *const c_char, arg: *const c_char);
+    pub fn nvim_ses_get_curbuf() -> BufPtr;
+
+    // Error message string accessors
+    pub fn nvim_ses_get_e_prev_dir() -> *const c_char;
+    pub fn nvim_ses_get_e_write() -> *const c_char;
+    pub fn nvim_ses_get_e_notopen() -> *const c_char;
+
+    // Filename constants
+    pub fn nvim_ses_get_VIMRC_FILE() -> *const c_char;
+    pub fn nvim_ses_get_SESSION_FILE() -> *const c_char;
+    pub fn nvim_ses_get_EXRC_FILE() -> *const c_char;
+
+    // Option flag values
+    pub fn nvim_ses_get_OPT_GLOBAL() -> c_int;
+    pub fn nvim_ses_get_OPT_SKIPRTP() -> c_int;
 }

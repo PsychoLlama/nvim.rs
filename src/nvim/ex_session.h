@@ -38,4 +38,8 @@ extern int rs_put_view(FILE *fd, win_T *wp, tabpage_T *tp, bool add_edit, unsign
 // Rust FFI: session orchestrator (Phase 7)
 extern int rs_makeopens(FILE *fd, char *dirnow);
 
+// Rust FFI: public entry points (Phase 8)
+extern void rs_ex_loadview(exarg_T *eap);
+extern void rs_ex_mkrc(exarg_T *eap);
+
 #include "ex_session.h.generated.h"

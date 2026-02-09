@@ -330,6 +330,74 @@ _Static_assert(kOptSsopFlagGlobals == 0x100, "kOptSsopFlagGlobals");
 _Static_assert(kOptSsopFlagTabpages == 0x8000, "kOptSsopFlagTabpages");
 _Static_assert(kOptSsopFlagResize == 0x04, "kOptSsopFlagResize");
 
+// --- Phase 8 accessors: ex_mkrc, ex_loadview ---
+
+// exarg_T field accessors
+int nvim_ses_eap_get_cmdidx(const exarg_T *eap) { return (int)eap->cmdidx; }
+char *nvim_ses_eap_get_arg(const exarg_T *eap) { return eap->arg; }
+bool nvim_ses_eap_get_forceit(const exarg_T *eap) { return eap->forceit; }
+void nvim_ses_eap_set_forceit(exarg_T *eap, bool val) { eap->forceit = val; }
+
+// CMD enum accessors (generated values — no _Static_assert)
+int nvim_ses_get_CMD_mksession(void) { return CMD_mksession; }
+int nvim_ses_get_CMD_mkview(void) { return CMD_mkview; }
+int nvim_ses_get_CMD_mkvimrc(void) { return CMD_mkvimrc; }
+int nvim_ses_get_CMD_mkexrc(void) { return CMD_mkexrc; }
+
+// File I/O wrappers
+FILE *nvim_ses_open_exfile(char *fname, int forceit, char *mode)
+{
+  return open_exfile(fname, forceit, mode);
+}
+int nvim_ses_fclose(FILE *fd) { return fclose(fd); }
+int nvim_ses_do_source(char *fname) { return do_source(fname, false, DOSO_NONE, NULL); }
+
+// OS wrappers
+bool nvim_ses_os_isdir(const char *dir) { return os_isdir(dir); }
+int nvim_ses_vim_mkdir_emsg(const char *dir, int perm) { return vim_mkdir_emsg(dir, perm); }
+int nvim_ses_os_dirname(char *buf, size_t len) { return os_dirname(buf, len); }
+int nvim_ses_os_chdir(const char *dir) { return os_chdir(dir); }
+int nvim_ses_vim_chdirfile(char *fname)
+{
+  return vim_chdirfile(fname, kCdCauseOther);
+}
+void nvim_ses_shorten_fnames(int force) { shorten_fnames(force); }
+
+// Session-related global state
+bool nvim_ses_get_p_hls(void) { return p_hls; }
+bool nvim_ses_get_no_hlsearch(void) { return no_hlsearch; }
+void nvim_ses_set_vim_var_string(const char *val)
+{
+  set_vim_var_string(VV_THIS_SESSION, val, -1);
+}
+void nvim_ses_apply_autocmds_session(void)
+{
+  apply_autocmds(EVENT_SESSIONWRITEPOST, NULL, NULL, false, curbuf);
+}
+void nvim_ses_emsg(const char *s) { emsg(s); }
+void nvim_ses_semsg(const char *fmt, const char *arg) { semsg(fmt, arg); }
+buf_T *nvim_ses_get_curbuf(void) { return curbuf; }
+
+// Error message string accessors
+const char *nvim_ses_get_e_prev_dir(void) { return _(e_prev_dir); }
+const char *nvim_ses_get_e_write(void) { return _(e_write); }
+const char *nvim_ses_get_e_notopen(void) { return _(e_notopen); }
+
+// Filename constants
+const char *nvim_ses_get_VIMRC_FILE(void) { return VIMRC_FILE; }
+const char *nvim_ses_get_SESSION_FILE(void) { return SESSION_FILE; }
+const char *nvim_ses_get_EXRC_FILE(void) { return EXRC_FILE; }
+
+// Option flag values
+int nvim_ses_get_OPT_GLOBAL(void) { return OPT_GLOBAL; }
+int nvim_ses_get_OPT_SKIPRTP(void) { return OPT_SKIPRTP; }
+
+// _Static_assert for Phase 8 constants
+_Static_assert(kOptSsopFlagSkiprtp == 0x20000, "kOptSsopFlagSkiprtp");
+_Static_assert(DOSO_NONE == 0, "DOSO_NONE");
+_Static_assert(OPT_GLOBAL == 0x01, "OPT_GLOBAL");
+_Static_assert(OPT_SKIPRTP == 0x80, "OPT_SKIPRTP");
+
 static int put_view_curpos(FILE *fd, const win_T *wp, char *spaces)
 {
   return rs_put_view_curpos(fd, (win_T *)wp, spaces);
@@ -413,15 +481,7 @@ static int makeopens(FILE *fd, char *dirnow)
 /// ":loadview [nr]"
 void ex_loadview(exarg_T *eap)
 {
-  char *fname = get_view_file(*eap->arg);
-  if (fname == NULL) {
-    return;
-  }
-
-  if (do_source(fname, false, DOSO_NONE, NULL) == FAIL) {
-    semsg(_(e_notopen), fname);
-  }
-  xfree(fname);
+  rs_ex_loadview(eap);
 }
 
 /// ":mkexrc", ":mkvimrc", ":mkview", ":mksession".
@@ -431,161 +491,7 @@ void ex_loadview(exarg_T *eap)
 ///   - kOptSsopFlagSlash: filenames are written with "/" slash
 void ex_mkrc(exarg_T *eap)
 {
-  bool view_session = false;  // :mkview, :mksession
-  int using_vdir = false;  // using 'viewdir'?
-  char *viewFile = NULL;
-
-  if (eap->cmdidx == CMD_mksession || eap->cmdidx == CMD_mkview) {
-    view_session = true;
-  }
-
-  // Use the short file name until ":lcd" is used.  We also don't use the
-  // short file name when 'acd' is set, that is checked later.
-  did_lcd = false;
-
-  char *fname;
-  // ":mkview" or ":mkview 9": generate file name with 'viewdir'
-  if (eap->cmdidx == CMD_mkview
-      && (*eap->arg == NUL
-          || (ascii_isdigit(*eap->arg) && eap->arg[1] == NUL))) {
-    eap->forceit = true;
-    fname = get_view_file(*eap->arg);
-    if (fname == NULL) {
-      return;
-    }
-    viewFile = fname;
-    using_vdir = true;
-  } else if (*eap->arg != NUL) {
-    fname = eap->arg;
-  } else if (eap->cmdidx == CMD_mkvimrc) {
-    fname = VIMRC_FILE;
-  } else if (eap->cmdidx == CMD_mksession) {
-    fname = SESSION_FILE;
-  } else {
-    fname = EXRC_FILE;
-  }
-
-  // When using 'viewdir' may have to create the directory.
-  if (using_vdir && !os_isdir(p_vdir)) {
-    vim_mkdir_emsg(p_vdir, 0755);
-  }
-
-  FILE *fd = open_exfile(fname, eap->forceit, WRITEBIN);
-  if (fd != NULL) {
-    bool failed = false;
-    unsigned *flagp;
-    if (eap->cmdidx == CMD_mkview) {
-      flagp = &vop_flags;
-    } else {
-      flagp = &ssop_flags;
-    }
-
-    // Write the version command for :mkvimrc
-    if (eap->cmdidx == CMD_mkvimrc) {
-      put_line(fd, "version 6.0");
-    }
-
-    if (eap->cmdidx == CMD_mksession) {
-      if (put_line(fd, "let SessionLoad = 1") == FAIL) {
-        failed = true;
-      }
-    }
-
-    if (!view_session || (eap->cmdidx == CMD_mksession
-                          && (*flagp & kOptSsopFlagOptions))) {
-      int flags = OPT_GLOBAL;
-
-      if (eap->cmdidx == CMD_mksession && (*flagp & kOptSsopFlagSkiprtp)) {
-        flags |= OPT_SKIPRTP;
-      }
-      failed |= (makemap(fd, NULL) == FAIL
-                 || makeset(fd, flags, false) == FAIL);
-    }
-
-    if (!failed && view_session) {
-      if (put_line(fd,
-                   "let s:so_save = &g:so | let s:siso_save = &g:siso"
-                   " | setg so=0 siso=0 | setl so=-1 siso=-1") == FAIL) {
-        failed = true;
-      }
-      if (eap->cmdidx == CMD_mksession) {
-        char *dirnow;  // current directory
-
-        dirnow = xmalloc(MAXPATHL);
-
-        // Change to session file's dir.
-        if (os_dirname(dirnow, MAXPATHL) == FAIL
-            || os_chdir(dirnow) != 0) {
-          *dirnow = NUL;
-        }
-        if (*dirnow != NUL && (ssop_flags & kOptSsopFlagSesdir)) {
-          if (vim_chdirfile(fname, kCdCauseOther) == OK) {
-            shorten_fnames(true);
-          }
-        } else if (*dirnow != NUL
-                   && (ssop_flags & kOptSsopFlagCurdir) && globaldir != NULL) {
-          if (os_chdir(globaldir) == 0) {
-            shorten_fnames(true);
-          }
-        }
-
-        failed |= (makeopens(fd, dirnow) == FAIL);
-
-        // restore original dir
-        if (*dirnow != NUL && ((ssop_flags & kOptSsopFlagSesdir)
-                               || ((ssop_flags & kOptSsopFlagCurdir) && globaldir !=
-                                   NULL))) {
-          if (os_chdir(dirnow) != 0) {
-            emsg(_(e_prev_dir));
-          }
-          shorten_fnames(true);
-        }
-        xfree(dirnow);
-      } else {
-        failed |= (put_view(fd, curwin, curtab, !using_vdir, flagp, -1) == FAIL);
-      }
-      if (fprintf(fd,
-                  "%s",
-                  "let &g:so = s:so_save | let &g:siso = s:siso_save\n")
-          < 0) {
-        failed = true;
-      }
-      if (p_hls && fprintf(fd, "%s", "set hlsearch\n") < 0) {
-        failed = true;
-      }
-      if (no_hlsearch && fprintf(fd, "%s", "nohlsearch\n") < 0) {
-        failed = true;
-      }
-      if (fprintf(fd, "%s", "doautoall SessionLoadPost\n") < 0) {
-        failed = true;
-      }
-      if (eap->cmdidx == CMD_mksession) {
-        if (fprintf(fd, "unlet SessionLoad\n") < 0) {
-          failed = true;
-        }
-      }
-    }
-    if (put_line(fd, "\" vim: set ft=vim :") == FAIL) {
-      failed = true;
-    }
-
-    failed |= fclose(fd);
-
-    if (failed) {
-      emsg(_(e_write));
-    } else if (eap->cmdidx == CMD_mksession) {
-      // successful session write - set v:this_session
-      char *const tbuf = xmalloc(MAXPATHL);
-      if (vim_FullName(fname, tbuf, MAXPATHL, false) == OK) {
-        set_vim_var_string(VV_THIS_SESSION, tbuf, -1);
-      }
-      xfree(tbuf);
-    }
-  }
-
-  xfree(viewFile);
-
-  apply_autocmds(EVENT_SESSIONWRITEPOST, NULL, NULL, false, curbuf);
+  rs_ex_mkrc(eap);
 }
 
 /// @return  the name of the view file for the current buffer.
