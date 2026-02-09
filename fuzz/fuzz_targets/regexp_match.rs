@@ -1,7 +1,11 @@
 //! Fuzz target for Vim regexp pattern matching.
 //!
-//! This is a skeleton target. When the Rust regexp crate exists, uncomment
-//! the actual matching call and add the crate dependency in fuzz/Cargo.toml.
+//! NOTE: This target cannot be used with `cargo fuzz` because the regexp
+//! Rust code calls ~100+ C accessor functions via FFI. Without linking the
+//! entire Neovim C codebase, the functions will fail to resolve at link time.
+//!
+//! For practical fuzz testing, use `just regexp-fuzz` which runs a VimL-based
+//! fuzzer inside a running nvim process, exercising the full regexp pipeline.
 
 #![no_main]
 
@@ -28,14 +32,5 @@ fuzz_target!(|data: &[u8]| {
         return;
     }
 
-    // TODO: When regexp crate exists, call the match function:
-    //
-    // use nvim_regexp::{vim_regcomp, vim_regexec, RE_MAGIC};
-    //
-    // if let Ok(prog) = vim_regcomp(pattern, RE_MAGIC) {
-    //     // Test matching doesn't panic or infinite-loop
-    //     let _ = vim_regexec(&prog, input, 0);
-    // }
-
-    let _ = (pattern, input); // placeholder
+    let _ = (pattern, input); // placeholder — see `just regexp-fuzz` for active fuzzing
 });

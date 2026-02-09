@@ -166,9 +166,9 @@ regexp-validate: build
     VIMRUNTIME=runtime ./build/bin/nvim --headless -S test/regexp_baseline.vim
     @git diff --exit-code src/nvim-rs/test/regexp_corpus.json || (echo 'ERROR: regexp corpus diverged from committed baseline' && exit 1)
 
-# Run regexp fuzz targets (requires cargo-fuzz)
-regexp-fuzz target='regexp_compile' duration='60':
-    cd fuzz && cargo +nightly fuzz run {{target}} -- -max_total_time={{duration}}
+# Fuzz test regexp engine with random patterns (catches crashes/hangs)
+regexp-fuzz duration='30': build
+    timeout {{duration}} bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_fuzz.vim 2>&1' || { echo "FAIL: regexp fuzz test crashed or timed out (exit $?)"; exit 1; }
 
 # Full build: Rust + C
 build-all: rust-build build

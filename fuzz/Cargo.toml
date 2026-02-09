@@ -9,7 +9,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-# Uncomment when the regexp crate exists:
+# The regexp crate depends on ~100+ C accessor functions via FFI.
+# Standalone cargo-fuzz cannot link these. Use `just regexp-fuzz` instead.
 # nvim-regexp = { path = "../src/nvim-rs/regexp" }
 
 [[bin]]
