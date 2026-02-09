@@ -144,7 +144,7 @@ extern "C" {
     fn nvim_tv_is_func(tv: TypevalHandle) -> c_int;
 
     // General equality
-    fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: c_int) -> c_int;
+    fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: bool) -> bool;
 
     // Error messages
     fn emsg(s: *const c_char) -> c_int;
@@ -371,14 +371,14 @@ pub unsafe fn typval_compare_impl(
             eq = p1 == p2;
         } else if type_is {
             if t1 == VAR_FUNC && t2 == VAR_FUNC {
-                eq = tv_equal(typ1, typ2, ic) != 0;
+                eq = tv_equal(typ1, typ2, ic != 0);
             } else if t1 == VAR_PARTIAL && t2 == VAR_PARTIAL {
                 eq = p1 == p2;
             } else {
                 eq = false;
             }
         } else {
-            eq = tv_equal(typ1, typ2, ic) != 0;
+            eq = tv_equal(typ1, typ2, ic != 0);
         }
 
         result = if (expr_type == EXPR_NEQUAL || expr_type == EXPR_ISNOT) != eq {

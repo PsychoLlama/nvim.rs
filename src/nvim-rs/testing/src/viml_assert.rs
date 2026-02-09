@@ -477,7 +477,7 @@ fn fill_assert_error(
 
 extern "C" {
     // Typval comparison and value extraction
-    fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: c_int) -> c_int;
+    fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: bool) -> bool;
     fn tv_get_number_chk(tv: TypevalHandle, err: *mut c_int) -> i64;
     fn nvim_testing_tv_get_bool_value(tv: TypevalHandle) -> c_int;
 
@@ -583,7 +583,7 @@ fn assert_equal_common(argvars: TypevalHandle, atype: AssertType) -> c_int {
         let arg0 = argvars;
         let arg1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast::<c_void>();
 
-        let equal = tv_equal(arg0, arg1, 0) != 0;
+        let equal = tv_equal(arg0, arg1, false);
         let should_be_equal = atype == AssertType::Equal;
 
         if equal != should_be_equal {
@@ -604,8 +604,8 @@ fn assert_equal_common(argvars: TypevalHandle, atype: AssertType) -> c_int {
 }
 
 // Size of typval_T structure (we need this for pointer arithmetic)
-// This should match the C sizeof(typval_T)
-const TYPVAL_SIZE: usize = 24; // Typical size, may vary by platform
+// Must match the C sizeof(typval_T). Guarded by _Static_assert in testing.c.
+const TYPVAL_SIZE: usize = 16;
 
 // Size of number buffer for string conversions
 const NUMBUFLEN: usize = 65;

@@ -598,16 +598,14 @@ pub fn tv_blob_len(tv: TypevalPtr) -> c_int {
 /// - `index` must be within bounds of the array
 #[inline]
 pub unsafe fn argvar_at(argvars: *const c_void, index: usize) -> TypevalPtr {
-    // typval_T is 24 bytes on 64-bit systems (v_type: i32, padding, union: 8 bytes, v_lock: i32, padding)
-    // We use the accessor to get sizeof(typval_T) from C
     let offset = index * TYPVAL_SIZE;
     let ptr = argvars.cast::<u8>().add(offset).cast::<c_void>();
     TypevalPtr::from_raw(ptr)
 }
 
-// Size of typval_T in bytes (from C)
-// This is platform-dependent but we match the C definition
-const TYPVAL_SIZE: usize = 24; // sizeof(typval_T) on 64-bit
+// Size of typval_T in bytes. Must match the C sizeof(typval_T).
+// Guarded by _Static_assert in testing.c.
+const TYPVAL_SIZE: usize = 16;
 
 #[cfg(test)]
 mod tests {
@@ -631,6 +629,6 @@ mod tests {
     #[test]
     fn test_typval_size() {
         // Verify our TYPVAL_SIZE constant matches expected layout
-        assert_eq!(TYPVAL_SIZE, 24);
+        assert_eq!(TYPVAL_SIZE, 16);
     }
 }

@@ -44,6 +44,13 @@ typedef enum {
 
 #include "testing.c.generated.h"
 
+// Rust code hard-codes sizeof(typval_T) for pointer arithmetic on argvar arrays.
+// If this changes, update TYPVAL_SIZE in:
+//   src/nvim-rs/testing/src/viml_assert.rs
+//   src/nvim-rs/eval/src/funcs/dispatch.rs
+_Static_assert(sizeof(typval_T) == 16,
+               "sizeof(typval_T) changed - update Rust TYPVAL_SIZE");
+
 // =============================================================================
 // Rust FFI declarations
 // =============================================================================
