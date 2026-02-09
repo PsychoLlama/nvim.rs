@@ -280,6 +280,18 @@ void nvim_al_memmove_aentry(aentry_T *dst, const aentry_T *src, int count)
   memmove(dst, src, (size_t)count * sizeof(aentry_T));
 }
 
+// -- Phase 5 extra accessors --
+buf_T *nvim_al_buflist_findnr(int fnum) { return buflist_findnr(fnum); }
+char *nvim_al_buf_get_fname(buf_T *buf) { return buf == NULL ? NULL : buf->b_fname; }
+char *nvim_al_buf_get_ffname(buf_T *buf) { return buf == NULL ? NULL : buf->b_ffname; }
+int nvim_al_buf_get_fnum(buf_T *buf) { return buf == NULL ? 0 : buf->b_fnum; }
+int nvim_al_path_full_compare(const char *s1, const char *s2, int check_name, int expand_env)
+{
+  return path_full_compare(s1, s2, check_name, expand_env);
+}
+buf_T *nvim_al_win_get_buffer(win_T *wp) { return wp->w_buffer; }
+void nvim_al_win_set_arg_idx_invalid(win_T *wp, int val) { wp->w_arg_idx_invalid = val; }
+
 // Rust FFI declarations for Phase 2
 extern int rs_check_arglist_locked(void);
 extern void rs_alist_clear(alist_T *al);
@@ -296,6 +308,13 @@ extern int rs_get_arglist_exp(char *str, int *fcountp, char ***fnamesp, int wig)
 // Rust FFI declarations for Phase 4
 extern int rs_do_arglist(char *str, int what, int after, int will_edit);
 extern void rs_set_arglist(char *str);
+
+// Rust FFI declarations for Phase 5
+extern char *rs_alist_name(aentry_T *aep);
+extern char *rs_get_arglist_name(void *xp, int idx);
+extern bool rs_editing_arg_idx(win_T *win);
+extern void rs_check_arg_idx(win_T *win);
+extern char *rs_arg_all(void);
 
 static int check_arglist_locked(void)
 {
@@ -354,45 +373,10 @@ void set_arglist(char *str) { rs_set_arglist(str); }
 
 /// @return  true if window "win" is editing the file at the current argument
 ///          index.
-bool editing_arg_idx(win_T *win)
-{
-  return !(win->w_arg_idx >= WARGCOUNT(win)
-           || (win->w_buffer->b_fnum
-               != WARGLIST(win)[win->w_arg_idx].ae_fnum
-               && (win->w_buffer->b_ffname == NULL
-                   || !(path_full_compare(alist_name(&WARGLIST(win)[win->w_arg_idx]),
-                                          win->w_buffer->b_ffname, true,
-                                          true) & kEqualFiles))));
-}
+bool editing_arg_idx(win_T *win) { return rs_editing_arg_idx(win); }
 
 /// Check if window "win" is editing the w_arg_idx file in its argument list.
-void check_arg_idx(win_T *win)
-{
-  if (WARGCOUNT(win) > 1 && !editing_arg_idx(win)) {
-    // We are not editing the current entry in the argument list.
-    // Set "arg_had_last" if we are editing the last one.
-    win->w_arg_idx_invalid = true;
-    if (win->w_arg_idx != WARGCOUNT(win) - 1
-        && arg_had_last == false
-        && ALIST(win) == &global_alist
-        && GARGCOUNT > 0
-        && win->w_arg_idx < GARGCOUNT
-        && (win->w_buffer->b_fnum == GARGLIST[GARGCOUNT - 1].ae_fnum
-            || (win->w_buffer->b_ffname != NULL
-                && (path_full_compare(alist_name(&GARGLIST[GARGCOUNT - 1]),
-                                      win->w_buffer->b_ffname, true, true)
-                    & kEqualFiles)))) {
-      arg_had_last = true;
-    }
-  } else {
-    // We are editing the current entry in the argument list.
-    // Set "arg_had_last" if it's also the last one
-    win->w_arg_idx_invalid = false;
-    if (win->w_arg_idx == WARGCOUNT(win) - 1 && win->w_alist == &global_alist) {
-      arg_had_last = true;
-    }
-  }
-}
+void check_arg_idx(win_T *win) { rs_check_arg_idx(win); }
 
 /// ":args", ":arglocal" and ":argglobal".
 void ex_args(exarg_T *eap)
@@ -707,22 +691,11 @@ void ex_argdelete(exarg_T *eap)
 /// argedit and argdelete commands.
 char *get_arglist_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 {
-  if (idx >= ARGCOUNT) {
-    return NULL;
-  }
-  return alist_name(&ARGLIST[idx]);
+  return rs_get_arglist_name(xp, idx);
 }
 
 /// Get the file name for an argument list entry.
-char *alist_name(aentry_T *aep)
-{
-  // Use the name from the associated buffer if it exists.
-  buf_T *bp = buflist_findnr(aep->ae_fnum);
-  if (bp == NULL || bp->b_fname == NULL) {
-    return aep->ae_fname;
-  }
-  return bp->b_fname;
-}
+char *alist_name(aentry_T *aep) { return rs_alist_name(aep); }
 
 /// Close all the windows containing files which are not in the argument list.
 /// Used by the ":all" command.
@@ -1040,58 +1013,7 @@ void ex_all(exarg_T *eap)
 /// Concatenate all files in the argument list, separated by spaces, and return
 /// it in one allocated string.
 /// Spaces and backslashes in the file names are escaped with a backslash.
-char *arg_all(void)
-{
-  char *retval = NULL;
-
-  // Do this loop two times:
-  // first time: compute the total length
-  // second time: concatenate the names
-  while (true) {
-    int len = 0;
-    for (int idx = 0; idx < ARGCOUNT; idx++) {
-      char *p = alist_name(&ARGLIST[idx]);
-      if (p == NULL) {
-        continue;
-      }
-      if (len > 0) {
-        // insert a space in between names
-        if (retval != NULL) {
-          retval[len] = ' ';
-        }
-        len++;
-      }
-      for (; *p != NUL; p++) {
-        if (*p == ' '
-#ifndef BACKSLASH_IN_FILENAME
-            || *p == '\\'
-#endif
-            || *p == '`') {
-          // insert a backslash
-          if (retval != NULL) {
-            retval[len] = '\\';
-          }
-          len++;
-        }
-        if (retval != NULL) {
-          retval[len] = *p;
-        }
-        len++;
-      }
-    }
-
-    // second time: break here
-    if (retval != NULL) {
-      retval[len] = NUL;
-      break;
-    }
-
-    // allocate memory
-    retval = xmalloc((size_t)len + 1);
-  }
-
-  return retval;
-}
+char *arg_all(void) { return rs_arg_all(); }
 
 /// "argc([window id])" function
 void f_argc(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)

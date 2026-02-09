@@ -15,6 +15,7 @@ pub mod manipulation;
 pub mod navigation;
 pub mod operations;
 pub mod parsing;
+pub mod query;
 
 use std::ffi::c_int;
 
