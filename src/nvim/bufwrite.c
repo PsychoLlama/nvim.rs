@@ -109,6 +109,54 @@ struct bw_info {
   iconv_t bw_iconv_fd;            // descriptor for iconv() or -1
 };
 
+// =============================================================================
+// C accessor functions for Rust FFI
+// =============================================================================
+
+void nvim_bw_emsg(const char *msg)
+{
+  emsg(msg);
+}
+
+void nvim_bw_semsg_2(const char *fmt, const char *a, const char *b)
+{
+  (void)b;  // b is unused; Rust passes null for single-arg format
+  semsg(fmt, a);
+}
+
+void nvim_bw_semsg_3(const char *fmt, const char *a, const char *b, const char *c)
+{
+  semsg(fmt, a, b, c);
+}
+
+void nvim_bw_semsg_4(const char *fmt, const char *a, const char *b, const char *c, const char *d)
+{
+  semsg(fmt, a, b, c, d);
+}
+
+const char *nvim_bw_os_strerror(int errnum)
+{
+  return os_strerror(errnum);
+}
+
+const char *nvim_bw_get_IObuff(void)
+{
+  return IObuff;
+}
+
+void nvim_bw_xfree(char *ptr)
+{
+  xfree(ptr);
+}
+
+// =============================================================================
+// Rust FFI declarations
+// =============================================================================
+extern Error_T rs_set_err_num(const char *num, const char *msg);
+extern Error_T rs_set_err(const char *msg);
+extern Error_T rs_set_err_arg(const char *msg, int arg);
+extern void rs_emit_err(const Error_T *e);
+
 #include "bufwrite.c.generated.h"
 
 /// Convert a Unicode character to bytes.
@@ -597,35 +645,22 @@ static void buf_write_do_post_autocmds(buf_T *buf, char *fname, exarg_T *eap, bo
 
 static inline Error_T set_err_num(const char *num, const char *msg)
 {
-  return (Error_T){ .num = num, .msg = (char *)msg, .arg = 0 };
+  return rs_set_err_num(num, msg);
 }
 
 static inline Error_T set_err(const char *msg)
 {
-  return (Error_T){ .num = NULL, .msg = (char *)msg, .arg = 0 };
+  return rs_set_err(msg);
 }
 
 static inline Error_T set_err_arg(const char *msg, int arg)
 {
-  return (Error_T){ .num = NULL, .msg = (char *)msg, .arg = arg };
+  return rs_set_err_arg(msg, arg);
 }
 
 static void emit_err(Error_T *e)
 {
-  if (e->num != NULL) {
-    if (e->arg != 0) {
-      semsg("%s: %s%s: %s", e->num, IObuff, e->msg, os_strerror(e->arg));
-    } else {
-      semsg("%s: %s%s", e->num, IObuff, e->msg);
-    }
-  } else if (e->arg != 0) {
-    semsg(e->msg, os_strerror(e->arg));
-  } else {
-    emsg(e->msg);
-  }
-  if (e->alloc) {
-    xfree(e->msg);
-  }
+  rs_emit_err(e);
 }
 
 #if defined(UNIX)
