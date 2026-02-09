@@ -1204,3 +1204,5 @@ foobar	xxfoobarxx
 [	bare bracket
 \v[\ze	with ze
 \M[	nomagic bracket
+\_[	underscore bracket
+\_[a	underscore bracket a

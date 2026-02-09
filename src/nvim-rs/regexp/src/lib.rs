@@ -7938,7 +7938,13 @@ pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
         extra = NFA_ADD_NL;
         if c == b'[' as c_int {
             // \_[ is collection plus newline
-            return nfa_handle_collection(extra, old_regparse);
+            let result = nfa_handle_collection(extra, old_regparse);
+            if result != -1 {
+                return result;
+            }
+            // No closing ']' — fall through to handle '[' as literal
+            // (mirrors the bare '[' fallthrough at line ~8058)
+            return nfa_handle_multibyte(nfa_magic(b'['), old_regparse);
         }
         // \_x is character class plus newline — fall through to char class handling
         return nfa_handle_char_class(c, extra, old_regparse);
