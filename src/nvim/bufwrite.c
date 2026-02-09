@@ -81,6 +81,20 @@ _Static_assert(kOptBkcFlagBreaksymlink == 0x08, "kOptBkcFlagBreaksymlink");
 _Static_assert(kOptBkcFlagBreakhardlink == 0x10, "kOptBkcFlagBreakhardlink");
 _Static_assert(MAXPATHL >= 4096, "MAXPATHL");
 _Static_assert(IOSIZE == 1025, "IOSIZE");
+_Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS");
+_Static_assert(BF_NEW == 0x10, "BF_NEW");
+_Static_assert(BF_WRITE_MASK == 0x58, "BF_WRITE_MASK");
+_Static_assert(EVENT_FILEAPPENDCMD == 48, "EVENT_FILEAPPENDCMD");
+_Static_assert(EVENT_FILEAPPENDPRE == 50, "EVENT_FILEAPPENDPRE");
+_Static_assert(EVENT_FILEAPPENDPOST == 49, "EVENT_FILEAPPENDPOST");
+_Static_assert(EVENT_FILTERWRITEPRE == 65, "EVENT_FILTERWRITEPRE");
+_Static_assert(EVENT_FILTERWRITEPOST == 64, "EVENT_FILTERWRITEPOST");
+_Static_assert(EVENT_BUFWRITECMD == 20, "EVENT_BUFWRITECMD");
+_Static_assert(EVENT_BUFWRITEPRE == 22, "EVENT_BUFWRITEPRE");
+_Static_assert(EVENT_BUFWRITEPOST == 21, "EVENT_BUFWRITEPOST");
+_Static_assert(EVENT_FILEWRITECMD == 59, "EVENT_FILEWRITECMD");
+_Static_assert(EVENT_FILEWRITEPRE == 61, "EVENT_FILEWRITEPRE");
+_Static_assert(EVENT_FILEWRITEPOST == 60, "EVENT_FILEWRITEPOST");
 
 static const char *err_readonly = "is read-only (cannot override: \"W\" in 'cpoptions')";
 static const char e_patchmode_cant_touch_empty_original_file[]
@@ -404,6 +418,47 @@ void nvim_bw_os_copy_xattr(const char *from, const char *to) { os_copy_xattr(fro
 void nvim_bw_os_copy_xattr(const char *from, const char *to) { (void)from; (void)to; }
 #endif
 
+// Autocmd accessors
+// aco_save_T / bufref_T as opaque handles
+size_t nvim_bw_sizeof_aco_save(void) { return sizeof(aco_save_T); }
+size_t nvim_bw_sizeof_bufref(void) { return sizeof(bufref_T); }
+void nvim_bw_aucmd_prepbuf(void *aco, buf_T *buf) { aucmd_prepbuf((aco_save_T *)aco, buf); }
+void nvim_bw_aucmd_restbuf(void *aco) { aucmd_restbuf((aco_save_T *)aco); }
+void nvim_bw_set_bufref(void *br, buf_T *buf) { set_bufref((bufref_T *)br, buf); }
+int nvim_bw_bufref_valid(void *br) { return bufref_valid((bufref_T *)br); }
+int nvim_bw_apply_autocmds_exarg(int event, char *fname, char *fname_io,
+                                  int force, buf_T *buf, exarg_T *eap) {
+  return apply_autocmds_exarg((event_T)event, fname, fname_io, force != 0, buf, eap);
+}
+
+// Buffer field accessors
+linenr_T nvim_bw_buf_get_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
+int nvim_bw_buf_get_ml_mfp_nonnull(buf_T *buf) { return buf->b_ml.ml_mfp != NULL; }
+char *nvim_bw_buf_get_ffname(buf_T *buf) { return buf->b_ffname; }
+char *nvim_bw_buf_get_sfname(buf_T *buf) { return buf->b_sfname; }
+pos_T nvim_bw_buf_get_op_start(buf_T *buf) { return buf->b_op_start; }
+void nvim_bw_buf_set_op_start(buf_T *buf, pos_T pos) { buf->b_op_start = pos; }
+pos_T nvim_bw_buf_get_op_end(buf_T *buf) { return buf->b_op_end; }
+void nvim_bw_buf_set_op_end(buf_T *buf, pos_T pos) { buf->b_op_end = pos; }
+int nvim_bw_buf_get_flags(buf_T *buf) { return buf->b_flags; }
+void nvim_bw_buf_set_flags(buf_T *buf, int flags) { buf->b_flags = flags; }
+int nvim_bw_buf_get_changed(buf_T *buf) { return buf->b_changed; }
+const char *nvim_bw_buf_get_p_bt(buf_T *buf) { return buf->b_p_bt; }
+void nvim_bw_buf_set_no_eol_lnum(buf_T *buf, linenr_T lnum) { buf->b_no_eol_lnum = lnum; }
+
+// Global state accessors
+buf_T *nvim_bw_get_curbuf(void) { return curbuf; }
+int nvim_bw_curbufIsChanged(void) { return curbufIsChanged(); }
+void nvim_bw_u_unchanged(buf_T *buf) { u_unchanged(buf); }
+void nvim_bw_u_update_save_nr(buf_T *buf) { u_update_save_nr(buf); }
+void nvim_bw_ml_timestamp(buf_T *buf) { ml_timestamp(buf); }
+int nvim_bw_bt_nofilename(buf_T *buf) { return bt_nofilename(buf); }
+int nvim_bw_get_no_wait_return(void) { return no_wait_return; }
+void nvim_bw_dec_no_wait_return(void) { no_wait_return--; }
+int nvim_bw_get_cmdmod_cmod_flags(void) { return cmdmod.cmod_flags; }
+int nvim_bw_aborting(void) { return aborting(); }
+void nvim_bw_semsg_nofile_err(buf_T *buf) { semsg(_(e_no_matching_autocommands_for_buftype_str_buffer), buf->b_p_bt); }
+
 // =============================================================================
 // Rust FFI declarations
 // =============================================================================
@@ -426,6 +481,12 @@ extern int rs_buf_write_make_backup(char *fname, int append, FileInfo *file_info
                                     vim_acl_T acl, int perm, unsigned bkc, int file_readonly,
                                     int forceit, bool *backup_copyp, char **backupp,
                                     Error_T *err);
+extern int rs_buf_write_do_autocmds(buf_T *buf, char **fnamep, char **sfnamep, char **ffnamep,
+                                     linenr_T start, linenr_T *endp, exarg_T *eap, int append,
+                                     int filtering, int reset_changed, int overwriting, int whole,
+                                     pos_T orig_start, pos_T orig_end);
+extern void rs_buf_write_do_post_autocmds(buf_T *buf, char *fname, exarg_T *eap, int append,
+                                           int filtering, int reset_changed, int whole);
 
 #include "bufwrite.c.generated.h"
 
@@ -480,196 +541,15 @@ static int buf_write_do_autocmds(buf_T *buf, char **fnamep, char **sfnamep, char
                                  bool filtering, bool reset_changed, bool overwriting, bool whole,
                                  const pos_T orig_start, const pos_T orig_end)
 {
-  linenr_T old_line_count = buf->b_ml.ml_line_count;
-  int msg_save = msg_scroll;
-
-  aco_save_T aco;
-  bool did_cmd = false;
-  bool nofile_err = false;
-  bool empty_memline = buf->b_ml.ml_mfp == NULL;
-  bufref_T bufref;
-
-  char *sfname = *sfnamep;
-
-  // Apply PRE autocommands.
-  // Set curbuf to the buffer to be written.
-  // Careful: The autocommands may call buf_write() recursively!
-  bool buf_ffname = *ffnamep == buf->b_ffname;
-  bool buf_sfname = sfname == buf->b_sfname;
-  bool buf_fname_f = *fnamep == buf->b_ffname;
-  bool buf_fname_s = *fnamep == buf->b_sfname;
-
-  // Set curwin/curbuf to buf and save a few things.
-  aucmd_prepbuf(&aco, buf);
-  set_bufref(&bufref, buf);
-
-  if (append) {
-    did_cmd = apply_autocmds_exarg(EVENT_FILEAPPENDCMD, sfname, sfname, false, curbuf, eap);
-    if (!did_cmd) {
-      if (overwriting && bt_nofilename(curbuf)) {
-        nofile_err = true;
-      } else {
-        apply_autocmds_exarg(EVENT_FILEAPPENDPRE,
-                             sfname, sfname, false, curbuf, eap);
-      }
-    }
-  } else if (filtering) {
-    apply_autocmds_exarg(EVENT_FILTERWRITEPRE,
-                         NULL, sfname, false, curbuf, eap);
-  } else if (reset_changed && whole) {
-    bool was_changed = curbufIsChanged();
-
-    did_cmd = apply_autocmds_exarg(EVENT_BUFWRITECMD, sfname, sfname, false, curbuf, eap);
-    if (did_cmd) {
-      if (was_changed && !curbufIsChanged()) {
-        // Written everything correctly and BufWriteCmd has reset
-        // 'modified': Correct the undo information so that an
-        // undo now sets 'modified'.
-        u_unchanged(curbuf);
-        u_update_save_nr(curbuf);
-      }
-    } else {
-      if (overwriting && bt_nofilename(curbuf)) {
-        nofile_err = true;
-      } else {
-        apply_autocmds_exarg(EVENT_BUFWRITEPRE,
-                             sfname, sfname, false, curbuf, eap);
-      }
-    }
-  } else {
-    did_cmd = apply_autocmds_exarg(EVENT_FILEWRITECMD, sfname, sfname, false, curbuf, eap);
-    if (!did_cmd) {
-      if (overwriting && bt_nofilename(curbuf)) {
-        nofile_err = true;
-      } else {
-        apply_autocmds_exarg(EVENT_FILEWRITEPRE,
-                             sfname, sfname, false, curbuf, eap);
-      }
-    }
-  }
-
-  // restore curwin/curbuf and a few other things
-  aucmd_restbuf(&aco);
-
-  // In three situations we return here and don't write the file:
-  // 1. the autocommands deleted or unloaded the buffer.
-  // 2. The autocommands abort script processing.
-  // 3. If one of the "Cmd" autocommands was executed.
-  if (!bufref_valid(&bufref)) {
-    buf = NULL;
-  }
-  if (buf == NULL || (buf->b_ml.ml_mfp == NULL && !empty_memline)
-      || did_cmd || nofile_err
-      || aborting()) {
-    if (buf != NULL && (cmdmod.cmod_flags & CMOD_LOCKMARKS)) {
-      // restore the original '[ and '] positions
-      buf->b_op_start = orig_start;
-      buf->b_op_end = orig_end;
-    }
-
-    no_wait_return--;
-    msg_scroll = msg_save;
-    if (nofile_err) {
-      semsg(_(e_no_matching_autocommands_for_buftype_str_buffer), curbuf->b_p_bt);
-    }
-
-    if (nofile_err || aborting()) {
-      // An aborting error, interrupt or exception in the
-      // autocommands.
-      return FAIL;
-    }
-    if (did_cmd) {
-      if (buf == NULL) {
-        // The buffer was deleted.  We assume it was written
-        // (can't retry anyway).
-        return OK;
-      }
-      if (overwriting) {
-        // Assume the buffer was written, update the timestamp.
-        ml_timestamp(buf);
-        if (append) {
-          buf->b_flags &= ~BF_NEW;
-        } else {
-          buf->b_flags &= ~BF_WRITE_MASK;
-        }
-      }
-      if (reset_changed && buf->b_changed && !append
-          && (overwriting || vim_strchr(p_cpo, CPO_PLUS) != NULL)) {
-        // Buffer still changed, the autocommands didn't work properly.
-        return FAIL;
-      }
-      return OK;
-    }
-    if (!aborting()) {
-      emsg(_("E203: Autocommands deleted or unloaded buffer to be written"));
-    }
-    return FAIL;
-  }
-
-  // The autocommands may have changed the number of lines in the file.
-  // When writing the whole file, adjust the end.
-  // When writing part of the file, assume that the autocommands only
-  // changed the number of lines that are to be written (tricky!).
-  if (buf->b_ml.ml_line_count != old_line_count) {
-    if (whole) {                                              // write all
-      *endp = buf->b_ml.ml_line_count;
-    } else if (buf->b_ml.ml_line_count > old_line_count) {           // more lines
-      *endp += buf->b_ml.ml_line_count - old_line_count;
-    } else {                                                    // less lines
-      *endp -= old_line_count - buf->b_ml.ml_line_count;
-      if (*endp < start) {
-        no_wait_return--;
-        msg_scroll = msg_save;
-        emsg(_("E204: Autocommand changed number of lines in unexpected way"));
-        return FAIL;
-      }
-    }
-  }
-
-  // The autocommands may have changed the name of the buffer, which may
-  // be kept in fname, ffname and sfname.
-  if (buf_ffname) {
-    *ffnamep = buf->b_ffname;
-  }
-  if (buf_sfname) {
-    *sfnamep = buf->b_sfname;
-  }
-  if (buf_fname_f) {
-    *fnamep = buf->b_ffname;
-  }
-  if (buf_fname_s) {
-    *fnamep = buf->b_sfname;
-  }
-  return NOTDONE;
+  return rs_buf_write_do_autocmds(buf, fnamep, sfnamep, ffnamep, start, endp, eap,
+                                   append, filtering, reset_changed, overwriting, whole,
+                                   orig_start, orig_end);
 }
 
 static void buf_write_do_post_autocmds(buf_T *buf, char *fname, exarg_T *eap, bool append,
                                        bool filtering, bool reset_changed, bool whole)
 {
-  aco_save_T aco;
-
-  curbuf->b_no_eol_lnum = 0;      // in case it was set by the previous read
-
-  // Apply POST autocommands.
-  // Careful: The autocommands may call buf_write() recursively!
-  aucmd_prepbuf(&aco, buf);
-
-  if (append) {
-    apply_autocmds_exarg(EVENT_FILEAPPENDPOST, fname, fname,
-                         false, curbuf, eap);
-  } else if (filtering) {
-    apply_autocmds_exarg(EVENT_FILTERWRITEPOST, NULL, fname,
-                         false, curbuf, eap);
-  } else if (reset_changed && whole) {
-    apply_autocmds_exarg(EVENT_BUFWRITEPOST, fname, fname,
-                         false, curbuf, eap);
-  } else {
-    apply_autocmds_exarg(EVENT_FILEWRITEPOST, fname, fname,
-                         false, curbuf, eap);
-  }
-
-  // restore curwin/curbuf and a few other things
-  aucmd_restbuf(&aco);
+  rs_buf_write_do_post_autocmds(buf, fname, eap, append, filtering, reset_changed, whole);
 }
 
 static inline Error_T set_err_num(const char *num, const char *msg)
