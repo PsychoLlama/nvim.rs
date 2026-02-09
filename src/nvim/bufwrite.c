@@ -52,6 +52,24 @@
 #include "nvim/undo_defs.h"
 #include "nvim/vim_defs.h"
 
+// Static assertions for constants shared with Rust
+_Static_assert(FIO_LATIN1 == 0x01, "FIO_LATIN1");
+_Static_assert(FIO_UTF8 == 0x02, "FIO_UTF8");
+_Static_assert(FIO_UCS2 == 0x04, "FIO_UCS2");
+_Static_assert(FIO_UCS4 == 0x08, "FIO_UCS4");
+_Static_assert(FIO_UTF16 == 0x10, "FIO_UTF16");
+_Static_assert(FIO_ENDIAN_L == 0x80, "FIO_ENDIAN_L");
+_Static_assert(FIO_NOCONVERT == 0x2000, "FIO_NOCONVERT");
+_Static_assert(CONV_RESTLEN == 30, "CONV_RESTLEN");
+_Static_assert(WRITEBUFSIZE == 8192, "WRITEBUFSIZE");
+_Static_assert(ICONV_MULT == 8, "ICONV_MULT");
+_Static_assert(EOL_UNIX == 0, "EOL_UNIX");
+_Static_assert(EOL_DOS == 1, "EOL_DOS");
+_Static_assert(EOL_MAC == 2, "EOL_MAC");
+_Static_assert(OK == 1, "OK");
+_Static_assert(FAIL == 0, "FAIL");
+_Static_assert(NOTDONE == 2, "NOTDONE");
+
 static const char *err_readonly = "is read-only (cannot override: \"W\" in 'cpoptions')";
 static const char e_patchmode_cant_touch_empty_original_file[]
   = N_("E206: Patchmode: can't touch empty original file");

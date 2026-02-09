@@ -11,6 +11,7 @@
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod encoding;
+pub mod ffi;
 pub mod format;
 pub mod validation;
 
