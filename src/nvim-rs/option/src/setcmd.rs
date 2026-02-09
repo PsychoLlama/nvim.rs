@@ -553,8 +553,8 @@ const K_OPT_VAL_TYPE_BOOLEAN: c_int = 0;
 const K_OPT_SCOPE_WIN: c_int = 1;
 const K_OPT_SCOPE_BUF: c_int = 2;
 
-/// UPD_CLEAR constant for redraw
-const UPD_CLEAR: c_int = 70;
+/// UPD_CLEAR constant for redraw (from drawscreen.h)
+const UPD_CLEAR: c_int = 50;
 
 /// IOSIZE constant
 const IOSIZE: usize = 1025;

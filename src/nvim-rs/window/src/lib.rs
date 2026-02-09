@@ -1642,8 +1642,8 @@ extern "C" {
     fn nvim_showmode();
 }
 
-/// UPD_VALID constant from screen.h
-const UPD_VALID: c_int = 20;
+/// UPD_VALID constant from drawscreen.h
+const UPD_VALID: c_int = 10;
 
 /// Set the window height of window "win" and take care of repositioning other
 /// windows to fit around it.

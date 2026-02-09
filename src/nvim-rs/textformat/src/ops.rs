@@ -82,8 +82,8 @@ extern "C" {
 /// BL_WHITE | BL_FIX flags for beginline
 const BL_WHITE_FIX: c_int = 0x04 | 0x08;
 
-/// Update type: UPD_INVERTED
-const UPD_INVERTED: c_int = 40;
+/// Update type: UPD_INVERTED (from drawscreen.h)
+const UPD_INVERTED: c_int = 20;
 
 /// FAIL return value
 const FAIL: c_int = 0;

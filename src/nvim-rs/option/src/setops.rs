@@ -22,11 +22,11 @@ extern "C" {
 // Redraw Type Constants
 // =============================================================================
 
-/// Redraw type: not valid, clear and recompute
-pub const UPD_NOT_VALID: c_int = 10;
+/// Redraw type: not valid, buffer needs complete redraw (from drawscreen.h)
+pub const UPD_NOT_VALID: c_int = 40;
 
-/// Redraw type: clear screen
-pub const UPD_CLEAR: c_int = 70;
+/// Redraw type: screen messed up, clear it (from drawscreen.h)
+pub const UPD_CLEAR: c_int = 50;
 
 // =============================================================================
 // Option Flag Constants (for redraw checking)

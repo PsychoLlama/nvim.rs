@@ -621,8 +621,8 @@ pub unsafe extern "C" fn rs_find_prev_quote(
 /// Motion type: character-wise
 const MT_CHAR_WISE: c_int = 0;
 
-/// Update type for redraw
-const UPD_INVERTED: c_int = 40;
+/// Update type for redraw (from drawscreen.h)
+const UPD_INVERTED: c_int = 20;
 
 extern "C" {
     /// Get VIsual_active state.

@@ -432,8 +432,8 @@ extern "C" {
     fn nvim_equalpos(pos1: *const PosT, pos2: *const PosT) -> c_int;
 }
 
-// Update type constants (from nvim/types_defs.h)
-const UPD_SOME_VALID: c_int = 10;
+// Update type constants (from nvim/drawscreen.h)
+const UPD_SOME_VALID: c_int = 35;
 
 // MAXLNUM constant
 const MAXLNUM: i32 = 0x7fff_ffff;

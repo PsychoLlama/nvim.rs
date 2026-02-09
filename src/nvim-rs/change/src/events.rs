@@ -93,8 +93,8 @@ extern "C" {
     fn changed_common(buf: BufHandle, lnum: LinenrT, col: ColnrT, lnume: LinenrT, xtra: LinenrT);
 }
 
-/// Update redraw type constant.
-const UPD_VALID: c_int = 2;
+/// Update redraw type constant (from drawscreen.h).
+const UPD_VALID: c_int = 10;
 
 /// Meta type for virtual lines.
 const KMT_META_LINES: c_int = 1;

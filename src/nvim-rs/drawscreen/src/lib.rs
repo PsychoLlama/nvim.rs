@@ -57,9 +57,6 @@ pub enum WindowCorner {
 /// Highlight group for WinSeparator (HLF_C in C).
 pub const HLF_C: c_int = 21;
 
-/// UPD_VALID constant from screen.h - redraw when scrolled or text changed
-const UPD_VALID: c_int = 20;
-
 // C accessor functions for window fields
 extern "C" {
     fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
@@ -597,19 +594,15 @@ pub extern "C" fn rs_status_redraw_curbuf() {
 /// Line number type (matches C's linenr_T which is typically int32_t).
 type LinenrT = i32;
 
-// Redraw type constants from screen.h
-/// UPD_NOT_VALID - redraw all windows for buffer changes
-pub const UPD_NOT_VALID: c_int = 30;
-/// UPD_SOME_VALID - redraw some windows (changed highlighting)
-pub const UPD_SOME_VALID: c_int = 25;
-/// UPD_INVERTED - redraw inverted area (selection)
-pub const UPD_INVERTED: c_int = 15;
-/// UPD_INVERTED_ALL - redraw all inverted areas
-pub const UPD_INVERTED_ALL: c_int = 10;
-/// UPD_REDRAW_TOP - redraw top of window
-pub const UPD_REDRAW_TOP: c_int = 5;
-/// UPD_CLEAR - clear screen and redraw all
-pub const UPD_CLEAR: c_int = 40;
+// Redraw type constants from drawscreen.h
+// The higher the value, the higher the priority.
+pub const UPD_VALID: c_int = 10;
+pub const UPD_INVERTED: c_int = 20;
+pub const UPD_INVERTED_ALL: c_int = 25;
+pub const UPD_REDRAW_TOP: c_int = 30;
+pub const UPD_SOME_VALID: c_int = 35;
+pub const UPD_NOT_VALID: c_int = 40;
+pub const UPD_CLEAR: c_int = 50;
 
 // Additional C accessor functions for window redraw state
 extern "C" {

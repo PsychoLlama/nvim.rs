@@ -2949,8 +2949,8 @@ extern "C" {
     fn nvim_redraw_curbuf_later(redraw_type: c_int);
 }
 
-/// UPD_INVERTED redraw type.
-const UPD_INVERTED: c_int = 25;
+/// UPD_INVERTED redraw type (from drawscreen.h).
+const UPD_INVERTED: c_int = 20;
 
 /// Create a fold from line `start_lnum` to line `end_lnum` (inclusive) in the window.
 ///

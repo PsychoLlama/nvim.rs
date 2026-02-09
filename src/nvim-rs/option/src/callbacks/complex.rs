@@ -701,8 +701,8 @@ extern "C" {
 const B_IMODE_NONE: c_int = 0;
 const B_IMODE_USE_INSERT: c_int = -1;
 
-/// Update type: NOT_VALID
-const UPD_NOT_VALID: c_int = 30;
+/// Update type: NOT_VALID (from drawscreen.h)
+const UPD_NOT_VALID: c_int = 40;
 
 /// kOptKeymap index (get from C)
 const K_OPT_KEYMAP: c_int = 155; // This should match the actual index in C
