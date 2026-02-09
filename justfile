@@ -107,6 +107,7 @@ rust-test:
       -p nvim-mark \
       -p nvim-marktree \
       -p nvim-math \
+      -p nvim-memfile \
       -p nvim-memline \
       -p nvim-memory \
       -p nvim-memutil \
