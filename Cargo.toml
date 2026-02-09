@@ -105,6 +105,7 @@ members = [
     "src/nvim-rs/userfunc",
     "src/nvim-rs/vars",
     "src/nvim-rs/session",
+    "src/nvim-rs/arglist",
     "src/nvim-rs/vterm",
 ]
 exclude = [

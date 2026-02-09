@@ -75,6 +75,45 @@ enum {
   AL_DEL = 3,
 };
 
+// Static assertions for Rust FFI constant synchronization
+_Static_assert(AL_SET == 1, "AL_SET mismatch");
+_Static_assert(AL_ADD == 2, "AL_ADD mismatch");
+_Static_assert(AL_DEL == 3, "AL_DEL mismatch");
+_Static_assert(OK == 1, "OK mismatch");
+_Static_assert(FAIL == 0, "FAIL mismatch");
+_Static_assert(NUL == 0, "NUL mismatch");
+_Static_assert(BLN_CURBUF == 1, "BLN_CURBUF mismatch");
+_Static_assert(BLN_LISTED == 2, "BLN_LISTED mismatch");
+_Static_assert(EW_DIR == 0x01, "EW_DIR mismatch");
+_Static_assert(EW_FILE == 0x02, "EW_FILE mismatch");
+_Static_assert(EW_NOTFOUND == 0x04, "EW_NOTFOUND mismatch");
+_Static_assert(EW_ADDSLASH == 0x08, "EW_ADDSLASH mismatch");
+_Static_assert(EW_NOERROR == 0x200, "EW_NOERROR mismatch");
+_Static_assert(EW_NOTWILD == 0x400, "EW_NOTWILD mismatch");
+_Static_assert(RE_MAGIC == 1, "RE_MAGIC mismatch");
+_Static_assert(kEqualFiles == 1, "kEqualFiles mismatch");
+_Static_assert(CCGD_AW == 1, "CCGD_AW mismatch");
+_Static_assert(CCGD_MULTWIN == 2, "CCGD_MULTWIN mismatch");
+_Static_assert(CCGD_FORCEIT == 4, "CCGD_FORCEIT mismatch");
+_Static_assert(CCGD_EXCMD == 16, "CCGD_EXCMD mismatch");
+_Static_assert(ECMD_LAST == -1, "ECMD_LAST mismatch");
+_Static_assert(ECMD_HIDE == 0x01, "ECMD_HIDE mismatch");
+_Static_assert(ECMD_OLDBUF == 0x04, "ECMD_OLDBUF mismatch");
+_Static_assert(ECMD_FORCEIT == 0x08, "ECMD_FORCEIT mismatch");
+_Static_assert(ECMD_ONE == 1, "ECMD_ONE mismatch");
+_Static_assert(CMD_args == 7, "CMD_args mismatch");
+_Static_assert(CMD_argglobal == 13, "CMD_argglobal mismatch");
+_Static_assert(CMD_arglocal == 14, "CMD_arglocal mismatch");
+_Static_assert(CMD_argdo == 10, "CMD_argdo mismatch");
+_Static_assert(CMD_snext == 413, "CMD_snext mismatch");
+_Static_assert(CMD_drop == 130, "CMD_drop mismatch");
+_Static_assert(WSP_ROOM == 0x01, "WSP_ROOM mismatch");
+_Static_assert(WSP_BELOW == 0x40, "WSP_BELOW mismatch");
+_Static_assert(VAR_UNKNOWN == 0, "VAR_UNKNOWN mismatch");
+_Static_assert(VAR_NUMBER == 1, "VAR_NUMBER mismatch");
+_Static_assert(VAR_STRING == 2, "VAR_STRING mismatch");
+_Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
+
 /// This flag is set whenever the argument list is being changed and calling a
 /// function that might trigger an autocommand.
 static bool arglist_locked = false;

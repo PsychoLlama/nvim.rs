@@ -9,6 +9,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 pub mod entry;
+pub mod ffi;
 pub mod navigation;
 pub mod operations;
 
@@ -28,6 +29,56 @@ pub const MAX_ARGS: usize = 10000;
 
 /// Invalid argument index
 pub const INVALID_ARG_IDX: c_int = -1;
+
+// FFI constants (verified against C headers with _Static_assert)
+pub const AL_SET: c_int = 1;
+pub const AL_ADD: c_int = 2;
+pub const AL_DEL: c_int = 3;
+
+pub const OK: c_int = 1;
+pub const FAIL: c_int = 0;
+pub const NUL: u8 = 0;
+
+pub const BLN_CURBUF: c_int = 1;
+pub const BLN_LISTED: c_int = 2;
+
+pub const EW_DIR: c_int = 0x01;
+pub const EW_FILE: c_int = 0x02;
+pub const EW_NOTFOUND: c_int = 0x04;
+pub const EW_ADDSLASH: c_int = 0x08;
+pub const EW_NOERROR: c_int = 0x200;
+pub const EW_NOTWILD: c_int = 0x400;
+
+pub const RE_MAGIC: c_int = 1;
+
+pub const K_EQUAL_FILES: c_int = 1;
+
+pub const CCGD_AW: c_int = 1;
+pub const CCGD_MULTWIN: c_int = 2;
+pub const CCGD_FORCEIT: c_int = 4;
+pub const CCGD_EXCMD: c_int = 16;
+
+pub const ECMD_LAST: i64 = -1;
+pub const ECMD_HIDE: c_int = 0x01;
+pub const ECMD_OLDBUF: c_int = 0x04;
+pub const ECMD_FORCEIT: c_int = 0x08;
+pub const ECMD_ONE: i64 = 1;
+
+pub const CMD_ARGS: c_int = 7;
+pub const CMD_ARGGLOBAL: c_int = 13;
+pub const CMD_ARGLOCAL: c_int = 14;
+pub const CMD_ARGDO: c_int = 10;
+pub const CMD_SNEXT: c_int = 413;
+pub const CMD_DROP: c_int = 130;
+
+pub const WSP_ROOM: c_int = 0x01;
+pub const WSP_BELOW: c_int = 0x40;
+
+pub const VAR_UNKNOWN: c_int = 0;
+pub const VAR_NUMBER: c_int = 1;
+pub const VAR_STRING: c_int = 2;
+
+pub const ML_EMPTY: c_int = 0x01;
 
 // =============================================================================
 // Argument List Type

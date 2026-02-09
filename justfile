@@ -69,6 +69,7 @@ rust-test:
       --show-progress=none \
       --status-level=fail \
       --cargo-quiet \
+      -p nvim-arglist \
       -p nvim-api \
       -p nvim-arabic \
       -p nvim-ascii \
