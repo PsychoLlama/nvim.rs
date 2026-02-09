@@ -45,7 +45,7 @@ extern "C" {
     fn nvim_oap_get_regname_raw(oap: *const std::ffi::c_void) -> c_int;
     fn nvim_oap_get_motion_type_raw(oap: *const std::ffi::c_void) -> c_int;
     fn nvim_oap_get_motion_force(oap: *const std::ffi::c_void) -> c_int;
-    fn nvim_oap_get_inclusive(oap: *const std::ffi::c_void) -> c_int;
+    fn nvim_oap_get_inclusive(oap: *const std::ffi::c_void) -> bool;
     fn nvim_oap_get_use_reg_one(oap: *const std::ffi::c_void) -> c_int;
     fn nvim_oap_get_line_count(oap: *const std::ffi::c_void) -> c_int;
     fn nvim_oap_get_empty(oap: *const std::ffi::c_void) -> c_int;
@@ -124,7 +124,7 @@ impl OpArgRef {
     #[inline]
     #[must_use]
     pub fn inclusive(&self) -> bool {
-        unsafe { nvim_oap_get_inclusive(self.handle.as_ptr()) != 0 }
+        unsafe { nvim_oap_get_inclusive(self.handle.as_ptr()) }
     }
 
     /// Check if delete should use reg 1 even when not linewise

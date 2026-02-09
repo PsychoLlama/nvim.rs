@@ -243,7 +243,7 @@ extern "C" {
 
     // Sign map operations
     fn nvim_sign_map_get(name: *const c_char) -> SignHandle;
-    fn nvim_sign_map_has(name: *const c_char) -> bool;
+    fn nvim_sign_map_has(name: *const c_char) -> c_int;
 
     // Namespace operations
     fn nvim_namespace_lookup(name: *const c_char) -> c_int;

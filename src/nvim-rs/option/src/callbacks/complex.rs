@@ -815,7 +815,7 @@ unsafe fn streq_cstr(s: *const c_char, bytes: &[u8]) -> bool {
 // =============================================================================
 
 extern "C" {
-    fn nvim_win_get_p_scb(win: *const std::ffi::c_void) -> c_int;
+    fn nvim_win_get_p_scb(win: *const std::ffi::c_void) -> bool;
     fn do_check_scrollbind(check: c_int);
 }
 
@@ -827,7 +827,7 @@ pub unsafe extern "C" fn rs_did_set_scrollbind(win: *const std::ffi::c_void) -> 
         return callback_ok();
     }
 
-    if nvim_win_get_p_scb(win) != 0 {
+    if nvim_win_get_p_scb(win) {
         // 'scrollbind' was set - check scroll binding
         do_check_scrollbind(1);
     }

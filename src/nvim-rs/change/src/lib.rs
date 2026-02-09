@@ -137,7 +137,7 @@ extern "C" {
     fn nvim_buf_set_b_changed_invalid(buf: BufHandle, val: bool);
     fn nvim_buf_get_b_did_warn(buf: BufHandle) -> bool;
     fn nvim_buf_set_b_did_warn(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> bool;
+    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
     fn nvim_buf_get_b_ro_locked(buf: BufHandle) -> c_int;
     fn nvim_buf_set_b_ro_locked(buf: BufHandle, val: c_int);
     fn nvim_buf_get_b_may_swap(buf: BufHandle) -> bool;
@@ -178,8 +178,8 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_autocmd_busy() -> bool;
-    fn nvim_get_highlight_match() -> bool;
-    fn nvim_set_highlight_match(val: bool);
+    fn nvim_get_highlight_match() -> c_int;
+    fn nvim_set_highlight_match(val: c_int);
     fn nvim_curbufIsChanged() -> c_int;
 
     // Message functions
@@ -192,7 +192,7 @@ extern "C" {
     fn nvim_msg_silent() -> c_int;
     fn nvim_silent_mode() -> bool;
     fn nvim_ui_active() -> bool;
-    fn nvim_ui_has_messages() -> bool;
+    fn nvim_ui_has_messages() -> c_int;
     fn nvim_set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
 
     // Redraw functions
@@ -212,8 +212,8 @@ extern "C" {
     fn nvim_wait_return(redraw: bool);
     fn nvim_get_msg_scroll() -> c_int;
     fn nvim_set_msg_scroll(val: c_int);
-    fn nvim_get_need_wait_return() -> bool;
-    fn nvim_set_need_wait_return(val: bool);
+    fn nvim_get_need_wait_return() -> c_int;
+    fn nvim_set_need_wait_return(val: c_int);
     fn nvim_get_emsg_silent() -> c_int;
     fn nvim_in_assert_fails() -> bool;
     fn nvim_get_msg_row() -> c_int;

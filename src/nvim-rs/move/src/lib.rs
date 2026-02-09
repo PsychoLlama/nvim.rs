@@ -3904,7 +3904,7 @@ extern "C" {
     fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
 
     /// Get 'scrollbind' option for a window.
-    fn nvim_win_get_p_scb(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_scb(wp: WinHandle) -> bool;
 
     /// Set curwin global.
     fn nvim_set_curwin(wp: WinHandle);
@@ -3913,7 +3913,7 @@ extern "C" {
     fn nvim_set_curbuf(buf: *mut std::ffi::c_void);
 
     /// Get `VIsual_select` global.
-    fn nvim_get_VIsual_select() -> c_int;
+    fn nvim_get_VIsual_select() -> bool;
 
     /// Set `VIsual_select` global.
     fn nvim_set_VIsual_select(val: c_int);
@@ -4027,7 +4027,7 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
 
             // Avoid a scroll here for the cursor position, 'scrollbind' is
             // more important.
-            if nvim_win_get_p_scb(wp) == 0 {
+            if !nvim_win_get_p_scb(wp) {
                 rs_validate_cursor(wp);
             }
 
@@ -4038,7 +4038,7 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
             nvim_redraw_later(wp, upd::VALID);
 
             // Only scroll when 'scrollbind' hasn't done this.
-            if nvim_win_get_p_scb(wp) == 0 {
+            if !nvim_win_get_p_scb(wp) {
                 nvim_update_topline(wp);
             }
             nvim_win_set_redr_status(wp, 1);
@@ -4048,7 +4048,7 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
     }
 
     // reset current-window
-    nvim_set_VIsual_select(old_visual_select);
+    nvim_set_VIsual_select(c_int::from(old_visual_select));
     nvim_set_VIsual_active(old_visual_active);
     nvim_set_curwin(old_curwin);
     nvim_set_curbuf(old_curbuf);

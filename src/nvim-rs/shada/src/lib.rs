@@ -376,7 +376,7 @@ extern "C" {
 
     // Option access
     fn nvim_get_p_hi() -> i64;
-    fn nvim_get_p_fs() -> c_int;
+    fn nvim_get_p_fs() -> bool;
 
     // Error messages
     fn nvim_semsg(fmt: *const c_char, ...);

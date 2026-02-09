@@ -256,7 +256,7 @@ extern "C" {
     fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn nvim_ptr2cells(p: *const c_char) -> c_int;
     fn nvim_vim_strnsize(s: *const c_char, len: c_int) -> c_int;
-    fn nvim_utf_iscomposing_first(c: c_int) -> bool;
+    fn nvim_utf_iscomposing_first(c: c_int) -> c_int;
     fn nvim_utf_ptr2char(s: *const c_char) -> c_int;
 
     // Ins_bytes function
@@ -1002,7 +1002,7 @@ fn open_line_impl(
             }
             if nvim_curbuf_get_b_p_ai() || openline_flags.contains(OpenlineFlags::DELSPACES) {
                 while (*p_extra == b' ' as c_char || *p_extra == TAB)
-                    && !nvim_utf_iscomposing_first(nvim_utf_ptr2char(p_extra.add(1)))
+                    && nvim_utf_iscomposing_first(nvim_utf_ptr2char(p_extra.add(1))) == 0
                 {
                     if replace_normal(state) {
                         nvim_replace_push(p_extra, 1);

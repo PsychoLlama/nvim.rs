@@ -913,9 +913,8 @@ pub fn extmark_splice(
     new_byte: BcountT,
     undo: ExtmarkOp,
 ) {
-    let mut offset = unsafe {
-        nvim_ml_find_line_or_offset(buf, start_row + 1, std::ptr::null_mut(), true)
-    };
+    let mut offset =
+        unsafe { nvim_ml_find_line_or_offset(buf, start_row + 1, std::ptr::null_mut(), true) };
 
     // On empty buffers, when editing the first line, the line is buffered,
     // causing offset to be < 0.

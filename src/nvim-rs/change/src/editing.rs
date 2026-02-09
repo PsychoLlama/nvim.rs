@@ -72,8 +72,8 @@ extern "C" {
         end: *mut ColnrT,
     );
     fn nvim_win_chartabsize(win: WinHandle, ptr: *const c_char, vcol: ColnrT) -> ColnrT;
-    fn nvim_win_get_p_list(win: WinHandle) -> bool;
-    fn nvim_win_set_p_list(win: WinHandle, val: bool);
+    fn nvim_win_get_p_list(win: WinHandle) -> c_int;
+    fn nvim_win_set_p_list(win: WinHandle, val: c_int);
     fn nvim_vim_strchr_cpo_listwm() -> bool;
 
     // Delcombine option
@@ -204,8 +204,8 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
             if (state & VREPLACE_FLAG) != 0 {
                 // VREPLACE mode - complex handling
                 let old_list = nvim_win_get_p_list(curwin);
-                if old_list && !nvim_vim_strchr_cpo_listwm() {
-                    nvim_win_set_p_list(curwin, false);
+                if old_list != 0 && !nvim_vim_strchr_cpo_listwm() {
+                    nvim_win_set_p_list(curwin, 0);
                 }
 
                 let mut vcol: ColnrT = 0;

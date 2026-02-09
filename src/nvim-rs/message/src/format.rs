@@ -30,7 +30,7 @@ extern "C" {
     /// Check shortmess option flag
     fn nvim_shortmess(flag: c_int) -> c_int;
     /// Get `exmode_active` flag
-    fn nvim_get_exmode_active() -> c_int;
+    fn nvim_get_exmode_active() -> bool;
     /// Get `msg_silent` count
     fn nvim_get_msg_silent() -> c_int;
     /// Check if UI has messages capability
@@ -135,7 +135,7 @@ pub unsafe extern "C" fn rs_msg_should_truncate() -> c_int {
     let msg_scroll = nvim_get_msg_scroll() != 0;
     let need_wait_return = nvim_get_need_wait_return() != 0;
     let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
-    let exmode_active = nvim_get_exmode_active() != 0;
+    let exmode_active = nvim_get_exmode_active();
     let msg_silent = nvim_get_msg_silent();
     let ui_has_messages = nvim_ui_has_messages() != 0;
 
@@ -575,7 +575,7 @@ pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut
         || (nvim_get_msg_scroll() == 0
             && nvim_get_need_wait_return() == 0
             && nvim_shortmess(SHM_TRUNCALL) != 0
-            && nvim_get_exmode_active() == 0
+            && !nvim_get_exmode_active()
             && nvim_get_msg_silent() == 0
             && nvim_ui_has_messages() == 0);
 
@@ -739,7 +739,7 @@ pub unsafe extern "C" fn rs_msg_should_trunc_impl() -> c_int {
     let msg_scroll = nvim_get_msg_scroll() != 0;
     let need_wait_return = nvim_get_need_wait_return() != 0;
     let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
-    let exmode_active = nvim_get_exmode_active() != 0;
+    let exmode_active = nvim_get_exmode_active();
     let msg_silent = nvim_get_msg_silent();
     let ui_has_messages = nvim_ui_has_messages() != 0;
 

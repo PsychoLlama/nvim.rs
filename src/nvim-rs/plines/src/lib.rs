@@ -178,7 +178,7 @@ extern "C" {
     ) -> i32;
 
     // Visual mode and virtual editing accessors for getvcol
-    fn nvim_virtual_active(wp: WinHandle) -> c_int;
+    fn nvim_virtual_active(wp: WinHandle) -> bool;
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_get_VIsual_lnum() -> c_int;
     fn nvim_get_VIsual_col() -> c_int;
@@ -1732,7 +1732,7 @@ fn getvcol_impl(
             // Complex cursor logic for tabs in visual mode
             let state = nvim_get_State();
             let p_list = nvim_win_get_p_list(wp) != 0;
-            let virtual_active = nvim_virtual_active(wp) != 0;
+            let virtual_active = nvim_virtual_active(wp);
             let visual_active = nvim_get_VIsual_active() != 0;
             let p_sel_first = nvim_get_p_sel_first();
 
@@ -2306,7 +2306,7 @@ pub unsafe extern "C" fn rs_getvvcol(
     }
 
     unsafe {
-        if nvim_virtual_active(wp) != 0 {
+        if nvim_virtual_active(wp) {
             // For virtual mode, only want one value
             let mut col: c_int = 0;
             nvim_getvcol_byval(

@@ -19,7 +19,7 @@ extern "C" {
     fn nvim_sign_map_get(name: *const c_char) -> SignHandle;
 
     /// Check if sign exists in the map
-    fn nvim_sign_map_has(name: *const c_char) -> bool;
+    fn nvim_sign_map_has(name: *const c_char) -> c_int;
 
     /// Get sign name from sign handle
     fn nvim_sign_get_name(sp: SignHandle) -> *const c_char;
@@ -67,7 +67,7 @@ pub unsafe extern "C" fn rs_sign_exists(name: *const c_char) -> c_int {
     if name.is_null() {
         return 0;
     }
-    c_int::from(nvim_sign_map_has(name))
+    nvim_sign_map_has(name)
 }
 
 // =============================================================================

@@ -31,7 +31,7 @@ extern "C" {
 
     // Window accessors
     fn nvim_win_get_buffer(win: WinHandle) -> BufHandle;
-    fn nvim_win_get_p_diff(win: WinHandle) -> bool;
+    fn nvim_win_get_p_diff(win: WinHandle) -> c_int;
 
     // Marktree accessors
     fn nvim_buf_marktree_n_keys(buf: BufHandle) -> c_int;
@@ -216,10 +216,10 @@ fn changed_bytes_impl(lnum: LinenrT, col: ColnrT) {
         nvim_buf_updates_send_changes(curbuf, lnum, 1, 1);
 
         // Diff highlighting in other diff windows may need to be updated too.
-        if nvim_win_get_p_diff(curwin) {
+        if nvim_win_get_p_diff(curwin) != 0 {
             let mut wp = nvim_curtab_first_win();
             while !wp.is_null() {
-                if nvim_win_get_p_diff(wp) && wp != curwin {
+                if nvim_win_get_p_diff(wp) != 0 && wp != curwin {
                     nvim_redraw_later(wp, UPD_VALID);
                     let wlnum = nvim_diff_lnum_win(lnum, wp);
                     if wlnum > 0 {
@@ -299,7 +299,7 @@ fn changed_lines_impl(
 
         let curwin = nvim_get_curwin();
         if xtra == 0
-            && nvim_win_get_p_diff(curwin)
+            && nvim_win_get_p_diff(curwin) != 0
             && nvim_win_get_buffer(curwin) == buf
             && !nvim_diff_internal()
         {
@@ -308,7 +308,7 @@ fn changed_lines_impl(
             // displaying.
             let mut wp = nvim_curtab_first_win();
             while !wp.is_null() {
-                if nvim_win_get_p_diff(wp) && wp != curwin {
+                if nvim_win_get_p_diff(wp) != 0 && wp != curwin {
                     nvim_redraw_later(wp, UPD_VALID);
                     let wlnum = nvim_diff_lnum_win(lnum, wp);
                     if wlnum > 0 {

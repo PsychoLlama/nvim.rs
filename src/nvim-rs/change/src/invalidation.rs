@@ -18,7 +18,7 @@ extern "C" {
     fn nvim_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
     fn nvim_win_get_cursor_col(win: WinHandle) -> ColnrT;
     fn nvim_win_get_botline(win: WinHandle) -> LinenrT;
-    fn nvim_win_get_p_wrap(win: WinHandle) -> bool;
+    fn nvim_win_get_p_wrap(win: WinHandle) -> c_int;
 
     // w_lines[] accessors
     fn nvim_win_get_lines_valid(win: WinHandle) -> c_int;
@@ -99,7 +99,9 @@ fn changed_lines_invalidate_win_impl(
 
         // Adjust lnume for virtual lines and inline text
         let mut lnume_adj = lnume;
-        if (xtra < 0 && nvim_win_get_p_wrap(wp) && nvim_buf_meta_total(buf, KMT_META_INLINE) != 0)
+        if (xtra < 0
+            && nvim_win_get_p_wrap(wp) != 0
+            && nvim_buf_meta_total(buf, KMT_META_INLINE) != 0)
             || (xtra != 0 && nvim_buf_meta_total(buf, KMT_META_LINES) != 0)
         {
             lnume_adj += 1;

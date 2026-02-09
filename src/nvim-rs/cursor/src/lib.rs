@@ -144,7 +144,7 @@ extern "C" {
     fn nvim_get_restart_edit() -> c_int;
 
     /// Check if Visual mode is active
-    fn nvim_get_visual_active() -> bool;
+    fn nvim_get_visual_active() -> c_int;
 
     /// Get 'selection' option first character
     fn nvim_get_p_sel_first() -> c_int;
@@ -551,7 +551,7 @@ pub unsafe extern "C" fn rs_cursor_one_more(win: WinHandle) -> bool {
     let state = nvim_get_state();
     let ve_flags = nvim_get_ve_flags(win);
     let restart_edit = nvim_get_restart_edit();
-    let visual_active = nvim_get_visual_active();
+    let visual_active = nvim_get_visual_active() != 0;
     let sel_first = nvim_get_p_sel_first();
 
     // Check each condition
@@ -814,7 +814,7 @@ pub unsafe extern "C" fn rs_char_before_cursor() -> c_int {
 pub unsafe extern "C" fn rs_adjust_cursor_col() {
     let col = nvim_curwin_get_cursor_col();
     if col > 0 {
-        let visual_active = nvim_get_visual_active();
+        let visual_active = nvim_get_visual_active() != 0;
         let sel_is_old = nvim_get_p_sel_first() == i32::from(b'o');
         // Only adjust if not in Visual mode or 'selection' is "old"
         if !visual_active || sel_is_old {
@@ -917,7 +917,7 @@ pub unsafe extern "C" fn rs_check_cursor_col(win: WinHandle) {
         // - 'virtualedit' is set
         let state = nvim_get_state();
         let restart_edit = nvim_get_restart_edit();
-        let visual_active = nvim_get_visual_active();
+        let visual_active = nvim_get_visual_active() != 0;
         let sel_first = nvim_get_p_sel_first();
         let virtual_active = nvim_virtual_active_win(win);
 

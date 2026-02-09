@@ -23,7 +23,7 @@ extern "C" {
 
     // Sign map operations
     fn nvim_sign_map_get(name: *const c_char) -> SignHandle;
-    fn nvim_sign_map_has(name: *const c_char) -> bool;
+    fn nvim_sign_map_has(name: *const c_char) -> c_int;
 }
 
 // =============================================================================
@@ -40,7 +40,7 @@ pub unsafe extern "C" fn rs_sign_is_defined(name: *const c_char) -> bool {
     if name.is_null() {
         return false;
     }
-    nvim_sign_map_has(name)
+    nvim_sign_map_has(name) != 0
 }
 
 /// Get a sign definition by name.

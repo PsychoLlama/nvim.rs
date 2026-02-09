@@ -132,7 +132,7 @@ extern "C" {
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_grid_alloc(wp: WinHandle) -> ScreenGridHandle;
-    fn nvim_win_get_config_hide(wp: WinHandle) -> bool;
+    fn nvim_win_get_config_hide(wp: WinHandle) -> c_int;
     fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
     fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
 
@@ -734,7 +734,7 @@ fn ui_comp_get_grid_at_coord_impl(row: c_int, col: c_int) -> ScreenGridHandle {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
             let grid = nvim_win_get_grid_alloc(wp);
-            let is_hidden = nvim_win_get_config_hide(wp);
+            let is_hidden = nvim_win_get_config_hide(wp) != 0;
             if point_in_grid(row, col, grid) && !is_hidden {
                 return grid;
             }

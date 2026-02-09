@@ -15,7 +15,7 @@ use crate::{
 #[allow(dead_code)]
 extern "C" {
     // Sign map operations
-    fn nvim_sign_map_has(name: *const c_char) -> bool;
+    fn nvim_sign_map_has(name: *const c_char) -> c_int;
 
     // Namespace operations
     fn nvim_namespace_lookup(name: *const c_char) -> c_int;
@@ -63,7 +63,7 @@ pub unsafe extern "C" fn rs_sign_get_display_name(sh: DecorSignHighlightHandle) 
     }
 
     // Check if the sign is still defined
-    if nvim_sign_map_has(name) {
+    if nvim_sign_map_has(name) != 0 {
         name
     } else {
         DELETED.as_ptr().cast::<c_char>()
