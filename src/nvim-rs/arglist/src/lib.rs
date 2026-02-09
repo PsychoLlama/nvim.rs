@@ -17,6 +17,7 @@ pub mod navigation;
 pub mod operations;
 pub mod parsing;
 pub mod query;
+pub mod viml;
 pub mod winmgmt;
 
 use std::ffi::c_int;

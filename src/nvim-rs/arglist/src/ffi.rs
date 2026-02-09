@@ -41,6 +41,9 @@ pub type TypvalPtr = *mut c_void;
 /// Opaque pointer to expand_T
 pub type ExpandPtr = *mut c_void;
 
+/// Opaque handle for EvalFuncData union (8-byte union passed by value)
+pub type EvalFuncData = *mut c_void;
+
 /// Opaque pointer to bufref_T
 pub type BufrefPtr = *mut c_void;
 
@@ -326,6 +329,7 @@ extern "C" {
     pub fn nvim_al_find_tabwin(tv_tab: TypvalPtr, tv_win: TypvalPtr) -> WinPtr;
     pub fn nvim_al_win_get_alist_id(wp: WinPtr) -> c_int;
     pub fn nvim_al_tv_idx(tv: TypvalPtr, idx: c_int) -> TypvalPtr;
+    pub fn nvim_al_ae_idx(ae: AentryPtr, idx: c_int) -> AentryPtr;
 }
 
 // =============================================================================
