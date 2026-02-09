@@ -11,6 +11,7 @@
 pub mod core;
 pub mod entry;
 pub mod ffi;
+pub mod manipulation;
 pub mod navigation;
 pub mod operations;
 pub mod parsing;

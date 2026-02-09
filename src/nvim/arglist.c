@@ -218,6 +218,68 @@ alist_T *nvim_al_alloc_alist(void)
   return xmalloc(sizeof(alist_T));
 }
 
+// -- Phase 4 extra accessors --
+
+// Callback-based iteration over FOR_ALL_TAB_WINDOWS
+// callback(wp, userdata) is called for each window; if it returns non-zero, stop.
+void nvim_al_foreach_tab_window(int (*callback)(win_T *wp, void *ud), void *ud)
+{
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    if (callback(wp, ud)) {
+      return;
+    }
+  }
+}
+
+// Opaque regex wrappers: allocate regmatch_T on C heap, compile, execute, free.
+void *nvim_al_regmatch_alloc(void)
+{
+  return xcalloc(1, sizeof(regmatch_T));
+}
+void nvim_al_regmatch_set_ic(void *rm, int ic)
+{
+  ((regmatch_T *)rm)->rm_ic = ic;
+}
+int nvim_al_regmatch_compile(void *rm, const char *pat, int re_flags)
+{
+  regmatch_T *rmp = (regmatch_T *)rm;
+  rmp->regprog = vim_regcomp(pat, re_flags);
+  return rmp->regprog != NULL;
+}
+int nvim_al_regmatch_exec(void *rm, const char *line)
+{
+  return vim_regexec((regmatch_T *)rm, line, 0);
+}
+void nvim_al_regmatch_free(void *rm)
+{
+  regmatch_T *rmp = (regmatch_T *)rm;
+  vim_regfree(rmp->regprog);
+  xfree(rmp);
+}
+void nvim_al_regmatch_free_prog(void *rm)
+{
+  regmatch_T *rmp = (regmatch_T *)rm;
+  vim_regfree(rmp->regprog);
+  rmp->regprog = NULL;
+}
+
+char *nvim_al_file_pat_to_reg_pat(const char *pat)
+{
+  return file_pat_to_reg_pat(pat, NULL, NULL, false);
+}
+int nvim_al_magic_isset(void) { return magic_isset(); }
+int nvim_al_get_p_fic(void) { return p_fic; }
+void nvim_al_semsg_nomatch2(const char *s) { semsg(_(e_nomatch2), s); }
+void nvim_al_emsg_nomatch(void) { emsg(_(e_nomatch)); }
+char *nvim_al_alist_name(aentry_T *ae) { return alist_name(ae); }
+void nvim_al_check_arg_idx(win_T *wp) { check_arg_idx(wp); }
+char *nvim_al_curbuf_b_ffname(void) { return curbuf->b_ffname; }
+char *nvim_al_curbuf_b_fname(void) { return curbuf->b_fname; }
+void nvim_al_memmove_aentry(aentry_T *dst, const aentry_T *src, int count)
+{
+  memmove(dst, src, (size_t)count * sizeof(aentry_T));
+}
+
 // Rust FFI declarations for Phase 2
 extern int rs_check_arglist_locked(void);
 extern void rs_alist_clear(alist_T *al);
@@ -230,6 +292,10 @@ extern void rs_alist_expand(int *fnum_list, int fnum_len);
 
 // Rust FFI declarations for Phase 3
 extern int rs_get_arglist_exp(char *str, int *fcountp, char ***fnamesp, int wig);
+
+// Rust FFI declarations for Phase 4
+extern int rs_do_arglist(char *str, int what, int after, int will_edit);
+extern void rs_set_arglist(char *str);
 
 static int check_arglist_locked(void)
 {
@@ -258,56 +324,6 @@ void alist_expand(int *fnum_list, int fnum_len) { rs_alist_expand(fnum_list, fnu
 void alist_slash_adjust(void) {}
 #endif
 
-/// Isolate one argument, taking backticks.
-/// Changes the argument in-place, puts a NUL after it.  Backticks remain.
-///
-/// @return  a pointer to the start of the next argument.
-static char *do_one_arg(char *str)
-{
-  char *p;
-
-  bool inbacktick = false;
-  for (p = str; *str; str++) {
-    // When the backslash is used for escaping the special meaning of a
-    // character we need to keep it until wildcard expansion.
-    if (rem_backslash(str)) {
-      *p++ = *str++;
-      *p++ = *str;
-    } else {
-      // An item ends at a space not in backticks
-      if (!inbacktick && ascii_isspace(*str)) {
-        break;
-      }
-      if (*str == '`') {
-        inbacktick ^= true;
-      }
-      *p++ = *str;
-    }
-  }
-  str = skipwhite(str);
-  *p = NUL;
-
-  return str;
-}
-
-/// Separate the arguments in "str" and return a list of pointers in the
-/// growarray "gap".
-static void get_arglist(garray_T *gap, char *str, bool escaped)
-{
-  ga_init(gap, (int)sizeof(char *), 20);
-  while (*str != NUL) {
-    GA_APPEND(char *, gap, str);
-
-    // If str is escaped, don't handle backslashes or spaces
-    if (!escaped) {
-      return;
-    }
-
-    // Isolate one argument, change it in-place, put a NUL after it.
-    str = do_one_arg(str);
-  }
-}
-
 /// Parse a list of arguments (file names), expand them and return in
 /// "fnames[fcountp]".  When "wig" is true, removes files matching 'wildignore'.
 ///
@@ -315,94 +331,6 @@ static void get_arglist(garray_T *gap, char *str, bool escaped)
 int get_arglist_exp(char *str, int *fcountp, char ***fnamesp, bool wig)
 {
   return rs_get_arglist_exp(str, fcountp, fnamesp, wig);
-}
-
-/// Check the validity of the arg_idx for each other window.
-static void alist_check_arg_idx(void)
-{
-  FOR_ALL_TAB_WINDOWS(tp, win) {
-    if (win->w_alist == curwin->w_alist) {
-      check_arg_idx(win);
-    }
-  }
-}
-
-/// Add files[count] to the arglist of the current window after arg "after".
-/// The file names in files[count] must have been allocated and are taken over.
-/// Files[] itself is not taken over.
-///
-/// @param after: where to add: 0 = before first one
-/// @param will_edit  will edit adding argument
-static void alist_add_list(int count, char **files, int after, bool will_edit)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int old_argcount = ARGCOUNT;
-  ga_grow(&ALIST(curwin)->al_ga, count);
-  if (check_arglist_locked() != FAIL) {
-    after = MIN(MAX(after, 0), ARGCOUNT);
-    if (after < ARGCOUNT) {
-      memmove(&(ARGLIST[after + count]), &(ARGLIST[after]),
-              (size_t)(ARGCOUNT - after) * sizeof(aentry_T));
-    }
-    arglist_locked = true;
-    curwin->w_locked = true;
-    for (int i = 0; i < count; i++) {
-      const int flags = BLN_LISTED | (will_edit ? BLN_CURBUF : 0);
-      ARGLIST[after + i].ae_fname = files[i];
-      ARGLIST[after + i].ae_fnum = buflist_add(files[i], flags);
-    }
-    arglist_locked = false;
-    curwin->w_locked = false;
-    ALIST(curwin)->al_ga.ga_len += count;
-    if (old_argcount > 0 && curwin->w_arg_idx >= after) {
-      curwin->w_arg_idx += count;
-    }
-    return;
-  }
-}
-
-/// Delete the file names in "alist_ga" from the argument list.
-static void arglist_del_files(garray_T *alist_ga)
-{
-  regmatch_T regmatch;
-
-  // Delete the items: use each item as a regexp and find a match in the
-  // argument list.
-  regmatch.rm_ic = p_fic;     // ignore case when 'fileignorecase' is set
-  for (int i = 0; i < alist_ga->ga_len && !got_int; i++) {
-    char *p = ((char **)alist_ga->ga_data)[i];
-    p = file_pat_to_reg_pat(p, NULL, NULL, false);
-    if (p == NULL) {
-      break;
-    }
-    regmatch.regprog = vim_regcomp(p, magic_isset() ? RE_MAGIC : 0);
-    if (regmatch.regprog == NULL) {
-      xfree(p);
-      break;
-    }
-
-    bool didone = false;
-    for (int match = 0; match < ARGCOUNT; match++) {
-      if (vim_regexec(&regmatch, alist_name(&ARGLIST[match]), 0)) {
-        didone = true;
-        xfree(ARGLIST[match].ae_fname);
-        memmove(ARGLIST + match, ARGLIST + match + 1,
-                (size_t)(ARGCOUNT - match - 1) * sizeof(aentry_T));
-        ALIST(curwin)->al_ga.ga_len--;
-        if (curwin->w_arg_idx > match) {
-          curwin->w_arg_idx--;
-        }
-        match--;
-      }
-    }
-
-    vim_regfree(regmatch.regprog);
-    xfree(p);
-    if (!didone) {
-      semsg(_(e_nomatch2), ((char **)alist_ga->ga_data)[i]);
-    }
-  }
-  ga_clear(alist_ga);
 }
 
 /// @param str
@@ -418,58 +346,11 @@ static void arglist_del_files(garray_T *alist_ga)
 static int do_arglist(char *str, int what, int after, bool will_edit)
   FUNC_ATTR_NONNULL_ALL
 {
-  garray_T new_ga;
-  int exp_count;
-  char **exp_files;
-  bool arg_escaped = true;
-
-  if (check_arglist_locked() == FAIL) {
-    return FAIL;
-  }
-
-  // Set default argument for ":argadd" command.
-  if (what == AL_ADD && *str == NUL) {
-    if (curbuf->b_ffname == NULL) {
-      return FAIL;
-    }
-    str = curbuf->b_fname;
-    arg_escaped = false;
-  }
-
-  // Collect all file name arguments in "new_ga".
-  get_arglist(&new_ga, str, arg_escaped);
-
-  if (what == AL_DEL) {
-    arglist_del_files(&new_ga);
-  } else {
-    int i = expand_wildcards(new_ga.ga_len, new_ga.ga_data,
-                             &exp_count, &exp_files,
-                             EW_DIR|EW_FILE|EW_ADDSLASH|EW_NOTFOUND);
-    ga_clear(&new_ga);
-    if (i == FAIL || exp_count == 0) {
-      emsg(_(e_nomatch));
-      return FAIL;
-    }
-
-    if (what == AL_ADD) {
-      alist_add_list(exp_count, exp_files, after, will_edit);
-      xfree(exp_files);
-    } else {
-      assert(what == AL_SET);
-      alist_set(ALIST(curwin), exp_count, exp_files, will_edit, NULL, 0);
-    }
-  }
-
-  alist_check_arg_idx();
-
-  return OK;
+  return rs_do_arglist(str, what, after, will_edit);
 }
 
 /// Redefine the argument list.
-void set_arglist(char *str)
-{
-  do_arglist(str, AL_SET, 0, true);
-}
+void set_arglist(char *str) { rs_set_arglist(str); }
 
 /// @return  true if window "win" is editing the file at the current argument
 ///          index.

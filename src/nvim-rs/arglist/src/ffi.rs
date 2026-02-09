@@ -153,25 +153,25 @@ extern "C" {
 
 extern "C" {
     pub fn nvim_al_foreach_tab_window(
-        cb: extern "C" fn(WinPtr, TabpagePtr, *mut c_void),
+        cb: unsafe extern "C" fn(WinPtr, *mut c_void) -> c_int,
         ud: *mut c_void,
     );
     pub fn nvim_al_memmove_aentry(dst: AentryPtr, src: AentryPtr, count: c_int);
-    pub fn nvim_al_file_pat_to_reg_pat(
-        pat: *const c_char,
-        pat_end: *const c_char,
-        allow_dirs: *mut c_int,
-        no_bslash: c_int,
-    ) -> *mut c_char;
-    pub fn nvim_al_regmatch_compile(pat: *const c_char, ic: c_int) -> *mut c_void;
-    pub fn nvim_al_regmatch_exec(rm: *mut c_void, str: *const c_char) -> c_int;
+    pub fn nvim_al_file_pat_to_reg_pat(pat: *const c_char) -> *mut c_char;
+    pub fn nvim_al_regmatch_alloc() -> *mut c_void;
+    pub fn nvim_al_regmatch_set_ic(rm: *mut c_void, ic: c_int);
+    pub fn nvim_al_regmatch_compile(rm: *mut c_void, pat: *const c_char, re_flags: c_int) -> c_int;
+    pub fn nvim_al_regmatch_exec(rm: *mut c_void, line: *const c_char) -> c_int;
     pub fn nvim_al_regmatch_free(rm: *mut c_void);
+    pub fn nvim_al_regmatch_free_prog(rm: *mut c_void);
     pub fn nvim_al_magic_isset() -> c_int;
     pub fn nvim_al_get_p_fic() -> c_int;
     pub fn nvim_al_semsg_nomatch2(pat: *const c_char);
     pub fn nvim_al_emsg_nomatch();
     pub fn nvim_al_curbuf_b_ffname() -> *mut c_char;
     pub fn nvim_al_curbuf_b_fname() -> *mut c_char;
+    pub fn nvim_al_alist_name(ae: AentryPtr) -> *mut c_char;
+    pub fn nvim_al_check_arg_idx(wp: WinPtr);
 }
 
 // =============================================================================
@@ -247,7 +247,6 @@ extern "C" {
     pub fn nvim_al_emsg_invrange();
     pub fn nvim_al_emsg_E610();
     pub fn nvim_al_emsg_str(msg: *const c_char);
-    pub fn nvim_al_alist_name(ae: AentryPtr) -> *mut c_char;
     pub fn nvim_al_ga_init_charptr_n(ga: GarrayPtr, n: c_int);
 }
 
