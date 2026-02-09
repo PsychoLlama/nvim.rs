@@ -1,20 +1,22 @@
-Plan: ~/.claude/plans/fix-abi-constants-vv-linenr-bool.md
+Plan: ~/.claude/plans/fuzz-testing-regexp.md
 
-All steps of the plan are complete. Here's a summary:
+All plan steps are complete. Here's a summary:
 
-**Commit 1: `0aaf905` — fix(ffi): correct VV_* constants and LinenrT type across crates**
-- Fixed `VV_EXCEPTION`: 16 → 30
-- Fixed `VV_TESTING`: 35 → 76
-- Fixed `VV_WARNINGMSG`: 38/39 → 4 (was also inconsistent between crates)
-- Fixed `LinenrT`: `c_long`/`i64` → `i32` in change, drawline, extmark, undo crates (matches C `int32_t linenr_T`)
-- Added `_Static_assert` guards for VV_* constants in `eval/vars.c`
-- 8 files changed
+**Commit**: `48c98cb4b0` — `feat(regexp): add VimL-based regexp fuzz testing`
 
-**Commit 2: `a615054` — fix(ffi): correct bool/int type mismatches in FFI declarations**
-- 6 functions: C returns `bool`, Rust had `-> c_int` → fixed to `-> bool`
-- 10 functions: C returns `int`, Rust had `-> bool` → fixed to `-> c_int`
-- 3 functions: C takes `int` param, Rust had `bool` → fixed to `c_int`
-- Resolved 15 inconsistent cross-crate declarations
-- 19 files changed
+**What was done:**
 
-All checks pass: build, smoke-test (29/29), rust-fmt-check, rust-clippy, rust-test (3518/3518).
+1. **`test/regexp_fuzz.vim`** — New VimL fuzz test script that:
+   - Tests 18 adversarial patterns (catastrophic backtracking, unclosed brackets, deep nesting)
+   - Generates 10,000 random regexp patterns from metacharacters
+   - Tests each pattern against 5 engine variants: default, `\v`, `\V`, BT (`\%#=1`), NFA (`\%#=2`)
+   - 50,018 total regexp operations per run
+   - Uses `silent!` inside `try/catch` to properly suppress non-exception regexp error messages
+
+2. **`justfile`** — Replaced the cargo-fuzz `regexp-fuzz` target with a VimL-based one that runs inside nvim with a 30-second timeout
+
+3. **`fuzz/` stubs** — Updated `regexp_compile.rs`, `regexp_match.rs`, and `fuzz/Cargo.toml` to document the FFI limitation and point to `just regexp-fuzz`
+
+**All checks passed:** build, regexp-fuzz, smoke-test, rust-fmt-check, rust-clippy, rust-test (3518 tests)
+
+**Notable finding:** VimL regexp errors (like `E866: Misplaced +`) are not proper exceptions — they bypass `try/catch` when running from a sourced script, causing the script to hang waiting for user input. The fix is `try | silent! call matchstrpos(...) | catch | endtry`.
