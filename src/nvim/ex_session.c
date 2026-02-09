@@ -1145,20 +1145,16 @@ static char *get_view_file(char c)
   return retval;
 }
 
-/// TODO(justinmk): remove this, not needed after 5ba3cecb68cd.
 int put_eol(FILE *fd)
 {
-  if (putc('\n', fd) < 0) {
-    return FAIL;
-  }
-  return OK;
+  return rs_put_eol(fd);
 }
 
-/// TODO(justinmk): remove this, not needed after 5ba3cecb68cd.
 int put_line(FILE *fd, char *s)
 {
-  if (fprintf(fd, "%s\n", s) < 0) {
-    return FAIL;
-  }
-  return OK;
+  return rs_put_line(fd, s);
 }
+
+// _Static_assert for OK/FAIL values used by Rust FFI
+_Static_assert(OK == 1, "OK must be 1");
+_Static_assert(FAIL == 0, "FAIL must be 0");

@@ -18,6 +18,7 @@ mod loading;
 mod serializer;
 mod view;
 mod viewload;
+pub mod writer;
 
 pub use buffers::*;
 pub use commands::*;
@@ -28,6 +29,7 @@ pub use loading::*;
 pub use serializer::*;
 pub use view::*;
 pub use viewload::*;
+pub use writer::*;
 
 // =============================================================================
 // Session Option Flags (matches kOptSsopFlag* from option_vars.generated.h)
@@ -122,10 +124,10 @@ pub enum SessionComponent {
 
 /// Frame layout type: leaf (single window)
 pub const FR_LEAF: c_int = 0;
-/// Frame layout type: column (vertical split)
-pub const FR_COL: c_int = 1;
 /// Frame layout type: row (horizontal split)
-pub const FR_ROW: c_int = 2;
+pub const FR_ROW: c_int = 1;
+/// Frame layout type: column (vertical split)
+pub const FR_COL: c_int = 2;
 
 // =============================================================================
 // Session Error Codes
@@ -315,8 +317,8 @@ pub extern "C" fn rs_session_frame_split_cmd(layout: c_int) -> *const c_char {
     static EMPTY: &[u8] = b"\0";
 
     let cmd = match layout {
-        1 => SPLIT,  // FR_COL
-        2 => VSPLIT, // FR_ROW
+        FR_COL => SPLIT,
+        FR_ROW => VSPLIT,
         _ => EMPTY,
     };
     cmd.as_ptr().cast::<c_char>()
@@ -330,8 +332,8 @@ pub extern "C" fn rs_session_frame_move_cmd(layout: c_int) -> *const c_char {
     static EMPTY: &[u8] = b"\0";
 
     let cmd = match layout {
-        1 => WINCMD_K, // FR_COL - move up
-        2 => WINCMD_H, // FR_ROW - move left
+        FR_COL => WINCMD_K, // move up
+        FR_ROW => WINCMD_H, // move left
         _ => EMPTY,
     };
     cmd.as_ptr().cast::<c_char>()

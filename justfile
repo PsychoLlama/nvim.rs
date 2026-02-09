@@ -126,6 +126,7 @@ rust-test:
       -p nvim-register \
       -p nvim-rs \
       -p nvim-search \
+      -p nvim-session \
       -p nvim-statusline \
       -p nvim-strings \
       -p nvim-syntax \
