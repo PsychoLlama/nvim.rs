@@ -36,4 +36,16 @@ extern "C" {
     pub fn nvim_ses_frame_get_child(fr: FramePtr) -> FramePtr;
     pub fn nvim_ses_frame_get_next(fr: FramePtr) -> FramePtr;
     pub fn nvim_ses_frame_get_win(fr: FramePtr) -> WinPtr;
+
+    // --- Filename helper accessors (Phase 3) ---
+    pub fn nvim_ses_buf_get_sfname(buf: BufPtr) -> *const c_char;
+    pub fn nvim_ses_buf_get_ffname(buf: BufPtr) -> *const c_char;
+    pub fn nvim_ses_get_vop_flags_ptr() -> *const c_uint;
+    pub fn nvim_ses_get_p_acd() -> c_int;
+    pub fn nvim_ses_get_did_lcd() -> c_int;
+    pub fn nvim_ses_set_did_lcd(val: c_int);
+    pub fn nvim_ses_home_replace_save(name: *const c_char) -> *mut c_char;
+    pub fn nvim_ses_vim_strsave_fnameescape(name: *const c_char) -> *mut c_char;
+    pub fn nvim_ses_xfree(p: *mut c_void);
+    pub fn nvim_ses_utfc_ptr2len(p: *const c_char) -> c_int;
 }

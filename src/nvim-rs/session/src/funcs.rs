@@ -5,8 +5,10 @@
 
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::ptr_cast_constness)]
 
-use std::ffi::{c_int, c_uint};
+use std::ffi::{c_char, c_int, c_uint};
 
 use crate::ffi;
 
@@ -19,6 +21,8 @@ pub const FAIL: c_int = 0;
 pub const K_OPT_SSOP_FLAG_BLANK: c_uint = 0x80;
 pub const K_OPT_SSOP_FLAG_HELP: c_uint = 0x40;
 pub const K_OPT_SSOP_FLAG_TERMINAL: c_uint = 0x10000;
+pub const K_OPT_SSOP_FLAG_CURDIR: c_uint = 0x1000;
+pub const K_OPT_SSOP_FLAG_SESDIR: c_uint = 0x800;
 
 /// Frame layout constants (verified via _Static_assert in C)
 pub const FR_LEAF: c_int = 0;
@@ -98,4 +102,124 @@ pub unsafe extern "C" fn rs_ses_skipframe(fr: ffi::FramePtr) -> ffi::FramePtr {
         frc = ffi::nvim_ses_frame_get_next(frc);
     }
     frc
+}
+
+// =============================================================================
+// Phase 3: Filename Helpers
+// =============================================================================
+
+/// Get the buffer name for `buf`.
+///
+/// Uses the short file name when the current directory is known at session
+/// source time (session flags with curdir/sesdir, no acd, no lcd).
+/// Otherwise uses the full file name.
+///
+/// # Safety
+/// `buf` must be a valid buf_T pointer. `flagp` must be a valid pointer to unsigned.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ses_get_fname(buf: ffi::BufPtr, flagp: *const c_uint) -> *const c_char {
+    let sfname = ffi::nvim_ses_buf_get_sfname(buf);
+    let ssop_ptr = ffi::nvim_ses_get_ssop_flags_ptr();
+
+    // Use the short file name if:
+    // - Buffer has b_sfname
+    // - flagp == &ssop_flags (session mode, not view)
+    // - (ssop_flags & (CURDIR | SESDIR)) is set
+    // - !p_acd
+    // - !did_lcd
+    if !sfname.is_null()
+        && flagp == ssop_ptr
+        && (ffi::nvim_ses_get_ssop_flags() & (K_OPT_SSOP_FLAG_CURDIR | K_OPT_SSOP_FLAG_SESDIR)) != 0
+        && ffi::nvim_ses_get_p_acd() == 0
+        && ffi::nvim_ses_get_did_lcd() == 0
+    {
+        return sfname;
+    }
+    ffi::nvim_ses_buf_get_ffname(buf)
+}
+
+/// Escape a filename for session writing.
+///
+/// Replaces backslashes with forward slashes (always kOptSsopFlagSlash)
+/// and escapes special characters.
+///
+/// Returns an allocated string (caller must free with `nvim_ses_xfree`).
+///
+/// # Safety
+/// `name` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ses_escape_fname(
+    name: *mut c_char,
+    _flagp: *mut c_uint,
+) -> *mut c_char {
+    let sname = ffi::nvim_ses_home_replace_save(name);
+
+    // Always kOptSsopFlagSlash: change all backslashes to forward slashes.
+    // Use MB_PTR_ADV equivalent (utfc_ptr2len) to advance past multibyte chars.
+    let mut p = sname;
+    while *p != 0 {
+        if *p == b'\\' as c_char {
+            *p = b'/' as c_char;
+        }
+        let len = ffi::nvim_ses_utfc_ptr2len(p);
+        p = p.add(if len > 0 { len as usize } else { 1 });
+    }
+
+    // Escape special characters.
+    let result = ffi::nvim_ses_vim_strsave_fnameescape(sname);
+    ffi::nvim_ses_xfree(sname.cast());
+    result
+}
+
+/// Write a file name to the session file.
+///
+/// Takes care of the "slash" option and escapes special characters.
+/// Returns OK or FAIL.
+///
+/// # Safety
+/// `fd` must be a valid FILE*. `name` must be a valid C string. `flagp` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ses_put_fname(
+    fd: *mut libc::FILE,
+    name: *mut c_char,
+    flagp: *mut c_uint,
+) -> c_int {
+    let p = rs_ses_escape_fname(name, flagp);
+    let mut w = crate::writer::SessionWriter::new(fd);
+
+    // Write the escaped filename (fputs equivalent)
+    let cstr = std::ffi::CStr::from_ptr(p);
+    let retval = if w.write_bytes(cstr.to_bytes()) {
+        OK
+    } else {
+        FAIL
+    };
+    ffi::nvim_ses_xfree(p.cast());
+    retval
+}
+
+/// Write a buffer name to the session file, optionally ending the line.
+///
+/// Returns OK or FAIL.
+///
+/// # Safety
+/// `fd` must be a valid FILE*. `buf` must be a valid buf_T pointer. `flagp` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ses_fname(
+    fd: *mut libc::FILE,
+    buf: ffi::BufPtr,
+    flagp: *mut c_uint,
+    add_eol: bool,
+) -> c_int {
+    let name = rs_ses_get_fname(buf, flagp);
+    if rs_ses_put_fname(fd, name as *mut c_char, flagp) == FAIL {
+        return FAIL;
+    }
+    if add_eol {
+        let mut w = crate::writer::SessionWriter::new(fd);
+        if !w.write_bytes(b"\n") {
+            return FAIL;
+        }
+    }
+    OK
 }

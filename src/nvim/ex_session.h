@@ -14,4 +14,10 @@ extern int rs_ses_do_win(win_T *wp);
 extern bool rs_ses_do_frame(const frame_T *fr);
 extern frame_T *rs_ses_skipframe(frame_T *fr);
 
+// Rust FFI: filename helpers (Phase 3)
+extern char *rs_ses_get_fname(buf_T *buf, const unsigned *flagp);
+extern char *rs_ses_escape_fname(char *name, unsigned *flagp);
+extern int rs_ses_put_fname(FILE *fd, char *name, unsigned *flagp);
+extern int rs_ses_fname(FILE *fd, buf_T *buf, unsigned *flagp, bool add_eol);
+
 #include "ex_session.h.generated.h"

@@ -94,6 +94,42 @@ _Static_assert(kOptSsopFlagBlank == 0x80, "kOptSsopFlagBlank");
 _Static_assert(kOptSsopFlagHelp == 0x40, "kOptSsopFlagHelp");
 _Static_assert(kOptSsopFlagTerminal == 0x10000, "kOptSsopFlagTerminal");
 
+// --- Filename helper accessors (Phase 3) ---
+const char *nvim_ses_buf_get_sfname(const buf_T *buf) { return buf->b_sfname; }
+const char *nvim_ses_buf_get_ffname(const buf_T *buf) { return buf->b_ffname; }
+unsigned *nvim_ses_get_vop_flags_ptr(void) { return &vop_flags; }
+int nvim_ses_get_p_acd(void) { return p_acd; }
+int nvim_ses_get_did_lcd(void) { return did_lcd; }
+void nvim_ses_set_did_lcd(int val) { did_lcd = val; }
+
+// Wraps home_replace_save(NULL, name) - returns xmalloc'd string
+char *nvim_ses_home_replace_save(const char *name)
+{
+  return home_replace_save(NULL, name);
+}
+
+// Wraps vim_strsave_fnameescape(name, VSE_NONE) - returns xmalloc'd string
+char *nvim_ses_vim_strsave_fnameescape(const char *name)
+{
+  return vim_strsave_fnameescape(name, VSE_NONE);
+}
+
+// Wraps xfree
+void nvim_ses_xfree(void *p)
+{
+  xfree(p);
+}
+
+// Wraps utfc_ptr2len for MB_PTR_ADV
+int nvim_ses_utfc_ptr2len(const char *p)
+{
+  return utfc_ptr2len(p);
+}
+
+// _Static_assert for Phase 3 constants
+_Static_assert(kOptSsopFlagCurdir == 0x1000, "kOptSsopFlagCurdir");
+_Static_assert(kOptSsopFlagSesdir == 0x800, "kOptSsopFlagSesdir");
+
 static int put_view_curpos(FILE *fd, const win_T *wp, char *spaces)
 {
   int r;
@@ -246,72 +282,24 @@ static int ses_arglist(FILE *fd, char *cmd, garray_T *gap, bool fullname, unsign
   return OK;
 }
 
-/// @return  the buffer name for `buf`.
 static char *ses_get_fname(buf_T *buf, const unsigned *flagp)
 {
-  // Use the short file name if the current directory is known at the time
-  // the session file will be sourced.
-  // Don't do this for ":mkview", we don't know the current directory.
-  // Don't do this after ":lcd", we don't keep track of what the current
-  // directory is.
-  if (buf->b_sfname != NULL
-      && flagp == &ssop_flags
-      && (ssop_flags & (kOptSsopFlagCurdir | kOptSsopFlagSesdir))
-      && !p_acd
-      && !did_lcd) {
-    return buf->b_sfname;
-  }
-  return buf->b_ffname;
+  return rs_ses_get_fname(buf, flagp);
 }
 
-/// Write a buffer name to the session file.
-/// Also ends the line, if "add_eol" is true.
-///
-/// @return  FAIL if writing fails.
 static int ses_fname(FILE *fd, buf_T *buf, unsigned *flagp, bool add_eol)
 {
-  char *name = ses_get_fname(buf, flagp);
-  if (ses_put_fname(fd, name, flagp) == FAIL
-      || (add_eol && fprintf(fd, "\n") < 0)) {
-    return FAIL;
-  }
-  return OK;
+  return rs_ses_fname(fd, buf, flagp, add_eol);
 }
 
-/// Escapes a filename for session writing.
-/// Takes care of "slash" flag in 'sessionoptions' and escapes special
-/// characters.
-///
-/// @return  allocated string or NULL.
 static char *ses_escape_fname(char *name, unsigned *flagp)
 {
-  char *p;
-  char *sname = home_replace_save(NULL, name);
-
-  // Always kOptSsopFlagSlash: change all backslashes to forward slashes.
-  for (p = sname; *p != NUL; MB_PTR_ADV(p)) {
-    if (*p == '\\') {
-      *p = '/';
-    }
-  }
-
-  // Escape special characters.
-  p = vim_strsave_fnameescape(sname, VSE_NONE);
-  xfree(sname);
-  return p;
+  return rs_ses_escape_fname(name, flagp);
 }
 
-/// Write a file name to the session file.
-/// Takes care of the "slash" option in 'sessionoptions' and escapes special
-/// characters.
-///
-/// @return  FAIL if writing fails.
 static int ses_put_fname(FILE *fd, char *name, unsigned *flagp)
 {
-  char *p = ses_escape_fname(name, flagp);
-  bool retval = fputs(p, fd) < 0 ? FAIL : OK;
-  xfree(p);
-  return retval;
+  return rs_ses_put_fname(fd, name, flagp);
 }
 
 /// Write commands to "fd" to restore the view of a window.
