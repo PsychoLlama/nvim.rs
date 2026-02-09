@@ -27,11 +27,14 @@ use nvim_window::WinHandle;
 ///
 /// This represents a position in a buffer with line number, column, and
 /// virtual column addition for 'virtualedit'.
+///
+/// IMPORTANT: This must exactly match the C `pos_T` layout:
+///   `linenr_T` lnum (`int32_t`) + `colnr_T` col (int) + `colnr_T` coladd (int) = 12 bytes
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CursorPos {
-    /// Line number (1-based)
-    pub lnum: i64,
+    /// Line number (1-based), matches C `linenr_T` = `int32_t`
+    pub lnum: i32,
     /// Column (0-based byte offset)
     pub col: i32,
     /// Column addition for 'virtualedit'
@@ -42,14 +45,14 @@ impl CursorPos {
     /// Create a new cursor position.
     #[inline]
     #[must_use]
-    pub const fn new(lnum: i64, col: i32, coladd: i32) -> Self {
+    pub const fn new(lnum: i32, col: i32, coladd: i32) -> Self {
         Self { lnum, col, coladd }
     }
 
     /// Create a position at the beginning of a line.
     #[inline]
     #[must_use]
-    pub const fn line_start(lnum: i64) -> Self {
+    pub const fn line_start(lnum: i32) -> Self {
         Self {
             lnum,
             col: 0,
@@ -117,19 +120,19 @@ pub const VE_NONEU: c_int = 0x20;
 // =============================================================================
 
 extern "C" {
-    /// Get line count from buffer
-    fn nvim_buf_get_line_count(buf: *mut std::ffi::c_void) -> i64;
+    /// Get line count from buffer (returns `linenr_T` = `int32_t`)
+    fn nvim_buf_get_line_count(buf: *mut std::ffi::c_void) -> i32;
 
     /// Get buffer from window
     fn nvim_win_get_buffer(win: WinHandle) -> *mut std::ffi::c_void;
 
-    /// Get cursor position from window
-    fn nvim_win_get_cursor_lnum(win: WinHandle) -> i64;
+    /// Get cursor position from window (`linenr_T` = `int32_t`)
+    fn nvim_win_get_cursor_lnum(win: WinHandle) -> i32;
     fn nvim_win_get_cursor_col(win: WinHandle) -> i32;
     fn nvim_win_get_cursor_coladd(win: WinHandle) -> i32;
 
-    /// Get length of a line in bytes
-    fn nvim_buf_get_line_len(buf: *mut std::ffi::c_void, lnum: i64) -> i32;
+    /// Get length of a line in bytes (lnum is `linenr_T` = `int32_t`)
+    fn nvim_buf_get_line_len(buf: *mut std::ffi::c_void, lnum: i32) -> i32;
 
     /// Check if 'virtualedit' allows cursor past end of line
     fn nvim_virtual_active(win: WinHandle) -> bool;
@@ -222,14 +225,14 @@ extern "C" {
     /// Get line count from buffer (i64 version)
     fn nvim_buf_get_ml_line_count_i64(buf: BufHandle) -> i64;
 
-    /// Get line length from buffer
-    fn nvim_buf_get_line_len_pos(buf: BufHandle, lnum: i64) -> i32;
+    /// Get line length from buffer (lnum is `linenr_T` = `int32_t`)
+    fn nvim_buf_get_line_len_pos(buf: BufHandle, lnum: i32) -> i32;
 
     /// Get `VIsual` position pointer
     fn nvim_get_visual_pos() -> *mut CursorPos;
 
-    /// Set `VIsual` position
-    fn nvim_set_visual_pos(lnum: i64, col: i32, coladd: i32);
+    /// Set `VIsual` position (lnum is `linenr_T` = `int32_t`)
+    fn nvim_set_visual_pos(lnum: i32, col: i32, coladd: i32);
 
     /// Get curbuf pointer
     fn nvim_cursor_get_curbuf() -> BufHandle;
@@ -237,12 +240,13 @@ extern "C" {
     /// Get buffer from window
     fn nvim_win_get_buffer_ptr(wp: WinHandle) -> BufHandle;
 
-    /// Check if line is folded at end of buffer
-    /// Returns the first line of the fold if found, or 0 if not folded
-    fn nvim_check_folding_at_end(win: WinHandle) -> i64;
+    /// Check if line is folded at end of buffer.
+    /// Returns the first line of the fold if found, or 0 if not folded.
+    /// (returns `linenr_T` = `int32_t`)
+    fn nvim_check_folding_at_end(win: WinHandle) -> i32;
 
-    /// Set window cursor line number
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: i64);
+    /// Set window cursor line number (lnum is `linenr_T` = `int32_t`)
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: i32);
 
     /// Set window cursor column
     fn nvim_win_set_cursor_col(wp: WinHandle, col: i32);
@@ -253,7 +257,7 @@ extern "C" {
     /// Wrapper for `mark_mb_adjustpos`
     fn nvim_mark_mb_adjustpos(buf: BufHandle, lp: *mut CursorPos);
 
-    /// Get vcol range (start and end columns) for virtualedit
+    /// Get vcol range (start and end columns) for `virtualedit`
     fn nvim_get_vcol_range(wp: WinHandle, pos: *const CursorPos, start: *mut i32, end: *mut i32);
 
     // -------------------------------------------------------------------------
@@ -280,8 +284,9 @@ extern "C" {
     /// Check if any folding is present in the window
     fn rs_hasAnyFolding(wp: WinHandle) -> c_int;
 
-    /// Check if a line is folded, returns fold boundaries
-    fn nvim_hasFolding(wp: WinHandle, lnum: i64, firstp: *mut i64, lastp: *mut i64) -> c_int;
+    /// Check if a line is folded, returns fold boundaries.
+    /// (lnum and pointers are `linenr_T` = `int32_t`)
+    fn nvim_hasFolding(wp: WinHandle, lnum: i32, firstp: *mut i32, lastp: *mut i32) -> c_int;
 
     // -------------------------------------------------------------------------
     // Window State Functions (for set_leftcol)
@@ -311,7 +316,7 @@ extern "C" {
     /// Call `validate_virtcol`
     fn nvim_validate_virtcol(wp: WinHandle);
 
-    /// Get sidescrolloff value
+    /// Get `sidescrolloff` value
     fn nvim_get_sidescrolloff_value(wp: WinHandle) -> c_int;
 
     /// Call `redraw_later`
@@ -408,7 +413,7 @@ pub extern "C" fn rs_cursor_pos_leq(a: &CursorPos, b: &CursorPos) -> bool {
 /// # Safety
 /// `win` must be a valid window handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_get_line_count(win: WinHandle) -> i64 {
+pub unsafe extern "C" fn rs_cursor_get_line_count(win: WinHandle) -> i32 {
     let buf = nvim_win_get_buffer(win);
     if buf.is_null() {
         return 0;
@@ -421,7 +426,7 @@ pub unsafe extern "C" fn rs_cursor_get_line_count(win: WinHandle) -> i64 {
 /// # Safety
 /// `win` must be a valid window handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_clamp_lnum(win: WinHandle, lnum: i64) -> i64 {
+pub unsafe extern "C" fn rs_cursor_clamp_lnum(win: WinHandle, lnum: i32) -> i32 {
     let line_count = rs_cursor_get_line_count(win);
     if lnum < 1 {
         1
@@ -437,7 +442,7 @@ pub unsafe extern "C" fn rs_cursor_clamp_lnum(win: WinHandle, lnum: i64) -> i64 
 /// # Safety
 /// `win` must be a valid window handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_valid_lnum(win: WinHandle, lnum: i64) -> bool {
+pub unsafe extern "C" fn rs_cursor_valid_lnum(win: WinHandle, lnum: i32) -> bool {
     if lnum < 1 {
         return false;
     }
@@ -454,7 +459,7 @@ pub unsafe extern "C" fn rs_cursor_valid_lnum(win: WinHandle, lnum: i64) -> bool
 /// # Safety
 /// `win` must be a valid window handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_can_move_up(_win: WinHandle, lnum: i64) -> bool {
+pub unsafe extern "C" fn rs_cursor_can_move_up(_win: WinHandle, lnum: i32) -> bool {
     lnum > 1
 }
 
@@ -463,7 +468,7 @@ pub unsafe extern "C" fn rs_cursor_can_move_up(_win: WinHandle, lnum: i64) -> bo
 /// # Safety
 /// `win` must be a valid window handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_can_move_down(win: WinHandle, lnum: i64) -> bool {
+pub unsafe extern "C" fn rs_cursor_can_move_down(win: WinHandle, lnum: i32) -> bool {
     let line_count = rs_cursor_get_line_count(win);
     lnum < line_count
 }
@@ -474,7 +479,7 @@ pub unsafe extern "C" fn rs_cursor_can_move_down(win: WinHandle, lnum: i64) -> b
 /// # Safety
 /// `win` must be a valid window handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_line_up(_win: WinHandle, lnum: i64, count: i64) -> i64 {
+pub unsafe extern "C" fn rs_cursor_line_up(_win: WinHandle, lnum: i32, count: i32) -> i32 {
     let target = lnum - count;
     if target < 1 {
         1
@@ -489,7 +494,7 @@ pub unsafe extern "C" fn rs_cursor_line_up(_win: WinHandle, lnum: i64, count: i6
 /// # Safety
 /// `win` must be a valid window handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_line_down(win: WinHandle, lnum: i64, count: i64) -> i64 {
+pub unsafe extern "C" fn rs_cursor_line_down(win: WinHandle, lnum: i32, count: i32) -> i32 {
     let line_count = rs_cursor_get_line_count(win);
     let target = lnum + count;
     if target > line_count {
@@ -508,7 +513,7 @@ pub unsafe extern "C" fn rs_cursor_line_down(win: WinHandle, lnum: i64, count: i
 #[no_mangle]
 pub unsafe extern "C" fn rs_cursor_clamp_col(
     win: WinHandle,
-    lnum: i64,
+    lnum: i32,
     col: i32,
     allow_past_end: bool,
 ) -> i32 {
@@ -567,7 +572,7 @@ pub unsafe extern "C" fn rs_cursor_one_more(win: WinHandle) -> bool {
 /// # Safety
 /// `win` must be a valid window handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_at_eol(win: WinHandle, lnum: i64, col: i32) -> bool {
+pub unsafe extern "C" fn rs_cursor_at_eol(win: WinHandle, lnum: i32, col: i32) -> bool {
     let buf = nvim_win_get_buffer(win);
     if buf.is_null() {
         return true;
@@ -584,7 +589,7 @@ pub extern "C" fn rs_cursor_at_bol(col: i32) -> bool {
 
 /// Check if position is at first line of buffer.
 #[no_mangle]
-pub extern "C" fn rs_cursor_at_first_line(lnum: i64) -> bool {
+pub extern "C" fn rs_cursor_at_first_line(lnum: i32) -> bool {
     lnum <= 1
 }
 
@@ -593,7 +598,7 @@ pub extern "C" fn rs_cursor_at_first_line(lnum: i64) -> bool {
 /// # Safety
 /// `win` must be a valid window handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_at_last_line(win: WinHandle, lnum: i64) -> bool {
+pub unsafe extern "C" fn rs_cursor_at_last_line(win: WinHandle, lnum: i32) -> bool {
     let line_count = rs_cursor_get_line_count(win);
     lnum >= line_count
 }
@@ -836,6 +841,7 @@ pub unsafe extern "C" fn rs_adjust_cursor_col() {
 /// # Safety
 /// `buf` and `pos` must be valid pointers.
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_check_pos(buf: BufHandle, pos: *mut CursorPos) {
     if buf.is_null() || pos.is_null() {
         return;
@@ -844,8 +850,9 @@ pub unsafe extern "C" fn rs_check_pos(buf: BufHandle, pos: *mut CursorPos) {
     let line_count = nvim_buf_get_ml_line_count_i64(buf);
 
     // Clamp line number to buffer range
-    if (*pos).lnum > line_count {
-        (*pos).lnum = line_count;
+    // line_count is i64 from the accessor, but lnum is i32 (linenr_T)
+    if i64::from((*pos).lnum) > line_count {
+        (*pos).lnum = line_count as i32;
     }
 
     // Clamp column to line length (allowing position on NUL)
@@ -862,6 +869,7 @@ pub unsafe extern "C" fn rs_check_pos(buf: BufHandle, pos: *mut CursorPos) {
 /// # Safety
 /// `win` must be a valid window handle.
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_check_cursor_lnum(win: WinHandle) {
     let buf = nvim_win_get_buffer_ptr(win);
     if buf.is_null() {
@@ -871,14 +879,14 @@ pub unsafe extern "C" fn rs_check_cursor_lnum(win: WinHandle) {
     let cursor_lnum = nvim_win_get_cursor_lnum(win);
     let line_count = nvim_buf_get_ml_line_count_i64(buf);
 
-    if cursor_lnum > line_count {
+    if i64::from(cursor_lnum) > line_count {
         // If there is a closed fold at the end of the file, put the cursor in
         // its first line. Otherwise in the last line.
         let fold_first = nvim_check_folding_at_end(win);
         if fold_first > 0 {
             nvim_win_set_cursor_lnum(win, fold_first);
         } else {
-            nvim_win_set_cursor_lnum(win, line_count);
+            nvim_win_set_cursor_lnum(win, line_count as i32);
         }
     }
 
@@ -986,6 +994,7 @@ pub unsafe extern "C" fn rs_check_cursor(win: WinHandle) {
 /// # Safety
 /// Requires valid global state (curbuf).
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_check_visual_pos() {
     let curbuf = nvim_cursor_get_curbuf();
     if curbuf.is_null() {
@@ -999,8 +1008,8 @@ pub unsafe extern "C" fn rs_check_visual_pos() {
 
     let line_count = nvim_buf_get_ml_line_count_i64(curbuf);
 
-    if (*visual).lnum > line_count {
-        nvim_set_visual_pos(line_count, 0, 0);
+    if i64::from((*visual).lnum) > line_count {
+        nvim_set_visual_pos(line_count as i32, 0, 0);
     } else {
         let len = nvim_buf_get_line_len_pos(curbuf, (*visual).lnum);
         if (*visual).col > len {
@@ -1083,7 +1092,7 @@ pub unsafe extern "C" fn rs_pchar_cursor(c: c_char) {
 /// # Safety
 /// `wp` must be a valid window handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_get_cursor_rel_lnum(wp: WinHandle, lnum: i64) -> i64 {
+pub unsafe extern "C" fn rs_get_cursor_rel_lnum(wp: WinHandle, lnum: i32) -> i32 {
     let cursor = nvim_win_get_cursor_lnum(wp);
 
     // Fast path: same line or no folding
@@ -1098,13 +1107,13 @@ pub unsafe extern "C" fn rs_get_cursor_rel_lnum(wp: WinHandle, lnum: i64) -> i64
         (cursor, lnum)
     };
 
-    let mut retval: i64 = 0;
+    let mut retval: i32 = 0;
     let mut from = from_line;
 
     // Loop until we reach to_line, skipping folds
     while from < to_line {
         // If from is in a fold, set it to the last line of that fold
-        let mut fold_last: i64 = 0;
+        let mut fold_last: i32 = 0;
         if nvim_hasFolding(wp, from, std::ptr::null_mut(), &raw mut fold_last) != 0 {
             from = fold_last;
         }
@@ -1331,5 +1340,12 @@ mod tests {
     fn test_return_value_constants() {
         assert_eq!(OK, 1);
         assert_eq!(FAIL, 0);
+    }
+
+    #[test]
+    fn test_cursor_pos_layout() {
+        // CursorPos must match C pos_T: 3 x int32_t = 12 bytes
+        assert_eq!(std::mem::size_of::<CursorPos>(), 12);
+        assert_eq!(std::mem::align_of::<CursorPos>(), 4);
     }
 }

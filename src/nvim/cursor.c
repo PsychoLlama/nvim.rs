@@ -29,6 +29,8 @@
 
 #include "cursor.c.generated.h"
 
+_Static_assert(sizeof(pos_T) == 12, "pos_T size changed - update Rust CursorPos in cursor crate");
+
 // =============================================================================
 // Rust Function Declarations
 // =============================================================================
