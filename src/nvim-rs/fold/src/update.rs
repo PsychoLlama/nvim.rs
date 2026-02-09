@@ -543,7 +543,7 @@ pub fn fold_update_iems_indent_impl(wp: WinHandle, mut top: LinenrT, mut bot: Li
         flp.lnum -= 1;
     }
 
-    let start = flp.lnum;
+    let mut start = flp.lnum;
     let mut end = bot;
 
     // Do at least one line
@@ -577,6 +577,7 @@ pub fn fold_update_iems_indent_impl(wp: WinHandle, mut top: LinenrT, mut bot: Li
                 fold_flags::FD_LEVEL,
                 use_indent,
             );
+            start = flp.lnum;
         } else {
             if flp.lnum == line_count {
                 break;
