@@ -12,10 +12,17 @@
 #![allow(clippy::derivable_impls)]
 #![allow(clippy::match_same_arms)]
 #![allow(clippy::if_same_then_else)]
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::ptr_cast_constness)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::borrow_as_ptr)]
+#![allow(clippy::as_ptr_cast_mut)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
-use crate::AddrType;
+use crate::define::EX_XFILE;
+use crate::{AddrType, ExpandHandle};
 
 // =============================================================================
 // EXPAND_* Constants — match cmdexpand_defs.h exactly
@@ -528,6 +535,318 @@ unsafe fn c_str_as_bytes(s: *const c_char) -> &'static [u8] {
 }
 
 // =============================================================================
+// C Accessor Functions (Phase 8 — completion context)
+// =============================================================================
+
+/// CMD_USER from ex_cmds_enum.generated.h
+const CMD_USER: c_int = -1;
+/// CMD_USER_BUF from ex_cmds_enum.generated.h
+const CMD_USER_BUF: c_int = -2;
+/// CMD_SIZE from ex_cmds_enum.generated.h (number of built-in commands)
+const CMD_SIZE: c_int = 556;
+
+extern "C" {
+    // String navigation helpers
+    /// Returns skiptowhite(p) — pointer to first whitespace
+    fn nvim_uc_skiptowhite(p: *const c_char) -> *mut c_char;
+    /// Returns skipwhite(p) — pointer past whitespace
+    fn nvim_uc_skipwhite(p: *const c_char) -> *mut c_char;
+
+    // expand_T (xp) accessors
+    /// Sets xp->xp_context = context
+    fn nvim_uc_xp_set_context(xp: ExpandHandle, context: c_int);
+    /// Sets xp->xp_pattern = pattern
+    fn nvim_uc_xp_set_pattern(xp: ExpandHandle, pattern: *mut c_char);
+
+    // set_context_in_user_cmdarg delegations
+    /// Calls set_context_in_menu_cmd(xp, cmd, arg, forceit != 0)
+    fn nvim_uc_set_context_in_menu_cmd(
+        xp: ExpandHandle,
+        cmd: *const c_char,
+        arg: *mut c_char,
+        forceit: c_int,
+    ) -> *const c_char;
+    /// Calls set_context_in_map_cmd(xp, "map", arg, forceit, false, false, CMD_map)
+    fn nvim_uc_set_context_in_map_cmd(
+        xp: ExpandHandle,
+        arg: *mut c_char,
+        forceit: c_int,
+    ) -> *const c_char;
+    /// Does MB_PTR_ADV(*pp)
+    fn nvim_uc_MB_PTR_ADV(pp: *mut *const c_char);
+
+    // garray operations for user commands
+    /// Returns prevwin_curwin()->w_buffer->b_ucmds.ga_len
+    fn nvim_uc_prevwin_curwin_buf_ucmds_len() -> c_int;
+    /// Returns USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, i)
+    fn nvim_uc_prevwin_curwin_buf_ucmd_ga(i: c_int) -> *mut c_void;
+    /// Returns ucmds.ga_len
+    fn nvim_uc_get_ucmds_len() -> c_int;
+    /// Returns USER_CMD(idx) (global ucmds array)
+    fn nvim_uc_user_cmd_global(idx: c_int) -> *mut c_void;
+
+    // ucmd_T field getters
+    /// Returns cmd->uc_name
+    fn nvim_uc_cmd_get_name(cmd: *const c_void) -> *const c_char;
+}
+
+// =============================================================================
+// Phase 8: Completion Context Functions
+// =============================================================================
+
+/// Case-insensitive comparison of first `n` bytes.
+/// Returns true if the first `n` bytes of `a` and `b` are equal ignoring case.
+///
+/// # Safety
+///
+/// `a` and `b` must point to at least `n` bytes.
+unsafe fn strnicmp_eq_bytes(a: *const c_char, b: &[u8], n: usize) -> bool {
+    if n > b.len() {
+        return false;
+    }
+    for i in 0..n {
+        let ca = (unsafe { *a.add(i) } as u8).to_ascii_lowercase();
+        let cb = b[i].to_ascii_lowercase();
+        if ca != cb {
+            return false;
+        }
+    }
+    true
+}
+
+/// Implementation of `set_context_in_user_cmd`.
+///
+/// Sets completion context for the `:command` command.
+///
+/// # Safety
+///
+/// `xp` must be a valid expand_T pointer. `arg_in` must be a valid C string.
+unsafe fn set_context_in_user_cmd_impl(xp: ExpandHandle, arg_in: *const c_char) -> *const c_char {
+    let mut arg = arg_in;
+
+    // Check for attributes
+    while unsafe { *arg } == b'-' as c_char {
+        arg = unsafe { arg.add(1) }; // Skip "-"
+        let p_end = nvim_uc_skiptowhite(arg);
+        if unsafe { *p_end } == 0 {
+            // Cursor is still in the attribute.
+            // Find '=' in arg
+            let mut eq_pos: *const c_char = std::ptr::null();
+            let mut scan = arg;
+            while unsafe { *scan } != 0 {
+                if unsafe { *scan } == b'=' as c_char {
+                    eq_pos = scan;
+                    break;
+                }
+                scan = unsafe { scan.add(1) };
+            }
+
+            if eq_pos.is_null() {
+                // No "=", so complete attribute names.
+                nvim_uc_xp_set_context(xp, EXPAND_USER_CMD_FLAGS);
+                nvim_uc_xp_set_pattern(xp, arg as *mut c_char);
+                return std::ptr::null();
+            }
+
+            // For the -complete, -nargs and -addr attributes, we complete
+            // their arguments as well.
+            let attr_len = unsafe { eq_pos.offset_from(arg) } as usize;
+            if unsafe { strnicmp_eq_bytes(arg, b"complete", attr_len) } {
+                nvim_uc_xp_set_context(xp, EXPAND_USER_COMPLETE);
+                nvim_uc_xp_set_pattern(xp, unsafe { eq_pos.add(1) } as *mut c_char);
+                return std::ptr::null();
+            } else if unsafe { strnicmp_eq_bytes(arg, b"nargs", attr_len) } {
+                nvim_uc_xp_set_context(xp, EXPAND_USER_NARGS);
+                nvim_uc_xp_set_pattern(xp, unsafe { eq_pos.add(1) } as *mut c_char);
+                return std::ptr::null();
+            } else if unsafe { strnicmp_eq_bytes(arg, b"addr", attr_len) } {
+                nvim_uc_xp_set_context(xp, EXPAND_USER_ADDR_TYPE);
+                nvim_uc_xp_set_pattern(xp, unsafe { eq_pos.add(1) } as *mut c_char);
+                return std::ptr::null();
+            }
+            return std::ptr::null();
+        }
+        arg = nvim_uc_skipwhite(p_end) as *const c_char;
+    }
+
+    // After the attributes comes the new command name.
+    let p = nvim_uc_skiptowhite(arg);
+    if unsafe { *p } == 0 {
+        nvim_uc_xp_set_context(xp, EXPAND_USER_COMMANDS);
+        nvim_uc_xp_set_pattern(xp, arg as *mut c_char);
+        return std::ptr::null();
+    }
+
+    // And finally comes a normal command.
+    nvim_uc_skipwhite(p) as *const c_char
+}
+
+/// Implementation of `set_context_in_user_cmdarg`.
+///
+/// Sets the completion context for the argument of a user defined command.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+unsafe fn set_context_in_user_cmdarg_impl(
+    cmd: *const c_char,
+    arg: *const c_char,
+    argt: u32,
+    context: c_int,
+    xp: ExpandHandle,
+    forceit: c_int,
+) -> *const c_char {
+    if context == EXPAND_NOTHING {
+        return std::ptr::null();
+    }
+
+    if (argt & EX_XFILE) != 0 {
+        // EX_XFILE: file names are handled before this call.
+        return std::ptr::null();
+    }
+
+    if context == EXPAND_MENUS {
+        return nvim_uc_set_context_in_menu_cmd(xp, cmd, arg as *mut c_char, forceit);
+    }
+    if context == EXPAND_COMMANDS {
+        return arg;
+    }
+    if context == EXPAND_MAPPINGS {
+        return nvim_uc_set_context_in_map_cmd(xp, arg as *mut c_char, forceit);
+    }
+
+    // Find start of last argument.
+    let mut p = arg;
+    let mut last_arg = arg;
+    while unsafe { *p } != 0 {
+        if unsafe { *p } == b' ' as c_char {
+            // argument starts after a space
+            last_arg = unsafe { p.add(1) };
+        } else if unsafe { *p } == b'\\' as c_char && unsafe { *p.add(1) } != 0 {
+            p = unsafe { p.add(1) }; // skip over escaped character
+        }
+        nvim_uc_MB_PTR_ADV(&mut p);
+    }
+    nvim_uc_xp_set_pattern(xp, last_arg as *mut c_char);
+    nvim_uc_xp_set_context(xp, context);
+
+    std::ptr::null()
+}
+
+/// Implementation of `expand_user_command_name`.
+///
+/// Returns the command name at index `idx - CMD_SIZE`.
+unsafe fn expand_user_command_name_impl(idx: c_int) -> *mut c_char {
+    get_user_commands_impl(idx - CMD_SIZE)
+}
+
+/// Implementation of `get_user_commands`.
+///
+/// Gets user command names for expansion. Buffer-local first, then global.
+/// Global commands overruled by buffer-local ones return "".
+unsafe fn get_user_commands_impl(idx: c_int) -> *mut c_char {
+    let buf_len = nvim_uc_prevwin_curwin_buf_ucmds_len();
+
+    if idx < buf_len {
+        return nvim_uc_cmd_get_name(nvim_uc_prevwin_curwin_buf_ucmd_ga(idx)) as *mut c_char;
+    }
+
+    let adjusted = idx - buf_len;
+    let ucmds_len = nvim_uc_get_ucmds_len();
+    if adjusted < ucmds_len {
+        let name = nvim_uc_cmd_get_name(nvim_uc_user_cmd_global(adjusted));
+
+        // Check if global command is overruled by buffer-local one
+        for i in 0..buf_len {
+            let buf_cmd_name = nvim_uc_cmd_get_name(nvim_uc_prevwin_curwin_buf_ucmd_ga(i));
+            if strcmp_c(name, buf_cmd_name) == 0 {
+                // global command is overruled by buffer-local one
+                return c"".as_ptr() as *mut c_char;
+            }
+        }
+        return name as *mut c_char;
+    }
+    std::ptr::null_mut()
+}
+
+/// Implementation of `get_user_command_name`.
+///
+/// Gets command name by index and cmdidx (CMD_USER or CMD_USER_BUF).
+unsafe fn get_user_command_name_impl(idx: c_int, cmdidx: c_int) -> *mut c_char {
+    if cmdidx == CMD_USER && idx < nvim_uc_get_ucmds_len() {
+        return nvim_uc_cmd_get_name(nvim_uc_user_cmd_global(idx)) as *mut c_char;
+    }
+    if cmdidx == CMD_USER_BUF {
+        let buf_len = nvim_uc_prevwin_curwin_buf_ucmds_len();
+        if idx < buf_len {
+            return nvim_uc_cmd_get_name(nvim_uc_prevwin_curwin_buf_ucmd_ga(idx)) as *mut c_char;
+        }
+    }
+    std::ptr::null_mut()
+}
+
+/// Compare two NUL-terminated C strings (like C strcmp).
+/// Returns 0 if equal.
+unsafe fn strcmp_c(a: *const c_char, b: *const c_char) -> c_int {
+    let mut i = 0usize;
+    loop {
+        let ca = unsafe { *a.add(i) as u8 };
+        let cb = unsafe { *b.add(i) as u8 };
+        if ca != cb {
+            return c_int::from(ca) - c_int::from(cb);
+        }
+        if ca == 0 {
+            return 0;
+        }
+        i += 1;
+    }
+}
+
+// =============================================================================
+// Phase 8: FFI Exports
+// =============================================================================
+
+/// FFI export: set_context_in_user_cmd.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_context_in_user_cmd(
+    xp: ExpandHandle,
+    arg_in: *const c_char,
+) -> *const c_char {
+    set_context_in_user_cmd_impl(xp, arg_in)
+}
+
+/// FFI export: set_context_in_user_cmdarg.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_context_in_user_cmdarg(
+    cmd: *const c_char,
+    arg: *const c_char,
+    argt: u32,
+    context: c_int,
+    xp: ExpandHandle,
+    forceit: c_int,
+) -> *const c_char {
+    set_context_in_user_cmdarg_impl(cmd, arg, argt, context, xp, forceit)
+}
+
+/// FFI export: expand_user_command_name.
+#[no_mangle]
+pub unsafe extern "C" fn rs_expand_user_command_name(idx: c_int) -> *mut c_char {
+    expand_user_command_name_impl(idx)
+}
+
+/// FFI export: get_user_commands.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_user_commands(_xp: ExpandHandle, idx: c_int) -> *mut c_char {
+    get_user_commands_impl(idx)
+}
+
+/// FFI export: get_user_command_name.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_user_command_name(idx: c_int, cmdidx: c_int) -> *mut c_char {
+    get_user_command_name_impl(idx, cmdidx)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -748,5 +1067,35 @@ mod tests {
         assert_eq!(rs_usercmd_expand_valid(EXPAND_UNSUCCESSFUL), 1);
         assert_eq!(rs_usercmd_expand_valid(64), 0);
         assert_eq!(rs_usercmd_expand_valid(-3), 0);
+    }
+
+    // =========================================================================
+    // Phase 8: completion context tests
+    // =========================================================================
+
+    #[test]
+    fn test_phase8_constants() {
+        assert_eq!(CMD_USER, -1);
+        assert_eq!(CMD_USER_BUF, -2);
+        assert_eq!(CMD_SIZE, 556);
+    }
+
+    #[test]
+    fn test_strnicmp_eq_bytes() {
+        assert!(unsafe { strnicmp_eq_bytes(c"complete".as_ptr(), b"complete", 8) });
+        assert!(unsafe { strnicmp_eq_bytes(c"COMPLETE".as_ptr(), b"complete", 8) });
+        assert!(unsafe { strnicmp_eq_bytes(c"Complete".as_ptr(), b"complete", 8) });
+        assert!(unsafe { strnicmp_eq_bytes(c"comp".as_ptr(), b"complete", 4) });
+        assert!(!unsafe { strnicmp_eq_bytes(c"compXete".as_ptr(), b"complete", 8) });
+        // n > target length
+        assert!(!unsafe { strnicmp_eq_bytes(c"complete".as_ptr(), b"comp", 8) });
+    }
+
+    #[test]
+    fn test_strcmp_c() {
+        assert_eq!(unsafe { strcmp_c(c"abc".as_ptr(), c"abc".as_ptr()) }, 0);
+        assert!(unsafe { strcmp_c(c"abc".as_ptr(), c"abd".as_ptr()) } < 0);
+        assert!(unsafe { strcmp_c(c"abd".as_ptr(), c"abc".as_ptr()) } > 0);
+        assert!(unsafe { strcmp_c(c"abc".as_ptr(), c"abcd".as_ptr()) } < 0);
     }
 }

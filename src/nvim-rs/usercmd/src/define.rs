@@ -15,10 +15,17 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::borrow_as_ptr)]
 #![allow(clippy::ptr_as_ptr)]
+#![allow(clippy::ptr_cast_constness)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::explicit_iter_loop)]
 
 use std::ffi::{c_char, c_int, c_void, CStr};
 
-use crate::{ExargHandle, GarrayHandle};
+use crate::complete::ADDR_TYPE_COMPLETE;
+use crate::{AddrType, ExargHandle, ExpandHandle, GarrayHandle};
 
 // =============================================================================
 // UC_* Constants — from usercmd.h
@@ -847,10 +854,6 @@ extern "C" {
     /// Returns ends_excmd(c) — 1 if c ends an ex command, 0 otherwise
     fn nvim_uc_ends_excmd(c: c_int) -> c_int;
 
-    // Command listing (not yet migrated to Rust)
-    /// Calls uc_list(name, name_len) in C
-    fn nvim_uc_list(name: *const c_char, name_len: usize);
-
     // Deletion helper
     /// memmove(cmd, cmd+1, (ga_len - i) * sizeof(ucmd_T)) — shift entries up
     fn nvim_uc_cmd_memmove_up(gap: GarrayHandle, i: c_int);
@@ -955,7 +958,7 @@ unsafe fn ex_command_impl(eap: ExargHandle) {
     let p_byte = unsafe { *p.cast::<u8>() };
 
     if !has_attr && nvim_uc_ends_excmd(c_int::from(p_byte)) != 0 {
-        nvim_uc_list(name, name_len);
+        uc_list_impl(name, name_len);
     } else if !ascii_isupper(unsafe { *name.cast::<u8>() }) {
         nvim_uc_emsg(c"E183: User defined commands must start with an uppercase letter".as_ptr());
     } else if name_len <= 4 {
@@ -1152,6 +1155,525 @@ pub unsafe extern "C" fn rs_ex_comclear(eap: ExargHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_delcommand(eap: ExargHandle) {
     ex_delcommand_impl(eap);
+}
+
+// =============================================================================
+// C Accessor Functions (Phase 8 — find_ucmd, uc_list, completion)
+// =============================================================================
+
+/// CMD_USER from ex_cmds_enum.generated.h
+const CMD_USER: c_int = -1;
+/// CMD_USER_BUF from ex_cmds_enum.generated.h
+const CMD_USER_BUF: c_int = -2;
+/// EXPAND_UNSUCCESSFUL from cmdexpand_defs.h
+const EXPAND_UNSUCCESSFUL: c_int = -2;
+/// HLF_D — directories in CTRL-D listing (highlight_defs.h, enum value 5)
+const HLF_D: c_int = 5;
+/// HLF_8 — meta & special keys (highlight_defs.h, enum value 1)
+const HLF_8: c_int = 1;
+
+extern "C" {
+    // --- find_ucmd accessors ---
+    /// Returns &prevwin_curwin()->w_buffer->b_ucmds (garray)
+    fn nvim_uc_prevwin_curwin_buf_ucmds() -> GarrayHandle;
+    /// Sets eap->cmdidx = (cmdidx_T)cmdidx
+    fn nvim_uc_eap_set_cmdidx(eap: ExargHandle, cmdidx: c_int);
+    /// Sets eap->argt = argt
+    fn nvim_uc_eap_set_argt(eap: ExargHandle, argt: u32);
+    /// Sets eap->useridx = useridx
+    fn nvim_uc_eap_set_useridx(eap: ExargHandle, useridx: c_int);
+    /// Sets eap->addr_type = (cmd_addr_T)addr_type
+    fn nvim_uc_eap_set_addr_type(eap: ExargHandle, addr_type: c_int);
+    /// Returns eap->cmd
+    fn nvim_uc_eap_get_cmd(eap: ExargHandle) -> *const c_char;
+    /// Returns cmd->uc_compl
+    fn nvim_uc_cmd_get_compl(cmd: *const c_void) -> c_int;
+    /// Returns (int)cmd->uc_addr_type
+    fn nvim_uc_cmd_get_addr_type(cmd: *const c_void) -> c_int;
+    /// Returns cmd->uc_compl_luaref
+    fn nvim_uc_cmd_get_compl_luaref(cmd: *const c_void) -> c_int;
+    /// Returns cmd->uc_compl_arg
+    fn nvim_uc_cmd_get_compl_arg(cmd: *const c_void) -> *const c_char;
+    /// Returns ascii_isdigit(c) ? 1 : 0
+    fn nvim_uc_ascii_isdigit(c: c_int) -> c_int;
+
+    // --- expand_T (xp) accessors ---
+    /// Sets xp->xp_context = context
+    fn nvim_uc_xp_set_context(xp: ExpandHandle, context: c_int);
+    /// Sets xp->xp_luaref = luaref
+    fn nvim_uc_xp_set_luaref(xp: ExpandHandle, luaref: c_int);
+    /// Sets xp->xp_arg = arg
+    fn nvim_uc_xp_set_arg(xp: ExpandHandle, arg: *mut c_char);
+    /// Sets xp->xp_script_ctx from cmd->uc_script_ctx + SOURCING_LNUM
+    fn nvim_uc_xp_set_script_ctx(xp: ExpandHandle, cmd: *const c_void);
+
+    // --- uc_list accessors ---
+    /// Calls msg_ext_set_kind(kind)
+    fn nvim_uc_msg_ext_set_kind(kind: *const c_char);
+    /// Calls msg_puts_title(_(s))
+    fn nvim_uc_msg_puts_title(s: *const c_char);
+    /// Calls msg_putchar(c)
+    fn nvim_uc_msg_putchar(c: c_int);
+    /// Calls msg_puts(s)
+    fn nvim_uc_msg_puts(s: *const c_char);
+    /// Calls msg_outtrans(s, attr, keep != 0)
+    fn nvim_uc_msg_outtrans(s: *const c_char, attr: c_int, keep: c_int);
+    /// Calls msg_outtrans_special(s, from_part != 0, maxlen)
+    fn nvim_uc_msg_outtrans_special(s: *const c_char, from_part: c_int, maxlen: c_int);
+    /// Calls msg_puts_hl(s, attr, keep != 0)
+    fn nvim_uc_msg_puts_hl(s: *const c_char, attr: c_int, keep: c_int);
+    /// Calls msg(_(s), attr)
+    fn nvim_uc_msg(s: *const c_char, attr: c_int);
+    /// Returns got_int
+    fn nvim_uc_got_int() -> c_int;
+    /// Calls line_breakcheck()
+    fn nvim_uc_line_breakcheck();
+    /// Returns message_filtered(msg) ? 1 : 0
+    fn nvim_uc_message_filtered(msg: *const c_char) -> c_int;
+    /// Returns p_verbose
+    fn nvim_uc_get_p_verbose() -> c_int;
+    /// Returns Columns
+    fn nvim_uc_get_Columns() -> c_int;
+    /// Returns IObuff pointer
+    fn nvim_uc_get_IObuff() -> *mut c_char;
+    /// Returns IOSIZE
+    fn nvim_uc_get_IOSIZE() -> usize;
+    /// Returns nlua_funcref_str(luaref, NULL) — caller must xfree
+    fn nvim_uc_nlua_funcref_str(luaref: c_int) -> *mut c_char;
+    /// Calls last_set_msg(cmd->uc_script_ctx)
+    fn nvim_uc_last_set_msg(cmd: *const c_void);
+    /// Returns cmd->uc_luaref
+    fn nvim_uc_cmd_get_luaref(cmd: *mut c_void) -> c_int;
+    /// Returns cmd->uc_rep
+    fn nvim_uc_cmd_get_rep(cmd: *mut c_void) -> *mut c_char;
+    /// Returns cmd->uc_argt
+    fn nvim_uc_cmd_get_argt(cmd: *mut c_void) -> u32;
+    /// Returns cmd->uc_def (as int64_t)
+    fn nvim_uc_cmd_get_def(cmd: *mut c_void) -> i64;
+
+    // --- Completion type lookup (already migrated to Rust) ---
+    /// rs_get_command_complete — returns the name for an EXPAND_* value
+    fn rs_get_command_complete(arg: c_int) -> *const c_char;
+}
+
+// =============================================================================
+// Phase 8: find_ucmd implementation
+// =============================================================================
+
+/// Search for a user command that matches `eap->cmd`.
+///
+/// Sets cmdidx, argt, useridx, addr_type in eap.
+/// Optionally sets xp fields and complp.
+/// Returns a pointer to just after the command, or NULL if no match/ambiguous.
+///
+/// # Safety
+///
+/// `eap` and `p` must be valid pointers. `full`, `xp`, `complp` may be null.
+unsafe fn find_ucmd_impl(
+    eap: ExargHandle,
+    p: *mut c_char,
+    full: *mut c_int,
+    xp: ExpandHandle,
+    complp: *mut c_int,
+) -> *mut c_char {
+    let eap_cmd = nvim_uc_eap_get_cmd(eap);
+    let len = unsafe { p.offset_from(eap_cmd) } as c_int;
+    let mut matchlen: c_int = 0;
+    let mut found = false;
+    let mut possible = false;
+    let mut amb_local = false;
+
+    let ucmds = nvim_uc_get_ucmds();
+    // Look for buffer-local user commands first, then global ones.
+    let mut gap = nvim_uc_prevwin_curwin_buf_ucmds();
+    loop {
+        let ga_len = nvim_uc_ga_get_len(gap);
+        let mut j = 0;
+        while j < ga_len {
+            let uc = nvim_uc_ga_get_cmd(gap, j);
+            let uc_name = nvim_uc_cmd_get_name(uc);
+            let mut cp = eap_cmd;
+            let mut np = uc_name;
+            let mut k: c_int = 0;
+            while k < len && unsafe { *np } != 0 && unsafe { *cp } == unsafe { *np } {
+                cp = unsafe { cp.add(1) };
+                np = unsafe { np.add(1) };
+                k += 1;
+            }
+
+            if k == len
+                || (unsafe { *np } == 0
+                    && nvim_uc_ascii_isdigit(
+                        c_int::from(unsafe { *eap_cmd.add(k as usize) } as u8),
+                    ) != 0)
+            {
+                // If finding a second match, the command is ambiguous.
+                // But not if a buffer-local command wasn't a full match and
+                // a global command is a full match.
+                if k == len && found && unsafe { *np } != 0 {
+                    if gap == ucmds {
+                        return std::ptr::null_mut();
+                    }
+                    amb_local = true;
+                }
+
+                if !found || (k == len && unsafe { *np } == 0) {
+                    if k == len {
+                        found = true;
+                    } else {
+                        possible = true;
+                    }
+
+                    if gap == ucmds {
+                        nvim_uc_eap_set_cmdidx(eap, CMD_USER);
+                    } else {
+                        nvim_uc_eap_set_cmdidx(eap, CMD_USER_BUF);
+                    }
+                    nvim_uc_eap_set_argt(eap, nvim_uc_cmd_get_argt(uc));
+                    nvim_uc_eap_set_useridx(eap, j);
+                    nvim_uc_eap_set_addr_type(eap, nvim_uc_cmd_get_addr_type(uc));
+
+                    if !complp.is_null() {
+                        unsafe { *complp = nvim_uc_cmd_get_compl(uc) };
+                    }
+                    if !xp.is_null() {
+                        nvim_uc_xp_set_luaref(xp, nvim_uc_cmd_get_compl_luaref(uc));
+                        nvim_uc_xp_set_arg(xp, nvim_uc_cmd_get_compl_arg(uc) as *mut c_char);
+                        nvim_uc_xp_set_script_ctx(xp, uc);
+                    }
+                    // Do not search for further abbreviations if this is an exact match.
+                    matchlen = k;
+                    if k == len && unsafe { *np } == 0 {
+                        if !full.is_null() {
+                            unsafe { *full = 1 };
+                        }
+                        amb_local = false;
+                        break;
+                    }
+                }
+            }
+            j += 1;
+        }
+
+        // Stop if we found a full match or searched all.
+        if j < ga_len || gap == ucmds {
+            break;
+        }
+        gap = ucmds;
+    }
+
+    // Only found ambiguous matches.
+    if amb_local {
+        if !xp.is_null() {
+            nvim_uc_xp_set_context(xp, EXPAND_UNSUCCESSFUL);
+        }
+        return std::ptr::null_mut();
+    }
+
+    // The match we found may be followed immediately by a number. Move "p"
+    // back to point to it.
+    if found || possible {
+        return unsafe { p.offset((matchlen - len) as isize) };
+    }
+    p
+}
+
+// =============================================================================
+// Phase 8: uc_list implementation
+// =============================================================================
+
+/// List user commands matching a name prefix.
+///
+/// This is the Rust implementation of `uc_list` from usercmd.c.
+///
+/// # Safety
+///
+/// `name` must be a valid NUL-terminated C string. `name_len` is the prefix length.
+unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
+    let mut found = false;
+
+    nvim_uc_msg_ext_set_kind(c"list_cmd".as_ptr());
+
+    let ucmds = nvim_uc_get_ucmds();
+    // In cmdwin, the alternative buffer should be used.
+    let mut gap = nvim_uc_prevwin_curwin_buf_ucmds();
+    loop {
+        let ga_len = nvim_uc_ga_get_len(gap);
+        let mut i = 0;
+        while i < ga_len {
+            let cmd = nvim_uc_ga_get_cmd(gap, i);
+            let a = nvim_uc_cmd_get_argt(cmd);
+            let cmd_name = nvim_uc_cmd_get_name(cmd);
+
+            // Skip commands which don't match the requested prefix and
+            // commands filtered out.
+            if !strncmp_eq(name, cmd_name, name_len) || nvim_uc_message_filtered(cmd_name) != 0 {
+                i += 1;
+                continue;
+            }
+
+            // Put out the title first time
+            if !found {
+                nvim_uc_msg_puts_title(
+                    c"\n    Name              Args Address Complete    Definition".as_ptr(),
+                );
+            }
+            found = true;
+            nvim_uc_msg_putchar(b'\n' as c_int);
+            if nvim_uc_got_int() != 0 {
+                break;
+            }
+
+            // Special cases
+            let mut flag_len: usize = 4;
+            if (a & EX_BANG) != 0 {
+                nvim_uc_msg_putchar(b'!' as c_int);
+                flag_len -= 1;
+            }
+            if (a & EX_REGSTR) != 0 {
+                nvim_uc_msg_putchar(b'"' as c_int);
+                flag_len -= 1;
+            }
+            if gap != ucmds {
+                nvim_uc_msg_putchar(b'b' as c_int);
+                flag_len -= 1;
+            }
+            if (a & EX_TRLBAR) != 0 {
+                nvim_uc_msg_putchar(b'|' as c_int);
+                flag_len -= 1;
+            }
+            if flag_len != 0 {
+                // Emit spaces for remaining flag_len
+                static SPACES4: &[u8] = b"    \0";
+                nvim_uc_msg_puts(unsafe { SPACES4.as_ptr().add(4 - flag_len) }.cast::<c_char>());
+            }
+
+            nvim_uc_msg_outtrans(cmd_name, HLF_D, 0);
+            let name_slen = strlen_safe(cmd_name);
+            let mut col_len: usize = name_slen + 4;
+
+            if col_len < 21 {
+                // Pad with spaces to column 21
+                static SPACES17: &[u8] = b"                 \0";
+                nvim_uc_msg_puts(unsafe { SPACES17.as_ptr().add(col_len - 4) }.cast::<c_char>());
+                col_len = 21;
+            }
+            nvim_uc_msg_putchar(b' ' as c_int);
+            col_len += 1;
+
+            // "over" is how much longer the name is than the column width
+            let over: i64 = col_len as i64 - 22;
+
+            // Build the IObuff content
+            let iobuff = nvim_uc_get_IObuff();
+            let iosize = nvim_uc_get_IOSIZE();
+            let mut pos: usize = 0;
+
+            // Arguments
+            let nargs_char = match a & (EX_EXTRA | EX_NOSPC | EX_NEEDARG) {
+                0 => b'0',
+                x if x == EX_EXTRA => b'*',
+                x if x == (EX_EXTRA | EX_NOSPC) => b'?',
+                x if x == (EX_EXTRA | EX_NEEDARG) => b'+',
+                x if x == (EX_EXTRA | EX_NOSPC | EX_NEEDARG) => b'1',
+                _ => b' ',
+            };
+            unsafe { *iobuff.add(pos) = nargs_char as c_char };
+            pos += 1;
+
+            // Pad to column 5 - over
+            loop {
+                unsafe { *iobuff.add(pos) = b' ' as c_char };
+                pos += 1;
+                if (pos as i64) >= 5 - over {
+                    break;
+                }
+            }
+
+            // Address / Range
+            if (a & (EX_RANGE | EX_COUNT)) != 0 {
+                if (a & EX_COUNT) != 0 {
+                    // -count=N
+                    let def_val = nvim_uc_cmd_get_def(cmd);
+                    let formatted = format!("{def_val}c");
+                    let bytes = formatted.as_bytes();
+                    let copy_len = bytes.len().min(iosize - pos - 1);
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            bytes.as_ptr(),
+                            iobuff.add(pos).cast::<u8>(),
+                            copy_len,
+                        );
+                    }
+                    pos += copy_len;
+                } else if (a & EX_DFLALL) != 0 {
+                    unsafe { *iobuff.add(pos) = b'%' as c_char };
+                    pos += 1;
+                } else if nvim_uc_cmd_get_def(cmd) >= 0 {
+                    // -range=N
+                    let def_val = nvim_uc_cmd_get_def(cmd);
+                    let formatted = format!("{def_val}");
+                    let bytes = formatted.as_bytes();
+                    let copy_len = bytes.len().min(iosize - pos - 1);
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            bytes.as_ptr(),
+                            iobuff.add(pos).cast::<u8>(),
+                            copy_len,
+                        );
+                    }
+                    pos += copy_len;
+                } else {
+                    unsafe { *iobuff.add(pos) = b'.' as c_char };
+                    pos += 1;
+                }
+            }
+
+            // Pad to column 8 - over
+            loop {
+                unsafe { *iobuff.add(pos) = b' ' as c_char };
+                pos += 1;
+                if (pos as i64) >= 8 - over {
+                    break;
+                }
+            }
+
+            // Address Type
+            let cmd_addr_type = nvim_uc_cmd_get_addr_type(cmd);
+            for entry in ADDR_TYPE_COMPLETE.iter() {
+                if entry.expand == AddrType::None {
+                    break;
+                }
+                if entry.expand != AddrType::Lines && entry.expand as c_int == cmd_addr_type {
+                    // Copy shortname (without trailing NUL from the static)
+                    let shortname = &entry.shortname[..entry.shortname.len() - 1]; // strip \0
+                    let copy_len = shortname.len().min(iosize - pos - 1);
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            shortname.as_ptr(),
+                            iobuff.add(pos).cast::<u8>(),
+                            copy_len,
+                        );
+                    }
+                    pos += copy_len;
+                    break;
+                }
+            }
+
+            // Pad to column 13 - over
+            loop {
+                unsafe { *iobuff.add(pos) = b' ' as c_char };
+                pos += 1;
+                if (pos as i64) >= 13 - over {
+                    break;
+                }
+            }
+
+            // Completion
+            let cmd_compl_val = nvim_uc_cmd_get_compl(cmd);
+            let cmd_compl = rs_get_command_complete(cmd_compl_val);
+            if !cmd_compl.is_null() {
+                let compl_len = strlen_safe(cmd_compl);
+                let copy_len = compl_len.min(iosize - pos - 1);
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        cmd_compl.cast::<u8>(),
+                        iobuff.add(pos).cast::<u8>(),
+                        copy_len,
+                    );
+                }
+                pos += copy_len;
+            }
+
+            // Pad to column 25 - over
+            loop {
+                unsafe { *iobuff.add(pos) = b' ' as c_char };
+                pos += 1;
+                if (pos as i64) >= 25 - over {
+                    break;
+                }
+            }
+
+            // NUL-terminate
+            unsafe { *iobuff.add(pos) = 0 };
+            nvim_uc_msg_outtrans(iobuff, 0, 0);
+
+            // Lua function reference
+            let luaref = nvim_uc_cmd_get_luaref(cmd);
+            if luaref != LUA_NOREF {
+                let fn_str = nvim_uc_nlua_funcref_str(luaref);
+                nvim_uc_msg_puts_hl(fn_str, HLF_8, 0);
+                nvim_uc_xfree(fn_str.cast::<c_void>());
+                // put the description on a new line
+                let rep = nvim_uc_cmd_get_rep(cmd);
+                if !rep.is_null() && unsafe { *rep } != 0 {
+                    nvim_uc_msg_puts(c"\n                                               ".as_ptr());
+                }
+            }
+
+            let rep = nvim_uc_cmd_get_rep(cmd);
+            let maxlen = if name_len == 0 {
+                nvim_uc_get_Columns() - 47
+            } else {
+                0
+            };
+            nvim_uc_msg_outtrans_special(rep, 0, maxlen);
+            if nvim_uc_get_p_verbose() > 0 {
+                nvim_uc_last_set_msg(cmd);
+            }
+            nvim_uc_line_breakcheck();
+            if nvim_uc_got_int() != 0 {
+                break;
+            }
+            i += 1;
+        }
+        if gap == ucmds || i < ga_len {
+            break;
+        }
+        gap = ucmds;
+    }
+
+    if !found {
+        nvim_uc_msg(c"No user-defined commands found".as_ptr(), 0);
+    }
+}
+
+/// Compare first `n` bytes of two C strings (like strncmp == 0).
+unsafe fn strncmp_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
+    for i in 0..n {
+        let ca = unsafe { *a.add(i) as u8 };
+        let cb = unsafe { *b.add(i) as u8 };
+        if ca != cb {
+            return false;
+        }
+    }
+    true
+}
+
+// =============================================================================
+// Phase 8: FFI Exports
+// =============================================================================
+
+/// FFI export: find_ucmd.
+///
+/// Direct replacement for C `find_ucmd`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_ucmd(
+    eap: ExargHandle,
+    p: *mut c_char,
+    full: *mut c_int,
+    xp: ExpandHandle,
+    complp: *mut c_int,
+) -> *mut c_char {
+    find_ucmd_impl(eap, p, full, xp, complp)
+}
+
+/// FFI export: uc_list.
+///
+/// Direct replacement for C `uc_list`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uc_list(name: *const c_char, name_len: usize) {
+    uc_list_impl(name, name_len);
 }
 
 // =============================================================================
@@ -1540,5 +2062,51 @@ mod tests {
         // Non-match
         let name = b"Noxt";
         assert_ne!(&name[..4], &next[..4]);
+    }
+
+    // =========================================================================
+    // Phase 8: constants and logic tests
+    // =========================================================================
+
+    #[test]
+    fn test_phase8_constants() {
+        assert_eq!(CMD_USER, -1);
+        assert_eq!(CMD_USER_BUF, -2);
+        assert_eq!(EXPAND_UNSUCCESSFUL, -2);
+        assert_eq!(HLF_D, 5);
+        assert_eq!(HLF_8, 1);
+    }
+
+    #[test]
+    fn test_strncmp_eq() {
+        let a = c"Hello";
+        let b = c"Hello World";
+        assert!(unsafe { strncmp_eq(a.as_ptr(), b.as_ptr(), 5) });
+        assert!(!unsafe { strncmp_eq(a.as_ptr(), c"Hxllo".as_ptr(), 5) });
+        // Zero-length always matches
+        assert!(unsafe { strncmp_eq(a.as_ptr(), b.as_ptr(), 0) });
+    }
+
+    #[test]
+    fn test_nargs_char_mapping() {
+        // Verify the nargs character mapping matches C
+        let test_cases: [(u32, u8); 5] = [
+            (0, b'0'),
+            (EX_EXTRA, b'*'),
+            (EX_EXTRA | EX_NOSPC, b'?'),
+            (EX_EXTRA | EX_NEEDARG, b'+'),
+            (EX_EXTRA | EX_NOSPC | EX_NEEDARG, b'1'),
+        ];
+        for (flags, expected) in &test_cases {
+            let ch = match *flags & (EX_EXTRA | EX_NOSPC | EX_NEEDARG) {
+                0 => b'0',
+                x if x == EX_EXTRA => b'*',
+                x if x == (EX_EXTRA | EX_NOSPC) => b'?',
+                x if x == (EX_EXTRA | EX_NEEDARG) => b'+',
+                x if x == (EX_EXTRA | EX_NOSPC | EX_NEEDARG) => b'1',
+                _ => b' ',
+            };
+            assert_eq!(ch, *expected, "flags={flags:#x}");
+        }
     }
 }

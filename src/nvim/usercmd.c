@@ -505,11 +505,6 @@ int nvim_uc_ends_excmd(int c)
   return ends_excmd(c) ? 1 : 0;
 }
 
-void nvim_uc_list(const char *name, size_t name_len)
-{
-  uc_list((char *)name, name_len);
-}
-
 void nvim_uc_cmd_memmove_up(void *gap, int i)
 {
   garray_T *g = (garray_T *)gap;
@@ -601,6 +596,23 @@ static struct {
   { ADDR_NONE, NULL, NULL }
 };
 
+// Rust FFI declarations (Phase 8: find_ucmd, uc_list, completion)
+extern char *rs_find_ucmd(void *eap, char *p, int *full, void *xp, int *complp);
+extern const char *rs_set_context_in_user_cmd(void *xp, const char *arg_in);
+extern const char *rs_set_context_in_user_cmdarg(const char *cmd, const char *arg,
+                                                  uint32_t argt, int context,
+                                                  void *xp, int forceit);
+extern char *rs_expand_user_command_name(int idx);
+extern char *rs_get_user_commands(void *xp, int idx);
+extern char *rs_get_user_command_name(int idx, int cmdidx);
+extern void rs_uc_list(const char *name, size_t name_len);
+
+// Phase 8 static assertions
+_Static_assert(CMD_map == 274, "CMD_map");
+_Static_assert(CMD_SIZE == 556, "CMD_SIZE");
+_Static_assert(HLF_D == 5, "HLF_D");
+_Static_assert(HLF_8 == 1, "HLF_8");
+
 /// Search for a user command that matches "eap->cmd".
 /// Return cmdidx in "eap->cmdidx", flags in "eap->argt", idx in "eap->useridx".
 /// Return a pointer to just after the command.
@@ -612,222 +624,32 @@ static struct {
 /// @param complp  completion flags or NULL
 char *find_ucmd(exarg_T *eap, char *p, int *full, expand_T *xp, int *complp)
 {
-  int len = (int)(p - eap->cmd);
-  int matchlen = 0;
-  bool found = false;
-  bool possible = false;
-  bool amb_local = false;            // Found ambiguous buffer-local command,
-                                     // only full match global is accepted.
-
-  // Look for buffer-local user commands first, then global ones.
-  garray_T *gap = &prevwin_curwin()->w_buffer->b_ucmds;
-  while (true) {
-    int j;
-    for (j = 0; j < gap->ga_len; j++) {
-      ucmd_T *uc = USER_CMD_GA(gap, j);
-      char *cp = eap->cmd;
-      char *np = uc->uc_name;
-      int k = 0;
-      while (k < len && *np != NUL && *cp++ == *np++) {
-        k++;
-      }
-      if (k == len || (*np == NUL && ascii_isdigit(eap->cmd[k]))) {
-        // If finding a second match, the command is ambiguous.  But
-        // not if a buffer-local command wasn't a full match and a
-        // global command is a full match.
-        if (k == len && found && *np != NUL) {
-          if (gap == &ucmds) {
-            return NULL;
-          }
-          amb_local = true;
-        }
-
-        if (!found || (k == len && *np == NUL)) {
-          // If we matched up to a digit, then there could
-          // be another command including the digit that we
-          // should use instead.
-          if (k == len) {
-            found = true;
-          } else {
-            possible = true;
-          }
-
-          if (gap == &ucmds) {
-            eap->cmdidx = CMD_USER;
-          } else {
-            eap->cmdidx = CMD_USER_BUF;
-          }
-          eap->argt = uc->uc_argt;
-          eap->useridx = j;
-          eap->addr_type = uc->uc_addr_type;
-
-          if (complp != NULL) {
-            *complp = uc->uc_compl;
-          }
-          if (xp != NULL) {
-            xp->xp_luaref = uc->uc_compl_luaref;
-            xp->xp_arg = uc->uc_compl_arg;
-            xp->xp_script_ctx = uc->uc_script_ctx;
-            xp->xp_script_ctx.sc_lnum += SOURCING_LNUM;
-          }
-          // Do not search for further abbreviations
-          // if this is an exact match.
-          matchlen = k;
-          if (k == len && *np == NUL) {
-            if (full != NULL) {
-              *full = true;
-            }
-            amb_local = false;
-            break;
-          }
-        }
-      }
-    }
-
-    // Stop if we found a full match or searched all.
-    if (j < gap->ga_len || gap == &ucmds) {
-      break;
-    }
-    gap = &ucmds;
-  }
-
-  // Only found ambiguous matches.
-  if (amb_local) {
-    if (xp != NULL) {
-      xp->xp_context = EXPAND_UNSUCCESSFUL;
-    }
-    return NULL;
-  }
-
-  // The match we found may be followed immediately by a number.  Move "p"
-  // back to point to it.
-  if (found || possible) {
-    return p + (matchlen - len);
-  }
-  return p;
+  return rs_find_ucmd(eap, p, full, xp, complp);
 }
 
 /// Set completion context for :command
 const char *set_context_in_user_cmd(expand_T *xp, const char *arg_in)
 {
-  const char *arg = arg_in;
-  const char *p;
-
-  // Check for attributes
-  while (*arg == '-') {
-    arg++;  // Skip "-".
-    p = skiptowhite(arg);
-    if (*p == NUL) {
-      // Cursor is still in the attribute.
-      p = strchr(arg, '=');
-      if (p == NULL) {
-        // No "=", so complete attribute names.
-        xp->xp_context = EXPAND_USER_CMD_FLAGS;
-        xp->xp_pattern = (char *)arg;
-        return NULL;
-      }
-
-      // For the -complete, -nargs and -addr attributes, we complete
-      // their arguments as well.
-      if (STRNICMP(arg, "complete", p - arg) == 0) {
-        xp->xp_context = EXPAND_USER_COMPLETE;
-        xp->xp_pattern = (char *)p + 1;
-        return NULL;
-      } else if (STRNICMP(arg, "nargs", p - arg) == 0) {
-        xp->xp_context = EXPAND_USER_NARGS;
-        xp->xp_pattern = (char *)p + 1;
-        return NULL;
-      } else if (STRNICMP(arg, "addr", p - arg) == 0) {
-        xp->xp_context = EXPAND_USER_ADDR_TYPE;
-        xp->xp_pattern = (char *)p + 1;
-        return NULL;
-      }
-      return NULL;
-    }
-    arg = skipwhite(p);
-  }
-
-  // After the attributes comes the new command name.
-  p = skiptowhite(arg);
-  if (*p == NUL) {
-    xp->xp_context = EXPAND_USER_COMMANDS;
-    xp->xp_pattern = (char *)arg;
-    return NULL;
-  }
-
-  // And finally comes a normal command.
-  return skipwhite(p);
+  return rs_set_context_in_user_cmd(xp, arg_in);
 }
 
 /// Set the completion context for the argument of a user defined command.
 const char *set_context_in_user_cmdarg(const char *cmd FUNC_ATTR_UNUSED, const char *arg,
                                        uint32_t argt, int context, expand_T *xp, bool forceit)
 {
-  if (context == EXPAND_NOTHING) {
-    return NULL;
-  }
-
-  if (argt & EX_XFILE) {
-    // EX_XFILE: file names are handled before this call.
-    return NULL;
-  }
-
-  if (context == EXPAND_MENUS) {
-    return set_context_in_menu_cmd(xp, cmd, (char *)arg, forceit);
-  }
-  if (context == EXPAND_COMMANDS) {
-    return arg;
-  }
-  if (context == EXPAND_MAPPINGS) {
-    return set_context_in_map_cmd(xp, "map", (char *)arg, forceit, false, false,
-                                  CMD_map);
-  }
-  // Find start of last argument.
-  const char *p = arg;
-  while (*p) {
-    if (*p == ' ') {
-      // argument starts after a space
-      arg = p + 1;
-    } else if (*p == '\\' && *(p + 1) != NUL) {
-      p++;  // skip over escaped character
-    }
-    MB_PTR_ADV(p);
-  }
-  xp->xp_pattern = (char *)arg;
-  xp->xp_context = context;
-
-  return NULL;
+  return rs_set_context_in_user_cmdarg(cmd, arg, argt, context, xp, forceit ? 1 : 0);
 }
 
 char *expand_user_command_name(int idx)
 {
-  return get_user_commands(NULL, idx - CMD_SIZE);
+  return rs_expand_user_command_name(idx);
 }
 
 /// Function given to ExpandGeneric() to obtain the list of user command names.
 char *get_user_commands(expand_T *xp FUNC_ATTR_UNUSED, int idx)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // In cmdwin, the alternative buffer should be used.
-  const buf_T *const buf = prevwin_curwin()->w_buffer;
-
-  if (idx < buf->b_ucmds.ga_len) {
-    return USER_CMD_GA(&buf->b_ucmds, idx)->uc_name;
-  }
-
-  idx -= buf->b_ucmds.ga_len;
-  if (idx < ucmds.ga_len) {
-    char *name = USER_CMD(idx)->uc_name;
-
-    for (int i = 0; i < buf->b_ucmds.ga_len; i++) {
-      if (strcmp(name, USER_CMD_GA(&buf->b_ucmds, i)->uc_name) == 0) {
-        // global command is overruled by buffer-local one
-        return "";
-      }
-    }
-    return name;
-  }
-  return NULL;
+  return rs_get_user_commands(xp, idx);
 }
 
 /// Get the name of user command "idx".  "cmdidx" can be CMD_USER or
@@ -836,18 +658,7 @@ char *get_user_commands(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 /// @return  NULL if the command is not found.
 char *get_user_command_name(int idx, int cmdidx)
 {
-  if (cmdidx == CMD_USER && idx < ucmds.ga_len) {
-    return USER_CMD(idx)->uc_name;
-  }
-  if (cmdidx == CMD_USER_BUF) {
-    // In cmdwin, the alternative buffer should be used.
-    const buf_T *const buf = prevwin_curwin()->w_buffer;
-
-    if (idx < buf->b_ucmds.ga_len) {
-      return USER_CMD_GA(&buf->b_ucmds, idx)->uc_name;
-    }
-  }
-  return NULL;
+  return rs_get_user_command_name(idx, cmdidx);
 }
 
 /// Function given to ExpandGeneric() to obtain the list of user address type names.
@@ -902,178 +713,7 @@ int cmdcomplete_str_to_type(const char *complete_str)
 
 static void uc_list(char *name, size_t name_len)
 {
-  bool found = false;
-
-  msg_ext_set_kind("list_cmd");
-  // In cmdwin, the alternative buffer should be used.
-  const garray_T *gap = &prevwin_curwin()->w_buffer->b_ucmds;
-  while (true) {
-    int i;
-    for (i = 0; i < gap->ga_len; i++) {
-      ucmd_T *cmd = USER_CMD_GA(gap, i);
-      uint32_t a = cmd->uc_argt;
-
-      // Skip commands which don't match the requested prefix and
-      // commands filtered out.
-      if (strncmp(name, cmd->uc_name, name_len) != 0
-          || message_filtered(cmd->uc_name)) {
-        continue;
-      }
-
-      // Put out the title first time
-      if (!found) {
-        msg_puts_title(_("\n    Name              Args Address Complete    Definition"));
-      }
-      found = true;
-      msg_putchar('\n');
-      if (got_int) {
-        break;
-      }
-
-      // Special cases
-      size_t len = 4;
-      if (a & EX_BANG) {
-        msg_putchar('!');
-        len--;
-      }
-      if (a & EX_REGSTR) {
-        msg_putchar('"');
-        len--;
-      }
-      if (gap != &ucmds) {
-        msg_putchar('b');
-        len--;
-      }
-      if (a & EX_TRLBAR) {
-        msg_putchar('|');
-        len--;
-      }
-      if (len != 0) {
-        msg_puts(&"    "[4 - len]);
-      }
-
-      msg_outtrans(cmd->uc_name, HLF_D, false);
-      len = strlen(cmd->uc_name) + 4;
-
-      if (len < 21) {
-        // Field padding spaces   12345678901234567
-        static char spaces[18] = "                 ";
-        msg_puts(&spaces[len - 4]);
-        len = 21;
-      }
-      msg_putchar(' ');
-      len++;
-
-      // "over" is how much longer the name is than the column width for
-      // the name, we'll try to align what comes after.
-      const int64_t over = (int64_t)len - 22;
-      len = 0;
-
-      // Arguments
-      switch (a & (EX_EXTRA | EX_NOSPC | EX_NEEDARG)) {
-      case 0:
-        IObuff[len++] = '0';
-        break;
-      case (EX_EXTRA):
-        IObuff[len++] = '*';
-        break;
-      case (EX_EXTRA | EX_NOSPC):
-        IObuff[len++] = '?';
-        break;
-      case (EX_EXTRA | EX_NEEDARG):
-        IObuff[len++] = '+';
-        break;
-      case (EX_EXTRA | EX_NOSPC | EX_NEEDARG):
-        IObuff[len++] = '1';
-        break;
-      }
-
-      do {
-        IObuff[len++] = ' ';
-      } while ((int64_t)len < 5 - over);
-
-      // Address / Range
-      if (a & (EX_RANGE | EX_COUNT)) {
-        if (a & EX_COUNT) {
-          // -count=N
-          int rc = snprintf(IObuff + len, IOSIZE - len, "%" PRId64 "c", cmd->uc_def);
-          assert(rc > 0);
-          len += (size_t)rc;
-        } else if (a & EX_DFLALL) {
-          IObuff[len++] = '%';
-        } else if (cmd->uc_def >= 0) {
-          // -range=N
-          int rc = snprintf(IObuff + len, IOSIZE - len, "%" PRId64 "", cmd->uc_def);
-          assert(rc > 0);
-          len += (size_t)rc;
-        } else {
-          IObuff[len++] = '.';
-        }
-      }
-
-      do {
-        IObuff[len++] = ' ';
-      } while ((int64_t)len < 8 - over);
-
-      // Address Type
-      for (int j = 0; addr_type_complete[j].expand != ADDR_NONE; j++) {
-        if (addr_type_complete[j].expand != ADDR_LINES
-            && addr_type_complete[j].expand == cmd->uc_addr_type) {
-          int rc = snprintf(IObuff + len, IOSIZE - len, "%s", addr_type_complete[j].shortname);
-          assert(rc > 0);
-          len += (size_t)rc;
-          break;
-        }
-      }
-
-      do {
-        IObuff[len++] = ' ';
-      } while ((int64_t)len < 13 - over);
-
-      // Completion
-      char *cmd_compl = get_command_complete(cmd->uc_compl);
-      if (cmd_compl != NULL) {
-        int rc = snprintf(IObuff + len, IOSIZE - len, "%s", get_command_complete(cmd->uc_compl));
-        assert(rc > 0);
-        len += (size_t)rc;
-      }
-
-      do {
-        IObuff[len++] = ' ';
-      } while ((int64_t)len < 25 - over);
-
-      IObuff[len] = NUL;
-      msg_outtrans(IObuff, 0, false);
-
-      if (cmd->uc_luaref != LUA_NOREF) {
-        char *fn = nlua_funcref_str(cmd->uc_luaref, NULL);
-        msg_puts_hl(fn, HLF_8, false);
-        xfree(fn);
-        // put the description on a new line
-        if (*cmd->uc_rep != NUL) {
-          msg_puts("\n                                               ");
-        }
-      }
-
-      msg_outtrans_special(cmd->uc_rep, false,
-                           name_len == 0 ? Columns - 47 : 0);
-      if (p_verbose > 0) {
-        last_set_msg(cmd->uc_script_ctx);
-      }
-      line_breakcheck();
-      if (got_int) {
-        break;
-      }
-    }
-    if (gap == &ucmds || i < gap->ga_len) {
-      break;
-    }
-    gap = &ucmds;
-  }
-
-  if (!found) {
-    msg(_("No user-defined commands found"), 0);
-  }
+  rs_uc_list(name, name_len);
 }
 
 /// Parse address type argument
@@ -1323,6 +963,220 @@ void nvim_uc_do_cmdline_with_sctx(char *buf, void *eap, uint32_t argt, int sc_si
   if (restore) {
     current_sctx = save;
   }
+}
+
+// C accessor functions called by Rust (Phase 8)
+
+// --- find_ucmd accessors ---
+
+void *nvim_uc_prevwin_curwin_buf_ucmds(void)
+{
+  return &prevwin_curwin()->w_buffer->b_ucmds;
+}
+
+void nvim_uc_eap_set_cmdidx(void *eap, int cmdidx)
+{
+  ((exarg_T *)eap)->cmdidx = (cmdidx_T)cmdidx;
+}
+
+void nvim_uc_eap_set_argt(void *eap, uint32_t argt)
+{
+  ((exarg_T *)eap)->argt = argt;
+}
+
+void nvim_uc_eap_set_useridx(void *eap, int useridx)
+{
+  ((exarg_T *)eap)->useridx = useridx;
+}
+
+void nvim_uc_eap_set_addr_type(void *eap, int addr_type)
+{
+  ((exarg_T *)eap)->addr_type = (cmd_addr_T)addr_type;
+}
+
+const char *nvim_uc_eap_get_cmd(const void *eap)
+{
+  return ((const exarg_T *)eap)->cmd;
+}
+
+int nvim_uc_cmd_get_compl(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_compl;
+}
+
+int nvim_uc_cmd_get_addr_type(const void *cmd)
+{
+  return (int)((const ucmd_T *)cmd)->uc_addr_type;
+}
+
+int nvim_uc_cmd_get_compl_luaref(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_compl_luaref;
+}
+
+const char *nvim_uc_cmd_get_compl_arg(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_compl_arg;
+}
+
+int nvim_uc_ascii_isdigit(int c)
+{
+  return ascii_isdigit(c) ? 1 : 0;
+}
+
+// --- expand_T (xp) accessors ---
+
+void nvim_uc_xp_set_context(void *xp, int context)
+{
+  ((expand_T *)xp)->xp_context = context;
+}
+
+void nvim_uc_xp_set_luaref(void *xp, int luaref)
+{
+  ((expand_T *)xp)->xp_luaref = luaref;
+}
+
+void nvim_uc_xp_set_arg(void *xp, char *arg)
+{
+  ((expand_T *)xp)->xp_arg = arg;
+}
+
+void nvim_uc_xp_set_script_ctx(void *xp, const void *cmd)
+{
+  ((expand_T *)xp)->xp_script_ctx = ((const ucmd_T *)cmd)->uc_script_ctx;
+  ((expand_T *)xp)->xp_script_ctx.sc_lnum += SOURCING_LNUM;
+}
+
+void nvim_uc_xp_set_pattern(void *xp, char *pattern)
+{
+  ((expand_T *)xp)->xp_pattern = pattern;
+}
+
+// --- uc_list accessors ---
+
+void nvim_uc_msg_ext_set_kind(const char *kind)
+{
+  msg_ext_set_kind(kind);
+}
+
+void nvim_uc_msg_puts_title(const char *s)
+{
+  msg_puts_title(_(s));
+}
+
+void nvim_uc_msg_putchar(int c)
+{
+  msg_putchar(c);
+}
+
+void nvim_uc_msg_puts(const char *s)
+{
+  msg_puts(s);
+}
+
+void nvim_uc_msg_outtrans(const char *s, int attr, int keep)
+{
+  msg_outtrans(s, attr, keep != 0);
+}
+
+void nvim_uc_msg_outtrans_special(const char *s, int from_part, int maxlen)
+{
+  msg_outtrans_special(s, from_part != 0, maxlen);
+}
+
+void nvim_uc_msg_puts_hl(const char *s, int attr, int keep)
+{
+  msg_puts_hl(s, attr, keep != 0);
+}
+
+void nvim_uc_msg(const char *s, int attr)
+{
+  msg(_(s), attr);
+}
+
+int nvim_uc_got_int(void)
+{
+  return got_int;
+}
+
+void nvim_uc_line_breakcheck(void)
+{
+  line_breakcheck();
+}
+
+int nvim_uc_message_filtered(const char *msg_str)
+{
+  return message_filtered(msg_str) ? 1 : 0;
+}
+
+int nvim_uc_get_p_verbose(void)
+{
+  return p_verbose;
+}
+
+int nvim_uc_get_Columns(void)
+{
+  return Columns;
+}
+
+char *nvim_uc_get_IObuff(void)
+{
+  return IObuff;
+}
+
+size_t nvim_uc_get_IOSIZE(void)
+{
+  return IOSIZE;
+}
+
+char *nvim_uc_nlua_funcref_str(int luaref)
+{
+  return nlua_funcref_str(luaref, NULL);
+}
+
+void nvim_uc_last_set_msg(const void *cmd)
+{
+  last_set_msg(((const ucmd_T *)cmd)->uc_script_ctx);
+}
+
+// --- set_context_in_user_cmdarg accessors ---
+
+const char *nvim_uc_set_context_in_menu_cmd(void *xp, const char *cmd, char *arg, int forceit)
+{
+  return set_context_in_menu_cmd((expand_T *)xp, cmd, arg, forceit != 0);
+}
+
+const char *nvim_uc_set_context_in_map_cmd(void *xp, char *arg, int forceit)
+{
+  return set_context_in_map_cmd((expand_T *)xp, "map", arg, forceit != 0, false, false,
+                                CMD_map);
+}
+
+void nvim_uc_MB_PTR_ADV(const char **pp)
+{
+  MB_PTR_ADV(*pp);
+}
+
+// --- get_user_commands / get_user_command_name accessors ---
+
+int nvim_uc_prevwin_curwin_buf_ucmds_len(void)
+{
+  return prevwin_curwin()->w_buffer->b_ucmds.ga_len;
+}
+
+void *nvim_uc_prevwin_curwin_buf_ucmd_ga(int i)
+{
+  return USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, i);
+}
+
+int nvim_uc_get_ucmds_len(void)
+{
+  return ucmds.ga_len;
+}
+
+void *nvim_uc_user_cmd_global(int idx)
+{
+  return USER_CMD(idx);
 }
 
 int do_ucmd(exarg_T *eap, bool preview)
