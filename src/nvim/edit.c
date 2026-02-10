@@ -260,6 +260,13 @@ extern int rs_ins_start_select(int c);
 extern void rs_ins_ctrl_g(void);
 extern void rs_ins_shift(int c, int lastc);
 extern void rs_ins_del(void);
+// Editing module exports (Phase 5)
+extern int rs_ins_eol(int c);
+extern void rs_ins_ctrl_v(void);
+extern int rs_ins_copychar(linenr_T lnum);
+extern int rs_ins_ctrl_ey(int tc);
+extern int rs_ins_digraph(void);
+extern int rs_stuff_inserted(int c, int count, int no_esc);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -1112,6 +1119,212 @@ _Static_assert(K_S_LEFT == -((int)('#') + ((int)('4') << 8)), "K_S_LEFT mismatch
 _Static_assert(K_S_RIGHT == -((int)('%') + ((int)('i') << 8)), "K_S_RIGHT mismatch");
 _Static_assert(K_C_HOME == -((int)(KS_EXTRA) + ((int)(87) << 8)), "K_C_HOME mismatch");
 _Static_assert(K_C_END == -((int)(KS_EXTRA) + ((int)(88) << 8)), "K_C_END mismatch");
+
+// -- Phase 5: Editing module accessors and delegated wrappers --
+
+// Forward declarations for Phase 5 wrappers (definitions are later in the file)
+static int pc_status;
+#ifndef PC_STATUS_UNSET
+#define PC_STATUS_UNSET 0
+#endif
+
+/// Delegated wrapper for ins_eol (Rust FFI export).
+int nvim_edit_ins_eol(int c)
+{
+  if (echeck_abbr(c + ABBR_OFF)) {
+    return true;
+  }
+  if (stop_arrow() == FAIL) {
+    return false;
+  }
+  undisplay_dollar();
+
+  if ((State & REPLACE_FLAG) && !(State & VREPLACE_FLAG)) {
+    replace_push_nul();
+  }
+
+  if (virtual_active(curwin) && curwin->w_cursor.coladd > 0) {
+    coladvance(curwin, getviscol());
+  }
+
+  if (revins_on) {
+    curwin->w_cursor.col += get_cursor_pos_len();
+  }
+
+  AppendToRedobuff(NL_STR);
+  bool i = open_line(FORWARD,
+                     has_format_option(FO_RET_COMS) ? OPENLINE_DO_COM : 0,
+                     old_indent, NULL);
+  old_indent = 0;
+  can_cindent = true;
+  foldOpenCursor();
+
+  return i;
+}
+
+/// Delegated wrapper for ins_ctrl_v (Rust FFI export).
+void nvim_edit_ins_ctrl_v(void)
+{
+  bool did_putchar = false;
+
+  ins_redraw(false);
+
+  if (redrawing() && !char_avail()) {
+    edit_putchar('^', true);
+    did_putchar = true;
+  }
+  AppendToRedobuff(CTRL_V_STR);
+
+  add_to_showcmd_c(Ctrl_V);
+
+  int c = get_literal(mod_mask & MOD_MASK_SHIFT);
+  if (did_putchar) {
+    edit_unputchar();
+  }
+  clear_showcmd();
+  insert_special(c, true, true);
+  revins_chars++;
+  revins_legal++;
+}
+
+/// Delegated wrapper for ins_copychar (Rust FFI export).
+int nvim_edit_ins_copychar(linenr_T lnum)
+{
+  if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count) {
+    vim_beep(kOptBoFlagCopy);
+    return NUL;
+  }
+
+  validate_virtcol(curwin);
+  int const end_vcol = curwin->w_virtcol;
+  char *line = ml_get(lnum);
+
+  CharsizeArg csarg;
+  CSType cstype = init_charsize_arg(&csarg, curwin, lnum, line);
+  StrCharInfo ci = utf_ptr2StrCharInfo(line);
+  int vcol = 0;
+  while (vcol < end_vcol && *ci.ptr != NUL) {
+    vcol += win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &csarg).width;
+    if (vcol > end_vcol) {
+      break;
+    }
+    ci = utfc_next(ci);
+  }
+
+  int c = ci.chr.value < 0 ? (uint8_t)(*ci.ptr) : ci.chr.value;
+  if (c == NUL) {
+    vim_beep(kOptBoFlagCopy);
+  }
+  return c;
+}
+
+/// Delegated wrapper for ins_ctrl_ey (Rust FFI export).
+int nvim_edit_ins_ctrl_ey(int tc)
+{
+  int c = tc;
+
+  if (ctrl_x_mode_scroll()) {
+    if (c == Ctrl_Y) {
+      scrolldown_clamp();
+    } else {
+      scrollup_clamp();
+    }
+    redraw_later(curwin, UPD_VALID);
+  } else {
+    c = ins_copychar(curwin->w_cursor.lnum + (c == Ctrl_Y ? -1 : 1));
+    if (c != NUL) {
+      if (c < 256 && !isalnum(c)) {
+        AppendToRedobuff(CTRL_V_STR);
+      }
+      OptInt tw_save = curbuf->b_p_tw;
+      curbuf->b_p_tw = -1;
+      insert_special(c, true, false);
+      curbuf->b_p_tw = tw_save;
+      revins_chars++;
+      revins_legal++;
+      c = Ctrl_V;
+      auto_format(false, true);
+    }
+  }
+  return c;
+}
+
+/// Delegated wrapper for ins_digraph (Rust FFI export).
+int nvim_edit_ins_digraph(void)
+{
+  bool did_putchar = false;
+
+  pc_status = PC_STATUS_UNSET;
+  if (redrawing() && !char_avail()) {
+    ins_redraw(false);
+    edit_putchar('?', true);
+    did_putchar = true;
+    add_to_showcmd_c(Ctrl_K);
+  }
+
+  no_mapping++;
+  allow_keys++;
+  int c = plain_vgetc();
+  no_mapping--;
+  allow_keys--;
+  if (did_putchar) {
+    edit_unputchar();
+  }
+
+  if (IS_SPECIAL(c) || mod_mask) {
+    clear_showcmd();
+    insert_special(c, true, false);
+    return NUL;
+  }
+  if (c != ESC) {
+    did_putchar = false;
+    if (redrawing() && !char_avail()) {
+      ins_redraw(false);
+      if (char2cells(c) == 1) {
+        ins_redraw(false);
+        edit_putchar(c, true);
+        did_putchar = true;
+      }
+      add_to_showcmd_c(c);
+    }
+    no_mapping++;
+    allow_keys++;
+    int cc = plain_vgetc();
+    no_mapping--;
+    allow_keys--;
+    if (did_putchar) {
+      edit_unputchar();
+    }
+    if (cc != ESC) {
+      AppendToRedobuff(CTRL_V_STR);
+      c = digraph_get(c, cc, true);
+      clear_showcmd();
+      return c;
+    }
+  }
+  clear_showcmd();
+  return NUL;
+}
+
+/// Accessor for stuff_inserted: stuffcharReadbuff (for Rust).
+void nvim_stuffcharReadbuff(int c)
+{
+  stuffcharReadbuff(c);
+}
+
+/// Accessor for stuff_inserted: stuffReadbuffLen (for Rust).
+void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len)
+{
+  stuffReadbuffLen(data, len);
+}
+
+// nvim_emsg_noinstext is already defined in register.c
+
+// Static asserts for Phase 5 constants
+_Static_assert(ABBR_OFF == 0x100, "ABBR_OFF mismatch");
+_Static_assert(OPENLINE_DO_COM == 0x02, "OPENLINE_DO_COM mismatch");
+_Static_assert(Ctrl_D == 4, "Ctrl_D mismatch");
+_Static_assert(kOptBoFlagCopy == 0x10, "kOptBoFlagCopy mismatch");
 
 #define TRIGGER_AUTOCOMPLETE() \
   do { \
@@ -2454,30 +2667,7 @@ void ins_redraw(bool ready)
 // Handle a CTRL-V or CTRL-Q typed in Insert mode.
 static void ins_ctrl_v(void)
 {
-  bool did_putchar = false;
-
-  // may need to redraw when no more chars available now
-  ins_redraw(false);
-
-  if (redrawing() && !char_avail()) {
-    edit_putchar('^', true);
-    did_putchar = true;
-  }
-  AppendToRedobuff(CTRL_V_STR);
-
-  add_to_showcmd_c(Ctrl_V);
-
-  // Do not include modifiers into the key for CTRL-SHIFT-V.
-  int c = get_literal(mod_mask & MOD_MASK_SHIFT);
-  if (did_putchar) {
-    // when the line fits in 'columns' the '^' is at the start of the next
-    // line and will not removed by the redraw
-    edit_unputchar();
-  }
-  clear_showcmd();
-  insert_special(c, true, true);
-  revins_chars++;
-  revins_legal++;
+  rs_ins_ctrl_v();
 }
 
 // Put a character directly onto the screen.  It's not stored in a buffer.
@@ -3317,62 +3507,7 @@ int cursor_down(int n, bool upd_topline)
 /// @param no_esc  Don't add an ESC at the end
 int stuff_inserted(int c, int count, int no_esc)
 {
-  char last = NUL;
-
-  String insert = get_last_insert();  // text to be inserted
-  if (insert.data == NULL) {
-    emsg(_(e_noinstext));
-    return FAIL;
-  }
-
-  // may want to stuff the command character, to start Insert mode
-  if (c != NUL) {
-    stuffcharReadbuff(c);
-  }
-
-  if (insert.size > 0) {
-    // look for the last ESC in 'insert'
-    for (char *p = insert.data + insert.size - 1; p >= insert.data; p--) {
-      if (*p == ESC) {
-        insert.size = (size_t)(p - insert.data);
-        break;
-      }
-    }
-  }
-
-  if (insert.size > 0) {
-    char *p = insert.data + insert.size - 1;
-    // when the last char is either "0" or "^" it will be quoted if no ESC
-    // comes after it OR if it will inserted more than once and "ptr"
-    // starts with ^D.  -- Acevedo
-    if ((*p == '0' || *p == '^')
-        && (no_esc || (*insert.data == Ctrl_D && count > 1))) {
-      last = *p;
-      insert.size--;
-    }
-  }
-
-  do {
-    stuffReadbuffLen(insert.data, (ptrdiff_t)insert.size);
-    // A trailing "0" is inserted as "<C-V>048", "^" as "<C-V>^".
-    switch (last) {
-    case '0':
-      stuffReadbuffLen(S_LEN("\026\060\064\070"));
-      break;
-    case '^':
-      stuffReadbuffLen(S_LEN("\026^"));
-      break;
-    default:
-      break;
-    }
-  } while (--count > 0);
-
-  // may want to stuff a trailing ESC, to get out of Insert mode
-  if (!no_esc) {
-    stuffcharReadbuff(ESC);
-  }
-
-  return OK;
+  return rs_stuff_inserted(c, count, no_esc);
 }
 
 String get_last_insert(void)
@@ -4340,47 +4475,7 @@ static bool ins_tab(void)
 /// @return false when it can't undo.
 bool ins_eol(int c)
 {
-  if (echeck_abbr(c + ABBR_OFF)) {
-    return true;
-  }
-  if (stop_arrow() == FAIL) {
-    return false;
-  }
-  undisplay_dollar();
-
-  // Strange Vi behaviour: In Replace mode, typing a NL will not delete the
-  // character under the cursor.  Only push a NUL on the replace stack,
-  // nothing to put back when the NL is deleted.
-  if ((State & REPLACE_FLAG) && !(State & VREPLACE_FLAG)) {
-    replace_push_nul();
-  }
-
-  // In MODE_VREPLACE state, a NL replaces the rest of the line, and starts
-  // replacing the next line, so we push all of the characters left on the
-  // line onto the replace stack.  This is not done here though, it is done
-  // in open_line().
-
-  // Put cursor on NUL if on the last char and coladd is 1 (happens after
-  // CTRL-O).
-  if (virtual_active(curwin) && curwin->w_cursor.coladd > 0) {
-    coladvance(curwin, getviscol());
-  }
-
-  // NL in reverse insert will always start in the end of current line.
-  if (revins_on) {
-    curwin->w_cursor.col += get_cursor_pos_len();
-  }
-
-  AppendToRedobuff(NL_STR);
-  bool i = open_line(FORWARD,
-                     has_format_option(FO_RET_COMS) ? OPENLINE_DO_COM : 0,
-                     old_indent, NULL);
-  old_indent = 0;
-  can_cindent = true;
-  // When inserting a line the cursor line must never be in a closed fold.
-  foldOpenCursor();
-
-  return i;
+  return rs_ins_eol(c) != 0;
 }
 
 // Handle digraph in insert mode.
@@ -4388,136 +4483,20 @@ bool ins_eol(int c)
 // done.
 static int ins_digraph(void)
 {
-  bool did_putchar = false;
-
-  pc_status = PC_STATUS_UNSET;
-  if (redrawing() && !char_avail()) {
-    // may need to redraw when no more chars available now
-    ins_redraw(false);
-
-    edit_putchar('?', true);
-    did_putchar = true;
-    add_to_showcmd_c(Ctrl_K);
-  }
-
-  // don't map the digraph chars. This also prevents the
-  // mode message to be deleted when ESC is hit
-  no_mapping++;
-  allow_keys++;
-  int c = plain_vgetc();
-  no_mapping--;
-  allow_keys--;
-  if (did_putchar) {
-    // when the line fits in 'columns' the '?' is at the start of the next
-    // line and will not be removed by the redraw
-    edit_unputchar();
-  }
-
-  if (IS_SPECIAL(c) || mod_mask) {          // special key
-    clear_showcmd();
-    insert_special(c, true, false);
-    return NUL;
-  }
-  if (c != ESC) {
-    did_putchar = false;
-    if (redrawing() && !char_avail()) {
-      // may need to redraw when no more chars available now
-      ins_redraw(false);
-
-      if (char2cells(c) == 1) {
-        ins_redraw(false);
-        edit_putchar(c, true);
-        did_putchar = true;
-      }
-      add_to_showcmd_c(c);
-    }
-    no_mapping++;
-    allow_keys++;
-    int cc = plain_vgetc();
-    no_mapping--;
-    allow_keys--;
-    if (did_putchar) {
-      // when the line fits in 'columns' the '?' is at the start of the
-      // next line and will not be removed by a redraw
-      edit_unputchar();
-    }
-    if (cc != ESC) {
-      AppendToRedobuff(CTRL_V_STR);
-      c = digraph_get(c, cc, true);
-      clear_showcmd();
-      return c;
-    }
-  }
-  clear_showcmd();
-  return NUL;
+  return rs_ins_digraph();
 }
 
 // Handle CTRL-E and CTRL-Y in Insert mode: copy char from other line.
 // Returns the char to be inserted, or NUL if none found.
 int ins_copychar(linenr_T lnum)
 {
-  if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count) {
-    vim_beep(kOptBoFlagCopy);
-    return NUL;
-  }
-
-  // try to advance to the cursor column
-  validate_virtcol(curwin);
-  int const end_vcol = curwin->w_virtcol;
-  char *line = ml_get(lnum);
-
-  CharsizeArg csarg;
-  CSType cstype = init_charsize_arg(&csarg, curwin, lnum, line);
-  StrCharInfo ci = utf_ptr2StrCharInfo(line);
-  int vcol = 0;
-  while (vcol < end_vcol && *ci.ptr != NUL) {
-    vcol += win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &csarg).width;
-    if (vcol > end_vcol) {
-      break;
-    }
-    ci = utfc_next(ci);
-  }
-
-  int c = ci.chr.value < 0 ? (uint8_t)(*ci.ptr) : ci.chr.value;
-  if (c == NUL) {
-    vim_beep(kOptBoFlagCopy);
-  }
-  return c;
+  return rs_ins_copychar(lnum);
 }
 
 // CTRL-Y or CTRL-E typed in Insert mode.
 static int ins_ctrl_ey(int tc)
 {
-  int c = tc;
-
-  if (ctrl_x_mode_scroll()) {
-    if (c == Ctrl_Y) {
-      scrolldown_clamp();
-    } else {
-      scrollup_clamp();
-    }
-    redraw_later(curwin, UPD_VALID);
-  } else {
-    c = ins_copychar(curwin->w_cursor.lnum + (c == Ctrl_Y ? -1 : 1));
-    if (c != NUL) {
-      // The character must be taken literally, insert like it
-      // was typed after a CTRL-V, and pretend 'textwidth'
-      // wasn't set.  Digits, 'o' and 'x' are special after a
-      // CTRL-V, don't use it for these.
-      if (c < 256 && !isalnum(c)) {
-        AppendToRedobuff(CTRL_V_STR);
-      }
-      OptInt tw_save = curbuf->b_p_tw;
-      curbuf->b_p_tw = -1;
-      insert_special(c, true, false);
-      curbuf->b_p_tw = tw_save;
-      revins_chars++;
-      revins_legal++;
-      c = Ctrl_V;       // pretend CTRL-V is last character
-      auto_format(false, true);
-    }
-  }
-  return c;
+  return rs_ins_ctrl_ey(tc);
 }
 
 // Get the value that w_virtcol would have when 'list' is off.
