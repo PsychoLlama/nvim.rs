@@ -203,6 +203,42 @@ extern "C" {
 
     /// Get translated " (%d of %d)" format string.
     fn nvim_msg_arg_number() -> *const c_char;
+
+    /// Get `w_topline` from a window.
+    fn nvim_win_get_topline(wp: WinHandle) -> c_int;
+
+    /// Get `w_topfill` from a window.
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+
+    /// Get `w_botline` from a window.
+    fn nvim_win_get_botline(wp: WinHandle) -> c_int;
+
+    /// Get fill lines for a window at a line number.
+    fn nvim_win_get_fill(wp: WinHandle, lnum: c_int) -> c_int;
+
+    /// Get the buffer associated with a window.
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+
+    /// Get `b_ml.ml_line_count` from a buffer.
+    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
+
+    /// Get translated "All" string.
+    fn nvim_msg_all() -> *const c_char;
+
+    /// Get translated "Top" string.
+    fn nvim_msg_top() -> *const c_char;
+
+    /// Get translated "Bot" string.
+    fn nvim_msg_bot() -> *const c_char;
+
+    /// Get translated "%d%%" format string.
+    fn nvim_msg_pct() -> *const c_char;
+
+    /// Get translated "%3s" format string.
+    fn nvim_msg_3s() -> *const c_char;
+
+    /// Calculate percentage (from math crate).
+    fn rs_calc_percentage(part: i64, whole: i64) -> c_int;
 }
 
 /// Check if "buf" is a pointer to an existing buffer.
@@ -737,6 +773,68 @@ pub unsafe extern "C" fn rs_append_arg_number(
         // cap to actual buffer capacity
         let max_written = c_int::try_from(buflen.saturating_sub(1)).unwrap_or(c_int::MAX);
         n.min(max_written)
+    }
+}
+
+// =============================================================================
+// Statusline Position Formatting (Phase 4)
+// =============================================================================
+
+/// Get relative cursor position in window, formatted as "All", "Top", "Bot",
+/// or a localized percentage string.
+///
+/// # Safety
+///
+/// `wp` must be a valid window handle. `buf` must be a valid writable buffer
+/// of at least `buflen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_rel_pos(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int {
+    if buflen < 3 {
+        return 0;
+    }
+
+    let topline = nvim_win_get_topline(wp);
+    let topfill = nvim_win_get_topfill(wp);
+    let botline = nvim_win_get_botline(wp);
+
+    // Number of lines above window
+    let mut above: i64 = i64::from(topline) - 1;
+    above += i64::from(nvim_win_get_fill(wp, topline)) - i64::from(topfill);
+    if topline == 1 && topfill >= 1 {
+        above = 0;
+    }
+
+    // Number of lines below window
+    let win_buf = nvim_win_get_buffer(wp);
+    let line_count = nvim_buf_get_ml_line_count(win_buf);
+    let below: i64 = i64::from(line_count) - i64::from(botline) + 1;
+
+    // buflen >= 3 guaranteed by guard above, so unsigned_abs() is safe
+    let buflen_sz = buflen.unsigned_abs() as usize;
+
+    if below <= 0 {
+        let msg = if above == 0 {
+            nvim_msg_all()
+        } else {
+            nvim_msg_bot()
+        };
+        let n = libc::snprintf(buf, buflen_sz, c"%s".as_ptr(), msg);
+        return if n < 0 { 0 } else { n.min(buflen - 1) };
+    }
+
+    if above <= 0 {
+        let n = libc::snprintf(buf, buflen_sz, c"%s".as_ptr(), nvim_msg_top());
+        return if n < 0 { 0 } else { n.min(buflen - 1) };
+    }
+
+    let perc = rs_calc_percentage(above, above + below);
+    let mut tmp = [0u8; 8];
+    libc::snprintf(tmp.as_mut_ptr().cast(), tmp.len(), nvim_msg_pct(), perc);
+    let n = libc::snprintf(buf, buflen_sz, nvim_msg_3s(), tmp.as_ptr());
+    if n < 0 {
+        0
+    } else {
+        n.min(buflen - 1)
     }
 }
 

@@ -153,6 +153,7 @@ extern int rs_buflist_name_nr(int fnum, char **fname, linenr_T *lnum);
 extern char *rs_buf_spname(buf_T *buf);
 extern char *rs_getaltfname(bool errmsg);
 extern int rs_append_arg_number(win_T *wp, char *buf, size_t buflen);
+extern int rs_get_rel_pos(win_T *wp, char *buf, int buflen);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
@@ -628,6 +629,36 @@ const char *nvim_msg_arg_number_invalid(void)
 const char *nvim_msg_arg_number(void)
 {
   return _(" (%d of %d)");
+}
+
+/// Get translated "All" string (accessor for Rust).
+const char *nvim_msg_all(void)
+{
+  return _("All");
+}
+
+/// Get translated "Top" string (accessor for Rust).
+const char *nvim_msg_top(void)
+{
+  return _("Top");
+}
+
+/// Get translated "Bot" string (accessor for Rust).
+const char *nvim_msg_bot(void)
+{
+  return _("Bot");
+}
+
+/// Get translated "%d%%" format string (accessor for Rust).
+const char *nvim_msg_pct(void)
+{
+  return _("%d%%");
+}
+
+/// Get translated "%3s" format string (accessor for Rust).
+const char *nvim_msg_3s(void)
+{
+  return _("%3s");
 }
 
 typedef enum {
@@ -3919,37 +3950,7 @@ void free_titles(void)
 /// percentage form like %99, 99%; using "Top", "Bot" or "All" when appropriate.
 int get_rel_pos(win_T *wp, char *buf, int buflen)
 {
-  // Need at least 3 chars for writing.
-  if (buflen < 3) {
-    return 0;
-  }
-
-  linenr_T above;          // number of lines above window
-  linenr_T below;          // number of lines below window
-
-  above = wp->w_topline - 1;
-  above += win_get_fill(wp, wp->w_topline) - wp->w_topfill;
-  if (wp->w_topline == 1 && wp->w_topfill >= 1) {
-    // All buffer lines are displayed and there is an indication
-    // of filler lines, that can be considered seeing all lines.
-    above = 0;
-  }
-  below = wp->w_buffer->b_ml.ml_line_count - wp->w_botline + 1;
-  if (below <= 0) {
-    return (int)vim_snprintf_safelen(buf, (size_t)buflen,
-                                     "%s", (above == 0) ? _("All") : _("Bot"));
-  }
-
-  if (above <= 0) {
-    return (int)vim_snprintf_safelen(buf, (size_t)buflen,
-                                     "%s", _("Top"));
-  }
-
-  int perc = calc_percentage(above, above + below);
-  char tmp[8];
-  // localized percentage value
-  vim_snprintf(tmp, sizeof(tmp), _("%d%%"), perc);
-  return (int)vim_snprintf_safelen(buf, (size_t)buflen, _("%3s"), tmp);
+  return rs_get_rel_pos(wp, buf, buflen);
 }
 
 /// Append (2 of 8) to "buf[]", if editing more than one file.
