@@ -40,6 +40,93 @@
 
 garray_T ucmds = { 0, 0, sizeof(ucmd_T), 4, NULL };
 
+// ============================================================================
+// Static assertions: verify Rust-mirrored constants match C definitions.
+// ============================================================================
+
+// cmd_addr_T (ex_cmds_defs.h)
+_Static_assert(ADDR_LINES == 0, "ADDR_LINES");
+_Static_assert(ADDR_WINDOWS == 1, "ADDR_WINDOWS");
+_Static_assert(ADDR_ARGUMENTS == 2, "ADDR_ARGUMENTS");
+_Static_assert(ADDR_LOADED_BUFFERS == 3, "ADDR_LOADED_BUFFERS");
+_Static_assert(ADDR_BUFFERS == 4, "ADDR_BUFFERS");
+_Static_assert(ADDR_TABS == 5, "ADDR_TABS");
+_Static_assert(ADDR_TABS_RELATIVE == 6, "ADDR_TABS_RELATIVE");
+_Static_assert(ADDR_QUICKFIX_VALID == 7, "ADDR_QUICKFIX_VALID");
+_Static_assert(ADDR_QUICKFIX == 8, "ADDR_QUICKFIX");
+_Static_assert(ADDR_UNSIGNED == 9, "ADDR_UNSIGNED");
+_Static_assert(ADDR_OTHER == 10, "ADDR_OTHER");
+_Static_assert(ADDR_NONE == 11, "ADDR_NONE");
+
+// EX_* flags (ex_cmds_defs.h)
+_Static_assert(EX_RANGE == 0x001, "EX_RANGE");
+_Static_assert(EX_BANG == 0x002, "EX_BANG");
+_Static_assert(EX_EXTRA == 0x004, "EX_EXTRA");
+_Static_assert(EX_XFILE == 0x008, "EX_XFILE");
+_Static_assert(EX_NOSPC == 0x010, "EX_NOSPC");
+_Static_assert(EX_DFLALL == 0x020, "EX_DFLALL");
+_Static_assert(EX_NEEDARG == 0x080, "EX_NEEDARG");
+_Static_assert(EX_TRLBAR == 0x100, "EX_TRLBAR");
+_Static_assert(EX_REGSTR == 0x200, "EX_REGSTR");
+_Static_assert(EX_COUNT == 0x400, "EX_COUNT");
+_Static_assert(EX_ZEROR == 0x1000, "EX_ZEROR");
+_Static_assert(EX_BUFNAME == 0x8000, "EX_BUFNAME");
+_Static_assert(EX_KEEPSCRIPT == 0x4000000, "EX_KEEPSCRIPT");
+
+// CMOD_* flags (ex_cmds_defs.h)
+_Static_assert(CMOD_SANDBOX == 0x0001, "CMOD_SANDBOX");
+_Static_assert(CMOD_SILENT == 0x0002, "CMOD_SILENT");
+_Static_assert(CMOD_ERRSILENT == 0x0004, "CMOD_ERRSILENT");
+_Static_assert(CMOD_UNSILENT == 0x0008, "CMOD_UNSILENT");
+_Static_assert(CMOD_NOAUTOCMD == 0x0010, "CMOD_NOAUTOCMD");
+_Static_assert(CMOD_HIDE == 0x0020, "CMOD_HIDE");
+_Static_assert(CMOD_BROWSE == 0x0040, "CMOD_BROWSE");
+_Static_assert(CMOD_CONFIRM == 0x0080, "CMOD_CONFIRM");
+_Static_assert(CMOD_KEEPALT == 0x0100, "CMOD_KEEPALT");
+_Static_assert(CMOD_KEEPMARKS == 0x0200, "CMOD_KEEPMARKS");
+_Static_assert(CMOD_KEEPJUMPS == 0x0400, "CMOD_KEEPJUMPS");
+_Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS");
+_Static_assert(CMOD_KEEPPATTERNS == 0x1000, "CMOD_KEEPPATTERNS");
+_Static_assert(CMOD_NOSWAPFILE == 0x2000, "CMOD_NOSWAPFILE");
+
+// WSP_* flags (window.h)
+_Static_assert(WSP_ROOM == 0x01, "WSP_ROOM");
+_Static_assert(WSP_VERT == 0x02, "WSP_VERT");
+_Static_assert(WSP_HOR == 0x04, "WSP_HOR");
+_Static_assert(WSP_TOP == 0x08, "WSP_TOP");
+_Static_assert(WSP_BOT == 0x10, "WSP_BOT");
+_Static_assert(WSP_BELOW == 0x40, "WSP_BELOW");
+_Static_assert(WSP_ABOVE == 0x80, "WSP_ABOVE");
+
+// K_SPECIAL / KS_SPECIAL / KE_FILLER (keycodes.h)
+_Static_assert(K_SPECIAL == 0x80, "K_SPECIAL");
+_Static_assert(KS_SPECIAL == 254, "KS_SPECIAL");
+_Static_assert(KE_FILLER == 'X', "KE_FILLER");
+
+// UC_BUFFER (usercmd.h)
+_Static_assert(UC_BUFFER == 1, "UC_BUFFER");
+
+// EXPAND_* (cmdexpand_defs.h) — spot-check key values
+_Static_assert(EXPAND_UNSUCCESSFUL == -2, "EXPAND_UNSUCCESSFUL");
+_Static_assert(EXPAND_NOTHING == 0, "EXPAND_NOTHING");
+_Static_assert(EXPAND_COMMANDS == 1, "EXPAND_COMMANDS");
+_Static_assert(EXPAND_FILES == 2, "EXPAND_FILES");
+_Static_assert(EXPAND_DIRECTORIES == 3, "EXPAND_DIRECTORIES");
+_Static_assert(EXPAND_BUFFERS == 9, "EXPAND_BUFFERS");
+_Static_assert(EXPAND_MENUS == 11, "EXPAND_MENUS");
+_Static_assert(EXPAND_MAPPINGS == 16, "EXPAND_MAPPINGS");
+_Static_assert(EXPAND_USER_COMMANDS == 22, "EXPAND_USER_COMMANDS");
+_Static_assert(EXPAND_USER_CMD_FLAGS == 23, "EXPAND_USER_CMD_FLAGS");
+_Static_assert(EXPAND_USER_NARGS == 24, "EXPAND_USER_NARGS");
+_Static_assert(EXPAND_USER_COMPLETE == 25, "EXPAND_USER_COMPLETE");
+_Static_assert(EXPAND_USER_DEFINED == 30, "EXPAND_USER_DEFINED");
+_Static_assert(EXPAND_USER_LIST == 31, "EXPAND_USER_LIST");
+_Static_assert(EXPAND_USER_LUA == 32, "EXPAND_USER_LUA");
+_Static_assert(EXPAND_SHELLCMD == 33, "EXPAND_SHELLCMD");
+_Static_assert(EXPAND_USER_ADDR_TYPE == 43, "EXPAND_USER_ADDR_TYPE");
+_Static_assert(EXPAND_SHELLCMDLINE == 57, "EXPAND_SHELLCMDLINE");
+_Static_assert(EXPAND_LUA == 63, "EXPAND_LUA");
+
 static const char e_argument_required_for_str[]
   = N_("E179: Argument required for %s");
 static const char e_no_such_user_defined_command_str[]

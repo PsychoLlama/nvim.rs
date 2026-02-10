@@ -18,10 +18,52 @@ use std::ffi::c_int;
 type LinenrT = i32;
 
 // =============================================================================
-// Execution Modifiers
+// CMOD_* Constants — from ex_cmds_defs.h
 // =============================================================================
 
-/// Command modifier flags
+pub const CMOD_SANDBOX: c_int = 0x0001;
+pub const CMOD_SILENT: c_int = 0x0002;
+pub const CMOD_ERRSILENT: c_int = 0x0004;
+pub const CMOD_UNSILENT: c_int = 0x0008;
+pub const CMOD_NOAUTOCMD: c_int = 0x0010;
+pub const CMOD_HIDE: c_int = 0x0020;
+pub const CMOD_BROWSE: c_int = 0x0040;
+pub const CMOD_CONFIRM: c_int = 0x0080;
+pub const CMOD_KEEPALT: c_int = 0x0100;
+pub const CMOD_KEEPMARKS: c_int = 0x0200;
+pub const CMOD_KEEPJUMPS: c_int = 0x0400;
+pub const CMOD_LOCKMARKS: c_int = 0x0800;
+pub const CMOD_KEEPPATTERNS: c_int = 0x1000;
+pub const CMOD_NOSWAPFILE: c_int = 0x2000;
+
+// =============================================================================
+// WSP_* Constants — from window.h
+// =============================================================================
+
+pub const WSP_ROOM: c_int = 0x01;
+pub const WSP_VERT: c_int = 0x02;
+pub const WSP_HOR: c_int = 0x04;
+pub const WSP_TOP: c_int = 0x08;
+pub const WSP_BOT: c_int = 0x10;
+pub const WSP_HELP: c_int = 0x20;
+pub const WSP_BELOW: c_int = 0x40;
+pub const WSP_ABOVE: c_int = 0x80;
+pub const WSP_NEWLOC: c_int = 0x100;
+pub const WSP_NOENTER: c_int = 0x200;
+
+// =============================================================================
+// K_SPECIAL / KS_SPECIAL / KE_FILLER — from keycodes.h
+// =============================================================================
+
+pub const K_SPECIAL: u8 = 0x80;
+pub const KS_SPECIAL: u8 = 254;
+pub const KE_FILLER: u8 = b'X'; // 0x58
+
+// =============================================================================
+// Execution Modifiers (internal Rust flags)
+// =============================================================================
+
+/// Command modifier flags (internal Rust tracking, NOT matching C)
 pub const MOD_SILENT: u32 = 0x0001;
 pub const MOD_VERTICAL: u32 = 0x0002;
 pub const MOD_HORIZONTAL: u32 = 0x0004;
@@ -471,6 +513,47 @@ pub extern "C" fn rs_usercmd_exec_result_is_ok(result: c_int) -> c_int {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_cmod_constant_values() {
+        // Verify CMOD_* constants match ex_cmds_defs.h
+        assert_eq!(CMOD_SANDBOX, 0x0001);
+        assert_eq!(CMOD_SILENT, 0x0002);
+        assert_eq!(CMOD_ERRSILENT, 0x0004);
+        assert_eq!(CMOD_UNSILENT, 0x0008);
+        assert_eq!(CMOD_NOAUTOCMD, 0x0010);
+        assert_eq!(CMOD_HIDE, 0x0020);
+        assert_eq!(CMOD_BROWSE, 0x0040);
+        assert_eq!(CMOD_CONFIRM, 0x0080);
+        assert_eq!(CMOD_KEEPALT, 0x0100);
+        assert_eq!(CMOD_KEEPMARKS, 0x0200);
+        assert_eq!(CMOD_KEEPJUMPS, 0x0400);
+        assert_eq!(CMOD_LOCKMARKS, 0x0800);
+        assert_eq!(CMOD_KEEPPATTERNS, 0x1000);
+        assert_eq!(CMOD_NOSWAPFILE, 0x2000);
+    }
+
+    #[test]
+    fn test_wsp_constant_values() {
+        // Verify WSP_* constants match window.h
+        assert_eq!(WSP_ROOM, 0x01);
+        assert_eq!(WSP_VERT, 0x02);
+        assert_eq!(WSP_HOR, 0x04);
+        assert_eq!(WSP_TOP, 0x08);
+        assert_eq!(WSP_BOT, 0x10);
+        assert_eq!(WSP_HELP, 0x20);
+        assert_eq!(WSP_BELOW, 0x40);
+        assert_eq!(WSP_ABOVE, 0x80);
+        assert_eq!(WSP_NEWLOC, 0x100);
+        assert_eq!(WSP_NOENTER, 0x200);
+    }
+
+    #[test]
+    fn test_keycode_constant_values() {
+        assert_eq!(K_SPECIAL, 0x80);
+        assert_eq!(KS_SPECIAL, 254);
+        assert_eq!(KE_FILLER, b'X');
+    }
 
     #[test]
     fn test_cmd_modifiers() {

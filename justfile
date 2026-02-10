@@ -139,6 +139,7 @@ rust-test:
       -p nvim-unpacker \
       -p nvim-version \
       -p nvim-viewport \
+      -p nvim-usercmd \
       -p nvim-viml-parser
 
 # Run Rust linter

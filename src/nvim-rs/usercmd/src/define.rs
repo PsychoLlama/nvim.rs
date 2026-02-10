@@ -13,20 +13,61 @@
 use std::ffi::c_int;
 
 // =============================================================================
+// UC_* Constants — from usercmd.h
+// =============================================================================
+
+/// -buffer: local to current buffer (UC_BUFFER in C)
+pub const UC_BUFFER: c_int = 1;
+
+// =============================================================================
+// EX_* Flag Constants — from ex_cmds_defs.h
+// =============================================================================
+
+pub const EX_RANGE: u32 = 0x001;
+pub const EX_BANG: u32 = 0x002;
+pub const EX_EXTRA: u32 = 0x004;
+pub const EX_XFILE: u32 = 0x008;
+pub const EX_NOSPC: u32 = 0x010;
+pub const EX_DFLALL: u32 = 0x020;
+pub const EX_WHOLEFOLD: u32 = 0x040;
+pub const EX_NEEDARG: u32 = 0x080;
+pub const EX_TRLBAR: u32 = 0x100;
+pub const EX_REGSTR: u32 = 0x200;
+pub const EX_COUNT: u32 = 0x400;
+pub const EX_NOTRLCOM: u32 = 0x800;
+pub const EX_ZEROR: u32 = 0x1000;
+pub const EX_CTRLV: u32 = 0x2000;
+pub const EX_CMDARG: u32 = 0x4000;
+pub const EX_BUFNAME: u32 = 0x8000;
+pub const EX_BUFUNL: u32 = 0x1_0000;
+pub const EX_ARGOPT: u32 = 0x2_0000;
+pub const EX_SBOXOK: u32 = 0x4_0000;
+pub const EX_CMDWIN: u32 = 0x8_0000;
+pub const EX_MODIFY: u32 = 0x10_0000;
+pub const EX_FLAGS: u32 = 0x20_0000;
+pub const EX_LOCK_OK: u32 = 0x100_0000;
+pub const EX_KEEPSCRIPT: u32 = 0x400_0000;
+pub const EX_PREVIEW: u32 = 0x800_0000;
+
+// Composite flags
+pub const EX_FILES: u32 = EX_XFILE | EX_EXTRA;
+pub const EX_FILE1: u32 = EX_FILES | EX_NOSPC;
+pub const EX_WORD1: u32 = EX_EXTRA | EX_NOSPC;
+
+// =============================================================================
 // Command Flags
 // =============================================================================
 
-/// User command definition flags (UC_* in C)
-pub const UC_BUFFER: u32 = 0x0001;
-pub const UC_BANG: u32 = 0x0002;
-pub const UC_RANGE: u32 = 0x0004;
-pub const UC_COUNT: u32 = 0x0008;
-pub const UC_REGISTER: u32 = 0x0010;
-pub const UC_NARGS: u32 = 0x0020;
-pub const UC_COMPLETE: u32 = 0x0040;
-pub const UC_FORCE: u32 = 0x0080;
-pub const UC_KEEPSCRIPT: u32 = 0x0100;
-pub const UC_BAR: u32 = 0x0200;
+/// User command definition flags (internal Rust tracking)
+pub const UC_BANG_FLAG: u32 = 0x0002;
+pub const UC_RANGE_FLAG: u32 = 0x0004;
+pub const UC_COUNT_FLAG: u32 = 0x0008;
+pub const UC_REGISTER_FLAG: u32 = 0x0010;
+pub const UC_NARGS_FLAG: u32 = 0x0020;
+pub const UC_COMPLETE_FLAG: u32 = 0x0040;
+pub const UC_FORCE_FLAG: u32 = 0x0080;
+pub const UC_KEEPSCRIPT_FLAG: u32 = 0x0100;
+pub const UC_BAR_FLAG: u32 = 0x0200;
 
 /// User command flags wrapper
 #[repr(C)]
@@ -53,68 +94,68 @@ impl UserCmdFlags {
 
     /// Check if buffer-local
     pub const fn is_buffer_local(self) -> bool {
-        (self.flags & UC_BUFFER) != 0
+        (self.flags & UC_BUFFER as u32) != 0
     }
 
     /// Check if allows bang (!)
     pub const fn allows_bang(self) -> bool {
-        (self.flags & UC_BANG) != 0
+        (self.flags & UC_BANG_FLAG) != 0
     }
 
     /// Check if allows range
     pub const fn allows_range(self) -> bool {
-        (self.flags & UC_RANGE) != 0
+        (self.flags & UC_RANGE_FLAG) != 0
     }
 
     /// Check if allows count
     pub const fn allows_count(self) -> bool {
-        (self.flags & UC_COUNT) != 0
+        (self.flags & UC_COUNT_FLAG) != 0
     }
 
     /// Check if allows register
     pub const fn allows_register(self) -> bool {
-        (self.flags & UC_REGISTER) != 0
+        (self.flags & UC_REGISTER_FLAG) != 0
     }
 
     /// Check if has nargs specified
     pub const fn has_nargs(self) -> bool {
-        (self.flags & UC_NARGS) != 0
+        (self.flags & UC_NARGS_FLAG) != 0
     }
 
     /// Check if has complete specified
     pub const fn has_complete(self) -> bool {
-        (self.flags & UC_COMPLETE) != 0
+        (self.flags & UC_COMPLETE_FLAG) != 0
     }
 
     /// Check if allows bar (|)
     pub const fn allows_bar(self) -> bool {
-        (self.flags & UC_BAR) != 0
+        (self.flags & UC_BAR_FLAG) != 0
     }
 
     /// Set buffer-local flag
     pub fn set_buffer_local(&mut self, value: bool) {
         if value {
-            self.flags |= UC_BUFFER;
+            self.flags |= UC_BUFFER as u32;
         } else {
-            self.flags &= !UC_BUFFER;
+            self.flags &= !(UC_BUFFER as u32);
         }
     }
 
     /// Set bang flag
     pub fn set_bang(&mut self, value: bool) {
         if value {
-            self.flags |= UC_BANG;
+            self.flags |= UC_BANG_FLAG;
         } else {
-            self.flags &= !UC_BANG;
+            self.flags &= !UC_BANG_FLAG;
         }
     }
 
     /// Set range flag
     pub fn set_range(&mut self, value: bool) {
         if value {
-            self.flags |= UC_RANGE;
+            self.flags |= UC_RANGE_FLAG;
         } else {
-            self.flags &= !UC_RANGE;
+            self.flags &= !UC_RANGE_FLAG;
         }
     }
 }
@@ -216,7 +257,6 @@ impl UserCmdDef {
 
     /// Check if definition is valid
     pub const fn is_valid(&self) -> bool {
-        // Must have at least some specification
         self.flags.flags != 0 || self.nargs != 0
     }
 
@@ -344,12 +384,47 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_ex_flag_values() {
+        // Verify EX_* flags match ex_cmds_defs.h
+        assert_eq!(EX_RANGE, 0x001);
+        assert_eq!(EX_BANG, 0x002);
+        assert_eq!(EX_EXTRA, 0x004);
+        assert_eq!(EX_XFILE, 0x008);
+        assert_eq!(EX_NOSPC, 0x010);
+        assert_eq!(EX_DFLALL, 0x020);
+        assert_eq!(EX_WHOLEFOLD, 0x040);
+        assert_eq!(EX_NEEDARG, 0x080);
+        assert_eq!(EX_TRLBAR, 0x100);
+        assert_eq!(EX_REGSTR, 0x200);
+        assert_eq!(EX_COUNT, 0x400);
+        assert_eq!(EX_NOTRLCOM, 0x800);
+        assert_eq!(EX_ZEROR, 0x1000);
+        assert_eq!(EX_CTRLV, 0x2000);
+        assert_eq!(EX_CMDARG, 0x4000);
+        assert_eq!(EX_BUFNAME, 0x8000);
+        assert_eq!(EX_BUFUNL, 0x1_0000);
+        assert_eq!(EX_ARGOPT, 0x2_0000);
+        assert_eq!(EX_SBOXOK, 0x4_0000);
+        assert_eq!(EX_CMDWIN, 0x8_0000);
+        assert_eq!(EX_MODIFY, 0x10_0000);
+        assert_eq!(EX_FLAGS, 0x20_0000);
+        assert_eq!(EX_LOCK_OK, 0x100_0000);
+        assert_eq!(EX_KEEPSCRIPT, 0x400_0000);
+        assert_eq!(EX_PREVIEW, 0x800_0000);
+    }
+
+    #[test]
+    fn test_uc_buffer_value() {
+        assert_eq!(UC_BUFFER, 1);
+    }
+
+    #[test]
     fn test_user_cmd_flags() {
         let flags = UserCmdFlags::none();
         assert!(!flags.is_buffer_local());
         assert!(!flags.allows_bang());
 
-        let flags = UserCmdFlags::from_raw(UC_BUFFER | UC_BANG);
+        let flags = UserCmdFlags::from_raw(UC_BUFFER as u32 | UC_BANG_FLAG);
         assert!(flags.is_buffer_local());
         assert!(flags.allows_bang());
         assert!(!flags.allows_range());
@@ -387,7 +462,7 @@ mod tests {
         assert!(!def.has_complete());
 
         let mut def = UserCmdDef::new();
-        def.flags = UserCmdFlags::from_raw(UC_BUFFER | UC_BANG);
+        def.flags = UserCmdFlags::from_raw(UC_BUFFER as u32 | UC_BANG_FLAG);
         assert!(def.is_valid());
         assert!(def.is_buffer_local());
         assert!(def.allows_bang());
@@ -417,7 +492,7 @@ mod tests {
 
     #[test]
     fn test_ffi_exports() {
-        assert_eq!(rs_usercmd_flags_is_buffer_local(UC_BUFFER), 1);
+        assert_eq!(rs_usercmd_flags_is_buffer_local(UC_BUFFER as u32), 1);
         assert_eq!(rs_usercmd_flags_is_buffer_local(0), 0);
 
         assert_eq!(rs_usercmd_nargs_requires_arg(NARGS_ONE), 1);
