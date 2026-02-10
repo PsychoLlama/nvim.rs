@@ -508,6 +508,15 @@ extern "C" {
     fn nvim_shada_curbuf_marks_read() -> c_int;
     fn nvim_shada_curbuf_set_marks_read(val: c_int);
     fn nvim_shada_curbuf_ffname() -> *const c_char;
+
+    // Phase 7: histentry_T accessor
+    fn nvim_shada_set_histentry(
+        hist_array: *mut c_void,
+        idx: c_int,
+        ts: Timestamp,
+        hisstr: *mut c_char,
+        additional_data: *mut c_void,
+    );
 }
 
 // =============================================================================
@@ -2375,6 +2384,39 @@ pub unsafe extern "C" fn rs_hmll_entry_get_data(entry: *const HMLListEntry) -> *
         return std::ptr::null();
     }
     &raw const (*entry).data
+}
+
+/// Convert history merger state to a histentry_T array.
+///
+/// Iterates over the history merger's linked list and populates the
+/// provided histentry_T array via a C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hms_to_he_array(
+    hms_p: *const HistoryMergerState,
+    hist_array: *mut c_void,
+    new_hisidx: *mut c_int,
+    new_hisnum: *mut c_int,
+) {
+    let hmll = &(*hms_p).hmll;
+    let mut idx: c_int = 0;
+    let mut cur = hmll.first;
+    while !cur.is_null() {
+        let entry = &(*cur).data;
+        let hist_ptr: *const HistoryItemData =
+            std::ptr::addr_of!(entry.data.history_item).cast();
+        let hist = std::ptr::read(hist_ptr);
+        nvim_shada_set_histentry(
+            hist_array,
+            idx,
+            entry.timestamp,
+            hist.string,
+            entry.additional_data,
+        );
+        idx += 1;
+        cur = (*cur).next;
+    }
+    *new_hisnum = idx;
+    *new_hisidx = idx - 1;
 }
 
 // =============================================================================

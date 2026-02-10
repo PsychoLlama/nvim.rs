@@ -356,6 +356,19 @@ typedef struct {
   uint8_t history_type;
 } HistoryMergerState;
 
+// Phase 7: History merger deduplication (needs HMLList, HMLListEntry, HistoryMergerState)
+extern void rs_hmll_init(HMLList *hmll, size_t size);
+extern void rs_hmll_remove(HMLList *hmll, HMLListEntry *entry);
+extern void rs_hmll_insert(HMLList *hmll, HMLListEntry *after, ShadaEntry data);
+extern void rs_hmll_dealloc(HMLList *hmll);
+extern void rs_hms_init(HistoryMergerState *hms_p, uint8_t history_type,
+                        size_t num_elements, int do_merge, int reading);
+extern void rs_hms_insert(HistoryMergerState *hms_p, ShadaEntry entry, int do_iter);
+extern void rs_hms_insert_whole_neovim_history(HistoryMergerState *hms_p);
+extern void rs_hms_dealloc(HistoryMergerState *hms_p);
+extern void rs_hms_to_he_array(const HistoryMergerState *hms_p, void *hist_array,
+                               int *new_hisidx, int *new_hisnum);
+
 /// Structure that holds one file marks.
 typedef struct {
   ShadaEntry marks[NLOCALMARKS];  ///< All file marks.
@@ -460,16 +473,7 @@ static const ShadaEntry sd_default_values[] = {
 static inline void hmll_init(HMLList *const hmll, const size_t size)
   FUNC_ATTR_NONNULL_ALL
 {
-  *hmll = (HMLList) {
-    .entries = xcalloc(size, sizeof(hmll->entries[0])),
-    .first = NULL,
-    .last = NULL,
-    .free_entry = NULL,
-    .size = size,
-    .num_entries = 0,
-    .contained_entries = MAP_INIT,
-  };
-  hmll->last_free_entry = hmll->entries;
+  rs_hmll_init(hmll, size);
 }
 
 /// Iterate over HMLList in forward direction
@@ -492,28 +496,7 @@ static inline void hmll_init(HMLList *const hmll, const size_t size)
 static inline void hmll_remove(HMLList *const hmll, HMLListEntry *const hmll_entry)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (hmll_entry == hmll->last_free_entry - 1) {
-    hmll->last_free_entry--;
-  } else {
-    assert(hmll->free_entry == NULL);
-    hmll->free_entry = hmll_entry;
-  }
-  ptr_t val = pmap_del(cstr_t)(&hmll->contained_entries,
-                               hmll_entry->data.data.history_item.string, NULL);
-  assert(val);
-  (void)val;
-  if (hmll_entry->next == NULL) {
-    hmll->last = hmll_entry->prev;
-  } else {
-    hmll_entry->next->prev = hmll_entry->prev;
-  }
-  if (hmll_entry->prev == NULL) {
-    hmll->first = hmll_entry->next;
-  } else {
-    hmll_entry->prev->next = hmll_entry->next;
-  }
-  hmll->num_entries--;
-  shada_free_shada_entry(&hmll_entry->data);
+  rs_hmll_remove(hmll, hmll_entry);
 }
 
 /// Insert entry to the linked list
@@ -526,45 +509,7 @@ static inline void hmll_remove(HMLList *const hmll, HMLListEntry *const hmll_ent
 static inline void hmll_insert(HMLList *const hmll, HMLListEntry *hmll_entry, const ShadaEntry data)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (hmll->num_entries == hmll->size) {
-    if (hmll_entry == hmll->first) {
-      hmll_entry = NULL;
-    }
-    assert(hmll->first != NULL);
-    hmll_remove(hmll, hmll->first);
-  }
-  HMLListEntry *target_entry;
-  if (hmll->free_entry == NULL) {
-    assert((size_t)(hmll->last_free_entry - hmll->entries)
-           == hmll->num_entries);
-    target_entry = hmll->last_free_entry++;
-  } else {
-    assert((size_t)(hmll->last_free_entry - hmll->entries) - 1
-           == hmll->num_entries);
-    target_entry = hmll->free_entry;
-    hmll->free_entry = NULL;
-  }
-  target_entry->data = data;
-  bool new_item = false;
-  ptr_t *val = pmap_put_ref(cstr_t)(&hmll->contained_entries, data.data.history_item.string,
-                                    NULL, &new_item);
-  if (new_item) {
-    *val = target_entry;
-  }
-  hmll->num_entries++;
-  target_entry->prev = hmll_entry;
-  if (hmll_entry == NULL) {
-    target_entry->next = hmll->first;
-    hmll->first = target_entry;
-  } else {
-    target_entry->next = hmll_entry->next;
-    hmll_entry->next = target_entry;
-  }
-  if (target_entry->next == NULL) {
-    hmll->last = target_entry;
-  } else {
-    target_entry->next->prev = target_entry;
-  }
+  rs_hmll_insert(hmll, hmll_entry, data);
 }
 
 /// Free linked list
@@ -573,8 +518,7 @@ static inline void hmll_insert(HMLList *const hmll, HMLListEntry *hmll_entry, co
 static inline void hmll_dealloc(HMLList *const hmll)
   FUNC_ATTR_NONNULL_ALL
 {
-  map_destroy(cstr_t, &hmll->contained_entries);
-  xfree(hmll->entries);
+  rs_hmll_dealloc(hmll);
 }
 
 /// Wrapper for read that can be used when lseek cannot be used
@@ -658,45 +602,7 @@ static const void *shada_hist_iter(const void *const iter, const uint8_t history
 static void hms_insert(HistoryMergerState *const hms_p, const ShadaEntry entry, const bool do_iter)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (do_iter) {
-    while (hms_p->last_hist_entry.type != kSDItemMissing
-           && hms_p->last_hist_entry.timestamp < entry.timestamp) {
-      hms_insert(hms_p, hms_p->last_hist_entry, false);
-      if (hms_p->iter == NULL) {
-        hms_p->last_hist_entry.type = kSDItemMissing;
-        break;
-      }
-      hms_p->iter = shada_hist_iter(hms_p->iter, hms_p->history_type,
-                                    hms_p->reading, &hms_p->last_hist_entry);
-    }
-  }
-  HMLList *const hmll = &hms_p->hmll;
-  cstr_t *key_alloc = NULL;
-  ptr_t *val = pmap_ref(cstr_t)(&hms_p->hmll.contained_entries, entry.data.history_item.string,
-                                &key_alloc);
-  if (val) {
-    HMLListEntry *const existing_entry = *val;
-    if (entry.timestamp > existing_entry->data.timestamp) {
-      hmll_remove(hmll, existing_entry);
-    } else if (!do_iter && entry.timestamp == existing_entry->data.timestamp) {
-      // Prefer entry from the current Neovim instance.
-      shada_free_shada_entry(&existing_entry->data);
-      existing_entry->data = entry;
-      // Previous key was freed above, as part of freeing the ShaDa entry.
-      *key_alloc = entry.data.history_item.string;
-      return;
-    } else {
-      return;
-    }
-  }
-  HMLListEntry *insert_after;
-  // Iterate over HMLList in backward direction
-  for (insert_after = hmll->last; insert_after != NULL; insert_after = insert_after->prev) {
-    if (insert_after->data.timestamp <= entry.timestamp) {
-      break;
-    }
-  }
-  hmll_insert(hmll, insert_after, entry);
+  rs_hms_insert(hms_p, entry, do_iter ? 1 : 0);
 }
 
 /// Initialize the history merger
@@ -711,12 +617,7 @@ static inline void hms_init(HistoryMergerState *const hms_p, const uint8_t histo
                             const size_t num_elements, const bool do_merge, const bool reading)
   FUNC_ATTR_NONNULL_ALL
 {
-  hmll_init(&hms_p->hmll, num_elements);
-  hms_p->do_merge = do_merge;
-  hms_p->reading = reading;
-  hms_p->iter = shada_hist_iter(NULL, history_type, hms_p->reading,
-                                &hms_p->last_hist_entry);
-  hms_p->history_type = history_type;
+  rs_hms_init(hms_p, history_type, num_elements, do_merge ? 1 : 0, reading ? 1 : 0);
 }
 
 /// Merge in all remaining Neovim own history entries
@@ -726,14 +627,7 @@ static inline void hms_init(HistoryMergerState *const hms_p, const uint8_t histo
 static inline void hms_insert_whole_neovim_history(HistoryMergerState *const hms_p)
   FUNC_ATTR_NONNULL_ALL
 {
-  while (hms_p->last_hist_entry.type != kSDItemMissing) {
-    hms_insert(hms_p, hms_p->last_hist_entry, false);
-    if (hms_p->iter == NULL) {
-      break;
-    }
-    hms_p->iter = shada_hist_iter(hms_p->iter, hms_p->history_type,
-                                  hms_p->reading, &hms_p->last_hist_entry);
-  }
+  rs_hms_insert_whole_neovim_history(hms_p);
 }
 
 /// Convert merger structure to Neovim internal structure for history
@@ -747,17 +641,7 @@ static inline void hms_to_he_array(const HistoryMergerState *const hms_p,
                                    int *const new_hisnum)
   FUNC_ATTR_NONNULL_ALL
 {
-  histentry_T *hist = hist_array;
-  HMLL_FORALL(&hms_p->hmll, cur_entry,  {
-    hist->timestamp = cur_entry->data.timestamp;
-    hist->hisnum = (int)(hist - hist_array) + 1;
-    hist->hisstr = cur_entry->data.data.history_item.string;
-    hist->hisstrlen = strlen(cur_entry->data.data.history_item.string);
-    hist->additional_data = cur_entry->data.additional_data;
-    hist++;
-  })
-  *new_hisnum = (int)(hist - hist_array);
-  *new_hisidx = *new_hisnum - 1;
+  rs_hms_to_he_array(hms_p, hist_array, new_hisidx, new_hisnum);
 }
 
 /// Free history merger structure
@@ -766,7 +650,7 @@ static inline void hms_to_he_array(const HistoryMergerState *const hms_p,
 static inline void hms_dealloc(HistoryMergerState *const hms_p)
   FUNC_ATTR_NONNULL_ALL
 {
-  hmll_dealloc(&hms_p->hmll);
+  rs_hms_dealloc(hms_p);
 }
 
 /// Iterate over all history entries in history merger, in order
@@ -3989,4 +3873,18 @@ void nvim_shada_curbuf_set_marks_read(int val)
 const char *nvim_shada_curbuf_ffname(void)
 {
   return curbuf->b_ffname;
+}
+
+// Phase 7: histentry_T accessor for hms_to_he_array
+
+/// Set a histentry_T element at the given index.
+void nvim_shada_set_histentry(void *hist_array, int idx, uint64_t ts,
+                              char *hisstr, void *additional_data)
+{
+  histentry_T *he = &((histentry_T *)hist_array)[idx];
+  he->timestamp = ts;
+  he->hisnum = idx + 1;
+  he->hisstr = hisstr;
+  he->hisstrlen = strlen(hisstr);
+  he->additional_data = additional_data;
 }
