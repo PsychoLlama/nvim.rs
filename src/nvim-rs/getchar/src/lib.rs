@@ -44,6 +44,12 @@ extern "C" {
     fn nvim_get_rm_none() -> c_int;
     /// Get `RM_SCRIPT` constant
     fn nvim_get_rm_script() -> c_int;
+    /// Get `State` global
+    fn nvim_get_state() -> c_int;
+    /// Get `arrow_used` global
+    fn nvim_get_arrow_used() -> c_int;
+    /// Call `u_sync(force)`
+    fn nvim_call_u_sync(force: c_int);
 }
 
 /// Returns true if the stuff buffer is empty.
@@ -121,4 +127,27 @@ pub unsafe extern "C" fn rs_noremap_keys() -> c_int {
     let rm_none = nvim_get_rm_none();
     let rm_script = nvim_get_rm_script();
     c_int::from((keynoremap & (rm_none | rm_script)) != 0)
+}
+
+/// Mode flags
+const MODE_INSERT: c_int = 0x10;
+const MODE_CMDLINE: c_int = 0x08;
+
+/// Sync undo. Called when typed characters are obtained from the typeahead
+/// buffer, or when a menu is used.
+///
+/// Do not sync in Insert or Cmdline mode unless cursor key has been used,
+/// and not while reading a script file.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_may_sync_undo() {
+    let state = nvim_get_state();
+    let arrow_used = nvim_get_arrow_used() != 0;
+    let curscript = nvim_get_curscript();
+
+    if (state & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used) && curscript < 0 {
+        nvim_call_u_sync(0);
+    }
 }

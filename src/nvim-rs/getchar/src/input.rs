@@ -31,6 +31,9 @@ const KS_ZERO: u8 = 255;
 #[allow(dead_code)]
 const KS_MODIFIER: u8 = 252;
 
+/// KS_EXTRA - indicates an extra key code follows
+const KS_EXTRA_BYTE: u8 = 253;
+
 /// KE_FILLER - filler byte for special sequences
 const KE_FILLER: u8 = b'X';
 
@@ -82,6 +85,9 @@ extern "C" {
     fn nvim_get_keytyped() -> c_int;
     fn nvim_get_cmd_silent() -> c_int;
     fn nvim_add_on_key_ignore_len(val: usize);
+
+    // For fix_input_buffer
+    fn rs_using_script() -> c_int;
 
     // External Rust functions
     fn rs_special_to_buf(key: c_int, modifiers: c_int, escape_ks: c_int, dst: *mut u8) -> c_uint;
@@ -443,6 +449,16 @@ pub unsafe extern "C" fn rs_restore_old_char_state() {
     nvim_set_old_char(-1);
 }
 
+// =============================================================================
+// Modifier Constants
+// =============================================================================
+
+/// Ctrl modifier mask
+const MOD_MASK_CTRL: c_int = 0x04;
+
+/// K_ZERO: TERMCAP2KEY(KS_ZERO, KE_FILLER) = -(255 + (0x58 << 8))
+const K_ZERO: c_int = -((KS_ZERO as c_int) + ((KE_FILLER as c_int) << 8));
+
 /// Maximum bytes for a special key sequence with modifiers
 /// MB_MAXBYTES * 3 + 4 = 6 * 3 + 4 = 22
 const MB_MAXBYTES_TIMES_3_PLUS_4: usize = 22;
@@ -524,6 +540,93 @@ pub extern "C" fn rs_is_special(c: c_int) -> c_int {
 #[allow(clippy::missing_const_for_fn)]
 pub extern "C" fn rs_translate_keypad_key(c: c_int) -> c_int {
     translate_keypad_key(c)
+}
+
+/// Merge modifiers into a character code.
+///
+/// If CTRL is set and the character is in the '@'..0x7f range, convert to
+/// a control character. CTRL-6 becomes CTRL-^.
+///
+/// # Safety
+/// `modifiers` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_merge_modifiers(c_arg: c_int, modifiers: *mut c_int) -> c_int {
+    let mut c = c_arg;
+    let mods = &mut *modifiers;
+
+    if *mods & MOD_MASK_CTRL != 0 {
+        if c >= c_int::from(b'@') && c <= 0x7f {
+            c &= 0x1f;
+            if c == 0 {
+                c = K_ZERO;
+            }
+        } else if c == c_int::from(b'6') {
+            // CTRL-6 is equivalent to CTRL-^
+            c = 0x1e;
+        }
+        if c != c_arg {
+            *mods &= !MOD_MASK_CTRL;
+        }
+    }
+    c
+}
+
+/// Fix typed characters for use by vgetc().
+///
+/// When reading from a script, escapes NUL and K_SPECIAL bytes.
+/// The buffer must have room to triple the number of bytes.
+///
+/// # Safety
+/// `buf` must point to a buffer with at least `len * 3` bytes of capacity.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fix_input_buffer(buf: *mut u8, len: c_int) -> c_int {
+    if rs_using_script() == 0 {
+        // Not reading from script - don't escape K_SPECIAL
+        *buf.add(len as usize) = 0; // NUL
+        return len;
+    }
+
+    // Reading from script, need to process special bytes
+    let mut p = buf;
+    let mut new_len = len;
+
+    // Two characters are special: NUL and K_SPECIAL.
+    // Replace       NUL by K_SPECIAL KS_ZERO    KE_FILLER
+    // Replace K_SPECIAL by K_SPECIAL KS_SPECIAL KE_FILLER
+    let mut i = len;
+    loop {
+        i -= 1;
+        if i < 0 {
+            break;
+        }
+
+        if *p == 0 || (*p == K_SPECIAL && (i < 2 || *p.add(1) != KS_EXTRA_BYTE)) {
+            let orig = *p;
+            // memmove(p + 3, p + 1, i)
+            std::ptr::copy(p.add(1), p.add(3), i as usize);
+            // K_THIRD equivalent
+            *p.add(2) = if orig == K_SPECIAL || orig == 0 {
+                KE_FILLER
+            } else {
+                key2termcap1(-c_int::from(orig)) as u8
+            };
+            // K_SECOND equivalent
+            *p.add(1) = if orig == K_SPECIAL {
+                KS_SPECIAL
+            } else if orig == 0 {
+                KS_ZERO
+            } else {
+                key2termcap0(-c_int::from(orig)) as u8
+            };
+            *p = K_SPECIAL;
+            p = p.add(2);
+            new_len += 2;
+        }
+
+        p = p.add(1);
+    }
+    *p = 0; // NUL terminate
+    new_len
 }
 
 #[cfg(test)]

@@ -196,6 +196,14 @@ extern "C" {
     fn nvim_get_typeahead_char() -> c_int;
     /// Set typeahead_char value
     fn nvim_set_typeahead_char(val: c_int);
+    /// Get emsg_silent
+    fn nvim_get_emsg_silent() -> c_int;
+    /// Call flush_buffers(flush_type)
+    fn nvim_call_flush_buffers(flush_type: c_int);
+    /// Call vim_beep(flag)
+    fn nvim_call_vim_beep(flag: c_int);
+    /// Set block_redo
+    fn nvim_set_block_redo(val: c_int);
 }
 
 // Note: rs_stuff_empty and rs_readbuf1_empty are already exported from lib.rs
@@ -333,6 +341,42 @@ pub unsafe extern "C" fn rs_encode_char_for_stuff(c: c_int, buf: *mut u8) -> c_i
 #[no_mangle]
 pub extern "C" fn rs_needs_special_encoding(c: c_int) -> c_int {
     c_int::from(is_special(c) || c == K_SPECIAL as c_int || c == NUL as c_int)
+}
+
+/// FLUSH_MINIMAL constant (matches C enum)
+const FLUSH_MINIMAL: c_int = 0;
+
+/// kOptBoFlagError constant (from generated option_vars.h)
+const K_OPT_BO_FLAG_ERROR: c_int = 0x40;
+
+/// Set typeahead character that won't be flushed.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_typeahead_noflush(c: c_int) {
+    nvim_set_typeahead_char(c);
+}
+
+/// Flush map and typeahead buffers and give a warning for an error.
+///
+/// # Safety
+/// Calls C functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_beep_flush() {
+    if nvim_get_emsg_silent() == 0 {
+        nvim_call_flush_buffers(FLUSH_MINIMAL);
+        nvim_call_vim_beep(K_OPT_BO_FLAG_ERROR);
+    }
+}
+
+/// Stop redo insert mode (unblock redo buffer).
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stop_redo_ins() {
+    nvim_set_block_redo(0);
 }
 
 // Note: rs_to_special and rs_is_special are already exported from input.rs

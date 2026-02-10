@@ -90,6 +90,20 @@ extern int rs_get_old_char(void);
 extern void rs_clear_old_char(void);
 extern void rs_restore_old_char_state(void);
 extern int rs_ins_char_typebuf(int c, int modifiers, int on_key_ignore);
+extern int rs_merge_modifiers(int c_arg, int *modifiers);
+extern int rs_fix_input_buffer(uint8_t *buf, int len);
+extern void rs_may_sync_undo(void);
+extern void rs_stop_redo_ins(void);
+extern void rs_typeahead_noflush(int c);
+extern void rs_beep_flush(void);
+extern void rs_check_end_reg_executing(int advance);
+
+// Static assertions for constants hardcoded in Rust
+_Static_assert(MOD_MASK_CTRL == 0x04, "MOD_MASK_CTRL");
+_Static_assert(MODE_INSERT == 0x10, "MODE_INSERT");
+_Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE");
+_Static_assert(FLUSH_MINIMAL == 0, "FLUSH_MINIMAL");
+_Static_assert(KS_EXTRA == 253, "KS_EXTRA");
 
 /// State for adding bytes to a recording or 'showcmd'.
 typedef struct {
@@ -455,7 +469,7 @@ bool readbuf1_empty(void)
 /// Set a typeahead character that won't be flushed.
 void typeahead_noflush(int c)
 {
-  typeahead_char = c;
+  rs_typeahead_noflush(c);
 }
 
 /// Remove the contents of the stuff buffer and the mapped characters in the
@@ -498,10 +512,7 @@ void flush_buffers(flush_buffers_T flush_typeahead)
 /// flush map and typeahead buffers and give a warning for an error
 void beep_flush(void)
 {
-  if (emsg_silent == 0) {
-    flush_buffers(FLUSH_MINIMAL);
-    vim_beep(kOptBoFlagError);
-  }
+  rs_beep_flush();
 }
 
 /// The previous contents of the redo buffer is kept in old_redobuffer.
@@ -896,7 +907,7 @@ int start_redo_ins(void)
 
 void stop_redo_ins(void)
 {
-  block_redo = false;
+  rs_stop_redo_ins();
 }
 
 /// Initialize typebuf.tb_buf to point to typebuf_init.
@@ -1279,16 +1290,9 @@ void ungetchars(int len)
 
 /// Sync undo.  Called when typed characters are obtained from the typeahead
 /// buffer, or when a menu is used.
-/// Do not sync:
-/// - In Insert mode, unless cursor key has been used.
-/// - While reading a script file.
-/// - When no_u_sync is non-zero.
 void may_sync_undo(void)
 {
-  if ((!(State & (MODE_INSERT | MODE_CMDLINE)) || arrow_used)
-      && curscript < 0) {
-    u_sync(false);
-  }
+  rs_may_sync_undo();
 }
 
 /// Make "typebuf" empty and allocate new buffers.
@@ -1530,23 +1534,7 @@ static void updatescript(int c)
 /// Merge "modifiers" into "c_arg".
 int merge_modifiers(int c_arg, int *modifiers)
 {
-  int c = c_arg;
-
-  if (*modifiers & MOD_MASK_CTRL) {
-    if (c >= '@' && c <= 0x7f) {
-      c &= 0x1f;
-      if (c == NUL) {
-        c = K_ZERO;
-      }
-    } else if (c == '6') {
-      // CTRL-6 is equivalent to CTRL-^
-      c = 0x1e;
-    }
-    if (c != c_arg) {
-      *modifiers &= ~MOD_MASK_CTRL;
-    }
-  }
-  return c;
+  return rs_merge_modifiers(c_arg, modifiers);
 }
 
 /// Add a single byte to 'showcmd' for a partially matched mapping.
@@ -2546,14 +2534,7 @@ void vungetc(int c)
 /// yet, so set a flag to clear it later.
 void check_end_reg_executing(bool advance)
 {
-  if (reg_executing != 0 && (typebuf.tb_maplen == 0 || pending_end_reg_executing)) {
-    if (advance) {
-      reg_executing = 0;
-      pending_end_reg_executing = false;
-    } else {
-      pending_end_reg_executing = true;
-    }
-  }
+  rs_check_end_reg_executing(advance ? 1 : 0);
 }
 
 /// Gets a byte:
@@ -3120,33 +3101,7 @@ int inchar(uint8_t *buf, int maxlen, long wait_time)
 int fix_input_buffer(uint8_t *buf, int len)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (!using_script()) {
-    // Should not escape K_SPECIAL reading input from the user because vim
-    // key codes keys are processed in input.c/input_enqueue.
-    buf[len] = NUL;
-    return len;
-  }
-
-  // Reading from script, need to process special bytes
-  uint8_t *p = buf;
-
-  // Two characters are special: NUL and K_SPECIAL.
-  // Replace       NUL by K_SPECIAL KS_ZERO    KE_FILLER
-  // Replace K_SPECIAL by K_SPECIAL KS_SPECIAL KE_FILLER
-  for (int i = len; --i >= 0; p++) {
-    if (p[0] == NUL
-        || (p[0] == K_SPECIAL
-            && (i < 2 || p[1] != KS_EXTRA))) {
-      memmove(p + 3, p + 1, (size_t)i);
-      p[2] = (uint8_t)K_THIRD(p[0]);
-      p[1] = (uint8_t)K_SECOND(p[0]);
-      p[0] = K_SPECIAL;
-      p += 2;
-      len += 2;
-    }
-  }
-  *p = NUL;  // add trailing NUL
-  return len;
+  return rs_fix_input_buffer(buf, len);
 }
 
 /// Function passed to do_cmdline() to get the command after a <Cmd> key from
@@ -3838,4 +3793,41 @@ void nvim_add_num_buff_redobuff(int n)
   if (!block_redo) {
     add_num_buff(&redobuff, n);
   }
+}
+
+// Phase 1 accessor functions for Rust
+
+void nvim_call_u_sync(int force)
+{
+  u_sync(force != 0);
+}
+
+void nvim_call_flush_buffers(int flush_type)
+{
+  flush_buffers((flush_buffers_T)flush_type);
+}
+
+void nvim_call_vim_beep(int flag)
+{
+  vim_beep((unsigned)flag);
+}
+
+void nvim_set_reg_executing(int val)
+{
+  reg_executing = val;
+}
+
+int nvim_get_pending_end_reg_executing(void)
+{
+  return pending_end_reg_executing ? 1 : 0;
+}
+
+void nvim_set_pending_end_reg_executing(int val)
+{
+  pending_end_reg_executing = val != 0;
+}
+
+void nvim_set_block_redo(int val)
+{
+  block_redo = val != 0;
 }

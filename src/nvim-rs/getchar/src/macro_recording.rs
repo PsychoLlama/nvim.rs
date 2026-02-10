@@ -105,6 +105,16 @@ extern "C" {
     fn nvim_add_last_recorded_len(val: usize);
     /// Check if block_redo is set
     fn nvim_get_block_redo() -> c_int;
+    /// Get reg_executing
+    fn nvim_get_reg_executing() -> c_int;
+    /// Set reg_executing
+    fn nvim_set_reg_executing(val: c_int);
+    /// Get pending_end_reg_executing
+    fn nvim_get_pending_end_reg_executing() -> c_int;
+    /// Set pending_end_reg_executing
+    fn nvim_set_pending_end_reg_executing(val: c_int);
+    /// Get typebuf.tb_maplen
+    fn nvim_get_typebuf_maplen() -> c_int;
 }
 
 /// Check if we are currently recording a macro.
@@ -159,6 +169,27 @@ pub unsafe extern "C" fn rs_add_last_recorded_len(len: usize) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_block_redo() -> c_int {
     nvim_get_block_redo()
+}
+
+/// When peeking and not getting a character, reg_executing cannot be cleared
+/// yet, so set a flag to clear it later.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_end_reg_executing(advance: c_int) {
+    let reg_executing = nvim_get_reg_executing();
+    let tb_maplen = nvim_get_typebuf_maplen();
+    let pending = nvim_get_pending_end_reg_executing() != 0;
+
+    if reg_executing != 0 && (tb_maplen == 0 || pending) {
+        if advance != 0 {
+            nvim_set_reg_executing(0);
+            nvim_set_pending_end_reg_executing(0);
+        } else {
+            nvim_set_pending_end_reg_executing(1);
+        }
+    }
 }
 
 // =============================================================================
