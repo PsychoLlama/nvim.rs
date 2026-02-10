@@ -2149,6 +2149,52 @@ pub extern "C" fn rs_win_update_cursorline(wp: WinHandle, foldinfo: FoldinfoHand
     }
 }
 
+// =============================================================================
+// Phase 6: Cursor Positioning
+// =============================================================================
+
+extern "C" {
+    fn nvim_win_get_w_wrow(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_wcol(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_p_rl(wp: WinHandle) -> c_int;
+    fn nvim_win_rl_cursor_col(wp: WinHandle) -> c_int;
+    fn nvim_grid_adjust_cursor_goto(wp: WinHandle, row: c_int, col: c_int);
+    fn nvim_validate_cursor_for_win(wp: WinHandle);
+}
+
+/// Set cursor to its position in the current window.
+///
+/// Rust equivalent of `setcursor()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_setcursor() {
+    unsafe {
+        rs_setcursor_mayforce(nvim_get_curwin(), 0);
+    }
+}
+
+/// Set cursor to its position in a window.
+///
+/// Rust equivalent of `setcursor_mayforce()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_setcursor_mayforce(wp: WinHandle, force: c_int) {
+    unsafe {
+        if force != 0 || redrawing_impl() {
+            nvim_validate_cursor_for_win(wp);
+
+            let row = nvim_win_get_w_wrow(wp);
+            let col = if nvim_win_get_w_p_rl(wp) != 0 {
+                // With 'rightleft' set and the cursor on a double-wide character,
+                // position it on the leftmost column.
+                nvim_win_rl_cursor_col(wp)
+            } else {
+                nvim_win_get_w_wcol(wp)
+            };
+
+            nvim_grid_adjust_cursor_goto(wp, row, col);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

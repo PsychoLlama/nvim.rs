@@ -752,34 +752,20 @@ void end_search_hl(void)
   screen_search_hl.rm.regprog = NULL;
 }
 
+extern void rs_setcursor(void);
+extern void rs_setcursor_mayforce(win_T *wp, int force);
+
 /// Set cursor to its position in the current window.
 void setcursor(void)
 {
-  setcursor_mayforce(curwin, false);
+  rs_setcursor();
 }
 
 /// Set cursor to its position in the current window.
 /// @param force  when true, also when not redrawing.
 void setcursor_mayforce(win_T *wp, bool force)
 {
-  if (force || redrawing()) {
-    validate_cursor(wp);
-
-    int row = wp->w_wrow;
-    int col = wp->w_wcol;
-    if (wp->w_p_rl) {
-      // With 'rightleft' set and the cursor on a double-wide character,
-      // position it on the leftmost column.
-      char *cursor = ml_get_buf(wp->w_buffer, wp->w_cursor.lnum) + wp->w_cursor.col;
-      col = wp->w_view_width - wp->w_wcol - ((utf_ptr2cells(cursor) == 2
-                                              && vim_isprintc(utf_ptr2char(cursor))) ? 2 : 1);
-    }
-
-    ScreenGrid *grid = grid_adjust(&wp->w_grid, &row, &col);
-    if (grid) {
-      ui_grid_cursor_goto(grid->handle, row, col);
-    }
-  }
+  rs_setcursor_mayforce(wp, force ? 1 : 0);
 }
 
 extern int rs_redraw_custom_title_later(void);
@@ -2874,4 +2860,43 @@ int nvim_fold_info(win_T *wp, linenr_T lnum, linenr_T *out_fi_lnum, linenr_T *ou
     *out_fi_lines = fi.fi_lines;
   }
   return fi.fi_level;
+}
+
+// Phase 6 accessors for setcursor() / setcursor_mayforce()
+
+/// Get w_wrow for a window.
+int nvim_win_get_w_wrow(win_T *wp) { return wp ? wp->w_wrow : 0; }
+
+/// Get w_wcol for a window.
+int nvim_win_get_w_wcol(win_T *wp) { return wp ? wp->w_wcol : 0; }
+
+/// Get w_p_rl option for a window.
+int nvim_win_get_w_p_rl(win_T *wp) { return wp ? wp->w_p_rl : 0; }
+
+/// Compute rightleft column adjustment for cursor positioning.
+/// Returns the adjusted column, accounting for double-wide chars.
+int nvim_win_rl_cursor_col(win_T *wp)
+{
+  if (!wp) { return 0; }
+  char *cursor = ml_get_buf(wp->w_buffer, wp->w_cursor.lnum) + wp->w_cursor.col;
+  int view_width = wp->w_view_width;
+  int wcol = wp->w_wcol;
+  return view_width - wcol - ((utf_ptr2cells(cursor) == 2
+                               && vim_isprintc(utf_ptr2char(cursor))) ? 2 : 1);
+}
+
+/// Combined grid_adjust + ui_grid_cursor_goto.
+/// Avoids exposing ScreenGrid pointer to Rust.
+void nvim_grid_adjust_cursor_goto(win_T *wp, int row, int col)
+{
+  ScreenGrid *grid = grid_adjust(&wp->w_grid, &row, &col);
+  if (grid) {
+    ui_grid_cursor_goto(grid->handle, row, col);
+  }
+}
+
+/// Wrapper for validate_cursor(wp) for Rust FFI.
+void nvim_validate_cursor_for_win(win_T *wp)
+{
+  validate_cursor(wp);
 }
