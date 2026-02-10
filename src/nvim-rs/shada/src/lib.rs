@@ -380,6 +380,9 @@ extern "C" {
 
     // Error messages
     fn nvim_semsg(fmt: *const c_char, ...);
+
+    // FileMarks accessor
+    fn nvim_filemarks_get_greatest_timestamp(fm: *const c_void) -> Timestamp;
 }
 
 // =============================================================================
@@ -428,6 +431,12 @@ pub extern "C" fn rs_shada_hist_char2type(c: c_int) -> c_int {
 #[inline]
 pub const fn marks_equal(a: Position, b: Position) -> bool {
     a.lnum == b.lnum && a.col == b.col
+}
+
+/// FFI export: check if two positions are equal.
+#[no_mangle]
+pub extern "C" fn rs_marks_equal(a: Position, b: Position) -> c_int {
+    c_int::from(marks_equal(a, b))
 }
 
 /// Get the shada parameter value for a given type character.
@@ -3067,6 +3076,129 @@ pub unsafe extern "C" fn rs_shada_free_entry_contents(entry: *mut ShadaEntry) {
     // Reset entry to missing state
     (*entry).entry_type = ShadaEntryType::Missing;
     (*entry).can_free_entry = false;
+}
+
+// =============================================================================
+// Stateless Helpers (Phase 1)
+// =============================================================================
+
+/// Insert into a mark list (jump list or change list) at the given position.
+///
+/// Handles the case where the list is full (JUMPLISTSIZE) by either dropping
+/// the oldest entry or rejecting the insert. Returns the adjusted index where
+/// the entry was placed, or -1 if the insert was rejected.
+///
+/// # Safety
+///
+/// - `jumps_arr` must point to a valid array of at least `jl_len` elements,
+///   each of size `jump_size`.
+/// - `i` must be in the range `[0, jl_len]`.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_marklist_insert(
+    jumps_arr: *mut c_void,
+    jump_size: usize,
+    jl_len: c_int,
+    i: c_int,
+) -> c_int {
+    let jumps = jumps_arr.cast::<u8>();
+    let mut i = i;
+    if i > 0 {
+        if jl_len == JUMPLISTSIZE as c_int {
+            i -= 1;
+            if i > 0 {
+                // delete oldest item to make room for new element
+                std::ptr::copy(jumps.add(jump_size), jumps, jump_size * i as usize);
+            }
+        } else if i != jl_len {
+            // insert at position i, move newer items out of the way
+            std::ptr::copy(
+                jumps.add(i as usize * jump_size),
+                jumps.add((i as usize + 1) * jump_size),
+                jump_size * (jl_len - i) as usize,
+            );
+        }
+    } else if i == 0 {
+        if jl_len == JUMPLISTSIZE as c_int {
+            return -1; // don't insert, older than the entire list
+        } else if jl_len > 0 {
+            // insert i as the oldest item
+            std::ptr::copy(jumps, jumps.add(jump_size), jump_size * jl_len as usize);
+        }
+    }
+    i
+}
+
+/// Compare two FileMarks pointers by greatest_timestamp for qsort.
+///
+/// Orders in reverse: structure with greatest timestamp comes first.
+///
+/// # Safety
+///
+/// Both `a` and `b` must be valid pointers to `*const FileMarks`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compare_file_marks(a: *const c_void, b: *const c_void) -> c_int {
+    let a_fm: *const c_void = (*(a.cast::<*const FileMarks>())).cast();
+    let b_fm: *const c_void = (*(b.cast::<*const FileMarks>())).cast();
+    let a_ts = nvim_filemarks_get_greatest_timestamp(a_fm);
+    let b_ts = nvim_filemarks_get_greatest_timestamp(b_fm);
+    // Reverse order: greater timestamp comes first
+    match b_ts.cmp(&a_ts) {
+        std::cmp::Ordering::Less => -1,
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Greater => 1,
+    }
+}
+
+/// Replace a numbered mark in the WriteMergerState.
+///
+/// Frees the last mark, moves marks from idx to last-but-one (adjusting names),
+/// and saves the new mark at the given index.
+///
+/// # Safety
+///
+/// - `wms` must be a valid pointer to a WriteMergerState.
+/// - `idx` must be < EXTRA_MARKS.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_replace_numbered_mark(
+    wms: *mut WriteMergerState,
+    idx: usize,
+    entry: ShadaEntry,
+) {
+    let wms = &mut *wms;
+    let last = EXTRA_MARKS - 1;
+
+    // Free the last entry
+    nvim_shada_free_shada_entry(std::ptr::addr_of_mut!(wms.numbered_marks[last]));
+
+    // Adjust names of marks that will shift down
+    for i in idx..last {
+        if wms.numbered_marks[i].entry_type == ShadaEntryType::GlobalMark {
+            // Write filemark.name through raw pointer to avoid implicit autoref
+            let fm_ptr: *mut FilemarkData =
+                std::ptr::addr_of_mut!(wms.numbered_marks[i].data.filemark).cast();
+            std::ptr::addr_of_mut!((*fm_ptr).name).write((b'0' + i as u8 + 1) as c_char);
+        }
+    }
+
+    // Move marks from idx..last-1 to idx+1..last
+    if idx < last {
+        std::ptr::copy(
+            wms.numbered_marks.as_ptr().add(idx),
+            wms.numbered_marks.as_mut_ptr().add(idx + 1),
+            last - idx,
+        );
+    }
+
+    // Place the new entry at idx
+    wms.numbered_marks[idx] = entry;
+
+    // Set the name of the new entry
+    let fm_ptr: *mut FilemarkData =
+        std::ptr::addr_of_mut!(wms.numbered_marks[idx].data.filemark).cast();
+    std::ptr::addr_of_mut!((*fm_ptr).name).write((b'0' + idx as u8) as c_char);
 }
 
 // =============================================================================

@@ -78,6 +78,11 @@ extern int rs_shada_entry_type_from_raw(uint64_t raw_type);
 extern int rs_shada_is_unknown_entry(uint64_t entry_type);
 extern int rs_shada_should_write_entry(size_t packed_size, size_t max_kbyte);
 
+// Phase 1: Stateless helpers
+extern int rs_marks_equal(pos_T a, pos_T b);
+extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
+extern int rs_compare_file_marks(const void *a, const void *b);
+
 // Legacy alias
 #define rs_hist_type2char rs_shada_hist_type2char
 
@@ -354,6 +359,9 @@ typedef struct {
   Set(cstr_t) dumped_variables;  ///< Names of already dumped variables.
   PMap(cstr_t) file_marks;  ///< All file marks.
 } WriteMergerState;
+
+// Phase 1: Rust helper for replace_numbered_mark (needs WriteMergerState typedef)
+extern void rs_replace_numbered_mark(WriteMergerState *wms, size_t idx, ShadaEntry entry);
 
 #include "shada.c.generated.h"
 
@@ -883,36 +891,10 @@ static inline bool marks_equal(const pos_T a, const pos_T b)
 }
 
 /// adjust "jumps_arr" to make space to insert an item just before the item at "i"
-/// (or after the last if i == jl_len)
-///
-/// Higher incidies indicate newer items. If the list is full, discard the oldest item
-/// (or don't insert the considered item if it is older)
-///
-/// @return the actual position a new item should be inserted or -1 if it shouldn't be inserted
+/// Delegated to Rust rs_marklist_insert.
 static int marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i)
 {
-  char *jumps = (char *)jumps_arr;  // for pointer maffs
-  if (i > 0) {
-    if (jl_len == JUMPLISTSIZE) {
-      i--;
-      if (i > 0) {
-        // delete oldest item to make room for new element
-        memmove(jumps, jumps + jump_size, jump_size * (size_t)i);
-      }
-    } else if (i != jl_len) {
-      // insert at position i, move newer items out of the way
-      memmove(jumps + (size_t)(i + 1) * jump_size, jumps + (size_t)i * jump_size,
-              jump_size * (size_t)(jl_len - i));
-    }
-  } else if (i == 0) {
-    if (jl_len == JUMPLISTSIZE) {
-      return -1;  // don't insert, older than the entire list
-    } else if (jl_len > 0) {
-      // insert i as the oldest item
-      memmove(jumps + jump_size, jumps, jump_size * (size_t)jl_len);
-    }
-  }
-  return i;
+  return rs_marklist_insert(jumps_arr, jump_size, jl_len, i);
 }
 
 /// Read data from ShaDa file
@@ -1608,18 +1590,12 @@ static inline ShaDaWriteResult shada_pack_pfreed_entry(PackerBuffer *const packe
   return ret;
 }
 
-/// Compare two FileMarks structure to order them by greatest_timestamp
-///
-/// Order is reversed: structure with greatest greatest_timestamp comes first.
-/// Function signature is compatible with qsort.
+/// Compare two FileMarks structure to order them by greatest_timestamp.
+/// Delegated to Rust rs_compare_file_marks.
 static int compare_file_marks(const void *a, const void *b)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
-  const FileMarks *const *const a_fms = a;
-  const FileMarks *const *const b_fms = b;
-  return ((*a_fms)->greatest_timestamp == (*b_fms)->greatest_timestamp
-          ? 0
-          : ((*a_fms)->greatest_timestamp > (*b_fms)->greatest_timestamp ? -1 : 1));
+  return rs_compare_file_marks(a, b);
 }
 
 /// Parse msgpack object that has given length
@@ -2152,27 +2128,13 @@ static inline void shada_initialize_registers(WriteMergerState *const wms, int m
 
 /// Replace numbered mark in WriteMergerState
 ///
-/// Frees the last mark, moves (including adjusting mark names) marks from idx
-/// to the last-but-one one and saves the new mark at given index.
-///
-/// @param[out]  wms  Merger state to adjust.
-/// @param[in]  idx  Index at which new mark should be placed.
-/// @param[in]  entry  New mark.
+/// Frees the last mark, moves marks from idx to last-but-one and saves new mark.
+/// Delegated to Rust rs_replace_numbered_mark.
 static inline void replace_numbered_mark(WriteMergerState *const wms, const size_t idx,
                                          const ShadaEntry entry)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_ALWAYS_INLINE
 {
-  shada_free_shada_entry(&ARRAY_LAST_ENTRY(wms->numbered_marks));
-  for (size_t i = idx; i < ARRAY_SIZE(wms->numbered_marks) - 1; i++) {
-    if (wms->numbered_marks[i].type == kSDItemGlobalMark) {
-      wms->numbered_marks[i].data.filemark.name = (char)('0' + (int)i + 1);
-    }
-  }
-  memmove(wms->numbered_marks + idx + 1, wms->numbered_marks + idx,
-          sizeof(wms->numbered_marks[0])
-          * (ARRAY_SIZE(wms->numbered_marks) - 1 - idx));
-  wms->numbered_marks[idx] = entry;
-  wms->numbered_marks[idx].data.filemark.name = (char)('0' + (int)idx);
+  rs_replace_numbered_mark(wms, idx, entry);
 }
 
 /// Find buffers ignored due to their location.
@@ -3897,3 +3859,10 @@ String nvim_shada_encode_regs(void) { return shada_encode_regs(); }
 String nvim_shada_encode_jumps(void) { return shada_encode_jumps(); }
 String nvim_shada_encode_buflist(void) { return shada_encode_buflist(); }
 String nvim_shada_encode_gvars(void) { return shada_encode_gvars(); }
+
+// Phase 1: FileMarks accessor for Rust FFI
+Timestamp nvim_filemarks_get_greatest_timestamp(const void *fm_ptr)
+{
+  const FileMarks *fm = fm_ptr;
+  return fm ? fm->greatest_timestamp : 0;
+}
