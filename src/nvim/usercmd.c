@@ -106,6 +106,15 @@ _Static_assert(KE_FILLER == 'X', "KE_FILLER");
 // UC_BUFFER (usercmd.h)
 _Static_assert(UC_BUFFER == 1, "UC_BUFFER");
 
+// CMD_USER / CMD_USER_BUF (ex_cmds_enum.generated.h)
+_Static_assert(CMD_USER == -1, "CMD_USER");
+_Static_assert(CMD_USER_BUF == -2, "CMD_USER_BUF");
+
+// DOCMD_* flags (ex_docmd.h)
+_Static_assert(DOCMD_VERBOSE == 0x01, "DOCMD_VERBOSE");
+_Static_assert(DOCMD_NOWAIT == 0x02, "DOCMD_NOWAIT");
+_Static_assert(DOCMD_KEYTYPED == 0x08, "DOCMD_KEYTYPED");
+
 // EXPAND_* (cmdexpand_defs.h) — spot-check key values
 _Static_assert(EXPAND_UNSUCCESSFUL == -2, "EXPAND_UNSUCCESSFUL");
 _Static_assert(EXPAND_NOTHING == 0, "EXPAND_NOTHING");
@@ -1246,123 +1255,79 @@ static size_t uc_check_code(char *code, size_t len, char *buf, ucmd_T *cmd, exar
   return rs_uc_check_code(code, len, buf, cmd, eap, split_buf, split_len);
 }
 
+// Rust FFI declarations (Phase 7: do_ucmd)
+extern int rs_do_ucmd(void *eap, int preview);
+
+// C accessor functions called by Rust (Phase 7)
+int nvim_uc_eap_get_cmdidx(const void *eap)
+{
+  return (int)((const exarg_T *)eap)->cmdidx;
+}
+
+int nvim_uc_eap_get_useridx(const void *eap)
+{
+  return ((const exarg_T *)eap)->useridx;
+}
+
+void *nvim_uc_user_cmd(int idx)
+{
+  return USER_CMD(idx);
+}
+
+void *nvim_uc_prevwin_curwin_buf_ucmd(int idx)
+{
+  return USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, idx);
+}
+
+int nvim_uc_cmd_get_preview_luaref(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_preview_luaref;
+}
+
+int nvim_uc_cmd_get_luaref(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_luaref;
+}
+
+const char *nvim_uc_cmd_get_rep(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_rep;
+}
+
+uint32_t nvim_uc_cmd_get_argt(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_argt;
+}
+
+int nvim_uc_nlua_do_ucmd(void *cmd, void *eap, int preview)
+{
+  return nlua_do_ucmd((ucmd_T *)cmd, (exarg_T *)eap, preview != 0);
+}
+
+char *nvim_uc_vim_strchr(const char *p, int c)
+{
+  return vim_strchr(p, c);
+}
+
+void nvim_uc_do_cmdline_with_sctx(char *buf, void *eap, uint32_t argt, int sc_sid)
+{
+  sctx_T save;
+  bool restore = false;
+  if ((argt & EX_KEEPSCRIPT) == 0) {
+    restore = true;
+    save = current_sctx;
+    current_sctx.sc_sid = sc_sid;
+  }
+  do_cmdline(buf, ((exarg_T *)eap)->ea_getline, ((exarg_T *)eap)->cookie,
+             DOCMD_VERBOSE | DOCMD_NOWAIT | DOCMD_KEYTYPED);
+  if (restore) {
+    current_sctx = save;
+  }
+}
+
 int do_ucmd(exarg_T *eap, bool preview)
 {
-  char *end = NULL;
-
-  size_t split_len = 0;
-  char *split_buf = NULL;
-  ucmd_T *cmd;
-
-  if (eap->cmdidx == CMD_USER) {
-    cmd = USER_CMD(eap->useridx);
-  } else {
-    cmd = USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, eap->useridx);
-  }
-
-  if (preview) {
-    assert(cmd->uc_preview_luaref > 0);
-    return nlua_do_ucmd(cmd, eap, true);
-  }
-
-  if (cmd->uc_luaref > 0) {
-    nlua_do_ucmd(cmd, eap, false);
-    return 0;
-  }
-
-  // Replace <> in the command by the arguments.
-  // First round: "buf" is NULL, compute length, allocate "buf".
-  // Second round: copy result into "buf".
-  char *buf = NULL;
-  while (true) {
-    char *p = cmd->uc_rep;        // source
-    char *q = buf;                // destination
-    size_t totlen = 0;
-
-    while (true) {
-      char *start = vim_strchr(p, '<');
-      if (start != NULL) {
-        end = vim_strchr(start + 1, '>');
-      }
-      if (buf != NULL) {
-        char *ksp;
-        for (ksp = p; *ksp != NUL && (uint8_t)(*ksp) != K_SPECIAL; ksp++) {}
-        if ((uint8_t)(*ksp) == K_SPECIAL
-            && (start == NULL || ksp < start || end == NULL)
-            && ((uint8_t)ksp[1] == KS_SPECIAL && ksp[2] == KE_FILLER)) {
-          // K_SPECIAL has been put in the buffer as K_SPECIAL
-          // KS_SPECIAL KE_FILLER, like for mappings, but
-          // do_cmdline() doesn't handle that, so convert it back.
-          size_t len = (size_t)(ksp - p);
-          if (len > 0) {
-            memmove(q, p, len);
-            q += len;
-          }
-          *q++ = (char)K_SPECIAL;
-          p = ksp + 3;
-          continue;
-        }
-      }
-
-      // break if no <item> is found
-      if (start == NULL || end == NULL) {
-        break;
-      }
-
-      // Include the '>'
-      end++;
-
-      // Take everything up to the '<'
-      size_t len = (size_t)(start - p);
-      if (buf == NULL) {
-        totlen += len;
-      } else {
-        memmove(q, p, len);
-        q += len;
-      }
-
-      len = uc_check_code(start, (size_t)(end - start), q, cmd, eap, &split_buf, &split_len);
-      if (len == (size_t)-1) {
-        // no match, continue after '<'
-        p = start + 1;
-        len = 1;
-      } else {
-        p = end;
-      }
-      if (buf == NULL) {
-        totlen += len;
-      } else {
-        q += len;
-      }
-    }
-    if (buf != NULL) {              // second time here, finished
-      STRCPY(q, p);
-      break;
-    }
-
-    totlen += strlen(p);            // Add on the trailing characters
-    buf = xmalloc(totlen + 1);
-  }
-
-  sctx_T save_current_sctx;
-  bool restore_current_sctx = false;
-  if ((cmd->uc_argt & EX_KEEPSCRIPT) == 0) {
-    restore_current_sctx = true;
-    save_current_sctx = current_sctx;
-    current_sctx.sc_sid = cmd->uc_script_ctx.sc_sid;
-  }
-  do_cmdline(buf, eap->ea_getline, eap->cookie,
-             DOCMD_VERBOSE|DOCMD_NOWAIT|DOCMD_KEYTYPED);
-
-  // Careful: Do not use "cmd" here, it may have become invalid if a user
-  // command was added.
-  if (restore_current_sctx) {
-    current_sctx = save_current_sctx;
-  }
-  xfree(buf);
-  xfree(split_buf);
-
-  return 0;
+  return rs_do_ucmd(eap, preview ? 1 : 0);
 }
 
 /// Gets a map of maps describing user-commands defined for buffer `buf` or

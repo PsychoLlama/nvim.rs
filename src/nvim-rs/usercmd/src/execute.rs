@@ -16,7 +16,7 @@
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::define::EX_NOSPC;
 use crate::{CmdmodHandle, ExargHandle, UcmdHandle};
@@ -1478,6 +1478,214 @@ pub unsafe extern "C" fn rs_uc_check_code(
 }
 
 // =============================================================================
+// Constants (Phase 7)
+// =============================================================================
+
+/// CMD_USER from ex_cmds_enum.generated.h
+const CMD_USER: c_int = -1;
+
+// =============================================================================
+// C Accessor Functions (Phase 7 — do_ucmd)
+// =============================================================================
+
+extern "C" {
+    /// Get eap->cmdidx (as int)
+    fn nvim_uc_eap_get_cmdidx(eap: ExargHandle) -> c_int;
+    /// Get eap->useridx (int)
+    fn nvim_uc_eap_get_useridx(eap: ExargHandle) -> c_int;
+    /// Returns USER_CMD(idx) — global ucmds entry
+    fn nvim_uc_user_cmd(idx: c_int) -> UcmdHandle;
+    /// Returns USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, idx)
+    fn nvim_uc_prevwin_curwin_buf_ucmd(idx: c_int) -> UcmdHandle;
+    /// Get cmd->uc_preview_luaref
+    fn nvim_uc_cmd_get_preview_luaref(cmd: UcmdHandle) -> c_int;
+    /// Get cmd->uc_luaref
+    fn nvim_uc_cmd_get_luaref(cmd: UcmdHandle) -> c_int;
+    /// Get cmd->uc_rep (const char *)
+    fn nvim_uc_cmd_get_rep(cmd: UcmdHandle) -> *mut c_char;
+    /// Get cmd->uc_argt (uint32_t)
+    fn nvim_uc_cmd_get_argt(cmd: UcmdHandle) -> u32;
+    /// Calls nlua_do_ucmd(cmd, eap, preview != 0)
+    fn nvim_uc_nlua_do_ucmd(cmd: UcmdHandle, eap: ExargHandle, preview: c_int) -> c_int;
+    /// Returns vim_strchr(p, c)
+    fn nvim_uc_vim_strchr(p: *const c_char, c: c_int) -> *mut c_char;
+    /// Calls do_cmdline with sctx save/restore
+    fn nvim_uc_do_cmdline_with_sctx(buf: *mut c_char, eap: ExargHandle, argt: u32, sc_sid: c_int);
+    /// Get cmd->uc_script_ctx.sc_sid
+    fn nvim_uc_cmd_get_sc_sid(cmd: *const c_void) -> c_int;
+    /// xfree(ptr)
+    fn nvim_uc_xfree(ptr: *mut c_void);
+}
+
+// =============================================================================
+// Phase 7: do_ucmd Implementation
+// =============================================================================
+
+/// Execute a user command.
+///
+/// This is the main user command execution function.  It:
+/// 1. Looks up the command (global or buffer-local based on cmdidx)
+/// 2. If preview: calls nlua_do_ucmd with preview=true, returns result
+/// 3. If luaref > 0: calls nlua_do_ucmd with preview=false, returns 0
+/// 4. Otherwise: expands `<>` codes in the replacement text (two-pass:
+///    measure then fill), handles K_SPECIAL byte sequences, calls do_cmdline,
+///    and saves/restores current_sctx
+///
+/// # Safety
+/// `eap` must be a valid ExargHandle (pointer to exarg_T).
+unsafe fn do_ucmd_impl(eap: ExargHandle, preview: bool) -> c_int {
+    // Look up the command
+    let cmdidx = nvim_uc_eap_get_cmdidx(eap);
+    let useridx = nvim_uc_eap_get_useridx(eap);
+    let cmd = if cmdidx == CMD_USER {
+        nvim_uc_user_cmd(useridx)
+    } else {
+        nvim_uc_prevwin_curwin_buf_ucmd(useridx)
+    };
+
+    // Preview path
+    if preview {
+        debug_assert!(nvim_uc_cmd_get_preview_luaref(cmd) > 0);
+        return nvim_uc_nlua_do_ucmd(cmd, eap, 1);
+    }
+
+    // Lua callback path
+    if nvim_uc_cmd_get_luaref(cmd) > 0 {
+        nvim_uc_nlua_do_ucmd(cmd, eap, 0);
+        return 0;
+    }
+
+    // Save argt and sc_sid before the two-pass loop, since after do_cmdline
+    // the cmd pointer may become invalid.
+    let argt = nvim_uc_cmd_get_argt(cmd);
+    let sc_sid = nvim_uc_cmd_get_sc_sid(cmd.cast_const());
+
+    let mut split_len: usize = 0;
+    let mut split_buf: *mut c_char = std::ptr::null_mut();
+
+    // Replace <> in the command by the arguments.
+    // First round: buf is NULL, compute length, allocate buf.
+    // Second round: copy result into buf.
+    let mut buf: *mut c_char = std::ptr::null_mut();
+    let uc_rep = nvim_uc_cmd_get_rep(cmd);
+
+    loop {
+        let mut p: *mut c_char = uc_rep;
+        let mut q: *mut c_char = buf;
+        let mut totlen: usize = 0;
+        let mut end: *mut c_char;
+
+        loop {
+            let start = nvim_uc_vim_strchr(p, c_int::from(b'<'));
+            end = if start.is_null() {
+                std::ptr::null_mut()
+            } else {
+                nvim_uc_vim_strchr(start.add(1), c_int::from(b'>'))
+            };
+
+            // K_SPECIAL handling — only during the fill pass (buf != NULL)
+            if !buf.is_null() {
+                // Scan for K_SPECIAL byte between p and the next < (or end of string)
+                let mut ksp = p;
+                while *ksp != 0 && (*ksp as u8) != K_SPECIAL {
+                    ksp = ksp.add(1);
+                }
+                if (*ksp as u8) == K_SPECIAL
+                    && (start.is_null() || (ksp as usize) < (start as usize) || end.is_null())
+                    && ((*ksp.add(1) as u8) == KS_SPECIAL && (*ksp.add(2) as u8) == KE_FILLER)
+                {
+                    // K_SPECIAL has been put in the buffer as K_SPECIAL
+                    // KS_SPECIAL KE_FILLER, like for mappings, but
+                    // do_cmdline() doesn't handle that, so convert it back.
+                    let len = ksp as usize - p as usize;
+                    if len > 0 {
+                        std::ptr::copy(p, q, len);
+                        q = q.add(len);
+                    }
+                    *q = K_SPECIAL as c_char;
+                    q = q.add(1);
+                    p = ksp.add(3);
+                    continue;
+                }
+            }
+
+            // Break if no <item> is found
+            if start.is_null() || end.is_null() {
+                break;
+            }
+
+            // Include the '>'
+            end = end.add(1);
+
+            // Take everything up to the '<'
+            let len = start as usize - p as usize;
+            if buf.is_null() {
+                totlen += len;
+            } else {
+                std::ptr::copy(p, q, len);
+                q = q.add(len);
+            }
+
+            // Expand the <> code
+            let mut expanded_len = uc_check_code_impl(
+                start,
+                end as usize - start as usize,
+                q,
+                cmd,
+                eap,
+                &raw mut split_buf,
+                &raw mut split_len,
+            );
+            if expanded_len == usize::MAX {
+                // No match, continue after '<'
+                p = start.add(1);
+                expanded_len = 1;
+            } else {
+                p = end;
+            }
+            if buf.is_null() {
+                totlen += expanded_len;
+            } else {
+                q = q.add(expanded_len);
+            }
+        }
+
+        if !buf.is_null() {
+            // Second pass complete — copy trailing characters and NUL
+            let trail_len = c_strlen(p);
+            std::ptr::copy(p, q, trail_len + 1); // +1 for NUL
+            break;
+        }
+
+        // Add trailing characters length
+        totlen += c_strlen(p);
+        buf = nvim_uc_xmalloc(totlen + 1);
+    }
+
+    // Execute the command line with sctx save/restore handled in C
+    nvim_uc_do_cmdline_with_sctx(buf, eap, argt, sc_sid);
+
+    // Careful: Do not use "cmd" here, it may have become invalid if a user
+    // command was added.
+    nvim_uc_xfree(buf.cast::<c_void>());
+    nvim_uc_xfree(split_buf.cast::<c_void>());
+
+    0
+}
+
+// =============================================================================
+// FFI Exports (Phase 7)
+// =============================================================================
+
+/// FFI export: Execute a user command.
+///
+/// Direct replacement for C `do_ucmd(eap, preview)`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_ucmd(eap: ExargHandle, preview: c_int) -> c_int {
+    do_ucmd_impl(eap, preview != 0)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -2031,5 +2239,31 @@ mod tests {
         let mut buf = [0u8; 20];
         assert_eq!(format_i64(1_000_000_000, &mut buf), b"1000000000");
         assert_eq!(format_i64(-1_000_000_000, &mut buf), b"-1000000000");
+    }
+
+    // =========================================================================
+    // Phase 7 — do_ucmd constant tests
+    // =========================================================================
+
+    #[test]
+    fn test_cmd_user_constant() {
+        assert_eq!(CMD_USER, -1);
+    }
+
+    #[test]
+    fn test_k_special_sequence() {
+        // Verify the K_SPECIAL encoding constants match the expected values
+        // for the K_SPECIAL → KS_SPECIAL KE_FILLER conversion in do_ucmd
+        assert_eq!(K_SPECIAL, 0x80);
+        assert_eq!(KS_SPECIAL, 254);
+        assert_eq!(KE_FILLER, b'X');
+        // The 3-byte sequence is: K_SPECIAL(0x80) KS_SPECIAL(0xFE) KE_FILLER(0x58)
+        assert_eq!([K_SPECIAL, KS_SPECIAL, KE_FILLER], [0x80, 0xFE, 0x58]);
+    }
+
+    #[test]
+    fn test_ex_keepscript_value() {
+        // Verify EX_KEEPSCRIPT constant from define.rs
+        assert_eq!(crate::define::EX_KEEPSCRIPT, 0x400_0000);
     }
 }

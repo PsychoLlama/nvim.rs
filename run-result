@@ -1,62 +1,47 @@
-Migration of bufwrite.c to Rust completed successfully.
+Migration of do_ucmd (Phase 7) to Rust completed successfully.
 
-## Functions Migrated (43 exported Rust functions)
+## Function Migrated
 
-### Core
-- **buf_write()** — Main buffer write function (~880 lines of C → ~1800 lines of Rust)
+- **do_ucmd()** — Main user command execution function (~120 lines of C → ~120 lines of Rust)
 
-### Encoding
-- **ucs2bytes()** — Unicode character to bytes conversion
-- **make_bom()** — BOM generation for file encoding
-- **ucs_to_bytes()** — UCS encoding helper
-- Surrogate pair helpers (needs_surrogate, high_surrogate, low_surrogate)
+## What it does
 
-### Conversion
-- **buf_write_convert()** — Encoding conversion for write buffer
-- **buf_write_convert_with_iconv()** — iconv-based conversion
-- **buf_write_bytes()** — Write buffer data with encoding handling
+The `do_ucmd` function is the entry point for executing user-defined commands.
+It:
+1. Looks up the ucmd_T (from global ucmds or buffer-local based on cmdidx)
+2. If preview: calls nlua_do_ucmd with preview=true, returns result
+3. If luaref > 0: calls nlua_do_ucmd with preview=false, returns 0
+4. Otherwise: expands `<>` codes in the replacement text (two-pass: measure
+   then fill), handles K_SPECIAL byte sequences, calls do_cmdline with
+   sctx save/restore
 
-### Error Handling
-- **set_err() / set_err_num() / set_err_arg()** — Error construction
-- **emit_err()** — Error emission with formatted messages
+## New C Accessor Functions (Phase 7)
 
-### File Info
-- **check_mtime()** — Modification time checking before write
-- **get_fileinfo() / get_fileinfo_os()** — File metadata retrieval
+- `nvim_uc_eap_get_cmdidx` — returns eap->cmdidx as int
+- `nvim_uc_eap_get_useridx` — returns eap->useridx
+- `nvim_uc_user_cmd` — returns USER_CMD(idx) (global ucmds)
+- `nvim_uc_prevwin_curwin_buf_ucmd` — returns buffer-local ucmd
+- `nvim_uc_cmd_get_preview_luaref` — returns cmd->uc_preview_luaref
+- `nvim_uc_cmd_get_luaref` — returns cmd->uc_luaref
+- `nvim_uc_cmd_get_rep` — returns cmd->uc_rep
+- `nvim_uc_cmd_get_argt` — returns cmd->uc_argt
+- `nvim_uc_nlua_do_ucmd` — calls nlua_do_ucmd
+- `nvim_uc_vim_strchr` — calls vim_strchr
+- `nvim_uc_do_cmdline_with_sctx` — calls do_cmdline with sctx save/restore
 
-### Backup
-- **buf_write_make_backup()** — Backup file creation and management
+## Design Decisions
 
-### Autocommands
-- **buf_write_do_autocmds()** — Pre-write autocommand handling
-- **buf_write_do_post_autocmds()** — Post-write autocommand handling
-
-### Format/Validation Helpers
-- File format queries (is_unix, is_dos, is_mac, line_ending_len)
-- BOM helpers (bom_len, is_little_endian, bytes_per_char)
-- Unicode/multibyte detection (is_unicode, is_multibyte)
-- Validation (valid_range, valid_filename, calc_buffer_size)
-- Format utilities (count_newlines, converted_size, convert_to_mac)
-
-## Modules
-
-| Module | Purpose |
-|--------|---------|
-| `lib.rs` | File format enum, FIO flags, BOM constants, format queries |
-| `write.rs` | Main `rs_buf_write` function and helpers |
-| `encoding.rs` | UCS/UTF encoding conversion, BOM generation |
-| `convert.rs` | Write buffer encoding conversion (iconv + manual) |
-| `error.rs` | Error_T struct and error handling |
-| `fileinfo.rs` | File info retrieval and mtime checking |
-| `backup.rs` | Backup file creation |
-| `autocmd.rs` | Autocommand wrappers |
-| `format.rs` | Line ending conversion, newline counting |
-| `validation.rs` | Range/filename validation, buffer size calculation |
-| `ffi.rs` | Opaque handle types and FFI helpers |
+- The sctx save/restore and do_cmdline call are wrapped in a single C
+  accessor (`nvim_uc_do_cmdline_with_sctx`) to keep the opaque sctx_T
+  structure out of Rust.
+- The `uc_check_code_impl` function (already in Rust from Phase 4) is
+  called directly as a Rust function within the same module.
+- K_SPECIAL byte sequence handling is done only during the fill pass
+  (second iteration), matching the C behavior exactly.
 
 ## Verification
 
-- All Rust unit tests pass (3779 tests)
+- All Rust unit tests pass (3922 tests)
 - Format check passes
 - Clippy lints pass
 - Full build succeeds
