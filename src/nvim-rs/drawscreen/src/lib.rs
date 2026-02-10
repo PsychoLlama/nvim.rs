@@ -2195,6 +2195,47 @@ pub extern "C" fn rs_setcursor_mayforce(wp: WinHandle, force: c_int) {
     }
 }
 
+// =============================================================================
+// Phase 7: Search Highlight Bookkeeping
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_p_hls() -> c_int;
+    fn nvim_get_no_hlsearch() -> c_int;
+    fn nvim_search_hl_has_regprog() -> c_int;
+    fn nvim_search_hl_start();
+    fn nvim_search_hl_end();
+}
+
+/// Prepare for 'hlsearch' highlighting.
+///
+/// Rust equivalent of `start_search_hl()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_start_search_hl() {
+    unsafe {
+        if nvim_get_p_hls() == 0 || nvim_get_no_hlsearch() != 0 {
+            return;
+        }
+
+        rs_end_search_hl(); // just in case it wasn't called before
+        nvim_search_hl_start();
+    }
+}
+
+/// Clean up for 'hlsearch' highlighting.
+///
+/// Rust equivalent of `end_search_hl()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_end_search_hl() {
+    unsafe {
+        if nvim_search_hl_has_regprog() == 0 {
+            return;
+        }
+
+        nvim_search_hl_end();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

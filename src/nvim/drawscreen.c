@@ -728,28 +728,19 @@ int update_screen(void)
   return OK;
 }
 
+extern void rs_start_search_hl(void);
+extern void rs_end_search_hl(void);
+
 /// Prepare for 'hlsearch' highlighting.
 void start_search_hl(void)
 {
-  if (!p_hls || no_hlsearch) {
-    return;
-  }
-
-  end_search_hl();  // just in case it wasn't called before
-  last_pat_prog(&screen_search_hl.rm);
-  // Set the time limit to 'redrawtime'.
-  screen_search_hl.tm = profile_setlimit(p_rdt);
+  rs_start_search_hl();
 }
 
 /// Clean up for 'hlsearch' highlighting.
 void end_search_hl(void)
 {
-  if (screen_search_hl.rm.regprog == NULL) {
-    return;
-  }
-
-  vim_regfree(screen_search_hl.rm.regprog);
-  screen_search_hl.rm.regprog = NULL;
+  rs_end_search_hl();
 }
 
 extern void rs_setcursor(void);
@@ -2899,4 +2890,24 @@ void nvim_grid_adjust_cursor_goto(win_T *wp, int row, int col)
 void nvim_validate_cursor_for_win(win_T *wp)
 {
   validate_cursor(wp);
+}
+
+// Phase 7 accessors for start_search_hl() / end_search_hl()
+
+/// Check if screen_search_hl has a regprog.
+int nvim_search_hl_has_regprog(void) { return screen_search_hl.rm.regprog != NULL ? 1 : 0; }
+
+/// Prepare search highlight: set regprog and time limit.
+/// Keeps regexp lifetime management in C.
+void nvim_search_hl_start(void)
+{
+  last_pat_prog(&screen_search_hl.rm);
+  screen_search_hl.tm = profile_setlimit(p_rdt);
+}
+
+/// Free search highlight regprog. Keeps regexp lifetime management in C.
+void nvim_search_hl_end(void)
+{
+  vim_regfree(screen_search_hl.rm.regprog);
+  screen_search_hl.rm.regprog = NULL;
 }
