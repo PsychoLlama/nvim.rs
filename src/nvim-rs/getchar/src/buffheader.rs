@@ -3,9 +3,41 @@
 //! This module provides safe Rust wrappers for the `buffheader_T` and
 //! `buffblock_T` types used for managing the stuff buffer, redo buffer,
 //! and recording buffer.
+//!
+//! The 5 global buffer statics (redobuff, old_redobuff, recordbuff,
+//! readbuf1, readbuf2) are owned here, along with the block_redo flag.
+
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr,
+    clippy::items_after_statements,
+    static_mut_refs
+)]
+
+use std::ffi::c_int;
+
+use crate::stuff;
 
 /// Minimum size for a buffer block's string content.
 const MINIMAL_SIZE: usize = 20;
+
+// Key encoding constants (must match keycodes.h)
+const K_SPECIAL: u8 = 0x80;
+const KS_SPECIAL: u8 = 254;
+const KS_ZERO: u8 = 255;
+const KE_FILLER: u8 = b'X';
+
+// =============================================================================
+// Global Buffer Statics
+// =============================================================================
+
+static mut REDOBUFF: BuffHeader = BuffHeader::new();
+static mut OLD_REDOBUFF: BuffHeader = BuffHeader::new();
+static mut RECORDBUFF: BuffHeader = BuffHeader::new();
+static mut READBUF1: BuffHeader = BuffHeader::new();
+static mut READBUF2: BuffHeader = BuffHeader::new();
+static mut BLOCK_REDO: bool = false;
 
 /// A block in a buffer chain.
 ///
@@ -255,20 +287,28 @@ impl BuffHeader {
 
     /// Add a single byte to the buffer.
     ///
-    /// Translates special keys, NUL, and K_SPECIAL.
+    /// Translates special keys, NUL, and K_SPECIAL into 3-byte sequences.
     pub fn add_byte(&mut self, c: u8) {
-        const K_SPECIAL: u8 = 0x80;
-        const NUL: u8 = 0;
-
-        if c == K_SPECIAL || c == NUL {
-            // Need to escape: K_SPECIAL + second + third byte
-            // For K_SPECIAL: K_SPECIAL KS_SPECIAL KE_FILLER
-            // For NUL: K_SPECIAL KS_ZERO KE_FILLER
-            let ks = if c == K_SPECIAL { 254 } else { 255 }; // KS_SPECIAL or KS_ZERO
-            let ke = b'X'; // KE_FILLER
-            self.add(&[K_SPECIAL, ks, ke]);
+        if c == K_SPECIAL || c == 0 {
+            let ks = if c == K_SPECIAL { KS_SPECIAL } else { KS_ZERO };
+            self.add(&[K_SPECIAL, ks, KE_FILLER]);
         } else {
             self.add(&[c]);
+        }
+    }
+
+    /// Add a character to the buffer (like C's add_char_buff).
+    ///
+    /// Encodes the character as UTF-8 bytes and calls add_byte for each.
+    /// Special keys are encoded as a single 3-byte sequence.
+    pub fn add_char(&mut self, c: c_int) {
+        let mut buf = [0u8; stuff::CHAR_BUF_SIZE];
+        let len = stuff::encode_char(c, &mut buf);
+
+        // Both special keys and normal/UTF-8 chars get add_byte'd per byte
+        // to handle K_SPECIAL/NUL escaping.
+        for &b in &buf[..len] {
+            self.add_byte(b);
         }
     }
 }
@@ -291,6 +331,491 @@ impl SaveRedo {
             old_redobuff: BuffHeader::new(),
         }
     }
+}
+
+// =============================================================================
+// Buffer Access Functions (used by other Rust modules)
+// =============================================================================
+
+/// Get a mutable reference to REDOBUFF.
+///
+/// # Safety
+/// Caller must ensure no other mutable references exist.
+pub unsafe fn redobuff() -> &'static mut BuffHeader {
+    &mut *std::ptr::addr_of_mut!(REDOBUFF)
+}
+
+/// Get a mutable reference to OLD_REDOBUFF.
+///
+/// # Safety
+/// Caller must ensure no other mutable references exist.
+pub unsafe fn old_redobuff() -> &'static mut BuffHeader {
+    &mut *std::ptr::addr_of_mut!(OLD_REDOBUFF)
+}
+
+/// Get a mutable reference to RECORDBUFF.
+///
+/// # Safety
+/// Caller must ensure no other mutable references exist.
+pub unsafe fn recordbuff() -> &'static mut BuffHeader {
+    &mut *std::ptr::addr_of_mut!(RECORDBUFF)
+}
+
+/// Get a mutable reference to READBUF1.
+///
+/// # Safety
+/// Caller must ensure no other mutable references exist.
+pub unsafe fn readbuf1() -> &'static mut BuffHeader {
+    &mut *std::ptr::addr_of_mut!(READBUF1)
+}
+
+/// Get a mutable reference to READBUF2.
+///
+/// # Safety
+/// Caller must ensure no other mutable references exist.
+pub unsafe fn readbuf2() -> &'static mut BuffHeader {
+    &mut *std::ptr::addr_of_mut!(READBUF2)
+}
+
+/// Get the block_redo flag.
+///
+/// # Safety
+/// Accesses mutable static.
+#[must_use]
+pub unsafe fn is_block_redo() -> bool {
+    BLOCK_REDO
+}
+
+/// Set the block_redo flag.
+///
+/// # Safety
+/// Accesses mutable static.
+pub unsafe fn set_block_redo(val: bool) {
+    BLOCK_REDO = val;
+}
+
+// =============================================================================
+// FFI Exports for C callers
+// =============================================================================
+
+// --- readbuf1 operations ---
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_buff_readbuf1(s: *const u8, len: isize) {
+    let buf = readbuf1();
+    let slice = if len < 0 {
+        let mut end = s;
+        while *end != 0 {
+            end = end.add(1);
+        }
+        std::slice::from_raw_parts(s, end.offset_from(s) as usize)
+    } else {
+        std::slice::from_raw_parts(s, len as usize)
+    };
+    buf.add(slice);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_char_buff_readbuf1(c: c_int) {
+    readbuf1().add_char(c);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_num_buff_readbuf1(n: c_int) {
+    readbuf1().add_num(n);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_buff_readbuf1() {
+    readbuf1().clear();
+}
+
+// --- readbuf2 operations ---
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_buff_readbuf2(s: *const u8, len: isize) {
+    let buf = readbuf2();
+    let slice = if len < 0 {
+        let mut end = s;
+        while *end != 0 {
+            end = end.add(1);
+        }
+        std::slice::from_raw_parts(s, end.offset_from(s) as usize)
+    } else {
+        std::slice::from_raw_parts(s, len as usize)
+    };
+    buf.add(slice);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_char_buff_readbuf2(c: c_int) {
+    readbuf2().add_char(c);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_num_buff_readbuf2(n: c_int) {
+    readbuf2().add_num(n);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_buff_readbuf2() {
+    readbuf2().clear();
+}
+
+// --- redobuff operations ---
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_buff_redobuff(s: *const u8, len: isize) {
+    if BLOCK_REDO {
+        return;
+    }
+    let buf = redobuff();
+    let slice = if len < 0 {
+        let mut end = s;
+        while *end != 0 {
+            end = end.add(1);
+        }
+        std::slice::from_raw_parts(s, end.offset_from(s) as usize)
+    } else {
+        std::slice::from_raw_parts(s, len as usize)
+    };
+    buf.add(slice);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_char_buff_redobuff(c: c_int) {
+    if !BLOCK_REDO {
+        redobuff().add_char(c);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_byte_buff_redobuff(c: c_int) {
+    if !BLOCK_REDO {
+        redobuff().add_byte(c as u8);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_num_buff_redobuff(n: c_int) {
+    if !BLOCK_REDO {
+        redobuff().add_num(n);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_buff_redobuff() {
+    redobuff().clear();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_buffcont_redobuff() -> *mut u8 {
+    let contents = redobuff().get_contents();
+    if contents.is_empty() {
+        return std::ptr::null_mut();
+    }
+    // Allocate a NUL-terminated C string via xmalloc
+    let ptr = nvim_xmalloc(contents.len() + 1) as *mut u8;
+    std::ptr::copy_nonoverlapping(contents.as_ptr(), ptr, contents.len());
+    *ptr.add(contents.len()) = 0;
+    ptr
+}
+
+// --- old_redobuff operations ---
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_buff_old_redobuff() {
+    old_redobuff().clear();
+}
+
+// --- recordbuff operations ---
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_buff_recordbuff(s: *const u8, len: isize) {
+    let buf = recordbuff();
+    let slice = if len < 0 {
+        let mut end = s;
+        while *end != 0 {
+            end = end.add(1);
+        }
+        std::slice::from_raw_parts(s, end.offset_from(s) as usize)
+    } else {
+        std::slice::from_raw_parts(s, len as usize)
+    };
+    buf.add(slice);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_char_buff_recordbuff(c: c_int) {
+    recordbuff().add_char(c);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_byte_buff_recordbuff(c: c_int) {
+    recordbuff().add_byte(c as u8);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_buff_recordbuff() {
+    recordbuff().clear();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_buffcont_recordbuff() -> *mut u8 {
+    let contents = recordbuff().get_contents();
+    if contents.is_empty() {
+        return std::ptr::null_mut();
+    }
+    let ptr = nvim_xmalloc(contents.len() + 1) as *mut u8;
+    std::ptr::copy_nonoverlapping(contents.as_ptr(), ptr, contents.len());
+    *ptr.add(contents.len()) = 0;
+    ptr
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_delete_buff_tail_recordbuff(slen: c_int) {
+    recordbuff().delete_tail(slen as usize);
+}
+
+// --- Cross-buffer operations ---
+
+/// Read from readbuf1 first, fall back to readbuf2.
+/// Returns 0 (NUL) if both are empty.
+#[no_mangle]
+pub unsafe extern "C" fn rs_read_readbuffers(advance: c_int) -> c_int {
+    let adv = advance != 0;
+    if let Some(c) = readbuf1().read_byte(adv) {
+        return c_int::from(c);
+    }
+    if let Some(c) = readbuf2().read_byte(adv) {
+        return c_int::from(c);
+    }
+    0 // NUL
+}
+
+/// Prepare readbufs for reading (start_stuff).
+#[no_mangle]
+pub unsafe extern "C" fn rs_start_stuff() {
+    readbuf1().start_reading();
+    readbuf2().start_reading();
+}
+
+/// Check if readbuf1 is empty.
+#[no_mangle]
+pub unsafe extern "C" fn rs_readbuf1_is_empty() -> c_int {
+    c_int::from(readbuf1().is_empty())
+}
+
+/// Check if readbuf2 is empty.
+#[no_mangle]
+pub unsafe extern "C" fn rs_readbuf2_is_empty() -> c_int {
+    c_int::from(readbuf2().is_empty())
+}
+
+/// Get/set block_redo from C.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_block_redo() -> c_int {
+    c_int::from(BLOCK_REDO)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_block_redo(val: c_int) {
+    BLOCK_REDO = val != 0;
+}
+
+// --- Redo buffer swap operations (Phase 2: for C callers) ---
+
+/// ResetRedobuff: swap old_redobuff and redobuff.
+/// Does nothing if block_redo is set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ResetRedobuff() {
+    if BLOCK_REDO {
+        return;
+    }
+    old_redobuff().clear();
+    core::ptr::swap(
+        std::ptr::addr_of_mut!(REDOBUFF),
+        std::ptr::addr_of_mut!(OLD_REDOBUFF),
+    );
+}
+
+/// CancelRedo: discard redobuff and restore old_redobuff.
+/// Drains readbufs. Does nothing if block_redo is set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_CancelRedo() {
+    if BLOCK_REDO {
+        return;
+    }
+    redobuff().clear();
+    core::ptr::swap(
+        std::ptr::addr_of_mut!(REDOBUFF),
+        std::ptr::addr_of_mut!(OLD_REDOBUFF),
+    );
+    rs_start_stuff();
+    while rs_read_readbuffers(1) != 0 {}
+}
+
+/// Save redobuff/old_redobuff into opaque save slots.
+/// Makes a copy of the saved redobuff back into the active redobuff
+/// so that ":normal ." in a function works.
+///
+/// Uses static save slots (only one level of save supported, matching C).
+static mut SAVE_REDOBUFF: BuffHeader = BuffHeader::new();
+static mut SAVE_OLD_REDOBUFF: BuffHeader = BuffHeader::new();
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_saveRedobuff() {
+    // save_redo->sr_redobuff = redobuff; redobuff = empty
+    SAVE_REDOBUFF = std::mem::take(&mut *std::ptr::addr_of_mut!(REDOBUFF));
+    // save_redo->sr_old_redobuff = old_redobuff; old_redobuff = empty
+    SAVE_OLD_REDOBUFF = std::mem::take(&mut *std::ptr::addr_of_mut!(OLD_REDOBUFF));
+
+    // Make a copy so that ":normal ." in a function works.
+    let contents = SAVE_REDOBUFF.get_contents();
+    if !contents.is_empty() {
+        redobuff().add(&contents);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_restoreRedobuff() {
+    redobuff().clear();
+    *std::ptr::addr_of_mut!(REDOBUFF) = std::mem::take(&mut *std::ptr::addr_of_mut!(SAVE_REDOBUFF));
+    old_redobuff().clear();
+    *std::ptr::addr_of_mut!(OLD_REDOBUFF) =
+        std::mem::take(&mut *std::ptr::addr_of_mut!(SAVE_OLD_REDOBUFF));
+}
+
+// --- read_redo support ---
+
+/// Static reader state for read_redo.
+/// Stores a flattened copy of the buffer content for sequential reading.
+static mut REDO_READER_BUF: Vec<u8> = Vec::new();
+static mut REDO_READER_POS: usize = 0;
+
+/// Initialize the redo reader. Returns FAIL (1) if nothing to redo, OK (0) otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_read_redo_init(old_redo: c_int) -> c_int {
+    let buf = if old_redo != 0 {
+        old_redobuff()
+    } else {
+        redobuff()
+    };
+    let contents = buf.get_contents();
+    if contents.is_empty() {
+        REDO_READER_BUF = Vec::new();
+        REDO_READER_POS = 0;
+        return 1; // FAIL
+    }
+    REDO_READER_BUF = contents;
+    REDO_READER_POS = 0;
+    0 // OK
+}
+
+/// Read next byte from redo reader. Returns 0 (NUL) at end.
+#[no_mangle]
+pub unsafe extern "C" fn rs_read_redo_byte() -> c_int {
+    if REDO_READER_POS >= REDO_READER_BUF.len() {
+        return 0;
+    }
+    let c = REDO_READER_BUF[REDO_READER_POS];
+    REDO_READER_POS += 1;
+    c_int::from(c)
+}
+
+/// Peek at the next byte without advancing. Returns 0 at end.
+#[no_mangle]
+pub unsafe extern "C" fn rs_read_redo_peek() -> c_int {
+    if REDO_READER_POS >= REDO_READER_BUF.len() {
+        return 0;
+    }
+    c_int::from(REDO_READER_BUF[REDO_READER_POS])
+}
+
+// --- Save/restore readbufs for typeahead ---
+
+static mut SAVE_READBUF1: BuffHeader = BuffHeader::new();
+static mut SAVE_READBUF2: BuffHeader = BuffHeader::new();
+
+/// Save readbuf1 and readbuf2, clearing the active ones.
+#[no_mangle]
+pub unsafe extern "C" fn rs_save_readbufs() {
+    SAVE_READBUF1 = std::mem::take(&mut *std::ptr::addr_of_mut!(READBUF1));
+    SAVE_READBUF2 = std::mem::take(&mut *std::ptr::addr_of_mut!(READBUF2));
+}
+
+/// Restore readbuf1 and readbuf2 from saved state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_restore_readbufs() {
+    readbuf1().clear();
+    *std::ptr::addr_of_mut!(READBUF1) = std::mem::take(&mut *std::ptr::addr_of_mut!(SAVE_READBUF1));
+    readbuf2().clear();
+    *std::ptr::addr_of_mut!(READBUF2) = std::mem::take(&mut *std::ptr::addr_of_mut!(SAVE_READBUF2));
+}
+
+// --- get_recorded / get_inserted support ---
+
+/// Get recordbuff contents and clear it, then trim last_recorded_len
+/// and check for trailing Ctrl_O if restart_edit != 0.
+/// Returns xmalloc'd NUL-terminated string, or NULL if empty.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_recorded() -> *mut u8 {
+    let contents = recordbuff().get_contents();
+    recordbuff().clear();
+
+    let last_len = nvim_get_last_recorded_len();
+    let restart_edit_val = nvim_get_restart_edit();
+
+    if contents.is_empty() {
+        // Match C behavior: get_buffcont with dozero=true returns empty string
+        let ptr = nvim_xmalloc(1) as *mut u8;
+        *ptr = 0;
+        return ptr;
+    }
+
+    let mut len = contents.len();
+
+    // Remove the characters that were added the last time
+    if len >= last_len {
+        len -= last_len;
+    }
+
+    // When stopping recording from Insert mode with CTRL-O q
+    const CTRL_O: u8 = 0x0f;
+    if len > 0 && restart_edit_val != 0 && contents[len - 1] == CTRL_O {
+        len -= 1;
+    }
+
+    let ptr = nvim_xmalloc(len + 1) as *mut u8;
+    std::ptr::copy_nonoverlapping(contents.as_ptr(), ptr, len);
+    *ptr.add(len) = 0;
+    ptr
+}
+
+/// Get redobuff contents as xmalloc'd NUL-terminated string.
+/// Returns NULL if empty.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_inserted() -> *mut u8 {
+    let contents = redobuff().get_contents();
+    if contents.is_empty() {
+        return std::ptr::null_mut();
+    }
+    let ptr = nvim_xmalloc(contents.len() + 1) as *mut u8;
+    std::ptr::copy_nonoverlapping(contents.as_ptr(), ptr, contents.len());
+    *ptr.add(contents.len()) = 0;
+    ptr
+}
+
+/// Get the length of redobuff contents (for get_inserted).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_inserted_len() -> usize {
+    redobuff().get_contents().len()
+}
+
+extern "C" {
+    fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
+    fn nvim_get_last_recorded_len() -> usize;
+    fn nvim_get_restart_edit() -> c_int;
 }
 
 #[cfg(test)]

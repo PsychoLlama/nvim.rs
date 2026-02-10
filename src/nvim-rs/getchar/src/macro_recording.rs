@@ -103,8 +103,6 @@ extern "C" {
     fn nvim_set_last_recorded_len(val: usize);
     /// Add last_recorded_len
     fn nvim_add_last_recorded_len(val: usize);
-    /// Check if block_redo is set
-    fn nvim_get_block_redo() -> c_int;
     /// Get reg_executing
     fn nvim_get_reg_executing() -> c_int;
     /// Set reg_executing
@@ -163,12 +161,9 @@ pub unsafe extern "C" fn rs_add_last_recorded_len(len: usize) {
 }
 
 /// Check if redo buffer modifications are blocked.
-///
-/// # Safety
-/// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_block_redo() -> c_int {
-    nvim_get_block_redo()
+    c_int::from(crate::buffheader::is_block_redo())
 }
 
 /// When peeking and not getting a character, reg_executing cannot be cleared

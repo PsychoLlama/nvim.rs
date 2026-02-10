@@ -186,12 +186,7 @@ fn utf_char2bytes(c: c_int, buf: &mut [u8]) -> usize {
 // C FFI Accessor Functions
 // =============================================================================
 
-#[allow(dead_code)]
 extern "C" {
-    /// Check if readbuf1 is empty
-    fn nvim_readbuf1_is_empty() -> c_int;
-    /// Check if readbuf2 is empty
-    fn nvim_readbuf2_is_empty() -> c_int;
     /// Get typeahead_char value
     fn nvim_get_typeahead_char() -> c_int;
     /// Set typeahead_char value
@@ -202,67 +197,58 @@ extern "C" {
     fn nvim_call_flush_buffers(flush_type: c_int);
     /// Call vim_beep(flag)
     fn nvim_call_vim_beep(flag: c_int);
-    /// Set block_redo
-    fn nvim_set_block_redo(val: c_int);
 }
 
-// Note: rs_stuff_empty and rs_readbuf1_empty are already exported from lib.rs
+use crate::buffheader;
 
-// Additional C functions for stuff buffer operations
-extern "C" {
-    // C buffer operations (we wrap these)
-    fn nvim_add_buff_readbuf1(s: *const u8, len: isize);
-    fn nvim_add_char_buff_readbuf1(c: c_int);
-    fn nvim_add_num_buff_readbuf1(n: c_int);
-    fn nvim_add_buff_readbuf2(s: *const u8, len: isize);
-
-    // Redo buffer operations (block_redo check is in the wrapper)
-    fn nvim_add_buff_redobuff(s: *const u8, len: isize);
-    fn nvim_add_char_buff_redobuff(c: c_int);
-    fn nvim_add_num_buff_redobuff(n: c_int);
+/// Convert a C pointer + len to a slice. If len < 0, treats s as NUL-terminated.
+const unsafe fn ptr_to_slice<'a>(s: *const u8, len: isize) -> &'a [u8] {
+    if len < 0 {
+        let mut end = s;
+        while *end != 0 {
+            end = end.add(1);
+        }
+        std::slice::from_raw_parts(s, end.offset_from(s) as usize)
+    } else {
+        std::slice::from_raw_parts(s, len as usize)
+    }
 }
+
+// =============================================================================
+// Stuff Buffer Operations (readbuf1)
+// =============================================================================
 
 /// Append a string to the stuff buffer (readbuf1).
-///
-/// K_SPECIAL must already have been escaped.
 ///
 /// # Safety
 /// `s` must be a valid pointer to a string of at least `len` bytes,
 /// or if `len` is -1, must be NUL-terminated.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stuffReadbuff(s: *const u8, len: isize) {
-    nvim_add_buff_readbuf1(s, len);
+    let slice = ptr_to_slice(s, len);
+    buffheader::readbuf1().add(slice);
 }
 
 /// Append a character to the stuff buffer.
-///
-/// Translates special keys, NUL, K_SPECIAL and multibyte characters.
-///
-/// # Safety
-/// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stuffcharReadbuff(c: c_int) {
-    nvim_add_char_buff_readbuf1(c);
+    buffheader::readbuf1().add_char(c);
 }
 
 /// Append a number to the stuff buffer.
-///
-/// # Safety
-/// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stuffnumReadbuff(n: c_int) {
-    nvim_add_num_buff_readbuf1(n);
+    buffheader::readbuf1().add_num(n);
 }
 
 /// Append a string to the redo stuff buffer (readbuf2).
-///
-/// K_SPECIAL must already have been escaped.
 ///
 /// # Safety
 /// `s` must be a valid pointer to a NUL-terminated string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stuffRedoReadbuff(s: *const u8) {
-    nvim_add_buff_readbuf2(s, -1);
+    let slice = ptr_to_slice(s, -1);
+    buffheader::readbuf2().add(slice);
 }
 
 // =============================================================================
@@ -271,53 +257,47 @@ pub unsafe extern "C" fn rs_stuffRedoReadbuff(s: *const u8) {
 
 /// Append a string to the redo buffer.
 ///
-/// K_SPECIAL should already have been escaped.
-/// Does nothing if block_redo is true (checked in C wrapper).
+/// Does nothing if block_redo is true.
 ///
 /// # Safety
 /// `s` must be a valid pointer to a string of at least `len` bytes,
 /// or if `len` is -1, must be NUL-terminated.
 #[no_mangle]
 pub unsafe extern "C" fn rs_AppendToRedobuff(s: *const u8, len: isize) {
-    nvim_add_buff_redobuff(s, len);
+    if buffheader::is_block_redo() {
+        return;
+    }
+    let slice = ptr_to_slice(s, len);
+    buffheader::redobuff().add(slice);
 }
 
 /// Append a character to the redo buffer.
 ///
-/// Translates special keys, NUL, K_SPECIAL and multibyte characters.
-/// Does nothing if block_redo is true (checked in C wrapper).
-///
-/// # Safety
-/// Calls C accessor function.
+/// Does nothing if block_redo is true.
 #[no_mangle]
 pub unsafe extern "C" fn rs_AppendCharToRedobuff(c: c_int) {
-    nvim_add_char_buff_redobuff(c);
+    if !buffheader::is_block_redo() {
+        buffheader::redobuff().add_char(c);
+    }
 }
 
 /// Append a number to the redo buffer.
 ///
-/// Does nothing if block_redo is true (checked in C wrapper).
-///
-/// # Safety
-/// Calls C accessor function.
+/// Does nothing if block_redo is true.
 #[no_mangle]
 pub unsafe extern "C" fn rs_AppendNumberToRedobuff(n: c_int) {
-    nvim_add_num_buff_redobuff(n);
+    if !buffheader::is_block_redo() {
+        buffheader::redobuff().add_num(n);
+    }
 }
 
 /// Get the typeahead character that won't be flushed.
-///
-/// # Safety
-/// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_typeahead_char() -> c_int {
     nvim_get_typeahead_char()
 }
 
 /// Set the typeahead character that won't be flushed.
-///
-/// # Safety
-/// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_typeahead_char(c: c_int) {
     nvim_set_typeahead_char(c);
@@ -371,12 +351,9 @@ pub unsafe extern "C" fn rs_beep_flush() {
 }
 
 /// Stop redo insert mode (unblock redo buffer).
-///
-/// # Safety
-/// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stop_redo_ins() {
-    nvim_set_block_redo(0);
+    buffheader::set_block_redo(false);
 }
 
 // Note: rs_to_special and rs_is_special are already exported from input.rs

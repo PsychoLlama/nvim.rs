@@ -98,6 +98,47 @@ extern void rs_typeahead_noflush(int c);
 extern void rs_beep_flush(void);
 extern void rs_check_end_reg_executing(int advance);
 
+// Phase 2: Buffer FFI functions (buffers owned by Rust)
+extern void rs_add_buff_readbuf1(const uint8_t *s, ptrdiff_t len);
+extern void rs_add_char_buff_readbuf1(int c);
+extern void rs_add_num_buff_readbuf1(int n);
+extern void rs_free_buff_readbuf1(void);
+extern void rs_add_buff_readbuf2(const uint8_t *s, ptrdiff_t len);
+extern void rs_add_char_buff_readbuf2(int c);
+extern void rs_add_num_buff_readbuf2(int n);
+extern void rs_free_buff_readbuf2(void);
+extern void rs_add_buff_redobuff(const uint8_t *s, ptrdiff_t len);
+extern void rs_add_char_buff_redobuff(int c);
+extern void rs_add_byte_buff_redobuff(int c);
+extern void rs_add_num_buff_redobuff(int n);
+extern void rs_free_buff_redobuff(void);
+extern uint8_t *rs_get_buffcont_redobuff(void);
+extern void rs_free_buff_old_redobuff(void);
+extern void rs_add_buff_recordbuff(const uint8_t *s, ptrdiff_t len);
+extern void rs_add_char_buff_recordbuff(int c);
+extern void rs_add_byte_buff_recordbuff(int c);
+extern void rs_free_buff_recordbuff(void);
+extern uint8_t *rs_get_buffcont_recordbuff(void);
+extern void rs_delete_buff_tail_recordbuff(int slen);
+extern int rs_read_readbuffers(int advance);
+extern void rs_start_stuff(void);
+extern int rs_readbuf1_is_empty(void);
+extern int rs_readbuf2_is_empty(void);
+extern int rs_get_block_redo(void);
+extern void rs_set_block_redo(int val);
+extern void rs_ResetRedobuff(void);
+extern void rs_CancelRedo(void);
+extern void rs_saveRedobuff(void);
+extern void rs_restoreRedobuff(void);
+extern int rs_read_redo_init(int old_redo);
+extern int rs_read_redo_byte(void);
+extern int rs_read_redo_peek(void);
+extern void rs_save_readbufs(void);
+extern void rs_restore_readbufs(void);
+extern uint8_t *rs_get_recorded(void);
+extern uint8_t *rs_get_inserted(void);
+extern size_t rs_get_inserted_len(void);
+
 // Static assertions for constants hardcoded in Rust
 _Static_assert(MOD_MASK_CTRL == 0x04, "MOD_MASK_CTRL");
 _Static_assert(MODE_INSERT == 0x10, "MODE_INSERT");
@@ -119,30 +160,9 @@ static int curscript = -1;
 /// Streams to read script from
 static FileDescriptor scriptin[NSCRIPT] = { 0 };
 
-// These buffers are used for storing:
-// - stuffed characters: A command that is translated into another command.
-// - redo characters: will redo the last change.
-// - recorded characters: for the "q" command.
-//
-// The bytes are stored like in the typeahead buffer:
-// - K_SPECIAL introduces a special key (two more bytes follow).  A literal
-//   K_SPECIAL is stored as K_SPECIAL KS_SPECIAL KE_FILLER.
-// These translations are also done on multi-byte characters!
-//
-// Escaping K_SPECIAL is done by inchar().
-// Un-escaping is done by vgetc().
-
-#define MINIMAL_SIZE 20                 // minimal size for b_str
-
-static buffheader_T redobuff = { { NULL, 0, { NUL } }, NULL, 0, 0, false };
-static buffheader_T old_redobuff = { { NULL, 0, { NUL } }, NULL, 0, 0, false };
-static buffheader_T recordbuff = { { NULL, 0, { NUL } }, NULL, 0, 0, false };
-
-/// First read ahead buffer. Used for translated commands.
-static buffheader_T readbuf1 = { { NULL, 0, { NUL } }, NULL, 0, 0, false };
-
-/// Second read ahead buffer. Used for redo.
-static buffheader_T readbuf2 = { { NULL, 0, { NUL } }, NULL, 0, 0, false };
+// Buffer statics (redobuff, old_redobuff, recordbuff, readbuf1, readbuf2)
+// are now owned by Rust in the getchar crate's buffheader module.
+// Access them through rs_* FFI functions.
 
 /// Buffer used to store typed characters for vim.on_key().
 static kvec_withinit_t(char, MAXMAPLEN + 1) on_key_buf = KVI_INITIAL_VALUE(on_key_buf);
@@ -152,9 +172,7 @@ static size_t on_key_ignore_len = 0;
 
 static int typeahead_char = 0;  ///< typeahead char that's not flushed
 
-/// When block_redo is true the redo buffer will not be changed.
-/// Used by edit() to repeat insertions.
-static bool block_redo = false;
+// block_redo is now owned by Rust (rs_get_block_redo / rs_set_block_redo)
 
 static int KeyNoremap = 0;  ///< remapping flags
 
@@ -203,253 +221,27 @@ static const char e_cmd_mapping_must_end_with_cr[]
 static const char e_cmd_mapping_must_end_with_cr_before_second_cmd[]
   = N_("E1136: <Cmd> mapping must end with <CR> before second <Cmd>");
 
-/// Free and clear a buffer.
-static void free_buff(buffheader_T *buf)
-{
-  buffblock_T *np;
-
-  for (buffblock_T *p = buf->bh_first.b_next; p != NULL; p = np) {
-    np = p->b_next;
-    xfree(p);
-  }
-  buf->bh_first.b_next = NULL;
-  buf->bh_curr = NULL;
-}
-
-/// Return the contents of a buffer as a single string.
-/// K_SPECIAL in the returned string is escaped.
-///
-/// @param dozero  count == zero is not an error
-/// @param len     the length of the returned buffer
-static char *get_buffcont(buffheader_T *buffer, int dozero, size_t *len)
-{
-  size_t count = 0;
-  char *p = NULL;
-  size_t i = 0;
-
-  // compute the total length of the string
-  for (const buffblock_T *bp = buffer->bh_first.b_next;
-       bp != NULL; bp = bp->b_next) {
-    count += bp->b_strlen;
-  }
-
-  if (count > 0 || dozero) {
-    p = xmalloc(count + 1);
-    char *p2 = p;
-    for (const buffblock_T *bp = buffer->bh_first.b_next;
-         bp != NULL; bp = bp->b_next) {
-      for (const char *str = bp->b_str; *str;) {
-        *p2++ = *str++;
-      }
-    }
-    *p2 = NUL;
-    i = (size_t)(p2 - p);
-  }
-
-  if (len != NULL) {
-    *len = i;
-  }
-
-  return p;
-}
+// Buffer primitive functions (free_buff, get_buffcont, add_buff, etc.)
+// have been removed. Use rs_* FFI functions instead.
 
 /// Return the contents of the record buffer as a single string
 /// and clear the record buffer.
 /// K_SPECIAL in the returned string is escaped.
 char *get_recorded(void)
 {
-  size_t len;
-  char *p = get_buffcont(&recordbuff, true, &len);
-  if (p == NULL) {
-    return NULL;
-  }
-
-  free_buff(&recordbuff);
-
-  // Remove the characters that were added the last time, these must be the
-  // (possibly mapped) characters that stopped the recording.
-  if (len >= last_recorded_len) {
-    len -= last_recorded_len;
-    p[len] = NUL;
-  }
-
-  // When stopping recording from Insert mode with CTRL-O q, also remove the
-  // CTRL-O.
-  if (len > 0 && restart_edit != 0 && p[len - 1] == Ctrl_O) {
-    p[len - 1] = NUL;
-  }
-
-  return p;
+  return (char *)rs_get_recorded();
 }
 
 /// Return the contents of the redo buffer as a single string.
 /// K_SPECIAL in the returned string is escaped.
 String get_inserted(void)
 {
-  size_t len = 0;
-  char *str = get_buffcont(&redobuff, false, &len);
+  size_t len = rs_get_inserted_len();
+  char *str = (char *)rs_get_inserted();
   return cbuf_as_string(str, len);
 }
 
-/// Add string after the current block of the given buffer
-///
-/// K_SPECIAL should have been escaped already.
-///
-/// @param[out]  buf  Buffer to add to.
-/// @param[in]  s  String to add.
-/// @param[in]  slen  String length or -1 for NUL-terminated string.
-static void add_buff(buffheader_T *const buf, const char *const s, ptrdiff_t slen)
-{
-  if (slen < 0) {
-    slen = (ptrdiff_t)strlen(s);
-  }
-  if (slen == 0) {                              // don't add empty strings
-    return;
-  }
-
-  if (buf->bh_first.b_next == NULL) {  // first add to list
-    buf->bh_curr = &(buf->bh_first);
-    buf->bh_create_newblock = true;
-  } else if (buf->bh_curr == NULL) {  // buffer has already been read
-    iemsg(_("E222: Add to read buffer"));
-    return;
-  } else if (buf->bh_index != 0) {
-    memmove(buf->bh_first.b_next->b_str,
-            buf->bh_first.b_next->b_str + buf->bh_index,
-            (buf->bh_first.b_next->b_strlen - buf->bh_index) + 1);
-    buf->bh_first.b_next->b_strlen -= buf->bh_index;
-    buf->bh_space += buf->bh_index;
-  }
-  buf->bh_index = 0;
-
-  if (!buf->bh_create_newblock && buf->bh_space >= (size_t)slen) {
-    xmemcpyz(buf->bh_curr->b_str + buf->bh_curr->b_strlen, s, (size_t)slen);
-    buf->bh_curr->b_strlen += (size_t)slen;
-    buf->bh_space -= (size_t)slen;
-  } else {
-    size_t len = MAX(MINIMAL_SIZE, (size_t)slen);
-    buffblock_T *p = xmalloc(offsetof(buffblock_T, b_str) + len + 1);
-    xmemcpyz(p->b_str, s, (size_t)slen);
-    p->b_strlen = (size_t)slen;
-    buf->bh_space = len - (size_t)slen;
-    buf->bh_create_newblock = false;
-
-    p->b_next = buf->bh_curr->b_next;
-    buf->bh_curr->b_next = p;
-    buf->bh_curr = p;
-  }
-}
-
-/// Delete "slen" bytes from the end of "buf".
-/// Only works when it was just added.
-static void delete_buff_tail(buffheader_T *buf, int slen)
-{
-  if (buf->bh_curr == NULL) {
-    return;  // nothing to delete
-  }
-  if (buf->bh_curr->b_strlen < (size_t)slen) {
-    return;
-  }
-
-  buf->bh_curr->b_str[buf->bh_curr->b_strlen - (size_t)slen] = NUL;
-  buf->bh_curr->b_strlen -= (size_t)slen;
-  buf->bh_space += (size_t)slen;
-}
-
-/// Add number "n" to buffer "buf".
-static void add_num_buff(buffheader_T *buf, int n)
-{
-  char number[32];
-  int numberlen = snprintf(number, sizeof(number), "%d", n);
-  add_buff(buf, number, numberlen);
-}
-
-/// Add byte or special key 'c' to buffer "buf".
-/// Translates special keys, NUL and K_SPECIAL.
-static void add_byte_buff(buffheader_T *buf, int c)
-{
-  char temp[4];
-  ptrdiff_t templen;
-  if (IS_SPECIAL(c) || c == K_SPECIAL || c == NUL) {
-    // Translate special key code into three byte sequence.
-    temp[0] = (char)K_SPECIAL;
-    temp[1] = (char)K_SECOND(c);
-    temp[2] = (char)K_THIRD(c);
-    temp[3] = NUL;
-    templen = 3;
-  } else {
-    temp[0] = (char)c;
-    temp[1] = NUL;
-    templen = 1;
-  }
-  add_buff(buf, temp, templen);
-}
-
-/// Add character 'c' to buffer "buf".
-/// Translates special keys, NUL, K_SPECIAL and multibyte characters.
-static void add_char_buff(buffheader_T *buf, int c)
-{
-  uint8_t bytes[MB_MAXBYTES + 1];
-
-  int len;
-  if (IS_SPECIAL(c)) {
-    len = 1;
-  } else {
-    len = utf_char2bytes(c, (char *)bytes);
-  }
-
-  for (int i = 0; i < len; i++) {
-    if (!IS_SPECIAL(c)) {
-      c = bytes[i];
-    }
-    add_byte_buff(buf, c);
-  }
-}
-
-/// Get one byte from the read buffers.  Use readbuf1 one first, use readbuf2
-/// if that one is empty.
-/// If advance == true go to the next char.
-/// No translation is done K_SPECIAL is escaped.
-static int read_readbuffers(bool advance)
-{
-  int c = read_readbuf(&readbuf1, advance);
-  if (c == NUL) {
-    c = read_readbuf(&readbuf2, advance);
-  }
-  return c;
-}
-
-static int read_readbuf(buffheader_T *buf, bool advance)
-{
-  if (buf->bh_first.b_next == NULL) {  // buffer is empty
-    return NUL;
-  }
-
-  buffblock_T *const curr = buf->bh_first.b_next;
-  uint8_t c = (uint8_t)curr->b_str[buf->bh_index];
-
-  if (advance) {
-    if (curr->b_str[++buf->bh_index] == NUL) {
-      buf->bh_first.b_next = curr->b_next;
-      xfree(curr);
-      buf->bh_index = 0;
-    }
-  }
-  return c;
-}
-
-/// Prepare the read buffers for reading (if they contain something).
-static void start_stuff(void)
-{
-  if (readbuf1.bh_first.b_next != NULL) {
-    readbuf1.bh_curr = &(readbuf1.bh_first);
-    readbuf1.bh_create_newblock = true;  // force a new block to be created (see add_buff())
-  }
-  if (readbuf2.bh_first.b_next != NULL) {
-    readbuf2.bh_curr = &(readbuf2.bh_first);
-    readbuf2.bh_create_newblock = true;  // force a new block to be created (see add_buff())
-  }
-}
+// (Buffer primitive functions removed - now in Rust buffheader module)
 
 /// @return  true if the stuff buffer is empty.
 bool stuff_empty(void)
@@ -479,8 +271,8 @@ void flush_buffers(flush_buffers_T flush_typeahead)
 {
   init_typebuf();
 
-  start_stuff();
-  while (read_readbuffers(true) != NUL) {}
+  rs_start_stuff();
+  while (rs_read_readbuffers(true) != NUL) {}
 
   if (flush_typeahead == FLUSH_MINIMAL) {
     // remove mapped characters at the start only
@@ -519,67 +311,37 @@ void beep_flush(void)
 /// This is used for the CTRL-O <.> command in insert mode.
 void ResetRedobuff(void)
 {
-  if (block_redo) {
-    return;
-  }
-
-  free_buff(&old_redobuff);
-  old_redobuff = redobuff;
-  redobuff.bh_first.b_next = NULL;
+  rs_ResetRedobuff();
 }
 
 /// Discard the contents of the redo buffer and restore the previous redo
 /// buffer.
 void CancelRedo(void)
 {
-  if (block_redo) {
-    return;
-  }
-
-  free_buff(&redobuff);
-  redobuff = old_redobuff;
-  old_redobuff.bh_first.b_next = NULL;
-  start_stuff();
-  while (read_readbuffers(true) != NUL) {}
+  rs_CancelRedo();
 }
 
 /// Save redobuff and old_redobuff to save_redobuff and save_old_redobuff.
 /// Used before executing autocommands and user functions.
 void saveRedobuff(save_redo_T *save_redo)
 {
-  save_redo->sr_redobuff = redobuff;
-  redobuff.bh_first.b_next = NULL;
-  save_redo->sr_old_redobuff = old_redobuff;
-  old_redobuff.bh_first.b_next = NULL;
-
-  // Make a copy, so that ":normal ." in a function works.
-  size_t slen;
-  char *const s = get_buffcont(&save_redo->sr_redobuff, false, &slen);
-  if (s == NULL) {
-    return;
-  }
-
-  add_buff(&redobuff, s, (ptrdiff_t)slen);
-  xfree(s);
+  (void)save_redo;  // save state is now in Rust statics
+  rs_saveRedobuff();
 }
 
 /// Restore redobuff and old_redobuff from save_redobuff and save_old_redobuff.
 /// Used after executing autocommands and user functions.
 void restoreRedobuff(save_redo_T *save_redo)
 {
-  free_buff(&redobuff);
-  redobuff = save_redo->sr_redobuff;
-  free_buff(&old_redobuff);
-  old_redobuff = save_redo->sr_old_redobuff;
+  (void)save_redo;  // save state is now in Rust statics
+  rs_restoreRedobuff();
 }
 
 /// Append "s" to the redo buffer.
 /// K_SPECIAL should already have been escaped.
 void AppendToRedobuff(const char *s)
 {
-  if (!block_redo) {
-    add_buff(&redobuff, s, -1);
-  }
+  rs_add_buff_redobuff((const uint8_t *)s, -1);
 }
 
 /// Append to Redo buffer literally, escaping special characters with CTRL-V.
@@ -589,7 +351,7 @@ void AppendToRedobuff(const char *s)
 /// @param len  Length of `str` or -1 for up to the NUL.
 void AppendToRedobuffLit(const char *str, int len)
 {
-  if (block_redo) {
+  if (rs_get_block_redo()) {
     return;
   }
 
@@ -608,7 +370,7 @@ void AppendToRedobuffLit(const char *str, int len)
       s--;
     }
     if (s > start) {
-      add_buff(&redobuff, start, s - start);
+      rs_add_buff_redobuff((const uint8_t *)start, s - start);
     }
 
     if (*s == NUL || (len >= 0 && s - str >= len)) {
@@ -619,14 +381,14 @@ void AppendToRedobuffLit(const char *str, int len)
     // Composing chars separately are handled separately.
     const int c = mb_cptr2char_adv(&s);
     if (c < ' ' || c == DEL || (*s == NUL && (c == '0' || c == '^'))) {
-      add_char_buff(&redobuff, Ctrl_V);
+      rs_add_char_buff_redobuff(Ctrl_V);
     }
 
     // CTRL-V '0' must be inserted as CTRL-V 048.
     if (*s == NUL && c == '0') {
-      add_buff(&redobuff, "048", 3);
+      rs_add_buff_redobuff((const uint8_t *)"048", 3);
     } else {
-      add_char_buff(&redobuff, c);
+      rs_add_char_buff_redobuff(c);
     }
   }
 }
@@ -635,17 +397,17 @@ void AppendToRedobuffLit(const char *str, int len)
 /// and escaping other K_SPECIAL bytes.
 void AppendToRedobuffSpec(const char *s)
 {
-  if (block_redo) {
+  if (rs_get_block_redo()) {
     return;
   }
 
   while (*s != NUL) {
     if ((uint8_t)(*s) == K_SPECIAL && s[1] != NUL && s[2] != NUL) {
       // Insert special key literally.
-      add_buff(&redobuff, s, 3);
+      rs_add_buff_redobuff((const uint8_t *)s, 3);
       s += 3;
     } else {
-      add_char_buff(&redobuff, mb_cptr2char_adv(&s));
+      rs_add_char_buff_redobuff(mb_cptr2char_adv(&s));
     }
   }
 }
@@ -654,36 +416,32 @@ void AppendToRedobuffSpec(const char *s)
 /// Translates special keys, NUL, K_SPECIAL and multibyte characters.
 void AppendCharToRedobuff(int c)
 {
-  if (!block_redo) {
-    add_char_buff(&redobuff, c);
-  }
+  rs_add_char_buff_redobuff(c);
 }
 
 // Append a number to the redo buffer.
 void AppendNumberToRedobuff(int n)
 {
-  if (!block_redo) {
-    add_num_buff(&redobuff, n);
-  }
+  rs_add_num_buff_redobuff(n);
 }
 
 /// Append string "s" to the stuff buffer.
 /// K_SPECIAL must already have been escaped.
 void stuffReadbuff(const char *s)
 {
-  add_buff(&readbuf1, s, -1);
+  rs_add_buff_readbuf1((const uint8_t *)s, -1);
 }
 
 /// Append string "s" to the redo stuff buffer.
 /// @remark K_SPECIAL must already have been escaped.
 void stuffRedoReadbuff(const char *s)
 {
-  add_buff(&readbuf2, s, -1);
+  rs_add_buff_readbuf2((const uint8_t *)s, -1);
 }
 
 void stuffReadbuffLen(const char *s, ptrdiff_t len)
 {
-  add_buff(&readbuf1, s, len);
+  rs_add_buff_readbuf1((const uint8_t *)s, len);
 }
 
 /// Stuff "s" into the stuff buffer, leaving special key codes unmodified and
@@ -710,13 +468,13 @@ void stuffReadbuffSpec(const char *s)
 /// Translates special keys, NUL, K_SPECIAL and multibyte characters.
 void stuffcharReadbuff(int c)
 {
-  add_char_buff(&readbuf1, c);
+  rs_add_char_buff_readbuf1(c);
 }
 
 // Append a number to the stuff buffer.
 void stuffnumReadbuff(int n)
 {
-  add_num_buff(&readbuf1, n);
+  rs_add_num_buff_readbuf1(n);
 }
 
 /// Stuff a string into the typeahead buffer, such that edit() will insert it
@@ -755,39 +513,32 @@ void stuffescaped(const char *arg, bool literally)
 /// If old_redo is true, use old_redobuff instead of redobuff.
 static int read_redo(bool init, bool old_redo)
 {
-  static buffblock_T *bp;
-  static uint8_t *p;
   int c;
   int n;
   uint8_t buf[MB_MAXBYTES + 1];
 
   if (init) {
-    bp = old_redo ? old_redobuff.bh_first.b_next : redobuff.bh_first.b_next;
-    if (bp == NULL) {
-      return FAIL;
-    }
-    p = (uint8_t *)bp->b_str;
-    return OK;
+    return rs_read_redo_init(old_redo ? 1 : 0) != 0 ? FAIL : OK;
   }
-  if ((c = *p) == NUL) {
+
+  c = rs_read_redo_byte();
+  if (c == NUL) {
     return c;
   }
+
   // Reverse the conversion done by add_char_buff()
   // For a multi-byte character get all the bytes and return the
   // converted character.
-  if (c != K_SPECIAL || p[1] == KS_SPECIAL) {
+  if (c != K_SPECIAL || rs_read_redo_peek() == KS_SPECIAL) {
     n = MB_BYTE2LEN_CHECK(c);
   } else {
     n = 1;
   }
   for (int i = 0;; i++) {
     if (c == K_SPECIAL) {  // special key or escaped K_SPECIAL
-      c = TO_SPECIAL(p[1], p[2]);
-      p += 2;
-    }
-    if (*++p == NUL && bp->b_next != NULL) {
-      bp = bp->b_next;
-      p = (uint8_t *)bp->b_str;
+      int b1 = rs_read_redo_byte();
+      int b2 = rs_read_redo_byte();
+      c = TO_SPECIAL(b1, b2);
     }
     buf[i] = (uint8_t)c;
     if (i == n - 1) {         // last byte of a character
@@ -796,7 +547,7 @@ static int read_redo(bool init, bool old_redo)
       }
       break;
     }
-    c = *p;
+    c = rs_read_redo_byte();
     if (c == NUL) {           // cannot happen?
       break;
     }
@@ -813,7 +564,7 @@ static void copy_redo(bool old_redo)
   int c;
 
   while ((c = read_redo(false, old_redo)) != NUL) {
-    add_char_buff(&readbuf2, c);
+    rs_add_char_buff_readbuf2(c);
   }
 }
 
@@ -835,18 +586,18 @@ int start_redo(int count, bool old_redo)
 
   // copy the buffer name, if present
   if (c == '"') {
-    add_buff(&readbuf2, "\"", 1);
+    rs_add_buff_readbuf2((const uint8_t *)"\"", 1);
     c = read_redo(false, old_redo);
 
     // if a numbered buffer is used, increment the number
     if (c >= '1' && c < '9') {
       c++;
     }
-    add_char_buff(&readbuf2, c);
+    rs_add_char_buff_readbuf2(c);
 
     // the expression register should be re-evaluated
     if (c == '=') {
-      add_char_buff(&readbuf2, CAR);
+      rs_add_char_buff_readbuf2(CAR);
       cmd_silent = true;
     }
 
@@ -867,11 +618,11 @@ int start_redo(int count, bool old_redo)
     while (ascii_isdigit(c)) {    // skip "old" count
       c = read_redo(false, old_redo);
     }
-    add_num_buff(&readbuf2, count);
+    rs_add_num_buff_readbuf2(count);
   }
 
   // copy from the redo buffer into the stuff buffer
-  add_char_buff(&readbuf2, c);
+  rs_add_char_buff_readbuf2(c);
   copy_redo(old_redo);
   return OK;
 }
@@ -887,13 +638,13 @@ int start_redo_ins(void)
   if (read_redo(true, false) == FAIL) {
     return FAIL;
   }
-  start_stuff();
+  rs_start_stuff();
 
   // skip the count and the command character
   while ((c = read_redo(false, false)) != NUL) {
     if (vim_strchr("AaIiRrOo", c) != NULL) {
       if (c == 'O' || c == 'o') {
-        add_buff(&readbuf2, NL_STR, -1);
+        rs_add_buff_readbuf2((const uint8_t *)NL_STR, -1);
       }
       break;
     }
@@ -901,7 +652,7 @@ int start_redo_ins(void)
 
   // copy the typed text from the redo buffer into the stuff buffer
   copy_redo(false);
-  block_redo = true;
+  rs_set_block_redo(1);
   return OK;
 }
 
@@ -1248,7 +999,7 @@ static void gotchars(const uint8_t *chars, size_t len)
 
     if (reg_recording != 0) {
       state.buf[state.buflen] = NUL;
-      add_buff(&recordbuff, (char *)state.buf, (ptrdiff_t)state.buflen);
+      rs_add_buff_recordbuff(state.buf, (ptrdiff_t)state.buflen);
       // remember how many chars were last recorded
       last_recorded_len += state.buflen;
     }
@@ -1284,7 +1035,7 @@ void ungetchars(int len)
     return;
   }
 
-  delete_buff_tail(&recordbuff, len);
+  rs_delete_buff_tail_recordbuff(len);
   last_recorded_len -= (size_t)len;
 }
 
@@ -1362,10 +1113,7 @@ void save_typeahead(tasave_T *tp)
   tp->old_mod_mask = old_mod_mask;
   old_char = -1;
 
-  tp->save_readbuf1 = readbuf1;
-  readbuf1.bh_first.b_next = NULL;
-  tp->save_readbuf2 = readbuf2;
-  readbuf2.bh_first.b_next = NULL;
+  rs_save_readbufs();
 }
 
 /// Restore the typeahead to what it was before calling save_typeahead().
@@ -1380,10 +1128,7 @@ void restore_typeahead(tasave_T *tp)
   old_char = tp->old_char;
   old_mod_mask = tp->old_mod_mask;
 
-  free_buff(&readbuf1);
-  readbuf1 = tp->save_readbuf1;
-  free_buff(&readbuf2);
-  readbuf2 = tp->save_readbuf2;
+  rs_restore_readbufs();
 }
 
 /// Open a new script file for the ":source!" command.
@@ -2589,7 +2334,7 @@ static int vgetorpeek(bool advance)
   }
 
   init_typebuf();
-  start_stuff();
+  rs_start_stuff();
   check_end_reg_executing(advance);
   do {
     // get a character: 1. from the stuffbuffer
@@ -2599,7 +2344,7 @@ static int vgetorpeek(bool advance)
         typeahead_char = 0;
       }
     } else {
-      c = read_readbuffers(advance);
+      c = rs_read_readbuffers(advance);
     }
     if (c != NUL && !got_int) {
       if (advance) {
@@ -3251,7 +2996,7 @@ void paste_store(const uint64_t channel_id, const TriState state, const String s
     return;
   }
 
-  const bool need_redo = !block_redo;
+  const bool need_redo = !rs_get_block_redo();
   const bool need_record = reg_recording != 0 && !is_internal_call(channel_id);
 
   if (!need_redo && !need_record) {
@@ -3264,10 +3009,10 @@ void paste_store(const uint64_t channel_id, const TriState state, const String s
       if (state == kFalse && !(State & MODE_INSERT)) {
         ResetRedobuff();
       }
-      add_char_buff(&redobuff, c);
+      rs_add_char_buff_redobuff(c);
     }
     if (need_record) {
-      add_char_buff(&recordbuff, c);
+      rs_add_char_buff_recordbuff(c);
     }
     return;
   }
@@ -3284,10 +3029,10 @@ void paste_store(const uint64_t channel_id, const TriState state, const String s
 
     if (s > start) {
       if (need_redo) {
-        add_buff(&redobuff, start, s - start);
+        rs_add_buff_redobuff((const uint8_t *)start, s - start);
       }
       if (need_record) {
-        add_buff(&recordbuff, start, s - start);
+        rs_add_buff_recordbuff((const uint8_t *)start, s - start);
       }
     }
 
@@ -3300,10 +3045,10 @@ void paste_store(const uint64_t channel_id, const TriState state, const String s
         c = NL;
       }
       if (need_redo) {
-        add_byte_buff(&redobuff, c);
+        rs_add_byte_buff_redobuff(c);
       }
       if (need_record) {
-        add_byte_buff(&recordbuff, c);
+        rs_add_byte_buff_recordbuff(c);
       }
     }
   }
@@ -3357,16 +3102,6 @@ void paste_repeat(int count)
 }
 
 // Rust FFI accessor functions
-
-int nvim_readbuf1_is_empty(void)
-{
-  return readbuf1.bh_first.b_next == NULL ? 1 : 0;
-}
-
-int nvim_readbuf2_is_empty(void)
-{
-  return readbuf2.bh_first.b_next == NULL ? 1 : 0;
-}
 
 int nvim_get_typebuf_change_cnt(void)
 {
@@ -3562,11 +3297,6 @@ void nvim_add_last_recorded_len(size_t val)
   last_recorded_len += val;
 }
 
-int nvim_get_block_redo(void)
-{
-  return block_redo ? 1 : 0;
-}
-
 int nvim_get_no_mapping(void)
 {
   return no_mapping;
@@ -3752,49 +3482,6 @@ void nvim_add_on_key_ignore_len(size_t val)
   on_key_ignore_len += val;
 }
 
-// Wrappers for buffer operations that Rust can call
-void nvim_add_buff_readbuf1(const char *s, ptrdiff_t len)
-{
-  add_buff(&readbuf1, s, len);
-}
-
-void nvim_add_char_buff_readbuf1(int c)
-{
-  add_char_buff(&readbuf1, c);
-}
-
-void nvim_add_num_buff_readbuf1(int n)
-{
-  add_num_buff(&readbuf1, n);
-}
-
-void nvim_add_buff_readbuf2(const char *s, ptrdiff_t len)
-{
-  add_buff(&readbuf2, s, len);
-}
-
-// Wrappers for redo buffer operations
-void nvim_add_buff_redobuff(const char *s, ptrdiff_t len)
-{
-  if (!block_redo) {
-    add_buff(&redobuff, s, len);
-  }
-}
-
-void nvim_add_char_buff_redobuff(int c)
-{
-  if (!block_redo) {
-    add_char_buff(&redobuff, c);
-  }
-}
-
-void nvim_add_num_buff_redobuff(int n)
-{
-  if (!block_redo) {
-    add_num_buff(&redobuff, n);
-  }
-}
-
 // Phase 1 accessor functions for Rust
 
 void nvim_call_u_sync(int force)
@@ -3827,7 +3514,4 @@ void nvim_set_pending_end_reg_executing(int val)
   pending_end_reg_executing = val != 0;
 }
 
-void nvim_set_block_redo(int val)
-{
-  block_redo = val != 0;
-}
+// nvim_set_block_redo removed - use rs_set_block_redo instead

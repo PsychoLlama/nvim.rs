@@ -26,10 +26,6 @@ pub mod typebuf;
 use std::ffi::c_int;
 
 extern "C" {
-    /// Check if `readbuf1.bh_first.b_next` is NULL
-    fn nvim_readbuf1_is_empty() -> c_int;
-    /// Check if `readbuf2.bh_first.b_next` is NULL
-    fn nvim_readbuf2_is_empty() -> c_int;
     /// Get `typebuf.tb_change_cnt`
     fn nvim_get_typebuf_change_cnt() -> c_int;
     /// Get `typebuf_was_filled`
@@ -52,23 +48,23 @@ extern "C" {
     fn nvim_call_u_sync(force: c_int);
 }
 
-/// Returns true if the stuff buffer is empty.
+/// Returns true if the stuff buffer is empty (both readbufs empty).
 ///
 /// # Safety
-/// Calls C accessor functions for `readbuf1` and `readbuf2`.
+/// Accesses Rust buffer statics.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stuff_empty() -> c_int {
-    c_int::from(nvim_readbuf1_is_empty() != 0 && nvim_readbuf2_is_empty() != 0)
+    c_int::from(buffheader::readbuf1().is_empty() && buffheader::readbuf2().is_empty())
 }
 
 /// Returns true if `readbuf1` is empty. There may still be redo characters in
 /// `readbuf2`.
 ///
 /// # Safety
-/// Calls C accessor function for `readbuf1`.
+/// Accesses Rust buffer static.
 #[no_mangle]
 pub unsafe extern "C" fn rs_readbuf1_empty() -> c_int {
-    nvim_readbuf1_is_empty()
+    c_int::from(buffheader::readbuf1().is_empty())
 }
 
 /// Check if the typeahead buffer was changed.
