@@ -277,6 +277,204 @@ const void *nvim_uc_get_cmdmod(void)
   return &cmdmod;
 }
 
+// Rust FFI declarations (Phase 5: command definition management)
+extern int rs_uc_add_command(char *name, size_t name_len, const char *rep,
+                             uint32_t argt, int64_t def, int flags, int context,
+                             char *compl_arg, int compl_luaref, int preview_luaref,
+                             int addr_type, int luaref, int force);
+extern void rs_free_ucmd(void *cmd);
+extern void rs_uc_clear(void *gap);
+
+// C accessor functions called by Rust (Phase 5)
+void *nvim_uc_get_curbuf_ucmds(void)
+{
+  return &curbuf->b_ucmds;
+}
+
+void *nvim_uc_get_ucmds(void)
+{
+  return &ucmds;
+}
+
+int nvim_uc_ga_get_len(void *gap)
+{
+  return ((garray_T *)gap)->ga_len;
+}
+
+int nvim_uc_ga_get_itemsize(void *gap)
+{
+  return ((garray_T *)gap)->ga_itemsize;
+}
+
+void nvim_uc_ga_set_len(void *gap, int len)
+{
+  ((garray_T *)gap)->ga_len = len;
+}
+
+void nvim_uc_ga_init_ucmd(void *gap)
+{
+  ga_init((garray_T *)gap, (int)sizeof(ucmd_T), 4);
+}
+
+void nvim_uc_ga_grow(void *gap, int n)
+{
+  ga_grow((garray_T *)gap, n);
+}
+
+void nvim_uc_ga_clear(void *gap)
+{
+  ga_clear((garray_T *)gap);
+}
+
+void *nvim_uc_ga_get_cmd(void *gap, int i)
+{
+  return USER_CMD_GA((garray_T *)gap, i);
+}
+
+void nvim_uc_cmd_memmove_down(void *gap, int i)
+{
+  garray_T *g = (garray_T *)gap;
+  ucmd_T *cmd = USER_CMD_GA(g, i);
+  memmove(cmd + 1, cmd, (size_t)(g->ga_len - i) * sizeof(ucmd_T));
+}
+
+const char *nvim_uc_cmd_get_name(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_name;
+}
+
+int nvim_uc_cmd_get_sc_sid(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_script_ctx.sc_sid;
+}
+
+int nvim_uc_cmd_get_sc_seq(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_script_ctx.sc_seq;
+}
+
+void nvim_uc_cmd_set_name(void *cmd, char *name)
+{
+  ((ucmd_T *)cmd)->uc_name = name;
+}
+
+void nvim_uc_cmd_set_rep(void *cmd, char *rep)
+{
+  ((ucmd_T *)cmd)->uc_rep = rep;
+}
+
+void nvim_uc_cmd_set_argt(void *cmd, uint32_t argt)
+{
+  ((ucmd_T *)cmd)->uc_argt = argt;
+}
+
+void nvim_uc_cmd_set_def(void *cmd, int64_t def)
+{
+  ((ucmd_T *)cmd)->uc_def = def;
+}
+
+void nvim_uc_cmd_set_compl(void *cmd, int compl_val)
+{
+  ((ucmd_T *)cmd)->uc_compl = compl_val;
+}
+
+void nvim_uc_cmd_set_compl_arg(void *cmd, char *arg)
+{
+  ((ucmd_T *)cmd)->uc_compl_arg = arg;
+}
+
+void nvim_uc_cmd_set_addr_type(void *cmd, int addr_type)
+{
+  ((ucmd_T *)cmd)->uc_addr_type = (cmd_addr_T)addr_type;
+}
+
+void nvim_uc_cmd_set_luaref(void *cmd, int luaref)
+{
+  ((ucmd_T *)cmd)->uc_luaref = luaref;
+}
+
+void nvim_uc_cmd_set_compl_luaref(void *cmd, int luaref)
+{
+  ((ucmd_T *)cmd)->uc_compl_luaref = luaref;
+}
+
+void nvim_uc_cmd_set_preview_luaref(void *cmd, int luaref)
+{
+  ((ucmd_T *)cmd)->uc_preview_luaref = luaref;
+}
+
+void nvim_uc_cmd_set_script_ctx(void *cmd)
+{
+  ((ucmd_T *)cmd)->uc_script_ctx = current_sctx;
+  ((ucmd_T *)cmd)->uc_script_ctx.sc_lnum += SOURCING_LNUM;
+  nlua_set_sctx(&((ucmd_T *)cmd)->uc_script_ctx);
+}
+
+void nvim_uc_cmd_free_rep(void *cmd)
+{
+  XFREE_CLEAR(((ucmd_T *)cmd)->uc_rep);
+}
+
+void nvim_uc_cmd_free_compl_arg(void *cmd)
+{
+  XFREE_CLEAR(((ucmd_T *)cmd)->uc_compl_arg);
+}
+
+void nvim_uc_cmd_clear_luaref(void *cmd)
+{
+  NLUA_CLEAR_REF(((ucmd_T *)cmd)->uc_luaref);
+}
+
+void nvim_uc_cmd_clear_compl_luaref(void *cmd)
+{
+  NLUA_CLEAR_REF(((ucmd_T *)cmd)->uc_compl_luaref);
+}
+
+void nvim_uc_cmd_clear_preview_luaref(void *cmd)
+{
+  NLUA_CLEAR_REF(((ucmd_T *)cmd)->uc_preview_luaref);
+}
+
+void nvim_uc_free_ucmd(void *cmd)
+{
+  xfree(((ucmd_T *)cmd)->uc_name);
+  xfree(((ucmd_T *)cmd)->uc_rep);
+  xfree(((ucmd_T *)cmd)->uc_compl_arg);
+  NLUA_CLEAR_REF(((ucmd_T *)cmd)->uc_compl_luaref);
+  NLUA_CLEAR_REF(((ucmd_T *)cmd)->uc_luaref);
+  NLUA_CLEAR_REF(((ucmd_T *)cmd)->uc_preview_luaref);
+}
+
+void nvim_uc_xfree(void *ptr)
+{
+  xfree(ptr);
+}
+
+void nvim_uc_nlua_clear_ref(int ref_val)
+{
+  NLUA_CLEAR_REF(ref_val);
+}
+
+char *nvim_uc_replace_termcodes(const char *rep, size_t replen)
+{
+  char *buf = NULL;
+  replace_termcodes(rep, replen, &buf, 0, 0, NULL, p_cpo);
+  if (buf == NULL) {
+    buf = xstrdup(rep);
+  }
+  return buf;
+}
+
+int nvim_uc_get_current_sctx_sid(void)
+{
+  return current_sctx.sc_sid;
+}
+
+int nvim_uc_get_current_sctx_seq(void)
+{
+  return current_sctx.sc_seq;
+}
+
 static const char e_argument_required_for_str[]
   = N_("E179: Argument required for %s");
 static const char e_no_such_user_defined_command_str[]
@@ -876,103 +1074,9 @@ int uc_add_command(char *name, size_t name_len, const char *rep, uint32_t argt, 
                    LuaRef preview_luaref, cmd_addr_T addr_type, LuaRef luaref, bool force)
   FUNC_ATTR_NONNULL_ARG(1, 3)
 {
-  ucmd_T *cmd = NULL;
-  int cmp = 1;
-  char *rep_buf = NULL;
-  garray_T *gap;
-
-  replace_termcodes(rep, strlen(rep), &rep_buf, 0, 0, NULL, p_cpo);
-  if (rep_buf == NULL) {
-    // Can't replace termcodes - try using the string as is
-    rep_buf = xstrdup(rep);
-  }
-
-  // get address of growarray: global or in curbuf
-  if (flags & UC_BUFFER) {
-    gap = &curbuf->b_ucmds;
-    if (gap->ga_itemsize == 0) {
-      ga_init(gap, (int)sizeof(ucmd_T), 4);
-    }
-  } else {
-    gap = &ucmds;
-  }
-
-  int i;
-
-  // Search for the command in the already defined commands.
-  for (i = 0; i < gap->ga_len; i++) {
-    cmd = USER_CMD_GA(gap, i);
-    size_t len = strlen(cmd->uc_name);
-    cmp = strncmp(name, cmd->uc_name, name_len);
-    if (cmp == 0) {
-      if (name_len < len) {
-        cmp = -1;
-      } else if (name_len > len) {
-        cmp = 1;
-      }
-    }
-
-    if (cmp == 0) {
-      // Command can be replaced with "command!" and when sourcing the
-      // same script again, but only once.
-      if (!force
-          && (cmd->uc_script_ctx.sc_sid != current_sctx.sc_sid
-              || cmd->uc_script_ctx.sc_seq == current_sctx.sc_seq)) {
-        semsg(_("E174: Command already exists: add ! to replace it: %s"),
-              name);
-        goto fail;
-      }
-
-      XFREE_CLEAR(cmd->uc_rep);
-      XFREE_CLEAR(cmd->uc_compl_arg);
-      NLUA_CLEAR_REF(cmd->uc_luaref);
-      NLUA_CLEAR_REF(cmd->uc_compl_luaref);
-      NLUA_CLEAR_REF(cmd->uc_preview_luaref);
-      break;
-    }
-
-    // Stop as soon as we pass the name to add
-    if (cmp < 0) {
-      break;
-    }
-  }
-
-  // Extend the array unless we're replacing an existing command
-  if (cmp != 0) {
-    ga_grow(gap, 1);
-
-    char *const p = xstrnsave(name, name_len);
-
-    cmd = USER_CMD_GA(gap, i);
-    memmove(cmd + 1, cmd, (size_t)(gap->ga_len - i) * sizeof(ucmd_T));
-
-    gap->ga_len++;
-
-    cmd->uc_name = p;
-  }
-
-  cmd->uc_rep = rep_buf;
-  cmd->uc_argt = argt;
-  cmd->uc_def = def;
-  cmd->uc_compl = context;
-  cmd->uc_script_ctx = current_sctx;
-  cmd->uc_script_ctx.sc_lnum += SOURCING_LNUM;
-  nlua_set_sctx(&cmd->uc_script_ctx);
-  cmd->uc_compl_arg = compl_arg;
-  cmd->uc_compl_luaref = compl_luaref;
-  cmd->uc_preview_luaref = preview_luaref;
-  cmd->uc_addr_type = addr_type;
-  cmd->uc_luaref = luaref;
-
-  return OK;
-
-fail:
-  xfree(rep_buf);
-  xfree(compl_arg);
-  NLUA_CLEAR_REF(luaref);
-  NLUA_CLEAR_REF(compl_luaref);
-  NLUA_CLEAR_REF(preview_luaref);
-  return FAIL;
+  return rs_uc_add_command(name, name_len, rep, argt, def, flags, context,
+                           compl_arg, compl_luaref, preview_luaref,
+                           (int)addr_type, luaref, force ? 1 : 0);
 }
 
 /// ":command ..."
@@ -1043,18 +1147,13 @@ void ex_comclear(exarg_T *eap)
 
 void free_ucmd(ucmd_T *cmd)
 {
-  xfree(cmd->uc_name);
-  xfree(cmd->uc_rep);
-  xfree(cmd->uc_compl_arg);
-  NLUA_CLEAR_REF(cmd->uc_compl_luaref);
-  NLUA_CLEAR_REF(cmd->uc_luaref);
-  NLUA_CLEAR_REF(cmd->uc_preview_luaref);
+  rs_free_ucmd(cmd);
 }
 
 /// Clear all user commands for "gap".
 void uc_clear(garray_T *gap)
 {
-  GA_DEEP_CLEAR(gap, ucmd_T, free_ucmd);
+  rs_uc_clear(gap);
 }
 
 void ex_delcommand(exarg_T *eap)

@@ -12,8 +12,11 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clippy::too_many_arguments)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void, CStr};
+
+use crate::GarrayHandle;
 
 // =============================================================================
 // UC_* Constants — from usercmd.h
@@ -467,6 +470,363 @@ pub extern "C" fn rs_usercmd_def_is_valid(def: *const UserCmdDef) -> c_int {
 }
 
 // =============================================================================
+// C Return Value Constants
+// =============================================================================
+
+/// OK return value (matches C OK = 1)
+const C_OK: c_int = 1;
+/// FAIL return value (matches C FAIL = 0)
+const C_FAIL: c_int = 0;
+/// LUA_NOREF value (matches C LUA_NOREF = -2)
+const LUA_NOREF: c_int = -2;
+
+// =============================================================================
+// C Accessor Functions (Phase 5 — command definition management)
+// =============================================================================
+
+extern "C" {
+    // garray operations
+    /// Returns &curbuf->b_ucmds (GarrayHandle)
+    fn nvim_uc_get_curbuf_ucmds() -> GarrayHandle;
+    /// Returns &ucmds (GarrayHandle)
+    fn nvim_uc_get_ucmds() -> GarrayHandle;
+    /// Returns gap->ga_len
+    fn nvim_uc_ga_get_len(gap: GarrayHandle) -> c_int;
+    /// Returns gap->ga_itemsize
+    fn nvim_uc_ga_get_itemsize(gap: GarrayHandle) -> c_int;
+    /// Sets gap->ga_len = len
+    fn nvim_uc_ga_set_len(gap: GarrayHandle, len: c_int);
+    /// ga_init(gap, sizeof(ucmd_T), 4)
+    fn nvim_uc_ga_init_ucmd(gap: GarrayHandle);
+    /// ga_grow(gap, n)
+    fn nvim_uc_ga_grow(gap: GarrayHandle, n: c_int);
+    /// ga_clear(gap)
+    fn nvim_uc_ga_clear(gap: GarrayHandle);
+
+    // ucmd_T element access
+    /// Returns USER_CMD_GA(gap, i) as opaque pointer
+    fn nvim_uc_ga_get_cmd(gap: GarrayHandle, i: c_int) -> *mut c_void;
+    /// memmove(cmd+1, cmd, (gap->ga_len - i) * sizeof(ucmd_T))
+    fn nvim_uc_cmd_memmove_down(gap: GarrayHandle, i: c_int);
+
+    // ucmd_T field getters
+    /// Returns cmd->uc_name
+    fn nvim_uc_cmd_get_name(cmd: *const c_void) -> *const c_char;
+    /// Returns cmd->uc_script_ctx.sc_sid
+    fn nvim_uc_cmd_get_sc_sid(cmd: *const c_void) -> c_int;
+    /// Returns cmd->uc_script_ctx.sc_seq
+    fn nvim_uc_cmd_get_sc_seq(cmd: *const c_void) -> c_int;
+
+    // ucmd_T field setters
+    /// Sets cmd->uc_name = name
+    fn nvim_uc_cmd_set_name(cmd: *mut c_void, name: *mut c_char);
+    /// Sets cmd->uc_rep = rep
+    fn nvim_uc_cmd_set_rep(cmd: *mut c_void, rep: *mut c_char);
+    /// Sets cmd->uc_argt = argt
+    fn nvim_uc_cmd_set_argt(cmd: *mut c_void, argt: u32);
+    /// Sets cmd->uc_def = def
+    fn nvim_uc_cmd_set_def(cmd: *mut c_void, def: i64);
+    /// Sets cmd->uc_compl = compl
+    fn nvim_uc_cmd_set_compl(cmd: *mut c_void, compl_val: c_int);
+    /// Sets cmd->uc_compl_arg = arg
+    fn nvim_uc_cmd_set_compl_arg(cmd: *mut c_void, arg: *mut c_char);
+    /// Sets cmd->uc_addr_type = addr_type
+    fn nvim_uc_cmd_set_addr_type(cmd: *mut c_void, addr_type: c_int);
+    /// Sets cmd->uc_luaref = luaref
+    fn nvim_uc_cmd_set_luaref(cmd: *mut c_void, luaref: c_int);
+    /// Sets cmd->uc_compl_luaref = luaref
+    fn nvim_uc_cmd_set_compl_luaref(cmd: *mut c_void, luaref: c_int);
+    /// Sets cmd->uc_preview_luaref = luaref
+    fn nvim_uc_cmd_set_preview_luaref(cmd: *mut c_void, luaref: c_int);
+    /// Sets cmd->uc_script_ctx = current_sctx; sc_lnum += SOURCING_LNUM;
+    /// nlua_set_sctx(&cmd->uc_script_ctx)
+    fn nvim_uc_cmd_set_script_ctx(cmd: *mut c_void);
+
+    // ucmd_T field cleanup (XFREE_CLEAR / NLUA_CLEAR_REF on individual fields)
+    /// XFREE_CLEAR(cmd->uc_rep)
+    fn nvim_uc_cmd_free_rep(cmd: *mut c_void);
+    /// XFREE_CLEAR(cmd->uc_compl_arg)
+    fn nvim_uc_cmd_free_compl_arg(cmd: *mut c_void);
+    /// NLUA_CLEAR_REF(cmd->uc_luaref)
+    fn nvim_uc_cmd_clear_luaref(cmd: *mut c_void);
+    /// NLUA_CLEAR_REF(cmd->uc_compl_luaref)
+    fn nvim_uc_cmd_clear_compl_luaref(cmd: *mut c_void);
+    /// NLUA_CLEAR_REF(cmd->uc_preview_luaref)
+    fn nvim_uc_cmd_clear_preview_luaref(cmd: *mut c_void);
+
+    // Whole-struct cleanup
+    /// Calls free_ucmd(cmd) — frees all fields of a ucmd_T
+    fn nvim_uc_free_ucmd(cmd: *mut c_void);
+
+    // Memory operations
+    /// xfree(ptr)
+    fn nvim_uc_xfree(ptr: *mut c_void);
+    /// NLUA_CLEAR_REF(ref) — for standalone LuaRef values (not in a struct)
+    fn nvim_uc_nlua_clear_ref(luaref: c_int);
+    /// replace_termcodes(rep, replen, &buf, 0, 0, NULL, p_cpo) then
+    /// returns buf (or xstrdup(rep) if buf is NULL). Caller owns result.
+    fn nvim_uc_replace_termcodes(rep: *const c_char, replen: usize) -> *mut c_char;
+    /// xstrnsave(s, len) — already exists from Phase 2
+    fn nvim_uc_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+
+    // Global state
+    /// Returns current_sctx.sc_sid
+    fn nvim_uc_get_current_sctx_sid() -> c_int;
+    /// Returns current_sctx.sc_seq
+    fn nvim_uc_get_current_sctx_seq() -> c_int;
+
+    // Error reporting — already exists from Phase 2
+    /// semsg(_(fmt), arg)
+    fn nvim_uc_semsg_1(fmt: *const c_char, arg: *const c_char);
+}
+
+// =============================================================================
+// Phase 5: Command Definition Management
+// =============================================================================
+
+/// Find the insertion point for a command name in a sorted garray.
+///
+/// Returns (index, cmp) where:
+/// - If cmp == 0: exact match found at index
+/// - If cmp < 0: name sorts before index
+/// - If cmp > 0: name sorts after all entries (index == len)
+unsafe fn find_cmd_index(
+    gap: GarrayHandle,
+    name: *const c_char,
+    name_len: usize,
+) -> (c_int, c_int) {
+    let ga_len = nvim_uc_ga_get_len(gap);
+    let mut cmp: c_int = 1;
+
+    for i in 0..ga_len {
+        let cmd = nvim_uc_ga_get_cmd(gap, i);
+        let cmd_name = nvim_uc_cmd_get_name(cmd);
+        let cmd_name_cstr = CStr::from_ptr(cmd_name);
+        let cmd_name_bytes = cmd_name_cstr.to_bytes();
+        let cmd_name_len = cmd_name_bytes.len();
+
+        // Compare using the input name length for strncmp equivalent
+        let name_slice = std::slice::from_raw_parts(name.cast::<u8>(), name_len);
+        let compare_len = name_len.min(cmd_name_len);
+        let left = &name_slice[..compare_len];
+        let right = &cmd_name_bytes[..compare_len];
+
+        cmp = match left.cmp(right) {
+            std::cmp::Ordering::Less => -1,
+            std::cmp::Ordering::Greater => 1,
+            std::cmp::Ordering::Equal => 0,
+        };
+
+        // If prefix matches, compare by length (like strncmp + length check)
+        if cmp == 0 {
+            if name_len < cmd_name_len {
+                cmp = -1;
+            } else if name_len > cmd_name_len {
+                cmp = 1;
+            }
+        }
+
+        if cmp <= 0 {
+            return (i, cmp);
+        }
+    }
+
+    (ga_len, cmp)
+}
+
+/// Create or replace a user command in a sorted garray.
+///
+/// This is the Rust implementation of `uc_add_command` from usercmd.c.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid. `name` and `rep` must be non-null
+/// NUL-terminated C strings. The caller is responsible for memory ownership
+/// as described in the C API contract.
+unsafe fn uc_add_command_impl(
+    name: *mut c_char,
+    name_len: usize,
+    rep: *const c_char,
+    argt: u32,
+    def: i64,
+    flags: c_int,
+    context: c_int,
+    compl_arg: *mut c_char,
+    compl_luaref: c_int,
+    preview_luaref: c_int,
+    addr_type: c_int,
+    luaref: c_int,
+    force: c_int,
+) -> c_int {
+    // replace_termcodes on the replacement string
+    let rep_cstr = CStr::from_ptr(rep);
+    let rep_len = rep_cstr.to_bytes().len();
+    let rep_buf = nvim_uc_replace_termcodes(rep, rep_len);
+    // nvim_uc_replace_termcodes handles the NULL case internally
+    // (returns xstrdup(rep) if replace_termcodes returns NULL)
+
+    // Get the appropriate garray (buffer-local or global)
+    let gap = if (flags & UC_BUFFER) != 0 {
+        let gap = nvim_uc_get_curbuf_ucmds();
+        if nvim_uc_ga_get_itemsize(gap) == 0 {
+            nvim_uc_ga_init_ucmd(gap);
+        }
+        gap
+    } else {
+        nvim_uc_get_ucmds()
+    };
+
+    // Search for the command in the sorted array
+    let (i, cmp) = find_cmd_index(gap, name, name_len);
+
+    if cmp == 0 {
+        // Exact match found — check if we can replace
+        let cmd = nvim_uc_ga_get_cmd(gap, i);
+
+        if force == 0
+            && (nvim_uc_cmd_get_sc_sid(cmd) != nvim_uc_get_current_sctx_sid()
+                || nvim_uc_cmd_get_sc_seq(cmd) == nvim_uc_get_current_sctx_seq())
+        {
+            // Cannot replace: emit error and clean up
+            nvim_uc_semsg_1(
+                c"E174: Command already exists: add ! to replace it: %s".as_ptr(),
+                name,
+            );
+            // Cleanup on failure
+            nvim_uc_xfree(rep_buf.cast::<c_void>());
+            nvim_uc_xfree(compl_arg.cast::<c_void>());
+            if luaref != LUA_NOREF {
+                nvim_uc_nlua_clear_ref(luaref);
+            }
+            if compl_luaref != LUA_NOREF {
+                nvim_uc_nlua_clear_ref(compl_luaref);
+            }
+            if preview_luaref != LUA_NOREF {
+                nvim_uc_nlua_clear_ref(preview_luaref);
+            }
+            return C_FAIL;
+        }
+
+        // Replace existing: free old fields
+        nvim_uc_cmd_free_rep(cmd);
+        nvim_uc_cmd_free_compl_arg(cmd);
+        nvim_uc_cmd_clear_luaref(cmd);
+        nvim_uc_cmd_clear_compl_luaref(cmd);
+        nvim_uc_cmd_clear_preview_luaref(cmd);
+    }
+
+    let cmd = if cmp != 0 {
+        // Insert new command at position i
+        nvim_uc_ga_grow(gap, 1);
+        let p = nvim_uc_xstrnsave(name, name_len);
+        // memmove existing entries down to make room
+        nvim_uc_cmd_memmove_down(gap, i);
+        let ga_len = nvim_uc_ga_get_len(gap);
+        nvim_uc_ga_set_len(gap, ga_len + 1);
+        let cmd = nvim_uc_ga_get_cmd(gap, i);
+        nvim_uc_cmd_set_name(cmd, p);
+        cmd
+    } else {
+        nvim_uc_ga_get_cmd(gap, i)
+    };
+
+    // Set all fields
+    nvim_uc_cmd_set_rep(cmd, rep_buf);
+    nvim_uc_cmd_set_argt(cmd, argt);
+    nvim_uc_cmd_set_def(cmd, def);
+    nvim_uc_cmd_set_compl(cmd, context);
+    nvim_uc_cmd_set_script_ctx(cmd);
+    nvim_uc_cmd_set_compl_arg(cmd, compl_arg);
+    nvim_uc_cmd_set_compl_luaref(cmd, compl_luaref);
+    nvim_uc_cmd_set_preview_luaref(cmd, preview_luaref);
+    nvim_uc_cmd_set_addr_type(cmd, addr_type);
+    nvim_uc_cmd_set_luaref(cmd, luaref);
+
+    C_OK
+}
+
+/// Free all fields of a single ucmd_T.
+///
+/// # Safety
+///
+/// `cmd` must point to a valid ucmd_T.
+unsafe fn free_ucmd_impl(cmd: *mut c_void) {
+    nvim_uc_free_ucmd(cmd);
+}
+
+/// Clear all user commands in a garray.
+///
+/// Iterates over each element, calls free_ucmd on it, then calls ga_clear.
+///
+/// # Safety
+///
+/// `gap` must point to a valid garray_T containing ucmd_T elements.
+unsafe fn uc_clear_impl(gap: GarrayHandle) {
+    let ga_len = nvim_uc_ga_get_len(gap);
+    for i in 0..ga_len {
+        let cmd = nvim_uc_ga_get_cmd(gap, i);
+        nvim_uc_free_ucmd(cmd);
+    }
+    nvim_uc_ga_clear(gap);
+}
+
+// =============================================================================
+// Phase 5: FFI Exports
+// =============================================================================
+
+/// FFI export: Create or replace a user command.
+///
+/// Direct replacement for C `uc_add_command`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uc_add_command(
+    name: *mut c_char,
+    name_len: usize,
+    rep: *const c_char,
+    argt: u32,
+    def: i64,
+    flags: c_int,
+    context: c_int,
+    compl_arg: *mut c_char,
+    compl_luaref: c_int,
+    preview_luaref: c_int,
+    addr_type: c_int,
+    luaref: c_int,
+    force: c_int,
+) -> c_int {
+    uc_add_command_impl(
+        name,
+        name_len,
+        rep,
+        argt,
+        def,
+        flags,
+        context,
+        compl_arg,
+        compl_luaref,
+        preview_luaref,
+        addr_type,
+        luaref,
+        force,
+    )
+}
+
+/// FFI export: Free all fields of a single ucmd_T.
+///
+/// Direct replacement for C `free_ucmd`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_ucmd(cmd: *mut c_void) {
+    free_ucmd_impl(cmd);
+}
+
+/// FFI export: Clear all user commands in a garray.
+///
+/// Direct replacement for C `uc_clear`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uc_clear(gap: GarrayHandle) {
+    uc_clear_impl(gap);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -691,5 +1051,62 @@ mod tests {
         assert!(!result.is_null());
         let offset = unsafe { result.offset_from(s.as_ptr()) };
         assert_eq!(offset, 3);
+    }
+
+    // =========================================================================
+    // Phase 5: constants and logic tests
+    // =========================================================================
+
+    #[test]
+    fn test_c_return_constants() {
+        assert_eq!(C_OK, 1);
+        assert_eq!(C_FAIL, 0);
+        assert_eq!(LUA_NOREF, -2);
+    }
+
+    #[test]
+    fn test_uc_buffer_flag_usage() {
+        // Test that UC_BUFFER flag check works the same way as in C
+        let flags_with_buffer: c_int = UC_BUFFER;
+        assert_ne!(flags_with_buffer & UC_BUFFER, 0);
+
+        let flags_without_buffer: c_int = 0;
+        assert_eq!(flags_without_buffer & UC_BUFFER, 0);
+    }
+
+    #[test]
+    fn test_name_comparison_logic() {
+        // Test the comparison logic used in find_cmd_index
+        // This mirrors the strncmp + length comparison from uc_add_command
+
+        // Same prefix, different lengths
+        let name = b"Cmd";
+        let existing = b"CmdLonger";
+        let compare_len = name.len().min(existing.len());
+        let cmp = name[..compare_len].cmp(&existing[..compare_len]);
+        assert_eq!(cmp, std::cmp::Ordering::Equal);
+        // name_len (3) < existing_len (9) → should be -1
+        assert!(name.len() < existing.len());
+
+        // Exact match
+        let name = b"Hello";
+        let existing = b"Hello";
+        let compare_len = name.len().min(existing.len());
+        let cmp = name[..compare_len].cmp(&existing[..compare_len]);
+        assert_eq!(cmp, std::cmp::Ordering::Equal);
+        assert_eq!(name.len(), existing.len());
+
+        // Different prefix
+        let name = b"Alpha";
+        let existing = b"Beta";
+        let compare_len = name.len().min(existing.len());
+        let cmp = name[..compare_len].cmp(&existing[..compare_len]);
+        assert_eq!(cmp, std::cmp::Ordering::Less);
+
+        let name = b"Zebra";
+        let existing = b"Alpha";
+        let compare_len = name.len().min(existing.len());
+        let cmp = name[..compare_len].cmp(&existing[..compare_len]);
+        assert_eq!(cmp, std::cmp::Ordering::Greater);
     }
 }
