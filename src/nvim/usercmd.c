@@ -517,15 +517,6 @@ int nvim_uc_curbuf_is_null(void)
   return curbuf == NULL ? 1 : 0;
 }
 
-static const char e_argument_required_for_str[]
-  = N_("E179: Argument required for %s");
-static const char e_no_such_user_defined_command_str[]
-  = N_("E184: No such user-defined command: %s");
-static const char e_complete_used_without_allowing_arguments[]
-  = N_("E1208: -complete used without allowing arguments");
-static const char e_no_such_user_defined_command_in_current_buffer_str[]
-  = N_("E1237: No such user-defined command in current buffer: %s");
-
 /// List of names for completion for ":command" with the EXPAND_ flag.
 /// Must be alphabetical for completion.
 static const char *command_complete[] = {
