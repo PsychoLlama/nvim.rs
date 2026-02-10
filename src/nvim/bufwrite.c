@@ -100,15 +100,6 @@ _Static_assert(FORCE_BIN == 1, "FORCE_BIN");
 _Static_assert(SHA256_SUM_SIZE == 32, "UNDO_HASH_SIZE");
 
 static const char *err_readonly = "is read-only (cannot override: \"W\" in 'cpoptions')";
-static const char e_patchmode_cant_touch_empty_original_file[]
-  = N_("E206: Patchmode: can't touch empty original file");
-static const char e_write_error_conversion_failed_make_fenc_empty_to_override[]
-  = N_("E513: Write error, conversion failed (make 'fenc' empty to override)");
-static const char e_write_error_conversion_failed_in_line_nr_make_fenc_empty_to_override[]
-  = N_("E513: Write error, conversion failed in line %" PRIdLINENR
-       " (make 'fenc' empty to override)");
-static const char e_write_error_file_system_full[]
-  = N_("E514: Write error (file system full?)");
 static const char e_no_matching_autocommands_for_buftype_str_buffer[]
   = N_("E676: No matching autocommands for buftype=%s buffer");
 
@@ -528,7 +519,7 @@ int nvim_bw_get_fileformat_force(buf_T *buf, exarg_T *eap) { return get_fileform
 // iconv
 void *nvim_bw_my_iconv_open(const char *tocode, const char *fromcode)
 {
-  return (void *)my_iconv_open(tocode, fromcode);
+  return (void *)my_iconv_open((char *)tocode, (char *)fromcode);
 }
 void nvim_bw_iconv_close(void *cd) { iconv_close((iconv_t)cd); }
 
