@@ -1108,42 +1108,15 @@ static void recording_mode(int hl_id)
 
 #define COL_RULER 17        // columns needed by standard ruler
 
+extern void rs_comp_col(void);
+
 /// Compute columns for ruler and shown command. 'sc_col' is also used to
 /// decide what the maximum length of a message on the status line can be.
 /// If there is a status line for the last window, 'sc_col' is independent
 /// of 'ru_col'.
 void comp_col(void)
 {
-  bool last_has_status = last_stl_height(false) > 0;
-
-  sc_col = 0;
-  ru_col = 0;
-  if (p_ru) {
-    ru_col = (ru_wid ? ru_wid : COL_RULER) + 1;
-    // no last status line, adjust sc_col
-    if (!last_has_status) {
-      sc_col = ru_col;
-    }
-  }
-  if (p_sc && *p_sloc == 'l') {
-    sc_col += SHOWCMD_COLS;
-    if (!p_ru || last_has_status) {         // no need for separating space
-      sc_col++;
-    }
-  }
-  assert(sc_col >= 0
-         && INT_MIN + sc_col <= Columns);
-  sc_col = Columns - sc_col;
-  assert(ru_col >= 0
-         && INT_MIN + ru_col <= Columns);
-  ru_col = Columns - ru_col;
-  if (sc_col <= 0) {            // screen too narrow, will become a mess
-    sc_col = 1;
-  }
-  if (ru_col <= 0) {
-    ru_col = 1;
-  }
-  set_vim_var_nr(VV_ECHOSPACE, sc_col - 1);
+  rs_comp_col();
 }
 
 /// Redraw entire window "wp" if "auto" 'signcolumn' width has changed.
@@ -2823,3 +2796,32 @@ int nvim_cmdline_mouse_used(void)
 }
 
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
+
+// Phase 2 accessors for comp_col()
+
+/// Get ruler width override.
+int nvim_get_ru_wid(void) { return ru_wid; }
+
+/// Get 'showcmd' option.
+int nvim_get_p_sc(void) { return p_sc; }
+
+/// Check if 'showcmdloc' is "last".
+int nvim_get_p_sloc_is_last(void) { return *p_sloc == 'l' ? 1 : 0; }
+
+/// Set sc_col global.
+void nvim_set_sc_col(int val) { sc_col = val; }
+
+/// Get ru_col global.
+int nvim_get_ru_col(void) { return ru_col; }
+
+/// Set ru_col global.
+void nvim_set_ru_col(int val) { ru_col = val; }
+
+/// Wrapper for last_stl_height(false) for Rust FFI.
+int nvim_last_stl_height(void) { return last_stl_height(false); }
+
+/// Set v:echospace variable.
+void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
+
+_Static_assert(COL_RULER == 17, "COL_RULER must be 17");
+_Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS must be 10");

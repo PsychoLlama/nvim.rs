@@ -1876,6 +1876,72 @@ pub extern "C" fn rs_cmdline_number_prompt() -> c_int {
     c_int::from(cmdline_number_prompt_impl())
 }
 
+// =============================================================================
+// Phase 2: Column Computation
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_ru_wid() -> c_int;
+    fn nvim_get_p_sc() -> c_int;
+    fn nvim_get_p_sloc_is_last() -> c_int;
+    fn nvim_set_sc_col(val: c_int);
+    fn nvim_set_ru_col(val: c_int);
+    fn nvim_last_stl_height() -> c_int;
+    fn nvim_set_vim_var_echospace(val: c_int);
+}
+
+/// COL_RULER from drawscreen.c — columns needed by standard ruler.
+const COL_RULER: c_int = 17;
+/// SHOWCMD_COLS from normal_defs.h — columns needed by shown command.
+const SHOWCMD_COLS: c_int = 10;
+
+/// Compute columns for ruler and shown command.
+///
+/// 'sc_col' is also used to decide what the maximum length of a message on
+/// the status line can be. If there is a status line for the last window,
+/// 'sc_col' is independent of 'ru_col'.
+/// Rust equivalent of `comp_col()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_comp_col() {
+    unsafe {
+        let last_has_status = nvim_last_stl_height() > 0;
+        let columns = nvim_get_Columns();
+
+        let mut sc_col: c_int = 0;
+        let mut ru_col: c_int = 0;
+
+        if nvim_get_p_ru() != 0 {
+            let ru_wid = nvim_get_ru_wid();
+            ru_col = (if ru_wid != 0 { ru_wid } else { COL_RULER }) + 1;
+            // no last status line, adjust sc_col
+            if !last_has_status {
+                sc_col = ru_col;
+            }
+        }
+        if nvim_get_p_sc() != 0 && nvim_get_p_sloc_is_last() != 0 {
+            sc_col += SHOWCMD_COLS;
+            if nvim_get_p_ru() == 0 || last_has_status {
+                // no need for separating space
+                sc_col += 1;
+            }
+        }
+        debug_assert!(sc_col >= 0 && c_int::MIN + sc_col <= columns);
+        sc_col = columns - sc_col;
+        debug_assert!(ru_col >= 0 && c_int::MIN + ru_col <= columns);
+        ru_col = columns - ru_col;
+        if sc_col <= 0 {
+            // screen too narrow, will become a mess
+            sc_col = 1;
+        }
+        if ru_col <= 0 {
+            ru_col = 1;
+        }
+        nvim_set_sc_col(sc_col);
+        nvim_set_ru_col(ru_col);
+        nvim_set_vim_var_echospace(sc_col - 1);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
