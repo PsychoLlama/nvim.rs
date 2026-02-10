@@ -147,6 +147,9 @@ extern int rs_buf_can_unload(buf_T *buf);
 extern char *rs_buf_get_fname(buf_T *buf);
 extern bool rs_bt_dontwrite_msg(buf_T *buf);
 extern bool rs_curbuf_reusable(void);
+extern bool rs_otherfile(char *ffname);
+extern void rs_buf_set_file_id(buf_T *buf);
+extern int rs_buflist_name_nr(int fnum, char **fname, linenr_T *lnum);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
@@ -493,6 +496,69 @@ const char *nvim_e382_msg(void)
 int nvim_buf_get_ml_mfp_null(buf_T *buf)
 {
   return buf->b_ml.ml_mfp == NULL;
+}
+
+/// Compare two file paths (case-sensitive or not depending on platform).
+/// Returns 0 if equal, non-zero otherwise (accessor for Rust).
+int nvim_path_fnamecmp(const char *a, const char *b)
+{
+  return path_fnamecmp(a, b);
+}
+
+/// Get file identity for a path (accessor for Rust).
+/// Returns true if successful. The file_id buffer must be at least sizeof(FileID) bytes.
+bool nvim_os_fileid(const char *path, void *file_id_out)
+{
+  return os_fileid(path, (FileID *)file_id_out);
+}
+
+/// Compare two file identities (accessor for Rust).
+/// Each buffer must be at least sizeof(FileID) bytes.
+bool nvim_os_fileid_equal(const void *a, const void *b)
+{
+  return os_fileid_equal((const FileID *)a, (const FileID *)b);
+}
+
+/// Get the size of FileID struct (accessor for Rust).
+size_t nvim_sizeof_file_id(void)
+{
+  return sizeof(FileID);
+}
+
+// Rust uses a 16-byte buffer to hold FileID; assert this is sufficient.
+_Static_assert(sizeof(FileID) <= 16, "FileID size exceeds Rust FILE_ID_SIZE");
+
+/// Check if buffer has a valid cached file_id (accessor for Rust).
+int nvim_buf_file_id_valid(buf_T *buf)
+{
+  return buf->file_id_valid;
+}
+
+/// Copy buffer's cached file_id into output buffer (accessor for Rust).
+void nvim_buf_get_file_id(buf_T *buf, void *out)
+{
+  *(FileID *)out = buf->file_id;
+}
+
+/// Set buffer's file_id from a FileID and validity flag (accessor for Rust).
+void nvim_buf_set_file_id_data(buf_T *buf, const void *file_id, bool valid)
+{
+  if (valid) {
+    buf->file_id = *(const FileID *)file_id;
+  }
+  buf->file_id_valid = valid;
+}
+
+/// Find a buffer by its number (accessor for Rust).
+buf_T *nvim_buflist_findnr(int fnum)
+{
+  return buflist_findnr(fnum);
+}
+
+/// Get the stored line number for a buffer (accessor for Rust).
+linenr_T nvim_buflist_findlnum(buf_T *buf)
+{
+  return buflist_findlnum(buf);
 }
 
 typedef enum {
@@ -3303,15 +3369,7 @@ void buflist_list(exarg_T *eap)
 /// @return  FAIL if not found, OK for success.
 int buflist_name_nr(int fnum, char **fname, linenr_T *lnum)
 {
-  buf_T *buf = buflist_findnr(fnum);
-  if (buf == NULL || buf->b_fname == NULL) {
-    return FAIL;
-  }
-
-  *fname = buf->b_fname;
-  *lnum = buflist_findlnum(buf);
-
-  return OK;
+  return rs_buflist_name_nr(fnum, (char **)fname, lnum);
 }
 
 /// Set the file name for "buf" to "ffname_arg", short file name to
@@ -3506,9 +3564,9 @@ void buflist_altfpos(win_T *win)
 ///
 /// @param  ffname  full path name to check
 bool otherfile(char *ffname)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
+  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-  return otherfile_buf(curbuf, ffname, NULL, false);
+  return rs_otherfile(ffname);
 }
 
 /// Check that "ffname" is not the same file as the file loaded in "buf".
@@ -3562,14 +3620,7 @@ static bool otherfile_buf(buf_T *buf, char *ffname, FileID *file_id_p, bool file
 /// Must always be called when b_fname is changed!
 void buf_set_file_id(buf_T *buf)
 {
-  FileID file_id;
-  if (buf->b_fname != NULL
-      && os_fileid(buf->b_fname, &file_id)) {
-    buf->file_id_valid = true;
-    buf->file_id = file_id;
-  } else {
-    buf->file_id_valid = false;
-  }
+  rs_buf_set_file_id(buf);
 }
 
 /// Check that file_id in buffer "buf" matches with "file_id".

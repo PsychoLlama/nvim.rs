@@ -135,6 +135,30 @@ extern "C" {
 
     /// Check if current buffer is changed.
     fn curbufIsChanged() -> bool;
+
+    /// Compare two file paths (platform-aware).
+    fn nvim_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+
+    /// Get file identity for a path. Returns true if successful.
+    fn nvim_os_fileid(path: *const c_char, file_id_out: *mut u8) -> bool;
+
+    /// Compare two file identities.
+    fn nvim_os_fileid_equal(a: *const u8, b: *const u8) -> bool;
+
+    /// Check if buffer has a valid cached `file_id`.
+    fn nvim_buf_file_id_valid(buf: BufHandle) -> c_int;
+
+    /// Copy buffer's cached `file_id` into output buffer.
+    fn nvim_buf_get_file_id(buf: BufHandle, out: *mut u8);
+
+    /// Set buffer's `file_id` data and validity flag.
+    fn nvim_buf_set_file_id_data(buf: BufHandle, file_id: *const u8, valid: bool);
+
+    /// Find a buffer by its number.
+    fn nvim_buflist_findnr(fnum: c_int) -> BufHandle;
+
+    /// Get the stored line number for a buffer.
+    fn nvim_buflist_findlnum(buf: BufHandle) -> c_int;
 }
 
 /// Check if "buf" is a pointer to an existing buffer.
@@ -557,6 +581,116 @@ unsafe fn curbuf_reusable_impl() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn rs_curbuf_reusable() -> bool {
     curbuf_reusable_impl()
+}
+
+// =============================================================================
+// File Identity & Alternate Buffer (Phase 2)
+// =============================================================================
+
+/// Maximum size for an opaque `FileID` buffer.
+/// `FileID` is `{ uint64_t inode; uint64_t device_id; }` = 16 bytes.
+const FILE_ID_SIZE: usize = 16;
+
+/// Opaque file identity buffer, sized to hold a C `FileID` struct.
+type FileIdBuf = [u8; FILE_ID_SIZE];
+
+/// Check if buffer's cached `file_id` matches the given `file_id`.
+#[inline]
+unsafe fn buf_same_file_id(buf: BufHandle, file_id: &FileIdBuf) -> bool {
+    if nvim_buf_file_id_valid(buf) == 0 {
+        return false;
+    }
+    let mut buf_fid: FileIdBuf = [0u8; FILE_ID_SIZE];
+    nvim_buf_get_file_id(buf, buf_fid.as_mut_ptr());
+    nvim_os_fileid_equal(buf_fid.as_ptr(), file_id.as_ptr())
+}
+
+/// Cache a file's `FileID` into the buffer struct.
+#[inline]
+unsafe fn buf_set_file_id_impl(buf: BufHandle) {
+    let fname = nvim_buf_get_b_fname(buf);
+    if fname.is_null() {
+        nvim_buf_set_file_id_data(buf, std::ptr::null(), false);
+        return;
+    }
+    let mut file_id: FileIdBuf = [0u8; FILE_ID_SIZE];
+    let valid = nvim_os_fileid(fname, file_id.as_mut_ptr());
+    nvim_buf_set_file_id_data(buf, file_id.as_ptr(), valid);
+}
+
+/// FFI wrapper for `buf_set_file_id`.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_set_file_id(buf: BufHandle) {
+    buf_set_file_id_impl(buf);
+}
+
+/// Check that "ffname" is not the same file as the file loaded in "buf".
+///
+/// This is the core comparison logic (equivalent to C `otherfile_buf`).
+#[inline]
+unsafe fn otherfile_buf_impl(buf: BufHandle, ffname: *const c_char) -> bool {
+    // no name is different
+    if ffname.is_null() || *ffname == 0 || nvim_buf_get_b_ffname(buf).is_null() {
+        return true;
+    }
+    // fast path: string comparison
+    if nvim_path_fnamecmp(ffname, nvim_buf_get_b_ffname(buf)) == 0 {
+        return false;
+    }
+    // slow path: file identity comparison
+    let mut file_id: FileIdBuf = [0u8; FILE_ID_SIZE];
+    let file_id_valid = nvim_os_fileid(ffname, file_id.as_mut_ptr());
+    if !file_id_valid {
+        return true;
+    }
+    if buf_same_file_id(buf, &file_id) {
+        // Re-stat and check again (file may have been recreated)
+        buf_set_file_id_impl(buf);
+        if buf_same_file_id(buf, &file_id) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Check that "ffname" is not the same file as the current buffer.
+///
+/// # Safety
+///
+/// Accesses global state (curbuf) via C FFI. `ffname` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_otherfile(ffname: *const c_char) -> bool {
+    otherfile_buf_impl(nvim_get_curbuf(), ffname)
+}
+
+/// Get file name and line number for file 'fnum'.
+///
+/// Returns FAIL (1) if not found, OK (0) for success.
+///
+/// # Safety
+///
+/// `fname` and `lnum` must be valid out-pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buflist_name_nr(
+    fnum: c_int,
+    fname: *mut *const c_char,
+    lnum: *mut c_int,
+) -> c_int {
+    let buf = nvim_buflist_findnr(fnum);
+    if buf.is_null() {
+        return 1; // FAIL
+    }
+    let b_fname = nvim_buf_get_b_fname(buf);
+    if b_fname.is_null() {
+        return 1; // FAIL
+    }
+    *fname = b_fname;
+    *lnum = nvim_buflist_findlnum(buf);
+    0 // OK
 }
 
 /// Check if a line that was just obtained by a call to `ml_get` is in allocated memory.
