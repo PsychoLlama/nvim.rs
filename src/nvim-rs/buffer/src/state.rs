@@ -22,6 +22,7 @@ extern "C" {
     fn nvim_buf_get_changedtick(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
+    fn nvim_buf_first_line_empty(buf: BufHandle) -> c_int;
 }
 
 // =============================================================================
@@ -280,13 +281,25 @@ pub unsafe extern "C" fn rs_buf_get_line_count(buf: BufHandle) -> c_int {
     nvim_buf_get_ml_line_count(buf)
 }
 
-/// Check if buffer is empty.
+/// Check if buffer is empty (line count == 1 and first line is empty).
+///
+/// This matches the C `buf_is_empty()` semantics exactly.
+///
+/// # Safety
+///
+/// Calls external C functions. `buf` must be valid.
+#[must_use]
+pub unsafe fn buf_is_empty(buf: BufHandle) -> bool {
+    if buf.is_null() {
+        return true;
+    }
+    nvim_buf_get_ml_line_count(buf) == 1 && nvim_buf_first_line_empty(buf) != 0
+}
+
+/// FFI wrapper for `buf_is_empty`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_buf_is_empty(buf: BufHandle) -> c_int {
-    if buf.is_null() {
-        return 1;
-    }
-    c_int::from(nvim_buf_get_ml_line_count(buf) <= 1)
+    c_int::from(buf_is_empty(buf))
 }
 
 /// Check if changedtick has changed.

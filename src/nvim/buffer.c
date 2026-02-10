@@ -144,6 +144,9 @@ extern int rs_buf_is_listed(buf_T *buf);
 extern int rs_buf_is_empty(buf_T *buf);
 extern int rs_buf_nwindows(buf_T *buf);
 extern int rs_buf_can_unload(buf_T *buf);
+extern char *rs_buf_get_fname(buf_T *buf);
+extern bool rs_bt_dontwrite_msg(buf_T *buf);
+extern bool rs_curbuf_reusable(void);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
@@ -466,6 +469,30 @@ const char *nvim_buf_get_line_at(buf_T *buf, linenr_T lnum)
 int nvim_getwhitecols_curline(void)
 {
   return (int)getwhitecols_curline();
+}
+
+/// Check if the first line of a buffer is empty (accessor for Rust).
+int nvim_buf_first_line_empty(buf_T *buf)
+{
+  return *ml_get_buf(buf, 1) == NUL;
+}
+
+/// Get translated "[No Name]" string (accessor for Rust).
+const char *nvim_no_name_msg(void)
+{
+  return _("[No Name]");
+}
+
+/// Get translated E382 error message string (accessor for Rust).
+const char *nvim_e382_msg(void)
+{
+  return _("E382: Cannot write, 'buftype' option is set");
+}
+
+/// Check if the memfile pointer is NULL for a buffer (accessor for Rust).
+int nvim_buf_get_ml_mfp_null(buf_T *buf)
+{
+  return buf->b_ml.ml_mfp == NULL;
 }
 
 typedef enum {
@@ -2385,12 +2412,7 @@ buf_T *buflist_new(char *ffname_arg, char *sfname_arg, linenr_T lnum, int flags)
 /// only one window. That means it can be reused.
 bool curbuf_reusable(void)
 {
-  return (curbuf != NULL
-          && curbuf->b_ffname == NULL
-          && curbuf->b_nwindows <= 1
-          && (curbuf->b_ml.ml_mfp == NULL || buf_is_empty(curbuf))
-          && !bt_quickfix(curbuf)
-          && !curbufIsChanged());
+  return rs_curbuf_reusable();
 }
 
 /// Free the memory for the options of a buffer.
@@ -4281,13 +4303,8 @@ bool bt_dontwrite(const buf_T *const buf)
 }
 
 bool bt_dontwrite_msg(const buf_T *const buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (bt_dontwrite(buf)) {
-    emsg(_("E382: Cannot write, 'buftype' option is set"));
-    return true;
-  }
-  return false;
+  return rs_bt_dontwrite_msg((buf_T *)buf);
 }
 
 /// @return  true if the buffer should be hidden, according to 'hidden', ":hide"
@@ -4334,10 +4351,7 @@ char *buf_spname(buf_T *buf)
 char *buf_get_fname(const buf_T *buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-  if (buf->b_fname == NULL) {
-    return _("[No Name]");
-  }
-  return buf->b_fname;
+  return rs_buf_get_fname((buf_T *)buf);
 }
 
 /// Set 'buflisted' for curbuf to "on" and trigger autocommands if it changed.
@@ -4460,7 +4474,7 @@ int buf_open_scratch(handle_T bufnr, char *bufname)
 
 bool buf_is_empty(buf_T *buf)
 {
-  return buf->b_ml.ml_line_count == 1 && *ml_get_buf(buf, 1) == NUL;
+  return rs_buf_is_empty(buf);
 }
 
 /// Increment b:changedtick value
