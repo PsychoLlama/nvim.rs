@@ -15,9 +15,38 @@ extern "C" {
         name: *const c_char,
         out_cmdidx: *mut c_int,
         out_full: *mut c_int,
+        out_useridx: *mut c_int,
     ) -> *mut c_char;
     fn nvim_docmd_cmdnames_func_is_ni(cmdidx: c_int) -> c_int;
+
+    // Phase 3: command table accessors
+    fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
+    fn nvim_eap_set_cmdidx(eap: ExArgHandle, idx: c_int);
+    fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
+    fn nvim_eap_set_flags(eap: ExArgHandle, flags: c_int);
+    fn nvim_docmd_cmd_next() -> c_int;
+    fn nvim_docmd_cmd_bang() -> c_int;
+    fn nvim_docmd_get_command_count() -> c_int;
+    fn nvim_docmd_get_cmdidxs1(c: c_int) -> c_int;
+    fn nvim_docmd_get_cmdidxs2(c1: c_int, c2: c_int) -> c_int;
+    fn nvim_docmd_cmdnames_prefix_match(idx: c_int, cmd: *const c_char, len: c_int) -> c_int;
+    fn nvim_docmd_cmdnames_name_complete(idx: c_int, len: c_int) -> c_int;
+    fn nvim_docmd_cmdnames_name(idx: c_int) -> *mut c_char;
+    fn nvim_docmd_find_ucmd(eap: ExArgHandle, p: *mut c_char, full: *mut c_int) -> *mut c_char;
+    fn nvim_docmd_expand_user_cmd_name(idx: c_int) -> *mut c_char;
+    fn nvim_docmd_e943_abort();
+
+    // Phase 3: f_fullcommand helpers
+    fn nvim_docmd_tv_get_string(argvars: *const c_void) -> *mut c_char;
+    fn nvim_docmd_rettv_init_string(rettv: *mut c_void);
+    fn nvim_docmd_rettv_set_string(rettv: *mut c_void, s: *const c_char);
+    fn nvim_docmd_get_user_command_name(useridx: c_int, cmdidx: c_int) -> *mut c_char;
 }
+
+use std::ffi::c_void;
+
+use crate::ExArgHandle;
 
 // =============================================================================
 // One-letter command helpers
@@ -303,7 +332,7 @@ pub unsafe extern "C" fn rs_cmd_exists(name: *const c_char) -> c_int {
     // Check built-in commands and user defined commands.
     let mut cmdidx: c_int = 0;
     let mut full: c_int = 0;
-    let p = nvim_docmd_cmd_exists_inner(name, &mut cmdidx, &mut full);
+    let p = nvim_docmd_cmd_exists_inner(name, &mut cmdidx, &mut full, std::ptr::null_mut());
 
     if p.is_null() {
         return 3;
@@ -336,6 +365,278 @@ pub unsafe extern "C" fn rs_cmd_exists(name: *const c_char) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_is_cmd_ni(cmdidx: c_int) -> c_int {
     unsafe { nvim_docmd_cmdnames_func_is_ni(cmdidx) }
+}
+
+// =============================================================================
+// find_ex_command - Central command lookup
+// =============================================================================
+
+/// Find an Ex command by its name.
+///
+/// Start of the name can be found at `eap->cmd`.
+/// Sets `eap->cmdidx` and returns a pointer to char after the command name.
+/// `full` is set to true (1) if the whole command name matched.
+///
+/// Returns NULL for an ambiguous user command.
+///
+/// Matches C `find_ex_command()`.
+///
+/// # Safety
+///
+/// `eap` must be a valid ExArgHandle. `full` may be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) -> *mut c_char {
+    if eap.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let cmd = nvim_eap_get_cmd(eap);
+    let mut p = cmd;
+
+    // Try one-letter command first.
+    let mut idx_val: c_int = 0;
+    if rs_one_letter_cmd(cmd as *const c_char, &mut idx_val) != 0 {
+        nvim_eap_set_cmdidx(eap, idx_val);
+        p = p.add(1);
+        if !full.is_null() {
+            *full = 1;
+        }
+    } else {
+        // Skip alphabetic chars.
+        while (*p as u8).is_ascii_alphabetic() {
+            p = p.add(1);
+        }
+        // For python 3.x: ":py3", ":python3", ":py3file", etc.
+        if *cmd as u8 == b'p' && *cmd.add(1) as u8 == b'y' {
+            while (*p as u8).is_ascii_alphanumeric() {
+                p = p.add(1);
+            }
+        }
+
+        // Check for non-alpha command.
+        if p == cmd {
+            let c = *p as u8;
+            if c == b'@'
+                || c == b'!'
+                || c == b'='
+                || c == b'>'
+                || c == b'<'
+                || c == b'&'
+                || c == b'~'
+                || c == b'#'
+            {
+                p = p.add(1);
+            }
+        }
+
+        let len = p.offset_from(cmd) as c_int;
+
+        // The "d" command can directly be followed by 'l' or 'p' flag.
+        let mut effective_len = len;
+        if *cmd as u8 == b'd' && len > 0 {
+            let last_char = *p.sub(1) as u8;
+            if last_char == b'l' || last_char == b'p' {
+                // Check for ":dl", ":dell", etc. to ":deletel"
+                let delete_str = b"delete";
+                let mut i = 0i32;
+                while (i as usize) < delete_str.len() && i < len {
+                    if *cmd.add(i as usize) as u8 != delete_str[i as usize] {
+                        break;
+                    }
+                    i += 1;
+                }
+                if i == len - 1 {
+                    effective_len -= 1;
+                    let flags = nvim_eap_get_flags(eap);
+                    if last_char == b'l' {
+                        nvim_eap_set_flags(eap, flags | crate::execute::EXFLAG_LIST);
+                    } else {
+                        nvim_eap_set_flags(eap, flags | crate::execute::EXFLAG_PRINT);
+                    }
+                }
+            }
+        }
+
+        // Determine starting cmdidx.
+        let c0 = *cmd as u8;
+        if c0.is_ascii_lowercase() {
+            let c1 = c0 as c_int;
+            let c2 = if effective_len == 1 {
+                0
+            } else {
+                *cmd.add(1) as u8 as c_int
+            };
+
+            let cmd_size = nvim_docmd_cmd_size();
+            if nvim_docmd_get_command_count() != cmd_size {
+                nvim_docmd_e943_abort();
+            }
+
+            let mut start_idx = nvim_docmd_get_cmdidxs1(c1);
+            if (c2 as u8).is_ascii_lowercase() {
+                start_idx += nvim_docmd_get_cmdidxs2(c1, c2);
+            }
+            nvim_eap_set_cmdidx(eap, start_idx);
+        } else if c0.is_ascii_uppercase() {
+            nvim_eap_set_cmdidx(eap, nvim_docmd_cmd_next());
+        } else {
+            nvim_eap_set_cmdidx(eap, nvim_docmd_cmd_bang());
+        }
+
+        // Make :def an unknown command (#23149).
+        if effective_len == 3
+            && *cmd as u8 == b'd'
+            && *cmd.add(1) as u8 == b'e'
+            && *cmd.add(2) as u8 == b'f'
+        {
+            nvim_eap_set_cmdidx(eap, nvim_docmd_cmd_size());
+        }
+
+        // Iterate cmdnames[] for prefix match.
+        let cmd_size = nvim_docmd_cmd_size();
+        let mut cidx = nvim_eap_get_cmdidx(eap);
+        while cidx < cmd_size {
+            if nvim_docmd_cmdnames_prefix_match(cidx, cmd as *const c_char, effective_len) != 0 {
+                if !full.is_null() && nvim_docmd_cmdnames_name_complete(cidx, effective_len) != 0 {
+                    *full = 1;
+                }
+                break;
+            }
+            cidx += 1;
+        }
+        nvim_eap_set_cmdidx(eap, cidx);
+
+        // Look for a user defined command as a last resort.
+        if nvim_eap_get_cmdidx(eap) == cmd_size && (*cmd as u8) >= b'A' && (*cmd as u8) <= b'Z' {
+            // User defined commands may contain digits.
+            while (*p as u8).is_ascii_alphanumeric() {
+                p = p.add(1);
+            }
+            p = nvim_docmd_find_ucmd(eap, p, full);
+        }
+        if p == cmd {
+            nvim_eap_set_cmdidx(eap, cmd_size);
+        }
+    }
+
+    p
+}
+
+// =============================================================================
+// excmd_get_cmdidx - Get command index from name
+// =============================================================================
+
+/// Get the command index for a command name of given length.
+///
+/// Matches C `excmd_get_cmdidx()`.
+///
+/// # Safety
+///
+/// `cmd` must be a valid pointer to at least `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_excmd_get_cmdidx(cmd: *const c_char, len: usize) -> c_int {
+    if cmd.is_null() {
+        return nvim_docmd_cmd_size();
+    }
+
+    // Make :def an unknown command (#23149).
+    if len == 3 && *cmd as u8 == b'd' && *cmd.add(1) as u8 == b'e' && *cmd.add(2) as u8 == b'f' {
+        return nvim_docmd_cmd_size();
+    }
+
+    let mut idx_val: c_int = 0;
+    if rs_one_letter_cmd(cmd, &mut idx_val) != 0 {
+        return idx_val;
+    }
+
+    let cmd_size = nvim_docmd_cmd_size();
+    let len_i = len as c_int;
+    let mut idx: c_int = 0;
+    while idx < cmd_size {
+        if nvim_docmd_cmdnames_prefix_match(idx, cmd, len_i) != 0 {
+            break;
+        }
+        idx += 1;
+    }
+    idx
+}
+
+// =============================================================================
+// get_command_name - Get name string from cmdidx
+// =============================================================================
+
+/// Get command name for completion.
+///
+/// Returns the name of the command at `idx`, or a user command name
+/// if `idx >= CMD_SIZE`.
+///
+/// Matches C `get_command_name()`.
+///
+/// # Safety
+///
+/// `xp` is unused (passed through for API compat). `idx` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_command_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
+    let cmd_size = nvim_docmd_cmd_size();
+    if idx >= cmd_size {
+        return nvim_docmd_expand_user_cmd_name(idx);
+    }
+    nvim_docmd_cmdnames_name(idx)
+}
+
+// =============================================================================
+// f_fullcommand - VimL fullcommand() function
+// =============================================================================
+
+/// Implementation of the VimL `fullcommand()` function.
+///
+/// Matches C `f_fullcommand()`.
+///
+/// # Safety
+///
+/// `argvars` and `rettv` must be valid pointers to typval_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_fullcommand(argvars: *mut c_void, rettv: *mut c_void, _fptr: u64) {
+    let name_ptr = nvim_docmd_tv_get_string(argvars as *const c_void);
+    nvim_docmd_rettv_init_string(rettv);
+
+    // Skip leading colons.
+    let mut name = name_ptr;
+    while *name as u8 == b':' {
+        name = name.add(1);
+    }
+
+    // Skip range.
+    name = crate::rs_skip_range(name as *const c_char, std::ptr::null_mut()) as *mut c_char;
+
+    // Use cmd_exists_inner to create temp exarg_T and call find_ex_command.
+    let mut cmdidx: c_int = 0;
+    let mut full_val: c_int = 0;
+    let mut useridx: c_int = 0;
+    let p = nvim_docmd_cmd_exists_inner(
+        name as *const c_char,
+        &mut cmdidx,
+        &mut full_val,
+        &mut useridx,
+    );
+
+    let cmd_size = nvim_docmd_cmd_size();
+    if p.is_null() || cmdidx == cmd_size {
+        return;
+    }
+
+    // IS_USER_CMDIDX: cmdidx < 0
+    if cmdidx < 0 {
+        let user_name = nvim_docmd_get_user_command_name(useridx, cmdidx);
+        if !user_name.is_null() {
+            nvim_docmd_rettv_set_string(rettv, user_name as *const c_char);
+        }
+    } else {
+        let cmd_name = nvim_docmd_cmdnames_name(cmdidx);
+        if !cmd_name.is_null() {
+            nvim_docmd_rettv_set_string(rettv, cmd_name as *const c_char);
+        }
+    }
 }
 
 #[cfg(test)]

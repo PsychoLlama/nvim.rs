@@ -132,6 +132,10 @@ extern int rs_is_cmd_ni(int cmdidx);
 extern char *rs_skip_grep_pat(void *eap);
 extern void rs_set_cmd_count(void *eap, int count, int validate);
 extern bool rs_cmd_has_expr_args(int cmdidx);
+extern char *rs_find_ex_command(void *eap, int *full);
+extern int rs_excmd_get_cmdidx(const char *cmd, size_t len);
+extern char *rs_get_command_name(void *xp, int idx);
+extern void rs_f_fullcommand(void *argvars, void *rettv, EvalFuncData fptr);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -3038,103 +3042,7 @@ static int one_letter_cmd(const char *p, cmdidx_T *idx)
 char *find_ex_command(exarg_T *eap, int *full)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  // Isolate the command and search for it in the command table.
-  char *p = eap->cmd;
-  if (one_letter_cmd(p, &eap->cmdidx)) {
-    p++;
-    if (full != NULL) {
-      *full = true;
-    }
-  } else {
-    while (ASCII_ISALPHA(*p)) {
-      p++;
-    }
-    // for python 3.x support ":py3", ":python3", ":py3file", etc.
-    if (eap->cmd[0] == 'p' && eap->cmd[1] == 'y') {
-      while (ASCII_ISALNUM(*p)) {
-        p++;
-      }
-    }
-
-    // check for non-alpha command
-    if (p == eap->cmd && vim_strchr("@!=><&~#", (uint8_t)(*p)) != NULL) {
-      p++;
-    }
-    int len = (int)(p - eap->cmd);
-    // The "d" command can directly be followed by 'l' or 'p' flag.
-    if (*eap->cmd == 'd' && (p[-1] == 'l' || p[-1] == 'p')) {
-      // Check for ":dl", ":dell", etc. to ":deletel": that's
-      // :delete with the 'l' flag.  Same for 'p'.
-      int i;
-      for (i = 0; i < len; i++) {
-        if (eap->cmd[i] != ("delete")[i]) {
-          break;
-        }
-      }
-      if (i == len - 1) {
-        len--;
-        if (p[-1] == 'l') {
-          eap->flags |= EXFLAG_LIST;
-        } else {
-          eap->flags |= EXFLAG_PRINT;
-        }
-      }
-    }
-
-    if (ASCII_ISLOWER(eap->cmd[0])) {
-      const int c1 = (uint8_t)eap->cmd[0];
-      const int c2 = len == 1 ? NUL : eap->cmd[1];
-
-      if (command_count != CMD_SIZE) {
-        iemsg(_("E943: Command table needs to be updated, run 'make'"));
-        getout(1);
-      }
-
-      // Use a precomputed index for fast look-up in cmdnames[]
-      // taking into account the first 2 letters of eap->cmd.
-      eap->cmdidx = cmdidxs1[CHAR_ORD_LOW(c1)];
-      if (ASCII_ISLOWER(c2)) {
-        eap->cmdidx += cmdidxs2[CHAR_ORD_LOW(c1)][CHAR_ORD_LOW(c2)];
-      }
-    } else if (ASCII_ISUPPER(eap->cmd[0])) {
-      eap->cmdidx = CMD_Next;
-    } else {
-      eap->cmdidx = CMD_bang;
-    }
-    assert(eap->cmdidx >= 0);
-
-    if (len == 3 && strncmp("def", eap->cmd, 3) == 0) {
-      // Make :def an unknown command to avoid confusing behavior. #23149
-      eap->cmdidx = CMD_SIZE;
-    }
-
-    for (; (int)eap->cmdidx < CMD_SIZE;
-         eap->cmdidx = (cmdidx_T)((int)eap->cmdidx + 1)) {
-      if (strncmp(cmdnames[(int)eap->cmdidx].cmd_name, eap->cmd,
-                  (size_t)len) == 0) {
-        if (full != NULL
-            && cmdnames[(int)eap->cmdidx].cmd_name[len] == NUL) {
-          *full = true;
-        }
-        break;
-      }
-    }
-
-    // Look for a user defined command as a last resort.
-    if ((eap->cmdidx == CMD_SIZE)
-        && *eap->cmd >= 'A' && *eap->cmd <= 'Z') {
-      // User defined commands may contain digits.
-      while (ASCII_ISALNUM(*p)) {
-        p++;
-      }
-      p = find_ucmd(eap, p, full, NULL, NULL);
-    }
-    if (p == eap->cmd) {
-      eap->cmdidx = CMD_SIZE;
-    }
-  }
-
-  return p;
+  return rs_find_ex_command(eap, full);
 }
 
 static struct cmdmod {
@@ -3186,48 +3094,12 @@ int cmd_exists(const char *const name)
 /// "fullcommand" function
 void f_fullcommand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  char *name = (char *)tv_get_string(&argvars[0]);
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  while (*name == ':') {
-    name++;
-  }
-  name = skip_range(name, NULL);
-
-  exarg_T ea;
-  ea.cmd = (*name == '2' || *name == '3') ? name + 1 : name;
-  ea.cmdidx = 0;
-  ea.flags = 0;
-  char *p = find_ex_command(&ea, NULL);
-  if (p == NULL || ea.cmdidx == CMD_SIZE) {
-    return;
-  }
-
-  rettv->vval.v_string = xstrdup(IS_USER_CMDIDX(ea.cmdidx)
-                                 ? get_user_command_name(ea.useridx, ea.cmdidx)
-                                 : cmdnames[ea.cmdidx].cmd_name);
+  rs_f_fullcommand(argvars, rettv, fptr);
 }
 
 cmdidx_T excmd_get_cmdidx(const char *cmd, size_t len)
 {
-  if (len == 3 && strncmp("def", cmd, 3) == 0) {
-    // Make :def an unknown command to avoid confusing behavior. #23149
-    return CMD_SIZE;
-  }
-
-  cmdidx_T idx;
-
-  if (!one_letter_cmd(cmd, &idx)) {
-    for (idx = 0; (int)idx < CMD_SIZE; idx = (cmdidx_T)((int)idx + 1)) {
-      if (strncmp(cmdnames[(int)idx].cmd_name, cmd, len) == 0) {
-        break;
-      }
-    }
-  }
-
-  return idx;
+  return (cmdidx_T)rs_excmd_get_cmdidx(cmd, len);
 }
 
 uint32_t excmd_get_argt(cmdidx_T idx)
@@ -4524,10 +4396,7 @@ static int check_more(bool message, bool forceit)
 /// Function given to ExpandGeneric() to obtain the list of command names.
 char *get_command_name(expand_T *xp, int idx)
 {
-  if (idx >= CMD_SIZE) {
-    return expand_user_command_name(idx);
-  }
-  return cmdnames[idx].cmd_name;
+  return rs_get_command_name(xp, idx);
 }
 
 static void ex_colorscheme(exarg_T *eap)
@@ -8306,13 +8175,15 @@ void nvim_docmd_xstrlcat_iobuff(const char *src)
   xstrlcat(IObuff, src, IOSIZE);
 }
 
-/// Inner helper for cmd_exists: look up built-in and user commands.
+/// Inner helper for cmd_exists / f_fullcommand: look up built-in and user commands.
 ///
 /// Creates a temporary exarg_T, calls find_ex_command, and returns:
 /// - cmdidx via *out_cmdidx
 /// - full match flag via *out_full
+/// - useridx via *out_useridx (if non-NULL)
 /// - pointer to end of command name (or NULL)
-char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_full)
+char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_full,
+                                   int *out_useridx)
 {
   exarg_T ea;
   ea.cmd = (char *)((*name == '2' || *name == '3') ? name + 1 : name);
@@ -8321,6 +8192,9 @@ char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_fu
   *out_full = false;
   char *p = find_ex_command(&ea, out_full);
   *out_cmdidx = (int)ea.cmdidx;
+  if (out_useridx != NULL) {
+    *out_useridx = ea.useridx;
+  }
   return p;
 }
 
@@ -8390,4 +8264,99 @@ int nvim_docmd_grep_internal(int cmdidx)
 linenr_T nvim_docmd_get_curbuf_line_count(void)
 {
   return curbuf->b_ml.ml_line_count;
+}
+
+// =========================================================================
+// Command table accessor functions for Rust FFI (Phase 3)
+// =========================================================================
+
+/// Get eap->cmd pointer.
+char *nvim_eap_get_cmd(const exarg_T *eap) { return eap->cmd; }
+/// Set eap->cmdidx.
+void nvim_eap_set_cmdidx(exarg_T *eap, int idx) { eap->cmdidx = (cmdidx_T)idx; }
+/// Get eap->useridx.
+int nvim_eap_get_useridx(const exarg_T *eap) { return eap->useridx; }
+
+/// Get CMD_Next enum value.
+int nvim_docmd_cmd_next(void) { return (int)CMD_Next; }
+/// Get CMD_bang enum value.
+int nvim_docmd_cmd_bang(void) { return (int)CMD_bang; }
+
+/// Get command_count (total commands in table).
+int nvim_docmd_get_command_count(void) { return command_count; }
+
+/// Look up initial cmdidx using cmdidxs1 table.
+int nvim_docmd_get_cmdidxs1(int c)
+{
+  return (int)cmdidxs1[CHAR_ORD_LOW(c)];
+}
+
+/// Look up secondary offset using cmdidxs2 table.
+int nvim_docmd_get_cmdidxs2(int c1, int c2)
+{
+  return (int)cmdidxs2[CHAR_ORD_LOW(c1)][CHAR_ORD_LOW(c2)];
+}
+
+/// Check if cmdnames[idx] name prefix-matches cmd for len chars.
+int nvim_docmd_cmdnames_prefix_match(int idx, const char *cmd, int len)
+{
+  return strncmp(cmdnames[idx].cmd_name, cmd, (size_t)len) == 0;
+}
+
+/// Check if cmdnames[idx] name is exactly len chars (name[len] == NUL).
+int nvim_docmd_cmdnames_name_complete(int idx, int len)
+{
+  return cmdnames[idx].cmd_name[len] == NUL;
+}
+
+/// Get cmdnames[idx].cmd_name pointer.
+char *nvim_docmd_cmdnames_name(int idx)
+{
+  return cmdnames[idx].cmd_name;
+}
+
+/// Wrap find_ucmd for Rust access.
+char *nvim_docmd_find_ucmd(exarg_T *eap, char *p, int *full)
+{
+  return find_ucmd(eap, p, full, NULL, NULL);
+}
+
+/// Wrap expand_user_command_name for Rust access.
+char *nvim_docmd_expand_user_cmd_name(int idx)
+{
+  return expand_user_command_name(idx);
+}
+
+/// Report E943 and exit (command table mismatch).
+void nvim_docmd_e943_abort(void)
+{
+  iemsg(_("E943: Command table needs to be updated, run 'make'"));
+  getout(1);
+}
+
+/// Get first argvar string from typval array (for f_fullcommand).
+char *nvim_docmd_tv_get_string(const void *argvars)
+{
+  return (char *)tv_get_string((const typval_T *)argvars);
+}
+
+/// Set rettv to VAR_STRING type with NULL initial value (for f_fullcommand).
+void nvim_docmd_rettv_init_string(void *rettv)
+{
+  typval_T *tv = (typval_T *)rettv;
+  tv->v_type = VAR_STRING;
+  tv->vval.v_string = NULL;
+}
+
+/// Set rettv string to xstrdup of given string (for f_fullcommand).
+void nvim_docmd_rettv_set_string(void *rettv, const char *s)
+{
+  typval_T *tv = (typval_T *)rettv;
+  tv->vval.v_string = xstrdup(s);
+}
+
+/// Get user command name by useridx/cmdidx.
+char *nvim_docmd_get_user_command_name(int useridx, int cmdidx)
+{
+  return get_user_command_name(useridx, (cmdidx_T)cmdidx);
 }
