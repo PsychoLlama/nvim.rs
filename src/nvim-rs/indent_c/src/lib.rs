@@ -158,6 +158,18 @@ extern "C" {
     // Multi-byte character width
     fn utfc_ptr2len(p: *const c_char) -> c_int;
 
+    // Phase 3 accessors
+    fn nvim_cindent_findmatchlimit(what: c_int, flags: c_int, maxtravel: i64) -> FindMatchResult;
+    fn nvim_cindent_ml_get_pos_lnum_col(lnum: c_int, col: c_int) -> *const c_char;
+    fn nvim_cindent_getvcol(lnum: c_int, col: c_int) -> c_int;
+    fn nvim_cindent_curwin_get_cursor_col() -> c_int;
+    fn nvim_cindent_curwin_set_cursor(lnum: c_int, col: c_int);
+    fn nvim_cindent_curbuf_get_ind_maxcomment() -> c_int;
+    fn nvim_cindent_curbuf_get_ml_line_count() -> c_int;
+    fn nvim_cindent_get_indent() -> c_int;
+    fn nvim_cindent_get_cursor_line_ptr() -> *const c_char;
+    fn nvim_cindent_curbuf_get_ind_cpp_baseclass() -> c_int;
+
     // Option parsing
     fn copy_option_part(
         option: *mut *mut c_char,
@@ -901,6 +913,29 @@ pub struct BracketMatch {
     pub found: bool,
     /// Column (0-based) of the last unmatched bracket, if found.
     pub col: c_int,
+}
+
+/// Result of a `findmatchlimit` call across FFI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FindMatchResult {
+    /// Whether a match was found.
+    pub found: bool,
+    /// Line number of the match.
+    pub lnum: c_int,
+    /// Column of the match.
+    pub col: c_int,
+}
+
+impl FindMatchResult {
+    /// Create a "not found" result.
+    const fn not_found() -> Self {
+        Self {
+            found: false,
+            lnum: 0,
+            col: 0,
+        }
+    }
 }
 
 /// Find the position of the last unmatched closing bracket in a line.
@@ -2589,6 +2624,403 @@ pub unsafe extern "C" fn rs_cin_is_cinword(line: *const c_char) -> bool {
     false
 }
 
+// ============================================================================
+// Phase 3: FFI infrastructure + finder functions
+// ============================================================================
+
+/// Find the start of a comment. Search starts at `w_cursor.lnum` and goes backwards.
+/// Returns a `FindMatchResult` with the position, or `not_found`.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_start_comment(ind_maxcomment: c_int) -> FindMatchResult {
+    let mut cur_maxcomment = i64::from(ind_maxcomment);
+
+    loop {
+        let result = nvim_cindent_findmatchlimit(c_int::from(b'*'), FM_BACKWARD, cur_maxcomment);
+        if !result.found {
+            return FindMatchResult::not_found();
+        }
+
+        // Check if the comment start is inside a string.
+        let line = nvim_cindent_ml_get(result.lnum);
+        if !rs_is_pos_in_string(line, result.col) {
+            return result;
+        }
+
+        // Restrict search to below this line and try again.
+        cur_maxcomment =
+            i64::from(nvim_cindent_curwin_get_cursor_lnum()) - i64::from(result.lnum) - 1;
+        if cur_maxcomment <= 0 {
+            return FindMatchResult::not_found();
+        }
+    }
+}
+
+/// Find the start of a raw string. Search starts at `w_cursor.lnum` and goes backwards.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_start_rawstring(ind_maxcomment: c_int) -> FindMatchResult {
+    let mut cur_maxcomment = i64::from(ind_maxcomment);
+
+    loop {
+        let result = nvim_cindent_findmatchlimit(c_int::from(b'R'), FM_BACKWARD, cur_maxcomment);
+        if !result.found {
+            return FindMatchResult::not_found();
+        }
+
+        let line = nvim_cindent_ml_get(result.lnum);
+        if !rs_is_pos_in_string(line, result.col) {
+            return result;
+        }
+
+        cur_maxcomment =
+            i64::from(nvim_cindent_curwin_get_cursor_lnum()) - i64::from(result.lnum) - 1;
+        if cur_maxcomment <= 0 {
+            return FindMatchResult::not_found();
+        }
+    }
+}
+
+/// Find the start of a comment or raw string (CORS).
+/// Sets `out_lnum`/`out_col` to the position found (or -1 if not found).
+/// Sets `*is_raw` to the raw string start lnum if raw string was found.
+///
+/// # Safety
+/// All pointers must be valid. Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ind_find_start_CORS(
+    out_lnum: *mut c_int,
+    out_col: *mut c_int,
+    is_raw: *mut c_int,
+) {
+    let ind_maxcomment = nvim_cindent_curbuf_get_ind_maxcomment();
+
+    let comment_pos = rs_find_start_comment(ind_maxcomment);
+    let rs_pos = rs_find_start_rawstring(ind_maxcomment);
+
+    // If comment_pos is before rs_pos the raw string is inside the comment.
+    // If rs_pos is before comment_pos the comment is inside the raw string.
+    if !comment_pos.found
+        || (rs_pos.found
+            && (rs_pos.lnum < comment_pos.lnum
+                || (rs_pos.lnum == comment_pos.lnum && rs_pos.col < comment_pos.col)))
+    {
+        if !is_raw.is_null() && rs_pos.found {
+            *is_raw = rs_pos.lnum;
+        }
+        if rs_pos.found {
+            *out_lnum = rs_pos.lnum;
+            *out_col = rs_pos.col;
+        } else {
+            *out_lnum = -1;
+        }
+    } else {
+        *out_lnum = comment_pos.lnum;
+        *out_col = comment_pos.col;
+    }
+}
+
+/// Skip strings, chars and comments until at or past position (lnum, col).
+/// Return the column found.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_skip2pos_lnum_col(lnum: c_int, col: c_int) -> c_int {
+    rs_cin_skip2pos_col(nvim_cindent_ml_get(lnum), col)
+}
+
+/// Find the matching character, ignoring it if it is in a comment or raw string.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_match_char(c: c_int, ind_maxparen: c_int) -> FindMatchResult {
+    // Save cursor
+    let save_lnum = nvim_cindent_curwin_get_cursor_lnum();
+    let save_col = nvim_cindent_curwin_get_cursor_col();
+    let mut ind_maxp_wk = ind_maxparen;
+
+    loop {
+        let trypos = nvim_cindent_findmatchlimit(c, 0, i64::from(ind_maxp_wk));
+        if !trypos.found {
+            // Restore cursor
+            nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+            return FindMatchResult::not_found();
+        }
+
+        // Check if the ( is in a // comment
+        if rs_cin_skip2pos_lnum_col(trypos.lnum, trypos.col) as i32 > trypos.col {
+            ind_maxp_wk = ind_maxparen - (save_lnum - trypos.lnum);
+            if ind_maxp_wk > 0 {
+                nvim_cindent_curwin_set_cursor(trypos.lnum, 0);
+                continue;
+            }
+            nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+            return FindMatchResult::not_found();
+        }
+
+        // Check if in comment or raw string
+        let pos_copy = trypos;
+        nvim_cindent_curwin_set_cursor(trypos.lnum, trypos.col);
+
+        let mut cors_lnum: c_int = -1;
+        let mut cors_col: c_int = 0;
+        rs_ind_find_start_CORS(
+            std::ptr::addr_of_mut!(cors_lnum),
+            std::ptr::addr_of_mut!(cors_col),
+            std::ptr::null_mut(),
+        );
+
+        if cors_lnum != -1 {
+            ind_maxp_wk = ind_maxparen - (save_lnum - cors_lnum);
+            if ind_maxp_wk > 0 {
+                nvim_cindent_curwin_set_cursor(cors_lnum, cors_col);
+                continue;
+            }
+            nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+            return FindMatchResult::not_found();
+        }
+
+        nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+        return pos_copy;
+    }
+}
+
+/// Find the matching '(', ignoring it if it is in a comment.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_match_paren(ind_maxparen: c_int) -> FindMatchResult {
+    rs_find_match_char(c_int::from(b'('), ind_maxparen)
+}
+
+/// Find the '{' at the start of the block we are in.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_start_brace() -> FindMatchResult {
+    let save_lnum = nvim_cindent_curwin_get_cursor_lnum();
+    let save_col = nvim_cindent_curwin_get_cursor_col();
+    let mut result = FindMatchResult::not_found();
+
+    loop {
+        let trypos = nvim_cindent_findmatchlimit(c_int::from(b'{'), FM_BLOCKSTOP, 0);
+        if !trypos.found {
+            break;
+        }
+
+        let pos_copy = trypos;
+        nvim_cindent_curwin_set_cursor(trypos.lnum, trypos.col);
+
+        // Ignore the { if it's in a // or /* */ comment
+        if rs_cin_skip2pos_lnum_col(trypos.lnum, trypos.col) == trypos.col {
+            let mut cors_lnum: c_int = -1;
+            let mut cors_col: c_int = 0;
+            rs_ind_find_start_CORS(
+                std::ptr::addr_of_mut!(cors_lnum),
+                std::ptr::addr_of_mut!(cors_col),
+                std::ptr::null_mut(),
+            );
+
+            if cors_lnum == -1 {
+                result = pos_copy;
+                break;
+            }
+            nvim_cindent_curwin_set_cursor(cors_lnum, cors_col);
+        }
+    }
+
+    nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+    result
+}
+
+/// Find the matching '(', ignoring it if it is in a comment or before an
+/// unmatched '{'.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_match_paren_after_brace(ind_maxparen: c_int) -> FindMatchResult {
+    let trypos = rs_find_match_paren(ind_maxparen);
+    if !trypos.found {
+        return FindMatchResult::not_found();
+    }
+
+    let trypos_brace = rs_find_start_brace();
+    // If both an unmatched '(' and '{' is found, ignore the '(' position
+    // if the '{' is further down.
+    if trypos_brace.found && (trypos.lnum, trypos.col) < (trypos_brace.lnum, trypos_brace.col) {
+        return FindMatchResult::not_found();
+    }
+
+    trypos
+}
+
+/// Return the indent of the first variable name after a type in a declaration.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_first_id_amount() -> c_int {
+    let line = nvim_cindent_get_cursor_line_ptr();
+    let mut p = skipwhite(line).cast_const();
+    let mut len = skiptowhite(p).offset_from(p) as c_int;
+
+    if len == 6
+        && std::ffi::CStr::from_ptr(p)
+            .to_bytes()
+            .starts_with(b"static")
+    {
+        p = skipwhite(p.add(6)).cast_const();
+        len = skiptowhite(p).offset_from(p) as c_int;
+    }
+    if len == 6
+        && std::ffi::CStr::from_ptr(p)
+            .to_bytes()
+            .starts_with(b"struct")
+    {
+        p = skipwhite(p.add(6)).cast_const();
+    } else if len == 4 && std::ffi::CStr::from_ptr(p).to_bytes().starts_with(b"enum") {
+        p = skipwhite(p.add(4)).cast_const();
+    } else if (len == 8
+        && std::ffi::CStr::from_ptr(p)
+            .to_bytes()
+            .starts_with(b"unsigned"))
+        || (len == 6
+            && std::ffi::CStr::from_ptr(p)
+                .to_bytes()
+                .starts_with(b"signed"))
+    {
+        let s = skipwhite(p.add(len as usize)).cast_const();
+        let s_bytes = std::ffi::CStr::from_ptr(s).to_bytes();
+        if (s_bytes.starts_with(b"int") && ascii_iswhite(*s.add(3) as u8))
+            || (s_bytes.starts_with(b"long") && ascii_iswhite(*s.add(4) as u8))
+            || (s_bytes.starts_with(b"short") && ascii_iswhite(*s.add(5) as u8))
+            || (s_bytes.starts_with(b"char") && ascii_iswhite(*s.add(4) as u8))
+        {
+            p = s;
+        }
+    }
+
+    // Find end of type keyword
+    len = 0;
+    while vim_isIDc(i32::from(*p.add(len as usize) as u8)) != 0 {
+        len += 1;
+    }
+    if len == 0 || !ascii_iswhite(*p.add(len as usize) as u8) || rs_cin_nocode(p) {
+        return 0;
+    }
+
+    p = skipwhite(p.add(len as usize)).cast_const();
+    let col_offset = p.offset_from(line) as c_int;
+    nvim_cindent_getvcol(nvim_cindent_curwin_get_cursor_lnum(), col_offset)
+}
+
+/// Return the indent of the first non-blank after an equal sign.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_get_equal_amount(lnum: c_int) -> c_int {
+    if lnum > 1 {
+        let prev_line = nvim_cindent_ml_get(lnum - 1);
+        if !is_nul(*prev_line) {
+            let prev_len = c_strlen(prev_line);
+            if prev_len > 0 && *prev_line.add(prev_len - 1) == b'\\' as c_char {
+                return -1;
+            }
+        }
+    }
+
+    let line = nvim_cindent_ml_get(lnum);
+    let mut s = line;
+    while !is_nul(*s) {
+        let c = *s as u8;
+        if c == b'=' || c == b';' || c == b'{' || c == b'}' || c == b'"' || c == b'\'' {
+            break;
+        }
+        if rs_cin_iscomment(s) {
+            s = rs_cin_skipcomment(s);
+        } else {
+            s = s.add(1);
+        }
+    }
+    if *s as u8 != b'=' {
+        return 0;
+    }
+
+    s = skipwhite(s.add(1)).cast_const();
+    if rs_cin_nocode(s) {
+        return 0;
+    }
+
+    if *s as u8 == b'"' {
+        s = s.add(1);
+    }
+
+    let col_offset = s.offset_from(line) as c_int;
+    nvim_cindent_getvcol(lnum, col_offset)
+}
+
+/// Get indent of line "lnum", skipping a label.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_indent_nolabel(lnum: c_int) -> c_int {
+    let l = nvim_cindent_ml_get(lnum);
+    let p = rs_after_label(l);
+    if p.is_null() {
+        return 0;
+    }
+
+    let col = p.offset_from(l) as c_int;
+    nvim_cindent_getvcol(lnum, col)
+}
+
+/// Return the indent amount for a C++ base class.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_baseclass_amount(col: c_int) -> c_int {
+    let ind_cpp_baseclass = nvim_cindent_curbuf_get_ind_cpp_baseclass();
+    let mut amount;
+
+    if col == 0 {
+        amount = nvim_cindent_get_indent();
+        let line = nvim_cindent_get_cursor_line_ptr();
+        let bracket = rs_find_last_paren(line, b'(' as c_char, b')' as c_char);
+        if bracket.found {
+            // Set cursor col for find_match_paren
+            nvim_cindent_curwin_set_cursor(nvim_cindent_curwin_get_cursor_lnum(), bracket.col);
+            let trypos = rs_find_match_paren(nvim_cindent_curbuf_get_ind_maxparen());
+            if trypos.found {
+                amount = nvim_cindent_get_indent_lnum(trypos.lnum);
+            }
+        }
+        let comma_str = c",".as_ptr();
+        if !rs_cin_ends_in(nvim_cindent_get_cursor_line_ptr(), comma_str) {
+            amount += ind_cpp_baseclass;
+        }
+    } else {
+        nvim_cindent_curwin_set_cursor(nvim_cindent_curwin_get_cursor_lnum(), col);
+        amount = nvim_cindent_getvcol(nvim_cindent_curwin_get_cursor_lnum(), col);
+    }
+
+    if amount < ind_cpp_baseclass {
+        amount = ind_cpp_baseclass;
+    }
+    amount
+}
+
 /// Result struct for `cin_ispreproc_cont`.
 #[repr(C)]
 pub struct PreprocContResult {
@@ -2649,6 +3081,148 @@ pub unsafe extern "C" fn rs_cin_ispreproc_cont(
     }
 
     0
+}
+
+// ============================================================================
+// Phase 3b: find_line_comment, cin_iswhileofdo, cin_iswhileofdo_end
+// ============================================================================
+
+/// Check previous lines for a "//" line comment, skipping over blank lines.
+/// Returns the position of the comment, or `not_found()`.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_line_comment() -> FindMatchResult {
+    let mut lnum = nvim_cindent_curwin_get_cursor_lnum();
+    loop {
+        lnum -= 1;
+        if lnum <= 0 {
+            return FindMatchResult::not_found();
+        }
+        let line = nvim_cindent_ml_get(lnum);
+        let p = skipwhite(line);
+        if rs_cin_islinecomment(p) {
+            let col = p.offset_from(line) as c_int;
+            return FindMatchResult {
+                found: true,
+                lnum,
+                col,
+            };
+        }
+        if !is_nul(*p) {
+            break;
+        }
+    }
+    FindMatchResult::not_found()
+}
+
+/// Check if this is a "while" that should have a matching "do".
+/// We only accept a "while (condition) ;", with only white space between
+/// the ')' and ';'. The condition may be spread over several lines.
+///
+/// # Safety
+/// Calls FFI accessors including `findmatchlimit`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_iswhileofdo(p: *const c_char, lnum: c_int) -> bool {
+    if p.is_null() {
+        return false;
+    }
+
+    let mut s = rs_cin_skipcomment(p);
+    if *s == b'}' as c_char {
+        s = rs_cin_skipcomment(s.add(1));
+    }
+
+    let while_str = c"while".as_ptr();
+    if !rs_cin_starts_with(s, while_str) {
+        return false;
+    }
+
+    // Save cursor, set to start of line
+    let save_lnum = nvim_cindent_curwin_get_cursor_lnum();
+    let save_col = nvim_cindent_curwin_get_cursor_col();
+    nvim_cindent_curwin_set_cursor(lnum, 0);
+
+    let line = nvim_cindent_get_cursor_line_ptr();
+    let mut q = line;
+    // skip any '}', until the 'w' of the "while"
+    while !is_nul(*q) && *q != b'w' as c_char {
+        q = q.add(1);
+        let new_col = nvim_cindent_curwin_get_cursor_col() + 1;
+        nvim_cindent_curwin_set_cursor(lnum, new_col);
+    }
+
+    let result =
+        nvim_cindent_findmatchlimit(0, 0, i64::from(nvim_cindent_curbuf_get_ind_maxparen()));
+    let retval = if result.found {
+        let after_paren = nvim_cindent_ml_get_pos_lnum_col(result.lnum, result.col);
+        // ml_get_pos returns the character at (lnum, col), we need +1 to skip ')'
+        let after = rs_cin_skipcomment(after_paren.add(1));
+        *after == b';' as c_char
+    } else {
+        false
+    };
+
+    nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+    retval
+}
+
+/// Return true if we are at the end of a do-while.
+///    do
+///       nothing;
+///    while (foo
+///             && bar);  <-- here
+/// Adjust the cursor to the line with "while".
+///
+/// # Safety
+/// Calls FFI accessors. Modifies cursor position on success.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_iswhileofdo_end(terminated: c_int) -> bool {
+    if terminated != c_int::from(b';') {
+        return false;
+    }
+
+    let mut line = nvim_cindent_get_cursor_line_ptr();
+    let mut p = line;
+    let cursor_lnum = nvim_cindent_curwin_get_cursor_lnum();
+
+    while !is_nul(*p) {
+        p = rs_cin_skipcomment(p);
+        if *p == b')' as c_char {
+            let s = skipwhite(p.add(1));
+            if *s == b';' as c_char && rs_cin_nocode(s.add(1)) {
+                // Found ");" at end of the line, now check there is "while"
+                // before the matching '('. XXX
+                let i = p.offset_from(line) as c_int;
+                nvim_cindent_curwin_set_cursor(cursor_lnum, i);
+                let trypos = rs_find_match_paren(nvim_cindent_curbuf_get_ind_maxparen());
+                if trypos.found {
+                    let ms = rs_cin_skipcomment(nvim_cindent_ml_get(trypos.lnum));
+                    let mut check = ms;
+                    if *check == b'}' as c_char {
+                        check = rs_cin_skipcomment(check.add(1));
+                    }
+                    let while_str = c"while".as_ptr();
+                    if rs_cin_starts_with(check, while_str) {
+                        nvim_cindent_curwin_set_cursor(
+                            trypos.lnum,
+                            nvim_cindent_curwin_get_cursor_col(),
+                        );
+                        return true;
+                    }
+                }
+
+                // Searching may have made "line" invalid, get it again.
+                line = nvim_cindent_get_cursor_line_ptr();
+                p = line.offset(i as isize);
+            }
+        }
+        if !is_nul(*p) {
+            p = p.add(1);
+        }
+    }
+    false
 }
 
 // ============================================================================

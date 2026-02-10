@@ -208,6 +208,98 @@ extern bool rs_cin_isinit(const char *line);
 extern bool rs_cin_is_cinword(const char *line);
 extern int rs_cin_ispreproc_cont(int lnum, int amount, int *out_lnum, int *out_amount);
 
+// Phase 3 C accessors
+
+/// C accessor for findmatchlimit, returning a copyable result.
+FindMatchResult nvim_cindent_findmatchlimit(int what, int flags, int64_t maxtravel)
+{
+  FindMatchResult result = { false, 0, 0 };
+  pos_T *pos = findmatchlimit(NULL, what, flags, maxtravel);
+  if (pos != NULL) {
+    result.found = true;
+    result.lnum = pos->lnum;
+    result.col = pos->col;
+  }
+  return result;
+}
+
+/// C accessor for ml_get_pos: get string at (lnum, col) and return pointer offset by col.
+const char *nvim_cindent_ml_get_pos_lnum_col(int lnum, int col)
+{
+  return ml_get(lnum) + col;
+}
+
+/// C accessor for getvcol.
+int nvim_cindent_getvcol(int lnum, int col)
+{
+  pos_T fp;
+  colnr_T vcol;
+  fp.lnum = lnum;
+  fp.col = col;
+  getvcol(curwin, &fp, &vcol, NULL, NULL);
+  return (int)vcol;
+}
+
+/// C accessor for curwin->w_cursor.col.
+int nvim_cindent_curwin_get_cursor_col(void)
+{
+  return curwin->w_cursor.col;
+}
+
+/// C accessor to set curwin->w_cursor.
+void nvim_cindent_curwin_set_cursor(int lnum, int col)
+{
+  curwin->w_cursor.lnum = lnum;
+  curwin->w_cursor.col = col;
+}
+
+/// C accessor for curbuf->b_ind_maxcomment.
+int nvim_cindent_curbuf_get_ind_maxcomment(void)
+{
+  return curbuf->b_ind_maxcomment;
+}
+
+/// C accessor for curbuf->b_ml.ml_line_count.
+int nvim_cindent_curbuf_get_ml_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// C accessor for curbuf->b_ind_cpp_baseclass.
+int nvim_cindent_curbuf_get_ind_cpp_baseclass(void)
+{
+  return curbuf->b_ind_cpp_baseclass;
+}
+
+/// C accessor for get_indent().
+int nvim_cindent_get_indent(void)
+{
+  return get_indent();
+}
+
+/// C accessor for get_cursor_line_ptr().
+const char *nvim_cindent_get_cursor_line_ptr(void)
+{
+  return get_cursor_line_ptr();
+}
+
+// Phase 3 Rust function declarations
+extern FindMatchResult rs_find_start_comment(int ind_maxcomment);
+extern FindMatchResult rs_find_start_rawstring(int ind_maxcomment);
+extern void rs_ind_find_start_CORS(int *out_lnum, int *out_col, int *is_raw);
+extern int rs_cin_skip2pos_lnum_col(int lnum, int col);
+extern FindMatchResult rs_find_match_char(int c, int ind_maxparen);
+extern FindMatchResult rs_find_match_paren(int ind_maxparen);
+extern FindMatchResult rs_find_start_brace(void);
+extern FindMatchResult rs_find_match_paren_after_brace(int ind_maxparen);
+extern int rs_cin_first_id_amount(void);
+extern int rs_cin_get_equal_amount(int lnum);
+extern int rs_get_indent_nolabel(int lnum);
+extern int rs_get_baseclass_amount(int col);
+extern FindMatchResult rs_find_line_comment(void);
+extern bool rs_cin_iswhileofdo(const char *p, int lnum);
+extern bool rs_cin_iswhileofdo_end(int terminated);
+
 // Find result cache for cpp_baseclass
 typedef struct {
   int found;
@@ -225,27 +317,26 @@ static pos_T *ind_find_start_comment(void)  // XXX
 
 pos_T *find_start_comment(int ind_maxcomment)  // XXX
 {
-  pos_T *pos;
-  int64_t cur_maxcomment = ind_maxcomment;
-
-  while (true) {
-    pos = findmatchlimit(NULL, '*', FM_BACKWARD, cur_maxcomment);
-    if (pos == NULL) {
-      break;
-    }
-
-    // Check if the comment start we found is inside a string.
-    // If it is then restrict the search to below this line and try again.
-    if (!is_pos_in_string(ml_get(pos->lnum), pos->col)) {
-      break;
-    }
-    cur_maxcomment = curwin->w_cursor.lnum - pos->lnum - 1;
-    if (cur_maxcomment <= 0) {
-      pos = NULL;
-      break;
-    }
+  static pos_T pos_copy;
+  FindMatchResult result = rs_find_start_comment(ind_maxcomment);
+  if (result.found) {
+    pos_copy.lnum = result.lnum;
+    pos_copy.col = result.col;
+    return &pos_copy;
   }
-  return pos;
+  return NULL;
+}
+
+static pos_T *find_start_rawstring(int ind_maxcomment)  // XXX
+{
+  static pos_T pos_copy;
+  FindMatchResult result = rs_find_start_rawstring(ind_maxcomment);
+  if (result.found) {
+    pos_copy.lnum = result.lnum;
+    pos_copy.col = result.col;
+    return &pos_copy;
+  }
+  return NULL;
 }
 
 /// Find the start of a comment or raw string, not knowing if we are in a
@@ -258,55 +349,19 @@ pos_T *find_start_comment(int ind_maxcomment)  // XXX
 /// @note "CORS" -> Comment Or Raw String
 static pos_T *ind_find_start_CORS(linenr_T *is_raw)
 {
-  // XXX
-  static pos_T comment_pos_copy;
-
-  pos_T *comment_pos = find_start_comment(curbuf->b_ind_maxcomment);
-  if (comment_pos != NULL) {
-    // Need to make a copy of the static pos in findmatchlimit(),
-    // calling find_start_rawstring() may change it.
-    comment_pos_copy = *comment_pos;
-    comment_pos = &comment_pos_copy;
+  static pos_T pos_copy;
+  int out_lnum = -1, out_col = 0;
+  int raw_lnum = 0;
+  rs_ind_find_start_CORS(&out_lnum, &out_col, is_raw != NULL ? &raw_lnum : NULL);
+  if (out_lnum == -1) {
+    return NULL;
   }
-  pos_T *rs_pos = find_start_rawstring(curbuf->b_ind_maxcomment);
-
-  // If comment_pos is before rs_pos the raw string is inside the comment.
-  // If rs_pos is before comment_pos the comment is inside the raw string.
-  if (comment_pos == NULL || (rs_pos != NULL && lt(*rs_pos, *comment_pos))) {
-    if (is_raw != NULL && rs_pos != NULL) {
-      *is_raw = rs_pos->lnum;
-    }
-    return rs_pos;
+  if (is_raw != NULL && raw_lnum != 0) {
+    *is_raw = raw_lnum;
   }
-  return comment_pos;
-}
-
-// Find the start of a raw string, not knowing if we are in one right now.
-// Search starts at w_cursor.lnum and goes backwards.
-// Return NULL when not inside a raw string.
-static pos_T *find_start_rawstring(int ind_maxcomment)  // XXX
-{
-  pos_T *pos;
-  int cur_maxcomment = ind_maxcomment;
-
-  while (true) {
-    pos = findmatchlimit(NULL, 'R', FM_BACKWARD, cur_maxcomment);
-    if (pos == NULL) {
-      break;
-    }
-
-    // Check if the raw string start we found is inside a string.
-    // If it is then restrict the search to below this line and try again.
-    if (!is_pos_in_string(ml_get(pos->lnum), pos->col)) {
-      break;
-    }
-    cur_maxcomment = curwin->w_cursor.lnum - pos->lnum - 1;
-    if (cur_maxcomment <= 0) {
-      pos = NULL;
-      break;
-    }
-  }
-  return pos;
+  pos_copy.lnum = out_lnum;
+  pos_copy.col = out_col;
+  return &pos_copy;
 }
 
 // Skip to the end of a "string" and a 'c' character.
@@ -358,20 +413,11 @@ static int cin_nocode(const char *s)
 static pos_T *find_line_comment(void)  // XXX
 {
   static pos_T pos;
-  char *line;
-  char *p;
-
-  pos = curwin->w_cursor;
-  while (--pos.lnum > 0) {
-    line = ml_get(pos.lnum);
-    p = skipwhite(line);
-    if (cin_islinecomment(p)) {
-      pos.col = (int)(p - line);
-      return &pos;
-    }
-    if (*p != NUL) {
-      break;
-    }
+  FindMatchResult result = rs_find_line_comment();
+  if (result.found) {
+    pos.lnum = result.lnum;
+    pos.col = result.col;
+    return &pos;
   }
   return NULL;
 }
@@ -537,21 +583,7 @@ static const char *after_label(const char *l)
 // Return 0 if there is nothing after the label.
 static int get_indent_nolabel(linenr_T lnum)  // XXX
 {
-  const char *l;
-  pos_T fp;
-  colnr_T col;
-  const char *p;
-
-  l = ml_get(lnum);
-  p = after_label(l);
-  if (p == NULL) {
-    return 0;
-  }
-
-  fp.col = (colnr_T)(p - l);
-  fp.lnum = lnum;
-  getvcol(curwin, &fp, &col, NULL, NULL);
-  return (int)col;
+  return rs_get_indent_nolabel(lnum);
 }
 
 // Find indent for line "lnum", ignoring any case or jump label.
@@ -591,42 +623,7 @@ static int skip_label(linenr_T lnum, const char **pp)
 // Returns zero when it doesn't look like a declaration.
 static int cin_first_id_amount(void)
 {
-  char *line, *p, *s;
-  int len;
-  pos_T fp;
-  colnr_T col;
-
-  line = get_cursor_line_ptr();
-  p = skipwhite(line);
-  len = (int)(skiptowhite(p) - p);
-  if (len == 6 && strncmp(p, "static", 6) == 0) {
-    p = skipwhite(p + 6);
-    len = (int)(skiptowhite(p) - p);
-  }
-  if (len == 6 && strncmp(p, "struct", 6) == 0) {
-    p = skipwhite(p + 6);
-  } else if (len == 4 && strncmp(p, "enum", 4) == 0) {
-    p = skipwhite(p + 4);
-  } else if ((len == 8 && strncmp(p, "unsigned", 8) == 0)
-             || (len == 6 && strncmp(p, "signed", 6) == 0)) {
-    s = skipwhite(p + len);
-    if ((strncmp(s, "int", 3) == 0 && ascii_iswhite(s[3]))
-        || (strncmp(s, "long", 4) == 0 && ascii_iswhite(s[4]))
-        || (strncmp(s, "short", 5) == 0 && ascii_iswhite(s[5]))
-        || (strncmp(s, "char", 4) == 0 && ascii_iswhite(s[4]))) {
-      p = s;
-    }
-  }
-  for (len = 0; vim_isIDc((uint8_t)p[len]); len++) {}
-  if (len == 0 || !ascii_iswhite(p[len]) || cin_nocode(p)) {
-    return 0;
-  }
-
-  p = skipwhite(p + len);
-  fp.lnum = curwin->w_cursor.lnum;
-  fp.col = (colnr_T)(p - line);
-  getvcol(curwin, &fp, &col, NULL, NULL);
-  return (int)col;
+  return rs_cin_first_id_amount();
 }
 
 // Return the indent of the first non-blank after an equal sign.
@@ -638,44 +635,7 @@ static int cin_first_id_amount(void)
 //             here";
 static int cin_get_equal_amount(linenr_T lnum)
 {
-  const char *line;
-  const char *s;
-  colnr_T col;
-  pos_T fp;
-
-  if (lnum > 1) {
-    line = ml_get(lnum - 1);
-    if (*line != NUL && line[strlen(line) - 1] == '\\') {
-      return -1;
-    }
-  }
-
-  s = ml_get(lnum);
-  line = s;
-  while (*s != NUL && vim_strchr("=;{}\"'", (uint8_t)(*s)) == NULL) {
-    if (cin_iscomment(s)) {     // ignore comments
-      s = cin_skipcomment(s);
-    } else {
-      s++;
-    }
-  }
-  if (*s != '=') {
-    return 0;
-  }
-
-  s = skipwhite(s + 1);
-  if (cin_nocode(s)) {
-    return 0;
-  }
-
-  if (*s == '"') {      // nice alignment for continued strings
-    s++;
-  }
-
-  fp.lnum = lnum;
-  fp.col = (colnr_T)(s - line);
-  getvcol(curwin, &fp, &col, NULL, NULL);
-  return (int)col;
+  return rs_cin_get_equal_amount(lnum);
 }
 
 // Recognize a preprocessor statement: Any line that starts with '#'.
@@ -871,30 +831,7 @@ static int cin_isdo(const char *p)
 // ')' and ';'. The condition may be spread over several lines.
 static int cin_iswhileofdo(const char *p, linenr_T lnum)  // XXX
 {
-  pos_T cursor_save;
-  pos_T *trypos;
-  int retval = false;
-
-  p = cin_skipcomment(p);
-  if (*p == '}') {              // accept "} while (cond);"
-    p = cin_skipcomment(p + 1);
-  }
-  if (cin_starts_with(p, "while")) {
-    cursor_save = curwin->w_cursor;
-    curwin->w_cursor.lnum = lnum;
-    curwin->w_cursor.col = 0;
-    p = get_cursor_line_ptr();
-    while (*p && *p != 'w') {   // skip any '}', until the 'w' of the "while"
-      p++;
-      curwin->w_cursor.col++;
-    }
-    if ((trypos = findmatchlimit(NULL, 0, 0, curbuf->b_ind_maxparen)) != NULL
-        && *cin_skipcomment(ml_get_pos(trypos) + 1) == ';') {
-      retval = true;
-    }
-    curwin->w_cursor = cursor_save;
-  }
-  return retval;
+  return rs_cin_iswhileofdo(p, lnum);
 }
 
 // Check whether in "p" there is an "if", "for" or "while" before "*poffset".
@@ -914,48 +851,7 @@ static int cin_is_if_for_while_before_offset(const char *line, int *poffset)
 /// Adjust the cursor to the line with "while".
 static int cin_iswhileofdo_end(int terminated)
 {
-  const char *line;
-  const char *p;
-  const char *s;
-  pos_T *trypos;
-  int i;
-
-  if (terminated != ';') {      // there must be a ';' at the end
-    return false;
-  }
-
-  p = line = get_cursor_line_ptr();
-  while (*p != NUL) {
-    p = cin_skipcomment(p);
-    if (*p == ')') {
-      s = skipwhite(p + 1);
-      if (*s == ';' && cin_nocode(s + 1)) {
-        // Found ");" at end of the line, now check there is "while"
-        // before the matching '('.  XXX
-        i = (int)(p - line);
-        curwin->w_cursor.col = i;
-        trypos = find_match_paren(curbuf->b_ind_maxparen);
-        if (trypos != NULL) {
-          s = cin_skipcomment(ml_get(trypos->lnum));
-          if (*s == '}') {                      // accept "} while (cond);"
-            s = cin_skipcomment(s + 1);
-          }
-          if (cin_starts_with(s, "while")) {
-            curwin->w_cursor.lnum = trypos->lnum;
-            return true;
-          }
-        }
-
-        // Searching may have made "line" invalid, get it again.
-        line = get_cursor_line_ptr();
-        p = line + i;
-      }
-    }
-    if (*p != NUL) {
-      p++;
-    }
-  }
-  return false;
+  return rs_cin_iswhileofdo_end(terminated);
 }
 
 static int cin_isbreak(const char *p)
@@ -1127,28 +1023,7 @@ static int cin_is_cpp_baseclass(cpp_baseclass_cache_T *cached)
 
 static int get_baseclass_amount(int col)
 {
-  int amount;
-  colnr_T vcol;
-  pos_T *trypos;
-
-  if (col == 0) {
-    amount = get_indent();
-    if (find_last_paren(get_cursor_line_ptr(), '(', ')')
-        && (trypos = find_match_paren(curbuf->b_ind_maxparen)) != NULL) {
-      amount = get_indent_lnum(trypos->lnum);       // XXX
-    }
-    if (!cin_ends_in(get_cursor_line_ptr(), ",")) {
-      amount += curbuf->b_ind_cpp_baseclass;
-    }
-  } else {
-    curwin->w_cursor.col = col;
-    getvcol(curwin, &curwin->w_cursor, &vcol, NULL, NULL);
-    amount = (int)vcol;
-  }
-  if (amount < curbuf->b_ind_cpp_baseclass) {
-    amount = curbuf->b_ind_cpp_baseclass;
-  }
-  return amount;
+  return rs_get_baseclass_amount(col);
 }
 
 /// Return true if string "s" ends with the string "find", possibly followed by
@@ -1187,75 +1062,40 @@ static int cin_skip2pos(pos_T *trypos)
 
 static pos_T *find_start_brace(void)  // XXX
 {
-  pos_T cursor_save;
-  pos_T *trypos;
-  pos_T *pos;
   static pos_T pos_copy;
-
-  cursor_save = curwin->w_cursor;
-  while ((trypos = findmatchlimit(NULL, '{', FM_BLOCKSTOP, 0)) != NULL) {
-    pos_copy = *trypos;         // copy pos_T, next findmatch will change it
-    trypos = &pos_copy;
-    curwin->w_cursor = *trypos;
-    pos = NULL;
-    // ignore the { if it's in a // or / *  * / comment
-    if ((colnr_T)cin_skip2pos(trypos) == trypos->col
-        && (pos = ind_find_start_CORS(NULL)) == NULL) {   // XXX
-      break;
-    }
-    if (pos != NULL) {
-      curwin->w_cursor = *pos;
-    }
+  FindMatchResult result = rs_find_start_brace();
+  if (result.found) {
+    pos_copy.lnum = result.lnum;
+    pos_copy.col = result.col;
+    return &pos_copy;
   }
-  curwin->w_cursor = cursor_save;
-  return trypos;
+  return NULL;
 }
 
 /// Find the matching '(', ignoring it if it is in a comment.
 /// @returns NULL or the found match.
 static pos_T *find_match_paren(int ind_maxparen)
 {
-  return find_match_char('(', ind_maxparen);
+  static pos_T pos_copy;
+  FindMatchResult result = rs_find_match_paren(ind_maxparen);
+  if (result.found) {
+    pos_copy.lnum = result.lnum;
+    pos_copy.col = result.col;
+    return &pos_copy;
+  }
+  return NULL;
 }
 
 static pos_T *find_match_char(char c, int ind_maxparen)
 {
-  pos_T cursor_save;
-  pos_T *trypos;
   static pos_T pos_copy;
-  int ind_maxp_wk;
-
-  cursor_save = curwin->w_cursor;
-  ind_maxp_wk = ind_maxparen;
-retry:
-  if ((trypos = findmatchlimit(NULL, (uint8_t)c, 0, ind_maxp_wk)) != NULL) {
-    // check if the ( is in a // comment
-    if ((colnr_T)cin_skip2pos(trypos) > trypos->col) {
-      ind_maxp_wk = ind_maxparen - (cursor_save.lnum - trypos->lnum);
-      if (ind_maxp_wk > 0) {
-        curwin->w_cursor = *trypos;
-        curwin->w_cursor.col = 0;  // XXX
-        goto retry;
-      }
-      trypos = NULL;
-    } else {
-      pos_T *trypos_wk;
-
-      pos_copy = *trypos;           // copy trypos, findmatch will change it
-      trypos = &pos_copy;
-      curwin->w_cursor = *trypos;
-      if ((trypos_wk = ind_find_start_CORS(NULL)) != NULL) {  // XXX
-        ind_maxp_wk = ind_maxparen - (cursor_save.lnum - trypos_wk->lnum);
-        if (ind_maxp_wk > 0) {
-          curwin->w_cursor = *trypos_wk;
-          goto retry;
-        }
-        trypos = NULL;
-      }
-    }
+  FindMatchResult result = rs_find_match_char((int)(uint8_t)c, ind_maxparen);
+  if (result.found) {
+    pos_copy.lnum = result.lnum;
+    pos_copy.col = result.col;
+    return &pos_copy;
   }
-  curwin->w_cursor = cursor_save;
-  return trypos;
+  return NULL;
 }
 
 /// Find the matching '(', ignoring it if it is in a comment or before an
@@ -1263,21 +1103,14 @@ retry:
 /// @returns NULL or the found match.
 static pos_T *find_match_paren_after_brace(int ind_maxparen)
 {
-  pos_T *trypos = find_match_paren(ind_maxparen);
-  if (trypos == NULL) {
-    return NULL;
+  static pos_T pos_copy;
+  FindMatchResult result = rs_find_match_paren_after_brace(ind_maxparen);
+  if (result.found) {
+    pos_copy.lnum = result.lnum;
+    pos_copy.col = result.col;
+    return &pos_copy;
   }
-
-  pos_T *tryposBrace = find_start_brace();
-  // If both an unmatched '(' and '{' is found.  Ignore the '('
-  // position if the '{' is further down.
-  if (tryposBrace != NULL
-      && (trypos->lnum != tryposBrace->lnum
-          ? trypos->lnum < tryposBrace->lnum
-          : trypos->col < tryposBrace->col)) {
-    trypos = NULL;
-  }
-  return trypos;
+  return NULL;
 }
 
 // Return ind_maxparen corrected for the difference in line number between the
