@@ -136,6 +136,35 @@ extern const char *rs_get_user_cmd_addr_type(int idx);
 extern const char *rs_get_user_cmd_flags(int idx);
 extern const char *rs_get_user_cmd_nargs(int idx);
 
+// Rust FFI declarations (Phase 2: argument parsing)
+extern const char *rs_uc_validate_name(const char *name);
+extern int rs_parse_addr_type_arg(const char *value, int vallen, int *addr_type_arg);
+extern int rs_parse_compl_arg(const char *value, int vallen, int *complp, uint32_t *argt,
+                              char **compl_arg);
+extern int rs_uc_scan_attr(char *attr, size_t len, uint32_t *argt, int *def, int *flags,
+                           int *complp, char **compl_arg, int *addr_type_arg);
+
+// C accessor functions called by Rust (Phase 2)
+void nvim_uc_emsg(const char *msg)
+{
+  emsg(_(msg));
+}
+
+void nvim_uc_semsg_1(const char *fmt, const char *arg)
+{
+  semsg(_(fmt), arg);
+}
+
+int nvim_uc_getdigits_int(char **pp, int strict, int def)
+{
+  return getdigits_int(pp, strict != 0, def);
+}
+
+char *nvim_uc_xstrnsave(const char *s, size_t len)
+{
+  return xstrnsave(s, len);
+}
+
 static const char e_argument_required_for_str[]
   = N_("E179: Argument required for %s");
 static const char e_no_such_user_defined_command_str[]
@@ -694,27 +723,7 @@ static void uc_list(char *name, size_t name_len)
 int parse_addr_type_arg(char *value, int vallen, cmd_addr_T *addr_type_arg)
   FUNC_ATTR_NONNULL_ALL
 {
-  int i;
-
-  for (i = 0; addr_type_complete[i].expand != ADDR_NONE; i++) {
-    int a = (int)strlen(addr_type_complete[i].name) == vallen;
-    int b = strncmp(value, addr_type_complete[i].name, (size_t)vallen) == 0;
-    if (a && b) {
-      *addr_type_arg = addr_type_complete[i].expand;
-      break;
-    }
-  }
-
-  if (addr_type_complete[i].expand == ADDR_NONE) {
-    char *err = value;
-
-    for (i = 0; err[i] != NUL && !ascii_iswhite(err[i]); i++) {}
-    err[i] = NUL;
-    semsg(_("E180: Invalid address type value: %s"), err);
-    return FAIL;
-  }
-
-  return OK;
+  return rs_parse_addr_type_arg(value, vallen, (int *)addr_type_arg);
 }
 
 /// Parse a completion argument "value[vallen]".
@@ -726,194 +735,14 @@ int parse_addr_type_arg(char *value, int vallen, cmd_addr_T *addr_type_arg)
 int parse_compl_arg(const char *value, int vallen, int *complp, uint32_t *argt, char **compl_arg)
   FUNC_ATTR_NONNULL_ALL
 {
-  const char *arg = NULL;
-  size_t arglen = 0;
-  int valend = vallen;
-
-  // Look for any argument part - which is the part after any ','
-  for (int i = 0; i < vallen; i++) {
-    if (value[i] == ',') {
-      arg = (char *)&value[i + 1];
-      arglen = (size_t)(vallen - i - 1);
-      valend = i;
-      break;
-    }
-  }
-
-  int i;
-  for (i = 0; i < (int)ARRAY_SIZE(command_complete); i++) {
-    if (get_command_complete(i) == NULL) {
-      continue;
-    }
-    if ((int)strlen(command_complete[i]) == valend
-        && strncmp(value, command_complete[i], (size_t)valend) == 0) {
-      *complp = i;
-      if (i == EXPAND_BUFFERS) {
-        *argt |= EX_BUFNAME;
-      } else if (i == EXPAND_DIRECTORIES || i == EXPAND_FILES
-                 || i == EXPAND_SHELLCMDLINE) {
-        *argt |= EX_XFILE;
-      }
-      break;
-    }
-  }
-
-  if (i == (int)ARRAY_SIZE(command_complete)) {
-    semsg(_("E180: Invalid complete value: %s"), value);
-    return FAIL;
-  }
-
-  if (*complp != EXPAND_USER_DEFINED && *complp != EXPAND_USER_LIST
-      && arg != NULL) {
-    emsg(_("E468: Completion argument only allowed for custom completion"));
-    return FAIL;
-  }
-
-  if ((*complp == EXPAND_USER_DEFINED || *complp == EXPAND_USER_LIST)
-      && arg == NULL) {
-    emsg(_("E467: Custom completion requires a function argument"));
-    return FAIL;
-  }
-
-  if (arg != NULL) {
-    *compl_arg = xstrnsave(arg, arglen);
-  }
-  return OK;
+  return rs_parse_compl_arg(value, vallen, complp, argt, compl_arg);
 }
 
 static int uc_scan_attr(char *attr, size_t len, uint32_t *argt, int *def, int *flags, int *complp,
                         char **compl_arg, cmd_addr_T *addr_type_arg)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (len == 0) {
-    emsg(_("E175: No attribute specified"));
-    return FAIL;
-  }
-
-  // First, try the simple attributes (no arguments)
-  if (STRNICMP(attr, "bang", len) == 0) {
-    *argt |= EX_BANG;
-  } else if (STRNICMP(attr, "buffer", len) == 0) {
-    *flags |= UC_BUFFER;
-  } else if (STRNICMP(attr, "register", len) == 0) {
-    *argt |= EX_REGSTR;
-  } else if (STRNICMP(attr, "keepscript", len) == 0) {
-    *argt |= EX_KEEPSCRIPT;
-  } else if (STRNICMP(attr, "bar", len) == 0) {
-    *argt |= EX_TRLBAR;
-  } else {
-    char *val = NULL;
-    size_t vallen = 0;
-    size_t attrlen = len;
-
-    // Look for the attribute name - which is the part before any '='
-    for (int i = 0; i < (int)len; i++) {
-      if (attr[i] == '=') {
-        val = &attr[i + 1];
-        vallen = len - (size_t)i - 1;
-        attrlen = (size_t)i;
-        break;
-      }
-    }
-
-    if (STRNICMP(attr, "nargs", attrlen) == 0) {
-      if (vallen == 1) {
-        if (*val == '0') {
-          // Do nothing - this is the default;
-        } else if (*val == '1') {
-          *argt |= (EX_EXTRA | EX_NOSPC | EX_NEEDARG);
-        } else if (*val == '*') {
-          *argt |= EX_EXTRA;
-        } else if (*val == '?') {
-          *argt |= (EX_EXTRA | EX_NOSPC);
-        } else if (*val == '+') {
-          *argt |= (EX_EXTRA | EX_NEEDARG);
-        } else {
-          goto wrong_nargs;
-        }
-      } else {
-wrong_nargs:
-        emsg(_("E176: Invalid number of arguments"));
-        return FAIL;
-      }
-    } else if (STRNICMP(attr, "range", attrlen) == 0) {
-      *argt |= EX_RANGE;
-      if (vallen == 1 && *val == '%') {
-        *argt |= EX_DFLALL;
-      } else if (val != NULL) {
-        char *p = val;
-        if (*def >= 0) {
-two_count:
-          emsg(_("E177: Count cannot be specified twice"));
-          return FAIL;
-        }
-
-        *def = getdigits_int(&p, true, 0);
-        *argt |= EX_ZEROR;
-
-        if (p != val + vallen || vallen == 0) {
-invalid_count:
-          emsg(_("E178: Invalid default value for count"));
-          return FAIL;
-        }
-      }
-      // default for -range is using buffer lines
-      if (*addr_type_arg == ADDR_NONE) {
-        *addr_type_arg = ADDR_LINES;
-      }
-    } else if (STRNICMP(attr, "count", attrlen) == 0) {
-      *argt |= (EX_COUNT | EX_ZEROR | EX_RANGE);
-      // default for -count is using any number
-      if (*addr_type_arg == ADDR_NONE) {
-        *addr_type_arg = ADDR_OTHER;
-      }
-
-      if (val != NULL) {
-        char *p = val;
-        if (*def >= 0) {
-          goto two_count;
-        }
-
-        *def = getdigits_int(&p, true, 0);
-
-        if (p != val + vallen) {
-          goto invalid_count;
-        }
-      }
-
-      *def = MAX(*def, 0);
-    } else if (STRNICMP(attr, "complete", attrlen) == 0) {
-      if (val == NULL) {
-        semsg(_(e_argument_required_for_str), "-complete");
-        return FAIL;
-      }
-
-      if (parse_compl_arg(val, (int)vallen, complp, argt, compl_arg)
-          == FAIL) {
-        return FAIL;
-      }
-    } else if (STRNICMP(attr, "addr", attrlen) == 0) {
-      *argt |= EX_RANGE;
-      if (val == NULL) {
-        semsg(_(e_argument_required_for_str), "-addr");
-        return FAIL;
-      }
-      if (parse_addr_type_arg(val, (int)vallen, addr_type_arg) == FAIL) {
-        return FAIL;
-      }
-      if (*addr_type_arg != ADDR_LINES) {
-        *argt |= EX_ZEROR;
-      }
-    } else {
-      char ch = attr[len];
-      attr[len] = NUL;
-      semsg(_("E181: Invalid attribute: %s"), attr);
-      attr[len] = ch;
-      return FAIL;
-    }
-  }
-
-  return OK;
+  return rs_uc_scan_attr(attr, len, argt, def, flags, complp, compl_arg, (int *)addr_type_arg);
 }
 
 /// Check for a valid user command name
@@ -922,16 +751,7 @@ invalid_count:
 /// Otherwise, returns NULL.
 char *uc_validate_name(char *name)
 {
-  if (ASCII_ISALPHA(*name)) {
-    while (ASCII_ISALNUM(*name)) {
-      name++;
-    }
-  }
-  if (!ends_excmd(*name) && !ascii_iswhite(*name)) {
-    return NULL;
-  }
-
-  return name;
+  return (char *)rs_uc_validate_name(name);
 }
 
 /// Create a new user command {name}, if one doesn't already exist.
