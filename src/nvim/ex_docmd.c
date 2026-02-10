@@ -136,6 +136,13 @@ extern char *rs_find_ex_command(void *eap, int *full);
 extern int rs_excmd_get_cmdidx(const char *cmd, size_t len);
 extern char *rs_get_command_name(void *xp, int idx);
 extern void rs_f_fullcommand(void *argvars, void *rettv, EvalFuncData fptr);
+extern void rs_parse_register(void *eap);
+extern int rs_parse_count_ex(void *eap, const char **errormsg, int validate);
+extern int rs_get_bad_opt(const char *p, void *eap);
+extern int rs_getargopt(void *eap);
+extern char *rs_getargcmd(char **argp);
+extern char *rs_skip_cmd_arg(char *p, int rembs);
+extern void rs_separate_nextcmd(void *eap);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -1425,26 +1432,7 @@ void set_cmd_dflall_range(exarg_T *eap)
 
 static void parse_register(exarg_T *eap)
 {
-  // Accept numbered register only when no count allowed (:put)
-  if ((eap->argt & EX_REGSTR)
-      && *eap->arg != NUL
-      // Do not allow register = for user commands
-      && (!IS_USER_CMDIDX(eap->cmdidx) || *eap->arg != '=')
-      && !((eap->argt & EX_COUNT) && ascii_isdigit(*eap->arg))) {
-    if (valid_yank_reg(*eap->arg,
-                       (!IS_USER_CMDIDX(eap->cmdidx)
-                        && eap->cmdidx != CMD_put && eap->cmdidx != CMD_iput))) {
-      eap->regname = (uint8_t)(*eap->arg++);
-      // for '=' register: accept the rest of the line as an expression
-      if (eap->arg[-1] == '=' && eap->arg[0] != NUL) {
-        if (!eap->skip) {
-          set_expr_line(xstrdup(eap->arg));
-        }
-        eap->arg += strlen(eap->arg);
-      }
-      eap->arg = skipwhite(eap->arg);
-    }
-  }
+  rs_parse_register(eap);
 }
 
 // Change line1 and line2 of Ex command to use count
@@ -1455,39 +1443,7 @@ void set_cmd_count(exarg_T *eap, linenr_T count, bool validate)
 
 static int parse_count(exarg_T *eap, const char **errormsg, bool validate)
 {
-  // Check for a count.  When accepting a EX_BUFNAME, don't use "123foo" as a
-  // count, it's a buffer name.
-  char *p;
-
-  if ((eap->argt & EX_COUNT) && ascii_isdigit(*eap->arg)
-      && (!(eap->argt & EX_BUFNAME) || *(p = skipdigits(eap->arg + 1)) == NUL
-          || ascii_iswhite(*p))) {
-    linenr_T n = getdigits_int32(&eap->arg, false, INT32_MAX);
-    eap->arg = skipwhite(eap->arg);
-
-    if (eap->args != NULL) {
-      assert(eap->argc > 0 && eap->arg >= eap->args[0]);
-      // If eap->arg is still pointing to the first argument, just make eap->args[0] point to the
-      // same location. This is needed for usecases like vim.cmd.sleep('10m'). If eap->arg is
-      // pointing outside the first argument, shift arguments by 1.
-      if (eap->arg < eap->args[0] + eap->arglens[0]) {
-        eap->arglens[0] -= (size_t)(eap->arg - eap->args[0]);
-        eap->args[0] = eap->arg;
-      } else {
-        shift_cmd_args(eap);
-      }
-    }
-
-    if (n <= 0 && (eap->argt & EX_ZEROR) == 0) {
-      if (errormsg != NULL) {
-        *errormsg = _(e_zerocount);
-      }
-      return FAIL;
-    }
-    set_cmd_count(eap, n, validate);
-  }
-
-  return OK;
+  return rs_parse_count_ex(eap, errormsg, validate ? 1 : 0);
 }
 
 /// Check if command is not implemented
@@ -3843,81 +3799,13 @@ static char *repl_cmdline(exarg_T *eap, char *src, size_t srclen, char *repl, ch
 /// Check for '|' to separate commands and '"' to start comments.
 void separate_nextcmd(exarg_T *eap)
 {
-  char *p = skip_grep_pat(eap);
-
-  for (; *p; MB_PTR_ADV(p)) {
-    if (*p == Ctrl_V) {
-      if (eap->argt & (EX_CTRLV | EX_XFILE)) {
-        p++;  // skip CTRL-V and next char
-      } else {
-        // remove CTRL-V and skip next char
-        STRMOVE(p, p + 1);
-      }
-      if (*p == NUL) {  // stop at NUL after CTRL-V
-        break;
-      }
-    } else if (p[0] == '`' && p[1] == '=' && (eap->argt & EX_XFILE)) {
-      // Skip over `=expr` when wildcards are expanded.
-      p += 2;
-      skip_expr(&p, NULL);
-      if (*p == NUL) {  // stop at NUL after CTRL-V
-        break;
-      }
-    } else if (
-               // Check for '"': start of comment or '|': next command
-               // :@" does not start a comment!
-               // :redir @" doesn't either.
-               (*p == '"'
-                && !(eap->argt & EX_NOTRLCOM)
-                && (eap->cmdidx != CMD_at || p != eap->arg)
-                && (eap->cmdidx != CMD_redir
-                    || p != eap->arg + 1 || p[-1] != '@'))
-               || (*p == '|'
-                   && eap->cmdidx != CMD_append
-                   && eap->cmdidx != CMD_change
-                   && eap->cmdidx != CMD_insert)
-               || *p == '\n') {
-      // We remove the '\' before the '|', unless EX_CTRLV is used
-      // AND 'b' is present in 'cpoptions'.
-      if ((vim_strchr(p_cpo, CPO_BAR) == NULL
-           || !(eap->argt & EX_CTRLV)) && *(p - 1) == '\\') {
-        STRMOVE(p - 1, p);  // remove the '\'
-        p--;
-      } else {
-        eap->nextcmd = check_nextcmd(p);
-        *p = NUL;
-        break;
-      }
-    }
-  }
-
-  if (!(eap->argt & EX_NOTRLCOM)) {  // remove trailing spaces
-    del_trailing_spaces(eap->arg);
-  }
+  rs_separate_nextcmd(eap);
 }
 
 /// get + command from ex argument
 char *getargcmd(char **argp)
 {
-  char *arg = *argp;
-  char *command = NULL;
-
-  if (*arg == '+') {        // +[command]
-    arg++;
-    if (ascii_isspace(*arg) || *arg == NUL) {
-      command = dollar_command;
-    } else {
-      command = arg;
-      arg = skip_cmd_arg(command, true);
-      if (*arg != NUL) {
-        *arg++ = NUL;                   // terminate command with NUL
-      }
-    }
-
-    arg = skipwhite(arg);       // skip over spaces
-    *argp = arg;
-  }
-  return command;
+  return rs_getargcmd(argp);
 }
 
 /// Find end of "+command" argument.  Skip over "\ " and "\\".
@@ -3925,32 +3813,13 @@ char *getargcmd(char **argp)
 /// @param rembs  true to halve the number of backslashes
 char *skip_cmd_arg(char *p, bool rembs)
 {
-  while (*p && !ascii_isspace(*p)) {
-    if (*p == '\\' && p[1] != NUL) {
-      if (rembs) {
-        STRMOVE(p, p + 1);
-      } else {
-        p++;
-      }
-    }
-    MB_PTR_ADV(p);
-  }
-  return p;
+  return rs_skip_cmd_arg(p, rembs ? 1 : 0);
 }
 
 int get_bad_opt(const char *p, exarg_T *eap)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (STRICMP(p, "keep") == 0) {
-    eap->bad_char = BAD_KEEP;
-  } else if (STRICMP(p, "drop") == 0) {
-    eap->bad_char = BAD_DROP;
-  } else if (MB_BYTE2LEN((uint8_t)(*p)) == 1 && p[1] == NUL) {
-    eap->bad_char = (uint8_t)(*p);
-  } else {
-    return FAIL;
-  }
-  return OK;
+  return rs_get_bad_opt(p, eap);
 }
 
 /// Function given to ExpandGeneric() to obtain the list of bad= names.
@@ -3974,88 +3843,7 @@ static char *get_bad_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 /// @return  FAIL or OK.
 int getargopt(exarg_T *eap)
 {
-  char *arg = eap->arg + 2;
-  int *pp = NULL;
-  int bad_char_idx;
-
-  // Note: Keep this in sync with get_argopt_name.
-
-  // ":edit ++[no]bin[ary] file"
-  if (strncmp(arg, "bin", 3) == 0 || strncmp(arg, "nobin", 5) == 0) {
-    if (*arg == 'n') {
-      arg += 2;
-      eap->force_bin = FORCE_NOBIN;
-    } else {
-      eap->force_bin = FORCE_BIN;
-    }
-    if (!checkforcmd(&arg, "binary", 3)) {
-      return FAIL;
-    }
-    eap->arg = skipwhite(arg);
-    return OK;
-  }
-
-  // ":read ++edit file"
-  if (strncmp(arg, "edit", 4) == 0) {
-    eap->read_edit = true;
-    eap->arg = skipwhite(arg + 4);
-    return OK;
-  }
-
-  // ":write ++p foo/bar/file
-  if (strncmp(arg, "p", 1) == 0) {
-    eap->mkdir_p = true;
-    eap->arg = skipwhite(arg + 1);
-    return OK;
-  }
-
-  if (strncmp(arg, "ff", 2) == 0) {
-    arg += 2;
-    pp = &eap->force_ff;
-  } else if (strncmp(arg, "fileformat", 10) == 0) {
-    arg += 10;
-    pp = &eap->force_ff;
-  } else if (strncmp(arg, "enc", 3) == 0) {
-    if (strncmp(arg, "encoding", 8) == 0) {
-      arg += 8;
-    } else {
-      arg += 3;
-    }
-    pp = &eap->force_enc;
-  } else if (strncmp(arg, "bad", 3) == 0) {
-    arg += 3;
-    pp = &bad_char_idx;
-  }
-
-  if (pp == NULL || *arg != '=') {
-    return FAIL;
-  }
-
-  arg++;
-  *pp = (int)(arg - eap->cmd);
-  arg = skip_cmd_arg(arg, false);
-  eap->arg = skipwhite(arg);
-  *arg = NUL;
-
-  if (pp == &eap->force_ff) {
-    if (check_ff_value(eap->cmd + eap->force_ff) == FAIL) {
-      return FAIL;
-    }
-    eap->force_ff = (uint8_t)eap->cmd[eap->force_ff];
-  } else if (pp == &eap->force_enc) {
-    // Make 'fileencoding' lower case.
-    for (char *p = eap->cmd + eap->force_enc; *p != NUL; p++) {
-      *p = (char)TOLOWER_ASC(*p);
-    }
-  } else {
-    // Check ++bad= argument.  Must be a single-byte character, "keep" or
-    // "drop".
-    if (get_bad_opt(eap->cmd + bad_char_idx, eap) == FAIL) {
-      return FAIL;
-    }
-  }
-
-  return OK;
+  return rs_getargopt(eap);
 }
 
 /// Function given to ExpandGeneric() to obtain the list of ++opt names.
@@ -8359,4 +8147,147 @@ void nvim_docmd_rettv_set_string(void *rettv, const char *s)
 char *nvim_docmd_get_user_command_name(int useridx, int cmdidx)
 {
   return get_user_command_name(useridx, (cmdidx_T)cmdidx);
+}
+
+// =========================================================================
+// Phase 4 accessor functions for Rust FFI
+// =========================================================================
+
+_Static_assert(BAD_KEEP == -1, "BAD_KEEP");
+_Static_assert(BAD_DROP == -2, "BAD_DROP");
+_Static_assert(FORCE_BIN == 1, "FORCE_BIN");
+_Static_assert(FORCE_NOBIN == 2, "FORCE_NOBIN");
+_Static_assert(Ctrl_V == 22, "Ctrl_V");
+_Static_assert(CPO_BAR == 'b', "CPO_BAR");
+
+// eap field accessors
+uint32_t nvim_eap_get_argt_p4(const exarg_T *eap) { return eap->argt; }
+int nvim_eap_get_regname(const exarg_T *eap) { return eap->regname; }
+void nvim_eap_set_regname(exarg_T *eap, int r) { eap->regname = (uint8_t)r; }
+int nvim_eap_get_bad_char(const exarg_T *eap) { return eap->bad_char; }
+void nvim_eap_set_bad_char(exarg_T *eap, int c) { eap->bad_char = c; }
+int nvim_eap_get_force_bin(const exarg_T *eap) { return eap->force_bin; }
+void nvim_eap_set_force_bin(exarg_T *eap, int v) { eap->force_bin = v; }
+int nvim_eap_get_force_ff(const exarg_T *eap) { return eap->force_ff; }
+void nvim_eap_set_force_ff(exarg_T *eap, int v) { eap->force_ff = v; }
+int nvim_eap_get_force_enc(const exarg_T *eap) { return eap->force_enc; }
+void nvim_eap_set_force_enc(exarg_T *eap, int v) { eap->force_enc = v; }
+int nvim_eap_get_read_edit(const exarg_T *eap) { return eap->read_edit; }
+void nvim_eap_set_read_edit(exarg_T *eap, int v) { eap->read_edit = v; }
+int nvim_eap_get_mkdir_p(const exarg_T *eap) { return eap->mkdir_p; }
+void nvim_eap_set_mkdir_p(exarg_T *eap, int v) { eap->mkdir_p = v; }
+char *nvim_eap_get_nextcmd(const exarg_T *eap) { return eap->nextcmd; }
+void nvim_eap_set_nextcmd(exarg_T *eap, char *p) { eap->nextcmd = p; }
+int nvim_eap_get_skip(const exarg_T *eap) { return eap->skip; }
+int nvim_eap_has_args(const exarg_T *eap) { return eap->args != NULL; }
+
+// CMD enum accessors
+int nvim_docmd_cmd_put(void) { return (int)CMD_put; }
+int nvim_docmd_cmd_iput(void) { return (int)CMD_iput; }
+int nvim_docmd_cmd_at(void) { return (int)CMD_at; }
+int nvim_docmd_cmd_redir(void) { return (int)CMD_redir; }
+int nvim_docmd_cmd_append(void) { return (int)CMD_append; }
+int nvim_docmd_cmd_change(void) { return (int)CMD_change; }
+int nvim_docmd_cmd_insert(void) { return (int)CMD_insert; }
+
+// Helper function wrappers
+int nvim_docmd_valid_yank_reg(int regname, int writing)
+{
+  return valid_yank_reg(regname, writing);
+}
+
+void nvim_docmd_set_expr_line(const char *arg)
+{
+  set_expr_line(xstrdup(arg));
+}
+
+int nvim_docmd_check_ff_value(const char *p)
+{
+  return check_ff_value((char *)p);
+}
+
+void nvim_docmd_strmove(char *dst, const char *src)
+{
+  STRMOVE(dst, src);
+}
+
+int nvim_docmd_mb_ptr_adv_len(const char *p)
+{
+  return utfc_ptr2len(p);
+}
+
+int nvim_docmd_mb_byte2len(int b)
+{
+  return MB_BYTE2LEN((uint8_t)b);
+}
+
+char nvim_docmd_tolower_asc(int c)
+{
+  return (char)TOLOWER_ASC(c);
+}
+
+void nvim_docmd_skip_expr(char **pp)
+{
+  skip_expr(pp, NULL);
+}
+
+int nvim_docmd_cpo_has_bar(void)
+{
+  return vim_strchr(p_cpo, CPO_BAR) != NULL;
+}
+
+void nvim_docmd_del_trailing_spaces(char *p)
+{
+  del_trailing_spaces(p);
+}
+
+char *nvim_docmd_get_dollar_command(void)
+{
+  return dollar_command;
+}
+
+/// Parse digits from eap->arg, advance eap->arg, return the number.
+/// Also handles eap->args/arglens/argc adjustment.
+int nvim_docmd_parse_count_digits(exarg_T *eap)
+{
+  linenr_T n = getdigits_int32(&eap->arg, false, INT32_MAX);
+  eap->arg = skipwhite(eap->arg);
+
+  if (eap->args != NULL) {
+    assert(eap->argc > 0 && eap->arg >= eap->args[0]);
+    if (eap->arg < eap->args[0] + eap->arglens[0]) {
+      eap->arglens[0] -= (size_t)(eap->arg - eap->args[0]);
+      eap->args[0] = eap->arg;
+    } else {
+      shift_cmd_args(eap);
+    }
+  }
+  return (int)n;
+}
+
+/// Get e_zerocount error message.
+const char *nvim_docmd_get_e_zerocount(void)
+{
+  return _(e_zerocount);
+}
+
+/// Advance eap->arg by one and return old value as a char.
+int nvim_docmd_arg_advance_get(exarg_T *eap)
+{
+  int c = (uint8_t)(*eap->arg);
+  eap->arg++;
+  return c;
+}
+
+/// Advance eap->arg to end of string (skip to NUL).
+void nvim_docmd_arg_skip_to_end(exarg_T *eap)
+{
+  eap->arg += strlen(eap->arg);
+}
+
+/// Check condition for skipdigits+whitespace in parse_count.
+int nvim_docmd_count_buf_check(exarg_T *eap)
+{
+  char *p = skipdigits(eap->arg + 1);
+  return *p == NUL || ascii_iswhite(*p);
 }
