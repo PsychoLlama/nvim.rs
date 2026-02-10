@@ -64,6 +64,11 @@ const K_C_RIGHT: c_int = termcap2key(KS_EXTRA, KE_C_RIGHT);
 const BACKWARD: c_int = -1;
 const FORWARD: c_int = 1;
 
+// Delete key codes (from keycodes.h)
+const KE_KDEL: c_int = 80;
+const K_DEL: c_int = termcap2key(b'k' as c_int, b'D' as c_int);
+const K_KDEL: c_int = termcap2key(KS_EXTRA, KE_KDEL);
+
 // =============================================================================
 // C accessor functions for normal mode state
 // =============================================================================
@@ -214,17 +219,35 @@ extern "C" {
     fn nvim_do_execreg_recorded() -> bool;
     fn nvim_normal_get_got_int() -> bool;
     fn nvim_normal_line_breakcheck();
+    #[allow(dead_code)]
     fn nvim_v_visop(cap: CapHandle);
+
+    // Wave 2 Phase 3: Visual operator accessors
+    fn nvim_set_VIsual_mode(val: c_int);
+    fn nvim_oap_get_motion_force(oap: OapHandle) -> c_int;
 }
 
 // Operator type constants (must match ops.h)
 const OP_NOP: c_int = 0;
+const OP_DELETE: c_int = 1;
+const OP_YANK: c_int = 2;
+const OP_LSHIFT: c_int = 4;
+const OP_RSHIFT: c_int = 5;
 
 // NUL constant for motion_force
 const NUL_CHAR: c_int = 0;
 
 // Command retval constants (from normal_defs.h)
 const CA_COMMAND_BUSY: c_int = 1;
+
+// Ctrl_V constant (must match ascii_defs.h)
+const CTRL_V: c_int = 22;
+
+// Motion type constants (must match types_defs.h)
+const K_MT_LINEWISE: c_int = 1;
+
+// Beginline flags (must match cursor_defs.h)
+const BL_WHITE: c_int = 1;
 
 /// Opaque handle to a window (win_T*).
 pub type WinHandle = *mut std::ffi::c_void;
@@ -2328,9 +2351,95 @@ pub unsafe extern "C" fn rs_nv_regreplay(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_ctrlh(cap: CapHandle) {
     if nvim_get_VIsual_active() != 0 && nvim_get_VIsual_select() {
         nvim_cap_set_cmdchar(cap, c_int::from(b'x'));
-        nvim_v_visop(cap);
+        rs_v_visop(cap);
     } else {
         rs_nv_left(cap);
+    }
+}
+
+// =============================================================================
+// Wave 2 Phase 3: Visual Operator Helpers
+// =============================================================================
+
+/// Translate visual commands and call nv_operator.
+///
+/// For uppercase commands (Y, D, C, X): switches to linewise mode unless in
+/// block mode. For C/D in block mode, sets curswant to MAXCOL. Translates
+/// the command character via the mapping: Y→y, D→d, C→c, x→d, X→d, A→A, I→I, r→r.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_v_visop(cap: CapHandle) {
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+
+    // Uppercase means linewise, except in block mode (isupper equivalent)
+    if cmdchar >= c_int::from(b'A') && cmdchar <= c_int::from(b'Z') {
+        if nvim_get_VIsual_mode() != CTRL_V {
+            nvim_set_VIsual_mode_orig(nvim_get_VIsual_mode());
+            nvim_set_VIsual_mode(c_int::from(b'V'));
+        } else if cmdchar == c_int::from(b'C') || cmdchar == c_int::from(b'D') {
+            nvim_set_curswant(MAXCOL);
+        }
+    }
+
+    // Translate the command character
+    let translated = match cmdchar {
+        c if c == c_int::from(b'Y') => c_int::from(b'y'),
+        c if c == c_int::from(b'D') => c_int::from(b'd'),
+        c if c == c_int::from(b'C') => c_int::from(b'c'),
+        c if c == c_int::from(b'x') => c_int::from(b'd'),
+        c if c == c_int::from(b'X') => c_int::from(b'd'),
+        c if c == c_int::from(b'A') => c_int::from(b'A'),
+        c if c == c_int::from(b'I') => c_int::from(b'I'),
+        c if c == c_int::from(b'r') => c_int::from(b'r'),
+        _ => cmdchar, // shouldn't happen for valid visual ops
+    };
+    nvim_cap_set_cmdchar(cap, translated);
+    rs_nv_operator(cap);
+}
+
+/// Abbreviated commands (DEL/KDEL → 'x', then visual or optrans).
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_abbrev(cap: CapHandle) {
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    if cmdchar == K_DEL || cmdchar == K_KDEL {
+        nvim_cap_set_cmdchar(cap, c_int::from(b'x'));
+    }
+    // in Visual mode these commands are operators
+    if nvim_get_VIsual_active() != 0 {
+        rs_v_visop(cap);
+    } else {
+        nvim_nv_optrans_impl(cap);
+    }
+}
+
+/// '_' command: linewise motion, cursor down, then beginline.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_lineop(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    nvim_oap_set_motion_type(oap, K_MT_LINEWISE);
+    let count1 = nvim_cap_get_count1(cap);
+    let op_type = nvim_oap_get_op_type_ptr(oap);
+
+    if nvim_cursor_down(count1 - 1, op_type == OP_NOP) {
+        let motion_force = nvim_oap_get_motion_force(oap);
+        let is_linewise_delete =
+            op_type == OP_DELETE && motion_force != c_int::from(b'v') && motion_force != CTRL_V;
+        if is_linewise_delete || op_type == OP_LSHIFT || op_type == OP_RSHIFT {
+            nvim_beginline(BL_SOL | BL_FIX);
+        } else if op_type != OP_YANK {
+            // 'Y' does not move cursor
+            nvim_beginline(BL_WHITE | BL_FIX);
+        }
+    } else {
+        rs_clearopbeep(oap);
     }
 }
 

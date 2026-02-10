@@ -462,6 +462,11 @@ extern void rs_nv_tagpop(cmdarg_T *cap);
 extern void rs_nv_regreplay(cmdarg_T *cap);
 extern void rs_nv_ctrlh(cmdarg_T *cap);
 
+// Wave 2 Phase 3 functions
+extern void rs_v_visop(cmdarg_T *cap);
+extern void rs_nv_abbrev(cmdarg_T *cap);
+extern void rs_nv_lineop(cmdarg_T *cap);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -1748,11 +1753,29 @@ void nvim_normal_line_breakcheck(void)
   line_breakcheck();
 }
 
-/// Wrapper for v_visop (used by Phase 2, replaced in Phase 3).
+/// Wrapper for v_visop (calls Rust via thin C wrapper).
 void nvim_v_visop(cmdarg_T *cap)
 {
   v_visop(cap);
 }
+
+// =============================================================================
+// Wave 2 Phase 3 accessors for Rust FFI
+// =============================================================================
+
+// Verify constants used in Phase 3
+_Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
+_Static_assert(OP_DELETE == 1, "OP_DELETE mismatch");
+_Static_assert(OP_YANK == 2, "OP_YANK mismatch");
+_Static_assert(OP_LSHIFT == 4, "OP_LSHIFT mismatch");
+_Static_assert(OP_RSHIFT == 5, "OP_RSHIFT mismatch");
+_Static_assert(BL_WHITE == 1, "BL_WHITE mismatch");
+_Static_assert(BL_SOL == 2, "BL_SOL mismatch");
+_Static_assert(BL_FIX == 4, "BL_FIX mismatch");
+_Static_assert(K_DEL == TERMCAP2KEY('k', 'D'), "K_DEL mismatch");
+_Static_assert(K_KDEL == TERMCAP2KEY(KS_EXTRA, KE_KDEL), "K_KDEL mismatch");
+_Static_assert(kMTLineWise == 1, "kMTLineWise mismatch");
+
 
 /// Wrapper for nv_Zet C implementation.
 void nvim_nv_Zet_impl(cmdarg_T *cap)
@@ -6201,20 +6224,7 @@ static MarkMoveRes nv_mark_move_to(cmdarg_T *cap, MarkMove flags, fmark_T *fm)
 /// Handle commands that are operators in Visual mode.
 static void v_visop(cmdarg_T *cap)
 {
-  static char trans[] = "YyDdCcxdXdAAIIrr";
-
-  // Uppercase means linewise, except in block mode, then "D" deletes till
-  // the end of the line, and "C" replaces till EOL
-  if (isupper(cap->cmdchar)) {
-    if (VIsual_mode != Ctrl_V) {
-      VIsual_mode_orig = VIsual_mode;
-      VIsual_mode = 'V';
-    } else if (cap->cmdchar == 'C' || cap->cmdchar == 'D') {
-      curwin->w_curswant = MAXCOL;
-    }
-  }
-  cap->cmdchar = (uint8_t)(*(vim_strchr(trans, cap->cmdchar) + 1));
-  nv_operator(cap);
+  rs_v_visop(cap);
 }
 
 /// "s" and "S" commands.
@@ -6245,15 +6255,7 @@ static void nv_subst_impl(cmdarg_T *cap)
 /// Abbreviated commands.
 static void nv_abbrev(cmdarg_T *cap)
 {
-  if (cap->cmdchar == K_DEL || cap->cmdchar == K_KDEL) {
-    cap->cmdchar = 'x';                 // DEL key behaves like 'x'
-  }
-  // in Visual mode these commands are operators
-  if (VIsual_active) {
-    v_visop(cap);
-  } else {
-    nv_optrans_impl(cap);
-  }
+  rs_nv_abbrev(cap);
 }
 
 /// Translate a command into another command.
@@ -7223,19 +7225,7 @@ static void set_op_var(int optype)
 /// "d3_" works to delete 3 lines.
 static void nv_lineop(cmdarg_T *cap)
 {
-  cap->oap->motion_type = kMTLineWise;
-  if (cursor_down(cap->count1 - 1, cap->oap->op_type == OP_NOP) == false) {
-    clearopbeep(cap->oap);
-  } else if ((cap->oap->op_type == OP_DELETE
-              // only with linewise motions
-              && cap->oap->motion_force != 'v'
-              && cap->oap->motion_force != Ctrl_V)
-             || cap->oap->op_type == OP_LSHIFT
-             || cap->oap->op_type == OP_RSHIFT) {
-    beginline(BL_SOL | BL_FIX);
-  } else if (cap->oap->op_type != OP_YANK) {  // 'Y' does not move cursor
-    beginline(BL_WHITE | BL_FIX);
-  }
+  rs_nv_lineop(cap);
 }
 
 /// <Home> command.
