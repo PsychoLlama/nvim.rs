@@ -97,6 +97,7 @@ rust-test:
       -p nvim-ex-eval \
       -p nvim-fileio \
       -p nvim-fuzzy \
+      -p nvim-getchar \
       -p nvim-grid \
       -p nvim-help \
       -p nvim-input \

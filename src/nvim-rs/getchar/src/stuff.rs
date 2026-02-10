@@ -69,21 +69,24 @@ pub const fn is_special(c: c_int) -> bool {
 }
 
 /// Encode two bytes into a special key code
+/// Matches C: `TERMCAP2KEY(a, b) = -(a + (b << 8))`
 #[must_use]
 pub const fn termcap2key(a: c_int, b: c_int) -> c_int {
-    -(a + (b << 8) + 0x100)
+    -(a + (b << 8))
 }
 
 /// Get the first termcap byte from a special key code
+/// Matches C: `KEY2TERMCAP0(x) = (-(x)) & 0xff`
 #[must_use]
 pub const fn key2termcap0(x: c_int) -> c_int {
-    ((-1 - x) & 0xff) as c_int
+    ((-x) & 0xff) as c_int
 }
 
 /// Get the second termcap byte from a special key code
+/// Matches C: `KEY2TERMCAP1(x) = ((unsigned)(-(x)) >> 8) & 0xff`
 #[must_use]
 pub const fn key2termcap1(x: c_int) -> c_int {
-    (((-1 - x) >> 8) & 0xff) as c_int
+    (((-x) as u32 >> 8) & 0xff) as c_int
 }
 
 /// Convert KS_* and KE_* values to a special key
@@ -591,7 +594,7 @@ extern "C" {
 /// Returns 1 for special keys (negative) or values > 255.
 #[must_use]
 #[allow(clippy::manual_range_contains)]
-const fn mb_byte2len_check(c: c_int) -> c_int {
+pub const fn mb_byte2len_check_pub(c: c_int) -> c_int {
     if c < 0 || c > 255 {
         return 1;
     }
@@ -613,7 +616,7 @@ unsafe fn read_redo_char() -> c_int {
 
     // Reverse the conversion done by add_char_buff()
     let n = if c != c_int::from(K_SPECIAL) || rs_read_redo_peek() == c_int::from(KS_SPECIAL) {
-        mb_byte2len_check(c)
+        mb_byte2len_check_pub(c)
     } else {
         1
     };
@@ -777,13 +780,13 @@ mod tests {
 
     #[test]
     fn test_termcap_roundtrip() {
-        // Test with valid KS_*/KE_* style values (typically >= 4)
-        // Note: (0, 0) doesn't roundtrip correctly - this is expected per C macro behavior
-        for a in 1..10 {
-            for b in 0..10 {
+        // (0,0) maps to termcap2key(0,0) = 0, which is not a special key,
+        // so it doesn't roundtrip. Start from 1.
+        for a in 1..=255 {
+            for b in 0..=255 {
                 let key = termcap2key(a, b);
-                assert_eq!(key2termcap0(key), a);
-                assert_eq!(key2termcap1(key), b);
+                assert_eq!(key2termcap0(key), a, "a={a}, b={b}");
+                assert_eq!(key2termcap1(key), b, "a={a}, b={b}");
             }
         }
     }

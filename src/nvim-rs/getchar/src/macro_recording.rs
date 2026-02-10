@@ -87,6 +87,67 @@ impl GotcharsState {
     pub const fn reset_buflen(&mut self) {
         self.buflen = 0;
     }
+
+    /// Add a byte to the state, accumulating until a full character is ready.
+    ///
+    /// Returns `true` when a complete character (possibly multi-byte or
+    /// special key sequence) has been accumulated and is ready to process.
+    ///
+    /// This is the Rust equivalent of C `gotchars_add_byte`.
+    pub fn add_byte(&mut self, byte: u8) -> bool {
+        let c_byte = c_int::from(byte);
+        self.buf[self.buflen] = byte;
+        self.buflen += 1;
+        let mut c = c_byte;
+        let in_special = self.pending_special > 0;
+        let in_mbyte = self.pending_mbyte > 0;
+
+        if in_special {
+            self.pending_special -= 1;
+        } else if c == c_int::from(K_SPECIAL) {
+            // When receiving a special key sequence, store it until we have all
+            // the bytes and we can decide what to do with it.
+            self.pending_special = 2;
+        }
+
+        if self.pending_special > 0 {
+            self.prev_c = c;
+            return false;
+        }
+
+        if in_mbyte {
+            self.pending_mbyte -= 1;
+        } else {
+            if in_special {
+                if self.prev_c == c_int::from(KS_MODIFIER) {
+                    // When receiving a modifier, wait for the modified key.
+                    self.prev_c = c;
+                    return false;
+                }
+                c = crate::stuff::to_special(self.prev_c, c);
+            }
+            // When receiving a multibyte character, store it until we have all
+            // the bytes, so that it won't be split between two buffer blocks,
+            // and delete_buff_tail() will work properly.
+            let mb_len = crate::stuff::mb_byte2len_check_pub(c);
+            self.pending_mbyte = if mb_len > 1 { mb_len as u32 - 1 } else { 0 };
+        }
+
+        if self.pending_mbyte > 0 {
+            self.prev_c = c;
+            return false;
+        }
+
+        self.prev_c = c;
+        true
+    }
+
+    /// NUL-terminate the buffer contents (for passing to C).
+    pub const fn nul_terminate(&mut self) {
+        if self.buflen < self.buf.len() {
+            self.buf[self.buflen] = 0;
+        }
+    }
 }
 
 // =============================================================================
@@ -188,6 +249,94 @@ pub unsafe extern "C" fn rs_check_end_reg_executing(advance: c_int) {
 }
 
 // =============================================================================
+// Phase 4: gotchars / ungetchars / gotchars_ignore
+// =============================================================================
+
+#[allow(dead_code)]
+extern "C" {
+    /// Call updatescript(c)
+    fn nvim_call_updatescript(c: c_int);
+    /// Append bytes to on_key_buf, subtracting on_key_ignore_len
+    fn nvim_on_key_buf_process(buf: *const u8, buflen: usize);
+    /// Get debug_did_msg
+    fn nvim_get_debug_did_msg() -> c_int;
+    /// Set debug_did_msg
+    fn nvim_set_debug_did_msg(val: c_int);
+    /// Increment maptick
+    fn nvim_inc_maptick();
+}
+
+/// Static state for gotchars (mirrors C's `static gotchars_state_T state`).
+static mut GOTCHARS_STATE: GotcharsState = GotcharsState::new();
+
+/// Write typed characters to script file.
+/// If recording is on, put the character in the record buffer.
+///
+/// # Safety
+/// `chars` must point to at least `len` valid bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_gotchars(chars: *const u8, len: usize) {
+    let slice = std::slice::from_raw_parts(chars, len);
+    let state = &mut *std::ptr::addr_of_mut!(GOTCHARS_STATE);
+
+    for &byte in slice {
+        if !state.add_byte(byte) {
+            continue;
+        }
+
+        // Handle one byte at a time; no translation to be done.
+        for i in 0..state.buflen {
+            nvim_call_updatescript(c_int::from(state.buf[i]));
+        }
+
+        // Process on_key_buf (handles on_key_ignore_len subtraction in C)
+        nvim_on_key_buf_process(state.buf.as_ptr(), state.buflen);
+
+        if nvim_get_reg_recording() != 0 {
+            state.nul_terminate();
+            crate::buffheader::recordbuff().add(&state.buf[..state.buflen]);
+            nvim_add_last_recorded_len(state.buflen);
+        }
+
+        state.buflen = 0;
+    }
+
+    crate::rs_may_sync_undo();
+
+    // output "debug mode" message next time in debug mode
+    nvim_set_debug_did_msg(0);
+
+    // Since characters have been typed, consider the following to be in
+    // another mapping. Search string will be kept in history.
+    nvim_inc_maptick();
+}
+
+/// Record an <Ignore> key.
+#[no_mangle]
+pub unsafe extern "C" fn rs_gotchars_ignore() {
+    let nop_buf: [u8; 3] = [K_SPECIAL, crate::stuff::KS_EXTRA, crate::stuff::KE_IGNORE];
+    nvim_add_on_key_ignore_len(3);
+    rs_gotchars(nop_buf.as_ptr(), 3);
+}
+
+extern "C" {
+    fn nvim_add_on_key_ignore_len(val: usize);
+}
+
+/// Undo the last gotchars() for "len" bytes. To be used when putting a typed
+/// character back into the typeahead buffer, thus gotchars() will be called
+/// again. Only affects recorded characters.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ungetchars(len: c_int) {
+    if nvim_get_reg_recording() == 0 {
+        return;
+    }
+    crate::buffheader::recordbuff().delete_tail(len as usize);
+    let current = nvim_get_last_recorded_len();
+    nvim_set_last_recorded_len(current - len as usize);
+}
+
+// =============================================================================
 // Key Constants for special sequences
 // =============================================================================
 
@@ -268,5 +417,44 @@ mod tests {
         assert_eq!(to_special(0, 0), 0);
         assert_eq!(to_special(1, 0), 256);
         assert_eq!(to_special(1, 1), 257);
+    }
+
+    #[test]
+    fn test_add_byte_ascii() {
+        let mut state = GotcharsState::new();
+        // Single ASCII byte should be a complete character
+        assert!(state.add_byte(b'A'));
+        assert_eq!(state.buflen, 1);
+        assert_eq!(state.buf[0], b'A');
+    }
+
+    #[test]
+    fn test_add_byte_k_special_sequence() {
+        let mut state = GotcharsState::new();
+        // K_SPECIAL starts a 3-byte sequence
+        assert!(!state.add_byte(K_SPECIAL)); // not complete yet
+        assert!(!state.add_byte(253)); // KS_EXTRA, still waiting
+        assert!(state.add_byte(4)); // KE_IGNORE, now complete
+        assert_eq!(state.buflen, 3);
+    }
+
+    #[test]
+    fn test_add_byte_utf8_multibyte() {
+        let mut state = GotcharsState::new();
+        // 2-byte UTF-8 character (é = 0xC3 0xA9)
+        assert!(!state.add_byte(0xC3)); // lead byte, expect 1 more
+        assert!(state.add_byte(0xA9)); // continuation, complete
+        assert_eq!(state.buflen, 2);
+    }
+
+    #[test]
+    fn test_add_byte_modifier_sequence() {
+        let mut state = GotcharsState::new();
+        // K_SPECIAL + KS_MODIFIER + modifier_byte + actual key
+        assert!(!state.add_byte(K_SPECIAL)); // start special
+        assert!(!state.add_byte(KS_MODIFIER)); // modifier indicator
+        assert!(!state.add_byte(0x04)); // modifier value (ctrl)
+        assert!(state.add_byte(b'a')); // modified key, complete
+        assert_eq!(state.buflen, 4);
     }
 }

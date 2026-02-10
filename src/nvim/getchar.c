@@ -148,6 +148,11 @@ extern void rs_copy_redo(int old_redo);
 extern int rs_start_redo(int count, int old_redo);
 extern int rs_start_redo_ins(void);
 
+// Phase 4: Recording/gotchars operations (full functions in Rust)
+extern void rs_gotchars(const uint8_t *chars, size_t len);
+extern void rs_ungetchars(int len);
+extern void rs_gotchars_ignore(void);
+
 // Static assertions for constants hardcoded in Rust
 _Static_assert(MOD_MASK_CTRL == 0x04, "MOD_MASK_CTRL");
 _Static_assert(MODE_INSERT == 0x10, "MODE_INSERT");
@@ -770,54 +775,13 @@ ret_false:
 static void gotchars(const uint8_t *chars, size_t len)
   FUNC_ATTR_NONNULL_ALL
 {
-  const uint8_t *s = chars;
-  size_t todo = len;
-  static gotchars_state_T state;
-
-  while (todo-- > 0) {
-    if (!gotchars_add_byte(&state, *s++)) {
-      continue;
-    }
-
-    // Handle one byte at a time; no translation to be done.
-    for (size_t i = 0; i < state.buflen; i++) {
-      updatescript(state.buf[i]);
-    }
-
-    if (state.buflen > on_key_ignore_len) {
-      kvi_concat_len(on_key_buf, (char *)state.buf + on_key_ignore_len,
-                     state.buflen - on_key_ignore_len);
-      on_key_ignore_len = 0;
-    } else {
-      on_key_ignore_len -= state.buflen;
-    }
-
-    if (reg_recording != 0) {
-      state.buf[state.buflen] = NUL;
-      rs_add_buff_recordbuff(state.buf, (ptrdiff_t)state.buflen);
-      // remember how many chars were last recorded
-      last_recorded_len += state.buflen;
-    }
-
-    state.buflen = 0;
-  }
-
-  may_sync_undo();
-
-  // output "debug mode" message next time in debug mode
-  debug_did_msg = false;
-
-  // Since characters have been typed, consider the following to be in
-  // another mapping.  Search string will be kept in history.
-  maptick++;
+  rs_gotchars(chars, len);
 }
 
 /// Record an <Ignore> key.
 void gotchars_ignore(void)
 {
-  uint8_t nop_buf[3] = { K_SPECIAL, KS_EXTRA, KE_IGNORE };
-  on_key_ignore_len += 3;
-  gotchars(nop_buf, 3);
+  rs_gotchars_ignore();
 }
 
 /// Undo the last gotchars() for "len" bytes.  To be used when putting a typed
@@ -826,12 +790,7 @@ void gotchars_ignore(void)
 /// Only affects recorded characters.
 void ungetchars(int len)
 {
-  if (reg_recording == 0) {
-    return;
-  }
-
-  rs_delete_buff_tail_recordbuff(len);
-  last_recorded_len -= (size_t)len;
+  rs_ungetchars(len);
 }
 
 /// Sync undo.  Called when typed characters are obtained from the typeahead
@@ -3319,4 +3278,33 @@ void nvim_set_visual_from_cursor(void)
   VIsual_select = false;
   VIsual_reselect = true;
   redo_VIsual_busy = true;
+}
+
+// Phase 4 accessor functions for Rust gotchars
+
+void nvim_call_updatescript(int c)
+{
+  updatescript(c);
+}
+
+/// Process bytes for on_key_buf, handling on_key_ignore_len.
+void nvim_on_key_buf_process(const uint8_t *buf, size_t buflen)
+{
+  if (buflen > on_key_ignore_len) {
+    kvi_concat_len(on_key_buf, (char *)buf + on_key_ignore_len,
+                   buflen - on_key_ignore_len);
+    on_key_ignore_len = 0;
+  } else {
+    on_key_ignore_len -= buflen;
+  }
+}
+
+int nvim_get_debug_did_msg(void)
+{
+  return debug_did_msg ? 1 : 0;
+}
+
+void nvim_set_debug_did_msg(int val)
+{
+  debug_did_msg = val != 0;
 }
