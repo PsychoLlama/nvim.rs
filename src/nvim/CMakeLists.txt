@@ -104,7 +104,7 @@ endif()
 
 if(NOT MSVC)
   target_compile_options(main_lib INTERFACE -Wall -Wextra -pedantic -Wno-unused-parameter
-    -Wstrict-prototypes -std=gnu99 -Wshadow -Wconversion -Wvla
+    -Wstrict-prototypes -std=gnu11 -Wshadow -Wconversion -Wvla
     -Wdouble-promotion
     -Wmissing-noreturn
     -Wmissing-format-attribute

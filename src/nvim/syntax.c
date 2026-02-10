@@ -127,7 +127,6 @@ static bool did_syntax_onoff = false;
 #define SPO_LC_OFF      6       // leading context offset
 #define SPO_COUNT       7
 
-static const char e_illegal_arg[] = N_("E390: Illegal argument: %s");
 static const char e_contains_argument_not_accepted_here[]
   = N_("E395: Contains argument not accepted here");
 static const char e_invalid_cchar_value[]

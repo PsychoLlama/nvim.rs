@@ -4,7 +4,7 @@ _:
 # Build neovim using system dependencies from nix
 build:
     cargo build --release
-    cmake -B build -G Ninja -DUSE_BUNDLED=OFF
+    @test -f build/build.ninja || cmake -B build -G Ninja -DUSE_BUNDLED=OFF
     cmake --build build
 
 # Build with bundled dependencies (downloads deps)
