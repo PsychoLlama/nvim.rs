@@ -455,6 +455,13 @@ extern void rs_reset_VIsual(void);
 extern void rs_restore_visual_mode(void);
 extern void rs_may_clear_cmdline(void);
 
+// Wave 2 Phase 2 functions
+extern void rs_prep_redo_cmd(cmdarg_T *cap);
+extern void rs_set_vcount_ca(cmdarg_T *cap, bool *set_prevcount);
+extern void rs_nv_tagpop(cmdarg_T *cap);
+extern void rs_nv_regreplay(cmdarg_T *cap);
+extern void rs_nv_ctrlh(cmdarg_T *cap);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -1690,6 +1697,61 @@ void nvim_set_clear_cmdline(bool val)
 void nvim_clear_showcmd_call(void)
 {
   clear_showcmd();
+}
+
+// =============================================================================
+// Wave 2 Phase 2 accessors for Rust FFI
+// =============================================================================
+
+/// Get cap->nchar_len.
+int nvim_cap_get_nchar_len(cmdarg_T *cap)
+{
+  return cap ? cap->nchar_len : 0;
+}
+
+/// Append cap->nchar_composing to the redo buffer.
+void nvim_cap_append_nchar_composing_to_redobuff(cmdarg_T *cap)
+{
+  if (cap) {
+    AppendToRedobuff(cap->nchar_composing);
+  }
+}
+
+/// Wrapper for set_vcount(count, count1, set_prevcount).
+void nvim_set_vcount_call(int64_t count, int64_t count1, bool set_prevcount)
+{
+  set_vcount(count, count1, set_prevcount);
+}
+
+/// Wrapper for do_tag("", DT_POP, count1, false, true).
+void nvim_do_tag_pop(int count1)
+{
+  do_tag("", DT_POP, count1, false, true);
+}
+
+/// Wrapper for do_execreg with reg_recorded.
+/// Returns true on success, false on failure.
+bool nvim_do_execreg_recorded(void)
+{
+  return do_execreg(reg_recorded, false, false, false) != false;
+}
+
+/// Get got_int global (for normal mode).
+bool nvim_normal_get_got_int(void)
+{
+  return got_int;
+}
+
+/// Wrapper for line_breakcheck() (for normal mode).
+void nvim_normal_line_breakcheck(void)
+{
+  line_breakcheck();
+}
+
+/// Wrapper for v_visop (used by Phase 2, replaced in Phase 3).
+void nvim_v_visop(cmdarg_T *cap)
+{
+  v_visop(cap);
 }
 
 /// Wrapper for nv_Zet C implementation.
@@ -3062,14 +3124,7 @@ static int normal_check(VimState *state)
 /// Set v:prevcount only when "set_prevcount" is true.
 static void set_vcount_ca(cmdarg_T *cap, bool *set_prevcount)
 {
-  int64_t count = cap->count0;
-
-  // multiply with cap->opcount the same way as above
-  if (cap->opcount != 0) {
-    count = cap->opcount * (count == 0 ? 1 : count);
-  }
-  set_vcount(count, count == 0 ? 1 : count, *set_prevcount);
-  *set_prevcount = false;    // only set v:prevcount once
+  rs_set_vcount_ca(cap, set_prevcount);
 }
 
 /// End Visual mode.
@@ -3260,13 +3315,7 @@ size_t find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol, char **text
 /// Prepare for redo of a normal command.
 static void prep_redo_cmd(cmdarg_T *cap)
 {
-  prep_redo(cap->oap->regname, cap->count0,
-            NUL, cap->cmdchar, NUL, NUL, NUL);
-  if (cap->nchar_len > 0) {
-    AppendToRedobuff(cap->nchar_composing);
-  } else {
-    AppendCharToRedobuff(cap->nchar);
-  }
+  rs_prep_redo_cmd(cap);
 }
 
 /// Prepare for redo of any command.
@@ -4566,17 +4615,7 @@ static void nv_zet_impl(cmdarg_T *cap)
 /// "Q" command.
 static void nv_regreplay(cmdarg_T *cap)
 {
-  if (checkclearop(cap->oap)) {
-    return;
-  }
-
-  while (cap->count1-- && !got_int) {
-    if (do_execreg(reg_recorded, false, false, false) == false) {
-      clearopbeep(cap->oap);
-      break;
-    }
-    line_breakcheck();
-  }
+  rs_nv_regreplay(cap);
 }
 
 /// Handle a ":" command and <Cmd> or Lua mappings.
@@ -4638,12 +4677,7 @@ static void nv_ctrlg(cmdarg_T *cap)
 /// Handle CTRL-H <Backspace> command.
 static void nv_ctrlh(cmdarg_T *cap)
 {
-  if (VIsual_active && VIsual_select) {
-    cap->cmdchar = 'x';         // BS key behaves like 'x' in Select mode
-    v_visop(cap);
-  } else {
-    nv_left(cap);
-  }
+  rs_nv_ctrlh(cap);
 }
 
 /// CTRL-L: clear screen and redraw.
@@ -4987,9 +5021,7 @@ bool get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp)
 /// CTRL-T: backwards in tag stack
 static void nv_tagpop(cmdarg_T *cap)
 {
-  if (!checkclearopq(cap->oap)) {
-    do_tag("", DT_POP, cap->count1, false, true);
-  }
+  rs_nv_tagpop(cap);
 }
 
 /// Handle scrolling command 'H', 'L' and 'M'.

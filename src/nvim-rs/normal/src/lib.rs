@@ -204,6 +204,17 @@ extern "C" {
     fn nvim_get_mode_displayed() -> bool;
     fn nvim_set_clear_cmdline(val: bool);
     fn nvim_clear_showcmd_call();
+
+    // Wave 2 Phase 2: Redo/count/handler accessors
+    fn nvim_oap_get_regname_ptr(oap: OapHandle) -> c_int;
+    fn nvim_cap_get_nchar_len(cap: CapHandle) -> c_int;
+    fn nvim_cap_append_nchar_composing_to_redobuff(cap: CapHandle);
+    fn nvim_set_vcount_call(count: i64, count1: i64, set_prevcount: bool);
+    fn nvim_do_tag_pop(count1: c_int);
+    fn nvim_do_execreg_recorded() -> bool;
+    fn nvim_normal_get_got_int() -> bool;
+    fn nvim_normal_line_breakcheck();
+    fn nvim_v_visop(cap: CapHandle);
 }
 
 // Operator type constants (must match ops.h)
@@ -2216,6 +2227,110 @@ pub extern "C" fn rs_may_clear_cmdline() {
         } else {
             nvim_clear_showcmd_call();
         }
+    }
+}
+
+// =============================================================================
+// Wave 2 Phase 2: Redo/Count Helpers + Simple nv_* Handlers
+// =============================================================================
+
+/// Prepare for redo of a command with nchar.
+///
+/// Calls `prep_redo` with the cap's register, count, and cmdchar, then appends
+/// either the nchar_composing string or the single nchar to the redo buffer.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_prep_redo_cmd(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let regname = nvim_oap_get_regname_ptr(oap);
+    let count0 = nvim_cap_get_count0(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+
+    rs_prep_redo(
+        regname, count0, NUL_CHAR, cmdchar, NUL_CHAR, NUL_CHAR, NUL_CHAR,
+    );
+
+    if nvim_cap_get_nchar_len(cap) > 0 {
+        nvim_cap_append_nchar_composing_to_redobuff(cap);
+    } else {
+        let nchar = nvim_cap_get_nchar(cap);
+        AppendCharToRedobuff(nchar);
+    }
+}
+
+/// Set v:count and v:count1 from cmdarg_T counts.
+///
+/// Multiplies count0 with opcount (same way as normal_execute), then calls
+/// `set_vcount()`. Clears `*set_prevcount` after the first call.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer. `set_prevcount` must be a valid bool pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_vcount_ca(cap: CapHandle, set_prevcount: *mut bool) {
+    let count0 = i64::from(nvim_cap_get_count0(cap));
+    let opcount = i64::from(nvim_cap_get_opcount(cap));
+
+    let count = if opcount != 0 {
+        opcount * (if count0 == 0 { 1 } else { count0 })
+    } else {
+        count0
+    };
+    let count1 = if count == 0 { 1 } else { count };
+
+    nvim_set_vcount_call(count, count1, *set_prevcount);
+    *set_prevcount = false;
+}
+
+/// CTRL-T: jump to older tag.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_tagpop(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if !rs_checkclearopq(oap) {
+        nvim_do_tag_pop(nvim_cap_get_count1(cap));
+    }
+}
+
+/// Q: replay last recorded register.
+///
+/// Loops `count1` times executing `do_execreg(reg_recorded)`, with
+/// `line_breakcheck()` between iterations. Stops on failure or interrupt.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_regreplay(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearop(oap) {
+        return;
+    }
+
+    let mut count1 = nvim_cap_get_count1(cap);
+    while count1 > 0 && !nvim_normal_get_got_int() {
+        count1 -= 1;
+        if !nvim_do_execreg_recorded() {
+            rs_clearopbeep(oap);
+            break;
+        }
+        nvim_normal_line_breakcheck();
+    }
+}
+
+/// CTRL-H / BS: in Select mode behaves like 'x', else like left.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_ctrlh(cap: CapHandle) {
+    if nvim_get_VIsual_active() != 0 && nvim_get_VIsual_select() {
+        nvim_cap_set_cmdchar(cap, c_int::from(b'x'));
+        nvim_v_visop(cap);
+    } else {
+        rs_nv_left(cap);
     }
 }
 
