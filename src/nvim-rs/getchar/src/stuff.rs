@@ -356,6 +356,411 @@ pub unsafe extern "C" fn rs_stop_redo_ins() {
     buffheader::set_block_redo(false);
 }
 
+// =============================================================================
+// UTF-8 Decode Helper
+// =============================================================================
+
+/// Decode one UTF-8 character from a byte slice.
+/// Returns (codepoint, bytes_consumed).
+/// Equivalent to C `mb_cptr2char_adv`.
+#[must_use]
+pub fn utf8_decode_advance(bytes: &[u8]) -> (c_int, usize) {
+    if bytes.is_empty() {
+        return (0, 0);
+    }
+
+    let b0 = bytes[0];
+
+    if b0 < 0x80 {
+        return (c_int::from(b0), 1);
+    }
+
+    if b0 < 0xc0 || bytes.len() < 2 {
+        // Invalid lead byte or not enough bytes
+        return (c_int::from(b0), 1);
+    }
+
+    if b0 < 0xe0 {
+        if bytes.len() < 2 || (bytes[1] & 0xc0) != 0x80 {
+            return (c_int::from(b0), 1);
+        }
+        let cp = (c_int::from(b0 & 0x1f) << 6) | c_int::from(bytes[1] & 0x3f);
+        return (cp, 2);
+    }
+
+    if b0 < 0xf0 {
+        if bytes.len() < 3 || (bytes[1] & 0xc0) != 0x80 || (bytes[2] & 0xc0) != 0x80 {
+            return (c_int::from(b0), 1);
+        }
+        let cp = (c_int::from(b0 & 0x0f) << 12)
+            | (c_int::from(bytes[1] & 0x3f) << 6)
+            | c_int::from(bytes[2] & 0x3f);
+        return (cp, 3);
+    }
+
+    if bytes.len() < 4
+        || (bytes[1] & 0xc0) != 0x80
+        || (bytes[2] & 0xc0) != 0x80
+        || (bytes[3] & 0xc0) != 0x80
+    {
+        return (c_int::from(b0), 1);
+    }
+    let cp = (c_int::from(b0 & 0x07) << 18)
+        | (c_int::from(bytes[1] & 0x3f) << 12)
+        | (c_int::from(bytes[2] & 0x3f) << 6)
+        | c_int::from(bytes[3] & 0x3f);
+    (cp, 4)
+}
+
+// =============================================================================
+// Phase 3: Redo buffer append operations (migrated from C)
+// =============================================================================
+
+/// Append to Redo buffer literally, escaping special characters with CTRL-V.
+/// K_SPECIAL is escaped as well.
+///
+/// # Safety
+/// `s` must be a valid pointer to a string of at least `len` bytes,
+/// or if `len` is -1, must be NUL-terminated.
+#[no_mangle]
+pub unsafe extern "C" fn rs_AppendToRedobuffLit(s: *const u8, len: c_int) {
+    if buffheader::is_block_redo() {
+        return;
+    }
+
+    let slice = ptr_to_slice(s, len as isize);
+    let mut pos = 0;
+
+    while pos < slice.len() {
+        // Put a string of normal characters in the redo buffer
+        let start = pos;
+        while pos < slice.len() && slice[pos] >= b' ' && slice[pos] < DEL_U8 {
+            pos += 1;
+        }
+
+        // Don't put '0' or '^' as last character
+        if pos < slice.len()
+            && slice[pos] == 0
+            && pos > start
+            && (slice[pos - 1] == b'0' || slice[pos - 1] == b'^')
+        {
+            pos -= 1;
+        }
+        if pos > start {
+            buffheader::redobuff().add(&slice[start..pos]);
+        }
+
+        if pos >= slice.len() {
+            break;
+        }
+
+        // Check for end (NUL byte in the slice)
+        if slice[pos] == 0 {
+            // Check if this is a real NUL terminator (for len == -1 case)
+            if len < 0 {
+                break;
+            }
+            // Handle NUL as a character to be escaped
+        }
+
+        // Handle a special or multibyte character
+        let remaining = &slice[pos..];
+        let (c, consumed) = utf8_decode_advance(remaining);
+        pos += consumed;
+
+        if c < c_int::from(b' ')
+            || c == DEL as c_int
+            || (pos >= slice.len() && (c == c_int::from(b'0') || c == c_int::from(b'^')))
+        {
+            buffheader::redobuff().add_char(CTRL_V);
+        }
+
+        // CTRL-V '0' must be inserted as CTRL-V 048
+        if pos >= slice.len() && c == c_int::from(b'0') {
+            buffheader::redobuff().add(b"048");
+        } else {
+            buffheader::redobuff().add_char(c);
+        }
+    }
+}
+
+const DEL_U8: u8 = 0x7f;
+
+/// Append to the redo buffer, leaving 3-byte special key codes unmodified
+/// and escaping other K_SPECIAL bytes.
+///
+/// # Safety
+/// `s` must be a valid pointer to a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_AppendToRedobuffSpec(s: *const u8) {
+    if buffheader::is_block_redo() {
+        return;
+    }
+
+    let slice = ptr_to_slice(s, -1);
+    let mut pos = 0;
+
+    while pos < slice.len() {
+        if slice[pos] == K_SPECIAL && pos + 2 < slice.len() {
+            // Insert special key literally
+            buffheader::redobuff().add(&slice[pos..pos + 3]);
+            pos += 3;
+        } else {
+            let (c, consumed) = utf8_decode_advance(&slice[pos..]);
+            pos += consumed;
+            buffheader::redobuff().add_char(c);
+        }
+    }
+}
+
+// =============================================================================
+// Phase 3: Stuff buffer operations (migrated from C)
+// =============================================================================
+
+/// Stuff "s" into the stuff buffer, leaving special key codes unmodified and
+/// escaping other K_SPECIAL bytes. Change CR, LF and ESC into a space.
+///
+/// # Safety
+/// `s` must be a valid pointer to a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stuffReadbuffSpec(s: *const u8) {
+    let slice = ptr_to_slice(s, -1);
+    let mut pos = 0;
+
+    while pos < slice.len() {
+        if slice[pos] == K_SPECIAL && pos + 2 < slice.len() {
+            // Insert special key literally
+            buffheader::readbuf1().add(&slice[pos..pos + 3]);
+            pos += 3;
+        } else {
+            let (mut c, consumed) = utf8_decode_advance(&slice[pos..]);
+            pos += consumed;
+            if c == CAR || c == NL || c == ESC {
+                c = c_int::from(b' ');
+            }
+            buffheader::readbuf1().add_char(c);
+        }
+    }
+}
+
+/// Stuff a string into the typeahead buffer, such that edit() will insert it
+/// literally ("literally" true) or interpret is as typed characters.
+///
+/// # Safety
+/// `arg` must be a valid pointer to a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stuffescaped(arg: *const u8, literally: c_int) {
+    let slice = ptr_to_slice(arg, -1);
+    let literally = literally != 0;
+    let mut pos = 0;
+
+    while pos < slice.len() {
+        // Stuff a sequence of normal ASCII characters
+        let start = pos;
+        while pos < slice.len()
+            && ((slice[pos] >= b' ' && slice[pos] < DEL_U8)
+                || (slice[pos] == K_SPECIAL && !literally))
+        {
+            pos += 1;
+        }
+        if pos > start {
+            buffheader::readbuf1().add(&slice[start..pos]);
+        }
+
+        // Stuff a single special character
+        if pos < slice.len() {
+            let (c, consumed) = utf8_decode_advance(&slice[pos..]);
+            pos += consumed;
+            if literally && ((c < c_int::from(b' ') && c != TAB) || c == DEL as c_int) {
+                buffheader::readbuf1().add_char(CTRL_V);
+            }
+            buffheader::readbuf1().add_char(c);
+        }
+    }
+}
+
+// =============================================================================
+// Phase 3: Redo replay (migrated from C)
+// =============================================================================
+
+extern "C" {
+    fn nvim_utf_ptr2char(p: *const u8) -> c_int;
+}
+
+/// MB_BYTE2LEN_CHECK equivalent: returns UTF-8 byte length for a lead byte.
+/// Returns 1 for special keys (negative) or values > 255.
+#[must_use]
+#[allow(clippy::manual_range_contains)]
+const fn mb_byte2len_check(c: c_int) -> c_int {
+    if c < 0 || c > 255 {
+        return 1;
+    }
+    crate::macro_recording::mb_byte2len(c as u8) as c_int
+}
+
+/// Read a character from the redo buffer. Translates K_SPECIAL and
+/// multibyte characters. Returns the character or NUL at end.
+///
+/// This is the Rust version of C `read_redo(false, old_redo)`.
+/// The buffer must have been initialized with `rs_read_redo_init` first.
+unsafe fn read_redo_char() -> c_int {
+    use crate::buffheader::{rs_read_redo_byte, rs_read_redo_peek};
+
+    let c = rs_read_redo_byte();
+    if c == 0 {
+        return 0;
+    }
+
+    // Reverse the conversion done by add_char_buff()
+    let n = if c != c_int::from(K_SPECIAL) || rs_read_redo_peek() == c_int::from(KS_SPECIAL) {
+        mb_byte2len_check(c)
+    } else {
+        1
+    };
+
+    let mut buf = [0u8; 8]; // MB_MAXBYTES + 1
+    let mut c = c;
+    for i in 0..n as usize {
+        if c == c_int::from(K_SPECIAL) {
+            let b1 = rs_read_redo_byte();
+            let b2 = rs_read_redo_byte();
+            c = to_special(b1, b2);
+        }
+        buf[i] = c as u8;
+        if i == (n as usize) - 1 {
+            if n != 1 {
+                c = nvim_utf_ptr2char(buf.as_ptr());
+            }
+            break;
+        }
+        c = rs_read_redo_byte();
+        if c == 0 {
+            break;
+        }
+    }
+
+    c
+}
+
+/// Copy the rest of the redo buffer into readbuf2.
+/// The escaped K_SPECIAL is copied without translation.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_redo(old_redo: c_int) {
+    // The redo reader must already be initialized for `old_redo`.
+    // Note: we re-initialize here since C's copy_redo passes old_redo.
+    // But in practice, copy_redo is always called after read_redo with
+    // same old_redo value, and the reader is already positioned.
+    let _ = old_redo; // reader already positioned by caller
+    loop {
+        let c = read_redo_char();
+        if c == 0 {
+            break;
+        }
+        buffheader::readbuf2().add_char(c);
+    }
+}
+
+/// Initialize redo reader and read first character.
+/// Returns FAIL (1) if nothing to redo.
+unsafe fn read_redo_init_and_first(old_redo: bool) -> Result<c_int, ()> {
+    use crate::buffheader::rs_read_redo_init;
+
+    if rs_read_redo_init(c_int::from(old_redo)) != 0 {
+        return Err(());
+    }
+    Ok(read_redo_char())
+}
+
+/// Stuff the redo buffer into readbuf2 with count insertion.
+/// Returns FAIL (1) for failure, OK (0) otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_start_redo(count: c_int, old_redo: c_int) -> c_int {
+    let old = old_redo != 0;
+
+    let Ok(mut c) = read_redo_init_and_first(old) else {
+        return 1; // FAIL
+    };
+
+    // Copy the buffer name, if present
+    if c == c_int::from(b'"') {
+        buffheader::readbuf2().add(b"\"");
+        c = read_redo_char();
+
+        // If a numbered buffer is used, increment the number
+        if c >= c_int::from(b'1') && c < c_int::from(b'9') {
+            c += 1;
+        }
+        buffheader::readbuf2().add_char(c);
+
+        // The expression register should be re-evaluated
+        if c == c_int::from(b'=') {
+            buffheader::readbuf2().add_char(CAR);
+            nvim_set_cmd_silent(1);
+        }
+
+        c = read_redo_char();
+    }
+
+    if c == c_int::from(b'v') {
+        // redo Visual
+        nvim_set_visual_from_cursor();
+        c = read_redo_char();
+    }
+
+    // Try to enter the count (in place of a previous count)
+    if count != 0 {
+        while c >= c_int::from(b'0') && c <= c_int::from(b'9') {
+            c = read_redo_char();
+        }
+        buffheader::readbuf2().add_num(count);
+    }
+
+    // Copy from the redo buffer into the stuff buffer
+    buffheader::readbuf2().add_char(c);
+    rs_copy_redo(old_redo);
+    0 // OK
+}
+
+/// Repeat the last insert by stuffing the redo buffer into readbuf2.
+/// Returns FAIL (1) for failure, OK (0) otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_start_redo_ins() -> c_int {
+    let Ok(c) = read_redo_init_and_first(false) else {
+        return 1; // FAIL
+    };
+
+    buffheader::readbuf1().start_reading();
+    buffheader::readbuf2().start_reading();
+
+    // Skip the count and the command character
+    let mut c = c;
+    loop {
+        if c == 0 {
+            break;
+        }
+        if matches!(
+            c as u8,
+            b'A' | b'a' | b'I' | b'i' | b'R' | b'r' | b'O' | b'o'
+        ) {
+            if c == c_int::from(b'O') || c == c_int::from(b'o') {
+                buffheader::readbuf2().add(b"\n");
+            }
+            break;
+        }
+        c = read_redo_char();
+    }
+
+    // Copy the typed text from the redo buffer into the stuff buffer
+    rs_copy_redo(0);
+    buffheader::set_block_redo(true);
+    0 // OK
+}
+
+extern "C" {
+    fn nvim_set_cmd_silent(val: c_int);
+    fn nvim_set_visual_from_cursor();
+}
+
 // Note: rs_to_special and rs_is_special are already exported from input.rs
 
 #[cfg(test)]

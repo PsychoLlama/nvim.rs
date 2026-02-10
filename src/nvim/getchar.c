@@ -139,6 +139,15 @@ extern uint8_t *rs_get_recorded(void);
 extern uint8_t *rs_get_inserted(void);
 extern size_t rs_get_inserted_len(void);
 
+// Phase 3: Redo/stuff operations (full functions in Rust)
+extern void rs_AppendToRedobuffLit(const uint8_t *s, int len);
+extern void rs_AppendToRedobuffSpec(const uint8_t *s);
+extern void rs_stuffReadbuffSpec(const uint8_t *s);
+extern void rs_stuffescaped(const uint8_t *arg, int literally);
+extern void rs_copy_redo(int old_redo);
+extern int rs_start_redo(int count, int old_redo);
+extern int rs_start_redo_ins(void);
+
 // Static assertions for constants hardcoded in Rust
 _Static_assert(MOD_MASK_CTRL == 0x04, "MOD_MASK_CTRL");
 _Static_assert(MODE_INSERT == 0x10, "MODE_INSERT");
@@ -351,65 +360,14 @@ void AppendToRedobuff(const char *s)
 /// @param len  Length of `str` or -1 for up to the NUL.
 void AppendToRedobuffLit(const char *str, int len)
 {
-  if (rs_get_block_redo()) {
-    return;
-  }
-
-  const char *s = str;
-  while (len < 0 ? *s != NUL : s - str < len) {
-    // Put a string of normal characters in the redo buffer (that's
-    // faster).
-    const char *start = s;
-    while (*s >= ' ' && *s < DEL && (len < 0 || s - str < len)) {
-      s++;
-    }
-
-    // Don't put '0' or '^' as last character, just in case a CTRL-D is
-    // typed next.
-    if (*s == NUL && (s[-1] == '0' || s[-1] == '^')) {
-      s--;
-    }
-    if (s > start) {
-      rs_add_buff_redobuff((const uint8_t *)start, s - start);
-    }
-
-    if (*s == NUL || (len >= 0 && s - str >= len)) {
-      break;
-    }
-
-    // Handle a special or multibyte character.
-    // Composing chars separately are handled separately.
-    const int c = mb_cptr2char_adv(&s);
-    if (c < ' ' || c == DEL || (*s == NUL && (c == '0' || c == '^'))) {
-      rs_add_char_buff_redobuff(Ctrl_V);
-    }
-
-    // CTRL-V '0' must be inserted as CTRL-V 048.
-    if (*s == NUL && c == '0') {
-      rs_add_buff_redobuff((const uint8_t *)"048", 3);
-    } else {
-      rs_add_char_buff_redobuff(c);
-    }
-  }
+  rs_AppendToRedobuffLit((const uint8_t *)str, len);
 }
 
 /// Append "s" to the redo buffer, leaving 3-byte special key codes unmodified
 /// and escaping other K_SPECIAL bytes.
 void AppendToRedobuffSpec(const char *s)
 {
-  if (rs_get_block_redo()) {
-    return;
-  }
-
-  while (*s != NUL) {
-    if ((uint8_t)(*s) == K_SPECIAL && s[1] != NUL && s[2] != NUL) {
-      // Insert special key literally.
-      rs_add_buff_redobuff((const uint8_t *)s, 3);
-      s += 3;
-    } else {
-      rs_add_char_buff_redobuff(mb_cptr2char_adv(&s));
-    }
-  }
+  rs_AppendToRedobuffSpec((const uint8_t *)s);
 }
 
 /// Append a character to the redo buffer.
@@ -449,19 +407,7 @@ void stuffReadbuffLen(const char *s, ptrdiff_t len)
 /// Change CR, LF and ESC into a space.
 void stuffReadbuffSpec(const char *s)
 {
-  while (*s != NUL) {
-    if ((uint8_t)(*s) == K_SPECIAL && s[1] != NUL && s[2] != NUL) {
-      // Insert special key literally.
-      stuffReadbuffLen(s, 3);
-      s += 3;
-    } else {
-      int c = mb_cptr2char_adv(&s);
-      if (c == CAR || c == NL || c == ESC) {
-        c = ' ';
-      }
-      stuffcharReadbuff(c);
-    }
-  }
+  rs_stuffReadbuffSpec((const uint8_t *)s);
 }
 
 /// Append a character to the stuff buffer.
@@ -481,91 +427,7 @@ void stuffnumReadbuff(int n)
 /// literally ("literally" true) or interpret is as typed characters.
 void stuffescaped(const char *arg, bool literally)
 {
-  while (*arg != NUL) {
-    // Stuff a sequence of normal ASCII characters, that's fast.  Also
-    // stuff K_SPECIAL to get the effect of a special key when "literally"
-    // is true.
-    const char *const start = arg;
-    while ((*arg >= ' ' && *arg < DEL) || ((uint8_t)(*arg) == K_SPECIAL
-                                           && !literally)) {
-      arg++;
-    }
-    if (arg > start) {
-      stuffReadbuffLen(start, arg - start);
-    }
-
-    // stuff a single special character
-    if (*arg != NUL) {
-      const int c = mb_cptr2char_adv(&arg);
-      if (literally && ((c < ' ' && c != TAB) || c == DEL)) {
-        stuffcharReadbuff(Ctrl_V);
-      }
-      stuffcharReadbuff(c);
-    }
-  }
-}
-
-/// Read a character from the redo buffer.  Translates K_SPECIAL and
-/// multibyte characters.
-/// The redo buffer is left as it is.
-/// If init is true, prepare for redo, return FAIL if nothing to redo, OK
-/// otherwise.
-/// If old_redo is true, use old_redobuff instead of redobuff.
-static int read_redo(bool init, bool old_redo)
-{
-  int c;
-  int n;
-  uint8_t buf[MB_MAXBYTES + 1];
-
-  if (init) {
-    return rs_read_redo_init(old_redo ? 1 : 0) != 0 ? FAIL : OK;
-  }
-
-  c = rs_read_redo_byte();
-  if (c == NUL) {
-    return c;
-  }
-
-  // Reverse the conversion done by add_char_buff()
-  // For a multi-byte character get all the bytes and return the
-  // converted character.
-  if (c != K_SPECIAL || rs_read_redo_peek() == KS_SPECIAL) {
-    n = MB_BYTE2LEN_CHECK(c);
-  } else {
-    n = 1;
-  }
-  for (int i = 0;; i++) {
-    if (c == K_SPECIAL) {  // special key or escaped K_SPECIAL
-      int b1 = rs_read_redo_byte();
-      int b2 = rs_read_redo_byte();
-      c = TO_SPECIAL(b1, b2);
-    }
-    buf[i] = (uint8_t)c;
-    if (i == n - 1) {         // last byte of a character
-      if (n != 1) {
-        c = utf_ptr2char((char *)buf);
-      }
-      break;
-    }
-    c = rs_read_redo_byte();
-    if (c == NUL) {           // cannot happen?
-      break;
-    }
-  }
-
-  return c;
-}
-
-/// Copy the rest of the redo buffer into the stuff buffer (in a slow way).
-/// If old_redo is true, use old_redobuff instead of redobuff.
-/// The escaped K_SPECIAL is copied without translation.
-static void copy_redo(bool old_redo)
-{
-  int c;
-
-  while ((c = read_redo(false, old_redo)) != NUL) {
-    rs_add_char_buff_readbuf2(c);
-  }
+  rs_stuffescaped((const uint8_t *)arg, literally ? 1 : 0);
 }
 
 /// Stuff the redo buffer into readbuf2.
@@ -577,54 +439,7 @@ static void copy_redo(bool old_redo)
 /// @return  FAIL for failure, OK otherwise
 int start_redo(int count, bool old_redo)
 {
-  // init the pointers; return if nothing to redo
-  if (read_redo(true, old_redo) == FAIL) {
-    return FAIL;
-  }
-
-  int c = read_redo(false, old_redo);
-
-  // copy the buffer name, if present
-  if (c == '"') {
-    rs_add_buff_readbuf2((const uint8_t *)"\"", 1);
-    c = read_redo(false, old_redo);
-
-    // if a numbered buffer is used, increment the number
-    if (c >= '1' && c < '9') {
-      c++;
-    }
-    rs_add_char_buff_readbuf2(c);
-
-    // the expression register should be re-evaluated
-    if (c == '=') {
-      rs_add_char_buff_readbuf2(CAR);
-      cmd_silent = true;
-    }
-
-    c = read_redo(false, old_redo);
-  }
-
-  if (c == 'v') {   // redo Visual
-    VIsual = curwin->w_cursor;
-    VIsual_active = true;
-    VIsual_select = false;
-    VIsual_reselect = true;
-    redo_VIsual_busy = true;
-    c = read_redo(false, old_redo);
-  }
-
-  // try to enter the count (in place of a previous count)
-  if (count) {
-    while (ascii_isdigit(c)) {    // skip "old" count
-      c = read_redo(false, old_redo);
-    }
-    rs_add_num_buff_readbuf2(count);
-  }
-
-  // copy from the redo buffer into the stuff buffer
-  rs_add_char_buff_readbuf2(c);
-  copy_redo(old_redo);
-  return OK;
+  return rs_start_redo(count, old_redo ? 1 : 0) != 0 ? FAIL : OK;
 }
 
 /// Repeat the last insert (R, o, O, a, A, i or I command) by stuffing
@@ -633,27 +448,7 @@ int start_redo(int count, bool old_redo)
 /// @return  FAIL for failure, OK otherwise
 int start_redo_ins(void)
 {
-  int c;
-
-  if (read_redo(true, false) == FAIL) {
-    return FAIL;
-  }
-  rs_start_stuff();
-
-  // skip the count and the command character
-  while ((c = read_redo(false, false)) != NUL) {
-    if (vim_strchr("AaIiRrOo", c) != NULL) {
-      if (c == 'O' || c == 'o') {
-        rs_add_buff_readbuf2((const uint8_t *)NL_STR, -1);
-      }
-      break;
-    }
-  }
-
-  // copy the typed text from the redo buffer into the stuff buffer
-  copy_redo(false);
-  rs_set_block_redo(1);
-  return OK;
+  return rs_start_redo_ins() != 0 ? FAIL : OK;
 }
 
 void stop_redo_ins(void)
@@ -3515,3 +3310,13 @@ void nvim_set_pending_end_reg_executing(int val)
 }
 
 // nvim_set_block_redo removed - use rs_set_block_redo instead
+
+// Phase 3 accessor: set Visual from cursor for redo Visual
+void nvim_set_visual_from_cursor(void)
+{
+  VIsual = curwin->w_cursor;
+  VIsual_active = true;
+  VIsual_select = false;
+  VIsual_reselect = true;
+  redo_VIsual_busy = true;
+}
