@@ -3642,10 +3642,13 @@ void nvim_hmll_map_del(void *map, const char *key)
   pmap_del(cstr_t)((PMap(cstr_t) *)map, key, NULL);
 }
 
-// Wrapper for shada_free_shada_entry
+// Wrapper for shada_free_shada_entry — delegates to Rust rs_shada_free_entry_contents
+// which handles all entry types (delegating back to C for Variable and Register
+// due to struct layout differences).
+extern void rs_shada_free_entry_contents(ShadaEntry *entry);
 void nvim_shada_free_shada_entry(ShadaEntry *entry)
 {
-  shada_free_shada_entry(entry);
+  rs_shada_free_entry_contents(entry);
 }
 
 // Wrapper for shada_hist_iter
@@ -3895,4 +3898,37 @@ const void *nvim_shada_buflist_findnr(int nr) { return buflist_findnr(nr); }
 void nvim_shada_siemsg(const char *msg)
 {
   siemsg("%s", msg);
+}
+
+// Phase 4: FFI wrappers for shada_free_shada_entry consolidation
+
+/// Free a Dict (api_free_dict wrapper)
+void nvim_shada_api_free_dict(Dict value)
+{
+  api_free_dict(value);
+}
+
+/// Clear a typval_T (tv_clear wrapper)
+void nvim_shada_tv_clear(typval_T *tv)
+{
+  tv_clear(tv);
+}
+
+/// Free register contents — each element is a String struct ({char*, size_t}).
+/// Frees each String's data and then the array itself.
+void nvim_shada_free_reg_contents(void *contents_ptr, size_t contents_size)
+{
+  String *contents = (String *)contents_ptr;
+  for (size_t i = 0; i < contents_size; i++) {
+    api_free_string(contents[i]);
+  }
+  xfree(contents);
+}
+
+/// Free the value portion of a global_var entry.
+/// Takes a pointer to the typval_T within the ShadaEntry union.
+void nvim_shada_free_variable(ShadaEntry *entry)
+{
+  xfree(entry->data.global_var.name);
+  tv_clear(&entry->data.global_var.value);
 }

@@ -478,6 +478,11 @@ extern "C" {
     ) -> *const c_void;
     fn nvim_shada_buflist_findnr(nr: c_int) -> *const c_void;
     fn nvim_shada_siemsg(msg: *const c_char);
+
+    // Phase 4: Entry free consolidation accessors
+    fn nvim_shada_tv_clear(tv: *mut c_void);
+    fn nvim_shada_free_reg_contents(contents_ptr: *mut c_void, contents_size: usize);
+    fn nvim_shada_free_variable(entry: *mut ShadaEntry);
 }
 
 // =============================================================================
@@ -3101,9 +3106,16 @@ pub unsafe extern "C" fn rs_shada_free_entry_contents(entry: *mut ShadaEntry) {
     }
 
     match (*entry).entry_type {
-        ShadaEntryType::Missing | ShadaEntryType::Unknown | ShadaEntryType::Header => {
-            // Header dict is handled by C
+        ShadaEntryType::Unknown => {
+            let contents = read_union_field!(entry, unknown_item, contents);
+            if !contents.is_null() {
+                nvim_xfree(contents.cast());
+            }
         }
+        // Header is a Dict (kvec_t) — layout differs between Rust and C.
+        // In practice, Header entries always have can_free_entry=false,
+        // so this branch is unreachable.
+        ShadaEntryType::Missing | ShadaEntryType::Header => {}
         ShadaEntryType::SearchPattern => {
             let pat = read_union_field!(entry, search_pattern, pat);
             if !pat.is_null() {
@@ -3123,24 +3135,18 @@ pub unsafe extern "C" fn rs_shada_free_entry_contents(entry: *mut ShadaEntry) {
             }
         }
         ShadaEntryType::Register => {
+            // Register contents are String structs in C ({char*, size_t} = 16 bytes each),
+            // not simple char* pointers. Delegate to C to free correctly.
             let contents = read_union_field!(entry, reg, contents);
             let contents_size = read_union_field!(entry, reg, contents_size);
             if !contents.is_null() {
-                for i in 0..contents_size {
-                    let s = *contents.add(i);
-                    if !s.is_null() {
-                        nvim_xfree(s.cast());
-                    }
-                }
-                nvim_xfree(contents.cast());
+                nvim_shada_free_reg_contents(contents.cast(), contents_size);
             }
         }
         ShadaEntryType::Variable => {
-            let name = read_union_field!(entry, global_var, name);
-            if !name.is_null() {
-                nvim_xfree(name.cast());
-            }
-            // Value is handled by C (typval_T)
+            // Variable has layout mismatch between Rust (name + void*) and C (name + typval_T).
+            // Delegate entirely to C which knows the correct struct layout.
+            nvim_shada_free_variable(entry);
         }
         ShadaEntryType::GlobalMark
         | ShadaEntryType::LocalMark
@@ -3160,14 +3166,21 @@ pub unsafe extern "C" fn rs_shada_free_entry_contents(entry: *mut ShadaEntry) {
                     if !(*buf).fname.is_null() {
                         nvim_xfree((*buf).fname.cast());
                     }
-                    // additional_data handled by C
+                    if !(*buf).additional_data.is_null() {
+                        nvim_xfree((*buf).additional_data.cast());
+                    }
                 }
                 nvim_xfree(buffers.cast());
             }
         }
     }
 
-    // Free additional_data if present (handled by C)
+    // Free additional_data if present
+    if !(*entry).additional_data.is_null() {
+        nvim_xfree((*entry).additional_data);
+        (*entry).additional_data = std::ptr::null_mut();
+    }
+
     // Reset entry to missing state
     (*entry).entry_type = ShadaEntryType::Missing;
     (*entry).can_free_entry = false;
