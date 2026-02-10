@@ -39,9 +39,9 @@ const CMOD_LOCKMARKS: c_int = 0x0800;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct PosT {
-    lnum: i32,
-    col: c_int,
-    coladd: c_int,
+    pub lnum: i32,
+    pub col: c_int,
+    pub coladd: c_int,
 }
 
 /// Opaque handle to a C `aco_save_T` struct.

@@ -23,3 +23,26 @@ pub type AclHandle = *mut std::ffi::c_void;
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
 pub const NOTDONE: c_int = 2;
+
+extern "C" {
+    fn nvim_bw_info_get_len(p: BwInfoHandle) -> c_int;
+    fn nvim_bw_info_set_conv_error(p: BwInfoHandle, val: c_int);
+}
+
+/// Get bw_info len field.
+///
+/// # Safety
+///
+/// Handle must be valid.
+pub unsafe fn nvim_bw_info_get_len_direct(p: BwInfoHandle) -> c_int {
+    unsafe { nvim_bw_info_get_len(p) }
+}
+
+/// Set bw_info conv_error field.
+///
+/// # Safety
+///
+/// Handle must be valid.
+pub unsafe fn nvim_bw_info_set_conv_error_direct(p: BwInfoHandle, val: c_int) {
+    unsafe { nvim_bw_info_set_conv_error(p, val) }
+}

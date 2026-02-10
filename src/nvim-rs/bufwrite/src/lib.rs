@@ -19,6 +19,7 @@ pub mod ffi;
 pub mod fileinfo;
 pub mod format;
 pub mod validation;
+pub mod write;
 
 use std::ffi::c_int;
 

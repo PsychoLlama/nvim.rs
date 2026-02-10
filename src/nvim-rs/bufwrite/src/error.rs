@@ -78,7 +78,7 @@ extern "C" {
         d: *const c_char,
     );
     fn nvim_bw_os_strerror(errnum: c_int) -> *const c_char;
-    fn nvim_bw_get_IObuff() -> *const c_char;
+    fn nvim_bw_get_IObuff() -> *mut c_char;
     fn nvim_bw_xfree(ptr: *mut c_char);
 }
 
