@@ -1,22 +1,22 @@
-Plan: ~/.claude/plans/purrfect-dancing-hinton.md
+Plan: ~/.claude/plans/radiant-munching-hopper.md
 
-All 4 phases of the getchar.c migration plan are complete. Here's a summary:
+All phases of the drawscreen migration plan are complete. Here's the summary:
 
-**Phase 1** (previously done): 7 self-contained helpers migrated to Rust
-**Phase 2** (previously done): Buffer ownership transferred from C to Rust statics
-**Phase 3** (this session): Redo + stuff operations migrated
-- `AppendToRedobuffLit`, `AppendToRedobuffSpec`, `stuffReadbuffSpec`, `stuffescaped` → Rust
-- `read_redo`, `copy_redo`, `start_redo`, `start_redo_ins` → Rust
-- Added `nvim_set_visual_from_cursor` C accessor
-- Fixed `termcap2key`/`key2termcap0`/`key2termcap1` formulas to match C macros
+## Drawscreen Migration — Complete
 
-**Phase 4** (this session): Recording/gotchars migrated
-- `gotchars`, `ungetchars`, `gotchars_ignore` → Rust
-- `GotcharsState::add_byte()` method added matching C `gotchars_add_byte`
-- Added C accessors: `nvim_on_key_buf_process`, `nvim_call_updatescript`, `nvim_set_debug_did_msg`
-- Added `nvim-getchar` to justfile test list
+**8 commits** on `rust-migration`:
 
-**Results:**
-- `getchar.c`: 3841 → 3310 lines (~14% reduction)
-- Tests: 3942 → 3977 (35 new tests from getchar crate)
-- All checks green: build, smoke-test, fmt, clippy, 3977 tests passing
+| Commit | Description |
+|--------|-------------|
+| `7e0bd71` | Fix UPD_VALID test assertion (20→10) |
+| `95af3f1` | Phase 1: `redrawing()`, `check_screensize()`, `cmdline_number_prompt()` |
+| `6e75ffc` | Phase 2: `comp_col()` |
+| `c33dce7` | Phase 3: `skip_showmode()`, `unshowmode()` |
+| `5dcfde7` | Phase 4: `redraw_statuslines()`, `redraw_custom_title_later()` |
+| `4f4e18e` | Phase 5: `conceal_check_cursor_line()`, `win_update_cursorline()` |
+| `3f3c43e` | Phase 6: `setcursor()`, `setcursor_mayforce()` |
+| `4b88932` | Phase 7: `start_search_hl()`, `end_search_hl()` |
+
+**Stats**: 12 C functions migrated, 14 new `#[no_mangle]` FFI exports (81→95 total), ~40 new C accessor functions, 5 `_Static_assert` verifications.
+
+**All checks passing**: `just build`, `just smoke-test`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test` (3977 tests).
