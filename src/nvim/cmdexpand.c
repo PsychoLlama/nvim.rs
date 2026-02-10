@@ -178,6 +178,11 @@ extern void rs_expand_cleanup(expand_T *xp);
 extern void rs_clear_cmdline_orig(void);
 extern char *rs_addstar(const char *fname, size_t len, int context);
 
+// Phase 3: Match navigation
+extern char *rs_get_next_or_prev_match(int mode, expand_T *xp);
+extern char *rs_expand_one_start(int mode, expand_T *xp, const char *str, int options);
+extern char *rs_find_longest_match(expand_T *xp, int options);
+
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
 {
@@ -414,6 +419,109 @@ void nvim_clear_cmdline_orig(void)
 
 // Static assert for XP_PREFIX_NONE used in rs_expand_init
 _Static_assert(XP_PREFIX_NONE == 0, "XP_PREFIX_NONE mismatch");
+
+// =============================================================================
+// Phase 3: C accessors for match navigation
+// =============================================================================
+
+/// Get xp->xp_orig pointer (for Rust FFI).
+const char *nvim_expand_get_orig(const expand_T *xp)
+{
+  return xp ? xp->xp_orig : NULL;
+}
+
+/// Get xp->xp_files[i] (for Rust FFI).
+const char *nvim_expand_get_files_item(const expand_T *xp, int i)
+{
+  if (!xp || i < 0 || i >= xp->xp_numfiles || !xp->xp_files) {
+    return NULL;
+  }
+  return xp->xp_files[i];
+}
+
+/// Get compl_selected (for Rust FFI).
+int nvim_get_compl_selected(void)
+{
+  return compl_selected;
+}
+
+/// Set compl_selected (for Rust FFI).
+void nvim_set_compl_selected(int val)
+{
+  compl_selected = val;
+}
+
+/// Get cmd_showtail (for Rust FFI).
+int nvim_get_cmd_showtail(void)
+{
+  return cmd_showtail;
+}
+
+/// Get p_wmnu (for Rust FFI).
+int nvim_get_p_wmnu(void)
+{
+  return p_wmnu;
+}
+
+// nvim_get_p_fic already exists in option.c
+
+/// Wrapper for cmdline_pum_display (for Rust FFI).
+void nvim_cmdexpand_pum_display(int changed_array)
+{
+  cmdline_pum_display(changed_array != 0);
+}
+
+/// Wrapper for cmdline_pum_create for navigation (for Rust FFI).
+/// Creates PUM with xp->xp_files/xp_numfiles and given showtail/noselect flags.
+void nvim_cmdexpand_pum_create_for_nav(expand_T *xp, int showtail, int noselect)
+{
+  cmdline_pum_create(get_cmdline_info(), xp, xp->xp_files, xp->xp_numfiles,
+                     showtail != 0, noselect != 0);
+}
+
+/// Wrapper for redraw_wildmenu (for Rust FFI).
+void nvim_cmdexpand_redraw_wildmenu(expand_T *xp, int num_matches, int findex, int showtail)
+{
+  redraw_wildmenu(xp, num_matches, xp->xp_files, findex, showtail != 0);
+}
+
+/// Wrapper for ExpandFromContext (for Rust FFI).
+/// Calls ExpandFromContext and stores results into xp->xp_files/xp_numfiles.
+/// Returns FAIL (0) or OK (1).
+int nvim_cmdexpand_expand_from_context(expand_T *xp, const char *pat, int options)
+{
+  return ExpandFromContext(xp, (char *)pat, &xp->xp_files, &xp->xp_numfiles, options);
+}
+
+/// Wrapper for ExpandEscape (for Rust FFI).
+void nvim_cmdexpand_expand_escape(expand_T *xp, const char *str, int options)
+{
+  ExpandEscape(xp, (char *)str, xp->xp_numfiles, xp->xp_files, options);
+}
+
+/// Wrapper for match_suffix on xp->xp_files[i] (for Rust FFI).
+int nvim_cmdexpand_match_suffix(expand_T *xp, int i)
+{
+  if (!xp || i < 0 || i >= xp->xp_numfiles || !xp->xp_files) {
+    return 0;
+  }
+  return match_suffix(xp->xp_files[i]);
+}
+
+/// Wrapper for semsg(e_nomatch2, str) (for Rust FFI).
+void nvim_cmdexpand_semsg_nomatch(const char *str)
+{
+  semsg(_(e_nomatch2), str);
+}
+
+/// Wrapper for emsg(e_toomany) (for Rust FFI).
+void nvim_cmdexpand_emsg_toomany(void)
+{
+  emsg(_(e_toomany));
+}
+
+// Static assert for kOptBoFlagWildmode used in rs_find_longest_match
+_Static_assert(kOptBoFlagWildmode == 0x80000, "kOptBoFlagWildmode mismatch");
 
 // Phase 6: Wrapper functions for Rust implementations
 
@@ -1293,188 +1401,23 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
 
 /// Get the next or prev cmdline completion match. The index of the match is set
 /// in "xp->xp_selected"
+/// Navigate to next/previous completion match. Rust implementation.
 static char *get_next_or_prev_match(int mode, expand_T *xp)
 {
-  // When no matches found, return NULL
-  if (xp->xp_numfiles <= 0) {
-    return NULL;
-  }
-
-  int findex = xp->xp_selected;
-
-  if (mode == WILD_PREV) {
-    // Select the last entry if at original text
-    if (findex == -1) {
-      findex = xp->xp_numfiles;
-    }
-    // Otherwise select the previous entry
-    findex--;
-  } else if (mode == WILD_NEXT) {
-    // Select the next entry
-    findex++;
-  } else if (mode == WILD_PAGEUP || mode == WILD_PAGEDOWN) {
-    // Get the height of popup menu (used for both PAGEUP and PAGEDOWN)
-    int ht = pum_get_height();
-    if (ht > 3) {
-      ht -= 2;
-    }
-
-    if (mode == WILD_PAGEUP) {
-      if (findex == 0) {
-        // at the first entry, don't select any entries
-        findex = -1;
-      } else if (findex < 0) {
-        // no entry is selected. select the last entry
-        findex = xp->xp_numfiles - 1;
-      } else {
-        // go up by the pum height
-        findex = MAX(findex - ht, 0);
-      }
-    } else {  // mode == WILD_PAGEDOWN
-      if (findex == xp->xp_numfiles - 1) {
-        // at the last entry, don't select any entries
-        findex = -1;
-      } else if (findex < 0) {
-        // no entry is selected. select the first entry
-        findex = 0;
-      } else {
-        // go down by the pum height
-        findex = MIN(findex + ht, xp->xp_numfiles - 1);
-      }
-    }
-  } else {  // mode == WILD_PUM_WANT
-    assert(pum_want.active);
-    findex = pum_want.item;
-  }
-
-  // Handle wrapping around
-  if (findex < 0 || findex >= xp->xp_numfiles) {
-    // If original text exists, return to it when wrapping around
-    if (xp->xp_orig != NULL) {
-      findex = -1;
-    } else {
-      // Wrap around to opposite end
-      findex = (findex < 0) ? xp->xp_numfiles - 1 : 0;
-    }
-  }
-
-  // Display matches on screen
-  if (p_wmnu) {
-    if (compl_match_array) {
-      compl_selected = findex;
-      cmdline_pum_display(false);
-    } else if (cmdline_compl_use_pum(true)) {
-      cmdline_pum_create(get_cmdline_info(), xp, xp->xp_files, xp->xp_numfiles,
-                         cmd_showtail, false);
-      compl_selected = findex;
-      pum_clear();
-      cmdline_pum_display(true);
-    } else {
-      redraw_wildmenu(xp, xp->xp_numfiles, xp->xp_files, findex, cmd_showtail);
-    }
-  }
-
-  xp->xp_selected = findex;
-  // Return the original text or the selected match
-  return xstrdup(findex == -1 ? xp->xp_orig : xp->xp_files[findex]);
+  return rs_get_next_or_prev_match(mode, xp);
 }
 
-/// Start the command-line expansion and get the matches.
+/// Start the command-line expansion and get the matches. Rust implementation.
 static char *ExpandOne_start(int mode, expand_T *xp, char *str, int options)
 {
-  int non_suf_match;  // number without matching suffix
-  char *ss = NULL;
-
-  // Do the expansion.
-  if (ExpandFromContext(xp, str, &xp->xp_files, &xp->xp_numfiles, options) == FAIL) {
-#ifdef FNAME_ILLEGAL
-    // Illegal file name has been silently skipped.  But when there
-    // are wildcards, the real problem is that there was no match,
-    // causing the pattern to be added, which has illegal characters.
-    if (!(options & WILD_SILENT) && (options & WILD_LIST_NOTFOUND)) {
-      semsg(_(e_nomatch2), str);
-    }
-#endif
-  } else if (xp->xp_numfiles == 0) {
-    if (!(options & WILD_SILENT)) {
-      semsg(_(e_nomatch2), str);
-    }
-  } else {
-    // Escape the matches for use on the command line.
-    ExpandEscape(xp, str, xp->xp_numfiles, xp->xp_files, options);
-
-    // Check for matching suffixes in file names.
-    if (mode != WILD_ALL && mode != WILD_ALL_KEEP && mode != WILD_LONGEST) {
-      if (xp->xp_numfiles) {
-        non_suf_match = xp->xp_numfiles;
-      } else {
-        non_suf_match = 1;
-      }
-      if ((xp->xp_context == EXPAND_FILES
-           || xp->xp_context == EXPAND_DIRECTORIES)
-          && xp->xp_numfiles > 1) {
-        // More than one match; check suffix.
-        // The files will have been sorted on matching suffix in
-        // expand_wildcards, only need to check the first two.
-        non_suf_match = 0;
-        for (int i = 0; i < 2; i++) {
-          if (match_suffix(xp->xp_files[i])) {
-            non_suf_match++;
-          }
-        }
-      }
-      if (non_suf_match != 1) {
-        // Can we ever get here unless it's while expanding
-        // interactively?  If not, we can get rid of this all
-        // together. Don't really want to wait for this message
-        // (and possibly have to hit return to continue!).
-        if (!(options & WILD_SILENT)) {
-          emsg(_(e_toomany));
-        } else if (!(options & WILD_NO_BEEP)) {
-          beep_flush();
-        }
-      }
-      if (!(non_suf_match != 1 && mode == WILD_EXPAND_FREE)) {
-        ss = xstrdup(xp->xp_files[0]);
-      }
-    }
-  }
-
-  return ss;
+  return rs_expand_one_start(mode, xp, str, options);
 }
 
 /// Return the longest common part in the list of cmdline completion matches.
+/// Rust implementation.
 static char *find_longest_match(expand_T *xp, int options)
 {
-  size_t len = 0;
-
-  for (size_t mb_len; xp->xp_files[0][len]; len += mb_len) {
-    mb_len = (size_t)utfc_ptr2len(&xp->xp_files[0][len]);
-    int c0 = utf_ptr2char(&xp->xp_files[0][len]);
-    int i;
-    for (i = 1; i < xp->xp_numfiles; i++) {
-      int ci = utf_ptr2char(&xp->xp_files[i][len]);
-
-      if (p_fic && (xp->xp_context == EXPAND_DIRECTORIES
-                    || xp->xp_context == EXPAND_FILES
-                    || xp->xp_context == EXPAND_SHELLCMD
-                    || xp->xp_context == EXPAND_BUFFERS)) {
-        if (mb_tolower(c0) != mb_tolower(ci)) {
-          break;
-        }
-      } else if (c0 != ci) {
-        break;
-      }
-    }
-    if (i < xp->xp_numfiles) {
-      if (!(options & WILD_NO_BEEP)) {
-        vim_beep(kOptBoFlagWildmode);
-      }
-      break;
-    }
-  }
-
-  return xmemdupz(xp->xp_files[0], len);
+  return rs_find_longest_match(xp, options);
 }
 
 /// Do wildcard expansion on the string "str".
