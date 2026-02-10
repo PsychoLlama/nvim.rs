@@ -145,6 +145,7 @@ extern "C" {
     fn nvim_get_fdo_flags() -> c_uint;
     fn nvim_foldOpenCursor();
     fn nvim_set_ins_at_eol(val: bool);
+    fn nvim_get_curswant() -> c_int;
     fn nvim_set_curswant(val: c_int);
     fn nvim_virtual_active() -> bool;
     fn nvim_gchar_cursor() -> c_int;
@@ -241,6 +242,53 @@ extern "C" {
     fn nvim_set_cmdwin_result(val: c_int);
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_set_restart_edit(val: c_int);
+
+    // Wave 2 Phase 5: Visual complex function accessors
+    fn nvim_set_VIsual_active(val: bool);
+    fn nvim_check_cursor();
+    fn nvim_setmouse();
+    fn nvim_get_VIsual_lnum() -> c_int;
+    fn nvim_get_VIsual_col() -> c_int;
+    fn nvim_get_VIsual_coladd() -> c_int;
+    fn nvim_set_VIsual_pos(lnum: c_int, col: c_int, coladd: c_int);
+    fn nvim_set_cursor_pos(lnum: c_int, col: c_int, coladd: c_int);
+    fn nvim_get_b_visual_vi_start_lnum() -> c_int;
+    fn nvim_get_b_visual_vi_start_col() -> c_int;
+    fn nvim_get_b_visual_vi_start_coladd() -> c_int;
+    fn nvim_set_b_visual_vi_start(lnum: c_int, col: c_int, coladd: c_int);
+    fn nvim_get_b_visual_vi_end_lnum() -> c_int;
+    fn nvim_get_b_visual_vi_end_col() -> c_int;
+    fn nvim_get_b_visual_vi_end_coladd() -> c_int;
+    fn nvim_set_b_visual_vi_end(lnum: c_int, col: c_int, coladd: c_int);
+    fn nvim_get_b_visual_vi_curswant() -> c_int;
+    fn nvim_set_b_visual_vi_curswant(val: c_int);
+    fn nvim_set_curbuf_visual_mode_eval(val: c_int);
+    fn nvim_set_VIsual_select_reg(val: c_int);
+    fn nvim_update_topline_call();
+    fn nvim_p_sel_is_exclusive() -> bool;
+    fn nvim_equalpos_VIsual_cursor() -> bool;
+    fn nvim_set_w_set_curswant(val: bool);
+    fn nvim_getvcols_call(
+        lnum1: c_int,
+        col1: c_int,
+        coladd1: c_int,
+        lnum2: c_int,
+        col2: c_int,
+        coladd2: c_int,
+        out_left: *mut c_int,
+        out_right: *mut c_int,
+    );
+    fn nvim_coladvance_call(col: c_int);
+    fn nvim_findmatch_nul(
+        oap: OapHandle,
+        out_lnum: *mut c_int,
+        out_col: *mut c_int,
+        out_coladd: *mut c_int,
+    ) -> bool;
+    fn nvim_unadjust_for_sel_inner_cursor() -> bool;
+    fn nvim_unadjust_for_sel_inner_visual() -> bool;
+    #[allow(dead_code)]
+    fn nvim_ml_get_len_call(lnum: c_int) -> c_int;
 }
 
 // Operator type constants (must match ops.h)
@@ -268,6 +316,9 @@ const K_MT_LINEWISE: c_int = 1;
 
 // Beginline flags (must match cursor_defs.h)
 const BL_WHITE: c_int = 1;
+
+// Fold open flag (must match option_vars.generated.h)
+const K_OPT_FDO_FLAG_PERCENT: c_uint = 0x10;
 
 /// Opaque handle to a window (win_T*).
 pub type WinHandle = *mut std::ffi::c_void;
@@ -2575,6 +2626,266 @@ pub unsafe extern "C" fn rs_nv_normal(cap: CapHandle) {
         }
     } else {
         rs_clearopbeep(oap);
+    }
+}
+
+// =============================================================================
+// Wave 2 Phase 5: Visual complex functions
+// =============================================================================
+
+/// `gv` command: reselect previous Visual area (or exchange with current).
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_gv_cmd(cap: CapHandle) {
+    let vi_start_lnum = nvim_get_b_visual_vi_start_lnum();
+    let line_count = nvim_get_line_count();
+
+    if vi_start_lnum == 0 || vi_start_lnum > line_count || nvim_get_b_visual_vi_end_lnum() == 0 {
+        beep_flush();
+        return;
+    }
+
+    // tpos holds the end position
+    let tpos_lnum: c_int;
+    let tpos_col: c_int;
+    let tpos_coladd: c_int;
+
+    if nvim_get_VIsual_active() != 0 {
+        // Swap VIsual_mode with b_visual.vi_mode
+        let i = nvim_get_VIsual_mode();
+        nvim_set_VIsual_mode(nvim_get_curbuf_visual_vi_mode());
+        nvim_set_curbuf_visual_vi_mode(i);
+        nvim_set_curbuf_visual_mode_eval(i);
+
+        // Swap curswant with b_visual.vi_curswant
+        let i = nvim_get_curswant();
+        nvim_set_curswant(nvim_get_b_visual_vi_curswant());
+        nvim_set_b_visual_vi_curswant(i);
+
+        // tpos = b_visual.vi_end
+        tpos_lnum = nvim_get_b_visual_vi_end_lnum();
+        tpos_col = nvim_get_b_visual_vi_end_col();
+        tpos_coladd = nvim_get_b_visual_vi_end_coladd();
+
+        // b_visual.vi_end = cursor
+        nvim_set_b_visual_vi_end(
+            nvim_get_cursor_lnum(),
+            nvim_get_cursor_col(),
+            nvim_get_cursor_coladd(),
+        );
+
+        // cursor = b_visual.vi_start
+        nvim_set_cursor_pos(
+            nvim_get_b_visual_vi_start_lnum(),
+            nvim_get_b_visual_vi_start_col(),
+            nvim_get_b_visual_vi_start_coladd(),
+        );
+
+        // b_visual.vi_start = VIsual
+        nvim_set_b_visual_vi_start(
+            nvim_get_VIsual_lnum(),
+            nvim_get_VIsual_col(),
+            nvim_get_VIsual_coladd(),
+        );
+    } else {
+        nvim_set_VIsual_mode(nvim_get_curbuf_visual_vi_mode());
+        nvim_set_curswant(nvim_get_b_visual_vi_curswant());
+
+        tpos_lnum = nvim_get_b_visual_vi_end_lnum();
+        tpos_col = nvim_get_b_visual_vi_end_col();
+        tpos_coladd = nvim_get_b_visual_vi_end_coladd();
+
+        nvim_set_cursor_pos(
+            nvim_get_b_visual_vi_start_lnum(),
+            nvim_get_b_visual_vi_start_col(),
+            nvim_get_b_visual_vi_start_coladd(),
+        );
+    }
+
+    nvim_set_VIsual_active(true);
+    nvim_set_VIsual_reselect(true);
+
+    // Make sure cursor is on an existing character
+    nvim_check_cursor();
+    // VIsual = cursor
+    nvim_set_VIsual_pos(
+        nvim_get_cursor_lnum(),
+        nvim_get_cursor_col(),
+        nvim_get_cursor_coladd(),
+    );
+    // cursor = tpos
+    nvim_set_cursor_pos(tpos_lnum, tpos_col, tpos_coladd);
+    nvim_check_cursor();
+    nvim_update_topline_call();
+
+    // Start Select mode or may_start_select
+    if nvim_cap_get_arg(cap) != 0 {
+        nvim_set_VIsual_select(true);
+        nvim_set_VIsual_select_reg(0);
+    } else {
+        rs_may_start_select(c_int::from(b'c'));
+    }
+    nvim_setmouse();
+    nvim_redraw_curbuf_inverted();
+    nvim_showmode();
+}
+
+/// `o`/`O` in Visual mode: exchange start/end corners.
+///
+/// # Safety
+/// Called from C with valid state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
+    // Save old cursor (needed in both branches)
+    let old_lnum = nvim_get_cursor_lnum();
+    let old_col = nvim_get_cursor_col();
+    let old_coladd = nvim_get_cursor_coladd();
+
+    if cmdchar == c_int::from(b'O') && nvim_get_VIsual_mode() == CTRL_V {
+        let mut left: c_int = 0;
+        let mut right: c_int = 0;
+        nvim_getvcols_call(
+            old_lnum,
+            old_col,
+            old_coladd,
+            nvim_get_VIsual_lnum(),
+            nvim_get_VIsual_col(),
+            nvim_get_VIsual_coladd(),
+            &raw mut left,
+            &raw mut right,
+        );
+
+        // Move cursor to VIsual line, advance to left column
+        nvim_set_cursor_lnum(nvim_get_VIsual_lnum());
+        nvim_coladvance_call(left);
+        // VIsual = cursor
+        nvim_set_VIsual_pos(
+            nvim_get_cursor_lnum(),
+            nvim_get_cursor_col(),
+            nvim_get_cursor_coladd(),
+        );
+
+        // Restore cursor to old line, set curswant to right
+        nvim_set_cursor_lnum(old_lnum);
+        nvim_set_curswant(right);
+
+        // 'selection' "exclusive" and cursor at right-bottom corner: move right
+        if old_lnum >= nvim_get_VIsual_lnum() && nvim_p_sel_is_exclusive() {
+            nvim_set_curswant(nvim_get_curswant() + 1);
+        }
+        nvim_coladvance_call(nvim_get_curswant());
+
+        if nvim_get_cursor_col() == old_col
+            && (!nvim_virtual_active() || nvim_get_cursor_coladd() == old_coladd)
+        {
+            nvim_set_cursor_lnum(nvim_get_VIsual_lnum());
+            if old_lnum <= nvim_get_VIsual_lnum() && nvim_p_sel_is_exclusive() {
+                right += 1;
+            }
+            nvim_coladvance_call(right);
+            nvim_set_VIsual_pos(
+                nvim_get_cursor_lnum(),
+                nvim_get_cursor_col(),
+                nvim_get_cursor_coladd(),
+            );
+
+            nvim_set_cursor_lnum(old_lnum);
+            nvim_coladvance_call(left);
+            nvim_set_curswant(left);
+        }
+    } else {
+        // Simple swap: cursor <-> VIsual
+        nvim_set_cursor_pos(
+            nvim_get_VIsual_lnum(),
+            nvim_get_VIsual_col(),
+            nvim_get_VIsual_coladd(),
+        );
+        nvim_set_VIsual_pos(old_lnum, old_col, old_coladd);
+        nvim_set_w_set_curswant(true);
+    }
+}
+
+/// Exclude last char for 'selection' == "exclusive".
+///
+/// # Safety
+/// Called from C with valid state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_unadjust_for_sel() -> bool {
+    if nvim_p_sel_is_exclusive() && !nvim_equalpos_VIsual_cursor() {
+        if nvim_lt_VIsual_cursor() {
+            return nvim_unadjust_for_sel_inner_cursor();
+        }
+        return nvim_unadjust_for_sel_inner_visual();
+    }
+    false
+}
+
+/// `%` command: goto percentage in file or find matching paren.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_percent(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let lnum = nvim_get_cursor_lnum();
+
+    nvim_oap_set_inclusive(oap, true);
+
+    let count0 = nvim_cap_get_count0(cap);
+    if count0 != 0 {
+        // {cnt}% : goto {cnt} percentage in file
+        if count0 > 100 {
+            rs_clearopbeep(oap);
+        } else {
+            nvim_oap_set_motion_type(oap, K_MT_LINEWISE);
+            nvim_setpcmark();
+
+            let line_count = nvim_get_line_count();
+            // Round up, so 'normal 100%' always jumps to the last line.
+            // Beyond 21474836 lines, (ml_line_count * 100 + 99) would
+            // overflow on 32-bits, so use a formula with less accuracy.
+            #[allow(clippy::cast_sign_loss)]
+            let target = if line_count >= 21_474_836 {
+                (line_count + 99) / 100 * count0
+            } else {
+                (line_count * count0 + 99) / 100
+            };
+            let target = target.max(1).min(line_count);
+            nvim_set_cursor_lnum(target);
+
+            nvim_beginline(BL_SOL | BL_FIX);
+        }
+    } else {
+        // "%" : go to matching paren
+        nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
+        nvim_oap_set_use_reg_one(oap, true);
+
+        let mut out_lnum: c_int = 0;
+        let mut out_col: c_int = 0;
+        let mut out_coladd: c_int = 0;
+        if nvim_findmatch_nul(
+            oap,
+            &raw mut out_lnum,
+            &raw mut out_col,
+            &raw mut out_coladd,
+        ) {
+            nvim_setpcmark();
+            nvim_set_cursor_pos(out_lnum, out_col, 0);
+            nvim_set_w_set_curswant(true);
+            adjust_for_sel(cap);
+        } else {
+            rs_clearopbeep(oap);
+        }
+    }
+
+    if nvim_oap_get_op_type_ptr(oap) == OP_NOP
+        && lnum != nvim_get_cursor_lnum()
+        && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_PERCENT) != 0
+        && nvim_get_KeyTyped()
+    {
+        nvim_foldOpenCursor();
     }
 }
 

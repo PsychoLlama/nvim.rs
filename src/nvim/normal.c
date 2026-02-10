@@ -474,6 +474,12 @@ extern void rs_nv_g_underscore_cmd(cmdarg_T *cap);
 extern void rs_nv_gi_cmd(cmdarg_T *cap);
 extern void rs_nv_normal(cmdarg_T *cap);
 
+// Wave 2 Phase 5 functions
+extern void rs_nv_gv_cmd(cmdarg_T *cap);
+extern void rs_v_swap_corners(int cmdchar);
+extern bool rs_unadjust_for_sel(void);
+extern void rs_nv_percent(cmdarg_T *cap);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -1865,6 +1871,215 @@ int nvim_normal_get_cmdwin_type(void)
 void nvim_set_cmdwin_result(int val)
 {
   cmdwin_result = val;
+}
+
+// =============================================================================
+// Wave 2 Phase 5: Visual complex function accessors
+// =============================================================================
+
+// Guards: ensure Rust constants match C values
+_Static_assert(kOptFdoFlagPercent == 0x10,
+               "kOptFdoFlagPercent changed - update K_OPT_FDO_FLAG_PERCENT in normal/src/lib.rs");
+_Static_assert(BL_SOL == 2,
+               "BL_SOL changed - update BL_SOL in normal/src/lib.rs");
+_Static_assert(BL_FIX == 4,
+               "BL_FIX changed - update BL_FIX in normal/src/lib.rs");
+_Static_assert(UPD_INVERTED == 20,
+               "UPD_INVERTED changed - update UPD_INVERTED in normal/src/lib.rs");
+
+/// Set full VIsual position.
+void nvim_set_VIsual_pos(int lnum, int col, int coladd)
+{
+  VIsual.lnum = lnum;
+  VIsual.col = col;
+  VIsual.coladd = coladd;
+}
+
+/// Set full cursor position.
+void nvim_set_cursor_pos(int lnum, int col, int coladd)
+{
+  curwin->w_cursor.lnum = lnum;
+  curwin->w_cursor.col = col;
+  curwin->w_cursor.coladd = coladd;
+}
+
+/// Get curbuf->b_visual.vi_start.lnum.
+int nvim_get_b_visual_vi_start_lnum(void)
+{
+  return curbuf->b_visual.vi_start.lnum;
+}
+
+/// Get curbuf->b_visual.vi_start.col.
+int nvim_get_b_visual_vi_start_col(void)
+{
+  return curbuf->b_visual.vi_start.col;
+}
+
+/// Get curbuf->b_visual.vi_start.coladd.
+int nvim_get_b_visual_vi_start_coladd(void)
+{
+  return curbuf->b_visual.vi_start.coladd;
+}
+
+/// Set curbuf->b_visual.vi_start position.
+void nvim_set_b_visual_vi_start(int lnum, int col, int coladd)
+{
+  curbuf->b_visual.vi_start.lnum = lnum;
+  curbuf->b_visual.vi_start.col = col;
+  curbuf->b_visual.vi_start.coladd = coladd;
+}
+
+/// Get curbuf->b_visual.vi_end.lnum.
+int nvim_get_b_visual_vi_end_lnum(void)
+{
+  return curbuf->b_visual.vi_end.lnum;
+}
+
+/// Get curbuf->b_visual.vi_end.col.
+int nvim_get_b_visual_vi_end_col(void)
+{
+  return curbuf->b_visual.vi_end.col;
+}
+
+/// Get curbuf->b_visual.vi_end.coladd.
+int nvim_get_b_visual_vi_end_coladd(void)
+{
+  return curbuf->b_visual.vi_end.coladd;
+}
+
+/// Set curbuf->b_visual.vi_end position.
+void nvim_set_b_visual_vi_end(int lnum, int col, int coladd)
+{
+  curbuf->b_visual.vi_end.lnum = lnum;
+  curbuf->b_visual.vi_end.col = col;
+  curbuf->b_visual.vi_end.coladd = coladd;
+}
+
+/// Get curbuf->b_visual.vi_curswant.
+int nvim_get_b_visual_vi_curswant(void)
+{
+  return curbuf->b_visual.vi_curswant;
+}
+
+/// Set curbuf->b_visual.vi_curswant.
+void nvim_set_b_visual_vi_curswant(int val)
+{
+  curbuf->b_visual.vi_curswant = val;
+}
+
+/// Set curbuf->b_visual_mode_eval.
+void nvim_set_curbuf_visual_mode_eval(int val)
+{
+  curbuf->b_visual_mode_eval = val;
+}
+
+/// Set VIsual_select_reg.
+void nvim_set_VIsual_select_reg(int val)
+{
+  VIsual_select_reg = val;
+}
+
+/// Wrapper for update_topline(curwin).
+void nvim_update_topline_call(void)
+{
+  update_topline(curwin);
+}
+
+/// Check if *p_sel == 'e' (exclusive selection).
+bool nvim_p_sel_is_exclusive(void)
+{
+  return *p_sel == 'e';
+}
+
+/// Check if VIsual and curwin->w_cursor are equal.
+bool nvim_equalpos_VIsual_cursor(void)
+{
+  return equalpos(VIsual, curwin->w_cursor);
+}
+
+/// Get curwin->w_set_curswant.
+bool nvim_get_w_set_curswant(void)
+{
+  return curwin->w_set_curswant;
+}
+
+/// Set curwin->w_set_curswant.
+void nvim_set_w_set_curswant(bool val)
+{
+  curwin->w_set_curswant = val;
+}
+
+/// Wrapper for getvcols: takes two positions, returns left/right via out-params.
+void nvim_getvcols_call(int lnum1, int col1, int coladd1,
+                        int lnum2, int col2, int coladd2,
+                        int *out_left, int *out_right)
+{
+  pos_T pos1 = { lnum1, col1, coladd1 };
+  pos_T pos2 = { lnum2, col2, coladd2 };
+  colnr_T left, right;
+  getvcols(curwin, &pos1, &pos2, &left, &right);
+  *out_left = left;
+  *out_right = right;
+}
+
+/// Wrapper for coladvance(curwin, col).
+void nvim_coladvance_call(int col)
+{
+  coladvance(curwin, col);
+}
+
+/// findmatch wrapper: returns success and out-params for position.
+bool nvim_findmatch_nul(oparg_T *oap, int *out_lnum, int *out_col, int *out_coladd)
+{
+  pos_T *pos = findmatch(oap, NUL);
+  if (pos == NULL) {
+    return false;
+  }
+  *out_lnum = pos->lnum;
+  *out_col = pos->col;
+  *out_coladd = pos->coladd;
+  return true;
+}
+
+/// Wrapper for unadjust_for_sel_inner on curwin->w_cursor.
+bool nvim_unadjust_for_sel_inner_cursor(void)
+{
+  return unadjust_for_sel_inner(&curwin->w_cursor);
+}
+
+/// Wrapper for unadjust_for_sel_inner on VIsual.
+bool nvim_unadjust_for_sel_inner_visual(void)
+{
+  return unadjust_for_sel_inner(&VIsual);
+}
+
+/// Wrapper for mark_mb_adjustpos on cursor, returns adjusted col.
+int nvim_mark_mb_adjustpos_cursor(void)
+{
+  mark_mb_adjustpos(curbuf, &curwin->w_cursor);
+  return curwin->w_cursor.col;
+}
+
+/// Wrapper for mark_mb_adjustpos on VIsual, returns adjusted col.
+int nvim_mark_mb_adjustpos_visual(void)
+{
+  mark_mb_adjustpos(curbuf, &VIsual);
+  return VIsual.col;
+}
+
+/// Wrapper for getvcol on a position, returns ce (end virtual column).
+int nvim_getvcol_ce(int lnum, int col, int coladd)
+{
+  pos_T pp = { lnum, col, coladd };
+  colnr_T cs, ce;
+  getvcol(curwin, &pp, &cs, NULL, &ce);
+  return ce - cs;
+}
+
+/// Wrapper for ml_get_len.
+int nvim_ml_get_len_call(int lnum)
+{
+  return (int)ml_get_len(lnum);
 }
 
 /// Wrapper for nv_Zet C implementation.
@@ -5870,50 +6085,7 @@ static void nv_brackets_impl(cmdarg_T *cap)
 /// Handle Normal mode "%" command.
 static void nv_percent(cmdarg_T *cap)
 {
-  linenr_T lnum = curwin->w_cursor.lnum;
-
-  cap->oap->inclusive = true;
-  if (cap->count0) {  // {cnt}% : goto {cnt} percentage in file
-    if (cap->count0 > 100) {
-      clearopbeep(cap->oap);
-    } else {
-      cap->oap->motion_type = kMTLineWise;
-      setpcmark();
-      // Round up, so 'normal 100%' always jumps at the line line.
-      // Beyond 21474836 lines, (ml_line_count * 100 + 99) would
-      // overflow on 32-bits, so use a formula with less accuracy
-      // to avoid overflows.
-      if (curbuf->b_ml.ml_line_count >= 21474836) {
-        curwin->w_cursor.lnum = (curbuf->b_ml.ml_line_count + 99)
-                                / 100 * cap->count0;
-      } else {
-        curwin->w_cursor.lnum = (curbuf->b_ml.ml_line_count *
-                                 cap->count0 + 99) / 100;
-      }
-      curwin->w_cursor.lnum = MIN(MAX(curwin->w_cursor.lnum, 1), curbuf->b_ml.ml_line_count);
-
-      beginline(BL_SOL | BL_FIX);
-    }
-  } else {  // "%" : go to matching paren
-    pos_T *pos;
-    cap->oap->motion_type = kMTCharWise;
-    cap->oap->use_reg_one = true;
-    if ((pos = findmatch(cap->oap, NUL)) == NULL) {
-      clearopbeep(cap->oap);
-    } else {
-      setpcmark();
-      curwin->w_cursor = *pos;
-      curwin->w_set_curswant = true;
-      curwin->w_cursor.coladd = 0;
-      adjust_for_sel(cap);
-    }
-  }
-  if (cap->oap->op_type == OP_NOP
-      && lnum != curwin->w_cursor.lnum
-      && (fdo_flags & kOptFdoFlagPercent)
-      && KeyTyped) {
-    foldOpenCursor();
-  }
+  rs_nv_percent(cap);
 }
 
 /// Handle "(" and ")" commands.
@@ -6120,44 +6292,7 @@ static void nv_replace_impl(cmdarg_T *cap)
 /// 'O': same, but in block mode exchange left and right corners.
 static void v_swap_corners(int cmdchar)
 {
-  colnr_T left, right;
-
-  if (cmdchar == 'O' && VIsual_mode == Ctrl_V) {
-    pos_T old_cursor = curwin->w_cursor;
-    getvcols(curwin, &old_cursor, &VIsual, &left, &right);
-    curwin->w_cursor.lnum = VIsual.lnum;
-    coladvance(curwin, left);
-    VIsual = curwin->w_cursor;
-
-    curwin->w_cursor.lnum = old_cursor.lnum;
-    curwin->w_curswant = right;
-    // 'selection "exclusive" and cursor at right-bottom corner: move it
-    // right one column
-    if (old_cursor.lnum >= VIsual.lnum && *p_sel == 'e') {
-      curwin->w_curswant++;
-    }
-    coladvance(curwin, curwin->w_curswant);
-    if (curwin->w_cursor.col == old_cursor.col
-        && (!virtual_active(curwin)
-            || curwin->w_cursor.coladd ==
-            old_cursor.coladd)) {
-      curwin->w_cursor.lnum = VIsual.lnum;
-      if (old_cursor.lnum <= VIsual.lnum && *p_sel == 'e') {
-        right++;
-      }
-      coladvance(curwin, right);
-      VIsual = curwin->w_cursor;
-
-      curwin->w_cursor.lnum = old_cursor.lnum;
-      coladvance(curwin, left);
-      curwin->w_curswant = left;
-    }
-  } else {
-    pos_T old_cursor = curwin->w_cursor;
-    curwin->w_cursor = VIsual;
-    VIsual = old_cursor;
-    curwin->w_set_curswant = true;
-  }
+  rs_v_swap_corners(cmdchar);
 }
 
 /// "R" (cap->arg is false) and "gR" (cap->arg is true).
@@ -6566,58 +6701,7 @@ static void nv_suspend(cmdarg_T *cap)
 ///       exchange previous and current Visual area.
 static void nv_gv_cmd(cmdarg_T *cap)
 {
-  if (curbuf->b_visual.vi_start.lnum == 0
-      || curbuf->b_visual.vi_start.lnum > curbuf->b_ml.ml_line_count
-      || curbuf->b_visual.vi_end.lnum == 0) {
-    beep_flush();
-    return;
-  }
-
-  pos_T tpos;
-  // set w_cursor to the start of the Visual area, tpos to the end
-  if (VIsual_active) {
-    int i = VIsual_mode;
-    VIsual_mode = curbuf->b_visual.vi_mode;
-    curbuf->b_visual.vi_mode = i;
-    curbuf->b_visual_mode_eval = i;
-    i = curwin->w_curswant;
-    curwin->w_curswant = curbuf->b_visual.vi_curswant;
-    curbuf->b_visual.vi_curswant = i;
-
-    tpos = curbuf->b_visual.vi_end;
-    curbuf->b_visual.vi_end = curwin->w_cursor;
-    curwin->w_cursor = curbuf->b_visual.vi_start;
-    curbuf->b_visual.vi_start = VIsual;
-  } else {
-    VIsual_mode = curbuf->b_visual.vi_mode;
-    curwin->w_curswant = curbuf->b_visual.vi_curswant;
-    tpos = curbuf->b_visual.vi_end;
-    curwin->w_cursor = curbuf->b_visual.vi_start;
-  }
-
-  VIsual_active = true;
-  VIsual_reselect = true;
-
-  // Set Visual to the start and w_cursor to the end of the Visual
-  // area.  Make sure they are on an existing character.
-  check_cursor(curwin);
-  VIsual = curwin->w_cursor;
-  curwin->w_cursor = tpos;
-  check_cursor(curwin);
-  update_topline(curwin);
-
-  // When called from normal "g" command: start Select mode when
-  // 'selectmode' contains "cmd".  When called for K_SELECT, always
-  // start Select mode.
-  if (cap->arg) {
-    VIsual_select = true;
-    VIsual_select_reg = 0;
-  } else {
-    may_start_select('c');
-  }
-  setmouse();
-  redraw_curbuf_later(UPD_INVERTED);
-  showmode();
+  rs_nv_gv_cmd(cap);
 }
 
 /// "g0", "g^" : Like "0" and "^" but for screen lines.
@@ -7353,11 +7437,7 @@ static void adjust_for_sel(cmdarg_T *cap)
 /// @return  true when backed up to the previous line.
 bool unadjust_for_sel(void)
 {
-  if (*p_sel == 'e' && !equalpos(VIsual, curwin->w_cursor)) {
-    return unadjust_for_sel_inner(lt(VIsual, curwin->w_cursor)
-                                  ? &curwin->w_cursor : &VIsual);
-  }
-  return false;
+  return rs_unadjust_for_sel();
 }
 
 /// Move position "*pp" back one character for 'selection' == "exclusive".
