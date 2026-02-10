@@ -233,6 +233,14 @@ extern void rs_replace_pop_ins(void);
 extern void rs_mb_replace_pop_ins(void);
 extern void rs_replace_do_bs(int limit_col);
 extern void rs_replace_stack_clear(void);
+// Movement module exports (Phase 3)
+extern void rs_beginline(int flags);
+extern int rs_oneright(void);
+extern int rs_oneleft(void);
+extern void rs_cursor_up_inner(win_T *wp, linenr_T n, bool skip_conceal);
+extern int rs_cursor_up(linenr_T n, int upd_topline);
+extern void rs_cursor_down_inner(win_T *wp, int n, bool skip_conceal);
+extern int rs_cursor_down(int n, int upd_topline);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -604,6 +612,127 @@ const void *nvim_curwin_get_cursor_ptr(void)
 {
   return &curwin->w_cursor;
 }
+
+// -- Phase 3: Movement module accessors --
+
+/// Get curwin->w_cursor.coladd (accessor for Rust).
+colnr_T nvim_edit_get_cursor_coladd(void)
+{
+  return curwin->w_cursor.coladd;
+}
+
+/// Set curwin->w_cursor.coladd (accessor for Rust).
+void nvim_edit_set_cursor_coladd(colnr_T val)
+{
+  curwin->w_cursor.coladd = val;
+}
+
+/// Get curwin->w_curswant (accessor for Rust).
+colnr_T nvim_edit_get_w_curswant(void)
+{
+  return curwin->w_curswant;
+}
+
+/// Set curwin->w_set_curswant (accessor for Rust).
+void nvim_edit_set_w_set_curswant(int val)
+{
+  curwin->w_set_curswant = (val != 0);
+}
+
+/// Call coladvance(curwin, col) (accessor for Rust).
+void nvim_edit_coladvance(colnr_T col)
+{
+  coladvance(curwin, col);
+}
+
+/// Call adjust_skipcol() (accessor for Rust).
+void nvim_edit_adjust_skipcol(void)
+{
+  adjust_skipcol();
+}
+
+/// Call getviscol() (accessor for Rust).
+colnr_T nvim_edit_getviscol(void)
+{
+  return getviscol();
+}
+
+/// Call virtual_active(curwin) (accessor for Rust).
+int nvim_edit_virtual_active(void)
+{
+  return virtual_active(curwin) ? 1 : 0;
+}
+
+/// Get get_ve_flags(curwin) (accessor for Rust).
+int nvim_edit_get_ve_flags(void)
+{
+  return (int)get_ve_flags(curwin);
+}
+
+/// Call vim_isprintc(c) (accessor for Rust).
+int nvim_edit_vim_isprintc(int c)
+{
+  return vim_isprintc(c) ? 1 : 0;
+}
+
+/// Call ptr2cells(ptr) (accessor for Rust).
+int nvim_edit_ptr2cells(const char *ptr)
+{
+  return ptr2cells(ptr);
+}
+
+/// Call utf_ptr2char(ptr) (accessor for Rust).
+int nvim_edit_utf_ptr2char(const char *ptr)
+{
+  return utf_ptr2char(ptr);
+}
+
+/// Get wp->w_cursor.lnum (accessor for Rust).
+linenr_T nvim_edit_win_get_cursor_lnum(win_T *wp)
+{
+  return wp->w_cursor.lnum;
+}
+
+/// Set wp->w_cursor.lnum (accessor for Rust).
+void nvim_edit_win_set_cursor_lnum(win_T *wp, linenr_T lnum)
+{
+  wp->w_cursor.lnum = lnum;
+}
+
+/// Get wp->w_buffer->b_ml.ml_line_count (accessor for Rust).
+linenr_T nvim_edit_win_get_buf_line_count(win_T *wp)
+{
+  return wp->w_buffer->b_ml.ml_line_count;
+}
+
+/// Get fdo_flags global (accessor for Rust).
+int nvim_edit_get_fdo_flags(void)
+{
+  return (int)fdo_flags;
+}
+
+/// Call hasFoldingWin(wp, lnum, firstp, lastp, true, NULL) (accessor for Rust).
+int nvim_edit_hasFoldingWin(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp)
+{
+  return hasFoldingWin(wp, lnum, firstp, lastp, true, NULL) ? 1 : 0;
+}
+
+/// Call update_topline(curwin) (accessor for Rust).
+void nvim_edit_update_topline(void)
+{
+  update_topline(curwin);
+}
+
+// Static asserts for Phase 3 constants
+_Static_assert(BL_WHITE == 1, "BL_WHITE mismatch");
+_Static_assert(BL_SOL == 2, "BL_SOL mismatch");
+_Static_assert(BL_FIX == 4, "BL_FIX mismatch");
+_Static_assert(OK == 1, "OK mismatch");
+_Static_assert(FAIL == 0, "FAIL mismatch");
+_Static_assert(MODE_INSERT == 0x10, "MODE_INSERT mismatch");
+_Static_assert(kOptFdoFlagAll == 0x01, "kOptFdoFlagAll mismatch");
+_Static_assert(kOptVeFlagOnemore == 0x08, "kOptVeFlagOnemore mismatch");
+_Static_assert(TAB == '\011', "TAB mismatch");
 
 #define TRIGGER_AUTOCOMPLETE() \
   do { \
@@ -2755,21 +2884,7 @@ void free_last_insert(void)
 // if flags & BL_FIX    don't leave the cursor on a NUL.
 void beginline(int flags)
 {
-  if ((flags & BL_SOL) && !p_sol) {
-    coladvance(curwin, curwin->w_curswant);
-  } else {
-    curwin->w_cursor.col = 0;
-    curwin->w_cursor.coladd = 0;
-
-    if (flags & (BL_WHITE | BL_SOL)) {
-      for (char *ptr = get_cursor_line_ptr(); ascii_iswhite(*ptr)
-           && !((flags & BL_FIX) && ptr[1] == NUL); ptr++) {
-        curwin->w_cursor.col++;
-      }
-    }
-    curwin->w_set_curswant = true;
-  }
-  adjust_skipcol();
+  rs_beginline(flags);
 }
 
 // oneright oneleft cursor_down cursor_up
@@ -2780,195 +2895,38 @@ void beginline(int flags)
 
 int oneright(void)
 {
-  char *ptr;
-
-  if (virtual_active(curwin)) {
-    pos_T prevpos = curwin->w_cursor;
-
-    // Adjust for multi-wide char (excluding TAB)
-    ptr = get_cursor_pos_ptr();
-    coladvance(curwin, getviscol() + ((*ptr != TAB && vim_isprintc(utf_ptr2char(ptr)))
-                                      ? ptr2cells(ptr) : 1));
-    curwin->w_set_curswant = true;
-    // Return OK if the cursor moved, FAIL otherwise (at window edge).
-    return (prevpos.col != curwin->w_cursor.col
-            || prevpos.coladd != curwin->w_cursor.coladd) ? OK : FAIL;
-  }
-
-  ptr = get_cursor_pos_ptr();
-  if (*ptr == NUL) {
-    return FAIL;            // already at the very end
-  }
-
-  int l = utfc_ptr2len(ptr);
-
-  // move "l" bytes right, but don't end up on the NUL, unless 'virtualedit'
-  // contains "onemore".
-  if (ptr[l] == NUL && (get_ve_flags(curwin) & kOptVeFlagOnemore) == 0) {
-    return FAIL;
-  }
-  curwin->w_cursor.col += l;
-
-  curwin->w_set_curswant = true;
-  adjust_skipcol();
-  return OK;
+  return rs_oneright();
 }
 
 int oneleft(void)
 {
-  if (virtual_active(curwin)) {
-    int v = getviscol();
-
-    if (v == 0) {
-      return FAIL;
-    }
-
-    // We might get stuck on 'showbreak', skip over it.
-    int width = 1;
-    while (true) {
-      coladvance(curwin, v - width);
-      // getviscol() is slow, skip it when 'showbreak' is empty,
-      // 'breakindent' is not set and there are no multi-byte
-      // characters
-      if (getviscol() < v) {
-        break;
-      }
-      width++;
-    }
-
-    if (curwin->w_cursor.coladd == 1) {
-      // Adjust for multi-wide char (not a TAB)
-      char *ptr = get_cursor_pos_ptr();
-      if (*ptr != TAB && vim_isprintc(utf_ptr2char(ptr)) && ptr2cells(ptr) > 1) {
-        curwin->w_cursor.coladd = 0;
-      }
-    }
-
-    curwin->w_set_curswant = true;
-    adjust_skipcol();
-    return OK;
-  }
-
-  if (curwin->w_cursor.col == 0) {
-    return FAIL;
-  }
-
-  curwin->w_set_curswant = true;
-  curwin->w_cursor.col--;
-
-  // if the character on the left of the current cursor is a multi-byte
-  // character, move to its first byte
-  mb_adjust_cursor();
-  adjust_skipcol();
-  return OK;
+  return rs_oneleft();
 }
 
 /// Move the cursor up "n" lines in window "wp". Takes care of closed folds.
 /// Skips over concealed lines when "skip_conceal" is true.
 void cursor_up_inner(win_T *wp, linenr_T n, bool skip_conceal)
 {
-  linenr_T lnum = wp->w_cursor.lnum;
-
-  if (n >= lnum) {
-    lnum = 1;
-  } else if (win_lines_concealed(wp)) {
-    // Count each sequence of folded lines as one logical line.
-
-    // go to the start of the current fold
-    hasFolding(wp, lnum, &lnum, NULL);
-
-    while (n--) {
-      // move up one line
-      lnum--;
-      if (lnum <= 1) {
-        break;
-      }
-      n += skip_conceal && decor_conceal_line(wp, lnum - 1, true);
-      // If we entered a fold, move to the beginning, unless in
-      // Insert mode or when 'foldopen' contains "all": it will open
-      // in a moment.
-      if (n > 0 || !((State & MODE_INSERT) || (fdo_flags & kOptFdoFlagAll))) {
-        hasFolding(wp, lnum, &lnum, NULL);
-      }
-    }
-    lnum = MAX(lnum, 1);
-  } else {
-    lnum -= n;
-  }
-
-  wp->w_cursor.lnum = lnum;
+  rs_cursor_up_inner(wp, n, skip_conceal);
 }
 
 /// @param upd_topline  When true: update topline
 int cursor_up(linenr_T n, bool upd_topline)
 {
-  // This fails if the cursor is already in the first line.
-  if (n > 0 && curwin->w_cursor.lnum <= 1) {
-    return FAIL;
-  }
-  cursor_up_inner(curwin, n, false);
-
-  // try to advance to the column we want to be at
-  coladvance(curwin, curwin->w_curswant);
-
-  if (upd_topline) {
-    update_topline(curwin);  // make sure curwin->w_topline is valid
-  }
-
-  return OK;
+  return rs_cursor_up(n, upd_topline ? 1 : 0);
 }
 
 /// Move the cursor down "n" lines in window "wp". Takes care of closed folds.
 /// Skips over concealed lines when "skip_conceal" is true.
 void cursor_down_inner(win_T *wp, int n, bool skip_conceal)
 {
-  linenr_T lnum = wp->w_cursor.lnum;
-  linenr_T line_count = wp->w_buffer->b_ml.ml_line_count;
-
-  if (lnum + n >= line_count) {
-    lnum = line_count;
-  } else if (win_lines_concealed(wp)) {
-    linenr_T last;
-
-    // count each sequence of folded lines as one logical line
-    while (n--) {
-      if (hasFoldingWin(wp, lnum, NULL, &last, true, NULL)) {
-        lnum = last + 1;
-      } else {
-        lnum++;
-      }
-      if (lnum >= line_count) {
-        break;
-      }
-      n += skip_conceal && decor_conceal_line(wp, lnum - 1, true);
-    }
-    lnum = MIN(lnum, line_count);
-  } else {
-    lnum += (linenr_T)n;
-  }
-
-  wp->w_cursor.lnum = lnum;
+  rs_cursor_down_inner(wp, n, skip_conceal);
 }
 
 /// @param upd_topline  When true: update topline
 int cursor_down(int n, bool upd_topline)
 {
-  linenr_T lnum = curwin->w_cursor.lnum;
-  // This fails if the cursor is already in the last (folded) line.
-  hasFoldingWin(curwin, lnum, NULL, &lnum, true, NULL);
-  if (n > 0 && lnum >= curwin->w_buffer->b_ml.ml_line_count) {
-    return FAIL;
-  }
-  cursor_down_inner(curwin, n, false);
-
-  // try to advance to the column we want to be at
-  coladvance(curwin, curwin->w_curswant);
-
-  if (upd_topline) {
-    update_topline(curwin);           // make sure curwin->w_topline is valid
-  }
-
-  return OK;
+  return rs_cursor_down(n, upd_topline ? 1 : 0);
 }
 
 /// Stuff the last inserted text in the read buffer.

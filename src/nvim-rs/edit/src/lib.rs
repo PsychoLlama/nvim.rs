@@ -12,6 +12,7 @@ pub mod helpers;
 pub mod insert;
 pub mod keys;
 pub mod mode;
+pub mod movement;
 pub mod replace;
 pub mod state;
 pub mod undo;
