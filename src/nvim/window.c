@@ -184,6 +184,15 @@ extern win_T *rs_nav_get_prev_nonfloat(win_T *wp, int wrap);
 extern int rs_nav_is_horizontal_dir(int dir);
 extern int rs_nav_is_vertical_dir(int dir);
 
+// Phase 1: Pure calculations and thin wrappers
+extern void rs_set_fraction(win_T *wp);
+extern int64_t rs_win_default_scroll(win_T *wp);
+extern void rs_win_setheight(int height);
+extern void rs_win_setwidth(int width);
+extern int rs_min_rows(tabpage_T *tp);
+extern int rs_min_rows_for_all_tabpages(void);
+extern void rs_win_get_tabwin(int id, int *tabnr, int *winnr);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -6978,7 +6987,7 @@ static void frame_comp_pos(frame_T *topfrp, int *row, int *col)
 // fit around it.
 void win_setheight(int height)
 {
-  win_setheight_win(height, curwin);
+  rs_win_setheight(height);
 }
 
 // Set the window height of window "win" and take care of repositioning other
@@ -7008,7 +7017,7 @@ static void frame_setheight(frame_T *curfrp, int height)
 // fit around it.
 void win_setwidth(int width)
 {
-  win_setwidth_win(width, curwin);
+  rs_win_setwidth(width);
 }
 
 void win_setwidth_win(int width, win_T *wp)
@@ -7086,12 +7095,7 @@ void win_drag_vsep_line(win_T *dragwin, int offset)
 // Has no effect when the window is less than two lines.
 void set_fraction(win_T *wp)
 {
-  if (wp->w_view_height > 1) {
-    // When cursor is in the first line the percentage is computed as if
-    // it's halfway that line.  Thus with two lines it is 25%, with three
-    // lines 17%, etc.  Similarly for the last line: 75%, 83%, etc.
-    wp->w_fraction = (wp->w_wrow * FRACTION_MULT + FRACTION_MULT / 2) / wp->w_view_height;
-  }
+  rs_set_fraction(wp);
 }
 
 /// Handle scroll position, depending on 'splitkeep'.  Replaces the
@@ -7396,7 +7400,7 @@ void win_new_width(win_T *wp, int width)
 
 OptInt win_default_scroll(win_T *wp)
 {
-  return MAX(wp->w_view_height / 2, 1);
+  return rs_win_default_scroll(wp);
 }
 
 void win_comp_scroll(win_T *wp)
@@ -7687,36 +7691,14 @@ int last_stl_height(bool morewin)
 /// the current number of windows for the given tab page.
 int min_rows(tabpage_T *tp) FUNC_ATTR_NONNULL_ALL
 {
-  if (firstwin == NULL) {       // not initialized yet
-    return MIN_LINES;
-  }
-
-  int total = frame_minheight(tp->tp_topframe, NULL);
-  total += tabline_height() + global_stl_height();
-  if ((tp == curtab ? p_ch : tp->tp_ch_used) > 0) {
-    total++;  // count the room for the command line
-  }
-  return total;
+  return rs_min_rows(tp);
 }
 
 /// Return the minimal number of rows that is needed on the screen to display
 /// the current number of windows for all tab pages.
 int min_rows_for_all_tabpages(void)
 {
-  if (firstwin == NULL) {       // not initialized yet
-    return MIN_LINES;
-  }
-
-  int total = 0;
-  FOR_ALL_TABS(tp) {
-    int n = frame_minheight(tp->tp_topframe, NULL);
-    if ((tp == curtab ? p_ch : tp->tp_ch_used) > 0) {
-      n++;  // count the room for the command line
-    }
-    total = MAX(total, n);
-  }
-  total += tabline_height() + global_stl_height();
-  return total;
+  return rs_min_rows_for_all_tabpages();
 }
 
 /// Check that there is only one window (and only one tab page), not counting a
@@ -8079,25 +8061,7 @@ int win_locked(win_T *wp)
 
 void win_get_tabwin(handle_T id, int *tabnr, int *winnr)
 {
-  *tabnr = 0;
-  *winnr = 0;
-
-  int tnum = 1;
-  int wnum = 1;
-  FOR_ALL_TABS(tp) {
-    FOR_ALL_WINDOWS_IN_TAB(wp, tp) {
-      if (wp->handle == id) {
-        if (win_has_winnr(wp, tp)) {
-          *winnr = wnum;
-          *tabnr = tnum;
-        }
-        return;
-      }
-      wnum += win_has_winnr(wp, tp);
-    }
-    tnum++;
-    wnum = 1;
-  }
+  rs_win_get_tabwin(id, tabnr, winnr);
 }
 
 void win_ui_flush(bool validate)
@@ -8261,3 +8225,29 @@ int nvim_win_buf_is_empty(win_T *wp)
 {
   return (wp && wp->w_buffer) ? buf_is_empty(wp->w_buffer) : 1;
 }
+
+// --- Phase 1 accessors ---
+
+/// Set the w_fraction field for a window (accessor for Rust).
+void nvim_win_set_fraction(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_fraction = val;
+  }
+}
+
+/// Get the tp_ch_used field from a tabpage (accessor for Rust).
+int nvim_tabpage_get_ch_used(tabpage_T *tp)
+{
+  return tp ? (int)tp->tp_ch_used : 0;
+}
+
+/// Check if window has a winnr in tabpage (accessor for Rust).
+/// Wraps win_has_winnr() from eval/window.c.
+int nvim_win_has_winnr(win_T *wp, tabpage_T *tp)
+{
+  return (wp && tp) ? (int)win_has_winnr(wp, tp) : 0;
+}
+
+_Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
+_Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");

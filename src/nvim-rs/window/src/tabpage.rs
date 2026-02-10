@@ -542,6 +542,63 @@ pub extern "C" fn rs_tabpage_insert_position(after: c_int) -> TabpageHandle {
     new_tabpage_insert_position_impl(after)
 }
 
+// =============================================================================
+// Window/Tabpage Lookup
+// =============================================================================
+
+extern "C" {
+    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
+    fn nvim_win_has_winnr(wp: WinHandle, tp: TabpageHandle) -> c_int;
+}
+
+/// Find the tabpage number and window number for a window ID.
+///
+/// Sets `*tabnr` and `*winnr` to the 1-based indices, or 0 if not found.
+///
+/// Equivalent to C `win_get_tabwin()` (window.c L8080).
+fn win_get_tabwin_impl(id: c_int) -> (c_int, c_int) {
+    unsafe {
+        let mut tnum: c_int = 1;
+
+        let mut tp = nvim_get_first_tabpage();
+        while !tp.is_null() {
+            let mut wnum: c_int = 1;
+            let mut wp = get_tabpage_firstwin(tp);
+            while !wp.is_null() {
+                if nvim_win_get_handle(wp) == id {
+                    if nvim_win_has_winnr(wp, tp) != 0 {
+                        return (tnum, wnum);
+                    }
+                    return (0, 0);
+                }
+                wnum += nvim_win_has_winnr(wp, tp);
+                wp = nvim_win_get_next(wp);
+            }
+            tnum += 1;
+            tp = nvim_tabpage_get_next(tp);
+        }
+
+        (0, 0)
+    }
+}
+
+/// FFI: Find tabpage and window number for a window handle ID.
+///
+/// Writes the 1-based tab number and window number to the provided pointers.
+///
+/// # Safety
+/// `tabnr` and `winnr` must be valid, non-null pointers to `c_int`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_get_tabwin(id: c_int, tabnr: *mut c_int, winnr: *mut c_int) {
+    let (t, w) = win_get_tabwin_impl(id);
+    if !tabnr.is_null() {
+        *tabnr = t;
+    }
+    if !winnr.is_null() {
+        *winnr = w;
+    }
+}
+
 // Note: The following FFI exports are in lib.rs:
 // - rs_tabpage_index - get tabpage index
 // - rs_win_find_tabpage - find tabpage containing window
@@ -671,5 +728,13 @@ mod tests {
     fn test_can_create_tabpage() {
         // Basic check - cmdwin is checked in C
         assert_eq!(can_create_tabpage_impl(), 0);
+    }
+
+    #[test]
+    fn test_win_get_tabwin_not_found() {
+        // With no windows initialized, any ID should return (0, 0)
+        let (tabnr, winnr) = win_get_tabwin_impl(99999);
+        assert_eq!(tabnr, 0);
+        assert_eq!(winnr, 0);
     }
 }

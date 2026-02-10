@@ -386,6 +386,37 @@ pub extern "C" fn rs_resize_curwin_total_width() -> c_int {
     unsafe { win_total_width_impl(nvim_get_curwin()) }
 }
 
+// =============================================================================
+// Height/Width Setter Wrappers
+// =============================================================================
+
+extern "C" {
+    fn rs_win_setheight_win(height: c_int, win: WinHandle);
+    fn rs_win_setwidth_win(width: c_int, wp: WinHandle);
+}
+
+/// Set current window height and take care of repositioning other windows.
+///
+/// Equivalent to C `win_setheight()` (window.c L6979).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_win_setheight(height: c_int) {
+    unsafe {
+        let curwin = nvim_get_curwin();
+        rs_win_setheight_win(height, curwin);
+    }
+}
+
+/// Set current window width and take care of repositioning other windows.
+///
+/// Equivalent to C `win_setwidth()` (window.c L7009).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_win_setwidth(width: c_int) {
+    unsafe {
+        let curwin = nvim_get_curwin();
+        rs_win_setwidth_win(width, curwin);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
