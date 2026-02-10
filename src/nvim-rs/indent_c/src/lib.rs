@@ -3768,6 +3768,197 @@ pub unsafe extern "C" fn rs_find_match(lookfor: c_int, ourscope: c_int) -> c_int
 }
 
 // ============================================================================
+// Phase 5: parse_cino — cinoptions parser
+// ============================================================================
+
+/// Helper: check if a byte is an ASCII digit.
+#[inline]
+const fn is_ascii_digit(c: c_char) -> bool {
+    (c as u8).is_ascii_digit()
+}
+
+/// Parse a cinoptions string and populate a `CindentOptions` struct.
+///
+/// This is the Rust implementation of `parse_cino()`. The C wrapper calls this
+/// and copies the resulting options into the buffer's `b_ind_*` fields.
+///
+/// # Safety
+/// - `cino` must be a valid null-terminated C string (or null).
+/// - `opts` must point to a valid `CindentOptions` struct.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_parse_cino(cino: *const c_char, sw: c_int, opts: *mut CindentOptions) {
+    if opts.is_null() {
+        return;
+    }
+    let opts = &mut *opts;
+
+    // Set defaults
+    opts.ind_level = sw;
+    opts.ind_open_imag = 0;
+    opts.ind_no_brace = 0;
+    opts.ind_first_open = 0;
+    opts.ind_open_extra = 0;
+    opts.ind_close_extra = 0;
+    opts.ind_open_left_imag = 0;
+    opts.ind_jump_label = -1;
+    opts.ind_case = sw;
+    opts.ind_case_code = sw;
+    opts.ind_case_break = 0;
+    opts.ind_scopedecl = sw;
+    opts.ind_scopedecl_code = sw;
+    opts.ind_param = sw;
+    opts.ind_func_type = sw;
+    opts.ind_cpp_baseclass = sw;
+    opts.ind_continuation = sw;
+    opts.ind_unclosed = sw * 2;
+    opts.ind_unclosed2 = sw;
+    opts.ind_unclosed_noignore = 0;
+    opts.ind_unclosed_wrapped = 0;
+    opts.ind_unclosed_whiteok = 0;
+    opts.ind_matching_paren = 0;
+    opts.ind_paren_prev = 0;
+    opts.ind_comment = 0;
+    opts.ind_in_comment = 3;
+    opts.ind_in_comment2 = 0;
+    opts.ind_maxparen = 20;
+    opts.ind_maxcomment = 70;
+    opts.ind_java = 0;
+    opts.ind_js = 0;
+    opts.ind_keep_case_label = 0;
+    opts.ind_cpp_namespace = 0;
+    opts.ind_if_for_while = 0;
+    opts.ind_hash_comment = 0;
+    opts.ind_cpp_extern_c = 0;
+    opts.ind_pragma = 0;
+
+    if cino.is_null() {
+        return;
+    }
+
+    let mut p = cino;
+    while !is_nul(*p) {
+        let key = *p;
+        p = p.add(1);
+
+        // Check for negative sign
+        let negative = *p == b'-' as c_char;
+        if negative {
+            p = p.add(1);
+        }
+
+        // Remember where digits start
+        let digits_start = p;
+
+        // Parse integer part (getdigits equivalent)
+        let mut n: i64 = 0;
+        while is_ascii_digit(*p) {
+            n = n.wrapping_mul(10).wrapping_add(i64::from(*p as u8 - b'0'));
+            p = p.add(1);
+        }
+
+        // Parse fractional part (".5s" means a fraction)
+        let mut fraction: i64 = 0;
+        let mut divider: i64 = 0;
+        if *p == b'.' as c_char {
+            p = p.add(1);
+            fraction = 0;
+            while is_ascii_digit(*p) {
+                fraction = fraction
+                    .wrapping_mul(10)
+                    .wrapping_add(i64::from(*p as u8 - b'0'));
+                p = p.add(1);
+                if divider != 0 {
+                    divider *= 10;
+                } else {
+                    divider = 10;
+                }
+            }
+        }
+
+        // Handle shiftwidth multiplier ("2s" means two times shiftwidth)
+        if *p == b's' as c_char {
+            if p == digits_start {
+                n = i64::from(sw); // just "s" is one shiftwidth
+            } else {
+                n *= i64::from(sw);
+                if divider != 0 {
+                    n += (i64::from(sw) * fraction + divider / 2) / divider;
+                }
+            }
+            p = p.add(1);
+        }
+
+        // Apply negative sign
+        if negative {
+            n = -n;
+        }
+
+        // Clamp to int range
+        let n = trim_to_int(n);
+
+        // Map key character to option field
+        match key as u8 {
+            b'>' => opts.ind_level = n,
+            b'e' => opts.ind_open_imag = n,
+            b'n' => opts.ind_no_brace = n,
+            b'f' => opts.ind_first_open = n,
+            b'{' => opts.ind_open_extra = n,
+            b'}' => opts.ind_close_extra = n,
+            b'^' => opts.ind_open_left_imag = n,
+            b'L' => opts.ind_jump_label = n,
+            b':' => opts.ind_case = n,
+            b'=' => opts.ind_case_code = n,
+            b'b' => opts.ind_case_break = n,
+            b'p' => opts.ind_param = n,
+            b't' => opts.ind_func_type = n,
+            b'/' => opts.ind_comment = n,
+            b'c' => opts.ind_in_comment = n,
+            b'C' => opts.ind_in_comment2 = n,
+            b'i' => opts.ind_cpp_baseclass = n,
+            b'+' => opts.ind_continuation = n,
+            b'(' => opts.ind_unclosed = n,
+            b'u' => opts.ind_unclosed2 = n,
+            b'U' => opts.ind_unclosed_noignore = n,
+            b'W' => opts.ind_unclosed_wrapped = n,
+            b'w' => opts.ind_unclosed_whiteok = n,
+            b'm' => opts.ind_matching_paren = n,
+            b'M' => opts.ind_paren_prev = n,
+            b')' => opts.ind_maxparen = n,
+            b'*' => opts.ind_maxcomment = n,
+            b'g' => opts.ind_scopedecl = n,
+            b'h' => opts.ind_scopedecl_code = n,
+            b'j' => opts.ind_java = n,
+            b'J' => opts.ind_js = n,
+            b'l' => opts.ind_keep_case_label = n,
+            b'#' => opts.ind_hash_comment = n,
+            b'N' => opts.ind_cpp_namespace = n,
+            b'k' => opts.ind_if_for_while = n,
+            b'E' => opts.ind_cpp_extern_c = n,
+            b'P' => opts.ind_pragma = n,
+            _ => {}
+        }
+
+        // Skip comma separator
+        if *p == b',' as c_char {
+            p = p.add(1);
+        }
+    }
+}
+
+/// Clamp an `i64` value to fit in a `c_int`.
+#[inline]
+fn trim_to_int(x: i64) -> c_int {
+    if x > i64::from(c_int::MAX) {
+        c_int::MAX
+    } else if x < i64::from(c_int::MIN) {
+        c_int::MIN
+    } else {
+        x as c_int
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -3930,5 +4121,182 @@ mod tests {
 
         assert_eq!(FM_BACKWARD, 0x01);
         assert_eq!(FM_BLOCKSTOP, 0x02);
+    }
+
+    #[test]
+    fn test_parse_cino_defaults() {
+        unsafe {
+            let mut opts = CindentOptions::default();
+            let cino = CString::new("").unwrap();
+            rs_parse_cino(cino.as_ptr(), 4, &raw mut opts);
+
+            assert_eq!(opts.ind_level, 4);
+            assert_eq!(opts.ind_open_imag, 0);
+            assert_eq!(opts.ind_no_brace, 0);
+            assert_eq!(opts.ind_first_open, 0);
+            assert_eq!(opts.ind_open_extra, 0);
+            assert_eq!(opts.ind_close_extra, 0);
+            assert_eq!(opts.ind_open_left_imag, 0);
+            assert_eq!(opts.ind_jump_label, -1);
+            assert_eq!(opts.ind_case, 4);
+            assert_eq!(opts.ind_case_code, 4);
+            assert_eq!(opts.ind_case_break, 0);
+            assert_eq!(opts.ind_scopedecl, 4);
+            assert_eq!(opts.ind_scopedecl_code, 4);
+            assert_eq!(opts.ind_param, 4);
+            assert_eq!(opts.ind_func_type, 4);
+            assert_eq!(opts.ind_cpp_baseclass, 4);
+            assert_eq!(opts.ind_continuation, 4);
+            assert_eq!(opts.ind_unclosed, 8); // sw * 2
+            assert_eq!(opts.ind_unclosed2, 4);
+            assert_eq!(opts.ind_unclosed_noignore, 0);
+            assert_eq!(opts.ind_unclosed_wrapped, 0);
+            assert_eq!(opts.ind_unclosed_whiteok, 0);
+            assert_eq!(opts.ind_matching_paren, 0);
+            assert_eq!(opts.ind_paren_prev, 0);
+            assert_eq!(opts.ind_comment, 0);
+            assert_eq!(opts.ind_in_comment, 3);
+            assert_eq!(opts.ind_in_comment2, 0);
+            assert_eq!(opts.ind_maxparen, 20);
+            assert_eq!(opts.ind_maxcomment, 70);
+            assert_eq!(opts.ind_java, 0);
+            assert_eq!(opts.ind_js, 0);
+            assert_eq!(opts.ind_keep_case_label, 0);
+            assert_eq!(opts.ind_cpp_namespace, 0);
+            assert_eq!(opts.ind_if_for_while, 0);
+            assert_eq!(opts.ind_hash_comment, 0);
+            assert_eq!(opts.ind_cpp_extern_c, 0);
+            assert_eq!(opts.ind_pragma, 0);
+        }
+    }
+
+    #[test]
+    fn test_parse_cino_null() {
+        unsafe {
+            let mut opts = CindentOptions::default();
+            rs_parse_cino(std::ptr::null(), 4, &raw mut opts);
+            // Should get defaults
+            assert_eq!(opts.ind_level, 4);
+            assert_eq!(opts.ind_case, 4);
+        }
+    }
+
+    #[test]
+    fn test_parse_cino_simple_values() {
+        unsafe {
+            let mut opts = CindentOptions::default();
+            let cino = CString::new(">8,:2,=2").unwrap();
+            rs_parse_cino(cino.as_ptr(), 4, &raw mut opts);
+
+            assert_eq!(opts.ind_level, 8);
+            assert_eq!(opts.ind_case, 2);
+            assert_eq!(opts.ind_case_code, 2);
+        }
+    }
+
+    #[test]
+    fn test_parse_cino_negative_values() {
+        unsafe {
+            let mut opts = CindentOptions::default();
+            let cino = CString::new("L-1,>-2").unwrap();
+            rs_parse_cino(cino.as_ptr(), 4, &raw mut opts);
+
+            assert_eq!(opts.ind_jump_label, -1);
+            assert_eq!(opts.ind_level, -2);
+        }
+    }
+
+    #[test]
+    fn test_parse_cino_shiftwidth_multiplier() {
+        unsafe {
+            let mut opts = CindentOptions::default();
+            let cino = CString::new(">2s").unwrap();
+            rs_parse_cino(cino.as_ptr(), 4, &raw mut opts);
+
+            assert_eq!(opts.ind_level, 8); // 2 * sw(4) = 8
+        }
+    }
+
+    #[test]
+    fn test_parse_cino_bare_s() {
+        unsafe {
+            let mut opts = CindentOptions::default();
+            let cino = CString::new(">s").unwrap();
+            rs_parse_cino(cino.as_ptr(), 4, &raw mut opts);
+
+            assert_eq!(opts.ind_level, 4); // just "s" = 1 * sw
+        }
+    }
+
+    #[test]
+    fn test_parse_cino_fraction() {
+        unsafe {
+            let mut opts = CindentOptions::default();
+            let cino = CString::new(">.5s").unwrap();
+            rs_parse_cino(cino.as_ptr(), 4, &raw mut opts);
+
+            // 0 * sw + (sw * 5 + 10/2) / 10 = (20 + 5) / 10 = 2
+            assert_eq!(opts.ind_level, 2);
+        }
+    }
+
+    #[test]
+    fn test_parse_cino_all_keys() {
+        unsafe {
+            let mut opts = CindentOptions::default();
+            let cino =
+                CString::new(">1,e2,n3,f4,{5,}6,^7,L8,:9,=10,b11,p12,t13,/14,c15,C16,i17,+18,(19,u20,U21,W22,w23,m24,M25,)26,*27,g28,h29,j30,J31,l32,#33,N34,k35,E36,P37")
+                    .unwrap();
+            rs_parse_cino(cino.as_ptr(), 4, &raw mut opts);
+
+            assert_eq!(opts.ind_level, 1);
+            assert_eq!(opts.ind_open_imag, 2);
+            assert_eq!(opts.ind_no_brace, 3);
+            assert_eq!(opts.ind_first_open, 4);
+            assert_eq!(opts.ind_open_extra, 5);
+            assert_eq!(opts.ind_close_extra, 6);
+            assert_eq!(opts.ind_open_left_imag, 7);
+            assert_eq!(opts.ind_jump_label, 8);
+            assert_eq!(opts.ind_case, 9);
+            assert_eq!(opts.ind_case_code, 10);
+            assert_eq!(opts.ind_case_break, 11);
+            assert_eq!(opts.ind_param, 12);
+            assert_eq!(opts.ind_func_type, 13);
+            assert_eq!(opts.ind_comment, 14);
+            assert_eq!(opts.ind_in_comment, 15);
+            assert_eq!(opts.ind_in_comment2, 16);
+            assert_eq!(opts.ind_cpp_baseclass, 17);
+            assert_eq!(opts.ind_continuation, 18);
+            assert_eq!(opts.ind_unclosed, 19);
+            assert_eq!(opts.ind_unclosed2, 20);
+            assert_eq!(opts.ind_unclosed_noignore, 21);
+            assert_eq!(opts.ind_unclosed_wrapped, 22);
+            assert_eq!(opts.ind_unclosed_whiteok, 23);
+            assert_eq!(opts.ind_matching_paren, 24);
+            assert_eq!(opts.ind_paren_prev, 25);
+            assert_eq!(opts.ind_maxparen, 26);
+            assert_eq!(opts.ind_maxcomment, 27);
+            assert_eq!(opts.ind_scopedecl, 28);
+            assert_eq!(opts.ind_scopedecl_code, 29);
+            assert_eq!(opts.ind_java, 30);
+            assert_eq!(opts.ind_js, 31);
+            assert_eq!(opts.ind_keep_case_label, 32);
+            assert_eq!(opts.ind_hash_comment, 33);
+            assert_eq!(opts.ind_cpp_namespace, 34);
+            assert_eq!(opts.ind_if_for_while, 35);
+            assert_eq!(opts.ind_cpp_extern_c, 36);
+            assert_eq!(opts.ind_pragma, 37);
+        }
+    }
+
+    #[test]
+    fn test_parse_cino_negative_shiftwidth() {
+        unsafe {
+            let mut opts = CindentOptions::default();
+            let cino = CString::new(">-2s").unwrap();
+            rs_parse_cino(cino.as_ptr(), 4, &raw mut opts);
+
+            assert_eq!(opts.ind_level, -8); // -(2 * 4)
+        }
     }
 }
