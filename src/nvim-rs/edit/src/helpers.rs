@@ -40,9 +40,9 @@ extern "C" {
     // State
     fn nvim_get_State() -> c_int;
 
-    // Replace stack (still in C for Phase 1, migrated in Phase 2)
-    fn replace_join(off: c_int);
-    fn nvim_replace_do_bs(limit_col: c_int);
+    // Replace stack (Rust-owned in replace.rs, accessed via rs_* functions)
+    fn rs_replace_join(off: c_int);
+    fn rs_replace_do_bs(limit_col: c_int);
 
     // Character operations
     fn mb_adjust_cursor();
@@ -209,7 +209,7 @@ pub unsafe extern "C" fn rs_truncate_spaces(line: *mut c_char, len: usize) {
             break;
         }
         if state & REPLACE_FLAG != 0 {
-            replace_join(0);
+            rs_replace_join(0);
         }
         i -= 1;
     }
@@ -270,7 +270,7 @@ pub unsafe extern "C" fn rs_backspace_until_column(col: c_int) {
     while nvim_curwin_get_cursor_col() as c_int > col {
         nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() - 1);
         if nvim_get_State() & REPLACE_FLAG != 0 {
-            nvim_replace_do_bs(col);
+            rs_replace_do_bs(col);
         } else if !del_char_after_col_impl(col) {
             break;
         }

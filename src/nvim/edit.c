@@ -224,6 +224,15 @@ typedef struct {
 } RsNvimString;
 extern RsNvimString rs_get_last_insert(void);
 extern char *rs_get_last_insert_save(void);
+// Replace stack module exports (Phase 2)
+extern void rs_replace_push(const char *str, size_t len);
+extern void rs_replace_push_nul(void);
+extern int rs_replace_pop_if_nul(void);
+extern void rs_replace_join(int off);
+extern void rs_replace_pop_ins(void);
+extern void rs_mb_replace_pop_ins(void);
+extern void rs_replace_do_bs(int limit_col);
+extern void rs_replace_stack_clear(void);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -575,21 +584,25 @@ void nvim_set_last_insert_skip(int val)
   last_insert_skip = val;
 }
 
-// Static asserts for constants used in Rust helpers module
+// Static asserts for constants used in Rust helpers/replace modules
 _Static_assert(REPLACE_FLAG == 0x100, "REPLACE_FLAG mismatch");
+_Static_assert(VREPLACE_FLAG == 0x200, "VREPLACE_FLAG mismatch");
+_Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL mismatch");
 _Static_assert(MB_MAXBYTES == 21, "MB_MAXBYTES mismatch");
 _Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
 _Static_assert(DEL == 0x7f, "DEL mismatch");
 _Static_assert(ESC == '\033', "ESC mismatch");
 
-static kvec_t(char) replace_stack = KV_INITIAL_VALUE;
-
-// Forward-declared static wrapper for Rust (replace_do_bs is static)
-static void replace_do_bs(int limit_col);
-/// Non-static wrapper for replace_do_bs (accessible from Rust).
-void nvim_replace_do_bs(int limit_col)
+/// Get replace_offset global (accessor for Rust).
+int nvim_get_replace_offset(void)
 {
-  replace_do_bs(limit_col);
+  return replace_offset;
+}
+
+/// Get &curwin->w_cursor as opaque pointer (accessor for Rust).
+const void *nvim_curwin_get_cursor_ptr(void)
+{
+  return &curwin->w_cursor;
 }
 
 #define TRIGGER_AUTOCOMPLETE() \
@@ -2608,7 +2621,7 @@ int stop_arrow(void)
 static void stop_insert(pos_T *end_insert_pos, int esc, int nomove)
 {
   stop_redo_ins();
-  kv_destroy(replace_stack);  // abandon replace stack (reinitializes)
+  rs_replace_stack_clear();  // abandon replace stack
 
   // Save the inserted text for later redo with ^@ and CTRL-A.
   // Don't do it when "restart_edit" was set and nothing was inserted,
@@ -3076,138 +3089,37 @@ static bool echeck_abbr(int c)
 /// @param len length of character in bytes
 void replace_push(char *str, size_t len)
 {
-  // TODO(bfredl): replace_offset is suss af, if we don't need it, this
-  // function is just kv_concat() :p
-  if (kv_size(replace_stack) < (size_t)replace_offset) {  // nothing to do
-    return;
-  }
-
-  kv_ensure_space(replace_stack, len);
-
-  char *p = replace_stack.items + kv_size(replace_stack) - replace_offset;
-  if (replace_offset) {
-    memmove(p + len, p, (size_t)replace_offset);
-  }
-  memcpy(p, str, len);
-  kv_size(replace_stack) += len;
+  rs_replace_push(str, len);
 }
 
-/// push NUL as separator between entries in the stack
 void replace_push_nul(void)
 {
-  replace_push("", 1);
+  rs_replace_push_nul();
 }
 
-/// Check top of replace stack, pop it if it was NUL
-///
-/// when a non-NUL byte is found, use mb_replace_pop_ins() to
-/// pop one complete multibyte character.
-///
-/// @return -1 if stack is empty, last byte of char or NUL otherwise
 static int replace_pop_if_nul(void)
 {
-  int ch = (kv_size(replace_stack)) ? (uint8_t)kv_A(replace_stack, kv_size(replace_stack) - 1) : -1;
-  if (ch == NUL) {
-    kv_size(replace_stack)--;
-  }
-  return ch;
+  return rs_replace_pop_if_nul();
 }
 
-/// Join the top two items on the replace stack.  This removes to "off"'th NUL
-/// encountered.
-///
-/// @param off  offset for which NUL to remove
 void replace_join(int off)
 {
-  for (ssize_t i = (ssize_t)kv_size(replace_stack); --i >= 0;) {
-    if (kv_A(replace_stack, i) == NUL && off-- <= 0) {
-      kv_size(replace_stack)--;
-      memmove(&kv_A(replace_stack, i), &kv_A(replace_stack, i + 1),
-              (kv_size(replace_stack) - (size_t)i));
-      return;
-    }
-  }
+  rs_replace_join(off);
 }
 
-/// Pop bytes from the replace stack until a NUL is found, and insert them
-/// before the cursor.  Can only be used in MODE_REPLACE or MODE_VREPLACE state.
 static void replace_pop_ins(void)
 {
-  int oldState = State;
-
-  State = MODE_NORMAL;                       // don't want MODE_REPLACE here
-  while ((replace_pop_if_nul()) > 0) {
-    mb_replace_pop_ins();
-    dec_cursor();
-  }
-  State = oldState;
+  rs_replace_pop_ins();
 }
 
-/// Insert multibyte char popped from the replace stack.
-///
-/// caller must already have checked the top of the stack is not NUL!!
 static void mb_replace_pop_ins(void)
 {
-  int len = utf_head_off(&kv_A(replace_stack, 0),
-                         &kv_A(replace_stack, kv_size(replace_stack) - 1)) + 1;
-  kv_size(replace_stack) -= (size_t)len;
-  ins_bytes_len(&kv_A(replace_stack, kv_size(replace_stack)), (size_t)len);
+  rs_mb_replace_pop_ins();
 }
 
-// Handle doing a BS for one character.
-// cc < 0: replace stack empty, just move cursor
-// cc == 0: character was inserted, delete it
-// cc > 0: character was replaced, put cc (first byte of original char) back
-// and check for more characters to be put back
-// When "limit_col" is >= 0, don't delete before this column.  Matters when
-// using composing characters, use del_char_after_col() instead of del_char().
 static void replace_do_bs(int limit_col)
 {
-  colnr_T start_vcol;
-  const int l_State = State;
-
-  int cc = replace_pop_if_nul();
-  if (cc > 0) {
-    int orig_len = 0;
-    int orig_vcols = 0;
-    if (l_State & VREPLACE_FLAG) {
-      // Get the number of screen cells used by the character we are
-      // going to delete.
-      getvcol(curwin, &curwin->w_cursor, NULL, &start_vcol, NULL);
-      orig_vcols = win_chartabsize(curwin, get_cursor_pos_ptr(), start_vcol);
-    }
-    del_char_after_col(limit_col);
-    if (l_State & VREPLACE_FLAG) {
-      orig_len = get_cursor_pos_len();
-    }
-    replace_pop_ins();
-
-    if (l_State & VREPLACE_FLAG) {
-      // Get the number of screen cells used by the inserted characters
-      char *p = get_cursor_pos_ptr();
-      int ins_len = get_cursor_pos_len() - orig_len;
-      int vcol = start_vcol;
-      for (int i = 0; i < ins_len; i++) {
-        vcol += win_chartabsize(curwin, p + i, vcol);
-        i += utfc_ptr2len(p) - 1;
-      }
-      vcol -= start_vcol;
-
-      // Delete spaces that were inserted after the cursor to keep the
-      // text aligned.
-      curwin->w_cursor.col += ins_len;
-      while (vcol > orig_vcols && gchar_cursor() == ' ') {
-        del_char(false);
-        orig_vcols++;
-      }
-      curwin->w_cursor.col -= ins_len;
-    }
-
-    // mark the buffer as changed and prepare for displaying
-    changed_bytes(curwin->w_cursor.lnum, curwin->w_cursor.col);
-  } else if (cc == 0) {
-    del_char_after_col(limit_col);
-  }
+  rs_replace_do_bs(limit_col);
 }
 
 static void ins_reg(void)
