@@ -241,6 +241,25 @@ extern void rs_cursor_up_inner(win_T *wp, linenr_T n, bool skip_conceal);
 extern int rs_cursor_up(linenr_T n, int upd_topline);
 extern void rs_cursor_down_inner(win_T *wp, int n, bool skip_conceal);
 extern int rs_cursor_down(int n, int upd_topline);
+// Key handler module exports (Phase 4)
+extern void rs_ins_left(void);
+extern void rs_ins_right(void);
+extern void rs_ins_s_left(void);
+extern void rs_ins_s_right(void);
+extern void rs_ins_home(int c);
+extern void rs_ins_end(int c);
+extern void rs_ins_up(int startcol);
+extern void rs_ins_down(int startcol);
+extern void rs_ins_pageup(void);
+extern void rs_ins_pagedown(void);
+extern void rs_ins_insert(int replaceState);
+extern void rs_ins_ctrl_o(void);
+extern void rs_ins_ctrl_hat(void);
+extern void rs_ins_ctrl_(void);
+extern int rs_ins_start_select(int c);
+extern void rs_ins_ctrl_g(void);
+extern void rs_ins_shift(int c, int lastc);
+extern void rs_ins_del(void);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -733,6 +752,366 @@ _Static_assert(MODE_INSERT == 0x10, "MODE_INSERT mismatch");
 _Static_assert(kOptFdoFlagAll == 0x01, "kOptFdoFlagAll mismatch");
 _Static_assert(kOptVeFlagOnemore == 0x08, "kOptVeFlagOnemore mismatch");
 _Static_assert(TAB == '\011', "TAB mismatch");
+
+// -- Phase 4: Key handler module accessors --
+
+// Saved cursor positions for start_arrow calls (2 slots)
+static pos_T edit_saved_cursor[2];
+static linenr_T saved_topline;
+static int saved_topfill;
+
+/// Check fdo_flags & kOptFdoFlagHor && KeyTyped (accessor for Rust).
+int nvim_edit_fdo_hor_and_key_typed(void)
+{
+  return ((fdo_flags & kOptFdoFlagHor) && KeyTyped) ? 1 : 0;
+}
+
+/// Save cursor position to a slot (accessor for Rust).
+void nvim_edit_save_cursor(int slot)
+{
+  edit_saved_cursor[slot] = curwin->w_cursor;
+}
+
+/// Call start_arrow() with saved cursor slot (accessor for Rust).
+void nvim_edit_start_arrow_from_slot(int slot)
+{
+  start_arrow(&edit_saved_cursor[slot]);
+}
+
+/// Call start_arrow_with_change() with saved cursor slot (accessor for Rust).
+void nvim_edit_start_arrow_with_change_from_slot(int slot, int end_change)
+{
+  start_arrow_with_change(&edit_saved_cursor[slot], end_change != 0);
+}
+
+/// Call start_arrow(&curwin->w_cursor) (accessor for Rust).
+void nvim_edit_start_arrow_curpos(void)
+{
+  start_arrow(&curwin->w_cursor);
+}
+
+/// Call start_arrow_with_change(&curwin->w_cursor, end_change) (accessor for Rust).
+void nvim_edit_start_arrow_with_change_curpos(bool end_change)
+{
+  start_arrow_with_change(&curwin->w_cursor, end_change);
+}
+
+/// Call AppendCharToRedobuff(c) (accessor for Rust).
+void nvim_edit_append_char_to_redobuff(int c)
+{
+  AppendCharToRedobuff(c);
+}
+
+/// Call vim_beep(val) (accessor for Rust).
+void nvim_edit_vim_beep(int val)
+{
+  vim_beep((unsigned)val);
+}
+
+/// Check if p_ww (whichwrap) allows the given character (accessor for Rust).
+int nvim_edit_ww_allows(int ch)
+{
+  return vim_strchr(p_ww, (char)ch) != NULL ? 1 : 0;
+}
+
+/// Adjust cursor lnum relative to current position (accessor for Rust).
+void nvim_edit_set_cursor_lnum_rel(linenr_T delta)
+{
+  curwin->w_cursor.lnum += delta;
+}
+
+/// Set cursor lnum to an absolute value (accessor for Rust).
+void nvim_edit_set_cursor_lnum_abs(linenr_T lnum)
+{
+  curwin->w_cursor.lnum = lnum;
+}
+
+/// Set curwin->w_curswant (accessor for Rust).
+void nvim_edit_set_w_curswant(colnr_T val)
+{
+  curwin->w_curswant = val;
+}
+
+/// Get curbuf->b_ml.ml_line_count via curwin (accessor for Rust).
+linenr_T nvim_edit_curwin_buf_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// Call coladvance(curwin, getvcol_nolist(&Insstart)) (accessor for Rust).
+void nvim_edit_coladvance_insstart(void)
+{
+  coladvance(curwin, getvcol_nolist(&Insstart));
+}
+
+/// Save topline/topfill for later comparison (accessor for Rust).
+void nvim_edit_save_topline(void)
+{
+  saved_topline = curwin->w_topline;
+  saved_topfill = curwin->w_topfill;
+}
+
+/// Check if topline/topfill changed since save (accessor for Rust).
+int nvim_edit_topline_changed(void)
+{
+  return (saved_topline != curwin->w_topline
+          || saved_topfill != curwin->w_topfill) ? 1 : 0;
+}
+
+/// Call redraw_later(curwin, UPD_VALID) (accessor for Rust).
+void nvim_edit_redraw_later_valid(void)
+{
+  redraw_later(curwin, UPD_VALID);
+}
+
+/// Check if mod_mask has MOD_MASK_CTRL (accessor for Rust).
+int nvim_edit_mod_mask_ctrl(void)
+{
+  return (mod_mask & MOD_MASK_CTRL) ? 1 : 0;
+}
+
+/// Check if there is a next tab page (accessor for Rust).
+int nvim_edit_has_next_tabpage(void)
+{
+  return first_tabpage->tp_next != NULL ? 1 : 0;
+}
+
+/// Call pagescroll(BACKWARD, 1, false) and return result (accessor for Rust).
+int nvim_edit_pagescroll_backward(void)
+{
+  return pagescroll(BACKWARD, 1, false);
+}
+
+/// Call pagescroll(FORWARD, 1, false) and return result (accessor for Rust).
+int nvim_edit_pagescroll_forward(void)
+{
+  return pagescroll(FORWARD, 1, false);
+}
+
+// -- Phase 4b: Complex key handler delegated wrappers --
+
+/// ins_insert() wrapper — handles set_vim_var_string, autocmds, mode change.
+void nvim_edit_ins_insert(int replaceState)
+{
+  set_vim_var_string(VV_INSERTMODE, ((State & REPLACE_FLAG)
+                                     ? "i"
+                                     : replaceState == MODE_VREPLACE ? "v" : "r"), 1);
+  ins_apply_autocmds(EVENT_INSERTCHANGE);
+  if (State & REPLACE_FLAG) {
+    State = MODE_INSERT | (State & MODE_LANGMAP);
+  } else {
+    State = replaceState | (State & MODE_LANGMAP);
+  }
+  may_trigger_modechanged();
+  AppendCharToRedobuff(K_INS);
+  showmode();
+  ui_cursor_shape();
+}
+
+/// ins_ctrl_o() wrapper — sets restart_edit and ins_at_eol.
+void nvim_edit_ins_ctrl_o(void)
+{
+  restart_VIsual_select = 0;
+  if (State & VREPLACE_FLAG) {
+    restart_edit = 'V';
+  } else if (State & REPLACE_FLAG) {
+    restart_edit = 'R';
+  } else {
+    restart_edit = 'I';
+  }
+  if (virtual_active(curwin)) {
+    ins_at_eol = false;
+  } else {
+    ins_at_eol = (gchar_cursor() == NUL);
+  }
+}
+
+/// ins_ctrl_hat() wrapper — toggles langmap mode.
+void nvim_edit_ins_ctrl_hat(void)
+{
+  if (map_to_exists_mode("", MODE_LANGMAP, false)) {
+    if (State & MODE_LANGMAP) {
+      curbuf->b_p_iminsert = B_IMODE_NONE;
+      State &= ~MODE_LANGMAP;
+    } else {
+      curbuf->b_p_iminsert = B_IMODE_LMAP;
+      State |= MODE_LANGMAP;
+    }
+  }
+  set_iminsert_global(curbuf);
+  showmode();
+  status_redraw_curbuf();
+}
+
+/// ins_ctrl_() helper — handles the state changes that need C access.
+/// The Rust side computes revins_on, this function handles the rest.
+void nvim_edit_ins_ctrl_(int new_revins_on)
+{
+  if (revins_on && revins_chars && revins_scol >= 0) {
+    while (gchar_cursor() != NUL && revins_chars--) {
+      curwin->w_cursor.col++;
+    }
+  }
+  p_ri = !p_ri;
+  revins_on = (new_revins_on != 0);
+  if (revins_on) {
+    revins_scol = curwin->w_cursor.col;
+    revins_legal++;
+    revins_chars = 0;
+    undisplay_dollar();
+  } else {
+    revins_scol = -1;
+  }
+  showmode();
+}
+
+/// ins_start_select() wrapper — handles key constant switch and stuffing.
+int nvim_edit_ins_start_select(int c)
+{
+  if (!km_startsel) {
+    return 0;
+  }
+  switch (c) {
+  case K_KHOME:
+  case K_KEND:
+  case K_PAGEUP:
+  case K_KPAGEUP:
+  case K_PAGEDOWN:
+  case K_KPAGEDOWN:
+    if (!(mod_mask & MOD_MASK_SHIFT)) {
+      break;
+    }
+    FALLTHROUGH;
+  case K_S_LEFT:
+  case K_S_RIGHT:
+  case K_S_UP:
+  case K_S_DOWN:
+  case K_S_END:
+  case K_S_HOME:
+    start_selection();
+    stuffcharReadbuff(Ctrl_O);
+    if (mod_mask) {
+      const char buf[] = { (char)K_SPECIAL, (char)KS_MODIFIER,
+                           (char)(uint8_t)mod_mask, NUL };
+      stuffReadbuffLen(buf, 3);
+    }
+    stuffcharReadbuff(c);
+    return 1;
+  }
+  return 0;
+}
+
+/// ins_ctrl_g() get key helper — reads key and classifies it.
+/// Returns: 1=up, 2=down, 3=u_sync, 4=no_sync, 5=ESC, 0=unknown
+int nvim_edit_ins_ctrl_g_get_key(void)
+{
+  setcursor();
+  no_mapping++;
+  allow_keys++;
+  int c = plain_vgetc();
+  no_mapping--;
+  allow_keys--;
+  switch (c) {
+  case K_UP:
+  case Ctrl_K:
+  case 'k':
+    return 1;  // up
+  case K_DOWN:
+  case Ctrl_J:
+  case 'j':
+    return 2;  // down
+  case 'u':
+    return 3;  // u_sync
+  case 'U':
+    return 4;  // no_sync
+  case ESC:
+    return 5;  // ESC
+  default:
+    return 0;  // unknown
+  }
+}
+
+/// ins_ctrl_g 'u' sync handler (accessor for Rust).
+void nvim_edit_ctrl_g_u_sync(void)
+{
+  u_sync(true);
+  ins_need_undo = true;
+  update_Insstart_orig = false;
+  Insstart = curwin->w_cursor;
+}
+
+/// ins_shift() wrapper — handles indent changes.
+void nvim_edit_ins_shift(int c, int lastc)
+{
+  if (stop_arrow() == FAIL) {
+    return;
+  }
+  AppendCharToRedobuff(c);
+
+  if (c == Ctrl_D && (lastc == '0' || lastc == '^')
+      && curwin->w_cursor.col > 0) {
+    curwin->w_cursor.col--;
+    del_char(false);
+    if (State & REPLACE_FLAG) {
+      replace_pop_ins();
+    }
+    if (lastc == '^') {
+      old_indent = get_indent();
+    }
+    change_indent(INDENT_SET, 0, true, true);
+  } else {
+    change_indent(c == Ctrl_D ? INDENT_DEC : INDENT_INC, 0, true, true);
+  }
+
+  if (did_ai && *skipwhite(get_cursor_line_ptr()) != NUL) {
+    did_ai = false;
+  }
+  did_si = false;
+  can_si = false;
+  can_si_back = false;
+  can_cindent = false;
+}
+
+/// ins_del() wrapper — handles delete key in insert mode.
+void nvim_edit_ins_del(void)
+{
+  if (stop_arrow() == FAIL) {
+    return;
+  }
+  if (gchar_cursor() == NUL) {
+    const int temp = curwin->w_cursor.col;
+    if (!can_bs(BS_EOL)
+        || do_join(2, false, true, false, false) == FAIL) {
+      vim_beep(kOptBoFlagBackspace);
+    } else {
+      curwin->w_cursor.col = temp;
+      if (State & VREPLACE_FLAG
+          && orig_line_count > curbuf->b_ml.ml_line_count) {
+        orig_line_count = curbuf->b_ml.ml_line_count;
+      }
+    }
+  } else if (del_char(false) == FAIL) {
+    vim_beep(kOptBoFlagBackspace);
+  }
+  did_ai = false;
+  did_si = false;
+  can_si = false;
+  can_si_back = false;
+  AppendCharToRedobuff(K_DEL);
+}
+
+// Static asserts for Phase 4 constants
+_Static_assert(kOptBoFlagCursor == 0x04, "kOptBoFlagCursor mismatch");
+_Static_assert(kOptBoFlagCtrlg == 0x20, "kOptBoFlagCtrlg mismatch");
+_Static_assert(kOptBoFlagBackspace == 0x02, "kOptBoFlagBackspace mismatch");
+_Static_assert(kOptFdoFlagHor == 0x04, "kOptFdoFlagHor mismatch");
+_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch");
+_Static_assert(K_LEFT == -((int)('k') + ((int)('l') << 8)), "K_LEFT mismatch");
+_Static_assert(K_RIGHT == -((int)('k') + ((int)('r') << 8)), "K_RIGHT mismatch");
+_Static_assert(K_S_LEFT == -((int)('#') + ((int)('4') << 8)), "K_S_LEFT mismatch");
+_Static_assert(K_S_RIGHT == -((int)('%') + ((int)('i') << 8)), "K_S_RIGHT mismatch");
+_Static_assert(K_C_HOME == -((int)(KS_EXTRA) + ((int)(87) << 8)), "K_C_HOME mismatch");
+_Static_assert(K_C_END == -((int)(KS_EXTRA) + ((int)(88) << 8)), "K_C_END mismatch");
 
 #define TRIGGER_AUTOCOMPLETE() \
   do { \
@@ -3178,76 +3557,13 @@ static void ins_reg(void)
 // CTRL-G commands in Insert mode.
 static void ins_ctrl_g(void)
 {
-  // Right after CTRL-X the cursor will be after the ruler.
-  setcursor();
-
-  // Don't map the second key. This also prevents the mode message to be
-  // deleted when ESC is hit.
-  no_mapping++;
-  allow_keys++;
-  int c = plain_vgetc();
-  no_mapping--;
-  allow_keys--;
-  switch (c) {
-  // CTRL-G k and CTRL-G <Up>: cursor up to Insstart.col
-  case K_UP:
-  case Ctrl_K:
-  case 'k':
-    ins_up(true);
-    break;
-
-  // CTRL-G j and CTRL-G <Down>: cursor down to Insstart.col
-  case K_DOWN:
-  case Ctrl_J:
-  case 'j':
-    ins_down(true);
-    break;
-
-  // CTRL-G u: start new undoable edit
-  case 'u':
-    u_sync(true);
-    ins_need_undo = true;
-
-    // Need to reset Insstart, esp. because a BS that joins
-    // a line to the previous one must save for undo.
-    update_Insstart_orig = false;
-    Insstart = curwin->w_cursor;
-    break;
-
-  // CTRL-G U: do not break undo with the next char.
-  case 'U':
-    // Allow one left/right cursor movement with the next char,
-    // without breaking undo.
-    dont_sync_undo = kNone;
-    break;
-
-  case ESC:
-    // Esc after CTRL-G cancels it.
-    break;
-
-  // Unknown CTRL-G command, reserved for future expansion.
-  default:
-    vim_beep(kOptBoFlagCtrlg);
-  }
+  rs_ins_ctrl_g();
 }
 
 // CTRL-^ in Insert mode.
 static void ins_ctrl_hat(void)
 {
-  if (map_to_exists_mode("", MODE_LANGMAP, false)) {
-    // ":lmap" mappings exists, Toggle use of ":lmap" mappings.
-    if (State & MODE_LANGMAP) {
-      curbuf->b_p_iminsert = B_IMODE_NONE;
-      State &= ~MODE_LANGMAP;
-    } else {
-      curbuf->b_p_iminsert = B_IMODE_LMAP;
-      State |= MODE_LANGMAP;
-    }
-  }
-  set_iminsert_global(curbuf);
-  showmode();
-  // Show/unshow value of 'keymap' in status lines.
-  status_redraw_curbuf();
+  rs_ins_ctrl_hat();
 }
 
 /// Handle ESC in insert mode.
@@ -3365,22 +3681,7 @@ static bool ins_esc(int *count, int cmdchar, bool nomove)
 // Move to end of reverse inserted text.
 static void ins_ctrl_(void)
 {
-  if (revins_on && revins_chars && revins_scol >= 0) {
-    while (gchar_cursor() != NUL && revins_chars--) {
-      curwin->w_cursor.col++;
-    }
-  }
-  p_ri = !p_ri;
-  revins_on = (State == MODE_INSERT && p_ri);
-  if (revins_on) {
-    revins_scol = curwin->w_cursor.col;
-    revins_legal++;
-    revins_chars = 0;
-    undisplay_dollar();
-  } else {
-    revins_scol = -1;
-  }
-  showmode();
+  rs_ins_ctrl_();
 }
 
 /// If 'keymodel' contains "startsel", may start selection.
@@ -3391,77 +3692,19 @@ static void ins_ctrl_(void)
 static bool ins_start_select(int c)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (!km_startsel) {
-    return false;
-  }
-  switch (c) {
-  case K_KHOME:
-  case K_KEND:
-  case K_PAGEUP:
-  case K_KPAGEUP:
-  case K_PAGEDOWN:
-  case K_KPAGEDOWN:
-    if (!(mod_mask & MOD_MASK_SHIFT)) {
-      break;
-    }
-    FALLTHROUGH;
-  case K_S_LEFT:
-  case K_S_RIGHT:
-  case K_S_UP:
-  case K_S_DOWN:
-  case K_S_END:
-  case K_S_HOME:
-    // Start selection right away, the cursor can move with CTRL-O when
-    // beyond the end of the line.
-    start_selection();
-
-    // Execute the key in (insert) Select mode.
-    stuffcharReadbuff(Ctrl_O);
-    if (mod_mask) {
-      const char buf[] = { (char)K_SPECIAL, (char)KS_MODIFIER,
-                           (char)(uint8_t)mod_mask, NUL };
-      stuffReadbuffLen(buf, 3);
-    }
-    stuffcharReadbuff(c);
-    return true;
-  }
-  return false;
+  return rs_ins_start_select(c) != 0;
 }
 
 // <Insert> key in Insert mode: toggle insert/replace mode.
 static void ins_insert(int replaceState)
 {
-  set_vim_var_string(VV_INSERTMODE, ((State & REPLACE_FLAG)
-                                     ? "i"
-                                     : replaceState == MODE_VREPLACE ? "v" : "r"), 1);
-  ins_apply_autocmds(EVENT_INSERTCHANGE);
-  if (State & REPLACE_FLAG) {
-    State = MODE_INSERT | (State & MODE_LANGMAP);
-  } else {
-    State = replaceState | (State & MODE_LANGMAP);
-  }
-  may_trigger_modechanged();
-  AppendCharToRedobuff(K_INS);
-  showmode();
-  ui_cursor_shape();            // may show different cursor shape
+  rs_ins_insert(replaceState);
 }
 
 // Pressed CTRL-O in Insert mode.
 static void ins_ctrl_o(void)
 {
-  restart_VIsual_select = 0;
-  if (State & VREPLACE_FLAG) {
-    restart_edit = 'V';
-  } else if (State & REPLACE_FLAG) {
-    restart_edit = 'R';
-  } else {
-    restart_edit = 'I';
-  }
-  if (virtual_active(curwin)) {
-    ins_at_eol = false;         // cursor always keeps its column
-  } else {
-    ins_at_eol = (gchar_cursor() == NUL);
-  }
+  rs_ins_ctrl_o();
 }
 
 // If the cursor is on an indent, ^T/^D insert/delete one
@@ -3471,65 +3714,12 @@ static void ins_ctrl_o(void)
 // autoindent, we support it everywhere.
 static void ins_shift(int c, int lastc)
 {
-  if (stop_arrow() == FAIL) {
-    return;
-  }
-  AppendCharToRedobuff(c);
-
-  // 0^D and ^^D: remove all indent.
-  if (c == Ctrl_D && (lastc == '0' || lastc == '^')
-      && curwin->w_cursor.col > 0) {
-    curwin->w_cursor.col--;
-    del_char(false);              // delete the '^' or '0'
-    // In Replace mode, restore the characters that '^' or '0' replaced.
-    if (State & REPLACE_FLAG) {
-      replace_pop_ins();
-    }
-    if (lastc == '^') {
-      old_indent = get_indent();        // remember curr. indent
-    }
-    change_indent(INDENT_SET, 0, true, true);
-  } else {
-    change_indent(c == Ctrl_D ? INDENT_DEC : INDENT_INC, 0, true, true);
-  }
-
-  if (did_ai && *skipwhite(get_cursor_line_ptr()) != NUL) {
-    did_ai = false;
-  }
-  did_si = false;
-  can_si = false;
-  can_si_back = false;
-  can_cindent = false;          // no cindenting after ^D or ^T
+  rs_ins_shift(c, lastc);
 }
 
 static void ins_del(void)
 {
-  if (stop_arrow() == FAIL) {
-    return;
-  }
-  if (gchar_cursor() == NUL) {          // delete newline
-    const int temp = curwin->w_cursor.col;
-    if (!can_bs(BS_EOL)  // only if "eol" included
-        || do_join(2, false, true, false, false) == FAIL) {
-      vim_beep(kOptBoFlagBackspace);
-    } else {
-      curwin->w_cursor.col = temp;
-      // Adjust orig_line_count in case more lines have been deleted than
-      // have been added. That makes sure, that open_line() later
-      // can access all buffer lines correctly
-      if (State & VREPLACE_FLAG
-          && orig_line_count > curbuf->b_ml.ml_line_count) {
-        orig_line_count = curbuf->b_ml.ml_line_count;
-      }
-    }
-  } else if (del_char(false) == FAIL) {  // delete char under cursor
-    vim_beep(kOptBoFlagBackspace);
-  }
-  did_ai = false;
-  did_si = false;
-  can_si = false;
-  can_si_back = false;
-  AppendCharToRedobuff(K_DEL);
+  rs_ins_del();
 }
 
 /// Handle Backspace, delete-word and delete-line in Insert mode.
@@ -3873,235 +4063,54 @@ static bool ins_bs(int c, int mode, int *inserted_space_p)
 
 static void ins_left(void)
 {
-  const bool end_change = dont_sync_undo == kFalse;  // end undoable change
-
-  if ((fdo_flags & kOptFdoFlagHor) && KeyTyped) {
-    foldOpenCursor();
-  }
-  undisplay_dollar();
-  pos_T tpos = curwin->w_cursor;
-  if (oneleft() == OK) {
-    start_arrow_with_change(&tpos, end_change);
-    if (!end_change) {
-      AppendCharToRedobuff(K_LEFT);
-    }
-    // If exit reversed string, position is fixed
-    if (revins_scol != -1 && (int)curwin->w_cursor.col >= revins_scol) {
-      revins_legal++;
-    }
-    revins_chars++;
-  } else if (vim_strchr(p_ww, '[') != NULL && curwin->w_cursor.lnum > 1) {
-    // if 'whichwrap' set for cursor in insert mode may go to previous line.
-    // always break undo when moving upwards/downwards, else undo may break
-    start_arrow(&tpos);
-    curwin->w_cursor.lnum--;
-    coladvance(curwin, MAXCOL);
-    curwin->w_set_curswant = true;  // so we stay at the end
-  } else {
-    vim_beep(kOptBoFlagCursor);
-  }
-  dont_sync_undo = kFalse;
+  rs_ins_left();
 }
 
 static void ins_home(int c)
 {
-  if ((fdo_flags & kOptFdoFlagHor) && KeyTyped) {
-    foldOpenCursor();
-  }
-  undisplay_dollar();
-  pos_T tpos = curwin->w_cursor;
-  if (c == K_C_HOME) {
-    curwin->w_cursor.lnum = 1;
-  }
-  curwin->w_cursor.col = 0;
-  curwin->w_cursor.coladd = 0;
-  curwin->w_curswant = 0;
-  start_arrow(&tpos);
+  rs_ins_home(c);
 }
 
 static void ins_end(int c)
 {
-  if ((fdo_flags & kOptFdoFlagHor) && KeyTyped) {
-    foldOpenCursor();
-  }
-  undisplay_dollar();
-  pos_T tpos = curwin->w_cursor;
-  if (c == K_C_END) {
-    curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-  }
-  coladvance(curwin, MAXCOL);
-  curwin->w_curswant = MAXCOL;
-
-  start_arrow(&tpos);
+  rs_ins_end(c);
 }
 
 static void ins_s_left(void)
 {
-  const bool end_change = dont_sync_undo == kFalse;  // end undoable change
-  if ((fdo_flags & kOptFdoFlagHor) && KeyTyped) {
-    foldOpenCursor();
-  }
-  undisplay_dollar();
-  if (curwin->w_cursor.lnum > 1 || curwin->w_cursor.col > 0) {
-    start_arrow_with_change(&curwin->w_cursor, end_change);
-    if (!end_change) {
-      AppendCharToRedobuff(K_S_LEFT);
-    }
-    bck_word(1, false, false);
-    curwin->w_set_curswant = true;
-  } else {
-    vim_beep(kOptBoFlagCursor);
-  }
-  dont_sync_undo = kFalse;
+  rs_ins_s_left();
 }
 
-/// @param end_change      end undoable change
 static void ins_right(void)
 {
-  const bool end_change = dont_sync_undo == kFalse;  // end undoable change
-  if ((fdo_flags & kOptFdoFlagHor) && KeyTyped) {
-    foldOpenCursor();
-  }
-  undisplay_dollar();
-  if (gchar_cursor() != NUL || virtual_active(curwin)) {
-    start_arrow_with_change(&curwin->w_cursor, end_change);
-    if (!end_change) {
-      AppendCharToRedobuff(K_RIGHT);
-    }
-    curwin->w_set_curswant = true;
-    if (virtual_active(curwin)) {
-      oneright();
-    } else {
-      curwin->w_cursor.col += utfc_ptr2len(get_cursor_pos_ptr());
-    }
-
-    revins_legal++;
-    if (revins_chars) {
-      revins_chars--;
-    }
-  } else if (vim_strchr(p_ww, ']') != NULL
-             && curwin->w_cursor.lnum < curbuf->b_ml.ml_line_count) {
-    // if 'whichwrap' set for cursor in insert mode, may move the
-    // cursor to the next line
-    start_arrow(&curwin->w_cursor);
-    curwin->w_set_curswant = true;
-    curwin->w_cursor.lnum++;
-    curwin->w_cursor.col = 0;
-  } else {
-    vim_beep(kOptBoFlagCursor);
-  }
-  dont_sync_undo = kFalse;
+  rs_ins_right();
 }
 
 static void ins_s_right(void)
 {
-  const bool end_change = dont_sync_undo == kFalse;  // end undoable change
-  if ((fdo_flags & kOptFdoFlagHor) && KeyTyped) {
-    foldOpenCursor();
-  }
-  undisplay_dollar();
-  if (curwin->w_cursor.lnum < curbuf->b_ml.ml_line_count
-      || gchar_cursor() != NUL) {
-    start_arrow_with_change(&curwin->w_cursor, end_change);
-    if (!end_change) {
-      AppendCharToRedobuff(K_S_RIGHT);
-    }
-    fwd_word(1, false, 0);
-    curwin->w_set_curswant = true;
-  } else {
-    vim_beep(kOptBoFlagCursor);
-  }
-  dont_sync_undo = kFalse;
+  rs_ins_s_right();
 }
 
 /// @param startcol  when true move to Insstart.col
 static void ins_up(bool startcol)
 {
-  linenr_T old_topline = curwin->w_topline;
-  int old_topfill = curwin->w_topfill;
-
-  undisplay_dollar();
-  pos_T tpos = curwin->w_cursor;
-  if (cursor_up(1, true) == OK) {
-    if (startcol) {
-      coladvance(curwin, getvcol_nolist(&Insstart));
-    }
-    if (old_topline != curwin->w_topline
-        || old_topfill != curwin->w_topfill) {
-      redraw_later(curwin, UPD_VALID);
-    }
-    start_arrow(&tpos);
-    can_cindent = true;
-  } else {
-    vim_beep(kOptBoFlagCursor);
-  }
+  rs_ins_up(startcol);
 }
 
 static void ins_pageup(void)
 {
-  undisplay_dollar();
-
-  if (mod_mask & MOD_MASK_CTRL) {
-    // <C-PageUp>: tab page back
-    if (first_tabpage->tp_next != NULL) {
-      start_arrow(&curwin->w_cursor);
-      goto_tabpage(-1);
-    }
-    return;
-  }
-
-  pos_T tpos = curwin->w_cursor;
-  if (pagescroll(BACKWARD, 1, false) == OK) {
-    start_arrow(&tpos);
-    can_cindent = true;
-  } else {
-    vim_beep(kOptBoFlagCursor);
-  }
+  rs_ins_pageup();
 }
 
 /// @param startcol  when true move to Insstart.col
 static void ins_down(bool startcol)
 {
-  linenr_T old_topline = curwin->w_topline;
-  int old_topfill = curwin->w_topfill;
-
-  undisplay_dollar();
-  pos_T tpos = curwin->w_cursor;
-  if (cursor_down(1, true) == OK) {
-    if (startcol) {
-      coladvance(curwin, getvcol_nolist(&Insstart));
-    }
-    if (old_topline != curwin->w_topline
-        || old_topfill != curwin->w_topfill) {
-      redraw_later(curwin, UPD_VALID);
-    }
-    start_arrow(&tpos);
-    can_cindent = true;
-  } else {
-    vim_beep(kOptBoFlagCursor);
-  }
+  rs_ins_down(startcol);
 }
 
 static void ins_pagedown(void)
 {
-  undisplay_dollar();
-
-  if (mod_mask & MOD_MASK_CTRL) {
-    // <C-PageDown>: tab page forward
-    if (first_tabpage->tp_next != NULL) {
-      start_arrow(&curwin->w_cursor);
-      goto_tabpage(0);
-    }
-    return;
-  }
-
-  pos_T tpos = curwin->w_cursor;
-  if (pagescroll(FORWARD, 1, false) == OK) {
-    start_arrow(&tpos);
-    can_cindent = true;
-  } else {
-    vim_beep(kOptBoFlagCursor);
-  }
+  rs_ins_pagedown();
 }
 
 /// Handle TAB in Insert or Replace mode.

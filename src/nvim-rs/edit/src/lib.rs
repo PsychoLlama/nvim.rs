@@ -10,6 +10,7 @@ pub mod abbrev;
 pub mod completion;
 pub mod helpers;
 pub mod insert;
+pub mod key_handlers;
 pub mod keys;
 pub mod mode;
 pub mod movement;
