@@ -8,6 +8,7 @@
 
 pub mod abbrev;
 pub mod completion;
+pub mod helpers;
 pub mod insert;
 pub mod keys;
 pub mod mode;

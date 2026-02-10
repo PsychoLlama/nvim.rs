@@ -208,6 +208,22 @@ extern int rs_remove_abbr_off(int c);
 extern int rs_has_abbr_off(int c);
 extern int rs_abbr_trigger_type(int c);
 extern int rs_abbr_trigger_needs_offset(int trigger_type);
+// Helpers module exports
+extern void rs_undisplay_dollar(void);
+extern colnr_T rs_get_nolist_virtcol(void);
+extern int rs_echeck_abbr(int c);
+extern void rs_truncate_spaces(char *line, size_t len);
+extern int rs_del_char_after_col(int limit_col);
+extern void rs_backspace_until_column(int col);
+extern void rs_set_last_insert(int c);
+extern void rs_free_last_insert(void);
+
+typedef struct {
+  char *data;
+  size_t size;
+} RsNvimString;
+extern RsNvimString rs_get_last_insert(void);
+extern char *rs_get_last_insert_save(void);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -476,7 +492,105 @@ int nvim_get_p_ri(void)
   return p_ri;
 }
 
+// ============================================================================
+// Accessors for helpers.rs (Phase 1)
+// ============================================================================
+
+/// Check if curwin buffer is valid for cursor operations (accessor for Rust).
+int nvim_curwin_buf_valid(void)
+{
+  return curwin->w_buffer != NULL && curwin->w_buffer->b_ml.ml_mfp != NULL;
+}
+
+/// Get curwin buffer line count (accessor for Rust).
+linenr_T nvim_curwin_buf_line_count(void)
+{
+  return curwin->w_buffer->b_ml.ml_line_count;
+}
+
+/// Get curwin->w_p_list (accessor for Rust).
+int nvim_curwin_w_p_list(void)
+{
+  return curwin->w_p_list;
+}
+
+/// Check if p_cpo contains CPO_LISTWM ('L') (accessor for Rust).
+int nvim_p_cpo_has_listwm(void)
+{
+  return vim_strchr(p_cpo, CPO_LISTWM) != NULL;
+}
+
+/// Get getvcol_nolist(&curwin->w_cursor) (accessor for Rust).
+colnr_T nvim_getvcol_nolist(void)
+{
+  return getvcol_nolist(&curwin->w_cursor);
+}
+
+/// Run validate_virtcol(curwin) (accessor for Rust).
+void nvim_validate_virtcol_curwin(void)
+{
+  validate_virtcol(curwin);
+}
+
+/// Get curwin->w_virtcol (accessor for Rust).
+colnr_T nvim_curwin_get_w_virtcol(void)
+{
+  return curwin->w_virtcol;
+}
+
+/// Get get_cursor_pos_ptr() (accessor for Rust).
+char *nvim_get_cursor_pos_ptr(void)
+{
+  return get_cursor_pos_ptr();
+}
+
+/// Get last_insert.data (accessor for Rust).
+char *nvim_get_last_insert_data(void)
+{
+  return last_insert.data;
+}
+
+/// Get last_insert.size (accessor for Rust).
+size_t nvim_get_last_insert_size(void)
+{
+  return last_insert.size;
+}
+
+/// Set last_insert data and size (accessor for Rust).
+void nvim_set_last_insert(char *data, size_t size)
+{
+  last_insert.data = data;
+  last_insert.size = size;
+}
+
+/// Clear last_insert (free and zero) (accessor for Rust).
+void nvim_clear_last_insert(void)
+{
+  API_CLEAR_STRING(last_insert);
+}
+
+/// Set last_insert_skip (accessor for Rust).
+void nvim_set_last_insert_skip(int val)
+{
+  last_insert_skip = val;
+}
+
+// Static asserts for constants used in Rust helpers module
+_Static_assert(REPLACE_FLAG == 0x100, "REPLACE_FLAG mismatch");
+_Static_assert(MB_MAXBYTES == 21, "MB_MAXBYTES mismatch");
+_Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
+_Static_assert(DEL == 0x7f, "DEL mismatch");
+_Static_assert(ESC == '\033', "ESC mismatch");
+
 static kvec_t(char) replace_stack = KV_INITIAL_VALUE;
+
+// Forward-declared static wrapper for Rust (replace_do_bs is static)
+static void replace_do_bs(int limit_col);
+/// Non-static wrapper for replace_do_bs (accessible from Rust).
+void nvim_replace_do_bs(int limit_col)
+{
+  replace_do_bs(limit_col);
+}
 
 #define TRIGGER_AUTOCOMPLETE() \
   do { \
@@ -2015,12 +2129,7 @@ void display_dollar(colnr_T col_arg)
 // in insert mode.
 void undisplay_dollar(void)
 {
-  if (dollar_vcol < 0) {
-    return;
-  }
-
-  dollar_vcol = -1;
-  redrawWinline(curwin, curwin->w_cursor.lnum);
+  rs_undisplay_dollar();
 }
 
 /// Truncate the space at the end of a line.  This is to be used only in an
@@ -2028,15 +2137,7 @@ void undisplay_dollar(void)
 /// MODE_VREPLACE modes.
 void truncate_spaces(char *line, size_t len)
 {
-  int i;
-
-  // find start of trailing white space
-  for (i = (int)len - 1; i >= 0 && ascii_iswhite(line[i]); i--) {
-    if (State & REPLACE_FLAG) {
-      replace_join(0);              // remove a NUL from the replace stack
-    }
-  }
-  line[i + 1] = NUL;
+  rs_truncate_spaces(line, len);
 }
 
 /// Backspace the cursor until the given column.  Handles MODE_REPLACE and
@@ -2045,14 +2146,7 @@ void truncate_spaces(char *line, size_t len)
 /// character.
 void backspace_until_column(int col)
 {
-  while ((int)curwin->w_cursor.col > col) {
-    curwin->w_cursor.col--;
-    if (State & REPLACE_FLAG) {
-      replace_do_bs(col);
-    } else if (!del_char_after_col(col)) {
-      break;
-    }
-  }
+  rs_backspace_until_column(col);
 }
 
 /// Like del_char(), but make sure not to go before column "limit_col".
@@ -2063,29 +2157,7 @@ void backspace_until_column(int col)
 /// @return true when something was deleted.
 static bool del_char_after_col(int limit_col)
 {
-  if (limit_col >= 0) {
-    colnr_T ecol = curwin->w_cursor.col + 1;
-
-    // Make sure the cursor is at the start of a character, but
-    // skip forward again when going too far back because of a
-    // composing character.
-    mb_adjust_cursor();
-    while (curwin->w_cursor.col < (colnr_T)limit_col) {
-      int l = utf_ptr2len(get_cursor_pos_ptr());
-
-      if (l == 0) {  // end of line
-        break;
-      }
-      curwin->w_cursor.col += l;
-    }
-    if (*get_cursor_pos_ptr() == NUL || curwin->w_cursor.col == ecol) {
-      return false;
-    }
-    del_bytes(ecol - curwin->w_cursor.col, false, true);
-  } else {
-    del_char(false);
-  }
-  return true;
+  return rs_del_char_after_col(limit_col) != 0;
 }
 
 /// Next character is interpreted literally.
@@ -2653,24 +2725,13 @@ static void stop_insert(pos_T *end_insert_pos, int esc, int nomove)
 // Used for the replace command.
 void set_last_insert(int c)
 {
-  xfree(last_insert.data);
-  last_insert.data = xmalloc(MB_MAXBYTES * 3 + 5);
-  char *s = last_insert.data;
-  // Use the CTRL-V only when entering a special char
-  if (c < ' ' || c == DEL) {
-    *s++ = Ctrl_V;
-  }
-  s = add_char2buf(c, s);
-  *s++ = ESC;
-  *s = NUL;
-  last_insert.size = (size_t)(s - last_insert.data);
-  last_insert_skip = 0;
+  rs_set_last_insert(c);
 }
 
 #if defined(EXITFREE)
 void free_last_insert(void)
 {
-  API_CLEAR_STRING(last_insert);
+  rs_free_last_insert();
 }
 #endif
 
@@ -2967,27 +3028,15 @@ int stuff_inserted(int c, int count, int no_esc)
 String get_last_insert(void)
   FUNC_ATTR_PURE
 {
-  return last_insert.data == NULL ? NULL_STRING : (String){
-    .data = last_insert.data + last_insert_skip,
-    .size = last_insert.size - (size_t)last_insert_skip,
-  };
+  RsNvimString rs = rs_get_last_insert();
+  return rs.data == NULL ? NULL_STRING : (String){ .data = rs.data, .size = rs.size };
 }
 
 // Get last inserted string, and remove trailing <Esc>.
 // Returns pointer to allocated memory (must be freed) or NULL.
 char *get_last_insert_save(void)
 {
-  String insert = get_last_insert();
-
-  if (insert.data == NULL) {
-    return NULL;
-  }
-
-  char *s = xmemdupz(insert.data, insert.size);
-  if (insert.size > 0 && s[insert.size - 1] == ESC) {  // remain trailing ESC
-    s[--insert.size] = NUL;
-  }
-  return s;
+  return rs_get_last_insert_save();
 }
 
 /// Check the word in front of the cursor for an abbreviation.
@@ -3001,14 +3050,7 @@ char *get_last_insert_save(void)
 static bool echeck_abbr(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // Don't check for abbreviation in paste mode, when disabled and just
-  // after moving around with cursor keys.
-  if (p_paste || no_abbr || arrow_used) {
-    return false;
-  }
-
-  return check_abbr(c, get_cursor_line_ptr(), curwin->w_cursor.col,
-                    curwin->w_cursor.lnum == Insstart.lnum ? Insstart.col : 0);
+  return rs_echeck_abbr(c) != 0;
 }
 
 // replace-stack functions
@@ -4603,22 +4645,13 @@ static int ins_ctrl_ey(int tc)
 // Unless 'cpo' contains the 'L' flag.
 colnr_T get_nolist_virtcol(void)
 {
-  // check validity of cursor in current buffer
-  if (curwin->w_buffer == NULL || curwin->w_buffer->b_ml.ml_mfp == NULL
-      || curwin->w_cursor.lnum > curwin->w_buffer->b_ml.ml_line_count) {
-    return 0;
-  }
-  if (curwin->w_p_list && vim_strchr(p_cpo, CPO_LISTWM) == NULL) {
-    return getvcol_nolist(&curwin->w_cursor);
-  }
-  validate_virtcol(curwin);
-  return curwin->w_virtcol;
+  return rs_get_nolist_virtcol();
 }
 
 /// Get virtual column without list mode (accessor for Rust).
 int nvim_get_nolist_virtcol(void)
 {
-  return (int)get_nolist_virtcol();
+  return (int)rs_get_nolist_virtcol();
 }
 
 // Handle the InsertCharPre autocommand.
