@@ -483,6 +483,26 @@ extern "C" {
     fn nvim_shada_tv_clear(tv: *mut c_void);
     fn nvim_shada_free_reg_contents(contents_ptr: *mut c_void, contents_size: usize);
     fn nvim_shada_free_variable(entry: *mut ShadaEntry);
+
+    // Phase 5: File I/O accessors
+    fn nvim_shada_file_open(fd: FileDescriptorHandle, fname: *const c_char) -> c_int;
+    fn nvim_shada_read(fd: FileDescriptorHandle, flags: c_int);
+    fn nvim_shada_os_strerror(err: c_int) -> *const c_char;
+    fn nvim_shada_verbose_enter();
+    fn nvim_shada_verbose_leave();
+    fn nvim_shada_get_p_verbose() -> c_int;
+    fn nvim_shada_smsg_reading(
+        fname: *const c_char,
+        want_info: c_int,
+        want_marks: c_int,
+        get_oldfiles: c_int,
+        failed: c_int,
+    );
+    fn nvim_shada_get_p_fs() -> c_int;
+    fn nvim_shada_build_default_path() -> *mut c_char;
+    fn nvim_shada_semsg_close_error(strerror_msg: *const c_char);
+    fn nvim_shada_semsg_open_error(fname: *const c_char, strerror_msg: *const c_char);
+    fn nvim_shada_file_descriptor_size() -> usize;
 }
 
 // =============================================================================
@@ -2422,12 +2442,19 @@ pub unsafe extern "C" fn rs_shada_filename(file: *const c_char) -> *mut c_char {
 
 /// Get the default ShaDa file path.
 ///
+/// Returns a cached path on subsequent calls. The path is built as
+/// `<user_state_dir>/shada/main.shada`.
+///
 /// # Returns
 ///
 /// A pointer to the default ShaDa file path (not allocated, do not free).
 #[no_mangle]
 pub unsafe extern "C" fn rs_shada_get_default_file() -> *const c_char {
-    nvim_shada_get_default_file()
+    static mut DEFAULT_SHADA_FILE: *mut c_char = std::ptr::null_mut();
+    if DEFAULT_SHADA_FILE.is_null() {
+        DEFAULT_SHADA_FILE = nvim_shada_build_default_path();
+    }
+    DEFAULT_SHADA_FILE
 }
 
 /// Read marks information from ShaDa file.
@@ -2477,20 +2504,49 @@ pub unsafe extern "C" fn rs_shada_read_everything(
 /// OK (0) on success, FAIL (1) on failure.
 #[no_mangle]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub unsafe extern "C" fn rs_shada_read_file(file: *const c_char, _flags: c_int) -> c_int {
+pub unsafe extern "C" fn rs_shada_read_file(file: *const c_char, flags: c_int) -> c_int {
     const OK: c_int = 0;
     const FAIL: c_int = 1;
+    const UV_ENOENT: c_int = -2;
 
     let fname = rs_shada_filename(file);
     if fname.is_null() {
         return FAIL;
     }
 
-    // The actual file reading is delegated to C code since it involves
-    // complex interaction with Neovim internals (buffer management, marks, etc.)
-    // This function serves as the Rust entry point for the high-level API.
+    // Allocate a FileDescriptor on the heap (opaque C struct)
+    let fd_size = nvim_shada_file_descriptor_size();
+    let sd_reader = nvim_xcalloc(1, fd_size);
+    let fd = FileDescriptorHandle::from_ptr(sd_reader);
 
+    let of_ret = nvim_shada_file_open(fd, fname);
+
+    if nvim_shada_get_p_verbose() > 1 {
+        nvim_shada_verbose_enter();
+        nvim_shada_smsg_reading(
+            fname,
+            c_int::from(flags & SHADA_WANT_INFO as c_int != 0),
+            c_int::from(flags & SHADA_WANT_MARKS as c_int != 0),
+            c_int::from(flags & SHADA_GET_OLDFILES as c_int != 0),
+            c_int::from(of_ret != 0),
+        );
+        nvim_shada_verbose_leave();
+    }
+
+    if of_ret != 0 {
+        if of_ret != UV_ENOENT || (flags & SHADA_MISSING_ERROR as c_int) != 0 {
+            nvim_shada_semsg_open_error(fname, nvim_shada_os_strerror(of_ret));
+        }
+        nvim_xfree(fname.cast::<c_void>());
+        nvim_xfree(sd_reader);
+        return FAIL;
+    }
     nvim_xfree(fname.cast::<c_void>());
+
+    nvim_shada_read(fd, flags);
+    rs_close_file(fd);
+    nvim_xfree(sd_reader);
+
     OK
 }
 
@@ -3779,6 +3835,21 @@ pub unsafe extern "C" fn rs_shada_init_jumps(
         }
     }
     jumps_size
+}
+
+// =============================================================================
+// Phase 5: File I/O Wrappers
+// =============================================================================
+
+/// Close a ShaDa file descriptor, reporting errors.
+///
+/// Equivalent to the C `close_file` function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_close_file(cookie: FileDescriptorHandle) {
+    let error = nvim_file_close(cookie, nvim_shada_get_p_fs());
+    if error != 0 {
+        nvim_shada_semsg_close_error(nvim_shada_os_strerror(error));
+    }
 }
 
 // =============================================================================

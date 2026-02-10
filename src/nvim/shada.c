@@ -96,6 +96,11 @@ extern void rs_add_search_pattern(ShadaEntry *ret_pse, int is_substitute,
 extern ShadaEntry rs_shada_get_buflist(void *removable_bufs);
 extern size_t rs_shada_init_jumps(ShadaEntry *jumps, void *removable_bufs);
 
+// Phase 5: File I/O wrappers
+extern void rs_close_file(void *cookie);
+extern const char *rs_shada_get_default_file(void);
+extern int rs_shada_read_file(const char *file, int flags);
+
 // Legacy alias
 #define rs_hist_type2char rs_shada_hist_type2char
 
@@ -600,11 +605,7 @@ static ShaDaReadResult sd_reader_skip(FileDescriptor *const sd_reader, const siz
 /// Wrapper for closing file descriptors
 static void close_file(FileDescriptor *cookie)
 {
-  const int error = file_close(cookie, !!p_fs);
-  if (error != 0) {
-    semsg(_(SERR "System error while closing ShaDa file: %s"),
-          os_strerror(error));
-  }
+  rs_close_file(cookie);
 }
 
 /// Read ShaDa file
@@ -616,39 +617,7 @@ static void close_file(FileDescriptor *cookie)
 static int shada_read_file(const char *const file, const int flags)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  char *const fname = shada_filename(file);
-  if (fname == NULL) {
-    return FAIL;
-  }
-
-  FileDescriptor sd_reader;
-  int of_ret = file_open(&sd_reader, fname, kFileReadOnly, 0);
-
-  if (p_verbose > 1) {
-    verbose_enter();
-    smsg(0, _("Reading ShaDa file \"%s\"%s%s%s%s"),
-         fname,
-         (flags & kShaDaWantInfo) ? _(" info") : "",
-         (flags & kShaDaWantMarks) ? _(" marks") : "",
-         (flags & kShaDaGetOldfiles) ? _(" oldfiles") : "",
-         of_ret != 0 ? _(" FAILED") : "");
-    verbose_leave();
-  }
-
-  if (of_ret != 0) {
-    if (of_ret != UV_ENOENT || (flags & kShaDaMissingError)) {
-      semsg(_(SERR "System error while opening ShaDa file %s for reading: %s"),
-            fname, os_strerror(of_ret));
-    }
-    xfree(fname);
-    return FAIL;
-  }
-  xfree(fname);
-
-  shada_read(&sd_reader, flags);
-  close_file(&sd_reader);
-
-  return OK;
+  return rs_shada_read_file(file, flags);
 }
 
 /// Wrapper for hist_iter() function which produces ShadaEntry values
@@ -1250,18 +1219,12 @@ shada_read_main_cycle_end:
   set_destroy(cstr_t, &oldfiles_set);
 }
 
-/// Default shada file location: cached path
-static char *default_shada_file = NULL;
 
 /// Get the default ShaDa file
 static const char *shada_get_default_file(void)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (default_shada_file == NULL) {
-    char *shada_dir = stdpaths_user_state_subpath("shada", 0, false);
-    default_shada_file = concat_fnames_realloc(shada_dir, "main.shada", true);
-  }
-  return default_shada_file;
+  return rs_shada_get_default_file();
 }
 
 /// Get the ShaDa file name to use
@@ -3931,4 +3894,87 @@ void nvim_shada_free_variable(ShadaEntry *entry)
 {
   xfree(entry->data.global_var.name);
   tv_clear(&entry->data.global_var.value);
+}
+
+// Phase 5: File I/O wrappers
+
+/// Open a file for reading. Returns 0 on success, error code on failure.
+int nvim_shada_file_open(void *fd, const char *fname)
+{
+  return file_open((FileDescriptor *)fd, fname, kFileReadOnly, 0);
+}
+
+/// Read shada data from an open file descriptor.
+void nvim_shada_read(void *fd, int flags)
+{
+  shada_read((FileDescriptor *)fd, flags);
+}
+
+/// Get the os_strerror() message for an error code.
+const char *nvim_shada_os_strerror(int err)
+{
+  return os_strerror(err);
+}
+
+/// Wrapper for verbose_enter()
+void nvim_shada_verbose_enter(void)
+{
+  verbose_enter();
+}
+
+/// Wrapper for verbose_leave()
+void nvim_shada_verbose_leave(void)
+{
+  verbose_leave();
+}
+
+/// Get p_verbose value
+int nvim_shada_get_p_verbose(void)
+{
+  return (int)p_verbose;
+}
+
+/// Non-variadic smsg wrapper for "Reading ShaDa file" verbose message
+void nvim_shada_smsg_reading(const char *fname, int want_info, int want_marks,
+                             int get_oldfiles, int failed)
+{
+  smsg(0, _("Reading ShaDa file \"%s\"%s%s%s%s"),
+       fname,
+       want_info ? _(" info") : "",
+       want_marks ? _(" marks") : "",
+       get_oldfiles ? _(" oldfiles") : "",
+       failed ? _(" FAILED") : "");
+}
+
+/// Get p_fs value (for file sync)
+int nvim_shada_get_p_fs(void)
+{
+  return !!p_fs;
+}
+
+/// Wrapper for stdpaths_user_state_subpath + concat_fnames_realloc
+/// to build the default shada file path.
+char *nvim_shada_build_default_path(void)
+{
+  char *shada_dir = stdpaths_user_state_subpath("shada", 0, false);
+  return concat_fnames_realloc(shada_dir, "main.shada", true);
+}
+
+/// Error message wrapper for close_file errors
+void nvim_shada_semsg_close_error(const char *strerror_msg)
+{
+  semsg(_(SERR "System error while closing ShaDa file: %s"), strerror_msg);
+}
+
+/// Error message wrapper for open-for-read errors
+void nvim_shada_semsg_open_error(const char *fname, const char *strerror_msg)
+{
+  semsg(_(SERR "System error while opening ShaDa file %s for reading: %s"),
+        fname, strerror_msg);
+}
+
+/// Get the size of FileDescriptor struct for Rust allocation
+size_t nvim_shada_file_descriptor_size(void)
+{
+  return sizeof(FileDescriptor);
 }
