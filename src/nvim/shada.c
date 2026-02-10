@@ -101,6 +101,11 @@ extern void rs_close_file(void *cookie);
 extern const char *rs_shada_get_default_file(void);
 extern int rs_shada_read_file(const char *file, int flags);
 
+// Phase 6: Public API wrappers
+extern int rs_shada_read_marks(void);
+extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
+extern void rs_check_marks_read(void);
+
 // Legacy alias
 #define rs_hist_type2char rs_shada_hist_type2char
 
@@ -2696,7 +2701,7 @@ shada_write_file_did_not_remove:
 /// @return OK in case of success, FAIL otherwise.
 int shada_read_marks(void)
 {
-  return shada_read_file(NULL, kShaDaWantMarks);
+  return rs_shada_read_marks();
 }
 
 /// Read all information from ShaDa file
@@ -2709,10 +2714,7 @@ int shada_read_marks(void)
 /// @return OK in case of success, FAIL otherwise.
 int shada_read_everything(const char *const fname, const bool forceit, const bool missing_ok)
 {
-  return shada_read_file(fname,
-                         kShaDaWantInfo|kShaDaWantMarks|kShaDaGetOldfiles
-                         |(forceit ? kShaDaForceit : 0)
-                         |(missing_ok ? 0 : kShaDaMissingError));
+  return rs_shada_read_everything(fname, forceit, missing_ok);
 }
 
 static void shada_free_shada_entry(ShadaEntry *const entry)
@@ -3509,14 +3511,7 @@ char *find_shada_parameter(int type)
 /// buffer marks and the buffer has a name.
 void check_marks_read(void)
 {
-  if (!curbuf->b_marks_read && get_shada_parameter('\'') > 0
-      && curbuf->b_ffname != NULL) {
-    shada_read_marks();
-  }
-
-  // Always set b_marks_read; needed when 'shada' is changed to include
-  // the ' parameter after opening a buffer.
-  curbuf->b_marks_read = true;
+  rs_check_marks_read();
 }
 
 // =============================================================================
@@ -3977,4 +3972,21 @@ void nvim_shada_semsg_open_error(const char *fname, const char *strerror_msg)
 size_t nvim_shada_file_descriptor_size(void)
 {
   return sizeof(FileDescriptor);
+}
+
+// Phase 6: curbuf accessors for check_marks_read
+
+int nvim_shada_curbuf_marks_read(void)
+{
+  return curbuf->b_marks_read;
+}
+
+void nvim_shada_curbuf_set_marks_read(int val)
+{
+  curbuf->b_marks_read = val;
+}
+
+const char *nvim_shada_curbuf_ffname(void)
+{
+  return curbuf->b_ffname;
 }

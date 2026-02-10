@@ -503,6 +503,11 @@ extern "C" {
     fn nvim_shada_semsg_close_error(strerror_msg: *const c_char);
     fn nvim_shada_semsg_open_error(fname: *const c_char, strerror_msg: *const c_char);
     fn nvim_shada_file_descriptor_size() -> usize;
+
+    // Phase 6: curbuf accessors for check_marks_read
+    fn nvim_shada_curbuf_marks_read() -> c_int;
+    fn nvim_shada_curbuf_set_marks_read(val: c_int);
+    fn nvim_shada_curbuf_ffname() -> *const c_char;
 }
 
 // =============================================================================
@@ -2491,6 +2496,26 @@ pub unsafe extern "C" fn rs_shada_read_everything(
         flags |= SHADA_MISSING_ERROR;
     }
     rs_shada_read_file(fname, flags as c_int)
+}
+
+/// Check if marks need to be read from ShaDa file for current buffer.
+///
+/// If the current buffer hasn't had its marks read yet, and the 'shada'
+/// option includes the `'` parameter (marks saving), and the buffer has
+/// a filename, then reads marks from the ShaDa file.
+///
+/// Always sets `b_marks_read` to true afterward.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_marks_read() {
+    if nvim_shada_curbuf_marks_read() == 0
+        && nvim_get_shada_parameter(c_int::from(b'\'')) > 0
+        && !nvim_shada_curbuf_ffname().is_null()
+    {
+        rs_shada_read_marks();
+    }
+    // Always set b_marks_read; needed when 'shada' is changed to include
+    // the ' parameter after opening a buffer.
+    nvim_shada_curbuf_set_marks_read(1);
 }
 
 /// Read ShaDa file with specified flags.
