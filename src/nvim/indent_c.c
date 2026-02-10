@@ -168,6 +168,46 @@ bool nvim_in_cinkeys(int keytyped, int when, bool line_is_empty)
   return in_cinkeys(keytyped, when, line_is_empty);
 }
 
+// Phase 2 C accessors
+/// C accessor for curwin->w_cursor.lnum.
+int nvim_cindent_curwin_get_cursor_lnum(void)
+{
+  return curwin->w_cursor.lnum;
+}
+
+/// C accessor for curbuf->b_ind_maxparen.
+int nvim_cindent_curbuf_get_ind_maxparen(void)
+{
+  return curbuf->b_ind_maxparen;
+}
+
+/// C accessor for curbuf->b_p_cinw (cinwords option).
+const char *nvim_cindent_curbuf_get_cinw(void)
+{
+  return curbuf->b_p_cinw;
+}
+
+/// C accessor for ml_get(lnum).
+const char *nvim_cindent_ml_get(int lnum)
+{
+  return ml_get(lnum);
+}
+
+/// C accessor for get_indent_lnum(lnum).
+int nvim_cindent_get_indent_lnum(int lnum)
+{
+  return get_indent_lnum(lnum);
+}
+
+// Phase 2 Rust function declarations
+extern bool rs_cin_islabel_skip(const char *s, int *new_offset);
+extern const char *rs_after_label(const char *l);
+extern bool rs_cin_is_if_for_while_before_offset(const char *line, int *poffset);
+extern int rs_corr_ind_maxparen(int startpos_lnum);
+extern bool rs_cin_isinit(const char *line);
+extern bool rs_cin_is_cinword(const char *line);
+extern int rs_cin_ispreproc_cont(int lnum, int amount, int *out_lnum, int *out_amount);
+
 // Find result cache for cpp_baseclass
 typedef struct {
   int found;
@@ -290,24 +330,7 @@ int is_pos_in_string(const char *line, colnr_T col)
 /// @return  true if the string "line" starts with a word from 'cinwords'.
 bool cin_is_cinword(const char *line)
 {
-  bool retval = false;
-
-  size_t cinw_len = strlen(curbuf->b_p_cinw) + 1;
-  char *cinw_buf = xmalloc(cinw_len);
-  line = skipwhite(line);
-
-  for (char *cinw = curbuf->b_p_cinw; *cinw;) {
-    size_t len = copy_option_part(&cinw, cinw_buf, cinw_len, ",");
-    if (strncmp(line, cinw_buf, len) == 0
-        && (!vim_iswordc((uint8_t)line[len]) || !vim_iswordc((uint8_t)line[len - 1]))) {
-      retval = true;
-      break;
-    }
-  }
-
-  xfree(cinw_buf);
-
-  return retval;
+  return rs_cin_is_cinword(line);
 }
 
 /// Check that C-indenting is on.
@@ -364,18 +387,12 @@ static bool cin_has_js_key(const char *text)
 static bool cin_islabel_skip(const char **s)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (!vim_isIDc((uint8_t)(**s))) {            // need at least one ID character
-    return false;
+  int new_offset = 0;
+  if (rs_cin_islabel_skip(*s, &new_offset)) {
+    *s = *s + new_offset;
+    return true;
   }
-
-  while (vim_isIDc((uint8_t)(**s))) {
-    (*s) += utfc_ptr2len(*s);
-  }
-
-  *s = cin_skipcomment(*s);
-
-  // "::" is not a label, it's C++
-  return **s == ':' && *++*s != ':';
+  return false;
 }
 
 // Recognize a label: "label:".
@@ -455,36 +472,7 @@ static bool cin_is_compound_init(const char *s)
 /// Calls another function to recognize structure initialization.
 static bool cin_isinit(void)
 {
-  const char *s;
-  static char *skip[] = { "static", "public", "protected", "private" };
-
-  s = cin_skipcomment(get_cursor_line_ptr());
-
-  if (cin_starts_with(s, "typedef")) {
-    s = cin_skipcomment(s + 7);
-  }
-
-  while (true) {
-    int i, l;
-
-    for (i = 0; i < (int)ARRAY_SIZE(skip); i++) {
-      l = (int)strlen(skip[i]);
-      if (cin_starts_with(s, skip[i])) {
-        s = cin_skipcomment(s + l);
-        l = 0;
-        break;
-      }
-    }
-    if (l != 0) {
-      break;
-    }
-  }
-
-  if (cin_starts_with(s, "enum")) {
-    return true;
-  }
-
-  return cin_is_compound_init(s);
+  return rs_cin_isinit(get_cursor_line_ptr());
 }
 
 /// Recognize a switch label: "case .*:" or "default:".
@@ -542,25 +530,7 @@ static bool cin_is_cpp_namespace(const char *s)
 //                     ^
 static const char *after_label(const char *l)
 {
-  for (; *l; l++) {
-    if (*l == ':') {
-      if (l[1] == ':') {            // skip over "::" for C++
-        l++;
-      } else if (!cin_iscase(l + 1, false)) {
-        break;
-      }
-    } else if (*l == '\'' && l[1] && l[2] == '\'') {
-      l += 2;                       // skip over 'x'
-    }
-  }
-  if (*l == NUL) {
-    return NULL;
-  }
-  l = cin_skipcomment(l + 1);
-  if (*l == NUL) {
-    return NULL;
-  }
-  return l;
+  return rs_after_label(l);
 }
 
 // Get indent of line "lnum", skipping a label.
@@ -720,35 +690,15 @@ static int cin_ispreproc(const char *s)
 /// Put the amount of indent in "*amount".
 static int cin_ispreproc_cont(const char **pp, linenr_T *lnump, int *amount)
 {
-  const char *line = *pp;
-  linenr_T lnum = *lnump;
-  int retval = false;
-  int candidate_amount = *amount;
-
-  if (*line != NUL && line[strlen(line) - 1] == '\\') {
-    candidate_amount = get_indent_lnum(lnum);
-  }
-
-  while (true) {
-    if (cin_ispreproc(line)) {
-      retval = true;
-      *lnump = lnum;
-      break;
-    }
-    if (lnum == 1) {
-      break;
-    }
-    line = ml_get(--lnum);
-    if (*line == NUL || line[strlen(line) - 1] != '\\') {
-      break;
-    }
-  }
-
-  if (lnum != *lnump) {
-    *pp = ml_get(*lnump);
-  }
+  int out_lnum = *lnump;
+  int out_amount = *amount;
+  int retval = rs_cin_ispreproc_cont(*lnump, *amount, &out_lnum, &out_amount);
   if (retval) {
-    *amount = candidate_amount;
+    if (out_lnum != *lnump) {
+      *pp = ml_get(out_lnum);
+    }
+    *lnump = out_lnum;
+    *amount = out_amount;
   }
   return retval;
 }
@@ -953,41 +903,7 @@ static int cin_iswhileofdo(const char *p, linenr_T lnum)  // XXX
 // string was found.
 static int cin_is_if_for_while_before_offset(const char *line, int *poffset)
 {
-  int offset = *poffset;
-
-  if (offset-- < 2) {
-    return 0;
-  }
-  while (offset > 2 && ascii_iswhite(line[offset])) {
-    offset--;
-  }
-
-  offset -= 1;
-  if (!strncmp(line + offset, "if", 2)) {
-    goto probablyFound;
-  }
-
-  if (offset >= 1) {
-    offset -= 1;
-    if (!strncmp(line + offset, "for", 3)) {
-      goto probablyFound;
-    }
-
-    if (offset >= 2) {
-      offset -= 2;
-      if (!strncmp(line + offset, "while", 5)) {
-        goto probablyFound;
-      }
-    }
-  }
-  return 0;
-
-probablyFound:
-  if (!offset || !vim_isIDc((uint8_t)line[offset - 1])) {
-    *poffset = offset;
-    return 1;
-  }
-  return 0;
+  return rs_cin_is_if_for_while_before_offset(line, poffset);
 }
 
 /// Return true if we are at the end of a do-while.
@@ -1370,12 +1286,7 @@ static pos_T *find_match_paren_after_brace(int ind_maxparen)
 // looking a few lines further.
 static int corr_ind_maxparen(pos_T *startpos)
 {
-  int n = startpos->lnum - curwin->w_cursor.lnum;
-
-  if (n > 0 && n < curbuf->b_ind_maxparen / 2) {
-    return curbuf->b_ind_maxparen - n;
-  }
-  return curbuf->b_ind_maxparen;
+  return rs_corr_ind_maxparen(startpos->lnum);
 }
 
 // Set w_cursor.col to the column number of the last unmatched ')' or '{' in

@@ -147,6 +147,24 @@ extern "C" {
     // Character classification
     fn vim_iswordc(c: c_int) -> c_int;
     fn vim_isIDc(c: c_int) -> c_int;
+
+    // Phase 2 accessors
+    fn nvim_cindent_curwin_get_cursor_lnum() -> c_int;
+    fn nvim_cindent_curbuf_get_ind_maxparen() -> c_int;
+    fn nvim_cindent_curbuf_get_cinw() -> *const c_char;
+    fn nvim_cindent_ml_get(lnum: c_int) -> *const c_char;
+    fn nvim_cindent_get_indent_lnum(lnum: c_int) -> c_int;
+
+    // Multi-byte character width
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+
+    // Option parsing
+    fn copy_option_part(
+        option: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+        sep_chars: *const c_char,
+    ) -> usize;
 }
 
 /// Check if a character is whitespace (space or tab).
@@ -169,6 +187,16 @@ const fn ascii_isdigit(c: u8) -> bool {
 #[inline]
 const fn is_nul(c: c_char) -> bool {
     c == NUL
+}
+
+/// Return the length of a null-terminated C string (equivalent to strlen).
+///
+/// # Safety
+/// `s` must be a valid null-terminated C string pointer.
+#[inline]
+#[allow(clippy::missing_const_for_fn)]
+unsafe fn c_strlen(s: *const c_char) -> usize {
+    std::ffi::CStr::from_ptr(s).to_bytes().len()
 }
 
 /// Check if a character is whitespace (space or tab).
@@ -2302,6 +2330,325 @@ pub unsafe extern "C" fn rs_cin_is_operator_continuation(s: *const c_char) -> bo
     }
 
     false
+}
+
+// ============================================================================
+// Phase 2: Pure logic helpers
+// ============================================================================
+
+/// Check if string matches "label:" pattern (identifier followed by colon).
+/// Returns true if found, and sets `*new_offset` to the byte offset past the ':'.
+///
+/// # Safety
+/// All pointers must be valid. `s` must point to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_islabel_skip(s: *const c_char, new_offset: *mut c_int) -> bool {
+    if s.is_null() || new_offset.is_null() {
+        return false;
+    }
+
+    let mut p = s;
+
+    // Need at least one ID character
+    if vim_isIDc(i32::from(*p as u8)) == 0 {
+        return false;
+    }
+
+    // Skip over identifier characters
+    while vim_isIDc(i32::from(*p as u8)) != 0 {
+        let len = utfc_ptr2len(p);
+        p = p.add(len as usize);
+    }
+
+    // Skip comments
+    p = rs_cin_skipcomment(p);
+
+    // "::" is not a label, it's C++
+    if *p == b':' as c_char {
+        p = p.add(1);
+        if *p != b':' as c_char {
+            *new_offset = p.offset_from(s) as c_int;
+            return true;
+        }
+    }
+    false
+}
+
+/// Return a pointer to the first non-empty non-comment character after a ':'.
+/// Return NULL if not found.
+///
+/// # Safety
+/// `l` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_after_label(l: *const c_char) -> *const c_char {
+    if l.is_null() {
+        return std::ptr::null();
+    }
+
+    let mut p = l;
+    while !is_nul(*p) {
+        if *p == b':' as c_char {
+            if *p.add(1) == b':' as c_char {
+                // skip over "::" for C++
+                p = p.add(1);
+            } else if !rs_cin_iscase(p.add(1), false) {
+                break;
+            }
+        } else if *p == b'\'' as c_char && !is_nul(*p.add(1)) && *p.add(2) == b'\'' as c_char {
+            p = p.add(2); // skip over 'x'
+        }
+        p = p.add(1);
+    }
+    if is_nul(*p) {
+        return std::ptr::null();
+    }
+    let result = rs_cin_skipcomment(p.add(1));
+    if is_nul(*result) {
+        return std::ptr::null();
+    }
+    result
+}
+
+/// Check whether in "line" there is an "if", "for" or "while" before "*poffset".
+/// Returns true if found, and updates "*poffset" to point to the found keyword.
+///
+/// # Safety
+/// `line` must be valid. `poffset` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_if_for_while_before_offset(
+    line: *const c_char,
+    poffset: *mut c_int,
+) -> bool {
+    if line.is_null() || poffset.is_null() {
+        return false;
+    }
+
+    let mut offset = *poffset;
+    offset -= 1;
+    if offset < 2 {
+        return false;
+    }
+
+    // Skip whitespace backwards
+    while offset > 2 && ascii_iswhite(*line.add(offset as usize) as u8) {
+        offset -= 1;
+    }
+
+    // Check for "if" (2 chars)
+    let check_offset = offset - 1;
+    if std::ffi::CStr::from_ptr(line.add(check_offset as usize))
+        .to_bytes()
+        .starts_with(b"if")
+        && (check_offset == 0
+            || vim_isIDc(i32::from(*line.add((check_offset - 1) as usize) as u8)) == 0)
+    {
+        *poffset = check_offset;
+        return true;
+    }
+
+    // Check for "for" (3 chars)
+    if check_offset >= 1 {
+        let for_offset = check_offset - 1;
+        if std::ffi::CStr::from_ptr(line.add(for_offset as usize))
+            .to_bytes()
+            .starts_with(b"for")
+            && (for_offset == 0
+                || vim_isIDc(i32::from(*line.add((for_offset - 1) as usize) as u8)) == 0)
+        {
+            *poffset = for_offset;
+            return true;
+        }
+
+        // Check for "while" (5 chars)
+        if for_offset >= 2 {
+            let while_offset = for_offset - 2;
+            if std::ffi::CStr::from_ptr(line.add(while_offset as usize))
+                .to_bytes()
+                .starts_with(b"while")
+                && (while_offset == 0
+                    || vim_isIDc(i32::from(*line.add((while_offset - 1) as usize) as u8)) == 0)
+            {
+                *poffset = while_offset;
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Return `ind_maxparen` corrected for the difference in line number between the
+/// cursor position and `startpos_lnum`.
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_corr_ind_maxparen(startpos_lnum: c_int) -> c_int {
+    let cursor_lnum = nvim_cindent_curwin_get_cursor_lnum();
+    let ind_maxparen = nvim_cindent_curbuf_get_ind_maxparen();
+    let n = startpos_lnum - cursor_lnum;
+
+    if n > 0 && n < ind_maxparen / 2 {
+        ind_maxparen - n
+    } else {
+        ind_maxparen
+    }
+}
+
+/// Recognize enumerations: "[typedef] [static|public|protected|private] enum"
+/// Also recognizes compound literal initialization.
+///
+/// # Safety
+/// `line` must be a valid null-terminated C string. Calls FFI functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isinit(line: *const c_char) -> bool {
+    if line.is_null() {
+        return false;
+    }
+
+    let mut s = rs_cin_skipcomment(line);
+
+    // Check for "typedef" prefix
+    let typedef_kw = b"typedef\0";
+    if rs_cin_starts_with(s, typedef_kw.as_ptr().cast()) {
+        s = rs_cin_skipcomment(s.add(7));
+    }
+
+    // Skip any combination of "static", "public", "protected", "private"
+    loop {
+        let mut found = false;
+        for &(kw, len) in &[
+            (&b"static\0"[..], 6),
+            (&b"public\0"[..], 6),
+            (&b"protected\0"[..], 9),
+            (&b"private\0"[..], 7),
+        ] {
+            if rs_cin_starts_with(s, kw.as_ptr().cast()) {
+                s = rs_cin_skipcomment(s.add(len));
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            break;
+        }
+    }
+
+    // Check for "enum"
+    let enum_kw = b"enum\0";
+    if rs_cin_starts_with(s, enum_kw.as_ptr().cast()) {
+        return true;
+    }
+
+    rs_cin_is_compound_init(s)
+}
+
+/// Check if the string "line" starts with a word from 'cinwords'.
+///
+/// # Safety
+/// `line` must be a valid null-terminated C string. Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_cinword(line: *const c_char) -> bool {
+    if line.is_null() {
+        return false;
+    }
+
+    let cinw_ptr = nvim_cindent_curbuf_get_cinw();
+    if cinw_ptr.is_null() || is_nul(*cinw_ptr) {
+        return false;
+    }
+
+    let line_skip = skipwhite(line);
+
+    // We need to parse the comma-separated cinwords option.
+    // Use copy_option_part to iterate.
+    let cinw_len = c_strlen(cinw_ptr) + 1;
+    let mut buf: Vec<u8> = vec![0u8; cinw_len];
+    let cinw_buf: *mut c_char = buf.as_mut_ptr().cast();
+
+    let mut cinw: *mut c_char = cinw_ptr.cast_mut();
+    let sep = b",\0";
+    while !is_nul(*cinw) {
+        let len = copy_option_part(
+            std::ptr::addr_of_mut!(cinw),
+            cinw_buf,
+            cinw_len,
+            sep.as_ptr().cast(),
+        );
+        // Compare line_skip with cinw_buf for len bytes
+        let line_bytes = std::slice::from_raw_parts(line_skip as *const u8, len);
+        let buf_bytes = std::slice::from_raw_parts(cinw_buf as *const u8, len);
+        if line_bytes == buf_bytes
+            && (vim_iswordc(i32::from(*line_skip.add(len) as u8)) == 0
+                || vim_iswordc(i32::from(*line_skip.add(len - 1) as u8)) == 0)
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Result struct for `cin_ispreproc_cont`.
+#[repr(C)]
+pub struct PreprocContResult {
+    /// Whether it's a preprocessor continuation.
+    pub found: bool,
+    /// The starting line number of the preprocessor statement.
+    pub lnum: c_int,
+    /// The adjusted indent amount.
+    pub amount: c_int,
+}
+
+/// Check if line at `lnum` is a preprocessor statement or continuation line.
+/// Returns: 1 if it is (and updates `out_lnum`/`out_amount`), 0 otherwise.
+///
+/// # Safety
+/// `out_lnum` and `out_amount` must be valid pointers. Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_ispreproc_cont(
+    lnum: c_int,
+    amount: c_int,
+    out_lnum: *mut c_int,
+    out_amount: *mut c_int,
+) -> c_int {
+    if out_lnum.is_null() || out_amount.is_null() {
+        return 0;
+    }
+
+    let mut cur_lnum = lnum;
+    let mut line = nvim_cindent_ml_get(cur_lnum);
+    let mut candidate_amount = amount;
+
+    // Check if line ends in backslash
+    if !is_nul(*line) {
+        let len = c_strlen(line);
+        if len > 0 && *line.add(len - 1) == b'\\' as c_char {
+            candidate_amount = nvim_cindent_get_indent_lnum(cur_lnum);
+        }
+    }
+
+    loop {
+        if rs_cin_ispreproc(line) {
+            *out_lnum = cur_lnum;
+            *out_amount = candidate_amount;
+            return 1;
+        }
+        if cur_lnum == 1 {
+            break;
+        }
+        cur_lnum -= 1;
+        line = nvim_cindent_ml_get(cur_lnum);
+        if is_nul(*line) {
+            break;
+        }
+        let len = c_strlen(line);
+        if len == 0 || *line.add(len - 1) != b'\\' as c_char {
+            break;
+        }
+    }
+
+    0
 }
 
 // ============================================================================
