@@ -125,6 +125,13 @@ extern int rs_one_letter_cmd(const char *p, int *idx);
 extern int rs_modifier_len(const char *cmd);
 extern int rs_cmd_exists(const char *name);
 extern void rs_append_command(const char *cmd);
+extern bool rs_parse_bang(const void *eap, char **p);
+extern void rs_get_flags(void *eap);
+extern void rs_correct_range(void *eap);
+extern int rs_is_cmd_ni(int cmdidx);
+extern char *rs_skip_grep_pat(void *eap);
+extern void rs_set_cmd_count(void *eap, int count, int validate);
+extern bool rs_cmd_has_expr_args(int cmdidx);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -1439,24 +1446,7 @@ static void parse_register(exarg_T *eap)
 // Change line1 and line2 of Ex command to use count
 void set_cmd_count(exarg_T *eap, linenr_T count, bool validate)
 {
-  if (eap->addr_type != ADDR_LINES) {  // e.g. :buffer 2, :sleep 3
-    eap->line2 = count;
-    if (eap->addr_count == 0) {
-      eap->addr_count = 1;
-    }
-  } else {
-    eap->line1 = eap->line2;
-    if (eap->line2 >= INT32_MAX - (count - 1)) {
-      eap->line2 = INT32_MAX;
-    } else {
-      eap->line2 += count - 1;
-    }
-    eap->addr_count++;
-    // Be vi compatible: no error message for out of range.
-    if (validate && eap->line2 > curbuf->b_ml.ml_line_count) {
-      eap->line2 = curbuf->b_ml.ml_line_count;
-    }
-  }
+  rs_set_cmd_count(eap, (int)count, validate ? 1 : 0);
 }
 
 static int parse_count(exarg_T *eap, const char **errormsg, bool validate)
@@ -1499,8 +1489,7 @@ static int parse_count(exarg_T *eap, const char **errormsg, bool validate)
 /// Check if command is not implemented
 bool is_cmd_ni(cmdidx_T cmdidx)
 {
-  return !IS_USER_CMDIDX(cmdidx) && (cmdnames[cmdidx].cmd_func == ex_ni
-                                     || cmdnames[cmdidx].cmd_func == ex_script_ni);
+  return rs_is_cmd_ni((int)cmdidx);
 }
 
 // Find the command name after skipping range specifiers.
@@ -1520,24 +1509,13 @@ static char *find_excmd_after_range(exarg_T *eap)
 // Set the forceit flag based on the presence of '!' after the command.
 static bool parse_bang(const exarg_T *eap, char **p)
 {
-  if (**p == '!'
-      && eap->cmdidx != CMD_substitute
-      && eap->cmdidx != CMD_smagic
-      && eap->cmdidx != CMD_snomagic) {
-    (*p)++;
-    return true;
-  }
-  return false;
+  return rs_parse_bang(eap, p);
 }
 
 /// Check if command expects expression arguments that need special parsing
 bool cmd_has_expr_args(cmdidx_T cmdidx)
 {
-  return cmdidx == CMD_execute
-         || cmdidx == CMD_echo
-         || cmdidx == CMD_echon
-         || cmdidx == CMD_echomsg
-         || cmdidx == CMD_echoerr;
+  return rs_cmd_has_expr_args((int)cmdidx);
 }
 
 /// Parse command line and return information about the first command.
@@ -3609,16 +3587,7 @@ error:
 /// Get flags from an Ex command argument.
 static void get_flags(exarg_T *eap)
 {
-  while (vim_strchr("lp#", (uint8_t)(*eap->arg)) != NULL) {
-    if (*eap->arg == 'l') {
-      eap->flags |= EXFLAG_LIST;
-    } else if (*eap->arg == 'p') {
-      eap->flags |= EXFLAG_PRINT;
-    } else {
-      eap->flags |= EXFLAG_NR;
-    }
-    eap->arg = skipwhite(eap->arg + 1);
-  }
+  rs_get_flags(eap);
 }
 
 /// Stub function for command which is Not Implemented. NI!
@@ -3737,32 +3706,14 @@ char *invalid_range(exarg_T *eap)
 /// Correct the range for zero line number, if required.
 static void correct_range(exarg_T *eap)
 {
-  if (!(eap->argt & EX_ZEROR)) {  // zero in range not allowed
-    if (eap->line1 == 0) {
-      eap->line1 = 1;
-    }
-    if (eap->line2 == 0) {
-      eap->line2 = 1;
-    }
-  }
+  rs_correct_range(eap);
 }
 
 /// For a ":vimgrep" or ":vimgrepadd" command return a pointer past the
 /// pattern.  Otherwise return eap->arg.
 static char *skip_grep_pat(exarg_T *eap)
 {
-  char *p = eap->arg;
-
-  if (*p != NUL && (eap->cmdidx == CMD_vimgrep || eap->cmdidx == CMD_lvimgrep
-                    || eap->cmdidx == CMD_vimgrepadd
-                    || eap->cmdidx == CMD_lvimgrepadd
-                    || grep_internal(eap->cmdidx))) {
-    p = skip_vimgrep_pat(p, NULL, NULL);
-    if (p == NULL) {
-      p = eap->arg;
-    }
-  }
-  return p;
+  return rs_skip_grep_pat(eap);
 }
 
 /// For the ":make" and ":grep" commands insert the 'makeprg'/'grepprg' option
@@ -8371,4 +8322,72 @@ char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_fu
   char *p = find_ex_command(&ea, out_full);
   *out_cmdidx = (int)ea.cmdidx;
   return p;
+}
+
+// =========================================================================
+// exarg_T accessor functions for Rust FFI (Phase 2)
+// =========================================================================
+
+_Static_assert(EXFLAG_LIST == 0x01, "EXFLAG_LIST");
+_Static_assert(EXFLAG_NR == 0x02, "EXFLAG_NR");
+_Static_assert(EXFLAG_PRINT == 0x04, "EXFLAG_PRINT");
+_Static_assert(EX_ZEROR == 0x1000u, "EX_ZEROR");
+
+char *nvim_eap_get_arg(const exarg_T *eap) { return eap->arg; }
+void nvim_eap_set_arg(exarg_T *eap, char *arg) { eap->arg = arg; }
+int nvim_eap_get_cmdidx(const exarg_T *eap) { return (int)eap->cmdidx; }
+uint32_t nvim_eap_get_argt(const exarg_T *eap) { return eap->argt; }
+int nvim_eap_get_flags(const exarg_T *eap) { return eap->flags; }
+void nvim_eap_set_flags(exarg_T *eap, int flags) { eap->flags = flags; }
+linenr_T nvim_eap_get_line1(const exarg_T *eap) { return eap->line1; }
+void nvim_eap_set_line1(exarg_T *eap, linenr_T line) { eap->line1 = line; }
+linenr_T nvim_eap_get_line2(const exarg_T *eap) { return eap->line2; }
+void nvim_eap_set_line2(exarg_T *eap, linenr_T line) { eap->line2 = line; }
+int nvim_eap_get_addr_type(const exarg_T *eap) { return (int)eap->addr_type; }
+int nvim_eap_get_addr_count(const exarg_T *eap) { return eap->addr_count; }
+void nvim_eap_set_addr_count(exarg_T *eap, int count) { eap->addr_count = count; }
+
+/// Get CMD_smagic enum value.
+int nvim_docmd_cmd_smagic(void) { return (int)CMD_smagic; }
+/// Get CMD_snomagic enum value.
+int nvim_docmd_cmd_snomagic(void) { return (int)CMD_snomagic; }
+/// Get CMD_execute enum value.
+int nvim_docmd_cmd_execute(void) { return (int)CMD_execute; }
+/// Get CMD_echo enum value.
+int nvim_docmd_cmd_echo(void) { return (int)CMD_echo; }
+/// Get CMD_echon enum value.
+int nvim_docmd_cmd_echon(void) { return (int)CMD_echon; }
+/// Get CMD_echomsg enum value.
+int nvim_docmd_cmd_echomsg(void) { return (int)CMD_echomsg; }
+/// Get CMD_echoerr enum value.
+int nvim_docmd_cmd_echoerr(void) { return (int)CMD_echoerr; }
+/// Get CMD_vimgrep enum value.
+int nvim_docmd_cmd_vimgrep(void) { return (int)CMD_vimgrep; }
+/// Get CMD_lvimgrep enum value.
+int nvim_docmd_cmd_lvimgrep(void) { return (int)CMD_lvimgrep; }
+/// Get CMD_vimgrepadd enum value.
+int nvim_docmd_cmd_vimgrepadd(void) { return (int)CMD_vimgrepadd; }
+/// Get CMD_lvimgrepadd enum value.
+int nvim_docmd_cmd_lvimgrepadd(void) { return (int)CMD_lvimgrepadd; }
+
+/// Check if a command function is "not implemented" (ex_ni or ex_script_ni).
+int nvim_docmd_cmdnames_func_is_ni(int cmdidx)
+{
+  if (IS_USER_CMDIDX((cmdidx_T)cmdidx)) {
+    return 0;
+  }
+  return cmdnames[cmdidx].cmd_func == ex_ni
+         || cmdnames[cmdidx].cmd_func == ex_script_ni;
+}
+
+/// Wrap grep_internal for Rust access.
+int nvim_docmd_grep_internal(int cmdidx)
+{
+  return grep_internal((cmdidx_T)cmdidx);
+}
+
+/// Get curbuf line count for set_cmd_count validation.
+linenr_T nvim_docmd_get_curbuf_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
 }

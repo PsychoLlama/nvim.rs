@@ -4,6 +4,39 @@
 //! including ++opt options, counts, registers, and filename expansion.
 
 use std::ffi::{c_char, c_int};
+use std::ptr;
+
+use crate::ExArgHandle;
+
+// =============================================================================
+// FFI declarations for exarg_T accessors and command index values
+// =============================================================================
+
+extern "C" {
+    fn nvim_eap_get_arg(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
+    fn nvim_eap_set_line1(eap: ExArgHandle, line: i32);
+    fn nvim_eap_get_line2(eap: ExArgHandle) -> i32;
+    fn nvim_eap_set_line2(eap: ExArgHandle, line: i32);
+    fn nvim_eap_get_addr_type(eap: ExArgHandle) -> c_int;
+    fn nvim_eap_get_addr_count(eap: ExArgHandle) -> c_int;
+    fn nvim_eap_set_addr_count(eap: ExArgHandle, count: c_int);
+
+    fn nvim_docmd_cmd_substitute() -> c_int;
+    fn nvim_docmd_cmd_smagic() -> c_int;
+    fn nvim_docmd_cmd_snomagic() -> c_int;
+    fn nvim_docmd_cmd_vimgrep() -> c_int;
+    fn nvim_docmd_cmd_lvimgrep() -> c_int;
+    fn nvim_docmd_cmd_vimgrepadd() -> c_int;
+    fn nvim_docmd_cmd_lvimgrepadd() -> c_int;
+    fn nvim_docmd_grep_internal(cmdidx: c_int) -> c_int;
+    fn nvim_docmd_get_curbuf_line_count() -> i32;
+
+    fn rs_skip_vimgrep_pat(p: *mut c_char, s: *mut *mut c_char, flags: *mut c_int) -> *mut c_char;
+}
+
+/// Address type: lines in current buffer (matches ADDR_LINES in C).
+const ADDR_LINES: c_int = 0;
 
 // =============================================================================
 // Force binary mode constants
@@ -224,6 +257,126 @@ pub fn is_escaped(s: &[u8], pos: usize) -> bool {
 
     // Odd number of backslashes means the character is escaped
     count % 2 == 1
+}
+
+// =============================================================================
+// parse_bang - Check for `!` after command
+// =============================================================================
+
+/// Check if `!` follows the command (and it's not a substitute variant).
+///
+/// Returns true if bang is found and consumed. Advances `*p` past the `!`.
+///
+/// # Safety
+///
+/// `eap` must be a valid ExArgHandle.
+/// `p` must point to a valid `*mut c_char` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_bang(eap: ExArgHandle, p: *mut *mut c_char) -> bool {
+    if eap.is_null() || p.is_null() {
+        return false;
+    }
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+
+    if *(*p) as u8 == b'!'
+        && cmdidx != nvim_docmd_cmd_substitute()
+        && cmdidx != nvim_docmd_cmd_smagic()
+        && cmdidx != nvim_docmd_cmd_snomagic()
+    {
+        *p = (*p).add(1);
+        return true;
+    }
+    false
+}
+
+// =============================================================================
+// skip_grep_pat - Skip grep pattern in arguments
+// =============================================================================
+
+/// Skip the grep pattern in command arguments for vimgrep-like commands.
+///
+/// Returns a pointer past the pattern, or the original arg if not a grep command.
+///
+/// # Safety
+///
+/// `eap` must be a valid ExArgHandle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_grep_pat(eap: ExArgHandle) -> *mut c_char {
+    if eap.is_null() {
+        return ptr::null_mut();
+    }
+
+    let arg = nvim_eap_get_arg(eap);
+    if arg.is_null() || *arg as u8 == 0 {
+        return arg;
+    }
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+
+    if cmdidx == nvim_docmd_cmd_vimgrep()
+        || cmdidx == nvim_docmd_cmd_lvimgrep()
+        || cmdidx == nvim_docmd_cmd_vimgrepadd()
+        || cmdidx == nvim_docmd_cmd_lvimgrepadd()
+        || nvim_docmd_grep_internal(cmdidx) != 0
+    {
+        let p = rs_skip_vimgrep_pat(arg, ptr::null_mut(), ptr::null_mut());
+        if p.is_null() {
+            return arg;
+        }
+        return p;
+    }
+    arg
+}
+
+// =============================================================================
+// set_cmd_count - Set count from address into eap fields
+// =============================================================================
+
+/// Set the command count from an address value.
+///
+/// For non-line address types (e.g. `:buffer 2`), stores count in line2.
+/// For line addresses, treats count as an offset from line2.
+/// If `validate` is non-zero, clamps line2 to buffer line count.
+///
+/// # Safety
+///
+/// `eap` must be a valid ExArgHandle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_cmd_count(eap: ExArgHandle, count: c_int, validate: c_int) {
+    if eap.is_null() {
+        return;
+    }
+
+    let addr_type = nvim_eap_get_addr_type(eap);
+
+    if addr_type != ADDR_LINES {
+        // e.g. :buffer 2, :sleep 3
+        nvim_eap_set_line2(eap, count);
+        if nvim_eap_get_addr_count(eap) == 0 {
+            nvim_eap_set_addr_count(eap, 1);
+        }
+    } else {
+        let line2 = nvim_eap_get_line2(eap);
+        nvim_eap_set_line1(eap, line2);
+
+        if line2 >= i32::MAX - (count - 1) {
+            nvim_eap_set_line2(eap, i32::MAX);
+        } else {
+            nvim_eap_set_line2(eap, line2 + count - 1);
+        }
+
+        nvim_eap_set_addr_count(eap, nvim_eap_get_addr_count(eap) + 1);
+
+        // Be vi compatible: no error message for out of range.
+        if validate != 0 {
+            let line_count = nvim_docmd_get_curbuf_line_count();
+            let new_line2 = nvim_eap_get_line2(eap);
+            if new_line2 > line_count {
+                nvim_eap_set_line2(eap, line_count);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

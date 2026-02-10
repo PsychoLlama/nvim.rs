@@ -4,7 +4,9 @@
 //! infrastructure, including the ExArg structure, security checks,
 //! and command execution state management.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
+
+use crate::ExArgHandle;
 
 // =============================================================================
 // EXFLAG constants for command flags
@@ -25,9 +27,15 @@ extern "C" {
     fn nvim_get_sandbox() -> c_int;
     fn nvim_get_secure() -> c_int;
     fn nvim_set_secure(val: c_int);
-    fn nvim_emsg(s: *const std::ffi::c_char);
-    fn nvim_get_e_curdir() -> *const std::ffi::c_char;
-    fn nvim_get_e_sandbox() -> *const std::ffi::c_char;
+    fn nvim_emsg(s: *const c_char);
+    fn nvim_get_e_curdir() -> *const c_char;
+    fn nvim_get_e_sandbox() -> *const c_char;
+
+    fn nvim_eap_get_arg(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_eap_set_arg(eap: ExArgHandle, arg: *mut c_char);
+    fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
+    fn nvim_eap_set_flags(eap: ExArgHandle, flags: c_int);
+    fn skipwhite(p: *const c_char) -> *mut c_char;
 }
 
 // =============================================================================
@@ -232,6 +240,40 @@ pub const fn valid_line_range(line1: i64, line2: i64) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_valid_line_range(line1: i64, line2: i64) -> c_int {
     c_int::from(valid_line_range(line1, line2))
+}
+
+// =============================================================================
+// get_flags - Parse l/p/# flags from command arguments
+// =============================================================================
+
+/// Parse `l`, `p`, `#` flags from the current argument position.
+///
+/// Sets corresponding EXFLAG bits and advances `eap->arg` past the flags.
+///
+/// # Safety
+///
+/// `eap` must be a valid ExArgHandle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_flags(eap: ExArgHandle) {
+    if eap.is_null() {
+        return;
+    }
+
+    loop {
+        let arg = nvim_eap_get_arg(eap);
+        let c = *arg as u8;
+
+        let flag = match c {
+            b'l' => EXFLAG_LIST,
+            b'p' => EXFLAG_PRINT,
+            b'#' => EXFLAG_NR,
+            _ => break,
+        };
+
+        let flags = nvim_eap_get_flags(eap);
+        nvim_eap_set_flags(eap, flags | flag);
+        nvim_eap_set_arg(eap, skipwhite(arg.add(1) as *const c_char));
+    }
 }
 
 #[cfg(test)]

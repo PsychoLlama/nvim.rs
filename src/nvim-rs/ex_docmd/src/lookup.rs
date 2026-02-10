@@ -16,6 +16,7 @@ extern "C" {
         out_cmdidx: *mut c_int,
         out_full: *mut c_int,
     ) -> *mut c_char;
+    fn nvim_docmd_cmdnames_func_is_ni(cmdidx: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -325,6 +326,18 @@ pub unsafe extern "C" fn rs_cmd_exists(name: *const c_char) -> c_int {
     }
 }
 
+// =============================================================================
+// is_cmd_ni - Check if command is "not implemented"
+// =============================================================================
+
+/// Check if a command is "not implemented" (ex_ni or ex_script_ni).
+///
+/// Matches C `is_cmd_ni()`.
+#[no_mangle]
+pub extern "C" fn rs_is_cmd_ni(cmdidx: c_int) -> c_int {
+    unsafe { nvim_docmd_cmdnames_func_is_ni(cmdidx) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -416,7 +429,6 @@ mod tests {
         assert_eq!(cmd_char_ord_low(b'A'), 0); // Returns 0 for non-lowercase
     }
 
-    // Note: rs_checkforcmd, rs_one_letter_cmd, rs_cmd_exists tests require C FFI
-    // (skipwhite, nvim_docmd_cmd_k, etc.) and are verified through integration
-    // tests (just smoke-test) instead.
+    // Note: rs_checkforcmd, rs_one_letter_cmd, rs_cmd_exists, rs_is_cmd_ni tests
+    // require C FFI and are verified through integration tests (just smoke-test).
 }

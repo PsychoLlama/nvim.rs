@@ -23,8 +23,14 @@ pub mod range;
 pub mod source;
 pub mod table;
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
+
+/// Opaque handle to a C `exarg_T` struct.
+///
+/// Rust code never dereferences this directly — all field access goes through
+/// C accessor functions (`nvim_eap_get_*`/`nvim_eap_set_*`).
+pub type ExArgHandle = *mut c_void;
 
 pub use address::*;
 pub use args::*;

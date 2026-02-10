@@ -5,6 +5,8 @@
 
 use std::ffi::{c_char, c_int, c_long};
 
+use crate::ExArgHandle;
+
 // =============================================================================
 // FFI declarations
 // =============================================================================
@@ -12,8 +14,16 @@ use std::ffi::{c_char, c_int, c_long};
 /// Expansion context: no expansion
 const EXPAND_NOTHING: c_int = 0;
 
+/// EX_ZEROR flag: zero in range allowed.
+const EX_ZEROR: u32 = 0x1000;
+
 extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn nvim_eap_get_argt(eap: ExArgHandle) -> u32;
+    fn nvim_eap_get_line1(eap: ExArgHandle) -> i32;
+    fn nvim_eap_set_line1(eap: ExArgHandle, line: i32);
+    fn nvim_eap_get_line2(eap: ExArgHandle) -> i32;
+    fn nvim_eap_set_line2(eap: ExArgHandle, line: i32);
 }
 
 // =============================================================================
@@ -534,6 +544,34 @@ pub unsafe extern "C" fn rs_range_parse_state_has_special(state: *const RangePar
         return 0;
     }
     c_int::from((*state).has_special())
+}
+
+// =============================================================================
+// correct_range - Fix zero line numbers
+// =============================================================================
+
+/// Correct zero line numbers to 1 when EX_ZEROR is not set.
+///
+/// Matches C `correct_range()`.
+///
+/// # Safety
+///
+/// `eap` must be a valid ExArgHandle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_correct_range(eap: ExArgHandle) {
+    if eap.is_null() {
+        return;
+    }
+
+    let argt = nvim_eap_get_argt(eap);
+    if (argt & EX_ZEROR) == 0 {
+        if nvim_eap_get_line1(eap) == 0 {
+            nvim_eap_set_line1(eap, 1);
+        }
+        if nvim_eap_get_line2(eap) == 0 {
+            nvim_eap_set_line2(eap, 1);
+        }
+    }
 }
 
 // =============================================================================
