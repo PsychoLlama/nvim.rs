@@ -1,43 +1,63 @@
-Migration of page scroll functions to Rust completed successfully.
+Migration of bufwrite.c to Rust completed successfully.
 
-## Functions Migrated
+## Functions Migrated (43 exported Rust functions)
 
-1. **cursor_correct()** - Corrects cursor position to stay within scrolloff bounds
-2. **get_scroll_overlap()** - Calculates optimal overlap for page-up/page-down scrolling  
-3. **scroll_with_sms()** - Handles smooth scrolling during page scroll operations
-4. **pagescroll()** - Main page scrolling function for CTRL-F/B and CTRL-D/U
+### Core
+- **buf_write()** — Main buffer write function (~880 lines of C → ~1800 lines of Rust)
 
-## New Rust Functions
+### Encoding
+- **ucs2bytes()** — Unicode character to bytes conversion
+- **make_bom()** — BOM generation for file encoding
+- **ucs_to_bytes()** — UCS encoding helper
+- Surrogate pair helpers (needs_surrogate, high_surrogate, low_surrogate)
 
-- `rs_cursor_correct(wp: WinHandle)`
-- `rs_get_scroll_overlap(dir: c_int) -> c_int`
-- `rs_scroll_with_sms(dir: c_int, count: c_int, curscount: *mut c_int) -> c_int`
-- `rs_pagescroll(dir: c_int, count: c_int, half: c_int) -> c_int`
+### Conversion
+- **buf_write_convert()** — Encoding conversion for write buffer
+- **buf_write_convert_with_iconv()** — iconv-based conversion
+- **buf_write_bytes()** — Write buffer data with encoding handling
 
-## New C Accessor/Wrapper Functions
+### Error Handling
+- **set_err() / set_err_num() / set_err_arg()** — Error construction
+- **emit_err()** — Error emission with formatted messages
 
-- `nvim_cursor_down_inner()` / `nvim_cursor_up_inner()` - Cursor movement
-- `nvim_nv_screengo()` - Screen-based cursor movement
-- `nvim_beginline_flags()` - Move cursor to beginning of line
-- `nvim_beep_flush_wrapper()` - Error notification
-- `nvim_nv_g_home_m_cmd()` - Move to first non-blank
-- `nvim_one_window()` - Check if single window
-- `nvim_get_p_sol()` - Get 'startofline' option
-- `nvim_win_get_p_scr()` / `nvim_win_set_p_scr()` - Window scroll option
-- `nvim_plines_correct_topline()` - Screen line calculation
-- `nvim_plines_m_win()` - Multi-line screen calculation
-- `nvim_win_set_p_sms()` - Set smoothscroll option
+### File Info
+- **check_mtime()** — Modification time checking before write
+- **get_fileinfo() / get_fileinfo_os()** — File metadata retrieval
 
-## Commits
+### Backup
+- **buf_write_make_backup()** — Backup file creation and management
 
-1. feat(move): migrate cursor_correct to Rust
-2. feat(move): migrate get_scroll_overlap to Rust  
-3. feat(move): migrate scroll_with_sms to Rust
-4. feat(move): migrate pagescroll to Rust
+### Autocommands
+- **buf_write_do_autocmds()** — Pre-write autocommand handling
+- **buf_write_do_post_autocmds()** — Post-write autocommand handling
+
+### Format/Validation Helpers
+- File format queries (is_unix, is_dos, is_mac, line_ending_len)
+- BOM helpers (bom_len, is_little_endian, bytes_per_char)
+- Unicode/multibyte detection (is_unicode, is_multibyte)
+- Validation (valid_range, valid_filename, calc_buffer_size)
+- Format utilities (count_newlines, converted_size, convert_to_mac)
+
+## Modules
+
+| Module | Purpose |
+|--------|---------|
+| `lib.rs` | File format enum, FIO flags, BOM constants, format queries |
+| `write.rs` | Main `rs_buf_write` function and helpers |
+| `encoding.rs` | UCS/UTF encoding conversion, BOM generation |
+| `convert.rs` | Write buffer encoding conversion (iconv + manual) |
+| `error.rs` | Error_T struct and error handling |
+| `fileinfo.rs` | File info retrieval and mtime checking |
+| `backup.rs` | Backup file creation |
+| `autocmd.rs` | Autocommand wrappers |
+| `format.rs` | Line ending conversion, newline counting |
+| `validation.rs` | Range/filename validation, buffer size calculation |
+| `ffi.rs` | Opaque handle types and FFI helpers |
 
 ## Verification
 
-- All Rust unit tests pass (3712 tests)
+- All Rust unit tests pass (3779 tests)
 - Format check passes
 - Clippy lints pass
 - Full build succeeds
+- Smoke test passes (including regexp smoke)
