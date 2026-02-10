@@ -88,6 +88,14 @@ extern int rs_shada_removable(const char *name);
 extern int rs_ignore_buf(const void *buf, const void *removable_bufs);
 extern void rs_find_removable_bufs(void *removable_bufs);
 
+// Phase 3: Data collection functions (those not needing WriteMergerState)
+extern const void *rs_shada_hist_iter(const void *iter, uint8_t history_type,
+                                      int zero, ShadaEntry *hist);
+extern void rs_add_search_pattern(ShadaEntry *ret_pse, int is_substitute,
+                                  int search_last_used, int search_highlighted);
+extern ShadaEntry rs_shada_get_buflist(void *removable_bufs);
+extern size_t rs_shada_init_jumps(ShadaEntry *jumps, void *removable_bufs);
+
 // Legacy alias
 #define rs_hist_type2char rs_shada_hist_type2char
 
@@ -367,6 +375,8 @@ typedef struct {
 
 // Phase 1: Rust helper for replace_numbered_mark (needs WriteMergerState typedef)
 extern void rs_replace_numbered_mark(WriteMergerState *wms, size_t idx, ShadaEntry entry);
+// Phase 3: Rust helper for shada_initialize_registers (needs WriteMergerState typedef)
+extern void rs_shada_initialize_registers(WriteMergerState *wms, int max_reg_lines);
 
 #include "shada.c.generated.h"
 
@@ -654,28 +664,7 @@ static const void *shada_hist_iter(const void *const iter, const uint8_t history
                                    const bool zero, ShadaEntry *const hist)
   FUNC_ATTR_NONNULL_ARG(4) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  histentry_T hist_he;
-  const void *const ret = hist_iter(iter, history_type, zero, &hist_he);
-  if (hist_he.hisstr == NULL) {
-    *hist = (ShadaEntry) { .type = kSDItemMissing };
-  } else {
-    *hist = (ShadaEntry) {
-      .can_free_entry = zero,
-      .type = kSDItemHistoryEntry,
-      .timestamp = hist_he.timestamp,
-      .data = {
-        .history_item = {
-          .histtype = history_type,
-          .string = hist_he.hisstr,
-          .sep = (char)(history_type == HIST_SEARCH
-                        ? hist_he.hisstr[hist_he.hisstrlen + 1]
-                        : 0),
-        }
-      },
-      .additional_data = hist_he.additional_data,
-    };
-  }
-  return ret;
+  return rs_shada_hist_iter(iter, history_type, zero ? 1 : 0, hist);
 }
 
 /// Insert history entry
@@ -2000,43 +1989,7 @@ static inline bool ignore_buf(const buf_T *const buf, Set(ptr_t) *const removabl
 static inline ShadaEntry shada_get_buflist(Set(ptr_t) *const removable_bufs)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_ALWAYS_INLINE
 {
-  int max_bufs = get_shada_parameter('%');
-  size_t buf_count = 0;
-  FOR_ALL_BUFFERS(buf) {
-    if (!ignore_buf(buf, removable_bufs)
-        && (max_bufs < 0 || buf_count < (size_t)max_bufs)) {
-      buf_count++;
-    }
-  }
-
-  ShadaEntry buflist_entry = (ShadaEntry) {
-    .type = kSDItemBufferList,
-    .timestamp = os_time(),
-    .data = {
-      .buffer_list = {
-        .size = buf_count,
-        .buffers = xmalloc(buf_count
-                           * sizeof(*buflist_entry.data.buffer_list.buffers)),
-      },
-    },
-  };
-  size_t i = 0;
-  FOR_ALL_BUFFERS(buf) {
-    if (ignore_buf(buf, removable_bufs)) {
-      continue;
-    }
-    if (i >= buf_count) {
-      break;
-    }
-    buflist_entry.data.buffer_list.buffers[i] = (struct buffer_list_buffer) {
-      .pos = buf->b_last_cursor.mark,
-      .fname = buf->b_ffname,
-      .additional_data = buf->additional_data,
-    };
-    i++;
-  }
-
-  return buflist_entry;
+  return rs_shada_get_buflist(removable_bufs);
 }
 
 /// Save search pattern to ShadaEntry
@@ -2057,39 +2010,8 @@ static inline void add_search_pattern(ShadaEntry *const ret_pse,
                                       const bool search_highlighted)
   FUNC_ATTR_ALWAYS_INLINE
 {
-  const ShadaEntry defaults = sd_default_values[kSDItemSearchPattern];
-  SearchPattern pat;
-  get_pattern(&pat);
-  if (pat.pat != NULL) {
-    *ret_pse = (ShadaEntry) {
-      .can_free_entry = false,
-      .type = kSDItemSearchPattern,
-      .timestamp = pat.timestamp,
-      .data = {
-        .search_pattern = {
-          .magic = pat.magic,
-          .smartcase = !pat.no_scs,
-          .has_line_offset = (is_substitute_pattern
-                              ? defaults.data.search_pattern.has_line_offset
-                              : pat.off.line),
-          .place_cursor_at_end = (
-                                  is_substitute_pattern
-                                  ? defaults.data.search_pattern.place_cursor_at_end
-                                  : pat.off.end),
-          .offset = (is_substitute_pattern
-                     ? defaults.data.search_pattern.offset
-                     : pat.off.off),
-          .is_last_used = (is_substitute_pattern ^ search_last_used),
-          .is_substitute_pattern = is_substitute_pattern,
-          .highlighted = ((is_substitute_pattern ^ search_last_used)
-                          && search_highlighted),
-          .pat = cstr_as_string(pat.pat),
-          .search_backward = (!is_substitute_pattern && pat.off.dir == '?'),
-        }
-      },
-      .additional_data = pat.additional_data,
-    };
-  }
+  rs_add_search_pattern(ret_pse, is_substitute_pattern ? 1 : 0,
+                        search_last_used ? 1 : 0, search_highlighted ? 1 : 0);
 }
 
 /// Initialize registers for writing to the ShaDa file
@@ -2099,36 +2021,7 @@ static inline void add_search_pattern(ShadaEntry *const ret_pse,
 static inline void shada_initialize_registers(WriteMergerState *const wms, int max_reg_lines)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_ALWAYS_INLINE
 {
-  const void *reg_iter = NULL;
-  const bool limit_reg_lines = max_reg_lines >= 0;
-  do {
-    yankreg_T reg;
-    char name = NUL;
-    bool is_unnamed = false;
-    reg_iter = op_global_reg_iter(reg_iter, &name, &reg, &is_unnamed);
-    if (name == NUL) {
-      break;
-    }
-    if (limit_reg_lines && reg.y_size > (size_t)max_reg_lines) {
-      continue;
-    }
-    wms->registers[op_reg_index(name)] = (ShadaEntry) {
-      .can_free_entry = false,
-      .type = kSDItemRegister,
-      .timestamp = reg.timestamp,
-      .data = {
-        .reg = {
-          .contents = reg.y_array,
-          .contents_size = reg.y_size,
-          .type = reg.y_type,
-          .width = (size_t)(reg.y_type == kMTBlockWise ? reg.y_width : 0),
-          .name = name,
-          .is_unnamed = is_unnamed,
-        }
-      },
-      .additional_data = reg.additional_data,
-    };
-  } while (reg_iter != NULL);
+  rs_shada_initialize_registers(wms, max_reg_lines);
 }
 
 /// Replace numbered mark in WriteMergerState
@@ -3497,45 +3390,7 @@ static bool shada_removable(const char *name)
 /// @return number of jumplist entries
 static inline size_t shada_init_jumps(ShadaEntry *jumps, Set(ptr_t) *const removable_bufs)
 {
-  // Initialize jump list
-  size_t jumps_size = 0;
-  const void *jump_iter = NULL;
-  setpcmark();
-  cleanup_jumplist(curwin, false);
-  do {
-    xfmark_T fm;
-    jump_iter = mark_jumplist_iter(jump_iter, curwin, &fm);
-
-    if (fm.fmark.mark.lnum == 0) {
-      siemsg("ShaDa: mark lnum zero (ji:%p, js:%p, len:%i)",
-             (void *)jump_iter, (void *)&curwin->w_jumplist[0],
-             curwin->w_jumplistlen);
-      continue;
-    }
-    const buf_T *const buf = (fm.fmark.fnum == 0 ? NULL : buflist_findnr(fm.fmark.fnum));
-    if (buf != NULL ? ignore_buf(buf, removable_bufs) : fm.fmark.fnum != 0) {
-      continue;
-    }
-    const char *const fname =
-      (fm.fmark.fnum == 0 ? (fm.fname == NULL ? NULL : fm.fname) : buf ? buf->b_ffname : NULL);
-    if (fname == NULL) {
-      continue;
-    }
-    jumps[jumps_size++] = (ShadaEntry) {
-      .can_free_entry = false,
-      .type = kSDItemJump,
-      .timestamp = fm.fmark.timestamp,
-      .data = {
-        .filemark = {
-          .name = NUL,
-          .mark = fm.fmark.mark,
-          .fname = (char *)fname,
-        }
-      },
-      .additional_data = fm.fmark.additional_data,
-    };
-  } while (jump_iter != NULL);
-  return jumps_size;
+  return rs_shada_init_jumps(jumps, removable_bufs);
 }
 
 /// Write registers ShaDa entries in given msgpack_sbuffer.
@@ -3918,4 +3773,126 @@ void nvim_shada_set_destroy_ptr(void *set)
     set_destroy(ptr_t, (Set(ptr_t) *)set);
     xfree(set);
   }
+}
+
+// Phase 3: Data collection accessors for Rust FFI
+
+// hist_iter wrapper that returns individual fields instead of histentry_T
+const void *nvim_shada_hist_iter_raw(const void *iter, uint8_t history_type, int zero,
+                                     char **out_str, size_t *out_strlen, Timestamp *out_ts,
+                                     void **out_additional_data)
+{
+  histentry_T hist_he;
+  const void *ret = hist_iter(iter, history_type, zero != 0, &hist_he);
+  *out_str = hist_he.hisstr;
+  *out_strlen = hist_he.hisstrlen;
+  *out_ts = hist_he.timestamp;
+  *out_additional_data = hist_he.additional_data;
+  return ret;
+}
+
+// Search pattern accessors
+void nvim_shada_get_search_pattern(char **out_pat, int *out_magic, int *out_no_scs,
+                                   Timestamp *out_ts, int *out_off_line, int *out_off_end,
+                                   int64_t *out_off_off, char *out_off_dir,
+                                   void **out_additional_data)
+{
+  SearchPattern pat;
+  get_search_pattern(&pat);
+  *out_pat = pat.pat;
+  *out_magic = pat.magic;
+  *out_no_scs = pat.no_scs;
+  *out_ts = pat.timestamp;
+  *out_off_line = pat.off.line;
+  *out_off_end = pat.off.end;
+  *out_off_off = pat.off.off;
+  *out_off_dir = pat.off.dir;
+  *out_additional_data = pat.additional_data;
+}
+
+void nvim_shada_get_substitute_pattern(char **out_pat, int *out_magic, int *out_no_scs,
+                                       Timestamp *out_ts, int *out_off_line, int *out_off_end,
+                                       int64_t *out_off_off, char *out_off_dir,
+                                       void **out_additional_data)
+{
+  SearchPattern pat;
+  get_substitute_pattern(&pat);
+  *out_pat = pat.pat;
+  *out_magic = pat.magic;
+  *out_no_scs = pat.no_scs;
+  *out_ts = pat.timestamp;
+  *out_off_line = pat.off.line;
+  *out_off_end = pat.off.end;
+  *out_off_off = pat.off.off;
+  *out_off_dir = pat.off.dir;
+  *out_additional_data = pat.additional_data;
+}
+
+int nvim_shada_search_was_last_used(void) { return search_was_last_used(); }
+int nvim_shada_no_hlsearch(void) { return no_hlsearch; }
+
+// Register iteration accessor
+const void *nvim_shada_reg_iter(const void *iter, char *out_name, int *out_type,
+                                String **out_contents, size_t *out_size,
+                                size_t *out_width, int *out_is_unnamed,
+                                Timestamp *out_ts, void **out_additional_data)
+{
+  yankreg_T reg;
+  bool is_unnamed = false;
+  const void *ret = op_global_reg_iter(iter, out_name, &reg, &is_unnamed);
+  *out_type = reg.y_type;
+  *out_contents = reg.y_array;
+  *out_size = reg.y_size;
+  *out_width = (size_t)(reg.y_type == kMTBlockWise ? reg.y_width : 0);
+  *out_is_unnamed = is_unnamed;
+  *out_ts = reg.timestamp;
+  *out_additional_data = reg.additional_data;
+  return ret;
+}
+
+int nvim_shada_op_reg_index(char name) { return op_reg_index(name); }
+
+// Buffer list accessors
+int nvim_shada_get_percent_param(void) { return get_shada_parameter('%'); }
+void nvim_shada_buf_get_cursor(const void *buf, pos_T *pos)
+{
+  if (buf) {
+    *pos = ((const buf_T *)buf)->b_last_cursor.mark;
+  }
+}
+void *nvim_shada_buf_get_additional_data(const void *buf)
+{
+  return buf ? ((const buf_T *)buf)->additional_data : NULL;
+}
+Timestamp nvim_shada_os_time(void) { return os_time(); }
+
+// Jump list accessors
+void nvim_shada_setpcmark(void) { setpcmark(); }
+void nvim_shada_cleanup_jumplist(void *wp, int loadfiles)
+{
+  cleanup_jumplist((win_T *)wp, loadfiles != 0);
+}
+void *nvim_shada_curwin(void) { return curwin; }
+
+// mark_jumplist_iter wrapper
+const void *nvim_shada_jumplist_iter(const void *iter, void *wp,
+                                     pos_T *out_mark, int *out_fnum,
+                                     Timestamp *out_ts, char **out_fname,
+                                     void **out_additional_data)
+{
+  xfmark_T fm;
+  const void *ret = mark_jumplist_iter(iter, (win_T *)wp, &fm);
+  *out_mark = fm.fmark.mark;
+  *out_fnum = fm.fmark.fnum;
+  *out_ts = fm.fmark.timestamp;
+  *out_fname = fm.fname;
+  *out_additional_data = fm.fmark.additional_data;
+  return ret;
+}
+
+const void *nvim_shada_buflist_findnr(int nr) { return buflist_findnr(nr); }
+
+void nvim_shada_siemsg(const char *msg)
+{
+  siemsg("%s", msg);
 }

@@ -413,6 +413,71 @@ extern "C" {
     fn nvim_shada_set_has_ptr(set: *const c_void, ptr: *const c_void) -> c_int;
     fn nvim_shada_set_put_ptr(set: *mut c_void, ptr: *const c_void);
     fn nvim_shada_set_destroy_ptr(set: *mut c_void);
+
+    // Phase 3: Data collection accessors
+    fn nvim_shada_hist_iter_raw(
+        iter: *const c_void,
+        history_type: u8,
+        zero: c_int,
+        out_str: *mut *mut c_char,
+        out_strlen: *mut usize,
+        out_ts: *mut Timestamp,
+        out_additional_data: *mut *mut c_void,
+    ) -> *const c_void;
+    fn nvim_shada_get_search_pattern(
+        out_pat: *mut *mut c_char,
+        out_magic: *mut c_int,
+        out_no_scs: *mut c_int,
+        out_ts: *mut Timestamp,
+        out_off_line: *mut c_int,
+        out_off_end: *mut c_int,
+        out_off_off: *mut i64,
+        out_off_dir: *mut c_char,
+        out_additional_data: *mut *mut c_void,
+    );
+    fn nvim_shada_get_substitute_pattern(
+        out_pat: *mut *mut c_char,
+        out_magic: *mut c_int,
+        out_no_scs: *mut c_int,
+        out_ts: *mut Timestamp,
+        out_off_line: *mut c_int,
+        out_off_end: *mut c_int,
+        out_off_off: *mut i64,
+        out_off_dir: *mut c_char,
+        out_additional_data: *mut *mut c_void,
+    );
+    fn nvim_shada_search_was_last_used() -> c_int;
+    fn nvim_shada_no_hlsearch() -> c_int;
+    fn nvim_shada_reg_iter(
+        iter: *const c_void,
+        out_name: *mut c_char,
+        out_type: *mut c_int,
+        out_contents: *mut *mut c_void, // String* array
+        out_size: *mut usize,
+        out_width: *mut usize,
+        out_is_unnamed: *mut c_int,
+        out_ts: *mut Timestamp,
+        out_additional_data: *mut *mut c_void,
+    ) -> *const c_void;
+    fn nvim_shada_op_reg_index(name: c_char) -> c_int;
+    fn nvim_shada_get_percent_param() -> c_int;
+    fn nvim_shada_buf_get_cursor(buf: *const c_void, pos: *mut Position);
+    fn nvim_shada_buf_get_additional_data(buf: *const c_void) -> *mut c_void;
+    fn nvim_shada_os_time() -> Timestamp;
+    fn nvim_shada_setpcmark();
+    fn nvim_shada_cleanup_jumplist(wp: *mut c_void, loadfiles: c_int);
+    fn nvim_shada_curwin() -> *mut c_void;
+    fn nvim_shada_jumplist_iter(
+        iter: *const c_void,
+        wp: *mut c_void,
+        out_mark: *mut Position,
+        out_fnum: *mut c_int,
+        out_ts: *mut Timestamp,
+        out_fname: *mut *mut c_char,
+        out_additional_data: *mut *mut c_void,
+    ) -> *const c_void;
+    fn nvim_shada_buflist_findnr(nr: c_int) -> *const c_void;
+    fn nvim_shada_siemsg(msg: *const c_char);
 }
 
 // =============================================================================
@@ -3333,6 +3398,374 @@ pub unsafe extern "C" fn rs_find_removable_bufs(removable_bufs: SetPtrHandle) {
         }
         buf = nvim_shada_buf_next(buf);
     }
+}
+
+// =============================================================================
+// Data Collection Functions (Phase 3)
+// =============================================================================
+
+/// Iterate over history entries and construct ShadaEntry.
+///
+/// # Safety
+///
+/// `hist` must be a valid pointer to write to.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_hist_iter(
+    iter: *const c_void,
+    history_type: u8,
+    zero: c_int,
+    hist: *mut ShadaEntry,
+) -> *const c_void {
+    let mut out_str: *mut c_char = std::ptr::null_mut();
+    let mut out_strlen: usize = 0;
+    let mut out_ts: Timestamp = 0;
+    let mut out_additional_data: *mut c_void = std::ptr::null_mut();
+
+    let ret = nvim_shada_hist_iter_raw(
+        iter,
+        history_type,
+        zero,
+        &raw mut out_str,
+        &raw mut out_strlen,
+        &raw mut out_ts,
+        &raw mut out_additional_data,
+    );
+
+    if out_str.is_null() {
+        *hist = ShadaEntry::missing();
+    } else {
+        let sep = if history_type == HIST_SEARCH {
+            *out_str.add(out_strlen + 1)
+        } else {
+            0
+        };
+        *hist = ShadaEntry {
+            can_free_entry: zero != 0,
+            entry_type: ShadaEntryType::HistoryEntry,
+            timestamp: out_ts,
+            data: ShadaEntryData {
+                history_item: std::mem::ManuallyDrop::new(HistoryItemData {
+                    histtype: history_type,
+                    string: out_str,
+                    sep,
+                }),
+            },
+            additional_data: out_additional_data,
+        };
+    }
+    ret
+}
+
+/// Save a search pattern to a ShadaEntry.
+///
+/// # Safety
+///
+/// `ret_pse` must be a valid pointer to write to.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_add_search_pattern(
+    ret_pse: *mut ShadaEntry,
+    is_substitute: c_int,
+    search_last_used: c_int,
+    search_highlighted: c_int,
+) {
+    let is_sub = is_substitute != 0;
+    let last_used = search_last_used != 0;
+    let highlighted = search_highlighted != 0;
+
+    let mut pat: *mut c_char = std::ptr::null_mut();
+    let mut magic: c_int = 0;
+    let mut no_scs: c_int = 0;
+    let mut ts: Timestamp = 0;
+    let mut off_line: c_int = 0;
+    let mut off_end: c_int = 0;
+    let mut off_off: i64 = 0;
+    let mut off_dir: c_char = 0;
+    let mut additional_data: *mut c_void = std::ptr::null_mut();
+
+    if is_sub {
+        nvim_shada_get_substitute_pattern(
+            &raw mut pat,
+            &raw mut magic,
+            &raw mut no_scs,
+            &raw mut ts,
+            &raw mut off_line,
+            &raw mut off_end,
+            &raw mut off_off,
+            &raw mut off_dir,
+            &raw mut additional_data,
+        );
+    } else {
+        nvim_shada_get_search_pattern(
+            &raw mut pat,
+            &raw mut magic,
+            &raw mut no_scs,
+            &raw mut ts,
+            &raw mut off_line,
+            &raw mut off_end,
+            &raw mut off_off,
+            &raw mut off_dir,
+            &raw mut additional_data,
+        );
+    }
+
+    if !pat.is_null() {
+        // Default values for substitute pattern fields
+        let has_line_offset = if is_sub { false } else { off_line != 0 };
+        let place_cursor_at_end = if is_sub { false } else { off_end != 0 };
+        let offset = if is_sub { 0 } else { off_off };
+
+        *ret_pse = ShadaEntry {
+            can_free_entry: false,
+            entry_type: ShadaEntryType::SearchPattern,
+            timestamp: ts,
+            data: ShadaEntryData {
+                search_pattern: std::mem::ManuallyDrop::new(SearchPatternData {
+                    magic: magic != 0,
+                    smartcase: no_scs == 0,
+                    has_line_offset,
+                    place_cursor_at_end,
+                    offset,
+                    is_last_used: is_sub ^ last_used,
+                    is_substitute_pattern: is_sub,
+                    highlighted: (is_sub ^ last_used) && highlighted,
+                    pat,
+                    pat_len: libc::strlen(pat.cast()),
+                    search_backward: !is_sub && off_dir == b'?' as c_char,
+                }),
+            },
+            additional_data,
+        };
+    }
+}
+
+/// Initialize registers for writing to ShaDa file.
+///
+/// # Safety
+///
+/// `wms` must be a valid WriteMergerState pointer.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_shada_initialize_registers(
+    wms: *mut WriteMergerState,
+    max_reg_lines: c_int,
+) {
+    let wms = &mut *wms;
+    let limit = max_reg_lines >= 0;
+    let mut reg_iter: *const c_void = std::ptr::null();
+
+    loop {
+        let mut name: c_char = 0;
+        let mut reg_type: c_int = 0;
+        let mut contents: *mut c_void = std::ptr::null_mut();
+        let mut size: usize = 0;
+        let mut width: usize = 0;
+        let mut is_unnamed: c_int = 0;
+        let mut ts: Timestamp = 0;
+        let mut additional_data: *mut c_void = std::ptr::null_mut();
+
+        reg_iter = nvim_shada_reg_iter(
+            reg_iter,
+            &raw mut name,
+            &raw mut reg_type,
+            &raw mut contents,
+            &raw mut size,
+            &raw mut width,
+            &raw mut is_unnamed,
+            &raw mut ts,
+            &raw mut additional_data,
+        );
+
+        if name == 0 {
+            break;
+        }
+        if limit && size > max_reg_lines as usize {
+            if reg_iter.is_null() {
+                break;
+            }
+            continue;
+        }
+
+        let idx = nvim_shada_op_reg_index(name);
+        if idx >= 0 {
+            wms.registers[idx as usize] = ShadaEntry {
+                can_free_entry: false,
+                entry_type: ShadaEntryType::Register,
+                timestamp: ts,
+                data: ShadaEntryData {
+                    reg: std::mem::ManuallyDrop::new(RegisterData {
+                        contents: contents.cast(),
+                        contents_size: size,
+                        reg_type,
+                        width,
+                        name,
+                        is_unnamed: is_unnamed != 0,
+                    }),
+                },
+                additional_data,
+            };
+        }
+
+        if reg_iter.is_null() {
+            break;
+        }
+    }
+}
+
+/// Get list of buffers to write to the ShaDa file.
+///
+/// # Safety
+///
+/// `removable_bufs` must be a valid Set(ptr_t) handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_get_buflist(removable_bufs: SetPtrHandle) -> ShadaEntry {
+    let max_bufs = nvim_shada_get_percent_param();
+    let mut buf_count: usize = 0;
+
+    // Count buffers
+    let mut buf = nvim_shada_buf_first();
+    while !buf.is_null() {
+        if rs_ignore_buf(buf, removable_bufs) == 0
+            && (max_bufs < 0 || buf_count < max_bufs as usize)
+        {
+            buf_count += 1;
+        }
+        buf = nvim_shada_buf_next(buf);
+    }
+
+    // Allocate buffer list
+    let buf_size = std::mem::size_of::<BufferListBuffer>();
+    let buffers = nvim_xmalloc(buf_count * buf_size).cast::<BufferListBuffer>();
+
+    let mut i: usize = 0;
+    buf = nvim_shada_buf_first();
+    while !buf.is_null() {
+        if rs_ignore_buf(buf, removable_bufs) != 0 {
+            buf = nvim_shada_buf_next(buf);
+            continue;
+        }
+        if i >= buf_count {
+            break;
+        }
+        let mut pos = Position::DEFAULT;
+        nvim_shada_buf_get_cursor(buf, &raw mut pos);
+        let ffname = nvim_shada_buf_get_ffname(buf);
+        let additional_data = nvim_shada_buf_get_additional_data(buf);
+        (*buffers.add(i)).pos = pos;
+        (*buffers.add(i)).fname = ffname.cast_mut();
+        (*buffers.add(i)).additional_data = additional_data;
+        i += 1;
+        buf = nvim_shada_buf_next(buf);
+    }
+
+    ShadaEntry {
+        entry_type: ShadaEntryType::BufferList,
+        can_free_entry: false,
+        timestamp: nvim_shada_os_time(),
+        data: ShadaEntryData {
+            buffer_list: std::mem::ManuallyDrop::new(BufferListData {
+                size: buf_count,
+                buffers,
+            }),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+/// Initialize ShaDa jumplist entries.
+///
+/// # Safety
+///
+/// - `jumps` must be a valid array of at least JUMPLISTSIZE ShadaEntry elements.
+/// - `removable_bufs` must be a valid Set(ptr_t) handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_init_jumps(
+    jumps: *mut ShadaEntry,
+    removable_bufs: SetPtrHandle,
+) -> usize {
+    let mut jumps_size: usize = 0;
+    let mut jump_iter: *const c_void = std::ptr::null();
+
+    nvim_shada_setpcmark();
+    let wp = nvim_shada_curwin();
+    nvim_shada_cleanup_jumplist(wp, 0);
+
+    loop {
+        let mut mark = Position::DEFAULT;
+        let mut fnum: c_int = 0;
+        let mut ts: Timestamp = 0;
+        let mut fname: *mut c_char = std::ptr::null_mut();
+        let mut additional_data: *mut c_void = std::ptr::null_mut();
+
+        jump_iter = nvim_shada_jumplist_iter(
+            jump_iter,
+            wp,
+            &raw mut mark,
+            &raw mut fnum,
+            &raw mut ts,
+            &raw mut fname,
+            &raw mut additional_data,
+        );
+
+        if mark.lnum == 0 {
+            if jump_iter.is_null() {
+                break;
+            }
+            continue;
+        }
+
+        let buf = if fnum == 0 {
+            std::ptr::null()
+        } else {
+            nvim_shada_buflist_findnr(fnum)
+        };
+
+        if if buf.is_null() {
+            fnum != 0
+        } else {
+            rs_ignore_buf(buf, removable_bufs) != 0
+        } {
+            if jump_iter.is_null() {
+                break;
+            }
+            continue;
+        }
+
+        let final_fname = if fnum == 0 {
+            fname
+        } else if !buf.is_null() {
+            nvim_shada_buf_get_ffname(buf).cast_mut()
+        } else {
+            std::ptr::null_mut()
+        };
+
+        if final_fname.is_null() {
+            if jump_iter.is_null() {
+                break;
+            }
+            continue;
+        }
+
+        *jumps.add(jumps_size) = ShadaEntry {
+            can_free_entry: false,
+            entry_type: ShadaEntryType::Jump,
+            timestamp: ts,
+            data: ShadaEntryData {
+                filemark: std::mem::ManuallyDrop::new(FilemarkData {
+                    name: 0, // NUL
+                    mark,
+                    fname: final_fname,
+                }),
+            },
+            additional_data,
+        };
+        jumps_size += 1;
+
+        if jump_iter.is_null() {
+            break;
+        }
+    }
+    jumps_size
 }
 
 // =============================================================================
