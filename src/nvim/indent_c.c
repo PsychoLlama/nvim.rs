@@ -208,6 +208,12 @@ extern bool rs_cin_isinit(const char *line);
 extern bool rs_cin_is_cinword(const char *line);
 extern int rs_cin_ispreproc_cont(int lnum, int amount, int *out_lnum, int *out_amount);
 
+/// C accessor for curbuf->b_p_cinsd (cinscopedecls option).
+const char *nvim_cindent_curbuf_get_cinsd(void)
+{
+  return curbuf->b_p_cinsd;
+}
+
 // Phase 3 C accessors
 
 /// C accessor for findmatchlimit, returning a copyable result.
@@ -299,6 +305,14 @@ extern int rs_get_baseclass_amount(int col);
 extern FindMatchResult rs_find_line_comment(void);
 extern bool rs_cin_iswhileofdo(const char *p, int lnum);
 extern bool rs_cin_iswhileofdo_end(int terminated);
+
+// Phase 4: Complex state machine functions
+extern bool rs_cin_isscopedecl(const char *p);
+extern bool rs_cin_islabel(void);
+extern int rs_cin_isfuncdecl(const char **sp, int first_lnum, int min_lnum);
+extern int rs_cin_is_cpp_baseclass(int *found, int *pos_lnum, int *pos_col);
+extern int rs_skip_label(int lnum, const char **pp);
+extern int rs_find_match(int lookfor, int ourscope);
 
 // Find result cache for cpp_baseclass
 typedef struct {
@@ -445,57 +459,7 @@ static bool cin_islabel_skip(const char **s)
 // Note: curwin->w_cursor must be where we are looking for the label.
 static bool cin_islabel(void)  // XXX
 {
-  const char *s = cin_skipcomment(get_cursor_line_ptr());
-
-  // Exclude "default" from labels, since it should be indented
-  // like a switch label.  Same for C++ scope declarations.
-  if (cin_isdefault(s)) {
-    return false;
-  }
-  if (cin_isscopedecl(s)) {
-    return false;
-  }
-
-  if (!cin_islabel_skip(&s)) {
-    return false;
-  }
-
-  // Only accept a label if the previous line is terminated or is a case
-  // label.
-  pos_T cursor_save;
-  pos_T *trypos;
-  const char *line;
-
-  cursor_save = curwin->w_cursor;
-  while (curwin->w_cursor.lnum > 1) {
-    curwin->w_cursor.lnum--;
-
-    // If we're in a comment or raw string now, skip to the start of
-    // it.
-    curwin->w_cursor.col = 0;
-    if ((trypos = ind_find_start_CORS(NULL)) != NULL) {   // XXX
-      curwin->w_cursor = *trypos;
-    }
-
-    line = get_cursor_line_ptr();
-    if (cin_ispreproc(line)) {        // ignore #defines, #if, etc.
-      continue;
-    }
-    if (*(line = cin_skipcomment(line)) == NUL) {
-      continue;
-    }
-
-    curwin->w_cursor = cursor_save;
-    if (cin_isterminated(line, true, false)
-        || cin_isscopedecl(line)
-        || cin_iscase(line, true)
-        || (cin_islabel_skip(&line) && cin_nocode(line))) {
-      return true;
-    }
-    return false;
-  }
-  curwin->w_cursor = cursor_save;
-  return true;  // label at start of file???
+  return rs_cin_islabel();
 }
 
 /// Strings can be concatenated with comments between:
@@ -538,27 +502,7 @@ static int cin_isdefault(const char *s)
 /// Recognize a scope declaration label from the 'cinscopedecls' option.
 static bool cin_isscopedecl(const char *p)
 {
-  const char *s = cin_skipcomment(p);
-
-  const size_t cinsd_len = strlen(curbuf->b_p_cinsd) + 1;
-  char *cinsd_buf = xmalloc(cinsd_len);
-
-  bool found = false;
-
-  for (char *cinsd = curbuf->b_p_cinsd; *cinsd;) {
-    const size_t len = copy_option_part(&cinsd, cinsd_buf, cinsd_len, ",");
-    if (strncmp(s, cinsd_buf, len) == 0) {
-      const char *skip = cin_skipcomment(s + len);
-      if (*skip == ':' && skip[1] != ':') {
-        found = true;
-        break;
-      }
-    }
-  }
-
-  xfree(cinsd_buf);
-
-  return found;
+  return rs_cin_isscopedecl(p);
 }
 
 // Maximum number of lines to search back for a "namespace" line.
@@ -592,28 +536,7 @@ static int get_indent_nolabel(linenr_T lnum)  // XXX
 //              ^
 static int skip_label(linenr_T lnum, const char **pp)
 {
-  const char *l;
-  int amount;
-  pos_T cursor_save;
-
-  cursor_save = curwin->w_cursor;
-  curwin->w_cursor.lnum = lnum;
-  l = get_cursor_line_ptr();
-  // XXX
-  if (cin_iscase(l, false) || cin_isscopedecl(l) || cin_islabel()) {
-    amount = get_indent_nolabel(lnum);
-    l = after_label(get_cursor_line_ptr());
-    if (l == NULL) {            // just in case
-      l = get_cursor_line_ptr();
-    }
-  } else {
-    amount = get_indent();
-    l = get_cursor_line_ptr();
-  }
-  *pp = l;
-
-  curwin->w_cursor = cursor_save;
-  return amount;
+  return rs_skip_label(lnum, pp);
 }
 
 // Return the indent of the first variable name after a type in a declaration.
@@ -703,112 +626,7 @@ static char cin_isterminated(const char *s, int incl_open, int incl_comma)
 /// @param[in]  min_lnum The line before which we will not be looking.
 static int cin_isfuncdecl(const char **sp, linenr_T first_lnum, linenr_T min_lnum)
 {
-  const char *s;
-  linenr_T lnum = first_lnum;
-  linenr_T save_lnum = curwin->w_cursor.lnum;
-  int retval = false;
-  pos_T *trypos;
-  int just_started = true;
-
-  if (sp == NULL) {
-    s = ml_get(lnum);
-  } else {
-    s = *sp;
-  }
-
-  curwin->w_cursor.lnum = lnum;
-  if (find_last_paren(s, '(', ')')
-      && (trypos = find_match_paren(curbuf->b_ind_maxparen)) != NULL) {
-    lnum = trypos->lnum;
-    if (lnum < min_lnum) {
-      curwin->w_cursor.lnum = save_lnum;
-      return false;
-    }
-    s = ml_get(lnum);
-  }
-
-  curwin->w_cursor.lnum = save_lnum;
-  // Ignore line starting with #.
-  if (cin_ispreproc(s)) {
-    return false;
-  }
-
-  while (*s && *s != '(' && *s != ';' && *s != '\'' && *s != '"') {
-    // ignore comments
-    if (cin_iscomment(s)) {
-      s = cin_skipcomment(s);
-    } else if (*s == ':') {
-      if (*(s + 1) == ':') {
-        s += 2;
-      } else {
-        // To avoid a mistake in the following situation:
-        // A::A(int a, int b)
-        //     : a(0)  // <--not a function decl
-        //     , b(0)
-        // {...
-        return false;
-      }
-    } else {
-      s++;
-    }
-  }
-  if (*s != '(') {
-    return false;  // ';', ' or "  before any () or no '('
-  }
-
-  while (*s && *s != ';' && *s != '\'' && *s != '"') {
-    if (*s == ')' && cin_nocode(s + 1)) {
-      // ')' at the end: may have found a match
-      // Check for the previous line not to end in a backslash:
-      //       #if defined(x) && {backslash}
-      //           defined(y)
-      lnum = first_lnum - 1;
-      s = ml_get(lnum);
-      if (*s == NUL || s[strlen(s) - 1] != '\\') {
-        retval = true;
-      }
-      goto done;
-    }
-    if ((*s == ',' && cin_nocode(s + 1)) || s[1] == NUL || cin_nocode(s)) {
-      int comma = (*s == ',');
-
-      // ',' at the end: continue looking in the next line.
-      // At the end: check for ',' in the next line, for this style:
-      // func(arg1
-      //       , arg2)
-      while (true) {
-        if (lnum >= curbuf->b_ml.ml_line_count) {
-          break;
-        }
-        s = ml_get(++lnum);
-        if (!cin_ispreproc(s)) {
-          break;
-        }
-      }
-      if (lnum >= curbuf->b_ml.ml_line_count) {
-        break;
-      }
-      // Require a comma at end of the line or a comma or ')' at the
-      // start of next line.
-      s = skipwhite(s);
-      if (!just_started && (!comma && *s != ',' && *s != ')')) {
-        break;
-      }
-      just_started = false;
-    } else if (cin_iscomment(s)) {      // ignore comments
-      s = cin_skipcomment(s);
-    } else {
-      s++;
-      just_started = false;
-    }
-  }
-
-done:
-  if (lnum != first_lnum && sp != NULL) {
-    *sp = ml_get(first_lnum);
-  }
-
-  return retval;
+  return rs_cin_isfuncdecl(sp, first_lnum, min_lnum);
 }
 
 static int cin_isif(const char *p)
@@ -872,153 +690,14 @@ static int cin_isbreak(const char *p)
 // This is a lot of guessing.  Watch out for "cond ? func() : foo".
 static int cin_is_cpp_baseclass(cpp_baseclass_cache_T *cached)
 {
-  lpos_T *pos = &cached->lpos;  // find position
-  const char *s;
-  int class_or_struct, lookfor_ctor_init, cpp_base_class;
-  linenr_T lnum = curwin->w_cursor.lnum;
-  const char *line = get_cursor_line_ptr();
-
-  if (pos->lnum <= lnum) {
-    return cached->found;  // Use the cached result
-  }
-
-  pos->col = 0;
-
-  s = skipwhite(line);
-  if (*s == '#') {              // skip #define FOO x ? (x) : x
-    return false;
-  }
-  s = cin_skipcomment(s);
-  if (*s == NUL) {
-    return false;
-  }
-
-  cpp_base_class = lookfor_ctor_init = class_or_struct = false;
-
-  // Search for a line starting with '#', empty, ending in ';' or containing
-  // '{' or '}' and start below it.  This handles the following situations:
-  //    a = cond ?
-  //          func() :
-  //               asdf;
-  //    func::foo()
-  //          : something
-  //    {}
-  //    Foo::Foo (int one, int two)
-  //            : something(4),
-  //            somethingelse(3)
-  //    {}
-  while (lnum > 1) {
-    line = ml_get(lnum - 1);
-    s = skipwhite(line);
-    if (*s == '#' || *s == NUL) {
-      break;
-    }
-    while (*s != NUL) {
-      s = cin_skipcomment(s);
-      if (*s == '{' || *s == '}'
-          || (*s == ';' && cin_nocode(s + 1))) {
-        break;
-      }
-      if (*s != NUL) {
-        s++;
-      }
-    }
-    if (*s != NUL) {
-      break;
-    }
-    lnum--;
-  }
-
-  pos->lnum = lnum;
-  line = ml_get(lnum);
-  s = line;
-  while (true) {
-    if (*s == NUL) {
-      if (lnum == curwin->w_cursor.lnum) {
-        break;
-      }
-      // Continue in the cursor line.
-      line = ml_get(++lnum);
-      s = line;
-    }
-    if (s == line) {
-      // don't recognize "case (foo):" as a baseclass
-      if (cin_iscase(s, false)) {
-        break;
-      }
-      s = cin_skipcomment(line);
-      if (*s == NUL) {
-        continue;
-      }
-    }
-
-    if (s[0] == '"' || (s[0] == 'R' && s[1] == '"')) {
-      s = skip_string(s) + 1;
-    } else if (s[0] == ':') {
-      if (s[1] == ':') {
-        // skip double colon. It can't be a constructor
-        // initialization any more
-        lookfor_ctor_init = false;
-        s = cin_skipcomment(s + 2);
-      } else if (lookfor_ctor_init || class_or_struct) {
-        // we have something found, that looks like the start of
-        // cpp-base-class-declaration or constructor-initialization
-        cpp_base_class = true;
-        lookfor_ctor_init = class_or_struct = false;
-        pos->col = 0;
-        s = cin_skipcomment(s + 1);
-      } else {
-        s = cin_skipcomment(s + 1);
-      }
-    } else if ((strncmp(s, "class", 5) == 0 && !vim_isIDc((uint8_t)s[5]))
-               || (strncmp(s, "struct", 6) == 0 && !vim_isIDc((uint8_t)s[6]))) {
-      class_or_struct = true;
-      lookfor_ctor_init = false;
-
-      if (*s == 'c') {
-        s = cin_skipcomment(s + 5);
-      } else {
-        s = cin_skipcomment(s + 6);
-      }
-    } else {
-      if (s[0] == '{' || s[0] == '}' || s[0] == ';') {
-        cpp_base_class = lookfor_ctor_init = class_or_struct = false;
-      } else if (s[0] == ')') {
-        // Constructor-initialization is assumed if we come across
-        // something like "):"
-        class_or_struct = false;
-        lookfor_ctor_init = true;
-      } else if (s[0] == '?') {
-        // Avoid seeing '() :' after '?' as constructor init.
-        return false;
-      } else if (!vim_isIDc((uint8_t)s[0])) {
-        // if it is not an identifier, we are wrong
-        class_or_struct = false;
-        lookfor_ctor_init = false;
-      } else if (pos->col == 0) {
-        // it can't be a constructor-initialization any more
-        lookfor_ctor_init = false;
-
-        // the first statement starts here: lineup with this one...
-        if (cpp_base_class) {
-          pos->col = (colnr_T)(s - line);
-        }
-      }
-
-      // When the line ends in a comma don't align with it.
-      if (lnum == curwin->w_cursor.lnum && *s == ',' && cin_nocode(s + 1)) {
-        pos->col = 0;
-      }
-
-      s = cin_skipcomment(s + 1);
-    }
-  }
-
-  cached->found = cpp_base_class;
-  if (cpp_base_class) {
-    pos->lnum = lnum;
-  }
-  return cpp_base_class;
+  int found = cached->found;
+  int pos_lnum = cached->lpos.lnum;
+  int pos_col = cached->lpos.col;
+  int result = rs_cin_is_cpp_baseclass(&found, &pos_lnum, &pos_col);
+  cached->found = found;
+  cached->lpos.lnum = pos_lnum;
+  cached->lpos.col = pos_col;
+  return result;
 }
 
 static int get_baseclass_amount(int col)
@@ -3189,98 +2868,7 @@ laterend:
 
 static int find_match(int lookfor, linenr_T ourscope)
 {
-  const char *look;
-  pos_T *theirscope;
-  const char *mightbeif;
-  int elselevel;
-  int whilelevel;
-
-  if (lookfor == LOOKFOR_IF) {
-    elselevel = 1;
-    whilelevel = 0;
-  } else {
-    elselevel = 0;
-    whilelevel = 1;
-  }
-
-  curwin->w_cursor.col = 0;
-
-  while (curwin->w_cursor.lnum > ourscope + 1) {
-    curwin->w_cursor.lnum--;
-    curwin->w_cursor.col = 0;
-
-    look = cin_skipcomment(get_cursor_line_ptr());
-    if (!cin_iselse(look)
-        && !cin_isif(look)
-        && !cin_isdo(look)                                   // XXX
-        && !cin_iswhileofdo(look, curwin->w_cursor.lnum)) {
-      continue;
-    }
-
-    // if we've gone outside the braces entirely,
-    // we must be out of scope...
-    theirscope = find_start_brace();        // XXX
-    if (theirscope == NULL) {
-      break;
-    }
-
-    // and if the brace enclosing this is further
-    // back than the one enclosing the else, we're
-    // out of luck too.
-    if (theirscope->lnum < ourscope) {
-      break;
-    }
-
-    // and if they're enclosed in a *deeper* brace,
-    // then we can ignore it because it's in a
-    // different scope...
-    if (theirscope->lnum > ourscope) {
-      continue;
-    }
-
-    // if it was an "else" (that's not an "else if")
-    // then we need to go back to another if, so
-    // increment elselevel
-    look = cin_skipcomment(get_cursor_line_ptr());
-    if (cin_iselse(look)) {
-      mightbeif = cin_skipcomment(look + 4);
-      if (!cin_isif(mightbeif)) {
-        elselevel++;
-      }
-      continue;
-    }
-
-    // if it was a "while" then we need to go back to
-    // another "do", so increment whilelevel.  XXX
-    if (cin_iswhileofdo(look, curwin->w_cursor.lnum)) {
-      whilelevel++;
-      continue;
-    }
-
-    // If it's an "if" decrement elselevel
-    look = cin_skipcomment(get_cursor_line_ptr());
-    if (cin_isif(look)) {
-      elselevel--;
-      // When looking for an "if" ignore "while"s that
-      // get in the way.
-      if (elselevel == 0 && lookfor == LOOKFOR_IF) {
-        whilelevel = 0;
-      }
-    }
-
-    // If it's a "do" decrement whilelevel
-    if (cin_isdo(look)) {
-      whilelevel--;
-    }
-
-    // if we've used up all the elses, then
-    // this must be the if that we want!
-    // match the indent level of that if.
-    if (elselevel <= 0 && whilelevel <= 0) {
-      return OK;
-    }
-  }
-  return FAIL;
+  return rs_find_match(lookfor, ourscope);
 }
 
 /// Check that "cinkeys" contains the key "keytyped",

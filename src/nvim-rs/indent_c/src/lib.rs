@@ -125,6 +125,12 @@ pub const MAXCOL: c_int = 0x7fff_ffff;
 /// Maximum line number value.
 pub const MAXLNUM: i64 = 0x7fff_ffff;
 
+/// Return value: success.
+const OK: c_int = 1;
+
+/// Return value: failure.
+const FAIL: c_int = 0;
+
 // ============================================================================
 // C accessor function declarations
 // ============================================================================
@@ -169,6 +175,7 @@ extern "C" {
     fn nvim_cindent_get_indent() -> c_int;
     fn nvim_cindent_get_cursor_line_ptr() -> *const c_char;
     fn nvim_cindent_curbuf_get_ind_cpp_baseclass() -> c_int;
+    fn nvim_cindent_curbuf_get_cinsd() -> *const c_char;
 
     // Option parsing
     fn copy_option_part(
@@ -3223,6 +3230,541 @@ pub unsafe extern "C" fn rs_cin_iswhileofdo_end(terminated: c_int) -> bool {
         }
     }
     false
+}
+
+// ============================================================================
+// Phase 4: Complex state machines
+// ============================================================================
+
+/// Check if the line starts with a scope declaration keyword
+/// (from `cinscopedecls` option) followed by `:` (not `::`).
+///
+/// # Safety
+/// Calls FFI accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isscopedecl(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+
+    let s = rs_cin_skipcomment(p);
+    let cinsd = nvim_cindent_curbuf_get_cinsd();
+    if cinsd.is_null() || is_nul(*cinsd) {
+        return false;
+    }
+
+    // Parse comma-separated list from b_p_cinsd
+    let cinsd_len = c_strlen(cinsd) + 1;
+    let mut buf = vec![0i8; cinsd_len];
+    let mut opt_ptr = cinsd.cast_mut();
+
+    loop {
+        if is_nul(*opt_ptr) {
+            break;
+        }
+        let len = copy_option_part(
+            std::ptr::addr_of_mut!(opt_ptr),
+            buf.as_mut_ptr(),
+            cinsd_len,
+            c",".as_ptr(),
+        );
+        if len > 0 {
+            // Compare s with the keyword from cinsd
+            let s_bytes = std::slice::from_raw_parts(s.cast::<u8>(), c_strlen(s));
+            let buf_bytes = std::slice::from_raw_parts(buf.as_ptr().cast::<u8>(), len);
+            if s_bytes.len() >= len && s_bytes[..len] == buf_bytes[..len] {
+                let skip = rs_cin_skipcomment(s.add(len));
+                if *skip == b':' as c_char && *skip.add(1) != b':' as c_char {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
+/// Check if the current line is a label (identifier followed by `:`).
+/// Excludes "default" and scope declarations.
+/// Walks backward to verify the previous line is terminated.
+///
+/// # Safety
+/// Calls FFI accessors. Modifies and restores cursor.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_islabel() -> bool {
+    let s = rs_cin_skipcomment(nvim_cindent_get_cursor_line_ptr());
+
+    // Exclude "default" and scope declarations
+    if rs_cin_isdefault(s) {
+        return false;
+    }
+    if rs_cin_isscopedecl(s) {
+        return false;
+    }
+
+    let mut new_offset: c_int = 0;
+    if !rs_cin_islabel_skip(s, std::ptr::addr_of_mut!(new_offset)) {
+        return false;
+    }
+
+    // Only accept a label if the previous line is terminated or is a case label.
+    let save_lnum = nvim_cindent_curwin_get_cursor_lnum();
+    let save_col = nvim_cindent_curwin_get_cursor_col();
+    let mut lnum = save_lnum;
+
+    while lnum > 1 {
+        lnum -= 1;
+
+        // If we're in a comment or raw string now, skip to the start of it.
+        nvim_cindent_curwin_set_cursor(lnum, 0);
+        let mut cors_lnum: c_int = -1;
+        let mut cors_col: c_int = 0;
+        rs_ind_find_start_CORS(
+            std::ptr::addr_of_mut!(cors_lnum),
+            std::ptr::addr_of_mut!(cors_col),
+            std::ptr::null_mut(),
+        );
+        if cors_lnum != -1 {
+            nvim_cindent_curwin_set_cursor(cors_lnum, cors_col);
+            lnum = cors_lnum;
+        }
+
+        let line = nvim_cindent_get_cursor_line_ptr();
+        if rs_cin_ispreproc(line) {
+            continue;
+        }
+        let checked = rs_cin_skipcomment(line);
+        if is_nul(*checked) {
+            continue;
+        }
+
+        nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+        if rs_cin_isterminated(checked, true, false) != 0
+            || rs_cin_isscopedecl(checked)
+            || rs_cin_iscase(checked, true)
+        {
+            return true;
+        }
+        // Check if it's a label followed by nothing useful
+        let mut label_offset: c_int = 0;
+        if rs_cin_islabel_skip(checked, std::ptr::addr_of_mut!(label_offset)) {
+            let after = checked.add(label_offset as usize);
+            if rs_cin_nocode(after) {
+                return true;
+            }
+        }
+        return false;
+    }
+    nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+    true // label at start of file???
+}
+
+/// Check if text looks like a function declaration.
+/// Multi-line scan looking for `func(arg1, arg2, ...)` pattern.
+///
+/// # Safety
+/// Calls FFI accessors. Modifies and restores cursor.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isfuncdecl(
+    sp: *mut *const c_char,
+    first_lnum: c_int,
+    min_lnum: c_int,
+) -> c_int {
+    let mut lnum = first_lnum;
+    let save_lnum = nvim_cindent_curwin_get_cursor_lnum();
+    let mut retval = 0;
+    let mut just_started = true;
+
+    let mut s = if sp.is_null() {
+        nvim_cindent_ml_get(lnum)
+    } else {
+        *sp
+    };
+
+    nvim_cindent_curwin_set_cursor(lnum, nvim_cindent_curwin_get_cursor_col());
+    // Adjust lnum cursor for find_last_paren / find_match_paren
+    nvim_cindent_curwin_set_cursor(lnum, 0);
+    let bracket = rs_find_last_paren(s, b'(' as c_char, b')' as c_char);
+    if bracket.found {
+        nvim_cindent_curwin_set_cursor(lnum, bracket.col);
+        let trypos = rs_find_match_paren(nvim_cindent_curbuf_get_ind_maxparen());
+        if trypos.found {
+            lnum = trypos.lnum;
+            if lnum < min_lnum {
+                nvim_cindent_curwin_set_cursor(save_lnum, 0);
+                return 0;
+            }
+            s = nvim_cindent_ml_get(lnum);
+        }
+    }
+
+    nvim_cindent_curwin_set_cursor(save_lnum, 0);
+    // Ignore line starting with #.
+    if rs_cin_ispreproc(s) {
+        return 0;
+    }
+
+    // Skip to first '('
+    while !is_nul(*s)
+        && *s != b'(' as c_char
+        && *s != b';' as c_char
+        && *s != b'\'' as c_char
+        && *s != b'"' as c_char
+    {
+        if rs_cin_iscomment(s) {
+            s = rs_cin_skipcomment(s);
+        } else if *s == b':' as c_char {
+            if *s.add(1) == b':' as c_char {
+                s = s.add(2);
+            } else {
+                // Colon without double-colon → not a function decl
+                // (constructor-initialization like A::A(int a) : a(0))
+                return 0;
+            }
+        } else {
+            s = s.add(1);
+        }
+    }
+    if *s != b'(' as c_char {
+        return 0; // ';', ' or "  before any () or no '('
+    }
+
+    // Now scan through parameters
+    while !is_nul(*s) && *s != b';' as c_char && *s != b'\'' as c_char && *s != b'"' as c_char {
+        if *s == b')' as c_char && rs_cin_nocode(s.add(1)) {
+            // ')' at the end: may have found a match
+            // Check for the previous line not to end in a backslash
+            let prev_lnum = first_lnum - 1;
+            let prev_s = nvim_cindent_ml_get(prev_lnum);
+            if is_nul(*prev_s) || {
+                let prev_len = c_strlen(prev_s);
+                prev_len == 0 || *prev_s.add(prev_len - 1) != b'\\' as c_char
+            } {
+                retval = 1;
+            }
+            // goto done
+            if lnum != first_lnum && !sp.is_null() {
+                *sp = nvim_cindent_ml_get(first_lnum);
+            }
+            return retval;
+        }
+        if (*s == b',' as c_char && rs_cin_nocode(s.add(1)))
+            || is_nul(*s.add(1))
+            || rs_cin_nocode(s)
+        {
+            let comma = *s == b',' as c_char;
+
+            // ',' at the end: continue looking in the next line.
+            loop {
+                if lnum >= nvim_cindent_curbuf_get_ml_line_count() {
+                    break;
+                }
+                lnum += 1;
+                s = nvim_cindent_ml_get(lnum);
+                if !rs_cin_ispreproc(s) {
+                    break;
+                }
+            }
+            if lnum >= nvim_cindent_curbuf_get_ml_line_count() {
+                break;
+            }
+            s = skipwhite(s).cast_const();
+            if !just_started && !comma && *s != b',' as c_char && *s != b')' as c_char {
+                break;
+            }
+            just_started = false;
+        } else if rs_cin_iscomment(s) {
+            s = rs_cin_skipcomment(s);
+        } else {
+            s = s.add(1);
+            just_started = false;
+        }
+    }
+
+    // done:
+    if lnum != first_lnum && !sp.is_null() {
+        *sp = nvim_cindent_ml_get(first_lnum);
+    }
+
+    retval
+}
+
+/// Check if line is a C++ base class declaration or constructor-initialization.
+/// Uses a cache mechanism: if `pos->lnum <= curwin->w_cursor.lnum`, returns cached result.
+///
+/// The function outputs to `found`, `pos_lnum`, and `pos_col`.
+///
+/// # Safety
+/// Calls FFI accessors. Does not modify cursor.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_cin_is_cpp_baseclass(
+    found: *mut c_int,
+    pos_lnum: *mut c_int,
+    pos_col: *mut c_int,
+) -> c_int {
+    if found.is_null() || pos_lnum.is_null() || pos_col.is_null() {
+        return 0;
+    }
+
+    let cursor_lnum = nvim_cindent_curwin_get_cursor_lnum();
+
+    // Cache check: if pos_lnum <= cursor_lnum, return cached result
+    if *pos_lnum <= cursor_lnum {
+        return *found;
+    }
+
+    *pos_col = 0;
+
+    let line = nvim_cindent_get_cursor_line_ptr();
+    let mut s = skipwhite(line).cast_const();
+    if *s == b'#' as c_char {
+        return 0;
+    }
+    s = rs_cin_skipcomment(s);
+    if is_nul(*s) {
+        return 0;
+    }
+
+    let mut cpp_base_class = false;
+    let mut lookfor_ctor_init = false;
+    let mut class_or_struct = false;
+    let mut lnum = cursor_lnum;
+
+    // Search backward for context boundary
+    while lnum > 1 {
+        let prev_line = nvim_cindent_ml_get(lnum - 1);
+        s = skipwhite(prev_line).cast_const();
+        if *s == b'#' as c_char || is_nul(*s) {
+            break;
+        }
+        while !is_nul(*s) {
+            s = rs_cin_skipcomment(s);
+            if *s == b'{' as c_char
+                || *s == b'}' as c_char
+                || (*s == b';' as c_char && rs_cin_nocode(s.add(1)))
+            {
+                break;
+            }
+            if !is_nul(*s) {
+                s = s.add(1);
+            }
+        }
+        if !is_nul(*s) {
+            break;
+        }
+        lnum -= 1;
+    }
+
+    *pos_lnum = lnum;
+    let mut line = nvim_cindent_ml_get(lnum);
+    s = line;
+
+    loop {
+        if is_nul(*s) {
+            if lnum == cursor_lnum {
+                break;
+            }
+            lnum += 1;
+            line = nvim_cindent_ml_get(lnum);
+            s = line;
+        }
+        if s == line {
+            // don't recognize "case (foo):" as a baseclass
+            if rs_cin_iscase(s, false) {
+                break;
+            }
+            s = rs_cin_skipcomment(line);
+            if is_nul(*s) {
+                continue;
+            }
+        }
+
+        if *s == b'"' as c_char || (*s == b'R' as c_char && *s.add(1) == b'"' as c_char) {
+            s = rs_skip_string(s).add(1);
+        } else if *s == b':' as c_char {
+            if *s.add(1) == b':' as c_char {
+                // skip double colon
+                lookfor_ctor_init = false;
+                s = rs_cin_skipcomment(s.add(2));
+            } else if lookfor_ctor_init || class_or_struct {
+                cpp_base_class = true;
+                lookfor_ctor_init = false;
+                class_or_struct = false;
+                *pos_col = 0;
+                s = rs_cin_skipcomment(s.add(1));
+            } else {
+                s = rs_cin_skipcomment(s.add(1));
+            }
+        } else if (std::slice::from_raw_parts(s.cast::<u8>(), 5.min(c_strlen(s)))
+            .starts_with(b"class")
+            && vim_isIDc(c_int::from(*s.add(5) as u8)) == 0)
+            || (std::slice::from_raw_parts(s.cast::<u8>(), 6.min(c_strlen(s)))
+                .starts_with(b"struct")
+                && vim_isIDc(c_int::from(*s.add(6) as u8)) == 0)
+        {
+            class_or_struct = true;
+            lookfor_ctor_init = false;
+            if *s == b'c' as c_char {
+                s = rs_cin_skipcomment(s.add(5));
+            } else {
+                s = rs_cin_skipcomment(s.add(6));
+            }
+        } else {
+            if *s == b'{' as c_char || *s == b'}' as c_char || *s == b';' as c_char {
+                cpp_base_class = false;
+                lookfor_ctor_init = false;
+                class_or_struct = false;
+            } else if *s == b')' as c_char {
+                class_or_struct = false;
+                lookfor_ctor_init = true;
+            } else if *s == b'?' as c_char {
+                // Avoid seeing '() :' after '?' as constructor init.
+                *found = 0;
+                return 0;
+            } else if vim_isIDc(c_int::from(*s as u8)) == 0 {
+                class_or_struct = false;
+                lookfor_ctor_init = false;
+            } else if *pos_col == 0 {
+                lookfor_ctor_init = false;
+                if cpp_base_class {
+                    *pos_col = s.offset_from(line) as c_int;
+                }
+            }
+
+            // When the line ends in a comma don't align with it.
+            if lnum == cursor_lnum && *s == b',' as c_char && rs_cin_nocode(s.add(1)) {
+                *pos_col = 0;
+            }
+
+            s = rs_cin_skipcomment(s.add(1));
+        }
+    }
+
+    *found = c_int::from(cpp_base_class);
+    if cpp_base_class {
+        *pos_lnum = lnum;
+    }
+    c_int::from(cpp_base_class)
+}
+
+/// Find indent for line `lnum`, ignoring any case, scope, or jump label.
+/// Also return a pointer to the text (after the label) in `pp`.
+///
+/// # Safety
+/// Calls FFI accessors. Modifies and restores cursor.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_label(lnum: c_int, pp: *mut *const c_char) -> c_int {
+    let save_lnum = nvim_cindent_curwin_get_cursor_lnum();
+    let save_col = nvim_cindent_curwin_get_cursor_col();
+
+    nvim_cindent_curwin_set_cursor(lnum, 0);
+    let l = nvim_cindent_get_cursor_line_ptr();
+    let amount;
+
+    if rs_cin_iscase(l, false) || rs_cin_isscopedecl(l) || rs_cin_islabel() {
+        amount = rs_get_indent_nolabel(lnum);
+        let mut after = rs_after_label(nvim_cindent_get_cursor_line_ptr());
+        if after.is_null() {
+            after = nvim_cindent_get_cursor_line_ptr();
+        }
+        if !pp.is_null() {
+            *pp = after;
+        }
+    } else {
+        amount = nvim_cindent_get_indent();
+        if !pp.is_null() {
+            *pp = nvim_cindent_get_cursor_line_ptr();
+        }
+    }
+
+    nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+    amount
+}
+
+/// Match if/else and do/while pairs.
+/// Walks backward from cursor to `ourscope` looking for matching constructs.
+///
+/// Note: This function modifies `curwin->w_cursor` and does NOT restore it
+/// (same behavior as the C version).
+///
+/// # Safety
+/// Calls FFI accessors. Modifies cursor position.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_match(lookfor: c_int, ourscope: c_int) -> c_int {
+    let (mut elselevel, mut whilelevel) = if lookfor == LOOKFOR_IF {
+        (1, 0)
+    } else {
+        (0, 1)
+    };
+
+    nvim_cindent_curwin_set_cursor(nvim_cindent_curwin_get_cursor_lnum(), 0);
+
+    while nvim_cindent_curwin_get_cursor_lnum() > ourscope + 1 {
+        let new_lnum = nvim_cindent_curwin_get_cursor_lnum() - 1;
+        nvim_cindent_curwin_set_cursor(new_lnum, 0);
+
+        let look = rs_cin_skipcomment(nvim_cindent_get_cursor_line_ptr());
+        if !rs_cin_iselse(look)
+            && !rs_cin_isif(look)
+            && !rs_cin_isdo(look)
+            && !rs_cin_iswhileofdo(look, nvim_cindent_curwin_get_cursor_lnum())
+        {
+            continue;
+        }
+
+        // if we've gone outside the braces entirely, we must be out of scope
+        let theirscope = rs_find_start_brace();
+        if !theirscope.found {
+            break;
+        }
+
+        // and if the brace enclosing this is further back, we're out of luck
+        if theirscope.lnum < ourscope {
+            break;
+        }
+
+        // and if they're enclosed in a *deeper* brace, ignore it
+        if theirscope.lnum > ourscope {
+            continue;
+        }
+
+        // if it was an "else" (that's not an "else if"), increment elselevel
+        let look = rs_cin_skipcomment(nvim_cindent_get_cursor_line_ptr());
+        if rs_cin_iselse(look) {
+            let mightbeif = rs_cin_skipcomment(look.add(4));
+            if !rs_cin_isif(mightbeif) {
+                elselevel += 1;
+            }
+            continue;
+        }
+
+        // if it was a "while" increment whilelevel
+        if rs_cin_iswhileofdo(look, nvim_cindent_curwin_get_cursor_lnum()) {
+            whilelevel += 1;
+            continue;
+        }
+
+        // If it's an "if" decrement elselevel
+        let look = rs_cin_skipcomment(nvim_cindent_get_cursor_line_ptr());
+        if rs_cin_isif(look) {
+            elselevel -= 1;
+            if elselevel == 0 && lookfor == LOOKFOR_IF {
+                whilelevel = 0;
+            }
+        }
+
+        // If it's a "do" decrement whilelevel
+        if rs_cin_isdo(look) {
+            whilelevel -= 1;
+        }
+
+        // if we've used up all the elses/whiles, this must be the match
+        if elselevel <= 0 && whilelevel <= 0 {
+            return OK;
+        }
+    }
+    FAIL
 }
 
 // ============================================================================
