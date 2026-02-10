@@ -1942,6 +1942,56 @@ pub extern "C" fn rs_comp_col() {
     }
 }
 
+// =============================================================================
+// Phase 3: Mode Display Helpers
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_global_busy() -> c_int;
+    fn nvim_get_msg_silent() -> c_int;
+    fn nvim_get_redraw_mode() -> c_int;
+    fn nvim_set_redraw_mode(val: c_int);
+    fn nvim_clearmode();
+}
+
+/// Check if mode display should be postponed.
+///
+/// Returns true when not redrawing or inside a mapping.
+/// Rust equivalent of `skip_showmode()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_skip_showmode() -> c_int {
+    unsafe {
+        // Call char_avail() only when we are going to show something, because it
+        // takes a bit of time.  redrawing() may also call char_avail().
+        if nvim_get_global_busy() != 0
+            || nvim_get_msg_silent() != 0
+            || !redrawing_impl()
+            || (nvim_char_avail() != 0 && !nvim_get_KeyTyped())
+        {
+            nvim_set_redraw_mode(1); // show mode later
+            return 1;
+        }
+        0
+    }
+}
+
+/// Delete mode message.
+///
+/// Used when ESC is typed which is expected to end Insert mode
+/// (but Insert mode didn't end yet!).
+/// Rust equivalent of `unshowmode()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_unshowmode(force: c_int) {
+    unsafe {
+        // Don't delete it right now, when not redrawing or inside a mapping.
+        if !redrawing_impl() || (force == 0 && nvim_char_avail() != 0 && !nvim_get_KeyTyped()) {
+            nvim_set_redraw_cmdline(true); // delete mode later
+        } else {
+            nvim_clearmode();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

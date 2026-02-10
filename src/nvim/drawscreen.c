@@ -859,17 +859,13 @@ void show_cursor_info_later(bool force)
   }
 }
 
+extern int rs_skip_showmode(void);
+
 /// @return true when postponing displaying the mode message: when not redrawing
 /// or inside a mapping.
 bool skip_showmode(void)
 {
-  // Call char_avail() only when we are going to show something, because it
-  // takes a bit of time.  redrawing() may also call char_avail().
-  if (global_busy || msg_silent != 0 || !redrawing() || (char_avail() && !KeyTyped)) {
-    redraw_mode = true;  // show mode later
-    return true;
-  }
-  return false;
+  return rs_skip_showmode() != 0;
 }
 
 /// Show the current mode and ruler.
@@ -1063,17 +1059,14 @@ static void msg_pos_mode(void)
   msg_row = Rows - 1;
 }
 
+extern void rs_unshowmode(int force);
+
 /// Delete mode message.  Used when ESC is typed which is expected to end
 /// Insert mode (but Insert mode didn't end yet!).
 /// Caller should check "mode_displayed".
 void unshowmode(bool force)
 {
-  // Don't delete it right now, when not redrawing or inside a mapping.
-  if (!redrawing() || (!force && char_avail() && !KeyTyped)) {
-    redraw_cmdline = true;  // delete mode later
-  } else {
-    clearmode();
-  }
+  rs_unshowmode(force ? 1 : 0);
 }
 
 // Clear the mode message.
@@ -2825,3 +2818,14 @@ void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
 
 _Static_assert(COL_RULER == 17, "COL_RULER must be 17");
 _Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS must be 10");
+
+// Phase 3 accessors for skip_showmode() / unshowmode()
+
+/// Get redraw_mode flag.
+int nvim_get_redraw_mode(void) { return redraw_mode ? 1 : 0; }
+
+/// Set redraw_mode flag.
+void nvim_set_redraw_mode(int val) { redraw_mode = (val != 0); }
+
+/// Wrapper for clearmode() for Rust FFI.
+void nvim_clearmode(void) { clearmode(); }
