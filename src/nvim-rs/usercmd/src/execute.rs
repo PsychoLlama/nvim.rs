@@ -12,7 +12,9 @@
 #![allow(clippy::match_same_arms)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
+
+use crate::CmdmodHandle;
 
 /// Line number type
 type LinenrT = i32;
@@ -449,8 +451,279 @@ impl SpecialArg {
 }
 
 // =============================================================================
+// C Accessor Functions (Phase 3 — modifier string generation)
+// =============================================================================
+
+extern "C" {
+    /// Get cmod->cmod_split field
+    fn nvim_uc_cmod_get_split(cmod: CmdmodHandle) -> c_int;
+    /// Get cmod->cmod_flags field
+    fn nvim_uc_cmod_get_flags(cmod: CmdmodHandle) -> c_int;
+    /// Get cmod->cmod_tab field
+    fn nvim_uc_cmod_get_tab(cmod: CmdmodHandle) -> c_int;
+    /// Get cmod->cmod_verbose field
+    fn nvim_uc_cmod_get_verbose(cmod: CmdmodHandle) -> c_int;
+    /// Return tabpage_index(curtab)
+    fn nvim_uc_tabpage_index_curtab() -> c_int;
+}
+
+// =============================================================================
+// Modifier String Generation (Phase 3)
+// =============================================================================
+
+/// Table of simple flag-based modifier entries for `uc_mods`.
+/// Order matches the C `mod_entries[]` table exactly.
+const MOD_ENTRIES: &[(c_int, &[u8])] = &[
+    (CMOD_BROWSE, b"browse"),
+    (CMOD_CONFIRM, b"confirm"),
+    (CMOD_HIDE, b"hide"),
+    (CMOD_KEEPALT, b"keepalt"),
+    (CMOD_KEEPJUMPS, b"keepjumps"),
+    (CMOD_KEEPMARKS, b"keepmarks"),
+    (CMOD_KEEPPATTERNS, b"keeppatterns"),
+    (CMOD_LOCKMARKS, b"lockmarks"),
+    (CMOD_NOSWAPFILE, b"noswapfile"),
+    (CMOD_UNSILENT, b"unsilent"),
+    (CMOD_NOAUTOCMD, b"noautocmd"),
+    (CMOD_SANDBOX, b"sandbox"),
+];
+
+/// Internal helper: append a modifier string, preceded by a space if
+/// `*multi_mods` is true.  Returns the number of bytes that would be
+/// (or were) written.
+///
+/// * `buf` – if `Some`, the modifier text is appended via `strcat`-style
+///   writes (the buffer must already be NUL-terminated).
+///   If `None`, only the length is computed (measure pass).
+/// * `mod_str` – the modifier keyword (e.g. `b"keepalt"`).
+/// * `multi_mods` – set to `true` after the first call so subsequent
+///   modifiers are separated by a space.
+fn add_cmd_modifier(buf: *mut c_char, mod_str: &[u8], multi_mods: &mut bool) -> usize {
+    let mut result = mod_str.len();
+    if *multi_mods {
+        result += 1;
+    }
+
+    if !buf.is_null() {
+        unsafe {
+            // Find the NUL terminator (equivalent to strcat finding the end)
+            let mut p = buf;
+            while *p != 0 {
+                p = p.add(1);
+            }
+            // Append space separator if needed
+            if *multi_mods {
+                *p = b' ' as c_char;
+                p = p.add(1);
+            }
+            // Append the modifier string
+            std::ptr::copy_nonoverlapping(mod_str.as_ptr().cast::<c_char>(), p, mod_str.len());
+            p = p.add(mod_str.len());
+            // NUL-terminate
+            *p = 0;
+        }
+    }
+
+    *multi_mods = true;
+    result
+}
+
+/// Generate window-split modifier strings from `cmod->cmod_split` and
+/// `cmod->cmod_tab`.
+///
+/// When `buf` is non-NULL the text is appended (the buffer must be
+/// NUL-terminated on entry).  Returns the number of bytes added.
+fn add_win_cmd_modifiers_impl(
+    buf: *mut c_char,
+    cmod: CmdmodHandle,
+    multi_mods: &mut bool,
+) -> usize {
+    let split = unsafe { nvim_uc_cmod_get_split(cmod) };
+    let cmod_tab = unsafe { nvim_uc_cmod_get_tab(cmod) };
+    let mut result: usize = 0;
+
+    // :aboveleft / :leftabove
+    if split & WSP_ABOVE != 0 {
+        result += add_cmd_modifier(buf, b"aboveleft", multi_mods);
+    }
+    // :belowright / :rightbelow
+    if split & WSP_BELOW != 0 {
+        result += add_cmd_modifier(buf, b"belowright", multi_mods);
+    }
+    // :botright
+    if split & WSP_BOT != 0 {
+        result += add_cmd_modifier(buf, b"botright", multi_mods);
+    }
+
+    // :tab  (cmod_tab > 0 means ":tab" was used; value is tab_number + 1)
+    if cmod_tab > 0 {
+        let tabnr = cmod_tab - 1;
+        let curtab_idx = unsafe { nvim_uc_tabpage_index_curtab() };
+        if tabnr == curtab_idx {
+            result += add_cmd_modifier(buf, b"tab", multi_mods);
+        } else {
+            // Format "<N>tab" into a stack buffer
+            let mut tab_buf = [0u8; 68]; // NUMBUFLEN(65) + 3
+            let s = format_int_suffix(tabnr, b"tab", &mut tab_buf);
+            result += add_cmd_modifier(buf, s, multi_mods);
+        }
+    }
+
+    // :topleft
+    if split & WSP_TOP != 0 {
+        result += add_cmd_modifier(buf, b"topleft", multi_mods);
+    }
+    // :vertical
+    if split & WSP_VERT != 0 {
+        result += add_cmd_modifier(buf, b"vertical", multi_mods);
+    }
+    // :horizontal
+    if split & WSP_HOR != 0 {
+        result += add_cmd_modifier(buf, b"horizontal", multi_mods);
+    }
+
+    result
+}
+
+/// Generate the full modifier string for `<mods>` / `<q-mods>` expansion.
+///
+/// When `buf` is non-NULL the text is written into it.  Returns the total
+/// number of bytes (including optional surrounding quotes).
+fn uc_mods_impl(buf: *mut c_char, cmod: CmdmodHandle, quote: bool) -> usize {
+    let flags = unsafe { nvim_uc_cmod_get_flags(cmod) };
+    let cmod_verbose = unsafe { nvim_uc_cmod_get_verbose(cmod) };
+    let mut multi_mods = false;
+
+    // Start with space for the quote characters (if any).
+    let mut result: usize = if quote { 2 } else { 0 };
+
+    // `work` is the pointer where modifier text will be appended.
+    // If quoting, it is advanced past the opening '"' character.
+    let work: *mut c_char = if buf.is_null() {
+        std::ptr::null_mut()
+    } else {
+        unsafe {
+            let mut p = buf;
+            if quote {
+                *p = b'"' as c_char;
+                p = p.add(1);
+            }
+            // NUL-terminate so strcat-style appending works
+            *p = 0;
+            p
+        }
+    };
+
+    // Simple flag-based modifiers
+    for &(flag, name) in MOD_ENTRIES {
+        if flags & flag != 0 {
+            result += add_cmd_modifier(work, name, &mut multi_mods);
+        }
+    }
+
+    // :silent  (may be "silent!")
+    if flags & CMOD_SILENT != 0 {
+        if flags & CMOD_ERRSILENT != 0 {
+            result += add_cmd_modifier(work, b"silent!", &mut multi_mods);
+        } else {
+            result += add_cmd_modifier(work, b"silent", &mut multi_mods);
+        }
+    }
+
+    // :verbose
+    if cmod_verbose > 0 {
+        let verbose_value = cmod_verbose - 1;
+        if verbose_value == 1 {
+            result += add_cmd_modifier(work, b"verbose", &mut multi_mods);
+        } else {
+            let mut verbose_buf = [0u8; 65]; // NUMBUFLEN
+            let s = format_int_suffix(verbose_value, b"verbose", &mut verbose_buf);
+            result += add_cmd_modifier(work, s, &mut multi_mods);
+        }
+    }
+
+    // Window-split modifiers
+    result += add_win_cmd_modifiers_impl(work, cmod, &mut multi_mods);
+
+    // Closing quote — overwrites the NUL that strcat left at the end
+    if quote && !buf.is_null() {
+        unsafe {
+            // The opening quote consumed 1 byte, so the modifier text starts
+            // at buf+1 and is (result - 2) bytes long.  The closing quote
+            // goes right after the modifier text.
+            let closing = buf.add(result - 1);
+            *closing = b'"' as c_char;
+        }
+    }
+
+    result
+}
+
+/// Format `<number><suffix>` into `out` and return the used slice.
+///
+/// Example: `format_int_suffix(3, b"tab", &mut buf)` produces `b"3tab"`.
+fn format_int_suffix<'a>(n: c_int, suffix: &[u8], out: &'a mut [u8]) -> &'a [u8] {
+    // Write the integer digits
+    let mut num_buf = [0u8; 20]; // enough for any i32
+    let num_str = format_c_int(n, &mut num_buf);
+    let total = num_str.len() + suffix.len();
+    assert!(total <= out.len(), "format_int_suffix: buffer too small");
+    out[..num_str.len()].copy_from_slice(num_str);
+    out[num_str.len()..total].copy_from_slice(suffix);
+    &out[..total]
+}
+
+/// Format a `c_int` as decimal digits into `buf`, returning the used slice.
+fn format_c_int(n: c_int, buf: &mut [u8; 20]) -> &[u8] {
+    if n == 0 {
+        buf[0] = b'0';
+        return &buf[..1];
+    }
+    let negative = n < 0;
+    // Work with the absolute value as u32 to avoid sign-loss warnings.
+    let mut val = n.unsigned_abs();
+    let mut pos = buf.len();
+    while val > 0 {
+        pos -= 1;
+        buf[pos] = b'0' + (val % 10) as u8;
+        val /= 10;
+    }
+    if negative {
+        pos -= 1;
+        buf[pos] = b'-';
+    }
+    &buf[pos..]
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// FFI export: Generate window-split modifier string.
+///
+/// Mirrors C `add_win_cmd_modifiers(buf, cmod, multi_mods)`.
+/// `multi_mods_ptr` points to a C `int` used as a bool (0/1).
+#[no_mangle]
+pub extern "C" fn rs_add_win_cmd_modifiers(
+    buf: *mut c_char,
+    cmod: CmdmodHandle,
+    multi_mods_ptr: *mut c_int,
+) -> usize {
+    let mut multi_mods = unsafe { *multi_mods_ptr != 0 };
+    let result = add_win_cmd_modifiers_impl(buf, cmod, &mut multi_mods);
+    unsafe {
+        *multi_mods_ptr = c_int::from(multi_mods);
+    }
+    result
+}
+
+/// FFI export: Generate full modifier string for `<mods>` expansion.
+///
+/// Mirrors C `uc_mods(buf, cmod, quote)`.
+#[no_mangle]
+pub extern "C" fn rs_uc_mods(buf: *mut c_char, cmod: CmdmodHandle, quote: c_int) -> usize {
+    uc_mods_impl(buf, cmod, quote != 0)
+}
 
 /// FFI export: Check if modifiers is silent
 #[no_mangle]
@@ -644,5 +917,185 @@ mod tests {
 
         assert_eq!(rs_usercmd_exec_result_is_ok(0), 1);
         assert_eq!(rs_usercmd_exec_result_is_ok(1), 0);
+    }
+
+    // =========================================================================
+    // Phase 3 — add_cmd_modifier tests
+    // =========================================================================
+
+    /// Helper: create a NUL-terminated C buffer of the given size, returning
+    /// a pointer and the backing storage.
+    fn make_buf(size: usize) -> (Vec<i8>, *mut c_char) {
+        let mut v: Vec<i8> = vec![0; size];
+        let p = v.as_mut_ptr();
+        (v, p)
+    }
+
+    /// Read a NUL-terminated C string from a buffer into a Rust `String`.
+    #[allow(clippy::cast_sign_loss)]
+    fn read_cstr(buf: &[i8]) -> String {
+        let bytes: Vec<u8> = buf
+            .iter()
+            .take_while(|&&b| b != 0)
+            .map(|&b| b as u8)
+            .collect();
+        String::from_utf8(bytes).unwrap()
+    }
+
+    #[test]
+    fn test_add_cmd_modifier_single_measure() {
+        // Measure-only pass (null buffer)
+        let mut multi = false;
+        let len = add_cmd_modifier(std::ptr::null_mut(), b"keepalt", &mut multi);
+        assert_eq!(len, 7); // "keepalt".len()
+        assert!(multi); // always set to true
+    }
+
+    #[test]
+    fn test_add_cmd_modifier_single_write() {
+        let (storage, buf) = make_buf(64);
+        let mut multi = false;
+        let len = add_cmd_modifier(buf, b"keepalt", &mut multi);
+        assert_eq!(len, 7);
+        assert!(multi);
+        assert_eq!(read_cstr(&storage), "keepalt");
+        // Verify NUL termination
+        assert_eq!(storage[7], 0);
+    }
+
+    #[test]
+    fn test_add_cmd_modifier_multiple_measure() {
+        let mut multi = false;
+        let len1 = add_cmd_modifier(std::ptr::null_mut(), b"browse", &mut multi);
+        assert_eq!(len1, 6);
+        assert!(multi);
+
+        let len2 = add_cmd_modifier(std::ptr::null_mut(), b"confirm", &mut multi);
+        // Second modifier adds a space prefix
+        assert_eq!(len2, 8); // " confirm" = 1 + 7
+        assert!(multi);
+    }
+
+    #[test]
+    fn test_add_cmd_modifier_multiple_write() {
+        let (storage, buf) = make_buf(64);
+        let mut multi = false;
+
+        let len1 = add_cmd_modifier(buf, b"browse", &mut multi);
+        assert_eq!(len1, 6);
+        assert_eq!(read_cstr(&storage), "browse");
+
+        let len2 = add_cmd_modifier(buf, b"confirm", &mut multi);
+        assert_eq!(len2, 8); // " confirm"
+        assert_eq!(read_cstr(&storage), "browse confirm");
+
+        let len3 = add_cmd_modifier(buf, b"hide", &mut multi);
+        assert_eq!(len3, 5); // " hide"
+        assert_eq!(read_cstr(&storage), "browse confirm hide");
+    }
+
+    #[test]
+    fn test_add_cmd_modifier_multi_mods_starts_true() {
+        // When multi_mods starts as true, even the first modifier gets a
+        // leading space.
+        let (storage, buf) = make_buf(64);
+        let mut multi = true;
+        let len = add_cmd_modifier(buf, b"silent", &mut multi);
+        assert_eq!(len, 7); // " silent" = 1 + 6
+        assert_eq!(read_cstr(&storage), " silent");
+    }
+
+    #[test]
+    fn test_add_cmd_modifier_null_buf_does_not_crash() {
+        let mut multi = true;
+        let len = add_cmd_modifier(std::ptr::null_mut(), b"noautocmd", &mut multi);
+        assert_eq!(len, 10); // " noautocmd" = 1 + 9
+    }
+
+    #[test]
+    fn test_add_cmd_modifier_empty_string() {
+        let (storage, buf) = make_buf(64);
+        let mut multi = false;
+        let len = add_cmd_modifier(buf, b"", &mut multi);
+        assert_eq!(len, 0);
+        assert_eq!(read_cstr(&storage), "");
+        assert!(multi); // still set to true
+    }
+
+    #[test]
+    fn test_add_cmd_modifier_silent_bang() {
+        let (storage, buf) = make_buf(64);
+        let mut multi = false;
+        let len = add_cmd_modifier(buf, b"silent!", &mut multi);
+        assert_eq!(len, 7);
+        assert_eq!(read_cstr(&storage), "silent!");
+    }
+
+    // =========================================================================
+    // Phase 3 — format_c_int / format_int_suffix tests
+    // =========================================================================
+
+    #[test]
+    fn test_format_c_int_positive() {
+        let mut buf = [0u8; 20];
+        assert_eq!(format_c_int(0, &mut buf), b"0");
+        assert_eq!(format_c_int(1, &mut buf), b"1");
+        assert_eq!(format_c_int(42, &mut buf), b"42");
+        assert_eq!(format_c_int(999, &mut buf), b"999");
+    }
+
+    #[test]
+    fn test_format_c_int_negative() {
+        let mut buf = [0u8; 20];
+        assert_eq!(format_c_int(-1, &mut buf), b"-1");
+        assert_eq!(format_c_int(-123, &mut buf), b"-123");
+    }
+
+    #[test]
+    fn test_format_int_suffix_tab() {
+        let mut buf = [0u8; 68];
+        assert_eq!(format_int_suffix(3, b"tab", &mut buf), b"3tab");
+        assert_eq!(format_int_suffix(10, b"tab", &mut buf), b"10tab");
+        assert_eq!(format_int_suffix(0, b"tab", &mut buf), b"0tab");
+    }
+
+    #[test]
+    fn test_format_int_suffix_verbose() {
+        let mut buf = [0u8; 65];
+        assert_eq!(format_int_suffix(2, b"verbose", &mut buf), b"2verbose");
+        assert_eq!(format_int_suffix(99, b"verbose", &mut buf), b"99verbose");
+    }
+
+    // =========================================================================
+    // Phase 3 — MOD_ENTRIES table tests
+    // =========================================================================
+
+    #[test]
+    fn test_mod_entries_table_length() {
+        // Must match the 12 entries in the C mod_entries[] array
+        assert_eq!(MOD_ENTRIES.len(), 12);
+    }
+
+    #[test]
+    fn test_mod_entries_table_order() {
+        // Verify the order matches C exactly
+        let expected: &[(c_int, &[u8])] = &[
+            (CMOD_BROWSE, b"browse"),
+            (CMOD_CONFIRM, b"confirm"),
+            (CMOD_HIDE, b"hide"),
+            (CMOD_KEEPALT, b"keepalt"),
+            (CMOD_KEEPJUMPS, b"keepjumps"),
+            (CMOD_KEEPMARKS, b"keepmarks"),
+            (CMOD_KEEPPATTERNS, b"keeppatterns"),
+            (CMOD_LOCKMARKS, b"lockmarks"),
+            (CMOD_NOSWAPFILE, b"noswapfile"),
+            (CMOD_UNSILENT, b"unsilent"),
+            (CMOD_NOAUTOCMD, b"noautocmd"),
+            (CMOD_SANDBOX, b"sandbox"),
+        ];
+        for (i, &(flag, name)) in expected.iter().enumerate() {
+            assert_eq!(MOD_ENTRIES[i].0, flag, "flag mismatch at index {i}");
+            assert_eq!(MOD_ENTRIES[i].1, name, "name mismatch at index {i}");
+        }
     }
 }

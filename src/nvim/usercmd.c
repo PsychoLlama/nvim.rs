@@ -165,6 +165,36 @@ char *nvim_uc_xstrnsave(const char *s, size_t len)
   return xstrnsave(s, len);
 }
 
+// Rust FFI declarations (Phase 3: modifier string generation)
+extern size_t rs_add_win_cmd_modifiers(char *buf, const void *cmod, int *multi_mods);
+extern size_t rs_uc_mods(char *buf, const void *cmod, int quote);
+
+// C accessor functions called by Rust (Phase 3)
+int nvim_uc_cmod_get_split(const void *cmod)
+{
+  return ((const cmdmod_T *)cmod)->cmod_split;
+}
+
+int nvim_uc_cmod_get_flags(const void *cmod)
+{
+  return ((const cmdmod_T *)cmod)->cmod_flags;
+}
+
+int nvim_uc_cmod_get_tab(const void *cmod)
+{
+  return ((const cmdmod_T *)cmod)->cmod_tab;
+}
+
+int nvim_uc_cmod_get_verbose(const void *cmod)
+{
+  return ((const cmdmod_T *)cmod)->cmod_verbose;
+}
+
+int nvim_uc_tabpage_index_curtab(void)
+{
+  return tabpage_index(curtab);
+}
+
 static const char e_argument_required_for_str[]
   = N_("E179: Argument required for %s");
 static const char e_no_such_user_defined_command_str[]
@@ -1162,71 +1192,15 @@ static char *uc_split_args(const char *arg, char **args, const size_t *arglens, 
   return buf;
 }
 
-static size_t add_cmd_modifier(char *buf, char *mod_str, bool *multi_mods)
-{
-  size_t result = strlen(mod_str);
-  if (*multi_mods) {
-    result++;
-  }
-
-  if (buf != NULL) {
-    if (*multi_mods) {
-      strcat(buf, " ");
-    }
-    strcat(buf, mod_str);
-  }
-
-  *multi_mods = true;
-  return result;
-}
-
 /// Add modifiers from "cmod->cmod_split" to "buf".  Set "multi_mods" when one
 /// was added.
 ///
 /// @return the number of bytes added
 size_t add_win_cmd_modifiers(char *buf, const cmdmod_T *cmod, bool *multi_mods)
 {
-  size_t result = 0;
-
-  // :aboveleft and :leftabove
-  if (cmod->cmod_split & WSP_ABOVE) {
-    result += add_cmd_modifier(buf, "aboveleft", multi_mods);
-  }
-  // :belowright and :rightbelow
-  if (cmod->cmod_split & WSP_BELOW) {
-    result += add_cmd_modifier(buf, "belowright", multi_mods);
-  }
-  // :botright
-  if (cmod->cmod_split & WSP_BOT) {
-    result += add_cmd_modifier(buf, "botright", multi_mods);
-  }
-
-  // :tab
-  if (cmod->cmod_tab > 0) {
-    int tabnr = cmod->cmod_tab - 1;
-    if (tabnr == tabpage_index(curtab)) {
-      // For compatibility, don't add a tabpage number if it is the same
-      // as the default number for :tab.
-      result += add_cmd_modifier(buf, "tab", multi_mods);
-    } else {
-      char tab_buf[NUMBUFLEN + 3];
-      snprintf(tab_buf, sizeof(tab_buf), "%dtab", tabnr);
-      result += add_cmd_modifier(buf, tab_buf, multi_mods);
-    }
-  }
-
-  // :topleft
-  if (cmod->cmod_split & WSP_TOP) {
-    result += add_cmd_modifier(buf, "topleft", multi_mods);
-  }
-  // :vertical
-  if (cmod->cmod_split & WSP_VERT) {
-    result += add_cmd_modifier(buf, "vertical", multi_mods);
-  }
-  // :horizontal
-  if (cmod->cmod_split & WSP_HOR) {
-    result += add_cmd_modifier(buf, "horizontal", multi_mods);
-  }
+  int mm = *multi_mods ? 1 : 0;
+  size_t result = rs_add_win_cmd_modifiers(buf, cmod, &mm);
+  *multi_mods = mm != 0;
   return result;
 }
 
@@ -1234,68 +1208,7 @@ size_t add_win_cmd_modifiers(char *buf, const cmdmod_T *cmod, bool *multi_mods)
 /// If "buf" is NULL just return the length.
 size_t uc_mods(char *buf, const cmdmod_T *cmod, bool quote)
 {
-  size_t result = 0;
-  bool multi_mods = false;
-
-  typedef struct {
-    int flag;
-    char *name;
-  } mod_entry_T;
-  static mod_entry_T mod_entries[] = {
-    { CMOD_BROWSE, "browse" },
-    { CMOD_CONFIRM, "confirm" },
-    { CMOD_HIDE, "hide" },
-    { CMOD_KEEPALT, "keepalt" },
-    { CMOD_KEEPJUMPS, "keepjumps" },
-    { CMOD_KEEPMARKS, "keepmarks" },
-    { CMOD_KEEPPATTERNS, "keeppatterns" },
-    { CMOD_LOCKMARKS, "lockmarks" },
-    { CMOD_NOSWAPFILE, "noswapfile" },
-    { CMOD_UNSILENT, "unsilent" },
-    { CMOD_NOAUTOCMD, "noautocmd" },
-    { CMOD_SANDBOX, "sandbox" },
-  };
-
-  result = quote ? 2 : 0;
-  if (buf != NULL) {
-    if (quote) {
-      *buf++ = '"';
-    }
-    *buf = NUL;
-  }
-
-  // the modifiers that are simple flags
-  for (size_t i = 0; i < ARRAY_SIZE(mod_entries); i++) {
-    if (cmod->cmod_flags & mod_entries[i].flag) {
-      result += add_cmd_modifier(buf, mod_entries[i].name, &multi_mods);
-    }
-  }
-
-  // :silent
-  if (cmod->cmod_flags & CMOD_SILENT) {
-    result += add_cmd_modifier(buf,
-                               (cmod->cmod_flags & CMOD_ERRSILENT) ? "silent!" : "silent",
-                               &multi_mods);
-  }
-  // :verbose
-  if (cmod->cmod_verbose > 0) {
-    int verbose_value = cmod->cmod_verbose - 1;
-    if (verbose_value == 1) {
-      result += add_cmd_modifier(buf, "verbose", &multi_mods);
-    } else {
-      char verbose_buf[NUMBUFLEN];
-      snprintf(verbose_buf, sizeof(verbose_buf), "%dverbose", verbose_value);
-      result += add_cmd_modifier(buf, verbose_buf, &multi_mods);
-    }
-  }
-  // flags from cmod->cmod_split
-  result += add_win_cmd_modifiers(buf, cmod, &multi_mods);
-
-  if (quote && buf != NULL) {
-    buf += result - 2;
-    *buf = '"';
-  }
-  return result;
+  return rs_uc_mods(buf, cmod, quote ? 1 : 0);
 }
 
 /// Check for a <> code in a user command.
