@@ -467,6 +467,13 @@ extern void rs_v_visop(cmdarg_T *cap);
 extern void rs_nv_abbrev(cmdarg_T *cap);
 extern void rs_nv_lineop(cmdarg_T *cap);
 
+// Wave 2 Phase 4 functions
+extern void rs_start_selection(void);
+extern void rs_may_start_select(int c);
+extern void rs_nv_g_underscore_cmd(cmdarg_T *cap);
+extern void rs_nv_gi_cmd(cmdarg_T *cap);
+extern void rs_nv_normal(cmdarg_T *cap);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -1776,6 +1783,89 @@ _Static_assert(K_DEL == TERMCAP2KEY('k', 'D'), "K_DEL mismatch");
 _Static_assert(K_KDEL == TERMCAP2KEY(KS_EXTRA, KE_KDEL), "K_KDEL mismatch");
 _Static_assert(kMTLineWise == 1, "kMTLineWise mismatch");
 
+// =============================================================================
+// Wave 2 Phase 4 accessors for Rust FFI
+// =============================================================================
+
+// Verify constants used in Phase 4
+_Static_assert(Ctrl_N == 14, "Ctrl_N mismatch");
+_Static_assert(Ctrl_G == 7, "Ctrl_G mismatch");
+_Static_assert(Ctrl_C == 3, "Ctrl_C mismatch");
+_Static_assert(kMTCharWise == 0, "kMTCharWise mismatch");
+
+/// Get the byte at cursor column from get_cursor_line_ptr().
+/// Returns NUL (0) if col is past end of line.
+int nvim_get_cursor_line_byte_at_col(int col)
+{
+  char *ptr = get_cursor_line_ptr();
+  return (uint8_t)ptr[col];
+}
+
+/// Check if byte at cursor column is whitespace (ascii_iswhite).
+bool nvim_cursor_line_col_is_white(int col)
+{
+  char *ptr = get_cursor_line_ptr();
+  return ascii_iswhite(ptr[col]);
+}
+
+/// Get whether stuff buffer is empty.
+bool nvim_stuff_empty(void)
+{
+  return stuff_empty();
+}
+
+/// Get whether typebuf was typed (not from mapping).
+bool nvim_typebuf_typed(void)
+{
+  return typebuf_typed();
+}
+
+/// Check if char c is in 'selectmode' option.
+bool nvim_vim_strchr_p_slm(int c)
+{
+  return vim_strchr(p_slm, c) != NULL;
+}
+
+/// Set curwin->w_cursor from curbuf->b_last_insert.mark.
+/// Returns true if b_last_insert.mark.lnum != 0.
+bool nvim_set_cursor_from_last_insert(void)
+{
+  if (curbuf->b_last_insert.mark.lnum != 0) {
+    curwin->w_cursor = curbuf->b_last_insert.mark;
+    return true;
+  }
+  return false;
+}
+
+/// Wrapper for check_cursor_lnum(curwin).
+void nvim_check_cursor_lnum_call(void)
+{
+  check_cursor_lnum(curwin);
+}
+
+/// Get length of cursor line (colnr_T).
+int nvim_get_cursor_line_len(void)
+{
+  return (int)get_cursor_line_len();
+}
+
+/// Get curwin->w_cursor.coladd (for Phase 4 g-cmds).
+int nvim_get_cursor_coladd(void)
+{
+  return curwin->w_cursor.coladd;
+}
+
+/// Get cmdwin_type global.
+int nvim_normal_get_cmdwin_type(void)
+{
+  return cmdwin_type;
+}
+
+/// Set cmdwin_result global.
+void nvim_set_cmdwin_result(int val)
+{
+  cmdwin_result = val;
+}
 
 /// Wrapper for nv_Zet C implementation.
 void nvim_nv_Zet_impl(cmdarg_T *cap)
@@ -6415,17 +6505,14 @@ static void nv_visual_impl(cmdarg_T *cap)
 /// Start selection for Shift-movement keys.
 void start_selection(void)
 {
-  // if 'selectmode' contains "key", start Select mode
-  may_start_select('k');
-  n_start_visual_mode('v');
+  rs_start_selection();
 }
 
 /// Start Select mode, if "c" is in 'selectmode' and not in a mapping or menu.
 /// When "c" is 'o' (checking for "mouse") then also when mapped.
 void may_start_select(int c)
 {
-  VIsual_select = (c == 'o' || (stuff_empty() && typebuf_typed()))
-                  && vim_strchr(p_slm, c) != NULL;
+  rs_may_start_select(c);
 }
 
 /// Start Visual mode "c".
@@ -6590,27 +6677,7 @@ void nv_g_home_m_cmd(cmdarg_T *cap)
 /// "g_": to the last non-blank character in the line or <count> lines downward.
 static void nv_g_underscore_cmd(cmdarg_T *cap)
 {
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = true;
-  curwin->w_curswant = MAXCOL;
-  if (cursor_down(cap->count1 - 1, cap->oap->op_type == OP_NOP) == false) {
-    clearopbeep(cap->oap);
-    return;
-  }
-
-  char *ptr = get_cursor_line_ptr();
-
-  // In Visual mode we may end up after the line.
-  if (curwin->w_cursor.col > 0 && ptr[curwin->w_cursor.col] == NUL) {
-    curwin->w_cursor.col--;
-  }
-
-  // Decrease the cursor column until it's on a non-blank.
-  while (curwin->w_cursor.col > 0 && ascii_iswhite(ptr[curwin->w_cursor.col])) {
-    curwin->w_cursor.col--;
-  }
-  curwin->w_set_curswant = true;
-  adjust_for_sel(cap);
+  rs_nv_g_underscore_cmd(cap);
 }
 
 /// "g$" : Like "$" but for screen lines.
@@ -6681,19 +6748,7 @@ static void nv_g_dollar_cmd(cmdarg_T *cap)
 /// "gi": start Insert at the last position.
 static void nv_gi_cmd(cmdarg_T *cap)
 {
-  if (curbuf->b_last_insert.mark.lnum != 0) {
-    curwin->w_cursor = curbuf->b_last_insert.mark;
-    check_cursor_lnum(curwin);
-    int i = (int)get_cursor_line_len();
-    if (curwin->w_cursor.col > (colnr_T)i) {
-      if (virtual_active(curwin)) {
-        curwin->w_cursor.coladd += curwin->w_cursor.col - i;
-      }
-      curwin->w_cursor.col = i;
-    }
-  }
-  cap->cmdchar = 'i';
-  nv_edit(cap);
+  rs_nv_gi_cmd(cap);
 }
 
 /// Commands starting with "g".
@@ -7360,22 +7415,7 @@ static void nv_goto(cmdarg_T *cap)
 /// CTRL-\ in Normal mode.
 static void nv_normal(cmdarg_T *cap)
 {
-  if (cap->nchar == Ctrl_N || cap->nchar == Ctrl_G) {
-    clearop(cap->oap);
-    if (restart_edit != 0 && mode_displayed) {
-      clear_cmdline = true;                     // unshow mode later
-    }
-    restart_edit = 0;
-    if (cmdwin_type != 0) {
-      cmdwin_result = Ctrl_C;
-    }
-    if (VIsual_active) {
-      end_visual_mode();                // stop Visual
-      redraw_curbuf_later(UPD_INVERTED);
-    }
-  } else {
-    clearopbeep(cap->oap);
-  }
+  rs_nv_normal(cap);
 }
 
 /// ESC in Normal mode: beep, but don't flush buffers.

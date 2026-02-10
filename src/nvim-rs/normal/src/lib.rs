@@ -225,6 +225,22 @@ extern "C" {
     // Wave 2 Phase 3: Visual operator accessors
     fn nvim_set_VIsual_mode(val: c_int);
     fn nvim_oap_get_motion_force(oap: OapHandle) -> c_int;
+
+    // Wave 2 Phase 4: Selection/g-cmd accessors
+    fn nvim_get_cursor_line_byte_at_col(col: c_int) -> c_int;
+    fn nvim_cursor_line_col_is_white(col: c_int) -> bool;
+    fn nvim_stuff_empty() -> bool;
+    fn nvim_typebuf_typed() -> bool;
+    fn nvim_vim_strchr_p_slm(c: c_int) -> bool;
+    fn nvim_n_start_visual_mode(c: c_int);
+    fn nvim_set_cursor_from_last_insert() -> bool;
+    fn nvim_check_cursor_lnum_call();
+    fn nvim_get_cursor_line_len() -> c_int;
+    fn nvim_get_cursor_coladd() -> c_int;
+    fn nvim_normal_get_cmdwin_type() -> c_int;
+    fn nvim_set_cmdwin_result(val: c_int);
+    fn nvim_get_restart_edit() -> c_int;
+    fn nvim_set_restart_edit(val: c_int);
 }
 
 // Operator type constants (must match ops.h)
@@ -240,10 +256,14 @@ const NUL_CHAR: c_int = 0;
 // Command retval constants (from normal_defs.h)
 const CA_COMMAND_BUSY: c_int = 1;
 
-// Ctrl_V constant (must match ascii_defs.h)
+// Ctrl key constants (must match ascii_defs.h)
+const CTRL_C: c_int = 3;
+const CTRL_G: c_int = 7;
+const CTRL_N: c_int = 14;
 const CTRL_V: c_int = 22;
 
-// Motion type constants (must match types_defs.h)
+// Motion type constants (must match normal_defs.h)
+const K_MT_CHARWISE: c_int = 0;
 const K_MT_LINEWISE: c_int = 1;
 
 // Beginline flags (must match cursor_defs.h)
@@ -2437,6 +2457,121 @@ pub unsafe extern "C" fn rs_nv_lineop(cap: CapHandle) {
         } else if op_type != OP_YANK {
             // 'Y' does not move cursor
             nvim_beginline(BL_WHITE | BL_FIX);
+        }
+    } else {
+        rs_clearopbeep(oap);
+    }
+}
+
+// =============================================================================
+// Wave 2 Phase 4: Selection Start + g-Command Sub-handlers
+// =============================================================================
+
+/// Set VIsual_select based on selectmode option and input context.
+///
+/// When "c" is 'o' (mouse), always checks selectmode. Otherwise only when
+/// stuff buffer is empty and typebuf was typed.
+///
+/// # Safety
+/// Calls into C accessors for globals.
+#[no_mangle]
+pub extern "C" fn rs_may_start_select(c: c_int) {
+    unsafe {
+        let select = (c == c_int::from(b'o') || (nvim_stuff_empty() && nvim_typebuf_typed()))
+            && nvim_vim_strchr_p_slm(c);
+        nvim_set_VIsual_select(select);
+    }
+}
+
+/// Start selection for Shift-movement keys.
+///
+/// Calls may_start_select('k') then enters visual mode with 'v'.
+#[no_mangle]
+pub extern "C" fn rs_start_selection() {
+    rs_may_start_select(c_int::from(b'k'));
+    unsafe {
+        nvim_n_start_visual_mode(c_int::from(b'v'));
+    }
+}
+
+/// "g_": go to last non-blank in line, optionally count lines down.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_g_underscore_cmd(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
+    nvim_oap_set_inclusive(oap, true);
+    nvim_set_curswant(MAXCOL);
+
+    let count1 = nvim_cap_get_count1(cap);
+    let op_type = nvim_oap_get_op_type_ptr(oap);
+    if !nvim_cursor_down(count1 - 1, op_type == OP_NOP) {
+        rs_clearopbeep(oap);
+        return;
+    }
+
+    let mut col = nvim_get_cursor_col();
+
+    // In Visual mode we may end up after the line.
+    if col > 0 && nvim_get_cursor_line_byte_at_col(col) == 0 {
+        col -= 1;
+        nvim_set_cursor_col(col);
+    }
+
+    // Decrease the cursor column until it's on a non-blank.
+    while col > 0 && nvim_cursor_line_col_is_white(col) {
+        col -= 1;
+        nvim_set_cursor_col(col);
+    }
+
+    nvim_curwin_set_curswant(true);
+    adjust_for_sel(cap);
+}
+
+/// "gi": start Insert at the last insert position.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_gi_cmd(cap: CapHandle) {
+    if nvim_set_cursor_from_last_insert() {
+        nvim_check_cursor_lnum_call();
+        let line_len = nvim_get_cursor_line_len();
+        let col = nvim_get_cursor_col();
+        if col > line_len {
+            if nvim_virtual_active() {
+                let coladd = nvim_get_cursor_coladd();
+                nvim_set_cursor_coladd(coladd + col - line_len);
+            }
+            nvim_set_cursor_col(line_len);
+        }
+    }
+    nvim_cap_set_cmdchar(cap, c_int::from(b'i'));
+    rs_nv_edit(cap);
+}
+
+/// CTRL-\ in Normal mode: CTRL-N/CTRL-G clear state, stop visual.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_normal(cap: CapHandle) {
+    let nchar = nvim_cap_get_nchar(cap);
+    let oap = nvim_cap_get_oap(cap);
+    if nchar == CTRL_N || nchar == CTRL_G {
+        rs_clearop(oap);
+        if nvim_get_restart_edit() != 0 && nvim_get_mode_displayed() {
+            nvim_set_clear_cmdline(true);
+        }
+        nvim_set_restart_edit(0);
+        if nvim_normal_get_cmdwin_type() != 0 {
+            nvim_set_cmdwin_result(CTRL_C);
+        }
+        if nvim_get_VIsual_active() != 0 {
+            end_visual_mode();
+            nvim_redraw_curbuf_inverted();
         }
     } else {
         rs_clearopbeep(oap);
