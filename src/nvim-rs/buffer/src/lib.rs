@@ -49,6 +49,11 @@ impl BufHandle {
     }
 }
 
+/// Opaque handle to a Neovim window (`win_T*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WinHandle(*mut std::ffi::c_void);
+
 // C accessor functions for buffer fields.
 // These are defined in buffer.c and provide safe access to buf_T fields.
 extern "C" {
@@ -159,6 +164,45 @@ extern "C" {
 
     /// Get the stored line number for a buffer.
     fn nvim_buflist_findlnum(buf: BufHandle) -> c_int;
+
+    /// Get the quickfix stack buffer number.
+    fn nvim_qf_stack_get_bufnr() -> c_int;
+
+    /// Get translated "[Quickfix List]" string.
+    fn nvim_msg_qflist() -> *const c_char;
+
+    /// Get translated "[Location List]" string.
+    fn nvim_msg_loclist() -> *const c_char;
+
+    /// Get the `cmdwin_buf` global.
+    fn nvim_get_cmdwin_buf() -> BufHandle;
+
+    /// Get translated "[Command Line]" string.
+    fn nvim_msg_command_line() -> *const c_char;
+
+    /// Get translated "[Prompt]" string.
+    fn nvim_msg_prompt() -> *const c_char;
+
+    /// Get translated "[Scratch]" string.
+    fn nvim_msg_scratch() -> *const c_char;
+
+    /// Get translated "E23: No alternate file" string.
+    fn nvim_e_noalt() -> *const c_char;
+
+    /// Get `ARGCOUNT` value.
+    fn nvim_get_argcount() -> c_int;
+
+    /// Get `w_arg_idx` from a window.
+    fn nvim_win_get_arg_idx(wp: WinHandle) -> c_int;
+
+    /// Get `w_arg_idx_invalid` from a window.
+    fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
+
+    /// Get translated " ((%d) of %d)" format string.
+    fn nvim_msg_arg_number_invalid() -> *const c_char;
+
+    /// Get translated " (%d of %d)" format string.
+    fn nvim_msg_arg_number() -> *const c_char;
 }
 
 /// Check if "buf" is a pointer to an existing buffer.
@@ -581,6 +625,119 @@ unsafe fn curbuf_reusable_impl() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn rs_curbuf_reusable() -> bool {
     curbuf_reusable_impl()
+}
+
+// =============================================================================
+// Special Buffer Names & Info Formatting (Phase 3)
+// =============================================================================
+
+/// Get special buffer name, or NULL if the buffer has a normal file name.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_spname(buf: BufHandle) -> *mut c_char {
+    if buf.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Quickfix/location list
+    if bt_quickfix_impl(buf) {
+        let fnum = nvim_buf_get_fnum(buf);
+        if fnum == nvim_qf_stack_get_bufnr() {
+            return nvim_msg_qflist().cast_mut();
+        }
+        return nvim_msg_loclist().cast_mut();
+    }
+
+    // Buffer types with no file name
+    if bt_nofilename_impl(buf) {
+        let fname = nvim_buf_get_b_fname(buf);
+        if !fname.is_null() {
+            return fname.cast_mut();
+        }
+        if buf == nvim_get_cmdwin_buf() {
+            return nvim_msg_command_line().cast_mut();
+        }
+        if bt_prompt_impl(buf) {
+            return nvim_msg_prompt().cast_mut();
+        }
+        return nvim_msg_scratch().cast_mut();
+    }
+
+    // Buffer with no fname gets "[No Name]"
+    if nvim_buf_get_b_fname(buf).is_null() {
+        return buf_get_fname_impl(buf).cast_mut();
+    }
+
+    std::ptr::null_mut()
+}
+
+/// Get alternate file name for the current window.
+/// Returns NULL if there isn't any, and emits error message if requested.
+///
+/// # Safety
+///
+/// Accesses global state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getaltfname(errmsg: bool) -> *mut c_char {
+    let mut fname: *const c_char = std::ptr::null();
+    let mut dummy: c_int = 0;
+
+    if rs_buflist_name_nr(
+        0,
+        std::ptr::addr_of_mut!(fname),
+        std::ptr::addr_of_mut!(dummy),
+    ) != 0
+    {
+        // FAIL
+        if errmsg {
+            nvim_emsg(nvim_e_noalt());
+        }
+        return std::ptr::null_mut();
+    }
+    fname.cast_mut()
+}
+
+/// Append "(N of M)" to a buffer string, if editing more than one file.
+///
+/// Returns the number of characters appended.
+///
+/// # Safety
+///
+/// `wp` must be a valid window handle. `buf` must be a valid writable buffer
+/// of at least `buflen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_append_arg_number(
+    wp: WinHandle,
+    buf: *mut c_char,
+    buflen: usize,
+) -> c_int {
+    let argcount = nvim_get_argcount();
+    if argcount <= 1 {
+        return 0;
+    }
+
+    let arg_idx = nvim_win_get_arg_idx(wp) + 1;
+    let invalid = nvim_win_get_arg_idx_invalid(wp) != 0;
+
+    let fmt = if invalid {
+        nvim_msg_arg_number_invalid()
+    } else {
+        nvim_msg_arg_number()
+    };
+
+    // Use snprintf with the translated format string
+    let n = libc::snprintf(buf, buflen, fmt, arg_idx, argcount);
+    if n < 0 {
+        0
+    } else {
+        // snprintf returns the number of chars that would have been written;
+        // cap to actual buffer capacity
+        let max_written = c_int::try_from(buflen.saturating_sub(1)).unwrap_or(c_int::MAX);
+        n.min(max_written)
+    }
 }
 
 // =============================================================================

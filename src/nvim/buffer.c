@@ -150,6 +150,9 @@ extern bool rs_curbuf_reusable(void);
 extern bool rs_otherfile(char *ffname);
 extern void rs_buf_set_file_id(buf_T *buf);
 extern int rs_buflist_name_nr(int fnum, char **fname, linenr_T *lnum);
+extern char *rs_buf_spname(buf_T *buf);
+extern char *rs_getaltfname(bool errmsg);
+extern int rs_append_arg_number(win_T *wp, char *buf, size_t buflen);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
@@ -559,6 +562,72 @@ buf_T *nvim_buflist_findnr(int fnum)
 linenr_T nvim_buflist_findlnum(buf_T *buf)
 {
   return buflist_findlnum(buf);
+}
+
+/// Get the quickfix stack buffer number (accessor for Rust).
+int nvim_qf_stack_get_bufnr(void)
+{
+  return qf_stack_get_bufnr();
+}
+
+/// Get translated "[Quickfix List]" string (accessor for Rust).
+const char *nvim_msg_qflist(void)
+{
+  return _(msg_qflist);
+}
+
+/// Get translated "[Location List]" string (accessor for Rust).
+const char *nvim_msg_loclist(void)
+{
+  return _(msg_loclist);
+}
+
+/// Get the cmdwin_buf global (accessor for Rust).
+buf_T *nvim_get_cmdwin_buf(void)
+{
+  return cmdwin_buf;
+}
+
+/// Get translated "[Command Line]" string (accessor for Rust).
+const char *nvim_msg_command_line(void)
+{
+  return _("[Command Line]");
+}
+
+/// Get translated "[Prompt]" string (accessor for Rust).
+const char *nvim_msg_prompt(void)
+{
+  return _("[Prompt]");
+}
+
+/// Get translated "[Scratch]" string (accessor for Rust).
+const char *nvim_msg_scratch(void)
+{
+  return _("[Scratch]");
+}
+
+/// Get translated "E23: No alternate file" string (accessor for Rust).
+const char *nvim_e_noalt(void)
+{
+  return _(e_noalt);
+}
+
+/// Get ARGCOUNT value (accessor for Rust).
+int nvim_get_argcount(void)
+{
+  return ARGCOUNT;
+}
+
+/// Get translated " ((%d) of %d)" format string (accessor for Rust).
+const char *nvim_msg_arg_number_invalid(void)
+{
+  return _(" ((%d) of %d)");
+}
+
+/// Get translated " (%d of %d)" format string (accessor for Rust).
+const char *nvim_msg_arg_number(void)
+{
+  return _(" (%d of %d)");
 }
 
 typedef enum {
@@ -3511,16 +3580,7 @@ buf_T *setaltfname(char *ffname, char *sfname, linenr_T lnum)
 /// @param errmsg  give error message
 char *getaltfname(bool errmsg)
 {
-  char *fname;
-  linenr_T dummy;
-
-  if (buflist_name_nr(0, &fname, &dummy) == FAIL) {
-    if (errmsg) {
-      emsg(_(e_noalt));
-    }
-    return NULL;
-  }
-  return fname;
+  return rs_getaltfname(errmsg);
 }
 
 /// Add a file name to the buflist and return its number.
@@ -3902,14 +3962,7 @@ int get_rel_pos(win_T *wp, char *buf, int buflen)
 int append_arg_number(win_T *wp, char *buf, size_t buflen)
   FUNC_ATTR_NONNULL_ALL
 {
-  // Nothing to do
-  if (ARGCOUNT <= 1) {
-    return 0;
-  }
-
-  const char *msg = wp->w_arg_idx_invalid ? _(" ((%d) of %d)") : _(" (%d of %d)");
-
-  return (int)vim_snprintf_safelen(buf, buflen, msg, wp->w_arg_idx + 1, ARGCOUNT);
+  return rs_append_arg_number(wp, buf, buflen);
 }
 
 /// Make "*ffname" a full file name, set "*sfname" to "*ffname" if not NULL.
@@ -4370,32 +4423,7 @@ bool buf_hide(const buf_T *const buf)
 ///          NULL when the buffer has a normal file name.
 char *buf_spname(buf_T *buf)
 {
-  if (bt_quickfix(buf)) {
-    // Differentiate between the quickfix and location list buffers using
-    // the buffer number stored in the global quickfix stack.
-    if (buf->b_fnum == qf_stack_get_bufnr()) {
-      return _(msg_qflist);
-    }
-    return _(msg_loclist);
-  }
-  // There is no _file_ when 'buftype' is "nofile", b_sfname
-  // contains the name as specified by the user.
-  if (bt_nofilename(buf)) {
-    if (buf->b_fname != NULL) {
-      return buf->b_fname;
-    }
-    if (buf == cmdwin_buf) {
-      return _("[Command Line]");
-    }
-    if (bt_prompt(buf)) {
-      return _("[Prompt]");
-    }
-    return _("[Scratch]");
-  }
-  if (buf->b_fname == NULL) {
-    return buf_get_fname(buf);
-  }
-  return NULL;
+  return rs_buf_spname(buf);
 }
 
 /// Get "buf->b_fname", use "[No Name]" if it is NULL.
