@@ -1992,6 +1992,74 @@ pub extern "C" fn rs_unshowmode(force: c_int) {
     }
 }
 
+// =============================================================================
+// Phase 4: Status/Title Redraw Iteration
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_redraw_tabline() -> c_int;
+    fn nvim_get_need_maketitle() -> c_int;
+    fn nvim_get_p_icon() -> c_int;
+    fn nvim_get_p_title() -> c_int;
+    fn nvim_get_stl_syntax() -> c_int;
+    fn nvim_set_need_maketitle(val: c_int);
+    fn nvim_win_check_ns_hl(wp: WinHandle);
+    fn nvim_win_redr_winbar(wp: WinHandle);
+    fn nvim_win_redr_status(wp: WinHandle);
+    fn nvim_draw_tabline();
+    fn nvim_maketitle();
+}
+
+/// STL_IN_ICON from globals.h
+const STL_IN_ICON: c_int = 1;
+/// STL_IN_TITLE from globals.h
+const STL_IN_TITLE: c_int = 2;
+
+/// Redraw all status lines that need to be redrawn.
+///
+/// Rust equivalent of `redraw_statuslines()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_redraw_statuslines() {
+    unsafe {
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            if nvim_win_get_redr_status(wp) != 0 {
+                nvim_win_check_ns_hl(wp);
+                nvim_win_redr_winbar(wp);
+                nvim_win_redr_status(wp);
+            }
+            wp = nvim_win_get_next(wp);
+        }
+
+        nvim_win_check_ns_hl(WinHandle::null());
+        if nvim_get_redraw_tabline() != 0 {
+            nvim_draw_tabline();
+        }
+
+        if nvim_get_need_maketitle() != 0 {
+            nvim_maketitle();
+        }
+    }
+}
+
+/// Mark the title and icon for redraw if using statusline format.
+///
+/// Returns 1 if either title or icon uses statusline format.
+/// Rust equivalent of `redraw_custom_title_later()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_redraw_custom_title_later() -> c_int {
+    unsafe {
+        let stl_syntax = nvim_get_stl_syntax();
+        if (nvim_get_p_icon() != 0 && (stl_syntax & STL_IN_ICON) != 0)
+            || (nvim_get_p_title() != 0 && (stl_syntax & STL_IN_TITLE) != 0)
+        {
+            nvim_set_need_maketitle(1);
+            return 1;
+        }
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

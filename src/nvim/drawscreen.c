@@ -793,17 +793,14 @@ void setcursor_mayforce(win_T *wp, bool force)
   }
 }
 
+extern int rs_redraw_custom_title_later(void);
+
 /// Mark the title and icon for redraw if either of them uses statusline format.
 ///
 /// @return  whether either title or icon uses statusline format.
 bool redraw_custom_title_later(void)
 {
-  if ((p_icon && (stl_syntax & STL_IN_ICON))
-      || (p_title && (stl_syntax & STL_IN_TITLE))) {
-    need_maketitle = true;
-    return true;
-  }
-  return false;
+  return rs_redraw_custom_title_later() != 0;
 }
 
 /// Show current cursor info in ruler and various other places
@@ -2576,25 +2573,12 @@ void status_redraw_buf(buf_T *buf)
   rs_status_redraw_buf(buf);
 }
 
+extern void rs_redraw_statuslines(void);
+
 /// Redraw all status lines that need to be redrawn.
 void redraw_statuslines(void)
 {
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_redr_status) {
-      win_check_ns_hl(wp);
-      win_redr_winbar(wp);
-      win_redr_status(wp);
-    }
-  }
-
-  win_check_ns_hl(NULL);
-  if (redraw_tabline) {
-    draw_tabline();
-  }
-
-  if (need_maketitle) {
-    maketitle();
-  }
+  rs_redraw_statuslines();
 }
 
 // Rust implementation of win_redraw_last_status
@@ -2829,3 +2813,44 @@ void nvim_set_redraw_mode(int val) { redraw_mode = (val != 0); }
 
 /// Wrapper for clearmode() for Rust FFI.
 void nvim_clearmode(void) { clearmode(); }
+
+// Phase 4 accessors for redraw_statuslines() / redraw_custom_title_later()
+
+/// Get redraw_tabline flag.
+int nvim_get_redraw_tabline(void) { return redraw_tabline ? 1 : 0; }
+
+/// Set redraw_tabline flag.
+void nvim_set_redraw_tabline(int val) { redraw_tabline = (val != 0); }
+
+/// Get need_maketitle flag.
+int nvim_get_need_maketitle(void) { return need_maketitle ? 1 : 0; }
+
+/// Set need_maketitle flag.
+void nvim_set_need_maketitle(int val) { need_maketitle = (val != 0); }
+
+/// Get p_icon option.
+int nvim_get_p_icon(void) { return p_icon; }
+
+/// Get p_title option.
+int nvim_get_p_title(void) { return p_title; }
+
+/// Get stl_syntax flags.
+int nvim_get_stl_syntax(void) { return stl_syntax; }
+
+/// Wrapper for win_check_ns_hl() for Rust FFI.
+void nvim_win_check_ns_hl(win_T *wp) { win_check_ns_hl(wp); }
+
+/// Wrapper for win_redr_winbar() for Rust FFI.
+void nvim_win_redr_winbar(win_T *wp) { win_redr_winbar(wp); }
+
+/// Wrapper for win_redr_status() for Rust FFI.
+void nvim_win_redr_status(win_T *wp) { win_redr_status(wp); }
+
+/// Wrapper for draw_tabline() for Rust FFI.
+void nvim_draw_tabline(void) { draw_tabline(); }
+
+/// Wrapper for maketitle() for Rust FFI.
+void nvim_maketitle(void) { maketitle(); }
+
+_Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
+_Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");
