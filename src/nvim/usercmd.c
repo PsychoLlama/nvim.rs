@@ -195,6 +195,88 @@ int nvim_uc_tabpage_index_curtab(void)
   return tabpage_index(curtab);
 }
 
+// Rust FFI declarations (Phase 4: argument expansion)
+extern char *rs_uc_split_args(const char *arg, char **args, const size_t *arglens, size_t argc,
+                              size_t *lenp);
+extern size_t rs_uc_check_code(char *code, size_t len, char *buf, void *cmd, void *eap,
+                               char **split_buf, size_t *split_len);
+
+// C accessor functions called by Rust (Phase 4)
+const char *nvim_uc_eap_get_arg(const void *eap)
+{
+  return ((const exarg_T *)eap)->arg;
+}
+
+uint32_t nvim_uc_eap_get_argt(const void *eap)
+{
+  return ((const exarg_T *)eap)->argt;
+}
+
+int nvim_uc_eap_get_forceit(const void *eap)
+{
+  return ((const exarg_T *)eap)->forceit ? 1 : 0;
+}
+
+int nvim_uc_eap_get_line1(const void *eap)
+{
+  return (int)((const exarg_T *)eap)->line1;
+}
+
+int nvim_uc_eap_get_line2(const void *eap)
+{
+  return (int)((const exarg_T *)eap)->line2;
+}
+
+int nvim_uc_eap_get_addr_count(const void *eap)
+{
+  return ((const exarg_T *)eap)->addr_count;
+}
+
+int nvim_uc_eap_get_regname(const void *eap)
+{
+  return ((const exarg_T *)eap)->regname;
+}
+
+char **nvim_uc_eap_get_args(const void *eap)
+{
+  return ((const exarg_T *)eap)->args;
+}
+
+size_t *nvim_uc_eap_get_arglens(const void *eap)
+{
+  return ((const exarg_T *)eap)->arglens;
+}
+
+size_t nvim_uc_eap_get_argc(const void *eap)
+{
+  return ((const exarg_T *)eap)->argc;
+}
+
+int64_t nvim_uc_cmd_get_def(const void *cmd)
+{
+  return ((const ucmd_T *)cmd)->uc_def;
+}
+
+int nvim_uc_utfc_ptr2len(const char *p)
+{
+  return utfc_ptr2len(p);
+}
+
+void nvim_uc_mb_copy_char(const char **pp, char **qq)
+{
+  mb_copy_char(pp, qq);
+}
+
+char *nvim_uc_xmalloc(size_t size)
+{
+  return xmalloc(size);
+}
+
+const void *nvim_uc_get_cmdmod(void)
+{
+  return &cmdmod;
+}
+
 static const char e_argument_required_for_str[]
   = N_("E179: Argument required for %s");
 static const char e_no_such_user_defined_command_str[]
@@ -1081,115 +1163,7 @@ size_t uc_nargs_upper_bound(const char *arg, size_t arglen)
 static char *uc_split_args(const char *arg, char **args, const size_t *arglens, size_t argc,
                            size_t *lenp)
 {
-  // Precalculate length
-  int len = 2;   // Initial and final quotes
-  if (args == NULL) {
-    const char *p = arg;
-
-    while (*p) {
-      if (p[0] == '\\' && p[1] == '\\') {
-        len += 2;
-        p += 2;
-      } else if (p[0] == '\\' && ascii_iswhite(p[1])) {
-        len += 1;
-        p += 2;
-      } else if (*p == '\\' || *p == '"') {
-        len += 2;
-        p += 1;
-      } else if (ascii_iswhite(*p)) {
-        p = skipwhite(p);
-        if (*p == NUL) {
-          break;
-        }
-        len += 4;  // ", "
-      } else {
-        const int charlen = utfc_ptr2len(p);
-
-        len += charlen;
-        p += charlen;
-      }
-    }
-  } else {
-    for (size_t i = 0; i < argc; i++) {
-      const char *p = args[i];
-      const char *arg_end = args[i] + arglens[i];
-
-      while (p < arg_end) {
-        if (*p == '\\' || *p == '"') {
-          len += 2;
-          p += 1;
-        } else {
-          const int charlen = utfc_ptr2len(p);
-
-          len += charlen;
-          p += charlen;
-        }
-      }
-
-      if (i != argc - 1) {
-        len += 4;  // ", "
-      }
-    }
-  }
-
-  char *buf = xmalloc((size_t)len + 1);
-
-  char *q = buf;
-  *q++ = '"';
-
-  if (args == NULL) {
-    const char *p = arg;
-    while (*p) {
-      if (p[0] == '\\' && p[1] == '\\') {
-        *q++ = '\\';
-        *q++ = '\\';
-        p += 2;
-      } else if (p[0] == '\\' && ascii_iswhite(p[1])) {
-        *q++ = p[1];
-        p += 2;
-      } else if (*p == '\\' || *p == '"') {
-        *q++ = '\\';
-        *q++ = *p++;
-      } else if (ascii_iswhite(*p)) {
-        p = skipwhite(p);
-        if (*p == NUL) {
-          break;
-        }
-        *q++ = '"';
-        *q++ = ',';
-        *q++ = ' ';
-        *q++ = '"';
-      } else {
-        mb_copy_char(&p, &q);
-      }
-    }
-  } else {
-    for (size_t i = 0; i < argc; i++) {
-      const char *p = args[i];
-      const char *arg_end = args[i] + arglens[i];
-
-      while (p < arg_end) {
-        if (*p == '\\' || *p == '"') {
-          *q++ = '\\';
-          *q++ = *p++;
-        } else {
-          mb_copy_char(&p, &q);
-        }
-      }
-      if (i != argc - 1) {
-        *q++ = '"';
-        *q++ = ',';
-        *q++ = ' ';
-        *q++ = '"';
-      }
-    }
-  }
-
-  *q++ = '"';
-  *q = 0;
-
-  *lenp = (size_t)len;
-  return buf;
+  return rs_uc_split_args(arg, args, arglens, argc, lenp);
 }
 
 /// Add modifiers from "cmod->cmod_split" to "buf".  Set "multi_mods" when one
@@ -1225,208 +1199,7 @@ size_t uc_mods(char *buf, const cmdmod_T *cmod, bool quote)
 static size_t uc_check_code(char *code, size_t len, char *buf, ucmd_T *cmd, exarg_T *eap,
                             char **split_buf, size_t *split_len)
 {
-  size_t result = 0;
-  char *p = code + 1;
-  size_t l = len - 2;
-  int quote = 0;
-  enum {
-    ct_ARGS,
-    ct_BANG,
-    ct_COUNT,
-    ct_LINE1,
-    ct_LINE2,
-    ct_RANGE,
-    ct_MODS,
-    ct_REGISTER,
-    ct_LT,
-    ct_NONE,
-  } type = ct_NONE;
-
-  if ((vim_strchr("qQfF", (uint8_t)(*p)) != NULL) && p[1] == '-') {
-    quote = (*p == 'q' || *p == 'Q') ? 1 : 2;
-    p += 2;
-    l -= 2;
-  }
-
-  l++;
-  if (l <= 1) {
-    // type = ct_NONE;
-  } else if (STRNICMP(p, "args>", l) == 0) {
-    type = ct_ARGS;
-  } else if (STRNICMP(p, "bang>", l) == 0) {
-    type = ct_BANG;
-  } else if (STRNICMP(p, "count>", l) == 0) {
-    type = ct_COUNT;
-  } else if (STRNICMP(p, "line1>", l) == 0) {
-    type = ct_LINE1;
-  } else if (STRNICMP(p, "line2>", l) == 0) {
-    type = ct_LINE2;
-  } else if (STRNICMP(p, "range>", l) == 0) {
-    type = ct_RANGE;
-  } else if (STRNICMP(p, "lt>", l) == 0) {
-    type = ct_LT;
-  } else if (STRNICMP(p, "reg>", l) == 0 || STRNICMP(p, "register>", l) == 0) {
-    type = ct_REGISTER;
-  } else if (STRNICMP(p, "mods>", l) == 0) {
-    type = ct_MODS;
-  }
-
-  switch (type) {
-  case ct_ARGS:
-    // Simple case first
-    if (*eap->arg == NUL) {
-      if (quote == 1) {
-        result = 2;
-        if (buf != NULL) {
-          STRCPY(buf, "''");
-        }
-      } else {
-        result = 0;
-      }
-      break;
-    }
-
-    // When specified there is a single argument don't split it.
-    // Works for ":Cmd %" when % is "a b c".
-    if ((eap->argt & EX_NOSPC) && quote == 2) {
-      quote = 1;
-    }
-
-    switch (quote) {
-    case 0:     // No quoting, no splitting
-      result = strlen(eap->arg);
-      if (buf != NULL) {
-        STRCPY(buf, eap->arg);
-      }
-      break;
-    case 1:     // Quote, but don't split
-      result = strlen(eap->arg) + 2;
-      for (p = eap->arg; *p; p++) {
-        if (*p == '\\' || *p == '"') {
-          result++;
-        }
-      }
-
-      if (buf != NULL) {
-        *buf++ = '"';
-        for (p = eap->arg; *p; p++) {
-          if (*p == '\\' || *p == '"') {
-            *buf++ = '\\';
-          }
-          *buf++ = *p;
-        }
-        *buf = '"';
-      }
-
-      break;
-    case 2:     // Quote and split (<f-args>)
-      // This is hard, so only do it once, and cache the result
-      if (*split_buf == NULL) {
-        *split_buf = uc_split_args(eap->arg, eap->args, eap->arglens, eap->argc, split_len);
-      }
-
-      result = *split_len;
-      if (buf != NULL && result != 0) {
-        STRCPY(buf, *split_buf);
-      }
-
-      break;
-    }
-    break;
-
-  case ct_BANG:
-    result = eap->forceit ? 1 : 0;
-    if (quote) {
-      result += 2;
-    }
-    if (buf != NULL) {
-      if (quote) {
-        *buf++ = '"';
-      }
-      if (eap->forceit) {
-        *buf++ = '!';
-      }
-      if (quote) {
-        *buf = '"';
-      }
-    }
-    break;
-
-  case ct_LINE1:
-  case ct_LINE2:
-  case ct_RANGE:
-  case ct_COUNT: {
-    char num_buf[20];
-    int64_t num = type == ct_LINE1
-                  ? eap->line1
-                  : (type == ct_LINE2
-                     ? eap->line2
-                     : (type == ct_RANGE
-                        ? eap->addr_count
-                        : (eap->addr_count > 0 ? eap->line2 : cmd->uc_def)));
-    size_t num_len;
-
-    snprintf(num_buf, sizeof(num_buf), "%" PRId64, num);
-    num_len = strlen(num_buf);
-    result = num_len;
-
-    if (quote) {
-      result += 2;
-    }
-
-    if (buf != NULL) {
-      if (quote) {
-        *buf++ = '"';
-      }
-      STRCPY(buf, num_buf);
-      buf += num_len;
-      if (quote) {
-        *buf = '"';
-      }
-    }
-
-    break;
-  }
-
-  case ct_MODS:
-    result = uc_mods(buf, &cmdmod, quote);
-    break;
-
-  case ct_REGISTER:
-    result = eap->regname ? 1 : 0;
-    if (quote) {
-      result += 2;
-    }
-    if (buf != NULL) {
-      if (quote) {
-        *buf++ = '\'';
-      }
-      if (eap->regname) {
-        *buf++ = (char)eap->regname;
-      }
-      if (quote) {
-        *buf = '\'';
-      }
-    }
-    break;
-
-  case ct_LT:
-    result = 1;
-    if (buf != NULL) {
-      *buf = '<';
-    }
-    break;
-
-  default:
-    // Not recognized: just copy the '<' and return -1.
-    result = (size_t)-1;
-    if (buf != NULL) {
-      *buf = '<';
-    }
-    break;
-  }
-
-  return result;
+  return rs_uc_check_code(code, len, buf, cmd, eap, split_buf, split_len);
 }
 
 int do_ucmd(exarg_T *eap, bool preview)

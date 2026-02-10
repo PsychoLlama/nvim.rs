@@ -11,10 +11,15 @@
 #![allow(clippy::derivable_impls)]
 #![allow(clippy::match_same_arms)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::missing_safety_doc)]
 
 use std::ffi::{c_char, c_int};
 
-use crate::CmdmodHandle;
+use crate::define::EX_NOSPC;
+use crate::{CmdmodHandle, ExargHandle, UcmdHandle};
 
 /// Line number type
 type LinenrT = i32;
@@ -468,6 +473,52 @@ extern "C" {
 }
 
 // =============================================================================
+// C Accessor Functions (Phase 4 — argument expansion)
+// =============================================================================
+
+extern "C" {
+    // exarg_T accessors
+    /// Get eap->arg (const char *)
+    fn nvim_uc_eap_get_arg(eap: ExargHandle) -> *const c_char;
+    /// Get eap->argt (uint32_t)
+    fn nvim_uc_eap_get_argt(eap: ExargHandle) -> u32;
+    /// Get eap->forceit (int, used as bool)
+    fn nvim_uc_eap_get_forceit(eap: ExargHandle) -> c_int;
+    /// Get eap->line1 (linenr_T = int32)
+    fn nvim_uc_eap_get_line1(eap: ExargHandle) -> c_int;
+    /// Get eap->line2 (linenr_T = int32)
+    fn nvim_uc_eap_get_line2(eap: ExargHandle) -> c_int;
+    /// Get eap->addr_count (int)
+    fn nvim_uc_eap_get_addr_count(eap: ExargHandle) -> c_int;
+    /// Get eap->regname (int)
+    fn nvim_uc_eap_get_regname(eap: ExargHandle) -> c_int;
+    /// Get eap->args (char **)
+    fn nvim_uc_eap_get_args(eap: ExargHandle) -> *const *const c_char;
+    /// Get eap->arglens (size_t *)
+    fn nvim_uc_eap_get_arglens(eap: ExargHandle) -> *const usize;
+    /// Get eap->argc (size_t)
+    fn nvim_uc_eap_get_argc(eap: ExargHandle) -> usize;
+
+    // ucmd_T accessors
+    /// Get cmd->uc_def (int64_t)
+    fn nvim_uc_cmd_get_def(cmd: UcmdHandle) -> i64;
+
+    // Multibyte helpers
+    /// Get the byte length of a UTF-8 character
+    fn nvim_uc_utfc_ptr2len(p: *const c_char) -> c_int;
+    /// Copy one multi-byte character from *pp to *qq, advancing both
+    fn nvim_uc_mb_copy_char(pp: *mut *const c_char, qq: *mut *mut c_char);
+
+    // Memory allocation
+    /// Allocate memory via xmalloc
+    fn nvim_uc_xmalloc(size: usize) -> *mut c_char;
+
+    // Global cmdmod pointer
+    /// Get pointer to global cmdmod struct
+    fn nvim_uc_get_cmdmod() -> CmdmodHandle;
+}
+
+// =============================================================================
 // Modifier String Generation (Phase 3)
 // =============================================================================
 
@@ -777,6 +828,653 @@ pub extern "C" fn rs_usercmd_exec_has_range(ctx: *const ExecContext) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_usercmd_exec_result_is_ok(result: c_int) -> c_int {
     c_int::from(ExecResult::from_raw(result).is_ok())
+}
+
+// =============================================================================
+// Helpers (Phase 4)
+// =============================================================================
+
+/// Check if a byte is ASCII whitespace (space or tab), matching C `ascii_iswhite`.
+fn ascii_iswhite(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+/// Compute the length of a NUL-terminated C string.
+///
+/// # Safety
+/// `s` must point to a valid NUL-terminated C string.
+unsafe fn c_strlen(s: *const c_char) -> usize {
+    let mut p = s;
+    while unsafe { *p } != 0 {
+        p = unsafe { p.add(1) };
+    }
+    p as usize - s as usize
+}
+
+/// Case-insensitive comparison of a raw pointer region against a byte literal.
+///
+/// Compares `l` bytes starting at `p` against `target`.  Returns true if
+/// `target.len() == l` and the bytes match case-insensitively.
+///
+/// This is the equivalent of `STRNICMP(p, "keyword>", l) == 0` from C.
+///
+/// # Safety
+/// `p` must point to at least `l` readable bytes.
+unsafe fn strnicmp_eq_ptr(p: *const c_char, target: &[u8], l: usize) -> bool {
+    if target.len() != l {
+        return false;
+    }
+    let slice = unsafe { std::slice::from_raw_parts(p.cast::<u8>(), l) };
+    slice.eq_ignore_ascii_case(target)
+}
+
+// =============================================================================
+// Argument Expansion (Phase 4)
+// =============================================================================
+
+/// Code type for `uc_check_code` expansion — mirrors the C `enum { ct_ARGS, ... }`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CodeType {
+    Args,
+    Bang,
+    Count,
+    Line1,
+    Line2,
+    Range,
+    Mods,
+    Register,
+    Lt,
+    None,
+}
+
+/// Detect the quote prefix (q/Q/f/F) and return the quote mode (0, 1, or 2)
+/// plus the number of bytes consumed (0 or 2).
+///
+/// This matches the C logic:
+/// ```c
+/// if ((vim_strchr("qQfF", *p) != NULL) && p[1] == '-') {
+///     quote = (*p == 'q' || *p == 'Q') ? 1 : 2;
+///     p += 2; l -= 2;
+/// }
+/// ```
+fn detect_quote_prefix(first: u8, second: u8) -> (c_int, usize) {
+    match first {
+        b'q' | b'Q' if second == b'-' => (1, 2),
+        b'f' | b'F' if second == b'-' => (2, 2),
+        _ => (0, 0),
+    }
+}
+
+/// Identify the `CodeType` from a keyword region.
+///
+/// `p` points to the first byte of the keyword (after any quote prefix),
+/// `l` is the comparison length (includes the trailing `>`).
+///
+/// # Safety
+/// `p` must point to at least `l` readable bytes.
+unsafe fn identify_code_type(p: *const c_char, l: usize) -> CodeType {
+    if l <= 1 {
+        return CodeType::None;
+    }
+    if unsafe { strnicmp_eq_ptr(p, b"args>", l) } {
+        CodeType::Args
+    } else if unsafe { strnicmp_eq_ptr(p, b"bang>", l) } {
+        CodeType::Bang
+    } else if unsafe { strnicmp_eq_ptr(p, b"count>", l) } {
+        CodeType::Count
+    } else if unsafe { strnicmp_eq_ptr(p, b"line1>", l) } {
+        CodeType::Line1
+    } else if unsafe { strnicmp_eq_ptr(p, b"line2>", l) } {
+        CodeType::Line2
+    } else if unsafe { strnicmp_eq_ptr(p, b"range>", l) } {
+        CodeType::Range
+    } else if unsafe { strnicmp_eq_ptr(p, b"lt>", l) } {
+        CodeType::Lt
+    } else if unsafe { strnicmp_eq_ptr(p, b"reg>", l) }
+        || unsafe { strnicmp_eq_ptr(p, b"register>", l) }
+    {
+        CodeType::Register
+    } else if unsafe { strnicmp_eq_ptr(p, b"mods>", l) } {
+        CodeType::Mods
+    } else {
+        CodeType::None
+    }
+}
+
+/// Split and quote args for `<f-args>`.
+///
+/// This mirrors the C `uc_split_args` function exactly.  It allocates the
+/// result buffer via `nvim_uc_xmalloc` and returns ownership to the caller.
+///
+/// # Safety
+/// All pointer arguments must be valid or NULL as described:
+/// - `arg` must be a valid NUL-terminated C string.
+/// - When `args` is non-NULL, `arglens` must also be non-NULL and both
+///   must have at least `argc` entries.  Each `args[i]` must point to
+///   `arglens[i]` readable bytes.
+/// - `lenp` must be a valid pointer.
+unsafe fn uc_split_args_impl(
+    arg: *const c_char,
+    args: *const *const c_char,
+    arglens: *const usize,
+    argc: usize,
+    lenp: *mut usize,
+) -> *mut c_char {
+    // Precalculate length
+    let mut len: usize = 2; // Initial and final quotes
+
+    if args.is_null() {
+        // Single-string path: process `arg` directly
+        let mut p = arg;
+        unsafe {
+            while *p != 0 {
+                let p0 = *p as u8;
+                let p1 = *p.add(1) as u8;
+                if p0 == b'\\' && p1 == b'\\' {
+                    len += 2;
+                    p = p.add(2);
+                } else if p0 == b'\\' && ascii_iswhite(p1) {
+                    len += 1;
+                    p = p.add(2);
+                } else if p0 == b'\\' || p0 == b'"' {
+                    len += 2;
+                    p = p.add(1);
+                } else if ascii_iswhite(p0) {
+                    // Skip whitespace
+                    while *p != 0 && ascii_iswhite(*p as u8) {
+                        p = p.add(1);
+                    }
+                    if *p == 0 {
+                        break;
+                    }
+                    len += 4; // ", "
+                } else {
+                    let charlen = nvim_uc_utfc_ptr2len(p) as usize;
+                    len += charlen;
+                    p = p.add(charlen);
+                }
+            }
+        }
+    } else {
+        // Pre-split args path
+        unsafe {
+            for i in 0..argc {
+                let mut p = *args.add(i);
+                let arg_end = p.add(*arglens.add(i));
+                while (p as usize) < (arg_end as usize) {
+                    let ch = *p as u8;
+                    if ch == b'\\' || ch == b'"' {
+                        len += 2;
+                        p = p.add(1);
+                    } else {
+                        let charlen = nvim_uc_utfc_ptr2len(p) as usize;
+                        len += charlen;
+                        p = p.add(charlen);
+                    }
+                }
+                if i != argc - 1 {
+                    len += 4; // ", "
+                }
+            }
+        }
+    }
+
+    // Allocate and fill
+    let buf = unsafe { nvim_uc_xmalloc(len + 1) };
+    let mut q = buf;
+
+    unsafe {
+        *q = b'"' as c_char;
+        q = q.add(1);
+    }
+
+    if args.is_null() {
+        let mut p = arg;
+        unsafe {
+            while *p != 0 {
+                let p0 = *p as u8;
+                let p1 = *p.add(1) as u8;
+                if p0 == b'\\' && p1 == b'\\' {
+                    *q = b'\\' as c_char;
+                    q = q.add(1);
+                    *q = b'\\' as c_char;
+                    q = q.add(1);
+                    p = p.add(2);
+                } else if p0 == b'\\' && ascii_iswhite(p1) {
+                    *q = p1 as c_char;
+                    q = q.add(1);
+                    p = p.add(2);
+                } else if p0 == b'\\' || p0 == b'"' {
+                    *q = b'\\' as c_char;
+                    q = q.add(1);
+                    *q = *p;
+                    q = q.add(1);
+                    p = p.add(1);
+                } else if ascii_iswhite(p0) {
+                    // Skip whitespace
+                    while *p != 0 && ascii_iswhite(*p as u8) {
+                        p = p.add(1);
+                    }
+                    if *p == 0 {
+                        break;
+                    }
+                    *q = b'"' as c_char;
+                    q = q.add(1);
+                    *q = b',' as c_char;
+                    q = q.add(1);
+                    *q = b' ' as c_char;
+                    q = q.add(1);
+                    *q = b'"' as c_char;
+                    q = q.add(1);
+                } else {
+                    let mut pp = p.cast::<c_char>();
+                    let mut qq = q;
+                    nvim_uc_mb_copy_char(&raw mut pp, &raw mut qq);
+                    p = pp;
+                    q = qq;
+                }
+            }
+        }
+    } else {
+        unsafe {
+            for i in 0..argc {
+                let mut p = *args.add(i);
+                let arg_end = p.add(*arglens.add(i));
+                while (p as usize) < (arg_end as usize) {
+                    let ch = *p as u8;
+                    if ch == b'\\' || ch == b'"' {
+                        *q = b'\\' as c_char;
+                        q = q.add(1);
+                        *q = *p;
+                        q = q.add(1);
+                        p = p.add(1);
+                    } else {
+                        let mut pp = p.cast::<c_char>();
+                        let mut qq = q;
+                        nvim_uc_mb_copy_char(&raw mut pp, &raw mut qq);
+                        p = pp;
+                        q = qq;
+                    }
+                }
+                if i != argc - 1 {
+                    *q = b'"' as c_char;
+                    q = q.add(1);
+                    *q = b',' as c_char;
+                    q = q.add(1);
+                    *q = b' ' as c_char;
+                    q = q.add(1);
+                    *q = b'"' as c_char;
+                    q = q.add(1);
+                }
+            }
+        }
+    }
+
+    unsafe {
+        *q = b'"' as c_char;
+        q = q.add(1);
+        *q = 0;
+        *lenp = len;
+    }
+
+    buf
+}
+
+/// Expand `<>` codes like `<args>`, `<bang>`, `<count>`, `<mods>`, etc.
+///
+/// This mirrors the C `uc_check_code` function exactly.
+///
+/// When `buf` is NULL, only the length is computed (measure pass).
+/// When `buf` is non-NULL, the expanded text is written.
+///
+/// Returns the number of bytes produced, or `usize::MAX` (i.e. `(size_t)-1`
+/// in C) when the code is not recognized.
+///
+/// # Safety
+/// - `code` must point to a valid `<...>` sequence of at least `len` bytes.
+/// - `cmd` and `eap` must be valid opaque handles.
+/// - `split_buf` and `split_len` must be valid pointers.
+/// - When `buf` is non-NULL it must have enough space for the expansion.
+unsafe fn uc_check_code_impl(
+    code: *mut c_char,
+    len: usize,
+    buf: *mut c_char,
+    cmd: UcmdHandle,
+    eap: ExargHandle,
+    split_buf: *mut *mut c_char,
+    split_len: *mut usize,
+) -> usize {
+    let mut p = unsafe { code.add(1) };
+    let mut l = len - 2;
+
+    // Detect quote prefix
+    let first = unsafe { *p as u8 };
+    let second = if l >= 2 {
+        unsafe { *p.add(1) as u8 }
+    } else {
+        0
+    };
+    let (quote, skip) = detect_quote_prefix(first, second);
+    unsafe {
+        p = p.add(skip);
+    }
+    l -= skip;
+
+    // l++ in C (adjusts for the comparison including the '>')
+    l += 1;
+
+    // Identify the code type
+    let code_type = unsafe { identify_code_type(p, l) };
+
+    match code_type {
+        CodeType::Args => unsafe { expand_args(buf, eap, quote, split_buf, split_len) },
+        CodeType::Bang => unsafe { expand_bang(buf, eap, quote) },
+        CodeType::Line1 | CodeType::Line2 | CodeType::Range | CodeType::Count => unsafe {
+            expand_numeric(buf, cmd, eap, code_type, quote)
+        },
+        CodeType::Mods => {
+            let cmod = unsafe { nvim_uc_get_cmdmod() };
+            uc_mods_impl(buf, cmod, quote != 0)
+        }
+        CodeType::Register => unsafe { expand_register(buf, eap, quote) },
+        CodeType::Lt => {
+            let result = 1;
+            if !buf.is_null() {
+                unsafe {
+                    *buf = b'<' as c_char;
+                }
+            }
+            result
+        }
+        CodeType::None => {
+            // Not recognized: just copy the '<' and return -1 (usize::MAX)
+            if !buf.is_null() {
+                unsafe {
+                    *buf = b'<' as c_char;
+                }
+            }
+            usize::MAX
+        }
+    }
+}
+
+/// Expand `<args>`, `<q-args>`, or `<f-args>`.
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn expand_args(
+    buf: *mut c_char,
+    eap: ExargHandle,
+    quote: c_int,
+    split_buf: *mut *mut c_char,
+    split_len: *mut usize,
+) -> usize {
+    let eap_arg = unsafe { nvim_uc_eap_get_arg(eap) };
+
+    // Empty argument case
+    if unsafe { *eap_arg } == 0 {
+        if quote == 1 {
+            let result = 2;
+            if !buf.is_null() {
+                unsafe {
+                    *buf = b'\'' as c_char;
+                    *buf.add(1) = b'\'' as c_char;
+                }
+            }
+            return result;
+        }
+        return 0;
+    }
+
+    // When specified there is a single argument don't split it.
+    let argt = unsafe { nvim_uc_eap_get_argt(eap) };
+    let effective_quote = if (argt & EX_NOSPC) != 0 && quote == 2 {
+        1
+    } else {
+        quote
+    };
+
+    match effective_quote {
+        0 => {
+            // No quoting, no splitting
+            let result = unsafe { c_strlen(eap_arg) };
+            if !buf.is_null() {
+                unsafe {
+                    std::ptr::copy_nonoverlapping(eap_arg.cast::<u8>(), buf.cast::<u8>(), result);
+                    *buf.add(result) = 0;
+                }
+            }
+            result
+        }
+        1 => {
+            // Quote, but don't split
+            let arg_len = unsafe { c_strlen(eap_arg) };
+            let mut result = arg_len + 2; // for surrounding quotes
+                                          // Count extra escapes needed
+            let mut scan = eap_arg;
+            unsafe {
+                while *scan != 0 {
+                    let ch = *scan as u8;
+                    if ch == b'\\' || ch == b'"' {
+                        result += 1;
+                    }
+                    scan = scan.add(1);
+                }
+            }
+
+            if !buf.is_null() {
+                let mut b = buf;
+                unsafe {
+                    *b = b'"' as c_char;
+                    b = b.add(1);
+                    scan = eap_arg;
+                    while *scan != 0 {
+                        let ch = *scan as u8;
+                        if ch == b'\\' || ch == b'"' {
+                            *b = b'\\' as c_char;
+                            b = b.add(1);
+                        }
+                        *b = *scan;
+                        b = b.add(1);
+                        scan = scan.add(1);
+                    }
+                    *b = b'"' as c_char;
+                }
+            }
+            result
+        }
+        2 => {
+            // Quote and split (<f-args>)
+            unsafe {
+                if (*split_buf).is_null() {
+                    let eap_args = nvim_uc_eap_get_args(eap);
+                    let eap_arglens = nvim_uc_eap_get_arglens(eap);
+                    let eap_argc = nvim_uc_eap_get_argc(eap);
+                    *split_buf =
+                        uc_split_args_impl(eap_arg, eap_args, eap_arglens, eap_argc, split_len);
+                }
+                let result = *split_len;
+                if !buf.is_null() && result != 0 {
+                    std::ptr::copy_nonoverlapping(
+                        (*split_buf).cast::<u8>(),
+                        buf.cast::<u8>(),
+                        result,
+                    );
+                    *buf.add(result) = 0;
+                }
+                result
+            }
+        }
+        _ => 0,
+    }
+}
+
+/// Expand `<bang>`.
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn expand_bang(buf: *mut c_char, eap: ExargHandle, quote: c_int) -> usize {
+    let forceit = unsafe { nvim_uc_eap_get_forceit(eap) } != 0;
+    let mut result: usize = usize::from(forceit);
+    if quote != 0 {
+        result += 2;
+    }
+    if !buf.is_null() {
+        let mut b = buf;
+        unsafe {
+            if quote != 0 {
+                *b = b'"' as c_char;
+                b = b.add(1);
+            }
+            if forceit {
+                *b = b'!' as c_char;
+                b = b.add(1);
+            }
+            if quote != 0 {
+                *b = b'"' as c_char;
+            }
+        }
+    }
+    result
+}
+
+/// Expand `<line1>`, `<line2>`, `<range>`, or `<count>`.
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn expand_numeric(
+    buf: *mut c_char,
+    cmd: UcmdHandle,
+    eap: ExargHandle,
+    code_type: CodeType,
+    quote: c_int,
+) -> usize {
+    let num: i64 = unsafe {
+        match code_type {
+            CodeType::Line1 => i64::from(nvim_uc_eap_get_line1(eap)),
+            CodeType::Line2 => i64::from(nvim_uc_eap_get_line2(eap)),
+            CodeType::Range => i64::from(nvim_uc_eap_get_addr_count(eap)),
+            CodeType::Count => {
+                if nvim_uc_eap_get_addr_count(eap) > 0 {
+                    i64::from(nvim_uc_eap_get_line2(eap))
+                } else {
+                    nvim_uc_cmd_get_def(cmd)
+                }
+            }
+            _ => 0,
+        }
+    };
+
+    // Format number into a stack buffer
+    let mut num_buf = [0u8; 20];
+    let num_str = format_i64(num, &mut num_buf);
+    let num_len = num_str.len();
+    let mut result = num_len;
+
+    if quote != 0 {
+        result += 2;
+    }
+
+    if !buf.is_null() {
+        let mut b = buf;
+        unsafe {
+            if quote != 0 {
+                *b = b'"' as c_char;
+                b = b.add(1);
+            }
+            std::ptr::copy_nonoverlapping(num_str.as_ptr().cast::<c_char>(), b, num_len);
+            b = b.add(num_len);
+            if quote != 0 {
+                *b = b'"' as c_char;
+            }
+        }
+    }
+
+    result
+}
+
+/// Expand `<reg>` / `<register>`.
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn expand_register(buf: *mut c_char, eap: ExargHandle, quote: c_int) -> usize {
+    let regname = unsafe { nvim_uc_eap_get_regname(eap) };
+    let mut result: usize = usize::from(regname != 0);
+    if quote != 0 {
+        result += 2;
+    }
+    if !buf.is_null() {
+        let mut b = buf;
+        unsafe {
+            if quote != 0 {
+                *b = b'\'' as c_char;
+                b = b.add(1);
+            }
+            if regname != 0 {
+                *b = regname as u8 as c_char;
+                b = b.add(1);
+            }
+            if quote != 0 {
+                *b = b'\'' as c_char;
+            }
+        }
+    }
+    result
+}
+
+/// Format an `i64` as decimal digits into `buf`, returning the used slice.
+fn format_i64(n: i64, buf: &mut [u8; 20]) -> &[u8] {
+    if n == 0 {
+        buf[0] = b'0';
+        return &buf[..1];
+    }
+    let negative = n < 0;
+    let mut val = n.unsigned_abs();
+    let mut pos = buf.len();
+    while val > 0 {
+        pos -= 1;
+        buf[pos] = b'0' + (val % 10) as u8;
+        val /= 10;
+    }
+    if negative {
+        pos -= 1;
+        buf[pos] = b'-';
+    }
+    &buf[pos..]
+}
+
+// =============================================================================
+// FFI Exports (Phase 4)
+// =============================================================================
+
+/// FFI export: Split and quote args for `<f-args>`.
+///
+/// Mirrors C `uc_split_args(arg, args, arglens, argc, lenp)`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uc_split_args(
+    arg: *const c_char,
+    args: *const *const c_char,
+    arglens: *const usize,
+    argc: usize,
+    lenp: *mut usize,
+) -> *mut c_char {
+    unsafe { uc_split_args_impl(arg, args, arglens, argc, lenp) }
+}
+
+/// FFI export: Expand `<>` codes in user commands.
+///
+/// Mirrors C `uc_check_code(code, len, buf, cmd, eap, split_buf, split_len)`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uc_check_code(
+    code: *mut c_char,
+    len: usize,
+    buf: *mut c_char,
+    cmd: UcmdHandle,
+    eap: ExargHandle,
+    split_buf: *mut *mut c_char,
+    split_len: *mut usize,
+) -> usize {
+    unsafe { uc_check_code_impl(code, len, buf, cmd, eap, split_buf, split_len) }
 }
 
 // =============================================================================
@@ -1097,5 +1795,241 @@ mod tests {
             assert_eq!(MOD_ENTRIES[i].0, flag, "flag mismatch at index {i}");
             assert_eq!(MOD_ENTRIES[i].1, name, "name mismatch at index {i}");
         }
+    }
+
+    // =========================================================================
+    // Phase 4 — detect_quote_prefix tests
+    // =========================================================================
+
+    #[test]
+    fn test_detect_quote_prefix_q_dash() {
+        let (quote, skip) = detect_quote_prefix(b'q', b'-');
+        assert_eq!(quote, 1);
+        assert_eq!(skip, 2);
+    }
+
+    #[test]
+    fn test_detect_quote_prefix_upper_q_dash() {
+        let (quote, skip) = detect_quote_prefix(b'Q', b'-');
+        assert_eq!(quote, 1);
+        assert_eq!(skip, 2);
+    }
+
+    #[test]
+    fn test_detect_quote_prefix_f_dash() {
+        let (quote, skip) = detect_quote_prefix(b'f', b'-');
+        assert_eq!(quote, 2);
+        assert_eq!(skip, 2);
+    }
+
+    #[test]
+    fn test_detect_quote_prefix_upper_f_dash() {
+        let (quote, skip) = detect_quote_prefix(b'F', b'-');
+        assert_eq!(quote, 2);
+        assert_eq!(skip, 2);
+    }
+
+    #[test]
+    fn test_detect_quote_prefix_no_prefix() {
+        let (quote, skip) = detect_quote_prefix(b'a', b'-');
+        assert_eq!(quote, 0);
+        assert_eq!(skip, 0);
+    }
+
+    #[test]
+    fn test_detect_quote_prefix_q_no_dash() {
+        // q without - should not match
+        let (quote, skip) = detect_quote_prefix(b'q', b'x');
+        assert_eq!(quote, 0);
+        assert_eq!(skip, 0);
+    }
+
+    // =========================================================================
+    // Phase 4 — identify_code_type tests
+    // =========================================================================
+
+    #[test]
+    fn test_identify_code_type_args() {
+        let s = b"args>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Args);
+    }
+
+    #[test]
+    fn test_identify_code_type_bang() {
+        let s = b"bang>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Bang);
+    }
+
+    #[test]
+    fn test_identify_code_type_count() {
+        let s = b"count>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Count);
+    }
+
+    #[test]
+    fn test_identify_code_type_line1() {
+        let s = b"line1>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Line1);
+    }
+
+    #[test]
+    fn test_identify_code_type_line2() {
+        let s = b"line2>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Line2);
+    }
+
+    #[test]
+    fn test_identify_code_type_range() {
+        let s = b"range>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Range);
+    }
+
+    #[test]
+    fn test_identify_code_type_lt() {
+        let s = b"lt>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Lt);
+    }
+
+    #[test]
+    fn test_identify_code_type_reg() {
+        let s = b"reg>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Register);
+    }
+
+    #[test]
+    fn test_identify_code_type_register() {
+        let s = b"register>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Register);
+    }
+
+    #[test]
+    fn test_identify_code_type_mods() {
+        let s = b"mods>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Mods);
+    }
+
+    #[test]
+    fn test_identify_code_type_case_insensitive() {
+        let s = b"ARGS>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Args);
+
+        let s = b"Bang>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Bang);
+
+        let s = b"MODS>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::Mods);
+    }
+
+    #[test]
+    fn test_identify_code_type_unknown() {
+        let s = b"foo>";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::None);
+    }
+
+    #[test]
+    fn test_identify_code_type_too_short() {
+        // l <= 1 should return None
+        let s = b"x";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), 1) };
+        assert_eq!(ct, CodeType::None);
+
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), 0) };
+        assert_eq!(ct, CodeType::None);
+    }
+
+    #[test]
+    fn test_identify_code_type_wrong_length() {
+        // "args" without ">" should not match "args>" (length mismatch)
+        let s = b"args";
+        let ct = unsafe { identify_code_type(s.as_ptr().cast(), s.len()) };
+        assert_eq!(ct, CodeType::None);
+    }
+
+    // =========================================================================
+    // Phase 4 — strnicmp_eq_ptr tests
+    // =========================================================================
+
+    #[test]
+    fn test_strnicmp_eq_ptr_basic() {
+        let s = b"args>";
+        assert!(unsafe { strnicmp_eq_ptr(s.as_ptr().cast(), b"args>", 5) });
+    }
+
+    #[test]
+    fn test_strnicmp_eq_ptr_case_insensitive() {
+        let s = b"ARGS>";
+        assert!(unsafe { strnicmp_eq_ptr(s.as_ptr().cast(), b"args>", 5) });
+    }
+
+    #[test]
+    fn test_strnicmp_eq_ptr_length_mismatch() {
+        let s = b"args>";
+        // target is 4 bytes but l is 5 — length check should fail
+        assert!(!unsafe { strnicmp_eq_ptr(s.as_ptr().cast(), b"args", 5) });
+    }
+
+    #[test]
+    fn test_strnicmp_eq_ptr_content_mismatch() {
+        let s = b"bang>";
+        assert!(!unsafe { strnicmp_eq_ptr(s.as_ptr().cast(), b"args>", 5) });
+    }
+
+    // =========================================================================
+    // Phase 4 — ascii_iswhite tests
+    // =========================================================================
+
+    #[test]
+    fn test_ascii_iswhite() {
+        assert!(ascii_iswhite(b' '));
+        assert!(ascii_iswhite(b'\t'));
+        assert!(!ascii_iswhite(b'a'));
+        assert!(!ascii_iswhite(b'\n'));
+        assert!(!ascii_iswhite(b'\0'));
+    }
+
+    // =========================================================================
+    // Phase 4 — format_i64 tests
+    // =========================================================================
+
+    #[test]
+    fn test_format_i64_zero() {
+        let mut buf = [0u8; 20];
+        assert_eq!(format_i64(0, &mut buf), b"0");
+    }
+
+    #[test]
+    fn test_format_i64_positive() {
+        let mut buf = [0u8; 20];
+        assert_eq!(format_i64(1, &mut buf), b"1");
+        assert_eq!(format_i64(42, &mut buf), b"42");
+        assert_eq!(format_i64(12345, &mut buf), b"12345");
+    }
+
+    #[test]
+    fn test_format_i64_negative() {
+        let mut buf = [0u8; 20];
+        assert_eq!(format_i64(-1, &mut buf), b"-1");
+        assert_eq!(format_i64(-999, &mut buf), b"-999");
+    }
+
+    #[test]
+    fn test_format_i64_large() {
+        let mut buf = [0u8; 20];
+        assert_eq!(format_i64(1_000_000_000, &mut buf), b"1000000000");
+        assert_eq!(format_i64(-1_000_000_000, &mut buf), b"-1000000000");
     }
 }
