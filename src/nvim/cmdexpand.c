@@ -183,6 +183,9 @@ extern char *rs_get_next_or_prev_match(int mode, expand_T *xp);
 extern char *rs_expand_one_start(int mode, expand_T *xp, const char *str, int options);
 extern char *rs_find_longest_match(expand_T *xp, int options);
 
+// Phase 4: ExpandOne orchestrator
+extern char *rs_expand_one(expand_T *xp, char *str, char *orig, int options, int mode);
+
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
 {
@@ -522,6 +525,57 @@ void nvim_cmdexpand_emsg_toomany(void)
 
 // Static assert for kOptBoFlagWildmode used in rs_find_longest_match
 _Static_assert(kOptBoFlagWildmode == 0x80000, "kOptBoFlagWildmode mismatch");
+
+// =============================================================================
+// Phase 4: C accessors for ExpandOne orchestrator
+// =============================================================================
+
+/// Set xp->xp_orig (for Rust FFI). Takes ownership of the pointer.
+void nvim_expand_set_orig(expand_T *xp, char *orig)
+{
+  if (xp) {
+    xp->xp_orig = orig;
+  }
+}
+
+/// Free old wild matches, set numfiles=-1, clear orig, remove PUM if needed.
+/// Used in ExpandOne before starting a new expansion.
+void nvim_expand_free_old_matches(expand_T *xp)
+{
+  if (!xp) {
+    return;
+  }
+  if (xp->xp_numfiles != -1) {
+    FreeWild(xp->xp_numfiles, xp->xp_files);
+    xp->xp_numfiles = -1;
+    XFREE_CLEAR(xp->xp_orig);
+
+    if (compl_match_array != NULL) {
+      cmdline_pum_remove(false);
+    }
+  }
+}
+
+// nvim_get_got_int already exists in ex_eval.c
+
+/// Get strlen of xp->xp_files[i] (for Rust FFI).
+size_t nvim_expand_get_files_item_len(const expand_T *xp, int i)
+{
+  if (!xp || i < 0 || i >= xp->xp_numfiles || !xp->xp_files) {
+    return 0;
+  }
+  return strlen(xp->xp_files[i]);
+}
+
+/// xstpcpy wrapper (for Rust FFI): copies src to dst, returns pointer past NUL.
+char *nvim_cmdexpand_xstpcpy(char *dst, const char *src)
+{
+  return xstpcpy(dst, src);
+}
+
+// Static asserts for XP_PREFIX values used in rs_expand_one
+_Static_assert(XP_PREFIX_NO == 1, "XP_PREFIX_NO mismatch");
+_Static_assert(XP_PREFIX_INV == 2, "XP_PREFIX_INV mismatch");
 
 // Phase 6: Wrapper functions for Rust implementations
 
@@ -1459,103 +1513,10 @@ static char *find_longest_match(expand_T *xp, int options)
 /// The variables xp->xp_context and xp->xp_backslash must have been set!
 ///
 /// @param orig  allocated copy of original of expanded string
+/// Do wildcard expansion on the string "str". Rust implementation.
 char *ExpandOne(expand_T *xp, char *str, char *orig, int options, int mode)
 {
-  char *ss = NULL;
-  bool orig_saved = false;
-
-  // first handle the case of using an old match
-  if (mode == WILD_NEXT || mode == WILD_PREV
-      || mode == WILD_PAGEUP || mode == WILD_PAGEDOWN
-      || mode == WILD_PUM_WANT) {
-    return get_next_or_prev_match(mode, xp);
-  }
-
-  if (mode == WILD_CANCEL) {
-    ss = xstrdup(xp->xp_orig ? xp->xp_orig : "");
-  } else if (mode == WILD_APPLY) {
-    ss = xstrdup(xp->xp_selected == -1
-                 ? (xp->xp_orig ? xp->xp_orig : "")
-                 : xp->xp_files[xp->xp_selected]);
-  }
-
-  // free old names
-  if (xp->xp_numfiles != -1 && mode != WILD_ALL && mode != WILD_LONGEST) {
-    FreeWild(xp->xp_numfiles, xp->xp_files);
-    xp->xp_numfiles = -1;
-    XFREE_CLEAR(xp->xp_orig);
-
-    // The entries from xp_files may be used in the PUM, remove it.
-    if (compl_match_array != NULL) {
-      cmdline_pum_remove(false);
-    }
-  }
-  xp->xp_selected = (options & WILD_NOSELECT) ? -1 : 0;
-
-  if (mode == WILD_FREE) {      // only release file name
-    return NULL;
-  }
-
-  if (xp->xp_numfiles == -1 && mode != WILD_APPLY && mode != WILD_CANCEL) {
-    xfree(xp->xp_orig);
-    xp->xp_orig = orig;
-    orig_saved = true;
-
-    ss = ExpandOne_start(mode, xp, str, options);
-  }
-
-  // Find longest common part
-  if (mode == WILD_LONGEST && xp->xp_numfiles > 0) {
-    ss = find_longest_match(xp, options);
-    xp->xp_selected = -1;  // next p_wc gets first one
-  }
-
-  // Concatenate all matching names.  Unless interrupted, this can be slow
-  // and the result probably won't be used.
-  if (mode == WILD_ALL && xp->xp_numfiles > 0 && !got_int) {
-    size_t ss_size = 0;
-    char *prefix = "";
-    char *suffix = (options & WILD_USE_NL) ? "\n" : " ";
-    const int n = xp->xp_numfiles - 1;
-
-    if (xp->xp_prefix == XP_PREFIX_NO) {
-      prefix = "no";
-      ss_size = STRLEN_LITERAL("no") * (size_t)n;
-    } else if (xp->xp_prefix == XP_PREFIX_INV) {
-      prefix = "inv";
-      ss_size = STRLEN_LITERAL("inv") * (size_t)n;
-    }
-
-    for (int i = 0; i < xp->xp_numfiles; i++) {
-      ss_size += strlen(xp->xp_files[i]) + 1;  // +1 for the suffix
-    }
-    ss_size++;  // +1 for the NUL
-
-    ss = xmalloc(ss_size);
-    *ss = NUL;
-    char *ssp = ss;
-    for (int i = 0; i < xp->xp_numfiles; i++) {
-      if (i > 0) {
-        ssp = xstpcpy(ssp, prefix);
-      }
-      ssp = xstpcpy(ssp, xp->xp_files[i]);
-      if (i < n) {
-        ssp = xstpcpy(ssp, suffix);
-      }
-      assert(ssp < ss + ss_size);
-    }
-  }
-
-  if (mode == WILD_EXPAND_FREE || mode == WILD_ALL) {
-    ExpandCleanup(xp);
-  }
-
-  // Free "orig" if it wasn't stored in "xp->xp_orig".
-  if (!orig_saved) {
-    xfree(orig);
-  }
-
-  return ss;
+  return rs_expand_one(xp, str, orig, options, mode);
 }
 
 /// Prepare an expand structure for use. Rust implementation.
