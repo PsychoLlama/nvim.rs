@@ -13,10 +13,12 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::borrow_as_ptr)]
+#![allow(clippy::ptr_as_ptr)]
 
 use std::ffi::{c_char, c_int, c_void, CStr};
 
-use crate::GarrayHandle;
+use crate::{ExargHandle, GarrayHandle};
 
 // =============================================================================
 // UC_* Constants — from usercmd.h
@@ -827,6 +829,332 @@ pub unsafe extern "C" fn rs_uc_clear(gap: GarrayHandle) {
 }
 
 // =============================================================================
+// C Accessor Functions (Phase 6 — ex command handlers)
+// =============================================================================
+
+extern "C" {
+    // eap accessors (from Phase 4)
+    /// Returns eap->arg
+    fn nvim_uc_eap_get_arg(eap: ExargHandle) -> *const c_char;
+    /// Returns eap->forceit (as int: 0 or 1)
+    fn nvim_uc_eap_get_forceit(eap: ExargHandle) -> c_int;
+
+    // String navigation helpers
+    /// Returns skiptowhite(p) — pointer to first whitespace
+    fn nvim_uc_skiptowhite(p: *const c_char) -> *mut c_char;
+    /// Returns skipwhite(p) — pointer past whitespace
+    fn nvim_uc_skipwhite(p: *const c_char) -> *mut c_char;
+    /// Returns ends_excmd(c) — 1 if c ends an ex command, 0 otherwise
+    fn nvim_uc_ends_excmd(c: c_int) -> c_int;
+
+    // Command listing (not yet migrated to Rust)
+    /// Calls uc_list(name, name_len) in C
+    fn nvim_uc_list(name: *const c_char, name_len: usize);
+
+    // Deletion helper
+    /// memmove(cmd, cmd+1, (ga_len - i) * sizeof(ucmd_T)) — shift entries up
+    fn nvim_uc_cmd_memmove_up(gap: GarrayHandle, i: c_int);
+
+    // curbuf null check
+    /// Returns 1 if curbuf is NULL, 0 otherwise
+    fn nvim_uc_curbuf_is_null() -> c_int;
+
+    // Error reporting (already declared in Phase 2 extern block in parse.rs,
+    // but we need it here too for emsg calls)
+    /// Calls emsg(_(msg)) in C
+    fn nvim_uc_emsg(msg: *const c_char);
+}
+
+// Already-migrated Rust functions called via extern "C" (same crate, different module)
+extern "C" {
+    /// rs_uc_scan_attr — in parse.rs
+    fn rs_uc_scan_attr(
+        attr: *mut c_char,
+        len: usize,
+        argt: *mut u32,
+        def: *mut c_int,
+        flags: *mut c_int,
+        complp: *mut c_int,
+        compl_arg: *mut *mut c_char,
+        addr_type_arg: *mut c_int,
+    ) -> c_int;
+}
+
+// =============================================================================
+// Phase 6: Ex Command Handler Implementations
+// =============================================================================
+
+/// EXPAND_NOTHING constant (matches C EXPAND_NOTHING = 0)
+const EXPAND_NOTHING: c_int = 0;
+
+/// ADDR_NONE constant (matches C ADDR_NONE = 11)
+const ADDR_NONE: c_int = 11;
+
+/// Check if a byte is ASCII uppercase (A-Z)
+const fn ascii_isupper(c: u8) -> bool {
+    c >= b'A' && c <= b'Z'
+}
+
+/// Implementation of `:command` ex handler.
+///
+/// Parses attributes, validates name, and either lists commands or adds a new one.
+///
+/// # Safety
+///
+/// `eap` must be a valid ExargHandle (pointer to exarg_T).
+unsafe fn ex_command_impl(eap: ExargHandle) {
+    let mut argt: u32 = 0;
+    let mut def: c_int = -1;
+    let mut flags: c_int = 0;
+    let mut context: c_int = EXPAND_NOTHING;
+    let mut compl_arg: *mut c_char = std::ptr::null_mut();
+    let mut addr_type_arg: c_int = ADDR_NONE;
+
+    let arg = nvim_uc_eap_get_arg(eap);
+    let has_attr = unsafe { *arg.cast::<u8>() } == b'-';
+
+    let mut p: *const c_char = arg;
+
+    // Check for attributes
+    while unsafe { *p.cast::<u8>() } == b'-' {
+        p = unsafe { p.add(1) };
+        let end = nvim_uc_skiptowhite(p);
+        let attr_len = unsafe { end.offset_from(p) } as usize;
+        // rs_uc_scan_attr needs *mut c_char because it temporarily NUL-terminates
+        if rs_uc_scan_attr(
+            p.cast_mut(),
+            attr_len,
+            &mut argt,
+            &mut def,
+            &mut flags,
+            &mut context,
+            &mut compl_arg,
+            &mut addr_type_arg,
+        ) == C_FAIL
+        {
+            // Cleanup on failure
+            nvim_uc_xfree(compl_arg.cast::<c_void>());
+            return;
+        }
+        p = nvim_uc_skipwhite(end);
+    }
+
+    // Get the name (if any) and skip to the following argument.
+    let name = p;
+    let end = rs_uc_validate_name(name);
+    if end.is_null() {
+        nvim_uc_emsg(c"E182: Invalid command name".as_ptr());
+        nvim_uc_xfree(compl_arg.cast::<c_void>());
+        return;
+    }
+    let name_len = unsafe { end.offset_from(name) } as usize;
+
+    // If there is nothing after the name, and no attributes were specified,
+    // we are listing commands
+    p = nvim_uc_skipwhite(end);
+    let p_byte = unsafe { *p.cast::<u8>() };
+
+    if !has_attr && nvim_uc_ends_excmd(c_int::from(p_byte)) != 0 {
+        nvim_uc_list(name, name_len);
+    } else if !ascii_isupper(unsafe { *name.cast::<u8>() }) {
+        nvim_uc_emsg(c"E183: User defined commands must start with an uppercase letter".as_ptr());
+    } else if name_len <= 4 {
+        // Check for reserved name "Next"
+        let next = b"Next";
+        let name_slice = unsafe { std::slice::from_raw_parts(name.cast::<u8>(), name_len) };
+        if name_slice == &next[..name_len] {
+            nvim_uc_emsg(c"E841: Reserved name, cannot be used for user defined command".as_ptr());
+        } else if context > 0 && (argt & EX_EXTRA) == 0 {
+            nvim_uc_emsg(c"E1208: -complete used without allowing arguments".as_ptr());
+        } else {
+            uc_add_command_impl(
+                name.cast_mut(),
+                name_len,
+                p,
+                argt,
+                i64::from(def),
+                flags,
+                context,
+                compl_arg,
+                LUA_NOREF,
+                LUA_NOREF,
+                addr_type_arg,
+                LUA_NOREF,
+                nvim_uc_eap_get_forceit(eap),
+            );
+            return; // success — ownership of compl_arg transferred
+        }
+    } else if context > 0 && (argt & EX_EXTRA) == 0 {
+        nvim_uc_emsg(c"E1208: -complete used without allowing arguments".as_ptr());
+    } else {
+        uc_add_command_impl(
+            name.cast_mut(),
+            name_len,
+            p,
+            argt,
+            i64::from(def),
+            flags,
+            context,
+            compl_arg,
+            LUA_NOREF,
+            LUA_NOREF,
+            addr_type_arg,
+            LUA_NOREF,
+            nvim_uc_eap_get_forceit(eap),
+        );
+        return; // success — ownership of compl_arg transferred
+    }
+
+    // Cleanup on non-success paths
+    nvim_uc_xfree(compl_arg.cast::<c_void>());
+}
+
+/// Implementation of `:comclear` ex handler.
+///
+/// Clears all global and buffer-local user commands.
+///
+/// # Safety
+///
+/// `_eap` must be a valid ExargHandle (unused but required by signature).
+unsafe fn ex_comclear_impl(_eap: ExargHandle) {
+    let ucmds = nvim_uc_get_ucmds();
+    uc_clear_impl(ucmds);
+    if nvim_uc_curbuf_is_null() == 0 {
+        let buf_ucmds = nvim_uc_get_curbuf_ucmds();
+        uc_clear_impl(buf_ucmds);
+    }
+}
+
+/// Implementation of `:delcommand` ex handler.
+///
+/// Deletes a user command by name, searching buffer-local first then global.
+///
+/// # Safety
+///
+/// `eap` must be a valid ExargHandle (pointer to exarg_T).
+unsafe fn ex_delcommand_impl(eap: ExargHandle) {
+    let mut cmd: *mut c_void = std::ptr::null_mut();
+    let mut res: c_int = -1;
+    let mut arg: *const c_char = nvim_uc_eap_get_arg(eap);
+    let mut buffer_only = false;
+
+    // Check for -buffer flag
+    let arg_len = strlen_safe(arg);
+    if arg_len >= 7 {
+        let arg_slice = unsafe { std::slice::from_raw_parts(arg.cast::<u8>(), arg_len) };
+        if &arg_slice[..7] == b"-buffer" {
+            let after = arg_slice.get(7).copied().unwrap_or(0);
+            if after == b' ' || after == b'\t' {
+                buffer_only = true;
+                arg = nvim_uc_skipwhite(unsafe { arg.add(7) });
+            }
+        }
+    }
+
+    let ucmds_ptr = nvim_uc_get_ucmds();
+    let mut gap = nvim_uc_get_curbuf_ucmds();
+    let mut i: c_int;
+
+    loop {
+        let ga_len = nvim_uc_ga_get_len(gap);
+        i = 0;
+        while i < ga_len {
+            cmd = nvim_uc_ga_get_cmd(gap, i);
+            let cmd_name = nvim_uc_cmd_get_name(cmd);
+            res = strcmp_c(arg, cmd_name);
+            if res <= 0 {
+                break;
+            }
+            i += 1;
+        }
+        // If we didn't find it in any iteration, res stays from last compare
+        // or stays -1 if ga_len was 0
+        if gap == ucmds_ptr || res == 0 || buffer_only {
+            break;
+        }
+        gap = ucmds_ptr;
+    }
+
+    if res != 0 {
+        if buffer_only {
+            nvim_uc_semsg_1(
+                c"E1237: No such user-defined command in current buffer: %s".as_ptr(),
+                arg,
+            );
+        } else {
+            nvim_uc_semsg_1(c"E184: No such user-defined command: %s".as_ptr(), arg);
+        }
+        return;
+    }
+
+    nvim_uc_free_ucmd(cmd);
+
+    let ga_len = nvim_uc_ga_get_len(gap);
+    nvim_uc_ga_set_len(gap, ga_len - 1);
+
+    if i < ga_len - 1 {
+        nvim_uc_cmd_memmove_up(gap, i);
+    }
+}
+
+/// Compute strlen of a NUL-terminated C string, safely.
+unsafe fn strlen_safe(s: *const c_char) -> usize {
+    if s.is_null() {
+        return 0;
+    }
+    let mut len = 0usize;
+    while unsafe { *s.add(len) } != 0 {
+        len += 1;
+    }
+    len
+}
+
+/// Compare two NUL-terminated C strings (like C strcmp).
+/// Returns negative if a < b, 0 if equal, positive if a > b.
+unsafe fn strcmp_c(a: *const c_char, b: *const c_char) -> c_int {
+    let mut i = 0usize;
+    loop {
+        let ca = unsafe { *a.add(i) as u8 };
+        let cb = unsafe { *b.add(i) as u8 };
+        if ca != cb {
+            return c_int::from(ca) - c_int::from(cb);
+        }
+        if ca == 0 {
+            return 0;
+        }
+        i += 1;
+    }
+}
+
+// =============================================================================
+// Phase 6: FFI Exports
+// =============================================================================
+
+/// FFI export: `:command` handler.
+///
+/// Direct replacement for C `ex_command`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_command(eap: ExargHandle) {
+    ex_command_impl(eap);
+}
+
+/// FFI export: `:comclear` handler.
+///
+/// Direct replacement for C `ex_comclear`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_comclear(eap: ExargHandle) {
+    ex_comclear_impl(eap);
+}
+
+/// FFI export: `:delcommand` handler.
+///
+/// Direct replacement for C `ex_delcommand`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_delcommand(eap: ExargHandle) {
+    ex_delcommand_impl(eap);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1108,5 +1436,109 @@ mod tests {
         let compare_len = name.len().min(existing.len());
         let cmp = name[..compare_len].cmp(&existing[..compare_len]);
         assert_eq!(cmp, std::cmp::Ordering::Greater);
+    }
+
+    // =========================================================================
+    // Phase 6: ex command handler tests
+    // =========================================================================
+
+    #[test]
+    fn test_ascii_isupper() {
+        assert!(ascii_isupper(b'A'));
+        assert!(ascii_isupper(b'Z'));
+        assert!(ascii_isupper(b'M'));
+        assert!(!ascii_isupper(b'a'));
+        assert!(!ascii_isupper(b'z'));
+        assert!(!ascii_isupper(b'0'));
+        assert!(!ascii_isupper(b' '));
+        assert!(!ascii_isupper(b'@'));
+        assert!(!ascii_isupper(b'['));
+    }
+
+    #[test]
+    fn test_strcmp_c_equal() {
+        let a = c"hello";
+        let b = c"hello";
+        assert_eq!(unsafe { strcmp_c(a.as_ptr(), b.as_ptr()) }, 0);
+    }
+
+    #[test]
+    fn test_strcmp_c_less() {
+        let a = c"abc";
+        let b = c"abd";
+        assert!(unsafe { strcmp_c(a.as_ptr(), b.as_ptr()) } < 0);
+    }
+
+    #[test]
+    fn test_strcmp_c_greater() {
+        let a = c"abd";
+        let b = c"abc";
+        assert!(unsafe { strcmp_c(a.as_ptr(), b.as_ptr()) } > 0);
+    }
+
+    #[test]
+    fn test_strcmp_c_prefix() {
+        let a = c"abc";
+        let b = c"abcdef";
+        assert!(unsafe { strcmp_c(a.as_ptr(), b.as_ptr()) } < 0);
+    }
+
+    #[test]
+    fn test_strcmp_c_empty() {
+        let a = c"";
+        let b = c"";
+        assert_eq!(unsafe { strcmp_c(a.as_ptr(), b.as_ptr()) }, 0);
+    }
+
+    #[test]
+    fn test_strcmp_c_one_empty() {
+        let a = c"";
+        let b = c"a";
+        assert!(unsafe { strcmp_c(a.as_ptr(), b.as_ptr()) } < 0);
+    }
+
+    #[test]
+    fn test_strlen_safe_basic() {
+        let s = c"hello";
+        assert_eq!(unsafe { strlen_safe(s.as_ptr()) }, 5);
+    }
+
+    #[test]
+    fn test_strlen_safe_empty() {
+        let s = c"";
+        assert_eq!(unsafe { strlen_safe(s.as_ptr()) }, 0);
+    }
+
+    #[test]
+    fn test_strlen_safe_null() {
+        assert_eq!(unsafe { strlen_safe(std::ptr::null()) }, 0);
+    }
+
+    #[test]
+    fn test_phase6_constants() {
+        assert_eq!(EXPAND_NOTHING, 0);
+        assert_eq!(ADDR_NONE, 11);
+    }
+
+    #[test]
+    fn test_reserved_name_check() {
+        // Test the reserved name "Next" check logic
+        let next = b"Next";
+
+        // Exact match with length 4
+        let name = b"Next";
+        assert_eq!(&name[..4], &next[..4]);
+
+        // Prefix match with length 3
+        let name = b"Nex";
+        assert_eq!(&name[..3], &next[..3]);
+
+        // Prefix match with length 2
+        let name = b"Ne";
+        assert_eq!(&name[..2], &next[..2]);
+
+        // Non-match
+        let name = b"Noxt";
+        assert_ne!(&name[..4], &next[..4]);
     }
 }

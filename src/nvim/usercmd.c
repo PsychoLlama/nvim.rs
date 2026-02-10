@@ -475,6 +475,44 @@ int nvim_uc_get_current_sctx_seq(void)
   return current_sctx.sc_seq;
 }
 
+// Rust FFI declarations (Phase 6: ex command handlers)
+extern void rs_ex_command(void *eap);
+extern void rs_ex_comclear(void *eap);
+extern void rs_ex_delcommand(void *eap);
+
+// C accessor functions called by Rust (Phase 6)
+char *nvim_uc_skiptowhite(const char *p)
+{
+  return skiptowhite(p);
+}
+
+char *nvim_uc_skipwhite(const char *p)
+{
+  return skipwhite(p);
+}
+
+int nvim_uc_ends_excmd(int c)
+{
+  return ends_excmd(c) ? 1 : 0;
+}
+
+void nvim_uc_list(const char *name, size_t name_len)
+{
+  uc_list((char *)name, name_len);
+}
+
+void nvim_uc_cmd_memmove_up(void *gap, int i)
+{
+  garray_T *g = (garray_T *)gap;
+  ucmd_T *cmd = USER_CMD_GA(g, i);
+  memmove(cmd, cmd + 1, (size_t)(g->ga_len - i) * sizeof(ucmd_T));
+}
+
+int nvim_uc_curbuf_is_null(void)
+{
+  return curbuf == NULL ? 1 : 0;
+}
+
 static const char e_argument_required_for_str[]
   = N_("E179: Argument required for %s");
 static const char e_no_such_user_defined_command_str[]
@@ -1082,67 +1120,14 @@ int uc_add_command(char *name, size_t name_len, const char *rep, uint32_t argt, 
 /// ":command ..."
 void ex_command(exarg_T *eap)
 {
-  char *end;
-  uint32_t argt = 0;
-  int def = -1;
-  int flags = 0;
-  int context = EXPAND_NOTHING;
-  char *compl_arg = NULL;
-  cmd_addr_T addr_type_arg = ADDR_NONE;
-  int has_attr = (eap->arg[0] == '-');
-
-  char *p = eap->arg;
-
-  // Check for attributes
-  while (*p == '-') {
-    p++;
-    end = skiptowhite(p);
-    if (uc_scan_attr(p, (size_t)(end - p), &argt, &def, &flags, &context, &compl_arg,
-                     &addr_type_arg) == FAIL) {
-      goto theend;
-    }
-    p = skipwhite(end);
-  }
-
-  // Get the name (if any) and skip to the following argument.
-  char *name = p;
-  end = uc_validate_name(name);
-  if (!end) {
-    emsg(_("E182: Invalid command name"));
-    goto theend;
-  }
-  size_t name_len = (size_t)(end - name);
-
-  // If there is nothing after the name, and no attributes were specified,
-  // we are listing commands
-  p = skipwhite(end);
-  if (!has_attr && ends_excmd(*p)) {
-    uc_list(name, name_len);
-  } else if (!ASCII_ISUPPER(*name)) {
-    emsg(_("E183: User defined commands must start with an uppercase letter"));
-  } else if (name_len <= 4 && strncmp(name, "Next", name_len) == 0) {
-    emsg(_("E841: Reserved name, cannot be used for user defined command"));
-  } else if (context > 0 && (argt & EX_EXTRA) == 0) {
-    emsg(_(e_complete_used_without_allowing_arguments));
-  } else {
-    uc_add_command(name, name_len, p, argt, def, flags, context, compl_arg, LUA_NOREF, LUA_NOREF,
-                   addr_type_arg, LUA_NOREF, eap->forceit);
-
-    return;  // success
-  }
-
-theend:
-  xfree(compl_arg);
+  rs_ex_command(eap);
 }
 
 /// ":comclear"
 /// Clear all user commands, global and for current buffer.
 void ex_comclear(exarg_T *eap)
 {
-  uc_clear(&ucmds);
-  if (curbuf != NULL) {
-    uc_clear(&curbuf->b_ucmds);
-  }
+  rs_ex_comclear(eap);
 }
 
 void free_ucmd(ucmd_T *cmd)
@@ -1158,47 +1143,7 @@ void uc_clear(garray_T *gap)
 
 void ex_delcommand(exarg_T *eap)
 {
-  int i = 0;
-  ucmd_T *cmd = NULL;
-  int res = -1;
-  const char *arg = eap->arg;
-  bool buffer_only = false;
-
-  if (strncmp(arg, "-buffer", 7) == 0 && ascii_iswhite(arg[7])) {
-    buffer_only = true;
-    arg = skipwhite(arg + 7);
-  }
-
-  garray_T *gap = &curbuf->b_ucmds;
-  while (true) {
-    for (i = 0; i < gap->ga_len; i++) {
-      cmd = USER_CMD_GA(gap, i);
-      res = strcmp(arg, cmd->uc_name);
-      if (res <= 0) {
-        break;
-      }
-    }
-    if (gap == &ucmds || res == 0 || buffer_only) {
-      break;
-    }
-    gap = &ucmds;
-  }
-
-  if (res != 0) {
-    semsg(_(buffer_only
-            ? e_no_such_user_defined_command_in_current_buffer_str
-            : e_no_such_user_defined_command_str),
-          arg);
-    return;
-  }
-
-  free_ucmd(cmd);
-
-  gap->ga_len--;
-
-  if (i < gap->ga_len) {
-    memmove(cmd, cmd + 1, (size_t)(gap->ga_len - i) * sizeof(ucmd_T));
-  }
+  rs_ex_delcommand(eap);
 }
 
 /// Split a string by unescaped whitespace (space & tab), used for f-args on Lua commands callback.
