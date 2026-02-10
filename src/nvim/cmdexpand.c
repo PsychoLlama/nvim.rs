@@ -163,6 +163,15 @@ extern int rs_is_user_expand_context(int context);
 extern int rs_wild_mode_is_navigation(int mode);
 extern int rs_wild_mode_needs_list(int mode);
 
+// Phase 1: Leaf utility functions from Rust
+extern int rs_sort_func_compare(const void *s1, const void *s2);
+extern int rs_cmdline_compl_use_pum(int need_wildmenu);
+extern int rs_map_wildopts_to_ewflags(int options);
+extern char *rs_showmatches_gettail(char *s, int eager);
+extern int rs_expand_showtail(expand_T *xp);
+extern void rs_wildescape(expand_T *xp, const char *str, int numfiles, char **files);
+extern void rs_expand_escape(expand_T *xp, char *str, int numfiles, char **files, int options);
+
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
 {
@@ -290,6 +299,61 @@ int nvim_get_pum_want_item(void)
 int nvim_get_wild_menu_showing(void)
 {
   return wild_menu_showing;
+}
+
+// =============================================================================
+// Phase 1: Static asserts for Rust-hardcoded constants
+// =============================================================================
+
+// EW flags (path.h) used in rs_map_wildopts_to_ewflags
+_Static_assert(EW_DIR == 0x01, "EW_DIR mismatch");
+_Static_assert(EW_FILE == 0x02, "EW_FILE mismatch");
+_Static_assert(EW_NOTFOUND == 0x04, "EW_NOTFOUND mismatch");
+_Static_assert(EW_ADDSLASH == 0x08, "EW_ADDSLASH mismatch");
+_Static_assert(EW_KEEPALL == 0x10, "EW_KEEPALL mismatch");
+_Static_assert(EW_SILENT == 0x20, "EW_SILENT mismatch");
+_Static_assert(EW_NOERROR == 0x200, "EW_NOERROR mismatch");
+_Static_assert(EW_ALLLINKS == 0x1000, "EW_ALLLINKS mismatch");
+
+// VSE flags (ex_getln.h) used in rs_wildescape
+_Static_assert(VSE_NONE == 0, "VSE_NONE mismatch");
+_Static_assert(VSE_SHELL == 1, "VSE_SHELL mismatch");
+_Static_assert(VSE_BUFFER == 2, "VSE_BUFFER mismatch");
+
+// UI extension enum values (ui_defs.h) used in rs_cmdline_compl_use_pum
+_Static_assert(kUICmdline == 0, "kUICmdline mismatch");
+_Static_assert(kUIPopupmenu == 1, "kUIPopupmenu mismatch");
+_Static_assert(kUIWildmenu == 3, "kUIWildmenu mismatch");
+
+// wildoptions flag used in rs_cmdline_compl_use_pum
+_Static_assert(kOptWopFlagPum == 0x04, "kOptWopFlagPum mismatch");
+
+// =============================================================================
+// Phase 1: C accessors for Rust leaf utility functions
+// =============================================================================
+
+/// Check if UI extension is active (for Rust FFI).
+int nvim_cmdexpand_ui_has(int ext)
+{
+  return ui_has(ext);
+}
+
+/// Check if character is a path separator (for Rust FFI).
+int nvim_cmdexpand_vim_ispathsep(int c)
+{
+  return vim_ispathsep(c);
+}
+
+/// Check if backslash should be removed (for Rust FFI).
+int nvim_cmdexpand_rem_backslash(const char *p)
+{
+  return rem_backslash(p);
+}
+
+/// Get the byte length for multibyte pointer advance (for Rust FFI).
+int nvim_cmdexpand_mb_ptr_adv_len(const char *p)
+{
+  return utfc_ptr2len(p);
 }
 
 // Phase 6: Wrapper functions for Rust implementations
@@ -710,97 +774,22 @@ bool cmdline_fuzzy_complete(const char *const fuzzystr)
 }
 
 /// Sort function for the completion matches.
-/// <SNR> functions should be sorted to the end.
+/// <SNR> functions should be sorted to the end. Rust implementation.
 static int sort_func_compare(const void *s1, const void *s2)
 {
-  char *p1 = *(char **)s1;
-  char *p2 = *(char **)s2;
-
-  if (*p1 != '<' && *p2 == '<') {
-    return -1;
-  }
-  if (*p1 == '<' && *p2 != '<') {
-    return 1;
-  }
-  return strcmp(p1, p2);
+  return rs_sort_func_compare(s1, s2);
 }
 
-/// Escape special characters in the cmdline completion matches.
+/// Escape special characters in the cmdline completion matches. Rust implementation.
 static void wildescape(expand_T *xp, const char *str, int numfiles, char **files)
 {
-  char *p;
-  const int vse_what = xp->xp_context == EXPAND_BUFFERS ? VSE_BUFFER : VSE_NONE;
-
-  if (xp->xp_context == EXPAND_FILES
-      || xp->xp_context == EXPAND_FILES_IN_PATH
-      || xp->xp_context == EXPAND_SHELLCMD
-      || xp->xp_context == EXPAND_BUFFERS
-      || xp->xp_context == EXPAND_DIRECTORIES
-      || xp->xp_context == EXPAND_DIRS_IN_CDPATH) {
-    // Insert a backslash into a file name before a space, \, %, #
-    // and wildmatch characters, except '~'.
-    for (int i = 0; i < numfiles; i++) {
-      // for ":set path=" we need to escape spaces twice
-      if (xp->xp_backslash & XP_BS_THREE) {
-        char *pat = (xp->xp_backslash & XP_BS_COMMA) ? " ," : " ";
-        p = vim_strsave_escaped(files[i], pat);
-        xfree(files[i]);
-        files[i] = p;
-#if defined(BACKSLASH_IN_FILENAME)
-        p = vim_strsave_escaped(files[i], " ");
-        xfree(files[i]);
-        files[i] = p;
-#endif
-      } else if (xp->xp_backslash & XP_BS_COMMA) {
-        if (vim_strchr(files[i], ',') != NULL) {
-          p = vim_strsave_escaped(files[i], ",");
-          xfree(files[i]);
-          files[i] = p;
-        }
-      }
-#ifdef BACKSLASH_IN_FILENAME
-      p = vim_strsave_fnameescape(files[i], vse_what);
-#else
-      p = vim_strsave_fnameescape(files[i], xp->xp_shell ? VSE_SHELL : vse_what);
-#endif
-      xfree(files[i]);
-      files[i] = p;
-
-      // If 'str' starts with "\~", replace "~" at start of
-      // files[i] with "\~".
-      if (str[0] == '\\' && str[1] == '~' && files[i][0] == '~') {
-        escape_fname(&files[i]);
-      }
-    }
-    xp->xp_backslash = XP_BS_NONE;
-
-    // If the first file starts with a '+' escape it.  Otherwise it
-    // could be seen as "+cmd".
-    if (*files[0] == '+') {
-      escape_fname(&files[0]);
-    }
-  } else if (xp->xp_context == EXPAND_TAGS) {
-    // Insert a backslash before characters in a tag name that
-    // would terminate the ":tag" command.
-    for (int i = 0; i < numfiles; i++) {
-      p = vim_strsave_escaped(files[i], "\\|\"");
-      xfree(files[i]);
-      files[i] = p;
-    }
-  }
+  rs_wildescape(xp, str, numfiles, files);
 }
 
-/// Escape special characters in the cmdline completion matches.
+/// Escape special characters in the cmdline completion matches. Rust implementation.
 static void ExpandEscape(expand_T *xp, char *str, int numfiles, char **files, int options)
 {
-  // May change home directory back to "~"
-  if (options & WILD_HOME_REPLACE) {
-    tilde_replace(str, numfiles, files);
-  }
-
-  if (options & WILD_ESCAPE) {
-    wildescape(xp, str, numfiles, files);
-  }
+  rs_expand_escape(xp, str, numfiles, files, options);
 }
 
 /// Return FAIL if this is not an appropriate context in which to do
@@ -1011,13 +1000,12 @@ bool cmdline_compl_is_fuzzy(void)
 }
 
 /// Checks whether popup menu should be used for cmdline completion wildmenu.
+/// Rust implementation.
 ///
 /// @param wildmenu  whether wildmenu is needed by current 'wildmode' part
 static bool cmdline_compl_use_pum(bool need_wildmenu)
 {
-  return ((need_wildmenu && (wop_flags & kOptWopFlagPum)
-           && !(ui_has(kUICmdline) && cmdline_win == NULL))
-          || ui_has(kUIWildmenu) || (ui_has(kUICmdline) && ui_has(kUIPopupmenu)));
+  return rs_cmdline_compl_use_pum(need_wildmenu) != 0;
 }
 
 /// Return the number of characters that should be skipped in the wildmenu
@@ -1771,58 +1759,18 @@ int showmatches(expand_T *xp, bool display_wildmenu, bool display_list, bool nos
 
 /// path_tail() version for showmatches() and redraw_wildmenu():
 /// Return the tail of file name path "s", ignoring a trailing "/".
+/// Rust implementation.
 static char *showmatches_gettail(char *s, bool eager)
 {
-  char *t = s;
-  bool had_sep = false;
-
-  for (char *p = s; *p != NUL;) {
-    if (vim_ispathsep(*p)
-#ifdef BACKSLASH_IN_FILENAME
-        && !rem_backslash(p)
-#endif
-        ) {
-      if (eager) {
-        t = p + 1;
-      } else {
-        had_sep = true;
-      }
-    } else if (had_sep) {
-      t = p;
-      had_sep = false;
-    }
-    MB_PTR_ADV(p);
-  }
-  return t;
+  return rs_showmatches_gettail(s, eager);
 }
 
 /// Return true if we only need to show the tail of completion matches.
 /// When not completing file names or there is a wildcard in the path false is
-/// returned.
+/// returned. Rust implementation.
 static bool expand_showtail(expand_T *xp)
 {
-  // When not completing file names a "/" may mean something different.
-  if (xp->xp_context != EXPAND_FILES
-      && xp->xp_context != EXPAND_SHELLCMD
-      && xp->xp_context != EXPAND_DIRECTORIES) {
-    return false;
-  }
-
-  char *end = path_tail(xp->xp_pattern);
-  if (end == xp->xp_pattern) {          // there is no path separator
-    return false;
-  }
-
-  for (char *s = xp->xp_pattern; s < end; s++) {
-    // Skip escaped wildcards.  Only when the backslash is not a path
-    // separator, on DOS the '*' "path\*\file" must not be skipped.
-    if (rem_backslash(s)) {
-      s++;
-    } else if (vim_strchr("*?[", (uint8_t)(*s)) != NULL) {
-      return false;
-    }
-  }
-  return true;
+  return rs_expand_showtail(xp) != 0;
 }
 
 /// Prepare a string for expansion.
@@ -3470,30 +3418,10 @@ static int ExpandOther(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches
   return ret;
 }
 
-/// Map wild expand options to flags for expand_wildcards()
+/// Map wild expand options to flags for expand_wildcards(). Rust implementation.
 static int map_wildopts_to_ewflags(int options)
 {
-  int flags = EW_DIR;       // include directories
-  if (options & WILD_LIST_NOTFOUND) {
-    flags |= EW_NOTFOUND;
-  }
-  if (options & WILD_ADD_SLASH) {
-    flags |= EW_ADDSLASH;
-  }
-  if (options & WILD_KEEP_ALL) {
-    flags |= EW_KEEPALL;
-  }
-  if (options & WILD_SILENT) {
-    flags |= EW_SILENT;
-  }
-  if (options & WILD_NOERROR) {
-    flags |= EW_NOERROR;
-  }
-  if (options & WILD_ALLLINKS) {
-    flags |= EW_ALLLINKS;
-  }
-
-  return flags;
+  return rs_map_wildopts_to_ewflags(options);
 }
 
 /// Do the expansion based on xp->xp_context and "pat".
