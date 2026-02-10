@@ -5,6 +5,18 @@
 
 use std::ffi::{c_char, c_int};
 
+/// Get the length of a null-terminated C string.
+///
+/// # Safety
+/// `s` must be a valid null-terminated string.
+unsafe fn c_strlen(s: *const c_char) -> usize {
+    let mut len = 0;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
+}
+
 // =============================================================================
 // Error message string constants (error codes for reference)
 // =============================================================================
@@ -33,6 +45,14 @@ extern "C" {
     fn nvim_get_e_trailing_arg() -> *const c_char;
 
     fn nvim_emsg(s: *const c_char);
+
+    // IObuff accessors for append_command
+    fn nvim_docmd_get_iobuff() -> *mut c_char;
+    fn nvim_docmd_get_iosize() -> c_int;
+    fn nvim_docmd_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn nvim_docmd_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_docmd_mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char);
+    fn nvim_docmd_xstrlcat_iobuff(src: *const c_char);
 }
 
 // =============================================================================
@@ -285,6 +305,72 @@ pub unsafe fn has_trailing_chars(arg: *const c_char) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn rs_has_trailing_chars(arg: *const c_char) -> c_int {
     c_int::from(has_trailing_chars(arg))
+}
+
+// =============================================================================
+// append_command - Append command text to IObuff for error display
+// =============================================================================
+
+/// Append "cmd" to the error message in IObuff.
+///
+/// Takes care of limiting the length and handling 0xa0, which would be
+/// invisible otherwise (displays as `<a0>`).
+///
+/// Matches C `append_command()`.
+///
+/// # Safety
+///
+/// `cmd` must be a valid null-terminated C string.
+/// Accesses global `IObuff` via C accessors.
+#[no_mangle]
+pub unsafe extern "C" fn rs_append_command(cmd: *const c_char) {
+    if cmd.is_null() {
+        return;
+    }
+
+    let iobuff = nvim_docmd_get_iobuff();
+    let iosize = nvim_docmd_get_iosize() as usize;
+
+    let len = c_strlen(iobuff as *const c_char);
+
+    if len > iosize - 100 {
+        // Not enough space, truncate and put in "...".
+        let mut d = iobuff.add(iosize - 100);
+        let head_off = nvim_docmd_utf_head_off(iobuff as *const c_char, d as *const c_char);
+        d = d.sub(head_off as usize);
+        // Write "..." followed by NUL
+        *d = b'.' as c_char;
+        *d.add(1) = b'.' as c_char;
+        *d.add(2) = b'.' as c_char;
+        *d.add(3) = 0;
+    }
+
+    // Append ": "
+    nvim_docmd_xstrlcat_iobuff(c": ".as_ptr());
+
+    let mut d = iobuff.add(c_strlen(iobuff as *const c_char));
+    let mut s = cmd;
+
+    while *s as u8 != 0 && (d as usize - iobuff as usize) + 5 < iosize {
+        if *s as u8 == 0xc2 && *s.add(1) as u8 == 0xa0 {
+            // Non-breaking space: display as "<a0>"
+            s = s.add(2);
+            *d = b'<' as c_char;
+            *d.add(1) = b'a' as c_char;
+            *d.add(2) = b'0' as c_char;
+            *d.add(3) = b'>' as c_char;
+            d = d.add(4);
+        } else if (d as usize - iobuff as usize)
+            + nvim_docmd_utfc_ptr2len(s as *const c_char) as usize
+            + 1
+            >= iosize
+        {
+            break;
+        } else {
+            nvim_docmd_mb_copy_char(&mut s as *mut *const c_char, &mut d as *mut *mut c_char);
+        }
+    }
+    *d = 0;
 }
 
 #[cfg(test)]

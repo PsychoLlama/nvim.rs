@@ -118,6 +118,13 @@ extern const char *rs_check_nextcmd(const char *p);
 extern int rs_is_loclist_cmd(int cmdidx, int cmd_size);
 extern int rs_get_pressedreturn(void);
 extern int rs_expr_map_locked(void);
+extern const char *rs_skip_colon_white(const char *p, int skipleadingwhite);
+extern const char *rs_skip_range(const char *cmd, int *ctx);
+extern bool rs_checkforcmd(char **pp, const char *cmd, int len);
+extern int rs_one_letter_cmd(const char *p, int *idx);
+extern int rs_modifier_len(const char *cmd);
+extern int rs_cmd_exists(const char *name);
+extern void rs_append_command(const char *cmd);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -1280,15 +1287,7 @@ static void get_wincmd_addr_type(const char *arg, exarg_T *eap)
 /// @param skipleadingwhite Skip leading whitespace too
 static char *skip_colon_white(const char *p, bool skipleadingwhite)
 {
-  if (skipleadingwhite) {
-    p = skipwhite(p);
-  }
-
-  while (*p == ':') {
-    p = skipwhite(p + 1);
-  }
-
-  return (char *)p;
+  return (char *)rs_skip_colon_white(p, skipleadingwhite ? 1 : 0);
 }
 
 /// Set the addr type for command
@@ -3024,18 +3023,7 @@ theend:
 /// @param len  required length
 bool checkforcmd(char **pp, const char *cmd, int len)
 {
-  int i;
-
-  for (i = 0; cmd[i] != NUL; i++) {
-    if ((cmd)[i] != (*pp)[i]) {
-      break;
-    }
-  }
-  if (i >= len && !ASCII_ISALPHA((*pp)[i])) {
-    *pp = skipwhite(*pp + i);
-    return true;
-  }
-  return false;
+  return rs_checkforcmd(pp, cmd, len);
 }
 
 /// Append "cmd" to the error message in IObuff.
@@ -3043,30 +3031,7 @@ bool checkforcmd(char **pp, const char *cmd, int len)
 /// invisible otherwise.
 static void append_command(const char *cmd)
 {
-  size_t len = strlen(IObuff);
-  const char *s = cmd;
-  char *d;
-
-  if (len > IOSIZE - 100) {
-    // Not enough space, truncate and put in "...".
-    d = IObuff + IOSIZE - 100;
-    d -= utf_head_off(IObuff, d);
-    STRCPY(d, "...");
-  }
-  xstrlcat(IObuff, ": ", IOSIZE);
-  d = IObuff + strlen(IObuff);
-  while (*s != NUL && d - IObuff + 5 < IOSIZE) {
-    if ((uint8_t)s[0] == 0xc2 && (uint8_t)s[1] == 0xa0) {
-      s += 2;
-      STRCPY(d, "<a0>");
-      d += 4;
-    } else if (d - IObuff + utfc_ptr2len(s) + 1 >= IOSIZE) {
-      break;
-    } else {
-      mb_copy_char(&s, &d);
-    }
-  }
-  *d = NUL;
+  rs_append_command(cmd);
 }
 
 /// Return true and set "*idx" if "p" points to a one letter command.
@@ -3078,25 +3043,12 @@ static void append_command(const char *cmd)
 ///          :scs[cope], :sim[alt], :sig[ns] and :sil[ent].
 static int one_letter_cmd(const char *p, cmdidx_T *idx)
 {
-  if (p[0] == 'k'
-      && (p[1] != 'e' || (p[1] == 'e' && p[2] != 'e'))) {
-    *idx = CMD_k;
-    return true;
+  int raw_idx;
+  int result = rs_one_letter_cmd(p, &raw_idx);
+  if (result) {
+    *idx = (cmdidx_T)raw_idx;
   }
-  if (p[0] == 's'
-      && ((p[1] == 'c'
-           && (p[2] == NUL
-               || (p[2] != 's' && p[2] != 'r'
-                   && (p[3] == NUL
-                       || (p[3] != 'i' && p[4] != 'p')))))
-          || p[1] == 'g'
-          || (p[1] == 'i' && p[2] != 'm' && p[2] != 'l' && p[2] != 'g')
-          || p[1] == 'I'
-          || (p[1] == 'r' && p[2] != 'e'))) {
-    *idx = CMD_substitute;
-    return true;
-  }
-  return false;
+  return result;
 }
 
 /// Find an Ex command by its name, either built-in or user.
@@ -3242,25 +3194,7 @@ static struct cmdmod {
 ///          zero when it's not a modifier.
 int modifier_len(char *cmd)
 {
-  char *p = cmd;
-
-  if (ascii_isdigit(*cmd)) {
-    p = skipwhite(skipdigits(cmd + 1));
-  }
-  for (int i = 0; i < (int)ARRAY_SIZE(cmdmods); i++) {
-    int j;
-    for (j = 0; p[j] != NUL; j++) {
-      if (p[j] != cmdmods[i].name[j]) {
-        break;
-      }
-    }
-    if (j >= cmdmods[i].minlen
-        && !ASCII_ISALPHA(p[j])
-        && (p == cmd || cmdmods[i].has_count)) {
-      return j + (int)(p - cmd);
-    }
-  }
-  return 0;
+  return rs_modifier_len(cmd);
 }
 
 /// @return  > 0 if an Ex command "name" exists or,
@@ -3268,37 +3202,7 @@ int modifier_len(char *cmd)
 ///            3 if there is an ambiguous match.
 int cmd_exists(const char *const name)
 {
-  // Check command modifiers.
-  for (int i = 0; i < (int)ARRAY_SIZE(cmdmods); i++) {
-    int j;
-    for (j = 0; name[j] != NUL; j++) {
-      if (name[j] != cmdmods[i].name[j]) {
-        break;
-      }
-    }
-    if (name[j] == NUL && j >= cmdmods[i].minlen) {
-      return cmdmods[i].name[j] == NUL ? 2 : 1;
-    }
-  }
-
-  // Check built-in commands and user defined commands.
-  // For ":2match" and ":3match" we need to skip the number.
-  exarg_T ea;
-  ea.cmd = (char *)((*name == '2' || *name == '3') ? name + 1 : name);
-  ea.cmdidx = 0;
-  ea.flags = 0;
-  int full = false;
-  char *p = find_ex_command(&ea, &full);
-  if (p == NULL) {
-    return 3;
-  }
-  if (ascii_isdigit(*name) && ea.cmdidx != CMD_match) {
-    return 0;
-  }
-  if (*skipwhite(p) != NUL) {
-    return 0;           // trailing garbage
-  }
-  return ea.cmdidx == CMD_SIZE ? 0 : (full ? 2 : 1);
+  return rs_cmd_exists(name);
 }
 
 /// "fullcommand" function
@@ -3365,37 +3269,7 @@ uint32_t excmd_get_argt(cmdidx_T idx)
 /// @return the "cmd" pointer advanced to beyond the range.
 char *skip_range(const char *cmd, int *ctx)
 {
-  while (vim_strchr(" \t0123456789.$%'/?-+,;\\", (uint8_t)(*cmd)) != NULL) {
-    if (*cmd == '\\') {
-      if (cmd[1] == '?' || cmd[1] == '/' || cmd[1] == '&') {
-        cmd++;
-      } else {
-        break;
-      }
-    } else if (*cmd == '\'') {
-      if (*++cmd == NUL && ctx != NULL) {
-        *ctx = EXPAND_NOTHING;
-      }
-    } else if (*cmd == '/' || *cmd == '?') {
-      unsigned delim = (unsigned)(*cmd++);
-      while (*cmd != NUL && *cmd != (char)delim) {
-        if (*cmd++ == '\\' && *cmd != NUL) {
-          cmd++;
-        }
-      }
-      if (*cmd == NUL && ctx != NULL) {
-        *ctx = EXPAND_NOTHING;
-      }
-    }
-    if (*cmd != NUL) {
-      cmd++;
-    }
-  }
-
-  // Skip ":" and white space.
-  cmd = skip_colon_white(cmd, false);
-
-  return (char *)cmd;
+  return (char *)rs_skip_range(cmd, ctx);
 }
 
 static const char *addr_error(cmd_addr_T addr_type)
@@ -8415,4 +8289,86 @@ bool is_map_cmd(cmdidx_T cmdidx)
          || func == ex_mapclear      // :mapclear, :nmapclear, etc.
          || func == ex_abbreviate    // :abbreviate, :iabbrev, etc.
          || func == ex_abclear;      // :abclear, :iabclear, etc.
+}
+
+// =========================================================================
+// C accessor functions for Rust FFI
+// =========================================================================
+
+/// Get the CMD_k enum value.
+int nvim_docmd_cmd_k(void)
+{
+  return (int)CMD_k;
+}
+
+/// Get the CMD_substitute enum value.
+int nvim_docmd_cmd_substitute(void)
+{
+  return (int)CMD_substitute;
+}
+
+/// Get the CMD_match enum value.
+int nvim_docmd_cmd_match(void)
+{
+  return (int)CMD_match;
+}
+
+/// Get the CMD_SIZE sentinel value.
+int nvim_docmd_cmd_size(void)
+{
+  return (int)CMD_SIZE;
+}
+
+/// Get a pointer to IObuff.
+char *nvim_docmd_get_iobuff(void)
+{
+  return IObuff;
+}
+
+/// Get the IOSIZE constant.
+int nvim_docmd_get_iosize(void)
+{
+  return IOSIZE;
+}
+
+/// Get utf_head_off for IObuff.
+int nvim_docmd_utf_head_off(const char *base, const char *p)
+{
+  return utf_head_off(base, p);
+}
+
+/// Get utfc_ptr2len.
+int nvim_docmd_utfc_ptr2len(const char *p)
+{
+  return utfc_ptr2len(p);
+}
+
+/// Copy a multibyte character, advancing both pointers.
+void nvim_docmd_mb_copy_char(const char **fp, char **tp)
+{
+  mb_copy_char(fp, tp);
+}
+
+/// Concatenate to IObuff with size limit.
+void nvim_docmd_xstrlcat_iobuff(const char *src)
+{
+  xstrlcat(IObuff, src, IOSIZE);
+}
+
+/// Inner helper for cmd_exists: look up built-in and user commands.
+///
+/// Creates a temporary exarg_T, calls find_ex_command, and returns:
+/// - cmdidx via *out_cmdidx
+/// - full match flag via *out_full
+/// - pointer to end of command name (or NULL)
+char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_full)
+{
+  exarg_T ea;
+  ea.cmd = (char *)((*name == '2' || *name == '3') ? name + 1 : name);
+  ea.cmdidx = 0;
+  ea.flags = 0;
+  *out_full = false;
+  char *p = find_ex_command(&ea, out_full);
+  *out_cmdidx = (int)ea.cmdidx;
+  return p;
 }

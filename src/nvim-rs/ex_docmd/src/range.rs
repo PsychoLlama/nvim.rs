@@ -9,6 +9,9 @@ use std::ffi::{c_char, c_int, c_long};
 // FFI declarations
 // =============================================================================
 
+/// Expansion context: no expansion
+const EXPAND_NOTHING: c_int = 0;
+
 extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
 }
@@ -534,6 +537,99 @@ pub unsafe extern "C" fn rs_range_parse_state_has_special(state: *const RangePar
 }
 
 // =============================================================================
+// Skip colon and whitespace
+// =============================================================================
+
+/// Skip over ':' and whitespace in a command line string.
+///
+/// If `skipleadingwhite` is true, also skip leading whitespace before any ':'.
+///
+/// Matches C `skip_colon_white()`.
+///
+/// # Safety
+///
+/// `p` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_colon_white(
+    p: *const c_char,
+    skipleadingwhite: c_int,
+) -> *const c_char {
+    if p.is_null() {
+        return p;
+    }
+
+    let mut ptr = p;
+
+    if skipleadingwhite != 0 {
+        ptr = skipwhite(ptr) as *const c_char;
+    }
+
+    while *ptr as u8 == b':' {
+        ptr = skipwhite(ptr.add(1)) as *const c_char;
+    }
+
+    ptr
+}
+
+/// Skip over a range specification in a command line.
+///
+/// Handles digits, marks, search patterns, offsets, and separators.
+/// If `ctx` is non-null, sets `*ctx = EXPAND_NOTHING` when the range
+/// ends with an incomplete mark or search pattern.
+///
+/// Matches C `skip_range()`.
+///
+/// # Safety
+///
+/// `cmd` must be a valid null-terminated C string.
+/// `ctx` may be null or a valid pointer for writes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_range(cmd: *const c_char, ctx: *mut c_int) -> *const c_char {
+    if cmd.is_null() {
+        return cmd;
+    }
+
+    let mut p = cmd;
+
+    // Characters that can appear in a range specification
+    const RANGE_CHARS: &[u8] = b" \t0123456789.$%'/?-+,;\\";
+
+    while RANGE_CHARS.contains(&(*p as u8)) {
+        if *p as u8 == b'\\' {
+            let next = *p.add(1) as u8;
+            if next == b'?' || next == b'/' || next == b'&' {
+                p = p.add(1);
+            } else {
+                break;
+            }
+        } else if *p as u8 == b'\'' {
+            p = p.add(1);
+            if *p as u8 == 0 && !ctx.is_null() {
+                *ctx = EXPAND_NOTHING;
+            }
+        } else if *p as u8 == b'/' || *p as u8 == b'?' {
+            let delim = *p as u8;
+            p = p.add(1);
+            while *p as u8 != 0 && *p as u8 != delim {
+                if *p as u8 == b'\\' && *p.add(1) as u8 != 0 {
+                    p = p.add(1);
+                }
+                p = p.add(1);
+            }
+            if *p as u8 == 0 && !ctx.is_null() {
+                *ctx = EXPAND_NOTHING;
+            }
+        }
+        if *p as u8 != 0 {
+            p = p.add(1);
+        }
+    }
+
+    // Skip ":" and white space.
+    rs_skip_colon_white(p, 0)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -661,4 +757,7 @@ mod tests {
         assert_eq!(rs_is_range_sep(b';' as c_int), 1);
         assert_eq!(rs_is_range_sep(b':' as c_int), 0);
     }
+
+    // Note: rs_skip_colon_white, rs_skip_range tests require C FFI (skipwhite)
+    // and are verified through integration tests (just smoke-test) instead.
 }

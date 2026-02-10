@@ -2402,8 +2402,7 @@ pub unsafe extern "C" fn rs_hms_to_he_array(
     let mut cur = hmll.first;
     while !cur.is_null() {
         let entry = &(*cur).data;
-        let hist_ptr: *const HistoryItemData =
-            std::ptr::addr_of!(entry.data.history_item).cast();
+        let hist_ptr: *const HistoryItemData = std::ptr::addr_of!(entry.data.history_item).cast();
         let hist = std::ptr::read(hist_ptr);
         nvim_shada_set_histentry(
             hist_array,
