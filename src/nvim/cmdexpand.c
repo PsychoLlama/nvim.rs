@@ -172,6 +172,12 @@ extern int rs_expand_showtail(expand_T *xp);
 extern void rs_wildescape(expand_T *xp, const char *str, int numfiles, char **files);
 extern void rs_expand_escape(expand_T *xp, char *str, int numfiles, char **files, int options);
 
+// Phase 2: Expand struct operations
+extern void rs_expand_init(expand_T *xp);
+extern void rs_expand_cleanup(expand_T *xp);
+extern void rs_clear_cmdline_orig(void);
+extern char *rs_addstar(const char *fname, size_t len, int context);
+
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
 {
@@ -355,6 +361,59 @@ int nvim_cmdexpand_mb_ptr_adv_len(const char *p)
 {
   return utfc_ptr2len(p);
 }
+
+// =============================================================================
+// Phase 2: C accessors for expand_T struct operations
+// =============================================================================
+
+/// Zero the entire expand_T struct (for Rust FFI).
+void nvim_expand_clear(expand_T *xp)
+{
+  if (xp) {
+    CLEAR_POINTER(xp);
+  }
+}
+
+/// Set xp_prefix (for Rust FFI).
+void nvim_expand_set_prefix(expand_T *xp, int prefix)
+{
+  if (xp) {
+    xp->xp_prefix = (xp_prefix_T)prefix;
+  }
+}
+
+/// Set xp_numfiles (for Rust FFI).
+void nvim_expand_set_numfiles(expand_T *xp, int numfiles)
+{
+  if (xp) {
+    xp->xp_numfiles = numfiles;
+  }
+}
+
+/// Free wild matches via FreeWild (for Rust FFI).
+void nvim_expand_free_wild(expand_T *xp)
+{
+  if (xp) {
+    FreeWild(xp->xp_numfiles, xp->xp_files);
+  }
+}
+
+/// Free and NULL xp_orig (for Rust FFI).
+void nvim_expand_clear_orig(expand_T *xp)
+{
+  if (xp) {
+    XFREE_CLEAR(xp->xp_orig);
+  }
+}
+
+/// Free and NULL the static cmdline_orig (for Rust FFI).
+void nvim_clear_cmdline_orig(void)
+{
+  XFREE_CLEAR(cmdline_orig);
+}
+
+// Static assert for XP_PREFIX_NONE used in rs_expand_init
+_Static_assert(XP_PREFIX_NONE == 0, "XP_PREFIX_NONE mismatch");
 
 // Phase 6: Wrapper functions for Rust implementations
 
@@ -1556,29 +1615,23 @@ char *ExpandOne(expand_T *xp, char *str, char *orig, int options, int mode)
   return ss;
 }
 
-/// Prepare an expand structure for use.
+/// Prepare an expand structure for use. Rust implementation.
 void ExpandInit(expand_T *xp)
   FUNC_ATTR_NONNULL_ALL
 {
-  CLEAR_POINTER(xp);
-  xp->xp_backslash = XP_BS_NONE;
-  xp->xp_prefix = XP_PREFIX_NONE;
-  xp->xp_numfiles = -1;
+  rs_expand_init(xp);
 }
 
-/// Cleanup an expand structure after use.
+/// Cleanup an expand structure after use. Rust implementation.
 void ExpandCleanup(expand_T *xp)
 {
-  if (xp->xp_numfiles >= 0) {
-    FreeWild(xp->xp_numfiles, xp->xp_files);
-    xp->xp_numfiles = -1;
-  }
-  XFREE_CLEAR(xp->xp_orig);
+  rs_expand_cleanup(xp);
 }
 
+/// Clear the static cmdline_orig. Rust implementation.
 void clear_cmdline_orig(void)
 {
-  XFREE_CLEAR(cmdline_orig);
+  rs_clear_cmdline_orig();
 }
 
 /// Display one line of completion matches. Multiple matches are displayed in
@@ -1773,7 +1826,7 @@ static bool expand_showtail(expand_T *xp)
   return rs_expand_showtail(xp) != 0;
 }
 
-/// Prepare a string for expansion.
+/// Prepare a string for expansion. Rust implementation.
 ///
 /// When expanding file names: The string will be used with expand_wildcards().
 /// Copy "fname[len]" into allocated memory and add a '*' at the end.
@@ -1784,123 +1837,7 @@ static bool expand_showtail(expand_T *xp)
 char *addstar(char *fname, size_t len, int context)
   FUNC_ATTR_NONNULL_RET
 {
-  char *retval;
-
-  if (context != EXPAND_FILES
-      && context != EXPAND_FILES_IN_PATH
-      && context != EXPAND_SHELLCMD
-      && context != EXPAND_DIRECTORIES
-      && context != EXPAND_DIRS_IN_CDPATH) {
-    // Matching will be done internally (on something other than files).
-    // So we convert the file-matching-type wildcards into our kind for
-    // use with vim_regcomp().  First work out how long it will be:
-
-    // For help tags the translation is done in find_help_tags().
-    // For a tag pattern starting with "/" no translation is needed.
-    if (context == EXPAND_FINDFUNC
-        || context == EXPAND_HELP
-        || context == EXPAND_COLORS
-        || context == EXPAND_COMPILER
-        || context == EXPAND_OWNSYNTAX
-        || context == EXPAND_FILETYPE
-        || context == EXPAND_KEYMAP
-        || context == EXPAND_PACKADD
-        || context == EXPAND_RUNTIME
-        || ((context == EXPAND_TAGS_LISTFILES || context == EXPAND_TAGS)
-            && fname[0] == '/')
-        || context == EXPAND_CHECKHEALTH
-        || context == EXPAND_LUA) {
-      retval = xstrnsave(fname, len);
-    } else {
-      size_t new_len = len + 2;                // +2 for '^' at start, NUL at end
-      for (size_t i = 0; i < len; i++) {
-        if (fname[i] == '*' || fname[i] == '~') {
-          new_len++;                    // '*' needs to be replaced by ".*"
-                                        // '~' needs to be replaced by "\~"
-        }
-        // Buffer names are like file names.  "." should be literal
-        if (context == EXPAND_BUFFERS && fname[i] == '.') {
-          new_len++;                    // "." becomes "\."
-        }
-        // Custom expansion takes care of special things, match
-        // backslashes literally (perhaps also for other types?)
-        if ((context == EXPAND_USER_DEFINED
-             || context == EXPAND_USER_LIST) && fname[i] == '\\') {
-          new_len++;                    // '\' becomes "\\"
-        }
-      }
-      retval = xmalloc(new_len);
-      {
-        retval[0] = '^';
-        size_t j = 1;
-        for (size_t i = 0; i < len; i++, j++) {
-          // Skip backslash.  But why?  At least keep it for custom
-          // expansion.
-          if (context != EXPAND_USER_DEFINED
-              && context != EXPAND_USER_LIST
-              && fname[i] == '\\'
-              && ++i == len) {
-            break;
-          }
-
-          switch (fname[i]) {
-          case '*':
-            retval[j++] = '.';
-            break;
-          case '~':
-            retval[j++] = '\\';
-            break;
-          case '?':
-            retval[j] = '.';
-            continue;
-          case '.':
-            if (context == EXPAND_BUFFERS) {
-              retval[j++] = '\\';
-            }
-            break;
-          case '\\':
-            if (context == EXPAND_USER_DEFINED
-                || context == EXPAND_USER_LIST) {
-              retval[j++] = '\\';
-            }
-            break;
-          }
-          retval[j] = fname[i];
-        }
-        retval[j] = NUL;
-      }
-    }
-  } else {
-    retval = xmalloc(len + 4);
-    xmemcpyz(retval, fname, len);
-
-    // Don't add a star to *, ~, ~user, $var or `cmd`.
-    // * would become **, which walks the whole tree.
-    // ~ would be at the start of the file name, but not the tail.
-    // $ could be anywhere in the tail.
-    // ` could be anywhere in the file name.
-    // When the name ends in '$' don't add a star, remove the '$'.
-    char *tail = path_tail(retval);
-    int ends_in_star = (len > 0 && retval[len - 1] == '*');
-#ifndef BACKSLASH_IN_FILENAME
-    for (ssize_t k = (ssize_t)len - 2; k >= 0; k--) {
-      if (retval[k] != '\\') {
-        break;
-      }
-      ends_in_star = !ends_in_star;
-    }
-#endif
-    if ((*retval != '~' || tail != retval)
-        && !ends_in_star
-        && vim_strchr(tail, '$') == NULL
-        && vim_strchr(retval, '`') == NULL) {
-      retval[len++] = '*';
-    } else if (len > 0 && retval[len - 1] == '$') {
-      len--;
-    }
-    retval[len] = NUL;
-  }
-  return retval;
+  return rs_addstar(fname, len, context);
 }
 
 /// Must parse the command line so far to work out what context we are in.

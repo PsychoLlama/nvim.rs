@@ -34,6 +34,17 @@ extern "C" {
     // Path utilities (existing `nvim_` wrappers)
     fn nvim_path_tail(p: *const c_char) -> *const c_char;
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+
+    // Phase 2: `expand_T` struct operations
+    fn nvim_expand_clear(xp: ExpandHandle);
+    fn nvim_expand_set_prefix(xp: ExpandHandle, prefix: c_int);
+    fn nvim_expand_set_numfiles(xp: ExpandHandle, numfiles: c_int);
+    fn nvim_expand_free_wild(xp: ExpandHandle);
+    fn nvim_expand_clear_orig(xp: ExpandHandle);
+    fn nvim_expand_get_numfiles(xp: ExpandHandle) -> c_int;
+
+    // Phase 2: static `cmdline_orig` management
+    fn nvim_clear_cmdline_orig();
 }
 
 // =============================================================================
@@ -226,3 +237,51 @@ pub unsafe extern "C" fn rs_expand_escape(
         rs_wildescape(xp, str_, numfiles, files);
     }
 }
+
+// =============================================================================
+// Phase 2: Expand struct operations
+// =============================================================================
+
+/// Prepare an expand structure for use.
+///
+/// Zeros the struct, then sets `xp_backslash` to `XP_BS_NONE`,
+/// `xp_prefix` to `XP_PREFIX_NONE` (0), and `xp_numfiles` to -1.
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T` handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_expand_init(xp: ExpandHandle) {
+    nvim_expand_clear(xp);
+    nvim_expand_set_backslash(xp, XP_BS_NONE);
+    nvim_expand_set_prefix(xp, XP_PREFIX_NONE);
+    nvim_expand_set_numfiles(xp, -1);
+}
+
+/// Cleanup an expand structure after use.
+///
+/// Frees the wild matches if `xp_numfiles >= 0`, resets `xp_numfiles` to -1,
+/// and frees `xp_orig`.
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T` handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_expand_cleanup(xp: ExpandHandle) {
+    if nvim_expand_get_numfiles(xp) >= 0 {
+        nvim_expand_free_wild(xp);
+        nvim_expand_set_numfiles(xp, -1);
+    }
+    nvim_expand_clear_orig(xp);
+}
+
+/// Clear the static `cmdline_orig` variable.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_clear_cmdline_orig() {
+    // SAFETY: `nvim_clear_cmdline_orig` is a simple accessor that frees and
+    // NULLs the static `cmdline_orig` variable.
+    unsafe { nvim_clear_cmdline_orig() }
+}
+
+/// `XP_PREFIX_NONE` value (0).
+const XP_PREFIX_NONE: c_int = 0;
