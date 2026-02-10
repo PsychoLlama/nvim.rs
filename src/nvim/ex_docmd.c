@@ -143,6 +143,11 @@ extern int rs_getargopt(void *eap);
 extern char *rs_getargcmd(char **argp);
 extern char *rs_skip_cmd_arg(char *p, int rembs);
 extern void rs_separate_nextcmd(void *eap);
+extern void rs_set_cmd_addr_type(void *eap, char *p);
+extern int rs_get_cmd_default_range(void *eap);
+extern void rs_set_cmd_dflall_range(void *eap);
+extern char *rs_invalid_range(void *eap);
+extern int rs_get_tabpage_arg(void *eap);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -1211,93 +1216,7 @@ static int current_tab_nr(tabpage_T *tab)
 #define CURRENT_TAB_NR current_tab_nr(curtab)
 #define LAST_TAB_NR current_tab_nr(NULL)
 
-/// Figure out the address type for ":wincmd".
-static void get_wincmd_addr_type(const char *arg, exarg_T *eap)
-{
-  switch (*arg) {
-  case 'S':
-  case Ctrl_S:
-  case 's':
-  case Ctrl_N:
-  case 'n':
-  case 'j':
-  case Ctrl_J:
-  case 'k':
-  case Ctrl_K:
-  case 'T':
-  case Ctrl_R:
-  case 'r':
-  case 'R':
-  case 'K':
-  case 'J':
-  case '+':
-  case '-':
-  case Ctrl__:
-  case '_':
-  case '|':
-  case ']':
-  case Ctrl_RSB:
-  case 'g':
-  case Ctrl_G:
-  case Ctrl_V:
-  case 'v':
-  case 'h':
-  case Ctrl_H:
-  case 'l':
-  case Ctrl_L:
-  case 'H':
-  case 'L':
-  case '>':
-  case '<':
-  case '}':
-  case 'f':
-  case 'F':
-  case Ctrl_F:
-  case 'i':
-  case Ctrl_I:
-  case 'd':
-  case Ctrl_D:
-    // window size or any count
-    eap->addr_type = ADDR_OTHER;
-    break;
-
-  case Ctrl_HAT:
-  case '^':
-    // buffer number
-    eap->addr_type = ADDR_BUFFERS;
-    break;
-
-  case Ctrl_Q:
-  case 'q':
-  case Ctrl_C:
-  case 'c':
-  case Ctrl_O:
-  case 'o':
-  case Ctrl_W:
-  case 'w':
-  case 'W':
-  case 'x':
-  case Ctrl_X:
-    // window number
-    eap->addr_type = ADDR_WINDOWS;
-    break;
-
-  case Ctrl_Z:
-  case 'z':
-  case 'P':
-  case 't':
-  case Ctrl_T:
-  case 'b':
-  case Ctrl_B:
-  case 'p':
-  case Ctrl_P:
-  case '=':
-  case CAR:
-    // no count
-    eap->addr_type = ADDR_NONE;
-    break;
-  }
-}
+// get_wincmd_addr_type: now in Rust (rs_set_cmd_addr_type calls it internally)
 
 /// Skip colons and trailing whitespace, returning a pointer to the first
 /// non-colon, non-whitespace character.
@@ -1313,121 +1232,19 @@ static char *skip_colon_white(const char *p, bool skipleadingwhite)
 /// @param p pointer to character after command name in cmdline
 void set_cmd_addr_type(exarg_T *eap, char *p)
 {
-  // ea.addr_type for user commands is set by find_ucmd
-  if (IS_USER_CMDIDX(eap->cmdidx)) {
-    return;
-  }
-  if (eap->cmdidx != CMD_SIZE) {
-    eap->addr_type = cmdnames[(int)eap->cmdidx].cmd_addr_type;
-  } else {
-    eap->addr_type = ADDR_LINES;
-  }
-  // :wincmd range depends on the argument
-  if (eap->cmdidx == CMD_wincmd && p != NULL) {
-    get_wincmd_addr_type(skipwhite(p), eap);
-  }
-  // :.cc in quickfix window uses line number
-  if ((eap->cmdidx == CMD_cc || eap->cmdidx == CMD_ll) && bt_quickfix(curbuf)) {
-    eap->addr_type = ADDR_OTHER;
-  }
+  rs_set_cmd_addr_type(eap, p);
 }
 
 /// Get default range number for command based on its address type
 linenr_T get_cmd_default_range(exarg_T *eap)
 {
-  switch (eap->addr_type) {
-  case ADDR_LINES:
-  case ADDR_OTHER:
-    // Default is the cursor line number.  Avoid using an invalid
-    // line number though.
-    return MIN(curwin->w_cursor.lnum, curbuf->b_ml.ml_line_count);
-    break;
-  case ADDR_WINDOWS:
-    return CURRENT_WIN_NR;
-    break;
-  case ADDR_ARGUMENTS:
-    return MIN(curwin->w_arg_idx + 1, ARGCOUNT);
-    break;
-  case ADDR_LOADED_BUFFERS:
-  case ADDR_BUFFERS:
-    return curbuf->b_fnum;
-    break;
-  case ADDR_TABS:
-    return CURRENT_TAB_NR;
-    break;
-  case ADDR_TABS_RELATIVE:
-  case ADDR_UNSIGNED:
-    return 1;
-    break;
-  case ADDR_QUICKFIX:
-    return (linenr_T)qf_get_cur_idx(eap);
-    break;
-  case ADDR_QUICKFIX_VALID:
-    return qf_get_cur_valid_idx(eap);
-    break;
-  default:
-    return 0;
-    // Will give an error later if a range is found.
-    break;
-  }
+  return rs_get_cmd_default_range(eap);
 }
 
 /// Set default command range for -range=% based on the addr type of the command
 void set_cmd_dflall_range(exarg_T *eap)
 {
-  buf_T *buf;
-
-  eap->line1 = 1;
-  switch (eap->addr_type) {
-  case ADDR_LINES:
-  case ADDR_OTHER:
-    eap->line2 = curbuf->b_ml.ml_line_count;
-    break;
-  case ADDR_LOADED_BUFFERS:
-    buf = firstbuf;
-    while (buf->b_next != NULL && buf->b_ml.ml_mfp == NULL) {
-      buf = buf->b_next;
-    }
-    eap->line1 = buf->b_fnum;
-    buf = lastbuf;
-    while (buf->b_prev != NULL && buf->b_ml.ml_mfp == NULL) {
-      buf = buf->b_prev;
-    }
-    eap->line2 = buf->b_fnum;
-    break;
-  case ADDR_BUFFERS:
-    eap->line1 = firstbuf->b_fnum;
-    eap->line2 = lastbuf->b_fnum;
-    break;
-  case ADDR_WINDOWS:
-    eap->line2 = LAST_WIN_NR;
-    break;
-  case ADDR_TABS:
-    eap->line2 = LAST_TAB_NR;
-    break;
-  case ADDR_TABS_RELATIVE:
-    eap->line2 = 1;
-    break;
-  case ADDR_ARGUMENTS:
-    if (ARGCOUNT == 0) {
-      eap->line1 = eap->line2 = 0;
-    } else {
-      eap->line2 = ARGCOUNT;
-    }
-    break;
-  case ADDR_QUICKFIX_VALID:
-    eap->line2 = (linenr_T)qf_get_valid_size(eap);
-    if (eap->line2 == 0) {
-      eap->line2 = 1;
-    }
-    break;
-  case ADDR_NONE:
-  case ADDR_UNSIGNED:
-  case ADDR_QUICKFIX:
-    iemsg(_("INTERNAL: Cannot use EX_DFLALL "
-            "with ADDR_NONE, ADDR_UNSIGNED or ADDR_QUICKFIX"));
-    break;
-  }
+  rs_set_cmd_dflall_range(eap);
 }
 
 static void parse_register(exarg_T *eap)
@@ -3443,92 +3260,7 @@ static void ex_script_ni(exarg_T *eap)
 /// @return  NULL when valid, error message when invalid.
 char *invalid_range(exarg_T *eap)
 {
-  buf_T *buf;
-  if (eap->line1 < 0 || eap->line2 < 0 || eap->line1 > eap->line2) {
-    return _(e_invrange);
-  }
-
-  if (eap->argt & EX_RANGE) {
-    switch (eap->addr_type) {
-    case ADDR_LINES:
-      if (eap->line2 >
-          (curbuf->b_ml.ml_line_count
-           + (eap->cmdidx == CMD_diffget || eap->cmdidx == CMD_diffput))) {
-        return _(e_invrange);
-      }
-      break;
-    case ADDR_ARGUMENTS:
-      // add 1 if ARGCOUNT is 0
-      if (eap->line2 > ARGCOUNT + (!ARGCOUNT)) {
-        return _(e_invrange);
-      }
-      break;
-    case ADDR_BUFFERS:
-      // Only a boundary check, not whether the buffers actually
-      // exist.
-      if (eap->line1 < 1 || eap->line2 > get_highest_fnum()) {
-        return _(e_invrange);
-      }
-      break;
-    case ADDR_LOADED_BUFFERS:
-      buf = firstbuf;
-      while (buf->b_ml.ml_mfp == NULL) {
-        if (buf->b_next == NULL) {
-          return _(e_invrange);
-        }
-        buf = buf->b_next;
-      }
-      if (eap->line1 < buf->b_fnum) {
-        return _(e_invrange);
-      }
-      buf = lastbuf;
-      while (buf->b_ml.ml_mfp == NULL) {
-        if (buf->b_prev == NULL) {
-          return _(e_invrange);
-        }
-        buf = buf->b_prev;
-      }
-      if (eap->line2 > buf->b_fnum) {
-        return _(e_invrange);
-      }
-      break;
-    case ADDR_WINDOWS:
-      if (eap->line2 > LAST_WIN_NR) {
-        return _(e_invrange);
-      }
-      break;
-    case ADDR_TABS:
-      if (eap->line2 > LAST_TAB_NR) {
-        return _(e_invrange);
-      }
-      break;
-    case ADDR_TABS_RELATIVE:
-    case ADDR_OTHER:
-      // Any range is OK.
-      break;
-    case ADDR_QUICKFIX:
-      assert(eap->line2 >= 0);
-      // No error for value that is too big, will use the last entry.
-      if (eap->line2 <= 0) {
-        if (eap->addr_count == 0) {
-          return _(e_no_errors);
-        }
-        return _(e_invrange);
-      }
-      break;
-    case ADDR_QUICKFIX_VALID:
-      if ((eap->line2 != 1 && (size_t)eap->line2 > qf_get_valid_size(eap))
-          || eap->line2 < 0) {
-        return _(e_invrange);
-      }
-      break;
-    case ADDR_UNSIGNED:
-    case ADDR_NONE:
-      // Will give an error elsewhere.
-      break;
-    }
-  }
-  return NULL;
+  return rs_invalid_range(eap);
 }
 
 /// Correct the range for zero line number, if required.
@@ -3917,94 +3649,7 @@ int expand_argopt(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int
 /// @return  a tabpage number.
 static int get_tabpage_arg(exarg_T *eap)
 {
-  int tab_number = 0;
-  int unaccept_arg0 = (eap->cmdidx == CMD_tabmove) ? 0 : 1;
-
-  if (eap->arg && *eap->arg != NUL) {
-    char *p = eap->arg;
-    int relative = 0;  // argument +N/-N means: go to N places to the
-                       // right/left relative to the current position.
-
-    if (*p == '-') {
-      relative = -1;
-      p++;
-    } else if (*p == '+') {
-      relative = 1;
-      p++;
-    }
-
-    char *p_save = p;
-    tab_number = (int)getdigits(&p, false, tab_number);
-
-    if (relative == 0) {
-      if (strcmp(p, "$") == 0) {
-        tab_number = LAST_TAB_NR;
-      } else if (strcmp(p, "#") == 0) {
-        if (valid_tabpage(lastused_tabpage)) {
-          tab_number = tabpage_index(lastused_tabpage);
-        } else {
-          eap->errmsg = ex_errmsg(e_invargval, eap->arg);
-          tab_number = 0;
-          goto theend;
-        }
-      } else if (p == p_save || *p_save == '-' || *p != NUL
-                 || tab_number > LAST_TAB_NR) {
-        // No numbers as argument.
-        eap->errmsg = ex_errmsg(e_invarg2, eap->arg);
-        goto theend;
-      }
-    } else {
-      if (*p_save == NUL) {
-        tab_number = 1;
-      } else if (p == p_save || *p_save == '-' || *p != NUL || tab_number == 0) {
-        // No numbers as argument.
-        eap->errmsg = ex_errmsg(e_invarg2, eap->arg);
-        goto theend;
-      }
-      tab_number = tab_number * relative + tabpage_index(curtab);
-      if (!unaccept_arg0 && relative == -1) {
-        tab_number--;
-      }
-    }
-    if (tab_number < unaccept_arg0 || tab_number > LAST_TAB_NR) {
-      eap->errmsg = ex_errmsg(e_invarg2, eap->arg);
-    }
-  } else if (eap->addr_count > 0) {
-    if (unaccept_arg0 && eap->line2 == 0) {
-      eap->errmsg = _(e_invrange);
-      tab_number = 0;
-    } else {
-      tab_number = (int)eap->line2;
-      if (!unaccept_arg0) {
-        char *cmdp = eap->cmd;
-        while (--cmdp > *eap->cmdlinep
-               && (ascii_iswhite(*cmdp) || ascii_isdigit(*cmdp))) {}
-        if (*cmdp == '-') {
-          tab_number--;
-          if (tab_number < unaccept_arg0) {
-            eap->errmsg = _(e_invrange);
-          }
-        }
-      }
-    }
-  } else {
-    switch (eap->cmdidx) {
-    case CMD_tabnext:
-      tab_number = tabpage_index(curtab) + 1;
-      if (tab_number > LAST_TAB_NR) {
-        tab_number = 1;
-      }
-      break;
-    case CMD_tabmove:
-      tab_number = LAST_TAB_NR;
-      break;
-    default:
-      tab_number = tabpage_index(curtab);
-    }
-  }
-
-theend:
-  return tab_number;
+  return rs_get_tabpage_arg(eap);
 }
 
 static void ex_autocmd(exarg_T *eap)
@@ -8291,3 +7936,212 @@ int nvim_docmd_count_buf_check(exarg_T *eap)
   char *p = skipdigits(eap->arg + 1);
   return *p == NUL || ascii_iswhite(*p);
 }
+
+// =========================================================================
+// Phase 5 accessor functions for Rust FFI
+// =========================================================================
+
+_Static_assert(ADDR_LINES == 0, "ADDR_LINES");
+_Static_assert(ADDR_WINDOWS == 1, "ADDR_WINDOWS");
+_Static_assert(ADDR_ARGUMENTS == 2, "ADDR_ARGUMENTS");
+_Static_assert(ADDR_LOADED_BUFFERS == 3, "ADDR_LOADED_BUFFERS");
+_Static_assert(ADDR_BUFFERS == 4, "ADDR_BUFFERS");
+_Static_assert(ADDR_TABS == 5, "ADDR_TABS");
+_Static_assert(ADDR_TABS_RELATIVE == 6, "ADDR_TABS_RELATIVE");
+_Static_assert(ADDR_QUICKFIX_VALID == 7, "ADDR_QUICKFIX_VALID");
+_Static_assert(ADDR_QUICKFIX == 8, "ADDR_QUICKFIX");
+_Static_assert(ADDR_UNSIGNED == 9, "ADDR_UNSIGNED");
+_Static_assert(ADDR_OTHER == 10, "ADDR_OTHER");
+_Static_assert(ADDR_NONE == 11, "ADDR_NONE");
+_Static_assert(CAR == 13, "CAR");
+_Static_assert(Ctrl_S == 19, "Ctrl_S");
+_Static_assert(Ctrl_N == 14, "Ctrl_N");
+_Static_assert(Ctrl_J == 10, "Ctrl_J");
+_Static_assert(Ctrl_K == 11, "Ctrl_K");
+_Static_assert(Ctrl_R == 18, "Ctrl_R");
+_Static_assert(Ctrl__ == 31, "Ctrl__");
+_Static_assert(Ctrl_RSB == 29, "Ctrl_RSB");
+_Static_assert(Ctrl_G == 7, "Ctrl_G");
+_Static_assert(Ctrl_V == 22, "Ctrl_V");
+_Static_assert(Ctrl_H == 8, "Ctrl_H");
+_Static_assert(Ctrl_L == 12, "Ctrl_L");
+_Static_assert(Ctrl_F == 6, "Ctrl_F");
+_Static_assert(Ctrl_I == 9, "Ctrl_I");
+_Static_assert(Ctrl_D == 4, "Ctrl_D");
+_Static_assert(Ctrl_HAT == 30, "Ctrl_HAT");
+_Static_assert(Ctrl_Q == 17, "Ctrl_Q");
+_Static_assert(Ctrl_C == 3, "Ctrl_C");
+_Static_assert(Ctrl_O == 15, "Ctrl_O");
+_Static_assert(Ctrl_W == 23, "Ctrl_W");
+_Static_assert(Ctrl_X == 24, "Ctrl_X");
+_Static_assert(Ctrl_Z == 26, "Ctrl_Z");
+_Static_assert(Ctrl_T == 20, "Ctrl_T");
+_Static_assert(Ctrl_B == 2, "Ctrl_B");
+_Static_assert(Ctrl_P == 16, "Ctrl_P");
+_Static_assert(EX_RANGE == 0x001u, "EX_RANGE");
+
+// eap field accessors for Phase 5
+void nvim_eap_set_addr_type(exarg_T *eap, int t) { eap->addr_type = (cmd_addr_T)t; }
+char *nvim_eap_get_errmsg(const exarg_T *eap) { return eap->errmsg; }
+void nvim_eap_set_errmsg(exarg_T *eap, char *msg) { eap->errmsg = msg; }
+char **nvim_eap_get_cmdlinep(const exarg_T *eap) { return eap->cmdlinep; }
+
+// CMD enum accessors for Phase 5
+int nvim_docmd_cmd_wincmd(void) { return (int)CMD_wincmd; }
+int nvim_docmd_cmd_cc(void) { return (int)CMD_cc; }
+int nvim_docmd_cmd_ll(void) { return (int)CMD_ll; }
+int nvim_docmd_cmd_diffget(void) { return (int)CMD_diffget; }
+int nvim_docmd_cmd_diffput(void) { return (int)CMD_diffput; }
+int nvim_docmd_cmd_tabmove(void) { return (int)CMD_tabmove; }
+int nvim_docmd_cmd_tabnext(void) { return (int)CMD_tabnext; }
+
+// cmdnames table accessor
+int nvim_docmd_cmdnames_addr_type(int idx)
+{
+  return (int)cmdnames[idx].cmd_addr_type;
+}
+
+// bt_quickfix check for curbuf
+int nvim_docmd_bt_quickfix_curbuf(void)
+{
+  return bt_quickfix(curbuf);
+}
+
+// Window/tab navigation accessors
+int nvim_docmd_current_win_nr(void) { return CURRENT_WIN_NR; }
+int nvim_docmd_last_win_nr(void) { return LAST_WIN_NR; }
+int nvim_docmd_current_tab_nr(void) { return CURRENT_TAB_NR; }
+int nvim_docmd_last_tab_nr(void) { return LAST_TAB_NR; }
+
+// Cursor and arg accessors
+linenr_T nvim_docmd_get_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum; }
+int nvim_docmd_get_curwin_arg_idx(void) { return curwin->w_arg_idx; }
+int nvim_docmd_get_argcount(void) { return ARGCOUNT; }
+
+// Buffer accessors
+int nvim_docmd_get_curbuf_fnum(void) { return curbuf->b_fnum; }
+
+// Quickfix accessors
+int nvim_docmd_qf_get_cur_idx(const exarg_T *eap)
+{
+  return (int)qf_get_cur_idx(eap);
+}
+
+int nvim_docmd_qf_get_cur_valid_idx(const exarg_T *eap)
+{
+  return (int)qf_get_cur_valid_idx(eap);
+}
+
+size_t nvim_docmd_qf_get_valid_size(const exarg_T *eap)
+{
+  return qf_get_valid_size(eap);
+}
+
+/// Walk forward from firstbuf to find first loaded buffer.
+/// Returns fnum of first loaded buffer, or -1 if none found.
+int nvim_docmd_first_loaded_buf_fnum(void)
+{
+  buf_T *buf = firstbuf;
+  while (buf->b_next != NULL && buf->b_ml.ml_mfp == NULL) {
+    buf = buf->b_next;
+  }
+  return buf->b_fnum;
+}
+
+/// Walk backward from lastbuf to find last loaded buffer.
+/// Returns fnum of last loaded buffer, or -1 if none found.
+int nvim_docmd_last_loaded_buf_fnum(void)
+{
+  buf_T *buf = lastbuf;
+  while (buf->b_prev != NULL && buf->b_ml.ml_mfp == NULL) {
+    buf = buf->b_prev;
+  }
+  return buf->b_fnum;
+}
+
+/// Get firstbuf->b_fnum.
+int nvim_docmd_firstbuf_fnum(void) { return firstbuf->b_fnum; }
+
+/// Get lastbuf->b_fnum.
+int nvim_docmd_lastbuf_fnum(void) { return lastbuf->b_fnum; }
+
+/// Emit INTERNAL error for invalid EX_DFLALL addr_type.
+void nvim_docmd_iemsg_dflall(void)
+{
+  iemsg(_("INTERNAL: Cannot use EX_DFLALL "
+          "with ADDR_NONE, ADDR_UNSIGNED or ADDR_QUICKFIX"));
+}
+
+/// Get get_highest_fnum().
+int nvim_docmd_get_highest_fnum(void) { return get_highest_fnum(); }
+
+/// Walk forward from firstbuf: find first loaded buffer fnum.
+/// Returns -1 if all buffers walked to end and none loaded.
+int nvim_docmd_first_loaded_fnum_or_fail(void)
+{
+  buf_T *buf = firstbuf;
+  while (buf->b_ml.ml_mfp == NULL) {
+    if (buf->b_next == NULL) {
+      return -1;
+    }
+    buf = buf->b_next;
+  }
+  return buf->b_fnum;
+}
+
+/// Walk backward from lastbuf: find last loaded buffer fnum.
+/// Returns -1 if all buffers walked to start and none loaded.
+int nvim_docmd_last_loaded_fnum_or_fail(void)
+{
+  buf_T *buf = lastbuf;
+  while (buf->b_ml.ml_mfp == NULL) {
+    if (buf->b_prev == NULL) {
+      return -1;
+    }
+    buf = buf->b_prev;
+  }
+  return buf->b_fnum;
+}
+
+/// Get e_invrange error message.
+char *nvim_docmd_get_e_invrange(void) { return _(e_invrange); }
+
+/// Get e_no_errors error message.
+char *nvim_docmd_get_e_no_errors(void) { return _(e_no_errors); }
+
+// Tabpage accessors for get_tabpage_arg
+int nvim_docmd_tabpage_index_curtab(void) { return tabpage_index(curtab); }
+
+int nvim_docmd_valid_lastused_tabpage(void)
+{
+  return valid_tabpage(lastused_tabpage);
+}
+
+int nvim_docmd_tabpage_index_lastused(void)
+{
+  return tabpage_index(lastused_tabpage);
+}
+
+/// Call getdigits on a string, return the number and advance the pointer.
+int nvim_docmd_getdigits(char **pp, int def)
+{
+  return (int)getdigits(pp, false, def);
+}
+
+/// Get ex_errmsg(e_invargval, arg).
+char *nvim_docmd_ex_errmsg_invargval(const char *arg)
+{
+  return (char *)ex_errmsg(e_invargval, arg);
+}
+
+/// Get ex_errmsg(e_invarg2, arg).
+char *nvim_docmd_ex_errmsg_invarg2(const char *arg)
+{
+  return (char *)ex_errmsg(e_invarg2, arg);
+}
+
+/// Check ascii_iswhite.
+int nvim_docmd_ascii_iswhite(int c) { return ascii_iswhite(c); }
+
+/// Check ascii_isdigit.
+int nvim_docmd_ascii_isdigit(int c) { return ascii_isdigit(c); }

@@ -4,7 +4,12 @@
 //! in Ex commands, such as `1,5`, `%`, `'a,'b`, `.,$`, etc.
 
 use std::ffi::{c_char, c_int, c_long};
+use std::ptr;
 
+use crate::address::{
+    ADDR_ARGUMENTS, ADDR_BUFFERS, ADDR_LINES, ADDR_LOADED_BUFFERS, ADDR_NONE, ADDR_OTHER,
+    ADDR_QUICKFIX, ADDR_QUICKFIX_VALID, ADDR_TABS, ADDR_TABS_RELATIVE, ADDR_UNSIGNED, ADDR_WINDOWS,
+};
 use crate::ExArgHandle;
 
 // =============================================================================
@@ -17,6 +22,9 @@ const EXPAND_NOTHING: c_int = 0;
 /// EX_ZEROR flag: zero in range allowed.
 const EX_ZEROR: u32 = 0x1000;
 
+/// EX_RANGE flag (verified with _Static_assert in C)
+const EX_RANGE: u32 = 0x001;
+
 extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn nvim_eap_get_argt(eap: ExArgHandle) -> u32;
@@ -24,6 +32,27 @@ extern "C" {
     fn nvim_eap_set_line1(eap: ExArgHandle, line: i32);
     fn nvim_eap_get_line2(eap: ExArgHandle) -> i32;
     fn nvim_eap_set_line2(eap: ExArgHandle, line: i32);
+    fn nvim_eap_get_addr_type(eap: ExArgHandle) -> c_int;
+    fn nvim_eap_get_addr_count(eap: ExArgHandle) -> c_int;
+    fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
+
+    // Buffer/window/tab navigation
+    fn nvim_docmd_get_curbuf_line_count() -> i32;
+    fn nvim_docmd_get_argcount() -> c_int;
+    fn nvim_docmd_get_highest_fnum() -> c_int;
+    fn nvim_docmd_first_loaded_fnum_or_fail() -> c_int;
+    fn nvim_docmd_last_loaded_fnum_or_fail() -> c_int;
+    fn nvim_docmd_last_win_nr() -> c_int;
+    fn nvim_docmd_last_tab_nr() -> c_int;
+    fn nvim_docmd_qf_get_valid_size(eap: ExArgHandle) -> usize;
+
+    // CMD enum accessors
+    fn nvim_docmd_cmd_diffget() -> c_int;
+    fn nvim_docmd_cmd_diffput() -> c_int;
+
+    // Error messages
+    fn nvim_docmd_get_e_invrange() -> *mut c_char;
+    fn nvim_docmd_get_e_no_errors() -> *mut c_char;
 }
 
 // =============================================================================
@@ -665,6 +694,106 @@ pub unsafe extern "C" fn rs_skip_range(cmd: *const c_char, ctx: *mut c_int) -> *
 
     // Skip ":" and white space.
     rs_skip_colon_white(p, 0)
+}
+
+// =============================================================================
+// rs_invalid_range — validate range for command
+// =============================================================================
+
+/// Check range in Ex command for validity.
+///
+/// Returns NULL when valid, error message when invalid.
+///
+/// Replaces C `invalid_range()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
+    let line1 = nvim_eap_get_line1(eap);
+    let line2 = nvim_eap_get_line2(eap);
+
+    if line1 < 0 || line2 < 0 || line1 > line2 {
+        return nvim_docmd_get_e_invrange();
+    }
+
+    let argt = nvim_eap_get_argt(eap);
+    if (argt & EX_RANGE) != 0 {
+        let addr_type = nvim_eap_get_addr_type(eap);
+        match addr_type {
+            x if x == ADDR_LINES => {
+                let cmdidx = nvim_eap_get_cmdidx(eap);
+                let diff_extra =
+                    if cmdidx == nvim_docmd_cmd_diffget() || cmdidx == nvim_docmd_cmd_diffput() {
+                        1
+                    } else {
+                        0
+                    };
+                if line2 > nvim_docmd_get_curbuf_line_count() + diff_extra {
+                    return nvim_docmd_get_e_invrange();
+                }
+            }
+            x if x == ADDR_ARGUMENTS => {
+                let argcount = nvim_docmd_get_argcount();
+                // add 1 if ARGCOUNT is 0
+                let limit = argcount + c_int::from(argcount == 0);
+                if line2 > limit as i32 {
+                    return nvim_docmd_get_e_invrange();
+                }
+            }
+            x if x == ADDR_BUFFERS => {
+                if line1 < 1 || line2 > nvim_docmd_get_highest_fnum() as i32 {
+                    return nvim_docmd_get_e_invrange();
+                }
+            }
+            x if x == ADDR_LOADED_BUFFERS => {
+                let first_loaded = nvim_docmd_first_loaded_fnum_or_fail();
+                if first_loaded < 0 {
+                    return nvim_docmd_get_e_invrange();
+                }
+                if line1 < first_loaded as i32 {
+                    return nvim_docmd_get_e_invrange();
+                }
+                let last_loaded = nvim_docmd_last_loaded_fnum_or_fail();
+                if last_loaded < 0 {
+                    return nvim_docmd_get_e_invrange();
+                }
+                if line2 > last_loaded as i32 {
+                    return nvim_docmd_get_e_invrange();
+                }
+            }
+            x if x == ADDR_WINDOWS => {
+                if line2 > nvim_docmd_last_win_nr() as i32 {
+                    return nvim_docmd_get_e_invrange();
+                }
+            }
+            x if x == ADDR_TABS => {
+                if line2 > nvim_docmd_last_tab_nr() as i32 {
+                    return nvim_docmd_get_e_invrange();
+                }
+            }
+            x if x == ADDR_TABS_RELATIVE || x == ADDR_OTHER => {
+                // Any range is OK.
+            }
+            x if x == ADDR_QUICKFIX => {
+                debug_assert!(line2 >= 0);
+                if line2 <= 0 {
+                    if nvim_eap_get_addr_count(eap) == 0 {
+                        return nvim_docmd_get_e_no_errors();
+                    }
+                    return nvim_docmd_get_e_invrange();
+                }
+            }
+            x if x == ADDR_QUICKFIX_VALID => {
+                if (line2 != 1 && (line2 as usize) > nvim_docmd_qf_get_valid_size(eap)) || line2 < 0
+                {
+                    return nvim_docmd_get_e_invrange();
+                }
+            }
+            x if x == ADDR_UNSIGNED || x == ADDR_NONE => {
+                // Will give an error elsewhere.
+            }
+            _ => {}
+        }
+    }
+    ptr::null_mut()
 }
 
 // =============================================================================
