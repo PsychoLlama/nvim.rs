@@ -127,6 +127,15 @@ _Static_assert(EXPAND_USER_ADDR_TYPE == 43, "EXPAND_USER_ADDR_TYPE");
 _Static_assert(EXPAND_SHELLCMDLINE == 57, "EXPAND_SHELLCMDLINE");
 _Static_assert(EXPAND_LUA == 63, "EXPAND_LUA");
 
+// Rust FFI declarations (Phase 1: static data tables & trivial lookups)
+extern const char *rs_get_command_complete(int arg);
+extern const char *rs_get_user_cmd_complete(int idx);
+extern int rs_cmdcomplete_type_to_str(int expand, const char *compl_arg, char *buf, size_t buflen);
+extern int rs_usercmd_str_to_type(const char *complete_str);
+extern const char *rs_get_user_cmd_addr_type(int idx);
+extern const char *rs_get_user_cmd_flags(int idx);
+extern const char *rs_get_user_cmd_nargs(int idx);
+
 static const char e_argument_required_for_str[]
   = N_("E179: Argument required for %s");
 static const char e_no_such_user_defined_command_str[]
@@ -458,54 +467,31 @@ char *get_user_command_name(int idx, int cmdidx)
 /// Function given to ExpandGeneric() to obtain the list of user address type names.
 char *get_user_cmd_addr_type(expand_T *xp, int idx)
 {
-  return addr_type_complete[idx].name;
+  return (char *)rs_get_user_cmd_addr_type(idx);
 }
 
 /// Function given to ExpandGeneric() to obtain the list of user command
 /// attributes.
 char *get_user_cmd_flags(expand_T *xp, int idx)
 {
-  static char *user_cmd_flags[] = { "addr",   "bang",     "bar",
-                                    "buffer", "complete", "count",
-                                    "nargs",  "range",    "register",
-                                    "keepscript" };
-
-  if (idx >= (int)ARRAY_SIZE(user_cmd_flags)) {
-    return NULL;
-  }
-  return user_cmd_flags[idx];
+  return (char *)rs_get_user_cmd_flags(idx);
 }
 
 /// Function given to ExpandGeneric() to obtain the list of values for -nargs.
 char *get_user_cmd_nargs(expand_T *xp, int idx)
 {
-  static char *user_cmd_nargs[] = { "0", "1", "*", "?", "+" };
-
-  if (idx >= (int)ARRAY_SIZE(user_cmd_nargs)) {
-    return NULL;
-  }
-  return user_cmd_nargs[idx];
+  return (char *)rs_get_user_cmd_nargs(idx);
 }
 
 static char *get_command_complete(int arg)
 {
-  if (arg < 0 || arg >= (int)(ARRAY_SIZE(command_complete))) {
-    return NULL;
-  }
-  return (char *)command_complete[arg];
+  return (char *)rs_get_command_complete(arg);
 }
 
 /// Function given to ExpandGeneric() to obtain the list of values for -complete.
 char *get_user_cmd_complete(expand_T *xp, int idx)
 {
-  if (idx >= (int)ARRAY_SIZE(command_complete)) {
-    return NULL;
-  }
-  char *cmd_compl = get_command_complete(idx);
-  if (cmd_compl == NULL || idx == EXPAND_USER_LUA) {
-    return "";
-  }
-  return cmd_compl;
+  return (char *)rs_get_user_cmd_complete(idx);
 }
 
 /// Get the name of completion type "expand" as an allocated string.
@@ -513,41 +499,19 @@ char *get_user_cmd_complete(expand_T *xp, int idx)
 /// Returns NULL if no completion is available.
 char *cmdcomplete_type_to_str(int expand, const char *compl_arg)
 {
-  char *cmd_compl = get_command_complete(expand);
-  if (cmd_compl == NULL || expand == EXPAND_USER_LUA) {
+  // Query length from Rust
+  int len = rs_cmdcomplete_type_to_str(expand, compl_arg, NULL, 0);
+  if (len < 0) {
     return NULL;
   }
-
-  if (expand == EXPAND_USER_LIST || expand == EXPAND_USER_DEFINED) {
-    size_t buflen = strlen(cmd_compl) + strlen(compl_arg) + 2;
-    char *buffer = xmalloc(buflen);
-    snprintf(buffer, buflen, "%s,%s", cmd_compl, compl_arg);
-    return buffer;
-  }
-
-  return xstrdup(cmd_compl);
+  char *buf = xmalloc((size_t)len + 1);
+  rs_cmdcomplete_type_to_str(expand, compl_arg, buf, (size_t)len + 1);
+  return buf;
 }
 
 int cmdcomplete_str_to_type(const char *complete_str)
 {
-  if (strncmp(complete_str, "custom,", 7) == 0) {
-    return EXPAND_USER_DEFINED;
-  }
-  if (strncmp(complete_str, "customlist,", 11) == 0) {
-    return EXPAND_USER_LIST;
-  }
-
-  for (int i = 0; i < (int)(ARRAY_SIZE(command_complete)); i++) {
-    char *cmd_compl = get_command_complete(i);
-    if (cmd_compl == NULL) {
-      continue;
-    }
-    if (strcmp(complete_str, command_complete[i]) == 0) {
-      return i;
-    }
-  }
-
-  return EXPAND_NOTHING;
+  return rs_usercmd_str_to_type(complete_str);
 }
 
 static void uc_list(char *name, size_t name_len)
