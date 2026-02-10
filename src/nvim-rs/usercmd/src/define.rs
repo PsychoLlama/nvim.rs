@@ -9,8 +9,11 @@
 #![allow(clippy::derivable_impls)]
 #![allow(clippy::match_same_arms)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 // =============================================================================
 // UC_* Constants — from usercmd.h
@@ -366,6 +369,94 @@ pub extern "C" fn rs_usercmd_def_new() -> UserCmdDef {
     UserCmdDef::new()
 }
 
+// =============================================================================
+// Name Validation
+// =============================================================================
+
+/// Check if byte is ASCII alphabetic (a-zA-Z)
+const fn ascii_is_alpha(c: u8) -> bool {
+    c.is_ascii_alphabetic()
+}
+
+/// Check if byte is ASCII alphanumeric (a-zA-Z0-9)
+const fn ascii_is_alnum(c: u8) -> bool {
+    c.is_ascii_alphanumeric()
+}
+
+/// Check if byte ends an ex-command (NUL, '|', '"', '\n')
+const fn ends_excmd(c: u8) -> bool {
+    c == 0 || c == b'|' || c == b'"' || c == b'\n'
+}
+
+/// Check if byte is whitespace for Vim purposes (space or tab)
+const fn ascii_is_white(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+/// Validate a user command name.
+///
+/// Scans from the beginning of the name: it must start with an ASCII letter,
+/// followed by zero or more ASCII alphanumeric characters. The character
+/// immediately after the valid prefix must be a whitespace or an ex-command
+/// terminator (NUL, '|', '"', '\n').
+///
+/// Returns the number of valid bytes in the name prefix, or -1 if the name
+/// is invalid (doesn't start with alpha, or the character after the
+/// alphanumeric prefix is neither whitespace nor an excmd terminator).
+pub fn uc_validate_name(name: &[u8]) -> isize {
+    if name.is_empty() || !ascii_is_alpha(name[0]) {
+        // If the first character is not alpha, check if it's an excmd
+        // terminator or whitespace — the C code checks `*name` after the
+        // while loop, so an empty/non-alpha lead goes straight to the
+        // terminator check.
+        let first = if name.is_empty() { 0u8 } else { name[0] };
+        if !ends_excmd(first) && !ascii_is_white(first) {
+            return -1;
+        }
+        return 0;
+    }
+
+    let mut i = 0;
+    // First character is alpha (checked above), advance past alnum
+    while i < name.len() && ascii_is_alnum(name[i]) {
+        i += 1;
+    }
+
+    // Check the character after the valid prefix
+    let next = if i < name.len() { name[i] } else { 0u8 };
+    if !ends_excmd(next) && !ascii_is_white(next) {
+        return -1;
+    }
+
+    i as isize
+}
+
+/// FFI export: Validate a user command name.
+///
+/// Takes a NUL-terminated C string. Returns a pointer past the valid name
+/// prefix, or NULL if the name is invalid. Matches the C `uc_validate_name`
+/// signature exactly.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uc_validate_name(name: *const c_char) -> *const c_char {
+    if name.is_null() {
+        return std::ptr::null();
+    }
+    // Build a slice up to and including the NUL terminator so we can check
+    // the character after the valid prefix.  We scan for the NUL.
+    let mut len = 0usize;
+    while unsafe { *name.add(len) } != 0 {
+        len += 1;
+    }
+    // Include the NUL in the slice so ends_excmd(0) works at the boundary
+    let slice = unsafe { std::slice::from_raw_parts(name.cast::<u8>(), len + 1) };
+    let result = uc_validate_name(slice);
+    if result < 0 {
+        std::ptr::null()
+    } else {
+        unsafe { name.add(result as usize) }
+    }
+}
+
 /// FFI export: Check if definition is valid
 #[no_mangle]
 pub extern "C" fn rs_usercmd_def_is_valid(def: *const UserCmdDef) -> c_int {
@@ -497,5 +588,108 @@ mod tests {
 
         assert_eq!(rs_usercmd_nargs_requires_arg(NARGS_ONE), 1);
         assert_eq!(rs_usercmd_nargs_requires_arg(NARGS_ZERO), 0);
+    }
+
+    // =========================================================================
+    // uc_validate_name tests
+    // =========================================================================
+
+    #[test]
+    fn test_uc_validate_name_simple() {
+        // "Hello" followed by NUL
+        assert_eq!(uc_validate_name(b"Hello\0"), 5);
+    }
+
+    #[test]
+    fn test_uc_validate_name_with_trailing_space() {
+        // "Cmd arg" — stops at space
+        assert_eq!(uc_validate_name(b"Cmd arg"), 3);
+    }
+
+    #[test]
+    fn test_uc_validate_name_with_trailing_tab() {
+        assert_eq!(uc_validate_name(b"Cmd\targ"), 3);
+    }
+
+    #[test]
+    fn test_uc_validate_name_with_bar() {
+        assert_eq!(uc_validate_name(b"Cmd|other"), 3);
+    }
+
+    #[test]
+    fn test_uc_validate_name_with_quote() {
+        assert_eq!(uc_validate_name(b"Cmd\"comment"), 3);
+    }
+
+    #[test]
+    fn test_uc_validate_name_with_newline() {
+        assert_eq!(uc_validate_name(b"Cmd\nrest"), 3);
+    }
+
+    #[test]
+    fn test_uc_validate_name_alphanumeric() {
+        // Contains digits after alpha
+        assert_eq!(uc_validate_name(b"Cmd123\0"), 6);
+    }
+
+    #[test]
+    fn test_uc_validate_name_starts_with_digit() {
+        // Doesn't start with alpha → checks first char, '1' is not excmd/white
+        assert_eq!(uc_validate_name(b"1Cmd\0"), -1);
+    }
+
+    #[test]
+    fn test_uc_validate_name_starts_with_special() {
+        // '@' is not alpha, not excmd, not white
+        assert_eq!(uc_validate_name(b"@Cmd\0"), -1);
+    }
+
+    #[test]
+    fn test_uc_validate_name_invalid_after_alnum() {
+        // "Cmd@" — '@' is not excmd/white
+        assert_eq!(uc_validate_name(b"Cmd@rest"), -1);
+    }
+
+    #[test]
+    fn test_uc_validate_name_empty() {
+        // Empty input with just NUL
+        assert_eq!(uc_validate_name(b"\0"), 0);
+    }
+
+    #[test]
+    fn test_uc_validate_name_truly_empty() {
+        // Zero-length slice — first char is 0 (implicit NUL), ends_excmd(0) is true
+        assert_eq!(uc_validate_name(b""), 0);
+    }
+
+    #[test]
+    fn test_uc_validate_name_just_bar() {
+        // '|' is not alpha → check '|' which is ends_excmd → return 0
+        assert_eq!(uc_validate_name(b"|\0"), 0);
+    }
+
+    #[test]
+    fn test_uc_validate_name_ffi() {
+        // Test via FFI wrapper
+        let result = unsafe { rs_uc_validate_name(c"Hello".as_ptr()) };
+        assert!(!result.is_null());
+        // Should point 5 bytes past start
+        let offset = unsafe { result.offset_from(c"Hello".as_ptr()) };
+        assert_eq!(offset, 5);
+
+        // Invalid name
+        let result = unsafe { rs_uc_validate_name(c"1Bad".as_ptr()) };
+        assert!(result.is_null());
+
+        // NULL input
+        let result = unsafe { rs_uc_validate_name(std::ptr::null()) };
+        assert!(result.is_null());
+
+        // Name with space after
+        let s = c"Cmd rest";
+        let result = unsafe { rs_uc_validate_name(s.as_ptr()) };
+        assert!(!result.is_null());
+        let offset = unsafe { result.offset_from(s.as_ptr()) };
+        assert_eq!(offset, 3);
     }
 }

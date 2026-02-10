@@ -108,7 +108,7 @@ pub fn get_command_complete(arg: c_int) -> Option<&'static [u8]> {
 
 /// Sparse table mapping EXPAND_* index → name (NUL-terminated byte string).
 /// Indices with no entry are None. Matches usercmd.c `command_complete[]`.
-static COMMAND_COMPLETE: [Option<&[u8]>; EXPAND_COUNT] = {
+pub static COMMAND_COMPLETE: [Option<&[u8]>; EXPAND_COUNT] = {
     let mut table: [Option<&[u8]>; EXPAND_COUNT] = [None; EXPAND_COUNT];
     table[EXPAND_ARGLIST as usize] = Some(b"arglist\0");
     table[EXPAND_AUGROUP as usize] = Some(b"augroup\0");
