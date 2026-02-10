@@ -130,6 +130,7 @@ rust-test:
       -p nvim-rs \
       -p nvim-search \
       -p nvim-session \
+      -p nvim-shada \
       -p nvim-statusline \
       -p nvim-strings \
       -p nvim-syntax \
