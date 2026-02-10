@@ -202,6 +202,13 @@ extern void rs_set_context_with_pattern(expand_T *xp);
 extern void rs_set_context_for_wildcard_arg(const char *arg, int is_shell_cmd,
                                             expand_T *xp, int *complp);
 
+// Phase 6: Callback generators
+extern char *rs_get_filetypecmd_arg(expand_T *xp, int idx);
+extern char *rs_get_breakadd_arg(expand_T *xp, int idx);
+extern char *rs_get_retab_arg(expand_T *xp, int idx);
+extern char *rs_get_messages_arg(expand_T *xp, int idx);
+extern char *rs_get_mapclear_arg(expand_T *xp, int idx);
+
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
 {
@@ -718,6 +725,18 @@ void nvim_cmdexpand_set_breakpt_expand_what(int val)
 void nvim_cmdexpand_set_filetype_expand_what(int val)
 {
   filetype_expand_what = val;
+}
+
+/// Get the static breakpt_expand_what variable (for Rust FFI).
+int nvim_cmdexpand_get_breakpt_expand_what(void)
+{
+  return (int)breakpt_expand_what;
+}
+
+/// Get the static filetype_expand_what variable (for Rust FFI).
+int nvim_cmdexpand_get_filetype_expand_what(void)
+{
+  return (int)filetype_expand_what;
 }
 
 // Static asserts for Phase 5 constants
@@ -2918,27 +2937,7 @@ static int expand_files_and_dirs(expand_T *xp, char *pat, char ***matches, int *
 /// ":filetype {plugin,indent}" command.
 static char *get_filetypecmd_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 {
-  if (idx < 0) {
-    return NULL;
-  }
-
-  if (filetype_expand_what == EXP_FILETYPECMD_ALL && idx < 4) {
-    char *opts_all[] = { "indent", "plugin", "on", "off" };
-    return opts_all[idx];
-  }
-  if (filetype_expand_what == EXP_FILETYPECMD_PLUGIN && idx < 3) {
-    char *opts_plugin[] = { "plugin", "on", "off" };
-    return opts_plugin[idx];
-  }
-  if (filetype_expand_what == EXP_FILETYPECMD_INDENT && idx < 3) {
-    char *opts_indent[] = { "indent", "on", "off" };
-    return opts_indent[idx];
-  }
-  if (filetype_expand_what == EXP_FILETYPECMD_ONOFF && idx < 2) {
-    char *opts_onoff[] = { "on", "off" };
-    return opts_onoff[idx];
-  }
-  return NULL;
+  return rs_get_filetypecmd_arg(xp, idx);
 }
 
 /// Function given to ExpandGeneric() to obtain the possible arguments of the
@@ -2946,25 +2945,7 @@ static char *get_filetypecmd_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 /// ":breakdel {func, file, here}" command.
 static char *get_breakadd_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 {
-  if (idx >= 0 && idx <= 3) {
-    char *opts[] = { "expr", "file", "func", "here" };
-
-    // breakadd {expr, file, func, here}
-    if (breakpt_expand_what == EXP_BREAKPT_ADD) {
-      return opts[idx];
-    } else if (breakpt_expand_what == EXP_BREAKPT_DEL) {
-      // breakdel {func, file, here}
-      if (idx <= 2) {
-        return opts[idx + 1];
-      }
-    } else {
-      // profdel {func, file}
-      if (idx <= 1) {
-        return opts[idx + 1];
-      }
-    }
-  }
-  return NULL;
+  return rs_get_breakadd_arg(xp, idx);
 }
 
 /// Function given to ExpandGeneric() to obtain the possible arguments for the
@@ -2984,28 +2965,19 @@ static char *get_scriptnames_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 /// ":retab {-indentonly}" option.
 static char *get_retab_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 {
-  if (idx == 0) {
-    return "-indentonly";
-  }
-  return NULL;
+  return rs_get_retab_arg(xp, idx);
 }
 
 /// Function given to ExpandGeneric() to obtain the possible arguments of the
 /// ":messages {clear}" command.
 static char *get_messages_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 {
-  if (idx == 0) {
-    return "clear";
-  }
-  return NULL;
+  return rs_get_messages_arg(xp, idx);
 }
 
 static char *get_mapclear_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 {
-  if (idx == 0) {
-    return "<buffer>";
-  }
-  return NULL;
+  return rs_get_mapclear_arg(xp, idx);
 }
 
 /// Completion for |:checkhealth| command.
