@@ -1,21 +1,19 @@
-Plan: ~/.claude/plans/glowing-soaring-cookie.md
+Plan: ~/.claude/plans/binary-gliding-floyd.md
 
-All plan steps are complete. Here's a summary:
+All 8 phases of the bufwrite.c migration are complete. Here's a summary:
 
-## Migration Complete: `arglist.c` → Rust
+**Phase 0**: Created bufwrite crate scaffold
+**Phase 1**: Migrated line ending / BOM / encoding helpers
+**Phase 2**: Migrated `ucs2bytes` and `make_bom`
+**Phase 3**: Migrated file info functions (`check_mtime`, `get_fileinfo_os`, `get_fileinfo`)
+**Phase 4**: Migrated conversion pipeline (`buf_write_bytes`, `buf_write_convert`, iconv)
+**Phase 5**: Migrated backup management (`buf_write_make_backup`)
+**Phase 6**: Migrated autocommand wrappers (`buf_write_do_autocmds`, `buf_write_do_post_autocmds`)
+**Phase 7**: Migrated the main `buf_write()` orchestrator (~880 lines) - the largest and most complex function
 
-**Commits:** 10 phased commits (`a5798b6d98` through `182d3bc019`)
-
-### What was done:
-- **41 functions** migrated from `arglist.c` to the `nvim-arglist` Rust crate across 10 phases
-- C file now contains only thin `rs_*` wrappers + C accessor functions
-- ~100+ C accessor functions (`nvim_al_*`) for struct fields and globals
-- `_Static_assert` guards for all hardcoded constants
-- Workspace + justfile registration fixed
-
-### Verification:
-- `just build` — passes
-- `just smoke-test` — passes (headless start + 29/29 regexp tests)
-- `just rust-fmt-check` — clean
-- `just rust-clippy` — clean
-- `just rust-test` — 3739 tests pass
+The C `buf_write()` function is now a thin wrapper calling `rs_buf_write()` in Rust. All verification passes:
+- `just build` - links successfully
+- `just smoke-test` - nvim starts, 29 regexp smoke tests pass
+- `just rust-fmt-check` - clean
+- `just rust-clippy` - clean
+- `just rust-test` - 3779/3779 tests pass
