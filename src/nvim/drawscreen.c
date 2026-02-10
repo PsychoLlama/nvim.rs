@@ -151,25 +151,14 @@ static bool msg_grid_invalid = false;
 static bool resizing_autocmd = false;
 static bool conceal_cursor_used = false;
 
+extern void rs_conceal_check_cursor_line(void);
+
 /// Check if the cursor line needs to be redrawn because of 'concealcursor'.
 ///
 /// When cursor is moved at the same time, both lines will be redrawn regardless.
 void conceal_check_cursor_line(void)
 {
-  bool should_conceal = conceal_cursor_line(curwin);
-  if (curwin->w_p_cole <= 0 || conceal_cursor_used == should_conceal) {
-    return;
-  }
-
-  redrawWinline(curwin, curwin->w_cursor.lnum);
-
-  // Concealed line visibility toggled.
-  if (decor_conceal_line(curwin, curwin->w_cursor.lnum - 1, true)) {
-    changed_window_setting(curwin);
-  }
-  // Need to recompute cursor column, e.g., when starting Visual mode
-  // without concealing.
-  curs_columns(curwin, true);
+  rs_conceal_check_cursor_line();
 }
 
 /// Resize default_grid to Rows and Columns.
@@ -2610,19 +2599,14 @@ bool win_cursorline_standout(const win_T *wp)
   return rs_win_cursorline_standout((win_T *)wp);
 }
 
+extern void rs_win_update_cursorline(win_T *wp, foldinfo_T *foldinfo);
+
 /// Update w_cursorline, taking care to set it to the to the start of a closed fold.
 ///
 /// @param[out] foldinfo foldinfo for the cursor line
 void win_update_cursorline(win_T *wp, foldinfo_T *foldinfo)
 {
-  wp->w_cursorline = win_cursorline_standout(wp) ? wp->w_cursor.lnum : 0;
-  if (wp->w_p_cul) {
-    // Make sure that the cursorline on a closed fold is redrawn
-    *foldinfo = fold_info(wp, wp->w_cursor.lnum);
-    if (foldinfo->fi_level != 0 && foldinfo->fi_lines > 0) {
-      wp->w_cursorline = foldinfo->fi_lnum;
-    }
-  }
+  rs_win_update_cursorline(wp, foldinfo);
 }
 
 // =============================================================================
@@ -2854,3 +2838,40 @@ void nvim_maketitle(void) { maketitle(); }
 
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
 _Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");
+
+// Phase 5 accessors for conceal_check_cursor_line() / win_update_cursorline()
+
+/// Get conceal_cursor_used (file-static).
+int nvim_get_conceal_cursor_used(void) { return conceal_cursor_used ? 1 : 0; }
+
+/// Set conceal_cursor_used (file-static).
+void nvim_set_conceal_cursor_used(int val) { conceal_cursor_used = (val != 0); }
+
+/// Get w_p_cole option for a window.
+int nvim_win_get_w_p_cole(win_T *wp) { return wp ? wp->w_p_cole : 0; }
+
+/// Get w_p_cul option for a window.
+int nvim_win_get_w_p_cul(win_T *wp) { return wp ? wp->w_p_cul : 0; }
+
+/// Set w_cursorline for a window.
+void nvim_win_set_w_cursorline(win_T *wp, linenr_T val) { if (wp) { wp->w_cursorline = val; } }
+
+/// Get w_cursorline for a window.
+linenr_T nvim_win_get_w_cursorline(win_T *wp) { return wp ? wp->w_cursorline : 0; }
+
+/// Call fold_info and write results to output fields. Returns fi_level.
+int nvim_fold_info(win_T *wp, linenr_T lnum, linenr_T *out_fi_lnum, linenr_T *out_fi_lines,
+                   foldinfo_T *out_foldinfo)
+{
+  foldinfo_T fi = fold_info(wp, lnum);
+  if (out_foldinfo) {
+    *out_foldinfo = fi;
+  }
+  if (out_fi_lnum) {
+    *out_fi_lnum = fi.fi_lnum;
+  }
+  if (out_fi_lines) {
+    *out_fi_lines = fi.fi_lines;
+  }
+  return fi.fi_level;
+}

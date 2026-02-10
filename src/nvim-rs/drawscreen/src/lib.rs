@@ -2060,6 +2060,95 @@ pub extern "C" fn rs_redraw_custom_title_later() -> c_int {
     }
 }
 
+// =============================================================================
+// Phase 5: Conceal Check and Cursorline Update
+// =============================================================================
+
+/// Opaque handle to C's foldinfo_T.
+type FoldinfoHandle = *mut c_void;
+
+extern "C" {
+    fn nvim_get_conceal_cursor_used() -> c_int;
+    fn nvim_set_conceal_cursor_used(val: c_int);
+    fn nvim_win_get_w_p_cole(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_p_cul(wp: WinHandle) -> c_int;
+    fn nvim_win_set_w_cursorline(wp: WinHandle, val: LinenrT);
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
+    fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
+    fn nvim_changed_window_setting(wp: WinHandle);
+    fn nvim_curs_columns(wp: WinHandle, may_scroll: c_int);
+    fn nvim_fold_info(
+        wp: WinHandle,
+        lnum: LinenrT,
+        out_fi_lnum: *mut LinenrT,
+        out_fi_lines: *mut LinenrT,
+        out_foldinfo: FoldinfoHandle,
+    ) -> c_int;
+    // Already-migrated functions in other crates
+    fn rs_conceal_cursor_line(wp: WinHandle) -> c_int;
+    fn rs_win_cursorline_standout(wp: WinHandle) -> c_int;
+}
+
+/// Check if the cursor line needs to be redrawn because of 'concealcursor'.
+///
+/// Rust equivalent of `conceal_check_cursor_line()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_conceal_check_cursor_line() {
+    unsafe {
+        let curwin = nvim_get_curwin();
+        let should_conceal = rs_conceal_cursor_line(curwin) != 0;
+        if nvim_win_get_w_p_cole(curwin) <= 0
+            || (nvim_get_conceal_cursor_used() != 0) == should_conceal
+        {
+            return;
+        }
+
+        let cursor_lnum = nvim_win_get_cursor_lnum(curwin);
+        rs_redrawWinline(curwin, cursor_lnum);
+
+        // Concealed line visibility toggled.
+        if nvim_decor_conceal_line(curwin, cursor_lnum - 1, 1) != 0 {
+            nvim_changed_window_setting(curwin);
+        }
+        // Need to recompute cursor column, e.g., when starting Visual mode
+        // without concealing.
+        nvim_curs_columns(curwin, 1);
+    }
+}
+
+/// Update w_cursorline, setting it to the start of a closed fold.
+///
+/// Rust equivalent of `win_update_cursorline()` in drawscreen.c.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_win_update_cursorline(wp: WinHandle, foldinfo: FoldinfoHandle) {
+    unsafe {
+        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        let cursorline = if rs_win_cursorline_standout(wp) != 0 {
+            cursor_lnum
+        } else {
+            0
+        };
+        nvim_win_set_w_cursorline(wp, cursorline);
+
+        if nvim_win_get_w_p_cul(wp) != 0 {
+            // Make sure that the cursorline on a closed fold is redrawn
+            let mut fi_lnum: LinenrT = 0;
+            let mut fi_lines: LinenrT = 0;
+            let fi_level = nvim_fold_info(
+                wp,
+                cursor_lnum,
+                &raw mut fi_lnum,
+                &raw mut fi_lines,
+                foldinfo,
+            );
+            if fi_level != 0 && fi_lines > 0 {
+                nvim_win_set_w_cursorline(wp, fi_lnum);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
