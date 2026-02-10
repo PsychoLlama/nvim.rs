@@ -449,6 +449,12 @@ extern void rs_nv_at(cmdarg_T *cap);
 extern void rs_nv_join(cmdarg_T *cap);
 extern void rs_nv_open(cmdarg_T *cap);
 
+// Wave 2 Phase 1 functions
+extern void rs_reset_VIsual_and_resel(void);
+extern void rs_reset_VIsual(void);
+extern void rs_restore_visual_mode(void);
+extern void rs_may_clear_cmdline(void);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -1638,6 +1644,52 @@ int nvim_get_GETF_SETMARK(void)
 int nvim_get_GETF_ALT(void)
 {
   return GETF_ALT;
+}
+
+// =============================================================================
+// Wave 2 Phase 1 accessors for Rust FFI
+// =============================================================================
+
+/// Get VIsual_mode_orig (static global).
+int nvim_get_VIsual_mode_orig(void)
+{
+  return VIsual_mode_orig;
+}
+
+/// Set VIsual_mode_orig (static global).
+void nvim_set_VIsual_mode_orig(int val)
+{
+  VIsual_mode_orig = val;
+}
+
+/// Get curbuf->b_visual.vi_mode.
+int nvim_get_curbuf_visual_vi_mode(void)
+{
+  return curbuf->b_visual.vi_mode;
+}
+
+/// Set curbuf->b_visual.vi_mode.
+void nvim_set_curbuf_visual_vi_mode(int val)
+{
+  curbuf->b_visual.vi_mode = val;
+}
+
+/// Get mode_displayed global.
+bool nvim_get_mode_displayed(void)
+{
+  return mode_displayed;
+}
+
+/// Set clear_cmdline global.
+void nvim_set_clear_cmdline(bool val)
+{
+  clear_cmdline = val;
+}
+
+/// Wrapper for clear_showcmd().
+void nvim_clear_showcmd_call(void)
+{
+  clear_showcmd();
 }
 
 /// Wrapper for nv_Zet C implementation.
@@ -3049,29 +3101,18 @@ void end_visual_mode(void)
 /// Reset VIsual_active and VIsual_reselect.
 void reset_VIsual_and_resel(void)
 {
-  if (VIsual_active) {
-    end_visual_mode();
-    redraw_curbuf_later(UPD_INVERTED);  // delete the inversion later
-  }
-  VIsual_reselect = false;
+  rs_reset_VIsual_and_resel();
 }
 
 /// Reset VIsual_active and VIsual_reselect if it's set.
 void reset_VIsual(void)
 {
-  if (VIsual_active) {
-    end_visual_mode();
-    redraw_curbuf_later(UPD_INVERTED);  // delete the inversion later
-    VIsual_reselect = false;
-  }
+  rs_reset_VIsual();
 }
 
 void restore_visual_mode(void)
 {
-  if (VIsual_mode_orig != NUL) {
-    curbuf->b_visual.vi_mode = VIsual_mode_orig;
-    VIsual_mode_orig = NUL;
-  }
+  rs_restore_visual_mode();
 }
 
 /// Check for a balloon-eval special item to include when searching for an
@@ -3278,12 +3319,7 @@ static void unshift_special(cmdarg_T *cap)
 /// command displayed.
 void may_clear_cmdline(void)
 {
-  if (mode_displayed) {
-    // unshow visual mode later
-    clear_cmdline = true;
-  } else {
-    clear_showcmd();
-  }
+  rs_may_clear_cmdline();
 }
 
 // Routines for displaying a partly typed command

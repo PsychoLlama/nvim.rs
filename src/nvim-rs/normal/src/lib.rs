@@ -192,6 +192,18 @@ extern "C" {
     fn ex_help(eap: *mut std::ffi::c_void);
     fn do_cmdline_cmd(cmd: *const std::ffi::c_char);
     fn end_visual_mode();
+
+    // Wave 2 Phase 1: Visual state accessors
+    fn nvim_redraw_curbuf_inverted();
+    fn nvim_set_VIsual_reselect(val: bool);
+    fn nvim_get_VIsual_mode_orig() -> c_int;
+    fn nvim_set_VIsual_mode_orig(val: c_int);
+    #[allow(dead_code)]
+    fn nvim_get_curbuf_visual_vi_mode() -> c_int;
+    fn nvim_set_curbuf_visual_vi_mode(val: c_int);
+    fn nvim_get_mode_displayed() -> bool;
+    fn nvim_set_clear_cmdline(val: bool);
+    fn nvim_clear_showcmd_call();
 }
 
 // Operator type constants (must match ops.h)
@@ -2141,6 +2153,70 @@ pub unsafe extern "C" fn rs_nv_join(cap: CapHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_open(cap: CapHandle) {
     nvim_nv_open_impl(cap);
+}
+
+// =============================================================================
+// Wave 2 Phase 1: Visual State Helpers
+// =============================================================================
+
+/// Reset VIsual_active and VIsual_reselect.
+///
+/// Ends visual mode and redraws if visual was active, then unconditionally
+/// clears VIsual_reselect.
+#[no_mangle]
+pub extern "C" fn rs_reset_VIsual_and_resel() {
+    unsafe {
+        if nvim_get_VIsual_active() != 0 {
+            end_visual_mode();
+            nvim_redraw_curbuf_inverted();
+        }
+        nvim_set_VIsual_reselect(false);
+    }
+}
+
+/// Reset VIsual_active and VIsual_reselect if visual was active.
+///
+/// Only clears VIsual_reselect when visual mode was active (unlike
+/// `rs_reset_VIsual_and_resel` which always clears it).
+#[no_mangle]
+pub extern "C" fn rs_reset_VIsual() {
+    unsafe {
+        if nvim_get_VIsual_active() != 0 {
+            end_visual_mode();
+            nvim_redraw_curbuf_inverted();
+            nvim_set_VIsual_reselect(false);
+        }
+    }
+}
+
+/// Restore VIsual_mode_orig to curbuf's visual mode.
+///
+/// If VIsual_mode_orig is set (non-NUL), copies it to curbuf->b_visual.vi_mode
+/// and resets VIsual_mode_orig to NUL.
+#[no_mangle]
+pub extern "C" fn rs_restore_visual_mode() {
+    unsafe {
+        let orig = nvim_get_VIsual_mode_orig();
+        if orig != NUL_CHAR {
+            nvim_set_curbuf_visual_vi_mode(orig);
+            nvim_set_VIsual_mode_orig(NUL_CHAR);
+        }
+    }
+}
+
+/// Clear the command line or update the displayed command.
+///
+/// If mode is currently displayed, sets `clear_cmdline` to clear it later.
+/// Otherwise calls `clear_showcmd()` to update the displayed command.
+#[no_mangle]
+pub extern "C" fn rs_may_clear_cmdline() {
+    unsafe {
+        if nvim_get_mode_displayed() {
+            nvim_set_clear_cmdline(true);
+        } else {
+            nvim_clear_showcmd_call();
+        }
+    }
 }
 
 // =============================================================================
