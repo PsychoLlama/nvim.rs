@@ -102,6 +102,20 @@ extern "C" {
     fn rs_grid_line_put_schar(col: c_int, schar: ScharT, attr: c_int);
     fn rs_grid_line_fill(start_col: c_int, end_col: c_int, sc: ScharT, attr: c_int) -> c_int;
     fn rs_grid_line_flush();
+
+    // Phase 1: Flag/guard function accessors
+    fn nvim_get_p_lz() -> c_int;
+    fn nvim_char_avail() -> c_int;
+    fn nvim_get_KeyTyped() -> bool;
+    fn nvim_get_do_redraw() -> c_int;
+    fn nvim_get_Rows() -> c_int;
+    fn nvim_set_Rows(val: c_int);
+    fn nvim_get_Columns() -> c_int;
+    fn nvim_set_Columns(val: c_int);
+    fn nvim_get_State() -> c_int;
+    fn nvim_ui_has_messages() -> c_int;
+    fn nvim_cmdline_mouse_used() -> c_int;
+    fn nvim_min_rows_for_all_tabpages() -> c_int;
 }
 
 /// Check if horizontal separator of window at specified corner is connected
@@ -1798,6 +1812,68 @@ pub extern "C" fn rs_change_invalidation_start(
         // Change starts within or below window
         ((change_start_lnum - topline) as c_int + topfill).max(0)
     }
+}
+
+// =============================================================================
+// Phase 1: Pure Flag/Guard Functions
+// =============================================================================
+
+/// MODE_CMDLINE from state_defs.h
+const MODE_CMDLINE: c_int = 0x08;
+/// MIN_COLUMNS from window.h
+const MIN_COLUMNS: c_int = 12;
+
+/// Return true if redrawing should currently be done.
+///
+/// Rust equivalent of `redrawing()` in drawscreen.c.
+fn redrawing_impl() -> bool {
+    unsafe {
+        nvim_get_redrawing_disabled() == 0
+            && !(nvim_get_p_lz() != 0
+                && nvim_char_avail() != 0
+                && !nvim_get_KeyTyped()
+                && nvim_get_do_redraw() == 0)
+    }
+}
+
+/// FFI export for `redrawing()`.
+#[no_mangle]
+pub extern "C" fn rs_redrawing() -> c_int {
+    c_int::from(redrawing_impl())
+}
+
+/// Check if the new Nvim application "screen" dimensions are valid.
+/// Correct it if it's too small or way too big.
+///
+/// Rust equivalent of `check_screensize()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_check_screensize() {
+    unsafe {
+        let rows = nvim_get_Rows();
+        let min_rows = nvim_min_rows_for_all_tabpages();
+        nvim_set_Rows(rows.clamp(min_rows, 1000));
+
+        let cols = nvim_get_Columns();
+        nvim_set_Columns(cols.clamp(MIN_COLUMNS, 10000));
+    }
+}
+
+/// Unlike cmdline "one_key" prompts, the message part of the prompt is not stored
+/// to be re-emitted: avoid clearing the prompt from the message grid.
+///
+/// Rust equivalent of `cmdline_number_prompt()` in drawscreen.c.
+fn cmdline_number_prompt_impl() -> bool {
+    unsafe {
+        nvim_ui_has_messages() == 0
+            && (nvim_get_State() & MODE_CMDLINE) != 0
+            && nvim_cmdline_mouse_used() != 0
+    }
+}
+
+/// FFI export for `cmdline_number_prompt()`.
+#[no_mangle]
+pub extern "C" fn rs_cmdline_number_prompt() -> c_int {
+    c_int::from(cmdline_number_prompt_impl())
 }
 
 #[cfg(test)]

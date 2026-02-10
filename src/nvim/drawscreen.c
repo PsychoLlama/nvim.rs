@@ -281,11 +281,13 @@ void screenclear(void)
   }
 }
 
+extern int rs_cmdline_number_prompt(void);
+
 /// Unlike cmdline "one_key" prompts, the message part of the prompt is not stored
 /// to be re-emitted: avoid clearing the prompt from the message grid.
 static bool cmdline_number_prompt(void)
 {
-  return !ui_has(kUIMessages) && (State & MODE_CMDLINE) && get_cmdline_info()->mouse_used != NULL;
+  return rs_cmdline_number_prompt() != 0;
 }
 
 /// Set dimensions of the Nvim application "screen".
@@ -429,21 +431,21 @@ void screen_resize(int width, int height)
   resizing_screen = false;
 }
 
+extern void rs_check_screensize(void);
+
 /// Check if the new Nvim application "screen" dimensions are valid.
 /// Correct it if it's too small or way too big.
 void check_screensize(void)
 {
-  // Limit Rows and Columns to avoid an overflow in Rows * Columns.
-  // need room for one window and command line
-  Rows = MIN(MAX(Rows, min_rows_for_all_tabpages()), 1000);
-  Columns = MIN(MAX(Columns, MIN_COLUMNS), 10000);
+  rs_check_screensize();
 }
+
+extern int rs_redrawing(void);
 
 /// Return true if redrawing should currently be done.
 bool redrawing(void)
 {
-  return !RedrawingDisabled
-         && !(p_lz && char_avail() && !KeyTyped && !do_redraw);
+  return rs_redrawing() != 0;
 }
 
 /// Redraw the parts of the screen that is marked for redraw.
@@ -2788,7 +2790,7 @@ void nvim_win_set_old_visual_col(win_T *wp, colnr_T val)
 /// Check if redrawing is currently being done (accessor for Rust).
 int nvim_redrawing(void)
 {
-  return redrawing() ? 1 : 0;
+  return rs_redrawing();
 }
 
 /// Scroll lines in window (wrapper for win_scroll_lines for Rust FFI).
@@ -2796,3 +2798,28 @@ void nvim_win_scroll_lines(win_T *wp, int row, int line_count)
 {
   win_scroll_lines(wp, row, line_count);
 }
+
+// Phase 1 accessors for Rust FFI
+
+/// Get the 'lazyredraw' option value.
+int nvim_get_p_lz(void) { return p_lz; }
+
+/// Get the do_redraw flag.
+int nvim_get_do_redraw(void) { return do_redraw ? 1 : 0; }
+
+/// Set the Rows global.
+void nvim_set_Rows(int val) { Rows = val; }
+
+/// Set the Columns global.
+void nvim_set_Columns(int val) { Columns = val; }
+
+/// Wrapper for min_rows_for_all_tabpages() for Rust FFI.
+int nvim_min_rows_for_all_tabpages(void) { return min_rows_for_all_tabpages(); }
+
+/// Check if cmdline mouse_used is set (for cmdline_number_prompt).
+int nvim_cmdline_mouse_used(void)
+{
+  return get_cmdline_info()->mouse_used != NULL ? 1 : 0;
+}
+
+_Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
