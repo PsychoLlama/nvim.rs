@@ -186,6 +186,22 @@ extern char *rs_find_longest_match(expand_T *xp, int options);
 // Phase 4: ExpandOne orchestrator
 extern char *rs_expand_one(expand_T *xp, char *str, char *orig, int options, int mode);
 
+// Phase 5: Context-setting helpers
+extern const char *rs_find_cmd_after_global_cmd(const char *arg);
+extern const char *rs_find_cmd_after_substitute_cmd(const char *arg);
+extern const char *rs_find_cmd_after_isearch_cmd(expand_T *xp, const char *arg);
+extern const char *rs_set_context_in_argopt(expand_T *xp, const char *arg);
+extern const char *rs_set_context_in_filter_cmd(expand_T *xp, const char *arg);
+extern const char *rs_set_context_in_match_cmd(expand_T *xp, const char *arg);
+extern const char *rs_set_context_in_unlet_cmd(expand_T *xp, const char *arg);
+extern const char *rs_set_context_in_lang_cmd(expand_T *xp, const char *arg);
+extern const char *rs_set_context_in_breakadd_cmd(expand_T *xp, const char *arg, int breakpt_cmd_type);
+extern const char *rs_set_context_in_scriptnames_cmd(expand_T *xp, const char *arg);
+extern const char *rs_set_context_in_filetype_cmd(expand_T *xp, const char *arg);
+extern void rs_set_context_with_pattern(expand_T *xp);
+extern void rs_set_context_for_wildcard_arg(const char *arg, int is_shell_cmd,
+                                            expand_T *xp, int *complp);
+
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
 {
@@ -576,6 +592,145 @@ char *nvim_cmdexpand_xstpcpy(char *dst, const char *src)
 // Static asserts for XP_PREFIX values used in rs_expand_one
 _Static_assert(XP_PREFIX_NO == 1, "XP_PREFIX_NO mismatch");
 _Static_assert(XP_PREFIX_INV == 2, "XP_PREFIX_INV mismatch");
+
+// =============================================================================
+// Phase 5: Static enums and constants (moved here for accessor visibility)
+// =============================================================================
+
+static enum {
+  EXP_FILETYPECMD_ALL,     ///< expand all :filetype values
+  EXP_FILETYPECMD_PLUGIN,  ///< expand plugin on off
+  EXP_FILETYPECMD_INDENT,  ///< expand indent on off
+  EXP_FILETYPECMD_ONOFF,   ///< expand on off
+} filetype_expand_what;
+
+enum {
+  EXPAND_FILETYPECMD_PLUGIN = 0x01,
+  EXPAND_FILETYPECMD_INDENT = 0x02,
+  EXPAND_FILETYPECMD_ONOFF  = 0x04,
+};
+
+static enum {
+  EXP_BREAKPT_ADD,  ///< expand ":breakadd" sub-commands
+  EXP_BREAKPT_DEL,  ///< expand ":breakdel" sub-commands
+  EXP_PROFDEL,      ///< expand ":profdel" sub-commands
+} breakpt_expand_what;
+
+// =============================================================================
+// Phase 5: C accessors for context-setting helpers
+// =============================================================================
+
+/// Set xp->xp_pattern (for Rust FFI).
+void nvim_expand_set_pattern(expand_T *xp, char *pattern)
+{
+  if (xp) {
+    xp->xp_pattern = pattern;
+  }
+}
+
+/// Set xp->xp_pattern_len (for Rust FFI).
+void nvim_expand_set_pattern_len(expand_T *xp, size_t len)
+{
+  if (xp) {
+    xp->xp_pattern_len = len;
+  }
+}
+
+/// Set xp->xp_search_dir (for Rust FFI).
+void nvim_expand_set_search_dir(expand_T *xp, int dir)
+{
+  if (xp) {
+    xp->xp_search_dir = (Direction)dir;
+  }
+}
+
+/// Set xp->xp_shell (for Rust FFI).
+void nvim_expand_set_shell(expand_T *xp, int shell)
+{
+  if (xp) {
+    xp->xp_shell = shell != 0;
+  }
+}
+
+/// Get xp->xp_pattern (for Rust FFI).
+char *nvim_cmdexpand_get_xp_pattern(expand_T *xp)
+{
+  return xp ? xp->xp_pattern : NULL;
+}
+
+/// Wrapper for ascii_iswhite (for Rust FFI).
+int nvim_cmdexpand_ascii_iswhite(int c)
+{
+  return ascii_iswhite(c);
+}
+
+/// Wrapper for vim_isfilec_or_wc (for Rust FFI).
+int nvim_cmdexpand_vim_isfilec_or_wc(int c)
+{
+  return vim_isfilec_or_wc(c);
+}
+
+/// Wrapper for vim_isIDc (for Rust FFI).
+int nvim_cmdexpand_vim_isIDc(int c)
+{
+  return vim_isIDc((uint8_t)c);
+}
+
+/// Get ccline->cmdpos (for Rust FFI).
+int nvim_cmdexpand_get_cmdpos(void)
+{
+  return get_cmdline_info()->cmdpos;
+}
+
+/// Get ccline->cmdbuff (for Rust FFI).
+char *nvim_cmdexpand_get_cmdbuff(void)
+{
+  return get_cmdline_info()->cmdbuff;
+}
+
+/// Wrapper for parse_pattern_and_range (for Rust FFI).
+/// Returns OK(1)/FAIL(0). Writes skiplen and patlen via out pointers.
+int nvim_cmdexpand_parse_pattern_and_range(int *skiplen, int *patlen)
+{
+  int dummy;
+  return parse_pattern_and_range(&pre_incsearch_pos, &dummy, skiplen, patlen);
+}
+
+/// Increment emsg_off (for Rust FFI).
+void nvim_cmdexpand_emsg_off_inc(void)
+{
+  emsg_off++;
+}
+
+/// Decrement emsg_off (for Rust FFI).
+void nvim_cmdexpand_emsg_off_dec(void)
+{
+  emsg_off--;
+}
+
+/// Set the static breakpt_expand_what variable (for Rust FFI).
+void nvim_cmdexpand_set_breakpt_expand_what(int val)
+{
+  breakpt_expand_what = val;
+}
+
+/// Set the static filetype_expand_what variable (for Rust FFI).
+void nvim_cmdexpand_set_filetype_expand_what(int val)
+{
+  filetype_expand_what = val;
+}
+
+// Static asserts for Phase 5 constants
+_Static_assert(FORWARD == 1, "FORWARD mismatch");
+_Static_assert(EXP_BREAKPT_ADD == 0, "EXP_BREAKPT_ADD mismatch");
+_Static_assert(EXP_BREAKPT_DEL == 1, "EXP_BREAKPT_DEL mismatch");
+_Static_assert(EXP_PROFDEL == 2, "EXP_PROFDEL mismatch");
+_Static_assert(EXP_FILETYPECMD_ALL == 0, "EXP_FILETYPECMD_ALL mismatch");
+_Static_assert(EXP_FILETYPECMD_PLUGIN == 1, "EXP_FILETYPECMD_PLUGIN mismatch");
+_Static_assert(EXP_FILETYPECMD_INDENT == 2, "EXP_FILETYPECMD_INDENT mismatch");
+_Static_assert(EXP_FILETYPECMD_ONOFF == 3, "EXP_FILETYPECMD_ONOFF mismatch");
+_Static_assert(EXPAND_FILETYPECMD_PLUGIN == 0x01, "EXPAND_FILETYPECMD_PLUGIN mismatch");
+_Static_assert(EXPAND_FILETYPECMD_INDENT == 0x02, "EXPAND_FILETYPECMD_INDENT mismatch");
 
 // Phase 6: Wrapper functions for Rust implementations
 
@@ -1906,193 +2061,43 @@ static const char *set_cmd_index(const char *cmd, exarg_T *eap, expand_T *xp, in
 static void set_context_for_wildcard_arg(exarg_T *eap, const char *arg, bool usefilter,
                                          expand_T *xp, int *complp)
 {
-  bool in_quote = false;
-  const char *bow = NULL;  // Beginning of word.
-  size_t len = 0;
-
-  // Allow spaces within back-quotes to count as part of the argument
-  // being expanded.
-  xp->xp_pattern = skipwhite(arg);
-  const char *p = xp->xp_pattern;
-  while (*p != NUL) {
-    int c = utf_ptr2char(p);
-    if (c == '\\' && p[1] != NUL) {
-      p++;
-    } else if (c == '`') {
-      if (!in_quote) {
-        xp->xp_pattern = (char *)p;
-        bow = p + 1;
-      }
-      in_quote = !in_quote;
-      // An argument can contain just about everything, except
-      // characters that end the command and white space.
-    } else if (c == '|' || c == '\n' || c == '"' || ascii_iswhite(c)) {
-      len = 0;  // avoid getting stuck when space is in 'isfname'
-      while (*p != NUL) {
-        c = utf_ptr2char(p);
-        if (c == '`' || vim_isfilec_or_wc(c)) {
-          break;
-        }
-        len = (size_t)utfc_ptr2len(p);
-        MB_PTR_ADV(p);
-      }
-      if (in_quote) {
-        bow = p;
-      } else {
-        xp->xp_pattern = (char *)p;
-      }
-      p -= len;
-    }
-    MB_PTR_ADV(p);
-  }
-
-  // If we are still inside the quotes, and we passed a space, just
-  // expand from there.
-  if (bow != NULL && in_quote) {
-    xp->xp_pattern = (char *)bow;
-  }
-  xp->xp_context = EXPAND_FILES;
-
-  // For a shell command more chars need to be escaped.
-  if (usefilter
-      || (eap != NULL && (eap->cmdidx == CMD_bang || eap->cmdidx == CMD_terminal))
-      || *complp == EXPAND_SHELLCMDLINE) {
-#ifndef BACKSLASH_IN_FILENAME
-    xp->xp_shell = true;
-#endif
-    // When still after the command name expand executables.
-    if (xp->xp_pattern == skipwhite(arg)) {
-      xp->xp_context = EXPAND_SHELLCMD;
-    }
-  }
-
-  // Check for environment variable.
-  if (*xp->xp_pattern == '$') {
-    for (p = xp->xp_pattern + 1; *p != NUL; p++) {
-      if (!vim_isIDc((uint8_t)(*p))) {
-        break;
-      }
-    }
-    if (*p == NUL) {
-      xp->xp_context = EXPAND_ENV_VARS;
-      xp->xp_pattern++;
-      // Avoid that the assignment uses EXPAND_FILES again.
-      if (*complp != EXPAND_USER_DEFINED && *complp != EXPAND_USER_LIST) {
-        *complp = EXPAND_ENV_VARS;
-      }
-    }
-  }
-  // Check for user names.
-  if (*xp->xp_pattern == '~') {
-    for (p = xp->xp_pattern + 1; *p != NUL && *p != '/'; p++) {}
-    // Complete ~user only if it partially matches a user name.
-    // A full match ~user<Tab> will be replaced by user's home
-    // directory i.e. something like ~user<Tab> -> /home/user/
-    if (*p == NUL && p > xp->xp_pattern + 1 && match_user(xp->xp_pattern + 1) >= 1) {
-      xp->xp_context = EXPAND_USER;
-      xp->xp_pattern++;
-    }
-  }
+  int is_shell_cmd = usefilter
+                     || (eap != NULL && (eap->cmdidx == CMD_bang || eap->cmdidx == CMD_terminal));
+  rs_set_context_for_wildcard_arg(arg, is_shell_cmd ? 1 : 0, xp, complp);
 }
 
 /// Set the completion context for the "++opt=arg" argument.  Always returns NULL.
 static const char *set_context_in_argopt(expand_T *xp, const char *arg)
 {
-  char *p = vim_strchr(arg, '=');
-  if (p == NULL) {
-    xp->xp_pattern = (char *)arg;
-  } else {
-    xp->xp_pattern = p + 1;
-  }
-
-  xp->xp_context = EXPAND_ARGOPT;
-  return NULL;
+  return rs_set_context_in_argopt(xp, arg);
 }
 
 /// Set the completion context for the :filter command. Returns a pointer to the
 /// next command after the :filter command.
 static const char *set_context_in_filter_cmd(expand_T *xp, const char *arg)
 {
-  if (*arg != NUL) {
-    arg = skip_vimgrep_pat((char *)arg, NULL, NULL);
-  }
-  if (arg == NULL || *arg == NUL) {
-    xp->xp_context = EXPAND_NOTHING;
-    return NULL;
-  }
-  return skipwhite(arg);
+  return rs_set_context_in_filter_cmd(xp, arg);
 }
 
 /// Set the completion context for the :match command. Returns a pointer to the
 /// next command after the :match command.
 static const char *set_context_in_match_cmd(expand_T *xp, const char *arg)
 {
-  if (*arg == NUL || !ends_excmd(*arg)) {
-    // also complete "None"
-    set_context_in_echohl_cmd(xp, arg);
-    arg = skipwhite(skiptowhite(arg));
-    if (*arg != NUL) {
-      xp->xp_context = EXPAND_NOTHING;
-      arg = skip_regexp((char *)arg + 1, (uint8_t)(*arg), magic_isset());
-    }
-  }
-  return find_nextcmd(arg);
+  return rs_set_context_in_match_cmd(xp, arg);
 }
 
 /// Returns a pointer to the next command after a :global or a :v command.
 /// Returns NULL if there is no next command.
 static const char *find_cmd_after_global_cmd(const char *arg)
 {
-  const int delim = (uint8_t)(*arg);  // Get the delimiter.
-  if (delim) {
-    arg++;  // Skip delimiter if there is one.
-  }
-
-  while (arg[0] != NUL && (uint8_t)arg[0] != delim) {
-    if (arg[0] == '\\' && arg[1] != NUL) {
-      arg++;
-    }
-    arg++;
-  }
-  if (arg[0] != NUL) {
-    return arg + 1;
-  }
-
-  return NULL;
+  return rs_find_cmd_after_global_cmd(arg);
 }
 
 /// Returns a pointer to the next command after a :substitute or a :& command.
 /// Returns NULL if there is no next command.
 static const char *find_cmd_after_substitute_cmd(const char *arg)
 {
-  const int delim = (uint8_t)(*arg);
-  if (delim) {
-    // Skip "from" part.
-    arg++;
-    arg = skip_regexp((char *)arg, delim, magic_isset());
-
-    if (arg[0] != NUL && arg[0] == delim) {
-      // Skip "to" part.
-      arg++;
-      while (arg[0] != NUL && (uint8_t)arg[0] != delim) {
-        if (arg[0] == '\\' && arg[1] != NUL) {
-          arg++;
-        }
-        arg++;
-      }
-      if (arg[0] != NUL) {  // Skip delimiter.
-        arg++;
-      }
-    }
-  }
-  while (arg[0] && strchr("|\"#", arg[0]) == NULL) {
-    arg++;
-  }
-  if (arg[0] != NUL) {
-    return arg;
-  }
-
-  return NULL;
+  return rs_find_cmd_after_substitute_cmd(arg);
 }
 
 /// Returns a pointer to the next command after a :isearch/:dsearch/:ilist
@@ -2100,219 +2105,51 @@ static const char *find_cmd_after_substitute_cmd(const char *arg)
 /// Returns NULL if there is no next command.
 static const char *find_cmd_after_isearch_cmd(expand_T *xp, const char *arg)
 {
-  // Skip count.
-  arg = skipwhite(skipdigits(arg));
-  if (*arg != '/') {
-    return NULL;
-  }
-
-  // Match regexp, not just whole words.
-  for (++arg; *arg && *arg != '/'; arg++) {
-    if (*arg == '\\' && arg[1] != NUL) {
-      arg++;
-    }
-  }
-  if (*arg) {
-    arg = skipwhite(arg + 1);
-
-    // Check for trailing illegal characters.
-    if (*arg == NUL || strchr("|\"\n", *arg) == NULL) {
-      xp->xp_context = EXPAND_NOTHING;
-    } else {
-      return arg;
-    }
-  }
-
-  return NULL;
+  return rs_find_cmd_after_isearch_cmd(xp, arg);
 }
 
 /// Set the completion context for the :unlet command. Always returns NULL.
 static const char *set_context_in_unlet_cmd(expand_T *xp, const char *arg)
 {
-  while ((xp->xp_pattern = strchr(arg, ' ')) != NULL) {
-    arg = xp->xp_pattern + 1;
-  }
-
-  xp->xp_context = EXPAND_USER_VARS;
-  xp->xp_pattern = (char *)arg;
-
-  if (*xp->xp_pattern == '$') {
-    xp->xp_context = EXPAND_ENV_VARS;
-    xp->xp_pattern++;
-  }
-
-  return NULL;
+  return rs_set_context_in_unlet_cmd(xp, arg);
 }
 
 /// Set the completion context for the :language command. Always returns NULL.
 static const char *set_context_in_lang_cmd(expand_T *xp, const char *arg)
 {
-  const char *p = skiptowhite(arg);
-  if (*p == NUL) {
-    xp->xp_context = EXPAND_LANGUAGE;
-    xp->xp_pattern = (char *)arg;
-  } else {
-    if (strncmp(arg, "messages", (size_t)(p - arg)) == 0
-        || strncmp(arg, "ctype", (size_t)(p - arg)) == 0
-        || strncmp(arg, "time", (size_t)(p - arg)) == 0
-        || strncmp(arg, "collate", (size_t)(p - arg)) == 0) {
-      xp->xp_context = EXPAND_LOCALES;
-      xp->xp_pattern = skipwhite(p);
-    } else {
-      xp->xp_context = EXPAND_NOTHING;
-    }
-  }
-
-  return NULL;
+  return rs_set_context_in_lang_cmd(xp, arg);
 }
-
-static enum {
-  EXP_FILETYPECMD_ALL,     ///< expand all :filetype values
-  EXP_FILETYPECMD_PLUGIN,  ///< expand plugin on off
-  EXP_FILETYPECMD_INDENT,  ///< expand indent on off
-  EXP_FILETYPECMD_ONOFF,   ///< expand on off
-} filetype_expand_what;
-
-enum {
-  EXPAND_FILETYPECMD_PLUGIN = 0x01,
-  EXPAND_FILETYPECMD_INDENT = 0x02,
-  EXPAND_FILETYPECMD_ONOFF  = 0x04,
-};
-
-static enum {
-  EXP_BREAKPT_ADD,  ///< expand ":breakadd" sub-commands
-  EXP_BREAKPT_DEL,  ///< expand ":breakdel" sub-commands
-  EXP_PROFDEL,      ///< expand ":profdel" sub-commands
-} breakpt_expand_what;
 
 /// Set the completion context for the :breakadd command. Always returns NULL.
 static const char *set_context_in_breakadd_cmd(expand_T *xp, const char *arg, cmdidx_T cmdidx)
 {
-  xp->xp_context = EXPAND_BREAKPOINT;
-  xp->xp_pattern = (char *)arg;
-
+  int breakpt_cmd_type;
   if (cmdidx == CMD_breakadd) {
-    breakpt_expand_what = EXP_BREAKPT_ADD;
+    breakpt_cmd_type = 0;  // BREAKPT_CMD_ADD
   } else if (cmdidx == CMD_breakdel) {
-    breakpt_expand_what = EXP_BREAKPT_DEL;
+    breakpt_cmd_type = 1;  // BREAKPT_CMD_DEL
   } else {
-    breakpt_expand_what = EXP_PROFDEL;
+    breakpt_cmd_type = 2;  // BREAKPT_CMD_PROFDEL
   }
-
-  const char *p = skipwhite(arg);
-  if (*p == NUL) {
-    return NULL;
-  }
-  const char *subcmd_start = p;
-
-  if (strncmp("file ", p, 5) == 0 || strncmp("func ", p, 5) == 0) {
-    // :breakadd file [lnum] <filename>
-    // :breakadd func [lnum] <funcname>
-    p += 4;
-    p = skipwhite(p);
-
-    // skip line number (if specified)
-    if (ascii_isdigit(*p)) {
-      p = skipdigits(p);
-      if (*p != ' ') {
-        xp->xp_context = EXPAND_NOTHING;
-        return NULL;
-      }
-      p = skipwhite(p);
-    }
-    if (strncmp("file", subcmd_start, 4) == 0) {
-      xp->xp_context = EXPAND_FILES;
-    } else {
-      xp->xp_context = EXPAND_USER_FUNC;
-    }
-    xp->xp_pattern = (char *)p;
-  } else if (strncmp("expr ", p, 5) == 0) {
-    // :breakadd expr <expression>
-    xp->xp_context = EXPAND_EXPRESSION;
-    xp->xp_pattern = skipwhite(p + 5);
-  }
-
-  return NULL;
+  return rs_set_context_in_breakadd_cmd(xp, arg, breakpt_cmd_type);
 }
 
 static const char *set_context_in_scriptnames_cmd(expand_T *xp, const char *arg)
 {
-  xp->xp_context = EXPAND_NOTHING;
-  xp->xp_pattern = NULL;
-
-  char *p = skipwhite(arg);
-  if (ascii_isdigit(*p)) {
-    return NULL;
-  }
-
-  xp->xp_context = EXPAND_SCRIPTNAMES;
-  xp->xp_pattern = p;
-
-  return NULL;
+  return rs_set_context_in_scriptnames_cmd(xp, arg);
 }
 
 /// Set the completion context for the :filetype command. Always returns NULL.
 static const char *set_context_in_filetype_cmd(expand_T *xp, const char *arg)
 {
-  xp->xp_context = EXPAND_FILETYPECMD;
-  xp->xp_pattern = (char *)arg;
-  filetype_expand_what = EXP_FILETYPECMD_ALL;
-
-  char *p = skipwhite(arg);
-  if (*p == NUL) {
-    return NULL;
-  }
-
-  int val = 0;
-
-  while (true) {
-    if (strncmp(p, "plugin", 6) == 0) {
-      val |= EXPAND_FILETYPECMD_PLUGIN;
-      p = skipwhite(p + 6);
-      continue;
-    }
-    if (strncmp(p, "indent", 6) == 0) {
-      val |= EXPAND_FILETYPECMD_INDENT;
-      p = skipwhite(p + 6);
-      continue;
-    }
-    break;
-  }
-
-  if ((val & EXPAND_FILETYPECMD_PLUGIN) && (val & EXPAND_FILETYPECMD_INDENT)) {
-    filetype_expand_what = EXP_FILETYPECMD_ONOFF;
-  } else if ((val & EXPAND_FILETYPECMD_PLUGIN)) {
-    filetype_expand_what = EXP_FILETYPECMD_INDENT;
-  } else if ((val & EXPAND_FILETYPECMD_INDENT)) {
-    filetype_expand_what = EXP_FILETYPECMD_PLUGIN;
-  }
-
-  xp->xp_pattern = p;
-
-  return NULL;
+  return rs_set_context_in_filetype_cmd(xp, arg);
 }
 
 /// Sets the completion context for commands that involve a search pattern
 /// and a line range (e.g., :s, :g, :v).
 static void set_context_with_pattern(expand_T *xp)
 {
-  CmdlineInfo *ccline = get_cmdline_info();
-
-  emsg_off++;
-  int skiplen = 0;
-  int dummy, patlen;
-  int retval = parse_pattern_and_range(&pre_incsearch_pos, &dummy, &skiplen, &patlen);
-  emsg_off--;
-
-  // Check if cursor is within search pattern
-  if (!retval || ccline->cmdpos <= skiplen || ccline->cmdpos > skiplen + patlen) {
-    return;
-  }
-
-  xp->xp_pattern = ccline->cmdbuff + skiplen;
-  xp->xp_pattern_len = (size_t)(ccline->cmdpos - skiplen);
-  xp->xp_context = EXPAND_PATTERN_IN_BUF;
-  xp->xp_search_dir = FORWARD;
+  rs_set_context_with_pattern(xp);
 }
 
 /// Set the completion context in "xp" for command "cmd" with index "cmdidx".
