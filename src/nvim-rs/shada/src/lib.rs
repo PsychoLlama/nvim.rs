@@ -383,6 +383,36 @@ extern "C" {
 
     // FileMarks accessor
     fn nvim_filemarks_get_greatest_timestamp(fm: *const c_void) -> Timestamp;
+
+    // Buffer/path filtering (Phase 2)
+    fn nvim_shada_get_p_shada() -> *const c_char;
+    fn nvim_shada_home_replace_save(buf: *const c_void, src: *const c_char) -> *mut c_char;
+    fn nvim_shada_home_replace(
+        buf: *const c_void,
+        src: *const c_char,
+        dst: *mut c_char,
+        dstlen: usize,
+        one: c_int,
+    );
+    fn nvim_shada_copy_option_part(
+        option: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+        sep_chars: *const c_char,
+    ) -> usize;
+    fn nvim_shada_mb_strnicmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn nvim_shada_get_namebuff() -> *mut c_char;
+    fn nvim_shada_buf_first() -> *const c_void;
+    fn nvim_shada_buf_next(buf: *const c_void) -> *const c_void;
+    fn nvim_shada_buf_get_ffname(buf: *const c_void) -> *const c_char;
+    fn nvim_shada_buf_is_listed(buf: *const c_void) -> c_int;
+    fn nvim_shada_buf_is_quickfix(buf: *const c_void) -> c_int;
+    fn nvim_shada_buf_is_terminal(buf: *const c_void) -> c_int;
+    // Set(ptr_t) operations
+    fn nvim_shada_set_init_ptr() -> *mut c_void;
+    fn nvim_shada_set_has_ptr(set: *const c_void, ptr: *const c_void) -> c_int;
+    fn nvim_shada_set_put_ptr(set: *mut c_void, ptr: *const c_void);
+    fn nvim_shada_set_destroy_ptr(set: *mut c_void);
 }
 
 // =============================================================================
@@ -3199,6 +3229,110 @@ pub unsafe extern "C" fn rs_replace_numbered_mark(
     let fm_ptr: *mut FilemarkData =
         std::ptr::addr_of_mut!(wms.numbered_marks[idx].data.filemark).cast();
     std::ptr::addr_of_mut!((*fm_ptr).name).write((b'0' + idx as u8) as c_char);
+}
+
+// =============================================================================
+// Buffer/Path Filtering Helpers (Phase 2)
+// =============================================================================
+
+/// Opaque handle to a buffer (buf_T *).
+pub type BufHandle = *const c_void;
+
+/// Opaque handle to a Set(ptr_t).
+pub type SetPtrHandle = *mut c_void;
+
+/// Check if a file path matches a removable directory from 'shada' option.
+///
+/// Returns true if `name` starts with any `rXXX` entry in `'shada'`.
+///
+/// # Safety
+///
+/// `name` must be a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_removable(name: *const c_char) -> c_int {
+    let mut part = [0u8; MAXPATHL + 1];
+    let new_name = nvim_shada_home_replace_save(std::ptr::null(), name);
+    let p_shada = nvim_shada_get_p_shada();
+    let mut p = p_shada.cast_mut();
+    let mut retval = false;
+
+    while *p != 0 {
+        nvim_shada_copy_option_part(
+            &raw mut p,
+            part.as_mut_ptr().cast(),
+            part.len(),
+            c", ".as_ptr(),
+        );
+        if part[0] == b'r' {
+            let name_buff = nvim_shada_get_namebuff();
+            nvim_shada_home_replace(
+                std::ptr::null(),
+                part.as_ptr().add(1).cast(),
+                name_buff,
+                MAXPATHL,
+                1,
+            );
+            let n = libc::strlen(name_buff.cast());
+            if nvim_shada_mb_strnicmp(name_buff, new_name, n) == 0 {
+                retval = true;
+                break;
+            }
+        }
+    }
+    nvim_xfree(new_name.cast());
+    c_int::from(retval)
+}
+
+/// Check if a buffer should be ignored when saving ShaDa data.
+///
+/// A buffer is ignored if it is NULL, has no filename, is not listed,
+/// is a quickfix buffer, is a terminal buffer, or is in the removable set.
+///
+/// # Safety
+///
+/// - `buf` must be a valid buffer handle or null.
+/// - `removable_bufs` must be a valid Set(ptr_t) handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ignore_buf(buf: BufHandle, removable_bufs: SetPtrHandle) -> c_int {
+    if buf.is_null() {
+        return 1;
+    }
+    let ffname = nvim_shada_buf_get_ffname(buf);
+    if ffname.is_null() {
+        return 1;
+    }
+    if nvim_shada_buf_is_listed(buf) == 0 {
+        return 1;
+    }
+    if nvim_shada_buf_is_quickfix(buf) != 0 {
+        return 1;
+    }
+    if nvim_shada_buf_is_terminal(buf) != 0 {
+        return 1;
+    }
+    if nvim_shada_set_has_ptr(removable_bufs, buf) != 0 {
+        return 1;
+    }
+    0
+}
+
+/// Find buffers ignored due to their location and add them to the set.
+///
+/// Iterates all buffers and calls `rs_shada_removable` for each one with a filename.
+///
+/// # Safety
+///
+/// `removable_bufs` must be a valid Set(ptr_t) handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_removable_bufs(removable_bufs: SetPtrHandle) {
+    let mut buf = nvim_shada_buf_first();
+    while !buf.is_null() {
+        let ffname = nvim_shada_buf_get_ffname(buf);
+        if !ffname.is_null() && rs_shada_removable(ffname) != 0 {
+            nvim_shada_set_put_ptr(removable_bufs, buf);
+        }
+        buf = nvim_shada_buf_next(buf);
+    }
 }
 
 // =============================================================================

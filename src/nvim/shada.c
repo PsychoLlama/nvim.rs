@@ -83,6 +83,11 @@ extern int rs_marks_equal(pos_T a, pos_T b);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
 
+// Phase 2: Buffer/path filtering helpers
+extern int rs_shada_removable(const char *name);
+extern int rs_ignore_buf(const void *buf, const void *removable_bufs);
+extern void rs_find_removable_bufs(void *removable_bufs);
+
 // Legacy alias
 #define rs_hist_type2char rs_shada_hist_type2char
 
@@ -1980,11 +1985,11 @@ static inline ShaDaWriteResult shada_read_when_writing(FileDescriptor *const sd_
 /// @param[in]  removable_bufs  Cache of buffers ignored due to their location.
 ///
 /// @return true or false.
+/// Delegated to Rust rs_ignore_buf.
 static inline bool ignore_buf(const buf_T *const buf, Set(ptr_t) *const removable_bufs)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_ALWAYS_INLINE
 {
-  return (buf == NULL || buf->b_ffname == NULL || !buf->b_p_bl || bt_quickfix(buf) \
-          || bt_terminal(buf) || set_has(ptr_t, removable_bufs, (ptr_t)buf));
+  return rs_ignore_buf(buf, removable_bufs) != 0;
 }
 
 /// Get list of buffers to write to the shada file
@@ -2140,13 +2145,10 @@ static inline void replace_numbered_mark(WriteMergerState *const wms, const size
 /// Find buffers ignored due to their location.
 ///
 /// @param[out]  removable_bufs  Cache of buffers ignored due to their location.
+/// Delegated to Rust rs_find_removable_bufs.
 static inline void find_removable_bufs(Set(ptr_t) *removable_bufs)
 {
-  FOR_ALL_BUFFERS(buf) {
-    if (buf->b_ffname != NULL && shada_removable(buf->b_ffname)) {
-      set_put(ptr_t, removable_bufs, (ptr_t)buf);
-    }
-  }
+  rs_find_removable_bufs(removable_bufs);
 }
 
 /// Translate a history type number to the associated character
@@ -3479,26 +3481,11 @@ shada_read_next_item_error:
 /// @param[in]  name  Checked name.
 ///
 /// @return True if it is, false otherwise.
+/// Delegated to Rust rs_shada_removable.
 static bool shada_removable(const char *name)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  char part[MAXPATHL + 1];
-  bool retval = false;
-
-  char *new_name = home_replace_save(NULL, name);
-  for (char *p = p_shada; *p;) {
-    copy_option_part(&p, part, ARRAY_SIZE(part), ", ");
-    if (part[0] == 'r') {
-      home_replace(NULL, part + 1, NameBuff, MAXPATHL, true);
-      size_t n = strlen(NameBuff);
-      if (mb_strnicmp(NameBuff, new_name, n) == 0) {
-        retval = true;
-        break;
-      }
-    }
-  }
-  xfree(new_name);
-  return retval;
+  return rs_shada_removable(name) != 0;
 }
 
 /// Initialize ShaDa jumplist entries.
@@ -3865,4 +3852,70 @@ Timestamp nvim_filemarks_get_greatest_timestamp(const void *fm_ptr)
 {
   const FileMarks *fm = fm_ptr;
   return fm ? fm->greatest_timestamp : 0;
+}
+
+// Phase 2: Buffer/path filtering accessors for Rust FFI
+const char *nvim_shada_get_p_shada(void) { return p_shada; }
+char *nvim_shada_home_replace_save(const void *buf, const char *src)
+{
+  return home_replace_save((buf_T *)buf, src);
+}
+void nvim_shada_home_replace(const void *buf, const char *src, char *dst, size_t dstlen, int one)
+{
+  home_replace((buf_T *)buf, src, dst, dstlen, one != 0);
+}
+size_t nvim_shada_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep_chars)
+{
+  return copy_option_part(option, buf, maxlen, (char *)sep_chars);
+}
+int nvim_shada_mb_strnicmp(const char *s1, const char *s2, size_t n)
+{
+  return mb_strnicmp(s1, s2, n);
+}
+char *nvim_shada_get_namebuff(void) { return NameBuff; }
+const void *nvim_shada_buf_first(void) { return firstbuf; }
+const void *nvim_shada_buf_next(const void *buf)
+{
+  return buf ? ((const buf_T *)buf)->b_next : NULL;
+}
+const char *nvim_shada_buf_get_ffname(const void *buf)
+{
+  return buf ? ((const buf_T *)buf)->b_ffname : NULL;
+}
+int nvim_shada_buf_is_listed(const void *buf)
+{
+  return buf ? ((const buf_T *)buf)->b_p_bl : 0;
+}
+int nvim_shada_buf_is_quickfix(const void *buf)
+{
+  return buf ? bt_quickfix((const buf_T *)buf) : 0;
+}
+int nvim_shada_buf_is_terminal(const void *buf)
+{
+  return buf ? bt_terminal((const buf_T *)buf) : 0;
+}
+
+// Set(ptr_t) operations for Rust FFI
+void *nvim_shada_set_init_ptr(void)
+{
+  Set(ptr_t) *s = xcalloc(1, sizeof(Set(ptr_t)));
+  *s = (Set(ptr_t))SET_INIT;
+  return s;
+}
+int nvim_shada_set_has_ptr(const void *set, const void *ptr)
+{
+  return set ? set_has(ptr_t, (Set(ptr_t) *)set, (ptr_t)ptr) : 0;
+}
+void nvim_shada_set_put_ptr(void *set, const void *ptr)
+{
+  if (set) {
+    set_put(ptr_t, (Set(ptr_t) *)set, (ptr_t)ptr);
+  }
+}
+void nvim_shada_set_destroy_ptr(void *set)
+{
+  if (set) {
+    set_destroy(ptr_t, (Set(ptr_t) *)set);
+    xfree(set);
+  }
 }
