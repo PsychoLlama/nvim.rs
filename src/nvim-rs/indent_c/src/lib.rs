@@ -147,8 +147,18 @@ extern "C" {
     // Character classification
     fn vim_iswordc(c: c_int) -> c_int;
     fn vim_isIDc(c: c_int) -> c_int;
-    fn ascii_iswhite(c: c_int) -> c_int;
-    fn ascii_isdigit(c: c_int) -> c_int;
+}
+
+/// Check if a character is whitespace (space or tab).
+#[inline]
+const fn ascii_iswhite(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+/// Check if a character is a digit ('0'-'9').
+#[inline]
+const fn ascii_isdigit(c: u8) -> bool {
+    c >= b'0' && c <= b'9'
 }
 
 // ============================================================================
@@ -351,7 +361,7 @@ pub unsafe extern "C" fn rs_skip_string(p: *const c_char) -> *const c_char {
             if *ptr.add(1) == b'\\' as c_char && !is_nul(*ptr.add(2)) {
                 // '\n' or '\000'
                 i += 1;
-                while ascii_isdigit(i32::from(*ptr.add(i - 1) as u8)) != 0 {
+                while ascii_isdigit(*ptr.add(i - 1) as u8) {
                     // '\000'
                     i += 1;
                 }
@@ -746,7 +756,7 @@ pub unsafe extern "C" fn rs_cin_is_cpp_namespace(s: *const c_char) -> bool {
     let mut has_name_start = false;
 
     while !is_nul(*p) {
-        if ascii_iswhite(i32::from(*p as u8)) != 0 {
+        if ascii_iswhite(*p as u8) {
             has_name = true; // found end of a name
             p = rs_cin_skipcomment(skip_whitespace(p));
         } else if *p == b'{' as c_char {

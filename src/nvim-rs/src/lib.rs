@@ -67,6 +67,7 @@ pub use nvim_help::*;
 pub use nvim_highlight::*;
 pub use nvim_highlight_group::*;
 pub use nvim_indent::*;
+pub use nvim_indent_c::*;
 pub use nvim_input::*;
 pub use nvim_insexpand::*;
 pub use nvim_keycodes::*;
