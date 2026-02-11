@@ -34,14 +34,11 @@ const CTRL_T: c_int = 20; // ^T - new tab
 const CTRL_X: c_int = 24; // ^X - exchange
 const CTRL_R: c_int = 18; // ^R - rotate
 
-/// WSP flags for split operations.
-const WSP_VERT: c_int = 0x01;
-#[allow(dead_code)]
-const WSP_TOP: c_int = 0x02;
-#[allow(dead_code)]
-const WSP_BOT: c_int = 0x04;
-#[allow(dead_code)]
-const WSP_HELP: c_int = 0x08;
+/// WSP flags for split operations (verified by _Static_assert in window.c).
+const WSP_VERT: c_int = 0x02;
+const WSP_HOR: c_int = 0x04;
+const WSP_TOP: c_int = 0x08;
+const WSP_BOT: c_int = 0x10;
 
 // =============================================================================
 // External C Functions

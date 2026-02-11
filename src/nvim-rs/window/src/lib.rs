@@ -35,6 +35,7 @@
 pub mod alloc;
 pub mod close;
 pub mod commands;
+pub mod dispatch;
 pub mod equalize;
 pub mod events;
 pub mod exchange;

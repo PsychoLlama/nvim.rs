@@ -250,6 +250,9 @@ extern WinCloseStructResult rs_win_close_structural(win_T *win, int help_window,
                                                      frame_T *win_frame);
 extern void rs_win_close_post_layout(int was_floating, int dir, frame_T *win_frame);
 
+// do_window migration: Rust dispatcher
+extern void rs_do_window(int nchar, int Prenum, int xchar);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -2138,539 +2141,7 @@ extern void rs_win_equal(win_T *next_curwin, int current, int dir);
 /// @param xchar  extra char from ":wincmd gx" or NUL
 void do_window(int nchar, int Prenum, int xchar)
 {
-  int type = FIND_DEFINE;
-  char cbuf[40];
-
-  int Prenum1 = Prenum == 0 ? 1 : Prenum;
-
-#define CHECK_CMDWIN \
-  do { \
-    if (cmdwin_type != 0) { \
-      emsg(_(e_cmdwin)); \
-      return; \
-    } \
-  } while (0)
-
-  switch (nchar) {
-  // split current window in two parts, horizontally
-  case 'S':
-  case Ctrl_S:
-  case 's':
-    CHECK_CMDWIN;
-    reset_VIsual_and_resel();  // stop Visual mode
-    // When splitting the quickfix window open a new buffer in it,
-    // don't replicate the quickfix buffer.
-    if (bt_quickfix(curbuf)) {
-      goto newwindow;
-    }
-    win_split(Prenum, 0);
-    break;
-
-  // split current window in two parts, vertically
-  case Ctrl_V:
-  case 'v':
-    CHECK_CMDWIN;
-    reset_VIsual_and_resel();  // stop Visual mode
-    // When splitting the quickfix window open a new buffer in it,
-    // don't replicate the quickfix buffer.
-    if (bt_quickfix(curbuf)) {
-      goto newwindow;
-    }
-    win_split(Prenum, WSP_VERT);
-    break;
-
-  // split current window and edit alternate file
-  case Ctrl_HAT:
-  case '^':
-    CHECK_CMDWIN;
-    reset_VIsual_and_resel();  // stop Visual mode
-
-    if (buflist_findnr(Prenum == 0 ? curwin->w_alt_fnum : Prenum) == NULL) {
-      if (Prenum == 0) {
-        emsg(_(e_noalt));
-      } else {
-        semsg(_("E92: Buffer %" PRId64 " not found"), (int64_t)Prenum);
-      }
-      break;
-    }
-
-    if (!curbuf_locked() && win_split(0, 0) == OK) {
-      buflist_getfile(Prenum == 0 ? curwin->w_alt_fnum : Prenum,
-                      0, GETF_ALT, false);
-    }
-    break;
-
-  // open new window
-  case Ctrl_N:
-  case 'n':
-    CHECK_CMDWIN;
-    reset_VIsual_and_resel();  // stop Visual mode
-newwindow:
-    if (Prenum) {
-      // window height
-      vim_snprintf(cbuf, sizeof(cbuf) - 5, "%" PRId64, (int64_t)Prenum);
-    } else {
-      cbuf[0] = NUL;
-    }
-    if (nchar == 'v' || nchar == Ctrl_V) {
-      xstrlcat(cbuf, "v", sizeof(cbuf));
-    }
-    xstrlcat(cbuf, "new", sizeof(cbuf));
-    do_cmdline_cmd(cbuf);
-    break;
-
-  // quit current window
-  case Ctrl_Q:
-  case 'q':
-    reset_VIsual_and_resel();                   // stop Visual mode
-    cmd_with_count("quit", cbuf, sizeof(cbuf), Prenum);
-    do_cmdline_cmd(cbuf);
-    break;
-
-  // close current window
-  case Ctrl_C:
-  case 'c':
-    reset_VIsual_and_resel();                   // stop Visual mode
-    cmd_with_count("close", cbuf, sizeof(cbuf), Prenum);
-    do_cmdline_cmd(cbuf);
-    break;
-
-  // close preview window
-  case Ctrl_Z:
-  case 'z':
-    CHECK_CMDWIN;
-    reset_VIsual_and_resel();  // stop Visual mode
-    do_cmdline_cmd("pclose");
-    break;
-
-  // cursor to preview window
-  case 'P': {
-    win_T *wp = NULL;
-    FOR_ALL_WINDOWS_IN_TAB(wp2, curtab) {
-      if (wp2->w_p_pvw) {
-        wp = wp2;
-        break;
-      }
-    }
-    if (wp == NULL) {
-      emsg(_("E441: There is no preview window"));
-    } else {
-      win_goto(wp);
-    }
-    break;
-  }
-
-  // close all but current window
-  case Ctrl_O:
-  case 'o':
-    CHECK_CMDWIN;
-    reset_VIsual_and_resel();  // stop Visual mode
-    cmd_with_count("only", cbuf, sizeof(cbuf), Prenum);
-    do_cmdline_cmd(cbuf);
-    break;
-
-  // cursor to next window with wrap around
-  case Ctrl_W:
-  case 'w':
-  // cursor to previous window with wrap around
-  case 'W':
-    CHECK_CMDWIN;
-    if (ONE_WINDOW && Prenum != 1) {  // just one window
-      beep_flush();
-    } else {
-      win_T *wp;
-      if (Prenum) {  // go to specified window
-        win_T *last_focusable = firstwin;
-        for (wp = firstwin; --Prenum > 0;) {
-          if (!wp->w_floating || (!wp->w_config.hide && wp->w_config.focusable)) {
-            last_focusable = wp;
-          }
-          if (wp->w_next == NULL) {
-            break;
-          }
-          wp = wp->w_next;
-        }
-        while (wp != NULL && wp->w_floating
-               && (wp->w_config.hide || !wp->w_config.focusable)) {
-          wp = wp->w_next;
-        }
-        if (wp == NULL) {  // went past the last focusable window
-          wp = last_focusable;
-        }
-      } else {
-        if (nchar == 'W') {  // go to previous window
-          wp = curwin->w_prev;
-          if (wp == NULL) {
-            wp = lastwin;  // wrap around
-          }
-          while (wp != NULL && wp->w_floating
-                 && (wp->w_config.hide || !wp->w_config.focusable)) {
-            wp = wp->w_prev;
-          }
-        } else {  // go to next window
-          wp = curwin->w_next;
-          while (wp != NULL && wp->w_floating
-                 && (wp->w_config.hide || !wp->w_config.focusable)) {
-            wp = wp->w_next;
-          }
-          if (wp == NULL) {
-            wp = firstwin;  // wrap around
-          }
-        }
-      }
-      win_goto(wp);
-    }
-    break;
-
-  // cursor to window below
-  case 'j':
-  case K_DOWN:
-  case Ctrl_J:
-    CHECK_CMDWIN;
-    win_goto_ver(false, Prenum1);
-    break;
-
-  // cursor to window above
-  case 'k':
-  case K_UP:
-  case Ctrl_K:
-    CHECK_CMDWIN;
-    win_goto_ver(true, Prenum1);
-    break;
-
-  // cursor to left window
-  case 'h':
-  case K_LEFT:
-  case Ctrl_H:
-  case K_BS:
-    CHECK_CMDWIN;
-    win_goto_hor(true, Prenum1);
-    break;
-
-  // cursor to right window
-  case 'l':
-  case K_RIGHT:
-  case Ctrl_L:
-    CHECK_CMDWIN;
-    win_goto_hor(false, Prenum1);
-    break;
-
-  // move window to new tab page
-  case 'T':
-    CHECK_CMDWIN;
-    if (one_window(curwin, NULL)) {
-      msg(_(m_onlyone), 0);
-    } else {
-      tabpage_T *oldtab = curtab;
-
-      // First create a new tab with the window, then go back to
-      // the old tab and close the window there.
-      win_T *wp = curwin;
-      if (win_new_tabpage(Prenum, NULL) == OK
-          && valid_tabpage(oldtab)) {
-        tabpage_T *newtab = curtab;
-        goto_tabpage_tp(oldtab, true, true);
-        if (curwin == wp) {
-          win_close(curwin, false, false);
-        }
-        if (valid_tabpage(newtab)) {
-          goto_tabpage_tp(newtab, true, true);
-          apply_autocmds(EVENT_TABNEWENTERED, NULL, NULL, false, curbuf);
-        }
-      }
-    }
-    break;
-
-  // cursor to top-left window
-  case 't':
-  case Ctrl_T:
-    win_goto(firstwin);
-    break;
-
-  // cursor to bottom-right window
-  case 'b':
-  case Ctrl_B:
-    win_goto(lastwin_nofloating());
-    break;
-
-  // cursor to last accessed (previous) window
-  case 'p':
-  case Ctrl_P:
-    if (!win_valid(prevwin) || prevwin->w_config.hide || !prevwin->w_config.focusable) {
-      beep_flush();
-    } else {
-      win_goto(prevwin);
-    }
-    break;
-
-  // exchange current and next window
-  case 'x':
-  case Ctrl_X:
-    CHECK_CMDWIN;
-    win_exchange(Prenum);
-    break;
-
-  // rotate windows downwards
-  case Ctrl_R:
-  case 'r':
-    CHECK_CMDWIN;
-    reset_VIsual_and_resel();  // stop Visual mode
-    win_rotate(false, Prenum1);  // downwards
-    break;
-
-  // rotate windows upwards
-  case 'R':
-    CHECK_CMDWIN;
-    reset_VIsual_and_resel();  // stop Visual mode
-    win_rotate(true, Prenum1);  // upwards
-    break;
-
-  // move window to the very top/bottom/left/right
-  case 'K':
-  case 'J':
-  case 'H':
-  case 'L':
-    CHECK_CMDWIN;
-    if (one_window(curwin, NULL)) {
-      beep_flush();
-    } else {
-      const int dir = ((nchar == 'H' || nchar == 'L') ? WSP_VERT : 0)
-                      | ((nchar == 'H' || nchar == 'K') ? WSP_TOP : WSP_BOT);
-
-      win_splitmove(curwin, Prenum, dir);
-    }
-    break;
-
-  // make all windows the same width and/or height
-  case '=': {
-    int mod = cmdmod.cmod_split & (WSP_VERT | WSP_HOR);
-    win_equal(NULL, false, mod == WSP_VERT ? 'v' : mod == WSP_HOR ? 'h' : 'b');
-    break;
-  }
-
-  // increase current window height
-  case '+':
-    win_setheight(curwin->w_height + Prenum1);
-    break;
-
-  // decrease current window height
-  case '-':
-    win_setheight(curwin->w_height - Prenum1);
-    break;
-
-  // set current window height
-  case Ctrl__:
-  case '_':
-    win_setheight(Prenum ? Prenum : Rows - (int)min_set_ch);
-    break;
-
-  // increase current window width
-  case '>':
-    win_setwidth(curwin->w_width + Prenum1);
-    break;
-
-  // decrease current window width
-  case '<':
-    win_setwidth(curwin->w_width - Prenum1);
-    break;
-
-  // set current window width
-  case '|':
-    win_setwidth(Prenum != 0 ? Prenum : Columns);
-    break;
-
-  // jump to tag and split window if tag exists (in preview window)
-  case '}':
-    CHECK_CMDWIN;
-    if (Prenum) {
-      g_do_tagpreview = Prenum;
-    } else {
-      g_do_tagpreview = (int)p_pvh;
-    }
-    FALLTHROUGH;
-  case ']':
-  case Ctrl_RSB:
-    CHECK_CMDWIN;
-    // Keep visual mode, can select words to use as a tag.
-    if (Prenum) {
-      postponed_split = Prenum;
-    } else {
-      postponed_split = -1;
-    }
-
-    if (nchar != '}') {
-      g_do_tagpreview = 0;
-    }
-
-    // Execute the command right here, required when
-    // "wincmd ]" was used in a function.
-    do_nv_ident(Ctrl_RSB, NUL);
-    postponed_split = 0;
-    break;
-
-  // edit file name under cursor in a new window
-  case 'f':
-  case 'F':
-  case Ctrl_F: {
-wingotofile:
-    CHECK_CMDWIN;
-    if (check_text_or_curbuf_locked(NULL)) {
-      break;
-    }
-
-    linenr_T lnum = -1;
-    char *ptr = grab_file_name(Prenum1, &lnum);
-    if (ptr != NULL) {
-      tabpage_T *oldtab = curtab;
-      win_T *oldwin = curwin;
-      setpcmark();
-
-      // If 'switchbuf' is set to 'useopen' or 'usetab' and the
-      // file is already opened in a window, then jump to it.
-      win_T *wp = NULL;
-      if ((swb_flags & (kOptSwbFlagUseopen | kOptSwbFlagUsetab))
-          && cmdmod.cmod_tab == 0) {
-        wp = swbuf_goto_win_with_buf(buflist_findname_exp(ptr));
-      }
-
-      if (wp == NULL && win_split(0, 0) == OK) {
-        RESET_BINDING(curwin);
-        if (do_ecmd(0, ptr, NULL, NULL, ECMD_LASTL, ECMD_HIDE, NULL) == FAIL) {
-          // Failed to open the file, close the window opened for it.
-          win_close(curwin, false, false);
-          goto_tabpage_win(oldtab, oldwin);
-        } else {
-          wp = curwin;
-        }
-      }
-
-      if (wp != NULL && nchar == 'F' && lnum >= 0) {
-        curwin->w_cursor.lnum = lnum;
-        check_cursor_lnum(curwin);
-        beginline(BL_SOL | BL_FIX);
-      }
-      xfree(ptr);
-    }
-    break;
-  }
-
-  // Go to the first occurrence of the identifier under cursor along path in a
-  // new window -- webb
-  case 'i':                         // Go to any match
-  case Ctrl_I:
-    type = FIND_ANY;
-    FALLTHROUGH;
-  case 'd':                         // Go to definition, using 'define'
-  case Ctrl_D: {
-    CHECK_CMDWIN;
-    size_t len;
-    char *ptr;
-    if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
-      break;
-    }
-
-    // Make a copy, if the line was changed it will be freed.
-    ptr = xmemdupz(ptr, len);
-
-    find_pattern_in_path(ptr, 0, len, true, Prenum == 0, type,
-                         Prenum1, ACTION_SPLIT, 1, MAXLNUM, false, false);
-    xfree(ptr);
-    curwin->w_set_curswant = true;
-    break;
-  }
-
-  // Quickfix window only: view the result under the cursor in a new split.
-  case K_KENTER:
-  case CAR:
-    if (bt_quickfix(curbuf)) {
-      qf_view_result(true);
-    }
-    break;
-
-  // CTRL-W g  extended commands
-  case 'g':
-  case Ctrl_G:
-    CHECK_CMDWIN;
-    no_mapping++;
-    allow_keys++;               // no mapping for xchar, but allow key codes
-    if (xchar == NUL) {
-      xchar = plain_vgetc();
-    }
-    LANGMAP_ADJUST(xchar, true);
-    no_mapping--;
-    allow_keys--;
-    add_to_showcmd(xchar);
-
-    switch (xchar) {
-    case '}':
-      xchar = Ctrl_RSB;
-      if (Prenum) {
-        g_do_tagpreview = Prenum;
-      } else {
-        g_do_tagpreview = (int)p_pvh;
-      }
-      FALLTHROUGH;
-    case ']':
-    case Ctrl_RSB:
-      // Keep visual mode, can select words to use as a tag.
-      if (Prenum) {
-        postponed_split = Prenum;
-      } else {
-        postponed_split = -1;
-      }
-
-      // Execute the command right here, required when
-      // "wincmd g}" was used in a function.
-      do_nv_ident('g', xchar);
-      postponed_split = 0;
-      break;
-
-    case 'f':                       // CTRL-W gf: "gf" in a new tab page
-    case 'F':                       // CTRL-W gF: "gF" in a new tab page
-      cmdmod.cmod_tab = tabpage_index(curtab) + 1;
-      nchar = xchar;
-      goto wingotofile;
-
-    case 't':                       // CTRL-W gt: go to next tab page
-      goto_tabpage(Prenum);
-      break;
-
-    case 'T':                       // CTRL-W gT: go to previous tab page
-      goto_tabpage(-Prenum1);
-      break;
-
-    case TAB:                       // CTRL-W g<Tab>: go to last used tab page
-      if (!goto_tabpage_lastused()) {
-        beep_flush();
-      }
-      break;
-
-    case 'e':
-      if (curwin->w_floating || !ui_has(kUIMultigrid)) {
-        beep_flush();
-        break;
-      }
-      WinConfig config = WIN_CONFIG_INIT;
-      config.width = curwin->w_width;
-      config.height = curwin->w_height;
-      config.external = true;
-      Error err = ERROR_INIT;
-      if (!win_new_float(curwin, false, config, &err)) {
-        emsg(err.msg);
-        api_clear_error(&err);
-        beep_flush();
-      }
-      break;
-    default:
-      beep_flush();
-      break;
-    }
-    break;
-
-  default:
-    beep_flush();
-    break;
-  }
+  rs_do_window(nchar, Prenum, xchar);
 }
 
 static void cmd_with_count(char *cmd, char *bufp, size_t bufsize, int64_t Prenum)
@@ -5314,7 +4785,10 @@ void goto_tabpage(int n)
 void goto_tabpage_tp(tabpage_T *tp, bool trigger_enter_autocmds, bool trigger_leave_autocmds)
 {
   if (trigger_enter_autocmds || trigger_leave_autocmds) {
-    CHECK_CMDWIN;
+    if (cmdwin_type != 0) {
+      emsg(_(e_cmdwin));
+      return;
+    }
   }
 
   // Don't repeat a message in another tab page.
@@ -7930,6 +7404,449 @@ int nvim_can_close_floating_windows(tabpage_T *tp)
   return can_close_floating_windows(tp) ? 1 : 0;
 }
 
+// =============================================================================
+// Phase 4: do_window wrappers
+// =============================================================================
+
+/// Wrapper for static win_exchange(Prenum).
+void nvim_win_exchange_wrapper(int Prenum)
+{
+  win_exchange(Prenum);
+}
+
+/// Wrapper for static win_rotate(upwards, count).
+void nvim_win_rotate_wrapper(int upwards, int count)
+{
+  win_rotate(upwards != 0, count);
+}
+
+/// Wrapper for static win_goto_ver(up, count).
+void nvim_win_goto_ver_wrapper(int up, int count)
+{
+  win_goto_ver(up != 0, count);
+}
+
+/// Wrapper for static win_goto_hor(left, count).
+void nvim_win_goto_hor_wrapper(int left, int count)
+{
+  win_goto_hor(left != 0, count);
+}
+
+/// Get cmdmod.cmod_split.
+int nvim_get_cmdmod_cmod_split(void)
+{
+  return cmdmod.cmod_split;
+}
+
+/// Get cmdmod.cmod_tab.
+int nvim_get_cmdmod_cmod_tab(void)
+{
+  return cmdmod.cmod_tab;
+}
+
+/// Set cmdmod.cmod_tab.
+void nvim_set_cmdmod_cmod_tab(int val)
+{
+  cmdmod.cmod_tab = val;
+}
+
+/// Get swb_flags global.
+unsigned nvim_get_swb_flags(void)
+{
+  return swb_flags;
+}
+
+/// Get p_pvh (preview height) option.
+int64_t nvim_get_p_pvh(void)
+{
+  return p_pvh;
+}
+
+/// Wrapper: win_goto(wp).
+void nvim_win_goto_wrapper(win_T *wp)
+{
+  win_goto(wp);
+}
+
+/// Wrapper: win_split(size, flags).
+int nvim_win_split_wrapper(int size, int flags)
+{
+  return win_split(size, flags);
+}
+
+/// Wrapper: win_splitmove(wp, size, flags).
+int nvim_win_splitmove_wrapper(win_T *wp, int size, int flags)
+{
+  return win_splitmove(wp, size, flags);
+}
+
+/// Wrapper: reset_VIsual_and_resel().
+void nvim_reset_visual_wrapper(void)
+{
+  reset_VIsual_and_resel();
+}
+
+/// Wrapper: do_cmdline_cmd(cmd).
+int nvim_do_cmdline_cmd_wrapper(const char *cmd)
+{
+  return do_cmdline_cmd(cmd);
+}
+
+/// Wrapper: emsg(_(e_cmdwin)).
+void nvim_emsg_e_cmdwin(void)
+{
+  emsg(_(e_cmdwin));
+}
+
+/// Wrapper: bt_quickfix(curbuf).
+int nvim_bt_quickfix_curbuf(void)
+{
+  return bt_quickfix(curbuf) ? 1 : 0;
+}
+
+/// Wrapper: one_window(curwin, NULL).
+int nvim_one_window_curwin(void)
+{
+  return one_window(curwin, NULL) ? 1 : 0;
+}
+
+/// Wrapper: msg(_(m_onlyone), 0).
+void nvim_msg_onlyone(void)
+{
+  msg(_(m_onlyone), 0);
+}
+
+/// Wrapper: lastwin_nofloating().
+win_T *nvim_lastwin_nofloating_wrapper(void)
+{
+  return lastwin_nofloating();
+}
+
+/// Wrapper: win_valid(prevwin) check for 'p' command.
+/// Returns prevwin if valid and focusable, NULL otherwise.
+win_T *nvim_get_valid_prevwin(void)
+{
+  if (!win_valid(prevwin) || prevwin->w_config.hide || !prevwin->w_config.focusable) {
+    return NULL;
+  }
+  return prevwin;
+}
+
+/// Wrapper: The 'w'/'W' window navigation.
+/// nchar='w' goes forward, nchar='W' goes backward.
+/// Prenum selects a specific window number.
+void nvim_do_window_wW(int nchar, int Prenum)
+{
+  if (ONE_WINDOW && Prenum != 1) {
+    beep_flush();
+  } else {
+    win_T *wp;
+    if (Prenum) {
+      win_T *last_focusable = firstwin;
+      for (wp = firstwin; --Prenum > 0;) {
+        if (!wp->w_floating || (!wp->w_config.hide && wp->w_config.focusable)) {
+          last_focusable = wp;
+        }
+        if (wp->w_next == NULL) {
+          break;
+        }
+        wp = wp->w_next;
+      }
+      while (wp != NULL && wp->w_floating
+             && (wp->w_config.hide || !wp->w_config.focusable)) {
+        wp = wp->w_next;
+      }
+      if (wp == NULL) {
+        wp = last_focusable;
+      }
+    } else {
+      if (nchar == 'W') {
+        wp = curwin->w_prev;
+        if (wp == NULL) {
+          wp = lastwin;
+        }
+        while (wp != NULL && wp->w_floating
+               && (wp->w_config.hide || !wp->w_config.focusable)) {
+          wp = wp->w_prev;
+        }
+      } else {
+        wp = curwin->w_next;
+        while (wp != NULL && wp->w_floating
+               && (wp->w_config.hide || !wp->w_config.focusable)) {
+          wp = wp->w_next;
+        }
+        if (wp == NULL) {
+          wp = firstwin;
+        }
+      }
+    }
+    win_goto(wp);
+  }
+}
+
+/// Wrapper: cursor to preview window ('P' command).
+void nvim_do_window_P(void)
+{
+  win_T *wp = NULL;
+  FOR_ALL_WINDOWS_IN_TAB(wp2, curtab) {
+    if (wp2->w_p_pvw) {
+      wp = wp2;
+      break;
+    }
+  }
+  if (wp == NULL) {
+    emsg(_("E441: There is no preview window"));
+  } else {
+    win_goto(wp);
+  }
+}
+
+/// Wrapper: 'T' move-to-tab command.
+void nvim_do_window_T(int Prenum)
+{
+  if (one_window(curwin, NULL)) {
+    msg(_(m_onlyone), 0);
+  } else {
+    tabpage_T *oldtab = curtab;
+    win_T *wp = curwin;
+    if (win_new_tabpage(Prenum, NULL) == OK
+        && valid_tabpage(oldtab)) {
+      tabpage_T *newtab = curtab;
+      goto_tabpage_tp(oldtab, true, true);
+      if (curwin == wp) {
+        win_close(curwin, false, false);
+      }
+      if (valid_tabpage(newtab)) {
+        goto_tabpage_tp(newtab, true, true);
+        apply_autocmds(EVENT_TABNEWENTERED, NULL, NULL, false, curbuf);
+      }
+    }
+  }
+}
+
+/// Wrapper: '^' split-and-edit-alternate command.
+void nvim_do_window_hat(int Prenum)
+{
+  reset_VIsual_and_resel();
+
+  if (buflist_findnr(Prenum == 0 ? curwin->w_alt_fnum : Prenum) == NULL) {
+    if (Prenum == 0) {
+      emsg(_(e_noalt));
+    } else {
+      semsg(_("E92: Buffer %" PRId64 " not found"), (int64_t)Prenum);
+    }
+    return;
+  }
+
+  if (!curbuf_locked() && win_split(0, 0) == OK) {
+    buflist_getfile(Prenum == 0 ? curwin->w_alt_fnum : Prenum,
+                    0, GETF_ALT, false);
+  }
+}
+
+/// Wrapper: 'n'/'N' new window, including the 'newwindow' goto label logic.
+/// nchar is the original command char (to detect 'v'/'V' for vertical).
+void nvim_do_window_new(int nchar, int Prenum)
+{
+  char cbuf[40];
+  if (Prenum) {
+    vim_snprintf(cbuf, sizeof(cbuf) - 5, "%" PRId64, (int64_t)Prenum);
+  } else {
+    cbuf[0] = NUL;
+  }
+  if (nchar == 'v' || nchar == Ctrl_V) {
+    xstrlcat(cbuf, "v", sizeof(cbuf));
+  }
+  xstrlcat(cbuf, "new", sizeof(cbuf));
+  do_cmdline_cmd(cbuf);
+}
+
+/// Wrapper: cmd_with_count + do_cmdline_cmd.
+void nvim_cmd_with_count_exec(const char *cmd, int64_t Prenum)
+{
+  char cbuf[40];
+  size_t len = xstrlcpy(cbuf, cmd, sizeof(cbuf));
+  if (Prenum > 0 && len < sizeof(cbuf)) {
+    vim_snprintf(cbuf + len, sizeof(cbuf) - len, "%" PRId64, Prenum);
+  }
+  do_cmdline_cmd(cbuf);
+}
+
+/// Wrapper: The '=' equalize command.
+void nvim_do_window_equalize(void)
+{
+  int mod = cmdmod.cmod_split & (WSP_VERT | WSP_HOR);
+  win_equal(NULL, false, mod == WSP_VERT ? 'v' : mod == WSP_HOR ? 'h' : 'b');
+}
+
+/// Wrapper: The tag/preview commands (']', '}', Ctrl-]).
+void nvim_do_window_tag(int nchar, int Prenum)
+{
+  if (nchar == '}') {
+    if (Prenum) {
+      g_do_tagpreview = Prenum;
+    } else {
+      g_do_tagpreview = (int)p_pvh;
+    }
+  }
+
+  if (Prenum) {
+    postponed_split = Prenum;
+  } else {
+    postponed_split = -1;
+  }
+
+  if (nchar != '}') {
+    g_do_tagpreview = 0;
+  }
+
+  do_nv_ident(Ctrl_RSB, NUL);
+  postponed_split = 0;
+}
+
+/// Wrapper: The 'f'/'F'/Ctrl-F file-goto command.
+void nvim_do_window_goto_file(int nchar, int Prenum1)
+{
+  if (check_text_or_curbuf_locked(NULL)) {
+    return;
+  }
+
+  linenr_T lnum = -1;
+  char *ptr = grab_file_name(Prenum1, &lnum);
+  if (ptr != NULL) {
+    tabpage_T *oldtab = curtab;
+    win_T *oldwin = curwin;
+    setpcmark();
+
+    win_T *wp = NULL;
+    if ((swb_flags & (kOptSwbFlagUseopen | kOptSwbFlagUsetab))
+        && cmdmod.cmod_tab == 0) {
+      wp = swbuf_goto_win_with_buf(buflist_findname_exp(ptr));
+    }
+
+    if (wp == NULL && win_split(0, 0) == OK) {
+      RESET_BINDING(curwin);
+      if (do_ecmd(0, ptr, NULL, NULL, ECMD_LASTL, ECMD_HIDE, NULL) == FAIL) {
+        win_close(curwin, false, false);
+        goto_tabpage_win(oldtab, oldwin);
+      } else {
+        wp = curwin;
+      }
+    }
+
+    if (wp != NULL && nchar == 'F' && lnum >= 0) {
+      curwin->w_cursor.lnum = lnum;
+      check_cursor_lnum(curwin);
+      beginline(BL_SOL | BL_FIX);
+    }
+    xfree(ptr);
+  }
+}
+
+/// Wrapper: The 'i'/'d' find-in-path command.
+void nvim_do_window_find_in_path(int nchar, int Prenum, int Prenum1)
+{
+  int type = FIND_DEFINE;
+  if (nchar == 'i' || nchar == Ctrl_I) {
+    type = FIND_ANY;
+  }
+
+  size_t len;
+  char *ptr;
+  if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
+    return;
+  }
+
+  ptr = xmemdupz(ptr, len);
+  find_pattern_in_path(ptr, 0, len, true, Prenum == 0, type,
+                       Prenum1, ACTION_SPLIT, 1, MAXLNUM, false, false);
+  xfree(ptr);
+  curwin->w_set_curswant = true;
+}
+
+/// Wrapper: The 'g' sub-switch.
+void nvim_do_window_g(int Prenum, int xchar)
+{
+  int Prenum1 = Prenum == 0 ? 1 : Prenum;
+
+  no_mapping++;
+  allow_keys++;
+  if (xchar == NUL) {
+    xchar = plain_vgetc();
+  }
+  LANGMAP_ADJUST(xchar, true);
+  no_mapping--;
+  allow_keys--;
+  add_to_showcmd(xchar);
+
+  switch (xchar) {
+  case '}':
+    xchar = Ctrl_RSB;
+    if (Prenum) {
+      g_do_tagpreview = Prenum;
+    } else {
+      g_do_tagpreview = (int)p_pvh;
+    }
+    FALLTHROUGH;
+  case ']':
+  case Ctrl_RSB:
+    if (Prenum) {
+      postponed_split = Prenum;
+    } else {
+      postponed_split = -1;
+    }
+    do_nv_ident('g', xchar);
+    postponed_split = 0;
+    break;
+
+  case 'f':
+  case 'F':
+    cmdmod.cmod_tab = tabpage_index(curtab) + 1;
+    nvim_do_window_goto_file(xchar, Prenum1);
+    break;
+
+  case 't':
+    goto_tabpage(Prenum);
+    break;
+
+  case 'T':
+    goto_tabpage(-Prenum1);
+    break;
+
+  case TAB:
+    if (!goto_tabpage_lastused()) {
+      beep_flush();
+    }
+    break;
+
+  case 'e':
+    if (curwin->w_floating || !ui_has(kUIMultigrid)) {
+      beep_flush();
+      break;
+    }
+    WinConfig config = WIN_CONFIG_INIT;
+    config.width = curwin->w_width;
+    config.height = curwin->w_height;
+    config.external = true;
+    Error err = ERROR_INIT;
+    if (!win_new_float(curwin, false, config, &err)) {
+      emsg(err.msg);
+      api_clear_error(&err);
+      beep_flush();
+    }
+    break;
+  default:
+    beep_flush();
+    break;
+  }
+}
+
+/// Wrapper: qf_view_result(true).
+void nvim_qf_view_result_split(void)
+{
+  qf_view_result(true);
+}
+
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
 _Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");
 _Static_assert(2 == SNAP_COUNT, "SNAP_COUNT mismatch");
@@ -7956,3 +7873,14 @@ _Static_assert(0x08 == WEE_TRIGGER_ENTER_AUTOCMDS, "WEE_TRIGGER_ENTER_AUTOCMDS m
 _Static_assert(0x10 == WEE_TRIGGER_LEAVE_AUTOCMDS, "WEE_TRIGGER_LEAVE_AUTOCMDS mismatch");
 _Static_assert(40 == UPD_NOT_VALID, "UPD_NOT_VALID mismatch");
 _Static_assert(2 == DOBUF_UNLOAD, "DOBUF_UNLOAD mismatch");
+
+// Key code static asserts for do_window Rust dispatch
+_Static_assert(-30059 == K_UP, "K_UP mismatch");
+_Static_assert(-25707 == K_DOWN, "K_DOWN mismatch");
+_Static_assert(-27755 == K_LEFT, "K_LEFT mismatch");
+_Static_assert(-29291 == K_RIGHT, "K_RIGHT mismatch");
+_Static_assert(-25195 == K_BS, "K_BS mismatch");
+_Static_assert(-16715 == K_KENTER, "K_KENTER mismatch");
+_Static_assert(30 == Ctrl_HAT, "Ctrl_HAT mismatch");
+_Static_assert(29 == Ctrl_RSB, "Ctrl_RSB mismatch");
+_Static_assert(31 == Ctrl__, "Ctrl__ mismatch");
