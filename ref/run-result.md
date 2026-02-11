@@ -1,22 +1,24 @@
-Plan: ~/.claude/plans/prancy-frolicking-waffle.md
+Plan: ~/.claude/plans/wobbly-fluttering-orbit.md
 
-All 5 phases of the plan are complete. Here's a summary:
+All 4 phases of the insexpand completion helpers migration are complete. Here's the summary:
 
-## Completed: option.c Rust Migration Plan
+## Completed
 
-### Phase 1 — Wire 6 already-correct callbacks (`0eb7ab162c`)
-Wired `did_set_hlsearch`, `did_set_ignorecase`, `did_set_title_icon`, `did_set_iminsert`, `did_set_eof_eol_fixeol_bomb`, and `did_set_title`. Fixed all `UpdateType` enum values that were wrong and added `_Static_assert` guards.
+**Phase 1** — Wired 3 existing Rust functions:
+- `ins_compl_make_cyclic` → `rs_ins_compl_make_cyclic`
+- `ins_compl_make_linear` → `rs_ins_compl_make_linear`
+- `pum_enough_matches` → `rs_pum_enough_matches`
 
-### Phase 2 — Complete and wire 10 stub callbacks (`bd99f380f8`)
-Completed `langnoremap/langremap` (toggle paired option), `foldlevel` (call `newFoldLevel`), `showtabline`, `modifiable`, `pumblend` (full pum_grid blending logic), `textwidth` (FOR_ALL_TAB_WINDOWS iteration), `smoothscroll`, `winblend` (clamp + check_blending), `updatecount`.
+**Phase 2** — Migrated 3 functions + 6 C accessors:
+- `compl_match_curr_select` → `rs_compl_match_curr_select` (pum.rs)
+- `get_cpt_sources_count` → `rs_get_cpt_sources_count` (source.rs, +8 unit tests)
+- `check_elapsed_time` → `rs_check_elapsed_time` (source.rs)
 
-### Phase 3 — Wire 10 argument-taking callbacks (`5df91b154b`)
-Wired `binary`, `diff`, `equalalways`, `foldminlines`, `foldnestmax`, `helpheight`, `swapfile`, `numberwidth`, `number_relativenumber`, `titlelen` — extracting `win_T*`/`buf_T*`/old_value from `optset_T` in C thin wrappers.
+**Phase 3** — Migrated 1 function + 16 C setter accessors:
+- `ins_compl_clear` → `rs_ins_compl_clear` (state.rs, resets 18 state variables)
 
-### Phase 4 — Fix 5 incorrect implementations (`2ac6922aeb`)
-Fixed `lisp` (was setting modeline, should call `buf_init_chartab`), `wildchar` (wrong validation), `window` (missing lower-bound clamp), `scrollbind` (wrong arg + missing `w_scbind_pos`), `autochdir` (had incorrect guard).
+**Phase 4** — Migrated 2 functions + 7 C accessors:
+- `ins_compl_fixRedoBufForLeader` → `rs_ins_compl_fixRedoBufForLeader` (leader.rs)
+- `set_fuzzy_score` → `rs_set_fuzzy_score` (sort.rs)
 
-### Phase 5 — Migrate self-contained helpers (`28022e427e`)
-Wired `optval_free`, `optval_copy`, `optval_equal` to Rust. Fixed a critical bug: Rust's `extern static` for a C `char[]` array reads the array contents as a pointer instead of its address, causing `free(): invalid pointer` crashes. Used the existing `nvim_get_empty_string_option()` accessor instead.
-
-**Total: ~31 C functions converted to thin wrappers calling Rust.** All checks pass: build, smoke-test, fmt, clippy, 4028 unit tests.
+**Totals**: 9 functions migrated/wired, ~29 new C accessor functions, 8 new unit tests. All checks pass (build, smoke-test, rust-fmt-check, rust-clippy, rust-test with 4036 tests).
