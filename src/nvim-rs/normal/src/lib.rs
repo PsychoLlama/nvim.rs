@@ -9,6 +9,7 @@
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod additional_char;
+pub mod check;
 pub mod commands;
 pub mod count;
 pub mod dispatch;

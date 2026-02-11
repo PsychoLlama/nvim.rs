@@ -493,6 +493,9 @@ extern void rs_normal_get_additional_char(void *s);
 // Phase 3: normal_finish_command
 extern void rs_normal_finish_command(void *s);
 
+// Phase 4A: normal_check
+extern int rs_normal_check(void *s);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -3385,105 +3388,146 @@ static void normal_redraw(NormalState *s)
   setcursor();
 }
 
-/// Function executed before each iteration of normal mode.
-///
-/// @return:
-///           1 if the iteration should continue normally
-///          -1 if the iteration should be skipped
-///           0 if the main loop must exit
+// =============================================================================
+// Phase 4A: normal_check accessors for Rust FFI
+// =============================================================================
+
+/// normal_check_stuff_buffer wrapper.
+void nvim_normal_check_stuff_buffer_wrapper(void *sp)
+{
+  normal_check_stuff_buffer((NormalState *)sp);
+}
+
+/// normal_check_interrupt wrapper.
+void nvim_normal_check_interrupt_wrapper(void *sp)
+{
+  normal_check_interrupt((NormalState *)sp);
+}
+
+/// Get did_throw global.
+bool nvim_get_did_throw_direct(void) { return did_throw; }
+
+/// discard_current_exception wrapper.
+void nvim_discard_current_exception_wrapper(void) { discard_current_exception(); }
+
+/// Set quit_more global.
+void nvim_set_quit_more(bool val) { quit_more = val; }
+
+/// Get skip_redraw global.
+bool nvim_get_skip_redraw(void) { return skip_redraw; }
+
+/// Set skip_redraw global.
+void nvim_set_skip_redraw(bool val) { skip_redraw = val; }
+
+/// Set do_redraw global.
+void nvim_set_do_redraw(bool val) { do_redraw = val; }
+
+/// setcursor() wrapper.
+void nvim_setcursor_wrapper(void) { setcursor(); }
+
+/// update_topline(curwin) wrapper.
+void nvim_update_topline_curwin_wrapper(void) { update_topline(curwin); }
+
+/// normal_check_cursor_moved wrapper.
+void nvim_normal_check_cursor_moved_wrapper(void *sp)
+{
+  normal_check_cursor_moved((NormalState *)sp);
+}
+
+/// normal_check_text_changed wrapper.
+void nvim_normal_check_text_changed_wrapper(void *sp)
+{
+  normal_check_text_changed((NormalState *)sp);
+}
+
+/// normal_check_window_scrolled wrapper.
+void nvim_normal_check_window_scrolled_wrapper(void *sp)
+{
+  normal_check_window_scrolled((NormalState *)sp);
+}
+
+/// normal_check_buffer_modified wrapper.
+void nvim_normal_check_buffer_modified_wrapper(void *sp)
+{
+  normal_check_buffer_modified((NormalState *)sp);
+}
+
+/// normal_check_safe_state wrapper.
+void nvim_normal_check_safe_state_wrapper(void *sp)
+{
+  normal_check_safe_state((NormalState *)sp);
+}
+
+/// curtab->tp_diff_update || curtab->tp_diff_invalid.
+bool nvim_curtab_needs_diff_update(void)
+{
+  return curtab->tp_diff_update || curtab->tp_diff_invalid;
+}
+
+/// ex_diffupdate(NULL) wrapper.
+void nvim_ex_diffupdate_wrapper(void) { ex_diffupdate(NULL); }
+
+/// Clear curtab diff update flag.
+void nvim_curtab_clear_diff_update(void) { curtab->tp_diff_update = false; }
+
+/// Get diff_need_scrollbind global.
+bool nvim_get_diff_need_scrollbind(void) { return diff_need_scrollbind; }
+
+/// Set diff_need_scrollbind global.
+void nvim_set_diff_need_scrollbind(bool val) { diff_need_scrollbind = val; }
+
+/// check_scrollbind(0, 0) wrapper.
+void nvim_check_scrollbind_zero_wrapper(void) { check_scrollbind(0, 0); }
+
+/// normal_check_folds wrapper.
+void nvim_normal_check_folds_wrapper(void *sp)
+{
+  normal_check_folds((NormalState *)sp);
+}
+
+/// normal_redraw wrapper.
+void nvim_normal_redraw_wrapper(void *sp)
+{
+  normal_redraw((NormalState *)sp);
+}
+
+/// time_fd != NULL check.
+bool nvim_get_time_fd_not_null(void) { return time_fd != NULL; }
+
+/// TIME_MSG("first screen update") + time_finish() wrapper.
+void nvim_time_msg_first_screen_and_finish(void)
+{
+  TIME_MSG("first screen update");
+  time_finish();
+}
+
+/// may_make_initial_scroll_size_snapshot() wrapper.
+void nvim_may_make_initial_scroll_size_snapshot_wrapper(void)
+{
+  may_make_initial_scroll_size_snapshot();
+}
+
+/// Set may_garbage_collect global.
+void nvim_set_may_garbage_collect(bool val) { may_garbage_collect = val; }
+
+/// update_curswant() wrapper.
+void nvim_update_curswant_wrapper(void) { update_curswant(); }
+
+/// Get cmdwin_result global.
+int nvim_get_cmdwin_result(void) { return cmdwin_result; }
+
+/// do_exmode() wrapper.
+void nvim_do_exmode_wrapper(void) { do_exmode(); }
+
+/// normal_prepare wrapper.
+void nvim_normal_prepare_wrapper(void *sp)
+{
+  normal_prepare((NormalState *)sp);
+}
+
 static int normal_check(VimState *state)
 {
-  NormalState *s = (NormalState *)state;
-  normal_check_stuff_buffer(s);
-  normal_check_interrupt(s);
-
-  // At the toplevel there is no exception handling.  Discard any that
-  // may be hanging around (e.g. from "interrupt" at the debug prompt).
-  if (did_throw && !ex_normal_busy) {
-    discard_current_exception();
-  }
-
-  if (!exmode_active) {
-    msg_scroll = false;
-  }
-  quit_more = false;
-
-  state_no_longer_safe(NULL);
-
-  // If skip redraw is set (for ":" in wait_return()), don't redraw now.
-  // If there is nothing in the stuff_buffer or do_redraw is true,
-  // update cursor and redraw.
-  if (skip_redraw || exmode_active) {
-    skip_redraw = false;
-    setcursor();
-  } else if (do_redraw || stuff_empty()) {
-    // Ensure curwin->w_topline and curwin->w_leftcol are up to date
-    // before triggering a WinScrolled autocommand.
-    update_topline(curwin);
-    validate_cursor(curwin);
-
-    normal_check_cursor_moved(s);
-    normal_check_text_changed(s);
-    normal_check_window_scrolled(s);
-    normal_check_buffer_modified(s);
-    normal_check_safe_state(s);
-
-    // Updating diffs from changed() does not always work properly,
-    // esp. updating folds.  Do an update just before redrawing if
-    // needed.
-    if (curtab->tp_diff_update || curtab->tp_diff_invalid) {
-      ex_diffupdate(NULL);
-      curtab->tp_diff_update = false;
-    }
-
-    // Scroll-binding for diff mode may have been postponed until
-    // here.  Avoids doing it for every change.
-    if (diff_need_scrollbind) {
-      check_scrollbind(0, 0);
-      diff_need_scrollbind = false;
-    }
-
-    normal_check_folds(s);
-    normal_redraw(s);
-    do_redraw = false;
-
-    // Now that we have drawn the first screen all the startup stuff
-    // has been done, close any file for startup messages.
-    if (time_fd != NULL) {
-      TIME_MSG("first screen update");
-      time_finish();
-    }
-    // After the first screen update may start triggering WinScrolled
-    // autocmd events.  Store all the scroll positions and sizes now.
-    may_make_initial_scroll_size_snapshot();
-  }
-
-  // May perform garbage collection when waiting for a character, but
-  // only at the very toplevel.  Otherwise we may be using a List or
-  // Dict internally somewhere.
-  // "may_garbage_collect" is reset in vgetc() which is invoked through
-  // do_exmode() and normal_cmd().
-  may_garbage_collect = !s->cmdwin && !s->noexmode;
-
-  // Update w_curswant if w_set_curswant has been set.
-  // Postponed until here to avoid computing w_virtcol too often.
-  update_curswant();
-
-  if (exmode_active) {
-    if (s->noexmode) {
-      return 0;
-    }
-    do_exmode();
-    return -1;
-  }
-
-  if (s->cmdwin && cmdwin_result != 0) {
-    // command-line window and cmdwin_result is set
-    return 0;
-  }
-
-  normal_prepare(s);
-  return 1;
+  return rs_normal_check((NormalState *)state);
 }
 
 /// Set v:count and v:count1 according to "cap".
