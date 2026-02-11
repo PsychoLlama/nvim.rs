@@ -166,6 +166,11 @@ extern char *rs_buflist_nr2name(int n, int fullname, int helptail);
 extern buf_T *rs_buflist_findname(char *ffname);
 extern buf_T *rs_buflist_findname_exp(char *fname);
 
+// Phase 3 (Wave 2): file identity helpers from Rust
+extern bool rs_otherfile_buf_4(buf_T *buf, char *ffname, void *file_id_p, bool file_id_valid);
+extern void rs_fname_expand(buf_T *buf, char **ffname, char **sfname);
+extern int rs_buflist_add(char *fname, int flags);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
 
@@ -686,6 +691,18 @@ void nvim_buf_set_ml_mfp_null(buf_T *buf)
 
 // nvim_buf_set_ml_flags already defined in memline.c
 
+/// Expand filename to full path (accessor for Rust).
+char *nvim_fix_fname(const char *fname)
+{
+  return fix_fname(fname);
+}
+
+/// Create a new buffer in the buffer list (accessor for Rust).
+buf_T *nvim_buflist_new(char *ffname, char *sfname, linenr_T lnum, int flags)
+{
+  return buflist_new(ffname, sfname, lnum, flags);
+}
+
 /// Get buf_get_changedtick value (direct accessor for Rust, avoids API function).
 int64_t nvim_buf_get_changedtick_direct(buf_T *buf)
 {
@@ -754,7 +771,7 @@ char *nvim_home_replace_save(buf_T *buf, const char *src)
 /// file_id_p may be NULL to trigger a new os_fileid call.
 bool nvim_otherfile_buf(buf_T *buf, char *ffname, void *file_id_p, bool file_id_valid)
 {
-  return otherfile_buf(buf, ffname, (FileID *)file_id_p, file_id_valid);
+  return rs_otherfile_buf_4(buf, ffname, file_id_p, file_id_valid);
 }
 
 // Static assertions for constants used in Rust (Phase 1).
@@ -3686,11 +3703,7 @@ char *getaltfname(bool errmsg)
 /// Used by qf_init(), main() and doarglist()
 int buflist_add(char *fname, int flags)
 {
-  buf_T *buf = buflist_new(fname, NULL, 0, flags);
-  if (buf != NULL) {
-    return buf->b_fnum;
-  }
-  return 0;
+  return rs_buflist_add(fname, flags);
 }
 
 #if defined(BACKSLASH_IN_FILENAME)
@@ -3734,43 +3747,8 @@ bool otherfile(char *ffname)
 /// @param  file_id_p      information about the file at "ffname".
 /// @param  file_id_valid  whether a valid "file_id_p" was passed in.
 static bool otherfile_buf(buf_T *buf, char *ffname, FileID *file_id_p, bool file_id_valid)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // no name is different
-  if (ffname == NULL || *ffname == NUL || buf->b_ffname == NULL) {
-    return true;
-  }
-  if (path_fnamecmp(ffname, buf->b_ffname) == 0) {
-    return false;
-  }
-  {
-    FileID file_id;
-    // If no struct stat given, get it now
-    if (file_id_p == NULL) {
-      file_id_p = &file_id;
-      file_id_valid = os_fileid(ffname, file_id_p);
-    }
-    if (!file_id_valid) {
-      // file_id not valid, assume files are different.
-      return true;
-    }
-    // Use dev/ino to check if the files are the same, even when the names
-    // are different (possible with links).  Still need to compare the
-    // name above, for when the file doesn't exist yet.
-    // Problem: The dev/ino changes when a file is deleted (and created
-    // again) and remains the same when renamed/moved.  We don't want to
-    // stat() each buffer each time, that would be too slow.  Get the
-    // dev/ino again when they appear to match, but not when they appear
-    // to be different: Could skip a buffer when it's actually the same
-    // file.
-    if (buf_same_file_id(buf, file_id_p)) {
-      buf_set_file_id(buf);
-      if (buf_same_file_id(buf, file_id_p)) {
-        return false;
-      }
-    }
-  }
-  return true;
+  return rs_otherfile_buf_4(buf, ffname, (void *)file_id_p, file_id_valid);
 }
 
 /// Set file_id for a buffer.
@@ -3780,15 +3758,7 @@ void buf_set_file_id(buf_T *buf)
   rs_buf_set_file_id(buf);
 }
 
-/// Check that file_id in buffer "buf" matches with "file_id".
-///
-/// @param  buf      buffer
-/// @param  file_id  file id
-static bool buf_same_file_id(buf_T *buf, FileID *file_id)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return buf->file_id_valid && os_fileid_equal(&(buf->file_id), file_id);
-}
+// buf_same_file_id is now Rust-internal (buf_same_file_id in lib.rs)
 
 /// Print info about the current buffer.
 ///
@@ -4040,25 +4010,7 @@ int append_arg_number(win_T *wp, char *buf, size_t buflen)
 /// Note that the resulting "*ffname" pointer should be considered not allocated.
 void fname_expand(buf_T *buf, char **ffname, char **sfname)
 {
-  if (*ffname == NULL) {  // no file name given, nothing to do
-    return;
-  }
-  if (*sfname == NULL) {  // no short file name given, use ffname
-    *sfname = *ffname;
-  }
-  *ffname = fix_fname((*ffname));     // expand to full path
-
-#ifdef MSWIN
-  if (!buf->b_p_bin) {
-    // If the file name is a shortcut file, use the file it links to.
-    char *rfname = os_resolve_shortcut(*ffname);
-    if (rfname != NULL) {
-      xfree(*ffname);
-      *ffname = rfname;
-      *sfname = rfname;
-    }
-  }
-#endif
+  rs_fname_expand(buf, ffname, sfname);
 }
 
 /// @return  true if "buf" is a prompt buffer.

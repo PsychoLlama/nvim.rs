@@ -922,6 +922,108 @@ pub unsafe extern "C" fn rs_otherfile(ffname: *const c_char) -> bool {
     otherfile_buf_impl(nvim_get_curbuf(), ffname)
 }
 
+// =============================================================================
+// File Identity Helpers (Phase 3: Wave 2)
+// =============================================================================
+
+extern "C" {
+    fn nvim_fix_fname(fname: *const c_char) -> *mut c_char;
+    fn nvim_buflist_new(
+        ffname: *const c_char,
+        sfname: *const c_char,
+        lnum: c_int,
+        flags: c_int,
+    ) -> BufHandle;
+}
+
+/// Check that "ffname" is not the same file as buffer "buf" (4-arg version).
+///
+/// When `file_id_p` is non-null, uses the provided file identity instead of
+/// computing it. This avoids redundant `os_fileid` calls when the caller
+/// already has the file identity.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer handle. `ffname` must be a valid C string
+/// or null. `file_id_p` must point to a valid `FileID` buffer or be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_otherfile_buf_4(
+    buf: BufHandle,
+    ffname: *const c_char,
+    file_id_p: *const u8,
+    file_id_valid: bool,
+) -> bool {
+    // no name is different
+    if ffname.is_null() || *ffname == 0 || nvim_buf_get_b_ffname(buf).is_null() {
+        return true;
+    }
+    // fast path: string comparison
+    if nvim_path_fnamecmp(ffname, nvim_buf_get_b_ffname(buf)) == 0 {
+        return false;
+    }
+    // If no file_id provided, compute it
+    let mut local_fid: FileIdBuf = [0u8; FILE_ID_SIZE];
+    let (fid_ptr, fid_valid) = if file_id_p.is_null() {
+        let valid = nvim_os_fileid(ffname, local_fid.as_mut_ptr());
+        (local_fid.as_ptr(), valid)
+    } else {
+        (file_id_p, file_id_valid)
+    };
+    if !fid_valid {
+        return true;
+    }
+    // Copy to a FileIdBuf for buf_same_file_id
+    let mut file_id: FileIdBuf = [0u8; FILE_ID_SIZE];
+    std::ptr::copy_nonoverlapping(fid_ptr, file_id.as_mut_ptr(), FILE_ID_SIZE);
+    if buf_same_file_id(buf, &file_id) {
+        buf_set_file_id_impl(buf);
+        if buf_same_file_id(buf, &file_id) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Expand filename to full path.
+///
+/// Sets `*ffname` to the full path (allocated, replaces old value).
+/// If `*sfname` is NULL, sets it to `*ffname`.
+///
+/// # Safety
+///
+/// `ffname` and `sfname` must be valid pointers to `*mut c_char` values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_fname_expand(
+    _buf: BufHandle,
+    ffname: *mut *mut c_char,
+    sfname: *mut *mut c_char,
+) {
+    if (*ffname).is_null() {
+        return;
+    }
+    if (*sfname).is_null() {
+        *sfname = *ffname;
+    }
+    *ffname = nvim_fix_fname(*ffname);
+    // MSWIN shortcut handling is not needed on Linux
+}
+
+/// Add a file to the buffer list.
+///
+/// Calls `buflist_new()` and returns the buffer number, or 0 on failure.
+///
+/// # Safety
+///
+/// `fname` must be a valid C string or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_buflist_add(fname: *mut c_char, flags: c_int) -> c_int {
+    let buf = nvim_buflist_new(fname, std::ptr::null(), 0, flags);
+    if buf.is_null() {
+        return 0;
+    }
+    nvim_buf_get_fnum(buf)
+}
+
 /// Get file name and line number for file 'fnum'.
 ///
 /// Returns FAIL (1) if not found, OK (0) for success.
