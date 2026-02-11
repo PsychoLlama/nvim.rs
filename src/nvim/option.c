@@ -247,6 +247,8 @@ _Static_assert(UPD_SOME_VALID == 35, "UPD_SOME_VALID mismatch with Rust UpdateTy
 _Static_assert(UPD_NOT_VALID == 40, "UPD_NOT_VALID mismatch with Rust UpdateType::NotValid");
 _Static_assert(UPD_CLEAR == 50, "UPD_CLEAR mismatch with Rust UpdateType::Clear");
 _Static_assert(NO_SCREEN == 2, "NO_SCREEN mismatch with Rust NO_SCREEN constant");
+_Static_assert(Ctrl_C == 3, "Ctrl_C mismatch with Rust CTRL_C constant");
+_Static_assert(K_KENTER == -16715, "K_KENTER mismatch with Rust K_KENTER constant");
 
 // Value computation functions (from Rust value.rs)
 extern int64_t rs_apply_number_op(int64_t oldval, int64_t operand, int op);
@@ -375,6 +377,13 @@ extern const char *rs_did_set_termguicolors(void);
 extern const char *rs_did_set_virtualedit(void);
 extern const char *rs_did_set_writebackup(void);
 extern const char *rs_did_set_updatecount(int64_t old_value);
+
+// Complex callbacks (from Rust callbacks/complex.rs)
+extern const char *rs_did_set_lisp(buf_T *buf);
+extern const char *rs_did_set_wildchar(int64_t c);
+extern const char *rs_did_set_window(void);
+extern const char *rs_did_set_scrollbind(win_T *win);
+extern const char *rs_did_set_autochdir(void);
 
 // Phase 527-530: Option display and expansion functions from Rust
 extern int rs_bool_display_show_no(int value);
@@ -643,6 +652,14 @@ void nvim_callback_win_clamp_winbl(win_T *win) {
 void nvim_callback_win_set_hl_needs_update(win_T *win, int value) {
   if (win) win->w_hl_needs_update = (value != 0);
 }
+
+// Phase 4 callback accessors: scrollbind
+void nvim_callback_win_set_scbind_pos(win_T *win, int value) {
+  if (win) win->w_scbind_pos = value;
+}
+
+// Phase 4 callback accessors: e_invarg error message
+const char *nvim_callback_get_e_invarg(void) { return e_invarg; }
 
 // =============================================================================
 // Simple accessor functions for Rust (don't require options array)
@@ -2513,9 +2530,7 @@ static const char *did_set_arabic(optset_T *args)
 /// Process the updated 'autochdir' option value.
 static const char *did_set_autochdir(optset_T *args FUNC_ATTR_UNUSED)
 {
-  // Change directories when the 'acd' option is set now.
-  do_autochdir();
-  return NULL;
+  return rs_did_set_autochdir();
 }
 
 /// Process the updated 'binary' option value.
@@ -2702,10 +2717,7 @@ static const char *did_set_lines_or_columns(optset_T *args)
 /// Process the updated 'lisp' option value.
 static const char *did_set_lisp(optset_T *args)
 {
-  buf_T *buf = (buf_T *)args->os_buf;
-  // When 'lisp' option changes include/exclude '-' in keyword characters.
-  buf_init_chartab(buf, false);          // ignore errors
-  return NULL;
+  return rs_did_set_lisp((buf_T *)args->os_buf);
 }
 
 /// Process the updated 'modifiable' option value.
@@ -2930,16 +2942,7 @@ static const char *did_set_scrollback(optset_T *args)
 /// Process the updated 'scrollbind' option value.
 static const char *did_set_scrollbind(optset_T *args)
 {
-  win_T *win = (win_T *)args->os_win;
-
-  // when 'scrollbind' is set: snapshot the current position to avoid a jump
-  // at the end of normal_cmd()
-  if (!win->w_p_scb) {
-    return NULL;
-  }
-  do_check_scrollbind(false);
-  win->w_scbind_pos = get_vtopline(win);
-  return NULL;
+  return rs_did_set_scrollbind((win_T *)args->os_win);
 }
 
 #ifdef BACKSLASH_IN_FILENAME
@@ -3105,14 +3108,7 @@ static const char *did_set_updatecount(optset_T *args)
 /// Process the new 'wildchar' / 'wildcharm' option value.
 static const char *did_set_wildchar(optset_T *args)
 {
-  OptInt c = *(OptInt *)args->os_varp;
-
-  // Don't allow key values that wouldn't work as wildchar.
-  if (c == Ctrl_C || c == '\n' || c == '\r' || c == K_KENTER) {
-    return e_invarg;
-  }
-
-  return NULL;
+  return rs_did_set_wildchar(*(OptInt *)args->os_varp);
 }
 
 /// Process the new 'winblend' option value.
@@ -3124,12 +3120,7 @@ static const char *did_set_winblend(optset_T *args)
 /// Process the new 'window' option value.
 static const char *did_set_window(optset_T *args FUNC_ATTR_UNUSED)
 {
-  if (p_window < 1) {
-    p_window = Rows - 1;
-  } else if (p_window >= Rows) {
-    p_window = Rows - 1;
-  }
-  return NULL;
+  return rs_did_set_window();
 }
 
 /// Process the new 'winheight' value.

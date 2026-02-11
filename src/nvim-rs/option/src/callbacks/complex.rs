@@ -815,23 +815,22 @@ unsafe fn streq_cstr(s: *const c_char, bytes: &[u8]) -> bool {
 // =============================================================================
 
 extern "C" {
-    fn nvim_win_get_p_scb(win: *const std::ffi::c_void) -> bool;
+    fn nvim_win_get_p_scb(win: crate::WinHandle) -> c_int;
     fn do_check_scrollbind(check: c_int);
+    fn get_vtopline(win: crate::WinHandle) -> c_int;
+    fn nvim_callback_win_set_scbind_pos(win: crate::WinHandle, value: c_int);
 }
 
 /// Callback for 'scrollbind' option.
-/// When 'scrollbind' changes, sync scroll positions if enabled.
+/// When 'scrollbind' is set, snapshot the current position to avoid a jump
+/// at the end of normal_cmd().
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_scrollbind(win: *const std::ffi::c_void) -> CallbackResult {
-    if win.is_null() {
+pub unsafe extern "C" fn rs_did_set_scrollbind(win: crate::WinHandle) -> CallbackResult {
+    if nvim_win_get_p_scb(win) == 0 {
         return callback_ok();
     }
-
-    if nvim_win_get_p_scb(win) {
-        // 'scrollbind' was set - check scroll binding
-        do_check_scrollbind(1);
-    }
-
+    do_check_scrollbind(0); // false: prepare snapshot, don't sync
+    nvim_callback_win_set_scbind_pos(win, get_vtopline(win));
     callback_ok()
 }
 
@@ -875,24 +874,16 @@ pub unsafe extern "C" fn rs_did_set_undofile(buf: *mut std::ffi::c_void) -> Call
 // =============================================================================
 
 extern "C" {
-    fn nvim_buf_get_p_lisp(buf: *const std::ffi::c_void) -> c_int;
-    fn nvim_buf_set_b_p_ml(buf: *mut std::ffi::c_void, val: c_int);
+    fn buf_init_chartab(buf: crate::BufHandle, global: c_int) -> c_int;
 }
 
 /// Callback for 'lisp' option.
-/// When 'lisp' is set, also set 'modeline'.
+/// When 'lisp' option changes, include/exclude '-' in keyword characters.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_lisp(buf: *mut std::ffi::c_void) -> CallbackResult {
-    if buf.is_null() {
-        return callback_ok();
-    }
-
-    if nvim_buf_get_p_lisp(buf) != 0 {
-        // 'lisp' was set - also set 'modeline'
-        // (This is historical behavior)
-        nvim_buf_set_b_p_ml(buf, 1);
-    }
-
+pub unsafe extern "C" fn rs_did_set_lisp(buf: crate::BufHandle) -> CallbackResult {
+    // Reinitialize character table — this updates iskeyword-like classification
+    // to include/exclude '-' depending on whether 'lisp' is set.
+    buf_init_chartab(buf, 0); // ignore errors (false = not global)
     callback_ok()
 }
 
@@ -901,17 +892,14 @@ pub unsafe extern "C" fn rs_did_set_lisp(buf: *mut std::ffi::c_void) -> Callback
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_p_acd() -> c_int;
     fn do_autochdir();
 }
 
 /// Callback for 'autochdir' option.
-/// When 'autochdir' is set, change to buffer's directory.
+/// Change directories when the 'acd' option is set now.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_autochdir() -> CallbackResult {
-    if nvim_get_p_acd() != 0 {
-        do_autochdir();
-    }
+    do_autochdir();
     callback_ok()
 }
 
@@ -938,26 +926,22 @@ pub unsafe extern "C" fn rs_did_set_shellslash() -> CallbackResult {
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_p_wc() -> c_int;
-    fn nvim_set_p_wc(val: c_int);
+    fn nvim_callback_get_e_invarg() -> CallbackResult;
 }
 
-/// Special key code for Escape
-const ESC: c_int = 27;
-/// Special key code for Tab
-const TAB: c_int = 9;
+/// Ctrl_C key code (verified via _Static_assert in option.c)
+const CTRL_C: i64 = 3;
+/// K_KENTER = TERMCAP2KEY('K', 'A') = -(75 + (65 << 8)) = -16715
+const K_KENTER: i64 = -16715;
 
-/// Callback for 'wildchar' option.
-/// Validate that wildchar isn't set to a special character.
+/// Callback for 'wildchar' / 'wildcharm' option.
+/// Don't allow key values that wouldn't work as wildchar.
+/// The value `c` is the current option value (from `*(OptInt *)args->os_varp`).
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_wildchar() -> CallbackResult {
-    let wc = nvim_get_p_wc();
-
-    // Don't allow setting wildchar to Escape or Tab
-    if wc == ESC {
-        nvim_set_p_wc(TAB);
+pub unsafe extern "C" fn rs_did_set_wildchar(c: crate::OptInt) -> CallbackResult {
+    if c == CTRL_C || c == i64::from(b'\n') || c == i64::from(b'\r') || c == K_KENTER {
+        return nvim_callback_get_e_invarg();
     }
-
     callback_ok()
 }
 
@@ -972,13 +956,13 @@ extern "C" {
 }
 
 /// Callback for 'window' option.
-/// Ensure 'window' doesn't exceed number of screen rows.
+/// Ensure 'window' is clamped to [1, Rows-1].
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_window() -> CallbackResult {
     let rows = nvim_get_Rows();
     let window = nvim_get_p_window();
 
-    if window >= rows {
+    if window < 1 || window >= rows {
         nvim_set_p_window(rows - 1);
     }
 
