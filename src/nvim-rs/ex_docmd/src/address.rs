@@ -236,6 +236,9 @@ extern "C" {
     fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
     fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
     fn nvim_eap_get_cmdlinep(eap: ExArgHandle) -> *mut *mut c_char;
+    fn nvim_eap_set_cmd(eap: ExArgHandle, p: *mut c_char);
+    fn nvim_eap_set_addr_count(eap: ExArgHandle, count: c_int);
+    fn nvim_eap_get_skip(eap: ExArgHandle) -> c_int;
 
     // CMD enum accessors
     fn nvim_docmd_cmd_size() -> c_int;
@@ -670,6 +673,12 @@ extern "C" {
 
     // skip_regexp (already in Rust, exposed via FFI)
     fn rs_skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
+
+    // parse_cmd_address helpers
+    fn nvim_docmd_is_user_cmdidx(eap: ExArgHandle) -> c_int;
+    fn nvim_docmd_mark_get_visual(ch: c_int) -> *mut c_void;
+    fn nvim_docmd_check_cursor();
+    fn nvim_docmd_check_cursor_col();
 }
 
 /// Return the appropriate error message for an invalid address type.
@@ -1076,6 +1085,207 @@ pub unsafe extern "C" fn rs_get_address(
         address_count,
         errormsg,
     )
+}
+
+// =============================================================================
+// parse_cmd_address — parse Ex command address/range
+// =============================================================================
+
+const OK: c_int = 1;
+
+/// Parse the address range for an Ex command.
+///
+/// Replaces C `parse_cmd_address()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_cmd_address(
+    eap: ExArgHandle,
+    errormsg: *mut *const c_char,
+    silent: bool,
+) -> c_int {
+    let mut address_count: c_int = 1;
+    let mut lnum: i32;
+    let mut need_check_cursor = false;
+
+    // Repeat for all ',' or ';' separated addresses.
+    loop {
+        nvim_eap_set_line1(eap, nvim_eap_get_line2(eap));
+        nvim_eap_set_line2(eap, rs_get_cmd_default_range(eap));
+
+        let mut cmd = skipwhite(nvim_eap_get_cmd(eap));
+        nvim_eap_set_cmd(eap, cmd);
+
+        let addr_type = nvim_eap_get_addr_type(eap);
+        let skip = nvim_eap_get_skip(eap) != 0;
+        let to_other_file = if nvim_eap_get_addr_count(eap) == 0 {
+            1
+        } else {
+            0
+        };
+        lnum = get_address_impl(
+            eap,
+            &mut cmd,
+            addr_type,
+            skip,
+            silent,
+            to_other_file,
+            address_count,
+            errormsg,
+        );
+        nvim_eap_set_cmd(eap, cmd);
+        address_count += 1;
+
+        if nvim_eap_get_cmd(eap).is_null() {
+            // error detected
+            if need_check_cursor {
+                nvim_docmd_check_cursor();
+            }
+            return 0; // FAIL
+        }
+
+        if lnum == MAXLNUM {
+            let cmd = nvim_eap_get_cmd(eap);
+            if *cmd as u8 == b'%' {
+                // '%' - all lines
+                nvim_eap_set_cmd(eap, cmd.add(1));
+                let addr_type = nvim_eap_get_addr_type(eap);
+                match addr_type {
+                    ADDR_LINES | ADDR_OTHER => {
+                        nvim_eap_set_line1(eap, 1);
+                        nvim_eap_set_line2(eap, nvim_docmd_get_curbuf_line_count());
+                    }
+                    ADDR_LOADED_BUFFERS => {
+                        nvim_eap_set_line1(eap, nvim_docmd_first_loaded_buf_fnum() as i32);
+                        nvim_eap_set_line2(eap, nvim_docmd_last_loaded_buf_fnum() as i32);
+                    }
+                    ADDR_BUFFERS => {
+                        nvim_eap_set_line1(eap, nvim_docmd_firstbuf_fnum() as i32);
+                        nvim_eap_set_line2(eap, nvim_docmd_lastbuf_fnum() as i32);
+                    }
+                    ADDR_WINDOWS | ADDR_TABS => {
+                        if nvim_docmd_is_user_cmdidx(eap) != 0 {
+                            nvim_eap_set_line1(eap, 1);
+                            let last = if addr_type == ADDR_WINDOWS {
+                                nvim_docmd_last_win_nr()
+                            } else {
+                                nvim_docmd_last_tab_nr()
+                            };
+                            nvim_eap_set_line2(eap, last as i32);
+                        } else {
+                            // there is no Vim command which uses '%' and
+                            // ADDR_WINDOWS or ADDR_TABS
+                            *errormsg = nvim_docmd_get_e_invrange();
+                            if need_check_cursor {
+                                nvim_docmd_check_cursor();
+                            }
+                            return 0; // FAIL
+                        }
+                    }
+                    ADDR_TABS_RELATIVE | ADDR_UNSIGNED | ADDR_QUICKFIX => {
+                        *errormsg = nvim_docmd_get_e_invrange();
+                        if need_check_cursor {
+                            nvim_docmd_check_cursor();
+                        }
+                        return 0; // FAIL
+                    }
+                    ADDR_ARGUMENTS => {
+                        let argcount = nvim_docmd_get_argcount();
+                        if argcount == 0 {
+                            nvim_eap_set_line1(eap, 0);
+                            nvim_eap_set_line2(eap, 0);
+                        } else {
+                            nvim_eap_set_line1(eap, 1);
+                            nvim_eap_set_line2(eap, argcount as i32);
+                        }
+                    }
+                    ADDR_QUICKFIX_VALID => {
+                        nvim_eap_set_line1(eap, 1);
+                        let mut size = nvim_docmd_qf_get_valid_size(eap) as i32;
+                        if size == 0 {
+                            size = 1;
+                        }
+                        nvim_eap_set_line2(eap, size);
+                    }
+                    ADDR_NONE => {
+                        // Will give an error later if a range is found.
+                    }
+                    _ => {}
+                }
+                let count = nvim_eap_get_addr_count(eap) + 1;
+                nvim_eap_set_addr_count(eap, count);
+            } else if *cmd as u8 == b'*' {
+                // '*' - visual area
+                let addr_type = nvim_eap_get_addr_type(eap);
+                if addr_type != ADDR_LINES {
+                    *errormsg = nvim_docmd_get_e_invrange();
+                    if need_check_cursor {
+                        nvim_docmd_check_cursor();
+                    }
+                    return 0; // FAIL
+                }
+
+                nvim_eap_set_cmd(eap, cmd.add(1));
+                if nvim_eap_get_skip(eap) == 0 {
+                    let fm = nvim_docmd_mark_get_visual(b'<' as c_int);
+                    if nvim_docmd_mark_check(fm, errormsg) == 0 {
+                        if need_check_cursor {
+                            nvim_docmd_check_cursor();
+                        }
+                        return 0; // FAIL
+                    }
+                    // assert(fm != NULL) — mark_check succeeded
+                    nvim_eap_set_line1(eap, nvim_docmd_mark_lnum(fm));
+                    let fm = nvim_docmd_mark_get_visual(b'>' as c_int);
+                    if nvim_docmd_mark_check(fm, errormsg) == 0 {
+                        if need_check_cursor {
+                            nvim_docmd_check_cursor();
+                        }
+                        return 0; // FAIL
+                    }
+                    // assert(fm != NULL)
+                    nvim_eap_set_line2(eap, nvim_docmd_mark_lnum(fm));
+                    let count = nvim_eap_get_addr_count(eap) + 1;
+                    nvim_eap_set_addr_count(eap, count);
+                }
+            }
+        } else {
+            nvim_eap_set_line2(eap, lnum);
+        }
+
+        let count = nvim_eap_get_addr_count(eap) + 1;
+        nvim_eap_set_addr_count(eap, count);
+
+        let cmd = nvim_eap_get_cmd(eap);
+        if *cmd as u8 == b';' {
+            if nvim_eap_get_skip(eap) == 0 {
+                nvim_docmd_set_curwin_cursor_lnum(nvim_eap_get_line2(eap));
+                // Don't leave the cursor on an illegal line or column, but do
+                // accept zero as address, so 0;/PATTERN/ works correctly.
+                if nvim_eap_get_line2(eap) > 0 {
+                    nvim_docmd_check_cursor();
+                } else {
+                    nvim_docmd_check_cursor_col();
+                }
+                need_check_cursor = true;
+            }
+        } else if *cmd as u8 != b',' {
+            break;
+        }
+        nvim_eap_set_cmd(eap, cmd.add(1));
+    }
+
+    // One address given: set start and end lines.
+    if nvim_eap_get_addr_count(eap) == 1 {
+        nvim_eap_set_line1(eap, nvim_eap_get_line2(eap));
+        // ... but only implicit: really no address given
+        if lnum == MAXLNUM {
+            nvim_eap_set_addr_count(eap, 0);
+        }
+    }
+
+    if need_check_cursor {
+        nvim_docmd_check_cursor();
+    }
+    OK
 }
 
 #[cfg(test)]

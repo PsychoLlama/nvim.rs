@@ -153,6 +153,7 @@ extern int rs_parse_command_modifiers(exarg_T *eap, const char **errormsg, cmdmo
 extern linenr_T rs_get_address(exarg_T *eap, char **ptr, cmd_addr_T addr_type, bool skip,
                                 bool silent, int to_other_file, int address_count,
                                 const char **errormsg);
+extern int rs_parse_cmd_address(exarg_T *eap, const char **errormsg, bool silent);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -2386,154 +2387,11 @@ void undo_cmdmod(cmdmod_T *cmod)
 /// May set the last search pattern, unless "silent" is true.
 ///
 /// @return  FAIL and set "errormsg" or return OK.
+/// Thin wrapper around Rust `rs_parse_cmd_address`.
 int parse_cmd_address(exarg_T *eap, const char **errormsg, bool silent)
   FUNC_ATTR_NONNULL_ALL
 {
-  int address_count = 1;
-  linenr_T lnum;
-  bool need_check_cursor = false;
-  int ret = FAIL;
-
-  // Repeat for all ',' or ';' separated addresses.
-  while (true) {
-    eap->line1 = eap->line2;
-    eap->line2 = get_cmd_default_range(eap);
-    eap->cmd = skipwhite(eap->cmd);
-    lnum = get_address(eap, &eap->cmd, eap->addr_type, eap->skip, silent,
-                       eap->addr_count == 0, address_count++, errormsg);
-    if (eap->cmd == NULL) {  // error detected
-      goto theend;
-    }
-    if (lnum == MAXLNUM) {
-      if (*eap->cmd == '%') {  // '%' - all lines
-        eap->cmd++;
-        switch (eap->addr_type) {
-        case ADDR_LINES:
-        case ADDR_OTHER:
-          eap->line1 = 1;
-          eap->line2 = curbuf->b_ml.ml_line_count;
-          break;
-        case ADDR_LOADED_BUFFERS: {
-          buf_T *buf = firstbuf;
-
-          while (buf->b_next != NULL && buf->b_ml.ml_mfp == NULL) {
-            buf = buf->b_next;
-          }
-          eap->line1 = buf->b_fnum;
-          buf = lastbuf;
-          while (buf->b_prev != NULL && buf->b_ml.ml_mfp == NULL) {
-            buf = buf->b_prev;
-          }
-          eap->line2 = buf->b_fnum;
-          break;
-        }
-        case ADDR_BUFFERS:
-          eap->line1 = firstbuf->b_fnum;
-          eap->line2 = lastbuf->b_fnum;
-          break;
-        case ADDR_WINDOWS:
-        case ADDR_TABS:
-          if (IS_USER_CMDIDX(eap->cmdidx)) {
-            eap->line1 = 1;
-            eap->line2 = eap->addr_type == ADDR_WINDOWS
-                         ? LAST_WIN_NR : LAST_TAB_NR;
-          } else {
-            // there is no Vim command which uses '%' and
-            // ADDR_WINDOWS or ADDR_TABS
-            *errormsg = _(e_invrange);
-            goto theend;
-          }
-          break;
-        case ADDR_TABS_RELATIVE:
-        case ADDR_UNSIGNED:
-        case ADDR_QUICKFIX:
-          *errormsg = _(e_invrange);
-          goto theend;
-        case ADDR_ARGUMENTS:
-          if (ARGCOUNT == 0) {
-            eap->line1 = eap->line2 = 0;
-          } else {
-            eap->line1 = 1;
-            eap->line2 = ARGCOUNT;
-          }
-          break;
-        case ADDR_QUICKFIX_VALID:
-          eap->line1 = 1;
-          eap->line2 = (linenr_T)qf_get_valid_size(eap);
-          if (eap->line2 == 0) {
-            eap->line2 = 1;
-          }
-          break;
-        case ADDR_NONE:
-          // Will give an error later if a range is found.
-          break;
-        }
-        eap->addr_count++;
-      } else if (*eap->cmd == '*') {
-        // '*' - visual area
-        if (eap->addr_type != ADDR_LINES) {
-          *errormsg = _(e_invrange);
-          goto theend;
-        }
-
-        eap->cmd++;
-        if (!eap->skip) {
-          fmark_T *fm = mark_get_visual(curbuf, '<');
-          if (!mark_check(fm, errormsg)) {
-            goto theend;
-          }
-          assert(fm != NULL);
-          eap->line1 = fm->mark.lnum;
-          fm = mark_get_visual(curbuf, '>');
-          if (!mark_check(fm, errormsg)) {
-            goto theend;
-          }
-          assert(fm != NULL);
-          eap->line2 = fm->mark.lnum;
-          eap->addr_count++;
-        }
-      }
-    } else {
-      eap->line2 = lnum;
-    }
-    eap->addr_count++;
-
-    if (*eap->cmd == ';') {
-      if (!eap->skip) {
-        curwin->w_cursor.lnum = eap->line2;
-
-        // Don't leave the cursor on an illegal line or column, but do
-        // accept zero as address, so 0;/PATTERN/ works correctly
-        // (where zero usually means to use the first line).
-        // Check the cursor position before returning.
-        if (eap->line2 > 0) {
-          check_cursor(curwin);
-        } else {
-          check_cursor_col(curwin);
-        }
-        need_check_cursor = true;
-      }
-    } else if (*eap->cmd != ',') {
-      break;
-    }
-    eap->cmd++;
-  }
-
-  // One address given: set start and end lines.
-  if (eap->addr_count == 1) {
-    eap->line1 = eap->line2;
-    // ... but only implicit: really no address given
-    if (lnum == MAXLNUM) {
-      eap->addr_count = 0;
-    }
-  }
-  ret = OK;
-
-theend:
-  if (need_check_cursor) {
-    check_cursor(curwin);
-  }
-  return ret;
+  return rs_parse_cmd_address(eap, errormsg, silent);
 }
 
 /// Check for an Ex command with optional tail.
