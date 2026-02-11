@@ -86,11 +86,8 @@ extern "C" {
     fn nvim_edit_insstart_col_gt_orig() -> c_int;
     fn nvim_edit_linetabsize_cursor_line() -> ColnrT;
     fn nvim_edit_u_save_cursor() -> c_int;
-    fn nvim_edit_get_ai_col() -> ColnrT;
     fn nvim_edit_set_ai_col(val: ColnrT);
-    fn nvim_edit_get_orig_line_count() -> LinenrT;
     fn nvim_edit_set_orig_line_count(val: LinenrT);
-    fn nvim_edit_get_vr_lines_changed() -> c_int;
     fn nvim_edit_set_vr_lines_changed(val: c_int);
     fn nvim_edit_curbuf_line_count() -> LinenrT;
     fn nvim_edit_foldOpenCursor();
@@ -554,11 +551,10 @@ unsafe fn start_arrow_common_impl(end_insert_pos: *mut c_void, end_change: c_int
     rs_check_spell_redraw();
 }
 
+/// # Safety
+/// Called from C FFI only.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_start_arrow_common(
-    end_insert_pos: *mut c_void,
-    end_change: c_int,
-) {
+pub unsafe extern "C" fn rs_start_arrow_common(end_insert_pos: *mut c_void, end_change: c_int) {
     start_arrow_common_impl(end_insert_pos, end_change);
 }
 
@@ -568,6 +564,9 @@ pub unsafe extern "C" fn rs_start_arrow_common(
 
 /// Called when an arrow key is used in insert mode.
 /// For undo/redo it resembles hitting the <ESC> key.
+///
+/// # Safety
+/// Called from C FFI only.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_start_arrow(end_insert_pos: *mut c_void) {
     start_arrow_common_impl(end_insert_pos, 1);
@@ -579,6 +578,9 @@ pub unsafe extern "C" fn rs_start_arrow(end_insert_pos: *mut c_void) {
 
 /// Like `start_arrow()` but with `end_change` argument.
 /// Will prepare for redo of CTRL-G U if `end_change` is false.
+///
+/// # Safety
+/// Called from C FFI only.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_start_arrow_with_change(
     end_insert_pos: *mut c_void,
@@ -618,12 +620,10 @@ unsafe fn stop_arrow_impl() -> c_int {
             nvim_edit_set_vr_lines_changed(1);
         }
         nvim_edit_ResetRedobuff();
-        nvim_edit_AppendToRedobuff(b"1i\0".as_ptr().cast()); // Pretend we start an insertion.
+        nvim_edit_AppendToRedobuff(c"1i".as_ptr()); // Pretend we start an insertion.
         new_insert_skip_set(2);
-    } else if ins_need_undo_get() {
-        if nvim_edit_u_save_cursor() == OK {
-            ins_need_undo_set(false);
-        }
+    } else if ins_need_undo_get() && nvim_edit_u_save_cursor() == OK {
+        ins_need_undo_set(false);
     }
 
     // Always open fold at the cursor line when inserting something.
@@ -636,6 +636,8 @@ unsafe fn stop_arrow_impl() -> c_int {
     }
 }
 
+/// # Safety
+/// Called from C FFI only.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_stop_arrow() -> c_int {
     stop_arrow_impl()

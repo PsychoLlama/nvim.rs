@@ -18,9 +18,6 @@ use std::io::Write;
 /// Line number type (matches `linenr_T` in Neovim).
 type LinenrT = i32;
 
-/// Column number type (matches `colnr_T` in Neovim).
-type ColnrT = i32;
-
 // ============================================================================
 // C accessor / helper functions
 // ============================================================================
@@ -54,6 +51,27 @@ extern "C" {
     fn nvim_get_State() -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut u8) -> c_int;
     fn xstrdup(s: *const c_char) -> *mut c_char;
+
+    // -- insert_special dependencies --
+    fn nvim_edit_get_mod_mask() -> c_int;
+    fn nvim_edit_set_mod_mask(val: c_int);
+    fn nvim_edit_get_special_key_name(c: c_int, modifiers: c_int) -> *mut c_char;
+    fn nvim_edit_ins_str(p: *const c_char, len: usize);
+    fn nvim_edit_AppendToRedobuffLit(s: *const c_char, len: c_int);
+    fn nvim_edit_insertchar(c: c_int, flags: c_int, second_indent: c_int);
+    fn rs_stop_arrow() -> c_int;
+
+    // -- get_literal dependencies --
+    fn nvim_edit_plain_vgetc() -> c_int;
+    fn nvim_edit_merge_modifiers(c: c_int) -> c_int;
+    fn nvim_edit_add_to_showcmd(c: c_int);
+    fn nvim_edit_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
+    fn nvim_edit_vungetc(c: c_int);
+    fn nvim_edit_inc_no_mapping();
+    fn nvim_edit_dec_no_mapping();
+    fn nvim_edit_get_got_int() -> c_int;
+    fn nvim_edit_set_got_int(val: c_int);
+    fn nvim_edit_get_K_ZERO() -> c_int;
 }
 
 // ============================================================================
@@ -80,6 +98,21 @@ const CTRL_RSB: c_int = 29;
 
 /// `MB_MAXBYTES` from `mbyte_defs.h`
 const MB_MAXBYTES: usize = 21;
+
+/// `MOD_MASK_CMD` from `keycodes.h`
+const MOD_MASK_CMD: c_int = 0x80;
+
+/// `MOD_MASK_SHIFT` from `keycodes.h`
+const MOD_MASK_SHIFT: c_int = 0x02;
+
+/// `INSCHAR_CTRLV` from `edit.h`
+const INSCHAR_CTRLV: c_int = 4;
+
+/// `MODE_CMDLINE` from `state_defs.h`
+const MODE_CMDLINE: c_int = 0x08;
+
+/// `Ctrl_C` from `ascii_defs.h`
+const CTRL_C: c_int = 3;
 
 // ============================================================================
 // NvimString (matches helpers.rs definition)
@@ -232,7 +265,7 @@ pub unsafe extern "C" fn rs_stuff_inserted(c: c_int, count: c_int, no_esc: c_int
 unsafe fn redo_literal_impl(c: c_int) {
     if (c as u8).is_ascii_digit() {
         let mut buf = [0u8; 10];
-        let _ = write!(&mut buf.as_mut_slice()[..], "{:03}", c);
+        let _ = write!(&mut buf.as_mut_slice()[..], "{c:03}");
         // Find NUL terminator position and ensure it
         let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
         buf[len] = 0;
@@ -251,7 +284,7 @@ pub unsafe extern "C" fn rs_redo_literal(c: c_int) {
 // do_insert_char_pre — trigger InsertCharPre autocmd
 // ============================================================================
 
-/// Handle the InsertCharPre autocommand.
+/// Handle the `InsertCharPre` autocommand.
 /// `c` is the character that was typed.
 /// Returns a pointer to allocated memory with the replacement string,
 /// or NULL to continue inserting `c`.
@@ -316,6 +349,188 @@ unsafe fn libc_strcmp(a: *const c_char, b: *const c_char) -> c_int {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_do_insert_char_pre(c: c_int) -> *mut c_char {
     do_insert_char_pre_impl(c)
+}
+
+// ============================================================================
+// insert_special — handle special key insertion with modifiers
+// ============================================================================
+
+/// Insert character, taking care of special keys and `mod_mask`.
+///
+/// `allow_modmask`: if true, use `mod_mask` for non-special keys too.
+/// `ctrlv`: if true, `c` was typed after CTRL-V.
+unsafe fn insert_special_impl(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: c_int) {
+    let mod_mask = nvim_edit_get_mod_mask();
+
+    // Command-key never produces a normal key.
+    if mod_mask & MOD_MASK_CMD != 0 {
+        allow_modmask = 1;
+    }
+    // IS_SPECIAL(c) is (c < 0)
+    if c < 0 || (mod_mask != 0 && allow_modmask != 0) {
+        let p = nvim_edit_get_special_key_name(c, mod_mask);
+        let len = c_strlen(p);
+        c = c_int::from(*p.add(len - 1) as u8);
+        if len > 2 {
+            if rs_stop_arrow() == FAIL {
+                return;
+            }
+            // Temporarily NUL-terminate before the last char
+            let saved = *p.add(len - 1);
+            *p.add(len - 1) = 0;
+            nvim_edit_ins_str(p.cast_const(), len - 1);
+            nvim_edit_AppendToRedobuffLit(p.cast_const(), -1);
+            *p.add(len - 1) = saved;
+            ctrlv = 0;
+        }
+    }
+    if rs_stop_arrow() == OK {
+        nvim_edit_insertchar(c, if ctrlv != 0 { INSCHAR_CTRLV } else { 0 }, -1);
+    }
+}
+
+/// Compute the length of a NUL-terminated C string.
+unsafe fn c_strlen(p: *mut c_char) -> usize {
+    let mut len = 0;
+    while *p.add(len) != 0 {
+        len += 1;
+    }
+    len
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_insert_special(c: c_int, allow_modmask: c_int, ctrlv: c_int) {
+    insert_special_impl(c, allow_modmask, ctrlv);
+}
+
+// ============================================================================
+// get_literal — CTRL-V literal character input
+// ============================================================================
+
+/// Convert a hex digit character to its numeric value.
+fn hex2nr(c: c_int) -> c_int {
+    let ch = c as u8;
+    if ch.is_ascii_digit() {
+        c_int::from(ch - b'0')
+    } else if (b'a'..=b'f').contains(&ch) {
+        c_int::from(ch - b'a' + 10)
+    } else if (b'A'..=b'F').contains(&ch) {
+        c_int::from(ch - b'A' + 10)
+    } else {
+        0
+    }
+}
+
+/// Next character is interpreted literally.
+/// A one, two or three digit decimal number is interpreted as its byte value.
+/// If one or two digits are entered, the next character is given to `vungetc()`.
+/// For Unicode a character > 255 may be returned.
+unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
+    let mut nc: c_int;
+    let mut hex = false;
+    let mut octal = false;
+    let mut unicode: c_int = 0;
+
+    if nvim_edit_get_got_int() != 0 {
+        return CTRL_C;
+    }
+
+    nvim_edit_inc_no_mapping(); // don't map the next key hits
+    let mut cc: c_int = 0;
+    let mut i: c_int = 0;
+    loop {
+        nc = nvim_edit_plain_vgetc();
+        if no_simplify == 0 {
+            nc = nvim_edit_merge_modifiers(nc);
+        }
+        let mod_mask = nvim_edit_get_mod_mask();
+        if (mod_mask & !MOD_MASK_SHIFT) != 0 {
+            // A character with non-Shift modifiers should not be a valid
+            // character for i_CTRL-V_digit.
+            break;
+        }
+        let state = nvim_get_State();
+        if (state & MODE_CMDLINE) == 0 && nvim_edit_MB_BYTE2LEN_CHECK(nc) == 1 {
+            nvim_edit_add_to_showcmd(nc);
+        }
+        if nc == c_int::from(b'x') || nc == c_int::from(b'X') {
+            hex = true;
+        } else if nc == c_int::from(b'o') || nc == c_int::from(b'O') {
+            octal = true;
+        } else if nc == c_int::from(b'u') || nc == c_int::from(b'U') {
+            unicode = nc;
+        } else {
+            if hex || unicode != 0 {
+                if !(nc as u8).is_ascii_hexdigit() {
+                    break;
+                }
+                cc = cc * 16 + hex2nr(nc);
+            } else if octal {
+                if nc < c_int::from(b'0') || nc > c_int::from(b'7') {
+                    break;
+                }
+                cc = cc * 8 + nc - c_int::from(b'0');
+            } else {
+                if !(nc as u8).is_ascii_digit() {
+                    break;
+                }
+                cc = cc * 10 + nc - c_int::from(b'0');
+            }
+
+            i += 1;
+        }
+
+        if cc > 255 && unicode == 0 {
+            cc = 255; // limit range to 0-255
+        }
+        nc = 0;
+
+        if hex {
+            // hex: up to two chars
+            if i >= 2 {
+                break;
+            }
+        } else if unicode != 0 {
+            // Unicode: up to four or eight chars
+            if (unicode == c_int::from(b'u') && i >= 4) || (unicode == c_int::from(b'U') && i >= 8)
+            {
+                break;
+            }
+        } else if i >= 3 {
+            // decimal or octal: up to three chars
+            break;
+        }
+    }
+    if i == 0 {
+        // no number entered
+        let k_zero = nvim_edit_get_K_ZERO();
+        if nc == k_zero {
+            // NUL is stored as NL
+            cc = c_int::from(b'\n');
+        } else {
+            cc = nc;
+        }
+        nc = 0;
+    }
+
+    if cc == 0 {
+        // NUL is stored as NL
+        cc = c_int::from(b'\n');
+    }
+
+    nvim_edit_dec_no_mapping();
+    if nc != 0 {
+        nvim_edit_vungetc(nc);
+        // A character typed with i_CTRL-V_digit cannot have modifiers.
+        nvim_edit_set_mod_mask(0);
+    }
+    nvim_edit_set_got_int(0); // CTRL-C typed after CTRL-V is not an interrupt
+    cc
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_get_literal(no_simplify: c_int) -> c_int {
+    get_literal_impl(no_simplify)
 }
 
 // ============================================================================

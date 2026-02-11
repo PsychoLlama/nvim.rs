@@ -385,7 +385,7 @@ pub unsafe extern "C" fn rs_get_last_insert_save() -> *mut c_char {
 // ============================================================================
 
 /// If we skipped highlighting word at cursor, do it now.
-/// It may be skipped again, thus reset spell_redraw_lnum first.
+/// It may be skipped again, thus reset `spell_redraw_lnum` first.
 unsafe fn check_spell_redraw_impl() {
     let lnum = nvim_edit_get_spell_redraw_lnum();
     if lnum != 0 {

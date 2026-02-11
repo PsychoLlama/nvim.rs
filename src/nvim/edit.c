@@ -274,6 +274,8 @@ extern void rs_start_arrow(void *end_insert_pos);
 extern void rs_start_arrow_with_change(void *end_insert_pos, int end_change);
 extern void rs_start_arrow_common(void *end_insert_pos, int end_change);
 extern int rs_stop_arrow(void);
+extern void rs_insert_special(int c, int allow_modmask, int ctrlv);
+extern int rs_get_literal(int no_simplify);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -3126,138 +3128,15 @@ static bool del_char_after_col(int limit_col)
 }
 
 /// Next character is interpreted literally.
-/// A one, two or three digit decimal number is interpreted as its byte value.
-/// If one or two digits are entered, the next character is given to vungetc().
-/// For Unicode a character > 255 may be returned.
-///
-/// @param  no_simplify  do not include modifiers into the key
 int get_literal(bool no_simplify)
 {
-  int nc;
-  bool hex = false;
-  bool octal = false;
-  int unicode = 0;
-
-  if (got_int) {
-    return Ctrl_C;
-  }
-
-  no_mapping++;                 // don't map the next key hits
-  int cc = 0;
-  int i = 0;
-  while (true) {
-    nc = plain_vgetc();
-    if (!no_simplify) {
-      nc = merge_modifiers(nc, &mod_mask);
-    }
-    if ((mod_mask & ~MOD_MASK_SHIFT) != 0) {
-      // A character with non-Shift modifiers should not be a valid
-      // character for i_CTRL-V_digit.
-      break;
-    }
-    if ((State & MODE_CMDLINE) == 0 && MB_BYTE2LEN_CHECK(nc) == 1) {
-      add_to_showcmd(nc);
-    }
-    if (nc == 'x' || nc == 'X') {
-      hex = true;
-    } else if (nc == 'o' || nc == 'O') {
-      octal = true;
-    } else if (nc == 'u' || nc == 'U') {
-      unicode = nc;
-    } else {
-      if (hex
-          || unicode != 0) {
-        if (!ascii_isxdigit(nc)) {
-          break;
-        }
-        cc = cc * 16 + hex2nr(nc);
-      } else if (octal) {
-        if (nc < '0' || nc > '7') {
-          break;
-        }
-        cc = cc * 8 + nc - '0';
-      } else {
-        if (!ascii_isdigit(nc)) {
-          break;
-        }
-        cc = cc * 10 + nc - '0';
-      }
-
-      i++;
-    }
-
-    if (cc > 255
-        && unicode == 0) {
-      cc = 255;                 // limit range to 0-255
-    }
-    nc = 0;
-
-    if (hex) {                  // hex: up to two chars
-      if (i >= 2) {
-        break;
-      }
-    } else if (unicode) {     // Unicode: up to four or eight chars
-      if ((unicode == 'u' && i >= 4) || (unicode == 'U' && i >= 8)) {
-        break;
-      }
-    } else if (i >= 3) {        // decimal or octal: up to three chars
-      break;
-    }
-  }
-  if (i == 0) {     // no number entered
-    if (nc == K_ZERO) {     // NUL is stored as NL
-      cc = '\n';
-      nc = 0;
-    } else {
-      cc = nc;
-      nc = 0;
-    }
-  }
-
-  if (cc == 0) {        // NUL is stored as NL
-    cc = '\n';
-  }
-
-  no_mapping--;
-  if (nc) {
-    vungetc(nc);
-    // A character typed with i_CTRL-V_digit cannot have modifiers.
-    mod_mask = 0;
-  }
-  got_int = false;          // CTRL-C typed after CTRL-V is not an interrupt
-  return cc;
+  return rs_get_literal(no_simplify ? 1 : 0);
 }
 
-/// Insert character, taking care of special keys and mod_mask
-///
-/// @param ctrlv `c` was typed after CTRL-V
+/// Insert character, taking care of special keys and mod_mask.
 static void insert_special(int c, int allow_modmask, int ctrlv)
 {
-  // Special function key, translate into "<Key>". Up to the last '>' is
-  // inserted with ins_str(), so as not to replace characters in replace
-  // mode.
-  // Only use mod_mask for special keys, to avoid things like <S-Space>,
-  // unless 'allow_modmask' is true.
-  if (mod_mask & MOD_MASK_CMD) {  // Command-key never produces a normal key.
-    allow_modmask = true;
-  }
-  if (IS_SPECIAL(c) || (mod_mask && allow_modmask)) {
-    char *p = get_special_key_name(c, mod_mask);
-    int len = (int)strlen(p);
-    c = (uint8_t)p[len - 1];
-    if (len > 2) {
-      if (stop_arrow() == FAIL) {
-        return;
-      }
-      p[len - 1] = NUL;
-      ins_str(p, (size_t)(len - 1));
-      AppendToRedobuffLit(p, -1);
-      ctrlv = false;
-    }
-  }
-  if (stop_arrow() == OK) {
-    insertchar(c, ctrlv ? INSCHAR_CTRLV : 0, -1);
-  }
+  rs_insert_special(c, allow_modmask, ctrlv);
 }
 
 // Special characters in this context are those that need processing other
