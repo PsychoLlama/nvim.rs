@@ -94,6 +94,13 @@ extern int rs_check_luafunc_name(const char *str, bool paren);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern int rs_eval_expr_valid_arg(const typval_T *tv);
 
+// Phase 1: String/Float utilities (Rust implementations)
+extern size_t rs_string2float(const char *text, float_T *ret_value);
+extern char *rs_char_from_string(const char *str, varnumber_T index);
+extern char *rs_string_slice(const char *str, varnumber_T first, varnumber_T last, bool exclusive);
+
+_Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
+
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
@@ -4542,22 +4549,7 @@ static int eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *const evalarg)
 size_t string2float(const char *const text, float_T *const ret_value)
   FUNC_ATTR_NONNULL_ALL
 {
-  // MS-Windows does not deal with "inf" and "nan" properly
-  if (STRNICMP(text, "inf", 3) == 0) {
-    *ret_value = (float_T)INFINITY;
-    return 3;
-  }
-  if (STRNICMP(text, "-inf", 4) == 0) {
-    *ret_value = (float_T)(-INFINITY);
-    return 4;
-  }
-  if (STRNICMP(text, "nan", 3) == 0) {
-    *ret_value = (float_T)NAN;
-    return 3;
-  }
-  char *s = NULL;
-  *ret_value = strtod(text, &s);
-  return (size_t)(s - text);
+  return rs_string2float(text, ret_value);
 }
 
 /// Get the value of an environment variable.
@@ -5797,64 +5789,7 @@ int check_luafunc_name(const char *const str, const bool paren)
 /// If "index" is out of range NULL is returned.
 char *char_from_string(const char *str, varnumber_T index)
 {
-  varnumber_T nchar = index;
-
-  if (str == NULL) {
-    return NULL;
-  }
-  size_t slen = strlen(str);
-
-  // do the same as for a list: a negative index counts from the end
-  if (index < 0) {
-    int clen = 0;
-
-    for (size_t nbyte = 0; nbyte < slen; clen++) {
-      nbyte += (size_t)utfc_ptr2len(str + nbyte);
-    }
-    nchar = clen + index;
-    if (nchar < 0) {
-      // unlike list: index out of range results in empty string
-      return NULL;
-    }
-  }
-
-  size_t nbyte = 0;
-  for (; nchar > 0 && nbyte < slen; nchar--) {
-    nbyte += (size_t)utfc_ptr2len(str + nbyte);
-  }
-  if (nbyte >= slen) {
-    return NULL;
-  }
-  return xmemdupz(str + nbyte, (size_t)utfc_ptr2len(str + nbyte));
-}
-
-/// Get the byte index for character index "idx" in string "str" with length
-/// "str_len".  Composing characters are included.
-/// If going over the end return "str_len".
-/// If "idx" is negative count from the end, -1 is the last character.
-/// When going over the start return -1.
-static ssize_t char_idx2byte(const char *str, size_t str_len, varnumber_T idx)
-{
-  varnumber_T nchar = idx;
-  size_t nbyte = 0;
-
-  if (nchar >= 0) {
-    while (nchar > 0 && nbyte < str_len) {
-      nbyte += (size_t)utfc_ptr2len(str + nbyte);
-      nchar--;
-    }
-  } else {
-    nbyte = str_len;
-    while (nchar < 0 && nbyte > 0) {
-      nbyte--;
-      nbyte -= (size_t)utf_head_off(str, str + nbyte);
-      nchar++;
-    }
-    if (nchar < 0) {
-      return -1;
-    }
-  }
-  return (ssize_t)nbyte;
+  return rs_char_from_string(str, index);
 }
 
 /// Return the slice "str[first : last]" using character indexes.  Composing
@@ -5865,29 +5800,7 @@ static ssize_t char_idx2byte(const char *str, size_t str_len, varnumber_T idx)
 /// Return NULL when the result is empty.
 char *string_slice(const char *str, varnumber_T first, varnumber_T last, bool exclusive)
 {
-  if (str == NULL) {
-    return NULL;
-  }
-  size_t slen = strlen(str);
-  ssize_t start_byte = char_idx2byte(str, slen, first);
-  if (start_byte < 0) {
-    start_byte = 0;  // first index very negative: use zero
-  }
-  ssize_t end_byte;
-  if ((last == -1 && !exclusive) || last == VARNUMBER_MAX) {
-    end_byte = (ssize_t)slen;
-  } else {
-    end_byte = char_idx2byte(str, slen, last);
-    if (!exclusive && end_byte >= 0 && end_byte < (ssize_t)slen) {
-      // end index is inclusive
-      end_byte += utfc_ptr2len(str + end_byte);
-    }
-  }
-
-  if (start_byte >= (ssize_t)slen || end_byte <= start_byte) {
-    return NULL;
-  }
-  return xmemdupz(str + start_byte, (size_t)(end_byte - start_byte));
+  return rs_string_slice(str, first, last, exclusive);
 }
 
 /// Handle:

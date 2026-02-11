@@ -21,6 +21,7 @@ pub mod funcs;
 pub mod list;
 pub mod operator;
 pub mod scope;
+pub mod strutil;
 pub mod types;
 
 use std::ffi::c_int;
