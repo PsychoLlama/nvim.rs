@@ -1093,26 +1093,13 @@ static void ins_compl_add_matches(int num_matches, char **matches, int icase)
   FreeWild(num_matches, matches);
 }
 
+extern int rs_ins_compl_make_cyclic(void);
+
 /// Make the completion list cyclic.
 /// Return the number of matches (excluding the original).
 static int ins_compl_make_cyclic(void)
 {
-  if (compl_first_match == NULL) {
-    return 0;
-  }
-
-  // Find the end of the list.
-  compl_T *match = compl_first_match;
-  int count = 0;
-  // there's always an entry for the compl_orig_text, it doesn't count.
-  while (match->cp_next != NULL && !is_first_match(match->cp_next)) {
-    match = match->cp_next;
-    count++;
-  }
-  match->cp_next = compl_first_match;
-  compl_first_match->cp_prev = match;
-
-  return count;
+  return rs_ins_compl_make_cyclic();
 }
 
 extern int rs_ins_compl_has_shown_match(void);
@@ -1147,26 +1134,15 @@ static void ins_compl_del_pum(void)
   XFREE_CLEAR(compl_match_array);
 }
 
+extern int rs_pum_enough_matches(int menuone);
+
 /// Check that there are two or more matches to be shown in the popup menu.
 /// One if "completopt" contains "menuone".
 static bool pum_enough_matches(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // Don't display the popup menu if there are no matches or there is only
-  // one (ignoring the original text).
-  compl_T *comp = compl_first_match;
-  int i = 0;
-  do {
-    if (comp == NULL || (!match_at_original_text(comp) && ++i == 2)) {
-      break;
-    }
-    comp = comp->cp_next;
-  } while (!is_first_match(comp));
-
-  if ((get_cot_flags() & kOptCotFlagMenuone) || compl_autocomplete) {
-    return i >= 1;
-  }
-  return i >= 2;
+  return rs_pum_enough_matches(((get_cot_flags() & kOptCotFlagMenuone) != 0)
+                               || compl_autocomplete) != 0;
 }
 
 /// Convert to complete item dict
@@ -6288,15 +6264,12 @@ static bool is_cpt_func_refresh_always(void)
   return false;
 }
 
+extern void rs_ins_compl_make_linear(void);
+
 /// Make the completion list non-cyclic.
 static void ins_compl_make_linear(void)
 {
-  if (compl_first_match == NULL || compl_first_match->cp_prev == NULL) {
-    return;
-  }
-  compl_T *m = compl_first_match->cp_prev;
-  m->cp_next = NULL;
-  compl_first_match->cp_prev = NULL;
+  rs_ins_compl_make_linear();
 }
 
 /// Remove the matches linked to the current completion source (as indicated by
