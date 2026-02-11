@@ -821,6 +821,9 @@ extern const char *rs_qf_guess_filepath(void *qfl, char *filename);
 extern bool rs_vgr_match_buflines(void *qfl, const char *fname, void *buf, const char *spat,
                                   void *regmatch, int *tomatch, int duplicate_name, int flags);
 
+// List management functions
+extern int rs_qf_add_entries(void *qi, int qf_idx, void *list, char *title, int action);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -7864,100 +7867,76 @@ static bool entry_is_closer_to_target(qfline_T *entry, qfline_T *other_entry, in
   return rs_qf_entry_is_closer_to_target(entry, other_entry, target_fnum, target_lnum, target_col);
 }
 
+// ============================================================================
+// Phase 2: qf_add_entries accessors for Rust FFI
+// ============================================================================
+
+/// Get the first item in a VimL list
+void *nvim_tv_list_first(const void *list)
+{
+  if (list == NULL) {
+    return NULL;
+  }
+  return tv_list_first((const list_T *)list);
+}
+
+/// Get the next item in a VimL list
+void *nvim_tv_list_item_next(const void *list, const void *li)
+{
+  if (list == NULL || li == NULL) {
+    return NULL;
+  }
+  return TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li);
+}
+
+/// Get dict from a list item, or NULL if not a dict type
+void *nvim_tv_list_item_dict(const void *li)
+{
+  if (li == NULL) {
+    return NULL;
+  }
+  const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li);
+  if (tv->v_type != VAR_DICT) {
+    return NULL;
+  }
+  return tv->vval.v_dict;
+}
+
+/// Wrapper for qf_add_entry_from_dict (keeps dict handling in C)
+int nvim_qf_add_entry_from_dict(void *qfl, void *d, bool first_entry, bool *valid_entry)
+{
+  return qf_add_entry_from_dict((qf_list_T *)qfl, (dict_T *)d, first_entry, valid_entry);
+}
+
+/// Get the current entry's fnum, lnum, col as a group
+void nvim_qf_get_ptr_position(const void *qfl_void, int *fnum, int *lnum, int *col)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  if (qfl == NULL || qfl->qf_ptr == NULL) {
+    *fnum = 0;
+    *lnum = 0;
+    *col = 0;
+    return;
+  }
+  *fnum = qfl->qf_ptr->qf_fnum;
+  *lnum = qfl->qf_ptr->qf_lnum;
+  *col = qfl->qf_ptr->qf_col;
+}
+
+/// Check if a list item is the first item in the list
+bool nvim_tv_list_item_is_first(const void *list, const void *li)
+{
+  if (list == NULL || li == NULL) {
+    return false;
+  }
+  return li == tv_list_first((const list_T *)list);
+}
+
 /// Add list of entries to quickfix/location list. Each list entry is
 /// a dictionary with item information.
 static int qf_add_entries(qf_info_T *qi, int qf_idx, list_T *list, char *title, int action)
 {
-  qf_list_T *qfl = qf_get_list(qi, qf_idx);
-  qfline_T *old_last = NULL;
-  int retval = OK;
-  bool valid_entry = false;
-
-  // If there's an entry selected in the quickfix list, remember its location
-  // (file, line, column), so we can select the nearest entry in the updated
-  // quickfix list.
-  int prev_fnum = 0;
-  int prev_lnum = 0;
-  int prev_col = 0;
-  if (qfl->qf_ptr) {
-    prev_fnum = qfl->qf_ptr->qf_fnum;
-    prev_lnum = qfl->qf_ptr->qf_lnum;
-    prev_col = qfl->qf_ptr->qf_col;
-  }
-
-  bool select_first_entry = false;
-  bool select_nearest_entry = false;
-
-  if (action == ' ' || qf_idx == qi->qf_listcount) {
-    select_first_entry = true;
-    // make place for a new list
-    qf_new_list(qi, title);
-    qf_idx = qi->qf_curlist;
-    qfl = qf_get_list(qi, qf_idx);
-  } else if (action == 'a') {
-    if (qf_list_empty(qfl)) {
-      // Appending to empty list, select first entry.
-      select_first_entry = true;
-    } else {
-      // Adding to existing list, use last entry.
-      old_last = qfl->qf_last;
-    }
-  } else if (action == 'r') {
-    select_first_entry = true;
-    qf_free_items(qfl);
-    qf_store_title(qfl, title);
-  } else if (action == 'u') {
-    select_nearest_entry = true;
-    qf_free_items(qfl);
-    qf_store_title(qfl, title);
-  }
-
-  qfline_T *entry_to_select = NULL;
-  int entry_to_select_index = 0;
-
-  TV_LIST_ITER_CONST(list, li, {
-    if (TV_LIST_ITEM_TV(li)->v_type != VAR_DICT) {
-      continue;  // Skip non-dict items.
-    }
-
-    dict_T *const d = TV_LIST_ITEM_TV(li)->vval.v_dict;
-    if (d == NULL) {
-      continue;
-    }
-
-    retval = qf_add_entry_from_dict(qfl, d, li == tv_list_first(list), &valid_entry);
-    if (retval == QF_FAIL) {
-      break;
-    }
-
-    qfline_T *entry = qfl->qf_last;
-    if ((select_first_entry && entry_to_select == NULL)
-        || (select_nearest_entry
-            && (entry_to_select == NULL
-                || entry_is_closer_to_target(entry, entry_to_select, prev_fnum,
-                                             prev_lnum, prev_col)))) {
-      entry_to_select = entry;
-      entry_to_select_index = qfl->qf_count;
-    }
-  });
-
-  // Check if any valid error entries are added to the list.
-  if (valid_entry) {
-    qfl->qf_nonevalid = false;
-  } else if (qfl->qf_index == 0) {
-    qfl->qf_nonevalid = true;
-  }
-
-  // Set the current error.
-  if (entry_to_select) {
-    qfl->qf_ptr = entry_to_select;
-    qfl->qf_index = entry_to_select_index;
-  }
-
-  // Don't update the cursor in quickfix window when appending entries
-  qf_update_buffer(qi, old_last);
-
-  return retval;
+  return rs_qf_add_entries(qi, qf_idx, list, title, action);
 }
 
 /// Get the quickfix list index from 'nr' or 'id'

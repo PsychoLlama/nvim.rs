@@ -80,6 +80,35 @@ extern "C" {
 
     // Phase Q2: Free items (implemented in lib.rs)
     fn rs_qf_free_items(qfl: QfListHandleMut);
+
+    // Phase 2: qf_add_entries accessors
+    fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
+    fn nvim_qf_set_nonevalid(qfl: QfListHandleMut, nonevalid: bool);
+    fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
+    fn nvim_qf_get_ptr_position(
+        qfl: QfListHandle,
+        fnum: *mut c_int,
+        lnum: *mut c_int,
+        col: *mut c_int,
+    );
+    fn nvim_tv_list_first(list: *const c_void) -> *const c_void;
+    fn nvim_tv_list_item_next(list: *const c_void, li: *const c_void) -> *const c_void;
+    fn nvim_tv_list_item_dict(li: *const c_void) -> *mut c_void;
+    fn nvim_tv_list_item_is_first(list: *const c_void, li: *const c_void) -> bool;
+    fn nvim_qf_add_entry_from_dict(
+        qfl: QfListHandleMut,
+        d: *mut c_void,
+        first_entry: bool,
+        valid_entry: *mut bool,
+    ) -> c_int;
+    fn rs_qf_list_empty(qfl: QfListHandle) -> bool;
+    fn rs_qf_entry_is_closer_to_target(
+        entry: QfLineHandle,
+        other: QfLineHandle,
+        fnum: c_int,
+        lnum: c_int,
+        col: c_int,
+    ) -> bool;
 }
 
 // =============================================================================
@@ -936,6 +965,127 @@ pub unsafe extern "C" fn rs_qf_file_entry_count(qfl: QfListHandle, fnum: c_int) 
     }
 
     count
+}
+
+// =============================================================================
+// Phase 2: qf_add_entries
+// =============================================================================
+
+const OK: c_int = 1;
+const QF_FAIL: c_int = 0;
+
+/// Add list of entries to quickfix/location list. Each list entry is
+/// a dictionary with item information.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T`
+/// - `list` must be a valid pointer to a `list_T`
+/// - `title` must be a valid C string or NULL
+#[no_mangle]
+#[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_qf_add_entries(
+    qi: QfInfoHandleMut,
+    mut qf_idx: c_int,
+    list: *const c_void,
+    title: *const c_char,
+    action: c_int,
+) -> c_int {
+    let mut qfl = nvim_qf_get_list_at_mut(qi, qf_idx);
+    let mut old_last: QfLineHandle = std::ptr::null();
+    let mut retval: c_int = OK;
+    let mut valid_entry = false;
+
+    // Remember current entry's position for 'u' action
+    let mut prev_fnum: c_int = 0;
+    let mut prev_line: c_int = 0;
+    let mut prev_col: c_int = 0;
+    nvim_qf_get_ptr_position(
+        qfl,
+        &raw mut prev_fnum,
+        &raw mut prev_line,
+        &raw mut prev_col,
+    );
+
+    let mut select_first_entry = false;
+    let mut select_nearest_entry = false;
+
+    let action_char = action as u8;
+    if action_char == b' ' || qf_idx == nvim_qf_get_listcount(qi) {
+        select_first_entry = true;
+        nvim_qf_new_list(qi, title);
+        qf_idx = nvim_qf_get_curlist_idx(qi);
+        qfl = nvim_qf_get_list_at_mut(qi, qf_idx);
+    } else if action_char == b'a' {
+        if rs_qf_list_empty(qfl) {
+            select_first_entry = true;
+        } else {
+            old_last = nvim_qf_get_last(qfl);
+        }
+    } else if action_char == b'r' {
+        select_first_entry = true;
+        rs_qf_free_items(qfl);
+        nvim_qf_store_title(qfl, title);
+    } else if action_char == b'u' {
+        select_nearest_entry = true;
+        rs_qf_free_items(qfl);
+        nvim_qf_store_title(qfl, title);
+    }
+
+    let mut entry_to_select: QfLineHandle = std::ptr::null();
+    let mut entry_to_select_index: c_int = 0;
+
+    // Iterate over the VimL list items
+    let mut li = nvim_tv_list_first(list);
+    while !li.is_null() {
+        let d = nvim_tv_list_item_dict(li);
+        if d.is_null() {
+            li = nvim_tv_list_item_next(list, li);
+            continue;
+        }
+
+        let is_first = nvim_tv_list_item_is_first(list, li);
+        retval = nvim_qf_add_entry_from_dict(qfl, d, is_first, &raw mut valid_entry);
+        if retval == QF_FAIL {
+            break;
+        }
+
+        let entry = nvim_qf_get_last(qfl);
+        if (select_first_entry && entry_to_select.is_null())
+            || (select_nearest_entry
+                && (entry_to_select.is_null()
+                    || rs_qf_entry_is_closer_to_target(
+                        entry,
+                        entry_to_select,
+                        prev_fnum,
+                        prev_line,
+                        prev_col,
+                    )))
+        {
+            entry_to_select = entry;
+            entry_to_select_index = nvim_qf_get_count(qfl);
+        }
+
+        li = nvim_tv_list_item_next(list, li);
+    }
+
+    // Check if any valid error entries are added to the list.
+    if valid_entry {
+        nvim_qf_set_nonevalid(qfl, false);
+    } else if nvim_qf_get_index(qfl) == 0 {
+        nvim_qf_set_nonevalid(qfl, true);
+    }
+
+    // Set the current error.
+    if !entry_to_select.is_null() {
+        nvim_qf_set_ptr(qfl, entry_to_select);
+        nvim_qf_set_index(qfl, entry_to_select_index);
+    }
+
+    // Don't update the cursor in quickfix window when appending entries
+    nvim_qf_update_buffer(qi, old_last);
+
+    retval
 }
 
 // =============================================================================
