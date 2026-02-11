@@ -199,6 +199,13 @@ extern const char *rs_did_set_winminwidth(void);
 extern void rs_win_new_height(win_T *wp, int height);
 extern void rs_win_new_width(win_T *wp, int width);
 
+// Phase 3: Snapshot lifecycle
+extern void rs_clear_snapshot(tabpage_T *tp, int idx);
+extern void rs_make_snapshot(int idx);
+extern win_T *rs_get_snapshot_curwin(int idx);
+extern int rs_check_snapshot_rec(frame_T *sn, frame_T *fr);
+extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -7757,71 +7764,19 @@ void reset_lnums(void)
 // Create a snapshot of the current frame sizes.
 void make_snapshot(int idx)
 {
-  clear_snapshot(curtab, idx);
-  make_snapshot_rec(topframe, &curtab->tp_snapshot[idx]);
-}
-
-static void make_snapshot_rec(frame_T *fr, frame_T **frp)
-{
-  *frp = xcalloc(1, sizeof(frame_T));
-  (*frp)->fr_layout = fr->fr_layout;
-  (*frp)->fr_width = fr->fr_width;
-  (*frp)->fr_height = fr->fr_height;
-  if (fr->fr_next != NULL) {
-    make_snapshot_rec(fr->fr_next, &((*frp)->fr_next));
-  }
-  if (fr->fr_child != NULL) {
-    make_snapshot_rec(fr->fr_child, &((*frp)->fr_child));
-  }
-  if (fr->fr_layout == FR_LEAF && fr->fr_win == curwin) {
-    (*frp)->fr_win = curwin;
-  }
+  rs_make_snapshot(idx);
 }
 
 // Remove any existing snapshot.
 static void clear_snapshot(tabpage_T *tp, int idx)
 {
-  clear_snapshot_rec(tp->tp_snapshot[idx]);
-  tp->tp_snapshot[idx] = NULL;
-}
-
-static void clear_snapshot_rec(frame_T *fr)
-{
-  if (fr == NULL) {
-    return;
-  }
-  clear_snapshot_rec(fr->fr_next);
-  clear_snapshot_rec(fr->fr_child);
-  xfree(fr);
-}
-
-/// Traverse a snapshot to find the previous curwin.
-static win_T *get_snapshot_curwin_rec(frame_T *ft)
-{
-  win_T *wp;
-
-  if (ft->fr_next != NULL) {
-    if ((wp = get_snapshot_curwin_rec(ft->fr_next)) != NULL) {
-      return wp;
-    }
-  }
-  if (ft->fr_child != NULL) {
-    if ((wp = get_snapshot_curwin_rec(ft->fr_child)) != NULL) {
-      return wp;
-    }
-  }
-
-  return ft->fr_win;
+  rs_clear_snapshot(tp, idx);
 }
 
 /// @return  the current window stored in the snapshot or NULL.
 static win_T *get_snapshot_curwin(int idx)
 {
-  if (curtab->tp_snapshot[idx] == NULL) {
-    return NULL;
-  }
-
-  return get_snapshot_curwin_rec(curtab->tp_snapshot[idx]);
+  return rs_get_snapshot_curwin(idx);
 }
 
 /// Restore a previously created snapshot, if there is any.
@@ -7849,17 +7804,7 @@ void restore_snapshot(int idx, int close_curwin)
 /// and same children.  And the window pointer is valid.
 static int check_snapshot_rec(frame_T *sn, frame_T *fr)
 {
-  if (sn->fr_layout != fr->fr_layout
-      || (sn->fr_next == NULL) != (fr->fr_next == NULL)
-      || (sn->fr_child == NULL) != (fr->fr_child == NULL)
-      || (sn->fr_next != NULL
-          && check_snapshot_rec(sn->fr_next, fr->fr_next) == FAIL)
-      || (sn->fr_child != NULL
-          && check_snapshot_rec(sn->fr_child, fr->fr_child) == FAIL)
-      || (sn->fr_win != NULL && !win_valid(sn->fr_win))) {
-    return FAIL;
-  }
-  return OK;
+  return rs_check_snapshot_rec(sn, fr);
 }
 
 // Copy the size of snapshot frame "sn" to frame "fr".  Do the same for all
@@ -7867,28 +7812,7 @@ static int check_snapshot_rec(frame_T *sn, frame_T *fr)
 // Returns a pointer to the old current window, or NULL.
 static win_T *restore_snapshot_rec(frame_T *sn, frame_T *fr)
 {
-  win_T *wp = NULL;
-
-  fr->fr_height = sn->fr_height;
-  fr->fr_width = sn->fr_width;
-  if (fr->fr_layout == FR_LEAF) {
-    frame_new_height(fr, fr->fr_height, false, false, false);
-    frame_new_width(fr, fr->fr_width, false, false);
-    wp = sn->fr_win;
-  }
-  if (sn->fr_next != NULL) {
-    win_T *wp2 = restore_snapshot_rec(sn->fr_next, fr->fr_next);
-    if (wp2 != NULL) {
-      wp = wp2;
-    }
-  }
-  if (sn->fr_child != NULL) {
-    win_T *wp2 = restore_snapshot_rec(sn->fr_child, fr->fr_child);
-    if (wp2 != NULL) {
-      wp = wp2;
-    }
-  }
-  return wp;
+  return rs_restore_snapshot_rec(sn, fr);
 }
 
 /// Check that "topfrp" and its children are at the right height.
@@ -8241,5 +8165,27 @@ void nvim_win_set_inner_size(win_T *wp, int valid_cursor)
   }
 }
 
+// --- Phase 3 accessors ---
+
+/// Get a snapshot pointer from a tabpage.
+frame_T *nvim_tabpage_get_snapshot(tabpage_T *tp, int idx)
+{
+  if (!tp || idx < 0 || idx >= SNAP_COUNT) {
+    return NULL;
+  }
+  return tp->tp_snapshot[idx];
+}
+
+/// Set a snapshot pointer in a tabpage.
+void nvim_tabpage_set_snapshot(tabpage_T *tp, int idx, frame_T *val)
+{
+  if (tp && idx >= 0 && idx < SNAP_COUNT) {
+    tp->tp_snapshot[idx] = val;
+  }
+}
+
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
 _Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");
+_Static_assert(2 == SNAP_COUNT, "SNAP_COUNT mismatch");
+_Static_assert(0 == SNAP_HELP_IDX, "SNAP_HELP_IDX mismatch");
+_Static_assert(1 == SNAP_AUCMD_IDX, "SNAP_AUCMD_IDX mismatch");

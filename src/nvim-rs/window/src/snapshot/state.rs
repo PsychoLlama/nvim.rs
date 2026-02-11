@@ -20,8 +20,11 @@ use crate::{Frame, WinHandle, FR_LEAF};
 /// Help window snapshot index.
 pub const SNAP_HELP_IDX: c_int = 0;
 
+/// Autocommand window snapshot index.
+pub const SNAP_AUCMD_IDX: c_int = 1;
+
 /// Total number of snapshot slots.
-pub const SNAP_COUNT: c_int = 1;
+pub const SNAP_COUNT: c_int = 2;
 
 // =============================================================================
 // External C Functions
