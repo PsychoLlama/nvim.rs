@@ -107,4 +107,33 @@ typedef struct {
   int last_maxcount;  // the max count of the last search
 } searchstat_T;
 
+/// Result type for do_search helpers returning a position.
+typedef struct {
+  linenr_T lnum;
+  colnr_T col;
+} DoSearchPos;
+
+/// Result type for do_search echo helper.
+typedef struct {
+  char *msgbuf;
+  size_t msgbuflen;
+  int show_search_stats;
+} DoSearchEchoResult;
+
+/// Result type for do_search post-offset helper.
+typedef struct {
+  linenr_T lnum;
+  colnr_T col;
+  int retval;       ///< 1 for no offset, 2 for line offset
+  int has_offset;   ///< whether offset actually moved pos
+} DoSearchPostOffset;
+
+/// Saved search offset for save/restore across do_search.
+typedef struct {
+  char dir;
+  int line;
+  int end;
+  int64_t off;
+} SavedSearchOff;
+
 #include "search.h.generated.h"

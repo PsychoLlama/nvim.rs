@@ -9,6 +9,7 @@
 pub mod commands;
 pub mod core;
 pub mod direction;
+pub mod do_search;
 pub mod helpers;
 pub mod incsearch;
 pub mod pattern;

@@ -915,6 +915,13 @@ typedef struct {
   int sa_wrapped;
 } SearchitResult;
 
+extern int rs_do_search(void *oap, int dirc_in, int search_delim,
+                        char *pat_in, size_t patlen_in, int count,
+                        int search_options,
+                        int has_sia,
+                        linenr_T sa_stop_lnum, void *sa_tm,
+                        int *sa_timed_out_out, int *sa_wrapped_out);
+
 extern int rs_searchit(void *win, void *buf,
                        linenr_T pos_lnum, colnr_T pos_col, colnr_T pos_coladd,
                        int has_end_pos, int dir,
@@ -999,412 +1006,20 @@ static void set_vv_searchforward(void)
 int do_search(oparg_T *oap, int dirc, int search_delim, char *pat, size_t patlen, int count,
               int options, searchit_arg_T *sia)
 {
-  char *searchstr;
-  size_t searchstrlen;
-  int retval;                   // Return value
-  char *p;
-  int64_t c;
-  char *dircp;
-  char *strcopy = NULL;
-  char *ps;
-  char *msgbuf = NULL;
-  size_t msgbuflen = 0;
-  bool has_offset = false;
+  int has_sia = (sia != NULL) ? 1 : 0;
+  linenr_T sa_stop_lnum = sia ? sia->sa_stop_lnum : 0;
+  void *sa_tm = sia ? (void *)&sia->sa_tm : NULL;
+  int sa_timed_out = sia ? (sia->sa_timed_out ? 1 : 0) : 0;
+  int sa_wrapped = sia ? (sia->sa_wrapped ? 1 : 0) : 0;
 
-  searchcmdlen = 0;
+  int retval = rs_do_search(oap, dirc, search_delim, pat, patlen, count, options,
+                            has_sia, sa_stop_lnum, sa_tm,
+                            &sa_timed_out, &sa_wrapped);
 
-  // A line offset is not remembered, this is vi compatible.
-  if (spats[0].off.line && vim_strchr(p_cpo, CPO_LINEOFF) != NULL) {
-    spats[0].off.line = false;
-    spats[0].off.off = 0;
+  if (sia) {
+    sia->sa_timed_out = sa_timed_out != 0;
+    sia->sa_wrapped = sa_wrapped != 0;
   }
-
-  // Save the values for when (options & SEARCH_KEEP) is used.
-  // (there is no "if ()" around this because gcc wants them initialized)
-  SearchOffset old_off = spats[0].off;
-
-  pos_T pos = curwin->w_cursor;  // Position of the last match.
-                                 // Start searching at the cursor position.
-
-  // Find out the direction of the search.
-  if (dirc == 0) {
-    dirc = (uint8_t)spats[0].off.dir;
-  } else {
-    spats[0].off.dir = (char)dirc;
-    set_vv_searchforward();
-  }
-  if (options & SEARCH_REV) {
-    dirc = dirc == '/' ? '?' : '/';
-  }
-
-  // If the cursor is in a closed fold, don't find another match in the same
-  // fold.
-  if (dirc == '/') {
-    if (hasFolding(curwin, pos.lnum, NULL, &pos.lnum)) {
-      pos.col = MAXCOL - 2;             // avoid overflow when adding 1
-    }
-  } else {
-    if (hasFolding(curwin, pos.lnum, &pos.lnum, NULL)) {
-      pos.col = 0;
-    }
-  }
-
-  // Turn 'hlsearch' highlighting back on.
-  if (no_hlsearch && !(options & SEARCH_KEEP)) {
-    redraw_all_later(UPD_SOME_VALID);
-    set_no_hlsearch(false);
-  }
-
-  // Repeat the search when pattern followed by ';', e.g. "/foo/;?bar".
-  while (true) {
-    bool show_top_bot_msg = false;
-
-    searchstr = pat;
-    searchstrlen = patlen;
-
-    dircp = NULL;
-    // use previous pattern
-    if (pat == NULL || *pat == NUL || *pat == search_delim) {
-      if (spats[RE_SEARCH].pat == NULL) {           // no previous pattern
-        if (spats[RE_SUBST].pat == NULL) {
-          emsg(_(e_noprevre));
-          retval = 0;
-          goto end_do_search;
-        }
-        searchstr = spats[RE_SUBST].pat;
-        searchstrlen = spats[RE_SUBST].patlen;
-      } else {
-        // make search_regcomp() use spats[RE_SEARCH].pat
-        searchstr = "";
-        searchstrlen = 0;
-      }
-    }
-
-    if (pat != NULL && *pat != NUL) {   // look for (new) offset
-      // Find end of regular expression.
-      // If there is a matching '/' or '?', toss it.
-      ps = strcopy;
-      p = skip_regexp_ex(pat, search_delim, magic_isset(), &strcopy, NULL, NULL);
-      if (strcopy != ps) {
-        size_t len = strlen(strcopy);
-        // made a copy of "pat" to change "\?" to "?"
-        searchcmdlen += (int)(patlen - len);
-        pat = strcopy;
-        patlen = len;
-        searchstr = strcopy;
-        searchstrlen = len;
-      }
-      if (*p == search_delim) {
-        searchstrlen = (size_t)(p - pat);
-        dircp = p;              // remember where we put the NUL
-        *p++ = NUL;
-      }
-      spats[0].off.line = false;
-      spats[0].off.end = false;
-      spats[0].off.off = 0;
-      // Check for a line offset or a character offset.
-      // For get_address (echo off) we don't check for a character
-      // offset, because it is meaningless and the 's' could be a
-      // substitute command.
-      if (*p == '+' || *p == '-' || ascii_isdigit(*p)) {
-        spats[0].off.line = true;
-      } else if ((options & SEARCH_OPT)
-                 && (*p == 'e' || *p == 's' || *p == 'b')) {
-        if (*p == 'e') {  // end
-          spats[0].off.end = true;
-        }
-        p++;
-      }
-      if (ascii_isdigit(*p) || *p == '+' || *p == '-') {      // got an offset
-        // 'nr' or '+nr' or '-nr'
-        if (ascii_isdigit(*p) || ascii_isdigit(*(p + 1))) {
-          spats[0].off.off = atol(p);
-        } else if (*p == '-') {                      // single '-'
-          spats[0].off.off = -1;
-        } else {  // single '+'
-          spats[0].off.off = 1;
-        }
-        p++;
-        while (ascii_isdigit(*p)) {  // skip number
-          p++;
-        }
-      }
-
-      // compute length of search command for get_address()
-      searchcmdlen += (int)(p - pat);
-
-      patlen -= (size_t)(p - pat);
-      pat = p;                              // put pat after search command
-    }
-
-    bool show_search_stats = false;
-    if ((options & SEARCH_ECHO) && messaging() && !msg_silent
-        && (!cmd_silent || !shortmess(SHM_SEARCHCOUNT))) {
-      char off_buf[40];
-      size_t off_len = 0;
-
-      // Compute msg_row early.
-      msg_start();
-      msg_ext_set_kind("search_cmd");
-
-      // Get the offset, so we know how long it is.
-      if (!cmd_silent
-          && (spats[0].off.line || spats[0].off.end || spats[0].off.off)) {
-        off_buf[off_len++] = (char)dirc;
-        if (spats[0].off.end) {
-          off_buf[off_len++] = 'e';
-        } else if (!spats[0].off.line) {
-          off_buf[off_len++] = 's';
-        }
-        off_buf[off_len] = NUL;
-        if (spats[0].off.off != 0 || spats[0].off.line) {
-          off_len += (size_t)snprintf(off_buf + off_len, sizeof(off_buf) - off_len,
-                                      "%+" PRId64, spats[0].off.off);
-        }
-      }
-
-      size_t plen;
-      if (*searchstr == NUL) {
-        p = spats[0].pat;
-        plen = spats[0].patlen;
-      } else {
-        p = searchstr;
-        plen = searchstrlen;
-      }
-
-      size_t msgbufsize;
-      if (!shortmess(SHM_SEARCHCOUNT) || cmd_silent) {
-        // Reserve enough space for the search pattern + offset +
-        // search stat.  Use all the space available, so that the
-        // search state is right aligned.  If there is not enough space
-        // msg_strtrunc() will shorten in the middle.
-        if (ui_has(kUIMessages)) {
-          msgbufsize = 0;  // adjusted below
-        } else if (msg_scrolled != 0 && !cmd_silent) {
-          // Use all the columns.
-          msgbufsize = (size_t)((Rows - msg_row) * Columns - 1);
-        } else {
-          // Use up to 'showcmd' column.
-          msgbufsize = (size_t)((Rows - msg_row - 1) * Columns + sc_col - 1);
-        }
-        if (msgbufsize < plen + off_len + SEARCH_STAT_BUF_LEN + 3) {
-          msgbufsize = plen + off_len + SEARCH_STAT_BUF_LEN + 3;
-        }
-      } else {
-        // Reserve enough space for the search pattern + offset.
-        msgbufsize = plen + off_len + 3;
-      }
-
-      xfree(msgbuf);
-      msgbuf = xmalloc(msgbufsize);
-      memset(msgbuf, ' ', msgbufsize);
-      msgbuflen = msgbufsize - 1;
-      msgbuf[msgbuflen] = NUL;
-
-      // do not fill the msgbuf buffer, if cmd_silent is set, leave it
-      // empty for the search_stat feature.
-      if (!cmd_silent) {
-        ui_busy_start();
-        msgbuf[0] = (char)dirc;
-        if (utf_iscomposing_first(utf_ptr2char(p))) {
-          // Use a space to draw the composing char on.
-          msgbuf[1] = ' ';
-          memmove(msgbuf + 2, p, plen);
-        } else {
-          memmove(msgbuf + 1, p, plen);
-        }
-        if (off_len > 0) {
-          memmove(msgbuf + plen + 1, off_buf, off_len);
-        }
-
-        char *trunc = msg_strtrunc(msgbuf, true);
-        if (trunc != NULL) {
-          xfree(msgbuf);
-          msgbuf = trunc;
-          msgbuflen = strlen(msgbuf);
-        }
-
-        // The search pattern could be shown on the right in rightleft
-        // mode, but the 'ruler' and 'showcmd' area use it too, thus
-        // it would be blanked out again very soon.  Show it on the
-        // left, but do reverse the text.
-        if (curwin->w_p_rl && *curwin->w_p_rlc == 's') {
-          char *r = reverse_text(msgbuf);
-          xfree(msgbuf);
-          msgbuf = r;
-          msgbuflen = strlen(msgbuf);
-          // move reversed text to beginning of buffer
-          while (*r == ' ') {
-            r++;
-          }
-          size_t pat_len = (size_t)(msgbuf + msgbuflen - r);
-          memmove(msgbuf, r, pat_len);
-          // overwrite old text
-          if ((size_t)(r - msgbuf) >= pat_len) {
-            memset(r, ' ', pat_len);
-          } else {
-            memset(msgbuf + pat_len, ' ', (size_t)(r - msgbuf));
-          }
-        }
-        msg_outtrans(msgbuf, 0, false);
-        msg_clr_eos();
-        msg_check();
-
-        gotocmdline(false);
-        ui_flush();
-        ui_busy_stop();
-        msg_nowait = true;  // don't wait for this message
-      }
-
-      if (!shortmess(SHM_SEARCHCOUNT)) {
-        show_search_stats = true;
-      }
-    }
-
-    // If there is a character offset, subtract it from the current
-    // position, so we don't get stuck at "?pat?e+2" or "/pat/s-2".
-    // Skip this if pos.col is near MAXCOL (closed fold).
-    // This is not done for a line offset, because then we would not be vi
-    // compatible.
-    if (!spats[0].off.line && spats[0].off.off && pos.col < MAXCOL - 2) {
-      if (spats[0].off.off > 0) {
-        for (c = spats[0].off.off; c; c--) {
-          if (decl(&pos) == -1) {
-            break;
-          }
-        }
-        if (c) {                        // at start of buffer
-          pos.lnum = 0;                 // allow lnum == 0 here
-          pos.col = MAXCOL;
-        }
-      } else {
-        for (c = spats[0].off.off; c; c++) {
-          if (incl(&pos) == -1) {
-            break;
-          }
-        }
-        if (c) {                        // at end of buffer
-          pos.lnum = curbuf->b_ml.ml_line_count + 1;
-          pos.col = 0;
-        }
-      }
-    }
-
-    c = searchit(curwin, curbuf, &pos, NULL, dirc == '/' ? FORWARD : BACKWARD,
-                 searchstr, searchstrlen, count,
-                 (spats[0].off.end * SEARCH_END
-                  + (options
-                     & (SEARCH_KEEP + SEARCH_PEEK + SEARCH_HIS + SEARCH_MSG
-                        + SEARCH_START
-                        + ((pat != NULL && *pat == ';') ? 0 : SEARCH_NOOF)))),
-                 RE_LAST, sia);
-
-    if (dircp != NULL) {
-      *dircp = (char)search_delim;  // restore second '/' or '?' for normal_cmd()
-    }
-
-    if (!shortmess(SHM_SEARCH)
-        && ((dirc == '/' && lt(pos, curwin->w_cursor))
-            || (dirc == '?' && lt(curwin->w_cursor, pos)))) {
-      show_top_bot_msg = true;
-    }
-
-    if (c == FAIL) {
-      retval = 0;
-      goto end_do_search;
-    }
-    if (spats[0].off.end && oap != NULL) {
-      oap->inclusive = true;        // 'e' includes last character
-    }
-    retval = 1;                     // pattern found
-
-    if (sia && sia->sa_wrapped) {
-      apply_autocmds(EVENT_SEARCHWRAPPED, NULL, NULL, false, NULL);
-    }
-
-    // Add character and/or line offset
-    if (!(options & SEARCH_NOOF) || (pat != NULL && *pat == ';')) {
-      pos_T org_pos = pos;
-
-      if (spats[0].off.line) {  // Add the offset to the line number.
-        c = pos.lnum + spats[0].off.off;
-        if (c < 1) {
-          pos.lnum = 1;
-        } else if (c > curbuf->b_ml.ml_line_count) {
-          pos.lnum = curbuf->b_ml.ml_line_count;
-        } else {
-          pos.lnum = (linenr_T)c;
-        }
-        pos.col = 0;
-
-        retval = 2;                 // pattern found, line offset added
-      } else if (pos.col < MAXCOL - 2) {      // just in case
-        // to the right, check for end of file
-        c = spats[0].off.off;
-        if (c > 0) {
-          while (c-- > 0) {
-            if (incl(&pos) == -1) {
-              break;
-            }
-          }
-        } else {  // to the left, check for start of file
-          while (c++ < 0) {
-            if (decl(&pos) == -1) {
-              break;
-            }
-          }
-        }
-      }
-      if (!equalpos(pos, org_pos)) {
-        has_offset = true;
-      }
-    }
-
-    // Show [1/15] if 'S' is not in 'shortmess'.
-    if (show_search_stats) {
-      cmdline_search_stat(dirc, &pos, &curwin->w_cursor,
-                          show_top_bot_msg, msgbuf, msgbuflen,
-                          (count != 1 || has_offset
-                           || (!(fdo_flags & kOptFdoFlagSearch)
-                               && hasFolding(curwin, curwin->w_cursor.lnum, NULL,
-                                             NULL))),
-                          (int)p_msc,
-                          SEARCH_STAT_DEF_TIMEOUT);
-    }
-
-    // The search command can be followed by a ';' to do another search.
-    // For example: "/pat/;/foo/+3;?bar"
-    // This is like doing another search command, except:
-    // - The remembered direction '/' or '?' is from the first search.
-    // - When an error happens the cursor isn't moved at all.
-    // Don't do this when called by get_address() (it handles ';' itself).
-    if (!(options & SEARCH_OPT) || pat == NULL || *pat != ';') {
-      break;
-    }
-
-    dirc = (uint8_t)(*++pat);
-    search_delim = dirc;
-    if (dirc != '?' && dirc != '/') {
-      retval = 0;
-      emsg(_("E386: Expected '?' or '/'  after ';'"));
-      goto end_do_search;
-    }
-    pat++;
-    patlen--;
-  }
-
-  if (options & SEARCH_MARK) {
-    setpcmark();
-  }
-  curwin->w_cursor = pos;
-  curwin->w_set_curswant = true;
-
-end_do_search:
-  if ((options & SEARCH_KEEP) || (cmdmod.cmod_flags & CMOD_KEEPPATTERNS)) {
-    spats[0].off = old_off;
-  }
-  xfree(strcopy);
-  xfree(msgbuf);
 
   return retval;
 }
@@ -3680,3 +3295,435 @@ void nvim_regmmatch_free(void *rm)
 {
   xfree(rm);
 }
+
+// =============================================================================
+// C accessor functions for rs_do_search (Phase 2)
+// =============================================================================
+
+_Static_assert(SEARCH_REV == 0x01, "SEARCH_REV mismatch");
+_Static_assert(SEARCH_ECHO == 0x02, "SEARCH_ECHO mismatch");
+_Static_assert(SEARCH_OPT == 0x10, "SEARCH_OPT mismatch");
+_Static_assert(SEARCH_NOOF == 0x80, "SEARCH_NOOF mismatch");
+_Static_assert(SEARCH_MARK == 0x200, "SEARCH_MARK mismatch");
+_Static_assert(RE_SEARCH == 0, "RE_SEARCH mismatch");
+_Static_assert(RE_SUBST == 1, "RE_SUBST mismatch");
+_Static_assert(RE_LAST == 2, "RE_LAST mismatch");
+
+/// Check if spats[0].off.line is set and CPO_LINEOFF is in p_cpo.
+int nvim_do_search_check_lineoff(void)
+{
+  return (spats[0].off.line && vim_strchr(p_cpo, CPO_LINEOFF) != NULL) ? 1 : 0;
+}
+
+/// Clear spats[0].off.line and off if CPO_LINEOFF applies.
+void nvim_do_search_clear_lineoff(void)
+{
+  spats[0].off.line = false;
+  spats[0].off.off = 0;
+}
+
+/// Get the dirc from spats[0].off.dir.
+int nvim_do_search_get_dirc(void)
+{
+  return (uint8_t)spats[0].off.dir;
+}
+
+/// Set spats[0].off.dir and update vv:searchforward.
+void nvim_do_search_set_dirc(int dirc)
+{
+  spats[0].off.dir = (char)dirc;
+  set_vv_searchforward();
+}
+
+/// Handle fold adjustment for do_search position.
+/// For forward: adjusts to end of fold. For backward: adjusts to start of fold.
+/// Returns the adjusted pos (lnum, col).
+DoSearchPos nvim_do_search_fold_adjust(int dirc, linenr_T lnum, colnr_T col)
+{
+  pos_T pos;
+  pos.lnum = lnum;
+  pos.col = col;
+  pos.coladd = 0;
+
+  if (dirc == '/') {
+    if (hasFolding(curwin, pos.lnum, NULL, &pos.lnum)) {
+      pos.col = MAXCOL - 2;
+    }
+  } else {
+    if (hasFolding(curwin, pos.lnum, &pos.lnum, NULL)) {
+      pos.col = 0;
+    }
+  }
+  return (DoSearchPos){ pos.lnum, pos.col };
+}
+
+/// Turn hlsearch back on if needed.
+void nvim_do_search_hlsearch_on(int options)
+{
+  if (no_hlsearch && !(options & SEARCH_KEEP)) {
+    redraw_all_later(UPD_SOME_VALID);
+    set_no_hlsearch(false);
+  }
+}
+
+/// Get previous search pattern (spats[RE_SEARCH].pat).
+char *nvim_do_search_get_search_pat(void)
+{
+  return spats[RE_SEARCH].pat;
+}
+
+/// Get previous subst pattern info.
+char *nvim_do_search_get_subst_pat(void)
+{
+  return spats[RE_SUBST].pat;
+}
+
+size_t nvim_do_search_get_subst_patlen(void)
+{
+  return spats[RE_SUBST].patlen;
+}
+
+/// Call skip_regexp_ex for do_search pattern parsing.
+/// Returns: pointer to end of regexp.  Sets *newp if copy was made.
+char *nvim_do_search_skip_regexp(char *pat, int delim, char **newp)
+{
+  return skip_regexp_ex(pat, delim, magic_isset(), newp, NULL, NULL);
+}
+
+/// Set the searchcmdlen global.
+void nvim_do_search_set_searchcmdlen(int val)
+{
+  searchcmdlen = val;
+}
+
+/// Get the searchcmdlen global.
+int nvim_do_search_get_searchcmdlen(void)
+{
+  return searchcmdlen;
+}
+
+/// Set spats[0].off fields.
+void nvim_do_search_set_off(int off_line, int off_end, int64_t off_off)
+{
+  spats[0].off.line = off_line != 0;
+  spats[0].off.end = off_end != 0;
+  spats[0].off.off = off_off;
+}
+
+/// Get spats[0].off.end for the SEARCH_END computation.
+int nvim_do_search_get_off_end(void)
+{
+  return spats[0].off.end ? 1 : 0;
+}
+
+/// Get spats[0].off.line.
+int nvim_do_search_get_off_line(void)
+{
+  return spats[0].off.line ? 1 : 0;
+}
+
+/// Get spats[0].off.off.
+int64_t nvim_do_search_get_off_off(void)
+{
+  return spats[0].off.off;
+}
+
+/// Batch helper: handle echo/display section of do_search.
+/// Returns: msgbuf (allocated), sets *msgbuflen_out, sets *show_search_stats.
+/// Caller must xfree() the returned buffer (or NULL).
+DoSearchEchoResult nvim_do_search_echo(int dirc, int options,
+                                       const char *searchstr, size_t searchstrlen)
+{
+  DoSearchEchoResult result = { NULL, 0, 0 };
+
+  if (!((options & SEARCH_ECHO) && messaging() && !msg_silent
+        && (!cmd_silent || !shortmess(SHM_SEARCHCOUNT)))) {
+    return result;
+  }
+
+  char off_buf[40];
+  size_t off_len = 0;
+
+  msg_start();
+  msg_ext_set_kind("search_cmd");
+
+  if (!cmd_silent
+      && (spats[0].off.line || spats[0].off.end || spats[0].off.off)) {
+    off_buf[off_len++] = (char)dirc;
+    if (spats[0].off.end) {
+      off_buf[off_len++] = 'e';
+    } else if (!spats[0].off.line) {
+      off_buf[off_len++] = 's';
+    }
+    off_buf[off_len] = NUL;
+    if (spats[0].off.off != 0 || spats[0].off.line) {
+      off_len += (size_t)snprintf(off_buf + off_len, sizeof(off_buf) - off_len,
+                                  "%+" PRId64, spats[0].off.off);
+    }
+  }
+
+  const char *p;
+  size_t plen;
+  if (*searchstr == NUL) {
+    p = spats[0].pat;
+    plen = spats[0].patlen;
+  } else {
+    p = searchstr;
+    plen = searchstrlen;
+  }
+
+  size_t msgbufsize;
+  if (!shortmess(SHM_SEARCHCOUNT) || cmd_silent) {
+    if (ui_has(kUIMessages)) {
+      msgbufsize = 0;
+    } else if (msg_scrolled != 0 && !cmd_silent) {
+      msgbufsize = (size_t)((Rows - msg_row) * Columns - 1);
+    } else {
+      msgbufsize = (size_t)((Rows - msg_row - 1) * Columns + sc_col - 1);
+    }
+    if (msgbufsize < plen + off_len + SEARCH_STAT_BUF_LEN + 3) {
+      msgbufsize = plen + off_len + SEARCH_STAT_BUF_LEN + 3;
+    }
+  } else {
+    msgbufsize = plen + off_len + 3;
+  }
+
+  char *msgbuf = xmalloc(msgbufsize);
+  memset(msgbuf, ' ', msgbufsize);
+  size_t msgbuflen = msgbufsize - 1;
+  msgbuf[msgbuflen] = NUL;
+
+  if (!cmd_silent) {
+    ui_busy_start();
+    msgbuf[0] = (char)dirc;
+    if (utf_iscomposing_first(utf_ptr2char(p))) {
+      msgbuf[1] = ' ';
+      memmove(msgbuf + 2, p, plen);
+    } else {
+      memmove(msgbuf + 1, p, plen);
+    }
+    if (off_len > 0) {
+      memmove(msgbuf + plen + 1, off_buf, off_len);
+    }
+
+    char *trunc = msg_strtrunc(msgbuf, true);
+    if (trunc != NULL) {
+      xfree(msgbuf);
+      msgbuf = trunc;
+      msgbuflen = strlen(msgbuf);
+    }
+
+    if (curwin->w_p_rl && *curwin->w_p_rlc == 's') {
+      char *r = reverse_text(msgbuf);
+      xfree(msgbuf);
+      msgbuf = r;
+      msgbuflen = strlen(msgbuf);
+      while (*r == ' ') {
+        r++;
+      }
+      size_t pat_len = (size_t)(msgbuf + msgbuflen - r);
+      memmove(msgbuf, r, pat_len);
+      if ((size_t)(r - msgbuf) >= pat_len) {
+        memset(r, ' ', pat_len);
+      } else {
+        memset(msgbuf + pat_len, ' ', (size_t)(r - msgbuf));
+      }
+    }
+    msg_outtrans(msgbuf, 0, false);
+    msg_clr_eos();
+    msg_check();
+
+    gotocmdline(false);
+    ui_flush();
+    ui_busy_stop();
+    msg_nowait = true;
+  }
+
+  result.msgbuf = msgbuf;
+  result.msgbuflen = msgbuflen;
+  result.show_search_stats = !shortmess(SHM_SEARCHCOUNT) ? 1 : 0;
+
+  return result;
+}
+
+/// Free the echo result.
+void nvim_do_search_echo_free(char *msgbuf)
+{
+  xfree(msgbuf);
+}
+
+/// Pre-searchit character offset subtraction.
+/// This handles the "?pat?e+2" / "/pat/s-2" case.
+DoSearchPos nvim_do_search_pre_offset(linenr_T lnum, colnr_T col)
+{
+  pos_T pos = { .lnum = lnum, .col = col, .coladd = 0 };
+  int64_t off = spats[0].off.off;
+
+  if (!spats[0].off.line && off && pos.col < MAXCOL - 2) {
+    if (off > 0) {
+      int64_t c;
+      for (c = off; c; c--) {
+        if (decl(&pos) == -1) {
+          break;
+        }
+      }
+      if (c) {
+        pos.lnum = 0;
+        pos.col = MAXCOL;
+      }
+    } else {
+      int64_t c;
+      for (c = off; c; c++) {
+        if (incl(&pos) == -1) {
+          break;
+        }
+      }
+      if (c) {
+        pos.lnum = curbuf->b_ml.ml_line_count + 1;
+        pos.col = 0;
+      }
+    }
+  }
+
+  return (DoSearchPos){ pos.lnum, pos.col };
+}
+
+/// Post-searchit line/char offset addition.
+DoSearchPostOffset nvim_do_search_post_offset(linenr_T lnum, colnr_T col, int options,
+                                              int pat_has_semicolon)
+{
+  DoSearchPostOffset result = { lnum, col, 1, 0 };
+  pos_T pos = { .lnum = lnum, .col = col, .coladd = 0 };
+  pos_T org_pos = pos;
+
+  if (!(options & SEARCH_NOOF) || pat_has_semicolon) {
+    if (spats[0].off.line) {
+      int64_t c = pos.lnum + spats[0].off.off;
+      if (c < 1) {
+        pos.lnum = 1;
+      } else if (c > curbuf->b_ml.ml_line_count) {
+        pos.lnum = curbuf->b_ml.ml_line_count;
+      } else {
+        pos.lnum = (linenr_T)c;
+      }
+      pos.col = 0;
+      result.retval = 2;
+    } else if (pos.col < MAXCOL - 2) {
+      int64_t c = spats[0].off.off;
+      if (c > 0) {
+        while (c-- > 0) {
+          if (incl(&pos) == -1) {
+            break;
+          }
+        }
+      } else {
+        while (c++ < 0) {
+          if (decl(&pos) == -1) {
+            break;
+          }
+        }
+      }
+    }
+    if (!equalpos(pos, org_pos)) {
+      result.has_offset = 1;
+    }
+  }
+
+  result.lnum = pos.lnum;
+  result.col = pos.col;
+  return result;
+}
+
+/// Check if search wrapped (show top/bot msg).
+int nvim_do_search_show_top_bot(int dirc, linenr_T pos_lnum, colnr_T pos_col)
+{
+  if (shortmess(SHM_SEARCH)) {
+    return 0;
+  }
+  pos_T pos = { .lnum = pos_lnum, .col = pos_col, .coladd = 0 };
+  if ((dirc == '/' && lt(pos, curwin->w_cursor))
+      || (dirc == '?' && lt(curwin->w_cursor, pos))) {
+    return 1;
+  }
+  return 0;
+}
+
+/// Set oap->inclusive if needed.
+void nvim_do_search_set_oap_inclusive(void *oap)
+{
+  if (oap != NULL && spats[0].off.end) {
+    ((oparg_T *)oap)->inclusive = true;
+  }
+}
+
+/// Fire EVENT_SEARCHWRAPPED autocmd.
+void nvim_do_search_autocmd_wrapped(void)
+{
+  apply_autocmds(EVENT_SEARCHWRAPPED, NULL, NULL, false, NULL);
+}
+
+/// Show search stats (cmdline_search_stat).
+void nvim_do_search_show_stats(int dirc, linenr_T pos_lnum, colnr_T pos_col,
+                               int show_top_bot, char *msgbuf, size_t msgbuflen,
+                               int count, int has_offset)
+{
+  pos_T pos = { .lnum = pos_lnum, .col = pos_col, .coladd = 0 };
+  cmdline_search_stat(dirc, &pos, &curwin->w_cursor,
+                      show_top_bot != 0, msgbuf, msgbuflen,
+                      (count != 1 || has_offset
+                       || (!(fdo_flags & kOptFdoFlagSearch)
+                           && hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL))),
+                      (int)p_msc,
+                      SEARCH_STAT_DEF_TIMEOUT);
+}
+
+/// Emit E386 error.
+void nvim_do_search_emsg_e386(void)
+{
+  emsg(_("E386: Expected '?' or '/'  after ';'"));
+}
+
+/// Emit e_noprevre error.
+void nvim_do_search_emsg_noprevre(void)
+{
+  emsg(_(e_noprevre));
+}
+
+/// Set pcmark and cursor for search result.
+void nvim_do_search_finish(int options, linenr_T lnum, colnr_T col)
+{
+  if (options & SEARCH_MARK) {
+    setpcmark();
+  }
+  curwin->w_cursor.lnum = lnum;
+  curwin->w_cursor.col = col;
+  curwin->w_cursor.coladd = 0;
+  curwin->w_set_curswant = true;
+}
+
+/// Save spats[0].off, returns opaque data via struct.
+SavedSearchOff nvim_do_search_save_off(void)
+{
+  return (SavedSearchOff){
+    spats[0].off.dir,
+    spats[0].off.line,
+    spats[0].off.end,
+    spats[0].off.off
+  };
+}
+
+/// Restore spats[0].off from saved data.
+void nvim_do_search_restore_off(SavedSearchOff saved)
+{
+  spats[0].off.dir = saved.dir;
+  spats[0].off.line = saved.line != 0;
+  spats[0].off.end = saved.end != 0;
+  spats[0].off.off = saved.off;
+}
+
+/// Get cursor position for do_search start.
+DoSearchPos nvim_do_search_get_cursor(void)
+{
+  return (DoSearchPos){ curwin->w_cursor.lnum, curwin->w_cursor.col };
+}
+
