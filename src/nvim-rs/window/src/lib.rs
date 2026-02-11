@@ -23,6 +23,7 @@
 //! - [`snapshot`]: Window layout snapshot helpers
 //! - [`split`]: Window splitting functions (placeholder)
 //! - [`state`]: Window state accessors for layout fields
+//! - [`state_validation`]: Cursor line number validation (check_lnums/reset_lnums)
 //! - [`statusline`]: Status line and window bar (placeholder)
 //! - [`tabpage`]: Tab page management operations
 
@@ -48,6 +49,7 @@ pub mod resize;
 pub mod snapshot;
 pub mod split;
 pub mod state;
+pub mod state_validation;
 pub mod statusline;
 pub mod tabpage;
 

@@ -206,6 +206,13 @@ extern win_T *rs_get_snapshot_curwin(int idx);
 extern int rs_check_snapshot_rec(frame_T *sn, frame_T *fr);
 extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
 
+// Phase 4: Size save/restore + cursor line validation
+extern void rs_win_size_save(garray_T *gap);
+extern void rs_win_size_restore(garray_T *gap);
+extern void rs_check_lnums(int do_curwin);
+extern void rs_check_lnums_nested(int do_curwin);
+extern void rs_reset_lnums(void);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -6940,17 +6947,7 @@ void may_trigger_win_scrolled_resized(void)
 // Save the size of all windows in "gap".
 void win_size_save(garray_T *gap)
 {
-  ga_init(gap, (int)sizeof(int), 1);
-  ga_grow(gap, win_count() * 2 + 1);
-  // first entry is the total lines available for windows
-  ((int *)gap->ga_data)[gap->ga_len++] =
-    (int)ROWS_AVAIL + global_stl_height() - last_stl_height(false);
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    ((int *)gap->ga_data)[gap->ga_len++] =
-      wp->w_width + wp->w_vsep_width;
-    ((int *)gap->ga_data)[gap->ga_len++] = wp->w_height;
-  }
+  rs_win_size_save(gap);
 }
 
 // Restore window sizes, but only if the number of windows is still the same
@@ -6959,25 +6956,7 @@ void win_size_save(garray_T *gap)
 void win_size_restore(garray_T *gap)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (win_count() * 2 + 1 == gap->ga_len
-      && ((int *)gap->ga_data)[0] ==
-      ROWS_AVAIL + global_stl_height() - last_stl_height(false)) {
-    // The order matters, because frames contain other frames, but it's
-    // difficult to get right. The easy way out is to do it twice.
-    for (int j = 0; j < 2; j++) {
-      int i = 1;
-      FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-        int width = ((int *)gap->ga_data)[i++];
-        int height = ((int *)gap->ga_data)[i++];
-        if (!wp->w_floating) {
-          frame_setwidth(wp->w_frame, width);
-          win_setheight_win(height, wp);
-        }
-      }
-    }
-    // recompute the window positions
-    win_comp_pos();
-  }
+  rs_win_size_restore(gap);
 }
 
 // Update the position for all windows, using the width and height of the frames.
@@ -7680,75 +7659,26 @@ bool only_one_window(void) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
   return rs_only_one_window() != 0;
 }
 
-/// Implementation of check_lnums() and check_lnums_nested().
-static void check_lnums_both(bool do_curwin, bool nested)
-{
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if ((do_curwin || wp != curwin) && wp->w_buffer == curbuf) {
-      if (!nested) {
-        // save the original cursor position and topline
-        wp->w_save_cursor.w_cursor_save = wp->w_cursor;
-        wp->w_save_cursor.w_topline_save = wp->w_topline;
-      }
-
-      bool need_adjust = wp->w_cursor.lnum > curbuf->b_ml.ml_line_count;
-      if (need_adjust) {
-        wp->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-      }
-      if (need_adjust || !nested) {
-        // save the (corrected) cursor position
-        wp->w_save_cursor.w_cursor_corr = wp->w_cursor;
-      }
-
-      need_adjust = wp->w_topline > curbuf->b_ml.ml_line_count;
-      if (need_adjust) {
-        wp->w_topline = curbuf->b_ml.ml_line_count;
-      }
-      if (need_adjust || !nested) {
-        // save the (corrected) topline
-        wp->w_save_cursor.w_topline_corr = wp->w_topline;
-      }
-    }
-  }
-}
-
 /// Correct the cursor line number in other windows.  Used after changing the
 /// current buffer, and before applying autocommands.
 ///
 /// @param do_curwin  when true, also check current window.
 void check_lnums(bool do_curwin)
 {
-  check_lnums_both(do_curwin, false);
+  rs_check_lnums(do_curwin);
 }
 
 /// Like check_lnums() but for when check_lnums() was already called.
 void check_lnums_nested(bool do_curwin)
 {
-  check_lnums_both(do_curwin, true);
+  rs_check_lnums_nested(do_curwin);
 }
 
 /// Reset cursor and topline to its stored values from check_lnums().
 /// check_lnums() must have been called first!
 void reset_lnums(void)
 {
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (wp->w_buffer == curbuf) {
-      // Restore the value if the autocommand didn't change it and it was set.
-      // Note: This triggers e.g. on BufReadPre, when the buffer is not yet
-      //       loaded, so cannot validate the buffer line
-      if (equalpos(wp->w_save_cursor.w_cursor_corr, wp->w_cursor)
-          && wp->w_save_cursor.w_cursor_save.lnum != 0) {
-        wp->w_cursor = wp->w_save_cursor.w_cursor_save;
-      }
-      if (wp->w_save_cursor.w_topline_corr == wp->w_topline
-          && wp->w_save_cursor.w_topline_save != 0) {
-        wp->w_topline = wp->w_save_cursor.w_topline_save;
-      }
-      if (wp->w_save_cursor.w_topline_save > wp->w_buffer->b_ml.ml_line_count) {
-        wp->w_valid &= ~VALID_TOPLINE;
-      }
-    }
-  }
+  rs_reset_lnums();
 }
 
 // A snapshot of the window sizes, to restore them after closing the help
@@ -8184,8 +8114,151 @@ void nvim_tabpage_set_snapshot(tabpage_T *tp, int idx, frame_T *val)
   }
 }
 
+// --- Phase 4 accessors ---
+
+// nvim_curbuf_line_count() — already defined in move.c
+
+/// Check if window's buffer is curbuf.
+int nvim_win_buf_is_curbuf(win_T *wp)
+{
+  return wp && wp->w_buffer == curbuf;
+}
+
+/// Save cursor position to w_save_cursor.w_cursor_save.
+void nvim_win_save_cursor_to_save(win_T *wp)
+{
+  if (wp) {
+    wp->w_save_cursor.w_cursor_save = wp->w_cursor;
+  }
+}
+
+/// Save topline to w_save_cursor.w_topline_save.
+void nvim_win_save_topline_to_save(win_T *wp)
+{
+  if (wp) {
+    wp->w_save_cursor.w_topline_save = wp->w_topline;
+  }
+}
+
+/// Save (corrected) cursor position to w_save_cursor.w_cursor_corr.
+void nvim_win_save_cursor_to_corr(win_T *wp)
+{
+  if (wp) {
+    wp->w_save_cursor.w_cursor_corr = wp->w_cursor;
+  }
+}
+
+/// Save (corrected) topline to w_save_cursor.w_topline_corr.
+void nvim_win_save_topline_to_corr(win_T *wp)
+{
+  if (wp) {
+    wp->w_save_cursor.w_topline_corr = wp->w_topline;
+  }
+}
+
+/// Check if w_save_cursor.w_cursor_corr equals w_cursor (via equalpos).
+int nvim_win_cursor_eq_save_corr(win_T *wp)
+{
+  if (!wp) {
+    return 0;
+  }
+  return equalpos(wp->w_save_cursor.w_cursor_corr, wp->w_cursor);
+}
+
+/// Check if w_save_cursor.w_topline_corr equals w_topline.
+int nvim_win_topline_eq_save_corr(win_T *wp)
+{
+  if (!wp) {
+    return 0;
+  }
+  return wp->w_save_cursor.w_topline_corr == wp->w_topline;
+}
+
+/// Get w_save_cursor.w_cursor_save.lnum.
+linenr_T nvim_win_get_save_cursor_save_lnum(win_T *wp)
+{
+  if (!wp) {
+    return 0;
+  }
+  return wp->w_save_cursor.w_cursor_save.lnum;
+}
+
+/// Get w_save_cursor.w_topline_save.
+linenr_T nvim_win_get_save_topline_save(win_T *wp)
+{
+  if (!wp) {
+    return 0;
+  }
+  return wp->w_save_cursor.w_topline_save;
+}
+
+/// Restore cursor from w_save_cursor.w_cursor_save.
+void nvim_win_restore_cursor_from_save(win_T *wp)
+{
+  if (wp) {
+    wp->w_cursor = wp->w_save_cursor.w_cursor_save;
+  }
+}
+
+/// Restore topline from w_save_cursor.w_topline_save.
+void nvim_win_restore_topline_from_save(win_T *wp)
+{
+  if (wp) {
+    wp->w_topline = wp->w_save_cursor.w_topline_save;
+  }
+}
+
+/// Check if w_save_cursor.w_topline_save > buffer line count.
+int nvim_win_save_topline_gt_buf_line_count(win_T *wp)
+{
+  if (!wp || !wp->w_buffer) {
+    return 0;
+  }
+  return wp->w_save_cursor.w_topline_save > wp->w_buffer->b_ml.ml_line_count;
+}
+
+// Growarray accessors for Rust.
+
+/// Initialize a growarray for int items.
+void nvim_ga_init_int(garray_T *gap)
+{
+  ga_init(gap, (int)sizeof(int), 1);
+}
+
+/// Grow a growarray to accommodate n more items.
+void nvim_ga_grow(garray_T *gap, int n)
+{
+  ga_grow(gap, n);
+}
+
+/// Get the current length of a growarray.
+int nvim_ga_get_len(garray_T *gap)
+{
+  return gap ? gap->ga_len : 0;
+}
+
+// nvim_ga_set_len() — already defined in fold.c
+
+/// Get an int item from a growarray by index.
+int nvim_ga_get_int(garray_T *gap, int idx)
+{
+  if (!gap || !gap->ga_data || idx < 0 || idx >= gap->ga_len) {
+    return 0;
+  }
+  return ((int *)gap->ga_data)[idx];
+}
+
+/// Set an int item in a growarray by index.
+void nvim_ga_set_int(garray_T *gap, int idx, int val)
+{
+  if (gap && gap->ga_data && idx >= 0) {
+    ((int *)gap->ga_data)[idx] = val;
+  }
+}
+
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
 _Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");
 _Static_assert(2 == SNAP_COUNT, "SNAP_COUNT mismatch");
 _Static_assert(0 == SNAP_HELP_IDX, "SNAP_HELP_IDX mismatch");
 _Static_assert(1 == SNAP_AUCMD_IDX, "SNAP_AUCMD_IDX mismatch");
+_Static_assert(0x80 == VALID_TOPLINE, "VALID_TOPLINE mismatch");

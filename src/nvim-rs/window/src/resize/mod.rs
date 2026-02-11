@@ -10,12 +10,14 @@
 //! - [`fraction`]: Fraction and scroll default calculations
 //! - [`frame`]: Frame tree helpers for resize operations
 //! - [`minsize`]: Minimum size calculations for tabpages
+//! - [`save_restore`]: Window size save/restore to growarray
 
 pub mod calculate;
 pub mod execute;
 pub mod fraction;
 pub mod frame;
 pub mod minsize;
+pub mod save_restore;
 pub mod validate;
 
 // Re-export common items
@@ -24,4 +26,5 @@ pub use execute::*;
 pub use fraction::*;
 pub use frame::*;
 pub use minsize::*;
+pub use save_restore::*;
 pub use validate::*;
