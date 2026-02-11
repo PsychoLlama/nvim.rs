@@ -1285,36 +1285,11 @@ theend:
 }
 
 /// Set fuzzy score for completion matches.
+extern void rs_set_fuzzy_score(void);
+
 static void set_fuzzy_score(void)
 {
-  if (compl_first_match == NULL) {
-    return;
-  }
-
-  // Determine the pattern to match against
-  bool use_leader = (compl_leader.data != NULL && compl_leader.size > 0);
-  char *pattern;
-  if (!use_leader) {
-    if (compl_orig_text.data == NULL || compl_orig_text.size == 0) {
-      return;
-    }
-    pattern = compl_orig_text.data;
-  } else {
-    // Clear the leader cache once before the loop
-    (void)get_leader_for_startcol(NULL, true);
-    pattern = NULL;  // Will be computed per-completion
-  }
-
-  // Score all completion matches
-  compl_T *comp = compl_first_match;
-  do {
-    if (use_leader) {
-      pattern = get_leader_for_startcol(comp, true)->data;
-    }
-
-    comp->cp_score = fuzzy_match_str(comp->cp_str.data, pattern);
-    comp = comp->cp_next;
-  } while (comp != NULL && !is_first_match(comp));
+  rs_set_fuzzy_score();
 }
 
 /// Sort completion matches, excluding the node that contains the leader.
@@ -1996,6 +1971,30 @@ void nvim_cpt_sources_clear(void) { cpt_sources_clear(); }
 void nvim_set_completed_item_empty(void) {
   set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
 }
+
+// Phase 4 accessors for Rust (redo buffer fixup and fuzzy scoring)
+void nvim_append_char_to_redobuff(int c) { AppendCharToRedobuff(c); }
+void nvim_append_to_redobuff_lit(const char *s, int len) {
+  AppendToRedobuffLit(s, len);
+}
+int nvim_utf_head_off(const char *base, const char *p) {
+  return utf_head_off(base, p);
+}
+void nvim_compl_match_set_score(void *m, int score) {
+  if (m) { ((compl_T *)m)->cp_score = score; }
+}
+const char *nvim_compl_match_get_cp_str_data(void *m) {
+  return m ? ((compl_T *)m)->cp_str.data : NULL;
+}
+int nvim_fuzzy_match_str(char *str, const char *pat) {
+  return fuzzy_match_str(str, pat);
+}
+const char *nvim_get_leader_for_startcol_data(void *match, int cached) {
+  String *s = get_leader_for_startcol((compl_T *)match, cached != 0);
+  return s ? s->data : NULL;
+}
+
+_Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
 // Rust implementations
 extern int rs_ins_compl_interrupted(void);
@@ -2688,34 +2687,11 @@ bool ins_compl_prep(int c)
 /// Fix the redo buffer for the completion leader replacing some of the typed
 /// text.  This inserts backspaces and appends the changed text.
 /// "ptr" is the known leader text or NUL.
+extern void rs_ins_compl_fixRedoBufForLeader(char *ptr_arg);
+
 static void ins_compl_fixRedoBufForLeader(char *ptr_arg)
 {
-  int len = 0;
-  char *ptr = ptr_arg;
-
-  if (ptr == NULL) {
-    if (compl_leader.data != NULL) {
-      ptr = compl_leader.data;
-    } else {
-      return;        // nothing to do
-    }
-  }
-  if (compl_orig_text.data != NULL) {
-    char *p = compl_orig_text.data;
-    // Find length of common prefix between original text and new completion
-    while (p[len] != NUL && p[len] == ptr[len]) {
-      len++;
-    }
-    // Adjust length to not break inside a multi-byte character
-    if (len > 0) {
-      len -= utf_head_off(p, p + len);
-    }
-    // Add backspace characters for each remaining character in original text
-    for (p += len; *p != NUL; MB_PTR_ADV(p)) {
-      AppendCharToRedobuff(K_BS);
-    }
-  }
-  AppendToRedobuffLit(ptr + len, -1);
+  rs_ins_compl_fixRedoBufForLeader(ptr_arg);
 }
 
 /// Loops through the list of windows, loaded-buffers or non-loaded-buffers

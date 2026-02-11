@@ -197,6 +197,67 @@ pub unsafe extern "C" fn rs_leader_matches_orig() -> c_int {
 }
 
 // =============================================================================
+// Redo buffer fixup
+// =============================================================================
+
+extern "C" {
+    fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_append_char_to_redobuff(c: c_int);
+    fn nvim_append_to_redobuff_lit(s: *const c_char, len: c_int);
+}
+
+// K_BS = TERMCAP2KEY('k', 'b') = -(('k') + (('b') << 8)) = -25195
+const K_BS: c_int = -25195;
+
+/// Fix the redo buffer when the completion leader differs from the original text.
+///
+/// Compares `compl_orig_text` with the given pointer (or `compl_leader` if
+/// `ptr_arg` is null), emits backspaces for removed characters, and appends
+/// the new text via `AppendToRedobuffLit`.
+///
+/// # Safety
+/// Requires valid completion state and redo buffer.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_ins_compl_fixRedoBufForLeader(ptr_arg: *mut c_char) {
+    let mut len: c_int = 0;
+
+    let ptr = if ptr_arg.is_null() {
+        let leader_data = nvim_get_compl_leader_data();
+        if leader_data.is_null() {
+            return; // nothing to do
+        }
+        leader_data
+    } else {
+        ptr_arg
+    };
+
+    let orig_data = nvim_get_compl_orig_text_data();
+    if !orig_data.is_null() {
+        let p_start = orig_data;
+        // Find length of common prefix between original text and new completion
+        while *p_start.offset(len as isize) != 0
+            && *p_start.offset(len as isize) == *ptr.offset(len as isize)
+        {
+            len += 1;
+        }
+        // Adjust length to not break inside a multi-byte character
+        if len > 0 {
+            len -= nvim_utf_head_off(p_start, p_start.offset(len as isize));
+        }
+        // Add backspace characters for each remaining character in original text
+        let mut p = p_start.offset(len as isize);
+        while *p != 0 {
+            nvim_append_char_to_redobuff(K_BS);
+            // MB_PTR_ADV equivalent
+            p = p.add(nvim_utfc_ptr2len(p) as usize);
+        }
+    }
+    nvim_append_to_redobuff_lit(ptr.offset(len as isize), -1);
+}
+
+// =============================================================================
 // Phase 8: Leader Update and Cleanup Helpers
 // =============================================================================
 
