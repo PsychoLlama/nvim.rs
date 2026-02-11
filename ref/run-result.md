@@ -1,23 +1,17 @@
-Plan: ~/.claude/plans/polished-meandering-salamander.md
+Plan: ~/.claude/plans/zazzy-orbiting-flurry.md
 
-All 5 phases of the plan are complete. Here's a summary of what was done:
+All four phases of the plan at `/home/overlord/.claude/plans/zazzy-orbiting-flurry.md` are now complete:
 
-**Plan: Migrate Heavy ex_docmd.c Parsing Functions to Rust**
+**Phase 1** - `win_split_ins` (516 lines) - committed as `0e61261945`
+**Phase 2** - `win_close_othertab` (128 lines) - committed as `04b8f790ff`
+**Phase 3** - `win_close` (269 lines) - committed as `996b3f4a72`
+**Phase 4** - `do_window` (535 lines) - committed as `f4d112b720`
 
-| Phase | Function | C Lines Removed | Status |
-|-------|----------|----------------|--------|
-| 1 | C accessor infrastructure | — | Done |
-| 2 | `parse_command_modifiers` | ~242 lines | Done |
-| 3 | `get_address` + `addr_error` | ~310 lines | Done |
-| 4 | `parse_cmd_address` | ~148 lines | Done |
-| 5 | Verification | — | Done |
-
-**Total**: ~700 lines of complex parsing logic moved from C to Rust across 4 commits:
-- `dba32b9bf7` — Phase 1: C accessor infrastructure
-- `8e58dea19b` — (prior, cmdexpand)
-- `b5c3c32ead` — Phase 3: `get_address` + `addr_error`
-- `601ea98b1d` — Phase 4: `parse_cmd_address`
-
-(Phase 2 was committed in the prior session.)
-
-All checks pass: build, smoke-test, rust-fmt-check, rust-clippy, rust-test (4058/4058).
+**Summary of Phase 4:**
+- Created `dispatch.rs` with `rs_do_window()` — the Rust dispatcher for all CTRL-W commands
+- The C `do_window()` body was replaced with a single call to `rs_do_window(nchar, Prenum, xchar)`
+- Complex cases (file goto, tag preview, 'g' sub-switch, window traversal, alternate buffer) remain as C helper functions called from Rust
+- Simple cases (navigation, resize, rotate, exchange, close/quit) are dispatched directly to existing C functions
+- Fixed incorrect WSP_* flag values in `commands.rs` (WSP_VERT was 0x01, corrected to 0x02)
+- Added `_Static_assert` for key code constants (K_UP, K_DOWN, etc.)
+- All 5 validation checks pass: build, smoke-test (29 tests), rust-fmt, clippy, rust-test (4058 tests)
