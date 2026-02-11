@@ -54,7 +54,7 @@ pub use nvim_eval_exec::*;
 pub use nvim_event::*;
 pub use nvim_ex_cmds::display::{rs_do_ascii, rs_ex_z};
 pub use nvim_ex_cmds::format::rs_ex_align;
-pub use nvim_ex_cmds::lines::rs_ex_copy;
+pub use nvim_ex_cmds::lines::{rs_ex_change, rs_ex_copy};
 pub use nvim_ex_cmds2::*;
 pub use nvim_ex_docmd::*;
 pub use nvim_ex_eval::*;

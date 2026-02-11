@@ -372,6 +372,58 @@ pub fn adjust_line_after_move(lnum: LineNr, range: LineRange, dest: LineNr) -> L
 /// FAIL constant from vim_defs.h
 const FAIL: c_int = 0;
 
+/// ML_EMPTY flag from memline_defs.h
+const ML_EMPTY: c_int = 0x01;
+
+/// `:change` command implementation.
+///
+/// Deletes the specified range of lines and then calls `:append` to
+/// interactively insert replacement text.
+///
+/// # Safety
+/// `eap` must be a valid pointer to an exarg_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_change(eap: *mut crate::ExArgHandle) {
+    use crate::{
+        deleted_lines_mark, ex_append, get_indent_lnum, ml_delete, nvim_check_cursor_lnum_curwin,
+        nvim_curbuf_get_b_p_ai, nvim_curbuf_get_ml_flags, nvim_exarg_get_forceit,
+        nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_line2, nvim_set_append_indent,
+        u_save,
+    };
+
+    let line1 = nvim_exarg_get_line1(eap);
+    let line2 = nvim_exarg_get_line2(eap);
+
+    if line2 >= line1 && u_save(line1 - 1, line2 + 1) == FAIL {
+        return;
+    }
+
+    // The ! flag toggles autoindent
+    let forceit = nvim_exarg_get_forceit(eap) != 0;
+    let b_p_ai = nvim_curbuf_get_b_p_ai() != 0;
+    if if forceit { !b_p_ai } else { b_p_ai } {
+        nvim_set_append_indent(get_indent_lnum(line1));
+    }
+
+    let mut lnum = line2;
+    while lnum >= line1 {
+        if (nvim_curbuf_get_ml_flags() & ML_EMPTY) != 0 {
+            // nothing to delete
+            break;
+        }
+        ml_delete(line1);
+        lnum -= 1;
+    }
+
+    // Make sure the cursor is not beyond the end of the file now
+    nvim_check_cursor_lnum_curwin();
+    deleted_lines_mark(line1, line2 - lnum);
+
+    // ":append" on the line above the deleted lines
+    nvim_exarg_set_line2(eap, line1);
+    ex_append(eap);
+}
+
 /// `:copy`/`:t` command implementation.
 ///
 /// Copies lines from `line1..=line2` to after line `n`.

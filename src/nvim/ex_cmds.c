@@ -715,8 +715,27 @@ void nvim_transchar_nonprint_curbuf(char *buf, int c)
   transchar_nonprint(curbuf, buf, c);
 }
 
+/// Get curbuf->b_p_ai (autoindent).
+int nvim_curbuf_get_b_p_ai(void)
+{
+  return curbuf->b_p_ai;
+}
+
+/// Set eap->line2.
+void nvim_exarg_set_line2(exarg_T *eap, linenr_T line2)
+{
+  eap->line2 = line2;
+}
+
+/// Call check_cursor_lnum(curwin).
+void nvim_check_cursor_lnum_curwin(void)
+{
+  check_cursor_lnum(curwin);
+}
+
 _Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS mismatch");
 _Static_assert(EOL_MAC == 2, "EOL_MAC mismatch");
+_Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
 
 // Verify constants used in Rust code.
 _Static_assert(CMD_left == 229, "CMD_left mismatch");
@@ -3322,6 +3341,18 @@ static void delbuf_msg(char *name)
 
 static int append_indent = 0;       // autoindent for first line
 
+/// Get append_indent (used by ex_change/ex_append).
+int nvim_get_append_indent(void)
+{
+  return append_indent;
+}
+
+/// Set append_indent (used by ex_change before calling ex_append).
+void nvim_set_append_indent(int val)
+{
+  append_indent = val;
+}
+
 /// ":insert" and ":append", also used by ":change"
 void ex_append(exarg_T *eap)
 {
@@ -3473,32 +3504,7 @@ void ex_append(exarg_T *eap)
 /// ":change"
 void ex_change(exarg_T *eap)
 {
-  linenr_T lnum;
-
-  if (eap->line2 >= eap->line1
-      && u_save(eap->line1 - 1, eap->line2 + 1) == FAIL) {
-    return;
-  }
-
-  // the ! flag toggles autoindent
-  if (eap->forceit ? !curbuf->b_p_ai : curbuf->b_p_ai) {
-    append_indent = get_indent_lnum(eap->line1);
-  }
-
-  for (lnum = eap->line2; lnum >= eap->line1; lnum--) {
-    if (curbuf->b_ml.ml_flags & ML_EMPTY) {         // nothing to delete
-      break;
-    }
-    ml_delete(eap->line1);
-  }
-
-  // make sure the cursor is not beyond the end of the file now
-  check_cursor_lnum(curwin);
-  deleted_lines_mark(eap->line1, (eap->line2 - lnum));
-
-  // ":append" on the line above the deleted lines.
-  eap->line2 = eap->line1;
-  ex_append(eap);
+  rs_ex_change(eap);
 }
 
 void ex_z(exarg_T *eap)

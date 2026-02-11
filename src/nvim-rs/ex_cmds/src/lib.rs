@@ -570,6 +570,28 @@ extern "C" {
     pub fn msg_clr_eos();
     /// End message output
     pub fn msg_end() -> c_int;
+
+    // ex_change accessors and functions
+    /// Get curbuf->b_p_ai (autoindent)
+    pub fn nvim_curbuf_get_b_p_ai() -> c_int;
+    /// Get append_indent
+    pub fn nvim_get_append_indent() -> c_int;
+    /// Set append_indent
+    pub fn nvim_set_append_indent(val: c_int);
+    /// Set eap->line2
+    pub fn nvim_exarg_set_line2(eap: *mut ExArgHandle, line2: c_int);
+    /// Call check_cursor_lnum(curwin)
+    pub fn nvim_check_cursor_lnum_curwin();
+    /// Get curbuf->b_ml.ml_flags
+    pub fn nvim_curbuf_get_ml_flags() -> c_int;
+    /// Get indent of a line
+    pub fn get_indent_lnum(lnum: c_int) -> c_int;
+    /// Delete a line from the buffer
+    pub fn ml_delete(lnum: c_int) -> c_int;
+    /// Mark lines as deleted
+    pub fn deleted_lines_mark(lnum: c_int, count: c_int);
+    /// Execute :append command
+    pub fn ex_append(eap: *mut ExArgHandle);
 }
 
 // =============================================================================
