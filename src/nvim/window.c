@@ -218,6 +218,17 @@ extern void rs_last_status(int morewin);
 extern void rs_win_remove_status_line(win_T *wp, int add_hsep);
 extern int rs_resize_frame_for_winbar(frame_T *fr);
 
+// win_split_ins migration: Rust orchestrator
+typedef struct {
+  win_T *wp;           // new window or NULL
+  int do_enter;        // whether to call win_enter_ext
+  int enter_flags;     // WEE_* flags for win_enter_ext
+  int vertical;        // 1 if vertical split
+  int saved_option;    // saved p_wiw or p_wh value
+} SplitInsResult;
+extern SplitInsResult rs_win_split_ins(int size, int flags, win_T *new_wp, int dir,
+                                       frame_T *to_flatten);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -2973,521 +2984,33 @@ int win_split(int size, int flags)
 /// @return  NULL for failure, or pointer to new window
 win_T *win_split_ins(int size, int flags, win_T *new_wp, int dir, frame_T *to_flatten)
 {
-  win_T *wp = new_wp;
-
-  // aucmd_win[] should always remain floating
-  if (new_wp != NULL && is_aucmd_win(new_wp)) {
-    return NULL;
-  }
-
   win_T *oldwin;
   if (flags & WSP_TOP) {
     oldwin = firstwin;
   } else if (flags & WSP_BOT || curwin->w_floating) {
-    // can't split float, use last nonfloating window instead
     oldwin = lastwin_nofloating();
   } else {
     oldwin = curwin;
   }
 
-  int need_status = 0;
-  int new_size = size;
-  bool vertical = flags & WSP_VERT;
-  bool toplevel = flags & (WSP_TOP | WSP_BOT);
-
-  // add a status line when p_ls == 1 and splitting the first window
-  if (one_window(firstwin, NULL) && p_ls == 1 && oldwin->w_status_height == 0) {
-    if (oldwin->w_height <= p_wmh) {
-      emsg(_(e_noroom));
-      return NULL;
-    }
-    need_status = STATUS_HEIGHT;
-    win_float_anchor_laststatus();
+  SplitInsResult res = rs_win_split_ins(size, flags, new_wp, dir, to_flatten);
+  if (res.wp == NULL) {
+    return NULL;
   }
 
-  bool do_equal = false;
-  int oldwin_height = 0;
-  const int layout = vertical ? FR_ROW : FR_COL;
-  bool did_set_fraction = false;
-
-  if (vertical) {
-    // Check if we are able to split the current window and compute its
-    // width.
-    // Current window requires at least 1 space.
-    int wmw1 = (p_wmw == 0 ? 1 : (int)p_wmw);
-    int needed = wmw1 + 1;
-    if (flags & WSP_ROOM) {
-      needed += (int)p_wiw - wmw1;
-    }
-    int minwidth;
-    int available;
-    if (toplevel) {
-      minwidth = frame_minwidth(topframe, NOWIN);
-      available = topframe->fr_width;
-      needed += minwidth;
-    } else if (p_ea) {
-      minwidth = frame_minwidth(oldwin->w_frame, NOWIN);
-      frame_T *prevfrp = oldwin->w_frame;
-      for (frame_T *frp = oldwin->w_frame->fr_parent; frp != NULL;
-           frp = frp->fr_parent) {
-        if (frp->fr_layout == FR_ROW) {
-          frame_T *frp2;
-          FOR_ALL_FRAMES(frp2, frp->fr_child) {
-            if (frp2 != prevfrp) {
-              minwidth += frame_minwidth(frp2, NOWIN);
-            }
-          }
-        }
-        prevfrp = frp;
-      }
-      available = topframe->fr_width;
-      needed += minwidth;
-    } else {
-      minwidth = frame_minwidth(oldwin->w_frame, NOWIN);
-      available = oldwin->w_frame->fr_width;
-      needed += minwidth;
-    }
-    if (available < needed) {
-      emsg(_(e_noroom));
-      return NULL;
-    }
-    if (new_size == 0) {
-      new_size = oldwin->w_width / 2;
-    }
-    new_size = MAX(MIN(new_size, available - minwidth - 1), wmw1);
-
-    // if it doesn't fit in the current window, need win_equal()
-    if (oldwin->w_width - new_size - 1 < p_wmw) {
-      do_equal = true;
-    }
-
-    // We don't like to take lines for the new window from a
-    // 'winfixwidth' window.  Take them from a window to the left or right
-    // instead, if possible. Add one for the separator.
-    if (oldwin->w_p_wfw) {
-      win_setwidth_win(oldwin->w_width + new_size + 1, oldwin);
-    }
-
-    // Only make all windows the same width if one of them (except oldwin)
-    // is wider than one of the split windows.
-    if (!do_equal && p_ea && size == 0 && *p_ead != 'v'
-        && oldwin->w_frame->fr_parent != NULL) {
-      frame_T *frp = oldwin->w_frame->fr_parent->fr_child;
-      while (frp != NULL) {
-        if (frp->fr_win != oldwin && frp->fr_win != NULL
-            && (frp->fr_win->w_width > new_size
-                || frp->fr_win->w_width > (oldwin->w_width
-                                           - new_size - 1))) {
-          do_equal = true;
-          break;
-        }
-        frp = frp->fr_next;
-      }
-    }
+  if (res.do_enter) {
+    win_enter_ext(res.wp, res.enter_flags);
+  }
+  // restore p_wiw or p_wh
+  if (res.vertical) {
+    p_wiw = res.saved_option;
   } else {
-    // Check if we are able to split the current window and compute its height.
-    // Current window requires at least 1 space plus space for the window bar.
-    int wmh1 = MAX((int)p_wmh, 1) + oldwin->w_winbar_height;
-    int needed = wmh1 + STATUS_HEIGHT;
-    if (flags & WSP_ROOM) {
-      needed += (int)p_wh - wmh1 + oldwin->w_winbar_height;
-    }
-    if (p_ch < 1) {
-      needed += 1;  // Adjust for cmdheight=0.
-    }
-    int minheight;
-    int available;
-    if (toplevel) {
-      minheight = frame_minheight(topframe, NOWIN) + need_status;
-      available = topframe->fr_height;
-      needed += minheight;
-    } else if (p_ea) {
-      minheight = frame_minheight(oldwin->w_frame, NOWIN) + need_status;
-      frame_T *prevfrp = oldwin->w_frame;
-      for (frame_T *frp = oldwin->w_frame->fr_parent; frp != NULL; frp = frp->fr_parent) {
-        if (frp->fr_layout == FR_COL) {
-          frame_T *frp2;
-          FOR_ALL_FRAMES(frp2, frp->fr_child) {
-            if (frp2 != prevfrp) {
-              minheight += frame_minheight(frp2, NOWIN);
-            }
-          }
-        }
-        prevfrp = frp;
-      }
-      available = topframe->fr_height;
-      needed += minheight;
-    } else {
-      minheight = frame_minheight(oldwin->w_frame, NOWIN) + need_status;
-      available = oldwin->w_frame->fr_height;
-      needed += minheight;
-    }
-    if (available < needed) {
-      emsg(_(e_noroom));
-      return NULL;
-    }
-    oldwin_height = oldwin->w_height;
-    if (need_status) {
-      oldwin->w_status_height = STATUS_HEIGHT;
-      oldwin_height -= STATUS_HEIGHT;
-    }
-    if (new_size == 0) {
-      new_size = oldwin_height / 2;
-    }
-
-    new_size = MAX(MIN(new_size, available - minheight - STATUS_HEIGHT), wmh1);
-
-    // if it doesn't fit in the current window, need win_equal()
-    if (oldwin_height - new_size - STATUS_HEIGHT < p_wmh) {
-      do_equal = true;
-    }
-
-    // We don't like to take lines for the new window from a
-    // 'winfixheight' window.  Take them from a window above or below
-    // instead, if possible.
-    if (oldwin->w_p_wfh) {
-      // Set w_fraction now so that the cursor keeps the same relative
-      // vertical position using the old height.
-      set_fraction(oldwin);
-      did_set_fraction = true;
-
-      win_setheight_win(oldwin->w_height + new_size + STATUS_HEIGHT,
-                        oldwin);
-      oldwin_height = oldwin->w_height;
-      if (need_status) {
-        oldwin_height -= STATUS_HEIGHT;
-      }
-    }
-
-    // Only make all windows the same height if one of them (except oldwin)
-    // is higher than one of the split windows.
-    if (!do_equal && p_ea && size == 0
-        && *p_ead != 'h'
-        && oldwin->w_frame->fr_parent != NULL) {
-      frame_T *frp = oldwin->w_frame->fr_parent->fr_child;
-      while (frp != NULL) {
-        if (frp->fr_win != oldwin && frp->fr_win != NULL
-            && (frp->fr_win->w_height > new_size
-                || frp->fr_win->w_height > oldwin_height - new_size - STATUS_HEIGHT)) {
-          do_equal = true;
-          break;
-        }
-        frp = frp->fr_next;
-      }
-    }
+    p_wh = res.saved_option;
   }
-
-  // allocate new window structure and link it in the window list
-  if ((flags & WSP_TOP) == 0
-      && ((flags & WSP_BOT)
-          || (flags & WSP_BELOW)
-          || (!(flags & WSP_ABOVE)
-              && (vertical ? p_spr : p_sb)))) {
-    // new window below/right of current one
-    if (new_wp == NULL) {
-      wp = win_alloc(oldwin, false);
-    } else {
-      win_append(oldwin, wp, NULL);
-    }
-  } else {
-    if (new_wp == NULL) {
-      wp = win_alloc(oldwin->w_prev, false);
-    } else {
-      win_append(oldwin->w_prev, wp, NULL);
-    }
-  }
-
-  if (new_wp == NULL) {
-    if (wp == NULL) {
-      return NULL;
-    }
-
-    new_frame(wp);
-
-    // make the contents of the new window the same as the current one
-    win_init(wp, curwin, flags);
-  } else if (wp->w_floating) {
-    ui_comp_remove_grid(&wp->w_grid_alloc);
-    if (ui_has(kUIMultigrid)) {
-      wp->w_pos_changed = true;
-    } else {
-      // No longer a float, a non-multigrid UI shouldn't draw it as such
-      ui_call_win_hide(wp->w_grid_alloc.handle);
-      win_free_grid(wp, true);
-    }
-
-    // External windows are independent of tabpages, and may have been the curwin of others.
-    if (wp->w_config.external) {
-      FOR_ALL_TABS(tp) {
-        if (tp != curtab && tp->tp_curwin == wp) {
-          tp->tp_curwin = tp->tp_firstwin;
-        }
-      }
-    }
-
-    wp->w_floating = false;
-    new_frame(wp);
-
-    // non-floating window doesn't store float config or have a border.
-    merge_win_config(&wp->w_config, WIN_CONFIG_INIT);
-    CLEAR_FIELD(wp->w_border_adj);
-  }
-
-  // Going to reorganize frames now, make sure they're flat.
-  if (to_flatten != NULL) {
-    frame_flatten(to_flatten);
-  }
-
-  bool before;
-  frame_T *curfrp;
-
-  // Reorganise the tree of frames to insert the new window.
-  if (toplevel) {
-    if ((topframe->fr_layout == FR_COL && !vertical)
-        || (topframe->fr_layout == FR_ROW && vertical)) {
-      curfrp = topframe->fr_child;
-      if (flags & WSP_BOT) {
-        while (curfrp->fr_next != NULL) {
-          curfrp = curfrp->fr_next;
-        }
-      }
-    } else {
-      curfrp = topframe;
-    }
-    before = (flags & WSP_TOP);
-  } else {
-    curfrp = oldwin->w_frame;
-    if (flags & WSP_BELOW) {
-      before = false;
-    } else if (flags & WSP_ABOVE) {
-      before = true;
-    } else if (vertical) {
-      before = !p_spr;
-    } else {
-      before = !p_sb;
-    }
-  }
-  if (curfrp->fr_parent == NULL || curfrp->fr_parent->fr_layout != layout) {
-    // Need to create a new frame in the tree to make a branch.
-    frame_T *frp = xcalloc(1, sizeof(frame_T));
-    *frp = *curfrp;
-    curfrp->fr_layout = (char)layout;
-    frp->fr_parent = curfrp;
-    frp->fr_next = NULL;
-    frp->fr_prev = NULL;
-    curfrp->fr_child = frp;
-    curfrp->fr_win = NULL;
-    curfrp = frp;
-    if (frp->fr_win != NULL) {
-      oldwin->w_frame = frp;
-    } else {
-      FOR_ALL_FRAMES(frp, frp->fr_child) {
-        frp->fr_parent = curfrp;
-      }
-    }
-  }
-
-  frame_T *frp;
-  if (new_wp == NULL) {
-    frp = wp->w_frame;
-  } else {
-    frp = new_wp->w_frame;
-  }
-  frp->fr_parent = curfrp->fr_parent;
-
-  // Insert the new frame at the right place in the frame list.
-  if (before) {
-    frame_insert(curfrp, frp);
-  } else {
-    frame_append(curfrp, frp);
-  }
-
-  // Set w_fraction now so that the cursor keeps the same relative
-  // vertical position.
-  if (!did_set_fraction) {
-    set_fraction(oldwin);
-  }
-  wp->w_fraction = oldwin->w_fraction;
-
-  if (vertical) {
-    wp->w_p_scr = curwin->w_p_scr;
-
-    if (need_status) {
-      win_new_height(oldwin, oldwin->w_height - 1);
-      oldwin->w_status_height = need_status;
-    }
-    if (toplevel) {
-      // set height and row of new window to full height
-      wp->w_winrow = tabline_height();
-      win_new_height(wp, curfrp->fr_height - (p_ls == 1 || p_ls == 2));
-      wp->w_status_height = (p_ls == 1 || p_ls == 2);
-      wp->w_hsep_height = 0;
-    } else {
-      // height and row of new window is same as current window
-      wp->w_winrow = oldwin->w_winrow;
-      win_new_height(wp, oldwin->w_height);
-      wp->w_status_height = oldwin->w_status_height;
-      wp->w_hsep_height = oldwin->w_hsep_height;
-    }
-    frp->fr_height = curfrp->fr_height;
-
-    // "new_size" of the current window goes to the new window, use
-    // one column for the vertical separator
-    win_new_width(wp, new_size);
-    if (before) {
-      wp->w_vsep_width = 1;
-    } else {
-      wp->w_vsep_width = oldwin->w_vsep_width;
-      oldwin->w_vsep_width = 1;
-    }
-    if (toplevel) {
-      if (flags & WSP_BOT) {
-        frame_set_vsep(curfrp, true);
-      }
-      // Set width of neighbor frame
-      frame_new_width(curfrp, curfrp->fr_width
-                      - (new_size + ((flags & WSP_TOP) != 0)), flags & WSP_TOP,
-                      false);
-    } else {
-      win_new_width(oldwin, oldwin->w_width - (new_size + 1));
-    }
-    if (before) {       // new window left of current one
-      wp->w_wincol = oldwin->w_wincol;
-      oldwin->w_wincol += new_size + 1;
-    } else {  // new window right of current one
-      wp->w_wincol = oldwin->w_wincol + oldwin->w_width + 1;
-    }
-    frame_fix_width(oldwin);
-    frame_fix_width(wp);
-  } else {
-    const bool is_stl_global = global_stl_height() > 0;
-    // width and column of new window is same as current window
-    if (toplevel) {
-      wp->w_wincol = 0;
-      win_new_width(wp, Columns);
-      wp->w_vsep_width = 0;
-    } else {
-      wp->w_wincol = oldwin->w_wincol;
-      win_new_width(wp, oldwin->w_width);
-      wp->w_vsep_width = oldwin->w_vsep_width;
-    }
-    frp->fr_width = curfrp->fr_width;
-
-    // "new_size" of the current window goes to the new window, use
-    // one row for the status line
-    win_new_height(wp, new_size);
-    const int old_status_height = oldwin->w_status_height;
-    if (before) {
-      wp->w_hsep_height = is_stl_global ? 1 : 0;
-    } else {
-      wp->w_hsep_height = oldwin->w_hsep_height;
-      oldwin->w_hsep_height = is_stl_global ? 1 : 0;
-    }
-    if (toplevel) {
-      int new_fr_height = curfrp->fr_height - new_size;
-      if (is_stl_global) {
-        if (flags & WSP_BOT) {
-          frame_add_hsep(curfrp);
-        } else {
-          new_fr_height -= 1;
-        }
-      } else {
-        if (!((flags & WSP_BOT) && p_ls == 0)) {
-          new_fr_height -= STATUS_HEIGHT;
-        }
-        if (flags & WSP_BOT) {
-          frame_add_statusline(curfrp);
-        }
-      }
-      frame_new_height(curfrp, new_fr_height, flags & WSP_TOP, false, false);
-    } else {
-      win_new_height(oldwin, oldwin_height - (new_size + STATUS_HEIGHT));
-    }
-
-    if (before) {       // new window above current one
-      wp->w_winrow = oldwin->w_winrow;
-      if (is_stl_global) {
-        wp->w_status_height = 0;
-        oldwin->w_winrow += wp->w_height + 1;
-      } else {
-        wp->w_status_height = STATUS_HEIGHT;
-        oldwin->w_winrow += wp->w_height + STATUS_HEIGHT;
-      }
-    } else {            // new window below current one
-      if (is_stl_global) {
-        wp->w_winrow = oldwin->w_winrow + oldwin->w_height + 1;
-        wp->w_status_height = 0;
-      } else {
-        wp->w_winrow = oldwin->w_winrow + oldwin->w_height + STATUS_HEIGHT;
-        wp->w_status_height = old_status_height;
-        if (!(flags & WSP_BOT)) {
-          oldwin->w_status_height = STATUS_HEIGHT;
-        }
-      }
-    }
-    frame_fix_height(wp);
-    frame_fix_height(oldwin);
-  }
-
-  if (toplevel) {
-    win_comp_pos();
-  }
-
-  // Both windows need redrawing.  Update all status lines, in case they
-  // show something related to the window count or position.
-  redraw_later(wp, UPD_NOT_VALID);
-  redraw_later(oldwin, UPD_NOT_VALID);
-  status_redraw_all();
-
-  if (need_status) {
-    msg_row = Rows - 1;
-    msg_col = sc_col;
-    msg_clr_eos_force();        // Old command/ruler may still be there
-    comp_col();
-    msg_row = Rows - 1;
-    msg_col = 0;        // put position back at start of line
-  }
-
-  // equalize the window sizes.
-  if (do_equal || dir != 0) {
-    win_equal(wp, true, vertical ? (dir == 'v' ? 'b' : 'h') : (dir == 'h' ? 'b' : 'v'));
-  } else if (!is_aucmd_win(wp)) {
-    win_fix_scroll(false);
-  }
-
-  int i;
-
-  // Don't change the window height/width to 'winheight' / 'winwidth' if a
-  // size was given.
-  if (flags & WSP_VERT) {
-    i = (int)p_wiw;
-    if (size != 0) {
-      p_wiw = size;
-    }
-  } else {
-    i = (int)p_wh;
-    if (size != 0) {
-      p_wh = size;
-    }
-  }
-
-  if (!(flags & WSP_NOENTER)) {
-    // make the new window the current window
-    win_enter_ext(wp, (new_wp == NULL ? WEE_TRIGGER_NEW_AUTOCMDS : 0) | WEE_TRIGGER_ENTER_AUTOCMDS
-                  | WEE_TRIGGER_LEAVE_AUTOCMDS);
-  }
-  if (vertical) {
-    p_wiw = i;
-  } else {
-    p_wh = i;
-  }
-
   if (win_valid(oldwin)) {
-    // Send the window positions to the UI
     oldwin->w_pos_changed = true;
   }
-
-  return wp;
+  return res.wp;
 }
 
 // Initialize window "newp" from window "oldp".
@@ -8186,6 +7709,217 @@ void nvim_win_float_anchor_laststatus(void)
   win_float_anchor_laststatus();
 }
 
+// --- win_split_ins migration accessors ---
+
+/// Set the w_floating field of a window.
+void nvim_win_set_floating(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_floating = val;
+  }
+}
+
+/// Get the w_fraction field from a window.
+int nvim_win_get_fraction(win_T *wp)
+{
+  return wp ? wp->w_fraction : 0;
+}
+
+/// Get the global p_ea (equalalways) value.
+int nvim_get_p_ea(void)
+{
+  return p_ea ? 1 : 0;
+}
+
+/// Get the first char of the global p_ead (eadirection) option.
+int nvim_get_p_ead_char(void)
+{
+  return (p_ead && *p_ead) ? (int)(unsigned char)*p_ead : 0;
+}
+
+// nvim_get_p_ch() — already defined in message.c
+// nvim_get_sc_col() — already defined in message.c
+
+/// Set the global p_wiw (winwidth) value.
+void nvim_set_p_wiw(int64_t val)
+{
+  p_wiw = val;
+}
+
+/// Set the global p_wh (winheight) value.
+void nvim_set_p_wh(int64_t val)
+{
+  p_wh = val;
+}
+
+/// Wrapper: allocate a new window via win_alloc().
+win_T *nvim_win_alloc_wrapper(win_T *after, int hidden)
+{
+  return win_alloc(after, hidden != 0);
+}
+
+/// Wrapper: call new_frame(wp) to allocate and init a frame for a window.
+void nvim_new_frame_wrapper(win_T *wp)
+{
+  new_frame(wp);
+}
+
+/// Wrapper: call win_init(wp, oldwin, flags) to init a new window.
+void nvim_win_init_wrapper(win_T *wp, win_T *oldwin, int flags)
+{
+  win_init(wp, oldwin, flags);
+}
+
+/// Wrapper: call frame_flatten(frp).
+void nvim_frame_flatten_wrapper(frame_T *frp)
+{
+  frame_flatten(frp);
+}
+
+/// Wrapper: allocate a new frame via xcalloc.
+frame_T *nvim_xcalloc_frame(void)
+{
+  return xcalloc(1, sizeof(frame_T));
+}
+
+/// Wrapper: ui_comp_remove_grid(&wp->w_grid_alloc).
+void nvim_ui_comp_remove_grid_win(win_T *wp)
+{
+  if (wp) {
+    ui_comp_remove_grid(&wp->w_grid_alloc);
+  }
+}
+
+/// Wrapper: check ui_has(kUIMultigrid).
+int nvim_ui_has_multigrid(void)
+{
+  return ui_has(kUIMultigrid) ? 1 : 0;
+}
+
+/// Wrapper: ui_call_win_hide(wp->w_grid_alloc.handle).
+void nvim_ui_call_win_hide_win(win_T *wp)
+{
+  if (wp) {
+    ui_call_win_hide(wp->w_grid_alloc.handle);
+  }
+}
+
+/// Wrapper: win_free_grid(wp, reinit).
+void nvim_win_free_grid_wrapper(win_T *wp, int reinit)
+{
+  if (wp) {
+    win_free_grid(wp, reinit != 0);
+  }
+}
+
+/// Wrapper: merge_win_config(&wp->w_config, WIN_CONFIG_INIT) + CLEAR_FIELD(wp->w_border_adj).
+void nvim_merge_win_config_init(win_T *wp)
+{
+  if (wp) {
+    merge_win_config(&wp->w_config, WIN_CONFIG_INIT);
+    CLEAR_FIELD(wp->w_border_adj);
+  }
+}
+
+/// Wrapper: redraw_later(wp, type).
+void nvim_redraw_later_wrapper(win_T *wp, int type)
+{
+  if (wp) {
+    redraw_later(wp, type);
+  }
+}
+
+/// Wrapper: status_redraw_all().
+void nvim_status_redraw_all_wrapper(void)
+{
+  status_redraw_all();
+}
+
+/// Wrapper: msg_clr_eos_force().
+void nvim_msg_clr_eos_force(void)
+{
+  msg_clr_eos_force();
+}
+
+/// Wrapper: set_fraction(wp).
+void nvim_set_fraction_wrapper(win_T *wp)
+{
+  set_fraction(wp);
+}
+
+/// Wrapper: win_setheight_win(height, wp).
+void nvim_win_setheight_win_wrapper(int height, win_T *wp)
+{
+  win_setheight_win(height, wp);
+}
+
+/// Wrapper: win_setwidth_win(width, wp).
+void nvim_win_setwidth_win_wrapper(int width, win_T *wp)
+{
+  win_setwidth_win(width, wp);
+}
+
+/// Wrapper: win_enter_ext(wp, flags).
+void nvim_win_enter_ext_wrapper(win_T *wp, int flags)
+{
+  win_enter_ext(wp, flags);
+}
+
+/// Wrapper: win_valid(wp).
+int nvim_win_valid_wrapper(win_T *wp)
+{
+  return win_valid(wp) ? 1 : 0;
+}
+
+/// Wrapper: one_window(firstwin, NULL).
+int nvim_one_window_firstwin(void)
+{
+  return one_window(firstwin, NULL) ? 1 : 0;
+}
+
+/// Wrapper: is_aucmd_win(wp).
+int nvim_is_aucmd_win(win_T *wp)
+{
+  return is_aucmd_win(wp) ? 1 : 0;
+}
+
+/// Get the w_config.external field from a window.
+int nvim_win_get_config_external_int(win_T *wp)
+{
+  return wp ? (int)wp->w_config.external : 0;
+}
+
+/// Iterate over all tabpages, setting tp_curwin to tp_firstwin
+/// when tp != curtab && tp->tp_curwin == wp.
+void nvim_fixup_external_curwin(win_T *wp)
+{
+  FOR_ALL_TABS(tp) {
+    if (tp != curtab && tp->tp_curwin == wp) {
+      tp->tp_curwin = tp->tp_firstwin;
+    }
+  }
+}
+
+/// Set msg_row global.
+void nvim_set_msg_row_val(int val)
+{
+  msg_row = val;
+}
+
+/// Set msg_col global.
+void nvim_set_msg_col_val(int val)
+{
+  msg_col = val;
+}
+
+/// Set w_frame for a window.
+void nvim_win_set_frame(win_T *wp, frame_T *frp)
+{
+  if (wp) {
+    wp->w_frame = frp;
+  }
+}
+
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
 _Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");
 _Static_assert(2 == SNAP_COUNT, "SNAP_COUNT mismatch");
@@ -8193,3 +7927,21 @@ _Static_assert(0 == SNAP_HELP_IDX, "SNAP_HELP_IDX mismatch");
 _Static_assert(1 == SNAP_AUCMD_IDX, "SNAP_AUCMD_IDX mismatch");
 _Static_assert(0x80 == VALID_TOPLINE, "VALID_TOPLINE mismatch");
 _Static_assert(1 == STATUS_HEIGHT, "STATUS_HEIGHT mismatch");
+
+// WSP and WEE flag static asserts for Rust constant validation
+_Static_assert(0x01 == WSP_ROOM, "WSP_ROOM mismatch");
+_Static_assert(0x02 == WSP_VERT, "WSP_VERT mismatch");
+_Static_assert(0x04 == WSP_HOR, "WSP_HOR mismatch");
+_Static_assert(0x08 == WSP_TOP, "WSP_TOP mismatch");
+_Static_assert(0x10 == WSP_BOT, "WSP_BOT mismatch");
+_Static_assert(0x20 == WSP_HELP, "WSP_HELP mismatch");
+_Static_assert(0x40 == WSP_BELOW, "WSP_BELOW mismatch");
+_Static_assert(0x80 == WSP_ABOVE, "WSP_ABOVE mismatch");
+_Static_assert(0x100 == WSP_NEWLOC, "WSP_NEWLOC mismatch");
+_Static_assert(0x200 == WSP_NOENTER, "WSP_NOENTER mismatch");
+_Static_assert(0x01 == WEE_UNDO_SYNC, "WEE_UNDO_SYNC mismatch");
+_Static_assert(0x02 == WEE_CURWIN_INVALID, "WEE_CURWIN_INVALID mismatch");
+_Static_assert(0x04 == WEE_TRIGGER_NEW_AUTOCMDS, "WEE_TRIGGER_NEW_AUTOCMDS mismatch");
+_Static_assert(0x08 == WEE_TRIGGER_ENTER_AUTOCMDS, "WEE_TRIGGER_ENTER_AUTOCMDS mismatch");
+_Static_assert(0x10 == WEE_TRIGGER_LEAVE_AUTOCMDS, "WEE_TRIGGER_LEAVE_AUTOCMDS mismatch");
+_Static_assert(40 == UPD_NOT_VALID, "UPD_NOT_VALID mismatch");

@@ -180,7 +180,7 @@ pub const STATUS_HEIGHT: c_int = 1;
 /// # Memory Layout
 /// This struct exactly matches `struct frame_S` in `buffer_defs.h`.
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Frame {
     /// Frame layout type: FR_LEAF, FR_ROW, or FR_COL
     pub fr_layout: c_char,

@@ -11,9 +11,11 @@
 
 pub mod execute;
 pub mod frame;
+pub mod orchestrate;
 pub mod validation;
 
 // Re-export common items
 pub use execute::*;
 pub use frame::*;
+pub use orchestrate::*;
 pub use validation::*;
