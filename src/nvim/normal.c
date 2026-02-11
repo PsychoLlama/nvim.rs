@@ -484,6 +484,9 @@ extern void rs_nv_percent(cmdarg_T *cap);
 extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
                                    char **text, int *textcol, int find_type);
 
+// Phase 1B: clear_showcmd
+extern void rs_clear_showcmd(void);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -3664,88 +3667,123 @@ static char old_showcmd_buf[SHOWCMD_BUFLEN];    // For push_showcmd()
 static bool showcmd_is_clear = true;
 static bool showcmd_visual = false;
 
+// =============================================================================
+// Phase 1B: clear_showcmd accessors for Rust FFI
+// =============================================================================
+
+/// Constants for clear_showcmd (verified with _Static_assert).
+_Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS changed");
+_Static_assert(SHOWCMD_BUFLEN == SHOWCMD_COLS + 1 + 30, "SHOWCMD_BUFLEN changed");
+
+/// Get showcmd_is_clear static.
+bool nvim_get_showcmd_is_clear(void)
+{
+  return showcmd_is_clear;
+}
+
+/// Set showcmd_is_clear static.
+void nvim_set_showcmd_is_clear(bool val)
+{
+  showcmd_is_clear = val;
+}
+
+/// Get showcmd_visual static.
+bool nvim_get_showcmd_visual(void)
+{
+  return showcmd_visual;
+}
+
+/// Set showcmd_visual static.
+void nvim_set_showcmd_visual(bool val)
+{
+  showcmd_visual = val;
+}
+
+/// Get pointer to showcmd_buf.
+char *nvim_normal_showcmd_buf_ptr(void)
+{
+  return showcmd_buf;
+}
+
+/// Wrapper for display_showcmd (static in this file).
+void nvim_normal_display_showcmd(void)
+{
+  display_showcmd();
+}
+
+/// Compute Visual area info and write result into showcmd_buf.
+/// Returns true if in Visual mode and char_avail() is false.
+bool nvim_clear_showcmd_visual_info(void)
+{
+  if (!VIsual_active || char_avail()) {
+    return false;
+  }
+
+  bool cursor_bot = lt(VIsual, curwin->w_cursor);
+  int lines;
+  colnr_T leftcol, rightcol;
+  linenr_T top, bot;
+
+  if (cursor_bot) {
+    top = VIsual.lnum;
+    bot = curwin->w_cursor.lnum;
+  } else {
+    top = curwin->w_cursor.lnum;
+    bot = VIsual.lnum;
+  }
+  hasFolding(curwin, top, &top, NULL);
+  hasFolding(curwin, bot, NULL, &bot);
+  lines = bot - top + 1;
+
+  if (VIsual_mode == Ctrl_V) {
+    char *const saved_sbr = p_sbr;
+    char *const saved_w_sbr = curwin->w_p_sbr;
+    p_sbr = empty_string_option;
+    curwin->w_p_sbr = empty_string_option;
+    getvcols(curwin, &curwin->w_cursor, &VIsual, &leftcol, &rightcol);
+    p_sbr = saved_sbr;
+    curwin->w_p_sbr = saved_w_sbr;
+    snprintf(showcmd_buf, SHOWCMD_BUFLEN, "%" PRId64 "x%" PRId64,
+             (int64_t)lines, (int64_t)rightcol - leftcol + 1);
+  } else if (VIsual_mode == 'V' || VIsual.lnum != curwin->w_cursor.lnum) {
+    snprintf(showcmd_buf, SHOWCMD_BUFLEN, "%" PRId64, (int64_t)lines);
+  } else {
+    char *s, *e;
+    int bytes = 0;
+    int chars = 0;
+
+    if (cursor_bot) {
+      s = ml_get_pos(&VIsual);
+      e = get_cursor_pos_ptr();
+    } else {
+      s = get_cursor_pos_ptr();
+      e = ml_get_pos(&VIsual);
+    }
+    while ((*p_sel != 'e') ? s <= e : s < e) {
+      int l = utfc_ptr2len(s);
+      if (l == 0) {
+        bytes++;
+        chars++;
+        break;
+      }
+      bytes += l;
+      chars++;
+      s += l;
+    }
+    if (bytes == chars) {
+      snprintf(showcmd_buf, SHOWCMD_BUFLEN, "%d", chars);
+    } else {
+      snprintf(showcmd_buf, SHOWCMD_BUFLEN, "%d-%d", chars, bytes);
+    }
+  }
+  int limit = ui_has(kUIMessages) ? SHOWCMD_BUFLEN - 1 : SHOWCMD_COLS;
+  showcmd_buf[limit] = NUL;
+  return true;
+}
+
 void clear_showcmd(void)
 {
-  if (!p_sc) {
-    return;
-  }
-
-  if (VIsual_active && !char_avail()) {
-    bool cursor_bot = lt(VIsual, curwin->w_cursor);
-    int lines;
-    colnr_T leftcol, rightcol;
-    linenr_T top, bot;
-
-    // Show the size of the Visual area.
-    if (cursor_bot) {
-      top = VIsual.lnum;
-      bot = curwin->w_cursor.lnum;
-    } else {
-      top = curwin->w_cursor.lnum;
-      bot = VIsual.lnum;
-    }
-    // Include closed folds as a whole.
-    hasFolding(curwin, top, &top, NULL);
-    hasFolding(curwin, bot, NULL, &bot);
-    lines = bot - top + 1;
-
-    if (VIsual_mode == Ctrl_V) {
-      char *const saved_sbr = p_sbr;
-      char *const saved_w_sbr = curwin->w_p_sbr;
-
-      // Make 'sbr' empty for a moment to get the correct size.
-      p_sbr = empty_string_option;
-      curwin->w_p_sbr = empty_string_option;
-      getvcols(curwin, &curwin->w_cursor, &VIsual, &leftcol, &rightcol);
-      p_sbr = saved_sbr;
-      curwin->w_p_sbr = saved_w_sbr;
-      snprintf(showcmd_buf, SHOWCMD_BUFLEN, "%" PRId64 "x%" PRId64,
-               (int64_t)lines, (int64_t)rightcol - leftcol + 1);
-    } else if (VIsual_mode == 'V' || VIsual.lnum != curwin->w_cursor.lnum) {
-      snprintf(showcmd_buf, SHOWCMD_BUFLEN, "%" PRId64, (int64_t)lines);
-    } else {
-      char *s, *e;
-      int bytes = 0;
-      int chars = 0;
-
-      if (cursor_bot) {
-        s = ml_get_pos(&VIsual);
-        e = get_cursor_pos_ptr();
-      } else {
-        s = get_cursor_pos_ptr();
-        e = ml_get_pos(&VIsual);
-      }
-      while ((*p_sel != 'e') ? s <= e : s < e) {
-        int l = utfc_ptr2len(s);
-        if (l == 0) {
-          bytes++;
-          chars++;
-          break;            // end of line
-        }
-        bytes += l;
-        chars++;
-        s += l;
-      }
-      if (bytes == chars) {
-        snprintf(showcmd_buf, SHOWCMD_BUFLEN, "%d", chars);
-      } else {
-        snprintf(showcmd_buf, SHOWCMD_BUFLEN, "%d-%d", chars, bytes);
-      }
-    }
-    int limit = ui_has(kUIMessages) ? SHOWCMD_BUFLEN - 1 : SHOWCMD_COLS;
-    showcmd_buf[limit] = NUL;  // truncate
-    showcmd_visual = true;
-  } else {
-    showcmd_buf[0] = NUL;
-    showcmd_visual = false;
-
-    // Don't actually display something if there is nothing to clear.
-    if (showcmd_is_clear) {
-      return;
-    }
-  }
-
-  display_showcmd();
+  rs_clear_showcmd();
 }
 
 /// Add 'c' to string of shown command chars.

@@ -17,6 +17,7 @@ pub mod motion;
 pub mod operator;
 pub mod operator_cmds;
 pub mod pending;
+pub mod showcmd;
 pub mod visual;
 
 use std::ffi::{c_char, c_int, c_uint};
