@@ -349,11 +349,18 @@ extern const char *rs_did_set_conceallevel(void);
 extern const char *rs_did_set_concealcursor(void);
 extern const char *rs_did_set_fillchars(void);
 extern const char *rs_did_set_listchars(void);
+extern const char *rs_did_set_numberwidth(win_T *win);
+extern const char *rs_did_set_number_relativenumber(win_T *win);
 
 // Behavior callbacks (from Rust callbacks/behavior.rs)
 extern const char *rs_did_set_binary(void);
+extern const char *rs_did_set_diff(win_T *win);
 extern const char *rs_did_set_eof_eol_fixeol_bomb(void);
+extern const char *rs_did_set_equalalways(win_T *win, int old_value);
+extern const char *rs_did_set_foldminlines(win_T *win);
+extern const char *rs_did_set_foldnestmax(win_T *win);
 extern const char *rs_did_set_helpheight(void);
+extern const char *rs_did_set_swapfile(buf_T *buf);
 extern const char *rs_did_set_autoread(void);
 extern const char *rs_did_set_autowrite(void);
 extern const char *rs_did_set_backup(void);
@@ -2518,9 +2525,7 @@ static const char *did_set_binary(optset_T *args)
 
   // when 'bin' is set also set some other options
   set_options_bin((int)args->os_oldval.boolean, buf->b_p_bin, args->os_flags);
-  redraw_titles();
-
-  return NULL;
+  return rs_did_set_binary();
 }
 
 /// Process the updated 'buflisted' option value.
@@ -2560,13 +2565,7 @@ static const char *did_set_cmdheight(optset_T *args)
 /// Process the updated 'diff' option value.
 static const char *did_set_diff(optset_T *args)
 {
-  win_T *win = (win_T *)args->os_win;
-  // May add or remove the buffer from the list of diff buffers.
-  diff_buf_adjust(win);
-  if (foldmethodIsDiff(win)) {
-    foldUpdateAll(win);
-  }
-  return NULL;
+  return rs_did_set_diff((win_T *)args->os_win);
 }
 
 /// Process the updated 'endoffile' or 'endofline' or 'fixendofline' or 'bomb'
@@ -2579,12 +2578,7 @@ static const char *did_set_eof_eol_fixeol_bomb(optset_T *args FUNC_ATTR_UNUSED)
 /// Process the updated 'equalalways' option value.
 static const char *did_set_equalalways(optset_T *args)
 {
-  win_T *win = (win_T *)args->os_win;
-  if (p_ea && !args->os_oldval.boolean) {
-    win_equal(win, false, 0);
-  }
-
-  return NULL;
+  return rs_did_set_equalalways((win_T *)args->os_win, (int)args->os_oldval.boolean);
 }
 
 /// Process the new 'foldlevel' option value.
@@ -2596,32 +2590,19 @@ static const char *did_set_foldlevel(optset_T *args FUNC_ATTR_UNUSED)
 /// Process the new 'foldminlines' option value.
 static const char *did_set_foldminlines(optset_T *args)
 {
-  win_T *win = (win_T *)args->os_win;
-  foldUpdateAll(win);
-  return NULL;
+  return rs_did_set_foldminlines((win_T *)args->os_win);
 }
 
 /// Process the new 'foldnestmax' option value.
 static const char *did_set_foldnestmax(optset_T *args)
 {
-  win_T *win = (win_T *)args->os_win;
-  if (foldmethodIsSyntax(win) || foldmethodIsIndent(win)) {
-    foldUpdateAll(win);
-  }
-  return NULL;
+  return rs_did_set_foldnestmax((win_T *)args->os_win);
 }
 
 /// Process the new 'helpheight' option value.
-static const char *did_set_helpheight(optset_T *args)
+static const char *did_set_helpheight(optset_T *args FUNC_ATTR_UNUSED)
 {
-  // Change window height NOW
-  if (!ONE_WINDOW) {
-    if (curbuf->b_help && curwin->w_height < p_hh) {
-      win_setheight((int)p_hh);
-    }
-  }
-
-  return NULL;
+  return rs_did_set_helpheight();
 }
 
 /// Process the updated 'hlsearch' option value.
@@ -2748,22 +2729,13 @@ static const char *did_set_modified(optset_T *args)
 /// Process the updated 'number' or 'relativenumber' option value.
 static const char *did_set_number_relativenumber(optset_T *args)
 {
-  win_T *win = (win_T *)args->os_win;
-  if (*win->w_p_stc != NUL) {
-    // When 'relativenumber'/'number' is changed and 'statuscolumn' is set, reset width.
-    win->w_nrwidth_line_count = 0;
-  }
-  check_signcolumn(NULL, win);
-  return NULL;
+  return rs_did_set_number_relativenumber((win_T *)args->os_win);
 }
 
 /// Process the new 'numberwidth' option value.
 static const char *did_set_numberwidth(optset_T *args)
 {
-  win_T *win = (win_T *)args->os_win;
-  win->w_nrwidth_line_count = 0;  // trigger a redraw
-
-  return NULL;
+  return rs_did_set_numberwidth((win_T *)args->os_win);
 }
 
 /// Process the updated 'paste' option value.
@@ -3037,15 +3009,7 @@ static const char *did_set_spell(optset_T *args)
 /// Process the updated 'swapfile' option value.
 static const char *did_set_swapfile(optset_T *args)
 {
-  buf_T *buf = (buf_T *)args->os_buf;
-  // when 'swf' is set, create swapfile, when reset remove swapfile
-  if (buf->b_p_swf && p_uc) {
-    ml_open_file(buf);                     // create the swap file
-  } else {
-    // no need to reset buf->b_may_swap, ml_open_file() will check buf->b_p_swf
-    mf_close_file(buf, true);              // remove the swap file
-  }
-  return NULL;
+  return rs_did_set_swapfile((buf_T *)args->os_buf);
 }
 
 /// Process the new 'textwidth' option value.
@@ -3063,14 +3027,7 @@ static const char *did_set_title_icon(optset_T *args FUNC_ATTR_UNUSED)
 /// Process the new 'titlelen' option value.
 static const char *did_set_titlelen(optset_T *args)
 {
-  OptInt old_value = args->os_oldval.number;
-
-  // if 'titlelen' has changed, redraw the title
-  if (starting != NO_SCREEN && old_value != p_titlelen) {
-    need_maketitle = true;
-  }
-
-  return NULL;
+  return rs_did_set_titlelen(args->os_oldval.number);
 }
 
 /// Process the updated 'undofile' option value.
