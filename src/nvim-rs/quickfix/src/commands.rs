@@ -3,12 +3,39 @@
 //! This module provides helper functions for parsing and validating
 //! quickfix command arguments and implementing command logic.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 use crate::{
     nvim_qf_get_count, nvim_qf_get_curlist_idx, nvim_qf_get_index, nvim_qf_get_listcount,
     nvim_qf_get_title, QfInfoHandle, QfListHandle,
 };
+
+// =============================================================================
+// ex_helpgrep types and FFI declarations
+// =============================================================================
+
+/// Opaque handle to `exarg_T`
+type EapHandle = *mut c_void;
+
+/// Opaque handle to `qf_info_T` (mutable)
+type QfInfoHandleMut = *mut c_void;
+
+extern "C" {
+    fn nvim_get_ql_info() -> QfInfoHandleMut;
+    fn nvim_hgr_pre_check(eap: EapHandle) -> bool;
+    fn nvim_hgr_save_cpo() -> *mut c_void;
+    fn nvim_hgr_is_loclist_cmd(eap: EapHandle) -> bool;
+    fn nvim_hgr_get_ll(new_qi_out: *mut bool) -> QfInfoHandleMut;
+    fn nvim_incr_quickfix_busy();
+    fn nvim_decr_quickfix_busy();
+    fn nvim_hgr_compile_and_search(eap: EapHandle, qi: QfInfoHandleMut) -> bool;
+    fn nvim_hgr_restore_cpo(saved_cpo: *mut c_void);
+    fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: *const c_void);
+    fn nvim_hgr_post_autocmd(eap: EapHandle, qi: QfInfoHandleMut, new_qi: bool) -> bool;
+    fn nvim_hgr_jump_or_nomatch(eap: EapHandle, qi: QfInfoHandleMut);
+    fn nvim_hgr_is_lhelpgrep(eap: EapHandle) -> bool;
+    fn nvim_hgr_cleanup(qi: QfInfoHandleMut, new_qi: bool);
+}
 
 // =============================================================================
 // Command Direction
@@ -999,4 +1026,60 @@ pub const extern "C" fn rs_qf_cnext_is_file_nav(cmd_type: CnextCmdType) -> bool 
             | CnextCmdType::CNFileBig
             | CnextCmdType::LNFileBig
     )
+}
+
+// =============================================================================
+// ex_helpgrep — :helpgrep/:lhelpgrep command
+// =============================================================================
+
+/// Rust implementation of `:helpgrep` / `:lhelpgrep`.
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
+    // 1. Pre-check: fire EVENT_QUICKFIXCMDPRE, check aborting()
+    if !nvim_hgr_pre_check(eap) {
+        return;
+    }
+
+    // 2. Save cpoptions and set to empty
+    let saved_cpo = nvim_hgr_save_cpo();
+
+    // 3. Setup qi — use global ql_info or allocate location list
+    let mut qi = nvim_get_ql_info();
+    let mut new_qi = false;
+    if nvim_hgr_is_loclist_cmd(eap) {
+        qi = nvim_hgr_get_ll(&raw mut new_qi);
+    }
+
+    nvim_incr_quickfix_busy();
+
+    // 4. Compile regex, create list, search help files
+    let updated = nvim_hgr_compile_and_search(eap, qi);
+
+    // 5. Restore cpoptions (handles plugin interference)
+    nvim_hgr_restore_cpo(saved_cpo);
+
+    // 6. Update quickfix buffer if list was populated
+    if updated {
+        nvim_qf_update_buffer(qi, std::ptr::null());
+    }
+
+    // 7. Post autocmd — may invalidate location list
+    if !nvim_hgr_post_autocmd(eap, qi, new_qi) {
+        nvim_decr_quickfix_busy();
+        return;
+    }
+
+    // 8. Jump to first match or show "no match" error
+    nvim_hgr_jump_or_nomatch(eap, qi);
+
+    nvim_decr_quickfix_busy();
+
+    // 9. Cleanup: free location list if :lhelpgrep and not needed
+    if nvim_hgr_is_lhelpgrep(eap) {
+        nvim_hgr_cleanup(qi, new_qi);
+    }
 }
