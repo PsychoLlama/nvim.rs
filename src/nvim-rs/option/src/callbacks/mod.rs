@@ -67,6 +67,31 @@ extern "C" {
 
     // State setters
     fn nvim_callback_set_need_maketitle(value: c_int);
+
+    // Fold functions
+    fn newFoldLevel();
+
+    // Langnoremap/langremap accessors
+    fn nvim_callback_get_p_lnr() -> c_int;
+    fn nvim_callback_get_p_lrm() -> c_int;
+    fn nvim_callback_set_p_lnr(value: c_int);
+    fn nvim_callback_set_p_lrm(value: c_int);
+
+    // Pumblend accessors
+    fn hl_invalidate_blends();
+    fn nvim_callback_get_p_pb() -> OptInt;
+    fn nvim_callback_set_pum_grid_blending(value: c_int);
+    fn pum_drawn() -> c_int;
+    fn pum_redraw();
+
+    // Textwidth helper
+    fn check_colorcolumn_win(win: crate::WinHandle);
+    fn nvim_callback_for_all_tab_windows(callback: unsafe extern "C" fn(crate::WinHandle));
+
+    // Winblend accessors
+    fn nvim_callback_win_clamp_winbl(win: crate::WinHandle);
+    fn nvim_callback_win_set_hl_needs_update(win: crate::WinHandle, value: c_int);
+    fn check_blending(win: crate::WinHandle);
 }
 
 // =============================================================================
@@ -203,22 +228,22 @@ pub extern "C" fn rs_did_set_iminsert() -> CallbackResult {
 }
 
 /// Callback for 'langnoremap' option.
-/// Reset langmap when 'langnoremap' is set.
+/// 'langnoremap' -> !'langremap': toggle the paired option.
 #[no_mangle]
-pub extern "C" fn rs_did_set_langnoremap(new_value: c_int) -> CallbackResult {
-    // When langnoremap is set, langremap should be false and vice versa
-    // This logic is handled in C by toggling p_lrm
-    let _ = new_value;
+pub extern "C" fn rs_did_set_langnoremap() -> CallbackResult {
+    // p_lrm = !p_lnr
+    let lnr = unsafe { nvim_callback_get_p_lnr() };
+    unsafe { nvim_callback_set_p_lrm(c_int::from(lnr == 0)) };
     callback_ok()
 }
 
 /// Callback for 'langremap' option.
-/// Reset langmap when 'langremap' changes.
+/// 'langremap' -> !'langnoremap': toggle the paired option.
 #[no_mangle]
-pub extern "C" fn rs_did_set_langremap(new_value: c_int) -> CallbackResult {
-    // When langremap is set, langnoremap should be false and vice versa
-    // This logic is handled in C by toggling p_lnr
-    let _ = new_value;
+pub extern "C" fn rs_did_set_langremap() -> CallbackResult {
+    // p_lnr = !p_lrm
+    let lrm = unsafe { nvim_callback_get_p_lrm() };
+    unsafe { nvim_callback_set_p_lnr(c_int::from(lrm == 0)) };
     callback_ok()
 }
 
@@ -233,9 +258,10 @@ pub extern "C" fn rs_did_set_paste() -> CallbackResult {
 }
 
 /// Callback for 'foldlevel' option.
+/// Recalculate fold levels when 'foldlevel' changes.
 #[no_mangle]
 pub extern "C" fn rs_did_set_foldlevel() -> CallbackResult {
-    // newFoldLevel() is called in C to recalculate folds
+    unsafe { newFoldLevel() };
     callback_ok()
 }
 
@@ -248,29 +274,48 @@ pub extern "C" fn rs_did_set_smoothscroll() -> CallbackResult {
     callback_ok()
 }
 
+/// Callback for check_colorcolumn on a single window (used as fn pointer).
+unsafe extern "C" fn check_colorcolumn_for_win(win: crate::WinHandle) {
+    check_colorcolumn_win(win);
+}
+
 /// Callback for 'textwidth' option.
-/// May need to reformat text after textwidth changes.
+/// Check colorcolumn for all windows when textwidth changes.
 #[no_mangle]
 pub extern "C" fn rs_did_set_textwidth() -> CallbackResult {
-    // curbuf->b_p_tw_nopstrte is set in C
+    unsafe { nvim_callback_for_all_tab_windows(check_colorcolumn_for_win) };
     callback_ok()
 }
 
 /// Callback for 'pumblend' option.
-/// Update popup menu transparency.
+/// Update popup menu transparency: invalidate blends, update pum_grid.blending,
+/// and redraw popup menu if visible.
 #[no_mangle]
 pub extern "C" fn rs_did_set_pumblend() -> CallbackResult {
-    // hl_invalidate_blends() is called in C
-    // pum_recompose() is called if pum_drawn()
+    unsafe {
+        hl_invalidate_blends();
+        let pb = nvim_callback_get_p_pb();
+        nvim_callback_set_pum_grid_blending(c_int::from(pb > 0));
+        if pum_drawn() != 0 {
+            pum_redraw();
+        }
+    }
     callback_ok()
 }
 
 /// Callback for 'winblend' option.
-/// Update window transparency.
+/// Clamp value to [0, 100], update highlight blending if changed.
 #[no_mangle]
-pub extern "C" fn rs_did_set_winblend() -> CallbackResult {
-    // hl_invalidate_blends() is called in C
-    // Similar to pumblend, triggers recomposition
+pub unsafe extern "C" fn rs_did_set_winblend(
+    win: crate::WinHandle,
+    old_value: OptInt,
+    new_value: OptInt,
+) -> CallbackResult {
+    if new_value != old_value {
+        nvim_callback_win_clamp_winbl(win);
+        nvim_callback_win_set_hl_needs_update(win, 1);
+        check_blending(win);
+    }
     callback_ok()
 }
 

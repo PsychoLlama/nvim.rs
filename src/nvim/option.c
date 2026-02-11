@@ -323,16 +323,17 @@ extern const char *rs_did_set_titlelen(int64_t old_value);
 extern const char *rs_did_set_laststatus(void);
 extern const char *rs_did_set_showtabline(void);
 extern const char *rs_did_set_iminsert(void);
-extern const char *rs_did_set_langnoremap(int new_value);
-extern const char *rs_did_set_langremap(int new_value);
+extern const char *rs_did_set_langnoremap(void);
+extern const char *rs_did_set_langremap(void);
 extern const char *rs_did_set_paste(void);
 extern const char *rs_did_set_foldlevel(void);
 extern const char *rs_did_set_smoothscroll(void);
 extern const char *rs_did_set_textwidth(void);
 extern const char *rs_did_set_pumblend(void);
-extern const char *rs_did_set_winblend(void);
+extern const char *rs_did_set_winblend(win_T *win, int64_t old_value, int64_t new_value);
 
 // Display callbacks (from Rust callbacks/display.rs)
+extern const char *rs_did_set_smoothscroll_full(win_T *win);
 extern const char *rs_did_set_showtabline_full(void);
 extern const char *rs_did_set_ruler(void);
 extern const char *rs_did_set_showcmd(void);
@@ -366,6 +367,7 @@ extern const char *rs_did_set_spell(void);
 extern const char *rs_did_set_termguicolors(void);
 extern const char *rs_did_set_virtualedit(void);
 extern const char *rs_did_set_writebackup(void);
+extern const char *rs_did_set_updatecount(int64_t old_value);
 
 // Phase 527-530: Option display and expansion functions from Rust
 extern int rs_bool_display_show_no(int value);
@@ -612,6 +614,27 @@ void nvim_callback_for_all_tab_windows(void (*callback)(win_T *)) {
   FOR_ALL_TAB_WINDOWS(tp, wp) {
     callback(wp);
   }
+}
+
+// Phase 2 callback accessors: langnoremap/langremap toggle
+int nvim_callback_get_p_lnr(void) { return p_lnr; }
+int nvim_callback_get_p_lrm(void) { return p_lrm; }
+void nvim_callback_set_p_lnr(int value) { p_lnr = value; }
+void nvim_callback_set_p_lrm(int value) { p_lrm = value; }
+
+// Phase 2 callback accessors: pumblend
+OptInt nvim_callback_get_p_pb(void) { return p_pb; }
+void nvim_callback_set_pum_grid_blending(int value) { pum_grid.blending = (value != 0); }
+
+// Phase 2 callback accessors: winblend
+void nvim_callback_win_clamp_winbl(win_T *win) {
+  if (win) {
+    if (win->w_p_winbl > 100) win->w_p_winbl = 100;
+    if (win->w_p_winbl < 0) win->w_p_winbl = 0;
+  }
+}
+void nvim_callback_win_set_hl_needs_update(win_T *win, int value) {
+  if (win) win->w_hl_needs_update = (value != 0);
 }
 
 // =============================================================================
@@ -2567,8 +2590,7 @@ static const char *did_set_equalalways(optset_T *args)
 /// Process the new 'foldlevel' option value.
 static const char *did_set_foldlevel(optset_T *args FUNC_ATTR_UNUSED)
 {
-  newFoldLevel();
-  return NULL;
+  return rs_did_set_foldlevel();
 }
 
 /// Process the new 'foldminlines' option value.
@@ -2623,17 +2645,13 @@ static const char *did_set_iminsert(optset_T *args FUNC_ATTR_UNUSED)
 /// Process the updated 'langnoremap' option value.
 static const char *did_set_langnoremap(optset_T *args FUNC_ATTR_UNUSED)
 {
-  // 'langnoremap' -> !'langremap'
-  p_lrm = !p_lnr;
-  return NULL;
+  return rs_did_set_langnoremap();
 }
 
 /// Process the updated 'langremap' option value.
 static const char *did_set_langremap(optset_T *args FUNC_ATTR_UNUSED)
 {
-  // 'langremap' -> !'langnoremap'
-  p_lnr = !p_lrm;
-  return NULL;
+  return rs_did_set_langremap();
 }
 
 /// Process the new 'laststatus' option value.
@@ -2712,10 +2730,7 @@ static const char *did_set_lisp(optset_T *args)
 /// Process the updated 'modifiable' option value.
 static const char *did_set_modifiable(optset_T *args FUNC_ATTR_UNUSED)
 {
-  // when 'modifiable' is changed, redraw the window title
-  redraw_titles();
-
-  return NULL;
+  return rs_did_set_modifiable();
 }
 
 /// Process the updated 'modified' option value.
@@ -2903,13 +2918,7 @@ static const char *did_set_previewwindow(optset_T *args)
 /// Process the new 'pumblend' option value.
 static const char *did_set_pumblend(optset_T *args FUNC_ATTR_UNUSED)
 {
-  hl_invalidate_blends();
-  pum_grid.blending = (p_pb > 0);
-  if (pum_drawn()) {
-    pum_redraw();
-  }
-
-  return NULL;
+  return rs_did_set_pumblend();
 }
 
 /// Process the updated 'readonly' option value.
@@ -3005,20 +3014,13 @@ static const char *did_set_shiftwidth_tabstop(optset_T *args)
 /// Process the new 'showtabline' option value.
 static const char *did_set_showtabline(optset_T *args FUNC_ATTR_UNUSED)
 {
-  // (re)set tab page line
-  win_new_screen_rows();  // recompute window positions and heights
-  return NULL;
+  return rs_did_set_showtabline_full();
 }
 
 /// Process the updated 'smoothscroll' option value.
-static const char *did_set_smoothscroll(optset_T *args FUNC_ATTR_UNUSED)
+static const char *did_set_smoothscroll(optset_T *args)
 {
-  win_T *win = (win_T *)args->os_win;
-  if (!win->w_p_sms) {
-    win->w_skipcol = 0;
-  }
-
-  return NULL;
+  return rs_did_set_smoothscroll_full((win_T *)args->os_win);
 }
 
 /// Process the updated 'spell' option value.
@@ -3049,11 +3051,7 @@ static const char *did_set_swapfile(optset_T *args)
 /// Process the new 'textwidth' option value.
 static const char *did_set_textwidth(optset_T *args FUNC_ATTR_UNUSED)
 {
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    check_colorcolumn(NULL, wp);
-  }
-
-  return NULL;
+  return rs_did_set_textwidth();
 }
 
 /// Process the updated 'title' or the 'icon' option value.
@@ -3144,14 +3142,7 @@ static const char *did_set_undolevels(optset_T *args)
 /// Process the new 'updatecount' option value.
 static const char *did_set_updatecount(optset_T *args)
 {
-  OptInt old_value = args->os_oldval.number;
-
-  // when 'updatecount' changes from zero to non-zero, open swap files
-  if (p_uc && !old_value) {
-    ml_open_files();
-  }
-
-  return NULL;
+  return rs_did_set_updatecount(args->os_oldval.number);
 }
 
 /// Process the new 'wildchar' / 'wildcharm' option value.
@@ -3170,17 +3161,7 @@ static const char *did_set_wildchar(optset_T *args)
 /// Process the new 'winblend' option value.
 static const char *did_set_winblend(optset_T *args)
 {
-  win_T *win = (win_T *)args->os_win;
-  OptInt old_value = args->os_oldval.number;
-  OptInt value = args->os_newval.number;
-
-  if (value != old_value) {
-    win->w_p_winbl = MAX(MIN(win->w_p_winbl, 100), 0);
-    win->w_hl_needs_update = true;
-    check_blending(win);
-  }
-
-  return NULL;
+  return rs_did_set_winblend((win_T *)args->os_win, args->os_oldval.number, args->os_newval.number);
 }
 
 /// Process the new 'window' option value.

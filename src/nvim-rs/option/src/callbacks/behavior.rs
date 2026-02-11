@@ -271,9 +271,10 @@ pub extern "C" fn rs_did_set_insertmode() -> CallbackResult {
 
 /// Callback for 'modifiable' option.
 ///
-/// Placeholder - actual behavior is handled elsewhere.
+/// Redraws window title when modifiable state changes.
 #[no_mangle]
 pub extern "C" fn rs_did_set_modifiable() -> CallbackResult {
+    unsafe { redraw_titles() };
     callback_ok()
 }
 
@@ -351,7 +352,7 @@ mod tests {
         assert!(rs_did_set_expandtab().is_null());
         assert!(rs_did_set_hidden().is_null());
         assert!(rs_did_set_insertmode().is_null());
-        assert!(rs_did_set_modifiable().is_null());
+        // rs_did_set_modifiable now calls redraw_titles() (extern C)
         assert!(rs_did_set_spell().is_null());
         assert!(rs_did_set_termguicolors().is_null());
         assert!(rs_did_set_virtualedit().is_null());
