@@ -296,17 +296,6 @@ extern "C" {
     fn nvim_docmd_ascii_iswhite(c: c_int) -> c_int;
     fn nvim_docmd_ascii_isdigit(c: c_int) -> c_int;
 
-    // get_address (C version, used temporarily for :tab until Phase 3)
-    fn get_address(
-        eap: ExArgHandle,
-        ptr: *mut *mut c_char,
-        addr_type: c_int,
-        skip: bool,
-        silent: bool,
-        to_other_file: c_int,
-        address_count: c_int,
-        errormsg: *mut *const c_char,
-    ) -> i32;
 }
 
 // Constants
@@ -605,7 +594,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                     if !skip_only {
                         let eap_skip = nvim_eap_get_skip(eap) != 0;
                         let mut cmd_ptr = nvim_eap_get_cmd(eap);
-                        let tabnr = get_address(
+                        let tabnr = crate::address::get_address_impl(
                             eap,
                             &mut cmd_ptr,
                             ADDR_TABS,

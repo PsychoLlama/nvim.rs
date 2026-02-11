@@ -3,7 +3,7 @@
 //! This module defines types for command address/range parsing,
 //! such as `1,5`, `%`, `'a,'b`, etc.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::ExArgHandle;
 
@@ -592,6 +592,490 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
             nvim_docmd_tabpage_index_curtab()
         }
     }
+}
+
+// =============================================================================
+// get_address — FFI declarations and implementation
+// =============================================================================
+
+// Constants (verified with _Static_assert in C)
+const MAXLNUM: i32 = 0x7fffffff;
+const MAXCOL: i32 = 0x7fffffff;
+const FORWARD: c_int = 1;
+const BACKWARD: c_int = -1;
+const RE_SEARCH: c_int = 0;
+const RE_SUBST: c_int = 1;
+const SEARCH_HIS: c_int = 0x20;
+const SEARCH_MSG: c_int = 0x0c;
+const SEARCH_KEEP: c_int = 0x400;
+const K_MARK_BUF_LOCAL: c_int = 0;
+const K_MARK_ALL: c_int = 1;
+const INT32_MAX: i32 = 0x7fffffff;
+const NUL: c_char = 0;
+
+extern "C" {
+    // Cursor state (set)
+    fn nvim_docmd_set_curwin_cursor_lnum(lnum: i32);
+    fn nvim_docmd_set_curwin_cursor_col(col: i32);
+    fn nvim_docmd_get_curwin_cursor_col() -> i32;
+
+    // Buffer handle
+    fn nvim_docmd_get_curbuf_handle() -> c_int;
+
+    // Quickfix (qf_get_size returns c_int from wrapper)
+    fn nvim_docmd_qf_get_size(eap: ExArgHandle) -> c_int;
+
+    // Search
+    fn nvim_docmd_set_searchcmdlen(v: c_int);
+    fn nvim_docmd_get_searchcmdlen() -> c_int;
+    fn nvim_docmd_do_search(
+        eap: ExArgHandle,
+        search_type: c_int,
+        dirc: c_int,
+        pat: *const c_char,
+        patlen: usize,
+        count: c_int,
+        options: c_int,
+    ) -> c_int;
+    fn nvim_docmd_searchit(
+        dir: c_int,
+        re_pat: c_int,
+        start_lnum: i32,
+        start_col: i32,
+        flags: c_int,
+    ) -> i32;
+    fn nvim_docmd_strlen(s: *const c_char) -> usize;
+    fn nvim_docmd_magic_isset() -> c_int;
+
+    // Mark
+    fn nvim_docmd_mark_get(flag: c_int, ch: c_int) -> *mut c_void;
+    fn nvim_docmd_mark_check(fm: *mut c_void, errormsg: *mut *const c_char) -> c_int;
+    fn nvim_docmd_mark_fnum(fm: *const c_void) -> c_int;
+    fn nvim_docmd_mark_lnum(fm: *const c_void) -> i32;
+    fn nvim_docmd_mark_move_to(fm: *mut c_void);
+
+    // Folding
+    fn nvim_docmd_hasFolding(lnum: i32) -> i32;
+
+    // Buffer local count (for +/- on buffer addresses)
+    fn nvim_docmd_compute_buf_local_count(addr_type: c_int, lnum: i32, offset: c_int) -> c_int;
+
+    // Digit parsing (getdigits_int32 not in the existing block)
+    fn nvim_docmd_getdigits_int32(pp: *mut *mut c_char) -> c_int;
+
+    // Error messages
+    fn nvim_docmd_get_e_norange() -> *mut c_char;
+    fn nvim_docmd_get_e_backslash() -> *mut c_char;
+    fn nvim_docmd_get_e_line_number_out_of_range() -> *mut c_char;
+
+    // skip_regexp (already in Rust, exposed via FFI)
+    fn rs_skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
+}
+
+/// Return the appropriate error message for an invalid address type.
+///
+/// Mirrors C `addr_error()`.
+unsafe fn addr_error(addr_type: c_int) -> *const c_char {
+    if addr_type == ADDR_NONE {
+        nvim_docmd_get_e_norange()
+    } else {
+        nvim_docmd_get_e_invrange()
+    }
+}
+
+/// Gets a single EX address.
+///
+/// This is the internal implementation, callable from other Rust code in this
+/// crate (e.g. `parse_cmd_address`, `:tab` modifier).
+///
+/// Sets `*ptr` to the next character after the parsed address, or NULL on error.
+/// Returns `MAXLNUM` when no address was found.
+#[allow(clippy::too_many_arguments)]
+pub unsafe fn get_address_impl(
+    eap: ExArgHandle,
+    ptr: *mut *mut c_char,
+    addr_type: c_int,
+    skip: bool,
+    silent: bool,
+    to_other_file: c_int,
+    address_count: c_int,
+    errormsg: *mut *const c_char,
+) -> i32 {
+    let mut cmd: *mut c_char = skipwhite(*ptr);
+    let mut lnum: i32 = MAXLNUM;
+
+    // do { ... } while (*cmd == '/' || *cmd == '?')
+    loop {
+        let switch_char = *cmd as u8;
+        match switch_char {
+            // '.' - Cursor position
+            b'.' => {
+                cmd = cmd.add(1);
+                match addr_type {
+                    ADDR_LINES | ADDR_OTHER => {
+                        lnum = nvim_docmd_get_curwin_cursor_lnum();
+                    }
+                    ADDR_WINDOWS => {
+                        lnum = nvim_docmd_current_win_nr() as i32;
+                    }
+                    ADDR_ARGUMENTS => {
+                        lnum = nvim_docmd_get_curwin_arg_idx() as i32 + 1;
+                    }
+                    ADDR_LOADED_BUFFERS | ADDR_BUFFERS => {
+                        lnum = nvim_docmd_get_curbuf_fnum() as i32;
+                    }
+                    ADDR_TABS => {
+                        lnum = nvim_docmd_current_tab_nr() as i32;
+                    }
+                    ADDR_NONE | ADDR_TABS_RELATIVE | ADDR_UNSIGNED => {
+                        *errormsg = addr_error(addr_type);
+                        cmd = std::ptr::null_mut();
+                        *ptr = cmd;
+                        return lnum;
+                    }
+                    ADDR_QUICKFIX => {
+                        lnum = nvim_docmd_qf_get_cur_idx(eap) as i32;
+                    }
+                    ADDR_QUICKFIX_VALID => {
+                        lnum = nvim_docmd_qf_get_cur_valid_idx(eap) as i32;
+                    }
+                    _ => {}
+                }
+            }
+
+            // '$' - last line
+            b'$' => {
+                cmd = cmd.add(1);
+                match addr_type {
+                    ADDR_LINES | ADDR_OTHER => {
+                        lnum = nvim_docmd_get_curbuf_line_count();
+                    }
+                    ADDR_WINDOWS => {
+                        lnum = nvim_docmd_last_win_nr() as i32;
+                    }
+                    ADDR_ARGUMENTS => {
+                        lnum = nvim_docmd_get_argcount() as i32;
+                    }
+                    ADDR_LOADED_BUFFERS => {
+                        lnum = nvim_docmd_last_loaded_buf_fnum() as i32;
+                    }
+                    ADDR_BUFFERS => {
+                        lnum = nvim_docmd_lastbuf_fnum() as i32;
+                    }
+                    ADDR_TABS => {
+                        lnum = nvim_docmd_last_tab_nr() as i32;
+                    }
+                    ADDR_NONE | ADDR_TABS_RELATIVE | ADDR_UNSIGNED => {
+                        *errormsg = addr_error(addr_type);
+                        cmd = std::ptr::null_mut();
+                        *ptr = cmd;
+                        return lnum;
+                    }
+                    ADDR_QUICKFIX => {
+                        lnum = nvim_docmd_qf_get_size(eap) as i32;
+                        if lnum == 0 {
+                            lnum = 1;
+                        }
+                    }
+                    ADDR_QUICKFIX_VALID => {
+                        lnum = nvim_docmd_qf_get_valid_size(eap) as i32;
+                        if lnum == 0 {
+                            lnum = 1;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            // '\'' - mark
+            b'\'' => {
+                cmd = cmd.add(1);
+                if *cmd == NUL {
+                    cmd = std::ptr::null_mut();
+                    *ptr = cmd;
+                    return lnum;
+                }
+                if addr_type != ADDR_LINES {
+                    *errormsg = addr_error(addr_type);
+                    cmd = std::ptr::null_mut();
+                    *ptr = cmd;
+                    return lnum;
+                }
+                if skip {
+                    cmd = cmd.add(1);
+                } else {
+                    // Only accept a mark in another file when it is
+                    // used by itself: ":'M".
+                    let flag = if to_other_file != 0 && *cmd.add(1) == NUL {
+                        K_MARK_ALL
+                    } else {
+                        K_MARK_BUF_LOCAL
+                    };
+                    let fm = nvim_docmd_mark_get(flag, *cmd as u8 as c_int);
+                    cmd = cmd.add(1);
+                    if !fm.is_null() && nvim_docmd_mark_fnum(fm) != nvim_docmd_get_curbuf_handle() {
+                        nvim_docmd_mark_move_to(fm);
+                        // Jumped to another file.
+                        lnum = nvim_docmd_get_curwin_cursor_lnum();
+                    } else {
+                        if nvim_docmd_mark_check(fm, errormsg) == 0 {
+                            cmd = std::ptr::null_mut();
+                            *ptr = cmd;
+                            return lnum;
+                        }
+                        // assert(fm != NULL) — mark_check succeeded so fm is valid
+                        lnum = nvim_docmd_mark_lnum(fm);
+                    }
+                }
+            }
+
+            // '/' or '?' - search
+            b'/' | b'?' => {
+                let c = *cmd as u8 as c_int;
+                cmd = cmd.add(1);
+                if addr_type != ADDR_LINES {
+                    *errormsg = addr_error(addr_type);
+                    cmd = std::ptr::null_mut();
+                    *ptr = cmd;
+                    return lnum;
+                }
+                if skip {
+                    // skip "/pat/"
+                    cmd = rs_skip_regexp(cmd, c, nvim_docmd_magic_isset());
+                    if *cmd as u8 as c_int == c {
+                        cmd = cmd.add(1);
+                    }
+                } else {
+                    // Save curwin->w_cursor
+                    let save_lnum = nvim_docmd_get_curwin_cursor_lnum();
+                    let save_col = nvim_docmd_get_curwin_cursor_col();
+
+                    // When '/' or '?' follows another address, start from there.
+                    if lnum > 0 && lnum != MAXLNUM {
+                        let line_count = nvim_docmd_get_curbuf_line_count();
+                        let set_lnum = if lnum > line_count { line_count } else { lnum };
+                        nvim_docmd_set_curwin_cursor_lnum(set_lnum);
+                    }
+
+                    // Start a forward search at the end of the line (unless
+                    // before the first line).
+                    // Start a backward search at the start of the line.
+                    let col = if c == b'/' as c_int && nvim_docmd_get_curwin_cursor_lnum() > 0 {
+                        MAXCOL
+                    } else {
+                        0
+                    };
+                    nvim_docmd_set_curwin_cursor_col(col);
+                    nvim_docmd_set_searchcmdlen(0);
+                    let flags = if silent {
+                        SEARCH_KEEP
+                    } else {
+                        SEARCH_HIS | SEARCH_MSG
+                    };
+                    let patlen = nvim_docmd_strlen(cmd);
+                    if nvim_docmd_do_search(std::ptr::null_mut(), c, c, cmd, patlen, 1, flags) == 0
+                    {
+                        nvim_docmd_set_curwin_cursor_lnum(save_lnum);
+                        nvim_docmd_set_curwin_cursor_col(save_col);
+                        cmd = std::ptr::null_mut();
+                        *ptr = cmd;
+                        return lnum;
+                    }
+                    lnum = nvim_docmd_get_curwin_cursor_lnum();
+                    nvim_docmd_set_curwin_cursor_lnum(save_lnum);
+                    nvim_docmd_set_curwin_cursor_col(save_col);
+                    // adjust command string pointer
+                    cmd = cmd.offset(nvim_docmd_get_searchcmdlen() as isize);
+                }
+            }
+
+            // '\\' - "\?", "\/" or "\&", repeat search
+            b'\\' => {
+                cmd = cmd.add(1);
+                if addr_type != ADDR_LINES {
+                    *errormsg = addr_error(addr_type);
+                    cmd = std::ptr::null_mut();
+                    *ptr = cmd;
+                    return lnum;
+                }
+                let i;
+                if *cmd as u8 == b'&' {
+                    i = RE_SUBST;
+                } else if *cmd as u8 == b'?' || *cmd as u8 == b'/' {
+                    i = RE_SEARCH;
+                } else {
+                    *errormsg = nvim_docmd_get_e_backslash();
+                    cmd = std::ptr::null_mut();
+                    *ptr = cmd;
+                    return lnum;
+                }
+
+                if !skip {
+                    // When search follows another address, start from there.
+                    let start_lnum = if lnum != MAXLNUM {
+                        lnum
+                    } else {
+                        nvim_docmd_get_curwin_cursor_lnum()
+                    };
+                    // Start the search just like for the above do_search().
+                    let start_col = if *cmd as u8 != b'?' { MAXCOL } else { 0 };
+                    let dir = if *cmd as u8 == b'?' {
+                        BACKWARD
+                    } else {
+                        FORWARD
+                    };
+                    let result = nvim_docmd_searchit(dir, i, start_lnum, start_col, SEARCH_MSG);
+                    if result != 0 {
+                        lnum = result;
+                    } else {
+                        cmd = std::ptr::null_mut();
+                        *ptr = cmd;
+                        return lnum;
+                    }
+                }
+                cmd = cmd.add(1);
+            }
+
+            // default: absolute line number
+            _ => {
+                if nvim_docmd_ascii_isdigit(*cmd as u8 as c_int) != 0 {
+                    lnum = nvim_docmd_getdigits(&mut cmd, 0) as i32;
+                }
+            }
+        }
+
+        // Inner while(true) loop for +/- offset arithmetic
+        loop {
+            cmd = skipwhite(cmd);
+            if *cmd as u8 != b'-'
+                && *cmd as u8 != b'+'
+                && nvim_docmd_ascii_isdigit(*cmd as u8 as c_int) == 0
+            {
+                break;
+            }
+
+            if lnum == MAXLNUM {
+                match addr_type {
+                    ADDR_LINES | ADDR_OTHER => {
+                        // "+1" is same as ".+1"
+                        lnum = nvim_docmd_get_curwin_cursor_lnum();
+                    }
+                    ADDR_WINDOWS => {
+                        lnum = nvim_docmd_current_win_nr() as i32;
+                    }
+                    ADDR_ARGUMENTS => {
+                        lnum = nvim_docmd_get_curwin_arg_idx() as i32 + 1;
+                    }
+                    ADDR_LOADED_BUFFERS | ADDR_BUFFERS => {
+                        lnum = nvim_docmd_get_curbuf_fnum() as i32;
+                    }
+                    ADDR_TABS => {
+                        lnum = nvim_docmd_current_tab_nr() as i32;
+                    }
+                    ADDR_TABS_RELATIVE => {
+                        lnum = 1;
+                    }
+                    ADDR_QUICKFIX => {
+                        lnum = nvim_docmd_qf_get_cur_idx(eap) as i32;
+                    }
+                    ADDR_QUICKFIX_VALID => {
+                        lnum = nvim_docmd_qf_get_cur_valid_idx(eap) as i32;
+                    }
+                    ADDR_NONE | ADDR_UNSIGNED => {
+                        lnum = 0;
+                    }
+                    _ => {}
+                }
+            }
+
+            let i: u8;
+            if nvim_docmd_ascii_isdigit(*cmd as u8 as c_int) != 0 {
+                i = b'+'; // "number" is same as "+number"
+            } else {
+                i = *cmd as u8;
+                cmd = cmd.add(1);
+            }
+
+            let n: i32;
+            if nvim_docmd_ascii_isdigit(*cmd as u8 as c_int) == 0 {
+                n = 1; // '+' is '+1'
+            } else {
+                // "number", "+number" or "-number"
+                n = nvim_docmd_getdigits_int32(&mut cmd);
+                if n == MAXLNUM {
+                    *errormsg = nvim_docmd_get_e_line_number_out_of_range();
+                    cmd = std::ptr::null_mut();
+                    *ptr = cmd;
+                    return lnum;
+                }
+            }
+
+            if addr_type == ADDR_TABS_RELATIVE {
+                *errormsg = nvim_docmd_get_e_invrange();
+                cmd = std::ptr::null_mut();
+                *ptr = cmd;
+                return lnum;
+            } else if addr_type == ADDR_LOADED_BUFFERS || addr_type == ADDR_BUFFERS {
+                lnum = nvim_docmd_compute_buf_local_count(
+                    addr_type,
+                    lnum,
+                    if i == b'-' { -(n as c_int) } else { n as c_int },
+                ) as i32;
+            } else {
+                // Relative line addressing: need to adjust for lines in a
+                // closed fold after the first address.
+                if addr_type == ADDR_LINES && (i == b'-' || i == b'+') && address_count >= 2 {
+                    lnum = nvim_docmd_hasFolding(lnum);
+                }
+                if i == b'-' {
+                    lnum -= n;
+                } else {
+                    if lnum >= 0 && n >= INT32_MAX - lnum {
+                        *errormsg = nvim_docmd_get_e_line_number_out_of_range();
+                        cmd = std::ptr::null_mut();
+                        *ptr = cmd;
+                        return lnum;
+                    }
+                    lnum += n;
+                }
+            }
+        }
+
+        // do/while condition
+        if *cmd as u8 != b'/' && *cmd as u8 != b'?' {
+            break;
+        }
+    }
+
+    // error: (fall through — always executed)
+    *ptr = cmd;
+    lnum
+}
+
+/// Gets a single EX address (FFI entry point).
+///
+/// Replaces C `get_address()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_address(
+    eap: ExArgHandle,
+    ptr: *mut *mut c_char,
+    addr_type: c_int,
+    skip: bool,
+    silent: bool,
+    to_other_file: c_int,
+    address_count: c_int,
+    errormsg: *mut *const c_char,
+) -> i32 {
+    get_address_impl(
+        eap,
+        ptr,
+        addr_type,
+        skip,
+        silent,
+        to_other_file,
+        address_count,
+        errormsg,
+    )
 }
 
 #[cfg(test)]
