@@ -1870,27 +1870,11 @@ static void ins_compl_free(void)
 }
 
 /// Reset/clear the completion state.
+extern void rs_ins_compl_clear(void);
+
 void ins_compl_clear(void)
 {
-  compl_cont_status = 0;
-  compl_started = false;
-  compl_matches = 0;
-  compl_selected_item = -1;
-  compl_ins_end_col = 0;
-  compl_curr_win = NULL;
-  compl_curr_buf = NULL;
-  API_CLEAR_STRING(compl_pattern);
-  API_CLEAR_STRING(compl_leader);
-  edit_submode_extra = NULL;
-  kv_destroy(compl_orig_extmarks);
-  API_CLEAR_STRING(compl_orig_text);
-  compl_enter_selects = false;
-  cpt_sources_clear();
-  compl_autocomplete = false;
-  compl_from_nonkeyword = false;
-  compl_num_bests = 0;
-  // clear v:completed_item
-  set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
+  rs_ins_compl_clear();
 }
 
 /// Check that Insert completion is active.
@@ -1992,6 +1976,26 @@ uint64_t nvim_get_cpt_start_tv(void) {
 uint64_t nvim_get_compl_timeout_ms(void) { return compl_timeout_ms; }
 void nvim_set_compl_time_slice_expired(int val) { compl_time_slice_expired = val != 0; }
 void nvim_decay_compl_timeout(void) { DECAY_COMPL_TIMEOUT(); }
+
+// Phase 3 accessors for Rust (ins_compl_clear setters)
+void nvim_set_compl_cont_status(int val) { compl_cont_status = val; }
+void nvim_set_compl_started(int val) { compl_started = val != 0; }
+void nvim_set_compl_matches(int val) { compl_matches = val; }
+void nvim_set_compl_selected_item(int val) { compl_selected_item = val; }
+void nvim_set_compl_ins_end_col(int val) { compl_ins_end_col = val; }
+void nvim_clear_compl_curr_win(void) { compl_curr_win = NULL; }
+void nvim_clear_compl_curr_buf(void) { compl_curr_buf = NULL; }
+void nvim_set_compl_enter_selects(int val) { compl_enter_selects = val != 0; }
+void nvim_set_compl_autocomplete(int val) { compl_autocomplete = val != 0; }
+void nvim_set_compl_from_nonkeyword(int val) { compl_from_nonkeyword = val != 0; }
+void nvim_set_compl_num_bests(int val) { compl_num_bests = val; }
+void nvim_clear_edit_submode_extra(void) { edit_submode_extra = NULL; }
+void nvim_clear_compl_orig_extmarks(void) { kv_destroy(compl_orig_extmarks); }
+void nvim_compl_clear_orig_text(void) { API_CLEAR_STRING(compl_orig_text); }
+void nvim_cpt_sources_clear(void) { cpt_sources_clear(); }
+void nvim_set_completed_item_empty(void) {
+  set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
+}
 
 // Rust implementations
 extern int rs_ins_compl_interrupted(void);

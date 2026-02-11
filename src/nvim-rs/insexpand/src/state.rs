@@ -284,6 +284,60 @@ pub unsafe extern "C" fn rs_get_compl_used_match() -> c_int {
 }
 
 // =============================================================================
+// State Reset (ins_compl_clear)
+// =============================================================================
+
+extern "C" {
+    fn nvim_set_compl_cont_status(val: c_int);
+    fn nvim_set_compl_started(val: c_int);
+    fn nvim_set_compl_matches(val: c_int);
+    fn nvim_set_compl_selected_item(val: c_int);
+    fn nvim_set_compl_ins_end_col(val: c_int);
+    fn nvim_clear_compl_curr_win();
+    fn nvim_clear_compl_curr_buf();
+    fn nvim_compl_clear_pattern();
+    fn nvim_compl_clear_leader();
+    fn nvim_clear_edit_submode_extra();
+    fn nvim_clear_compl_orig_extmarks();
+    fn nvim_compl_clear_orig_text();
+    fn nvim_set_compl_enter_selects(val: c_int);
+    fn nvim_cpt_sources_clear();
+    fn nvim_set_compl_autocomplete(val: c_int);
+    fn nvim_set_compl_from_nonkeyword(val: c_int);
+    fn nvim_set_compl_num_bests(val: c_int);
+    fn nvim_set_completed_item_empty();
+}
+
+/// Clear all completion state.
+///
+/// Resets all global completion variables to their default values.
+/// This is called when completion is finished or abandoned.
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_clear() {
+    nvim_set_compl_cont_status(0);
+    nvim_set_compl_started(0);
+    nvim_set_compl_matches(0);
+    nvim_set_compl_selected_item(-1);
+    nvim_set_compl_ins_end_col(0);
+    nvim_clear_compl_curr_win();
+    nvim_clear_compl_curr_buf();
+    nvim_compl_clear_pattern();
+    nvim_compl_clear_leader();
+    nvim_clear_edit_submode_extra();
+    nvim_clear_compl_orig_extmarks();
+    nvim_compl_clear_orig_text();
+    nvim_set_compl_enter_selects(0);
+    nvim_cpt_sources_clear();
+    nvim_set_compl_autocomplete(0);
+    nvim_set_compl_from_nonkeyword(0);
+    nvim_set_compl_num_bests(0);
+    nvim_set_completed_item_empty();
+}
+
+// =============================================================================
 // Phase 1: State Machine Core Functions
 // =============================================================================
 
