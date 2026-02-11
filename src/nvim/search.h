@@ -136,4 +136,10 @@ typedef struct {
   int64_t off;
 } SavedSearchOff;
 
+/// Result type for find_pattern_in_path batch init helper.
+typedef struct {
+  void *handle;  ///< Opaque handle to FpipState (NULL on failure).
+  int ok;        ///< Whether initialization succeeded.
+} FpipInitResult;
+
 #include "search.h.generated.h"
