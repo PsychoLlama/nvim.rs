@@ -35,6 +35,7 @@ pub mod item;
 pub mod keyword;
 pub mod match_engine;
 pub mod offset;
+pub mod opt_parse;
 pub mod parse;
 pub mod pattern;
 pub mod region;

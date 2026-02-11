@@ -139,6 +139,13 @@ extern int rs_syn_finish_line(int syncing);
 // Phase 3: Migrated syn_sync from Rust
 extern void rs_syn_sync(win_T *wp, linenr_T start_lnum, synstate_T *last_valid);
 
+// Phase 4: Migrated get_syn_options + get_id_list from Rust
+extern char *rs_get_syn_options(char *arg, int *opt_flags, int opt_keyword,
+                                int *opt_sync_idx, int opt_has_cont_list,
+                                int16_t **opt_cont_list, int16_t **opt_cont_in_list,
+                                int16_t **opt_next_list, int *conceal_char, int skip);
+extern int rs_get_id_list(char **arg, int keylen, int16_t **list, int skip);
+
 // Phase 18a: Simple settings command functions from Rust
 extern int rs_syn_cmd_case(synblock_T *block, const char *arg, const char *arg_end);
 extern int rs_syn_cmd_conceal(synblock_T *block, const char *arg, const char *arg_end);
@@ -157,10 +164,6 @@ static bool did_syntax_onoff = false;
 #define SPO_LC_OFF      6       // leading context offset
 #define SPO_COUNT       7
 
-static const char e_contains_argument_not_accepted_here[]
-  = N_("E395: Contains argument not accepted here");
-static const char e_invalid_cchar_value[]
-  = N_("E844: Invalid cchar value");
 static const char e_trailing_char_after_rsb_str_str[]
   = N_("E890: Trailing char after ']': %s]%s");
 
@@ -3080,146 +3083,10 @@ static char *get_group_name(char *arg, char **name_end)
 ///              Return NULL for any error;
 static char *get_syn_options(char *arg, syn_opt_arg_T *opt, int *conceal_char, int skip)
 {
-  int len = 0;
-  int fidx;
-  static const struct flag {
-    char *name;
-    int argtype;
-    int flags;
-  } flagtab[] = { { "cCoOnNtTaAiInNeEdD",      0,      HL_CONTAINED },
-                  { "oOnNeElLiInNeE",          0,      HL_ONELINE },
-                  { "kKeEeEpPeEnNdD",          0,      HL_KEEPEND },
-                  { "eExXtTeEnNdD",            0,      HL_EXTEND },
-                  { "eExXcClLuUdDeEnNlL",      0,      HL_EXCLUDENL },
-                  { "tTrRaAnNsSpPaArReEnNtT",  0,      HL_TRANSP },
-                  { "sSkKiIpPnNlL",            0,      HL_SKIPNL },
-                  { "sSkKiIpPwWhHiItTeE",      0,      HL_SKIPWHITE },
-                  { "sSkKiIpPeEmMpPtTyY",      0,      HL_SKIPEMPTY },
-                  { "gGrRoOuUpPhHeErReE",      0,      HL_SYNC_HERE },
-                  { "gGrRoOuUpPtThHeErReE",    0,      HL_SYNC_THERE },
-                  { "dDiIsSpPlLaAyY",          0,      HL_DISPLAY },
-                  { "fFoOlLdD",                0,      HL_FOLD },
-                  { "cCoOnNcCeEaAlL",          0,      HL_CONCEAL },
-                  { "cCoOnNcCeEaAlLeEnNdDsS",  0,      HL_CONCEALENDS },
-                  { "cCcChHaArR",              11,     0 },
-                  { "cCoOnNtTaAiInNsS",        1,      0 },
-                  { "cCoOnNtTaAiInNeEdDiInN",  2,      0 },
-                  { "nNeExXtTgGrRoOuUpP",      3,      0 }, };
-  static const char *const first_letters = "cCoOkKeEtTsSgGdDfFnN";
-
-  if (arg == NULL) {            // already detected error
-    return NULL;
-  }
-
-  if (curwin->w_s->b_syn_conceal) {
-    opt->flags |= HL_CONCEAL;
-  }
-
-  while (true) {
-    // This is used very often when a large number of keywords is defined.
-    // Need to skip quickly when no option name is found.
-    // Also avoid tolower(), it's slow.
-    if (strchr(first_letters, *arg) == NULL) {
-      break;
-    }
-
-    for (fidx = ARRAY_SIZE(flagtab); --fidx >= 0;) {
-      char *p = flagtab[fidx].name;
-      int i;
-      for (i = 0, len = 0; p[i] != NUL; i += 2, len++) {
-        if (arg[len] != p[i] && arg[len] != p[i + 1]) {
-          break;
-        }
-      }
-      if (p[i] == NUL && (ascii_iswhite(arg[len])
-                          || (flagtab[fidx].argtype > 0
-                              ? arg[len] == '='
-                              : ends_excmd(arg[len])))) {
-        if (opt->keyword
-            && (flagtab[fidx].flags == HL_DISPLAY
-                || flagtab[fidx].flags == HL_FOLD
-                || flagtab[fidx].flags == HL_EXTEND)) {
-          // treat "display", "fold" and "extend" as a keyword
-          fidx = -1;
-        }
-        break;
-      }
-    }
-    if (fidx < 0) {         // no match found
-      break;
-    }
-
-    if (flagtab[fidx].argtype == 1) {
-      if (!opt->has_cont_list) {
-        emsg(_(e_contains_argument_not_accepted_here));
-        return NULL;
-      }
-      if (get_id_list(&arg, 8, &opt->cont_list, skip) == FAIL) {
-        return NULL;
-      }
-    } else if (flagtab[fidx].argtype == 2) {
-      if (get_id_list(&arg, 11, &opt->cont_in_list, skip) == FAIL) {
-        return NULL;
-      }
-    } else if (flagtab[fidx].argtype == 3) {
-      if (get_id_list(&arg, 9, &opt->next_list, skip) == FAIL) {
-        return NULL;
-      }
-    } else if (flagtab[fidx].argtype == 11 && arg[5] == '=') {
-      // cchar=?
-      *conceal_char = utf_ptr2char(arg + 6);
-      arg += utfc_ptr2len(arg + 6) - 1;
-      if (!vim_isprintc(*conceal_char)) {
-        emsg(_(e_invalid_cchar_value));
-        return NULL;
-      }
-      arg = skipwhite(arg + 7);
-    } else {
-      opt->flags |= flagtab[fidx].flags;
-      arg = skipwhite(arg + len);
-
-      if (flagtab[fidx].flags == HL_SYNC_HERE
-          || flagtab[fidx].flags == HL_SYNC_THERE) {
-        if (opt->sync_idx == NULL) {
-          emsg(_("E393: group[t]here not accepted here"));
-          return NULL;
-        }
-        char *gname_start = arg;
-        arg = skiptowhite(arg);
-        if (gname_start == arg) {
-          return NULL;
-        }
-        char *gname = xstrnsave(gname_start, (size_t)(arg - gname_start));
-        if (strcmp(gname, "NONE") == 0) {
-          *opt->sync_idx = NONE_IDX;
-        } else {
-          int syn_id = syn_name2id(gname);
-          int i;
-          for (i = curwin->w_s->b_syn_patterns.ga_len; --i >= 0;) {
-            if (SYN_ITEMS(curwin->w_s)[i].sp_syn.id == syn_id
-                && SYN_ITEMS(curwin->w_s)[i].sp_type == SPTYPE_START) {
-              *opt->sync_idx = i;
-              break;
-            }
-          }
-          if (i < 0) {
-            semsg(_("E394: Didn't find region item for %s"), gname);
-            xfree(gname);
-            return NULL;
-          }
-        }
-
-        xfree(gname);
-        arg = skipwhite(arg);
-      } else if (flagtab[fidx].flags == HL_FOLD
-                 && foldmethodIsSyntax(curwin)) {
-        // Need to update folds later.
-        foldUpdateAll(curwin);
-      }
-    }
-  }
-
-  return arg;
+  return rs_get_syn_options(arg, &opt->flags, opt->keyword,
+                            opt->sync_idx, opt->has_cont_list,
+                            &opt->cont_list, &opt->cont_in_list,
+                            &opt->next_list, conceal_char, skip);
 }
 
 // Adjustments to syntax item when declared in a ":syn include"'d file.
@@ -4226,153 +4093,7 @@ static void syn_cmd_sync(exarg_T *eap, int syncing)
 /// @return        FAIL for some error, OK for success.
 static int get_id_list(char **const arg, const int keylen, int16_t **const list, const bool skip)
 {
-  char *p = NULL;
-  char *end;
-  int total_count = 0;
-  int16_t *retval = NULL;
-  regmatch_T regmatch;
-  int id;
-  bool failed = false;
-
-  // We parse the list twice:
-  // round == 1: count the number of items, allocate the array.
-  // round == 2: fill the array with the items.
-  // In round 1 new groups may be added, causing the number of items to
-  // grow when a regexp is used.  In that case round 1 is done once again.
-  for (int round = 1; round <= 2; round++) {
-    // skip "contains"
-    p = skipwhite(*arg + keylen);
-    if (*p != '=') {
-      semsg(_("E405: Missing equal sign: %s"), *arg);
-      break;
-    }
-    p = skipwhite(p + 1);
-    if (ends_excmd(*p)) {
-      semsg(_("E406: Empty argument: %s"), *arg);
-      break;
-    }
-
-    // parse the arguments after "contains"
-    int count = 0;
-    do {
-      for (end = p; *end && !ascii_iswhite(*end) && *end != ','; end++) {}
-      char *const name = xmalloc((size_t)(end - p) + 3);   // leave room for "^$"
-      xmemcpyz(name + 1, p, (size_t)(end - p));
-      if (strcmp(name + 1, "ALLBUT") == 0
-          || strcmp(name + 1, "ALL") == 0
-          || strcmp(name + 1, "TOP") == 0
-          || strcmp(name + 1, "CONTAINED") == 0) {
-        if (TOUPPER_ASC(**arg) != 'C') {
-          semsg(_("E407: %s not allowed here"), name + 1);
-          failed = true;
-          xfree(name);
-          break;
-        }
-        if (count != 0) {
-          semsg(_("E408: %s must be first in contains list"),
-                name + 1);
-          failed = true;
-          xfree(name);
-          break;
-        }
-        if (name[1] == 'A') {
-          id = SYNID_ALLBUT;
-        } else if (name[1] == 'T') {
-          id = SYNID_TOP;
-        } else {
-          id = SYNID_CONTAINED;
-        }
-        id += current_syn_inc_tag;
-      } else if (name[1] == '@') {
-        if (skip) {
-          id = -1;
-        } else {
-          id = syn_check_cluster(name + 2, (int)(end - p - 1));
-        }
-      } else {
-        // Handle full group name.
-        if (strpbrk(name + 1, "\\.*^$~[") == NULL) {
-          id = syn_check_group((name + 1), (size_t)(end - p));
-        } else {
-          // Handle match of regexp with group names.
-          *name = '^';
-          strcat(name, "$");
-          regmatch.regprog = vim_regcomp(name, RE_MAGIC);
-          if (regmatch.regprog == NULL) {
-            failed = true;
-            xfree(name);
-            break;
-          }
-
-          regmatch.rm_ic = true;
-          id = 0;
-          for (int i = highlight_num_groups(); --i >= 0;) {
-            if (vim_regexec(&regmatch, highlight_group_name(i), 0)) {
-              if (round == 2) {
-                // Got more items than expected; can happen
-                // when adding items that match:
-                // "contains=a.*b,axb".
-                // Go back to first round.
-                if (count >= total_count) {
-                  xfree(retval);
-                  round = 1;
-                } else {
-                  retval[count] = (int16_t)(i + 1);
-                }
-              }
-              count++;
-              id = -1;  // Remember that we found one.
-            }
-          }
-          vim_regfree(regmatch.regprog);
-        }
-      }
-      xfree(name);
-      if (id == 0) {
-        semsg(_("E409: Unknown group name: %s"), p);
-        failed = true;
-        break;
-      }
-      if (id > 0) {
-        if (round == 2) {
-          // Got more items than expected, go back to first round.
-          if (count >= total_count) {
-            xfree(retval);
-            round = 1;
-          } else {
-            retval[count] = (int16_t)id;
-          }
-        }
-        count++;
-      }
-      p = skipwhite(end);
-      if (*p != ',') {
-        break;
-      }
-      p = skipwhite(p + 1);             // skip comma in between arguments
-    } while (!ends_excmd(*p));
-    if (failed) {
-      break;
-    }
-    if (round == 1) {
-      retval = xmalloc(((size_t)count + 1) * sizeof(*retval));
-      retval[count] = 0;            // zero means end of the list
-      total_count = count;
-    }
-  }
-
-  *arg = p;
-  if (failed || retval == NULL) {
-    xfree(retval);
-    return FAIL;
-  }
-
-  if (*list == NULL) {
-    *list = retval;
-  } else {
-    xfree(retval);           // list already found, don't overwrite it
-  }
-  return OK;
+  return rs_get_id_list(arg, keylen, list, skip);
 }
 
 // Make a copy of an ID list.
@@ -8138,6 +7859,196 @@ _Static_assert(SYNSPL_TOP == 1, "SYNSPL_TOP");
 _Static_assert(SYNSPL_NOTOP == 2, "SYNSPL_NOTOP");
 _Static_assert(KEYWORD_IDX == -1, "KEYWORD_IDX");
 
+// =============================================================================
+// Phase 4 accessor functions for get_syn_options + get_id_list migration
+// =============================================================================
+
+/// Get current_syn_inc_tag global.
+int nvim_syn_get_current_inc_tag(void)
+{
+  return current_syn_inc_tag;
+}
+
+/// Get b_syn_conceal from curwin.
+int nvim_syn_get_b_syn_conceal(void)
+{
+  return curwin->w_s->b_syn_conceal;
+}
+
+/// Wrap syn_check_cluster() for Rust.
+int nvim_syn_check_cluster(char *pp, int len)
+{
+  return syn_check_cluster(pp, len);
+}
+
+/// Wrap syn_name2id() for Rust.
+int nvim_syn_name2id_wrapper(const char *name)
+{
+  return syn_name2id(name);
+}
+
+/// Wrap syn_check_group() for Rust.
+int nvim_syn_check_group_wrapper(const char *name, int len)
+{
+  return syn_check_group(name, (size_t)len);
+}
+
+/// Wrap highlight_num_groups() for Rust.
+int nvim_syn_highlight_num_groups(void)
+{
+  return highlight_num_groups();
+}
+
+/// Wrap highlight_group_name() for Rust.
+char *nvim_syn_highlight_group_name(int idx)
+{
+  return highlight_group_name(idx);
+}
+
+/// Compile a regexp for group name matching.
+/// Returns opaque regprog handle, or NULL on failure.
+void *nvim_syn_vim_regcomp(char *pat, int flags)
+{
+  return vim_regcomp(pat, flags);
+}
+
+/// Execute a regexp match against a string.
+/// regprog is from nvim_syn_vim_regcomp, ic is ignore case.
+int nvim_syn_vim_regexec(void *regprog, int ic, char *str)
+{
+  regmatch_T regmatch;
+  regmatch.regprog = regprog;
+  regmatch.rm_ic = ic;
+  int ret = vim_regexec(&regmatch, str, 0);
+  // Don't free regprog here - caller manages it
+  return ret;
+}
+
+/// Free a compiled regexp.
+void nvim_syn_vim_regfree(void *regprog)
+{
+  vim_regfree(regprog);
+}
+
+/// Wrap foldmethodIsSyntax(curwin) for Rust.
+int nvim_syn_foldmethod_is_syntax_curwin(void)
+{
+  return foldmethodIsSyntax(curwin);
+}
+
+/// Wrap foldUpdateAll(curwin) for Rust.
+void nvim_syn_fold_update_all_curwin(void)
+{
+  foldUpdateAll(curwin);
+}
+
+/// Find the pattern index matching sync_id + SPTYPE_START in curwin's patterns.
+/// Returns the index, or -1 if not found.
+int nvim_syn_find_sync_pattern_idx(int syn_id)
+{
+  for (int i = curwin->w_s->b_syn_patterns.ga_len; --i >= 0;) {
+    if (SYN_ITEMS(curwin->w_s)[i].sp_syn.id == syn_id
+        && SYN_ITEMS(curwin->w_s)[i].sp_type == SPTYPE_START) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/// Wrap utf_ptr2char() for Rust.
+int nvim_syn_utf_ptr2char(const char *p)
+{
+  return utf_ptr2char(p);
+}
+
+// nvim_syn_utfc_ptr2len already defined above (line ~6694) with char * param
+
+/// Wrap vim_isprintc() for Rust.
+int nvim_syn_vim_isprintc(int c)
+{
+  return vim_isprintc(c);
+}
+
+/// Wrap xstrnsave() for Rust. Caller must call nvim_syn_xfree() to free.
+char *nvim_syn_xstrnsave(const char *s, int len)
+{
+  return xstrnsave(s, (size_t)len);
+}
+
+/// Wrap xfree() for Rust.
+void nvim_syn_xfree(void *ptr)
+{
+  xfree(ptr);
+}
+
+/// Wrap xmalloc() for Rust.
+void *nvim_syn_xmalloc(int size)
+{
+  return xmalloc((size_t)size);
+}
+
+/// Wrap xmemcpyz() for Rust.
+void nvim_syn_xmemcpyz(char *dst, const char *src, int len)
+{
+  xmemcpyz(dst, src, (size_t)len);
+}
+
+/// Wrap strpbrk() for Rust.
+char *nvim_syn_strpbrk(const char *s, const char *chars)
+{
+  return strpbrk(s, chars);
+}
+
+/// Wrap emsg() for Rust.
+void nvim_syn_emsg(const char *msg)
+{
+  emsg(msg);
+}
+
+/// Wrap semsg() for Rust (one string arg).
+void nvim_syn_semsg_1s(const char *fmt, const char *arg)
+{
+  semsg(fmt, arg);
+}
+
+/// Wrap skipwhite() for Rust.
+char *nvim_syn_skipwhite(const char *p)
+{
+  return skipwhite(p);
+}
+
+/// Wrap skiptowhite() for Rust.
+char *nvim_syn_skiptowhite(const char *p)
+{
+  return skiptowhite(p);
+}
+
+/// Wrap ends_excmd() for Rust.
+int nvim_syn_ends_excmd(int c)
+{
+  return ends_excmd(c);
+}
+
+/// Wrap ascii_iswhite() for Rust.
+int nvim_syn_ascii_iswhite_char(int c)
+{
+  return ascii_iswhite(c);
+}
+
+/// Wrap TOUPPER_ASC() for Rust.
+int nvim_syn_toupper_asc(int c)
+{
+  return TOUPPER_ASC(c);
+}
+
 /// _Static_assert for Phase 3 constants
 _Static_assert(SF_CCOMMENT == 0x01, "SF_CCOMMENT");
 _Static_assert(SF_MATCH == 0x02, "SF_MATCH");
+
+/// _Static_assert for Phase 4 constants
+_Static_assert(NONE_IDX == -2, "NONE_IDX");
+_Static_assert(SYNID_ALLBUT == MAX_HL_ID, "SYNID_ALLBUT");
+_Static_assert(SYNID_TOP == 21000, "SYNID_TOP");
+_Static_assert(SYNID_CONTAINED == 22000, "SYNID_CONTAINED");
+_Static_assert(HL_FOLD == 0x2000, "HL_FOLD");
+_Static_assert(HL_EXCLUDENL == 0x800, "HL_EXCLUDENL");
