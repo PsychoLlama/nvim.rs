@@ -697,7 +697,26 @@ void nvim_check_pos_visual(void)
   check_pos(curbuf, &VIsual);
 }
 
+/// Get file format of curbuf (EOL_UNIX=0, EOL_DOS=1, EOL_MAC=2).
+int nvim_get_fileformat_curbuf(void)
+{
+  return get_fileformat(curbuf);
+}
+
+/// Wrapper for msg_multiline taking a C string.
+void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear)
+{
+  msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear);
+}
+
+/// Wrapper for transchar_nonprint into a caller-provided buffer.
+void nvim_transchar_nonprint_curbuf(char *buf, int c)
+{
+  transchar_nonprint(curbuf, buf, c);
+}
+
 _Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS mismatch");
+_Static_assert(EOL_MAC == 2, "EOL_MAC mismatch");
 
 // Verify constants used in Rust code.
 _Static_assert(CMD_left == 229, "CMD_left mismatch");
@@ -715,95 +734,7 @@ static const char e_non_numeric_argument_to_z[]
 /// ":ascii" and "ga" implementation
 void do_ascii(exarg_T *eap)
 {
-  char *data = get_cursor_pos_ptr();
-  size_t len = (size_t)utfc_ptr2len(data);
-
-  if (len == 0) {
-    msg("NUL", 0);
-    return;
-  }
-
-  bool need_clear = true;
-  msg_sb_eol();
-  msg_start();
-
-  int c = utf_ptr2char(data);
-  size_t off = 0;
-
-  // TODO(bfredl): merge this with the main loop
-  if (c < 0x80) {
-    if (c == NL) {  // NUL is stored as NL.
-      c = NUL;
-    }
-    const int cval = (c == CAR && get_fileformat(curbuf) == EOL_MAC
-                      ? NL  // NL is stored as CR.
-                      : c);
-    char buf1[20];
-    if (vim_isprintc(c) && (c < ' ' || c > '~')) {
-      char buf3[7];
-      transchar_nonprint(curbuf, buf3, c);
-      vim_snprintf(buf1, sizeof(buf1), "  <%s>", buf3);
-    } else {
-      buf1[0] = NUL;
-    }
-    char buf2[20];
-    buf2[0] = NUL;
-
-    char *dig = get_digraph_for_char(cval);
-    if (dig != NULL) {
-      vim_snprintf(IObuff, sizeof(IObuff),
-                   _("<%s>%s%s  %d,  Hex %02x,  Oct %03o, Digr %s"),
-                   transchar(c), buf1, buf2, cval, cval, cval, dig);
-    } else {
-      vim_snprintf(IObuff, sizeof(IObuff),
-                   _("<%s>%s%s  %d,  Hex %02x,  Octal %03o"),
-                   transchar(c), buf1, buf2, cval, cval, cval);
-    }
-
-    msg_multiline(cstr_as_string(IObuff), 0, true, false, &need_clear);
-
-    off += (size_t)utf_ptr2len(data);  // needed for overlong ascii?
-  }
-
-  // Repeat for combining characters, also handle multiby here.
-  while (off < len) {
-    c = utf_ptr2char(data + off);
-
-    size_t iobuff_len = 0;
-    // This assumes every multi-byte char is printable...
-    if (off > 0) {
-      IObuff[iobuff_len++] = ' ';
-    }
-    IObuff[iobuff_len++] = '<';
-    if (utf_iscomposing_first(c)) {
-      IObuff[iobuff_len++] = ' ';  // Draw composing char on top of a space.
-    }
-    iobuff_len += (size_t)utf_char2bytes(c, IObuff + iobuff_len);
-
-    char *dig = get_digraph_for_char(c);
-    if (dig != NULL) {
-      vim_snprintf(IObuff + iobuff_len, sizeof(IObuff) - iobuff_len,
-                   (c < 0x10000
-                    ? _("> %d, Hex %04x, Oct %o, Digr %s")
-                    : _("> %d, Hex %08x, Oct %o, Digr %s")),
-                   c, c, c, dig);
-    } else {
-      vim_snprintf(IObuff + iobuff_len, sizeof(IObuff) - iobuff_len,
-                   (c < 0x10000
-                    ? _("> %d, Hex %04x, Octal %o")
-                    : _("> %d, Hex %08x, Octal %o")),
-                   c, c, c);
-    }
-
-    msg_multiline(cstr_as_string(IObuff), 0, true, false, &need_clear);
-
-    off += (size_t)utf_ptr2len(data + off);  // needed for overlong ascii?
-  }
-
-  if (need_clear) {
-    msg_clr_eos();
-  }
-  msg_end();
+  rs_do_ascii(eap);
 }
 
 /// ":left", ":center" and ":right": align text. Rust implementation.

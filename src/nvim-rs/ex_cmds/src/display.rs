@@ -393,6 +393,221 @@ extern "C" {
 // FFI Exports
 // =============================================================================
 
+/// Constants for do_ascii
+const NL: c_int = 10; // '\012'
+const NUL: c_int = 0; // '\000'
+const CAR: c_int = 13; // '\015'
+const EOL_MAC: c_int = 2;
+
+/// Maximum IO buffer size (matches IOSIZE in C)
+const IOSIZE: usize = 1025;
+
+/// `:ascii` / `ga` command implementation.
+///
+/// Shows character info (decimal, hex, octal, digraph) for the character
+/// under the cursor.
+///
+/// # Safety
+/// `eap` must be a valid pointer to an exarg_T (unused but required by interface).
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_ascii(_eap: *mut ExArgHandle) {
+    use crate::{
+        get_cursor_pos_ptr, get_digraph_for_char, msg, msg_clr_eos, msg_end, msg_sb_eol, msg_start,
+        nvim_get_fileformat_curbuf, nvim_msg_multiline_cstr, nvim_transchar_nonprint_curbuf,
+        transchar, utf_char2bytes, utf_iscomposing_first, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+        vim_isprintc,
+    };
+
+    let data = get_cursor_pos_ptr();
+    let total_len = utfc_ptr2len(data) as usize;
+
+    if total_len == 0 {
+        msg(c"NUL".as_ptr(), 0);
+        return;
+    }
+
+    let mut need_clear: c_int = 1; // bool as c_int
+    msg_sb_eol();
+    msg_start();
+
+    let mut c = utf_ptr2char(data);
+    let mut off: usize = 0;
+
+    // Handle ASCII character (< 0x80)
+    if c < 0x80 {
+        if c == NL {
+            // NUL is stored as NL
+            c = NUL;
+        }
+        let cval = if c == CAR && nvim_get_fileformat_curbuf() == EOL_MAC {
+            NL // NL is stored as CR
+        } else {
+            c
+        };
+
+        // Build the extra representation for non-ASCII printable chars
+        let mut buf1 = [0u8; 20];
+        let buf1_len;
+        if vim_isprintc(c) != 0 && !(0x20..=0x7e).contains(&c) {
+            let mut buf3 = [0i8; 7];
+            nvim_transchar_nonprint_curbuf(buf3.as_mut_ptr(), c);
+            let repr = CStr::from_ptr(buf3.as_ptr()).to_bytes();
+            buf1_len = std::cmp::min(repr.len() + 4, buf1.len() - 1);
+            buf1[0] = b' ';
+            buf1[1] = b' ';
+            buf1[2] = b'<';
+            let copy_len = std::cmp::min(repr.len(), buf1.len() - 4);
+            buf1[3..3 + copy_len].copy_from_slice(&repr[..copy_len]);
+            buf1[3 + copy_len] = b'>';
+            buf1[4 + copy_len] = 0;
+        } else {
+            buf1[0] = 0;
+            buf1_len = 0;
+        }
+        let _ = buf1_len;
+
+        let tc = CStr::from_ptr(transchar(c)).to_bytes();
+        let buf1_str = CStr::from_ptr(buf1.as_ptr().cast()).to_bytes();
+
+        // Format into stack buffer
+        let mut iobuf = [0u8; IOSIZE];
+        let dig = get_digraph_for_char(cval);
+        let formatted = if !dig.is_null() {
+            let dig_str = CStr::from_ptr(dig).to_bytes();
+            format_ascii_with_digraph(&mut iobuf, tc, buf1_str, cval, dig_str)
+        } else {
+            format_ascii_no_digraph(&mut iobuf, tc, buf1_str, cval)
+        };
+        iobuf[formatted] = 0;
+
+        nvim_msg_multiline_cstr(iobuf.as_ptr().cast(), 0, 1, 0, &mut need_clear);
+
+        off += utf_ptr2len(data) as usize;
+    }
+
+    // Repeat for combining characters and multibyte chars
+    while off < total_len {
+        c = utf_ptr2char(data.add(off));
+
+        let mut iobuf = [0u8; IOSIZE];
+        let mut pos = 0;
+
+        if off > 0 {
+            iobuf[pos] = b' ';
+            pos += 1;
+        }
+        iobuf[pos] = b'<';
+        pos += 1;
+        if utf_iscomposing_first(c) != 0 {
+            iobuf[pos] = b' '; // Draw composing char on top of a space
+            pos += 1;
+        }
+        let char_len = utf_char2bytes(c, iobuf[pos..].as_mut_ptr().cast()) as usize;
+        pos += char_len;
+
+        let dig = get_digraph_for_char(c);
+        let formatted = if !dig.is_null() {
+            let dig_str = CStr::from_ptr(dig).to_bytes();
+            format_multibyte_with_digraph(&mut iobuf[pos..], c, dig_str)
+        } else {
+            format_multibyte_no_digraph(&mut iobuf[pos..], c)
+        };
+        iobuf[pos + formatted] = 0;
+
+        nvim_msg_multiline_cstr(iobuf.as_ptr().cast(), 0, 1, 0, &mut need_clear);
+
+        off += utf_ptr2len(data.add(off)) as usize;
+    }
+
+    if need_clear != 0 {
+        msg_clr_eos();
+    }
+    msg_end();
+}
+
+/// Format ASCII char info with digraph.
+fn format_ascii_with_digraph(
+    buf: &mut [u8],
+    transchar_str: &[u8],
+    extra: &[u8],
+    cval: c_int,
+    dig: &[u8],
+) -> usize {
+    use std::io::Write;
+    let mut cursor = std::io::Cursor::new(&mut buf[..]);
+    let _ = write!(
+        cursor,
+        "<{}>{}  {},  Hex {:02x},  Oct {:03o}, Digr {}",
+        // transchar output
+        unsafe { std::str::from_utf8_unchecked(transchar_str) },
+        unsafe { std::str::from_utf8_unchecked(extra) },
+        cval,
+        cval,
+        cval,
+        unsafe { std::str::from_utf8_unchecked(dig) },
+    );
+    cursor.position() as usize
+}
+
+/// Format ASCII char info without digraph.
+fn format_ascii_no_digraph(
+    buf: &mut [u8],
+    transchar_str: &[u8],
+    extra: &[u8],
+    cval: c_int,
+) -> usize {
+    use std::io::Write;
+    let mut cursor = std::io::Cursor::new(&mut buf[..]);
+    let _ = write!(
+        cursor,
+        "<{}>{}  {},  Hex {:02x},  Octal {:03o}",
+        unsafe { std::str::from_utf8_unchecked(transchar_str) },
+        unsafe { std::str::from_utf8_unchecked(extra) },
+        cval,
+        cval,
+        cval,
+    );
+    cursor.position() as usize
+}
+
+/// Format multibyte char info with digraph.
+fn format_multibyte_with_digraph(buf: &mut [u8], c: c_int, dig: &[u8]) -> usize {
+    use std::io::Write;
+    let mut cursor = std::io::Cursor::new(&mut buf[..]);
+    if c < 0x10000 {
+        let _ = write!(
+            cursor,
+            "> {}, Hex {:04x}, Oct {:o}, Digr {}",
+            c,
+            c,
+            c,
+            unsafe { std::str::from_utf8_unchecked(dig) },
+        );
+    } else {
+        let _ = write!(
+            cursor,
+            "> {}, Hex {:08x}, Oct {:o}, Digr {}",
+            c,
+            c,
+            c,
+            unsafe { std::str::from_utf8_unchecked(dig) },
+        );
+    }
+    cursor.position() as usize
+}
+
+/// Format multibyte char info without digraph.
+fn format_multibyte_no_digraph(buf: &mut [u8], c: c_int) -> usize {
+    use std::io::Write;
+    let mut cursor = std::io::Cursor::new(&mut buf[..]);
+    if c < 0x10000 {
+        let _ = write!(cursor, "> {}, Hex {:04x}, Octal {:o}", c, c, c);
+    } else {
+        let _ = write!(cursor, "> {}, Hex {:08x}, Octal {:o}", c, c, c);
+    }
+    cursor.position() as usize
+}
+
 /// `:z` command implementation.
 ///
 /// # Safety

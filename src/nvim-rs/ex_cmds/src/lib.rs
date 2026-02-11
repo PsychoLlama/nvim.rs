@@ -528,6 +528,48 @@ extern "C" {
     pub fn appended_lines_mark(lnum: c_int, count: c_int);
     /// Display line count message
     pub fn msgmore(n: c_int);
+
+    // do_ascii accessors and functions
+    /// Get cursor position pointer
+    pub fn get_cursor_pos_ptr() -> *const c_char;
+    /// Get utfc_ptr2len (length of multibyte char sequence)
+    pub fn utfc_ptr2len(p: *const c_char) -> c_int;
+    /// Get character at pointer
+    pub fn utf_ptr2char(p: *const c_char) -> c_int;
+    /// Get byte length of character at pointer
+    pub fn utf_ptr2len(p: *const c_char) -> c_int;
+    /// Encode a character into bytes, return length
+    pub fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    /// Check if character is a composing character (first in sequence)
+    pub fn utf_iscomposing_first(c: c_int) -> c_int;
+    /// Check if character is printable
+    pub fn vim_isprintc(c: c_int) -> c_int;
+    /// Get printable representation of character
+    pub fn transchar(c: c_int) -> *const c_char;
+    /// Get non-printable character representation into buffer (curbuf)
+    pub fn nvim_transchar_nonprint_curbuf(buf: *mut c_char, c: c_int);
+    /// Get digraph string for a character (NULL if none)
+    pub fn get_digraph_for_char(val_arg: c_int) -> *const c_char;
+    /// Get file format of curbuf (0=unix, 1=dos, 2=mac)
+    pub fn nvim_get_fileformat_curbuf() -> c_int;
+    /// Display a message
+    pub fn msg(s: *const c_char, hl_id: c_int) -> c_int;
+    /// Start message output
+    pub fn msg_sb_eol();
+    /// Start a message
+    pub fn msg_start();
+    /// Display a multiline message from C string
+    pub fn nvim_msg_multiline_cstr(
+        s: *const c_char,
+        hl_id: c_int,
+        check_int: c_int,
+        hist: c_int,
+        need_clear: *mut c_int,
+    );
+    /// Clear to end of screen
+    pub fn msg_clr_eos();
+    /// End message output
+    pub fn msg_end() -> c_int;
 }
 
 // =============================================================================
