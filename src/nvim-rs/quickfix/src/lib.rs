@@ -23,6 +23,7 @@ pub mod navigate;
 pub mod parse;
 pub mod stack;
 pub mod types;
+pub mod vimgrep;
 pub mod window;
 
 // Re-export commonly used types from submodules

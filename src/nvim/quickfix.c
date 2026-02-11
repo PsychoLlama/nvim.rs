@@ -817,6 +817,10 @@ extern const char *rs_qf_pop_dir(void *qfl, bool is_file_stack);
 extern void rs_qf_clean_dir_stack(void *qfl, bool is_file_stack);
 extern const char *rs_qf_guess_filepath(void *qfl, char *filename);
 
+// Vimgrep functions
+extern bool rs_vgr_match_buflines(void *qfl, const char *fname, void *buf, const char *spat,
+                                  void *regmatch, int *tomatch, int duplicate_name, int flags);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -6718,109 +6722,66 @@ static bool vgr_qflist_valid(win_T *wp, qf_info_T *qi, unsigned qfid, char *titl
   return true;
 }
 
+// ============================================================================
+// Phase 1: vgr_match_buflines accessors for Rust FFI
+// ============================================================================
+
+/// Wrapper for vim_regexec_multi (simplified for vimgrep use)
+int nvim_vim_regexec_multi(regmmatch_T *rm, void *win, void *buf, linenr_T lnum, colnr_T col)
+{
+  return vim_regexec_multi(rm, (win_T *)win, (buf_T *)buf, lnum, col, NULL, NULL);
+}
+
+/// Get startpos[idx].lnum from regmmatch_T
+linenr_T nvim_regmatch_startpos_lnum(const regmmatch_T *rm, int idx)
+{
+  return rm->startpos[idx].lnum;
+}
+
+/// Get startpos[idx].col from regmmatch_T
+colnr_T nvim_regmatch_startpos_col(const regmmatch_T *rm, int idx)
+{
+  return rm->startpos[idx].col;
+}
+
+/// Get endpos[idx].lnum from regmmatch_T
+linenr_T nvim_regmatch_endpos_lnum(const regmmatch_T *rm, int idx)
+{
+  return rm->endpos[idx].lnum;
+}
+
+/// Get endpos[idx].col from regmmatch_T
+colnr_T nvim_regmatch_endpos_col(const regmmatch_T *rm, int idx)
+{
+  return rm->endpos[idx].col;
+}
+
+/// Wrapper for ml_get_buf_len
+colnr_T nvim_ml_get_buf_len(void *buf, linenr_T lnum)
+{
+  return ml_get_buf_len((buf_T *)buf, lnum);
+}
+
+/// Wrapper for fuzzy_match
+int nvim_fuzzy_match(const char *str, const char *pat, bool matchseq,
+                     int *score, uint32_t *matches, int max_matches)
+{
+  return fuzzy_match((char *)str, pat, matchseq, score, matches, max_matches);
+}
+
+// _Static_assert for constants used by rs_vgr_match_buflines
+_Static_assert(VGR_GLOBAL == 1, "VGR_GLOBAL mismatch");
+_Static_assert(VGR_NOJUMP == 2, "VGR_NOJUMP mismatch");
+_Static_assert(VGR_FUZZY == 4, "VGR_FUZZY mismatch");
+_Static_assert(FUZZY_MATCH_MAX_LEN == 1024, "FUZZY_MATCH_MAX_LEN mismatch");
+
 /// Search for a pattern in all the lines in a buffer and add the matching lines
 /// to a quickfix list.
 static bool vgr_match_buflines(qf_list_T *qfl, char *fname, buf_T *buf, char *spat,
                                regmmatch_T *regmatch, int *tomatch, int duplicate_name, int flags)
   FUNC_ATTR_NONNULL_ARG(1, 3, 4, 5, 6)
 {
-  bool found_match = false;
-  size_t pat_len = strlen(spat);
-  pat_len = MIN(pat_len, FUZZY_MATCH_MAX_LEN);
-
-  for (linenr_T lnum = 1; lnum <= buf->b_ml.ml_line_count && *tomatch > 0; lnum++) {
-    colnr_T col = 0;
-    if (!(flags & VGR_FUZZY)) {
-      // Regular expression match
-      while (vim_regexec_multi(regmatch, curwin, buf, lnum, col, NULL, NULL) > 0) {
-        // Pass the buffer number so that it gets used even for a
-        // dummy buffer, unless duplicate_name is set, then the
-        // buffer will be wiped out below.
-        if (qf_add_entry(qfl,
-                         NULL,   // dir
-                         fname,
-                         NULL,
-                         duplicate_name ? 0 : buf->b_fnum,
-                         ml_get_buf(buf, regmatch->startpos[0].lnum + lnum),
-                         regmatch->startpos[0].lnum + lnum,
-                         regmatch->endpos[0].lnum + lnum,
-                         regmatch->startpos[0].col + 1,
-                         regmatch->endpos[0].col + 1,
-                         false,  // vis_col
-                         NULL,   // search pattern
-                         0,      // nr
-                         0,      // type
-                         NULL,   // user_data
-                         true)   // valid
-            == QF_FAIL) {
-          got_int = true;
-          break;
-        }
-        found_match = true;
-        if (--*tomatch == 0) {
-          break;
-        }
-        if ((flags & VGR_GLOBAL) == 0 || regmatch->endpos[0].lnum > 0) {
-          break;
-        }
-        col = regmatch->endpos[0].col + (col == regmatch->endpos[0].col);
-        if (col > ml_get_buf_len(buf, lnum)) {
-          break;
-        }
-      }
-    } else {
-      char *const str = ml_get_buf(buf, lnum);
-      const colnr_T linelen = ml_get_buf_len(buf, lnum);
-      int score;
-      uint32_t matches[FUZZY_MATCH_MAX_LEN];
-      const size_t sz = sizeof(matches) / sizeof(matches[0]);
-
-      // Fuzzy string match
-      CLEAR_FIELD(matches);
-      while (fuzzy_match(str + col, spat, false, &score, matches, (int)sz) > 0) {
-        // Pass the buffer number so that it gets used even for a
-        // dummy buffer, unless duplicate_name is set, then the
-        // buffer will be wiped out below.
-        if (qf_add_entry(qfl,
-                         NULL,   // dir
-                         fname,
-                         NULL,
-                         duplicate_name ? 0 : buf->b_fnum,
-                         str,
-                         lnum,
-                         0,
-                         (colnr_T)matches[0] + col + 1,
-                         0,
-                         false,  // vis_col
-                         NULL,   // search pattern
-                         0,      // nr
-                         0,      // type
-                         NULL,   // user_data
-                         true)   // valid
-            == QF_FAIL) {
-          got_int = true;
-          break;
-        }
-        found_match = true;
-        if (--*tomatch == 0) {
-          break;
-        }
-        if ((flags & VGR_GLOBAL) == 0) {
-          break;
-        }
-        col = (colnr_T)matches[pat_len - 1] + col + 1;
-        if (col > linelen) {
-          break;
-        }
-      }
-    }
-    line_breakcheck();
-    if (got_int) {
-      break;
-    }
-  }
-
-  return found_match;
+  return rs_vgr_match_buflines(qfl, fname, buf, spat, regmatch, tomatch, duplicate_name, flags);
 }
 
 /// Jump to the first match and update the directory.
