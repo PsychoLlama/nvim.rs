@@ -213,6 +213,11 @@ extern void rs_check_lnums(int do_curwin);
 extern void rs_check_lnums_nested(int do_curwin);
 extern void rs_reset_lnums(void);
 
+// Phase 5: Status line management
+extern void rs_last_status(int morewin);
+extern void rs_win_remove_status_line(win_T *wp, int add_hsep);
+extern int rs_resize_frame_for_winbar(frame_T *fr);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -7432,128 +7437,13 @@ static void frame_add_height(frame_T *frp, int n)
 /// @param morewin  pretend there are two or more windows if true.
 void last_status(bool morewin)
 {
-  // Don't make a difference between horizontal or vertical split.
-  last_status_rec(topframe, last_stl_height(morewin) > 0, global_stl_height() > 0);
-  win_float_anchor_laststatus();
+  rs_last_status(morewin);
 }
 
 // Remove status line from window, replacing it with a horizontal separator if needed.
 void win_remove_status_line(win_T *wp, bool add_hsep)
 {
-  wp->w_status_height = 0;
-  if (add_hsep) {
-    wp->w_hsep_height = 1;
-  } else {
-    win_new_height(wp, (wp->w_floating ? wp->w_view_height : wp->w_height) + STATUS_HEIGHT);
-  }
-  comp_col();
-
-  stl_clear_click_defs(wp->w_status_click_defs, wp->w_status_click_defs_size);
-  xfree(wp->w_status_click_defs);
-  wp->w_status_click_defs_size = 0;
-  wp->w_status_click_defs = NULL;
-}
-
-// Look for a horizontally resizable frame, starting with frame "fr".
-// Returns NULL if there are no resizable frames.
-static frame_T *find_horizontally_resizable_frame(frame_T *fr)
-{
-  frame_T *fp = fr;
-
-  while (fp->fr_height <= frame_minheight(fp, NULL)) {
-    if (fp == topframe) {
-      return NULL;
-    }
-    // In a column of frames: go to frame above.  If already at
-    // the top or in a row of frames: go to parent.
-    if (fp->fr_parent->fr_layout == FR_COL && fp->fr_prev != NULL) {
-      fp = fp->fr_prev;
-    } else {
-      fp = fp->fr_parent;
-    }
-  }
-
-  return fp;
-}
-
-// Look for resizable frames and take lines from them to make room for the statusline.
-// @return Success or failure.
-static bool resize_frame_for_status(frame_T *fr)
-{
-  win_T *wp = fr->fr_win;
-  frame_T *fp = find_horizontally_resizable_frame(fr);
-
-  if (fp == NULL) {
-    emsg(_(e_noroom));
-    return false;
-  } else if (fp != fr) {
-    frame_new_height(fp, fp->fr_height - 1, false, false, false);
-    frame_fix_height(wp);
-    win_comp_pos();
-  } else {
-    win_new_height(wp, wp->w_height - 1);
-  }
-
-  return true;
-}
-
-// Look for resizable frames and take lines from them to make room for the winbar.
-// @return Success or failure.
-static bool resize_frame_for_winbar(frame_T *fr)
-{
-  win_T *wp = fr->fr_win;
-  frame_T *fp = find_horizontally_resizable_frame(fr);
-
-  if (fp == NULL || fp == fr) {
-    emsg(_(e_noroom));
-    return false;
-  }
-  frame_new_height(fp, fp->fr_height - 1, false, false, false);
-  win_new_height(wp, wp->w_height + 1);
-  frame_fix_height(wp);
-  win_comp_pos();
-
-  return true;
-}
-
-static void last_status_rec(frame_T *fr, bool statusline, bool is_stl_global)
-{
-  if (fr->fr_layout == FR_LEAF) {
-    win_T *wp = fr->fr_win;
-    bool is_last = is_bottom_win(wp);
-
-    if (is_last) {
-      if (wp->w_status_height != 0 && (!statusline || is_stl_global)) {
-        win_remove_status_line(wp, false);
-      } else if (wp->w_status_height == 0 && !is_stl_global && statusline) {
-        // Add statusline to window if needed
-        wp->w_status_height = STATUS_HEIGHT;
-        if (!resize_frame_for_status(fr)) {
-          return;
-        }
-        comp_col();
-      }
-      // Set prev_height when difference is due to 'laststatus'.
-      if (abs(wp->w_height - wp->w_prev_height) == 1) {
-        wp->w_prev_height = wp->w_height;
-      }
-    } else if (wp->w_status_height != 0 && is_stl_global) {
-      // If statusline is global and the window has a statusline, replace it with a horizontal
-      // separator
-      win_remove_status_line(wp, true);
-    } else if (wp->w_status_height == 0 && !is_stl_global) {
-      // If statusline isn't global and the window doesn't have a statusline, re-add it
-      wp->w_status_height = STATUS_HEIGHT;
-      wp->w_hsep_height = 0;
-      comp_col();
-    }
-  } else {
-    // For a column or row frame, recursively call this function for all child frames
-    frame_T *fp;
-    FOR_ALL_FRAMES(fp, fr->fr_child) {
-      last_status_rec(fp, statusline, is_stl_global);
-    }
-  }
+  rs_win_remove_status_line(wp, add_hsep);
 }
 
 /// Add or remove window bar from window "wp".
@@ -7574,7 +7464,7 @@ int set_winbar_win(win_T *wp, bool make_room, bool valid_cursor)
       if (wp->w_floating) {
         emsg(_(e_noroom));
         return NOTDONE;
-      } else if (!make_room || !resize_frame_for_winbar(wp->w_frame)) {
+      } else if (!make_room || !rs_resize_frame_for_winbar(wp->w_frame)) {
         return FAIL;
       }
     }
@@ -8256,9 +8146,50 @@ void nvim_ga_set_int(garray_T *gap, int idx, int val)
   }
 }
 
+// --- Phase 5 accessors ---
+
+/// Wrap comp_col() from drawscreen.c.
+void nvim_comp_col(void)
+{
+  comp_col();
+}
+
+/// Compound accessor: clear and free w_status_click_defs.
+void nvim_win_stl_clear_click_defs(win_T *wp)
+{
+  if (!wp) {
+    return;
+  }
+  stl_clear_click_defs(wp->w_status_click_defs, wp->w_status_click_defs_size);
+  xfree(wp->w_status_click_defs);
+  wp->w_status_click_defs_size = 0;
+  wp->w_status_click_defs = NULL;
+}
+
+/// Get w_prev_height from a window.
+int nvim_win_get_prev_height(win_T *wp)
+{
+  return wp ? wp->w_prev_height : 0;
+}
+
+/// Set w_prev_height for a window.
+void nvim_win_set_prev_height(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_prev_height = val;
+  }
+}
+
+/// Wrap win_float_anchor_laststatus() from winfloat.c.
+void nvim_win_float_anchor_laststatus(void)
+{
+  win_float_anchor_laststatus();
+}
+
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
 _Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");
 _Static_assert(2 == SNAP_COUNT, "SNAP_COUNT mismatch");
 _Static_assert(0 == SNAP_HELP_IDX, "SNAP_HELP_IDX mismatch");
 _Static_assert(1 == SNAP_AUCMD_IDX, "SNAP_AUCMD_IDX mismatch");
 _Static_assert(0x80 == VALID_TOPLINE, "VALID_TOPLINE mismatch");
+_Static_assert(1 == STATUS_HEIGHT, "STATUS_HEIGHT mismatch");
