@@ -12,9 +12,10 @@
 //! type definitions and formatting helpers. The actual output is performed
 //! by Neovim's message system.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_long, CStr};
 
 use crate::range::{LineNr, LineRange};
+use crate::ExArgHandle;
 
 /// Display mode for `:print`, `:number`, and `:list` commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -274,8 +275,294 @@ impl LineNumberResult {
 }
 
 // =============================================================================
+// ex_z types and pure logic
+// =============================================================================
+
+/// EXFLAG constants
+const EXFLAG_LIST: c_int = 0x01;
+const EXFLAG_NR: c_int = 0x02;
+
+/// Kind of `:z` display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZKind {
+    /// `-`: show lines above
+    Minus,
+    /// `=`: center on current line with separator
+    Equals,
+    /// `^`: show two pages above
+    Caret,
+    /// `.`: center on current line
+    Dot,
+    /// `+` or default: show lines below
+    Plus,
+}
+
+impl ZKind {
+    /// Parse from the kind character.
+    fn from_char(c: u8) -> Self {
+        match c {
+            b'-' => ZKind::Minus,
+            b'=' => ZKind::Equals,
+            b'^' => ZKind::Caret,
+            b'.' => ZKind::Dot,
+            _ => ZKind::Plus,
+        }
+    }
+}
+
+/// Result of calculating the z-command range.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZRange {
+    pub start: LineNr,
+    pub end: LineNr,
+    pub curs: LineNr,
+    pub show_separator: bool,
+}
+
+/// Calculate the display range for `:z`.
+///
+/// Pure function - no FFI calls. This is the core logic extracted for testing.
+///
+/// # Arguments
+/// * `kind` - The z-command kind character
+/// * `lnum` - The line number from the command
+/// * `bigness` - The size of the display area
+/// * `repeat_count` - For +/-, the number of consecutive kind chars (x - kind)
+/// * `addr_count` - Number of addresses given in the command
+/// * `line_count` - Total lines in the buffer
+pub fn calculate_z_range(
+    kind: ZKind,
+    lnum: LineNr,
+    bigness: LineNr,
+    repeat_count: LineNr,
+    addr_count: c_int,
+    line_count: LineNr,
+) -> ZRange {
+    let (start, end, curs, show_separator) = match kind {
+        ZKind::Minus => {
+            let s = lnum - bigness * repeat_count + 1;
+            let e = s + bigness - 1;
+            (s, e, e, false)
+        }
+        ZKind::Equals => {
+            let s = lnum - (bigness + 1) / 2 + 1;
+            let e = lnum + (bigness + 1) / 2 - 1;
+            (s, e, lnum, true)
+        }
+        ZKind::Caret => {
+            let s = lnum - bigness * 2;
+            let e = lnum - bigness;
+            (s, e, lnum - bigness, false)
+        }
+        ZKind::Dot => {
+            let s = lnum - (bigness + 1) / 2 + 1;
+            let e = lnum + (bigness + 1) / 2 - 1;
+            (s, e, e, false)
+        }
+        ZKind::Plus => {
+            let mut s = lnum;
+            if repeat_count > 1 {
+                // Was explicitly '+', multiply by repeat count
+                s += bigness * (repeat_count - 1) + 1;
+            } else if addr_count == 0 {
+                s += 1;
+            }
+            let e = s + bigness - 1;
+            (s, e, e, false)
+        }
+    };
+
+    // Clamp to buffer bounds
+    let start = start.max(1);
+    let end = end.min(line_count);
+    let curs = curs.max(1).min(line_count);
+
+    ZRange {
+        start,
+        end,
+        curs,
+        show_separator,
+    }
+}
+
+extern "C" {
+    fn atol(s: *const std::ffi::c_char) -> c_long;
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// `:z` command implementation.
+///
+/// # Safety
+/// `eap` must be a valid pointer to an exarg_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
+    use crate::{
+        emsg, msg_putchar, nvim_curbuf_get_line_count, nvim_curwin_get_cursor_lnum,
+        nvim_curwin_get_p_scr, nvim_curwin_get_view_height, nvim_curwin_set_cursor_col,
+        nvim_curwin_set_cursor_lnum, nvim_exarg_get_addr_count, nvim_exarg_get_arg,
+        nvim_exarg_get_flags, nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_get_Columns,
+        nvim_get_Rows, nvim_is_one_window, nvim_set_ex_no_reprint, nvim_set_p_window, print_line,
+    };
+
+    let lnum = nvim_exarg_get_line2(eap);
+
+    // Vi compatible: ":z!" uses display height, without a count uses 'scroll'
+    let forceit = nvim_exarg_get_forceit(eap) != 0;
+    let mut bigness: i64 = if forceit {
+        i64::from(nvim_get_Rows()) - 1
+    } else if nvim_is_one_window() != 0 {
+        nvim_curwin_get_p_scr() * 2
+    } else {
+        i64::from(nvim_curwin_get_view_height()) - 3
+    };
+    if bigness < 1 {
+        bigness = 1;
+    }
+
+    let arg = nvim_exarg_get_arg(eap);
+    let arg_bytes = CStr::from_ptr(arg).to_bytes();
+
+    // Parse kind character
+    let mut pos = 0;
+    let kind_byte =
+        if !arg_bytes.is_empty() && matches!(arg_bytes[0], b'-' | b'+' | b'=' | b'^' | b'.') {
+            let k = arg_bytes[0];
+            pos = 1;
+            k
+        } else {
+            0 // default ('+' behavior)
+        };
+
+    // Skip additional -/+ signs
+    while pos < arg_bytes.len() && (arg_bytes[pos] == b'-' || arg_bytes[pos] == b'+') {
+        pos += 1;
+    }
+
+    // Check for numeric argument
+    if pos < arg_bytes.len() && arg_bytes[pos] != 0 {
+        if !arg_bytes[pos].is_ascii_digit() {
+            // E144: Non-numeric argument to :z
+            emsg(c"E144: Non-numeric argument to :z".as_ptr());
+            return;
+        }
+        // Use C's atol to parse the number (same as original code)
+        // arg + pos points to the digit start
+        bigness = atol(arg.add(pos)) as i64;
+
+        // bigness could be < 0 if atol overflows
+        let line_count_2x = 2 * i64::from(nvim_curbuf_get_line_count());
+        if bigness > line_count_2x || bigness < 0 {
+            bigness = line_count_2x;
+        }
+
+        nvim_set_p_window(bigness);
+        if kind_byte == b'=' {
+            bigness += 2;
+        }
+    }
+
+    // Count repeat chars for '-' and '+' (the number of consecutive kind chars)
+    let kind = ZKind::from_char(kind_byte);
+    let repeat_count: LineNr = if kind_byte == b'-' || kind_byte == b'+' {
+        // Count: kind char itself (pos=1 at start) + additional same chars
+        // In C: for (x = kind + 1; *x == *kind; x++) {} then (x - kind)
+        // We started with pos after kind. Continue counting same chars from pos=1.
+        let mut count: LineNr = 1;
+        let mut i = 1;
+        while i < arg_bytes.len() && arg_bytes[i] == kind_byte {
+            count += 1;
+            i += 1;
+        }
+        count
+    } else {
+        1 // for '+' behavior (repeat_count > 1 means explicit '+' was typed)
+    };
+
+    // For the Plus default case, we need to distinguish explicit '+' from default.
+    // In the C code: default case checks if (*kind == '+') for the multiplication.
+    // repeat_count > 1 means we need multiplication, but for explicit '+' with count 1
+    // it also applies. Let me re-check the C logic:
+    //
+    // In C default case:
+    //   start = lnum;
+    //   if (*kind == '+') { start += bigness * (x - kind - 1) + 1; }
+    //   else if (addr_count == 0) { start++; }
+    //
+    // (x - kind) is the total offset from kind to x (including kind char itself).
+    // For a single '+', x points just past it, so (x - kind) = 1, (x - kind - 1) = 0.
+    // So start = lnum + 0 + 1 = lnum + 1.
+    // For '++', (x - kind) = 2, (x-kind-1) = 1, start = lnum + bigness*1 + 1.
+    //
+    // For default (no kind char), we fall through to the Plus case with repeat_count=1.
+    // The C code checks (*kind == '+') which is false for default, so addr_count check runs.
+
+    let is_explicit_plus = kind_byte == b'+';
+    let addr_count = nvim_exarg_get_addr_count(eap);
+
+    // Recalculate for Plus case with proper semantics
+    let bigness_nr = bigness as LineNr;
+    let line_count = nvim_curbuf_get_line_count();
+
+    let range = if kind == ZKind::Plus {
+        // Handle Plus/default case directly since it has special repeat logic
+        let mut start = lnum;
+        if is_explicit_plus {
+            start += bigness_nr * (repeat_count - 1) + 1;
+        } else if addr_count == 0 {
+            start += 1;
+        }
+        let end = start + bigness_nr - 1;
+        let curs = end;
+
+        ZRange {
+            start: start.max(1),
+            end: end.min(line_count),
+            curs: curs.max(1).min(line_count),
+            show_separator: false,
+        }
+    } else {
+        calculate_z_range(kind, lnum, bigness_nr, repeat_count, addr_count, line_count)
+    };
+
+    // Display the lines
+    let flags = nvim_exarg_get_flags(eap);
+    let use_number = (flags & EXFLAG_NR) != 0;
+    let use_list = (flags & EXFLAG_LIST) != 0;
+
+    for i in range.start..=range.end {
+        if range.show_separator && i == lnum {
+            msg_putchar(b'\n' as c_int);
+            let columns = nvim_get_Columns();
+            for _j in 1..columns {
+                msg_putchar(b'-' as c_int);
+            }
+        }
+
+        print_line(
+            i,
+            c_int::from(use_number),
+            c_int::from(use_list),
+            c_int::from(i == range.start),
+        );
+
+        if range.show_separator && i == lnum {
+            msg_putchar(b'\n' as c_int);
+            let columns = nvim_get_Columns();
+            for _j in 1..columns {
+                msg_putchar(b'-' as c_int);
+            }
+        }
+    }
+
+    if nvim_curwin_get_cursor_lnum() != range.curs {
+        nvim_curwin_set_cursor_lnum(range.curs);
+        nvim_curwin_set_cursor_col(0);
+    }
+    nvim_set_ex_no_reprint(1);
+}
 
 /// Convert display mode from exarg flags.
 ///
@@ -429,5 +716,86 @@ mod tests {
         assert_eq!(rs_line_number_width(9), 1);
         assert_eq!(rs_line_number_width(100), 3);
         assert_eq!(rs_line_number_width(10000), 5);
+    }
+
+    // =========================================================================
+    // ex_z tests
+    // =========================================================================
+
+    #[test]
+    fn test_z_kind_from_char() {
+        assert_eq!(ZKind::from_char(b'-'), ZKind::Minus);
+        assert_eq!(ZKind::from_char(b'+'), ZKind::Plus);
+        assert_eq!(ZKind::from_char(b'='), ZKind::Equals);
+        assert_eq!(ZKind::from_char(b'^'), ZKind::Caret);
+        assert_eq!(ZKind::from_char(b'.'), ZKind::Dot);
+        assert_eq!(ZKind::from_char(0), ZKind::Plus);
+        assert_eq!(ZKind::from_char(b'x'), ZKind::Plus);
+    }
+
+    #[test]
+    fn test_calculate_z_range_minus() {
+        // :z- at line 50, bigness=20
+        let r = calculate_z_range(ZKind::Minus, 50, 20, 1, 0, 100);
+        assert_eq!(r.start, 31); // 50 - 20*1 + 1
+        assert_eq!(r.end, 50); // 31 + 20 - 1
+        assert_eq!(r.curs, 50);
+        assert!(!r.show_separator);
+    }
+
+    #[test]
+    fn test_calculate_z_range_minus_double() {
+        // :z-- at line 50, bigness=20
+        let r = calculate_z_range(ZKind::Minus, 50, 20, 2, 0, 100);
+        assert_eq!(r.start, 11); // 50 - 20*2 + 1
+        assert_eq!(r.end, 30); // 11 + 20 - 1
+        assert_eq!(r.curs, 30);
+    }
+
+    #[test]
+    fn test_calculate_z_range_equals() {
+        // :z= at line 50, bigness=22
+        let r = calculate_z_range(ZKind::Equals, 50, 22, 1, 0, 100);
+        assert_eq!(r.start, 40); // 50 - (22+1)/2 + 1 = 50 - 11 + 1
+        assert_eq!(r.end, 60); // 50 + (22+1)/2 - 1 = 50 + 11 - 1
+        assert_eq!(r.curs, 50);
+        assert!(r.show_separator);
+    }
+
+    #[test]
+    fn test_calculate_z_range_caret() {
+        // :z^ at line 50, bigness=20
+        let r = calculate_z_range(ZKind::Caret, 50, 20, 1, 0, 100);
+        assert_eq!(r.start, 10); // 50 - 20*2
+        assert_eq!(r.end, 30); // 50 - 20
+        assert_eq!(r.curs, 30); // 50 - 20
+    }
+
+    #[test]
+    fn test_calculate_z_range_dot() {
+        // :z. at line 50, bigness=20
+        let r = calculate_z_range(ZKind::Dot, 50, 20, 1, 0, 100);
+        assert_eq!(r.start, 41); // 50 - (20+1)/2 + 1 = 50 - 10 + 1
+        assert_eq!(r.end, 59); // 50 + (20+1)/2 - 1 = 50 + 10 - 1
+        assert_eq!(r.curs, 59);
+        assert!(!r.show_separator);
+    }
+
+    #[test]
+    fn test_calculate_z_range_clamping() {
+        // Range extends before start of buffer
+        let r = calculate_z_range(ZKind::Minus, 5, 20, 1, 0, 100);
+        assert_eq!(r.start, 1); // clamped from -14
+        assert_eq!(r.end, 5);
+
+        // Range extends past end of buffer
+        let r = calculate_z_range(ZKind::Dot, 95, 20, 1, 0, 100);
+        assert_eq!(r.end, 100); // clamped from 105
+    }
+
+    #[test]
+    fn test_exflag_constants() {
+        assert_eq!(EXFLAG_LIST, 0x01);
+        assert_eq!(EXFLAG_NR, 0x02);
     }
 }

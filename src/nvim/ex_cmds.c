@@ -641,6 +641,36 @@ int nvim_linetabsize_str(char *s)
   return linetabsize_col(0, s);
 }
 
+/// Check if there is only one window (ONE_WINDOW macro).
+int nvim_is_one_window(void)
+{
+  return ONE_WINDOW ? 1 : 0;
+}
+
+/// Get curwin->w_p_scr (scroll option).
+int64_t nvim_curwin_get_p_scr(void)
+{
+  return curwin->w_p_scr;
+}
+
+/// Get curwin->w_view_height.
+int nvim_curwin_get_view_height(void)
+{
+  return curwin->w_view_height;
+}
+
+/// Set ex_no_reprint flag.
+void nvim_set_ex_no_reprint(int val)
+{
+  ex_no_reprint = val != 0;
+}
+
+/// Get curbuf->b_ml.ml_line_count.
+linenr_T nvim_curbuf_get_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
 // Verify constants used in Rust code.
 _Static_assert(CMD_left == 229, "CMD_left mismatch");
 _Static_assert(CMD_center == 63, "CMD_center mismatch");
@@ -648,6 +678,8 @@ _Static_assert(CMD_right == 372, "CMD_right mismatch");
 _Static_assert(BL_WHITE == 1, "BL_WHITE mismatch");
 _Static_assert(BL_FIX == 4, "BL_FIX mismatch");
 _Static_assert(TAB == '\011', "TAB mismatch");
+_Static_assert(EXFLAG_LIST == 0x01, "EXFLAG_LIST mismatch");
+_Static_assert(EXFLAG_NR == 0x02, "EXFLAG_NR mismatch");
 
 static const char e_non_numeric_argument_to_z[]
   = N_("E144: Non-numeric argument to :z");
@@ -3558,122 +3590,7 @@ void ex_change(exarg_T *eap)
 
 void ex_z(exarg_T *eap)
 {
-  int64_t bigness;
-  int minus = 0;
-  linenr_T start, end, curs;
-  linenr_T lnum = eap->line2;
-
-  // Vi compatible: ":z!" uses display height, without a count uses
-  // 'scroll'
-  if (eap->forceit) {
-    bigness = Rows - 1;
-  } else if (ONE_WINDOW) {
-    bigness = curwin->w_p_scr * 2;
-  } else {
-    bigness = curwin->w_view_height - 3;
-  }
-  bigness = MAX(bigness, 1);
-
-  char *x = eap->arg;
-  char *kind = x;
-  if (*kind == '-' || *kind == '+' || *kind == '='
-      || *kind == '^' || *kind == '.') {
-    x++;
-  }
-  while (*x == '-' || *x == '+') {
-    x++;
-  }
-
-  if (*x != 0) {
-    if (!ascii_isdigit(*x)) {
-      emsg(_(e_non_numeric_argument_to_z));
-      return;
-    }
-    bigness = atol(x);
-
-    // bigness could be < 0 if atol(x) overflows.
-    if (bigness > 2 * curbuf->b_ml.ml_line_count || bigness < 0) {
-      bigness = 2 * curbuf->b_ml.ml_line_count;
-    }
-
-    p_window = (int)bigness;
-    if (*kind == '=') {
-      bigness += 2;
-    }
-  }
-
-  // the number of '-' and '+' multiplies the distance
-  if (*kind == '-' || *kind == '+') {
-    for (x = kind + 1; *x == *kind; x++) {}
-  }
-
-  switch (*kind) {
-  case '-':
-    start = lnum - (linenr_T)bigness * (linenr_T)(x - kind) + 1;
-    end = start + (linenr_T)bigness - 1;
-    curs = end;
-    break;
-
-  case '=':
-    start = lnum - ((linenr_T)bigness + 1) / 2 + 1;
-    end = lnum + ((linenr_T)bigness + 1) / 2 - 1;
-    curs = lnum;
-    minus = 1;
-    break;
-
-  case '^':
-    start = lnum - (linenr_T)bigness * 2;
-    end = lnum - (linenr_T)bigness;
-    curs = lnum - (linenr_T)bigness;
-    break;
-
-  case '.':
-    start = lnum - ((linenr_T)bigness + 1) / 2 + 1;
-    end = lnum + ((linenr_T)bigness + 1) / 2 - 1;
-    curs = end;
-    break;
-
-  default:        // '+'
-    start = lnum;
-    if (*kind == '+') {
-      start += (linenr_T)bigness * (linenr_T)(x - kind - 1) + 1;
-    } else if (eap->addr_count == 0) {
-      start++;
-    }
-    end = start + (linenr_T)bigness - 1;
-    curs = end;
-    break;
-  }
-
-  start = MAX(start, 1);
-  end = MIN(end, curbuf->b_ml.ml_line_count);
-  curs = MIN(MAX(curs, 1), curbuf->b_ml.ml_line_count);
-
-  for (linenr_T i = start; i <= end; i++) {
-    if (minus && i == lnum) {
-      msg_putchar('\n');
-
-      for (int j = 1; j < Columns; j++) {
-        msg_putchar('-');
-      }
-    }
-
-    print_line(i, eap->flags & EXFLAG_NR, eap->flags & EXFLAG_LIST, i == start);
-
-    if (minus && i == lnum) {
-      msg_putchar('\n');
-
-      for (int j = 1; j < Columns; j++) {
-        msg_putchar('-');
-      }
-    }
-  }
-
-  if (curwin->w_cursor.lnum != curs) {
-    curwin->w_cursor.lnum = curs;
-    curwin->w_cursor.col = 0;
-  }
-  ex_no_reprint = true;
+  rs_ex_z(eap);
 }
 
 /// @return  true if the secure flag is set and also give an error message.

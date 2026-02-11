@@ -474,6 +474,34 @@ extern "C" {
     pub fn nvim_linetabsize_str(s: *mut c_char) -> c_int;
     /// Find character in string
     pub fn vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
+
+    // ex_z accessors
+    /// Check if there is only one window (ONE_WINDOW macro)
+    pub fn nvim_is_one_window() -> c_int;
+    /// Get curwin->w_p_scr (scroll option, OptInt = i64)
+    pub fn nvim_curwin_get_p_scr() -> i64;
+    /// Get curwin->w_view_height
+    pub fn nvim_curwin_get_view_height() -> c_int;
+    /// Set ex_no_reprint flag
+    pub fn nvim_set_ex_no_reprint(val: c_int);
+    /// Get curbuf->b_ml.ml_line_count
+    pub fn nvim_curbuf_get_line_count() -> c_int;
+    /// Get Rows (screen height)
+    pub fn nvim_get_Rows() -> c_int;
+    /// Get Columns (screen width)
+    pub fn nvim_get_Columns() -> c_int;
+    /// Get p_window option (OptInt = i64)
+    pub fn nvim_get_p_window() -> i64;
+    /// Set p_window option (OptInt = i64)
+    pub fn nvim_set_p_window(val: i64);
+    /// Set curwin->w_cursor.col
+    pub fn nvim_curwin_set_cursor_col(col: c_int);
+    /// Print a line to the message area
+    pub fn print_line(lnum: c_int, use_number: c_int, list: c_int, first: c_int);
+    /// Put a character to the message area
+    pub fn msg_putchar(c: c_int);
+    /// Display error message, returns true
+    pub fn emsg(s: *const c_char) -> c_int;
 }
 
 // =============================================================================
