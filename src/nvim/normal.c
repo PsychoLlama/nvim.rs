@@ -490,6 +490,9 @@ extern void rs_clear_showcmd(void);
 // Phase 2B: normal_get_additional_char
 extern void rs_normal_get_additional_char(void *s);
 
+// Phase 3: normal_finish_command
+extern void rs_normal_finish_command(void *s);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -2966,114 +2969,81 @@ static bool normal_get_command_count(NormalState *s)
   return false;
 }
 
+// =============================================================================
+// Phase 3: normal_finish_command accessors for Rust FFI
+// =============================================================================
+
+_Static_assert(K_IGNORE == -13821, "K_IGNORE changed");
+_Static_assert(K_MOUSEMOVE == -25853, "K_MOUSEMOVE changed");
+_Static_assert(K_EVENT == -26365, "K_EVENT changed");
+_Static_assert(OP_NOP == 0, "OP_NOP changed");
+_Static_assert(OP_COLON == 10, "OP_COLON changed");
+_Static_assert(CA_COMMAND_BUSY == 1, "CA_COMMAND_BUSY changed");
+_Static_assert(NV_KEEPREG == 0x100, "NV_KEEPREG changed");
+
+/// clearop(&oa) via oap handle.
+void nvim_clearop_wrapper(oparg_T *oap) { clearop(oap); }
+
+/// set_reg_var(get_default_register_name()).
+void nvim_set_reg_var_default(void) { set_reg_var(get_default_register_name()); }
+
+/// typebuf_maplen() wrapper.
+int nvim_typebuf_maplen_wrapper(void) { return typebuf_maplen(); }
+
+/// do_pending_operator(&ca, old_col, gui_yank).
+void nvim_do_pending_operator_call(cmdarg_T *ca, int old_col, bool gui_yank)
+{
+  do_pending_operator(ca, old_col, gui_yank);
+}
+
+/// normal_need_redraw_mode_message wrapper (takes void* for NormalState).
+bool nvim_normal_need_redraw_mode_message_wrapper(void *sp)
+{
+  return normal_need_redraw_mode_message((NormalState *)sp);
+}
+
+/// normal_redraw_mode_message wrapper (takes void* for NormalState).
+void nvim_normal_redraw_mode_message_wrapper(void *sp)
+{
+  normal_redraw_mode_message((NormalState *)sp);
+}
+
+/// ui_cursor_shape() wrapper.
+void nvim_ui_cursor_shape_wrapper(void) { ui_cursor_shape(); }
+
+/// checkpcmark() wrapper.
+void nvim_checkpcmark_wrapper(void) { checkpcmark(); }
+
+/// Free ca->searchbuf and null it.
+void nvim_xfree_cap_searchbuf(cmdarg_T *ca) { xfree(ca->searchbuf); ca->searchbuf = NULL; }
+
+/// mb_check_adjust_col(curwin) wrapper.
+void nvim_mb_check_adjust_col_wrapper(void) { mb_check_adjust_col(curwin); }
+
+/// curwin->w_p_scb.
+bool nvim_curwin_get_p_scb(void) { return curwin->w_p_scb; }
+
+/// curwin->w_p_crb.
+bool nvim_curwin_get_p_crb(void) { return curwin->w_p_crb; }
+
+/// validate_cursor(curwin) wrapper.
+void nvim_validate_cursor_curwin_wrapper(void) { validate_cursor(curwin); }
+
+/// do_check_scrollbind(flag) wrapper.
+void nvim_do_check_scrollbind_wrapper(bool flag) { do_check_scrollbind(flag); }
+
+/// do_check_cursorbind() wrapper.
+void nvim_do_check_cursorbind_wrapper(void) { do_check_cursorbind(); }
+
+/// edit(cmd, startln, count) wrapper.
+void nvim_edit_wrapper(int cmd, bool startln, int count) { edit(cmd, startln, count); }
+
+/// showmode() wrapper.
+void nvim_showmode_wrapper(void) { showmode(); }
+
 static void normal_finish_command(NormalState *s)
 {
-  bool did_visual_op = false;
-
-  if (s->command_finished) {
-    goto normal_end;
-  }
-
-  // If we didn't start or finish an operator, reset oap->regname, unless we
-  // need it later.
-  if (!finish_op
-      && !s->oa.op_type
-      && (s->idx < 0 || !(nv_cmds[s->idx].cmd_flags & NV_KEEPREG))) {
-    clearop(&s->oa);
-    set_reg_var(get_default_register_name());
-  }
-
-  // Get the length of mapped chars again after typing a count, second
-  // character or "z333<cr>".
-  if (s->old_mapped_len > 0) {
-    s->old_mapped_len = typebuf_maplen();
-  }
-
-  // If an operation is pending, handle it.  But not for K_IGNORE or
-  // K_MOUSEMOVE.
-  if (s->ca.cmdchar != K_IGNORE && s->ca.cmdchar != K_MOUSEMOVE) {
-    did_visual_op = VIsual_active && s->oa.op_type != OP_NOP
-                    // For OP_COLON, do_pending_operator() stuffs ':' into
-                    // the read buffer, which isn't executed immediately.
-                    && s->oa.op_type != OP_COLON;
-    do_pending_operator(&s->ca, s->old_col, false);
-  }
-
-  // Wait for a moment when a message is displayed that will be overwritten
-  // by the mode message.
-  if (normal_need_redraw_mode_message(s)) {
-    normal_redraw_mode_message(s);
-  }
-
-  // Finish up after executing a Normal mode command.
-normal_end:
-
-  msg_nowait = false;
-
-  if (finish_op || did_visual_op) {
-    set_reg_var(get_default_register_name());
-  }
-
-  const bool prev_finish_op = finish_op;
-  if (s->oa.op_type == OP_NOP) {
-    // Reset finish_op, in case it was set
-    finish_op = false;
-    may_trigger_modechanged();
-  }
-  // Redraw the cursor with another shape, if we were in Operator-pending
-  // mode or did a replace command.
-  if (prev_finish_op || s->ca.cmdchar == 'r'
-      || (s->ca.cmdchar == 'g' && s->ca.nchar == 'r')) {
-    ui_cursor_shape();                  // may show different cursor shape
-  }
-
-  if (s->oa.op_type == OP_NOP && s->oa.regname == 0
-      && s->ca.cmdchar != K_EVENT) {
-    clear_showcmd();
-  }
-
-  checkpcmark();                // check if we moved since setting pcmark
-  xfree(s->ca.searchbuf);
-
-  mb_check_adjust_col(curwin);  // #6203
-
-  if (curwin->w_p_scb && s->toplevel) {
-    validate_cursor(curwin);          // may need to update w_leftcol
-    do_check_scrollbind(true);
-  }
-
-  if (curwin->w_p_crb && s->toplevel) {
-    validate_cursor(curwin);          // may need to update w_leftcol
-    do_check_cursorbind();
-  }
-
-  // May restart edit(), if we got here with CTRL-O in Insert mode (but not
-  // if still inside a mapping that started in Visual mode).
-  // May switch from Visual to Select mode after CTRL-O command.
-  if (s->oa.op_type == OP_NOP
-      && ((restart_edit != 0 && !VIsual_active && s->old_mapped_len == 0)
-          || restart_VIsual_select == 1)
-      && !(s->ca.retval & CA_COMMAND_BUSY)
-      && stuff_empty()
-      && s->oa.regname == 0) {
-    if (restart_VIsual_select == 1) {
-      VIsual_select = true;
-      VIsual_select_reg = 0;
-      may_trigger_modechanged();
-      showmode();
-      restart_VIsual_select = 0;
-    }
-    if (restart_edit != 0 && !VIsual_active && s->old_mapped_len == 0) {
-      edit(restart_edit, false, 1);
-    }
-  }
-
-  if (restart_VIsual_select == 2) {
-    restart_VIsual_select = 1;
-  }
-
-  // Save count before an operator for next time
-  opcount = s->ca.opcount;
+  rs_normal_finish_command(s);
 }
 
 static int normal_execute(VimState *state, int key)

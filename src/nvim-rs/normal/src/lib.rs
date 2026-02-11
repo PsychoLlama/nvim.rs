@@ -13,6 +13,7 @@ pub mod commands;
 pub mod count;
 pub mod dispatch;
 pub mod execute;
+pub mod finish_command;
 pub mod insert;
 pub mod motion;
 pub mod operator;
