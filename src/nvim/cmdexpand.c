@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -209,6 +210,16 @@ extern char *rs_get_retab_arg(expand_T *xp, int idx);
 extern char *rs_get_messages_arg(expand_T *xp, int idx);
 extern char *rs_get_mapclear_arg(expand_T *xp, int idx);
 
+// Wave 4: Wildmenu display helpers
+extern int rs_skip_wildmenu_char(expand_T *xp, const char *s);
+extern int rs_wildmenu_match_len(expand_T *xp, char *s);
+
+// Wave 4: Pattern-in-buffer helpers
+extern int rs_is_regex_match(const char *pat, const char *str);
+extern char *rs_concat_pattern_with_buffer_match(const char *pat, int pat_len,
+                                                  const pos_T *end_match_pos, int lowercase);
+extern int rs_copy_substring_from_pos(pos_T *start, pos_T *end, char **match, pos_T *match_end);
+
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
 {
@@ -365,6 +376,19 @@ _Static_assert(kUIWildmenu == 3, "kUIWildmenu mismatch");
 // wildoptions flag used in rs_cmdline_compl_use_pum
 _Static_assert(kOptWopFlagPum == 0x04, "kOptWopFlagPum mismatch");
 
+// Wave 4: Constants used in wildmenu and pattern-in-buffer helpers
+_Static_assert(kOptWopFlagExacttext == 0x08, "kOptWopFlagExacttext mismatch");
+_Static_assert(RE_MAGIC == 1, "RE_MAGIC mismatch");
+_Static_assert(RE_STRING == 2, "RE_STRING mismatch");
+_Static_assert(EXPAND_HELP == 8, "EXPAND_HELP mismatch");
+_Static_assert(EXPAND_MENUS == 11, "EXPAND_MENUS mismatch");
+_Static_assert(EXPAND_MENUNAMES == 21, "EXPAND_MENUNAMES mismatch");
+_Static_assert(EXPAND_PATTERN_IN_BUF == 60, "EXPAND_PATTERN_IN_BUF mismatch");
+_Static_assert(sizeof(pos_T) == 12, "pos_T size mismatch");
+_Static_assert(offsetof(pos_T, lnum) == 0, "pos_T.lnum offset mismatch");
+_Static_assert(offsetof(pos_T, col) == 4, "pos_T.col offset mismatch");
+_Static_assert(offsetof(pos_T, coladd) == 8, "pos_T.coladd offset mismatch");
+
 // =============================================================================
 // Phase 1: C accessors for Rust leaf utility functions
 // =============================================================================
@@ -391,6 +415,54 @@ int nvim_cmdexpand_rem_backslash(const char *p)
 int nvim_cmdexpand_mb_ptr_adv_len(const char *p)
 {
   return utfc_ptr2len(p);
+}
+
+/// Get display cell width of character at pointer (for Rust FFI).
+int nvim_cmdexpand_ptr2cells(const char *p)
+{
+  return ptr2cells(p);
+}
+
+/// Check if string is a menu separator (for Rust FFI).
+int nvim_cmdexpand_menu_is_separator(const char *s)
+{
+  return menu_is_separator((char *)s);
+}
+
+/// Get buffer line text (for Rust FFI).
+const char *nvim_cmdexpand_ml_get(linenr_T lnum)
+{
+  return ml_get(lnum);
+}
+
+/// Get buffer line length (for Rust FFI).
+int nvim_cmdexpand_ml_get_len(linenr_T lnum)
+{
+  return ml_get_len(lnum);
+}
+
+/// Increment msg_silent (for Rust FFI).
+void nvim_cmdexpand_msg_silent_inc(void)
+{
+  msg_silent++;
+}
+
+/// Decrement msg_silent (for Rust FFI).
+void nvim_cmdexpand_msg_silent_dec(void)
+{
+  msg_silent--;
+}
+
+/// Get p_ic (ignorecase option) value (for Rust FFI).
+int nvim_cmdexpand_get_p_ic(void)
+{
+  return p_ic;
+}
+
+/// Get p_scs (smartcase option) value (for Rust FFI).
+int nvim_cmdexpand_get_p_scs(void)
+{
+  return p_scs;
 }
 
 // =============================================================================
@@ -1406,46 +1478,17 @@ static bool cmdline_compl_use_pum(bool need_wildmenu)
 /// Return the number of characters that should be skipped in the wildmenu
 /// These are backslashes used for escaping.  Do show backslashes in help tags
 /// and in search pattern completion matches.
+/// Rust implementation.
 static int skip_wildmenu_char(expand_T *xp, char *s)
 {
-  if ((rem_backslash(s) && xp->xp_context != EXPAND_HELP
-       && xp->xp_context != EXPAND_PATTERN_IN_BUF)
-      || ((xp->xp_context == EXPAND_MENUS || xp->xp_context == EXPAND_MENUNAMES)
-          && (s[0] == '\t' || (s[0] == '\\' && s[1] != NUL)))) {
-#ifndef BACKSLASH_IN_FILENAME
-    // TODO(bfredl): Why in the actual fuck are we special casing the
-    // shell variety deep in the redraw logic? Shell special snowflakiness
-    // should already be eliminated multiple layers before reaching the
-    // screen infracstructure.
-    if (xp->xp_shell && csh_like_shell() && s[1] == '\\' && s[2] == '!') {
-      return 2;
-    }
-#endif
-    return 1;
-  }
-  return 0;
+  return rs_skip_wildmenu_char(xp, s);
 }
 
 /// Get the length of an item as it will be shown in the status line.
+/// Rust implementation.
 static int wildmenu_match_len(expand_T *xp, char *s)
 {
-  int len = 0;
-
-  int emenu = (xp->xp_context == EXPAND_MENUS
-               || xp->xp_context == EXPAND_MENUNAMES);
-
-  // Check for menu separators - replace with '|'.
-  if (emenu && menu_is_separator(s)) {
-    return 1;
-  }
-
-  while (*s != NUL) {
-    s += skip_wildmenu_char(xp, s);
-    len += ptr2cells(s);
-    MB_PTR_ADV(s);
-  }
-
-  return len;
+  return rs_wildmenu_match_len(xp, s);
 }
 
 /// Show wildchar matches in the status line.
@@ -4125,102 +4168,19 @@ void f_cmdcomplete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// 'start' position to the word boundary after 'end' position.
 /// The copied string is stored in '*match', and the actual end position of the
 /// matched text is returned in '*match_end'.
+/// Rust implementation.
 static int copy_substring_from_pos(pos_T *start, pos_T *end, char **match, pos_T *match_end)
 {
-  bool exacttext = wop_flags & kOptWopFlagExacttext;
-
-  if (start->lnum > end->lnum
-      || (start->lnum == end->lnum && start->col >= end->col)) {
-    return FAIL;  // invalid range
-  }
-
-  // Use a growable string (ga)
-  garray_T ga;
-  ga_init(&ga, 1, 128);
-
-  // Append start line from start->col to end
-  char *start_line = ml_get(start->lnum);
-  char *start_ptr = start_line + start->col;
-  bool is_single_line = start->lnum == end->lnum;
-
-  int segment_len = is_single_line ? (int)(end->col - start->col)
-                                   : (int)(ml_get_len(start->lnum) - start->col);
-  ga_grow(&ga, segment_len + 2);
-  ga_concat_len(&ga, start_ptr, (size_t)segment_len);
-  if (!is_single_line) {
-    if (exacttext) {
-      ga_concat_len(&ga, "\\n", 2);
-    } else {
-      ga_append(&ga, '\n');
-    }
-  }
-
-  // Append full lines between start and end
-  if (!is_single_line) {
-    for (linenr_T lnum = start->lnum + 1; lnum < end->lnum; lnum++) {
-      char *line = ml_get(lnum);
-      ga_grow(&ga, ml_get_len(lnum) + 2);
-      ga_concat(&ga, line);
-      if (exacttext) {
-        ga_concat_len(&ga, "\\n", 2);
-      } else {
-        ga_append(&ga, '\n');
-      }
-    }
-  }
-
-  // Append partial end line (up to word end)
-  char *end_line = ml_get(end->lnum);
-  char *word_end = find_word_end(end_line + end->col);
-  segment_len = (int)(word_end - end_line);
-  ga_grow(&ga, segment_len);
-  ga_concat_len(&ga, end_line + (is_single_line ? end->col : 0),
-                (size_t)(segment_len - (is_single_line ? end->col : 0)));
-
-  // Null-terminate
-  ga_grow(&ga, 1);
-  ga_append(&ga, NUL);
-
-  *match = (char *)ga.ga_data;
-  match_end->lnum = end->lnum;
-  match_end->col = segment_len;
-
-  return OK;
+  return rs_copy_substring_from_pos(start, end, match, match_end);
 }
 
 /// Returns true if the given string `str` matches the regex pattern `pat`.
 /// Honors the 'ignorecase' (p_ic) and 'smartcase' (p_scs) settings to determine
 /// case sensitivity.
+/// Rust implementation.
 static bool is_regex_match(char *pat, char *str)
 {
-  if (strcmp(pat, str) == 0) {
-    return true;
-  }
-
-  regmatch_T regmatch;
-
-  emsg_off++;
-  msg_silent++;
-  regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-  emsg_off--;
-  msg_silent--;
-
-  if (regmatch.regprog == NULL) {
-    return false;
-  }
-  regmatch.rm_ic = p_ic;
-  if (p_ic && p_scs) {
-    regmatch.rm_ic = !pat_has_uppercase(pat);
-  }
-
-  emsg_off++;
-  msg_silent++;
-  bool result = vim_regexec_nl(&regmatch, str, (colnr_T)0);
-  emsg_off--;
-  msg_silent--;
-
-  vim_regfree(regmatch.regprog);
-  return result;
+  return rs_is_regex_match(pat, str) != 0;
 }
 
 /// Constructs a new match string by appending text from the buffer (starting at
@@ -4228,29 +4188,12 @@ static bool is_regex_match(char *pat, char *str)
 /// `pat` and the word following end_match_pos.
 /// If 'lowercase' is true, the appended text is converted to lowercase before
 /// being combined. Returns the newly allocated match string, or NULL on failure.
+/// Rust implementation.
 static char *concat_pattern_with_buffer_match(char *pat, int pat_len, pos_T *end_match_pos,
                                               bool lowercase)
   FUNC_ATTR_NONNULL_RET
 {
-  char *line = ml_get(end_match_pos->lnum);
-  char *word_end = find_word_end(line + end_match_pos->col);
-  int match_len = (int)(word_end - (line + end_match_pos->col));
-  char *match = xmalloc((size_t)match_len + (size_t)pat_len + 1);  // +1 for NUL
-
-  memmove(match, pat, (size_t)pat_len);
-  if (match_len > 0) {
-    if (lowercase) {
-      char *mword = xstrnsave(line + end_match_pos->col, (size_t)match_len);
-      char *lower = strcase_save(mword, false);
-      xfree(mword);
-      memmove(match + pat_len, lower, (size_t)match_len);
-      xfree(lower);
-    } else {
-      memmove(match + pat_len, line + end_match_pos->col, (size_t)match_len);
-    }
-  }
-  match[pat_len + match_len] = NUL;
-  return match;
+  return rs_concat_pattern_with_buffer_match(pat, pat_len, end_match_pos, lowercase);
 }
 
 /// Search for strings matching "pat" in the specified range and return them.

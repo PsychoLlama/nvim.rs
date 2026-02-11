@@ -77,6 +77,7 @@ rust-test:
       -p nvim-bufwrite \
       -p nvim-charset \
       -p nvim-clipboard \
+      -p nvim-cmdexpand \
       -p nvim-cmdline \
       -p nvim-cmdhist \
       -p nvim-collections \
