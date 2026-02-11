@@ -671,6 +671,34 @@ linenr_T nvim_curbuf_get_line_count(void)
   return curbuf->b_ml.ml_line_count;
 }
 
+/// Check if CMOD_LOCKMARKS is set in cmdmod.
+int nvim_cmdmod_has_lockmarks(void)
+{
+  return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0;
+}
+
+/// Set curbuf->b_op_start.
+void nvim_curbuf_set_op_start(linenr_T lnum, colnr_T col)
+{
+  curbuf->b_op_start.lnum = lnum;
+  curbuf->b_op_start.col = col;
+}
+
+/// Set curbuf->b_op_end.
+void nvim_curbuf_set_op_end(linenr_T lnum, colnr_T col)
+{
+  curbuf->b_op_end.lnum = lnum;
+  curbuf->b_op_end.col = col;
+}
+
+/// Call check_pos(curbuf, &VIsual).
+void nvim_check_pos_visual(void)
+{
+  check_pos(curbuf, &VIsual);
+}
+
+_Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS mismatch");
+
 // Verify constants used in Rust code.
 _Static_assert(CMD_left == 229, "CMD_left mismatch");
 _Static_assert(CMD_center == 63, "CMD_center mismatch");
@@ -1477,53 +1505,7 @@ int do_move(linenr_T line1, linenr_T line2, linenr_T dest)
 /// ":copy"
 void ex_copy(linenr_T line1, linenr_T line2, linenr_T n)
 {
-  linenr_T count = line2 - line1 + 1;
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    curbuf->b_op_start.lnum = n + 1;
-    curbuf->b_op_end.lnum = n + count;
-    curbuf->b_op_start.col = curbuf->b_op_end.col = 0;
-  }
-
-  // there are three situations:
-  // 1. destination is above line1
-  // 2. destination is between line1 and line2
-  // 3. destination is below line2
-  //
-  // n = destination (when starting)
-  // curwin->w_cursor.lnum = destination (while copying)
-  // line1 = start of source (while copying)
-  // line2 = end of source (while copying)
-  if (u_save(n, n + 1) == FAIL) {
-    return;
-  }
-
-  curwin->w_cursor.lnum = n;
-  while (line1 <= line2) {
-    // need to make a copy because the line will be unlocked within ml_append()
-    char *p = xstrnsave(ml_get(line1), (size_t)ml_get_len(line1));
-    ml_append(curwin->w_cursor.lnum, p, 0, false);
-    xfree(p);
-
-    // situation 2: skip already copied lines
-    if (line1 == n) {
-      line1 = curwin->w_cursor.lnum;
-    }
-    line1++;
-    if (curwin->w_cursor.lnum < line1) {
-      line1++;
-    }
-    if (curwin->w_cursor.lnum < line2) {
-      line2++;
-    }
-    curwin->w_cursor.lnum++;
-  }
-
-  appended_lines_mark(n, count);
-  if (VIsual_active) {
-    check_pos(curbuf, &VIsual);
-  }
-
-  msgmore(count);
+  rs_ex_copy(line1, line2, n);
 }
 
 static char *prevcmd = NULL;        // the previous command

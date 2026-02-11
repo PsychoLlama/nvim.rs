@@ -502,6 +502,32 @@ extern "C" {
     pub fn msg_putchar(c: c_int);
     /// Display error message, returns true
     pub fn emsg(s: *const c_char) -> c_int;
+
+    // ex_copy accessors and functions
+    /// Check if CMOD_LOCKMARKS is set in cmdmod
+    pub fn nvim_cmdmod_has_lockmarks() -> c_int;
+    /// Set curbuf->b_op_start
+    pub fn nvim_curbuf_set_op_start(lnum: c_int, col: c_int);
+    /// Set curbuf->b_op_end
+    pub fn nvim_curbuf_set_op_end(lnum: c_int, col: c_int);
+    /// Check if VIsual_active is set
+    pub fn nvim_get_visual_active() -> c_int;
+    /// Call check_pos(curbuf, &VIsual)
+    pub fn nvim_check_pos_visual();
+    /// Get a line from the buffer
+    pub fn ml_get(lnum: c_int) -> *const c_char;
+    /// Get the length of a line from the buffer
+    pub fn ml_get_len(lnum: c_int) -> c_int;
+    /// Append a line after lnum
+    pub fn ml_append(lnum: c_int, line: *const c_char, len: c_int, newfile: c_int) -> c_int;
+    /// Copy a string with known length
+    pub fn xstrnsave(string: *const c_char, len: usize) -> *mut c_char;
+    /// Free memory
+    pub fn xfree(ptr: *mut std::ffi::c_void);
+    /// Mark lines as appended
+    pub fn appended_lines_mark(lnum: c_int, count: c_int);
+    /// Display line count message
+    pub fn msgmore(n: c_int);
 }
 
 // =============================================================================

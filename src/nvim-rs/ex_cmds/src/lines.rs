@@ -369,6 +369,74 @@ pub fn adjust_line_after_move(lnum: LineNr, range: LineRange, dest: LineNr) -> L
 // FFI Exports
 // =============================================================================
 
+/// FAIL constant from vim_defs.h
+const FAIL: c_int = 0;
+
+/// `:copy`/`:t` command implementation.
+///
+/// Copies lines from `line1..=line2` to after line `n`.
+///
+/// # Safety
+/// Must be called from Neovim's main thread with valid buffer state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_copy(line1: c_int, line2: c_int, n: c_int) {
+    use crate::{
+        appended_lines_mark, ml_append, ml_get, ml_get_len, msgmore, nvim_check_pos_visual,
+        nvim_cmdmod_has_lockmarks, nvim_curbuf_set_op_end, nvim_curbuf_set_op_start,
+        nvim_curwin_get_cursor_lnum, nvim_curwin_set_cursor_lnum, nvim_get_visual_active, u_save,
+        xfree, xstrnsave,
+    };
+
+    let count = line2 - line1 + 1;
+
+    if nvim_cmdmod_has_lockmarks() == 0 {
+        nvim_curbuf_set_op_start(n + 1, 0);
+        nvim_curbuf_set_op_end(n + count, 0);
+    }
+
+    // There are three situations:
+    // 1. destination is above line1
+    // 2. destination is between line1 and line2
+    // 3. destination is below line2
+    if u_save(n, n + 1) == FAIL {
+        return;
+    }
+
+    nvim_curwin_set_cursor_lnum(n);
+    let mut l1 = line1;
+    let mut l2 = line2;
+    while l1 <= l2 {
+        // Need to make a copy because the line will be unlocked within ml_append()
+        let src = ml_get(l1);
+        let src_len = ml_get_len(l1);
+        let p = xstrnsave(src, src_len as usize);
+        let cursor_lnum = nvim_curwin_get_cursor_lnum();
+        ml_append(cursor_lnum, p, 0, 0);
+        xfree(p.cast());
+
+        // situation 2: skip already copied lines
+        if l1 == n {
+            l1 = nvim_curwin_get_cursor_lnum();
+        }
+        l1 += 1;
+        let cursor_lnum = nvim_curwin_get_cursor_lnum();
+        if cursor_lnum < l1 {
+            l1 += 1;
+        }
+        if cursor_lnum < l2 {
+            l2 += 1;
+        }
+        nvim_curwin_set_cursor_lnum(cursor_lnum + 1);
+    }
+
+    appended_lines_mark(n, count);
+    if nvim_get_visual_active() != 0 {
+        nvim_check_pos_visual();
+    }
+
+    msgmore(count);
+}
+
 /// Validate a copy operation.
 ///
 /// Returns 1 if valid, 0 if invalid.
