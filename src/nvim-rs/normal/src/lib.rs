@@ -19,7 +19,7 @@ pub mod operator_cmds;
 pub mod pending;
 pub mod visual;
 
-use std::ffi::{c_int, c_uint};
+use std::ffi::{c_char, c_int, c_uint};
 
 // =============================================================================
 // Key Constants (from keycodes.h)
@@ -289,6 +289,15 @@ extern "C" {
     fn nvim_unadjust_for_sel_inner_visual() -> bool;
     #[allow(dead_code)]
     fn nvim_ml_get_len_call(lnum: c_int) -> c_int;
+
+    // Phase 1A: find_ident_at_pos accessors
+    fn nvim_ml_get_buf_wrapper(buf: BufHandle, lnum: i32) -> *mut c_char;
+    fn nvim_mb_get_class_wrapper(ptr: *const c_char) -> c_int;
+    fn nvim_utfc_ptr2len_wrapper(ptr: *const c_char) -> c_int;
+    fn nvim_utf_head_off_wrapper(base: *const c_char, ptr: *const c_char) -> c_int;
+    fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
+    fn nvim_emsg_no_string_under_cursor();
+    fn nvim_emsg_no_ident_under_cursor();
 }
 
 // Operator type constants (must match ops.h)
@@ -322,6 +331,9 @@ const K_OPT_FDO_FLAG_PERCENT: c_uint = 0x10;
 
 /// Opaque handle to a window (win_T*).
 pub type WinHandle = *mut std::ffi::c_void;
+
+/// Opaque handle to a buffer (buf_T*).
+pub type BufHandle = *mut std::ffi::c_void;
 
 /// Opaque handle to operator arguments (oparg_T*).
 pub type OapHandle = *mut std::ffi::c_void;
@@ -560,6 +572,149 @@ pub unsafe extern "C" fn rs_find_is_eval_item(
     }
 
     false
+}
+
+// =============================================================================
+// find_ident_at_pos constants (from normal.h, verified with _Static_assert)
+// =============================================================================
+
+const FIND_IDENT: c_int = 1;
+const FIND_STRING: c_int = 2;
+const FIND_EVAL: c_int = 4;
+
+// =============================================================================
+// find_ident_at_pos (Phase 1A)
+// =============================================================================
+
+/// Find identifier or text at position in a window.
+///
+/// This is the Rust implementation of `find_ident_at_pos()` from normal.c.
+/// Searches for an identifier or text at the given position, respecting
+/// FIND_IDENT, FIND_STRING, and FIND_EVAL flags.
+///
+/// # Safety
+/// `wp` must be a valid window pointer. `text` must be a valid `char**`.
+/// `textcol` may be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_ident_at_pos(
+    wp: WinHandle,
+    lnum: i32,
+    startcol: i32,
+    text: *mut *mut c_char,
+    textcol: *mut c_int,
+    find_type: c_int,
+) -> usize {
+    let buf = nvim_win_get_w_buffer(wp);
+    let ptr = nvim_ml_get_buf_wrapper(buf, lnum);
+    let nul: c_char = 0;
+    #[allow(clippy::cast_possible_wrap)]
+    let rbracket: c_char = b']' as c_char;
+
+    let mut col: c_int = 0;
+    let mut this_class: c_int = 0;
+    let mut bn: c_int;
+    let mut i: c_int = c_int::from(find_type & FIND_IDENT == 0);
+
+    // if i == 0: try to find an identifier
+    // if i == 1: try to find any non-white text
+    while i < 2 {
+        // 1. skip to start of identifier/text
+        col = startcol;
+        while *ptr.offset(col as isize) != nul {
+            // Stop at a ']' to evaluate "a[x]".
+            if (find_type & FIND_EVAL != 0) && *ptr.offset(col as isize) == rbracket {
+                break;
+            }
+            this_class = nvim_mb_get_class_wrapper(ptr.offset(col as isize));
+            if this_class != 0 && (i == 1 || this_class != 1) {
+                break;
+            }
+            col += nvim_utfc_ptr2len_wrapper(ptr.offset(col as isize));
+        }
+
+        // When starting on a ']' count it, so that we include the '['.
+        bn = c_int::from(*ptr.offset(col as isize) == rbracket);
+
+        // 2. Back up to start of identifier/text.
+        // Remember class of character under cursor.
+        if (find_type & FIND_EVAL != 0) && *ptr.offset(col as isize) == rbracket {
+            // Use class of 'a' (identifier class)
+            this_class = nvim_mb_get_class_wrapper(c"a".as_ptr());
+        } else {
+            this_class = nvim_mb_get_class_wrapper(ptr.offset(col as isize));
+        }
+        while col > 0 && this_class != 0 {
+            let mut prevcol =
+                col - 1 - nvim_utf_head_off_wrapper(ptr, ptr.offset(col as isize - 1));
+            let prev_class = nvim_mb_get_class_wrapper(ptr.offset(prevcol as isize));
+            if this_class != prev_class
+                && (i == 0 || prev_class == 0 || (find_type & FIND_IDENT != 0))
+                && (find_type & FIND_EVAL == 0
+                    || prevcol == 0
+                    || !rs_find_is_eval_item(
+                        ptr.offset(prevcol as isize),
+                        std::ptr::addr_of_mut!(prevcol),
+                        std::ptr::addr_of_mut!(bn),
+                        BACKWARD,
+                    ))
+            {
+                break;
+            }
+            col = prevcol;
+        }
+
+        // If we don't want just any old text, or we've found an identifier, stop.
+        if this_class > 2 {
+            this_class = 2;
+        }
+        if (find_type & FIND_STRING == 0) || this_class == 2 {
+            break;
+        }
+        i += 1;
+    }
+
+    if *ptr.offset(col as isize) == nul || (i == 0 && this_class != 2) {
+        // Didn't find an identifier or text.
+        if find_type & FIND_STRING != 0 {
+            nvim_emsg_no_string_under_cursor();
+        } else {
+            nvim_emsg_no_ident_under_cursor();
+        }
+        return 0;
+    }
+    let result_ptr = ptr.offset(col as isize);
+    *text = result_ptr;
+    if !textcol.is_null() {
+        *textcol = col;
+    }
+
+    // 3. Find the end of the identifier/text.
+    bn = 0;
+    let startcol_remaining = startcol - col;
+    let mut end_col: c_int = 0;
+    // Search for point of changing multibyte character class.
+    this_class = nvim_mb_get_class_wrapper(result_ptr);
+    while *result_ptr.offset(end_col as isize) != nul
+        && ((if i == 0 {
+            nvim_mb_get_class_wrapper(result_ptr.offset(end_col as isize)) == this_class
+        } else {
+            nvim_mb_get_class_wrapper(result_ptr.offset(end_col as isize)) != 0
+        }) || ((find_type & FIND_EVAL != 0)
+            && end_col <= startcol_remaining
+            && rs_find_is_eval_item(
+                result_ptr.offset(end_col as isize),
+                std::ptr::addr_of_mut!(end_col),
+                std::ptr::addr_of_mut!(bn),
+                FORWARD,
+            )))
+    {
+        end_col += nvim_utfc_ptr2len_wrapper(result_ptr.offset(end_col as isize));
+    }
+
+    debug_assert!(end_col >= 0);
+    #[allow(clippy::cast_sign_loss)]
+    let result = end_col as usize;
+    result
 }
 
 // =============================================================================

@@ -480,6 +480,10 @@ extern void rs_v_swap_corners(int cmdchar);
 extern bool rs_unadjust_for_sel(void);
 extern void rs_nv_percent(cmdarg_T *cap);
 
+// Phase 1A: find_ident_at_pos
+extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
+                                   char **text, int *textcol, int find_type);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -2483,6 +2487,53 @@ bool op_pending(void)
   return rs_op_pending();
 }
 
+// =============================================================================
+// Phase 1A: find_ident_at_pos accessors for Rust FFI
+// =============================================================================
+
+/// Constants for find_ident_at_pos (verified with _Static_assert).
+_Static_assert(FIND_IDENT == 1, "FIND_IDENT changed");
+_Static_assert(FIND_STRING == 2, "FIND_STRING changed");
+_Static_assert(FIND_EVAL == 4, "FIND_EVAL changed");
+_Static_assert(BACKWARD == -1, "BACKWARD changed");
+_Static_assert(FORWARD == 1, "FORWARD changed");
+
+/// Get line text from a buffer.
+char *nvim_ml_get_buf_wrapper(buf_T *buf, linenr_T lnum)
+{
+  return ml_get_buf(buf, lnum);
+}
+
+/// Get character class.
+int nvim_mb_get_class_wrapper(const char *ptr)
+{
+  return mb_get_class(ptr);
+}
+
+/// Get multibyte character length.
+int nvim_utfc_ptr2len_wrapper(const char *ptr)
+{
+  return utfc_ptr2len(ptr);
+}
+
+/// Get byte offset to head of multibyte char.
+int nvim_utf_head_off_wrapper(const char *base, const char *ptr)
+{
+  return utf_head_off(base, ptr);
+}
+
+/// Emit "E348: No string under cursor" error.
+void nvim_emsg_no_string_under_cursor(void)
+{
+  emsg(_("E348: No string under cursor"));
+}
+
+/// Emit "E349: No identifier under cursor" error.
+void nvim_emsg_no_ident_under_cursor(void)
+{
+  emsg(_(e_noident));
+}
+
 /// Normal state entry point. This is called on:
 ///
 /// - Startup, In this case the function never returns.
@@ -3546,98 +3597,7 @@ size_t find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol, char **text
                          int find_type)
   FUNC_ATTR_NONNULL_ARG(1, 4)
 {
-  int col = 0;         // init to shut up GCC
-  int i;
-  int this_class = 0;
-  int prev_class;
-  int prevcol;
-  int bn = 0;                       // bracket nesting
-
-  // if i == 0: try to find an identifier
-  // if i == 1: try to find any non-white text
-  char *ptr = ml_get_buf(wp->w_buffer, lnum);
-  for (i = (find_type & FIND_IDENT) ? 0 : 1; i < 2; i++) {
-    // 1. skip to start of identifier/text
-    col = startcol;
-    while (ptr[col] != NUL) {
-      // Stop at a ']' to evaluate "a[x]".
-      if ((find_type & FIND_EVAL) && ptr[col] == ']') {
-        break;
-      }
-      this_class = mb_get_class(ptr + col);
-      if (this_class != 0 && (i == 1 || this_class != 1)) {
-        break;
-      }
-      col += utfc_ptr2len(ptr + col);
-    }
-
-    // When starting on a ']' count it, so that we include the '['.
-    bn = ptr[col] == ']';
-
-    // 2. Back up to start of identifier/text.
-    //
-    // Remember class of character under cursor.
-    if ((find_type & FIND_EVAL) && ptr[col] == ']') {
-      this_class = mb_get_class("a");
-    } else {
-      this_class = mb_get_class(ptr + col);
-    }
-    while (col > 0 && this_class != 0) {
-      prevcol = col - 1 - utf_head_off(ptr, ptr + col - 1);
-      prev_class = mb_get_class(ptr + prevcol);
-      if (this_class != prev_class
-          && (i == 0
-              || prev_class == 0
-              || (find_type & FIND_IDENT))
-          && (!(find_type & FIND_EVAL)
-              || prevcol == 0
-              || !find_is_eval_item(ptr + prevcol, &prevcol, &bn, BACKWARD))) {
-        break;
-      }
-      col = prevcol;
-    }
-
-    // If we don't want just any old text, or we've found an
-    // identifier, stop searching.
-    this_class = MIN(this_class, 2);
-    if (!(find_type & FIND_STRING) || this_class == 2) {
-      break;
-    }
-  }
-
-  if (ptr[col] == NUL || (i == 0 && this_class != 2)) {
-    // Didn't find an identifier or text.
-    if (find_type & FIND_STRING) {
-      emsg(_("E348: No string under cursor"));
-    } else {
-      emsg(_(e_noident));
-    }
-    return 0;
-  }
-  ptr += col;
-  *text = ptr;
-  if (textcol != NULL) {
-    *textcol = col;
-  }
-
-  // 3. Find the end if the identifier/text.
-  bn = 0;
-  startcol -= col;
-  col = 0;
-  // Search for point of changing multibyte character class.
-  this_class = mb_get_class(ptr);
-  while (ptr[col] != NUL
-         && ((i == 0
-              ? mb_get_class(ptr + col) == this_class
-              : mb_get_class(ptr + col) != 0)
-             || ((find_type & FIND_EVAL)
-                 && col <= (int)startcol
-                 && find_is_eval_item(ptr + col, &col, &bn, FORWARD)))) {
-    col += utfc_ptr2len(ptr + col);
-  }
-
-  assert(col >= 0);
-  return (size_t)col;
+  return rs_find_ident_at_pos(wp, lnum, startcol, text, textcol, find_type);
 }
 
 /// Prepare for redo of a normal command.
