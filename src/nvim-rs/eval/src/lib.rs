@@ -13,6 +13,7 @@
 
 pub mod arith;
 pub mod blob;
+pub mod callback;
 pub mod compare;
 pub mod dict;
 pub mod expr;

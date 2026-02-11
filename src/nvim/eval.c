@@ -119,6 +119,86 @@ extern int rs_pattern_match(const char *pat, const char *text, bool ic);
 _Static_assert(RE_MAGIC == 1, "RE_MAGIC mismatch");
 _Static_assert(RE_STRING == 2, "RE_STRING mismatch");
 
+// Phase 4: Function comparison + callback conversion (Rust implementations)
+extern bool rs_func_equal(typval_T *tv1, typval_T *tv2, bool ic);
+extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
+
+_Static_assert(VAR_NUMBER == 1, "VAR_NUMBER mismatch");
+_Static_assert(VAR_STRING == 2, "VAR_STRING mismatch");
+_Static_assert(VAR_FUNC == 3, "VAR_FUNC mismatch");
+_Static_assert(VAR_SPECIAL == 8, "VAR_SPECIAL mismatch");
+_Static_assert(VAR_PARTIAL == 9, "VAR_PARTIAL mismatch");
+_Static_assert(kCallbackNone == 0, "kCallbackNone mismatch");
+_Static_assert(kCallbackFuncref == 1, "kCallbackFuncref mismatch");
+_Static_assert(kCallbackPartial == 2, "kCallbackPartial mismatch");
+
+// C accessors for typval fields (used by Rust callback module)
+int nvim_eval_tv_get_type(const typval_T *tv)
+{
+  return (int)tv->v_type;
+}
+
+char *nvim_eval_tv_get_vstring(const typval_T *tv)
+{
+  return tv->vval.v_string;
+}
+
+partial_T *nvim_eval_tv_get_partial(const typval_T *tv)
+{
+  return tv->vval.v_partial;
+}
+
+int64_t nvim_eval_tv_get_vnumber(const typval_T *tv)
+{
+  return tv->vval.v_number;
+}
+
+// C accessors for partial fields
+dict_T *nvim_eval_partial_get_dict(partial_T *pt)
+{
+  return pt->pt_dict;
+}
+
+int nvim_eval_partial_get_argc(partial_T *pt)
+{
+  return pt->pt_argc;
+}
+
+typval_T *nvim_eval_partial_get_argv(partial_T *pt, int idx)
+{
+  return pt->pt_argv + idx;
+}
+
+void nvim_eval_partial_incref(partial_T *pt)
+{
+  pt->pt_refcount++;
+}
+
+// C accessors for Callback struct setters
+void nvim_eval_cb_set_partial(Callback *cb, partial_T *pt)
+{
+  cb->data.partial = pt;
+  cb->type = kCallbackPartial;
+}
+
+void nvim_eval_cb_set_funcref(Callback *cb, char *name)
+{
+  cb->data.funcref = name;
+  cb->type = kCallbackFuncref;
+}
+
+void nvim_eval_cb_set_none(Callback *cb)
+{
+  cb->data.funcref = NULL;
+  cb->type = kCallbackNone;
+}
+
+// Error message helper
+void nvim_eval_emsg_e921(void)
+{
+  emsg(_("E921: Invalid callback argument"));
+}
+
 // C accessors for buffer operations (used by Rust indexing module)
 int nvim_eval_buf_ml_valid(const buf_T *buf)
 {
@@ -3906,47 +3986,7 @@ failret:
 /// @param ic  ignore case
 bool func_equal(typval_T *tv1, typval_T *tv2, bool ic)
 {
-  // empty and NULL function name considered the same
-  char *s1 = tv1->v_type == VAR_FUNC ? tv1->vval.v_string : partial_name(tv1->vval.v_partial);
-  if (s1 != NULL && *s1 == NUL) {
-    s1 = NULL;
-  }
-  char *s2 = tv2->v_type == VAR_FUNC ? tv2->vval.v_string : partial_name(tv2->vval.v_partial);
-  if (s2 != NULL && *s2 == NUL) {
-    s2 = NULL;
-  }
-  if (s1 == NULL || s2 == NULL) {
-    if (s1 != s2) {
-      return false;
-    }
-  } else if (strcmp(s1, s2) != 0) {
-    return false;
-  }
-
-  // empty dict and NULL dict is different
-  dict_T *d1 = tv1->v_type == VAR_FUNC ? NULL : tv1->vval.v_partial->pt_dict;
-  dict_T *d2 = tv2->v_type == VAR_FUNC ? NULL : tv2->vval.v_partial->pt_dict;
-  if (d1 == NULL || d2 == NULL) {
-    if (d1 != d2) {
-      return false;
-    }
-  } else if (!tv_dict_equal(d1, d2, ic)) {
-    return false;
-  }
-
-  // empty list and no list considered the same
-  int a1 = tv1->v_type == VAR_FUNC ? 0 : tv1->vval.v_partial->pt_argc;
-  int a2 = tv2->v_type == VAR_FUNC ? 0 : tv2->vval.v_partial->pt_argc;
-  if (a1 != a2) {
-    return false;
-  }
-  for (int i = 0; i < a1; i++) {
-    if (!tv_equal(tv1->vval.v_partial->pt_argv + i,
-                  tv2->vval.v_partial->pt_argv + i, ic)) {
-      return false;
-    }
-  }
-  return true;
+  return rs_func_equal(tv1, tv2, ic);
 }
 
 extern int rs_get_copyID(void);
@@ -4803,57 +4843,7 @@ void f_systemlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 bool callback_from_typval(Callback *const callback, const typval_T *const arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  int r = OK;
-
-  if (arg->v_type == VAR_PARTIAL && arg->vval.v_partial != NULL) {
-    callback->data.partial = arg->vval.v_partial;
-    callback->data.partial->pt_refcount++;
-    callback->type = kCallbackPartial;
-  } else if (arg->v_type == VAR_STRING
-             && arg->vval.v_string != NULL
-             && ascii_isdigit(*arg->vval.v_string)) {
-    r = FAIL;
-  } else if (arg->v_type == VAR_FUNC || arg->v_type == VAR_STRING) {
-    char *name = arg->vval.v_string;
-    if (name == NULL) {
-      r = FAIL;
-    } else if (*name == NUL) {
-      callback->type = kCallbackNone;
-      callback->data.funcref = NULL;
-    } else {
-      callback->data.funcref = NULL;
-      if (arg->v_type == VAR_STRING) {
-        callback->data.funcref = get_scriptlocal_funcname(name);
-      }
-      if (callback->data.funcref == NULL) {
-        callback->data.funcref = xstrdup(name);
-      }
-      func_ref(callback->data.funcref);
-      callback->type = kCallbackFuncref;
-    }
-  } else if (nlua_is_table_from_lua(arg)) {
-    // TODO(tjdvries): UnifiedCallback
-    char *name = nlua_register_table_as_callable(arg);
-
-    if (name != NULL) {
-      callback->data.funcref = xstrdup(name);
-      callback->type = kCallbackFuncref;
-    } else {
-      r = FAIL;
-    }
-  } else if (arg->v_type == VAR_SPECIAL
-             || (arg->v_type == VAR_NUMBER && arg->vval.v_number == 0)) {
-    callback->type = kCallbackNone;
-    callback->data.funcref = NULL;
-  } else {
-    r = FAIL;
-  }
-
-  if (r == FAIL) {
-    emsg(_("E921: Invalid callback argument"));
-    return false;
-  }
-  return true;
+  return rs_callback_from_typval(callback, arg);
 }
 
 static int callback_depth = 0;
