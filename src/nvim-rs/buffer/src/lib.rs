@@ -241,6 +241,43 @@ extern "C" {
     fn rs_calc_percentage(part: i64, whole: i64) -> c_int;
 }
 
+// Phase 4 accessor functions.
+#[allow(dead_code)]
+extern "C" {
+    /// Get the current window.
+    fn nvim_get_curwin() -> WinHandle;
+
+    /// Get cursor line number for a window.
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
+
+    /// Get cursor column for a window.
+    fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
+
+    /// Call `buflist_setfpos` (set buffer/window position info).
+    fn nvim_buflist_setfpos(
+        buf: BufHandle,
+        win: WinHandle,
+        lnum: c_int,
+        col: c_int,
+        copy_options: bool,
+    );
+
+    /// Get stored lnum from `buflist_findfmark`.
+    fn nvim_buflist_findfmark_lnum(buf: BufHandle) -> c_int;
+
+    /// Get `b_p_bl` (buflisted) from a buffer.
+    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
+
+    /// Set `b_p_bl` (buflisted) on a buffer.
+    fn nvim_buf_set_b_p_bl(buf: BufHandle, val: c_int);
+
+    /// Call `apply_autocmds(EVENT_BUFADD, ...)`.
+    fn nvim_apply_autocmds_bufadd(buf: BufHandle) -> bool;
+
+    /// Call `apply_autocmds(EVENT_BUFDELETE, ...)`.
+    fn nvim_apply_autocmds_bufdelete(buf: BufHandle) -> bool;
+}
+
 /// Check if "buf" is a pointer to an existing buffer.
 ///
 /// This is the Rust equivalent of `buf_valid()` in buffer.c.
@@ -1059,6 +1096,58 @@ pub unsafe extern "C" fn rs_buflist_name_nr(
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_line_alloced() -> c_int {
     nvim_curbuf_get_ml_flags() & nvim_get_ml_line_dirty()
+}
+
+// =============================================================================
+// Buffer Display & Info Helpers (Phase 4: Wave 2)
+// =============================================================================
+
+/// Set alternate cursor position for the current buffer and window.
+///
+/// Saves the current cursor position and local window option values
+/// for the current buffer, associated with the given window.
+///
+/// # Safety
+///
+/// `win` must be a valid window handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_buflist_altfpos(win: WinHandle) {
+    let buf = nvim_get_curbuf();
+    let lnum = nvim_win_get_cursor_lnum(win);
+    let col = nvim_win_get_cursor_col(win);
+    nvim_buflist_setfpos(buf, win, lnum, col, true);
+}
+
+/// Find the stored line number for buffer `buf` for the current window.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_buflist_findlnum(buf: BufHandle) -> c_int {
+    nvim_buflist_findfmark_lnum(buf)
+}
+
+/// Set `buflisted` for curbuf to `on` and trigger autocommands if it changed.
+///
+/// If the value changes, fires `EVENT_BUFADD` (when turning on) or
+/// `EVENT_BUFDELETE` (when turning off).
+///
+/// # Safety
+///
+/// Calls external C functions. Accesses global `curbuf`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_set_buflisted(on: c_int) {
+    let buf = nvim_get_curbuf();
+    if on == nvim_buf_get_b_p_bl(buf) {
+        return;
+    }
+    nvim_buf_set_b_p_bl(buf, on);
+    if on != 0 {
+        nvim_apply_autocmds_bufadd(buf);
+    } else {
+        nvim_apply_autocmds_bufdelete(buf);
+    }
 }
 
 #[cfg(test)]

@@ -171,6 +171,11 @@ extern bool rs_otherfile_buf_4(buf_T *buf, char *ffname, void *file_id_p, bool f
 extern void rs_fname_expand(buf_T *buf, char **ffname, char **sfname);
 extern int rs_buflist_add(char *fname, int flags);
 
+// Phase 4 (Wave 2): buffer display & info helpers from Rust
+extern void rs_buflist_altfpos(win_T *win);
+extern linenr_T rs_buflist_findlnum(buf_T *buf);
+extern void rs_set_buflisted(int on);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
 
@@ -578,7 +583,7 @@ buf_T *nvim_buflist_findnr(int fnum)
 /// Get the stored line number for a buffer (accessor for Rust).
 linenr_T nvim_buflist_findlnum(buf_T *buf)
 {
-  return buflist_findlnum(buf);
+  return buflist_findfmark(buf)->mark.lnum;
 }
 
 /// Get the quickfix stack buffer number (accessor for Rust).
@@ -774,9 +779,46 @@ bool nvim_otherfile_buf(buf_T *buf, char *ffname, void *file_id_p, bool file_id_
   return rs_otherfile_buf_4(buf, ffname, file_id_p, file_id_valid);
 }
 
+// Phase 4 accessor functions for buffer display & info helpers.
+
+/// Call buflist_setfpos (accessor for Rust).
+void nvim_buflist_setfpos(buf_T *buf, win_T *win, linenr_T lnum, colnr_T col,
+                          bool copy_options)
+{
+  buflist_setfpos(buf, win, lnum, col, copy_options);
+}
+
+/// Get stored lnum from buflist_findfmark (accessor for Rust).
+linenr_T nvim_buflist_findfmark_lnum(buf_T *buf)
+{
+  return buflist_findfmark(buf)->mark.lnum;
+}
+
+/// Set b_p_bl on a buffer (accessor for Rust).
+void nvim_buf_set_b_p_bl(buf_T *buf, int val)
+{
+  buf->b_p_bl = val;
+}
+
+/// Call apply_autocmds with EVENT_BUFADD (accessor for Rust).
+bool nvim_apply_autocmds_bufadd(buf_T *buf)
+{
+  return apply_autocmds(EVENT_BUFADD, NULL, NULL, false, buf);
+}
+
+/// Call apply_autocmds with EVENT_BUFDELETE (accessor for Rust).
+bool nvim_apply_autocmds_bufdelete(buf_T *buf)
+{
+  return apply_autocmds(EVENT_BUFDELETE, NULL, NULL, false, buf);
+}
+
 // Static assertions for constants used in Rust (Phase 1).
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch with Rust");
 _Static_assert(DOBUF_WIPE == 4, "DOBUF_WIPE mismatch with Rust");
+
+// Static assertions for constants used in Rust (Phase 4).
+_Static_assert(EVENT_BUFADD == 0, "EVENT_BUFADD mismatch with Rust");
+_Static_assert(EVENT_BUFDELETE == 2, "EVENT_BUFDELETE mismatch with Rust");
 
 typedef enum {
   kBffClearWinInfo = 1,
@@ -3434,9 +3476,8 @@ fmark_T *buflist_findfmark(buf_T *buf)
 
 /// Find the lnum for the buffer 'buf' for the current window.
 linenr_T buflist_findlnum(buf_T *buf)
-  FUNC_ATTR_PURE
 {
-  return buflist_findfmark(buf)->mark.lnum;
+  return rs_buflist_findlnum(buf);
 }
 
 /// List all known file names (for :files and :buffers command).
@@ -3726,7 +3767,7 @@ void buflist_slash_adjust(void)
 /// Also save the local window option values.
 void buflist_altfpos(win_T *win)
 {
-  buflist_setfpos(curbuf, win, win->w_cursor.lnum, win->w_cursor.col, true);
+  rs_buflist_altfpos(win);
 }
 
 /// Check that "ffname" is not the same file as current file.
@@ -4455,16 +4496,7 @@ char *buf_get_fname(const buf_T *buf)
 /// Set 'buflisted' for curbuf to "on" and trigger autocommands if it changed.
 void set_buflisted(int on)
 {
-  if (on == curbuf->b_p_bl) {
-    return;
-  }
-
-  curbuf->b_p_bl = on;
-  if (on) {
-    apply_autocmds(EVENT_BUFADD, NULL, NULL, false, curbuf);
-  } else {
-    apply_autocmds(EVENT_BUFDELETE, NULL, NULL, false, curbuf);
-  }
+  rs_set_buflisted(on);
 }
 
 /// Read the file for "buf" again and check if the contents changed.
