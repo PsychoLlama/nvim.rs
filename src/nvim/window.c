@@ -229,6 +229,15 @@ typedef struct {
 extern SplitInsResult rs_win_split_ins(int size, int flags, win_T *new_wp, int dir,
                                        frame_T *to_flatten);
 
+// win_close_othertab migration: Rust helpers
+typedef struct {
+  int free_tp_idx;     // tabpage index if removed (0 if not)
+} TabRemoveResult;
+extern int rs_close_othertab_validate(win_T *win, tabpage_T *tp, int force);
+extern TabRemoveResult rs_close_othertab_remove_tabpage(win_T *win, tabpage_T *tp);
+extern void rs_close_othertab_leave_open(win_T *win, int did_decrement, buf_T *bufref_buf,
+                                         int bufref_valid);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -4084,43 +4093,32 @@ bool win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, bool force)
   assert(tp != curtab);
   bool did_decrement = false;
 
-  // Get here with win->w_buffer == NULL when win_close() detects the tab page
-  // changed.
-  if (win_locked(win)
-      || (win->w_buffer != NULL && win->w_buffer->b_locked > 0)) {
-    return false;  // window is already being closed
+  // Phase 1: Rust validation (locked, aucmd_win, floating-only check).
+  int vrc = rs_close_othertab_validate(win, tp, force ? 1 : 0);
+  if (vrc == 1) {
+    return false;  // locked or aucmd_win
   }
-  if (is_aucmd_win(win)) {
-    emsg(_(e_autocmd_close));
-    return false;
-  }
-
-  // Check if closing this window would leave only floating windows.
-  if (tp->tp_lastwin->w_floating && one_window(win, tp)) {
-    if (force || can_close_floating_windows(tp)) {
-      // close the last window until the there are no floating windows
-      while (tp->tp_lastwin->w_floating) {
-        // `force` flag isn't actually used when closing a floating window.
-        if (!win_close_othertab(tp->tp_lastwin, free_buf, tp, true)) {
-          // If closing the window fails give up, to avoid looping forever.
-          goto leave_open;
-        }
+  if (vrc == 2) {
+    // Floating-only: recursively close floating windows (must stay in C
+    // because win_close_othertab is recursive and triggers autocmds).
+    while (tp->tp_lastwin->w_floating) {
+      if (!win_close_othertab(tp->tp_lastwin, free_buf, tp, true)) {
+        goto leave_open;
       }
-      if (!win_valid_any_tab(win)) {
-        return false;  // window already closed by autocommands
-      }
-    } else {
-      emsg(e_floatonly);
-      goto leave_open;
+    }
+    if (!win_valid_any_tab(win)) {
+      return false;
     }
   }
+  if (vrc == 3) {
+    goto leave_open;  // e_floatonly already emitted by Rust
+  }
+
+  // --- Autocmd section (must stay in C) ---
 
   // Fire WinClosed just before starting to free window-related resources.
-  // If the buffer is NULL, it isn't safe to trigger autocommands,
-  // and win_close() should have already triggered WinClosed.
   if (win->w_buffer != NULL) {
     do_autocmd_winclosed(win);
-    // autocmd may have freed the window already.
     if (!win_valid_any_tab(win)) {
       return false;
     }
@@ -4130,83 +4128,44 @@ bool win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, bool force)
   set_bufref(&bufref, win->w_buffer);
 
   if (win->w_buffer != NULL) {
-    // Close the link to the buffer.
     did_decrement = close_buffer(win, win->w_buffer, free_buf ? DOBUF_UNLOAD : 0, false, true);
   }
 
-  // Careful: Autocommands may have closed the tab page or made it the
-  // current tab page.
+  // Re-validate after autocmds.
   if (!valid_tabpage(tp) || tp == curtab) {
     goto leave_open;
   }
-  // Autocommands may have closed the window already, or nvim_win_set_config
-  // moved it to a different tab page.
   if (!tabpage_win_valid(tp, win)) {
     goto leave_open;
   }
-  // Autocommands may again cause closing this window to leave only floats.
-  // Check again; we'll not bother closing floating windows this time.
   if (tp->tp_lastwin->w_floating && one_window(win, tp)) {
     emsg(e_floatonly);
     goto leave_open;
   }
 
-  int free_tp_idx = 0;
-
-  // When closing the last window in a tab page remove the tab page.
-  if (tp->tp_firstwin == tp->tp_lastwin) {
-    free_tp_idx = tabpage_index(tp);
-    int h = tabline_height();
-
-    if (tp == first_tabpage) {
-      first_tabpage = tp->tp_next;
-    } else {
-      tabpage_T *ptp;
-      for (ptp = first_tabpage; ptp != NULL && ptp->tp_next != tp;
-           ptp = ptp->tp_next) {
-        // loop
-      }
-      if (ptp == NULL) {
-        internal_error("win_close_othertab()");
-        return false;
-      }
-      ptp->tp_next = tp->tp_next;
-    }
-    redraw_tabline = true;
-    if (h != tabline_height()) {
-      win_new_screen_rows();
-    }
-  }
+  // Phase 2: Rust tabpage removal (pure structural logic).
+  TabRemoveResult res = rs_close_othertab_remove_tabpage(win, tp);
 
   // Free the memory used for the window.
   buf_T *buf = win->w_buffer;
   int dir;
   win_free_mem(win, &dir, tp);
 
-  if (free_tp_idx > 0) {
+  if (res.free_tp_idx > 0) {
     free_tabpage(tp);
 
     if (has_event(EVENT_TABCLOSED)) {
       char prev_idx[NUMBUFLEN];
-      vim_snprintf(prev_idx, NUMBUFLEN, "%i", free_tp_idx);
+      vim_snprintf(prev_idx, NUMBUFLEN, "%i", res.free_tp_idx);
       apply_autocmds(EVENT_TABCLOSED, prev_idx, prev_idx, false, buf);
     }
   }
   return true;
 
 leave_open:
-  if (win_valid_any_tab(win)) {
-    if (win->w_buffer == NULL) {
-      // If the buffer was removed from the window we have to give it any buffer.
-      win->w_buffer = firstbuf;
-      firstbuf->b_nwindows++;
-      win_init_empty(win);
-    } else if (did_decrement && win->w_buffer == bufref.br_buf && bufref_valid(&bufref)) {
-      // close_buffer decremented the window count, but we're keeping the window.
-      // As the window is still viewing the buffer, increment the count.
-      win->w_buffer->b_nwindows++;
-    }
-  }
+  // Phase 3: Rust error recovery.
+  rs_close_othertab_leave_open(win, did_decrement ? 1 : 0,
+                               bufref.br_buf, bufref_valid(&bufref) ? 1 : 0);
   return false;
 }
 
@@ -7920,6 +7879,100 @@ void nvim_win_set_frame(win_T *wp, frame_T *frp)
   }
 }
 
+// --- Phase 2 accessors: win_close_othertab ---
+
+/// Set first_tabpage global (for Rust tabpage list manipulation).
+void nvim_set_first_tabpage(tabpage_T *tp)
+{
+  first_tabpage = tp;
+}
+
+/// Set tp_next field on a tabpage (for Rust tabpage list manipulation).
+void nvim_tabpage_set_next(tabpage_T *tp, tabpage_T *next)
+{
+  tp->tp_next = next;
+}
+
+/// Set w_buffer on a window (raw, no side effects).
+void nvim_win_set_buffer_raw(win_T *wp, buf_T *buf)
+{
+  wp->w_buffer = buf;
+}
+
+/// Increment b_nwindows on a buffer.
+void nvim_buf_inc_nwindows(buf_T *buf)
+{
+  buf->b_nwindows++;
+}
+
+/// Wrapper: win_init_empty(wp).
+void nvim_win_init_empty_wrapper(win_T *wp)
+{
+  win_init_empty(wp);
+}
+
+/// Wrapper: emsg(e_floatonly).
+void nvim_emsg_e_floatonly(void)
+{
+  emsg(e_floatonly);
+}
+
+/// Wrapper: emsg(_(e_autocmd_close)).
+void nvim_emsg_e_autocmd_close(void)
+{
+  emsg(_(e_autocmd_close));
+}
+
+/// Wrapper: internal_error("win_close_othertab()").
+void nvim_internal_error_othertab(void)
+{
+  internal_error("win_close_othertab()");
+}
+
+/// Wrapper: win_new_screen_rows().
+void nvim_win_new_screen_rows_wrapper(void)
+{
+  win_new_screen_rows();
+}
+
+/// Wrapper: win_free_mem(win, dirp, tp).
+void nvim_win_free_mem_wrapper(win_T *win, int *dirp, tabpage_T *tp)
+{
+  win_free_mem(win, dirp, tp);
+}
+
+/// Wrapper: free_tabpage(tp).
+void nvim_free_tabpage_wrapper(tabpage_T *tp)
+{
+  free_tabpage(tp);
+}
+
+/// Wrapper: close_buffer(win, buf, action, abort_if_last, ignore_abort).
+/// Returns did_decrement (1 if decrement happened).
+int nvim_close_buffer_wrapper(win_T *win, buf_T *buf, int action, int abort_if_last,
+                              int ignore_abort)
+{
+  return close_buffer(win, buf, action, abort_if_last != 0, ignore_abort != 0) ? 1 : 0;
+}
+
+/// Wrapper: do_autocmd_winclosed(win).
+void nvim_do_autocmd_winclosed(win_T *win)
+{
+  do_autocmd_winclosed(win);
+}
+
+/// Get firstbuf global (for buffer recovery in leave_open).
+buf_T *nvim_get_firstbuf_wrapper(void)
+{
+  return firstbuf;
+}
+
+/// Wrapper: can_close_floating_windows(tp).
+int nvim_can_close_floating_windows(tabpage_T *tp)
+{
+  return can_close_floating_windows(tp) ? 1 : 0;
+}
+
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
 _Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");
 _Static_assert(2 == SNAP_COUNT, "SNAP_COUNT mismatch");
@@ -7945,3 +7998,4 @@ _Static_assert(0x04 == WEE_TRIGGER_NEW_AUTOCMDS, "WEE_TRIGGER_NEW_AUTOCMDS misma
 _Static_assert(0x08 == WEE_TRIGGER_ENTER_AUTOCMDS, "WEE_TRIGGER_ENTER_AUTOCMDS mismatch");
 _Static_assert(0x10 == WEE_TRIGGER_LEAVE_AUTOCMDS, "WEE_TRIGGER_LEAVE_AUTOCMDS mismatch");
 _Static_assert(40 == UPD_NOT_VALID, "UPD_NOT_VALID mismatch");
+_Static_assert(2 == DOBUF_UNLOAD, "DOBUF_UNLOAD mismatch");
