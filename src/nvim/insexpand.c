@@ -1572,26 +1572,11 @@ void ins_compl_show_pum(void)
 ///
 /// @param selected the item which is selected.
 /// @return bool    return true when is current match otherwise is false.
+extern int rs_compl_match_curr_select(int selected);
+
 bool compl_match_curr_select(int selected)
 {
-  if (selected < 0) {
-    return false;
-  }
-  compl_T *match = compl_first_match;
-  int selected_idx = -1, list_idx = 0;
-  do {
-    if (!match_at_original_text(match)) {
-      if (compl_curr_match != NULL
-          && compl_curr_match->cp_number == match->cp_number) {
-        selected_idx = list_idx;
-        break;
-      }
-      list_idx += 1;
-    }
-    match = match->cp_next;
-  } while (match != NULL && !is_first_match(match));
-
-  return selected == selected_idx;
+  return rs_compl_match_curr_select(selected) != 0;
 }
 
 #define DICT_FIRST      (1)     ///< use just first element in "dict"
@@ -1995,6 +1980,18 @@ void nvim_compl_clear_leader(void) { API_CLEAR_STRING(compl_leader); }
 void nvim_ins_compl_del_pum(void) { ins_compl_del_pum(); }
 void nvim_pum_clear(void) { pum_clear(); }
 int nvim_get_compl_match_array_exists(void) { return compl_match_array != NULL ? 1 : 0; }
+
+// Phase 2 accessors for Rust
+int nvim_compl_match_get_cp_number(void *m) {
+  return m ? ((compl_T *)m)->cp_number : -1;
+}
+const char *nvim_curbuf_get_b_p_cpt(void) { return curbuf->b_p_cpt; }
+uint64_t nvim_get_cpt_start_tv(void) {
+  return cpt_sources_array[cpt_sources_index].compl_start_tv;
+}
+uint64_t nvim_get_compl_timeout_ms(void) { return compl_timeout_ms; }
+void nvim_set_compl_time_slice_expired(int val) { compl_time_slice_expired = val != 0; }
+void nvim_decay_compl_timeout(void) { DECAY_COMPL_TIMEOUT(); }
 
 // Rust implementations
 extern int rs_ins_compl_interrupted(void);
@@ -2772,24 +2769,13 @@ static buf_T *ins_compl_next_buf(buf_T *buf, int flag)
   return buf;
 }
 
+extern int rs_get_cpt_sources_count(void);
+
 /// Count the number of entries in the 'complete' option (curbuf->b_p_cpt).
 /// Each non-empty, comma-separated segment is counted as one entry.
 static int get_cpt_sources_count(void)
 {
-  char dummy[LSIZE];
-  int count = 0;
-
-  for (char *p = curbuf->b_p_cpt; *p != NUL;) {
-    while (*p == ',' || *p == ' ') {
-      p++;  // Skip delimiters
-    }
-    if (*p != NUL) {
-      (void)copy_option_part(&p, dummy, LSIZE, ",");  // Advance p
-      count++;
-    }
-  }
-
-  return count;
+  return rs_get_cpt_sources_count();
 }
 
 static Callback cfu_cb;    ///< 'completefunc' callback function
@@ -5296,15 +5282,11 @@ static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match
 
 /// Check if the current completion source exceeded its timeout. If so, stop
 /// collecting, and halve the timeout.
+extern void rs_check_elapsed_time(void);
+
 static void check_elapsed_time(void)
 {
-  uint64_t start_tv = cpt_sources_array[cpt_sources_index].compl_start_tv;
-  uint64_t elapsed_ms = (os_hrtime() - start_tv) / 1000000;
-
-  if (elapsed_ms > compl_timeout_ms) {
-    compl_time_slice_expired = true;
-    DECAY_COMPL_TIMEOUT();
-  }
+  rs_check_elapsed_time();
 }
 
 /// Call this while finding completions, to check whether the user has hit a key

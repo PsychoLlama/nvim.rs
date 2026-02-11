@@ -195,6 +195,63 @@ pub unsafe extern "C" fn rs_pum_match_array_exists() -> c_int {
 }
 
 // =============================================================================
+// Match selection query
+// =============================================================================
+
+extern "C" {
+    fn nvim_compl_get_curr_match() -> ComplMatch;
+    fn nvim_compl_match_get_cp_number(m: ComplMatch) -> c_int;
+}
+
+/// Check if the currently selected completion match is at the given popup index.
+///
+/// Iterates through the match list (skipping original text entries), finds the
+/// index of compl_curr_match by comparing cp_number, and returns whether it
+/// equals the given `selected` index.
+///
+/// # Safety
+/// Requires valid completion list state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_match_curr_select(selected: c_int) -> c_int {
+    if selected < 0 {
+        return 0;
+    }
+
+    let first = nvim_compl_get_first_match();
+    if first.is_null() {
+        return 0;
+    }
+
+    let curr = nvim_compl_get_curr_match();
+    if curr.is_null() {
+        return c_int::from(selected == -1);
+    }
+
+    let curr_number = nvim_compl_match_get_cp_number(curr);
+
+    let mut m = first;
+    let mut selected_idx: c_int = -1;
+    let mut list_idx: c_int = 0;
+
+    loop {
+        if !match_at_original_text(m) {
+            if nvim_compl_match_get_cp_number(m) == curr_number {
+                selected_idx = list_idx;
+                break;
+            }
+            list_idx += 1;
+        }
+        let next = nvim_compl_match_get_next(m);
+        if next.is_null() || is_first_match(next) {
+            break;
+        }
+        m = next;
+    }
+
+    c_int::from(selected == selected_idx)
+}
+
+// =============================================================================
 // Phase 2: Popup Menu Update Functions
 // =============================================================================
 
