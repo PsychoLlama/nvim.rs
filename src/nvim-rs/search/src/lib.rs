@@ -12,6 +12,7 @@ pub mod direction;
 pub mod helpers;
 pub mod incsearch;
 pub mod pattern;
+pub mod searchit;
 pub mod state;
 pub mod stats;
 pub mod substitute;

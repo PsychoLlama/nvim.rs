@@ -900,427 +900,65 @@ void last_pat_prog(regmmatch_T *regmatch)
 /// @returns          FAIL (zero) for failure, non-zero for success.
 ///                   the index of the first matching
 ///                   subpattern plus one; one if there was none.
+
+// Rust implementation of searchit
+typedef struct {
+  int retval;
+  int pos_lnum;
+  int pos_col;
+  int pos_coladd;
+  int end_lnum;
+  int end_col;
+  int end_coladd;
+  int end_pos_set;
+  int sa_timed_out;
+  int sa_wrapped;
+} SearchitResult;
+
+extern int rs_searchit(void *win, void *buf,
+                       linenr_T pos_lnum, colnr_T pos_col, colnr_T pos_coladd,
+                       int has_end_pos, int dir,
+                       char *pat, size_t patlen,
+                       int count, int options, int pat_use,
+                       linenr_T sa_stop_lnum, void *sa_tm,
+                       int has_extra_arg,
+                       SearchitResult *result);
+
 int searchit(win_T *win, buf_T *buf, pos_T *pos, pos_T *end_pos, Direction dir, char *pat,
              size_t patlen, int count, int options, int pat_use, searchit_arg_T *extra_arg)
 {
-  int found;
-  linenr_T lnum;                // no init to shut up Apollo cc
-  regmmatch_T regmatch;
-  char *ptr;
-  colnr_T matchcol;
-  lpos_T endpos;
-  lpos_T matchpos;
-  int loop;
-  int extra_col;
-  int start_char_len;
-  bool match_ok;
-  int nmatched;
-  int submatch = 0;
-  bool first_match = true;
-  const int called_emsg_before = called_emsg;
-  bool break_loop = false;
-  linenr_T stop_lnum = 0;  // stop after this line number when != 0
-  proftime_T *tm = NULL;   // timeout limit or NULL
-  int *timed_out = NULL;   // set when timed out or NULL
+  SearchitResult result;
+
+  int retval = rs_searchit(
+    win, buf,
+    pos->lnum, pos->col, pos->coladd,
+    end_pos != NULL ? 1 : 0,
+    (int)dir,
+    pat, patlen, count, options, pat_use,
+    extra_arg != NULL ? extra_arg->sa_stop_lnum : 0,
+    extra_arg != NULL ? (void *)extra_arg->sa_tm : NULL,
+    extra_arg != NULL ? 1 : 0,
+    &result);
+
+  // Copy results back
+  pos->lnum = result.pos_lnum;
+  pos->col = result.pos_col;
+  pos->coladd = result.pos_coladd;
+
+  if (end_pos != NULL && result.end_pos_set) {
+    end_pos->lnum = result.end_lnum;
+    end_pos->col = result.end_col;
+    end_pos->coladd = result.end_coladd;
+  }
 
   if (extra_arg != NULL) {
-    stop_lnum = extra_arg->sa_stop_lnum;
-    tm = extra_arg->sa_tm;
-    timed_out = &extra_arg->sa_timed_out;
-  }
-
-  if (search_regcomp(pat, patlen, NULL, RE_SEARCH, pat_use,
-                     (options & (SEARCH_HIS + SEARCH_KEEP)), &regmatch) == FAIL) {
-    if ((options & SEARCH_MSG) && !rc_did_emsg) {
-      semsg(_("E383: Invalid search string: %s"), mr_pattern);
-    }
-    return FAIL;
-  }
-
-  const bool search_from_match_end = vim_strchr(p_cpo, CPO_SEARCH) != NULL;
-
-  // find the string
-  do {  // loop for count
-    // When not accepting a match at the start position set "extra_col" to a
-    // non-zero value.  Don't do that when starting at MAXCOL, since MAXCOL + 1
-    // is zero.
-    if (pos->col == MAXCOL) {
-      start_char_len = 0;
-    } else if (pos->lnum >= 1
-               && pos->lnum <= buf->b_ml.ml_line_count
-               && pos->col < MAXCOL - 2) {
-      // Watch out for the "col" being MAXCOL - 2, used in a closed fold.
-      ptr = ml_get_buf(buf, pos->lnum);
-      if (ml_get_buf_len(buf, pos->lnum) <= pos->col) {
-        start_char_len = 1;
-      } else {
-        start_char_len = utfc_ptr2len(ptr + pos->col);
-      }
-    } else {
-      start_char_len = 1;
-    }
-    if (dir == FORWARD) {
-      extra_col = (options & SEARCH_START) ? 0 : start_char_len;
-    } else {
-      extra_col = (options & SEARCH_START) ? start_char_len : 0;
-    }
-
-    pos_T start_pos = *pos;           // remember start pos for detecting no match
-    found = 0;                  // default: not found
-    int at_first_line = true;       // default: start in first line
-    if (pos->lnum == 0) {       // correct lnum for when starting in line 0
-      pos->lnum = 1;
-      pos->col = 0;
-      at_first_line = false;        // not in first line now
-    }
-
-    // Start searching in current line, unless searching backwards and
-    // we're in column 0.
-    // If we are searching backwards, in column 0, and not including the
-    // current position, gain some efficiency by skipping back a line.
-    // Otherwise begin the search in the current line.
-    if (dir == BACKWARD && start_pos.col == 0
-        && (options & SEARCH_START) == 0) {
-      lnum = pos->lnum - 1;
-      at_first_line = false;
-    } else {
-      lnum = pos->lnum;
-    }
-
-    for (loop = 0; loop <= 1; loop++) {     // loop twice if 'wrapscan' set
-      for (; lnum > 0 && lnum <= buf->b_ml.ml_line_count;
-           lnum += dir, at_first_line = false) {
-        // Stop after checking "stop_lnum", if it's set.
-        if (stop_lnum != 0 && (dir == FORWARD
-                               ? lnum > stop_lnum : lnum < stop_lnum)) {
-          break;
-        }
-        // Stop after passing the "tm" time limit.
-        if (tm != NULL && profile_passed_limit(*tm)) {
-          break;
-        }
-
-        // Look for a match somewhere in line "lnum".
-        colnr_T col = at_first_line && (options & SEARCH_COL) ? pos->col : 0;
-        nmatched = vim_regexec_multi(&regmatch, win, buf,
-                                     lnum, col, tm, timed_out);
-        // vim_regexec_multi() may clear "regprog"
-        if (regmatch.regprog == NULL) {
-          break;
-        }
-        // Abort searching on an error (e.g., out of stack).
-        if (called_emsg > called_emsg_before || (timed_out != NULL && *timed_out)) {
-          break;
-        }
-        if (nmatched > 0) {
-          // match may actually be in another line when using \zs
-          matchpos = regmatch.startpos[0];
-          endpos = regmatch.endpos[0];
-          submatch = first_submatch(&regmatch);
-          // "lnum" may be past end of buffer for "\n\zs".
-          if (lnum + matchpos.lnum > buf->b_ml.ml_line_count) {
-            ptr = "";
-          } else {
-            ptr = ml_get_buf(buf, lnum + matchpos.lnum);
-          }
-
-          // Forward search in the first line: match should be after
-          // the start position. If not, continue at the end of the
-          // match (this is vi compatible) or on the next char.
-          if (dir == FORWARD && at_first_line) {
-            match_ok = true;
-
-            // When the match starts in a next line it's certainly
-            // past the start position.
-            // When match lands on a NUL the cursor will be put
-            // one back afterwards, compare with that position,
-            // otherwise "/$" will get stuck on end of line.
-            while (matchpos.lnum == 0
-                   && (((options & SEARCH_END) && first_match)
-                       ? (nmatched == 1
-                          && (int)endpos.col - 1
-                          < (int)start_pos.col + extra_col)
-                       : ((int)matchpos.col
-                          - (ptr[matchpos.col] == NUL)
-                          < (int)start_pos.col + extra_col))) {
-              // If vi-compatible searching, continue at the end
-              // of the match, otherwise continue one position
-              // forward.
-              if (search_from_match_end) {
-                if (nmatched > 1) {
-                  // end is in next line, thus no match in
-                  // this line
-                  match_ok = false;
-                  break;
-                }
-                matchcol = endpos.col;
-                // for empty match: advance one char
-                if (matchcol == matchpos.col && ptr[matchcol] != NUL) {
-                  matchcol += utfc_ptr2len(ptr + matchcol);
-                }
-              } else {
-                // Advance "matchcol" to the next character.
-                // This uses rmm_matchcol, the actual start of
-                // the match, ignoring "\zs".
-                matchcol = regmatch.rmm_matchcol;
-                if (ptr[matchcol] != NUL) {
-                  matchcol += utfc_ptr2len(ptr + matchcol);
-                }
-              }
-              if (matchcol == 0 && (options & SEARCH_START)) {
-                break;
-              }
-              if (ptr[matchcol] == NUL
-                  || (nmatched = vim_regexec_multi(&regmatch, win, buf,
-                                                   lnum, matchcol, tm,
-                                                   timed_out)) == 0) {
-                match_ok = false;
-                break;
-              }
-              // vim_regexec_multi() may clear "regprog"
-              if (regmatch.regprog == NULL) {
-                break;
-              }
-              matchpos = regmatch.startpos[0];
-              endpos = regmatch.endpos[0];
-              submatch = first_submatch(&regmatch);
-
-              // This while-loop only works with matchpos.lnum == 0.
-              // For bigger values the next line pointer ptr might not be a
-              // buffer line.
-              if (matchpos.lnum != 0) {
-                break;
-              }
-              // Need to get the line pointer again, a multi-line search may
-              // have made it invalid.
-              ptr = ml_get_buf(buf, lnum);
-            }
-            if (!match_ok) {
-              continue;
-            }
-          }
-          if (dir == BACKWARD) {
-            // Now, if there are multiple matches on this line,
-            // we have to get the last one. Or the last one before
-            // the cursor, if we're on that line.
-            // When putting the new cursor at the end, compare
-            // relative to the end of the match.
-            match_ok = false;
-            while (true) {
-              // Remember a position that is before the start
-              // position, we use it if it's the last match in
-              // the line.  Always accept a position after
-              // wrapping around.
-              if (loop
-                  || ((options & SEARCH_END)
-                      ? (lnum + regmatch.endpos[0].lnum
-                         < start_pos.lnum
-                         || (lnum + regmatch.endpos[0].lnum
-                             == start_pos.lnum
-                             && (int)regmatch.endpos[0].col - 1
-                             < (int)start_pos.col + extra_col))
-                      : (lnum + regmatch.startpos[0].lnum
-                         < start_pos.lnum
-                         || (lnum + regmatch.startpos[0].lnum
-                             == start_pos.lnum
-                             && (int)regmatch.startpos[0].col
-                             < (int)start_pos.col + extra_col)))) {
-                match_ok = true;
-                matchpos = regmatch.startpos[0];
-                endpos = regmatch.endpos[0];
-                submatch = first_submatch(&regmatch);
-              } else {
-                break;
-              }
-
-              // We found a valid match, now check if there is
-              // another one after it.
-              // If vi-compatible searching, continue at the end
-              // of the match, otherwise continue one position
-              // forward.
-              if (search_from_match_end) {
-                if (nmatched > 1) {
-                  break;
-                }
-                matchcol = endpos.col;
-                // for empty match: advance one char
-                if (matchcol == matchpos.col
-                    && ptr[matchcol] != NUL) {
-                  matchcol += utfc_ptr2len(ptr + matchcol);
-                }
-              } else {
-                // Stop when the match is in a next line.
-                if (matchpos.lnum > 0) {
-                  break;
-                }
-                matchcol = matchpos.col;
-                if (ptr[matchcol] != NUL) {
-                  matchcol += utfc_ptr2len(ptr + matchcol);
-                }
-              }
-              if (ptr[matchcol] == NUL
-                  || (nmatched = vim_regexec_multi(&regmatch, win, buf, lnum + matchpos.lnum,
-                                                   matchcol, tm, timed_out)) == 0) {
-                // If the search timed out, we did find a match
-                // but it might be the wrong one, so that's not
-                // OK.
-                if (tm != NULL && profile_passed_limit(*tm)) {
-                  match_ok = false;
-                }
-                break;
-              }
-              // vim_regexec_multi() may clear "regprog"
-              if (regmatch.regprog == NULL) {
-                break;
-              }
-              // Need to get the line pointer again, a
-              // multi-line search may have made it invalid.
-              ptr = ml_get_buf(buf, lnum + matchpos.lnum);
-            }
-
-            // If there is only a match after the cursor, skip
-            // this match.
-            if (!match_ok) {
-              continue;
-            }
-          }
-
-          // With the SEARCH_END option move to the last character
-          // of the match.  Don't do it for an empty match, end
-          // should be same as start then.
-          if ((options & SEARCH_END) && !(options & SEARCH_NOOF)
-              && !(matchpos.lnum == endpos.lnum
-                   && matchpos.col == endpos.col)) {
-            // For a match in the first column, set the position
-            // on the NUL in the previous line.
-            pos->lnum = lnum + endpos.lnum;
-            pos->col = endpos.col;
-            if (endpos.col == 0) {
-              if (pos->lnum > 1) {              // just in case
-                pos->lnum--;
-                pos->col = ml_get_buf_len(buf, pos->lnum);
-              }
-            } else {
-              pos->col--;
-              if (pos->lnum <= buf->b_ml.ml_line_count) {
-                ptr = ml_get_buf(buf, pos->lnum);
-                pos->col -= utf_head_off(ptr, ptr + pos->col);
-              }
-            }
-            if (end_pos != NULL) {
-              end_pos->lnum = lnum + matchpos.lnum;
-              end_pos->col = matchpos.col;
-            }
-          } else {
-            pos->lnum = lnum + matchpos.lnum;
-            pos->col = matchpos.col;
-            if (end_pos != NULL) {
-              end_pos->lnum = lnum + endpos.lnum;
-              end_pos->col = endpos.col;
-            }
-          }
-          pos->coladd = 0;
-          if (end_pos != NULL) {
-            end_pos->coladd = 0;
-          }
-          found = 1;
-          first_match = false;
-
-          // Set variables used for 'incsearch' highlighting.
-          search_match_lines = endpos.lnum - matchpos.lnum;
-          search_match_endcol = endpos.col;
-          break;
-        }
-        line_breakcheck();              // stop if ctrl-C typed
-        if (got_int) {
-          break;
-        }
-
-        // Cancel searching if a character was typed.  Used for
-        // 'incsearch'.  Don't check too often, that would slowdown
-        // searching too much.
-        if ((options & SEARCH_PEEK)
-            && ((lnum - pos->lnum) & 0x3f) == 0
-            && char_avail()) {
-          break_loop = true;
-          break;
-        }
-
-        if (loop && lnum == start_pos.lnum) {
-          break;                    // if second loop, stop where started
-        }
-      }
-      at_first_line = false;
-
-      // vim_regexec_multi() may clear "regprog"
-      if (regmatch.regprog == NULL) {
-        break;
-      }
-
-      // Stop the search if wrapscan isn't set, "stop_lnum" is
-      // specified, after an interrupt, after a match and after looping
-      // twice.
-      if (!p_ws || stop_lnum != 0 || got_int
-          || called_emsg > called_emsg_before
-          || (timed_out != NULL && *timed_out)
-          || break_loop
-          || found || loop) {
-        break;
-      }
-
-      // If 'wrapscan' is set we continue at the other end of the file.
-      // If 'shortmess' does not contain 's', we give a message, but
-      // only, if we won't show the search stat later anyhow,
-      // (so SEARCH_COUNT must be absent).
-      // This message is also remembered in keep_msg for when the screen
-      // is redrawn. The keep_msg is cleared whenever another message is
-      // written.
-      lnum = dir == BACKWARD  // start second loop at the other end
-             ? buf->b_ml.ml_line_count
-             : 1;
-      if (!shortmess(SHM_SEARCH)
-          && shortmess(SHM_SEARCHCOUNT)
-          && (options & SEARCH_MSG)) {
-        give_warning(_(dir == BACKWARD ? top_bot_msg : bot_top_msg), true);
-      }
-      if (extra_arg != NULL) {
-        extra_arg->sa_wrapped = true;
-      }
-    }
-    if (got_int || called_emsg > called_emsg_before
-        || (timed_out != NULL && *timed_out)
-        || break_loop) {
-      break;
-    }
-  } while (--count > 0 && found);   // stop after count matches or no match
-
-  vim_regfree(regmatch.regprog);
-
-  if (!found) {             // did not find it
-    if (got_int) {
-      emsg(_(e_interr));
-    } else if ((options & SEARCH_MSG) == SEARCH_MSG) {
-      if (p_ws) {
-        semsg(_(e_patnotf2), mr_pattern);
-      } else if (lnum == 0) {
-        semsg(_(e_search_hit_top_without_match_for_str), mr_pattern);
-      } else {
-        semsg(_(e_search_hit_bottom_without_match_for_str), mr_pattern);
-      }
-    }
-    return FAIL;
-  }
-
-  // A pattern like "\n\zs" may go past the last line.
-  if (pos->lnum > buf->b_ml.ml_line_count) {
-    pos->lnum = buf->b_ml.ml_line_count;
-    pos->col = ml_get_buf_len(buf, pos->lnum);
-    if (pos->col > 0) {
-      pos->col--;
+    extra_arg->sa_timed_out = result.sa_timed_out;
+    if (result.sa_wrapped) {
+      extra_arg->sa_wrapped = true;
     }
   }
 
-  return submatch + 1;
+  return retval;
 }
 
 void set_search_direction(int cdir)
@@ -1331,24 +969,6 @@ void set_search_direction(int cdir)
 static void set_vv_searchforward(void)
 {
   set_vim_var_nr(VV_SEARCHFORWARD, spats[0].off.dir == '/');
-}
-
-// Return the number of the first subpat that matched.
-// Return zero if none of them matched.
-static int first_submatch(regmmatch_T *rp)
-{
-  int submatch;
-
-  for (submatch = 1;; submatch++) {
-    if (rp->startpos[submatch].lnum >= 0) {
-      break;
-    }
-    if (submatch == 9) {
-      submatch = 0;
-      break;
-    }
-  }
-  return submatch;
 }
 
 /// Highest level string search function.
@@ -3933,4 +3553,130 @@ void set_last_used_pattern(const bool is_substitute_pattern)
 bool search_was_last_used(void)
 {
   return rs_search_was_last_used() != 0;
+}
+
+// =============================================================================
+// C accessor functions for rs_searchit (Phase 1)
+// =============================================================================
+
+// Constant verification
+_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch");
+_Static_assert(CPO_SEARCH == 'c', "CPO_SEARCH mismatch");
+_Static_assert(SHM_SEARCH == 's', "SHM_SEARCH mismatch");
+_Static_assert(SHM_SEARCHCOUNT == 'S', "SHM_SEARCHCOUNT mismatch");
+_Static_assert(SEARCH_HIS == 0x20, "SEARCH_HIS mismatch");
+_Static_assert(SEARCH_KEEP == 0x400, "SEARCH_KEEP mismatch");
+_Static_assert(SEARCH_MSG == 0x0c, "SEARCH_MSG mismatch");
+_Static_assert(SEARCH_COL == 0x1000, "SEARCH_COL mismatch");
+_Static_assert(SEARCH_END == 0x40, "SEARCH_END mismatch");
+_Static_assert(SEARCH_START == 0x100, "SEARCH_START mismatch");
+_Static_assert(SEARCH_NOOF == 0x80, "SEARCH_NOOF mismatch");
+_Static_assert(SEARCH_PEEK == 0x800, "SEARCH_PEEK mismatch");
+_Static_assert(FORWARD == 1, "FORWARD mismatch");
+_Static_assert(BACKWARD == -1, "BACKWARD mismatch");
+_Static_assert(FAIL == 0, "FAIL mismatch");
+
+/// Compile search pattern for rs_searchit.
+/// Returns FAIL (0) or OK (1). regmatch is an opaque handle.
+int nvim_search_regcomp(char *pat, size_t patlen, int pat_use, int options, void *regmatch_out)
+{
+  return search_regcomp(pat, patlen, NULL, RE_SEARCH, pat_use, options, (regmmatch_T *)regmatch_out);
+}
+
+/// Execute multi-line regex match with timeout support.
+int nvim_searchit_regexec_multi(void *regmatch, void *win, void *buf,
+                                linenr_T lnum, colnr_T col,
+                                void *tm, int *timed_out)
+{
+  return vim_regexec_multi((regmmatch_T *)regmatch, (win_T *)win, (buf_T *)buf,
+                           lnum, col, (proftime_T *)tm, timed_out);
+}
+
+/// Free regprog from regmmatch_T.
+void nvim_searchit_regfree(void *regmatch)
+{
+  regmmatch_T *rm = (regmmatch_T *)regmatch;
+  vim_regfree(rm->regprog);
+}
+
+/// Check if regprog is NULL (pattern was freed during search).
+int nvim_regmatch_regprog_is_null(const void *regmatch)
+{
+  return ((const regmmatch_T *)regmatch)->regprog == NULL ? 1 : 0;
+}
+
+/// Get rmm_matchcol from regmmatch_T.
+colnr_T nvim_regmatch_rmm_matchcol(const void *regmatch)
+{
+  return ((const regmmatch_T *)regmatch)->rmm_matchcol;
+}
+
+/// Check if p_cpo contains CPO_SEARCH ('c').
+int nvim_cpo_has_search(void)
+{
+  return vim_strchr(p_cpo, CPO_SEARCH) != NULL ? 1 : 0;
+}
+
+/// Get rc_did_emsg flag.
+int nvim_get_rc_did_emsg(void)
+{
+  return rc_did_emsg ? 1 : 0;
+}
+
+/// Check if profile time limit has been passed.
+int nvim_profile_passed_limit(void *tm)
+{
+  if (tm == NULL) {
+    return 0;
+  }
+  return profile_passed_limit(*(proftime_T *)tm) ? 1 : 0;
+}
+
+/// Emit "Pattern not found" error with the pattern from mr_pattern.
+void nvim_searchit_emsg_patnotf(int p_ws_val, linenr_T lnum)
+{
+  if (p_ws_val) {
+    semsg(_(e_patnotf2), mr_pattern);
+  } else if (lnum == 0) {
+    semsg(_(e_search_hit_top_without_match_for_str), mr_pattern);
+  } else {
+    semsg(_(e_search_hit_bottom_without_match_for_str), mr_pattern);
+  }
+}
+
+/// Emit "E383: Invalid search string" error using mr_pattern.
+void nvim_searchit_emsg_invalid(void)
+{
+  semsg(_("E383: Invalid search string: %s"), mr_pattern);
+}
+
+/// Emit "Interrupted" error.
+void nvim_searchit_emsg_interr(void)
+{
+  emsg(_(e_interr));
+}
+
+/// Give search wrap-around warning message.
+void nvim_searchit_give_warning(int dir)
+{
+  give_warning(_(dir == BACKWARD ? top_bot_msg : bot_top_msg), true);
+}
+
+/// Get the sizeof(regmmatch_T) for stack allocation.
+int nvim_regmmatch_size(void)
+{
+  return (int)sizeof(regmmatch_T);
+}
+
+/// Allocate a regmmatch_T on the heap and return as opaque handle.
+void *nvim_regmmatch_alloc(void)
+{
+  regmmatch_T *rm = xcalloc(1, sizeof(regmmatch_T));
+  return rm;
+}
+
+/// Free a heap-allocated regmmatch_T.
+void nvim_regmmatch_free(void *rm)
+{
+  xfree(rm);
 }
