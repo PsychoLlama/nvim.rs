@@ -1,34 +1,28 @@
-Plan: ~/.claude/plans/lucky-hugging-alpaca.md
+Plan: ~/.claude/plans/zippy-stirring-twilight.md
 
-All 4 phases of the buffer.c Wave 2 migration plan are complete. Here's the summary:
+All steps of the plan are complete. Here's a summary of what was done:
 
-## Wave 2 Migration Results
+## Edit Crate Wave 3 Complete
 
-### Phase 1 (state.rs) — 3 functions
-- `rs_buf_clear_file` — reset buffer file state
-- `rs_buf_inc_changedtick` — increment b:changedtick
-- `rs_wipe_buffer` — wipe buffer with optional autocmd blocking
+**9 functions migrated** from `src/nvim/edit.c` to Rust across 4 phases:
 
-### Phase 2 (list.rs) — 5 functions  
-- `rs_buflist_findnr` — find buffer by number
-- `rs_buflist_nr2name` — get name for buffer number
-- `rs_buflist_findname` — find buffer by filename
-- `rs_buflist_findname_exp` — find buffer by name after expansion
-- `buflist_findname_file_id_impl` — internal Rust helper (C static kept for `buflist_new`)
+### Phase 1: C Accessor Infrastructure
+- Added 30+ new accessor/wrapper functions in `edit.c` for globals (`spell_redraw_lnum`, `ai_col`, `no_mapping`, `textlock`, `mod_mask`, `got_int`, etc.) and C library calls (`AppendToRedobuff`, `plain_vgetc`, `merge_modifiers`, `get_special_key_name`, etc.)
+- Added 9 `_Static_assert` entries for new constants
 
-### Phase 3 (lib.rs) — 3 functions
-- `rs_otherfile_buf_4` — check if filename differs from buffer's file
-- `rs_fname_expand` — expand filename to full path
-- `rs_buflist_add` — add file to buffer list
+### Phase 2: Leaf Functions (3 functions)
+- `redo_literal` → `editing.rs` (encodes literal chars into redo buffer)
+- `check_spell_redraw` → `helpers.rs` (redraws spell-checked line)
+- `do_insert_char_pre` → `editing.rs` (triggers `InsertCharPre` autocmd)
 
-### Phase 4 (lib.rs) — 3 functions
-- `rs_buflist_altfpos` — set alternate cursor position
-- `rs_buflist_findlnum` — find stored line number for buffer
-- `rs_set_buflisted` — toggle buflisted flag with autocmds
+### Phase 3: Arrow State Functions (4 functions)
+- `start_arrow_common` → `state.rs` (core arrow key state transition)
+- `start_arrow` → `state.rs` (thin wrapper)
+- `start_arrow_with_change` → `state.rs` (adds CTRL-G U to redo)
+- `stop_arrow` → `state.rs` (resets state, starts new insertion)
 
-### Deferred
-`fileinfo` (90 lines) and `maketitle` (70 lines) + `value_change` (15 lines) were deferred per the plan's risk mitigation — they require extensive FFI bindings for messaging globals, `_()` translation macros, `NGETTEXT`, and the complex `build_stl_str_hl` 12-parameter interface.
+### Phase 4: Input Processing Functions (2 functions)
+- `insert_special` → `editing.rs` (handles special key insertion with modifiers)
+- `get_literal` → `editing.rs` (CTRL-V literal character input with decimal/hex/octal/unicode digit accumulation)
 
-### Stats
-- **14 functions migrated** across 4 commits
-- All checks passing: build, smoke-test, rust-fmt-check, rust-clippy, rust-test (4045 tests)
+**All checks pass**: build, smoke-test, rust-test (4045/4045), rust-fmt-check, rust-clippy
