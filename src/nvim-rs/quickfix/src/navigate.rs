@@ -1184,6 +1184,124 @@ pub unsafe extern "C" fn rs_qf_get_entry_with_msg(
 }
 
 // =============================================================================
+// qf_jump_edit_buffer migration
+// =============================================================================
+
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+mod jump_edit {
+    use std::ffi::{c_int, c_uint, c_void};
+
+    /// Opaque handles — match lib.rs signatures
+    type QfInfoHandle = *const c_void;
+    type QfInfoHandleMut = *mut c_void;
+    type QfListHandle = *const c_void;
+    type QfLineHandle = *const c_void;
+
+    const FAIL: c_int = 0;
+    const QFLT_QUICKFIX: c_int = 0;
+    const QFLT_LOCATION: c_int = 1;
+    const QF_ABORT: c_int = 6;
+
+    extern "C" {
+        // Existing accessors
+        fn nvim_qf_get_curlist(qi: QfInfoHandle) -> QfListHandle;
+        fn nvim_qf_get_curlist_idx(qi: QfInfoHandle) -> c_int;
+        fn nvim_qf_get_changedtick(qfl: QfListHandle) -> c_int;
+        fn nvim_qf_get_id(qfl: QfListHandle) -> c_uint;
+        fn nvim_qf_get_qfl_type(qfl: QfListHandle) -> c_int;
+
+        fn nvim_qfline_get_type(qfp: QfLineHandle) -> i8;
+        fn nvim_qfline_get_fnum(qfp: QfLineHandle) -> c_int;
+
+        // Validation (already exist)
+        fn nvim_qflist_valid(qi: QfInfoHandle, qf_id: c_uint) -> bool;
+        fn nvim_qf_entry_present(qfl: QfListHandle, qf_ptr: QfLineHandle) -> bool;
+
+        // New Phase 5 high-level wrappers
+        fn nvim_qf_jump_open_help(qf_fnum: c_int, forceit: c_int, prev_winid: c_int) -> c_int;
+        fn nvim_qf_jump_open_file(
+            qi: QfInfoHandleMut,
+            fnum: c_int,
+            forceit: c_int,
+            opened_window: *mut bool,
+        ) -> c_int;
+        fn nvim_qf_jump_loc_win_closed(prev_winid: c_int, qi: QfInfoHandleMut) -> bool;
+        fn nvim_qf_jump_emsg_win_closed();
+        fn nvim_qf_jump_emsg_qf_changed();
+        fn nvim_qf_jump_emsg_ll_changed();
+    }
+
+    /// Edit the selected file or help file from quickfix.
+    ///
+    /// # Safety
+    ///
+    /// All pointer parameters must be valid.
+    #[no_mangle]
+    pub unsafe extern "C" fn rs_qf_jump_edit_buffer(
+        qi: QfInfoHandleMut,
+        qf_ptr: QfLineHandle,
+        forceit: c_int,
+        prev_winid: c_int,
+        opened_window: *mut bool,
+    ) -> c_int {
+        let qfl = nvim_qf_get_curlist(qi);
+        let old_changetick = nvim_qf_get_changedtick(qfl);
+        let old_qf_curlist = nvim_qf_get_curlist_idx(qi);
+        let qfl_type = nvim_qf_get_qfl_type(qfl);
+        let save_qfid = nvim_qf_get_id(qfl);
+
+        let retval = if nvim_qfline_get_type(qf_ptr) == 1 {
+            // Open help file
+            let result = nvim_qf_jump_open_help(nvim_qfline_get_fnum(qf_ptr), forceit, prev_winid);
+            if result == -2 {
+                // can_abandon failed: skip post-validation
+                return FAIL;
+            }
+            result
+        } else {
+            // Open normal file (handles winfixbuf logic)
+            let fnum = nvim_qfline_get_fnum(qf_ptr);
+            let result = nvim_qf_jump_open_file(qi, fnum, forceit, opened_window);
+            if result == -2 {
+                // Location list winfixbuf early return (skip post-validation)
+                return FAIL;
+            }
+            result
+        };
+
+        // If a location list, check whether the associated window is still present.
+        if qfl_type == QFLT_LOCATION && nvim_qf_jump_loc_win_closed(prev_winid, qi) {
+            nvim_qf_jump_emsg_win_closed();
+            *opened_window = false;
+            return QF_ABORT;
+        }
+
+        // Check if the quickfix list is still valid.
+        if qfl_type == QFLT_QUICKFIX && !nvim_qflist_valid(qi, save_qfid) {
+            nvim_qf_jump_emsg_qf_changed();
+            return QF_ABORT;
+        }
+
+        // Check if the list was changed by autocommands.
+        if old_qf_curlist != nvim_qf_get_curlist_idx(qi)
+            || old_changetick != nvim_qf_get_changedtick(qfl)
+            || !nvim_qf_entry_present(qfl, qf_ptr)
+        {
+            if qfl_type == QFLT_QUICKFIX {
+                nvim_qf_jump_emsg_qf_changed();
+            } else {
+                nvim_qf_jump_emsg_ll_changed();
+            }
+            return QF_ABORT;
+        }
+
+        retval
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -832,6 +832,10 @@ extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
                            void *tv, char *errorformat, bool newlist, linenr_T lnumfirst,
                            linenr_T lnumlast, const char *qf_title, char *enc);
 
+// Jump/edit functions
+extern int rs_qf_jump_edit_buffer(void *qi, const void *qf_ptr, int forceit,
+                                   int prev_winid, bool *opened_window);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -4538,6 +4542,89 @@ static int qf_jump_to_usable_window(int qf_fnum, bool newwin, bool *opened_windo
   return OK;
 }
 
+// =============================================================================
+// Phase 5: qf_jump_edit_buffer accessor functions for Rust
+// =============================================================================
+
+/// Open a help file from quickfix.
+/// Returns OK if do_ecmd succeeded, FAIL if do_ecmd failed (continue to
+/// post-validation), or -2 if can_abandon failed (skip post-validation).
+int nvim_qf_jump_open_help(int qf_fnum, int forceit, int prev_winid)
+{
+  if (!can_abandon(curbuf, forceit)) {
+    no_write_message();
+    return -2;  // sentinel: skip post-validation checks
+  }
+  return do_ecmd(qf_fnum, NULL, NULL, NULL, 1,
+                 ECMD_HIDE + ECMD_SET_HELP,
+                 prev_winid == curwin->handle ? curwin : NULL);
+}
+
+/// Handle winfixbuf logic and open file from quickfix.
+/// Returns OK/FAIL normally, or -2 for location-list winfixbuf early return.
+/// Sets *opened_window if a new window was split.
+int nvim_qf_jump_open_file(void *qi_void, int fnum, int forceit, bool *opened_window)
+{
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  int retval = OK;
+
+  if (!forceit && curwin->w_p_wfb && curbuf->b_fnum != fnum) {
+    if (qi->qfl_type == QFLT_LOCATION) {
+      emsg(_(e_winfixbuf_cannot_go_to_buffer));
+      return -2;  // sentinel: location list winfixbuf early return
+    }
+
+    if (win_valid(prevwin) && !prevwin->w_p_wfb
+        && !bt_quickfix(prevwin->w_buffer)) {
+      win_goto(prevwin);
+    }
+    if (curwin->w_p_wfb) {
+      if (win_split(0, 0) == OK) {
+        *opened_window = true;
+      }
+      if (curwin->w_p_wfb) {
+        emsg(_(e_winfixbuf_cannot_go_to_buffer));
+        retval = FAIL;
+      }
+    }
+  }
+
+  if (retval == OK) {
+    retval = buflist_getfile(fnum, 1, GETF_SETMARK | GETF_SWITCH, forceit);
+  }
+  return retval;
+}
+
+/// Check if the location list window was closed. Returns true if invalid.
+bool nvim_qf_jump_loc_win_closed(int prev_winid, void *qi_void)
+{
+  win_T *wp = win_id2wp(prev_winid);
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  return wp == NULL && curwin->w_llist != qi;
+}
+
+/// Emit "Current window was closed" error.
+void nvim_qf_jump_emsg_win_closed(void)
+{
+  emsg(_("E924: Current window was closed"));
+}
+
+/// Emit "Current quickfix list was changed" error.
+void nvim_qf_jump_emsg_qf_changed(void)
+{
+  emsg(_(e_current_quickfix_list_was_changed));
+}
+
+/// Emit "Current location list was changed" error.
+void nvim_qf_jump_emsg_ll_changed(void)
+{
+  emsg(_(e_current_location_list_was_changed));
+}
+
+_Static_assert(QFLT_QUICKFIX == 0, "QFLT_QUICKFIX must be 0");
+_Static_assert(QFLT_LOCATION == 1, "QFLT_LOCATION must be 1");
+_Static_assert(QF_ABORT == 6, "QF_ABORT must be 6");
+
 /// Edit the selected file or help file.
 /// @return  OK if successfully edited the file.
 ///          FAIL on failing to open the buffer.
@@ -4546,91 +4633,7 @@ static int qf_jump_to_usable_window(int qf_fnum, bool newwin, bool *opened_windo
 static int qf_jump_edit_buffer(qf_info_T *qi, qfline_T *qf_ptr, int forceit, int prev_winid,
                                bool *opened_window)
 {
-  qf_list_T *qfl = qf_get_curlist(qi);
-  int old_changetick = qfl->qf_changedtick;
-  int old_qf_curlist = qi->qf_curlist;
-  qfltype_T qfl_type = qfl->qfl_type;
-  int retval = OK;
-  unsigned save_qfid = qfl->qf_id;
-
-  if (qf_ptr->qf_type == 1) {
-    // Open help file (do_ecmd() will set b_help flag, readfile() will
-    // set b_p_ro flag).
-    if (!can_abandon(curbuf, forceit)) {
-      no_write_message();
-      return FAIL;
-    }
-    retval = do_ecmd(qf_ptr->qf_fnum, NULL, NULL, NULL, 1,
-                     ECMD_HIDE + ECMD_SET_HELP,
-                     prev_winid == curwin->handle ? curwin : NULL);
-  } else {
-    int fnum = qf_ptr->qf_fnum;
-
-    if (!forceit && curwin->w_p_wfb && curbuf->b_fnum != fnum) {
-      if (qi->qfl_type == QFLT_LOCATION) {
-        // Location lists cannot split or reassign their window
-        // so 'winfixbuf' windows must fail
-        emsg(_(e_winfixbuf_cannot_go_to_buffer));
-        return FAIL;
-      }
-
-      if (win_valid(prevwin) && !prevwin->w_p_wfb
-          && !bt_quickfix(prevwin->w_buffer)) {
-        // 'winfixbuf' is set; attempt to change to a window without it
-        // that isn't a quickfix/location list window.
-        win_goto(prevwin);
-      }
-      if (curwin->w_p_wfb) {
-        // Split the window, which will be 'nowinfixbuf', and set curwin
-        // to that
-        if (win_split(0, 0) == OK) {
-          *opened_window = true;
-        }
-        if (curwin->w_p_wfb) {
-          // Autocommands set 'winfixbuf' or sent us to another window
-          // with it set, or we failed to split the window.  Give up,
-          // but don't return immediately, as they may have messed
-          // with the list.
-          emsg(_(e_winfixbuf_cannot_go_to_buffer));
-          retval = FAIL;
-        }
-      }
-    }
-
-    if (retval == OK) {
-      retval = buflist_getfile(fnum, 1,
-                               GETF_SETMARK | GETF_SWITCH, forceit);
-    }
-  }
-  // If a location list, check whether the associated window is still
-  // present.
-  if (qfl_type == QFLT_LOCATION) {
-    win_T *wp = win_id2wp(prev_winid);
-
-    if (wp == NULL && curwin->w_llist != qi) {
-      emsg(_("E924: Current window was closed"));
-      *opened_window = false;
-      return QF_ABORT;
-    }
-  }
-
-  if (qfl_type == QFLT_QUICKFIX && !qflist_valid(NULL, save_qfid)) {
-    emsg(_(e_current_quickfix_list_was_changed));
-    return QF_ABORT;
-  }
-
-  if (old_qf_curlist != qi->qf_curlist
-      || old_changetick != qfl->qf_changedtick
-      || !is_qf_entry_present(qfl, qf_ptr)) {
-    if (qfl_type == QFLT_QUICKFIX) {
-      emsg(_(e_current_quickfix_list_was_changed));
-    } else {
-      emsg(_(e_current_location_list_was_changed));
-    }
-    return QF_ABORT;
-  }
-
-  return retval;
+  return rs_qf_jump_edit_buffer(qi, qf_ptr, forceit, prev_winid, opened_window);
 }
 
 /// Go to the error line in the current file using either line/column number or
