@@ -12,10 +12,14 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
+use std::io::Write;
 
 /// Line number type (matches `linenr_T` in Neovim).
 type LinenrT = i32;
+
+/// Column number type (matches `colnr_T` in Neovim).
+type ColnrT = i32;
 
 // ============================================================================
 // C accessor / helper functions
@@ -34,6 +38,22 @@ extern "C" {
     fn nvim_stuffcharReadbuff(c: c_int);
     fn nvim_stuffReadbuffLen(data: *const u8, len: isize);
     fn nvim_emsg_noinstext();
+
+    // -- redo_literal dependencies --
+    fn nvim_edit_AppendToRedobuff(s: *const c_char);
+    fn nvim_edit_append_char_to_redobuff(c: c_int);
+
+    // -- do_insert_char_pre dependencies --
+    fn nvim_edit_has_event_insertcharpre() -> c_int;
+    fn nvim_edit_textlock_inc();
+    fn nvim_edit_textlock_dec();
+    fn nvim_edit_set_vim_var_char(buf: *const c_char, len: isize);
+    fn nvim_edit_get_vim_var_char() -> *const c_char;
+    fn nvim_edit_ins_apply_autocmds_insertcharpre() -> c_int;
+    fn nvim_edit_set_State(val: c_int);
+    fn nvim_get_State() -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut u8) -> c_int;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 }
 
 // ============================================================================
@@ -54,6 +74,12 @@ const ESC: u8 = 0x1b;
 
 /// `Ctrl_D` from `ascii_defs.h`
 const CTRL_D: u8 = 4;
+
+/// `Ctrl_RSB` from `ascii_defs.h`
+const CTRL_RSB: c_int = 29;
+
+/// `MB_MAXBYTES` from `mbyte_defs.h`
+const MB_MAXBYTES: usize = 21;
 
 // ============================================================================
 // NvimString (matches helpers.rs definition)
@@ -195,6 +221,101 @@ unsafe fn stuff_inserted_impl(c: c_int, count: c_int, no_esc: c_int) -> c_int {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_stuff_inserted(c: c_int, count: c_int, no_esc: c_int) -> c_int {
     stuff_inserted_impl(c, count, no_esc)
+}
+
+// ============================================================================
+// redo_literal — encode literal character into redo buffer
+// ============================================================================
+
+/// Put a character in the redo buffer, for when just after a CTRL-V.
+/// Digits are encoded as a 3-digit decimal string to avoid ambiguity.
+unsafe fn redo_literal_impl(c: c_int) {
+    if (c as u8).is_ascii_digit() {
+        let mut buf = [0u8; 10];
+        let _ = write!(&mut buf.as_mut_slice()[..], "{:03}", c);
+        // Find NUL terminator position and ensure it
+        let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+        buf[len] = 0;
+        nvim_edit_AppendToRedobuff(buf.as_ptr().cast());
+    } else {
+        nvim_edit_append_char_to_redobuff(c);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_redo_literal(c: c_int) {
+    redo_literal_impl(c);
+}
+
+// ============================================================================
+// do_insert_char_pre — trigger InsertCharPre autocmd
+// ============================================================================
+
+/// Handle the InsertCharPre autocommand.
+/// `c` is the character that was typed.
+/// Returns a pointer to allocated memory with the replacement string,
+/// or NULL to continue inserting `c`.
+unsafe fn do_insert_char_pre_impl(c: c_int) -> *mut c_char {
+    if c == CTRL_RSB {
+        return std::ptr::null_mut();
+    }
+
+    // Return quickly when there is nothing to do.
+    if nvim_edit_has_event_insertcharpre() == 0 {
+        return std::ptr::null_mut();
+    }
+
+    let mut buf = [0u8; MB_MAXBYTES + 1];
+    let buflen = utf_char2bytes(c, buf.as_mut_ptr()) as usize;
+    buf[buflen] = 0; // NUL-terminate
+
+    let save_state = nvim_get_State();
+
+    // Lock the text to avoid weird things from happening.
+    nvim_edit_textlock_inc();
+    nvim_edit_set_vim_var_char(buf.as_ptr().cast(), buflen as isize);
+
+    let mut res: *mut c_char = std::ptr::null_mut();
+    if nvim_edit_ins_apply_autocmds_insertcharpre() != 0 {
+        // Get the value of v:char. Only use it when changed.
+        let vchar = nvim_edit_get_vim_var_char();
+        // Compare buf (our original) with v:char
+        if !vchar.is_null() {
+            let orig = buf.as_ptr().cast::<c_char>();
+            if libc_strcmp(orig, vchar) != 0 {
+                res = xstrdup(vchar);
+            }
+        }
+    }
+
+    nvim_edit_set_vim_var_char(std::ptr::null(), -1);
+    nvim_edit_textlock_dec();
+
+    // Restore the State, it may have been changed.
+    nvim_edit_set_State(save_state);
+
+    res
+}
+
+/// Simple strcmp implementation to avoid libc dependency.
+unsafe fn libc_strcmp(a: *const c_char, b: *const c_char) -> c_int {
+    let mut i = 0;
+    loop {
+        let ca = *a.offset(i) as u8;
+        let cb = *b.offset(i) as u8;
+        if ca != cb {
+            return c_int::from(ca) - c_int::from(cb);
+        }
+        if ca == 0 {
+            return 0;
+        }
+        i += 1;
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_do_insert_char_pre(c: c_int) -> *mut c_char {
+    do_insert_char_pre_impl(c)
 }
 
 // ============================================================================

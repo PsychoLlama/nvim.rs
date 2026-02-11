@@ -267,6 +267,9 @@ extern int rs_ins_copychar(linenr_T lnum);
 extern int rs_ins_ctrl_ey(int tc);
 extern int rs_ins_digraph(void);
 extern int rs_stuff_inserted(int c, int count, int no_esc);
+extern void rs_redo_literal(int c);
+extern void rs_check_spell_redraw(void);
+extern char *rs_do_insert_char_pre(int c);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -759,6 +762,253 @@ _Static_assert(MODE_INSERT == 0x10, "MODE_INSERT mismatch");
 _Static_assert(kOptFdoFlagAll == 0x01, "kOptFdoFlagAll mismatch");
 _Static_assert(kOptVeFlagOnemore == 0x08, "kOptVeFlagOnemore mismatch");
 _Static_assert(TAB == '\011', "TAB mismatch");
+
+// Static asserts for Wave 3 constants
+_Static_assert(VREPLACE_FLAG == 0x200, "VREPLACE_FLAG mismatch");
+_Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE mismatch");
+_Static_assert(MOD_MASK_SHIFT == 0x02, "MOD_MASK_SHIFT mismatch");
+_Static_assert(MOD_MASK_CMD == 0x80, "MOD_MASK_CMD mismatch");
+_Static_assert(INSCHAR_CTRLV == 4, "INSCHAR_CTRLV mismatch");
+_Static_assert(Ctrl_G == 7, "Ctrl_G mismatch");
+_Static_assert(Ctrl_C == 3, "Ctrl_C mismatch");
+_Static_assert(Ctrl_RSB == 29, "Ctrl_RSB mismatch");
+_Static_assert(MB_MAXBYTES == 21, "MB_MAXBYTES mismatch");
+
+// -- Wave 3: Global accessors for insert mode helpers --
+
+/// Get spell_redraw_lnum (accessor for Rust).
+linenr_T nvim_edit_get_spell_redraw_lnum(void)
+{
+  return spell_redraw_lnum;
+}
+
+/// Set spell_redraw_lnum (accessor for Rust).
+void nvim_edit_set_spell_redraw_lnum(linenr_T val)
+{
+  spell_redraw_lnum = val;
+}
+
+/// Get ai_col (accessor for Rust).
+colnr_T nvim_edit_get_ai_col(void)
+{
+  return ai_col;
+}
+
+/// Set ai_col (accessor for Rust).
+void nvim_edit_set_ai_col(colnr_T val)
+{
+  ai_col = val;
+}
+
+/// Get orig_line_count (accessor for Rust).
+linenr_T nvim_edit_get_orig_line_count(void)
+{
+  return orig_line_count;
+}
+
+/// Set orig_line_count (accessor for Rust).
+void nvim_edit_set_orig_line_count(linenr_T val)
+{
+  orig_line_count = val;
+}
+
+/// Get vr_lines_changed (accessor for Rust).
+int nvim_edit_get_vr_lines_changed(void)
+{
+  return vr_lines_changed;
+}
+
+/// Set vr_lines_changed (accessor for Rust).
+void nvim_edit_set_vr_lines_changed(int val)
+{
+  vr_lines_changed = val;
+}
+
+/// Increment no_mapping (accessor for Rust).
+void nvim_edit_inc_no_mapping(void)
+{
+  no_mapping++;
+}
+
+/// Decrement no_mapping (accessor for Rust).
+void nvim_edit_dec_no_mapping(void)
+{
+  no_mapping--;
+}
+
+/// Get got_int (accessor for Rust).
+int nvim_edit_get_got_int(void)
+{
+  return got_int ? 1 : 0;
+}
+
+/// Set got_int (accessor for Rust).
+void nvim_edit_set_got_int(int val)
+{
+  got_int = val != 0;
+}
+
+/// Get mod_mask (accessor for Rust).
+int nvim_edit_get_mod_mask(void)
+{
+  return mod_mask;
+}
+
+/// Set mod_mask (accessor for Rust).
+void nvim_edit_set_mod_mask(int val)
+{
+  mod_mask = val;
+}
+
+/// Increment textlock (accessor for Rust).
+void nvim_edit_textlock_inc(void)
+{
+  textlock++;
+}
+
+/// Decrement textlock (accessor for Rust).
+void nvim_edit_textlock_dec(void)
+{
+  textlock--;
+}
+
+/// Call AppendToRedobuff(s) (accessor for Rust).
+void nvim_edit_AppendToRedobuff(const char *s)
+{
+  AppendToRedobuff(s);
+}
+
+/// Call AppendToRedobuffLit(s, len) (accessor for Rust).
+void nvim_edit_AppendToRedobuffLit(const char *s, int len)
+{
+  AppendToRedobuffLit(s, len);
+}
+
+/// Call ResetRedobuff() (accessor for Rust).
+void nvim_edit_ResetRedobuff(void)
+{
+  ResetRedobuff();
+}
+
+/// Call u_save_cursor() (accessor for Rust).
+int nvim_edit_u_save_cursor(void)
+{
+  return u_save_cursor();
+}
+
+/// Set Insstart from curwin->w_cursor (accessor for Rust).
+void nvim_edit_set_insstart_from_cursor(void)
+{
+  Insstart = curwin->w_cursor;
+}
+
+/// Check if Insstart.col > Insstart_orig.col (accessor for Rust).
+int nvim_edit_insstart_col_gt_orig(void)
+{
+  return Insstart.col > Insstart_orig.col ? 1 : 0;
+}
+
+/// Get linetabsize_str(get_cursor_line_ptr()) (accessor for Rust).
+colnr_T nvim_edit_linetabsize_cursor_line(void)
+{
+  return linetabsize_str(get_cursor_line_ptr());
+}
+
+/// Get curbuf->b_ml.ml_line_count (accessor for Rust).
+linenr_T nvim_edit_curbuf_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// Call foldOpenCursor() (accessor for Rust).
+void nvim_edit_foldOpenCursor(void)
+{
+  foldOpenCursor();
+}
+
+/// Call plain_vgetc() (accessor for Rust).
+int nvim_edit_plain_vgetc(void)
+{
+  return plain_vgetc();
+}
+
+/// Call merge_modifiers(c, &mod_mask) — mutates global mod_mask (accessor for Rust).
+int nvim_edit_merge_modifiers(int c)
+{
+  return merge_modifiers(c, &mod_mask);
+}
+
+/// Call add_to_showcmd(c) (accessor for Rust).
+void nvim_edit_add_to_showcmd(int c)
+{
+  add_to_showcmd(c);
+}
+
+/// Call MB_BYTE2LEN_CHECK(c) (accessor for Rust).
+int nvim_edit_MB_BYTE2LEN_CHECK(int c)
+{
+  return MB_BYTE2LEN_CHECK(c);
+}
+
+/// Call vungetc(c) (accessor for Rust).
+void nvim_edit_vungetc(int c)
+{
+  vungetc(c);
+}
+
+/// Get K_ZERO computed macro value (accessor for Rust).
+int nvim_edit_get_K_ZERO(void)
+{
+  return K_ZERO;
+}
+
+/// Get special key name string (accessor for Rust).
+char *nvim_edit_get_special_key_name(int c, int modifiers)
+{
+  return get_special_key_name(c, modifiers);
+}
+
+/// Call ins_str(p, len) (accessor for Rust).
+void nvim_edit_ins_str(const char *p, size_t len)
+{
+  ins_str((char *)p, len);
+}
+
+/// Call insertchar(c, flags, second_indent) (accessor for Rust).
+void nvim_edit_insertchar(int c, int flags, int second_indent)
+{
+  insertchar(c, flags, second_indent);
+}
+
+/// Call stop_insert(end_insert_pos, esc, nomove) (accessor for Rust).
+void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
+{
+  stop_insert((pos_T *)end_insert_pos, esc, nomove);
+}
+
+/// Check has_event(EVENT_INSERTCHARPRE) (accessor for Rust).
+int nvim_edit_has_event_insertcharpre(void)
+{
+  return has_event(EVENT_INSERTCHARPRE) ? 1 : 0;
+}
+
+/// Call set_vim_var_string(VV_CHAR, buf, len) (accessor for Rust).
+void nvim_edit_set_vim_var_char(const char *buf, ptrdiff_t len)
+{
+  set_vim_var_string(VV_CHAR, buf, len);
+}
+
+/// Get get_vim_var_str(VV_CHAR) (accessor for Rust).
+const char *nvim_edit_get_vim_var_char(void)
+{
+  return get_vim_var_str(VV_CHAR);
+}
+
+/// Call ins_apply_autocmds(EVENT_INSERTCHARPRE) (accessor for Rust).
+int nvim_edit_ins_apply_autocmds_insertcharpre(void)
+{
+  return ins_apply_autocmds(EVENT_INSERTCHARPRE);
+}
 
 // -- Phase 4: Key handler module accessors --
 
@@ -3213,16 +3463,7 @@ void insertchar(int c, int flags, int second_indent)
 // Put a character in the redo buffer, for when just after a CTRL-V.
 static void redo_literal(int c)
 {
-  char buf[10];
-
-  // Only digits need special treatment.  Translate them into a string of
-  // three digits.
-  if (ascii_isdigit(c)) {
-    vim_snprintf(buf, sizeof(buf), "%03d", c);
-    AppendToRedobuff(buf);
-  } else {
-    AppendCharToRedobuff(c);
-  }
+  rs_redo_literal(c);
 }
 
 /// start_arrow() is called when an arrow key is used in insert mode.
@@ -3264,12 +3505,7 @@ static void start_arrow_common(pos_T *end_insert_pos, bool end_change)
 // It may be skipped again, thus reset spell_redraw_lnum first.
 static void check_spell_redraw(void)
 {
-  if (spell_redraw_lnum != 0) {
-    linenr_T lnum = spell_redraw_lnum;
-
-    spell_redraw_lnum = 0;
-    redrawWinline(curwin, lnum);
-  }
+  rs_check_spell_redraw();
 }
 
 // stop_arrow() is called before a change is made in insert mode.
@@ -4518,41 +4754,7 @@ int nvim_get_nolist_virtcol(void)
 // Return NULL to continue inserting "c".
 static char *do_insert_char_pre(int c)
 {
-  char buf[MB_MAXBYTES + 1];
-  const int save_State = State;
-
-  if (c == Ctrl_RSB) {
-    return NULL;
-  }
-
-  // Return quickly when there is nothing to do.
-  if (!has_event(EVENT_INSERTCHARPRE)) {
-    return NULL;
-  }
-  size_t buflen = (size_t)utf_char2bytes(c, buf);
-  buf[buflen] = NUL;
-
-  // Lock the text to avoid weird things from happening.
-  textlock++;
-  set_vim_var_string(VV_CHAR, buf, (ptrdiff_t)buflen);  // set v:char
-
-  char *res = NULL;
-  if (ins_apply_autocmds(EVENT_INSERTCHARPRE)) {
-    // Get the value of v:char.  It may be empty or more than one
-    // character.  Only use it when changed, otherwise continue with the
-    // original character to avoid breaking autoindent.
-    if (strcmp(buf, get_vim_var_str(VV_CHAR)) != 0) {
-      res = xstrdup(get_vim_var_str(VV_CHAR));
-    }
-  }
-
-  set_vim_var_string(VV_CHAR, NULL, -1);
-  textlock--;
-
-  // Restore the State, it may have been changed.
-  State = save_State;
-
-  return res;
+  return rs_do_insert_char_pre(c);
 }
 
 bool get_can_cindent(void)
