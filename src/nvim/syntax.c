@@ -146,6 +146,9 @@ extern char *rs_get_syn_options(char *arg, int *opt_flags, int opt_keyword,
                                 int16_t **opt_next_list, int *conceal_char, int skip);
 extern int rs_get_id_list(char **arg, int keylen, int16_t **list, int skip);
 
+// Phase 5: Migrated syn_cmd_region from Rust
+extern void rs_syn_cmd_region(exarg_T *eap, int syncing);
+
 // Phase 18a: Simple settings command functions from Rust
 extern int rs_syn_cmd_case(synblock_T *block, const char *arg, const char *arg_end);
 extern int rs_syn_cmd_conceal(synblock_T *block, const char *arg, const char *arg_end);
@@ -3382,219 +3385,14 @@ static void syn_cmd_match(exarg_T *eap, int syncing)
 /// @param syncing  true for ":syntax sync region .."
 static void syn_cmd_region(exarg_T *eap, int syncing)
 {
-  char *arg = eap->arg;
-  char *group_name_end;
-  char *rest;                    // next arg, NULL on error
-  char *key_end;
-  char *key = NULL;
-  int item;
+  rs_syn_cmd_region(eap, syncing);
+}
+
+// Keep ITEM_* defines available for C wrappers
 #define ITEM_START          0
 #define ITEM_SKIP           1
 #define ITEM_END            2
 #define ITEM_MATCHGROUP     3
-  struct pat_ptr {
-    synpat_T *pp_synp;                   // pointer to syn_pattern
-    int pp_matchgroup_id;                       // matchgroup ID
-    struct pat_ptr *pp_next;                   // pointer to next pat_ptr
-  }                   *(pat_ptrs[3]);
-  // patterns found in the line
-  struct pat_ptr *ppp;
-  struct pat_ptr *ppp_next;
-  int pat_count = 0;                            // nr of syn_patterns found
-  int syn_id;
-  int matchgroup_id = 0;
-  bool not_enough = false;                      // not enough arguments
-  bool illegal = false;                         // illegal arguments
-  bool success = false;
-  syn_opt_arg_T syn_opt_arg;
-  int conceal_char = NUL;
-
-  // Isolate the group name, check for validity
-  rest = get_group_name(arg, &group_name_end);
-
-  pat_ptrs[0] = NULL;
-  pat_ptrs[1] = NULL;
-  pat_ptrs[2] = NULL;
-
-  init_syn_patterns();
-
-  syn_opt_arg.flags = 0;
-  syn_opt_arg.keyword = false;
-  syn_opt_arg.sync_idx = NULL;
-  syn_opt_arg.has_cont_list = true;
-  syn_opt_arg.cont_list = NULL;
-  syn_opt_arg.cont_in_list = NULL;
-  syn_opt_arg.next_list = NULL;
-
-  // get the options, patterns and matchgroup.
-  while (rest != NULL && !ends_excmd(*rest)) {
-    // Check for option arguments
-    rest = get_syn_options(rest, &syn_opt_arg, &conceal_char, eap->skip);
-    if (rest == NULL || ends_excmd(*rest)) {
-      break;
-    }
-
-    // must be a pattern or matchgroup then
-    key_end = rest;
-    while (*key_end && !ascii_iswhite(*key_end) && *key_end != '=') {
-      key_end++;
-    }
-    xfree(key);
-    key = vim_strnsave_up(rest, (size_t)(key_end - rest));
-    if (strcmp(key, "MATCHGROUP") == 0) {
-      item = ITEM_MATCHGROUP;
-    } else if (strcmp(key, "START") == 0) {
-      item = ITEM_START;
-    } else if (strcmp(key, "END") == 0) {
-      item = ITEM_END;
-    } else if (strcmp(key, "SKIP") == 0) {
-      if (pat_ptrs[ITEM_SKIP] != NULL) {  // One skip pattern allowed.
-        illegal = true;
-        break;
-      }
-      item = ITEM_SKIP;
-    } else {
-      break;
-    }
-    rest = skipwhite(key_end);
-    if (*rest != '=') {
-      rest = NULL;
-      semsg(_("E398: Missing '=': %s"), arg);
-      break;
-    }
-    rest = skipwhite(rest + 1);
-    if (*rest == NUL) {
-      not_enough = true;
-      break;
-    }
-
-    if (item == ITEM_MATCHGROUP) {
-      char *p = skiptowhite(rest);
-      if ((p - rest == 4 && strncmp(rest, "NONE", 4) == 0) || eap->skip) {
-        matchgroup_id = 0;
-      } else {
-        matchgroup_id = syn_check_group(rest, (size_t)(p - rest));
-        if (matchgroup_id == 0) {
-          illegal = true;
-          break;
-        }
-      }
-      rest = skipwhite(p);
-    } else {
-      // Allocate room for a syn_pattern, and link it in the list of
-      // syn_patterns for this item, at the start (because the list is
-      // used from end to start).
-      ppp = xmalloc(sizeof(struct pat_ptr));
-      ppp->pp_next = pat_ptrs[item];
-      pat_ptrs[item] = ppp;
-      ppp->pp_synp = xcalloc(1, sizeof(synpat_T));
-
-      // Get the syntax pattern and the following offset(s).
-
-      // Enable the appropriate \z specials.
-      if (item == ITEM_START) {
-        reg_do_extmatch = REX_SET;
-      } else {
-        assert(item == ITEM_SKIP || item == ITEM_END);
-        reg_do_extmatch = REX_USE;
-      }
-      rest = get_syn_pattern(rest, ppp->pp_synp);
-      reg_do_extmatch = 0;
-      if (item == ITEM_END && vim_regcomp_had_eol()
-          && !(syn_opt_arg.flags & HL_EXCLUDENL)) {
-        ppp->pp_synp->sp_flags |= HL_HAS_EOL;
-      }
-      ppp->pp_matchgroup_id = matchgroup_id;
-      pat_count++;
-    }
-  }
-  xfree(key);
-  if (illegal || not_enough) {
-    rest = NULL;
-  }
-
-  // Must have a "start" and "end" pattern.
-  if (rest != NULL && (pat_ptrs[ITEM_START] == NULL
-                       || pat_ptrs[ITEM_END] == NULL)) {
-    not_enough = true;
-    rest = NULL;
-  }
-
-  if (rest != NULL) {
-    // Check for trailing garbage or command.
-    // If OK, add the item.
-    eap->nextcmd = check_nextcmd(rest);
-    if (!ends_excmd(*rest) || eap->skip) {
-      rest = NULL;
-    } else {
-      ga_grow(&(curwin->w_s->b_syn_patterns), pat_count);
-      if ((syn_id = syn_check_group(arg, (size_t)(group_name_end - arg))) != 0) {
-        syn_incl_toplevel(syn_id, &syn_opt_arg.flags);
-        // Store the start/skip/end in the syn_items list
-        int idx = curwin->w_s->b_syn_patterns.ga_len;
-        for (item = ITEM_START; item <= ITEM_END; item++) {
-          for (ppp = pat_ptrs[item]; ppp != NULL; ppp = ppp->pp_next) {
-            SYN_ITEMS(curwin->w_s)[idx] = *(ppp->pp_synp);
-            SYN_ITEMS(curwin->w_s)[idx].sp_syncing = syncing;
-            SYN_ITEMS(curwin->w_s)[idx].sp_type =
-              (item == ITEM_START) ? SPTYPE_START
-                                   : (item == ITEM_SKIP) ? SPTYPE_SKIP : SPTYPE_END;
-            SYN_ITEMS(curwin->w_s)[idx].sp_flags |= syn_opt_arg.flags;
-            SYN_ITEMS(curwin->w_s)[idx].sp_syn.id = (int16_t)syn_id;
-            SYN_ITEMS(curwin->w_s)[idx].sp_syn.inc_tag =
-              current_syn_inc_tag;
-            SYN_ITEMS(curwin->w_s)[idx].sp_syn_match_id = (int16_t)ppp->pp_matchgroup_id;
-            SYN_ITEMS(curwin->w_s)[idx].sp_cchar = conceal_char;
-            if (item == ITEM_START) {
-              SYN_ITEMS(curwin->w_s)[idx].sp_cont_list =
-                syn_opt_arg.cont_list;
-              SYN_ITEMS(curwin->w_s)[idx].sp_syn.cont_in_list =
-                syn_opt_arg.cont_in_list;
-              if (syn_opt_arg.cont_in_list != NULL) {
-                curwin->w_s->b_syn_containedin = true;
-              }
-              SYN_ITEMS(curwin->w_s)[idx].sp_next_list =
-                syn_opt_arg.next_list;
-            }
-            curwin->w_s->b_syn_patterns.ga_len++;
-            idx++;
-            if (syn_opt_arg.flags & HL_FOLD) {
-              curwin->w_s->b_syn_folditems++;
-            }
-          }
-        }
-
-        redraw_curbuf_later(UPD_SOME_VALID);
-        syn_stack_free_all(curwin->w_s);  // Need to recompute all syntax.
-        success = true;                   // don't free the progs and patterns now
-      }
-    }
-  }
-
-  // Free the allocated memory.
-  for (item = ITEM_START; item <= ITEM_END; item++) {
-    for (ppp = pat_ptrs[item]; ppp != NULL; ppp = ppp_next) {
-      if (!success && ppp->pp_synp != NULL) {
-        vim_regfree(ppp->pp_synp->sp_prog);
-        xfree(ppp->pp_synp->sp_pattern);
-      }
-      xfree(ppp->pp_synp);
-      ppp_next = ppp->pp_next;
-      xfree(ppp);
-    }
-  }
-
-  if (!success) {
-    xfree(syn_opt_arg.cont_list);
-    xfree(syn_opt_arg.cont_in_list);
-    xfree(syn_opt_arg.next_list);
-    if (not_enough) {
-      semsg(_("E399: Not enough arguments: syntax region %s"), arg);
-    } else if (illegal || rest == NULL) {
-      semsg(_(e_invarg2), arg);
-    }
-  }
-}
 
 // A simple syntax group ID comparison function suitable for use in qsort()
 static int syn_compare_stub(const void *const v1, const void *const v2)
@@ -8041,6 +7839,161 @@ int nvim_syn_toupper_asc(int c)
   return TOUPPER_ASC(c);
 }
 
+// =============================================================================
+// Phase 5 accessor functions for syn_cmd_region + get_syn_pattern migration
+// =============================================================================
+
+/// Wrap get_group_name() for Rust.
+char *nvim_syn_get_group_name(char *arg, char **name_end)
+{
+  return get_group_name(arg, name_end);
+}
+
+/// Wrap init_syn_patterns() for Rust.
+void nvim_syn_init_patterns(void)
+{
+  init_syn_patterns();
+}
+
+/// Wrap vim_strnsave_up() for Rust.
+char *nvim_syn_vim_strnsave_up(const char *str, int len)
+{
+  return vim_strnsave_up(str, (size_t)len);
+}
+
+/// Wrap check_nextcmd() for Rust, and set eap->nextcmd.
+void nvim_syn_set_nextcmd(exarg_T *eap, char *rest)
+{
+  eap->nextcmd = check_nextcmd(rest);
+}
+
+/// Get eap->arg.
+char *nvim_syn_get_eap_arg(const exarg_T *eap)
+{
+  return eap->arg;
+}
+
+/// Get eap->skip.
+int nvim_syn_get_eap_skip(const exarg_T *eap)
+{
+  return eap->skip;
+}
+
+/// Allocate and compile a syntax pattern via get_syn_pattern().
+/// Returns an opaque handle to a heap-allocated synpat_T (or NULL on error).
+/// The caller must free with nvim_syn_free_compiled_pattern() on error.
+/// item_type: 0=START, 1=SKIP, 2=END
+/// current_flags: current syn_opt_arg.flags at the time of pattern compilation
+synpat_T *nvim_syn_compile_pattern(char *arg, int item_type, int opt_flags, char **rest_out)
+{
+  // Enable the appropriate \z specials.
+  if (item_type == ITEM_START) {
+    reg_do_extmatch = REX_SET;
+  } else {
+    reg_do_extmatch = REX_USE;
+  }
+
+  synpat_T *pat = xcalloc(1, sizeof(synpat_T));
+  char *rest = get_syn_pattern(arg, pat);
+  reg_do_extmatch = 0;
+
+  if (rest == NULL) {
+    xfree(pat);
+    *rest_out = NULL;
+    return NULL;
+  }
+
+  // Check for HL_HAS_EOL on end patterns (only if HL_EXCLUDENL not set)
+  if (item_type == ITEM_END && vim_regcomp_had_eol()
+      && !(opt_flags & HL_EXCLUDENL)) {
+    pat->sp_flags |= HL_HAS_EOL;
+  }
+
+  *rest_out = rest;
+  return pat;
+}
+
+/// Free a compiled pattern on error.
+void nvim_syn_free_compiled_pattern(synpat_T *pat)
+{
+  if (pat != NULL) {
+    vim_regfree(pat->sp_prog);
+    xfree(pat->sp_pattern);
+    xfree(pat);
+  }
+}
+
+/// Get the sp_flags from a compiled pattern.
+int nvim_syn_compiled_pat_get_flags(const synpat_T *pat)
+{
+  return pat->sp_flags;
+}
+
+/// Set sp_flags on a compiled pattern (OR in additional flags).
+void nvim_syn_compiled_pat_or_flags(synpat_T *pat, int flags)
+{
+  pat->sp_flags |= flags;
+}
+
+/// Wrap syn_incl_toplevel() for Rust.
+void nvim_syn_incl_toplevel(int id, int *flagsp)
+{
+  syn_incl_toplevel(id, flagsp);
+}
+
+/// Store completed region patterns into the synblock.
+/// pat_data is an array of {synpat_T *pat, int matchgroup_id, int item_type} triples.
+/// pat_count is the number of entries.
+/// flags, syn_id, conceal_char are from option parsing.
+/// cont_list, cont_in_list, next_list are from option parsing (ownership transferred on success).
+/// Returns 1 on success (don't free patterns), 0 on failure.
+int nvim_syn_store_region_patterns(
+  synpat_T **pats,
+  int *matchgroup_ids,
+  int *item_types,
+  int pat_count,
+  int flags,
+  int syn_id,
+  int conceal_char,
+  int16_t *cont_list,
+  int16_t *cont_in_list,
+  int16_t *next_list,
+  int syncing)
+{
+  ga_grow(&(curwin->w_s->b_syn_patterns), pat_count);
+
+  int idx = curwin->w_s->b_syn_patterns.ga_len;
+  for (int i = 0; i < pat_count; i++) {
+    SYN_ITEMS(curwin->w_s)[idx] = *(pats[i]);
+    SYN_ITEMS(curwin->w_s)[idx].sp_syncing = syncing;
+    SYN_ITEMS(curwin->w_s)[idx].sp_type =
+      (item_types[i] == ITEM_START) ? SPTYPE_START
+                                    : (item_types[i] == ITEM_SKIP) ? SPTYPE_SKIP : SPTYPE_END;
+    SYN_ITEMS(curwin->w_s)[idx].sp_flags |= flags;
+    SYN_ITEMS(curwin->w_s)[idx].sp_syn.id = (int16_t)syn_id;
+    SYN_ITEMS(curwin->w_s)[idx].sp_syn.inc_tag = current_syn_inc_tag;
+    SYN_ITEMS(curwin->w_s)[idx].sp_syn_match_id = (int16_t)matchgroup_ids[i];
+    SYN_ITEMS(curwin->w_s)[idx].sp_cchar = conceal_char;
+    if (item_types[i] == ITEM_START) {
+      SYN_ITEMS(curwin->w_s)[idx].sp_cont_list = cont_list;
+      SYN_ITEMS(curwin->w_s)[idx].sp_syn.cont_in_list = cont_in_list;
+      if (cont_in_list != NULL) {
+        curwin->w_s->b_syn_containedin = true;
+      }
+      SYN_ITEMS(curwin->w_s)[idx].sp_next_list = next_list;
+    }
+    curwin->w_s->b_syn_patterns.ga_len++;
+    idx++;
+    if (flags & HL_FOLD) {
+      curwin->w_s->b_syn_folditems++;
+    }
+  }
+
+  redraw_curbuf_later(UPD_SOME_VALID);
+  syn_stack_free_all(curwin->w_s);
+  return 1;
+}
+
 /// _Static_assert for Phase 3 constants
 _Static_assert(SF_CCOMMENT == 0x01, "SF_CCOMMENT");
 _Static_assert(SF_MATCH == 0x02, "SF_MATCH");
@@ -8052,3 +8005,10 @@ _Static_assert(SYNID_TOP == 21000, "SYNID_TOP");
 _Static_assert(SYNID_CONTAINED == 22000, "SYNID_CONTAINED");
 _Static_assert(HL_FOLD == 0x2000, "HL_FOLD");
 _Static_assert(HL_EXCLUDENL == 0x800, "HL_EXCLUDENL");
+
+/// _Static_assert for Phase 5 constants
+_Static_assert(HL_HAS_EOL == 0x08, "HL_HAS_EOL");
+_Static_assert(HL_INCLUDED_TOPLEVEL == 0x80000, "HL_INCLUDED_TOPLEVEL");
+_Static_assert(SPTYPE_START == 2, "SPTYPE_START");
+_Static_assert(SPTYPE_SKIP == 4, "SPTYPE_SKIP");
+_Static_assert(SPTYPE_END == 3, "SPTYPE_END");
