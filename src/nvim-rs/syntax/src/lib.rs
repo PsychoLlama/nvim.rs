@@ -1052,8 +1052,7 @@ extern "C" {
     /// Call syn_update_ends from Rust
     fn nvim_syn_update_ends(startofline: c_int);
 
-    /// Call syn_sync from Rust
-    fn nvim_syn_sync(wp: WinHandle, start_lnum: c_int, last_valid: SynStateHandle);
+    // nvim_syn_sync removed - syn_sync is now implemented in sync.rs
 
     /// Call syntax_start from Rust
     fn nvim_syntax_start(wp: WinHandle, lnum: c_int);
@@ -3825,14 +3824,7 @@ pub unsafe extern "C" fn rs_syn_start_line() {
 
 // syn_finish_line is now implemented in current_attr.rs module
 
-/// Call syn_sync to synchronize syntax state for a line.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_sync(wp: WinHandle, start_lnum: c_int, last_valid: SynStateHandle) {
-    nvim_syn_sync(wp, start_lnum, last_valid);
-}
+// rs_syn_sync is now implemented in sync.rs module
 
 /// Call syntax_start - main entry point for syntax highlighting.
 ///

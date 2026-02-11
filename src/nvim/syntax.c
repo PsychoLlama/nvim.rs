@@ -136,6 +136,9 @@ extern void rs_syn_add_start_off(int *res_lnum, int *res_col,
 extern int rs_syn_current_attr_impl(int syncing, int displaying, bool *can_spell, int keep_state);
 extern int rs_syn_finish_line(int syncing);
 
+// Phase 3: Migrated syn_sync from Rust
+extern void rs_syn_sync(win_T *wp, linenr_T start_lnum, synstate_T *last_valid);
+
 // Phase 18a: Simple settings command functions from Rust
 extern int rs_syn_cmd_case(synblock_T *block, const char *arg, const char *arg_end);
 extern int rs_syn_cmd_conceal(synblock_T *block, const char *arg, const char *arg_end);
@@ -583,227 +586,7 @@ static void clear_current_state(void)
 // 3. Simply start on a given number of lines above "lnum".
 static void syn_sync(win_T *wp, linenr_T start_lnum, synstate_T *last_valid)
 {
-  pos_T cursor_save;
-  linenr_T lnum;
-  linenr_T break_lnum;
-  stateitem_T *cur_si;
-  synpat_T *spp;
-  int found_flags = 0;
-  int found_match_idx = 0;
-  linenr_T found_current_lnum = 0;
-  int found_current_col = 0;
-  lpos_T found_m_endpos;
-
-  // Clear any current state that might be hanging around.
-  invalidate_current_state();
-
-  // Start at least "minlines" back.  Default starting point for parsing is
-  // there.
-  // Start further back, to avoid that scrolling backwards will result in
-  // resyncing for every line.  Now it resyncs only one out of N lines,
-  // where N is minlines * 1.5, or minlines * 2 if minlines is small.
-  // Watch out for overflow when minlines is MAXLNUM.
-  if (syn_block->b_syn_sync_minlines > start_lnum) {
-    start_lnum = 1;
-  } else {
-    if (syn_block->b_syn_sync_minlines == 1) {
-      lnum = 1;
-    } else if (syn_block->b_syn_sync_minlines < 10) {
-      lnum = syn_block->b_syn_sync_minlines * 2;
-    } else {
-      lnum = syn_block->b_syn_sync_minlines * 3 / 2;
-    }
-    if (syn_block->b_syn_sync_maxlines != 0
-        && lnum > syn_block->b_syn_sync_maxlines) {
-      lnum = syn_block->b_syn_sync_maxlines;
-    }
-    if (lnum >= start_lnum) {
-      start_lnum = 1;
-    } else {
-      start_lnum -= lnum;
-    }
-  }
-  current_lnum = start_lnum;
-
-  // 1. Search backwards for the end of a C-style comment.
-  if (syn_block->b_syn_sync_flags & SF_CCOMMENT) {
-    // Need to make syn_buf the current buffer for a moment, to be able to
-    // use find_start_comment().
-    win_T *curwin_save = curwin;
-    curwin = wp;
-    buf_T *curbuf_save = curbuf;
-    curbuf = syn_buf;
-
-    // Skip lines that end in a backslash.
-    for (; start_lnum > 1; start_lnum--) {
-      char *l = ml_get(start_lnum - 1);
-      if (*l == NUL || *(l + ml_get_len(start_lnum - 1) - 1) != '\\') {
-        break;
-      }
-    }
-    current_lnum = start_lnum;
-
-    // set cursor to start of search
-    cursor_save = wp->w_cursor;
-    wp->w_cursor.lnum = start_lnum;
-    wp->w_cursor.col = 0;
-
-    // If the line is inside a comment, need to find the syntax item that
-    // defines the comment.
-    // Restrict the search for the end of a comment to b_syn_sync_maxlines.
-    if (find_start_comment((int)syn_block->b_syn_sync_maxlines) != NULL) {
-      for (int idx = syn_block->b_syn_patterns.ga_len; --idx >= 0;) {
-        if (SYN_ITEMS(syn_block)[idx].sp_syn.id
-            == syn_block->b_syn_sync_id
-            && SYN_ITEMS(syn_block)[idx].sp_type == SPTYPE_START) {
-          validate_current_state();
-          push_current_state(idx);
-          update_si_attr(current_state.ga_len - 1);
-          break;
-        }
-      }
-    }
-
-    // restore cursor and buffer
-    wp->w_cursor = cursor_save;
-    curwin = curwin_save;
-    curbuf = curbuf_save;
-  } else if (syn_block->b_syn_sync_flags & SF_MATCH) {
-    // 2. Search backwards for given sync patterns.
-    if (syn_block->b_syn_sync_maxlines != 0
-        && start_lnum > syn_block->b_syn_sync_maxlines) {
-      break_lnum = start_lnum - syn_block->b_syn_sync_maxlines;
-    } else {
-      break_lnum = 0;
-    }
-
-    found_m_endpos.lnum = 0;
-    found_m_endpos.col = 0;
-    linenr_T end_lnum = start_lnum;
-    lnum = start_lnum;
-    while (--lnum > break_lnum) {
-      // This can take a long time: break when CTRL-C pressed.
-      line_breakcheck();
-      if (got_int) {
-        invalidate_current_state();
-        current_lnum = start_lnum;
-        break;
-      }
-
-      // Check if we have run into a valid saved state stack now.
-      if (last_valid != NULL && lnum == last_valid->sst_lnum) {
-        load_current_state(last_valid);
-        break;
-      }
-
-      // Check if the previous line has the line-continuation pattern.
-      if (lnum > 1 && syn_match_linecont(lnum - 1)) {
-        continue;
-      }
-
-      // Start with nothing on the state stack
-      validate_current_state();
-
-      for (current_lnum = lnum; current_lnum < end_lnum; current_lnum++) {
-        syn_start_line();
-        while (true) {
-          bool had_sync_point = syn_finish_line(true);
-          // When a sync point has been found, remember where, and
-          // continue to look for another one, further on in the line.
-          if (had_sync_point && current_state.ga_len) {
-            cur_si = &CUR_STATE(current_state.ga_len - 1);
-            if (cur_si->si_m_endpos.lnum > start_lnum) {
-              // ignore match that goes to after where started
-              current_lnum = end_lnum;
-              break;
-            }
-            if (cur_si->si_idx < 0) {
-              // Cannot happen?
-              found_flags = 0;
-              found_match_idx = KEYWORD_IDX;
-            } else {
-              spp = &(SYN_ITEMS(syn_block)[cur_si->si_idx]);
-              found_flags = spp->sp_flags;
-              found_match_idx = spp->sp_sync_idx;
-            }
-            found_current_lnum = current_lnum;
-            found_current_col = current_col;
-            found_m_endpos = cur_si->si_m_endpos;
-            // Continue after the match (be aware of a zero-length
-            // match).
-            if (found_m_endpos.lnum > current_lnum) {
-              current_lnum = found_m_endpos.lnum;
-              current_col = found_m_endpos.col;
-              if (current_lnum >= end_lnum) {
-                break;
-              }
-            } else if (found_m_endpos.col > current_col) {
-              current_col = found_m_endpos.col;
-            } else {
-              current_col++;
-            }
-
-            // syn_current_attr() will have skipped the check for
-            // an item that ends here, need to do that now.  Be
-            // careful not to go past the NUL.
-            colnr_T prev_current_col = current_col;
-            if (syn_getcurline()[current_col] != NUL) {
-              current_col++;
-            }
-            check_state_ends();
-            current_col = prev_current_col;
-          } else {
-            break;
-          }
-        }
-      }
-
-      // If a sync point was encountered, break here.
-      if (found_flags) {
-        // Put the item that was specified by the sync point on the
-        // state stack.  If there was no item specified, make the
-        // state stack empty.
-        clear_current_state();
-        if (found_match_idx >= 0) {
-          push_current_state(found_match_idx);
-          update_si_attr(current_state.ga_len - 1);
-        }
-
-        // When using "grouphere", continue from the sync point
-        // match, until the end of the line.  Parsing starts at
-        // the next line.
-        // For "groupthere" the parsing starts at start_lnum.
-        if (found_flags & HL_SYNC_HERE) {
-          if (!GA_EMPTY(&current_state)) {
-            cur_si = &CUR_STATE(current_state.ga_len - 1);
-            cur_si->si_h_startpos.lnum = found_current_lnum;
-            cur_si->si_h_startpos.col = found_current_col;
-            update_si_end(cur_si, (int)current_col, true);
-            check_keepend();
-          }
-          current_col = found_m_endpos.col;
-          current_lnum = found_m_endpos.lnum;
-          syn_finish_line(false);
-          current_lnum++;
-        } else {
-          current_lnum = start_lnum;
-        }
-
-        break;
-      }
-
-      end_lnum = lnum;
-      invalidate_current_state();
-    }
-
-    // Ran into start of the file or exceeded maximum number of lines
-    if (lnum <= break_lnum) {
-      invalidate_current_state();
-      current_lnum = break_lnum + 1;
-    }
-  }
-
-  validate_current_state();
+  rs_syn_sync(wp, start_lnum, last_valid);
 }
 
 static void save_chartab(char *chartab)
@@ -7264,11 +7047,7 @@ void nvim_syn_update_ends(int startofline)
   syn_update_ends(startofline != 0);
 }
 
-/// Call syn_sync from Rust
-void nvim_syn_sync(void *wp, int start_lnum, void *last_valid)
-{
-  syn_sync((win_T *)wp, (linenr_T)start_lnum, (synstate_T *)last_valid);
-}
+// nvim_syn_sync removed - syn_sync is now implemented in Rust (sync.rs)
 
 /// Call syntax_start from Rust
 void nvim_syntax_start(void *wp, int lnum)
@@ -8264,6 +8043,91 @@ _Static_assert(HL_CONTAINED == 0x01, "HL_CONTAINED");
 _Static_assert(HL_SKIPNL == 0x80, "HL_SKIPNL");
 _Static_assert(HL_SKIPEMPTY == 0x200, "HL_SKIPEMPTY");
 
+// =============================================================================
+// Phase 3 accessor functions for syn_sync migration
+// =============================================================================
+
+/// Wrap load_current_state() for Rust.
+void nvim_syn_load_current_state(synstate_T *from)
+{
+  load_current_state(from);
+}
+
+/// Wrap syn_match_linecont() for Rust.
+int nvim_syn_match_linecont(linenr_T lnum)
+{
+  return syn_match_linecont(lnum);
+}
+
+/// Get sp_sync_idx for the current synblock pattern at index idx.
+int nvim_syn_get_pattern_sync_idx(int idx)
+{
+  if (idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return -2;  // NONE_IDX
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_sync_idx;
+}
+
+/// Get the line contents (ml_get) for a given lnum using syn_buf.
+char *nvim_syn_ml_get(linenr_T lnum)
+{
+  return ml_get_buf(syn_buf, lnum);
+}
+
+/// Get the line length (ml_get_len) for a given lnum using syn_buf.
+int nvim_syn_ml_get_len(linenr_T lnum)
+{
+  return (int)ml_get_buf_len(syn_buf, lnum);
+}
+
+/// Handle the entire C-comment sync setup path.
+/// This saves/restores curwin, curbuf, cursor and does the find_start_comment
+/// logic. Returns the adjusted start_lnum.
+linenr_T nvim_syn_ccomment_sync_setup(win_T *wp, linenr_T start_lnum)
+{
+  // Save curwin/curbuf and set to syn_buf/wp
+  win_T *curwin_save = curwin;
+  curwin = wp;
+  buf_T *curbuf_save = curbuf;
+  curbuf = syn_buf;
+
+  // Skip lines that end in a backslash.
+  for (; start_lnum > 1; start_lnum--) {
+    char *l = ml_get(start_lnum - 1);
+    if (*l == NUL || *(l + ml_get_len(start_lnum - 1) - 1) != '\\') {
+      break;
+    }
+  }
+  current_lnum = start_lnum;
+
+  // set cursor to start of search
+  pos_T cursor_save = wp->w_cursor;
+  wp->w_cursor.lnum = start_lnum;
+  wp->w_cursor.col = 0;
+
+  // If the line is inside a comment, need to find the syntax item that
+  // defines the comment.
+  if (find_start_comment((int)syn_block->b_syn_sync_maxlines) != NULL) {
+    for (int idx = syn_block->b_syn_patterns.ga_len; --idx >= 0;) {
+      if (SYN_ITEMS(syn_block)[idx].sp_syn.id
+          == syn_block->b_syn_sync_id
+          && SYN_ITEMS(syn_block)[idx].sp_type == SPTYPE_START) {
+        validate_current_state();
+        push_current_state(idx);
+        update_si_attr(current_state.ga_len - 1);
+        break;
+      }
+    }
+  }
+
+  // restore cursor and buffer
+  wp->w_cursor = cursor_save;
+  curwin = curwin_save;
+  curbuf = curbuf_save;
+
+  return start_lnum;
+}
+
 /// _Static_assert for Phase 2 constants
 _Static_assert(HL_DISPLAY == 0x1000, "HL_DISPLAY");
 _Static_assert(HL_SKIPWHITE == 0x100, "HL_SKIPWHITE");
@@ -8273,3 +8137,7 @@ _Static_assert(SYNSPL_DEFAULT == 0, "SYNSPL_DEFAULT");
 _Static_assert(SYNSPL_TOP == 1, "SYNSPL_TOP");
 _Static_assert(SYNSPL_NOTOP == 2, "SYNSPL_NOTOP");
 _Static_assert(KEYWORD_IDX == -1, "KEYWORD_IDX");
+
+/// _Static_assert for Phase 3 constants
+_Static_assert(SF_CCOMMENT == 0x01, "SF_CCOMMENT");
+_Static_assert(SF_MATCH == 0x02, "SF_MATCH");

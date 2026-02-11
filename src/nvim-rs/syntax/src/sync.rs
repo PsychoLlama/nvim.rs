@@ -7,7 +7,12 @@
 
 use std::ffi::c_int;
 
-use crate::types::{SynBlockHandle, SynPatHandle, SynStateHandle, WinHandle};
+use crate::check_ends::{check_keepend, check_state_ends, update_si_attr};
+use crate::current_attr::syn_finish_line;
+use crate::region::update_si_end;
+use crate::types::{
+    StateItemHandle, SynBlockHandle, SynPatHandle, SynStateHandle, WinHandle, KEYWORD_IDX,
+};
 
 // =============================================================================
 // Sync flag constants
@@ -18,6 +23,9 @@ pub const SF_CCOMMENT: i32 = 0x01;
 
 /// Sync flag: use match patterns for sync.
 pub const SF_MATCH: i32 = 0x02;
+
+/// HL_SYNC_HERE flag value.
+const HL_SYNC_HERE: i32 = 0x10;
 
 // =============================================================================
 // FFI declarations for sync operations
@@ -46,11 +54,42 @@ extern "C" {
     fn nvim_syn_get_hl_sync_here() -> c_int;
     fn nvim_syn_get_hl_sync_there() -> c_int;
 
-    // Main sync function
-    fn nvim_syn_sync(wp: WinHandle, start_lnum: c_int, last_valid: SynStateHandle);
-
     // Update ends with syncing parameter
     fn nvim_syn_call_syn_update_ends(syncing: c_int);
+
+    // State management
+    fn nvim_syn_invalidate_current_state();
+    fn nvim_syn_validate_current_state();
+    fn nvim_syn_clear_current_state();
+    fn nvim_syn_push_current_state(idx: c_int);
+    fn nvim_syn_set_current_lnum(lnum: c_int);
+    fn nvim_syn_get_current_lnum() -> c_int;
+    fn nvim_syn_set_current_col(col: c_int);
+    fn nvim_syn_get_current_col() -> c_int;
+    fn nvim_syn_get_current_state_len() -> c_int;
+    fn nvim_syn_start_line();
+    fn nvim_syn_get_got_int() -> c_int;
+    fn nvim_syn_line_breakcheck();
+
+    // Phase 3 accessors
+    fn nvim_syn_load_current_state(from: SynStateHandle);
+    fn nvim_syn_match_linecont(lnum: c_int) -> c_int;
+    fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
+    fn nvim_syn_ccomment_sync_setup(wp: WinHandle, start_lnum: c_int) -> c_int;
+
+    // Stateitem accessors
+    fn nvim_syn_get_top_stateitem() -> StateItemHandle;
+    fn nvim_stateitem_get_m_endpos_lnum(item: StateItemHandle) -> c_int;
+    fn nvim_stateitem_get_m_endpos_col(item: StateItemHandle) -> c_int;
+    fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
+    fn nvim_stateitem_set_h_startpos(item: StateItemHandle, lnum: c_int, col: c_int);
+
+    // Pattern accessors
+    fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
+    fn nvim_syn_get_pattern_sync_idx(idx: c_int) -> c_int;
+
+    // Line content access
+    fn nvim_syn_getcurline() -> *mut i8;
 }
 
 // =============================================================================
@@ -178,20 +217,210 @@ pub fn hl_sync_there() -> i32 {
 }
 
 // =============================================================================
-// Main sync function
+// Main sync function - Rust implementation
 // =============================================================================
 
 /// Synchronize syntax state for a window at a given line.
 ///
+/// This is the main sync function that determines the syntax state at a given
+/// line by searching backwards for sync points, C-style comments, or using
+/// minlines.
+///
 /// # Safety
 /// This modifies global state and must be called from the main thread.
-///
-/// # Arguments
-/// * `wp` - Window handle
-/// * `start_lnum` - Line number to sync to
-/// * `last_valid` - Last valid synstate (may be null)
-pub unsafe fn syn_sync(wp: WinHandle, start_lnum: i32, last_valid: SynStateHandle) {
-    nvim_syn_sync(wp, start_lnum, last_valid);
+pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynStateHandle) {
+    // Clear any current state that might be hanging around.
+    nvim_syn_invalidate_current_state();
+
+    // Calculate start_lnum based on minlines/maxlines.
+    let sync_minlines = nvim_syn_get_sync_minlines();
+    let sync_maxlines = nvim_syn_get_sync_maxlines();
+    let sync_fl = nvim_syn_get_sync_flags();
+
+    if sync_minlines > start_lnum {
+        start_lnum = 1;
+    } else {
+        let mut lnum = if sync_minlines == 1 {
+            1
+        } else if sync_minlines < 10 {
+            sync_minlines * 2
+        } else {
+            sync_minlines * 3 / 2
+        };
+        if sync_maxlines != 0 && lnum > sync_maxlines {
+            lnum = sync_maxlines;
+        }
+        if lnum >= start_lnum {
+            start_lnum = 1;
+        } else {
+            start_lnum -= lnum;
+        }
+    }
+    nvim_syn_set_current_lnum(start_lnum);
+
+    // 1. Search backwards for the end of a C-style comment.
+    if sync_fl & SF_CCOMMENT != 0 {
+        // The entire ccomment sync path is handled by C because it needs to
+        // manipulate curwin/curbuf/cursor globals. It returns the adjusted
+        // start_lnum.
+        let adjusted = nvim_syn_ccomment_sync_setup(wp, start_lnum);
+        nvim_syn_set_current_lnum(adjusted);
+    } else if sync_fl & SF_MATCH != 0 {
+        // 2. Search backwards for given sync patterns.
+        let break_lnum = if sync_maxlines != 0 && start_lnum > sync_maxlines {
+            start_lnum - sync_maxlines
+        } else {
+            0
+        };
+
+        let mut found_flags: i32 = 0;
+        let mut found_match_idx: i32 = 0;
+        let mut found_current_lnum: i32 = 0;
+        let mut found_current_col: i32 = 0;
+        let mut found_m_endpos_lnum: i32 = 0;
+        let mut found_m_endpos_col: i32 = 0;
+
+        let mut end_lnum = start_lnum;
+        let mut lnum = start_lnum;
+        lnum -= 1; // --lnum before first check
+        while lnum > break_lnum {
+            // This can take a long time: break when CTRL-C pressed.
+            nvim_syn_line_breakcheck();
+            if nvim_syn_get_got_int() != 0 {
+                nvim_syn_invalidate_current_state();
+                nvim_syn_set_current_lnum(start_lnum);
+                break;
+            }
+
+            // Check if we have run into a valid saved state stack now.
+            if !last_valid.is_null() && lnum == nvim_synstate_get_lnum(last_valid) {
+                nvim_syn_load_current_state(last_valid);
+                break;
+            }
+
+            // Check if the previous line has the line-continuation pattern.
+            if lnum > 1 && nvim_syn_match_linecont(lnum - 1) != 0 {
+                lnum -= 1;
+                continue;
+            }
+
+            // Start with nothing on the state stack
+            nvim_syn_validate_current_state();
+
+            let mut current_lnum = lnum;
+            while current_lnum < end_lnum {
+                nvim_syn_set_current_lnum(current_lnum);
+                nvim_syn_start_line();
+                loop {
+                    let had_sync_point = syn_finish_line(true);
+                    // When a sync point has been found, remember where, and
+                    // continue to look for another one, further on in the line.
+                    if had_sync_point && nvim_syn_get_current_state_len() > 0 {
+                        let cur_si = nvim_syn_get_top_stateitem();
+                        let si_m_endpos_lnum = nvim_stateitem_get_m_endpos_lnum(cur_si);
+                        let si_m_endpos_col = nvim_stateitem_get_m_endpos_col(cur_si);
+
+                        if si_m_endpos_lnum > start_lnum {
+                            // ignore match that goes to after where started
+                            current_lnum = end_lnum;
+                            break;
+                        }
+
+                        let si_idx = nvim_stateitem_get_idx(cur_si);
+                        if si_idx < 0 {
+                            // Cannot happen?
+                            found_flags = 0;
+                            found_match_idx = KEYWORD_IDX;
+                        } else {
+                            found_flags = nvim_syn_get_pattern_flags(si_idx);
+                            found_match_idx = nvim_syn_get_pattern_sync_idx(si_idx);
+                        }
+                        found_current_lnum = nvim_syn_get_current_lnum();
+                        found_current_col = nvim_syn_get_current_col();
+                        found_m_endpos_lnum = si_m_endpos_lnum;
+                        found_m_endpos_col = si_m_endpos_col;
+
+                        // Continue after the match (be aware of a zero-length match).
+                        if found_m_endpos_lnum > current_lnum {
+                            current_lnum = found_m_endpos_lnum;
+                            nvim_syn_set_current_lnum(current_lnum);
+                            nvim_syn_set_current_col(found_m_endpos_col);
+                            if current_lnum >= end_lnum {
+                                break;
+                            }
+                        } else if found_m_endpos_col > nvim_syn_get_current_col() {
+                            nvim_syn_set_current_col(found_m_endpos_col);
+                        } else {
+                            nvim_syn_set_current_col(nvim_syn_get_current_col() + 1);
+                        }
+
+                        // syn_current_attr() will have skipped the check for
+                        // an item that ends here, need to do that now. Be
+                        // careful not to go past the NUL.
+                        let prev_current_col = nvim_syn_get_current_col();
+                        let curline = nvim_syn_getcurline();
+                        if !curline.is_null() && *curline.offset(prev_current_col as isize) != 0 {
+                            nvim_syn_set_current_col(prev_current_col + 1);
+                        }
+                        check_state_ends();
+                        nvim_syn_set_current_col(prev_current_col);
+                    } else {
+                        break;
+                    }
+                }
+                current_lnum += 1;
+            }
+
+            // If a sync point was encountered, break here.
+            if found_flags != 0 {
+                // Put the item that was specified by the sync point on the
+                // state stack. If there was no item specified, make the
+                // state stack empty.
+                nvim_syn_clear_current_state();
+                if found_match_idx >= 0 {
+                    nvim_syn_push_current_state(found_match_idx);
+                    update_si_attr(nvim_syn_get_current_state_len() - 1);
+                }
+
+                // When using "grouphere", continue from the sync point
+                // match, until the end of the line. Parsing starts at
+                // the next line.
+                // For "groupthere" the parsing starts at start_lnum.
+                if found_flags & HL_SYNC_HERE != 0 {
+                    if nvim_syn_get_current_state_len() > 0 {
+                        let cur_si = nvim_syn_get_top_stateitem();
+                        nvim_stateitem_set_h_startpos(
+                            cur_si,
+                            found_current_lnum,
+                            found_current_col,
+                        );
+                        update_si_end(cur_si, nvim_syn_get_current_col(), true);
+                        check_keepend();
+                    }
+                    nvim_syn_set_current_col(found_m_endpos_col);
+                    nvim_syn_set_current_lnum(found_m_endpos_lnum);
+                    syn_finish_line(false);
+                    nvim_syn_set_current_lnum(nvim_syn_get_current_lnum() + 1);
+                } else {
+                    nvim_syn_set_current_lnum(start_lnum);
+                }
+
+                break;
+            }
+
+            end_lnum = lnum;
+            nvim_syn_invalidate_current_state();
+            lnum -= 1;
+        }
+
+        // Ran into start of the file or exceeded maximum number of lines
+        if lnum <= break_lnum {
+            nvim_syn_invalidate_current_state();
+            nvim_syn_set_current_lnum(break_lnum + 1);
+        }
+    }
+
+    nvim_syn_validate_current_state();
 }
 
 /// Call syn_update_ends with syncing parameter.
@@ -200,6 +429,16 @@ pub unsafe fn syn_sync(wp: WinHandle, start_lnum: i32, last_valid: SynStateHandl
 /// This modifies global state.
 pub unsafe fn call_syn_update_ends(syncing: bool) {
     nvim_syn_call_syn_update_ends(if syncing { 1 } else { 0 });
+}
+
+// =============================================================================
+// Exported FFI functions
+// =============================================================================
+
+/// Rust implementation of syn_sync.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_sync(wp: WinHandle, start_lnum: c_int, last_valid: SynStateHandle) {
+    syn_sync_impl(wp, start_lnum, last_valid);
 }
 
 // =============================================================================
@@ -357,6 +596,11 @@ mod tests {
     fn test_sync_flags() {
         assert_eq!(SF_CCOMMENT, 0x01);
         assert_eq!(SF_MATCH, 0x02);
+    }
+
+    #[test]
+    fn test_hl_sync_here() {
+        assert_eq!(HL_SYNC_HERE, 0x10);
     }
 
     #[test]
