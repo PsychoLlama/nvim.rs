@@ -23,6 +23,31 @@ extern "C" {
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_buf_first_line_empty(buf: BufHandle) -> c_int;
+
+    // Phase 1 accessors: buffer ml and file state fields
+    fn nvim_buf_set_ml_line_count(buf: BufHandle, val: c_int);
+    fn nvim_buf_set_ml_mfp_null(buf: BufHandle);
+    fn nvim_buf_set_ml_flags(buf: BufHandle, val: c_int);
+    fn nvim_buf_set_p_eof(buf: BufHandle, val: c_int);
+    fn nvim_buf_set_start_eof(buf: BufHandle, val: c_int);
+    fn nvim_buf_set_p_eol(buf: BufHandle, val: c_int);
+    fn nvim_buf_set_start_eol(buf: BufHandle, val: c_int);
+    fn nvim_buf_set_p_bomb(buf: BufHandle, val: c_int);
+    fn nvim_buf_set_start_bomb(buf: BufHandle, val: c_int);
+
+    // Phase 1: unchanged, changedtick, autocmd, close_buffer
+    fn unchanged(buf: BufHandle, ff: bool, always_inc_changedtick: bool);
+    fn nvim_buf_get_changedtick_direct(buf: BufHandle) -> i64;
+    fn buf_set_changedtick(buf: BufHandle, changedtick: i64);
+    fn block_autocmds();
+    fn unblock_autocmds();
+    fn close_buffer(
+        win: crate::WinHandle,
+        buf: BufHandle,
+        action: c_int,
+        abort_if_last: bool,
+        ignore_abort: bool,
+    ) -> bool;
 }
 
 // =============================================================================
@@ -311,6 +336,73 @@ pub unsafe extern "C" fn rs_changedtick_changed(
 ) -> c_int {
     let ref_ = ChangedTickRef::new(saved_tick, saved_fnum);
     c_int::from(ref_.has_changed(buf))
+}
+
+// =============================================================================
+// Buffer State Management (Phase 1: Wave 2)
+// =============================================================================
+
+/// ML_EMPTY flag from memline_defs.h — empty buffer.
+const ML_EMPTY: c_int = 0x01;
+
+/// DOBUF_WIPE action for close_buffer — wipe buffer completely.
+const DOBUF_WIPE: c_int = 4;
+
+/// Reset buffer file state (make buffer not contain a file).
+///
+/// Sets line count to 1, marks as unchanged, clears eol/eof/bomb flags,
+/// nulls the memfile pointer, and sets ml_flags to ML_EMPTY.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_buf_clear_file(buf: BufHandle) {
+    if buf.is_null() {
+        return;
+    }
+    nvim_buf_set_ml_line_count(buf, 1);
+    unchanged(buf, true, true);
+    nvim_buf_set_p_eof(buf, 0);
+    nvim_buf_set_start_eof(buf, 0);
+    nvim_buf_set_p_eol(buf, 1);
+    nvim_buf_set_start_eol(buf, 1);
+    nvim_buf_set_p_bomb(buf, 0);
+    nvim_buf_set_start_bomb(buf, 0);
+    nvim_buf_set_ml_mfp_null(buf);
+    nvim_buf_set_ml_flags(buf, ML_EMPTY);
+}
+
+/// Increment b:changedtick value.
+///
+/// Delegates to `buf_set_changedtick(buf, buf_get_changedtick(buf) + 1)`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_buf_inc_changedtick(buf: BufHandle) {
+    if buf.is_null() {
+        return;
+    }
+    let tick = nvim_buf_get_changedtick_direct(buf);
+    buf_set_changedtick(buf, tick + 1);
+}
+
+/// Wipe out a buffer, optionally blocking autocommands.
+///
+/// Calls `close_buffer(NULL, buf, DOBUF_WIPE, false, true)`.
+/// If `aucmd` is false, blocks autocommands around the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_wipe_buffer(buf: BufHandle, aucmd: bool) {
+    if buf.is_null() {
+        return;
+    }
+    if !aucmd {
+        block_autocmds();
+    }
+    close_buffer(
+        crate::WinHandle(std::ptr::null_mut()),
+        buf,
+        DOBUF_WIPE,
+        false,
+        true,
+    );
+    if !aucmd {
+        unblock_autocmds();
+    }
 }
 
 // =============================================================================

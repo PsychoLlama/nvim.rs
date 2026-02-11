@@ -155,6 +155,11 @@ extern char *rs_getaltfname(bool errmsg);
 extern int rs_append_arg_number(win_T *wp, char *buf, size_t buflen);
 extern int rs_get_rel_pos(win_T *wp, char *buf, int buflen);
 
+// Phase 1 (Wave 2): buffer state management functions from Rust
+extern void rs_buf_clear_file(buf_T *buf);
+extern void rs_buf_inc_changedtick(buf_T *buf);
+extern void rs_wipe_buffer(buf_T *buf, bool aucmd);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
 
@@ -660,6 +665,66 @@ const char *nvim_msg_3s(void)
 {
   return _("%3s");
 }
+
+/// Set b_ml.ml_line_count on a buffer (accessor for Rust).
+void nvim_buf_set_ml_line_count(buf_T *buf, linenr_T val)
+{
+  buf->b_ml.ml_line_count = val;
+}
+
+/// Set b_ml.ml_mfp to NULL on a buffer (accessor for Rust).
+void nvim_buf_set_ml_mfp_null(buf_T *buf)
+{
+  buf->b_ml.ml_mfp = NULL;
+}
+
+// nvim_buf_set_ml_flags already defined in memline.c
+
+/// Get buf_get_changedtick value (direct accessor for Rust, avoids API function).
+int64_t nvim_buf_get_changedtick_direct(buf_T *buf)
+{
+  return buf_get_changedtick(buf);
+}
+
+/// Set b_p_eof on a buffer (accessor for Rust).
+void nvim_buf_set_p_eof(buf_T *buf, int val)
+{
+  buf->b_p_eof = val;
+}
+
+/// Set b_start_eof on a buffer (accessor for Rust).
+void nvim_buf_set_start_eof(buf_T *buf, int val)
+{
+  buf->b_start_eof = val;
+}
+
+/// Set b_p_eol on a buffer (accessor for Rust).
+void nvim_buf_set_p_eol(buf_T *buf, int val)
+{
+  buf->b_p_eol = val;
+}
+
+/// Set b_start_eol on a buffer (accessor for Rust).
+void nvim_buf_set_start_eol(buf_T *buf, int val)
+{
+  buf->b_start_eol = val;
+}
+
+/// Set b_p_bomb on a buffer (accessor for Rust).
+void nvim_buf_set_p_bomb(buf_T *buf, int val)
+{
+  buf->b_p_bomb = val;
+}
+
+/// Set b_start_bomb on a buffer (accessor for Rust).
+void nvim_buf_set_start_bomb(buf_T *buf, int val)
+{
+  buf->b_start_bomb = val;
+}
+
+// Static assertions for constants used in Rust (Phase 1).
+_Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch with Rust");
+_Static_assert(DOBUF_WIPE == 4, "DOBUF_WIPE mismatch with Rust");
 
 typedef enum {
   kBffClearWinInfo = 1,
@@ -1280,16 +1345,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
 /// Make buffer not contain a file.
 void buf_clear_file(buf_T *buf)
 {
-  buf->b_ml.ml_line_count = 1;
-  unchanged(buf, true, true);
-  buf->b_p_eof = false;
-  buf->b_start_eof = false;
-  buf->b_p_eol = true;
-  buf->b_start_eol = true;
-  buf->b_p_bomb = false;
-  buf->b_start_bomb = false;
-  buf->b_ml.ml_mfp = NULL;
-  buf->b_ml.ml_flags = ML_EMPTY;                // empty buffer
+  rs_buf_clear_file(buf);
 }
 
 /// Clears the current buffer contents.
@@ -4514,14 +4570,7 @@ bool buf_contents_changed(buf_T *buf)
 /// @param aucmd  When true trigger autocommands.
 void wipe_buffer(buf_T *buf, bool aucmd)
 {
-  if (!aucmd) {
-    // Don't trigger BufDelete autocommands here.
-    block_autocmds();
-  }
-  close_buffer(NULL, buf, DOBUF_WIPE, false, true);
-  if (!aucmd) {
-    unblock_autocmds();
-  }
+  rs_wipe_buffer(buf, aucmd);
 }
 
 /// Creates or switches to a scratch buffer. :h special-buffers
@@ -4565,7 +4614,7 @@ bool buf_is_empty(buf_T *buf)
 void buf_inc_changedtick(buf_T *const buf)
   FUNC_ATTR_NONNULL_ALL
 {
-  buf_set_changedtick(buf, buf_get_changedtick(buf) + 1);
+  rs_buf_inc_changedtick(buf);
 }
 
 /// Set b:changedtick, also checking b: for consistency in debug build
