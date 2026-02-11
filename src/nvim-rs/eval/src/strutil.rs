@@ -143,7 +143,10 @@ pub unsafe extern "C" fn rs_char_from_string(s: *const c_char, index: i64) -> *m
     if nbyte >= slen {
         return std::ptr::null_mut();
     }
-    xmemdupz(s.add(nbyte).cast::<c_void>(), rs_utfc_ptr2len(s.add(nbyte)) as usize)
+    xmemdupz(
+        s.add(nbyte).cast::<c_void>(),
+        rs_utfc_ptr2len(s.add(nbyte)) as usize,
+    )
 }
 
 /// Return the slice `str[first : last]` using character indexes.

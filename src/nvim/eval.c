@@ -101,6 +101,16 @@ extern char *rs_string_slice(const char *str, varnumber_T first, varnumber_T las
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 
+// Phase 2: Name parsing utilities (Rust implementations)
+extern int rs_get_env_len(const char **arg);
+extern int rs_get_id_len(const char **arg);
+extern const char *rs_to_name_end(const char *arg, bool use_namespace);
+extern const char *rs_find_name_end(const char *arg, const char **expr_start,
+                                    const char **expr_end, int flags);
+
+_Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
+_Static_assert(FNE_CHECK_START == 2, "FNE_CHECK_START mismatch");
+
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
@@ -806,22 +816,7 @@ Object eval_foldtext(win_T *wp)
 /// valid name.
 static const char *to_name_end(const char *arg, bool use_namespace)
 {
-  // Quick check for valid starting character.
-  if (!eval_isnamec1(*arg)) {
-    return arg;
-  }
-
-  const char *p;
-  for (p = arg + 1; *p != NUL && eval_isnamec(*p); MB_PTR_ADV(p)) {
-    // Include a namespace such as "s:var" and "v:var".  But "n:" is not
-    // and can be used in slice "[n:]".
-    if (*p == ':' && (p != arg + 1
-                      || !use_namespace
-                      || vim_strchr("bgstvw", *arg) == NULL)) {
-      break;
-    }
-  }
-  return p;
+  return rs_to_name_end(arg, use_namespace);
 }
 
 /// Get an Dict lval variable that can be assigned a value to: "name",
@@ -5471,15 +5466,7 @@ int list2fpos(typval_T *arg, pos_T *posp, int *fnump, colnr_T *curswantp, bool c
 /// @return  0 for error.
 int get_env_len(const char **arg)
 {
-  const char *p;
-  for (p = *arg; vim_isIDc((uint8_t)(*p)); p++) {}
-  if (p == *arg) {  // No name found.
-    return 0;
-  }
-
-  int len = (int)(p - *arg);
-  *arg = p;
-  return len;
+  return rs_get_env_len(arg);
 }
 
 /// Get the length of the name of a function or internal variable.
@@ -5489,29 +5476,7 @@ int get_env_len(const char **arg)
 /// @return  0 if something is wrong.
 int get_id_len(const char **const arg)
 {
-  int len;
-
-  // Find the end of the name.
-  const char *p;
-  for (p = *arg; eval_isnamec(*p); p++) {
-    if (*p == ':') {
-      // "s:" is start of "s:var", but "n:" is not and can be used in
-      // slice "[n:]". Also "xx:" is not a namespace.
-      len = (int)(p - *arg);
-      if (len > 1
-          || (len == 1 && vim_strchr(namespace_char, (uint8_t)(**arg)) == NULL)) {
-        break;
-      }
-    }
-  }
-  if (p == *arg) {  // no name found
-    return 0;
-  }
-
-  len = (int)(p - *arg);
-  *arg = skipwhite(p);
-
-  return len;
+  return rs_get_id_len(arg);
 }
 
 /// Get the length of the name of a variable or function.
@@ -5584,78 +5549,7 @@ int get_name_len(const char **const arg, char **alias, bool evaluate, bool verbo
 const char *find_name_end(const char *arg, const char **expr_start, const char **expr_end,
                           int flags)
 {
-  if (expr_start != NULL) {
-    *expr_start = NULL;
-    *expr_end = NULL;
-  }
-
-  // Quick check for valid starting character.
-  if ((flags & FNE_CHECK_START) && !eval_isnamec1(*arg) && *arg != '{') {
-    return arg;
-  }
-
-  int mb_nest = 0;
-  int br_nest = 0;
-  int len;
-
-  const char *p;
-  for (p = arg; *p != NUL
-       && (eval_isnamec(*p)
-           || *p == '{'
-           || ((flags & FNE_INCL_BR) && (*p == '['
-                                         || (*p == '.' && eval_isdictc(p[1]))))
-           || mb_nest != 0
-           || br_nest != 0); MB_PTR_ADV(p)) {
-    if (*p == '\'') {
-      // skip over 'string' to avoid counting [ and ] inside it.
-      for (p = p + 1; *p != NUL && *p != '\''; MB_PTR_ADV(p)) {}
-      if (*p == NUL) {
-        break;
-      }
-    } else if (*p == '"') {
-      // skip over "str\"ing" to avoid counting [ and ] inside it.
-      for (p = p + 1; *p != NUL && *p != '"'; MB_PTR_ADV(p)) {
-        if (*p == '\\' && p[1] != NUL) {
-          p++;
-        }
-      }
-      if (*p == NUL) {
-        break;
-      }
-    } else if (br_nest == 0 && mb_nest == 0 && *p == ':') {
-      // "s:" is start of "s:var", but "n:" is not and can be used in
-      // slice "[n:]".  Also "xx:" is not a namespace. But {ns}: is.
-      len = (int)(p - arg);
-      if ((len > 1 && p[-1] != '}')
-          || (len == 1 && vim_strchr(namespace_char, (uint8_t)(*arg)) == NULL)) {
-        break;
-      }
-    }
-
-    if (mb_nest == 0) {
-      if (*p == '[') {
-        br_nest++;
-      } else if (*p == ']') {
-        br_nest--;
-      }
-    }
-
-    if (br_nest == 0) {
-      if (*p == '{') {
-        mb_nest++;
-        if (expr_start != NULL && *expr_start == NULL) {
-          *expr_start = p;
-        }
-      } else if (*p == '}') {
-        mb_nest--;
-        if (expr_start != NULL && mb_nest == 0 && *expr_end == NULL) {
-          *expr_end = p;
-        }
-      }
-    }
-  }
-
-  return p;
+  return rs_find_name_end(arg, expr_start, expr_end, flags);
 }
 
 /// Expands out the 'magic' {}'s in a variable/function name.

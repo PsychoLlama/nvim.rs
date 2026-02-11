@@ -19,6 +19,7 @@ pub mod expr;
 pub mod funcref;
 pub mod funcs;
 pub mod list;
+pub mod names;
 pub mod operator;
 pub mod scope;
 pub mod strutil;

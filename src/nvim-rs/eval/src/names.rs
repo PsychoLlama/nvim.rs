@@ -1,0 +1,273 @@
+//! Name parsing utilities migrated from eval.c.
+//!
+//! - `get_env_len`: Parse environment variable name length
+//! - `get_id_len`: Parse function/variable name length with namespace
+//! - `to_name_end`: Find end of name without magic braces
+//! - `find_name_end`: Find end of name with magic brace tracking
+
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr,
+    clippy::borrow_as_ptr
+)]
+
+use std::ffi::{c_char, c_int};
+
+/// namespace_char = "abglstvw" (verified by _Static_assert in eval.c)
+const NAMESPACE_CHARS: &[u8] = b"abglstvw";
+
+/// FNE_INCL_BR flag (verified by _Static_assert in eval.c)
+const FNE_INCL_BR: c_int = 1;
+/// FNE_CHECK_START flag (verified by _Static_assert in eval.c)
+const FNE_CHECK_START: c_int = 2;
+
+extern "C" {
+    fn rs_vim_isIDc(c: c_int) -> c_int;
+    fn rs_eval_isnamec(c: c_int) -> bool;
+    fn rs_eval_isnamec1(c: c_int) -> bool;
+    fn rs_eval_isdictc(c: c_int) -> bool;
+    fn rs_vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
+    fn rs_skipwhite(p: *const c_char) -> *const c_char;
+    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+}
+
+/// Advance pointer by one multi-byte character (at least 1 byte).
+///
+/// # Safety
+///
+/// `p` must point to a valid null-terminated C string.
+#[inline]
+unsafe fn mb_ptr_adv(p: *const c_char) -> *const c_char {
+    let len = rs_utfc_ptr2len(p);
+    p.add(if len > 0 { len as usize } else { 1 })
+}
+
+/// Get the length of the name of an environment variable.
+///
+/// Advances `*arg` past the name. Returns 0 if no valid name found.
+///
+/// # Safety
+///
+/// `arg` must be a valid pointer to a non-null pointer to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_env_len(arg: *mut *const c_char) -> c_int {
+    let mut p = *arg;
+    while rs_vim_isIDc(c_int::from(*p as u8)) != 0 {
+        p = p.add(1);
+    }
+    if p == *arg {
+        return 0;
+    }
+    let len = p.offset_from(*arg) as c_int;
+    *arg = p;
+    len
+}
+
+/// Get the length of the name of a function or internal variable.
+///
+/// Advances `*arg` to the first non-white character after the name.
+/// Returns 0 if no valid name found.
+///
+/// # Safety
+///
+/// `arg` must be a valid pointer to a non-null pointer to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_id_len(arg: *mut *const c_char) -> c_int {
+    let start = *arg;
+    let mut p = start;
+
+    // Find the end of the name
+    while rs_eval_isnamec(c_int::from(*p as u8)) {
+        if *p as u8 == b':' {
+            // "s:" is start of "s:var", but "n:" is not and can be used in
+            // slice "[n:]". Also "xx:" is not a namespace.
+            let len = p.offset_from(start) as c_int;
+            if len > 1
+                || (len == 1
+                    && rs_vim_strchr(
+                        NAMESPACE_CHARS.as_ptr().cast::<c_char>(),
+                        c_int::from(*start as u8),
+                    )
+                    .is_null())
+            {
+                break;
+            }
+        }
+        p = p.add(1);
+    }
+    if p == start {
+        return 0;
+    }
+
+    let len = p.offset_from(start) as c_int;
+    *arg = rs_skipwhite(p);
+    len
+}
+
+/// Find the end of a variable or function name.  Unlike `find_name_end` this
+/// does not recognize magic braces.
+///
+/// When `use_namespace` is true, recognize "b:", "s:", etc.
+///
+/// Returns a pointer to just after the name. Equal to `arg` if there is no
+/// valid name.
+///
+/// # Safety
+///
+/// `arg` must be a valid pointer to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_to_name_end(arg: *const c_char, use_namespace: bool) -> *const c_char {
+    // Quick check for valid starting character
+    if !rs_eval_isnamec1(c_int::from(*arg as u8)) {
+        return arg;
+    }
+
+    let mut p = arg.add(1);
+    while *p != 0 && rs_eval_isnamec(c_int::from(*p as u8)) {
+        // Include a namespace such as "s:var" and "v:var".  But "n:" is not
+        // and can be used in slice "[n:]".
+        if *p as u8 == b':'
+            && (p != arg.add(1)
+                || !use_namespace
+                || rs_vim_strchr(
+                    c"bgstvw".as_ptr(),
+                    c_int::from(*arg as u8),
+                )
+                .is_null())
+        {
+            break;
+        }
+        p = mb_ptr_adv(p);
+    }
+    p
+}
+
+/// Find the end of a variable or function name, including magic braces.
+///
+/// When `expr_start` and `expr_end` are not NULL, also return pointers to
+/// the start and end of magic brace expressions.
+///
+/// `flags` can have `FNE_INCL_BR` and `FNE_CHECK_START`.
+///
+/// Returns a pointer to just after the name. Equal to `arg` if there is no
+/// valid name.
+///
+/// # Safety
+///
+/// `arg` must be a valid pointer to a null-terminated C string.
+/// `expr_start` and `expr_end` may be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_name_end(
+    arg: *const c_char,
+    expr_start: *mut *const c_char,
+    expr_end: *mut *const c_char,
+    flags: c_int,
+) -> *const c_char {
+    if !expr_start.is_null() {
+        *expr_start = std::ptr::null();
+        *expr_end = std::ptr::null();
+    }
+
+    // Quick check for valid starting character
+    if (flags & FNE_CHECK_START) != 0
+        && !rs_eval_isnamec1(c_int::from(*arg as u8))
+        && *arg as u8 != b'{'
+    {
+        return arg;
+    }
+
+    let mut mb_nest: c_int = 0;
+    let mut br_nest: c_int = 0;
+
+    let mut p = arg;
+    while *p != 0
+        && (rs_eval_isnamec(c_int::from(*p as u8))
+            || *p as u8 == b'{'
+            || ((flags & FNE_INCL_BR) != 0
+                && (*p as u8 == b'['
+                    || (*p as u8 == b'.' && rs_eval_isdictc(c_int::from(*p.add(1) as u8)))))
+            || mb_nest != 0
+            || br_nest != 0)
+    {
+        if *p as u8 == b'\'' {
+            // skip over 'string' to avoid counting [ and ] inside it
+            p = p.add(1);
+            while *p != 0 && *p as u8 != b'\'' {
+                p = mb_ptr_adv(p);
+            }
+            if *p == 0 {
+                break;
+            }
+        } else if *p as u8 == b'"' {
+            // skip over "str\"ing" to avoid counting [ and ] inside it
+            p = p.add(1);
+            while *p != 0 && *p as u8 != b'"' {
+                if *p as u8 == b'\\' && *p.add(1) != 0 {
+                    p = p.add(1);
+                }
+                p = mb_ptr_adv(p);
+            }
+            if *p == 0 {
+                break;
+            }
+        } else if br_nest == 0 && mb_nest == 0 && *p as u8 == b':' {
+            // "s:" is start of "s:var", but "n:" is not and can be used in
+            // slice "[n:]".  Also "xx:" is not a namespace. But {ns}: is.
+            let len = p.offset_from(arg) as c_int;
+            if (len > 1 && *p.sub(1) as u8 != b'}')
+                || (len == 1
+                    && rs_vim_strchr(
+                        NAMESPACE_CHARS.as_ptr().cast::<c_char>(),
+                        c_int::from(*arg as u8),
+                    )
+                    .is_null())
+            {
+                break;
+            }
+        }
+
+        if mb_nest == 0 {
+            if *p as u8 == b'[' {
+                br_nest += 1;
+            } else if *p as u8 == b']' {
+                br_nest -= 1;
+            }
+        }
+
+        if br_nest == 0 {
+            if *p as u8 == b'{' {
+                mb_nest += 1;
+                if !expr_start.is_null() && (*expr_start).is_null() {
+                    *expr_start = p;
+                }
+            } else if *p as u8 == b'}' {
+                mb_nest -= 1;
+                if !expr_start.is_null() && mb_nest == 0 && (*expr_end).is_null() {
+                    *expr_end = p;
+                }
+            }
+        }
+
+        p = mb_ptr_adv(p);
+    }
+
+    p
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_namespace_chars() {
+        assert_eq!(NAMESPACE_CHARS, b"abglstvw");
+    }
+
+    #[test]
+    fn test_fne_constants() {
+        assert_eq!(FNE_INCL_BR, 1);
+        assert_eq!(FNE_CHECK_START, 2);
+    }
+}
