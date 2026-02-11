@@ -385,6 +385,11 @@ extern const char *rs_did_set_window(void);
 extern const char *rs_did_set_scrollbind(win_T *win);
 extern const char *rs_did_set_autochdir(void);
 
+// OptVal storage operations (from Rust storage.rs)
+extern void rs_optval_free(OptVal o);
+extern OptVal rs_optval_copy(OptVal o);
+extern int rs_optval_equal(OptVal o1, OptVal o2);
+
 // Phase 527-530: Option display and expansion functions from Rust
 extern int rs_bool_display_show_no(int value);
 extern int rs_count_num_digits(int64_t value);
@@ -3558,54 +3563,19 @@ OptIndex find_option(const char *const name)
 /// Free an allocated OptVal.
 void optval_free(OptVal o)
 {
-  switch (o.type) {
-  case kOptValTypeNil:
-  case kOptValTypeBoolean:
-  case kOptValTypeNumber:
-    break;
-  case kOptValTypeString:
-    // Don't free empty string option
-    if (o.data.string.data != empty_string_option) {
-      api_free_string(o.data.string);
-    }
-    break;
-  }
+  rs_optval_free(o);
 }
 
 /// Copy an OptVal.
 OptVal optval_copy(OptVal o)
 {
-  switch (o.type) {
-  case kOptValTypeNil:
-  case kOptValTypeBoolean:
-  case kOptValTypeNumber:
-    return o;
-  case kOptValTypeString:
-    return STRING_OPTVAL(copy_string(o.data.string, NULL));
-  }
-  UNREACHABLE;
+  return rs_optval_copy(o);
 }
 
 /// Check if two option values are equal.
 bool optval_equal(OptVal o1, OptVal o2)
 {
-  if (o1.type != o2.type) {
-    return false;
-  }
-
-  switch (o1.type) {
-  case kOptValTypeNil:
-    return true;
-  case kOptValTypeBoolean:
-    return o1.data.boolean == o2.data.boolean;
-  case kOptValTypeNumber:
-    return o1.data.number == o2.data.number;
-  case kOptValTypeString:
-    return o1.data.string.size == o2.data.string.size
-           && (o1.data.string.data == o2.data.string.data
-               || strnequal(o1.data.string.data, o2.data.string.data, o1.data.string.size));
-  }
-  UNREACHABLE;
+  return rs_optval_equal(o1, o2) != 0;
 }
 
 /// Get type of option.

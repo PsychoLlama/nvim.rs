@@ -138,8 +138,17 @@ impl OptVal {
 // =============================================================================
 
 extern "C" {
-    /// Sentinel for empty string options (from globals.h)
-    static empty_string_option: *mut c_char;
+    /// Get the address of the empty_string_option array.
+    /// We use an accessor because `empty_string_option` is a C `char[]` (array),
+    /// and Rust's `extern static` would treat it as a pointer variable, reading
+    /// the array contents instead of its address.
+    fn nvim_get_empty_string_option() -> *mut c_char;
+}
+
+/// Get the empty string option sentinel pointer.
+#[inline]
+unsafe fn empty_string_option() -> *mut c_char {
+    nvim_get_empty_string_option()
 }
 
 // =============================================================================
@@ -159,7 +168,7 @@ pub unsafe extern "C" fn rs_optval_free(o: OptVal) {
         }
         OptValType::String => {
             // Don't free empty string option sentinel
-            if o.data.string.data != empty_string_option {
+            if o.data.string.data != empty_string_option() {
                 api_free_string(o.data.string);
             }
         }
