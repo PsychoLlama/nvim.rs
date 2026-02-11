@@ -2537,6 +2537,57 @@ void nvim_emsg_no_ident_under_cursor(void)
   emsg(_(e_noident));
 }
 
+// =============================================================================
+// Phase 2A: NormalState field accessors for Rust FFI
+// All take void* (opaque NormalState handle) and cast internally.
+// =============================================================================
+
+#define NS(p) ((NormalState *)(p))
+
+int nvim_ns_get_c(void *s) { return NS(s)->c; }
+void nvim_ns_set_c(void *s, int val) { NS(s)->c = val; }
+
+bool nvim_ns_get_command_finished(void *s) { return NS(s)->command_finished; }
+void nvim_ns_set_command_finished(void *s, bool val) { NS(s)->command_finished = val; }
+
+bool nvim_ns_get_ctrl_w(void *s) { return NS(s)->ctrl_w; }
+void nvim_ns_set_ctrl_w(void *s, bool val) { NS(s)->ctrl_w = val; }
+
+bool nvim_ns_get_need_flushbuf(void *s) { return NS(s)->need_flushbuf; }
+void nvim_ns_set_need_flushbuf(void *s, bool val) { NS(s)->need_flushbuf = val; }
+void nvim_ns_set_need_flushbuf_or(void *s, bool val) { NS(s)->need_flushbuf |= val; }
+
+bool nvim_ns_get_set_prevcount(void *s) { return NS(s)->set_prevcount; }
+void nvim_ns_set_set_prevcount(void *s, bool val) { NS(s)->set_prevcount = val; }
+
+int nvim_ns_get_old_mapped_len(void *s) { return NS(s)->old_mapped_len; }
+void nvim_ns_set_old_mapped_len(void *s, int val) { NS(s)->old_mapped_len = val; }
+
+int nvim_ns_get_mapped_len(void *s) { return NS(s)->mapped_len; }
+
+int nvim_ns_get_idx(void *s) { return NS(s)->idx; }
+void nvim_ns_set_idx(void *s, int val) { NS(s)->idx = val; }
+
+int nvim_ns_get_old_col(void *s) { return NS(s)->old_col; }
+void nvim_ns_set_old_col(void *s, int val) { NS(s)->old_col = val; }
+
+bool nvim_ns_get_toplevel(void *s) { return NS(s)->toplevel; }
+bool nvim_ns_get_cmdwin(void *s) { return NS(s)->cmdwin; }
+bool nvim_ns_get_noexmode(void *s) { return NS(s)->noexmode; }
+
+oparg_T *nvim_ns_get_oa_ptr(void *s) { return &NS(s)->oa; }
+cmdarg_T *nvim_ns_get_ca_ptr(void *s) { return &NS(s)->ca; }
+
+int nvim_ns_get_old_pos_lnum(void *s) { return NS(s)->old_pos.lnum; }
+void nvim_ns_set_old_pos(void *s) { NS(s)->old_pos = curwin->w_cursor; }
+
+void nvim_ns_save_opcount(void *s) { NS(s)->oa.prev_opcount = NS(s)->ca.opcount; }
+
+bool nvim_ns_get_previous_got_int(void *s) { return NS(s)->previous_got_int; }
+void nvim_ns_set_previous_got_int(void *s, bool val) { NS(s)->previous_got_int = val; }
+
+#undef NS
+
 /// Normal state entry point. This is called on:
 ///
 /// - Startup, In this case the function never returns.
