@@ -8145,3 +8145,283 @@ int nvim_docmd_ascii_iswhite(int c) { return ascii_iswhite(c); }
 
 /// Check ascii_isdigit.
 int nvim_docmd_ascii_isdigit(int c) { return ascii_isdigit(c); }
+
+// =========================================================================
+// Phase 6 accessor functions for Rust FFI
+// parse_command_modifiers, get_address, parse_cmd_address
+// =========================================================================
+
+// --- _Static_assert entries ---
+
+// CMOD flags (ex_cmds_defs.h)
+_Static_assert(CMOD_SANDBOX == 0x0001, "CMOD_SANDBOX");
+_Static_assert(CMOD_SILENT == 0x0002, "CMOD_SILENT");
+_Static_assert(CMOD_ERRSILENT == 0x0004, "CMOD_ERRSILENT");
+_Static_assert(CMOD_UNSILENT == 0x0008, "CMOD_UNSILENT");
+_Static_assert(CMOD_NOAUTOCMD == 0x0010, "CMOD_NOAUTOCMD");
+_Static_assert(CMOD_HIDE == 0x0020, "CMOD_HIDE");
+_Static_assert(CMOD_BROWSE == 0x0040, "CMOD_BROWSE");
+_Static_assert(CMOD_CONFIRM == 0x0080, "CMOD_CONFIRM");
+_Static_assert(CMOD_KEEPALT == 0x0100, "CMOD_KEEPALT");
+_Static_assert(CMOD_KEEPMARKS == 0x0200, "CMOD_KEEPMARKS");
+_Static_assert(CMOD_KEEPJUMPS == 0x0400, "CMOD_KEEPJUMPS");
+_Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS");
+_Static_assert(CMOD_KEEPPATTERNS == 0x1000, "CMOD_KEEPPATTERNS");
+_Static_assert(CMOD_NOSWAPFILE == 0x2000, "CMOD_NOSWAPFILE");
+
+// WSP flags (window.h)
+_Static_assert(WSP_VERT == 0x02, "WSP_VERT");
+_Static_assert(WSP_HOR == 0x04, "WSP_HOR");
+_Static_assert(WSP_TOP == 0x08, "WSP_TOP");
+_Static_assert(WSP_BOT == 0x10, "WSP_BOT");
+_Static_assert(WSP_BELOW == 0x40, "WSP_BELOW");
+_Static_assert(WSP_ABOVE == 0x80, "WSP_ABOVE");
+
+// RE flags (regexp.h, search.h)
+_Static_assert(RE_MAGIC == 1, "RE_MAGIC");
+_Static_assert(RE_SEARCH == 0, "RE_SEARCH");
+_Static_assert(RE_SUBST == 1, "RE_SUBST");
+
+// Search flags (search.h)
+_Static_assert(SEARCH_HIS == 0x20, "SEARCH_HIS");
+_Static_assert(SEARCH_MSG == 0x0c, "SEARCH_MSG");
+_Static_assert(SEARCH_KEEP == 0x400, "SEARCH_KEEP");
+
+// Direction (vim_defs.h)
+_Static_assert(FORWARD == 1, "FORWARD");
+_Static_assert(BACKWARD == -1, "BACKWARD");
+
+// Mark flags (mark_defs.h)
+_Static_assert(kMarkBufLocal == 0, "kMarkBufLocal");
+_Static_assert(kMarkAll == 1, "kMarkAll");
+
+// Sentinel values (pos_defs.h)
+_Static_assert(MAXLNUM == 0x7fffffff, "MAXLNUM");
+_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL");
+
+// --- eap field accessors (additional) ---
+
+/// Set eap->cmd pointer.
+void nvim_eap_set_cmd(exarg_T *eap, char *p) { eap->cmd = p; }
+
+// --- cmdmod_T field accessors ---
+
+/// Clear a cmdmod_T struct.
+void nvim_cmod_clear(cmdmod_T *cmod) { CLEAR_POINTER(cmod); }
+
+/// Get cmod_flags.
+int nvim_cmod_get_flags(const cmdmod_T *cmod) { return cmod->cmod_flags; }
+/// Set cmod_flags.
+void nvim_cmod_set_flags(cmdmod_T *cmod, int f) { cmod->cmod_flags = f; }
+/// OR into cmod_flags.
+void nvim_cmod_or_flags(cmdmod_T *cmod, int f) { cmod->cmod_flags |= f; }
+
+/// Get cmod_split.
+int nvim_cmod_get_split(const cmdmod_T *cmod) { return cmod->cmod_split; }
+/// Set cmod_split.
+void nvim_cmod_set_split(cmdmod_T *cmod, int f) { cmod->cmod_split = f; }
+/// OR into cmod_split.
+void nvim_cmod_or_split(cmdmod_T *cmod, int f) { cmod->cmod_split |= f; }
+
+/// Get cmod_tab.
+int nvim_cmod_get_tab(const cmdmod_T *cmod) { return cmod->cmod_tab; }
+/// Set cmod_tab.
+void nvim_cmod_set_tab(cmdmod_T *cmod, int v) { cmod->cmod_tab = v; }
+
+/// Set cmod_verbose.
+void nvim_cmod_set_verbose(cmdmod_T *cmod, int v) { cmod->cmod_verbose = v; }
+
+/// Set cmod_filter_force.
+void nvim_cmod_set_filter_force(cmdmod_T *cmod, int v) { cmod->cmod_filter_force = (bool)v; }
+
+/// Set cmod_filter_pat (caller must have allocated with xstrdup).
+void nvim_cmod_set_filter_pat(cmdmod_T *cmod, char *s) { cmod->cmod_filter_pat = s; }
+
+/// Set cmod_filter_regmatch.regprog.
+void nvim_cmod_set_filter_regprog(cmdmod_T *cmod, void *prog)
+{
+  cmod->cmod_filter_regmatch.regprog = (regprog_T *)prog;
+}
+
+// --- Global state accessors for parse_command_modifiers ---
+
+/// Get exmode_active.
+int nvim_docmd_get_exmode_active(void) { return (int)exmode_active; }
+
+/// Check getline_equal(eap->ea_getline, eap->cookie, getexline).
+int nvim_docmd_getline_is_getexline(const exarg_T *eap)
+{
+  return getline_equal(eap->ea_getline, eap->cookie, getexline);
+}
+
+/// Get pointer to exmode_plus string.
+char *nvim_docmd_get_exmode_plus(void)
+{
+  return exmode_plus;
+}
+
+/// Set ex_pressedreturn.
+void nvim_docmd_set_ex_pressedreturn(int val) { ex_pressedreturn = (bool)val; }
+
+/// Wrap vim_strchr for Rust.
+char *nvim_docmd_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
+
+/// Wrap vim_regcomp for Rust.
+void *nvim_docmd_vim_regcomp(const char *pat, int flags)
+{
+  return vim_regcomp((char *)pat, flags);
+}
+
+/// Wrap xstrdup for Rust.
+char *nvim_docmd_xstrdup(const char *s) { return xstrdup(s); }
+
+/// Wrap skip_vimgrep_pat for Rust.
+char *nvim_docmd_skip_vimgrep_pat(char *p, char **s, int *flags)
+{
+  return skip_vimgrep_pat(p, s, flags);
+}
+
+/// Wrap LAST_TAB_NR for Rust.
+int nvim_docmd_LAST_TAB_NR(void) { return LAST_TAB_NR; }
+
+/// Wrap atoi for Rust (verbose count parsing).
+int nvim_docmd_atoi(const char *s) { return atoi(s); }
+
+/// Wrap skip_range for Rust.
+char *nvim_docmd_skip_range(const char *cmd)
+{
+  return skip_range(cmd, NULL);
+}
+
+/// Wrap skipwhite for Rust.
+char *nvim_docmd_skipwhite(const char *p) { return skipwhite(p); }
+
+/// Get _(e_invrange).
+char *nvim_docmd_get_e_invrange_msg(void) { return _(e_invrange); }
+
+// --- Accessors for get_address ---
+
+/// Set curwin->w_cursor.lnum.
+void nvim_docmd_set_curwin_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = lnum; }
+
+/// Set curwin->w_cursor.col.
+void nvim_docmd_set_curwin_cursor_col(colnr_T col) { curwin->w_cursor.col = col; }
+
+/// Set curwin->w_cursor.coladd.
+void nvim_docmd_set_curwin_cursor_coladd(colnr_T coladd) { curwin->w_cursor.coladd = coladd; }
+
+/// Get curwin->w_cursor.col.
+colnr_T nvim_docmd_get_curwin_cursor_col(void) { return curwin->w_cursor.col; }
+
+/// Get searchcmdlen.
+int nvim_docmd_get_searchcmdlen(void) { return (int)searchcmdlen; }
+/// Set searchcmdlen.
+void nvim_docmd_set_searchcmdlen(int v) { searchcmdlen = (ptrdiff_t)v; }
+
+/// Wrap do_search for Rust.
+int nvim_docmd_do_search(exarg_T *eap, int type, int dirc, const char *pat,
+                         size_t patlen, int count, int options)
+{
+  (void)eap;
+  return do_search(NULL, type, dirc, (char *)pat, patlen, (long)count, options, NULL);
+}
+
+/// Wrap searchit for Rust.
+/// Returns lnum of found position, or 0 on failure.
+linenr_T nvim_docmd_searchit(int dir, int re_pat, linenr_T start_lnum,
+                             colnr_T start_col, int flags)
+{
+  pos_T pos;
+  pos.lnum = start_lnum;
+  pos.col = start_col;
+  pos.coladd = 0;
+  if (searchit(curwin, curbuf, &pos, NULL, dir, "", 0, 1, flags, re_pat, NULL) != FAIL) {
+    return pos.lnum;
+  }
+  return 0;
+}
+
+/// Wrap mark_get for Rust.
+/// Returns opaque fmark_T pointer (NULL on failure).
+void *nvim_docmd_mark_get(int flag, int ch)
+{
+  return mark_get(curbuf, curwin, NULL, (MarkGet)flag, (uint8_t)ch);
+}
+
+/// Check a mark and set errormsg if invalid.
+int nvim_docmd_mark_check(void *fm, const char **errormsg)
+{
+  return mark_check((fmark_T *)fm, errormsg);
+}
+
+/// Get fmark_T->fnum.
+int nvim_docmd_mark_fnum(const void *fm) { return ((const fmark_T *)fm)->fnum; }
+/// Get fmark_T->mark.lnum.
+linenr_T nvim_docmd_mark_lnum(const void *fm) { return ((const fmark_T *)fm)->mark.lnum; }
+
+/// Wrap mark_move_to for Rust.
+void nvim_docmd_mark_move_to(void *fm) { mark_move_to((fmark_T *)fm, 0); }
+
+/// Get curbuf->handle.
+int nvim_docmd_get_curbuf_handle(void) { return curbuf->handle; }
+
+/// Wrap hasFolding for Rust.
+/// Returns last line of fold containing lnum, or lnum if not folded.
+linenr_T nvim_docmd_hasFolding(linenr_T lnum)
+{
+  linenr_T last;
+  if (hasFolding(curwin, lnum, NULL, &last)) {
+    return last;
+  }
+  return lnum;
+}
+
+/// Wrap compute_buffer_local_count for Rust.
+int nvim_docmd_compute_buf_local_count(int addr_type, linenr_T lnum, int offset)
+{
+  return compute_buffer_local_count((cmd_addr_T)addr_type, lnum, offset);
+}
+
+/// Wrap magic_isset for Rust.
+int nvim_docmd_magic_isset(void) { return magic_isset(); }
+
+/// Wrap getdigits_int32 for Rust.
+int nvim_docmd_getdigits_int32(char **pp)
+{
+  return (int)getdigits_int32(pp, false, MAXLNUM);
+}
+
+/// Wrap qf_get_size for Rust.
+int nvim_docmd_qf_get_size(const exarg_T *eap)
+{
+  return (int)qf_get_size(eap);
+}
+
+/// Get _(e_norange).
+char *nvim_docmd_get_e_norange(void) { return _(e_norange); }
+
+/// Get _(e_backslash).
+char *nvim_docmd_get_e_backslash(void) { return _(e_backslash); }
+
+/// Get _(e_line_number_out_of_range).
+char *nvim_docmd_get_e_line_number_out_of_range(void) { return _(e_line_number_out_of_range); }
+
+/// Get strlen of a string.
+size_t nvim_docmd_strlen(const char *s) { return strlen(s); }
+
+// --- Accessors for parse_cmd_address ---
+
+/// Wrap mark_get_visual for Rust.
+void *nvim_docmd_mark_get_visual(int ch)
+{
+  return mark_get_visual(curbuf, (uint8_t)ch);
+}
+
+/// Wrap check_cursor(curwin).
+void nvim_docmd_check_cursor(void) { check_cursor(curwin); }
+
+/// Wrap check_cursor_col(curwin).
+void nvim_docmd_check_cursor_col(void) { check_cursor_col(curwin); }
+
+/// Check IS_USER_CMDIDX(eap->cmdidx).
+int nvim_docmd_is_user_cmdidx(const exarg_T *eap) { return IS_USER_CMDIDX(eap->cmdidx); }

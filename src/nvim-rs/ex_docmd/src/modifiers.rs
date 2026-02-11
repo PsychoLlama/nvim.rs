@@ -178,18 +178,18 @@ pub const CMOD_NOSWAPFILE: c_int = 0x2000;
 // Window split flags (WSP_*)
 // =============================================================================
 
-/// Split horizontally
-pub const WSP_HOR: c_int = 0x01;
 /// Split vertically
 pub const WSP_VERT: c_int = 0x02;
+/// Split horizontally
+pub const WSP_HOR: c_int = 0x04;
 /// Split at top
-pub const WSP_TOP: c_int = 0x04;
+pub const WSP_TOP: c_int = 0x08;
 /// Split at bottom
-pub const WSP_BOT: c_int = 0x08;
-/// Split above current window
-pub const WSP_ABOVE: c_int = 0x10;
+pub const WSP_BOT: c_int = 0x10;
 /// Split below current window
-pub const WSP_BELOW: c_int = 0x20;
+pub const WSP_BELOW: c_int = 0x40;
+/// Split above current window
+pub const WSP_ABOVE: c_int = 0x80;
 
 // =============================================================================
 // Flag checking utilities
@@ -370,13 +370,13 @@ mod tests {
 
     #[test]
     fn test_wsp_flags() {
-        // Verify flag values match expected constants
-        assert_eq!(WSP_HOR, 0x01);
+        // Verify flag values match C header (window.h)
         assert_eq!(WSP_VERT, 0x02);
-        assert_eq!(WSP_TOP, 0x04);
-        assert_eq!(WSP_BOT, 0x08);
-        assert_eq!(WSP_ABOVE, 0x10);
-        assert_eq!(WSP_BELOW, 0x20);
+        assert_eq!(WSP_HOR, 0x04);
+        assert_eq!(WSP_TOP, 0x08);
+        assert_eq!(WSP_BOT, 0x10);
+        assert_eq!(WSP_BELOW, 0x40);
+        assert_eq!(WSP_ABOVE, 0x80);
     }
 
     #[test]
