@@ -199,6 +199,194 @@ void nvim_eval_emsg_e921(void)
   emsg(_("E921: Invalid callback argument"));
 }
 
+// Phase 5: GC reference marking (Rust implementations)
+extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
+extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
+extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
+                               list_stack_T **list_stack);
+extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
+                                   list_stack_T **list_stack);
+extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
+                                          ht_stack_T **ht_stack, list_stack_T **list_stack);
+
+_Static_assert(VAR_DICT == 5, "VAR_DICT mismatch");
+_Static_assert(VAR_LIST == 4, "VAR_LIST mismatch");
+_Static_assert(kCallbackPartial == 2, "kCallbackPartial mismatch Phase5");
+
+// C accessors for typval dict/list fields
+dict_T *nvim_eval_tv_get_dict(const typval_T *tv)
+{
+  return tv->vval.v_dict;
+}
+
+list_T *nvim_eval_tv_get_list(const typval_T *tv)
+{
+  return tv->vval.v_list;
+}
+
+// Dict accessors
+int nvim_eval_dict_get_copyid(dict_T *dd)
+{
+  return dd->dv_copyID;
+}
+
+void nvim_eval_dict_set_copyid(dict_T *dd, int copyid)
+{
+  dd->dv_copyID = copyid;
+}
+
+hashtab_T *nvim_eval_dict_get_ht(dict_T *dd)
+{
+  return &dd->dv_hashtab;
+}
+
+// List accessors
+int nvim_eval_list_get_copyid(list_T *ll)
+{
+  return ll->lv_copyID;
+}
+
+void nvim_eval_list_set_copyid(list_T *ll, int copyid)
+{
+  ll->lv_copyID = copyid;
+}
+
+// Partial accessors for GC
+int nvim_eval_partial_get_copyid(partial_T *pt)
+{
+  return pt->pt_copyID;
+}
+
+void nvim_eval_partial_set_copyid(partial_T *pt, int copyid)
+{
+  pt->pt_copyID = copyid;
+}
+
+char *nvim_eval_partial_get_name(partial_T *pt)
+{
+  return pt->pt_name;
+}
+
+ufunc_T *nvim_eval_partial_get_func(partial_T *pt)
+{
+  return pt->pt_func;
+}
+
+// Callback struct accessors for GC
+int nvim_eval_cb_get_type(const Callback *cb)
+{
+  return (int)cb->type;
+}
+
+partial_T *nvim_eval_cb_get_partial(const Callback *cb)
+{
+  return cb->data.partial;
+}
+
+// CallbackReader accessors
+Callback *nvim_eval_cbr_get_cb(CallbackReader *reader)
+{
+  return &reader->cb;
+}
+
+dict_T *nvim_eval_cbr_get_self(CallbackReader *reader)
+{
+  return reader->self;
+}
+
+// Hashtab iteration: iterate over entries and call rs_set_ref_in_item for each
+bool nvim_eval_ht_foreach_di_tv(hashtab_T *ht, int copyID, ht_stack_T **ht_stack,
+                                list_stack_T **list_stack)
+{
+  bool abort = false;
+  HASHTAB_ITER(ht, hi, {
+    abort = abort || rs_set_ref_in_item(&TV_DICT_HI2DI(hi)->di_tv, copyID, ht_stack, list_stack);
+  });
+  return abort;
+}
+
+// List iteration: iterate over items and call rs_set_ref_in_item for each
+bool nvim_eval_list_foreach_tv(list_T *l, int copyID, ht_stack_T **ht_stack,
+                               list_stack_T **list_stack)
+{
+  bool abort = false;
+  TV_LIST_ITER(l, li, {
+    if (abort) {
+      break;
+    }
+    abort = rs_set_ref_in_item(TV_LIST_ITEM_TV(li), copyID, ht_stack, list_stack);
+  });
+  return abort;
+}
+
+// Dict watcher iteration
+void nvim_eval_dict_foreach_watcher_callback(dict_T *dd, int copyID, ht_stack_T **ht_stack,
+                                             list_stack_T **list_stack)
+{
+  QUEUE *w = NULL;
+  DictWatcher *watcher = NULL;
+  QUEUE_FOREACH(w, &dd->watchers, {
+    watcher = tv_dict_watcher_node_data(w);
+    rs_set_ref_in_callback(&watcher->callback, copyID, ht_stack, list_stack);
+  })
+}
+
+// Stack operations for ht_stack
+void nvim_eval_ht_stack_push(ht_stack_T **stack, hashtab_T *ht)
+{
+  ht_stack_T *newitem = xmalloc(sizeof(ht_stack_T));
+  newitem->ht = ht;
+  newitem->prev = *stack;
+  *stack = newitem;
+}
+
+hashtab_T *nvim_eval_ht_stack_pop(ht_stack_T **stack)
+{
+  ht_stack_T *item = *stack;
+  hashtab_T *ht = item->ht;
+  *stack = item->prev;
+  xfree(item);
+  return ht;
+}
+
+// Stack operations for list_stack
+void nvim_eval_list_stack_push(list_stack_T **stack, list_T *list)
+{
+  list_stack_T *newitem = xmalloc(sizeof(list_stack_T));
+  newitem->list = list;
+  newitem->prev = *stack;
+  *stack = newitem;
+}
+
+list_T *nvim_eval_list_stack_pop(list_stack_T **stack)
+{
+  list_stack_T *item = *stack;
+  list_T *list = item->list;
+  *stack = item->prev;
+  xfree(item);
+  return list;
+}
+
+// Construct a typval_T with VAR_DICT and call rs_set_ref_in_item
+bool nvim_eval_set_ref_dict_tv(dict_T *dict, int copyID, ht_stack_T **ht_stack,
+                               list_stack_T **list_stack)
+{
+  typval_T dtv;
+  dtv.v_type = VAR_DICT;
+  dtv.vval.v_dict = dict;
+  return rs_set_ref_in_item(&dtv, copyID, ht_stack, list_stack);
+}
+
+// Construct a typval_T with VAR_PARTIAL and call rs_set_ref_in_item
+bool nvim_eval_set_ref_partial_tv(partial_T *partial, int copyID, ht_stack_T **ht_stack,
+                                  list_stack_T **list_stack)
+{
+  typval_T tv;
+  tv.v_type = VAR_PARTIAL;
+  tv.vval.v_partial = partial;
+  return rs_set_ref_in_item(&tv, copyID, ht_stack, list_stack);
+}
+
 // C accessors for buffer operations (used by Rust indexing module)
 int nvim_eval_buf_ml_valid(const buf_T *buf)
 {
@@ -4263,32 +4451,7 @@ static int free_unref_items(int copyID)
 bool set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  bool abort = false;
-  ht_stack_T *ht_stack = NULL;
-
-  hashtab_T *cur_ht = ht;
-  while (true) {
-    if (!abort) {
-      // Mark each item in the hashtab.  If the item contains a hashtab
-      // it is added to ht_stack, if it contains a list it is added to
-      // list_stack.
-      HASHTAB_ITER(cur_ht, hi, {
-        abort = abort || set_ref_in_item(&TV_DICT_HI2DI(hi)->di_tv, copyID, &ht_stack, list_stack);
-      });
-    }
-
-    if (ht_stack == NULL) {
-      break;
-    }
-
-    // take an item from the stack
-    cur_ht = ht_stack->ht;
-    ht_stack_T *tempitem = ht_stack;
-    ht_stack = ht_stack->prev;
-    xfree(tempitem);
-  }
-
-  return abort;
+  return rs_set_ref_in_ht(ht, copyID, list_stack);
 }
 
 /// Mark all lists and dicts referenced through list "l" with "copyID".
@@ -4301,118 +4464,11 @@ bool set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack)
 bool set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  bool abort = false;
-  list_stack_T *list_stack = NULL;
-
-  list_T *cur_l = l;
-  while (true) {
-    // Mark each item in the list.  If the item contains a hashtab
-    // it is added to ht_stack, if it contains a list it is added to
-    // list_stack.
-    TV_LIST_ITER(cur_l, li, {
-      if (abort) {
-        break;
-      }
-      abort = set_ref_in_item(TV_LIST_ITEM_TV(li), copyID, ht_stack,
-                              &list_stack);
-    });
-
-    if (list_stack == NULL) {
-      break;
-    }
-
-    // take an item from the stack
-    cur_l = list_stack->list;
-    list_stack_T *tempitem = list_stack;
-    list_stack = list_stack->prev;
-    xfree(tempitem);
-  }
-
-  return abort;
+  return rs_set_ref_in_list_items(l, copyID, ht_stack);
 }
 
 /// Mark the dict "dd" with "copyID".
 /// Also see set_ref_in_item().
-static bool set_ref_in_item_dict(dict_T *dd, int copyID, ht_stack_T **ht_stack,
-                                 list_stack_T **list_stack)
-{
-  if (dd == NULL || dd->dv_copyID == copyID) {
-    return false;
-  }
-
-  // Didn't see this dict yet.
-  dd->dv_copyID = copyID;
-  if (ht_stack == NULL) {
-    return set_ref_in_ht(&dd->dv_hashtab, copyID, list_stack);
-  }
-
-  ht_stack_T *const newitem = xmalloc(sizeof(ht_stack_T));
-  newitem->ht = &dd->dv_hashtab;
-  newitem->prev = *ht_stack;
-  *ht_stack = newitem;
-
-  QUEUE *w = NULL;
-  DictWatcher *watcher = NULL;
-  QUEUE_FOREACH(w, &dd->watchers, {
-    watcher = tv_dict_watcher_node_data(w);
-    set_ref_in_callback(&watcher->callback, copyID, ht_stack, list_stack);
-  })
-
-  return false;
-}
-
-/// Mark the list "ll" with "copyID".
-/// Also see set_ref_in_item().
-static bool set_ref_in_item_list(list_T *ll, int copyID, ht_stack_T **ht_stack,
-                                 list_stack_T **list_stack)
-{
-  if (ll == NULL || ll->lv_copyID == copyID) {
-    return false;
-  }
-
-  // Didn't see this list yet.
-  ll->lv_copyID = copyID;
-  if (list_stack == NULL) {
-    return set_ref_in_list_items(ll, copyID, ht_stack);
-  }
-
-  list_stack_T *const newitem = xmalloc(sizeof(list_stack_T));
-  newitem->list = ll;
-  newitem->prev = *list_stack;
-  *list_stack = newitem;
-
-  return false;
-}
-
-/// Mark the partial "pt" with "copyID".
-/// Also see set_ref_in_item().
-static bool set_ref_in_item_partial(partial_T *pt, int copyID, ht_stack_T **ht_stack,
-                                    list_stack_T **list_stack)
-{
-  if (pt == NULL || pt->pt_copyID == copyID) {
-    return false;
-  }
-
-  // Didn't see this partial yet.
-  pt->pt_copyID = copyID;
-
-  bool abort = set_ref_in_func(pt->pt_name, pt->pt_func, copyID);
-
-  if (pt->pt_dict != NULL) {
-    typval_T dtv;
-
-    dtv.v_type = VAR_DICT;
-    dtv.vval.v_dict = pt->pt_dict;
-    abort = abort || set_ref_in_item(&dtv, copyID, ht_stack, list_stack);
-  }
-
-  for (int i = 0; i < pt->pt_argc; i++) {
-    abort = abort || set_ref_in_item(&pt->pt_argv[i], copyID, ht_stack, list_stack);
-  }
-
-  return abort;
-}
-
 /// Mark all lists and dicts referenced through typval "tv" with "copyID".
 ///
 /// @param tv            Typval content will be marked.
@@ -4424,28 +4480,7 @@ static bool set_ref_in_item_partial(partial_T *pt, int copyID, ht_stack_T **ht_s
 bool set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  bool abort = false;
-
-  switch (tv->v_type) {
-  case VAR_DICT:
-    return set_ref_in_item_dict(tv->vval.v_dict, copyID, ht_stack, list_stack);
-  case VAR_LIST:
-    return set_ref_in_item_list(tv->vval.v_list, copyID, ht_stack, list_stack);
-  case VAR_FUNC:
-    abort = set_ref_in_func(tv->vval.v_string, NULL, copyID);
-    break;
-  case VAR_PARTIAL:
-    return set_ref_in_item_partial(tv->vval.v_partial, copyID, ht_stack, list_stack);
-  case VAR_UNKNOWN:
-  case VAR_BOOL:
-  case VAR_SPECIAL:
-  case VAR_FLOAT:
-  case VAR_NUMBER:
-  case VAR_STRING:
-  case VAR_BLOB:
-    break;
-  }
-  return abort;
+  return rs_set_ref_in_item(tv, copyID, ht_stack, list_stack);
 }
 
 /// Get the key for #{key: val} into "tv" and advance "arg".
@@ -4920,38 +4955,13 @@ bool callback_call(Callback *const callback, const int argcount_in, typval_T *co
 bool set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                          list_stack_T **list_stack)
 {
-  typval_T tv;
-  switch (callback->type) {
-  case kCallbackFuncref:
-  case kCallbackNone:
-    break;
-
-  case kCallbackPartial:
-    tv.v_type = VAR_PARTIAL;
-    tv.vval.v_partial = callback->data.partial;
-    return set_ref_in_item(&tv, copyID, ht_stack, list_stack);
-    break;
-
-  case kCallbackLua:
-    abort();
-  }
-  return false;
+  return rs_set_ref_in_callback(callback, copyID, ht_stack, list_stack);
 }
 
 static bool set_ref_in_callback_reader(CallbackReader *reader, int copyID, ht_stack_T **ht_stack,
                                        list_stack_T **list_stack)
 {
-  if (set_ref_in_callback(&reader->cb, copyID, ht_stack, list_stack)) {
-    return true;
-  }
-
-  if (reader->self) {
-    typval_T tv;
-    tv.v_type = VAR_DICT;
-    tv.vval.v_dict = reader->self;
-    return set_ref_in_item(&tv, copyID, ht_stack, list_stack);
-  }
-  return false;
+  return rs_set_ref_in_callback_reader(reader, copyID, ht_stack, list_stack);
 }
 
 timer_T *find_timer_by_nr(varnumber_T xx)

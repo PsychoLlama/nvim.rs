@@ -230,5 +230,4 @@ mod tests {
         assert_eq!(VAR_SPECIAL, 8);
         assert_eq!(VAR_PARTIAL, 9);
     }
-
 }

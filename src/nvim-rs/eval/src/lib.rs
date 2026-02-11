@@ -19,6 +19,7 @@ pub mod dict;
 pub mod expr;
 pub mod funcref;
 pub mod funcs;
+pub mod gc;
 pub mod indexing;
 pub mod list;
 pub mod names;
