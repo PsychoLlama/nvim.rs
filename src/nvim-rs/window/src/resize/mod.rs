@@ -16,6 +16,7 @@ pub mod execute;
 pub mod fraction;
 pub mod frame;
 pub mod minsize;
+pub mod validate;
 
 // Re-export common items
 pub use calculate::*;
@@ -23,3 +24,4 @@ pub use execute::*;
 pub use fraction::*;
 pub use frame::*;
 pub use minsize::*;
+pub use validate::*;

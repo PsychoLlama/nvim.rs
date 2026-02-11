@@ -193,6 +193,12 @@ extern int rs_min_rows(tabpage_T *tp);
 extern int rs_min_rows_for_all_tabpages(void);
 extern void rs_win_get_tabwin(int id, int *tabnr, int *winnr);
 
+// Phase 2: Option validation + height/width setters
+extern const char *rs_did_set_winminheight(void);
+extern const char *rs_did_set_winminwidth(void);
+extern void rs_win_new_height(win_T *wp, int height);
+extern void rs_win_new_width(win_T *wp, int width);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -7038,43 +7044,13 @@ static void frame_setwidth(frame_T *curfrp, int width)
 // Check 'winminheight' for a valid value and reduce it if needed.
 const char *did_set_winminheight(optset_T *args FUNC_ATTR_UNUSED)
 {
-  bool first = true;
-
-  // loop until there is a 'winminheight' that is possible
-  while (p_wmh > 0) {
-    const int room = Rows - (int)p_ch;
-    const int needed = min_rows_for_all_tabpages();
-    if (room >= needed) {
-      break;
-    }
-    p_wmh--;
-    if (first) {
-      emsg(_(e_noroom));
-      first = false;
-    }
-  }
-  return NULL;
+  return rs_did_set_winminheight();
 }
 
 // Check 'winminwidth' for a valid value and reduce it if needed.
 const char *did_set_winminwidth(optset_T *args FUNC_ATTR_UNUSED)
 {
-  bool first = true;
-
-  // loop until there is a 'winminheight' that is possible
-  while (p_wmw > 0) {
-    const int room = Columns;
-    const int needed = frame_minwidth(topframe, NULL);
-    if (room >= needed) {
-      break;
-    }
-    p_wmw--;
-    if (first) {
-      emsg(_(e_noroom));
-      first = false;
-    }
-  }
-  return NULL;
+  return rs_did_set_winminwidth();
 }
 
 /// Status line of dragwin is dragged "offset" lines down (negative is up).
@@ -7213,16 +7189,7 @@ static void win_fix_cursor(bool normal)
 // window position, the frame or to other windows.
 void win_new_height(win_T *wp, int height)
 {
-  // Don't want a negative height.  Happens when splitting a tiny window.
-  // Will equalize heights soon to fix it.
-  height = MAX(height, 0);
-  if (wp->w_height == height) {
-    return;  // nothing to do
-  }
-
-  wp->w_height = height;
-  wp->w_pos_changed = true;
-  win_set_inner_size(wp, true);
+  rs_win_new_height(wp, height);
 }
 
 void scroll_to_fraction(win_T *wp, int prev_height)
@@ -7392,10 +7359,7 @@ void win_set_inner_size(win_T *wp, bool valid_cursor)
 /// Set the width of a window.
 void win_new_width(win_T *wp, int width)
 {
-  // Should we give an error if width < 0?
-  wp->w_width = width < 0 ? 0 : width;
-  wp->w_pos_changed = true;
-  win_set_inner_size(wp, true);
+  rs_win_new_width(wp, width);
 }
 
 OptInt win_default_scroll(win_T *wp)
@@ -8247,6 +8211,34 @@ int nvim_tabpage_get_ch_used(tabpage_T *tp)
 int nvim_win_has_winnr(win_T *wp, tabpage_T *tp)
 {
   return (wp && tp) ? (int)win_has_winnr(wp, tp) : 0;
+}
+
+// --- Phase 2 accessors ---
+
+/// Set the global p_wmh (winminheight) value.
+void nvim_set_p_wmh(int64_t val)
+{
+  p_wmh = val;
+}
+
+/// Set the global p_wmw (winminwidth) value.
+void nvim_set_p_wmw(int64_t val)
+{
+  p_wmw = val;
+}
+
+/// Emit the E36 "Not enough room" error message.
+void nvim_emsg_noroom(void)
+{
+  emsg(_(e_noroom));
+}
+
+/// Wrapper for win_set_inner_size() (stays in C).
+void nvim_win_set_inner_size(win_T *wp, int valid_cursor)
+{
+  if (wp) {
+    win_set_inner_size(wp, valid_cursor != 0);
+  }
 }
 
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");

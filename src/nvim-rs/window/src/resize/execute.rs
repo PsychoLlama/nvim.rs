@@ -393,6 +393,11 @@ pub extern "C" fn rs_resize_curwin_total_width() -> c_int {
 extern "C" {
     fn rs_win_setheight_win(height: c_int, win: WinHandle);
     fn rs_win_setwidth_win(width: c_int, wp: WinHandle);
+    fn nvim_win_field_height(wp: WinHandle) -> c_int;
+    fn nvim_win_field_set_height(wp: WinHandle, val: c_int);
+    fn nvim_win_field_set_width(wp: WinHandle, val: c_int);
+    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
+    fn nvim_win_set_inner_size(wp: WinHandle, valid_cursor: c_int);
 }
 
 /// Set current window height and take care of repositioning other windows.
@@ -415,6 +420,63 @@ pub extern "C" fn rs_win_setwidth(width: c_int) {
         let curwin = nvim_get_curwin();
         rs_win_setwidth_win(width, curwin);
     }
+}
+
+// =============================================================================
+// Window Height/Width Setters
+// =============================================================================
+
+/// Set the height of a window.
+/// "height" excludes any window toolbar.
+/// This takes care of the things inside the window, not what happens to the
+/// window position, the frame or to other windows.
+///
+/// Equivalent to C `win_new_height()` (window.c L7214).
+pub(crate) fn win_new_height_impl(wp: WinHandle, height: c_int) {
+    if wp.is_null() {
+        return;
+    }
+
+    // Don't want a negative height. Happens when splitting a tiny window.
+    let height = height.max(0);
+
+    unsafe {
+        if nvim_win_field_height(wp) == height {
+            return; // nothing to do
+        }
+
+        nvim_win_field_set_height(wp, height);
+        nvim_win_set_pos_changed(wp, 1);
+        nvim_win_set_inner_size(wp, 1);
+    }
+}
+
+/// Set the width of a window.
+///
+/// Equivalent to C `win_new_width()` (window.c L7393).
+pub(crate) fn win_new_width_impl(wp: WinHandle, width: c_int) {
+    if wp.is_null() {
+        return;
+    }
+
+    unsafe {
+        let w = if width < 0 { 0 } else { width };
+        nvim_win_field_set_width(wp, w);
+        nvim_win_set_pos_changed(wp, 1);
+        nvim_win_set_inner_size(wp, 1);
+    }
+}
+
+/// FFI: Set the height of a window.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_win_new_height(wp: WinHandle, height: c_int) {
+    win_new_height_impl(wp, height);
+}
+
+/// FFI: Set the width of a window.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_win_new_width(wp: WinHandle, width: c_int) {
+    win_new_width_impl(wp, width);
 }
 
 #[cfg(test)]

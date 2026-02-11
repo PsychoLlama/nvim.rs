@@ -1584,12 +1584,6 @@ extern "C" {
     /// Set the fr_width field of a frame.
     fn nvim_frame_set_width(frp: *mut Frame, val: c_int);
 
-    /// Wrapper for win_new_height().
-    fn nvim_win_new_height(wp: WinHandle, height: c_int);
-
-    /// Wrapper for win_new_width().
-    fn nvim_win_new_width(wp: WinHandle, width: c_int);
-
     /// Wrapper for frame_new_height().
     fn nvim_frame_new_height(
         topfrp: *mut Frame,
@@ -2464,11 +2458,11 @@ fn frame_set_vsep_impl(frp: *const Frame, add: bool) {
             if add && vsep_width == 0 {
                 if w_width > 0 {
                     // don't make it negative
-                    nvim_win_new_width(wp, w_width - 1);
+                    crate::resize::execute::win_new_width_impl(wp, w_width - 1);
                 }
                 nvim_win_set_vsep_width(wp, 1);
             } else if !add && vsep_width == 1 {
-                nvim_win_new_width(wp, w_width + 1);
+                crate::resize::execute::win_new_width_impl(wp, w_width + 1);
                 nvim_win_set_vsep_width(wp, 0);
             }
         } else if frame.fr_layout == FR_COL {
