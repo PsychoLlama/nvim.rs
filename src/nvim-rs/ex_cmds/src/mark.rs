@@ -217,37 +217,31 @@ pub const fn is_valid_changelist_idx(idx: c_int, len: c_int) -> bool {
 // =============================================================================
 
 /// FFI: Check if character is valid mark name.
-#[no_mangle]
 pub extern "C" fn rs_is_valid_mark(c: c_int) -> c_int {
     c_int::from(is_valid_mark(c as u8))
 }
 
 /// FFI: Check if character is local mark.
-#[no_mangle]
 pub extern "C" fn rs_is_local_mark(c: c_int) -> c_int {
     c_int::from(is_local_mark(c as u8))
 }
 
 /// FFI: Check if character is global mark.
-#[no_mangle]
 pub extern "C" fn rs_is_global_mark(c: c_int) -> c_int {
     c_int::from(is_global_mark(c as u8))
 }
 
 /// FFI: Check if character is numbered mark.
-#[no_mangle]
 pub extern "C" fn rs_is_numbered_mark(c: c_int) -> c_int {
     c_int::from(is_numbered_mark(c as u8))
 }
 
 /// FFI: Check if character is special mark.
-#[no_mangle]
 pub extern "C" fn rs_is_special_mark(c: c_int) -> c_int {
     c_int::from(is_special_mark(c as u8))
 }
 
 /// FFI: Get mark type from character.
-#[no_mangle]
 pub extern "C" fn rs_mark_type_from_char(c: c_int) -> c_int {
     MarkType::from_char(c as u8).to_raw()
 }
@@ -256,7 +250,6 @@ pub extern "C" fn rs_mark_type_from_char(c: c_int) -> c_int {
 ///
 /// # Safety
 /// `count_out` must be a valid pointer.
-#[no_mangle]
 pub unsafe extern "C" fn rs_parse_mark_range(
     start: c_int,
     end: c_int,
@@ -273,7 +266,6 @@ pub unsafe extern "C" fn rs_parse_mark_range(
 ///
 /// # Safety
 /// `args` must be a valid null-terminated string or null.
-#[no_mangle]
 pub unsafe extern "C" fn rs_count_marks_in_args(args: *const c_char) -> c_int {
     if args.is_null() {
         return 0;
@@ -296,31 +288,26 @@ pub unsafe extern "C" fn rs_count_marks_in_args(args: *const c_char) -> c_int {
 }
 
 /// FFI: Check if jump list index is valid.
-#[no_mangle]
 pub extern "C" fn rs_is_valid_jumplist_idx(idx: c_int, len: c_int) -> c_int {
     c_int::from(is_valid_jumplist_idx(idx, len))
 }
 
 /// FFI: Get jump list display index.
-#[no_mangle]
 pub extern "C" fn rs_jumplist_display_idx(actual_idx: c_int, len: c_int) -> c_int {
     jumplist_display_idx(actual_idx, len)
 }
 
 /// FFI: Check if change list index is valid.
-#[no_mangle]
 pub extern "C" fn rs_is_valid_changelist_idx(idx: c_int, len: c_int) -> c_int {
     c_int::from(is_valid_changelist_idx(idx, len))
 }
 
 /// FFI: Get JUMPLISTSIZE constant.
-#[no_mangle]
 pub extern "C" fn rs_get_jumplist_size() -> c_int {
     JUMPLISTSIZE
 }
 
 /// FFI: Get CHANGELISTSIZE constant.
-#[no_mangle]
 pub extern "C" fn rs_get_changelist_size() -> c_int {
     CHANGELISTSIZE
 }

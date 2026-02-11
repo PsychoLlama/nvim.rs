@@ -163,7 +163,6 @@ impl std::error::Error for ReadError {}
 /// Validate read position and return clamped line number.
 ///
 /// Returns the clamped line number, or -1 on error (negative input).
-#[no_mangle]
 pub extern "C" fn rs_validate_read_position(line: c_int, line_count: c_int) -> c_int {
     validate_read_position(line, line_count).unwrap_or(-1)
 }

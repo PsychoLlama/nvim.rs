@@ -372,7 +372,6 @@ pub fn adjust_line_after_move(lnum: LineNr, range: LineRange, dest: LineNr) -> L
 /// Validate a copy operation.
 ///
 /// Returns 1 if valid, 0 if invalid.
-#[no_mangle]
 pub extern "C" fn rs_validate_copy(
     start: c_int,
     end: c_int,
@@ -386,7 +385,6 @@ pub extern "C" fn rs_validate_copy(
 /// Validate a move operation.
 ///
 /// Returns 1 if valid, 0 if invalid.
-#[no_mangle]
 pub extern "C" fn rs_validate_move(
     start: c_int,
     end: c_int,
@@ -398,7 +396,6 @@ pub extern "C" fn rs_validate_move(
 }
 
 /// Adjust a line number after a move operation.
-#[no_mangle]
 pub extern "C" fn rs_adjust_line_after_move(
     lnum: c_int,
     start: c_int,

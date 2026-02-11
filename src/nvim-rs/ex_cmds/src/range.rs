@@ -402,55 +402,46 @@ pub fn range_default_all(
 // =============================================================================
 
 /// FFI export: Create a line range
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_new(start: LineNr, end: LineNr) -> LineRange {
     LineRange::new(start, end)
 }
 
 /// FFI export: Create a single-line range
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_single(line: LineNr) -> LineRange {
     LineRange::single(line)
 }
 
 /// FFI export: Create an empty range
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_empty() -> LineRange {
     LineRange::empty()
 }
 
 /// FFI export: Create a whole-buffer range
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_whole_buffer(line_count: LineNr) -> LineRange {
     LineRange::whole_buffer(line_count)
 }
 
 /// FFI export: Check if range is empty
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_is_empty(start: LineNr, end: LineNr) -> c_int {
     c_int::from(LineRange::new(start, end).is_empty())
 }
 
 /// FFI export: Check if range is valid
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_is_valid(start: LineNr, end: LineNr) -> c_int {
     c_int::from(LineRange::new(start, end).is_valid())
 }
 
 /// FFI export: Get range length
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_len(start: LineNr, end: LineNr) -> LineNr {
     LineRange::new(start, end).len()
 }
 
 /// FFI export: Check if range contains a line
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_contains(start: LineNr, end: LineNr, line: LineNr) -> c_int {
     c_int::from(LineRange::new(start, end).contains(line))
 }
 
 /// FFI export: Check if ranges overlap
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_overlaps(
     start1: LineNr,
     end1: LineNr,
@@ -461,7 +452,6 @@ pub extern "C" fn rs_line_range_overlaps(
 }
 
 /// FFI export: Clamp range start to bounds
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_clamp_start(start: LineNr, line_count: LineNr) -> LineNr {
     if line_count <= 0 {
         return 0;
@@ -470,7 +460,6 @@ pub extern "C" fn rs_line_range_clamp_start(start: LineNr, line_count: LineNr) -
 }
 
 /// FFI export: Clamp range end to bounds
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_line_range_clamp_end(end: LineNr, line_count: LineNr) -> LineNr {
     if line_count <= 0 {
         return 0;
@@ -479,7 +468,6 @@ pub extern "C" fn rs_line_range_clamp_end(end: LineNr, line_count: LineNr) -> Li
 }
 
 /// FFI export: Create range from exarg
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_range_from_exarg(
     line1: LineNr,
     line2: LineNr,
@@ -490,7 +478,6 @@ pub extern "C" fn rs_range_from_exarg(
 }
 
 /// FFI export: Create range with default all
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_range_default_all(
     line1: LineNr,
     line2: LineNr,
@@ -501,7 +488,6 @@ pub extern "C" fn rs_range_default_all(
 }
 
 /// FFI export: Validate range - returns 0 if valid, error code otherwise
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_validate_range(start: LineNr, end: LineNr, line_count: LineNr) -> c_int {
     match validate_range(start, end, line_count) {
         RangeValidation::Valid(_) => 0,
@@ -512,25 +498,21 @@ pub extern "C" fn rs_validate_range(start: LineNr, end: LineNr, line_count: Line
 }
 
 /// FFI export: Get RangeValidation::Valid code
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_range_valid() -> c_int {
     0
 }
 
 /// FFI export: Get RangeValidation::Empty code
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_range_error_empty() -> c_int {
     1
 }
 
 /// FFI export: Get RangeValidation::OutOfBounds code
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_range_error_out_of_bounds() -> c_int {
     2
 }
 
 /// FFI export: Get RangeValidation::NegativeLine code
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_range_error_negative() -> c_int {
     3
 }

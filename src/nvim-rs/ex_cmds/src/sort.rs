@@ -404,7 +404,6 @@ impl SortEntry {
 ///
 /// # Safety
 /// The `flags` pointer must be null or point to a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn rs_parse_sort_flags(flags: *const std::ffi::c_char) -> c_int {
     if flags.is_null() {
         return 0; // No flags = default
@@ -441,13 +440,11 @@ pub unsafe extern "C" fn rs_parse_sort_flags(flags: *const std::ffi::c_char) -> 
 }
 
 /// Check if a numeric mode is integer-based.
-#[no_mangle]
 pub extern "C" fn rs_sort_numeric_is_integer(mode: c_int) -> c_int {
     c_int::from(NumericMode::from_c(mode).is_integer())
 }
 
 /// Check if a numeric mode is float-based.
-#[no_mangle]
 pub extern "C" fn rs_sort_numeric_is_float(mode: c_int) -> c_int {
     c_int::from(NumericMode::from_c(mode).is_float())
 }

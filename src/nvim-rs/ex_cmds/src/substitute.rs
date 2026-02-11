@@ -339,7 +339,6 @@ impl MatchRange {
 ///
 /// # Safety
 /// The `flags` pointer must be null or point to a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn rs_parse_sub_flags(flags: *const std::ffi::c_char) -> c_int {
     if flags.is_null() {
         return 0; // No flags = default
@@ -384,7 +383,6 @@ pub unsafe extern "C" fn rs_parse_sub_flags(flags: *const std::ffi::c_char) -> c
 /// Check if a delimiter character is valid.
 ///
 /// Returns 1 if valid, 0 if invalid (alphanumeric).
-#[no_mangle]
 pub extern "C" fn rs_is_valid_delimiter(c: c_int) -> c_int {
     if !(0..=127).contains(&c) {
         return 0;

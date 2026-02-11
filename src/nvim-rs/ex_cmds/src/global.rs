@@ -342,103 +342,86 @@ impl IntoIterator for MarkedLines {
 /// Create a global type from bang flag.
 ///
 /// Returns 0 for normal global, 1 for vglobal.
-#[no_mangle]
 pub extern "C" fn rs_global_type_from_bang(has_bang: c_int) -> c_int {
     GlobalType::from_bang(has_bang != 0).to_c()
 }
 
 /// Check if a global type is inverted.
-#[no_mangle]
 pub extern "C" fn rs_global_type_is_inverted(global_type: c_int) -> c_int {
     c_int::from(GlobalType::from_c(global_type).is_inverted())
 }
 
 /// FFI export: Get GlobalType::Global constant
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_type_global() -> c_int {
     GlobalType::Global.to_c()
 }
 
 /// FFI export: Get GlobalType::VGlobal constant
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_type_vglobal() -> c_int {
     GlobalType::VGlobal.to_c()
 }
 
 /// FFI export: Create GlobalResult
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_result_new() -> GlobalResult {
     GlobalResult::new()
 }
 
 /// FFI export: Check if GlobalResult has matches
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_result_has_matches(matches: c_int) -> c_int {
     c_int::from(matches > 0)
 }
 
 /// FFI export: Create MarkedLine at start
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_marked_line_at_start(lnum: LineNr) -> MarkedLine {
     MarkedLine::at_start(lnum)
 }
 
 /// FFI export: Create MarkedLine with column
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_marked_line_new(lnum: LineNr, col: c_int) -> MarkedLine {
     MarkedLine::new(lnum, col)
 }
 
 /// FFI export: Get GlobalError::InvalidPattern code
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_error_invalid_pattern() -> c_int {
     0
 }
 
 /// FFI export: Get GlobalError::NoPreviousPattern code
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_error_no_previous_pattern() -> c_int {
     1
 }
 
 /// FFI export: Get GlobalError::InvalidDelimiter code
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_error_invalid_delimiter() -> c_int {
     2
 }
 
 /// FFI export: Get GlobalError::NestedGlobal code
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_error_nested() -> c_int {
     3
 }
 
 /// FFI export: Get GlobalError::Interrupted code
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_error_interrupted() -> c_int {
     4
 }
 
 /// FFI export: Get GlobalError::InvalidRange code
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_error_invalid_range() -> c_int {
     5
 }
 
 /// FFI export: Initialize GlobalState
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_state_is_busy(busy: c_int) -> c_int {
     c_int::from(busy != 0)
 }
 
 /// FFI export: Check if lines processed count is valid
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_has_processed_lines(lines_processed: c_int) -> c_int {
     c_int::from(lines_processed > 0)
 }
 
 /// FFI export: Check if lines executed count is valid
-#[unsafe(no_mangle)]
 pub extern "C" fn rs_global_has_executed_lines(lines_executed: c_int) -> c_int {
     c_int::from(lines_executed > 0)
 }

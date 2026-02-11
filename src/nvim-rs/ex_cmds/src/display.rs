@@ -280,13 +280,11 @@ impl LineNumberResult {
 /// Convert display mode from exarg flags.
 ///
 /// Returns 0 for print, 1 for number, 2 for list.
-#[no_mangle]
 pub extern "C" fn rs_display_mode_from_flags(flags: c_int) -> c_int {
     DisplayFlags::from_exflag(flags).display_mode().to_c()
 }
 
 /// Calculate width needed for line numbers.
-#[no_mangle]
 pub extern "C" fn rs_line_number_width(max_lnum: c_int) -> c_int {
     LineNumberFormat::width_for_max(max_lnum) as c_int
 }

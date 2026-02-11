@@ -102,6 +102,13 @@
 // Rust implementations
 extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
 
+// Phase 7 (Wave 2): Full command implementations in Rust
+extern void rs_ex_align(exarg_T *eap);
+extern void rs_ex_z(exarg_T *eap);
+extern void rs_ex_copy(linenr_T line1, linenr_T line2, linenr_T dest);
+extern void rs_do_ascii(exarg_T *eap);
+extern void rs_ex_change(exarg_T *eap);
+
 // Phase 6: Buffer operations from Rust
 extern int rs_buffer_action_from_raw(int value);
 extern int rs_buffer_action_removes_from_list(int action);
@@ -522,6 +529,126 @@ static bool write_should_update(int is_modified)
   return rs_should_write_update(is_modified) != 0;
 }
 
+// =============================================================================
+// ExArg accessor functions for Rust (Wave 2)
+// =============================================================================
+
+/// Get command index from exarg_T.
+int nvim_exarg_get_cmdidx(exarg_T *eap)
+{
+  return (int)eap->cmdidx;
+}
+
+/// Get argument string from exarg_T.
+const char *nvim_exarg_get_arg(exarg_T *eap)
+{
+  return eap->arg;
+}
+
+/// Get line1 from exarg_T.
+linenr_T nvim_exarg_get_line1(exarg_T *eap)
+{
+  return eap->line1;
+}
+
+/// Get line2 from exarg_T.
+linenr_T nvim_exarg_get_line2(exarg_T *eap)
+{
+  return eap->line2;
+}
+
+/// Get addr_count from exarg_T.
+int nvim_exarg_get_addr_count(exarg_T *eap)
+{
+  return eap->addr_count;
+}
+
+/// Get forceit from exarg_T.
+int nvim_exarg_get_forceit(exarg_T *eap)
+{
+  return eap->forceit ? 1 : 0;
+}
+
+/// Get skip flag from exarg_T.
+int nvim_exarg_get_skip(exarg_T *eap)
+{
+  return eap->skip ? 1 : 0;
+}
+
+/// Get flags (EXFLAG_*) from exarg_T.
+int nvim_exarg_get_flags(exarg_T *eap)
+{
+  return eap->flags;
+}
+
+/// Get regname from exarg_T.
+int nvim_exarg_get_regname(exarg_T *eap)
+{
+  return eap->regname;
+}
+
+/// Get append flag from exarg_T.
+int nvim_exarg_get_append(exarg_T *eap)
+{
+  return eap->append;
+}
+
+/// Get usefilter flag from exarg_T.
+int nvim_exarg_get_usefilter(exarg_T *eap)
+{
+  return eap->usefilter ? 1 : 0;
+}
+
+/// Get address type from exarg_T.
+int nvim_exarg_get_addr_type(exarg_T *eap)
+{
+  return (int)eap->addr_type;
+}
+
+/// Get curwin->w_p_rl (right-to-left flag).
+int nvim_curwin_get_w_p_rl(void)
+{
+  return curwin->w_p_rl;
+}
+
+/// Get curbuf->b_p_tw (textwidth).
+int nvim_curbuf_get_b_p_tw(void)
+{
+  return (int)curbuf->b_p_tw;
+}
+
+/// Get curbuf->b_p_wm (wrapmargin).
+int nvim_curbuf_get_b_p_wm(void)
+{
+  return (int)curbuf->b_p_wm;
+}
+
+/// Get curwin->w_view_width.
+int nvim_curwin_get_view_width(void)
+{
+  return curwin->w_view_width;
+}
+
+/// Set curwin->w_cursor.lnum.
+void nvim_curwin_set_cursor_lnum(linenr_T lnum)
+{
+  curwin->w_cursor.lnum = lnum;
+}
+
+/// Wrapper for linetabsize_col(0, s) since linetabsize_str is inline.
+int nvim_linetabsize_str(char *s)
+{
+  return linetabsize_col(0, s);
+}
+
+// Verify constants used in Rust code.
+_Static_assert(CMD_left == 229, "CMD_left mismatch");
+_Static_assert(CMD_center == 63, "CMD_center mismatch");
+_Static_assert(CMD_right == 372, "CMD_right mismatch");
+_Static_assert(BL_WHITE == 1, "BL_WHITE mismatch");
+_Static_assert(BL_FIX == 4, "BL_FIX mismatch");
+_Static_assert(TAB == '\011', "TAB mismatch");
+
 static const char e_non_numeric_argument_to_z[]
   = N_("E144: Non-numeric argument to :z");
 
@@ -619,116 +746,10 @@ void do_ascii(exarg_T *eap)
   msg_end();
 }
 
-/// ":left", ":center" and ":right": align text.
+/// ":left", ":center" and ":right": align text. Rust implementation.
 void ex_align(exarg_T *eap)
 {
-  int indent = 0;
-  int new_indent;
-
-  if (curwin->w_p_rl) {
-    // switch left and right aligning
-    if (eap->cmdidx == CMD_right) {
-      eap->cmdidx = CMD_left;
-    } else if (eap->cmdidx == CMD_left) {
-      eap->cmdidx = CMD_right;
-    }
-  }
-
-  int width = atoi(eap->arg);
-  pos_T save_curpos = curwin->w_cursor;
-  if (eap->cmdidx == CMD_left) {    // width is used for new indent
-    if (width >= 0) {
-      indent = width;
-    }
-  } else {
-    // if 'textwidth' set, use it
-    // else if 'wrapmargin' set, use it
-    // if invalid value, use 80
-    if (width <= 0) {
-      width = (int)curbuf->b_p_tw;
-    }
-    if (width == 0 && curbuf->b_p_wm > 0) {
-      width = curwin->w_view_width - (int)curbuf->b_p_wm;
-    }
-    if (width <= 0) {
-      width = 80;
-    }
-  }
-
-  if (u_save((linenr_T)(eap->line1 - 1), (linenr_T)(eap->line2 + 1)) == FAIL) {
-    return;
-  }
-
-  for (curwin->w_cursor.lnum = eap->line1;
-       curwin->w_cursor.lnum <= eap->line2; curwin->w_cursor.lnum++) {
-    if (eap->cmdidx == CMD_left) {              // left align
-      new_indent = indent;
-    } else {
-      int has_tab = false;          // avoid uninit warnings
-      int len = linelen(eap->cmdidx == CMD_right ? &has_tab : NULL) - get_indent();
-
-      if (len <= 0) {                           // skip blank lines
-        continue;
-      }
-
-      if (eap->cmdidx == CMD_center) {
-        new_indent = (width - len) / 2;
-      } else {
-        new_indent = width - len;               // right align
-
-        // Make sure that embedded TABs don't make the text go too far
-        // to the right.
-        if (has_tab) {
-          while (new_indent > 0) {
-            set_indent(new_indent, 0);
-            if (linelen(NULL) <= width) {
-              // Now try to move the line as much as possible to
-              // the right.  Stop when it moves too far.
-              do {
-                set_indent(++new_indent, 0);
-              } while (linelen(NULL) <= width);
-              new_indent--;
-              break;
-            }
-            new_indent--;
-          }
-        }
-      }
-    }
-    new_indent = MAX(new_indent, 0);
-    set_indent(new_indent, 0);                    // set indent
-  }
-  changed_lines(curbuf, eap->line1, 0, eap->line2 + 1, 0, true);
-  curwin->w_cursor = save_curpos;
-  beginline(BL_WHITE | BL_FIX);
-}
-
-/// @return  the length of the current line, excluding trailing white space.
-static int linelen(int *has_tab)
-{
-  char *last;
-
-  // Get the line.  If it's empty bail out early (could be the empty string
-  // for an unloaded buffer).
-  char *line = get_cursor_line_ptr();
-  if (*line == NUL) {
-    return 0;
-  }
-  // find the first non-blank character
-  char *first = skipwhite(line);
-
-  // find the character after the last non-blank character
-  for (last = first + strlen(first);
-       last > first && ascii_iswhite(last[-1]); last--) {}
-  char save = *last;
-  *last = NUL;
-  int len = linetabsize_str(line);  // Get line length.
-  if (has_tab != NULL) {        // Check for embedded TAB.
-    *has_tab = vim_strchr(first, TAB) != NULL;
-  }
-  *last = save;
-
-  return len;
+  rs_ex_align(eap);
 }
 
 // Buffer for two lines used during sorting.  They are allocated to

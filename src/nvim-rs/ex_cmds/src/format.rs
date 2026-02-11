@@ -11,9 +11,10 @@
 //! These commands modify whitespace and indentation in the buffer.
 //! The actual text modification is performed by Neovim's buffer functions.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::range::{LineNr, LineRange};
+use crate::ExArgHandle;
 
 // =============================================================================
 // Alignment Type
@@ -374,23 +375,202 @@ pub fn tabstop_padding(col: i32, tabstop: i32) -> i32 {
 }
 
 // =============================================================================
+// Command Index Constants (verified with _Static_assert in C)
+// =============================================================================
+
+const CMD_LEFT: c_int = 229;
+const CMD_CENTER: c_int = 63;
+const CMD_RIGHT: c_int = 372;
+
+/// BL_WHITE | BL_FIX for beginline()
+const BL_WHITE_FIX: c_int = 1 | 4; // BL_WHITE=1, BL_FIX=4
+
+/// TAB character (ASCII 9)
+const TAB: c_int = 9;
+
+// =============================================================================
+// Line Length Helper
+// =============================================================================
+
+/// Get the length of the current line, excluding trailing white space.
+///
+/// If `check_tab` is true, also checks for embedded TAB characters
+/// in the non-whitespace portion and returns the result.
+///
+/// Returns `(line_length, has_tab)`.
+///
+/// # Safety
+///
+/// Calls C functions that operate on the current buffer line.
+unsafe fn linelen(check_tab: bool) -> (c_int, bool) {
+    let line = crate::get_cursor_line_ptr();
+    if line.is_null() || *line == 0 {
+        return (0, false);
+    }
+
+    // Find the first non-blank character
+    let first = crate::skipwhite(line);
+
+    // Find the character after the last non-blank character
+    let first_len = libc::strlen(first as *const _);
+    let mut last = first.add(first_len) as *mut c_char;
+    while last > first as *mut c_char
+        && (*last.offset(-1) == b' ' as c_char || *last.offset(-1) == b'\t' as c_char)
+    {
+        last = last.offset(-1);
+    }
+
+    // Temporarily NUL-terminate at the last non-blank character
+    let save = *last;
+    *last = 0;
+    let len = crate::nvim_linetabsize_str(line);
+
+    // Check for embedded TAB
+    let has_tab = if check_tab {
+        !crate::vim_strchr(first, TAB).is_null()
+    } else {
+        false
+    };
+
+    *last = save;
+
+    (len, has_tab)
+}
+
+// =============================================================================
+// ex_align Implementation
+// =============================================================================
+
+/// `:left`, `:center`, `:right` — align text.
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to an `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_align(eap: *mut ExArgHandle) {
+    let mut cmdidx = crate::nvim_exarg_get_cmdidx(eap);
+
+    // Switch left and right aligning for right-to-left mode
+    if crate::nvim_curwin_get_w_p_rl() != 0 {
+        if cmdidx == CMD_RIGHT {
+            cmdidx = CMD_LEFT;
+        } else if cmdidx == CMD_LEFT {
+            cmdidx = CMD_RIGHT;
+        }
+    }
+
+    let arg = crate::nvim_exarg_get_arg(eap);
+    let width_arg = libc::atoi(arg);
+    let line1 = crate::nvim_exarg_get_line1(eap);
+    let line2 = crate::nvim_exarg_get_line2(eap);
+
+    // Save cursor position
+    let save_lnum = crate::nvim_curwin_get_cursor_lnum();
+
+    let mut indent = 0;
+    let mut width = width_arg;
+
+    if cmdidx == CMD_LEFT {
+        // width is used for new indent
+        if width >= 0 {
+            indent = width;
+        }
+    } else {
+        // if 'textwidth' set, use it
+        // else if 'wrapmargin' set, use it
+        // if invalid value, use 80
+        if width <= 0 {
+            width = crate::nvim_curbuf_get_b_p_tw();
+        }
+        if width == 0 && crate::nvim_curbuf_get_b_p_wm() > 0 {
+            width = crate::nvim_curwin_get_view_width() - crate::nvim_curbuf_get_b_p_wm();
+        }
+        if width <= 0 {
+            width = 80;
+        }
+    }
+
+    // Save undo
+    if crate::u_save(line1 - 1, line2 + 1) == 0 {
+        // FAIL == 0
+        return;
+    }
+
+    let mut lnum = line1;
+    while lnum <= line2 {
+        crate::nvim_curwin_set_cursor_lnum(lnum);
+
+        let mut new_indent;
+        if cmdidx == CMD_LEFT {
+            new_indent = indent;
+        } else {
+            let check_tab = cmdidx == CMD_RIGHT;
+            let (line_total_len, has_tab) = linelen(check_tab);
+            let len = line_total_len - crate::get_indent();
+
+            if len <= 0 {
+                // skip blank lines
+                lnum += 1;
+                continue;
+            }
+
+            if cmdidx == CMD_CENTER {
+                new_indent = (width - len) / 2;
+            } else {
+                // right align
+                new_indent = width - len;
+
+                // Make sure that embedded TABs don't make the text go too far
+                // to the right.
+                if has_tab {
+                    while new_indent > 0 {
+                        crate::set_indent(new_indent, 0);
+                        if linelen(false).0 <= width {
+                            // Now try to move the line as much as possible to
+                            // the right. Stop when it moves too far.
+                            loop {
+                                new_indent += 1;
+                                crate::set_indent(new_indent, 0);
+                                if linelen(false).0 > width {
+                                    break;
+                                }
+                            }
+                            new_indent -= 1;
+                            break;
+                        }
+                        new_indent -= 1;
+                    }
+                }
+            }
+        }
+
+        let new_indent = if new_indent < 0 { 0 } else { new_indent };
+        crate::set_indent(new_indent, 0);
+
+        lnum += 1;
+    }
+
+    let buf = crate::nvim_get_curbuf();
+    crate::changed_lines(buf, line1, 0, line2 + 1, 0, 1);
+    crate::nvim_curwin_set_cursor_lnum(save_lnum);
+    crate::beginline(BL_WHITE_FIX);
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
 /// Convert alignment type from C integer.
-#[no_mangle]
 pub extern "C" fn rs_alignment_from_c(value: c_int) -> c_int {
     Alignment::from_c(value).to_c()
 }
 
 /// Swap alignment for RTL mode.
-#[no_mangle]
 pub extern "C" fn rs_alignment_swap_rtl(alignment: c_int) -> c_int {
     Alignment::from_c(alignment).swap_for_rtl().to_c()
 }
 
 /// Calculate alignment indent.
-#[no_mangle]
 pub extern "C" fn rs_calculate_alignment_indent(
     alignment: c_int,
     width: c_int,
@@ -400,7 +580,6 @@ pub extern "C" fn rs_calculate_alignment_indent(
 }
 
 /// Calculate tab padding (spaces to next tabstop).
-#[no_mangle]
 pub extern "C" fn rs_tabstop_padding(col: c_int, tabstop: c_int) -> c_int {
     tabstop_padding(col, tabstop)
 }
@@ -539,6 +718,17 @@ mod tests {
         assert_eq!(tabstop_padding(0, 4), 4);
         assert_eq!(tabstop_padding(1, 4), 3);
         assert_eq!(tabstop_padding(4, 4), 4);
+    }
+
+    #[test]
+    fn test_cmd_constants() {
+        // These must match the values in ex_cmds_enum.generated.h
+        // (verified with _Static_assert in C)
+        assert_eq!(CMD_LEFT, 229);
+        assert_eq!(CMD_CENTER, 63);
+        assert_eq!(CMD_RIGHT, 372);
+        assert_eq!(BL_WHITE_FIX, 5); // BL_WHITE(1) | BL_FIX(4)
+        assert_eq!(TAB, 9);
     }
 
     #[test]

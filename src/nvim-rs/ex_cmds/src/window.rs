@@ -272,19 +272,16 @@ impl WinNavDirection {
 // =============================================================================
 
 /// FFI: Get split direction from raw value.
-#[no_mangle]
 pub extern "C" fn rs_split_direction_from_raw(value: c_int) -> c_int {
     SplitDirection::from_raw(value).to_raw()
 }
 
 /// FFI: Check if split direction is vertical.
-#[no_mangle]
 pub extern "C" fn rs_split_is_vertical(dir: c_int) -> c_int {
     c_int::from(SplitDirection::from_raw(dir).is_vertical())
 }
 
 /// FFI: Get split position from options.
-#[no_mangle]
 pub extern "C" fn rs_split_position_from_options(
     splitbelow: c_int,
     splitright: c_int,
@@ -294,7 +291,6 @@ pub extern "C" fn rs_split_position_from_options(
 }
 
 /// FFI: Calculate split size.
-#[no_mangle]
 pub extern "C" fn rs_calc_split_size(
     total_size: c_int,
     requested: c_int,
@@ -304,19 +300,16 @@ pub extern "C" fn rs_calc_split_size(
 }
 
 /// FFI: Check if split is possible.
-#[no_mangle]
 pub extern "C" fn rs_can_split(total_size: c_int, min_size: c_int) -> c_int {
     c_int::from(can_split(total_size, min_size))
 }
 
 /// FFI: Get close action from raw value.
-#[no_mangle]
 pub extern "C" fn rs_close_action_from_raw(value: c_int) -> c_int {
     CloseAction::from_raw(value).to_raw()
 }
 
 /// FFI: Check if window can be closed.
-#[no_mangle]
 pub extern "C" fn rs_can_close_window(
     is_last: c_int,
     is_last_tab: c_int,
@@ -334,31 +327,26 @@ pub extern "C" fn rs_can_close_window(
 }
 
 /// FFI: Check if :only can proceed.
-#[no_mangle]
 pub extern "C" fn rs_can_do_only(win_count: c_int, has_modified: c_int, force: c_int) -> c_int {
     c_int::from(can_do_only(win_count, has_modified != 0, force != 0))
 }
 
 /// FFI: Get window navigation direction from raw value.
-#[no_mangle]
 pub extern "C" fn rs_win_nav_from_raw(value: c_int) -> c_int {
     WinNavDirection::from_raw(value).to_raw()
 }
 
 /// FFI: Check if navigation direction is horizontal.
-#[no_mangle]
 pub extern "C" fn rs_win_nav_is_horizontal(dir: c_int) -> c_int {
     c_int::from(WinNavDirection::from_raw(dir).is_horizontal())
 }
 
 /// FFI: Get minimum window height.
-#[no_mangle]
 pub extern "C" fn rs_min_window_height() -> c_int {
     MIN_WINDOW_HEIGHT
 }
 
 /// FFI: Get minimum window width.
-#[no_mangle]
 pub extern "C" fn rs_min_window_width() -> c_int {
     MIN_WINDOW_WIDTH
 }

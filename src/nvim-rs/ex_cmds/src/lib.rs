@@ -391,6 +391,8 @@ impl BadCharBehavior {
 
 extern "C" {
     // ExArg accessors - these access fields of exarg_T from C
+    /// Get command index from exarg_T
+    pub fn nvim_exarg_get_cmdidx(eap: *mut ExArgHandle) -> c_int;
     /// Get the argument string from exarg_T
     pub fn nvim_exarg_get_arg(eap: *const ExArgHandle) -> *const c_char;
     /// Get line1 (first line number) from exarg_T
@@ -429,6 +431,49 @@ extern "C" {
     pub fn nvim_get_curwin() -> *mut WinHandle;
     /// Get cursor line number from window (1-based)
     pub fn nvim_win_get_cursor_lnum(win: *const WinHandle) -> c_int;
+
+    // Cursor/window option accessors
+    /// Get curwin->w_p_rl (right-to-left flag)
+    pub fn nvim_curwin_get_w_p_rl() -> c_int;
+    /// Get curbuf->b_p_tw (textwidth)
+    pub fn nvim_curbuf_get_b_p_tw() -> c_int;
+    /// Get curbuf->b_p_wm (wrapmargin)
+    pub fn nvim_curbuf_get_b_p_wm() -> c_int;
+    /// Get curwin->w_view_width
+    pub fn nvim_curwin_get_view_width() -> c_int;
+    /// Get curwin->w_cursor.lnum
+    pub fn nvim_curwin_get_cursor_lnum() -> c_int;
+    /// Set curwin->w_cursor.lnum
+    pub fn nvim_curwin_set_cursor_lnum(lnum: c_int);
+
+    // Buffer/undo operations
+    /// Save undo information for lines [top+1, bot-1]
+    pub fn u_save(top: c_int, bot: c_int) -> c_int;
+    /// Set line indentation
+    pub fn set_indent(size: c_int, flags: c_int) -> c_int;
+    /// Get current line indent
+    pub fn get_indent() -> c_int;
+    /// Get pointer to current cursor line
+    pub fn get_cursor_line_ptr() -> *mut c_char;
+    /// Notify that lines have changed
+    pub fn changed_lines(
+        buf: *mut BufHandle,
+        lnum: c_int,
+        col: c_int,
+        lnume: c_int,
+        xtra: c_int,
+        do_buf_event: c_int,
+    );
+    /// Move cursor to beginning of line
+    pub fn beginline(flags: c_int);
+    /// Skip whitespace in string
+    pub fn skipwhite(p: *const c_char) -> *const c_char;
+    /// Get visual line length from column 0
+    pub fn linetabsize_col(startvcol: c_int, s: *mut c_char) -> c_int;
+    /// Wrapper for linetabsize_str (inline in C)
+    pub fn nvim_linetabsize_str(s: *mut c_char) -> c_int;
+    /// Find character in string
+    pub fn vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
 }
 
 // =============================================================================

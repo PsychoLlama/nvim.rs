@@ -262,31 +262,26 @@ pub const fn can_unload_buffer(modified: bool, force: bool, hidden: bool) -> boo
 // =============================================================================
 
 /// FFI: Get buffer action from raw value.
-#[no_mangle]
 pub extern "C" fn rs_buffer_action_from_raw(value: c_int) -> c_int {
     BufferAction::from_raw(value).to_raw()
 }
 
 /// FFI: Check if action removes from list.
-#[no_mangle]
 pub extern "C" fn rs_buffer_action_removes_from_list(action: c_int) -> c_int {
     c_int::from(BufferAction::from_raw(action).removes_from_list())
 }
 
 /// FFI: Check if action is destructive.
-#[no_mangle]
 pub extern "C" fn rs_buffer_action_is_destructive(action: c_int) -> c_int {
     c_int::from(BufferAction::from_raw(action).is_destructive())
 }
 
 /// FFI: Get buffer navigation direction from raw value.
-#[no_mangle]
 pub extern "C" fn rs_buffer_nav_from_raw(value: c_int) -> c_int {
     BufferNavDirection::from_raw(value).to_raw()
 }
 
 /// FFI: Calculate next buffer number.
-#[no_mangle]
 pub extern "C" fn rs_calc_next_bufnr(
     current: c_int,
     count: c_int,
@@ -302,7 +297,6 @@ pub extern "C" fn rs_calc_next_bufnr(
 }
 
 /// FFI: Check if should block modified buffer.
-#[no_mangle]
 pub extern "C" fn rs_should_block_modified(action: c_int, force: c_int, modified: c_int) -> c_int {
     c_int::from(should_block_modified(
         BufferAction::from_raw(action),
@@ -312,7 +306,6 @@ pub extern "C" fn rs_should_block_modified(action: c_int, force: c_int, modified
 }
 
 /// FFI: Check if buffer can be unloaded.
-#[no_mangle]
 pub extern "C" fn rs_can_unload_buffer(modified: c_int, force: c_int, hidden: c_int) -> c_int {
     c_int::from(can_unload_buffer(modified != 0, force != 0, hidden != 0))
 }
@@ -321,7 +314,6 @@ pub extern "C" fn rs_can_unload_buffer(modified: c_int, force: c_int, hidden: c_
 ///
 /// # Safety
 /// `arg` must be a valid null-terminated string or null.
-#[no_mangle]
 pub unsafe extern "C" fn rs_parse_bufnr(arg: *const u8, len: c_int) -> c_int {
     if arg.is_null() || len <= 0 {
         return 0;
@@ -335,7 +327,6 @@ pub unsafe extern "C" fn rs_parse_bufnr(arg: *const u8, len: c_int) -> c_int {
 ///
 /// # Safety
 /// `arg` must be a valid null-terminated string or null.
-#[no_mangle]
 pub unsafe extern "C" fn rs_is_numeric_bufarg(arg: *const u8, len: c_int) -> c_int {
     if arg.is_null() || len <= 0 {
         return 0;

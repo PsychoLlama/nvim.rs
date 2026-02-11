@@ -410,7 +410,6 @@ pub fn count_shell_special(s: &str) -> usize {
 // =============================================================================
 
 /// Create shell flags from C integer.
-#[no_mangle]
 pub extern "C" fn rs_shell_flags_from_c(value: c_int) -> c_int {
     ShellFlags::from_c(value).to_c()
 }
@@ -422,7 +421,6 @@ pub extern "C" fn rs_shell_flags_from_c(value: c_int) -> c_int {
 /// # Safety
 ///
 /// `cmd` must be a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn rs_find_unescaped_bang(cmd: *const std::ffi::c_char) -> c_int {
     if cmd.is_null() {
         return -1;
@@ -441,7 +439,6 @@ pub unsafe extern "C" fn rs_find_unescaped_bang(cmd: *const std::ffi::c_char) ->
 }
 
 /// Check if shell escape is needed for a character.
-#[no_mangle]
 pub extern "C" fn rs_needs_shell_escape(c: c_int) -> c_int {
     if !(0..=127).contains(&c) {
         return 0;
