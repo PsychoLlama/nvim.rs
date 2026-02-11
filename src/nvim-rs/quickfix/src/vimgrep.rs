@@ -27,6 +27,8 @@ type ColnrT = c_int;
 
 /// Opaque handle to `qf_list_T`
 type QfListHandleMut = *mut c_void;
+/// Opaque handle to `qf_info_T` (mutable)
+type QfInfoHandleMut = *mut c_void;
 /// Opaque handle to `buf_T`
 type BufHandle = *mut c_void;
 /// Opaque handle to `win_T`
@@ -429,4 +431,164 @@ pub unsafe extern "C" fn rs_vgr_process_files(
 
     nvim_vgr_free_dirnames(dirname_start, dirname_now);
     status
+}
+
+// =============================================================================
+// ex_vimgrep migration
+// =============================================================================
+
+/// Opaque handle to `exarg_T`
+type EapHandle = *mut c_void;
+/// Opaque handle to `vgr_args_T`
+type VgrArgsHandle = *mut c_void;
+
+extern "C" {
+    // Phase 7 high-level wrappers
+    fn nvim_vgr_pre_check(eap: EapHandle) -> bool;
+    fn nvim_vgr_setup(
+        eap: EapHandle,
+        qi_out: *mut QfInfoHandleMut,
+        wp_out: *mut WinHandle,
+        args_out: *mut VgrArgsHandle,
+    ) -> bool;
+    fn nvim_vgr_args_get_fields(
+        args: VgrArgsHandle,
+        fcount: *mut c_int,
+        fnames: *mut *const *const c_char,
+        spat: *mut *const c_char,
+        regmatch: *mut RegmmatchHandle,
+        tomatch: *mut *mut c_int,
+        flags: *mut c_int,
+        qf_title: *mut *const c_char,
+    );
+    fn nvim_vgr_free_wild(args: VgrArgsHandle);
+    fn nvim_vgr_finalize_list(qi: QfInfoHandleMut);
+    fn nvim_vgr_post_autocmd(eap: EapHandle);
+    fn nvim_vgr_list_still_valid(wp: WinHandle, qi: QfInfoHandleMut, save_qfid: u32) -> bool;
+    fn nvim_vgr_jump_or_nomatch(
+        qi: QfInfoHandleMut,
+        eap: EapHandle,
+        redraw_for_dummy: *mut bool,
+        first_match_buf: BufHandle,
+        target_dir: *mut c_char,
+        flags: c_int,
+        spat: *const c_char,
+    );
+    fn nvim_incr_quickfix_busy();
+    fn nvim_decr_quickfix_busy();
+    fn nvim_vgr_foldUpdateAll_curwin();
+    fn nvim_vgr_cleanup_args(args: VgrArgsHandle);
+    fn nvim_xfree(ptr: *mut c_void);
+}
+
+/// `:vimgrep`, `:vimgrepadd`, `:lvimgrep`, `:lvimgrepadd` command.
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to an `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
+    if !nvim_vgr_pre_check(eap) {
+        return;
+    }
+
+    let mut qi: QfInfoHandleMut = std::ptr::null_mut();
+    let mut wp: WinHandle = std::ptr::null_mut();
+    let mut args: VgrArgsHandle = std::ptr::null_mut();
+    let mut target_dir: *mut c_char = std::ptr::null_mut();
+
+    // Setup: get stack, parse args, maybe create new list
+    if !nvim_vgr_setup(eap, &raw mut qi, &raw mut wp, &raw mut args) {
+        // vgr_process_args failed; args may be NULL, cleanup handles it
+        nvim_vgr_cleanup_args(args);
+        return;
+    }
+
+    // Extract fields from args
+    let mut fcount: c_int = 0;
+    let mut fnames: *const *const c_char = std::ptr::null();
+    let mut spat: *const c_char = std::ptr::null();
+    let mut regmatch: RegmmatchHandle = std::ptr::null_mut();
+    let mut tomatch: *mut c_int = std::ptr::null_mut();
+    let mut flags: c_int = 0;
+    let mut qf_title: *const c_char = std::ptr::null();
+    nvim_vgr_args_get_fields(
+        args,
+        &raw mut fcount,
+        &raw mut fnames,
+        &raw mut spat,
+        &raw mut regmatch,
+        &raw mut tomatch,
+        &raw mut flags,
+        &raw mut qf_title,
+    );
+
+    nvim_incr_quickfix_busy();
+
+    let mut redraw_for_dummy = false;
+    let mut first_match_buf: BufHandle = std::ptr::null_mut();
+    let status = rs_vgr_process_files(
+        wp,
+        qi,
+        fcount,
+        fnames,
+        spat,
+        regmatch,
+        tomatch,
+        flags,
+        qf_title,
+        &raw mut redraw_for_dummy,
+        &raw mut first_match_buf,
+        &raw mut target_dir,
+    );
+
+    if status != OK {
+        nvim_vgr_free_wild(args);
+        nvim_decr_quickfix_busy();
+        // theend
+        nvim_vgr_cleanup_args(args);
+        nvim_xfree(target_dir.cast());
+        return;
+    }
+
+    nvim_vgr_free_wild(args);
+
+    // Finalize list
+    nvim_vgr_finalize_list(qi);
+
+    // Remember current qfid for validation after autocmd
+    let save_qfid = nvim_qf_get_id(nvim_qf_get_curlist(qi));
+
+    // Apply QuickFixCmdPost autocmd
+    nvim_vgr_post_autocmd(eap);
+
+    // Check if list is still valid after autocmd
+    if !nvim_vgr_list_still_valid(wp, qi, save_qfid) {
+        nvim_decr_quickfix_busy();
+        // theend
+        nvim_vgr_cleanup_args(args);
+        nvim_xfree(target_dir.cast());
+        return;
+    }
+
+    // Jump to first match or show nomatch error
+    nvim_vgr_jump_or_nomatch(
+        qi,
+        eap,
+        &raw mut redraw_for_dummy,
+        first_match_buf,
+        target_dir,
+        flags,
+        spat,
+    );
+
+    nvim_decr_quickfix_busy();
+
+    if redraw_for_dummy {
+        nvim_vgr_foldUpdateAll_curwin();
+    }
+
+    // theend cleanup
+    nvim_vgr_cleanup_args(args);
+    nvim_xfree(target_dir.cast());
 }
