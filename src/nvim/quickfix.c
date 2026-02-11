@@ -827,6 +827,11 @@ extern int rs_qf_add_entries(void *qi, int qf_idx, void *list, char *title, int 
 // Display functions
 extern void rs_qf_fill_buffer(void *qfl, void *buf, void *old_last, int qf_winid);
 
+// Init functions
+extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
+                           void *tv, char *errorformat, bool newlist, linenr_T lnumfirst,
+                           linenr_T lnumlast, const char *qf_title, char *enc);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -3015,6 +3020,145 @@ static void qf_cleanup_state(qfstate_T *pstate)
   }
 }
 
+// =============================================================================
+// Phase 4: qf_init_ext accessor functions for Rust
+// =============================================================================
+
+/// Allocate a qffields_T and return it as an opaque handle.
+void *nvim_qf_init_alloc_fields(void)
+{
+  qffields_T *pfields = xcalloc(1, sizeof(qffields_T));
+  qf_alloc_fields(pfields);
+  return pfields;
+}
+
+/// Free a qffields_T allocated by nvim_qf_init_alloc_fields.
+void nvim_qf_init_free_fields(void *fields_void)
+{
+  if (fields_void == NULL) {
+    return;
+  }
+  qffields_T *pfields = (qffields_T *)fields_void;
+  qf_free_fields(pfields);
+  xfree(pfields);
+}
+
+/// Allocate and setup a qfstate_T. Returns NULL on failure.
+void *nvim_qf_init_setup_state(char *enc, const char *efile, void *tv_void,
+                                void *buf_void, linenr_T lnumfirst, linenr_T lnumlast)
+{
+  qfstate_T *pstate = xcalloc(1, sizeof(qfstate_T));
+  if (qf_setup_state(pstate, enc, efile, (typval_T *)tv_void,
+                     (buf_T *)buf_void, lnumfirst, lnumlast) == FAIL) {
+    xfree(pstate);
+    return NULL;
+  }
+  return pstate;
+}
+
+/// Cleanup and free a qfstate_T.
+void nvim_qf_init_cleanup_state(void *state_void)
+{
+  if (state_void == NULL) {
+    return;
+  }
+  qf_cleanup_state((qfstate_T *)state_void);
+  xfree(state_void);
+}
+
+/// Clear the qf_last_bufname cache.
+void nvim_qf_init_clear_last_bufname(void)
+{
+  XFREE_CLEAR(qf_last_bufname);
+}
+
+/// Resolve the effective errorformat string.
+/// If errorformat == p_efm and tv is NULL and buf has a local 'efm', use that.
+/// Otherwise use the provided errorformat.
+/// Returns the efm string to use (NOT a copy - do not free).
+char *nvim_qf_init_resolve_efm(char *errorformat, void *tv_void, void *buf_void)
+{
+  typval_T *tv = (typval_T *)tv_void;
+  buf_T *buf = (buf_T *)buf_void;
+  if (errorformat == p_efm && tv == NULL && buf && *buf->b_p_efm != NUL) {
+    return buf->b_p_efm;
+  }
+  return errorformat;
+}
+
+/// Update the cached efm parsing. Returns the parsed format list (opaque handle).
+/// Manages static local cache: only re-parses if efm changed.
+/// Returns NULL if parsing failed.
+static efm_T *s_fmt_first = NULL;
+static char *s_last_efm = NULL;
+
+void *nvim_qf_init_update_efm_cache(char *efm)
+{
+  if (s_last_efm == NULL || (strcmp(s_last_efm, efm) != 0)) {
+    XFREE_CLEAR(s_last_efm);
+    free_efm_list(&s_fmt_first);
+    s_fmt_first = parse_efm_option(efm);
+    if (s_fmt_first != NULL) {
+      s_last_efm = xstrdup(efm);
+    }
+  }
+  return s_fmt_first;
+}
+
+/// Process one line during qf_init. Returns QF_OK, QF_END_OF_INPUT, or QF_FAIL.
+int nvim_qf_init_process_nextline(void *qfl_void, void *fmt_first_void,
+                                   void *state_void, void *fields_void)
+{
+  return qf_init_process_nextline((qf_list_T *)qfl_void, (efm_T *)fmt_first_void,
+                                  (qfstate_T *)state_void, (qffields_T *)fields_void);
+}
+
+/// Check if state had no file error (fd == NULL or no ferror).
+/// Returns true if there was NO file error (success path).
+bool nvim_qf_init_state_no_fd_error(void *state_void)
+{
+  qfstate_T *pstate = (qfstate_T *)state_void;
+  return pstate->fd == NULL || !ferror(pstate->fd);
+}
+
+/// Finalize a quickfix list after successful parsing.
+/// Sets qf_ptr, qf_index, and qf_nonevalid based on whether valid entries exist.
+void nvim_qf_init_finalize_list(void *qfl_void)
+{
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  if (qfl->qf_index == 0) {
+    // no valid entry found
+    qfl->qf_ptr = qfl->qf_start;
+    qfl->qf_index = 1;
+    qfl->qf_nonevalid = true;
+  } else {
+    qfl->qf_nonevalid = false;
+    if (qfl->qf_ptr == NULL) {
+      qfl->qf_ptr = qfl->qf_start;
+    }
+  }
+}
+
+/// Emit "Error while reading errorfile" message.
+void nvim_qf_init_emsg_readerrf(void)
+{
+  emsg(_(e_readerrf));
+}
+
+/// Handle error cleanup: free the new list and adjust listcount/curlist.
+void nvim_qf_init_error_cleanup(void *qi_void, void *qfl_void)
+{
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  qf_free((qf_list_T *)qfl_void);
+  qi->qf_listcount--;
+  if (qi->qf_curlist > 0) {
+    qi->qf_curlist--;
+  }
+}
+
+_Static_assert(QF_END_OF_INPUT == 2, "QF_END_OF_INPUT must be 2");
+_Static_assert(QF_FAIL == 0, "QF_FAIL must be 0");
+
 /// Read the errorfile "efile" into memory, line by line, building the error
 /// list.
 /// Alternative: when "efile" is NULL read errors from buffer "buf".
@@ -3033,111 +3177,8 @@ static int qf_init_ext(qf_info_T *qi, int qf_idx, const char *restrict efile, bu
                        linenr_T lnumlast, const char *restrict qf_title, char *restrict enc)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  qfstate_T state = { 0 };
-  qffields_T fields = { 0 };
-  qfline_T *old_last = NULL;
-  static efm_T *fmt_first = NULL;
-  static char *last_efm = NULL;
-  int retval = -1;                      // default: return error flag
-
-  // Do not used the cached buffer, it may have been wiped out.
-  XFREE_CLEAR(qf_last_bufname);
-
-  qf_alloc_fields(&fields);
-  if (qf_setup_state(&state, enc, efile, tv, buf, lnumfirst, lnumlast) == FAIL) {
-    goto qf_init_end;
-  }
-
-  qf_list_T *qfl;
-  bool adding = false;
-  if (newlist || qf_idx == qi->qf_listcount) {
-    // make place for a new list
-    qf_new_list(qi, qf_title);
-    qf_idx = qi->qf_curlist;
-    qfl = qf_get_list(qi, qf_idx);
-  } else {
-    // Adding to existing list, use last entry.
-    adding = true;
-    qfl = qf_get_list(qi, qf_idx);
-    if (!qf_list_empty(qfl)) {
-      old_last = qfl->qf_last;
-    }
-  }
-
-  // Use the local value of 'errorformat' if it's set.
-  char *efm = (errorformat == p_efm && tv == NULL && buf && *buf->b_p_efm != NUL)
-              ? buf->b_p_efm
-              : errorformat;
-
-  // If the errorformat didn't change between calls, then reuse the previously
-  // parsed values.
-  if (last_efm == NULL || (strcmp(last_efm, efm) != 0)) {
-    // free the previously parsed data
-    XFREE_CLEAR(last_efm);
-    free_efm_list(&fmt_first);
-
-    // parse the current 'efm'
-    fmt_first = parse_efm_option(efm);
-    if (fmt_first != NULL) {
-      last_efm = xstrdup(efm);
-    }
-  }
-
-  if (fmt_first == NULL) {      // nothing found
-    goto error2;
-  }
-
-  // got_int is reset here, because it was probably set when killing the
-  // ":make" command, but we still want to read the errorfile then.
-  got_int = false;
-
-  // Read the lines in the error file one by one.
-  // Try to recognize one of the error formats in each line.
-  while (!got_int) {
-    int status = qf_init_process_nextline(qfl, fmt_first, &state, &fields);
-    if (status == QF_END_OF_INPUT) {  // end of input
-      break;
-    }
-    if (status == QF_FAIL) {
-      goto error2;
-    }
-
-    line_breakcheck();
-  }
-  if (state.fd == NULL || !ferror(state.fd)) {
-    if (qfl->qf_index == 0) {
-      // no valid entry found
-      qfl->qf_ptr = qfl->qf_start;
-      qfl->qf_index = 1;
-      qfl->qf_nonevalid = true;
-    } else {
-      qfl->qf_nonevalid = false;
-      if (qfl->qf_ptr == NULL) {
-        qfl->qf_ptr = qfl->qf_start;
-      }
-    }
-    // return number of matches
-    retval = qfl->qf_count;
-    goto qf_init_end;
-  }
-  emsg(_(e_readerrf));
-error2:
-  if (!adding) {
-    // Error when creating a new list. Free the new list
-    qf_free(qfl);
-    qi->qf_listcount--;
-    if (qi->qf_curlist > 0) {
-      qi->qf_curlist--;
-    }
-  }
-qf_init_end:
-  if (qf_idx == qi->qf_curlist) {
-    qf_update_buffer(qi, old_last);
-  }
-  qf_cleanup_state(&state);
-  qf_free_fields(&fields);
-
-  return retval;
+  return rs_qf_init_ext(qi, qf_idx, efile, buf, tv, errorformat, newlist, lnumfirst,
+                        lnumlast, qf_title, enc);
 }
 
 /// Set the title of the specified quickfix list. Frees the previous title.

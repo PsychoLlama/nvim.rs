@@ -294,6 +294,184 @@ pub extern "C" fn rs_qf_init_should_create_list(options: &QfInitOptions) -> bool
 }
 
 // =============================================================================
+// qf_init_ext migration
+// =============================================================================
+
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+mod init_ext {
+    use std::ffi::{c_char, c_int, c_void};
+
+    type LinenrT = i32;
+
+    /// Opaque handles — must match signatures in lib.rs
+    type QfInfoHandle = *const c_void;
+    type QfInfoHandleMut = *mut c_void;
+    type QfListHandle = *const c_void;
+    type QfListHandleMut = *mut c_void;
+    type QfLineHandle = *const c_void;
+    type BufHandle = *mut c_void;
+    type TvHandle = *mut c_void;
+    type StateHandle = *mut c_void;
+    type FieldsHandle = *mut c_void;
+    type EfmHandle = *mut c_void;
+
+    const QF_END_OF_INPUT: c_int = 2;
+    const QF_FAIL: c_int = 0;
+
+    extern "C" {
+        // Existing accessors (signatures must match lib.rs)
+        fn nvim_qf_get_listcount(qi: QfInfoHandle) -> c_int;
+        fn nvim_qf_get_curlist_idx(qi: QfInfoHandle) -> c_int;
+        fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
+        fn nvim_qf_get_count(qfl: QfListHandle) -> c_int;
+        fn nvim_qf_get_last(qfl: QfListHandle) -> QfLineHandle;
+        fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
+
+        // Existing Rust functions called via FFI
+        fn rs_qf_new_list(qi: QfInfoHandleMut, title: *const c_char);
+        fn rs_qf_list_empty(qfl: *const c_void) -> bool;
+
+        // Globals
+        fn nvim_get_got_int() -> c_int;
+        fn nvim_set_got_int(val: c_int);
+        fn nvim_line_breakcheck();
+
+        // New Phase 4 accessors
+        fn nvim_qf_init_alloc_fields() -> FieldsHandle;
+        fn nvim_qf_init_free_fields(fields: FieldsHandle);
+        fn nvim_qf_init_setup_state(
+            enc: *mut c_char,
+            efile: *const c_char,
+            tv: TvHandle,
+            buf: BufHandle,
+            lnumfirst: LinenrT,
+            lnumlast: LinenrT,
+        ) -> StateHandle;
+        fn nvim_qf_init_cleanup_state(state: StateHandle);
+        fn nvim_qf_init_clear_last_bufname();
+        fn nvim_qf_init_resolve_efm(
+            errorformat: *mut c_char,
+            tv: TvHandle,
+            buf: BufHandle,
+        ) -> *mut c_char;
+        fn nvim_qf_init_update_efm_cache(efm: *mut c_char) -> EfmHandle;
+        fn nvim_qf_init_process_nextline(
+            qfl: QfListHandleMut,
+            fmt_first: EfmHandle,
+            state: StateHandle,
+            fields: FieldsHandle,
+        ) -> c_int;
+        fn nvim_qf_init_state_no_fd_error(state: StateHandle) -> bool;
+        fn nvim_qf_init_finalize_list(qfl: QfListHandleMut);
+        fn nvim_qf_init_emsg_readerrf();
+        fn nvim_qf_init_error_cleanup(qi: QfInfoHandleMut, qfl: QfListHandleMut);
+    }
+
+    /// Initialize quickfix list from error file/buffer/string/list.
+    ///
+    /// # Safety
+    ///
+    /// All pointer parameters must be valid or NULL as documented.
+    #[no_mangle]
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe extern "C" fn rs_qf_init_ext(
+        qi: QfInfoHandleMut,
+        mut qf_idx: c_int,
+        efile: *const c_char,
+        buf: BufHandle,
+        tv: TvHandle,
+        errorformat: *mut c_char,
+        newlist: bool,
+        lnumfirst: LinenrT,
+        lnumlast: LinenrT,
+        qf_title: *const c_char,
+        enc: *mut c_char,
+    ) -> c_int {
+        // Do not use the cached buffer, it may have been wiped out.
+        nvim_qf_init_clear_last_bufname();
+
+        let fields = nvim_qf_init_alloc_fields();
+        let state = nvim_qf_init_setup_state(enc, efile, tv, buf, lnumfirst, lnumlast);
+
+        // Tracks whether we need to run the error2 cleanup path.
+        let mut adding = false;
+        let mut qfl: QfListHandleMut = std::ptr::null_mut();
+        let mut old_last: QfLineHandle = std::ptr::null();
+
+        // Main logic: labeled block replaces C goto error2/qf_init_end.
+        let retval = 'init: {
+            if state.is_null() {
+                break 'init -1;
+            }
+
+            if newlist || qf_idx == nvim_qf_get_listcount(qi) {
+                // Make place for a new list
+                rs_qf_new_list(qi, qf_title);
+                qf_idx = nvim_qf_get_curlist_idx(qi);
+                qfl = nvim_qf_get_list_at_mut(qi, qf_idx);
+            } else {
+                // Adding to existing list, use last entry.
+                adding = true;
+                qfl = nvim_qf_get_list_at_mut(qi, qf_idx);
+                if !rs_qf_list_empty(qfl) {
+                    old_last = nvim_qf_get_last(qfl);
+                }
+            }
+
+            // Resolve the effective errorformat.
+            let efm = nvim_qf_init_resolve_efm(errorformat, tv, buf);
+
+            // Update the cached efm parsing.
+            let fmt_first = nvim_qf_init_update_efm_cache(efm);
+            if fmt_first.is_null() {
+                break 'init -1; // error2 path
+            }
+
+            // got_int is reset here, because it was probably set when killing
+            // the ":make" command, but we still want to read the errorfile then.
+            nvim_set_got_int(0);
+
+            // Read the lines in the error file one by one.
+            // Try to recognize one of the error formats in each line.
+            while nvim_get_got_int() == 0 {
+                let status = nvim_qf_init_process_nextline(qfl, fmt_first, state, fields);
+                if status == QF_END_OF_INPUT {
+                    break;
+                }
+                if status == QF_FAIL {
+                    break 'init -1; // error2 path
+                }
+                nvim_line_breakcheck();
+            }
+
+            if nvim_qf_init_state_no_fd_error(state) {
+                nvim_qf_init_finalize_list(qfl);
+                nvim_qf_get_count(qfl) // success: return number of matches
+            } else {
+                nvim_qf_init_emsg_readerrf();
+                -1 // error2 path
+            }
+        };
+
+        // error2: free the new list on error if we weren't appending
+        if retval == -1 && !adding && !qfl.is_null() {
+            nvim_qf_init_error_cleanup(qi, qfl);
+        }
+
+        // qf_init_end: always-run cleanup
+        if qf_idx == nvim_qf_get_curlist_idx(qi) {
+            nvim_qf_update_buffer(qi, old_last);
+        }
+        nvim_qf_init_cleanup_state(state);
+        nvim_qf_init_free_fields(fields);
+
+        retval
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
