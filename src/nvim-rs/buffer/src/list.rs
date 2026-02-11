@@ -11,7 +11,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(dead_code)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::BufHandle;
 
@@ -28,6 +28,23 @@ extern "C" {
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_buf_get_changedtick(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
+
+    // Phase 2 accessors
+    fn nvim_curwin_get_alt_fnum() -> c_int;
+    fn nvim_handle_get_buffer(handle: c_int) -> BufHandle;
+    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
+    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
+    fn nvim_home_replace_save(buf: BufHandle, src: *const c_char) -> *mut c_char;
+    fn nvim_FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
+    fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
+    fn nvim_os_fileid(path: *const c_char, file_id_out: *mut u8) -> bool;
+    fn nvim_otherfile_buf(
+        buf: BufHandle,
+        ffname: *const c_char,
+        file_id_p: *const u8,
+        file_id_valid: bool,
+    ) -> bool;
+    fn xfree(ptr: *mut c_void);
 }
 
 // =============================================================================
@@ -435,6 +452,108 @@ pub unsafe extern "C" fn rs_buf_navigate_n(buf: BufHandle, dir: c_int, count: c_
         return buf;
     }
     navigate_buf_n(buf, Direction::from_raw(dir), count as usize)
+}
+
+// =============================================================================
+// Buffer Lookup (Phase 2: Wave 2)
+// =============================================================================
+
+/// `BF_DUMMY` flag — dummy buffer used for preview, etc.
+const BF_DUMMY: c_int = 0x80;
+
+/// Maximum size for an opaque `FileID` buffer.
+const FILE_ID_SIZE: usize = 16;
+
+/// Find a file in the buffer list by buffer number.
+///
+/// If `nr` is 0, uses the alternate file number for the current window.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_buflist_findnr(nr: c_int) -> BufHandle {
+    let nr = if nr == 0 {
+        nvim_curwin_get_alt_fnum()
+    } else {
+        nr
+    };
+    nvim_handle_get_buffer(nr)
+}
+
+/// Get name of file 'n' in the buffer list.
+///
+/// Returns an allocated string (caller must free with `xfree`) or NULL.
+/// Uses `home_replace_save()` to shorten the file name.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_buflist_nr2name(
+    n: c_int,
+    fullname: c_int,
+    helptail: c_int,
+) -> *mut c_char {
+    let buf = rs_buflist_findnr(n);
+    if buf.is_null() {
+        return std::ptr::null_mut();
+    }
+    let src = if fullname != 0 {
+        nvim_buf_get_b_ffname(buf)
+    } else {
+        nvim_buf_get_b_fname(buf)
+    };
+    let help_buf = if helptail != 0 {
+        buf
+    } else {
+        BufHandle(std::ptr::null_mut())
+    };
+    nvim_home_replace_save(help_buf, src)
+}
+
+/// Internal: find buffer by name and `file_id`, iterating backwards.
+///
+/// Skips dummy buffers. Returns NULL if not found.
+unsafe fn buflist_findname_file_id_impl(
+    ffname: *const c_char,
+    file_id: *const u8,
+    file_id_valid: bool,
+) -> BufHandle {
+    let mut buf = nvim_get_lastbuf();
+    while !buf.is_null() {
+        let flags = nvim_buf_get_flags(buf);
+        if (flags & BF_DUMMY) == 0 && !nvim_otherfile_buf(buf, ffname, file_id, file_id_valid) {
+            return buf;
+        }
+        buf = nvim_buf_get_prev(buf);
+    }
+    BufHandle(std::ptr::null_mut())
+}
+
+/// Find file in buffer list by name (full path).
+///
+/// Gets the `file_id` and delegates to the internal `file_id` lookup.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_buflist_findname(ffname: *mut c_char) -> BufHandle {
+    if ffname.is_null() {
+        return BufHandle(std::ptr::null_mut());
+    }
+    let mut file_id = [0u8; FILE_ID_SIZE];
+    let file_id_valid = nvim_os_fileid(ffname, file_id.as_mut_ptr());
+    buflist_findname_file_id_impl(ffname, file_id.as_ptr(), file_id_valid)
+}
+
+/// Find file in buffer list by name, expanding to full path first.
+///
+/// On Unix, forces expansion to resolve symbolic links.
+#[allow(clippy::similar_names)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_buflist_findname_exp(fname: *mut c_char) -> BufHandle {
+    if fname.is_null() {
+        return BufHandle(std::ptr::null_mut());
+    }
+    // On Unix, force expansion to resolve symbolic links
+    let force = cfg!(unix);
+    let ffname = nvim_FullName_save(fname, force);
+    if ffname.is_null() {
+        return BufHandle(std::ptr::null_mut());
+    }
+    let buf = rs_buflist_findname(ffname);
+    xfree(ffname.cast());
+    buf
 }
 
 // =============================================================================

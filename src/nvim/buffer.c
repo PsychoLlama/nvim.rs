@@ -160,6 +160,12 @@ extern void rs_buf_clear_file(buf_T *buf);
 extern void rs_buf_inc_changedtick(buf_T *buf);
 extern void rs_wipe_buffer(buf_T *buf, bool aucmd);
 
+// Phase 2 (Wave 2): buffer lookup functions from Rust
+extern buf_T *rs_buflist_findnr(int nr);
+extern char *rs_buflist_nr2name(int n, int fullname, int helptail);
+extern buf_T *rs_buflist_findname(char *ffname);
+extern buf_T *rs_buflist_findname_exp(char *fname);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
 
@@ -720,6 +726,35 @@ void nvim_buf_set_p_bomb(buf_T *buf, int val)
 void nvim_buf_set_start_bomb(buf_T *buf, int val)
 {
   buf->b_start_bomb = val;
+}
+
+// Phase 2 accessor functions for buffer lookup helpers.
+
+/// Get alternate file number for the current window (accessor for Rust).
+int nvim_curwin_get_alt_fnum(void)
+{
+  return curwin->w_alt_fnum;
+}
+
+/// Look up a buffer by handle number (accessor for Rust).
+buf_T *nvim_handle_get_buffer(handle_T handle)
+{
+  return handle_get_buffer(handle);
+}
+
+// nvim_FullName_save already defined in undo.c
+
+/// Home-replace a filename, returning an allocated string (accessor for Rust).
+char *nvim_home_replace_save(buf_T *buf, const char *src)
+{
+  return home_replace_save(buf, src);
+}
+
+/// Check if filename differs from buffer's file (4-arg version, accessor for Rust).
+/// file_id_p may be NULL to trigger a new os_fileid call.
+bool nvim_otherfile_buf(buf_T *buf, char *ffname, void *file_id_p, bool file_id_valid)
+{
+  return otherfile_buf(buf, ffname, (FileID *)file_id_p, file_id_valid);
 }
 
 // Static assertions for constants used in Rust (Phase 1).
@@ -2826,22 +2861,7 @@ static void buflist_getfpos(void)
 /// @return  buffer or NULL if not found
 buf_T *buflist_findname_exp(char *fname)
 {
-  buf_T *buf = NULL;
-
-  // First make the name into a full path name
-  char *ffname = FullName_save(fname,
-#ifdef UNIX
-                               // force expansion, get rid of symbolic links
-                               true
-#else
-                               false
-#endif
-                               );
-  if (ffname != NULL) {
-    buf = buflist_findname(ffname);
-    xfree(ffname);
-  }
-  return buf;
+  return rs_buflist_findname_exp(fname);
 }
 
 /// Find file in buffer list by name (it has to be for the current window).
@@ -2851,9 +2871,7 @@ buf_T *buflist_findname_exp(char *fname)
 /// @return  buffer or NULL if not found
 buf_T *buflist_findname(char *ffname)
 {
-  FileID file_id;
-  bool file_id_valid = os_fileid(ffname, &file_id);
-  return buflist_findname_file_id(ffname, &file_id, file_id_valid);
+  return rs_buflist_findname(ffname);
 }
 
 /// Same as buflist_findname(), but pass the FileID structure to avoid
@@ -2863,6 +2881,7 @@ buf_T *buflist_findname(char *ffname)
 static buf_T *buflist_findname_file_id(char *ffname, FileID *file_id, bool file_id_valid)
   FUNC_ATTR_PURE
 {
+  // Delegate to the 4-arg otherfile_buf wrapper via backward buffer iteration.
   // Start at the last buffer, expect to find a match sooner.
   FOR_ALL_BUFFERS_BACKWARDS(buf) {
     if ((buf->b_flags & BF_DUMMY) == 0
@@ -3205,11 +3224,7 @@ static char *fname_match(regmatch_T *rmp, char *name, bool ignore_case)
 /// Find a file in the buffer list by buffer number.
 buf_T *buflist_findnr(int nr)
 {
-  if (nr == 0) {
-    nr = curwin->w_alt_fnum;
-  }
-
-  return handle_get_buffer((handle_T)nr);
+  return rs_buflist_findnr(nr);
 }
 
 /// Get name of file 'n' in the buffer list.
@@ -3221,12 +3236,7 @@ buf_T *buflist_findnr(int nr)
 /// @return  a pointer to allocated memory, of NULL when failed.
 char *buflist_nr2name(int n, int fullname, int helptail)
 {
-  buf_T *buf = buflist_findnr(n);
-  if (buf == NULL) {
-    return NULL;
-  }
-  return home_replace_save(helptail ? buf : NULL,
-                           fullname ? buf->b_ffname : buf->b_fname);
+  return rs_buflist_nr2name(n, fullname, helptail);
 }
 
 /// Set the line and column numbers for the given buffer and window
