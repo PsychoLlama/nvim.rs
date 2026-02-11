@@ -148,6 +148,8 @@ extern int rs_get_cmd_default_range(void *eap);
 extern void rs_set_cmd_dflall_range(void *eap);
 extern char *rs_invalid_range(void *eap);
 extern int rs_get_tabpage_arg(void *eap);
+extern int rs_parse_command_modifiers(exarg_T *eap, const char **errormsg, cmdmod_T *cmod,
+                                      bool skip_only);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -2287,246 +2289,7 @@ static char *ex_range_without_command(exarg_T *eap)
 /// @return  FAIL when the command is not to be executed.
 int parse_command_modifiers(exarg_T *eap, const char **errormsg, cmdmod_T *cmod, bool skip_only)
 {
-  CLEAR_POINTER(cmod);
-
-  // Repeat until no more command modifiers are found.
-  while (true) {
-    while (*eap->cmd == ' '
-           || *eap->cmd == '\t'
-           || *eap->cmd == ':') {
-      eap->cmd++;
-    }
-
-    // in ex mode, an empty line works like :+
-    if (*eap->cmd == NUL && exmode_active
-        && getline_equal(eap->ea_getline, eap->cookie, getexline)
-        && curwin->w_cursor.lnum < curbuf->b_ml.ml_line_count) {
-      eap->cmd = exmode_plus;
-      if (!skip_only) {
-        ex_pressedreturn = true;
-      }
-    }
-
-    // ignore comment and empty lines
-    if (*eap->cmd == '"') {
-      // a comment ends at a NL
-      eap->nextcmd = vim_strchr(eap->cmd, '\n');
-      if (eap->nextcmd != NULL) {
-        eap->nextcmd++;
-      }
-      return FAIL;
-    }
-    if (*eap->cmd == '\n') {
-      eap->nextcmd = eap->cmd + 1;
-      return FAIL;
-    }
-    if (*eap->cmd == NUL) {
-      if (!skip_only) {
-        ex_pressedreturn = true;
-      }
-      return FAIL;
-    }
-
-    char *p = skip_range(eap->cmd, NULL);
-    switch (*p) {
-    // When adding an entry, also modify cmdmods[]
-    case 'a':
-      if (!checkforcmd(&eap->cmd, "aboveleft", 3)) {
-        break;
-      }
-      cmod->cmod_split |= WSP_ABOVE;
-      continue;
-
-    case 'b':
-      if (checkforcmd(&eap->cmd, "belowright", 3)) {
-        cmod->cmod_split |= WSP_BELOW;
-        continue;
-      }
-      if (checkforcmd(&eap->cmd, "browse", 3)) {
-        cmod->cmod_flags |= CMOD_BROWSE;
-        continue;
-      }
-      if (!checkforcmd(&eap->cmd, "botright", 2)) {
-        break;
-      }
-      cmod->cmod_split |= WSP_BOT;
-      continue;
-
-    case 'c':
-      if (!checkforcmd(&eap->cmd, "confirm", 4)) {
-        break;
-      }
-      cmod->cmod_flags |= CMOD_CONFIRM;
-      continue;
-
-    case 'k':
-      if (checkforcmd(&eap->cmd, "keepmarks", 3)) {
-        cmod->cmod_flags |= CMOD_KEEPMARKS;
-        continue;
-      }
-      if (checkforcmd(&eap->cmd, "keepalt", 5)) {
-        cmod->cmod_flags |= CMOD_KEEPALT;
-        continue;
-      }
-      if (checkforcmd(&eap->cmd, "keeppatterns", 5)) {
-        cmod->cmod_flags |= CMOD_KEEPPATTERNS;
-        continue;
-      }
-      if (!checkforcmd(&eap->cmd, "keepjumps", 5)) {
-        break;
-      }
-      cmod->cmod_flags |= CMOD_KEEPJUMPS;
-      continue;
-
-    case 'f': {  // only accept ":filter {pat} cmd"
-      char *reg_pat;
-
-      if (!checkforcmd(&p, "filter", 4) || *p == NUL || ends_excmd(*p)) {
-        break;
-      }
-      if (*p == '!') {
-        cmod->cmod_filter_force = true;
-        p = skipwhite(p + 1);
-        if (*p == NUL || ends_excmd(*p)) {
-          break;
-        }
-      }
-      if (skip_only) {
-        p = skip_vimgrep_pat(p, NULL, NULL);
-      } else {
-        // NOTE: This puts a NUL after the pattern.
-        p = skip_vimgrep_pat(p, &reg_pat, NULL);
-      }
-      if (p == NULL || *p == NUL) {
-        break;
-      }
-      if (!skip_only) {
-        cmod->cmod_filter_pat = xstrdup(reg_pat);
-        cmod->cmod_filter_regmatch.regprog = vim_regcomp(reg_pat, RE_MAGIC);
-        if (cmod->cmod_filter_regmatch.regprog == NULL) {
-          break;
-        }
-      }
-      eap->cmd = p;
-      continue;
-    }
-
-    case 'h':
-      if (checkforcmd(&eap->cmd, "horizontal", 3)) {
-        cmod->cmod_split |= WSP_HOR;
-        continue;
-      }
-      // ":hide" and ":hide | cmd" are not modifiers
-      if (p != eap->cmd || !checkforcmd(&p, "hide", 3)
-          || *p == NUL || ends_excmd(*p)) {
-        break;
-      }
-      eap->cmd = p;
-      cmod->cmod_flags |= CMOD_HIDE;
-      continue;
-
-    case 'l':
-      if (checkforcmd(&eap->cmd, "lockmarks", 3)) {
-        cmod->cmod_flags |= CMOD_LOCKMARKS;
-        continue;
-      }
-
-      if (!checkforcmd(&eap->cmd, "leftabove", 5)) {
-        break;
-      }
-      cmod->cmod_split |= WSP_ABOVE;
-      continue;
-
-    case 'n':
-      if (checkforcmd(&eap->cmd, "noautocmd", 3)) {
-        cmod->cmod_flags |= CMOD_NOAUTOCMD;
-        continue;
-      }
-      if (!checkforcmd(&eap->cmd, "noswapfile", 3)) {
-        break;
-      }
-      cmod->cmod_flags |= CMOD_NOSWAPFILE;
-      continue;
-
-    case 'r':
-      if (!checkforcmd(&eap->cmd, "rightbelow", 6)) {
-        break;
-      }
-      cmod->cmod_split |= WSP_BELOW;
-      continue;
-
-    case 's':
-      if (checkforcmd(&eap->cmd, "sandbox", 3)) {
-        cmod->cmod_flags |= CMOD_SANDBOX;
-        continue;
-      }
-      if (!checkforcmd(&eap->cmd, "silent", 3)) {
-        break;
-      }
-      cmod->cmod_flags |= CMOD_SILENT;
-      if (*eap->cmd == '!' && !ascii_iswhite(eap->cmd[-1])) {
-        // ":silent!", but not "silent !cmd"
-        eap->cmd = skipwhite(eap->cmd + 1);
-        cmod->cmod_flags |= CMOD_ERRSILENT;
-      }
-      continue;
-
-    case 't':
-      if (checkforcmd(&p, "tab", 3)) {
-        if (!skip_only) {
-          int tabnr = (int)get_address(eap, &eap->cmd, ADDR_TABS, eap->skip, skip_only,
-                                       false, 1, errormsg);
-          if (eap->cmd == NULL) {
-            return false;
-          }
-
-          if (tabnr == MAXLNUM) {
-            cmod->cmod_tab = tabpage_index(curtab) + 1;
-          } else {
-            if (tabnr < 0 || tabnr > LAST_TAB_NR) {
-              *errormsg = _(e_invrange);
-              return false;
-            }
-            cmod->cmod_tab = tabnr + 1;
-          }
-        }
-        eap->cmd = p;
-        continue;
-      }
-      if (!checkforcmd(&eap->cmd, "topleft", 2)) {
-        break;
-      }
-      cmod->cmod_split |= WSP_TOP;
-      continue;
-
-    case 'u':
-      if (!checkforcmd(&eap->cmd, "unsilent", 3)) {
-        break;
-      }
-      cmod->cmod_flags |= CMOD_UNSILENT;
-      continue;
-
-    case 'v':
-      if (checkforcmd(&eap->cmd, "vertical", 4)) {
-        cmod->cmod_split |= WSP_VERT;
-        continue;
-      }
-      if (!checkforcmd(&p, "verbose", 4)) {
-        break;
-      }
-      if (ascii_isdigit(*eap->cmd)) {
-        // zero means not set, one is verbose == 0, etc.
-        cmod->cmod_verbose = atoi(eap->cmd) + 1;
-      } else {
-        cmod->cmod_verbose = 2;  // default: verbose == 1
-      }
-      eap->cmd = p;
-      continue;
-    }
-    break;
-  }
-
-  return OK;
+  return rs_parse_command_modifiers(eap, errormsg, cmod, skip_only);
 }
 
 /// Apply the command modifiers.  Saves current state in "cmdmod", call
@@ -2817,37 +2580,6 @@ char *find_ex_command(exarg_T *eap, int *full)
 {
   return rs_find_ex_command(eap, full);
 }
-
-static struct cmdmod {
-  char *name;
-  int minlen;
-  int has_count;            // :123verbose  :3tab
-} cmdmods[] = {
-  { "aboveleft", 3, false },
-  { "belowright", 3, false },
-  { "botright", 2, false },
-  { "browse", 3, false },
-  { "confirm", 4, false },
-  { "filter", 4, false },
-  { "hide", 3, false },
-  { "horizontal", 3, false },
-  { "keepalt", 5, false },
-  { "keepjumps", 5, false },
-  { "keepmarks", 3, false },
-  { "keeppatterns", 5, false },
-  { "leftabove", 5, false },
-  { "lockmarks", 3, false },
-  { "noautocmd", 3, false },
-  { "noswapfile", 3, false },
-  { "rightbelow", 6, false },
-  { "sandbox", 3, false },
-  { "silent", 3, false },
-  { "tab", 3, true },
-  { "topleft", 2, false },
-  { "unsilent", 3, false },
-  { "verbose", 4, true },
-  { "vertical", 4, false },
-};
 
 /// @return  length of a command modifier (including optional count) or,
 ///          zero when it's not a modifier.
@@ -8392,7 +8124,7 @@ int nvim_docmd_getdigits_int32(char **pp)
 }
 
 /// Wrap qf_get_size for Rust.
-int nvim_docmd_qf_get_size(const exarg_T *eap)
+int nvim_docmd_qf_get_size(exarg_T *eap)
 {
   return (int)qf_get_size(eap);
 }

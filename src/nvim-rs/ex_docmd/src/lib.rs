@@ -32,6 +32,12 @@ use std::ptr;
 /// C accessor functions (`nvim_eap_get_*`/`nvim_eap_set_*`).
 pub type ExArgHandle = *mut c_void;
 
+/// Opaque handle to a C `cmdmod_T` struct.
+///
+/// Rust code never dereferences this directly — all field access goes through
+/// C accessor functions (`nvim_cmod_*`).
+pub type CmdModHandle = *mut c_void;
+
 pub use address::*;
 pub use args::*;
 pub use completion::*;
