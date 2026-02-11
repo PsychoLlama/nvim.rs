@@ -496,6 +496,9 @@ extern void rs_normal_finish_command(void *s);
 // Phase 4A: normal_check
 extern int rs_normal_check(void *s);
 
+// Phase 4B: normal_execute
+extern int rs_normal_execute(void *s, int key);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -3049,188 +3052,103 @@ static void normal_finish_command(NormalState *s)
   rs_normal_finish_command(s);
 }
 
+// =============================================================================
+// Phase 4B: normal_execute accessors for Rust FFI
+// =============================================================================
+
+_Static_assert(K_IGNORE == -13821, "K_IGNORE changed");
+_Static_assert(K_MOUSEMOVE == -25853, "K_MOUSEMOVE changed");
+_Static_assert(K_EVENT == -26365, "K_EVENT changed");
+_Static_assert(K_KENTER == -16715, "K_KENTER changed");
+_Static_assert(K_ZERO == -22783, "K_ZERO changed");
+_Static_assert(ESC == 27, "ESC changed");
+_Static_assert(NL == 10, "NL changed");
+_Static_assert(CAR == 13, "CAR changed");
+_Static_assert(Ctrl_W == 23, "Ctrl_W changed");
+_Static_assert(MOD_MASK_SHIFT == 0x02, "MOD_MASK_SHIFT changed");
+_Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL changed");
+_Static_assert(MODE_SELECT == 0x40, "MODE_SELECT changed");
+_Static_assert(NV_NCW == 0x200, "NV_NCW changed");
+_Static_assert(NV_RL == 0x80, "NV_RL changed");
+_Static_assert(NV_SS == 0x10, "NV_SS changed");
+_Static_assert(NV_SSS == 0x20, "NV_SSS changed");
+
+/// Get curwin->w_curswant.
+int nvim_get_curwin_w_curswant(void) { return curwin->w_curswant; }
+
+/// Get vgetc_char global.
+int nvim_get_vgetc_char(void) { return vgetc_char; }
+
+/// Get vgetc_mod_mask global.
+int nvim_get_vgetc_mod_mask(void) { return vgetc_mod_mask; }
+
+/// Get km_startsel global.
+bool nvim_get_km_startsel(void) { return km_startsel; }
+
+/// Get curwin->w_p_rl.
+bool nvim_get_curwin_w_p_rl(void) { return curwin->w_p_rl; }
+
+/// Set oa->prev_opcount via oap handle.
+void nvim_oap_set_prev_opcount(oparg_T *oap, int val) { oap->prev_opcount = val; }
+
+/// Set oa->prev_count0 via oap handle.
+void nvim_oap_set_prev_count0(oparg_T *oap, int val) { oap->prev_count0 = val; }
+
+/// Run the normal_get_command_count loop (while returns true).
+void nvim_normal_get_command_count_loop(void *sp)
+{
+  while (normal_get_command_count((NormalState *)sp)) {}
+}
+
+/// clearopbeep(&oa) via oap handle.
+void nvim_clearopbeep_wrapper(oparg_T *oap) { clearopbeep(oap); }
+
+/// check_text_or_curbuf_locked(&oa) via oap handle.
+bool nvim_check_text_or_curbuf_locked_wrapper(oparg_T *oap)
+{
+  return check_text_or_curbuf_locked(oap);
+}
+
+/// normal_handle_special_visual_command wrapper.
+bool nvim_normal_handle_special_visual_command_wrapper(void *sp)
+{
+  return normal_handle_special_visual_command((NormalState *)sp);
+}
+
+/// normal_invert_horizontal wrapper.
+void nvim_normal_invert_horizontal_wrapper(void *sp)
+{
+  normal_invert_horizontal((NormalState *)sp);
+}
+
+/// normal_need_additional_char wrapper.
+bool nvim_normal_need_additional_char_wrapper(void *sp)
+{
+  return normal_need_additional_char((NormalState *)sp);
+}
+
+/// ui_flush() wrapper.
+void nvim_ui_flush_wrapper(void) { ui_flush(); }
+
+/// start_selection() wrapper.
+void nvim_start_selection_wrapper(void) { start_selection(); }
+
+/// unshift_special(&ca) wrapper.
+void nvim_unshift_special_wrapper(cmdarg_T *ca) { unshift_special(ca); }
+
+/// Clear MOD_MASK_SHIFT from mod_mask.
+void nvim_mod_mask_clear_shift(void) { mod_mask &= ~MOD_MASK_SHIFT; }
+
+/// Execute command: set arg and call the command function.
+void nvim_execute_nv_cmd(int idx, cmdarg_T *ca)
+{
+  ca->arg = nv_cmds[idx].cmd_arg;
+  (nv_cmds[idx].cmd_func)(ca);
+}
+
 static int normal_execute(VimState *state, int key)
 {
-  NormalState *s = (NormalState *)state;
-  s->command_finished = false;
-  s->ctrl_w = false;                  // got CTRL-W command
-  s->old_col = curwin->w_curswant;
-  s->c = key;
-
-  LANGMAP_ADJUST(s->c, get_real_state() != MODE_SELECT);
-
-  // If a mapping was started in Visual or Select mode, remember the length
-  // of the mapping.  This is used below to not return to Insert mode for as
-  // long as the mapping is being executed.
-  if (restart_edit == 0) {
-    s->old_mapped_len = 0;
-  } else if (s->old_mapped_len || (VIsual_active && s->mapped_len == 0
-                                   && typebuf_maplen() > 0)) {
-    s->old_mapped_len = typebuf_maplen();
-  }
-
-  if (s->c == NUL) {
-    s->c = K_ZERO;
-  }
-
-  // In Select mode, typed text replaces the selection.
-  if (VIsual_active && VIsual_select && (vim_isprintc(s->c)
-                                         || s->c == NL || s->c == CAR || s->c == K_KENTER)) {
-    // Fake a "c"hange command.
-    // When "restart_edit" is set fake a "d"elete command, Insert mode will restart automatically.
-    // Insert the typed character in the typeahead buffer, so that it can
-    // be mapped in Insert mode.  Required for ":lmap" to work.
-    int len = ins_char_typebuf(vgetc_char, vgetc_mod_mask, true);
-
-    // When recording and gotchars() was called the character will be
-    // recorded again, remove the previous recording.
-    if (KeyTyped) {
-      ungetchars(len);
-    }
-
-    if (restart_edit != 0) {
-      s->c = 'd';
-    } else {
-      s->c = 'c';
-    }
-    msg_nowait = true;          // don't delay going to insert mode
-    s->old_mapped_len = 0;      // do go to Insert mode
-  }
-
-  s->need_flushbuf = add_to_showcmd(s->c);
-
-  while (normal_get_command_count(s)) {}
-
-  if (s->c == K_EVENT) {
-    // Save the count values so that ca.opcount and ca.count0 are exactly
-    // the same when coming back here after handling K_EVENT.
-    s->oa.prev_opcount = s->ca.opcount;
-    s->oa.prev_count0 = s->ca.count0;
-  } else if (s->ca.opcount != 0) {
-    // If we're in the middle of an operator (including after entering a
-    // yank buffer with '"') AND we had a count before the operator, then
-    // that count overrides the current value of ca.count0.
-    // What this means effectively, is that commands like "3dw" get turned
-    // into "d3w" which makes things fall into place pretty neatly.
-    // If you give a count before AND after the operator, they are
-    // multiplied.
-    if (s->ca.count0) {
-      if (s->ca.opcount >= 999999999 / s->ca.count0) {
-        s->ca.count0 = 999999999;
-      } else {
-        s->ca.count0 *= s->ca.opcount;
-      }
-    } else {
-      s->ca.count0 = s->ca.opcount;
-    }
-  }
-
-  // Always remember the count.  It will be set to zero (on the next call,
-  // above) when there is no pending operator.
-  // When called from main(), save the count for use by the "count" built-in
-  // variable.
-  s->ca.opcount = s->ca.count0;
-  s->ca.count1 = (s->ca.count0 == 0 ? 1 : s->ca.count0);
-
-  // Only set v:count when called from main() and not a stuffed command.
-  // Do set it for redo.
-  if (s->toplevel && readbuf1_empty()) {
-    set_vcount(s->ca.count0, s->ca.count1, s->set_prevcount);
-  }
-
-  // Find the command character in the table of commands.
-  // For CTRL-W we already got nchar when looking for a count.
-  if (s->ctrl_w) {
-    s->ca.nchar = s->c;
-    s->ca.cmdchar = Ctrl_W;
-  } else {
-    s->ca.cmdchar = s->c;
-  }
-
-  s->idx = find_command(s->ca.cmdchar);
-
-  if (s->idx < 0) {
-    // Not a known command: beep.
-    clearopbeep(&s->oa);
-    s->command_finished = true;
-    goto finish;
-  }
-
-  if ((nv_cmds[s->idx].cmd_flags & NV_NCW) && check_text_or_curbuf_locked(&s->oa)) {
-    // this command is not allowed now
-    s->command_finished = true;
-    goto finish;
-  }
-
-  // In Visual/Select mode, a few keys are handled in a special way.
-  if (VIsual_active && normal_handle_special_visual_command(s)) {
-    s->command_finished = true;
-    goto finish;
-  }
-
-  if (curwin->w_p_rl && KeyTyped && !KeyStuffed
-      && (nv_cmds[s->idx].cmd_flags & NV_RL)) {
-    // Invert horizontal movements and operations.  Only when typed by the
-    // user directly, not when the result of a mapping or "x" translated
-    // to "dl".
-    normal_invert_horizontal(s);
-  }
-
-  // Get an additional character if we need one.
-  if (normal_need_additional_char(s)) {
-    normal_get_additional_char(s);
-  }
-
-  // Flush the showcmd characters onto the screen so we can see them while
-  // the command is being executed.  Only do this when the shown command was
-  // actually displayed, otherwise this will slow down a lot when executing
-  // mappings.
-  if (s->need_flushbuf) {
-    ui_flush();
-  }
-
-  if (s->ca.cmdchar != K_IGNORE && s->ca.cmdchar != K_EVENT) {
-    did_cursorhold = false;
-  }
-
-  State = MODE_NORMAL;
-
-  if (s->ca.nchar == ESC || s->ca.extra_char == ESC) {
-    clearop(&s->oa);
-    s->command_finished = true;
-    goto finish;
-  }
-
-  if (s->ca.cmdchar != K_IGNORE) {
-    msg_didout = false;        // don't scroll screen up for normal command
-    msg_col = 0;
-  }
-
-  s->old_pos = curwin->w_cursor;           // remember where the cursor was
-
-  // When 'keymodel' contains "startsel" some keys start Select/Visual
-  // mode.
-  if (!VIsual_active && km_startsel) {
-    if (nv_cmds[s->idx].cmd_flags & NV_SS) {
-      start_selection();
-      unshift_special(&s->ca);
-      s->idx = find_command(s->ca.cmdchar);
-      assert(s->idx >= 0);
-    } else if ((nv_cmds[s->idx].cmd_flags & NV_SSS)
-               && (mod_mask & MOD_MASK_SHIFT)) {
-      start_selection();
-      mod_mask &= ~MOD_MASK_SHIFT;
-    }
-  }
-
-  // Execute the command!
-  // Call the command function found in the commands table.
-  s->ca.arg = nv_cmds[s->idx].cmd_arg;
-  (nv_cmds[s->idx].cmd_func)(&s->ca);
-
-finish:
-  normal_finish_command(s);
-  return 1;
+  return rs_normal_execute((NormalState *)state, key);
 }
 
 static void normal_check_stuff_buffer(NormalState *s)

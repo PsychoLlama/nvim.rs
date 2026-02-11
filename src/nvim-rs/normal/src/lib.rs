@@ -17,6 +17,7 @@ pub mod execute;
 pub mod finish_command;
 pub mod insert;
 pub mod motion;
+pub mod normal_execute;
 pub mod operator;
 pub mod operator_cmds;
 pub mod pending;
