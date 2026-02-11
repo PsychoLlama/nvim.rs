@@ -22,6 +22,7 @@ pub mod api;
 pub mod attr;
 pub mod buffer;
 pub mod cache;
+pub mod check_ends;
 pub mod cluster;
 pub mod commands;
 pub mod containment;
@@ -32,6 +33,7 @@ pub mod highlight;
 pub mod item;
 pub mod keyword;
 pub mod match_engine;
+pub mod offset;
 pub mod parse;
 pub mod pattern;
 pub mod region;
@@ -3031,35 +3033,8 @@ pub unsafe extern "C" fn rs_clear_current_state() {
 // Phase 24.2: Core Pattern Matching Functions (FFI exports)
 // =============================================================================
 
-/// Check for end of current state (and the states before it).
-/// This is a Rust wrapper that delegates to the C implementation.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_check_state_ends() {
-    nvim_syn_check_state_ends();
-}
-
-/// Update an entry in the current_state stack for a match or region.
-/// This fills in si_attr, si_next_list and si_cont_list.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_update_si_attr(idx: c_int) {
-    nvim_syn_call_update_si_attr(idx);
-}
-
-/// Check the current stack for patterns with "keepend" flag.
-/// Propagate the match-end to contained items, until a "skipend" item is found.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_check_keepend() {
-    nvim_syn_check_keepend();
-}
+// rs_check_state_ends, rs_update_si_attr, rs_check_keepend:
+// Now implemented in check_ends.rs module
 
 /// Pop the current state from the stack.
 ///
@@ -3665,58 +3640,8 @@ pub unsafe extern "C" fn rs_get_next_match_extmatch() -> ExtMatchHandle {
     nvim_syn_get_next_match_extmatch()
 }
 
-/// Update state item end position.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_update_si_end(sip: StateItemHandle, startcol: c_int, force: c_int) {
-    nvim_syn_update_si_end(sip, startcol, force);
-}
-
-/// Push next match onto state stack.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_push_next_match() -> StateItemHandle {
-    nvim_syn_push_next_match()
-}
-
-/// Find end position of a syntax region.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_find_endpos(
-    idx: c_int,
-    start_lnum: c_int,
-    start_col: c_int,
-    m_end_lnum: *mut c_int,
-    m_end_col: *mut c_int,
-    hl_end_lnum: *mut c_int,
-    hl_end_col: *mut c_int,
-    flagsp: *mut c_int,
-    end_end_lnum: *mut c_int,
-    end_end_col: *mut c_int,
-    end_idx: *mut c_int,
-    start_ext: ExtMatchHandle,
-) {
-    nvim_syn_find_endpos(
-        idx,
-        start_lnum,
-        start_col,
-        m_end_lnum,
-        m_end_col,
-        hl_end_lnum,
-        hl_end_col,
-        flagsp,
-        end_end_lnum,
-        end_end_col,
-        end_idx,
-        start_ext,
-    );
-}
+// rs_update_si_end, rs_push_next_match, rs_find_endpos:
+// Now implemented in region.rs and check_ends.rs modules
 
 /// Get pattern flags by index.
 ///

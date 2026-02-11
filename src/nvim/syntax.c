@@ -109,6 +109,29 @@ extern int rs_stateitem_get_cchar(const void *item);
 extern int rs_stateitem_has_trans_cont(const void *item);
 extern int rs_stateitem_has_match(const void *item);
 
+// Phase 1: Migrated helper functions from Rust
+extern void rs_find_endpos(int idx, int start_lnum, int start_col,
+                           int *m_endpos_lnum, int *m_endpos_col,
+                           int *hl_endpos_lnum, int *hl_endpos_col,
+                           int *flagsp, int *end_endpos_lnum, int *end_endpos_col,
+                           int *end_idx, reg_extmatch_T *start_ext);
+extern void rs_update_si_end(stateitem_T *sip, int startcol, int force);
+extern void rs_check_state_ends(void);
+extern void rs_update_si_attr(int idx);
+extern void rs_check_keepend(void);
+extern stateitem_T *rs_push_next_match(void);
+extern int rs_did_match_already(int idx, int *gap_data, int gap_len);
+extern void rs_syn_limit_pos(int *pos_lnum, int *pos_col, int limit_lnum, int limit_col);
+extern void rs_syn_limit_pos_zero(int *pos_lnum, int *pos_col, int limit_lnum, int limit_col);
+extern void rs_syn_add_end_off(int *res_lnum, int *res_col,
+                               int start_lnum, int start_col,
+                               int end_lnum, int end_col,
+                               int pat_idx, int off_idx, int extra);
+extern void rs_syn_add_start_off(int *res_lnum, int *res_col,
+                                 int start_lnum, int start_col,
+                                 int end_lnum, int end_col,
+                                 int pat_idx, int off_idx, int extra);
+
 // Phase 18a: Simple settings command functions from Rust
 extern int rs_syn_cmd_case(synblock_T *block, const char *arg, const char *arg_end);
 extern int rs_syn_cmd_conceal(synblock_T *block, const char *arg, const char *arg_end);
@@ -2019,290 +2042,33 @@ static int syn_current_attr(const bool syncing, const bool displaying, bool *con
 /// @return  true if we already matched pattern "idx" at the current column.
 static bool did_match_already(int idx, garray_T *gap)
 {
-  for (int i = current_state.ga_len; --i >= 0;) {
-    if (CUR_STATE(i).si_m_startcol == (int)current_col
-        && CUR_STATE(i).si_m_lnum == (int)current_lnum
-        && CUR_STATE(i).si_idx == idx) {
-      return true;
-    }
-  }
-
-  // Zero-width matches with a nextgroup argument are not put on the syntax
-  // stack, and can only be matched once anyway.
-  for (int i = gap->ga_len; --i >= 0;) {
-    if (((int *)(gap->ga_data))[i] == idx) {
-      return true;
-    }
-  }
-
-  return false;
+  return rs_did_match_already(idx, (int *)gap->ga_data, gap->ga_len);
 }
 
 // Push the next match onto the stack.
 static stateitem_T *push_next_match(void)
 {
-  stateitem_T *cur_si;
-  synpat_T *spp;
-  int save_flags;
-
-  spp = &(SYN_ITEMS(syn_block)[next_match_idx]);
-
-  // Push the item in current_state stack;
-  push_current_state(next_match_idx);
-  {
-    // If it's a start-skip-end type that crosses lines, figure out how
-    // much it continues in this line.  Otherwise just fill in the length.
-    cur_si = &CUR_STATE(current_state.ga_len - 1);
-    cur_si->si_h_startpos = next_match_h_startpos;
-    cur_si->si_m_startcol = current_col;
-    cur_si->si_m_lnum = current_lnum;
-    cur_si->si_flags = spp->sp_flags;
-    cur_si->si_seqnr = next_seqnr++;
-    cur_si->si_cchar = spp->sp_cchar;
-    if (current_state.ga_len > 1) {
-      cur_si->si_flags |=
-        CUR_STATE(current_state.ga_len - 2).si_flags & HL_CONCEAL;
-    }
-    cur_si->si_next_list = spp->sp_next_list;
-    cur_si->si_extmatch = ref_extmatch(next_match_extmatch);
-    if (spp->sp_type == SPTYPE_START && !(spp->sp_flags & HL_ONELINE)) {
-      // Try to find the end pattern in the current line
-      update_si_end(cur_si, (int)(next_match_m_endpos.col), true);
-      check_keepend();
-    } else {
-      cur_si->si_m_endpos = next_match_m_endpos;
-      cur_si->si_h_endpos = next_match_h_endpos;
-      cur_si->si_ends = true;
-      cur_si->si_flags |= next_match_flags;
-      cur_si->si_eoe_pos = next_match_eoe_pos;
-      cur_si->si_end_idx = next_match_end_idx;
-    }
-    if (keepend_level < 0 && (cur_si->si_flags & HL_KEEPEND)) {
-      keepend_level = current_state.ga_len - 1;
-    }
-    check_keepend();
-    update_si_attr(current_state.ga_len - 1);
-
-    save_flags = cur_si->si_flags & (HL_CONCEAL | HL_CONCEALENDS);
-    // If the start pattern has another highlight group, push another item
-    // on the stack for the start pattern.
-    if (spp->sp_type == SPTYPE_START && spp->sp_syn_match_id != 0) {
-      push_current_state(next_match_idx);
-      cur_si = &CUR_STATE(current_state.ga_len - 1);
-      cur_si->si_h_startpos = next_match_h_startpos;
-      cur_si->si_m_startcol = current_col;
-      cur_si->si_m_lnum = current_lnum;
-      cur_si->si_m_endpos = next_match_eos_pos;
-      cur_si->si_h_endpos = next_match_eos_pos;
-      cur_si->si_ends = true;
-      cur_si->si_end_idx = 0;
-      cur_si->si_flags = HL_MATCH;
-      cur_si->si_seqnr = next_seqnr++;
-      cur_si->si_flags |= save_flags;
-      if (cur_si->si_flags & HL_CONCEALENDS) {
-        cur_si->si_flags |= HL_CONCEAL;
-      }
-      cur_si->si_next_list = NULL;
-      check_keepend();
-      update_si_attr(current_state.ga_len - 1);
-    }
-  }
-
-  next_match_idx = -1;          // try other match next time
-
-  return cur_si;
+  return rs_push_next_match();
 }
 
 // Check for end of current state (and the states before it).
 static void check_state_ends(void)
 {
-  stateitem_T *cur_si;
-  int had_extend;
-
-  cur_si = &CUR_STATE(current_state.ga_len - 1);
-  while (true) {
-    if (cur_si->si_ends
-        && (cur_si->si_m_endpos.lnum < current_lnum
-            || (cur_si->si_m_endpos.lnum == current_lnum
-                && cur_si->si_m_endpos.col <= current_col))) {
-      // If there is an end pattern group ID, highlight the end pattern
-      // now.  No need to pop the current item from the stack.
-      // Only do this if the end pattern continues beyond the current
-      // position.
-      if (cur_si->si_end_idx
-          && (cur_si->si_eoe_pos.lnum > current_lnum
-              || (cur_si->si_eoe_pos.lnum == current_lnum
-                  && cur_si->si_eoe_pos.col > current_col))) {
-        cur_si->si_idx = cur_si->si_end_idx;
-        cur_si->si_end_idx = 0;
-        cur_si->si_m_endpos = cur_si->si_eoe_pos;
-        cur_si->si_h_endpos = cur_si->si_eoe_pos;
-        cur_si->si_flags |= HL_MATCH;
-        cur_si->si_seqnr = next_seqnr++;
-        if (cur_si->si_flags & HL_CONCEALENDS) {
-          cur_si->si_flags |= HL_CONCEAL;
-        }
-        update_si_attr(current_state.ga_len - 1);
-
-        // nextgroup= should not match in the end pattern
-        current_next_list = NULL;
-
-        // what matches next may be different now, clear it
-        next_match_idx = 0;
-        next_match_col = MAXCOL;
-        break;
-      }
-
-      // handle next_list, unless at end of line and no "skipnl" or
-      // "skipempty"
-      current_next_list = cur_si->si_next_list;
-      current_next_flags = cur_si->si_flags;
-      if (!(current_next_flags & (HL_SKIPNL | HL_SKIPEMPTY))
-          && syn_getcurline()[current_col] == NUL) {
-        current_next_list = NULL;
-      }
-
-      // When the ended item has "extend", another item with
-      // "keepend" now needs to check for its end.
-      had_extend = (cur_si->si_flags & HL_EXTEND);
-
-      pop_current_state();
-
-      if (GA_EMPTY(&current_state)) {
-        break;
-      }
-
-      if (had_extend && keepend_level >= 0) {
-        syn_update_ends(false);
-        if (GA_EMPTY(&current_state)) {
-          break;
-        }
-      }
-
-      cur_si = &CUR_STATE(current_state.ga_len - 1);
-
-      // Only for a region the search for the end continues after
-      // the end of the contained item.  If the contained match
-      // included the end-of-line, break here, the region continues.
-      // Don't do this when:
-      // - "keepend" is used for the contained item
-      // - not at the end of the line (could be end="x$"me=e-1).
-      // - "excludenl" is used (HL_HAS_EOL won't be set)
-      if (cur_si->si_idx >= 0
-          && SYN_ITEMS(syn_block)[cur_si->si_idx].sp_type == SPTYPE_START
-          && !(cur_si->si_flags & (HL_MATCH | HL_KEEPEND))) {
-        update_si_end(cur_si, (int)current_col, true);
-        check_keepend();
-        if ((current_next_flags & HL_HAS_EOL)
-            && keepend_level < 0
-            && syn_getcurline()[current_col] == NUL) {
-          break;
-        }
-      }
-    } else {
-      break;
-    }
-  }
+  rs_check_state_ends();
 }
 
 // Update an entry in the current_state stack for a match or region.  This
 // fills in si_attr, si_next_list and si_cont_list.
 static void update_si_attr(int idx)
 {
-  stateitem_T *sip = &CUR_STATE(idx);
-  synpat_T *spp;
-
-  // This should not happen...
-  if (sip->si_idx < 0) {
-    return;
-  }
-
-  spp = &(SYN_ITEMS(syn_block)[sip->si_idx]);
-  if (sip->si_flags & HL_MATCH) {
-    sip->si_id = spp->sp_syn_match_id;
-  } else {
-    sip->si_id = spp->sp_syn.id;
-  }
-  sip->si_attr = syn_id2attr(sip->si_id);
-  sip->si_trans_id = sip->si_id;
-  if (sip->si_flags & HL_MATCH) {
-    sip->si_cont_list = NULL;
-  } else {
-    sip->si_cont_list = spp->sp_cont_list;
-  }
-
-  // For transparent items, take attr from outer item.
-  // Also take cont_list, if there is none.
-  // Don't do this for the matchgroup of a start or end pattern.
-  if ((spp->sp_flags & HL_TRANSP) && !(sip->si_flags & HL_MATCH)) {
-    if (idx == 0) {
-      sip->si_attr = 0;
-      sip->si_trans_id = 0;
-      if (sip->si_cont_list == NULL) {
-        sip->si_cont_list = ID_LIST_ALL;
-      }
-    } else {
-      sip->si_attr = CUR_STATE(idx - 1).si_attr;
-      sip->si_trans_id = CUR_STATE(idx - 1).si_trans_id;
-      if (sip->si_cont_list == NULL) {
-        sip->si_flags |= HL_TRANS_CONT;
-        sip->si_cont_list = CUR_STATE(idx - 1).si_cont_list;
-      }
-    }
-  }
+  rs_update_si_attr(idx);
 }
 
 // Check the current stack for patterns with "keepend" flag.
 // Propagate the match-end to contained items, until a "skipend" item is found.
 static void check_keepend(void)
 {
-  int i;
-  lpos_T maxpos;
-  lpos_T maxpos_h;
-  stateitem_T *sip;
-
-  // This check can consume a lot of time; only do it from the level where
-  // there really is a keepend.
-  if (keepend_level < 0) {
-    return;
-  }
-
-  // Find the last index of an "extend" item.  "keepend" items before that
-  // won't do anything.  If there is no "extend" item "i" will be
-  // "keepend_level" and all "keepend" items will work normally.
-  for (i = current_state.ga_len - 1; i > keepend_level; i--) {
-    if (CUR_STATE(i).si_flags & HL_EXTEND) {
-      break;
-    }
-  }
-
-  maxpos.lnum = 0;
-  maxpos.col = 0;
-  maxpos_h.lnum = 0;
-  maxpos_h.col = 0;
-  for (; i < current_state.ga_len; i++) {
-    sip = &CUR_STATE(i);
-    if (maxpos.lnum != 0) {
-      limit_pos_zero(&sip->si_m_endpos, &maxpos);
-      limit_pos_zero(&sip->si_h_endpos, &maxpos_h);
-      limit_pos_zero(&sip->si_eoe_pos, &maxpos);
-      sip->si_ends = true;
-    }
-    if (sip->si_ends && (sip->si_flags & HL_KEEPEND)) {
-      if (maxpos.lnum == 0
-          || maxpos.lnum > sip->si_m_endpos.lnum
-          || (maxpos.lnum == sip->si_m_endpos.lnum
-              && maxpos.col > sip->si_m_endpos.col)) {
-        maxpos = sip->si_m_endpos;
-      }
-      if (maxpos_h.lnum == 0
-          || maxpos_h.lnum > sip->si_h_endpos.lnum
-          || (maxpos_h.lnum == sip->si_h_endpos.lnum
-              && maxpos_h.col > sip->si_h_endpos.col)) {
-        maxpos_h = sip->si_h_endpos;
-      }
-    }
-  }
+  rs_check_keepend();
 }
 
 /// Update an entry in the current_state stack for a start-skip-end pattern.
@@ -2314,53 +2080,7 @@ static void check_keepend(void)
 /// @return          the flags for the matched END.
 static void update_si_end(stateitem_T *sip, int startcol, bool force)
 {
-  lpos_T hl_endpos;
-  lpos_T end_endpos;
-
-  // return quickly for a keyword
-  if (sip->si_idx < 0) {
-    return;
-  }
-
-  // Don't update when it's already done.  Can be a match of an end pattern
-  // that started in a previous line.  Watch out: can also be a "keepend"
-  // from a containing item.
-  if (!force && sip->si_m_endpos.lnum >= current_lnum) {
-    return;
-  }
-
-  // We need to find the end of the region.  It may continue in the next
-  // line.
-  int end_idx = 0;
-  lpos_T startpos = {
-    .lnum = current_lnum,
-    .col = startcol,
-  };
-  lpos_T endpos = { 0 };
-  find_endpos(sip->si_idx, &startpos, &endpos, &hl_endpos,
-              &(sip->si_flags), &end_endpos, &end_idx, sip->si_extmatch);
-
-  if (endpos.lnum == 0) {
-    // No end pattern matched.
-    if (SYN_ITEMS(syn_block)[sip->si_idx].sp_flags & HL_ONELINE) {
-      // a "oneline" never continues in the next line
-      sip->si_ends = true;
-      sip->si_m_endpos.lnum = current_lnum;
-      sip->si_m_endpos.col = syn_getcurline_len();
-    } else {
-      // continues in the next line
-      sip->si_ends = false;
-      sip->si_m_endpos.lnum = 0;
-    }
-    sip->si_h_endpos = sip->si_m_endpos;
-  } else {
-    // match within this line
-    sip->si_m_endpos = endpos;
-    sip->si_h_endpos = hl_endpos;
-    sip->si_eoe_pos = end_endpos;
-    sip->si_ends = true;
-    sip->si_end_idx = end_idx;
-  }
+  rs_update_si_end(sip, startcol, force ? 1 : 0);
 }
 
 // Add a new state to the current state stack.
@@ -2407,199 +2127,12 @@ static void pop_current_state(void)
 static void find_endpos(int idx, lpos_T *startpos, lpos_T *m_endpos, lpos_T *hl_endpos, int *flagsp,
                         lpos_T *end_endpos, int *end_idx, reg_extmatch_T *start_ext)
 {
-  synpat_T *spp_skip;
-  int best_idx;
-  regmmatch_T regmatch;
-  regmmatch_T best_regmatch;        // startpos/endpos of best match
-  lpos_T pos;
-  bool had_match = false;
-  char buf_chartab[32];  // chartab array for syn option iskeyword
-
-  // just in case we are invoked for a keyword
-  if (idx < 0) {
-    return;
-  }
-
-  // Check for being called with a START pattern.
-  // Can happen with a match that continues to the next line, because it
-  // contained a region.
-  synpat_T *spp = &(SYN_ITEMS(syn_block)[idx]);
-  if (spp->sp_type != SPTYPE_START) {
-    *hl_endpos = *startpos;
-    return;
-  }
-
-  // Find the SKIP or first END pattern after the last START pattern.
-  while (true) {
-    spp = &(SYN_ITEMS(syn_block)[idx]);
-    if (spp->sp_type != SPTYPE_START) {
-      break;
-    }
-    idx++;
-  }
-
-  //    Lookup the SKIP pattern (if present)
-  if (spp->sp_type == SPTYPE_SKIP) {
-    spp_skip = spp;
-    idx++;
-  } else {
-    spp_skip = NULL;
-  }
-
-  // Setup external matches for syn_regexec().
-  unref_extmatch(re_extmatch_in);
-  re_extmatch_in = ref_extmatch(start_ext);
-
-  colnr_T matchcol = startpos->col;     // start looking for a match at sstart
-  int start_idx = idx;              // remember the first END pattern.
-  best_regmatch.startpos[0].col = 0;            // avoid compiler warning
-
-  // use syntax iskeyword option
-  save_chartab(buf_chartab);
-
-  while (true) {
-    // Find end pattern that matches first after "matchcol".
-    best_idx = -1;
-    for (idx = start_idx; idx < syn_block->b_syn_patterns.ga_len; idx++) {
-      int lc_col = matchcol;
-
-      spp = &(SYN_ITEMS(syn_block)[idx]);
-      if (spp->sp_type != SPTYPE_END) {         // past last END pattern
-        break;
-      }
-      lc_col -= spp->sp_offsets[SPO_LC_OFF];
-      if (lc_col < 0) {
-        lc_col = 0;
-      }
-
-      regmatch.rmm_ic = spp->sp_ic;
-      regmatch.regprog = spp->sp_prog;
-      bool r = syn_regexec(&regmatch, startpos->lnum, lc_col,
-                           IF_SYN_TIME(&spp->sp_time));
-      spp->sp_prog = regmatch.regprog;
-      if (r) {
-        if (best_idx == -1 || regmatch.startpos[0].col
-            < best_regmatch.startpos[0].col) {
-          best_idx = idx;
-          best_regmatch.startpos[0] = regmatch.startpos[0];
-          best_regmatch.endpos[0] = regmatch.endpos[0];
-        }
-      }
-    }
-
-    // If all end patterns have been tried, and there is no match, the
-    // item continues until end-of-line.
-    if (best_idx == -1) {
-      break;
-    }
-
-    // If the skip pattern matches before the end pattern,
-    // continue searching after the skip pattern.
-    if (spp_skip != NULL) {
-      int lc_col = matchcol - spp_skip->sp_offsets[SPO_LC_OFF];
-
-      if (lc_col < 0) {
-        lc_col = 0;
-      }
-      regmatch.rmm_ic = spp_skip->sp_ic;
-      regmatch.regprog = spp_skip->sp_prog;
-      int r = syn_regexec(&regmatch, startpos->lnum, lc_col,
-                          IF_SYN_TIME(&spp_skip->sp_time));
-      spp_skip->sp_prog = regmatch.regprog;
-      if (r && regmatch.startpos[0].col <= best_regmatch.startpos[0].col) {
-        // Add offset to skip pattern match
-        syn_add_end_off(&pos, &regmatch, spp_skip, SPO_ME_OFF, 1);
-
-        // If the skip pattern goes on to the next line, there is no
-        // match with an end pattern in this line.
-        if (pos.lnum > startpos->lnum) {
-          break;
-        }
-
-        int line_len = ml_get_buf_len(syn_buf, startpos->lnum);
-
-        // take care of an empty match or negative offset
-        if (pos.col <= matchcol) {
-          matchcol++;
-        } else if (pos.col <= regmatch.endpos[0].col) {
-          matchcol = pos.col;
-        } else {
-          // Be careful not to jump over the NUL at the end-of-line
-          for (matchcol = regmatch.endpos[0].col;
-               matchcol < line_len && matchcol < pos.col;
-               matchcol++) {}
-        }
-
-        // if the skip pattern includes end-of-line, break here
-        if (matchcol >= line_len) {
-          break;
-        }
-
-        continue;  // start with first end pattern again
-      }
-    }
-
-    // Match from start pattern to end pattern.
-    // Correct for match and highlight offset of end pattern.
-    spp = &(SYN_ITEMS(syn_block)[best_idx]);
-    syn_add_end_off(m_endpos, &best_regmatch, spp, SPO_ME_OFF, 1);
-    // can't end before the start
-    if (m_endpos->lnum == startpos->lnum && m_endpos->col < startpos->col) {
-      m_endpos->col = startpos->col;
-    }
-
-    syn_add_end_off(end_endpos, &best_regmatch, spp, SPO_HE_OFF, 1);
-    // can't end before the start
-    if (end_endpos->lnum == startpos->lnum
-        && end_endpos->col < startpos->col) {
-      end_endpos->col = startpos->col;
-    }
-    // can't end after the match
-    limit_pos(end_endpos, m_endpos);
-
-    // If the end group is highlighted differently, adjust the pointers.
-    if (spp->sp_syn_match_id != spp->sp_syn.id && spp->sp_syn_match_id != 0) {
-      *end_idx = best_idx;
-      if (spp->sp_off_flags & (1 << (SPO_RE_OFF + SPO_COUNT))) {
-        hl_endpos->lnum = best_regmatch.endpos[0].lnum;
-        hl_endpos->col = best_regmatch.endpos[0].col;
-      } else {
-        hl_endpos->lnum = best_regmatch.startpos[0].lnum;
-        hl_endpos->col = best_regmatch.startpos[0].col;
-      }
-      hl_endpos->col += spp->sp_offsets[SPO_RE_OFF];
-
-      // can't end before the start
-      if (hl_endpos->lnum == startpos->lnum
-          && hl_endpos->col < startpos->col) {
-        hl_endpos->col = startpos->col;
-      }
-      limit_pos(hl_endpos, m_endpos);
-
-      // now the match ends where the highlighting ends, it is turned
-      // into the matchgroup for the end
-      *m_endpos = *hl_endpos;
-    } else {
-      *end_idx = 0;
-      *hl_endpos = *end_endpos;
-    }
-
-    *flagsp = spp->sp_flags;
-
-    had_match = true;
-    break;
-  }
-
-  // no match for an END pattern in this line
-  if (!had_match) {
-    m_endpos->lnum = 0;
-  }
-
-  restore_chartab(buf_chartab);
-
-  // Remove external matches.
-  unref_extmatch(re_extmatch_in);
-  re_extmatch_in = NULL;
+  rs_find_endpos(idx, startpos->lnum, startpos->col,
+                 &m_endpos->lnum, &m_endpos->col,
+                 &hl_endpos->lnum, &hl_endpos->col,
+                 flagsp,
+                 &end_endpos->lnum, &end_endpos->col,
+                 end_idx, start_ext);
 }
 
 // Limit "pos" not to be after "limit".
@@ -8331,3 +7864,209 @@ void nvim_syn_set_sst_lasttick_val(int tick)
 // nvim_stateitem_set_m_lnum, nvim_stateitem_set_m_startcol,
 // nvim_stateitem_set_cchar, nvim_stateitem_set_h_startpos,
 // nvim_stateitem_get_cchar, nvim_stateitem_get_end_idx, nvim_stateitem_get_ends
+
+// =============================================================================
+// Phase 1: Accessor/wrapper functions for migrated helpers
+// =============================================================================
+
+/// Wrapper around syn_regexec for calling from Rust.
+/// Executes regex match on a pattern in the current synblock by index.
+/// Returns 1 if matched, 0 if not. Fills out-params with match positions.
+int nvim_syn_regexec_pat(int idx, int lnum, int col,
+                         int *start_lnum, int *start_col,
+                         int *end_lnum, int *end_col)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  synpat_T *spp = &SYN_ITEMS(syn_block)[idx];
+  regmmatch_T regmatch;
+  regmatch.rmm_ic = spp->sp_ic;
+  regmatch.regprog = spp->sp_prog;
+  bool r = syn_regexec(&regmatch, (linenr_T)lnum, (colnr_T)col,
+                        IF_SYN_TIME(&spp->sp_time));
+  spp->sp_prog = regmatch.regprog;
+  if (r) {
+    if (start_lnum) { *start_lnum = regmatch.startpos[0].lnum; }
+    if (start_col) { *start_col = regmatch.startpos[0].col; }
+    if (end_lnum) { *end_lnum = regmatch.endpos[0].lnum; }
+    if (end_col) { *end_col = regmatch.endpos[0].col; }
+    return 1;
+  }
+  return 0;
+}
+
+/// Get a synpat offset value by pattern index and offset index.
+int nvim_syn_get_pattern_offset(int pat_idx, int off_idx)
+{
+  if (syn_block == NULL || pat_idx < 0 || pat_idx >= syn_block->b_syn_patterns.ga_len
+      || off_idx < 0 || off_idx >= SPO_COUNT) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[pat_idx].sp_offsets[off_idx];
+}
+
+/// Get a synpat off_flags by pattern index.
+int nvim_syn_get_pattern_off_flags(int pat_idx)
+{
+  if (syn_block == NULL || pat_idx < 0 || pat_idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[pat_idx].sp_off_flags;
+}
+
+/// Get the sp_syn.id by pattern index.
+int nvim_syn_get_pattern_syn_id(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_syn.id;
+}
+
+/// Get the sp_ic by pattern index.
+int nvim_syn_get_pattern_ic(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_ic;
+}
+
+/// Get the sp_cont_list by pattern index.
+int16_t *nvim_syn_get_pattern_cont_list(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return NULL;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_cont_list;
+}
+
+/// Get pattern count in the current synblock.
+int nvim_syn_get_synblock_pattern_count(void)
+{
+  if (syn_block == NULL) {
+    return 0;
+  }
+  return syn_block->b_syn_patterns.ga_len;
+}
+
+/// Get current line length (syn_getcurline_len).
+int nvim_syn_getcurline_len(void)
+{
+  return (int)ml_get_buf_len(syn_buf, current_lnum);
+}
+
+/// Get line length for arbitrary lnum in syn_buf.
+int nvim_syn_get_line_len(int lnum)
+{
+  return (int)ml_get_buf_len(syn_buf, (linenr_T)lnum);
+}
+
+/// Get syn_buf line count.
+int nvim_syn_get_buf_line_count(void)
+{
+  return (int)syn_buf->b_ml.ml_line_count;
+}
+
+/// Apply multibyte character offset to a column position.
+/// Given a line number and starting column, advance (off > 0) or retreat
+/// (off < 0) by `off` characters, respecting multibyte boundaries.
+/// Returns the new column.
+int nvim_syn_mb_adjust_col(int lnum, int col, int off)
+{
+  if (off == 0) {
+    return col;
+  }
+  char *base = ml_get_buf(syn_buf, (linenr_T)lnum);
+  char *p = base + col;
+  if (off > 0) {
+    while (off-- > 0 && *p != NUL) {
+      MB_PTR_ADV(p);
+    }
+  } else {
+    while (off++ < 0 && base < p) {
+      MB_PTR_BACK(base, p);
+    }
+  }
+  return (int)(p - base);
+}
+
+/// Same as nvim_syn_mb_adjust_col but don't go past NUL (for start offsets).
+int nvim_syn_mb_adjust_col_start(int lnum, int col, int off)
+{
+  if (off == 0) {
+    return col;
+  }
+  char *base = ml_get_buf(syn_buf, (linenr_T)lnum);
+  char *p = base + col;
+  if (off > 0) {
+    while (off-- && *p != NUL) {
+      MB_PTR_ADV(p);
+    }
+  } else {
+    while (off++ && base < p) {
+      MB_PTR_BACK(base, p);
+    }
+  }
+  return (int)(p - base);
+}
+
+/// Get/set re_extmatch_in for find_endpos.
+void nvim_syn_set_extmatch_in(reg_extmatch_T *em)
+{
+  unref_extmatch(re_extmatch_in);
+  re_extmatch_in = ref_extmatch(em);
+}
+
+/// Clear re_extmatch_in.
+void nvim_syn_clear_extmatch_in(void)
+{
+  unref_extmatch(re_extmatch_in);
+  re_extmatch_in = NULL;
+}
+
+/// Get the next_match_col static.
+int nvim_syn_get_next_match_col_val(void)
+{
+  return next_match_col;
+}
+
+/// Set the next_match_col static.
+void nvim_syn_set_next_match_col_val(int col)
+{
+  next_match_col = col;
+}
+
+/// Get the syn_getcurline() result at a specific column.
+int nvim_syn_getcurline_byte_at(int col)
+{
+  return (unsigned char)syn_getcurline()[col];
+}
+
+/// _Static_assert for Phase 1 constants
+_Static_assert(SPO_MS_OFF == 0, "SPO_MS_OFF");
+_Static_assert(SPO_ME_OFF == 1, "SPO_ME_OFF");
+_Static_assert(SPO_HS_OFF == 2, "SPO_HS_OFF");
+_Static_assert(SPO_HE_OFF == 3, "SPO_HE_OFF");
+_Static_assert(SPO_RS_OFF == 4, "SPO_RS_OFF");
+_Static_assert(SPO_RE_OFF == 5, "SPO_RE_OFF");
+_Static_assert(SPO_LC_OFF == 6, "SPO_LC_OFF");
+_Static_assert(SPO_COUNT == 7, "SPO_COUNT");
+_Static_assert(SPTYPE_MATCH == 1, "SPTYPE_MATCH");
+_Static_assert(SPTYPE_START == 2, "SPTYPE_START");
+_Static_assert(SPTYPE_END == 3, "SPTYPE_END");
+_Static_assert(SPTYPE_SKIP == 4, "SPTYPE_SKIP");
+_Static_assert(HL_HAS_EOL == 0x08, "HL_HAS_EOL");
+_Static_assert(HL_ONELINE == 0x04, "HL_ONELINE");
+_Static_assert(HL_KEEPEND == 0x400, "HL_KEEPEND");
+_Static_assert(HL_EXTEND == 0x4000, "HL_EXTEND");
+_Static_assert(HL_MATCHCONT == 0x8000, "HL_MATCHCONT");
+_Static_assert(HL_CONCEALENDS == 0x40000, "HL_CONCEALENDS");
+_Static_assert(HL_MATCH == 0x40, "HL_MATCH");
+_Static_assert(HL_CONCEAL == 0x20000, "HL_CONCEAL");
+_Static_assert(HL_TRANSP == 0x02, "HL_TRANSP");
+_Static_assert(HL_TRANS_CONT == 0x10000, "HL_TRANS_CONT");
+_Static_assert(HL_CONTAINED == 0x01, "HL_CONTAINED");
+_Static_assert(HL_SKIPNL == 0x80, "HL_SKIPNL");
+_Static_assert(HL_SKIPEMPTY == 0x200, "HL_SKIPEMPTY");
