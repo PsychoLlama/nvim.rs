@@ -1,16 +1,17 @@
-Plan: ~/.claude/plans/wiggly-sauteeing-waterfall.md
+Plan: ~/.claude/plans/delegated-juggling-gray.md
 
-All 8 phases of the quickfix migration plan are complete:
+All 4 phases of the search.c migration plan are complete and committed:
 
-| Phase | Function | Lines | Commit |
-|-------|----------|-------|--------|
-| 1 | `vgr_match_buflines` | ~102 | (earlier session) |
-| 2 | `qf_add_entries` | ~93 | (earlier session) |
-| 3 | `qf_fill_buffer` | ~119 | (earlier session) |
-| 4 | `qf_init_ext` | ~107 | 78dd97cf |
-| 5 | `qf_jump_edit_buffer` | ~87 | 3b2154dc |
-| 6 | `vgr_process_files` | ~124 | f1060a54 |
-| 7 | `ex_vimgrep` | ~87 | 07a411cc |
-| 8 | `ex_helpgrep` | ~104 | d8915335 |
+| Phase | Function(s) | Commit |
+|-------|-------------|--------|
+| 1 | `searchit()` + `first_submatch()` | `39e55ea` |
+| 2 | `do_search()` | `7d5c625` |
+| 3 | `findmatchlimit()` + `check_prevcol` + `find_rawstring_end` + `find_mps_values` | `02019fc` |
+| 4 | `find_pattern_in_path()` + batch helpers | `cc7c3af` |
 
-~811 lines of C logic migrated to Rust across 8 commits, all passing build, smoke-test, formatting, clippy, and unit tests.
+All checks pass:
+- **Build**: clean
+- **Smoke test**: passes (regexp smoke: 29/29)
+- **Format**: clean
+- **Clippy**: clean
+- **Unit tests**: 4083/4083 passing
