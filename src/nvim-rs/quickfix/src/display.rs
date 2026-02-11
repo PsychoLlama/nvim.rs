@@ -10,7 +10,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::derivable_impls)]
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
 // Display Constants
@@ -315,6 +315,173 @@ pub extern "C" fn rs_qf_display_scroll_percent(
         has_entries_below: false,
     };
     c_int::from(state.scroll_percent())
+}
+
+// =============================================================================
+// Phase 3: qf_fill_buffer
+// =============================================================================
+
+type LinenrT = i32;
+
+/// Opaque buffer handle
+type BufHandle = *mut c_void;
+/// Opaque qfline handle
+type QfLinePtr = *const c_void;
+/// Opaque list handle
+type ListPtr = *mut c_void;
+/// Opaque list item handle
+type ListItemPtr = *const c_void;
+
+const MAXPATHL: usize = 4096;
+
+extern "C" {
+    fn nvim_qf_buf_is_curbuf(buf: BufHandle) -> bool;
+    fn nvim_qf_fill_buffer_internal_error();
+    fn nvim_qf_delete_all_lines() -> bool;
+    fn nvim_qf_zero_skipcol_for_curbuf();
+    fn nvim_qf_u_clearallandblockfree();
+    fn nvim_qf_get_start_nonnull(qfl: *const c_void) -> QfLinePtr;
+    fn nvim_qfline_get_next(qfp: QfLinePtr) -> QfLinePtr;
+    fn nvim_qfline_get_fnum(qfp: QfLinePtr) -> c_int;
+    fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
+    fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
+    fn nvim_call_qftf_func(
+        qfl: *mut c_void,
+        qf_winid: c_int,
+        start: LinenrT,
+        count: c_int,
+    ) -> ListPtr;
+    fn nvim_tv_list_first(list: *const c_void) -> ListItemPtr;
+    fn nvim_tv_list_item_next(list: *const c_void, li: ListItemPtr) -> ListItemPtr;
+    fn nvim_tv_list_item_string(li: ListItemPtr) -> *mut c_char;
+    fn nvim_qf_buf_add_line(
+        qfl: *mut c_void,
+        buf: BufHandle,
+        lnum: LinenrT,
+        qfp: *mut c_void,
+        dirname: *mut c_char,
+        qftf_str: *mut c_char,
+        first_in_file: bool,
+    ) -> c_int;
+    fn nvim_ml_delete_one(lnum: LinenrT);
+    fn nvim_qfga_clear();
+    fn nvim_check_lnums_true();
+    fn nvim_qf_set_filetype_and_autocmds();
+    fn nvim_qf_get_key_typed() -> bool;
+    fn nvim_qf_set_key_typed(val: bool);
+}
+
+const FAIL: c_int = 0;
+
+/// Fill the quickfix buffer with entries.
+///
+/// # Safety
+///
+/// - `buf` must be a valid pointer to a `buf_T`
+/// - `qfl` may be NULL (in which case only cleanup is done)
+/// - `old_last` may be NULL (full refresh) or a valid `qfline_T` pointer
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_qf_fill_buffer(
+    qfl: *mut c_void,
+    buf: BufHandle,
+    old_last: QfLinePtr,
+    qf_winid: c_int,
+) {
+    let old_key_typed = nvim_qf_get_key_typed();
+
+    if old_last.is_null() {
+        if !nvim_qf_buf_is_curbuf(buf) {
+            nvim_qf_fill_buffer_internal_error();
+            return;
+        }
+
+        // Delete all existing lines
+        if !nvim_qf_delete_all_lines() {
+            return;
+        }
+
+        nvim_qf_zero_skipcol_for_curbuf();
+        nvim_qf_u_clearallandblockfree();
+    }
+
+    // Check if there is anything to display
+    let qf_start = nvim_qf_get_start_nonnull(qfl);
+    if !qfl.is_null() && !qf_start.is_null() {
+        let mut dirname = [0u8; MAXPATHL];
+
+        let mut lnum: LinenrT;
+        let mut qfp: QfLinePtr;
+
+        // Add one line for each error
+        if old_last.is_null() {
+            qfp = qf_start;
+            lnum = 0;
+        } else {
+            let next = nvim_qfline_get_next(old_last);
+            qfp = if next.is_null() { old_last } else { next };
+            lnum = nvim_buf_get_line_count(buf);
+        }
+
+        let qf_count = nvim_qf_get_count(qfl);
+        let qftf_list = nvim_call_qftf_func(qfl, qf_winid, lnum + 1, qf_count);
+        let mut qftf_li = nvim_tv_list_first(qftf_list.cast_const());
+
+        let mut prev_bufnr: c_int = -1;
+        let mut invalid_val = false;
+
+        while lnum < qf_count {
+            let mut qftf_str: *mut c_char = std::ptr::null_mut();
+
+            // Use the text supplied by the user defined function (if any).
+            if !qftf_li.is_null() && !invalid_val {
+                qftf_str = nvim_tv_list_item_string(qftf_li);
+                if qftf_str.is_null() {
+                    invalid_val = true;
+                }
+            }
+
+            if nvim_qf_buf_add_line(
+                qfl,
+                buf,
+                lnum,
+                qfp.cast_mut().cast(),
+                dirname.as_mut_ptr().cast(),
+                qftf_str,
+                prev_bufnr != nvim_qfline_get_fnum(qfp),
+            ) == FAIL
+            {
+                break;
+            }
+            prev_bufnr = nvim_qfline_get_fnum(qfp);
+            lnum += 1;
+            qfp = nvim_qfline_get_next(qfp);
+            if qfp.is_null() {
+                break;
+            }
+
+            if !qftf_li.is_null() {
+                qftf_li = nvim_tv_list_item_next(qftf_list.cast_const(), qftf_li);
+            }
+        }
+
+        if old_last.is_null() {
+            // Delete the empty line which is now at the end
+            nvim_ml_delete_one(lnum + 1);
+        }
+
+        nvim_qfga_clear();
+    }
+
+    // Correct cursor position.
+    nvim_check_lnums_true();
+
+    if old_last.is_null() {
+        nvim_qf_set_filetype_and_autocmds();
+    }
+
+    // Restore KeyTyped, setting 'filetype' may reset it.
+    nvim_qf_set_key_typed(old_key_typed);
 }
 
 // =============================================================================

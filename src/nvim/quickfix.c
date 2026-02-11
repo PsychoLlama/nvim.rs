@@ -824,6 +824,9 @@ extern bool rs_vgr_match_buflines(void *qfl, const char *fname, void *buf, const
 // List management functions
 extern int rs_qf_add_entries(void *qi, int qf_idx, void *list, char *title, int action);
 
+// Display functions
+extern void rs_qf_fill_buffer(void *qfl, void *buf, void *old_last, int qf_winid);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -5870,126 +5873,132 @@ static list_T *call_qftf_func(qf_list_T *qfl, int qf_winid, int start_idx, int e
 /// If "old_last" is not NULL append the items after this one.
 /// When "old_last" is NULL then "buf" must equal "curbuf"!  Because ml_delete()
 /// is used and autocommands will be triggered.
+// ============================================================================
+// Phase 3: qf_fill_buffer accessors for Rust FFI
+// ============================================================================
+
+/// Check if buf == curbuf
+bool nvim_qf_buf_is_curbuf(const void *buf)
+{
+  return (const buf_T *)buf == curbuf;
+}
+
+/// Delete all lines from curbuf (for qf_fill_buffer).
+/// Returns true on success.
+bool nvim_qf_delete_all_lines(void)
+{
+  while ((curbuf->b_ml.ml_flags & ML_EMPTY) == 0) {
+    if (ml_delete(1) == FAIL) {
+      internal_error("qf_fill_buffer()");
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Zero skipcol for all windows showing curbuf
+void nvim_qf_zero_skipcol_for_curbuf(void)
+{
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    if (wp->w_buffer == curbuf) {
+      wp->w_skipcol = 0;
+    }
+  }
+}
+
+/// Remove all undo information from curbuf
+void nvim_qf_u_clearallandblockfree(void)
+{
+  u_clearallandblockfree(curbuf);
+}
+
+/// Call the quickfix text formatting function
+void *nvim_call_qftf_func(void *qfl, int qf_winid, linenr_T start, int count)
+{
+  return call_qftf_func((qf_list_T *)qfl, qf_winid, start, count);
+}
+
+/// Get string from a list item, or NULL if not a string
+char *nvim_tv_list_item_string(const void *li)
+{
+  if (li == NULL) {
+    return NULL;
+  }
+  return (char *)tv_get_string_chk(TV_LIST_ITEM_TV((const listitem_T *)li));
+}
+
+/// Call qf_buf_add_line (keeps formatting logic in C)
+int nvim_qf_buf_add_line(void *qfl, void *buf, linenr_T lnum, void *qfp,
+                         char *dirname, char *qftf_str, bool first_in_file)
+{
+  return qf_buf_add_line((qf_list_T *)qfl, (buf_T *)buf, lnum, (qfline_T *)qfp,
+                         dirname, qftf_str, first_in_file);
+}
+
+/// Delete a line at the given line number
+void nvim_ml_delete_one(linenr_T lnum)
+{
+  ml_delete(lnum);
+}
+
+/// Clear the qfga buffer
+void nvim_qfga_clear(void)
+{
+  qfga_clear();
+}
+
+/// Correct cursor position
+void nvim_check_lnums_true(void)
+{
+  check_lnums(true);
+}
+
+/// Set filetype, apply autocmds, and redraw for new qf buffer fill
+void nvim_qf_set_filetype_and_autocmds(void)
+{
+  curbuf->b_ro_locked++;
+  set_option_value_give_err(kOptFiletype, STATIC_CSTR_AS_OPTVAL("qf"), OPT_LOCAL);
+  curbuf->b_p_ma = false;
+
+  curbuf->b_keep_filetype = true;
+  apply_autocmds(EVENT_BUFREADPOST, "quickfix", NULL, false, curbuf);
+  apply_autocmds(EVENT_BUFWINENTER, "quickfix", NULL, false, curbuf);
+  curbuf->b_keep_filetype = false;
+  curbuf->b_ro_locked--;
+
+  redraw_curbuf_later(UPD_NOT_VALID);
+}
+
+/// Get/set KeyTyped for qf_fill_buffer
+bool nvim_qf_get_key_typed(void)
+{
+  return KeyTyped;
+}
+
+void nvim_qf_set_key_typed(bool val)
+{
+  KeyTyped = val;
+}
+
+/// Report internal error for qf_fill_buffer
+void nvim_qf_fill_buffer_internal_error(void)
+{
+  internal_error("qf_fill_buffer()");
+}
+
+/// Get qf_start from a list (returns NULL if qfl is NULL)
+void *nvim_qf_get_start_nonnull(const void *qfl)
+{
+  if (qfl == NULL) {
+    return NULL;
+  }
+  return ((const qf_list_T *)qfl)->qf_start;
+}
+
 static void qf_fill_buffer(qf_list_T *qfl, buf_T *buf, qfline_T *old_last, int qf_winid)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-  const bool old_KeyTyped = KeyTyped;
-
-  if (old_last == NULL) {
-    if (buf != curbuf) {
-      internal_error("qf_fill_buffer()");
-      return;
-    }
-
-    // delete all existing lines
-    //
-    // Note: we cannot store undo information, because
-    // qf buffer is usually not allowed to be modified.
-    //
-    // So we need to clean up undo information
-    // otherwise autocommands may invalidate the undo stack
-    while ((curbuf->b_ml.ml_flags & ML_EMPTY) == 0) {
-      // If deletion fails, this loop may run forever, so
-      // signal error and return.
-      if (ml_delete(1) == FAIL) {
-        internal_error("qf_fill_buffer()");
-        return;
-      }
-    }
-
-    FOR_ALL_TAB_WINDOWS(tp, wp) {
-      if (wp->w_buffer == curbuf) {
-        wp->w_skipcol = 0;
-      }
-    }
-
-    // Remove all undo information
-    u_clearallandblockfree(curbuf);
-  }
-
-  // Check if there is anything to display
-  if (qfl != NULL && qfl->qf_start != NULL) {
-    char dirname[MAXPATHL];
-
-    *dirname = NUL;
-
-    linenr_T lnum;
-    qfline_T *qfp;
-
-    // Add one line for each error
-    if (old_last == NULL) {
-      qfp = qfl->qf_start;
-      lnum = 0;
-    } else {
-      qfp = old_last->qf_next != NULL ? old_last->qf_next : old_last;
-      lnum = buf->b_ml.ml_line_count;
-    }
-
-    list_T *qftf_list = call_qftf_func(qfl, qf_winid, lnum + 1, qfl->qf_count);
-    listitem_T *qftf_li = tv_list_first(qftf_list);
-
-    int prev_bufnr = -1;
-    bool invalid_val = false;
-
-    while (lnum < qfl->qf_count) {
-      char *qftf_str = NULL;
-
-      // Use the text supplied by the user defined function (if any).
-      // If the returned value is not string, then ignore the rest
-      // of the returned values and use the default.
-      if (qftf_li != NULL && !invalid_val) {
-        qftf_str = (char *)tv_get_string_chk(TV_LIST_ITEM_TV(qftf_li));
-        if (qftf_str == NULL) {
-          invalid_val = true;
-        }
-      }
-
-      if (qf_buf_add_line(qfl, buf, lnum, qfp, dirname, qftf_str,
-                          prev_bufnr != qfp->qf_fnum) == FAIL) {
-        break;
-      }
-      prev_bufnr = qfp->qf_fnum;
-      lnum++;
-      qfp = qfp->qf_next;
-      if (qfp == NULL) {
-        break;
-      }
-
-      if (qftf_li != NULL) {
-        qftf_li = TV_LIST_ITEM_NEXT(qftf_list, qftf_li);
-      }
-    }
-    if (old_last == NULL) {
-      // Delete the empty line which is now at the end
-      ml_delete(lnum + 1);
-    }
-
-    qfga_clear();
-  }
-
-  // Correct cursor position.
-  check_lnums(true);
-
-  if (old_last == NULL) {
-    // Set the 'filetype' to "qf" each time after filling the buffer.  This
-    // resembles reading a file into a buffer, it's more logical when using
-    // autocommands.
-    curbuf->b_ro_locked++;
-    set_option_value_give_err(kOptFiletype, STATIC_CSTR_AS_OPTVAL("qf"), OPT_LOCAL);
-    curbuf->b_p_ma = false;
-
-    curbuf->b_keep_filetype = true;  // don't detect 'filetype'
-    apply_autocmds(EVENT_BUFREADPOST, "quickfix", NULL, false, curbuf);
-    apply_autocmds(EVENT_BUFWINENTER, "quickfix", NULL, false, curbuf);
-    curbuf->b_keep_filetype = false;
-    curbuf->b_ro_locked--;
-
-    // make sure it will be redrawn
-    redraw_curbuf_later(UPD_NOT_VALID);
-  }
-
-  // Restore KeyTyped, setting 'filetype' may reset it.
-  KeyTyped = old_KeyTyped;
+  rs_qf_fill_buffer(qfl, buf, old_last, qf_winid);
 }
 
 static void qf_list_changed(qf_list_T *qfl)
