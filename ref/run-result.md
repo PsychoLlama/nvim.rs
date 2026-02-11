@@ -1,18 +1,29 @@
-Plan: ~/.claude/plans/spicy-leaping-perlis.md
+Plan: ~/.claude/plans/jolly-mapping-shamir.md
 
-All 5 phases of the syntax.c migration plan are complete:
+All 7 phases of the plan are complete. Here's a summary:
 
-| Phase | Functions | Status |
-|-------|-----------|--------|
-| 1 | `find_endpos` + helpers (~530 lines) | Committed |
-| 2 | `syn_current_attr` + `syn_finish_line` (~500 lines) | Committed |
-| 3 | `syn_sync` (~222 lines) | Committed |
-| 4 | `get_syn_options` + `get_id_list` (~290 lines) | Committed |
-| 5 | `syn_cmd_region` + `get_syn_pattern` (~300 lines) | Committed |
+## Plan Execution Complete
 
-**Summary of commits:**
-- 5 commits on `rust-migration` branch
-- ~1,842 C lines migrated to Rust across 5 new/modified modules (`region.rs`, `current_attr.rs`, `sync.rs`, `opt_parse.rs`, `cmd_region.rs`)
-- All checks pass: build, smoke test (29 tests), clippy, fmt, unit tests (4075 tests)
-- C functions replaced with thin wrappers calling `rs_*` Rust implementations
-- Complex data structure operations (synpat_T field writes, garray management) encapsulated in high-level C wrappers
+**6 heavy C functions migrated to Rust** from `src/nvim/normal.c`:
+
+| Phase | Function | Lines | New Rust File |
+|-------|----------|-------|---------------|
+| 1A | `find_ident_at_pos` | 93 | `lib.rs` (inline) |
+| 1B | `clear_showcmd` | 81 | `showcmd.rs` |
+| 2A | NormalState accessor infra | ~30 accessors | (C only) |
+| 2B | `normal_get_additional_char` | 159 | `additional_char.rs` |
+| 3 | `normal_finish_command` | 107 | `finish_command.rs` |
+| 4A | `normal_check` | 92 | `check.rs` |
+| 4B | `normal_execute` | 181 | `normal_execute.rs` |
+
+**Key patterns used:**
+- Opaque handle FFI (never dereference C structs in Rust)
+- `_Static_assert` for every migrated constant (~33 total)
+- Labeled blocks (`'finish: { break 'finish; }`) replacing `goto`
+- `CharTarget` enum replacing `int *cp` pointer-to-struct-field
+- Complex C code kept in thin wrapper functions
+
+**All 5 verification checks pass** for each commit:
+- `just build`, `just smoke-test`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test` (4076 tests)
+
+**Critical fix applied:** Hallucinated MODE_* constants (MODE_REPLACE, MODE_LREPLACE, MODE_LANGMAP, MODE_NORMAL_BUSY) were all wrong — verified and corrected against `state_defs.h`.
