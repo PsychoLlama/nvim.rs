@@ -238,6 +238,18 @@ extern TabRemoveResult rs_close_othertab_remove_tabpage(win_T *win, tabpage_T *t
 extern void rs_close_othertab_leave_open(win_T *win, int did_decrement, buf_T *bufref_buf,
                                          int bufref_valid);
 
+// win_close migration: Rust helpers
+typedef struct {
+  win_T *wp;           // new curwin candidate (from win_free_mem or cursor transfer)
+  int close_curwin;    // 1 if curwin was the closed window
+  int was_floating;    // 1 if closed window was floating
+  int dir;             // direction from win_free_mem ('v' or 'h')
+} WinCloseStructResult;
+extern int rs_win_close_validate(win_T *win, int free_buf, int force);
+extern WinCloseStructResult rs_win_close_structural(win_T *win, int help_window,
+                                                     frame_T *win_frame);
+extern void rs_win_close_post_layout(int was_floating, int dir, frame_T *win_frame);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -3800,35 +3812,30 @@ int win_close(win_T *win, bool free_buf, bool force)
   frame_T *win_frame = win->w_floating ? NULL : win->w_frame->fr_parent;
   const bool had_diffmode = win->w_p_diff;
 
-  if (last_window(win)) {
-    emsg(_("E444: Cannot close last window"));
-    return FAIL;
-  }
-
-  if (win_locked(win)
-      || (win->w_buffer != NULL && win->w_buffer->b_locked > 0)) {
-    return FAIL;     // window is already being closed
-  }
-  if (is_aucmd_win(win)) {
-    emsg(_(e_autocmd_close));
-    return FAIL;
-  }
-  if (lastwin->w_floating && one_window(win, NULL)) {
-    if (is_aucmd_win(lastwin)) {
+  // --- Phase 1: Rust validation ---
+  int vrc = rs_win_close_validate(win, free_buf ? 1 : 0, force ? 1 : 0);
+  if (vrc == 1) {
+    // Specific error messages for last_window, locked, aucmd_win, E814.
+    // Rust doesn't emit these (except E814), so re-check and emit here.
+    if (last_window(win)) {
+      emsg(_("E444: Cannot close last window"));
+    } else if (is_aucmd_win(win)) {
+      emsg(_(e_autocmd_close));
+    } else if (lastwin->w_floating && one_window(win, NULL) && is_aucmd_win(lastwin)) {
       emsg(_("E814: Cannot close window, only autocmd window would remain"));
-      return FAIL;
     }
+    return FAIL;
+  }
+  if (vrc == 2) {
+    // Floating-only: recursive close loop (must stay in C).
     if (force || can_close_floating_windows(NULL)) {
-      // close the last window until the there are no floating windows
       while (lastwin->w_floating) {
-        // `force` flag isn't actually used when closing a floating window.
         if (win_close(lastwin, free_buf, true) == FAIL) {
-          // If closing the window fails give up, to avoid looping forever.
           return FAIL;
         }
       }
       if (!win_valid_any_tab(win)) {
-        return FAIL;  // window already closed by autocommands
+        return FAIL;
       }
     } else {
       emsg(e_floatonly);
@@ -3836,17 +3843,14 @@ int win_close(win_T *win, bool free_buf, bool force)
     }
   }
 
-  // When closing the last window in a tab page first go to another tab page
-  // and then close the window and the tab page to avoid that curwin and
-  // curtab are invalid while we are freeing memory.
+  // close_last_window_tabpage (heavy autocmd interaction, stays in C).
   if (close_last_window_tabpage(win, free_buf, prev_curtab)) {
     return FAIL;
   }
 
-  bool help_window = false;
+  // --- Autocmd-heavy section (stays in C) ---
 
-  // When closing the help window, try restoring a snapshot after closing
-  // the window.  Otherwise clear the snapshot, it's now invalid.
+  bool help_window = false;
   if (bt_help(win->w_buffer)) {
     help_window = true;
   } else {
@@ -3859,14 +3863,10 @@ int win_close(win_T *win, bool free_buf, bool force)
   if (win == curwin) {
     leaving_window(curwin);
 
-    // Guess which window is going to be the new current window.
-    // This may change because of the autocommands (sigh).
     wp = win->w_floating ? win_float_find_altwin(win, NULL) : frame2win(win_altframe(win, NULL));
 
-    // Be careful: If autocommands delete the window or cause this window
-    // to be the last one left, return now.
     if (wp->w_buffer != curbuf) {
-      reset_VIsual_and_resel();  // stop Visual mode
+      reset_VIsual_and_resel();
 
       other_buffer = true;
       if (!win_valid(win)) {
@@ -3891,15 +3891,12 @@ int win_close(win_T *win, bool free_buf, bool force)
     if (last_window(win)) {
       return FAIL;
     }
-    // autocmds may abort script processing
     if (aborting()) {
       return FAIL;
     }
   }
 
-  // Fire WinClosed just before starting to free window-related resources.
   do_autocmd_winclosed(win);
-  // autocmd may have freed the window already.
   if (!win_valid_any_tab(win)) {
     return OK;
   }
@@ -3908,143 +3905,49 @@ int win_close(win_T *win, bool free_buf, bool force)
 
   if (win_valid(win) && win->w_buffer == NULL
       && !win->w_floating && last_window(win)) {
-    // Autocommands have closed all windows, quit now.  Restore
-    // curwin->w_buffer, otherwise writing ShaDa file may fail.
     if (curwin->w_buffer == NULL) {
       curwin->w_buffer = curbuf;
     }
     getout(0);
   }
-  // Autocommands may have moved to another tab page.
   if (curtab != prev_curtab && win_valid_any_tab(win)
       && win->w_buffer == NULL) {
-    // Need to close the window anyway, since the buffer is NULL.
     win_close_othertab(win, false, prev_curtab, force);
     return FAIL;
   }
 
-  // Autocommands may have closed the window already, or closed the only
-  // other window or moved to another tab page.
   if (!win_valid(win) || (!win->w_floating && last_window(win))
       || close_last_window_tabpage(win, free_buf, prev_curtab)) {
     return FAIL;
   }
 
-  // Now we are really going to close the window.  Disallow any autocommand
-  // to split a window to avoid trouble.
-  split_disallowed++;
+  // --- Phase 2: Rust structural close ---
+  WinCloseStructResult res = rs_win_close_structural(win, help_window ? 1 : 0, win_frame);
+  wp = res.wp;
 
-  bool was_floating = win->w_floating;
-  if (ui_has(kUIMultigrid)) {
-    ui_call_win_close(win->w_grid_alloc.handle);
-  }
+  // --- Phase 3: Rust post-layout ---
+  rs_win_close_post_layout(res.was_floating, res.dir, win_frame);
 
-  if (win->w_floating) {
-    ui_comp_remove_grid(&win->w_grid_alloc);
-    assert(first_tabpage != NULL);  // suppress clang "Dereference of NULL pointer"
-    if (win->w_config.external) {
-      FOR_ALL_TABS(tp) {
-        if (tp != curtab && tp->tp_curwin == win) {
-          // NB: an autocmd can still abort the closing of this window,
-          // but carrying out this change anyway shouldn't be a catastrophe.
-          tp->tp_curwin = tp->tp_firstwin;
-        }
-      }
-    }
-  }
-
-  // Free the memory used for the window and get the window that received
-  // the screen space.
-  int dir;
-  wp = win_free_mem(win, &dir, NULL);
-
-  if (help_window) {
-    // Closing the help window moves the cursor back to the current window
-    // of the snapshot.
-    win_T *prev_win = get_snapshot_curwin(SNAP_HELP_IDX);
-    if (win_valid(prev_win)) {
-      wp = prev_win;
-    }
-  }
-
-  bool close_curwin = false;
-
-  // Make sure curwin isn't invalid.  It can cause severe trouble when
-  // printing an error message.  For win_equal() curbuf needs to be valid
-  // too.
-  if (win == curwin) {
-    curwin = wp;
-    if (wp->w_p_pvw || bt_quickfix(wp->w_buffer)) {
-      // If the cursor goes to the preview or the quickfix window, try
-      // finding another window to go to.
-      while (true) {
-        if (wp->w_next == NULL) {
-          wp = firstwin;
-        } else {
-          wp = wp->w_next;
-        }
-        if (wp == curwin) {
-          break;
-        }
-        if (!wp->w_p_pvw && !bt_quickfix(wp->w_buffer)
-            && !(wp->w_floating && (wp->w_config.hide || !wp->w_config.focusable))) {
-          curwin = wp;
-          break;
-        }
-      }
-    }
-    curbuf = curwin->w_buffer;
-    close_curwin = true;
-
-    // The cursor position may be invalid if the buffer changed after last
-    // using the window.
-    check_cursor(curwin);
-  }
-
-  if (!was_floating) {
-    // If last window has a status line now and we don't want one,
-    // remove the status line. Do this before win_equal(), because
-    // it may change the height of a window.
-    last_status(false);
-
-    if (!curwin->w_floating && p_ea && (*p_ead == 'b' || *p_ead == dir)) {
-      // If the frame of the closed window contains the new current window,
-      // only resize that frame.  Otherwise resize all windows.
-      win_equal(curwin, curwin->w_frame->fr_parent == win_frame, dir);
-    } else {
-      win_comp_pos();
-      win_fix_scroll(false);
-    }
-  }
-
-  if (close_curwin) {
+  // --- Post-close autocmds (stay in C) ---
+  if (res.close_curwin) {
     win_enter_ext(wp, WEE_CURWIN_INVALID | WEE_TRIGGER_ENTER_AUTOCMDS
                   | WEE_TRIGGER_LEAVE_AUTOCMDS);
     if (other_buffer) {
-      // careful: after this wp and win may be invalid!
       apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf);
     }
   }
 
   if (ONE_WINDOW && curwin->w_locked && curbuf->b_locked_split
       && first_tabpage->tp_next != NULL) {
-    // The new curwin is the last window in the current tab page, and it is
-    // already being closed.  Trigger TabLeave now, as after its buffer is
-    // removed it's no longer safe to do that.
     apply_autocmds(EVENT_TABLEAVE, NULL, NULL, false, curbuf);
   }
 
-  split_disallowed--;
+  nvim_dec_split_disallowed();
 
-  // After closing the help window, try restoring the window layout from
-  // before it was opened.
   if (help_window) {
-    restore_snapshot(SNAP_HELP_IDX, close_curwin);
+    restore_snapshot(SNAP_HELP_IDX, res.close_curwin);
   }
 
-  // If the window had 'diff' set and now there is only one window left in
-  // the tab page with 'diff' set, and "closeoff" is in 'diffopt', then
-  // execute ":diffoff!".
   if (diffopt_closeoff() && had_diffmode && curtab == prev_curtab) {
     int diffcount = 0;
 
@@ -4059,8 +3962,7 @@ int win_close(win_T *win, bool free_buf, bool force)
   }
 
   curwin->w_pos_changed = true;
-  if (!was_floating) {
-    // TODO(bfredl): how about no?
+  if (!res.was_floating) {
     redraw_all_later(UPD_NOT_VALID);
   }
   return OK;
@@ -7935,10 +7837,65 @@ void nvim_win_new_screen_rows_wrapper(void)
   win_new_screen_rows();
 }
 
-/// Wrapper: win_free_mem(win, dirp, tp).
-void nvim_win_free_mem_wrapper(win_T *win, int *dirp, tabpage_T *tp)
+/// Wrapper: win_free_mem(win, dirp, tp). Returns the window that got the space.
+win_T *nvim_win_free_mem_wrapper(win_T *win, int *dirp, tabpage_T *tp)
 {
-  win_free_mem(win, dirp, tp);
+  return win_free_mem(win, dirp, tp);
+}
+
+// --- Phase 3 accessors: win_close ---
+
+/// Increment split_disallowed.
+void nvim_inc_split_disallowed(void)
+{
+  split_disallowed++;
+}
+
+/// Decrement split_disallowed.
+void nvim_dec_split_disallowed(void)
+{
+  split_disallowed--;
+}
+
+/// Wrapper: ui_call_win_close(wp->w_grid_alloc.handle).
+void nvim_ui_call_win_close_win(win_T *wp)
+{
+  if (wp) {
+    ui_call_win_close(wp->w_grid_alloc.handle);
+  }
+}
+
+/// Set tp_curwin on a tabpage.
+void nvim_tabpage_set_curwin(tabpage_T *tp, win_T *wp)
+{
+  tp->tp_curwin = wp;
+}
+
+/// Set curbuf = curwin->w_buffer.
+void nvim_set_curbuf_from_curwin(void)
+{
+  curbuf = curwin->w_buffer;
+}
+
+/// Wrapper: check_cursor(wp).
+void nvim_check_cursor_win_wrapper(win_T *wp)
+{
+  check_cursor(wp);
+}
+
+/// Wrapper: win_equal(wp, current, dir).
+void nvim_win_equal_wrapper(win_T *wp, int current, int dir)
+{
+  win_equal(wp, current != 0, dir);
+}
+
+/// Get w_frame->fr_parent from a window (for win_close frame comparison).
+frame_T *nvim_win_get_frame_parent(win_T *wp)
+{
+  if (wp && wp->w_frame) {
+    return wp->w_frame->fr_parent;
+  }
+  return NULL;
 }
 
 /// Wrapper: free_tabpage(tp).
