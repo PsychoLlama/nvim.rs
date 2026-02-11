@@ -111,6 +111,44 @@ extern const char *rs_find_name_end(const char *arg, const char **expr_start,
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
 _Static_assert(FNE_CHECK_START == 2, "FNE_CHECK_START mismatch");
 
+// Phase 3: Buffer index conversion + pattern match (Rust implementations)
+extern int rs_buf_byteidx_to_charidx(buf_T *buf, linenr_T lnum, int byteidx);
+extern int rs_buf_charidx_to_byteidx(buf_T *buf, linenr_T lnum, int charidx);
+extern int rs_pattern_match(const char *pat, const char *text, bool ic);
+
+_Static_assert(RE_MAGIC == 1, "RE_MAGIC mismatch");
+_Static_assert(RE_STRING == 2, "RE_STRING mismatch");
+
+// C accessors for buffer operations (used by Rust indexing module)
+int nvim_eval_buf_ml_valid(const buf_T *buf)
+{
+  return buf != NULL && buf->b_ml.ml_mfp != NULL;
+}
+
+int nvim_eval_buf_line_count(const buf_T *buf)
+{
+  return buf->b_ml.ml_line_count;
+}
+
+const char *nvim_eval_ml_get_buf(buf_T *buf, linenr_T lnum)
+{
+  return ml_get_buf(buf, lnum);
+}
+
+// C accessors for p_cpo save/restore (used by Rust pattern_match)
+static char *saved_eval_p_cpo;
+
+void nvim_eval_save_set_cpo(void)
+{
+  saved_eval_p_cpo = p_cpo;
+  p_cpo = empty_string_option;
+}
+
+void nvim_eval_restore_cpo(void)
+{
+  p_cpo = saved_eval_p_cpo;
+}
+
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
@@ -1665,20 +1703,7 @@ void set_context_for_expression(expand_T *xp, char *arg, cmdidx_T cmdidx)
 /// @return  true if "pat" matches "text".
 int pattern_match(const char *pat, const char *text, bool ic)
 {
-  int matches = 0;
-  regmatch_T regmatch;
-
-  // avoid 'l' flag in 'cpoptions'
-  char *save_cpo = p_cpo;
-  p_cpo = empty_string_option;
-  regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-  if (regmatch.regprog != NULL) {
-    regmatch.rm_ic = ic;
-    matches = vim_regexec_nl(&regmatch, text, 0);
-    vim_regfree(regmatch.regprog);
-  }
-  p_cpo = save_cpo;
-  return matches;
+  return rs_pattern_match(pat, text, ic);
 }
 
 /// Handle a name followed by "(".  Both for just "name(arg)" and for
@@ -5189,35 +5214,7 @@ char *save_tv_as_string(typval_T *tv, ptrdiff_t *const len, bool endnl, bool crl
 /// The index of the first byte and the first character is zero.
 int buf_byteidx_to_charidx(buf_T *buf, linenr_T lnum, int byteidx)
 {
-  if (buf == NULL || buf->b_ml.ml_mfp == NULL) {
-    return -1;
-  }
-
-  if (lnum > buf->b_ml.ml_line_count) {
-    lnum = buf->b_ml.ml_line_count;
-  }
-
-  char *str = ml_get_buf(buf, lnum);
-
-  if (*str == NUL) {
-    return 0;
-  }
-
-  // count the number of characters
-  char *t = str;
-  int count;
-  for (count = 0; *t != NUL && t <= str + byteidx; count++) {
-    t += utfc_ptr2len(t);
-  }
-
-  // In insert mode, when the cursor is at the end of a non-empty line,
-  // byteidx points to the NUL character immediately past the end of the
-  // string. In this case, add one to the character count.
-  if (*t == NUL && byteidx != 0 && t == str + byteidx) {
-    count++;
-  }
-
-  return count - 1;
+  return rs_buf_byteidx_to_charidx(buf, lnum, byteidx);
 }
 
 /// Convert the specified character index of line 'lnum' in buffer 'buf' to a
@@ -5227,23 +5224,7 @@ int buf_byteidx_to_charidx(buf_T *buf, linenr_T lnum, int byteidx)
 /// @return  -1 on failure.
 int buf_charidx_to_byteidx(buf_T *buf, linenr_T lnum, int charidx)
 {
-  if (buf == NULL || buf->b_ml.ml_mfp == NULL) {
-    return -1;
-  }
-
-  if (lnum > buf->b_ml.ml_line_count) {
-    lnum = buf->b_ml.ml_line_count;
-  }
-
-  char *str = ml_get_buf(buf, lnum);
-
-  // Convert the character offset to a byte offset
-  char *t = str;
-  while (*t != NUL && --charidx > 0) {
-    t += utfc_ptr2len(t);
-  }
-
-  return (int)(t - str);
+  return rs_buf_charidx_to_byteidx(buf, lnum, charidx);
 }
 
 /// Translate a Vimscript object into a position

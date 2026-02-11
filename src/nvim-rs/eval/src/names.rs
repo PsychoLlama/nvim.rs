@@ -131,11 +131,7 @@ pub unsafe extern "C" fn rs_to_name_end(arg: *const c_char, use_namespace: bool)
         if *p as u8 == b':'
             && (p != arg.add(1)
                 || !use_namespace
-                || rs_vim_strchr(
-                    c"bgstvw".as_ptr(),
-                    c_int::from(*arg as u8),
-                )
-                .is_null())
+                || rs_vim_strchr(c"bgstvw".as_ptr(), c_int::from(*arg as u8)).is_null())
         {
             break;
         }
