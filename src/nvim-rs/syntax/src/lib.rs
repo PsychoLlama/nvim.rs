@@ -26,6 +26,7 @@ pub mod check_ends;
 pub mod cluster;
 pub mod commands;
 pub mod containment;
+pub mod current_attr;
 pub mod engine;
 pub mod fold;
 pub mod group;
@@ -3822,15 +3823,7 @@ pub unsafe extern "C" fn rs_syn_start_line() {
     nvim_syn_start_line();
 }
 
-/// Call syn_finish_line to process to end of current line.
-/// Returns 1 if a sync point was found (when syncing), 0 otherwise.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_finish_line(syncing: c_int) -> c_int {
-    nvim_syn_finish_line(syncing)
-}
+// syn_finish_line is now implemented in current_attr.rs module
 
 /// Call syn_sync to synchronize syntax state for a line.
 ///

@@ -132,6 +132,10 @@ extern void rs_syn_add_start_off(int *res_lnum, int *res_col,
                                  int end_lnum, int end_col,
                                  int pat_idx, int off_idx, int extra);
 
+// Phase 2: Migrated syn_current_attr + syn_finish_line from Rust
+extern int rs_syn_current_attr_impl(int syncing, int displaying, bool *can_spell, int keep_state);
+extern int rs_syn_finish_line(int syncing);
+
 // Phase 18a: Simple settings command functions from Rust
 extern int rs_syn_cmd_case(synblock_T *block, const char *arg, const char *arg_end);
 extern int rs_syn_cmd_conceal(synblock_T *block, const char *arg, const char *arg_end);
@@ -1476,32 +1480,7 @@ bool syntax_check_changed(linenr_T lnum)
 /// @param syncing  called for syncing
 static bool syn_finish_line(const bool syncing)
 {
-  while (!current_finished) {
-    syn_current_attr(syncing, false, NULL, false);
-
-    // When syncing, and found some item, need to check the item.
-    if (syncing && current_state.ga_len) {
-      // Check for match with sync item.
-      const stateitem_T *const cur_si = &CUR_STATE(current_state.ga_len - 1);
-      if (cur_si->si_idx >= 0
-          && (SYN_ITEMS(syn_block)[cur_si->si_idx].sp_flags
-              & (HL_SYNC_HERE|HL_SYNC_THERE))) {
-        return true;
-      }
-
-      // syn_current_attr() will have skipped the check for an item
-      // that ends here, need to do that now.  Be careful not to go
-      // past the NUL.
-      const colnr_T prev_current_col = current_col;
-      if (syn_getcurline()[current_col] != NUL) {
-        current_col++;
-      }
-      check_state_ends();
-      current_col = prev_current_col;
-    }
-    current_col++;
-  }
-  return false;
+  return rs_syn_finish_line(syncing);
 }
 
 /// Gets highlight attributes for next character.
@@ -1564,6 +1543,13 @@ int get_syntax_attr(const colnr_T col, bool *const can_spell, const bool keep_st
 /// @param can_spell   return: do spell checking
 /// @param keep_state  keep syntax stack afterwards
 static int syn_current_attr(const bool syncing, const bool displaying, bool *const can_spell,
+                            const bool keep_state)
+{
+  return rs_syn_current_attr_impl(syncing, displaying, can_spell, keep_state);
+}
+
+#if 0  // Original C implementation preserved for reference during migration
+static int syn_current_attr_ORIG(const bool syncing, const bool displaying, bool *const can_spell,
                             const bool keep_state)
 {
   lpos_T endpos;
@@ -2038,6 +2024,7 @@ static int syn_current_attr(const bool syncing, const bool displaying, bool *con
 
   return current_attr;
 }
+#endif  // Original syn_current_attr
 
 /// @return  true if we already matched pattern "idx" at the current column.
 static bool did_match_already(int idx, garray_T *gap)
@@ -8044,6 +8031,212 @@ int nvim_syn_getcurline_byte_at(int col)
   return (unsigned char)syn_getcurline()[col];
 }
 
+// =============================================================================
+// Phase 2 accessor functions for syn_current_attr migration
+// =============================================================================
+
+/// Set current_attr
+void nvim_syn_set_current_attr(int attr)
+{
+  current_attr = attr;
+}
+
+/// Set current_sub_char
+void nvim_syn_set_current_sub_char(int c)
+{
+  current_sub_char = c;
+}
+
+/// Get re_extmatch_out, take ownership (sets it to NULL in C)
+reg_extmatch_T *nvim_syn_take_re_extmatch_out(void)
+{
+  reg_extmatch_T *em = re_extmatch_out;
+  re_extmatch_out = NULL;
+  return em;
+}
+
+/// Unref and clear re_extmatch_out
+void nvim_syn_clear_re_extmatch_out(void)
+{
+  unref_extmatch(re_extmatch_out);
+  re_extmatch_out = NULL;
+}
+
+/// Get pattern sp_line_id
+int nvim_syn_get_pattern_line_id(int idx)
+{
+  return SYN_ITEMS(syn_block)[idx].sp_line_id;
+}
+
+/// Set pattern sp_line_id
+void nvim_syn_set_pattern_line_id(int idx, int line_id)
+{
+  SYN_ITEMS(syn_block)[idx].sp_line_id = line_id;
+}
+
+/// Get pattern sp_startcol
+int nvim_syn_get_pattern_startcol(int idx)
+{
+  return SYN_ITEMS(syn_block)[idx].sp_startcol;
+}
+
+/// Set pattern sp_startcol
+void nvim_syn_set_pattern_startcol(int idx, int col)
+{
+  SYN_ITEMS(syn_block)[idx].sp_startcol = col;
+}
+
+/// Get pattern sp_offsets[SPO_LC_OFF]
+int nvim_syn_get_pattern_lc_off(int idx)
+{
+  return SYN_ITEMS(syn_block)[idx].sp_offsets[SPO_LC_OFF];
+}
+
+/// Get pattern sp_syncing
+int nvim_syn_get_pattern_syncing(int idx)
+{
+  return SYN_ITEMS(syn_block)[idx].sp_syncing;
+}
+
+/// Check if pattern has HL_DISPLAY flag
+int nvim_syn_get_pattern_display(int idx)
+{
+  return (SYN_ITEMS(syn_block)[idx].sp_flags & HL_DISPLAY) != 0;
+}
+
+/// Get synblock pattern count (b_syn_patterns.ga_len)
+int nvim_syn_get_pattern_ga_len(void)
+{
+  return syn_block->b_syn_patterns.ga_len;
+}
+
+/// Get syn_block b_syn_containedin
+int nvim_syn_has_containedin(void)
+{
+  return syn_block->b_syn_containedin;
+}
+
+/// Execute syn_regexec for a pattern by index, return match result.
+/// Returns 1 if matched, 0 if not. Writes start/end positions to out-params.
+/// Also updates sp_prog if needed.
+int nvim_syn_regexec_by_idx(int idx, int lnum, int col,
+                            int *s_lnum, int *s_col,
+                            int *e_lnum, int *e_col)
+{
+  synpat_T *spp = &(SYN_ITEMS(syn_block)[idx]);
+  regmmatch_T regmatch;
+  regmatch.rmm_ic = spp->sp_ic;
+  regmatch.regprog = spp->sp_prog;
+  int r = syn_regexec(&regmatch, lnum, col,
+                      IF_SYN_TIME(&spp->sp_time));
+  spp->sp_prog = regmatch.regprog;
+  if (r) {
+    *s_lnum = regmatch.startpos[0].lnum;
+    *s_col = regmatch.startpos[0].col;
+    *e_lnum = regmatch.endpos[0].lnum;
+    *e_col = regmatch.endpos[0].col;
+  }
+  return r;
+}
+
+/// Check in_id_list for a pattern by index against the current_next_list or
+/// cur_si cont_list.
+/// mode: 0 = check current_next_list (cur_si ignored)
+///       1 = check cur_si->si_cont_list
+///       2 = check HL_CONTAINED flag
+int nvim_syn_check_pattern_containment(int pat_idx, int si_idx, int has_next_list, int has_cur_si)
+{
+  synpat_T *spp = &(SYN_ITEMS(syn_block)[pat_idx]);
+  if (has_next_list) {
+    return in_id_list(NULL, current_next_list, &spp->sp_syn, 0);
+  } else if (!has_cur_si) {
+    return !(spp->sp_flags & HL_CONTAINED);
+  } else {
+    stateitem_T *cur_si = &CUR_STATE(si_idx);
+    return in_id_list(cur_si, cur_si->si_cont_list, &spp->sp_syn, spp->sp_flags);
+  }
+}
+
+/// Check in_id_list with a specific sp_syn (for spell checking)
+int nvim_syn_in_id_list_spell(stateitem_T *sip, int16_t *list, int id)
+{
+  struct sp_syn sps;
+  sps.inc_tag = 0;
+  sps.id = (int16_t)id;
+  sps.cont_in_list = NULL;
+  return in_id_list(sip, list, &sps, 0);
+}
+
+/// Get spell-related synblock fields
+int nvim_syn_get_spell_cluster_id(void)
+{
+  return syn_block->b_spell_cluster_id;
+}
+
+int nvim_syn_get_nospell_cluster_id(void)
+{
+  return syn_block->b_nospell_cluster_id;
+}
+
+int nvim_syn_get_syn_spell(void)
+{
+  return syn_block->b_syn_spell;
+}
+
+/// Vim iswordp check for syn_buf
+int nvim_syn_vim_iswordp_buf(char *p)
+{
+  return vim_iswordp_buf(p, syn_buf);
+}
+
+/// utf_head_off wrapper
+int nvim_syn_utf_head_off(char *base, char *p)
+{
+  return utf_head_off(base, p);
+}
+
+/// ascii_iswhite wrapper
+int nvim_syn_ascii_iswhite(int c)
+{
+  return ascii_iswhite(c);
+}
+
+/// Get pattern's sp_syn.id (for in_id_list calls)
+int nvim_syn_get_pattern_sp_syn_id(int idx)
+{
+  return SYN_ITEMS(syn_block)[idx].sp_syn.id;
+}
+
+/// Set next_match positions (bulk setter for all next_match_* variables)
+void nvim_syn_set_next_match_state(
+    int idx, int col,
+    int m_endpos_lnum, int m_endpos_col,
+    int h_endpos_lnum, int h_endpos_col,
+    int h_startpos_lnum, int h_startpos_col,
+    int flags,
+    int eos_pos_lnum, int eos_pos_col,
+    int eoe_pos_lnum, int eoe_pos_col,
+    int end_idx,
+    reg_extmatch_T *extmatch)
+{
+  next_match_idx = idx;
+  next_match_col = col;
+  next_match_m_endpos.lnum = m_endpos_lnum;
+  next_match_m_endpos.col = m_endpos_col;
+  next_match_h_endpos.lnum = h_endpos_lnum;
+  next_match_h_endpos.col = h_endpos_col;
+  next_match_h_startpos.lnum = h_startpos_lnum;
+  next_match_h_startpos.col = h_startpos_col;
+  next_match_flags = flags;
+  next_match_eos_pos.lnum = eos_pos_lnum;
+  next_match_eos_pos.col = eos_pos_col;
+  next_match_eoe_pos.lnum = eoe_pos_lnum;
+  next_match_eoe_pos.col = eoe_pos_col;
+  next_match_end_idx = end_idx;
+  unref_extmatch(next_match_extmatch);
+  next_match_extmatch = extmatch;
+}
+
 /// _Static_assert for Phase 1 constants
 _Static_assert(SPO_MS_OFF == 0, "SPO_MS_OFF");
 _Static_assert(SPO_ME_OFF == 1, "SPO_ME_OFF");
@@ -8070,3 +8263,13 @@ _Static_assert(HL_TRANS_CONT == 0x10000, "HL_TRANS_CONT");
 _Static_assert(HL_CONTAINED == 0x01, "HL_CONTAINED");
 _Static_assert(HL_SKIPNL == 0x80, "HL_SKIPNL");
 _Static_assert(HL_SKIPEMPTY == 0x200, "HL_SKIPEMPTY");
+
+/// _Static_assert for Phase 2 constants
+_Static_assert(HL_DISPLAY == 0x1000, "HL_DISPLAY");
+_Static_assert(HL_SKIPWHITE == 0x100, "HL_SKIPWHITE");
+_Static_assert(HL_SYNC_HERE == 0x10, "HL_SYNC_HERE");
+_Static_assert(HL_SYNC_THERE == 0x20, "HL_SYNC_THERE");
+_Static_assert(SYNSPL_DEFAULT == 0, "SYNSPL_DEFAULT");
+_Static_assert(SYNSPL_TOP == 1, "SYNSPL_TOP");
+_Static_assert(SYNSPL_NOTOP == 2, "SYNSPL_NOTOP");
+_Static_assert(KEYWORD_IDX == -1, "KEYWORD_IDX");
