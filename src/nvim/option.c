@@ -238,6 +238,16 @@ extern int rs_should_set_was_set(const char *errmsg);
 extern uint32_t rs_add_was_set_flag(uint32_t flags);
 extern uint32_t rs_apply_insecure_flag_change(uint32_t flags, int change);
 
+// Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
+_Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
+_Static_assert(UPD_INVERTED == 20, "UPD_INVERTED mismatch with Rust UpdateType::Inverted");
+_Static_assert(UPD_INVERTED_ALL == 25, "UPD_INVERTED_ALL mismatch with Rust UpdateType::InvertedAll");
+_Static_assert(UPD_REDRAW_TOP == 30, "UPD_REDRAW_TOP mismatch with Rust UpdateType::RedrawTop");
+_Static_assert(UPD_SOME_VALID == 35, "UPD_SOME_VALID mismatch with Rust UpdateType::SomeValid");
+_Static_assert(UPD_NOT_VALID == 40, "UPD_NOT_VALID mismatch with Rust UpdateType::NotValid");
+_Static_assert(UPD_CLEAR == 50, "UPD_CLEAR mismatch with Rust UpdateType::Clear");
+_Static_assert(NO_SCREEN == 2, "NO_SCREEN mismatch with Rust NO_SCREEN constant");
+
 // Value computation functions (from Rust value.rs)
 extern int64_t rs_apply_number_op(int64_t oldval, int64_t operand, int op);
 extern int rs_is_reset_to_default(int nextchar);
@@ -2031,9 +2041,7 @@ int string_to_key(char *arg)
 // the old value back.
 void did_set_title(void)
 {
-  if (starting != NO_SCREEN) {
-    maketitle();
-  }
+  rs_did_set_title();
 }
 
 /// set_options_bin -  called when 'bin' changes value.
@@ -2542,9 +2550,7 @@ static const char *did_set_diff(optset_T *args)
 /// option value.
 static const char *did_set_eof_eol_fixeol_bomb(optset_T *args FUNC_ATTR_UNUSED)
 {
-  // redraw the window title and tab page text
-  redraw_titles();
-  return NULL;
+  return rs_did_set_eof_eol_fixeol_bomb();
 }
 
 /// Process the updated 'equalalways' option value.
@@ -2599,29 +2605,19 @@ static const char *did_set_helpheight(optset_T *args)
 /// Process the updated 'hlsearch' option value.
 static const char *did_set_hlsearch(optset_T *args FUNC_ATTR_UNUSED)
 {
-  // when 'hlsearch' is set or reset: reset no_hlsearch
-  set_no_hlsearch(false);
-  return NULL;
+  return rs_did_set_hlsearch();
 }
 
 /// Process the updated 'ignorecase' option value.
 static const char *did_set_ignorecase(optset_T *args FUNC_ATTR_UNUSED)
 {
-  // when 'ignorecase' is set or reset and 'hlsearch' is set, redraw
-  if (p_hls) {
-    redraw_all_later(UPD_SOME_VALID);
-  }
-  return NULL;
+  return rs_did_set_ignorecase();
 }
 
 /// Process the new 'iminset' option value.
 static const char *did_set_iminsert(optset_T *args FUNC_ATTR_UNUSED)
 {
-  showmode();
-  // Show/unshow value of 'keymap' in status lines.
-  status_redraw_curbuf();
-
-  return NULL;
+  return rs_did_set_iminsert();
 }
 
 /// Process the updated 'langnoremap' option value.
@@ -3063,9 +3059,7 @@ static const char *did_set_textwidth(optset_T *args FUNC_ATTR_UNUSED)
 /// Process the updated 'title' or the 'icon' option value.
 static const char *did_set_title_icon(optset_T *args FUNC_ATTR_UNUSED)
 {
-  // when 'title' changed, may need to change the title; same for 'icon'
-  did_set_title();
-  return NULL;
+  return rs_did_set_title_icon();
 }
 
 /// Process the new 'titlelen' option value.

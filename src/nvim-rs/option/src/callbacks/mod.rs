@@ -23,21 +23,24 @@ use crate::OptInt;
 
 /// Update types for `redraw_all_later()`.
 /// These correspond to values in `drawscreen.h`.
+/// Values verified against src/nvim/drawscreen.h — add _Static_assert in C if changed.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdateType {
-    /// No update needed
+    /// UPD_VALID: buffer not changed, or changes marked with b_mod_*
     Valid = 10,
-    /// Some lines need updating
-    SomeValid = 20,
-    /// Redraw inverted part of current line
-    RedrawThis = 25,
-    /// Buffer contents need updating
-    NotValid = 30,
-    /// Current buffer needs update + clear first
-    NotValidVirt = 35,
-    /// Clear screen and redraw
-    Clear = 40,
+    /// UPD_INVERTED: redisplay inverted part that changed
+    Inverted = 20,
+    /// UPD_INVERTED_ALL: redisplay whole inverted part
+    InvertedAll = 25,
+    /// UPD_REDRAW_TOP: display first w_upd_rows screen lines
+    RedrawTop = 30,
+    /// UPD_SOME_VALID: like UPD_NOT_VALID but may scroll
+    SomeValid = 35,
+    /// UPD_NOT_VALID: buffer needs complete redraw
+    NotValid = 40,
+    /// UPD_CLEAR: screen messed up, clear it
+    Clear = 50,
 }
 
 // =============================================================================
@@ -64,7 +67,6 @@ extern "C" {
 
     // State setters
     fn nvim_callback_set_need_maketitle(value: c_int);
-    fn nvim_callback_set_redraw_tabline(value: c_int);
 }
 
 // =============================================================================
@@ -102,12 +104,6 @@ pub fn request_redraw_all(typ: UpdateType) {
 #[inline]
 fn request_maketitle() {
     unsafe { nvim_callback_set_need_maketitle(1) }
-}
-
-/// Request tabline redraw.
-#[inline]
-fn request_redraw_tabline() {
-    unsafe { nvim_callback_set_redraw_tabline(1) }
 }
 
 /// Check if screen is available for drawing.
@@ -159,10 +155,13 @@ pub extern "C" fn rs_did_set_title_icon() -> CallbackResult {
 }
 
 /// Internal helper for title-related callbacks.
+/// When changing 'title', 'titlestring', 'icon' or 'iconstring', call
+/// maketitle() to create and display it.
 #[no_mangle]
 pub extern "C" fn rs_did_set_title() {
-    request_maketitle();
-    request_redraw_tabline();
+    if screen_available() {
+        unsafe { maketitle() };
+    }
 }
 
 /// Callback for 'titlelen' option.
@@ -291,11 +290,13 @@ mod tests {
 
     #[test]
     fn test_update_type_values() {
+        // Values must match src/nvim/drawscreen.h
         assert_eq!(UpdateType::Valid as c_int, 10);
-        assert_eq!(UpdateType::SomeValid as c_int, 20);
-        assert_eq!(UpdateType::RedrawThis as c_int, 25);
-        assert_eq!(UpdateType::NotValid as c_int, 30);
-        assert_eq!(UpdateType::NotValidVirt as c_int, 35);
-        assert_eq!(UpdateType::Clear as c_int, 40);
+        assert_eq!(UpdateType::Inverted as c_int, 20);
+        assert_eq!(UpdateType::InvertedAll as c_int, 25);
+        assert_eq!(UpdateType::RedrawTop as c_int, 30);
+        assert_eq!(UpdateType::SomeValid as c_int, 35);
+        assert_eq!(UpdateType::NotValid as c_int, 40);
+        assert_eq!(UpdateType::Clear as c_int, 50);
     }
 }
