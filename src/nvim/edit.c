@@ -270,6 +270,10 @@ extern int rs_stuff_inserted(int c, int count, int no_esc);
 extern void rs_redo_literal(int c);
 extern void rs_check_spell_redraw(void);
 extern char *rs_do_insert_char_pre(int c);
+extern void rs_start_arrow(void *end_insert_pos);
+extern void rs_start_arrow_with_change(void *end_insert_pos, int end_change);
+extern void rs_start_arrow_common(void *end_insert_pos, int end_change);
+extern int rs_stop_arrow(void);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -3472,7 +3476,7 @@ static void redo_literal(int c)
 /// @param end_insert_pos  can be NULL
 void start_arrow(pos_T *end_insert_pos)
 {
-  start_arrow_common(end_insert_pos, true);
+  rs_start_arrow(end_insert_pos);
 }
 
 /// Like start_arrow() but with end_change argument.
@@ -3482,23 +3486,7 @@ void start_arrow(pos_T *end_insert_pos)
 /// @param end_change      end undoable change
 static void start_arrow_with_change(pos_T *end_insert_pos, bool end_change)
 {
-  start_arrow_common(end_insert_pos, end_change);
-  if (!end_change) {
-    AppendCharToRedobuff(Ctrl_G);
-    AppendCharToRedobuff('U');
-  }
-}
-
-/// @param end_insert_pos  can be NULL
-/// @param end_change      end undoable change
-static void start_arrow_common(pos_T *end_insert_pos, bool end_change)
-{
-  if (!arrow_used && end_change) {  // something has been inserted
-    AppendToRedobuff(ESC_STR);
-    stop_insert(end_insert_pos, false, false);
-    arrow_used = true;  // This means we stopped the current insert.
-  }
-  check_spell_redraw();
+  rs_start_arrow_with_change(end_insert_pos, end_change ? 1 : 0);
 }
 
 // If we skipped highlighting word at cursor, do it now.
@@ -3513,37 +3501,7 @@ static void check_spell_redraw(void)
 // Returns FAIL if undo is impossible, shouldn't insert then.
 int stop_arrow(void)
 {
-  if (arrow_used) {
-    Insstart = curwin->w_cursor;  // new insertion starts here
-    if (Insstart.col > Insstart_orig.col && !ins_need_undo) {
-      // Don't update the original insert position when moved to the
-      // right, except when nothing was inserted yet.
-      update_Insstart_orig = false;
-    }
-    Insstart_textlen = linetabsize_str(get_cursor_line_ptr());
-
-    if (u_save_cursor() == OK) {
-      arrow_used = false;
-      ins_need_undo = false;
-    }
-    ai_col = 0;
-    if (State & VREPLACE_FLAG) {
-      orig_line_count = curbuf->b_ml.ml_line_count;
-      vr_lines_changed = 1;
-    }
-    ResetRedobuff();
-    AppendToRedobuff("1i");  // Pretend we start an insertion.
-    new_insert_skip = 2;
-  } else if (ins_need_undo) {
-    if (u_save_cursor() == OK) {
-      ins_need_undo = false;
-    }
-  }
-
-  // Always open fold at the cursor line when inserting something.
-  foldOpenCursor();
-
-  return arrow_used || ins_need_undo ? FAIL : OK;
+  return rs_stop_arrow();
 }
 
 /// Do a few things to stop inserting.

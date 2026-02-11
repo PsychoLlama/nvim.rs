@@ -4,7 +4,7 @@
 //! including tracking of cursor position, insertion points, and mode-specific
 //! flags.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 
 /// Line number type (matches `linenr_T` in Neovim).
 pub type LinenrT = i32;
@@ -64,6 +64,36 @@ extern "C" {
     // Line tracking
     fn nvim_get_o_lnum() -> LinenrT;
     fn nvim_set_o_lnum(val: LinenrT);
+
+    // Arrow state
+    fn nvim_get_arrow_used() -> c_int;
+    fn nvim_set_arrow_used(val: c_int);
+    fn nvim_get_State() -> c_int;
+
+    // Redo buffer ops
+    fn nvim_edit_AppendToRedobuff(s: *const c_char);
+    fn nvim_edit_append_char_to_redobuff(c: c_int);
+    fn nvim_edit_ResetRedobuff();
+
+    // stop_insert (stays C, pass end_insert_pos as opaque pointer)
+    fn nvim_edit_stop_insert(end_insert_pos: *mut c_void, esc: c_int, nomove: c_int);
+
+    // check_spell_redraw (already in Rust)
+    fn rs_check_spell_redraw();
+
+    // stop_arrow dependencies
+    fn nvim_edit_set_insstart_from_cursor();
+    fn nvim_edit_insstart_col_gt_orig() -> c_int;
+    fn nvim_edit_linetabsize_cursor_line() -> ColnrT;
+    fn nvim_edit_u_save_cursor() -> c_int;
+    fn nvim_edit_get_ai_col() -> ColnrT;
+    fn nvim_edit_set_ai_col(val: ColnrT);
+    fn nvim_edit_get_orig_line_count() -> LinenrT;
+    fn nvim_edit_set_orig_line_count(val: LinenrT);
+    fn nvim_edit_get_vr_lines_changed() -> c_int;
+    fn nvim_edit_set_vr_lines_changed(val: c_int);
+    fn nvim_edit_curbuf_line_count() -> LinenrT;
+    fn nvim_edit_foldOpenCursor();
 }
 
 /// Position in a buffer (line and column).
@@ -485,6 +515,130 @@ pub extern "C" fn rs_state_o_lnum() -> LinenrT {
 #[no_mangle]
 pub extern "C" fn rs_state_set_o_lnum(val: LinenrT) {
     o_lnum_set(val);
+}
+
+// ============================================================================
+// Constants (verified with _Static_assert in edit.c)
+// ============================================================================
+
+/// `OK` from `vim_defs.h`
+const OK: c_int = 1;
+
+/// `FAIL` from `vim_defs.h`
+const FAIL: c_int = 0;
+
+/// `VREPLACE_FLAG` from `state_defs.h`
+const VREPLACE_FLAG: c_int = 0x200;
+
+/// `Ctrl_G` from `ascii_defs.h`
+const CTRL_G: c_int = 7;
+
+/// ESC string (0x1b + NUL)
+const ESC_STR: &[u8; 2] = b"\x1b\0";
+
+// ============================================================================
+// start_arrow_common — core logic for arrow key state transition
+// ============================================================================
+
+/// Core logic for arrow key state transitions.
+/// If `end_change` is true and something was inserted, appends ESC to redo
+/// buffer and calls `stop_insert`, then sets `arrow_used = true`.
+/// Always calls `check_spell_redraw` at end.
+unsafe fn start_arrow_common_impl(end_insert_pos: *mut c_void, end_change: c_int) {
+    if nvim_get_arrow_used() == 0 && end_change != 0 {
+        // something has been inserted
+        nvim_edit_AppendToRedobuff(ESC_STR.as_ptr().cast());
+        nvim_edit_stop_insert(end_insert_pos, 0, 0);
+        nvim_set_arrow_used(1); // This means we stopped the current insert.
+    }
+    rs_check_spell_redraw();
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_start_arrow_common(
+    end_insert_pos: *mut c_void,
+    end_change: c_int,
+) {
+    start_arrow_common_impl(end_insert_pos, end_change);
+}
+
+// ============================================================================
+// start_arrow — called when an arrow key is used in insert mode
+// ============================================================================
+
+/// Called when an arrow key is used in insert mode.
+/// For undo/redo it resembles hitting the <ESC> key.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_start_arrow(end_insert_pos: *mut c_void) {
+    start_arrow_common_impl(end_insert_pos, 1);
+}
+
+// ============================================================================
+// start_arrow_with_change — like start_arrow() with end_change argument
+// ============================================================================
+
+/// Like `start_arrow()` but with `end_change` argument.
+/// Will prepare for redo of CTRL-G U if `end_change` is false.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_start_arrow_with_change(
+    end_insert_pos: *mut c_void,
+    end_change: c_int,
+) {
+    start_arrow_common_impl(end_insert_pos, end_change);
+    if end_change == 0 {
+        nvim_edit_append_char_to_redobuff(CTRL_G);
+        nvim_edit_append_char_to_redobuff(c_int::from(b'U'));
+    }
+}
+
+// ============================================================================
+// stop_arrow — reset state after arrow key movement
+// ============================================================================
+
+/// Called before a change is made in insert mode.
+/// If an arrow key has been used, start a new insertion.
+/// Returns FAIL if undo is impossible, shouldn't insert then.
+unsafe fn stop_arrow_impl() -> c_int {
+    if nvim_get_arrow_used() != 0 {
+        nvim_edit_set_insstart_from_cursor(); // new insertion starts here
+        if nvim_edit_insstart_col_gt_orig() != 0 && !ins_need_undo_get() {
+            // Don't update the original insert position when moved to the
+            // right, except when nothing was inserted yet.
+            update_insstart_orig_set(false);
+        }
+        insstart_textlen_set(nvim_edit_linetabsize_cursor_line());
+
+        if nvim_edit_u_save_cursor() == OK {
+            nvim_set_arrow_used(0);
+            ins_need_undo_set(false);
+        }
+        nvim_edit_set_ai_col(0);
+        if nvim_get_State() & VREPLACE_FLAG != 0 {
+            nvim_edit_set_orig_line_count(nvim_edit_curbuf_line_count());
+            nvim_edit_set_vr_lines_changed(1);
+        }
+        nvim_edit_ResetRedobuff();
+        nvim_edit_AppendToRedobuff(b"1i\0".as_ptr().cast()); // Pretend we start an insertion.
+        new_insert_skip_set(2);
+    } else if ins_need_undo_get() {
+        if nvim_edit_u_save_cursor() == OK {
+            ins_need_undo_set(false);
+        }
+    }
+
+    // Always open fold at the cursor line when inserting something.
+    nvim_edit_foldOpenCursor();
+
+    if nvim_get_arrow_used() != 0 || ins_need_undo_get() {
+        FAIL
+    } else {
+        OK
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_stop_arrow() -> c_int {
+    stop_arrow_impl()
 }
 
 #[cfg(test)]
