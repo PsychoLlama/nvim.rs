@@ -836,6 +836,15 @@ extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
 extern int rs_qf_jump_edit_buffer(void *qi, const void *qf_ptr, int forceit,
                                    int prev_winid, bool *opened_window);
 
+// Vimgrep file processing
+extern int rs_vgr_process_files(void *wp, void *qi,
+                                 int fcount, const char *const *fnames,
+                                 const char *spat, void *regmatch,
+                                 int *tomatch, int flags,
+                                 const char *qf_title,
+                                 bool *redraw_for_dummy,
+                                 void **first_match_buf, char **target_dir);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -6915,133 +6924,139 @@ static int vgr_process_args(exarg_T *eap, vgr_args_T *args)
   return OK;
 }
 
+// =============================================================================
+// Phase 6: vgr_process_files accessor functions for Rust
+// =============================================================================
+
+/// Allocate dirname_start and dirname_now buffers, fill dirname_start with cwd.
+/// Returns dirname_start via *start_out, dirname_now via *now_out.
+void nvim_vgr_alloc_dirnames(char **start_out, char **now_out)
+{
+  *start_out = xmalloc(MAXPATHL);
+  *now_out = xmalloc(MAXPATHL);
+  os_dirname(*start_out, MAXPATHL);
+}
+
+/// Free dirname buffers.
+void nvim_vgr_free_dirnames(char *start, char *now)
+{
+  xfree(now);
+  xfree(start);
+}
+
+/// Get the shortened filename for a vimgrep file.
+char *nvim_vgr_shorten_fname(const char *full_fname)
+{
+  return path_try_shorten_fname((char *)full_fname);
+}
+
+/// Display vimgrep progress for a filename (every second).
+void nvim_vgr_display_fname_wrapper(const char *fname)
+{
+  vgr_display_fname((char *)fname);
+}
+
+/// Try to find a loaded buffer for the given filename.
+/// Returns: the buffer handle (or NULL), and sets *has_mfp if buffer has ml_mfp.
+void *nvim_vgr_find_buf(const char *fname, bool *has_mfp)
+{
+  buf_T *buf = buflist_findname_exp((char *)fname);
+  if (buf != NULL) {
+    *has_mfp = (buf->b_ml.ml_mfp != NULL);
+  } else {
+    *has_mfp = false;
+  }
+  return buf;
+}
+
+/// Load a dummy buffer for vimgrep scanning.
+void *nvim_vgr_load_dummy_buf_wrapper(const char *fname, char *dirname_start, char *dirname_now)
+{
+  return vgr_load_dummy_buf((char *)fname, dirname_start, dirname_now);
+}
+
+/// Check whether the vimgrep quickfix list is still valid.
+bool nvim_vgr_qflist_valid_wrapper(void *wp, void *qi, unsigned qfid, const char *title)
+{
+  return vgr_qflist_valid((win_T *)wp, (qf_info_T *)qi, qfid, title);
+}
+
+/// Emit "Cannot open file" message.
+void nvim_vgr_smsg_cannot_open(const char *fname)
+{
+  smsg(0, _("Cannot open file \"%s\""), fname);
+}
+
+/// Get the current time in seconds (for progress display throttling).
+long nvim_vgr_time_now(void)
+{
+  return (long)time(NULL);
+}
+
+/// Handle dummy buffer cleanup after matching. This encapsulates the complex
+/// wipe/unload/keep logic including aucmd_prepbuf, modelines, etc.
+/// first_match_buf and target_dir may be updated.
+void nvim_vgr_handle_dummy_buf(void *buf_void, bool found_match, bool duplicate_name,
+                                int flags, char *dirname_start, char *dirname_now,
+                                void **first_match_buf, char **target_dir)
+{
+  buf_T *buf = (buf_T *)buf_void;
+  buf_T **fmb = (buf_T **)first_match_buf;
+
+  if (found_match && *fmb == NULL) {
+    *fmb = buf;
+  }
+
+  if (duplicate_name) {
+    wipe_dummy_buffer(buf, dirname_start);
+    return;
+  }
+
+  if ((cmdmod.cmod_flags & CMOD_HIDE) == 0
+      || buf->b_p_bh[0] == 'u'
+      || buf->b_p_bh[0] == 'w'
+      || buf->b_p_bh[0] == 'd') {
+    if (!found_match) {
+      wipe_dummy_buffer(buf, dirname_start);
+      return;
+    }
+    if (buf != *fmb
+        || (flags & VGR_NOJUMP)
+        || existing_swapfile(buf)) {
+      unload_dummy_buffer(buf, dirname_start);
+      buf->b_flags &= ~BF_DUMMY;
+      return;
+    }
+  }
+
+  // Buffer is kept loaded
+  buf->b_flags &= ~BF_DUMMY;
+
+  if (buf == *fmb
+      && *target_dir == NULL
+      && strcmp(dirname_start, dirname_now) != 0) {
+    *target_dir = xstrdup(dirname_now);
+  }
+
+  // Apply Filetype autocommands and modelines
+  aco_save_T aco;
+  aucmd_prepbuf(&aco, buf);
+  apply_autocmds(EVENT_FILETYPE, buf->b_p_ft, buf->b_fname, true, buf);
+  do_modelines(OPT_NOWIN);
+  aucmd_restbuf(&aco);
+}
+
 /// Search for a pattern in a list of files and populate the quickfix list with
 /// the matches.
 static int vgr_process_files(win_T *wp, qf_info_T *qi, vgr_args_T *cmd_args, bool *redraw_for_dummy,
                              buf_T **first_match_buf, char **target_dir)
 {
-  int status = FAIL;
-  unsigned save_qfid = qf_get_curlist(qi)->qf_id;
-  bool duplicate_name = false;
-
-  char *dirname_start = xmalloc(MAXPATHL);
-  char *dirname_now = xmalloc(MAXPATHL);
-
-  // Remember the current directory, because a BufRead autocommand that does
-  // ":lcd %:p:h" changes the meaning of short path names.
-  os_dirname(dirname_start, MAXPATHL);
-
-  time_t seconds = 0;
-  for (int fi = 0; fi < cmd_args->fcount && !got_int && cmd_args->tomatch > 0; fi++) {
-    char *fname = path_try_shorten_fname(cmd_args->fnames[fi]);
-    if (time(NULL) > seconds) {
-      // Display the file name every second or so, show the user we are
-      // working on it.
-      seconds = time(NULL);
-      vgr_display_fname(fname);
-    }
-
-    buf_T *buf = buflist_findname_exp(cmd_args->fnames[fi]);
-    bool using_dummy;
-    if (buf == NULL || buf->b_ml.ml_mfp == NULL) {
-      // Remember that a buffer with this name already exists.
-      duplicate_name = (buf != NULL);
-      using_dummy = true;
-      *redraw_for_dummy = true;
-      buf = vgr_load_dummy_buf(fname, dirname_start, dirname_now);
-    } else {
-      // Use existing, loaded buffer.
-      using_dummy = false;
-    }
-
-    // Check whether the quickfix list is still valid. When loading a
-    // buffer above, autocommands might have changed the quickfix list.
-    if (!vgr_qflist_valid(wp, qi, save_qfid, cmd_args->qf_title)) {
-      goto theend;
-    }
-
-    save_qfid = qf_get_curlist(qi)->qf_id;
-
-    if (buf == NULL) {
-      if (!got_int) {
-        smsg(0, _("Cannot open file \"%s\""), fname);
-      }
-    } else {
-      // Try for a match in all lines of the buffer.
-      // For ":1vimgrep" look for first match only.
-      bool found_match = vgr_match_buflines(qf_get_curlist(qi),
-                                            fname,
-                                            buf,
-                                            cmd_args->spat,
-                                            &cmd_args->regmatch,
-                                            &cmd_args->tomatch,
-                                            duplicate_name,
-                                            cmd_args->flags);
-
-      if (using_dummy) {
-        if (found_match && *first_match_buf == NULL) {
-          *first_match_buf = buf;
-        }
-        if (duplicate_name) {
-          // Never keep a dummy buffer if there is another buffer
-          // with the same name.
-          wipe_dummy_buffer(buf, dirname_start);
-          buf = NULL;
-        } else if ((cmdmod.cmod_flags & CMOD_HIDE) == 0
-                   || buf->b_p_bh[0] == 'u'             // "unload"
-                   || buf->b_p_bh[0] == 'w'             // "wipe"
-                   || buf->b_p_bh[0] == 'd') {          // "delete"
-          // When no match was found we don't need to remember the
-          // buffer, wipe it out.  If there was a match and it
-          // wasn't the first one or we won't jump there: only
-          // unload the buffer.
-          // Ignore 'hidden' here, because it may lead to having too
-          // many swap files.
-          if (!found_match) {
-            wipe_dummy_buffer(buf, dirname_start);
-            buf = NULL;
-          } else if (buf != *first_match_buf
-                     || (cmd_args->flags & VGR_NOJUMP)
-                     || existing_swapfile(buf)) {
-            unload_dummy_buffer(buf, dirname_start);
-            // Keeping the buffer, remove the dummy flag.
-            buf->b_flags &= ~BF_DUMMY;
-            buf = NULL;
-          }
-        }
-
-        if (buf != NULL) {
-          // Keeping the buffer, remove the dummy flag.
-          buf->b_flags &= ~BF_DUMMY;
-
-          // If the buffer is still loaded we need to use the
-          // directory we jumped to below.
-          if (buf == *first_match_buf
-              && *target_dir == NULL
-              && strcmp(dirname_start, dirname_now) != 0) {
-            *target_dir = xstrdup(dirname_now);
-          }
-
-          // The buffer is still loaded, the Filetype autocommands
-          // need to be done now, in that buffer.  And the modelines
-          // need to be done (again).  But not the window-local
-          // options!
-          aco_save_T aco;
-          aucmd_prepbuf(&aco, buf);
-          apply_autocmds(EVENT_FILETYPE, buf->b_p_ft, buf->b_fname, true, buf);
-          do_modelines(OPT_NOWIN);
-          aucmd_restbuf(&aco);
-        }
-      }
-    }
-  }
-
-  status = OK;
-
-theend:
-  xfree(dirname_now);
-  xfree(dirname_start);
-  return status;
+  return rs_vgr_process_files(wp, qi,
+                              cmd_args->fcount, (const char *const *)cmd_args->fnames,
+                              cmd_args->spat, &cmd_args->regmatch,
+                              &cmd_args->tomatch, cmd_args->flags,
+                              cmd_args->qf_title,
+                              redraw_for_dummy, (void **)first_match_buf, target_dir);
 }
 
 /// ":vimgrep {pattern} file(s)"

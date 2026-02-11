@@ -287,3 +287,146 @@ unsafe fn vgr_fuzzy_match(
     }
     found_match
 }
+
+// =============================================================================
+// vgr_process_files migration
+// =============================================================================
+
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+extern "C" {
+    // Existing accessors (QfInfoHandle = *const c_void in lib.rs)
+    fn nvim_qf_get_curlist(qi: *const c_void) -> *const c_void;
+    fn nvim_qf_get_id(qfl: *const c_void) -> u32;
+
+    // New Phase 6 wrappers
+    fn nvim_vgr_alloc_dirnames(start_out: *mut *mut c_char, now_out: *mut *mut c_char);
+    fn nvim_vgr_free_dirnames(start: *mut c_char, now: *mut c_char);
+    fn nvim_vgr_shorten_fname(full_fname: *const c_char) -> *mut c_char;
+    fn nvim_vgr_display_fname_wrapper(fname: *const c_char);
+    fn nvim_vgr_find_buf(fname: *const c_char, has_mfp: *mut bool) -> BufHandle;
+    fn nvim_vgr_load_dummy_buf_wrapper(
+        fname: *const c_char,
+        dirname_start: *mut c_char,
+        dirname_now: *mut c_char,
+    ) -> BufHandle;
+    fn nvim_vgr_qflist_valid_wrapper(
+        wp: WinHandle,
+        qi: *mut c_void,
+        qfid: u32,
+        title: *const c_char,
+    ) -> bool;
+    fn nvim_vgr_smsg_cannot_open(fname: *const c_char);
+    fn nvim_vgr_time_now() -> i64;
+    fn nvim_vgr_handle_dummy_buf(
+        buf: BufHandle,
+        found_match: bool,
+        duplicate_name: bool,
+        flags: c_int,
+        dirname_start: *mut c_char,
+        dirname_now: *mut c_char,
+        first_match_buf: *mut BufHandle,
+        target_dir: *mut *mut c_char,
+    );
+}
+
+/// Process a list of files for vimgrep pattern matching.
+///
+/// # Safety
+///
+/// All pointer parameters must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rs_vgr_process_files(
+    wp: WinHandle,
+    qi: *mut c_void,
+    fcount: c_int,
+    fnames: *const *const c_char,
+    spat: *const c_char,
+    regmatch: RegmmatchHandle,
+    tomatch: *mut c_int,
+    flags: c_int,
+    qf_title: *const c_char,
+    redraw_for_dummy: *mut bool,
+    first_match_buf: *mut BufHandle,
+    target_dir: *mut *mut c_char,
+) -> c_int {
+    let mut save_qfid = nvim_qf_get_id(nvim_qf_get_curlist(qi));
+
+    let mut dirname_start: *mut c_char = std::ptr::null_mut();
+    let mut dirname_now: *mut c_char = std::ptr::null_mut();
+    nvim_vgr_alloc_dirnames(&raw mut dirname_start, &raw mut dirname_now);
+
+    let mut seconds: i64 = 0;
+    let mut status = FAIL;
+
+    'theend: {
+        for fi in 0..fcount {
+            if nvim_get_got_int() != 0 || *tomatch <= 0 {
+                break;
+            }
+
+            let fname = nvim_vgr_shorten_fname(*fnames.add(fi as usize));
+            let now = nvim_vgr_time_now();
+            if now > seconds {
+                seconds = now;
+                nvim_vgr_display_fname_wrapper(fname);
+            }
+
+            let mut has_mfp = false;
+            let mut buf = nvim_vgr_find_buf(*fnames.add(fi as usize), &raw mut has_mfp);
+            let using_dummy;
+            let mut duplicate_name = false;
+            if buf.is_null() || !has_mfp {
+                duplicate_name = !buf.is_null();
+                using_dummy = true;
+                *redraw_for_dummy = true;
+                buf = nvim_vgr_load_dummy_buf_wrapper(fname, dirname_start, dirname_now);
+            } else {
+                using_dummy = false;
+            }
+
+            // Check whether the quickfix list is still valid.
+            if !nvim_vgr_qflist_valid_wrapper(wp, qi, save_qfid, qf_title) {
+                break 'theend;
+            }
+
+            save_qfid = nvim_qf_get_id(nvim_qf_get_curlist(qi));
+
+            if buf.is_null() {
+                if nvim_get_got_int() == 0 {
+                    nvim_vgr_smsg_cannot_open(fname);
+                }
+            } else {
+                let found_match = rs_vgr_match_buflines(
+                    nvim_qf_get_curlist(qi).cast_mut(),
+                    fname,
+                    buf,
+                    spat,
+                    regmatch,
+                    tomatch,
+                    c_int::from(duplicate_name),
+                    flags,
+                );
+
+                if using_dummy {
+                    nvim_vgr_handle_dummy_buf(
+                        buf,
+                        found_match,
+                        duplicate_name,
+                        flags,
+                        dirname_start,
+                        dirname_now,
+                        first_match_buf,
+                        target_dir,
+                    );
+                }
+            }
+        }
+        status = OK;
+    }
+
+    nvim_vgr_free_dirnames(dirname_start, dirname_now);
+    status
+}
