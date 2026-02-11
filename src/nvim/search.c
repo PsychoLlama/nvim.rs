@@ -922,6 +922,15 @@ extern int rs_do_search(void *oap, int dirc_in, int search_delim,
                         linenr_T sa_stop_lnum, void *sa_tm,
                         int *sa_timed_out_out, int *sa_wrapped_out);
 
+// Rust implementation of findmatchlimit
+typedef struct {
+  bool found;
+  linenr_T lnum;
+  colnr_T col;
+} RsFindMatchResult;
+
+extern RsFindMatchResult rs_findmatchlimit(void *oap, int initc, int flags, int64_t maxtravel);
+
 extern int rs_searchit(void *win, void *buf,
                        linenr_T pos_lnum, colnr_T pos_col, colnr_T pos_coladd,
                        int has_end_pos, int dir,
@@ -1190,98 +1199,8 @@ pos_T *findmatch(oparg_T *oap, int initc)
   return findmatchlimit(oap, initc, 0, 0);
 }
 
-// Return true if the character before "linep[col]" equals "ch".
-// Return false if "col" is zero.
-// Update "*prevcol" to the column of the previous character, unless "prevcol"
-// is NULL.
-// Handles multibyte string correctly.
-static bool check_prevcol(char *linep, int col, int ch, int *prevcol)
-{
-  col--;
-  if (col > 0) {
-    col -= utf_head_off(linep, linep + col);
-  }
-  if (prevcol) {
-    *prevcol = col;
-  }
-  return col >= 0 && (uint8_t)linep[col] == ch;
-}
-
-/// Raw string start is found at linep[startpos.col - 1].
-///
-/// @return  true if the matching end can be found between startpos and endpos.
-static bool find_rawstring_end(char *linep, pos_T *startpos, pos_T *endpos)
-{
-  char *p;
-  linenr_T lnum;
-
-  for (p = linep + startpos->col + 1; *p && *p != '('; p++) {}
-
-  size_t delim_len = (size_t)((p - linep) - startpos->col - 1);
-  char *delim_copy = xmemdupz(linep + startpos->col + 1, delim_len);
-  bool found = false;
-  for (lnum = startpos->lnum; lnum <= endpos->lnum; lnum++) {
-    char *line = ml_get(lnum);
-
-    for (p = line + (lnum == startpos->lnum ? startpos->col + 1 : 0); *p; p++) {
-      if (lnum == endpos->lnum && (colnr_T)(p - line) >= endpos->col) {
-        break;
-      }
-      if (*p == ')'
-          && strncmp(delim_copy, p + 1, delim_len) == 0
-          && p[delim_len + 1] == '"') {
-        found = true;
-        break;
-      }
-    }
-    if (found) {
-      break;
-    }
-  }
-  xfree(delim_copy);
-  return found;
-}
-
-/// Check matchpairs option for "*initc".
-/// If there is a match set "*initc" to the matching character and "*findc" to
-/// the opposite character.  Set "*backwards" to the direction.
-/// When "switchit" is true swap the direction.
-static void find_mps_values(int *initc, int *findc, bool *backwards, bool switchit)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *ptr = curbuf->b_p_mps;
-
-  while (*ptr != NUL) {
-    if (utf_ptr2char(ptr) == *initc) {
-      if (switchit) {
-        *findc = *initc;
-        *initc = utf_ptr2char(ptr + utfc_ptr2len(ptr) + 1);
-        *backwards = true;
-      } else {
-        *findc = utf_ptr2char(ptr + utfc_ptr2len(ptr) + 1);
-        *backwards = false;
-      }
-      return;
-    }
-    char *prev = ptr;
-    ptr += utfc_ptr2len(ptr) + 1;
-    if (utf_ptr2char(ptr) == *initc) {
-      if (switchit) {
-        *findc = *initc;
-        *initc = utf_ptr2char(prev);
-        *backwards = false;
-      } else {
-        *findc = utf_ptr2char(prev);
-        *backwards = true;
-      }
-      return;
-    }
-    ptr += utfc_ptr2len(ptr);
-    if (*ptr == ',') {
-      ptr++;
-    }
-  }
-}
+// check_prevcol(), find_rawstring_end(), and find_mps_values() have been
+// migrated to Rust in search/src/matchparen.rs
 
 // findmatchlimit -- find the matching paren or brace, if it exists within
 // maxtravel lines of the cursor.  A maxtravel of 0 means search until falling
@@ -1303,12 +1222,26 @@ static void find_mps_values(int *initc, int *findc, bool *backwards, bool switch
 // NULL
 pos_T *findmatchlimit(oparg_T *oap, int initc, int flags, int64_t maxtravel)
 {
-  static pos_T pos;                     // current search position
-  int findc = 0;                        // matching brace
-  int count = 0;                        // cumulative number of braces
-  bool backwards = false;               // init for gcc
-  bool raw_string = false;              // search for raw string
-  bool inquote = false;                 // true when inside quotes
+  static pos_T pos;
+  RsFindMatchResult result = rs_findmatchlimit(oap, initc, flags, maxtravel);
+  if (!result.found) {
+    return NULL;
+  }
+  pos.lnum = result.lnum;
+  pos.col = result.col;
+  pos.coladd = 0;
+  return &pos;
+}
+
+#if 0  // Migrated to Rust (matchparen.rs)
+static pos_T *findmatchlimit_old(oparg_T *oap, int initc, int flags, int64_t maxtravel)
+{
+  static pos_T pos;
+  int findc = 0;
+  int count = 0;
+  bool backwards = false;
+  bool raw_string = false;
+  bool inquote = false;
   char *ptr;
   int hash_dir = 0;                     // Direction searched for # things
   int comment_dir = 0;                  // Direction searched for comments
@@ -1822,6 +1755,7 @@ pos_T *findmatchlimit(oparg_T *oap, int initc, int flags, int64_t maxtravel)
   }
   return (pos_T *)NULL;         // never found it
 }
+#endif  // Migrated to Rust
 
 /// Check if line[] contains a / / comment.
 /// @returns MAXCOL if not, otherwise return the column.
@@ -3725,5 +3659,84 @@ void nvim_do_search_restore_off(SavedSearchOff saved)
 DoSearchPos nvim_do_search_get_cursor(void)
 {
   return (DoSearchPos){ curwin->w_cursor.lnum, curwin->w_cursor.col };
+}
+
+// =========================================================================
+// Phase 3: findmatchlimit C accessors
+// =========================================================================
+
+_Static_assert(FM_BACKWARD == 0x01, "FM_BACKWARD mismatch");
+_Static_assert(FM_FORWARD == 0x02, "FM_FORWARD mismatch");
+_Static_assert(FM_BLOCKSTOP == 0x04, "FM_BLOCKSTOP mismatch");
+_Static_assert(CPO_MATCH == '%', "CPO_MATCH mismatch");
+_Static_assert(CPO_MATCHBSL == 'M', "CPO_MATCHBSL mismatch");
+_Static_assert(kMTLineWise == 1, "kMTLineWise mismatch");
+
+/// Get ml_get(lnum) for curbuf.
+char *nvim_search_ml_get(linenr_T lnum)
+{
+  return ml_get(lnum);
+}
+
+/// Get ml_get_len(lnum) for curbuf.
+colnr_T nvim_search_ml_get_len(linenr_T lnum)
+{
+  return ml_get_len(lnum);
+}
+
+/// Get curbuf->b_ml.ml_line_count.
+linenr_T nvim_search_get_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// Get curbuf->b_p_mps.
+char *nvim_search_get_curbuf_b_p_mps(void)
+{
+  return curbuf->b_p_mps;
+}
+
+/// Get curbuf->b_p_lisp.
+int nvim_search_get_curbuf_b_p_lisp(void)
+{
+  return curbuf->b_p_lisp ? 1 : 0;
+}
+
+/// Get curwin->w_p_rl.
+int nvim_search_get_curwin_w_p_rl(void)
+{
+  return curwin->w_p_rl ? 1 : 0;
+}
+
+/// Get curwin->w_p_rlc.
+char *nvim_search_get_curwin_w_p_rlc(void)
+{
+  return curwin->w_p_rlc;
+}
+
+/// Get curwin->w_cursor.lnum.
+linenr_T nvim_search_get_curwin_cursor_lnum(void)
+{
+  return curwin->w_cursor.lnum;
+}
+
+/// Get curwin->w_cursor.col.
+colnr_T nvim_search_get_curwin_cursor_col(void)
+{
+  return curwin->w_cursor.col;
+}
+
+/// Wrap check_linecomment().
+int nvim_search_check_linecomment(const char *line)
+{
+  return check_linecomment(line);
+}
+
+/// Set oap->motion_type.
+void nvim_search_set_oap_motion_type(void *oap, int motion_type)
+{
+  if (oap != NULL) {
+    ((oparg_T *)oap)->motion_type = (MotionType)motion_type;
+  }
 }
 
