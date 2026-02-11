@@ -487,6 +487,9 @@ extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
 // Phase 1B: clear_showcmd
 extern void rs_clear_showcmd(void);
 
+// Phase 2B: normal_get_additional_char
+extern void rs_normal_get_additional_char(void *s);
+
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 extern bool rs_cmd_has_lang_flag(int idx);
@@ -2774,167 +2777,127 @@ static void normal_redraw_mode_message(NormalState *s)
   emsg_on_display = false;
 }
 
-// TODO(tarruda): Split into a "normal pending" state that can handle K_EVENT
+// =============================================================================
+// Phase 2B: normal_get_additional_char accessors for Rust FFI
+// =============================================================================
+
+_Static_assert(MODE_REPLACE == 0x110, "MODE_REPLACE changed");
+_Static_assert(MODE_LREPLACE == 0x120, "MODE_LREPLACE changed");
+_Static_assert(MODE_LANGMAP == 0x20, "MODE_LANGMAP changed");
+_Static_assert(MODE_NORMAL_BUSY == 0x1001, "MODE_NORMAL_BUSY changed");
+_Static_assert(B_IMODE_LMAP == 1, "B_IMODE_LMAP changed");
+_Static_assert(NV_LANG == 0x08, "NV_LANG changed");
+_Static_assert(CPO_DIGRAPH == 'D', "CPO_DIGRAPH changed");
+
+/// Wrapper for plain_vgetc.
+int nvim_plain_vgetc_wrapper(void) { return plain_vgetc(); }
+
+/// Wrapper for LANGMAP_ADJUST macro.
+int nvim_langmap_adjust(int c, bool condition)
+{
+  LANGMAP_ADJUST(c, condition);
+  return c;
+}
+
+/// Wrapper for add_to_showcmd.
+bool nvim_add_to_showcmd_wrapper(int c) { return add_to_showcmd(c); }
+
+/// Wrapper for del_from_showcmd (static function).
+void nvim_del_from_showcmd_wrapper(int n) { del_from_showcmd(n); }
+
+/// Increment no_mapping.
+void nvim_inc_no_mapping(void) { no_mapping++; }
+/// Decrement no_mapping.
+void nvim_dec_no_mapping(void) { no_mapping--; }
+
+/// Increment allow_keys.
+void nvim_inc_allow_keys(void) { allow_keys++; }
+/// Decrement allow_keys.
+void nvim_dec_allow_keys(void) { allow_keys--; }
+
+/// Set did_cursorhold.
+void nvim_set_did_cursorhold(bool val) { did_cursorhold = val; }
+
+/// Get curbuf->b_p_iminsert.
+int nvim_get_curbuf_b_p_iminsert(void) { return curbuf->b_p_iminsert; }
+
+// nvim_set_State and nvim_get_State are in window.c
+
+/// Wrapper for ui_cursor_shape_no_check_conceal.
+void nvim_ui_cursor_shape_no_check_conceal(void) { ui_cursor_shape_no_check_conceal(); }
+
+/// Wrapper for get_digraph.
+int nvim_get_digraph(bool flag) { return get_digraph(flag); }
+
+/// Wrapper for vpeekc.
+int nvim_vpeekc_wrapper(void) { return vpeekc(); }
+
+/// Wrapper for do_sleep.
+void nvim_do_sleep_wrapper(int ms, bool allow_int) { do_sleep(ms, allow_int); }
+
+/// Check vim_strchr(p_cpo, c) != NULL.
+bool nvim_vim_strchr_p_cpo(int c) { return vim_strchr(p_cpo, c) != NULL; }
+
+/// Wrapper for vungetc.
+void nvim_vungetc_wrapper(int c) { vungetc(c); }
+
+/// Wrapper for get_op_type.
+int nvim_get_op_type_wrapper(int c1, int c2) { return get_op_type(c1, c2); }
+
+/// Get p_ttm.
+long nvim_get_p_ttm(void) { return p_ttm; }
+/// Get p_tm.
+long nvim_get_p_tm(void) { return p_tm; }
+
+/// Get MB_BYTE2LEN for a character.
+int nvim_get_MB_BYTE2LEN(int c) { return MB_BYTE2LEN(c); }
+
+/// Wrapper for gotchars_ignore with no_u_sync increment/decrement.
+void nvim_gotchars_ignore_wrapper(void)
+{
+  no_u_sync++;
+  gotchars_ignore();
+  no_u_sync--;
+}
+
+/// Handle the composing character loop in normal_get_additional_char.
+/// This is the "lang" section that deals with multi-byte composing chars.
+/// Takes NormalState* (as void*).
+void nvim_normal_handle_composing_chars(void *sp)
+{
+  NormalState *s = (NormalState *)sp;
+  no_mapping--;
+  GraphemeState state = GRAPHEME_STATE_INIT;
+  int prev_code = s->ca.nchar;
+
+  while ((s->c = vpeekc()) > 0
+         && (s->c >= 0x100 || MB_BYTE2LEN(vpeekc()) > 1)) {
+    s->c = plain_vgetc();
+
+    if (!utf_iscomposing(prev_code, s->c, &state)) {
+      vungetc(s->c);
+      break;
+    }
+
+    if (s->ca.nchar_len == 0) {
+      s->ca.nchar_len = utf_char2bytes(s->ca.nchar, s->ca.nchar_composing);
+    }
+
+    if (s->ca.nchar_len + utf_char2len(s->c) < (int)sizeof(s->ca.nchar_composing)) {
+      s->ca.nchar_len += utf_char2bytes(s->c, s->ca.nchar_composing + s->ca.nchar_len);
+    }
+    prev_code = s->c;
+  }
+  s->ca.nchar_composing[s->ca.nchar_len] = NUL;
+  no_mapping++;
+  no_u_sync++;
+  gotchars_ignore();
+  no_u_sync--;
+}
+
 static void normal_get_additional_char(NormalState *s)
 {
-  int *cp;
-  bool repl = false;            // get character for replace mode
-  bool lit = false;             // get extra character literally
-  bool lang;                    // getting a text character
-
-  no_mapping++;
-  allow_keys++;                 // no mapping for nchar, but allow key codes
-  // Don't generate a CursorHold event here, most commands can't handle
-  // it, e.g., nv_replace(), nv_csearch().
-  did_cursorhold = true;
-  if (s->ca.cmdchar == 'g') {
-    // For 'g' get the next character now, so that we can check for
-    // "gr", "g'" and "g`".
-    s->ca.nchar = plain_vgetc();
-    LANGMAP_ADJUST(s->ca.nchar, true);
-    s->need_flushbuf |= add_to_showcmd(s->ca.nchar);
-    if (s->ca.nchar == 'r' || s->ca.nchar == '\'' || s->ca.nchar == '`'
-        || s->ca.nchar == Ctrl_BSL) {
-      cp = &s->ca.extra_char;            // need to get a third character
-      if (s->ca.nchar != 'r') {
-        lit = true;                           // get it literally
-      } else {
-        repl = true;                          // get it in replace mode
-      }
-    } else {
-      cp = NULL;                      // no third character needed
-    }
-  } else {
-    if (s->ca.cmdchar == 'r') {
-      // get it in replace mode
-      repl = true;
-    }
-    cp = &s->ca.nchar;
-  }
-  lang = (repl || (nv_cmds[s->idx].cmd_flags & NV_LANG));
-
-  // Get a second or third character.
-  if (cp != NULL) {
-    bool langmap_active = false;  // using :lmap mappings
-    if (repl) {
-      State = MODE_REPLACE;                // pretend Replace mode
-      ui_cursor_shape_no_check_conceal();  // show different cursor shape
-    }
-    if (lang && curbuf->b_p_iminsert == B_IMODE_LMAP) {
-      // Allow mappings defined with ":lmap".
-      no_mapping--;
-      allow_keys--;
-      if (repl) {
-        State = MODE_LREPLACE;
-      } else {
-        State = MODE_LANGMAP;
-      }
-      langmap_active = true;
-    }
-
-    *cp = plain_vgetc();
-
-    if (langmap_active) {
-      // Undo the decrement done above
-      no_mapping++;
-      allow_keys++;
-    }
-    State = MODE_NORMAL_BUSY;
-    s->need_flushbuf |= add_to_showcmd(*cp);
-
-    if (!lit) {
-      // Typing CTRL-K gets a digraph.
-      if (*cp == Ctrl_K && ((nv_cmds[s->idx].cmd_flags & NV_LANG)
-                            || cp == &s->ca.extra_char)
-          && vim_strchr(p_cpo, CPO_DIGRAPH) == NULL) {
-        s->c = get_digraph(false);
-        if (s->c > 0) {
-          *cp = s->c;
-          // Guessing how to update showcmd here...
-          del_from_showcmd(3);
-          s->need_flushbuf |= add_to_showcmd(*cp);
-        }
-      }
-
-      // adjust chars > 127, except after "tTfFr" commands
-      LANGMAP_ADJUST(*cp, !lang);
-    }
-
-    // When the next character is CTRL-\ a following CTRL-N means the
-    // command is aborted and we go to Normal mode.
-    if (cp == &s->ca.extra_char
-        && s->ca.nchar == Ctrl_BSL
-        && (s->ca.extra_char == Ctrl_N || s->ca.extra_char == Ctrl_G)) {
-      s->ca.cmdchar = Ctrl_BSL;
-      s->ca.nchar = s->ca.extra_char;
-      s->idx = find_command(s->ca.cmdchar);
-    } else if ((s->ca.nchar == 'n' || s->ca.nchar == 'N')
-               && s->ca.cmdchar == 'g') {
-      s->ca.oap->op_type = get_op_type(*cp, NUL);
-    } else if (*cp == Ctrl_BSL) {
-      int towait = (p_ttm >= 0 ? (int)p_ttm : (int)p_tm);
-
-      // There is a busy wait here when typing "f<C-\>" and then
-      // something different from CTRL-N.  Can't be avoided.
-      while ((s->c = vpeekc()) <= 0 && towait > 0) {
-        do_sleep(towait > 50 ? 50 : towait, false);
-        towait -= 50;
-      }
-      if (s->c > 0) {
-        s->c = plain_vgetc();
-        if (s->c != Ctrl_N && s->c != Ctrl_G) {
-          vungetc(s->c);
-        } else {
-          s->ca.cmdchar = Ctrl_BSL;
-          s->ca.nchar = s->c;
-          s->idx = find_command(s->ca.cmdchar);
-          assert(s->idx >= 0);
-        }
-      }
-    }
-
-    if (lang) {
-      // When getting a text character and the next character is a
-      // multi-byte character, it could be a composing character.
-      // However, don't wait for it to arrive. Also, do enable mapping,
-      // because if it's put back with vungetc() it's too late to apply
-      // mapping.
-      no_mapping--;
-      GraphemeState state = GRAPHEME_STATE_INIT;
-      int prev_code = s->ca.nchar;
-
-      while ((s->c = vpeekc()) > 0
-             && (s->c >= 0x100 || MB_BYTE2LEN(vpeekc()) > 1)) {
-        s->c = plain_vgetc();
-
-        if (!utf_iscomposing(prev_code, s->c, &state)) {
-          vungetc(s->c);                   // it wasn't, put it back
-          break;
-        }
-
-        // first composing char, first put base char into buffer
-        if (s->ca.nchar_len == 0) {
-          s->ca.nchar_len = utf_char2bytes(s->ca.nchar, s->ca.nchar_composing);
-        }
-
-        if (s->ca.nchar_len + utf_char2len(s->c) < (int)sizeof(s->ca.nchar_composing)) {
-          s->ca.nchar_len += utf_char2bytes(s->c, s->ca.nchar_composing + s->ca.nchar_len);
-        }
-        prev_code = s->c;
-      }
-      s->ca.nchar_composing[s->ca.nchar_len] = NUL;
-      no_mapping++;
-      // Vim may be in a different mode when the user types the next key,
-      // but when replaying a recording the next key is already in the
-      // typeahead buffer, so record an <Ignore> before that to prevent
-      // the vpeekc() above from applying wrong mappings when replaying.
-      no_u_sync++;
-      gotchars_ignore();
-      no_u_sync--;
-    }
-  }
-  no_mapping--;
-  allow_keys--;
+  rs_normal_get_additional_char(s);
 }
 
 static void normal_invert_horizontal(NormalState *s)

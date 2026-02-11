@@ -8,6 +8,7 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 
+pub mod additional_char;
 pub mod commands;
 pub mod count;
 pub mod dispatch;
