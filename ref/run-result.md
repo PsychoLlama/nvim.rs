@@ -1,17 +1,25 @@
-Plan: ~/.claude/plans/delegated-juggling-gray.md
+Plan: ~/.claude/plans/precious-prancing-wilkes.md
 
-All 4 phases of the search.c migration plan are complete and committed:
+All 5 phases are complete. Here's the summary:
 
-| Phase | Function(s) | Commit |
-|-------|-------------|--------|
-| 1 | `searchit()` + `first_submatch()` | `39e55ea` |
-| 2 | `do_search()` | `7d5c625` |
-| 3 | `findmatchlimit()` + `check_prevcol` + `find_rawstring_end` + `find_mps_values` | `02019fc` |
-| 4 | `find_pattern_in_path()` + batch helpers | `cc7c3af` |
+## Migration Complete: ops.c Heavy Functions to Rust
+
+All 5 phases committed successfully on the `rust-migration` branch:
+
+| Commit | Phase | Function | Lines |
+|--------|-------|----------|-------|
+| `6e0eec2fa5` | 1 | `cursor_pos_info` | ~245 |
+| `ba3f15ca42` | 2 | `do_addsub` | ~352 |
+| `08417b5871` | 3 | `op_replace` | ~233 |
+| `813990a8a8` | 4 | `op_delete` | ~317 |
+| `3b2022654c` | 5 | `do_pending_operator` | ~638 |
+
+**Total: ~1,785 lines of C logic migrated to Rust**
 
 All checks pass:
-- **Build**: clean
-- **Smoke test**: passes (regexp smoke: 29/29)
-- **Format**: clean
-- **Clippy**: clean
-- **Unit tests**: 4083/4083 passing
+- `just build` — clean (no new warnings)
+- `just smoke-test` — passes
+- `just rust-fmt-check` — passes
+- `just rust-clippy` — passes
+- `just rust-test` — 4,099 tests pass
+- Targeted functional tests (operators, increment/decrement, delete, replace, fold, put, join) — all ops-related tests pass; fold_spec failures are pre-existing
