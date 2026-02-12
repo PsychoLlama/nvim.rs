@@ -3403,643 +3403,598 @@ static bool is_ex_cmdchar(cmdarg_T *cap)
 
 /// Handle an operator after Visual mode or when the movement is finished.
 /// "gui_yank" is true when yanking text for the clipboard.
-void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank)
+// ===========================================================================
+// do_pending_operator C accessors for Rust migration (Phase 5)
+// ===========================================================================
+
+extern void rs_do_pending_operator(void *cap, int old_col, int gui_yank);
+
+// File-scope statics for do_pending_operator (bridges across accessor calls)
+static redo_VIsual_T dpo_redo_VIsual = { NUL, 0, 0, 0, 0 };
+static bool dpo_include_line_break;
+static int dpo_saved_lbr;
+static pos_T dpo_saved_old_cursor;
+
+/// Check if we should process the pending operator.
+int nvim_dpo_should_process(cmdarg_T *cap)
+{
+  oparg_T *oap = cap->oap;
+  return ((finish_op || VIsual_active) && oap->op_type != OP_NOP) ? 1 : 0;
+}
+
+/// Preamble: save lbr, handle motion_force, prep redo, redo_VIsual/VIsual setup.
+void nvim_dpo_preamble(cmdarg_T *cap, int gui_yank)
+{
+  oparg_T *oap = cap->oap;
+  bool include_line_break = false;
+  const bool redo_yank = vim_strchr(p_cpo, CPO_YANK) != NULL && !gui_yank;
+
+  reset_lbr();
+  oap->is_VIsual = VIsual_active;
+
+  // Handle motion_force
+  if (oap->motion_force == 'V') {
+    oap->motion_type = kMTLineWise;
+  } else if (oap->motion_force == 'v') {
+    if (oap->motion_type == kMTLineWise) {
+      oap->inclusive = false;
+    } else if (oap->motion_type == kMTCharWise) {
+      oap->inclusive = !oap->inclusive;
+    }
+    oap->motion_type = kMTCharWise;
+  } else if (oap->motion_force == Ctrl_V) {
+    if (!VIsual_active) {
+      VIsual_active = true;
+      VIsual = oap->start;
+    }
+    VIsual_mode = Ctrl_V;
+    VIsual_select = false;
+    VIsual_reselect = false;
+  }
+
+  // Prep redo
+  if ((redo_yank || oap->op_type != OP_YANK)
+      && ((!VIsual_active || oap->motion_force)
+          || ((is_ex_cmdchar(cap) || cap->cmdchar == K_LUA)
+              && oap->op_type != OP_COLON))
+      && cap->cmdchar != 'D'
+      && oap->op_type != OP_FOLD
+      && oap->op_type != OP_FOLDOPEN
+      && oap->op_type != OP_FOLDOPENREC
+      && oap->op_type != OP_FOLDCLOSE
+      && oap->op_type != OP_FOLDCLOSEREC
+      && oap->op_type != OP_FOLDDEL
+      && oap->op_type != OP_FOLDDELREC) {
+    prep_redo(oap->regname, cap->count0,
+              get_op_char(oap->op_type), get_extra_op_char(oap->op_type),
+              oap->motion_force, cap->cmdchar, cap->nchar);
+    if (cap->cmdchar == '/' || cap->cmdchar == '?') {
+      if (vim_strchr(p_cpo, CPO_REDO) == NULL) {
+        AppendToRedobuffLit(cap->searchbuf, -1);
+      }
+      AppendToRedobuff(NL_STR);
+    } else if (is_ex_cmdchar(cap)) {
+      if (repeat_cmdline == NULL) {
+        ResetRedobuff();
+      } else {
+        if (cap->cmdchar == ':') {
+          AppendToRedobuffLit(repeat_cmdline, -1);
+        } else {
+          AppendToRedobuffSpec(repeat_cmdline);
+        }
+        AppendToRedobuff(NL_STR);
+        XFREE_CLEAR(repeat_cmdline);
+      }
+    } else if (cap->cmdchar == K_LUA) {
+      AppendNumberToRedobuff(repeat_luaref);
+      AppendToRedobuff(NL_STR);
+    }
+  }
+
+  // Handle redo_VIsual_busy or VIsual_active
+  if (redo_VIsual_busy) {
+    oap->start = curwin->w_cursor;
+    curwin->w_cursor.lnum += dpo_redo_VIsual.rv_line_count - 1;
+    curwin->w_cursor.lnum = MIN(curwin->w_cursor.lnum, curbuf->b_ml.ml_line_count);
+    VIsual_mode = dpo_redo_VIsual.rv_mode;
+    if (dpo_redo_VIsual.rv_vcol == MAXCOL || VIsual_mode == 'v') {
+      if (VIsual_mode == 'v') {
+        if (dpo_redo_VIsual.rv_line_count <= 1) {
+          validate_virtcol(curwin);
+          curwin->w_curswant = curwin->w_virtcol + dpo_redo_VIsual.rv_vcol - 1;
+        } else {
+          curwin->w_curswant = dpo_redo_VIsual.rv_vcol;
+        }
+      } else {
+        curwin->w_curswant = MAXCOL;
+      }
+      coladvance(curwin, curwin->w_curswant);
+    }
+    cap->count0 = dpo_redo_VIsual.rv_count;
+    cap->count1 = (cap->count0 == 0 ? 1 : cap->count0);
+  } else if (VIsual_active) {
+    if (!gui_yank) {
+      curbuf->b_visual.vi_start = VIsual;
+      curbuf->b_visual.vi_end = curwin->w_cursor;
+      curbuf->b_visual.vi_mode = VIsual_mode;
+      restore_visual_mode();
+      curbuf->b_visual.vi_curswant = curwin->w_curswant;
+      curbuf->b_visual_mode_eval = VIsual_mode;
+    }
+
+    if (VIsual_select && VIsual_mode == 'V'
+        && cap->oap->op_type != OP_DELETE) {
+      if (lt(VIsual, curwin->w_cursor)) {
+        VIsual.col = 0;
+        curwin->w_cursor.col = ml_get_len(curwin->w_cursor.lnum);
+      } else {
+        curwin->w_cursor.col = 0;
+        VIsual.col = ml_get_len(VIsual.lnum);
+      }
+      VIsual_mode = 'v';
+    } else if (VIsual_mode == 'v') {
+      include_line_break = unadjust_for_sel();
+    }
+
+    oap->start = VIsual;
+    if (VIsual_mode == 'V') {
+      oap->start.col = 0;
+      oap->start.coladd = 0;
+    }
+  }
+
+  // Store include_line_break for setup_positions (file-scope static,
+  // safe because do_pending_operator is not reentrant).
+  dpo_include_line_break = include_line_break;
+}
+
+/// Setup positions, folds, visual state.
+void nvim_dpo_setup_positions(cmdarg_T *cap, int gui_yank)
 {
   oparg_T *oap = cap->oap;
   int lbr_saved = curwin->w_p_lbr;
+  const bool redo_yank = vim_strchr(p_cpo, CPO_YANK) != NULL && !gui_yank;
 
-  // The visual area is remembered for redo
-  static redo_VIsual_T redo_VIsual = { NUL, 0, 0, 0, 0 };
+  // Retrieve include_line_break from preamble (file-scope static)
+  bool include_line_break = dpo_include_line_break;
 
-  pos_T old_cursor = curwin->w_cursor;
-
-  // If an operation is pending, handle it...
-  if ((finish_op
-       || VIsual_active)
-      && oap->op_type != OP_NOP) {
-    bool empty_region_error;
-    int restart_edit_save;
-    bool include_line_break = false;
-    // Yank can be redone when 'y' is in 'cpoptions', but not when yanking
-    // for the clipboard.
-    const bool redo_yank = vim_strchr(p_cpo, CPO_YANK) != NULL && !gui_yank;
-
-    // Avoid a problem with unwanted linebreaks in block mode
-    reset_lbr();
-    oap->is_VIsual = VIsual_active;
-    if (oap->motion_force == 'V') {
-      oap->motion_type = kMTLineWise;
-    } else if (oap->motion_force == 'v') {
-      // If the motion was linewise, "inclusive" will not have been set.
-      // Use "exclusive" to be consistent.  Makes "dvj" work nice.
-      if (oap->motion_type == kMTLineWise) {
-        oap->inclusive = false;
-      } else if (oap->motion_type == kMTCharWise) {
-        // If the motion already was charwise, toggle "inclusive"
-        oap->inclusive = !oap->inclusive;
+  // Set oap->start/end and fold handling
+  if (lt(oap->start, curwin->w_cursor)) {
+    if (!VIsual_active) {
+      if (hasFolding(curwin, oap->start.lnum, &oap->start.lnum, NULL)) {
+        oap->start.col = 0;
       }
-      oap->motion_type = kMTCharWise;
-    } else if (oap->motion_force == Ctrl_V) {
-      // Change line- or charwise motion into Visual block mode.
-      if (!VIsual_active) {
-        VIsual_active = true;
-        VIsual = oap->start;
+      if ((curwin->w_cursor.col > 0
+           || oap->inclusive
+           || oap->motion_type == kMTLineWise)
+          && hasFolding(curwin, curwin->w_cursor.lnum, NULL,
+                        &curwin->w_cursor.lnum)) {
+        curwin->w_cursor.col = get_cursor_line_len();
       }
-      VIsual_mode = Ctrl_V;
-      VIsual_select = false;
-      VIsual_reselect = false;
+    }
+    oap->end = curwin->w_cursor;
+    curwin->w_cursor = oap->start;
+    curwin->w_valid &= ~VALID_VIRTCOL;
+  } else {
+    if (!VIsual_active && oap->motion_type == kMTLineWise) {
+      if (hasFolding(curwin, curwin->w_cursor.lnum, &curwin->w_cursor.lnum, NULL)) {
+        curwin->w_cursor.col = 0;
+      }
+      if (hasFolding(curwin, oap->start.lnum, NULL, &oap->start.lnum)) {
+        oap->start.col = ml_get_len(oap->start.lnum);
+      }
+    }
+    oap->end = oap->start;
+    oap->start = curwin->w_cursor;
+  }
+
+  check_pos(curwin->w_buffer, &oap->end);
+  oap->line_count = oap->end.lnum - oap->start.lnum + 1;
+  virtual_op = virtual_active(curwin);
+
+  if (VIsual_active || redo_VIsual_busy) {
+    get_op_vcol(oap, dpo_redo_VIsual.rv_vcol, true);
+
+    if (!redo_VIsual_busy && !gui_yank) {
+      resel_VIsual_mode = VIsual_mode;
+      if (curwin->w_curswant == MAXCOL) {
+        resel_VIsual_vcol = MAXCOL;
+      } else {
+        if (VIsual_mode != Ctrl_V) {
+          getvvcol(curwin, &(oap->end), NULL, NULL, &oap->end_vcol);
+        }
+        if (VIsual_mode == Ctrl_V || oap->line_count <= 1) {
+          if (VIsual_mode != Ctrl_V) {
+            getvvcol(curwin, &(oap->start), &oap->start_vcol, NULL, NULL);
+          }
+          resel_VIsual_vcol = oap->end_vcol - oap->start_vcol + 1;
+        } else {
+          resel_VIsual_vcol = oap->end_vcol;
+        }
+      }
+      resel_VIsual_line_count = oap->line_count;
     }
 
-    // Only redo yank when 'y' flag is in 'cpoptions'.
-    // Never redo "zf" (define fold).
+    // Redo visual prep
     if ((redo_yank || oap->op_type != OP_YANK)
-        && ((!VIsual_active || oap->motion_force)
-            // Also redo Operator-pending Visual mode mappings.
-            || ((is_ex_cmdchar(cap) || cap->cmdchar == K_LUA)
-                && oap->op_type != OP_COLON))
-        && cap->cmdchar != 'D'
+        && oap->op_type != OP_COLON
         && oap->op_type != OP_FOLD
         && oap->op_type != OP_FOLDOPEN
         && oap->op_type != OP_FOLDOPENREC
         && oap->op_type != OP_FOLDCLOSE
         && oap->op_type != OP_FOLDCLOSEREC
         && oap->op_type != OP_FOLDDEL
-        && oap->op_type != OP_FOLDDELREC) {
-      prep_redo(oap->regname, cap->count0,
-                get_op_char(oap->op_type), get_extra_op_char(oap->op_type),
-                oap->motion_force, cap->cmdchar, cap->nchar);
-      if (cap->cmdchar == '/' || cap->cmdchar == '?') {     // was a search
-        // If 'cpoptions' does not contain 'r', insert the search
-        // pattern to really repeat the same command.
-        if (vim_strchr(p_cpo, CPO_REDO) == NULL) {
-          AppendToRedobuffLit(cap->searchbuf, -1);
+        && oap->op_type != OP_FOLDDELREC
+        && oap->motion_force == NUL) {
+      if (cap->cmdchar == 'g' && (cap->nchar == 'n' || cap->nchar == 'N')) {
+        prep_redo(oap->regname, cap->count0,
+                  get_op_char(oap->op_type), get_extra_op_char(oap->op_type),
+                  oap->motion_force, cap->cmdchar, cap->nchar);
+      } else if (!is_ex_cmdchar(cap) && cap->cmdchar != K_LUA) {
+        int opchar = get_op_char(oap->op_type);
+        int extra_opchar = get_extra_op_char(oap->op_type);
+        int nchar = oap->op_type == OP_REPLACE ? cap->nchar : NUL;
+        if (nchar == REPLACE_CR_NCHAR) {
+          nchar = CAR;
+        } else if (nchar == REPLACE_NL_NCHAR) {
+          nchar = NL;
         }
-        AppendToRedobuff(NL_STR);
-      } else if (is_ex_cmdchar(cap)) {
-        // do_cmdline() has stored the first typed line in
-        // "repeat_cmdline".  When several lines are typed repeating
-        // won't be possible.
-        if (repeat_cmdline == NULL) {
-          ResetRedobuff();
+        if (opchar == 'g' && extra_opchar == '@') {
+          prep_redo_num2(oap->regname, 0, NUL, 'v', cap->count0, opchar, extra_opchar, nchar);
         } else {
-          if (cap->cmdchar == ':') {
-            AppendToRedobuffLit(repeat_cmdline, -1);
-          } else {
-            AppendToRedobuffSpec(repeat_cmdline);
-          }
-          AppendToRedobuff(NL_STR);
-          XFREE_CLEAR(repeat_cmdline);
+          prep_redo(oap->regname, 0, NUL, 'v', opchar, extra_opchar, nchar);
         }
-      } else if (cap->cmdchar == K_LUA) {
-        AppendNumberToRedobuff(repeat_luaref);
-        AppendToRedobuff(NL_STR);
+      }
+      if (!redo_VIsual_busy) {
+        dpo_redo_VIsual.rv_mode = resel_VIsual_mode;
+        dpo_redo_VIsual.rv_vcol = resel_VIsual_vcol;
+        dpo_redo_VIsual.rv_line_count = resel_VIsual_line_count;
+        dpo_redo_VIsual.rv_count = cap->count0;
+        dpo_redo_VIsual.rv_arg = cap->arg;
       }
     }
 
-    if (redo_VIsual_busy) {
-      // Redo of an operation on a Visual area. Use the same size from
-      // redo_VIsual.rv_line_count and redo_VIsual.rv_vcol.
-      oap->start = curwin->w_cursor;
-      curwin->w_cursor.lnum += redo_VIsual.rv_line_count - 1;
-      curwin->w_cursor.lnum = MIN(curwin->w_cursor.lnum, curbuf->b_ml.ml_line_count);
-      VIsual_mode = redo_VIsual.rv_mode;
-      if (redo_VIsual.rv_vcol == MAXCOL || VIsual_mode == 'v') {
-        if (VIsual_mode == 'v') {
-          if (redo_VIsual.rv_line_count <= 1) {
-            validate_virtcol(curwin);
-            curwin->w_curswant = curwin->w_virtcol + redo_VIsual.rv_vcol - 1;
-          } else {
-            curwin->w_curswant = redo_VIsual.rv_vcol;
-          }
-        } else {
-          curwin->w_curswant = MAXCOL;
+    // Inclusive/motion_type adjustments
+    if (oap->motion_force == NUL || oap->motion_type == kMTLineWise) {
+      oap->inclusive = true;
+    }
+    if (VIsual_mode == 'V') {
+      oap->motion_type = kMTLineWise;
+    } else if (VIsual_mode == 'v') {
+      oap->motion_type = kMTCharWise;
+      if (*ml_get_pos(&(oap->end)) == NUL
+          && (include_line_break || !virtual_op)) {
+        oap->inclusive = false;
+        if (*p_sel != 'o'
+            && !op_on_lines(oap->op_type)
+            && oap->end.lnum < curbuf->b_ml.ml_line_count) {
+          oap->end.lnum++;
+          oap->end.col = 0;
+          oap->end.coladd = 0;
+          oap->line_count++;
         }
-        coladvance(curwin, curwin->w_curswant);
-      }
-      cap->count0 = redo_VIsual.rv_count;
-      cap->count1 = (cap->count0 == 0 ? 1 : cap->count0);
-    } else if (VIsual_active) {
-      if (!gui_yank) {
-        // Save the current VIsual area for '< and '> marks, and "gv"
-        curbuf->b_visual.vi_start = VIsual;
-        curbuf->b_visual.vi_end = curwin->w_cursor;
-        curbuf->b_visual.vi_mode = VIsual_mode;
-        restore_visual_mode();
-        curbuf->b_visual.vi_curswant = curwin->w_curswant;
-        curbuf->b_visual_mode_eval = VIsual_mode;
-      }
-
-      // In Select mode, a linewise selection is operated upon like a
-      // charwise selection.
-      // Special case: gH<Del> deletes the last line.
-      if (VIsual_select && VIsual_mode == 'V'
-          && cap->oap->op_type != OP_DELETE) {
-        if (lt(VIsual, curwin->w_cursor)) {
-          VIsual.col = 0;
-          curwin->w_cursor.col = ml_get_len(curwin->w_cursor.lnum);
-        } else {
-          curwin->w_cursor.col = 0;
-          VIsual.col = ml_get_len(VIsual.lnum);
-        }
-        VIsual_mode = 'v';
-      } else if (VIsual_mode == 'v') {
-        // If 'selection' is "exclusive", backup one character for
-        // charwise selections.
-        include_line_break = unadjust_for_sel();
-      }
-
-      oap->start = VIsual;
-      if (VIsual_mode == 'V') {
-        oap->start.col = 0;
-        oap->start.coladd = 0;
       }
     }
 
-    // Set oap->start to the first position of the operated text, oap->end
-    // to the end of the operated text.  w_cursor is equal to oap->start.
-    if (lt(oap->start, curwin->w_cursor)) {
-      // Include folded lines completely.
-      if (!VIsual_active) {
-        if (hasFolding(curwin, oap->start.lnum, &oap->start.lnum, NULL)) {
-          oap->start.col = 0;
-        }
-        if ((curwin->w_cursor.col > 0
-             || oap->inclusive
-             || oap->motion_type == kMTLineWise)
-            && hasFolding(curwin, curwin->w_cursor.lnum, NULL,
-                          &curwin->w_cursor.lnum)) {
-          curwin->w_cursor.col = get_cursor_line_len();
-        }
-      }
-      oap->end = curwin->w_cursor;
-      curwin->w_cursor = oap->start;
+    redo_VIsual_busy = false;
 
-      // w_virtcol may have been updated; if the cursor goes back to its
-      // previous position w_virtcol becomes invalid and isn't updated
-      // automatically.
-      curwin->w_valid &= ~VALID_VIRTCOL;
-    } else {
-      // Include folded lines completely.
-      if (!VIsual_active && oap->motion_type == kMTLineWise) {
-        if (hasFolding(curwin, curwin->w_cursor.lnum, &curwin->w_cursor.lnum,
-                       NULL)) {
-          curwin->w_cursor.col = 0;
-        }
-        if (hasFolding(curwin, oap->start.lnum, NULL, &oap->start.lnum)) {
-          oap->start.col = ml_get_len(oap->start.lnum);
-        }
-      }
-      oap->end = oap->start;
-      oap->start = curwin->w_cursor;
-    }
-
-    // Just in case lines were deleted that make the position invalid.
-    check_pos(curwin->w_buffer, &oap->end);
-    oap->line_count = oap->end.lnum - oap->start.lnum + 1;
-
-    // Set "virtual_op" before resetting VIsual_active.
-    virtual_op = virtual_active(curwin);
-
-    if (VIsual_active || redo_VIsual_busy) {
-      get_op_vcol(oap, redo_VIsual.rv_vcol, true);
-
-      if (!redo_VIsual_busy && !gui_yank) {
-        // Prepare to reselect and redo Visual: this is based on the
-        // size of the Visual text
-        resel_VIsual_mode = VIsual_mode;
-        if (curwin->w_curswant == MAXCOL) {
-          resel_VIsual_vcol = MAXCOL;
-        } else {
-          if (VIsual_mode != Ctrl_V) {
-            getvvcol(curwin, &(oap->end),
-                     NULL, NULL, &oap->end_vcol);
-          }
-          if (VIsual_mode == Ctrl_V || oap->line_count <= 1) {
-            if (VIsual_mode != Ctrl_V) {
-              getvvcol(curwin, &(oap->start),
-                       &oap->start_vcol, NULL, NULL);
-            }
-            resel_VIsual_vcol = oap->end_vcol - oap->start_vcol + 1;
-          } else {
-            resel_VIsual_vcol = oap->end_vcol;
-          }
-        }
-        resel_VIsual_line_count = oap->line_count;
-      }
-
-      // can't redo yank (unless 'y' is in 'cpoptions') and ":"
-      if ((redo_yank || oap->op_type != OP_YANK)
-          && oap->op_type != OP_COLON
-          && oap->op_type != OP_FOLD
-          && oap->op_type != OP_FOLDOPEN
-          && oap->op_type != OP_FOLDOPENREC
-          && oap->op_type != OP_FOLDCLOSE
-          && oap->op_type != OP_FOLDCLOSEREC
-          && oap->op_type != OP_FOLDDEL
-          && oap->op_type != OP_FOLDDELREC
+    if (!gui_yank) {
+      VIsual_active = false;
+      setmouse();
+      mouse_dragging = 0;
+      may_clear_cmdline();
+      if ((oap->op_type == OP_YANK
+           || oap->op_type == OP_COLON
+           || oap->op_type == OP_FUNCTION
+           || oap->op_type == OP_FILTER)
           && oap->motion_force == NUL) {
-        // Prepare for redoing.  Only use the nchar field for "r",
-        // otherwise it might be the second char of the operator.
-        if (cap->cmdchar == 'g' && (cap->nchar == 'n'
-                                    || cap->nchar == 'N')) {
-          prep_redo(oap->regname, cap->count0,
-                    get_op_char(oap->op_type), get_extra_op_char(oap->op_type),
-                    oap->motion_force, cap->cmdchar, cap->nchar);
-        } else if (!is_ex_cmdchar(cap) && cap->cmdchar != K_LUA) {
-          int opchar = get_op_char(oap->op_type);
-          int extra_opchar = get_extra_op_char(oap->op_type);
-          int nchar = oap->op_type == OP_REPLACE ? cap->nchar : NUL;
-
-          // reverse what nv_replace() did
-          if (nchar == REPLACE_CR_NCHAR) {
-            nchar = CAR;
-          } else if (nchar == REPLACE_NL_NCHAR) {
-            nchar = NL;
-          }
-
-          if (opchar == 'g' && extra_opchar == '@') {
-            // also repeat the count for 'operatorfunc'
-            prep_redo_num2(oap->regname, 0, NUL, 'v', cap->count0, opchar, extra_opchar, nchar);
-          } else {
-            prep_redo(oap->regname, 0, NUL, 'v', opchar, extra_opchar, nchar);
-          }
-        }
-        if (!redo_VIsual_busy) {
-          redo_VIsual.rv_mode = resel_VIsual_mode;
-          redo_VIsual.rv_vcol = resel_VIsual_vcol;
-          redo_VIsual.rv_line_count = resel_VIsual_line_count;
-          redo_VIsual.rv_count = cap->count0;
-          redo_VIsual.rv_arg = cap->arg;
-        }
+        restore_lbr(lbr_saved);
+        redraw_curbuf_later(UPD_INVERTED);
       }
+    }
+  }
 
-      // oap->inclusive defaults to true.
-      // If oap->end is on a NUL (empty line) oap->inclusive becomes
-      // false.  This makes "d}P" and "v}dP" work the same.
-      if (oap->motion_force == NUL || oap->motion_type == kMTLineWise) {
+  // Include trailing multi-byte byte
+  if (oap->inclusive) {
+    const int l = utfc_ptr2len(ml_get_pos(&oap->end));
+    if (l > 1) {
+      oap->end.col += l - 1;
+    }
+  }
+  curwin->w_set_curswant = true;
+
+  // empty check
+  oap->empty = (oap->motion_type != kMTLineWise
+                && (!oap->inclusive
+                    || (oap->op_type == OP_YANK
+                        && gchar_pos(&oap->end) == NUL))
+                && equalpos(oap->start, oap->end)
+                && !(virtual_op && oap->start.coladd != oap->end.coladd));
+
+  // Force redraw for empty visual region
+  if (oap->is_VIsual && (oap->empty || !MODIFIABLE(curbuf)
+                         || oap->op_type == OP_FOLD)) {
+    restore_lbr(lbr_saved);
+    redraw_curbuf_later(UPD_INVERTED);
+  }
+
+  // Adjust end for column-one case
+  if (oap->motion_type == kMTCharWise
+      && oap->inclusive == false
+      && !(cap->retval & CA_NO_ADJ_OP_END)
+      && oap->end.col == 0
+      && (!oap->is_VIsual || *p_sel == 'o')
+      && oap->line_count > 1) {
+    oap->end_adjusted = true;
+    oap->line_count--;
+    oap->end.lnum--;
+    if (inindent(0)) {
+      oap->motion_type = kMTLineWise;
+    } else {
+      oap->end.col = ml_get_len(oap->end.lnum);
+      if (oap->end.col) {
+        oap->end.col--;
         oap->inclusive = true;
       }
-      if (VIsual_mode == 'V') {
-        oap->motion_type = kMTLineWise;
-      } else if (VIsual_mode == 'v') {
-        oap->motion_type = kMTCharWise;
-        if (*ml_get_pos(&(oap->end)) == NUL
-            && (include_line_break || !virtual_op)) {
-          oap->inclusive = false;
-          // Try to include the newline, unless it's an operator
-          // that works on lines only.
-          if (*p_sel != 'o'
-              && !op_on_lines(oap->op_type)
-              && oap->end.lnum < curbuf->b_ml.ml_line_count) {
-            oap->end.lnum++;
-            oap->end.col = 0;
-            oap->end.coladd = 0;
-            oap->line_count++;
-          }
-        }
-      }
-
-      redo_VIsual_busy = false;
-
-      // Switch Visual off now, so screen updating does
-      // not show inverted text when the screen is redrawn.
-      // With OP_YANK and sometimes with OP_COLON and OP_FILTER there is
-      // no screen redraw, so it is done here to remove the inverted
-      // part.
-      if (!gui_yank) {
-        VIsual_active = false;
-        setmouse();
-        mouse_dragging = 0;
-        may_clear_cmdline();
-        if ((oap->op_type == OP_YANK
-             || oap->op_type == OP_COLON
-             || oap->op_type == OP_FUNCTION
-             || oap->op_type == OP_FILTER)
-            && oap->motion_force == NUL) {
-          // Make sure redrawing is correct.
-          restore_lbr(lbr_saved);
-          redraw_curbuf_later(UPD_INVERTED);
-        }
-      }
     }
+  } else {
+    oap->end_adjusted = false;
+  }
+}
 
-    // Include the trailing byte of a multi-byte char.
-    if (oap->inclusive) {
-      const int l = utfc_ptr2len(ml_get_pos(&oap->end));
-      if (l > 1) {
-        oap->end.col += l - 1;
-      }
-    }
-    curwin->w_set_curswant = true;
+/// Dispatch the operator (the big switch).
+void nvim_dpo_dispatch_operator(cmdarg_T *cap, int gui_yank)
+{
+  oparg_T *oap = cap->oap;
+  int lbr_saved = curwin->w_p_lbr;
+  int restart_edit_save;
+  bool empty_region_error = (oap->empty
+                             && vim_strchr(p_cpo, CPO_EMPTYREGION) != NULL);
 
-    // oap->empty is set when start and end are the same.  The inclusive
-    // flag affects this too, unless yanking and the end is on a NUL.
-    oap->empty = (oap->motion_type != kMTLineWise
-                  && (!oap->inclusive
-                      || (oap->op_type == OP_YANK
-                          && gchar_pos(&oap->end) == NUL))
-                  && equalpos(oap->start, oap->end)
-                  && !(virtual_op && oap->start.coladd != oap->end.coladd));
-    // For delete, change and yank, it's an error to operate on an
-    // empty region, when 'E' included in 'cpoptions' (Vi compatible).
-    empty_region_error = (oap->empty
-                          && vim_strchr(p_cpo, CPO_EMPTYREGION) != NULL);
+  switch (oap->op_type) {
+  case OP_LSHIFT:
+  case OP_RSHIFT:
+    op_shift(oap, true, oap->is_VIsual ? cap->count1 : 1);
+    auto_format(false, true);
+    break;
 
-    // Force a redraw when operating on an empty Visual region, when
-    // 'modifiable is off or creating a fold.
-    if (oap->is_VIsual && (oap->empty || !MODIFIABLE(curbuf)
-                           || oap->op_type == OP_FOLD)) {
-      restore_lbr(lbr_saved);
-      redraw_curbuf_later(UPD_INVERTED);
-    }
-
-    // If the end of an operator is in column one while oap->motion_type
-    // is kMTCharWise and oap->inclusive is false, we put op_end after the last
-    // character in the previous line. If op_start is on or before the
-    // first non-blank in the line, the operator becomes linewise
-    // (strange, but that's the way vi does it).
-    if (oap->motion_type == kMTCharWise
-        && oap->inclusive == false
-        && !(cap->retval & CA_NO_ADJ_OP_END)
-        && oap->end.col == 0
-        && (!oap->is_VIsual || *p_sel == 'o')
-        && oap->line_count > 1) {
-      oap->end_adjusted = true;  // remember that we did this
-      oap->line_count--;
-      oap->end.lnum--;
-      if (inindent(0)) {
-        oap->motion_type = kMTLineWise;
-      } else {
-        oap->end.col = ml_get_len(oap->end.lnum);
-        if (oap->end.col) {
-          oap->end.col--;
-          oap->inclusive = true;
-        }
-      }
+  case OP_JOIN_NS:
+  case OP_JOIN:
+    oap->line_count = MAX(oap->line_count, 2);
+    if (curwin->w_cursor.lnum + oap->line_count - 1 >
+        curbuf->b_ml.ml_line_count) {
+      beep_flush();
     } else {
-      oap->end_adjusted = false;
-    }
-
-    switch (oap->op_type) {
-    case OP_LSHIFT:
-    case OP_RSHIFT:
-      op_shift(oap, true, oap->is_VIsual ? cap->count1 : 1);
+      do_join((size_t)oap->line_count, oap->op_type == OP_JOIN,
+              true, true, true);
       auto_format(false, true);
-      break;
+    }
+    break;
 
-    case OP_JOIN_NS:
-    case OP_JOIN:
-      oap->line_count = MAX(oap->line_count, 2);
-      if (curwin->w_cursor.lnum + oap->line_count - 1 >
-          curbuf->b_ml.ml_line_count) {
-        beep_flush();
-      } else {
-        do_join((size_t)oap->line_count, oap->op_type == OP_JOIN,
-                true, true, true);
+  case OP_DELETE:
+    VIsual_reselect = false;
+    if (empty_region_error) {
+      vim_beep(kOptBoFlagOperator);
+      CancelRedo();
+    } else {
+      op_delete(oap);
+      if (oap->motion_type == kMTLineWise
+          && has_format_option(FO_AUTO)
+          && u_save_cursor() == OK) {
         auto_format(false, true);
       }
-      break;
+    }
+    break;
 
-    case OP_DELETE:
-      VIsual_reselect = false;              // don't reselect now
-      if (empty_region_error) {
+  case OP_YANK:
+    if (empty_region_error) {
+      if (!gui_yank) {
         vim_beep(kOptBoFlagOperator);
         CancelRedo();
-      } else {
-        op_delete(oap);
-        // save cursor line for undo if it wasn't saved yet
-        if (oap->motion_type == kMTLineWise
-            && has_format_option(FO_AUTO)
-            && u_save_cursor() == OK) {
-          auto_format(false, true);
-        }
       }
-      break;
+    } else {
+      restore_lbr(lbr_saved);
+      oap->excl_tr_ws = cap->cmdchar == 'z';
+      op_yank(oap, !gui_yank);
+    }
+    check_cursor_col(curwin);
+    break;
 
-    case OP_YANK:
-      if (empty_region_error) {
-        if (!gui_yank) {
-          vim_beep(kOptBoFlagOperator);
-          CancelRedo();
-        }
+  case OP_CHANGE:
+    VIsual_reselect = false;
+    if (empty_region_error) {
+      vim_beep(kOptBoFlagOperator);
+      CancelRedo();
+    } else {
+      if (!KeyTyped) {
+        restart_edit_save = restart_edit;
       } else {
-        restore_lbr(lbr_saved);
-        oap->excl_tr_ws = cap->cmdchar == 'z';
-        op_yank(oap, !gui_yank);
+        restart_edit_save = 0;
       }
-      check_cursor_col(curwin);
-      break;
+      restart_edit = 0;
+      restore_lbr(lbr_saved);
+      curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
+      if (op_change(oap)) {
+        cap->retval |= CA_COMMAND_BUSY;
+      }
+      if (restart_edit == 0) {
+        restart_edit = restart_edit_save;
+      }
+    }
+    break;
 
-    case OP_CHANGE:
-      VIsual_reselect = false;              // don't reselect now
-      if (empty_region_error) {
-        vim_beep(kOptBoFlagOperator);
-        CancelRedo();
-      } else {
-        // This is a new edit command, not a restart.  Need to
-        // remember it to make i_CTRL-O work with mappings for
-        // Visual mode.  But do this only once and not when typed.
-        if (!KeyTyped) {
-          restart_edit_save = restart_edit;
+  case OP_FILTER:
+    if (vim_strchr(p_cpo, CPO_FILTER) != NULL) {
+      AppendToRedobuff("!\r");
+    } else {
+      bangredo = true;
+    }
+    FALLTHROUGH;
+
+  case OP_INDENT:
+  case OP_COLON:
+    if (oap->op_type == OP_INDENT && *get_equalprg() == NUL) {
+      if (curbuf->b_p_lisp) {
+        if (use_indentexpr_for_lisp()) {
+          op_reindent(oap, get_expr_indent);
         } else {
-          restart_edit_save = 0;
+          op_reindent(oap, get_lisp_indent);
         }
-        restart_edit = 0;
-
-        // Restore linebreak, so that when the user edits it looks as before.
-        restore_lbr(lbr_saved);
-
-        // trigger TextChangedI
-        curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
-
-        if (op_change(oap)) {           // will call edit()
-          cap->retval |= CA_COMMAND_BUSY;
-        }
-        if (restart_edit == 0) {
-          restart_edit = restart_edit_save;
-        }
-      }
-      break;
-
-    case OP_FILTER:
-      if (vim_strchr(p_cpo, CPO_FILTER) != NULL) {
-        AppendToRedobuff("!\r");  // Use any last used !cmd.
-      } else {
-        bangredo = true;  // do_bang() will put cmd in redo buffer.
-      }
-      FALLTHROUGH;
-
-    case OP_INDENT:
-    case OP_COLON:
-
-      // If 'equalprg' is empty, do the indenting internally.
-      if (oap->op_type == OP_INDENT && *get_equalprg() == NUL) {
-        if (curbuf->b_p_lisp) {
-          if (use_indentexpr_for_lisp()) {
-            op_reindent(oap, get_expr_indent);
-          } else {
-            op_reindent(oap, get_lisp_indent);
-          }
-          break;
-        }
-        op_reindent(oap,
-                    *curbuf->b_p_inde != NUL ? get_expr_indent
-                                             : get_c_indent);
         break;
       }
-
-      op_colon(oap);
-      break;
-
-    case OP_TILDE:
-    case OP_UPPER:
-    case OP_LOWER:
-    case OP_ROT13:
-      if (empty_region_error) {
-        vim_beep(kOptBoFlagOperator);
-        CancelRedo();
-      } else {
-        op_tilde(oap);
-      }
-      check_cursor_col(curwin);
-      break;
-
-    case OP_FORMAT:
-      if (*curbuf->b_p_fex != NUL) {
-        op_formatexpr(oap);             // use expression
-      } else {
-        if (*p_fp != NUL || *curbuf->b_p_fp != NUL) {
-          op_colon(oap);                // use external command
-        } else {
-          op_format(oap, false);        // use internal function
-        }
-      }
-      break;
-
-    case OP_FORMAT2:
-      op_format(oap, true);             // use internal function
-      break;
-
-    case OP_FUNCTION: {
-      redo_VIsual_T save_redo_VIsual = redo_VIsual;
-
-      // Restore linebreak, so that when the user edits it looks as before.
-      restore_lbr(lbr_saved);
-      // call 'operatorfunc'
-      op_function(oap);
-
-      // Restore the info for redoing Visual mode, the function may
-      // invoke another operator and unintentionally change it.
-      redo_VIsual = save_redo_VIsual;
+      op_reindent(oap,
+                  *curbuf->b_p_inde != NUL ? get_expr_indent : get_c_indent);
       break;
     }
+    op_colon(oap);
+    break;
 
-    case OP_INSERT:
-    case OP_APPEND:
-      VIsual_reselect = false;          // don't reselect now
-      if (empty_region_error) {
-        vim_beep(kOptBoFlagOperator);
-        CancelRedo();
-      } else {
-        // This is a new edit command, not a restart.  Need to
-        // remember it to make i_CTRL-O work with mappings for
-        // Visual mode.  But do this only once.
-        restart_edit_save = restart_edit;
-        restart_edit = 0;
-
-        // Restore linebreak, so that when the user edits it looks as before.
-        restore_lbr(lbr_saved);
-
-        // trigger TextChangedI
-        curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
-
-        op_insert(oap, cap->count1);
-
-        // Reset linebreak, so that formatting works correctly.
-        reset_lbr();
-
-        // TODO(brammool): when inserting in several lines, should format all
-        // the lines.
-        auto_format(false, true);
-
-        if (restart_edit == 0) {
-          restart_edit = restart_edit_save;
-        } else {
-          cap->retval |= CA_COMMAND_BUSY;
-        }
-      }
-      break;
-
-    case OP_REPLACE:
-      VIsual_reselect = false;          // don't reselect now
-      if (empty_region_error) {
-        vim_beep(kOptBoFlagOperator);
-        CancelRedo();
-      } else {
-        // Restore linebreak, so that when the user edits it looks as before.
-        restore_lbr(lbr_saved);
-
-        op_replace(oap, cap->nchar);
-      }
-      break;
-
-    case OP_FOLD:
-      VIsual_reselect = false;          // don't reselect now
-      foldCreate(curwin, oap->start, oap->end);
-      break;
-
-    case OP_FOLDOPEN:
-    case OP_FOLDOPENREC:
-    case OP_FOLDCLOSE:
-    case OP_FOLDCLOSEREC:
-      VIsual_reselect = false;          // don't reselect now
-      opFoldRange(oap->start, oap->end,
-                  oap->op_type == OP_FOLDOPEN
-                  || oap->op_type == OP_FOLDOPENREC,
-                  oap->op_type == OP_FOLDOPENREC
-                  || oap->op_type == OP_FOLDCLOSEREC,
-                  oap->is_VIsual);
-      break;
-
-    case OP_FOLDDEL:
-    case OP_FOLDDELREC:
-      VIsual_reselect = false;          // don't reselect now
-      deleteFold(curwin, oap->start.lnum, oap->end.lnum,
-                 oap->op_type == OP_FOLDDELREC, oap->is_VIsual);
-      break;
-
-    case OP_NR_ADD:
-    case OP_NR_SUB:
-      if (empty_region_error) {
-        vim_beep(kOptBoFlagOperator);
-        CancelRedo();
-      } else {
-        VIsual_active = true;
-        restore_lbr(lbr_saved);
-        op_addsub(oap, (linenr_T)cap->count1, redo_VIsual.rv_arg);
-        VIsual_active = false;
-      }
-      check_cursor_col(curwin);
-      break;
-    default:
-      clearopbeep(oap);
-    }
-    virtual_op = kNone;
-    if (!gui_yank) {
-      // if 'sol' not set, go back to old column for some commands
-      if (!p_sol && oap->motion_type == kMTLineWise && !oap->end_adjusted
-          && (oap->op_type == OP_LSHIFT || oap->op_type == OP_RSHIFT
-              || oap->op_type == OP_DELETE)) {
-        reset_lbr();
-        coladvance(curwin, curwin->w_curswant = old_col);
-      }
+  case OP_TILDE:
+  case OP_UPPER:
+  case OP_LOWER:
+  case OP_ROT13:
+    if (empty_region_error) {
+      vim_beep(kOptBoFlagOperator);
+      CancelRedo();
     } else {
-      curwin->w_cursor = old_cursor;
+      op_tilde(oap);
     }
-    clearop(oap);
-    motion_force = NUL;
+    check_cursor_col(curwin);
+    break;
+
+  case OP_FORMAT:
+    if (*curbuf->b_p_fex != NUL) {
+      op_formatexpr(oap);
+    } else {
+      if (*p_fp != NUL || *curbuf->b_p_fp != NUL) {
+        op_colon(oap);
+      } else {
+        op_format(oap, false);
+      }
+    }
+    break;
+
+  case OP_FORMAT2:
+    op_format(oap, true);
+    break;
+
+  case OP_FUNCTION: {
+    redo_VIsual_T save_redo_VIsual = dpo_redo_VIsual;
+    restore_lbr(lbr_saved);
+    op_function(oap);
+    dpo_redo_VIsual = save_redo_VIsual;
+    break;
   }
-  restore_lbr(lbr_saved);
+
+  case OP_INSERT:
+  case OP_APPEND:
+    VIsual_reselect = false;
+    if (empty_region_error) {
+      vim_beep(kOptBoFlagOperator);
+      CancelRedo();
+    } else {
+      restart_edit_save = restart_edit;
+      restart_edit = 0;
+      restore_lbr(lbr_saved);
+      curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
+      op_insert(oap, cap->count1);
+      reset_lbr();
+      auto_format(false, true);
+      if (restart_edit == 0) {
+        restart_edit = restart_edit_save;
+      } else {
+        cap->retval |= CA_COMMAND_BUSY;
+      }
+    }
+    break;
+
+  case OP_REPLACE:
+    VIsual_reselect = false;
+    if (empty_region_error) {
+      vim_beep(kOptBoFlagOperator);
+      CancelRedo();
+    } else {
+      restore_lbr(lbr_saved);
+      op_replace(oap, cap->nchar);
+    }
+    break;
+
+  case OP_FOLD:
+    VIsual_reselect = false;
+    foldCreate(curwin, oap->start, oap->end);
+    break;
+
+  case OP_FOLDOPEN:
+  case OP_FOLDOPENREC:
+  case OP_FOLDCLOSE:
+  case OP_FOLDCLOSEREC:
+    VIsual_reselect = false;
+    opFoldRange(oap->start, oap->end,
+                oap->op_type == OP_FOLDOPEN || oap->op_type == OP_FOLDOPENREC,
+                oap->op_type == OP_FOLDOPENREC || oap->op_type == OP_FOLDCLOSEREC,
+                oap->is_VIsual);
+    break;
+
+  case OP_FOLDDEL:
+  case OP_FOLDDELREC:
+    VIsual_reselect = false;
+    deleteFold(curwin, oap->start.lnum, oap->end.lnum,
+               oap->op_type == OP_FOLDDELREC, oap->is_VIsual);
+    break;
+
+  case OP_NR_ADD:
+  case OP_NR_SUB:
+    if (empty_region_error) {
+      vim_beep(kOptBoFlagOperator);
+      CancelRedo();
+    } else {
+      VIsual_active = true;
+      restore_lbr(lbr_saved);
+      op_addsub(oap, (linenr_T)cap->count1, dpo_redo_VIsual.rv_arg);
+      VIsual_active = false;
+    }
+    check_cursor_col(curwin);
+    break;
+
+  default:
+    clearopbeep(oap);
+  }
+}
+
+/// Postamble: virtual_op reset, column restore, clearop.
+void nvim_dpo_postamble(cmdarg_T *cap, int old_col, int gui_yank)
+{
+  oparg_T *oap = cap->oap;
+
+  virtual_op = kNone;
+  if (!gui_yank) {
+    if (!p_sol && oap->motion_type == kMTLineWise && !oap->end_adjusted
+        && (oap->op_type == OP_LSHIFT || oap->op_type == OP_RSHIFT
+            || oap->op_type == OP_DELETE)) {
+      reset_lbr();
+      coladvance(curwin, curwin->w_curswant = old_col);
+    }
+  } else {
+    curwin->w_cursor = dpo_saved_old_cursor;
+  }
+  clearop(oap);
+  motion_force = NUL;
+}
+
+/// Final: restore_lbr.
+void nvim_dpo_restore_lbr(cmdarg_T *cap)
+{
+  (void)cap;
+  // We need the lbr_saved from function entry. Use a static.
+  restore_lbr(dpo_saved_lbr);
+}
+
+void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank)
+{
+  // Save state that the Rust side needs across accessor calls
+  dpo_saved_lbr = curwin->w_p_lbr;
+  dpo_saved_old_cursor = curwin->w_cursor;
+  rs_do_pending_operator(cap, old_col, (int)gui_yank);
 }
 
 /// Get the byte count of buffer region. End-exclusive.

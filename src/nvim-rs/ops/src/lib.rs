@@ -31,6 +31,7 @@ pub mod format;
 pub mod insert;
 pub mod join;
 pub mod oparg;
+pub mod pending;
 pub mod put;
 pub mod replace;
 pub mod replace_full;
