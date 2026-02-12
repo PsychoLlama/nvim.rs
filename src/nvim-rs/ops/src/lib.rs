@@ -32,6 +32,7 @@ pub mod join;
 pub mod oparg;
 pub mod put;
 pub mod replace;
+pub mod replace_full;
 pub mod shift;
 pub mod tilde;
 pub mod types;

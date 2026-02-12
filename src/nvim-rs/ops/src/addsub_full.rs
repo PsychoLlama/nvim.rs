@@ -352,7 +352,7 @@ mod tests {
         let n = oldn.wrapping_add(5);
         assert_eq!(n, 3);
         assert!(n < oldn); // wrapped around
-        // C code: n = (n ^ (uvarnumber_T)(-1)), plus sign flip
+                           // C code: n = (n ^ (uvarnumber_T)(-1)), plus sign flip
         let corrected = n ^ u64::MAX;
         assert_eq!(corrected, u64::MAX - 3);
 

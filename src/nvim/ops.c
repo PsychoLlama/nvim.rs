@@ -1060,239 +1060,228 @@ static void replace_character(int c)
   dec_cursor();
 }
 
-/// Replace a whole area with one character.
-static int op_replace(oparg_T *oap, int c)
+// ===========================================================================
+// op_replace C accessors for Rust migration (Phase 3)
+// ===========================================================================
+
+extern int rs_op_replace(void *oap, int c);
+
+_Static_assert(kMTBlockWise == 2, "kMTBlockWise must be 2");
+
+/// Check if buffer is empty or oap->empty.
+int nvim_opr_is_empty(oparg_T *oap)
 {
-  int n;
+  return ((curbuf->b_ml.ml_flags & ML_EMPTY) || oap->empty) ? 1 : 0;
+}
+
+/// Get motion type.
+int nvim_opr_get_motion_type(oparg_T *oap)
+{
+  return (int)oap->motion_type;
+}
+
+/// Adjust multi-byte opend.
+void nvim_opr_mb_adjust_opend(oparg_T *oap)
+{
+  mb_adjust_opend(oap);
+}
+
+/// Save undo for the replace operation range.
+int nvim_opr_u_save(oparg_T *oap)
+{
+  return u_save((linenr_T)(oap->start.lnum - 1),
+                (linenr_T)(oap->end.lnum + 1));
+}
+
+/// Block mode replacement loop — all lines in the block.
+void nvim_opr_block_loop(oparg_T *oap, int c, int had_ctrl_v_cr)
+{
   struct block_def bd;
   char *after_p = NULL;
-  bool had_ctrl_v_cr = false;
 
-  if ((curbuf->b_ml.ml_flags & ML_EMPTY) || oap->empty) {
-    return OK;              // nothing to do
-  }
-  if (c == REPLACE_CR_NCHAR) {
-    had_ctrl_v_cr = true;
-    c = CAR;
-  } else if (c == REPLACE_NL_NCHAR) {
-    had_ctrl_v_cr = true;
-    c = NL;
-  }
-
-  mb_adjust_opend(oap);
-
-  if (u_save((linenr_T)(oap->start.lnum - 1),
-             (linenr_T)(oap->end.lnum + 1)) == FAIL) {
-    return FAIL;
-  }
-
-  // block mode replace
-  if (oap->motion_type == kMTBlockWise) {
-    bd.is_MAX = (curwin->w_curswant == MAXCOL);
-    for (; curwin->w_cursor.lnum <= oap->end.lnum; curwin->w_cursor.lnum++) {
-      curwin->w_cursor.col = 0;       // make sure cursor position is valid
-      block_prep(oap, &bd, curwin->w_cursor.lnum, true);
-      if (bd.textlen == 0 && (!virtual_op || bd.is_MAX)) {
-        continue;                     // nothing to replace
-      }
-
-      // n == number of extra chars required
-      // If we split a TAB, it may be replaced by several characters.
-      // Thus the number of characters may increase!
-      // If the range starts in virtual space, count the initial
-      // coladd offset as part of "startspaces"
-      if (virtual_op && bd.is_short && *bd.textstart == NUL) {
-        pos_T vpos;
-
-        vpos.lnum = curwin->w_cursor.lnum;
-        getvpos(curwin, &vpos, oap->start_vcol);
-        bd.startspaces += vpos.coladd;
-        n = bd.startspaces;
-      } else {
-        // allow for pre spaces
-        n = (bd.startspaces ? bd.start_char_vcols - 1 : 0);
-      }
-
-      // allow for post spp
-      n += (bd.endspaces
-            && !bd.is_oneChar
-            && bd.end_char_vcols > 0) ? bd.end_char_vcols - 1 : 0;
-      // Figure out how many characters to replace.
-      int numc = oap->end_vcol - oap->start_vcol + 1;
-      if (bd.is_short && (!virtual_op || bd.is_MAX)) {
-        numc -= (oap->end_vcol - bd.end_vcol) + 1;
-      }
-
-      // A double-wide character can be replaced only up to half the
-      // times.
-      if (utf_char2cells(c) > 1) {
-        if ((numc & 1) && !bd.is_short) {
-          bd.endspaces++;
-          n++;
-        }
-        numc = numc / 2;
-      }
-
-      // Compute bytes needed, move character count to num_chars.
-      int num_chars = numc;
-      numc *= utf_char2len(c);
-
-      char *oldp = get_cursor_line_ptr();
-      colnr_T oldlen = get_cursor_line_len();
-
-      size_t newp_size = (size_t)bd.textcol + (size_t)bd.startspaces;
-      if (had_ctrl_v_cr || (c != '\r' && c != '\n')) {
-        newp_size += (size_t)numc;
-        if (!bd.is_short) {
-          newp_size += (size_t)(bd.endspaces + oldlen
-                                - bd.textcol - bd.textlen);
-        }
-      }
-      char *newp = xmallocz(newp_size);
-      // copy up to deleted part
-      memmove(newp, oldp, (size_t)bd.textcol);
-      oldp += bd.textcol + bd.textlen;
-      // insert pre-spaces
-      memset(newp + bd.textcol, ' ', (size_t)bd.startspaces);
-      // insert replacement chars CHECK FOR ALLOCATED SPACE
-      // REPLACE_CR_NCHAR/REPLACE_NL_NCHAR is used for entering CR literally.
-      size_t after_p_len = 0;
-      int col = oldlen - bd.textcol - bd.textlen + 1;
-      assert(col >= 0);
-      int newrows = 0;
-      int newcols = 0;
-      if (had_ctrl_v_cr || (c != '\r' && c != '\n')) {
-        // strlen(newp) at this point
-        int newp_len = bd.textcol + bd.startspaces;
-        while (--num_chars >= 0) {
-          newp_len += utf_char2bytes(c, newp + newp_len);
-        }
-        if (!bd.is_short) {
-          // insert post-spaces
-          memset(newp + newp_len, ' ', (size_t)bd.endspaces);
-          newp_len += bd.endspaces;
-          // copy the part after the changed part
-          memmove(newp + newp_len, oldp, (size_t)col);
-        }
-        newcols = newp_len - bd.textcol;
-      } else {
-        // Replacing with \r or \n means splitting the line.
-        after_p_len = (size_t)col;
-        after_p = xmalloc(after_p_len);
-        memmove(after_p, oldp, after_p_len);
-        newrows = 1;
-      }
-      // replace the line
-      ml_replace(curwin->w_cursor.lnum, newp, false);
-      curbuf_splice_pending++;
-      linenr_T baselnum = curwin->w_cursor.lnum;
-      if (after_p != NULL) {
-        ml_append(curwin->w_cursor.lnum++, after_p, (int)after_p_len, false);
-        appended_lines_mark(curwin->w_cursor.lnum, 1);
-        oap->end.lnum++;
-        xfree(after_p);
-      }
-      curbuf_splice_pending--;
-      extmark_splice(curbuf, (int)baselnum - 1, bd.textcol,
-                     0, bd.textlen, bd.textlen,
-                     newrows, newcols, newrows + newcols, kExtmarkUndo);
-    }
-  } else {
-    // Characterwise or linewise motion replace.
-    if (oap->motion_type == kMTLineWise) {
-      oap->start.col = 0;
-      curwin->w_cursor.col = 0;
-      oap->end.col = ml_get_len(oap->end.lnum);
-      if (oap->end.col) {
-        oap->end.col--;
-      }
-    } else if (!oap->inclusive) {
-      dec(&(oap->end));
+  bd.is_MAX = (curwin->w_curswant == MAXCOL);
+  for (; curwin->w_cursor.lnum <= oap->end.lnum; curwin->w_cursor.lnum++) {
+    curwin->w_cursor.col = 0;
+    block_prep(oap, &bd, curwin->w_cursor.lnum, true);
+    if (bd.textlen == 0 && (!virtual_op || bd.is_MAX)) {
+      continue;
     }
 
-    // TODO(bfredl): we could batch all the splicing
-    // done on the same line, at least
-    while (ltoreq(curwin->w_cursor, oap->end)) {
-      bool done = false;
+    int n;
+    if (virtual_op && bd.is_short && *bd.textstart == NUL) {
+      pos_T vpos;
+      vpos.lnum = curwin->w_cursor.lnum;
+      getvpos(curwin, &vpos, oap->start_vcol);
+      bd.startspaces += vpos.coladd;
+      n = bd.startspaces;
+    } else {
+      n = (bd.startspaces ? bd.start_char_vcols - 1 : 0);
+    }
 
-      n = gchar_cursor();
-      if (n != NUL) {
-        int new_byte_len = utf_char2len(c);
-        int old_byte_len = utfc_ptr2len(get_cursor_pos_ptr());
+    n += (bd.endspaces && !bd.is_oneChar && bd.end_char_vcols > 0)
+         ? bd.end_char_vcols - 1 : 0;
 
-        if (new_byte_len > 1 || old_byte_len > 1) {
-          // This is slow, but it handles replacing a single-byte
-          // with a multi-byte and the other way around.
+    int numc = oap->end_vcol - oap->start_vcol + 1;
+    if (bd.is_short && (!virtual_op || bd.is_MAX)) {
+      numc -= (oap->end_vcol - bd.end_vcol) + 1;
+    }
+
+    if (utf_char2cells(c) > 1) {
+      if ((numc & 1) && !bd.is_short) {
+        bd.endspaces++;
+        n++;
+      }
+      numc = numc / 2;
+    }
+
+    int num_chars = numc;
+    numc *= utf_char2len(c);
+
+    char *oldp = get_cursor_line_ptr();
+    colnr_T oldlen = get_cursor_line_len();
+
+    size_t newp_size = (size_t)bd.textcol + (size_t)bd.startspaces;
+    if (had_ctrl_v_cr || (c != '\r' && c != '\n')) {
+      newp_size += (size_t)numc;
+      if (!bd.is_short) {
+        newp_size += (size_t)(bd.endspaces + oldlen - bd.textcol - bd.textlen);
+      }
+    }
+    char *newp = xmallocz(newp_size);
+    memmove(newp, oldp, (size_t)bd.textcol);
+    oldp += bd.textcol + bd.textlen;
+    memset(newp + bd.textcol, ' ', (size_t)bd.startspaces);
+
+    size_t after_p_len = 0;
+    int col = oldlen - bd.textcol - bd.textlen + 1;
+    assert(col >= 0);
+    int newrows = 0;
+    int newcols = 0;
+    if (had_ctrl_v_cr || (c != '\r' && c != '\n')) {
+      int newp_len = bd.textcol + bd.startspaces;
+      while (--num_chars >= 0) {
+        newp_len += utf_char2bytes(c, newp + newp_len);
+      }
+      if (!bd.is_short) {
+        memset(newp + newp_len, ' ', (size_t)bd.endspaces);
+        newp_len += bd.endspaces;
+        memmove(newp + newp_len, oldp, (size_t)col);
+      }
+      newcols = newp_len - bd.textcol;
+    } else {
+      after_p_len = (size_t)col;
+      after_p = xmalloc(after_p_len);
+      memmove(after_p, oldp, after_p_len);
+      newrows = 1;
+    }
+
+    ml_replace(curwin->w_cursor.lnum, newp, false);
+    curbuf_splice_pending++;
+    linenr_T baselnum = curwin->w_cursor.lnum;
+    if (after_p != NULL) {
+      ml_append(curwin->w_cursor.lnum++, after_p, (int)after_p_len, false);
+      appended_lines_mark(curwin->w_cursor.lnum, 1);
+      oap->end.lnum++;
+      xfree(after_p);
+      after_p = NULL;
+    }
+    curbuf_splice_pending--;
+    extmark_splice(curbuf, (int)baselnum - 1, bd.textcol,
+                   0, bd.textlen, bd.textlen,
+                   newrows, newcols, newrows + newcols, kExtmarkUndo);
+  }
+}
+
+/// Charwise/linewise replacement loop.
+void nvim_opr_charwise_loop(oparg_T *oap, int c)
+{
+  if (oap->motion_type == kMTLineWise) {
+    oap->start.col = 0;
+    curwin->w_cursor.col = 0;
+    oap->end.col = ml_get_len(oap->end.lnum);
+    if (oap->end.col) {
+      oap->end.col--;
+    }
+  } else if (!oap->inclusive) {
+    dec(&(oap->end));
+  }
+
+  while (ltoreq(curwin->w_cursor, oap->end)) {
+    bool done = false;
+    int n = gchar_cursor();
+
+    if (n != NUL) {
+      int new_byte_len = utf_char2len(c);
+      int old_byte_len = utfc_ptr2len(get_cursor_pos_ptr());
+
+      if (new_byte_len > 1 || old_byte_len > 1) {
+        if (curwin->w_cursor.lnum == oap->end.lnum) {
+          oap->end.col += new_byte_len - old_byte_len;
+        }
+        replace_character(c);
+        done = true;
+      } else {
+        if (n == TAB) {
+          int end_vcol = 0;
           if (curwin->w_cursor.lnum == oap->end.lnum) {
-            oap->end.col += new_byte_len - old_byte_len;
+            end_vcol = getviscol2(oap->end.col, oap->end.coladd);
           }
-          replace_character(c);
+          coladvance_force(getviscol());
+          if (curwin->w_cursor.lnum == oap->end.lnum) {
+            getvpos(curwin, &oap->end, end_vcol);
+          }
+        }
+        if (gchar_cursor() != NUL) {
+          pbyte(curwin->w_cursor, c);
           done = true;
-        } else {
-          if (n == TAB) {
-            int end_vcol = 0;
-
-            if (curwin->w_cursor.lnum == oap->end.lnum) {
-              // oap->end has to be recalculated when
-              // the tab breaks
-              end_vcol = getviscol2(oap->end.col,
-                                    oap->end.coladd);
-            }
-            coladvance_force(getviscol());
-            if (curwin->w_cursor.lnum == oap->end.lnum) {
-              getvpos(curwin, &oap->end, end_vcol);
-            }
-          }
-          // with "coladd" set may move to just after a TAB
-          if (gchar_cursor() != NUL) {
-            pbyte(curwin->w_cursor, c);
-            done = true;
-          }
         }
-      }
-      if (!done && virtual_op && curwin->w_cursor.lnum == oap->end.lnum) {
-        int virtcols = oap->end.coladd;
-
-        if (curwin->w_cursor.lnum == oap->start.lnum
-            && oap->start.col == oap->end.col && oap->start.coladd) {
-          virtcols -= oap->start.coladd;
-        }
-
-        // oap->end has been trimmed so it's effectively inclusive;
-        // as a result an extra +1 must be counted so we don't
-        // trample the NUL byte.
-        coladvance_force(getviscol2(oap->end.col, oap->end.coladd) + 1);
-        curwin->w_cursor.col -= (virtcols + 1);
-        for (; virtcols >= 0; virtcols--) {
-          if (utf_char2len(c) > 1) {
-            replace_character(c);
-          } else {
-            pbyte(curwin->w_cursor, c);
-          }
-          if (inc(&curwin->w_cursor) == -1) {
-            break;
-          }
-        }
-      }
-
-      // Advance to next character, stop at the end of the file.
-      if (inc_cursor() == -1) {
-        break;
       }
     }
-  }
 
+    if (!done && virtual_op && curwin->w_cursor.lnum == oap->end.lnum) {
+      int virtcols = oap->end.coladd;
+      if (curwin->w_cursor.lnum == oap->start.lnum
+          && oap->start.col == oap->end.col && oap->start.coladd) {
+        virtcols -= oap->start.coladd;
+      }
+      coladvance_force(getviscol2(oap->end.col, oap->end.coladd) + 1);
+      curwin->w_cursor.col -= (virtcols + 1);
+      for (; virtcols >= 0; virtcols--) {
+        if (utf_char2len(c) > 1) {
+          replace_character(c);
+        } else {
+          pbyte(curwin->w_cursor, c);
+        }
+        if (inc(&curwin->w_cursor) == -1) {
+          break;
+        }
+      }
+    }
+
+    if (inc_cursor() == -1) {
+      break;
+    }
+  }
+}
+
+/// Finish: restore cursor, mark changed lines, set marks.
+void nvim_opr_finish(oparg_T *oap)
+{
   curwin->w_cursor = oap->start;
   check_cursor(curwin);
-  changed_lines(curbuf, oap->start.lnum, oap->start.col, oap->end.lnum + 1, 0, true);
+  changed_lines(curbuf, oap->start.lnum, oap->start.col,
+                oap->end.lnum + 1, 0, true);
 
   if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    // Set "'[" and "']" marks.
     curbuf->b_op_start = oap->start;
     curbuf->b_op_end = oap->end;
   }
+}
 
-  return OK;
+/// Replace a whole area with one character.
+static int op_replace(oparg_T *oap, int c)
+{
+  return rs_op_replace(oap, c);
 }
 
 /// Handle the (non-standard vi) tilde operator.  Also for "gu", "gU" and "g?".
