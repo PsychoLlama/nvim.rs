@@ -23,6 +23,7 @@
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod addsub;
+pub mod cursor_pos_info;
 pub mod delete;
 pub mod format;
 pub mod insert;
