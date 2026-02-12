@@ -88,6 +88,7 @@ extern int rs_get_op_char(int optype);
 extern int rs_get_extra_op_char(int optype);
 extern int rs_get_op_type(int char1, int char2);
 extern void rs_cursor_pos_info(dict_T *dict);
+extern bool rs_do_addsub(int op_type, pos_T *pos, int length, linenr_T Prenum1);
 
 // Flags for third item in "opchars".
 #define OPF_LINES  1  // operator always works on lines
@@ -2378,108 +2379,134 @@ void op_addsub(oparg_T *oap, linenr_T Prenum1, bool g_cmd)
   }
 }
 
-/// Add or subtract from a number in a line.
-///
-/// @param op_type OP_NR_ADD or OP_NR_SUB.
-/// @param pos     Cursor position.
-/// @param length  Target number length.
-/// @param Prenum1 Amount of addition or subtraction.
-///
-/// @return true if some character was changed.
-bool do_addsub(int op_type, pos_T *pos, int length, linenr_T Prenum1)
+// =============================================================================
+// C accessor functions for rs_do_addsub (Phase 2)
+// =============================================================================
+
+// Verify constants used in Rust
+_Static_assert(OP_NR_SUB == 29, "OP_NR_SUB mismatch");
+
+/// Struct matching Rust AddsubScanResult
+typedef struct {
+  int col;
+  int length;
+  int firstdigit;
+  int negative;
+  int was_positive;
+  int blank_unsigned;
+  int past_end;
+  int no_digit;
+  int is_alpha;
+} AddsubScanResult;
+
+/// Struct matching Rust AddsubParseResult
+typedef struct {
+  int pre;
+  int length;
+  uint64_t n_lo;
+  int col;
+  int negative;
+  int overflow;
+} AddsubParseResult;
+
+/// Struct matching Rust AddsubAlphaResult
+typedef struct {
+  int did_change;
+  int endpos_col;
+} AddsubAlphaResult;
+
+/// Setup: save state, get line info, set cursor.
+void nvim_addsub_setup(pos_T *pos, int *out_save_coladd, int *out_linelen, int *out_visual)
 {
-  int pre;  // 'X' or 'x': hex; '0': octal; 'B' or 'b': bin
-  static bool hexupper = false;  // 0xABC
-  uvarnumber_T n;
-  bool blank_unsigned = false;  // blank: treat as unsigned?
-  bool negative = false;
-  bool was_positive = true;
-  bool visual = VIsual_active;
-  bool did_change = false;
-  pos_T save_cursor = curwin->w_cursor;
-  int maxlen = 0;
-  pos_T startpos;
-  pos_T endpos;
-  colnr_T save_coladd = 0;
-
-  const bool do_hex = vim_strchr(curbuf->b_p_nf, 'x') != NULL;       // "heX"
-  const bool do_oct = vim_strchr(curbuf->b_p_nf, 'o') != NULL;       // "Octal"
-  const bool do_bin = vim_strchr(curbuf->b_p_nf, 'b') != NULL;       // "Bin"
-  const bool do_alpha = vim_strchr(curbuf->b_p_nf, 'p') != NULL;     // "alPha"
-  const bool do_unsigned = vim_strchr(curbuf->b_p_nf, 'u') != NULL;  // "Unsigned"
-  const bool do_blank = vim_strchr(curbuf->b_p_nf, 'k') != NULL;     // "blanK"
-
+  *out_visual = VIsual_active ? 1 : 0;
+  *out_save_coladd = 0;
   if (virtual_active(curwin)) {
-    save_coladd = pos->coladd;
+    *out_save_coladd = (int)pos->coladd;
     pos->coladd = 0;
   }
-
   curwin->w_cursor = *pos;
+  *out_linelen = ml_get_len(pos->lnum);
+}
+
+/// Get nrformats flags.
+void nvim_addsub_get_nrformats(int *out_hex, int *out_oct, int *out_bin,
+                               int *out_alpha, int *out_unsigned, int *out_blank)
+{
+  *out_hex = vim_strchr(curbuf->b_p_nf, 'x') != NULL;
+  *out_oct = vim_strchr(curbuf->b_p_nf, 'o') != NULL;
+  *out_bin = vim_strchr(curbuf->b_p_nf, 'b') != NULL;
+  *out_alpha = vim_strchr(curbuf->b_p_nf, 'p') != NULL;
+  *out_unsigned = vim_strchr(curbuf->b_p_nf, 'u') != NULL;
+  *out_blank = vim_strchr(curbuf->b_p_nf, 'k') != NULL;
+}
+
+/// Scan for number/alpha on the line. Encapsulates the complex scanning logic.
+void nvim_addsub_scan(pos_T *pos, int length,
+                      int do_hex, int do_oct, int do_bin,
+                      int do_alpha, int do_unsigned, int do_blank,
+                      int visual, void *out_ptr)
+{
+  AddsubScanResult *out = (AddsubScanResult *)out_ptr;
+  memset(out, 0, sizeof(*out));
+  out->was_positive = 1;
+  out->length = length;
+
   char *ptr = ml_get(pos->lnum);
   int linelen = ml_get_len(pos->lnum);
   int col = pos->col;
+  int save_coladd = virtual_active(curwin) ? (int)pos->coladd : 0;
 
   if (col + !!save_coladd >= linelen) {
-    goto theend;
+    out->past_end = 1;
+    return;
   }
 
-  // First check if we are on a hexadecimal number, after the "0x".
-  if (!VIsual_active) {
+  // Number scanning logic (non-visual)
+  if (!visual) {
     if (do_bin) {
       while (col > 0 && ascii_isbdigit(ptr[col])) {
         col--;
         col -= utf_head_off(ptr, ptr + col);
       }
     }
-
     if (do_hex) {
       while (col > 0 && ascii_isxdigit(ptr[col])) {
         col--;
         col -= utf_head_off(ptr, ptr + col);
       }
     }
-    if (do_bin
-        && do_hex
+    if (do_bin && do_hex
         && !((col > 0
               && (ptr[col] == 'X' || ptr[col] == 'x')
               && ptr[col - 1] == '0'
               && !utf_head_off(ptr, ptr + col - 1)
               && ascii_isxdigit(ptr[col + 1])))) {
-      // In case of binary/hexadecimal pattern overlap match, rescan
-
       col = curwin->w_cursor.col;
-
       while (col > 0 && ascii_isdigit(ptr[col])) {
         col--;
         col -= utf_head_off(ptr, ptr + col);
       }
     }
 
-    if ((do_hex
-         && col > 0
+    if ((do_hex && col > 0
          && (ptr[col] == 'X' || ptr[col] == 'x')
          && ptr[col - 1] == '0'
          && !utf_head_off(ptr, ptr + col - 1)
          && ascii_isxdigit(ptr[col + 1]))
-        || (do_bin
-            && col > 0
+        || (do_bin && col > 0
             && (ptr[col] == 'B' || ptr[col] == 'b')
             && ptr[col - 1] == '0'
             && !utf_head_off(ptr, ptr + col - 1)
             && ascii_isbdigit(ptr[col + 1]))) {
-      // Found hexadecimal or binary number, move to its start.
       col--;
       col -= utf_head_off(ptr, ptr + col);
     } else {
-      // Search forward and then backward to find the start of number.
       col = pos->col;
-
       while (ptr[col] != NUL
              && !ascii_isdigit(ptr[col])
              && !(do_alpha && ASCII_ISALPHA(ptr[col]))) {
         col++;
       }
-
       while (col > 0
              && ascii_isdigit(ptr[col - 1])
              && !(do_alpha && ASCII_ISALPHA(ptr[col]))) {
@@ -2492,251 +2519,244 @@ bool do_addsub(int op_type, pos_T *pos, int length, linenr_T Prenum1)
     while (ptr[col] != NUL && length > 0 && !ascii_isdigit(ptr[col])
            && !(do_alpha && ASCII_ISALPHA(ptr[col]))) {
       int mb_len = utfc_ptr2len(ptr + col);
-
       col += mb_len;
       length -= mb_len;
     }
-
     if (length == 0) {
-      goto theend;
+      out->past_end = 1;
+      return;
     }
+    out->length = length;
 
     if (col > pos->col && ptr[col - 1] == '-'
         && !utf_head_off(ptr, ptr + col - 1)
         && !do_unsigned) {
       if (do_blank && col >= 2 && !ascii_iswhite(ptr[col - 2])) {
-        blank_unsigned = true;
+        out->blank_unsigned = 1;
       } else {
-        negative = true;
-        was_positive = false;
+        out->negative = 1;
+        out->was_positive = 0;
       }
     }
   }
 
-  // If a number was found, and saving for undo works, replace the number.
   int firstdigit = (uint8_t)ptr[col];
   if (!ascii_isdigit(firstdigit) && !(do_alpha && ASCII_ISALPHA(firstdigit))) {
-    beep_flush();
-    goto theend;
+    out->no_digit = 1;
+    return;
   }
 
-  if (do_alpha && ASCII_ISALPHA(firstdigit)) {
-    // decrement or increment alphabetic character
-    if (op_type == OP_NR_SUB) {
-      if (CHAR_ORD(firstdigit) < Prenum1) {
-        firstdigit = isupper(firstdigit) ? 'A' : 'a';
-      } else {
-        firstdigit -= (int)Prenum1;
-      }
+  out->col = col;
+  out->firstdigit = firstdigit;
+  out->is_alpha = (do_alpha && ASCII_ISALPHA(firstdigit)) ? 1 : 0;
+}
+
+/// Handle alpha character increment/decrement.
+void nvim_addsub_do_alpha(int col, int firstdigit, int op_type, int prenum1,
+                          void *out_ptr)
+{
+  AddsubAlphaResult *out = (AddsubAlphaResult *)out_ptr;
+  memset(out, 0, sizeof(*out));
+
+  if (op_type == OP_NR_SUB) {
+    if (CHAR_ORD(firstdigit) < prenum1) {
+      firstdigit = isupper(firstdigit) ? 'A' : 'a';
     } else {
-      if (26 - CHAR_ORD(firstdigit) - 1 < Prenum1) {
-        firstdigit = isupper(firstdigit) ? 'Z' : 'z';
-      } else {
-        firstdigit += (int)Prenum1;
-      }
+      firstdigit -= prenum1;
     }
-    curwin->w_cursor.col = col;
-    startpos = curwin->w_cursor;
-    did_change = true;
-    del_char(false);
-    ins_char(firstdigit);
-    endpos = curwin->w_cursor;
-    curwin->w_cursor.col = col;
   } else {
-    if (col > 0 && ptr[col - 1] == '-'
-        && !utf_head_off(ptr, ptr + col - 1)
-        && !visual
-        && !do_unsigned) {
-      if (do_blank && col >= 2 && !ascii_iswhite(ptr[col - 2])) {
-        blank_unsigned = true;
-      } else {
-        // negative number
-        col--;
-        negative = true;
-      }
-    }
-
-    // get the number value (unsigned)
-    if (visual && VIsual_mode != 'V') {
-      maxlen = curbuf->b_visual.vi_curswant == MAXCOL ? linelen - col : length;
-    }
-
-    bool overflow = false;
-    vim_str2nr(ptr + col, &pre, &length,
-               0 + (do_bin ? STR2NR_BIN : 0)
-               + (do_oct ? STR2NR_OCT : 0)
-               + (do_hex ? STR2NR_HEX : 0),
-               NULL, &n, maxlen, false, &overflow);
-
-    // ignore leading '-' for hex, octal and bin numbers
-    if (pre && negative) {
-      col++;
-      length--;
-      negative = false;
-    }
-
-    // add or subtract
-    bool subtract = false;
-    if (op_type == OP_NR_SUB) {
-      subtract ^= true;
-    }
-    if (negative) {
-      subtract ^= true;
-    }
-
-    uvarnumber_T oldn = n;
-
-    if (!overflow) {  // if number is too big don't add/subtract
-      n = subtract ? n - (uvarnumber_T)Prenum1
-                   : n + (uvarnumber_T)Prenum1;
-    }
-
-    // handle wraparound for decimal numbers
-    if (!pre) {
-      if (subtract) {
-        if (n > oldn) {
-          n = 1 + (n ^ (uvarnumber_T)(-1));
-          negative ^= true;
-        }
-      } else {
-        // add
-        if (n < oldn) {
-          n = (n ^ (uvarnumber_T)(-1));
-          negative ^= true;
-        }
-      }
-      if (n == 0) {
-        negative = false;
-      }
-    }
-
-    if ((do_unsigned || blank_unsigned) && negative) {
-      if (subtract) {
-        // sticking at zero.
-        n = 0;
-      } else {
-        // sticking at 2^64 - 1.
-        n = (uvarnumber_T)(-1);
-      }
-      negative = false;
-    }
-
-    if (visual && !was_positive && !negative && col > 0) {
-      // need to remove the '-'
-      col--;
-      length++;
-    }
-
-    // Delete the old number.
-    curwin->w_cursor.col = col;
-    startpos = curwin->w_cursor;
-    did_change = true;
-    int todel = length;
-    int c = gchar_cursor();
-
-    // Don't include the '-' in the length, only the length of the part
-    // after it is kept the same.
-    if (c == '-') {
-      length--;
-    }
-    while (todel-- > 0) {
-      if (c < 0x100 && isalpha(c)) {
-        hexupper = isupper(c);
-      }
-      // del_char() will mark line needing displaying
-      del_char(false);
-      c = gchar_cursor();
-    }
-
-    // Prepare the leading characters in buf1[].
-    // When there are many leading zeros it could be very long.
-    // Allocate a bit too much.
-    char *buf1 = xmalloc((size_t)length + NUMBUFLEN);
-    ptr = buf1;
-    if (negative && (!visual || was_positive)) {
-      *ptr++ = '-';
-    }
-    if (pre) {
-      *ptr++ = '0';
-      length--;
-    }
-    if (pre == 'b' || pre == 'B' || pre == 'x' || pre == 'X') {
-      *ptr++ = (char)pre;
-      length--;
-    }
-
-    // Put the number characters in buf2[].
-    char buf2[NUMBUFLEN];
-    int buf2len = 0;
-    if (pre == 'b' || pre == 'B') {
-      size_t bits = 0;
-
-      // leading zeros
-      for (bits = 8 * sizeof(n); bits > 0; bits--) {
-        if ((n >> (bits - 1)) & 0x1) {
-          break;
-        }
-      }
-
-      while (bits > 0 && buf2len < NUMBUFLEN - 1) {
-        buf2[buf2len++] = ((n >> --bits) & 0x1) ? '1' : '0';
-      }
-
-      buf2[buf2len] = NUL;
-    } else if (pre == 0) {
-      buf2len = vim_snprintf(buf2, ARRAY_SIZE(buf2), "%" PRIu64, (uint64_t)n);
-    } else if (pre == '0') {
-      buf2len = vim_snprintf(buf2, ARRAY_SIZE(buf2), "%" PRIo64, (uint64_t)n);
-    } else if (hexupper) {
-      buf2len = vim_snprintf(buf2, ARRAY_SIZE(buf2), "%" PRIX64, (uint64_t)n);
+    if (26 - CHAR_ORD(firstdigit) - 1 < prenum1) {
+      firstdigit = isupper(firstdigit) ? 'Z' : 'z';
     } else {
-      buf2len = vim_snprintf(buf2, ARRAY_SIZE(buf2), "%" PRIx64, (uint64_t)n);
+      firstdigit += prenum1;
     }
-    length -= buf2len;
+  }
+  curwin->w_cursor.col = col;
+  out->did_change = 1;
+  del_char(false);
+  ins_char(firstdigit);
+  out->endpos_col = (int)curwin->w_cursor.col;
+  curwin->w_cursor.col = col;
+}
 
-    // Adjust number of zeros to the new number of digits, so the
-    // total length of the number remains the same.
-    // Don't do this when
-    // the result may look like an octal number.
-    if (firstdigit == '0' && !(do_oct && pre == 0)) {
-      while (length-- > 0) {
-        *ptr++ = '0';
-      }
-    }
-    *ptr = NUL;
-    int buf1len = (int)(ptr - buf1);
+/// Parse number with vim_str2nr.
+void nvim_addsub_parse_number(int col, int length, int negative,
+                              int do_hex, int do_oct, int do_bin,
+                              int visual, void *out_ptr)
+{
+  AddsubParseResult *out = (AddsubParseResult *)out_ptr;
+  memset(out, 0, sizeof(*out));
 
-    STRCPY(buf1 + buf1len, buf2);
-    buf1len += buf2len;
+  char *ptr = ml_get(curwin->w_cursor.lnum);
+  int linelen = ml_get_len(curwin->w_cursor.lnum);
+  int maxlen = 0;
 
-    ins_str(buf1, (size_t)buf1len);  // insert the new number
-    xfree(buf1);
-
-    endpos = curwin->w_cursor;
-    if (curwin->w_cursor.col) {
-      curwin->w_cursor.col--;
+  // Check for minus sign before the digit
+  if (!visual && col > 0 && ptr[col - 1] == '-'
+      && !utf_head_off(ptr, ptr + col - 1)
+      && !vim_strchr(curbuf->b_p_nf, 'u')) {
+    if (vim_strchr(curbuf->b_p_nf, 'k') && col >= 2 && !ascii_iswhite(ptr[col - 2])) {
+      // blank_unsigned case - handled by caller
+    } else {
+      col--;
+      negative = 1;
     }
   }
 
+  if (visual && VIsual_mode != 'V') {
+    maxlen = curbuf->b_visual.vi_curswant == MAXCOL ? linelen - col : length;
+  }
+
+  int pre = 0;
+  uvarnumber_T n = 0;
+  bool overflow = false;
+  vim_str2nr(ptr + col, &pre, &length,
+             0 + (do_bin ? STR2NR_BIN : 0)
+             + (do_oct ? STR2NR_OCT : 0)
+             + (do_hex ? STR2NR_HEX : 0),
+             NULL, &n, maxlen, false, &overflow);
+
+  // ignore leading '-' for hex, octal and bin numbers
+  if (pre && negative) {
+    col++;
+    length--;
+    negative = 0;
+  }
+
+  out->pre = pre;
+  out->length = length;
+  out->n_lo = (uint64_t)n;
+  out->col = col;
+  out->negative = negative;
+  out->overflow = overflow ? 1 : 0;
+}
+
+/// Delete old number and insert the new formatted number.
+void nvim_addsub_replace_number(int col, int length, int pre,
+                                uint64_t n, int negative,
+                                int was_positive, int visual,
+                                int firstdigit, int do_oct,
+                                int *out_endpos_col)
+{
+  static bool hexupper = false;
+
+  curwin->w_cursor.col = col;
+  int todel = length;
+  int c = gchar_cursor();
+
+  // Don't include the '-' in the length
+  if (c == '-') {
+    length--;
+  }
+  while (todel-- > 0) {
+    if (c < 0x100 && isalpha(c)) {
+      hexupper = isupper(c);
+    }
+    del_char(false);
+    c = gchar_cursor();
+  }
+
+  // Prepare the leading characters in buf1[]
+  char *buf1 = xmalloc((size_t)length + NUMBUFLEN);
+  char *ptr = buf1;
+  if (negative && (!visual || was_positive)) {
+    *ptr++ = '-';
+  }
+  if (pre) {
+    *ptr++ = '0';
+    length--;
+  }
+  if (pre == 'b' || pre == 'B' || pre == 'x' || pre == 'X') {
+    *ptr++ = (char)pre;
+    length--;
+  }
+
+  // Put the number characters in buf2[]
+  char buf2[NUMBUFLEN];
+  int buf2len = 0;
+  if (pre == 'b' || pre == 'B') {
+    size_t bits = 0;
+    for (bits = 8 * sizeof(n); bits > 0; bits--) {
+      if ((n >> (bits - 1)) & 0x1) {
+        break;
+      }
+    }
+    while (bits > 0 && buf2len < NUMBUFLEN - 1) {
+      buf2[buf2len++] = ((n >> --bits) & 0x1) ? '1' : '0';
+    }
+    buf2[buf2len] = NUL;
+  } else if (pre == 0) {
+    buf2len = vim_snprintf(buf2, ARRAY_SIZE(buf2), "%" PRIu64, (uint64_t)n);
+  } else if (pre == '0') {
+    buf2len = vim_snprintf(buf2, ARRAY_SIZE(buf2), "%" PRIo64, (uint64_t)n);
+  } else if (hexupper) {
+    buf2len = vim_snprintf(buf2, ARRAY_SIZE(buf2), "%" PRIX64, (uint64_t)n);
+  } else {
+    buf2len = vim_snprintf(buf2, ARRAY_SIZE(buf2), "%" PRIx64, (uint64_t)n);
+  }
+  length -= buf2len;
+
+  if (firstdigit == '0' && !(do_oct && pre == 0)) {
+    while (length-- > 0) {
+      *ptr++ = '0';
+    }
+  }
+  *ptr = NUL;
+  int buf1len = (int)(ptr - buf1);
+
+  STRCPY(buf1 + buf1len, buf2);
+  buf1len += buf2len;
+
+  ins_str(buf1, (size_t)buf1len);
+  xfree(buf1);
+
+  *out_endpos_col = (int)curwin->w_cursor.col;
+  if (curwin->w_cursor.col) {
+    curwin->w_cursor.col--;
+  }
+}
+
+/// Set the '[ and '] marks after addsub.
+void nvim_addsub_set_marks(int startpos_col, int endpos_col)
+{
   if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    // set the '[ and '] marks
-    curbuf->b_op_start = startpos;
-    curbuf->b_op_end = endpos;
+    curbuf->b_op_start = curwin->w_cursor;
+    curbuf->b_op_start.col = startpos_col;
+    curbuf->b_op_end = curwin->w_cursor;
+    curbuf->b_op_end.col = endpos_col;
     if (curbuf->b_op_end.col > 0) {
       curbuf->b_op_end.col--;
     }
   }
+}
 
-theend:
+/// Cleanup: restore cursor position.
+void nvim_addsub_cleanup(int visual, int did_change, int save_coladd)
+{
   if (visual) {
-    curwin->w_cursor = save_cursor;
+    // Visual mode cursor restore is handled by the thin wrapper (do_addsub)
   } else if (did_change) {
     curwin->w_set_curswant = true;
   } else if (virtual_active(curwin)) {
     curwin->w_cursor.coladd = save_coladd;
   }
+}
 
-  return did_change;
+/// Beep for no digit found.
+void nvim_addsub_beep(void)
+{
+  beep_flush();
+}
+
+/// Add or subtract from a number in a line.
+bool do_addsub(int op_type, pos_T *pos, int length, linenr_T Prenum1)
+{
+  pos_T save_cursor = curwin->w_cursor;
+  bool result = rs_do_addsub(op_type, pos, length, Prenum1);
+  if (VIsual_active) {
+    curwin->w_cursor = save_cursor;
+  }
+  return result;
 }
 
 void clear_oparg(oparg_T *oap)
@@ -2970,16 +2990,12 @@ int nvim_cpi_last_line_no_eol(void)
 /// Check if string at current position is shorter than len (for last-line EOL adjustment).
 int nvim_cpi_last_line_short(int lnum, int byte_count)
 {
-  // This checks if the actual line text (from block_prep's textstart) is
-  // shorter than the counted bytes, indicating the line was fully consumed
-  // and EOL was added. We approximate by checking ml_get_buf_len.
-  int line_len = ml_get_buf_len(curbuf, (linenr_T)lnum);
+  (void)lnum;
   (void)byte_count;
   // The original C code checked: (int)strlen(s) < len
-  // where s came from block_prep or ml_get. We check line length.
   // This is a conservative approximation; in visual mode with the last line,
   // the EOL adjustment happens when the line was fully consumed.
-  return 1;  // Always true for last-line-no-eol case in visual mode
+  return 1;
 }
 
 /// Call os_breakcheck for interrupt detection.
