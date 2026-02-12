@@ -702,36 +702,65 @@ static void block_insert(oparg_T *oap, const char *s, size_t slen, bool b_insert
 /// Handle a delete operation.
 ///
 /// @return  FAIL if undo failed, OK otherwise.
-int op_delete(oparg_T *oap)
+// ===========================================================================
+// op_delete C accessors for Rust migration (Phase 4)
+// ===========================================================================
+
+extern int rs_op_delete(void *oap);
+
+/// Check if buffer ML_EMPTY.
+int nvim_opd_is_ml_empty(void)
 {
-  linenr_T lnum;
-  struct block_def bd = { 0 };
-  linenr_T old_lcount = curbuf->b_ml.ml_line_count;
+  return (curbuf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0;
+}
 
-  if (curbuf->b_ml.ml_flags & ML_EMPTY) {  // nothing to do
-    return OK;
-  }
+/// Check if oap->empty.
+int nvim_opd_is_oap_empty(oparg_T *oap)
+{
+  return oap->empty ? 1 : 0;
+}
 
-  // Nothing to delete, return here. Do prepare undo, for op_change().
-  if (oap->empty) {
-    return u_save_cursor();
-  }
+/// u_save_cursor wrapper.
+int nvim_opd_u_save_cursor(void)
+{
+  return u_save_cursor();
+}
 
-  if (!MODIFIABLE(curbuf)) {
-    emsg(_(e_modifiable));
-    return FAIL;
-  }
+/// Check if buffer is modifiable.
+int nvim_opd_is_modifiable(void)
+{
+  return MODIFIABLE(curbuf) ? 1 : 0;
+}
 
+/// Emit error message for non-modifiable buffer.
+void nvim_opd_emsg_modifiable(void)
+{
+  emsg(_(e_modifiable));
+}
+
+/// Setup visual select register.
+void nvim_opd_setup_visual_reg(oparg_T *oap)
+{
   if (VIsual_select && oap->is_VIsual) {
-    // Use the register given with CTRL_R, defaults to zero
     oap->regname = VIsual_select_reg;
   }
+}
 
+/// Get motion type from oap.
+int nvim_opd_get_motion_type(oparg_T *oap)
+{
+  return (int)oap->motion_type;
+}
+
+/// Adjust multi-byte opend for delete.
+void nvim_opd_mb_adjust_opend(oparg_T *oap)
+{
   mb_adjust_opend(oap);
+}
 
-  // Imitate the strange Vi behaviour: If the delete spans more than one
-  // line and motion_type == kMTCharWise and the result is a blank line, make the
-  // delete linewise.  Don't do this for the change command or Visual mode.
+/// Check if charwise delete should be promoted to linewise.
+void nvim_opd_maybe_promote_to_linewise(oparg_T *oap)
+{
   if (oap->motion_type == kMTCharWise
       && !oap->is_VIsual
       && oap->line_count > 1
@@ -746,56 +775,52 @@ int op_delete(oparg_T *oap)
       oap->motion_type = kMTLineWise;
     }
   }
+}
 
-  // Check for trying to delete (e.g. "D") in an empty line.
-  // Note: For the change operator it is ok.
+/// Check for empty line delete.
+/// Returns: 0 = proceed, 1 = return OK, 2 = goto setmarks.
+int nvim_opd_check_empty_line(oparg_T *oap)
+{
   if (oap->motion_type != kMTLineWise
       && oap->line_count == 1
       && oap->op_type == OP_DELETE
       && *ml_get(oap->start.lnum) == NUL) {
-    // It's an error to operate on an empty region, when 'E' included in
-    // 'cpoptions' (Vi compatible).
     if (virtual_op) {
-      // Virtual editing: Nothing gets deleted, but we set the '[ and ']
-      // marks as if it happened.
-      goto setmarks;
+      return 2;  // goto setmarks
     }
     if (vim_strchr(p_cpo, CPO_EMPTYREGION) != NULL) {
       beep_flush();
     }
-    return OK;
+    return 1;  // return OK
   }
+  return 0;  // proceed
+}
 
-  // Do a yank of whatever we're about to delete.
-  // If a yank register was specified, put the deleted text into that
-  // register.  For the black hole register '_' don't yank anything.
+/// Do yank and register handling.
+/// Returns: OK (1) if should return OK (read-only reg), 2 if proceed normally.
+int nvim_opd_do_yank_and_registers(oparg_T *oap)
+{
   if (oap->regname != '_') {
     yankreg_T *reg = NULL;
     bool did_yank = false;
     if (oap->regname != 0) {
-      // check for read-only register
       if (!valid_yank_reg(oap->regname, true)) {
         beep_flush();
-        return OK;
+        return OK;  // return OK to caller
       }
-      reg = get_yank_register(oap->regname, YREG_YANK);  // yank into specif'd reg
-      op_yank_reg(oap, false, reg, is_append_register(oap->regname));  // yank without message
+      reg = get_yank_register(oap->regname, YREG_YANK);
+      op_yank_reg(oap, false, reg, is_append_register(oap->regname));
       did_yank = true;
     }
 
-    // Put deleted text into register 1 and shift number registers if the
-    // delete contains a line break, or when using a specific operator (Vi
-    // compatible)
-
-    if (oap->motion_type == kMTLineWise || oap->line_count > 1 || oap->use_reg_one) {
+    if (oap->motion_type == kMTLineWise || oap->line_count > 1
+        || oap->use_reg_one) {
       shift_delete_registers(is_append_register(oap->regname));
       reg = get_y_register(1);
       op_yank_reg(oap, false, reg, false);
       did_yank = true;
     }
 
-    // Yank into small delete register when no named register specified
-    // and the delete is within one line.
     if (oap->regname == 0 && oap->motion_type != kMTLineWise
         && oap->line_count == 1) {
       reg = get_yank_register('-', YREG_YANK);
@@ -811,202 +836,198 @@ int op_delete(oparg_T *oap)
       do_autocmd_textyankpost(oap, reg);
     }
   }
+  return 2;  // proceed normally
+}
 
-  // block mode delete
-  if (oap->motion_type == kMTBlockWise) {
-    if (u_save((linenr_T)(oap->start.lnum - 1),
-               (linenr_T)(oap->end.lnum + 1)) == FAIL) {
+/// Block mode delete.
+int nvim_opd_block_delete(oparg_T *oap)
+{
+  struct block_def bd = { 0 };
+
+  if (u_save((linenr_T)(oap->start.lnum - 1),
+             (linenr_T)(oap->end.lnum + 1)) == FAIL) {
+    return FAIL;
+  }
+
+  for (linenr_T lnum = curwin->w_cursor.lnum; lnum <= oap->end.lnum; lnum++) {
+    block_prep(oap, &bd, lnum, true);
+    if (bd.textlen == 0) {
+      continue;
+    }
+
+    if (lnum == curwin->w_cursor.lnum) {
+      curwin->w_cursor.col = bd.textcol + bd.startspaces;
+      curwin->w_cursor.coladd = 0;
+    }
+
+    int n = bd.textlen - bd.startspaces - bd.endspaces;
+    char *oldp = ml_get(lnum);
+    char *newp = xmalloc((size_t)ml_get_len(lnum) - (size_t)n + 1);
+    memmove(newp, oldp, (size_t)bd.textcol);
+    memset(newp + bd.textcol, ' ',
+           (size_t)bd.startspaces + (size_t)bd.endspaces);
+    STRCPY(newp + bd.textcol + bd.startspaces + bd.endspaces,
+           oldp + bd.textcol + bd.textlen);
+    ml_replace(lnum, newp, false);
+
+    extmark_splice_cols(curbuf, (int)lnum - 1, bd.textcol,
+                        bd.textlen, bd.startspaces + bd.endspaces,
+                        kExtmarkUndo);
+  }
+
+  check_cursor_col(curwin);
+  changed_lines(curbuf, curwin->w_cursor.lnum, curwin->w_cursor.col,
+                oap->end.lnum + 1, 0, true);
+  oap->line_count = 0;
+  return OK;
+}
+
+/// Linewise delete.
+int nvim_opd_linewise_delete(oparg_T *oap)
+{
+  if (oap->op_type == OP_CHANGE) {
+    if (oap->line_count > 1) {
+      linenr_T lnum = curwin->w_cursor.lnum;
+      curwin->w_cursor.lnum++;
+      del_lines(oap->line_count - 1, true);
+      curwin->w_cursor.lnum = lnum;
+    }
+    if (u_save_cursor() == FAIL) {
       return FAIL;
     }
-
-    for (lnum = curwin->w_cursor.lnum; lnum <= oap->end.lnum; lnum++) {
-      block_prep(oap, &bd, lnum, true);
-      if (bd.textlen == 0) {            // nothing to delete
-        continue;
-      }
-
-      // Adjust cursor position for tab replaced by spaces and 'lbr'.
-      if (lnum == curwin->w_cursor.lnum) {
-        curwin->w_cursor.col = bd.textcol + bd.startspaces;
-        curwin->w_cursor.coladd = 0;
-      }
-
-      // "n" == number of chars deleted
-      // If we delete a TAB, it may be replaced by several characters.
-      // Thus the number of characters may increase!
-      int n = bd.textlen - bd.startspaces - bd.endspaces;
-      char *oldp = ml_get(lnum);
-      char *newp = xmalloc((size_t)ml_get_len(lnum) - (size_t)n + 1);
-      // copy up to deleted part
-      memmove(newp, oldp, (size_t)bd.textcol);
-      // insert spaces
-      memset(newp + bd.textcol, ' ', (size_t)bd.startspaces +
-             (size_t)bd.endspaces);
-      // copy the part after the deleted part
-      STRCPY(newp + bd.textcol + bd.startspaces + bd.endspaces,
-             oldp + bd.textcol + bd.textlen);
-      // replace the line
-      ml_replace(lnum, newp, false);
-
-      extmark_splice_cols(curbuf, (int)lnum - 1, bd.textcol,
-                          bd.textlen, bd.startspaces + bd.endspaces,
-                          kExtmarkUndo);
+    if (curbuf->b_p_ai) {
+      beginline(BL_WHITE);
+      did_ai = true;
+      ai_col = curwin->w_cursor.col;
+    } else {
+      beginline(0);
     }
+    truncate_line(false);
+    if (oap->line_count > 1) {
+      u_clearline(curbuf);
+    }
+  } else {
+    del_lines(oap->line_count, true);
+    beginline(BL_WHITE | BL_FIX);
+    u_clearline(curbuf);
+  }
+  return OK;
+}
 
-    check_cursor_col(curwin);
-    changed_lines(curbuf, curwin->w_cursor.lnum, curwin->w_cursor.col,
-                  oap->end.lnum + 1, 0, true);
-    oap->line_count = 0;  // no lines deleted
-  } else if (oap->motion_type == kMTLineWise) {
-    if (oap->op_type == OP_CHANGE) {
-      // Delete the lines except the first one.  Temporarily move the
-      // cursor to the next line.  Save the current line number, if the
-      // last line is deleted it may be changed.
-
-      if (oap->line_count > 1) {
-        lnum = curwin->w_cursor.lnum;
-        curwin->w_cursor.lnum++;
-        del_lines(oap->line_count - 1, true);
-        curwin->w_cursor.lnum = lnum;
-      }
+/// Charwise delete.
+int nvim_opd_charwise_delete(oparg_T *oap)
+{
+  if (virtual_op) {
+    if (gchar_pos(&oap->start) == '\t') {
+      int endcol = 0;
       if (u_save_cursor() == FAIL) {
         return FAIL;
       }
-      if (curbuf->b_p_ai) {                 // don't delete indent
-        beginline(BL_WHITE);                // cursor on first non-white
-        did_ai = true;                      // delete the indent when ESC hit
-        ai_col = curwin->w_cursor.col;
-      } else {
-        beginline(0);                       // cursor in column 0
+      if (oap->line_count == 1) {
+        endcol = getviscol2(oap->end.col, oap->end.coladd);
       }
-      truncate_line(false);         // delete the rest of the line,
-                                    // leaving cursor past last char in line
-      if (oap->line_count > 1) {
-        u_clearline(curbuf);  // "U" command not possible after "2cc"
-      }
-    } else {
-      del_lines(oap->line_count, true);
-      beginline(BL_WHITE | BL_FIX);
-      u_clearline(curbuf);  //  "U" command not possible after "dd"
-    }
-  } else {
-    if (virtual_op) {
-      // For virtualedit: break the tabs that are partly included.
-      if (gchar_pos(&oap->start) == '\t') {
-        int endcol = 0;
-        if (u_save_cursor() == FAIL) {          // save first line for undo
-          return FAIL;
-        }
-        if (oap->line_count == 1) {
-          endcol = getviscol2(oap->end.col, oap->end.coladd);
-        }
-        coladvance_force(getviscol2(oap->start.col, oap->start.coladd));
-        oap->start = curwin->w_cursor;
-        if (oap->line_count == 1) {
-          coladvance(curwin, endcol);
-          oap->end.col = curwin->w_cursor.col;
-          oap->end.coladd = curwin->w_cursor.coladd;
-          curwin->w_cursor = oap->start;
-        }
-      }
-
-      // Break a tab only when it's included in the area.
-      if (gchar_pos(&oap->end) == '\t'
-          && oap->end.coladd == 0
-          && oap->inclusive) {
-        // save last line for undo
-        if (u_save((linenr_T)(oap->end.lnum - 1),
-                   (linenr_T)(oap->end.lnum + 1)) == FAIL) {
-          return FAIL;
-        }
-        curwin->w_cursor = oap->end;
-        coladvance_force(getviscol2(oap->end.col, oap->end.coladd));
-        oap->end = curwin->w_cursor;
+      coladvance_force(getviscol2(oap->start.col, oap->start.coladd));
+      oap->start = curwin->w_cursor;
+      if (oap->line_count == 1) {
+        coladvance(curwin, endcol);
+        oap->end.col = curwin->w_cursor.col;
+        oap->end.coladd = curwin->w_cursor.coladd;
         curwin->w_cursor = oap->start;
       }
-      mb_adjust_opend(oap);
     }
 
-    if (oap->line_count == 1) {         // delete characters within one line
-      if (u_save_cursor() == FAIL) {            // save line for undo
+    if (gchar_pos(&oap->end) == '\t'
+        && oap->end.coladd == 0
+        && oap->inclusive) {
+      if (u_save((linenr_T)(oap->end.lnum - 1),
+                 (linenr_T)(oap->end.lnum + 1)) == FAIL) {
         return FAIL;
       }
-
-      // if 'cpoptions' contains '$', display '$' at end of change
-      if (vim_strchr(p_cpo, CPO_DOLLAR) != NULL
-          && oap->op_type == OP_CHANGE
-          && oap->end.lnum == curwin->w_cursor.lnum
-          && !oap->is_VIsual) {
-        display_dollar(oap->end.col - !oap->inclusive);
-      }
-
-      int n = oap->end.col - oap->start.col + 1 - !oap->inclusive;
-
-      if (virtual_op) {
-        // fix up things for virtualedit-delete:
-        // break the tabs which are going to get in our way
-        int len = get_cursor_line_len();
-
-        if (oap->end.coladd != 0
-            && (int)oap->end.col >= len - 1
-            && !(oap->start.coladd && (int)oap->end.col >= len - 1)) {
-          n++;
-        }
-        // Delete at least one char (e.g, when on a control char).
-        if (n == 0 && oap->start.coladd != oap->end.coladd) {
-          n = 1;
-        }
-
-        // When deleted a char in the line, reset coladd.
-        if (gchar_cursor() != NUL) {
-          curwin->w_cursor.coladd = 0;
-        }
-      }
-
-      del_bytes((colnr_T)n, !virtual_op,
-                oap->op_type == OP_DELETE && !oap->is_VIsual);
-    } else {
-      // delete characters between lines
-      pos_T curpos;
-
-      // save deleted and changed lines for undo
-      if (u_save(curwin->w_cursor.lnum - 1,
-                 curwin->w_cursor.lnum + oap->line_count) == FAIL) {
-        return FAIL;
-      }
-
-      curbuf_splice_pending++;
-      pos_T startpos = curwin->w_cursor;  // start position for delete
-      bcount_t deleted_bytes = get_region_bytecount(curbuf, startpos.lnum, oap->end.lnum,
-                                                    startpos.col,
-                                                    oap->end.col) + oap->inclusive;
-      truncate_line(true);        // delete from cursor to end of line
-
-      curpos = curwin->w_cursor;  // remember curwin->w_cursor
-      curwin->w_cursor.lnum++;
-
-      del_lines(oap->line_count - 2, false);
-
-      // delete from start of line until op_end
-      int n = (oap->end.col + 1 - !oap->inclusive);
-      curwin->w_cursor.col = 0;
-      del_bytes((colnr_T)n, !virtual_op,
-                oap->op_type == OP_DELETE && !oap->is_VIsual);
-      curwin->w_cursor = curpos;  // restore curwin->w_cursor
-      do_join(2, false, false, false, false);
-      curbuf_splice_pending--;
-      extmark_splice(curbuf, (int)startpos.lnum - 1, startpos.col,
-                     (int)oap->line_count - 1, n, deleted_bytes,
-                     0, 0, 0, kExtmarkUndo);
+      curwin->w_cursor = oap->end;
+      coladvance_force(getviscol2(oap->end.col, oap->end.coladd));
+      oap->end = curwin->w_cursor;
+      curwin->w_cursor = oap->start;
     }
-    if (oap->op_type == OP_DELETE) {
-      auto_format(false, true);
-    }
+    mb_adjust_opend(oap);
   }
 
-  msgmore(curbuf->b_ml.ml_line_count - old_lcount);
+  if (oap->line_count == 1) {
+    if (u_save_cursor() == FAIL) {
+      return FAIL;
+    }
 
-setmarks:
+    if (vim_strchr(p_cpo, CPO_DOLLAR) != NULL
+        && oap->op_type == OP_CHANGE
+        && oap->end.lnum == curwin->w_cursor.lnum
+        && !oap->is_VIsual) {
+      display_dollar(oap->end.col - !oap->inclusive);
+    }
+
+    int n = oap->end.col - oap->start.col + 1 - !oap->inclusive;
+
+    if (virtual_op) {
+      int len = get_cursor_line_len();
+      if (oap->end.coladd != 0
+          && (int)oap->end.col >= len - 1
+          && !(oap->start.coladd && (int)oap->end.col >= len - 1)) {
+        n++;
+      }
+      if (n == 0 && oap->start.coladd != oap->end.coladd) {
+        n = 1;
+      }
+      if (gchar_cursor() != NUL) {
+        curwin->w_cursor.coladd = 0;
+      }
+    }
+
+    del_bytes((colnr_T)n, !virtual_op,
+              oap->op_type == OP_DELETE && !oap->is_VIsual);
+  } else {
+    pos_T curpos;
+    if (u_save(curwin->w_cursor.lnum - 1,
+               curwin->w_cursor.lnum + oap->line_count) == FAIL) {
+      return FAIL;
+    }
+
+    curbuf_splice_pending++;
+    pos_T startpos = curwin->w_cursor;
+    bcount_t deleted_bytes = get_region_bytecount(
+        curbuf, startpos.lnum, oap->end.lnum,
+        startpos.col, oap->end.col) + oap->inclusive;
+    truncate_line(true);
+
+    curpos = curwin->w_cursor;
+    curwin->w_cursor.lnum++;
+    del_lines(oap->line_count - 2, false);
+
+    int n = (oap->end.col + 1 - !oap->inclusive);
+    curwin->w_cursor.col = 0;
+    del_bytes((colnr_T)n, !virtual_op,
+              oap->op_type == OP_DELETE && !oap->is_VIsual);
+    curwin->w_cursor = curpos;
+    do_join(2, false, false, false, false);
+    curbuf_splice_pending--;
+    extmark_splice(curbuf, (int)startpos.lnum - 1, startpos.col,
+                   (int)oap->line_count - 1, n, deleted_bytes,
+                   0, 0, 0, kExtmarkUndo);
+  }
+  if (oap->op_type == OP_DELETE) {
+    auto_format(false, true);
+  }
+  return OK;
+}
+
+/// Get current line count for msgmore.
+int nvim_opd_get_ml_line_count(void)
+{
+  return (int)curbuf->b_ml.ml_line_count;
+}
+
+/// Finish: msgmore + setmarks.
+void nvim_opd_finish(oparg_T *oap, int old_lcount)
+{
+  msgmore(curbuf->b_ml.ml_line_count - (linenr_T)old_lcount);
+
   if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
     if (oap->motion_type == kMTBlockWise) {
       curbuf->b_op_end.lnum = oap->end.lnum;
@@ -1016,8 +1037,25 @@ setmarks:
     }
     curbuf->b_op_start = oap->start;
   }
+}
 
-  return OK;
+/// Setmarks only (for goto setmarks case).
+void nvim_opd_setmarks(oparg_T *oap)
+{
+  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
+    if (oap->motion_type == kMTBlockWise) {
+      curbuf->b_op_end.lnum = oap->end.lnum;
+      curbuf->b_op_end.col = oap->start.col;
+    } else {
+      curbuf->b_op_end = oap->start;
+    }
+    curbuf->b_op_start = oap->start;
+  }
+}
+
+int op_delete(oparg_T *oap)
+{
+  return rs_op_delete(oap);
 }
 
 /// Adjust end of operating area for ending on a multi-byte character.
