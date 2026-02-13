@@ -85,6 +85,14 @@ extern MenuTextResult rs_menu_text(const char *str);
 
 // Rust implementations for Phase 3
 extern vimmenu_T *rs_find_menu(vimmenu_T *menu, char *name, int modes);
+
+// Rust implementations for Phase 4
+extern void rs_free_menu_string(vimmenu_T *menu, int idx);
+extern void rs_free_menu(vimmenu_T **menup);
+extern int rs_menu_enable_recurse(vimmenu_T *menu, char *name, int modes, int enable);
+extern int rs_remove_menu(vimmenu_T **menup, char *name, int modes, bool silent);
+extern int rs_add_menu_path(const char *menu_path, vimmenu_T *menuarg, const int *pri_tab,
+                            const char *call_data);
 extern vimmenu_T *rs_menu_getbyname(char *name_arg);
 extern vimmenu_T *rs_menu_find(const char *path_name);
 extern int rs_show_menus(char *path_name, int modes);
@@ -310,251 +318,14 @@ theend:
 static int add_menu_path(const char *const menu_path, vimmenu_T *menuarg, const int *const pri_tab,
                          const char *const call_data)
 {
-  int modes = menuarg->modes;
-  vimmenu_T *menu = NULL;
-  vimmenu_T **lower_pri;
-  char *dname;
-  int pri_idx = 0;
-  int old_modes = 0;
-  char *en_name;
-
-  // Make a copy so we can stuff around with it, since it could be const
-  char *path_name = xstrdup(menu_path);
-  vimmenu_T **root_menu_ptr = get_root_menu(menu_path);
-  vimmenu_T **menup = root_menu_ptr;
-  vimmenu_T *parent = NULL;
-  char *name = path_name;
-  while (*name) {
-    // Get name of this element in the menu hierarchy, and the simplified
-    // name (without mnemonic and accelerator text).
-    char *next_name = menu_name_skip(name);
-    char *map_to = menutrans_lookup(name, (int)strlen(name));
-    if (map_to != NULL) {
-      en_name = name;
-      name = map_to;
-    } else {
-      en_name = NULL;
-    }
-    dname = menu_text(name, NULL, NULL);
-    if (*dname == NUL) {
-      // Only a mnemonic or accelerator is not valid.
-      emsg(_("E792: Empty menu name"));
-      goto erret;
-    }
-
-    // See if it's already there
-    lower_pri = menup;
-    menu = *menup;
-    while (menu != NULL) {
-      if (menu_name_equal(name, menu) || menu_name_equal(dname, menu)) {
-        if (*next_name == NUL && menu->children != NULL) {
-          if (!sys_menu) {
-            emsg(_("E330: Menu path must not lead to a sub-menu"));
-          }
-          goto erret;
-        }
-        if (*next_name != NUL && menu->children == NULL) {
-          if (!sys_menu) {
-            emsg(_(e_notsubmenu));
-          }
-          goto erret;
-        }
-        break;
-      }
-      menup = &menu->next;
-
-      // Count menus, to find where this one needs to be inserted.
-      // Ignore menus that are not in the menubar (PopUp and Toolbar)
-      if (parent != NULL || menu_is_menubar(menu->name)) {
-        if (menu->priority <= pri_tab[pri_idx]) {
-          lower_pri = menup;
-        }
-      }
-      menu = menu->next;
-    }
-
-    if (menu == NULL) {
-      if (*next_name == NUL && parent == NULL) {
-        emsg(_("E331: Must not add menu items directly to menu bar"));
-        goto erret;
-      }
-
-      if (menu_is_separator(dname) && *next_name != NUL) {
-        emsg(_("E332: Separator cannot be part of a menu path"));
-        goto erret;
-      }
-
-      // Not already there, so let's add it
-      menu = xcalloc(1, sizeof(vimmenu_T));
-
-      menu->modes = modes;
-      menu->enabled = MENU_ALL_MODES;
-      menu->name = xstrdup(name);
-      // separate mnemonic and accelerator text from actual menu name
-      menu->dname = menu_text(name, &menu->mnemonic, &menu->actext);
-      if (en_name != NULL) {
-        menu->en_name = xstrdup(en_name);
-        menu->en_dname = menu_text(en_name, NULL, NULL);
-      } else {
-        menu->en_name = NULL;
-        menu->en_dname = NULL;
-      }
-      menu->priority = pri_tab[pri_idx];
-      menu->parent = parent;
-
-      // Add after menu that has lower priority.
-      menu->next = *lower_pri;
-      *lower_pri = menu;
-
-      old_modes = 0;
-    } else {
-      old_modes = menu->modes;
-
-      // If this menu option was previously only available in other
-      // modes, then make sure it's available for this one now
-      // Also enable a menu when it's created or changed.
-      {
-        menu->modes |= modes;
-        menu->enabled |= modes;
-      }
-    }
-
-    menup = &menu->children;
-    parent = menu;
-    name = next_name;
-    XFREE_CLEAR(dname);
-    if (pri_tab[pri_idx + 1] != -1) {
-      pri_idx++;
-    }
-  }
-  xfree(path_name);
-
-  // Only add system menu items which have not been defined yet.
-  // First check if this was an ":amenu".
-  int amenu = ((modes & (MENU_NORMAL_MODE | MENU_INSERT_MODE)) ==
-               (MENU_NORMAL_MODE | MENU_INSERT_MODE));
-  if (sys_menu) {
-    modes &= ~old_modes;
-  }
-
-  if (menu != NULL && modes) {
-    char *p = (call_data == NULL) ? NULL : xstrdup(call_data);
-
-    // loop over all modes, may add more than one
-    for (int i = 0; i < MENU_MODES; i++) {
-      if (modes & (1 << i)) {
-        // free any old menu
-        free_menu_string(menu, i);
-
-        // For "amenu", may insert an extra character.
-        // Don't do this for "<Nop>".
-        char c = 0;
-        char d = 0;
-        if (amenu && call_data != NULL && *call_data != NUL) {
-          switch (1 << i) {
-          case MENU_VISUAL_MODE:
-          case MENU_SELECT_MODE:
-          case MENU_OP_PENDING_MODE:
-          case MENU_CMDLINE_MODE:
-            c = Ctrl_C;
-            break;
-          case MENU_INSERT_MODE:
-            c = Ctrl_BSL;
-            d = Ctrl_O;
-            break;
-          }
-        }
-
-        if (c != 0) {
-          menu->strings[i] = xmalloc(strlen(call_data) + 5);
-          menu->strings[i][0] = c;
-          if (d == 0) {
-            STRCPY(menu->strings[i] + 1, call_data);
-          } else {
-            menu->strings[i][1] = d;
-            STRCPY(menu->strings[i] + 2, call_data);
-          }
-          if (c == Ctrl_C) {
-            int len = (int)strlen(menu->strings[i]);
-
-            menu->strings[i][len] = Ctrl_BSL;
-            menu->strings[i][len + 1] = Ctrl_G;
-            menu->strings[i][len + 2] = NUL;
-          }
-        } else {
-          menu->strings[i] = p;
-        }
-        menu->noremap[i] = menuarg->noremap[0];
-        menu->silent[i] = menuarg->silent[0];
-      }
-    }
-  }
-  return OK;
-
-erret:
-  xfree(path_name);
-  xfree(dname);
-
-  // Delete any empty submenu we added before discovering the error.  Repeat
-  // for higher levels.
-  while (parent != NULL && parent->children == NULL) {
-    if (parent->parent == NULL) {
-      menup = root_menu_ptr;
-    } else {
-      menup = &parent->parent->children;
-    }
-    for (; *menup != NULL && *menup != parent; menup = &((*menup)->next)) {}
-    if (*menup == NULL) {   // safety check
-      break;
-    }
-    parent = parent->parent;
-    free_menu(menup);
-  }
-  return FAIL;
+  return rs_add_menu_path(menu_path, menuarg, pri_tab, call_data);
 }
 
 // Set the (sub)menu with the given name to enabled or disabled.
 // Called recursively.
 static int menu_enable_recurse(vimmenu_T *menu, char *name, int modes, int enable)
 {
-  if (menu == NULL) {
-    return OK;                  // Got to bottom of hierarchy
-  }
-  // Get name of this element in the menu hierarchy
-  char *p = menu_name_skip(name);
-
-  // Find the menu
-  while (menu != NULL) {
-    if (*name == NUL || *name == '*' || menu_name_equal(name, menu)) {
-      if (*p != NUL) {
-        if (menu->children == NULL) {
-          emsg(_(e_notsubmenu));
-          return FAIL;
-        }
-        if (menu_enable_recurse(menu->children, p, modes, enable) == FAIL) {
-          return FAIL;
-        }
-      } else if (enable) {
-        menu->enabled |= modes;
-      } else {
-        menu->enabled &= ~modes;
-      }
-
-      // When name is empty, we are doing all menu items for the given
-      // modes, so keep looping, otherwise we are just doing the named
-      // menu item (which has been found) so break here.
-      if (*name != NUL && *name != '*') {
-        break;
-      }
-    }
-    menu = menu->next;
-  }
-  if (*name != NUL && *name != '*' && menu == NULL) {
-    semsg(_(e_nomenu), name);
-    return FAIL;
-  }
-
-  return OK;
+  return rs_menu_enable_recurse(menu, name, modes, enable);
 }
 
 /// Remove the (sub)menu with the given name from the menu hierarchy
@@ -563,114 +334,19 @@ static int menu_enable_recurse(vimmenu_T *menu, char *name, int modes, int enabl
 /// @param silent  don't give error messages
 static int remove_menu(vimmenu_T **menup, char *name, int modes, bool silent)
 {
-  vimmenu_T *menu;
-
-  if (*menup == NULL) {
-    return OK;                  // Got to bottom of hierarchy
-  }
-  // Get name of this element in the menu hierarchy
-  char *p = menu_name_skip(name);
-
-  // Find the menu
-  while ((menu = *menup) != NULL) {
-    if (*name == NUL || menu_name_equal(name, menu)) {
-      if (*p != NUL && menu->children == NULL) {
-        if (!silent) {
-          emsg(_(e_notsubmenu));
-        }
-        return FAIL;
-      }
-      if ((menu->modes & modes) != 0x0) {
-        if (remove_menu(&menu->children, p, modes, silent) == FAIL) {
-          return FAIL;
-        }
-      } else if (*name != NUL) {
-        if (!silent) {
-          emsg(_(e_menu_only_exists_in_another_mode));
-        }
-        return FAIL;
-      }
-
-      // When name is empty, we are removing all menu items for the given
-      // modes, so keep looping, otherwise we are just removing the named
-      // menu item (which has been found) so break here.
-      if (*name != NUL) {
-        break;
-      }
-
-      // Remove the menu item for the given mode[s].  If the menu item
-      // is no longer valid in ANY mode, delete it
-      menu->modes &= ~modes;
-      if (modes & MENU_TIP_MODE) {
-        free_menu_string(menu, MENU_INDEX_TIP);
-      }
-      if ((menu->modes & MENU_ALL_MODES) == 0) {
-        free_menu(menup);
-      } else {
-        menup = &menu->next;
-      }
-    } else {
-      menup = &menu->next;
-    }
-  }
-  if (*name != NUL) {
-    if (menu == NULL) {
-      if (!silent) {
-        semsg(_(e_nomenu), name);
-      }
-      return FAIL;
-    }
-
-    // Recalculate modes for menu based on the new updated children
-    menu->modes &= ~modes;
-    vimmenu_T *child = menu->children;
-    for (; child != NULL; child = child->next) {
-      menu->modes |= child->modes;
-    }
-    if (modes & MENU_TIP_MODE) {
-      free_menu_string(menu, MENU_INDEX_TIP);
-    }
-    if ((menu->modes & MENU_ALL_MODES) == 0) {
-      // The menu item is no longer valid in ANY mode, so delete it
-      *menup = menu;
-      free_menu(menup);
-    }
-  }
-
-  return OK;
+  return rs_remove_menu(menup, name, modes, silent);
 }
 
 // Free the given menu structure and remove it from the linked list.
 static void free_menu(vimmenu_T **menup)
 {
-  vimmenu_T *menu = *menup;
-
-  *menup = menu->next;
-  xfree(menu->name);
-  xfree(menu->dname);
-  xfree(menu->en_name);
-  xfree(menu->en_dname);
-  xfree(menu->actext);
-  for (int i = 0; i < MENU_MODES; i++) {
-    free_menu_string(menu, i);
-  }
-  xfree(menu);
+  rs_free_menu(menup);
 }
 
 // Free the menu->string with the given index.
 static void free_menu_string(vimmenu_T *menu, int idx)
 {
-  int count = 0;
-
-  for (int i = 0; i < MENU_MODES; i++) {
-    if (menu->strings[i] == menu->strings[idx]) {
-      count++;
-    }
-  }
-  if (count == 1) {
-    xfree(menu->strings[idx]);
-  }
-  menu->strings[idx] = NULL;
+  rs_free_menu_string(menu, idx);
 }
 
 /// Export menus
@@ -1699,4 +1375,170 @@ vimmenu_T *nvim_menu_get_root_menu(void)
 int nvim_menu_get_got_int(void)
 {
   return got_int;
+}
+
+// ============================================================================
+// Phase 4: Mutation accessors
+// ============================================================================
+
+/// Set the modes field on a menu.
+void nvim_menu_set_modes(vimmenu_T *m, int v)
+{
+  m->modes = v;
+}
+
+/// Set the enabled field on a menu.
+void nvim_menu_set_enabled(vimmenu_T *m, int v)
+{
+  m->enabled = v;
+}
+
+/// Set the name field on a menu.
+void nvim_menu_set_name(vimmenu_T *m, char *v)
+{
+  m->name = v;
+}
+
+/// Set the dname field on a menu.
+void nvim_menu_set_dname(vimmenu_T *m, char *v)
+{
+  m->dname = v;
+}
+
+/// Set the en_name field on a menu.
+void nvim_menu_set_en_name(vimmenu_T *m, char *v)
+{
+  m->en_name = v;
+}
+
+/// Set the en_dname field on a menu.
+void nvim_menu_set_en_dname(vimmenu_T *m, char *v)
+{
+  m->en_dname = v;
+}
+
+/// Set the priority field on a menu.
+void nvim_menu_set_priority(vimmenu_T *m, int v)
+{
+  m->priority = v;
+}
+
+/// Set the mnemonic field on a menu.
+void nvim_menu_set_mnemonic(vimmenu_T *m, int v)
+{
+  m->mnemonic = v;
+}
+
+/// Set the actext field on a menu.
+void nvim_menu_set_actext(vimmenu_T *m, char *v)
+{
+  m->actext = v;
+}
+
+/// Set the next field on a menu.
+void nvim_menu_set_next(vimmenu_T *m, vimmenu_T *v)
+{
+  m->next = v;
+}
+
+/// Set the children field on a menu.
+void nvim_menu_set_children(vimmenu_T *m, vimmenu_T *v)
+{
+  m->children = v;
+}
+
+/// Set the parent field on a menu.
+void nvim_menu_set_parent(vimmenu_T *m, vimmenu_T *v)
+{
+  m->parent = v;
+}
+
+/// Set a string in the menu's strings array.
+void nvim_menu_set_string(vimmenu_T *m, int idx, char *v)
+{
+  if (idx >= 0 && idx < MENU_MODES) {
+    m->strings[idx] = v;
+  }
+}
+
+/// Set a noremap value in the menu's noremap array.
+void nvim_menu_set_noremap(vimmenu_T *m, int idx, int v)
+{
+  if (idx >= 0 && idx < MENU_MODES) {
+    m->noremap[idx] = v;
+  }
+}
+
+/// Set a silent flag in the menu's silent array.
+void nvim_menu_set_silent(vimmenu_T *m, int idx, bool v)
+{
+  if (idx >= 0 && idx < MENU_MODES) {
+    m->silent[idx] = v;
+  }
+}
+
+/// Allocate a new vimmenu_T, zero-initialized.
+vimmenu_T *nvim_menu_alloc(void)
+{
+  return xcalloc(1, sizeof(vimmenu_T));
+}
+
+/// Free a vimmenu_T struct.
+void nvim_menu_free_struct(vimmenu_T *m)
+{
+  xfree(m);
+}
+
+/// Get a pointer to the root_menu pointer.
+vimmenu_T **nvim_menu_root_menu_ptr(void)
+{
+  return &root_menu;
+}
+
+/// Get a pointer to a menu's children pointer.
+vimmenu_T **nvim_menu_children_ptr(vimmenu_T *m)
+{
+  return &m->children;
+}
+
+/// Get a pointer to a menu's next pointer.
+vimmenu_T **nvim_menu_next_ptr(vimmenu_T *m)
+{
+  return &m->next;
+}
+
+/// Read through a vimmenu_T** pointer.
+vimmenu_T *nvim_menu_ptr_read(vimmenu_T **p)
+{
+  return *p;
+}
+
+/// Write through a vimmenu_T** pointer.
+void nvim_menu_ptr_write(vimmenu_T **p, vimmenu_T *v)
+{
+  *p = v;
+}
+
+/// Lookup a menu name translation.
+char *nvim_menutrans_lookup(char *name, int len)
+{
+  return menutrans_lookup(name, len);
+}
+
+/// Get the sys_menu global.
+bool nvim_menu_get_sys_menu(void)
+{
+  return sys_menu;
+}
+
+/// Get menuarg->noremap[0] for use from Rust.
+int nvim_menu_get_noremap_0(vimmenu_T *menuarg)
+{
+  return menuarg->noremap[0];
+}
+
+/// Get menuarg->silent[0] for use from Rust.
+bool nvim_menu_get_silent_0(vimmenu_T *menuarg)
+{
+  return menuarg->silent[0];
 }
