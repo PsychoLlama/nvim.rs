@@ -99,6 +99,11 @@ extern const char *rs_get_path_cutoff(const char *fname, const void *gap);
 extern const char *rs_scandir_next_with_dots(void *dir);
 extern void rs_addfile(void *gap, const char *f, int flags);
 extern size_t rs_simplify_filename(char *filename);
+extern size_t rs_path_expand(void *gap, const char *path, int flags);
+extern size_t rs_do_path_expand(void *gap, const char *path, size_t wildoff, int flags, int didstar);
+
+// Forward declaration (defined below, after #include "path.c.generated.h")
+static int pstrcmp(const void *a, const void *b);
 
 // C accessor functions for Rust
 int nvim_path_os_isdir(const char *name) {
@@ -244,6 +249,83 @@ int nvim_path_os_fileinfo_id_equal(const uint8_t *a, const uint8_t *b) {
   return os_fileinfo_id_equal((const FileInfo *)a, (const FileInfo *)b) ? 1 : 0;
 }
 
+// Phase 6 C accessor functions for Rust
+void *nvim_path_compile_pattern(const char *pat, int flags, int ic) {
+  regmatch_T *rm = xmalloc(sizeof(regmatch_T));
+  rm->rm_ic = ic != 0;
+  rm->regprog = vim_regcomp(pat, flags);
+  if (rm->regprog == NULL) {
+    xfree(rm);
+    return NULL;
+  }
+  return rm;
+}
+
+int nvim_path_match_pattern(const void *handle, const char *s) {
+  return vim_regexec((regmatch_T *)handle, s, 0) ? 1 : 0;
+}
+
+void nvim_path_free_pattern(void *handle) {
+  if (handle != NULL) {
+    regmatch_T *rm = (regmatch_T *)handle;
+    vim_regfree(rm->regprog);
+    xfree(rm);
+  }
+}
+
+void nvim_path_os_breakcheck(void) {
+  os_breakcheck();
+}
+
+int nvim_path_get_got_int(void) {
+  return got_int ? 1 : 0;
+}
+
+int nvim_path_get_p_fic(void) {
+  return p_fic;
+}
+
+int nvim_path_os_file_is_readable(const char *fname) {
+  return os_file_is_readable(fname) ? 1 : 0;
+}
+
+char *nvim_path_file_pat_to_reg_pat(const char *pat, const char *pat_end,
+                                     char *allow_dirs, int no_bslash) {
+  return file_pat_to_reg_pat(pat, pat_end, allow_dirs, no_bslash);
+}
+
+int nvim_path_rem_backslash(const char *s) {
+  return rem_backslash(s) ? 1 : 0;
+}
+
+void nvim_path_backslash_halve(char *s) {
+  backslash_halve(s);
+}
+
+void nvim_path_emsg_silent_inc(void) {
+  emsg_silent++;
+}
+
+void nvim_path_emsg_silent_dec(void) {
+  emsg_silent--;
+}
+
+int nvim_path_mb_isalpha(int c) {
+  return mb_isalpha(c) ? 1 : 0;
+}
+
+int nvim_path_utf_ptr2char(const char *p) {
+  return utf_ptr2char(p);
+}
+
+void nvim_path_ga_sort_strings(void *gap, int start) {
+  garray_T *ga = (garray_T *)gap;
+  size_t count = (size_t)(ga->ga_len - start);
+  if (count > 1) {
+    qsort(((char **)ga->ga_data) + start, count, sizeof(char *), pstrcmp);
+  }
+}
+
 // Static assertions for constants used in Rust
 _Static_assert(sizeof(int) == 4, "int must be 4 bytes");
 _Static_assert(EW_DIR == 0x01, "EW_DIR");
@@ -274,6 +356,8 @@ _Static_assert(OK == 1, "OK");
 _Static_assert(FAIL == 0, "FAIL");
 _Static_assert(MAXPATHL >= 4096, "MAXPATHL");
 _Static_assert(sizeof(FileID) == 16, "FileID must be 16 bytes for Rust opaque buffer");
+_Static_assert(RE_MAGIC == 1, "RE_MAGIC");
+_Static_assert(RE_NOBREAK == 16, "RE_NOBREAK");
 
 #include "path.c.generated.h"
 
@@ -578,7 +662,7 @@ bool path_has_exp_wildcard(const char *p)
 static size_t path_expand(garray_T *gap, const char *path, int flags)
   FUNC_ATTR_NONNULL_ALL
 {
-  return do_path_expand(gap, path, 0, flags, false);
+  return rs_path_expand(gap, path, flags);
 }
 
 static const char *scandir_next_with_dots(Directory *dir)
@@ -593,188 +677,7 @@ static size_t do_path_expand(garray_T *gap, const char *path, size_t wildoff, in
                              bool didstar)
   FUNC_ATTR_NONNULL_ALL
 {
-  int start_len = gap->ga_len;
-  bool starstar = false;
-  static int stardepth = 0;  // depth for "**" expansion
-
-  // Expanding "**" may take a long time, check for CTRL-C.
-  if (stardepth > 0 && !(flags & EW_NOBREAK)) {
-    os_breakcheck();
-    if (got_int) {
-      return 0;
-    }
-  }
-
-  // Make room for file name (a bit too much to stay on the safe side).
-  const size_t buflen = strlen(path) + MAXPATHL;
-  char *buf = xmalloc(buflen);
-
-  // Find the first part in the path name that contains a wildcard.
-  // When EW_ICASE is set every letter is considered to be a wildcard.
-  // Copy it into "buf", including the preceding characters.
-  char *p = buf;
-  char *s = buf;
-  char *e = NULL;
-  const char *path_end = path;
-  while (*path_end != NUL) {
-    // May ignore a wildcard that has a backslash before it; it will
-    // be removed by rem_backslash() or file_pat_to_reg_pat() below.
-    if (path_end >= path + wildoff && rem_backslash(path_end)) {
-      *p++ = *path_end++;
-    } else if (vim_ispathsep_nocolon(*path_end)) {
-      if (e != NULL) {
-        break;
-      }
-      s = p + 1;
-    } else if (path_end >= path + wildoff
-#ifdef MSWIN
-               && vim_strchr("*?[~", (uint8_t)(*path_end)) != NULL
-#else
-               && (vim_strchr("*?[{~$", (uint8_t)(*path_end)) != NULL
-                   || (!p_fic && (flags & EW_ICASE) && mb_isalpha(utf_ptr2char(path_end))))
-#endif
-               ) {
-      e = p;
-    }
-    int charlen = utfc_ptr2len(path_end);
-    memcpy(p, path_end, (size_t)charlen);
-    p += charlen;
-    path_end += charlen;
-  }
-  e = p;
-  *e = NUL;
-
-  // Now we have one wildcard component between "s" and "e".
-  // Remove backslashes between "wildoff" and the start of the wildcard
-  // component.
-  for (p = buf + wildoff; p < s; p++) {
-    if (rem_backslash(p)) {
-      STRMOVE(p, p + 1);
-      e--;
-      s--;
-    }
-  }
-
-  // Check for "**" between "s" and "e".
-  for (p = s; p < e; p++) {
-    if (p[0] == '*' && p[1] == '*') {
-      starstar = true;
-    }
-  }
-
-  // convert the file pattern to a regexp pattern
-  int starts_with_dot = *s == '.';
-  char *pat = file_pat_to_reg_pat(s, e, NULL, false);
-  if (pat == NULL) {
-    xfree(buf);
-    return 0;
-  }
-
-  // compile the regexp into a program
-  regmatch_T regmatch;
-#if defined(UNIX)
-  // Ignore case if given 'wildignorecase', else respect 'fileignorecase'.
-  regmatch.rm_ic = (flags & EW_ICASE) || p_fic;
-#else
-  regmatch.rm_ic = true;  // Always ignore case on Windows.
-#endif
-  if (flags & (EW_NOERROR | EW_NOTWILD)) {
-    emsg_silent++;
-  }
-  bool nobreak = (flags & EW_NOBREAK);
-  regmatch.regprog = vim_regcomp(pat, RE_MAGIC | (nobreak ? RE_NOBREAK : 0));
-  if (flags & (EW_NOERROR | EW_NOTWILD)) {
-    emsg_silent--;
-  }
-  xfree(pat);
-
-  if (regmatch.regprog == NULL && (flags & EW_NOTWILD) == 0) {
-    xfree(buf);
-    return 0;
-  }
-
-  size_t len = (size_t)(s - buf);
-  // If "**" is by itself, this is the first time we encounter it and more
-  // is following then find matches without any directory.
-  if (!didstar && stardepth < 100 && starstar && e - s == 2
-      && *path_end == '/') {
-    vim_snprintf(s, buflen - len, "%s", path_end + 1);
-    stardepth++;
-    do_path_expand(gap, buf, len, flags, true);
-    stardepth--;
-  }
-  *s = NUL;
-
-  Directory dir;
-  char *dirpath = (*buf == NUL ? "." : buf);
-  if (os_file_is_readable(dirpath) && os_scandir(&dir, dirpath)) {
-    // Find all matching entries.
-    const char *name;
-    scandir_next_with_dots(NULL);  // initialize
-    while (!got_int && (name = scandir_next_with_dots(&dir)) != NULL) {
-      len = (size_t)(s - buf);
-      if ((name[0] != '.'
-           || starts_with_dot
-           || ((flags & EW_DODOT)
-               && name[1] != NUL
-               && (name[1] != '.' || name[2] != NUL)))
-          && ((regmatch.regprog != NULL && vim_regexec(&regmatch, name, 0))
-              || ((flags & EW_NOTWILD)
-                  && path_fnamencmp(path + len, name, (size_t)(e - s)) == 0))) {
-        len += (size_t)vim_snprintf(s, buflen - len, "%s", name);
-        if (len + 1 >= buflen) {
-          continue;
-        }
-
-        if (starstar && stardepth < 100) {
-          // For "**" in the pattern first go deeper in the tree to
-          // find matches.
-          vim_snprintf(buf + len, buflen - len, "/**%s", path_end);  // NOLINT
-          stardepth++;
-          do_path_expand(gap, buf, len + 1, flags, true);
-          stardepth--;
-        }
-
-        vim_snprintf(buf + len, buflen - len, "%s", path_end);
-        if (path_has_exp_wildcard(path_end)) {      // handle more wildcards
-          if (stardepth < 100) {
-            stardepth++;
-            // need to expand another component of the path
-            // remove backslashes for the remaining components only
-            do_path_expand(gap, buf, len + 1, flags, false);
-            stardepth--;
-          }
-        } else {
-          FileInfo file_info;
-
-          // no more wildcards, check if there is a match
-          // remove backslashes for the remaining components only
-          if (*path_end != NUL) {
-            backslash_halve(buf + len + 1);
-          }
-          // add existing file or symbolic link
-          if ((flags & EW_ALLLINKS)
-              ? os_fileinfo_link(buf, &file_info)
-              : os_path_exists(buf)) {
-            addfile(gap, buf, flags);
-          }
-        }
-      }
-    }
-    os_closedir(&dir);
-  }
-
-  xfree(buf);
-  vim_regfree(regmatch.regprog);
-
-  // When interrupted the matches probably won't be used and sorting can be
-  // slow, thus skip it.
-  size_t matches = (size_t)(gap->ga_len - start_len);
-  if (matches > 0 && !got_int) {
-    qsort(((char **)gap->ga_data) + start_len, matches,
-          sizeof(char *), pstrcmp);
-  }
-  return matches;
+  return rs_do_path_expand(gap, path, wildoff, flags, didstar ? 1 : 0);
 }
 
 // Moves "*psep" back to the previous path separator in "path".
