@@ -1,27 +1,23 @@
-Plan: ~/.claude/plans/humble-tickling-crystal.md
+Plan: ~/.claude/plans/polished-yawning-harbor.md
 
-All 6 phases of the `help.c` migration are complete. Here's the summary:
+All steps complete. Here's a summary:
 
-## Migration Complete
+## Summary
 
-**Commits:**
-1. `f141585307` — Phase 1: `check_help_lang`, `help_compare`
-2. `87b6a843ba` — Phase 2: `find_help_tags`, `cleanup_help_tags`
-3. `e1683f4ce9` — Phase 3: `ex_exusage`, `ex_viusage`
-4. `8fce0d8668` — Phase 4: `prepare_help_buffer`
-5. `f9634928d3` — Phase 5: `ex_helpclose`, `ex_help`
-6. `8f2536c742` — Phase 6: `helptags_one`, `do_helptags`, `helptags_cb`, `ex_helptags`, `get_local_additions`
+Migrated remaining self-contained `fuzzy.c` functions to Rust across 4 commits:
 
-**Result:**
-- All 14 functions migrated from C to Rust
-- `help.c` reduced from ~1,110 lines of logic to ~215 lines of thin wrappers + C accessor functions
-- `src/nvim-rs/help/src/lib.rs` grew from 218 lines to ~1,630 lines
-- `just build`, `just smoke-test`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test` (4,120 tests) all pass
+| Phase | Commit | Functions Migrated |
+|-------|--------|-------------------|
+| 1 | `cb42b8ca27` | `fuzzy_match_str_compare`, `fuzzy_match_str_sort`, `fuzzy_match_func_compare`, `fuzzy_match_func_sort`, `fuzmatch_str_free` (bug fix), `fuzzymatches_to_strmatches` |
+| 2 | `2973d9cc53` | `fuzzy_match_str` |
+| 3 | `995e284e44` | `fuzzy_match_str_with_pos` |
+| 4 | `58b1a3f6ec` | `fuzzy_match_str_in_line`, `search_for_fuzzy_match` |
 
-**Phase 6 highlights:**
-- Used `Vec<*mut c_char>` instead of `garray_T` for tag collection in `helptags_one`
-- Used `Vec<[u8; 2]>` instead of `garray_T` for language detection in `do_helptags`
-- Encapsulated `vimconv_T` encoding conversion in a C accessor (`nvim_help_convert_help_line`)
-- Wrapped `ExpandInit`/`ExpandOne` in C accessor (`nvim_help_expand_dir`) to avoid exposing `expand_T`
-- `rs_helptags_cb` passed directly as function pointer to `do_in_path` via FFI
-- Cleaned up the `#if 0` dead code block from old `find_help_tags`
+**Key changes:**
+- Added `FuzmatchStr`, `GArray`, `PosT` as `#[repr(C)]` structs with `_Static_assert` verification
+- Fixed bug in `fuzmatch_str_free`: `fuzmatch[count].str` → `fuzmatch[i].str`
+- Inner call from `search_for_fuzzy_match` → `fuzzy_match_str_in_line` is now a direct Rust call (no FFI hop)
+- `fuzzy.c` reduced from 652 → 413 lines (thin wrappers + VimL functions)
+- 5 VimL-heavy functions remain in C as planned
+
+**All checks pass:** build, smoke-test, rust-fmt-check, rust-clippy, rust-test (4121 tests)
