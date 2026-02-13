@@ -9,7 +9,26 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
+
+// C accessors for event name resolution and eventignore
+extern "C" {
+    fn nvim_event_name2nr(start: *const c_char, len: usize) -> c_int;
+    fn nvim_get_event_sign(event: c_int) -> c_int;
+    fn nvim_get_p_ei() -> *const c_char;
+    fn nvim_autocmd_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
+    fn nvim_autocmd_xstrnsave(src: *const c_char, len: usize) -> *mut c_char;
+    fn nvim_autocmd_xfree(ptr: *mut c_char);
+    fn nvim_autocmd_set_option_eventignore(val: *const c_char);
+}
+
+/// Result of event name resolution, returning both the event number
+/// and a pointer past the parsed event name.
+#[repr(C)]
+pub struct EventNameResult {
+    pub event: c_int,
+    pub end_ptr: *const c_char,
+}
 
 // =============================================================================
 // Event Categories
@@ -961,6 +980,220 @@ pub extern "C" fn rs_can_nest(current_depth: c_int) -> c_int {
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_max_nesting_depth() -> c_int {
     MAX_NESTING_DEPTH
+}
+
+// =============================================================================
+// Phase 2: Event Name Resolution + EventIgnore
+// =============================================================================
+
+/// Helper: check if a byte is ASCII whitespace.
+#[inline]
+fn is_ascii_white(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+/// Scan to find the end of an event name token.
+/// Returns the length of the token (stops at NUL, whitespace, comma, or pipe).
+unsafe fn event_name_len(start: *const c_char) -> usize {
+    let mut len = 0usize;
+    loop {
+        let c = *start.add(len) as u8;
+        if c == 0 || is_ascii_white(c) || c == b',' || c == b'|' {
+            break;
+        }
+        len += 1;
+    }
+    len
+}
+
+/// Resolve an event name string to its event number.
+///
+/// Returns an `EventNameResult` with the event number (or `NUM_EVENTS` if not found)
+/// and a pointer past the parsed name (after comma if present).
+///
+/// # Safety
+/// `start` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_event_name2nr(start: *const c_char) -> EventNameResult {
+    let len = event_name_len(start);
+    let event = nvim_event_name2nr(start, len);
+
+    // Advance past the name
+    let mut end = start.add(len);
+    // Skip comma if present
+    if *end == b',' as c_char {
+        end = end.add(1);
+    }
+
+    EventNameResult {
+        event,
+        end_ptr: end,
+    }
+}
+
+/// Resolve an event name from a data+size pair (API String).
+///
+/// Returns the event number, or `NUM_EVENTS` if not found.
+///
+/// # Safety
+/// `data` must be valid for `size` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_event_name2nr_str(data: *const c_char, size: usize) -> c_int {
+    nvim_event_name2nr(data, size)
+}
+
+/// Check if an event is included in an eventignore string.
+///
+/// Handles `-` prefix (unignore), `all` keyword, and comma-separated event names.
+/// The `all` keyword only covers window-level events if `ei` is `p_ei` (global eventignore).
+///
+/// # Safety
+/// `ei` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_event_ignored(event: c_int, ei: *const c_char) -> c_int {
+    let p_ei = nvim_get_p_ei();
+    let mut p = ei;
+    let mut ignored = false;
+
+    while *p != 0 {
+        let unignore = *p == b'-' as c_char;
+        if unignore {
+            p = p.add(1);
+        }
+
+        // Check for "all" keyword
+        let remaining = p;
+        if strnicmp_prefix(remaining, b"all") && {
+            let after = *remaining.add(3) as u8;
+            after == 0 || after == b','
+        } {
+            // "all" in global p_ei ignores all events;
+            // "all" in window-local ei only ignores window-level events (sign <= 0)
+            ignored = p == p_ei || nvim_get_event_sign(event) <= 0;
+            p = remaining.add(3);
+            if *p == b',' as c_char {
+                p = p.add(1);
+            }
+        } else {
+            // Parse event name
+            let result = rs_event_name2nr(p);
+            p = result.end_ptr;
+            if result.event == event {
+                if unignore {
+                    return 0;
+                }
+                ignored = true;
+            }
+        }
+    }
+
+    c_int::from(ignored)
+}
+
+/// Validate the contents of 'eventignore' or 'eventignorewin'.
+///
+/// Returns 0 (OK) if valid, -1 (FAIL) if invalid.
+///
+/// # Safety
+/// `ei` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_ei(ei: *const c_char) -> c_int {
+    let p_ei = nvim_get_p_ei();
+    let win = ei != p_ei;
+    let mut p = ei;
+
+    while *p != 0 {
+        // Check for "all" keyword
+        if strnicmp_prefix(p, b"all") && {
+            let after = *p.add(3) as u8;
+            after == 0 || after == b','
+        } {
+            p = p.add(3);
+            if *p == b',' as c_char {
+                p = p.add(1);
+            }
+        } else {
+            // Skip optional '-' prefix
+            if *p == b'-' as c_char {
+                p = p.add(1);
+            }
+            let result = rs_event_name2nr(p);
+            p = result.end_ptr;
+            if result.event == NUM_EVENTS {
+                return -1; // FAIL
+            }
+            // Window-local ei can only have window-level events (sign <= 0)
+            if win && nvim_get_event_sign(result.event) > 0 {
+                return -1; // FAIL
+            }
+        }
+    }
+
+    0 // OK
+}
+
+/// Add "what" to 'eventignore' to skip loading syntax highlighting.
+///
+/// "what" must start with a comma. Returns the old value of 'eventignore'
+/// in allocated memory (caller must pass it to `rs_au_event_restore`).
+///
+/// # Safety
+/// `what` must be a valid NUL-terminated C string starting with ','.
+#[no_mangle]
+pub unsafe extern "C" fn rs_au_event_disable(what: *const c_char) -> *mut c_char {
+    let p_ei = nvim_get_p_ei();
+    let p_ei_len = c_strlen(p_ei);
+    let what_len = c_strlen(what);
+
+    // Save old value
+    let save_ei = nvim_autocmd_xmemdupz(p_ei, p_ei_len);
+
+    // Create new value: p_ei + what
+    let new_ei = nvim_autocmd_xstrnsave(p_ei, p_ei_len + what_len);
+
+    if *what == b',' as c_char && *p_ei == 0 {
+        // p_ei is empty, skip the leading comma in what
+        std::ptr::copy_nonoverlapping(what.add(1), new_ei, what_len); // includes NUL from what
+    } else {
+        std::ptr::copy_nonoverlapping(what, new_ei.add(p_ei_len), what_len + 1);
+    }
+
+    nvim_autocmd_set_option_eventignore(new_ei);
+    nvim_autocmd_xfree(new_ei);
+
+    save_ei
+}
+
+/// Restore 'eventignore' from a previously saved value.
+///
+/// # Safety
+/// `old_ei` must be a value returned by `rs_au_event_disable`, or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_au_event_restore(old_ei: *mut c_char) {
+    if !old_ei.is_null() {
+        nvim_autocmd_set_option_eventignore(old_ei);
+        nvim_autocmd_xfree(old_ei);
+    }
+}
+
+/// Get the length of a NUL-terminated C string.
+unsafe fn c_strlen(s: *const c_char) -> usize {
+    let mut len = 0;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
+}
+
+/// Case-insensitive prefix check against a known ASCII lowercase byte pattern.
+unsafe fn strnicmp_prefix(s: *const c_char, prefix: &[u8]) -> bool {
+    for (i, &expected) in prefix.iter().enumerate() {
+        let c = *s.add(i) as u8;
+        if c.to_ascii_lowercase() != expected {
+            return false;
+        }
+    }
+    true
 }
 
 // =============================================================================

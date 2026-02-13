@@ -81,6 +81,18 @@ extern void rs_aupat_normalize_buflocal_pat(char *dest, const char *pat, int pat
                                             int buflocal_nr);
 extern int rs_autocmd_supported(const char *event);
 
+// Phase 2: Event name resolution + EventIgnore
+typedef struct {
+  int event;
+  const char *end_ptr;
+} EventNameResult;
+extern EventNameResult rs_event_name2nr(const char *start);
+extern int rs_event_name2nr_str(const char *data, size_t size);
+extern int rs_event_ignored(int event, const char *ei);
+extern int rs_check_ei(const char *ei);
+extern char *rs_au_event_disable(const char *what);
+extern void rs_au_event_restore(char *old_ei);
+
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
 {
@@ -643,31 +655,16 @@ bool is_aucmd_win(win_T *win)
 /// Return a pointer to the next event name in "end".
 event_T event_name2nr(const char *start, char **end)
 {
-  const char *p;
-
-  // the event name ends with end of line, '|', a blank or a comma
-  for (p = start; *p && !ascii_iswhite(*p) && *p != ',' && *p != '|'; p++) {}
-
-  int hash_idx = event_name2nr_hash(start, (size_t)(p - start));
-  if (*p == ',') {
-    p++;
-  }
-  *end = (char *)p;
-  if (hash_idx < 0) {
-    return NUM_EVENTS;
-  }
-  return (event_T)abs(event_names[event_hash[hash_idx]].event);
+  EventNameResult result = rs_event_name2nr(start);
+  *end = (char *)result.end_ptr;
+  return (event_T)result.event;
 }
 
 /// Return the event number for event name "str".
 /// Return NUM_EVENTS if the event name was not found.
 event_T event_name2nr_str(String str)
 {
-  int hash_idx = event_name2nr_hash(str.data, str.size);
-  if (hash_idx < 0) {
-    return NUM_EVENTS;
-  }
-  return (event_T)abs(event_names[event_hash[hash_idx]].event);
+  return (event_T)rs_event_name2nr_str(str.data, str.size);
 }
 
 /// Return the name for event
@@ -687,43 +684,14 @@ const char *event_nr2name(event_T event)
 bool event_ignored(event_T event, char *ei)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  bool ignored = false;
-  while (*ei != NUL) {
-    bool unignore = *ei == '-';
-    ei += unignore;
-    if (STRNICMP(ei, "all", 3) == 0 && (ei[3] == NUL || ei[3] == ',')) {
-      ignored = ei == p_ei || event_names[event].event <= 0;
-      ei += 3 + (ei[3] == ',');
-    } else if (event_name2nr(ei, &ei) == event) {
-      if (unignore) {
-        return false;
-      }
-      ignored = true;
-    }
-  }
-
-  return ignored;
+  return rs_event_ignored((int)event, ei) != 0;
 }
 
 /// Return OK when the contents of 'eventignore' or 'eventignorewin' is valid,
 /// FAIL otherwise.
 int check_ei(char *ei)
 {
-  bool win = ei != p_ei;
-
-  while (*ei) {
-    if (STRNICMP(ei, "all", 3) == 0 && (ei[3] == NUL || ei[3] == ',')) {
-      ei += 3 + (ei[3] == ',');
-    } else {
-      ei += (*ei == '-');
-      event_T event = event_name2nr(ei, &ei);
-      if (event == NUM_EVENTS || (win && event_names[event].event > 0)) {
-        return FAIL;
-      }
-    }
-  }
-
-  return OK;
+  return rs_check_ei(ei);
 }
 
 // Add "what" to 'eventignore' to skip loading syntax highlighting for every
@@ -731,25 +699,12 @@ int check_ei(char *ei)
 // Returns the old value of 'eventignore' in allocated memory.
 char *au_event_disable(char *what)
 {
-  size_t p_ei_len = strlen(p_ei);
-  char *save_ei = xmemdupz(p_ei, p_ei_len);
-  char *new_ei = xstrnsave(p_ei, p_ei_len + strlen(what));
-  if (*what == ',' && *p_ei == NUL) {
-    STRCPY(new_ei, what + 1);
-  } else {
-    STRCPY(new_ei + p_ei_len, what);
-  }
-  set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(new_ei), 0, SID_NONE);
-  xfree(new_ei);
-  return save_ei;
+  return rs_au_event_disable(what);
 }
 
 void au_event_restore(char *old_ei)
 {
-  if (old_ei != NULL) {
-    set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(old_ei), 0, SID_NONE);
-    xfree(old_ei);
-  }
+  rs_au_event_restore(old_ei);
 }
 
 // Implements :autocmd.
@@ -2733,4 +2688,44 @@ int nvim_event_name2nr(const char *start, size_t len)
     return NUM_EVENTS;
   }
   return abs(event_names[event_hash[hash_idx]].event);
+}
+
+/// Get the sign of event_names[event].event (used by Rust FFI).
+/// Negative means window-level event, positive means global-only.
+int nvim_get_event_sign(int event)
+{
+  if (event < 0 || event >= NUM_EVENTS) {
+    return 0;
+  }
+  return event_names[event].event;
+}
+
+/// Get pointer to p_ei (eventignore option value) (used by Rust FFI).
+const char *nvim_get_p_ei(void)
+{
+  return p_ei;
+}
+
+/// Duplicate memory with NUL termination (used by Rust FFI).
+char *nvim_autocmd_xmemdupz(const char *src, size_t len)
+{
+  return xmemdupz(src, len);
+}
+
+/// Allocate a string of given max size, copying src (used by Rust FFI).
+char *nvim_autocmd_xstrnsave(const char *src, size_t len)
+{
+  return xstrnsave(src, len);
+}
+
+/// Free memory allocated by xmalloc/xmemdupz/etc. (used by Rust FFI).
+void nvim_autocmd_xfree(char *ptr)
+{
+  xfree(ptr);
+}
+
+/// Set the 'eventignore' option value (used by Rust FFI).
+void nvim_autocmd_set_option_eventignore(const char *val)
+{
+  set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(val), 0, SID_NONE);
 }
