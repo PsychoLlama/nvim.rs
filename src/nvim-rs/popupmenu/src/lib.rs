@@ -36,6 +36,7 @@ pub mod placement;
 pub mod preview;
 pub mod redraw;
 pub mod render;
+pub mod selection;
 
 use std::ffi::c_int;
 

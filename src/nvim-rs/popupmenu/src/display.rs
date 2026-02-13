@@ -396,8 +396,6 @@ extern "C" {
         array_changed: c_int,
         cmd_startcol: c_int,
     );
-    /// Set the selected item index (scrolling, preview).
-    fn nvim_pum_set_selected_impl(n: c_int, repeat: c_int) -> c_int;
 }
 
 /// Opaque handle to a `buf_T`.
@@ -514,17 +512,7 @@ pub unsafe extern "C" fn rs_pum_ui_flush() {
 // rs_pum_preview_set_text: moved to preview.rs
 // rs_pum_adjust_info_position: moved to preview.rs
 // rs_pum_set_info: moved to preview.rs
-
-/// Set the selected item index, handle scrolling and preview.
-///
-/// Returns 1 if the window was resized and repositioning is needed.
-///
-/// # Safety
-/// Calls C `_impl` function.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
-    nvim_pum_set_selected_impl(n, repeat)
-}
+// rs_pum_set_selected: moved to selection.rs
 
 /// Display the popup menu.
 ///

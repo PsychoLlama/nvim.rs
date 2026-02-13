@@ -1307,6 +1307,251 @@ void nvim_pum_border_cfg_free(PumBorderConfig *cfg)
   xfree(cfg);
 }
 
+// Phase 7 C accessor functions (selection / preview window management)
+
+/// Get 'completeopt' flags.
+unsigned nvim_pum_get_cot_flags(void)
+{
+  return get_cot_flags();
+}
+
+/// Hide a floating preview window by setting its hide flag and reconfiguring.
+void nvim_pum_win_config_float_hide(win_T *wp)
+{
+  wp->w_config.hide = true;
+  win_config_float(wp, wp->w_config);
+}
+
+/// Check if pum_array[idx] has pum_info (non-NULL).
+int nvim_pum_array_has_info(int idx)
+{
+  return pum_array[idx].pum_info != NULL;
+}
+
+/// Get pum_array[idx].pum_info pointer.
+char *nvim_pum_array_get_info(int idx)
+{
+  return pum_array[idx].pum_info;
+}
+
+// nvim_get_Rows: already defined in window.c
+
+/// Get `p_pvh` (preview height option).
+int nvim_pum_get_p_pvh(void)
+{
+  return (int)p_pvh;
+}
+
+/// Get `cmdwin_type` global.
+int nvim_pum_get_cmdwin_type(void)
+{
+  return cmdwin_type;
+}
+
+/// Set `g_do_tagpreview` global.
+void nvim_pum_set_g_do_tagpreview(int val)
+{
+  g_do_tagpreview = val;
+}
+
+/// Enter a window (wrapper for win_enter).
+void nvim_pum_win_enter(win_T *wp, int set_curwin)
+{
+  win_enter(wp, set_curwin != 0);
+}
+
+/// Prepare tag preview window (wrapper for prepare_tagpreview).
+/// Returns 1 if window was resized.
+int nvim_pum_prepare_tagpreview(void)
+{
+  return prepare_tagpreview(false) ? 1 : 0;
+}
+
+/// Create a floating preview window (wrapper for win_float_create).
+/// Returns the window pointer, or NULL if failed.
+win_T *nvim_pum_win_float_create_preview(void)
+{
+  return win_float_create(true, true);
+}
+
+/// Check if curwin is a preview window or float info window.
+int nvim_pum_curwin_is_pvw_or_info(void)
+{
+  return curwin->w_p_pvw || curwin->w_float_is_info;
+}
+
+/// Check if the current buffer can be reused as a wipeout buffer.
+/// Checks: b_nwindows == 1, no filename, nofile buftype, bh starts with 'w'.
+int nvim_pum_curbuf_can_reuse(void)
+{
+  return (curbuf->b_nwindows == 1)
+         && (curbuf->b_fname == NULL)
+         && bt_nofile(curbuf)
+         && (curbuf->b_p_bh[0] == 'w');
+}
+
+/// Clear the current buffer (wrapper for buf_clear).
+void nvim_pum_buf_clear(void)
+{
+  buf_clear();
+}
+
+/// Execute do_ecmd to edit a new empty buffer.
+/// Returns OK (1) or FAIL (0).
+int nvim_pum_do_ecmd(void)
+{
+  return do_ecmd(0, NULL, NULL, NULL, ECMD_ONE, 0, NULL);
+}
+
+/// Set wipeout buffer options on curbuf (swapfile, buflisted, buftype, bufhidden, diff).
+void nvim_pum_set_wipeout_options(void)
+{
+  set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
+  set_option_value_give_err(kOptBuflisted, BOOLEAN_OPTVAL(false), OPT_LOCAL);
+  set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("nofile"), OPT_LOCAL);
+  set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("wipe"), OPT_LOCAL);
+  set_option_value_give_err(kOptDiff, BOOLEAN_OPTVAL(false), OPT_LOCAL);
+}
+
+/// Set window height (wrapper for win_setheight).
+void nvim_pum_win_setheight(int height)
+{
+  win_setheight(height);
+}
+
+/// Get curwin->w_height.
+int nvim_pum_curwin_get_height(void)
+{
+  return curwin->w_height;
+}
+
+/// Set curbuf->b_changed.
+void nvim_pum_set_curbuf_changed(int val)
+{
+  curbuf->b_changed = val != 0;
+}
+
+/// Set curbuf->b_p_ma (modifiable).
+void nvim_pum_set_curbuf_modifiable(int val)
+{
+  curbuf->b_p_ma = val != 0;
+}
+
+/// Get curwin->w_topline.
+int nvim_pum_curwin_get_topline(void)
+{
+  return (int)curwin->w_topline;
+}
+
+/// Set curwin->w_topline.
+void nvim_pum_curwin_set_topline(int val)
+{
+  curwin->w_topline = (linenr_T)val;
+}
+
+/// Set curwin->w_cursor.lnum and w_cursor.col.
+void nvim_pum_curwin_set_cursor(int lnum, int col)
+{
+  curwin->w_cursor.lnum = (linenr_T)lnum;
+  curwin->w_cursor.col = (colnr_T)col;
+}
+
+/// Get curbuf->b_ml.ml_line_count.
+int nvim_pum_curbuf_line_count(void)
+{
+  return (int)curbuf->b_ml.ml_line_count;
+}
+
+/// Check if a window pointer is valid (wrapper for win_valid).
+int nvim_pum_win_valid(win_T *wp)
+{
+  return win_valid(wp) ? 1 : 0;
+}
+
+/// Check if a tabpage pointer is valid (wrapper for valid_tabpage).
+int nvim_pum_tabpage_valid(tabpage_T *tp)
+{
+  return valid_tabpage(tp) ? 1 : 0;
+}
+
+/// Go to a tabpage (wrapper for goto_tabpage_tp).
+void nvim_pum_goto_tabpage(tabpage_T *tp)
+{
+  goto_tabpage_tp(tp, false, false);
+}
+
+/// Check if insert completion is active (wrapper for ins_compl_active).
+int nvim_pum_ins_compl_active(void)
+{
+  return ins_compl_active() ? 1 : 0;
+}
+
+/// Set curwin->w_redr_status.
+void nvim_pum_curwin_set_redr_status(int val)
+{
+  curwin->w_redr_status = val != 0;
+}
+
+/// Validate cursor in curwin (wrapper for validate_cursor).
+void nvim_pum_validate_cursor(void)
+{
+  validate_cursor(curwin);
+}
+
+/// Redraw later for curwin (wrapper for redraw_later).
+void nvim_pum_redraw_later_curwin(int update_type)
+{
+  redraw_later(curwin, update_type);
+}
+
+/// Update topline for curwin (wrapper for update_topline).
+void nvim_pum_update_topline(void)
+{
+  update_topline(curwin);
+}
+
+/// Update screen (wrapper for update_screen).
+void nvim_pum_update_screen(void)
+{
+  update_screen();
+}
+
+/// Get curwin pointer (for save/restore).
+win_T *nvim_pum_get_curwin(void)
+{
+  return curwin;
+}
+
+/// Get curtab pointer (for save/restore).
+tabpage_T *nvim_pum_get_curtab(void)
+{
+  return curtab;
+}
+
+/// Check if curwin equals the saved window pointer.
+int nvim_pum_curwin_is(win_T *wp)
+{
+  return curwin == wp;
+}
+
+/// Check if curtab equals the saved tabpage pointer.
+int nvim_pum_curtab_is(tabpage_T *tp)
+{
+  return curtab == tp;
+}
+
+/// Get curbuf pointer (for preview_set_text).
+void *nvim_pum_get_curbuf(void)
+{
+  return curbuf;
+}
+
+// Phase 7 static assertions
+_Static_assert(kOptCotFlagPopup == 0x10, "kOptCotFlagPopup must be 0x10");
+_Static_assert(kOptCotFlagPreview == 0x08, "kOptCotFlagPreview must be 0x08");
+_Static_assert(ECMD_ONE == 1, "ECMD_ONE must be 1");
+_Static_assert(UPD_SOME_VALID == 35, "UPD_SOME_VALID must be 35");
+
 // Phase 6 static assertions
 _Static_assert(HLF_PNI == 41, "HLF_PNI must be 41");
 _Static_assert(HLF_PSI == 42, "HLF_PSI must be 42");
@@ -1635,228 +1880,7 @@ static bool pum_set_selected(int n, int repeat)
   return rs_pum_set_selected(n, repeat) != 0;
 }
 
-/// Set selected item (implementation).
-int nvim_pum_set_selected_impl(int n, int repeat)
-{
-  bool resized = false;
-  int context = pum_height / 2;
-  int prev_selected = pum_selected;
-
-  pum_selected = n;
-  int scroll_offset = pum_selected - pum_height;
-  unsigned cur_cot_flags = get_cot_flags();
-  bool use_float = (cur_cot_flags & kOptCotFlagPopup) != 0;
-
-  // Close the floating preview window if 'selected' is -1, indicating a return to the original
-  // state. It is also closed when the selected item has no corresponding info item.
-  if (use_float && (pum_selected < 0 || pum_array[pum_selected].pum_info == NULL)) {
-    win_T *wp = win_float_find_preview();
-    if (wp) {
-      wp->w_config.hide = true;
-      win_config_float(wp, wp->w_config);
-    }
-  }
-
-  if ((pum_selected >= 0) && (pum_selected < pum_size)) {
-    if (pum_first > pum_selected - 4) {
-      // scroll down; when we did a jump it's probably a PageUp then
-      // scroll a whole page
-      if (pum_first > pum_selected - 2) {
-        pum_first -= pum_height - 2;
-        if (pum_first < 0) {
-          pum_first = 0;
-        } else if (pum_first > pum_selected) {
-          pum_first = pum_selected;
-        }
-      } else {
-        pum_first = pum_selected;
-      }
-    } else if (pum_first < scroll_offset + 5) {
-      // scroll up; when we did a jump it's probably a PageDown then
-      // scroll a whole page
-      if (pum_first < scroll_offset + 3) {
-        pum_first = MAX(pum_first + pum_height - 2, scroll_offset + 1);
-      } else {
-        pum_first = scroll_offset + 1;
-      }
-    }
-
-    // Give a few lines of context when possible.
-    context = MIN(context, 3);
-
-    if (pum_height > 2) {
-      if (pum_first > pum_selected - context) {
-        pum_first = MAX(pum_selected - context, 0);  // scroll down
-      } else if (pum_first < pum_selected + context - pum_height + 1) {
-        pum_first = pum_selected + context - pum_height + 1;  // up
-      }
-    }
-    // adjust for the number of lines displayed
-    pum_first = MIN(pum_first, pum_size - pum_height);
-
-    // Show extra info in the preview window if there is something and
-    // 'completeopt' contains "preview".
-    // Skip this when tried twice already.
-    // Skip this also when there is not much room.
-    // Skip this for command-window when 'completeopt' contains "preview".
-    // NOTE: Be very careful not to sync undo!
-    if ((pum_array[pum_selected].pum_info != NULL)
-        && (Rows > 10)
-        && (repeat <= 1)
-        && (cur_cot_flags & (kOptCotFlagPreview | kOptCotFlagPopup))
-        && !((cur_cot_flags & kOptCotFlagPreview) && cmdwin_type != 0)) {
-      win_T *curwin_save = curwin;
-      tabpage_T *curtab_save = curtab;
-
-      if (use_float) {
-        block_autocmds();
-      }
-
-      // Open a preview window.  3 lines by default.  Prefer
-      // 'previewheight' if set and smaller.
-      g_do_tagpreview = 3;
-
-      if ((p_pvh > 0) && (p_pvh < g_do_tagpreview)) {
-        g_do_tagpreview = (int)p_pvh;
-      }
-      RedrawingDisabled++;
-      // Prevent undo sync here, if an autocommand syncs undo weird
-      // things can happen to the undo tree.
-      no_u_sync++;
-
-      if (!use_float) {
-        resized = prepare_tagpreview(false);
-      } else {
-        win_T *wp = win_float_find_preview();
-        if (wp) {
-          win_enter(wp, false);
-        } else {
-          wp = win_float_create(true, true);
-          if (wp) {
-            resized = true;
-          }
-        }
-      }
-
-      no_u_sync--;
-      RedrawingDisabled--;
-      g_do_tagpreview = 0;
-
-      if (curwin->w_p_pvw || curwin->w_float_is_info) {
-        int res = OK;
-        if (!resized
-            && (curbuf->b_nwindows == 1)
-            && (curbuf->b_fname == NULL)
-            && bt_nofile(curbuf)
-            && (curbuf->b_p_bh[0] == 'w')) {
-          // Already a "wipeout" buffer, make it empty.
-          buf_clear();
-        } else {
-          // Don't want to sync undo in the current buffer.
-          no_u_sync++;
-          res = do_ecmd(0, NULL, NULL, NULL, ECMD_ONE, 0, NULL);
-          no_u_sync--;
-
-          if (res == OK) {
-            // Edit a new, empty buffer. Set options for a "wipeout"
-            // buffer.
-            set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
-            set_option_value_give_err(kOptBuflisted, BOOLEAN_OPTVAL(false), OPT_LOCAL);
-            set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("nofile"), OPT_LOCAL);
-            set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("wipe"), OPT_LOCAL);
-            set_option_value_give_err(kOptDiff, BOOLEAN_OPTVAL(false), OPT_LOCAL);
-          }
-        }
-
-        if (res == OK) {
-          linenr_T lnum = 0;
-          int max_info_width = 0;
-          rs_pum_preview_set_text(curbuf, pum_array[pum_selected].pum_info, &lnum, &max_info_width);
-          // Increase the height of the preview window to show the
-          // text, but no more than 'previewheight' lines.
-          if (repeat == 0 && !use_float) {
-            lnum = MIN(lnum, (linenr_T)p_pvh);
-
-            if (curwin->w_height < lnum) {
-              win_setheight((int)lnum);
-              resized = true;
-            }
-          }
-
-          curbuf->b_changed = false;
-          curbuf->b_p_ma = false;
-          if (pum_selected != prev_selected) {
-            curwin->w_topline = 1;
-          } else if (curwin->w_topline > curbuf->b_ml.ml_line_count) {
-            curwin->w_topline = curbuf->b_ml.ml_line_count;
-          }
-          curwin->w_cursor.lnum = 1;
-          curwin->w_cursor.col = 0;
-
-          if (use_float) {
-            // adjust floating window by actually height and max info text width
-            rs_pum_adjust_info_position(curwin, max_info_width);
-          }
-
-          if ((curwin != curwin_save && win_valid(curwin_save))
-              || (curtab != curtab_save && valid_tabpage(curtab_save))) {
-            if (curtab != curtab_save && valid_tabpage(curtab_save)) {
-              goto_tabpage_tp(curtab_save, false, false);
-            }
-
-            // When the first completion is done and the preview
-            // window is not resized, skip the preview window's
-            // status line redrawing.
-            if (ins_compl_active() && !resized) {
-              curwin->w_redr_status = false;
-            }
-
-            // Return cursor to where we were
-            validate_cursor(curwin);
-            redraw_later(curwin, UPD_SOME_VALID);
-
-            // When the preview window was resized we need to
-            // update the view on the buffer.  Only go back to
-            // the window when needed, otherwise it will always be
-            // redrawn.
-            if (resized && win_valid(curwin_save)) {
-              no_u_sync++;
-              win_enter(curwin_save, true);
-              no_u_sync--;
-              update_topline(curwin);
-            }
-
-            // Update the screen before drawing the popup menu.
-            // Enable updating the status lines.
-            // TODO(bfredl): can simplify, get rid of the flag munging?
-            // or at least eliminate extra redraw before win_enter()?
-            pum_is_visible = false;
-            update_screen();
-            pum_is_visible = true;
-
-            if (!resized && win_valid(curwin_save)) {
-              no_u_sync++;
-              win_enter(curwin_save, true);
-              no_u_sync--;
-            }
-
-            // May need to update the screen again when there are
-            // autocommands involved.
-            pum_is_visible = false;
-            update_screen();
-            pum_is_visible = true;
-          }
-        }
-      }
-
-      if (use_float) {
-        unblock_autocmds();
-      }
-    }
-  }
-
-  return (int)resized;
-}
+// nvim_pum_set_selected_impl: migrated to Rust (selection.rs)
 
 /// Undisplay the popup menu (later).
 void pum_undisplay(bool immediate)

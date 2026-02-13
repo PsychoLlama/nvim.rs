@@ -1,0 +1,343 @@
+//! Popup menu selection management.
+//!
+//! This module handles the `pum_set_selected` logic: scrolling the
+//! popup menu to show the selected item, and opening/updating the
+//! preview window for completion item info.
+
+use std::ffi::{c_char, c_int, c_uint};
+
+use crate::display::{BufHandle, WinHandle};
+
+/// Opaque handle to a `tabpage_T`.
+#[repr(C)]
+pub struct TabHandle {
+    _private: [u8; 0],
+}
+
+// C accessor functions for selection/preview operations.
+extern "C" {
+    // State accessors
+    fn nvim_get_pum_selected() -> c_int;
+    fn nvim_set_pum_selected(val: c_int);
+    fn nvim_get_pum_first() -> c_int;
+    fn nvim_set_pum_first(val: c_int);
+    fn nvim_get_pum_height() -> c_int;
+    fn nvim_get_pum_size() -> c_int;
+    fn nvim_set_pum_is_visible(val: c_int);
+
+    // COT flags
+    fn nvim_pum_get_cot_flags() -> c_uint;
+
+    // Preview window hide
+    fn nvim_pum_win_float_find_preview() -> *mut WinHandle;
+    fn nvim_pum_win_config_float_hide(wp: *mut WinHandle);
+
+    // Array info access
+    fn nvim_pum_array_has_info(idx: c_int) -> c_int;
+    fn nvim_pum_array_get_info(idx: c_int) -> *mut c_char;
+
+    // Global state
+    fn nvim_get_Rows() -> c_int;
+    fn nvim_pum_get_p_pvh() -> c_int;
+    fn nvim_pum_get_cmdwin_type() -> c_int;
+    fn nvim_pum_set_g_do_tagpreview(val: c_int);
+
+    // Autocmd / redraw control
+    fn nvim_pum_block_autocmds();
+    fn nvim_pum_unblock_autocmds();
+    fn nvim_pum_redrawing_disabled_inc();
+    fn nvim_pum_redrawing_disabled_dec();
+    fn nvim_pum_no_u_sync_inc();
+    fn nvim_pum_no_u_sync_dec();
+
+    // Window operations
+    fn nvim_pum_win_enter(wp: *mut WinHandle, set_curwin: c_int);
+    fn nvim_pum_prepare_tagpreview() -> c_int;
+    fn nvim_pum_win_float_create_preview() -> *mut WinHandle;
+
+    // Curwin/curbuf queries
+    fn nvim_pum_curwin_is_pvw_or_info() -> c_int;
+    fn nvim_pum_curbuf_can_reuse() -> c_int;
+
+    // Buffer operations
+    fn nvim_pum_buf_clear();
+    fn nvim_pum_do_ecmd() -> c_int;
+    fn nvim_pum_set_wipeout_options();
+
+    // Preview text
+    fn rs_pum_preview_set_text(
+        buf: *mut BufHandle,
+        info: *mut c_char,
+        lnum: *mut i32,
+        max_width: *mut c_int,
+    );
+    fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: c_int);
+
+    // Window height
+    fn nvim_pum_win_setheight(height: c_int);
+    fn nvim_pum_curwin_get_height() -> c_int;
+
+    // Buffer state
+    fn nvim_pum_set_curbuf_changed(val: c_int);
+    fn nvim_pum_set_curbuf_modifiable(val: c_int);
+    fn nvim_pum_curbuf_line_count() -> c_int;
+
+    // Cursor/topline
+    fn nvim_pum_curwin_get_topline() -> c_int;
+    fn nvim_pum_curwin_set_topline(val: c_int);
+    fn nvim_pum_curwin_set_cursor(lnum: c_int, col: c_int);
+
+    // Window/tabpage validity
+    fn nvim_pum_win_valid(wp: *mut WinHandle) -> c_int;
+    fn nvim_pum_tabpage_valid(tp: *mut TabHandle) -> c_int;
+    fn nvim_pum_goto_tabpage(tp: *mut TabHandle);
+
+    // Context save/restore
+    fn nvim_pum_get_curwin() -> *mut WinHandle;
+    fn nvim_pum_get_curtab() -> *mut TabHandle;
+    fn nvim_pum_curwin_is(wp: *mut WinHandle) -> c_int;
+    fn nvim_pum_curtab_is(tp: *mut TabHandle) -> c_int;
+
+    // Completion state
+    fn nvim_pum_ins_compl_active() -> c_int;
+
+    // Redraw helpers
+    fn nvim_pum_curwin_set_redr_status(val: c_int);
+    fn nvim_pum_validate_cursor();
+    fn nvim_pum_redraw_later_curwin(update_type: c_int);
+    fn nvim_pum_update_topline();
+    fn nvim_pum_update_screen();
+
+    // Curbuf for preview text
+    fn nvim_pum_get_curbuf() -> *mut BufHandle;
+
+    // Scroll computation (Rust function, called via extern "C")
+    fn rs_pum_compute_scroll(
+        selected: c_int,
+        current_first: c_int,
+        height: c_int,
+        size: c_int,
+    ) -> c_int;
+}
+
+/// `kOptCotFlagPopup` = 0x10.
+const K_OPT_COT_FLAG_POPUP: c_uint = 0x10;
+/// `kOptCotFlagPreview` = 0x08.
+const K_OPT_COT_FLAG_PREVIEW: c_uint = 0x08;
+/// `UPD_SOME_VALID` = 35.
+const UPD_SOME_VALID: c_int = 35;
+/// `OK` = 1.
+const OK: c_int = 1;
+
+/// Set the selected item in the popup menu and manage the preview window.
+///
+/// Handles scrolling so the selected item is visible, and opens/updates
+/// the preview window if 'completeopt' includes "preview" or "popup".
+///
+/// Returns 1 if the preview window was resized, 0 otherwise.
+///
+/// # Safety
+/// Calls many C accessor functions. The popup menu array must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
+    let mut resized = false;
+    let prev_selected = nvim_get_pum_selected();
+
+    nvim_set_pum_selected(n);
+    let pum_selected = n;
+    let pum_height = nvim_get_pum_height();
+    let pum_size = nvim_get_pum_size();
+    let cur_cot_flags = nvim_pum_get_cot_flags();
+    let use_float = (cur_cot_flags & K_OPT_COT_FLAG_POPUP) != 0;
+
+    // Close the floating preview window if 'selected' is -1, indicating a return to the original
+    // state. It is also closed when the selected item has no corresponding info item.
+    if use_float && (pum_selected < 0 || nvim_pum_array_has_info(pum_selected) == 0) {
+        let wp = nvim_pum_win_float_find_preview();
+        if !wp.is_null() {
+            nvim_pum_win_config_float_hide(wp);
+        }
+    }
+
+    if pum_selected >= 0 && pum_selected < pum_size {
+        // Compute new scroll position using the existing pure Rust function
+        let pum_first = nvim_get_pum_first();
+        let new_first = rs_pum_compute_scroll(pum_selected, pum_first, pum_height, pum_size);
+        nvim_set_pum_first(new_first);
+
+        // Show extra info in the preview window if there is something and
+        // 'completeopt' contains "preview" or "popup".
+        // Skip this when tried twice already.
+        // Skip this also when there is not much room.
+        // Skip this for command-window when 'completeopt' contains "preview".
+        // NOTE: Be very careful not to sync undo!
+        if nvim_pum_array_has_info(pum_selected) != 0
+            && nvim_get_Rows() > 10
+            && repeat <= 1
+            && (cur_cot_flags & (K_OPT_COT_FLAG_PREVIEW | K_OPT_COT_FLAG_POPUP)) != 0
+            && !((cur_cot_flags & K_OPT_COT_FLAG_PREVIEW) != 0 && nvim_pum_get_cmdwin_type() != 0)
+        {
+            let curwin_save = nvim_pum_get_curwin();
+            let curtab_save = nvim_pum_get_curtab();
+
+            if use_float {
+                nvim_pum_block_autocmds();
+            }
+
+            // Open a preview window. 3 lines by default. Prefer
+            // 'previewheight' if set and smaller.
+            let mut g_do_tagpreview = 3;
+            let p_pvh = nvim_pum_get_p_pvh();
+            if p_pvh > 0 && p_pvh < g_do_tagpreview {
+                g_do_tagpreview = p_pvh;
+            }
+            nvim_pum_set_g_do_tagpreview(g_do_tagpreview);
+
+            nvim_pum_redrawing_disabled_inc();
+            // Prevent undo sync here, if an autocommand syncs undo weird
+            // things can happen to the undo tree.
+            nvim_pum_no_u_sync_inc();
+
+            if use_float {
+                let wp = nvim_pum_win_float_find_preview();
+                if wp.is_null() {
+                    let wp2 = nvim_pum_win_float_create_preview();
+                    if !wp2.is_null() {
+                        resized = true;
+                    }
+                } else {
+                    nvim_pum_win_enter(wp, 0);
+                }
+            } else {
+                resized = nvim_pum_prepare_tagpreview() != 0;
+            }
+
+            nvim_pum_no_u_sync_dec();
+            nvim_pum_redrawing_disabled_dec();
+            nvim_pum_set_g_do_tagpreview(0);
+
+            if nvim_pum_curwin_is_pvw_or_info() != 0 {
+                let mut res = OK;
+                if !resized && nvim_pum_curbuf_can_reuse() != 0 {
+                    // Already a "wipeout" buffer, make it empty.
+                    nvim_pum_buf_clear();
+                } else {
+                    // Don't want to sync undo in the current buffer.
+                    nvim_pum_no_u_sync_inc();
+                    res = nvim_pum_do_ecmd();
+                    nvim_pum_no_u_sync_dec();
+
+                    if res == OK {
+                        // Edit a new, empty buffer. Set options for a "wipeout" buffer.
+                        nvim_pum_set_wipeout_options();
+                    }
+                }
+
+                if res == OK {
+                    let mut lnum: i32 = 0;
+                    let mut max_info_width: c_int = 0;
+                    let info = nvim_pum_array_get_info(pum_selected);
+                    let buf = nvim_pum_get_curbuf();
+                    rs_pum_preview_set_text(
+                        buf,
+                        info,
+                        std::ptr::addr_of_mut!(lnum),
+                        std::ptr::addr_of_mut!(max_info_width),
+                    );
+
+                    // Increase the height of the preview window to show the
+                    // text, but no more than 'previewheight' lines.
+                    if repeat == 0 && !use_float {
+                        let p_pvh_val = nvim_pum_get_p_pvh();
+                        if p_pvh_val > 0 && lnum > p_pvh_val {
+                            lnum = p_pvh_val;
+                        }
+                        if nvim_pum_curwin_get_height() < lnum {
+                            nvim_pum_win_setheight(lnum);
+                            resized = true;
+                        }
+                    }
+
+                    nvim_pum_set_curbuf_changed(0);
+                    nvim_pum_set_curbuf_modifiable(0);
+
+                    if pum_selected == prev_selected {
+                        let topline = nvim_pum_curwin_get_topline();
+                        let line_count = nvim_pum_curbuf_line_count();
+                        if topline > line_count {
+                            nvim_pum_curwin_set_topline(line_count);
+                        }
+                    } else {
+                        nvim_pum_curwin_set_topline(1);
+                    }
+                    nvim_pum_curwin_set_cursor(1, 0);
+
+                    if use_float {
+                        // adjust floating window by actual height and max info text width
+                        let curwin = nvim_pum_get_curwin();
+                        rs_pum_adjust_info_position(curwin, max_info_width);
+                    }
+
+                    if (nvim_pum_curwin_is(curwin_save) == 0
+                        && nvim_pum_win_valid(curwin_save) != 0)
+                        || (nvim_pum_curtab_is(curtab_save) == 0
+                            && nvim_pum_tabpage_valid(curtab_save) != 0)
+                    {
+                        if nvim_pum_curtab_is(curtab_save) == 0
+                            && nvim_pum_tabpage_valid(curtab_save) != 0
+                        {
+                            nvim_pum_goto_tabpage(curtab_save);
+                        }
+
+                        // When the first completion is done and the preview
+                        // window is not resized, skip the preview window's
+                        // status line redrawing.
+                        if nvim_pum_ins_compl_active() != 0 && !resized {
+                            nvim_pum_curwin_set_redr_status(0);
+                        }
+
+                        // Return cursor to where we were
+                        nvim_pum_validate_cursor();
+                        nvim_pum_redraw_later_curwin(UPD_SOME_VALID);
+
+                        // When the preview window was resized we need to
+                        // update the view on the buffer. Only go back to
+                        // the window when needed, otherwise it will always be
+                        // redrawn.
+                        if resized && nvim_pum_win_valid(curwin_save) != 0 {
+                            nvim_pum_no_u_sync_inc();
+                            nvim_pum_win_enter(curwin_save, 1);
+                            nvim_pum_no_u_sync_dec();
+                            nvim_pum_update_topline();
+                        }
+
+                        // Update the screen before drawing the popup menu.
+                        // Enable updating the status lines.
+                        nvim_set_pum_is_visible(0);
+                        nvim_pum_update_screen();
+                        nvim_set_pum_is_visible(1);
+
+                        if !resized && nvim_pum_win_valid(curwin_save) != 0 {
+                            nvim_pum_no_u_sync_inc();
+                            nvim_pum_win_enter(curwin_save, 1);
+                            nvim_pum_no_u_sync_dec();
+                        }
+
+                        // May need to update the screen again when there are
+                        // autocommands involved.
+                        nvim_set_pum_is_visible(0);
+                        nvim_pum_update_screen();
+                        nvim_set_pum_is_visible(1);
+                    }
+                }
+            }
+
+            if use_float {
+                nvim_pum_unblock_autocmds();
+            }
+        }
+    }
+
+    resized as c_int
+}
