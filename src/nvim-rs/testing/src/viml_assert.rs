@@ -1082,6 +1082,382 @@ fn assert_append_cmd_or_arg(gap: *mut GArray, argvars: TypevalHandle, cmd: *cons
 }
 
 // =============================================================================
+// Assert fails implementation
+// =============================================================================
+
+/// VAR_LIST constant
+const VAR_LIST: c_int = 4;
+
+/// VV_ERRMSG constant
+const VV_ERRMSG: c_int = 3;
+
+/// FAIL constant
+const FAIL: c_int = 0;
+
+extern "C" {
+    // Type checking functions
+    fn tv_check_for_string_or_number_arg(argvars: TypevalHandle, idx: c_int) -> c_int;
+    fn tv_check_for_opt_string_or_list_arg(argvars: TypevalHandle, idx: c_int) -> c_int;
+    fn tv_check_for_opt_number_arg(argvars: TypevalHandle, idx: c_int) -> c_int;
+
+    // Global state accessors
+    fn nvim_testing_get_trylevel() -> c_int;
+    fn nvim_testing_set_trylevel(val: c_int);
+    fn nvim_testing_get_called_emsg() -> c_int;
+    fn nvim_testing_set_in_assert_fails(val: c_int);
+    fn nvim_testing_increment_no_wait_return();
+    fn nvim_testing_decrement_no_wait_return();
+    fn nvim_testing_set_did_emsg(val: c_int);
+    fn nvim_testing_set_got_int(val: c_int);
+    fn nvim_testing_set_msg_col(val: c_int);
+    fn nvim_testing_set_need_wait_return(val: c_int);
+    fn nvim_testing_set_emsg_on_display(val: c_int);
+    fn nvim_testing_reset_lines_left();
+    fn nvim_testing_call_msg_reset_scroll();
+
+    // Error capture
+    fn nvim_testing_take_emsg_assert_fails_msg() -> *mut c_char;
+    fn nvim_testing_get_emsg_assert_fails_lnum() -> i64;
+    fn nvim_testing_get_emsg_assert_fails_context() -> *mut c_char;
+    fn nvim_testing_clear_vim_var_errmsg();
+
+    // List operations
+    fn nvim_testing_tv_list_len(tv: TypevalHandle) -> c_int;
+    fn nvim_testing_tv_list_first(tv: TypevalHandle) -> *mut c_void;
+    fn nvim_testing_tv_list_last(tv: TypevalHandle) -> *mut c_void;
+    fn nvim_listitem_get_tv(li: *mut c_void) -> TypevalHandle;
+
+    // Error string accessors
+    fn nvim_testing_get_e_assert_fails_second_arg() -> *const c_char;
+    fn nvim_testing_get_e_assert_fails_fourth_argument() -> *const c_char;
+    fn nvim_testing_get_e_assert_fails_fifth_argument() -> *const c_char;
+
+    // Temp typval creation
+    fn nvim_testing_make_number_tv(val: i64) -> TypevalHandle;
+    fn nvim_testing_make_string_tv(val: *mut c_char) -> TypevalHandle;
+
+    // Typval field accessors
+    fn nvim_testing_tv_get_number(tv: TypevalHandle) -> i64;
+    fn nvim_testing_tv_get_vstring(tv: TypevalHandle) -> *const c_char;
+
+    fn strstr(haystack: *const c_char, needle: *const c_char) -> *const c_char;
+}
+
+/// Result of the comparison phase of assert_fails.
+struct AssertFailsCheckResult {
+    /// If non-null, a wrong-argument error message to emit after cleanup.
+    wrong_arg_msg: *const c_char,
+    /// Allocated string that needs to be freed.
+    tofree: *mut c_char,
+    /// Whether to set rettv to 1.
+    set_rettv: bool,
+}
+
+/// Run the comparison/checking logic for `f_assert_fails`, after the command
+/// has been executed and we know it failed (called_emsg > before).
+///
+/// This function returns early for `goto theend` equivalents.
+unsafe fn assert_fails_check(argvars: TypevalHandle, cmd: *const c_char) -> AssertFailsCheckResult {
+    let mut result = AssertFailsCheckResult {
+        wrong_arg_msg: std::ptr::null(),
+        tofree: std::ptr::null_mut(),
+        set_rettv: false,
+    };
+
+    let argvars_1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast::<c_void>();
+
+    let type_1 = nvim_testing_tv_get_type(argvars_1);
+    if type_1 == VAR_UNKNOWN {
+        return result;
+    }
+
+    let mut buf = [0i8; NUMBUFLEN];
+    let mut expected_str: *const c_char = std::ptr::null();
+    let mut error_found = false;
+    let mut error_found_index: usize = 1;
+
+    let emsg_msg = nvim_testing_take_emsg_assert_fails_msg();
+    let actual = if emsg_msg.is_null() {
+        c"[unknown]".as_ptr()
+    } else {
+        emsg_msg.cast_const()
+    };
+
+    if type_1 == VAR_STRING {
+        let expected = tv_get_string_buf_chk(argvars_1, buf.as_mut_ptr());
+        error_found = expected.is_null() || strstr(actual, expected).is_null();
+    } else if type_1 == VAR_LIST {
+        let list_len = nvim_testing_tv_list_len(argvars_1);
+        if !(1..=2).contains(&list_len) {
+            result.wrong_arg_msg = nvim_testing_get_e_assert_fails_second_arg();
+            // Re-store emsg_msg so cleanup frees it
+            if !emsg_msg.is_null() {
+                xfree(emsg_msg.cast());
+            }
+            return result;
+        }
+
+        let first_item = nvim_testing_tv_list_first(argvars_1);
+        let first_tv = nvim_listitem_get_tv(first_item);
+        let expected = tv_get_string_buf_chk(first_tv, buf.as_mut_ptr());
+        if expected.is_null() {
+            if !emsg_msg.is_null() {
+                xfree(emsg_msg.cast());
+            }
+            return result;
+        }
+
+        if pattern_match(expected, actual, 0) == 0 {
+            error_found = true;
+            expected_str = expected;
+        } else if list_len == 2 {
+            // Make a copy, an error in pattern_match() may free it
+            let errmsg_str = get_vim_var_str(VV_ERRMSG);
+            result.tofree = xstrdup(errmsg_str);
+            let actual2 = result.tofree.cast_const();
+
+            let last_item = nvim_testing_tv_list_last(argvars_1);
+            let last_tv = nvim_listitem_get_tv(last_item);
+            let expected2 = tv_get_string_buf_chk(last_tv, buf.as_mut_ptr());
+            if expected2.is_null() {
+                if !emsg_msg.is_null() {
+                    xfree(emsg_msg.cast());
+                }
+                return result;
+            }
+            if pattern_match(expected2, actual2, 0) == 0 {
+                error_found = true;
+                expected_str = expected2;
+            }
+        }
+    } else {
+        result.wrong_arg_msg = nvim_testing_get_e_assert_fails_second_arg();
+        if !emsg_msg.is_null() {
+            xfree(emsg_msg.cast());
+        }
+        return result;
+    }
+
+    // Check optional arg3 (line number) and arg4 (context)
+    let check = assert_fails_check_extra_args(
+        argvars,
+        error_found,
+        error_found_index,
+        &mut result,
+        emsg_msg,
+    );
+    if result.wrong_arg_msg.is_null() {
+        error_found = check.0;
+        error_found_index = check.1;
+    } else {
+        return result;
+    }
+
+    if error_found {
+        assert_fails_report_error(
+            argvars,
+            cmd,
+            expected_str,
+            error_found_index,
+            emsg_msg,
+            &mut result,
+        );
+    }
+
+    if !emsg_msg.is_null() {
+        xfree(emsg_msg.cast());
+    }
+    result
+}
+
+/// Check optional arg3 (line number) and arg4 (context) for assert_fails.
+/// Returns (error_found, error_found_index). On wrong-arg error, sets result.wrong_arg_msg.
+unsafe fn assert_fails_check_extra_args(
+    argvars: TypevalHandle,
+    mut error_found: bool,
+    mut error_found_index: usize,
+    result: &mut AssertFailsCheckResult,
+    emsg_msg: *mut c_char,
+) -> (bool, usize) {
+    let argvars_2 = argvars.cast::<u8>().add(TYPVAL_SIZE * 2).cast::<c_void>();
+    let argvars_3 = argvars.cast::<u8>().add(TYPVAL_SIZE * 3).cast::<c_void>();
+    let argvars_4 = argvars.cast::<u8>().add(TYPVAL_SIZE * 4).cast::<c_void>();
+
+    let type_2 = nvim_testing_tv_get_type(argvars_2);
+    let type_3 = nvim_testing_tv_get_type(argvars_3);
+    if error_found || type_2 == VAR_UNKNOWN || type_3 == VAR_UNKNOWN {
+        return (error_found, error_found_index);
+    }
+
+    if nvim_testing_tv_get_type(argvars_3) != VAR_NUMBER {
+        result.wrong_arg_msg = nvim_testing_get_e_assert_fails_fourth_argument();
+        if !emsg_msg.is_null() {
+            xfree(emsg_msg.cast());
+        }
+        return (error_found, error_found_index);
+    }
+    let arg3_num = nvim_testing_tv_get_number(argvars_3);
+    if arg3_num >= 0 && arg3_num != nvim_testing_get_emsg_assert_fails_lnum() {
+        error_found = true;
+        error_found_index = 3;
+    }
+
+    let type_4 = nvim_testing_tv_get_type(argvars_4);
+    if !error_found && type_4 != VAR_UNKNOWN {
+        if type_4 != VAR_STRING {
+            result.wrong_arg_msg = nvim_testing_get_e_assert_fails_fifth_argument();
+            if !emsg_msg.is_null() {
+                xfree(emsg_msg.cast());
+            }
+            return (error_found, error_found_index);
+        }
+        let arg4_string = nvim_testing_tv_get_vstring(argvars_4);
+        if !arg4_string.is_null() {
+            let context = nvim_testing_get_emsg_assert_fails_context();
+            if pattern_match(arg4_string, context, 0) == 0 {
+                error_found = true;
+                error_found_index = 4;
+            }
+        }
+    }
+
+    (error_found, error_found_index)
+}
+
+/// Report an assert_fails error with the expected/actual values.
+unsafe fn assert_fails_report_error(
+    argvars: TypevalHandle,
+    cmd: *const c_char,
+    expected_str: *const c_char,
+    error_found_index: usize,
+    emsg_msg: *mut c_char,
+    result: &mut AssertFailsCheckResult,
+) {
+    let argvars_2 = argvars.cast::<u8>().add(TYPVAL_SIZE * 2).cast::<c_void>();
+
+    let mut ga = GArray::default();
+    prepare_assert_error(&raw mut ga);
+
+    // Build the actual_tv for fill_assert_error
+    let actual_tv = if error_found_index == 3 {
+        nvim_testing_make_number_tv(nvim_testing_get_emsg_assert_fails_lnum())
+    } else if error_found_index == 4 {
+        nvim_testing_make_string_tv(nvim_testing_get_emsg_assert_fails_context())
+    } else {
+        let actual_ptr = if result.tofree.is_null() {
+            emsg_msg
+        } else {
+            result.tofree
+        };
+        nvim_testing_make_string_tv(actual_ptr)
+    };
+
+    let error_argvar = argvars
+        .cast::<u8>()
+        .add(TYPVAL_SIZE * error_found_index)
+        .cast::<c_void>();
+    fill_assert_error(
+        &raw mut ga,
+        argvars_2,
+        expected_str,
+        error_argvar,
+        actual_tv,
+        AssertType::Fails,
+    );
+    ga_concat(&raw mut ga, c": ".as_ptr());
+    assert_append_cmd_or_arg(&raw mut ga, argvars, cmd);
+    assert_error(&raw mut ga);
+    ga_clear(&raw mut ga);
+    result.set_rettv = true;
+}
+
+/// Cleanup function for assert_fails - always runs, equivalent to `theend:` label.
+unsafe fn assert_fails_cleanup(save_trylevel: c_int, tofree: *mut c_char) {
+    nvim_testing_set_trylevel(save_trylevel);
+    nvim_testing_set_suppress_errthrow(0);
+    nvim_testing_set_in_assert_fails(0);
+    nvim_testing_set_did_emsg(0);
+    nvim_testing_set_got_int(0);
+    nvim_testing_set_msg_col(0);
+    nvim_testing_decrement_no_wait_return();
+    nvim_testing_set_need_wait_return(0);
+    nvim_testing_set_emsg_on_display(0);
+    nvim_testing_call_msg_reset_scroll();
+    nvim_testing_reset_lines_left();
+    if !tofree.is_null() {
+        xfree(tofree.cast());
+    }
+    nvim_testing_clear_vim_var_errmsg();
+}
+
+/// Full implementation of `assert_fails(cmd [, error [, msg [, lnum [, context]]]])`.
+fn assert_fails_impl(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    unsafe {
+        // Type checking (returns before state changes — no cleanup needed)
+        let argvars_1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast::<c_void>();
+        let argvars_2 = argvars.cast::<u8>().add(TYPVAL_SIZE * 2).cast::<c_void>();
+        let argvars_3 = argvars.cast::<u8>().add(TYPVAL_SIZE * 3).cast::<c_void>();
+
+        if tv_check_for_string_or_number_arg(argvars, 0) == FAIL
+            || tv_check_for_opt_string_or_list_arg(argvars, 1) == FAIL
+            || (nvim_testing_tv_get_type(argvars_1) != VAR_UNKNOWN
+                && (nvim_testing_tv_get_type(argvars_2) != VAR_UNKNOWN
+                    && (tv_check_for_opt_number_arg(argvars, 3) == FAIL
+                        || (nvim_testing_tv_get_type(argvars_3) != VAR_UNKNOWN
+                            && tv_check_for_opt_string_arg(argvars, 4) == FAIL))))
+        {
+            return;
+        }
+
+        // Save & set global state
+        let save_trylevel = nvim_testing_get_trylevel();
+        let called_emsg_before = nvim_testing_get_called_emsg();
+
+        // trylevel must be zero for a ":throw" command to be considered failed
+        nvim_testing_set_trylevel(0);
+        nvim_testing_set_suppress_errthrow(1);
+        nvim_testing_set_in_assert_fails(1);
+        nvim_testing_increment_no_wait_return();
+
+        // Execute the command
+        let cmd = tv_get_string_chk(argvars);
+        do_cmdline_cmd(cmd);
+
+        // Reset trylevel/suppress_errthrow for any errors reported below
+        nvim_testing_set_trylevel(save_trylevel);
+        nvim_testing_set_suppress_errthrow(0);
+
+        let called_emsg_after = nvim_testing_get_called_emsg();
+
+        if called_emsg_after == called_emsg_before {
+            // Command did not fail
+            let mut ga = GArray::default();
+            prepare_assert_error(&raw mut ga);
+            ga_concat(&raw mut ga, c"command did not fail: ".as_ptr());
+            assert_append_cmd_or_arg(&raw mut ga, argvars, cmd);
+            assert_error(&raw mut ga);
+            ga_clear(&raw mut ga);
+            set_rettv_number(rettv, 1);
+
+            assert_fails_cleanup(save_trylevel, std::ptr::null_mut());
+        } else {
+            // Command failed, check the error
+            let check_result = assert_fails_check(argvars, cmd);
+
+            if check_result.set_rettv {
+                set_rettv_number(rettv, 1);
+            }
+
+            assert_fails_cleanup(save_trylevel, check_result.tofree);
+
+            if !check_result.wrong_arg_msg.is_null() {
+                emsg(check_result.wrong_arg_msg);
+            }
+        }
+    }
+}
+
+// =============================================================================
 // VimL function implementations
 // =============================================================================
 
@@ -1116,6 +1492,17 @@ pub unsafe extern "C" fn rs_f_assert_false(argvars: TypevalHandle, rettv: Typeva
 #[no_mangle]
 pub unsafe extern "C" fn rs_f_assert_equalfile(argvars: TypevalHandle, rettv: TypevalHandleMut) {
     set_rettv_number(rettv, i64::from(assert_equalfile(argvars)));
+}
+
+/// `assert_fails(cmd [, error [, msg [, lnum [, context]]]])` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_fails(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    assert_fails_impl(argvars, rettv);
 }
 
 /// `assert_equal(expected, actual[, msg])` function implementation.
