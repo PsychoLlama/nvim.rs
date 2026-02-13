@@ -33,6 +33,7 @@ pub mod event;
 pub mod item;
 pub mod mouse;
 pub mod placement;
+pub mod preview;
 pub mod redraw;
 pub mod render;
 

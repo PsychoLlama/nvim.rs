@@ -747,6 +747,108 @@ void nvim_set_pum_win_col_offset(int val)
 
 _Static_assert(kOptCotFlagFuzzy == 0x80, "kOptCotFlagFuzzy must be 0x80");
 
+// Phase 4 accessors: preview window helpers
+
+/// Get line count for a window's buffer.
+int nvim_pum_win_get_line_count(win_T *wp)
+{
+  return (int)wp->w_buffer->b_ml.ml_line_count;
+}
+
+/// Wrapper for plines_m_win.
+int nvim_pum_plines_m_win(win_T *wp, int first, int last, int max_lines)
+{
+  return plines_m_win(wp, first, last, max_lines);
+}
+
+/// Set window config fields and call win_config_float.
+void nvim_pum_win_config_set_and_apply(win_T *wp, int width, int col, int anchor,
+                                       int height, int row, int hide)
+{
+  wp->w_config.width = width;
+  wp->w_config.col = col;
+  wp->w_config.anchor = anchor;
+  wp->w_view_width = width;
+  wp->w_config.height = height;
+  wp->w_config.row = row;
+  wp->w_config.hide = hide != 0;
+  win_config_float(wp, wp->w_config);
+}
+
+/// Check if the selected item matches the current completion selection.
+int nvim_pum_compl_match_curr_select(int selected)
+{
+  return compl_match_curr_select(selected) ? 1 : 0;
+}
+
+/// Block autocmds.
+void nvim_pum_block_autocmds(void)
+{
+  block_autocmds();
+}
+
+/// Unblock autocmds.
+void nvim_pum_unblock_autocmds(void)
+{
+  unblock_autocmds();
+}
+
+/// Increment RedrawingDisabled.
+void nvim_pum_redrawing_disabled_inc(void)
+{
+  RedrawingDisabled++;
+}
+
+/// Decrement RedrawingDisabled.
+void nvim_pum_redrawing_disabled_dec(void)
+{
+  RedrawingDisabled--;
+}
+
+/// Increment no_u_sync.
+void nvim_pum_no_u_sync_inc(void)
+{
+  no_u_sync++;
+}
+
+/// Decrement no_u_sync.
+void nvim_pum_no_u_sync_dec(void)
+{
+  no_u_sync--;
+}
+
+/// Create a floating info window (false, true args).
+win_T *nvim_pum_win_float_create_info(void)
+{
+  return win_float_create(false, true);
+}
+
+/// Set w_topline for a window.
+void nvim_pum_win_set_topline(win_T *wp, int val)
+{
+  wp->w_topline = val;
+}
+
+/// Set w_p_wfb for a window.
+void nvim_pum_win_set_wfb(win_T *wp, int val)
+{
+  wp->w_p_wfb = val != 0;
+}
+
+/// Get buffer handle from a window.
+buf_T *nvim_pum_win_get_buffer(win_T *wp)
+{
+  return wp->w_buffer;
+}
+
+/// Call redraw_later for a window.
+void nvim_pum_redraw_later_win(win_T *wp, int type)
+{
+  redraw_later(wp, type);
+}
+
+_Static_assert(kFloatAnchorSouth == 2, "kFloatAnchorSouth must be 2");
+
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 
@@ -1378,73 +1480,8 @@ void nvim_pum_preview_set_text_impl(buf_T *buf, char *info, linenr_T *lnum, int 
   buf->b_p_ma = false;
 }
 
-/// adjust floating info preview window position
-void nvim_pum_adjust_info_position_impl(win_T *wp, int width)
-{
-  int border_width = pum_border_width();
-  int col = pum_col + pum_width + 1 + border_width;
-  if (border_width < 0) {
-    col += pum_scrollbar;
-  }
-  // TODO(glepnir): support config align border by using completepopup
-  // align menu
-  int right_extra = Columns - col;
-  int left_extra = pum_col - 2;
-
-  if (right_extra > width) {  // place in right
-    wp->w_config.width = width;
-    wp->w_config.col = col - 1;
-  } else if (left_extra > width) {  // place in left
-    wp->w_config.width = width;
-    wp->w_config.col = pum_col - wp->w_config.width - 1;
-  } else {  // either width is enough just use the biggest one.
-    const bool place_in_right = right_extra > left_extra;
-    wp->w_config.width = place_in_right ? right_extra : left_extra;
-    wp->w_config.col = place_in_right ? col - 1 : pum_col - wp->w_config.width - 1;
-  }
-  // when pum_above is SW otherwise is NW
-  wp->w_config.anchor = pum_above ? kFloatAnchorSouth : 0;
-  linenr_T count = wp->w_buffer->b_ml.ml_line_count;
-  wp->w_view_width = wp->w_config.width;
-  wp->w_config.height = plines_m_win(wp, wp->w_topline, count, Rows);
-  wp->w_config.row = pum_above ? pum_row + wp->w_config.height : pum_row;
-  wp->w_config.hide = false;
-  win_config_float(wp, wp->w_config);
-}
-
-/// Used for nvim__complete_set
-///
-/// @param selected the selected compl item.
-/// @param info     Info string.
-/// @return a win_T pointer.
-win_T *nvim_pum_set_info_impl(int selected, char *info)
-{
-  if (!pum_is_visible || !compl_match_curr_select(selected)) {
-    return NULL;
-  }
-  block_autocmds();
-  RedrawingDisabled++;
-  no_u_sync++;
-  win_T *wp = win_float_find_preview();
-  if (wp == NULL) {
-    wp = win_float_create(false, true);
-    if (!wp) {
-      return NULL;
-    }
-    wp->w_topline = 1;
-    wp->w_p_wfb = true;
-  }
-  linenr_T lnum = 0;
-  int max_info_width = 0;
-  rs_pum_preview_set_text(wp->w_buffer, info, &lnum, &max_info_width);
-  no_u_sync--;
-  RedrawingDisabled--;
-  redraw_later(wp, UPD_NOT_VALID);
-
-  rs_pum_adjust_info_position(wp, max_info_width);
-  unblock_autocmds();
-  return wp;
-}
+// nvim_pum_adjust_info_position_impl: migrated to Rust (preview.rs)
+// nvim_pum_set_info_impl: migrated to Rust (preview.rs)
 
 win_T *pum_set_info(int selected, char *info)
 {

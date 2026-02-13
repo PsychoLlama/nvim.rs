@@ -396,17 +396,6 @@ extern "C" {
         array_changed: c_int,
         cmd_startcol: c_int,
     );
-    /// Set preview text in a buffer.
-    fn nvim_pum_preview_set_text_impl(
-        buf: *mut BufHandle,
-        info: *mut std::ffi::c_char,
-        lnum: *mut i32,
-        max_width: *mut c_int,
-    );
-    /// Adjust floating info preview window position.
-    fn nvim_pum_adjust_info_position_impl(wp: *mut WinHandle, width: c_int);
-    /// Set info for a completed item.
-    fn nvim_pum_set_info_impl(selected: c_int, info: *mut std::ffi::c_char) -> *mut WinHandle;
     /// Set the selected item index (scrolling, preview).
     fn nvim_pum_set_selected_impl(n: c_int, repeat: c_int) -> c_int;
 }
@@ -522,40 +511,9 @@ pub unsafe extern "C" fn rs_pum_ui_flush() {
     }
 }
 
-/// Set the informational text in the preview buffer.
-///
-/// # Safety
-/// Calls C `_impl` function. All pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_preview_set_text(
-    buf: *mut BufHandle,
-    info: *mut std::ffi::c_char,
-    lnum: *mut i32,
-    max_width: *mut c_int,
-) {
-    nvim_pum_preview_set_text_impl(buf, info, lnum, max_width);
-}
-
-/// Adjust floating info preview window position.
-///
-/// # Safety
-/// Calls C `_impl` function. `wp` must be a valid `win_T` pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: c_int) {
-    nvim_pum_adjust_info_position_impl(wp, width);
-}
-
-/// Set info for a completed item, returning a window pointer.
-///
-/// # Safety
-/// Calls C `_impl` function. `info` must be a valid C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_set_info(
-    selected: c_int,
-    info: *mut std::ffi::c_char,
-) -> *mut WinHandle {
-    nvim_pum_set_info_impl(selected, info)
-}
+// rs_pum_preview_set_text: moved to preview.rs
+// rs_pum_adjust_info_position: moved to preview.rs
+// rs_pum_set_info: moved to preview.rs
 
 /// Set the selected item index, handle scrolling and preview.
 ///
