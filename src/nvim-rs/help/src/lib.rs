@@ -152,6 +152,494 @@ pub unsafe extern "C" fn rs_help_compare(s1: *const c_void, s2: *const c_void) -
     unsafe { libc::strcmp(p1_str, p2_str) }
 }
 
+// Constants verified against C headers
+const IOSIZE: usize = 1025; // globals.h: (1024 + 1)
+const MAXCOL: c_int = 0x7fffffff; // pos_defs.h
+const TAG_HELP: c_int = 1; // tag.h
+const TAG_NAMES: c_int = 2; // tag.h
+const TAG_REGEXP: c_int = 4; // tag.h
+const TAG_VERBOSE: c_int = 32; // tag.h
+const TAG_KEEP_LANG: c_int = 128; // tag.h
+const TAG_NO_TAGFUNC: c_int = 256; // tag.h
+const TAG_MANY: c_int = 300; // tag.h
+const OK: c_int = 1; // vim_defs.h
+
+/// Exception table: specific tags that have a specific replacement or
+/// won't go through the generic rules.
+/// Copied verbatim from help.c.
+const EXCEPT_TBL: &[(&[u8], &[u8])] = &[
+    (b"*", b"star"),
+    (b"g*", b"gstar"),
+    (b"[*", b"[star"),
+    (b"]*", b"]star"),
+    (b":*", b":star"),
+    (b"/*", b"/star"),
+    (b"/\\*", b"/\\\\star"),
+    (b"\"*", b"quotestar"),
+    (b"**", b"starstar"),
+    (b"cpo-*", b"cpo-star"),
+    (b"/\\(\\)", b"/\\\\(\\\\)"),
+    (b"/\\%(\\)", b"/\\\\%(\\\\)"),
+    (b"?", b"?"),
+    (b"??", b"??"),
+    (b":?", b":?"),
+    (b"?<CR>", b"?<CR>"),
+    (b"g?", b"g?"),
+    (b"g?g?", b"g?g?"),
+    (b"g??", b"g??"),
+    (b"-?", b"-?"),
+    (b"q?", b"q?"),
+    (b"v_g?", b"v_g?"),
+    (b"/\\?", b"/\\\\?"),
+    (b"/\\z(\\)", b"/\\\\z(\\\\)"),
+    (b"\\=", b"\\\\="),
+    (b":s\\=", b":s\\\\="),
+    (b"[count]", b"\\[count]"),
+    (b"[quotex]", b"\\[quotex]"),
+    (b"[range]", b"\\[range]"),
+    (b":[range]", b":\\[range]"),
+    (b"[pattern]", b"\\[pattern]"),
+    (b"\\|", b"\\\\bar"),
+    (b"\\%$", b"/\\\\%\\$"),
+    (b"s/\\~", b"s/\\\\\\~"),
+    (b"s/\\U", b"s/\\\\U"),
+    (b"s/\\L", b"s/\\\\L"),
+    (b"s/\\1", b"s/\\\\1"),
+    (b"s/\\2", b"s/\\\\2"),
+    (b"s/\\3", b"s/\\\\3"),
+    (b"s/\\9", b"s/\\\\9"),
+];
+
+/// Expression table entries for "expr-" prefix matching.
+const EXPR_TABLE: &[&[u8]] = &[
+    b"!=?", b"!~?", b"<=?", b"<?", b"==?", b"=~?", b">=?", b">?", b"is?", b"isnot?",
+];
+
+extern "C" {
+    fn nvim_get_iobuff() -> *mut c_char;
+    fn find_tags(
+        pat: *const c_char,
+        num_matches: *mut c_int,
+        matchesp: *mut *mut *mut c_char,
+        flags: c_int,
+        mincount: c_int,
+        buf_ffname: *const c_char,
+    ) -> c_int;
+    fn xfree(ptr: *mut c_void);
+    fn nvim_help_get_p_hlg() -> *const c_char;
+}
+
+/// Helper: write a byte slice into a C buffer at a given offset.
+/// Returns the new offset (position after the last written byte).
+#[inline]
+unsafe fn buf_write(buf: *mut c_char, offset: usize, src: &[u8]) -> usize {
+    for (i, &b) in src.iter().enumerate() {
+        unsafe { *buf.add(offset + i) = b as c_char };
+    }
+    offset + src.len()
+}
+
+/// Find all help tags matching `arg`, sort them and return in `matches`.
+///
+/// The matches will be sorted with a "best" match algorithm.
+/// When `keep_lang` is true, try keeping the language of the current buffer.
+///
+/// # Safety
+/// All pointer arguments must be valid. `arg` must be NUL-terminated.
+/// `num_matches` and `matches` must be valid pointers to write results into.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_help_tags(
+    arg: *const c_char,
+    num_matches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+    keep_lang: bool,
+) -> c_int {
+    let iobuff = unsafe { nvim_get_iobuff() };
+    let arg_bytes = unsafe { CStr::from_ptr(arg) }.to_bytes();
+
+    // d tracks current write position in IObuff
+    let mut d: usize = 0;
+    unsafe { *iobuff = 0 }; // d[0] = NUL
+
+    let mut matched = false;
+
+    if arg_bytes.len() >= 5 && arg_bytes[..5].eq_ignore_ascii_case(b"expr-") {
+        // When the string starting with "expr-" and containing '?' and matches
+        // the table, it is taken literally (but ~ is escaped).
+        for entry in EXPR_TABLE.iter().rev() {
+            if &arg_bytes[5..] == *entry {
+                let mut si = 0usize;
+                while si < arg_bytes.len() {
+                    if arg_bytes[si] == b'~' {
+                        unsafe { *iobuff.add(d) = b'\\' as c_char };
+                        d += 1;
+                    }
+                    unsafe { *iobuff.add(d) = arg_bytes[si] as c_char };
+                    d += 1;
+                    si += 1;
+                }
+                unsafe { *iobuff.add(d) = 0 };
+                matched = true;
+                break;
+            }
+        }
+    } else {
+        // Recognize a few exceptions to the rule.
+        for &(from, to) in EXCEPT_TBL {
+            if arg_bytes == from {
+                d = unsafe { buf_write(iobuff, 0, to) };
+                unsafe { *iobuff.add(d) = 0 };
+                matched = true;
+                break;
+            }
+        }
+    }
+
+    if !matched {
+        // no match in table
+        d = 0;
+
+        // Replace "\S" with "/\\S", etc.
+        if arg_bytes.first() == Some(&b'\\')
+            && ((arg_bytes.len() == 2 && arg_bytes[1] != 0)
+                || (arg_bytes.len() >= 3
+                    && (arg_bytes[1] == b'%'
+                        || arg_bytes[1] == b'_'
+                        || arg_bytes[1] == b'z'
+                        || arg_bytes[1] == b'@')
+                    && arg_bytes[2] != 0))
+        {
+            // vim_snprintf(d, IOSIZE, "/\\\\%s", arg + 1);
+            let prefix = b"/\\\\";
+            d = unsafe { buf_write(iobuff, 0, prefix) };
+            d = unsafe { buf_write(iobuff, d, &arg_bytes[1..]) };
+            unsafe { *iobuff.add(d) = 0 };
+
+            // Check for "/\\_$", should be "/\\_\$"
+            if d >= 5 {
+                let d3 = unsafe { *iobuff.add(3) } as u8;
+                let d4 = unsafe { *iobuff.add(4) } as u8;
+                if d3 == b'_' && d4 == b'$' {
+                    // Replace "$" at position 4 with "\\$"
+                    unsafe { *iobuff.add(4) = b'\\' as c_char };
+                    unsafe { *iobuff.add(5) = b'$' as c_char };
+                    unsafe { *iobuff.add(6) = 0 };
+                    // d is not used after this branch, but kept for clarity
+                    let _ = 6;
+                }
+            }
+        } else {
+            // Replace:
+            // "[:...:]" with "\[:...:]"
+            // "[++...]" with "\[++...]"
+            // "\{" with "\\{"
+            if (arg_bytes.first() == Some(&b'[')
+                && (arg_bytes.get(1) == Some(&b':')
+                    || (arg_bytes.get(1) == Some(&b'+') && arg_bytes.get(2) == Some(&b'+'))))
+                || (arg_bytes.first() == Some(&b'\\') && arg_bytes.get(1) == Some(&b'{'))
+            {
+                unsafe { *iobuff.add(d) = b'\\' as c_char };
+                d += 1;
+            }
+
+            // If tag starts with "('", skip the "(".
+            let mut s_off: usize = 0;
+            let arg_start = if arg_bytes.first() == Some(&b'(') && arg_bytes.get(1) == Some(&b'\'')
+            {
+                s_off = 1;
+                1
+            } else {
+                0
+            };
+            let _ = arg_start; // suppress warning; s_off tracks the effective arg start
+
+            let mut si = s_off;
+            while si < arg_bytes.len() {
+                let s = arg_bytes[si];
+
+                // getting too long!?
+                if d > IOSIZE - 10 {
+                    break;
+                }
+
+                match s {
+                    b'|' => {
+                        d = unsafe { buf_write(iobuff, d, b"bar") };
+                        si += 1;
+                        continue;
+                    }
+                    b'"' => {
+                        d = unsafe { buf_write(iobuff, d, b"quote") };
+                        si += 1;
+                        continue;
+                    }
+                    b'*' => {
+                        unsafe { *iobuff.add(d) = b'.' as c_char };
+                        d += 1;
+                        // falls through to write *s
+                    }
+                    b'?' => {
+                        unsafe { *iobuff.add(d) = b'.' as c_char };
+                        d += 1;
+                        si += 1;
+                        continue;
+                    }
+                    b'$' | b'.' | b'~' => {
+                        unsafe { *iobuff.add(d) = b'\\' as c_char };
+                        d += 1;
+                    }
+                    _ => {}
+                }
+
+                // Replace "^x" by "CTRL-X". Don't do this for "^_".
+                // Insert '-' before and after "CTRL-X" when applicable.
+                if s < b' '
+                    || (s == b'^'
+                        && si + 1 < arg_bytes.len()
+                        && (arg_bytes[si + 1].is_ascii_alphabetic()
+                            || matches!(
+                                arg_bytes[si + 1],
+                                b'?' | b'@' | b'[' | b'\\' | b']' | b'^'
+                            )))
+                {
+                    if d > 0 {
+                        let prev = unsafe { *iobuff.add(d - 1) } as u8;
+                        if prev != b'_' && prev != b'\\' {
+                            unsafe { *iobuff.add(d) = b'_' as c_char };
+                            d += 1;
+                        }
+                    }
+                    d = unsafe { buf_write(iobuff, d, b"CTRL-") };
+
+                    if s < b' ' {
+                        let ctrl_char = s.wrapping_add(b'@');
+                        unsafe { *iobuff.add(d) = ctrl_char as c_char };
+                        d += 1;
+                        if ctrl_char == b'\\' {
+                            unsafe { *iobuff.add(d) = b'\\' as c_char };
+                            d += 1;
+                        }
+                    } else {
+                        si += 1;
+                        unsafe { *iobuff.add(d) = arg_bytes[si] as c_char };
+                        d += 1;
+                    }
+                    if si + 1 < arg_bytes.len() && arg_bytes[si + 1] != b'_' {
+                        unsafe { *iobuff.add(d) = b'_' as c_char };
+                        d += 1;
+                    }
+                    si += 1;
+                    continue;
+                } else if s == b'^' {
+                    // "^" or "CTRL-^" or "^_"
+                    unsafe { *iobuff.add(d) = b'\\' as c_char };
+                    d += 1;
+                } else if s == b'\\'
+                    && si + 1 < arg_bytes.len()
+                    && arg_bytes[si + 1] != b'\\'
+                    && arg_bytes.first() == Some(&b'/')
+                    && si == s_off + 1
+                {
+                    // Insert a backslash before a backslash after a slash
+                    unsafe { *iobuff.add(d) = b'\\' as c_char };
+                    d += 1;
+                }
+
+                // "CTRL-\_" -> "CTRL-\\_"
+                if si + 6 < arg_bytes.len() {
+                    let chunk = &arg_bytes[si..si + 7];
+                    if chunk.eq_ignore_ascii_case(b"CTRL-\\_") {
+                        d = unsafe { buf_write(iobuff, d, b"CTRL-\\\\") };
+                        si += 6;
+                        // The final char (after "CTRL-\\") is written below as *d++ = *s
+                        unsafe { *iobuff.add(d) = arg_bytes[si] as c_char };
+                        d += 1;
+
+                        // Check for break conditions
+                        if si + 1 < arg_bytes.len()
+                            && (arg_bytes[si + 1] == b'{' || arg_bytes[si + 1] == b'[')
+                            && arg_bytes[si] == b'('
+                        {
+                            break;
+                        }
+                        if arg_bytes[si] == b'\'' && si > s_off && arg_bytes[s_off] == b'\'' {
+                            break;
+                        }
+                        if arg_bytes[si] == b'}' && si > s_off && arg_bytes[s_off] == b'{' {
+                            break;
+                        }
+                        si += 1;
+                        continue;
+                    }
+                }
+
+                unsafe { *iobuff.add(d) = s as c_char };
+                d += 1;
+
+                // If tag contains "({" or "([", tag terminates at the "(".
+                if s == b'('
+                    && si + 1 < arg_bytes.len()
+                    && (arg_bytes[si + 1] == b'{' || arg_bytes[si + 1] == b'[')
+                {
+                    break;
+                }
+
+                // If tag starts with ', toss everything after a second '.
+                if s == b'\'' && si > s_off && arg_bytes[s_off] == b'\'' {
+                    break;
+                }
+                // Also '{' and '}'.
+                if s == b'}' && si > s_off && arg_bytes[s_off] == b'{' {
+                    break;
+                }
+
+                si += 1;
+            }
+            unsafe { *iobuff.add(d) = 0 };
+
+            // Handle backtick stripping
+            if unsafe { *iobuff } as u8 == b'`' {
+                if d > 2 && unsafe { *iobuff.add(d - 1) } as u8 == b'`' {
+                    // remove the backticks from `command`
+                    let len = d; // includes the NUL we just wrote? No, d is offset before NUL
+                    unsafe {
+                        std::ptr::copy(iobuff.add(1), iobuff, len);
+                        *iobuff.add(d - 2) = 0;
+                    }
+                } else if d > 3
+                    && unsafe { *iobuff.add(d - 2) } as u8 == b'`'
+                    && unsafe { *iobuff.add(d - 1) } as u8 == b','
+                {
+                    // remove the backticks and comma from `command`,
+                    unsafe {
+                        std::ptr::copy(iobuff.add(1), iobuff, d);
+                        *iobuff.add(d - 3) = 0;
+                    }
+                } else if d > 4
+                    && unsafe { *iobuff.add(d - 3) } as u8 == b'`'
+                    && unsafe { *iobuff.add(d - 2) } as u8 == b'\\'
+                    && unsafe { *iobuff.add(d - 1) } as u8 == b'.'
+                {
+                    // remove the backticks and dot from `command`\.
+                    unsafe {
+                        std::ptr::copy(iobuff.add(1), iobuff, d);
+                        *iobuff.add(d - 4) = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    unsafe { *matches = std::ptr::null_mut() };
+    unsafe { *num_matches = 0 };
+    let mut flags = TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC;
+    if keep_lang {
+        flags |= TAG_KEEP_LANG;
+    }
+    if unsafe {
+        find_tags(
+            iobuff,
+            num_matches,
+            matches,
+            flags,
+            MAXCOL,
+            std::ptr::null(),
+        )
+    } == OK
+        && unsafe { *num_matches } > 0
+    {
+        // Sort the matches found on the heuristic number.
+        unsafe {
+            libc::qsort(
+                *matches as *mut c_void,
+                *num_matches as usize,
+                std::mem::size_of::<*mut c_char>(),
+                Some(rs_help_compare),
+            );
+        }
+        // Delete more than TAG_MANY to reduce the size of the listing.
+        while unsafe { *num_matches } > TAG_MANY {
+            unsafe {
+                *num_matches -= 1;
+                xfree(*(*matches).add(*num_matches as usize) as *mut c_void);
+            }
+        }
+    }
+    OK
+}
+
+/// Cleanup matches for help tags: strip language suffixes.
+///
+/// Remove "@ab" if the top of 'helplang' is "ab" and the language of the first
+/// tag matches it. Otherwise remove "@en" if "en" is the only language.
+///
+/// # Safety
+/// `file` must point to an array of `num_file` valid, mutable, NUL-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) {
+    let mut buf = [0u8; 4];
+    let mut buf_len: usize = 0;
+
+    let p_hlg = unsafe { nvim_help_get_p_hlg() };
+    if !p_hlg.is_null() {
+        let hlg_bytes = unsafe { CStr::from_ptr(p_hlg) }.to_bytes();
+        if !hlg_bytes.is_empty() && (hlg_bytes[0] != b'e' || hlg_bytes.get(1) != Some(&b'n')) {
+            buf[0] = b'@';
+            buf[1] = hlg_bytes[0];
+            buf[2] = hlg_bytes[1];
+            buf_len = 3;
+        }
+    }
+
+    let n = num_file as usize;
+
+    for i in 0..n {
+        let s = unsafe { *file.add(i) };
+        let slen = unsafe { CStr::from_ptr(s) }.to_bytes().len();
+        if slen <= 3 {
+            continue;
+        }
+        let suffix_start = slen - 3;
+
+        // Check for "@en" suffix
+        let suffix = unsafe { std::slice::from_raw_parts(s.add(suffix_start) as *const u8, 3) };
+        if suffix == b"@en" {
+            // Search all items for a match up to the "@en".
+            let mut found_other = false;
+            for j in 0..n {
+                if j == i {
+                    continue;
+                }
+                let other = unsafe { *file.add(j) };
+                let other_len = unsafe { CStr::from_ptr(other) }.to_bytes().len();
+                if other_len == slen && unsafe { libc::strncmp(s, other, suffix_start + 1) } == 0 {
+                    found_other = true;
+                    break;
+                }
+            }
+            if !found_other {
+                // Item only exists with @en, remove suffix
+                unsafe { *s.add(suffix_start) = 0 };
+            }
+        }
+    }
+
+    if buf_len > 0 {
+        for i in 0..n {
+            let s = unsafe { *file.add(i) };
+            let slen = unsafe { CStr::from_ptr(s) }.to_bytes().len();
+            if slen <= 3 {
+                continue;
+            }
+            let suffix_start = slen - 3;
+            let suffix = unsafe { std::slice::from_raw_parts(s.add(suffix_start) as *const u8, 3) };
+            if suffix == &buf[..3] {
+                unsafe { *s.add(suffix_start) = 0 };
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -418,5 +906,45 @@ mod tests {
         assert!(!ascii_isalnum(b'-'));
         assert!(!ascii_isalnum(b'_'));
         assert!(!ascii_isalnum(b'+'));
+    }
+
+    #[test]
+    fn test_except_tbl_count() {
+        // Must match the 40 entries in the C except_tbl (without NULL terminator)
+        assert_eq!(EXCEPT_TBL.len(), 40);
+    }
+
+    #[test]
+    fn test_except_tbl_entries() {
+        // Verify a few key entries verbatim
+        assert_eq!(EXCEPT_TBL[0], (&b"*"[..], &b"star"[..]));
+        assert_eq!(EXCEPT_TBL[1], (&b"g*"[..], &b"gstar"[..]));
+        assert_eq!(EXCEPT_TBL[7], (&b"\"*"[..], &b"quotestar"[..]));
+        assert_eq!(EXCEPT_TBL[8], (&b"**"[..], &b"starstar"[..]));
+        assert_eq!(EXCEPT_TBL[31], (&b"\\|"[..], &b"\\\\bar"[..]));
+    }
+
+    #[test]
+    fn test_expr_table_count() {
+        assert_eq!(EXPR_TABLE.len(), 10);
+    }
+
+    #[test]
+    fn test_expr_table_entries() {
+        assert_eq!(EXPR_TABLE[0], b"!=?");
+        assert_eq!(EXPR_TABLE[9], b"isnot?");
+    }
+
+    #[test]
+    fn test_constants() {
+        assert_eq!(IOSIZE, 1025);
+        assert_eq!(MAXCOL, 0x7fffffff);
+        assert_eq!(TAG_HELP, 1);
+        assert_eq!(TAG_NAMES, 2);
+        assert_eq!(TAG_REGEXP, 4);
+        assert_eq!(TAG_VERBOSE, 32);
+        assert_eq!(TAG_KEEP_LANG, 128);
+        assert_eq!(TAG_NO_TAGFUNC, 256);
+        assert_eq!(TAG_MANY, 300);
     }
 }

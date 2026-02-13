@@ -53,6 +53,11 @@
 extern int rs_help_heuristic(const char *matched_string, int offset, bool wrong_case);
 extern char *rs_check_help_lang(char *arg);
 extern int rs_help_compare(const void *s1, const void *s2);
+extern int rs_find_help_tags(const char *arg, int *num_matches, char ***matches, bool keep_lang);
+extern void rs_cleanup_help_tags(int num_file, char **file);
+
+// C accessor for 'helplang' option
+const char *nvim_help_get_p_hlg(void) { return p_hlg; }
 
 /// ":help": open a read-only window on a help file
 void ex_help(exarg_T *eap)
@@ -272,8 +277,12 @@ static int help_compare(const void *s1, const void *s2)
 /// When "keep_lang" is true try keeping the language of the current buffer.
 int find_help_tags(const char *arg, int *num_matches, char ***matches, bool keep_lang)
 {
-  // Specific tags that either have a specific replacement or won't go
-  // through the generic rules.
+  return rs_find_help_tags(arg, num_matches, matches, keep_lang);
+}
+
+// The original find_help_tags implementation has been migrated to Rust (rs_find_help_tags).
+// See src/nvim-rs/help/src/lib.rs.
+#if 0
   static char *(except_tbl[][2]) = {
     { "*",           "star" },
     { "g*",          "gstar" },
@@ -513,57 +522,14 @@ int find_help_tags(const char *arg, int *num_matches, char ***matches, bool keep
   }
   return OK;
 }
+#endif  // Migrated to Rust
 
 /// Cleanup matches for help tags:
 /// Remove "@ab" if the top of 'helplang' is "ab" and the language of the first
 /// tag matches it.  Otherwise remove "@en" if "en" is the only language.
 void cleanup_help_tags(int num_file, char **file)
 {
-  char buf[4];
-  char *p = buf;
-
-  if (p_hlg[0] != NUL && (p_hlg[0] != 'e' || p_hlg[1] != 'n')) {
-    *p++ = '@';
-    *p++ = p_hlg[0];
-    *p++ = p_hlg[1];
-  }
-  *p = NUL;
-
-  for (int i = 0; i < num_file; i++) {
-    int len = (int)strlen(file[i]) - 3;
-    if (len <= 0) {
-      continue;
-    }
-    if (strcmp(file[i] + len, "@en") == 0) {
-      // Sorting on priority means the same item in another language may
-      // be anywhere.  Search all items for a match up to the "@en".
-      int j;
-      for (j = 0; j < num_file; j++) {
-        if (j != i
-            && (int)strlen(file[j]) == len + 3
-            && strncmp(file[i], file[j], (size_t)len + 1) == 0) {
-          break;
-        }
-      }
-      if (j == num_file) {
-        // item only exists with @en, remove it
-        file[i][len] = NUL;
-      }
-    }
-  }
-
-  if (*buf != NUL) {
-    for (int i = 0; i < num_file; i++) {
-      int len = (int)strlen(file[i]) - 3;
-      if (len <= 0) {
-        continue;
-      }
-      if (strcmp(file[i] + len, buf) == 0) {
-        // remove the default language
-        file[i][len] = NUL;
-      }
-    }
-  }
+  rs_cleanup_help_tags(num_file, file);
 }
 
 /// Called when starting to edit a buffer for a help file.
