@@ -13,6 +13,21 @@
 
 use std::ffi::{c_char, c_int};
 
+/// Deleted group sentinel value.
+pub const AUGROUP_DELETED: c_int = -4;
+
+// C accessors for group map operations
+extern "C" {
+    fn nvim_augroup_name_to_id(name: *const c_char) -> c_int;
+    fn nvim_augroup_id_to_name(id: c_int) -> *const c_char;
+    fn nvim_augroup_put(name: *const c_char, id: c_int);
+    fn nvim_augroup_map_del_c(id: c_int, name: *const c_char);
+    fn nvim_get_next_augroup_id() -> c_int;
+    fn nvim_inc_next_augroup_id() -> c_int;
+    fn nvim_get_current_augroup() -> c_int;
+    fn nvim_get_deleted_augroup() -> *const c_char;
+}
+
 // =============================================================================
 // Group Constants
 // =============================================================================
@@ -388,6 +403,103 @@ pub extern "C" fn rs_is_valid_augroup_char(c: c_int) -> c_int {
         return 0;
     }
     c_int::from(is_valid_group_char(c as u8))
+}
+
+// =============================================================================
+// Phase 3: Group Management FFI Exports
+// =============================================================================
+
+/// Find an autocmd group by name.
+///
+/// Returns the group ID if found, `AUGROUP_DELETED` if the group was deleted,
+/// or `AUGROUP_ERROR` if not found.
+///
+/// # Safety
+/// `name` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_augroup_find(name: *const c_char) -> c_int {
+    let existing_id = nvim_augroup_name_to_id(name);
+    if existing_id == AUGROUP_DELETED {
+        return existing_id;
+    }
+    if existing_id > 0 {
+        return existing_id;
+    }
+    AUGROUP_ERROR
+}
+
+/// Add a new autocmd group or return the existing ID.
+///
+/// If the group already exists, returns its ID. If it was previously deleted,
+/// removes the old entry first and creates a new one.
+///
+/// # Safety
+/// `name` must be a valid NUL-terminated C string, and must not be "end".
+#[no_mangle]
+pub unsafe extern "C" fn rs_augroup_add(name: *const c_char) -> c_int {
+    let existing_id = rs_augroup_find(name);
+    if existing_id > 0 {
+        return existing_id;
+    }
+
+    if existing_id == AUGROUP_DELETED {
+        nvim_augroup_map_del_c(existing_id, name);
+    }
+
+    let next_id = nvim_inc_next_augroup_id();
+    nvim_augroup_put(name, next_id);
+
+    next_id
+}
+
+/// Get the name of an autocmd group.
+///
+/// Returns a pointer to the group name string, "END" for next_augroup_id,
+/// the deleted sentinel string for deleted groups, or NULL if the group
+/// ID is beyond the valid range.
+///
+/// # Safety
+/// The returned pointer is valid as long as the group map entry exists.
+#[no_mangle]
+pub unsafe extern "C" fn rs_augroup_name(mut group: c_int) -> *const c_char {
+    if group == AUGROUP_DELETED {
+        return nvim_get_deleted_augroup();
+    }
+
+    if group == AUGROUP_ALL {
+        group = nvim_get_current_augroup();
+    }
+
+    let next_id = nvim_get_next_augroup_id();
+
+    // "END" is always considered the last augroup ID
+    if group == next_id {
+        return c"END".as_ptr();
+    }
+
+    // Beyond the valid range
+    if group > next_id {
+        return std::ptr::null();
+    }
+
+    let name = nvim_augroup_id_to_name(group);
+    if !name.is_null() {
+        return name;
+    }
+
+    // Not in the map anymore, must have been deleted
+    nvim_get_deleted_augroup()
+}
+
+/// Check if an autocmd group name exists.
+///
+/// Returns 1 if the group exists, 0 otherwise.
+///
+/// # Safety
+/// `name` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_augroup_exists(name: *const c_char) -> c_int {
+    c_int::from(rs_augroup_find(name) > 0)
 }
 
 // =============================================================================

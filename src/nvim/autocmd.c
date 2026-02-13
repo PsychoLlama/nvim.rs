@@ -93,6 +93,12 @@ extern int rs_check_ei(const char *ei);
 extern char *rs_au_event_disable(const char *what);
 extern void rs_au_event_restore(char *old_ei);
 
+// Phase 3: Group management
+extern int rs_augroup_find(const char *name);
+extern int rs_augroup_add(const char *name);
+extern const char *rs_augroup_name(int group);
+extern int rs_augroup_exists(const char *name);
+
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
 {
@@ -442,24 +448,7 @@ void aubuflocal_remove(buf_T *buf)
 int augroup_add(const char *name)
 {
   assert(STRICMP(name, "end") != 0);
-
-  int existing_id = augroup_find(name);
-  if (existing_id > 0) {
-    assert(existing_id != AUGROUP_DELETED);
-    return existing_id;
-  }
-
-  if (existing_id == AUGROUP_DELETED) {
-    augroup_map_del(existing_id, name);
-  }
-
-  int next_id = next_augroup_id++;
-  String name_key = cstr_to_string(name);
-  String name_val = cstr_to_string(name);
-  map_put(String, int)(&map_augroup_name_to_id, name_key, next_id);
-  map_put(int, String)(&map_augroup_id_to_name, next_id, name_val);
-
-  return next_id;
+  return rs_augroup_add(name);
 }
 
 /// Delete the augroup that matches name.
@@ -522,55 +511,13 @@ void augroup_del(char *name, bool stupid_legacy_mode)
 int augroup_find(const char *name)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  int existing_id = map_get(String, int)(&map_augroup_name_to_id, cstr_as_string(name));
-  if (existing_id == AUGROUP_DELETED) {
-    return existing_id;
-  }
-
-  if (existing_id > 0) {
-    return existing_id;
-  }
-
-  return AUGROUP_ERROR;
+  return rs_augroup_find(name);
 }
 
 /// Gets the name for a particular group.
 char *augroup_name(int group)
 {
-  assert(group != 0);
-
-  if (group == AUGROUP_DELETED) {
-    return (char *)get_deleted_augroup();
-  }
-
-  if (group == AUGROUP_ALL) {
-    group = current_augroup;
-  }
-
-  // next_augroup_id is the "source of truth" about what autocmds have existed
-  //
-  // The map_size is not the source of truth because groups can be removed from
-  // the map. When this happens, the map size is reduced. That's why this function
-  // relies on next_augroup_id instead.
-
-  // "END" is always considered the last augroup ID.
-  // Used for expand_get_event_name and expand_get_augroup_name
-  if (group == next_augroup_id) {
-    return "END";
-  }
-
-  // If it's larger than the largest group, then it doesn't have a name
-  if (group > next_augroup_id) {
-    return NULL;
-  }
-
-  String key = map_get(int, String)(&map_augroup_id_to_name, group);
-  if (key.data != NULL) {
-    return key.data;
-  }
-
-  // If it's not in the map anymore, then it must have been deleted.
-  return (char *)get_deleted_augroup();
+  return (char *)rs_augroup_name(group);
 }
 
 /// Return true if augroup "name" exists.
@@ -579,7 +526,7 @@ char *augroup_name(int group)
 bool augroup_exists(const char *name)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return augroup_find(name) > 0;
+  return rs_augroup_exists(name) != 0;
 }
 
 /// ":augroup {name}".
@@ -2728,4 +2675,58 @@ void nvim_autocmd_xfree(char *ptr)
 void nvim_autocmd_set_option_eventignore(const char *val)
 {
   set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(val), 0, SID_NONE);
+}
+
+// Phase 3: Group management accessors
+
+/// Look up group name → ID. Returns 0 if not found.
+int nvim_augroup_name_to_id(const char *name)
+{
+  return map_get(String, int)(&map_augroup_name_to_id, cstr_as_string(name));
+}
+
+/// Look up group ID → name. Returns NULL if not found.
+const char *nvim_augroup_id_to_name(int id)
+{
+  String key = map_get(int, String)(&map_augroup_id_to_name, id);
+  return key.data;
+}
+
+/// Insert group into both maps (allocates copies of name).
+void nvim_augroup_put(const char *name, int id)
+{
+  String name_key = cstr_to_string(name);
+  String name_val = cstr_to_string(name);
+  map_put(String, int)(&map_augroup_name_to_id, name_key, id);
+  map_put(int, String)(&map_augroup_id_to_name, id, name_val);
+}
+
+/// Delete group from both maps, freeing allocated strings (used by Rust FFI).
+void nvim_augroup_map_del_c(int id, const char *name)
+{
+  augroup_map_del(id, name);
+}
+
+/// Get the next_augroup_id value.
+int nvim_get_next_augroup_id(void)
+{
+  return next_augroup_id;
+}
+
+/// Get and increment next_augroup_id (returns the value before increment).
+int nvim_inc_next_augroup_id(void)
+{
+  return next_augroup_id++;
+}
+
+/// Get the current_augroup value.
+int nvim_get_current_augroup(void)
+{
+  return current_augroup;
+}
+
+/// Get the deleted augroup sentinel string.
+const char *nvim_get_deleted_augroup(void)
+{
+  return get_deleted_augroup();
 }
