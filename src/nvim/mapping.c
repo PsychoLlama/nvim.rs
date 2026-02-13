@@ -63,6 +63,10 @@
 extern int rs_map_to_exists_mode(const char *rhs, int mode, int abbr);
 extern int rs_get_map_mode_string(const char *mode_string, int abbr);
 extern void rs_map_mode_to_chars(int mode, char *buf);
+extern int rs_langmap_adjust_mb(int c);
+extern void rs_langmap_init(void);
+extern int rs_langmap_parse(const char *langmap_str, char *errbuf, size_t errbuflen);
+extern int rs_get_map_mode(char **cmdp, int forceit);
 
 /// List used for abbreviations.
 static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
@@ -949,41 +953,10 @@ free_and_return:
 }
 
 /// Get the mapping mode from the command name.
+/// Now implemented in Rust (rs_get_map_mode).
 static int get_map_mode(char **cmdp, bool forceit)
 {
-  int mode;
-
-  char *p = *cmdp;
-  int modec = (uint8_t)(*p++);
-  if (modec == 'i') {
-    mode = MODE_INSERT;                                                  // :imap
-  } else if (modec == 'l') {
-    mode = MODE_LANGMAP;                                                 // :lmap
-  } else if (modec == 'c') {
-    mode = MODE_CMDLINE;                                                 // :cmap
-  } else if (modec == 'n' && *p != 'o') {  // avoid :noremap
-    mode = MODE_NORMAL;                                                  // :nmap
-  } else if (modec == 'v') {
-    mode = MODE_VISUAL | MODE_SELECT;                                    // :vmap
-  } else if (modec == 'x') {
-    mode = MODE_VISUAL;                                                  // :xmap
-  } else if (modec == 's') {
-    mode = MODE_SELECT;                                                  // :smap
-  } else if (modec == 'o') {
-    mode = MODE_OP_PENDING;                                              // :omap
-  } else if (modec == 't') {
-    mode = MODE_TERMINAL;                                                // :tmap
-  } else {
-    p--;
-    if (forceit) {
-      mode = MODE_INSERT | MODE_CMDLINE;                                 // :map !
-    } else {
-      mode = MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING;  // :map
-    }
-  }
-
-  *cmdp = p;
-  return mode;
+  return rs_get_map_mode(cmdp, forceit ? 1 : 0);
 }
 
 /// Clear all mappings (":mapclear") or abbreviations (":abclear").
@@ -2353,173 +2326,28 @@ void add_map(char *lhs, char *rhs, int mode, bool buffer)
   xfree(args.orig_rhs);
 }
 
-/// Any character has an equivalent 'langmap' character.  This is used for
-/// keyboards that have a special language mode that sends characters above
-/// 128 (although other characters can be translated too).  The "to" field is a
-/// Vim command character.  This avoids having to switch the keyboard back to
-/// ASCII mode when leaving Insert mode.
-///
-/// langmap_mapchar[] maps any of 256 chars to an ASCII char used for Vim
-/// commands.
-/// langmap_mapga.ga_data is a sorted table of langmap_entry_T.
-/// This does the same as langmap_mapchar[] for characters >= 256.
-///
-/// With multi-byte support use growarray for 'langmap' chars >= 256
-typedef struct {
-  int from;
-  int to;
-} langmap_entry_T;
-
-static garray_T langmap_mapga = GA_EMPTY_INIT_VALUE;
-
-/// Search for an entry in "langmap_mapga" for "from".  If found set the "to"
-/// field.  If not found insert a new entry at the appropriate location.
-static void langmap_set_entry(int from, int to)
-{
-  langmap_entry_T *entries = (langmap_entry_T *)(langmap_mapga.ga_data);
-  unsigned a = 0;
-  assert(langmap_mapga.ga_len >= 0);
-  unsigned b = (unsigned)langmap_mapga.ga_len;
-
-  // Do a binary search for an existing entry.
-  while (a != b) {
-    unsigned i = (a + b) / 2;
-    int d = entries[i].from - from;
-
-    if (d == 0) {
-      entries[i].to = to;
-      return;
-    }
-    if (d < 0) {
-      a = i + 1;
-    } else {
-      b = i;
-    }
-  }
-
-  ga_grow(&langmap_mapga, 1);
-
-  // insert new entry at position "a"
-  entries = (langmap_entry_T *)(langmap_mapga.ga_data) + a;
-  memmove(entries + 1, entries,
-          ((unsigned)langmap_mapga.ga_len - a) * sizeof(langmap_entry_T));
-  langmap_mapga.ga_len++;
-  entries[0].from = from;
-  entries[0].to = to;
-}
+// Langmap subsystem — now implemented in Rust (src/nvim-rs/mapping/src/langmap.rs).
+// These thin C wrappers delegate to the Rust implementations.
 
 /// Apply 'langmap' to multi-byte character "c" and return the result.
 int langmap_adjust_mb(int c)
 {
-  langmap_entry_T *entries = (langmap_entry_T *)(langmap_mapga.ga_data);
-  int a = 0;
-  int b = langmap_mapga.ga_len;
-
-  while (a != b) {
-    int i = (a + b) / 2;
-    int d = entries[i].from - c;
-
-    if (d == 0) {
-      return entries[i].to;        // found matching entry
-    }
-    if (d < 0) {
-      a = i + 1;
-    } else {
-      b = i;
-    }
-  }
-  return c;    // no entry found, return "c" unmodified
+  return rs_langmap_adjust_mb(c);
 }
 
 void langmap_init(void)
 {
-  for (int i = 0; i < 256; i++) {
-    langmap_mapchar[i] = (uint8_t)i;      // we init with a one-to-one map
-  }
-  ga_init(&langmap_mapga, sizeof(langmap_entry_T), 8);
+  rs_langmap_init();
 }
 
 /// Called when langmap option is set; the language map can be
 /// changed at any time!
 const char *did_set_langmap(optset_T *args)
 {
-  ga_clear(&langmap_mapga);  // clear the previous map first
-  langmap_init();            // back to one-to-one map
-
-  for (char *p = p_langmap; p[0] != NUL;) {
-    char *p2;
-    for (p2 = p; p2[0] != NUL && p2[0] != ',' && p2[0] != ';';
-         MB_PTR_ADV(p2)) {
-      if (p2[0] == '\\' && p2[1] != NUL) {
-        p2++;
-      }
-    }
-    if (p2[0] == ';') {
-      p2++;                 // abcd;ABCD form, p2 points to A
-    } else {
-      p2 = NULL;            // aAbBcCdD form, p2 is NULL
-    }
-    while (p[0]) {
-      if (p[0] == ',') {
-        p++;
-        break;
-      }
-      if (p[0] == '\\' && p[1] != NUL) {
-        p++;
-      }
-      int from = utf_ptr2char(p);
-      int to = NUL;
-      if (p2 == NULL) {
-        MB_PTR_ADV(p);
-        if (p[0] != ',') {
-          if (p[0] == '\\') {
-            p++;
-          }
-          to = utf_ptr2char(p);
-        }
-      } else {
-        if (p2[0] != ',') {
-          if (p2[0] == '\\') {
-            p2++;
-          }
-          to = utf_ptr2char(p2);
-        }
-      }
-      if (to == NUL) {
-        snprintf(args->os_errbuf, args->os_errbuflen,
-                 _("E357: 'langmap': Matching character missing for %s"),
-                 transchar(from));
-        return args->os_errbuf;
-      }
-
-      if (from >= 256) {
-        langmap_set_entry(from, to);
-      } else {
-        assert(to <= UCHAR_MAX);
-        langmap_mapchar[from & 255] = (uint8_t)to;
-      }
-
-      // Advance to next pair
-      MB_PTR_ADV(p);
-      if (p2 != NULL) {
-        MB_PTR_ADV(p2);
-        if (*p == ';') {
-          p = p2;
-          if (p[0] != NUL) {
-            if (p[0] != ',') {
-              snprintf(args->os_errbuf, args->os_errbuflen,
-                       _("E358: 'langmap': Extra characters after semicolon: %s"),
-                       p);
-              return args->os_errbuf;
-            }
-            p++;
-          }
-          break;
-        }
-      }
-    }
+  int err = rs_langmap_parse(p_langmap, args->os_errbuf, args->os_errbuflen);
+  if (err != 0) {
+    return args->os_errbuf;
   }
-
   return NULL;
 }
 
@@ -2903,4 +2731,44 @@ mapblock_T *nvim_buf_get_maphash_entry(buf_T *buf, int index)
 mapblock_T *nvim_buf_get_first_abbr(buf_T *buf)
 {
   return buf ? buf->b_first_abbr : NULL;
+}
+
+// Langmap C accessors for Rust
+
+uint8_t nvim_langmap_mapchar_get(int index)
+{
+  if (index < 0 || index >= 256) {
+    return (uint8_t)index;
+  }
+  return langmap_mapchar[index];
+}
+
+void nvim_langmap_mapchar_set(int index, uint8_t value)
+{
+  if (index >= 0 && index < 256) {
+    langmap_mapchar[index] = value;
+  }
+}
+
+int nvim_mapping_utf_ptr2char(const char *p)
+{
+  return utf_ptr2char(p);
+}
+
+int nvim_mapping_utfc_ptr2len(const char *p)
+{
+  return utfc_ptr2len(p);
+}
+
+/// Format a langmap error message into the provided buffer.
+/// msgid: 357 = E357 (matching missing), 358 = E358 (extra chars)
+void nvim_langmap_format_error(char *buf, size_t buflen, int msgid, const char *arg)
+{
+  if (msgid == 357) {
+    snprintf(buf, buflen,
+             _("E357: 'langmap': Matching character missing for %s"), arg);
+  } else if (msgid == 358) {
+    snprintf(buf, buflen,
+             _("E358: 'langmap': Extra characters after semicolon: %s"), arg);
+  }
 }

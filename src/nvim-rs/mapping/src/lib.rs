@@ -15,6 +15,7 @@
 
 pub mod abbrev;
 pub mod flags;
+pub mod langmap;
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -271,6 +272,55 @@ pub unsafe extern "C" fn rs_map_mode_from_chars(modechars: *const c_char) -> c_i
         p = p.add(1);
     }
 
+    mode
+}
+
+// =============================================================================
+// Command Mode Parsing
+// =============================================================================
+
+/// Get the mapping mode from the command name prefix character.
+///
+/// Parses the first character of a `:map` variant command (e.g., 'n' for `:nmap`,
+/// 'i' for `:imap`) and returns the corresponding mode bits. Advances the
+/// command pointer past the mode character.
+///
+/// When no specific mode prefix is found, returns all visual/normal modes
+/// (`:map`) or insert+cmdline (`:map!` when `forceit` is true).
+///
+/// # Safety
+/// `cmdp` must point to a valid `*mut c_char` pointer into a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_map_mode(cmdp: *mut *mut c_char, forceit: c_int) -> c_int {
+    if cmdp.is_null() || (*cmdp).is_null() {
+        return 0;
+    }
+
+    let p = *cmdp;
+    let modec = *p as u8;
+    let mut advance = 1; // How many bytes to advance past
+
+    let mode = match modec {
+        b'i' => MODE_INSERT,
+        b'l' => MODE_LANGMAP,
+        b'c' => MODE_CMDLINE,
+        b'n' if *p.add(1) as u8 != b'o' => MODE_NORMAL,
+        b'v' => MODE_VISUAL | MODE_SELECT,
+        b'x' => MODE_VISUAL,
+        b's' => MODE_SELECT,
+        b'o' => MODE_OP_PENDING,
+        b't' => MODE_TERMINAL,
+        _ => {
+            advance = 0;
+            if forceit != 0 {
+                MODE_INSERT | MODE_CMDLINE
+            } else {
+                MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING
+            }
+        }
+    };
+
+    *cmdp = p.add(advance);
     mode
 }
 
@@ -1065,6 +1115,58 @@ mod tests {
             assert_eq!(rs_get_map_mode_string(c"n".as_ptr(), 1), 0);
             assert_eq!(rs_get_map_mode_string(c"x".as_ptr(), 1), 0);
             assert_eq!(rs_get_map_mode_string(c" ".as_ptr(), 1), 0);
+        }
+    }
+
+    #[test]
+    fn test_get_map_mode() {
+        unsafe {
+            // Helper: create mutable buffer from literal and test get_map_mode
+            macro_rules! test_mode {
+                ($input:expr, $forceit:expr, $expected:expr, $advance:expr) => {{
+                    let mut buf = *$input;
+                    let base = buf.as_mut_ptr().cast::<c_char>();
+                    let mut p = base;
+                    let mode = rs_get_map_mode(&mut p, $forceit);
+                    assert_eq!(mode, $expected, "Failed for {:?}", $input);
+                    assert_eq!(
+                        p as usize - base as usize,
+                        $advance,
+                        "Wrong advance for {:?}",
+                        $input
+                    );
+                }};
+            }
+
+            // Each mode prefix should advance by 1
+            test_mode!(b"imap\0", 0, MODE_INSERT, 1);
+            test_mode!(b"lmap\0", 0, MODE_LANGMAP, 1);
+            test_mode!(b"cmap\0", 0, MODE_CMDLINE, 1);
+            test_mode!(b"nmap\0", 0, MODE_NORMAL, 1);
+            test_mode!(b"vmap\0", 0, MODE_VISUAL | MODE_SELECT, 1);
+            test_mode!(b"xmap\0", 0, MODE_VISUAL, 1);
+            test_mode!(b"smap\0", 0, MODE_SELECT, 1);
+            test_mode!(b"omap\0", 0, MODE_OP_PENDING, 1);
+            test_mode!(b"tmap\0", 0, MODE_TERMINAL, 1);
+
+            // "noremap" — 'n' followed by 'o' should NOT match :nmap
+            test_mode!(
+                b"noremap\0",
+                0,
+                MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING,
+                0
+            );
+
+            // Default mode without forceit
+            test_mode!(
+                b"map\0",
+                0,
+                MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING,
+                0
+            );
+
+            // Default mode with forceit (:map!)
+            test_mode!(b"map\0", 1, MODE_INSERT | MODE_CMDLINE, 0);
         }
     }
 }
