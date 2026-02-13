@@ -88,3 +88,13 @@ extern "C" {
     pub fn set_histentry(hist_type: c_int, entry: HistEntryPtr);
     pub fn nvim_cmdhist_strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
 }
+
+// =============================================================================
+// Phase 3: Deletion Accessors (regexp wrappers)
+// =============================================================================
+
+extern "C" {
+    pub fn nvim_cmdhist_regcomp(str: *const c_char, flags: c_int) -> *mut c_void;
+    pub fn nvim_cmdhist_regexec(rm: *mut c_void, str: *const c_char) -> c_int;
+    pub fn nvim_cmdhist_regfree(rm: *mut c_void);
+}

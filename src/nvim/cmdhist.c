@@ -40,6 +40,8 @@ _Static_assert(sizeof(histentry_T) == 40,
                "sizeof(histentry_T) changed - update Rust HistoryEntry in cmdline/src/history.rs");
 _Static_assert(HIST_COUNT == 5, "HIST_COUNT changed - update Rust HIST_COUNT");
 _Static_assert(CMOD_KEEPPATTERNS == 0x1000, "CMOD_KEEPPATTERNS changed - update Rust constant");
+_Static_assert(RE_MAGIC == 1, "RE_MAGIC changed - update Rust constant");
+_Static_assert(RE_STRING == 2, "RE_STRING changed - update Rust constant");
 
 static histentry_T *(history[HIST_COUNT]) = { NULL, NULL, NULL, NULL, NULL };
 static int hisidx[HIST_COUNT] = { -1, -1, -1, -1, -1 };  ///< lastused entry
@@ -245,6 +247,37 @@ extern int rs_clr_history(int histype);
 extern int nvim_cmdhist_get_last_maptick(void);
 extern void nvim_cmdhist_set_last_maptick(int val);
 
+// =============================================================================
+// Phase 3: Regexp Wrappers
+// =============================================================================
+
+void *nvim_cmdhist_regcomp(const char *str, int flags)
+{
+  regmatch_T *rm = xmalloc(sizeof(regmatch_T));
+  rm->regprog = vim_regcomp((char *)str, flags);
+  if (rm->regprog == NULL) {
+    xfree(rm);
+    return NULL;
+  }
+  rm->rm_ic = false;  // always match case
+  return rm;
+}
+
+int nvim_cmdhist_regexec(void *rm, const char *str)
+{
+  return vim_regexec((regmatch_T *)rm, (char *)str, 0);
+}
+
+void nvim_cmdhist_regfree(void *rm)
+{
+  regmatch_T *r = (regmatch_T *)rm;
+  vim_regfree(r->regprog);
+  xfree(r);
+}
+
+extern int rs_del_history_entry(int histype, const char *str);
+extern int rs_del_history_idx(int histype, int idx);
+
 /// Translate a history character to the associated type number
 HistoryType hist_char2type(const int c)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
@@ -290,21 +323,6 @@ char *get_history_arg(expand_T *xp, int idx)
 void init_history(void)
 {
   rs_init_history();
-}
-
-/// Free a history entry (kept as C stub for del_history_entry/del_history_idx).
-static inline void hist_free_entry(histentry_T *hisptr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  xfree(hisptr->hisstr);
-  xfree(hisptr->additional_data);
-  clear_hist_entry(hisptr);
-}
-
-static inline void clear_hist_entry(histentry_T *hisptr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  CLEAR_POINTER(hisptr);
 }
 
 /// Convert history name to its HIST_ equivalent
@@ -381,86 +399,15 @@ int clr_history(const int histype)
 }
 
 /// Remove all entries matching {str} from a history.
-///
-/// @param histype  may be one of the HIST_ values.
 static int del_history_entry(int histype, char *str)
 {
-  if (hislen == 0 || histype < 0 || histype >= HIST_COUNT || *str == NUL
-      || hisidx[histype] < 0) {
-    return false;
-  }
-
-  const int idx = hisidx[histype];
-  regmatch_T regmatch;
-  regmatch.regprog = vim_regcomp(str, RE_MAGIC + RE_STRING);
-  if (regmatch.regprog == NULL) {
-    return false;
-  }
-
-  regmatch.rm_ic = false;       // always match case
-
-  bool found = false;
-  int i = idx;
-  int last = idx;
-  do {
-    histentry_T *hisptr = &history[histype][i];
-    if (hisptr->hisstr == NULL) {
-      break;
-    }
-    if (vim_regexec(&regmatch, hisptr->hisstr, 0)) {
-      found = true;
-      hist_free_entry(hisptr);
-    } else {
-      if (i != last) {
-        history[histype][last] = *hisptr;
-        clear_hist_entry(hisptr);
-      }
-      if (--last < 0) {
-        last += hislen;
-      }
-    }
-    if (--i < 0) {
-      i += hislen;
-    }
-  } while (i != idx);
-
-  if (history[histype][idx].hisstr == NULL) {
-    hisidx[histype] = -1;
-  }
-
-  vim_regfree(regmatch.regprog);
-  return found;
+  return rs_del_history_entry(histype, str);
 }
 
 /// Remove an indexed entry from a history.
-///
-/// @param histype  may be one of the HIST_ values.
 static int del_history_idx(int histype, int idx)
 {
-  int i = calc_hist_idx(histype, idx);
-  if (i < 0) {
-    return false;
-  }
-  idx = hisidx[histype];
-  hist_free_entry(&history[histype][i]);
-
-  // When deleting the last added search string in a mapping, reset
-  // last_maptick, so that the last added search string isn't deleted again.
-  if (histype == HIST_SEARCH && maptick == nvim_cmdhist_get_last_maptick() && i == idx) {
-    nvim_cmdhist_set_last_maptick(-1);
-  }
-
-  while (i != idx) {
-    int j = (i + 1) % hislen;
-    history[histype][i] = history[histype][j];
-    i = j;
-  }
-  clear_hist_entry(&history[histype][idx]);
-  if (--i < 0) {
-    i += hislen;
-  }
-  hisidx[histype] = i;
-  return true;
+  return rs_del_history_idx(histype, idx);
 }
 
 /// "histadd()" function
