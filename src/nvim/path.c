@@ -96,6 +96,8 @@ extern int rs_find_previous_pathsep(const char *path, char **psep);
 extern int rs_is_unique(const char *maybe_unique, const void *gap, int i);
 extern int rs_has_special_wildchar(const char *p, int flags);
 extern const char *rs_get_path_cutoff(const char *fname, const void *gap);
+extern const char *rs_scandir_next_with_dots(void *dir);
+extern void rs_addfile(void *gap, const char *f, int flags);
 
 // C accessor functions for Rust
 int nvim_path_os_isdir(const char *name) {
@@ -216,6 +218,15 @@ int nvim_path_ga_len(const void *gap) {
 
 const char *nvim_path_ga_get_string(const void *gap, int i) {
   return ((const char **)((const garray_T *)gap)->ga_data)[i];
+}
+
+// Phase 4 C accessor functions
+int nvim_path_os_path_exists(const char *fname) {
+  return os_path_exists(fname) ? 1 : 0;
+}
+
+void nvim_path_ga_append_string(void *gap, char *s) {
+  GA_APPEND(char *, (garray_T *)gap, s);
 }
 
 // Static assertions for constants used in Rust
@@ -557,17 +568,7 @@ static size_t path_expand(garray_T *gap, const char *path, int flags)
 
 static const char *scandir_next_with_dots(Directory *dir)
 {
-  static int count = 0;
-  if (dir == NULL) {  // initialize
-    count = 0;
-    return NULL;
-  }
-
-  count += 1;
-  if (count == 1 || count == 2) {
-    return (count == 1) ? "." : "..";
-  }
-  return os_scandir_next(dir);
+  return rs_scandir_next_with_dots(dir);
 }
 
 /// Implementation of path_expand().
@@ -1318,47 +1319,7 @@ void slash_adjust(char *p)
 void addfile(garray_T *gap, char *f, int flags)
   FUNC_ATTR_NONNULL_ALL
 {
-  bool isdir;
-  FileInfo file_info;
-
-  // if the file/dir/link doesn't exist, may not add it
-  if (!(flags & EW_NOTFOUND)
-      && ((flags & EW_ALLLINKS)
-          ? !os_fileinfo_link(f, &file_info)
-          : !os_path_exists(f))) {
-    return;
-  }
-
-#ifdef FNAME_ILLEGAL
-  // if the file/dir contains illegal characters, don't add it
-  if (strpbrk(f, FNAME_ILLEGAL) != NULL) {
-    return;
-  }
-#endif
-
-  isdir = os_isdir(f);
-  if ((isdir && !(flags & EW_DIR)) || (!isdir && !(flags & EW_FILE))) {
-    return;
-  }
-
-  // If the file isn't executable, may not add it.  Do accept directories.
-  // When invoked from expand_shellcmd() do not use $PATH.
-  if (!isdir && (flags & EW_EXEC)
-      && !os_can_exe(f, NULL, !(flags & EW_SHELLCMD))) {
-    return;
-  }
-
-  char *p = xmalloc(strlen(f) + 1 + isdir);
-
-  STRCPY(p, f);
-#ifdef BACKSLASH_IN_FILENAME
-  slash_adjust(p);
-#endif
-  // Append a slash or backslash after directory names if none is present.
-  if (isdir && (flags & EW_ADDSLASH)) {
-    add_pathsep(p);
-  }
-  GA_APPEND(char *, gap, p);
+  rs_addfile(gap, f, flags);
 }
 
 // Converts a file name into a canonical form. It simplifies a file name into

@@ -3476,3 +3476,104 @@ pub unsafe extern "C" fn rs_get_path_cutoff(
 
     cutoff
 }
+
+// ============================================================================
+// Phase 4: addfile + scandir_next_with_dots
+// ============================================================================
+
+extern "C" {
+    fn nvim_path_os_path_exists(fname: *const c_char) -> c_int;
+    fn nvim_path_ga_append_string(gap: *mut c_void, s: *mut c_char);
+}
+
+/// Static counter for `scandir_next_with_dots`.
+static mut SCANDIR_DOT_COUNT: c_int = 0;
+
+/// Yields `.` and `..` before delegating to `os_scandir_next`.
+///
+/// Call with `dir == NULL` to reset the counter. After reset, the first two
+/// calls return `.` and `..`, then subsequent calls delegate to
+/// `nvim_path_scandir_next`.
+///
+/// # Safety
+/// `dir` must be a valid `Directory` handle (from `nvim_path_scandir_open`) or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_scandir_next_with_dots(dir: *mut c_void) -> *const c_char {
+    if dir.is_null() {
+        // Reset
+        SCANDIR_DOT_COUNT = 0;
+        return std::ptr::null();
+    }
+
+    SCANDIR_DOT_COUNT += 1;
+    if SCANDIR_DOT_COUNT == 1 {
+        return c".".as_ptr();
+    }
+    if SCANDIR_DOT_COUNT == 2 {
+        return c"..".as_ptr();
+    }
+    nvim_path_scandir_next(dir)
+}
+
+/// Add a file to a file list. Accepted flags:
+/// - `EW_DIR`: add directories
+/// - `EW_FILE`: add files
+/// - `EW_EXEC`: add executable files
+/// - `EW_NOTFOUND`: add even when it doesn't exist
+/// - `EW_ADDSLASH`: add slash after directory name
+/// - `EW_ALLLINKS`: add symlink also when the referred file does not exist
+/// - `EW_SHELLCMD`: when invoked from expand_shellcmd(), do not use `$PATH`
+///
+/// # Safety
+/// `gap` must be a valid pointer to a `garray_T` of `char *`.
+/// `f` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_addfile(gap: *mut c_void, f: *const c_char, flags: c_int) {
+    if gap.is_null() || f.is_null() {
+        return;
+    }
+
+    // If the file/dir/link doesn't exist, may not add it.
+    if (flags & EW_NOTFOUND) == 0 {
+        if (flags & EW_ALLLINKS) != 0 {
+            if nvim_path_file_exists_link(f) == 0 {
+                return;
+            }
+        } else if nvim_path_os_path_exists(f) == 0 {
+            return;
+        }
+    }
+
+    let isdir = nvim_path_os_isdir(f) != 0;
+    if (isdir && (flags & EW_DIR) == 0) || (!isdir && (flags & EW_FILE) == 0) {
+        return;
+    }
+
+    // If the file isn't executable, may not add it. Do accept directories.
+    // When invoked from expand_shellcmd() do not use $PATH.
+    if !isdir
+        && (flags & EW_EXEC) != 0
+        && nvim_path_os_can_exe(
+            f,
+            std::ptr::null_mut(),
+            i32::from((flags & EW_SHELLCMD) == 0),
+        ) == 0
+    {
+        return;
+    }
+
+    let flen = libc::strlen(f);
+    let p = nvim_path_xmalloc(flen + 1 + usize::from(isdir)) as *mut c_char;
+    std::ptr::copy_nonoverlapping(f as *const u8, p as *mut u8, flen + 1);
+
+    // On Windows, adjust slashes (no-op on Unix since BACKSLASH_IN_FILENAME is not defined).
+    #[cfg(windows)]
+    rs_slash_adjust(p);
+
+    // Append a slash after directory names if none is present.
+    if isdir && (flags & EW_ADDSLASH) != 0 {
+        rs_add_pathsep(p);
+    }
+
+    nvim_path_ga_append_string(gap, p);
+}
