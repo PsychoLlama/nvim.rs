@@ -36,6 +36,7 @@ _Static_assert(sizeof(pos_T) == 12, "pos_T size changed - update Rust CursorPos 
 // =============================================================================
 
 extern int rs_gchar_cursor(void);
+extern int rs_coladvance_force(colnr_T wcol);
 extern int rs_getviscol(void);
 extern int rs_getviscol2(colnr_T col, colnr_T coladd);
 extern int rs_getvpos(win_T *wp, pos_T *pos, colnr_T wcol);
@@ -78,15 +79,7 @@ int getviscol2(colnr_T col, colnr_T coladd)
 /// The caller must have saved the cursor line for undo!
 int coladvance_force(colnr_T wcol)
 {
-  int rc = coladvance2(curwin, &curwin->w_cursor, true, false, wcol);
-
-  if (wcol == MAXCOL) {
-    curwin->w_valid &= ~VALID_VIRTCOL;
-  } else {
-    // Virtcol is valid
-    set_valid_virtcol(curwin, wcol);
-  }
-  return rc;
+  return rs_coladvance_force(wcol);
 }
 
 /// Try to advance the Cursor to the specified screen column.
@@ -560,4 +553,16 @@ void nvim_mark_mb_adjustpos(buf_T *buf, pos_T *lp)
 void nvim_get_vcol_range(win_T *wp, pos_T *pos, colnr_T *start, colnr_T *end)
 {
   getvcol(wp, pos, start, NULL, end);
+}
+
+/// Wrapper for coladvance2 with addspaces=true, finetune=false (for Rust).
+int nvim_coladvance2_addspaces(win_T *wp, pos_T *pos, colnr_T wcol)
+{
+  return coladvance2(wp, pos, true, false, wcol);
+}
+
+/// Wrapper for coladvance_force callable from Rust (for change crate).
+int nvim_coladvance_force(colnr_T wcol)
+{
+  return coladvance_force(wcol);
 }

@@ -187,6 +187,9 @@ extern "C" {
     /// Wrapper for `getvpos` - advances cursor to screen column
     fn nvim_getvpos(wp: WinHandle, pos: *mut CursorPos, wcol: i32) -> c_int;
 
+    /// Wrapper for `coladvance2` with addspaces=true, finetune=false
+    fn nvim_coladvance2_addspaces(wp: WinHandle, pos: *mut CursorPos, wcol: i32) -> c_int;
+
     /// Check if character at position is TAB
     fn nvim_char_at_pos_is_tab(wp: WinHandle, pos: *const CursorPos) -> bool;
 
@@ -725,6 +728,30 @@ pub unsafe extern "C" fn rs_coladvance(wp: WinHandle, wcol: i32) -> c_int {
         // Virtcol is valid when not on a TAB
         // Note: curwin is used here to match C behavior
         let curwin = nvim_cursor_get_curwin();
+        nvim_set_valid_virtcol(curwin, wcol);
+    }
+    rc
+}
+
+/// Go to column "wcol", and add/insert white space as necessary to get the
+/// cursor in that column.
+///
+/// # Arguments
+/// * `wcol` - Target screen column
+///
+/// # Returns
+/// `OK` if desired column is reached, `FAIL` if not.
+///
+/// # Safety
+/// Requires valid global state (curwin).
+#[no_mangle]
+pub unsafe extern "C" fn rs_coladvance_force(wcol: i32) -> c_int {
+    let curwin = nvim_cursor_get_curwin();
+    let cursor = nvim_cursor_get_curwin_cursor();
+    let rc = nvim_coladvance2_addspaces(curwin, cursor, wcol);
+    if wcol == MAXCOL {
+        nvim_win_clear_valid_virtcol(curwin);
+    } else {
         nvim_set_valid_virtcol(curwin, wcol);
     }
     rc
