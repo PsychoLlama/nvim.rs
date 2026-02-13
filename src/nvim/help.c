@@ -51,6 +51,8 @@
 #include "help.c.generated.h"
 
 extern int rs_help_heuristic(const char *matched_string, int offset, bool wrong_case);
+extern char *rs_check_help_lang(char *arg);
+extern int rs_help_compare(const void *s1, const void *s2);
 
 /// ":help": open a read-only window on a help file
 void ex_help(exarg_T *eap)
@@ -234,14 +236,7 @@ void ex_helpclose(exarg_T *eap)
 /// @return  NULL if not found.
 char *check_help_lang(char *arg)
 {
-  int len = (int)strlen(arg);
-
-  if (len >= 3 && arg[len - 3] == '@' && ASCII_ISALPHA(arg[len - 2])
-      && ASCII_ISALPHA(arg[len - 1])) {
-    arg[len - 3] = NUL;                 // remove the '@'
-    return arg + len - 2;
-  }
-  return NULL;
+  return rs_check_help_lang(arg);
 }
 
 /// Return a heuristic indicating how well the given string matches.  The
@@ -268,17 +263,7 @@ int help_heuristic(char *matched_string, int offset, bool wrong_case)
 /// that has been put after the tagname by find_tags().
 static int help_compare(const void *s1, const void *s2)
 {
-  char *p1 = *(char **)s1 + strlen(*(char **)s1) + 1;
-  char *p2 = *(char **)s2 + strlen(*(char **)s2) + 1;
-
-  // Compare by help heuristic number first.
-  int cmp = strcmp(p1, p2);
-  if (cmp != 0) {
-    return cmp;
-  }
-
-  // Compare by strings as tie-breaker when same heuristic number.
-  return strcmp(*(char **)s1, *(char **)s2);
+  return rs_help_compare(s1, s2);
 }
 
 /// Find all help tags matching "arg", sort them and return in matches[], with

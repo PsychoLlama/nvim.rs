@@ -1,7 +1,8 @@
-//! Help search heuristic utilities for Neovim
+//! Help system utilities for Neovim
 //!
-//! This module provides Rust implementations of the help heuristic function from
-//! `src/nvim/help.c`. This is a pure function with no external dependencies.
+//! This module provides Rust implementations of help system functions from
+//! `src/nvim/help.c`, including search heuristics, tag comparison, and
+//! language detection.
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
@@ -10,7 +11,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_void};
 
 /// Check if a byte is an ASCII alphanumeric character (0-9, a-z, A-Z).
 #[inline]
@@ -85,6 +86,70 @@ pub unsafe extern "C" fn rs_help_heuristic(
     // Multiply the number of letters by 100 to give it a much bigger
     // weighting than the number of characters.
     100 * num_letters + (bytes.len() as c_int) + offset_score
+}
+
+/// Parse `@xx` language suffix from a help argument.
+///
+/// If the argument ends with `@xx` where both characters are ASCII alphabetic,
+/// sets a NUL byte at the `@` position and returns a pointer to the two-letter
+/// language code. Otherwise returns null.
+///
+/// # Safety
+/// `arg` must be a valid, mutable, NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_help_lang(arg: *mut c_char) -> *mut c_char {
+    if arg.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let bytes = unsafe { CStr::from_ptr(arg) }.to_bytes();
+    let len = bytes.len();
+
+    if len >= 3 {
+        let at_pos = len - 3;
+        if bytes[at_pos] == b'@'
+            && bytes[at_pos + 1].is_ascii_alphabetic()
+            && bytes[at_pos + 2].is_ascii_alphabetic()
+        {
+            // Set NUL at the '@' position to truncate the string
+            unsafe { *arg.add(at_pos) = 0 };
+            // Return pointer to the two-letter language code
+            return unsafe { arg.add(at_pos + 1) };
+        }
+    }
+
+    std::ptr::null_mut()
+}
+
+/// Compare function for qsort() used by find_help_tags().
+///
+/// Each match string has a heuristic number stored after the tag name's NUL byte.
+/// We compare by that heuristic number first, then by the tag string as a tie-breaker.
+///
+/// # Safety
+/// `s1` and `s2` must point to valid `*const c_char` pointers (i.e., `char **`),
+/// and each pointed-to string must be NUL-terminated with a second NUL-terminated
+/// string immediately following.
+#[no_mangle]
+pub unsafe extern "C" fn rs_help_compare(s1: *const c_void, s2: *const c_void) -> c_int {
+    let p1_str = unsafe { *(s1 as *const *const c_char) };
+    let p2_str = unsafe { *(s2 as *const *const c_char) };
+
+    // Find the heuristic number stored after the tag name's NUL byte.
+    let p1_len = unsafe { CStr::from_ptr(p1_str) }.to_bytes().len();
+    let p2_len = unsafe { CStr::from_ptr(p2_str) }.to_bytes().len();
+
+    let p1_heur = unsafe { p1_str.add(p1_len + 1) };
+    let p2_heur = unsafe { p2_str.add(p2_len + 1) };
+
+    // Compare by heuristic number first.
+    let cmp = unsafe { libc::strcmp(p1_heur, p2_heur) };
+    if cmp != 0 {
+        return cmp;
+    }
+
+    // Compare by tag strings as tie-breaker.
+    unsafe { libc::strcmp(p1_str, p2_str) }
 }
 
 #[cfg(test)]
@@ -191,6 +256,146 @@ mod tests {
             let score = rs_help_heuristic(test_str("---").as_ptr(), 0, false);
             // 0 letters * 100 + 3 length + 0 offset = 3
             assert_eq!(score, 3);
+        }
+    }
+
+    #[test]
+    fn test_check_help_lang_with_suffix() {
+        unsafe {
+            let s = CString::new("foo@en").unwrap();
+            let ptr = s.into_raw();
+            let lang = rs_check_help_lang(ptr);
+            assert!(!lang.is_null());
+            // The language code should be "en"
+            assert_eq!(*lang as u8, b'e');
+            assert_eq!(*lang.add(1) as u8, b'n');
+            // The original string should be truncated to "foo"
+            let truncated = CStr::from_ptr(ptr);
+            assert_eq!(truncated.to_bytes(), b"foo");
+            // Clean up
+            let _ = CString::from_raw(ptr);
+        }
+    }
+
+    #[test]
+    fn test_check_help_lang_too_short() {
+        unsafe {
+            let s = CString::new("ab").unwrap();
+            let ptr = s.into_raw();
+            let lang = rs_check_help_lang(ptr);
+            assert!(lang.is_null());
+            let _ = CString::from_raw(ptr);
+        }
+    }
+
+    #[test]
+    fn test_check_help_lang_non_alpha() {
+        unsafe {
+            let s = CString::new("foo@1x").unwrap();
+            let ptr = s.into_raw();
+            let lang = rs_check_help_lang(ptr);
+            assert!(lang.is_null());
+            let _ = CString::from_raw(ptr);
+        }
+    }
+
+    #[test]
+    fn test_check_help_lang_no_at() {
+        unsafe {
+            let s = CString::new("foobar").unwrap();
+            let ptr = s.into_raw();
+            let lang = rs_check_help_lang(ptr);
+            assert!(lang.is_null());
+            let _ = CString::from_raw(ptr);
+        }
+    }
+
+    #[test]
+    fn test_check_help_lang_null() {
+        unsafe {
+            let lang = rs_check_help_lang(std::ptr::null_mut());
+            assert!(lang.is_null());
+        }
+    }
+
+    #[test]
+    fn test_check_help_lang_exactly_three() {
+        unsafe {
+            // "@en" is exactly 3 chars - the arg part before @ is empty
+            let s = CString::new("@en").unwrap();
+            let ptr = s.into_raw();
+            let lang = rs_check_help_lang(ptr);
+            assert!(!lang.is_null());
+            assert_eq!(*lang as u8, b'e');
+            assert_eq!(*lang.add(1) as u8, b'n');
+            let truncated = CStr::from_ptr(ptr);
+            assert_eq!(truncated.to_bytes(), b"");
+            let _ = CString::from_raw(ptr);
+        }
+    }
+
+    /// Helper to create a mock help tag match string with an embedded heuristic number.
+    /// The format is: "tagname\0heuristic_number\0"
+    fn make_help_match(tag: &str, heuristic: &str) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(tag.as_bytes());
+        v.push(0); // NUL separator
+        v.extend_from_slice(heuristic.as_bytes());
+        v.push(0); // NUL terminator
+        v
+    }
+
+    #[test]
+    fn test_help_compare_different_heuristic() {
+        unsafe {
+            let m1 = make_help_match("tag_a", "0100");
+            let m2 = make_help_match("tag_b", "0200");
+            let p1 = m1.as_ptr() as *const c_char;
+            let p2 = m2.as_ptr() as *const c_char;
+            let result = rs_help_compare(
+                &p1 as *const _ as *const c_void,
+                &p2 as *const _ as *const c_void,
+            );
+            // "0100" < "0200" so result should be negative
+            assert!(result < 0);
+
+            // Reverse order
+            let result2 = rs_help_compare(
+                &p2 as *const _ as *const c_void,
+                &p1 as *const _ as *const c_void,
+            );
+            assert!(result2 > 0);
+        }
+    }
+
+    #[test]
+    fn test_help_compare_same_heuristic_different_tag() {
+        unsafe {
+            let m1 = make_help_match("alpha", "0100");
+            let m2 = make_help_match("beta", "0100");
+            let p1 = m1.as_ptr() as *const c_char;
+            let p2 = m2.as_ptr() as *const c_char;
+            let result = rs_help_compare(
+                &p1 as *const _ as *const c_void,
+                &p2 as *const _ as *const c_void,
+            );
+            // Same heuristic, so compare by tag: "alpha" < "beta"
+            assert!(result < 0);
+        }
+    }
+
+    #[test]
+    fn test_help_compare_identical() {
+        unsafe {
+            let m1 = make_help_match("same", "0100");
+            let m2 = make_help_match("same", "0100");
+            let p1 = m1.as_ptr() as *const c_char;
+            let p2 = m2.as_ptr() as *const c_char;
+            let result = rs_help_compare(
+                &p1 as *const _ as *const c_void,
+                &p2 as *const _ as *const c_void,
+            );
+            assert_eq!(result, 0);
         }
     }
 
