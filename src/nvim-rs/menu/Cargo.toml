@@ -9,3 +9,4 @@ license = "Apache-2.0"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+libc = "0.2"

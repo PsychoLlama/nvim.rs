@@ -32,6 +32,13 @@ impl VimMenuHandle {
         Self(std::ptr::null_mut())
     }
 
+    /// Create a null handle (const alias for use in static initializers).
+    #[inline]
+    #[must_use]
+    pub const fn null_const() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
     /// Get the raw pointer.
     #[inline]
     #[must_use]

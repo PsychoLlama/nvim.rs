@@ -103,6 +103,13 @@ extern void rs_ex_menu(exarg_T *eap);
 extern void rs_ex_emenu(exarg_T *eap);
 extern void rs_show_popupmenu(void);
 
+// Rust implementations for Phase 6
+extern char *rs_set_context_in_menu_cmd(expand_T *xp, const char *cmd, char *arg, bool forceit);
+extern char *rs_get_menu_name(expand_T *xp, int idx);
+extern char *rs_get_menu_names(expand_T *xp, int idx);
+extern void rs_ex_menutranslate(exarg_T *eap);
+extern char *rs_menutrans_lookup(char *name, int len);
+
 /// The character for each menu mode
 static char *menu_mode_chars[] = { "n", "v", "s", "o", "i", "c", "tl", "t" };
 
@@ -295,214 +302,21 @@ static int expand_emenu;                // true for ":emenu" command
 char *set_context_in_menu_cmd(expand_T *xp, const char *cmd, char *arg, bool forceit)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *after_dot;
-  char *p;
-  char *path_name = NULL;
-  bool unmenu;
-  vimmenu_T *menu;
-
-  xp->xp_context = EXPAND_UNSUCCESSFUL;
-
-  // Check for priority numbers, enable and disable
-  for (p = arg; *p; p++) {
-    if (!ascii_isdigit(*p) && *p != '.') {
-      break;
-    }
-  }
-
-  if (!ascii_iswhite(*p)) {
-    if (strncmp(arg, "enable", 6) == 0
-        && (arg[6] == NUL || ascii_iswhite(arg[6]))) {
-      p = arg + 6;
-    } else if (strncmp(arg, "disable", 7) == 0
-               && (arg[7] == NUL || ascii_iswhite(arg[7]))) {
-      p = arg + 7;
-    } else {
-      p = arg;
-    }
-  }
-
-  while (*p != NUL && ascii_iswhite(*p)) {
-    p++;
-  }
-
-  arg = after_dot = p;
-
-  for (; *p && !ascii_iswhite(*p); p++) {
-    if ((*p == '\\' || *p == Ctrl_V) && p[1] != NUL) {
-      p++;
-    } else if (*p == '.') {
-      after_dot = p + 1;
-    }
-  }
-
-  // ":popup" only uses menus, not entries
-  int expand_menus = !((*cmd == 't' && cmd[1] == 'e') || *cmd == 'p');
-  expand_emenu = (*cmd == 'e');
-  if (expand_menus && ascii_iswhite(*p)) {
-    return NULL;  // TODO(vim): check for next command?
-  }
-  if (*p == NUL) {  // Complete the menu name
-    // With :unmenu, you only want to match menus for the appropriate mode.
-    // With :menu though you might want to add a menu with the same name as
-    // one in another mode, so match menus from other modes too.
-    expand_modes = get_menu_cmd_modes(cmd, forceit, NULL, &unmenu);
-    if (!unmenu) {
-      expand_modes = MENU_ALL_MODES;
-    }
-
-    menu = root_menu;
-    if (after_dot > arg) {
-      size_t path_len = (size_t)(after_dot - arg);
-      path_name = xmalloc(path_len);
-      xstrlcpy(path_name, arg, path_len);
-    }
-    char *name = path_name;
-    while (name != NULL && *name) {
-      p = menu_name_skip(name);
-      while (menu != NULL) {
-        if (menu_name_equal(name, menu)) {
-          // Found menu
-          if ((*p != NUL && menu->children == NULL)
-              || ((menu->modes & expand_modes) == 0x0)) {
-            // Menu path continues, but we have reached a leaf.
-            // Or menu exists only in another mode.
-            xfree(path_name);
-            return NULL;
-          }
-          break;
-        }
-        menu = menu->next;
-      }
-      if (menu == NULL) {
-        // No menu found with the name we were looking for
-        xfree(path_name);
-        return NULL;
-      }
-      name = p;
-      menu = menu->children;
-    }
-    xfree(path_name);
-
-    xp->xp_context = expand_menus ? EXPAND_MENUNAMES : EXPAND_MENUS;
-    xp->xp_pattern = after_dot;
-    expand_menu = menu;
-  } else {                      // We're in the mapping part
-    xp->xp_context = EXPAND_NOTHING;
-  }
-  return NULL;
+  return rs_set_context_in_menu_cmd(xp, cmd, arg, forceit);
 }
 
 // Function given to ExpandGeneric() to obtain the list of (sub)menus (not
 // entries).
 char *get_menu_name(expand_T *xp, int idx)
 {
-  static vimmenu_T *menu = NULL;
-  char *str;
-  static bool should_advance = false;
-
-  if (idx == 0) {           // first call: start at first item
-    menu = expand_menu;
-    should_advance = false;
-  }
-
-  // Skip PopUp[nvoci].
-  while (menu != NULL && (menu_is_hidden(menu->dname)
-                          || menu_is_separator(menu->dname)
-                          || menu->children == NULL)) {
-    menu = menu->next;
-  }
-
-  if (menu == NULL) {       // at end of linked list
-    return NULL;
-  }
-
-  if (menu->modes & expand_modes) {
-    if (should_advance) {
-      str = menu->en_dname;
-    } else {
-      str = menu->dname;
-      if (menu->en_dname == NULL) {
-        should_advance = true;
-      }
-    }
-  } else {
-    str = "";
-  }
-
-  if (should_advance) {
-    // Advance to next menu entry.
-    menu = menu->next;
-  }
-
-  should_advance = !should_advance;
-
-  return str;
+  return rs_get_menu_name(xp, idx);
 }
 
 // Function given to ExpandGeneric() to obtain the list of menus and menu
 // entries.
 char *get_menu_names(expand_T *xp, int idx)
 {
-  static vimmenu_T *menu = NULL;
-#define TBUFFER_LEN 256
-  static char tbuffer[TBUFFER_LEN];         // hack
-  char *str;
-  static bool should_advance = false;
-
-  if (idx == 0) {           // first call: start at first item
-    menu = expand_menu;
-    should_advance = false;
-  }
-
-  // Skip Browse-style entries, popup menus and separators.
-  while (menu != NULL
-         && (menu_is_hidden(menu->dname)
-             || (expand_emenu && menu_is_separator(menu->dname))
-             || menu->dname[strlen(menu->dname) - 1] == '.')) {
-    menu = menu->next;
-  }
-
-  if (menu == NULL) {       // at end of linked list
-    return NULL;
-  }
-
-  if (menu->modes & expand_modes) {
-    if (menu->children != NULL) {
-      if (should_advance) {
-        xstrlcpy(tbuffer, menu->en_dname, TBUFFER_LEN);
-      } else {
-        xstrlcpy(tbuffer, menu->dname,  TBUFFER_LEN);
-        if (menu->en_dname == NULL) {
-          should_advance = true;
-        }
-      }
-      // hack on menu separators:  use a 'magic' char for the separator
-      // so that '.' in names gets escaped properly
-      strcat(tbuffer, "\001");
-      str = tbuffer;
-    } else {
-      if (should_advance) {
-        str = menu->en_dname;
-      } else {
-        str = menu->dname;
-        if (menu->en_dname == NULL) {
-          should_advance = true;
-        }
-      }
-    }
-  } else {
-    str = "";
-  }
-
-  if (should_advance) {
-    // Advance to next menu entry.
-    menu = menu->next;
-  }
-
-  should_advance = !should_advance;
-
-  return str;
+  return rs_get_menu_names(xp, idx);
 }
 
 /// Skip over this element of the menu path and return the start of the next
@@ -796,42 +610,7 @@ static garray_T menutrans_ga = GA_EMPTY_INIT_VALUE;
 // case the commands are ignored.
 void ex_menutranslate(exarg_T *eap)
 {
-  char *arg = eap->arg;
-
-  if (menutrans_ga.ga_itemsize == 0) {
-    ga_init(&menutrans_ga, (int)sizeof(menutrans_T), 5);
-  }
-
-  // ":menutrans clear": clear all translations.
-  if (strncmp(arg, "clear", 5) == 0 && ends_excmd(*skipwhite(arg + 5))) {
-    GA_DEEP_CLEAR(&menutrans_ga, menutrans_T, FREE_MENUTRANS);
-
-    // Delete all "menutrans_" global variables.
-    del_menutrans_vars();
-  } else {
-    // ":menutrans from to": add translation
-    char *from = arg;
-    arg = menu_skip_part(arg);
-    char *to = skipwhite(arg);
-    *arg = NUL;
-    arg = menu_skip_part(to);
-    if (arg == to) {
-      emsg(_(e_invarg));
-    } else {
-      from = xstrdup(from);
-      char *from_noamp = menu_text(from, NULL, NULL);
-      assert(arg >= to);
-      to = xmemdupz(to, (size_t)(arg - to));
-      menu_translate_tab_and_shift(from);
-      menu_translate_tab_and_shift(to);
-      menu_unescape_name(from);
-      menu_unescape_name(to);
-      menutrans_T *tp = GA_APPEND_VIA_PTR(menutrans_T, &menutrans_ga);
-      tp->from = from;
-      tp->from_noamp = from_noamp;
-      tp->to = to;
-    }
-  }
+  rs_ex_menutranslate(eap);
 }
 
 // Find the character just after one part of a menu name.
@@ -844,28 +623,7 @@ static char *menu_skip_part(char *p)
 // Return a pointer to the translation or NULL if not found.
 static char *menutrans_lookup(char *name, int len)
 {
-  menutrans_T *tp = (menutrans_T *)menutrans_ga.ga_data;
-
-  for (int i = 0; i < menutrans_ga.ga_len; i++) {
-    if (STRNICMP(name, tp[i].from, len) == 0 && tp[i].from[len] == NUL) {
-      return tp[i].to;
-    }
-  }
-
-  // Now try again while ignoring '&' characters.
-  char c = name[len];
-  name[len] = NUL;
-  char *dname = menu_text(name, NULL, NULL);
-  name[len] = c;
-  for (int i = 0; i < menutrans_ga.ga_len; i++) {
-    if (STRICMP(dname, tp[i].from_noamp) == 0) {
-      xfree(dname);
-      return tp[i].to;
-    }
-  }
-  xfree(dname);
-
-  return NULL;
+  return rs_menutrans_lookup(name, len);
 }
 
 // Unescape the name in the translate dictionary table.
@@ -1377,3 +1135,112 @@ void nvim_menu_call_add_menu_path(const char *menu_path, int modes, int noremap,
   menuarg.silent[0] = silent;
   add_menu_path(menu_path, &menuarg, pri_tab, call_data);
 }
+
+// ============================================================================
+// Phase 6: Completion + Translation accessors
+// ============================================================================
+
+// expand_T field accessors
+void nvim_menu_xp_set_context(expand_T *xp, int ctx)
+{
+  xp->xp_context = ctx;
+}
+
+void nvim_menu_xp_set_pattern(expand_T *xp, char *pattern)
+{
+  xp->xp_pattern = pattern;
+}
+
+// Static variable accessors for expand_menu, expand_modes, expand_emenu
+vimmenu_T *nvim_menu_get_expand_menu(void)
+{
+  return expand_menu;
+}
+
+void nvim_menu_set_expand_menu(vimmenu_T *menu)
+{
+  expand_menu = menu;
+}
+
+int nvim_menu_get_expand_modes(void)
+{
+  return expand_modes;
+}
+
+void nvim_menu_set_expand_modes(int modes)
+{
+  expand_modes = modes;
+}
+
+int nvim_menu_get_expand_emenu(void)
+{
+  return expand_emenu;
+}
+
+void nvim_menu_set_expand_emenu(int v)
+{
+  expand_emenu = v;
+}
+
+// menutrans_ga accessors
+int nvim_menu_menutrans_ga_itemsize(void)
+{
+  return menutrans_ga.ga_itemsize;
+}
+
+int nvim_menu_menutrans_ga_init(void)
+{
+  ga_init(&menutrans_ga, (int)sizeof(menutrans_T), 5);
+  return 1;
+}
+
+int nvim_menu_menutrans_ga_len(void)
+{
+  return menutrans_ga.ga_len;
+}
+
+const char *nvim_menu_menutrans_get_from(int idx)
+{
+  menutrans_T *tp = (menutrans_T *)menutrans_ga.ga_data;
+  return tp[idx].from;
+}
+
+const char *nvim_menu_menutrans_get_from_noamp(int idx)
+{
+  menutrans_T *tp = (menutrans_T *)menutrans_ga.ga_data;
+  return tp[idx].from_noamp;
+}
+
+const char *nvim_menu_menutrans_get_to(int idx)
+{
+  menutrans_T *tp = (menutrans_T *)menutrans_ga.ga_data;
+  return tp[idx].to;
+}
+
+void nvim_menu_menutrans_clear(void)
+{
+  GA_DEEP_CLEAR(&menutrans_ga, menutrans_T, FREE_MENUTRANS);
+}
+
+void nvim_menu_menutrans_append(char *from, char *from_noamp, char *to)
+{
+  if (menutrans_ga.ga_itemsize == 0) {
+    ga_init(&menutrans_ga, (int)sizeof(menutrans_T), 5);
+  }
+  menutrans_T *tp = GA_APPEND_VIA_PTR(menutrans_T, &menutrans_ga);
+  tp->from = from;
+  tp->from_noamp = from_noamp;
+  tp->to = to;
+}
+
+// Error message wrapper
+void nvim_menu_emsg_invarg(void)
+{
+  emsg(_(e_invarg));
+}
+
+// _Static_assert for Phase 6 constants
+_Static_assert(EXPAND_MENUS == 11, "EXPAND_MENUS must be 11");
+_Static_assert(EXPAND_MENUNAMES == 21, "EXPAND_MENUNAMES must be 21");
+_Static_assert(EXPAND_UNSUCCESSFUL == -2, "EXPAND_UNSUCCESSFUL must be -2");
+_Static_assert(EXPAND_NOTHING == 0, "EXPAND_NOTHING must be 0");

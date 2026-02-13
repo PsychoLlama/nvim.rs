@@ -60,6 +60,7 @@
 
 pub mod classify;
 pub mod commands;
+pub mod complete_expand;
 pub mod completion;
 pub mod create;
 pub mod delete;
@@ -72,6 +73,7 @@ pub mod lookup;
 pub mod mutate;
 pub mod path;
 pub mod popup;
+pub mod translate;
 pub mod traverse;
 
 // Re-exports for convenience
@@ -80,6 +82,7 @@ pub use classify::{
     rs_menu_is_winbar,
 };
 pub use commands::{rs_get_menu_cmd_modes, rs_get_menu_mode_str, MenuCmdResult};
+pub use complete_expand::{rs_get_menu_name, rs_get_menu_names, rs_set_context_in_menu_cmd};
 pub use completion::{
     rs_count_completable_menus, rs_menu_completion_context, rs_menu_is_completable,
     rs_should_expand_all_modes, MenuCompletionContext,
@@ -116,6 +119,7 @@ pub use popup::{
     rs_is_popup_menu_for_mode, rs_popup_menu_should_show, rs_popup_mode_name,
     rs_popup_mode_name_len, MENU_MODE_CHARS,
 };
+pub use translate::{rs_ex_menutranslate, rs_menutrans_lookup};
 
 /// Hidden menu character (']')
 pub const MNU_HIDDEN_CHAR: u8 = b']';
