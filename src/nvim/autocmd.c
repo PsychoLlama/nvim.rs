@@ -76,6 +76,10 @@ extern int rs_has_event(int event, int num_events);
 extern int rs_is_aucmd_win(win_T *win);
 extern int rs_has_cursorhold(void);
 extern int rs_trigger_cursorhold(void);
+extern int rs_aupat_get_buflocal_nr(const char *pat, int patlen);
+extern void rs_aupat_normalize_buflocal_pat(char *dest, const char *pat, int patlen,
+                                            int buflocal_nr);
+extern int rs_autocmd_supported(const char *event);
 
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
@@ -2320,8 +2324,7 @@ char *get_event_name_no_group(expand_T *xp FUNC_ATTR_UNUSED, int idx, bool win)
 bool autocmd_supported(const char *const event)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  char *p;
-  return event_name2nr(event, &p) != NUM_EVENTS;
+  return rs_autocmd_supported(event) != 0;
 }
 
 /// Return true if an autocommand is defined for a group, event and
@@ -2425,39 +2428,13 @@ bool aupat_is_buflocal(const char *pat, int patlen)
 
 int aupat_get_buflocal_nr(const char *pat, int patlen)
 {
-  assert(aupat_is_buflocal(pat, patlen));
-
-  // "<buffer>"
-  if (patlen == 8) {
-    return curbuf->b_fnum;
-  }
-
-  if (patlen > 9 && (pat)[7] == '=') {
-    // "<buffer=abuf>"
-    if (patlen == 13 && STRNICMP(pat, "<buffer=abuf>", 13) == 0) {
-      return autocmd_bufnr;
-    }
-
-    // "<buffer=123>"
-    if (skipdigits(pat + 8) == pat + patlen - 1) {
-      return atoi(pat + 8);
-    }
-  }
-
-  return 0;
+  return rs_aupat_get_buflocal_nr(pat, patlen);
 }
 
 // normalize buffer pattern
 void aupat_normalize_buflocal_pat(char *dest, const char *pat, int patlen, int buflocal_nr)
 {
-  assert(aupat_is_buflocal(pat, patlen));
-
-  if (buflocal_nr == 0) {
-    buflocal_nr = curbuf->handle;
-  }
-
-  // normalize pat into standard "<buffer>#N" form
-  snprintf(dest, BUFLOCAL_PAT_LEN, "<buffer=%d>", buflocal_nr);
+  rs_aupat_normalize_buflocal_pat(dest, pat, patlen, buflocal_nr);
 }
 
 int autocmd_delete_event(int group, event_T event, const char *pat)
@@ -2727,4 +2704,33 @@ int nvim_get_reg_recording(void)
 int nvim_get_reg_executing(void)
 {
   return reg_executing;
+}
+
+/// Get the current buffer's file number (used by Rust FFI).
+int nvim_get_curbuf_fnum(void)
+{
+  return curbuf->b_fnum;
+}
+
+/// Get the current buffer's handle (used by Rust FFI).
+int nvim_get_curbuf_handle(void)
+{
+  return curbuf->handle;
+}
+
+/// Get the autocmd_bufnr value (used by Rust FFI).
+int nvim_get_autocmd_bufnr(void)
+{
+  return autocmd_bufnr;
+}
+
+/// Resolve an event name to its number (used by Rust FFI).
+/// Returns NUM_EVENTS if not found.
+int nvim_event_name2nr(const char *start, size_t len)
+{
+  int hash_idx = event_name2nr_hash(start, len);
+  if (hash_idx < 0) {
+    return NUM_EVENTS;
+  }
+  return abs(event_names[event_hash[hash_idx]].event);
 }

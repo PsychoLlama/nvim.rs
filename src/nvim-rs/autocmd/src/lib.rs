@@ -31,6 +31,9 @@ const EVENT_CURSORHOLD: c_int = 37;
 const EVENT_CURSORHOLDI: c_int = 38;
 const NUM_EVENTS: c_int = 141;
 
+// Buffer-local pattern constants from autocmd.h
+const BUFLOCAL_PAT_LEN: usize = 25;
+
 // C accessors for static data
 extern "C" {
     fn nvim_get_autocmd_blocked() -> c_int;
@@ -52,6 +55,14 @@ extern "C" {
 
     // From insexpand crate - check if completion is active
     fn rs_ins_compl_active() -> c_int;
+
+    // Buffer/autocmd state accessors (Phase 1)
+    fn nvim_get_curbuf_fnum() -> c_int;
+    fn nvim_get_curbuf_handle() -> c_int;
+    fn nvim_get_autocmd_bufnr() -> c_int;
+
+    // Event name resolution (Phase 1)
+    fn nvim_event_name2nr(start: *const c_char, len: usize) -> c_int;
 }
 
 // Static "Unknown" string for invalid events
@@ -275,6 +286,115 @@ pub unsafe extern "C" fn rs_aupat_is_buflocal(pat: *const c_char, patlen: c_int)
     // Check ends with ">"
     let last = *pat.add(patlen - 1) as u8;
     c_int::from(last == b'>')
+}
+
+/// Get the buffer number from a buffer-local pattern.
+///
+/// Patterns: `<buffer>` → curbuf fnum, `<buffer=abuf>` → autocmd_bufnr,
+/// `<buffer=N>` → N. Returns 0 if the pattern is invalid.
+///
+/// # Safety
+/// `pat` must be a valid pointer to at least `patlen` bytes.
+/// The pattern must be buffer-local (caller asserts this).
+#[no_mangle]
+pub unsafe extern "C" fn rs_aupat_get_buflocal_nr(pat: *const c_char, patlen: c_int) -> c_int {
+    let patlen = patlen as usize;
+
+    // "<buffer>" — bare pattern means current buffer
+    if patlen == 8 {
+        return nvim_get_curbuf_fnum();
+    }
+
+    // Need at least "<buffer=X>" (10 chars) and '=' at position 7
+    if patlen > 9 && *pat.add(7) == b'=' as c_char {
+        // "<buffer=abuf>" — use the autocmd buffer number
+        if patlen == 13 {
+            let slice = std::slice::from_raw_parts(pat.cast::<u8>(), 13);
+            if slice.eq_ignore_ascii_case(b"<buffer=abuf>") {
+                return nvim_get_autocmd_bufnr();
+            }
+        }
+
+        // "<buffer=123>" — parse the digits
+        // Check that characters at positions 8..patlen-1 are all digits
+        let digits_start = 8;
+        let digits_end = patlen - 1; // last char should be '>'
+        let mut all_digits = digits_start < digits_end;
+        for i in digits_start..digits_end {
+            let c = *pat.add(i) as u8;
+            if !c.is_ascii_digit() {
+                all_digits = false;
+                break;
+            }
+        }
+        if all_digits {
+            // Parse the number using atoi-equivalent
+            let slice = std::slice::from_raw_parts(pat.add(8).cast::<u8>(), digits_end - 8);
+            if let Ok(s) = std::str::from_utf8(slice) {
+                if let Ok(n) = s.parse::<c_int>() {
+                    return n;
+                }
+            }
+        }
+    }
+
+    0
+}
+
+/// Normalize a buffer-local pattern to standard `<buffer=N>` form.
+///
+/// If `buflocal_nr` is 0, uses `curbuf->handle` instead.
+/// Writes a NUL-terminated string into `dest` (must be at least `BUFLOCAL_PAT_LEN` bytes).
+///
+/// # Safety
+/// `dest` must be a valid writable pointer to at least `BUFLOCAL_PAT_LEN` bytes.
+/// `pat` must be a valid pointer to at least `patlen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_aupat_normalize_buflocal_pat(
+    dest: *mut c_char,
+    _pat: *const c_char,
+    _patlen: c_int,
+    mut buflocal_nr: c_int,
+) {
+    if buflocal_nr == 0 {
+        buflocal_nr = nvim_get_curbuf_handle();
+    }
+
+    // Format "<buffer=N>" into dest
+    // Use a stack buffer and copy
+    let mut buf = [0u8; BUFLOCAL_PAT_LEN];
+    let formatted = format!("<buffer={buflocal_nr}>");
+    let bytes = formatted.as_bytes();
+    let copy_len = bytes.len().min(BUFLOCAL_PAT_LEN - 1);
+    buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+    buf[copy_len] = 0;
+    std::ptr::copy_nonoverlapping(buf.as_ptr(), dest.cast::<u8>(), copy_len + 1);
+}
+
+/// Check whether a given autocommand event name is supported.
+///
+/// Returns 1 if the event name is recognized, 0 otherwise.
+///
+/// # Safety
+/// `event` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_autocmd_supported(event: *const c_char) -> c_int {
+    if event.is_null() {
+        return 0;
+    }
+
+    // Find the length of the event name (up to NUL, whitespace, comma, or pipe)
+    let mut len = 0usize;
+    loop {
+        let c = *event.add(len) as u8;
+        if c == 0 || c == b' ' || c == b'\t' || c == b',' || c == b'|' {
+            break;
+        }
+        len += 1;
+    }
+
+    let result = nvim_event_name2nr(event, len);
+    c_int::from(result != NUM_EVENTS)
 }
 
 #[cfg(test)]
