@@ -79,6 +79,9 @@ extern void rs_ins_bytes_len(const char *p, size_t len);
 extern void rs_ins_char(int c);
 extern void rs_ins_char_bytes(char *buf, size_t charlen);
 extern void rs_ins_str(const char *s, size_t slen);
+extern int rs_del_char(bool fixpos);
+extern int rs_del_chars(int count, int fixpos);
+extern int rs_del_bytes(colnr_T count, bool fixpos_arg, bool use_delcombine);
 
 void change_warning(buf_T *buf, int col)
 {
@@ -510,25 +513,13 @@ void ins_str(char *s, size_t slen)
 // return FAIL for failure, OK otherwise
 int del_char(bool fixpos)
 {
-  // Make sure the cursor is at the start of a character.
-  mb_adjust_cursor();
-  if (*get_cursor_pos_ptr() == NUL) {
-    return FAIL;
-  }
-  return del_chars(1, fixpos);
+  return rs_del_char(fixpos);
 }
 
 /// Like del_bytes(), but delete characters instead of bytes.
 int del_chars(int count, int fixpos)
 {
-  int bytes = 0;
-  char *p = get_cursor_pos_ptr();
-  for (int i = 0; i < count && *p != NUL; i++) {
-    int l = utfc_ptr2len(p);
-    bytes += l;
-    p += l;
-  }
-  return del_bytes(bytes, fixpos, true);
+  return rs_del_chars(count, fixpos);
 }
 
 /// Delete "count" bytes under the cursor.
@@ -542,82 +533,7 @@ int del_chars(int count, int fixpos)
 /// @return FAIL for failure, OK otherwise
 int del_bytes(colnr_T count, bool fixpos_arg, bool use_delcombine)
 {
-  linenr_T lnum = curwin->w_cursor.lnum;
-  colnr_T col = curwin->w_cursor.col;
-  bool fixpos = fixpos_arg;
-  char *oldp = ml_get(lnum);
-  colnr_T oldlen = ml_get_len(lnum);
-
-  // Can't do anything when the cursor is on the NUL after the line.
-  if (col >= oldlen) {
-    return FAIL;
-  }
-  // If "count" is zero there is nothing to do.
-  if (count == 0) {
-    return OK;
-  }
-  // If "count" is negative the caller must be doing something wrong.
-  if (count < 1) {
-    siemsg("E292: Invalid count for del_bytes(): %ld", (int64_t)count);
-    return FAIL;
-  }
-
-  // If 'delcombine' is set and deleting (less than) one character, only
-  // delete the last combining character.
-  if (p_deco && use_delcombine && utfc_ptr2len(oldp + col) >= count) {
-    char *p0 = oldp + col;
-    GraphemeState state = GRAPHEME_STATE_INIT;
-    if (utf_composinglike(p0, p0 + utf_ptr2len(p0), &state)) {
-      // Find the last composing char, there can be several.
-      int n = col;
-      do {
-        col = n;
-        count = utf_ptr2len(oldp + n);
-        n += count;
-      } while (utf_composinglike(oldp + col, oldp + n, &state));
-      fixpos = false;
-    }
-  }
-
-  // When count is too big, reduce it.
-  int movelen = oldlen - col - count + 1;  // includes trailing NUL
-  if (movelen <= 1) {
-    // If we just took off the last character of a non-blank line, and
-    // fixpos is true, we don't want to end up positioned at the NUL,
-    // unless "restart_edit" is set or 'virtualedit' contains "onemore".
-    if (col > 0 && fixpos && restart_edit == 0
-        && (get_ve_flags(curwin) & kOptVeFlagOnemore) == 0) {
-      curwin->w_cursor.col--;
-      curwin->w_cursor.coladd = 0;
-      curwin->w_cursor.col -= utf_head_off(oldp, oldp + curwin->w_cursor.col);
-    }
-    count = oldlen - col;
-    movelen = 1;
-  }
-  colnr_T newlen = oldlen - count;
-
-  // If the old line has been allocated the deletion can be done in the
-  // existing line. Otherwise a new line has to be allocated.
-  bool alloc_newp = !ml_line_alloced();     // check if oldp was allocated
-  char *newp;
-  if (!alloc_newp) {
-    ml_add_deleted_len(curbuf->b_ml.ml_line_ptr, oldlen);
-    newp = oldp;                            // use same allocated memory
-  } else {                                  // need to allocate a new line
-    newp = xmalloc((size_t)newlen + 1);
-    memmove(newp, oldp, (size_t)col);
-  }
-  memmove(newp + col, oldp + col + count, (size_t)movelen);
-  if (alloc_newp) {
-    ml_replace(lnum, newp, false);
-  } else {
-    curbuf->b_ml.ml_line_len -= count;
-  }
-
-  // mark the buffer as changed and prepare for displaying
-  inserted_bytes(lnum, col, count, 0);
-
-  return OK;
+  return rs_del_bytes(count, fixpos_arg, use_delcombine);
 }
 
 /// open_line: Add a new line below or above the current line.
