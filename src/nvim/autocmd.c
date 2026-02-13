@@ -125,6 +125,15 @@ extern void rs_do_all_autocmd_events(const char *pat, bool once, int nested, cha
 extern int rs_do_autocmd_event(int event, const char *pat, bool once, int nested,
                                const char *cmd, bool del, int group);
 
+// Phase 8a: Simple wrappers + blocking
+extern void rs_block_autocmds(void);
+extern void rs_unblock_autocmds(void);
+extern bool rs_apply_autocmds(int event, char *fname, char *fname_io, bool force, void *buf);
+extern bool rs_apply_autocmds_exarg(int event, char *fname, char *fname_io, bool force,
+                                    void *buf, void *eap);
+extern bool rs_apply_autocmds_retval(int event, char *fname, char *fname_io, bool force,
+                                     void *buf, int *retval);
+
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
 {
@@ -1007,7 +1016,7 @@ win_found:
 /// @return true if some commands were executed.
 bool apply_autocmds(event_T event, char *fname, char *fname_io, bool force, buf_T *buf)
 {
-  return apply_autocmds_group(event, fname, fname_io, force, AUGROUP_ALL, buf, NULL, NULL);
+  return rs_apply_autocmds((int)event, fname, fname_io, force, buf);
 }
 
 /// Like apply_autocmds(), but with extra "eap" argument.  This takes care of
@@ -1024,7 +1033,7 @@ bool apply_autocmds(event_T event, char *fname, char *fname_io, bool force, buf_
 bool apply_autocmds_exarg(event_T event, char *fname, char *fname_io, bool force, buf_T *buf,
                           exarg_T *eap)
 {
-  return apply_autocmds_group(event, fname, fname_io, force, AUGROUP_ALL, buf, eap, NULL);
+  return rs_apply_autocmds_exarg((int)event, fname, fname_io, force, buf, eap);
 }
 
 /// Like apply_autocmds(), but handles the caller's retval.  If the script
@@ -1043,15 +1052,7 @@ bool apply_autocmds_exarg(event_T event, char *fname, char *fname_io, bool force
 bool apply_autocmds_retval(event_T event, char *fname, char *fname_io, bool force, buf_T *buf,
                            int *retval)
 {
-  if (should_abort(*retval)) {
-    return false;
-  }
-
-  bool did_cmd = apply_autocmds_group(event, fname, fname_io, force, AUGROUP_ALL, buf, NULL, NULL);
-  if (did_cmd && aborting()) {
-    *retval = FAIL;
-  }
-  return did_cmd;
+  return rs_apply_autocmds_retval((int)event, fname, fname_io, force, buf, retval);
 }
 
 /// Return true if "event" autocommand is defined.
@@ -1462,23 +1463,12 @@ BYPASS_AU:
 // Can be used recursively, so long as it's symmetric.
 void block_autocmds(void)
 {
-  // Remember the value of v:termresponse.
-  if (!is_autocmd_blocked()) {
-    old_termresponse = get_vim_var_str(VV_TERMRESPONSE);
-  }
-  autocmd_blocked++;
+  rs_block_autocmds();
 }
 
 void unblock_autocmds(void)
 {
-  autocmd_blocked--;
-
-  // When v:termresponse was set while autocommands were blocked, trigger
-  // the autocommands now.  Esp. useful when executing a shell command
-  // during startup (nvim -d).
-  if (!is_autocmd_blocked() && get_vim_var_str(VV_TERMRESPONSE) != old_termresponse) {
-    apply_autocmds(EVENT_TERMRESPONSE, NULL, NULL, false, curbuf);
-  }
+  rs_unblock_autocmds();
 }
 
 bool is_autocmd_blocked(void)
@@ -2351,6 +2341,9 @@ const char *nvim_autocmd_get_e_duparg2(void)
 _Static_assert(HLF_8 == 1, "HLF_8 value changed");
 _Static_assert(HLF_E == 6, "HLF_E value changed");
 _Static_assert(HLF_T == 23, "HLF_T value changed");
+_Static_assert(EVENT_TERMRESPONSE == 120, "EVENT_TERMRESPONSE value changed");
+_Static_assert(VV_TERMRESPONSE == 11, "VV_TERMRESPONSE value changed");
+_Static_assert(FAIL == 0, "FAIL value changed");
 
 /// Get the pattern string of autocmd at (event, idx).
 const char *nvim_autocmd_get_pat_str(int event, size_t idx)
@@ -2621,4 +2614,62 @@ int nvim_autocmd_ok(void)
 int nvim_autocmd_fail(void)
 {
   return FAIL;
+}
+
+// Phase 8a: Simple wrappers + blocking accessors
+
+/// Get the string value of a Vim variable.
+const char *nvim_autocmd_get_vim_var_str(int vv)
+{
+  return get_vim_var_str(vv);
+}
+
+/// Get the saved old_termresponse pointer.
+const char *nvim_autocmd_get_old_termresponse(void)
+{
+  return old_termresponse;
+}
+
+/// Set the saved old_termresponse pointer.
+void nvim_autocmd_set_old_termresponse(const char *ptr)
+{
+  old_termresponse = (char *)ptr;
+}
+
+/// Increment autocmd_blocked counter.
+void nvim_autocmd_inc_blocked(void)
+{
+  autocmd_blocked++;
+}
+
+/// Decrement autocmd_blocked counter.
+void nvim_autocmd_dec_blocked(void)
+{
+  autocmd_blocked--;
+}
+
+/// Call apply_autocmds_group from Rust.
+bool nvim_autocmd_apply_autocmds_group(int event, char *fname, char *fname_io, bool force,
+                                       int group, void *buf, void *eap, void *data)
+{
+  return apply_autocmds_group((event_T)event, fname, fname_io, force, group,
+                              (buf_T *)buf, (exarg_T *)eap, (Object *)data);
+}
+
+/// Wrap should_abort for Rust.
+bool nvim_autocmd_should_abort(int retval)
+{
+  return should_abort(retval);
+}
+
+/// Wrap aborting for Rust.
+bool nvim_autocmd_aborting(void)
+{
+  return aborting();
+}
+
+/// Get curbuf as opaque pointer.
+void *nvim_autocmd_get_curbuf_ptr(void)
+{
+  return curbuf;
 }

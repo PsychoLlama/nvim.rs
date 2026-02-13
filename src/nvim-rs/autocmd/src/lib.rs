@@ -29,10 +29,17 @@ const MODE_INSERT: c_int = 0x10;
 // Event constants from auevents_enum.generated.h
 const EVENT_CURSORHOLD: c_int = 37;
 const EVENT_CURSORHOLDI: c_int = 38;
+const EVENT_TERMRESPONSE: c_int = 120;
 const NUM_EVENTS: c_int = 141;
+
+// C constant
+const FAIL: c_int = 0;
 
 // Buffer-local pattern constants from autocmd.h
 const BUFLOCAL_PAT_LEN: usize = 25;
+
+// Vim variable index from eval_defs.h
+const VV_TERMRESPONSE: c_int = 11;
 
 // C accessors for static data
 extern "C" {
@@ -140,6 +147,26 @@ extern "C" {
         cmd: *const c_char,
     ) -> c_int;
     fn nvim_autocmd_ok() -> c_int;
+
+    // Phase 8a: Simple wrappers + blocking accessors
+    fn nvim_autocmd_get_vim_var_str(vv: c_int) -> *const c_char;
+    fn nvim_autocmd_get_old_termresponse() -> *const c_char;
+    fn nvim_autocmd_set_old_termresponse(ptr: *const c_char);
+    fn nvim_autocmd_inc_blocked();
+    fn nvim_autocmd_dec_blocked();
+    fn nvim_autocmd_apply_autocmds_group(
+        event: c_int,
+        fname: *mut c_char,
+        fname_io: *mut c_char,
+        force: bool,
+        group: c_int,
+        buf: *mut c_void,
+        eap: *mut c_void,
+        data: *mut c_void,
+    ) -> bool;
+    fn nvim_autocmd_should_abort(retval: c_int) -> bool;
+    fn nvim_autocmd_aborting() -> bool;
+    fn nvim_autocmd_get_curbuf_ptr() -> *mut c_void;
 
     // Rust functions from other modules (called via FFI)
     fn rs_augroup_find(name: *const c_char) -> c_int;
@@ -1395,6 +1422,120 @@ pub unsafe extern "C" fn rs_do_autocmd_event(
 
     rs_au_cleanup();
     nvim_autocmd_ok()
+}
+
+// =============================================================================
+// Phase 8a: Simple Wrappers + Blocking
+// =============================================================================
+
+/// Block triggering autocommands until `unblock_autocmds` is called.
+/// Can be used recursively, so long as it's symmetric.
+#[no_mangle]
+pub unsafe extern "C" fn rs_block_autocmds() {
+    // Remember the value of v:termresponse.
+    if rs_is_autocmd_blocked() == 0 {
+        nvim_autocmd_set_old_termresponse(nvim_autocmd_get_vim_var_str(VV_TERMRESPONSE));
+    }
+    nvim_autocmd_inc_blocked();
+}
+
+/// Unblock autocommands. When v:termresponse was set while autocommands
+/// were blocked, trigger the autocommands now.
+#[no_mangle]
+pub unsafe extern "C" fn rs_unblock_autocmds() {
+    nvim_autocmd_dec_blocked();
+
+    // When v:termresponse was set while autocommands were blocked, trigger
+    // the autocommands now. Esp. useful when executing a shell command
+    // during startup (nvim -d).
+    if rs_is_autocmd_blocked() == 0
+        && nvim_autocmd_get_vim_var_str(VV_TERMRESPONSE) != nvim_autocmd_get_old_termresponse()
+    {
+        rs_apply_autocmds(
+            EVENT_TERMRESPONSE,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            false,
+            nvim_autocmd_get_curbuf_ptr(),
+        );
+    }
+}
+
+/// Execute autocommands for "event" and file name "fname".
+#[no_mangle]
+pub unsafe extern "C" fn rs_apply_autocmds(
+    event: c_int,
+    fname: *mut c_char,
+    fname_io: *mut c_char,
+    force: bool,
+    buf: *mut c_void,
+) -> bool {
+    nvim_autocmd_apply_autocmds_group(
+        event,
+        fname,
+        fname_io,
+        force,
+        group::AUGROUP_ALL,
+        buf,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+    )
+}
+
+/// Like `apply_autocmds`, but with extra "eap" argument.
+#[no_mangle]
+pub unsafe extern "C" fn rs_apply_autocmds_exarg(
+    event: c_int,
+    fname: *mut c_char,
+    fname_io: *mut c_char,
+    force: bool,
+    buf: *mut c_void,
+    eap: *mut c_void,
+) -> bool {
+    nvim_autocmd_apply_autocmds_group(
+        event,
+        fname,
+        fname_io,
+        force,
+        group::AUGROUP_ALL,
+        buf,
+        eap,
+        std::ptr::null_mut(),
+    )
+}
+
+/// Like `apply_autocmds`, but handles the caller's retval.
+///
+/// If the script processing is being aborted or if retval is FAIL when inside
+/// a try conditional, no autocommands are executed. If otherwise the
+/// autocommands cause the script to be aborted, retval is set to FAIL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_apply_autocmds_retval(
+    event: c_int,
+    fname: *mut c_char,
+    fname_io: *mut c_char,
+    force: bool,
+    buf: *mut c_void,
+    retval: *mut c_int,
+) -> bool {
+    if nvim_autocmd_should_abort(*retval) {
+        return false;
+    }
+
+    let did_cmd = nvim_autocmd_apply_autocmds_group(
+        event,
+        fname,
+        fname_io,
+        force,
+        group::AUGROUP_ALL,
+        buf,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+    );
+    if did_cmd && nvim_autocmd_aborting() {
+        *retval = FAIL;
+    }
+    did_cmd
 }
 
 #[cfg(test)]
