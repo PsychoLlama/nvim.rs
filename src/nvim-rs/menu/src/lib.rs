@@ -99,7 +99,10 @@ pub use lookup::{
     rs_count_menu_siblings, rs_find_menu_by_name, rs_find_menu_sibling, rs_menu_exists,
     rs_menu_path_depth, MenuSearchResult,
 };
-pub use path::{rs_menu_name_equal, rs_menu_namelen, rs_menu_text, MenuTextResult};
+pub use path::{
+    rs_menu_name_equal, rs_menu_name_skip, rs_menu_namelen, rs_menu_skip_part, rs_menu_text,
+    rs_menu_translate_tab_and_shift, rs_menu_unescape_name, MenuTextResult,
+};
 pub use popup::{
     rs_find_popup_menu, rs_get_menu_mode_chars, rs_get_menu_mode_chars_len,
     rs_is_popup_menu_for_mode, rs_popup_menu_should_show, rs_popup_mode_name,

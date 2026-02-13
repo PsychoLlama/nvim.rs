@@ -70,6 +70,19 @@ extern char *rs_popup_mode_name(const char *name, int idx);
 extern int rs_get_menu_mode(void);
 extern int rs_get_menu_mode_flag(void);
 
+// Rust implementations for Phase 2
+extern char *rs_menu_name_skip(char *name);
+extern const char *rs_menu_skip_part(const char *p);
+extern void rs_menu_unescape_name(char *name);
+extern char *rs_menu_translate_tab_and_shift(char *arg_start);
+
+typedef struct {
+  char *text;
+  int mnemonic;
+  char *actext;
+} MenuTextResult;
+extern MenuTextResult rs_menu_text(const char *str);
+
 /// The character for each menu mode
 static char *menu_mode_chars[] = { "n", "v", "s", "o", "i", "c", "tl", "t" };
 
@@ -1112,20 +1125,7 @@ char *get_menu_names(expand_T *xp, int idx)
 /// @return start of the next element
 static char *menu_name_skip(char *const name)
 {
-  char *p;
-
-  for (p = name; *p && *p != '.'; MB_PTR_ADV(p)) {
-    if (*p == '\\' || *p == Ctrl_V) {
-      STRMOVE(p, p + 1);
-      if (*p == NUL) {
-        break;
-      }
-    }
-  }
-  if (*p) {
-    *p++ = NUL;
-  }
-  return p;
+  return rs_menu_name_skip(name);
 }
 
 /// Return true when "name" matches with menu "menu".  The name is compared in
@@ -1185,35 +1185,16 @@ static char *menu_text(const char *str, int *mnemonic, char **actext)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  char *text;
-
-  // Locate accelerator text, after the first TAB
-  char *p = vim_strchr(str, TAB);
-  if (p != NULL) {
-    if (actext != NULL) {
-      *actext = xstrdup(p + 1);
-    }
-    assert(p >= str);
-    text = xmemdupz(str, (size_t)(p - str));
+  MenuTextResult result = rs_menu_text(str);
+  if (mnemonic != NULL) {
+    *mnemonic = result.mnemonic;
+  }
+  if (actext != NULL && result.actext != NULL) {
+    *actext = result.actext;
   } else {
-    text = xstrdup(str);
+    xfree(result.actext);
   }
-
-  // Find mnemonic characters "&a" and reduce "&&" to "&".
-  for (p = text; p != NULL;) {
-    p = vim_strchr(p, '&');
-    if (p != NULL) {
-      if (p[1] == NUL) {            // trailing "&"
-        break;
-      }
-      if (mnemonic != NULL && p[1] != '&') {
-        *mnemonic = (uint8_t)p[1];
-      }
-      STRMOVE(p, p + 1);
-      p = p + 1;
-    }
-  }
-  return text;
+  return result.text;
 }
 
 // Return true if "name" can be a menu in the MenuBar.
@@ -1599,13 +1580,7 @@ void ex_menutranslate(exarg_T *eap)
 // Find the character just after one part of a menu name.
 static char *menu_skip_part(char *p)
 {
-  while (*p != NUL && *p != '.' && !ascii_iswhite(*p)) {
-    if ((*p == '\\' || *p == Ctrl_V) && p[1] != NUL) {
-      p++;
-    }
-    p++;
-  }
-  return p;
+  return (char *)rs_menu_skip_part(p);
 }
 
 // Lookup part of a menu name in the translations.
@@ -1639,34 +1614,14 @@ static char *menutrans_lookup(char *name, int len)
 // Unescape the name in the translate dictionary table.
 static void menu_unescape_name(char *name)
 {
-  for (char *p = name; *p && *p != '.'; MB_PTR_ADV(p)) {
-    if (*p == '\\') {
-      STRMOVE(p, p + 1);
-    }
-  }
+  rs_menu_unescape_name(name);
 }
 
 // Isolate the menu name.
 // Skip the menu name, and translate <Tab> into a real TAB.
 static char *menu_translate_tab_and_shift(char *arg_start)
 {
-  char *arg = arg_start;
-
-  while (*arg && !ascii_iswhite(*arg)) {
-    if ((*arg == '\\' || *arg == Ctrl_V) && arg[1] != NUL) {
-      arg++;
-    } else if (STRNICMP(arg, "<TAB>", 5) == 0) {
-      *arg = TAB;
-      STRMOVE(arg + 1, arg + 5);
-    }
-    arg++;
-  }
-  if (*arg != NUL) {
-    *arg++ = NUL;
-  }
-  arg = skipwhite(arg);
-
-  return arg;
+  return rs_menu_translate_tab_and_shift(arg_start);
 }
 
 /// Get the information about a menu item in mode 'which'
@@ -1883,4 +1838,10 @@ bool nvim_menu_get_visual_select(void)
 bool nvim_menu_get_finish_op(void)
 {
   return finish_op;
+}
+
+/// Wrapper for utfc_ptr2len for Rust FFI.
+int nvim_menu_utfc_ptr2len(const char *p)
+{
+  return utfc_ptr2len(p);
 }

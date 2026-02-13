@@ -256,6 +256,197 @@ pub unsafe extern "C" fn rs_menu_namelen(name: *const c_char) -> c_int {
     len
 }
 
+/// Ctrl_V character value (0x16 = 22).
+const CTRL_V: u8 = 22;
+
+extern "C" {
+    fn nvim_menu_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn strlen(s: *const c_char) -> usize;
+}
+
+/// Skip over this element of the menu path and return the start of the next
+/// element. Any `\` and `^V` escapes are removed from the current element.
+///
+/// The buffer is modified in-place: escape characters are stripped from the
+/// current path component, and the `.` separator is replaced with NUL.
+///
+/// Returns a pointer to the start of the next path component, or to the
+/// NUL terminator if there is no next component.
+///
+/// This is the Rust implementation of C `menu_name_skip()`.
+///
+/// # Safety
+/// `name` must be a valid pointer to a mutable NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_menu_name_skip(name: *mut c_char) -> *mut c_char {
+    if name.is_null() {
+        return name;
+    }
+
+    let mut p = name;
+
+    // Walk through the current component
+    while unsafe { *p } != 0 && unsafe { *p } as u8 != b'.' {
+        let ch = unsafe { *p } as u8;
+        if ch == b'\\' || ch == CTRL_V {
+            // Remove the escape character by shifting everything left by 1
+            let src = unsafe { p.add(1) };
+            let len = unsafe { strlen(src) };
+            unsafe {
+                std::ptr::copy(src, p, len + 1);
+            }
+            // If we hit NUL after removing escape, stop
+            if unsafe { *p } == 0 {
+                break;
+            }
+        }
+        // Advance by multibyte character length
+        let char_len = unsafe { nvim_menu_utfc_ptr2len(p) };
+        p = unsafe { p.add(char_len as usize) };
+    }
+
+    if unsafe { *p } != 0 {
+        // Replace '.' with NUL and advance past it
+        unsafe {
+            *p = 0;
+        }
+        p = unsafe { p.add(1) };
+    }
+
+    p
+}
+
+/// Find the character just after one part of a menu name.
+///
+/// Like `menu_name_skip` but does NOT modify the buffer. Stops at NUL,
+/// `.`, or whitespace. Handles `\` and Ctrl_V escapes (skipping the next
+/// character).
+///
+/// This is the Rust implementation of C `menu_skip_part()`.
+///
+/// # Safety
+/// `p` must be a valid pointer to a NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_menu_skip_part(p: *const c_char) -> *const c_char {
+    if p.is_null() {
+        return p;
+    }
+
+    let mut cur = p;
+    while unsafe { *cur } != 0
+        && unsafe { *cur } as u8 != b'.'
+        && !(unsafe { *cur } as u8).is_ascii_whitespace()
+    {
+        let ch = unsafe { *cur } as u8;
+        if (ch == b'\\' || ch == CTRL_V) && unsafe { *cur.add(1) } != 0 {
+            cur = unsafe { cur.add(1) };
+        }
+        cur = unsafe { cur.add(1) };
+    }
+
+    cur
+}
+
+/// Remove `\` escapes from a menu name up to the first `.` or NUL.
+///
+/// Modifies the buffer in-place by removing backslash escape characters.
+/// Unlike `menu_name_skip`, this uses `MB_PTR_ADV` for multibyte handling.
+///
+/// This is the Rust implementation of C `menu_unescape_name()`.
+///
+/// # Safety
+/// `name` must be a valid pointer to a mutable NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_menu_unescape_name(name: *mut c_char) {
+    if name.is_null() {
+        return;
+    }
+
+    let mut p = name;
+    while unsafe { *p } != 0 && unsafe { *p } as u8 != b'.' {
+        if unsafe { *p } as u8 == b'\\' {
+            // Remove the backslash by shifting everything left by 1
+            let src = unsafe { p.add(1) };
+            let len = unsafe { strlen(src) };
+            unsafe {
+                std::ptr::copy(src, p, len + 1);
+            }
+        }
+        // Advance by multibyte character length
+        let char_len = unsafe { nvim_menu_utfc_ptr2len(p) };
+        p = unsafe { p.add(char_len as usize) };
+    }
+}
+
+/// Isolate the menu name and translate `<Tab>` text into a real TAB byte.
+///
+/// Stops at whitespace (the whitespace char is NUL-terminated).
+/// Returns a pointer to the text after the whitespace (skipping leading whitespace).
+///
+/// This is the Rust implementation of C `menu_translate_tab_and_shift()`.
+///
+/// # Safety
+/// `arg_start` must be a valid pointer to a mutable NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_menu_translate_tab_and_shift(arg_start: *mut c_char) -> *mut c_char {
+    if arg_start.is_null() {
+        return arg_start;
+    }
+
+    let mut arg = arg_start;
+
+    while unsafe { *arg } != 0 && !(unsafe { *arg } as u8).is_ascii_whitespace() {
+        let ch = unsafe { *arg } as u8;
+        if (ch == b'\\' || ch == CTRL_V) && unsafe { *arg.add(1) } != 0 {
+            arg = unsafe { arg.add(1) };
+        } else if strnicmp_5(arg, b"<TAB>") {
+            // Replace '<' with TAB and remove "TAB>"
+            unsafe {
+                *arg = TAB as i8;
+            }
+            // STRMOVE(arg + 1, arg + 5)
+            let src = unsafe { arg.add(5) };
+            let dst = unsafe { arg.add(1) };
+            let len = unsafe { strlen(src) };
+            unsafe {
+                std::ptr::copy(src, dst, len + 1);
+            }
+        }
+        arg = unsafe { arg.add(1) };
+    }
+
+    if unsafe { *arg } != 0 {
+        unsafe {
+            *arg = 0;
+        }
+        arg = unsafe { arg.add(1) };
+    }
+
+    // Skip whitespace
+    while unsafe { *arg } != 0 && (unsafe { *arg } as u8).is_ascii_whitespace() {
+        arg = unsafe { arg.add(1) };
+    }
+
+    arg
+}
+
+/// Case-insensitive comparison of 5 bytes against "<TAB>".
+///
+/// # Safety
+/// `p` must point to at least 5 readable bytes.
+unsafe fn strnicmp_5(p: *const c_char, pattern: &[u8; 5]) -> bool {
+    for (i, &pat_byte) in pattern.iter().enumerate() {
+        let ch = unsafe { *p.add(i) } as u8;
+        if ch == 0 {
+            return false;
+        }
+        if !ch.eq_ignore_ascii_case(&pat_byte) {
+            return false;
+        }
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
