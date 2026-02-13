@@ -70,6 +70,10 @@ extern void rs_changed_internal(buf_T *buf);
 extern void rs_changed_lines_invalidate_buf(buf_T *buf, linenr_T lnum, colnr_T col,
                                             linenr_T lnume, linenr_T xtra);
 extern void rs_changed_lines_redraw_buf(buf_T *buf, linenr_T lnum, linenr_T lnume, linenr_T xtra);
+extern void rs_changed_bytes(linenr_T lnum, colnr_T col);
+extern void rs_inserted_bytes(linenr_T lnum, colnr_T start_col, int old_col, int new_col);
+extern void rs_changed_lines(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume,
+                             linenr_T xtra, bool do_buf_event);
 
 void change_warning(buf_T *buf, int col)
 {
@@ -341,44 +345,12 @@ void changed_common(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume, line
 /// Careful: may trigger autocommands that reload the buffer.
 void changed_bytes(linenr_T lnum, colnr_T col)
 {
-  changed_lines_redraw_buf(curbuf, lnum, lnum + 1, 0);
-  changed_common(curbuf, lnum, col, lnum + 1, 0);
-  // When text has been changed at the end of the line, possibly the start of
-  // the next line may have SpellCap that should be removed or it needs to be
-  // displayed.  Schedule the next line for redrawing just in case.
-  // Don't do this when displaying '$' at the end of changed text.
-  if (spell_check_window(curwin)
-      && lnum < curbuf->b_ml.ml_line_count
-      && vim_strchr(p_cpo, CPO_DOLLAR) == NULL) {
-    redrawWinline(curwin, lnum + 1);
-  }
-  // notify any channels that are watching
-  buf_updates_send_changes(curbuf, lnum, 1, 1);
-
-  // Diff highlighting in other diff windows may need to be updated too.
-  if (curwin->w_p_diff) {
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_p_diff && wp != curwin) {
-        redraw_later(wp, UPD_VALID);
-        linenr_T wlnum = diff_lnum_win(lnum, wp);
-        if (wlnum > 0) {
-          changed_lines_redraw_buf(wp->w_buffer, wlnum, wlnum + 1, 0);
-        }
-      }
-    }
-  }
+  rs_changed_bytes(lnum, col);
 }
 
-/// insert/delete bytes at column
-///
-/// Like changed_bytes() but also adjust extmark for "new" bytes.
 void inserted_bytes(linenr_T lnum, colnr_T start_col, int old_col, int new_col)
 {
-  if (curbuf_splice_pending == 0) {
-    extmark_splice_cols(curbuf, (int)lnum - 1, start_col, old_col, new_col, kExtmarkUndo);
-  }
-
-  changed_bytes(lnum, start_col);
+  rs_inserted_bytes(lnum, start_col, old_col, new_col);
 }
 
 /// Appended "count" lines below line "lnum" in the given buffer.
@@ -467,32 +439,7 @@ void changed_lines_redraw_buf(buf_T *buf, linenr_T lnum, linenr_T lnume, linenr_
 void changed_lines(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume, linenr_T xtra,
                    bool do_buf_event)
 {
-  changed_lines_redraw_buf(buf, lnum, lnume, xtra);
-
-  if (xtra == 0 && curwin->w_p_diff && curwin->w_buffer == buf && !diff_internal()) {
-    // When the number of lines doesn't change then mark_adjust() isn't
-    // called and other diff buffers still need to be marked for
-    // displaying.
-    linenr_T wlnum;
-
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_p_diff && wp != curwin) {
-        redraw_later(wp, UPD_VALID);
-        wlnum = diff_lnum_win(lnum, wp);
-        if (wlnum > 0) {
-          changed_lines_redraw_buf(wp->w_buffer, wlnum, lnume - lnum + wlnum, 0);
-        }
-      }
-    }
-  }
-
-  changed_common(buf, lnum, col, lnume, xtra);
-
-  if (do_buf_event) {
-    int64_t num_added = (int64_t)(lnume + xtra - lnum);
-    int64_t num_removed = lnume - lnum;
-    buf_updates_send_changes(buf, lnum, num_added, num_removed);
-  }
+  rs_changed_lines(buf, lnum, col, lnume, xtra, do_buf_event);
 }
 
 /// Called when the changed flag must be reset for buffer `buf`.
