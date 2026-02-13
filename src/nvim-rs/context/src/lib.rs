@@ -10,8 +10,10 @@
 use std::ffi::c_char;
 
 pub mod ffi;
+mod save;
 mod stack;
 
+pub use save::*;
 pub use stack::*;
 
 /// String type from the Neovim API

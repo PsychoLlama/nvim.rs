@@ -31,6 +31,7 @@ extern size_t rs_ctx_size(void);
 extern void rs_ctx_free(Context *ctx);
 extern Context *rs_ctx_get(size_t index);
 extern void rs_ctx_free_all(void);
+extern void rs_ctx_save(Context *ctx, int flags);
 
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
@@ -76,32 +77,7 @@ void ctx_free(Context *ctx)
 /// @param  flags  Flags, see ContextTypeFlags enum.
 void ctx_save(Context *ctx, const int flags)
 {
-  if (ctx == NULL) {
-    kv_push(ctx_stack, CONTEXT_INIT);
-    ctx = &kv_last(ctx_stack);
-  }
-
-  if (flags & kCtxRegs) {
-    ctx->regs = shada_encode_regs();
-  }
-
-  if (flags & kCtxJumps) {
-    ctx->jumps = shada_encode_jumps();
-  }
-
-  if (flags & kCtxBufs) {
-    ctx->bufs = shada_encode_buflist();
-  }
-
-  if (flags & kCtxGVars) {
-    ctx->gvars = shada_encode_gvars();
-  }
-
-  if (flags & kCtxFuncs) {
-    ctx_save_funcs(ctx, false);
-  } else if (flags & kCtxSFuncs) {
-    ctx_save_funcs(ctx, true);
-  }
+  rs_ctx_save(ctx, flags);
 }
 
 /// Restores the editor state from a context.
@@ -193,36 +169,6 @@ static inline void ctx_restore_gvars(Context *ctx)
   shada_read_string(ctx->gvars, kShaDaWantInfo | kShaDaForceit);
 }
 
-/// Saves functions to a context.
-///
-/// @param  ctx         Save to this context.
-/// @param  scriptonly  Save script-local (s:) functions only.
-static inline void ctx_save_funcs(Context *ctx, bool scriptonly)
-  FUNC_ATTR_NONNULL_ALL
-{
-  ctx->funcs = (Array)ARRAY_DICT_INIT;
-  Error err = ERROR_INIT;
-
-  HASHTAB_ITER(func_tbl_get(), hi, {
-    const char *const name = hi->hi_key;
-    bool islambda = (strncmp(name, "<lambda>", 8) == 0);
-    bool isscript = ((uint8_t)name[0] == K_SPECIAL);
-
-    if (!islambda && (!scriptonly || isscript)) {
-      size_t cmd_len = sizeof("func! ") + strlen(name);
-      char *cmd = xmalloc(cmd_len);
-      snprintf(cmd, cmd_len, "func! %s", name);
-      Dict(exec_opts) opts = { .output = true };
-      String func_body = exec_impl(VIML_INTERNAL_CALL, cstr_as_string(cmd),
-                                   &opts, &err);
-      xfree(cmd);
-      if (!ERROR_SET(&err)) {
-        ADD(ctx->funcs, STRING_OBJ(func_body));
-      }
-      api_clear_error(&err);
-    }
-  });
-}
 
 /// Restores functions from a context.
 ///
@@ -380,4 +326,32 @@ Context *nvim_ctx_stack_pop(void)
 void nvim_ctx_stack_destroy(void)
 {
   kv_destroy(ctx_stack);
+}
+
+/// Saves functions to a context (C accessor for Rust).
+/// Kept in C due to HASHTAB_ITER, exec_impl, and Dict(exec_opts) coupling.
+void nvim_ctx_save_funcs(Context *ctx, bool scriptonly)
+{
+  ctx->funcs = (Array)ARRAY_DICT_INIT;
+  Error err = ERROR_INIT;
+
+  HASHTAB_ITER(func_tbl_get(), hi, {
+    const char *const name = hi->hi_key;
+    bool islambda = (strncmp(name, "<lambda>", 8) == 0);
+    bool isscript = ((uint8_t)name[0] == K_SPECIAL);
+
+    if (!islambda && (!scriptonly || isscript)) {
+      size_t cmd_len = sizeof("func! ") + strlen(name);
+      char *cmd = xmalloc(cmd_len);
+      snprintf(cmd, cmd_len, "func! %s", name);
+      Dict(exec_opts) opts = { .output = true };
+      String func_body = exec_impl(VIML_INTERNAL_CALL, cstr_as_string(cmd),
+                                   &opts, &err);
+      xfree(cmd);
+      if (!ERROR_SET(&err)) {
+        ADD(ctx->funcs, STRING_OBJ(func_body));
+      }
+      api_clear_error(&err);
+    }
+  });
 }
