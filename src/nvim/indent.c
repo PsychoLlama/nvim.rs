@@ -56,6 +56,7 @@ extern int rs_tabstop_padding(int col, int64_t ts_arg, const int *vts);
 extern int rs_indent_size_ts(const char *ptr, int64_t ts, const int *vts);
 extern int rs_indent_size_no_ts(const char *ptr);
 extern bool rs_set_indent(int size, int flags);
+extern bool rs_copy_indent(int size, const char *src);
 extern int rs_tabstop_at(int col, int64_t ts, const int *vts, bool left);
 extern int rs_tabstop_start(int col, int ts, const int *vts);
 extern bool rs_tabstop_eq(const int *ts1, const int *ts2);
@@ -866,110 +867,7 @@ void change_indent(int type, int amount, int round, bool call_changed_bytes)
 /// @return true if the line was changed.
 bool copy_indent(int size, char *src)
 {
-  char *p = NULL;
-  char *line = NULL;
-  int ind_len;
-  int line_len = 0;
-  int tab_pad;
-
-  // Round 1: compute the number of characters needed for the indent
-  // Round 2: copy the characters.
-  for (int round = 1; round <= 2; round++) {
-    int todo = size;
-    ind_len = 0;
-    int ind_done = 0;
-    int ind_col = 0;
-    char *s = src;
-
-    // Count/copy the usable portion of the source line.
-    while (todo > 0 && ascii_iswhite(*s)) {
-      if (*s == TAB) {
-        tab_pad = tabstop_padding(ind_done,
-                                  curbuf->b_p_ts,
-                                  curbuf->b_p_vts_array);
-
-        // Stop if this tab will overshoot the target.
-        if (todo < tab_pad) {
-          break;
-        }
-        todo -= tab_pad;
-        ind_done += tab_pad;
-        ind_col += tab_pad;
-      } else {
-        todo--;
-        ind_done++;
-        ind_col++;
-      }
-      ind_len++;
-
-      if (p != NULL) {
-        *p++ = *s;
-      }
-      s++;
-    }
-
-    // Fill to next tabstop with a tab, if possible.
-    tab_pad = tabstop_padding(ind_done, curbuf->b_p_ts, curbuf->b_p_vts_array);
-
-    if ((todo >= tab_pad) && !curbuf->b_p_et) {
-      todo -= tab_pad;
-      ind_len++;
-      ind_col += tab_pad;
-
-      if (p != NULL) {
-        *p++ = TAB;
-      }
-    }
-
-    // Add tabs required for indent.
-    if (!curbuf->b_p_et) {
-      while (true) {
-        tab_pad = tabstop_padding(ind_col,
-                                  curbuf->b_p_ts,
-                                  curbuf->b_p_vts_array);
-        if (todo < tab_pad) {
-          break;
-        }
-        todo -= tab_pad;
-        ind_len++;
-        ind_col += tab_pad;
-        if (p != NULL) {
-          *p++ = TAB;
-        }
-      }
-    }
-
-    // Count/add spaces required for indent.
-    while (todo > 0) {
-      todo--;
-      ind_len++;
-
-      if (p != NULL) {
-        *p++ = ' ';
-      }
-    }
-
-    if (p == NULL) {
-      // Allocate memory for the result: the copied indent, new indent
-      // and the rest of the line.
-      line_len = get_cursor_line_len() + 1;
-      assert(ind_len + line_len >= 0);
-      size_t line_size;
-      STRICT_ADD(ind_len, line_len, &line_size, size_t);
-      line = xmalloc(line_size);
-      p = line;
-    }
-  }
-
-  // Append the original line
-  memmove(p, get_cursor_line_ptr(), (size_t)line_len);
-
-  // Replace the line
-  ml_replace(curwin->w_cursor.lnum, line, false);
-
-  // Put the cursor after the indent.
-  curwin->w_cursor.col = ind_len;
-  return true;
+  return rs_copy_indent(size, src);
 }
 
 /// Give a "resulting text too long" error and maybe set got_int.
