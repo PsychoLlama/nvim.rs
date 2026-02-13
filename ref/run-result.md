@@ -1,22 +1,25 @@
-Plan: ~/.claude/plans/nested-frolicking-meadow.md
+Plan: ~/.claude/plans/sorted-skipping-noodle.md
 
-All 5 phases of the `context.c` → Rust migration are complete. Here's the summary:
+All 3 phases of the `cursor.c` completion migration are done. Here's the summary:
 
-**5 commits on `rust-migration`:**
+**3 commits on `rust-migration`:**
 
 | Commit | Description |
 |--------|-------------|
-| `ccf0ff3` | Phase 1: FFI foundation + `rs_ctx_free_all` |
-| `9011c4c` | Phase 2: `rs_ctx_save` (shada encoding, function saving) |
-| `2d42011` | Phase 3: `rs_ctx_restore` (shada reading, option save/restore) |
-| `189a9ad` | Phase 4: `rs_ctx_to_dict` + `rs_ctx_from_dict` (thin wrappers) |
-| `b2ff51f` | Phase 5: Cleanup (remove dead `shada.h` include, update run-result) |
+| Phase 1 | Convert 7 C functions to thin `rs_*` wrappers; fix `gchar_cursor` circular FFI |
+| Phase 2 | Migrate `coladvance_force` to Rust; add `nvim_coladvance2_addspaces` and `nvim_coladvance_force` C accessors |
+| Phase 3 | Cleanup and update metadata |
 
-**New Rust files (5):**
-- `ffi.rs` — all FFI declarations
-- `stack.rs` — `rs_ctx_free_all`
-- `save.rs` — `rs_ctx_save`
-- `restore.rs` — `rs_ctx_restore`
-- `convert.rs` — `rs_ctx_to_dict`, `rs_ctx_from_dict`
+**Changes:**
+- `rs_gchar_cursor` now calls `nvim_cursor_get_pos_ptr` + `rs_utf_ptr2char` directly (breaks circular FFI)
+- `nvim_gchar_cursor` in `normal.c` made self-contained (calls `utf_ptr2char` + `get_cursor_pos_ptr`)
+- 7 C functions converted to thin wrappers: `gchar_cursor`, `char_before_cursor`, `pchar_cursor`, `get_cursor_line_ptr`, `get_cursor_pos_ptr`, `get_cursor_line_len`, `get_cursor_pos_len`
+- New `rs_coladvance_force` in cursor crate
+- New C accessors: `nvim_coladvance2_addspaces`, `nvim_coladvance_force`
+- Change crate's dangling `nvim_coladvance_force` FFI now resolves at link time
 
-**Result:** Every public function in `context.c` is now a thin `rs_*` wrapper. All business logic lives in Rust. The C file retains only statics, C accessor functions (for deeply C-coupled operations like HASHTAB_ITER, Arena allocation, OptVal management), and `_Static_assert` guards. All 4106 tests pass.
+**Post-migration state of `cursor.c`:**
+- ~15 thin `rs_*` wrappers (all public API functions)
+- ~28 C accessor functions (`nvim_*` functions for Rust FFI access)
+- 1 static function (`coladvance2` — 155 lines, kept in C deliberately)
+- 0 lines of unmigrated public logic
