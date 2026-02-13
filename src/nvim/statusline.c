@@ -67,6 +67,9 @@ extern int rs_build_statuscol_str(win_T *wp, linenr_T lnum, linenr_T relnum, cha
 // Phase 2 Rust implementations
 extern void rs_win_redr_status(win_T *wp);
 extern void rs_win_redr_winbar(win_T *wp);
+// Phase 3 Rust implementations
+extern void rs_redraw_ruler(void);
+extern void rs_ui_ext_tabline_update(void);
 
 // Determines how deeply nested %{} blocks will be evaluated in statusline.
 #define MAX_STL_EVAL_DEPTH 100
@@ -333,131 +336,7 @@ void win_redr_winbar(win_T *wp)
 
 void redraw_ruler(void)
 {
-  static int did_ruler_col = -1;
-  static bool did_show_ext_ruler = false;
-  win_T *wp = curwin->w_status_height == 0 ? curwin : lastwin_nofloating();
-  bool is_stl_global = global_stl_height() > 0;
-
-  // Check if ruler should be drawn, clear if it was drawn before.
-  if (!p_ru || wp->w_status_height > 0 || is_stl_global || (p_ch == 0 && !ui_has(kUIMessages))) {
-    if (did_ruler_col > 0 && ui_has(kUIMessages)) {
-      ui_call_msg_ruler((Array)ARRAY_DICT_INIT);
-      did_show_ext_ruler = false;
-    } else if (did_ruler_col > 0) {
-      msg_col = did_ruler_col;
-      msg_row = Rows - 1;
-      msg_clr_eos();
-    }
-    did_ruler_col = -1;
-    return;
-  }
-
-  // Check if cursor.lnum is valid, since redraw_ruler() may be called
-  // after deleting lines, before cursor.lnum is corrected.
-  if (wp->w_cursor.lnum > wp->w_buffer->b_ml.ml_line_count) {
-    return;
-  }
-
-  // Don't draw the ruler while doing insert-completion, it might overwrite
-  // the (long) mode message.
-  if (wp->w_status_height == 0 && !is_stl_global && edit_submode != NULL) {
-    return;
-  }
-
-  bool part_of_status = wp->w_status_height || is_stl_global;
-  if (*p_ruf && (p_ch > 0 || (ui_has(kUIMessages) && !part_of_status))) {
-    win_redr_custom(wp, false, true, ui_has(kUIMessages));
-    return;
-  }
-
-  hlf_T group = HLF_MSG;
-  int off = wp->w_status_height ? wp->w_wincol : 0;
-  int width = wp->w_status_height ? wp->w_width : Columns;
-  schar_T fillchar = part_of_status ? fillchar_status(&group, wp) : schar_from_ascii(' ');
-  int attr = win_hl_attr(wp, (int)group);
-
-  // In list mode virtcol needs to be recomputed
-  colnr_T virtcol = wp->w_virtcol;
-  if (wp->w_p_list && wp->w_p_lcs_chars.tab1 == NUL) {
-    wp->w_p_list = false;
-    getvvcol(wp, &wp->w_cursor, NULL, &virtcol, NULL);
-    wp->w_p_list = true;
-  }
-
-  // Check if not in Insert mode and the line is empty (will show "0-1").
-  int empty_line = (State & MODE_INSERT) == 0
-                   && *ml_get_buf(wp->w_buffer, wp->w_cursor.lnum) == NUL;
-
-#define RULER_BUF_LEN 70
-  char buffer[RULER_BUF_LEN];
-
-  int bufferlen = vim_snprintf(buffer, RULER_BUF_LEN, "%" PRId64 ",",
-                               (wp->w_buffer->b_ml.ml_flags & ML_EMPTY)
-                               ? 0
-                               : (int64_t)wp->w_cursor.lnum);
-  bufferlen += col_print(buffer + bufferlen, RULER_BUF_LEN - (size_t)bufferlen,
-                         empty_line ? 0 : (int)wp->w_cursor.col + 1,
-                         (int)virtcol + 1);
-
-  // Add a "50%" if there is room for it.
-  // On the last line, don't print in the last column (scrolls the
-  // screen up on some terminals).
-  char rel_pos[RULER_BUF_LEN];
-  int rel_poslen = get_rel_pos(wp, rel_pos, RULER_BUF_LEN);
-  int n1 = bufferlen + vim_strsize(rel_pos);
-  if (wp->w_status_height == 0 && !is_stl_global) {  // can't use last char of screen
-    n1++;
-  }
-
-  int this_ru_col = ru_col - (Columns - width);
-  // Never use more than half the window/screen width, leave the other half
-  // for the filename.
-  int n2 = (width + 1) / 2;
-  this_ru_col = MAX(this_ru_col, n2);
-  if (this_ru_col + n1 < width) {
-    // need at least space for rel_pos + NUL
-    while (this_ru_col + n1 < width
-           && RULER_BUF_LEN > bufferlen + rel_poslen + 1) {  // +1 for NUL
-      bufferlen += (int)schar_get(buffer + bufferlen, fillchar);
-      n1++;
-    }
-    bufferlen += vim_snprintf(buffer + bufferlen, RULER_BUF_LEN - (size_t)bufferlen,
-                              "%s", rel_pos);
-  }
-  (void)bufferlen;
-
-  if (ui_has(kUIMessages) && !part_of_status) {
-    MAXSIZE_TEMP_ARRAY(content, 1);
-    MAXSIZE_TEMP_ARRAY(chunk, 3);
-    ADD_C(chunk, INTEGER_OBJ(attr));
-    ADD_C(chunk, CSTR_AS_OBJ(buffer));
-    ADD_C(chunk, INTEGER_OBJ(HLF_MSG));
-    assert(attr == HL_ATTR(HLF_MSG));
-    ADD_C(content, ARRAY_OBJ(chunk));
-    ui_call_msg_ruler(content);
-    did_show_ext_ruler = true;
-    did_ruler_col = 1;
-  } else {
-    if (did_show_ext_ruler) {
-      ui_call_msg_ruler((Array)ARRAY_DICT_INIT);
-      did_show_ext_ruler = false;
-    }
-    // Truncate at window boundary.
-    for (n1 = 0, n2 = 0; buffer[n1] != NUL; n1 += utfc_ptr2len(buffer + n1)) {
-      n2 += utf_ptr2cells(buffer + n1);
-      if (this_ru_col + n2 > width) {
-        bufferlen = n1;
-        buffer[bufferlen] = NUL;
-        break;
-      }
-    }
-
-    grid_line_start(&msg_grid_adj, Rows - 1);
-    did_ruler_col = off + this_ru_col;
-    int w = grid_line_puts(did_ruler_col, buffer, -1, attr);
-    grid_line_fill(did_ruler_col + w, off + width, fillchar, attr);
-    grid_line_flush();
-  }
+  rs_redraw_ruler();
 }
 
 /// Get the character to use in a status line.  Get its attributes in "*attr".
@@ -475,48 +354,7 @@ void redraw_custom_statusline(win_T *wp)
 
 static void ui_ext_tabline_update(void)
 {
-  Arena arena = ARENA_EMPTY;
-
-  size_t n_tabs = 0;
-  FOR_ALL_TABS(tp) {
-    n_tabs++;
-  }
-
-  Array tabs = arena_array(&arena, n_tabs);
-  FOR_ALL_TABS(tp) {
-    Dict tab_info = arena_dict(&arena, 2);
-    PUT_C(tab_info, "tab", TABPAGE_OBJ(tp->handle));
-
-    win_T *cwp = (tp == curtab) ? curwin : tp->tp_curwin;
-    get_trans_bufname(cwp->w_buffer);
-    PUT_C(tab_info, "name", CSTR_TO_ARENA_OBJ(&arena, NameBuff));
-
-    ADD_C(tabs, DICT_OBJ(tab_info));
-  }
-
-  size_t n_buffers = 0;
-  FOR_ALL_BUFFERS(buf) {
-    n_buffers += buf->b_p_bl ? 1 : 0;
-  }
-
-  Array buffers = arena_array(&arena, n_buffers);
-  FOR_ALL_BUFFERS(buf) {
-    // Do not include unlisted buffers
-    if (!buf->b_p_bl) {
-      continue;
-    }
-
-    Dict buffer_info = arena_dict(&arena, 2);
-    PUT_C(buffer_info, "buffer", BUFFER_OBJ(buf->handle));
-
-    get_trans_bufname(buf);
-    PUT_C(buffer_info, "name", CSTR_TO_ARENA_OBJ(&arena, NameBuff));
-
-    ADD_C(buffers, DICT_OBJ(buffer_info));
-  }
-
-  ui_call_tabline_update(curtab->handle, tabs, curbuf->handle, buffers);
-  arena_mem_free(arena_finish(&arena));
+  rs_ui_ext_tabline_update();
 }
 
 /// Draw the tab pages line at the top of the Vim window.
@@ -2273,3 +2111,184 @@ const char *nvim_stl_get_p_stl(void)
 
 _Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
 _Static_assert(HLF_C == 21, "HLF_C must be 21");
+
+// Phase 3 accessors for Rust FFI
+
+/// Ruler implementation (called from Rust rs_redraw_ruler).
+/// Contains the full redraw_ruler logic.
+void nvim_stl_redraw_ruler_impl(void)
+{
+  static int did_ruler_col = -1;
+  static bool did_show_ext_ruler = false;
+  win_T *wp = curwin->w_status_height == 0 ? curwin : lastwin_nofloating();
+  bool is_stl_global = global_stl_height() > 0;
+
+  // Check if ruler should be drawn, clear if it was drawn before.
+  if (!p_ru || wp->w_status_height > 0 || is_stl_global || (p_ch == 0 && !ui_has(kUIMessages))) {
+    if (did_ruler_col > 0 && ui_has(kUIMessages)) {
+      ui_call_msg_ruler((Array)ARRAY_DICT_INIT);
+      did_show_ext_ruler = false;
+    } else if (did_ruler_col > 0) {
+      msg_col = did_ruler_col;
+      msg_row = Rows - 1;
+      msg_clr_eos();
+    }
+    did_ruler_col = -1;
+    return;
+  }
+
+  // Check if cursor.lnum is valid, since redraw_ruler() may be called
+  // after deleting lines, before cursor.lnum is corrected.
+  if (wp->w_cursor.lnum > wp->w_buffer->b_ml.ml_line_count) {
+    return;
+  }
+
+  // Don't draw the ruler while doing insert-completion, it might overwrite
+  // the (long) mode message.
+  if (wp->w_status_height == 0 && !is_stl_global && edit_submode != NULL) {
+    return;
+  }
+
+  bool part_of_status = wp->w_status_height || is_stl_global;
+  if (*p_ruf && (p_ch > 0 || (ui_has(kUIMessages) && !part_of_status))) {
+    win_redr_custom(wp, false, true, ui_has(kUIMessages));
+    return;
+  }
+
+  hlf_T group = HLF_MSG;
+  int off = wp->w_status_height ? wp->w_wincol : 0;
+  int width = wp->w_status_height ? wp->w_width : Columns;
+  schar_T fillchar = part_of_status ? fillchar_status(&group, wp) : schar_from_ascii(' ');
+  int attr = win_hl_attr(wp, (int)group);
+
+  // In list mode virtcol needs to be recomputed
+  colnr_T virtcol = wp->w_virtcol;
+  if (wp->w_p_list && wp->w_p_lcs_chars.tab1 == NUL) {
+    wp->w_p_list = false;
+    getvvcol(wp, &wp->w_cursor, NULL, &virtcol, NULL);
+    wp->w_p_list = true;
+  }
+
+  // Check if not in Insert mode and the line is empty (will show "0-1").
+  int empty_line = (State & MODE_INSERT) == 0
+                   && *ml_get_buf(wp->w_buffer, wp->w_cursor.lnum) == NUL;
+
+#define RULER_BUF_LEN 70
+  char buffer[RULER_BUF_LEN];
+
+  int bufferlen = vim_snprintf(buffer, RULER_BUF_LEN, "%" PRId64 ",",
+                               (wp->w_buffer->b_ml.ml_flags & ML_EMPTY)
+                               ? 0
+                               : (int64_t)wp->w_cursor.lnum);
+  bufferlen += col_print(buffer + bufferlen, RULER_BUF_LEN - (size_t)bufferlen,
+                         empty_line ? 0 : (int)wp->w_cursor.col + 1,
+                         (int)virtcol + 1);
+
+  // Add a "50%" if there is room for it.
+  // On the last line, don't print in the last column (scrolls the
+  // screen up on some terminals).
+  char rel_pos[RULER_BUF_LEN];
+  int rel_poslen = get_rel_pos(wp, rel_pos, RULER_BUF_LEN);
+  int n1 = bufferlen + vim_strsize(rel_pos);
+  if (wp->w_status_height == 0 && !is_stl_global) {  // can't use last char of screen
+    n1++;
+  }
+
+  int this_ru_col = ru_col - (Columns - width);
+  // Never use more than half the window/screen width, leave the other half
+  // for the filename.
+  int n2 = (width + 1) / 2;
+  this_ru_col = MAX(this_ru_col, n2);
+  if (this_ru_col + n1 < width) {
+    // need at least space for rel_pos + NUL
+    while (this_ru_col + n1 < width
+           && RULER_BUF_LEN > bufferlen + rel_poslen + 1) {  // +1 for NUL
+      bufferlen += (int)schar_get(buffer + bufferlen, fillchar);
+      n1++;
+    }
+    bufferlen += vim_snprintf(buffer + bufferlen, RULER_BUF_LEN - (size_t)bufferlen,
+                              "%s", rel_pos);
+  }
+  (void)bufferlen;
+
+  if (ui_has(kUIMessages) && !part_of_status) {
+    MAXSIZE_TEMP_ARRAY(content, 1);
+    MAXSIZE_TEMP_ARRAY(chunk, 3);
+    ADD_C(chunk, INTEGER_OBJ(attr));
+    ADD_C(chunk, CSTR_AS_OBJ(buffer));
+    ADD_C(chunk, INTEGER_OBJ(HLF_MSG));
+    assert(attr == HL_ATTR(HLF_MSG));
+    ADD_C(content, ARRAY_OBJ(chunk));
+    ui_call_msg_ruler(content);
+    did_show_ext_ruler = true;
+    did_ruler_col = 1;
+  } else {
+    if (did_show_ext_ruler) {
+      ui_call_msg_ruler((Array)ARRAY_DICT_INIT);
+      did_show_ext_ruler = false;
+    }
+    // Truncate at window boundary.
+    for (n1 = 0, n2 = 0; buffer[n1] != NUL; n1 += utfc_ptr2len(buffer + n1)) {
+      n2 += utf_ptr2cells(buffer + n1);
+      if (this_ru_col + n2 > width) {
+        bufferlen = n1;
+        buffer[bufferlen] = NUL;
+        break;
+      }
+    }
+
+    grid_line_start(&msg_grid_adj, Rows - 1);
+    did_ruler_col = off + this_ru_col;
+    int w = grid_line_puts(did_ruler_col, buffer, -1, attr);
+    grid_line_fill(did_ruler_col + w, off + width, fillchar, attr);
+    grid_line_flush();
+  }
+}
+
+/// UI ext tabline update implementation (called from Rust rs_ui_ext_tabline_update).
+/// Contains the full arena-based tabline update logic.
+void nvim_stl_ui_ext_tabline_update_impl(void)
+{
+  Arena arena = ARENA_EMPTY;
+
+  size_t n_tabs = 0;
+  FOR_ALL_TABS(tp) {
+    n_tabs++;
+  }
+
+  Array tabs = arena_array(&arena, n_tabs);
+  FOR_ALL_TABS(tp) {
+    Dict tab_info = arena_dict(&arena, 2);
+    PUT_C(tab_info, "tab", TABPAGE_OBJ(tp->handle));
+
+    win_T *cwp = (tp == curtab) ? curwin : tp->tp_curwin;
+    get_trans_bufname(cwp->w_buffer);
+    PUT_C(tab_info, "name", CSTR_TO_ARENA_OBJ(&arena, NameBuff));
+
+    ADD_C(tabs, DICT_OBJ(tab_info));
+  }
+
+  size_t n_buffers = 0;
+  FOR_ALL_BUFFERS(buf) {
+    n_buffers += buf->b_p_bl ? 1 : 0;
+  }
+
+  Array buffers = arena_array(&arena, n_buffers);
+  FOR_ALL_BUFFERS(buf) {
+    // Do not include unlisted buffers
+    if (!buf->b_p_bl) {
+      continue;
+    }
+
+    Dict buffer_info = arena_dict(&arena, 2);
+    PUT_C(buffer_info, "buffer", BUFFER_OBJ(buf->handle));
+
+    get_trans_bufname(buf);
+    PUT_C(buffer_info, "name", CSTR_TO_ARENA_OBJ(&arena, NameBuff));
+
+    ADD_C(buffers, DICT_OBJ(buffer_info));
+  }
+
+  ui_call_tabline_update(curtab->handle, tabs, curbuf->handle, buffers);
+  arena_mem_free(arena_finish(&arena));
+}

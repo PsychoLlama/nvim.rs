@@ -2297,6 +2297,42 @@ pub unsafe extern "C" fn rs_win_redr_winbar(wp: WinHandle) {
     ENTERED.with(|e| e.set(false));
 }
 
+// =============================================================================
+// Phase 3: Ruler and UI Ext Tabline (redraw_ruler, ui_ext_tabline_update)
+// =============================================================================
+
+// Phase 3 C accessors
+extern "C" {
+    fn nvim_stl_redraw_ruler_impl();
+    fn nvim_stl_ui_ext_tabline_update_impl();
+}
+
+/// FFI export: Redraw the ruler.
+///
+/// This is the Rust replacement for `redraw_ruler()` in statusline.c.
+/// Delegates to the C implementation which handles all the complex
+/// string formatting, grid operations, and UI event calls.
+///
+/// # Safety
+/// Accesses global C state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_redraw_ruler() {
+    nvim_stl_redraw_ruler_impl();
+}
+
+/// FFI export: Update the external UI tabline.
+///
+/// This is the Rust replacement for `ui_ext_tabline_update()` in statusline.c.
+/// Delegates to the C implementation which handles arena-based API object
+/// construction and the `ui_call_tabline_update` call.
+///
+/// # Safety
+/// Accesses global C state (tab/buffer lists, arena allocation).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_ext_tabline_update() {
+    nvim_stl_ui_ext_tabline_update_impl();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
