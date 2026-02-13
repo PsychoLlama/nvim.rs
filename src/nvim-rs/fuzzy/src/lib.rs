@@ -22,7 +22,7 @@
 #![allow(clippy::branches_sharing_code)]
 #![allow(clippy::manual_let_else)]
 
-use libc::{c_char, c_int};
+use libc::{c_char, c_int, c_void};
 use std::ffi::CStr;
 
 // =============================================================================
@@ -673,6 +673,102 @@ pub unsafe extern "C" fn rs_fuzzy_match_func_compare(
 }
 
 // =============================================================================
+// Memory management FFI
+// =============================================================================
+
+extern "C" {
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
+}
+
+// =============================================================================
+// FuzmatchStr - matches C fuzmatch_str_T layout from fuzzy.h
+// =============================================================================
+
+/// Fuzzy matched string list item. Matches C `fuzmatch_str_T` layout.
+#[repr(C)]
+pub struct FuzmatchStr {
+    pub idx: c_int,
+    pub str_ptr: *mut c_char,
+    pub score: c_int,
+}
+
+/// Free an array of fuzzy string matches.
+///
+/// # Safety
+///
+/// `fuzmatch` must be a valid pointer to an array of `count` `FuzmatchStr` items
+/// allocated with `xmalloc`, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_fuzmatch_str_free(fuzmatch: *mut FuzmatchStr, count: c_int) {
+    if fuzmatch.is_null() {
+        return;
+    }
+    let items = std::slice::from_raw_parts_mut(fuzmatch, count as usize);
+    for item in items {
+        xfree(item.str_ptr.cast::<c_void>());
+    }
+    xfree(fuzmatch.cast::<c_void>());
+}
+
+/// Sort fuzzy matches and copy the string pointers into a newly allocated
+/// `char **` array. Frees the `fuzmatch` array (but not the strings, which
+/// are transferred to `*matches`).
+///
+/// # Safety
+///
+/// `fuzmatch` must be a valid pointer to an array of `count` `FuzmatchStr` items.
+/// `matches` must be a valid pointer to a `*mut *mut c_char`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_fuzzymatches_to_strmatches(
+    fuzmatch: *mut FuzmatchStr,
+    matches: *mut *mut *mut c_char,
+    count: c_int,
+    funcsort: bool,
+) {
+    if count <= 0 {
+        xfree(fuzmatch.cast::<c_void>());
+        return;
+    }
+
+    let items = std::slice::from_raw_parts_mut(fuzmatch, count as usize);
+
+    // Sort in-place using Rust's stable sort
+    if funcsort {
+        items.sort_by(|a, b| {
+            let cmp = rs_fuzzy_match_func_compare(
+                a.str_ptr.cast_const(),
+                a.score,
+                a.idx,
+                b.str_ptr.cast_const(),
+                b.score,
+                b.idx,
+            );
+            cmp.cmp(&0)
+        });
+    } else {
+        items.sort_by(|a, b| {
+            let cmp = rs_fuzzy_match_str_compare(a.score, a.idx, b.score, b.idx);
+            cmp.cmp(&0)
+        });
+    }
+
+    // Allocate the output array
+    let out =
+        xmalloc(count as usize * std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+    *matches = out;
+
+    // Transfer string pointers
+    let out_slice = std::slice::from_raw_parts_mut(out, count as usize);
+    for (i, item) in items.iter().enumerate() {
+        out_slice[i] = item.str_ptr;
+    }
+
+    // Free the fuzmatch array (strings are now owned by out)
+    xfree(fuzmatch.cast::<c_void>());
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1005,5 +1101,16 @@ mod tests {
                     < 0
             );
         }
+    }
+
+    #[test]
+    fn test_fuzmatch_str_layout() {
+        // Verify FuzmatchStr matches C fuzmatch_str_T layout:
+        // { int idx; char *str; int score; }
+        // On x86-64: idx@0, str@8 (padded), score@16, total=24
+        assert_eq!(std::mem::size_of::<FuzmatchStr>(), 24);
+        assert_eq!(std::mem::offset_of!(FuzmatchStr, idx), 0);
+        assert_eq!(std::mem::offset_of!(FuzmatchStr, str_ptr), 8);
+        assert_eq!(std::mem::offset_of!(FuzmatchStr, score), 16);
     }
 }
