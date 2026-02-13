@@ -34,7 +34,7 @@ extern "C" {
     fn get_trans_bufname(buf: BufHandle);
 
     // Global NameBuff access (MAXPATHL buffer for names)
-    fn nvim_get_namebuff() -> *const c_char;
+    fn nvim_get_namebuff() -> *mut c_char;
 
     // Standard C library
     fn strlen(s: *const c_char) -> usize;

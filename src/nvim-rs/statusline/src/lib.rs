@@ -21,6 +21,29 @@ pub mod highlight;
 pub mod render;
 pub mod ruler;
 pub mod statuscol;
+#[allow(
+    dead_code,
+    unused_variables,
+    clippy::manual_c_str_literals,
+    clippy::missing_const_for_thread_local,
+    clippy::ptr_as_ptr,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_lossless,
+    clippy::unnecessary_cast,
+    clippy::bool_to_int_with_if,
+    clippy::collapsible_else_if,
+    clippy::if_not_else,
+    clippy::needless_bool_assign,
+    clippy::comparison_to_empty,
+    clippy::too_many_lines,
+    clippy::missing_const_for_fn,
+    clippy::match_like_matches_macro,
+    clippy::redundant_pattern_matching,
+    clippy::unnecessary_operation,
+    clippy::comparison_chain,
+)]
+pub mod stl_build;
 pub mod tabline;
 pub mod ui;
 pub mod ui_ext;
@@ -2438,30 +2461,11 @@ pub unsafe extern "C" fn rs_win_redr_custom(
 // Phase 6: Format Parser (build_stl_str_hl)
 // =============================================================================
 
-// Phase 6 C accessors
-extern "C" {
-    fn nvim_stl_build_stl_str_hl_impl(
-        wp: WinHandle,
-        out: *mut c_char,
-        outlen: usize,
-        fmt: *mut c_char,
-        opt_idx: c_int,
-        opt_scope: c_int,
-        fillchar: ScharT,
-        maxwidth: c_int,
-        hltab: *mut *mut c_void,
-        hltab_len: *mut usize,
-        tabtab: *mut *mut c_void,
-        stcp: StatuscolHandle,
-    ) -> c_int;
-}
-
 /// FFI export: Build a string from the status line items in "fmt".
 ///
-/// This is the Rust replacement for `build_stl_str_hl()` in statusline.c.
-/// Delegates to the C implementation which handles the full format parsing
-/// loop (~1,274 lines), VimL eval, item rendering, truncation, separator
-/// filling, highlight/click record building.
+/// This is the full Rust implementation of `build_stl_str_hl`. It handles
+/// format parsing, VimL eval, item rendering, truncation, separator filling,
+/// and highlight/click record building.
 ///
 /// # Safety
 /// - `wp` must be a valid window handle.
@@ -2483,7 +2487,7 @@ pub unsafe extern "C" fn rs_build_stl_str_hl_wrap(
     tabtab: *mut *mut c_void,
     stcp: StatuscolHandle,
 ) -> c_int {
-    nvim_stl_build_stl_str_hl_impl(
+    stl_build::build_stl_str_hl(
         wp, out, outlen, fmt, opt_idx, opt_scope, fillchar, maxwidth, hltab, hltab_len, tabtab,
         stcp,
     )

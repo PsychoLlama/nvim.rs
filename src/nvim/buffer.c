@@ -464,7 +464,7 @@ const char *nvim_curbuf_get_inex(void)
 }
 
 /// Get the NameBuff global (accessor for Rust).
-const char *nvim_get_namebuff(void)
+char *nvim_get_namebuff(void)
 {
   return NameBuff;
 }

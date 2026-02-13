@@ -1737,6 +1737,441 @@ int nvim_stl_win_get_topline(win_T *wp)
 
 _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL must be 0x02");
 
+// Phase 6 accessors: build_stl_str_hl format parsing support
+
+/// Evaluate a VimL expression for the statusline with full context switching.
+/// Sets g:actual_curbuf, g:actual_curwin, switches curwin/curbuf, saves VIsual_active.
+/// Returns allocated string result (caller must free via nvim_stl_xfree), or NULL.
+char *nvim_stl_eval_expr_full(win_T *wp, char *expr, bool use_sandbox)
+{
+  char buf_tmp[70];
+
+  vim_snprintf(buf_tmp, sizeof(buf_tmp), "%d", curbuf->b_fnum);
+  set_internal_string_var("g:actual_curbuf", buf_tmp);
+  vim_snprintf(buf_tmp, sizeof(buf_tmp), "%d", curwin->handle);
+  set_internal_string_var("g:actual_curwin", buf_tmp);
+
+  buf_T *const save_curbuf = curbuf;
+  win_T *const save_curwin = curwin;
+  const int save_VIsual_active = VIsual_active;
+  curwin = wp;
+  curbuf = wp->w_buffer;
+  if (curwin != save_curwin) {
+    VIsual_active = false;
+  }
+
+  char *result = eval_to_string_safe(expr, use_sandbox, false);
+
+  curwin = save_curwin;
+  curbuf = save_curbuf;
+  VIsual_active = save_VIsual_active;
+
+  do_unlet(S_LEN("g:actual_curbuf"), true);
+  do_unlet(S_LEN("g:actual_curwin"), true);
+
+  return result;
+}
+
+/// Evaluate "%!" expression format: set g:statusline_winid, call eval_to_string_safe,
+/// clean up. Returns allocated string result (caller must free), or NULL.
+char *nvim_stl_eval_fmt_expr(win_T *wp, char *expr, bool use_sandbox)
+{
+  typval_T tv = {
+    .v_type = VAR_NUMBER,
+    .vval.v_number = wp->handle,
+  };
+  set_var(S_LEN("g:statusline_winid"), &tv, false);
+  char *result = eval_to_string_safe(expr, use_sandbox, false);
+  do_unlet(S_LEN("g:statusline_winid"), true);
+  return result;
+}
+
+/// Check if the option was set insecurely.
+int nvim_stl_was_set_insecurely(win_T *wp, int opt_idx, int opt_scope)
+{
+  if (opt_idx < 0) {
+    return 0;
+  }
+  return was_set_insecurely(wp, (OptIndex)opt_idx, opt_scope) ? 1 : 0;
+}
+
+/// Get the display width of a string (multibyte-aware).
+int nvim_stl_vim_strsize(const char *s)
+{
+  if (s == NULL) {
+    return 0;
+  }
+  return (int)vim_strsize(s);
+}
+
+/// Get display width of character at pointer.
+int nvim_stl_ptr2cells(const char *s)
+{
+  if (s == NULL) {
+    return 0;
+  }
+  return ptr2cells(s);
+}
+
+/// Get byte length of UTF-8 character at pointer.
+int nvim_stl_utfc_ptr2len(const char *s)
+{
+  if (s == NULL) {
+    return 0;
+  }
+  return utfc_ptr2len(s);
+}
+
+/// Get byte length of a schar_T.
+int nvim_stl_schar_len(schar_T c)
+{
+  return (int)schar_len(c);
+}
+
+/// Write a schar_T to a buffer and return bytes written.
+int nvim_stl_schar_get(char *buf, schar_T c)
+{
+  return (int)schar_get(buf, c);
+}
+
+/// Create schar_T from an ASCII char.
+schar_T nvim_stl_schar_from_ascii(char c)
+{
+  return schar_from_ascii(c);
+}
+
+/// Get buf_spname result, or NULL.
+const char *nvim_stl_buf_spname(buf_T *buf)
+{
+  return buf_spname(buf);
+}
+
+/// Call home_replace + trans_characters to fill the provided buffer.
+void nvim_stl_home_replace_trans(buf_T *buf, const char *src, char *dst, int dstlen)
+{
+  home_replace(buf, src, dst, dstlen, true);
+  trans_characters(dst, dstlen);
+}
+
+/// Get the tail (filename only) from a path.
+const char *nvim_stl_path_tail(const char *s)
+{
+  return path_tail(s);
+}
+
+/// Get file format of buffer (returns EOL_* value).
+int nvim_stl_get_fileformat(buf_T *buf)
+{
+  return get_fileformat(buf);
+}
+
+/// Get utf_ptr2char at the given pointer.
+int nvim_stl_utf_ptr2char(const char *s)
+{
+  return utf_ptr2char(s);
+}
+
+/// Get cursor line text pointer and length.
+/// Returns pointer to line text, sets *len_out to length.
+const char *nvim_stl_get_cursor_line(win_T *wp, int *len_out)
+{
+  linenr_T lnum = wp->w_cursor.lnum;
+  if (lnum > wp->w_buffer->b_ml.ml_line_count) {
+    lnum = wp->w_buffer->b_ml.ml_line_count;
+  }
+  const char *line = ml_get_buf(wp->w_buffer, lnum);
+  if (len_out) {
+    *len_out = (int)ml_get_buf_len(wp->w_buffer, lnum);
+  }
+  return line;
+}
+
+/// Clamp cursor to line length if needed.
+void nvim_stl_clamp_cursor(win_T *wp)
+{
+  linenr_T lnum = wp->w_cursor.lnum;
+  if (lnum > wp->w_buffer->b_ml.ml_line_count) {
+    lnum = wp->w_buffer->b_ml.ml_line_count;
+    wp->w_cursor.lnum = lnum;
+  }
+  colnr_T len = ml_get_buf_len(wp->w_buffer, lnum);
+  if (wp->w_cursor.col > len) {
+    wp->w_cursor.col = len;
+    wp->w_cursor.coladd = 0;
+  }
+}
+
+/// Get global state: updating_screen flag.
+int nvim_stl_get_updating_screen(void)
+{
+  return updating_screen ? 1 : 0;
+}
+
+/// Set global state: redraw_not_allowed flag.
+void nvim_stl_set_redraw_not_allowed(int val)
+{
+  redraw_not_allowed = val ? true : false;
+}
+
+/// Get global state: redraw_not_allowed flag.
+int nvim_stl_get_redraw_not_allowed(void)
+{
+  return redraw_not_allowed ? 1 : 0;
+}
+
+/// Save and get KeyTyped value.
+int nvim_stl_get_KeyTyped(void)
+{
+  return KeyTyped ? 1 : 0;
+}
+
+/// Set KeyTyped value.
+void nvim_stl_set_KeyTyped(int val)
+{
+  KeyTyped = val ? true : false;
+}
+
+/// Get did_emsg counter.
+int nvim_stl_get_did_emsg(void)
+{
+  return did_emsg;
+}
+
+/// Set an option to empty string on error (SID_ERROR).
+void nvim_stl_set_option_empty(int opt_idx, int opt_scope)
+{
+  set_option_direct((OptIndex)opt_idx, STATIC_CSTR_AS_OPTVAL(""), opt_scope, SID_ERROR);
+}
+
+/// Get the State variable (mode flags).
+int nvim_stl_get_State(void)
+{
+  return State;
+}
+
+/// Get the ML_EMPTY flag for a buffer.
+int nvim_stl_buf_ml_empty(buf_T *buf)
+{
+  return (buf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0;
+}
+
+/// Get window cursor lnum (clamped to line count).
+int nvim_stl_win_get_clamped_lnum(win_T *wp)
+{
+  linenr_T lnum = wp->w_cursor.lnum;
+  if (lnum > wp->w_buffer->b_ml.ml_line_count) {
+    lnum = wp->w_buffer->b_ml.ml_line_count;
+  }
+  return (int)lnum;
+}
+
+/// Free a C-allocated string (for eval results).
+void nvim_stl_xfree(void *ptr)
+{
+  xfree(ptr);
+}
+
+/// Duplicate a string into C heap (for click func commands).
+char *nvim_stl_xmemdupz(const char *s, size_t len)
+{
+  return xmemdupz(s, len);
+}
+
+/// Check if all characters in string are digits.
+int nvim_stl_str_all_digits(const char *s)
+{
+  return (*skipdigits(s) == NUL) ? 1 : 0;
+}
+
+/// vim_snprintf into a buffer with a given format and integer.
+int nvim_stl_snprintf_int(char *buf, size_t buflen, const char *fmt, int minwid, int num)
+{
+  return (int)vim_snprintf_safelen(buf, buflen, fmt, minwid, num);
+}
+
+/// vim_snprintf for scientific notation (with extra exponent arg).
+int nvim_stl_snprintf_sci(char *buf, size_t buflen, const char *fmt, int num, int exponent)
+{
+  return (int)vim_snprintf_safelen(buf, buflen, fmt, 0, num, exponent);
+}
+
+/// Get the relative position string ("Top", "Bot", "All", or "NN%").
+int nvim_stl_get_rel_pos(win_T *wp, char *buf, int buflen)
+{
+  get_rel_pos(wp, buf, buflen);
+  return (int)strlen(buf);
+}
+
+/// Get argument number string (e.g. "(2 of 5)").
+int nvim_stl_append_arg_number(win_T *wp, char *buf, int buflen)
+{
+  buf[0] = NUL;
+  return append_arg_number(wp, buf, (size_t)buflen);
+}
+
+/// Find option index by 'showcmdloc' value.
+int nvim_stl_showcmd_matches_opt(int opt_idx)
+{
+  if (p_sc && (opt_idx < 0 || find_option(p_sloc) == (OptIndex)opt_idx)) {
+    return 1;
+  }
+  return 0;
+}
+
+/// Get showcmd_buf contents.
+const char *nvim_stl_get_showcmd_buf(void)
+{
+  return showcmd_buf;
+}
+
+/// Get vim_var_nr value.
+int64_t nvim_stl_get_vim_var_nr(int vv_idx)
+{
+  return get_vim_var_nr(vv_idx);
+}
+
+/// Get calc_percentage (from statusline.c).
+int nvim_stl_calc_percentage(int lnum, int line_count)
+{
+  return calc_percentage(lnum, line_count);
+}
+
+/// Get wp->w_virtcol.
+int nvim_stl_win_get_w_virtcol(win_T *wp)
+{
+  return (int)wp->w_virtcol;
+}
+
+/// Get wp->w_cursor.col.
+int nvim_stl_win_get_cursor_col(win_T *wp)
+{
+  return (int)wp->w_cursor.col;
+}
+
+/// Get wp->w_p_nu (number option).
+int nvim_stl_win_get_p_nu(win_T *wp)
+{
+  return wp->w_p_nu ? 1 : 0;
+}
+
+/// Get wp->w_p_rnu (relativenumber option).
+int nvim_stl_win_get_p_rnu(win_T *wp)
+{
+  return wp->w_p_rnu ? 1 : 0;
+}
+
+/// Get wp->w_maxscwidth (sign column setting).
+int nvim_stl_win_get_maxscwidth(win_T *wp)
+{
+  return (int)wp->w_maxscwidth;
+}
+
+/// Get wp->w_scwidth (sign column width).
+int nvim_stl_win_get_scwidth(win_T *wp)
+{
+  return (int)wp->w_scwidth;
+}
+
+/// Get stcp->sattrs[0].text[0] != 0 (has sign text).
+int nvim_stl_stcp_has_sign_text(statuscol_T *stcp)
+{
+  if (stcp == NULL) { return 0; }
+  return stcp->sattrs[0].text[0] ? 1 : 0;
+}
+
+/// Compute fold column width.
+int nvim_stl_compute_foldcolumn(win_T *wp)
+{
+  return compute_foldcolumn(wp, 0);
+}
+
+/// Fill fold column into buf. Returns bytes written.
+int nvim_stl_fill_foldcolumn(win_T *wp, statuscol_T *stcp, int lnum, int fdc, char *buf, int buflen)
+{
+  if (stcp == NULL || fdc <= 0 || buf == NULL) {
+    return 0;
+  }
+  schar_T fold_buf[9];
+  fill_foldcolumn(wp, stcp->foldinfo, lnum, 0, fdc, NULL, stcp->fold_vcol, fold_buf);
+  size_t written = 0;
+  for (int i = 0; i < fdc && (int)written < buflen - 4; i++) {
+    written += schar_get(buf + written, fold_buf[i]);
+  }
+  buf[written] = NUL;
+  return (int)written;
+}
+
+/// Check use_cursor_line_highlight for a line.
+int nvim_stl_use_cursor_line_hl(win_T *wp, int lnum)
+{
+  return use_cursor_line_highlight(wp, (linenr_T)lnum) ? 1 : 0;
+}
+
+/// Describe sign text into a buffer. Returns bytes written.
+int nvim_stl_describe_sign_text(char *buf, schar_T *text)
+{
+  return (int)describe_sign_text(buf, text);
+}
+
+/// Get stcp->sign_cul_id.
+int nvim_stl_stcp_get_sign_cul_id(statuscol_T *stcp)
+{
+  if (stcp == NULL) { return 0; }
+  return stcp->sign_cul_id;
+}
+
+/// Get stcp->sattrs[idx].hl_id.
+int nvim_stl_stcp_get_sattr_hl_id(statuscol_T *stcp, int idx)
+{
+  if (stcp == NULL) { return 0; }
+  return stcp->sattrs[idx].hl_id;
+}
+
+/// Get stcp->sattrs[idx].text pointer.
+const schar_T *nvim_stl_stcp_get_sattr_text(statuscol_T *stcp, int idx)
+{
+  if (stcp == NULL) { return NULL; }
+  return stcp->sattrs[idx].text;
+}
+
+/// Get stcp->sattrs[idx].text[0] != 0.
+int nvim_stl_stcp_sattr_has_text(statuscol_T *stcp, int idx)
+{
+  if (stcp == NULL) { return 0; }
+  return stcp->sattrs[idx].text[0] ? 1 : 0;
+}
+
+/// Get syn_name2id_len for a highlight group name.
+int nvim_stl_syn_name2id_len(const char *name, int len)
+{
+  return syn_name2id_len(name, (size_t)len);
+}
+
+/// Check if a character is in the STL_ALL set.
+int nvim_stl_valid_flag(int c)
+{
+  return vim_strchr(STL_ALL, (uint8_t)c) != NULL ? 1 : 0;
+}
+
+_Static_assert(kOptInvalid == -1, "kOptInvalid must be -1");
+_Static_assert(kOptStatuscolumn == 293, "kOptStatuscolumn");
+_Static_assert(kOptStatusline == 294, "kOptStatusline");
+_Static_assert(kOptTabline == 302, "kOptTabline");
+_Static_assert(kOptWinbar == 355, "kOptWinbar");
+_Static_assert(kOptRulerformat == 241, "kOptRulerformat");
+_Static_assert(MODE_INSERT == 0x10, "MODE_INSERT");
+_Static_assert(VV_LNUM == 9, "VV_LNUM");
+_Static_assert(VV_RELNUM == 101, "VV_RELNUM");
+_Static_assert(VV_VIRTNUM == 102, "VV_VIRTNUM");
+_Static_assert(SCL_NUM == -2, "SCL_NUM");
+_Static_assert(EOL_MAC == 2, "EOL_MAC");
+_Static_assert(SID_ERROR == -5, "SID_ERROR");
+_Static_assert(NUL == 0, "NUL");
+_Static_assert(NL == 10, "NL");
+_Static_assert(CAR == 13, "CAR");
+_Static_assert(HLF_CLF == 17, "HLF_CLF");
+_Static_assert(HLF_FC == 29, "HLF_FC");
+
 // Phase 2 accessors for Rust FFI
 
 /// Call win_redr_custom(wp, true, false, false) for winbar rendering.
