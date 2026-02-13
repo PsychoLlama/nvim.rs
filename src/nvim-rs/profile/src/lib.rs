@@ -1,21 +1,20 @@
 //! Profiling time utilities for Neovim
 //!
-//! This module provides Rust implementations of the pure timing functions from
-//! `src/nvim/profile.c`. These are pure arithmetic functions with no external dependencies.
+//! This module provides Rust implementations of the profiling functions from
+//! `src/nvim/profile.c`.
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::must_use_candidate)]
 
+pub mod timing;
+pub mod types;
+
 use std::os::raw::c_int;
 
 /// Profile time type (nanoseconds since some epoch)
 pub type Proftime = u64;
-
-extern "C" {
-    fn nvim_get_prof_wait_time() -> Proftime;
-}
 
 /// Returns the zero time.
 #[no_mangle]
@@ -114,10 +113,10 @@ pub extern "C" fn rs_profile_cmp(tm1: Proftime, tm2: Proftime) -> c_int {
 ///
 /// # Safety
 ///
-/// Calls external C function to access static variable.
+/// Accesses mutable static via `timing` module.
 #[no_mangle]
 pub unsafe extern "C" fn rs_profile_get_wait() -> Proftime {
-    nvim_get_prof_wait_time()
+    timing::rs_profile_get_wait_time()
 }
 
 /// Subtracts the passed waittime since `tm`.
@@ -126,10 +125,10 @@ pub unsafe extern "C" fn rs_profile_get_wait() -> Proftime {
 ///
 /// # Safety
 ///
-/// Calls external C function to access static variable.
+/// Accesses mutable static via `timing` module.
 #[no_mangle]
 pub unsafe extern "C" fn rs_profile_sub_wait(tm: Proftime, tma: Proftime) -> Proftime {
-    let tm3 = rs_profile_sub(nvim_get_prof_wait_time(), tm);
+    let tm3 = rs_profile_sub(timing::rs_profile_get_wait_time(), tm);
     rs_profile_sub(tma, tm3)
 }
 

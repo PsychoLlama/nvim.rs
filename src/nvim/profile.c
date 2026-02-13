@@ -35,7 +35,7 @@
 
 #include "profile.c.generated.h"
 
-// Rust implementations of pure profile functions
+// Rust implementations of profile functions
 extern proftime_T rs_profile_zero(void);
 extern proftime_T rs_profile_divide(proftime_T tm, int count);
 extern proftime_T rs_profile_add(proftime_T tm1, proftime_T tm2);
@@ -46,6 +46,14 @@ extern int64_t rs_profile_signed(proftime_T tm);
 extern int rs_profile_cmp(proftime_T tm1, proftime_T tm2);
 extern proftime_T rs_profile_get_wait(void);
 extern proftime_T rs_profile_sub_wait(proftime_T tm, proftime_T tma);
+// Phase 1: timing wrappers
+extern proftime_T rs_profile_start(void);
+extern proftime_T rs_profile_end(proftime_T tm);
+extern const char *rs_profile_msg(proftime_T tm);
+extern proftime_T rs_profile_setlimit(int64_t msec);
+extern bool rs_profile_passed_limit(proftime_T tm);
+extern void rs_profile_set_wait(proftime_T wait);
+extern proftime_T rs_profile_get_wait_time(void);
 
 /// Struct used in sn_prl_ga for every line of a script.
 typedef struct {
@@ -56,7 +64,6 @@ typedef struct {
 
 #define PRL_ITEM(si, idx)     (((sn_prl_T *)(si)->sn_prl_ga.ga_data)[(idx)])
 
-static proftime_T prof_wait_time;
 static char *startuptime_buf = NULL;  // --startuptime buffer
 
 /// Gets the current time.
@@ -64,7 +71,7 @@ static char *startuptime_buf = NULL;  // --startuptime buffer
 /// @return the current time
 proftime_T profile_start(void) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return os_hrtime();
+  return rs_profile_start();
 }
 
 /// Computes the time elapsed.
@@ -72,7 +79,7 @@ proftime_T profile_start(void) FUNC_ATTR_WARN_UNUSED_RESULT
 /// @return Elapsed time from `tm` until now.
 proftime_T profile_end(proftime_T tm) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return profile_sub(os_hrtime(), tm);
+  return rs_profile_end(tm);
 }
 
 /// Gets a string representing time `tm`.
@@ -83,10 +90,7 @@ proftime_T profile_end(proftime_T tm) FUNC_ATTR_WARN_UNUSED_RESULT
 /// @return Static string representing `tm` in the form "seconds.microseconds".
 const char *profile_msg(proftime_T tm) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  static char buf[50];
-  snprintf(buf, sizeof(buf), "%10.6lf",
-           (double)profile_signed(tm) / 1000000000.0);
-  return buf;
+  return rs_profile_msg(tm);
 }
 
 /// Gets the time `msec` into the future.
@@ -97,13 +101,7 @@ const char *profile_msg(proftime_T tm) FUNC_ATTR_WARN_UNUSED_RESULT
 ///         the zero time.
 proftime_T profile_setlimit(int64_t msec) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (msec <= 0) {
-    // no limit
-    return profile_zero();
-  }
-  assert(msec <= (INT64_MAX / 1000000LL) - 1);
-  proftime_T nsec = (proftime_T)msec * 1000000ULL;
-  return os_hrtime() + nsec;
+  return rs_profile_setlimit(msec);
 }
 
 /// Checks if current time has passed `tm`.
@@ -112,12 +110,7 @@ proftime_T profile_setlimit(int64_t msec) FUNC_ATTR_WARN_UNUSED_RESULT
 ///         timer was not set.
 bool profile_passed_limit(proftime_T tm) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (tm == 0) {
-    // timer was not set
-    return false;
-  }
-
-  return profile_cmp(os_hrtime(), tm) < 0;
+  return rs_profile_passed_limit(tm);
 }
 
 /// Gets the zero time.
@@ -178,7 +171,7 @@ static proftime_T profile_get_wait(void) FUNC_ATTR_PURE
 /// Sets the current waittime.
 void profile_set_wait(proftime_T wait)
 {
-  prof_wait_time = wait;
+  rs_profile_set_wait(wait);
 }
 
 /// Subtracts the passed waittime since `tm`.
@@ -979,8 +972,8 @@ void time_finish(void)
   XFREE_CLEAR(startuptime_buf);
 }
 
-// C accessor for Rust to read prof_wait_time
+// C accessor for Rust — now delegates to the Rust-owned state
 proftime_T nvim_get_prof_wait_time(void)
 {
-  return prof_wait_time;
+  return rs_profile_get_wait_time();
 }
