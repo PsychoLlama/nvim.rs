@@ -88,6 +88,14 @@ extern char *rs_fix_fname(const char *fname);
 extern int rs_same_directory(const char *f1, const char *f2);
 extern char *rs_path_try_shorten_fname(char *full_path);
 extern void rs_slash_adjust(char *p);
+extern int rs_path_full_compare(const char *s1, const char *s2, int checkname, int expandenv);
+extern void rs_path_fix_case(char *name);
+extern int rs_match_suffix(const char *fname);
+extern void rs_path_guess_exepath(const char *argv0, char *buf, size_t bufsize);
+extern int rs_find_previous_pathsep(const char *path, char **psep);
+extern int rs_is_unique(const char *maybe_unique, const void *gap, int i);
+extern int rs_has_special_wildchar(const char *p, int flags);
+extern const char *rs_get_path_cutoff(const char *fname, const void *gap);
 
 // C accessor functions for Rust
 int nvim_path_os_isdir(const char *name) {
@@ -122,6 +130,94 @@ size_t nvim_path_xstrlcpy(char *dst, const char *src, size_t dsize) {
   return xstrlcpy(dst, src, dsize);
 }
 
+// Phase 3 C accessor functions for Rust
+void nvim_path_expand_env(const char *src, char *dst, size_t dstlen) {
+  expand_env((char *)src, dst, (int)dstlen);
+}
+
+int nvim_path_os_fileid(const char *fname, uint8_t *id_out) {
+  _Static_assert(sizeof(FileID) == 16, "FileID must be 16 bytes");
+  return os_fileid(fname, (FileID *)id_out) ? 1 : 0;
+}
+
+int nvim_path_os_fileid_equal(const uint8_t *a, const uint8_t *b) {
+  return os_fileid_equal((const FileID *)a, (const FileID *)b) ? 1 : 0;
+}
+
+int nvim_path_file_exists_link(const char *name) {
+  FileInfo info;
+  return os_fileinfo_link(name, &info) ? 1 : 0;
+}
+
+int nvim_path_scandir_open(const char *path, void **dir_out) {
+  Directory *dir = xmalloc(sizeof(Directory));
+  if (os_scandir(dir, path)) {
+    *dir_out = dir;
+    return 1;
+  }
+  xfree(dir);
+  *dir_out = NULL;
+  return 0;
+}
+
+const char *nvim_path_scandir_next(void *dir) {
+  return os_scandir_next((Directory *)dir);
+}
+
+void nvim_path_scandir_close(void *dir) {
+  os_closedir((Directory *)dir);
+  xfree(dir);
+}
+
+int nvim_path_STRICMP(const char *a, const char *b) {
+  return STRICMP(a, b);
+}
+
+size_t nvim_path_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep) {
+  return copy_option_part(option, buf, (int)maxlen, (char *)sep);
+}
+
+const char *nvim_path_get_p_su(void) {
+  return p_su;
+}
+
+char *nvim_path_os_getenv(const char *name) {
+  return os_getenv(name);
+}
+
+int nvim_path_os_can_exe(const char *name, char **abspath, int use_path) {
+  return os_can_exe(name, abspath, use_path != 0) ? 1 : 0;
+}
+
+const void *nvim_path_vim_env_iter(char sep, const char *val, const void *iter,
+                                   const char **dir, size_t *len) {
+  return vim_env_iter(sep, val, iter, dir, len);
+}
+
+char *nvim_path_get_NameBuff(void) {
+  return NameBuff;
+}
+
+size_t nvim_path_get_NameBuff_size(void) {
+  return sizeof(NameBuff);
+}
+
+size_t nvim_path_xstrlcat(char *dst, const char *src, size_t dstsize) {
+  return xstrlcat(dst, src, dstsize);
+}
+
+void nvim_path_xmemcpyz(char *dst, const char *src, size_t len) {
+  xmemcpyz(dst, src, len);
+}
+
+int nvim_path_ga_len(const void *gap) {
+  return ((const garray_T *)gap)->ga_len;
+}
+
+const char *nvim_path_ga_get_string(const void *gap, int i) {
+  return ((const char **)((const garray_T *)gap)->ga_data)[i];
+}
+
 // Static assertions for constants used in Rust
 _Static_assert(sizeof(int) == 4, "int must be 4 bytes");
 _Static_assert(EW_DIR == 0x01, "EW_DIR");
@@ -151,6 +247,7 @@ _Static_assert(kEqualFileNames == 7, "kEqualFileNames");
 _Static_assert(OK == 1, "OK");
 _Static_assert(FAIL == 0, "FAIL");
 _Static_assert(MAXPATHL >= 4096, "MAXPATHL");
+_Static_assert(sizeof(FileID) == 16, "FileID must be 16 bytes for Rust opaque buffer");
 
 #include "path.c.generated.h"
 
@@ -165,36 +262,7 @@ FileComparison path_full_compare(char *const s1, char *const s2, const bool chec
                                  const bool expandenv)
   FUNC_ATTR_NONNULL_ALL
 {
-  char exp1[MAXPATHL];
-  char full1[MAXPATHL];
-  char full2[MAXPATHL];
-  FileID file_id_1, file_id_2;
-
-  if (expandenv) {
-    expand_env(s1, exp1, MAXPATHL);
-  } else {
-    xstrlcpy(exp1, s1, MAXPATHL);
-  }
-  bool id_ok_1 = os_fileid(exp1, &file_id_1);
-  bool id_ok_2 = os_fileid(s2, &file_id_2);
-  if (!id_ok_1 && !id_ok_2) {
-    // If os_fileid() doesn't work, may compare the names.
-    if (checkname) {
-      vim_FullName(exp1, full1, MAXPATHL, false);
-      vim_FullName(s2, full2, MAXPATHL, false);
-      if (path_fnamecmp(full1, full2) == 0) {
-        return kEqualFileNames;
-      }
-    }
-    return kBothFilesMissing;
-  }
-  if (!id_ok_1 || !id_ok_2) {
-    return kOneFileMissing;
-  }
-  if (os_fileid_equal(&file_id_1, &file_id_2)) {
-    return kEqualFiles;
-  }
-  return kDifferentFiles;
+  return (FileComparison)rs_path_full_compare(s1, s2, checkname ? 1 : 0, expandenv ? 1 : 0);
 }
 
 /// Gets the tail (filename segment) of path `fname`.
@@ -698,20 +766,7 @@ static size_t do_path_expand(garray_T *gap, const char *path, size_t wildoff, in
 static int find_previous_pathsep(char *path, char **psep)
   FUNC_ATTR_NONNULL_ALL
 {
-  // skip the current separator
-  if (*psep > path && vim_ispathsep(**psep)) {
-    (*psep)--;
-  }
-
-  // find the previous separator
-  while (*psep > path) {
-    if (vim_ispathsep(**psep)) {
-      return OK;
-    }
-    MB_PTR_BACK(path, *psep);
-  }
-
-  return FAIL;
+  return rs_find_previous_pathsep(path, psep);
 }
 
 /// Returns true if "maybe_unique" is unique wrt other_paths in "gap".
@@ -719,24 +774,7 @@ static int find_previous_pathsep(char *path, char **psep)
 static bool is_unique(char *maybe_unique, garray_T *gap, int i)
   FUNC_ATTR_NONNULL_ALL
 {
-  size_t candidate_len = strlen(maybe_unique);
-  char **other_paths = gap->ga_data;
-
-  for (int j = 0; j < gap->ga_len; j++) {
-    if (j == i) {
-      continue;  // don't compare it with itself
-    }
-    size_t other_path_len = strlen(other_paths[j]);
-    if (other_path_len < candidate_len) {
-      continue;  // it's different when it's shorter
-    }
-    char *rival = other_paths[j] + other_path_len - candidate_len;
-    if (path_fnamecmp(maybe_unique, rival) == 0
-        && (rival == other_paths[j] || vim_ispathsep(*(rival - 1)))) {
-      return false;  // match
-    }
-  }
-  return true;  // no match found
+  return rs_is_unique(maybe_unique, gap, i) != 0;
 }
 
 /// Split the 'path' option into an array of strings in garray_T.  Relative
@@ -813,35 +851,7 @@ static void expand_path_option(char *curdir, char *path_option, garray_T *gap)
 static char *get_path_cutoff(char *fname, garray_T *gap)
   FUNC_ATTR_NONNULL_ALL
 {
-  int maxlen = 0;
-  char **path_part = gap->ga_data;
-  char *cutoff = NULL;
-
-  for (int i = 0; i < gap->ga_len; i++) {
-    int j = 0;
-
-    while ((fname[j] == path_part[i][j]
-#ifdef MSWIN
-            || (vim_ispathsep(fname[j]) && vim_ispathsep(path_part[i][j]))
-#endif
-            )
-           && fname[j] != NUL && path_part[i][j] != NUL) {
-      j++;
-    }
-    if (j > maxlen) {
-      maxlen = j;
-      cutoff = &fname[j];
-    }
-  }
-
-  // skip to the file or directory name
-  if (cutoff != NULL) {
-    while (vim_ispathsep(*cutoff)) {
-      MB_PTR_ADV(cutoff);
-    }
-  }
-
-  return cutoff;
+  return (char *)rs_get_path_cutoff(fname, gap);
 }
 
 /// Sorts, removes duplicates and modifies all the fullpath names in "gap" so
@@ -1061,31 +1071,7 @@ static bool has_env_var(char *p)
 static bool has_special_wildchar(char *p, int flags)
   FUNC_ATTR_NONNULL_ALL
 {
-  for (; *p; MB_PTR_ADV(p)) {
-    // Disallow line break characters.
-    if (*p == '\r' || *p == '\n') {
-      break;
-    }
-    // Allow for escaping.
-    if (*p == '\\' && p[1] != NUL && p[1] != '\r' && p[1] != '\n') {
-      p++;
-    } else if (vim_strchr(SPECIAL_WILDCHAR, (uint8_t)(*p)) != NULL) {
-      // Need a shell for curly braces only when including non-existing files.
-      if (*p == '{' && !(flags & EW_NOTFOUND)) {
-        continue;
-      }
-      // A { must be followed by a matching }.
-      if (*p == '{' && vim_strchr(p, '}') == NULL) {
-        continue;
-      }
-      // A quote and backtick must be followed by another one.
-      if ((*p == '`' || *p == '\'') && vim_strchr(p, (uint8_t)(*p)) == NULL) {
-        continue;
-      }
-      return true;
-    }
-  }
-  return false;
+  return rs_has_special_wildchar(p, flags) != 0;
 }
 #endif
 
@@ -1638,52 +1624,7 @@ char *fix_fname(const char *fname)
 void path_fix_case(char *name)
   FUNC_ATTR_NONNULL_ALL
 {
-  FileInfo file_info;
-  if (!os_fileinfo_link(name, &file_info)) {
-    return;
-  }
-
-  // Open the directory where the file is located.
-  char *slash = strrchr(name, '/');
-  char *tail;
-  Directory dir;
-  bool ok;
-  if (slash == NULL) {
-    ok = os_scandir(&dir, ".");
-    tail = name;
-  } else {
-    *slash = NUL;
-    ok = os_scandir(&dir, name);
-    *slash = '/';
-    tail = slash + 1;
-  }
-
-  if (!ok) {
-    return;
-  }
-
-  size_t taillen = strlen(tail);
-  const char *entry;
-  while ((entry = os_scandir_next(&dir))) {
-    // Only accept names that differ in case and are the same byte
-    // length. TODO: accept different length name.
-    if (STRICMP(tail, entry) == 0 && taillen == strlen(entry)) {
-      char newname[MAXPATHL + 1];
-
-      // Verify the inode is equal.
-      xstrlcpy(newname, name, MAXPATHL + 1);
-      xstrlcpy(newname + (tail - name), entry,
-               (size_t)(MAXPATHL - (tail - name) + 1));
-      FileInfo file_info_new;
-      if (os_fileinfo_link(newname, &file_info_new)
-          && os_fileinfo_id_equal(&file_info, &file_info_new)) {
-        STRCPY(tail, entry);
-        break;
-      }
-    }
-  }
-
-  os_closedir(&dir);
+  rs_path_fix_case(name);
 }
 
 /// Return true if "p" points to just after a path separator.
@@ -1869,30 +1810,7 @@ int expand_wildcards(int num_pat, char **pat, int *num_files, char ***files, int
 bool match_suffix(char *fname)
   FUNC_ATTR_NONNULL_ALL
 {
-#define MAXSUFLEN 30  // maximum length of a file suffix
-  char suf_buf[MAXSUFLEN];
-
-  size_t fnamelen = strlen(fname);
-  size_t setsuflen = 0;
-  for (char *setsuf = p_su; *setsuf;) {
-    setsuflen = copy_option_part(&setsuf, suf_buf, MAXSUFLEN, ".,");
-    if (setsuflen == 0) {
-      char *tail = path_tail(fname);
-
-      // empty entry: match name without a '.'
-      if (vim_strchr(tail, '.') == NULL) {
-        setsuflen = 1;
-        break;
-      }
-    } else {
-      if (fnamelen >= setsuflen
-          && path_fnamencmp(suf_buf, fname + fnamelen - setsuflen, setsuflen) == 0) {
-        break;
-      }
-      setsuflen = 0;
-    }
-  }
-  return setsuflen != 0;
+  return rs_match_suffix(fname) != 0;
 }
 
 /// Get the absolute name of the given relative directory.
@@ -1945,40 +1863,5 @@ bool path_is_absolute(const char *fname)
 void path_guess_exepath(const char *argv0, char *buf, size_t bufsize)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *path = os_getenv("PATH");
-
-  if (path == NULL || path_is_absolute(argv0)) {
-    xstrlcpy(buf, argv0, bufsize);
-  } else if (argv0[0] == '.' || strchr(argv0, PATHSEP)) {
-    // Relative to CWD.
-    if (os_dirname(buf, MAXPATHL) != OK) {
-      buf[0] = NUL;
-    }
-    xstrlcat(buf, PATHSEPSTR, bufsize);
-    xstrlcat(buf, argv0, bufsize);
-  } else {
-    // Search $PATH for plausible location.
-    const void *iter = NULL;
-    do {
-      const char *dir;
-      size_t dir_len;
-      iter = vim_env_iter(ENV_SEPCHAR, path, iter, &dir, &dir_len);
-      if (dir == NULL || dir_len == 0) {
-        break;
-      }
-      if (dir_len + 1 > sizeof(NameBuff)) {
-        continue;
-      }
-      xmemcpyz(NameBuff, dir, dir_len);
-      xstrlcat(NameBuff, PATHSEPSTR, sizeof(NameBuff));
-      xstrlcat(NameBuff, argv0, sizeof(NameBuff));
-      if (os_can_exe(NameBuff, NULL, false)) {
-        xstrlcpy(buf, NameBuff, bufsize);
-        return;
-      }
-    } while (iter != NULL);
-    // Not found in $PATH, fall back to argv0.
-    xstrlcpy(buf, argv0, bufsize);
-  }
-  xfree(path);
+  rs_path_guess_exepath(argv0, buf, bufsize);
 }

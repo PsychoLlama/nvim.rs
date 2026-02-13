@@ -2928,3 +2928,551 @@ pub unsafe extern "C" fn rs_slash_adjust(p: *mut c_char) {
         }
     }
 }
+
+// ============================================================================
+// Phase 3: File Comparison, Case Fixing, Suffix Matching, and Path Utilities
+// ============================================================================
+
+/// Size of the opaque FileID buffer (matches C static assert).
+const FILE_ID_SIZE: usize = 16;
+
+/// Opaque FileID buffer type.
+type FileIdBuf = [u8; FILE_ID_SIZE];
+
+extern "C" {
+    fn nvim_path_expand_env(src: *const c_char, dst: *mut c_char, dstlen: usize);
+    fn nvim_path_os_fileid(fname: *const c_char, id_out: *mut u8) -> c_int;
+    fn nvim_path_os_fileid_equal(a: *const u8, b: *const u8) -> c_int;
+    fn nvim_path_file_exists_link(name: *const c_char) -> c_int;
+    fn nvim_path_scandir_open(path: *const c_char, dir_out: *mut *mut c_void) -> c_int;
+    fn nvim_path_scandir_next(dir: *mut c_void) -> *const c_char;
+    fn nvim_path_scandir_close(dir: *mut c_void);
+    fn nvim_path_STRICMP(a: *const c_char, b: *const c_char) -> c_int;
+    fn nvim_path_copy_option_part(
+        option: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+        sep: *const c_char,
+    ) -> usize;
+    fn nvim_path_get_p_su() -> *const c_char;
+    fn nvim_path_os_getenv(name: *const c_char) -> *mut c_char;
+    fn nvim_path_os_can_exe(
+        name: *const c_char,
+        abspath: *mut *mut c_char,
+        use_path: c_int,
+    ) -> c_int;
+    fn nvim_path_vim_env_iter(
+        sep: c_char,
+        val: *const c_char,
+        iter: *const c_void,
+        dir: *mut *const c_char,
+        len: *mut usize,
+    ) -> *const c_void;
+    fn nvim_path_get_NameBuff() -> *mut c_char;
+    fn nvim_path_get_NameBuff_size() -> usize;
+    fn nvim_path_xstrlcat(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
+    fn nvim_path_xmemcpyz(dst: *mut c_char, src: *const c_char, len: usize);
+    /// Access ga_len field of a garray_T (opaque).
+    fn nvim_path_ga_len(gap: *const c_void) -> c_int;
+    /// Access ga_data[i] as a char* from a garray_T of char* pointers.
+    fn nvim_path_ga_get_string(gap: *const c_void, i: c_int) -> *const c_char;
+}
+
+// ============================================================================
+// path_full_compare - Compare two file paths by identity
+// ============================================================================
+
+/// Compare two file names and return a `FileComparison` value.
+///
+/// It tries to resolve file identities (via `os_fileid`). If `expandenv` is set,
+/// environment variables in `s1` are expanded first.
+///
+/// If both files are missing but `checkname` is set, the full names are compared
+/// to detect if they refer to the same (not-yet-existing) path.
+///
+/// # Safety
+/// `s1` and `s2` must be valid null-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_full_compare(
+    s1: *const c_char,
+    s2: *const c_char,
+    checkname: c_int,
+    expandenv: c_int,
+) -> c_int {
+    let mut exp1 = [0i8; MAXPATHL];
+    let mut full1 = [0i8; MAXPATHL];
+    let mut full2 = [0i8; MAXPATHL];
+    let mut file_id_1: FileIdBuf = [0u8; FILE_ID_SIZE];
+    let mut file_id_2: FileIdBuf = [0u8; FILE_ID_SIZE];
+
+    if expandenv != 0 {
+        nvim_path_expand_env(s1, exp1.as_mut_ptr(), MAXPATHL);
+    } else {
+        nvim_path_xstrlcpy(exp1.as_mut_ptr(), s1, MAXPATHL);
+    }
+
+    let id_ok_1 = nvim_path_os_fileid(exp1.as_ptr(), file_id_1.as_mut_ptr()) != 0;
+    let id_ok_2 = nvim_path_os_fileid(s2, file_id_2.as_mut_ptr()) != 0;
+
+    if !id_ok_1 && !id_ok_2 {
+        // If os_fileid() doesn't work, may compare the names.
+        if checkname != 0 {
+            rs_vim_FullName(exp1.as_ptr(), full1.as_mut_ptr(), MAXPATHL, 0);
+            rs_vim_FullName(s2, full2.as_mut_ptr(), MAXPATHL, 0);
+            if rs_path_fnamecmp(full1.as_ptr(), full2.as_ptr()) == 0 {
+                return K_EQUAL_FILE_NAMES;
+            }
+        }
+        return K_BOTH_FILES_MISSING;
+    }
+    if !id_ok_1 || !id_ok_2 {
+        return K_ONE_FILE_MISSING;
+    }
+    if nvim_path_os_fileid_equal(file_id_1.as_ptr(), file_id_2.as_ptr()) != 0 {
+        return K_EQUAL_FILES;
+    }
+    K_DIFFERENT_FILES
+}
+
+// ============================================================================
+// path_fix_case - Fix filename case by scanning directory
+// ============================================================================
+
+/// Correct the case of a file name on case-insensitive file systems.
+///
+/// Scans the directory for a matching entry with different case but the same
+/// inode, and overwrites the tail of `name` in-place.
+///
+/// # Safety
+/// `name` must be a valid pointer to a mutable, null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_fix_case(name: *mut c_char) {
+    if name.is_null() || *name == 0 {
+        return;
+    }
+
+    // Check that the file exists (via lstat semantics).
+    if nvim_path_file_exists_link(name) == 0 {
+        return;
+    }
+
+    // Get the file identity of the original name.
+    let mut orig_id: FileIdBuf = [0u8; FILE_ID_SIZE];
+    if nvim_path_os_fileid(name, orig_id.as_mut_ptr()) == 0 {
+        return;
+    }
+
+    // Find the tail (filename part) and open the parent directory.
+    let slash = libc::strrchr(name, b'/' as c_int);
+    let tail: *mut c_char;
+    let mut dir_handle: *mut c_void = std::ptr::null_mut();
+    let ok: c_int;
+
+    if slash.is_null() {
+        ok = nvim_path_scandir_open(c".".as_ptr(), &raw mut dir_handle);
+        tail = name;
+    } else {
+        *slash = 0; // NUL-terminate at separator
+        ok = nvim_path_scandir_open(name, &raw mut dir_handle);
+        *slash = b'/' as c_char; // restore
+        tail = slash.add(1);
+    }
+
+    if ok == 0 || dir_handle.is_null() {
+        return;
+    }
+
+    let taillen = libc::strlen(tail);
+    loop {
+        let entry = nvim_path_scandir_next(dir_handle);
+        if entry.is_null() {
+            break;
+        }
+
+        // Only accept names that differ in case and are the same byte length.
+        if nvim_path_STRICMP(tail, entry) == 0 && taillen == libc::strlen(entry) {
+            let mut newname = [0i8; MAXPATHL + 1];
+
+            // Build the full new name for verification.
+            nvim_path_xstrlcpy(newname.as_mut_ptr(), name, MAXPATHL + 1);
+            let tail_offset = (tail as usize) - (name as usize);
+            nvim_path_xstrlcpy(
+                newname.as_mut_ptr().add(tail_offset),
+                entry,
+                MAXPATHL - tail_offset + 1,
+            );
+
+            // Verify the inode is equal.
+            let mut new_id: FileIdBuf = [0u8; FILE_ID_SIZE];
+            if nvim_path_os_fileid(newname.as_ptr(), new_id.as_mut_ptr()) != 0
+                && nvim_path_os_fileid_equal(orig_id.as_ptr(), new_id.as_ptr()) != 0
+            {
+                // Copy the correctly-cased entry name into the tail.
+                let entry_len = libc::strlen(entry);
+                std::ptr::copy_nonoverlapping(entry as *const u8, tail as *mut u8, entry_len + 1);
+                break;
+            }
+        }
+    }
+
+    nvim_path_scandir_close(dir_handle);
+}
+
+// ============================================================================
+// match_suffix - Check if filename matches 'suffixes' option
+// ============================================================================
+
+/// Maximum length of a file suffix.
+const MAXSUFLEN: usize = 30;
+
+/// Check if `fname` matches one of the file suffixes in the 'suffixes' option.
+///
+/// Returns true if the filename ends with one of the suffixes from `p_su`,
+/// or if `p_su` contains an empty entry and the filename has no dot in its tail.
+///
+/// # Safety
+/// `fname` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_suffix(fname: *const c_char) -> c_int {
+    if fname.is_null() {
+        return 0;
+    }
+
+    let fnamelen = libc::strlen(fname);
+    let mut setsuflen: usize = 0;
+    let mut setsuf = nvim_path_get_p_su().cast_mut();
+
+    while *setsuf != 0 {
+        let mut suf_buf = [0i8; MAXSUFLEN];
+        setsuflen = nvim_path_copy_option_part(
+            &raw mut setsuf,
+            suf_buf.as_mut_ptr(),
+            MAXSUFLEN,
+            c".,".as_ptr(),
+        );
+        if setsuflen == 0 {
+            let tail = rs_path_tail(fname);
+            // Empty entry: match name without a '.'
+            if libc::strchr(tail, b'.' as c_int).is_null() {
+                setsuflen = 1;
+                break;
+            }
+        } else {
+            if fnamelen >= setsuflen
+                && rs_path_fnamencmp(suf_buf.as_ptr(), fname.add(fnamelen - setsuflen), setsuflen)
+                    == 0
+            {
+                break;
+            }
+            setsuflen = 0;
+        }
+    }
+    c_int::from(setsuflen != 0)
+}
+
+// ============================================================================
+// path_guess_exepath - Guess full executable path from argv[0]
+// ============================================================================
+
+/// Builds a full path from an invocation name `argv0`, based on heuristics.
+///
+/// 1. If `$PATH` is unset or `argv0` is absolute, use `argv0` directly.
+/// 2. If `argv0` starts with `.` or contains a path separator, resolve relative to CWD.
+/// 3. Otherwise, search `$PATH` for the executable.
+///
+/// # Safety
+/// `argv0` and `buf` must be valid. `buf` must have at least `bufsize` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_guess_exepath(
+    argv0: *const c_char,
+    buf: *mut c_char,
+    bufsize: usize,
+) {
+    if argv0.is_null() || buf.is_null() || bufsize == 0 {
+        return;
+    }
+
+    let path = nvim_path_os_getenv(c"PATH".as_ptr());
+
+    if path.is_null() || rs_path_is_absolute(argv0) != 0 {
+        nvim_path_xstrlcpy(buf, argv0, bufsize);
+    } else if *argv0 as u8 == b'.' || !libc::strchr(argv0, b'/' as c_int).is_null() {
+        // Relative to CWD.
+        if nvim_path_os_dirname(buf, MAXPATHL) != OK {
+            *buf = 0;
+        }
+        nvim_path_xstrlcat(buf, c"/".as_ptr(), bufsize);
+        nvim_path_xstrlcat(buf, argv0, bufsize);
+    } else {
+        // Search $PATH for plausible location.
+        let mut iter: *const c_void = std::ptr::null();
+        loop {
+            let mut dir: *const c_char = std::ptr::null();
+            let mut dir_len: usize = 0;
+            iter =
+                nvim_path_vim_env_iter(b':' as c_char, path, iter, &raw mut dir, &raw mut dir_len);
+            if dir.is_null() || dir_len == 0 {
+                break;
+            }
+            let namebuff = nvim_path_get_NameBuff();
+            let namebuff_size = nvim_path_get_NameBuff_size();
+            if dir_len + 1 > namebuff_size {
+                if iter.is_null() {
+                    break;
+                }
+                continue;
+            }
+            nvim_path_xmemcpyz(namebuff, dir, dir_len);
+            nvim_path_xstrlcat(namebuff, c"/".as_ptr(), namebuff_size);
+            nvim_path_xstrlcat(namebuff, argv0, namebuff_size);
+            if nvim_path_os_can_exe(namebuff, std::ptr::null_mut(), 0) != 0 {
+                nvim_path_xstrlcpy(buf, namebuff, bufsize);
+                nvim_path_xfree(path);
+                return;
+            }
+            if iter.is_null() {
+                break;
+            }
+        }
+        // Not found in $PATH, fall back to argv0.
+        nvim_path_xstrlcpy(buf, argv0, bufsize);
+    }
+    nvim_path_xfree(path);
+}
+
+// ============================================================================
+// find_previous_pathsep - Find previous path separator in a string
+// ============================================================================
+
+/// Find the previous path separator in `path`, searching backwards from `*psep`.
+///
+/// On entry, if `*psep` is on a separator, it is first skipped.
+/// Returns `OK` (1) if a separator was found, updating `*psep` to point to it.
+/// Returns `FAIL` (0) if no separator was found.
+///
+/// # Safety
+/// `path` and `psep` must be valid. `*psep` must point within `path`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_previous_pathsep(
+    path: *const c_char,
+    psep: *mut *mut c_char,
+) -> c_int {
+    if path.is_null() || psep.is_null() || (*psep).is_null() {
+        return FAIL;
+    }
+
+    // Skip the current separator.
+    if *psep > path.cast_mut() && rs_vim_ispathsep(*(*psep) as c_int) != 0 {
+        *psep = (*psep).sub(1);
+    }
+
+    // Find the previous separator.
+    while *psep > path.cast_mut() {
+        if rs_vim_ispathsep(*(*psep) as c_int) != 0 {
+            return OK;
+        }
+        // MB_PTR_BACK(path, *psep): p -= utf_head_off(s, p-1) + 1
+        let base = path as *const u8;
+        let cur = (*psep) as *const u8;
+        let prev = cur.sub(1);
+        let off = prev as usize - base as usize;
+        let slice = std::slice::from_raw_parts(base, off + 1);
+        let head_off = nvim_mbyte::utf_head_off(slice, off);
+        *psep = (*psep).sub(head_off + 1);
+    }
+
+    FAIL
+}
+
+// ============================================================================
+// is_unique - Check if a path suffix is unique in a garray
+// ============================================================================
+
+/// Returns true if `maybe_unique` is unique with respect to other paths in `gap`.
+///
+/// `maybe_unique` is the end portion of `((char **)gap->ga_data)[i]`.
+/// Compares against all other entries to see if any shares the same suffix.
+///
+/// # Safety
+/// `maybe_unique` must be a valid null-terminated C string.
+/// `gap` must be a valid pointer to a `garray_T` containing `char *` entries.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_unique(
+    maybe_unique: *const c_char,
+    gap: *const c_void,
+    i: c_int,
+) -> c_int {
+    if maybe_unique.is_null() || gap.is_null() {
+        return 1; // treat as unique if invalid
+    }
+
+    let candidate_len = libc::strlen(maybe_unique);
+    let ga_len = nvim_path_ga_len(gap);
+
+    for j in 0..ga_len {
+        if j == i {
+            continue; // don't compare it with itself
+        }
+        let other = nvim_path_ga_get_string(gap, j);
+        if other.is_null() {
+            continue;
+        }
+        let other_path_len = libc::strlen(other);
+        if other_path_len < candidate_len {
+            continue; // it's different when it's shorter
+        }
+        let rival = other.add(other_path_len - candidate_len);
+        if rs_path_fnamecmp(maybe_unique, rival) == 0
+            && (rival == other || rs_vim_ispathsep(*rival.sub(1) as c_int) != 0)
+        {
+            return 0; // match found
+        }
+    }
+    1 // no match found
+}
+
+// ============================================================================
+// has_special_wildchar - Check for shell-expanding wildcard characters
+// ============================================================================
+
+/// Check if string `p` contains special wildcard characters that require
+/// shell expansion.
+///
+/// On Unix, the special characters are `` ` ' { ``.
+///
+/// Rules:
+/// - Backslash-escaped characters are skipped.
+/// - Line breaks (`\r`, `\n`) terminate the scan.
+/// - `{` requires `EW_NOTFOUND` flag or a matching `}` to count.
+/// - `` ` `` and `'` require a matching pair to count.
+///
+/// # Safety
+/// `p` must be a valid null-terminated C string.
+#[cfg(unix)]
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_special_wildchar(p: *const c_char, flags: c_int) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+
+    let mut ptr = p;
+    while *ptr != 0 {
+        let c = *ptr as u8;
+
+        // Disallow line break characters.
+        if c == b'\r' || c == b'\n' {
+            break;
+        }
+
+        // Allow for escaping.
+        if c == b'\\'
+            && *ptr.add(1) != 0
+            && *ptr.add(1) as u8 != b'\r'
+            && *ptr.add(1) as u8 != b'\n'
+        {
+            ptr = ptr.add(1);
+        } else if c == b'`' || c == b'\'' || c == b'{' {
+            // Need a shell for curly braces only when including non-existing files.
+            if c == b'{' && (flags & EW_NOTFOUND) == 0 {
+                let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+                let char_len = nvim_mbyte::utfc_ptr2len(slice);
+                ptr = ptr.add(char_len);
+                continue;
+            }
+            // A { must be followed by a matching }.
+            if c == b'{' && libc::strchr(ptr, b'}' as c_int).is_null() {
+                let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+                let char_len = nvim_mbyte::utfc_ptr2len(slice);
+                ptr = ptr.add(char_len);
+                continue;
+            }
+            // A quote and backtick must be followed by another one.
+            if (c == b'`' || c == b'\'') && libc::strchr(ptr.add(1), c as c_int).is_null() {
+                let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+                let char_len = nvim_mbyte::utfc_ptr2len(slice);
+                ptr = ptr.add(char_len);
+                continue;
+            }
+            return 1;
+        }
+
+        // MB_PTR_ADV
+        let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+        let char_len = nvim_mbyte::utfc_ptr2len(slice);
+        ptr = ptr.add(char_len);
+    }
+    0
+}
+
+// ============================================================================
+// get_path_cutoff - Get the portion of fname matching the longest path in gap
+// ============================================================================
+
+/// Returns a pointer to the file or directory name in `fname` that matches
+/// the longest path in `gap`, or NULL if there is no match.
+///
+/// Example:
+/// ```text
+///    path: /foo/bar/baz
+///   fname: /foo/bar/baz/quux.txt
+/// returns:              ^this
+/// ```
+///
+/// # Safety
+/// `fname` must be a valid null-terminated C string.
+/// `gap` must be a valid pointer to a `garray_T` containing `char *` entries.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_path_cutoff(
+    fname: *const c_char,
+    gap: *const c_void,
+) -> *const c_char {
+    if fname.is_null() || gap.is_null() {
+        return std::ptr::null();
+    }
+
+    let mut maxlen: usize = 0;
+    let mut cutoff: *const c_char = std::ptr::null();
+    let ga_len = nvim_path_ga_len(gap);
+
+    for i in 0..ga_len {
+        let path_part = nvim_path_ga_get_string(gap, i);
+        if path_part.is_null() {
+            continue;
+        }
+        let mut j: usize = 0;
+
+        // Compare characters, treating path separators as equivalent on Windows.
+        loop {
+            let fc = *fname.add(j) as u8;
+            let pc = *path_part.add(j) as u8;
+
+            #[cfg(not(windows))]
+            let chars_match = fc == pc;
+            #[cfg(windows)]
+            let chars_match = fc == pc
+                || (rs_vim_ispathsep(fc as c_int) != 0 && rs_vim_ispathsep(pc as c_int) != 0);
+
+            if !chars_match || fc == 0 || pc == 0 {
+                break;
+            }
+            j += 1;
+        }
+
+        if j > maxlen {
+            maxlen = j;
+            cutoff = fname.add(j);
+        }
+    }
+
+    // Skip to the file or directory name (past path separators).
+    if !cutoff.is_null() {
+        while rs_vim_ispathsep(*cutoff as c_int) != 0 {
+            // MB_PTR_ADV
+            let slice = std::slice::from_raw_parts(cutoff as *const u8, 8);
+            let char_len = nvim_mbyte::utfc_ptr2len(slice);
+            cutoff = cutoff.add(char_len);
+        }
+    }
+
+    cutoff
+}
