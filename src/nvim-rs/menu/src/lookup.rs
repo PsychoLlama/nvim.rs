@@ -4,10 +4,10 @@
 //! or path. These are building blocks that can be used by higher-level
 //! functions that need to locate menus.
 
-use std::ffi::{c_char, c_int, CStr};
+use std::ffi::{c_char, c_int, c_void, CStr};
 
 use crate::handle::VimMenuHandle;
-use crate::path::rs_menu_name_equal;
+use crate::path::{rs_menu_name_equal, rs_menu_name_skip};
 
 /// Result of a menu search operation.
 #[repr(C)]
@@ -164,6 +164,204 @@ pub unsafe extern "C" fn rs_menu_path_depth(path: *const c_char) -> c_int {
     }
 
     depth
+}
+
+// Error message strings
+const E_NOTSUBMENU: *const c_char = c"E327: Part of menu-item path is not sub-menu".as_ptr();
+const E_NOMENU: *const c_char = c"E329: No menu \"%s\"".as_ptr();
+const E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE: *const c_char =
+    c"E328: Menu only exists in another mode".as_ptr();
+const E333_MENU_PATH_MUST_LEAD_TO_ITEM: *const c_char =
+    c"E333: Menu path must lead to a menu item".as_ptr();
+const E334_MENU_NOT_FOUND: *const c_char = c"E334: Menu not found: %s".as_ptr();
+const E336_MENU_PATH_MUST_LEAD_TO_SUBMENU: *const c_char =
+    c"E336: Menu path must lead to a sub-menu".as_ptr();
+const E337_MENU_NOT_FOUND: *const c_char = c"E337: Menu not found - check menu names".as_ptr();
+
+extern "C" {
+    fn emsg(s: *const c_char) -> bool;
+    fn semsg(s: *const c_char, ...) -> bool;
+    fn nvim_menu_get_root_menu() -> VimMenuHandle;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
+    fn nvim_gettext(s: *const c_char) -> *const c_char;
+}
+
+/// Find menu matching `name` and `modes`. Does not handle empty `name`.
+///
+/// Walks the menu tree by dot-separated path components. Each component
+/// is matched against menu names using `menu_name_equal`.
+///
+/// This is the Rust implementation of C `find_menu()`.
+///
+/// # Safety
+/// All pointers must be valid. `name` is modified in-place by `menu_name_skip`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_menu(
+    menu: VimMenuHandle,
+    name: *mut c_char,
+    modes: c_int,
+) -> VimMenuHandle {
+    if name.is_null() {
+        return VimMenuHandle::null();
+    }
+
+    let mut cur_menu = menu;
+    let mut cur_name = name;
+
+    while unsafe { *cur_name } != 0 {
+        // find the end of one dot-separated name and put a NUL at the dot
+        let p = unsafe { rs_menu_name_skip(cur_name) };
+
+        while !cur_menu.is_null() {
+            if unsafe { rs_menu_name_equal(cur_name, cur_menu) } {
+                // Found menu
+                if unsafe { *p } != 0 && cur_menu.children().is_null() {
+                    unsafe { emsg(nvim_gettext(E_NOTSUBMENU)) };
+                    return VimMenuHandle::null();
+                } else if (cur_menu.modes() & modes) == 0 {
+                    unsafe { emsg(nvim_gettext(E_MENU_ONLY_EXISTS_IN_ANOTHER_MODE)) };
+                    return VimMenuHandle::null();
+                } else if unsafe { *p } == 0 {
+                    // found a full match
+                    return cur_menu;
+                }
+                break;
+            }
+            cur_menu = cur_menu.next();
+        }
+
+        if cur_menu.is_null() {
+            unsafe { semsg(nvim_gettext(E_NOMENU), cur_name) };
+            return VimMenuHandle::null();
+        }
+        // Found a match, search the sub-menu.
+        cur_name = p;
+        cur_menu = cur_menu.children();
+    }
+
+    // Should not reach here with valid input (name is non-empty on entry
+    // and we return inside the loop). Match C behavior: abort.
+    VimMenuHandle::null()
+}
+
+/// Lookup a menu by the descriptor name e.g. "File.New".
+///
+/// Returns NULL if the menu is not found. Only finds leaf menus.
+///
+/// This is the Rust implementation of C `menu_getbyname()`.
+///
+/// # Safety
+/// `name_arg` must be a valid pointer to a NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_menu_getbyname(name_arg: *const c_char) -> VimMenuHandle {
+    if name_arg.is_null() {
+        return VimMenuHandle::null();
+    }
+
+    let saved_name = unsafe { xstrdup(name_arg) };
+    let mut menu = unsafe { nvim_menu_get_root_menu() };
+    let mut name = saved_name;
+    let mut gave_emsg = false;
+
+    while unsafe { *name } != 0 {
+        // Find in the menu hierarchy
+        let p = unsafe { rs_menu_name_skip(name) };
+
+        while !menu.is_null() {
+            if unsafe { rs_menu_name_equal(name, menu) } {
+                if unsafe { *p } == 0 && !menu.children().is_null() {
+                    unsafe { emsg(nvim_gettext(E333_MENU_PATH_MUST_LEAD_TO_ITEM)) };
+                    gave_emsg = true;
+                    menu = VimMenuHandle::null();
+                } else if unsafe { *p } != 0 && menu.children().is_null() {
+                    unsafe { emsg(nvim_gettext(E_NOTSUBMENU)) };
+                    menu = VimMenuHandle::null();
+                }
+                break;
+            }
+            menu = menu.next();
+        }
+        if menu.is_null() || unsafe { *p } == 0 {
+            break;
+        }
+        menu = menu.children();
+        name = p;
+    }
+
+    unsafe { xfree(saved_name as *mut c_void) };
+
+    if menu.is_null() {
+        if !gave_emsg {
+            unsafe { semsg(nvim_gettext(E334_MENU_NOT_FOUND), name_arg) };
+        }
+        return VimMenuHandle::null();
+    }
+
+    menu
+}
+
+/// Given a menu descriptor, e.g. "File.New", find it in the menu hierarchy.
+///
+/// Returns a submenu (not a leaf item). Emits error messages on failure.
+///
+/// This is the Rust implementation of C `menu_find()`.
+///
+/// # Safety
+/// `path_name` must be a valid pointer to a NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_menu_find(path_name: *const c_char) -> VimMenuHandle {
+    if path_name.is_null() {
+        return VimMenuHandle::null();
+    }
+
+    let mut menu = unsafe { nvim_menu_get_root_menu() };
+    let saved_name = unsafe { xstrdup(path_name) };
+    let mut name = saved_name;
+
+    while unsafe { *name } != 0 {
+        // find the end of one dot-separated name and put a NUL at the dot
+        let p = unsafe { rs_menu_name_skip(name) };
+
+        while !menu.is_null() {
+            if unsafe { rs_menu_name_equal(name, menu) } {
+                if menu.children().is_null() {
+                    // found a menu item instead of a sub-menu
+                    if unsafe { *p } == 0 {
+                        unsafe {
+                            emsg(nvim_gettext(E336_MENU_PATH_MUST_LEAD_TO_SUBMENU));
+                        }
+                    } else {
+                        unsafe { emsg(nvim_gettext(E_NOTSUBMENU)) };
+                    }
+                    menu = VimMenuHandle::null();
+                    unsafe { xfree(saved_name as *mut c_void) };
+                    return menu;
+                }
+                if unsafe { *p } == 0 {
+                    // found a full match
+                    unsafe { xfree(saved_name as *mut c_void) };
+                    return menu;
+                }
+                break;
+            }
+            menu = menu.next();
+        }
+        if menu.is_null() {
+            // didn't find it
+            break;
+        }
+
+        // Found a match, search the sub-menu.
+        menu = menu.children();
+        name = p;
+    }
+
+    if menu.is_null() {
+        unsafe { emsg(nvim_gettext(E337_MENU_NOT_FOUND)) };
+    }
+    unsafe { xfree(saved_name as *mut c_void) };
+    menu
 }
 
 #[cfg(test)]

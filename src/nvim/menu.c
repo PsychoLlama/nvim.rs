@@ -83,6 +83,13 @@ typedef struct {
 } MenuTextResult;
 extern MenuTextResult rs_menu_text(const char *str);
 
+// Rust implementations for Phase 3
+extern vimmenu_T *rs_find_menu(vimmenu_T *menu, char *name, int modes);
+extern vimmenu_T *rs_menu_getbyname(char *name_arg);
+extern vimmenu_T *rs_menu_find(const char *path_name);
+extern int rs_show_menus(char *path_name, int modes);
+extern void rs_show_menus_recursive(vimmenu_T *menu, int modes, int depth);
+
 /// The character for each menu mode
 static char *menu_mode_chars[] = { "n", "v", "s", "o", "i", "c", "tl", "t" };
 
@@ -769,134 +776,19 @@ bool menu_get(char *const path_name, int modes, list_T *list)
 /// @return found menu or NULL
 static vimmenu_T *find_menu(vimmenu_T *menu, char *name, int modes)
 {
-  assert(*name);
-
-  while (*name) {
-    // find the end of one dot-separated name and put a NUL at the dot
-    char *p = menu_name_skip(name);
-    while (menu != NULL) {
-      if (menu_name_equal(name, menu)) {
-        // Found menu
-        if (*p != NUL && menu->children == NULL) {
-          emsg(_(e_notsubmenu));
-          return NULL;
-        } else if ((menu->modes & modes) == 0x0) {
-          emsg(_(e_menu_only_exists_in_another_mode));
-          return NULL;
-        } else if (*p == NUL) {  // found a full match
-          return menu;
-        }
-        break;
-      }
-      menu = menu->next;
-    }
-
-    if (menu == NULL) {
-      semsg(_(e_nomenu), name);
-      return NULL;
-    }
-    // Found a match, search the sub-menu.
-    name = p;
-    assert(*name);
-    menu = menu->children;
-  }
-
-  abort();
+  return rs_find_menu(menu, name, modes);
 }
 
 /// Show the mapping associated with a menu item or hierarchy in a sub-menu.
 static int show_menus(char *const path_name, int modes)
 {
-  vimmenu_T *menu = NULL;
-  if (*path_name != NUL) {
-    // First, find the (sub)menu with the given name
-    menu = find_menu(*get_root_menu(path_name), path_name, modes);
-    if (menu == NULL) {
-      return FAIL;
-    }
-  }
-
-  // Now we have found the matching menu, and we list the mappings.
-  msg_puts_title(_("\n--- Menus ---"));
-  show_menus_recursive(menu, modes, 0);
-
-  return OK;
+  return rs_show_menus(path_name, modes);
 }
 
 /// Recursively show the mappings associated with the menus under the given one
 static void show_menus_recursive(vimmenu_T *menu, int modes, int depth)
 {
-  if (menu != NULL && (menu->modes & modes) == 0x0) {
-    return;
-  }
-
-  if (menu != NULL) {
-    msg_putchar('\n');
-    if (got_int) {              // "q" hit for "--more--"
-      return;
-    }
-    for (int i = 0; i < depth; i++) {
-      msg_puts("  ");
-    }
-    if (menu->priority) {
-      msg_outnum(menu->priority);
-      msg_puts(" ");
-    }
-    // Same highlighting as for directories!?
-    msg_outtrans(menu->name, HLF_D, false);
-  }
-
-  if (menu != NULL && menu->children == NULL) {
-    for (int bit = 0; bit < MENU_MODES; bit++) {
-      if ((menu->modes & modes & (1 << bit)) != 0) {
-        msg_putchar('\n');
-        if (got_int) {                  // "q" hit for "--more--"
-          return;
-        }
-        for (int i = 0; i < depth + 2; i++) {
-          msg_puts("  ");
-        }
-        msg_puts(menu_mode_chars[bit]);
-        if (menu->noremap[bit] == REMAP_NONE) {
-          msg_putchar('*');
-        } else if (menu->noremap[bit] == REMAP_SCRIPT) {
-          msg_putchar('&');
-        } else {
-          msg_putchar(' ');
-        }
-        if (menu->silent[bit]) {
-          msg_putchar('s');
-        } else {
-          msg_putchar(' ');
-        }
-        if ((menu->modes & menu->enabled & (1 << bit)) == 0) {
-          msg_putchar('-');
-        } else {
-          msg_putchar(' ');
-        }
-        msg_puts(" ");
-        if (*menu->strings[bit] == NUL) {
-          msg_puts_hl("<Nop>", HLF_8, false);
-        } else {
-          msg_outtrans_special(menu->strings[bit], false, 0);
-        }
-      }
-    }
-  } else {
-    if (menu == NULL) {
-      menu = root_menu;
-      depth--;
-    } else {
-      menu = menu->children;
-    }
-
-    // recursively show all children.  Skip PopUp[nvoci].
-    for (; menu != NULL && !got_int; menu = menu->next) {
-      if (!menu_is_hidden(menu->dname)) {
-        show_menus_recursive(menu, modes, depth + 1);
-      }
-    }
-  }
+  rs_show_menus_recursive(menu, modes, depth);
 }
 
 // Used when expanding menu names.
@@ -1394,43 +1286,7 @@ void execute_menu(const exarg_T *eap, vimmenu_T *menu, int mode_idx)
 static vimmenu_T *menu_getbyname(char *name_arg)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *saved_name = xstrdup(name_arg);
-  vimmenu_T *menu = *get_root_menu(saved_name);
-  char *name = saved_name;
-  bool gave_emsg = false;
-  while (*name) {
-    // Find in the menu hierarchy
-    char *p = menu_name_skip(name);
-
-    while (menu != NULL) {
-      if (menu_name_equal(name, menu)) {
-        if (*p == NUL && menu->children != NULL) {
-          emsg(_("E333: Menu path must lead to a menu item"));
-          gave_emsg = true;
-          menu = NULL;
-        } else if (*p != NUL && menu->children == NULL) {
-          emsg(_(e_notsubmenu));
-          menu = NULL;
-        }
-        break;
-      }
-      menu = menu->next;
-    }
-    if (menu == NULL || *p == NUL) {
-      break;
-    }
-    menu = menu->children;
-    name = p;
-  }
-  xfree(saved_name);
-  if (menu == NULL) {
-    if (!gave_emsg) {
-      semsg(_("E334: Menu not found: %s"), name_arg);
-    }
-    return NULL;
-  }
-
-  return menu;
+  return rs_menu_getbyname(name_arg);
 }
 
 /// Given a menu descriptor, e.g. "File.New", find it in the menu hierarchy and
@@ -1475,47 +1331,7 @@ void ex_emenu(exarg_T *eap)
 /// Given a menu descriptor, e.g. "File.New", find it in the menu hierarchy.
 vimmenu_T *menu_find(const char *path_name)
 {
-  vimmenu_T *menu = *get_root_menu(path_name);
-  char *saved_name = xstrdup(path_name);
-  char *name = saved_name;
-  while (*name) {
-    // find the end of one dot-separated name and put a NUL at the dot
-    char *p = menu_name_skip(name);
-
-    while (menu != NULL) {
-      if (menu_name_equal(name, menu)) {
-        if (menu->children == NULL) {
-          // found a menu item instead of a sub-menu
-          if (*p == NUL) {
-            emsg(_("E336: Menu path must lead to a sub-menu"));
-          } else {
-            emsg(_(e_notsubmenu));
-          }
-          menu = NULL;
-          goto theend;
-        }
-        if (*p == NUL) {  // found a full match
-          goto theend;
-        }
-        break;
-      }
-      menu = menu->next;
-    }
-    if (menu == NULL) {  // didn't find it
-      break;
-    }
-
-    // Found a match, search the sub-menu.
-    menu = menu->children;
-    name = p;
-  }
-
-  if (menu == NULL) {
-    emsg(_("E337: Menu not found - check menu names"));
-  }
-theend:
-  xfree(saved_name);
-  return menu;
+  return rs_menu_find(path_name);
 }
 
 // Translation of menu names.  Just a simple lookup table.
@@ -1844,4 +1660,43 @@ bool nvim_menu_get_finish_op(void)
 int nvim_menu_utfc_ptr2len(const char *p)
 {
   return utfc_ptr2len(p);
+}
+
+/// Get a string from the menu's strings array.
+const char *nvim_menu_get_string(vimmenu_T *menu, int idx)
+{
+  if (idx < 0 || idx >= MENU_MODES) {
+    return NULL;
+  }
+  return menu->strings[idx];
+}
+
+/// Get a noremap value from the menu's noremap array.
+int nvim_menu_get_noremap(vimmenu_T *menu, int idx)
+{
+  if (idx < 0 || idx >= MENU_MODES) {
+    return 0;
+  }
+  return menu->noremap[idx];
+}
+
+/// Get a silent flag from the menu's silent array.
+bool nvim_menu_get_silent(vimmenu_T *menu, int idx)
+{
+  if (idx < 0 || idx >= MENU_MODES) {
+    return false;
+  }
+  return menu->silent[idx];
+}
+
+/// Get the root_menu global.
+vimmenu_T *nvim_menu_get_root_menu(void)
+{
+  return root_menu;
+}
+
+/// Get the got_int global.
+int nvim_menu_get_got_int(void)
+{
+  return got_int;
 }

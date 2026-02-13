@@ -63,6 +63,7 @@ pub mod commands;
 pub mod completion;
 pub mod create;
 pub mod delete;
+pub mod display;
 pub mod execute;
 pub mod handle;
 pub mod hidden;
@@ -89,6 +90,7 @@ pub use delete::{
     rs_menu_has_modes, rs_menu_is_empty, rs_menu_remaining_modes, rs_recalculate_parent_modes,
     rs_should_delete_menu, rs_should_free_tip,
 };
+pub use display::{rs_show_menus, rs_show_menus_recursive};
 pub use execute::{
     rs_get_menu_mode, rs_get_menu_mode_flag, rs_get_menu_string, rs_menu_has_string_for_mode,
     rs_menu_is_enabled_for_mode, rs_menu_mode_name, rs_mode_flag_to_index, rs_mode_index_to_flag,
@@ -96,8 +98,8 @@ pub use execute::{
 pub use handle::VimMenuHandle;
 pub use hidden::rs_menu_is_hidden;
 pub use lookup::{
-    rs_count_menu_siblings, rs_find_menu_by_name, rs_find_menu_sibling, rs_menu_exists,
-    rs_menu_path_depth, MenuSearchResult,
+    rs_count_menu_siblings, rs_find_menu, rs_find_menu_by_name, rs_find_menu_sibling,
+    rs_menu_exists, rs_menu_find, rs_menu_getbyname, rs_menu_path_depth, MenuSearchResult,
 };
 pub use path::{
     rs_menu_name_equal, rs_menu_name_skip, rs_menu_namelen, rs_menu_skip_part, rs_menu_text,
