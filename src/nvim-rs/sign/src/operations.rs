@@ -37,11 +37,7 @@ extern "C" {
         group: *const c_char,
         atlnum: LinenrT,
     ) -> c_int;
-    fn nvim_sign_jump_impl(
-        id: c_int,
-        group: *const c_char,
-        buf: crate::SignBufHandle,
-    ) -> LinenrT;
+    fn nvim_sign_jump_impl(id: c_int, group: *const c_char, buf: crate::SignBufHandle) -> LinenrT;
 }
 
 // =============================================================================

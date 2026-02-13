@@ -32,6 +32,11 @@ extern "C" {
 
     // DecorSignHighlight accessors
     fn nvim_decor_sh_get_sign_name(sh: DecorSignHighlightHandle) -> *const c_char;
+
+    // Display/listing composite accessors
+    fn nvim_sign_list_placed_impl(rbuf: SignBufHandle, group: *const c_char);
+    fn nvim_sign_list_defined_impl(sp: crate::SignHandle);
+    fn nvim_sign_list_by_name_impl(name: *const c_char);
 }
 
 // =============================================================================
@@ -269,6 +274,55 @@ pub unsafe extern "C" fn rs_sign_get_lnum_from_key(key: MTKeyHandle) -> LinenrT 
         return 0;
     }
     nvim_mtkey_get_row(key) + 1
+}
+
+// =============================================================================
+// Sign Display/Listing
+// =============================================================================
+
+/// List placed signs for a buffer or all buffers.
+///
+/// If `rbuf` is null, lists signs for all buffers.
+/// Delegates to C composite accessor for marktree iteration and message output.
+///
+/// # Safety
+///
+/// `rbuf` must be a valid buffer handle or null.
+/// `group` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_list_placed(rbuf: SignBufHandle, group: *const c_char) {
+    nvim_sign_list_placed_impl(rbuf, group);
+}
+
+/// List a single sign definition.
+///
+/// Delegates to C composite accessor for message formatting and output.
+///
+/// # Safety
+///
+/// `sp` must be a valid sign handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_list_defined(sp: crate::SignHandle) {
+    if sp.is_null() {
+        return;
+    }
+    nvim_sign_list_defined_impl(sp);
+}
+
+/// List the sign matching a given name.
+///
+/// Looks up the sign in the sign map and displays its definition.
+/// Emits E155 error for unknown sign names.
+///
+/// # Safety
+///
+/// `name` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_list_by_name(name: *const c_char) {
+    if name.is_null() {
+        return;
+    }
+    nvim_sign_list_by_name_impl(name);
 }
 
 // =============================================================================

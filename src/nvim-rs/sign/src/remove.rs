@@ -22,8 +22,12 @@ extern "C" {
     fn nvim_extmark_del_id(buf: SignBufHandle, ns: u32, id: u32) -> bool;
 
     // Composite sign deletion (marktree iteration stays in C)
-    fn nvim_sign_delete_signs_impl(buf: SignBufHandle, ns: i64, id: c_int, atlnum: LinenrT)
-        -> c_int;
+    fn nvim_sign_delete_signs_impl(
+        buf: SignBufHandle,
+        ns: i64,
+        id: c_int,
+        atlnum: LinenrT,
+    ) -> c_int;
 
     // Namespace filtering
     fn rs_group_get_ns(

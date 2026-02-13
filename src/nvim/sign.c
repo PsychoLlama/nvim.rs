@@ -81,6 +81,9 @@ extern int rs_sign_place(uint32_t *id, const char *group, const char *name, buf_
                          linenr_T lnum, int prio);
 extern int rs_sign_unplace(buf_T *buf, int id, const char *group, linenr_T atlnum);
 extern linenr_T rs_sign_jump(int id, const char *group, buf_T *buf);
+extern void rs_sign_list_placed(buf_T *rbuf, const char *group);
+extern void rs_sign_list_defined(sign_T *sp);
+extern void rs_sign_list_by_name(const char *name);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -173,65 +176,7 @@ bool buf_has_signs(const buf_T *buf)
 /// List placed signs for "rbuf".  If "rbuf" is NULL do it for all buffers.
 static void sign_list_placed(buf_T *rbuf, char *group)
 {
-  char lbuf[MSG_BUF_LEN];
-  char namebuf[MSG_BUF_LEN];
-  char groupbuf[MSG_BUF_LEN];
-  buf_T *buf = rbuf ? rbuf : firstbuf;
-  int64_t ns = group_get_ns(group);
-
-  msg_puts_title(_("\n--- Signs ---"));
-  msg_putchar('\n');
-
-  while (buf != NULL && !got_int) {
-    if (buf_has_signs(buf)) {
-      vim_snprintf(lbuf, MSG_BUF_LEN, _("Signs for %s:"), buf->b_fname);
-      msg_puts_hl(lbuf, HLF_D, false);
-      msg_putchar('\n');
-    }
-
-    if (ns >= 0) {
-      MarkTreeIter itr[1];
-      kvec_t(MTKey) signs = KV_INITIAL_VALUE;
-      marktree_itr_get(buf->b_marktree, 0, 0, itr);
-
-      while (itr->x) {
-        MTKey mark = marktree_itr_current(itr);
-        if (!mt_end(mark) && mt_decor_sign(mark)
-            && (ns == UINT32_MAX || ns == mark.ns)) {
-          kv_push(signs, mark);
-        }
-        marktree_itr_next(buf->b_marktree, itr);
-      }
-
-      if (kv_size(signs)) {
-        qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(MTKey), sign_row_cmp);
-
-        for (size_t i = 0; i < kv_size(signs); i++) {
-          namebuf[0] = NUL;
-          groupbuf[0] = NUL;
-          MTKey mark = kv_A(signs, i);
-
-          DecorSignHighlight *sh = decor_find_sign(mt_decor(mark));
-          if (sh->sign_name != NULL) {
-            vim_snprintf(namebuf, MSG_BUF_LEN, _("  name=%s"), sign_get_name(sh));
-          }
-          if (mark.ns != 0) {
-            vim_snprintf(groupbuf, MSG_BUF_LEN, _("  group=%s"), describe_ns((int)mark.ns, ""));
-          }
-          vim_snprintf(lbuf, MSG_BUF_LEN, _("    line=%" PRIdLINENR "  id=%u%s%s  priority=%d"),
-                       mark.pos.row + 1, mark.id, groupbuf, namebuf, sh->priority);
-          msg_puts(lbuf);
-          msg_putchar('\n');
-        }
-        kv_destroy(signs);
-      }
-    }
-
-    if (rbuf != NULL) {
-      return;
-    }
-    buf = buf->b_next;
-  }
+  rs_sign_list_placed(rbuf, group);
 }
 
 /// Find index of a ":sign" subcmd from its name.
@@ -286,43 +231,13 @@ static int sign_undefine_by_name(const char *name)
 /// List one sign.
 static void sign_list_defined(sign_T *sp)
 {
-  smsg(0, "sign %s", sp->sn_name);
-  if (sp->sn_icon != NULL) {
-    msg_puts(" icon=");
-    msg_outtrans(sp->sn_icon, 0, false);
-    msg_puts(_(" (not supported)"));
-  }
-  if (sp->sn_text[0]) {
-    msg_puts(" text=");
-    char buf[SIGN_WIDTH * MAX_SCHAR_SIZE];
-    describe_sign_text(buf, sp->sn_text);
-    msg_outtrans(buf, 0, false);
-  }
-  if (sp->sn_priority > 0) {
-    char lbuf[MSG_BUF_LEN];
-    vim_snprintf(lbuf, MSG_BUF_LEN, " priority=%d", sp->sn_priority);
-    msg_puts(lbuf);
-  }
-  static char *arg[] = { " linehl=", " texthl=", " culhl=", " numhl=" };
-  int hl[] = { sp->sn_line_hl, sp->sn_text_hl, sp->sn_cul_hl, sp->sn_num_hl };
-  for (int i = 0; i < 4; i++) {
-    if (hl[i] > 0) {
-      msg_puts(arg[i]);
-      const char *p = get_highlight_name_ext(NULL, hl[i] - 1, false);
-      msg_puts(p ? p : "NONE");
-    }
-  }
+  rs_sign_list_defined(sp);
 }
 
 /// List the signs matching 'name'
 static void sign_list_by_name(char *name)
 {
-  sign_T *sp = pmap_get(cstr_t)(&sign_map, name);
-  if (sp != NULL) {
-    sign_list_defined(sp);
-  } else {
-    semsg(_("E155: Unknown sign: %s"), name);
-  }
+  rs_sign_list_by_name(name);
 }
 
 /// Place a sign at the specified file location or update a sign.
@@ -1733,4 +1648,114 @@ int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
   }
 
   return OK;
+}
+
+/// List placed signs for a buffer or all buffers — composite accessor.
+/// Performs marktree iteration, sorting, and message output.
+void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
+{
+  char lbuf[MSG_BUF_LEN];
+  char namebuf[MSG_BUF_LEN];
+  char groupbuf[MSG_BUF_LEN];
+  buf_T *buf = rbuf ? rbuf : firstbuf;
+  int64_t ns = group_get_ns(group);
+
+  msg_puts_title(_("\n--- Signs ---"));
+  msg_putchar('\n');
+
+  while (buf != NULL && !got_int) {
+    if (buf_has_signs(buf)) {
+      vim_snprintf(lbuf, MSG_BUF_LEN, _("Signs for %s:"), buf->b_fname);
+      msg_puts_hl(lbuf, HLF_D, false);
+      msg_putchar('\n');
+    }
+
+    if (ns >= 0) {
+      MarkTreeIter itr[1];
+      kvec_t(MTKey) signs = KV_INITIAL_VALUE;
+      marktree_itr_get(buf->b_marktree, 0, 0, itr);
+
+      while (itr->x) {
+        MTKey mark = marktree_itr_current(itr);
+        if (!mt_end(mark) && mt_decor_sign(mark)
+            && (ns == UINT32_MAX || ns == mark.ns)) {
+          kv_push(signs, mark);
+        }
+        marktree_itr_next(buf->b_marktree, itr);
+      }
+
+      if (kv_size(signs)) {
+        qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(MTKey), sign_row_cmp);
+
+        for (size_t i = 0; i < kv_size(signs); i++) {
+          namebuf[0] = NUL;
+          groupbuf[0] = NUL;
+          MTKey mark = kv_A(signs, i);
+
+          DecorSignHighlight *sh = decor_find_sign(mt_decor(mark));
+          if (sh->sign_name != NULL) {
+            vim_snprintf(namebuf, MSG_BUF_LEN, _("  name=%s"), sign_get_name(sh));
+          }
+          if (mark.ns != 0) {
+            vim_snprintf(groupbuf, MSG_BUF_LEN, _("  group=%s"), describe_ns((int)mark.ns, ""));
+          }
+          vim_snprintf(lbuf, MSG_BUF_LEN, _("    line=%" PRIdLINENR "  id=%u%s%s  priority=%d"),
+                       mark.pos.row + 1, mark.id, groupbuf, namebuf, sh->priority);
+          msg_puts(lbuf);
+          msg_putchar('\n');
+        }
+        kv_destroy(signs);
+      }
+    }
+
+    if (rbuf != NULL) {
+      return;
+    }
+    buf = buf->b_next;
+  }
+}
+
+/// List a sign definition — composite accessor.
+/// Formats and outputs a single sign definition using message APIs.
+void nvim_sign_list_defined_impl(sign_T *sp)
+{
+  smsg(0, "sign %s", sp->sn_name);
+  if (sp->sn_icon != NULL) {
+    msg_puts(" icon=");
+    msg_outtrans(sp->sn_icon, 0, false);
+    msg_puts(_(" (not supported)"));
+  }
+  if (sp->sn_text[0]) {
+    msg_puts(" text=");
+    char buf[SIGN_WIDTH * MAX_SCHAR_SIZE];
+    describe_sign_text(buf, sp->sn_text);
+    msg_outtrans(buf, 0, false);
+  }
+  if (sp->sn_priority > 0) {
+    char lbuf[MSG_BUF_LEN];
+    vim_snprintf(lbuf, MSG_BUF_LEN, " priority=%d", sp->sn_priority);
+    msg_puts(lbuf);
+  }
+  static char *arg[] = { " linehl=", " texthl=", " culhl=", " numhl=" };
+  int hl[] = { sp->sn_line_hl, sp->sn_text_hl, sp->sn_cul_hl, sp->sn_num_hl };
+  for (int i = 0; i < 4; i++) {
+    if (hl[i] > 0) {
+      msg_puts(arg[i]);
+      const char *p = get_highlight_name_ext(NULL, hl[i] - 1, false);
+      msg_puts(p ? p : "NONE");
+    }
+  }
+}
+
+/// List sign by name — composite accessor.
+/// Looks up sign in sign_map and delegates to nvim_sign_list_defined_impl.
+/// Emits E155 error for unknown sign names.
+void nvim_sign_list_by_name_impl(const char *name)
+{
+  sign_T *sp = pmap_get(cstr_t)(&sign_map, name);
+  if (sp != NULL) {
+    nvim_sign_list_defined_impl(sp);
+  } else {
+    semsg(_("E155: Unknown sign: %s"), name);
+  }
 }
