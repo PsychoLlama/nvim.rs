@@ -210,6 +210,79 @@ pub unsafe extern "C" fn rs_popup_mode_name_len(name: *const c_char, mode_idx: c
     (name_len + mode_chars_len + 1) as c_int
 }
 
+/// Modify a menu name starting with "PopUp" to include the mode character.
+///
+/// For example, given "PopUp.Foo" and mode index 0 (Normal), returns "PopUpn.Foo".
+/// The returned string is allocated with `nvim_xmalloc` and must be freed by the caller.
+///
+/// This is the Rust implementation of C `popup_mode_name()`.
+///
+/// # Safety
+/// The `name` pointer must be valid and point to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_popup_mode_name(name: *const c_char, idx: c_int) -> *mut c_char {
+    if name.is_null() || !is_valid_mode_index(idx) {
+        return std::ptr::null_mut();
+    }
+
+    let name_cstr = unsafe { CStr::from_ptr(name) };
+    let name_bytes = name_cstr.to_bytes();
+    let name_len = name_bytes.len();
+
+    let mode_chars: &[u8] = match idx {
+        MENU_INDEX_NORMAL => b"n",
+        MENU_INDEX_VISUAL => b"v",
+        MENU_INDEX_SELECT => b"s",
+        MENU_INDEX_OP_PENDING => b"o",
+        MENU_INDEX_INSERT => b"i",
+        MENU_INDEX_CMDLINE => b"c",
+        MENU_INDEX_TERMINAL => b"tl",
+        MENU_INDEX_TIP => b"t",
+        _ => return std::ptr::null_mut(),
+    };
+    let mode_chars_len = mode_chars.len();
+
+    // Allocate: original length + mode chars + NUL terminator
+    let total_len = name_len + mode_chars_len + 1;
+    let p = unsafe { nvim_xmalloc(total_len) } as *mut u8;
+    if p.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Copy first 5 bytes ("PopUp")
+    unsafe {
+        std::ptr::copy_nonoverlapping(name_bytes.as_ptr(), p, 5);
+    }
+
+    // Insert mode chars after "PopUp"
+    unsafe {
+        std::ptr::copy_nonoverlapping(mode_chars.as_ptr(), p.add(5), mode_chars_len);
+    }
+
+    // Copy the rest of name after "PopUp" (includes the part after position 5)
+    let rest_len = name_len - 5; // could be 0 if name is just "PopUp"
+    if rest_len > 0 {
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                name_bytes.as_ptr().add(5),
+                p.add(5 + mode_chars_len),
+                rest_len,
+            );
+        }
+    }
+
+    // NUL terminate
+    unsafe {
+        *p.add(name_len + mode_chars_len) = 0;
+    }
+
+    p as *mut c_char
+}
+
+extern "C" {
+    fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
+}
+
 /// Check if a mode index is valid.
 fn is_valid_mode_index(mode_idx: c_int) -> bool {
     mode_idx != MENU_INDEX_INVALID && (0..8).contains(&mode_idx)

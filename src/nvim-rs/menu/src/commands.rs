@@ -18,6 +18,8 @@ pub mod remap {
     pub const REMAP_YES: c_int = 0;
     /// No, don't remap (nore- prefix).
     pub const REMAP_NONE: c_int = -1;
+    /// Remap script-local mappings only.
+    pub const REMAP_SCRIPT: c_int = -2;
 }
 
 /// Result of parsing a menu command.
@@ -195,7 +197,7 @@ pub extern "C" fn rs_get_menu_mode_str(modes: c_int) -> *const c_char {
         return c"t".as_ptr();
     }
 
-    c" ".as_ptr()
+    c"".as_ptr()
 }
 
 #[cfg(test)]

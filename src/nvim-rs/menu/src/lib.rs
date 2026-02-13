@@ -90,8 +90,8 @@ pub use delete::{
     rs_should_delete_menu, rs_should_free_tip,
 };
 pub use execute::{
-    rs_get_menu_string, rs_menu_has_string_for_mode, rs_menu_is_enabled_for_mode,
-    rs_menu_mode_name, rs_mode_flag_to_index, rs_mode_index_to_flag,
+    rs_get_menu_mode, rs_get_menu_mode_flag, rs_get_menu_string, rs_menu_has_string_for_mode,
+    rs_menu_is_enabled_for_mode, rs_menu_mode_name, rs_mode_flag_to_index, rs_mode_index_to_flag,
 };
 pub use handle::VimMenuHandle;
 pub use hidden::rs_menu_is_hidden;
@@ -102,7 +102,8 @@ pub use lookup::{
 pub use path::{rs_menu_name_equal, rs_menu_namelen, rs_menu_text, MenuTextResult};
 pub use popup::{
     rs_find_popup_menu, rs_get_menu_mode_chars, rs_get_menu_mode_chars_len,
-    rs_is_popup_menu_for_mode, rs_popup_menu_should_show, rs_popup_mode_name_len, MENU_MODE_CHARS,
+    rs_is_popup_menu_for_mode, rs_popup_menu_should_show, rs_popup_mode_name,
+    rs_popup_mode_name_len, MENU_MODE_CHARS,
 };
 
 /// Hidden menu character (']')

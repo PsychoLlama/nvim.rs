@@ -57,6 +57,19 @@ extern bool rs_menu_is_separator(const char *name);
 extern bool rs_menu_is_hidden(const char *name);
 extern bool rs_menu_name_equal(const char *name, vimmenu_T *menu);
 
+// Rust implementations for Phase 1
+typedef struct {
+  int modes;
+  int noremap;
+  bool unmenu;
+  int consumed;
+} MenuCmdResult;
+extern MenuCmdResult rs_get_menu_cmd_modes(const char *cmd, bool forceit);
+extern const char *rs_get_menu_mode_str(int modes);
+extern char *rs_popup_mode_name(const char *name, int idx);
+extern int rs_get_menu_mode(void);
+extern int rs_get_menu_mode_flag(void);
+
 /// The character for each menu mode
 static char *menu_mode_chars[] = { "n", "v", "s", "o", "i", "c", "tl", "t" };
 
@@ -1133,135 +1146,28 @@ static bool menu_name_equal(const char *const name, const vimmenu_T *const menu)
 ///                     to whether the command is an "unmenu" command.
 int get_menu_cmd_modes(const char *cmd, bool forceit, int *noremap, bool *unmenu)
 {
-  int modes;
-
-  switch (*cmd++) {
-  case 'v':                             // vmenu, vunmenu, vnoremenu
-    modes = MENU_VISUAL_MODE | MENU_SELECT_MODE;
-    break;
-  case 'x':                             // xmenu, xunmenu, xnoremenu
-    modes = MENU_VISUAL_MODE;
-    break;
-  case 's':                             // smenu, sunmenu, snoremenu
-    modes = MENU_SELECT_MODE;
-    break;
-  case 'o':                             // omenu
-    modes = MENU_OP_PENDING_MODE;
-    break;
-  case 'i':                             // imenu
-    modes = MENU_INSERT_MODE;
-    break;
-  case 't':
-    if (*cmd == 'l') {                  // tlmenu, tlunmenu, tlnoremenu
-      modes = MENU_TERMINAL_MODE;
-      cmd++;
-      break;
-    }
-    modes = MENU_TIP_MODE;              // tmenu
-    break;
-  case 'c':                             // cmenu
-    modes = MENU_CMDLINE_MODE;
-    break;
-  case 'a':                             // amenu
-    modes = MENU_INSERT_MODE | MENU_CMDLINE_MODE | MENU_NORMAL_MODE
-            | MENU_VISUAL_MODE | MENU_SELECT_MODE
-            | MENU_OP_PENDING_MODE;
-    break;
-  case 'n':
-    if (*cmd != 'o') {                  // nmenu, not noremenu
-      modes = MENU_NORMAL_MODE;
-      break;
-    }
-    FALLTHROUGH;
-  default:
-    cmd--;
-    if (forceit) {
-      // menu!!
-      modes = MENU_INSERT_MODE | MENU_CMDLINE_MODE;
-    } else {
-      // menu
-      modes = MENU_NORMAL_MODE | MENU_VISUAL_MODE | MENU_SELECT_MODE
-              | MENU_OP_PENDING_MODE;
-    }
-  }
-
+  MenuCmdResult result = rs_get_menu_cmd_modes(cmd, forceit);
   if (noremap != NULL) {
-    *noremap = (*cmd == 'n' ? REMAP_NONE : REMAP_YES);
+    *noremap = result.noremap;
   }
   if (unmenu != NULL) {
-    *unmenu = (*cmd == 'u');
+    *unmenu = result.unmenu;
   }
-  return modes;
+  return result.modes;
 }
 
 /// Return the string representation of the menu modes. Does the opposite
 /// of get_menu_cmd_modes().
 static char *get_menu_mode_str(int modes)
 {
-  if ((modes & (MENU_INSERT_MODE | MENU_CMDLINE_MODE | MENU_NORMAL_MODE |
-                MENU_VISUAL_MODE | MENU_SELECT_MODE | MENU_OP_PENDING_MODE))
-      == (MENU_INSERT_MODE | MENU_CMDLINE_MODE | MENU_NORMAL_MODE |
-          MENU_VISUAL_MODE | MENU_SELECT_MODE | MENU_OP_PENDING_MODE)) {
-    return "a";
-  }
-  if ((modes & (MENU_NORMAL_MODE | MENU_VISUAL_MODE | MENU_SELECT_MODE |
-                MENU_OP_PENDING_MODE))
-      == (MENU_NORMAL_MODE | MENU_VISUAL_MODE | MENU_SELECT_MODE |
-          MENU_OP_PENDING_MODE)) {
-    return " ";
-  }
-  if ((modes & (MENU_INSERT_MODE | MENU_CMDLINE_MODE))
-      == (MENU_INSERT_MODE | MENU_CMDLINE_MODE)) {
-    return "!";
-  }
-  if ((modes & (MENU_VISUAL_MODE | MENU_SELECT_MODE))
-      == (MENU_VISUAL_MODE | MENU_SELECT_MODE)) {
-    return "v";
-  }
-  if (modes & MENU_VISUAL_MODE) {
-    return "x";
-  }
-  if (modes & MENU_SELECT_MODE) {
-    return "s";
-  }
-  if (modes & MENU_OP_PENDING_MODE) {
-    return "o";
-  }
-  if (modes & MENU_INSERT_MODE) {
-    return "i";
-  }
-  if (modes & MENU_TERMINAL_MODE) {
-    return "tl";
-  }
-  if (modes & MENU_CMDLINE_MODE) {
-    return "c";
-  }
-  if (modes & MENU_NORMAL_MODE) {
-    return "n";
-  }
-  if (modes & MENU_TIP_MODE) {
-    return "t";
-  }
-
-  return "";
+  return (char *)rs_get_menu_mode_str(modes);
 }
 
 // Modify a menu name starting with "PopUp" to include the mode character.
 // Returns the name in allocated memory.
 static char *popup_mode_name(char *name, int idx)
 {
-  size_t len = strlen(name);
-  assert(len >= 4);
-
-  char *mode_chars = menu_mode_chars[idx];
-  size_t mode_chars_len = strlen(mode_chars);
-  char *p = xstrnsave(name, len + mode_chars_len);
-  memmove(p + 5 + mode_chars_len, p + 5, len - 4);
-  for (size_t i = 0; i < mode_chars_len; i++) {
-    p[5 + i] = menu_mode_chars[idx][i];
-  }
-
-  return p;
+  return rs_popup_mode_name(name, idx);
 }
 
 /// Duplicate the menu item text and then process to see if a mnemonic key
@@ -1348,41 +1254,12 @@ static bool menu_is_hidden(char *name)
 
 static int get_menu_mode(void)
 {
-  if (State & MODE_TERMINAL) {
-    return MENU_INDEX_TERMINAL;
-  }
-  if (VIsual_active) {
-    if (VIsual_select) {
-      return MENU_INDEX_SELECT;
-    }
-    return MENU_INDEX_VISUAL;
-  }
-  if (State & MODE_INSERT) {
-    return MENU_INDEX_INSERT;
-  }
-  if ((State & MODE_CMDLINE) || State == MODE_ASKMORE || State == MODE_HITRETURN) {
-    return MENU_INDEX_CMDLINE;
-  }
-  if (finish_op) {
-    return MENU_INDEX_OP_PENDING;
-  }
-  if (State & MODE_NORMAL) {
-    return MENU_INDEX_NORMAL;
-  }
-  if (State & MODE_LANGMAP) {  // must be a "r" command, like Insert mode
-    return MENU_INDEX_INSERT;
-  }
-  return MENU_INDEX_INVALID;
+  return rs_get_menu_mode();
 }
 
 int get_menu_mode_flag(void)
 {
-  int mode = get_menu_mode();
-
-  if (mode == MENU_INDEX_INVALID) {
-    return 0;
-  }
-  return 1 << mode;
+  return rs_get_menu_mode_flag();
 }
 
 /// Display the Special "PopUp" menu as a pop-up at the current mouse
@@ -1982,4 +1859,28 @@ int nvim_menu_get_mnemonic(vimmenu_T *menu)
 const char *nvim_menu_get_actext(vimmenu_T *menu)
 {
   return menu->actext;
+}
+
+/// Get the global State variable.
+int nvim_menu_get_global_state(void)
+{
+  return State;
+}
+
+/// Get the VIsual_active global variable.
+bool nvim_menu_get_visual_active(void)
+{
+  return VIsual_active;
+}
+
+/// Get the VIsual_select global variable.
+bool nvim_menu_get_visual_select(void)
+{
+  return VIsual_select;
+}
+
+/// Get the finish_op global variable.
+bool nvim_menu_get_finish_op(void)
+{
+  return finish_op;
 }

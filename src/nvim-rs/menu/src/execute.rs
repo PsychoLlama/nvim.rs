@@ -121,6 +121,81 @@ pub extern "C" fn rs_menu_mode_name(mode_idx: c_int) -> *const std::ffi::c_char 
     }
 }
 
+// C globals for mode detection
+extern "C" {
+    fn nvim_menu_get_global_state() -> c_int;
+    fn nvim_menu_get_visual_active() -> bool;
+    fn nvim_menu_get_visual_select() -> bool;
+    fn nvim_menu_get_finish_op() -> bool;
+}
+
+/// Mode flags from state_defs.h
+mod mode_flags {
+    use std::ffi::c_int;
+
+    pub const MODE_NORMAL: c_int = 0x01;
+    pub const MODE_INSERT: c_int = 0x10;
+    pub const MODE_CMDLINE: c_int = 0x08;
+    pub const MODE_TERMINAL: c_int = 0x80;
+    pub const MODE_LANGMAP: c_int = 0x20;
+    pub const MODE_ASKMORE: c_int = 0x3000;
+    pub const MODE_HITRETURN: c_int = 0x2001;
+}
+
+/// Get the menu mode index based on current Vim state.
+///
+/// Returns a MENU_INDEX_* value corresponding to the current mode.
+///
+/// This is the Rust implementation of C `get_menu_mode()`.
+#[no_mangle]
+pub extern "C" fn rs_get_menu_mode() -> c_int {
+    let state = unsafe { nvim_menu_get_global_state() };
+
+    if (state & mode_flags::MODE_TERMINAL) != 0 {
+        return MENU_INDEX_TERMINAL;
+    }
+    if unsafe { nvim_menu_get_visual_active() } {
+        if unsafe { nvim_menu_get_visual_select() } {
+            return MENU_INDEX_SELECT;
+        }
+        return MENU_INDEX_VISUAL;
+    }
+    if (state & mode_flags::MODE_INSERT) != 0 {
+        return MENU_INDEX_INSERT;
+    }
+    if (state & mode_flags::MODE_CMDLINE) != 0
+        || state == mode_flags::MODE_ASKMORE
+        || state == mode_flags::MODE_HITRETURN
+    {
+        return MENU_INDEX_CMDLINE;
+    }
+    if unsafe { nvim_menu_get_finish_op() } {
+        return MENU_INDEX_OP_PENDING;
+    }
+    if (state & mode_flags::MODE_NORMAL) != 0 {
+        return MENU_INDEX_NORMAL;
+    }
+    if (state & mode_flags::MODE_LANGMAP) != 0 {
+        // must be a "r" command, like Insert mode
+        return MENU_INDEX_INSERT;
+    }
+    MENU_INDEX_INVALID
+}
+
+/// Get the menu mode flag (bitmask) for the current Vim state.
+///
+/// Returns `1 << get_menu_mode()`, or 0 if the mode is invalid.
+///
+/// This is the Rust implementation of C `get_menu_mode_flag()`.
+#[no_mangle]
+pub extern "C" fn rs_get_menu_mode_flag() -> c_int {
+    let mode = rs_get_menu_mode();
+    if mode == MENU_INDEX_INVALID {
+        return 0;
+    }
+    1 << mode
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
