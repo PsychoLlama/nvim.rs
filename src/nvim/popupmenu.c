@@ -68,6 +68,25 @@ extern void rs_pum_clear(void);
 extern void rs_pum_ext_select_item(int item, int insert, int finish);
 extern void rs_pum_invalidate(void);
 extern int rs_pum_undisplay(int immediate);
+extern int rs_pum_border_width(void);
+extern int rs_pum_get_height(void);
+
+typedef struct {
+  int first;
+  int second;
+  int third;
+} PumAlignOrder;
+extern PumAlignOrder rs_pum_get_current_align_order(void);
+
+extern const char *rs_pum_get_item(const pumitem_T *array, int index, int item_type);
+extern int rs_pum_user_attr_combine(const pumitem_T *array, int idx, int item_type, int attr);
+
+typedef struct {
+  int base_width;
+  int kind_width;
+  int extra_width;
+} PumSizeResult;
+extern PumSizeResult rs_pum_compute_size(const pumitem_T *array);
 
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
@@ -373,30 +392,10 @@ int nvim_curwin_hl_attr(int hlf)
 
 static void pum_compute_size(void)
 {
-  // Compute the width of the widest match and the widest extra.
-  pum_base_width = 0;
-  pum_kind_width = 0;
-  pum_extra_width = 0;
-  for (int i = 0; i < pum_size; i++) {
-    if (pum_array[i].pum_text != NULL) {
-      int w = vim_strsize(pum_array[i].pum_text);
-      if (pum_base_width < w) {
-        pum_base_width = w;
-      }
-    }
-    if (pum_array[i].pum_kind != NULL) {
-      int w = vim_strsize(pum_array[i].pum_kind) + 1;
-      if (pum_kind_width < w) {
-        pum_kind_width = w;
-      }
-    }
-    if (pum_array[i].pum_extra != NULL) {
-      int w = vim_strsize(pum_array[i].pum_extra) + 1;
-      if (pum_extra_width < w) {
-        pum_extra_width = w;
-      }
-    }
-  }
+  PumSizeResult result = rs_pum_compute_size(pum_array);
+  pum_base_width = result.base_width;
+  pum_kind_width = result.kind_width;
+  pum_extra_width = result.extra_width;
 }
 
 /// Calculate vertical placement for popup menu.
@@ -552,11 +551,7 @@ static void pum_compute_horizontal_placement(win_T *target_win, int cursor_col)
 
 static inline int pum_border_width(void)
 {
-  if (*p_pumborder == NUL || strequal(p_pumborder, opt_winborder_values[7])) {
-    return 0;  // No border
-  }
-  // Shadow (1) only has right+bottom, others (2) have full border
-  return strequal(p_pumborder, opt_winborder_values[3]) ? 1 : 2;
+  return rs_pum_border_width();
 }
 
 /// Show the popup menu with items "array[size]".
@@ -815,32 +810,20 @@ static void pum_grid_puts_with_attrs(int col, int cells, const char *text, int t
 
 static inline void pum_align_order(int *order)
 {
-  bool is_default = cia_flags == 0;
-  order[0] = is_default ? CPT_ABBR : cia_flags / 100;
-  order[1] = is_default ? CPT_KIND : (cia_flags / 10) % 10;
-  order[2] = is_default ? CPT_MENU : cia_flags % 10;
+  PumAlignOrder result = rs_pum_get_current_align_order();
+  order[0] = result.first;
+  order[1] = result.second;
+  order[2] = result.third;
 }
 
 static inline char *pum_get_item(int index, int type)
 {
-  switch (type) {
-  case CPT_ABBR:
-    return pum_array[index].pum_text;
-  case CPT_KIND:
-    return pum_array[index].pum_kind;
-  case CPT_MENU:
-    return pum_array[index].pum_extra;
-  }
-  return NULL;
+  return (char *)rs_pum_get_item(pum_array, index, type);
 }
 
 static inline int pum_user_attr_combine(int idx, int type, int attr)
 {
-  int user_attr[] = {
-    pum_array[idx].pum_user_abbr_hlattr,
-    pum_array[idx].pum_user_kind_hlattr,
-  };
-  return user_attr[type] > 0 ? hl_combine_attr(attr, user_attr[type]) : attr;
+  return rs_pum_user_attr_combine(pum_array, idx, type, attr);
 }
 
 /// Redraw the popup menu, using "pum_first" and "pum_selected".
@@ -1602,9 +1585,6 @@ void pum_ext_select_item(int item, bool insert, bool finish)
 {
   rs_pum_ext_select_item(item, insert ? 1 : 0, finish ? 1 : 0);
 }
-
-// Rust implementation of pum_get_height
-extern int rs_pum_get_height(void);
 
 /// Gets the height of the menu.
 ///

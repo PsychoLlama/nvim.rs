@@ -5,6 +5,8 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::placement::PumSizeResult;
+
 /// Completion item type for abbreviation/text.
 pub const CPT_ABBR: c_int = 0;
 /// Completion item type for kind.
@@ -38,6 +40,10 @@ extern "C" {
     fn strequal(s1: *const c_char, s2: *const c_char) -> c_int;
     /// Get the completion item align flags global.
     fn nvim_get_cia_flags() -> c_int;
+    /// Compute the display width of a string.
+    fn vim_strsize(s: *const c_char) -> c_int;
+    /// Get the `pum_size` (number of items).
+    fn nvim_get_pum_size() -> c_int;
 }
 
 // Static string constants for border comparison
@@ -221,6 +227,55 @@ pub unsafe extern "C" fn rs_pum_item_is_empty(
     }
     // Check if first byte is NUL
     (*ptr == 0) as c_int
+}
+
+/// Compute the widths of the widest match, kind, and extra text.
+///
+/// Iterates over all items in the popup menu array and measures
+/// each field's display width using `vim_strsize`.
+///
+/// # Arguments
+/// * `array` - Pointer to the popup menu item array
+///
+/// # Safety
+/// The caller must ensure `array` is a valid pointer to a `pumitem_T` array
+/// with at least `pum_size` elements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_compute_size(array: *const PumItemArray) -> PumSizeResult {
+    let size = nvim_get_pum_size();
+    let mut base_width: c_int = 0;
+    let mut kind_width: c_int = 0;
+    let mut extra_width: c_int = 0;
+
+    for i in 0..size {
+        let text = nvim_pum_item_get_text(array, i);
+        if !text.is_null() {
+            let w = vim_strsize(text);
+            if base_width < w {
+                base_width = w;
+            }
+        }
+        let kind = nvim_pum_item_get_kind(array, i);
+        if !kind.is_null() {
+            let w = vim_strsize(kind) + 1;
+            if kind_width < w {
+                kind_width = w;
+            }
+        }
+        let extra = nvim_pum_item_get_extra(array, i);
+        if !extra.is_null() {
+            let w = vim_strsize(extra) + 1;
+            if extra_width < w {
+                extra_width = w;
+            }
+        }
+    }
+
+    PumSizeResult {
+        base_width,
+        kind_width,
+        extra_width,
+    }
 }
 
 #[cfg(test)]
