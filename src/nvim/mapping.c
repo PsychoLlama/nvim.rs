@@ -71,6 +71,8 @@ extern char *rs_check_map(char *keys, int mode, int exact, int ign_mod, int abbr
                           mapblock_T **mp_ptr, int *local_ptr, int *rhs_lua);
 extern int rs_map_to_exists_str(const char *str, const char *modechars, int abbr);
 extern char *rs_translate_mapping(const char *str_in, const char *cpo_val);
+extern void rs_map_clear_mode(buf_T *buf, int mode, int local, int abbr);
+extern void rs_do_mapclear(char *cmdp, char *arg, int forceit, int abbr);
 
 /// List used for abbreviations.
 static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
@@ -785,67 +787,13 @@ static int get_map_mode(char **cmdp, bool forceit)
 /// This function used to be called map_clear().
 static void do_mapclear(char *cmdp, char *arg, int forceit, int abbr)
 {
-  bool local = strcmp(arg, "<buffer>") == 0;
-  if (!local && *arg != NUL) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-  int mode = get_map_mode(&cmdp, forceit);
-  map_clear_mode(curbuf, mode, local, abbr);
+  rs_do_mapclear(cmdp, arg, forceit, abbr);
 }
 
 /// Clear all mappings in "mode".
-///
-/// @param buf,  buffer for local mappings
-/// @param mode  mode in which to delete
-/// @param local  true for buffer-local mappings
-/// @param abbr  true for abbreviations
 void map_clear_mode(buf_T *buf, int mode, bool local, bool abbr)
 {
-  for (int hash = 0; hash < 256; hash++) {
-    mapblock_T **mpp;
-    if (abbr) {
-      if (hash > 0) {           // there is only one abbrlist
-        break;
-      }
-      if (local) {
-        mpp = &buf->b_first_abbr;
-      } else {
-        mpp = &first_abbr;
-      }
-    } else {
-      if (local) {
-        mpp = &buf->b_maphash[hash];
-      } else {
-        mpp = &maphash[hash];
-      }
-    }
-    while (*mpp != NULL) {
-      mapblock_T *mp = *mpp;
-      if (mp->m_mode & mode) {
-        mp->m_mode &= ~mode;
-        if (mp->m_mode == 0) {       // entry can be deleted
-          mapblock_free(mpp);
-          continue;
-        }
-        // May need to put this entry into another hash list.
-        int new_hash = MAP_HASH(mp->m_mode, (uint8_t)mp->m_keys[0]);
-        if (!abbr && new_hash != hash) {
-          *mpp = mp->m_next;
-          if (local) {
-            mp->m_next = buf->b_maphash[new_hash];
-            buf->b_maphash[new_hash] = mp;
-          } else {
-            mp->m_next = maphash[new_hash];
-            maphash[new_hash] = mp;
-          }
-          continue;                     // continue with *mpp
-        }
-      }
-      mpp = &(mp->m_next);
-    }
-  }
+  rs_map_clear_mode(buf, mode, local ? 1 : 0, abbr ? 1 : 0);
 }
 
 /// Check if a map exists that has given string in the rhs
@@ -2487,6 +2435,72 @@ int nvim_mapping_utf_ptr2char(const char *p)
 int nvim_mapping_utfc_ptr2len(const char *p)
 {
   return utfc_ptr2len(p);
+}
+
+// Write accessors for Rust mutation primitives (Phase 5)
+
+void nvim_mapping_emsg_invarg(void)
+{
+  emsg(_(e_invarg));
+}
+
+void nvim_set_maphash_entry(int index, mapblock_T *mp)
+{
+  if (index >= 0 && index < MAX_MAPHASH) {
+    maphash[index] = mp;
+  }
+}
+
+void nvim_set_first_abbr(mapblock_T *mp)
+{
+  first_abbr = mp;
+}
+
+void nvim_buf_set_maphash_entry(buf_T *buf, int index, mapblock_T *mp)
+{
+  if (buf && index >= 0 && index < MAX_MAPHASH) {
+    buf->b_maphash[index] = mp;
+  }
+}
+
+void nvim_buf_set_first_abbr(buf_T *buf, mapblock_T *mp)
+{
+  if (buf) {
+    buf->b_first_abbr = mp;
+  }
+}
+
+void nvim_mapblock_set_next(mapblock_T *mp, mapblock_T *next)
+{
+  if (mp) {
+    mp->m_next = next;
+  }
+}
+
+void nvim_mapblock_set_mode(mapblock_T *mp, int mode)
+{
+  if (mp) {
+    mp->m_mode = mode;
+  }
+}
+
+/// Free a mapblock and advance the pointer to the next entry.
+/// This is a C-side helper because it calls xfree and NLUA_CLEAR_REF.
+void nvim_mapblock_free(mapblock_T *mp)
+{
+  if (!mp) {
+    return;
+  }
+  xfree(mp->m_keys);
+  if (mp->m_alt != NULL) {
+    mp->m_alt->m_alt = NULL;
+  } else {
+    NLUA_CLEAR_REF(mp->m_luaref);
+    xfree(mp->m_str);
+    xfree(mp->m_orig_str);
+    xfree(mp->m_desc);
+  }
+  xfree(mp);
 }
 
 /// Format a langmap error message into the provided buffer.

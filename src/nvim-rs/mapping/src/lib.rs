@@ -18,6 +18,7 @@ pub mod args;
 pub mod flags;
 pub mod langmap;
 pub mod lookup;
+pub mod mutate;
 
 use std::ffi::{c_char, c_int, c_void};
 
