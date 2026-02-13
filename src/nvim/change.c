@@ -82,6 +82,11 @@ extern void rs_ins_str(const char *s, size_t slen);
 extern int rs_del_char(bool fixpos);
 extern int rs_del_chars(int count, int fixpos);
 extern int rs_del_bytes(colnr_T count, bool fixpos_arg, bool use_delcombine);
+extern void rs_truncate_line(int fixpos);
+extern void rs_appended_lines_buf(buf_T *buf, linenr_T lnum, linenr_T count);
+extern void rs_appended_lines(linenr_T lnum, linenr_T count);
+extern void rs_appended_lines_mark(linenr_T lnum, int count);
+extern void rs_deleted_lines_buf(buf_T *buf, linenr_T lnum, linenr_T count);
 
 void change_warning(buf_T *buf, int col)
 {
@@ -366,7 +371,7 @@ void inserted_bytes(linenr_T lnum, colnr_T start_col, int old_col, int new_col)
 /// Takes care of marking the buffer to be redrawn and sets the changed flag.
 void appended_lines_buf(buf_T *buf, linenr_T lnum, linenr_T count)
 {
-  changed_lines(buf, lnum + 1, 0, lnum + 1, count, true);
+  rs_appended_lines_buf(buf, lnum, count);
 }
 
 /// Appended "count" lines below line "lnum" in the current buffer.
@@ -374,14 +379,13 @@ void appended_lines_buf(buf_T *buf, linenr_T lnum, linenr_T count)
 /// Takes care of marking the buffer to be redrawn and sets the changed flag.
 void appended_lines(linenr_T lnum, linenr_T count)
 {
-  appended_lines_buf(curbuf, lnum, count);
+  rs_appended_lines(lnum, count);
 }
 
 /// Like appended_lines(), but adjust marks first.
 void appended_lines_mark(linenr_T lnum, int count)
 {
-  mark_adjust(lnum + 1, (linenr_T)MAXLNUM, (linenr_T)count, 0, kExtmarkUndo);
-  changed_lines(curbuf, lnum + 1, 0, lnum + 1, (linenr_T)count, true);
+  rs_appended_lines_mark(lnum, count);
 }
 
 /// Deleted "count" lines at line "lnum" in the given buffer.
@@ -389,7 +393,7 @@ void appended_lines_mark(linenr_T lnum, int count)
 /// Takes care of marking the buffer to be redrawn and sets the changed flag.
 void deleted_lines_buf(buf_T *buf, linenr_T lnum, linenr_T count)
 {
-  changed_lines(buf, lnum, 0, lnum + count, -count, true);
+  rs_deleted_lines_buf(buf, lnum, count);
 }
 
 /// Deleted "count" lines at line "lnum" in the current buffer.
@@ -1433,21 +1437,7 @@ theend:
 /// If "fixpos" is true fix the cursor position when done.
 void truncate_line(int fixpos)
 {
-  linenr_T lnum = curwin->w_cursor.lnum;
-  colnr_T col = curwin->w_cursor.col;
-  char *old_line = ml_get(lnum);
-  char *newp = col == 0 ? xstrdup("") : xstrnsave(old_line, (size_t)col);
-  int deleted = ml_get_len(lnum) - col;
-
-  ml_replace(lnum, newp, false);
-
-  // mark the buffer as changed and prepare for displaying
-  inserted_bytes(lnum, curwin->w_cursor.col, deleted, 0);
-
-  // If "fixpos" is true we don't want to end up positioned at the NUL.
-  if (fixpos && curwin->w_cursor.col > 0) {
-    curwin->w_cursor.col--;
-  }
+  rs_truncate_line(fixpos);
 }
 
 /// Delete "nlines" lines at the cursor.
