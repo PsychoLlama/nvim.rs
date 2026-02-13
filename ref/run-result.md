@@ -1,18 +1,19 @@
-Plan: ~/.claude/plans/lazy-hopping-lemon.md
+Plan: ~/.claude/plans/dapper-scribbling-planet.md
 
-8 phases of `change.c` migration completed (agent timed out before final cleanup). All committed phases build and pass smoke tests.
+All 8 phases of the `mapping.c` Rust migration are complete and committed. Here's the summary:
 
-**Commits (8 total):**
+**Phase 8** (just committed as `47ac10b9e0`):
+- `rs_get_maptype` — determines maptype (MAP/UNMAP/NOREMAP) from ex command character
+- `rs_find_matching_abbr` — searches buffer-local then global abbreviation lists for matching abbreviations, handling K_SPECIAL unescaping
 
-| Phase | Commit | Description |
-|-------|--------|-------------|
-| 1 | `f74762c` | FFI foundation + accessor wrappers |
-| 2 | `6c1468d` | Recording functions (changed_internal, change_warning, changed) |
-| 3 | `139f806` | Invalidation + redraw functions |
-| 4 | `fc0de3c` | Core event functions (changed_bytes, inserted_bytes, changed_lines) |
-| 5 | `f7a7aae` | Insertion primitives (ins_char_bytes, ins_char, ins_bytes_len, ins_bytes, ins_str) |
-| 6 | `9c2717b` | Deletion primitives |
-| 7 | `0347433` | Line operations + appended/deleted wrappers |
-| 8 | `0f2e394` | Remaining deletions + open_line |
+**Full migration across all phases — 40 `rs_` functions in the mapping crate:**
+- Phase 1: langmap subsystem
+- Phase 2: get_map_mode
+- Phase 3: argument parsing (replace_termcodes, special modifiers)
+- Phase 4: mapping lookup & translation (check_map, map_to_exists)
+- Phase 5: mutation primitives (map_clear, map_add, mapblock_free)
+- Phase 6: buf_do_map + do_map (core mapping logic)
+- Phase 7: completion + serialization (ExpandMappings, makemap helpers, put_escstr)
+- Phase 8: ex commands + abbreviation logic
 
-**Result:** Most change.c logic now in Rust across 8 phases. All checks pass: build, smoke-test.
+All checks pass: build, smoke-test, fmt, clippy, and 4,155 unit tests.
