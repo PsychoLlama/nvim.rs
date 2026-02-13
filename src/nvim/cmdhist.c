@@ -528,85 +528,28 @@ void ex_history(exarg_T *eap)
   rs_ex_history(eap);
 }
 
+extern const void *rs_hist_iter(const void *iter, uint8_t history_type, int zero,
+                                histentry_T *hist);
+extern histentry_T *rs_hist_get_array(uint8_t history_type, int **new_hisidx, int **new_hisnum);
+
+/// Convert a pointer within a history array to an index.
+int nvim_cmdhist_ptr_to_idx(histentry_T *base, histentry_T *ptr)
+{
+  return (int)(ptr - base);
+}
+
 /// Iterate over history items
-///
-/// @warning No history-editing functions must be run while iteration is in
-///          progress.
-///
-/// @param[in]   iter          Pointer to the last history entry.
-/// @param[in]   history_type  Type of the history (HIST_*). Ignored if iter
-///                            parameter is not NULL.
-/// @param[in]   zero          If true then zero (but not free) returned items.
-///
-///                            @warning When using this parameter user is
-///                                     responsible for calling clr_history()
-///                                     itself after iteration is over. If
-///                                     clr_history() is not called behaviour is
-///                                     undefined. No functions that work with
-///                                     history must be called during iteration
-///                                     in this case.
-/// @param[out]  hist          Next history entry.
-///
-/// @return Pointer used in next iteration or NULL to indicate that iteration
-///         was finished.
 const void *hist_iter(const void *const iter, const uint8_t history_type, const bool zero,
                       histentry_T *const hist)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(4)
 {
-  *hist = (histentry_T) {
-    .hisstr = NULL
-  };
-  if (hisidx[history_type] == -1) {
-    return NULL;
-  }
-  histentry_T *const hstart = &(history[history_type][0]);
-  histentry_T *const hlast = &(history[history_type][hisidx[history_type]]);
-  const histentry_T *const hend = &(history[history_type][hislen - 1]);
-  histentry_T *hiter;
-  if (iter == NULL) {
-    histentry_T *hfirst = hlast;
-    do {
-      hfirst++;
-      if (hfirst > hend) {
-        hfirst = hstart;
-      }
-      if (hfirst->hisstr != NULL) {
-        break;
-      }
-    } while (hfirst != hlast);
-    hiter = hfirst;
-  } else {
-    hiter = (histentry_T *)iter;
-  }
-  if (hiter == NULL) {
-    return NULL;
-  }
-  *hist = *hiter;
-  if (zero) {
-    CLEAR_POINTER(hiter);
-  }
-  if (hiter == hlast) {
-    return NULL;
-  }
-  hiter++;
-  return (const void *)((hiter > hend) ? hstart : hiter);
+  return rs_hist_iter(iter, history_type, zero, hist);
 }
 
 /// Get array of history items
-///
-/// @param[in]   history_type  Type of the history to get array for.
-/// @param[out]  new_hisidx    Location where last index in the new array should
-///                            be saved.
-/// @param[out]  new_hisnum    Location where last history number in the new
-///                            history should be saved.
-///
-/// @return Pointer to the array or NULL.
 histentry_T *hist_get_array(const uint8_t history_type, int **const new_hisidx,
                             int **const new_hisnum)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-  init_history();
-  *new_hisidx = &(hisidx[history_type]);
-  *new_hisnum = &(hisnum[history_type]);
-  return history[history_type];
+  return rs_hist_get_array(history_type, new_hisidx, new_hisnum);
 }

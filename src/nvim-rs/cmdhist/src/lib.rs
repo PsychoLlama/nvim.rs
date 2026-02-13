@@ -12,6 +12,7 @@ pub mod command;
 pub mod delete;
 pub mod ffi;
 pub mod helpers;
+pub mod iter;
 pub mod modify;
 pub mod viml;
 
