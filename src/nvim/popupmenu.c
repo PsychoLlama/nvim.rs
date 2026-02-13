@@ -88,6 +88,25 @@ typedef struct {
 } PumSizeResult;
 extern PumSizeResult rs_pum_compute_size(const pumitem_T *array);
 
+typedef struct {
+  int row;
+  int height;
+  int above;
+} PumVerticalResult;
+extern PumVerticalResult rs_pum_compute_vertical(int size, int pum_win_row, int above_row,
+                                                  int below_row, int pum_border_size,
+                                                  int cmdline_row, int is_cmdline,
+                                                  int has_target_win, int context_above,
+                                                  int context_below);
+
+typedef struct {
+  int col;
+  int width;
+} PumHorizontalResult;
+extern PumHorizontalResult rs_pum_compute_horizontal(int cursor_col, int max_col, int pum_rl,
+                                                     int pum_scrollbar, int pum_base_width,
+                                                     int pum_kind_width, int pum_extra_width);
+
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
 static int pum_selected;            // index of selected item or -1
@@ -403,98 +422,24 @@ static void pum_compute_size(void)
 static void pum_compute_vertical_placement(int size, win_T *target_win, int pum_win_row,
                                            int above_row, int below_row, int pum_border_size)
 {
-  int context_lines;
+  int is_cmdline = (State & MODE_CMDLINE) != 0;
+  int has_target_win = target_win != NULL;
+  int context_above = 0;
+  int context_below = 0;
 
-  // Figure out the size and position of the pum.
-  pum_height = MIN(size, PUM_DEF_HEIGHT);
-  if (p_ph > 0 && pum_height > p_ph) {
-    pum_height = (int)p_ph;
+  if (has_target_win) {
+    context_above = target_win->w_wrow - target_win->w_cline_row;
+    // Need to call validate_cheight before reading cline_height
+    validate_cheight(target_win);
+    context_below = target_win->w_cline_row + target_win->w_cline_height - target_win->w_wrow;
   }
 
-  // Put the pum below "pum_win_row" if possible.
-  // If there are few lines decide on where there is more room.
-  if (pum_win_row + 2 + pum_border_size >= below_row - pum_height
-      && pum_win_row - above_row > (below_row - above_row) / 2) {
-    // pum above "pum_win_row"
-    pum_above = true;
-
-    if ((State & MODE_CMDLINE) && target_win == NULL) {
-      // For cmdline pum, no need for context lines unless target_win is set
-      context_lines = 0;
-    } else {
-      // Leave two lines of context if possible
-      context_lines = MIN(2, target_win->w_wrow - target_win->w_cline_row);
-    }
-
-    if (pum_win_row >= size + context_lines) {
-      pum_row = pum_win_row - size - context_lines;
-      pum_height = size;
-    } else {
-      pum_row = 0;
-      pum_height = pum_win_row - context_lines;
-    }
-    if (p_ph > 0 && pum_height > p_ph) {
-      pum_row += pum_height - (int)p_ph;
-      pum_height = (int)p_ph;
-    }
-
-    if (pum_border_size > 0 && pum_border_size + pum_row + pum_height >= pum_win_row) {
-      if (pum_row < 2) {
-        pum_height -= pum_border_size;
-      } else {
-        pum_row -= pum_border_size;
-      }
-    }
-  } else {
-    // pum below "pum_win_row"
-    pum_above = false;
-
-    if ((State & MODE_CMDLINE) && target_win == NULL) {
-      // for cmdline pum, no need for context lines unless target_win is set
-      context_lines = 0;
-    } else {
-      // Leave three lines of context if possible
-      validate_cheight(target_win);
-      int cline_visible_offset = target_win->w_cline_row +
-                                 target_win->w_cline_height - target_win->w_wrow;
-      context_lines = MIN(3, cline_visible_offset);
-    }
-
-    pum_row = pum_win_row + context_lines;
-    pum_height = MIN(below_row - pum_row, size);
-    if (p_ph > 0 && pum_height > p_ph) {
-      pum_height = (int)p_ph;
-    }
-
-    if (pum_row + pum_height + pum_border_size >= cmdline_row) {
-      pum_height -= pum_border_size;
-    }
-  }
-
-  // If there is a preview window above avoid drawing over it.
-  if (above_row > 0 && pum_row < above_row && pum_height > above_row) {
-    pum_row = above_row;
-    pum_height = pum_win_row - above_row;
-  }
-}
-
-/// Try to set "pum_width" so that it fits within available_width.
-/// Returns true if pum_width was successfully set, FALSE otherwise.
-static bool set_pum_width_aligned_with_cursor(int width, int available_width)
-{
-  bool end_padding = true;
-
-  if (width < p_pw) {
-    width = (int)p_pw;
-    end_padding = false;
-  }
-  if (p_pmw > 0 && width > p_pmw) {
-    width = (int)p_pmw;
-    end_padding = false;
-  }
-
-  pum_width = width + (end_padding && width >= p_pw ? 1 : 0);
-  return available_width >= pum_width;
+  PumVerticalResult result = rs_pum_compute_vertical(
+      size, pum_win_row, above_row, below_row, pum_border_size,
+      cmdline_row, is_cmdline, has_target_win, context_above, context_below);
+  pum_row = result.row;
+  pum_height = result.height;
+  pum_above = result.above != 0;
 }
 
 /// Calculate horizontal placement for popup menu. Sets pum_col and pum_width
@@ -502,51 +447,11 @@ static bool set_pum_width_aligned_with_cursor(int width, int available_width)
 static void pum_compute_horizontal_placement(win_T *target_win, int cursor_col)
 {
   int max_col = MAX(Columns, target_win ? (target_win->w_wincol + target_win->w_view_width) : 0);
-  int desired_width = pum_base_width + pum_kind_width + pum_extra_width;
-  int available_width;
-
-  if (pum_rl) {
-    available_width = cursor_col - pum_scrollbar + 1;
-  } else {
-    available_width = max_col - cursor_col - pum_scrollbar;
-  }
-
-  // Align pum with "cursor_col"
-  pum_col = cursor_col;
-  if (set_pum_width_aligned_with_cursor(desired_width, available_width)) {
-    return;
-  }
-
-  // Show the pum truncated, provided it is at least as wide as 'pum_width'
-  if (available_width > p_pw) {
-    pum_width = available_width;
-    return;
-  }
-
-  // Truncated pum is no longer aligned with "cursor_col"
-  if (pum_rl) {
-    available_width = max_col - pum_scrollbar;
-  } else {
-    available_width += cursor_col;
-  }
-
-  if (available_width > p_pw) {
-    pum_width = (int)p_pw + 1;  // Truncate beyond 'pum_width'
-    if (pum_rl) {
-      pum_col = pum_width + pum_scrollbar;
-    } else {
-      pum_col = max_col - pum_width - pum_scrollbar;
-    }
-    return;
-  }
-
-  // Not enough room anywhere, use what we have
-  if (pum_rl) {
-    pum_col = max_col - 1;
-  } else {
-    pum_col = 0;
-  }
-  pum_width = max_col - pum_scrollbar;
+  PumHorizontalResult result = rs_pum_compute_horizontal(
+      cursor_col, max_col, pum_rl, pum_scrollbar,
+      pum_base_width, pum_kind_width, pum_extra_width);
+  pum_col = result.col;
+  pum_width = result.width;
 }
 
 static inline int pum_border_width(void)
