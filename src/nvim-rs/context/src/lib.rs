@@ -9,6 +9,11 @@
 
 use std::ffi::c_char;
 
+pub mod ffi;
+mod stack;
+
+pub use stack::*;
+
 /// String type from the Neovim API
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -82,48 +87,20 @@ pub struct Context {
     pub funcs: Array,
 }
 
-extern "C" {
-    /// Get the size of the context stack
-    fn nvim_get_ctx_stack_size() -> usize;
-
-    /// Get context at given index from top of stack (returns NULL if out of bounds)
-    fn nvim_get_ctx_at_index(index: usize) -> *mut Context;
-
-    /// Free a string
-    fn rs_api_free_string(value: NvimString);
-
-    /// Free an array
-    fn rs_api_free_array(value: Array);
-}
-
 /// Returns the size of the context stack.
-///
-/// # Safety
-/// Calls C accessor function for `ctx_stack`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctx_size() -> usize {
-    nvim_get_ctx_stack_size()
+    ffi::nvim_get_ctx_stack_size()
 }
 
 /// Returns pointer to Context object with given zero-based index from the top
 /// of context stack or NULL if index is out of bounds.
-///
-/// # Safety
-/// Returns a pointer to a C-owned Context struct. The caller must not
-/// free or modify the returned pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctx_get(index: usize) -> *mut Context {
-    nvim_get_ctx_at_index(index)
+    ffi::nvim_get_ctx_at_index(index)
 }
 
 /// Free resources used by a Context object.
-///
-/// # Safety
-/// The context pointer must be valid and the strings/arrays must be
-/// properly initialized.
-///
-/// # Arguments
-/// * `ctx` - Pointer to Context object to free
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctx_free(ctx: *mut Context) {
     if ctx.is_null() {
@@ -132,14 +109,12 @@ pub unsafe extern "C" fn rs_ctx_free(ctx: *mut Context) {
 
     let ctx = &mut *ctx;
 
-    // Free the string fields
-    rs_api_free_string(std::ptr::read(&ctx.regs));
-    rs_api_free_string(std::ptr::read(&ctx.jumps));
-    rs_api_free_string(std::ptr::read(&ctx.bufs));
-    rs_api_free_string(std::ptr::read(&ctx.gvars));
+    ffi::rs_api_free_string(std::ptr::read(&ctx.regs));
+    ffi::rs_api_free_string(std::ptr::read(&ctx.jumps));
+    ffi::rs_api_free_string(std::ptr::read(&ctx.bufs));
+    ffi::rs_api_free_string(std::ptr::read(&ctx.gvars));
 
-    // Free the funcs array
-    rs_api_free_array(std::ptr::read(&ctx.funcs));
+    ffi::rs_api_free_array(std::ptr::read(&ctx.funcs));
 }
 
 #[cfg(test)]
@@ -148,7 +123,6 @@ mod tests {
 
     #[test]
     fn test_object_type_constants() {
-        // Verify ObjectType constants match C definitions
         assert_eq!(K_OBJECT_TYPE_NIL, 0);
         assert_eq!(K_OBJECT_TYPE_BOOLEAN, 1);
         assert_eq!(K_OBJECT_TYPE_INTEGER, 2);
@@ -161,7 +135,6 @@ mod tests {
 
     #[test]
     fn test_object_type_sequential() {
-        // Ensure types are sequential for indexing
         let types = [
             K_OBJECT_TYPE_NIL,
             K_OBJECT_TYPE_BOOLEAN,
@@ -179,25 +152,21 @@ mod tests {
 
     #[test]
     fn test_nvim_string_size() {
-        // NvimString should be ptr + size_t = 16 bytes on 64-bit
         assert_eq!(std::mem::size_of::<NvimString>(), 16);
     }
 
     #[test]
     fn test_array_size() {
-        // Array should be 3 * size_t = 24 bytes on 64-bit
         assert_eq!(std::mem::size_of::<Array>(), 24);
     }
 
     #[test]
     fn test_dict_size() {
-        // Dict should be 3 * size_t = 24 bytes on 64-bit
         assert_eq!(std::mem::size_of::<Dict>(), 24);
     }
 
     #[test]
     fn test_nvim_string_default() {
-        // Test that we can create a null NvimString
         let s = NvimString {
             data: std::ptr::null_mut(),
             size: 0,
@@ -208,7 +177,6 @@ mod tests {
 
     #[test]
     fn test_array_default() {
-        // Test that we can create an empty Array
         let a = Array {
             size: 0,
             capacity: 0,
@@ -221,7 +189,6 @@ mod tests {
 
     #[test]
     fn test_object_type_distinct() {
-        // All object types should have distinct values
         let types = [
             K_OBJECT_TYPE_NIL,
             K_OBJECT_TYPE_BOOLEAN,
@@ -243,7 +210,6 @@ mod tests {
 
     #[test]
     fn test_dict_default() {
-        // Test that we can create an empty Dict
         let d = Dict {
             size: 0,
             capacity: 0,
@@ -256,14 +222,11 @@ mod tests {
 
     #[test]
     fn test_context_struct_size() {
-        // Context should be 5 fields: 4 NvimStrings (16 bytes each) + 1 Array (24 bytes)
-        // = 64 + 24 = 88 bytes on 64-bit
         assert_eq!(std::mem::size_of::<Context>(), 88);
     }
 
     #[test]
     fn test_context_field_offsets() {
-        // Verify that Context fields are properly aligned
         use std::mem::offset_of;
         assert_eq!(offset_of!(Context, regs), 0);
         assert_eq!(offset_of!(Context, jumps), 16);

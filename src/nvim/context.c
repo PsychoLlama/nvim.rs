@@ -30,6 +30,7 @@
 extern size_t rs_ctx_size(void);
 extern void rs_ctx_free(Context *ctx);
 extern Context *rs_ctx_get(size_t index);
+extern void rs_ctx_free_all(void);
 
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
@@ -39,10 +40,7 @@ static ContextVec ctx_stack = KV_INITIAL_VALUE;
 /// Clears and frees the context stack
 void ctx_free_all(void)
 {
-  for (size_t i = 0; i < kv_size(ctx_stack); i++) {
-    ctx_free(&kv_A(ctx_stack, i));
-  }
-  kv_destroy(ctx_stack);
+  rs_ctx_free_all();
 }
 
 /// Returns the size of the context stack.
@@ -323,6 +321,14 @@ int ctx_from_dict(Dict dict, Context *ctx, Error *err)
 
 // Rust FFI accessor functions
 
+// Compile-time verification that Rust constants match C values
+_Static_assert(kCtxRegs == 1, "kCtxRegs must be 1");
+_Static_assert(kCtxJumps == 2, "kCtxJumps must be 2");
+_Static_assert(kCtxBufs == 4, "kCtxBufs must be 4");
+_Static_assert(kCtxGVars == 8, "kCtxGVars must be 8");
+_Static_assert(kCtxSFuncs == 16, "kCtxSFuncs must be 16");
+_Static_assert(kCtxFuncs == 32, "kCtxFuncs must be 32");
+
 size_t nvim_get_ctx_stack_size(void)
 {
   return kv_size(ctx_stack);
@@ -336,4 +342,42 @@ Context *nvim_get_ctx_at_index(size_t index)
     return &kv_Z(ctx_stack, index);
   }
   return NULL;
+}
+
+/// Returns a pointer to Context at given forward index.
+/// Returns NULL if index is out of bounds.
+Context *nvim_ctx_stack_at_forward(size_t index)
+{
+  if (index < kv_size(ctx_stack)) {
+    return &kv_A(ctx_stack, index);
+  }
+  return NULL;
+}
+
+/// Push a CONTEXT_INIT onto the stack.
+void nvim_ctx_stack_push_init(void)
+{
+  kv_push(ctx_stack, CONTEXT_INIT);
+}
+
+/// Returns a pointer to the last element of the stack.
+Context *nvim_ctx_stack_last(void)
+{
+  return &kv_last(ctx_stack);
+}
+
+/// Pops the last element from the stack and returns a pointer to the
+/// (still-allocated) slot. The memory is valid until the next push/destroy.
+Context *nvim_ctx_stack_pop(void)
+{
+  // kv_pop decrements size and returns the value.
+  // The slot memory at items[size] is still allocated, so we can return its address.
+  (void)kv_pop(ctx_stack);
+  return &ctx_stack.items[ctx_stack.size];
+}
+
+/// Destroy the stack (free items array, reset to empty).
+void nvim_ctx_stack_destroy(void)
+{
+  kv_destroy(ctx_stack);
 }
