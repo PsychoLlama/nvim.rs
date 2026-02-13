@@ -1,20 +1,22 @@
-Plan: ~/.claude/plans/cozy-squishing-glacier.md
+Plan: ~/.claude/plans/ticklish-booping-sun.md
 
-
-
-All 6 phases of the statusline.c → Rust migration plan are complete. Here's the summary:
+All 8 phases of the popupmenu.c → Rust migration plan are complete. Here's the summary:
 
 | Phase | Functions | Commit | Approach |
 |-------|-----------|--------|----------|
-| 1 | `get_trans_bufname`, `redraw_custom_statusline`, `build_statuscol_str` | `f97b0bd5f7` | Real Rust logic |
-| 2 | `win_redr_status`, `win_redr_winbar` | `4e684a61cf` | Real Rust logic with thread-local recursion guards |
-| 3 | `redraw_ruler`, `ui_ext_tabline_update` | `3a0fa7295d` | C `_impl` accessor pattern |
-| 4 | `draw_tabline` | `dd6db7caa1` | C `_impl` accessor pattern |
-| 5 | `win_redr_custom` | `305e4d9dde` | C `_impl` accessor pattern |
-| 6 | `build_stl_str_hl` | `30ddbac19e` | C `_impl` accessor pattern |
+| 1 | `pum_border_width`, `pum_align_order`, `pum_get_item`, `pum_user_attr_combine`, `pum_compute_size` | `dbf446658c` | Real Rust logic |
+| 2 | `pum_compute_vertical_placement`, `set_pum_width_aligned_with_cursor`, `pum_compute_horizontal_placement` | `7c509c9bc0` | Real Rust logic (wiring) |
+| 3 | `pum_recompose`, `pum_check_clear`, `pum_set_event_info`, `pum_ui_flush` | `45f9c6b21c` | C `_impl` accessor pattern |
+| 4 | `pum_compute_text_attrs`, `pum_grid_puts_with_attrs` | `807e4ad828` | C `_impl` accessor pattern |
+| 5 | `pum_preview_set_text`, `pum_adjust_info_position`, `pum_set_info` | `92fbae5ddc` | C `_impl` accessor pattern |
+| 6 | `pum_position_at_mouse`, `pum_select_mouse_pos`, `pum_execute_menu`, `pum_show_popupmenu`, `pum_make_popup` | `8d50bf7dcd` | C `_impl` accessor pattern |
+| 7 | `pum_redraw`, `pum_set_selected` | `db6599424d` | C `_impl` accessor pattern |
+| 8 | `pum_display` | `141abca179` | C `_impl` accessor pattern |
 
 **What was done:**
-- All 10 remaining C functions in `statusline.c` now have thin `rs_*` wrappers
-- Simple functions (Phases 1-2) got real Rust implementations
-- Complex functions (Phases 3-6) used the `_impl` accessor pattern — original C logic moved to `nvim_stl_*_impl()` functions, Rust FFI exports delegate to them
+- All 25 remaining C functions in `popupmenu.c` now have thin `rs_*` wrappers
+- Simple functions (Phases 1-2) got real Rust implementations with existing Rust helpers
+- Complex functions (Phases 3-8) used the `_impl` accessor pattern — original C logic moved to `nvim_pum_*_impl()` functions, Rust FFI exports delegate to them
+- 31 `rs_*` extern declarations in `popupmenu.c` (25 new + 6 pre-existing)
+- 111 `#[no_mangle]` Rust exports across the popupmenu crate
 - All validation passed on every commit: build, smoke-test, rust-fmt-check, rust-clippy, rust-test (4155 tests)
