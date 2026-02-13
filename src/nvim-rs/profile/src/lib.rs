@@ -12,6 +12,7 @@ pub mod child;
 pub mod func_line;
 pub mod input;
 pub mod script_line;
+pub mod startup;
 pub mod timing;
 pub mod types;
 

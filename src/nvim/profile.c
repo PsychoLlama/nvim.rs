@@ -72,6 +72,13 @@ extern void rs_script_prof_restore(const proftime_T *tm);
 // Phase 5: child profiling
 extern void rs_prof_child_enter(proftime_T *tm);
 extern void rs_prof_child_exit(proftime_T *tm);
+// Phase 6: startup timing
+extern void rs_time_push(proftime_T *rel, proftime_T *start);
+extern void rs_time_pop(proftime_T tp);
+extern void rs_time_start(const char *message);
+extern void rs_time_msg(const char *mesg, const proftime_T *start);
+extern void rs_time_init(const char *fname, const char *proc_name);
+extern void rs_time_finish(void);
 
 /// Struct used in sn_prl_ga for every line of a script.
 typedef struct {
@@ -709,99 +716,38 @@ void script_line_end(void)
   rs_script_line_end();
 }
 
-/// globals for use in the startuptime related functionality (time_*).
-static proftime_T g_start_time;
-static proftime_T g_prev_time;
-
 /// Saves the previous time before doing something that could nest.
-///
-/// After calling this function, the static global `g_prev_time` will
-/// contain the current time.
 ///
 /// @param[out] rel to the time elapsed so far
 /// @param[out] start the current time
 void time_push(proftime_T *rel, proftime_T *start)
 {
-  proftime_T now = profile_start();
-
-  // subtract the previous time from now, store it in `rel`
-  *rel = profile_sub(now, g_prev_time);
-  *start = now;
-
-  // reset global `g_prev_time` for the next call
-  g_prev_time = now;
+  rs_time_push(rel, start);
 }
 
 /// Computes the prev time after doing something that could nest.
 ///
-/// Subtracts `tp` from the static global `g_prev_time`.
-///
 /// @param tp the time to subtract
 void time_pop(proftime_T tp)
 {
-  g_prev_time -= tp;
-}
-
-/// Prints the difference between `then` and `now`.
-///
-/// the format is "msec.usec".
-static void time_diff(proftime_T then, proftime_T now)
-{
-  proftime_T diff = profile_sub(now, then);
-  fprintf(time_fd, "%07.3lf", (double)diff / 1.0E6);
+  rs_time_pop(tp);
 }
 
 /// Initializes the startuptime code.
 ///
-/// Must be called once before calling other startuptime code (such as
-/// time_{push,pop,msg,...}).
-///
 /// @param message the message that will be displayed
 void time_start(const char *message)
 {
-  if (time_fd == NULL) {
-    return;
-  }
-
-  // initialize the global variables
-  g_prev_time = g_start_time = profile_start();
-
-  fprintf(time_fd, "\ntimes in msec\n");
-  fprintf(time_fd, " clock   self+sourced   self:  sourced script\n");
-  fprintf(time_fd, " clock   elapsed:              other lines\n\n");
-
-  time_msg(message, NULL);
+  rs_time_start(message);
 }
 
 /// Prints out timing info.
-///
-/// @warning don't forget to call `time_start()` once before calling this.
 ///
 /// @param mesg the message to display next to the timing information
 /// @param start only for do_source: start time
 void time_msg(const char *mesg, const proftime_T *start)
 {
-  if (time_fd == NULL) {
-    return;
-  }
-
-  // print out the difference between `start` (init earlier) and `now`
-  proftime_T now = profile_start();
-  time_diff(g_start_time, now);
-
-  // if `start` was supplied, print the diff between `start` and `now`
-  if (start != NULL) {
-    fprintf(time_fd, "  ");
-    time_diff(*start, now);
-  }
-
-  // print the difference between the global `g_prev_time` and `now`
-  fprintf(time_fd, "  ");
-  time_diff(g_prev_time, now);
-
-  // reset `g_prev_time` and print the message
-  g_prev_time = now;
-  fprintf(time_fd, ": %s\n", mesg);
+  rs_time_msg(mesg, start);
 }
 
 /// Initializes the `time_fd` stream for the --startuptime report.
@@ -810,41 +756,13 @@ void time_msg(const char *mesg, const proftime_T *start)
 /// @param proc_name name of the current Nvim process to write in the report.
 void time_init(const char *fname, const char *proc_name)
 {
-  const size_t bufsize = 8192;  // Big enough for the entire --startuptime report.
-  time_fd = fopen(fname, "a");
-  if (time_fd == NULL) {
-    fprintf(stderr, _(e_notopen), fname);
-    return;
-  }
-  startuptime_buf = xmalloc(sizeof(char) * (bufsize + 1));
-  // The startuptime file is (potentially) written by multiple Nvim processes concurrently. So each
-  // report is buffered, and flushed to disk (`time_finish`) once after startup. `_IOFBF` mode
-  // ensures the buffer is not auto-flushed ("controlled buffering").
-  int r = setvbuf(time_fd, startuptime_buf, _IOFBF, bufsize + 1);
-  if (r != 0) {
-    XFREE_CLEAR(startuptime_buf);
-    fclose(time_fd);
-    time_fd = NULL;
-    fprintf(stderr, "time_init: setvbuf failed: %d %s", r, uv_err_name(r));
-    return;
-  }
-  fprintf(time_fd, "--- Startup times for process: %s ---\n", proc_name);
+  rs_time_init(fname, proc_name);
 }
 
 /// Flushes the startuptimes to disk for the current process
 void time_finish(void)
 {
-  if (time_fd == NULL) {
-    return;
-  }
-  assert(startuptime_buf != NULL);
-  TIME_MSG("--- NVIM STARTED ---\n");
-
-  // flush buffer to disk
-  fclose(time_fd);
-  time_fd = NULL;
-
-  XFREE_CLEAR(startuptime_buf);
+  rs_time_finish();
 }
 
 // C accessor for Rust — now delegates to the Rust-owned state
@@ -1001,4 +919,71 @@ proftime_T nvim_si_prl_item_get_self(int sid, int idx)
 void nvim_si_prl_item_set_self(int sid, int idx, proftime_T val)
 {
   PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_self = val;
+}
+
+// C accessors for Phase 6: startup timing FILE* management
+
+FILE *nvim_profile_get_time_fd(void)
+{
+  return time_fd;
+}
+
+void nvim_profile_set_time_fd(FILE *fd)
+{
+  time_fd = fd;
+}
+
+FILE *nvim_profile_fopen(const char *name, const char *mode)
+{
+  return fopen(name, mode);
+}
+
+void nvim_profile_fclose(FILE *fd)
+{
+  fclose(fd);
+}
+
+void nvim_profile_fputs(const char *s, FILE *fd)
+{
+  fputs(s, fd);
+}
+
+char *nvim_profile_xmalloc(size_t size)
+{
+  return xmalloc(size);
+}
+
+void nvim_profile_xfree(char *ptr)
+{
+  xfree(ptr);
+}
+
+int nvim_profile_setvbuf(FILE *fd, char *buf, size_t size)
+{
+  return setvbuf(fd, buf, _IOFBF, size);
+}
+
+void nvim_profile_fprintf_stderr(const char *s)
+{
+  fprintf(stderr, "%s", s);
+}
+
+char *nvim_profile_get_startuptime_buf(void)
+{
+  return startuptime_buf;
+}
+
+void nvim_profile_set_startuptime_buf(char *buf)
+{
+  startuptime_buf = buf;
+}
+
+const char *nvim_profile_gettext_e_notopen(void)
+{
+  return _(e_notopen);
+}
+
+const char *nvim_profile_uv_err_name(int r)
+{
+  return uv_err_name(r);
 }
