@@ -967,180 +967,6 @@ void nvim_stl_emit_tabline_update(int *tab_handles, const char **tab_names,
   arena_mem_free(arena_finish(&arena));
 }
 
-// Phase 4 accessor for Rust FFI
-
-/// Draw tabline implementation (called from Rust rs_draw_tabline).
-/// Contains the full draw_tabline logic.
-void nvim_stl_draw_tabline_impl(void)
-{
-  win_T *wp;
-  int attr_nosel = HL_ATTR(HLF_TP);
-  int attr_fill = HL_ATTR(HLF_TPF);
-  bool use_sep_chars = (t_colors < 8);
-
-  if (default_grid.chars == NULL) {
-    return;
-  }
-  redraw_tabline = false;
-
-  if (ui_has(kUITabline)) {
-    ui_ext_tabline_update();
-    return;
-  }
-
-  if (tabline_height() < 1) {
-    return;
-  }
-
-  // Clear tab_page_click_defs: Clicking outside of tabs has no effect.
-  assert(tab_page_click_defs_size >= (size_t)Columns);
-  stl_clear_click_defs(tab_page_click_defs, tab_page_click_defs_size);
-
-  // Use the 'tabline' option if it's set.
-  if (*p_tal != NUL) {
-    rs_win_redr_custom(NULL, false, false, false);
-  } else {
-    int tabcount = 0;
-    int col = 0;
-    win_T *cwp;
-    int wincount;
-    grid_line_start(&default_gridview, 0);
-    FOR_ALL_TABS(tp) {
-      tabcount++;
-    }
-
-    int tabwidth = rs_tabwidth_calc(Columns, tabcount);
-
-    int attr = attr_nosel;
-    tabcount = 0;
-
-    FOR_ALL_TABS(tp) {
-      if (col >= Columns - 4) {
-        break;
-      }
-
-      int scol = col;
-
-      if (tp == curtab) {
-        cwp = curwin;
-        wp = firstwin;
-      } else {
-        cwp = tp->tp_curwin;
-        wp = tp->tp_firstwin;
-      }
-
-      if (tp->tp_topframe == topframe) {
-        attr = win_hl_attr(cwp, HLF_TPS);
-      }
-      if (use_sep_chars && col > 0) {
-        grid_line_put_schar(col++, schar_from_ascii('|'), attr);
-      }
-
-      if (tp->tp_topframe != topframe) {
-        attr = win_hl_attr(cwp, HLF_TP);
-      }
-
-      grid_line_put_schar(col++, schar_from_ascii(' '), attr);
-
-      bool modified = false;
-
-      for (wincount = 0; wp != NULL; wp = wp->w_next, wincount++) {
-        if (!wp->w_config.focusable || wp->w_config.hide) {
-          wincount--;
-        } else if (bufIsChanged(wp->w_buffer)) {
-          modified = true;
-        }
-      }
-
-      if (modified || wincount > 1) {
-        if (wincount > 1) {
-          int len = vim_snprintf(NameBuff, MAXPATHL, "%d", wincount);
-          if (col + len >= Columns - 3) {
-            break;
-          }
-          grid_line_puts(col, NameBuff, len,
-                         hl_combine_attr(attr, win_hl_attr(cwp, HLF_T)));
-          col += len;
-        }
-        if (modified) {
-          grid_line_put_schar(col++, schar_from_ascii('+'), attr);
-        }
-        grid_line_put_schar(col++, schar_from_ascii(' '), attr);
-      }
-
-      int room = scol - col + tabwidth - 1;
-      if (room > 0) {
-        // Get buffer name in NameBuff[]
-        get_trans_bufname(cwp->w_buffer);
-        shorten_dir(NameBuff);
-        int len = vim_strsize(NameBuff);
-        char *p = NameBuff;
-        while (len > room) {
-          len -= ptr2cells(p);
-          MB_PTR_ADV(p);
-        }
-        int n = Columns - col - 1;
-        len = MIN(len, n);
-
-        grid_line_puts(col, p, -1, attr);
-        col += len;
-      }
-      grid_line_put_schar(col++, schar_from_ascii(' '), attr);
-
-      // Store the tab page number in tab_page_click_defs[], so that
-      // jump_to_mouse() knows where each one is.
-      tabcount++;
-      while (scol < col) {
-        tab_page_click_defs[scol++] = (StlClickDefinition) {
-          .type = kStlClickTabSwitch,
-          .tabnr = tabcount,
-          .func = NULL,
-        };
-      }
-    }
-
-    for (int scol = col; scol < Columns; scol++) {
-      // Use 0 as tabpage number here, so that double-click opens a tabpage
-      // after the last one, and single-click goes to the next tabpage.
-      tab_page_click_defs[scol] = (StlClickDefinition) {
-        .type = kStlClickTabSwitch,
-        .tabnr = 0,
-        .func = NULL,
-      };
-    }
-
-    char c = use_sep_chars ? '_' : ' ';
-    grid_line_fill(col, Columns, schar_from_ascii(c), attr_fill);
-
-    // Draw the 'showcmd' information if 'showcmdloc' == "tabline".
-    if (p_sc && *p_sloc == 't') {
-      int n = Columns - col - (tabcount > 1) * 3;
-      const int sc_width = MIN(10, n);
-
-      if (sc_width > 0) {
-        grid_line_puts(Columns - sc_width - (tabcount > 1) * 2,
-                       showcmd_buf, sc_width, attr_nosel);
-      }
-    }
-
-    // Put an "X" for closing the current tab if there are several.
-    if (tabcount > 1) {
-      grid_line_put_schar(Columns - 1, schar_from_ascii('X'), attr_nosel);
-      tab_page_click_defs[Columns - 1] = (StlClickDefinition) {
-        .type = kStlClickTabClose,
-        .tabnr = 999,
-        .func = NULL,
-      };
-    }
-
-    grid_line_flush();
-  }
-
-  // Reset the flag here again, in case evaluating 'tabline' causes it to be
-  // set.
-  redraw_tabline = false;
-}
-
 // Phase 5 accessors for Rust FFI (win_redr_custom)
 
 /// Get window floating flag.
@@ -1396,4 +1222,152 @@ void nvim_stl_msg_grid_line_start(int row)
 _Static_assert(MODE_INSERT == 0x10, "MODE_INSERT must be 0x10");
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY must be 0x01");
 _Static_assert(kUIMessages == 4, "kUIMessages must be 4");
+
+// Phase 5 accessors for draw_tabline Rust FFI
+
+/// Get t_colors.
+int nvim_stl_get_t_colors(void) { return t_colors; }
+
+/// Check if default_grid.chars is NULL.
+int nvim_stl_default_grid_chars_null(void) { return default_grid.chars == NULL ? 1 : 0; }
+
+/// Set redraw_tabline flag.
+void nvim_stl_set_redraw_tabline(int val) { redraw_tabline = val ? true : false; }
+
+/// Check ui_has(kUITabline).
+int nvim_stl_ui_has_tabline(void) { return ui_has(kUITabline) ? 1 : 0; }
+
+/// Get tabline_height().
+int nvim_stl_tabline_height(void) { return tabline_height(); }
+
+/// Start grid line on default_gridview at given row.
+void nvim_stl_default_grid_line_start(int row)
+{
+  grid_line_start(&default_gridview, row);
+}
+
+/// Put single schar at column.
+void nvim_stl_grid_line_put_schar(int col, schar_T c, int attr)
+{
+  grid_line_put_schar(col, c, attr);
+}
+
+/// Get tab_page_click_defs_size.
+size_t nvim_stl_get_tab_page_click_defs_size(void) { return tab_page_click_defs_size; }
+
+/// Set a tab_page_click_def entry.
+void nvim_stl_set_tab_click_def(int col, int click_type, int tabnr)
+{
+  tab_page_click_defs[col] = (StlClickDefinition) {
+    .type = click_type,
+    .tabnr = tabnr,
+    .func = NULL,
+  };
+}
+
+/// Get p_sc (showcmd option).
+int nvim_stl_get_p_sc(void) { return p_sc; }
+
+/// Check if showcmdloc == "tabline".
+int nvim_stl_showcmd_loc_is_tabline(void) { return *p_sloc == 't' ? 1 : 0; }
+
+/// Per-tab info for Rust draw_tabline.
+typedef struct {
+  win_T *cwp;          // current window in this tab
+  int wincount;        // number of focusable, non-hidden windows
+  bool modified;       // any buffer changed?
+  bool is_curtab;      // is this the active tab?
+  bool topframe_match; // tp->tp_topframe == topframe
+  char name[MAXPATHL]; // shortened buffer name
+  int name_len;        // display width of name
+} TabInfo;
+
+/// Collect all tab page info into a flat array.
+/// Returns the number of tabs (written to *out_count).
+/// The caller must free the result with xfree().
+void *nvim_stl_collect_tab_info(int *out_count)
+{
+  int tabcount = 0;
+  FOR_ALL_TABS(tp) {
+    tabcount++;
+  }
+  *out_count = tabcount;
+  if (tabcount == 0) {
+    return NULL;
+  }
+
+  TabInfo *tabs = xcalloc((size_t)tabcount, sizeof(TabInfo));
+  int idx = 0;
+  FOR_ALL_TABS(tp) {
+    TabInfo *t = &tabs[idx++];
+    t->is_curtab = (tp == curtab);
+    t->topframe_match = (tp->tp_topframe == topframe);
+
+    if (tp == curtab) {
+      t->cwp = curwin;
+    } else {
+      t->cwp = tp->tp_curwin;
+    }
+
+    win_T *wp = t->is_curtab ? firstwin : tp->tp_firstwin;
+    t->wincount = 0;
+    t->modified = false;
+    for (; wp != NULL; wp = wp->w_next) {
+      if (!wp->w_config.focusable || wp->w_config.hide) {
+        // skip non-focusable/hidden windows
+      } else {
+        t->wincount++;
+        if (bufIsChanged(wp->w_buffer)) {
+          t->modified = true;
+        }
+      }
+    }
+
+    // Get buffer name
+    get_trans_bufname(t->cwp->w_buffer);
+    shorten_dir(NameBuff);
+    xstrlcpy(t->name, NameBuff, sizeof(t->name));
+    t->name_len = vim_strsize(t->name);
+  }
+
+  return tabs;
+}
+
+/// Get cwp from TabInfo (opaque pointer).
+win_T *nvim_stl_tab_info_get_cwp(void *ptr) { return ((TabInfo *)ptr)->cwp; }
+
+/// Get wincount from TabInfo.
+int nvim_stl_tab_info_get_wincount(void *ptr) { return ((TabInfo *)ptr)->wincount; }
+
+/// Get modified from TabInfo.
+int nvim_stl_tab_info_get_modified(void *ptr) { return ((TabInfo *)ptr)->modified ? 1 : 0; }
+
+/// Get is_curtab from TabInfo.
+int nvim_stl_tab_info_get_is_curtab(void *ptr) { return ((TabInfo *)ptr)->is_curtab ? 1 : 0; }
+
+/// Get topframe_match from TabInfo.
+int nvim_stl_tab_info_get_topframe_match(void *ptr) { return ((TabInfo *)ptr)->topframe_match ? 1 : 0; }
+
+/// Get name from TabInfo.
+const char *nvim_stl_tab_info_get_name(void *ptr) { return ((TabInfo *)ptr)->name; }
+
+/// Get name display width from TabInfo.
+int nvim_stl_tab_info_get_name_len(void *ptr) { return ((TabInfo *)ptr)->name_len; }
+
+/// Get size of TabInfo struct for Rust array iteration.
+size_t nvim_stl_tab_info_size(void) { return sizeof(TabInfo); }
+
+/// Call ui_ext_tabline_update (wrapper for Rust).
+void nvim_stl_ui_ext_tabline_update(void)
+{
+  ui_ext_tabline_update();
+}
+
+_Static_assert(HLF_T == 23, "HLF_T must be 23");
+_Static_assert(HLF_TP == 52, "HLF_TP must be 52");
+_Static_assert(HLF_TPS == 53, "HLF_TPS must be 53");
+_Static_assert(HLF_TPF == 54, "HLF_TPF must be 54");
+_Static_assert(kStlClickTabSwitch == 1, "kStlClickTabSwitch must be 1");
+_Static_assert(kStlClickTabClose == 2, "kStlClickTabClose must be 2");
+_Static_assert(kUITabline == 2, "kUITabline must be 2");
 

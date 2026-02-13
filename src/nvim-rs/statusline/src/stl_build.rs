@@ -177,7 +177,7 @@ extern "C" {
 
     // Showcmd
     fn nvim_stl_showcmd_matches_opt(opt_idx: c_int) -> c_int;
-    fn nvim_stl_get_showcmd_buf(buf: *mut c_char, buflen: c_int) -> c_int;
+    fn nvim_stl_get_showcmd(buf: *mut c_char, buflen: c_int) -> c_int;
 
     // Vim variables
     fn nvim_stl_get_vim_var_nr(vv_idx: c_int) -> i64;
@@ -909,7 +909,7 @@ pub unsafe fn build_stl_str_hl(
 
             STL_SHOWCMD => {
                 if nvim_stl_showcmd_matches_opt(opt_idx) != 0 {
-                    nvim_stl_get_showcmd_buf(buf_tmp.as_mut_ptr(), TMPLEN as c_int);
+                    nvim_stl_get_showcmd(buf_tmp.as_mut_ptr(), TMPLEN as c_int);
                     str_ptr = buf_tmp.as_ptr();
                 }
             }

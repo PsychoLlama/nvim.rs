@@ -15,6 +15,17 @@ use nvim_window::{BufHandle, Frame, WinHandle, FR_COL};
 pub mod builder;
 pub mod click;
 pub mod draw;
+#[allow(
+    dead_code,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::ptr_as_ptr,
+    clippy::borrow_as_ptr,
+    clippy::too_many_lines,
+    clippy::too_many_arguments
+)]
+pub mod draw_tabline;
 pub mod eval;
 pub mod format;
 pub mod highlight;
@@ -2433,22 +2444,16 @@ pub unsafe extern "C" fn rs_ui_ext_tabline_update() {
 // Phase 4: Tabline Drawing (draw_tabline)
 // =============================================================================
 
-// Phase 4 C accessors
-extern "C" {
-    fn nvim_stl_draw_tabline_impl();
-}
-
 /// FFI export: Draw the tab pages line at the top of the Vim window.
 ///
 /// This is the Rust replacement for `draw_tabline()` in statusline.c.
-/// Delegates to the C implementation which handles grid operations,
-/// tab iteration, click definitions, and showcmd rendering.
+/// Handles grid operations, tab iteration, click definitions, and showcmd rendering.
 ///
 /// # Safety
 /// Accesses global C state (grid, tabs, click defs).
 #[no_mangle]
 pub unsafe extern "C" fn rs_draw_tabline() {
-    nvim_stl_draw_tabline_impl();
+    draw_tabline::draw_tabline();
 }
 
 // =============================================================================
