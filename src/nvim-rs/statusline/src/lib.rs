@@ -18,6 +18,17 @@ pub mod draw;
 pub mod eval;
 pub mod format;
 pub mod highlight;
+#[allow(
+    clippy::missing_const_for_thread_local,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::if_not_else,
+    clippy::ptr_as_ptr,
+    clippy::borrow_as_ptr,
+    clippy::too_many_lines
+)]
+pub mod redraw_ruler;
 pub mod render;
 pub mod ruler;
 pub mod statuscol;
@@ -2347,8 +2358,6 @@ pub unsafe extern "C" fn rs_win_redr_winbar(wp: WinHandle) {
 
 // Phase 3 C accessors
 extern "C" {
-    fn nvim_stl_redraw_ruler_impl();
-
     fn nvim_stl_emit_tabline_update(
         tab_handles: *const c_int,
         tab_names: *const *const c_char,
@@ -2364,14 +2373,13 @@ extern "C" {
 /// FFI export: Redraw the ruler.
 ///
 /// This is the Rust replacement for `redraw_ruler()` in statusline.c.
-/// Delegates to the C implementation which handles all the complex
-/// string formatting, grid operations, and UI event calls.
+/// Handles string formatting, grid operations, and UI event calls.
 ///
 /// # Safety
 /// Accesses global C state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_redraw_ruler() {
-    nvim_stl_redraw_ruler_impl();
+    redraw_ruler::redraw_ruler();
 }
 
 /// FFI export: Update the external UI tabline.

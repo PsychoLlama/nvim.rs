@@ -938,137 +938,6 @@ _Static_assert(HLF_C == 21, "HLF_C must be 21");
 
 // Phase 3 accessors for Rust FFI
 
-/// Ruler implementation (called from Rust rs_redraw_ruler).
-/// Contains the full redraw_ruler logic.
-void nvim_stl_redraw_ruler_impl(void)
-{
-  static int did_ruler_col = -1;
-  static bool did_show_ext_ruler = false;
-  win_T *wp = curwin->w_status_height == 0 ? curwin : lastwin_nofloating();
-  bool is_stl_global = global_stl_height() > 0;
-
-  // Check if ruler should be drawn, clear if it was drawn before.
-  if (!p_ru || wp->w_status_height > 0 || is_stl_global || (p_ch == 0 && !ui_has(kUIMessages))) {
-    if (did_ruler_col > 0 && ui_has(kUIMessages)) {
-      ui_call_msg_ruler((Array)ARRAY_DICT_INIT);
-      did_show_ext_ruler = false;
-    } else if (did_ruler_col > 0) {
-      msg_col = did_ruler_col;
-      msg_row = Rows - 1;
-      msg_clr_eos();
-    }
-    did_ruler_col = -1;
-    return;
-  }
-
-  // Check if cursor.lnum is valid, since redraw_ruler() may be called
-  // after deleting lines, before cursor.lnum is corrected.
-  if (wp->w_cursor.lnum > wp->w_buffer->b_ml.ml_line_count) {
-    return;
-  }
-
-  // Don't draw the ruler while doing insert-completion, it might overwrite
-  // the (long) mode message.
-  if (wp->w_status_height == 0 && !is_stl_global && edit_submode != NULL) {
-    return;
-  }
-
-  bool part_of_status = wp->w_status_height || is_stl_global;
-  if (*p_ruf && (p_ch > 0 || (ui_has(kUIMessages) && !part_of_status))) {
-    rs_win_redr_custom(wp, false, true, ui_has(kUIMessages));
-    return;
-  }
-
-  hlf_T group = HLF_MSG;
-  int off = wp->w_status_height ? wp->w_wincol : 0;
-  int width = wp->w_status_height ? wp->w_width : Columns;
-  schar_T fillchar = part_of_status ? fillchar_status(&group, wp) : schar_from_ascii(' ');
-  int attr = win_hl_attr(wp, (int)group);
-
-  // In list mode virtcol needs to be recomputed
-  colnr_T virtcol = wp->w_virtcol;
-  if (wp->w_p_list && wp->w_p_lcs_chars.tab1 == NUL) {
-    wp->w_p_list = false;
-    getvvcol(wp, &wp->w_cursor, NULL, &virtcol, NULL);
-    wp->w_p_list = true;
-  }
-
-  // Check if not in Insert mode and the line is empty (will show "0-1").
-  int empty_line = (State & MODE_INSERT) == 0
-                   && *ml_get_buf(wp->w_buffer, wp->w_cursor.lnum) == NUL;
-
-#define RULER_BUF_LEN 70
-  char buffer[RULER_BUF_LEN];
-
-  int bufferlen = vim_snprintf(buffer, RULER_BUF_LEN, "%" PRId64 ",",
-                               (wp->w_buffer->b_ml.ml_flags & ML_EMPTY)
-                               ? 0
-                               : (int64_t)wp->w_cursor.lnum);
-  bufferlen += col_print(buffer + bufferlen, RULER_BUF_LEN - (size_t)bufferlen,
-                         empty_line ? 0 : (int)wp->w_cursor.col + 1,
-                         (int)virtcol + 1);
-
-  // Add a "50%" if there is room for it.
-  // On the last line, don't print in the last column (scrolls the
-  // screen up on some terminals).
-  char rel_pos[RULER_BUF_LEN];
-  int rel_poslen = get_rel_pos(wp, rel_pos, RULER_BUF_LEN);
-  int n1 = bufferlen + vim_strsize(rel_pos);
-  if (wp->w_status_height == 0 && !is_stl_global) {  // can't use last char of screen
-    n1++;
-  }
-
-  int this_ru_col = ru_col - (Columns - width);
-  // Never use more than half the window/screen width, leave the other half
-  // for the filename.
-  int n2 = (width + 1) / 2;
-  this_ru_col = MAX(this_ru_col, n2);
-  if (this_ru_col + n1 < width) {
-    // need at least space for rel_pos + NUL
-    while (this_ru_col + n1 < width
-           && RULER_BUF_LEN > bufferlen + rel_poslen + 1) {  // +1 for NUL
-      bufferlen += (int)schar_get(buffer + bufferlen, fillchar);
-      n1++;
-    }
-    bufferlen += vim_snprintf(buffer + bufferlen, RULER_BUF_LEN - (size_t)bufferlen,
-                              "%s", rel_pos);
-  }
-  (void)bufferlen;
-
-  if (ui_has(kUIMessages) && !part_of_status) {
-    MAXSIZE_TEMP_ARRAY(content, 1);
-    MAXSIZE_TEMP_ARRAY(chunk, 3);
-    ADD_C(chunk, INTEGER_OBJ(attr));
-    ADD_C(chunk, CSTR_AS_OBJ(buffer));
-    ADD_C(chunk, INTEGER_OBJ(HLF_MSG));
-    assert(attr == HL_ATTR(HLF_MSG));
-    ADD_C(content, ARRAY_OBJ(chunk));
-    ui_call_msg_ruler(content);
-    did_show_ext_ruler = true;
-    did_ruler_col = 1;
-  } else {
-    if (did_show_ext_ruler) {
-      ui_call_msg_ruler((Array)ARRAY_DICT_INIT);
-      did_show_ext_ruler = false;
-    }
-    // Truncate at window boundary.
-    for (n1 = 0, n2 = 0; buffer[n1] != NUL; n1 += utfc_ptr2len(buffer + n1)) {
-      n2 += utf_ptr2cells(buffer + n1);
-      if (this_ru_col + n2 > width) {
-        bufferlen = n1;
-        buffer[bufferlen] = NUL;
-        break;
-      }
-    }
-
-    grid_line_start(&msg_grid_adj, Rows - 1);
-    did_ruler_col = off + this_ru_col;
-    int w = grid_line_puts(did_ruler_col, buffer, -1, attr);
-    grid_line_fill(did_ruler_col + w, off + width, fillchar, attr);
-    grid_line_flush();
-  }
-}
-
 /// Accessor: build arena-based API objects from flat arrays and emit
 /// ui_call_tabline_update.  Called from Rust rs_ui_ext_tabline_update().
 void nvim_stl_emit_tabline_update(int *tab_handles, const char **tab_names,
@@ -1456,4 +1325,75 @@ void nvim_stl_win_set_winbar_click_defs_size(win_T *wp, size_t size) { wp->w_win
 /// Get/set win_T->w_p_crb.
 int nvim_stl_win_get_p_crb(win_T *wp) { return wp->w_p_crb; }
 void nvim_stl_win_set_p_crb(win_T *wp, int val) { wp->w_p_crb = val; }
+
+// Phase 4 accessors for redraw_ruler Rust FFI
+
+/// Get p_ru (ruler option).
+int nvim_stl_get_p_ru(void) { return p_ru ? 1 : 0; }
+
+/// Get lastwin_nofloating().
+win_T *nvim_stl_lastwin_nofloating(void) { return lastwin_nofloating(); }
+
+/// Check if ui_has(kUIMessages).
+int nvim_stl_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
+
+/// Call ui_call_msg_ruler with empty array (to clear ruler).
+void nvim_stl_ui_call_msg_ruler_empty(void) { ui_call_msg_ruler((Array)ARRAY_DICT_INIT); }
+
+/// Set msg_col.
+void nvim_stl_set_msg_col(int col) { msg_col = col; }
+
+/// Set msg_row.
+void nvim_stl_set_msg_row(int row) { msg_row = row; }
+
+/// Call msg_clr_eos().
+void nvim_stl_msg_clr_eos(void) { msg_clr_eos(); }
+
+/// Get edit_submode != NULL (check if in edit submode).
+int nvim_stl_edit_submode_not_null(void) { return edit_submode != NULL ? 1 : 0; }
+
+/// Get wp->w_p_list.
+int nvim_stl_win_get_p_list(win_T *wp) { return wp->w_p_list ? 1 : 0; }
+
+/// Set wp->w_p_list.
+void nvim_stl_win_set_p_list(win_T *wp, int val) { wp->w_p_list = val ? true : false; }
+
+/// Get wp->w_p_lcs_chars.tab1.
+int nvim_stl_win_get_lcs_tab1(win_T *wp) { return (int)wp->w_p_lcs_chars.tab1; }
+
+/// Call getvvcol and return the cursor virtual column.
+int nvim_stl_getvvcol_cursor(win_T *wp)
+{
+  colnr_T virtcol;
+  getvvcol(wp, &wp->w_cursor, NULL, &virtcol, NULL);
+  return (int)virtcol;
+}
+
+/// Get first char of cursor line in buffer (0 if empty).
+int nvim_stl_ml_get_buf_first_char(win_T *wp)
+{
+  return (int)(uint8_t)(*ml_get_buf(wp->w_buffer, wp->w_cursor.lnum));
+}
+
+/// Get wp->w_cursor.lnum.
+int nvim_stl_win_get_cursor_lnum(win_T *wp)
+{
+  return (int)wp->w_cursor.lnum;
+}
+
+/// Check if cursor lnum > line count (invalid position).
+int nvim_stl_win_cursor_invalid(win_T *wp)
+{
+  return wp->w_cursor.lnum > wp->w_buffer->b_ml.ml_line_count ? 1 : 0;
+}
+
+/// Start grid line on msg_grid_adj at given row.
+void nvim_stl_msg_grid_line_start(int row)
+{
+  grid_line_start(&msg_grid_adj, row);
+}
+
+_Static_assert(MODE_INSERT == 0x10, "MODE_INSERT must be 0x10");
+_Static_assert(ML_EMPTY == 0x01, "ML_EMPTY must be 0x01");
+_Static_assert(kUIMessages == 4, "kUIMessages must be 4");
 
