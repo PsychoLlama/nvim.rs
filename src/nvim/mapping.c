@@ -67,6 +67,10 @@ extern int rs_langmap_adjust_mb(int c);
 extern void rs_langmap_init(void);
 extern int rs_langmap_parse(const char *langmap_str, char *errbuf, size_t errbuflen);
 extern int rs_get_map_mode(char **cmdp, int forceit);
+extern char *rs_check_map(char *keys, int mode, int exact, int ign_mod, int abbr,
+                          mapblock_T **mp_ptr, int *local_ptr, int *rhs_lua);
+extern int rs_map_to_exists_str(const char *str, const char *modechars, int abbr);
+extern char *rs_translate_mapping(const char *str_in, const char *cpo_val);
 
 /// List used for abbreviations.
 static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
@@ -857,32 +861,7 @@ void map_clear_mode(buf_T *buf, int mode, bool local, bool abbr)
 bool map_to_exists(const char *const str, const char *const modechars, const bool abbr)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
-  int mode = 0;
-
-  char *buf = NULL;
-  const char *const rhs = replace_termcodes(str, strlen(str), &buf, 0,
-                                            REPTERM_DO_LT, NULL, p_cpo);
-
-#define MAPMODE(mode, modechars, chr, modeflags) \
-  do { \
-    if (strchr(modechars, chr) != NULL) { \
-      (mode) |= (modeflags); \
-    } \
-  } while (0)
-  MAPMODE(mode, modechars, 'n', MODE_NORMAL);
-  MAPMODE(mode, modechars, 'v', MODE_VISUAL | MODE_SELECT);
-  MAPMODE(mode, modechars, 'x', MODE_VISUAL);
-  MAPMODE(mode, modechars, 's', MODE_SELECT);
-  MAPMODE(mode, modechars, 'o', MODE_OP_PENDING);
-  MAPMODE(mode, modechars, 'i', MODE_INSERT);
-  MAPMODE(mode, modechars, 'l', MODE_LANGMAP);
-  MAPMODE(mode, modechars, 'c', MODE_CMDLINE);
-#undef MAPMODE
-
-  bool retval = map_to_exists_mode(rhs, mode, abbr);
-  xfree(buf);
-
-  return retval;
+  return rs_map_to_exists_str(str, modechars, abbr ? 1 : 0) != 0;
 }
 
 /// Check if a map exists that has given string in the rhs
@@ -921,47 +900,7 @@ static bool expand_buffer = false;
 /// @return  NULL when there is a problem.
 static char *translate_mapping(const char *const str_in, const char *const cpo_val)
 {
-  const uint8_t *str = (const uint8_t *)str_in;
-  garray_T ga;
-  ga_init(&ga, 1, 40);
-
-  const bool cpo_bslash = (vim_strchr(cpo_val, CPO_BSLASH) != NULL);
-
-  for (; *str; str++) {
-    int c = *str;
-    if (c == K_SPECIAL && str[1] != NUL && str[2] != NUL) {
-      int modifiers = 0;
-      if (str[1] == KS_MODIFIER) {
-        str++;
-        modifiers = *++str;
-        c = *++str;
-      }
-
-      if (c == K_SPECIAL && str[1] != NUL && str[2] != NUL) {
-        c = TO_SPECIAL(str[1], str[2]);
-        if (c == K_ZERO) {
-          // display <Nul> as ^@
-          c = NUL;
-        }
-        str += 2;
-      }
-      if (IS_SPECIAL(c) || modifiers) {         // special key
-        ga_concat(&ga, get_special_key_name(c, modifiers));
-        continue;         // for (str)
-      }
-    }
-
-    if (c == ' ' || c == '\t' || c == Ctrl_J || c == Ctrl_V
-        || c == '<' || (c == '\\' && !cpo_bslash)) {
-      ga_append(&ga, cpo_bslash ? Ctrl_V : '\\');
-    }
-
-    if (c) {
-      ga_append(&ga, (uint8_t)c);
-    }
-  }
-  ga_append(&ga, NUL);
-  return (char *)ga.ga_data;
+  return rs_translate_mapping(str_in, cpo_val);
 }
 
 /// Work out what to complete when doing command line completion of mapping
@@ -1734,54 +1673,7 @@ int put_escstr(FILE *fd, const char *strstart, int what)
 char *check_map(char *keys, int mode, int exact, int ign_mod, int abbr, mapblock_T **mp_ptr,
                 int *local_ptr, int *rhs_lua)
 {
-  *rhs_lua = LUA_NOREF;
-
-  int len = (int)strlen(keys);
-  for (int local = 1; local >= 0; local--) {
-    // loop over all hash lists
-    for (int hash = 0; hash < 256; hash++) {
-      mapblock_T *mp;
-      if (abbr) {
-        if (hash > 0) {                 // there is only one list.
-          break;
-        }
-        if (local) {
-          mp = curbuf->b_first_abbr;
-        } else {
-          mp = first_abbr;
-        }
-      } else if (local) {
-        mp = curbuf->b_maphash[hash];
-      } else {
-        mp = maphash[hash];
-      }
-      for (; mp != NULL; mp = mp->m_next) {
-        // skip entries with wrong mode, wrong length and not matching ones
-        if ((mp->m_mode & mode) && (!exact || mp->m_keylen == len)) {
-          char *s = mp->m_keys;
-          int keylen = mp->m_keylen;
-          if (ign_mod && keylen >= 3
-              && (uint8_t)s[0] == K_SPECIAL && (uint8_t)s[1] == KS_MODIFIER) {
-            s += 3;
-            keylen -= 3;
-          }
-          int minlen = keylen < len ? keylen : len;
-          if (strncmp(s, keys, (size_t)minlen) == 0) {
-            if (mp_ptr != NULL) {
-              *mp_ptr = mp;
-            }
-            if (local_ptr != NULL) {
-              *local_ptr = local;
-            }
-            *rhs_lua = mp->m_luaref;
-            return mp->m_luaref == LUA_NOREF ? mp->m_str : NULL;
-          }
-        }
-      }
-    }
-  }
-
-  return NULL;
+  return rs_check_map(keys, mode, exact, ign_mod, abbr, mp_ptr, local_ptr, rhs_lua);
 }
 
 /// "hasmapto()" function
