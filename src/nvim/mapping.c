@@ -73,6 +73,23 @@ extern int rs_map_to_exists_str(const char *str, const char *modechars, int abbr
 extern char *rs_translate_mapping(const char *str_in, const char *cpo_val);
 extern void rs_map_clear_mode(buf_T *buf, int mode, int local, int abbr);
 extern void rs_do_mapclear(char *cmdp, char *arg, int forceit, int abbr);
+extern char *rs_set_context_in_map_cmd(void *xp, char *cmd, char *arg,
+                                        int forceit, int isabbrev, int isunmap, int cmdidx);
+extern int rs_expand_mappings(char *pat, void *regmatch,
+                               int *numMatches, char ***matches);
+extern int rs_makemap_should_skip(mapblock_T *mp);
+extern int rs_makemap_needs_cpo(mapblock_T *mp);
+
+// MakemapModeResult from Rust
+typedef struct {
+  char c1;
+  char c2;
+  char c3;
+  int use_bang;
+  int error;
+} MakemapModeResult;
+extern MakemapModeResult rs_makemap_mode_chars(int mode, int abbr);
+extern int rs_put_escstr_escape_type(int what, int c, int is_first);
 
 /// List used for abbreviations.
 static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
@@ -504,56 +521,11 @@ static char *translate_mapping(const char *const str_in, const char *const cpo_v
 char *set_context_in_map_cmd(expand_T *xp, char *cmd, char *arg, bool forceit, bool isabbrev,
                              bool isunmap, cmdidx_T cmdidx)
 {
-  if (forceit && cmdidx != CMD_map && cmdidx != CMD_unmap) {
-    xp->xp_context = EXPAND_NOTHING;
-  } else {
-    if (isunmap) {
-      expand_mapmodes = get_map_mode(&cmd, forceit || isabbrev);
-    } else {
-      expand_mapmodes = MODE_INSERT | MODE_CMDLINE;
-      if (!isabbrev) {
-        expand_mapmodes |= MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING;
-      }
-    }
-    expand_isabbrev = isabbrev;
-    xp->xp_context = EXPAND_MAPPINGS;
-    expand_buffer = false;
-    while (true) {
-      if (strncmp(arg, "<buffer>", 8) == 0) {
-        expand_buffer = true;
-        arg = skipwhite(arg + 8);
-        continue;
-      }
-      if (strncmp(arg, "<unique>", 8) == 0) {
-        arg = skipwhite(arg + 8);
-        continue;
-      }
-      if (strncmp(arg, "<nowait>", 8) == 0) {
-        arg = skipwhite(arg + 8);
-        continue;
-      }
-      if (strncmp(arg, "<silent>", 8) == 0) {
-        arg = skipwhite(arg + 8);
-        continue;
-      }
-      if (strncmp(arg, "<special>", 9) == 0) {
-        arg = skipwhite(arg + 9);
-        continue;
-      }
-      if (strncmp(arg, "<script>", 8) == 0) {
-        arg = skipwhite(arg + 8);
-        continue;
-      }
-      if (strncmp(arg, "<expr>", 6) == 0) {
-        arg = skipwhite(arg + 6);
-        continue;
-      }
-      break;
-    }
-    xp->xp_pattern = arg;
-  }
-
-  return NULL;
+  return rs_set_context_in_map_cmd(xp, cmd, arg,
+                                   forceit ? 1 : 0,
+                                   isabbrev ? 1 : 0,
+                                   isunmap ? 1 : 0,
+                                   (int)cmdidx);
 }
 
 /// Find all mapping/abbreviation names that match regexp "regmatch".
@@ -561,148 +533,7 @@ char *set_context_in_map_cmd(expand_T *xp, char *cmd, char *arg, bool forceit, b
 /// @return OK if matches found, FAIL otherwise.
 int ExpandMappings(char *pat, regmatch_T *regmatch, int *numMatches, char ***matches)
 {
-  const bool fuzzy = cmdline_fuzzy_complete(pat);
-
-  *numMatches = 0;                    // return values in case of FAIL
-  *matches = NULL;
-
-  garray_T ga;
-  if (!fuzzy) {
-    ga_init(&ga, sizeof(char *), 3);
-  } else {
-    ga_init(&ga, sizeof(fuzmatch_str_T), 3);
-  }
-
-  // First search in map modifier arguments
-  for (int i = 0; i < 7; i++) {
-    char *p;
-    if (i == 0) {
-      p = "<silent>";
-    } else if (i == 1) {
-      p = "<unique>";
-    } else if (i == 2) {
-      p = "<script>";
-    } else if (i == 3) {
-      p = "<expr>";
-    } else if (i == 4 && !expand_buffer) {
-      p = "<buffer>";
-    } else if (i == 5) {
-      p = "<nowait>";
-    } else if (i == 6) {
-      p = "<special>";
-    } else {
-      continue;
-    }
-
-    bool match;
-    int score = 0;
-    if (!fuzzy) {
-      match = vim_regexec(regmatch, p, 0);
-    } else {
-      score = fuzzy_match_str(p, pat);
-      match = (score != FUZZY_SCORE_NONE);
-    }
-
-    if (!match) {
-      continue;
-    }
-
-    if (fuzzy) {
-      GA_APPEND(fuzmatch_str_T, &ga, ((fuzmatch_str_T){
-        .idx = ga.ga_len,
-        .str = xstrdup(p),
-        .score = score,
-      }));
-    } else {
-      GA_APPEND(char *, &ga, xstrdup(p));
-    }
-  }
-
-  for (int hash = 0; hash < 256; hash++) {
-    mapblock_T *mp;
-    if (expand_isabbrev) {
-      if (hash > 0) {    // only one abbrev list
-        break;  // for (hash)
-      }
-      mp = first_abbr;
-    } else if (expand_buffer) {
-      mp = curbuf->b_maphash[hash];
-    } else {
-      mp = maphash[hash];
-    }
-    for (; mp; mp = mp->m_next) {
-      if (mp->m_simplified || !(mp->m_mode & expand_mapmodes)) {
-        continue;
-      }
-
-      char *p = translate_mapping(mp->m_keys, p_cpo);
-      if (p == NULL) {
-        continue;
-      }
-
-      bool match;
-      int score = 0;
-      if (!fuzzy) {
-        match = vim_regexec(regmatch, p, 0);
-      } else {
-        score = fuzzy_match_str(p, pat);
-        match = (score != FUZZY_SCORE_NONE);
-      }
-
-      if (!match) {
-        xfree(p);
-        continue;
-      }
-
-      if (fuzzy) {
-        GA_APPEND(fuzmatch_str_T, &ga, ((fuzmatch_str_T){
-          .idx = ga.ga_len,
-          .str = p,
-          .score = score,
-        }));
-      } else {
-        GA_APPEND(char *, &ga, p);
-      }
-    }  // for (mp)
-  }  // for (hash)
-
-  if (ga.ga_len == 0) {
-    return FAIL;
-  }
-
-  if (!fuzzy) {
-    *matches = ga.ga_data;
-    *numMatches = ga.ga_len;
-  } else {
-    fuzzymatches_to_strmatches(ga.ga_data, matches, ga.ga_len, false);
-    *numMatches = ga.ga_len;
-  }
-
-  int count = *numMatches;
-  if (count > 1) {
-    // Sort the matches
-    // Fuzzy matching already sorts the matches
-    if (!fuzzy) {
-      sort_strings(*matches, count);
-    }
-
-    // Remove multiple entries
-    char **ptr1 = *matches;
-    char **ptr2 = ptr1 + 1;
-    char **ptr3 = ptr1 + count;
-
-    while (ptr2 < ptr3) {
-      if (strcmp(*ptr1, *ptr2) != 0) {
-        *++ptr1 = *ptr2++;
-      } else {
-        xfree(*ptr2++);
-        count--;
-      }
-    }
-  }
-
-  *numMatches = count;
-  return count == 0 ? FAIL : OK;
+  return rs_expand_mappings(pat, regmatch, numMatches, matches);
 }
 
 // Check for an abbreviation.
@@ -975,130 +806,29 @@ int makemap(FILE *fd, buf_T *buf)
       }
 
       for (; mp; mp = mp->m_next) {
-        // skip script-local mappings
-        if (mp->m_noremap == REMAP_SCRIPT) {
+        if (rs_makemap_should_skip(mp)) {
           continue;
         }
 
-        // skip Lua mappings and mappings that contain a <SNR> (script-local thing),
-        // they probably don't work when loaded again
-        if (mp->m_luaref != LUA_NOREF) {
-          continue;
-        }
-        char *p;
-        for (p = mp->m_str; *p != NUL; p++) {
-          if ((uint8_t)p[0] == K_SPECIAL && (uint8_t)p[1] == KS_EXTRA
-              && p[2] == KE_SNR) {
-            break;
-          }
-        }
-        if (*p != NUL) {
-          continue;
-        }
-
-        // It's possible to create a mapping and then ":unmap" certain
-        // modes.  We recreate this here by mapping the individual
-        // modes, which requires up to three of them.
-        char c1 = NUL;
-        char c2 = NUL;
-        char c3 = NUL;
-        char *cmd = abbr ? "abbr" : "map";
-        switch (mp->m_mode) {
-        case MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING:
-          break;
-        case MODE_NORMAL:
-          c1 = 'n';
-          break;
-        case MODE_VISUAL:
-          c1 = 'x';
-          break;
-        case MODE_SELECT:
-          c1 = 's';
-          break;
-        case MODE_OP_PENDING:
-          c1 = 'o';
-          break;
-        case MODE_NORMAL | MODE_VISUAL:
-          c1 = 'n';
-          c2 = 'x';
-          break;
-        case MODE_NORMAL | MODE_SELECT:
-          c1 = 'n';
-          c2 = 's';
-          break;
-        case MODE_NORMAL | MODE_OP_PENDING:
-          c1 = 'n';
-          c2 = 'o';
-          break;
-        case MODE_VISUAL | MODE_SELECT:
-          c1 = 'v';
-          break;
-        case MODE_VISUAL | MODE_OP_PENDING:
-          c1 = 'x';
-          c2 = 'o';
-          break;
-        case MODE_SELECT | MODE_OP_PENDING:
-          c1 = 's';
-          c2 = 'o';
-          break;
-        case MODE_NORMAL | MODE_VISUAL | MODE_SELECT:
-          c1 = 'n';
-          c2 = 'v';
-          break;
-        case MODE_NORMAL | MODE_VISUAL | MODE_OP_PENDING:
-          c1 = 'n';
-          c2 = 'x';
-          c3 = 'o';
-          break;
-        case MODE_NORMAL | MODE_SELECT | MODE_OP_PENDING:
-          c1 = 'n';
-          c2 = 's';
-          c3 = 'o';
-          break;
-        case MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING:
-          c1 = 'v';
-          c2 = 'o';
-          break;
-        case MODE_CMDLINE | MODE_INSERT:
-          if (!abbr) {
-            cmd = "map!";
-          }
-          break;
-        case MODE_CMDLINE:
-          c1 = 'c';
-          break;
-        case MODE_INSERT:
-          c1 = 'i';
-          break;
-        case MODE_LANGMAP:
-          c1 = 'l';
-          break;
-        case MODE_TERMINAL:
-          c1 = 't';
-          break;
-        default:
+        // Decompose mode into prefix characters (Rust)
+        MakemapModeResult mr = rs_makemap_mode_chars(mp->m_mode, abbr);
+        if (mr.error) {
           iemsg(_("E228: makemap: Illegal mode"));
           return FAIL;
         }
+        char c1 = mr.c1;
+        char c2 = mr.c2;
+        char c3 = mr.c3;
+        char *cmd = mr.use_bang ? "map!" : (abbr ? "abbr" : "map");
+
         do {  // do this twice if c2 is set, 3 times with c3
-          // When outputting <> form, need to make sure that 'cpo'
-          // is set to the Vim default.
-          if (!did_cpo) {
-            if (*mp->m_str == NUL) {  // Will use <Nop>.
-              did_cpo = true;
-            } else {
-              const char specials[] = { (char)(uint8_t)K_SPECIAL, NL, NUL };
-              if (strpbrk(mp->m_str, specials) != NULL || strpbrk(mp->m_keys, specials) != NULL) {
-                did_cpo = true;
-              }
-            }
-            if (did_cpo) {
-              if (fprintf(fd, "let s:cpo_save=&cpo") < 0
-                  || put_eol(fd) < 0
-                  || fprintf(fd, "set cpo&vim") < 0
-                  || put_eol(fd) < 0) {
-                return FAIL;
-              }
+          if (!did_cpo && rs_makemap_needs_cpo(mp)) {
+            did_cpo = true;
+            if (fprintf(fd, "let s:cpo_save=&cpo") < 0
+                || put_eol(fd) < 0
+                || fprintf(fd, "set cpo&vim") < 0
+                || put_eol(fd) < 0) {
+              return FAIL;
             }
           }
           if (c1 && putc(c1, fd) < 0) {
@@ -1225,23 +955,12 @@ int put_escstr(FILE *fd, const char *strstart, int what)
       continue;
     }
 
-    // Some characters have to be escaped with CTRL-V to
-    // prevent them from misinterpreted in DoOneCmd().
-    // A space, Tab and '"' has to be escaped with a backslash to
-    // prevent it to be misinterpreted in do_set().
-    // A space has to be escaped with a CTRL-V when it's at the start of a
-    // ":map" rhs.
-    // A '<' has to be escaped with a CTRL-V to prevent it being
-    // interpreted as the start of a special key name.
-    // A space in the lhs of a :map needs a CTRL-V.
-    if (what == 2 && (ascii_iswhite(c) || c == '"' || c == '\\')) {
+    int esc = rs_put_escstr_escape_type(what, c, str == (uint8_t *)strstart ? 1 : 0);
+    if (esc == 1) {
       if (putc('\\', fd) < 0) {
         return FAIL;
       }
-    } else if (c < ' ' || c > '~' || c == '|'
-               || (what == 0 && c == ' ')
-               || (what == 1 && str == (uint8_t *)strstart && c == ' ')
-               || (what != 2 && c == '<')) {
+    } else if (esc == 2) {
       if (putc(Ctrl_V, fd) < 0) {
         return FAIL;
       }
@@ -2348,4 +2067,149 @@ void nvim_langmap_format_error(char *buf, size_t buflen, int msgid, const char *
     snprintf(buf, buflen,
              _("E358: 'langmap': Extra characters after semicolon: %s"), arg);
   }
+}
+
+// =============================================================================
+// Phase 7 C accessor functions for completion + serialization
+// =============================================================================
+
+// expand_T field accessors: reuse nvim_expand_set_context and
+// nvim_expand_set_pattern from cmdexpand.c (already exist).
+
+// Global expand state accessors
+void nvim_mapping_set_expand_mapmodes(int val)
+{
+  expand_mapmodes = val;
+}
+
+void nvim_mapping_set_expand_isabbrev(int val)
+{
+  expand_isabbrev = (val != 0);
+}
+
+void nvim_mapping_set_expand_buffer(int val)
+{
+  expand_buffer = (val != 0);
+}
+
+int nvim_mapping_get_expand_mapmodes(void)
+{
+  return expand_mapmodes;
+}
+
+int nvim_mapping_get_expand_isabbrev(void)
+{
+  return expand_isabbrev ? 1 : 0;
+}
+
+int nvim_mapping_get_expand_buffer(void)
+{
+  return expand_buffer ? 1 : 0;
+}
+
+int nvim_mapping_get_cmd_map(void)
+{
+  return (int)CMD_map;
+}
+
+int nvim_mapping_get_cmd_unmap(void)
+{
+  return (int)CMD_unmap;
+}
+
+char *nvim_mapping_skipwhite(const char *p)
+{
+  return skipwhite(p);
+}
+
+// ExpandMappings helper: call vim_regexec on regmatch (passed opaquely)
+int nvim_mapping_vim_regexec(void *regmatch, const char *s)
+{
+  return vim_regexec((regmatch_T *)regmatch, s, 0) ? 1 : 0;
+}
+
+int nvim_mapping_fuzzy_match_str(const char *s, const char *pat)
+{
+  return fuzzy_match_str((char *)s, pat);
+}
+
+int nvim_mapping_cmdline_fuzzy_complete(const char *pat)
+{
+  return cmdline_fuzzy_complete(pat) ? 1 : 0;
+}
+
+// garray_T wrappers (garray is passed opaquely)
+void nvim_mapping_ga_init_str(void *ga)
+{
+  ga_init((garray_T *)ga, (int)sizeof(char *), 3);
+}
+
+void nvim_mapping_ga_init_fuzmatch(void *ga)
+{
+  ga_init((garray_T *)ga, (int)sizeof(fuzmatch_str_T), 3);
+}
+
+void nvim_mapping_ga_append_str(void *ga, const char *s)
+{
+  GA_APPEND(char *, (garray_T *)ga, xstrdup(s));
+}
+
+void nvim_mapping_ga_append_fuzmatch(void *ga, const char *s, int score)
+{
+  garray_T *g = (garray_T *)ga;
+  GA_APPEND(fuzmatch_str_T, g, ((fuzmatch_str_T){
+    .idx = g->ga_len,
+    .str = xstrdup(s),
+    .score = score,
+  }));
+}
+
+int nvim_mapping_ga_len(const void *ga)
+{
+  return ((const garray_T *)ga)->ga_len;
+}
+
+/// Finish ExpandMappings: sort, dedup, set output.
+/// Returns OK or FAIL.
+int nvim_mapping_expand_finish(void *ga_ptr, int fuzzy,
+                               int *numMatches, char ***matches)
+{
+  garray_T *ga = (garray_T *)ga_ptr;
+
+  if (ga->ga_len == 0) {
+    return FAIL;
+  }
+
+  if (!fuzzy) {
+    *matches = ga->ga_data;
+    *numMatches = ga->ga_len;
+  } else {
+    fuzzymatches_to_strmatches(ga->ga_data, matches, ga->ga_len, false);
+    *numMatches = ga->ga_len;
+  }
+
+  int count = *numMatches;
+  if (count > 1) {
+    // Sort the matches (fuzzy matching already sorts)
+    if (!fuzzy) {
+      sort_strings(*matches, count);
+    }
+
+    // Remove duplicates
+    char **ptr1 = *matches;
+    char **ptr2 = ptr1 + 1;
+    char **ptr3 = ptr1 + count;
+
+    while (ptr2 < ptr3) {
+      if (strcmp(*ptr1, *ptr2) != 0) {
+        *++ptr1 = *ptr2++;
+      } else {
+        xfree(*ptr2++);
+        count--;
+      }
+    }
+  }
+
+  *numMatches = count;
+  return count == 0 ? FAIL : OK;
 }
