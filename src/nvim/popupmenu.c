@@ -991,6 +991,336 @@ void nvim_pum_emsg_menu_mode(void)
   emsg(_(e_menu_only_exists_in_another_mode));
 }
 
+// Phase 6 accessors: grid operations for redraw
+
+/// Call `screengrid_line_start` for pum_grid.
+void nvim_pum_screengrid_line_start(int row, int col)
+{
+  screengrid_line_start(&pum_grid, row, col);
+}
+
+/// Call `grid_line_fill`.
+void nvim_pum_grid_line_fill(int start, int end, schar_T fillchar, int attr)
+{
+  grid_line_fill(start, end, fillchar, attr);
+}
+
+/// Call `grid_line_put_schar`.
+void nvim_pum_grid_line_put_schar(int col, schar_T sc, int attr)
+{
+  grid_line_put_schar(col, sc, attr);
+}
+
+/// Call `grid_line_flush`.
+void nvim_pum_grid_line_flush(void)
+{
+  grid_line_flush();
+}
+
+/// Call `grid_assign_handle` for pum_grid.
+void nvim_pum_grid_assign_handle(void)
+{
+  grid_assign_handle(&pum_grid);
+}
+
+/// Call `grid_alloc` for pum_grid.
+void nvim_pum_grid_alloc(int rows, int cols, int keep_contents)
+{
+  grid_alloc(&pum_grid, rows, cols, keep_contents != 0, false);
+}
+
+/// Call `grid_invalidate` for pum_grid.
+void nvim_pum_grid_invalidate(void)
+{
+  grid_invalidate(&pum_grid);
+}
+
+/// Call `ui_call_grid_resize` for pum_grid.
+void nvim_pum_ui_call_grid_resize(void)
+{
+  ui_call_grid_resize(pum_grid.handle, pum_grid.cols, pum_grid.rows);
+}
+
+/// Check if pum_grid.chars is non-null.
+int nvim_pum_grid_has_chars(void)
+{
+  return pum_grid.chars != NULL;
+}
+
+/// Get pum_grid.rows.
+int nvim_pum_grid_get_rows(void)
+{
+  return pum_grid.rows;
+}
+
+/// Get pum_grid.cols.
+int nvim_pum_grid_get_cols(void)
+{
+  return pum_grid.cols;
+}
+
+/// Call `ui_comp_put_grid` for pum_grid. Returns 1 if grid moved.
+int nvim_pum_ui_comp_put_grid(int row, int col, int height, int width)
+{
+  return ui_comp_put_grid(&pum_grid, row, col, height, width, false, true) ? 1 : 0;
+}
+
+/// Call `ui_call_win_float_pos` for pum_grid.
+void nvim_pum_ui_call_win_float_pos_grid(const char *anchor, int anchor_grid,
+                                          int anchor_row, int anchor_col)
+{
+  ui_call_win_float_pos(pum_grid.handle, -1, cstr_as_string(anchor), anchor_grid,
+                        anchor_row, anchor_col,
+                        false, pum_grid.zindex, (int)pum_grid.comp_index,
+                        pum_grid.comp_row, pum_grid.comp_col);
+}
+
+/// Check if `ui_has(kUIMultigrid)`.
+int nvim_pum_ui_has_multigrid(void)
+{
+  return ui_has(kUIMultigrid) ? 1 : 0;
+}
+
+/// Set `pum_invalid`.
+void nvim_set_pum_invalid_val(int val)
+{
+  pum_invalid = val != 0;
+}
+
+/// Get `W_ENDCOL(curwin)`.
+int nvim_pum_curwin_end_col(void)
+{
+  return W_ENDCOL(curwin);
+}
+
+/// Get `fcs_trunc` character for current pum_rl.
+schar_T nvim_pum_fcs_trunc(int is_rl)
+{
+  return is_rl ? curwin->w_p_fcs_chars.truncrl : curwin->w_p_fcs_chars.trunc;
+}
+
+/// `schar_from_ascii` wrapper.
+schar_T nvim_pum_schar_from_ascii(char c)
+{
+  return schar_from_ascii(c);
+}
+
+/// `schar_from_str` wrapper.
+schar_T nvim_pum_schar_from_str(const char *str)
+{
+  return schar_from_str(str);
+}
+
+/// `hl_combine_attr` wrapper.
+int nvim_pum_hl_combine_attr(int a, int b)
+{
+  return hl_combine_attr(a, b);
+}
+
+/// Get `hl_attr_active[hlf]`.
+int nvim_pum_hl_attr_active(int hlf)
+{
+  return hl_attr_active[hlf];
+}
+
+/// `hl_get_ui_attr` wrapper.
+int nvim_pum_hl_get_ui_attr(int hlf, int id)
+{
+  return hl_get_ui_attr(-1, hlf, id, false);
+}
+
+/// `transstr` wrapper.
+char *nvim_pum_transstr(const char *s)
+{
+  return transstr(s, true);
+}
+
+/// `reverse_text` wrapper.
+char *nvim_pum_reverse_text(char *s)
+{
+  return reverse_text(s);
+}
+
+/// `mb_string2cells` wrapper.
+int nvim_pum_mb_string2cells(const char *s)
+{
+  return (int)mb_string2cells(s);
+}
+
+/// `ptr2cells` wrapper.
+int nvim_pum_ptr2cells(const char *p)
+{
+  return ptr2cells(p);
+}
+
+/// Advance multi-byte pointer. Returns number of bytes advanced.
+int nvim_pum_mb_ptr_adv(const char *p)
+{
+  int len = utfc_ptr2len(p);
+  return len > 0 ? len : 1;
+}
+
+/// `xfree` wrapper.
+void nvim_pum_xfree(void *ptr)
+{
+  xfree(ptr);
+}
+
+/// Set `linebuf_char[col]`.
+void nvim_pum_set_linebuf_char(int col, schar_T sc)
+{
+  linebuf_char[col] = sc;
+}
+
+/// Get `linebuf_char[col]`.
+schar_T nvim_pum_get_linebuf_char(int col)
+{
+  return linebuf_char[col];
+}
+
+/// Set `linebuf_attr[col]`.
+void nvim_pum_set_linebuf_attr(int col, int attr)
+{
+  linebuf_attr[col] = (sattr_T)attr;
+}
+
+/// Get `pum_array` pointer.
+pumitem_T *nvim_get_pum_array(void)
+{
+  return pum_array;
+}
+
+/// Check if `State & MODE_CMDLINE`.
+int nvim_pum_is_cmdline(void)
+{
+  return (State & MODE_CMDLINE) != 0;
+}
+
+/// Get kZIndexCmdlinePopupMenu constant.
+int nvim_pum_kZIndexCmdlinePopupMenu(void)
+{
+  return kZIndexCmdlinePopupMenu;
+}
+
+/// Opaque border configuration for popup menu rendering.
+/// Bundles WinConfig + border attrs/chars so Rust doesn't need WinConfig layout.
+struct PumBorderConfig {
+  WinConfig fconfig;
+  bool has_border;
+  bool is_shadow;
+  schar_T scrollbar_border_char;
+  int scrollbar_border_attr;
+};
+
+/// Parse border configuration. Returns heap-allocated PumBorderConfig.
+/// Returns NULL on parse error (emsg already called).
+PumBorderConfig *nvim_pum_parse_border(int has_scrollbar)
+{
+  PumBorderConfig *cfg = xcalloc(1, sizeof(*cfg));
+  cfg->fconfig = WIN_CONFIG_INIT;
+
+  int bw = rs_pum_border_width();
+  cfg->has_border = bw > 0;
+
+  if (bw > 0) {
+    Error err = ERROR_INIT;
+    if (!parse_winborder(&cfg->fconfig, p_pumborder, &err)) {
+      if (ERROR_SET(&err)) {
+        emsg(err.msg);
+      }
+      api_clear_error(&err);
+      xfree(cfg);
+      return NULL;
+    }
+
+    // Shadow style
+    if (strequal(p_pumborder, opt_winborder_values[3])) {
+      cfg->fconfig.shadow = true;
+      int blend = SYN_GROUP_STATIC("PmenuShadow");
+      int through = SYN_GROUP_STATIC("PmenuShadowThrough");
+      cfg->fconfig.border_hl_ids[2] = through;
+      cfg->fconfig.border_hl_ids[3] = blend;
+      cfg->fconfig.border_hl_ids[4] = blend;
+      cfg->fconfig.border_hl_ids[5] = blend;
+      cfg->fconfig.border_hl_ids[6] = through;
+    }
+    cfg->is_shadow = cfg->fconfig.shadow;
+
+    // Convert border highlight IDs to attributes
+    for (int i = 0; i < 8; i++) {
+      int attr = hl_attr_active[HLF_PBR];
+      if (cfg->fconfig.border_hl_ids[i]) {
+        attr = hl_get_ui_attr(-1, HLF_PBR, cfg->fconfig.border_hl_ids[i], false);
+      }
+      cfg->fconfig.border_attr[i] = attr;
+    }
+    api_clear_error(&err);
+
+    if (has_scrollbar) {
+      cfg->scrollbar_border_char = schar_from_str(cfg->fconfig.border_chars[3]);
+      cfg->scrollbar_border_attr = cfg->fconfig.border_attr[3];
+    }
+  }
+
+  return cfg;
+}
+
+/// Get has_border from PumBorderConfig.
+int nvim_pum_border_cfg_has_border(PumBorderConfig *cfg)
+{
+  return cfg->has_border ? 1 : 0;
+}
+
+/// Get is_shadow from PumBorderConfig.
+int nvim_pum_border_cfg_is_shadow(PumBorderConfig *cfg)
+{
+  return cfg->is_shadow ? 1 : 0;
+}
+
+/// Get fconfig.border (whether border chars are set) from PumBorderConfig.
+int nvim_pum_border_cfg_has_border_chars(PumBorderConfig *cfg)
+{
+  return cfg->fconfig.border ? 1 : 0;
+}
+
+/// Get scrollbar border char from PumBorderConfig.
+schar_T nvim_pum_border_cfg_scrollbar_char(PumBorderConfig *cfg)
+{
+  return cfg->scrollbar_border_char;
+}
+
+/// Get scrollbar border attr from PumBorderConfig.
+int nvim_pum_border_cfg_scrollbar_attr(PumBorderConfig *cfg)
+{
+  return cfg->scrollbar_border_attr;
+}
+
+/// Draw border on pum_grid using PumBorderConfig.
+void nvim_pum_border_draw(PumBorderConfig *cfg)
+{
+  grid_draw_border(&pum_grid, &cfg->fconfig, NULL, 0, NULL);
+}
+
+/// Free PumBorderConfig.
+void nvim_pum_border_cfg_free(PumBorderConfig *cfg)
+{
+  xfree(cfg);
+}
+
+// Phase 6 static assertions
+_Static_assert(HLF_PNI == 41, "HLF_PNI must be 41");
+_Static_assert(HLF_PSI == 42, "HLF_PSI must be 42");
+_Static_assert(HLF_PNK == 45, "HLF_PNK must be 45");
+_Static_assert(HLF_PSK == 46, "HLF_PSK must be 46");
+_Static_assert(HLF_PNX == 47, "HLF_PNX must be 47");
+_Static_assert(HLF_PSX == 48, "HLF_PSX must be 48");
+_Static_assert(HLF_PSB == 49, "HLF_PSB must be 49");
+_Static_assert(HLF_PST == 50, "HLF_PST must be 50");
+_Static_assert(HLF_PBR == 51, "HLF_PBR must be 51");
+_Static_assert(CPT_ABBR == 0, "CPT_ABBR must be 0");
+_Static_assert(kZIndexCmdlinePopupMenu == 250, "kZIndexCmdlinePopupMenu must be 250");
+_Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE must be 0x08");
+
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 
@@ -1230,349 +1560,7 @@ void pum_redraw(void)
   rs_pum_redraw();
 }
 
-/// Redraw the popup menu (implementation).
-void nvim_pum_redraw_impl(void)
-{
-  int row = 0;
-  int attr_scroll = win_hl_attr(curwin, HLF_PSB);
-  int attr_thumb = win_hl_attr(curwin, HLF_PST);
-  char *p = NULL;
-  int thumb_pos = 0;
-  int thumb_height = 1;
-  int n;
-  const schar_T fcs_trunc = pum_rl ? curwin->w_p_fcs_chars.truncrl
-                                   : curwin->w_p_fcs_chars.trunc;
-
-  //                         "word"   "kind"   "extra text"
-  const hlf_T hlfsNorm[3] = { HLF_PNI, HLF_PNK, HLF_PNX };
-  const hlf_T hlfsSel[3] = { HLF_PSI, HLF_PSK, HLF_PSX };
-
-  int grid_width = pum_width;
-  int col_off = 0;
-  bool extra_space = false;
-  if (pum_rl) {
-    col_off = pum_width - 1;
-    assert(!(State & MODE_CMDLINE));
-    int win_end_col = W_ENDCOL(curwin);
-    if (pum_col < win_end_col - 1) {
-      grid_width += 1;
-      extra_space = true;
-    }
-  } else {
-    int min_col = 0;
-    if (pum_col > min_col) {
-      grid_width += 1;
-      col_off = 1;
-      extra_space = true;
-    }
-  }
-  WinConfig fconfig = WIN_CONFIG_INIT;
-  int border_width = pum_border_width();
-  int border_attr = 0;
-  schar_T border_char = 0;
-  schar_T fill_char = schar_from_ascii(' ');
-  bool has_border = border_width > 0;
-  // setup popup menu border if 'pumborder' option is set
-  if (border_width > 0) {
-    Error err = ERROR_INIT;
-    if (!parse_winborder(&fconfig, p_pumborder, &err)) {
-      if (ERROR_SET(&err)) {
-        emsg(err.msg);
-      }
-      api_clear_error(&err);
-      return;
-    }
-
-    // Shadow style: only adds border on right and bottom edges
-    if (strequal(p_pumborder, opt_winborder_values[3])) {
-      fconfig.shadow = true;
-      int blend = SYN_GROUP_STATIC("PmenuShadow");
-      int through = SYN_GROUP_STATIC("PmenuShadowThrough");
-      fconfig.border_hl_ids[2] = through;
-      fconfig.border_hl_ids[3] = blend;
-      fconfig.border_hl_ids[4] = blend;
-      fconfig.border_hl_ids[5] = blend;
-      fconfig.border_hl_ids[6] = through;
-    }
-
-    // convert border highlight IDs to attributes, use PmenuBorder as default
-    for (int i = 0; i < 8; i++) {
-      int attr = hl_attr_active[HLF_PBR];
-      if (fconfig.border_hl_ids[i]) {
-        attr = hl_get_ui_attr(-1, HLF_PBR, fconfig.border_hl_ids[i], false);
-      }
-      fconfig.border_attr[i] = attr;
-    }
-    api_clear_error(&err);
-    if (pum_scrollbar) {
-      border_char = schar_from_str(fconfig.border_chars[3]);
-      border_attr = fconfig.border_attr[3];
-    }
-  }
-
-  if (pum_scrollbar > 0 && !fconfig.border) {
-    grid_width++;
-    if (pum_rl) {
-      col_off++;
-    }
-  }
-  grid_assign_handle(&pum_grid);
-
-  pum_left_col = pum_col - col_off;
-  pum_right_col = pum_left_col + grid_width;
-  bool moved = ui_comp_put_grid(&pum_grid, pum_row, pum_left_col,
-                                pum_height + border_width, grid_width + border_width, false,
-                                true);
-  bool invalid_grid = moved || pum_invalid;
-  pum_invalid = false;
-  must_redraw_pum = false;
-
-  if (!pum_grid.chars || pum_grid.rows != pum_height + border_width
-      || pum_grid.cols != grid_width + border_width) {
-    grid_alloc(&pum_grid, pum_height + border_width, grid_width + border_width,
-               !invalid_grid, false);
-    ui_call_grid_resize(pum_grid.handle, pum_grid.cols, pum_grid.rows);
-  } else if (invalid_grid) {
-    grid_invalidate(&pum_grid);
-  }
-  if (ui_has(kUIMultigrid)) {
-    const char *anchor = pum_above ? "SW" : "NW";
-    int row_off = pum_above ? -pum_height : 0;
-    ui_call_win_float_pos(pum_grid.handle, -1, cstr_as_string(anchor), pum_anchor_grid,
-                          pum_row - row_off - pum_win_row_offset, pum_left_col - pum_win_col_offset,
-                          false, pum_grid.zindex, (int)pum_grid.comp_index, pum_grid.comp_row,
-                          pum_grid.comp_col);
-  }
-
-  int scroll_range = pum_size - pum_height;
-
-  // avoid set border for mouse menu
-  int mouse_menu = State != MODE_CMDLINE && pum_grid.zindex == kZIndexCmdlinePopupMenu;
-  if (!mouse_menu && fconfig.border) {
-    grid_draw_border(&pum_grid, &fconfig, NULL, 0, NULL);
-    if (!fconfig.shadow) {
-      row++;
-      col_off++;
-    }
-  }
-
-  // Never display more than we have
-  pum_first = MIN(pum_first, scroll_range);
-
-  if (pum_scrollbar) {
-    thumb_height = pum_height * pum_height / pum_size;
-    if (thumb_height == 0) {
-      thumb_height = 1;
-    }
-    thumb_pos = (pum_first * (pum_height - thumb_height) + scroll_range / 2) / scroll_range;
-  }
-
-  for (int i = 0; i < pum_height; i++) {
-    int idx = i + pum_first;
-    const bool selected = idx == pum_selected;
-    const hlf_T *const hlfs = selected ? hlfsSel : hlfsNorm;
-    const int trunc_attr = win_hl_attr(curwin, selected ? HLF_PSI : HLF_PNI);
-    hlf_T hlf = hlfs[0];  // start with "word" highlight
-    int attr = win_hl_attr(curwin, (int)hlf);
-    attr = hl_combine_attr(win_hl_attr(curwin, HLF_PNI), attr);
-
-    screengrid_line_start(&pum_grid, row, 0);
-
-    // prepend a space if there is room
-    if (extra_space) {
-      if (pum_rl) {
-        grid_line_puts(col_off + 1, " ", 1, attr);
-      } else {
-        grid_line_puts(col_off - 1, " ", 1, attr);
-      }
-    }
-
-    // Display each entry, use two spaces for a Tab.
-    // Do this 3 times and order from p_cia
-    int grid_col = col_off;
-    int totwidth = 0;
-    bool need_fcs_trunc = false;
-    int order[3];
-    int items_width_array[3] = { pum_base_width, pum_kind_width, pum_extra_width };
-    pum_align_order(order);
-    int basic_width = items_width_array[order[0]];  // first item width
-    bool last_isabbr = order[2] == CPT_ABBR;
-    int orig_attr = -1;
-
-    for (int j = 0; j < 3; j++) {
-      int item_type = order[j];
-      hlf = hlfs[item_type];
-      attr = win_hl_attr(curwin, (int)hlf);
-      attr = hl_combine_attr(win_hl_attr(curwin, HLF_PNI), attr);
-      orig_attr = attr;
-      if (item_type < 2) {  // try combine attr with user custom
-        attr = pum_user_attr_combine(idx, item_type, attr);
-      }
-      int width = 0;
-      char *s = NULL;
-      p = pum_get_item(idx, item_type);
-
-      const bool next_isempty = j + 1 >= 3 || pum_get_item(idx, order[j + 1]) == NULL;
-
-      if (p != NULL) {
-        for (;; MB_PTR_ADV(p)) {
-          if (s == NULL) {
-            s = p;
-          }
-          int w = ptr2cells(p);
-          if (*p != NUL && *p != TAB && totwidth + w <= pum_width) {
-            width += w;
-            continue;
-          }
-          const int width_limit = pum_width;
-
-          // Display the text that fits or comes before a Tab.
-          // First convert it to printable characters.
-          char saved = *p;
-
-          if (saved != NUL) {
-            *p = NUL;
-          }
-          char *st = transstr(s, true);
-          if (saved != NUL) {
-            *p = saved;
-          }
-
-          int *attrs = NULL;
-          if (item_type == CPT_ABBR) {
-            attrs = rs_pum_compute_text_attrs(st, hlf,
-                                           pum_array[idx].pum_user_abbr_hlattr);
-          }
-
-          if (pum_rl) {
-            char *rt = reverse_text(st);
-            char *rt_start = rt;
-            int cells = (int)mb_string2cells(rt);
-            int pad = next_isempty ? 0 : 2;
-            if (width_limit - totwidth < cells + pad) {
-              need_fcs_trunc = true;
-            }
-
-            // only draw the text that fits
-            if (grid_col - cells < col_off - width_limit) {
-              do {
-                cells -= utf_ptr2cells(rt);
-                MB_PTR_ADV(rt);
-              } while (grid_col - cells < col_off - width_limit);
-
-              if (grid_col - cells > col_off - width_limit) {
-                // Most left character requires 2-cells but only 1 cell is available on
-                // screen.  Put a '<' on the left of the pum item.
-                *(--rt) = '<';
-                cells++;
-              }
-            }
-
-            if (attrs == NULL) {
-              grid_line_puts(grid_col - cells + 1, rt, -1, attr);
-            } else {
-              rs_pum_grid_puts_with_attrs(grid_col - cells + 1, cells, rt, -1, attrs);
-            }
-
-            xfree(rt_start);
-            xfree(st);
-            grid_col -= width;
-          } else {
-            int cells = (int)mb_string2cells(st);
-            int pad = next_isempty ? 0 : 2;
-            if (width_limit - totwidth < cells + pad) {
-              need_fcs_trunc = true;
-            }
-
-            if (attrs == NULL) {
-              grid_line_puts(grid_col, st, -1, attr);
-            } else {
-              rs_pum_grid_puts_with_attrs(grid_col, cells, st, -1, attrs);
-            }
-
-            xfree(st);
-            grid_col += width;
-          }
-
-          if (attrs != NULL) {
-            XFREE_CLEAR(attrs);
-          }
-
-          if (*p != TAB) {
-            break;
-          }
-
-          // Display two spaces for a Tab.
-          if (pum_rl) {
-            grid_line_puts(grid_col - 1, "  ", 2, attr);
-            grid_col -= 2;
-          } else {
-            grid_line_puts(grid_col, "  ", 2, attr);
-            grid_col += 2;
-          }
-          totwidth += 2;
-          s = NULL;  // start text at next char
-          width = 0;
-        }
-      }
-
-      if (j > 0) {
-        n = items_width_array[order[1]] + (last_isabbr ? 0 : 1);
-      } else {
-        n = order[j] == CPT_ABBR ? 1 : 0;
-      }
-
-      // Stop when there is nothing more to display.
-      if ((j == 2)
-          || (next_isempty && (j == 1 || (j == 0 && pum_get_item(idx, order[j + 2]) == NULL)))
-          || (basic_width + n >= pum_width)) {
-        break;
-      }
-
-      if (pum_rl) {
-        grid_line_fill(col_off - basic_width - n + 1, grid_col + 1,
-                       schar_from_ascii(' '), orig_attr);
-        grid_col = col_off - basic_width - n;
-      } else {
-        grid_line_fill(grid_col, col_off + basic_width + n,
-                       schar_from_ascii(' '), orig_attr);
-        grid_col = col_off + basic_width + n;
-      }
-      totwidth = basic_width + n;
-    }
-
-    if (pum_rl) {
-      const int lcol = col_off - pum_width + 1;
-      grid_line_fill(lcol, grid_col + 1, schar_from_ascii(' '), orig_attr);
-      if (need_fcs_trunc) {
-        linebuf_char[lcol] = fcs_trunc != NUL ? fcs_trunc : schar_from_ascii('<');
-        linebuf_attr[lcol] = trunc_attr;
-        if (pum_width > 1 && linebuf_char[lcol + 1] == NUL) {
-          linebuf_char[lcol + 1] = schar_from_ascii(' ');
-        }
-      }
-    } else {
-      const int rcol = col_off + pum_width;
-      grid_line_fill(grid_col, rcol, schar_from_ascii(' '), orig_attr);
-      if (need_fcs_trunc) {
-        if (pum_width > 1 && linebuf_char[rcol - 1] == NUL) {
-          linebuf_char[rcol - 2] = schar_from_ascii(' ');
-        }
-        linebuf_char[rcol - 1] = fcs_trunc != NUL ? fcs_trunc : schar_from_ascii('>');
-        linebuf_attr[rcol - 1] = trunc_attr;
-      }
-    }
-
-    if (pum_scrollbar > 0) {
-      bool thumb = i >= thumb_pos && i < thumb_pos + thumb_height;
-      int scrollbar_col = col_off + (pum_rl ? -pum_width : pum_width);
-      grid_line_put_schar(scrollbar_col, (has_border && !thumb) ? border_char : fill_char,
-                          thumb ? attr_thumb : (has_border ? border_attr : attr_scroll));
-    }
-    grid_line_flush();
-    row++;
-  }
-}
+// nvim_pum_redraw_impl: migrated to Rust (redraw.rs)
 
 /// Set the informational text in the preview buffer when the completion
 /// item does not include a dedicated preview or popup window.

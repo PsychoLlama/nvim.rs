@@ -461,19 +461,551 @@ pub const extern "C" fn rs_pum_trunc_col(col_off: c_int, pum_width: c_int, is_rl
     }
 }
 
-// C `_impl` function for Phase 7 migration.
+use std::ffi::{c_char, c_void};
+
+use crate::item::{PumItemArray, CPT_ABBR};
+use crate::render::hlf;
+
+/// `schar_T` is `uint32_t`.
+type ScharT = u32;
+
+/// NUL character value.
+const NUL: u8 = 0;
+/// TAB character value.
+const TAB: u8 = 0x09;
+
+// C accessor functions for Phase 6 redraw.
+#[allow(dead_code)]
 extern "C" {
-    /// Redraw the popup menu.
-    fn nvim_pum_redraw_impl();
+    // State accessors used in redraw (not already declared above)
+    fn nvim_get_pum_rl() -> c_int;
+    fn nvim_get_pum_width() -> c_int;
+    fn nvim_get_pum_col() -> c_int;
+    fn nvim_get_pum_scrollbar() -> c_int;
+    fn nvim_get_pum_row() -> c_int;
+    fn nvim_get_pum_above() -> c_int;
+
+    // Grid operations
+    fn nvim_pum_screengrid_line_start(row: c_int, col: c_int);
+    fn nvim_pum_grid_line_fill(start: c_int, end: c_int, fillchar: ScharT, attr: c_int);
+    fn nvim_pum_grid_line_put_schar(col: c_int, sc: ScharT, attr: c_int);
+    fn nvim_pum_grid_line_flush();
+    fn nvim_pum_grid_assign_handle();
+    fn nvim_pum_grid_alloc(rows: c_int, cols: c_int, keep_contents: c_int);
+    fn nvim_pum_grid_invalidate();
+    fn nvim_pum_ui_call_grid_resize();
+    fn nvim_pum_grid_has_chars() -> c_int;
+    fn nvim_pum_grid_get_rows() -> c_int;
+    fn nvim_pum_grid_get_cols() -> c_int;
+    fn nvim_pum_ui_comp_put_grid(row: c_int, col: c_int, height: c_int, width: c_int) -> c_int;
+    fn nvim_pum_ui_call_win_float_pos_grid(
+        anchor: *const c_char,
+        anchor_grid: c_int,
+        anchor_row: c_int,
+        anchor_col: c_int,
+    );
+    fn nvim_pum_ui_has_multigrid() -> c_int;
+    fn nvim_pum_grid_line_puts(
+        col: c_int,
+        text: *const c_char,
+        textlen: c_int,
+        attr: c_int,
+    ) -> c_int;
+
+    // State accessors
+    fn nvim_set_pum_invalid_val(val: c_int);
+    fn nvim_set_must_redraw_pum(val: c_int);
+    fn nvim_set_pum_left_col(val: c_int);
+    fn nvim_set_pum_right_col(val: c_int);
+    fn nvim_get_pum_anchor_grid() -> c_int;
+    fn nvim_get_pum_win_row_offset() -> c_int;
+    fn nvim_get_pum_win_col_offset() -> c_int;
+    fn nvim_get_pum_invalid() -> c_int;
+
+    // Text/string operations
+    fn nvim_pum_curwin_end_col() -> c_int;
+    fn nvim_pum_fcs_trunc(is_rl: c_int) -> ScharT;
+    fn nvim_pum_schar_from_ascii(c: c_char) -> ScharT;
+    fn nvim_pum_transstr(s: *const c_char) -> *mut c_char;
+    fn nvim_pum_reverse_text(s: *mut c_char) -> *mut c_char;
+    fn nvim_pum_mb_string2cells(s: *const c_char) -> c_int;
+    fn nvim_pum_ptr2cells(p: *const c_char) -> c_int;
+    fn nvim_pum_mb_ptr_adv(p: *const c_char) -> c_int;
+    fn nvim_pum_xfree(ptr: *mut c_void);
+
+    // Highlight operations
+    fn nvim_curwin_hl_attr(hlf: c_int) -> c_int;
+    fn nvim_pum_hl_combine_attr(a: c_int, b: c_int) -> c_int;
+
+    // Linebuf operations
+    fn nvim_pum_set_linebuf_char(col: c_int, sc: ScharT);
+    fn nvim_pum_get_linebuf_char(col: c_int) -> ScharT;
+    fn nvim_pum_set_linebuf_attr(col: c_int, attr: c_int);
+
+    // State queries
+    fn nvim_pum_is_cmdline() -> c_int;
+    fn nvim_pum_kZIndexCmdlinePopupMenu() -> c_int;
+    fn nvim_pum_grid_get_zindex() -> c_int;
+
+    // Border operations
+    fn nvim_pum_parse_border(has_scrollbar: c_int) -> *mut c_void;
+    fn nvim_pum_border_cfg_has_border(cfg: *mut c_void) -> c_int;
+    fn nvim_pum_border_cfg_is_shadow(cfg: *mut c_void) -> c_int;
+    fn nvim_pum_border_cfg_has_border_chars(cfg: *mut c_void) -> c_int;
+    fn nvim_pum_border_cfg_scrollbar_char(cfg: *mut c_void) -> ScharT;
+    fn nvim_pum_border_cfg_scrollbar_attr(cfg: *mut c_void) -> c_int;
+    fn nvim_pum_border_draw(cfg: *mut c_void);
+    fn nvim_pum_border_cfg_free(cfg: *mut c_void);
+
+    // Item/array accessors
+    fn nvim_get_pum_array() -> *const PumItemArray;
+
+    // These are Rust #[no_mangle] functions callable via C linkage
+    fn rs_pum_get_item(array: *const PumItemArray, index: c_int, item_type: c_int)
+        -> *const c_char;
+    fn rs_pum_user_attr_combine(
+        array: *const PumItemArray,
+        idx: c_int,
+        item_type: c_int,
+        attr: c_int,
+    ) -> c_int;
+    fn rs_pum_compute_text_attrs(
+        text: *mut c_char,
+        hlf_id: c_int,
+        user_hlattr: c_int,
+    ) -> *mut c_int;
+    fn rs_pum_grid_puts_with_attrs(
+        col: c_int,
+        cells: c_int,
+        text: *const c_char,
+        textlen: c_int,
+        attrs: *const c_int,
+    );
+    fn rs_pum_border_width() -> c_int;
 }
 
 /// Redraw the popup menu using current `pum_first` and `pum_selected`.
 ///
+/// This is the core rendering function that handles grid allocation,
+/// border drawing, row-by-row text rendering with highlight attributes,
+/// RTL support, scrollbar rendering, and truncation indicators.
+///
 /// # Safety
-/// Calls C `_impl` function.
+/// Calls numerous C accessor and grid functions.
 #[no_mangle]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cognitive_complexity,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr,
+    clippy::if_then_some_else_none,
+    clippy::bool_to_int_with_if,
+    clippy::unnecessary_operation,
+    clippy::collapsible_else_if
+)]
 pub unsafe extern "C" fn rs_pum_redraw() {
-    nvim_pum_redraw_impl();
+    let pum_rl = nvim_get_pum_rl() != 0;
+    let pum_width = nvim_get_pum_width();
+    let pum_col = nvim_get_pum_col();
+    let pum_height = nvim_get_pum_height();
+    let pum_size = nvim_get_pum_size();
+    let pum_scrollbar = nvim_get_pum_scrollbar();
+    let pum_row = nvim_get_pum_row();
+    let pum_above = nvim_get_pum_above() != 0;
+    let pum_selected = nvim_get_pum_selected();
+
+    let mut row = 0;
+    let attr_scroll = nvim_curwin_hl_attr(hlf::HLF_PSB);
+    let attr_thumb = nvim_curwin_hl_attr(hlf::HLF_PST);
+    let fcs_trunc = nvim_pum_fcs_trunc(pum_rl as c_int);
+    let fill_char = nvim_pum_schar_from_ascii(b' ' as c_char);
+
+    //                         "word"   "kind"   "extra text"
+    let hlfs_norm: [c_int; 3] = [hlf::HLF_PNI, hlf::HLF_PNK, hlf::HLF_PNX];
+    let hlfs_sel: [c_int; 3] = [hlf::HLF_PSI, hlf::HLF_PSK, hlf::HLF_PSX];
+
+    let border_width = rs_pum_border_width();
+
+    // Calculate grid width and column offset
+    let mut grid_width = pum_width;
+    let (mut col_off, extra_space) = if pum_rl {
+        let win_end_col = nvim_pum_curwin_end_col();
+        (pum_width - 1, pum_col < win_end_col - 1)
+    } else {
+        let es = pum_col > 0;
+        (if es { 1 } else { 0 }, es)
+    };
+    if extra_space {
+        grid_width += 1;
+    }
+
+    // Parse border configuration (opaque handle)
+    let border_cfg = nvim_pum_parse_border(pum_scrollbar);
+    if border_cfg.is_null() {
+        return;
+    }
+    let has_border = nvim_pum_border_cfg_has_border(border_cfg) != 0;
+    let (border_char, border_attr) = if has_border && pum_scrollbar != 0 {
+        (
+            nvim_pum_border_cfg_scrollbar_char(border_cfg),
+            nvim_pum_border_cfg_scrollbar_attr(border_cfg),
+        )
+    } else {
+        (0, 0)
+    };
+    let has_border_chars = nvim_pum_border_cfg_has_border_chars(border_cfg) != 0;
+
+    if pum_scrollbar > 0 && !has_border_chars {
+        grid_width += 1;
+        if pum_rl {
+            col_off += 1;
+        }
+    }
+
+    nvim_pum_grid_assign_handle();
+
+    nvim_set_pum_left_col(pum_col - col_off);
+    let pum_left_col = pum_col - col_off;
+    nvim_set_pum_right_col(pum_left_col + grid_width);
+
+    let moved = nvim_pum_ui_comp_put_grid(
+        pum_row,
+        pum_left_col,
+        pum_height + border_width,
+        grid_width + border_width,
+    ) != 0;
+    let invalid_grid = moved || nvim_get_pum_invalid() != 0;
+    nvim_set_pum_invalid_val(0);
+    nvim_set_must_redraw_pum(0);
+
+    if nvim_pum_grid_has_chars() == 0
+        || nvim_pum_grid_get_rows() != pum_height + border_width
+        || nvim_pum_grid_get_cols() != grid_width + border_width
+    {
+        nvim_pum_grid_alloc(
+            pum_height + border_width,
+            grid_width + border_width,
+            !invalid_grid as c_int,
+        );
+        nvim_pum_ui_call_grid_resize();
+    } else if invalid_grid {
+        nvim_pum_grid_invalidate();
+    }
+
+    if nvim_pum_ui_has_multigrid() != 0 {
+        let anchor: &[u8] = if pum_above { b"SW\0" } else { b"NW\0" };
+        let row_off = if pum_above { -pum_height } else { 0 };
+        let anchor_grid = nvim_get_pum_anchor_grid();
+        let win_row_offset = nvim_get_pum_win_row_offset();
+        let win_col_offset = nvim_get_pum_win_col_offset();
+        nvim_pum_ui_call_win_float_pos_grid(
+            anchor.as_ptr().cast(),
+            anchor_grid,
+            pum_row - row_off - win_row_offset,
+            pum_left_col - win_col_offset,
+        );
+    }
+
+    let scroll_range = pum_size - pum_height;
+
+    // Avoid border for mouse menu
+    let mouse_menu = nvim_pum_is_cmdline() == 0
+        && nvim_pum_grid_get_zindex() == nvim_pum_kZIndexCmdlinePopupMenu();
+    if !mouse_menu && has_border_chars {
+        nvim_pum_border_draw(border_cfg);
+        if nvim_pum_border_cfg_is_shadow(border_cfg) == 0 {
+            row += 1;
+            col_off += 1;
+        }
+    }
+
+    // Never display more than we have
+    let pum_first = {
+        let f = nvim_get_pum_first();
+        let clamped = if f > scroll_range { scroll_range } else { f };
+        if clamped != f {
+            nvim_set_pum_first(clamped);
+        }
+        clamped
+    };
+
+    let mut thumb_pos = 0;
+    let mut thumb_height = 1;
+    if pum_scrollbar != 0 {
+        thumb_height = pum_height * pum_height / pum_size;
+        if thumb_height == 0 {
+            thumb_height = 1;
+        }
+        thumb_pos = (pum_first * (pum_height - thumb_height) + scroll_range / 2) / scroll_range;
+    }
+
+    let pum_array = nvim_get_pum_array();
+
+    // Main row rendering loop
+    for i in 0..pum_height {
+        let idx = i + pum_first;
+        let selected = idx == pum_selected;
+        let hlfs = if selected { &hlfs_sel } else { &hlfs_norm };
+        let trunc_attr = nvim_curwin_hl_attr(if selected { hlf::HLF_PSI } else { hlf::HLF_PNI });
+        let mut hlf = hlfs[0]; // start with "word" highlight
+        let mut attr = nvim_curwin_hl_attr(hlf);
+        attr = nvim_pum_hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PNI), attr);
+
+        nvim_pum_screengrid_line_start(row, 0);
+
+        // Prepend a space if there is room
+        if extra_space {
+            let space = b" \0";
+            if pum_rl {
+                nvim_pum_grid_line_puts(col_off + 1, space.as_ptr().cast(), 1, attr);
+            } else {
+                nvim_pum_grid_line_puts(col_off - 1, space.as_ptr().cast(), 1, attr);
+            }
+        }
+
+        // Display each entry, use two spaces for a Tab.
+        // Do this 3 times and order from p_cia
+        let mut grid_col = col_off;
+        let mut totwidth = 0;
+        let mut need_fcs_trunc = false;
+
+        let align_order = crate::item::rs_pum_get_current_align_order();
+        let order = [align_order.first, align_order.second, align_order.third];
+        let items_width_array = [
+            nvim_get_pum_base_width(),
+            nvim_get_pum_kind_width(),
+            nvim_get_pum_extra_width(),
+        ];
+        let basic_width = items_width_array[order[0] as usize];
+        let last_isabbr = order[2] == CPT_ABBR;
+        let mut orig_attr: c_int = -1;
+
+        for j in 0..3 {
+            let item_type = order[j];
+            hlf = hlfs[item_type as usize];
+            attr = nvim_curwin_hl_attr(hlf);
+            attr = nvim_pum_hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PNI), attr);
+            orig_attr = attr;
+            if item_type < 2 {
+                // try combine attr with user custom
+                attr = rs_pum_user_attr_combine(pum_array, idx, item_type, attr);
+            }
+            let mut width: c_int = 0;
+            let mut s: *const c_char = std::ptr::null();
+            let mut p: *mut c_char = rs_pum_get_item(pum_array, idx, item_type).cast_mut();
+
+            let next_isempty =
+                j + 1 >= 3 || rs_pum_get_item(pum_array, idx, order[j + 1]).is_null();
+
+            if !p.is_null() {
+                loop {
+                    if s.is_null() {
+                        s = p;
+                    }
+                    let w = nvim_pum_ptr2cells(p);
+                    if *p as u8 != NUL && *p as u8 != TAB && totwidth + w <= pum_width {
+                        width += w;
+                        let adv = nvim_pum_mb_ptr_adv(p);
+                        p = p.add(adv as usize);
+                        continue;
+                    }
+
+                    // Display the text that fits or comes before a Tab.
+                    let saved = *p;
+                    if saved as u8 != NUL {
+                        *p = 0;
+                    }
+                    let st = nvim_pum_transstr(s);
+                    if saved as u8 != NUL {
+                        *p = saved;
+                    }
+
+                    let attrs: *mut c_int = if item_type == CPT_ABBR {
+                        let user_hlattr =
+                            crate::item::nvim_pum_item_get_user_abbr_hlattr(pum_array, idx);
+                        rs_pum_compute_text_attrs(st, hlf, user_hlattr)
+                    } else {
+                        std::ptr::null_mut()
+                    };
+
+                    if pum_rl {
+                        let rt = nvim_pum_reverse_text(st);
+                        let rt_start = rt;
+                        let cells = nvim_pum_mb_string2cells(rt);
+                        let mut rt_cur = rt;
+                        let pad = if next_isempty { 0 } else { 2 };
+                        if pum_width - totwidth < cells + pad {
+                            need_fcs_trunc = true;
+                        }
+
+                        // Only draw the text that fits
+                        let mut cur_cells = cells;
+                        if grid_col - cur_cells < col_off - pum_width {
+                            while grid_col - cur_cells < col_off - pum_width {
+                                let c = nvim_pum_ptr2cells(rt_cur);
+                                cur_cells -= c;
+                                let adv = nvim_pum_mb_ptr_adv(rt_cur);
+                                rt_cur = rt_cur.add(adv as usize);
+                            }
+                            if grid_col - cur_cells > col_off - pum_width {
+                                // Most left character requires 2 cells but only 1 available.
+                                rt_cur = rt_cur.sub(1);
+                                *rt_cur = b'<' as c_char;
+                                cur_cells += 1;
+                            }
+                        }
+
+                        if attrs.is_null() {
+                            nvim_pum_grid_line_puts(grid_col - cur_cells + 1, rt_cur, -1, attr);
+                        } else {
+                            rs_pum_grid_puts_with_attrs(
+                                grid_col - cur_cells + 1,
+                                cur_cells,
+                                rt_cur,
+                                -1,
+                                attrs,
+                            );
+                        }
+                        nvim_pum_xfree(rt_start.cast());
+                        nvim_pum_xfree(st.cast());
+                        grid_col -= width;
+                    } else {
+                        let cells = nvim_pum_mb_string2cells(st);
+                        let pad = if next_isempty { 0 } else { 2 };
+                        if pum_width - totwidth < cells + pad {
+                            need_fcs_trunc = true;
+                        }
+
+                        if attrs.is_null() {
+                            nvim_pum_grid_line_puts(grid_col, st, -1, attr);
+                        } else {
+                            rs_pum_grid_puts_with_attrs(grid_col, cells, st, -1, attrs);
+                        }
+                        nvim_pum_xfree(st.cast());
+                        grid_col += width;
+                    }
+
+                    if !attrs.is_null() {
+                        nvim_pum_xfree(attrs.cast());
+                    }
+
+                    if *p as u8 != TAB {
+                        break;
+                    }
+
+                    // Display two spaces for a Tab.
+                    let two_spaces = b"  \0";
+                    if pum_rl {
+                        nvim_pum_grid_line_puts(grid_col - 1, two_spaces.as_ptr().cast(), 2, attr);
+                        grid_col -= 2;
+                    } else {
+                        nvim_pum_grid_line_puts(grid_col, two_spaces.as_ptr().cast(), 2, attr);
+                        grid_col += 2;
+                    }
+                    totwidth += 2;
+                    s = std::ptr::null(); // start text at next char
+                    width = 0;
+
+                    let adv = nvim_pum_mb_ptr_adv(p);
+                    p = p.add(adv as usize);
+                }
+            }
+
+            // Calculate spacing
+            let n = if j > 0 {
+                items_width_array[order[1] as usize] + if last_isabbr { 0 } else { 1 }
+            } else if order[j] == CPT_ABBR {
+                1
+            } else {
+                0
+            };
+
+            // Stop when nothing more to display
+            let next_next_isempty =
+                j + 2 >= 3 || rs_pum_get_item(pum_array, idx, order[j + 2]).is_null();
+            if j == 2
+                || (next_isempty && (j == 1 || (j == 0 && next_next_isempty)))
+                || (basic_width + n >= pum_width)
+            {
+                break;
+            }
+
+            // Fill space between columns
+            let space_char = nvim_pum_schar_from_ascii(b' ' as c_char);
+            if pum_rl {
+                nvim_pum_grid_line_fill(
+                    col_off - basic_width - n + 1,
+                    grid_col + 1,
+                    space_char,
+                    orig_attr,
+                );
+                grid_col = col_off - basic_width - n;
+            } else {
+                nvim_pum_grid_line_fill(grid_col, col_off + basic_width + n, space_char, orig_attr);
+                grid_col = col_off + basic_width + n;
+            }
+            totwidth = basic_width + n;
+        }
+
+        // Fill remaining space and handle truncation indicator
+        let space_char = nvim_pum_schar_from_ascii(b' ' as c_char);
+        if pum_rl {
+            let lcol = col_off - pum_width + 1;
+            nvim_pum_grid_line_fill(lcol, grid_col + 1, space_char, orig_attr);
+            if need_fcs_trunc {
+                let trunc_char = if fcs_trunc == NUL as ScharT {
+                    nvim_pum_schar_from_ascii(b'<' as c_char)
+                } else {
+                    fcs_trunc
+                };
+                nvim_pum_set_linebuf_char(lcol, trunc_char);
+                nvim_pum_set_linebuf_attr(lcol, trunc_attr);
+                if pum_width > 1 && nvim_pum_get_linebuf_char(lcol + 1) == NUL as ScharT {
+                    nvim_pum_set_linebuf_char(lcol + 1, space_char);
+                }
+            }
+        } else {
+            let rcol = col_off + pum_width;
+            nvim_pum_grid_line_fill(grid_col, rcol, space_char, orig_attr);
+            if need_fcs_trunc {
+                if pum_width > 1 && nvim_pum_get_linebuf_char(rcol - 1) == NUL as ScharT {
+                    nvim_pum_set_linebuf_char(rcol - 2, space_char);
+                }
+                let trunc_char = if fcs_trunc == NUL as ScharT {
+                    nvim_pum_schar_from_ascii(b'>' as c_char)
+                } else {
+                    fcs_trunc
+                };
+                nvim_pum_set_linebuf_char(rcol - 1, trunc_char);
+                nvim_pum_set_linebuf_attr(rcol - 1, trunc_attr);
+            }
+        }
+
+        // Scrollbar
+        if pum_scrollbar > 0 {
+            let thumb = i >= thumb_pos && i < thumb_pos + thumb_height;
+            let scrollbar_col = col_off + if pum_rl { -pum_width } else { pum_width };
+            let sc = if has_border && !thumb {
+                border_char
+            } else {
+                fill_char
+            };
+            let sc_attr = if thumb {
+                attr_thumb
+            } else if has_border {
+                border_attr
+            } else {
+                attr_scroll
+            };
+            nvim_pum_grid_line_put_schar(scrollbar_col, sc, sc_attr);
+        }
+
+        nvim_pum_grid_line_flush();
+        row += 1;
+    }
+
+    nvim_pum_border_cfg_free(border_cfg);
 }
 
 #[cfg(test)]

@@ -23,15 +23,15 @@ pub struct PumItemArray {
 // FFI declarations for item access
 extern "C" {
     /// Get item text field from array at index.
-    fn nvim_pum_item_get_text(array: *const PumItemArray, index: c_int) -> *const c_char;
+    pub fn nvim_pum_item_get_text(array: *const PumItemArray, index: c_int) -> *const c_char;
     /// Get item kind field from array at index.
-    fn nvim_pum_item_get_kind(array: *const PumItemArray, index: c_int) -> *const c_char;
+    pub fn nvim_pum_item_get_kind(array: *const PumItemArray, index: c_int) -> *const c_char;
     /// Get item extra field from array at index.
-    fn nvim_pum_item_get_extra(array: *const PumItemArray, index: c_int) -> *const c_char;
+    pub fn nvim_pum_item_get_extra(array: *const PumItemArray, index: c_int) -> *const c_char;
     /// Get item user abbr highlight attr from array at index.
-    fn nvim_pum_item_get_user_abbr_hlattr(array: *const PumItemArray, index: c_int) -> c_int;
+    pub fn nvim_pum_item_get_user_abbr_hlattr(array: *const PumItemArray, index: c_int) -> c_int;
     /// Get item user kind highlight attr from array at index.
-    fn nvim_pum_item_get_user_kind_hlattr(array: *const PumItemArray, index: c_int) -> c_int;
+    pub fn nvim_pum_item_get_user_kind_hlattr(array: *const PumItemArray, index: c_int) -> c_int;
     /// Combine highlight attributes (`hl_combine_attr`).
     fn hl_combine_attr(char_attr: c_int, comb_attr: c_int) -> c_int;
     /// Get the `pumborder` option value.

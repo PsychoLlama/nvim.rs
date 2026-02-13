@@ -47,6 +47,9 @@ typedef struct {
   int valid;
 } PumWinInfo;
 
+/// Opaque border configuration for popup menu rendering (Rust FFI).
+typedef struct PumBorderConfig PumBorderConfig;
+
 /// state for pum_ext_select_item.
 EXTERN struct {
   bool active;
