@@ -3,7 +3,7 @@
 //! This module provides helper functions for getting popup menu
 //! position and size information for event dictionaries.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 // C accessor functions for popup state.
 extern "C" {
@@ -21,6 +21,34 @@ extern "C" {
     fn nvim_get_pum_scrollbar() -> c_int;
     /// Get the `pum_is_visible` static variable.
     fn nvim_get_pum_is_visible() -> c_int;
+}
+
+/// Result from `ui_pum_get_pos` wrapper.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct PumUiPos {
+    valid: c_int,
+    width: f64,
+    height: f64,
+    row: f64,
+    col: f64,
+}
+
+// C accessor functions for event info dict population.
+extern "C" {
+    /// Get UI-provided popup position (wraps `ui_pum_get_pos`).
+    fn nvim_pum_ui_pum_get_pos() -> PumUiPos;
+    /// Add a float value to a `dict_T`.
+    fn nvim_pum_dict_add_float(dict: *mut DictHandle, key: *const c_char, key_len: usize, val: f64);
+    /// Add an integer value to a `dict_T`.
+    fn nvim_pum_dict_add_nr(dict: *mut DictHandle, key: *const c_char, key_len: usize, val: c_int);
+    /// Add a boolean value to a `dict_T` (0 = false, nonzero = true).
+    fn nvim_pum_dict_add_bool(
+        dict: *mut DictHandle,
+        key: *const c_char,
+        key_len: usize,
+        val: c_int,
+    );
 }
 
 /// Popup menu position and size information.
@@ -177,19 +205,39 @@ pub struct DictHandle {
     _private: [u8; 0],
 }
 
-// C _impl function for Phase 3 migration.
-extern "C" {
-    /// Set event info into a `dict_T`.
-    fn nvim_pum_set_event_info_impl(dict: *mut DictHandle);
-}
-
 /// Add size information about the popup menu to the given dictionary.
 ///
+/// Populates the dictionary with height, width, row, col (as floats from
+/// the UI if available, otherwise from internal state), size (integer),
+/// and scrollbar (boolean).
+///
 /// # Safety
-/// Calls C `_impl` function. `dict` must be a valid `dict_T` pointer.
+/// Calls C accessor functions. `dict` must be a valid `dict_T` pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_set_event_info(dict: *mut DictHandle) {
-    nvim_pum_set_event_info_impl(dict);
+    if nvim_get_pum_is_visible() == 0 {
+        return;
+    }
+
+    // Try to get position from the UI; fall back to internal state.
+    let pos = nvim_pum_ui_pum_get_pos();
+    let (w, h, r, c) = if pos.valid != 0 {
+        (pos.width, pos.height, pos.row, pos.col)
+    } else {
+        (
+            f64::from(nvim_get_pum_width()),
+            f64::from(nvim_get_pum_height()),
+            f64::from(nvim_get_pum_row()),
+            f64::from(nvim_get_pum_col()),
+        )
+    };
+
+    nvim_pum_dict_add_float(dict, c"height".as_ptr(), 6, h);
+    nvim_pum_dict_add_float(dict, c"width".as_ptr(), 5, w);
+    nvim_pum_dict_add_float(dict, c"row".as_ptr(), 3, r);
+    nvim_pum_dict_add_float(dict, c"col".as_ptr(), 3, c);
+    nvim_pum_dict_add_nr(dict, c"size".as_ptr(), 4, nvim_get_pum_size());
+    nvim_pum_dict_add_bool(dict, c"scrollbar".as_ptr(), 9, nvim_get_pum_scrollbar());
 }
 
 #[cfg(test)]

@@ -426,6 +426,122 @@ int nvim_curwin_hl_attr(int hlf)
   return win_hl_attr(curwin, hlf);
 }
 
+// Phase 1 accessors: pum_grid field accessors for Rust FFI
+ScreenGrid *nvim_pum_get_grid_ptr(void)
+{
+  return &pum_grid;
+}
+
+int nvim_pum_grid_get_handle(void)
+{
+  return pum_grid.handle;
+}
+
+int nvim_pum_grid_get_pending_comp_index_update(void)
+{
+  return pum_grid.pending_comp_index_update;
+}
+
+void nvim_pum_grid_set_pending_comp_index_update(int val)
+{
+  pum_grid.pending_comp_index_update = val != 0;
+}
+
+int nvim_pum_grid_get_zindex(void)
+{
+  return pum_grid.zindex;
+}
+
+int nvim_pum_grid_get_comp_index(void)
+{
+  return (int)pum_grid.comp_index;
+}
+
+int nvim_pum_grid_get_comp_row(void)
+{
+  return pum_grid.comp_row;
+}
+
+int nvim_pum_grid_get_comp_col(void)
+{
+  return pum_grid.comp_col;
+}
+
+// Phase 1 accessor: ui_call_win_float_pos wrapper for pum_grid
+void nvim_pum_ui_call_win_float_pos(int handle, const char *anchor, int anchor_grid,
+                                     int row, int col, int zindex, int comp_index,
+                                     int comp_row, int comp_col)
+{
+  ui_call_win_float_pos(handle, -1, cstr_as_string(anchor), anchor_grid,
+                        row, col, false, zindex, comp_index, comp_row, comp_col);
+}
+
+// Phase 1 accessor: menu linked-list traversal
+void *nvim_pum_menu_children(void *menu)
+{
+  return ((vimmenu_T *)menu)->children;
+}
+
+void *nvim_pum_menu_next(void *menu)
+{
+  return ((vimmenu_T *)menu)->next;
+}
+
+int nvim_pum_menu_matches_mode(void *menu, int mode)
+{
+  vimmenu_T *mp = (vimmenu_T *)menu;
+  return (mp->modes & mp->enabled & mode) != 0;
+}
+
+void nvim_pum_execute_menu_item(void *menu)
+{
+  exarg_T ea;
+  CLEAR_FIELD(ea);
+  execute_menu(&ea, (vimmenu_T *)menu, -1);
+}
+
+// Phase 1 accessor: ui_pum_get_pos wrapper
+PumUiPos nvim_pum_ui_pum_get_pos(void)
+{
+  PumUiPos result;
+  double w, h, r, c;
+  if (ui_pum_get_pos(&w, &h, &r, &c)) {
+    result.valid = 1;
+    result.width = w;
+    result.height = h;
+    result.row = r;
+    result.col = c;
+  } else {
+    result.valid = 0;
+    result.width = 0;
+    result.height = 0;
+    result.row = 0;
+    result.col = 0;
+  }
+  return result;
+}
+
+// Phase 1 accessor: tv_dict_add_* wrappers for Rust FFI
+void nvim_pum_dict_add_float(void *dict, const char *key, size_t key_len, double val)
+{
+  tv_dict_add_float((dict_T *)dict, key, key_len, val);
+}
+
+void nvim_pum_dict_add_nr(void *dict, const char *key, size_t key_len, int val)
+{
+  tv_dict_add_nr((dict_T *)dict, key, key_len, val);
+}
+
+void nvim_pum_dict_add_bool(void *dict, const char *key, size_t key_len, int val)
+{
+  tv_dict_add_bool((dict_T *)dict, key, key_len, val ? kBoolVarTrue : kBoolVarFalse);
+}
+
+// Static assertions for constants used by Rust FFI
+_Static_assert(kUIMultigrid == 6, "kUIMultigrid must be 6");
+_Static_assert(kUIPopupmenu == 1, "kUIPopupmenu must be 1");
+_Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
+
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 
@@ -1530,10 +1646,7 @@ void pum_invalidate(void)
   rs_pum_invalidate();
 }
 
-void nvim_pum_recompose_impl(void)
-{
-  ui_comp_compose_grid(&pum_grid);
-}
+// nvim_pum_recompose_impl: migrated to Rust (display.rs)
 
 void pum_recompose(void)
 {
@@ -1554,27 +1667,7 @@ int pum_get_height(void)
   return rs_pum_get_height();
 }
 
-/// Add size information about the pum to "dict".
-void nvim_pum_set_event_info_impl(dict_T *dict)
-{
-  if (!pum_visible()) {
-    return;
-  }
-  double w, h, r, c;
-  if (!ui_pum_get_pos(&w, &h, &r, &c)) {
-    w = (double)pum_width;
-    h = (double)pum_height;
-    r = (double)pum_row;
-    c = (double)pum_col;
-  }
-  tv_dict_add_float(dict, S_LEN("height"), h);
-  tv_dict_add_float(dict, S_LEN("width"), w);
-  tv_dict_add_float(dict, S_LEN("row"), r);
-  tv_dict_add_float(dict, S_LEN("col"), c);
-  tv_dict_add_nr(dict, S_LEN("size"), pum_size);
-  tv_dict_add_bool(dict, S_LEN("scrollbar"),
-                   pum_scrollbar ? kBoolVarTrue : kBoolVarFalse);
-}
+// nvim_pum_set_event_info_impl: migrated to Rust (event.rs)
 
 void pum_set_event_info(dict_T *dict)
 {
@@ -1695,20 +1788,7 @@ void nvim_pum_select_mouse_pos_impl(void)
   }
 }
 
-/// Execute the currently selected popup menu item.
-void nvim_pum_execute_menu_impl(vimmenu_T *menu, int mode)
-{
-  int idx = 0;
-  exarg_T ea;
-
-  for (vimmenu_T *mp = menu->children; mp != NULL; mp = mp->next) {
-    if ((mp->modes & mp->enabled & mode) && idx++ == pum_selected) {
-      CLEAR_FIELD(ea);
-      execute_menu(&ea, mp, -1);
-      break;
-    }
-  }
-}
+// nvim_pum_execute_menu_impl: migrated to Rust (context_menu.rs)
 
 /// Open the terminal version of the popup menu and don't return until it is closed.
 void nvim_pum_show_popupmenu_impl(vimmenu_T *menu)
@@ -1859,19 +1939,7 @@ void pum_make_popup(const char *path_name, int use_mouse_pos)
   rs_pum_make_popup(path_name, use_mouse_pos);
 }
 
-void nvim_pum_ui_flush_impl(void)
-{
-  if (ui_has(kUIMultigrid) && pum_is_drawn && !pum_external && pum_grid.handle != 0
-      && pum_grid.pending_comp_index_update) {
-    const char *anchor = pum_above ? "SW" : "NW";
-    int row_off = pum_above ? -pum_height : 0;
-    ui_call_win_float_pos(pum_grid.handle, -1, cstr_as_string(anchor), pum_anchor_grid,
-                          pum_row - row_off - pum_win_row_offset, pum_left_col - pum_win_col_offset,
-                          false, pum_grid.zindex, (int)pum_grid.comp_index, pum_grid.comp_row,
-                          pum_grid.comp_col);
-    pum_grid.pending_comp_index_update = false;
-  }
-}
+// nvim_pum_ui_flush_impl: migrated to Rust (display.rs)
 
 void pum_ui_flush(void)
 {

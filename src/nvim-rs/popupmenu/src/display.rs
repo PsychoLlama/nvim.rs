@@ -3,7 +3,7 @@
 //! This module provides helper functions for showing, hiding, and managing
 //! the popup menu display state.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 // C accessor functions for display state.
 extern "C" {
@@ -43,10 +43,62 @@ extern "C" {
     fn nvim_get_State() -> c_int;
 }
 
-/// UI capability for popup menu.
-const K_UI_POPUPMENU: c_int = 8;
-/// UI capability for wildmenu.
-const K_UI_WILDMENU: c_int = 12;
+// Grid accessor functions for pum_grid fields.
+extern "C" {
+    /// Get pointer to `pum_grid` (`ScreenGrid`*).
+    fn nvim_pum_get_grid_ptr() -> *mut c_void;
+    /// Compose grid (calls `ui_comp_compose_grid`).
+    fn ui_comp_compose_grid(grid: *mut c_void);
+    /// Get `pum_grid.handle`.
+    fn nvim_pum_grid_get_handle() -> c_int;
+    /// Get `pum_grid.pending_comp_index_update`.
+    fn nvim_pum_grid_get_pending_comp_index_update() -> c_int;
+    /// Set `pum_grid.pending_comp_index_update`.
+    fn nvim_pum_grid_set_pending_comp_index_update(val: c_int);
+    /// Get `pum_grid.zindex`.
+    fn nvim_pum_grid_get_zindex() -> c_int;
+    /// Get `pum_grid.comp_index`.
+    fn nvim_pum_grid_get_comp_index() -> c_int;
+    /// Get `pum_grid.comp_row`.
+    fn nvim_pum_grid_get_comp_row() -> c_int;
+    /// Get `pum_grid.comp_col`.
+    fn nvim_pum_grid_get_comp_col() -> c_int;
+    /// Call `ui_call_win_float_pos` with pum parameters.
+    fn nvim_pum_ui_call_win_float_pos(
+        handle: c_int,
+        anchor: *const std::ffi::c_char,
+        anchor_grid: c_int,
+        row: c_int,
+        col: c_int,
+        zindex: c_int,
+        comp_index: c_int,
+        comp_row: c_int,
+        comp_col: c_int,
+    );
+}
+
+// Pum position state accessors (used by ui_flush).
+extern "C" {
+    /// Get the `pum_above` static variable.
+    fn nvim_get_pum_above() -> c_int;
+    /// Get the `pum_height` static variable.
+    fn nvim_get_pum_height() -> c_int;
+    /// Get the `pum_row` static variable.
+    fn nvim_get_pum_row() -> c_int;
+    /// Get the `pum_left_col` static variable.
+    fn nvim_get_pum_left_col() -> c_int;
+    /// Get the `pum_win_row_offset` static variable.
+    fn nvim_get_pum_win_row_offset() -> c_int;
+    /// Get the `pum_win_col_offset` static variable.
+    fn nvim_get_pum_win_col_offset() -> c_int;
+    /// Get the `pum_anchor_grid` static variable.
+    fn nvim_get_pum_anchor_grid() -> c_int;
+}
+
+/// UI capability for popup menu (kUIPopupmenu = 1).
+const K_UI_POPUPMENU: c_int = 1;
+/// UI capability for wildmenu (kUIWildmenu = 3).
+const K_UI_WILDMENU: c_int = 3;
 /// Mode flag for command line.
 const MODE_CMDLINE: c_int = 0x08;
 
@@ -313,7 +365,10 @@ pub const extern "C" fn rs_pum_has_room(height: c_int, size: c_int, border_width
     1
 }
 
-// C _impl functions for Phase 3/5/8 migration.
+/// UI capability for multigrid mode (kUIMultigrid = 6).
+const K_UI_MULTIGRID: c_int = 6;
+
+// C _impl functions for later phase migrations.
 extern "C" {
     /// Display the popup menu (implementation).
     fn nvim_pum_display_impl(
@@ -323,12 +378,8 @@ extern "C" {
         array_changed: c_int,
         cmd_startcol: c_int,
     );
-    /// Recompose the popup menu grid.
-    fn nvim_pum_recompose_impl();
     /// Check and clear the popup menu display.
     fn nvim_pum_check_clear_impl();
-    /// Flush the popup menu UI position.
-    fn nvim_pum_ui_flush_impl();
     /// Set preview text in a buffer.
     fn nvim_pum_preview_set_text_impl(
         buf: *mut BufHandle,
@@ -358,11 +409,16 @@ pub struct WinHandle {
 
 /// Recompose the popup menu grid.
 ///
+/// Calls `ui_comp_compose_grid` on the `pum_grid` to recompose the area
+/// under the popup menu. Needed when options affecting composition change
+/// (e.g. 'pumblend').
+///
 /// # Safety
-/// Calls C `_impl` function.
+/// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_recompose() {
-    nvim_pum_recompose_impl();
+    let grid = nvim_pum_get_grid_ptr();
+    ui_comp_compose_grid(grid);
 }
 
 /// Check and clear the popup menu display if needed.
@@ -376,11 +432,52 @@ pub unsafe extern "C" fn rs_pum_check_clear() {
 
 /// Flush the popup menu UI position in multigrid mode.
 ///
+/// Updates the floating window position for the popup menu grid when
+/// there is a pending compositor index update. Only applies in multigrid
+/// mode when the popup is drawn internally (not external).
+///
 /// # Safety
-/// Calls C `_impl` function.
+/// Calls C accessor functions and UI call wrappers.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_ui_flush() {
-    nvim_pum_ui_flush_impl();
+    let has_multigrid = ui_has(K_UI_MULTIGRID);
+    let is_drawn = nvim_get_pum_is_drawn() != 0;
+    let is_external = nvim_get_pum_external() != 0;
+    let handle = nvim_pum_grid_get_handle();
+    let pending = nvim_pum_grid_get_pending_comp_index_update() != 0;
+
+    if has_multigrid && is_drawn && !is_external && handle != 0 && pending {
+        let pum_above = nvim_get_pum_above() != 0;
+        let pum_height = nvim_get_pum_height();
+        let anchor = if pum_above {
+            c"SW".as_ptr()
+        } else {
+            c"NW".as_ptr()
+        };
+        let row_off = if pum_above { -pum_height } else { 0 };
+        let pum_row = nvim_get_pum_row();
+        let pum_left_col = nvim_get_pum_left_col();
+        let win_row_offset = nvim_get_pum_win_row_offset();
+        let win_col_offset = nvim_get_pum_win_col_offset();
+        let anchor_grid = nvim_get_pum_anchor_grid();
+        let zindex = nvim_pum_grid_get_zindex();
+        let comp_index = nvim_pum_grid_get_comp_index();
+        let comp_row = nvim_pum_grid_get_comp_row();
+        let comp_col = nvim_pum_grid_get_comp_col();
+
+        nvim_pum_ui_call_win_float_pos(
+            handle,
+            anchor,
+            anchor_grid,
+            pum_row - row_off - win_row_offset,
+            pum_left_col - win_col_offset,
+            zindex,
+            comp_index,
+            comp_row,
+            comp_col,
+        );
+        nvim_pum_grid_set_pending_comp_index_update(0);
+    }
 }
 
 /// Set the informational text in the preview buffer.

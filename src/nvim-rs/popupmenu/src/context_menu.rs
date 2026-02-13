@@ -263,10 +263,22 @@ pub struct VimMenuHandle {
     _private: [u8; 0],
 }
 
-// C `_impl` functions for Phase 6 migration.
+// C accessor functions for menu traversal.
 extern "C" {
-    /// Execute the currently selected popup menu item.
-    fn nvim_pum_execute_menu_impl(menu: *mut VimMenuHandle, mode: c_int);
+    /// Get `menu->children` (first child menu item).
+    fn nvim_pum_menu_children(menu: *mut VimMenuHandle) -> *mut VimMenuHandle;
+    /// Get `menu->next` (next sibling menu item).
+    fn nvim_pum_menu_next(menu: *mut VimMenuHandle) -> *mut VimMenuHandle;
+    /// Check if menu item matches mode: `(mp->modes & mp->enabled & mode) != 0`.
+    fn nvim_pum_menu_matches_mode(menu: *mut VimMenuHandle, mode: c_int) -> c_int;
+    /// Execute a menu item (`CLEAR_FIELD(ea); execute_menu(&ea, mp, -1)`).
+    fn nvim_pum_execute_menu_item(menu: *mut VimMenuHandle);
+    /// Get the `pum_selected` static variable.
+    fn nvim_get_pum_selected() -> c_int;
+}
+
+// C `_impl` functions for later phase migrations.
+extern "C" {
     /// Show the terminal popup menu.
     fn nvim_pum_show_popupmenu_impl(menu: *mut VimMenuHandle);
     /// Create a popup from a menu path.
@@ -275,11 +287,27 @@ extern "C" {
 
 /// Execute the currently selected popup menu item.
 ///
+/// Walks the menu's children linked list, counting items that match
+/// the given mode. When the count matches `pum_selected`, executes
+/// that menu item.
+///
 /// # Safety
-/// Calls C `_impl` function. `menu` must be a valid `vimmenu_T` pointer.
+/// Calls C accessor functions. `menu` must be a valid `vimmenu_T` pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_int) {
-    nvim_pum_execute_menu_impl(menu, mode);
+    let pum_selected = nvim_get_pum_selected();
+    let mut idx = 0;
+    let mut mp = nvim_pum_menu_children(menu);
+    while !mp.is_null() {
+        if nvim_pum_menu_matches_mode(mp, mode) != 0 {
+            if idx == pum_selected {
+                nvim_pum_execute_menu_item(mp);
+                return;
+            }
+            idx += 1;
+        }
+        mp = nvim_pum_menu_next(mp);
+    }
 }
 
 /// Open the terminal version of the popup menu.
