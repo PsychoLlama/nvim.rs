@@ -98,6 +98,11 @@ extern vimmenu_T *rs_menu_find(const char *path_name);
 extern int rs_show_menus(char *path_name, int modes);
 extern void rs_show_menus_recursive(vimmenu_T *menu, int modes, int depth);
 
+// Rust implementations for Phase 5
+extern void rs_ex_menu(exarg_T *eap);
+extern void rs_ex_emenu(exarg_T *eap);
+extern void rs_show_popupmenu(void);
+
 /// The character for each menu mode
 static char *menu_mode_chars[] = { "n", "v", "s", "o", "i", "c", "tl", "t" };
 
@@ -121,193 +126,7 @@ static vimmenu_T **get_root_menu(const char *const name)
 /// @param eap Ex command arguments
 void ex_menu(exarg_T *eap)
 {
-  char *map_to;            // command mapped to the menu entry
-  int noremap;
-  bool silent = false;
-  bool unmenu;
-  char *map_buf;
-  char *p;
-  int i;
-  int pri_tab[MENUDEPTH + 1];
-  TriState enable = kNone;        // kTrue for "menu enable",
-                                  // kFalse for "menu disable
-  vimmenu_T menuarg;
-
-  int modes = get_menu_cmd_modes(eap->cmd, eap->forceit, &noremap, &unmenu);
-  char *arg = eap->arg;
-
-  while (true) {
-    if (strncmp(arg, "<script>", 8) == 0) {
-      noremap = REMAP_SCRIPT;
-      arg = skipwhite(arg + 8);
-      continue;
-    }
-    if (strncmp(arg, "<silent>", 8) == 0) {
-      silent = true;
-      arg = skipwhite(arg + 8);
-      continue;
-    }
-    if (strncmp(arg, "<special>", 9) == 0) {
-      // Ignore obsolete "<special>" modifier.
-      arg = skipwhite(arg + 9);
-      continue;
-    }
-    break;
-  }
-
-  // Locate an optional "icon=filename" argument
-  // TODO(nvim): Currently this is only parsed. Should expose it to UIs.
-  if (strncmp(arg, "icon=", 5) == 0) {
-    arg += 5;
-    while (*arg != NUL && *arg != ' ') {
-      if (*arg == '\\') {
-        STRMOVE(arg, arg + 1);
-      }
-      MB_PTR_ADV(arg);
-    }
-    if (*arg != NUL) {
-      *arg++ = NUL;
-      arg = skipwhite(arg);
-    }
-  }
-
-  // Fill in the priority table.
-  for (p = arg; *p; p++) {
-    if (!ascii_isdigit(*p) && *p != '.') {
-      break;
-    }
-  }
-  if (ascii_iswhite(*p)) {
-    for (i = 0; i < MENUDEPTH && !ascii_iswhite(*arg); i++) {
-      pri_tab[i] = getdigits_int(&arg, false, 0);
-      if (pri_tab[i] == 0) {
-        pri_tab[i] = 500;
-      }
-      if (*arg == '.') {
-        arg++;
-      }
-    }
-    arg = skipwhite(arg);
-  } else if (eap->addr_count && eap->line2 != 0) {
-    pri_tab[0] = eap->line2;
-    i = 1;
-  } else {
-    i = 0;
-  }
-  while (i < MENUDEPTH) {
-    pri_tab[i++] = 500;
-  }
-  pri_tab[MENUDEPTH] = -1;              // mark end of the table
-
-  // Check for "disable" or "enable" argument.
-  if (strncmp(arg, "enable", 6) == 0 && ascii_iswhite(arg[6])) {
-    enable = kTrue;
-    arg = skipwhite(arg + 6);
-  } else if (strncmp(arg, "disable", 7) == 0 && ascii_iswhite(arg[7])) {
-    enable = kFalse;
-    arg = skipwhite(arg + 7);
-  }
-
-  // If there is no argument, display all menus.
-  if (*arg == NUL) {
-    show_menus(arg, modes);
-    return;
-  }
-
-  char *menu_path = arg;
-  if (*menu_path == '.') {
-    semsg(_(e_invarg2), menu_path);
-    goto theend;
-  }
-
-  map_to = menu_translate_tab_and_shift(arg);
-
-  // If there is only a menu name, display menus with that name.
-  if (*map_to == NUL && !unmenu && enable == kNone) {
-    show_menus(menu_path, modes);
-    goto theend;
-  } else if (*map_to != NUL && (unmenu || enable != kNone)) {
-    semsg(_(e_trailing_arg), map_to);
-    goto theend;
-  }
-
-  vimmenu_T **root_menu_ptr = get_root_menu(menu_path);
-
-  if (enable != kNone) {
-    // Change sensitivity of the menu.
-    // For the PopUp menu, remove a menu for each mode separately.
-    // Careful: menu_enable_recurse() changes menu_path.
-    if (strcmp(menu_path, "*") == 0) {          // meaning: do all menus
-      menu_path = "";
-    }
-
-    if (menu_is_popup(menu_path)) {
-      for (i = 0; i < MENU_INDEX_TIP; i++) {
-        if (modes & (1 << i)) {
-          p = popup_mode_name(menu_path, i);
-          menu_enable_recurse(*root_menu_ptr, p, MENU_ALL_MODES, enable);
-          xfree(p);
-        }
-      }
-    }
-    menu_enable_recurse(*root_menu_ptr, menu_path, modes, enable);
-  } else if (unmenu) {
-    // Delete menu(s).
-    if (strcmp(menu_path, "*") == 0) {          // meaning: remove all menus
-      menu_path = "";
-    }
-
-    // For the PopUp menu, remove a menu for each mode separately.
-    if (menu_is_popup(menu_path)) {
-      for (i = 0; i < MENU_INDEX_TIP; i++) {
-        if (modes & (1 << i)) {
-          p = popup_mode_name(menu_path, i);
-          remove_menu(root_menu_ptr, p, MENU_ALL_MODES, true);
-          xfree(p);
-        }
-      }
-    }
-
-    // Careful: remove_menu() changes menu_path
-    remove_menu(root_menu_ptr, menu_path, modes, false);
-  } else {
-    // Add menu(s).
-    // Replace special key codes.
-    if (STRICMP(map_to, "<nop>") == 0) {        // "<Nop>" means nothing
-      map_to = "";
-      map_buf = NULL;
-    } else if (modes & MENU_TIP_MODE) {
-      map_buf = NULL;  // Menu tips are plain text.
-    } else {
-      map_buf = NULL;
-      map_to = replace_termcodes(map_to, strlen(map_to), &map_buf, 0,
-                                 REPTERM_DO_LT, NULL, p_cpo);
-    }
-    menuarg.modes = modes;
-    menuarg.noremap[0] = noremap;
-    menuarg.silent[0] = silent;
-    add_menu_path(menu_path, &menuarg, pri_tab, map_to);
-
-    // For the PopUp menu, add a menu for each mode separately.
-    if (menu_is_popup(menu_path)) {
-      for (i = 0; i < MENU_INDEX_TIP; i++) {
-        if (modes & (1 << i)) {
-          p = popup_mode_name(menu_path, i);
-          // Include all modes, to make ":amenu" work
-          menuarg.modes = modes;
-          add_menu_path(p, &menuarg, pri_tab, map_to);
-          xfree(p);
-        }
-      }
-    }
-
-    xfree(map_buf);
-  }
-
-  ui_call_update_menu();
-
-theend:
-  ;
+  rs_ex_menu(eap);
 }
 
 /// Add the menu with the given name to the menu hierarchy
@@ -816,29 +635,7 @@ int get_menu_mode_flag(void)
 /// etc.
 void show_popupmenu(void)
 {
-  int menu_mode = get_menu_mode();
-  if (menu_mode == MENU_INDEX_INVALID) {
-    return;
-  }
-  char *mode = menu_mode_chars[menu_mode];
-  size_t mode_len = strlen(mode);
-
-  apply_autocmds(EVENT_MENUPOPUP, mode, NULL, false, curbuf);
-
-  vimmenu_T *menu;
-
-  for (menu = root_menu; menu != NULL; menu = menu->next) {
-    if (strncmp("PopUp", menu->name, 5) == 0 && strncmp(menu->name + 5, mode, mode_len) == 0) {
-      break;
-    }
-  }
-
-  // Only show a popup when it is defined and has entries
-  if (menu == NULL || menu->children == NULL) {
-    return;
-  }
-
-  pum_show_popupmenu(menu);
+  rs_show_popupmenu();
 }
 
 /// Execute "menu".  Use by ":emenu" and the window toolbar.
@@ -969,39 +766,7 @@ static vimmenu_T *menu_getbyname(char *name_arg)
 /// execute it.
 void ex_emenu(exarg_T *eap)
 {
-  char *arg = eap->arg;
-  int mode_idx = MENU_INDEX_INVALID;
-
-  if (arg[0] && ascii_iswhite(arg[1])) {
-    switch (arg[0]) {
-    case 'n':
-      mode_idx = MENU_INDEX_NORMAL; break;
-    case 'v':
-      mode_idx = MENU_INDEX_VISUAL; break;
-    case 's':
-      mode_idx = MENU_INDEX_SELECT; break;
-    case 'o':
-      mode_idx = MENU_INDEX_OP_PENDING; break;
-    case 't':
-      mode_idx = MENU_INDEX_TERMINAL; break;
-    case 'i':
-      mode_idx = MENU_INDEX_INSERT; break;
-    case 'c':
-      mode_idx = MENU_INDEX_CMDLINE; break;
-    default:
-      semsg(_(e_invarg2), arg);
-      return;
-    }
-    arg = skipwhite(arg + 2);
-  }
-
-  vimmenu_T *menu = menu_getbyname(arg);
-  if (menu == NULL) {
-    return;
-  }
-
-  // Found the menu, so execute.
-  execute_menu(eap, menu, mode_idx);
+  rs_ex_emenu(eap);
 }
 
 /// Given a menu descriptor, e.g. "File.New", find it in the menu hierarchy.
@@ -1541,4 +1306,74 @@ int nvim_menu_get_noremap_0(vimmenu_T *menuarg)
 bool nvim_menu_get_silent_0(vimmenu_T *menuarg)
 {
   return menuarg->silent[0];
+}
+
+// ============================================================================
+// Phase 5: ExArg accessors and wrapper functions
+// ============================================================================
+
+/// Get the cmd field from an exarg_T.
+const char *nvim_menu_eap_get_cmd(exarg_T *eap)
+{
+  return eap->cmd;
+}
+
+/// Get the arg field from an exarg_T.
+char *nvim_menu_eap_get_arg(exarg_T *eap)
+{
+  return eap->arg;
+}
+
+/// Get the forceit field from an exarg_T.
+bool nvim_menu_eap_get_forceit(exarg_T *eap)
+{
+  return eap->forceit;
+}
+
+/// Get the addr_count field from an exarg_T.
+int nvim_menu_eap_get_addr_count(exarg_T *eap)
+{
+  return eap->addr_count;
+}
+
+/// Get the line2 field from an exarg_T.
+int nvim_menu_eap_get_line2(exarg_T *eap)
+{
+  return (int)eap->line2;
+}
+
+/// Get p_cpo for use from Rust.
+const char *nvim_menu_get_p_cpo(void)
+{
+  return p_cpo;
+}
+
+/// Get curbuf for use from Rust.
+void *nvim_menu_get_curbuf(void)
+{
+  return curbuf;
+}
+
+/// Wrapper for apply_autocmds for use from Rust.
+bool nvim_menu_apply_autocmds(int event, const char *pat, void *buf)
+{
+  return apply_autocmds(event, pat, NULL, false, buf);
+}
+
+/// Wrapper for pum_show_popupmenu for use from Rust.
+void nvim_menu_pum_show_popupmenu(vimmenu_T *menu)
+{
+  pum_show_popupmenu(menu);
+}
+
+/// Wrapper to construct a menuarg struct and call add_menu_path from Rust.
+void nvim_menu_call_add_menu_path(const char *menu_path, int modes, int noremap,
+                                  bool silent, const int *pri_tab, const char *call_data)
+{
+  vimmenu_T menuarg;
+  memset(&menuarg, 0, sizeof(menuarg));
+  menuarg.modes = modes;
+  menuarg.noremap[0] = noremap;
+  menuarg.silent[0] = silent;
+  add_menu_path(menu_path, &menuarg, pri_tab, call_data);
 }

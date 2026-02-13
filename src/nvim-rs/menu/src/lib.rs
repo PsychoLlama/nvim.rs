@@ -64,6 +64,7 @@ pub mod completion;
 pub mod create;
 pub mod delete;
 pub mod display;
+pub mod ex_commands;
 pub mod execute;
 pub mod handle;
 pub mod hidden;
@@ -92,6 +93,7 @@ pub use delete::{
     rs_should_delete_menu, rs_should_free_tip,
 };
 pub use display::{rs_show_menus, rs_show_menus_recursive};
+pub use ex_commands::{rs_ex_emenu, rs_ex_menu, rs_show_popupmenu};
 pub use execute::{
     rs_get_menu_mode, rs_get_menu_mode_flag, rs_get_menu_string, rs_menu_has_string_for_mode,
     rs_menu_is_enabled_for_mode, rs_menu_mode_name, rs_mode_flag_to_index, rs_mode_index_to_flag,
