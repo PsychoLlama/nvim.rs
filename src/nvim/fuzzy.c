@@ -69,6 +69,7 @@ _Static_assert(offsetof(fuzmatch_str_T, score) == 16, "fuzmatch_str_T.score offs
 // Rust FFI declarations
 extern bool rs_fuzzy_match(const char *str, const char *pat, bool matchseq,
                            int *outScore, uint32_t *matches, int maxMatches);
+extern int rs_fuzzy_match_str(const char *str, const char *pat);
 extern void rs_fuzmatch_str_free(fuzmatch_str_T *fuzmatch, int count);
 extern void rs_fuzzymatches_to_strmatches(fuzmatch_str_T *fuzmatch, char ***matches,
                                           int count, bool funcsort);
@@ -356,19 +357,11 @@ void f_matchfuzzypos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// Fuzzy match "pat" in "str".
-/// @returns 0 if there is no match. Otherwise, returns the match score.
+/// @returns FUZZY_SCORE_NONE if there is no match. Otherwise, returns the match score.
 int fuzzy_match_str(char *const str, const char *const pat)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (str == NULL || pat == NULL) {
-    return 0;
-  }
-
-  int score = FUZZY_SCORE_NONE;
-  uint32_t matchpos[FUZZY_MATCH_MAX_LEN];
-  fuzzy_match(str, pat, true, &score, matchpos, ARRAY_SIZE(matchpos));
-
-  return score;
+  return rs_fuzzy_match_str(str, pat);
 }
 
 /// Fuzzy match the position of string "pat" in string "str".
