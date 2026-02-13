@@ -346,6 +346,125 @@ extern void rs_f_histadd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void rs_f_histdel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void rs_f_histget(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void rs_f_histnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_ex_history(exarg_T *eap);
+extern char *rs_get_history_arg(expand_T *xp, int idx);
+
+// =============================================================================
+// Phase 5: Ex Command Accessors
+// =============================================================================
+
+_Static_assert(IOSIZE == 1025, "IOSIZE changed - update Rust constant");
+
+void nvim_cmdhist_msg_puts_title(const char *buf)
+{
+  msg_puts_title(buf);
+}
+
+void nvim_cmdhist_msg_putchar(int c)
+{
+  msg_putchar(c);
+}
+
+void nvim_cmdhist_msg_outtrans(const char *buf)
+{
+  msg_outtrans(buf, 0, false);
+}
+
+int nvim_cmdhist_message_filtered(const char *s)
+{
+  return message_filtered(s);
+}
+
+int nvim_cmdhist_get_Columns(void)
+{
+  return Columns;
+}
+
+int nvim_cmdhist_get_got_int(void)
+{
+  return got_int;
+}
+
+int nvim_cmdhist_vim_strsize(const char *s)
+{
+  return vim_strsize(s);
+}
+
+void nvim_cmdhist_trunc_string(const char *s, char *buf, int len, int buflen)
+{
+  trunc_string((char *)s, buf, len, buflen);
+}
+
+void nvim_cmdhist_xstrlcpy(char *dst, const char *src, size_t n)
+{
+  xstrlcpy(dst, src, n);
+}
+
+char *nvim_cmdhist_format_hist_header(const char *name)
+{
+  vim_snprintf(IObuff, IOSIZE, "\n      #  %s history", name);
+  return IObuff;
+}
+
+int nvim_cmdhist_format_hist_entry(int is_current, int hisnum_val)
+{
+  return snprintf(IObuff, IOSIZE, "%c%6d  ", is_current ? '>' : ' ', hisnum_val);
+}
+
+char *nvim_cmdhist_get_IObuff(void)
+{
+  return IObuff;
+}
+
+int nvim_cmdhist_get_IOSIZE(void)
+{
+  return IOSIZE;
+}
+
+int nvim_cmdhist_get_list_range(char **end, int *val1, int *val2)
+{
+  return get_list_range(end, val1, val2);
+}
+
+void nvim_cmdhist_semsg_trailing_arg(const char *s)
+{
+  semsg(_(e_trailing_arg), s);
+}
+
+void nvim_cmdhist_semsg_val_too_large(const char *s)
+{
+  semsg(_(e_val_too_large), s);
+}
+
+void nvim_cmdhist_msg_history_zero(void)
+{
+  msg(_("'history' option is zero"), 0);
+}
+
+char *nvim_cmdhist_eap_get_arg(exarg_T *eap)
+{
+  return eap->arg;
+}
+
+void nvim_cmdhist_xp_buf_set(expand_T *xp, int idx, char c)
+{
+  xp->xp_buf[idx] = c;
+}
+
+char *nvim_cmdhist_xp_buf_ptr(expand_T *xp)
+{
+  return xp->xp_buf;
+}
+
+int nvim_cmdhist_ascii_isdigit(int c)
+{
+  return ascii_isdigit(c);
+}
+
+int nvim_cmdhist_ascii_isalpha(int c)
+{
+  return ASCII_ISALPHA(c);
+}
 
 /// Translate a history character to the associated type number
 HistoryType hist_char2type(const int c)
@@ -354,51 +473,17 @@ HistoryType hist_char2type(const int c)
   return rs_hist_char2type(c);
 }
 
-/// Table of history names.
-/// These names are used in :history and various hist...() functions.
-/// It is sufficient to give the significant prefix of a history name.
-static char *(history_names[]) = {
-  "cmd",
-  "search",
-  "expr",
-  "input",
-  "debug",
-  NULL
-};
-
 /// Function given to ExpandGeneric() to obtain the possible first
 /// arguments of the ":history command.
 char *get_history_arg(expand_T *xp, int idx)
 {
-  const char *short_names = ":=@>?/";
-  const int short_names_count = (int)strlen(short_names);
-  const int history_name_count = ARRAY_SIZE(history_names) - 1;
-
-  if (idx < short_names_count) {
-    xp->xp_buf[0] = short_names[idx];
-    xp->xp_buf[1] = NUL;
-    return xp->xp_buf;
-  }
-  if (idx < short_names_count + history_name_count) {
-    return history_names[idx - short_names_count];
-  }
-  if (idx == short_names_count + history_name_count) {
-    return "all";
-  }
-  return NULL;
+  return rs_get_history_arg(xp, idx);
 }
 
 /// Initialize command line history.
 void init_history(void)
 {
   rs_init_history();
-}
-
-/// Convert history name to its HIST_ equivalent
-static HistoryType get_histtype(const char *const name, const size_t len, const bool return_default)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_get_histtype(name, len, return_default);
 }
 
 /// Add the given string to the given history.
@@ -440,86 +525,7 @@ void f_histnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// :history command - print a history
 void ex_history(exarg_T *eap)
 {
-  int histype1 = HIST_CMD;
-  int histype2 = HIST_CMD;
-  int hisidx1 = 1;
-  int hisidx2 = -1;
-  char *end;
-  char *arg = eap->arg;
-
-  if (hislen == 0) {
-    msg(_("'history' option is zero"), 0);
-    return;
-  }
-
-  if (!(ascii_isdigit(*arg) || *arg == '-' || *arg == ',')) {
-    end = arg;
-    while (ASCII_ISALPHA(*end)
-           || vim_strchr(":=@>/?", (uint8_t)(*end)) != NULL) {
-      end++;
-    }
-    histype1 = get_histtype(arg, (size_t)(end - arg), false);
-    if (histype1 == HIST_INVALID) {
-      if (STRNICMP(arg, "all", end - arg) == 0) {
-        histype1 = 0;
-        histype2 = HIST_COUNT - 1;
-      } else {
-        semsg(_(e_trailing_arg), arg);
-        return;
-      }
-    } else {
-      histype2 = histype1;
-    }
-  } else {
-    end = arg;
-  }
-  if (!get_list_range(&end, &hisidx1, &hisidx2) || *end != NUL) {
-    if (*end != NUL) {
-      semsg(_(e_trailing_arg), end);
-    } else {
-      semsg(_(e_val_too_large), arg);
-    }
-    return;
-  }
-
-  for (; !got_int && histype1 <= histype2; histype1++) {
-    assert(history_names[histype1] != NULL);
-    vim_snprintf(IObuff, IOSIZE, "\n      #  %s history", history_names[histype1]);
-    msg_puts_title(IObuff);
-    int idx = hisidx[histype1];
-    histentry_T *hist = history[histype1];
-    int j = hisidx1;
-    int k = hisidx2;
-    if (j < 0) {
-      j = (-j > hislen) ? 0 : hist[(hislen + j + idx + 1) % hislen].hisnum;
-    }
-    if (k < 0) {
-      k = (-k > hislen) ? 0 : hist[(hislen + k + idx + 1) % hislen].hisnum;
-    }
-    if (idx >= 0 && j <= k) {
-      for (int i = idx + 1; !got_int; i++) {
-        if (i == hislen) {
-          i = 0;
-        }
-        if (hist[i].hisstr != NULL
-            && hist[i].hisnum >= j && hist[i].hisnum <= k
-            && !message_filtered(hist[i].hisstr)) {
-          msg_putchar('\n');
-          int len = snprintf(IObuff, IOSIZE,
-                             "%c%6d  ", i == idx ? '>' : ' ', hist[i].hisnum);
-          if (vim_strsize(hist[i].hisstr) > Columns - 10) {
-            trunc_string(hist[i].hisstr, IObuff + len, Columns - 10, IOSIZE - len);
-          } else {
-            xstrlcpy(IObuff + len, hist[i].hisstr, (size_t)(IOSIZE - len));
-          }
-          msg_outtrans(IObuff, 0, false);
-        }
-        if (i == idx) {
-          break;
-        }
-      }
-    }
-  }
+  rs_ex_history(eap);
 }
 
 /// Iterate over history items

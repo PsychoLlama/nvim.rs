@@ -8,6 +8,7 @@
 
 use std::os::raw::c_int;
 
+pub mod command;
 pub mod delete;
 pub mod ffi;
 pub mod helpers;

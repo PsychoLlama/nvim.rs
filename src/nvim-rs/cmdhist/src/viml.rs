@@ -111,10 +111,7 @@ pub unsafe extern "C" fn rs_f_histget(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
         }
         idx = calc_hist_idx(hist_type, idx);
         if idx < 0 {
-            ffi::nvim_cmdhist_rettv_set_string(
-                rettv,
-                ffi::nvim_cmdhist_xstrnsave(c"".as_ptr(), 0),
-            );
+            ffi::nvim_cmdhist_rettv_set_string(rettv, ffi::nvim_cmdhist_xstrnsave(c"".as_ptr(), 0));
         } else {
             let hist = ffi::get_histentry(hist_type);
             let entry = ffi::nvim_cmdhist_he_at(hist, idx);
