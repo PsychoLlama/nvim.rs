@@ -41,7 +41,7 @@ pub mod statuscol;
     clippy::match_like_matches_macro,
     clippy::redundant_pattern_matching,
     clippy::unnecessary_operation,
-    clippy::comparison_chain,
+    clippy::comparison_chain
 )]
 pub mod stl_build;
 pub mod tabline;
