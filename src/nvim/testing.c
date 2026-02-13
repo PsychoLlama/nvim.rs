@@ -67,6 +67,7 @@ extern void rs_f_assert_beeps(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_nobeep(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_exception(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_inrange(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_equalfile(typval_T *argvars, typval_T *rettv);
 extern void rs_f_test_garbagecollect_now(typval_T *argvars, typval_T *rettv);
 
 // =============================================================================
@@ -168,6 +169,12 @@ void nvim_testing_format_range_float(char *buf, size_t size, double lower, doubl
 const char *nvim_testing_gettext(const char *s)
 {
   return _(s);
+}
+
+/// Format a "Can't read file" error message into buf (for e_notread).
+void nvim_testing_format_notread(char *buf, size_t size, const char *fname)
+{
+  vim_snprintf(buf, size, _(e_notread), fname);
 }
 
 /// Fill the gap with dict diff info (keep complex diffing logic in C for now).
@@ -523,6 +530,8 @@ static int assert_bool(typval_T *argvars, bool is_true)
   return 0;
 }
 
+// NOTE: assert_append_cmd_or_arg logic is also in Rust (viml_assert.rs).
+// This C copy is kept until f_assert_fails is fully migrated to Rust.
 static void assert_append_cmd_or_arg(garray_T *gap, typval_T *argvars, const char *cmd)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -582,101 +591,12 @@ void f_assert_equal(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rs_f_assert_equal(argvars, rettv);
 }
 
-static int assert_equalfile(typval_T *argvars)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char buf1[NUMBUFLEN];
-  char buf2[NUMBUFLEN];
-  const char *const fname1 = tv_get_string_buf_chk(&argvars[0], buf1);
-  const char *const fname2 = tv_get_string_buf_chk(&argvars[1], buf2);
-
-  if (fname1 == NULL || fname2 == NULL) {
-    return 0;
-  }
-
-  IObuff[0] = NUL;
-  FILE *const fd1 = os_fopen(fname1, READBIN);
-  char line1[200];
-  char line2[200];
-  ptrdiff_t lineidx = 0;
-  if (fd1 == NULL) {
-    snprintf(IObuff, IOSIZE, e_notread, fname1);
-  } else {
-    FILE *const fd2 = os_fopen(fname2, READBIN);
-    if (fd2 == NULL) {
-      fclose(fd1);
-      snprintf(IObuff, IOSIZE, e_notread, fname2);
-    } else {
-      int64_t linecount = 1;
-      for (int64_t count = 0;; count++) {
-        const int c1 = fgetc(fd1);
-        const int c2 = fgetc(fd2);
-        if (c1 == EOF) {
-          if (c2 != EOF) {
-            xstrlcpy(IObuff, "first file is shorter", IOSIZE);
-          }
-          break;
-        } else if (c2 == EOF) {
-          xstrlcpy(IObuff, "second file is shorter", IOSIZE);
-          break;
-        } else {
-          line1[lineidx] = (char)c1;
-          line2[lineidx] = (char)c2;
-          lineidx++;
-          if (c1 != c2) {
-            snprintf(IObuff, IOSIZE,
-                     "difference at byte %" PRId64 ", line %" PRId64,
-                     count, linecount);
-            break;
-          }
-        }
-        if (c1 == NL) {
-          linecount++;
-          lineidx = 0;
-        } else if (lineidx + 2 == (ptrdiff_t)sizeof(line1)) {
-          memmove(line1, line1 + 100, (size_t)(lineidx - 100));
-          memmove(line2, line2 + 100, (size_t)(lineidx - 100));
-          lineidx -= 100;
-        }
-      }
-      fclose(fd1);
-      fclose(fd2);
-    }
-  }
-
-  if (IObuff[0] != NUL) {
-    garray_T ga;
-    prepare_assert_error(&ga);
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      char *const tofree = encode_tv2echo(&argvars[2], NULL);
-      ga_concat(&ga, tofree);
-      xfree(tofree);
-      ga_concat(&ga, ": ");
-    }
-    ga_concat(&ga, IObuff);
-    if (lineidx > 0) {
-      line1[lineidx] = NUL;
-      line2[lineidx] = NUL;
-      ga_concat(&ga, " after \"");
-      ga_concat(&ga, line1);
-      if (strcmp(line1, line2) != 0) {
-        ga_concat(&ga, "\" vs \"");
-        ga_concat(&ga, line2);
-      }
-      ga_concat(&ga, "\"");
-    }
-    assert_error(&ga);
-    ga_clear(&ga);
-    return 1;
-  }
-
-  return 0;
-}
+// assert_equalfile: migrated to Rust (viml_assert.rs)
 
 /// "assert_equalfile(fname-one, fname-two[, msg])" function
 void f_assert_equalfile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = assert_equalfile(argvars);
+  rs_f_assert_equalfile(argvars, rettv);
 }
 
 /// "assert_notequal(expected, actual[, msg])" function

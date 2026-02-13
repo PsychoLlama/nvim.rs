@@ -13,7 +13,8 @@
 // Allow dead code for functions that will be used in later migration phases
 #![allow(dead_code)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_void, CStr};
+use std::io::Read;
 
 use nvim_collections::garray::GArray;
 
@@ -906,6 +907,181 @@ fn assert_match_common(argvars: TypevalHandle, atype: AssertType) -> c_int {
 }
 
 // =============================================================================
+// Assert equalfile implementation
+// =============================================================================
+
+extern "C" {
+    fn nvim_testing_format_notread(buf: *mut c_char, size: usize, fname: *const c_char);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+}
+
+/// Compare two files byte-by-byte, returning 0 on match or 1 on mismatch.
+///
+/// On failure, prepares an assert error message with the first difference
+/// including byte offset, line number, and context.
+///
+/// This mirrors the C `assert_equalfile` function, using `std::fs::File`
+/// for file I/O instead of Neovim's `os_fopen`.
+fn assert_equalfile(argvars: TypevalHandle) -> c_int {
+    unsafe {
+        let mut buf1 = [0i8; NUMBUFLEN];
+        let mut buf2 = [0i8; NUMBUFLEN];
+
+        let fname1 = tv_get_string_buf_chk(argvars, buf1.as_mut_ptr());
+        let argvars_1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast::<c_void>();
+        let fname2 = tv_get_string_buf_chk(argvars_1, buf2.as_mut_ptr());
+
+        if fname1.is_null() || fname2.is_null() {
+            return 0;
+        }
+
+        let fname1_str = CStr::from_ptr(fname1);
+        let fname2_str = CStr::from_ptr(fname2);
+
+        // Result buffer: error message (if any)
+        let mut errmsg = [0u8; 1024];
+        let mut line1 = [0u8; 200];
+        let mut line2 = [0u8; 200];
+        let mut lineidx: usize = 0;
+
+        // Try to open both files
+        let f1_path = std::str::from_utf8_unchecked(fname1_str.to_bytes());
+
+        if let Ok(f1_file) = std::fs::File::open(f1_path) {
+            let f2_path = std::str::from_utf8_unchecked(fname2_str.to_bytes());
+
+            if let Ok(f2_file) = std::fs::File::open(f2_path) {
+                let mut f1 = std::io::BufReader::new(f1_file);
+                let mut f2 = std::io::BufReader::new(f2_file);
+                let mut linecount: i64 = 1;
+                let mut count: i64 = 0;
+
+                let mut b1 = [0u8; 1];
+                let mut b2 = [0u8; 1];
+
+                loop {
+                    let r1 = f1.read(&mut b1).unwrap_or(0);
+                    let r2 = f2.read(&mut b2).unwrap_or(0);
+
+                    if r1 == 0 {
+                        // EOF on file 1
+                        if r2 != 0 {
+                            let msg = b"first file is shorter\0";
+                            errmsg[..msg.len()].copy_from_slice(msg);
+                        }
+                        break;
+                    } else if r2 == 0 {
+                        // EOF on file 2
+                        let msg = b"second file is shorter\0";
+                        errmsg[..msg.len()].copy_from_slice(msg);
+                        break;
+                    }
+
+                    let c1 = b1[0];
+                    let c2 = b2[0];
+                    line1[lineidx] = c1;
+                    line2[lineidx] = c2;
+                    lineidx += 1;
+
+                    if c1 != c2 {
+                        // Format "difference at byte N, line M"
+                        let s = format!("difference at byte {count}, line {linecount}\0");
+                        let bytes = s.as_bytes();
+                        let copy_len = bytes.len().min(errmsg.len());
+                        errmsg[..copy_len].copy_from_slice(&bytes[..copy_len]);
+                        break;
+                    }
+
+                    if c1 == b'\n' {
+                        linecount += 1;
+                        lineidx = 0;
+                    } else if lineidx + 2 == line1.len() {
+                        // Shift context buffer
+                        line1.copy_within(100..lineidx, 0);
+                        line2.copy_within(100..lineidx, 0);
+                        lineidx -= 100;
+                    }
+
+                    count += 1;
+                }
+            } else {
+                nvim_testing_format_notread(errmsg.as_mut_ptr().cast(), errmsg.len(), fname2);
+            }
+        } else {
+            nvim_testing_format_notread(errmsg.as_mut_ptr().cast(), errmsg.len(), fname1);
+        }
+
+        // Check if we have an error message
+        if errmsg[0] != 0 {
+            let mut ga = GArray::default();
+            prepare_assert_error(&raw mut ga);
+
+            // Add optional message from argvars[2]
+            let argvars_2 = argvars.cast::<u8>().add(TYPVAL_SIZE * 2).cast::<c_void>();
+            let type_2 = nvim_testing_tv_get_type(argvars_2);
+            if type_2 != VAR_UNKNOWN {
+                let tofree = encode_tv2echo(argvars_2, std::ptr::null_mut());
+                if !tofree.is_null() {
+                    ga_concat(&raw mut ga, tofree);
+                    xfree(tofree.cast());
+                }
+                ga_concat(&raw mut ga, c": ".as_ptr());
+            }
+
+            ga_concat(&raw mut ga, errmsg.as_ptr().cast());
+
+            if lineidx > 0 {
+                line1[lineidx] = 0;
+                line2[lineidx] = 0;
+                ga_concat(&raw mut ga, c" after \"".as_ptr());
+                ga_concat(&raw mut ga, line1.as_ptr().cast());
+                // Compare the context buffers
+                if line1[..lineidx] != line2[..lineidx] {
+                    ga_concat(&raw mut ga, c"\" vs \"".as_ptr());
+                    ga_concat(&raw mut ga, line2.as_ptr().cast());
+                }
+                ga_concat(&raw mut ga, c"\"".as_ptr());
+            }
+
+            assert_error(&raw mut ga);
+            ga_clear(&raw mut ga);
+            return 1;
+        }
+
+        0
+    }
+}
+
+// =============================================================================
+// Assert helper: append command or argument
+// =============================================================================
+
+/// Append the user-provided message (argvars[2]) or the command string to the GArray.
+///
+/// If argvars[1] and argvars[2] are both set, encode argvars[2] as the message.
+/// Otherwise, append the command string.
+///
+/// This mirrors the C `assert_append_cmd_or_arg` function.
+fn assert_append_cmd_or_arg(gap: *mut GArray, argvars: TypevalHandle, cmd: *const c_char) {
+    unsafe {
+        let argvars_1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast::<c_void>();
+        let argvars_2 = argvars.cast::<u8>().add(TYPVAL_SIZE * 2).cast::<c_void>();
+        let type_1 = nvim_testing_tv_get_type(argvars_1);
+        let type_2 = nvim_testing_tv_get_type(argvars_2);
+
+        if type_1 != VAR_UNKNOWN && type_2 != VAR_UNKNOWN {
+            let tofree = encode_tv2echo(argvars_2, std::ptr::null_mut());
+            if !tofree.is_null() {
+                ga_concat(gap, tofree);
+                xfree(tofree.cast());
+            }
+        } else {
+            ga_concat(gap, cmd);
+        }
+    }
+}
+
+// =============================================================================
 // VimL function implementations
 // =============================================================================
 
@@ -929,6 +1105,17 @@ pub unsafe extern "C" fn rs_f_assert_true(argvars: TypevalHandle, rettv: Typeval
 #[no_mangle]
 pub unsafe extern "C" fn rs_f_assert_false(argvars: TypevalHandle, rettv: TypevalHandleMut) {
     set_rettv_number(rettv, i64::from(assert_bool(argvars, false)));
+}
+
+/// `assert_equalfile(fname-one, fname-two[, msg])` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_equalfile(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    set_rettv_number(rettv, i64::from(assert_equalfile(argvars)));
 }
 
 /// `assert_equal(expected, actual[, msg])` function implementation.
