@@ -59,6 +59,7 @@ typedef struct {
   int startpos;
 } fuzzyItem_T;
 
+_Static_assert(sizeof(garray_T) == 24, "garray_T size must match Rust GArray");
 _Static_assert(sizeof(fuzmatch_str_T) == 24, "fuzmatch_str_T size must match Rust FuzmatchStr");
 _Static_assert(offsetof(fuzmatch_str_T, idx) == 0, "fuzmatch_str_T.idx offset");
 _Static_assert(offsetof(fuzmatch_str_T, str) == 8, "fuzmatch_str_T.str offset");
@@ -70,6 +71,7 @@ _Static_assert(offsetof(fuzmatch_str_T, score) == 16, "fuzmatch_str_T.score offs
 extern bool rs_fuzzy_match(const char *str, const char *pat, bool matchseq,
                            int *outScore, uint32_t *matches, int maxMatches);
 extern int rs_fuzzy_match_str(const char *str, const char *pat);
+extern garray_T *rs_fuzzy_match_str_with_pos(const char *str, const char *pat);
 extern void rs_fuzmatch_str_free(fuzmatch_str_T *fuzmatch, int count);
 extern void rs_fuzzymatches_to_strmatches(fuzmatch_str_T *fuzmatch, char ***matches,
                                           int count, bool funcsort);
@@ -368,31 +370,7 @@ int fuzzy_match_str(char *const str, const char *const pat)
 /// @returns a dynamic array of matching positions. If there is no match, returns NULL.
 garray_T *fuzzy_match_str_with_pos(char *const str, const char *const pat)
 {
-  if (str == NULL || pat == NULL) {
-    return NULL;
-  }
-
-  garray_T *match_positions = xmalloc(sizeof(garray_T));
-  ga_init(match_positions, sizeof(uint32_t), 10);
-
-  int score = FUZZY_SCORE_NONE;
-  uint32_t matches[FUZZY_MATCH_MAX_LEN];
-  if (!fuzzy_match(str, pat, false, &score, matches, FUZZY_MATCH_MAX_LEN)
-      || score == FUZZY_SCORE_NONE) {
-    ga_clear(match_positions);
-    xfree(match_positions);
-    return NULL;
-  }
-
-  int j = 0;
-  for (const char *p = pat; *p != NUL; MB_PTR_ADV(p)) {
-    if (!ascii_iswhite(utf_ptr2char(p))) {
-      GA_APPEND(uint32_t, match_positions, matches[j]);
-      j++;
-    }
-  }
-
-  return match_positions;
+  return rs_fuzzy_match_str_with_pos(str, pat);
 }
 
 /// This function splits the line pointed to by `*ptr` into words and performs

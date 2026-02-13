@@ -679,6 +679,25 @@ pub unsafe extern "C" fn rs_fuzzy_match_func_compare(
 extern "C" {
     fn xmalloc(size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
+    fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int);
+    fn ga_clear(gap: *mut GArray);
+    fn ga_grow(gap: *mut GArray, n: c_int);
+    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+}
+
+// =============================================================================
+// GArray - matches C garray_T layout from garray_defs.h
+// =============================================================================
+
+/// Growing array structure - matches C `garray_T` layout exactly.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+pub struct GArray {
+    pub ga_len: c_int,
+    pub ga_maxlen: c_int,
+    pub ga_itemsize: c_int,
+    pub ga_growsize: c_int,
+    pub ga_data: *mut c_void,
 }
 
 // =============================================================================
@@ -766,6 +785,70 @@ pub unsafe extern "C" fn rs_fuzzymatches_to_strmatches(
 
     // Free the fuzmatch array (strings are now owned by out)
     xfree(fuzmatch.cast::<c_void>());
+}
+
+/// Fuzzy match the position of string "pat" in string "str".
+/// Returns a heap-allocated `GArray` of matching positions, or null on no match.
+///
+/// Uses `matchseq=false` (multi-word matching with whitespace splitting).
+///
+/// # Safety
+///
+/// `str_ptr` and `pat_ptr` must be valid null-terminated C strings or null.
+/// Caller is responsible for freeing the returned `GArray` with `ga_clear` + `xfree`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_fuzzy_match_str_with_pos(
+    str_ptr: *const c_char,
+    pat_ptr: *const c_char,
+) -> *mut GArray {
+    if str_ptr.is_null() || pat_ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Allocate and initialize the GArray
+    let match_positions = xmalloc(std::mem::size_of::<GArray>()).cast::<GArray>();
+    ga_init(match_positions, std::mem::size_of::<u32>() as c_int, 10);
+
+    // Try fuzzy match with matchseq=false
+    let mut score: c_int = SCORE_NONE;
+    let mut matches = [0u32; MATCH_MAX_LEN];
+    let matched = rs_fuzzy_match(
+        str_ptr,
+        pat_ptr,
+        false,
+        std::ptr::addr_of_mut!(score),
+        matches.as_mut_ptr(),
+        MATCH_MAX_LEN as c_int,
+    );
+
+    if !matched || score == SCORE_NONE {
+        ga_clear(match_positions);
+        xfree(match_positions.cast::<c_void>());
+        return std::ptr::null_mut();
+    }
+
+    // Walk the pattern, skipping whitespace, appending positions
+    let mut j: usize = 0;
+    let mut p = pat_ptr;
+    while *p != 0 {
+        // Check if current char is NOT ascii whitespace
+        let byte = *p as u8;
+        let is_white = byte == b' ' || byte == b'\t' || byte == b'\n' || byte == b'\r';
+        if !is_white {
+            // Append match position to GArray
+            ga_grow(match_positions, 1);
+            let ga = &mut *match_positions;
+            let data = ga.ga_data.cast::<u32>();
+            *data.add(ga.ga_len as usize) = matches[j];
+            ga.ga_len += 1;
+            j += 1;
+        }
+        // Advance by one UTF-8 character (MB_PTR_ADV equivalent)
+        let char_len = rs_utfc_ptr2len(p);
+        p = p.add(if char_len > 0 { char_len as usize } else { 1 });
+    }
+
+    match_positions
 }
 
 // =============================================================================
