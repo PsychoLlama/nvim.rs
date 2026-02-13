@@ -47,6 +47,27 @@ pub mod stl_build;
 pub mod tabline;
 pub mod ui;
 pub mod ui_ext;
+#[allow(
+    dead_code,
+    unused_variables,
+    unused_assignments,
+    clippy::manual_c_str_literals,
+    clippy::missing_const_for_thread_local,
+    clippy::ptr_as_ptr,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::needless_borrows_for_generic_args,
+    clippy::if_not_else,
+    clippy::comparison_chain,
+    clippy::redundant_closure_for_method_calls,
+    clippy::borrow_as_ptr,
+    clippy::ptr_cast_constness
+)]
+pub mod win_redr;
 pub mod winbar;
 
 pub use builder::{BuilderItem, ItemType, StatuslineBuilder};
@@ -2426,23 +2447,12 @@ pub unsafe extern "C" fn rs_draw_tabline() {
 // Phase 5: Custom Rendering Orchestrator (win_redr_custom)
 // =============================================================================
 
-// Phase 5 C accessors
-extern "C" {
-    fn nvim_stl_win_redr_custom_impl(
-        wp: WinHandle,
-        draw_winbar: bool,
-        draw_ruler: bool,
-        ui_event: bool,
-    );
-}
-
 /// FFI export: Redraw the status line, window bar, ruler or tabline using
 /// a custom format string.
 ///
 /// This is the Rust replacement for `win_redr_custom()` in statusline.c.
-/// Delegates to the C implementation which handles the complex setup logic
-/// (mode determination, grid selection, format string parsing, highlight
-/// record iteration, click definition filling).
+/// Handles mode determination, grid selection, format string parsing,
+/// highlight record iteration, and click definition filling.
 ///
 /// # Safety
 /// - `wp` may be null (for tabline rendering).
@@ -2454,7 +2464,7 @@ pub unsafe extern "C" fn rs_win_redr_custom(
     draw_ruler: bool,
     ui_event: bool,
 ) {
-    nvim_stl_win_redr_custom_impl(wp, draw_winbar, draw_ruler, ui_event);
+    win_redr::win_redr_custom(wp, draw_winbar, draw_ruler, ui_event);
 }
 
 // =============================================================================

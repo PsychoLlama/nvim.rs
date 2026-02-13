@@ -381,7 +381,7 @@ void nvim_stl_get_trans_bufname(buf_T *buf)
 /// Call win_redr_custom(wp, false, false, false) for redraw_custom_statusline.
 void nvim_stl_win_redr_custom(win_T *wp)
 {
-  nvim_stl_win_redr_custom_impl(wp, false, false, false);
+  rs_win_redr_custom(wp, false, false, false);
 }
 
 /// Set v:lnum variable.
@@ -894,13 +894,18 @@ _Static_assert(NL == 10, "NL");
 _Static_assert(CAR == 13, "CAR");
 _Static_assert(HLF_CLF == 17, "HLF_CLF");
 _Static_assert(HLF_FC == 29, "HLF_FC");
+_Static_assert(HLF_TPF == 54, "HLF_TPF");
+_Static_assert(HLF_WBR == 65, "HLF_WBR");
+_Static_assert(HLF_WBRNC == 66, "HLF_WBRNC");
+_Static_assert(HLF_MSG == 63, "HLF_MSG");
+_Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL");
 
 // Phase 2 accessors for Rust FFI
 
 /// Call win_redr_custom(wp, true, false, false) for winbar rendering.
 void nvim_stl_win_redr_custom_winbar(win_T *wp)
 {
-  nvim_stl_win_redr_custom_impl(wp, true, false, false);
+  rs_win_redr_custom(wp, true, false, false);
 }
 
 /// Check if wildmenu is showing and UI does not have kUIWildmenu.
@@ -970,7 +975,7 @@ void nvim_stl_redraw_ruler_impl(void)
 
   bool part_of_status = wp->w_status_height || is_stl_global;
   if (*p_ruf && (p_ch > 0 || (ui_has(kUIMessages) && !part_of_status))) {
-    nvim_stl_win_redr_custom_impl(wp, false, true, ui_has(kUIMessages));
+    rs_win_redr_custom(wp, false, true, ui_has(kUIMessages));
     return;
   }
 
@@ -1124,7 +1129,7 @@ void nvim_stl_draw_tabline_impl(void)
 
   // Use the 'tabline' option if it's set.
   if (*p_tal != NUL) {
-    nvim_stl_win_redr_custom_impl(NULL, false, false, false);
+    rs_win_redr_custom(NULL, false, false, false);
   } else {
     int tabcount = 0;
     int col = 0;
@@ -1267,205 +1272,188 @@ void nvim_stl_draw_tabline_impl(void)
   redraw_tabline = false;
 }
 
-// Phase 5 accessor for Rust FFI
+// Phase 5 accessors for Rust FFI (win_redr_custom)
 
-/// win_redr_custom implementation (called from Rust rs_win_redr_custom).
-/// Contains the full custom statusline/winbar/ruler/tabline rendering logic.
-void nvim_stl_win_redr_custom_impl(win_T *wp, bool draw_winbar, bool draw_ruler, bool ui_event)
+/// Get window floating flag.
+int nvim_stl_win_get_floating(win_T *wp) { return wp->w_floating; }
+
+/// Get window status height.
+int nvim_stl_win_get_status_height(win_T *wp) { return wp->w_status_height; }
+
+/// Get window row offset.
+int nvim_stl_win_get_winrow_off(win_T *wp) { return wp->w_winrow_off; }
+
+/// Get window column offset.
+int nvim_stl_win_get_wincol_off(win_T *wp) { return wp->w_wincol_off; }
+
+/// Get window view height.
+int nvim_stl_win_get_view_height(win_T *wp) { return wp->w_view_height; }
+
+/// Get window view width.
+int nvim_stl_win_get_view_width(win_T *wp) { return wp->w_view_width; }
+
+/// Get W_ENDROW(wp) (last row of window).
+int nvim_stl_W_ENDROW(win_T *wp) { return W_ENDROW(wp); }
+
+/// Get window wincol.
+int nvim_stl_win_get_wincol(win_T *wp) { return wp->w_wincol; }
+
+/// Get window winbar fill character (w_p_fcs_chars.wbr).
+schar_T nvim_stl_win_get_fcs_wbr(win_T *wp) { return wp->w_p_fcs_chars.wbr; }
+
+/// Get global Columns.
+int nvim_stl_get_Columns(void) { return Columns; }
+
+/// Get global Rows.
+int nvim_stl_get_Rows(void) { return Rows; }
+
+/// Get global p_ch (cmdheight).
+int64_t nvim_stl_get_p_ch(void) { return p_ch; }
+
+/// Get global ru_col.
+int nvim_stl_get_ru_col(void) { return ru_col; }
+
+/// Get global p_tal (tabline option).
+char *nvim_stl_get_p_tal(void) { return p_tal; }
+
+/// Get global p_ruf (ruler format option).
+char *nvim_stl_get_p_ruf(void) { return p_ruf; }
+
+/// Get wp->w_p_wbr (window-local winbar option).
+char *nvim_stl_win_get_p_wbr(win_T *wp) { return wp->w_p_wbr; }
+
+/// Call fillchar_status (returns fill character and sets HLF group).
+schar_T nvim_stl_fillchar_status(int *group, win_T *wp) { return fillchar_status((hlf_T *)group, wp); }
+
+/// Call schar_from_ascii.
+schar_T nvim_stl_schar_from_ascii_char(char c) { return schar_from_ascii(c); }
+
+/// Call grid_adjust for a window's grid_alloc. Returns the grid handle.
+/// Updates row and col through pointers.
+void *nvim_stl_grid_adjust_win(win_T *wp, int *row, int *col)
 {
-  static bool entered = false;
-  int col = 0;
-  int attr, row, maxwidth;
-  hlf_T group;
-  schar_T fillchar;
-  char buf[MAXPATHL];
-  char transbuf[MAXPATHL];
-  char *stl;
-  OptIndex opt_idx = kOptInvalid;
-  int opt_scope = 0;
-  stl_hlrec_t *hltab;
-  StlClickRecord *tabtab;
-  bool is_stl_global = global_stl_height() > 0;
-
-  ScreenGrid *grid = wp && wp->w_floating && !is_stl_global ? &wp->w_grid_alloc : &default_grid;
-
-  // There is a tiny chance that this gets called recursively: When
-  // redrawing a status line triggers redrawing the ruler or tabline.
-  // Avoid trouble by not allowing recursion.
-  if (entered) {
-    return;
-  }
-  entered = true;
-
-  // setup environment for the task at hand
-  if (wp == NULL) {
-    // Use 'tabline'.  Always at the first line of the screen.
-    stl = p_tal;
-    row = 0;
-    fillchar = schar_from_ascii(' ');
-    group = HLF_TPF;
-    attr = HL_ATTR(group);
-    maxwidth = Columns;
-    opt_idx = kOptTabline;
-  } else if (draw_winbar) {
-    opt_idx = kOptWinbar;
-    stl = ((*wp->w_p_wbr != NUL) ? wp->w_p_wbr : p_wbr);
-    opt_scope = ((*wp->w_p_wbr != NUL) ? OPT_LOCAL : 0);
-    row = -1;  // row zero is first row of text
-    col = 0;
-    grid = grid_adjust(&wp->w_grid, &row, &col);
-
-    if (row < 0) {
-      goto theend;
-    }
-
-    fillchar = wp->w_p_fcs_chars.wbr;
-    group = (wp == curwin) ? HLF_WBR : HLF_WBRNC;
-    attr = win_hl_attr(wp, (int)group);
-    maxwidth = wp->w_view_width;
-    stl_clear_click_defs(wp->w_winbar_click_defs, wp->w_winbar_click_defs_size);
-    wp->w_winbar_click_defs = stl_alloc_click_defs(wp->w_winbar_click_defs, maxwidth,
-                                                   &wp->w_winbar_click_defs_size);
-  } else {
-    const bool in_status_line = wp->w_status_height != 0 || is_stl_global;
-    if (wp->w_floating && !is_stl_global && !draw_ruler) {
-      row = wp->w_winrow_off + wp->w_view_height;
-      col = wp->w_wincol_off;
-      maxwidth = wp->w_view_width;
-    } else {
-      row = is_stl_global ? (Rows - (int)p_ch - 1) : W_ENDROW(wp);
-      maxwidth = in_status_line && !is_stl_global ? wp->w_width : Columns;
-    }
-    fillchar = fillchar_status(&group, wp);
-    stl_clear_click_defs(wp->w_status_click_defs, wp->w_status_click_defs_size);
-    wp->w_status_click_defs = stl_alloc_click_defs(wp->w_status_click_defs, maxwidth,
-                                                   &wp->w_status_click_defs_size);
-
-    if (draw_ruler) {
-      stl = p_ruf;
-      opt_idx = kOptRulerformat;
-      // advance past any leading group spec - implicit in ru_col
-      if (*stl == '%') {
-        if (*++stl == '-') {
-          stl++;
-        }
-        if (atoi(stl)) {
-          while (ascii_isdigit(*stl)) {
-            stl++;
-          }
-        }
-        if (*stl++ != '(') {
-          stl = p_ruf;
-        }
-      }
-      col = MAX(ru_col - (Columns - maxwidth), (maxwidth + 1) / 2);
-      maxwidth -= col;
-      if (!in_status_line) {
-        row = Rows - 1;
-        grid = grid_adjust(&msg_grid_adj, &row, &col);
-        maxwidth--;  // writing in last column may cause scrolling
-        fillchar = schar_from_ascii(' ');
-        group = HLF_MSG;
-      }
-    } else {
-      opt_idx = kOptStatusline;
-      stl = ((*wp->w_p_stl != NUL) ? wp->w_p_stl : p_stl);
-      opt_scope = ((*wp->w_p_stl != NUL) ? OPT_LOCAL : 0);
-    }
-
-    attr = win_hl_attr(wp, (int)group);
-    if (!wp->w_floating && in_status_line && !is_stl_global) {
-      col += wp->w_wincol;
-    }
-  }
-
-  if (maxwidth <= 0) {
-    goto theend;
-  }
-
-  // Temporarily reset 'cursorbind', we don't want a side effect from moving
-  // the cursor away and back.
-  win_T *ewp = wp == NULL ? curwin : wp;
-  int p_crb_save = ewp->w_p_crb;
-  ewp->w_p_crb = false;
-
-  // Make a copy, because the statusline may include a function call that
-  // might change the option value and free the memory.
-  stl = xstrdup(stl);
-  rs_build_stl_str_hl_wrap(ewp, buf, sizeof(buf), stl, (int)opt_idx, opt_scope,
-                           fillchar, maxwidth, &hltab, NULL, &tabtab, NULL);
-
-  xfree(stl);
-  ewp->w_p_crb = p_crb_save;
-
-  int len = (int)strlen(buf);
-  int start_col = col;
-
-  if (!ui_event) {
-    // Draw each snippet with the specified highlighting.
-    screengrid_line_start(grid, row, 0);
-  }
-
-  char *p = buf;
-  int curattr = attr;
-  int curgroup = (int)group;
-  Array content = ARRAY_DICT_INIT;
-  for (stl_hlrec_t *sp = hltab;; sp++) {
-    int textlen = (int)(sp->start ? sp->start - p : buf + len - p);
-    // Make all characters printable. Use an empty string instead of p, if p is beyond buf + len.
-    size_t tsize = transstr_buf(p >= buf + len ? "" : p, textlen, transbuf, sizeof transbuf, true);
-    if (!ui_event) {
-      col += grid_line_puts(col, transbuf, (int)tsize, curattr);
-    } else {
-      Array chunk = ARRAY_DICT_INIT;
-      ADD(chunk, INTEGER_OBJ(curattr));
-      ADD(chunk, STRING_OBJ(cbuf_as_string(xmemdupz(transbuf, tsize), tsize)));
-      ADD(chunk, INTEGER_OBJ(curgroup));
-      ADD(content, ARRAY_OBJ(chunk));
-    }
-    p = sp->start;
-
-    if (p == NULL) {
-      break;
-    } else if (sp->userhl == 0) {
-      curattr = attr;
-      curgroup = (int)group;
-    } else if (sp->userhl < 0) {
-      curattr = syn_id2attr(-sp->userhl);
-      curgroup = -sp->userhl;
-    } else {
-      int *userhl = (wp != NULL && wp != curwin && wp->w_status_height != 0)
-                    ? highlight_stlnc : highlight_user;
-      char userbuf[5] = "User";
-      userbuf[4] = (char)sp->userhl + '0';
-      curattr = userhl[sp->userhl - 1];
-      curgroup = syn_name2id_len(userbuf, 5);
-    }
-    if (curattr != attr) {
-      curattr = hl_combine_attr(attr, curattr);
-    }
-  }
-
-  if (ui_event) {
-    ui_call_msg_ruler(content);
-    api_free_array(content);
-    goto theend;
-  }
-
-  int maxcol = start_col + maxwidth;
-
-  // fill up with "fillchar"
-  grid_line_fill(col, maxcol, fillchar, curattr);
-  grid_line_flush();
-
-  // Fill the tab_page_click_defs, w_status_click_defs or w_winbar_click_defs array for clicking
-  // in the tab page line, status line or window bar
-  StlClickDefinition *click_defs = (wp == NULL) ? tab_page_click_defs
-                                                : draw_winbar ? wp->w_winbar_click_defs
-                                                              : wp->w_status_click_defs;
-
-  stl_fill_click_defs(click_defs, tabtab, buf, maxwidth, wp == NULL);
-
-theend:
-  entered = false;
+  ScreenGrid *grid = grid_adjust(&wp->w_grid, row, col);
+  return grid;
 }
+
+/// Call grid_adjust for msg_grid_adj. Returns the grid handle.
+void *nvim_stl_grid_adjust_msg(int *row, int *col)
+{
+  ScreenGrid *grid = grid_adjust(&msg_grid_adj, row, col);
+  return grid;
+}
+
+/// Get pointer to default_grid.
+void *nvim_stl_get_default_grid(void) { return &default_grid; }
+
+/// Get pointer to w_grid_alloc.
+void *nvim_stl_win_get_grid_alloc(win_T *wp) { return &wp->w_grid_alloc; }
+
+/// Call screengrid_line_start.
+void nvim_stl_screengrid_line_start(void *grid, int row, int col)
+{
+  screengrid_line_start((ScreenGrid *)grid, row, col);
+}
+
+/// Call grid_line_puts. Returns number of columns written.
+int nvim_stl_grid_line_puts(int col, const char *text, int textlen, int attr)
+{
+  return grid_line_puts(col, text, textlen, attr);
+}
+
+/// Call grid_line_fill.
+void nvim_stl_grid_line_fill(int start, int end, schar_T fillchar, int attr)
+{
+  grid_line_fill(start, end, fillchar, attr);
+}
+
+/// Call grid_line_flush.
+void nvim_stl_grid_line_flush(void)
+{
+  grid_line_flush();
+}
+
+/// Call win_hl_attr.
+int nvim_stl_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
+
+/// Call hl_combine_attr.
+int nvim_stl_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
+
+/// Call syn_id2attr.
+int nvim_stl_syn_id2attr(int id) { return syn_id2attr(id); }
+
+/// Get HL_ATTR value.
+int nvim_stl_HL_ATTR(int hlf) { return HL_ATTR((hlf_T)hlf); }
+
+/// Get highlight_user array element.
+int nvim_stl_highlight_user_arr(int index) { return highlight_user[index]; }
+
+/// Get highlight_stlnc array element.
+int nvim_stl_highlight_stlnc_arr(int index) { return highlight_stlnc[index]; }
+
+/// Call transstr_buf. Returns number of bytes written.
+size_t nvim_stl_transstr_buf(const char *s, int len, char *buf, size_t buflen)
+{
+  return transstr_buf(s, len, buf, buflen, true);
+}
+
+/// Call xstrdup.
+char *nvim_stl_xstrdup(const char *s) { return xstrdup(s); }
+
+/// Build a UI msg_ruler content chunk and call ui_call_msg_ruler.
+/// Takes arrays of (attr, text, tsize, group) tuples.
+void nvim_stl_ui_call_msg_ruler_content(int *attrs, const char **texts, size_t *tsizes,
+                                        int *groups, int count)
+{
+  Array content = ARRAY_DICT_INIT;
+  for (int i = 0; i < count; i++) {
+    Array chunk = ARRAY_DICT_INIT;
+    ADD(chunk, INTEGER_OBJ(attrs[i]));
+    ADD(chunk, STRING_OBJ(cbuf_as_string(xmemdupz(texts[i], tsizes[i]), tsizes[i])));
+    ADD(chunk, INTEGER_OBJ(groups[i]));
+    ADD(content, ARRAY_OBJ(chunk));
+  }
+  ui_call_msg_ruler(content);
+  api_free_array(content);
+}
+
+/// Get win_T *curwin.
+win_T *nvim_stl_get_curwin(void) { return curwin; }
+
+/// Call stl_clear_click_defs (wrapper).
+void nvim_stl_clear_click_defs_wrap(void *defs, size_t size)
+{
+  stl_clear_click_defs((StlClickDefinition *)defs, size);
+}
+
+/// Call stl_alloc_click_defs. Returns new pointer, updates size.
+void *nvim_stl_alloc_click_defs_wrap(void *cdp, int width, size_t *size)
+{
+  return stl_alloc_click_defs((StlClickDefinition *)cdp, width, size);
+}
+
+/// Call stl_fill_click_defs.
+void nvim_stl_fill_click_defs_wrap(void *defs, void *recs, const char *buf, int width, bool tabline)
+{
+  stl_fill_click_defs((StlClickDefinition *)defs, (StlClickRecord *)recs, buf, width, tabline);
+}
+
+/// Get tab_page_click_defs pointer.
+void *nvim_stl_get_tab_page_click_defs(void) { return tab_page_click_defs; }
+
+/// Get wp->w_status_click_defs.
+void *nvim_stl_win_get_status_click_defs(win_T *wp) { return wp->w_status_click_defs; }
+size_t nvim_stl_win_get_status_click_defs_size(win_T *wp) { return wp->w_status_click_defs_size; }
+void nvim_stl_win_set_status_click_defs(win_T *wp, void *defs) { wp->w_status_click_defs = defs; }
+void nvim_stl_win_set_status_click_defs_size(win_T *wp, size_t size) { wp->w_status_click_defs_size = size; }
+
+/// Get wp->w_winbar_click_defs.
+void *nvim_stl_win_get_winbar_click_defs(win_T *wp) { return wp->w_winbar_click_defs; }
+size_t nvim_stl_win_get_winbar_click_defs_size(win_T *wp) { return wp->w_winbar_click_defs_size; }
+void nvim_stl_win_set_winbar_click_defs(win_T *wp, void *defs) { wp->w_winbar_click_defs = defs; }
+void nvim_stl_win_set_winbar_click_defs_size(win_T *wp, size_t size) { wp->w_winbar_click_defs_size = size; }
+
+/// Get/set win_T->w_p_crb.
+int nvim_stl_win_get_p_crb(win_T *wp) { return wp->w_p_crb; }
+void nvim_stl_win_set_p_crb(win_T *wp, int val) { wp->w_p_crb = val; }
+
