@@ -615,7 +615,8 @@ pub unsafe extern "C" fn rs_cursor_at_last_line(win: WinHandle, lnum: i32) -> bo
 /// Requires valid global state (curwin, curbuf).
 #[no_mangle]
 pub unsafe extern "C" fn rs_gchar_cursor() -> c_int {
-    nvim_gchar_cursor()
+    let pos_ptr = nvim_cursor_get_pos_ptr();
+    nvim_mbyte::rs_utf_ptr2char(pos_ptr)
 }
 
 // =============================================================================

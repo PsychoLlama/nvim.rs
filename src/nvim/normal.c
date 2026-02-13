@@ -1011,10 +1011,10 @@ bool nvim_virtual_active(void)
   return virtual_active(curwin);
 }
 
-/// Get char under cursor (gchar_cursor).
+/// Get char under cursor (self-contained, does not call gchar_cursor to avoid circular FFI).
 int nvim_gchar_cursor(void)
 {
-  return gchar_cursor();
+  return utf_ptr2char(get_cursor_pos_ptr());
 }
 
 /// Call nv_pipe for <Home> command implementation.
