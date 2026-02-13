@@ -204,6 +204,47 @@ size_t nvim_cmdhist_sizeof_histentry(void)
   return sizeof(histentry_T);
 }
 
+// =============================================================================
+// Phase 2: History Modification Accessors
+// =============================================================================
+
+int64_t nvim_cmdhist_get_p_hi(void)
+{
+  return p_hi;
+}
+
+int nvim_cmdhist_get_maptick(void)
+{
+  return maptick;
+}
+
+uint64_t nvim_cmdhist_os_time(void)
+{
+  return os_time();
+}
+
+int nvim_cmdhist_get_cmdmod_cmod_flags(void)
+{
+  return (int)cmdmod.cmod_flags;
+}
+
+void nvim_cmdhist_set_hislen(int val)
+{
+  hislen = val;
+}
+
+int nvim_cmdhist_strcmp(const char *s1, const char *s2)
+{
+  return strcmp(s1, s2);
+}
+
+extern void rs_init_history(void);
+extern void rs_add_to_history(int histype, const char *new_entry, size_t new_entrylen, int in_map,
+                              int sep);
+extern int rs_clr_history(int histype);
+extern int nvim_cmdhist_get_last_maptick(void);
+extern void nvim_cmdhist_set_last_maptick(int val);
+
 /// Translate a history character to the associated type number
 HistoryType hist_char2type(const int c)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
@@ -246,67 +287,12 @@ char *get_history_arg(expand_T *xp, int idx)
 }
 
 /// Initialize command line history.
-/// Also used to re-allocate history tables when size changes.
 void init_history(void)
 {
-  assert(p_hi >= 0 && p_hi <= INT_MAX);
-  int newlen = (int)p_hi;
-  int oldlen = hislen;
-
-  if (newlen == oldlen) {  // history length didn't change
-    return;
-  }
-
-  // If history tables size changed, reallocate them.
-  // Tables are circular arrays (current position marked by hisidx[type]).
-  // On copying them to the new arrays, we take the chance to reorder them.
-  for (int type = 0; type < HIST_COUNT; type++) {
-    histentry_T *temp = (newlen > 0
-                         ? xmalloc((size_t)newlen * sizeof(*temp))
-                         : NULL);
-
-    int j = hisidx[type];
-    if (j >= 0) {
-      // old array gets partitioned this way:
-      // [0       , i1     ) --> newest entries to be deleted
-      // [i1      , i1 + l1) --> newest entries to be copied
-      // [i1 + l1 , i2     ) --> oldest entries to be deleted
-      // [i2      , i2 + l2) --> oldest entries to be copied
-      int l1 = MIN(j + 1, newlen);             // how many newest to copy
-      int l2 = MIN(newlen, oldlen) - l1;       // how many oldest to copy
-      int i1 = j + 1 - l1;                     // copy newest from here
-      int i2 = MAX(l1, oldlen - newlen + l1);  // copy oldest from here
-
-      // copy as much entries as they fit to new table, reordering them
-      if (newlen) {
-        // copy oldest entries
-        memcpy(&temp[0], &history[type][i2], (size_t)l2 * sizeof(*temp));
-        // copy newest entries
-        memcpy(&temp[l2], &history[type][i1], (size_t)l1 * sizeof(*temp));
-      }
-
-      // delete entries that don't fit in newlen, if any
-      for (int i = 0; i < i1; i++) {
-        hist_free_entry(history[type] + i);
-      }
-      for (int i = i1 + l1; i < i2; i++) {
-        hist_free_entry(history[type] + i);
-      }
-    }
-
-    // clear remaining space, if any
-    int l3 = j < 0 ? 0 : MIN(newlen, oldlen);  // number of copied entries
-    if (newlen > 0) {
-      memset(temp + l3, 0, (size_t)(newlen - l3) * sizeof(*temp));
-    }
-
-    hisidx[type] = l3 - 1;
-    xfree(history[type]);
-    history[type] = temp;
-  }
-  hislen = newlen;
+  rs_init_history();
 }
 
+/// Free a history entry (kept as C stub for del_history_entry/del_history_idx).
 static inline void hist_free_entry(histentry_T *hisptr)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -321,62 +307,6 @@ static inline void clear_hist_entry(histentry_T *hisptr)
   CLEAR_POINTER(hisptr);
 }
 
-/// Check if command line 'str' is already in history.
-/// If 'move_to_front' is true, matching entry is moved to end of history.
-///
-/// @param move_to_front  Move the entry to the front if it exists
-static int in_history(int type, const char *str, int move_to_front, int sep)
-{
-  int last_i = -1;
-
-  if (hisidx[type] < 0) {
-    return false;
-  }
-  int i = hisidx[type];
-  do {
-    if (history[type][i].hisstr == NULL) {
-      return false;
-    }
-
-    // For search history, check that the separator character matches as
-    // well.
-    char *p = history[type][i].hisstr;
-    if (strcmp(str, p) == 0
-        && (type != HIST_SEARCH || sep == p[history[type][i].hisstrlen + 1])) {
-      if (!move_to_front) {
-        return true;
-      }
-      last_i = i;
-      break;
-    }
-    if (--i < 0) {
-      i = hislen - 1;
-    }
-  } while (i != hisidx[type]);
-
-  if (last_i < 0) {
-    return false;
-  }
-
-  AdditionalData *ad = history[type][i].additional_data;
-  char *const save_hisstr = history[type][i].hisstr;
-  const size_t save_hisstrlen = history[type][i].hisstrlen;
-  while (i != hisidx[type]) {
-    if (++i >= hislen) {
-      i = 0;
-    }
-    history[type][last_i] = history[type][i];
-    last_i = i;
-  }
-  xfree(ad);
-  history[type][i].hisnum = ++hisnum[type];
-  history[type][i].hisstr = save_hisstr;
-  history[type][i].hisstrlen = save_hisstrlen;
-  history[type][i].timestamp = os_time();
-  history[type][i].additional_data = NULL;
-  return true;
-}
-
 /// Convert history name to its HIST_ equivalent
 static HistoryType get_histtype(const char *const name, const size_t len, const bool return_default)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
@@ -384,64 +314,10 @@ static HistoryType get_histtype(const char *const name, const size_t len, const 
   return rs_get_histtype(name, len, return_default);
 }
 
-static int last_maptick = -1;           // last seen maptick
-
-/// Add the given string to the given history.  If the string is already in the
-/// history then it is moved to the front.
-///
-/// @param histype  may be one of the HIST_ values.
-/// @param in_map   consider maptick when inside a mapping
-/// @param sep      separator character used (search hist)
+/// Add the given string to the given history.
 void add_to_history(int histype, const char *new_entry, size_t new_entrylen, bool in_map, int sep)
 {
-  histentry_T *hisptr;
-
-  if (hislen == 0 || histype == HIST_INVALID) {  // no history
-    return;
-  }
-  assert(histype != HIST_DEFAULT);
-
-  if ((cmdmod.cmod_flags & CMOD_KEEPPATTERNS) && histype == HIST_SEARCH) {
-    return;
-  }
-
-  // Searches inside the same mapping overwrite each other, so that only
-  // the last line is kept.  Be careful not to remove a line that was moved
-  // down, only lines that were added.
-  if (histype == HIST_SEARCH && in_map) {
-    if (maptick == last_maptick && hisidx[HIST_SEARCH] >= 0) {
-      // Current line is from the same mapping, remove it
-      hisptr = &history[HIST_SEARCH][hisidx[HIST_SEARCH]];
-      hist_free_entry(hisptr);
-      hisnum[histype]--;
-      if (--hisidx[HIST_SEARCH] < 0) {
-        hisidx[HIST_SEARCH] = hislen - 1;
-      }
-    }
-    last_maptick = -1;
-  }
-
-  if (in_history(histype, new_entry, true, sep)) {
-    return;
-  }
-
-  if (++hisidx[histype] == hislen) {
-    hisidx[histype] = 0;
-  }
-  hisptr = &history[histype][hisidx[histype]];
-  hist_free_entry(hisptr);
-
-  // Store the separator after the NUL of the string.
-  hisptr->hisstr = xstrnsave(new_entry, new_entrylen + 2);
-  hisptr->timestamp = os_time();
-  hisptr->additional_data = NULL;
-  hisptr->hisstr[new_entrylen + 1] = (char)sep;
-  hisptr->hisstrlen = new_entrylen;
-
-  hisptr->hisnum = ++hisnum[histype];
-  if (histype == HIST_SEARCH && in_map) {
-    last_maptick = maptick;
-  }
+  rs_add_to_history(histype, new_entry, new_entrylen, in_map, sep);
 }
 
 /// Get identifier of newest history entry.
@@ -499,23 +375,9 @@ static int calc_hist_idx(int histype, int num)
 }
 
 /// Clear all entries in a history
-///
-/// @param[in]  histype  One of the HIST_ values.
-///
-/// @return OK if there was something to clean and histype was one of HIST_
-///         values, FAIL otherwise.
 int clr_history(const int histype)
 {
-  if (hislen != 0 && histype >= 0 && histype < HIST_COUNT) {
-    histentry_T *hisptr = history[histype];
-    for (int i = hislen; i--; hisptr++) {
-      hist_free_entry(hisptr);
-    }
-    hisidx[histype] = -1;  // mark history as cleared
-    hisnum[histype] = 0;   // reset identifier counter
-    return OK;
-  }
-  return FAIL;
+  return rs_clr_history(histype);
 }
 
 /// Remove all entries matching {str} from a history.
@@ -584,8 +446,8 @@ static int del_history_idx(int histype, int idx)
 
   // When deleting the last added search string in a mapping, reset
   // last_maptick, so that the last added search string isn't deleted again.
-  if (histype == HIST_SEARCH && maptick == last_maptick && i == idx) {
-    last_maptick = -1;
+  if (histype == HIST_SEARCH && maptick == nvim_cmdhist_get_last_maptick() && i == idx) {
+    nvim_cmdhist_set_last_maptick(-1);
   }
 
   while (i != idx) {

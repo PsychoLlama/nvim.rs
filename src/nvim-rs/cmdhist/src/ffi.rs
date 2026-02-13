@@ -74,3 +74,17 @@ extern "C" {
     // -- Sizeof --
     pub fn nvim_cmdhist_sizeof_histentry() -> usize;
 }
+
+// =============================================================================
+// Phase 2: History Modification Accessors
+// =============================================================================
+
+extern "C" {
+    pub fn nvim_cmdhist_get_p_hi() -> i64;
+    pub fn nvim_cmdhist_get_maptick() -> c_int;
+    pub fn nvim_cmdhist_os_time() -> u64;
+    pub fn nvim_cmdhist_get_cmdmod_cmod_flags() -> c_int;
+    pub fn nvim_cmdhist_set_hislen(val: c_int);
+    pub fn set_histentry(hist_type: c_int, entry: HistEntryPtr);
+    pub fn nvim_cmdhist_strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+}

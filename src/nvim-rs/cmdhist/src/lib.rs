@@ -10,6 +10,7 @@ use std::os::raw::c_int;
 
 pub mod ffi;
 pub mod helpers;
+pub mod modify;
 
 /// Number of history tables (HIST_CMD through HIST_DEBUG).
 pub const HIST_COUNT: c_int = 5;
