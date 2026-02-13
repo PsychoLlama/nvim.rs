@@ -1,18 +1,22 @@
 Plan: ~/.claude/plans/nested-frolicking-meadow.md
 
-All 4 phases of the `context.c` → Rust migration are complete. Here's the summary:
+All 5 phases of the `context.c` → Rust migration are complete. Here's the summary:
 
-**Commits (4 total):**
-1. Phase 1: FFI foundation + `rs_ctx_free_all` (stack accessors, _Static_assert)
-2. Phase 2: `rs_ctx_save` (shada encoding, `nvim_ctx_save_funcs` C accessor)
-3. Phase 3: `rs_ctx_restore` (shada reading, option save/restore, `nvim_ctx_restore_funcs`)
-4. Phase 4: `rs_ctx_to_dict` + `rs_ctx_from_dict` (thin wrappers over C accessors)
+**5 commits on `rust-migration`:**
 
-**Rust files created:**
-- `src/nvim-rs/context/src/ffi.rs` — all FFI declarations (stack, shada, option, dict)
-- `src/nvim-rs/context/src/stack.rs` — `rs_ctx_free_all`
-- `src/nvim-rs/context/src/save.rs` — `rs_ctx_save`
-- `src/nvim-rs/context/src/restore.rs` — `rs_ctx_restore`
-- `src/nvim-rs/context/src/convert.rs` — `rs_ctx_to_dict`, `rs_ctx_from_dict`
+| Commit | Description |
+|--------|-------------|
+| `ccf0ff3` | Phase 1: FFI foundation + `rs_ctx_free_all` |
+| `9011c4c` | Phase 2: `rs_ctx_save` (shada encoding, function saving) |
+| `2d42011` | Phase 3: `rs_ctx_restore` (shada reading, option save/restore) |
+| `189a9ad` | Phase 4: `rs_ctx_to_dict` + `rs_ctx_from_dict` (thin wrappers) |
+| `b2ff51f` | Phase 5: Cleanup (remove dead `shada.h` include, update run-result) |
 
-**Result:** `context.c` is now reduced to statics (`ctx_stack`, `kCtxAll`, `saved_shada_opt`) + C accessor functions (stack ops, shada opt save/restore, function save/restore, dict conversion) + thin `rs_*` forwarding wrappers. All public functions delegate to Rust. Every phase passes `just build`, `just smoke-test`, `just rust-fmt-check`, `just rust-clippy`, and `just rust-test` (4106 tests).
+**New Rust files (5):**
+- `ffi.rs` — all FFI declarations
+- `stack.rs` — `rs_ctx_free_all`
+- `save.rs` — `rs_ctx_save`
+- `restore.rs` — `rs_ctx_restore`
+- `convert.rs` — `rs_ctx_to_dict`, `rs_ctx_from_dict`
+
+**Result:** Every public function in `context.c` is now a thin `rs_*` wrapper. All business logic lives in Rust. The C file retains only statics, C accessor functions (for deeply C-coupled operations like HASHTAB_ITER, Arena allocation, OptVal management), and `_Static_assert` guards. All 4106 tests pass.
