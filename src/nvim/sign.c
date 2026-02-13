@@ -62,6 +62,9 @@ extern int rs_sign_row_cmp(int row1, int row2);
 extern bool rs_sign_id_valid(int id);
 extern int rs_sign_clamp_lnum(int lnum, int max_line);
 extern bool rs_sign_lnum_valid(int lnum);
+extern int64_t rs_group_get_ns(const char *group, int (*ns_lookup)(const char *));
+extern const char *rs_sign_get_display_name(DecorSignHighlight *sh);
+extern bool rs_sign_buffer_has_signs(const buf_T *buf);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -83,23 +86,21 @@ static char *cmds[] = {
 #define SIGNCMD_LAST    6
 };
 
+/// C accessor: look up namespace by name (wraps map_get for namespace_ids)
+static int nvim_namespace_lookup_fn(const char *name)
+{
+  return map_get(String, int)(&namespace_ids, cstr_as_string(name));
+}
+
 // Convert the supplied "group" to a namespace filter
 static int64_t group_get_ns(const char *group)
 {
-  if (group == NULL) {
-    return 0;           // Global namespace
-  } else if (strcmp(group, "*") == 0) {
-    return UINT32_MAX;  // All namespaces
-  }
-  // Specific or non-existing namespace
-  int ns = map_get(String, int)(&namespace_ids, cstr_as_string(group));
-  return ns ? ns : -1;
+  return rs_group_get_ns(group, nvim_namespace_lookup_fn);
 }
 
 static const char *sign_get_name(DecorSignHighlight *sh)
 {
-  char *name = sh->sign_name;
-  return !name ? "" : map_has(cstr_t, &sign_map, name) ? name : "[Deleted]";
+  return rs_sign_get_display_name(sh);
 }
 
 /// Create or update a sign extmark.
@@ -261,7 +262,7 @@ static int buf_delete_signs(buf_T *buf, char *group, int id, linenr_T atlnum)
 
 bool buf_has_signs(const buf_T *buf)
 {
-  return (buf_meta_total(buf, kMTMetaSignHL) + buf_meta_total(buf, kMTMetaSignText));
+  return rs_sign_buffer_has_signs((const buf_T *)buf);
 }
 
 /// List placed signs for "rbuf".  If "rbuf" is NULL do it for all buffers.
