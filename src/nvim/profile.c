@@ -54,6 +54,10 @@ extern proftime_T rs_profile_setlimit(int64_t msec);
 extern bool rs_profile_passed_limit(proftime_T tm);
 extern void rs_profile_set_wait(proftime_T wait);
 extern proftime_T rs_profile_get_wait_time(void);
+// Phase 2: input/wait profiling
+extern void rs_prof_input_start(void);
+extern void rs_prof_input_end(void);
+extern bool rs_prof_def_func(void);
 
 /// Struct used in sn_prl_ga for every line of a script.
 typedef struct {
@@ -369,19 +373,16 @@ void set_context_in_profile_cmd(expand_T *xp, const char *arg)
   xp->xp_context = EXPAND_NOTHING;
 }
 
-static proftime_T wait_time;
-
 /// Called when starting to wait for the user to type a character.
 void prof_input_start(void)
 {
-  wait_time = profile_start();
+  rs_prof_input_start();
 }
 
 /// Called when finished waiting for the user to type a character.
 void prof_input_end(void)
 {
-  wait_time = profile_end(wait_time);
-  profile_set_wait(profile_add(profile_get_wait(), wait_time));
+  rs_prof_input_end();
 }
 
 /// @return  true when a function defined in the current script should be
@@ -389,10 +390,7 @@ void prof_input_end(void)
 bool prof_def_func(void)
   FUNC_ATTR_PURE
 {
-  if (current_sctx.sc_sid > 0) {
-    return SCRIPT_ITEM(current_sctx.sc_sid)->sn_pr_force;
-  }
-  return false;
+  return rs_prof_def_func();
 }
 
 /// Print the count and times for one function or function line.
@@ -976,4 +974,15 @@ void time_finish(void)
 proftime_T nvim_get_prof_wait_time(void)
 {
   return rs_profile_get_wait_time();
+}
+
+// C accessors for Phase 2
+int nvim_get_script_items_len(void)
+{
+  return script_items.ga_len;
+}
+
+int nvim_script_item_get_pr_force(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_pr_force ? 1 : 0;
 }
