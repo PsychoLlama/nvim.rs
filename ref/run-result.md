@@ -1,26 +1,22 @@
-Plan: ~/.claude/plans/tranquil-noodling-pelican.md
+Plan: ~/.claude/plans/whimsical-leaping-kay.md
 
-All 7 phases of the profile migration plan are now complete. Here's a summary:
+All 6 phases of the `cmdhist.c` → Rust migration are complete. Here's the summary:
 
-**Commits created (Phases 1-7):**
+**Commits (6 total):**
+1. Phase 1: FFI foundation + core helpers (`rs_get_histtype`, `HISTORY_NAMES`, `calc_hist_idx`, etc.)
+2. Phase 2: History modification (`rs_init_history`, `rs_add_to_history`, `rs_clr_history`, `LAST_MAPTICK`)
+3. Phase 3: Deletion (`rs_del_history_entry`, `rs_del_history_idx`)
+4. Phase 4: VimL functions (`rs_f_histadd`, `rs_f_histdel`, `rs_f_histget`, `rs_f_histnr`)
+5. Phase 5: Ex command + completion (`rs_ex_history`, `rs_get_history_arg`)
+6. Phase 6: Iterators (`rs_hist_iter`, `rs_hist_get_array`)
 
-| Phase | Commit | Functions |
-|-------|--------|-----------|
-| 1 | `68f7cf118c` | timing wrappers + types foundation (6 fns) |
-| 2 | `e0512a522c` | input/wait profiling (3 fns) |
-| 3 | `70b6e65de3` | function line profiling (4 fns) |
-| 4 | `9a305a73f4` | script line profiling (5 fns) |
-| 5 | `998a7742e3` | child profiling (2 fns) |
-| 6 | `15fbc5750b` | startup timing (7 fns) |
-| 7 | `6300ad318e` | command handling, state mgmt, dump (5 fns + accessors) |
+**Rust files created:**
+- `src/nvim-rs/cmdhist/src/ffi.rs` — opaque handle types + extern declarations
+- `src/nvim-rs/cmdhist/src/helpers.rs` — core helpers, name table, index calculations
+- `src/nvim-rs/cmdhist/src/modify.rs` — history init/add/clear
+- `src/nvim-rs/cmdhist/src/delete.rs` — regex-based and index-based deletion
+- `src/nvim-rs/cmdhist/src/viml.rs` — VimL function implementations
+- `src/nvim-rs/cmdhist/src/command.rs` — `:history` command + completion
+- `src/nvim-rs/cmdhist/src/iter.rs` — ShaDa iteration/array access
 
-**What moved to Rust:**
-- All profiling statics: `prof_wait_time`, `wait_time`, `g_start_time`, `g_prev_time`, `profile_fname`, `pause_time`, `pexpand_what`, `pexpand_cmds`
-- ~27 `rs_*` functions across 7 Rust modules (`timing`, `input`, `func_line`, `script_line`, `child`, `startup`, `command`)
-
-**What remains in C:**
-- `profile_init` (directly manipulates `scriptitem_T` fields via `ga_init`)
-- `func_dump_profile`, `script_dump_profile`, `prof_func_line`, `prof_sort_list`, `prof_total_cmp`, `prof_self_cmp` (deep hashtable/garray iteration + file I/O)
-- All C accessor functions (thin wrappers exposing struct fields to Rust)
-
-All checks pass: `build`, `smoke-test`, `rust-fmt-check`, `rust-clippy`, `rust-test` (4102 tests).
+**Result:** `cmdhist.c` is now reduced to statics (`history[]`, `hisidx[]`, `hisnum[]`, `hislen`) + C accessor functions + thin `rs_*` forwarding wrappers. All real logic lives in Rust. Every phase passes `just build`, `just smoke-test`, `just rust-fmt-check`, `just rust-clippy`, and `just rust-test` (4106 tests).
