@@ -313,7 +313,7 @@ pub const extern "C" fn rs_pum_has_room(height: c_int, size: c_int, border_width
     1
 }
 
-// C _impl functions for Phase 3 migration.
+// C _impl functions for Phase 3/5 migration.
 extern "C" {
     /// Recompose the popup menu grid.
     fn nvim_pum_recompose_impl();
@@ -321,6 +321,29 @@ extern "C" {
     fn nvim_pum_check_clear_impl();
     /// Flush the popup menu UI position.
     fn nvim_pum_ui_flush_impl();
+    /// Set preview text in a buffer.
+    fn nvim_pum_preview_set_text_impl(
+        buf: *mut BufHandle,
+        info: *mut std::ffi::c_char,
+        lnum: *mut i32,
+        max_width: *mut c_int,
+    );
+    /// Adjust floating info preview window position.
+    fn nvim_pum_adjust_info_position_impl(wp: *mut WinHandle, width: c_int);
+    /// Set info for a completed item.
+    fn nvim_pum_set_info_impl(selected: c_int, info: *mut std::ffi::c_char) -> *mut WinHandle;
+}
+
+/// Opaque handle to a `buf_T`.
+#[repr(C)]
+pub struct BufHandle {
+    _private: [u8; 0],
+}
+
+/// Opaque handle to a `win_T`.
+#[repr(C)]
+pub struct WinHandle {
+    _private: [u8; 0],
 }
 
 /// Recompose the popup menu grid.
@@ -348,6 +371,41 @@ pub unsafe extern "C" fn rs_pum_check_clear() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_ui_flush() {
     nvim_pum_ui_flush_impl();
+}
+
+/// Set the informational text in the preview buffer.
+///
+/// # Safety
+/// Calls C `_impl` function. All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_preview_set_text(
+    buf: *mut BufHandle,
+    info: *mut std::ffi::c_char,
+    lnum: *mut i32,
+    max_width: *mut c_int,
+) {
+    nvim_pum_preview_set_text_impl(buf, info, lnum, max_width);
+}
+
+/// Adjust floating info preview window position.
+///
+/// # Safety
+/// Calls C `_impl` function. `wp` must be a valid `win_T` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: c_int) {
+    nvim_pum_adjust_info_position_impl(wp, width);
+}
+
+/// Set info for a completed item, returning a window pointer.
+///
+/// # Safety
+/// Calls C `_impl` function. `info` must be a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_set_info(
+    selected: c_int,
+    info: *mut std::ffi::c_char,
+) -> *mut WinHandle {
+    nvim_pum_set_info_impl(selected, info)
 }
 
 #[cfg(test)]

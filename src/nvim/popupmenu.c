@@ -114,6 +114,9 @@ extern void rs_pum_ui_flush(void);
 extern int *rs_pum_compute_text_attrs(char *text, int hlf, int user_hlattr);
 extern void rs_pum_grid_puts_with_attrs(int col, int cells, const char *text,
                                         int textlen, const int *attrs);
+extern void rs_pum_preview_set_text(buf_T *buf, char *info, linenr_T *lnum, int *max_width);
+extern void rs_pum_adjust_info_position(win_T *wp, int width);
+extern win_T *rs_pum_set_info(int selected, char *info);
 
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
@@ -1090,7 +1093,7 @@ void pum_redraw(void)
 /// @param[in]  info       Informational text to display in the preview buffer.
 /// @param[in]  lnum       Where to start the text. Incremented for each added line.
 /// @param[out] max_width  Maximum width of the displayed text.
-static void pum_preview_set_text(buf_T *buf, char *info, linenr_T *lnum, int *max_width)
+void nvim_pum_preview_set_text_impl(buf_T *buf, char *info, linenr_T *lnum, int *max_width)
 {
   Error err = ERROR_INIT;
   Arena arena = ARENA_EMPTY;
@@ -1132,7 +1135,7 @@ static void pum_preview_set_text(buf_T *buf, char *info, linenr_T *lnum, int *ma
 }
 
 /// adjust floating info preview window position
-static void pum_adjust_info_position(win_T *wp, int width)
+void nvim_pum_adjust_info_position_impl(win_T *wp, int width)
 {
   int border_width = pum_border_width();
   int col = pum_col + pum_width + 1 + border_width;
@@ -1170,7 +1173,7 @@ static void pum_adjust_info_position(win_T *wp, int width)
 /// @param selected the selected compl item.
 /// @param info     Info string.
 /// @return a win_T pointer.
-win_T *pum_set_info(int selected, char *info)
+win_T *nvim_pum_set_info_impl(int selected, char *info)
 {
   if (!pum_is_visible || !compl_match_curr_select(selected)) {
     return NULL;
@@ -1189,14 +1192,19 @@ win_T *pum_set_info(int selected, char *info)
   }
   linenr_T lnum = 0;
   int max_info_width = 0;
-  pum_preview_set_text(wp->w_buffer, info, &lnum, &max_info_width);
+  rs_pum_preview_set_text(wp->w_buffer, info, &lnum, &max_info_width);
   no_u_sync--;
   RedrawingDisabled--;
   redraw_later(wp, UPD_NOT_VALID);
 
-  pum_adjust_info_position(wp, max_info_width);
+  rs_pum_adjust_info_position(wp, max_info_width);
   unblock_autocmds();
   return wp;
+}
+
+win_T *pum_set_info(int selected, char *info)
+{
+  return rs_pum_set_info(selected, info);
 }
 
 /// Set the index of the currently selected item.  The menu will scroll when
@@ -1346,7 +1354,7 @@ static bool pum_set_selected(int n, int repeat)
         if (res == OK) {
           linenr_T lnum = 0;
           int max_info_width = 0;
-          pum_preview_set_text(curbuf, pum_array[pum_selected].pum_info, &lnum, &max_info_width);
+          rs_pum_preview_set_text(curbuf, pum_array[pum_selected].pum_info, &lnum, &max_info_width);
           // Increase the height of the preview window to show the
           // text, but no more than 'previewheight' lines.
           if (repeat == 0 && !use_float) {
@@ -1370,7 +1378,7 @@ static bool pum_set_selected(int n, int repeat)
 
           if (use_float) {
             // adjust floating window by actually height and max info text width
-            pum_adjust_info_position(curwin, max_info_width);
+            rs_pum_adjust_info_position(curwin, max_info_width);
           }
 
           if ((curwin != curwin_save && win_valid(curwin_save))
