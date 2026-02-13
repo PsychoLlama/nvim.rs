@@ -2333,6 +2333,28 @@ pub unsafe extern "C" fn rs_ui_ext_tabline_update() {
     nvim_stl_ui_ext_tabline_update_impl();
 }
 
+// =============================================================================
+// Phase 4: Tabline Drawing (draw_tabline)
+// =============================================================================
+
+// Phase 4 C accessors
+extern "C" {
+    fn nvim_stl_draw_tabline_impl();
+}
+
+/// FFI export: Draw the tab pages line at the top of the Vim window.
+///
+/// This is the Rust replacement for `draw_tabline()` in statusline.c.
+/// Delegates to the C implementation which handles grid operations,
+/// tab iteration, click definitions, and showcmd rendering.
+///
+/// # Safety
+/// Accesses global C state (grid, tabs, click defs).
+#[no_mangle]
+pub unsafe extern "C" fn rs_draw_tabline() {
+    nvim_stl_draw_tabline_impl();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
