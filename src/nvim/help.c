@@ -57,6 +57,43 @@ extern int rs_find_help_tags(const char *arg, int *num_matches, char ***matches,
 extern void rs_cleanup_help_tags(int num_file, char **file);
 extern void rs_ex_exusage(void *eap);
 extern void rs_ex_viusage(void *eap);
+extern void rs_prepare_help_buffer(void);
+
+// C accessors for prepare_help_buffer
+void nvim_help_set_curbuf_b_help(bool val) { curbuf->b_help = val; }
+const char *nvim_help_get_curbuf_b_p_isk(void) { return curbuf->b_p_isk; }
+void nvim_help_set_buftype_help(void)
+{
+  set_option_direct(kOptBuftype, STATIC_CSTR_AS_OPTVAL("help"), OPT_LOCAL, 0);
+}
+void nvim_help_set_isk_help(const char *p)
+{
+  set_option_direct(kOptIskeyword, CSTR_AS_OPTVAL(p), OPT_LOCAL, 0);
+  check_buf_options(curbuf);
+  buf_init_chartab(curbuf, false);
+}
+void nvim_help_set_foldmethod_manual(void)
+{
+  set_option_direct(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("manual"), OPT_LOCAL, 0);
+}
+void nvim_help_set_buf_fields(void)
+{
+  curbuf->b_p_ts = 8;
+  curbuf->b_p_ma = false;
+  curbuf->b_p_bin = false;
+}
+void nvim_help_set_win_help_options(void)
+{
+  curwin->w_p_list = false;
+  curwin->w_p_nu = 0;
+  curwin->w_p_rnu = 0;
+  RESET_BINDING(curwin);
+  curwin->w_p_arab = false;
+  curwin->w_p_rl = false;
+  curwin->w_p_fen = false;
+  curwin->w_p_diff = false;
+  curwin->w_p_spell = false;
+}
 
 // C accessor for 'helplang' option
 const char *nvim_help_get_p_hlg(void) { return p_hlg; }
@@ -537,39 +574,7 @@ void cleanup_help_tags(int num_file, char **file)
 /// Called when starting to edit a buffer for a help file.
 void prepare_help_buffer(void)
 {
-  curbuf->b_help = true;
-  set_option_direct(kOptBuftype, STATIC_CSTR_AS_OPTVAL("help"), OPT_LOCAL, 0);
-
-  // Always set these options after jumping to a help tag, because the
-  // user may have an autocommand that gets in the way.
-  // Accept all ASCII chars for keywords, except ' ', '*', '"', '|', and
-  // latin1 word characters (for translated help files).
-  // Only set it when needed, buf_init_chartab() is some work.
-  char *p = "!-~,^*,^|,^\",192-255";
-  if (strcmp(curbuf->b_p_isk, p) != 0) {
-    set_option_direct(kOptIskeyword, CSTR_AS_OPTVAL(p), OPT_LOCAL, 0);
-    check_buf_options(curbuf);
-    buf_init_chartab(curbuf, false);
-  }
-
-  // Don't use the global foldmethod.
-  set_option_direct(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("manual"), OPT_LOCAL, 0);
-
-  curbuf->b_p_ts = 8;         // 'tabstop' is 8.
-  curwin->w_p_list = false;   // No list mode.
-
-  curbuf->b_p_ma = false;     // Not modifiable.
-  curbuf->b_p_bin = false;    // Reset 'bin' before reading file.
-  curwin->w_p_nu = 0;         // No line numbers.
-  curwin->w_p_rnu = 0;        // No relative line numbers.
-  RESET_BINDING(curwin);      // No scroll or cursor binding.
-  curwin->w_p_arab = false;   // No arabic mode.
-  curwin->w_p_rl = false;     // Help window is left-to-right.
-  curwin->w_p_fen = false;    // No folding in the help window.
-  curwin->w_p_diff = false;   // No 'diff'.
-  curwin->w_p_spell = false;  // No spell checking.
-
-  set_buflisted(false);
+  rs_prepare_help_buffer();
 }
 
 /// After reading a help file: if help.txt, populate *local-additions*

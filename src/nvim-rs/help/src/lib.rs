@@ -231,6 +231,14 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
     fn nvim_help_get_p_hlg() -> *const c_char;
     fn do_cmdline_cmd(cmd: *const c_char);
+    fn set_buflisted(listed: bool);
+    fn nvim_help_set_curbuf_b_help(val: bool);
+    fn nvim_help_get_curbuf_b_p_isk() -> *const c_char;
+    fn nvim_help_set_buftype_help();
+    fn nvim_help_set_isk_help(p: *const c_char);
+    fn nvim_help_set_foldmethod_manual();
+    fn nvim_help_set_buf_fields();
+    fn nvim_help_set_win_help_options();
 }
 
 /// Helper: write a byte slice into a C buffer at a given offset.
@@ -642,6 +650,28 @@ pub unsafe extern "C" fn rs_cleanup_help_tags(num_file: c_int, file: *mut *mut c
             }
         }
     }
+}
+
+/// Called when starting to edit a buffer for a help file.
+/// Sets buffer type, iskeyword, foldmethod, and various buffer/window options.
+#[no_mangle]
+pub unsafe extern "C" fn rs_prepare_help_buffer() {
+    unsafe { nvim_help_set_curbuf_b_help(true) };
+    unsafe { nvim_help_set_buftype_help() };
+
+    // Accept all ASCII chars for keywords, except ' ', '*', '"', '|', and
+    // latin1 word characters (for translated help files).
+    // Only set it when needed, buf_init_chartab() is some work.
+    let isk = c"!-~,^*,^|,^\",192-255";
+    let current_isk = unsafe { nvim_help_get_curbuf_b_p_isk() };
+    if !current_isk.is_null() && unsafe { libc::strcmp(current_isk, isk.as_ptr()) } != 0 {
+        unsafe { nvim_help_set_isk_help(isk.as_ptr()) };
+    }
+
+    unsafe { nvim_help_set_foldmethod_manual() };
+    unsafe { nvim_help_set_buf_fields() };
+    unsafe { nvim_help_set_win_help_options() };
+    unsafe { set_buflisted(false) };
 }
 
 /// `:exusage` — open help for ex command index.
