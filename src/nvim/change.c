@@ -74,6 +74,11 @@ extern void rs_changed_bytes(linenr_T lnum, colnr_T col);
 extern void rs_inserted_bytes(linenr_T lnum, colnr_T start_col, int old_col, int new_col);
 extern void rs_changed_lines(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume,
                              linenr_T xtra, bool do_buf_event);
+extern void rs_ins_bytes(const char *p);
+extern void rs_ins_bytes_len(const char *p, size_t len);
+extern void rs_ins_char(int c);
+extern void rs_ins_char_bytes(char *buf, size_t charlen);
+extern void rs_ins_str(const char *s, size_t slen);
 
 void change_warning(buf_T *buf, int col)
 {
@@ -475,166 +480,27 @@ bool file_ff_differs(buf_T *buf, bool ignore_empty)
 /// Handles Replace mode and multi-byte characters.
 void ins_bytes(char *p)
 {
-  ins_bytes_len(p, strlen(p));
+  rs_ins_bytes(p);
 }
 
-/// Insert string "p" with length "len" at the cursor position.
-/// Handles Replace mode and multi-byte characters.
 void ins_bytes_len(char *p, size_t len)
 {
-  size_t n;
-  for (size_t i = 0; i < len; i += n) {
-    // avoid reading past p[len]
-    n = (size_t)utfc_ptr2len_len(p + i, (int)(len - i));
-    ins_char_bytes(p + i, n);
-  }
+  rs_ins_bytes_len(p, len);
 }
 
-/// Insert or replace a single character at the cursor position.
-/// When in MODE_REPLACE or MODE_VREPLACE state, replace any existing character.
-/// Caller must have prepared for undo.
-/// For multi-byte characters we get the whole character, the caller must
-/// convert bytes to a character.
 void ins_char(int c)
 {
-  char buf[MB_MAXCHAR + 1];
-  size_t n = (size_t)utf_char2bytes(c, buf);
-
-  // When "c" is 0x100, 0x200, etc. we don't want to insert a NUL byte.
-  // Happens for CTRL-Vu9900.
-  if (buf[0] == 0) {
-    buf[0] = '\n';
-  }
-  ins_char_bytes(buf, n);
+  rs_ins_char(c);
 }
 
 void ins_char_bytes(char *buf, size_t charlen)
 {
-  // Break tabs if needed.
-  if (virtual_active(curwin) && curwin->w_cursor.coladd > 0) {
-    coladvance_force(getviscol());
-  }
-
-  size_t col = (size_t)curwin->w_cursor.col;
-  linenr_T lnum = curwin->w_cursor.lnum;
-  char *oldp = ml_get(lnum);
-  size_t linelen = (size_t)ml_get_len(lnum) + 1;  // length of old line including NUL
-
-  // The lengths default to the values for when not replacing.
-  size_t oldlen = 0;        // nr of bytes inserted
-  size_t newlen = charlen;  // nr of bytes deleted (0 when not replacing)
-
-  if (State & REPLACE_FLAG) {
-    if (State & VREPLACE_FLAG) {
-      // Disable 'list' temporarily, unless 'cpo' contains the 'L' flag.
-      // Returns the old value of list, so when finished,
-      // curwin->w_p_list should be set back to this.
-      int old_list = curwin->w_p_list;
-      if (old_list && vim_strchr(p_cpo, CPO_LISTWM) == NULL) {
-        curwin->w_p_list = false;
-      }
-      // In virtual replace mode each character may replace one or more
-      // characters (zero if it's a TAB).  Count the number of bytes to
-      // be deleted to make room for the new character, counting screen
-      // cells.  May result in adding spaces to fill a gap.
-      colnr_T vcol;
-      getvcol(curwin, &curwin->w_cursor, NULL, &vcol, NULL);
-      colnr_T new_vcol = vcol + win_chartabsize(curwin, buf, vcol);
-      while (oldp[col + oldlen] != NUL && vcol < new_vcol) {
-        vcol += win_chartabsize(curwin, oldp + col + oldlen, vcol);
-        // Don't need to remove a TAB that takes us to the right
-        // position.
-        if (vcol > new_vcol && oldp[col + oldlen] == TAB) {
-          break;
-        }
-        oldlen += (size_t)utfc_ptr2len(oldp + col + oldlen);
-        // Deleted a bit too much, insert spaces.
-        if (vcol > new_vcol) {
-          newlen += (size_t)(vcol - new_vcol);
-        }
-      }
-      curwin->w_p_list = old_list;
-    } else if (oldp[col] != NUL) {
-      // normal replace
-      oldlen = (size_t)utfc_ptr2len(oldp + col);
-    }
-
-    // Push the replaced bytes onto the replace stack, so that they can be
-    // put back when BS is used.  The bytes of a multi-byte character are
-    // done the other way around, so that the first byte is popped off
-    // first (it tells the byte length of the character).
-    replace_push_nul();
-    replace_push(oldp + col, oldlen);
-  }
-
-  char *newp = xmalloc(linelen + newlen - oldlen);
-
-  // Copy bytes before the cursor.
-  if (col > 0) {
-    memmove(newp, oldp, col);
-  }
-
-  // Copy bytes after the changed character(s).
-  char *p = newp + col;
-  if (linelen > col + oldlen) {
-    memmove(p + newlen, oldp + col + oldlen, linelen - col - oldlen);
-  }
-
-  // Insert or overwrite the new character.
-  memmove(p, buf, charlen);
-
-  // Fill with spaces when necessary.
-  for (size_t i = charlen; i < newlen; i++) {
-    p[i] = ' ';
-  }
-
-  // Replace the line in the buffer.
-  ml_replace(lnum, newp, false);
-
-  // mark the buffer as changed and prepare for displaying
-  inserted_bytes(lnum, (colnr_T)col, (int)oldlen, (int)newlen);
-
-  // If we're in Insert or Replace mode and 'showmatch' is set, then briefly
-  // show the match for right parens and braces.
-  if (p_sm && (State & MODE_INSERT)
-      && msg_silent == 0
-      && !ins_compl_active()) {
-    showmatch(utf_ptr2char(buf));
-  }
-
-  if (!p_ri || (State & REPLACE_FLAG)) {
-    // Normal insert: move cursor right
-    curwin->w_cursor.col += (colnr_T)charlen;
-  }
-  // TODO(Bram): should try to update w_row here, to avoid recomputing it later.
+  rs_ins_char_bytes(buf, charlen);
 }
 
-/// Insert a string at the cursor position.
-/// Note: Does NOT handle Replace mode.
-/// Caller must have prepared for undo.
 void ins_str(char *s, size_t slen)
 {
-  linenr_T lnum = curwin->w_cursor.lnum;
-
-  if (virtual_active(curwin) && curwin->w_cursor.coladd > 0) {
-    coladvance_force(getviscol());
-  }
-
-  colnr_T col = curwin->w_cursor.col;
-  char *oldp = ml_get(lnum);
-  int oldlen = ml_get_len(lnum);
-
-  char *newp = xmalloc((size_t)oldlen + slen + 1);
-  if (col > 0) {
-    memmove(newp, oldp, (size_t)col);
-  }
-  memmove(newp + col, s, slen);
-  int bytes = oldlen - col + 1;
-  assert(bytes >= 0);
-  memmove(newp + col + slen, oldp + col, (size_t)bytes);
-  ml_replace(lnum, newp, false);
-  inserted_bytes(lnum, col, 0, (int)slen);
-  curwin->w_cursor.col += (colnr_T)slen;
+  rs_ins_str(s, slen);
 }
 
 // Delete one character under the cursor.
