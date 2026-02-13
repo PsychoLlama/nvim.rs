@@ -12,9 +12,18 @@ pub mod delete;
 pub mod ffi;
 pub mod helpers;
 pub mod modify;
+pub mod viml;
 
 /// Number of history tables (HIST_CMD through HIST_DEBUG).
 pub const HIST_COUNT: c_int = 5;
+
+/// VimL typval type constants (verified by _Static_assert in C).
+pub const VAR_UNKNOWN: c_int = 0;
+pub const VAR_NUMBER: c_int = 1;
+pub const VAR_STRING: c_int = 2;
+
+/// Buffer length for number-to-string conversions.
+pub const NUMBUFLEN: usize = 65;
 
 /// Return the length of the history tables.
 ///

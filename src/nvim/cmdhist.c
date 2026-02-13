@@ -278,6 +278,75 @@ void nvim_cmdhist_regfree(void *rm)
 extern int rs_del_history_entry(int histype, const char *str);
 extern int rs_del_history_idx(int histype, int idx);
 
+// =============================================================================
+// Phase 4: VimL Typval Wrappers
+// =============================================================================
+
+_Static_assert(VAR_UNKNOWN == 0, "VAR_UNKNOWN changed - update Rust constant");
+_Static_assert(VAR_NUMBER == 1, "VAR_NUMBER changed - update Rust constant");
+_Static_assert(VAR_STRING == 2, "VAR_STRING changed - update Rust constant");
+_Static_assert(NUMBUFLEN == 65, "NUMBUFLEN changed - update Rust constant");
+
+const char *nvim_cmdhist_tv_get_string_chk(typval_T *tv)
+{
+  return tv_get_string_chk(tv);
+}
+
+const char *nvim_cmdhist_tv_get_string_buf(typval_T *tv, char *buf)
+{
+  return tv_get_string_buf(tv, buf);
+}
+
+int64_t nvim_cmdhist_tv_get_number(typval_T *tv)
+{
+  return tv_get_number(tv);
+}
+
+int64_t nvim_cmdhist_tv_get_number_chk(typval_T *tv, void *error)
+{
+  return tv_get_number_chk(tv, (bool *)error);
+}
+
+int nvim_cmdhist_tv_get_type(typval_T *tv)
+{
+  return tv->v_type;
+}
+
+typval_T *nvim_cmdhist_tv_idx(typval_T *tv, int idx)
+{
+  return &tv[idx];
+}
+
+void nvim_cmdhist_rettv_set_number(typval_T *rettv, int64_t val)
+{
+  rettv->vval.v_number = val;
+}
+
+void nvim_cmdhist_rettv_set_string(typval_T *rettv, char *s)
+{
+  rettv->vval.v_string = s;
+}
+
+void nvim_cmdhist_rettv_set_type(typval_T *rettv, int typ)
+{
+  rettv->v_type = typ;
+}
+
+int nvim_cmdhist_check_secure(void)
+{
+  return check_secure();
+}
+
+size_t nvim_cmdhist_strlen(const char *s)
+{
+  return strlen(s);
+}
+
+extern void rs_f_histadd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_histdel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_histget(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_histnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 /// Translate a history character to the associated type number
 HistoryType hist_char2type(const int c)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
@@ -338,162 +407,34 @@ void add_to_history(int histype, const char *new_entry, size_t new_entrylen, boo
   rs_add_to_history(histype, new_entry, new_entrylen, in_map, sep);
 }
 
-/// Get identifier of newest history entry.
-///
-/// @param histype  may be one of the HIST_ values.
-static int get_history_idx(int histype)
-{
-  if (hislen == 0 || histype < 0 || histype >= HIST_COUNT
-      || hisidx[histype] < 0) {
-    return -1;
-  }
-
-  return history[histype][hisidx[histype]].hisnum;
-}
-
-/// Calculate history index from a number:
-///
-/// @param num      > 0: seen as identifying number of a history entry
-///                 < 0: relative position in history wrt newest entry
-/// @param histype  may be one of the HIST_ values.
-static int calc_hist_idx(int histype, int num)
-{
-  int i;
-
-  if (hislen == 0 || histype < 0 || histype >= HIST_COUNT
-      || (i = hisidx[histype]) < 0 || num == 0) {
-    return -1;
-  }
-
-  histentry_T *hist = history[histype];
-  if (num > 0) {
-    bool wrapped = false;
-    while (hist[i].hisnum > num) {
-      if (--i < 0) {
-        if (wrapped) {
-          break;
-        }
-        i += hislen;
-        wrapped = true;
-      }
-    }
-    if (i >= 0 && hist[i].hisnum == num && hist[i].hisstr != NULL) {
-      return i;
-    }
-  } else if (-num <= hislen) {
-    i += num + 1;
-    if (i < 0) {
-      i += hislen;
-    }
-    if (hist[i].hisstr != NULL) {
-      return i;
-    }
-  }
-  return -1;
-}
-
 /// Clear all entries in a history
 int clr_history(const int histype)
 {
   return rs_clr_history(histype);
 }
 
-/// Remove all entries matching {str} from a history.
-static int del_history_entry(int histype, char *str)
-{
-  return rs_del_history_entry(histype, str);
-}
-
-/// Remove an indexed entry from a history.
-static int del_history_idx(int histype, int idx)
-{
-  return rs_del_history_idx(histype, idx);
-}
-
 /// "histadd()" function
 void f_histadd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = false;
-  if (check_secure()) {
-    return;
-  }
-  const char *str = tv_get_string_chk(&argvars[0]);  // NULL on type error
-  HistoryType histype = str != NULL ? get_histtype(str, strlen(str), false) : HIST_INVALID;
-  if (histype == HIST_INVALID) {
-    return;
-  }
-
-  char buf[NUMBUFLEN];
-  str = tv_get_string_buf(&argvars[1], buf);
-  if (*str == NUL) {
-    return;
-  }
-
-  init_history();
-  add_to_history(histype, str, strlen(str), false, NUL);
-  rettv->vval.v_number = true;
+  rs_f_histadd(argvars, rettv, fptr);
 }
 
 /// "histdel()" function
 void f_histdel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  int n;
-  const char *const str = tv_get_string_chk(&argvars[0]);  // NULL on type error
-  if (str == NULL) {
-    n = 0;
-  } else if (argvars[1].v_type == VAR_UNKNOWN) {
-    // only one argument: clear entire history
-    n = clr_history(get_histtype(str, strlen(str), false));
-  } else if (argvars[1].v_type == VAR_NUMBER) {
-    // index given: remove that entry
-    n = del_history_idx(get_histtype(str, strlen(str), false),
-                        (int)tv_get_number(&argvars[1]));
-  } else {
-    // string given: remove all matching entries
-    char buf[NUMBUFLEN];
-    n = del_history_entry(get_histtype(str, strlen(str), false),
-                          (char *)tv_get_string_buf(&argvars[1], buf));
-  }
-  rettv->vval.v_number = n;
+  rs_f_histdel(argvars, rettv, fptr);
 }
 
 /// "histget()" function
 void f_histget(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  const char *const str = tv_get_string_chk(&argvars[0]);  // NULL on type error
-  if (str == NULL) {
-    rettv->vval.v_string = NULL;
-  } else {
-    int idx;
-    HistoryType type = get_histtype(str, strlen(str), false);
-    if (argvars[1].v_type == VAR_UNKNOWN) {
-      idx = get_history_idx(type);
-    } else {
-      idx = (int)tv_get_number_chk(&argvars[1], NULL);  // -1 on type error
-    }
-    idx = calc_hist_idx(type, idx);
-    if (idx < 0) {
-      rettv->vval.v_string = xstrnsave("", 0);
-    } else {
-      rettv->vval.v_string = xstrnsave(history[type][idx].hisstr,
-                                       history[type][idx].hisstrlen);
-    }
-  }
-  rettv->v_type = VAR_STRING;
+  rs_f_histget(argvars, rettv, fptr);
 }
 
 /// "histnr()" function
 void f_histnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  const char *const histname = tv_get_string_chk(&argvars[0]);
-  HistoryType i = histname == NULL
-                  ? HIST_INVALID
-                  : get_histtype(histname, strlen(histname), false);
-  if (i != HIST_INVALID) {
-    rettv->vval.v_number = get_history_idx(i);
-  } else {
-    rettv->vval.v_number = HIST_INVALID;
-  }
+  rs_f_histnr(argvars, rettv, fptr);
 }
 
 /// :history command - print a history

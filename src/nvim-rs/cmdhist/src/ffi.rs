@@ -98,3 +98,21 @@ extern "C" {
     pub fn nvim_cmdhist_regexec(rm: *mut c_void, str: *const c_char) -> c_int;
     pub fn nvim_cmdhist_regfree(rm: *mut c_void);
 }
+
+// =============================================================================
+// Phase 4: VimL Function Accessors (typval wrappers)
+// =============================================================================
+
+extern "C" {
+    pub fn nvim_cmdhist_tv_get_string_chk(tv: TypvalPtr) -> *const c_char;
+    pub fn nvim_cmdhist_tv_get_string_buf(tv: TypvalPtr, buf: *mut c_char) -> *const c_char;
+    pub fn nvim_cmdhist_tv_get_number(tv: TypvalPtr) -> i64;
+    pub fn nvim_cmdhist_tv_get_number_chk(tv: TypvalPtr, error: *mut c_void) -> i64;
+    pub fn nvim_cmdhist_tv_get_type(tv: TypvalPtr) -> c_int;
+    pub fn nvim_cmdhist_tv_idx(tv: TypvalPtr, idx: c_int) -> TypvalPtr;
+    pub fn nvim_cmdhist_rettv_set_number(rettv: TypvalPtr, val: i64);
+    pub fn nvim_cmdhist_rettv_set_string(rettv: TypvalPtr, s: *mut c_char);
+    pub fn nvim_cmdhist_rettv_set_type(rettv: TypvalPtr, typ: c_int);
+    pub fn nvim_cmdhist_check_secure() -> c_int;
+    pub fn nvim_cmdhist_strlen(s: *const c_char) -> usize;
+}
