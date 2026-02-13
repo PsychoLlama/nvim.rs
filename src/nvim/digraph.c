@@ -1486,6 +1486,34 @@ static digr_T digraphdefault[] =
   { NUL, NUL, NUL }
 };
 
+// Verify DG_START_* constants match between C and Rust
+_Static_assert(DG_START_LATIN == 0xa1, "DG_START_LATIN");
+_Static_assert(DG_START_GREEK == 0x0386, "DG_START_GREEK");
+_Static_assert(DG_START_CYRILLIC == 0x0401, "DG_START_CYRILLIC");
+_Static_assert(DG_START_HEBREW == 0x05d0, "DG_START_HEBREW");
+_Static_assert(DG_START_ARABIC == 0x060c, "DG_START_ARABIC");
+_Static_assert(DG_START_LATIN_EXTENDED == 0x1e02, "DG_START_LATIN_EXTENDED");
+_Static_assert(DG_START_GREEK_EXTENDED == 0x1f00, "DG_START_GREEK_EXTENDED");
+_Static_assert(DG_START_PUNCTUATION == 0x2002, "DG_START_PUNCTUATION");
+_Static_assert(DG_START_SUB_SUPER == 0x2070, "DG_START_SUB_SUPER");
+_Static_assert(DG_START_CURRENCY == 0x20a4, "DG_START_CURRENCY");
+_Static_assert(DG_START_OTHER1 == 0x2103, "DG_START_OTHER1");
+_Static_assert(DG_START_ROMAN == 0x2160, "DG_START_ROMAN");
+_Static_assert(DG_START_ARROWS == 0x2190, "DG_START_ARROWS");
+_Static_assert(DG_START_MATH == 0x2200, "DG_START_MATH");
+_Static_assert(DG_START_TECHNICAL == 0x2302, "DG_START_TECHNICAL");
+_Static_assert(DG_START_OTHER2 == 0x2423, "DG_START_OTHER2");
+_Static_assert(DG_START_DRAWING == 0x2500, "DG_START_DRAWING");
+_Static_assert(DG_START_BLOCK == 0x2580, "DG_START_BLOCK");
+_Static_assert(DG_START_SHAPES == 0x25a0, "DG_START_SHAPES");
+_Static_assert(DG_START_SYMBOLS == 0x2605, "DG_START_SYMBOLS");
+_Static_assert(DG_START_DINGBATS == 0x2713, "DG_START_DINGBATS");
+_Static_assert(DG_START_CJK_SYMBOLS == 0x3000, "DG_START_CJK_SYMBOLS");
+_Static_assert(DG_START_HIRAGANA == 0x3041, "DG_START_HIRAGANA");
+_Static_assert(DG_START_KATAKANA == 0x30a1, "DG_START_KATAKANA");
+_Static_assert(DG_START_BOPOMOFO == 0x3105, "DG_START_BOPOMOFO");
+_Static_assert(DG_START_OTHER3 == 0x3220, "DG_START_OTHER3");
+
 // =============================================================================
 // Accessor functions for Rust FFI
 // =============================================================================

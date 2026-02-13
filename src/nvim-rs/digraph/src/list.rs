@@ -40,22 +40,22 @@ const DG_START_GREEK: c_int = 0x0386;
 const DG_START_CYRILLIC: c_int = 0x0401;
 const DG_START_HEBREW: c_int = 0x05d0;
 const DG_START_ARABIC: c_int = 0x060c;
-const DG_START_LATIN_EXTENDED: c_int = 0x1e00;
+const DG_START_LATIN_EXTENDED: c_int = 0x1e02;
 const DG_START_GREEK_EXTENDED: c_int = 0x1f00;
 const DG_START_PUNCTUATION: c_int = 0x2002;
 const DG_START_SUB_SUPER: c_int = 0x2070;
-const DG_START_CURRENCY: c_int = 0x20a0;
-const DG_START_OTHER1: c_int = 0x2100;
+const DG_START_CURRENCY: c_int = 0x20a4;
+const DG_START_OTHER1: c_int = 0x2103;
 const DG_START_ROMAN: c_int = 0x2160;
 const DG_START_ARROWS: c_int = 0x2190;
 const DG_START_MATH: c_int = 0x2200;
-const DG_START_TECHNICAL: c_int = 0x2300;
-const DG_START_OTHER2: c_int = 0x2400;
+const DG_START_TECHNICAL: c_int = 0x2302;
+const DG_START_OTHER2: c_int = 0x2423;
 const DG_START_DRAWING: c_int = 0x2500;
 const DG_START_BLOCK: c_int = 0x2580;
 const DG_START_SHAPES: c_int = 0x25a0;
-const DG_START_SYMBOLS: c_int = 0x2600;
-const DG_START_DINGBATS: c_int = 0x2700;
+const DG_START_SYMBOLS: c_int = 0x2605;
+const DG_START_DINGBATS: c_int = 0x2713;
 const DG_START_CJK_SYMBOLS: c_int = 0x3000;
 const DG_START_HIRAGANA: c_int = 0x3041;
 const DG_START_KATAKANA: c_int = 0x30a1;
@@ -601,11 +601,32 @@ mod tests {
 
     #[test]
     fn test_dg_start_constants() {
-        // Verify key DG_START constants match expected values
+        // Verify all 26 DG_START constants match C #define values
         assert_eq!(DG_START_LATIN, 0xa1);
         assert_eq!(DG_START_GREEK, 0x0386);
         assert_eq!(DG_START_CYRILLIC, 0x0401);
         assert_eq!(DG_START_HEBREW, 0x05d0);
         assert_eq!(DG_START_ARABIC, 0x060c);
+        assert_eq!(DG_START_LATIN_EXTENDED, 0x1e02);
+        assert_eq!(DG_START_GREEK_EXTENDED, 0x1f00);
+        assert_eq!(DG_START_PUNCTUATION, 0x2002);
+        assert_eq!(DG_START_SUB_SUPER, 0x2070);
+        assert_eq!(DG_START_CURRENCY, 0x20a4);
+        assert_eq!(DG_START_OTHER1, 0x2103);
+        assert_eq!(DG_START_ROMAN, 0x2160);
+        assert_eq!(DG_START_ARROWS, 0x2190);
+        assert_eq!(DG_START_MATH, 0x2200);
+        assert_eq!(DG_START_TECHNICAL, 0x2302);
+        assert_eq!(DG_START_OTHER2, 0x2423);
+        assert_eq!(DG_START_DRAWING, 0x2500);
+        assert_eq!(DG_START_BLOCK, 0x2580);
+        assert_eq!(DG_START_SHAPES, 0x25a0);
+        assert_eq!(DG_START_SYMBOLS, 0x2605);
+        assert_eq!(DG_START_DINGBATS, 0x2713);
+        assert_eq!(DG_START_CJK_SYMBOLS, 0x3000);
+        assert_eq!(DG_START_HIRAGANA, 0x3041);
+        assert_eq!(DG_START_KATAKANA, 0x30a1);
+        assert_eq!(DG_START_BOPOMOFO, 0x3105);
+        assert_eq!(DG_START_OTHER3, 0x3220);
     }
 }
