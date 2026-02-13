@@ -332,6 +332,8 @@ extern "C" {
     fn nvim_pum_adjust_info_position_impl(wp: *mut WinHandle, width: c_int);
     /// Set info for a completed item.
     fn nvim_pum_set_info_impl(selected: c_int, info: *mut std::ffi::c_char) -> *mut WinHandle;
+    /// Set the selected item index (scrolling, preview).
+    fn nvim_pum_set_selected_impl(n: c_int, repeat: c_int) -> c_int;
 }
 
 /// Opaque handle to a `buf_T`.
@@ -406,6 +408,17 @@ pub unsafe extern "C" fn rs_pum_set_info(
     info: *mut std::ffi::c_char,
 ) -> *mut WinHandle {
     nvim_pum_set_info_impl(selected, info)
+}
+
+/// Set the selected item index, handle scrolling and preview.
+///
+/// Returns 1 if the window was resized and repositioning is needed.
+///
+/// # Safety
+/// Calls C `_impl` function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
+    nvim_pum_set_selected_impl(n, repeat)
 }
 
 #[cfg(test)]

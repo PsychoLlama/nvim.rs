@@ -461,6 +461,21 @@ pub const extern "C" fn rs_pum_trunc_col(col_off: c_int, pum_width: c_int, is_rl
     }
 }
 
+// C `_impl` function for Phase 7 migration.
+extern "C" {
+    /// Redraw the popup menu.
+    fn nvim_pum_redraw_impl();
+}
+
+/// Redraw the popup menu using current `pum_first` and `pum_selected`.
+///
+/// # Safety
+/// Calls C `_impl` function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_redraw() {
+    nvim_pum_redraw_impl();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

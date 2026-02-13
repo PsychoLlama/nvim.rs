@@ -122,6 +122,8 @@ extern void rs_pum_select_mouse_pos(void);
 extern void rs_pum_execute_menu(vimmenu_T *menu, int mode);
 extern void rs_pum_show_popupmenu(vimmenu_T *menu);
 extern void rs_pum_make_popup(const char *path_name, int use_mouse_pos);
+extern void rs_pum_redraw(void);
+extern int rs_pum_set_selected(int n, int repeat);
 
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
@@ -750,6 +752,12 @@ static inline int pum_user_attr_combine(int idx, int type, int attr)
 /// Redraw the popup menu, using "pum_first" and "pum_selected".
 void pum_redraw(void)
 {
+  rs_pum_redraw();
+}
+
+/// Redraw the popup menu (implementation).
+void nvim_pum_redraw_impl(void)
+{
   int row = 0;
   int attr_scroll = win_hl_attr(curwin, HLF_PSB);
   int attr_thumb = win_hl_attr(curwin, HLF_PST);
@@ -1226,6 +1234,12 @@ win_T *pum_set_info(int selected, char *info)
 /// menu must be recomputed.
 static bool pum_set_selected(int n, int repeat)
 {
+  return rs_pum_set_selected(n, repeat) != 0;
+}
+
+/// Set selected item (implementation).
+int nvim_pum_set_selected_impl(int n, int repeat)
+{
   bool resized = false;
   int context = pum_height / 2;
   int prev_selected = pum_selected;
@@ -1443,7 +1457,7 @@ static bool pum_set_selected(int n, int repeat)
     }
   }
 
-  return resized;
+  return (int)resized;
 }
 
 /// Undisplay the popup menu (later).
@@ -1742,7 +1756,7 @@ void nvim_pum_show_popupmenu_impl(vimmenu_T *menu)
     pum_is_visible = true;
     pum_is_drawn = true;
     pum_grid.zindex = kZIndexCmdlinePopupMenu;  // show above cmdline area #23275
-    pum_redraw();
+    rs_pum_redraw();
     setcursor_mayforce(curwin, true);
 
     int c = vgetc();
