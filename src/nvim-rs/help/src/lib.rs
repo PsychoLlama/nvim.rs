@@ -215,6 +215,9 @@ const EXPR_TABLE: &[&[u8]] = &[
     b"!=?", b"!~?", b"<=?", b"<?", b"==?", b"=~?", b">=?", b">?", b"is?", b"isnot?",
 ];
 
+/// Opaque handle to exarg_T.
+pub type ExargHandle = *mut c_void;
+
 extern "C" {
     fn nvim_get_iobuff() -> *mut c_char;
     fn find_tags(
@@ -227,6 +230,7 @@ extern "C" {
     ) -> c_int;
     fn xfree(ptr: *mut c_void);
     fn nvim_help_get_p_hlg() -> *const c_char;
+    fn do_cmdline_cmd(cmd: *const c_char);
 }
 
 /// Helper: write a byte slice into a C buffer at a given offset.
@@ -638,6 +642,18 @@ pub unsafe extern "C" fn rs_cleanup_help_tags(num_file: c_int, file: *mut *mut c
             }
         }
     }
+}
+
+/// `:exusage` — open help for ex command index.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_exusage(_eap: ExargHandle) {
+    unsafe { do_cmdline_cmd(c"help ex-cmd-index".as_ptr()) };
+}
+
+/// `:viusage` — open help for normal mode command index.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_viusage(_eap: ExargHandle) {
+    unsafe { do_cmdline_cmd(c"help normal-index".as_ptr()) };
 }
 
 #[cfg(test)]

@@ -55,6 +55,8 @@ extern char *rs_check_help_lang(char *arg);
 extern int rs_help_compare(const void *s1, const void *s2);
 extern int rs_find_help_tags(const char *arg, int *num_matches, char ***matches, bool keep_lang);
 extern void rs_cleanup_help_tags(int num_file, char **file);
+extern void rs_ex_exusage(void *eap);
+extern void rs_ex_viusage(void *eap);
 
 // C accessor for 'helplang' option
 const char *nvim_help_get_p_hlg(void) { return p_hlg; }
@@ -736,13 +738,13 @@ void get_local_additions(void)
 /// ":exusage"
 void ex_exusage(exarg_T *eap)
 {
-  do_cmdline_cmd("help ex-cmd-index");
+  rs_ex_exusage(eap);
 }
 
 /// ":viusage"
 void ex_viusage(exarg_T *eap)
 {
-  do_cmdline_cmd("help normal-index");
+  rs_ex_viusage(eap);
 }
 
 /// Generate tags in one help directory
