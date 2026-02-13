@@ -257,6 +257,52 @@ pub const extern "C" fn rs_pum_menu_key_action(
     PumMenuKeyResult { action: 0 }
 }
 
+/// Opaque handle to a `vimmenu_T`.
+#[repr(C)]
+pub struct VimMenuHandle {
+    _private: [u8; 0],
+}
+
+// C `_impl` functions for Phase 6 migration.
+extern "C" {
+    /// Execute the currently selected popup menu item.
+    fn nvim_pum_execute_menu_impl(menu: *mut VimMenuHandle, mode: c_int);
+    /// Show the terminal popup menu.
+    fn nvim_pum_show_popupmenu_impl(menu: *mut VimMenuHandle);
+    /// Create a popup from a menu path.
+    fn nvim_pum_make_popup_impl(path_name: *const std::ffi::c_char, use_mouse_pos: c_int);
+}
+
+/// Execute the currently selected popup menu item.
+///
+/// # Safety
+/// Calls C `_impl` function. `menu` must be a valid `vimmenu_T` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_int) {
+    nvim_pum_execute_menu_impl(menu, mode);
+}
+
+/// Open the terminal version of the popup menu.
+///
+/// # Safety
+/// Calls C `_impl` function. `menu` must be a valid `vimmenu_T` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
+    nvim_pum_show_popupmenu_impl(menu);
+}
+
+/// Create a popup from a menu path.
+///
+/// # Safety
+/// Calls C `_impl` function. `path_name` must be a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_make_popup(
+    path_name: *const std::ffi::c_char,
+    use_mouse_pos: c_int,
+) {
+    nvim_pum_make_popup_impl(path_name, use_mouse_pos);
+}
+
 /// Move selection in context menu, skipping separators.
 ///
 /// # Arguments

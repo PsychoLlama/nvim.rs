@@ -117,6 +117,11 @@ extern void rs_pum_grid_puts_with_attrs(int col, int cells, const char *text,
 extern void rs_pum_preview_set_text(buf_T *buf, char *info, linenr_T *lnum, int *max_width);
 extern void rs_pum_adjust_info_position(win_T *wp, int width);
 extern win_T *rs_pum_set_info(int selected, char *info);
+extern void rs_pum_position_at_mouse(int min_width);
+extern void rs_pum_select_mouse_pos(void);
+extern void rs_pum_execute_menu(vimmenu_T *menu, int mode);
+extern void rs_pum_show_popupmenu(vimmenu_T *menu);
+extern void rs_pum_make_popup(const char *path_name, int use_mouse_pos);
 
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
@@ -1553,7 +1558,7 @@ void pum_set_event_info(dict_T *dict)
   rs_pum_set_event_info(dict);
 }
 
-static void pum_position_at_mouse(int min_width)
+void nvim_pum_position_at_mouse_impl(int min_width)
 {
   int min_row = 0;
   int min_col = 0;
@@ -1636,7 +1641,7 @@ static void pum_position_at_mouse(int min_width)
 }
 
 /// Select the pum entry at the mouse position.
-static void pum_select_mouse_pos(void)
+void nvim_pum_select_mouse_pos_impl(void)
 {
   int grid = mouse_grid;
   int row = mouse_row;
@@ -1668,7 +1673,7 @@ static void pum_select_mouse_pos(void)
 }
 
 /// Execute the currently selected popup menu item.
-static void pum_execute_menu(vimmenu_T *menu, int mode)
+void nvim_pum_execute_menu_impl(vimmenu_T *menu, int mode)
 {
   int idx = 0;
   exarg_T ea;
@@ -1683,7 +1688,7 @@ static void pum_execute_menu(vimmenu_T *menu, int mode)
 }
 
 /// Open the terminal version of the popup menu and don't return until it is closed.
-void pum_show_popupmenu(vimmenu_T *menu)
+void nvim_pum_show_popupmenu_impl(vimmenu_T *menu)
 {
   pum_undisplay(true);
   pum_size = 0;
@@ -1724,7 +1729,7 @@ void pum_show_popupmenu(vimmenu_T *menu)
   pum_scrollbar = 0;
   pum_height = pum_size;
   pum_rl = curwin->w_p_rl;
-  pum_position_at_mouse(20);
+  rs_pum_position_at_mouse(20);
 
   pum_selected = -1;
   pum_first = 0;
@@ -1748,7 +1753,7 @@ void pum_show_popupmenu(vimmenu_T *menu)
       break;
     } else if (c == CAR || c == NL) {
       // enter: select current item, if any, and close
-      pum_execute_menu(menu, mode);
+      rs_pum_execute_menu(menu, mode);
       break;
     } else if (c == 'k' || c == K_UP || c == K_MOUSEUP) {
       // cursor up: select previous item
@@ -1772,13 +1777,13 @@ void pum_show_popupmenu(vimmenu_T *menu)
       break;
     } else if (c == K_LEFTDRAG || c == K_RIGHTDRAG || c == K_MOUSEMOVE) {
       // mouse moved: select item in the mouse row
-      pum_select_mouse_pos();
+      rs_pum_select_mouse_pos();
     } else if (c == K_LEFTMOUSE || c == K_LEFTMOUSE_NM || c == K_RIGHTRELEASE) {
       // left mouse click: select clicked item, if any, and close;
       // right mouse release: select clicked item, close if any
-      pum_select_mouse_pos();
+      rs_pum_select_mouse_pos();
       if (pum_selected >= 0) {
-        pum_execute_menu(menu, mode);
+        rs_pum_execute_menu(menu, mode);
         break;
       }
       if (c == K_LEFTMOUSE || c == K_LEFTMOUSE_NM) {
@@ -1797,7 +1802,7 @@ void pum_show_popupmenu(vimmenu_T *menu)
   }
 }
 
-void pum_make_popup(const char *path_name, int use_mouse_pos)
+void nvim_pum_make_popup_impl(const char *path_name, int use_mouse_pos)
 {
   if (!use_mouse_pos) {
     // Hack: set mouse position at the cursor so that the menu pops up
@@ -1817,8 +1822,18 @@ void pum_make_popup(const char *path_name, int use_mouse_pos)
 
   vimmenu_T *menu = menu_find(path_name);
   if (menu != NULL) {
-    pum_show_popupmenu(menu);
+    rs_pum_show_popupmenu(menu);
   }
+}
+
+void pum_show_popupmenu(vimmenu_T *menu)
+{
+  rs_pum_show_popupmenu(menu);
+}
+
+void pum_make_popup(const char *path_name, int use_mouse_pos)
+{
+  rs_pum_make_popup(path_name, use_mouse_pos);
 }
 
 void nvim_pum_ui_flush_impl(void)

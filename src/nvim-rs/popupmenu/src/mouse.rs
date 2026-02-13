@@ -339,6 +339,32 @@ pub const extern "C" fn rs_pum_scrollbar_click_to_first(
     }
 }
 
+// C `_impl` functions for Phase 6 migration.
+extern "C" {
+    /// Position popup menu at mouse location.
+    fn nvim_pum_position_at_mouse_impl(min_width: c_int);
+    /// Select the popup entry at the mouse position.
+    fn nvim_pum_select_mouse_pos_impl();
+}
+
+/// Position popup menu at the current mouse location.
+///
+/// # Safety
+/// Calls C `_impl` function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
+    nvim_pum_position_at_mouse_impl(min_width);
+}
+
+/// Select the popup entry at the mouse position.
+///
+/// # Safety
+/// Calls C `_impl` function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_select_mouse_pos() {
+    nvim_pum_select_mouse_pos_impl();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
