@@ -74,6 +74,11 @@ extern void rs_ui_ext_tabline_update(void);
 extern void rs_draw_tabline(void);
 // Phase 5 Rust implementation
 extern void rs_win_redr_custom(win_T *wp, bool draw_winbar, bool draw_ruler, bool ui_event);
+// Phase 6 Rust implementation
+extern int rs_build_stl_str_hl_wrap(win_T *wp, char *out, size_t outlen, char *fmt, int opt_idx,
+                                     int opt_scope, schar_T fillchar, int maxwidth,
+                                     stl_hlrec_t **hltab, size_t *hltab_len,
+                                     StlClickRecord **tabtab, statuscol_T *stcp);
 
 // Determines how deeply nested %{} blocks will be evaluated in statusline.
 #define MAX_STL_EVAL_DEPTH 100
@@ -212,6 +217,17 @@ int build_statuscol_str(win_T *wp, linenr_T lnum, linenr_T relnum, char *buf, st
 int build_stl_str_hl(win_T *wp, char *out, size_t outlen, char *fmt, OptIndex opt_idx,
                      int opt_scope, schar_T fillchar, int maxwidth, stl_hlrec_t **hltab,
                      size_t *hltab_len, StlClickRecord **tabtab, statuscol_T *stcp)
+{
+  return rs_build_stl_str_hl_wrap(wp, out, outlen, fmt, (int)opt_idx, opt_scope, fillchar, maxwidth,
+                                  hltab, hltab_len, tabtab, stcp);
+}
+
+/// build_stl_str_hl implementation (called from Rust rs_build_stl_str_hl).
+/// Contains the full format parser logic (~1,274 lines).
+int nvim_stl_build_stl_str_hl_impl(win_T *wp, char *out, size_t outlen, char *fmt, OptIndex opt_idx,
+                                    int opt_scope, schar_T fillchar, int maxwidth,
+                                    stl_hlrec_t **hltab, size_t *hltab_len,
+                                    StlClickRecord **tabtab, statuscol_T *stcp)
 {
   static size_t stl_items_len = 20;  // Initial value, grows as needed.
   static stl_item_t *stl_items = NULL;
@@ -1671,8 +1687,8 @@ int nvim_stl_build_stl_str_hl(win_T *wp, char *buf, int buflen, const char *stc,
 {
   // build_stl_str_hl requires a mutable copy of the format string
   char *stc_copy = xstrdup(stc);
-  int width = build_stl_str_hl(wp, buf, (size_t)buflen, stc_copy, kOptStatuscolumn, OPT_LOCAL, 0,
-                                maxwidth, hlrec, NULL, clickrec, stcp);
+  int width = nvim_stl_build_stl_str_hl_impl(wp, buf, (size_t)buflen, stc_copy, kOptStatuscolumn,
+                                             OPT_LOCAL, 0, maxwidth, hlrec, NULL, clickrec, stcp);
   xfree(stc_copy);
   return width;
 }
@@ -2237,8 +2253,8 @@ void nvim_stl_win_redr_custom_impl(win_T *wp, bool draw_winbar, bool draw_ruler,
   // Make a copy, because the statusline may include a function call that
   // might change the option value and free the memory.
   stl = xstrdup(stl);
-  build_stl_str_hl(ewp, buf, sizeof(buf), stl, opt_idx, opt_scope,
-                   fillchar, maxwidth, &hltab, NULL, &tabtab, NULL);
+  nvim_stl_build_stl_str_hl_impl(ewp, buf, sizeof(buf), stl, opt_idx, opt_scope,
+                                 fillchar, maxwidth, &hltab, NULL, &tabtab, NULL);
 
   xfree(stl);
   ewp->w_p_crb = p_crb_save;

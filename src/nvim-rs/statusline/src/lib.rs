@@ -2390,6 +2390,61 @@ pub unsafe extern "C" fn rs_win_redr_custom(
     nvim_stl_win_redr_custom_impl(wp, draw_winbar, draw_ruler, ui_event);
 }
 
+// =============================================================================
+// Phase 6: Format Parser (build_stl_str_hl)
+// =============================================================================
+
+// Phase 6 C accessors
+extern "C" {
+    fn nvim_stl_build_stl_str_hl_impl(
+        wp: WinHandle,
+        out: *mut c_char,
+        outlen: usize,
+        fmt: *mut c_char,
+        opt_idx: c_int,
+        opt_scope: c_int,
+        fillchar: ScharT,
+        maxwidth: c_int,
+        hltab: *mut *mut c_void,
+        hltab_len: *mut usize,
+        tabtab: *mut *mut c_void,
+        stcp: StatuscolHandle,
+    ) -> c_int;
+}
+
+/// FFI export: Build a string from the status line items in "fmt".
+///
+/// This is the Rust replacement for `build_stl_str_hl()` in statusline.c.
+/// Delegates to the C implementation which handles the full format parsing
+/// loop (~1,274 lines), VimL eval, item rendering, truncation, separator
+/// filling, highlight/click record building.
+///
+/// # Safety
+/// - `wp` must be a valid window handle.
+/// - `out` must be a valid buffer of at least `outlen` bytes.
+/// - `fmt` must be a valid C string (will be modified in place).
+/// - Other pointer parameters may be null where documented.
+#[no_mangle]
+pub unsafe extern "C" fn rs_build_stl_str_hl_wrap(
+    wp: WinHandle,
+    out: *mut c_char,
+    outlen: usize,
+    fmt: *mut c_char,
+    opt_idx: c_int,
+    opt_scope: c_int,
+    fillchar: ScharT,
+    maxwidth: c_int,
+    hltab: *mut *mut c_void,
+    hltab_len: *mut usize,
+    tabtab: *mut *mut c_void,
+    stcp: StatuscolHandle,
+) -> c_int {
+    nvim_stl_build_stl_str_hl_impl(
+        wp, out, outlen, fmt, opt_idx, opt_scope, fillchar, maxwidth, hltab, hltab_len, tabtab,
+        stcp,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
