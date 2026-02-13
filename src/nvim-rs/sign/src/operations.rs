@@ -21,6 +21,27 @@ extern "C" {
 
     /// Get sign priority
     fn nvim_sign_get_priority(sp: SignHandle) -> c_int;
+
+    // Composite C accessors for high-level operations
+    fn nvim_sign_place_impl(
+        id: *mut u32,
+        group: *const c_char,
+        name: *const c_char,
+        buf: crate::SignBufHandle,
+        lnum: LinenrT,
+        prio: c_int,
+    ) -> c_int;
+    fn nvim_sign_unplace_impl(
+        buf: crate::SignBufHandle,
+        id: c_int,
+        group: *const c_char,
+        atlnum: LinenrT,
+    ) -> c_int;
+    fn nvim_sign_jump_impl(
+        id: c_int,
+        group: *const c_char,
+        buf: crate::SignBufHandle,
+    ) -> LinenrT;
 }
 
 // =============================================================================
@@ -492,6 +513,59 @@ pub unsafe extern "C" fn rs_sign_can_undefine(name: *const c_char) -> SignUndefi
     } else {
         SignUndefineResult::Ok
     }
+}
+
+// =============================================================================
+// Core High-Level Operations
+// =============================================================================
+
+/// Place a sign at the specified file location or update a sign.
+///
+/// Returns OK (1) on success, FAIL (0) on failure.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_place(
+    id: *mut u32,
+    group: *const c_char,
+    name: *const c_char,
+    buf: crate::SignBufHandle,
+    lnum: LinenrT,
+    prio: c_int,
+) -> c_int {
+    nvim_sign_place_impl(id, group, name, buf, lnum, prio)
+}
+
+/// Unplace the specified sign for a single or all buffers.
+///
+/// Returns OK (1) on success, FAIL (0) on failure.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_unplace(
+    buf: crate::SignBufHandle,
+    id: c_int,
+    group: *const c_char,
+    atlnum: LinenrT,
+) -> c_int {
+    nvim_sign_unplace_impl(buf, id, group, atlnum)
+}
+
+/// Jump to a sign.
+///
+/// Returns the line number on success, -1 on failure.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_jump(
+    id: c_int,
+    group: *const c_char,
+    buf: crate::SignBufHandle,
+) -> LinenrT {
+    nvim_sign_jump_impl(id, group, buf)
 }
 
 // =============================================================================

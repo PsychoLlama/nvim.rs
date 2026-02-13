@@ -77,6 +77,10 @@ extern int rs_sign_define_by_name(const char *name, const char *icon, const char
                                   const char *culhl, const char *numhl, int prio);
 extern int rs_sign_undefine_by_name(const char *name);
 extern void rs_free_signs(void);
+extern int rs_sign_place(uint32_t *id, const char *group, const char *name, buf_T *buf,
+                         linenr_T lnum, int prio);
+extern int rs_sign_unplace(buf_T *buf, int id, const char *group, linenr_T atlnum);
+extern linenr_T rs_sign_jump(int id, const char *group, buf_T *buf);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -324,103 +328,19 @@ static void sign_list_by_name(char *name)
 /// Place a sign at the specified file location or update a sign.
 static int sign_place(uint32_t *id, char *group, char *name, buf_T *buf, linenr_T lnum, int prio)
 {
-  // Check for reserved character '*' in group name
-  if (group != NULL && (*group == '*' || *group == NUL)) {
-    return FAIL;
-  }
-
-  sign_T *sp = pmap_get(cstr_t)(&sign_map, name);
-  if (sp == NULL) {
-    semsg(_("E155: Unknown sign: %s"), name);
-    return FAIL;
-  }
-
-  // Use the default priority value for this sign.
-  prio = rs_sign_effective_priority(prio == -1 && sp->sn_priority != -1 ? sp->sn_priority : prio);
-
-  if (lnum > 0) {
-    // ":sign place {id} line={lnum} name={name} file={fname}": place a sign
-    buf_set_sign(buf, id, group, prio, lnum, sp);
-  } else {
-    // ":sign place {id} file={fname}": change sign type and/or priority
-    lnum = buf_mod_sign(buf, id, group, prio, sp);
-  }
-  if (lnum <= 0) {
-    semsg(_("E885: Not possible to change sign %s"), name);
-    return FAIL;
-  }
-
-  return OK;
-}
-
-static int sign_unplace_inner(buf_T *buf, int id, char *group, linenr_T atlnum)
-{
-  if (!buf_has_signs(buf)) {  // No signs in the buffer
-    return FAIL;
-  }
-
-  if (id == 0 || atlnum > 0 || (group != NULL && *group == '*')) {
-    // Delete multiple specified signs
-    if (!buf_delete_signs(buf, group, id, atlnum)) {
-      return FAIL;
-    }
-  } else {
-    // Delete only a single sign
-    int64_t ns = group_get_ns(group);
-    if (ns < 0 || !extmark_del_id(buf, (uint32_t)ns, (uint32_t)id)) {
-      return FAIL;
-    }
-  }
-
-  return OK;
+  return rs_sign_place(id, group, name, buf, lnum, prio);
 }
 
 /// Unplace the specified sign for a single or all buffers
 static int sign_unplace(buf_T *buf, int id, char *group, linenr_T atlnum)
 {
-  if (buf != NULL) {
-    return sign_unplace_inner(buf, id, group, atlnum);
-  } else {
-    int retval = OK;
-    FOR_ALL_BUFFERS(cbuf) {
-      if (!sign_unplace_inner(cbuf, id, group, atlnum)) {
-        retval = FAIL;
-      }
-    }
-    return retval;
-  }
+  return rs_sign_unplace(buf, id, group, atlnum);
 }
 
 /// Jump to a sign.
 static linenr_T sign_jump(int id, char *group, buf_T *buf)
 {
-  linenr_T lnum = buf_findsign(buf, id, group);
-
-  if (lnum <= 0) {
-    semsg(_("E157: Invalid sign ID: %" PRId32), id);
-    return -1;
-  }
-
-  // goto a sign ...
-  if (buf_jump_open_win(buf) != NULL) {     // ... in a current window
-    curwin->w_cursor.lnum = lnum;
-    check_cursor_lnum(curwin);
-    beginline(BL_WHITE);
-  } else {      // ... not currently in a window
-    if (buf->b_fname == NULL) {
-      emsg(_("E934: Cannot jump to a buffer that does not have a name"));
-      return -1;
-    }
-    size_t cmdlen = strlen(buf->b_fname) + 24;
-    char *cmd = xmallocz(cmdlen);
-    snprintf(cmd, cmdlen, "e +%" PRId64 " %s", (int64_t)lnum, buf->b_fname);
-    do_cmdline_cmd(cmd);
-    xfree(cmd);
-  }
-
-  foldOpenCursor();
-
-  return lnum;
+  return rs_sign_jump(id, group, buf);
 }
 
 /// ":sign define {name} ..." command
@@ -1638,6 +1558,106 @@ int nvim_sign_undefine_by_name_impl(const char *name)
   xfree(sp->sn_icon);
   xfree(sp);
   return OK;
+}
+
+/// Place a sign — composite accessor implementing the core logic.
+/// Returns OK on success, FAIL on failure. Error messages stay in C.
+int nvim_sign_place_impl(uint32_t *id, char *group, char *name, buf_T *buf, linenr_T lnum,
+                         int prio)
+{
+  // Check for reserved character '*' in group name
+  if (group != NULL && (*group == '*' || *group == NUL)) {
+    return FAIL;
+  }
+
+  sign_T *sp = pmap_get(cstr_t)(&sign_map, name);
+  if (sp == NULL) {
+    semsg(_("E155: Unknown sign: %s"), name);
+    return FAIL;
+  }
+
+  // Use the default priority value for this sign.
+  prio = rs_sign_effective_priority(prio == -1 && sp->sn_priority != -1 ? sp->sn_priority : prio);
+
+  if (lnum > 0) {
+    buf_set_sign(buf, id, group, prio, lnum, sp);
+  } else {
+    lnum = buf_mod_sign(buf, id, group, prio, sp);
+  }
+  if (lnum <= 0) {
+    semsg(_("E885: Not possible to change sign %s"), name);
+    return FAIL;
+  }
+
+  return OK;
+}
+
+/// Unplace sign(s) from a single buffer — composite accessor.
+int nvim_sign_unplace_inner_impl(buf_T *buf, int id, char *group, linenr_T atlnum)
+{
+  if (!buf_has_signs(buf)) {
+    return FAIL;
+  }
+
+  if (id == 0 || atlnum > 0 || (group != NULL && *group == '*')) {
+    if (!buf_delete_signs(buf, group, id, atlnum)) {
+      return FAIL;
+    }
+  } else {
+    int64_t ns = group_get_ns(group);
+    if (ns < 0 || !extmark_del_id(buf, (uint32_t)ns, (uint32_t)id)) {
+      return FAIL;
+    }
+  }
+
+  return OK;
+}
+
+/// Unplace sign(s) from a single buffer or all buffers.
+int nvim_sign_unplace_impl(buf_T *buf, int id, char *group, linenr_T atlnum)
+{
+  if (buf != NULL) {
+    return nvim_sign_unplace_inner_impl(buf, id, group, atlnum);
+  } else {
+    int retval = OK;
+    FOR_ALL_BUFFERS(cbuf) {
+      if (!nvim_sign_unplace_inner_impl(cbuf, id, group, atlnum)) {
+        retval = FAIL;
+      }
+    }
+    return retval;
+  }
+}
+
+/// Jump to a sign — composite accessor.
+/// Returns lnum on success, -1 on failure. Error messages stay in C.
+linenr_T nvim_sign_jump_impl(int id, char *group, buf_T *buf)
+{
+  linenr_T lnum = buf_findsign(buf, id, group);
+
+  if (lnum <= 0) {
+    semsg(_("E157: Invalid sign ID: %" PRId32), id);
+    return -1;
+  }
+
+  if (buf_jump_open_win(buf) != NULL) {
+    curwin->w_cursor.lnum = lnum;
+    check_cursor_lnum(curwin);
+    beginline(BL_WHITE);
+  } else {
+    if (buf->b_fname == NULL) {
+      emsg(_("E934: Cannot jump to a buffer that does not have a name"));
+      return -1;
+    }
+    size_t cmdlen = strlen(buf->b_fname) + 24;
+    char *cmd = xmallocz(cmdlen);
+    snprintf(cmd, cmdlen, "e +%" PRId64 " %s", (int64_t)lnum, buf->b_fname);
+    do_cmdline_cmd(cmd);
+    xfree(cmd);
+  }
+
+  foldOpenCursor();
+  return lnum;
 }
 
 /// Free all signs — iterate map and undefine each.
