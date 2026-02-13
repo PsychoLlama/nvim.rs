@@ -313,8 +313,16 @@ pub const extern "C" fn rs_pum_has_room(height: c_int, size: c_int, border_width
     1
 }
 
-// C _impl functions for Phase 3/5 migration.
+// C _impl functions for Phase 3/5/8 migration.
 extern "C" {
+    /// Display the popup menu (implementation).
+    fn nvim_pum_display_impl(
+        array: *mut crate::item::PumItemArray,
+        size: c_int,
+        selected: c_int,
+        array_changed: c_int,
+        cmd_startcol: c_int,
+    );
     /// Recompose the popup menu grid.
     fn nvim_pum_recompose_impl();
     /// Check and clear the popup menu display.
@@ -419,6 +427,21 @@ pub unsafe extern "C" fn rs_pum_set_info(
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
     nvim_pum_set_selected_impl(n, repeat)
+}
+
+/// Display the popup menu.
+///
+/// # Safety
+/// Calls C `_impl` function. `array` must be a valid `pumitem_T` array pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_display(
+    array: *mut crate::item::PumItemArray,
+    size: c_int,
+    selected: c_int,
+    array_changed: c_int,
+    cmd_startcol: c_int,
+) {
+    nvim_pum_display_impl(array, size, selected, array_changed, cmd_startcol);
 }
 
 #[cfg(test)]

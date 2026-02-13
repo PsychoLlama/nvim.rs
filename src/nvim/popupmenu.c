@@ -124,6 +124,8 @@ extern void rs_pum_show_popupmenu(vimmenu_T *menu);
 extern void rs_pum_make_popup(const char *path_name, int use_mouse_pos);
 extern void rs_pum_redraw(void);
 extern int rs_pum_set_selected(int n, int repeat);
+extern void rs_pum_display(pumitem_T *array, int size, int selected, int array_changed,
+                            int cmd_startcol);
 
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
@@ -490,6 +492,13 @@ static inline int pum_border_width(void)
 ///                      is the same
 /// @param cmd_startcol only for cmdline mode: column of completed match
 void pum_display(pumitem_T *array, int size, int selected, bool array_changed, int cmd_startcol)
+{
+  rs_pum_display(array, size, selected, (int)array_changed, cmd_startcol);
+}
+
+/// Display the popup menu (implementation).
+void nvim_pum_display_impl(pumitem_T *array, int size, int selected, int array_changed,
+                            int cmd_startcol)
 {
   int redo_count = 0;
   int pum_win_row;
