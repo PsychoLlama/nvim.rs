@@ -67,6 +67,10 @@ extern const char *rs_sign_get_display_name(DecorSignHighlight *sh);
 extern bool rs_sign_buffer_has_signs(const buf_T *buf);
 extern size_t rs_describe_sign_text(char *buf, size_t buflen, const schar_T *sign_text);
 extern int rs_init_sign_text(schar_T *sign_text, const char *text, int remove_backslash);
+extern void rs_buf_set_sign(buf_T *buf, uint32_t *id, const char *group, int prio, linenr_T lnum,
+                            sign_T *sp);
+extern linenr_T rs_buf_mod_sign(buf_T *buf, uint32_t *id, const char *group, int prio, sign_T *sp);
+extern int rs_buf_findsign(buf_T *buf, int id, const char *group);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -106,76 +110,22 @@ static const char *sign_get_name(DecorSignHighlight *sh)
 }
 
 /// Create or update a sign extmark.
-///
-/// @param buf  buffer to store sign in
-/// @param id  sign ID
-/// @param group  sign group
-/// @param prio  sign priority
-/// @param lnum  line number which gets the mark
-/// @param sp  sign properties
 static void buf_set_sign(buf_T *buf, uint32_t *id, char *group, int prio, linenr_T lnum, sign_T *sp)
 {
-  if (group && !map_get(String, int)(&namespace_ids, cstr_as_string(group))) {
-    kv_push(sign_ns, nvim_create_namespace(cstr_as_string(group)));
-  }
-
-  uint32_t ns = group ? (uint32_t)nvim_create_namespace(cstr_as_string(group)) : 0;
-  DecorSignHighlight sign = DECOR_SIGN_HIGHLIGHT_INIT;
-
-  sign.flags |= kSHIsSign;
-  memcpy(sign.text, sp->sn_text, SIGN_WIDTH * sizeof(schar_T));
-  sign.sign_name = xstrdup(sp->sn_name);
-  sign.hl_id = sp->sn_text_hl;
-  sign.line_hl_id = sp->sn_line_hl;
-  sign.number_hl_id = sp->sn_num_hl;
-  sign.cursorline_hl_id = sp->sn_cul_hl;
-  sign.priority = (DecorPriority)prio;
-
-  bool has_hl = (sp->sn_line_hl || sp->sn_num_hl || sp->sn_cul_hl);
-  uint16_t decor_flags = (sp->sn_text[0] ? MT_FLAG_DECOR_SIGNTEXT : 0)
-                         | (has_hl ? MT_FLAG_DECOR_SIGNHL : 0);
-
-  DecorInline decor = { .ext = true, .data.ext = { .vt = NULL, .sh_idx = decor_put_sh(sign) } };
-  extmark_set(buf, ns, id, MIN(buf->b_ml.ml_line_count, lnum) - 1, 0, -1, -1,
-              decor, decor_flags, true, false, true, true, NULL);
+  rs_buf_set_sign(buf, id, group, prio, lnum, sp);
 }
 
 /// For an existing, placed sign with "id", modify the sign, group or priority.
 /// Returns the line number of the sign, or zero if the sign is not found.
-///
-/// @param buf  buffer to store sign in
-/// @param id  sign ID
-/// @param group  sign group
-/// @param prio  sign priority
-/// @param sp  sign pointer
 static linenr_T buf_mod_sign(buf_T *buf, uint32_t *id, char *group, int prio, sign_T *sp)
 {
-  int64_t ns = group_get_ns(group);
-  if (ns < 0 || (group && ns == 0)) {
-    return 0;
-  }
-
-  MTKey mark = marktree_lookup_ns(buf->b_marktree, (uint32_t)ns, *id, false, NULL);
-  if (mark.pos.row >= 0) {
-    buf_set_sign(buf, id, group, prio, mark.pos.row + 1, sp);
-  }
-  return mark.pos.row + 1;
+  return rs_buf_mod_sign(buf, id, group, prio, sp);
 }
 
-/// Find the line number of the sign with the requested id in group 'group'. If
-/// the sign does not exist, return 0 as the line number. This will still let
-/// the correct file get loaded.
-///
-/// @param buf  buffer to store sign in
-/// @param id  sign ID
-/// @param group  sign group
+/// Find the line number of the sign with the requested id in group 'group'.
 static int buf_findsign(buf_T *buf, int id, char *group)
 {
-  int64_t ns = group_get_ns(group);
-  if (ns < 0 || (group && ns == 0)) {
-    return 0;
-  }
-  return marktree_lookup_ns(buf->b_marktree, (uint32_t)ns, (uint32_t)id, false, NULL).pos.row + 1;
+  return rs_buf_findsign(buf, id, group);
 }
 
 /// qsort() function to sort signs by line number, priority, id and recency.
@@ -1675,4 +1625,59 @@ char *nvim_sign_get_name(sign_T *sp)
 int nvim_sign_get_priority(sign_T *sp)
 {
   return sp ? sp->sn_priority : -1;
+}
+
+/// Build a DecorSignHighlight from sign properties and place/update an extmark.
+/// This composite accessor keeps complex struct construction on the C side.
+void nvim_sign_build_decor_and_set(buf_T *buf, uint32_t ns, uint32_t *id, int row,
+                                   sign_T *sp, int prio)
+{
+  DecorSignHighlight sign = DECOR_SIGN_HIGHLIGHT_INIT;
+  sign.flags |= kSHIsSign;
+  memcpy(sign.text, sp->sn_text, SIGN_WIDTH * sizeof(schar_T));
+  sign.sign_name = xstrdup(sp->sn_name);
+  sign.hl_id = sp->sn_text_hl;
+  sign.line_hl_id = sp->sn_line_hl;
+  sign.number_hl_id = sp->sn_num_hl;
+  sign.cursorline_hl_id = sp->sn_cul_hl;
+  sign.priority = (DecorPriority)prio;
+
+  bool has_hl = (sp->sn_line_hl || sp->sn_num_hl || sp->sn_cul_hl);
+  uint16_t decor_flags = (sp->sn_text[0] ? MT_FLAG_DECOR_SIGNTEXT : 0)
+                         | (has_hl ? MT_FLAG_DECOR_SIGNHL : 0);
+
+  DecorInline decor = { .ext = true, .data.ext = { .vt = NULL, .sh_idx = decor_put_sh(sign) } };
+  extmark_set(buf, ns, id, row, 0, -1, -1, decor, decor_flags, true, false, true, true, NULL);
+}
+
+/// Look up a sign in the marktree by namespace and ID.
+/// Returns the 1-based line number, or 0 if not found.
+linenr_T nvim_sign_marktree_lookup_row(buf_T *buf, uint32_t ns, uint32_t id)
+{
+  MTKey mark = marktree_lookup_ns(buf->b_marktree, ns, id, false, NULL);
+  return mark.pos.row + 1;
+}
+
+/// Get the line count of a buffer (for sign operations).
+linenr_T nvim_sign_buf_line_count(buf_T *buf)
+{
+  return buf ? buf->b_ml.ml_line_count : 0;
+}
+
+/// Push a namespace ID onto the sign_ns kvec.
+void nvim_sign_ns_push(Integer ns)
+{
+  kv_push(sign_ns, ns);
+}
+
+/// Create a namespace from a C string name.
+int nvim_sign_create_namespace_cstr(const char *name)
+{
+  return (int)nvim_create_namespace(cstr_as_string(name));
+}
+
+/// Check if a namespace with the given name exists.
+int nvim_sign_namespace_exists(const char *name)
+{
+  return map_get(String, int)(&namespace_ids, cstr_as_string(name)) ? 1 : 0;
 }

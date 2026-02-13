@@ -20,7 +20,27 @@ extern "C" {
 
     // Namespace operations
     fn nvim_namespace_lookup(name: *const c_char) -> c_int;
-    fn nvim_create_namespace(name: *const c_char) -> c_int;
+    fn nvim_sign_create_namespace_cstr(name: *const c_char) -> c_int;
+    fn nvim_sign_namespace_exists(name: *const c_char) -> c_int;
+
+    // Composite sign operations
+    fn nvim_sign_build_decor_and_set(
+        buf: SignBufHandle,
+        ns: u32,
+        id: *mut u32,
+        row: c_int,
+        sp: SignHandle,
+        prio: c_int,
+    );
+    fn nvim_sign_marktree_lookup_row(buf: SignBufHandle, ns: u32, id: u32) -> LinenrT;
+    fn nvim_sign_buf_line_count(buf: SignBufHandle) -> LinenrT;
+    fn nvim_sign_ns_push(ns: i64);
+
+    // Namespace filtering
+    fn rs_group_get_ns(
+        group: *const c_char,
+        ns_lookup: extern "C" fn(*const c_char) -> c_int,
+    ) -> i64;
 }
 
 // =============================================================================
@@ -131,7 +151,7 @@ pub unsafe extern "C" fn rs_sign_resolve_namespace(group: *const c_char) -> c_in
     }
 
     // Create or get the namespace
-    nvim_create_namespace(group)
+    nvim_sign_create_namespace_cstr(group)
 }
 
 /// Check if a group name represents a valid namespace.
@@ -382,6 +402,98 @@ pub extern "C" fn rs_sign_calc_decor_flags(
     }
 
     flags
+}
+
+// =============================================================================
+// Core Sign Placement Operations
+// =============================================================================
+
+/// Callback used by rs_group_get_ns for namespace lookup.
+extern "C" fn namespace_lookup_fn(name: *const c_char) -> c_int {
+    unsafe { nvim_namespace_lookup(name) }
+}
+
+/// Create or update a sign extmark.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_set_sign(
+    buf: SignBufHandle,
+    id: *mut u32,
+    group: *const c_char,
+    prio: c_int,
+    lnum: LinenrT,
+    sp: SignHandle,
+) {
+    // If group is non-null and namespace doesn't exist yet, register it
+    if !group.is_null() && nvim_sign_namespace_exists(group) == 0 {
+        let ns = nvim_sign_create_namespace_cstr(group);
+        nvim_sign_ns_push(i64::from(ns));
+    }
+
+    // Resolve namespace
+    let ns: u32 = if group.is_null() {
+        0
+    } else {
+        #[allow(clippy::cast_sign_loss)]
+        let ns = nvim_sign_create_namespace_cstr(group) as u32;
+        ns
+    };
+
+    // Clamp lnum to buffer range and convert to 0-based row
+    let line_count = nvim_sign_buf_line_count(buf);
+    let clamped = if lnum > line_count { line_count } else { lnum };
+    let row = clamped - 1;
+
+    nvim_sign_build_decor_and_set(buf, ns, id, row, sp, prio);
+}
+
+/// Modify an existing placed sign. Returns the 1-based line number, or 0 if not found.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_buf_mod_sign(
+    buf: SignBufHandle,
+    id: *mut u32,
+    group: *const c_char,
+    prio: c_int,
+    sp: SignHandle,
+) -> LinenrT {
+    let ns = rs_group_get_ns(group, namespace_lookup_fn);
+    if ns < 0 || (!group.is_null() && ns == 0) {
+        return 0;
+    }
+
+    #[allow(clippy::cast_sign_loss)]
+    let mark_lnum = nvim_sign_marktree_lookup_row(buf, ns as u32, *id);
+    if mark_lnum > 0 {
+        // mark_lnum is already 1-based from the accessor
+        rs_buf_set_sign(buf, id, group, prio, mark_lnum, sp);
+    }
+    mark_lnum
+}
+
+/// Find the line number of a placed sign. Returns 1-based line number, or 0 if not found.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_buf_findsign(
+    buf: SignBufHandle,
+    id: c_int,
+    group: *const c_char,
+) -> c_int {
+    let ns = rs_group_get_ns(group, namespace_lookup_fn);
+    if ns < 0 || (!group.is_null() && ns == 0) {
+        return 0;
+    }
+
+    #[allow(clippy::cast_sign_loss)]
+    nvim_sign_marktree_lookup_row(buf, ns as u32, id as u32)
 }
 
 // =============================================================================
