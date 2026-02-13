@@ -58,6 +58,61 @@ extern void rs_cleanup_help_tags(int num_file, char **file);
 extern void rs_ex_exusage(void *eap);
 extern void rs_ex_viusage(void *eap);
 extern void rs_prepare_help_buffer(void);
+extern void rs_ex_help(void *eap);
+extern void rs_ex_helpclose(void *eap);
+
+// C accessors for ex_help / ex_helpclose
+char *nvim_help_eap_get_arg(exarg_T *eap) { return eap->arg; }
+void nvim_help_eap_set_arg(exarg_T *eap, char *arg) { eap->arg = arg; }
+void nvim_help_eap_set_nextcmd(exarg_T *eap, char *cmd) { eap->nextcmd = cmd; }
+int nvim_help_eap_get_forceit(exarg_T *eap) { return eap->forceit; }
+int nvim_help_eap_get_skip(exarg_T *eap) { return eap->skip; }
+
+bool nvim_help_curbuf_is_help(void) { return curbuf->b_help; }
+bool nvim_help_curwin_bt_help(void) { return bt_help(curwin->w_buffer); }
+int nvim_help_get_cmdmod_tab(void) { return cmdmod.cmod_tab; }
+int nvim_help_get_cmdmod_split(void) { return cmdmod.cmod_split; }
+int nvim_help_get_cmdmod_flags(void) { return cmdmod.cmod_flags; }
+int nvim_help_get_columns(void) { return Columns; }
+int nvim_help_get_curwin_width(void) { return curwin->w_width; }
+int nvim_help_get_curwin_height(void) { return curwin->w_height; }
+int nvim_help_get_p_sb(void) { return p_sb; }
+int64_t nvim_help_get_p_hh(void) { return p_hh; }
+const char *nvim_help_get_p_hf(void) { return p_hf; }
+
+bool nvim_help_get_KeyTyped(void) { return KeyTyped; }
+void nvim_help_set_KeyTyped(bool val) { KeyTyped = val; }
+int nvim_help_get_restart_edit(void) { return restart_edit; }
+void nvim_help_set_restart_edit(int val) { restart_edit = val; }
+
+int nvim_help_get_curbuf_fnum(void) { return curbuf->b_fnum; }
+int nvim_help_get_curwin_alt_fnum(void) { return curwin->w_alt_fnum; }
+void nvim_help_set_curwin_alt_fnum(int fnum) { curwin->w_alt_fnum = fnum; }
+
+// Find a help window in current tab
+void *nvim_help_find_help_win_in_tab(void)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp2, curtab) {
+    if (bt_help(wp2->w_buffer) && !wp2->w_config.hide && wp2->w_config.focusable) {
+      return wp2;
+    }
+  }
+  return NULL;
+}
+
+int nvim_help_win_nwindows(void *wp)
+{
+  return ((win_T *)wp)->w_buffer->b_nwindows;
+}
+
+// Wrappers for functions needing complex types
+int nvim_help_do_ecmd_help(void)
+{
+  return do_ecmd(0, NULL, NULL, NULL, ECMD_LASTL,
+                 ECMD_HIDE + ECMD_SET_HELP, NULL);
+}
+
+int nvim_help_buf_nwindows(buf_T *buf) { return buf->b_nwindows; }
 
 // C accessors for prepare_help_buffer
 void nvim_help_set_curbuf_b_help(bool val) { curbuf->b_help = val; }
@@ -101,177 +156,13 @@ const char *nvim_help_get_p_hlg(void) { return p_hlg; }
 /// ":help": open a read-only window on a help file
 void ex_help(exarg_T *eap)
 {
-  char *arg;
-  FILE *helpfd;          // file descriptor of help file
-  win_T *wp;
-  int num_matches;
-  char **matches;
-  int empty_fnum = 0;
-  int alt_fnum = 0;
-  const bool old_KeyTyped = KeyTyped;
-
-  if (eap != NULL) {
-    // A ":help" command ends at the first LF, or at a '|' that is
-    // followed by some text.  Set nextcmd to the following command.
-    for (arg = eap->arg; *arg; arg++) {
-      if (*arg == '\n' || *arg == '\r'
-          || (*arg == '|' && arg[1] != NUL && arg[1] != '|')) {
-        *arg++ = NUL;
-        eap->nextcmd = arg;
-        break;
-      }
-    }
-    arg = eap->arg;
-
-    if (eap->forceit && *arg == NUL && !curbuf->b_help) {
-      emsg(_("E478: Don't panic!"));
-      return;
-    }
-
-    if (eap->skip) {        // not executing commands
-      return;
-    }
-  } else {
-    arg = "";
-  }
-
-  // remove trailing blanks
-  char *p = arg + strlen(arg) - 1;
-  while (p > arg && ascii_iswhite(*p) && p[-1] != '\\') {
-    *p-- = NUL;
-  }
-
-  // Check for a specified language
-  char *lang = check_help_lang(arg);
-
-  // When no argument given go to the index.
-  if (*arg == NUL) {
-    arg = "help.txt";
-  }
-
-  // Check if there is a match for the argument.
-  int n = find_help_tags(arg, &num_matches, &matches, eap != NULL && eap->forceit);
-
-  int i = 0;
-  if (n != FAIL && lang != NULL) {
-    // Find first item with the requested language.
-    for (i = 0; i < num_matches; i++) {
-      int len = (int)strlen(matches[i]);
-      if (len > 3 && matches[i][len - 3] == '@'
-          && STRICMP(matches[i] + len - 2, lang) == 0) {
-        break;
-      }
-    }
-  }
-  if (i >= num_matches || n == FAIL) {
-    if (lang != NULL) {
-      semsg(_("E661: Sorry, no '%s' help for %s"), lang, arg);
-    } else {
-      semsg(_("E149: Sorry, no help for %s"), arg);
-    }
-    if (n != FAIL) {
-      FreeWild(num_matches, matches);
-    }
-    return;
-  }
-
-  // The first match (in the requested language) is the best match.
-  char *tag = xstrdup(matches[i]);
-  FreeWild(num_matches, matches);
-
-  // Re-use an existing help window or open a new one.
-  // Always open a new one for ":tab help".
-  if (!bt_help(curwin->w_buffer) || cmdmod.cmod_tab != 0) {
-    if (cmdmod.cmod_tab != 0) {
-      wp = NULL;
-    } else {
-      wp = NULL;
-      FOR_ALL_WINDOWS_IN_TAB(wp2, curtab) {
-        if (bt_help(wp2->w_buffer) && !wp2->w_config.hide && wp2->w_config.focusable) {
-          wp = wp2;
-          break;
-        }
-      }
-    }
-    if (wp != NULL && wp->w_buffer->b_nwindows > 0) {
-      win_enter(wp, true);
-    } else {
-      // There is no help window yet.
-      // Try to open the file specified by the "helpfile" option.
-      if ((helpfd = os_fopen(p_hf, READBIN)) == NULL) {
-        smsg(0, _("Sorry, help file \"%s\" not found"), p_hf);
-        goto erret;
-      }
-      fclose(helpfd);
-
-      // Split off help window; put it at far top if no position
-      // specified, the current window is vertically split and
-      // narrow.
-      n = WSP_HELP;
-      if (cmdmod.cmod_split == 0 && curwin->w_width != Columns
-          && curwin->w_width < 80) {
-        n |= p_sb ? WSP_BOT : WSP_TOP;
-      }
-      if (win_split(0, n) == FAIL) {
-        goto erret;
-      }
-
-      if (curwin->w_height < p_hh) {
-        win_setheight((int)p_hh);
-      }
-
-      // Open help file (do_ecmd() will set b_help flag, readfile() will
-      // set b_p_ro flag).
-      // Set the alternate file to the previously edited file.
-      alt_fnum = curbuf->b_fnum;
-      do_ecmd(0, NULL, NULL, NULL, ECMD_LASTL,
-              ECMD_HIDE + ECMD_SET_HELP,
-              NULL);  // buffer is still open, don't store info
-
-      if ((cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
-        curwin->w_alt_fnum = alt_fnum;
-      }
-      empty_fnum = curbuf->b_fnum;
-    }
-  }
-
-  restart_edit = 0;               // don't want insert mode in help file
-
-  // Restore KeyTyped, setting 'filetype=help' may reset it.
-  // It is needed for do_tag top open folds under the cursor.
-  KeyTyped = old_KeyTyped;
-
-  do_tag(tag, DT_HELP, 1, false, true);
-
-  // Delete the empty buffer if we're not using it.  Careful: autocommands
-  // may have jumped to another window, check that the buffer is not in a
-  // window.
-  if (empty_fnum != 0 && curbuf->b_fnum != empty_fnum) {
-    buf_T *buf = buflist_findnr(empty_fnum);
-    if (buf != NULL && buf->b_nwindows == 0) {
-      wipe_buffer(buf, true);
-    }
-  }
-
-  // keep the previous alternate file
-  if (alt_fnum != 0 && curwin->w_alt_fnum == empty_fnum
-      && (cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
-    curwin->w_alt_fnum = alt_fnum;
-  }
-
-erret:
-  xfree(tag);
+  rs_ex_help(eap);
 }
 
 /// ":helpclose": Close one help window
 void ex_helpclose(exarg_T *eap)
 {
-  FOR_ALL_WINDOWS_IN_TAB(win, curtab) {
-    if (bt_help(win->w_buffer)) {
-      win_close(win, false, eap->forceit);
-      return;
-    }
-  }
+  rs_ex_helpclose(eap);
 }
 
 /// In an argument search for a language specifiers in the form "@xx".

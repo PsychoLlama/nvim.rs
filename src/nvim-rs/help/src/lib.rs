@@ -239,6 +239,52 @@ extern "C" {
     fn nvim_help_set_foldmethod_manual();
     fn nvim_help_set_buf_fields();
     fn nvim_help_set_win_help_options();
+
+    // ex_help / ex_helpclose accessors
+    fn nvim_help_eap_get_arg(eap: ExargHandle) -> *mut c_char;
+    fn nvim_help_eap_set_nextcmd(eap: ExargHandle, cmd: *mut c_char);
+    fn nvim_help_eap_get_forceit(eap: ExargHandle) -> c_int;
+    fn nvim_help_eap_get_skip(eap: ExargHandle) -> c_int;
+
+    fn nvim_help_curbuf_is_help() -> bool;
+    fn nvim_help_curwin_bt_help() -> bool;
+    fn nvim_help_get_cmdmod_tab() -> c_int;
+    fn nvim_help_get_cmdmod_split() -> c_int;
+    fn nvim_help_get_cmdmod_flags() -> c_int;
+    fn nvim_help_get_columns() -> c_int;
+    fn nvim_help_get_curwin_width() -> c_int;
+    fn nvim_help_get_curwin_height() -> c_int;
+    fn nvim_help_get_p_sb() -> c_int;
+    fn nvim_help_get_p_hh() -> i64;
+    fn nvim_help_get_p_hf() -> *const c_char;
+
+    fn nvim_help_get_KeyTyped() -> bool;
+    fn nvim_help_set_KeyTyped(val: bool);
+    fn nvim_help_set_restart_edit(val: c_int);
+
+    fn nvim_help_get_curbuf_fnum() -> c_int;
+    fn nvim_help_get_curwin_alt_fnum() -> c_int;
+    fn nvim_help_set_curwin_alt_fnum(fnum: c_int);
+
+    fn nvim_help_find_help_win_in_tab() -> *mut c_void;
+    fn nvim_help_win_nwindows(wp: *mut c_void) -> c_int;
+    fn nvim_help_do_ecmd_help() -> c_int;
+
+    fn emsg(s: *const c_char);
+    fn semsg(fmt: *const c_char, ...);
+    fn smsg(hl_id: c_int, s: *const c_char, ...);
+
+    fn os_fopen(path: *const c_char, flags: *const c_char) -> *mut c_void;
+    fn win_enter(wp: *mut c_void, undo_sync: bool);
+    fn win_close(win: *mut c_void, free_buf: bool, force: bool) -> c_int;
+    fn win_split(size: c_int, flags: c_int) -> c_int;
+    fn win_setheight(height: c_int);
+    fn do_tag(tag: *const c_char, tag_type: c_int, count: c_int, forceit: c_int, verbose: bool);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn FreeWild(count: c_int, files: *mut *mut c_char);
+    fn buflist_findnr(nr: c_int) -> *mut c_void;
+    fn wipe_buffer(buf: *mut c_void, aucmd: bool);
+    fn nvim_help_buf_nwindows(buf: *mut c_void) -> c_int;
 }
 
 /// Helper: write a byte slice into a C buffer at a given offset.
@@ -650,6 +696,238 @@ pub unsafe extern "C" fn rs_cleanup_help_tags(num_file: c_int, file: *mut *mut c
             }
         }
     }
+}
+
+// Window split constants (verified against src/nvim/window.h)
+const WSP_HELP: c_int = 0x20;
+const WSP_BOT: c_int = 0x10;
+const WSP_TOP: c_int = 0x08;
+
+// Command modifier flags (verified against src/nvim/ex_cmds_defs.h)
+const CMOD_KEEPALT: c_int = 0x0100;
+
+// Tag action (verified against src/nvim/tag.h)
+const DT_HELP: c_int = 8;
+
+// Return values (verified against src/nvim/vim_defs.h)
+const FAIL: c_int = 0;
+
+/// `:helpclose` — close one help window in the current tab.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_helpclose(eap: ExargHandle) {
+    let forceit = unsafe { nvim_help_eap_get_forceit(eap) } != 0;
+
+    // Iterate windows in the current tab looking for a help window
+    // We use the combined accessor that finds the help window for us
+    // since FOR_ALL_WINDOWS_IN_TAB + bt_help check is encapsulated in C.
+    // Actually we need to replicate the loop here. Let's use the window
+    // iteration pattern from the window crate.
+
+    // Use the C accessor that finds the first help window
+    let help_win = unsafe { nvim_help_find_help_win_in_tab() };
+    if !help_win.is_null() {
+        unsafe { win_close(help_win, false, forceit) };
+    }
+}
+
+/// `:help` — open a read-only window on a help file.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_help(eap: ExargHandle) {
+    let eap_is_null = eap.is_null();
+
+    let mut arg: *mut c_char;
+    let mut empty_fnum: c_int = 0;
+    let mut alt_fnum: c_int = 0;
+    let old_key_typed = unsafe { nvim_help_get_KeyTyped() };
+
+    if !eap_is_null {
+        // A ":help" command ends at the first LF, or at a '|' that is
+        // followed by some text. Set nextcmd to the following command.
+        arg = unsafe { nvim_help_eap_get_arg(eap) };
+        let mut p = arg;
+        while unsafe { *p } != 0 {
+            let ch = unsafe { *p } as u8;
+            let next = unsafe { *p.add(1) } as u8;
+            if ch == b'\n' || ch == b'\r' || (ch == b'|' && next != 0 && next != b'|') {
+                unsafe { *p = 0 };
+                let next_ptr = unsafe { p.add(1) };
+                unsafe { nvim_help_eap_set_nextcmd(eap, next_ptr) };
+                break;
+            }
+            p = unsafe { p.add(1) };
+        }
+        arg = unsafe { nvim_help_eap_get_arg(eap) };
+
+        let forceit = unsafe { nvim_help_eap_get_forceit(eap) } != 0;
+        if forceit && unsafe { *arg } == 0 && !unsafe { nvim_help_curbuf_is_help() } {
+            unsafe { emsg(c"E478: Don't panic!".as_ptr()) };
+            return;
+        }
+
+        if unsafe { nvim_help_eap_get_skip(eap) } != 0 {
+            return;
+        }
+    } else {
+        arg = c"".as_ptr() as *mut c_char;
+    }
+
+    // remove trailing blanks
+    let arg_len = unsafe { CStr::from_ptr(arg) }.to_bytes().len();
+    if arg_len > 0 {
+        let mut p = unsafe { arg.add(arg_len - 1) };
+        while p > arg {
+            let ch = unsafe { *p } as u8;
+            let prev = unsafe { *p.sub(1) } as u8;
+            if (ch == b' ' || ch == b'\t') && prev != b'\\' {
+                unsafe { *p = 0 };
+                p = unsafe { p.sub(1) };
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Check for a specified language
+    let lang = rs_check_help_lang(arg);
+
+    // When no argument given go to the index.
+    if unsafe { *arg } == 0 {
+        arg = c"help.txt".as_ptr() as *mut c_char;
+    }
+
+    // Check if there is a match for the argument.
+    let mut num_matches: c_int = 0;
+    let mut matches: *mut *mut c_char = std::ptr::null_mut();
+    let n = rs_find_help_tags(
+        arg,
+        &mut num_matches,
+        &mut matches,
+        !eap_is_null && unsafe { nvim_help_eap_get_forceit(eap) } != 0,
+    );
+
+    let mut i: c_int = 0;
+    if n != FAIL && !lang.is_null() {
+        // Find first item with the requested language.
+        while i < num_matches {
+            let m = unsafe { *matches.add(i as usize) };
+            let m_len = unsafe { CStr::from_ptr(m) }.to_bytes().len();
+            if m_len > 3 {
+                let at_pos = m_len - 3;
+                if unsafe { *m.add(at_pos) } as u8 == b'@' {
+                    // Case-insensitive compare of the 2-letter language code
+                    let l1 = (unsafe { *m.add(at_pos + 1) } as u8).to_ascii_lowercase();
+                    let l2 = (unsafe { *m.add(at_pos + 2) } as u8).to_ascii_lowercase();
+                    let r1 = (unsafe { *lang } as u8).to_ascii_lowercase();
+                    let r2 = (unsafe { *lang.add(1) } as u8).to_ascii_lowercase();
+                    if l1 == r1 && l2 == r2 {
+                        break;
+                    }
+                }
+            }
+            i += 1;
+        }
+    }
+
+    if i >= num_matches || n == FAIL {
+        if !lang.is_null() {
+            unsafe { semsg(c"E661: Sorry, no '%s' help for %s".as_ptr(), lang, arg) };
+        } else {
+            unsafe { semsg(c"E149: Sorry, no help for %s".as_ptr(), arg) };
+        }
+        if n != FAIL {
+            unsafe { FreeWild(num_matches, matches) };
+        }
+        return;
+    }
+
+    // The first match (in the requested language) is the best match.
+    let tag = unsafe { xstrdup(*matches.add(i as usize)) };
+    unsafe { FreeWild(num_matches, matches) };
+
+    // Use a closure-like block so we can break out (simulating goto erret).
+    let mut do_help = || -> bool {
+        // Re-use an existing help window or open a new one.
+        // Always open a new one for ":tab help".
+        if !unsafe { nvim_help_curwin_bt_help() } || unsafe { nvim_help_get_cmdmod_tab() } != 0 {
+            let wp = if unsafe { nvim_help_get_cmdmod_tab() } != 0 {
+                std::ptr::null_mut()
+            } else {
+                unsafe { nvim_help_find_help_win_in_tab() }
+            };
+
+            if !wp.is_null() && unsafe { nvim_help_win_nwindows(wp) } > 0 {
+                unsafe { win_enter(wp, true) };
+            } else {
+                // There is no help window yet.
+                // Try to open the file specified by the "helpfile" option.
+                let p_hf = unsafe { nvim_help_get_p_hf() };
+                let helpfd = unsafe { os_fopen(p_hf, c"rb".as_ptr()) };
+                if helpfd.is_null() {
+                    unsafe { smsg(0, c"Sorry, help file \"%s\" not found".as_ptr(), p_hf) };
+                    return false; // goto erret
+                }
+                unsafe { libc::fclose(helpfd as *mut libc::FILE) };
+
+                // Split off help window
+                let mut split_flags = WSP_HELP;
+                if unsafe { nvim_help_get_cmdmod_split() } == 0
+                    && unsafe { nvim_help_get_curwin_width() } != unsafe { nvim_help_get_columns() }
+                    && unsafe { nvim_help_get_curwin_width() } < 80
+                {
+                    if unsafe { nvim_help_get_p_sb() } != 0 {
+                        split_flags |= WSP_BOT;
+                    } else {
+                        split_flags |= WSP_TOP;
+                    }
+                }
+                if unsafe { win_split(0, split_flags) } == FAIL {
+                    return false; // goto erret
+                }
+
+                let p_hh = unsafe { nvim_help_get_p_hh() };
+                if (unsafe { nvim_help_get_curwin_height() } as i64) < p_hh {
+                    unsafe { win_setheight(p_hh as c_int) };
+                }
+
+                // Open help file
+                alt_fnum = unsafe { nvim_help_get_curbuf_fnum() };
+                unsafe { nvim_help_do_ecmd_help() };
+
+                if unsafe { nvim_help_get_cmdmod_flags() } & CMOD_KEEPALT == 0 {
+                    unsafe { nvim_help_set_curwin_alt_fnum(alt_fnum) };
+                }
+                empty_fnum = unsafe { nvim_help_get_curbuf_fnum() };
+            }
+        }
+        true
+    };
+
+    let success = do_help();
+
+    if success {
+        unsafe { nvim_help_set_restart_edit(0) };
+        unsafe { nvim_help_set_KeyTyped(old_key_typed) };
+        unsafe { do_tag(tag, DT_HELP, 1, 0, true) };
+
+        // Delete the empty buffer if we're not using it.
+        if empty_fnum != 0 && unsafe { nvim_help_get_curbuf_fnum() } != empty_fnum {
+            let buf = unsafe { buflist_findnr(empty_fnum) };
+            if !buf.is_null() && unsafe { nvim_help_buf_nwindows(buf) } == 0 {
+                unsafe { wipe_buffer(buf, true) };
+            }
+        }
+
+        // keep the previous alternate file
+        if alt_fnum != 0
+            && unsafe { nvim_help_get_curwin_alt_fnum() } == empty_fnum
+            && unsafe { nvim_help_get_cmdmod_flags() } & CMOD_KEEPALT == 0
+        {
+            unsafe { nvim_help_set_curwin_alt_fnum(alt_fnum) };
+        }
+    }
+
+    // erret: always free tag
+    unsafe { xfree(tag as *mut c_void) };
 }
 
 /// Called when starting to edit a buffer for a help file.
