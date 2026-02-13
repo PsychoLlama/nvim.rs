@@ -676,6 +676,9 @@ pub unsafe extern "C" fn rs_fuzzy_match_func_compare(
 // Memory management FFI
 // =============================================================================
 
+/// Opaque handle for C `buf_T *`.
+type BufHandle = *mut c_void;
+
 extern "C" {
     fn xmalloc(size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
@@ -683,6 +686,30 @@ extern "C" {
     fn ga_clear(gap: *mut GArray);
     fn ga_grow(gap: *mut GArray, n: c_int);
     fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn rs_find_word_start(ptr: *mut c_char) -> *mut c_char;
+    fn rs_find_word_end(ptr: *mut c_char) -> *mut c_char;
+    fn rs_find_line_end(ptr: *mut c_char) -> *mut c_char;
+    fn rs_vim_iswordp(p: *const c_char) -> c_int;
+    fn rs_ctrl_x_mode_whole_line() -> c_int;
+    fn rs_equalpos(a: PosT, b: PosT) -> c_int;
+    fn nvim_ml_get_buf(buf: BufHandle, lnum: c_int) -> *mut c_char;
+    fn nvim_ml_get_buf_len(buf: BufHandle, lnum: c_int) -> c_int;
+    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
+    fn nvim_get_curbuf() -> BufHandle;
+    fn nvim_get_p_ws() -> c_int;
+}
+
+// =============================================================================
+// PosT - matches C pos_T layout from pos_defs.h
+// =============================================================================
+
+/// Position in file. Matches C `pos_T` layout.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PosT {
+    pub lnum: c_int,
+    pub col: c_int,
+    pub coladd: c_int,
 }
 
 // =============================================================================
@@ -773,8 +800,7 @@ pub unsafe extern "C" fn rs_fuzzymatches_to_strmatches(
     }
 
     // Allocate the output array
-    let out =
-        xmalloc(count as usize * std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+    let out = xmalloc(count as usize * std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
     *matches = out;
 
     // Transfer string pointers
@@ -849,6 +875,190 @@ pub unsafe extern "C" fn rs_fuzzy_match_str_with_pos(
     }
 
     match_positions
+}
+
+// =============================================================================
+// Fuzzy search in lines/buffers
+// =============================================================================
+
+/// FORWARD direction constant, matching C `FORWARD = 1` from `vim_defs.h`.
+const FORWARD: c_int = 1;
+
+/// Advance a pointer by one UTF-8 character (`MB_PTR_ADV` equivalent).
+unsafe fn mb_ptr_adv(p: *mut c_char) -> *mut c_char {
+    let len = rs_utfc_ptr2len(p);
+    p.add(if len > 0 { len as usize } else { 1 })
+}
+
+/// Split a line into words and fuzzy-match each against `pat`.
+///
+/// On match: `*ptr` → start of matched word, `*len_out` → word length,
+/// `*score_out` → match score, `current_pos.col` advanced past the word.
+///
+/// On no match: `*ptr` → end of line.
+///
+/// # Safety
+///
+/// All pointer parameters must be valid. `current_pos` may be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_fuzzy_match_str_in_line(
+    ptr: *mut *mut c_char,
+    pat: *mut c_char,
+    len_out: *mut c_int,
+    current_pos: *mut PosT,
+    score_out: *mut c_int,
+) -> bool {
+    let str_start = *ptr;
+    let str_begin = str_start;
+
+    if str_start.is_null() || pat.is_null() {
+        return false;
+    }
+
+    let line_end = rs_find_line_end(str_start);
+    let mut str_cur = str_start;
+
+    while str_cur < line_end {
+        // Skip non-word characters
+        let start = rs_find_word_start(str_cur);
+        if *start == 0 {
+            break;
+        }
+        let end = rs_find_word_end(start);
+
+        // Temporarily null-terminate the word
+        let save_end = *end;
+        *end = 0;
+
+        // Perform fuzzy match
+        *score_out = rs_fuzzy_match_str(start.cast_const(), pat.cast_const());
+        *end = save_end;
+
+        if *score_out != SCORE_NONE {
+            *len_out = end.offset_from(start) as c_int;
+            *ptr = start;
+            if !current_pos.is_null() {
+                (*current_pos).col += end.offset_from(str_begin) as c_int;
+            }
+            return true;
+        }
+
+        // Move to end of current word, then skip non-word chars
+        str_cur = end;
+        while *str_cur != 0 && rs_vim_iswordp(str_cur.cast_const()) == 0 {
+            str_cur = mb_ptr_adv(str_cur);
+        }
+    }
+
+    *ptr = line_end;
+    false
+}
+
+/// Search for the next fuzzy match in a buffer, with direction and wrapping.
+///
+/// # Safety
+///
+/// All pointer parameters must be valid. `buf` must be a valid `buf_T *`.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rs_search_for_fuzzy_match(
+    buf: BufHandle,
+    pos: *mut PosT,
+    pattern: *mut c_char,
+    dir: c_int,
+    start_pos: *mut PosT,
+    len_out: *mut c_int,
+    ptr_out: *mut *mut c_char,
+    score_out: *mut c_int,
+) -> bool {
+    let mut current_pos = *pos;
+    let mut found_new_match = false;
+    let mut looped_around = false;
+
+    let whole_line = rs_ctrl_x_mode_whole_line() != 0;
+    let line_count = nvim_buf_get_ml_line_count(buf);
+
+    let circly_end = if buf == nvim_get_curbuf() {
+        *start_pos
+    } else {
+        PosT {
+            lnum: line_count,
+            col: 0,
+            coladd: 0,
+        }
+    };
+
+    if whole_line && (*start_pos).lnum != (*pos).lnum {
+        current_pos.lnum += dir;
+    }
+
+    loop {
+        // Check if looped around and back to start position
+        if looped_around && rs_equalpos(current_pos, circly_end) != 0 {
+            break;
+        }
+
+        // Ensure current_pos is valid
+        if current_pos.lnum >= 1 && current_pos.lnum <= line_count {
+            // Get the current line buffer
+            *ptr_out = nvim_ml_get_buf(buf, current_pos.lnum);
+            if !whole_line {
+                *ptr_out = (*ptr_out).add(current_pos.col as usize);
+            }
+
+            // If end of line not reached
+            if !(*ptr_out).is_null() && **ptr_out != 0 {
+                if !whole_line {
+                    found_new_match = rs_fuzzy_match_str_in_line(
+                        ptr_out,
+                        pattern,
+                        len_out,
+                        std::ptr::addr_of_mut!(current_pos),
+                        score_out,
+                    );
+                    if found_new_match {
+                        *pos = current_pos;
+                        break;
+                    } else if looped_around && current_pos.lnum == circly_end.lnum {
+                        break;
+                    }
+                } else if rs_fuzzy_match_str((*ptr_out).cast_const(), pattern.cast_const())
+                    != SCORE_NONE
+                {
+                    found_new_match = true;
+                    *pos = current_pos;
+                    *len_out = nvim_ml_get_buf_len(buf, current_pos.lnum);
+                    break;
+                }
+            }
+        }
+
+        // Move to next/previous line
+        if dir == FORWARD {
+            current_pos.lnum += 1;
+            if current_pos.lnum > line_count {
+                if nvim_get_p_ws() != 0 {
+                    current_pos.lnum = 1;
+                    looped_around = true;
+                } else {
+                    break;
+                }
+            }
+        } else {
+            current_pos.lnum -= 1;
+            if current_pos.lnum < 1 {
+                if nvim_get_p_ws() != 0 {
+                    current_pos.lnum = line_count;
+                    looped_around = true;
+                } else {
+                    break;
+                }
+            }
+        }
+        current_pos.col = 0;
+    }
+
+    found_new_match
 }
 
 // =============================================================================
