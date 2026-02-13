@@ -2,9 +2,51 @@
 //!
 //! This module handles the :sign command and its subcommands.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::{LinenrT, SignBufHandle, SignCmd, SIGN_DEF_PRIO};
+
+// =============================================================================
+// C Accessor Extern Declarations
+// =============================================================================
+
+extern "C" {
+    // Composite accessors for ex command handling
+    fn nvim_sign_define_cmd_impl(name: *mut c_char, cmdline: *mut c_char);
+    fn nvim_sign_place_cmd_impl(
+        buf: SignBufHandle,
+        lnum: LinenrT,
+        name: *mut c_char,
+        id: c_int,
+        group: *mut c_char,
+        prio: c_int,
+    );
+    fn nvim_sign_unplace_cmd_impl(
+        buf: SignBufHandle,
+        lnum: LinenrT,
+        name: *const c_char,
+        id: c_int,
+        group: *mut c_char,
+    );
+    fn nvim_sign_jump_cmd_impl(
+        buf: SignBufHandle,
+        lnum: LinenrT,
+        name: *const c_char,
+        id: c_int,
+        group: *mut c_char,
+    );
+    fn nvim_parse_sign_cmd_args_impl(
+        cmd: c_int,
+        arg: *mut c_char,
+        name: *mut *mut c_char,
+        id: *mut c_int,
+        group: *mut *mut c_char,
+        prio: *mut c_int,
+        buf: *mut SignBufHandle,
+        lnum: *mut LinenrT,
+    ) -> c_int;
+    fn nvim_ex_sign_impl(eap: *mut c_void);
+}
 
 // =============================================================================
 // Command Argument Parsing
@@ -439,6 +481,103 @@ pub extern "C" fn rs_sign_list_format(
     } else {
         SignListFormat::AllPlaced
     }
+}
+
+// =============================================================================
+// Ex Command FFI Wrappers
+// =============================================================================
+
+/// ":sign define {name} ..." command.
+///
+/// Parses key=value pairs from the command line and defines the sign.
+///
+/// # Safety
+///
+/// `name` and `cmdline` must be valid, writable C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
+    nvim_sign_define_cmd_impl(name, cmdline);
+}
+
+/// ":sign place" command.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_place_cmd(
+    buf: SignBufHandle,
+    lnum: LinenrT,
+    name: *mut c_char,
+    id: c_int,
+    group: *mut c_char,
+    prio: c_int,
+) {
+    nvim_sign_place_cmd_impl(buf, lnum, name, id, group, prio);
+}
+
+/// ":sign unplace" command.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_unplace_cmd(
+    buf: SignBufHandle,
+    lnum: LinenrT,
+    name: *const c_char,
+    id: c_int,
+    group: *mut c_char,
+) {
+    nvim_sign_unplace_cmd_impl(buf, lnum, name, id, group);
+}
+
+/// ":sign jump" command.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_jump_cmd(
+    buf: SignBufHandle,
+    lnum: LinenrT,
+    name: *const c_char,
+    id: c_int,
+    group: *mut c_char,
+) {
+    nvim_sign_jump_cmd_impl(buf, lnum, name, id, group);
+}
+
+/// Parse command line arguments for ":sign place/unplace/jump".
+///
+/// # Safety
+///
+/// All pointer arguments must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_sign_cmd_args(
+    cmd: c_int,
+    arg: *mut c_char,
+    name: *mut *mut c_char,
+    id: *mut c_int,
+    group: *mut *mut c_char,
+    prio: *mut c_int,
+    buf: *mut SignBufHandle,
+    lnum: *mut LinenrT,
+) -> c_int {
+    nvim_parse_sign_cmd_args_impl(cmd, arg, name, id, group, prio, buf, lnum)
+}
+
+/// ":sign" command — top-level dispatcher.
+///
+/// # Safety
+///
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_sign(eap: *mut c_void) {
+    if eap.is_null() {
+        return;
+    }
+    nvim_ex_sign_impl(eap);
 }
 
 // =============================================================================

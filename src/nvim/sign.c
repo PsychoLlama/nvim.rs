@@ -84,6 +84,14 @@ extern linenr_T rs_sign_jump(int id, const char *group, buf_T *buf);
 extern void rs_sign_list_placed(buf_T *rbuf, const char *group);
 extern void rs_sign_list_defined(sign_T *sp);
 extern void rs_sign_list_by_name(const char *name);
+extern void rs_sign_define_cmd(char *name, char *cmdline);
+extern void rs_sign_place_cmd(buf_T *buf, linenr_T lnum, char *name, int id, char *group,
+                               int prio);
+extern void rs_sign_unplace_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group);
+extern void rs_sign_jump_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group);
+extern int rs_parse_sign_cmd_args(int cmd, char *arg, char **name, int *id, char **group,
+                                   int *prio, buf_T **buf, linenr_T *lnum);
+extern void rs_ex_sign(void *eap);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -261,276 +269,39 @@ static linenr_T sign_jump(int id, char *group, buf_T *buf)
 /// ":sign define {name} ..." command
 static void sign_define_cmd(char *name, char *cmdline)
 {
-  char *icon = NULL;
-  char *text = NULL;
-  char *linehl = NULL;
-  char *texthl = NULL;
-  char *culhl = NULL;
-  char *numhl = NULL;
-  int prio = -1;
-
-  // set values for a defined sign.
-  while (true) {
-    char *arg = skipwhite(cmdline);
-    if (*arg == NUL) {
-      break;
-    }
-    cmdline = skiptowhite_esc(arg);
-    if (strncmp(arg, "icon=", 5) == 0) {
-      icon = arg + 5;
-    } else if (strncmp(arg, "text=", 5) == 0) {
-      text = arg + 5;
-    } else if (strncmp(arg, "linehl=", 7) == 0) {
-      linehl = arg + 7;
-    } else if (strncmp(arg, "texthl=", 7) == 0) {
-      texthl = arg + 7;
-    } else if (strncmp(arg, "culhl=", 6) == 0) {
-      culhl = arg + 6;
-    } else if (strncmp(arg, "numhl=", 6) == 0) {
-      numhl = arg + 6;
-    } else if (strncmp(arg, "priority=", 9) == 0) {
-      prio = atoi(arg + 9);
-    } else {
-      semsg(_(e_invarg2), arg);
-      return;
-    }
-    if (*cmdline == NUL) {
-      break;
-    }
-    *cmdline++ = NUL;
-  }
-
-  sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio);
+  rs_sign_define_cmd(name, cmdline);
 }
 
 /// ":sign place" command
 static void sign_place_cmd(buf_T *buf, linenr_T lnum, char *name, int id, char *group, int prio)
 {
-  if (id <= 0) {
-    // List signs placed in a file/buffer
-    //   :sign place file={fname}
-    //   :sign place group={group} file={fname}
-    //   :sign place group=* file={fname}
-    //   :sign place buffer={nr}
-    //   :sign place group={group} buffer={nr}
-    //   :sign place group=* buffer={nr}
-    //   :sign place
-    //   :sign place group={group}
-    //   :sign place group=*
-    if (lnum >= 0 || name != NULL || (group != NULL && *group == NUL)) {
-      emsg(_(e_invarg));
-    } else {
-      sign_list_placed(buf, group);
-    }
-  } else {
-    // Place a new sign
-    if (name == NULL || buf == NULL || (group != NULL && *group == NUL)) {
-      emsg(_(e_invarg));
-      return;
-    }
-    uint32_t uid = (uint32_t)id;
-    sign_place(&uid, group, name, buf, lnum, prio);
-  }
+  rs_sign_place_cmd(buf, lnum, name, id, group, prio);
 }
 
 /// ":sign unplace" command
 static void sign_unplace_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group)
 {
-  if (lnum >= 0 || name != NULL || (group != NULL && *group == NUL)) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-  if (id == -1) {
-    lnum = curwin->w_cursor.lnum;
-    buf = curwin->w_buffer;
-  }
-
-  if (!sign_unplace(buf, MAX(0, id), group, lnum) && lnum > 0) {
-    emsg(_("E159: Missing sign number"));
-  }
+  rs_sign_unplace_cmd(buf, lnum, name, id, group);
 }
 
-/// Jump to a placed sign commands:
-///   :sign jump {id} file={fname}
-///   :sign jump {id} buffer={nr}
-///   :sign jump {id} group={group} file={fname}
-///   :sign jump {id} group={group} buffer={nr}
+/// Jump to a placed sign commands
 static void sign_jump_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group)
 {
-  if (name == NULL && group == NULL && id == -1) {
-    emsg(_(e_argreq));
-    return;
-  }
-
-  if (buf == NULL || (group != NULL && *group == NUL) || lnum >= 0 || name != NULL) {
-    // File or buffer is not specified or an empty group is used
-    // or a line number or a sign name is specified.
-    emsg(_(e_invarg));
-    return;
-  }
-
-  sign_jump(id, group, buf);
+  rs_sign_jump_cmd(buf, lnum, name, id, group);
 }
 
 /// Parse the command line arguments for the ":sign place", ":sign unplace" and
 /// ":sign jump" commands.
-/// The supported arguments are: line={lnum} name={name} group={group}
-/// priority={prio} and file={fname} or buffer={nr}.
 static int parse_sign_cmd_args(int cmd, char *arg, char **name, int *id, char **group, int *prio,
                                buf_T **buf, linenr_T *lnum)
 {
-  char *arg1 = arg;
-  char *filename = NULL;
-  bool lnum_arg = false;
-
-  // first arg could be placed sign id
-  if (ascii_isdigit(*arg)) {
-    *id = getdigits_int(&arg, true, 0);
-    if (!ascii_iswhite(*arg) && *arg != NUL) {
-      *id = -1;
-      arg = arg1;
-    } else {
-      arg = skipwhite(arg);
-    }
-  }
-
-  while (*arg != NUL) {
-    if (strncmp(arg, "line=", 5) == 0) {
-      arg += 5;
-      *lnum = atoi(arg);
-      arg = skiptowhite(arg);
-      lnum_arg = true;
-    } else if (strncmp(arg, "*", 1) == 0 && cmd == SIGNCMD_UNPLACE) {
-      if (*id != -1) {
-        emsg(_(e_invarg));
-        return FAIL;
-      }
-      *id = -2;
-      arg = skiptowhite(arg + 1);
-    } else if (strncmp(arg, "name=", 5) == 0) {
-      arg += 5;
-      char *namep = arg;
-      arg = skiptowhite(arg);
-      if (*arg != NUL) {
-        *arg++ = NUL;
-      }
-      while (namep[0] == '0' && namep[1] != NUL) {
-        namep++;
-      }
-      *name = namep;
-    } else if (strncmp(arg, "group=", 6) == 0) {
-      arg += 6;
-      *group = arg;
-      arg = skiptowhite(arg);
-      if (*arg != NUL) {
-        *arg++ = NUL;
-      }
-    } else if (strncmp(arg, "priority=", 9) == 0) {
-      arg += 9;
-      *prio = atoi(arg);
-      arg = skiptowhite(arg);
-    } else if (strncmp(arg, "file=", 5) == 0) {
-      arg += 5;
-      filename = arg;
-      *buf = buflist_findname_exp(arg);
-      break;
-    } else if (strncmp(arg, "buffer=", 7) == 0) {
-      arg += 7;
-      filename = arg;
-      *buf = buflist_findnr(getdigits_int(&arg, true, 0));
-      if (*skipwhite(arg) != NUL) {
-        semsg(_(e_trailing_arg), arg);
-      }
-      break;
-    } else {
-      emsg(_(e_invarg));
-      return FAIL;
-    }
-    arg = skipwhite(arg);
-  }
-
-  if (filename != NULL && *buf == NULL) {
-    semsg(_(e_invalid_buffer_name_str), filename);
-    return FAIL;
-  }
-
-  // If the filename is not supplied for the sign place or the sign jump
-  // command, then use the current buffer.
-  if (filename == NULL && ((cmd == SIGNCMD_PLACE && lnum_arg) || cmd == SIGNCMD_JUMP)) {
-    *buf = curwin->w_buffer;
-  }
-  return OK;
+  return rs_parse_sign_cmd_args(cmd, arg, name, id, group, prio, buf, lnum);
 }
 
 /// ":sign" command
 void ex_sign(exarg_T *eap)
 {
-  char *arg = eap->arg;
-
-  // Parse the subcommand.
-  char *p = skiptowhite(arg);
-  int idx = sign_cmd_idx(arg, p);
-  if (idx == SIGNCMD_LAST) {
-    semsg(_("E160: Unknown sign command: %s"), arg);
-    return;
-  }
-  arg = skipwhite(p);
-
-  if (idx <= SIGNCMD_LIST) {
-    // Define, undefine or list signs.
-    if (idx == SIGNCMD_LIST && *arg == NUL) {
-      // ":sign list": list all defined signs
-      sign_T *sp;
-      map_foreach_value(&sign_map, sp, {
-        sign_list_defined(sp);
-      });
-    } else if (*arg == NUL) {
-      emsg(_("E156: Missing sign name"));
-    } else {
-      // Isolate the sign name.  If it's a number skip leading zeroes,
-      // so that "099" and "99" are the same sign.  But keep "0".
-      p = skiptowhite(arg);
-      if (*p != NUL) {
-        *p++ = NUL;
-      }
-      while (arg[0] == '0' && arg[1] != NUL) {
-        arg++;
-      }
-
-      if (idx == SIGNCMD_DEFINE) {
-        sign_define_cmd(arg, p);
-      } else if (idx == SIGNCMD_LIST) {
-        // ":sign list {name}"
-        sign_list_by_name(arg);
-      } else {
-        // ":sign undefine {name}"
-        sign_undefine_by_name(arg);
-      }
-
-      return;
-    }
-  } else {
-    int id = -1;
-    linenr_T lnum = -1;
-    char *name = NULL;
-    char *group = NULL;
-    int prio = -1;
-    buf_T *buf = NULL;
-
-    // Parse command line arguments
-    if (parse_sign_cmd_args(idx, arg, &name, &id, &group, &prio, &buf, &lnum) == FAIL) {
-      return;
-    }
-
-    if (idx == SIGNCMD_PLACE) {
-      sign_place_cmd(buf, lnum, name, id, group, prio);
-    } else if (idx == SIGNCMD_UNPLACE) {
-      sign_unplace_cmd(buf, lnum, name, id, group);
-    } else if (idx == SIGNCMD_JUMP) {
-      sign_jump_cmd(buf, lnum, name, id, group);
-    }
-  }
+  rs_ex_sign(eap);
 }
 
 /// Get dictionary of information for a defined sign "sp"
@@ -1757,5 +1528,261 @@ void nvim_sign_list_by_name_impl(const char *name)
     nvim_sign_list_defined_impl(sp);
   } else {
     semsg(_("E155: Unknown sign: %s"), name);
+  }
+}
+
+/// ":sign define {name} ..." command — composite accessor.
+/// Parses key=value pairs and calls sign_define_by_name.
+void nvim_sign_define_cmd_impl(char *name, char *cmdline)
+{
+  char *icon = NULL;
+  char *text = NULL;
+  char *linehl = NULL;
+  char *texthl = NULL;
+  char *culhl = NULL;
+  char *numhl = NULL;
+  int prio = -1;
+
+  // set values for a defined sign.
+  while (true) {
+    char *arg = skipwhite(cmdline);
+    if (*arg == NUL) {
+      break;
+    }
+    cmdline = skiptowhite_esc(arg);
+    if (strncmp(arg, "icon=", 5) == 0) {
+      icon = arg + 5;
+    } else if (strncmp(arg, "text=", 5) == 0) {
+      text = arg + 5;
+    } else if (strncmp(arg, "linehl=", 7) == 0) {
+      linehl = arg + 7;
+    } else if (strncmp(arg, "texthl=", 7) == 0) {
+      texthl = arg + 7;
+    } else if (strncmp(arg, "culhl=", 6) == 0) {
+      culhl = arg + 6;
+    } else if (strncmp(arg, "numhl=", 6) == 0) {
+      numhl = arg + 6;
+    } else if (strncmp(arg, "priority=", 9) == 0) {
+      prio = atoi(arg + 9);
+    } else {
+      semsg(_(e_invarg2), arg);
+      return;
+    }
+    if (*cmdline == NUL) {
+      break;
+    }
+    *cmdline++ = NUL;
+  }
+
+  sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio);
+}
+
+/// ":sign place" command — composite accessor.
+void nvim_sign_place_cmd_impl(buf_T *buf, linenr_T lnum, char *name, int id, char *group, int prio)
+{
+  if (id <= 0) {
+    if (lnum >= 0 || name != NULL || (group != NULL && *group == NUL)) {
+      emsg(_(e_invarg));
+    } else {
+      sign_list_placed(buf, group);
+    }
+  } else {
+    if (name == NULL || buf == NULL || (group != NULL && *group == NUL)) {
+      emsg(_(e_invarg));
+      return;
+    }
+    uint32_t uid = (uint32_t)id;
+    sign_place(&uid, group, name, buf, lnum, prio);
+  }
+}
+
+/// ":sign unplace" command — composite accessor.
+void nvim_sign_unplace_cmd_impl(buf_T *buf, linenr_T lnum, const char *name, int id, char *group)
+{
+  if (lnum >= 0 || name != NULL || (group != NULL && *group == NUL)) {
+    emsg(_(e_invarg));
+    return;
+  }
+
+  if (id == -1) {
+    lnum = curwin->w_cursor.lnum;
+    buf = curwin->w_buffer;
+  }
+
+  if (!sign_unplace(buf, MAX(0, id), group, lnum) && lnum > 0) {
+    emsg(_("E159: Missing sign number"));
+  }
+}
+
+/// ":sign jump" command — composite accessor.
+void nvim_sign_jump_cmd_impl(buf_T *buf, linenr_T lnum, const char *name, int id, char *group)
+{
+  if (name == NULL && group == NULL && id == -1) {
+    emsg(_(e_argreq));
+    return;
+  }
+
+  if (buf == NULL || (group != NULL && *group == NUL) || lnum >= 0 || name != NULL) {
+    emsg(_(e_invarg));
+    return;
+  }
+
+  sign_jump(id, group, buf);
+}
+
+/// Parse command line arguments — composite accessor.
+int nvim_parse_sign_cmd_args_impl(int cmd, char *arg, char **name, int *id, char **group, int *prio,
+                                  buf_T **buf, linenr_T *lnum)
+{
+  char *arg1 = arg;
+  char *filename = NULL;
+  bool lnum_arg = false;
+
+  // first arg could be placed sign id
+  if (ascii_isdigit(*arg)) {
+    *id = getdigits_int(&arg, true, 0);
+    if (!ascii_iswhite(*arg) && *arg != NUL) {
+      *id = -1;
+      arg = arg1;
+    } else {
+      arg = skipwhite(arg);
+    }
+  }
+
+  while (*arg != NUL) {
+    if (strncmp(arg, "line=", 5) == 0) {
+      arg += 5;
+      *lnum = atoi(arg);
+      arg = skiptowhite(arg);
+      lnum_arg = true;
+    } else if (strncmp(arg, "*", 1) == 0 && cmd == SIGNCMD_UNPLACE) {
+      if (*id != -1) {
+        emsg(_(e_invarg));
+        return FAIL;
+      }
+      *id = -2;
+      arg = skiptowhite(arg + 1);
+    } else if (strncmp(arg, "name=", 5) == 0) {
+      arg += 5;
+      char *namep = arg;
+      arg = skiptowhite(arg);
+      if (*arg != NUL) {
+        *arg++ = NUL;
+      }
+      while (namep[0] == '0' && namep[1] != NUL) {
+        namep++;
+      }
+      *name = namep;
+    } else if (strncmp(arg, "group=", 6) == 0) {
+      arg += 6;
+      *group = arg;
+      arg = skiptowhite(arg);
+      if (*arg != NUL) {
+        *arg++ = NUL;
+      }
+    } else if (strncmp(arg, "priority=", 9) == 0) {
+      arg += 9;
+      *prio = atoi(arg);
+      arg = skiptowhite(arg);
+    } else if (strncmp(arg, "file=", 5) == 0) {
+      arg += 5;
+      filename = arg;
+      *buf = buflist_findname_exp(arg);
+      break;
+    } else if (strncmp(arg, "buffer=", 7) == 0) {
+      arg += 7;
+      filename = arg;
+      *buf = buflist_findnr(getdigits_int(&arg, true, 0));
+      if (*skipwhite(arg) != NUL) {
+        semsg(_(e_trailing_arg), arg);
+      }
+      break;
+    } else {
+      emsg(_(e_invarg));
+      return FAIL;
+    }
+    arg = skipwhite(arg);
+  }
+
+  if (filename != NULL && *buf == NULL) {
+    semsg(_(e_invalid_buffer_name_str), filename);
+    return FAIL;
+  }
+
+  // If the filename is not supplied for the sign place or the sign jump
+  // command, then use the current buffer.
+  if (filename == NULL && ((cmd == SIGNCMD_PLACE && lnum_arg) || cmd == SIGNCMD_JUMP)) {
+    *buf = curwin->w_buffer;
+  }
+  return OK;
+}
+
+/// ":sign" command — composite accessor.
+void nvim_ex_sign_impl(exarg_T *eap)
+{
+  char *arg = eap->arg;
+
+  // Parse the subcommand.
+  char *p = skiptowhite(arg);
+  int idx = sign_cmd_idx(arg, p);
+  if (idx == SIGNCMD_LAST) {
+    semsg(_("E160: Unknown sign command: %s"), arg);
+    return;
+  }
+  arg = skipwhite(p);
+
+  if (idx <= SIGNCMD_LIST) {
+    // Define, undefine or list signs.
+    if (idx == SIGNCMD_LIST && *arg == NUL) {
+      // ":sign list": list all defined signs
+      sign_T *sp;
+      map_foreach_value(&sign_map, sp, {
+        sign_list_defined(sp);
+      });
+    } else if (*arg == NUL) {
+      emsg(_("E156: Missing sign name"));
+    } else {
+      // Isolate the sign name.  If it's a number skip leading zeroes,
+      // so that "099" and "99" are the same sign.  But keep "0".
+      p = skiptowhite(arg);
+      if (*p != NUL) {
+        *p++ = NUL;
+      }
+      while (arg[0] == '0' && arg[1] != NUL) {
+        arg++;
+      }
+
+      if (idx == SIGNCMD_DEFINE) {
+        sign_define_cmd(arg, p);
+      } else if (idx == SIGNCMD_LIST) {
+        // ":sign list {name}"
+        sign_list_by_name(arg);
+      } else {
+        // ":sign undefine {name}"
+        sign_undefine_by_name(arg);
+      }
+
+      return;
+    }
+  } else {
+    int id = -1;
+    linenr_T lnum = -1;
+    char *name = NULL;
+    char *group = NULL;
+    int prio = -1;
+    buf_T *buf = NULL;
+
+    // Parse command line arguments
+    if (parse_sign_cmd_args(idx, arg, &name, &id, &group, &prio, &buf, &lnum) == FAIL) {
+      return;
+    }
+
+    if (idx == SIGNCMD_PLACE) {
+      sign_place_cmd(buf, lnum, name, id, group, prio);
+    } else if (idx == SIGNCMD_UNPLACE) {
+      sign_unplace_cmd(buf, lnum, name, id, group);
+    } else if (idx == SIGNCMD_JUMP) {
+      sign_jump_cmd(buf, lnum, name, id, group);
+    }
   }
 }
