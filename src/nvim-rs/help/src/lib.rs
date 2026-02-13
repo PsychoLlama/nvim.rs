@@ -964,6 +964,674 @@ pub unsafe extern "C" fn rs_ex_viusage(_eap: ExargHandle) {
     unsafe { do_cmdline_cmd(c"help normal-index".as_ptr()) };
 }
 
+// =====================================================================
+// Phase 6: helptags + get_local_additions
+// =====================================================================
+
+// Constants verified against C headers
+const MAXPATHL: usize = 4096; // os/os_defs.h: DEFAULT_MAXPATHL
+const EW_FILE: c_int = 0x02; // path.h
+const EW_SILENT: c_int = 0x20; // path.h
+const DIP_ALL: c_int = 0x01; // runtime.h
+const DIP_DIR: c_int = 0x02; // runtime.h
+const K_EQUAL_FILES: c_int = 1; // path.h: kEqualFiles
+const K_EXTMARK_UNDO: c_int = 1; // extmark_defs.h: kExtmarkUndo
+const MAXLNUM: i32 = 0x7fffffff; // pos_defs.h
+
+/// DoInRuntimepathCB function pointer type.
+type DoInRuntimepathCB =
+    Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>;
+
+extern "C" {
+    // Phase 6 FFI
+    fn nvim_help_get_namebuff_mut() -> *mut c_char;
+    fn nvim_help_get_namebuff_size() -> usize;
+    fn nvim_help_get_p_rtp() -> *const c_char;
+    fn nvim_help_get_curbuf_fname() -> *mut c_char;
+    fn nvim_help_get_curbuf_ml_line_count() -> c_int;
+    fn nvim_help_get_curbuf_ptr() -> *mut c_void;
+    fn nvim_help_get_got_int() -> bool;
+    fn nvim_help_expand_dir(arg: *const c_char) -> *mut c_char;
+    fn nvim_help_convert_help_line(buf: *mut c_char) -> *mut c_char;
+
+    fn gen_expand_wildcards(
+        num_pat: c_int,
+        pat: *mut *mut c_char,
+        num_file: *mut c_int,
+        file: *mut *mut *mut c_char,
+        flags: c_int,
+    ) -> c_int;
+    fn add_pathsep(p: *mut c_char) -> bool;
+    fn path_tail(fname: *const c_char) -> *mut c_char;
+    fn path_fnamecmp(fname1: *const c_char, fname2: *const c_char) -> c_int;
+    fn path_fnamencmp(fname1: *const c_char, fname2: *const c_char, len: usize) -> c_int;
+    fn path_full_compare(
+        s1: *mut c_char,
+        s2: *mut c_char,
+        checkname: bool,
+        expandenv: bool,
+    ) -> c_int;
+    fn copy_option_part(
+        option: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+        sep_chars: *const c_char,
+    ) -> usize;
+    fn vim_getenv(name: *const c_char) -> *mut c_char;
+    fn vim_fgets(buf: *mut c_char, size: c_int, fp: *mut c_void) -> bool;
+    fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
+    fn ml_get_buf(buf: *mut c_void, lnum: i32) -> *mut c_char;
+    fn ml_append(lnum: i32, line: *mut c_char, len: i32, newfile: bool) -> c_int;
+    fn mark_adjust(line1: i32, line2: i32, amount: i32, amount_after: i32, op: c_int);
+    fn changed_lines_redraw_buf(buf: *mut c_void, lnum: i32, lnume: i32, xtra: i32);
+    fn sort_strings(files: *mut *mut c_char, count: c_int);
+    fn line_breakcheck();
+    fn os_isdir(name: *const c_char) -> bool;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
+    fn xstrlcat(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn do_in_path(
+        path: *const c_char,
+        prefix: *const c_char,
+        name: *mut c_char,
+        flags: c_int,
+        callback: DoInRuntimepathCB,
+        cookie: *mut c_void,
+    ) -> c_int;
+}
+
+/// Generate tags in one help directory.
+///
+/// Scans help files for `*tag*` patterns, sorts tags, checks for duplicates,
+/// and writes a tags file.
+#[no_mangle]
+pub unsafe extern "C" fn rs_helptags_one(
+    dir: *mut c_char,
+    ext: *const c_char,
+    tagfname: *const c_char,
+    add_help_tags: bool,
+    ignore_writeerr: bool,
+) {
+    let namebuff = unsafe { nvim_help_get_namebuff_mut() };
+    let namebuff_size = unsafe { nvim_help_get_namebuff_size() };
+
+    // Find all *.<ext> files.
+    let dirlen = unsafe { xstrlcpy(namebuff, dir, namebuff_size) };
+    if dirlen >= MAXPATHL
+        || unsafe { xstrlcat(namebuff, c"/**/*".as_ptr(), namebuff_size) } >= MAXPATHL
+        || unsafe { xstrlcat(namebuff, ext, namebuff_size) } >= MAXPATHL
+    {
+        unsafe { emsg(c"E856: Filename too long".as_ptr()) };
+        return;
+    }
+
+    let mut filecount: c_int = 0;
+    let mut files: *mut *mut c_char = std::ptr::null_mut();
+    let mut buff_list: [*mut c_char; 1] = [namebuff];
+    let res = unsafe {
+        gen_expand_wildcards(
+            1,
+            buff_list.as_mut_ptr(),
+            &mut filecount,
+            &mut files,
+            EW_FILE | EW_SILENT,
+        )
+    };
+    if res == FAIL || filecount == 0 {
+        if !unsafe { nvim_help_get_got_int() } {
+            unsafe { semsg(c"E151: No match: %s".as_ptr(), namebuff) };
+        }
+        if res != FAIL {
+            unsafe { FreeWild(filecount, files) };
+        }
+        return;
+    }
+
+    // Open the tags file for writing.
+    unsafe { std::ptr::copy_nonoverlapping(dir, namebuff, dirlen + 1) };
+    if !unsafe { add_pathsep(namebuff) }
+        || unsafe { xstrlcat(namebuff, tagfname, namebuff_size) } >= MAXPATHL
+    {
+        unsafe { emsg(c"E856: Filename too long".as_ptr()) };
+        return;
+    }
+
+    let fd_tags = unsafe { os_fopen(namebuff, c"w".as_ptr()) };
+    if fd_tags.is_null() {
+        if !ignore_writeerr {
+            unsafe { semsg(c"E152: Cannot open %s for writing".as_ptr(), namebuff) };
+        }
+        unsafe { FreeWild(filecount, files) };
+        return;
+    }
+
+    // Collect tags into a Vec instead of garray.
+    let mut tags: Vec<*mut c_char> = Vec::with_capacity(100);
+
+    // If using "++t" or generating tags for "$VIMRUNTIME/doc", add "help-tags".
+    if add_help_tags
+        || unsafe {
+            path_full_compare(c"$VIMRUNTIME/doc".as_ptr() as *mut c_char, dir, false, true)
+        } == K_EQUAL_FILES
+    {
+        let tagfname_len = unsafe { CStr::from_ptr(tagfname) }.to_bytes().len();
+        let s_len = 18 + tagfname_len;
+        let s = unsafe { xmalloc(s_len) } as *mut c_char;
+        unsafe {
+            libc::snprintf(s, s_len, c"help-tags\t%s\t1\n".as_ptr(), tagfname);
+        }
+        tags.push(s);
+    }
+
+    let iobuff = unsafe { nvim_get_iobuff() };
+
+    // Go over all the files and extract the tags.
+    let mut fi = 0;
+    while fi < filecount && !unsafe { nvim_help_get_got_int() } {
+        let fd = unsafe { os_fopen(*files.add(fi as usize), c"r".as_ptr()) };
+        if fd.is_null() {
+            unsafe {
+                semsg(
+                    c"E153: Unable to open %s for reading".as_ptr(),
+                    *files.add(fi as usize),
+                );
+            }
+            fi += 1;
+            continue;
+        }
+        let fname = unsafe { (*files.add(fi as usize)).add(dirlen + 1) };
+
+        let mut in_example = false;
+        while !unsafe { vim_fgets(iobuff, IOSIZE as c_int, fd) }
+            && !unsafe { nvim_help_get_got_int() }
+        {
+            if in_example {
+                // skip over example; a non-white in the first column ends it
+                let ch = unsafe { *iobuff } as u8;
+                if ch == b' ' || ch == b'\t' || ch == b'\n' || ch == b'\r' {
+                    continue;
+                }
+                in_example = false;
+            }
+
+            let mut p1 = unsafe { vim_strchr(iobuff, b'*' as c_int) };
+            while !p1.is_null() {
+                let p2 = unsafe { libc::strchr(p1.add(1), b'*' as c_int) };
+                if !p2.is_null() && p2 > unsafe { p1.add(1) } {
+                    // Check that tag contains only valid characters
+                    let mut s = unsafe { p1.add(1) };
+                    while s < p2 {
+                        let ch = unsafe { *s } as u8;
+                        if ch == b' ' || ch == b'\t' || ch == b'|' {
+                            break;
+                        }
+                        s = unsafe { s.add(1) };
+                    }
+
+                    if s == p2
+                        && (p1 == iobuff
+                            || unsafe { *p1.sub(1) } as u8 == b' '
+                            || unsafe { *p1.sub(1) } as u8 == b'\t')
+                        && (unsafe {
+                            !vim_strchr(c" \t\n\r".as_ptr(), *s.add(1) as u8 as c_int).is_null()
+                        } || unsafe { *s.add(1) } == 0)
+                    {
+                        unsafe { *p2 = 0 };
+                        let tag_start = unsafe { p1.add(1) };
+                        let tag_len = unsafe { CStr::from_ptr(tag_start) }.to_bytes().len();
+                        let fname_len = unsafe { CStr::from_ptr(fname) }.to_bytes().len();
+                        let s_len = tag_len + fname_len + 2;
+                        let entry = unsafe { xmalloc(s_len) } as *mut c_char;
+                        unsafe {
+                            libc::snprintf(entry, s_len, c"%s\t%s".as_ptr(), tag_start, fname);
+                        }
+                        tags.push(entry);
+
+                        // find next '*'
+                        p1 = unsafe { vim_strchr(p2.add(1), b'*' as c_int) };
+                        continue;
+                    }
+                }
+                p1 = p2;
+            }
+
+            // Detect example blocks (line ending with ">" after whitespace)
+            let off = unsafe { CStr::from_ptr(iobuff) }.to_bytes().len();
+            if off >= 2 && unsafe { *iobuff.add(off - 1) } as u8 == b'\n' {
+                let mut check_off = off - 2;
+                while check_off > 0 {
+                    let ch = unsafe { *iobuff.add(check_off) } as u8;
+                    if ch.is_ascii_lowercase() || ch.is_ascii_digit() {
+                        check_off -= 1;
+                    } else {
+                        break;
+                    }
+                }
+                if unsafe { *iobuff.add(check_off) } as u8 == b'>'
+                    && (check_off == 0 || unsafe { *iobuff.add(check_off - 1) } as u8 == b' ')
+                {
+                    in_example = true;
+                }
+            }
+            unsafe { line_breakcheck() };
+        }
+
+        unsafe { libc::fclose(fd as *mut libc::FILE) };
+        fi += 1;
+    }
+
+    unsafe { FreeWild(filecount, files) };
+
+    if !unsafe { nvim_help_get_got_int() } && !tags.is_empty() {
+        // Sort the tags.
+        unsafe {
+            sort_strings(tags.as_mut_ptr(), tags.len() as c_int);
+        }
+
+        // Check for duplicates.
+        for i in 1..tags.len() {
+            let mut q1 = tags[i - 1];
+            let mut q2 = tags[i];
+            loop {
+                let c1 = unsafe { *q1 } as u8;
+                let c2 = unsafe { *q2 } as u8;
+                if c1 != c2 {
+                    break;
+                }
+                if c2 == b'\t' {
+                    unsafe { *q2 = 0 };
+                    // Write duplicate error message into NameBuff
+                    unsafe {
+                        libc::snprintf(
+                            namebuff,
+                            MAXPATHL,
+                            c"E154: Duplicate tag \"%s\" in file %s/%s".as_ptr(),
+                            tags[i],
+                            dir,
+                            q2.add(1),
+                        );
+                    }
+                    unsafe { emsg(namebuff) };
+                    unsafe { *q2 = b'\t' as c_char };
+                    break;
+                }
+                q1 = unsafe { q1.add(1) };
+                q2 = unsafe { q2.add(1) };
+            }
+        }
+
+        // Write the tags into the file.
+        let fd_tags_file = fd_tags as *mut libc::FILE;
+        for &s in &tags {
+            if unsafe { libc::strncmp(s, c"help-tags\t".as_ptr(), 10) } == 0 {
+                unsafe { libc::fputs(s, fd_tags_file) };
+            } else {
+                unsafe { libc::fprintf(fd_tags_file, c"%s\t/*".as_ptr(), s) };
+                let mut q = s;
+                while unsafe { *q } as u8 != b'\t' {
+                    let ch = unsafe { *q } as u8;
+                    if ch == b'\\' || ch == b'/' {
+                        unsafe { libc::fputc(b'\\' as c_int, fd_tags_file) };
+                    }
+                    unsafe { libc::fputc(ch as c_int, fd_tags_file) };
+                    q = unsafe { q.add(1) };
+                }
+                unsafe { libc::fprintf(fd_tags_file, c"*\n".as_ptr()) };
+            }
+        }
+    }
+
+    // Free all tag strings
+    for &s in &tags {
+        unsafe { xfree(s as *mut c_void) };
+    }
+
+    unsafe { libc::fclose(fd_tags as *mut libc::FILE) };
+}
+
+/// Generate tags in one help directory, taking care of translations.
+///
+/// Detects languages from filenames, then calls `rs_helptags_one` per language.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_helptags(
+    dirname: *mut c_char,
+    add_help_tags: bool,
+    ignore_writeerr: bool,
+) {
+    let namebuff = unsafe { nvim_help_get_namebuff_mut() };
+    let namebuff_size = unsafe { nvim_help_get_namebuff_size() };
+
+    // Get a list of all files in the help directory and in subdirectories.
+    unsafe { xstrlcpy(namebuff, dirname, namebuff_size) };
+    if !unsafe { add_pathsep(namebuff) }
+        || unsafe { xstrlcat(namebuff, c"**".as_ptr(), namebuff_size) } >= MAXPATHL
+    {
+        unsafe { emsg(c"E856: Filename too long".as_ptr()) };
+        return;
+    }
+
+    let mut filecount: c_int = 0;
+    let mut files: *mut *mut c_char = std::ptr::null_mut();
+    let mut buff_list: [*mut c_char; 1] = [namebuff];
+    if unsafe {
+        gen_expand_wildcards(
+            1,
+            buff_list.as_mut_ptr(),
+            &mut filecount,
+            &mut files,
+            EW_FILE | EW_SILENT,
+        )
+    } == FAIL
+        || filecount == 0
+    {
+        unsafe { semsg(c"E151: No match: %s".as_ptr(), namebuff) };
+        return;
+    }
+
+    // Detect languages from filenames using a Vec<[u8; 2]> instead of garray.
+    let mut languages: Vec<[u8; 2]> = Vec::with_capacity(10);
+
+    for i in 0..filecount {
+        let f = unsafe { *files.add(i as usize) };
+        let flen = unsafe { CStr::from_ptr(f) }.to_bytes().len();
+        if flen <= 4 {
+            continue;
+        }
+
+        let fbytes = unsafe { std::slice::from_raw_parts(f as *const u8, flen) };
+        let last4 = &fbytes[flen - 4..];
+
+        let lang: [u8; 2];
+        if last4[0] == b'.'
+            && last4[1].eq_ignore_ascii_case(&b't')
+            && last4[2].eq_ignore_ascii_case(&b'x')
+            && last4[3].eq_ignore_ascii_case(&b't')
+        {
+            // ".txt" -> language "en"
+            lang = [b'e', b'n'];
+        } else if last4[0] == b'.'
+            && last4[1].is_ascii_alphabetic()
+            && last4[2].is_ascii_alphabetic()
+            && last4[3].eq_ignore_ascii_case(&b'x')
+        {
+            // ".abx" -> language "ab"
+            lang = [last4[1].to_ascii_lowercase(), last4[2].to_ascii_lowercase()];
+        } else {
+            continue;
+        };
+
+        // Check if we already have this language
+        if !languages.contains(&lang) {
+            languages.push(lang);
+        }
+    }
+
+    // Loop over the found languages to generate a tags file for each one.
+    for lang in &languages {
+        let mut fname_buf = [0u8; 8];
+        let mut ext_buf = [0u8; 5];
+
+        if lang[0] == b'e' && lang[1] == b'n' {
+            // English is an exception: use ".txt" and "tags".
+            fname_buf[..4].copy_from_slice(b"tags");
+            fname_buf[4] = 0;
+            ext_buf[..4].copy_from_slice(b".txt");
+            ext_buf[4] = 0;
+        } else {
+            // Language "ab" uses ".abx" and "tags-ab".
+            fname_buf[..5].copy_from_slice(b"tags-");
+            fname_buf[5] = lang[0];
+            fname_buf[6] = lang[1];
+            fname_buf[7] = 0;
+            ext_buf[0] = b'.';
+            ext_buf[1] = lang[0];
+            ext_buf[2] = lang[1];
+            ext_buf[3] = b'x';
+            ext_buf[4] = 0;
+        }
+
+        rs_helptags_one(
+            dirname,
+            ext_buf.as_ptr() as *const c_char,
+            fname_buf.as_ptr() as *const c_char,
+            add_help_tags,
+            ignore_writeerr,
+        );
+    }
+
+    unsafe { FreeWild(filecount, files) };
+}
+
+/// Callback for `do_in_path` used by `:helptags ALL`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_helptags_cb(
+    num_fnames: c_int,
+    fnames: *mut *mut c_char,
+    all: bool,
+    cookie: *mut c_void,
+) -> bool {
+    let add_help_tags = unsafe { *(cookie as *const bool) };
+    for i in 0..num_fnames {
+        rs_do_helptags(unsafe { *fnames.add(i as usize) }, add_help_tags, true);
+        if !all {
+            return true;
+        }
+    }
+    num_fnames > 0
+}
+
+/// `:helptags` — generate help tags for a directory or ALL runtimepath docs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_helptags(eap: ExargHandle) {
+    let mut arg = unsafe { nvim_help_eap_get_arg(eap) };
+    let mut add_help_tags = false;
+
+    // Check for ":helptags ++t {dir}".
+    if unsafe { libc::strncmp(arg, c"++t".as_ptr(), 3) } == 0 {
+        let ch3 = unsafe { *arg.add(3) } as u8;
+        if ch3 == b' ' || ch3 == b'\t' {
+            add_help_tags = true;
+            arg = unsafe { skipwhite(arg.add(3)) };
+        }
+    }
+
+    if unsafe { libc::strcmp(arg, c"ALL".as_ptr()) } == 0 {
+        let p_rtp = unsafe { nvim_help_get_p_rtp() };
+        let mut add_ht = add_help_tags;
+        unsafe {
+            do_in_path(
+                p_rtp,
+                c"".as_ptr(),
+                c"doc".as_ptr() as *mut c_char,
+                DIP_ALL + DIP_DIR,
+                Some(rs_helptags_cb),
+                &mut add_ht as *mut bool as *mut c_void,
+            );
+        }
+    } else {
+        let dirname = unsafe { nvim_help_expand_dir(arg) };
+        if dirname.is_null() || !unsafe { os_isdir(dirname) } {
+            unsafe { semsg(c"E150: Not a directory: %s".as_ptr(), arg) };
+        } else {
+            rs_do_helptags(dirname, add_help_tags, false);
+        }
+        unsafe { xfree(dirname as *mut c_void) };
+    }
+}
+
+/// After reading a help file: if help.txt, populate *local-additions*.
+///
+/// In the "help.txt" and "help.abx" file, add the locally added help
+/// files. This uses the very first line in the help file.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_local_additions() {
+    let fname = unsafe { path_tail(nvim_help_get_curbuf_fname()) };
+    let fname_bytes = unsafe { CStr::from_ptr(fname) }.to_bytes();
+
+    // Check if this is "help.txt" or "help.abx"
+    let is_help_txt = unsafe { path_fnamecmp(fname, c"help.txt".as_ptr()) } == 0;
+    let is_help_abx = !is_help_txt
+        && fname_bytes.len() == 8
+        && unsafe { path_fnamencmp(fname, c"help.".as_ptr(), 5) } == 0
+        && fname_bytes[5].is_ascii_alphabetic()
+        && fname_bytes[6].is_ascii_alphabetic()
+        && fname_bytes[7].eq_ignore_ascii_case(&b'x');
+
+    if !is_help_txt && !is_help_abx {
+        return;
+    }
+
+    let curbuf = unsafe { nvim_help_get_curbuf_ptr() };
+    let line_count = unsafe { nvim_help_get_curbuf_ml_line_count() };
+
+    for lnum_check in 1..line_count {
+        let line = unsafe { ml_get_buf(curbuf, lnum_check) };
+        if unsafe { libc::strstr(line, c"*local-additions*".as_ptr()) }.is_null() {
+            continue;
+        }
+
+        let lnum_start = lnum_check;
+        let mut lnum = lnum_check;
+
+        // Go through all directories in 'runtimepath', skipping $VIMRUNTIME.
+        let p_rtp = unsafe { nvim_help_get_p_rtp() };
+        let mut p = p_rtp as *mut c_char;
+        let namebuff = unsafe { nvim_help_get_namebuff_mut() };
+        let namebuff_size = unsafe { nvim_help_get_namebuff_size() };
+        let iobuff = unsafe { nvim_get_iobuff() };
+
+        while unsafe { *p } != 0 {
+            unsafe { copy_option_part(&mut p, namebuff, MAXPATHL, c",".as_ptr()) };
+            let rt = unsafe { vim_getenv(c"VIMRUNTIME".as_ptr()) };
+            if !rt.is_null()
+                && unsafe { path_full_compare(rt, namebuff, false, true) } != K_EQUAL_FILES
+            {
+                // Find all "doc/*.??[tx]" files in this directory.
+                if !unsafe { add_pathsep(namebuff) }
+                    || unsafe { xstrlcat(namebuff, c"doc/*.??[tx]".as_ptr(), namebuff_size) }
+                        >= MAXPATHL
+                {
+                    unsafe { emsg(c"E856: Filename too long".as_ptr()) };
+                    unsafe { xfree(rt as *mut c_void) };
+                    continue;
+                }
+
+                let mut fcount: c_int = 0;
+                let mut fnames: *mut *mut c_char = std::ptr::null_mut();
+                let mut buff_list: [*mut c_char; 1] = [namebuff];
+                if unsafe {
+                    gen_expand_wildcards(
+                        1,
+                        buff_list.as_mut_ptr(),
+                        &mut fcount,
+                        &mut fnames,
+                        EW_FILE | EW_SILENT,
+                    )
+                } == OK
+                    && fcount > 0
+                {
+                    // If foo.abx is found, use it instead of foo.txt in same directory.
+                    for i1 in 0..fcount as usize {
+                        let f1 = unsafe { *fnames.add(i1) };
+                        if f1.is_null() {
+                            continue;
+                        }
+                        let t1 = unsafe { path_tail(f1) };
+                        let e1 = unsafe { libc::strrchr(t1, b'.' as c_int) };
+                        if e1.is_null() {
+                            continue;
+                        }
+                        if unsafe { path_fnamecmp(e1, c".txt".as_ptr()) } != 0
+                            && unsafe { path_fnamecmp(e1, fname.add(4)) } != 0
+                        {
+                            // Not .txt and not .abx, remove it.
+                            unsafe { xfree(f1 as *mut c_void) };
+                            unsafe { *fnames.add(i1) = std::ptr::null_mut() };
+                            continue;
+                        }
+
+                        for i2 in (i1 + 1)..fcount as usize {
+                            let f2 = unsafe { *fnames.add(i2) };
+                            if f2.is_null() {
+                                continue;
+                            }
+                            let t2 = unsafe { path_tail(f2) };
+                            let e2 = unsafe { libc::strrchr(t2, b'.' as c_int) };
+                            if e2.is_null() {
+                                continue;
+                            }
+                            let stem1 = unsafe { e1.offset_from(f1) };
+                            let stem2 = unsafe { e2.offset_from(f2) };
+                            if stem1 != stem2
+                                || unsafe { path_fnamencmp(f1, f2, stem1 as usize) != 0 }
+                            {
+                                continue;
+                            }
+                            if unsafe { path_fnamecmp(e1, c".txt".as_ptr()) } == 0
+                                && unsafe { path_fnamecmp(e2, fname.add(4)) } == 0
+                            {
+                                // use .abx instead of .txt
+                                unsafe { xfree(f1 as *mut c_void) };
+                                unsafe { *fnames.add(i1) = std::ptr::null_mut() };
+                            }
+                        }
+                    }
+
+                    for fi in 0..fcount as usize {
+                        let fentry = unsafe { *fnames.add(fi) };
+                        if fentry.is_null() {
+                            continue;
+                        }
+
+                        let fd = unsafe { os_fopen(fentry, c"r".as_ptr()) };
+                        if fd.is_null() {
+                            continue;
+                        }
+                        unsafe { vim_fgets(iobuff, IOSIZE as c_int, fd) };
+                        if unsafe { *iobuff } as u8 == b'*' {
+                            let star2 = unsafe { vim_strchr(iobuff.add(1), b'*' as c_int) };
+                            if !star2.is_null() {
+                                // Change tag definition to a reference and remove CR/NL.
+                                unsafe { *iobuff = b'|' as c_char };
+                                unsafe { *star2 = b'|' as c_char };
+                                let mut s = star2;
+                                while unsafe { *s } != 0 {
+                                    let ch = unsafe { *s } as u8;
+                                    if ch == b'\r' || ch == b'\n' {
+                                        unsafe { *s = 0 };
+                                    }
+                                    s = unsafe { s.add(1) };
+                                }
+
+                                // Use C accessor for encoding conversion
+                                let cp = unsafe { nvim_help_convert_help_line(iobuff) };
+                                unsafe { ml_append(lnum, cp, 0, false) };
+                                if cp != iobuff {
+                                    unsafe { xfree(cp as *mut c_void) };
+                                }
+                                lnum += 1;
+                            }
+                        }
+                        unsafe { libc::fclose(fd as *mut libc::FILE) };
+                    }
+                    unsafe { FreeWild(fcount, fnames) };
+                }
+            }
+            unsafe { xfree(rt as *mut c_void) };
+        }
+
+        let appended = lnum - lnum_start;
+        if appended > 0 {
+            unsafe {
+                mark_adjust(lnum_start + 1, MAXLNUM, appended, 0, K_EXTMARK_UNDO);
+                changed_lines_redraw_buf(curbuf, lnum_start + 1, lnum_start + 1, appended);
+            }
+        }
+        break;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
