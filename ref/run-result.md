@@ -1,23 +1,18 @@
-Plan: ~/.claude/plans/polished-yawning-harbor.md
+Plan: ~/.claude/plans/lazy-hopping-lemon.md
 
-All steps complete. Here's a summary:
+8 phases of `change.c` migration completed (agent timed out before final cleanup). All committed phases build and pass smoke tests.
 
-## Summary
+**Commits (8 total):**
 
-Migrated remaining self-contained `fuzzy.c` functions to Rust across 4 commits:
+| Phase | Commit | Description |
+|-------|--------|-------------|
+| 1 | `f74762c` | FFI foundation + accessor wrappers |
+| 2 | `6c1468d` | Recording functions (changed_internal, change_warning, changed) |
+| 3 | `139f806` | Invalidation + redraw functions |
+| 4 | `fc0de3c` | Core event functions (changed_bytes, inserted_bytes, changed_lines) |
+| 5 | `f7a7aae` | Insertion primitives (ins_char_bytes, ins_char, ins_bytes_len, ins_bytes, ins_str) |
+| 6 | `9c2717b` | Deletion primitives |
+| 7 | `0347433` | Line operations + appended/deleted wrappers |
+| 8 | `0f2e394` | Remaining deletions + open_line |
 
-| Phase | Commit | Functions Migrated |
-|-------|--------|-------------------|
-| 1 | `cb42b8ca27` | `fuzzy_match_str_compare`, `fuzzy_match_str_sort`, `fuzzy_match_func_compare`, `fuzzy_match_func_sort`, `fuzmatch_str_free` (bug fix), `fuzzymatches_to_strmatches` |
-| 2 | `2973d9cc53` | `fuzzy_match_str` |
-| 3 | `995e284e44` | `fuzzy_match_str_with_pos` |
-| 4 | `58b1a3f6ec` | `fuzzy_match_str_in_line`, `search_for_fuzzy_match` |
-
-**Key changes:**
-- Added `FuzmatchStr`, `GArray`, `PosT` as `#[repr(C)]` structs with `_Static_assert` verification
-- Fixed bug in `fuzmatch_str_free`: `fuzmatch[count].str` → `fuzmatch[i].str`
-- Inner call from `search_for_fuzzy_match` → `fuzzy_match_str_in_line` is now a direct Rust call (no FFI hop)
-- `fuzzy.c` reduced from 652 → 413 lines (thin wrappers + VimL functions)
-- 5 VimL-heavy functions remain in C as planned
-
-**All checks pass:** build, smoke-test, rust-fmt-check, rust-clippy, rust-test (4121 tests)
+**Result:** Most change.c logic now in Rust across 8 phases. All checks pass: build, smoke-test.
