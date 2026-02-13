@@ -72,6 +72,11 @@ extern void rs_buf_set_sign(buf_T *buf, uint32_t *id, const char *group, int pri
 extern linenr_T rs_buf_mod_sign(buf_T *buf, uint32_t *id, const char *group, int prio, sign_T *sp);
 extern int rs_buf_findsign(buf_T *buf, int id, const char *group);
 extern int rs_buf_delete_signs(buf_T *buf, const char *group, int id, linenr_T atlnum);
+extern int rs_sign_define_by_name(const char *name, const char *icon, const char *text,
+                                  const char *linehl, const char *texthl,
+                                  const char *culhl, const char *numhl, int prio);
+extern int rs_sign_undefine_by_name(const char *name);
+extern void rs_free_signs(void);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -261,76 +266,17 @@ int init_sign_text(sign_T *sp, schar_T *sign_text, char *text)
 static int sign_define_by_name(char *name, char *icon, char *text, char *linehl, char *texthl,
                                char *culhl, char *numhl, int prio)
 {
-  cstr_t *key;
-  bool new_sign = false;
-  sign_T **sp = (sign_T **)pmap_put_ref(cstr_t)(&sign_map, name, &key, &new_sign);
-
-  if (new_sign) {
-    *key = xstrdup(name);
-    *sp = xcalloc(1, sizeof(sign_T));
-    (*sp)->sn_name = (char *)(*key);
-  }
-
-  // Set values for a defined sign.
-  if (icon != NULL) {
-    /// Initialize the icon information for a new sign
-    xfree((*sp)->sn_icon);
-    (*sp)->sn_icon = xstrdup(icon);
-    backslash_halve((*sp)->sn_icon);
-  }
-
-  if (text != NULL && (init_sign_text(*sp, (*sp)->sn_text, text) == FAIL)) {
-    return FAIL;
-  }
-
-  (*sp)->sn_priority = prio;
-
-  char *arg[] = { linehl, texthl, culhl, numhl };
-  int *hl[] = { &(*sp)->sn_line_hl, &(*sp)->sn_text_hl, &(*sp)->sn_cul_hl, &(*sp)->sn_num_hl };
-  for (int i = 0; i < 4; i++) {
-    if (arg[i] != NULL) {
-      *hl[i] = *arg[i] ? syn_check_group(arg[i], strlen(arg[i])) : 0;
-    }
-  }
-
-  // Update already placed signs and redraw if necessary when modifying a sign.
-  if (!new_sign) {
-    bool did_redraw = false;
-    for (size_t i = 0; i < kv_size(decor_items); i++) {
-      DecorSignHighlight *sh = &kv_A(decor_items, i);
-      if (sh->sign_name && strcmp(sh->sign_name, name) == 0) {
-        memcpy(sh->text, (*sp)->sn_text, SIGN_WIDTH * sizeof(schar_T));
-        sh->hl_id = (*sp)->sn_text_hl;
-        sh->line_hl_id = (*sp)->sn_line_hl;
-        sh->number_hl_id = (*sp)->sn_num_hl;
-        sh->cursorline_hl_id = (*sp)->sn_cul_hl;
-        if (!did_redraw) {
-          FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-            if (buf_has_signs(wp->w_buffer)) {
-              redraw_buf_later(wp->w_buffer, UPD_NOT_VALID);
-            }
-          }
-          did_redraw = true;
-        }
-      }
-    }
-  }
-  return OK;
+  return rs_sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio);
 }
 
 /// Free the sign specified by 'name'.
 static int sign_undefine_by_name(const char *name)
 {
-  sign_T *sp = pmap_del(cstr_t)(&sign_map, name, NULL);
-  if (sp == NULL) {
+  int result = rs_sign_undefine_by_name(name);
+  if (result == FAIL) {
     semsg(_("E155: Unknown sign: %s"), name);
-    return FAIL;
   }
-
-  xfree(sp->sn_name);
-  xfree(sp->sn_icon);
-  xfree(sp);
-  return OK;
+  return result;
 }
 
 /// List one sign.
@@ -881,15 +827,7 @@ static void sign_get_placed(buf_T *buf, linenr_T lnum, int id, const char *group
 
 void free_signs(void)
 {
-  cstr_t name;
-  kvec_t(cstr_t) names = KV_INITIAL_VALUE;
-  map_foreach_key(&sign_map, name, {
-    kv_push(names, name);
-  });
-  for (size_t i = 0; i < kv_size(names); i++) {
-    sign_undefine_by_name(kv_A(names, i));
-  }
-  kv_destroy(names);
+  rs_free_signs();
 }
 
 static enum {
@@ -1624,6 +1562,96 @@ int nvim_sign_create_namespace_cstr(const char *name)
 int nvim_sign_namespace_exists(const char *name)
 {
   return map_get(String, int)(&namespace_ids, cstr_as_string(name)) ? 1 : 0;
+}
+
+/// Implement sign definition — allocate/update in sign_map, set all fields.
+/// Returns OK on success, FAIL on failure.
+/// Error messages are handled by caller.
+int nvim_sign_define_by_name_impl(const char *name, const char *icon, const char *text,
+                                  const char *linehl, const char *texthl,
+                                  const char *culhl, const char *numhl, int prio)
+{
+  cstr_t *key;
+  bool new_sign = false;
+  sign_T **sp = (sign_T **)pmap_put_ref(cstr_t)(&sign_map, name, &key, &new_sign);
+
+  if (new_sign) {
+    *key = xstrdup(name);
+    *sp = xcalloc(1, sizeof(sign_T));
+    (*sp)->sn_name = (char *)(*key);
+  }
+
+  if (icon != NULL) {
+    xfree((*sp)->sn_icon);
+    (*sp)->sn_icon = xstrdup(icon);
+    backslash_halve((*sp)->sn_icon);
+  }
+
+  if (text != NULL && (init_sign_text(*sp, (*sp)->sn_text, (char *)text) == FAIL)) {
+    return FAIL;
+  }
+
+  (*sp)->sn_priority = prio;
+
+  const char *arg[] = { linehl, texthl, culhl, numhl };
+  int *hl[] = { &(*sp)->sn_line_hl, &(*sp)->sn_text_hl, &(*sp)->sn_cul_hl, &(*sp)->sn_num_hl };
+  for (int i = 0; i < 4; i++) {
+    if (arg[i] != NULL) {
+      *hl[i] = *arg[i] ? syn_check_group(arg[i], strlen(arg[i])) : 0;
+    }
+  }
+
+  // Update already placed signs and redraw if necessary when modifying a sign.
+  if (!new_sign) {
+    bool did_redraw = false;
+    for (size_t i = 0; i < kv_size(decor_items); i++) {
+      DecorSignHighlight *sh = &kv_A(decor_items, i);
+      if (sh->sign_name && strcmp(sh->sign_name, name) == 0) {
+        memcpy(sh->text, (*sp)->sn_text, SIGN_WIDTH * sizeof(schar_T));
+        sh->hl_id = (*sp)->sn_text_hl;
+        sh->line_hl_id = (*sp)->sn_line_hl;
+        sh->number_hl_id = (*sp)->sn_num_hl;
+        sh->cursorline_hl_id = (*sp)->sn_cul_hl;
+        if (!did_redraw) {
+          FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+            if (buf_has_signs(wp->w_buffer)) {
+              redraw_buf_later(wp->w_buffer, UPD_NOT_VALID);
+            }
+          }
+          did_redraw = true;
+        }
+      }
+    }
+  }
+  return OK;
+}
+
+/// Undefine a sign by name — remove from map and free.
+/// Returns OK on success, FAIL if not found (no error message emitted).
+int nvim_sign_undefine_by_name_impl(const char *name)
+{
+  sign_T *sp = pmap_del(cstr_t)(&sign_map, name, NULL);
+  if (sp == NULL) {
+    return FAIL;
+  }
+  xfree(sp->sn_name);
+  xfree(sp->sn_icon);
+  xfree(sp);
+  return OK;
+}
+
+/// Free all signs — iterate map and undefine each.
+void nvim_sign_free_all_impl(void)
+{
+  cstr_t name;
+  kvec_t(cstr_t) names = KV_INITIAL_VALUE;
+  map_foreach_key(&sign_map, name, {
+    kv_push(names, name);
+  });
+  for (size_t i = 0; i < kv_size(names); i++) {
+    nvim_sign_undefine_by_name_impl(kv_A(names, i));
+  }
+  kv_destroy(names);
 }
 
 /// Perform the marktree iteration + sorting + deletion for sign removal.

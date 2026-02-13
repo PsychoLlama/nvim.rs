@@ -414,6 +414,20 @@ pub unsafe extern "C" fn rs_sign_define_validate(
 extern "C" {
     /// Look up a highlight group by name, creating if necessary.
     fn syn_check_group(name: *const c_char, len: usize) -> c_int;
+
+    // Composite C accessors for sign definition management
+    fn nvim_sign_define_by_name_impl(
+        name: *const c_char,
+        icon: *const c_char,
+        text: *const c_char,
+        linehl: *const c_char,
+        texthl: *const c_char,
+        culhl: *const c_char,
+        numhl: *const c_char,
+        prio: c_int,
+    ) -> c_int;
+    fn nvim_sign_undefine_by_name_impl(name: *const c_char) -> c_int;
+    fn nvim_sign_free_all_impl();
 }
 
 /// Resolve a highlight group name to its ID.
@@ -473,6 +487,51 @@ pub unsafe extern "C" fn rs_sign_resolve_highlights(
         num_hl: rs_sign_resolve_highlight(numhl),
         cul_hl: rs_sign_resolve_highlight(culhl),
     }
+}
+
+// =============================================================================
+// Core Sign Definition Management
+// =============================================================================
+
+/// Define a new sign or update an existing sign.
+///
+/// Returns OK (1) on success, FAIL (0) on failure.
+///
+/// # Safety
+/// All string pointers must be valid null-terminated C strings or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_define_by_name(
+    name: *const c_char,
+    icon: *const c_char,
+    text: *const c_char,
+    linehl: *const c_char,
+    texthl: *const c_char,
+    culhl: *const c_char,
+    numhl: *const c_char,
+    prio: c_int,
+) -> c_int {
+    nvim_sign_define_by_name_impl(name, icon, text, linehl, texthl, culhl, numhl, prio)
+}
+
+/// Undefine a sign by name.
+///
+/// Returns OK (1) on success, FAIL (0) if not found.
+/// Does NOT emit an error message — caller handles that.
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_undefine_by_name(name: *const c_char) -> c_int {
+    nvim_sign_undefine_by_name_impl(name)
+}
+
+/// Free all sign definitions.
+///
+/// # Safety
+/// Must be called during cleanup only.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_signs() {
+    nvim_sign_free_all_impl();
 }
 
 // =============================================================================
