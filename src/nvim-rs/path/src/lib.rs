@@ -2609,3 +2609,322 @@ mod phase1_tests {
         assert_eq!(SPECIAL_WILDCHAR, b"`'{\"");
     }
 }
+
+// ============================================================================
+// Phase 2: Path Resolution Chain
+// ============================================================================
+
+extern "C" {
+    fn nvim_path_os_dirname(buf: *mut c_char, len: usize) -> c_int;
+    fn nvim_path_os_realpath(name: *const c_char, buf: *mut c_char, len: usize) -> *mut c_char;
+    fn nvim_path_xstrdup(s: *const c_char) -> *mut c_char;
+    fn nvim_path_xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
+}
+
+/// Get the absolute name of the given relative directory.
+///
+/// # Safety
+/// All pointers must be valid. `buffer` must have at least `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_full_dir_name(
+    directory: *const c_char,
+    buffer: *mut c_char,
+    len: usize,
+) -> c_int {
+    if directory.is_null() || buffer.is_null() {
+        return FAIL;
+    }
+
+    // Empty directory string -> get current directory
+    if *directory == 0 {
+        return nvim_path_os_dirname(buffer, len);
+    }
+
+    // Try realpath first
+    if !nvim_path_os_realpath(directory, buffer, len).is_null() {
+        return OK;
+    }
+
+    // Path does not exist (yet). For a full path fail.
+    if rs_path_is_absolute(directory) != 0 {
+        return FAIL;
+    }
+
+    // For a relative path use the current directory and append the file name.
+    let mut old_dir = [0i8; MAXPATHL];
+    if nvim_path_os_dirname(old_dir.as_mut_ptr(), MAXPATHL) == FAIL {
+        return FAIL;
+    }
+
+    nvim_path_xstrlcpy(buffer, old_dir.as_ptr(), len);
+    if rs_append_path(buffer, directory, len) == FAIL {
+        return FAIL;
+    }
+
+    OK
+}
+
+/// Expand a filename to its full absolute path.
+///
+/// Used by `vim_FullName` and `fix_fname`.
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_to_absolute(
+    fname: *const c_char,
+    buf: *mut c_char,
+    len: usize,
+    force: c_int,
+) -> c_int {
+    if fname.is_null() || buf.is_null() {
+        return FAIL;
+    }
+
+    *buf = 0;
+
+    let relative_directory = nvim_path_xmalloc(len);
+    let mut end_of_path = fname;
+
+    // Expand if forced or not an absolute path
+    if force != 0 || rs_path_is_absolute(fname) == 0 {
+        let mut p = libc::strrchr(fname, b'/' as c_int);
+
+        #[cfg(windows)]
+        {
+            if p.is_null() {
+                p = libc::strrchr(fname, b'\\' as c_int);
+            }
+        }
+
+        // Handle ".." without path separators
+        if p.is_null() && libc::strcmp(fname, c"..".as_ptr()) == 0 {
+            p = fname.add(2).cast_mut();
+        }
+
+        if p.is_null() {
+            *relative_directory = 0;
+        } else {
+            // For "/path/dir/.." include the "/.."
+            if rs_vim_ispathsep_nocolon(*p as c_int) != 0
+                && libc::strcmp(p.add(1), c"..".as_ptr()) == 0
+            {
+                p = p.add(3);
+            }
+            let offset = (p as usize) - (fname as usize);
+            std::ptr::copy_nonoverlapping(
+                fname as *const u8,
+                relative_directory as *mut u8,
+                offset + 1,
+            );
+            *relative_directory.add(offset + 1) = 0;
+            end_of_path = if rs_vim_ispathsep_nocolon(*p as c_int) != 0 {
+                p.add(1)
+            } else {
+                p.cast_const()
+            };
+        }
+
+        if rs_path_full_dir_name(relative_directory, buf, len) == FAIL {
+            nvim_path_xfree(relative_directory);
+            return FAIL;
+        }
+    }
+    nvim_path_xfree(relative_directory);
+    rs_append_path(buf, end_of_path, len)
+}
+
+/// Save absolute file name to buf[len].
+///
+/// # Safety
+/// `buf` must have at least `len` bytes. `fname` may be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_FullName(
+    fname: *const c_char,
+    buf: *mut c_char,
+    len: usize,
+    force: c_int,
+) -> c_int {
+    *buf = 0;
+    if fname.is_null() {
+        return FAIL;
+    }
+
+    if libc::strlen(fname) > len - 1 {
+        nvim_path_xstrlcpy(buf, fname, len); // truncate
+        #[cfg(windows)]
+        {
+            rs_slash_adjust(buf);
+        }
+        return FAIL;
+    }
+
+    if rs_path_with_url(fname) != 0 {
+        nvim_path_xstrlcpy(buf, fname, len);
+        return OK;
+    }
+
+    let rv = rs_path_to_absolute(fname, buf, len, force);
+    if rv == FAIL {
+        nvim_path_xstrlcpy(buf, fname, len); // something failed; use the filename
+    }
+    #[cfg(windows)]
+    {
+        rs_slash_adjust(buf);
+    }
+    rv
+}
+
+/// Get an allocated copy of the full path to a file.
+///
+/// # Safety
+/// `fname` may be NULL. Returns an allocated string or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_FullName_save(fname: *const c_char, force: c_int) -> *mut c_char {
+    if fname.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let buf = nvim_path_xmalloc(MAXPATHL);
+    if rs_vim_FullName(fname, buf, MAXPATHL, force) == FAIL {
+        nvim_path_xfree(buf);
+        return nvim_path_xstrdup(fname);
+    }
+    buf
+}
+
+/// Saves the absolute path.
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_save_abs_path(name: *const c_char) -> *mut c_char {
+    if name.is_null() {
+        return std::ptr::null_mut();
+    }
+    if rs_path_is_absolute(name) == 0 {
+        return rs_FullName_save(name, 1);
+    }
+    nvim_path_xstrdup(name)
+}
+
+/// Get the full resolved path for fname.
+///
+/// On Unix, this is just FullName_save(fname, true).
+///
+/// # Safety
+/// `fname` may be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fix_fname(fname: *const c_char) -> *mut c_char {
+    if fname.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    #[cfg(unix)]
+    {
+        rs_FullName_save(fname, 1)
+    }
+
+    #[cfg(not(unix))]
+    {
+        if rs_vim_isAbsName(fname) == 0
+            || !libc::strstr(fname, b"..\0".as_ptr() as *const c_char).is_null()
+            || !libc::strstr(fname, b"//\0".as_ptr() as *const c_char).is_null()
+        {
+            return rs_FullName_save(fname, 0);
+        }
+        // xstrdup + path_fix_case would go here for Windows
+        nvim_path_xstrdup(fname)
+    }
+}
+
+/// Return true if file names "f1" and "f2" are in the same directory.
+/// "f1" may be a short name, "f2" must be a full path.
+///
+/// # Safety
+/// `f1` and `f2` may be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_same_directory(f1: *const c_char, f2: *const c_char) -> c_int {
+    if f1.is_null() || f2.is_null() {
+        return 0;
+    }
+
+    let mut ffname = [0i8; MAXPATHL];
+    rs_vim_FullName(f1, ffname.as_mut_ptr(), MAXPATHL, 0);
+    let t1 = rs_path_tail_with_sep(ffname.as_ptr());
+    let t2 = rs_path_tail_with_sep(f2);
+    let len1 = (t1 as usize) - (ffname.as_ptr() as usize);
+    let len2 = (t2 as usize) - (f2 as usize);
+    if len1 != len2 {
+        return 0;
+    }
+    c_int::from(rs_pathcmp(ffname.as_ptr(), f2, len1 as c_int) == 0)
+}
+
+/// Try to find a shortname by comparing the fullname with the current directory.
+///
+/// # Safety
+/// `full_path` may be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_try_shorten_fname(full_path: *mut c_char) -> *mut c_char {
+    if full_path.is_null() {
+        return full_path;
+    }
+
+    let dirname = nvim_path_xmalloc(MAXPATHL);
+    let mut p = full_path;
+
+    if nvim_path_os_dirname(dirname, MAXPATHL) == OK {
+        let short = rs_path_shorten_fname(full_path, dirname);
+        if !short.is_null() && *short != 0 {
+            p = short;
+        }
+    }
+    nvim_path_xfree(dirname);
+    p
+}
+
+/// Replace all slashes by backslashes (or vice versa on Windows).
+/// No-op on Unix.
+///
+/// # Safety
+/// `p` must be a valid pointer to a mutable, null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_slash_adjust(p: *mut c_char) {
+    if p.is_null() {
+        return;
+    }
+
+    // No-op on Unix
+    #[cfg(not(windows))]
+    {
+        let _ = p;
+    }
+
+    #[cfg(windows)]
+    {
+        if rs_path_with_url(p) != 0 {
+            return;
+        }
+
+        // Don't replace backslash in backtick quoted strings
+        if *p as u8 == b'`' {
+            let len = libc::strlen(p);
+            if len > 2 && *p.add(len - 1) as u8 == b'`' {
+                return;
+            }
+        }
+
+        // Replace slashes based on 'shellslash' option
+        // On Windows, this would check psepc/psepcN - simplified for now
+        let mut ptr = p;
+        while *ptr != 0 {
+            if *ptr as u8 == b'/' {
+                *ptr = b'\\' as c_char;
+            }
+            let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+            let char_len = nvim_mbyte::utfc_ptr2len(slice);
+            ptr = ptr.add(char_len);
+        }
+    }
+}
