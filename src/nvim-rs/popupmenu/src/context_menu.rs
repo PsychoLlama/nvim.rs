@@ -277,12 +277,51 @@ extern "C" {
     fn nvim_get_pum_selected() -> c_int;
 }
 
-// C `_impl` functions for later phase migrations.
+// C accessor functions for make_popup.
+extern "C" {
+    /// Check if UI has a capability.
+    fn ui_has(what: c_int) -> bool;
+    /// Set `mouse_grid`.
+    fn nvim_set_mouse_grid(val: c_int);
+    /// Get `mouse_row`.
+    fn nvim_get_mouse_row() -> c_int;
+    /// Set `mouse_row`.
+    fn nvim_set_mouse_row(val: c_int);
+    /// Get `mouse_col`.
+    fn nvim_get_mouse_col() -> c_int;
+    /// Set `mouse_col`.
+    fn nvim_set_mouse_col(val: c_int);
+    /// Get `curwin->w_grid.row_offset`.
+    fn nvim_pum_curwin_grid_row_offset() -> c_int;
+    /// Get `curwin->w_grid.col_offset`.
+    fn nvim_pum_curwin_grid_col_offset() -> c_int;
+    /// Get `curwin->w_wrow`.
+    fn nvim_pum_curwin_wrow() -> c_int;
+    /// Get `curwin->w_wcol`.
+    fn nvim_pum_curwin_wcol() -> c_int;
+    /// Get `curwin->w_p_rl`.
+    fn nvim_pum_curwin_p_rl() -> c_int;
+    /// Get `curwin->w_view_width`.
+    fn nvim_pum_curwin_view_width() -> c_int;
+    /// Get `curwin->w_winrow`.
+    fn nvim_pum_curwin_winrow() -> c_int;
+    /// Get `curwin->w_wincol`.
+    fn nvim_pum_curwin_wincol() -> c_int;
+    /// Get `curwin->w_grid.target->handle`.
+    fn nvim_pum_curwin_grid_target_handle() -> c_int;
+    /// Check if `curwin->w_grid.target == &default_grid`.
+    fn nvim_pum_curwin_grid_target_is_default() -> c_int;
+    /// Find menu by path name (returns NULL if not found).
+    fn nvim_pum_menu_find(path_name: *const std::ffi::c_char) -> *mut VimMenuHandle;
+}
+
+/// UI capability for multigrid mode (kUIMultigrid = 6).
+const K_UI_MULTIGRID: c_int = 6;
+
+// C _impl function for later phase migration.
 extern "C" {
     /// Show the terminal popup menu.
     fn nvim_pum_show_popupmenu_impl(menu: *mut VimMenuHandle);
-    /// Create a popup from a menu path.
-    fn nvim_pum_make_popup_impl(path_name: *const std::ffi::c_char, use_mouse_pos: c_int);
 }
 
 /// Execute the currently selected popup menu item.
@@ -321,14 +360,42 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
 
 /// Create a popup from a menu path.
 ///
+/// If `use_mouse_pos` is false, sets the mouse position to the cursor
+/// location so the menu appears near the cursor. Then finds the menu
+/// by path name and shows it as a popup.
+///
 /// # Safety
-/// Calls C `_impl` function. `path_name` must be a valid C string.
+/// Calls C accessor functions. `path_name` must be a valid C string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_make_popup(
     path_name: *const std::ffi::c_char,
     use_mouse_pos: c_int,
 ) {
-    nvim_pum_make_popup_impl(path_name, use_mouse_pos);
+    if use_mouse_pos == 0 {
+        // Set mouse position at the cursor so the menu pops up there.
+        let row_offset = nvim_pum_curwin_grid_row_offset();
+        let col_offset = nvim_pum_curwin_grid_col_offset();
+        let wrow = nvim_pum_curwin_wrow();
+        let wcol = nvim_pum_curwin_wcol();
+        let p_rl = nvim_pum_curwin_p_rl() != 0;
+        let view_width = nvim_pum_curwin_view_width();
+
+        nvim_set_mouse_row(row_offset + wrow);
+        nvim_set_mouse_col(col_offset + if p_rl { view_width - wcol - 1 } else { wcol });
+
+        if ui_has(K_UI_MULTIGRID) {
+            nvim_set_mouse_grid(nvim_pum_curwin_grid_target_handle());
+        } else if nvim_pum_curwin_grid_target_is_default() == 0 {
+            nvim_set_mouse_grid(0);
+            nvim_set_mouse_row(nvim_get_mouse_row() + nvim_pum_curwin_winrow());
+            nvim_set_mouse_col(nvim_get_mouse_col() + nvim_pum_curwin_wincol());
+        }
+    }
+
+    let menu = nvim_pum_menu_find(path_name);
+    if !menu.is_null() {
+        nvim_pum_show_popupmenu_impl(menu);
+    }
 }
 
 /// Move selection in context menu, skipping separators.

@@ -542,6 +542,116 @@ _Static_assert(kUIMultigrid == 6, "kUIMultigrid must be 6");
 _Static_assert(kUIPopupmenu == 1, "kUIPopupmenu must be 1");
 _Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
 
+// Phase 2 accessors: grid cleanup wrappers for Rust FFI
+void nvim_pum_ui_call_popupmenu_hide(void)
+{
+  ui_call_popupmenu_hide();
+}
+
+void nvim_pum_ui_comp_remove_grid(void)
+{
+  ui_comp_remove_grid(&pum_grid);
+}
+
+void nvim_pum_ui_call_win_close_grid(void)
+{
+  ui_call_win_close(pum_grid.handle);
+}
+
+void nvim_pum_ui_call_grid_destroy(void)
+{
+  ui_call_grid_destroy(pum_grid.handle);
+}
+
+void nvim_pum_grid_free(void)
+{
+  grid_free(&pum_grid);
+}
+
+void *nvim_pum_win_float_find_preview(void)
+{
+  return win_float_find_preview();
+}
+
+void nvim_pum_win_close(void *wp)
+{
+  win_close((win_T *)wp, false, false);
+}
+
+// Phase 2 accessors: mouse_find_win_outer wrapper
+PumMouseFindResult nvim_pum_mouse_find_win_outer(int grid, int row, int col)
+{
+  mouse_find_win_outer(&grid, &row, &col);
+  return (PumMouseFindResult){ grid, row, col };
+}
+
+// Phase 2 accessor: check if pum_array item text is non-empty
+int nvim_pum_array_item_is_nonempty(int idx)
+{
+  return pum_array != NULL && *pum_array[idx].pum_text != NUL;
+}
+
+// Phase 2 accessors: curwin geometry for make_popup
+int nvim_pum_curwin_grid_row_offset(void)
+{
+  return curwin->w_grid.row_offset;
+}
+
+int nvim_pum_curwin_grid_col_offset(void)
+{
+  return curwin->w_grid.col_offset;
+}
+
+int nvim_pum_curwin_wrow(void)
+{
+  return curwin->w_wrow;
+}
+
+int nvim_pum_curwin_wcol(void)
+{
+  return curwin->w_wcol;
+}
+
+int nvim_pum_curwin_p_rl(void)
+{
+  return curwin->w_p_rl;
+}
+
+int nvim_pum_curwin_view_width(void)
+{
+  return curwin->w_view_width;
+}
+
+int nvim_pum_curwin_winrow(void)
+{
+  return curwin->w_winrow;
+}
+
+int nvim_pum_curwin_wincol(void)
+{
+  return curwin->w_wincol;
+}
+
+int nvim_pum_curwin_grid_target_handle(void)
+{
+  return curwin->w_grid.target->handle;
+}
+
+int nvim_pum_curwin_grid_target_is_default(void)
+{
+  return curwin->w_grid.target == &default_grid;
+}
+
+void nvim_set_pum_anchor_grid(int val)
+{
+  pum_anchor_grid = val;
+}
+
+void *nvim_pum_menu_find(const char *path_name)
+{
+  return menu_find(path_name);
+}
+
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 
@@ -1593,28 +1703,7 @@ void pum_undisplay(bool immediate)
   }
 }
 
-void nvim_pum_check_clear_impl(void)
-{
-  if (!pum_is_visible && pum_is_drawn) {
-    if (pum_external) {
-      ui_call_popupmenu_hide();
-    } else {
-      ui_comp_remove_grid(&pum_grid);
-      if (ui_has(kUIMultigrid)) {
-        ui_call_win_close(pum_grid.handle);
-        ui_call_grid_destroy(pum_grid.handle);
-      }
-      // TODO(bfredl): consider keeping float grids allocated.
-      grid_free(&pum_grid);
-    }
-    pum_is_drawn = false;
-    pum_external = false;
-    win_T *wp = win_float_find_preview();
-    if (wp != NULL) {
-      win_close(wp, false, false);
-    }
-  }
-}
+// nvim_pum_check_clear_impl: migrated to Rust (display.rs)
 
 void pum_check_clear(void)
 {
@@ -1757,36 +1846,7 @@ void nvim_pum_position_at_mouse_impl(int min_width)
 }
 
 /// Select the pum entry at the mouse position.
-void nvim_pum_select_mouse_pos_impl(void)
-{
-  int grid = mouse_grid;
-  int row = mouse_row;
-  int col = mouse_col;
-
-  if (grid == 0) {
-    mouse_find_win_outer(&grid, &row, &col);
-  }
-
-  if (grid == pum_grid.handle) {
-    pum_selected = row;
-    return;
-  }
-
-  if (grid != pum_anchor_grid
-      || col < pum_left_col - pum_win_col_offset
-      || col >= pum_right_col - pum_win_col_offset) {
-    pum_selected = -1;
-    return;
-  }
-
-  int idx = row - (pum_row - pum_win_row_offset);
-
-  if (idx < 0 || idx >= pum_height) {
-    pum_selected = -1;
-  } else if (*pum_array[idx].pum_text != NUL) {
-    pum_selected = idx;
-  }
-}
+// nvim_pum_select_mouse_pos_impl: migrated to Rust (mouse.rs)
 
 // nvim_pum_execute_menu_impl: migrated to Rust (context_menu.rs)
 
@@ -1905,29 +1965,7 @@ void nvim_pum_show_popupmenu_impl(vimmenu_T *menu)
   }
 }
 
-void nvim_pum_make_popup_impl(const char *path_name, int use_mouse_pos)
-{
-  if (!use_mouse_pos) {
-    // Hack: set mouse position at the cursor so that the menu pops up
-    // around there.
-    mouse_row = curwin->w_grid.row_offset + curwin->w_wrow;
-    mouse_col = curwin->w_grid.col_offset
-                + (curwin->w_p_rl ? curwin->w_view_width - curwin->w_wcol - 1
-                                  : curwin->w_wcol);
-    if (ui_has(kUIMultigrid)) {
-      mouse_grid = curwin->w_grid.target->handle;
-    } else if (curwin->w_grid.target != &default_grid) {
-      mouse_grid = 0;
-      mouse_row += curwin->w_winrow;
-      mouse_col += curwin->w_wincol;
-    }
-  }
-
-  vimmenu_T *menu = menu_find(path_name);
-  if (menu != NULL) {
-    rs_pum_show_popupmenu(menu);
-  }
-}
+// nvim_pum_make_popup_impl: migrated to Rust (context_menu.rs)
 
 void pum_show_popupmenu(vimmenu_T *menu)
 {

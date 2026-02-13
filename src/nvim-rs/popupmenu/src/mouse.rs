@@ -339,12 +339,37 @@ pub const extern "C" fn rs_pum_scrollbar_click_to_first(
     }
 }
 
-// C `_impl` functions for Phase 6 migration.
+// C accessor functions for mouse globals and selection.
+extern "C" {
+    /// Get `mouse_grid`.
+    fn nvim_get_mouse_grid() -> c_int;
+    /// Get `mouse_row`.
+    fn nvim_get_mouse_row() -> c_int;
+    /// Get `mouse_col`.
+    fn nvim_get_mouse_col() -> c_int;
+    /// Get `pum_grid.handle`.
+    fn nvim_pum_grid_get_handle() -> c_int;
+    /// Set `pum_selected`.
+    fn nvim_set_pum_selected(val: c_int);
+    /// Check if `pum_array[idx].pum_text` is non-empty.
+    fn nvim_pum_array_item_is_nonempty(idx: c_int) -> c_int;
+    /// Find window from outer grid coords, returning adjusted grid/row/col.
+    fn nvim_pum_mouse_find_win_outer(grid: c_int, row: c_int, col: c_int) -> PumMouseFindResult;
+}
+
+/// Result of `mouse_find_win_outer` wrapper.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct PumMouseFindResult {
+    grid: c_int,
+    row: c_int,
+    col: c_int,
+}
+
+// C _impl function for later phase migration.
 extern "C" {
     /// Position popup menu at mouse location.
     fn nvim_pum_position_at_mouse_impl(min_width: c_int);
-    /// Select the popup entry at the mouse position.
-    fn nvim_pum_select_mouse_pos_impl();
 }
 
 /// Position popup menu at the current mouse location.
@@ -358,11 +383,54 @@ pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
 
 /// Select the popup entry at the mouse position.
 ///
+/// Determines which popup menu item the mouse is over and sets
+/// `pum_selected` accordingly. Handles both direct grid clicks and
+/// anchor grid clicks with position adjustment.
+///
 /// # Safety
-/// Calls C `_impl` function.
+/// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_select_mouse_pos() {
-    nvim_pum_select_mouse_pos_impl();
+    let mut grid = nvim_get_mouse_grid();
+    let mut row = nvim_get_mouse_row();
+    let mut col = nvim_get_mouse_col();
+
+    if grid == 0 {
+        let result = nvim_pum_mouse_find_win_outer(grid, row, col);
+        grid = result.grid;
+        row = result.row;
+        col = result.col;
+    }
+
+    let pum_grid_handle = nvim_pum_grid_get_handle();
+    if grid == pum_grid_handle {
+        nvim_set_pum_selected(row);
+        return;
+    }
+
+    let pum_anchor_grid = nvim_get_pum_anchor_grid();
+    let pum_left_col = nvim_get_pum_left_col();
+    let pum_right_col = nvim_get_pum_right_col();
+    let pum_win_col_offset = nvim_get_pum_win_col_offset();
+
+    if grid != pum_anchor_grid
+        || col < pum_left_col - pum_win_col_offset
+        || col >= pum_right_col - pum_win_col_offset
+    {
+        nvim_set_pum_selected(-1);
+        return;
+    }
+
+    let pum_row = nvim_get_pum_row();
+    let pum_win_row_offset = nvim_get_pum_win_row_offset();
+    let pum_height = nvim_get_pum_height();
+    let idx = row - (pum_row - pum_win_row_offset);
+
+    if idx < 0 || idx >= pum_height {
+        nvim_set_pum_selected(-1);
+    } else if nvim_pum_array_item_is_nonempty(idx) != 0 {
+        nvim_set_pum_selected(idx);
+    }
 }
 
 #[cfg(test)]

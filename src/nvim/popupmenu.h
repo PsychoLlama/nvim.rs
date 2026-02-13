@@ -31,6 +31,13 @@ typedef struct {
   double col;
 } PumUiPos;
 
+/// Result type for `nvim_pum_mouse_find_win_outer` (Rust FFI).
+typedef struct {
+  int grid;
+  int row;
+  int col;
+} PumMouseFindResult;
+
 /// state for pum_ext_select_item.
 EXTERN struct {
   bool active;

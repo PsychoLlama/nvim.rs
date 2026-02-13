@@ -368,6 +368,24 @@ pub const extern "C" fn rs_pum_has_room(height: c_int, size: c_int, border_width
 /// UI capability for multigrid mode (kUIMultigrid = 6).
 const K_UI_MULTIGRID: c_int = 6;
 
+// C accessor functions for check_clear.
+extern "C" {
+    /// Call `ui_call_popupmenu_hide()`.
+    fn nvim_pum_ui_call_popupmenu_hide();
+    /// Call `ui_comp_remove_grid(&pum_grid)`.
+    fn nvim_pum_ui_comp_remove_grid();
+    /// Call `ui_call_win_close(pum_grid.handle)`.
+    fn nvim_pum_ui_call_win_close_grid();
+    /// Call `ui_call_grid_destroy(pum_grid.handle)`.
+    fn nvim_pum_ui_call_grid_destroy();
+    /// Call `grid_free(&pum_grid)`.
+    fn nvim_pum_grid_free();
+    /// Find the floating preview window (returns NULL if none).
+    fn nvim_pum_win_float_find_preview() -> *mut WinHandle;
+    /// Close a window.
+    fn nvim_pum_win_close(wp: *mut WinHandle);
+}
+
 // C _impl functions for later phase migrations.
 extern "C" {
     /// Display the popup menu (implementation).
@@ -378,8 +396,6 @@ extern "C" {
         array_changed: c_int,
         cmd_startcol: c_int,
     );
-    /// Check and clear the popup menu display.
-    fn nvim_pum_check_clear_impl();
     /// Set preview text in a buffer.
     fn nvim_pum_preview_set_text_impl(
         buf: *mut BufHandle,
@@ -423,11 +439,37 @@ pub unsafe extern "C" fn rs_pum_recompose() {
 
 /// Check and clear the popup menu display if needed.
 ///
+/// If the popup is not visible but still drawn, tears down the grid and
+/// closes the floating preview window. Handles both external and internal
+/// popup display modes.
+///
 /// # Safety
-/// Calls C `_impl` function.
+/// Calls C accessor and UI functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_check_clear() {
-    nvim_pum_check_clear_impl();
+    let is_visible = nvim_get_pum_is_visible() != 0;
+    let is_drawn = nvim_get_pum_is_drawn() != 0;
+
+    if !is_visible && is_drawn {
+        let is_external = nvim_get_pum_external() != 0;
+        if is_external {
+            nvim_pum_ui_call_popupmenu_hide();
+        } else {
+            nvim_pum_ui_comp_remove_grid();
+            if ui_has(K_UI_MULTIGRID) {
+                nvim_pum_ui_call_win_close_grid();
+                nvim_pum_ui_call_grid_destroy();
+            }
+            nvim_pum_grid_free();
+        }
+        nvim_set_pum_is_drawn(0);
+        nvim_set_pum_external(0);
+
+        let wp = nvim_pum_win_float_find_preview();
+        if !wp.is_null() {
+            nvim_pum_win_close(wp);
+        }
+    }
 }
 
 /// Flush the popup menu UI position in multigrid mode.
