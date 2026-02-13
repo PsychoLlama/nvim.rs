@@ -72,6 +72,8 @@ extern void rs_redraw_ruler(void);
 extern void rs_ui_ext_tabline_update(void);
 // Phase 4 Rust implementation
 extern void rs_draw_tabline(void);
+// Phase 5 Rust implementation
+extern void rs_win_redr_custom(win_T *wp, bool draw_winbar, bool draw_ruler, bool ui_event);
 
 // Determines how deeply nested %{} blocks will be evaluated in statusline.
 #define MAX_STL_EVAL_DEPTH 100
@@ -134,201 +136,7 @@ void stl_fill_click_defs(StlClickDefinition *click_defs, StlClickRecord *click_r
 /// @param ui_event  emit UI-event instead of drawing
 static void win_redr_custom(win_T *wp, bool draw_winbar, bool draw_ruler, bool ui_event)
 {
-  static bool entered = false;
-  int col = 0;
-  int attr, row, maxwidth;
-  hlf_T group;
-  schar_T fillchar;
-  char buf[MAXPATHL];
-  char transbuf[MAXPATHL];
-  char *stl;
-  OptIndex opt_idx = kOptInvalid;
-  int opt_scope = 0;
-  stl_hlrec_t *hltab;
-  StlClickRecord *tabtab;
-  bool is_stl_global = global_stl_height() > 0;
-
-  ScreenGrid *grid = wp && wp->w_floating && !is_stl_global ? &wp->w_grid_alloc : &default_grid;
-
-  // There is a tiny chance that this gets called recursively: When
-  // redrawing a status line triggers redrawing the ruler or tabline.
-  // Avoid trouble by not allowing recursion.
-  if (entered) {
-    return;
-  }
-  entered = true;
-
-  // setup environment for the task at hand
-  if (wp == NULL) {
-    // Use 'tabline'.  Always at the first line of the screen.
-    stl = p_tal;
-    row = 0;
-    fillchar = schar_from_ascii(' ');
-    group = HLF_TPF;
-    attr = HL_ATTR(group);
-    maxwidth = Columns;
-    opt_idx = kOptTabline;
-  } else if (draw_winbar) {
-    opt_idx = kOptWinbar;
-    stl = ((*wp->w_p_wbr != NUL) ? wp->w_p_wbr : p_wbr);
-    opt_scope = ((*wp->w_p_wbr != NUL) ? OPT_LOCAL : 0);
-    row = -1;  // row zero is first row of text
-    col = 0;
-    grid = grid_adjust(&wp->w_grid, &row, &col);
-
-    if (row < 0) {
-      goto theend;
-    }
-
-    fillchar = wp->w_p_fcs_chars.wbr;
-    group = (wp == curwin) ? HLF_WBR : HLF_WBRNC;
-    attr = win_hl_attr(wp, (int)group);
-    maxwidth = wp->w_view_width;
-    stl_clear_click_defs(wp->w_winbar_click_defs, wp->w_winbar_click_defs_size);
-    wp->w_winbar_click_defs = stl_alloc_click_defs(wp->w_winbar_click_defs, maxwidth,
-                                                   &wp->w_winbar_click_defs_size);
-  } else {
-    const bool in_status_line = wp->w_status_height != 0 || is_stl_global;
-    if (wp->w_floating && !is_stl_global && !draw_ruler) {
-      row = wp->w_winrow_off + wp->w_view_height;
-      col = wp->w_wincol_off;
-      maxwidth = wp->w_view_width;
-    } else {
-      row = is_stl_global ? (Rows - (int)p_ch - 1) : W_ENDROW(wp);
-      maxwidth = in_status_line && !is_stl_global ? wp->w_width : Columns;
-    }
-    fillchar = fillchar_status(&group, wp);
-    stl_clear_click_defs(wp->w_status_click_defs, wp->w_status_click_defs_size);
-    wp->w_status_click_defs = stl_alloc_click_defs(wp->w_status_click_defs, maxwidth,
-                                                   &wp->w_status_click_defs_size);
-
-    if (draw_ruler) {
-      stl = p_ruf;
-      opt_idx = kOptRulerformat;
-      // advance past any leading group spec - implicit in ru_col
-      if (*stl == '%') {
-        if (*++stl == '-') {
-          stl++;
-        }
-        if (atoi(stl)) {
-          while (ascii_isdigit(*stl)) {
-            stl++;
-          }
-        }
-        if (*stl++ != '(') {
-          stl = p_ruf;
-        }
-      }
-      col = MAX(ru_col - (Columns - maxwidth), (maxwidth + 1) / 2);
-      maxwidth -= col;
-      if (!in_status_line) {
-        row = Rows - 1;
-        grid = grid_adjust(&msg_grid_adj, &row, &col);
-        maxwidth--;  // writing in last column may cause scrolling
-        fillchar = schar_from_ascii(' ');
-        group = HLF_MSG;
-      }
-    } else {
-      opt_idx = kOptStatusline;
-      stl = ((*wp->w_p_stl != NUL) ? wp->w_p_stl : p_stl);
-      opt_scope = ((*wp->w_p_stl != NUL) ? OPT_LOCAL : 0);
-    }
-
-    attr = win_hl_attr(wp, (int)group);
-    if (!wp->w_floating && in_status_line && !is_stl_global) {
-      col += wp->w_wincol;
-    }
-  }
-
-  if (maxwidth <= 0) {
-    goto theend;
-  }
-
-  // Temporarily reset 'cursorbind', we don't want a side effect from moving
-  // the cursor away and back.
-  win_T *ewp = wp == NULL ? curwin : wp;
-  int p_crb_save = ewp->w_p_crb;
-  ewp->w_p_crb = false;
-
-  // Make a copy, because the statusline may include a function call that
-  // might change the option value and free the memory.
-  stl = xstrdup(stl);
-  build_stl_str_hl(ewp, buf, sizeof(buf), stl, opt_idx, opt_scope,
-                   fillchar, maxwidth, &hltab, NULL, &tabtab, NULL);
-
-  xfree(stl);
-  ewp->w_p_crb = p_crb_save;
-
-  int len = (int)strlen(buf);
-  int start_col = col;
-
-  if (!ui_event) {
-    // Draw each snippet with the specified highlighting.
-    screengrid_line_start(grid, row, 0);
-  }
-
-  char *p = buf;
-  int curattr = attr;
-  int curgroup = (int)group;
-  Array content = ARRAY_DICT_INIT;
-  for (stl_hlrec_t *sp = hltab;; sp++) {
-    int textlen = (int)(sp->start ? sp->start - p : buf + len - p);
-    // Make all characters printable. Use an empty string instead of p, if p is beyond buf + len.
-    size_t tsize = transstr_buf(p >= buf + len ? "" : p, textlen, transbuf, sizeof transbuf, true);
-    if (!ui_event) {
-      col += grid_line_puts(col, transbuf, (int)tsize, curattr);
-    } else {
-      Array chunk = ARRAY_DICT_INIT;
-      ADD(chunk, INTEGER_OBJ(curattr));
-      ADD(chunk, STRING_OBJ(cbuf_as_string(xmemdupz(transbuf, tsize), tsize)));
-      ADD(chunk, INTEGER_OBJ(curgroup));
-      ADD(content, ARRAY_OBJ(chunk));
-    }
-    p = sp->start;
-
-    if (p == NULL) {
-      break;
-    } else if (sp->userhl == 0) {
-      curattr = attr;
-      curgroup = (int)group;
-    } else if (sp->userhl < 0) {
-      curattr = syn_id2attr(-sp->userhl);
-      curgroup = -sp->userhl;
-    } else {
-      int *userhl = (wp != NULL && wp != curwin && wp->w_status_height != 0)
-                    ? highlight_stlnc : highlight_user;
-      char userbuf[5] = "User";
-      userbuf[4] = (char)sp->userhl + '0';
-      curattr = userhl[sp->userhl - 1];
-      curgroup = syn_name2id_len(userbuf, 5);
-    }
-    if (curattr != attr) {
-      curattr = hl_combine_attr(attr, curattr);
-    }
-  }
-
-  if (ui_event) {
-    ui_call_msg_ruler(content);
-    api_free_array(content);
-    goto theend;
-  }
-
-  int maxcol = start_col + maxwidth;
-
-  // fill up with "fillchar"
-  grid_line_fill(col, maxcol, fillchar, curattr);
-  grid_line_flush();
-
-  // Fill the tab_page_click_defs, w_status_click_defs or w_winbar_click_defs array for clicking
-  // in the tab page line, status line or window bar
-  StlClickDefinition *click_defs = (wp == NULL) ? tab_page_click_defs
-                                                : draw_winbar ? wp->w_winbar_click_defs
-                                                              : wp->w_status_click_defs;
-
-  stl_fill_click_defs(click_defs, tabtab, buf, maxwidth, wp == NULL);
-
-theend:
-  entered = false;
+  rs_win_redr_custom(wp, draw_winbar, draw_ruler, ui_event);
 }
 
 void win_redr_winbar(win_T *wp)
@@ -1834,7 +1642,7 @@ void nvim_stl_get_trans_bufname(buf_T *buf)
 /// Call win_redr_custom(wp, false, false, false) for redraw_custom_statusline.
 void nvim_stl_win_redr_custom(win_T *wp)
 {
-  win_redr_custom(wp, false, false, false);
+  nvim_stl_win_redr_custom_impl(wp, false, false, false);
 }
 
 /// Set v:lnum variable.
@@ -1918,7 +1726,7 @@ _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL must be 0x02");
 /// Call win_redr_custom(wp, true, false, false) for winbar rendering.
 void nvim_stl_win_redr_custom_winbar(win_T *wp)
 {
-  win_redr_custom(wp, true, false, false);
+  nvim_stl_win_redr_custom_impl(wp, true, false, false);
 }
 
 /// Check if wildmenu is showing and UI does not have kUIWildmenu.
@@ -1988,7 +1796,7 @@ void nvim_stl_redraw_ruler_impl(void)
 
   bool part_of_status = wp->w_status_height || is_stl_global;
   if (*p_ruf && (p_ch > 0 || (ui_has(kUIMessages) && !part_of_status))) {
-    win_redr_custom(wp, false, true, ui_has(kUIMessages));
+    nvim_stl_win_redr_custom_impl(wp, false, true, ui_has(kUIMessages));
     return;
   }
 
@@ -2161,7 +1969,7 @@ void nvim_stl_draw_tabline_impl(void)
 
   // Use the 'tabline' option if it's set.
   if (*p_tal != NUL) {
-    win_redr_custom(NULL, false, false, false);
+    nvim_stl_win_redr_custom_impl(NULL, false, false, false);
   } else {
     int tabcount = 0;
     int col = 0;
@@ -2302,4 +2110,207 @@ void nvim_stl_draw_tabline_impl(void)
   // Reset the flag here again, in case evaluating 'tabline' causes it to be
   // set.
   redraw_tabline = false;
+}
+
+// Phase 5 accessor for Rust FFI
+
+/// win_redr_custom implementation (called from Rust rs_win_redr_custom).
+/// Contains the full custom statusline/winbar/ruler/tabline rendering logic.
+void nvim_stl_win_redr_custom_impl(win_T *wp, bool draw_winbar, bool draw_ruler, bool ui_event)
+{
+  static bool entered = false;
+  int col = 0;
+  int attr, row, maxwidth;
+  hlf_T group;
+  schar_T fillchar;
+  char buf[MAXPATHL];
+  char transbuf[MAXPATHL];
+  char *stl;
+  OptIndex opt_idx = kOptInvalid;
+  int opt_scope = 0;
+  stl_hlrec_t *hltab;
+  StlClickRecord *tabtab;
+  bool is_stl_global = global_stl_height() > 0;
+
+  ScreenGrid *grid = wp && wp->w_floating && !is_stl_global ? &wp->w_grid_alloc : &default_grid;
+
+  // There is a tiny chance that this gets called recursively: When
+  // redrawing a status line triggers redrawing the ruler or tabline.
+  // Avoid trouble by not allowing recursion.
+  if (entered) {
+    return;
+  }
+  entered = true;
+
+  // setup environment for the task at hand
+  if (wp == NULL) {
+    // Use 'tabline'.  Always at the first line of the screen.
+    stl = p_tal;
+    row = 0;
+    fillchar = schar_from_ascii(' ');
+    group = HLF_TPF;
+    attr = HL_ATTR(group);
+    maxwidth = Columns;
+    opt_idx = kOptTabline;
+  } else if (draw_winbar) {
+    opt_idx = kOptWinbar;
+    stl = ((*wp->w_p_wbr != NUL) ? wp->w_p_wbr : p_wbr);
+    opt_scope = ((*wp->w_p_wbr != NUL) ? OPT_LOCAL : 0);
+    row = -1;  // row zero is first row of text
+    col = 0;
+    grid = grid_adjust(&wp->w_grid, &row, &col);
+
+    if (row < 0) {
+      goto theend;
+    }
+
+    fillchar = wp->w_p_fcs_chars.wbr;
+    group = (wp == curwin) ? HLF_WBR : HLF_WBRNC;
+    attr = win_hl_attr(wp, (int)group);
+    maxwidth = wp->w_view_width;
+    stl_clear_click_defs(wp->w_winbar_click_defs, wp->w_winbar_click_defs_size);
+    wp->w_winbar_click_defs = stl_alloc_click_defs(wp->w_winbar_click_defs, maxwidth,
+                                                   &wp->w_winbar_click_defs_size);
+  } else {
+    const bool in_status_line = wp->w_status_height != 0 || is_stl_global;
+    if (wp->w_floating && !is_stl_global && !draw_ruler) {
+      row = wp->w_winrow_off + wp->w_view_height;
+      col = wp->w_wincol_off;
+      maxwidth = wp->w_view_width;
+    } else {
+      row = is_stl_global ? (Rows - (int)p_ch - 1) : W_ENDROW(wp);
+      maxwidth = in_status_line && !is_stl_global ? wp->w_width : Columns;
+    }
+    fillchar = fillchar_status(&group, wp);
+    stl_clear_click_defs(wp->w_status_click_defs, wp->w_status_click_defs_size);
+    wp->w_status_click_defs = stl_alloc_click_defs(wp->w_status_click_defs, maxwidth,
+                                                   &wp->w_status_click_defs_size);
+
+    if (draw_ruler) {
+      stl = p_ruf;
+      opt_idx = kOptRulerformat;
+      // advance past any leading group spec - implicit in ru_col
+      if (*stl == '%') {
+        if (*++stl == '-') {
+          stl++;
+        }
+        if (atoi(stl)) {
+          while (ascii_isdigit(*stl)) {
+            stl++;
+          }
+        }
+        if (*stl++ != '(') {
+          stl = p_ruf;
+        }
+      }
+      col = MAX(ru_col - (Columns - maxwidth), (maxwidth + 1) / 2);
+      maxwidth -= col;
+      if (!in_status_line) {
+        row = Rows - 1;
+        grid = grid_adjust(&msg_grid_adj, &row, &col);
+        maxwidth--;  // writing in last column may cause scrolling
+        fillchar = schar_from_ascii(' ');
+        group = HLF_MSG;
+      }
+    } else {
+      opt_idx = kOptStatusline;
+      stl = ((*wp->w_p_stl != NUL) ? wp->w_p_stl : p_stl);
+      opt_scope = ((*wp->w_p_stl != NUL) ? OPT_LOCAL : 0);
+    }
+
+    attr = win_hl_attr(wp, (int)group);
+    if (!wp->w_floating && in_status_line && !is_stl_global) {
+      col += wp->w_wincol;
+    }
+  }
+
+  if (maxwidth <= 0) {
+    goto theend;
+  }
+
+  // Temporarily reset 'cursorbind', we don't want a side effect from moving
+  // the cursor away and back.
+  win_T *ewp = wp == NULL ? curwin : wp;
+  int p_crb_save = ewp->w_p_crb;
+  ewp->w_p_crb = false;
+
+  // Make a copy, because the statusline may include a function call that
+  // might change the option value and free the memory.
+  stl = xstrdup(stl);
+  build_stl_str_hl(ewp, buf, sizeof(buf), stl, opt_idx, opt_scope,
+                   fillchar, maxwidth, &hltab, NULL, &tabtab, NULL);
+
+  xfree(stl);
+  ewp->w_p_crb = p_crb_save;
+
+  int len = (int)strlen(buf);
+  int start_col = col;
+
+  if (!ui_event) {
+    // Draw each snippet with the specified highlighting.
+    screengrid_line_start(grid, row, 0);
+  }
+
+  char *p = buf;
+  int curattr = attr;
+  int curgroup = (int)group;
+  Array content = ARRAY_DICT_INIT;
+  for (stl_hlrec_t *sp = hltab;; sp++) {
+    int textlen = (int)(sp->start ? sp->start - p : buf + len - p);
+    // Make all characters printable. Use an empty string instead of p, if p is beyond buf + len.
+    size_t tsize = transstr_buf(p >= buf + len ? "" : p, textlen, transbuf, sizeof transbuf, true);
+    if (!ui_event) {
+      col += grid_line_puts(col, transbuf, (int)tsize, curattr);
+    } else {
+      Array chunk = ARRAY_DICT_INIT;
+      ADD(chunk, INTEGER_OBJ(curattr));
+      ADD(chunk, STRING_OBJ(cbuf_as_string(xmemdupz(transbuf, tsize), tsize)));
+      ADD(chunk, INTEGER_OBJ(curgroup));
+      ADD(content, ARRAY_OBJ(chunk));
+    }
+    p = sp->start;
+
+    if (p == NULL) {
+      break;
+    } else if (sp->userhl == 0) {
+      curattr = attr;
+      curgroup = (int)group;
+    } else if (sp->userhl < 0) {
+      curattr = syn_id2attr(-sp->userhl);
+      curgroup = -sp->userhl;
+    } else {
+      int *userhl = (wp != NULL && wp != curwin && wp->w_status_height != 0)
+                    ? highlight_stlnc : highlight_user;
+      char userbuf[5] = "User";
+      userbuf[4] = (char)sp->userhl + '0';
+      curattr = userhl[sp->userhl - 1];
+      curgroup = syn_name2id_len(userbuf, 5);
+    }
+    if (curattr != attr) {
+      curattr = hl_combine_attr(attr, curattr);
+    }
+  }
+
+  if (ui_event) {
+    ui_call_msg_ruler(content);
+    api_free_array(content);
+    goto theend;
+  }
+
+  int maxcol = start_col + maxwidth;
+
+  // fill up with "fillchar"
+  grid_line_fill(col, maxcol, fillchar, curattr);
+  grid_line_flush();
+
+  // Fill the tab_page_click_defs, w_status_click_defs or w_winbar_click_defs array for clicking
+  // in the tab page line, status line or window bar
+  StlClickDefinition *click_defs = (wp == NULL) ? tab_page_click_defs
+                                                : draw_winbar ? wp->w_winbar_click_defs
+                                                              : wp->w_status_click_defs;
+
+  stl_fill_click_defs(click_defs, tabtab, buf, maxwidth, wp == NULL);
+
+theend:
+  entered = false;
 }

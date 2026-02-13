@@ -2355,6 +2355,41 @@ pub unsafe extern "C" fn rs_draw_tabline() {
     nvim_stl_draw_tabline_impl();
 }
 
+// =============================================================================
+// Phase 5: Custom Rendering Orchestrator (win_redr_custom)
+// =============================================================================
+
+// Phase 5 C accessors
+extern "C" {
+    fn nvim_stl_win_redr_custom_impl(
+        wp: WinHandle,
+        draw_winbar: bool,
+        draw_ruler: bool,
+        ui_event: bool,
+    );
+}
+
+/// FFI export: Redraw the status line, window bar, ruler or tabline using
+/// a custom format string.
+///
+/// This is the Rust replacement for `win_redr_custom()` in statusline.c.
+/// Delegates to the C implementation which handles the complex setup logic
+/// (mode determination, grid selection, format string parsing, highlight
+/// record iteration, click definition filling).
+///
+/// # Safety
+/// - `wp` may be null (for tabline rendering).
+/// - Accesses global C state (grid, highlight arrays, options).
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_redr_custom(
+    wp: WinHandle,
+    draw_winbar: bool,
+    draw_ruler: bool,
+    ui_event: bool,
+) {
+    nvim_stl_win_redr_custom_impl(wp, draw_winbar, draw_ruler, ui_event);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
