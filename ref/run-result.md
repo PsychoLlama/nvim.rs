@@ -1,19 +1,18 @@
-Plan: ~/.claude/plans/sorted-skipping-noodle.md
+Plan: ~/.claude/plans/whimsical-knitting-lark.md
 
-All steps complete. Here's the summary:
+All 10 phases of the `sign.c` migration plan are complete:
 
-**3 commits on `rust-migration`:**
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| 1 | Core types & constants | `033c18f160` |
+| 2 | Sign text utilities | `479e8679f6` |
+| 3 | Sign definitions | `60e7fef022` |
+| 4 | Sign placement | `7d76af33e4` |
+| 5 | Sign removal | `8e67a7fafa` |
+| 6 | High-level operations | `f97a57134d` |
+| 7 | Display/listing | `715847a18e` |
+| 8 | Ex command handling | `267866fe48` |
+| 9 | Command completion | `cdf85eba10` |
+| 10 | VimL f_sign_* functions | `f02d86c287` |
 
-| Commit | Description |
-|--------|-------------|
-| `7f18af3` | Phase 1: Convert 7 C functions to thin `rs_*` wrappers; fix `gchar_cursor` circular FFI |
-| `cef7648` | Phase 2: Migrate `coladvance_force` to Rust with `nvim_coladvance2_addspaces` and `nvim_coladvance_force` C accessors |
-| `d2ececa` | Phase 3: Update run-result metadata |
-
-**Key changes:**
-- Fixed the `gchar_cursor` → `rs_gchar_cursor` → `nvim_gchar_cursor` → `gchar_cursor` circular FFI chain
-- All 7 remaining C functions with duplicated logic converted to thin wrappers
-- `coladvance_force` logic now lives in Rust as `rs_coladvance_force`
-- Change crate's `nvim_coladvance_force` FFI now resolves at link time
-
-**Validation:** `just build`, `just smoke-test`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test` (4106/4106 passed) — all green.
+All checks pass: build, smoke-test, rust-fmt-check, rust-clippy, and rust-test (4106 tests).
