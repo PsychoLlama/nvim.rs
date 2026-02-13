@@ -32,6 +32,7 @@ extern void rs_ctx_free(Context *ctx);
 extern Context *rs_ctx_get(size_t index);
 extern void rs_ctx_free_all(void);
 extern void rs_ctx_save(Context *ctx, int flags);
+extern bool rs_ctx_restore(Context *ctx, int flags);
 
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
@@ -91,94 +92,7 @@ void ctx_save(Context *ctx, const int flags)
 /// @return true on success, false otherwise (i.e.: empty context stack).
 bool ctx_restore(Context *ctx, const int flags)
 {
-  bool free_ctx = false;
-  if (ctx == NULL) {
-    if (ctx_stack.size == 0) {
-      return false;
-    }
-    ctx = &kv_pop(ctx_stack);
-    free_ctx = true;
-  }
-
-  OptVal op_shada = get_option_value(kOptShada, OPT_GLOBAL);
-  set_option_value(kOptShada, STATIC_CSTR_AS_OPTVAL("!,'100,%"), OPT_GLOBAL);
-
-  if (flags & kCtxRegs) {
-    ctx_restore_regs(ctx);
-  }
-
-  if (flags & kCtxJumps) {
-    ctx_restore_jumps(ctx);
-  }
-
-  if (flags & kCtxBufs) {
-    ctx_restore_bufs(ctx);
-  }
-
-  if (flags & kCtxGVars) {
-    ctx_restore_gvars(ctx);
-  }
-
-  if (flags & kCtxFuncs) {
-    ctx_restore_funcs(ctx);
-  }
-
-  if (free_ctx) {
-    ctx_free(ctx);
-  }
-
-  set_option_value(kOptShada, op_shada, OPT_GLOBAL);
-  optval_free(op_shada);
-
-  return true;
-}
-
-/// Restores the global registers from a context.
-///
-/// @param  ctx   Restore from this context.
-static inline void ctx_restore_regs(Context *ctx)
-  FUNC_ATTR_NONNULL_ALL
-{
-  shada_read_string(ctx->regs, kShaDaWantInfo | kShaDaForceit);
-}
-
-/// Restores the jumplist from a context.
-///
-/// @param  ctx  Restore from this context.
-static inline void ctx_restore_jumps(Context *ctx)
-  FUNC_ATTR_NONNULL_ALL
-{
-  shada_read_string(ctx->jumps, kShaDaWantInfo | kShaDaForceit);
-}
-
-/// Restores the buffer list from a context.
-///
-/// @param  ctx  Restore from this context.
-static inline void ctx_restore_bufs(Context *ctx)
-  FUNC_ATTR_NONNULL_ALL
-{
-  shada_read_string(ctx->bufs, kShaDaWantInfo | kShaDaForceit);
-}
-
-/// Restores global variables from a context.
-///
-/// @param  ctx  Restore from this context.
-static inline void ctx_restore_gvars(Context *ctx)
-  FUNC_ATTR_NONNULL_ALL
-{
-  shada_read_string(ctx->gvars, kShaDaWantInfo | kShaDaForceit);
-}
-
-
-/// Restores functions from a context.
-///
-/// @param  ctx  Restore from this context.
-static inline void ctx_restore_funcs(Context *ctx)
-  FUNC_ATTR_NONNULL_ALL
-{
-  for (size_t i = 0; i < ctx->funcs.size; i++) {
-    do_cmdline_cmd(ctx->funcs.items[i].data.string.data);
-  }
+  return rs_ctx_restore(ctx, flags);
 }
 
 /// Convert readfile()-style array to String
@@ -326,6 +240,36 @@ Context *nvim_ctx_stack_pop(void)
 void nvim_ctx_stack_destroy(void)
 {
   kv_destroy(ctx_stack);
+}
+
+// ShaDa option save/restore accessors.
+// Wraps the save-set-restore pattern for the shada option so Rust
+// never needs to touch the OptVal struct.
+static OptVal saved_shada_opt;
+
+void nvim_ctx_save_shada_opt(void)
+{
+  saved_shada_opt = get_option_value(kOptShada, OPT_GLOBAL);
+}
+
+void nvim_ctx_set_shada_restore(void)
+{
+  set_option_value(kOptShada, STATIC_CSTR_AS_OPTVAL("!,'100,%"), OPT_GLOBAL);
+}
+
+void nvim_ctx_restore_shada_opt(void)
+{
+  set_option_value(kOptShada, saved_shada_opt, OPT_GLOBAL);
+  optval_free(saved_shada_opt);
+}
+
+/// Restores functions from a context (C accessor for Rust).
+/// Kept in C due to do_cmdline_cmd coupling.
+void nvim_ctx_restore_funcs(Context *ctx)
+{
+  for (size_t i = 0; i < ctx->funcs.size; i++) {
+    do_cmdline_cmd(ctx->funcs.items[i].data.string.data);
+  }
 }
 
 /// Saves functions to a context (C accessor for Rust).
