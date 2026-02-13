@@ -65,6 +65,8 @@ extern bool rs_sign_lnum_valid(int lnum);
 extern int64_t rs_group_get_ns(const char *group, int (*ns_lookup)(const char *));
 extern const char *rs_sign_get_display_name(DecorSignHighlight *sh);
 extern bool rs_sign_buffer_has_signs(const buf_T *buf);
+extern size_t rs_describe_sign_text(char *buf, size_t buflen, const schar_T *sign_text);
+extern int rs_init_sign_text(schar_T *sign_text, const char *text, int remove_backslash);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -346,61 +348,19 @@ static int sign_cmd_idx(char *begin_cmd, char *end_cmd)
 /// buf must be SIGN_WIDTH * MAX_SCHAR_SIZE (no extra +1 needed)
 size_t describe_sign_text(char *buf, schar_T *sign_text)
 {
-  size_t p = 0;
-  for (int i = 0; i < SIGN_WIDTH; i++) {
-    schar_get(buf + p, sign_text[i]);
-    size_t len = strlen(buf + p);
-    if (len == 0) {
-      break;
-    }
-    p += len;
-  }
-  return p;
+  return rs_describe_sign_text(buf, SIGN_WIDTH * MAX_SCHAR_SIZE, sign_text);
 }
 
 /// Initialize the "text" for a new sign and store in "sign_text".
 /// "sp" is NULL for signs added through nvim_buf_set_extmark().
 int init_sign_text(sign_T *sp, schar_T *sign_text, char *text)
 {
-  char *s;
-  char *endp = text + (int)strlen(text);
-
-  for (s = sp ? text : endp; s + 1 < endp; s++) {
-    if (*s == '\\') {
-      // Remove a backslash, so that it is possible to use a space.
-      STRMOVE(s, s + 1);
-      endp--;
-    }
+  // sp != NULL means: remove backslashes (sign define cmd) and emit error on failure
+  int result = rs_init_sign_text(sign_text, text, sp != NULL ? 1 : 0);
+  if (result != 0 && sp != NULL) {
+    semsg(_("E239: Invalid sign text: %s"), text);
   }
-  // Count cells and check for non-printable chars
-  int cells = 0;
-  for (s = text; s < endp; s += utfc_ptr2len(s)) {
-    int c;
-    sign_text[cells] = utfc_ptr2schar(s, &c);
-    if (!vim_isprintc(c)) {
-      break;
-    }
-    int width = utf_ptr2cells(s);
-    if (width == 2) {
-      sign_text[cells + 1] = 0;
-    }
-    cells += width;
-  }
-  // Currently must be empty, one or two display cells
-  if (s != endp || cells > SIGN_WIDTH) {
-    if (sp != NULL) {
-      semsg(_("E239: Invalid sign text: %s"), text);
-    }
-    return FAIL;
-  }
-
-  if (cells < 1) {
-    sign_text[0] = 0;
-  } else if (cells == 1) {
-    sign_text[1] = schar_from_ascii(' ');
-  }
-
-  return OK;
+  return result == 0 ? OK : FAIL;
 }
 
 /// Define a new sign or update an existing sign
