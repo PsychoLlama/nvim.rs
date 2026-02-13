@@ -849,6 +849,148 @@ void nvim_pum_redraw_later_win(win_T *wp, int type)
 
 _Static_assert(kFloatAnchorSouth == 2, "kFloatAnchorSouth must be 2");
 
+// Phase 5 accessors: show_popupmenu helpers
+static void pum_compute_size(void);
+
+void nvim_set_pum_size(int val)
+{
+  pum_size = val;
+}
+
+/// Get get_menu_mode_flag().
+int nvim_pum_get_menu_mode_flag(void)
+{
+  return get_menu_mode_flag();
+}
+
+/// Check if menu item name is a separator.
+int nvim_pum_menu_is_separator(vimmenu_T *mp)
+{
+  return menu_is_separator(mp->dname) ? 1 : 0;
+}
+
+/// Get menu item display name.
+char *nvim_pum_menu_get_dname(vimmenu_T *mp)
+{
+  return mp->dname;
+}
+
+/// Allocate pumitem_T array.
+pumitem_T *nvim_pum_alloc_items(int count)
+{
+  return (pumitem_T *)xcalloc((size_t)count, sizeof(pumitem_T));
+}
+
+/// Set text for a pumitem_T.
+void nvim_pum_item_set_text(pumitem_T *array, int idx, const char *text)
+{
+  array[idx].pum_text = xstrdup(text);
+}
+
+/// Free text in pumitem_T array and the array itself.
+void nvim_pum_free_items(pumitem_T *array, int count)
+{
+  for (int i = 0; i < count; i++) {
+    xfree(array[i].pum_text);
+  }
+  xfree(array);
+}
+
+/// Set pum_array pointer.
+void nvim_set_pum_array(pumitem_T *array)
+{
+  pum_array = array;
+}
+
+/// Get pum_array pointer (NULL check).
+int nvim_pum_array_is_null(void)
+{
+  return pum_array == NULL ? 1 : 0;
+}
+
+/// Call pum_compute_size (forward-declared static helper).
+void nvim_pum_call_compute_size(void)
+{
+  pum_compute_size();
+}
+
+/// Get curwin->w_p_rl.
+int nvim_pum_curwin_get_p_rl(void)
+{
+  return curwin->w_p_rl ? 1 : 0;
+}
+
+/// Call vgetc().
+int nvim_pum_vgetc(void)
+{
+  return vgetc();
+}
+
+/// Call vungetc().
+void nvim_pum_vungetc(int c)
+{
+  vungetc(c);
+}
+
+/// Call setcursor_mayforce(curwin, true).
+void nvim_pum_setcursor_mayforce(void)
+{
+  setcursor_mayforce(curwin, true);
+}
+
+/// Get p_mousemev.
+int nvim_pum_get_p_mousemev(void)
+{
+  return p_mousemev ? 1 : 0;
+}
+
+/// Set mousemoveevent option via UI.
+void nvim_pum_ui_set_mousemoveevent(int val)
+{
+  ui_call_option_set(STATIC_CSTR_AS_STRING("mousemoveevent"), BOOLEAN_OBJ(val != 0));
+}
+
+/// Call `rs_pum_undisplay(1)`.
+void nvim_pum_call_undisplay(void)
+{
+  rs_pum_undisplay(1);
+}
+
+/// Set pum_grid.zindex to kZIndexCmdlinePopupMenu.
+void nvim_pum_grid_set_zindex_cmdline(void)
+{
+  pum_grid.zindex = kZIndexCmdlinePopupMenu;
+}
+
+/// Key constant accessors.
+int nvim_key_ESC(void) { return ESC; }
+int nvim_key_Ctrl_C(void) { return Ctrl_C; }
+int nvim_key_CAR(void) { return CAR; }
+int nvim_key_NL(void) { return NL; }
+int nvim_key_K_UP(void) { return K_UP; }
+int nvim_key_K_DOWN(void) { return K_DOWN; }
+int nvim_key_K_MOUSEUP(void) { return K_MOUSEUP; }
+int nvim_key_K_MOUSEDOWN(void) { return K_MOUSEDOWN; }
+int nvim_key_K_RIGHTMOUSE(void) { return K_RIGHTMOUSE; }
+int nvim_key_K_LEFTDRAG(void) { return K_LEFTDRAG; }
+int nvim_key_K_RIGHTDRAG(void) { return K_RIGHTDRAG; }
+int nvim_key_K_MOUSEMOVE(void) { return K_MOUSEMOVE; }
+int nvim_key_K_LEFTMOUSE(void) { return K_LEFTMOUSE; }
+int nvim_key_K_LEFTMOUSE_NM(void) { return K_LEFTMOUSE_NM; }
+int nvim_key_K_RIGHTRELEASE(void) { return K_RIGHTRELEASE; }
+
+/// Get pum_array[idx].pum_text[0] (first character, NUL check).
+int nvim_pum_array_item_text_char(int idx)
+{
+  return (int)(unsigned char)pum_array[idx].pum_text[0];
+}
+
+/// Emit error message.
+void nvim_pum_emsg_menu_mode(void)
+{
+  emsg(_(e_menu_only_exists_in_another_mode));
+}
+
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 
@@ -1804,119 +1946,7 @@ void pum_set_event_info(dict_T *dict)
 // nvim_pum_execute_menu_impl: migrated to Rust (context_menu.rs)
 
 /// Open the terminal version of the popup menu and don't return until it is closed.
-void nvim_pum_show_popupmenu_impl(vimmenu_T *menu)
-{
-  pum_undisplay(true);
-  pum_size = 0;
-  int mode = get_menu_mode_flag();
-
-  for (vimmenu_T *mp = menu->children; mp != NULL; mp = mp->next) {
-    if (menu_is_separator(mp->dname) || (mp->modes & mp->enabled & mode)) {
-      pum_size++;
-    }
-  }
-
-  // When there are only Terminal mode menus, using "popup Edit" results in
-  // pum_size being zero.
-  if (pum_size <= 0) {
-    emsg(_(e_menu_only_exists_in_another_mode));
-    return;
-  }
-
-  int idx = 0;
-  pumitem_T *array = (pumitem_T *)xcalloc((size_t)pum_size, sizeof(pumitem_T));
-
-  for (vimmenu_T *mp = menu->children; mp != NULL; mp = mp->next) {
-    char *s = NULL;
-    // Make a copy of the text, the menu may be redefined in a callback.
-    if (menu_is_separator(mp->dname)) {
-      s = "";
-    } else if (mp->modes & mp->enabled & mode) {
-      s = mp->dname;
-    }
-    if (s != NULL) {
-      s = xstrdup(s);
-      array[idx++].pum_text = s;
-    }
-  }
-
-  pum_array = array;
-  pum_compute_size();
-  pum_scrollbar = 0;
-  pum_height = pum_size;
-  pum_rl = curwin->w_p_rl;
-  rs_pum_position_at_mouse(20);
-
-  pum_selected = -1;
-  pum_first = 0;
-  if (!p_mousemev) {
-    // Pretend 'mousemoveevent' is set.
-    ui_call_option_set(STATIC_CSTR_AS_STRING("mousemoveevent"), BOOLEAN_OBJ(true));
-  }
-
-  while (true) {
-    pum_is_visible = true;
-    pum_is_drawn = true;
-    pum_grid.zindex = kZIndexCmdlinePopupMenu;  // show above cmdline area #23275
-    rs_pum_redraw();
-    setcursor_mayforce(curwin, true);
-
-    int c = vgetc();
-
-    // Bail out when typing Esc, CTRL-C or some callback or <expr> mapping
-    // closed the popup menu.
-    if (c == ESC || c == Ctrl_C || pum_array == NULL) {
-      break;
-    } else if (c == CAR || c == NL) {
-      // enter: select current item, if any, and close
-      rs_pum_execute_menu(menu, mode);
-      break;
-    } else if (c == 'k' || c == K_UP || c == K_MOUSEUP) {
-      // cursor up: select previous item
-      while (pum_selected > 0) {
-        pum_selected--;
-        if (*array[pum_selected].pum_text != NUL) {
-          break;
-        }
-      }
-    } else if (c == 'j' || c == K_DOWN || c == K_MOUSEDOWN) {
-      // cursor down: select next item
-      while (pum_selected < pum_size - 1) {
-        pum_selected++;
-        if (*array[pum_selected].pum_text != NUL) {
-          break;
-        }
-      }
-    } else if (c == K_RIGHTMOUSE) {
-      // Right mouse down: reposition the menu.
-      vungetc(c);
-      break;
-    } else if (c == K_LEFTDRAG || c == K_RIGHTDRAG || c == K_MOUSEMOVE) {
-      // mouse moved: select item in the mouse row
-      rs_pum_select_mouse_pos();
-    } else if (c == K_LEFTMOUSE || c == K_LEFTMOUSE_NM || c == K_RIGHTRELEASE) {
-      // left mouse click: select clicked item, if any, and close;
-      // right mouse release: select clicked item, close if any
-      rs_pum_select_mouse_pos();
-      if (pum_selected >= 0) {
-        rs_pum_execute_menu(menu, mode);
-        break;
-      }
-      if (c == K_LEFTMOUSE || c == K_LEFTMOUSE_NM) {
-        break;
-      }
-    }
-  }
-
-  for (idx = 0; idx < pum_size; idx++) {
-    xfree(array[idx].pum_text);
-  }
-  xfree(array);
-  pum_undisplay(true);
-  if (!p_mousemev) {
-    ui_call_option_set(STATIC_CSTR_AS_STRING("mousemoveevent"), BOOLEAN_OBJ(false));
-  }
-}
+// nvim_pum_show_popupmenu_impl: migrated to Rust (context_menu.rs)
 
 // nvim_pum_make_popup_impl: migrated to Rust (context_menu.rs)
 
