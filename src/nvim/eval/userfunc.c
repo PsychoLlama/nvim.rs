@@ -4267,3 +4267,187 @@ int nvim_is_builtin_function(const char *name, int len)
 {
   return builtin_function(name, len);
 }
+
+// =============================================================================
+// Profile FFI Accessor Functions
+// =============================================================================
+
+ufunc_T *nvim_fc_get_func(const funccall_T *fc)
+{
+  return fc->fc_func;
+}
+
+int nvim_ufunc_get_profiling(const ufunc_T *fp)
+{
+  return fp->uf_profiling;
+}
+
+void nvim_ufunc_set_profiling(ufunc_T *fp, int val)
+{
+  fp->uf_profiling = val;
+}
+
+int nvim_ufunc_get_prof_initialized(const ufunc_T *fp)
+{
+  return fp->uf_prof_initialized;
+}
+
+void nvim_ufunc_set_prof_initialized(ufunc_T *fp, int val)
+{
+  fp->uf_prof_initialized = val;
+}
+
+int nvim_ufunc_get_lines_len(const ufunc_T *fp)
+{
+  return fp->uf_lines.ga_len;
+}
+
+int nvim_ufunc_get_tml_idx(const ufunc_T *fp)
+{
+  return fp->uf_tml_idx;
+}
+
+void nvim_ufunc_set_tml_idx(ufunc_T *fp, int val)
+{
+  fp->uf_tml_idx = val;
+}
+
+int nvim_ufunc_get_tml_execed(const ufunc_T *fp)
+{
+  return fp->uf_tml_execed;
+}
+
+void nvim_ufunc_set_tml_execed(ufunc_T *fp, int val)
+{
+  fp->uf_tml_execed = val;
+}
+
+proftime_T nvim_ufunc_get_tml_start(const ufunc_T *fp)
+{
+  return fp->uf_tml_start;
+}
+
+void nvim_ufunc_set_tml_start(ufunc_T *fp, proftime_T val)
+{
+  fp->uf_tml_start = val;
+}
+
+proftime_T nvim_ufunc_get_tml_children(const ufunc_T *fp)
+{
+  return fp->uf_tml_children;
+}
+
+void nvim_ufunc_set_tml_children(ufunc_T *fp, proftime_T val)
+{
+  fp->uf_tml_children = val;
+}
+
+proftime_T nvim_ufunc_get_tml_wait(const ufunc_T *fp)
+{
+  return fp->uf_tml_wait;
+}
+
+void nvim_ufunc_set_tml_wait(ufunc_T *fp, proftime_T val)
+{
+  fp->uf_tml_wait = val;
+}
+
+int nvim_ufunc_get_tm_count(const ufunc_T *fp)
+{
+  return fp->uf_tm_count;
+}
+
+void nvim_ufunc_set_tm_count(ufunc_T *fp, int val)
+{
+  fp->uf_tm_count = val;
+}
+
+proftime_T nvim_ufunc_get_tm_total(const ufunc_T *fp)
+{
+  return fp->uf_tm_total;
+}
+
+void nvim_ufunc_set_tm_total(ufunc_T *fp, proftime_T val)
+{
+  fp->uf_tm_total = val;
+}
+
+proftime_T nvim_ufunc_get_tm_self(const ufunc_T *fp)
+{
+  return fp->uf_tm_self;
+}
+
+void nvim_ufunc_set_tm_self(ufunc_T *fp, proftime_T val)
+{
+  fp->uf_tm_self = val;
+}
+
+// Array element accessors for per-line profiling arrays
+
+int nvim_ufunc_get_tml_count_i(const ufunc_T *fp, int i)
+{
+  return fp->uf_tml_count[i];
+}
+
+void nvim_ufunc_set_tml_count_i(ufunc_T *fp, int i, int val)
+{
+  fp->uf_tml_count[i] = val;
+}
+
+proftime_T nvim_ufunc_get_tml_total_i(const ufunc_T *fp, int i)
+{
+  return fp->uf_tml_total[i];
+}
+
+void nvim_ufunc_set_tml_total_i(ufunc_T *fp, int i, proftime_T val)
+{
+  fp->uf_tml_total[i] = val;
+}
+
+proftime_T nvim_ufunc_get_tml_self_i(const ufunc_T *fp, int i)
+{
+  return fp->uf_tml_self[i];
+}
+
+void nvim_ufunc_set_tml_self_i(ufunc_T *fp, int i, proftime_T val)
+{
+  fp->uf_tml_self[i] = val;
+}
+
+// Null checks for profiling arrays
+int nvim_ufunc_tml_count_is_null(const ufunc_T *fp)
+{
+  return fp->uf_tml_count == NULL;
+}
+
+int nvim_ufunc_tml_total_is_null(const ufunc_T *fp)
+{
+  return fp->uf_tml_total == NULL;
+}
+
+int nvim_ufunc_tml_self_is_null(const ufunc_T *fp)
+{
+  return fp->uf_tml_self == NULL;
+}
+
+// Array allocation
+void nvim_ufunc_alloc_tml_count(ufunc_T *fp, int len)
+{
+  fp->uf_tml_count = xcalloc((size_t)len, sizeof(int));
+}
+
+void nvim_ufunc_alloc_tml_total(ufunc_T *fp, int len)
+{
+  fp->uf_tml_total = xcalloc((size_t)len, sizeof(proftime_T));
+}
+
+void nvim_ufunc_alloc_tml_self(ufunc_T *fp, int len)
+{
+  fp->uf_tml_self = xcalloc((size_t)len, sizeof(proftime_T));
+}
+
+// FUNCLINE null check
+int nvim_ufunc_funcline_is_null(const ufunc_T *fp, int idx)
+{
+  return FUNCLINE(fp, idx) == NULL;
+}

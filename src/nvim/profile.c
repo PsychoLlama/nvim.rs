@@ -58,6 +58,11 @@ extern proftime_T rs_profile_get_wait_time(void);
 extern void rs_prof_input_start(void);
 extern void rs_prof_input_end(void);
 extern bool rs_prof_def_func(void);
+// Phase 3: function line profiling
+extern void rs_func_line_start(void *cookie);
+extern void rs_func_line_exec(void *cookie);
+extern void rs_func_line_end(void *cookie);
+extern void rs_func_do_profile(ufunc_T *fp);
 
 /// Struct used in sn_prl_ga for every line of a script.
 typedef struct {
@@ -453,33 +458,7 @@ static int prof_self_cmp(const void *s1, const void *s2)
 /// Start profiling function "fp".
 void func_do_profile(ufunc_T *fp)
 {
-  int len = fp->uf_lines.ga_len;
-
-  if (!fp->uf_prof_initialized) {
-    if (len == 0) {
-      len = 1;  // avoid getting error for allocating zero bytes
-    }
-    fp->uf_tm_count = 0;
-    fp->uf_tm_self = profile_zero();
-    fp->uf_tm_total = profile_zero();
-
-    if (fp->uf_tml_count == NULL) {
-      fp->uf_tml_count = xcalloc((size_t)len, sizeof(int));
-    }
-
-    if (fp->uf_tml_total == NULL) {
-      fp->uf_tml_total = xcalloc((size_t)len, sizeof(proftime_T));
-    }
-
-    if (fp->uf_tml_self == NULL) {
-      fp->uf_tml_self = xcalloc((size_t)len, sizeof(proftime_T));
-    }
-
-    fp->uf_tml_idx = -1;
-    fp->uf_prof_initialized = true;
-  }
-
-  fp->uf_profiling = true;
+  rs_func_do_profile(fp);
 }
 
 /// Prepare profiling for entering a child or something else that is not
@@ -524,52 +503,19 @@ void prof_child_exit(proftime_T *tm)
 /// until later and we need to store the time now.
 void func_line_start(void *cookie)
 {
-  funccall_T *fcp = (funccall_T *)cookie;
-  ufunc_T *fp = fcp->fc_func;
-
-  if (fp->uf_profiling && SOURCING_LNUM >= 1 && SOURCING_LNUM <= fp->uf_lines.ga_len) {
-    fp->uf_tml_idx = SOURCING_LNUM - 1;
-    // Skip continuation lines.
-    while (fp->uf_tml_idx > 0 && FUNCLINE(fp, fp->uf_tml_idx) == NULL) {
-      fp->uf_tml_idx--;
-    }
-    fp->uf_tml_execed = false;
-    fp->uf_tml_start = profile_start();
-    fp->uf_tml_children = profile_zero();
-    fp->uf_tml_wait = profile_get_wait();
-  }
+  rs_func_line_start(cookie);
 }
 
 /// Called when actually executing a function line.
 void func_line_exec(void *cookie)
 {
-  funccall_T *fcp = (funccall_T *)cookie;
-  ufunc_T *fp = fcp->fc_func;
-
-  if (fp->uf_profiling && fp->uf_tml_idx >= 0) {
-    fp->uf_tml_execed = true;
-  }
+  rs_func_line_exec(cookie);
 }
 
 /// Called when done with a function line.
 void func_line_end(void *cookie)
 {
-  funccall_T *fcp = (funccall_T *)cookie;
-  ufunc_T *fp = fcp->fc_func;
-
-  if (fp->uf_profiling && fp->uf_tml_idx >= 0) {
-    if (fp->uf_tml_execed) {
-      fp->uf_tml_count[fp->uf_tml_idx]++;
-      fp->uf_tml_start = profile_end(fp->uf_tml_start);
-      fp->uf_tml_start = profile_sub_wait(fp->uf_tml_wait, fp->uf_tml_start);
-      fp->uf_tml_total[fp->uf_tml_idx] =
-        profile_add(fp->uf_tml_total[fp->uf_tml_idx], fp->uf_tml_start);
-      fp->uf_tml_self[fp->uf_tml_idx] =
-        profile_self(fp->uf_tml_self[fp->uf_tml_idx], fp->uf_tml_start,
-                     fp->uf_tml_children);
-    }
-    fp->uf_tml_idx = -1;
-  }
+  rs_func_line_end(cookie);
 }
 
 /// Dump the profiling results for all functions in file "fd".
