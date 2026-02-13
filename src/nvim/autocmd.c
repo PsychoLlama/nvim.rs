@@ -134,6 +134,9 @@ extern bool rs_apply_autocmds_exarg(int event, char *fname, char *fname_io, bool
 extern bool rs_apply_autocmds_retval(int event, char *fname, char *fname_io, bool force,
                                      void *buf, int *retval);
 
+// Phase 8e: Event triggers + doautocmd
+extern int rs_do_doautocmd(char *arg_start, bool do_msg, bool *did_something);
+
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
 {
@@ -662,46 +665,7 @@ const char *aucmd_next_pattern(const char *pat, size_t patlen)
 /// @param do_msg  give message for no matching autocmds?
 int do_doautocmd(char *arg_start, bool do_msg, bool *did_something)
 {
-  char *arg = arg_start;
-  int nothing_done = true;
-
-  if (did_something != NULL) {
-    *did_something = false;
-  }
-
-  // Check for a legal group name.  If not, use AUGROUP_ALL.
-  int group = arg_augroup_get(&arg);
-
-  if (*arg == '*') {
-    emsg(_("E217: Can't execute autocommands for ALL events"));
-    return FAIL;
-  }
-
-  // Scan over the events.
-  // If we find an illegal name, return here, don't do anything.
-  char *fname = arg_event_skip(arg, group != AUGROUP_ALL);
-  if (fname == NULL) {
-    return FAIL;
-  }
-
-  fname = skipwhite(fname);
-
-  // Loop over the events.
-  while (*arg && !ends_excmd(*arg) && !ascii_iswhite(*arg)) {
-    if (apply_autocmds_group(event_name2nr(arg, &arg), fname, NULL, true, group,
-                             curbuf, NULL, NULL)) {
-      nothing_done = false;
-    }
-  }
-
-  if (nothing_done && do_msg && !aborting()) {
-    smsg(0, _("No matching autocommands: %s"), arg_start);
-  }
-  if (did_something != NULL) {
-    *did_something = !nothing_done;
-  }
-
-  return aborting() ? FAIL : OK;
+  return rs_do_doautocmd(arg_start, do_msg, did_something);
 }
 
 // ":doautoall": execute autocommands for each loaded buffer.
@@ -2344,6 +2308,7 @@ _Static_assert(HLF_T == 23, "HLF_T value changed");
 _Static_assert(EVENT_TERMRESPONSE == 120, "EVENT_TERMRESPONSE value changed");
 _Static_assert(VV_TERMRESPONSE == 11, "VV_TERMRESPONSE value changed");
 _Static_assert(FAIL == 0, "FAIL value changed");
+_Static_assert(OK == 1, "OK value changed");
 
 /// Get the pattern string of autocmd at (event, idx).
 const char *nvim_autocmd_get_pat_str(int event, size_t idx)
@@ -2672,4 +2637,18 @@ bool nvim_autocmd_aborting(void)
 void *nvim_autocmd_get_curbuf_ptr(void)
 {
   return curbuf;
+}
+
+// Phase 8e: Event triggers + doautocmd accessors
+
+/// Get the translated E217 error message.
+const char *nvim_autocmd_get_e217(void)
+{
+  return _("E217: Can't execute autocommands for ALL events");
+}
+
+/// Show "No matching autocommands" message.
+void nvim_autocmd_smsg_no_matching(const char *arg_start)
+{
+  smsg(0, _("No matching autocommands: %s"), arg_start);
 }

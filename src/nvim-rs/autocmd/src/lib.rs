@@ -32,8 +32,9 @@ const EVENT_CURSORHOLDI: c_int = 38;
 const EVENT_TERMRESPONSE: c_int = 120;
 const NUM_EVENTS: c_int = 141;
 
-// C constant
+// C constants from vim_defs.h
 const FAIL: c_int = 0;
+const OK: c_int = 1;
 
 // Buffer-local pattern constants from autocmd.h
 const BUFLOCAL_PAT_LEN: usize = 25;
@@ -167,6 +168,10 @@ extern "C" {
     fn nvim_autocmd_should_abort(retval: c_int) -> bool;
     fn nvim_autocmd_aborting() -> bool;
     fn nvim_autocmd_get_curbuf_ptr() -> *mut c_void;
+
+    // Phase 8e: Event triggers + doautocmd accessors
+    fn nvim_autocmd_get_e217() -> *const c_char;
+    fn nvim_autocmd_smsg_no_matching(arg_start: *const c_char);
 
     // Rust functions from other modules (called via FFI)
     fn rs_augroup_find(name: *const c_char) -> c_int;
@@ -1536,6 +1541,83 @@ pub unsafe extern "C" fn rs_apply_autocmds_retval(
         *retval = FAIL;
     }
     did_cmd
+}
+
+// =============================================================================
+// Phase 8e: Event Triggers + doautocmd
+// =============================================================================
+
+/// Check if a character ends an Ex command.
+///
+/// Returns true for NUL, '|', '"', '\n'.
+#[inline]
+fn ends_excmd(c: u8) -> bool {
+    c == 0 || c == b'|' || c == b'"' || c == b'\n'
+}
+
+/// Execute `:doautocmd` — trigger autocommands for a given set of events.
+///
+/// Returns OK for success, FAIL for failure.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_doautocmd(
+    arg_start: *mut c_char,
+    do_msg: bool,
+    did_something: *mut bool,
+) -> c_int {
+    let mut arg: *const c_char = arg_start;
+    let mut nothing_done = true;
+
+    if !did_something.is_null() {
+        *did_something = false;
+    }
+
+    // Check for a legal group name. If not, use AUGROUP_ALL.
+    let group = rs_arg_augroup_get(&raw mut arg);
+
+    if *arg == b'*' as c_char {
+        nvim_autocmd_emsg(nvim_autocmd_get_e217());
+        return FAIL;
+    }
+
+    // Scan over the events.
+    // If we find an illegal name, return here, don't do anything.
+    let fname = rs_arg_event_skip(arg, group != group::AUGROUP_ALL);
+    if fname.is_null() {
+        return FAIL;
+    }
+
+    let fname = nvim_skipwhite(fname);
+
+    // Loop over the events.
+    while *arg != 0 && !ends_excmd(*arg as u8) && !is_ascii_white(*arg as u8) {
+        let result = event::rs_event_name2nr(arg);
+        arg = result.end_ptr;
+        if nvim_autocmd_apply_autocmds_group(
+            result.event,
+            fname,
+            std::ptr::null_mut(),
+            true,
+            group,
+            nvim_autocmd_get_curbuf_ptr(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        ) {
+            nothing_done = false;
+        }
+    }
+
+    if nothing_done && do_msg && !nvim_autocmd_aborting() {
+        nvim_autocmd_smsg_no_matching(arg_start);
+    }
+    if !did_something.is_null() {
+        *did_something = !nothing_done;
+    }
+
+    if nvim_autocmd_aborting() {
+        FAIL
+    } else {
+        OK
+    }
 }
 
 #[cfg(test)]
