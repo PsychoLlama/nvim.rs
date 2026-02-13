@@ -1906,51 +1906,32 @@ void nvim_stl_redraw_ruler_impl(void)
   }
 }
 
-/// UI ext tabline update implementation (called from Rust rs_ui_ext_tabline_update).
-/// Contains the full arena-based tabline update logic.
-void nvim_stl_ui_ext_tabline_update_impl(void)
+/// Accessor: build arena-based API objects from flat arrays and emit
+/// ui_call_tabline_update.  Called from Rust rs_ui_ext_tabline_update().
+void nvim_stl_emit_tabline_update(int *tab_handles, const char **tab_names,
+                                  int tab_count, int *buf_handles,
+                                  const char **buf_names, int buf_count,
+                                  int curtab_handle, int curbuf_handle)
 {
   Arena arena = ARENA_EMPTY;
 
-  size_t n_tabs = 0;
-  FOR_ALL_TABS(tp) {
-    n_tabs++;
-  }
-
-  Array tabs = arena_array(&arena, n_tabs);
-  FOR_ALL_TABS(tp) {
+  Array tabs = arena_array(&arena, (size_t)tab_count);
+  for (int i = 0; i < tab_count; i++) {
     Dict tab_info = arena_dict(&arena, 2);
-    PUT_C(tab_info, "tab", TABPAGE_OBJ(tp->handle));
-
-    win_T *cwp = (tp == curtab) ? curwin : tp->tp_curwin;
-    get_trans_bufname(cwp->w_buffer);
-    PUT_C(tab_info, "name", CSTR_TO_ARENA_OBJ(&arena, NameBuff));
-
+    PUT_C(tab_info, "tab", TABPAGE_OBJ(tab_handles[i]));
+    PUT_C(tab_info, "name", CSTR_TO_ARENA_OBJ(&arena, tab_names[i]));
     ADD_C(tabs, DICT_OBJ(tab_info));
   }
 
-  size_t n_buffers = 0;
-  FOR_ALL_BUFFERS(buf) {
-    n_buffers += buf->b_p_bl ? 1 : 0;
-  }
-
-  Array buffers = arena_array(&arena, n_buffers);
-  FOR_ALL_BUFFERS(buf) {
-    // Do not include unlisted buffers
-    if (!buf->b_p_bl) {
-      continue;
-    }
-
+  Array buffers = arena_array(&arena, (size_t)buf_count);
+  for (int i = 0; i < buf_count; i++) {
     Dict buffer_info = arena_dict(&arena, 2);
-    PUT_C(buffer_info, "buffer", BUFFER_OBJ(buf->handle));
-
-    get_trans_bufname(buf);
-    PUT_C(buffer_info, "name", CSTR_TO_ARENA_OBJ(&arena, NameBuff));
-
+    PUT_C(buffer_info, "buffer", BUFFER_OBJ(buf_handles[i]));
+    PUT_C(buffer_info, "name", CSTR_TO_ARENA_OBJ(&arena, buf_names[i]));
     ADD_C(buffers, DICT_OBJ(buffer_info));
   }
 
-  ui_call_tabline_update(curtab->handle, tabs, curbuf->handle, buffers);
+  ui_call_tabline_update(curtab_handle, tabs, curbuf_handle, buffers);
   arena_mem_free(arena_finish(&arena));
 }
 

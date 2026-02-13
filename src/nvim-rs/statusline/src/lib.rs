@@ -2304,7 +2304,17 @@ pub unsafe extern "C" fn rs_win_redr_winbar(wp: WinHandle) {
 // Phase 3 C accessors
 extern "C" {
     fn nvim_stl_redraw_ruler_impl();
-    fn nvim_stl_ui_ext_tabline_update_impl();
+
+    fn nvim_stl_emit_tabline_update(
+        tab_handles: *const c_int,
+        tab_names: *const *const c_char,
+        tab_count: c_int,
+        buf_handles: *const c_int,
+        buf_names: *const *const c_char,
+        buf_count: c_int,
+        curtab_handle: c_int,
+        curbuf_handle: c_int,
+    );
 }
 
 /// FFI export: Redraw the ruler.
@@ -2322,15 +2332,49 @@ pub unsafe extern "C" fn rs_redraw_ruler() {
 
 /// FFI export: Update the external UI tabline.
 ///
-/// This is the Rust replacement for `ui_ext_tabline_update()` in statusline.c.
-/// Delegates to the C implementation which handles arena-based API object
-/// construction and the `ui_call_tabline_update` call.
+/// Collects tab/buffer data in Rust and passes flat arrays to C for
+/// arena-based API object construction and `ui_call_tabline_update`.
 ///
 /// # Safety
-/// Accesses global C state (tab/buffer lists, arena allocation).
+/// Accesses global C state (tab/buffer lists).
 #[no_mangle]
 pub unsafe extern "C" fn rs_ui_ext_tabline_update() {
-    nvim_stl_ui_ext_tabline_update_impl();
+    use ui_ext::collect_tabline_data;
+
+    let data = collect_tabline_data();
+
+    // Build flat arrays of handles and C string pointers for the C accessor.
+    let tab_handles: Vec<c_int> = data.tabs.iter().map(|t| t.handle).collect();
+    let tab_name_cstrings: Vec<std::ffi::CString> = data
+        .tabs
+        .iter()
+        .map(|t| std::ffi::CString::new(t.name.as_str()).unwrap_or_default())
+        .collect();
+    let tab_name_ptrs: Vec<*const c_char> = tab_name_cstrings.iter().map(|s| s.as_ptr()).collect();
+
+    let buf_handles: Vec<c_int> = data.buffers.iter().map(|b| b.handle).collect();
+    let buf_name_cstrings: Vec<std::ffi::CString> = data
+        .buffers
+        .iter()
+        .map(|b| std::ffi::CString::new(b.name.as_str()).unwrap_or_default())
+        .collect();
+    let buf_name_ptrs: Vec<*const c_char> = buf_name_cstrings.iter().map(|s| s.as_ptr()).collect();
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let tab_count = tab_handles.len() as c_int;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let buf_count = buf_handles.len() as c_int;
+
+    nvim_stl_emit_tabline_update(
+        tab_handles.as_ptr(),
+        tab_name_ptrs.as_ptr(),
+        tab_count,
+        buf_handles.as_ptr(),
+        buf_name_ptrs.as_ptr(),
+        buf_count,
+        data.current_tab,
+        data.current_buffer,
+    );
 }
 
 // =============================================================================
