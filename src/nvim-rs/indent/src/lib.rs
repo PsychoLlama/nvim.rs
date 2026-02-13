@@ -6,6 +6,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_truncation)]
 
+pub mod breakindent;
 pub mod checks;
 pub mod copy_indent;
 pub mod getters;

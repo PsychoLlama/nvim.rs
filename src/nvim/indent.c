@@ -57,6 +57,7 @@ extern int rs_indent_size_ts(const char *ptr, int64_t ts, const int *vts);
 extern int rs_indent_size_no_ts(const char *ptr);
 extern bool rs_set_indent(int size, int flags);
 extern bool rs_copy_indent(int size, const char *src);
+extern int rs_get_breakindent_win(win_T *wp, const char *line);
 extern int rs_tabstop_at(int col, int64_t ts, const int *vts, bool left);
 extern int rs_tabstop_start(int col, int ts, const int *vts);
 extern bool rs_tabstop_eq(const int *ts1, const int *ts2);
@@ -363,124 +364,7 @@ bool briopt_check(char *briopt, win_T *wp)
 int get_breakindent_win(win_T *wp, char *line)
   FUNC_ATTR_NONNULL_ALL
 {
-  static int prev_indent = 0;  // cached indent value
-  static OptInt prev_ts = 0;  // cached tabstop value
-  static colnr_T *prev_vts = NULL;  // cached vartabs values
-  static int prev_fnum = 0;  // cached buffer number
-  static char *prev_line = NULL;  // cached copy of "line"
-  static varnumber_T prev_tick = 0;  // changedtick of cached value
-  static int prev_list = 0;  // cached list indent
-  static int prev_listopt = 0;  // cached w_p_briopt_list value
-  static bool prev_no_ts = false;  // cached no_ts value
-  static unsigned prev_dy_uhex = 0;   // cached 'display' "uhex" value
-  static char *prev_flp = NULL;  // cached formatlistpat value
-  int bri = 0;
-  // window width minus window margin space, i.e. what rests for text
-  const int eff_wwidth = wp->w_view_width - win_col_off(wp) + win_col_off2(wp);
-
-  // In list mode, if 'listchars' "tab" isn't set, a TAB is displayed as ^I.
-  const bool no_ts = wp->w_p_list && wp->w_p_lcs_chars.tab1 == NUL;
-
-  // Used cached indent, unless
-  // - buffer changed, or
-  // - 'tabstop' changed, or
-  // - 'vartabstop' changed, or
-  // - buffer was changed, or
-  // - 'breakindentopt' "list" changed, or
-  // - 'list' or 'listchars' "tab" changed, or
-  // - 'display' "uhex" flag changed, or
-  // - 'formatlistpat' changed, or
-  // - line changed.
-  if (prev_fnum != wp->w_buffer->b_fnum
-      || prev_ts != wp->w_buffer->b_p_ts
-      || prev_vts != wp->w_buffer->b_p_vts_array
-      || prev_tick != buf_get_changedtick(wp->w_buffer)
-      || prev_listopt != wp->w_briopt_list
-      || prev_no_ts != no_ts
-      || prev_dy_uhex != (dy_flags & kOptDyFlagUhex)
-      || prev_flp == NULL
-      || strcmp(prev_flp, get_flp_value(wp->w_buffer)) != 0
-      || prev_line == NULL || strcmp(prev_line, line) != 0) {
-    prev_fnum = wp->w_buffer->b_fnum;
-    xfree(prev_line);
-    prev_line = xstrdup(line);
-    prev_ts = wp->w_buffer->b_p_ts;
-    prev_vts = wp->w_buffer->b_p_vts_array;
-    if (wp->w_briopt_vcol == 0) {
-      if (no_ts) {
-        prev_indent = indent_size_no_ts(line);
-      } else {
-        prev_indent = indent_size_ts(line, wp->w_buffer->b_p_ts,
-                                     wp->w_buffer->b_p_vts_array);
-      }
-    }
-    prev_tick = buf_get_changedtick(wp->w_buffer);
-    prev_listopt = wp->w_briopt_list;
-    prev_list = 0;
-    prev_no_ts = no_ts;
-    prev_dy_uhex = (dy_flags & kOptDyFlagUhex);
-    xfree(prev_flp);
-    prev_flp = xstrdup(get_flp_value(wp->w_buffer));
-    // add additional indent for numbered lists
-    if (wp->w_briopt_list != 0 && wp->w_briopt_vcol == 0) {
-      regmatch_T regmatch = {
-        .regprog = vim_regcomp(prev_flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT),
-      };
-      if (regmatch.regprog != NULL) {
-        regmatch.rm_ic = false;
-        if (vim_regexec(&regmatch, line, 0)) {
-          if (wp->w_briopt_list > 0) {
-            prev_list += wp->w_briopt_list;
-          } else {
-            char *ptr = *regmatch.startp;
-            char *end_ptr = *regmatch.endp;
-            int indent = 0;
-            // Compute the width of the matched text.
-            // Use win_chartabsize() so that TAB size is correct,
-            // while wrapping is ignored.
-            while (ptr < end_ptr) {
-              indent += win_chartabsize(wp, ptr, indent);
-              MB_PTR_ADV(ptr);
-            }
-            prev_indent = indent;
-          }
-        }
-        vim_regfree(regmatch.regprog);
-      }
-    }
-  }
-  if (wp->w_briopt_vcol != 0) {
-    // column value has priority
-    bri = wp->w_briopt_vcol;
-    prev_list = 0;
-  } else {
-    bri = prev_indent + wp->w_briopt_shift;
-  }
-
-  // Add offset for number column, if 'n' is in 'cpoptions'
-  bri += win_col_off2(wp);
-
-  // add additional indent for numbered lists
-  if (wp->w_briopt_list > 0) {
-    bri += prev_list;
-  }
-
-  // indent minus the length of the showbreak string
-  if (wp->w_briopt_sbr) {
-    bri -= vim_strsize(get_showbreak_value(wp));
-  }
-
-  // never indent past left window margin
-  if (bri < 0) {
-    bri = 0;
-  } else if (bri > eff_wwidth - wp->w_briopt_min) {
-    // always leave at least bri_min characters on the left,
-    // if text width is sufficient
-    bri = (eff_wwidth - wp->w_briopt_min < 0)
-          ? 0 : eff_wwidth - wp->w_briopt_min;
-  }
-
-  return bri;
+  return rs_get_breakindent_win(wp, line);
 }
 
 /// Get breakindent for window and line number (accessor for Rust FFI).
