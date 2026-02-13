@@ -386,16 +386,81 @@ extern "C" {
     fn nvim_pum_win_close(wp: *mut WinHandle);
 }
 
-// C _impl functions for later phase migrations.
+// Phase 8: Display orchestrator C accessor functions.
 extern "C" {
-    /// Display the popup menu (implementation).
-    fn nvim_pum_display_impl(
+    /// Validate cursor column in curwin.
+    fn nvim_pum_validate_cursor_col();
+    /// Compute display geometry (`pum_win_row`, `cursor_col`, anchor, offsets, above/below).
+    fn nvim_pum_compute_geometry(cmd_startcol: c_int) -> PumDisplayGeometry;
+    /// Send external popupmenu show event with Arena-allocated arrays.
+    fn nvim_pum_ext_show(
         array: *mut crate::item::PumItemArray,
         size: c_int,
         selected: c_int,
-        array_changed: c_int,
-        cmd_startcol: c_int,
+        pum_win_row: c_int,
+        cursor_col: c_int,
+        anchor_grid: c_int,
+        win_row_offset: c_int,
+        win_col_offset: c_int,
     );
+    /// Send external popupmenu select event.
+    fn nvim_pum_ext_select(selected: c_int);
+    /// Find preview window and compute above/below row adjustments.
+    fn nvim_pum_find_pvwin_rows(above_row_out: *mut c_int, below_row_out: *mut c_int);
+    /// Compute vertical placement (sets `pum_row`, `pum_height`, `pum_above`).
+    fn nvim_pum_compute_vp(
+        size: c_int,
+        pum_win_row: c_int,
+        above_row: c_int,
+        below_row: c_int,
+        border_width: c_int,
+    );
+    /// Compute horizontal placement (sets `pum_col`, `pum_width`).
+    fn nvim_pum_compute_hp(cursor_col: c_int);
+    /// Compute item widths (sets `pum_base_width`, `pum_kind_width`, `pum_extra_width`).
+    fn nvim_pum_call_compute_size();
+    /// Set `pum_array` pointer.
+    fn nvim_set_pum_array(array: *mut crate::item::PumItemArray);
+    /// Set `pum_size`.
+    fn nvim_set_pum_size(val: c_int);
+    /// Set `pum_scrollbar`.
+    fn nvim_set_pum_scrollbar(val: c_int);
+    /// Get `pum_col`.
+    fn nvim_get_pum_col() -> c_int;
+    /// Set `pum_col`.
+    fn nvim_set_pum_col(val: c_int);
+    /// Get `pum_width`.
+    fn nvim_get_pum_width() -> c_int;
+    /// Get `Columns`.
+    fn nvim_get_Columns() -> c_int;
+    /// Set `pum_win_row_offset`.
+    fn nvim_set_pum_win_row_offset(val: c_int);
+    /// Set `pum_win_col_offset`.
+    fn nvim_set_pum_win_col_offset(val: c_int);
+    /// Set `pum_anchor_grid`.
+    fn nvim_set_pum_anchor_grid(val: c_int);
+    /// Set grid zindex based on current mode.
+    fn nvim_pum_set_grid_zindex_for_mode();
+    /// Get curwin->w_p_rl.
+    fn nvim_pum_curwin_get_p_rl() -> c_int;
+    /// Set selected item (Rust function via extern "C").
+    fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int;
+    /// Redraw popup menu (Rust function via extern "C").
+    fn rs_pum_redraw();
+    /// Get border width from Rust.
+    fn rs_pum_border_width() -> c_int;
+}
+
+/// Result of geometry computation from C.
+#[repr(C)]
+struct PumDisplayGeometry {
+    pum_win_row: c_int,
+    cursor_col: c_int,
+    anchor_grid: c_int,
+    win_row_offset: c_int,
+    win_col_offset: c_int,
+    above_row: c_int,
+    below_row: c_int,
 }
 
 /// Opaque handle to a `buf_T`.
@@ -516,9 +581,17 @@ pub unsafe extern "C" fn rs_pum_ui_flush() {
 
 /// Display the popup menu.
 ///
+/// Shows the popup menu with the given items array. Handles:
+/// - Display mode determination (external vs internal)
+/// - Geometry computation (position, size, anchor)
+/// - External UI events (`popupmenu_show`/`select`)
+/// - Internal rendering (vertical/horizontal placement, redraw)
+/// - Preview window row adjustments
+///
 /// # Safety
-/// Calls C `_impl` function. `array` must be a valid `pumitem_T` array pointer.
+/// `array` must be a valid `pumitem_T` array pointer with at least `size` elements.
 #[no_mangle]
+#[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_pum_display(
     array: *mut crate::item::PumItemArray,
     size: c_int,
@@ -526,7 +599,121 @@ pub unsafe extern "C" fn rs_pum_display(
     array_changed: c_int,
     cmd_startcol: c_int,
 ) {
-    nvim_pum_display_impl(array, size, selected, array_changed, cmd_startcol);
+    let mut redo_count: c_int = 0;
+
+    // Determine display mode (external/rl) only when not already visible
+    let is_visible = nvim_get_pum_is_visible();
+    let state = nvim_get_State();
+    let is_cmdline = (state & MODE_CMDLINE) != 0;
+
+    if is_visible == 0 {
+        let has_popupmenu = ui_has(K_UI_POPUPMENU);
+        let has_wildmenu = ui_has(K_UI_WILDMENU);
+        let external = c_int::from(has_popupmenu || (is_cmdline && has_wildmenu));
+        nvim_set_pum_external(external);
+    }
+
+    let curwin_rl = nvim_pum_curwin_get_p_rl();
+    let rl = if is_cmdline { 0 } else { curwin_rl };
+    nvim_set_pum_rl(rl);
+
+    let border_width = rs_pum_border_width();
+
+    loop {
+        // Mark as visible early to avoid must_redraw when 'cursorcolumn' is on
+        nvim_set_pum_is_visible(1);
+        nvim_set_pum_is_drawn(1);
+        nvim_pum_validate_cursor_col();
+
+        // Compute geometry from C (handles target_win, cmdline_win, grid offsets)
+        let geom = nvim_pum_compute_geometry(cmd_startcol);
+        nvim_set_pum_win_row_offset(geom.win_row_offset);
+        nvim_set_pum_win_col_offset(geom.win_col_offset);
+        nvim_set_pum_anchor_grid(geom.anchor_grid);
+
+        let pum_win_row = geom.pum_win_row;
+        let cursor_col = geom.cursor_col;
+
+        if nvim_get_pum_external() != 0 {
+            if array_changed != 0 {
+                nvim_pum_ext_show(
+                    array,
+                    size,
+                    selected,
+                    pum_win_row,
+                    cursor_col,
+                    geom.anchor_grid,
+                    geom.win_row_offset,
+                    geom.win_col_offset,
+                );
+            } else {
+                nvim_pum_ext_select(selected);
+                return;
+            }
+        }
+
+        // Find preview window and adjust above/below rows
+        let mut above_row = geom.above_row;
+        let mut below_row = geom.below_row;
+        let mut pvwin_above: c_int = 0;
+        let mut pvwin_below: c_int = 0;
+        nvim_pum_find_pvwin_rows(
+            std::ptr::addr_of_mut!(pvwin_above),
+            std::ptr::addr_of_mut!(pvwin_below),
+        );
+        if pvwin_above > 0 {
+            above_row = pvwin_above;
+        }
+        if pvwin_below > 0 {
+            below_row = pvwin_below;
+        }
+
+        // Compute vertical placement (sets pum_row, pum_height, pum_above)
+        nvim_pum_compute_vp(size, pum_win_row, above_row, below_row, border_width);
+
+        // Don't display when we only have room for one line
+        let pum_height = nvim_get_pum_height();
+        if border_width == 0 && (pum_height < 1 || (pum_height == 1 && size > 1)) {
+            return;
+        }
+
+        // Set array and size
+        nvim_set_pum_array(array);
+        nvim_set_pum_size(size);
+
+        if nvim_get_pum_external() != 0 {
+            return;
+        }
+
+        // Compute item widths
+        nvim_pum_call_compute_size();
+
+        // If there are more items than room we need a scrollbar
+        let pum_height = nvim_get_pum_height();
+        nvim_set_pum_scrollbar(c_int::from(pum_height < size));
+
+        // Compute horizontal placement (sets pum_col, pum_width)
+        nvim_pum_compute_hp(cursor_col);
+
+        // Adjust for border overflow
+        let pum_col = nvim_get_pum_col();
+        let pum_width = nvim_get_pum_width();
+        let columns = nvim_get_Columns();
+        if pum_col + border_width + pum_width > columns {
+            nvim_set_pum_col(pum_col - border_width);
+        }
+
+        // Set selected item and redraw. If the window size changed need to
+        // redo the positioning. Limit to two times.
+        let resized = rs_pum_set_selected(selected, redo_count) != 0;
+        redo_count += 1;
+        if !resized || redo_count > 2 {
+            break;
+        }
+    }
+
+    nvim_pum_set_grid_zindex_for_mode();
+    rs_pum_redraw();
 }
 
 #[cfg(test)]

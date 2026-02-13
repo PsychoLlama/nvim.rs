@@ -1546,6 +1546,114 @@ void *nvim_pum_get_curbuf(void)
   return curbuf;
 }
 
+// Phase 8 C accessor functions (display orchestrator)
+
+/// Compute the complete display geometry for popup menu positioning.
+/// This encapsulates all target_win field access and cmdline_win queries.
+PumDisplayGeometry nvim_pum_compute_geometry(int cmd_startcol)
+{
+  PumDisplayGeometry g = { 0, 0, DEFAULT_GRID_HANDLE, 0, 0, 0, 0 };
+  int is_cmdline = (State & MODE_CMDLINE) != 0;
+
+  g.below_row = MAX(cmdline_row, curwin->w_winrow + curwin->w_view_height);
+  if (is_cmdline) {
+    g.below_row = cmdline_row;
+  }
+
+  win_T *target_win = is_cmdline ? cmdline_win : curwin;
+
+  if (is_cmdline) {
+    g.pum_win_row = cmdline_win ? cmdline_win->w_wrow : ui_has(kUICmdline) ? 0 : cmdline_row;
+    g.cursor_col = (cmdline_win ? cmdline_win->w_config._cmdline_offset : 0) + cmd_startcol;
+    g.cursor_col %= cmdline_win ? cmdline_win->w_view_width : Columns;
+    g.anchor_grid = ui_has(kUICmdline) ? -1 : DEFAULT_GRID_HANDLE;
+  } else {
+    g.pum_win_row = curwin->w_wrow;
+    if (pum_rl) {
+      g.cursor_col = curwin->w_view_width - curwin->w_wcol - 1;
+    } else {
+      g.cursor_col = curwin->w_wcol;
+    }
+  }
+
+  if (target_win != NULL) {
+    g.anchor_grid = target_win->w_grid.target->handle;
+    g.pum_win_row += target_win->w_grid.row_offset;
+    g.cursor_col += target_win->w_grid.col_offset;
+    if (target_win->w_grid.target != &default_grid) {
+      g.pum_win_row += target_win->w_winrow;
+      g.cursor_col += target_win->w_wincol;
+      if (!ui_has(kUIMultigrid)) {
+        g.anchor_grid = DEFAULT_GRID_HANDLE;
+      } else {
+        g.win_row_offset = target_win->w_winrow;
+        g.win_col_offset = target_win->w_wincol;
+      }
+    }
+  }
+
+  return g;
+}
+
+/// Call validate_cursor_col(curwin).
+void nvim_pum_validate_cursor_col(void)
+{
+  validate_cursor_col(curwin);
+}
+
+/// Call ui_call_popupmenu_show with Arena-built array. Handles all Arena allocation.
+void nvim_pum_ext_show(pumitem_T *array, int size, int selected,
+                       int pum_win_row, int cursor_col, int anchor_grid,
+                       int win_row_offset, int win_col_offset)
+{
+  Arena arena = ARENA_EMPTY;
+  Array arr = arena_array(&arena, (size_t)size);
+  for (int i = 0; i < size; i++) {
+    Array item = arena_array(&arena, 4);
+    ADD_C(item, CSTR_AS_OBJ(array[i].pum_text));
+    ADD_C(item, CSTR_AS_OBJ(array[i].pum_kind));
+    ADD_C(item, CSTR_AS_OBJ(array[i].pum_extra));
+    ADD_C(item, CSTR_AS_OBJ(array[i].pum_info));
+    ADD_C(arr, ARRAY_OBJ(item));
+  }
+  ui_call_popupmenu_show(arr, selected, pum_win_row - win_row_offset,
+                         cursor_col - win_col_offset, anchor_grid);
+  arena_mem_free(arena_finish(&arena));
+}
+
+/// Call ui_call_popupmenu_select.
+void nvim_pum_ext_select(int selected)
+{
+  ui_call_popupmenu_select(selected);
+}
+
+/// Find preview window row adjustments using FOR_ALL_WINDOWS_IN_TAB.
+/// Returns (above_row_adj, below_row_adj) via output params.
+/// above_row_adj > 0 means above_row should be updated.
+/// below_row_adj > 0 means below_row should be updated.
+void nvim_pum_find_pvwin_rows(int *above_row_out, int *below_row_out)
+{
+  *above_row_out = 0;
+  *below_row_out = 0;
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp->w_p_pvw) {
+      if (wp->w_winrow < curwin->w_winrow) {
+        *above_row_out = wp->w_winrow + wp->w_height;
+      } else if (wp->w_winrow > curwin->w_winrow + curwin->w_height) {
+        *below_row_out = wp->w_winrow;
+      }
+      break;
+    }
+  }
+}
+
+// nvim_pum_compute_vp, nvim_pum_compute_hp, nvim_pum_set_grid_zindex_for_mode:
+// defined after pum_compute_vertical_placement / pum_compute_horizontal_placement
+
+// Phase 8 static assertions
+_Static_assert(DEFAULT_GRID_HANDLE == 1, "DEFAULT_GRID_HANDLE must be 1");
+_Static_assert(kZIndexPopupMenu == 100, "kZIndexPopupMenu must be 100");
+
 // Phase 7 static assertions
 _Static_assert(kOptCotFlagPopup == 0x10, "kOptCotFlagPopup must be 0x10");
 _Static_assert(kOptCotFlagPreview == 0x08, "kOptCotFlagPreview must be 0x08");
@@ -1614,6 +1722,28 @@ static void pum_compute_horizontal_placement(win_T *target_win, int cursor_col)
   pum_width = result.width;
 }
 
+/// Wrapper for pum_compute_vertical_placement (Phase 8 accessor).
+void nvim_pum_compute_vp(int size, int pum_win_row, int above_row, int below_row,
+                         int border_width)
+{
+  win_T *target_win = (State & MODE_CMDLINE) ? cmdline_win : curwin;
+  pum_compute_vertical_placement(size, target_win, pum_win_row, above_row, below_row,
+                                 border_width);
+}
+
+/// Wrapper for pum_compute_horizontal_placement (Phase 8 accessor).
+void nvim_pum_compute_hp(int cursor_col)
+{
+  win_T *target_win = (State & MODE_CMDLINE) ? cmdline_win : curwin;
+  pum_compute_horizontal_placement(target_win, cursor_col);
+}
+
+/// Set grid zindex based on current mode (Phase 8 accessor).
+void nvim_pum_set_grid_zindex_for_mode(void)
+{
+  pum_grid.zindex = (State & MODE_CMDLINE) ? kZIndexCmdlinePopupMenu : kZIndexPopupMenu;
+}
+
 static inline int pum_border_width(void)
 {
   return rs_pum_border_width();
@@ -1636,147 +1766,7 @@ void pum_display(pumitem_T *array, int size, int selected, bool array_changed, i
   rs_pum_display(array, size, selected, (int)array_changed, cmd_startcol);
 }
 
-/// Display the popup menu (implementation).
-void nvim_pum_display_impl(pumitem_T *array, int size, int selected, int array_changed,
-                            int cmd_startcol)
-{
-  int redo_count = 0;
-  int pum_win_row;
-  int cursor_col;
-
-  if (!pum_is_visible) {
-    // To keep the code simple, we only allow changing the
-    // draw mode when the popup menu is not being displayed
-    pum_external = ui_has(kUIPopupmenu)
-                   || ((State & MODE_CMDLINE) && ui_has(kUIWildmenu));
-  }
-
-  pum_rl = (State & MODE_CMDLINE) == 0 && curwin->w_p_rl;
-
-  int border_width = pum_border_width();
-  do {
-    // Mark the pum as visible already here,
-    // to avoid that must_redraw is set when 'cursorcolumn' is on.
-    pum_is_visible = true;
-    pum_is_drawn = true;
-    validate_cursor_col(curwin);
-    int above_row = 0;
-    int below_row = MAX(cmdline_row, curwin->w_winrow + curwin->w_view_height);
-    if (State & MODE_CMDLINE) {
-      below_row = cmdline_row;
-    }
-    win_T *target_win = (State & MODE_CMDLINE) ? cmdline_win : curwin;
-    pum_win_row_offset = 0;
-    pum_win_col_offset = 0;
-
-    // wildoptions=pum
-    if (State & MODE_CMDLINE) {
-      pum_win_row = cmdline_win ? cmdline_win->w_wrow : ui_has(kUICmdline) ? 0 : cmdline_row;
-      cursor_col = (cmdline_win ? cmdline_win->w_config._cmdline_offset : 0) + cmd_startcol;
-      cursor_col %= cmdline_win ? cmdline_win->w_view_width : Columns;
-      pum_anchor_grid = ui_has(kUICmdline) ? -1 : DEFAULT_GRID_HANDLE;
-    } else {
-      // anchor position: the start of the completed word
-      pum_win_row = curwin->w_wrow;
-      if (pum_rl) {
-        cursor_col = curwin->w_view_width - curwin->w_wcol - 1;
-      } else {
-        cursor_col = curwin->w_wcol;
-      }
-    }
-
-    if (target_win != NULL) {
-      // ext_popupmenu should always anchor to the default grid when multigrid is disabled
-      pum_anchor_grid = target_win->w_grid.target->handle;
-      pum_win_row += target_win->w_grid.row_offset;
-      cursor_col += target_win->w_grid.col_offset;
-      if (target_win->w_grid.target != &default_grid) {
-        pum_win_row += target_win->w_winrow;
-        cursor_col += target_win->w_wincol;
-        if (!ui_has(kUIMultigrid)) {
-          pum_anchor_grid = DEFAULT_GRID_HANDLE;
-        } else {
-          pum_win_row_offset = target_win->w_winrow;
-          pum_win_col_offset = target_win->w_wincol;
-        }
-      }
-    }
-
-    if (pum_external) {
-      if (array_changed) {
-        Arena arena = ARENA_EMPTY;
-        Array arr = arena_array(&arena, (size_t)size);
-        for (int i = 0; i < size; i++) {
-          Array item = arena_array(&arena, 4);
-          ADD_C(item, CSTR_AS_OBJ(array[i].pum_text));
-          ADD_C(item, CSTR_AS_OBJ(array[i].pum_kind));
-          ADD_C(item, CSTR_AS_OBJ(array[i].pum_extra));
-          ADD_C(item, CSTR_AS_OBJ(array[i].pum_info));
-          ADD_C(arr, ARRAY_OBJ(item));
-        }
-        ui_call_popupmenu_show(arr, selected, pum_win_row - pum_win_row_offset,
-                               cursor_col - pum_win_col_offset,
-                               pum_anchor_grid);
-        arena_mem_free(arena_finish(&arena));
-      } else {
-        ui_call_popupmenu_select(selected);
-        return;
-      }
-    }
-
-    win_T *pvwin = NULL;
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_p_pvw) {
-        pvwin = wp;
-        break;
-      }
-    }
-
-    if (pvwin != NULL) {
-      if (pvwin->w_winrow < curwin->w_winrow) {
-        above_row = pvwin->w_winrow + pvwin->w_height;
-      } else if (pvwin->w_winrow > curwin->w_winrow + curwin->w_height) {
-        below_row = pvwin->w_winrow;
-      }
-    }
-
-    // Figure out the vertical size and position of the pum.
-    pum_compute_vertical_placement(size, target_win, pum_win_row, above_row, below_row,
-                                   border_width);
-
-    // don't display when we only have room for one line
-    if (border_width == 0 && (pum_height < 1 || (pum_height == 1 && size > 1))) {
-      return;
-    }
-
-    pum_array = array;
-    // Set "pum_size" before returning so that pum_set_event_info() gets the correct size.
-    pum_size = size;
-
-    if (pum_external) {
-      return;
-    }
-
-    pum_compute_size();
-
-    // if there are more items than room we need a scrollbar
-    pum_scrollbar = (pum_height < size) ? 1 : 0;
-
-    // Figure out the horizontal size and position of the pum.
-    pum_compute_horizontal_placement(target_win, cursor_col);
-
-    if (pum_col + border_width + pum_width > Columns) {
-      pum_col -= border_width;
-    }
-
-    // Set selected item and redraw.  If the window size changed need to redo
-    // the positioning.  Limit this to two times, when there is not much
-    // room the window size will keep changing.
-  } while (pum_set_selected(selected, redo_count) && ++redo_count <= 2);
-
-  pum_grid.zindex = (State & MODE_CMDLINE) ? kZIndexCmdlinePopupMenu : kZIndexPopupMenu;
-  pum_redraw();
-}
+// nvim_pum_display_impl: migrated to Rust (display.rs)
 
 // nvim_pum_compute_text_attrs_impl: migrated to Rust (render.rs)
 // nvim_pum_grid_puts_with_attrs_impl: migrated to Rust (render.rs)

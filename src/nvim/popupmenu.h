@@ -50,6 +50,17 @@ typedef struct {
 /// Opaque border configuration for popup menu rendering (Rust FFI).
 typedef struct PumBorderConfig PumBorderConfig;
 
+/// Result type for display geometry computation (Rust FFI).
+typedef struct {
+  int pum_win_row;
+  int cursor_col;
+  int anchor_grid;
+  int win_row_offset;
+  int win_col_offset;
+  int above_row;
+  int below_row;
+} PumDisplayGeometry;
+
 /// state for pum_ext_select_item.
 EXTERN struct {
   bool active;
