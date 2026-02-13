@@ -28,8 +28,8 @@ pub use input::{
 };
 pub use list::{
     rs_digraph_format_entry, rs_digraph_format_pair, rs_digraph_format_result,
-    rs_digraph_get_header_index, rs_digraph_iterate, rs_digraph_iterate_default,
-    rs_digraph_iterate_user,
+    rs_digraph_get_header_index, rs_digraph_header, rs_digraph_iterate, rs_digraph_iterate_default,
+    rs_digraph_iterate_user, rs_listdigraphs, rs_printdigraph,
 };
 pub use parse::{rs_putdigraph, PutdigraphResult};
 pub use register::{rs_get_digraph_for_char, rs_registerdigraph};

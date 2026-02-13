@@ -112,6 +112,7 @@
 #include "nvim/winfloat.h"
 
 // Rust implementations - declarations
+extern void rs_listdigraphs(int use_headers);
 extern int rs_ends_excmd(int c);
 extern const char *rs_find_nextcmd(const char *p);
 extern const char *rs_check_nextcmd(const char *p);
@@ -6246,7 +6247,7 @@ static void ex_digraphs(exarg_T *eap)
   if (*eap->arg != NUL) {
     putdigraph(eap->arg);
   } else {
-    listdigraphs(eap->forceit);
+    rs_listdigraphs(eap->forceit ? 1 : 0);
   }
 }
 

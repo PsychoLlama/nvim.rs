@@ -8,12 +8,12 @@ use std::ffi::{c_char, c_void};
 use libc::c_int;
 
 use crate::data::{
-    DIGRAPH_DEFAULT, DG_START_ARABIC, DG_START_ARROWS, DG_START_BLOCK, DG_START_BOPOMOFO,
-    DG_START_CJK_SYMBOLS, DG_START_CURRENCY, DG_START_CYRILLIC, DG_START_DINGBATS,
-    DG_START_DRAWING, DG_START_GREEK, DG_START_GREEK_EXTENDED, DG_START_HEBREW,
-    DG_START_HIRAGANA, DG_START_KATAKANA, DG_START_LATIN, DG_START_LATIN_EXTENDED,
-    DG_START_MATH, DG_START_OTHER1, DG_START_OTHER2, DG_START_OTHER3, DG_START_PUNCTUATION,
-    DG_START_ROMAN, DG_START_SHAPES, DG_START_SUB_SUPER, DG_START_SYMBOLS, DG_START_TECHNICAL,
+    DG_START_ARABIC, DG_START_ARROWS, DG_START_BLOCK, DG_START_BOPOMOFO, DG_START_CJK_SYMBOLS,
+    DG_START_CURRENCY, DG_START_CYRILLIC, DG_START_DINGBATS, DG_START_DRAWING, DG_START_GREEK,
+    DG_START_GREEK_EXTENDED, DG_START_HEBREW, DG_START_HIRAGANA, DG_START_KATAKANA, DG_START_LATIN,
+    DG_START_LATIN_EXTENDED, DG_START_MATH, DG_START_OTHER1, DG_START_OTHER2, DG_START_OTHER3,
+    DG_START_PUNCTUATION, DG_START_ROMAN, DG_START_SHAPES, DG_START_SUB_SUPER, DG_START_SYMBOLS,
+    DG_START_TECHNICAL, DIGRAPH_DEFAULT,
 };
 use crate::DigrT;
 
@@ -37,7 +37,31 @@ extern "C" {
 
     /// Get display width of a character in cells.
     fn nvim_char2cells(c: c_int) -> c_int;
+
+    /// Put a character to the message output.
+    fn msg_putchar(c: c_int);
+
+    /// Output a translated string with highlighting.
+    fn msg_outtrans(s: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+
+    /// Set the message extension kind.
+    fn msg_ext_set_kind(kind: *const c_char);
+
+    /// Translate a string via gettext.
+    fn nvim_gettext(s: *const c_char) -> *const c_char;
+
+    /// Get the current message column.
+    fn nvim_get_msg_col() -> c_int;
+
+    /// Get the screen width (Columns).
+    fn nvim_get_Columns() -> c_int;
 }
+
+/// Highlight group for special keys text (`HLF_8` = 1).
+const HLF_8: c_int = 1;
+
+/// Highlight group for mode message (`HLF_CM` = 11).
+const HLF_CM: c_int = 11;
 
 /// Header entries for digraph categories.
 /// Each entry has `(start_code, header_index)`.
@@ -70,6 +94,37 @@ static HEADER_TABLE: &[(c_int, c_int)] = &[
     (DG_START_BOPOMOFO, 24),      // "Bopomofo"
     (DG_START_OTHER3, 25),        // "Other"
     (0x0fff_ffff, -1),            // Sentinel
+];
+
+/// Translatable header strings for digraph categories.
+/// Index matches the `header_index` in `HEADER_TABLE`.
+static HEADER_STRINGS: &[&std::ffi::CStr] = &[
+    c"Latin supplement",
+    c"Greek and Coptic",
+    c"Cyrillic",
+    c"Hebrew",
+    c"Arabic",
+    c"Latin extended",
+    c"Greek extended",
+    c"Punctuation",
+    c"Super- and subscripts",
+    c"Currency",
+    c"Other",
+    c"Roman numbers",
+    c"Arrows",
+    c"Mathematical operators",
+    c"Technical",
+    c"Other",
+    c"Box drawing",
+    c"Block elements",
+    c"Geometric shapes",
+    c"Symbols",
+    c"Dingbats",
+    c"CJK symbols and punctuation",
+    c"Hiragana",
+    c"Katakana",
+    c"Bopomofo",
+    c"Other",
 ];
 
 /// Find the header index for a digraph result code.
@@ -469,6 +524,226 @@ pub unsafe extern "C" fn rs_digraph_format_result(result: c_int, buf: *mut c_cha
     }
 
     len
+}
+
+/// Display a digraph header line.
+///
+/// If the cursor is past column 0, output a newline first.
+/// Then output the translated header text with `HLF_CM` highlighting,
+/// followed by a newline.
+///
+/// # Safety
+/// `msg` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_digraph_header(msg: *const c_char) {
+    if msg.is_null() {
+        return;
+    }
+    if unsafe { nvim_get_msg_col() } > 0 {
+        unsafe { msg_putchar(c_int::from(b'\n')) };
+    }
+    unsafe { msg_outtrans(msg, HLF_CM, false) };
+    unsafe { msg_putchar(c_int::from(b'\n')) };
+}
+
+/// Print a single digraph entry to the message output.
+///
+/// Formats and displays a digraph as: `{c1}{c2} {char} {decimal}`
+/// with appropriate highlighting and column alignment.
+///
+/// If `previous` is non-null, checks whether a category header should be
+/// displayed before this entry (based on the previous result code).
+///
+/// # Arguments
+/// * `char1` - First character of the digraph
+/// * `char2` - Second character of the digraph
+/// * `result` - The digraph result character
+/// * `previous` - Pointer to the previous result code (nullable)
+///
+/// # Safety
+/// `previous` must be null or a valid pointer to a writable `c_int`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_printdigraph(
+    char1: u8,
+    char2: u8,
+    result: c_int,
+    previous: *mut c_int,
+) {
+    if result == 0 {
+        return;
+    }
+
+    let list_width: c_int = 13;
+
+    // Show category header if needed
+    if !previous.is_null() {
+        let prev_val = unsafe { *previous };
+        let header_idx = rs_digraph_get_header_index(prev_val, result);
+        #[allow(clippy::cast_sign_loss)]
+        if header_idx >= 0 && (header_idx as usize) < HEADER_STRINGS.len() {
+            let header_str = HEADER_STRINGS[header_idx as usize];
+            let translated = unsafe { nvim_gettext(header_str.as_ptr()) };
+            unsafe { rs_digraph_header(translated) };
+        }
+        unsafe { *previous = result };
+    }
+
+    // Wrap to next line if not enough room
+    if unsafe { nvim_get_msg_col() } > unsafe { nvim_get_Columns() } - list_width {
+        unsafe { msg_putchar(c_int::from(b'\n')) };
+    }
+
+    // Align to multiple of list_width
+    let msg_col = unsafe { nvim_get_msg_col() };
+    if msg_col % list_width != 0 {
+        let mut spaces = (msg_col / list_width + 1) * list_width - msg_col;
+        while spaces > 0 {
+            unsafe { msg_putchar(c_int::from(b' ')) };
+            spaces -= 1;
+        }
+    }
+
+    // Output "{c1}{c2} " with default highlighting
+    let mut buf = [0i8; 4];
+    #[allow(clippy::cast_possible_wrap)]
+    {
+        buf[0] = char1 as c_char;
+        buf[1] = char2 as c_char;
+        buf[2] = b' ' as c_char;
+        buf[3] = 0;
+    }
+    unsafe { msg_outtrans(buf.as_ptr(), 0, false) };
+
+    // Output the result character with HLF_8 highlighting
+    let mut charbuf = [0i8; 8];
+    let mut pos = 0usize;
+
+    // Add space for composing characters
+    if unsafe { nvim_utf_iscomposing_first(result) } != 0 {
+        #[allow(clippy::cast_possible_wrap)]
+        {
+            charbuf[pos] = b' ' as c_char;
+        }
+        pos += 1;
+    }
+
+    let utf8_len = unsafe { rs_utf_char2bytes(result, charbuf.as_mut_ptr().add(pos)) };
+    #[allow(clippy::cast_sign_loss)]
+    if utf8_len > 0 {
+        pos += utf8_len as usize;
+    }
+    charbuf[pos] = 0;
+    unsafe { msg_outtrans(charbuf.as_ptr(), HLF_8, false) };
+
+    // Output " {decimal}" with default highlighting
+    let mut numbuf = [0i8; 16];
+    let mut npos = 0usize;
+
+    // Add padding space for single-width characters
+    if unsafe { nvim_char2cells(result) } == 1 {
+        #[allow(clippy::cast_possible_wrap)]
+        {
+            numbuf[npos] = b' ' as c_char;
+        }
+        npos += 1;
+    }
+    #[allow(clippy::cast_possible_wrap)]
+    {
+        numbuf[npos] = b' ' as c_char;
+    }
+    npos += 1;
+
+    // Format decimal number right-aligned in 3 chars
+    let mut dec_buf = [0u8; 8];
+    let dec_str = format_decimal(result, &mut dec_buf);
+    let padding = if dec_str.len() < 3 {
+        3 - dec_str.len()
+    } else {
+        0
+    };
+    for _ in 0..padding {
+        #[allow(clippy::cast_possible_wrap)]
+        {
+            numbuf[npos] = b' ' as c_char;
+        }
+        npos += 1;
+    }
+    for &b in dec_str {
+        #[allow(clippy::cast_possible_wrap)]
+        {
+            numbuf[npos] = b as c_char;
+        }
+        npos += 1;
+    }
+    numbuf[npos] = 0;
+    unsafe { msg_outtrans(numbuf.as_ptr(), 0, false) };
+}
+
+/// List all digraphs to the message output.
+///
+/// Iterates over default digraphs (with optional category headers)
+/// and user digraphs, displaying each with `rs_printdigraph`.
+///
+/// # Arguments
+/// * `use_headers` - If nonzero, display category headers between sections
+///
+/// # Safety
+/// Calls C message output functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_listdigraphs(use_headers: c_int) {
+    let mut previous: c_int = 0;
+
+    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    unsafe { msg_putchar(c_int::from(b'\n')) };
+
+    // Iterate default digraphs
+    for dp in DIGRAPH_DEFAULT {
+        // Check for user interrupt
+        if unsafe { nvim_digraph_got_int() } != 0 {
+            return;
+        }
+
+        // Get actual result (may be overridden by user digraph)
+        let result = unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), 0) };
+
+        if result != 0 && result != c_int::from(dp.char2) {
+            let prev_ptr = if use_headers != 0 {
+                &raw mut previous
+            } else {
+                std::ptr::null_mut()
+            };
+            unsafe { rs_printdigraph(dp.char1, dp.char2, result, prev_ptr) };
+        }
+        unsafe { nvim_digraph_fast_breakcheck() };
+    }
+
+    // Iterate user digraphs
+    let user_data = unsafe { nvim_get_user_digraphs_data() };
+    let user_len = unsafe { nvim_get_user_digraphs_len() };
+
+    if !user_data.is_null() && user_len > 0 {
+        let user_digraphs = user_data.cast::<DigrT>();
+        #[allow(clippy::cast_sign_loss)]
+        let len = user_len as usize;
+
+        for i in 0..len {
+            if unsafe { nvim_digraph_got_int() } != 0 {
+                return;
+            }
+
+            let dp = unsafe { &*user_digraphs.add(i) };
+
+            // Show "Custom" header before first user digraph
+            if previous >= 0 && use_headers != 0 {
+                let translated = unsafe { nvim_gettext(c"Custom".as_ptr()) };
+                unsafe { rs_digraph_header(translated) };
+            }
+            previous = -1;
+
+            unsafe { rs_printdigraph(dp.char1, dp.char2, dp.result, std::ptr::null_mut()) };
+            unsafe { nvim_digraph_fast_breakcheck() };
+        }
+    }
 }
 
 #[cfg(test)]

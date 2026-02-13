@@ -76,6 +76,13 @@ extern int rs_digraph_format_entry(uint8_t char1, uint8_t char2, int result, cha
 typedef int (*DigraphIterCallback)(uint8_t char1, uint8_t char2, int result, void *ctx);
 extern int rs_digraph_iterate_default(DigraphIterCallback callback, void *ctx);
 extern int rs_digraph_iterate_user(DigraphIterCallback callback, void *ctx);
+extern void rs_listdigraphs(int use_headers);
+extern void rs_printdigraph(uint8_t char1, uint8_t char2, int result, int *previous);
+extern void rs_digraph_header(const char *msg);
+
+// Verify highlight constants match Rust values
+_Static_assert(HLF_8 == 1, "HLF_8");
+_Static_assert(HLF_CM == 11, "HLF_CM");
 
 // digraphs added by the user
 static garray_T user_digraphs = { 0, 0, (int)sizeof(digr_T), 10, NULL };
@@ -303,51 +310,7 @@ void putdigraph(char *str)
   }
 }
 
-static void digraph_header(const char *msg)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (msg_col > 0) {
-    msg_putchar('\n');
-  }
-  msg_outtrans(msg, HLF_CM, false);
-  msg_putchar('\n');
-}
-
-void listdigraphs(bool use_headers)
-{
-  result_T previous = 0;
-
-  msg_ext_set_kind("list_cmd");
-  msg_putchar('\n');
-
-  const digr_T *dp = rs_get_digraphdefault();
-  int dp_len = rs_get_digraphdefault_len();
-
-  for (int i = 0; i < dp_len && !got_int; i++) {
-    digr_T tmp;
-
-    // May need to convert the result to 'encoding'.
-    tmp.char1 = dp[i].char1;
-    tmp.char2 = dp[i].char2;
-    tmp.result = getexactdigraph(tmp.char1, tmp.char2, false);
-
-    if (tmp.result != 0 && tmp.result != tmp.char2) {
-      printdigraph(&tmp, use_headers ? &previous : NULL);
-    }
-    fast_breakcheck();
-  }
-
-  dp = (const digr_T *)user_digraphs.ga_data;
-  for (int i = 0; i < user_digraphs.ga_len && !got_int; i++) {
-    if (previous >= 0 && use_headers) {
-      digraph_header(_("Custom"));
-    }
-    previous = -1;
-    printdigraph(dp, NULL);
-    fast_breakcheck();
-    dp++;
-  }
-}
+// digraph_header(), listdigraphs(), printdigraph() moved to Rust (list.rs)
 
 /// Context for digraph_getlist iteration callback.
 typedef struct {
@@ -392,92 +355,7 @@ void digraph_getlist_common(bool list_all, typval_T *rettv)
   rs_digraph_iterate_user(digraph_getlist_callback, &ctx);
 }
 
-static struct dg_header_entry {
-  int dg_start;
-  const char *dg_header;
-} header_table[] = {
-  { 0xa1, N_("Latin supplement") },
-  { 0x0386, N_("Greek and Coptic") },
-  { 0x0401, N_("Cyrillic") },
-  { 0x05d0, N_("Hebrew") },
-  { 0x060c, N_("Arabic") },
-  { 0x1e02, N_("Latin extended") },
-  { 0x1f00, N_("Greek extended") },
-  { 0x2002, N_("Punctuation") },
-  { 0x2070, N_("Super- and subscripts") },
-  { 0x20a4, N_("Currency") },
-  { 0x2103, N_("Other") },
-  { 0x2160, N_("Roman numbers") },
-  { 0x2190, N_("Arrows") },
-  { 0x2200, N_("Mathematical operators") },
-  { 0x2302, N_("Technical") },
-  { 0x2423, N_("Other") },
-  { 0x2500, N_("Box drawing") },
-  { 0x2580, N_("Block elements") },
-  { 0x25a0, N_("Geometric shapes") },
-  { 0x2605, N_("Symbols") },
-  { 0x2713, N_("Dingbats") },
-  { 0x3000, N_("CJK symbols and punctuation") },
-  { 0x3041, N_("Hiragana") },
-  { 0x30a1, N_("Katakana") },
-  { 0x3105, N_("Bopomofo") },
-  { 0x3220, N_("Other") },
-  { 0xfffffff, NULL },
-};
-
-static void printdigraph(const digr_T *dp, result_T *previous)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  char buf[30];
-  int list_width = 13;
-
-  if (dp->result == 0) {
-    return;
-  }
-
-  if (previous != NULL) {
-    int header_idx = rs_digraph_get_header_index(*previous, dp->result);
-    if (header_idx >= 0 && header_idx < (int)ARRAY_SIZE(header_table) - 1) {
-      digraph_header(_(header_table[header_idx].dg_header));
-    }
-    *previous = dp->result;
-  }
-  if (msg_col > Columns - list_width) {
-    msg_putchar('\n');
-  }
-
-  // Make msg_col a multiple of list_width by using spaces.
-  if (msg_col % list_width != 0) {
-    int spaces = (msg_col / list_width + 1) * list_width - msg_col;
-    while (spaces--) {
-      msg_putchar(' ');
-    }
-  }
-
-  char *p = &buf[0];
-  *p++ = (char)dp->char1;
-  *p++ = (char)dp->char2;
-  *p++ = ' ';
-  *p = NUL;
-  msg_outtrans(buf, 0, false);
-  p = buf;
-
-  // add a space to draw a composing char on
-  if (utf_iscomposing_first(dp->result)) {
-    *p++ = ' ';
-  }
-  p += utf_char2bytes(dp->result, p);
-
-  *p = NUL;
-  msg_outtrans(buf, HLF_8, false);
-  p = buf;
-  if (char2cells(dp->result) == 1) {
-    *p++ = ' ';
-  }
-  assert(p >= buf);
-  vim_snprintf(p, sizeof(buf) - (size_t)(p - buf), " %3d", dp->result);
-  msg_outtrans(buf, 0, false);
-}
+// header_table[] moved to Rust (list.rs HEADER_STRINGS)
 
 /// Get the two digraph characters from a typval.
 /// @return OK or FAIL.
