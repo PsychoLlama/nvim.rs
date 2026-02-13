@@ -10,6 +10,7 @@
 
 pub mod func_line;
 pub mod input;
+pub mod script_line;
 pub mod timing;
 pub mod types;
 

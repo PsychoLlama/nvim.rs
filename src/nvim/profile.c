@@ -63,6 +63,12 @@ extern void rs_func_line_start(void *cookie);
 extern void rs_func_line_exec(void *cookie);
 extern void rs_func_line_end(void *cookie);
 extern void rs_func_do_profile(ufunc_T *fp);
+// Phase 4: script line profiling
+extern void rs_script_line_start(void);
+extern void rs_script_line_exec(void);
+extern void rs_script_line_end(void);
+extern void rs_script_prof_save(proftime_T *tm);
+extern void rs_script_prof_restore(const proftime_T *tm);
 
 /// Struct used in sn_prl_ga for every line of a script.
 typedef struct {
@@ -605,30 +611,13 @@ void profile_init(scriptitem_T *si)
 /// @param tm  place to store wait time
 void script_prof_save(proftime_T *tm)
 {
-  if (current_sctx.sc_sid > 0 && current_sctx.sc_sid <= script_items.ga_len) {
-    scriptitem_T *si = SCRIPT_ITEM(current_sctx.sc_sid);
-    if (si->sn_prof_on && si->sn_pr_nest++ == 0) {
-      si->sn_pr_child = profile_start();
-    }
-  }
-  *tm = profile_get_wait();
+  rs_script_prof_save(tm);
 }
 
 /// Count time spent in children after invoking another script or function.
 void script_prof_restore(const proftime_T *tm)
 {
-  if (!SCRIPT_ID_VALID(current_sctx.sc_sid)) {
-    return;
-  }
-
-  scriptitem_T *si = SCRIPT_ITEM(current_sctx.sc_sid);
-  if (si->sn_prof_on && --si->sn_pr_nest == 0) {
-    si->sn_pr_child = profile_end(si->sn_pr_child);
-    // don't count wait time
-    si->sn_pr_child = profile_sub_wait(*tm, si->sn_pr_child);
-    si->sn_pr_children = profile_add(si->sn_pr_children, si->sn_pr_child);
-    si->sn_prl_children = profile_add(si->sn_prl_children, si->sn_pr_child);
-  }
+  rs_script_prof_restore(tm);
 }
 
 /// Dump the profiling results for all scripts in file "fd".
@@ -719,63 +708,19 @@ void profile_dump(void)
 /// until later and we need to store the time now.
 void script_line_start(void)
 {
-  if (current_sctx.sc_sid <= 0 || current_sctx.sc_sid > script_items.ga_len) {
-    return;
-  }
-  scriptitem_T *si = SCRIPT_ITEM(current_sctx.sc_sid);
-  if (si->sn_prof_on && SOURCING_LNUM >= 1) {
-    // Grow the array before starting the timer, so that the time spent
-    // here isn't counted.
-    ga_grow(&si->sn_prl_ga, SOURCING_LNUM - si->sn_prl_ga.ga_len);
-    si->sn_prl_idx = SOURCING_LNUM - 1;
-    while (si->sn_prl_ga.ga_len <= si->sn_prl_idx
-           && si->sn_prl_ga.ga_len < si->sn_prl_ga.ga_maxlen) {
-      // Zero counters for a line that was not used before.
-      sn_prl_T *pp = &PRL_ITEM(si, si->sn_prl_ga.ga_len);
-      pp->snp_count = 0;
-      pp->sn_prl_total = profile_zero();
-      pp->sn_prl_self = profile_zero();
-      si->sn_prl_ga.ga_len++;
-    }
-    si->sn_prl_execed = false;
-    si->sn_prl_start = profile_start();
-    si->sn_prl_children = profile_zero();
-    si->sn_prl_wait = profile_get_wait();
-  }
+  rs_script_line_start();
 }
 
 /// Called when actually executing a function line.
 void script_line_exec(void)
 {
-  if (current_sctx.sc_sid <= 0 || current_sctx.sc_sid > script_items.ga_len) {
-    return;
-  }
-  scriptitem_T *si = SCRIPT_ITEM(current_sctx.sc_sid);
-  if (si->sn_prof_on && si->sn_prl_idx >= 0) {
-    si->sn_prl_execed = true;
-  }
+  rs_script_line_exec();
 }
 
 /// Called when done with a function line.
 void script_line_end(void)
 {
-  if (current_sctx.sc_sid <= 0 || current_sctx.sc_sid > script_items.ga_len) {
-    return;
-  }
-  scriptitem_T *si = SCRIPT_ITEM(current_sctx.sc_sid);
-  if (si->sn_prof_on && si->sn_prl_idx >= 0
-      && si->sn_prl_idx < si->sn_prl_ga.ga_len) {
-    if (si->sn_prl_execed) {
-      sn_prl_T *pp = &PRL_ITEM(si, si->sn_prl_idx);
-      pp->snp_count++;
-      si->sn_prl_start = profile_end(si->sn_prl_start);
-      si->sn_prl_start = profile_sub_wait(si->sn_prl_wait, si->sn_prl_start);
-      pp->sn_prl_total = profile_add(pp->sn_prl_total, si->sn_prl_start);
-      pp->sn_prl_self = profile_self(pp->sn_prl_self, si->sn_prl_start,
-                                     si->sn_prl_children);
-    }
-    si->sn_prl_idx = -1;
-  }
+  rs_script_line_end();
 }
 
 /// globals for use in the startuptime related functionality (time_*).
@@ -931,4 +876,143 @@ int nvim_get_script_items_len(void)
 int nvim_script_item_get_pr_force(int sid)
 {
   return SCRIPT_ITEM(sid)->sn_pr_force ? 1 : 0;
+}
+
+// C accessors for Phase 4: scriptitem_T profiling fields
+
+int nvim_si_get_prof_on(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_prof_on ? 1 : 0;
+}
+
+int nvim_si_get_prl_idx(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_prl_idx;
+}
+
+void nvim_si_set_prl_idx(int sid, int val)
+{
+  SCRIPT_ITEM(sid)->sn_prl_idx = val;
+}
+
+int nvim_si_get_prl_execed(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_prl_execed;
+}
+
+void nvim_si_set_prl_execed(int sid, int val)
+{
+  SCRIPT_ITEM(sid)->sn_prl_execed = val;
+}
+
+proftime_T nvim_si_get_prl_start(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_prl_start;
+}
+
+void nvim_si_set_prl_start(int sid, proftime_T val)
+{
+  SCRIPT_ITEM(sid)->sn_prl_start = val;
+}
+
+proftime_T nvim_si_get_prl_children(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_prl_children;
+}
+
+void nvim_si_set_prl_children(int sid, proftime_T val)
+{
+  SCRIPT_ITEM(sid)->sn_prl_children = val;
+}
+
+proftime_T nvim_si_get_prl_wait(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_prl_wait;
+}
+
+void nvim_si_set_prl_wait(int sid, proftime_T val)
+{
+  SCRIPT_ITEM(sid)->sn_prl_wait = val;
+}
+
+int nvim_si_get_pr_nest(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_pr_nest;
+}
+
+void nvim_si_set_pr_nest(int sid, int val)
+{
+  SCRIPT_ITEM(sid)->sn_pr_nest = val;
+}
+
+proftime_T nvim_si_get_pr_child(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_pr_child;
+}
+
+void nvim_si_set_pr_child(int sid, proftime_T val)
+{
+  SCRIPT_ITEM(sid)->sn_pr_child = val;
+}
+
+proftime_T nvim_si_get_pr_children(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_pr_children;
+}
+
+void nvim_si_set_pr_children(int sid, proftime_T val)
+{
+  SCRIPT_ITEM(sid)->sn_pr_children = val;
+}
+
+// garray_T ops for sn_prl_ga
+int nvim_si_prl_ga_len(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_prl_ga.ga_len;
+}
+
+void nvim_si_prl_ga_set_len(int sid, int len)
+{
+  SCRIPT_ITEM(sid)->sn_prl_ga.ga_len = len;
+}
+
+int nvim_si_prl_ga_maxlen(int sid)
+{
+  return SCRIPT_ITEM(sid)->sn_prl_ga.ga_maxlen;
+}
+
+void nvim_si_prl_ga_grow(int sid, int n)
+{
+  ga_grow(&SCRIPT_ITEM(sid)->sn_prl_ga, n);
+}
+
+// PRL_ITEM field accessors
+int nvim_si_prl_item_get_count(int sid, int idx)
+{
+  return PRL_ITEM(SCRIPT_ITEM(sid), idx).snp_count;
+}
+
+void nvim_si_prl_item_set_count(int sid, int idx, int val)
+{
+  PRL_ITEM(SCRIPT_ITEM(sid), idx).snp_count = val;
+}
+
+proftime_T nvim_si_prl_item_get_total(int sid, int idx)
+{
+  return PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_total;
+}
+
+void nvim_si_prl_item_set_total(int sid, int idx, proftime_T val)
+{
+  PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_total = val;
+}
+
+proftime_T nvim_si_prl_item_get_self(int sid, int idx)
+{
+  return PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_self;
+}
+
+void nvim_si_prl_item_set_self(int sid, int idx, proftime_T val)
+{
+  PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_self = val;
 }
