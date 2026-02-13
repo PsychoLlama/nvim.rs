@@ -34,9 +34,12 @@
 
 extern HistoryType rs_hist_char2type(int c);
 extern int rs_get_hislen(void);
+extern HistoryType rs_get_histtype(const char *name, size_t len, int return_default);
 
 _Static_assert(sizeof(histentry_T) == 40,
                "sizeof(histentry_T) changed - update Rust HistoryEntry in cmdline/src/history.rs");
+_Static_assert(HIST_COUNT == 5, "HIST_COUNT changed - update Rust HIST_COUNT");
+_Static_assert(CMOD_KEEPPATTERNS == 0x1000, "CMOD_KEEPPATTERNS changed - update Rust constant");
 
 static histentry_T *(history[HIST_COUNT]) = { NULL, NULL, NULL, NULL, NULL };
 static int hisidx[HIST_COUNT] = { -1, -1, -1, -1, -1 };  ///< lastused entry
@@ -75,6 +78,130 @@ int *get_hisidx(int hist_type)
 int *get_hisnum(int hist_type)
 {
   return &hisnum[hist_type];
+}
+
+// =============================================================================
+// histentry_T field accessors for Rust
+// =============================================================================
+
+int nvim_cmdhist_he_get_hisnum(histentry_T *he)
+{
+  return he->hisnum;
+}
+
+void nvim_cmdhist_he_set_hisnum(histentry_T *he, int val)
+{
+  he->hisnum = val;
+}
+
+char *nvim_cmdhist_he_get_hisstr(histentry_T *he)
+{
+  return he->hisstr;
+}
+
+void nvim_cmdhist_he_set_hisstr(histentry_T *he, char *val)
+{
+  he->hisstr = val;
+}
+
+size_t nvim_cmdhist_he_get_hisstrlen(histentry_T *he)
+{
+  return he->hisstrlen;
+}
+
+void nvim_cmdhist_he_set_hisstrlen(histentry_T *he, size_t val)
+{
+  he->hisstrlen = val;
+}
+
+uint64_t nvim_cmdhist_he_get_timestamp(histentry_T *he)
+{
+  return he->timestamp;
+}
+
+void nvim_cmdhist_he_set_timestamp(histentry_T *he, uint64_t val)
+{
+  he->timestamp = val;
+}
+
+void *nvim_cmdhist_he_get_additional_data(histentry_T *he)
+{
+  return he->additional_data;
+}
+
+void nvim_cmdhist_he_set_additional_data(histentry_T *he, void *val)
+{
+  he->additional_data = (AdditionalData *)val;
+}
+
+void nvim_cmdhist_he_clear(histentry_T *he)
+{
+  CLEAR_POINTER(he);
+}
+
+void nvim_cmdhist_he_copy(histentry_T *dst, histentry_T *src)
+{
+  *dst = *src;
+}
+
+histentry_T *nvim_cmdhist_he_at(histentry_T *base, int idx)
+{
+  return &base[idx];
+}
+
+// -- Memory wrappers --
+
+void nvim_cmdhist_xfree(void *ptr)
+{
+  xfree(ptr);
+}
+
+void *nvim_cmdhist_xmalloc(size_t size)
+{
+  return xmalloc(size);
+}
+
+char *nvim_cmdhist_xstrnsave(const char *s, size_t len)
+{
+  return xstrnsave(s, len);
+}
+
+// -- String wrappers --
+
+int nvim_cmdhist_strnicmp(const char *s1, const char *s2, size_t n)
+{
+  return STRNICMP(s1, s2, n);
+}
+
+char *nvim_cmdhist_vim_strchr(const char *s, int c)
+{
+  return vim_strchr(s, c);
+}
+
+// -- Global accessors --
+
+int nvim_cmdhist_get_cmdline_firstc(void)
+{
+  return get_cmdline_firstc();
+}
+
+// -- Array ops --
+
+void nvim_cmdhist_memset_entries(histentry_T *dst, int count)
+{
+  memset(dst, 0, (size_t)count * sizeof(histentry_T));
+}
+
+void nvim_cmdhist_memcpy_entries(histentry_T *dst, histentry_T *src, int count)
+{
+  memcpy(dst, src, (size_t)count * sizeof(histentry_T));
+}
+
+// -- Sizeof --
+
+size_t nvim_cmdhist_sizeof_histentry(void)
+{
+  return sizeof(histentry_T);
 }
 
 /// Translate a history character to the associated type number
@@ -251,36 +378,10 @@ static int in_history(int type, const char *str, int move_to_front, int sep)
 }
 
 /// Convert history name to its HIST_ equivalent
-///
-/// Names are taken from the table above. When `name` is empty returns currently
-/// active history or HIST_DEFAULT, depending on `return_default` argument.
-///
-/// @param[in]  name            Converted name.
-/// @param[in]  len             Name length.
-/// @param[in]  return_default  Determines whether HIST_DEFAULT should be
-///                             returned or value based on `ccline.cmdfirstc`.
-///
-/// @return Any value from HistoryType enum, including HIST_INVALID. May not
-///         return HIST_DEFAULT unless return_default is true.
 static HistoryType get_histtype(const char *const name, const size_t len, const bool return_default)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // No argument: use current history.
-  if (len == 0) {
-    return return_default ? HIST_DEFAULT : hist_char2type(get_cmdline_firstc());
-  }
-
-  for (HistoryType i = 0; history_names[i] != NULL; i++) {
-    if (STRNICMP(name, history_names[i], len) == 0) {
-      return i;
-    }
-  }
-
-  if (vim_strchr(":=@>?/", (uint8_t)name[0]) != NULL && len == 1) {
-    return hist_char2type(name[0]);
-  }
-
-  return HIST_INVALID;
+  return rs_get_histtype(name, len, return_default);
 }
 
 static int last_maptick = -1;           // last seen maptick
