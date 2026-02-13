@@ -52,14 +52,14 @@ extern "C" {
     fn nvim_curbuf_get_b_p_com() -> *mut c_char;
 
     // String functions
-    fn nvim_copy_option_part(
+    fn nvim_change_copy_option_part(
         src: *mut *mut c_char,
         dest: *mut c_char,
         maxlen: c_int,
         sep: *const c_char,
     ) -> usize;
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
-    fn nvim_ascii_iswhite(c: c_char) -> bool;
+    fn nvim_change_ascii_iswhite(c: c_int) -> bool;
 }
 
 // =============================================================================
@@ -95,7 +95,7 @@ fn get_leader_len_impl(
         let mut i = 0i32;
 
         // leading white space is ignored
-        while nvim_ascii_iswhite(*line.offset(i as isize)) {
+        while nvim_change_ascii_iswhite(*line.offset(i as isize) as c_int) {
             i += 1;
         }
 
@@ -111,7 +111,7 @@ fn get_leader_len_impl(
                     *flags = list; // remember where flags started
                 }
                 let prev_list = list;
-                nvim_copy_option_part(
+                nvim_change_copy_option_part(
                     &mut list,
                     part_buf.as_mut_ptr(),
                     COM_MAX_LEN as c_int,
@@ -147,11 +147,12 @@ fn get_leader_len_impl(
 
                 // Line contents and string must match.
                 // When string starts with white space, must have some white space.
-                if nvim_ascii_iswhite(*string) {
-                    if i == 0 || !nvim_ascii_iswhite(*line.offset((i - 1) as isize)) {
+                if nvim_change_ascii_iswhite(*string as c_int) {
+                    if i == 0 || !nvim_change_ascii_iswhite(*line.offset((i - 1) as isize) as c_int)
+                    {
                         continue; // missing white space
                     }
-                    while nvim_ascii_iswhite(*string) {
+                    while nvim_change_ascii_iswhite(*string as c_int) {
                         string = string.add(1);
                     }
                 }
@@ -167,7 +168,7 @@ fn get_leader_len_impl(
 
                 // When 'b' flag used, there must be white space or end-of-line after the string.
                 if !nvim_vim_strchr(part_buf.as_ptr(), COM_BLANK as c_int).is_null()
-                    && !nvim_ascii_iswhite(*line.offset((i + j as i32) as isize))
+                    && !nvim_change_ascii_iswhite(*line.offset((i + j as i32) as isize) as c_int)
                     && *line.offset((i + j as i32) as isize) != 0
                 {
                     continue;
@@ -211,7 +212,7 @@ fn get_leader_len_impl(
             result = i;
 
             // Include any trailing white space.
-            while nvim_ascii_iswhite(*line.offset(i as isize)) {
+            while nvim_change_ascii_iswhite(*line.offset(i as isize) as c_int) {
                 i += 1;
             }
 
@@ -274,7 +275,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
             while *list != 0 {
                 let flags_save = list;
 
-                nvim_copy_option_part(
+                nvim_change_copy_option_part(
                     &mut list,
                     part_buf.as_mut_ptr(),
                     COM_MAX_LEN as c_int,
@@ -290,11 +291,12 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
                 let _com_leader = string;
 
                 // Line contents and string must match.
-                if nvim_ascii_iswhite(*string) {
-                    if i == 0 || !nvim_ascii_iswhite(*line.offset((i - 1) as isize)) {
+                if nvim_change_ascii_iswhite(*string as c_int) {
+                    if i == 0 || !nvim_change_ascii_iswhite(*line.offset((i - 1) as isize) as c_int)
+                    {
                         continue;
                     }
-                    while nvim_ascii_iswhite(*string) {
+                    while nvim_change_ascii_iswhite(*string as c_int) {
                         string = string.add(1);
                     }
                 }
@@ -310,7 +312,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
 
                 // When 'b' flag used, there must be white space or end-of-line after the string.
                 if !nvim_vim_strchr(part_buf.as_ptr(), COM_BLANK as c_int).is_null()
-                    && !nvim_ascii_iswhite(*line.offset((i + j as i32) as isize))
+                    && !nvim_change_ascii_iswhite(*line.offset((i + j as i32) as isize) as c_int)
                     && *line.offset((i + j as i32) as isize) != 0
                 {
                     continue;
@@ -320,7 +322,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
                 // everything before the current position in the line is whitespace.
                 if !nvim_vim_strchr(part_buf.as_ptr(), COM_MIDDLE as c_int).is_null() {
                     let mut k = 0;
-                    while k <= i && nvim_ascii_iswhite(*line.offset(k as isize)) {
+                    while k <= i && nvim_change_ascii_iswhite(*line.offset(k as isize) as c_int) {
                         k += 1;
                     }
                     if k < i {
@@ -354,7 +356,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
                 let mut com_leader = nvim_vim_strchr(part_buf.as_ptr(), b':' as c_int);
                 if !com_leader.is_null() {
                     com_leader = com_leader.add(1);
-                    while nvim_ascii_iswhite(*com_leader) {
+                    while nvim_change_ascii_iswhite(*com_leader as c_int) {
                         com_leader = com_leader.add(1);
                     }
                     let len1 = libc::strlen(com_leader) as i32;
@@ -362,7 +364,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
                     let mut list = nvim_curbuf_get_b_p_com();
                     while *list != 0 {
                         let flags_save = list;
-                        nvim_copy_option_part(
+                        nvim_change_copy_option_part(
                             &mut list,
                             part_buf2.as_mut_ptr(),
                             COM_MAX_LEN as c_int,
@@ -376,7 +378,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
                             continue;
                         }
                         string = string.add(1);
-                        while nvim_ascii_iswhite(*string) {
+                        while nvim_change_ascii_iswhite(*string as c_int) {
                             string = string.add(1);
                         }
                         let len2 = libc::strlen(string) as i32;

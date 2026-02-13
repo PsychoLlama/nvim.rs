@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn test_constants() {
-        assert_eq!(UPD_VALID, 2);
+        assert_eq!(UPD_VALID, 10);
         assert_eq!(KMT_META_LINES, 1);
     }
 }

@@ -58,6 +58,13 @@
 
 #include "change.c.generated.h"
 
+// Rust FFI declarations
+extern bool rs_file_ff_differs(buf_T *buf, bool ignore_empty);
+extern void rs_save_file_ff(buf_T *buf);
+extern void rs_unchanged(buf_T *buf, bool ff, bool always_inc_changedtick);
+extern int rs_get_leader_len(const char *line, char **flags, bool backward, bool include_space);
+extern int rs_get_last_leader_offset(const char *line, char **flags);
+
 /// If the file is readonly, give a warning message with the first change.
 /// Don't do this for autocommands.
 /// Doesn't use emsg(), because it flushes the macro buffer.
@@ -232,7 +239,7 @@ void changed_lines_invalidate_buf(buf_T *buf, linenr_T lnum, colnr_T col, linenr
 /// Common code for when a change was made.
 /// See changed_lines() for the arguments.
 /// Careful: may trigger autocommands that reload the buffer.
-static void changed_common(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume, linenr_T xtra)
+void changed_common(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume, linenr_T xtra)
 {
   // mark the buffer as modified
   changed(buf);
@@ -603,37 +610,14 @@ void changed_lines(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume, linen
 /// when the changed flag was off.
 void unchanged(buf_T *buf, bool ff, bool always_inc_changedtick)
 {
-  if (buf->b_changed || (ff && file_ff_differs(buf, false))) {
-    buf->b_changed = false;
-    buf->b_changed_invalid = true;
-    ml_setflags(buf);
-    if (ff) {
-      save_file_ff(buf);
-    }
-    redraw_buf_status_later(buf);
-    redraw_tabline = true;
-    need_maketitle = true;  // set window title later
-    buf_inc_changedtick(buf);
-  } else if (always_inc_changedtick) {
-    buf_inc_changedtick(buf);
-  }
+  rs_unchanged(buf, ff, always_inc_changedtick);
 }
 
 /// Save the current values of 'fileformat' and 'fileencoding', so that we know
 /// the file must be considered changed when the value is different.
 void save_file_ff(buf_T *buf)
 {
-  buf->b_start_ffc = (unsigned char)(*buf->b_p_ff);
-  buf->b_start_eof = buf->b_p_eof;
-  buf->b_start_eol = buf->b_p_eol;
-  buf->b_start_bomb = buf->b_p_bomb;
-
-  // Only use free/alloc when necessary, they take time.
-  if (buf->b_start_fenc == NULL
-      || strcmp(buf->b_start_fenc, buf->b_p_fenc) != 0) {
-    xfree(buf->b_start_fenc);
-    buf->b_start_fenc = xstrdup(buf->b_p_fenc);
-  }
+  rs_save_file_ff(buf);
 }
 
 /// Return true if 'fileformat' and/or 'fileencoding' has a different value
@@ -646,30 +630,7 @@ void save_file_ff(buf_T *buf)
 bool file_ff_differs(buf_T *buf, bool ignore_empty)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // In a buffer that was never loaded the options are not valid.
-  if (buf->b_flags & BF_NEVERLOADED) {
-    return false;
-  }
-  if (ignore_empty
-      && (buf->b_flags & BF_NEW)
-      && buf->b_ml.ml_line_count == 1
-      && *ml_get_buf(buf, 1) == NUL) {
-    return false;
-  }
-  if (buf->b_start_ffc != *buf->b_p_ff) {
-    return true;
-  }
-  if ((buf->b_p_bin || !buf->b_p_fixeol)
-      && (buf->b_start_eof != buf->b_p_eof || buf->b_start_eol != buf->b_p_eol)) {
-    return true;
-  }
-  if (!buf->b_p_bin && buf->b_start_bomb != buf->b_p_bomb) {
-    return true;
-  }
-  if (buf->b_start_fenc == NULL) {
-    return *buf->b_p_fenc != NUL;
-  }
-  return strcmp(buf->b_start_fenc, buf->b_p_fenc) != 0;
+  return rs_file_ff_differs(buf, ignore_empty);
 }
 
 /// Insert string "p" at the cursor position.  Stops at a NUL byte.
@@ -1916,137 +1877,7 @@ void del_lines(linenr_T nlines, bool undo)
 /// If "include_space" is set, include trailing whitespace while calculating the length.
 int get_leader_len(char *line, char **flags, bool backward, bool include_space)
 {
-  int j;
-  bool got_com = false;
-  char part_buf[COM_MAX_LEN];         // buffer for one option part
-  char *string;                  // pointer to comment string
-  int middle_match_len = 0;
-  char *saved_flags = NULL;
-
-  int result = 0;
-  int i = 0;
-  while (ascii_iswhite(line[i])) {  // leading white space is ignored
-    i++;
-  }
-
-  // Repeat to match several nested comment strings.
-  while (line[i] != NUL) {
-    // scan through the 'comments' option for a match
-    bool found_one = false;
-    for (char *list = curbuf->b_p_com; *list;) {
-      // Get one option part into part_buf[].  Advance "list" to next
-      // one.  Put "string" at start of string.
-      if (!got_com && flags != NULL) {
-        *flags = list;              // remember where flags started
-      }
-      char *prev_list = list;
-      copy_option_part(&list, part_buf, COM_MAX_LEN, ",");
-      string = vim_strchr(part_buf, ':');
-      if (string == NULL) {         // missing ':', ignore this part
-        continue;
-      }
-      *string++ = NUL;              // isolate flags from string
-
-      // If we found a middle match previously, use that match when this
-      // is not a middle or end.
-      if (middle_match_len != 0
-          && vim_strchr(part_buf, COM_MIDDLE) == NULL
-          && vim_strchr(part_buf, COM_END) == NULL) {
-        break;
-      }
-
-      // When we already found a nested comment, only accept further
-      // nested comments.
-      if (got_com && vim_strchr(part_buf, COM_NEST) == NULL) {
-        continue;
-      }
-
-      // When 'O' flag present and using "O" command skip this one.
-      if (backward && vim_strchr(part_buf, COM_NOBACK) != NULL) {
-        continue;
-      }
-
-      // Line contents and string must match.
-      // When string starts with white space, must have some white space
-      // (but the amount does not need to match, there might be a mix of
-      // TABs and spaces).
-      if (ascii_iswhite(string[0])) {
-        if (i == 0 || !ascii_iswhite(line[i - 1])) {
-          continue;            // missing white space
-        }
-        while (ascii_iswhite(string[0])) {
-          string++;
-        }
-      }
-      for (j = 0; string[j] != NUL && string[j] == line[i + j]; j++) {}
-      if (string[j] != NUL) {
-        continue;          // string doesn't match
-      }
-      // When 'b' flag used, there must be white space or an
-      // end-of-line after the string in the line.
-      if (vim_strchr(part_buf, COM_BLANK) != NULL
-          && !ascii_iswhite(line[i + j]) && line[i + j] != NUL) {
-        continue;
-      }
-
-      // We have found a match, stop searching unless this is a middle
-      // comment. The middle comment can be a substring of the end
-      // comment in which case it's better to return the length of the
-      // end comment and its flags.  Thus we keep searching with middle
-      // and end matches and use an end match if it matches better.
-      if (vim_strchr(part_buf, COM_MIDDLE) != NULL) {
-        if (middle_match_len == 0) {
-          middle_match_len = j;
-          saved_flags = prev_list;
-        }
-        continue;
-      }
-      if (middle_match_len != 0 && j > middle_match_len) {
-        // Use this match instead of the middle match, since it's a
-        // longer thus better match.
-        middle_match_len = 0;
-      }
-
-      if (middle_match_len == 0) {
-        i += j;
-      }
-      found_one = true;
-      break;
-    }
-
-    if (middle_match_len != 0) {
-      // Use the previously found middle match after failing to find a
-      // match with an end.
-      if (!got_com && flags != NULL) {
-        *flags = saved_flags;
-      }
-      i += middle_match_len;
-      found_one = true;
-    }
-
-    // No match found, stop scanning.
-    if (!found_one) {
-      break;
-    }
-
-    result = i;
-
-    // Include any trailing white space.
-    while (ascii_iswhite(line[i])) {
-      i++;
-    }
-
-    if (include_space) {
-      result = i;
-    }
-
-    // If this comment doesn't nest, stop here.
-    got_com = true;
-    if (vim_strchr(part_buf, COM_NEST) == NULL) {
-      break;
-    }
-  }
-  return result;
+  return rs_get_leader_len(line, flags, backward, include_space);
 }
 
 /// Return the offset at which the last comment in line starts. If there is no
@@ -2056,129 +1887,5 @@ int get_leader_len(char *line, char **flags, bool backward, bool include_space)
 /// recognized comment leader.
 int get_last_leader_offset(char *line, char **flags)
 {
-  int result = -1;
-  int j;
-  int lower_check_bound = 0;
-  char *com_leader;
-  char *com_flags;
-  char part_buf[COM_MAX_LEN];         // buffer for one option part
-
-  // Repeat to match several nested comment strings.
-  int i = (int)strlen(line);
-  while (--i >= lower_check_bound) {
-    // scan through the 'comments' option for a match
-    bool found_one = false;
-    for (char *list = curbuf->b_p_com; *list;) {
-      char *flags_save = list;
-
-      // Get one option part into part_buf[].  Advance list to next one.
-      // put string at start of string.
-      copy_option_part(&list, part_buf, COM_MAX_LEN, ",");
-      char *string = vim_strchr(part_buf, ':');
-      if (string == NULL) {  // If everything is fine, this cannot actually
-                             // happen.
-        continue;
-      }
-      *string++ = NUL;          // Isolate flags from string.
-      com_leader = string;
-
-      // Line contents and string must match.
-      // When string starts with white space, must have some white space
-      // (but the amount does not need to match, there might be a mix of
-      // TABs and spaces).
-      if (ascii_iswhite(string[0])) {
-        if (i == 0 || !ascii_iswhite(line[i - 1])) {
-          continue;
-        }
-        while (ascii_iswhite(*string)) {
-          string++;
-        }
-      }
-      for (j = 0; string[j] != NUL && string[j] == line[i + j]; j++) {
-        // do nothing
-      }
-      if (string[j] != NUL) {
-        continue;
-      }
-
-      // When 'b' flag used, there must be white space or an
-      // end-of-line after the string in the line.
-      if (vim_strchr(part_buf, COM_BLANK) != NULL
-          && !ascii_iswhite(line[i + j]) && line[i + j] != NUL) {
-        continue;
-      }
-
-      if (vim_strchr(part_buf, COM_MIDDLE) != NULL) {
-        // For a middlepart comment, only consider it to match if
-        // everything before the current position in the line is
-        // whitespace.  Otherwise we would think we are inside a
-        // comment if the middle part appears somewhere in the middle
-        // of the line.  E.g. for C the "*" appears often.
-        for (j = 0; j <= i && ascii_iswhite(line[j]); j++) {}
-        if (j < i) {
-          continue;
-        }
-      }
-
-      // We have found a match, stop searching.
-      found_one = true;
-
-      if (flags) {
-        *flags = flags_save;
-      }
-      com_flags = flags_save;
-
-      break;
-    }
-
-    if (found_one) {
-      char part_buf2[COM_MAX_LEN];            // buffer for one option part
-
-      result = i;
-      // If this comment nests, continue searching.
-      if (vim_strchr(part_buf, COM_NEST) != NULL) {
-        continue;
-      }
-
-      lower_check_bound = i;
-
-      // Let's verify whether the comment leader found is a substring
-      // of other comment leaders. If it is, let's adjust the
-      // lower_check_bound so that we make sure that we have determined
-      // the comment leader correctly.
-
-      while (ascii_iswhite(*com_leader)) {
-        com_leader++;
-      }
-      int len1 = (int)strlen(com_leader);
-
-      for (char *list = curbuf->b_p_com; *list;) {
-        char *flags_save = list;
-
-        copy_option_part(&list, part_buf2, COM_MAX_LEN, ",");
-        if (flags_save == com_flags) {
-          continue;
-        }
-        char *string = vim_strchr(part_buf2, ':');
-        string++;
-        while (ascii_iswhite(*string)) {
-          string++;
-        }
-        int len2 = (int)strlen(string);
-        if (len2 == 0) {
-          continue;
-        }
-
-        // Now we have to verify whether string ends with a substring
-        // beginning the com_leader.
-        for (int off = (len2 > i ? i : len2); off > 0 && off + len1 > len2;) {
-          off--;
-          if (!strncmp(string + off, com_leader, (size_t)(len2 - off))) {
-            lower_check_bound = MIN(lower_check_bound, i - off);
-          }
-        }
-      }
-    }
-  }
-  return result;
+  return rs_get_last_leader_offset(line, flags);
 }

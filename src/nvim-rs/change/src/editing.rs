@@ -32,12 +32,12 @@ extern "C" {
     fn nvim_xmalloc(size: usize) -> *mut c_char;
 
     // State checks
-    fn nvim_virtual_active(win: WinHandle) -> bool;
-    fn nvim_coladvance_force(vcol: ColnrT);
+    fn nvim_change_virtual_active(win: WinHandle) -> bool;
+    fn nvim_coladvance_force(vcol: ColnrT) -> c_int;
     fn nvim_getviscol() -> ColnrT;
     fn nvim_get_state() -> c_int;
     fn nvim_get_restart_edit() -> c_int;
-    fn nvim_get_ve_flags(win: WinHandle) -> c_int;
+    fn nvim_change_get_ve_flags(win: WinHandle) -> c_int;
 
     // Multi-byte functions
     fn nvim_mb_adjust_cursor();
@@ -186,7 +186,7 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
         let curwin = nvim_get_curwin();
 
         // Break tabs if needed.
-        if nvim_virtual_active(curwin) && nvim_win_get_cursor_coladd(curwin) > 0 {
+        if nvim_change_virtual_active(curwin) && nvim_win_get_cursor_coladd(curwin) > 0 {
             nvim_coladvance_force(nvim_getviscol());
         }
 
@@ -302,7 +302,7 @@ fn ins_str_impl(s: *const c_char, slen: usize) {
         let curwin = nvim_get_curwin();
         let lnum = nvim_win_get_cursor_lnum(curwin);
 
-        if nvim_virtual_active(curwin) && nvim_win_get_cursor_coladd(curwin) > 0 {
+        if nvim_change_virtual_active(curwin) && nvim_win_get_cursor_coladd(curwin) > 0 {
             nvim_coladvance_force(nvim_getviscol());
         }
 
@@ -448,7 +448,7 @@ fn del_bytes_impl(count: ColnrT, fixpos_arg: bool, use_delcombine: bool) -> c_in
             if col > 0
                 && fixpos
                 && nvim_get_restart_edit() == 0
-                && (nvim_get_ve_flags(curwin) & K_OPT_VE_FLAG_ONEMORE) == 0
+                && (nvim_change_get_ve_flags(curwin) & K_OPT_VE_FLAG_ONEMORE) == 0
             {
                 let mut cur_col = nvim_win_get_cursor_col(curwin) - 1;
                 nvim_win_set_cursor_coladd(curwin, 0);

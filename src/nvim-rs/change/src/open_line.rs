@@ -106,7 +106,7 @@ extern "C" {
     fn nvim_set_inhibit_delete_count(val: c_int);
 
     // Cursor/window accessors
-    fn nvim_get_curwin_cursor() -> PosT;
+    fn nvim_change_get_curwin_cursor() -> PosT;
     fn nvim_set_curwin_cursor(pos: PosT);
     fn nvim_get_curwin_cursor_lnum() -> LinenrT;
     fn nvim_set_curwin_cursor_lnum(lnum: LinenrT);
@@ -129,7 +129,7 @@ extern "C" {
     fn nvim_curbuf_get_b_p_inde_ptr() -> *const c_char;
     fn nvim_curbuf_get_b_p_com() -> *mut c_char;
     fn nvim_curbuf_get_b_ml_ml_line_count() -> LinenrT;
-    fn nvim_bt_prompt() -> bool;
+    fn nvim_change_bt_prompt() -> bool;
     fn nvim_get_curbuf_b_prompt_start_mark_lnum() -> LinenrT;
     fn nvim_get_cmdmod_cmod_flags() -> c_int;
     fn nvim_set_cmdmod_cmod_flags(val: c_int);
@@ -153,7 +153,7 @@ extern "C" {
     fn nvim_strcat(dest: *mut c_char, src: *const c_char) -> *mut c_char;
     fn nvim_strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
     fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
-    fn nvim_ascii_iswhite(c: c_char) -> bool;
+    fn nvim_change_ascii_iswhite(c: c_int) -> bool;
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn nvim_strmove(dest: *mut c_char, src: *const c_char);
     fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
@@ -164,7 +164,7 @@ extern "C" {
     fn nvim_get_indent() -> c_int;
     fn nvim_set_indent(size: c_int, flags: c_int) -> bool;
     fn nvim_copy_indent(size: c_int, src: *const c_char) -> bool;
-    fn nvim_get_sw_value() -> c_int;
+    fn nvim_change_get_sw_value() -> c_int;
     fn nvim_getwhitecols_curline() -> c_int;
     fn nvim_linewhite(lnum: LinenrT) -> bool;
     fn nvim_truncate_spaces(line: *mut c_char, col: usize);
@@ -177,7 +177,7 @@ extern "C" {
         include_space: bool,
     ) -> c_int;
     fn nvim_check_linecomment(line: *const c_char) -> ColnrT;
-    fn nvim_copy_option_part(
+    fn nvim_change_copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,
         maxlen: c_int,
@@ -186,7 +186,7 @@ extern "C" {
 
     // Format option functions
     fn nvim_has_format_option(opt: c_int) -> bool;
-    fn nvim_in_cinkeys(keytyped: c_int, when: c_char, line_is_white: bool) -> bool;
+    fn nvim_in_cinkeys(keytyped: c_int, when: c_int, line_is_white: bool) -> bool;
     fn nvim_cin_is_cinword(line: *const c_char) -> bool;
 
     // Findmatch function
@@ -239,7 +239,14 @@ extern "C" {
     );
 
     // Changed notification functions
-    fn nvim_changed_lines(lnum: LinenrT, col: ColnrT, lnume: LinenrT, extra: LinenrT, last_u: bool);
+    fn nvim_changed_lines(
+        buf: crate::BufHandle,
+        lnum: LinenrT,
+        col: ColnrT,
+        lnume: LinenrT,
+        extra: LinenrT,
+        last_u: bool,
+    );
     fn nvim_changed_bytes(lnum: LinenrT, col: ColnrT);
 
     // Indentation functions
@@ -456,7 +463,7 @@ fn open_line_impl(
                 && *saved_line != NUL
                 && (p_extra.is_null() || first_char != b'{' as c_int)
             {
-                old_cursor = nvim_get_curwin_cursor();
+                old_cursor = nvim_change_get_curwin_cursor();
                 let ptr = saved_line;
 
                 if openline_flags.contains(OpenlineFlags::DO_COM) {
@@ -488,7 +495,7 @@ fn open_line_impl(
                     if lead_len == 0 {
                         // Not a comment line - check for smart indent triggers
                         p = ptr.add(nvim_strlen(ptr) - 1);
-                        while p > ptr && nvim_ascii_iswhite(*p) {
+                        while p > ptr && nvim_change_ascii_iswhite(*p as c_int) {
                             p = p.sub(1);
                         }
                         let last_char = *p;
@@ -497,14 +504,14 @@ fn open_line_impl(
                             if p > ptr {
                                 p = p.sub(1);
                             }
-                            while p > ptr && nvim_ascii_iswhite(*p) {
+                            while p > ptr && nvim_change_ascii_iswhite(*p as c_int) {
                                 p = p.sub(1);
                             }
                         }
 
                         if *p == b')' as c_char {
                             let col_offset = p.offset_from(ptr) as ColnrT;
-                            let mut cursor = nvim_get_curwin_cursor();
+                            let mut cursor = nvim_change_get_curwin_cursor();
                             cursor.col = col_offset;
                             nvim_set_curwin_cursor(cursor);
                             let pos = nvim_findmatch(std::ptr::null_mut(), b'(' as c_char);
@@ -573,7 +580,7 @@ fn open_line_impl(
                 } else {
                     KEY_OPEN_BACK
                 },
-                b' ' as c_char,
+                b' ' as c_int,
                 nvim_linewhite(nvim_get_curwin_cursor_lnum()),
             )
             && !openline_flags.contains(OpenlineFlags::FORCE_INDENT);
@@ -637,7 +644,7 @@ fn open_line_impl(
                             break;
                         }
                         // Find start of middle part
-                        nvim_copy_option_part(
+                        nvim_change_copy_option_part(
                             &mut p,
                             lead_middle.as_mut_ptr(),
                             COM_MAX_LEN as c_int,
@@ -653,7 +660,7 @@ fn open_line_impl(
                         }
                         p = p.add(1);
                     }
-                    nvim_copy_option_part(
+                    nvim_change_copy_option_part(
                         &mut p,
                         lead_middle.as_mut_ptr(),
                         COM_MAX_LEN as c_int,
@@ -666,7 +673,7 @@ fn open_line_impl(
                         }
                         p = p.add(1);
                     }
-                    let n = nvim_copy_option_part(
+                    let n = nvim_change_copy_option_part(
                         &mut p,
                         lead_end.as_mut_ptr(),
                         COM_MAX_LEN as c_int,
@@ -699,10 +706,11 @@ fn open_line_impl(
 
                         // Add extra space if needed
                         let col = nvim_get_curwin_cursor_col();
-                        if !nvim_ascii_iswhite(*saved_line.add((lead_len - 1) as usize))
-                            && ((!p_extra.is_null() && col == lead_len)
-                                || (p_extra.is_null() && *saved_line.add(lead_len as usize) == NUL)
-                                || require_blank)
+                        if !nvim_change_ascii_iswhite(
+                            *saved_line.add((lead_len - 1) as usize) as c_int
+                        ) && ((!p_extra.is_null() && col == lead_len)
+                            || (p_extra.is_null() && *saved_line.add(lead_len as usize) == NUL)
+                            || require_blank)
                         {
                             extra_space = true;
                         }
@@ -778,7 +786,7 @@ fn open_line_impl(
 
                 // Replace non-whitespace in comment_start region with spaces
                 for li in 0..comment_start {
-                    if !nvim_ascii_iswhite(*leader.add(li as usize)) {
+                    if !nvim_change_ascii_iswhite(*leader.add(li as usize) as c_int) {
                         *leader.add(li as usize) = b' ' as c_char;
                     }
                 }
@@ -817,7 +825,7 @@ fn open_line_impl(
                     if c == COM_RIGHT as c_int {
                         // Right adjusted leader
                         p = leader.add((lead_len - 1) as usize);
-                        while p > leader && nvim_ascii_iswhite(*p) {
+                        while p > leader && nvim_change_ascii_iswhite(*p as c_int) {
                             p = p.sub(1);
                         }
                         p = p.add(1);
@@ -864,7 +872,7 @@ fn open_line_impl(
                                 );
                                 lead_len -= head_off;
                                 *p = b' ' as c_char;
-                            } else if !nvim_ascii_iswhite(*p) {
+                            } else if !nvim_change_ascii_iswhite(*p as c_int) {
                                 *p = b' ' as c_char;
                             }
                         }
@@ -893,7 +901,7 @@ fn open_line_impl(
                         // Replace remaining non-white chars with spaces
                         p = p.add(lead_repl_len as usize);
                         while p < leader.add(lead_len as usize) {
-                            if !nvim_ascii_iswhite(*p) {
+                            if !nvim_change_ascii_iswhite(*p as c_int) {
                                 let l = nvim_utfc_ptr2len(p);
                                 if l > 1 {
                                     if nvim_ptr2cells(p) > 1 {
@@ -947,7 +955,9 @@ fn open_line_impl(
                     }
 
                     // If leader ends in whitespace, don't add extra space
-                    if lead_len > 0 && nvim_ascii_iswhite(*leader.add((lead_len - 1) as usize)) {
+                    if lead_len > 0
+                        && nvim_change_ascii_iswhite(*leader.add((lead_len - 1) as usize) as c_int)
+                    {
                         extra_space = false;
                     }
                     *leader.add(lead_len as usize) = NUL;
@@ -963,7 +973,7 @@ fn open_line_impl(
 
                 // Remove indent in comment leader if new indent will be set
                 if newindent != 0 || nvim_get_did_si() {
-                    while lead_len > 0 && nvim_ascii_iswhite(*leader) {
+                    while lead_len > 0 && nvim_change_ascii_iswhite(*leader as c_int) {
                         lead_len -= 1;
                         newcol -= 1;
                         leader = leader.add(1);
@@ -977,9 +987,9 @@ fn open_line_impl(
                     && *comment_end.add(1) == b'/' as c_char
                     && (nvim_curbuf_get_b_p_ai() || do_si)
                 {
-                    old_cursor = nvim_get_curwin_cursor();
+                    old_cursor = nvim_change_get_curwin_cursor();
                     let col_offset = comment_end.offset_from(saved_line) as ColnrT;
-                    let mut cursor = nvim_get_curwin_cursor();
+                    let mut cursor = nvim_change_get_curwin_cursor();
                     cursor.col = col_offset;
                     nvim_set_curwin_cursor(cursor);
                     let pos = nvim_findmatch(std::ptr::null_mut(), NUL as c_char);
@@ -1042,14 +1052,15 @@ fn open_line_impl(
         let splice_pending = nvim_get_curbuf_splice_pending();
         nvim_set_curbuf_splice_pending(splice_pending + 1);
 
-        old_cursor = nvim_get_curwin_cursor();
+        old_cursor = nvim_change_get_curwin_cursor();
         let old_cmod_flags = nvim_get_cmdmod_cmod_flags();
         let mut prompt_moved: *mut c_char = std::ptr::null_mut();
 
         if dir == BACKWARD {
             // Handle prompt buffer case
             let cursor_lnum = nvim_get_curwin_cursor_lnum();
-            if nvim_bt_prompt() && cursor_lnum == nvim_get_curbuf_b_prompt_start_mark_lnum() {
+            if nvim_change_bt_prompt() && cursor_lnum == nvim_get_curbuf_b_prompt_start_mark_lnum()
+            {
                 let prompt_line = nvim_ml_get(cursor_lnum);
                 let prompt = nvim_prompt_text();
                 let prompt_len = nvim_strlen(prompt);
@@ -1105,7 +1116,7 @@ fn open_line_impl(
         if newindent != 0 || nvim_get_did_si() {
             nvim_set_curwin_cursor_lnum(nvim_get_curwin_cursor_lnum() + 1);
             if nvim_get_did_si() {
-                let sw = nvim_get_sw_value();
+                let sw = nvim_change_get_sw_value();
                 if nvim_p_sr() {
                     newindent -= newindent % sw;
                 }
@@ -1194,7 +1205,14 @@ fn open_line_impl(
                         KEXTMARK_UNDO,
                     );
 
-                    nvim_changed_lines(cursor_lnum, col, cursor_lnum + 1, 1, true);
+                    nvim_changed_lines(
+                        nvim_get_curbuf(),
+                        cursor_lnum,
+                        col,
+                        cursor_lnum + 1,
+                        1,
+                        true,
+                    );
                     did_append = false;
 
                     // Move marks after line break
@@ -1231,7 +1249,7 @@ fn open_line_impl(
                 1 + extra,
                 KEXTMARK_UNDO,
             );
-            nvim_changed_lines(cursor_lnum, 0, cursor_lnum, 1, true);
+            nvim_changed_lines(nvim_get_curbuf(), cursor_lnum, 0, cursor_lnum, 1, true);
         }
 
         nvim_set_curbuf_splice_pending(nvim_get_curbuf_splice_pending() - 1);

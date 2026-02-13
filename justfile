@@ -75,6 +75,7 @@ rust-test:
       -p nvim-ascii \
       -p nvim-autocmd \
       -p nvim-bufwrite \
+      -p nvim-change \
       -p nvim-charset \
       -p nvim-clipboard \
       -p nvim-cmdexpand \
