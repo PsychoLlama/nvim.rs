@@ -20,6 +20,16 @@ extern "C" {
 
     // Extmark deletion
     fn nvim_extmark_del_id(buf: SignBufHandle, ns: u32, id: u32) -> bool;
+
+    // Composite sign deletion (marktree iteration stays in C)
+    fn nvim_sign_delete_signs_impl(buf: SignBufHandle, ns: i64, id: c_int, atlnum: LinenrT)
+        -> c_int;
+
+    // Namespace filtering
+    fn rs_group_get_ns(
+        group: *const c_char,
+        ns_lookup: extern "C" fn(*const c_char) -> c_int,
+    ) -> i64;
 }
 
 // =============================================================================
@@ -188,6 +198,39 @@ pub extern "C" fn rs_sign_remove_params_ns(
     atlnum: LinenrT,
 ) -> SignRemoveParams {
     SignRemoveParams { ns, id, atlnum }
+}
+
+// =============================================================================
+// Core Sign Deletion
+// =============================================================================
+
+/// Callback used by rs_group_get_ns for namespace lookup.
+extern "C" fn namespace_lookup_fn(name: *const c_char) -> c_int {
+    unsafe { nvim_namespace_lookup(name) }
+}
+
+/// Delete the specified sign(s) from a buffer.
+///
+/// Resolves the namespace from group name and delegates to C for the actual
+/// marktree iteration and deletion.
+///
+/// Returns OK (1) on success, FAIL (0) on failure.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle. `group` must be null or valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_delete_signs(
+    buf: SignBufHandle,
+    group: *const c_char,
+    id: c_int,
+    atlnum: LinenrT,
+) -> c_int {
+    let ns = rs_group_get_ns(group, namespace_lookup_fn);
+    if ns < 0 {
+        return 0; // FAIL
+    }
+
+    nvim_sign_delete_signs_impl(buf, ns, id, atlnum)
 }
 
 // =============================================================================

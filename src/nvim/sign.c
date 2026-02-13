@@ -71,6 +71,7 @@ extern void rs_buf_set_sign(buf_T *buf, uint32_t *id, const char *group, int pri
                             sign_T *sp);
 extern linenr_T rs_buf_mod_sign(buf_T *buf, uint32_t *id, const char *group, int prio, sign_T *sp);
 extern int rs_buf_findsign(buf_T *buf, int id, const char *group);
+extern int rs_buf_delete_signs(buf_T *buf, const char *group, int id, linenr_T atlnum);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -150,66 +151,9 @@ static int sign_row_cmp(const void *p1, const void *p2)
 }
 
 /// Delete the specified sign(s)
-///
-/// @param buf  buffer sign is stored in or NULL for all buffers
-/// @param group  sign group
-/// @param id  sign id
-/// @param atlnum  single sign at this line, specified signs at any line when -1
 static int buf_delete_signs(buf_T *buf, char *group, int id, linenr_T atlnum)
 {
-  int64_t ns = group_get_ns(group);
-  if (ns < 0) {
-    return FAIL;
-  }
-
-  MarkTreeIter itr[1];
-  int row = atlnum > 0 ? atlnum - 1 : 0;
-  kvec_t(MTKey) signs = KV_INITIAL_VALUE;
-  // Store signs at a specific line number to remove one later.
-  if (atlnum > 0) {
-    if (!marktree_itr_get_overlap(buf->b_marktree, row, 0, itr)) {
-      return FAIL;
-    }
-
-    MTPair pair;
-    while (marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
-      if ((ns == UINT32_MAX || ns == pair.start.ns) && mt_decor_sign(pair.start)) {
-        kv_push(signs, pair.start);
-      }
-    }
-  } else {
-    marktree_itr_get(buf->b_marktree, 0, 0, itr);
-  }
-
-  while (itr->x) {
-    MTKey mark = marktree_itr_current(itr);
-    if (row && mark.pos.row > row) {
-      break;
-    }
-    if (!mt_end(mark) && mt_decor_sign(mark)
-        && (id == 0 || (int)mark.id == id)
-        && (ns == UINT32_MAX || ns == mark.ns)) {
-      if (atlnum > 0) {
-        kv_push(signs, mark);
-        marktree_itr_next(buf->b_marktree, itr);
-      } else {
-        extmark_del(buf, itr, mark, true);
-      }
-    } else {
-      marktree_itr_next(buf->b_marktree, itr);
-    }
-  }
-
-  // Sort to remove the highest priority sign at a specific line number.
-  if (kv_size(signs)) {
-    qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(MTKey), sign_row_cmp);
-    extmark_del_id(buf, kv_A(signs, 0).ns, kv_A(signs, 0).id);
-    kv_destroy(signs);
-  } else if (atlnum > 0) {
-    return FAIL;
-  }
-
-  return OK;
+  return rs_buf_delete_signs(buf, group, id, atlnum);
 }
 
 bool buf_has_signs(const buf_T *buf)
@@ -1680,4 +1624,65 @@ int nvim_sign_create_namespace_cstr(const char *name)
 int nvim_sign_namespace_exists(const char *name)
 {
   return map_get(String, int)(&namespace_ids, cstr_as_string(name)) ? 1 : 0;
+}
+
+/// Perform the marktree iteration + sorting + deletion for sign removal.
+/// This composite accessor keeps MarkTreeIter on the C side.
+///
+/// @param buf  buffer
+/// @param ns  namespace filter (0 = global, UINT32_MAX = all)
+/// @param id  sign ID filter (0 = all matching)
+/// @param atlnum  line number (> 0 = specific line, <= 0 = any line)
+/// @return OK on success, FAIL on failure
+int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
+{
+  MarkTreeIter itr[1];
+  int row = atlnum > 0 ? atlnum - 1 : 0;
+  kvec_t(MTKey) signs = KV_INITIAL_VALUE;
+
+  // Store signs at a specific line number to remove one later.
+  if (atlnum > 0) {
+    if (!marktree_itr_get_overlap(buf->b_marktree, row, 0, itr)) {
+      return FAIL;
+    }
+
+    MTPair pair;
+    while (marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
+      if ((ns == UINT32_MAX || ns == pair.start.ns) && mt_decor_sign(pair.start)) {
+        kv_push(signs, pair.start);
+      }
+    }
+  } else {
+    marktree_itr_get(buf->b_marktree, 0, 0, itr);
+  }
+
+  while (itr->x) {
+    MTKey mark = marktree_itr_current(itr);
+    if (row && mark.pos.row > row) {
+      break;
+    }
+    if (!mt_end(mark) && mt_decor_sign(mark)
+        && (id == 0 || (int)mark.id == id)
+        && (ns == UINT32_MAX || ns == mark.ns)) {
+      if (atlnum > 0) {
+        kv_push(signs, mark);
+        marktree_itr_next(buf->b_marktree, itr);
+      } else {
+        extmark_del(buf, itr, mark, true);
+      }
+    } else {
+      marktree_itr_next(buf->b_marktree, itr);
+    }
+  }
+
+  // Sort to remove the highest priority sign at a specific line number.
+  if (kv_size(signs)) {
+    qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(MTKey), sign_row_cmp);
+    extmark_del_id(buf, kv_A(signs, 0).ns, kv_A(signs, 0).id);
+    kv_destroy(signs);
+  } else if (atlnum > 0) {
+    return FAIL;
+  }
+
+  return OK;
 }
