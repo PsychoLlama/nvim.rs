@@ -1,16 +1,14 @@
-Plan: ~/.claude/plans/ticklish-booping-sun.md
+Plan: ~/.claude/plans/expressive-sprouting-breeze.md
 
-All 8 phases of the `popupmenu.c` → Rust migration are complete. Here's the summary:
+All 5 `_impl` functions in statusline.c have been rewritten as real Rust implementations and the C originals deleted:
 
-| Phase | Functions | Commit |
-|-------|-----------|--------|
-| 1 | `pum_border_width`, `pum_align_order`, `pum_get_item`, `pum_user_attr_combine`, `pum_compute_size` | `dbf446658c` |
-| 2 | `pum_compute_vertical_placement`, `set_pum_width_aligned_with_cursor`, `pum_compute_horizontal_placement` | `7c509c9bc0` |
-| 3 | `pum_recompose`, `pum_check_clear`, `pum_set_event_info`, `pum_ui_flush` | `45f9c6b21c` |
-| 4 | `pum_compute_text_attrs`, `pum_grid_puts_with_attrs` | `807e4ad828` |
-| 5 | `pum_preview_set_text`, `pum_adjust_info_position`, `pum_set_info` | `92fbae5ddc` |
-| 6 | `pum_position_at_mouse`, `pum_select_mouse_pos`, `pum_execute_menu`, `pum_show_popupmenu`, `pum_make_popup` | `8d50bf7dcd` |
-| 7 | `pum_redraw`, `pum_set_selected` | `db6599424d` |
-| 8 | `pum_display` | `141abca179` |
+| Phase | Commit | Function | C Lines Deleted |
+|-------|--------|----------|-----------------|
+| 1 | `ba264ee` | ui_ext_tabline_update_impl | ~45 |
+| 2a+2b | `8a40e22` | build_stl_str_hl_impl (port) | ~1500 |
+| 2c | `5399f01` | build_stl_str_hl_impl (delete C) | — |
+| 3 | `8bf6ea6` | win_redr_custom_impl | ~100 |
+| 4 | `8bb5843` | redraw_ruler_impl | ~130 |
+| 5 | `7ddd7c4` | draw_tabline_impl | ~170 |
 
-**25 functions migrated** across 8 commits. All validations (build, smoke-test, fmt, clippy, 4155 unit tests) passed on every commit.
+statusline.c reduced from 2,332 → 1,373 lines (~960 lines of real C logic deleted). All checks pass: build, smoke-test.
