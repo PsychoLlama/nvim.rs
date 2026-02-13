@@ -9,6 +9,7 @@
 pub mod checks;
 pub mod getters;
 pub mod helpers;
+pub mod set_indent;
 
 use std::ffi::c_char;
 use std::ffi::c_int;
