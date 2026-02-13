@@ -3577,3 +3577,258 @@ pub unsafe extern "C" fn rs_addfile(gap: *mut c_void, f: *const c_char, flags: c
 
     nvim_path_ga_append_string(gap, p);
 }
+
+// ============================================================================
+// simplify_filename - Simplify a file name in place
+// ============================================================================
+
+/// Size of an opaque buffer large enough to hold a C `FileInfo` struct.
+/// `FileInfo` contains a `uv_stat_t` which is ~160 bytes on Linux x86_64.
+/// 256 bytes provides a comfortable margin for any platform.
+const FILEINFO_SIZE: usize = 256;
+
+extern "C" {
+    fn nvim_path_os_fileinfo(fname: *const c_char, info_out: *mut u8) -> c_int;
+    fn nvim_path_os_fileinfo_link(fname: *const c_char, info_out: *mut u8) -> c_int;
+    fn nvim_path_os_fileinfo_id_equal(a: *const u8, b: *const u8) -> c_int;
+}
+
+/// Simplify a file name in place, by stripping `.`, `..` and duplicate `/`.
+///
+/// This is the Rust replacement for `simplify_filename()` in path.c.
+/// The file name is modified in-place and the resulting length is returned.
+///
+/// # Safety
+/// `filename` must be a valid, writable, NUL-terminated C string.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_simplify_filename(filename: *mut c_char) -> usize {
+    let mut components: i32 = 0;
+    let mut stripping_disabled = false;
+    let mut relative = true;
+
+    let mut p = filename;
+
+    // On Windows, skip "x:" drive prefix.
+    #[cfg(windows)]
+    {
+        if *p != 0 && *p.add(1) == b':' as c_char {
+            p = p.add(2);
+        }
+    }
+
+    if rs_vim_ispathsep(*p as c_int) != 0 {
+        relative = false;
+        loop {
+            p = p.add(1);
+            if rs_vim_ispathsep(*p as c_int) == 0 {
+                break;
+            }
+        }
+    }
+
+    let start = p; // remember start after "c:/" or "/" or "///"
+    let mut p_end = p.add(libc::strlen(p)); // points to NUL at end of string
+
+    // Posix says that "//path" is unchanged but "///path" is "/path".
+    #[cfg(unix)]
+    {
+        if start > filename.add(2) {
+            let move_len = (p_end as usize - p as usize) + 1; // +1 for NUL
+            std::ptr::copy(p as *const u8, filename.add(1) as *mut u8, move_len);
+            p_end = p_end.sub(p as usize - filename.add(1) as usize);
+            p = filename.add(1);
+            // start is reassigned below (shadowed in C, we just rebind)
+        }
+    }
+
+    // On Unix, start may have been reassigned above.
+    #[cfg(unix)]
+    let start = if start > filename.add(2) {
+        filename.add(1)
+    } else {
+        start
+    };
+    #[cfg(not(unix))]
+    let start = start;
+
+    loop {
+        // At this point "p" is pointing to the char following a single "/"
+        // or "p" is at the "start" of the (absolute or relative) path name.
+        if rs_vim_ispathsep(*p as c_int) != 0 {
+            // Remove duplicate "/"
+            let src = p.add(1);
+            let move_len = (p_end as usize - src as usize) + 1;
+            std::ptr::copy(src as *const u8, p as *mut u8, move_len);
+            p_end = p_end.sub(1);
+        } else if *p == b'.' as c_char
+            && (rs_vim_ispathsep(*p.add(1) as c_int) != 0 || *p.add(1) == 0)
+        {
+            if p == start && relative {
+                // keep single "." or leading "./"
+                p = p.add(1 + usize::from(*p.add(1) != 0));
+            } else {
+                // Strip "./" or ".///".  If we are at the end of the file name
+                // and there is no trailing path separator, either strip "/." if
+                // we are after "start", or strip "." if we are at the beginning
+                // of an absolute path name.
+                let mut tail = p.add(1);
+                if *p.add(1) != 0 {
+                    while rs_vim_ispathsep(*tail as c_int) != 0 {
+                        // MB_PTR_ADV(tail)
+                        let slice = std::slice::from_raw_parts(tail as *const u8, 8);
+                        let char_len = nvim_mbyte::utfc_ptr2len(slice);
+                        tail = tail.add(char_len);
+                    }
+                } else if p > start {
+                    p = p.sub(1); // strip preceding path separator
+                }
+                let move_len = (p_end as usize - tail as usize) + 1;
+                std::ptr::copy(tail as *const u8, p as *mut u8, move_len);
+                p_end = p_end.sub(tail as usize - p as usize);
+            }
+        } else if *p == b'.' as c_char
+            && *p.add(1) == b'.' as c_char
+            && (rs_vim_ispathsep(*p.add(2) as c_int) != 0 || *p.add(2) == 0)
+        {
+            // Skip to after ".." or "../" or "..///".
+            let mut tail = p.add(2);
+            while rs_vim_ispathsep(*tail as c_int) != 0 {
+                // MB_PTR_ADV(tail)
+                let slice = std::slice::from_raw_parts(tail as *const u8, 8);
+                let char_len = nvim_mbyte::utfc_ptr2len(slice);
+                tail = tail.add(char_len);
+            }
+
+            if components > 0 {
+                // Strip one preceding component
+                let mut do_strip = false;
+
+                // Don't strip for an erroneous file name.
+                if !stripping_disabled {
+                    // If the preceding component does not exist in the file
+                    // system, we strip it.  On Unix, we don't accept a symbolic
+                    // link that refers to a non-existent file.
+                    let saved_char = *p.sub(1);
+                    *p.sub(1) = 0;
+                    let mut file_info = [0u8; FILEINFO_SIZE];
+                    if nvim_path_os_fileinfo_link(filename.cast_const(), file_info.as_mut_ptr())
+                        == 0
+                    {
+                        do_strip = true;
+                    }
+                    *p.sub(1) = saved_char;
+
+                    p = p.sub(1);
+                    // Skip back to after previous '/'.
+                    while p > start && rs_after_pathsep(start.cast_const(), p.cast_const()) == 0 {
+                        // MB_PTR_BACK(start, p)
+                        let base = start as *const u8;
+                        let cur = p as *const u8;
+                        let prev = cur.sub(1);
+                        let off = prev as usize - base as usize;
+                        let slice = std::slice::from_raw_parts(base, off + 1);
+                        let head_off = utf_head_off(slice, off);
+                        p = p.sub(head_off + 1);
+                    }
+
+                    if !do_strip {
+                        // If the component exists in the file system, check
+                        // that stripping it won't change the meaning of the
+                        // file name.
+                        let saved_char2 = *tail;
+                        *tail = 0;
+                        let mut file_info2 = [0u8; FILEINFO_SIZE];
+                        if nvim_path_os_fileinfo(filename.cast_const(), file_info2.as_mut_ptr())
+                            != 0
+                        {
+                            do_strip = true;
+                        } else {
+                            stripping_disabled = true;
+                        }
+                        *tail = saved_char2;
+
+                        if do_strip {
+                            // The parent of the directory pointed to by the link
+                            // must be the same as the stripped file name.
+                            let mut new_file_info = [0u8; FILEINFO_SIZE];
+                            if p == start && relative {
+                                nvim_path_os_fileinfo(c".".as_ptr(), new_file_info.as_mut_ptr());
+                            } else {
+                                let saved_char3 = *p;
+                                *p = 0;
+                                nvim_path_os_fileinfo(
+                                    filename.cast_const(),
+                                    new_file_info.as_mut_ptr(),
+                                );
+                                *p = saved_char3;
+                            }
+
+                            if nvim_path_os_fileinfo_id_equal(
+                                file_info2.as_ptr(),
+                                new_file_info.as_ptr(),
+                            ) == 0
+                            {
+                                do_strip = false;
+                                // We don't disable stripping of later
+                                // components since the unstripped path name is
+                                // still valid.
+                            }
+                        }
+                    }
+                }
+
+                if do_strip {
+                    // Strip previous component.  If the result would get empty
+                    // and there is no trailing path separator, leave a single
+                    // "." instead.  If we are at the end of the file name and
+                    // there is no trailing path separator and a preceding
+                    // component is left after stripping, strip its trailing
+                    // path separator as well.
+                    if p == start && relative && *tail.sub(1) == b'.' as c_char {
+                        *p = b'.' as c_char;
+                        p = p.add(1);
+                        *p = 0;
+                    } else {
+                        if p > start && *tail.sub(1) == b'.' as c_char {
+                            p = p.sub(1);
+                        }
+                        let move_len = (p_end as usize - tail as usize) + 1;
+                        std::ptr::copy(tail as *const u8, p as *mut u8, move_len);
+                        p_end = p_end.sub(tail as usize - p as usize);
+                    }
+
+                    components -= 1;
+                } else {
+                    // Skip the ".." or "../" and reset the counter for the
+                    // components that might be stripped later on.
+                    p = tail;
+                    components = 0;
+                }
+            } else if p == start && !relative {
+                // Leading "/.." or "/../"
+                let move_len = (p_end as usize - tail as usize) + 1;
+                std::ptr::copy(tail as *const u8, p as *mut u8, move_len);
+                p_end = p_end.sub(tail as usize - p as usize);
+            } else {
+                if p == start.add(2) && *p.sub(2) == b'.' as c_char {
+                    // Leading "./../" — strip leading "./"
+                    let move_len = (p_end as usize - p as usize) + 1;
+                    std::ptr::copy(p as *const u8, p.sub(2) as *mut u8, move_len);
+                    p_end = p_end.sub(2);
+                    tail = tail.sub(2);
+                }
+                p = tail; // skip to char after ".." or "../"
+            }
+        } else {
+            components += 1; // Simple path component.
+            p = rs_path_next_component(p.cast_const()).cast_mut();
+        }
+
+        if *p == 0 {
+            break;
+        }
+    }
+
+    p_end as usize - filename as usize
+}

@@ -98,6 +98,7 @@ extern int rs_has_special_wildchar(const char *p, int flags);
 extern const char *rs_get_path_cutoff(const char *fname, const void *gap);
 extern const char *rs_scandir_next_with_dots(void *dir);
 extern void rs_addfile(void *gap, const char *f, int flags);
+extern size_t rs_simplify_filename(char *filename);
 
 // C accessor functions for Rust
 int nvim_path_os_isdir(const char *name) {
@@ -227,6 +228,20 @@ int nvim_path_os_path_exists(const char *fname) {
 
 void nvim_path_ga_append_string(void *gap, char *s) {
   GA_APPEND(char *, (garray_T *)gap, s);
+}
+
+// Phase 5 C accessor functions for Rust
+int nvim_path_os_fileinfo(const char *fname, uint8_t *info_out) {
+  _Static_assert(sizeof(FileInfo) <= 256, "FileInfo must fit in 256-byte opaque buffer");
+  return os_fileinfo(fname, (FileInfo *)info_out) ? 1 : 0;
+}
+
+int nvim_path_os_fileinfo_link(const char *fname, uint8_t *info_out) {
+  return os_fileinfo_link(fname, (FileInfo *)info_out) ? 1 : 0;
+}
+
+int nvim_path_os_fileinfo_id_equal(const uint8_t *a, const uint8_t *b) {
+  return os_fileinfo_id_equal((const FileInfo *)a, (const FileInfo *)b) ? 1 : 0;
 }
 
 // Static assertions for constants used in Rust
@@ -1329,180 +1344,7 @@ void addfile(garray_T *gap, char *f, int flags)
 size_t simplify_filename(char *filename)
   FUNC_ATTR_NONNULL_ALL
 {
-  int components = 0;
-  bool stripping_disabled = false;
-  bool relative = true;
-
-  char *p = filename;
-#ifdef BACKSLASH_IN_FILENAME
-  if (p[0] != NUL && p[1] == ':') {        // skip "x:"
-    p += 2;
-  }
-#endif
-
-  if (vim_ispathsep(*p)) {
-    relative = false;
-    do {
-      p++;
-    } while (vim_ispathsep(*p));
-  }
-  char *start = p;        // remember start after "c:/" or "/" or "///"
-  char *p_end = p + strlen(p);  // point to NUL at end of string "p"
-#ifdef UNIX
-  // Posix says that "//path" is unchanged but "///path" is "/path".
-  if (start > filename + 2) {
-    memmove(filename + 1, p, (size_t)(p_end - p) + 1);  // +1 for NUL
-    p_end -= (size_t)(p - (filename + 1));
-    start = p = filename + 1;
-  }
-#endif
-
-  do {
-    // At this point "p" is pointing to the char following a single "/"
-    // or "p" is at the "start" of the (absolute or relative) path name.
-    if (vim_ispathsep(*p)) {
-      memmove(p, p + 1, (size_t)(p_end - (p + 1)) + 1);  // remove duplicate "/"
-      p_end--;
-    } else if (p[0] == '.'
-               && (vim_ispathsep(p[1]) || p[1] == NUL)) {
-      if (p == start && relative) {
-        p += 1 + (p[1] != NUL);         // keep single "." or leading "./"
-      } else {
-        // Strip "./" or ".///".  If we are at the end of the file name
-        // and there is no trailing path separator, either strip "/." if
-        // we are after "start", or strip "." if we are at the beginning
-        // of an absolute path name.
-        char *tail = p + 1;
-        if (p[1] != NUL) {
-          while (vim_ispathsep(*tail)) {
-            MB_PTR_ADV(tail);
-          }
-        } else if (p > start) {
-          p--;                          // strip preceding path separator
-        }
-        memmove(p, tail, (size_t)(p_end - tail) + 1);
-        p_end -= (size_t)(tail - p);
-      }
-    } else if (p[0] == '.' && p[1] == '.'
-               && (vim_ispathsep(p[2]) || p[2] == NUL)) {
-      // Skip to after ".." or "../" or "..///".
-      char *tail = p + 2;
-      while (vim_ispathsep(*tail)) {
-        MB_PTR_ADV(tail);
-      }
-
-      if (components > 0) {             // strip one preceding component
-        bool do_strip = false;
-
-        // Don't strip for an erroneous file name.
-        if (!stripping_disabled) {
-          // If the preceding component does not exist in the file
-          // system, we strip it.  On Unix, we don't accept a symbolic
-          // link that refers to a non-existent file.
-          char saved_char = p[-1];
-          p[-1] = NUL;
-          FileInfo file_info;
-          if (!os_fileinfo_link(filename, &file_info)) {
-            do_strip = true;
-          }
-          p[-1] = saved_char;
-
-          p--;
-          // Skip back to after previous '/'.
-          while (p > start && !after_pathsep(start, p)) {
-            MB_PTR_BACK(start, p);
-          }
-
-          if (!do_strip) {
-            // If the component exists in the file system, check
-            // that stripping it won't change the meaning of the
-            // file name.  First get information about the
-            // unstripped file name.  This may fail if the component
-            // to strip is not a searchable directory (but a regular
-            // file, for instance), since the trailing "/.." cannot
-            // be applied then.  We don't strip it then since we
-            // don't want to replace an erroneous file name by
-            // a valid one, and we disable stripping of later
-            // components.
-            saved_char = *tail;
-            *tail = NUL;
-            if (os_fileinfo(filename, &file_info)) {
-              do_strip = true;
-            } else {
-              stripping_disabled = true;
-            }
-            *tail = saved_char;
-            if (do_strip) {
-              // The check for the unstripped file name
-              // above works also for a symbolic link pointing to
-              // a searchable directory.  But then the parent of
-              // the directory pointed to by the link must be the
-              // same as the stripped file name.  (The latter
-              // exists in the file system since it is the
-              // component's parent directory.)
-              FileInfo new_file_info;
-              if (p == start && relative) {
-                os_fileinfo(".", &new_file_info);
-              } else {
-                saved_char = *p;
-                *p = NUL;
-                os_fileinfo(filename, &new_file_info);
-                *p = saved_char;
-              }
-
-              if (!os_fileinfo_id_equal(&file_info, &new_file_info)) {
-                do_strip = false;
-                // We don't disable stripping of later
-                // components since the unstripped path name is
-                // still valid.
-              }
-            }
-          }
-        }
-
-        if (!do_strip) {
-          // Skip the ".." or "../" and reset the counter for the
-          // components that might be stripped later on.
-          p = tail;
-          components = 0;
-        } else {
-          // Strip previous component.  If the result would get empty
-          // and there is no trailing path separator, leave a single
-          // "." instead.  If we are at the end of the file name and
-          // there is no trailing path separator and a preceding
-          // component is left after stripping, strip its trailing
-          // path separator as well.
-          if (p == start && relative && tail[-1] == '.') {
-            *p++ = '.';
-            *p = NUL;
-          } else {
-            if (p > start && tail[-1] == '.') {
-              p--;
-            }
-            memmove(p, tail, (size_t)(p_end - tail) + 1);  // strip previous component
-            p_end -= (size_t)(tail - p);
-          }
-
-          components--;
-        }
-      } else if (p == start && !relative) {            // leading "/.." or "/../"
-        memmove(p, tail, (size_t)(p_end - tail) + 1);  // strip ".." or "../"
-        p_end -= (size_t)(tail - p);
-      } else {
-        if (p == start + 2 && p[-2] == '.') {          // leading "./../"
-          memmove(p - 2, p, (size_t)(p_end - p) + 1);  // strip leading "./"
-          p_end -= 2;
-          tail -= 2;
-        }
-        p = tail;                       // skip to char after ".." or "../"
-      }
-    } else {
-      components++;  // Simple path component.
-      p = (char *)path_next_component(p);
-    }
-  } while (*p != NUL);
-
-  return (size_t)(p_end - filename);
+  return rs_simplify_filename(filename);
 }
 
 /// Checks for a Windows drive letter ("C:/") at the start of the path.
