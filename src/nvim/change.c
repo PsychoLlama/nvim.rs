@@ -64,107 +64,23 @@ extern void rs_save_file_ff(buf_T *buf);
 extern void rs_unchanged(buf_T *buf, bool ff, bool always_inc_changedtick);
 extern int rs_get_leader_len(const char *line, char **flags, bool backward, bool include_space);
 extern int rs_get_last_leader_offset(const char *line, char **flags);
+extern void rs_change_warning(buf_T *buf, int col);
+extern void rs_changed(buf_T *buf);
+extern void rs_changed_internal(buf_T *buf);
 
-/// If the file is readonly, give a warning message with the first change.
-/// Don't do this for autocommands.
-/// Doesn't use emsg(), because it flushes the macro buffer.
-/// If we have undone all changes b_changed will be false, but "b_did_warn"
-/// will be true.
-/// "col" is the column for the message; non-zero when in insert mode and
-/// 'showmode' is on.
-/// Careful: may trigger autocommands that reload the buffer.
 void change_warning(buf_T *buf, int col)
 {
-  static const char *w_readonly = N_("W10: Warning: Changing a readonly file");
-
-  if (buf->b_did_warn == false
-      && curbufIsChanged() == 0
-      && !autocmd_busy
-      && buf->b_p_ro) {
-    buf->b_ro_locked++;
-    apply_autocmds(EVENT_FILECHANGEDRO, NULL, NULL, false, buf);
-    buf->b_ro_locked--;
-    if (!buf->b_p_ro) {
-      return;
-    }
-    // Do what msg() does, but with a column offset if the warning should
-    // be after the mode message.
-    msg_start();
-    if (msg_row == Rows - 1) {
-      msg_col = col;
-    }
-    msg_source(HLF_W);
-    msg_ext_set_kind("wmsg");
-    msg_puts_hl(_(w_readonly), HLF_W, true);
-    set_vim_var_string(VV_WARNINGMSG, _(w_readonly), -1);
-    msg_clr_eos();
-    msg_end();
-    if (msg_silent == 0 && !silent_mode && ui_active() && !ui_has(kUIMessages)) {
-      ui_flush();
-      os_delay(1002, true);  // give the user time to think about it
-    }
-    buf->b_did_warn = true;
-    redraw_cmdline = false;  // don't redraw and erase the message
-    if (msg_row < Rows - 1) {
-      showmode();
-    }
-  }
+  rs_change_warning(buf, col);
 }
 
-/// Call this function when something in a buffer is changed.
-///
-/// Most often called through changed_bytes() and changed_lines(), which also
-/// mark the area of the display to be redrawn.
-///
-/// Careful: may trigger autocommands that reload the buffer.
 void changed(buf_T *buf)
 {
-  if (!buf->b_changed) {
-    int save_msg_scroll = msg_scroll;
-
-    // Give a warning about changing a read-only file.  This may also
-    // check-out the file, thus change "curbuf"!
-    change_warning(buf, 0);
-
-    // Create a swap file if that is wanted.
-    // Don't do this for "nofile" and "nowrite" buffer types.
-    if (buf->b_may_swap && !bt_dontwrite(buf)) {
-      bool save_need_wait_return = need_wait_return;
-
-      need_wait_return = false;
-      ml_open_file(buf);
-
-      // The ml_open_file() can cause an ATTENTION message.
-      // Wait two seconds, to make sure the user reads this unexpected
-      // message.  Since we could be anywhere, call wait_return() now,
-      // and don't let the emsg() set msg_scroll.
-      if (need_wait_return && emsg_silent == 0 && !in_assert_fails && !ui_has(kUIMessages)) {
-        ui_flush();
-        os_delay(2002, true);
-        wait_return(true);
-        msg_scroll = save_msg_scroll;
-      } else {
-        need_wait_return = save_need_wait_return;
-      }
-    }
-    changed_internal(buf);
-  }
-  buf_inc_changedtick(buf);
-
-  // If a pattern is highlighted, the position may now be invalid.
-  highlight_match = false;
+  rs_changed(buf);
 }
 
-/// Internal part of changed(), no user interaction.
-/// Also used for recovery.
 void changed_internal(buf_T *buf)
 {
-  buf->b_changed = true;
-  buf->b_changed_invalid = true;
-  ml_setflags(buf);
-  redraw_buf_status_later(buf);
-  redraw_tabline = true;
-  need_maketitle = true;  // set window title later
+  rs_changed_internal(buf);
 }
 
 /// Invalidate a window's w_valid flags and w_lines[] entries after changing lines.
