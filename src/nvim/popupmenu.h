@@ -38,6 +38,15 @@ typedef struct {
   int col;
 } PumMouseFindResult;
 
+/// Result type for `nvim_pum_get_win_by_grid` (Rust FFI).
+typedef struct {
+  int winrow;
+  int wincol;
+  int view_height;
+  int view_width;
+  int valid;
+} PumWinInfo;
+
 /// state for pum_ext_select_item.
 EXTERN struct {
   bool active;

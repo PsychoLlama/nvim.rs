@@ -652,6 +652,101 @@ void *nvim_pum_menu_find(const char *path_name)
   return menu_find(path_name);
 }
 
+// Phase 3 accessors: text attrs computation helpers
+
+/// Get completion leader string.
+char *nvim_pum_get_compl_leader(void)
+{
+  return (State & MODE_CMDLINE) ? cmdline_compl_pattern() : ins_compl_leader();
+}
+
+/// Check if completion is fuzzy.
+int nvim_pum_compl_is_fuzzy(void)
+{
+  return (State & MODE_CMDLINE) ? cmdline_compl_is_fuzzy()
+                                : (get_cot_flags() & kOptCotFlagFuzzy) != 0;
+}
+
+/// Fuzzy match helper: returns flat array of matching positions and count.
+/// Caller must free the returned array with xfree().
+/// Returns NULL if no match. Sets *out_len to number of positions.
+uint32_t *nvim_pum_fuzzy_match_positions(const char *text, const char *leader, int *out_len)
+{
+  garray_T *ga = fuzzy_match_str_with_pos(text, leader);
+  if (!ga) {
+    *out_len = 0;
+    return NULL;
+  }
+  int len = ga->ga_len;
+  uint32_t *positions = xmalloc(sizeof(uint32_t) * (size_t)len);
+  memcpy(positions, ga->ga_data, sizeof(uint32_t) * (size_t)len);
+  ga_clear(ga);
+  xfree(ga);
+  *out_len = len;
+  return positions;
+}
+
+/// Case-insensitive multibyte string comparison.
+int nvim_pum_mb_strnicmp(const char *s1, const char *s2, size_t len)
+{
+  return mb_strnicmp(s1, s2, len);
+}
+
+/// Allocate int array via xmalloc.
+int *nvim_pum_alloc_int_array(int count)
+{
+  return xmalloc(sizeof(int) * (size_t)count);
+}
+
+/// Get display width of string in cells.
+int nvim_pum_vim_strsize(const char *text)
+{
+  return vim_strsize(text);
+}
+
+// Phase 3 accessors: grid rendering
+int nvim_pum_grid_line_puts(int col, const char *text, int textlen, int attr)
+{
+  return grid_line_puts(col, text, textlen, attr);
+}
+
+// Phase 3 accessors: position_at_mouse helpers
+
+PumWinInfo nvim_pum_get_win_by_grid(int grid)
+{
+  win_T *wp = get_win_by_grid_handle(grid);
+  if (wp == NULL) {
+    return (PumWinInfo){ 0, 0, 0, 0, 0 };
+  }
+  return (PumWinInfo){
+    wp->w_winrow, wp->w_wincol,
+    wp->w_view_height, wp->w_view_width, 1
+  };
+}
+
+
+void nvim_set_pum_left_col(int val)
+{
+  pum_left_col = val;
+}
+
+void nvim_set_pum_right_col(int val)
+{
+  pum_right_col = val;
+}
+
+void nvim_set_pum_win_row_offset(int val)
+{
+  pum_win_row_offset = val;
+}
+
+void nvim_set_pum_win_col_offset(int val)
+{
+  pum_win_col_offset = val;
+}
+
+_Static_assert(kOptCotFlagFuzzy == 0x80, "kOptCotFlagFuzzy must be 0x80");
+
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 
@@ -864,107 +959,8 @@ void nvim_pum_display_impl(pumitem_T *array, int size, int selected, int array_c
   pum_redraw();
 }
 
-/// Computes attributes of text on the popup menu.
-/// Returns attributes for every cell, or NULL if all attributes are the same.
-int *nvim_pum_compute_text_attrs_impl(char *text, int hlf, int user_hlattr)
-{
-  if (*text == NUL || (hlf != HLF_PSI && hlf != HLF_PNI)
-      || (win_hl_attr(curwin, HLF_PMSI) == win_hl_attr(curwin, HLF_PSI)
-          && win_hl_attr(curwin, HLF_PMNI) == win_hl_attr(curwin, HLF_PNI))) {
-    return NULL;
-  }
-
-  char *leader = (State & MODE_CMDLINE) ? cmdline_compl_pattern()
-                                        : ins_compl_leader();
-  if (leader == NULL || *leader == NUL) {
-    return NULL;
-  }
-
-  int *attrs = xmalloc(sizeof(int) * (size_t)vim_strsize(text));
-  bool in_fuzzy = (State & MODE_CMDLINE) ? cmdline_compl_is_fuzzy()
-                                         : (get_cot_flags() & kOptCotFlagFuzzy) != 0;
-  size_t leader_len = strlen(leader);
-
-  garray_T *ga = NULL;
-  int matched_len = -1;
-
-  if (in_fuzzy) {
-    ga = fuzzy_match_str_with_pos(text, leader);
-    if (!ga) {
-      xfree(attrs);
-      return NULL;
-    }
-  }
-
-  const char *ptr = text;
-  int cell_idx = 0;
-  uint32_t char_pos = 0;
-  bool is_select = hlf == HLF_PSI;
-
-  while (*ptr != NUL) {
-    int new_attr = win_hl_attr(curwin, (int)hlf);
-
-    if (ga != NULL) {
-      // Handle fuzzy matching
-      for (int i = 0; i < ga->ga_len; i++) {
-        if (char_pos == ((uint32_t *)ga->ga_data)[i]) {
-          new_attr = win_hl_attr(curwin, is_select ? HLF_PMSI : HLF_PMNI);
-          new_attr = hl_combine_attr(win_hl_attr(curwin, HLF_PMNI), new_attr);
-          new_attr = hl_combine_attr(win_hl_attr(curwin, (int)hlf), new_attr);
-          break;
-        }
-      }
-    } else {
-      if (matched_len < 0 && mb_strnicmp(ptr, leader, leader_len) == 0) {
-        matched_len = (int)leader_len;
-      }
-      if (matched_len > 0) {
-        new_attr = win_hl_attr(curwin, is_select ? HLF_PMSI : HLF_PMNI);
-        new_attr = hl_combine_attr(win_hl_attr(curwin, HLF_PMNI), new_attr);
-        new_attr = hl_combine_attr(win_hl_attr(curwin, (int)hlf), new_attr);
-        matched_len--;
-      }
-    }
-
-    new_attr = hl_combine_attr(win_hl_attr(curwin, HLF_PNI), new_attr);
-
-    if (user_hlattr > 0) {
-      new_attr = hl_combine_attr(new_attr, user_hlattr);
-    }
-
-    int char_cells = utf_ptr2cells(ptr);
-    for (int i = 0; i < char_cells; i++) {
-      attrs[cell_idx + i] = new_attr;
-    }
-    cell_idx += char_cells;
-
-    MB_PTR_ADV(ptr);
-    char_pos++;
-  }
-
-  if (ga != NULL) {
-    ga_clear(ga);
-    xfree(ga);
-  }
-  return attrs;
-}
-
-/// Displays text on the popup menu with specific attributes.
-void nvim_pum_grid_puts_with_attrs_impl(int col, int cells, const char *text, int textlen,
-                                        const int *attrs)
-{
-  const int col_start = col;
-  const char *ptr = text;
-
-  // Render text with proper attributes
-  while (*ptr != NUL && (textlen < 0 || ptr < text + textlen)) {
-    int char_len = utfc_ptr2len(ptr);
-    int attr = attrs[pum_rl ? (col_start + cells - col - 1) : (col - col_start)];
-    grid_line_puts(col, ptr, char_len, attr);
-    col += utf_ptr2cells(ptr);
-    ptr += char_len;
-  }
-}
+// nvim_pum_compute_text_attrs_impl: migrated to Rust (render.rs)
+// nvim_pum_grid_puts_with_attrs_impl: migrated to Rust (render.rs)
 
 static inline void pum_align_order(int *order)
 {
@@ -1763,87 +1759,7 @@ void pum_set_event_info(dict_T *dict)
   rs_pum_set_event_info(dict);
 }
 
-void nvim_pum_position_at_mouse_impl(int min_width)
-{
-  int min_row = 0;
-  int min_col = 0;
-  int max_row = Rows;
-  int max_col = Columns;
-  int grid = mouse_grid;
-  int row = mouse_row;
-  int col = mouse_col;
-  pum_win_row_offset = 0;
-  pum_win_col_offset = 0;
-
-  if (ui_has(kUIMultigrid) && grid == 0) {
-    mouse_find_win_outer(&grid, &row, &col);
-  }
-  if (grid > 1) {
-    win_T *wp = get_win_by_grid_handle(grid);
-    if (wp != NULL) {
-      row += wp->w_winrow;
-      col += wp->w_wincol;
-      pum_win_row_offset = wp->w_winrow;
-      pum_win_col_offset = wp->w_wincol;
-
-      if (wp->w_view_height > 0 || wp->w_view_width > 0) {
-        // When the user has requested a different grid size, let the popupmenu extend to the size
-        // of it.
-        max_row = MAX(Rows - wp->w_winrow, wp->w_winrow + wp->w_view_height);
-        max_col = MAX(Columns - wp->w_wincol, wp->w_wincol + wp->w_view_width);
-      }
-    }
-  }
-  if (pum_grid.handle != 0 && grid == pum_grid.handle) {
-    // Repositioning the menu by right-clicking on itself
-    row += pum_row;
-    col += pum_left_col;
-  } else {
-    pum_anchor_grid = grid;
-  }
-
-  if (max_row - row > pum_size || max_row - row > row - min_row) {
-    // Enough space below the mouse row,
-    // or there is more space below the mouse row than above.
-    pum_above = false;
-    pum_row = row + 1;
-    if (pum_height > max_row - pum_row) {
-      pum_height = max_row - pum_row;
-    }
-  } else {
-    // Show above the mouse row, reduce height if it does not fit.
-    pum_above = true;
-    pum_row = row - pum_size;
-    if (pum_row < min_row) {
-      pum_height += pum_row - min_row;
-      pum_row = min_row;
-    }
-  }
-
-  if (pum_rl) {
-    if (col - min_col + 1 >= pum_base_width
-        || col - min_col + 1 > min_width) {
-      // Enough space to show at mouse column.
-      pum_col = col;
-    } else {
-      // Not enough space, left align with window.
-      pum_col = min_col + MIN(pum_base_width, min_width) - 1;
-    }
-    pum_width = pum_col - min_col + 1;
-  } else {
-    if (max_col - col >= pum_base_width
-        || max_col - col > min_width) {
-      // Enough space to show at mouse column.
-      pum_col = col;
-    } else {
-      // Not enough space, right align with window.
-      pum_col = max_col - MIN(pum_base_width, min_width);
-    }
-    pum_width = max_col - pum_col;
-  }
-
-  pum_width = MIN(pum_width, pum_base_width + 1);
-}
+// nvim_pum_position_at_mouse_impl: migrated to Rust (mouse.rs)
 
 /// Select the pum entry at the mouse position.
 // nvim_pum_select_mouse_pos_impl: migrated to Rust (mouse.rs)

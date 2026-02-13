@@ -366,19 +366,159 @@ struct PumMouseFindResult {
     col: c_int,
 }
 
-// C _impl function for later phase migration.
+// C accessor functions for position_at_mouse.
 extern "C" {
-    /// Position popup menu at mouse location.
-    fn nvim_pum_position_at_mouse_impl(min_width: c_int);
+    /// Get `Rows` global.
+    fn nvim_get_Rows() -> c_int;
+    /// Get `Columns` global.
+    fn nvim_get_Columns() -> c_int;
+    /// Get window info by grid handle.
+    fn nvim_pum_get_win_by_grid(grid: c_int) -> PumWinInfo;
+    /// Set `pum_win_row_offset`.
+    fn nvim_set_pum_win_row_offset(val: c_int);
+    /// Set `pum_win_col_offset`.
+    fn nvim_set_pum_win_col_offset(val: c_int);
+    /// Set `pum_anchor_grid`.
+    fn nvim_set_pum_anchor_grid(val: c_int);
+    /// Set `pum_row`.
+    fn nvim_set_pum_row(val: c_int);
+    /// Set `pum_above`.
+    fn nvim_set_pum_above(val: c_int);
+    /// Set `pum_col`.
+    fn nvim_set_pum_col(val: c_int);
+    /// Set `pum_width`.
+    fn nvim_set_pum_width(val: c_int);
+    /// Set `pum_height`.
+    fn nvim_set_pum_height(val: c_int);
+    /// Get `pum_size`.
+    fn nvim_get_pum_size() -> c_int;
+    /// Get `pum_base_width`.
+    fn nvim_get_pum_base_width() -> c_int;
+    /// Check if UI has multigrid.
+    fn nvim_ui_has_multigrid() -> c_int;
+}
+
+/// Window info returned by `nvim_pum_get_win_by_grid`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct PumWinInfo {
+    winrow: c_int,
+    wincol: c_int,
+    view_height: c_int,
+    view_width: c_int,
+    valid: c_int,
 }
 
 /// Position popup menu at the current mouse location.
 ///
+/// Calculates the optimal popup menu position based on mouse coordinates,
+/// handling multigrid adjustments, RTL mode, and space constraints.
+///
 /// # Safety
-/// Calls C `_impl` function.
+/// Calls C accessor functions for globals and window state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
-    nvim_pum_position_at_mouse_impl(min_width);
+    let min_row = 0;
+    let min_col = 0;
+    let mut max_row = nvim_get_Rows();
+    let mut max_col = nvim_get_Columns();
+    let mut grid = nvim_get_mouse_grid();
+    let mut row = nvim_get_mouse_row();
+    let mut col = nvim_get_mouse_col();
+    nvim_set_pum_win_row_offset(0);
+    nvim_set_pum_win_col_offset(0);
+
+    if nvim_ui_has_multigrid() != 0 && grid == 0 {
+        let result = nvim_pum_mouse_find_win_outer(grid, row, col);
+        grid = result.grid;
+        row = result.row;
+        col = result.col;
+    }
+    if grid > 1 {
+        let wp = nvim_pum_get_win_by_grid(grid);
+        if wp.valid != 0 {
+            row += wp.winrow;
+            col += wp.wincol;
+            nvim_set_pum_win_row_offset(wp.winrow);
+            nvim_set_pum_win_col_offset(wp.wincol);
+
+            if wp.view_height > 0 || wp.view_width > 0 {
+                max_row = max(max_row - wp.winrow, wp.winrow + wp.view_height);
+                max_col = max(max_col - wp.wincol, wp.wincol + wp.view_width);
+            }
+        }
+    }
+
+    let pum_grid_handle = nvim_pum_grid_get_handle();
+    if pum_grid_handle != 0 && grid == pum_grid_handle {
+        // Repositioning the menu by right-clicking on itself
+        row += nvim_get_pum_row();
+        col += nvim_get_pum_left_col();
+    } else {
+        nvim_set_pum_anchor_grid(grid);
+    }
+
+    let pum_size = nvim_get_pum_size();
+    let mut pum_height = nvim_get_pum_height();
+
+    if max_row - row > pum_size || max_row - row > row - min_row {
+        // Enough space below the mouse row, or more space below than above
+        nvim_set_pum_above(0);
+        let pum_row = row + 1;
+        nvim_set_pum_row(pum_row);
+        if pum_height > max_row - pum_row {
+            pum_height = max_row - pum_row;
+            nvim_set_pum_height(pum_height);
+        }
+    } else {
+        // Show above the mouse row
+        nvim_set_pum_above(1);
+        let mut pum_row = row - pum_size;
+        if pum_row < min_row {
+            pum_height += pum_row - min_row;
+            nvim_set_pum_height(pum_height);
+            pum_row = min_row;
+        }
+        nvim_set_pum_row(pum_row);
+    }
+
+    let pum_rl = nvim_get_pum_rl() != 0;
+    let pum_base_width = nvim_get_pum_base_width();
+
+    let (pum_col, pum_width) = if pum_rl {
+        let pum_col = if col - min_col + 1 >= pum_base_width || col - min_col + 1 > min_width {
+            col
+        } else {
+            min_col + min(pum_base_width, min_width) - 1
+        };
+        (pum_col, pum_col - min_col + 1)
+    } else {
+        let pum_col = if max_col - col >= pum_base_width || max_col - col > min_width {
+            col
+        } else {
+            max_col - min(pum_base_width, min_width)
+        };
+        (pum_col, max_col - pum_col)
+    };
+
+    nvim_set_pum_col(pum_col);
+    nvim_set_pum_width(min(pum_width, pum_base_width + 1));
+}
+
+const fn min(a: c_int, b: c_int) -> c_int {
+    if a < b {
+        a
+    } else {
+        b
+    }
+}
+
+const fn max(a: c_int, b: c_int) -> c_int {
+    if a > b {
+        a
+    } else {
+        b
+    }
 }
 
 /// Select the popup entry at the mouse position.

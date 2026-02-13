@@ -3,7 +3,7 @@
 //! This module provides helper functions for rendering popup menu text
 //! with fuzzy match highlighting and proper attribute handling.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_ulong};
 
 /// Highlight group IDs used in popup menu rendering.
 pub mod hlf {
@@ -294,46 +294,165 @@ pub const extern "C" fn rs_pum_needs_truncation(
     (text_cells > available_cells && available_cells > 0) as c_int
 }
 
-// C `_impl` functions for Phase 4 migration.
+// C accessor functions for Phase 3 migration.
 extern "C" {
-    /// Compute text attributes for a popup menu item.
-    fn nvim_pum_compute_text_attrs_impl(
-        text: *mut c_char,
-        hlf: c_int,
-        user_hlattr: c_int,
-    ) -> *mut c_int;
-    /// Display text on the popup menu grid with per-cell attributes.
-    fn nvim_pum_grid_puts_with_attrs_impl(
+    /// Get completion leader string.
+    fn nvim_pum_get_compl_leader() -> *mut c_char;
+    /// Check if completion is using fuzzy matching.
+    fn nvim_pum_compl_is_fuzzy() -> c_int;
+    /// Get fuzzy match positions. Caller must free with `nvim_xfree`.
+    fn nvim_pum_fuzzy_match_positions(
+        text: *const c_char,
+        leader: *const c_char,
+        out_len: *mut c_int,
+    ) -> *mut u32;
+    /// Case-insensitive multibyte string comparison.
+    fn nvim_pum_mb_strnicmp(s1: *const c_char, s2: *const c_char, len: c_ulong) -> c_int;
+    /// Allocate int array via xmalloc.
+    fn nvim_pum_alloc_int_array(count: c_int) -> *mut c_int;
+    /// Get display width of string in cells.
+    fn nvim_pum_vim_strsize(text: *const c_char) -> c_int;
+    /// Display text on popup grid at column with attribute.
+    fn nvim_pum_grid_line_puts(
         col: c_int,
-        cells: c_int,
         text: *const c_char,
         textlen: c_int,
-        attrs: *const c_int,
-    );
+        attr: c_int,
+    ) -> c_int;
+    /// Get `pum_rl` state.
+    fn nvim_get_pum_rl() -> c_int;
+    /// Free memory allocated by C.
+    fn nvim_xfree(ptr: *mut u8);
+    /// Get C strlen.
+    fn strlen(s: *const c_char) -> c_ulong;
 }
 
 /// Compute text attributes for a popup menu item.
 ///
-/// Returns a pointer to an array of per-cell attributes, or null if
-/// all cells have the same attribute.
+/// Returns a pointer to an array of per-cell attributes (one per display cell),
+/// or null if match highlighting is not needed (all cells have the same attribute).
+///
+/// The caller must free the returned array with `xfree()`.
 ///
 /// # Safety
-/// Calls C `_impl` function. `text` must be a valid C string.
+/// `text` must be a valid NUL-terminated C string.
 #[no_mangle]
+#[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_pum_compute_text_attrs(
     text: *mut c_char,
-    hlf: c_int,
+    hlf_id: c_int,
     user_hlattr: c_int,
 ) -> *mut c_int {
-    nvim_pum_compute_text_attrs_impl(text, hlf, user_hlattr)
+    // Early exit: empty text or not a match-highlight-eligible group
+    if *text == 0
+        || (hlf_id != hlf::HLF_PSI && hlf_id != hlf::HLF_PNI)
+        || (nvim_curwin_hl_attr(hlf::HLF_PMSI) == nvim_curwin_hl_attr(hlf::HLF_PSI)
+            && nvim_curwin_hl_attr(hlf::HLF_PMNI) == nvim_curwin_hl_attr(hlf::HLF_PNI))
+    {
+        return std::ptr::null_mut();
+    }
+
+    let leader = nvim_pum_get_compl_leader();
+    if leader.is_null() || *leader == 0 {
+        return std::ptr::null_mut();
+    }
+
+    let text_cells = nvim_pum_vim_strsize(text);
+    let attrs = nvim_pum_alloc_int_array(text_cells);
+    let in_fuzzy = nvim_pum_compl_is_fuzzy() != 0;
+    let leader_len = strlen(leader) as c_ulong;
+    let is_select = hlf_id == hlf::HLF_PSI;
+
+    // Get fuzzy match positions if in fuzzy mode
+    let mut fuzzy_len: c_int = 0;
+    let fuzzy_positions = if in_fuzzy {
+        let positions =
+            nvim_pum_fuzzy_match_positions(text, leader, std::ptr::addr_of_mut!(fuzzy_len));
+        if positions.is_null() {
+            nvim_xfree(attrs.cast());
+            return std::ptr::null_mut();
+        }
+        positions
+    } else {
+        std::ptr::null_mut()
+    };
+
+    let mut ptr = text.cast::<u8>();
+    let mut cell_idx: c_int = 0;
+    let mut char_pos: u32 = 0;
+    let mut matched_len: c_int = -1;
+
+    while *ptr != 0 {
+        let mut new_attr = nvim_curwin_hl_attr(hlf_id);
+
+        if fuzzy_positions.is_null() {
+            // Prefix matching
+            #[allow(clippy::cast_possible_truncation)]
+            if matched_len < 0 && nvim_pum_mb_strnicmp(ptr.cast(), leader, leader_len) == 0 {
+                matched_len = leader_len as c_int;
+            }
+            if matched_len > 0 {
+                let match_hlf = if is_select {
+                    hlf::HLF_PMSI
+                } else {
+                    hlf::HLF_PMNI
+                };
+                new_attr = nvim_curwin_hl_attr(match_hlf);
+                new_attr = hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PMNI), new_attr);
+                new_attr = hl_combine_attr(nvim_curwin_hl_attr(hlf_id), new_attr);
+                matched_len -= 1;
+            }
+        } else {
+            // Fuzzy matching: check if this character position is a match
+            for i in 0..fuzzy_len as usize {
+                if char_pos == *fuzzy_positions.add(i) {
+                    let match_hlf = if is_select {
+                        hlf::HLF_PMSI
+                    } else {
+                        hlf::HLF_PMNI
+                    };
+                    new_attr = nvim_curwin_hl_attr(match_hlf);
+                    new_attr = hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PMNI), new_attr);
+                    new_attr = hl_combine_attr(nvim_curwin_hl_attr(hlf_id), new_attr);
+                    break;
+                }
+            }
+        }
+
+        new_attr = hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PNI), new_attr);
+
+        if user_hlattr > 0 {
+            new_attr = hl_combine_attr(new_attr, user_hlattr);
+        }
+
+        let char_cells = utf_ptr2cells(ptr);
+        for i in 0..char_cells {
+            *attrs.offset((cell_idx + i) as isize) = new_attr;
+        }
+        cell_idx += char_cells;
+
+        let char_len = utfc_ptr2len(ptr);
+        ptr = ptr.add(char_len as usize);
+        char_pos += 1;
+    }
+
+    if !fuzzy_positions.is_null() {
+        nvim_xfree(fuzzy_positions.cast());
+    }
+    attrs
 }
 
 /// Display text on the popup menu grid with per-cell attributes.
 ///
+/// Renders text character by character, looking up the per-cell attribute
+/// from the `attrs` array. Handles right-to-left mode by reversing the
+/// attribute index.
+///
 /// # Safety
-/// Calls C `_impl` function. `text` must be a valid C string,
-/// `attrs` must be a valid array of attributes.
+/// `text` must be a valid NUL-terminated C string. `attrs` must point to
+/// an array with at least `cells` elements.
 #[no_mangle]
+#[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_pum_grid_puts_with_attrs(
     col: c_int,
     cells: c_int,
@@ -341,7 +460,23 @@ pub unsafe extern "C" fn rs_pum_grid_puts_with_attrs(
     textlen: c_int,
     attrs: *const c_int,
 ) {
-    nvim_pum_grid_puts_with_attrs_impl(col, cells, text, textlen, attrs);
+    let col_start = col;
+    let mut col = col;
+    let mut ptr = text.cast::<u8>();
+    let pum_rl = nvim_get_pum_rl() != 0;
+
+    while *ptr != 0 && (textlen < 0 || (ptr as isize - text as isize) < textlen as isize) {
+        let char_len = utfc_ptr2len(ptr);
+        let attr_idx = if pum_rl {
+            col_start + cells - col - 1
+        } else {
+            col - col_start
+        };
+        let attr = *attrs.offset(attr_idx as isize);
+        nvim_pum_grid_line_puts(col, ptr.cast(), char_len, attr);
+        col += utf_ptr2cells(ptr);
+        ptr = ptr.add(char_len as usize);
+    }
 }
 
 #[cfg(test)]
