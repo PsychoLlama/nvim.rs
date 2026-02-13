@@ -67,6 +67,9 @@ extern int rs_get_last_leader_offset(const char *line, char **flags);
 extern void rs_change_warning(buf_T *buf, int col);
 extern void rs_changed(buf_T *buf);
 extern void rs_changed_internal(buf_T *buf);
+extern void rs_changed_lines_invalidate_buf(buf_T *buf, linenr_T lnum, colnr_T col,
+                                            linenr_T lnume, linenr_T xtra);
+extern void rs_changed_lines_redraw_buf(buf_T *buf, linenr_T lnum, linenr_T lnume, linenr_T xtra);
 
 void change_warning(buf_T *buf, int col)
 {
@@ -145,11 +148,7 @@ static void changed_lines_invalidate_win(win_T *wp, linenr_T lnum, colnr_T col, 
 void changed_lines_invalidate_buf(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume,
                                   linenr_T xtra)
 {
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (wp->w_buffer == buf) {
-      changed_lines_invalidate_win(wp, lnum, col, lnume, xtra);
-    }
-  }
+  rs_changed_lines_invalidate_buf(buf, lnum, col, lnume, xtra);
 }
 
 /// Common code for when a change was made.
@@ -444,31 +443,7 @@ void deleted_lines_mark(linenr_T lnum, int count)
 /// @param xtra number of extra lines (negative when deleting)
 void changed_lines_redraw_buf(buf_T *buf, linenr_T lnum, linenr_T lnume, linenr_T xtra)
 {
-  // If lines have been deleted and there may be decorations in the buffer, ensure
-  // win_update() calculates the height of, and redraws the line to which or whence
-  // from its mark may have moved. When lines are deleted, a virt_line mark may
-  // have moved be drawn two lines below so increase by one more.
-  if (xtra != 0 && buf->b_marktree->n_keys > 0) {
-    lnume += 1 + (xtra < 0 && buf_meta_total(buf, kMTMetaLines));
-  }
-
-  if (buf->b_mod_set) {
-    // find the maximum area that must be redisplayed
-    buf->b_mod_top = MIN(buf->b_mod_top, lnum);
-    if (lnum < buf->b_mod_bot) {
-      // adjust old bot position for xtra lines
-      buf->b_mod_bot += xtra;
-      buf->b_mod_bot = MAX(buf->b_mod_bot, lnum);
-    }
-    buf->b_mod_bot = MAX(buf->b_mod_bot, lnume + xtra);
-    buf->b_mod_xlines += xtra;
-  } else {
-    // set the area that must be redisplayed
-    buf->b_mod_set = true;
-    buf->b_mod_top = lnum;
-    buf->b_mod_bot = lnume + xtra;
-    buf->b_mod_xlines = xtra;
-  }
+  rs_changed_lines_redraw_buf(buf, lnum, lnume, xtra);
 }
 
 /// Changed lines for a buffer.
