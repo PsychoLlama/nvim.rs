@@ -46,6 +46,10 @@ extern "C" {
         lnum: *mut LinenrT,
     ) -> c_int;
     fn nvim_ex_sign_impl(eap: *mut c_void);
+
+    // Command completion composite accessors
+    fn nvim_get_sign_name_impl(xp: *mut c_void, idx: c_int) -> *mut c_char;
+    fn nvim_set_context_in_sign_cmd_impl(xp: *mut c_void, arg: *mut c_char);
 }
 
 // =============================================================================
@@ -578,6 +582,34 @@ pub unsafe extern "C" fn rs_ex_sign(eap: *mut c_void) {
         return;
     }
     nvim_ex_sign_impl(eap);
+}
+
+// =============================================================================
+// Command Completion FFI Wrappers
+// =============================================================================
+
+/// Get sign command expansion string for command line completion.
+///
+/// # Safety
+///
+/// `xp` must be a valid expand_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_sign_name(xp: *mut c_void, idx: c_int) -> *mut c_char {
+    nvim_get_sign_name_impl(xp, idx)
+}
+
+/// Set command line completion context for :sign command.
+///
+/// # Safety
+///
+/// `xp` must be a valid expand_T pointer.
+/// `arg` must be a valid, writable C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_context_in_sign_cmd(xp: *mut c_void, arg: *mut c_char) {
+    if xp.is_null() || arg.is_null() {
+        return;
+    }
+    nvim_set_context_in_sign_cmd_impl(xp, arg);
 }
 
 // =============================================================================
