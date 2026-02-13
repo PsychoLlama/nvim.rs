@@ -10,10 +10,12 @@
 use std::ffi::c_char;
 
 pub mod ffi;
+mod convert;
 mod restore;
 mod save;
 mod stack;
 
+pub use convert::*;
 pub use restore::*;
 pub use save::*;
 pub use stack::*;

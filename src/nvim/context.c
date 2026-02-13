@@ -33,6 +33,8 @@ extern Context *rs_ctx_get(size_t index);
 extern void rs_ctx_free_all(void);
 extern void rs_ctx_save(Context *ctx, int flags);
 extern bool rs_ctx_restore(Context *ctx, int flags);
+extern Dict rs_ctx_to_dict(Context *ctx, Arena *arena);
+extern int rs_ctx_from_dict(Dict dict, Context *ctx, Error *err);
 
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
@@ -95,88 +97,18 @@ bool ctx_restore(Context *ctx, const int flags)
   return rs_ctx_restore(ctx, flags);
 }
 
-/// Convert readfile()-style array to String
-///
-/// @param[in]  array  readfile()-style array to convert.
-/// @param[out]  err   Error object.
-///
-/// @return String with conversion result.
-static inline String array_to_string(Array array, Error *err)
-  FUNC_ATTR_NONNULL_ALL
-{
-  String sbuf = STRING_INIT;
-
-  typval_T list_tv;
-  object_to_vim(ARRAY_OBJ(array), &list_tv, err);
-
-  assert(list_tv.v_type == VAR_LIST);
-  if (!encode_vim_list_to_buf(list_tv.vval.v_list, &sbuf.size, &sbuf.data)) {
-    api_set_error(err, kErrorTypeException, "%s",
-                  "E474: Failed to convert list to msgpack string buffer");
-  }
-
-  tv_clear(&list_tv);
-  return sbuf;
-}
-
 /// Converts Context to Dict representation.
-///
-/// @param[in]  ctx  Context to convert.
-///
-/// @return Dict representing "ctx".
 Dict ctx_to_dict(Context *ctx, Arena *arena)
   FUNC_ATTR_NONNULL_ALL
 {
-  assert(ctx != NULL);
-
-  Dict rv = arena_dict(arena, 5);
-
-  PUT_C(rv, "regs", ARRAY_OBJ(string_to_array(ctx->regs, false, arena)));
-  PUT_C(rv, "jumps", ARRAY_OBJ(string_to_array(ctx->jumps, false, arena)));
-  PUT_C(rv, "bufs", ARRAY_OBJ(string_to_array(ctx->bufs, false, arena)));
-  PUT_C(rv, "gvars", ARRAY_OBJ(string_to_array(ctx->gvars, false, arena)));
-  PUT_C(rv, "funcs", ARRAY_OBJ(copy_array(ctx->funcs, arena)));
-
-  return rv;
+  return rs_ctx_to_dict(ctx, arena);
 }
 
 /// Converts Dict representation of Context back to Context object.
-///
-/// @param[in]   dict  Context Dict representation.
-/// @param[out]  ctx   Context object to store conversion result into.
-/// @param[out]  err   Error object.
-///
-/// @return types of included context items.
 int ctx_from_dict(Dict dict, Context *ctx, Error *err)
   FUNC_ATTR_NONNULL_ALL
 {
-  assert(ctx != NULL);
-
-  int types = 0;
-  for (size_t i = 0; i < dict.size && !ERROR_SET(err); i++) {
-    KeyValuePair item = dict.items[i];
-    if (item.value.type != kObjectTypeArray) {
-      continue;
-    }
-    if (strequal(item.key.data, "regs")) {
-      types |= kCtxRegs;
-      ctx->regs = array_to_string(item.value.data.array, err);
-    } else if (strequal(item.key.data, "jumps")) {
-      types |= kCtxJumps;
-      ctx->jumps = array_to_string(item.value.data.array, err);
-    } else if (strequal(item.key.data, "bufs")) {
-      types |= kCtxBufs;
-      ctx->bufs = array_to_string(item.value.data.array, err);
-    } else if (strequal(item.key.data, "gvars")) {
-      types |= kCtxGVars;
-      ctx->gvars = array_to_string(item.value.data.array, err);
-    } else if (strequal(item.key.data, "funcs")) {
-      types |= kCtxFuncs;
-      ctx->funcs = copy_object(item.value, NULL).data.array;
-    }
-  }
-
-  return types;
+  return rs_ctx_from_dict(dict, ctx, err);
 }
 
 // Rust FFI accessor functions
@@ -270,6 +202,75 @@ void nvim_ctx_restore_funcs(Context *ctx)
   for (size_t i = 0; i < ctx->funcs.size; i++) {
     do_cmdline_cmd(ctx->funcs.items[i].data.string.data);
   }
+}
+
+/// Converts readfile()-style array to String (C accessor for Rust).
+/// Kept in C due to object_to_vim, encode_vim_list_to_buf coupling.
+static inline String nvim_ctx_array_to_string(Array array, Error *err)
+{
+  String sbuf = STRING_INIT;
+
+  typval_T list_tv;
+  object_to_vim(ARRAY_OBJ(array), &list_tv, err);
+
+  assert(list_tv.v_type == VAR_LIST);
+  if (!encode_vim_list_to_buf(list_tv.vval.v_list, &sbuf.size, &sbuf.data)) {
+    api_set_error(err, kErrorTypeException, "%s",
+                  "E474: Failed to convert list to msgpack string buffer");
+  }
+
+  tv_clear(&list_tv);
+  return sbuf;
+}
+
+/// Converts Context to Dict representation (C accessor for Rust).
+/// Kept in C due to Arena, PUT_C, string_to_array, copy_array coupling.
+Dict nvim_ctx_to_dict_impl(Context *ctx, Arena *arena)
+{
+  assert(ctx != NULL);
+
+  Dict rv = arena_dict(arena, 5);
+
+  PUT_C(rv, "regs", ARRAY_OBJ(string_to_array(ctx->regs, false, arena)));
+  PUT_C(rv, "jumps", ARRAY_OBJ(string_to_array(ctx->jumps, false, arena)));
+  PUT_C(rv, "bufs", ARRAY_OBJ(string_to_array(ctx->bufs, false, arena)));
+  PUT_C(rv, "gvars", ARRAY_OBJ(string_to_array(ctx->gvars, false, arena)));
+  PUT_C(rv, "funcs", ARRAY_OBJ(copy_array(ctx->funcs, arena)));
+
+  return rv;
+}
+
+/// Converts Dict representation of Context back to Context object (C accessor for Rust).
+/// Kept in C due to array_to_string, copy_object, ERROR_SET coupling.
+int nvim_ctx_from_dict_impl(Dict dict, Context *ctx, Error *err)
+{
+  assert(ctx != NULL);
+
+  int types = 0;
+  for (size_t i = 0; i < dict.size && !ERROR_SET(err); i++) {
+    KeyValuePair item = dict.items[i];
+    if (item.value.type != kObjectTypeArray) {
+      continue;
+    }
+    if (strequal(item.key.data, "regs")) {
+      types |= kCtxRegs;
+      ctx->regs = nvim_ctx_array_to_string(item.value.data.array, err);
+    } else if (strequal(item.key.data, "jumps")) {
+      types |= kCtxJumps;
+      ctx->jumps = nvim_ctx_array_to_string(item.value.data.array, err);
+    } else if (strequal(item.key.data, "bufs")) {
+      types |= kCtxBufs;
+      ctx->bufs = nvim_ctx_array_to_string(item.value.data.array, err);
+    } else if (strequal(item.key.data, "gvars")) {
+      types |= kCtxGVars;
+      ctx->gvars = nvim_ctx_array_to_string(item.value.data.array, err);
+    } else if (strequal(item.key.data, "funcs")) {
+      types |= kCtxFuncs;
+      ctx->funcs = copy_object(item.value, NULL).data.array;
+    }
+  }
+
+  return types;
 }
 
 /// Saves functions to a context (C accessor for Rust).
