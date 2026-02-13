@@ -118,6 +118,13 @@ extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
 extern bool rs_au_exists(const char *arg);
 extern char *rs_aucmd_handler_to_string(int event, size_t idx);
 
+// Phase 7: :autocmd command + registration
+extern void rs_do_autocmd(void *eap, char *arg_in, int forceit);
+extern void rs_do_all_autocmd_events(const char *pat, bool once, int nested, char *cmd,
+                                     bool del, int group);
+extern int rs_do_autocmd_event(int event, const char *pat, bool once, int nested,
+                               const char *cmd, bool del, int group);
+
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
 {
@@ -475,138 +482,12 @@ void au_event_restore(char *old_ei)
 // Mostly a {group} argument can optionally appear before <event>.
 void do_autocmd(exarg_T *eap, char *arg_in, int forceit)
 {
-  char *arg = arg_in;
-  char *envpat = NULL;
-  char *cmd;
-  bool need_free = false;
-  bool nested = false;
-  bool once = false;
-  int group;
-
-  if (*arg == '|') {
-    eap->nextcmd = arg + 1;
-    arg = "";
-    group = AUGROUP_ALL;  // no argument, use all groups
-  } else {
-    // Check for a legal group name.  If not, use AUGROUP_ALL.
-    group = arg_augroup_get(&arg);
-  }
-
-  // Scan over the events.
-  // If we find an illegal name, return here, don't do anything.
-  char *pat = arg_event_skip(arg, group != AUGROUP_ALL);
-  if (pat == NULL) {
-    return;
-  }
-
-  pat = skipwhite(pat);
-  if (*pat == '|') {
-    eap->nextcmd = pat + 1;
-    pat = "";
-    cmd = "";
-  } else {
-    // Scan over the pattern.  Put a NUL at the end.
-    cmd = pat;
-    while (*cmd && (!ascii_iswhite(*cmd) || cmd[-1] == '\\')) {
-      cmd++;
-    }
-    if (*cmd) {
-      *cmd++ = NUL;
-    }
-
-    // Expand environment variables in the pattern.  Set 'shellslash', we want
-    // forward slashes here.
-    if (vim_strchr(pat, '$') != NULL || vim_strchr(pat, '~') != NULL) {
-#ifdef BACKSLASH_IN_FILENAME
-      int p_ssl_save = p_ssl;
-
-      p_ssl = true;
-#endif
-      envpat = expand_env_save(pat);
-#ifdef BACKSLASH_IN_FILENAME
-      p_ssl = p_ssl_save;
-#endif
-      if (envpat != NULL) {
-        pat = envpat;
-      }
-    }
-
-    cmd = skipwhite(cmd);
-
-    bool invalid_flags = false;
-    for (size_t i = 0; i < 2; i++) {
-      if (*cmd == NUL) {
-        continue;
-      }
-
-      invalid_flags |= arg_autocmd_flag_get(&once, &cmd, "++once", 6);
-      invalid_flags |= arg_autocmd_flag_get(&nested, &cmd, "++nested", 8);
-
-      // Check the deprecated "nested" flag.
-      invalid_flags |= arg_autocmd_flag_get(&nested, &cmd, "nested", 6);
-    }
-
-    if (invalid_flags) {
-      return;
-    }
-
-    // Find the start of the commands.
-    // Expand <sfile> in it.
-    if (*cmd != NUL) {
-      cmd = expand_sfile(cmd);
-      if (cmd == NULL) {  // some error
-        return;
-      }
-      need_free = true;
-    }
-  }
-
-  const bool is_showing = !forceit && *cmd == NUL;
-
-  // Print header when showing autocommands.
-  if (is_showing) {
-    // Highlight title
-    msg_ext_set_kind("list_cmd");
-    msg_puts_title(_("\n--- Autocommands ---"));
-
-    if (*arg == '*' || *arg == '|' || *arg == NUL) {
-      au_show_for_all_events(group, pat);
-    } else {
-      event_T event = event_name2nr(arg, &arg);
-      assert(event < NUM_EVENTS);
-      au_show_for_event(group, event, pat);
-    }
-  } else {
-    if (*arg == '*' || *arg == NUL || *arg == '|') {
-      if (*cmd != NUL) {
-        emsg(_(e_cannot_define_autocommands_for_all_events));
-      } else {
-        do_all_autocmd_events(pat, once, nested, cmd, forceit, group);
-      }
-    } else {
-      while (*arg && *arg != '|' && !ascii_iswhite(*arg)) {
-        event_T event = event_name2nr(arg, &arg);
-        assert(event < NUM_EVENTS);
-        if (do_autocmd_event(event, pat, once, nested, cmd, forceit, group) == FAIL) {
-          break;
-        }
-      }
-    }
-  }
-
-  if (need_free) {
-    xfree(cmd);
-  }
-  xfree(envpat);
+  rs_do_autocmd(eap, arg_in, forceit);
 }
 
 void do_all_autocmd_events(const char *pat, bool once, int nested, char *cmd, bool del, int group)
 {
-  FOR_ALL_AUEVENTS(event) {
-    if (do_autocmd_event(event, pat, once, nested, cmd, del, group) == FAIL) {
-      return;
-    }
-  }
+  rs_do_all_autocmd_events(pat, once, nested, cmd, del, group);
 }
 
 // do_autocmd() for one event.
@@ -620,71 +501,7 @@ int do_autocmd_event(event_T event, const char *pat, bool once, int nested, cons
                      bool del, int group)
   FUNC_ATTR_NONNULL_ALL
 {
-  // Cannot be used to show all patterns. See au_show_for_event or au_show_for_all_events
-  assert(*pat != NUL || del);
-
-  char buflocal_pat[BUFLOCAL_PAT_LEN];  // for "<buffer=X>"
-
-  bool is_adding_cmd = *cmd != NUL;
-  const int findgroup = group == AUGROUP_ALL ? current_augroup : group;
-
-  // Delete all aupat for an event.
-  if (*pat == NUL && del) {
-    aucmd_del_for_event_and_group(event, findgroup);
-    return OK;
-  }
-
-  // Loop through all the specified patterns.
-  int patlen = (int)aucmd_pattern_length(pat);
-  while (patlen) {
-    // detect special <buffer[=X]> buffer-local patterns
-    bool is_buflocal = aupat_is_buflocal(pat, patlen);
-    if (is_buflocal) {
-      const int buflocal_nr = aupat_get_buflocal_nr(pat, patlen);
-
-      // normalize pat into standard "<buffer>#N" form
-      aupat_normalize_buflocal_pat(buflocal_pat, pat, patlen, buflocal_nr);
-
-      pat = buflocal_pat;
-      patlen = (int)strlen(buflocal_pat);
-    }
-
-    if (del) {
-      assert(*pat != NUL);
-
-      // Find existing autocommands with this pattern.
-      AutoCmdVec *const acs = &autocmds[(int)event];
-      for (size_t i = 0; i < kv_size(*acs); i++) {
-        AutoCmd *const ac = &kv_A(*acs, i);
-        AutoPat *const ap = ac->pat;
-        // Accept a pattern when:
-        // - a group was specified and it's that group
-        // - the length of the pattern matches
-        // - the pattern matches.
-        // For <buffer[=X]>, this condition works because we normalize
-        // all buffer-local patterns.
-        if (ap != NULL && ap->group == findgroup && ap->patlen == patlen
-            && strncmp(pat, ap->pat, (size_t)patlen) == 0) {
-          // Remove existing autocommands.
-          // If adding any new autocmd's for this AutoPat, don't
-          // delete the pattern from the autopat list, append to
-          // this list.
-          aucmd_del(ac);
-        }
-      }
-    }
-
-    if (is_adding_cmd) {
-      Callback handler_fn = CALLBACK_INIT;
-      autocmd_register(0, event, pat, patlen, group, once, nested, NULL, cmd, &handler_fn);
-    }
-
-    pat = aucmd_next_pattern(pat, (size_t)patlen);
-    patlen = (int)aucmd_pattern_length(pat);
-  }
-
-  au_cleanup();  // may really delete removed patterns/commands now
-  return OK;
+  return rs_do_autocmd_event((int)event, pat, once, nested, cmd, del, group);
 }
 
 /// Registers an autocmd. The handler may be a Ex command or callback function, decided by
@@ -2719,4 +2536,89 @@ char *nvim_autocmd_callback_to_string(int event, size_t idx)
 char *nvim_autocmd_xstrdup(const char *s)
 {
   return xstrdup(s);
+}
+
+// Phase 7: :autocmd command + registration accessors
+
+/// Get eap->nextcmd.
+const char *nvim_autocmd_eap_get_nextcmd(void *eap)
+{
+  return ((exarg_T *)eap)->nextcmd;
+}
+
+/// Set eap->nextcmd.
+void nvim_autocmd_eap_set_nextcmd(void *eap, char *val)
+{
+  ((exarg_T *)eap)->nextcmd = val;
+}
+
+/// Wrapper for vim_strchr.
+const char *nvim_autocmd_vim_strchr(const char *s, int c)
+{
+  return vim_strchr(s, c);
+}
+
+/// Wrapper for expand_env_save.
+char *nvim_autocmd_expand_env_save(const char *pat)
+{
+  return expand_env_save((char *)pat);
+}
+
+/// Wrapper for expand_sfile.
+char *nvim_autocmd_expand_sfile(const char *cmd)
+{
+  return expand_sfile((char *)cmd);
+}
+
+/// Wrapper for msg_ext_set_kind + msg_puts_title for autocmd listing header.
+void nvim_autocmd_show_header(void)
+{
+  msg_ext_set_kind("list_cmd");
+  msg_puts_title(_("\n--- Autocommands ---"));
+}
+
+/// Get the "E219: Cannot define autocommands for ALL events" error.
+const char *nvim_autocmd_get_e_cannot_define_for_all(void)
+{
+  return _(e_cannot_define_autocommands_for_all_events);
+}
+
+/// Get current_augroup value.
+int nvim_autocmd_get_current_augroup(void)
+{
+  return current_augroup;
+}
+
+/// Delete matching autocmds for a pattern at (event, idx) if they match findgroup/pat/patlen.
+void nvim_autocmd_del_matching(int event, int findgroup, const char *pat, int patlen)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  for (size_t i = 0; i < kv_size(*acs); i++) {
+    AutoCmd *const ac = &kv_A(*acs, i);
+    AutoPat *const ap = ac->pat;
+    if (ap != NULL && ap->group == findgroup && ap->patlen == patlen
+        && strncmp(pat, ap->pat, (size_t)patlen) == 0) {
+      aucmd_del(ac);
+    }
+  }
+}
+
+/// Register an autocmd with a command string handler. Wraps autocmd_register.
+int nvim_autocmd_register_cmd(int event, const char *pat, int patlen, int group,
+                              bool once, bool nested, const char *cmd)
+{
+  Callback handler_fn = CALLBACK_INIT;
+  return autocmd_register(0, (event_T)event, pat, patlen, group, once, nested,
+                          NULL, cmd, &handler_fn);
+}
+
+/// OK / FAIL constants.
+int nvim_autocmd_ok(void)
+{
+  return OK;
+}
+
+int nvim_autocmd_fail(void)
+{
+  return FAIL;
 }

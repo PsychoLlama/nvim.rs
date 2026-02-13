@@ -121,6 +121,26 @@ extern "C" {
     fn nvim_autocmd_xmallocz(len: usize) -> *mut c_char;
     fn nvim_autocmd_xstrdup(s: *const c_char) -> *mut c_char;
 
+    // Phase 7: :autocmd command + registration accessors
+    fn nvim_autocmd_eap_set_nextcmd(eap: *mut c_void, val: *mut c_char);
+    fn nvim_autocmd_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn nvim_autocmd_expand_env_save(pat: *const c_char) -> *mut c_char;
+    fn nvim_autocmd_expand_sfile(cmd: *const c_char) -> *mut c_char;
+    fn nvim_autocmd_show_header();
+    fn nvim_autocmd_get_e_cannot_define_for_all() -> *const c_char;
+    fn nvim_autocmd_get_current_augroup() -> c_int;
+    fn nvim_autocmd_del_matching(event: c_int, findgroup: c_int, pat: *const c_char, patlen: c_int);
+    fn nvim_autocmd_register_cmd(
+        event: c_int,
+        pat: *const c_char,
+        patlen: c_int,
+        group: c_int,
+        once: bool,
+        nested: bool,
+        cmd: *const c_char,
+    ) -> c_int;
+    fn nvim_autocmd_ok() -> c_int;
+
     // Rust functions from other modules (called via FFI)
     fn rs_augroup_find(name: *const c_char) -> c_int;
     fn rs_augroup_add(name: *const c_char) -> c_int;
@@ -1152,6 +1172,229 @@ unsafe fn strnicmp_prefix_8(s: *const c_char, prefix: &[u8; 8]) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn rs_aucmd_handler_to_string(event: c_int, idx: usize) -> *mut c_char {
     nvim_autocmd_get_handler_str(event, idx)
+}
+
+// =============================================================================
+// Phase 7: :autocmd Command + Registration
+// =============================================================================
+
+/// Handle the `:autocmd` command.
+///
+/// # Safety
+/// `eap` must be a valid `exarg_T*`, `arg_in` must be a valid NUL-terminated mutable string.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_do_autocmd(eap: *mut c_void, arg_in: *mut c_char, forceit: c_int) {
+    let mut arg = arg_in;
+    let mut envpat: *mut c_char = std::ptr::null_mut();
+    let mut cmd: *mut c_char;
+    let mut need_free = false;
+    let mut nested = false;
+    let mut once = false;
+    let group: c_int;
+
+    if *arg == b'|' as c_char {
+        nvim_autocmd_eap_set_nextcmd(eap, arg.add(1));
+        arg = c"".as_ptr().cast_mut();
+        group = group::AUGROUP_ALL;
+    } else {
+        let mut arg_ptr: *const c_char = arg;
+        group = rs_arg_augroup_get(&raw mut arg_ptr);
+        arg = arg_ptr.cast_mut();
+    }
+
+    // Scan over the events
+    let pat_result = rs_arg_event_skip(arg, group != group::AUGROUP_ALL);
+    if pat_result.is_null() {
+        return;
+    }
+    let mut pat: *mut c_char = nvim_skipwhite(pat_result);
+
+    if *pat == b'|' as c_char {
+        nvim_autocmd_eap_set_nextcmd(eap, pat.add(1));
+        pat = c"".as_ptr().cast_mut();
+        cmd = c"".as_ptr().cast_mut();
+    } else {
+        // Scan over the pattern. Put a NUL at the end.
+        cmd = pat;
+        while *cmd != 0 && (!is_ascii_white(*cmd as u8) || *cmd.sub(1) == b'\\' as c_char) {
+            cmd = cmd.add(1);
+        }
+        if *cmd != 0 {
+            *cmd = 0;
+            cmd = cmd.add(1);
+        }
+
+        // Expand environment variables in the pattern
+        if !nvim_autocmd_vim_strchr(pat, c_int::from(b'$')).is_null()
+            || !nvim_autocmd_vim_strchr(pat, c_int::from(b'~')).is_null()
+        {
+            envpat = nvim_autocmd_expand_env_save(pat);
+            if !envpat.is_null() {
+                pat = envpat;
+            }
+        }
+
+        cmd = nvim_skipwhite(cmd);
+
+        // Parse ++once, ++nested flags
+        let mut invalid_flags = false;
+        let mut cmd_const: *const c_char = cmd;
+        for _ in 0..2 {
+            if *cmd_const == 0 {
+                continue;
+            }
+            invalid_flags |=
+                rs_arg_autocmd_flag_get(&raw mut once, &raw mut cmd_const, c"++once".as_ptr(), 6);
+            invalid_flags |= rs_arg_autocmd_flag_get(
+                &raw mut nested,
+                &raw mut cmd_const,
+                c"++nested".as_ptr(),
+                8,
+            );
+            // Check the deprecated "nested" flag
+            invalid_flags |=
+                rs_arg_autocmd_flag_get(&raw mut nested, &raw mut cmd_const, c"nested".as_ptr(), 6);
+        }
+        cmd = cmd_const.cast_mut();
+
+        if invalid_flags {
+            return;
+        }
+
+        // Expand <sfile> in command
+        if *cmd != 0 {
+            cmd = nvim_autocmd_expand_sfile(cmd);
+            if cmd.is_null() {
+                return;
+            }
+            need_free = true;
+        }
+    }
+
+    let is_showing = forceit == 0 && *cmd == 0;
+
+    if is_showing {
+        nvim_autocmd_show_header();
+        if *arg == b'*' as c_char || *arg == b'|' as c_char || *arg == 0 {
+            rs_au_show_for_all_events(group, pat);
+        } else {
+            let result = event::rs_event_name2nr(arg);
+            rs_au_show_for_event(group, result.event, pat);
+        }
+    } else if *arg == b'*' as c_char || *arg == 0 || *arg == b'|' as c_char {
+        if *cmd != 0 {
+            nvim_autocmd_emsg(nvim_autocmd_get_e_cannot_define_for_all());
+        } else {
+            rs_do_all_autocmd_events(pat, once, c_int::from(nested), cmd, forceit != 0, group);
+        }
+    } else {
+        while *arg != 0 && *arg != b'|' as c_char && !is_ascii_white(*arg as u8) {
+            let result = event::rs_event_name2nr(arg);
+            arg = result.end_ptr.cast_mut();
+            if rs_do_autocmd_event(result.event, pat, once, nested, cmd, forceit != 0, group)
+                != nvim_autocmd_ok()
+            {
+                break;
+            }
+        }
+    }
+
+    if need_free {
+        nvim_autocmd_xfree(cmd);
+    }
+    nvim_autocmd_xfree(envpat);
+}
+
+/// Execute `do_autocmd_event` for all events.
+///
+/// # Safety
+/// All pointers must be valid NUL-terminated strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_all_autocmd_events(
+    pat: *const c_char,
+    once: bool,
+    nested: c_int,
+    cmd: *mut c_char,
+    del: bool,
+    group: c_int,
+) {
+    for event in 0..NUM_EVENTS {
+        if rs_do_autocmd_event(event, pat, once, nested != 0, cmd, del, group) != nvim_autocmd_ok()
+        {
+            return;
+        }
+    }
+}
+
+/// Define or delete an autocommand for one event.
+///
+/// # Safety
+/// `pat` and `cmd` must be valid NUL-terminated C strings.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_do_autocmd_event(
+    event: c_int,
+    pat: *const c_char,
+    once: bool,
+    nested: bool,
+    cmd: *const c_char,
+    del: bool,
+    group: c_int,
+) -> c_int {
+    let is_adding_cmd = *cmd != 0;
+    let findgroup = if group == group::AUGROUP_ALL {
+        nvim_autocmd_get_current_augroup()
+    } else {
+        group
+    };
+
+    // Delete all aupat for an event
+    if *pat == 0 && del {
+        rs_aucmd_del_for_event_and_group(event, findgroup);
+        return nvim_autocmd_ok();
+    }
+
+    let mut buflocal_pat = [0u8; BUFLOCAL_PAT_LEN];
+    let mut pat = pat;
+
+    #[allow(clippy::cast_possible_truncation)]
+    let mut patlen = rs_aucmd_pattern_length(pat) as c_int;
+
+    while patlen != 0 {
+        // Detect special <buffer[=X]> buffer-local patterns
+        if rs_aupat_is_buflocal(pat, patlen) != 0 {
+            let buflocal_nr = rs_aupat_get_buflocal_nr(pat, patlen);
+            rs_aupat_normalize_buflocal_pat(
+                buflocal_pat.as_mut_ptr().cast(),
+                pat,
+                patlen,
+                buflocal_nr,
+            );
+            pat = buflocal_pat.as_ptr().cast();
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                patlen = c_strlen(pat) as c_int;
+            }
+        }
+
+        if del {
+            nvim_autocmd_del_matching(event, findgroup, pat, patlen);
+        }
+
+        if is_adding_cmd {
+            nvim_autocmd_register_cmd(event, pat, patlen, group, once, nested, cmd);
+        }
+
+        pat = rs_aucmd_next_pattern(pat, patlen as usize);
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            patlen = rs_aucmd_pattern_length(pat) as c_int;
+        }
+    }
+
+    rs_au_cleanup();
+    nvim_autocmd_ok()
 }
 
 #[cfg(test)]
