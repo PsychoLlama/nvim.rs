@@ -1,16 +1,24 @@
-Plan: ~/.claude/plans/shiny-yawning-thompson.md
+Plan: ~/.claude/plans/groovy-snuggling-clover.md
 
-All 6 phases of the menu migration plan are complete. Here's a summary of what was accomplished:
+All phases complete. Here's a summary:
 
-**Phase 6 (this session)** ported the final 5 functions:
-- `set_context_in_menu_cmd` → `rs_set_context_in_menu_cmd` in `complete_expand.rs` — command-line completion context setup
-- `get_menu_name` → `rs_get_menu_name` — completion generator for submenus only
-- `get_menu_names` → `rs_get_menu_names` — completion generator for menus + entries
-- `ex_menutranslate` → `rs_ex_menutranslate` in `translate.rs` — `:menutranslate` command handler
-- `menutrans_lookup` → `rs_menutrans_lookup` — translation table lookup
+## Completed
 
-**Overall migration stats across all 6 phases:**
-- ~28 functions migrated from C to Rust
-- `menu.c` reduced from ~1,985 lines to thin wrappers + accessors + deferred functions
-- 5 functions deferred (execute_menu, menu_get, menu_get_recursive, menuitem_getinfo, f_menu_info) as they're deeply tied to VimL eval types
-- All checks pass: build, smoke-test, rust-fmt-check, rust-clippy, rust-test (4155 tests)
+**Phase 0** — Fixed 7 wrong `DG_START_*` constants in Rust, added `_Static_assert` for all 26 in C.
+
+**Phase 1** — Moved `digraphdefault[]` (~1366 entries) from C to Rust `data.rs`. Script-generated from C source. Rust callers now access `DIGRAPH_DEFAULT` directly as a slice. C callers use `rs_get_digraphdefault()`/`rs_get_digraphdefault_len()` FFI. Removed ~1430 lines from `digraph.c`.
+
+**Phase 2** — Migrated `digraph_header()`, `printdigraph()`, and `listdigraphs()` to Rust. Moved `header_table[]` (26 translatable strings) to Rust. `ex_digraphs()` now calls `rs_listdigraphs()` directly.
+
+**Phase 3** — Migrated `get_digraph()` (Ctrl-K input) to Rust. Added 6 C accessor functions for globals (`no_mapping`, `allow_keys`, `cmdline_star`, `plain_vgetc`, `putcmdline`, `add_to_showcmd`).
+
+**Phases 4 & 5** — Deferred as planned (VimL eval functions and keymap functions stay in C).
+
+### Validation
+- `just build` — passes
+- `just smoke-test` — passes
+- `just rust-fmt-check` — passes
+- `just rust-clippy` — passes
+- `just rust-test` — 4155 tests pass
+- `digraph.c` reduced from ~2228 to 703 lines
+- 26 `#[no_mangle]` FFI exports in the digraph crate
