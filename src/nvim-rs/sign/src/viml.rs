@@ -11,9 +11,9 @@
 //! - sign_unplace()
 //! - sign_unplacelist()
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
-use crate::{LinenrT, SignBufHandle, SignHandle, SIGN_DEF_PRIO};
+use crate::{LinenrT, MTKeyHandle, SignBufHandle, SignHandle, SIGN_DEF_PRIO};
 
 // =============================================================================
 // C FFI declarations
@@ -377,6 +377,352 @@ pub unsafe extern "C" fn rs_sign_jump_viml_validate(params: *const SignJumpVimlP
     }
 
     true
+}
+
+// =============================================================================
+// C Composite Accessor Extern Declarations (Phase 10)
+// =============================================================================
+
+extern "C" {
+    // Dict/list construction (complex C operations stay in C)
+    fn nvim_sign_get_info_dict_impl(sp: SignHandle) -> *mut c_void;
+    fn nvim_sign_get_placed_info_dict_impl(mark: MTKeyHandle) -> *mut c_void;
+    fn nvim_get_buffer_signs_impl(buf: SignBufHandle) -> *mut c_void;
+    fn nvim_sign_get_placed_in_buf_impl(
+        buf: SignBufHandle,
+        lnum: LinenrT,
+        sign_id: c_int,
+        group: *const c_char,
+        retlist: *mut c_void,
+    );
+    fn nvim_sign_get_placed_impl(
+        buf: SignBufHandle,
+        lnum: LinenrT,
+        id: c_int,
+        group: *const c_char,
+        retlist: *mut c_void,
+    );
+    fn nvim_sign_define_from_dict_impl(name: *mut c_char, dict: *mut c_void) -> c_int;
+    fn nvim_sign_define_multiple_impl(l: *mut c_void, retlist: *mut c_void);
+    fn nvim_sign_place_from_dict_impl(
+        id_tv: *mut c_void,
+        group_tv: *mut c_void,
+        name_tv: *mut c_void,
+        buf_tv: *mut c_void,
+        dict: *mut c_void,
+    ) -> c_int;
+    fn nvim_sign_unplace_from_dict_impl(group_tv: *mut c_void, dict: *mut c_void) -> c_int;
+    fn nvim_sign_undefine_multiple_impl(l: *mut c_void, retlist: *mut c_void);
+
+    // f_sign_* VimL function implementations
+    fn nvim_f_sign_define_impl(argvars: *mut c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_sign_getdefined_impl(argvars: *mut c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_sign_getplaced_impl(argvars: *mut c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_sign_jump_impl(argvars: *mut c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_sign_place_impl(argvars: *mut c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_sign_placelist_impl(argvars: *mut c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_sign_undefine_impl(argvars: *mut c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_sign_unplace_impl(argvars: *mut c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_sign_unplacelist_impl(argvars: *mut c_void, rettv: *mut c_void, fptr: *mut c_void);
+}
+
+// =============================================================================
+// VimL Function FFI Wrappers (Phase 10)
+// =============================================================================
+
+/// Get sign info as a dictionary.
+///
+/// Delegates to C composite accessor for dict construction.
+///
+/// # Safety
+///
+/// `sp` must be a valid sign handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_get_info_dict(sp: SignHandle) -> *mut c_void {
+    if sp.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_sign_get_info_dict_impl(sp)
+}
+
+/// Get placed sign info as a dictionary.
+///
+/// Delegates to C composite accessor for dict construction from MTKey.
+///
+/// # Safety
+///
+/// `mark_ptr` must be a valid pointer to an MTKey.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_get_placed_info_dict(mark_ptr: MTKeyHandle) -> *mut c_void {
+    if mark_ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_sign_get_placed_info_dict_impl(mark_ptr)
+}
+
+/// Get all signs placed in a buffer as a list.
+///
+/// Delegates to C composite accessor for list construction.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_buffer_signs(buf: SignBufHandle) -> *mut c_void {
+    if buf.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_get_buffer_signs_impl(buf)
+}
+
+/// Get placed signs in a buffer, filtered by parameters.
+///
+/// Delegates to C composite accessor for marktree iteration and list building.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer handle. `retlist` must be a valid list handle.
+/// `group` must be null or a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_get_placed_in_buf(
+    buf: SignBufHandle,
+    lnum: LinenrT,
+    sign_id: c_int,
+    group: *const c_char,
+    retlist: *mut c_void,
+) {
+    if buf.is_null() || retlist.is_null() {
+        return;
+    }
+    nvim_sign_get_placed_in_buf_impl(buf, lnum, sign_id, group, retlist);
+}
+
+/// Get placed signs across buffers.
+///
+/// If `buf` is non-null, gets signs for that buffer only.
+/// Otherwise gets signs for all buffers.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer handle or null. `retlist` must be a valid list.
+/// `group` must be null or a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_get_placed(
+    buf: SignBufHandle,
+    lnum: LinenrT,
+    id: c_int,
+    group: *const c_char,
+    retlist: *mut c_void,
+) {
+    if retlist.is_null() {
+        return;
+    }
+    nvim_sign_get_placed_impl(buf, lnum, id, group, retlist);
+}
+
+/// Define a sign from a VimL dictionary.
+///
+/// Delegates to C composite accessor for dict key extraction and sign definition.
+///
+/// # Safety
+///
+/// `name` must be null or a valid C string. `dict` must be a valid dict handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_define_from_dict(name: *mut c_char, dict: *mut c_void) -> c_int {
+    nvim_sign_define_from_dict_impl(name, dict)
+}
+
+/// Define multiple signs from a VimL list.
+///
+/// Delegates to C composite accessor for list iteration and sign definitions.
+///
+/// # Safety
+///
+/// `l` must be a valid list handle. `retlist` must be a valid list handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_define_multiple(l: *mut c_void, retlist: *mut c_void) {
+    if l.is_null() || retlist.is_null() {
+        return;
+    }
+    nvim_sign_define_multiple_impl(l, retlist);
+}
+
+/// Place a sign from VimL dictionary parameters.
+///
+/// Delegates to C composite accessor for typval extraction and sign placement.
+///
+/// # Safety
+///
+/// All typval pointers must be valid. `dict` must be a valid dict handle or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_place_from_dict(
+    id_tv: *mut c_void,
+    group_tv: *mut c_void,
+    name_tv: *mut c_void,
+    buf_tv: *mut c_void,
+    dict: *mut c_void,
+) -> c_int {
+    nvim_sign_place_from_dict_impl(id_tv, group_tv, name_tv, buf_tv, dict)
+}
+
+/// Unplace a sign from VimL dictionary parameters.
+///
+/// Delegates to C composite accessor for typval extraction and sign removal.
+///
+/// # Safety
+///
+/// `group_tv` must be a valid typval pointer. `dict` must be a valid dict handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_unplace_from_dict(
+    group_tv: *mut c_void,
+    dict: *mut c_void,
+) -> c_int {
+    nvim_sign_unplace_from_dict_impl(group_tv, dict)
+}
+
+/// Undefine multiple signs from a VimL list.
+///
+/// Delegates to C composite accessor for list iteration and sign undefinition.
+///
+/// # Safety
+///
+/// `l` must be a valid list handle. `retlist` must be a valid list handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_undefine_multiple(l: *mut c_void, retlist: *mut c_void) {
+    if l.is_null() || retlist.is_null() {
+        return;
+    }
+    nvim_sign_undefine_multiple_impl(l, retlist);
+}
+
+// =============================================================================
+// f_sign_* VimL Function Wrappers
+// =============================================================================
+
+/// VimL sign_define() function implementation.
+///
+/// # Safety
+///
+/// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_sign_define(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    nvim_f_sign_define_impl(argvars, rettv, fptr);
+}
+
+/// VimL sign_getdefined() function implementation.
+///
+/// # Safety
+///
+/// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_sign_getdefined(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    nvim_f_sign_getdefined_impl(argvars, rettv, fptr);
+}
+
+/// VimL sign_getplaced() function implementation.
+///
+/// # Safety
+///
+/// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_sign_getplaced(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    nvim_f_sign_getplaced_impl(argvars, rettv, fptr);
+}
+
+/// VimL sign_jump() function implementation.
+///
+/// # Safety
+///
+/// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_sign_jump(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    nvim_f_sign_jump_impl(argvars, rettv, fptr);
+}
+
+/// VimL sign_place() function implementation.
+///
+/// # Safety
+///
+/// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_sign_place(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    nvim_f_sign_place_impl(argvars, rettv, fptr);
+}
+
+/// VimL sign_placelist() function implementation.
+///
+/// # Safety
+///
+/// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_sign_placelist(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    nvim_f_sign_placelist_impl(argvars, rettv, fptr);
+}
+
+/// VimL sign_undefine() function implementation.
+///
+/// # Safety
+///
+/// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_sign_undefine(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    nvim_f_sign_undefine_impl(argvars, rettv, fptr);
+}
+
+/// VimL sign_unplace() function implementation.
+///
+/// # Safety
+///
+/// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_sign_unplace(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    nvim_f_sign_unplace_impl(argvars, rettv, fptr);
+}
+
+/// VimL sign_unplacelist() function implementation.
+///
+/// # Safety
+///
+/// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_sign_unplacelist(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    nvim_f_sign_unplacelist_impl(argvars, rettv, fptr);
 }
 
 // =============================================================================
