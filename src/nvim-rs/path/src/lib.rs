@@ -4198,3 +4198,571 @@ pub unsafe extern "C" fn rs_do_path_expand(
     }
     matches
 }
+
+// ============================================================================
+// Phase 7: expand_path_option, uniquefy_paths, gen_expand_wildcards,
+//          expand_wildcards
+// ============================================================================
+
+extern "C" {
+    // --- Phase 7 accessors ---
+    /// Get path option: curbuf->b_p_path if non-empty, else p_path
+    fn nvim_path_get_path_option() -> *const c_char;
+    /// Get curbuf->b_ffname (may be NULL)
+    fn nvim_path_curbuf_ffname() -> *const c_char;
+    /// expand_env_save_opt(src, true) -- may return NULL
+    fn nvim_path_expand_env_save_opt(src: *mut c_char, one: c_int) -> *mut c_char;
+    /// backslash_halve_save(str) -- allocates copy
+    fn nvim_path_backslash_halve_save(s: *const c_char) -> *mut c_char;
+    /// p_wig option value
+    fn nvim_path_get_p_wig() -> *const c_char;
+    /// match_file_list(list, fname, ffname)
+    fn nvim_path_match_file_list(
+        list: *const c_char,
+        fname: *const c_char,
+        ffname: *const c_char,
+    ) -> c_int;
+    /// os_expand_wildcards(num_pat, pat, num_file, file, flags)
+    fn nvim_path_os_expand_wildcards(
+        num_pat: c_int,
+        pat: *mut *mut c_char,
+        num_file: *mut c_int,
+        file: *mut *mut *mut c_char,
+        flags: c_int,
+    ) -> c_int;
+    /// expand_backtick(gap, pat, flags) -- stays in C
+    fn nvim_path_expand_backtick(gap: *mut c_void, pat: *mut c_char, flags: c_int) -> c_int;
+    /// expand_in_path(gap, pat, flags) -- stays in C
+    fn nvim_path_expand_in_path(gap: *mut c_void, pat: *mut c_char, flags: c_int) -> c_int;
+    /// Heap-allocate a garray_T for strings and ga_init it
+    fn nvim_path_ga_alloc_strings(growsize: c_int) -> *mut c_void;
+    /// Free the garray_T handle (NOT ga_clear)
+    fn nvim_path_ga_free_handle(gap: *mut c_void);
+    /// ga_clear_strings
+    fn nvim_path_ga_clear_strings(gap: *mut c_void);
+    /// ga_remove_duplicate_strings
+    fn nvim_path_ga_remove_duplicate_strings(gap: *mut c_void);
+    /// Get ga_data pointer (array of char*)
+    fn nvim_path_ga_get_data(gap: *const c_void) -> *mut *mut c_char;
+    /// Set ga_data[i] to a new value
+    fn nvim_path_ga_set_string(gap: *mut c_void, i: c_int, s: *mut c_char);
+    /// xmemdupz(s, len) -- allocates len+1 bytes
+    fn nvim_path_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
+    /// xcalloc(count, size)
+    fn nvim_path_xcalloc(count: usize, size: usize) -> *mut c_void;
+    /// Get ga_data as void*
+    fn nvim_path_ga_get_data_ptr(gap: *const c_void) -> *mut c_void;
+}
+
+/// RE_STRING flag for `vim_regcomp`.
+const RE_STRING: c_int = 2;
+
+/// Path separator character.
+#[cfg(unix)]
+const PATHSEP: u8 = b'/';
+
+#[cfg(not(unix))]
+const PATHSEP: u8 = b'/';
+
+/// Format a relative path: writes "./" + short_name into dst.
+///
+/// # Safety
+/// `dst` must have at least `dstsize` bytes. `short_name` must be a valid
+/// NUL-terminated C string.
+unsafe fn format_relative(dst: *mut c_char, dstsize: usize, short_name: *const c_char) {
+    if dstsize < 3 {
+        return;
+    }
+    *dst = b'.' as c_char;
+    *dst.add(1) = PATHSEP as c_char;
+    let slen = libc::strlen(short_name);
+    let copy_len = slen.min(dstsize - 3);
+    std::ptr::copy_nonoverlapping(short_name as *const u8, dst.add(2) as *mut u8, copy_len);
+    *dst.add(2 + copy_len) = 0;
+}
+
+// ---------------------------------------------------------------------------
+// rs_expand_path_option
+// ---------------------------------------------------------------------------
+
+/// Split the 'path' option into an array of strings in garray_T.
+///
+/// Relative paths are expanded to their equivalent fullpath. This includes
+/// the "." (relative to current buffer directory) and empty path (relative
+/// to current directory) notations.
+///
+/// # Safety
+/// All pointers must be valid. `gap` must be a valid garray_T of `char *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_expand_path_option(
+    curdir: *mut c_char,
+    path_option: *mut c_char,
+    gap: *mut c_void,
+) {
+    let buf: *mut c_char = nvim_path_xmalloc(MAXPATHL) as *mut c_char;
+    let mut curdirlen: usize = 0;
+    let mut opt_ptr = path_option;
+
+    while *opt_ptr != 0 {
+        let buflen = nvim_path_copy_option_part(&raw mut opt_ptr, buf, MAXPATHL, c" ,".as_ptr());
+        let mut final_buflen = buflen;
+
+        if *buf as u8 == b'.' && (*buf.add(1) == 0 || rs_vim_ispathsep(*buf.add(1) as c_int) != 0) {
+            // Relative to current buffer:
+            let ffname = nvim_path_curbuf_ffname();
+            if ffname.is_null() {
+                continue;
+            }
+            let p = rs_path_tail(ffname);
+            let plen = p as usize - ffname as usize;
+            if plen + libc::strlen(buf) >= MAXPATHL {
+                continue;
+            }
+            if *buf.add(1) == 0 {
+                *buf.add(plen) = 0;
+            } else {
+                std::ptr::copy(buf.add(2), buf.add(plen), (buflen - 2) + 1);
+            }
+            std::ptr::copy(ffname as *const u8, buf as *mut u8, plen);
+            final_buflen = rs_simplify_filename(buf);
+        } else if *buf == 0 {
+            // Relative to current directory.
+            libc::strcpy(buf, curdir);
+            if curdirlen == 0 {
+                curdirlen = libc::strlen(curdir);
+            }
+            final_buflen = curdirlen;
+        } else if rs_path_with_url(buf) != 0 {
+            continue;
+        } else if rs_path_is_absolute(buf) == 0 {
+            // Expand relative path to full path equivalent.
+            if curdirlen == 0 {
+                curdirlen = libc::strlen(curdir);
+            }
+            if curdirlen + buflen + 3 > MAXPATHL {
+                continue;
+            }
+            std::ptr::copy(
+                buf as *const u8,
+                buf.add(curdirlen + 1) as *mut u8,
+                buflen + 1,
+            );
+            libc::strcpy(buf, curdir);
+            *buf.add(curdirlen) = PATHSEP as c_char;
+            final_buflen = rs_simplify_filename(buf);
+        }
+
+        let dup = nvim_path_xmemdupz(buf, final_buflen);
+        nvim_path_ga_append_string(gap, dup);
+    }
+
+    nvim_path_xfree(buf);
+}
+
+// ---------------------------------------------------------------------------
+// rs_uniquefy_paths
+// ---------------------------------------------------------------------------
+
+/// Make fullpath names in "gap" unique while conserving pattern matches.
+///
+/// Sorts, removes duplicates and modifies all the fullpath names in "gap" so
+/// that they are unique with respect to each other while conserving the part
+/// that matches the pattern. Beware, this is at least O(n^2) wrt "gap->ga_len".
+///
+/// # Safety
+/// All pointers must be valid. `gap` must be a valid garray_T of `char *`.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_uniquefy_paths(
+    gap: *mut c_void,
+    pattern: *mut c_char,
+    path_option: *mut c_char,
+) {
+    let mut sort_again = false;
+
+    nvim_path_ga_remove_duplicate_strings(gap);
+    let path_ga = nvim_path_ga_alloc_strings(1);
+
+    // Prepend '*' to pattern for regex matching anywhere in the path.
+    let len = libc::strlen(pattern);
+    let file_pattern: *mut c_char = nvim_path_xmalloc(len + 2) as *mut c_char;
+    *file_pattern = b'*' as c_char;
+    *file_pattern.add(1) = 0;
+    libc::strcpy(file_pattern.add(1), pattern);
+    let pat =
+        nvim_path_file_pat_to_reg_pat(file_pattern, std::ptr::null(), std::ptr::null_mut(), 0);
+    nvim_path_xfree(file_pattern);
+    if pat.is_null() {
+        nvim_path_ga_clear_strings(path_ga);
+        nvim_path_ga_free_handle(path_ga);
+        return;
+    }
+
+    // Compile the regex with ignore-case.
+    let reghandle = nvim_path_compile_pattern(pat, RE_MAGIC + RE_STRING, 1);
+    nvim_path_xfree(pat);
+    if reghandle.is_null() {
+        nvim_path_ga_clear_strings(path_ga);
+        nvim_path_ga_free_handle(path_ga);
+        return;
+    }
+
+    let curdir: *mut c_char = nvim_path_xmalloc(MAXPATHL) as *mut c_char;
+    nvim_path_os_dirname(curdir, MAXPATHL);
+    rs_expand_path_option(curdir, path_option, path_ga);
+
+    let ga_len = nvim_path_ga_len(gap);
+    let in_curdir: *mut *mut c_char =
+        nvim_path_xcalloc(ga_len as usize, std::mem::size_of::<*mut c_char>()) as *mut *mut c_char;
+
+    // First loop: shorten paths while maintaining uniqueness.
+    let mut i = 0;
+    while i < nvim_path_ga_len(gap) && nvim_path_get_got_int() == 0 {
+        let fnames = nvim_path_ga_get_data(gap);
+        let path = *fnames.add(i as usize);
+        let dir_end = rs_gettail_dir(path);
+
+        let path_len = libc::strlen(path);
+        let dir_end_offset = dir_end as usize - path as usize;
+        let is_in_curdir = rs_path_fnamencmp(curdir, path, dir_end_offset) == 0
+            && *curdir.add(dir_end_offset) == 0;
+        if is_in_curdir {
+            *in_curdir.add(i as usize) = nvim_path_xmemdupz(path, path_len);
+        }
+
+        // Shorten the filename while maintaining its uniqueness.
+        let path_cutoff = rs_get_path_cutoff(path, path_ga);
+
+        if *pattern as u8 == b'*'
+            && *pattern.add(1) as u8 == b'*'
+            && rs_vim_ispathsep_nocolon(*pattern.add(2) as c_int) != 0
+            && !path_cutoff.is_null()
+            && nvim_path_match_pattern(reghandle, path_cutoff) != 0
+            && rs_is_unique(path_cutoff, gap, i) != 0
+        {
+            sort_again = true;
+            let cutoff_len = libc::strlen(path_cutoff);
+            std::ptr::copy(path_cutoff as *const u8, path as *mut u8, cutoff_len + 1);
+        } else {
+            // Get shortest unique path starting from the end.
+            let mut pathsep_p: *mut c_char = path.add(path_len.wrapping_sub(1));
+            while rs_find_previous_pathsep(path, &raw mut pathsep_p) == OK {
+                let after_sep = pathsep_p.add(1);
+                if nvim_path_match_pattern(reghandle, after_sep) != 0
+                    && rs_is_unique(after_sep, gap, i) != 0
+                    && !path_cutoff.is_null()
+                    && after_sep as usize >= path_cutoff as usize
+                {
+                    sort_again = true;
+                    let move_len = (path as usize + path_len) - after_sep as usize + 1;
+                    std::ptr::copy(after_sep as *const u8, path as *mut u8, move_len);
+                    break;
+                }
+            }
+        }
+
+        if rs_path_is_absolute(path) != 0 {
+            let short_name = rs_path_shorten_fname(path, curdir);
+            if !short_name.is_null() && short_name as usize > path as usize + 1 {
+                format_relative(path, MAXPATHL, short_name);
+            }
+        }
+        nvim_path_os_breakcheck();
+        i += 1;
+    }
+
+    // Second loop: shorten filenames in the current directory.
+    i = 0;
+    while i < nvim_path_ga_len(gap) && nvim_path_get_got_int() == 0 {
+        let fnames = nvim_path_ga_get_data(gap);
+        let path = *in_curdir.add(i as usize);
+        if path.is_null() {
+            i += 1;
+            continue;
+        }
+
+        let mut short_name = rs_path_shorten_fname(path, curdir);
+        if short_name.is_null() {
+            short_name = path;
+        }
+        if rs_is_unique(short_name, gap, i) != 0 {
+            libc::strcpy(*fnames.add(i as usize), short_name);
+            i += 1;
+            continue;
+        }
+
+        let slen = libc::strlen(short_name);
+        // "./" + short_name + NUL
+        let rel_pathsize: usize = 1 + 1 + slen + 1;
+        let rel_path: *mut c_char = nvim_path_xmalloc(rel_pathsize) as *mut c_char;
+        format_relative(rel_path, rel_pathsize, short_name);
+
+        nvim_path_xfree(*fnames.add(i as usize));
+        nvim_path_ga_set_string(gap, i, rel_path);
+        sort_again = true;
+        nvim_path_os_breakcheck();
+        i += 1;
+    }
+
+    nvim_path_xfree(curdir);
+    let final_ga_len = nvim_path_ga_len(gap);
+    for j in 0..final_ga_len {
+        let p = *in_curdir.add(j as usize);
+        if !p.is_null() {
+            nvim_path_xfree(p);
+        }
+    }
+    nvim_path_xfree(in_curdir as *mut c_char);
+    nvim_path_ga_clear_strings(path_ga);
+    nvim_path_ga_free_handle(path_ga);
+    nvim_path_free_pattern(reghandle);
+
+    if sort_again {
+        nvim_path_ga_remove_duplicate_strings(gap);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// rs_gen_expand_wildcards
+// ---------------------------------------------------------------------------
+
+/// Static recursion guard for `gen_expand_wildcards`.
+static mut GEN_EXPAND_RECURSIVE: bool = false;
+
+/// Expand wildcards for a list of patterns, collecting matches in a growarray.
+///
+/// # Safety
+/// All pointer arguments must be valid. `pat` must point to an array of
+/// `num_pat` valid C strings.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_gen_expand_wildcards(
+    num_pat: c_int,
+    pat: *mut *mut c_char,
+    num_file: *mut c_int,
+    file: *mut *mut *mut c_char,
+    flags: c_int,
+) -> c_int {
+    let mut did_expand_in_path = false;
+    let path_option = nvim_path_get_path_option();
+
+    // If already recursing, delegate to os_expand_wildcards (Unix) or fail.
+    if GEN_EXPAND_RECURSIVE {
+        #[cfg(unix)]
+        {
+            return nvim_path_os_expand_wildcards(num_pat, pat, num_file, file, flags);
+        }
+        #[cfg(not(unix))]
+        {
+            return FAIL;
+        }
+    }
+
+    // Check for special wildcard characters that need the shell.
+    #[cfg(unix)]
+    {
+        for idx in 0..num_pat {
+            let p = *pat.add(idx as usize);
+            if rs_has_special_wildchar(p, flags) != 0
+                && !(rs_vim_backtick(p) != 0 && *p.add(1) as u8 == b'=')
+            {
+                return nvim_path_os_expand_wildcards(num_pat, pat, num_file, file, flags);
+            }
+        }
+    }
+
+    GEN_EXPAND_RECURSIVE = true;
+
+    let ga = nvim_path_ga_alloc_strings(30);
+
+    let mut i = 0;
+    while i < num_pat && nvim_path_get_got_int() == 0 {
+        let mut add_pat: c_int = -1;
+        let mut p: *mut c_char = *pat.add(i as usize);
+
+        if rs_vim_backtick(p) != 0 {
+            add_pat = nvim_path_expand_backtick(ga, p, flags);
+            if add_pat == -1 {
+                GEN_EXPAND_RECURSIVE = false;
+                nvim_path_ga_clear_strings(ga);
+                nvim_path_ga_free_handle(ga);
+                *num_file = 0;
+                *file = std::ptr::null_mut();
+                return FAIL;
+            }
+        } else {
+            // First expand environment variables, "~/" and "~user/".
+            if (rs_has_env_var(p) != 0 && (flags & EW_NOTENV) == 0) || *p as u8 == b'~' {
+                p = nvim_path_expand_env_save_opt(p, 1);
+                if p.is_null() {
+                    p = *pat.add(i as usize);
+                } else {
+                    #[cfg(unix)]
+                    {
+                        // On Unix, if expand_env() can't expand an environment
+                        // variable, use the shell to do that.
+                        if rs_has_env_var(p) != 0 || *p as u8 == b'~' {
+                            nvim_path_xfree(p);
+                            nvim_path_ga_clear_strings(ga);
+                            nvim_path_ga_free_handle(ga);
+                            let result = nvim_path_os_expand_wildcards(
+                                num_pat,
+                                pat,
+                                num_file,
+                                file,
+                                flags | EW_KEEPDOLLAR,
+                            );
+                            GEN_EXPAND_RECURSIVE = false;
+                            return result;
+                        }
+                    }
+                }
+            }
+
+            // If there are wildcards or case-insensitive expansion is
+            // required: Expand file names and add each match to the list.
+            if rs_path_has_exp_wildcard(p) != 0 || (flags & EW_ICASE) != 0 {
+                GEN_EXPAND_RECURSIVE = false;
+                if (flags & (EW_PATH | EW_CDPATH)) != 0
+                    && rs_path_is_absolute(p) == 0
+                    && !(*p as u8 == b'.'
+                        && (rs_vim_ispathsep(*p.add(1) as c_int) != 0
+                            || (*p.add(1) as u8 == b'.'
+                                && rs_vim_ispathsep(*p.add(2) as c_int) != 0)))
+                {
+                    // :find completion where 'path' is used.
+                    add_pat = nvim_path_expand_in_path(ga, p, flags);
+                    did_expand_in_path = true;
+                } else {
+                    let tmp_add_pat = rs_path_expand(ga, p, flags);
+                    add_pat = tmp_add_pat as c_int;
+                }
+                GEN_EXPAND_RECURSIVE = true;
+            }
+        }
+
+        if add_pat == -1 || (add_pat == 0 && (flags & EW_NOTFOUND) != 0) {
+            let t = nvim_path_backslash_halve_save(p);
+
+            if (flags & EW_NOTFOUND) != 0 {
+                rs_addfile(ga, t, flags | EW_DIR | EW_FILE);
+            } else {
+                rs_addfile(ga, t, flags);
+            }
+
+            if t != p {
+                nvim_path_xfree(t);
+            }
+        }
+
+        if did_expand_in_path && nvim_path_ga_len(ga) > 0 && (flags & (EW_PATH | EW_CDPATH)) != 0 {
+            GEN_EXPAND_RECURSIVE = false;
+            rs_uniquefy_paths(ga, p, path_option.cast_mut());
+            GEN_EXPAND_RECURSIVE = true;
+        }
+        if p != *pat.add(i as usize) {
+            nvim_path_xfree(p);
+        }
+        i += 1;
+    }
+
+    *num_file = nvim_path_ga_len(ga);
+    let data = nvim_path_ga_get_data_ptr(ga);
+    *file = if data.is_null() {
+        std::ptr::null_mut()
+    } else {
+        data as *mut *mut c_char
+    };
+
+    GEN_EXPAND_RECURSIVE = false;
+
+    // Free the garray handle but NOT the data (it's returned to the caller).
+    // We need to be careful: ga_free_handle just frees the struct, not ga_data.
+    nvim_path_ga_free_handle(ga);
+
+    if (flags & EW_EMPTYOK) != 0 || !(*file).is_null() {
+        OK
+    } else {
+        FAIL
+    }
+}
+
+// ---------------------------------------------------------------------------
+// rs_expand_wildcards
+// ---------------------------------------------------------------------------
+
+/// Expand wildcards. Calls `gen_expand_wildcards()` and removes files matching
+/// 'wildignore', then moves files matching 'suffixes' to the end.
+///
+/// # Safety
+/// All pointer arguments must be valid. `pat` must point to an array of
+/// `num_pat` valid C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_expand_wildcards(
+    num_pat: c_int,
+    pat: *mut *mut c_char,
+    num_files: *mut c_int,
+    files: *mut *mut *mut c_char,
+    flags: c_int,
+) -> c_int {
+    let retval = rs_gen_expand_wildcards(num_pat, pat, num_files, files, flags);
+
+    // When keeping all matches, return here.
+    if (flags & EW_KEEPALL) != 0 || retval == FAIL {
+        return retval;
+    }
+
+    // Remove names that match 'wildignore'.
+    let p_wig = nvim_path_get_p_wig();
+    if !p_wig.is_null() && *p_wig != 0 {
+        let mut i: c_int = 0;
+        while i < *num_files {
+            let cur_name = *(*files).add(i as usize);
+            let full_name = rs_FullName_save(cur_name, 0);
+            if !full_name.is_null() && nvim_path_match_file_list(p_wig, cur_name, full_name) != 0 {
+                // Remove this matching file from the list.
+                nvim_path_xfree(cur_name);
+                let mut j = i;
+                while j + 1 < *num_files {
+                    *(*files).add(j as usize) = *(*files).add((j + 1) as usize);
+                    j += 1;
+                }
+                *num_files -= 1;
+                i -= 1;
+            }
+            if !full_name.is_null() {
+                nvim_path_xfree(full_name);
+            }
+            i += 1;
+        }
+    }
+
+    // Move the names where 'suffixes' match to the end.
+    if *num_files > 1 && nvim_path_get_got_int() == 0 {
+        let mut non_suf_match: c_int = 0;
+        for i in 0..*num_files {
+            if rs_match_suffix(*(*files).add(i as usize)) == 0 {
+                // Move the name without matching suffix to the front.
+                let p = *(*files).add(i as usize);
+                let mut j = i;
+                while j > non_suf_match {
+                    *(*files).add(j as usize) = *(*files).add((j - 1) as usize);
+                    j -= 1;
+                }
+                *(*files).add(non_suf_match as usize) = p;
+                non_suf_match += 1;
+            }
+        }
+    }
+
+    // Free empty array of matches.
+    if *num_files == 0 {
+        if !(*files).is_null() {
+            nvim_path_xfree(*files as *mut c_char);
+            *files = std::ptr::null_mut();
+        }
+        return FAIL;
+    }
+
+    retval
+}
