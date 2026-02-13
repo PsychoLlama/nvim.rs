@@ -140,6 +140,8 @@ extern int rs_set_maparg_lhs_rhs(const char *orig_lhs, size_t orig_lhs_len,
 extern void rs_set_maparg_rhs(const char *orig_rhs, size_t orig_rhs_len,
                                LuaRef rhs_lua, int sid, const char *cpo_val,
                                MapArguments *mapargs);
+extern int rs_buf_do_map(int maptype, MapArguments *args, int mode, int is_abbrev, buf_T *buf);
+extern int rs_do_map(int maptype, char *arg, int mode, int is_abbrev);
 
 #define MAP_ARGUMENTS_INIT { false, false, false, false, false, false, false, false, \
                              { 0 }, 0, { 0 }, 0, NULL, 0, LUA_NOREF, false, NULL, 0, NULL }
@@ -358,346 +360,7 @@ static mapblock_T *map_add(buf_T *buf, mapblock_T **map_table, mapblock_T **abbr
 /// @param buf        Target Buffer
 static int buf_do_map(int maptype, MapArguments *args, int mode, bool is_abbrev, buf_T *buf)
 {
-  int retval = 0;
-
-  // If <buffer> was given, we'll be searching through the buffer's
-  // mappings/abbreviations, not the globals.
-  mapblock_T **map_table = args->buffer ? buf->b_maphash : maphash;
-  mapblock_T **abbr_table = args->buffer ? &buf->b_first_abbr : &first_abbr;
-  mapblock_T *mp_result[2] = { NULL, NULL };
-
-  bool unmap_lhs_only = false;
-  if (maptype == MAPTYPE_UNMAP_LHS) {
-    unmap_lhs_only = true;
-    maptype = MAPTYPE_UNMAP;
-  }
-
-  // For ":noremap" don't remap, otherwise do remap.
-  int noremap = args->script ? REMAP_SCRIPT
-                             : maptype == MAPTYPE_NOREMAP ? REMAP_NONE : REMAP_YES;
-
-  const bool has_lhs = (args->lhs[0] != NUL);
-  const bool has_rhs = args->rhs_lua != LUA_NOREF || (args->rhs[0] != NUL) || args->rhs_is_noop;
-  const bool do_print = !has_lhs || (maptype != MAPTYPE_UNMAP && !has_rhs);
-  if (do_print) {
-    msg_ext_set_kind("list_cmd");
-  }
-
-  // check for :unmap without argument
-  if (maptype == MAPTYPE_UNMAP && !has_lhs) {
-    retval = 1;
-    goto theend;
-  }
-
-  const char *lhs = (char *)&args->lhs;
-  const bool did_simplify = args->alt_lhs_len != 0;
-
-  // The following is done twice if we have two versions of keys
-  for (int keyround = 1; keyround <= 2; keyround++) {
-    bool did_it = false;
-    bool did_local = false;
-    bool keyround1_simplified = keyround == 1 && did_simplify;
-    int len = (int)args->lhs_len;
-
-    if (keyround == 2) {
-      if (!did_simplify) {
-        break;
-      }
-      lhs = (char *)&args->alt_lhs;
-      len = (int)args->alt_lhs_len;
-    } else if (did_simplify && do_print) {
-      // when printing always use the not-simplified map
-      lhs = (char *)&args->alt_lhs;
-      len = (int)args->alt_lhs_len;
-    }
-
-    // check arguments and translate function keys
-    if (has_lhs) {
-      if (len > MAXMAPLEN) {
-        retval = 1;
-        goto theend;
-      }
-
-      if (is_abbrev && maptype != MAPTYPE_UNMAP) {
-        // If an abbreviation ends in a keyword character, the
-        // rest must be all keyword-char or all non-keyword-char.
-        // Otherwise we won't be able to find the start of it in a
-        // vi-compatible way.
-        int same = -1;
-
-        const int first = vim_iswordp(lhs);
-        int last = first;
-        const char *p = lhs + utfc_ptr2len(lhs);
-        int n = 1;
-        while (p < lhs + len) {
-          n++;                                  // nr of (multi-byte) chars
-          last = vim_iswordp(p);                // type of last char
-          if (same == -1 && last != first) {
-            same = n - 1;                       // count of same char type
-          }
-          p += utfc_ptr2len(p);
-        }
-        if (last && n > 2 && same >= 0 && same < n - 1) {
-          retval = 1;
-          goto theend;
-        }
-        // An abbreviation cannot contain white space.
-        for (n = 0; n < len; n++) {
-          if (ascii_iswhite(lhs[n])) {
-            retval = 1;
-            goto theend;
-          }
-        }  // for
-      }
-    }
-
-    if (has_lhs && has_rhs && is_abbrev) {  // if we will add an abbreviation,
-      no_abbr = false;  // reset flag that indicates there are no abbreviations
-    }
-
-    if (do_print) {
-      msg_start();
-    }
-
-    // Check if a new local mapping wasn't already defined globally.
-    if (args->unique && map_table == buf->b_maphash && has_lhs && has_rhs
-        && maptype != MAPTYPE_UNMAP) {
-      // need to loop over all global hash lists
-      for (int hash = 0; hash < 256 && !got_int; hash++) {
-        mapblock_T *mp;
-        if (is_abbrev) {
-          if (hash != 0) {  // there is only one abbreviation list
-            break;
-          }
-          mp = first_abbr;
-        } else {
-          mp = maphash[hash];
-        }
-        for (; mp != NULL && !got_int; mp = mp->m_next) {
-          // check entries with the same mode
-          if ((mp->m_mode & mode) != 0
-              && mp->m_keylen == len
-              && strncmp(mp->m_keys, lhs, (size_t)len) == 0) {
-            retval = 6;
-            goto theend;
-          }
-        }
-      }
-    }
-
-    // When listing global mappings, also list buffer-local ones here.
-    if (map_table != buf->b_maphash && !has_rhs && maptype != MAPTYPE_UNMAP) {
-      // need to loop over all global hash lists
-      for (int hash = 0; hash < 256 && !got_int; hash++) {
-        mapblock_T *mp;
-        if (is_abbrev) {
-          if (hash != 0) {  // there is only one abbreviation list
-            break;
-          }
-          mp = buf->b_first_abbr;
-        } else {
-          mp = buf->b_maphash[hash];
-        }
-        for (; mp != NULL && !got_int; mp = mp->m_next) {
-          // check entries with the same mode
-          if (!mp->m_simplified && (mp->m_mode & mode) != 0) {
-            if (!has_lhs) {  // show all entries
-              showmap(mp, true);
-              did_local = true;
-            } else {
-              int n = mp->m_keylen;
-              if (strncmp(mp->m_keys, lhs, (size_t)(n < len ? n : len)) == 0) {
-                showmap(mp, true);
-                did_local = true;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Find an entry in the maphash[] list that matches.
-    // For :unmap we may loop two times: once to try to unmap an entry with a
-    // matching 'from' part, a second time, if the first fails, to unmap an
-    // entry with a matching 'to' part. This was done to allow ":ab foo bar"
-    // to be unmapped by typing ":unab foo", where "foo" will be replaced by
-    // "bar" because of the abbreviation.
-    const int num_rounds = maptype == MAPTYPE_UNMAP && !unmap_lhs_only ? 2 : 1;
-    for (int round = 0; round < num_rounds && !did_it && !got_int; round++) {
-      int hash_start, hash_end;
-      if ((round == 0 && has_lhs) || is_abbrev) {
-        // just use one hash
-        hash_start = is_abbrev ? 0 : MAP_HASH(mode, (uint8_t)lhs[0]);
-        hash_end = hash_start + 1;
-      } else {
-        // need to loop over all hash lists
-        hash_start = 0;
-        hash_end = 256;
-      }
-      for (int hash = hash_start; hash < hash_end && !got_int; hash++) {
-        mapblock_T **mpp = is_abbrev ? abbr_table : &(map_table[hash]);
-        for (mapblock_T *mp = *mpp; mp != NULL && !got_int; mp = *mpp) {
-          if ((mp->m_mode & mode) == 0) {
-            // skip entries with wrong mode
-            mpp = &(mp->m_next);
-            continue;
-          }
-          if (!has_lhs) {                      // show all entries
-            if (!mp->m_simplified) {
-              showmap(mp, map_table != maphash);
-              did_it = true;
-            }
-          } else {                          // do we have a match?
-            int n;
-            const char *p;
-            if (round) {              // second round: Try unmap "rhs" string
-              n = (int)strlen(mp->m_str);
-              p = mp->m_str;
-            } else {
-              n = mp->m_keylen;
-              p = mp->m_keys;
-            }
-            if (strncmp(p, lhs, (size_t)(n < len ? n : len)) == 0) {
-              if (maptype == MAPTYPE_UNMAP) {
-                // Delete entry.
-                // Only accept a full match.  For abbreviations
-                // we ignore trailing space when matching with
-                // the "lhs", since an abbreviation can't have
-                // trailing space.
-                if (n != len && (!is_abbrev || round || n > len || *skipwhite(lhs + n) != NUL)) {
-                  mpp = &(mp->m_next);
-                  continue;
-                }
-                // In keyround for simplified keys, don't unmap
-                // a mapping without m_simplified flag.
-                if (keyround1_simplified && !mp->m_simplified) {
-                  break;
-                }
-                // We reset the indicated mode bits. If nothing
-                // is left the entry is deleted below.
-                mp->m_mode &= ~mode;
-                did_it = true;  // remember we did something
-              } else if (!has_rhs) {  // show matching entry
-                if (!mp->m_simplified) {
-                  showmap(mp, map_table != maphash);
-                  did_it = true;
-                }
-              } else if (n != len) {  // new entry is ambiguous
-                mpp = &(mp->m_next);
-                continue;
-              } else if (keyround1_simplified && !mp->m_simplified) {
-                // In keyround for simplified keys, don't replace
-                // a mapping without m_simplified flag.
-                did_it = true;
-                break;
-              } else if (args->unique) {
-                retval = 5;
-                goto theend;
-              } else {
-                // new rhs for existing entry
-                mp->m_mode &= ~mode;  // remove mode bits
-                if (mp->m_mode == 0 && !did_it) {  // reuse entry
-                  if (mp->m_alt != NULL) {
-                    mp->m_alt = mp->m_alt->m_alt = NULL;
-                  } else {
-                    NLUA_CLEAR_REF(mp->m_luaref);
-                    xfree(mp->m_str);
-                    xfree(mp->m_orig_str);
-                    xfree(mp->m_desc);
-                  }
-                  mp->m_str = args->rhs;
-                  mp->m_orig_str = args->orig_rhs;
-                  mp->m_luaref = args->rhs_lua;
-                  mp->m_noremap = noremap;
-                  mp->m_nowait = args->nowait;
-                  mp->m_silent = args->silent;
-                  mp->m_mode = mode;
-                  mp->m_simplified = keyround1_simplified;
-                  mp->m_expr = args->expr;
-                  mp->m_replace_keycodes = args->replace_keycodes;
-                  mp->m_script_ctx = current_sctx;
-                  mp->m_script_ctx.sc_lnum += SOURCING_LNUM;
-                  nlua_set_sctx(&mp->m_script_ctx);
-                  mp->m_desc = args->desc;
-                  mp_result[keyround - 1] = mp;
-                  did_it = true;
-                }
-              }
-              if (mp->m_mode == 0) {  // entry can be deleted
-                mapblock_free(mpp);
-                continue;  // continue with *mpp
-              }
-
-              // May need to put this entry into another hash list.
-              int new_hash = MAP_HASH(mp->m_mode, (uint8_t)mp->m_keys[0]);
-              if (!is_abbrev && new_hash != hash) {
-                *mpp = mp->m_next;
-                mp->m_next = map_table[new_hash];
-                map_table[new_hash] = mp;
-
-                continue;  // continue with *mpp
-              }
-            }
-          }
-          mpp = &(mp->m_next);
-        }
-      }
-    }
-
-    if (maptype == MAPTYPE_UNMAP) {
-      // delete entry
-      if (!did_it) {
-        if (!keyround1_simplified) {
-          retval = 2;  // no match
-        }
-      } else if (*lhs == Ctrl_C) {
-        // If CTRL-C has been unmapped, reuse it for Interrupting.
-        if (map_table == buf->b_maphash) {
-          buf->b_mapped_ctrl_c &= ~mode;
-        } else {
-          mapped_ctrl_c &= ~mode;
-        }
-      }
-      continue;
-    }
-
-    if (!has_lhs || !has_rhs) {
-      // print entries
-      if (!did_it && !did_local) {
-        if (is_abbrev) {
-          msg(_("No abbreviation found"), 0);
-        } else {
-          msg(_("No mapping found"), 0);
-        }
-      }
-      goto theend;  // listing finished
-    }
-
-    if (did_it) {
-      continue;  // have added the new entry already
-    }
-
-    // Get here when adding a new entry to the maphash[] list or abbrlist.
-    mp_result[keyround - 1] = map_add(buf, map_table, abbr_table, lhs,
-                                      args, noremap, mode, is_abbrev,
-                                      0,  // sid
-                                      0,  // lnum
-                                      keyround1_simplified);
-  }
-
-  if (mp_result[0] != NULL && mp_result[1] != NULL) {
-    mp_result[0]->m_alt = mp_result[1];
-    mp_result[1]->m_alt = mp_result[0];
-  }
-
-theend:
-  if (mp_result[0] != NULL || mp_result[1] != NULL) {
-    args->rhs = NULL;
-    args->orig_rhs = NULL;
-    args->rhs_lua = LUA_NOREF;
-    args->desc = NULL;
-  }
-  return retval;
+  return rs_buf_do_map(maptype, args, mode, is_abbrev ? 1 : 0, buf);
 }
 
 /// Set or remove a mapping or an abbreviation in the current buffer, OR
@@ -753,26 +416,7 @@ theend:
 ///
 int do_map(int maptype, char *arg, int mode, bool is_abbrev)
 {
-  MapArguments parsed_args;
-  int result = str_to_mapargs(arg, maptype == MAPTYPE_UNMAP, &parsed_args);
-  switch (result) {
-  case 0:
-    break;
-  case 1:
-    // invalid arguments
-    goto free_and_return;
-  default:
-    assert(false && "Unknown return code from str_to_mapargs!");
-    result = -1;
-    goto free_and_return;
-  }  // switch
-
-  result = buf_do_map(maptype, &parsed_args, mode, is_abbrev, curbuf);
-
-free_and_return:
-  xfree(parsed_args.rhs);
-  xfree(parsed_args.orig_rhs);
-  return result;
+  return rs_do_map(maptype, arg, mode, is_abbrev ? 1 : 0);
 }
 
 /// Get the mapping mode from the command name.
@@ -2501,6 +2145,196 @@ void nvim_mapblock_free(mapblock_T *mp)
     xfree(mp->m_desc);
   }
   xfree(mp);
+}
+
+// =========================================================================
+// Phase 6 C accessors for buf_do_map / do_map Rust migration
+// =========================================================================
+
+/// Wrapper for showmap() callable from Rust.
+void nvim_showmap(mapblock_T *mp, int local)
+{
+  showmap(mp, local != 0);
+}
+
+/// Wrapper for map_add() callable from Rust.
+/// @param is_buf_local  if true, uses buf->b_maphash / buf->b_first_abbr;
+///                      otherwise uses global maphash / first_abbr.
+mapblock_T *nvim_map_add(buf_T *buf, int is_buf_local, const char *keys,
+                         void *args_ptr, int noremap, int mode,
+                         int is_abbr, int sid, int lnum, int simplified)
+{
+  MapArguments *args = (MapArguments *)args_ptr;
+  mapblock_T **mt = is_buf_local ? buf->b_maphash : maphash;
+  mapblock_T **at = is_buf_local ? &buf->b_first_abbr : &first_abbr;
+  return map_add(buf, mt, at, keys, args, noremap, mode,
+                 is_abbr != 0, (scid_T)sid, (linenr_T)lnum, simplified != 0);
+}
+
+/// Reuse an existing mapblock entry with new RHS data from args.
+/// This handles the complex field-update pattern from buf_do_map (lines 598-624).
+void nvim_mapblock_reuse(mapblock_T *mp, void *args_ptr,
+                         int noremap, int mode, int simplified)
+{
+  MapArguments *args = (MapArguments *)args_ptr;
+  if (!mp || !args) {
+    return;
+  }
+  if (mp->m_alt != NULL) {
+    mp->m_alt = mp->m_alt->m_alt = NULL;
+  } else {
+    NLUA_CLEAR_REF(mp->m_luaref);
+    xfree(mp->m_str);
+    xfree(mp->m_orig_str);
+    xfree(mp->m_desc);
+  }
+  mp->m_str = args->rhs;
+  mp->m_orig_str = args->orig_rhs;
+  mp->m_luaref = args->rhs_lua;
+  mp->m_noremap = noremap;
+  mp->m_nowait = args->nowait;
+  mp->m_silent = args->silent;
+  mp->m_mode = mode;
+  mp->m_simplified = simplified != 0;
+  mp->m_expr = args->expr;
+  mp->m_replace_keycodes = args->replace_keycodes;
+  mp->m_script_ctx = current_sctx;
+  mp->m_script_ctx.sc_lnum += SOURCING_LNUM;
+  nlua_set_sctx(&mp->m_script_ctx);
+  mp->m_desc = args->desc;
+}
+
+/// Link two mapblocks as alternates of each other.
+void nvim_mapblock_set_alt(mapblock_T *a, mapblock_T *b)
+{
+  if (a) {
+    a->m_alt = b;
+  }
+  if (b) {
+    b->m_alt = a;
+  }
+}
+
+/// Nullify args ownership fields (rhs, orig_rhs, rhs_lua, desc) so that
+/// do_map's cleanup won't free memory now owned by the mapblock.
+void nvim_mapargs_take_ownership(void *args_ptr)
+{
+  MapArguments *args = (MapArguments *)args_ptr;
+  if (!args) {
+    return;
+  }
+  args->rhs = NULL;
+  args->orig_rhs = NULL;
+  args->rhs_lua = LUA_NOREF;
+  args->desc = NULL;
+}
+
+// nvim_get_got_int, nvim_get_mapped_ctrl_c, nvim_set_mapped_ctrl_c,
+// nvim_msg_start already defined in other files — reuse those.
+
+/// Set the global no_abbr flag.
+void nvim_mapping_set_no_abbr(int val)
+{
+  no_abbr = val != 0;
+}
+
+/// Get the buffer-local b_mapped_ctrl_c.
+int nvim_mapping_buf_get_mapped_ctrl_c(buf_T *buf)
+{
+  return buf ? buf->b_mapped_ctrl_c : 0;
+}
+
+/// Set the buffer-local b_mapped_ctrl_c.
+void nvim_mapping_buf_set_mapped_ctrl_c(buf_T *buf, int val)
+{
+  if (buf) {
+    buf->b_mapped_ctrl_c = val;
+  }
+}
+
+/// Call msg_ext_set_kind("list_cmd") from Rust.
+void nvim_mapping_msg_ext_set_kind_list_cmd(void)
+{
+  msg_ext_set_kind("list_cmd");
+}
+
+/// Display "No mapping found" or "No abbreviation found" message.
+void nvim_mapping_msg_no_mapping(int is_abbr)
+{
+  if (is_abbr) {
+    msg(_("No abbreviation found"), 0);
+  } else {
+    msg(_("No mapping found"), 0);
+  }
+}
+
+/// Wrapper for vim_iswordp().
+int nvim_vim_iswordp(const char *p)
+{
+  return vim_iswordp(p);
+}
+
+/// Get strlen(mp->m_str) for round-2 unmap matching.
+int nvim_mapblock_get_str_len(mapblock_T *mp)
+{
+  return mp ? (int)strlen(mp->m_str) : 0;
+}
+
+/// Check if map_table for this operation is buffer-local.
+/// Used to determine "local" display flag in showmap.
+int nvim_mapping_is_buf_maphash(buf_T *buf, int is_buf_local)
+{
+  // In the C code: map_table != maphash  means buffer-local
+  // is_buf_local directly tells us this
+  return is_buf_local;
+}
+
+/// Wrapper for mapblock_free() using pointer-to-pointer pattern.
+/// Unlinks from the specified list and frees.
+/// Returns the new current node (*mpp after deletion).
+mapblock_T *nvim_mapblock_free_in_list(buf_T *buf, int hash, int is_abbr,
+                                       int is_buf_local, mapblock_T *mp)
+{
+  // Find the pointer-to-pointer that points to mp
+  mapblock_T **mpp;
+  if (is_abbr) {
+    mpp = is_buf_local ? &buf->b_first_abbr : &first_abbr;
+  } else {
+    mapblock_T **mt = is_buf_local ? buf->b_maphash : maphash;
+    mpp = &mt[hash];
+  }
+
+  // Walk to find the entry
+  while (*mpp != NULL) {
+    if (*mpp == mp) {
+      mapblock_free(mpp);
+      return *mpp;  // mpp now points to the next entry
+    }
+    mpp = &((*mpp)->m_next);
+  }
+  return NULL;
+}
+
+/// Move a mapblock from one hash bucket to another.
+/// Unlinks from old bucket and inserts at head of new bucket.
+void nvim_mapblock_rehash(buf_T *buf, int is_buf_local,
+                          int old_hash, int new_hash, mapblock_T *mp)
+{
+  mapblock_T **mt = is_buf_local ? buf->b_maphash : maphash;
+
+  // Unlink from old hash bucket
+  mapblock_T **mpp = &mt[old_hash];
+  while (*mpp != NULL) {
+    if (*mpp == mp) {
+      *mpp = mp->m_next;
+      break;
+    }
+    mpp = &((*mpp)->m_next);
+  }
+
+  // Insert at head of new hash bucket
+  mp->m_next = mt[new_hash];
+  mt[new_hash] = mp;
 }
 
 /// Format a langmap error message into the provided buffer.
