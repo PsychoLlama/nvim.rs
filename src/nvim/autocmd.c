@@ -99,6 +99,11 @@ extern int rs_augroup_add(const char *name);
 extern const char *rs_augroup_name(int group);
 extern int rs_augroup_exists(const char *name);
 
+// Phase 4: Autocmd deletion + cleanup
+extern void rs_aucmd_del_for_event_and_group(int event, int group);
+extern void rs_au_cleanup(void);
+extern void rs_aubuflocal_remove(int bufnr);
+
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
 {
@@ -363,47 +368,14 @@ static void aucmd_del(AutoCmd *ac)
 
 void aucmd_del_for_event_and_group(event_T event, int group)
 {
-  AutoCmdVec *const acs = &autocmds[(int)event];
-  for (size_t i = 0; i < kv_size(*acs); i++) {
-    AutoCmd *const ac = &kv_A(*acs, i);
-    if (ac->pat != NULL && ac->pat->group == group) {
-      aucmd_del(ac);
-    }
-  }
-
-  au_cleanup();
+  rs_aucmd_del_for_event_and_group((int)event, group);
 }
 
 /// Cleanup autocommands that have been deleted.
 /// This is only done when not executing autocommands.
 static void au_cleanup(void)
 {
-  if (autocmd_busy || !au_need_clean) {
-    return;
-  }
-
-  // Loop over all events.
-  FOR_ALL_AUEVENTS(event) {
-    // Loop over all autocommands.
-    AutoCmdVec *const acs = &autocmds[(int)event];
-    size_t nsize = 0;
-    for (size_t i = 0; i < kv_size(*acs); i++) {
-      AutoCmd *const ac = &kv_A(*acs, i);
-      if (nsize != i) {
-        kv_A(*acs, nsize) = *ac;
-      }
-      if (ac->pat != NULL) {
-        nsize++;
-      }
-    }
-    if (nsize == 0) {
-      kv_destroy(*acs);
-    } else {
-      acs->size = nsize;
-    }
-  }
-
-  au_need_clean = false;
+  rs_au_cleanup();
 }
 
 AutoCmdVec *au_get_autocmds_for_event(event_T event)
@@ -415,32 +387,7 @@ AutoCmdVec *au_get_autocmds_for_event(event_T event)
 // Called when buffer is freed, to remove/invalidate related buffer-local autocmds.
 void aubuflocal_remove(buf_T *buf)
 {
-  // invalidate currently executing autocommands
-  for (AutoPatCmd *apc = active_apc_list; apc != NULL; apc = apc->next) {
-    if (buf->b_fnum == apc->arg_bufnr) {
-      apc->arg_bufnr = 0;
-    }
-  }
-
-  // invalidate buflocals looping through events
-  FOR_ALL_AUEVENTS(event) {
-    AutoCmdVec *const acs = &autocmds[(int)event];
-    for (size_t i = 0; i < kv_size(*acs); i++) {
-      AutoCmd *const ac = &kv_A(*acs, i);
-      if (ac->pat == NULL || ac->pat->buflocal_nr != buf->b_fnum) {
-        continue;
-      }
-
-      aucmd_del(ac);
-
-      if (p_verbose >= 6) {
-        verbose_enter();
-        smsg(0, _("auto-removing autocommand: %s <buffer=%d>"), event_nr2name(event), buf->b_fnum);
-        verbose_leave();
-      }
-    }
-  }
-  au_cleanup();
+  rs_aubuflocal_remove(buf->b_fnum);
 }
 
 // Add an autocmd group name or return existing group matching name.
@@ -2729,4 +2676,98 @@ int nvim_get_current_augroup(void)
 const char *nvim_get_deleted_augroup(void)
 {
   return get_deleted_augroup();
+}
+
+// Phase 4: Autocmd deletion + cleanup accessors
+
+/// Delete the autocmd at index `idx` in event `event` (refcount + free).
+void nvim_autocmd_del_at(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx < kv_size(*acs)) {
+    aucmd_del(&kv_A(*acs, idx));
+  }
+}
+
+/// Check if the autocmd pattern at index is NULL (deleted).
+int nvim_autocmd_pat_is_null(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return 1;
+  }
+  return kv_A(*acs, idx).pat == NULL ? 1 : 0;
+}
+
+/// Get the group of the autocmd pattern at index.
+int nvim_autocmd_get_pat_group(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
+    return -1;
+  }
+  return kv_A(*acs, idx).pat->group;
+}
+
+/// Get the buflocal_nr of the autocmd pattern at index.
+int nvim_autocmd_get_pat_buflocal_nr(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
+    return 0;
+  }
+  return kv_A(*acs, idx).pat->buflocal_nr;
+}
+
+/// Compact the autocmd vector for a given event (remove NULL-pat entries).
+void nvim_autocmd_compact_event(int event)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  size_t nsize = 0;
+  for (size_t i = 0; i < kv_size(*acs); i++) {
+    AutoCmd *const ac = &kv_A(*acs, i);
+    if (nsize != i) {
+      kv_A(*acs, nsize) = *ac;
+    }
+    if (ac->pat != NULL) {
+      nsize++;
+    }
+  }
+  if (nsize == 0) {
+    kv_destroy(*acs);
+  } else {
+    acs->size = nsize;
+  }
+}
+
+/// Get au_need_clean flag.
+int nvim_get_au_need_clean(void)
+{
+  return au_need_clean ? 1 : 0;
+}
+
+/// Set au_need_clean flag.
+void nvim_set_au_need_clean(int val)
+{
+  au_need_clean = val != 0;
+}
+
+/// Walk active_apc_list and invalidate matching arg_bufnr.
+void nvim_apc_invalidate_bufnr(int bufnr)
+{
+  for (AutoPatCmd *apc = active_apc_list; apc != NULL; apc = apc->next) {
+    if (bufnr == apc->arg_bufnr) {
+      apc->arg_bufnr = 0;
+    }
+  }
+}
+
+/// Verbose message for aubuflocal_remove.
+void nvim_verbose_buflocal_remove(int event, int bufnr)
+{
+  if (p_verbose >= 6) {
+    verbose_enter();
+    smsg(0, _("auto-removing autocommand: %s <buffer=%d>"), event_nr2name((event_T)event), bufnr);
+    verbose_leave();
+  }
 }

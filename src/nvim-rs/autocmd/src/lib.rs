@@ -63,6 +63,18 @@ extern "C" {
 
     // Event name resolution (Phase 1)
     fn nvim_event_name2nr(start: *const c_char, len: usize) -> c_int;
+
+    // Phase 4: Autocmd deletion + cleanup accessors
+    fn nvim_autocmd_del_at(event: c_int, idx: usize);
+    fn nvim_autocmd_pat_is_null(event: c_int, idx: usize) -> c_int;
+    fn nvim_autocmd_get_pat_group(event: c_int, idx: usize) -> c_int;
+    fn nvim_autocmd_get_pat_buflocal_nr(event: c_int, idx: usize) -> c_int;
+    fn nvim_autocmd_compact_event(event: c_int);
+    fn nvim_get_au_need_clean() -> c_int;
+    fn nvim_set_au_need_clean(val: c_int);
+    fn nvim_get_autocmd_busy() -> bool;
+    fn nvim_apc_invalidate_bufnr(bufnr: c_int);
+    fn nvim_verbose_buflocal_remove(event: c_int, bufnr: c_int);
 }
 
 // Static "Unknown" string for invalid events
@@ -369,6 +381,67 @@ pub unsafe extern "C" fn rs_aupat_normalize_buflocal_pat(
     buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
     buf[copy_len] = 0;
     std::ptr::copy_nonoverlapping(buf.as_ptr(), dest.cast::<u8>(), copy_len + 1);
+}
+
+// =============================================================================
+// Phase 4: Autocmd Deletion + Cleanup
+// =============================================================================
+
+/// Delete all autocommands for a specific event and group, then cleanup.
+///
+/// # Safety
+/// `event` must be a valid event number (0..NUM_EVENTS).
+#[no_mangle]
+pub unsafe extern "C" fn rs_aucmd_del_for_event_and_group(event: c_int, group: c_int) {
+    let size = nvim_get_autocmds_count(event);
+    for i in 0..size {
+        if nvim_autocmd_pat_is_null(event, i) == 0 && nvim_autocmd_get_pat_group(event, i) == group
+        {
+            nvim_autocmd_del_at(event, i);
+        }
+    }
+    rs_au_cleanup();
+}
+
+/// Cleanup autocommands that have been deleted.
+/// Only runs when not executing autocommands and cleanup is needed.
+#[no_mangle]
+pub unsafe extern "C" fn rs_au_cleanup() {
+    if nvim_get_autocmd_busy() || nvim_get_au_need_clean() == 0 {
+        return;
+    }
+
+    for event in 0..NUM_EVENTS {
+        nvim_autocmd_compact_event(event);
+    }
+
+    nvim_set_au_need_clean(0);
+}
+
+/// Remove/invalidate buffer-local autocommands when a buffer is freed.
+///
+/// # Safety
+/// `bufnr` must be the buffer's file number (`buf->b_fnum`).
+#[no_mangle]
+pub unsafe extern "C" fn rs_aubuflocal_remove(bufnr: c_int) {
+    // Invalidate currently executing autocommands
+    nvim_apc_invalidate_bufnr(bufnr);
+
+    // Invalidate buffer-local autocommands across all events
+    for event in 0..NUM_EVENTS {
+        let size = nvim_get_autocmds_count(event);
+        for i in 0..size {
+            if nvim_autocmd_pat_is_null(event, i) != 0 {
+                continue;
+            }
+            if nvim_autocmd_get_pat_buflocal_nr(event, i) != bufnr {
+                continue;
+            }
+            nvim_autocmd_del_at(event, i);
+            nvim_verbose_buflocal_remove(event, bufnr);
+        }
+    }
+    rs_au_cleanup();
 }
 
 /// Check whether a given autocommand event name is supported.
