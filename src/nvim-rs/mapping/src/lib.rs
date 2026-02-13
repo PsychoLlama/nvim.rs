@@ -17,6 +17,7 @@ pub mod abbrev;
 pub mod args;
 pub mod completion;
 pub mod do_map;
+pub mod exmap;
 pub mod flags;
 pub mod langmap;
 pub mod lookup;
@@ -75,6 +76,13 @@ impl MapblockHandle {
     #[must_use]
     pub const fn as_ptr(self) -> *mut c_void {
         self.0
+    }
+
+    /// Create a null handle.
+    #[inline]
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
     }
 
     /// Check if the handle is null.

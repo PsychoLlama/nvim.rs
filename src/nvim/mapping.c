@@ -79,6 +79,8 @@ extern int rs_expand_mappings(char *pat, void *regmatch,
                                int *numMatches, char ***matches);
 extern int rs_makemap_should_skip(mapblock_T *mp);
 extern int rs_makemap_needs_cpo(mapblock_T *mp);
+extern int rs_get_maptype(int cmdchar);
+extern mapblock_T *rs_find_matching_abbr(const char *ptr, int len);
 
 // MakemapModeResult from Rust
 typedef struct {
@@ -606,35 +608,7 @@ bool check_abbr(int c, char *ptr, int col, int mincol)
   if (scol < col) {             // there is a word in front of the cursor
     ptr += scol;
     int len = col - scol;
-    mapblock_T *mp = curbuf->b_first_abbr;
-    mapblock_T *mp2 = first_abbr;
-    if (mp == NULL) {
-      mp = mp2;
-      mp2 = NULL;
-    }
-    for (; mp;
-         mp->m_next == NULL ? (mp = mp2, mp2 = NULL)
-                            : (mp = mp->m_next)) {
-      int qlen = mp->m_keylen;
-      char *q = mp->m_keys;
-
-      if (strchr(mp->m_keys, K_SPECIAL) != NULL) {
-        // Might have K_SPECIAL escaped mp->m_keys.
-        q = xstrdup(mp->m_keys);
-        vim_unescape_ks(q);
-        qlen = (int)strlen(q);
-      }
-      // find entries with right mode and keys
-      int match = (mp->m_mode & State)
-                  && qlen == len
-                  && !strncmp(q, ptr, (size_t)len);
-      if (q != mp->m_keys) {
-        xfree(q);
-      }
-      if (match) {
-        break;
-      }
-    }
+    mapblock_T *mp = rs_find_matching_abbr(ptr, len);
     if (mp != NULL) {
       // Found a match:
       // Insert the rest of the abbreviation in typebuf.tb_buf[].
@@ -1376,14 +1350,7 @@ static void do_exmap(exarg_T *eap, int isabbrev)
   char *cmdp = eap->cmd;
   int mode = get_map_mode(&cmdp, eap->forceit || isabbrev);
 
-  int maptype;
-  if (*cmdp == 'n') {
-    maptype = MAPTYPE_NOREMAP;
-  } else if (*cmdp == 'u') {
-    maptype = MAPTYPE_UNMAP;
-  } else {
-    maptype = MAPTYPE_MAP;
-  }
+  int maptype = rs_get_maptype(*cmdp);
   MapArguments parsed_args;
   int result = str_to_mapargs(eap->arg, maptype == MAPTYPE_UNMAP, &parsed_args);
   switch (result) {
@@ -2212,4 +2179,20 @@ int nvim_mapping_expand_finish(void *ga_ptr, int fuzzy,
 
   *numMatches = count;
   return count == 0 ? FAIL : OK;
+}
+
+// =============================================================================
+// Phase 8 C accessor functions for ex commands + abbreviation search
+// =============================================================================
+
+/// Unescape K_SPECIAL sequences in a string (for abbreviation matching).
+void nvim_mapping_vim_unescape_ks(char *s)
+{
+  vim_unescape_ks(s);
+}
+
+/// Get the current editor State for abbreviation mode matching.
+int nvim_mapping_get_state(void)
+{
+  return State;
 }
