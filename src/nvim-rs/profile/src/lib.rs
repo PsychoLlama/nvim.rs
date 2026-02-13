@@ -9,6 +9,7 @@
 #![allow(clippy::must_use_candidate)]
 
 pub mod child;
+pub mod command;
 pub mod func_line;
 pub mod input;
 pub mod script_line;

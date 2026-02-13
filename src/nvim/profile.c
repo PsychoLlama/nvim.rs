@@ -79,6 +79,12 @@ extern void rs_time_start(const char *message);
 extern void rs_time_msg(const char *mesg, const proftime_T *start);
 extern void rs_time_init(const char *fname, const char *proc_name);
 extern void rs_time_finish(void);
+// Phase 7: command handling, state management, dump
+extern void rs_ex_profile(exarg_T *eap);
+extern const char *rs_get_profile_name(expand_T *xp, int idx);
+extern void rs_set_context_in_profile_cmd(expand_T *xp, const char *arg);
+extern void rs_profile_reset(void);
+extern void rs_profile_dump(void);
 
 /// Struct used in sn_prl_ga for every line of a script.
 typedef struct {
@@ -236,162 +242,30 @@ int profile_cmp(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
   return rs_profile_cmp(tm1, tm2);
 }
 
-static char *profile_fname = NULL;
-
 /// Reset all profiling information.
 void profile_reset(void)
 {
-  // Reset sourced files.
-  for (int id = 1; id <= script_items.ga_len; id++) {
-    scriptitem_T *si = SCRIPT_ITEM(id);
-    if (si->sn_prof_on) {
-      si->sn_prof_on = false;
-      si->sn_pr_force = false;
-      si->sn_pr_child = profile_zero();
-      si->sn_pr_nest = 0;
-      si->sn_pr_count = 0;
-      si->sn_pr_total = profile_zero();
-      si->sn_pr_self = profile_zero();
-      si->sn_pr_start = profile_zero();
-      si->sn_pr_children = profile_zero();
-      ga_clear(&si->sn_prl_ga);
-      si->sn_prl_start = profile_zero();
-      si->sn_prl_children = profile_zero();
-      si->sn_prl_wait = profile_zero();
-      si->sn_prl_idx = -1;
-      si->sn_prl_execed = 0;
-    }
-  }
-
-  // Reset functions.
-  hashtab_T *const functbl = func_tbl_get();
-  size_t todo = functbl->ht_used;
-  hashitem_T *hi = functbl->ht_array;
-
-  for (; todo > 0; hi++) {
-    if (!HASHITEM_EMPTY(hi)) {
-      todo--;
-      ufunc_T *uf = HI2UF(hi);
-      if (uf->uf_prof_initialized) {
-        uf->uf_profiling = 0;
-        uf->uf_tm_count = 0;
-        uf->uf_tm_total = profile_zero();
-        uf->uf_tm_self = profile_zero();
-        uf->uf_tm_children = profile_zero();
-
-        for (int i = 0; i < uf->uf_lines.ga_len; i++) {
-          uf->uf_tml_count[i] = 0;
-          uf->uf_tml_total[i] = uf->uf_tml_self[i] = 0;
-        }
-
-        uf->uf_tml_start = profile_zero();
-        uf->uf_tml_children = profile_zero();
-        uf->uf_tml_wait = profile_zero();
-        uf->uf_tml_idx = -1;
-        uf->uf_tml_execed = 0;
-      }
-    }
-  }
-
-  XFREE_CLEAR(profile_fname);
+  rs_profile_reset();
 }
 
 /// ":profile cmd args"
 void ex_profile(exarg_T *eap)
 {
-  static proftime_T pause_time;
-
-  char *e = skiptowhite(eap->arg);
-  int len = (int)(e - eap->arg);
-  e = skipwhite(e);
-
-  if (len == 5 && strncmp(eap->arg, "start", 5) == 0 && *e != NUL) {
-    xfree(profile_fname);
-    profile_fname = expand_env_save_opt(e, true);
-    do_profiling = PROF_YES;
-    profile_set_wait(profile_zero());
-    set_vim_var_nr(VV_PROFILING, 1);
-  } else if (do_profiling == PROF_NONE) {
-    emsg(_("E750: First use \":profile start {fname}\""));
-  } else if (strcmp(eap->arg, "stop") == 0) {
-    profile_dump();
-    do_profiling = PROF_NONE;
-    set_vim_var_nr(VV_PROFILING, 0);
-    profile_reset();
-  } else if (strcmp(eap->arg, "pause") == 0) {
-    if (do_profiling == PROF_YES) {
-      pause_time = profile_start();
-    }
-    do_profiling = PROF_PAUSED;
-  } else if (strcmp(eap->arg, "continue") == 0) {
-    if (do_profiling == PROF_PAUSED) {
-      pause_time = profile_end(pause_time);
-      profile_set_wait(profile_add(profile_get_wait(), pause_time));
-    }
-    do_profiling = PROF_YES;
-  } else if (strcmp(eap->arg, "dump") == 0) {
-    profile_dump();
-  } else {
-    // The rest is similar to ":breakadd".
-    ex_breakadd(eap);
-  }
+  rs_ex_profile(eap);
 }
-
-/// Command line expansion for :profile.
-static enum {
-  PEXP_SUBCMD,          ///< expand :profile sub-commands
-  PEXP_FUNC,  ///< expand :profile func {funcname}
-} pexpand_what;
-
-static char *pexpand_cmds[] = {
-  "continue",
-  "dump",
-  "file",
-  "func",
-  "pause",
-  "start",
-  "stop",
-  NULL
-};
 
 /// Function given to ExpandGeneric() to obtain the profile command
 /// specific expansion.
 char *get_profile_name(expand_T *xp, int idx)
   FUNC_ATTR_PURE
 {
-  switch (pexpand_what) {
-  case PEXP_SUBCMD:
-    return pexpand_cmds[idx];
-  default:
-    return NULL;
-  }
+  return (char *)rs_get_profile_name(xp, idx);
 }
 
 /// Handle command line completion for :profile command.
 void set_context_in_profile_cmd(expand_T *xp, const char *arg)
 {
-  // Default: expand subcommands.
-  xp->xp_context = EXPAND_PROFILE;
-  pexpand_what = PEXP_SUBCMD;
-  xp->xp_pattern = (char *)arg;
-
-  char *const end_subcmd = skiptowhite(arg);
-  if (*end_subcmd == NUL) {
-    return;
-  }
-
-  if ((end_subcmd - arg == 5 && strncmp(arg, "start", 5) == 0)
-      || (end_subcmd - arg == 4 && strncmp(arg, "file", 4) == 0)) {
-    xp->xp_context = EXPAND_FILES;
-    xp->xp_pattern = skipwhite(end_subcmd);
-    return;
-  } else if (end_subcmd - arg == 4 && strncmp(arg, "func", 4) == 0) {
-    xp->xp_context = EXPAND_USER_FUNC;
-    xp->xp_pattern = skipwhite(end_subcmd);
-    return;
-  }
-
-  xp->xp_context = EXPAND_NOTHING;
+  rs_set_context_in_profile_cmd(xp, arg);
 }
 
 /// Called when starting to wait for the user to type a character.
@@ -681,18 +555,7 @@ static void script_dump_profile(FILE *fd)
 /// Dump the profiling info.
 void profile_dump(void)
 {
-  if (profile_fname == NULL) {
-    return;
-  }
-
-  FILE *fd = os_fopen(profile_fname, "w");
-  if (fd == NULL) {
-    semsg(_(e_notopen), profile_fname);
-  } else {
-    script_dump_profile(fd);
-    func_dump_profile(fd);
-    fclose(fd);
-  }
+  rs_profile_dump();
 }
 
 /// Called when starting to read a script line.
@@ -986,4 +849,172 @@ const char *nvim_profile_gettext_e_notopen(void)
 const char *nvim_profile_uv_err_name(int r)
 {
   return uv_err_name(r);
+}
+
+// C accessors for Phase 7: command handling, state management, dump
+
+int nvim_profile_get_prof_none(void)
+{
+  return PROF_NONE;
+}
+
+int nvim_profile_get_prof_yes(void)
+{
+  return PROF_YES;
+}
+
+int nvim_profile_get_prof_paused(void)
+{
+  return PROF_PAUSED;
+}
+
+int nvim_profile_get_do_profiling(void)
+{
+  return do_profiling;
+}
+
+void nvim_profile_set_do_profiling(int val)
+{
+  do_profiling = val;
+}
+
+void nvim_profile_set_vim_var_nr_profiling(int val)
+{
+  set_vim_var_nr(VV_PROFILING, val);
+}
+
+void nvim_profile_emsg_e750(void)
+{
+  emsg(_("E750: First use \":profile start {fname}\""));
+}
+
+void nvim_profile_semsg_notopen(const char *fname)
+{
+  semsg(_(e_notopen), fname);
+}
+
+void nvim_profile_ex_breakadd(exarg_T *eap)
+{
+  ex_breakadd(eap);
+}
+
+char *nvim_profile_expand_env_save_opt(char *src)
+{
+  return expand_env_save_opt(src, true);
+}
+
+char *nvim_profile_eap_get_arg(exarg_T *eap)
+{
+  return eap->arg;
+}
+
+char *nvim_profile_skiptowhite(const char *s)
+{
+  return skiptowhite(s);
+}
+
+char *nvim_profile_skipwhite(const char *s)
+{
+  return skipwhite(s);
+}
+
+void nvim_profile_xp_set_context(expand_T *xp, int ctx)
+{
+  xp->xp_context = ctx;
+}
+
+void nvim_profile_xp_set_pattern(expand_T *xp, const char *pat)
+{
+  xp->xp_pattern = (char *)pat;
+}
+
+int nvim_profile_get_expand_profile(void)
+{
+  return EXPAND_PROFILE;
+}
+
+int nvim_profile_get_expand_files(void)
+{
+  return EXPAND_FILES;
+}
+
+int nvim_profile_get_expand_user_func(void)
+{
+  return EXPAND_USER_FUNC;
+}
+
+int nvim_profile_get_expand_nothing(void)
+{
+  return EXPAND_NOTHING;
+}
+
+FILE *nvim_profile_os_fopen(const char *name, const char *mode)
+{
+  return os_fopen(name, mode);
+}
+
+void nvim_profile_reset_scripts(void)
+{
+  for (int id = 1; id <= script_items.ga_len; id++) {
+    scriptitem_T *si = SCRIPT_ITEM(id);
+    if (si->sn_prof_on) {
+      si->sn_prof_on = false;
+      si->sn_pr_force = false;
+      si->sn_pr_child = profile_zero();
+      si->sn_pr_nest = 0;
+      si->sn_pr_count = 0;
+      si->sn_pr_total = profile_zero();
+      si->sn_pr_self = profile_zero();
+      si->sn_pr_start = profile_zero();
+      si->sn_pr_children = profile_zero();
+      ga_clear(&si->sn_prl_ga);
+      si->sn_prl_start = profile_zero();
+      si->sn_prl_children = profile_zero();
+      si->sn_prl_wait = profile_zero();
+      si->sn_prl_idx = -1;
+      si->sn_prl_execed = 0;
+    }
+  }
+}
+
+void nvim_profile_reset_funcs(void)
+{
+  hashtab_T *const functbl = func_tbl_get();
+  size_t todo = functbl->ht_used;
+  hashitem_T *hi = functbl->ht_array;
+
+  for (; todo > 0; hi++) {
+    if (!HASHITEM_EMPTY(hi)) {
+      todo--;
+      ufunc_T *uf = HI2UF(hi);
+      if (uf->uf_prof_initialized) {
+        uf->uf_profiling = 0;
+        uf->uf_tm_count = 0;
+        uf->uf_tm_total = profile_zero();
+        uf->uf_tm_self = profile_zero();
+        uf->uf_tm_children = profile_zero();
+
+        for (int i = 0; i < uf->uf_lines.ga_len; i++) {
+          uf->uf_tml_count[i] = 0;
+          uf->uf_tml_total[i] = uf->uf_tml_self[i] = 0;
+        }
+
+        uf->uf_tml_start = profile_zero();
+        uf->uf_tml_children = profile_zero();
+        uf->uf_tml_wait = profile_zero();
+        uf->uf_tml_idx = -1;
+        uf->uf_tml_execed = 0;
+      }
+    }
+  }
+}
+
+void nvim_profile_script_dump(FILE *fd)
+{
+  script_dump_profile(fd);
+}
+
+void nvim_profile_func_dump(FILE *fd)
+{
+  func_dump_profile(fd);
 }
