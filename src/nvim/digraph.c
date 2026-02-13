@@ -77,6 +77,7 @@ typedef int (*DigraphIterCallback)(uint8_t char1, uint8_t char2, int result, voi
 extern int rs_digraph_iterate_default(DigraphIterCallback callback, void *ctx);
 extern int rs_digraph_iterate_user(DigraphIterCallback callback, void *ctx);
 extern void rs_listdigraphs(int use_headers);
+extern int rs_get_digraph(int cmdline);
 extern void rs_printdigraph(uint8_t char1, uint8_t char2, int result, int *previous);
 extern void rs_digraph_header(const char *msg);
 
@@ -159,6 +160,44 @@ void nvim_digraph_fast_breakcheck(void)
   fast_breakcheck();
 }
 
+/// Get a character without mapping (for Rust FFI).
+int nvim_digraph_plain_vgetc(void)
+{
+  return plain_vgetc();
+}
+
+/// Increment no_mapping and allow_keys (for Rust FFI).
+void nvim_digraph_inc_no_mapping(void)
+{
+  no_mapping++;
+  allow_keys++;
+}
+
+/// Decrement no_mapping and allow_keys (for Rust FFI).
+void nvim_digraph_dec_no_mapping(void)
+{
+  no_mapping--;
+  allow_keys--;
+}
+
+/// Get cmdline_star value (for Rust FFI).
+int nvim_digraph_get_cmdline_star(void)
+{
+  return cmdline_star;
+}
+
+/// Put a character on the command line (for Rust FFI).
+void nvim_digraph_putcmdline(int c, int shift)
+{
+  putcmdline((char)c, shift != 0);
+}
+
+/// Add a character to the showcmd display (for Rust FFI).
+void nvim_digraph_add_to_showcmd(int c)
+{
+  add_to_showcmd(c);
+}
+
 /// handle digraphs after typing a character
 ///
 /// @param c
@@ -193,39 +232,7 @@ char *get_digraph_for_char(int val_arg)
 /// @returns composed character, or NUL when ESC was used.
 int get_digraph(bool cmdline)
 {
-  no_mapping++;
-  allow_keys++;
-  int c = plain_vgetc();
-  no_mapping--;
-  allow_keys--;
-
-  if (c == ESC) {  // ESC cancels CTRL-K
-    return NUL;
-  }
-
-  if (IS_SPECIAL(c)) {
-    // insert special key code
-    return c;
-  }
-
-  if (cmdline) {
-    if ((char2cells(c) == 1) && c < 128 && (cmdline_star == 0)) {
-      putcmdline((char)c, true);
-    }
-  } else {
-    add_to_showcmd(c);
-  }
-  no_mapping++;
-  allow_keys++;
-  int cc = plain_vgetc();
-  no_mapping--;
-  allow_keys--;
-
-  if (cc != ESC) {
-    // ESC cancels CTRL-K
-    return digraph_get(c, cc, true);
-  }
-  return NUL;
+  return rs_get_digraph(cmdline ? 1 : 0);
 }
 
 /// Lookup the pair "char1", "char2" in the digraph tables.

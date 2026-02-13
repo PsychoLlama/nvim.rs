@@ -6,10 +6,31 @@ use std::sync::atomic::{AtomicI32, Ordering};
 
 use libc::c_int;
 
-// C accessor for 'digraph' option
+// C accessor functions
 extern "C" {
     /// Get the value of the 'digraph' option (`p_dg`).
     fn nvim_get_p_dg() -> c_int;
+
+    /// Get a character without mapping.
+    fn nvim_digraph_plain_vgetc() -> c_int;
+
+    /// Increment `no_mapping` and `allow_keys`.
+    fn nvim_digraph_inc_no_mapping();
+
+    /// Decrement `no_mapping` and `allow_keys`.
+    fn nvim_digraph_dec_no_mapping();
+
+    /// Get `cmdline_star` value.
+    fn nvim_digraph_get_cmdline_star() -> c_int;
+
+    /// Put a character on the command line.
+    fn nvim_digraph_putcmdline(c: c_int, shift: c_int);
+
+    /// Add a character to the showcmd display.
+    fn nvim_digraph_add_to_showcmd(c: c_int);
+
+    /// Get display width of a character in cells.
+    fn nvim_char2cells(c: c_int) -> c_int;
 }
 
 // Import the digraph lookup function from lib
@@ -125,6 +146,67 @@ pub extern "C" fn rs_get_digraph_result(first_char: c_int, second_char: c_int) -
         return 0;
     }
     unsafe { rs_digraph_get(first_char, second_char, 1) }
+}
+
+/// NUL character.
+const NUL: c_int = 0;
+
+/// Get a digraph via Ctrl-K two-character input.
+///
+/// Reads two characters from the user (with `no_mapping` set) and composes
+/// a digraph. If the first character is ESC or a special key, returns
+/// NUL or the special key respectively. Between characters, displays
+/// the first character on the command line or showcmd.
+///
+/// # Arguments
+/// * `cmdline` - 1 if called from command-line mode, 0 otherwise
+///
+/// # Returns
+/// The composed digraph character, or NUL if ESC was pressed.
+///
+/// # Safety
+/// Calls C input functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_digraph(cmdline: c_int) -> c_int {
+    // Read first character with no mapping
+    unsafe { nvim_digraph_inc_no_mapping() };
+    let c = unsafe { nvim_digraph_plain_vgetc() };
+    unsafe { nvim_digraph_dec_no_mapping() };
+
+    // ESC cancels Ctrl-K
+    if c == ESC {
+        return NUL;
+    }
+
+    // Special keys (negative values) are returned as-is
+    if c < 0 {
+        return c;
+    }
+
+    // Show the first character
+    if cmdline != 0 {
+        if unsafe { nvim_char2cells(c) } == 1
+            && c < 128
+            && unsafe { nvim_digraph_get_cmdline_star() } == 0
+        {
+            unsafe { nvim_digraph_putcmdline(c, 1) };
+        }
+    } else {
+        unsafe { nvim_digraph_add_to_showcmd(c) };
+    }
+
+    // Read second character with no mapping
+    unsafe { nvim_digraph_inc_no_mapping() };
+    let cc = unsafe { nvim_digraph_plain_vgetc() };
+    unsafe { nvim_digraph_dec_no_mapping() };
+
+    // ESC cancels
+    if cc == ESC {
+        return NUL;
+    }
+
+    // Compose the digraph
+    unsafe { rs_digraph_get(c, cc, 1) }
 }
 
 #[cfg(test)]
