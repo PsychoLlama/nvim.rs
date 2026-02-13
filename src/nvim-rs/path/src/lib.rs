@@ -20,7 +20,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::ptr_as_ptr)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use nvim_mbyte::utf_head_off;
 
@@ -2189,5 +2189,423 @@ mod shorten_dir_tests {
         let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
         // ".." is preserved (dots are not counted)
         assert_eq!(result_str.to_str().unwrap(), "/h/../b/file.txt");
+    }
+}
+
+// ============================================================================
+// Phase 1: Constants and Simple Functions
+// ============================================================================
+
+// FileComparison enum values (matches C path.h)
+// Used in later migration phases.
+#[allow(dead_code)]
+const K_EQUAL_FILES: c_int = 1;
+#[allow(dead_code)]
+const K_DIFFERENT_FILES: c_int = 2;
+#[allow(dead_code)]
+const K_BOTH_FILES_MISSING: c_int = 4;
+#[allow(dead_code)]
+const K_ONE_FILE_MISSING: c_int = 6;
+#[allow(dead_code)]
+const K_EQUAL_FILE_NAMES: c_int = 7;
+
+// EW_* flags for expand_wildcards (matches C path.h)
+// Used in later migration phases.
+#[allow(dead_code)]
+const EW_DIR: c_int = 0x01;
+#[allow(dead_code)]
+const EW_FILE: c_int = 0x02;
+#[allow(dead_code)]
+const EW_NOTFOUND: c_int = 0x04;
+#[allow(dead_code)]
+const EW_ADDSLASH: c_int = 0x08;
+#[allow(dead_code)]
+const EW_KEEPALL: c_int = 0x10;
+#[allow(dead_code)]
+const EW_SILENT: c_int = 0x20;
+#[allow(dead_code)]
+const EW_EXEC: c_int = 0x40;
+#[allow(dead_code)]
+const EW_PATH: c_int = 0x80;
+#[allow(dead_code)]
+const EW_ICASE: c_int = 0x100;
+#[allow(dead_code)]
+const EW_NOERROR: c_int = 0x200;
+#[allow(dead_code)]
+const EW_NOTWILD: c_int = 0x400;
+#[allow(dead_code)]
+const EW_KEEPDOLLAR: c_int = 0x800;
+#[allow(dead_code)]
+const EW_ALLLINKS: c_int = 0x1000;
+#[allow(dead_code)]
+const EW_SHELLCMD: c_int = 0x2000;
+#[allow(dead_code)]
+const EW_DODOT: c_int = 0x4000;
+#[allow(dead_code)]
+const EW_EMPTYOK: c_int = 0x8000;
+#[allow(dead_code)]
+const EW_NOTENV: c_int = 0x10000;
+#[allow(dead_code)]
+const EW_CDPATH: c_int = 0x20000;
+#[allow(dead_code)]
+const EW_NOBREAK: c_int = 0x40000;
+
+#[allow(dead_code)]
+const OK: c_int = 1;
+#[allow(dead_code)]
+const FAIL: c_int = 0;
+
+/// Unix special wildcard characters that need shell expansion.
+#[cfg(unix)]
+#[allow(dead_code)]
+const SPECIAL_WILDCHAR: &[u8] = b"`'{\"";
+
+extern "C" {
+    fn nvim_path_os_isdir(name: *const c_char) -> c_int;
+    fn nvim_path_xmalloc(size: usize) -> *mut c_char;
+    fn nvim_path_xrealloc(ptr: *mut c_char, size: usize) -> *mut c_char;
+    fn nvim_path_xfree(ptr: *mut c_char);
+}
+
+/// qsort comparator for path strings — dereferences two `char **` pointers
+/// and calls `rs_pathcmp` with maxlen=-1 (compare full strings).
+///
+/// # Safety
+/// `a` and `b` must be valid pointers to `*const c_char`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pstrcmp(a: *const c_void, b: *const c_void) -> c_int {
+    let pa = *(a as *const *const c_char);
+    let pb = *(b as *const *const c_char);
+    rs_pathcmp(pa, pb, -1)
+}
+
+/// Return true if we can expand this backtick thing here.
+///
+/// Checks that `p` starts and ends with '`' and has at least one char between.
+///
+/// # Safety
+/// `p` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_backtick(p: *const c_char) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+    let first = *p as u8;
+    if first != b'`' {
+        return 0;
+    }
+    // Check second char exists
+    if *p.add(1) == 0 {
+        return 0;
+    }
+    // Find end
+    let len = libc::strlen(p);
+    c_int::from(*(p.add(len - 1)) as u8 == b'`')
+}
+
+/// Return true if "p" contains what looks like an environment variable.
+/// Allowing for escaping.
+///
+/// # Safety
+/// `p` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_env_var(p: *const c_char) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+    let mut ptr = p;
+    while *ptr != 0 {
+        if *ptr as u8 == b'\\' && *ptr.add(1) != 0 {
+            // Skip escaped character
+            ptr = ptr.add(1);
+            let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+            let char_len = nvim_mbyte::utfc_ptr2len(slice);
+            ptr = ptr.add(char_len);
+            continue;
+        }
+        if *ptr as u8 == b'$' {
+            return 1;
+        }
+        // MB_PTR_ADV
+        let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+        let char_len = nvim_mbyte::utfc_ptr2len(slice);
+        ptr = ptr.add(char_len);
+    }
+    0
+}
+
+/// Free the list of files returned by expand_wildcards() or other expansion functions.
+///
+/// # Safety
+/// `files` must be a valid pointer to an array of `count` allocated C strings,
+/// or NULL. Each string and the array itself are freed.
+#[no_mangle]
+pub unsafe extern "C" fn rs_FreeWild(count: c_int, files: *mut *mut c_char) {
+    if count <= 0 || files.is_null() {
+        return;
+    }
+    let mut i = count;
+    while i > 0 {
+        i -= 1;
+        nvim_path_xfree(*files.add(i as usize));
+    }
+    nvim_path_xfree(files as *mut c_char);
+}
+
+/// Return true if the directory of "fname" exists, false otherwise.
+/// Also returns true if there is no directory name.
+/// "fname" must be writable!
+///
+/// # Safety
+/// `fname` must be a valid pointer to a mutable, null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dir_of_file_exists(fname: *mut c_char) -> c_int {
+    if fname.is_null() {
+        return 0;
+    }
+    let p = rs_path_tail_with_sep(fname).cast_mut();
+    if p == fname {
+        return 1; // no directory name
+    }
+    let saved = *p;
+    *p = 0; // NUL-terminate at separator
+    let retval = nvim_path_os_isdir(fname);
+    *p = saved;
+    retval
+}
+
+/// Concatenate file names in-place.
+///
+/// Appends `fname2` (len2 bytes) to `fname1` at offset `len1`.
+/// If `sep` is true and fname1 doesn't end with a path separator, inserts one.
+///
+/// # Safety
+/// `fname1` buffer must have enough space for len1 + len2 + 2 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_concat_fnames(
+    fname1: *mut c_char,
+    len1: usize,
+    fname2: *const c_char,
+    len2: usize,
+    sep: c_int,
+) -> *mut c_char {
+    if fname1.is_null() || fname2.is_null() {
+        return fname1;
+    }
+    if sep != 0 && *fname1 != 0 && rs_after_pathsep(fname1, fname1.add(len1)) == 0 {
+        // Insert path separator
+        #[cfg(unix)]
+        {
+            *fname1.add(len1) = b'/' as c_char;
+        }
+        #[cfg(windows)]
+        {
+            *fname1.add(len1) = b'\\' as c_char;
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            *fname1.add(len1) = b'/' as c_char;
+        }
+        std::ptr::copy(
+            fname2 as *const u8,
+            fname1.add(len1 + 1) as *mut u8,
+            len2 + 1,
+        );
+    } else {
+        std::ptr::copy(fname2 as *const u8, fname1.add(len1) as *mut u8, len2 + 1);
+    }
+    fname1
+}
+
+/// Concatenate file names fname1 and fname2 into allocated memory.
+///
+/// Only add a '/' or '\\' when 'sep' is true and it is necessary.
+///
+/// # Safety
+/// `fname1` and `fname2` must be valid null-terminated C strings.
+/// Returns an allocated string that must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_concat_fnames(
+    fname1: *const c_char,
+    fname2: *const c_char,
+    sep: c_int,
+) -> *mut c_char {
+    if fname1.is_null() || fname2.is_null() {
+        return std::ptr::null_mut();
+    }
+    let len1 = libc::strlen(fname1);
+    let len2 = libc::strlen(fname2);
+    let dest = nvim_path_xmalloc(len1 + len2 + 3);
+    std::ptr::copy_nonoverlapping(fname1 as *const u8, dest as *mut u8, len1 + 1);
+    rs_do_concat_fnames(dest, len1, fname2, len2, sep)
+}
+
+/// Concatenate file names, reallocating fname1.
+///
+/// Like concat_fnames(), but in place of allocating new memory it reallocates
+/// fname1.
+///
+/// # Safety
+/// `fname1` must have been allocated with xmalloc. `fname2` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_concat_fnames_realloc(
+    fname1: *mut c_char,
+    fname2: *const c_char,
+    sep: c_int,
+) -> *mut c_char {
+    if fname1.is_null() || fname2.is_null() {
+        return fname1;
+    }
+    let len1 = libc::strlen(fname1);
+    let len2 = libc::strlen(fname2);
+    let dest = nvim_path_xrealloc(fname1, len1 + len2 + 3);
+    rs_do_concat_fnames(dest, len1, fname2, len2, sep)
+}
+
+#[cfg(test)]
+mod phase1_tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_pstrcmp() {
+        unsafe {
+            let s1 = CString::new("/a/b").unwrap();
+            let s2 = CString::new("/a/c").unwrap();
+            let s3 = CString::new("/a/b").unwrap();
+
+            let p1 = s1.as_ptr();
+            let p2 = s2.as_ptr();
+            let p3 = s3.as_ptr();
+
+            // Same strings should compare equal
+            assert_eq!(
+                rs_pstrcmp(
+                    std::ptr::addr_of!(p1) as *const c_void,
+                    std::ptr::addr_of!(p3) as *const c_void,
+                ),
+                0
+            );
+            // /a/b < /a/c
+            assert!(
+                rs_pstrcmp(
+                    std::ptr::addr_of!(p1) as *const c_void,
+                    std::ptr::addr_of!(p2) as *const c_void,
+                ) < 0
+            );
+        }
+    }
+
+    #[test]
+    fn test_vim_backtick() {
+        unsafe {
+            let bt = CString::new("`echo hello`").unwrap();
+            assert_eq!(rs_vim_backtick(bt.as_ptr()), 1);
+
+            let no_bt = CString::new("echo hello").unwrap();
+            assert_eq!(rs_vim_backtick(no_bt.as_ptr()), 0);
+
+            let single = CString::new("`").unwrap();
+            assert_eq!(rs_vim_backtick(single.as_ptr()), 0);
+
+            let empty = CString::new("``").unwrap();
+            assert_eq!(rs_vim_backtick(empty.as_ptr()), 1);
+        }
+    }
+
+    #[test]
+    fn test_has_env_var() {
+        unsafe {
+            let with_var = CString::new("$HOME/file").unwrap();
+            assert_eq!(rs_has_env_var(with_var.as_ptr()), 1);
+
+            let no_var = CString::new("/home/user/file").unwrap();
+            assert_eq!(rs_has_env_var(no_var.as_ptr()), 0);
+
+            let escaped = CString::new("\\$HOME/file").unwrap();
+            assert_eq!(rs_has_env_var(escaped.as_ptr()), 0);
+
+            let escaped_then_var = CString::new("\\$HOME/$USER").unwrap();
+            assert_eq!(rs_has_env_var(escaped_then_var.as_ptr()), 1);
+        }
+    }
+
+    #[test]
+    fn test_do_concat_fnames() {
+        unsafe {
+            // With separator
+            let mut buf = [0i8; 100];
+            let src = b"/home\0";
+            for (i, &b) in src.iter().enumerate() {
+                buf[i] = b as i8;
+            }
+            let fname2 = CString::new("user").unwrap();
+            let result = rs_do_concat_fnames(buf.as_mut_ptr(), 5, fname2.as_ptr(), 4, 1);
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "/home/user");
+
+            // Without separator (already has one)
+            let mut buf2 = [0i8; 100];
+            let src2 = b"/home/\0";
+            for (i, &b) in src2.iter().enumerate() {
+                buf2[i] = b as i8;
+            }
+            let result2 = rs_do_concat_fnames(buf2.as_mut_ptr(), 6, fname2.as_ptr(), 4, 1);
+            let result_str2 = std::ffi::CStr::from_ptr(result2);
+            assert_eq!(result_str2.to_str().unwrap(), "/home/user");
+
+            // sep=false, no separator added
+            let mut buf3 = [0i8; 100];
+            let src3 = b"/home\0";
+            for (i, &b) in src3.iter().enumerate() {
+                buf3[i] = b as i8;
+            }
+            let result3 = rs_do_concat_fnames(buf3.as_mut_ptr(), 5, fname2.as_ptr(), 4, 0);
+            let result_str3 = std::ffi::CStr::from_ptr(result3);
+            assert_eq!(result_str3.to_str().unwrap(), "/homeuser");
+        }
+    }
+
+    #[test]
+    fn test_constants() {
+        // Verify FileComparison values match path.h
+        assert_eq!(K_EQUAL_FILES, 1);
+        assert_eq!(K_DIFFERENT_FILES, 2);
+        assert_eq!(K_BOTH_FILES_MISSING, 4);
+        assert_eq!(K_ONE_FILE_MISSING, 6);
+        assert_eq!(K_EQUAL_FILE_NAMES, 7);
+
+        // Verify EW_* flags match path.h
+        assert_eq!(EW_DIR, 0x01);
+        assert_eq!(EW_FILE, 0x02);
+        assert_eq!(EW_NOTFOUND, 0x04);
+        assert_eq!(EW_ADDSLASH, 0x08);
+        assert_eq!(EW_KEEPALL, 0x10);
+        assert_eq!(EW_SILENT, 0x20);
+        assert_eq!(EW_EXEC, 0x40);
+        assert_eq!(EW_PATH, 0x80);
+        assert_eq!(EW_ICASE, 0x100);
+        assert_eq!(EW_NOERROR, 0x200);
+        assert_eq!(EW_NOTWILD, 0x400);
+        assert_eq!(EW_KEEPDOLLAR, 0x800);
+        assert_eq!(EW_ALLLINKS, 0x1000);
+        assert_eq!(EW_SHELLCMD, 0x2000);
+        assert_eq!(EW_DODOT, 0x4000);
+        assert_eq!(EW_EMPTYOK, 0x8000);
+        assert_eq!(EW_NOTENV, 0x10000);
+        assert_eq!(EW_CDPATH, 0x20000);
+        assert_eq!(EW_NOBREAK, 0x40000);
+    }
+
+    #[test]
+    fn test_ok_fail() {
+        assert_eq!(OK, 1);
+        assert_eq!(FAIL, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_special_wildchar() {
+        assert_eq!(SPECIAL_WILDCHAR, b"`'{\"");
     }
 }

@@ -71,6 +71,61 @@ extern int rs_path_with_extension(const char *path, const char *extension);
 extern char *rs_path_shorten_fname(char *full_path, char *dir_name);
 extern void rs_shorten_dir_len(char *str, int trim_len);
 extern void rs_shorten_dir(char *str);
+extern int rs_pstrcmp(const void *a, const void *b);
+extern int rs_vim_backtick(const char *p);
+extern int rs_has_env_var(const char *p);
+extern void rs_FreeWild(int count, char **files);
+extern int rs_dir_of_file_exists(char *fname);
+extern char *rs_do_concat_fnames(char *fname1, size_t len1, const char *fname2, size_t len2, int sep);
+extern char *rs_concat_fnames(const char *fname1, const char *fname2, int sep);
+extern char *rs_concat_fnames_realloc(char *fname1, const char *fname2, int sep);
+
+// C accessor functions for Rust
+int nvim_path_os_isdir(const char *name) {
+  return os_isdir(name);
+}
+
+void *nvim_path_xmalloc(size_t size) {
+  return xmalloc(size);
+}
+
+void *nvim_path_xrealloc(void *ptr, size_t size) {
+  return xrealloc(ptr, size);
+}
+
+void nvim_path_xfree(void *ptr) {
+  xfree(ptr);
+}
+
+// Static assertions for constants used in Rust
+_Static_assert(sizeof(int) == 4, "int must be 4 bytes");
+_Static_assert(EW_DIR == 0x01, "EW_DIR");
+_Static_assert(EW_FILE == 0x02, "EW_FILE");
+_Static_assert(EW_NOTFOUND == 0x04, "EW_NOTFOUND");
+_Static_assert(EW_ADDSLASH == 0x08, "EW_ADDSLASH");
+_Static_assert(EW_KEEPALL == 0x10, "EW_KEEPALL");
+_Static_assert(EW_SILENT == 0x20, "EW_SILENT");
+_Static_assert(EW_EXEC == 0x40, "EW_EXEC");
+_Static_assert(EW_PATH == 0x80, "EW_PATH");
+_Static_assert(EW_ICASE == 0x100, "EW_ICASE");
+_Static_assert(EW_NOERROR == 0x200, "EW_NOERROR");
+_Static_assert(EW_NOTWILD == 0x400, "EW_NOTWILD");
+_Static_assert(EW_KEEPDOLLAR == 0x800, "EW_KEEPDOLLAR");
+_Static_assert(EW_ALLLINKS == 0x1000, "EW_ALLLINKS");
+_Static_assert(EW_SHELLCMD == 0x2000, "EW_SHELLCMD");
+_Static_assert(EW_DODOT == 0x4000, "EW_DODOT");
+_Static_assert(EW_EMPTYOK == 0x8000, "EW_EMPTYOK");
+_Static_assert(EW_NOTENV == 0x10000, "EW_NOTENV");
+_Static_assert(EW_CDPATH == 0x20000, "EW_CDPATH");
+_Static_assert(EW_NOBREAK == 0x40000, "EW_NOBREAK");
+_Static_assert(kEqualFiles == 1, "kEqualFiles");
+_Static_assert(kDifferentFiles == 2, "kDifferentFiles");
+_Static_assert(kBothFilesMissing == 4, "kBothFilesMissing");
+_Static_assert(kOneFileMissing == 6, "kOneFileMissing");
+_Static_assert(kEqualFileNames == 7, "kEqualFileNames");
+_Static_assert(OK == 1, "OK");
+_Static_assert(FAIL == 0, "FAIL");
+_Static_assert(MAXPATHL >= 4096, "MAXPATHL");
 
 #include "path.c.generated.h"
 
@@ -246,15 +301,7 @@ void shorten_dir(char *str)
 bool dir_of_file_exists(char *fname)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *p = path_tail_with_sep(fname);
-  if (p == fname) {
-    return true;
-  }
-  char c = *p;
-  *p = NUL;
-  bool retval = os_isdir(fname);
-  *p = c;
-  return retval;
+  return rs_dir_of_file_exists(fname) != 0;
 }
 
 /// Compare two file names
@@ -306,14 +353,7 @@ static inline char *do_concat_fnames(char *fname1, const size_t len1, const char
                                      const size_t len2, const bool sep)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
-  if (sep && *fname1 && !after_pathsep(fname1, fname1 + len1)) {
-    fname1[len1] = PATHSEP;
-    memmove(fname1 + len1 + 1, fname2, len2 + 1);
-  } else {
-    memmove(fname1 + len1, fname2, len2 + 1);
-  }
-
-  return fname1;
+  return rs_do_concat_fnames(fname1, len1, fname2, len2, sep ? 1 : 0);
 }
 
 /// Concatenate file names fname1 and fname2 into allocated memory.
@@ -328,11 +368,7 @@ static inline char *do_concat_fnames(char *fname1, const size_t len1, const char
 char *concat_fnames(const char *fname1, const char *fname2, bool sep)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
-  const size_t len1 = strlen(fname1);
-  const size_t len2 = strlen(fname2);
-  char *dest = xmalloc(len1 + len2 + 3);
-  memmove(dest, fname1, len1 + 1);
-  return do_concat_fnames(dest, len1, fname2, len2, sep);
+  return rs_concat_fnames(fname1, fname2, sep ? 1 : 0);
 }
 
 /// Concatenate file names fname1 and fname2
@@ -349,10 +385,7 @@ char *concat_fnames(const char *fname1, const char *fname2, bool sep)
 char *concat_fnames_realloc(char *fname1, const char *fname2, bool sep)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
-  const size_t len1 = strlen(fname1);
-  const size_t len2 = strlen(fname2);
-  return do_concat_fnames(xrealloc(fname1, len1 + len2 + 3), len1,
-                          fname2, len2, sep);
+  return rs_concat_fnames_realloc(fname1, fname2, sep ? 1 : 0);
 }
 
 /// Adds a path separator to a filename, unless it already ends in one.
@@ -411,7 +444,7 @@ bool path_has_wildcard(const char *p)
 
 static int pstrcmp(const void *a, const void *b)
 {
-  return pathcmp(*(char **)a, *(char **)b, -1);
+  return rs_pstrcmp(a, b);
 }
 
 /// Checks if a path has a character path_expand can expand.
@@ -1005,14 +1038,7 @@ static int expand_in_path(garray_T *const gap, char *const pattern, const int fl
 static bool has_env_var(char *p)
   FUNC_ATTR_NONNULL_ALL
 {
-  for (; *p; MB_PTR_ADV(p)) {
-    if (*p == '\\' && p[1] != NUL) {
-      p++;
-    } else if (vim_strchr("$", (uint8_t)(*p)) != NULL) {
-      return true;
-    }
-  }
-  return false;
+  return rs_has_env_var(p) != 0;
 }
 
 #ifdef SPECIAL_WILDCHAR
@@ -1212,20 +1238,14 @@ int gen_expand_wildcards(int num_pat, char **pat, int *num_file, char ***file, i
 /// Free the list of files returned by expand_wildcards() or other expansion functions.
 void FreeWild(int count, char **files)
 {
-  if (count <= 0 || files == NULL) {
-    return;
-  }
-  while (count--) {
-    xfree(files[count]);
-  }
-  xfree(files);
+  rs_FreeWild(count, files);
 }
 
 /// @return  true if we can expand this backtick thing here.
 static bool vim_backtick(char *p)
   FUNC_ATTR_NONNULL_ALL
 {
-  return *p == '`' && *(p + 1) != NUL && *(p + strlen(p) - 1) == '`';
+  return rs_vim_backtick(p) != 0;
 }
 
 /// Expand an item in `backticks` by executing it as a command.
