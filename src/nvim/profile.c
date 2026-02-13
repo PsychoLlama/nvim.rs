@@ -69,6 +69,9 @@ extern void rs_script_line_exec(void);
 extern void rs_script_line_end(void);
 extern void rs_script_prof_save(proftime_T *tm);
 extern void rs_script_prof_restore(const proftime_T *tm);
+// Phase 5: child profiling
+extern void rs_prof_child_enter(proftime_T *tm);
+extern void rs_prof_child_exit(proftime_T *tm);
 
 /// Struct used in sn_prl_ga for every line of a script.
 typedef struct {
@@ -474,13 +477,7 @@ void func_do_profile(ufunc_T *fp)
 /// @param tm  place to store waittime
 void prof_child_enter(proftime_T *tm)
 {
-  funccall_T *fc = get_current_funccal();
-
-  if (fc != NULL && fc->fc_func->uf_profiling) {
-    fc->fc_prof_child = profile_start();
-  }
-
-  script_prof_save(tm);
+  rs_prof_child_enter(tm);
 }
 
 /// Take care of time spent in a child.
@@ -489,18 +486,7 @@ void prof_child_enter(proftime_T *tm)
 /// @param tm  where waittime was stored
 void prof_child_exit(proftime_T *tm)
 {
-  funccall_T *fc = get_current_funccal();
-
-  if (fc != NULL && fc->fc_func->uf_profiling) {
-    fc->fc_prof_child = profile_end(fc->fc_prof_child);
-    // don't count waiting time
-    fc->fc_prof_child = profile_sub_wait(*tm, fc->fc_prof_child);
-    fc->fc_func->uf_tm_children =
-      profile_add(fc->fc_func->uf_tm_children, fc->fc_prof_child);
-    fc->fc_func->uf_tml_children =
-      profile_add(fc->fc_func->uf_tml_children, fc->fc_prof_child);
-  }
-  script_prof_restore(tm);
+  rs_prof_child_exit(tm);
 }
 
 /// Called when starting to read a function line.

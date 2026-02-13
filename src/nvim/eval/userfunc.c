@@ -4451,3 +4451,29 @@ int nvim_ufunc_funcline_is_null(const ufunc_T *fp, int idx)
 {
   return FUNCLINE(fp, idx) == NULL;
 }
+
+// Phase 5: child profiling accessors
+funccall_T *nvim_get_current_funccal(void)
+{
+  return get_current_funccal();
+}
+
+proftime_T nvim_fc_get_prof_child(const funccall_T *fc)
+{
+  return fc->fc_prof_child;
+}
+
+void nvim_fc_set_prof_child(funccall_T *fc, proftime_T val)
+{
+  fc->fc_prof_child = val;
+}
+
+proftime_T nvim_ufunc_get_tm_children(const ufunc_T *fp)
+{
+  return fp->uf_tm_children;
+}
+
+void nvim_ufunc_set_tm_children(ufunc_T *fp, proftime_T val)
+{
+  fp->uf_tm_children = val;
+}
