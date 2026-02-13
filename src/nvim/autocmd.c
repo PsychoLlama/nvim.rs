@@ -111,6 +111,13 @@ extern const char *rs_arg_event_skip(const char *arg, bool have_group);
 extern bool rs_arg_autocmd_flag_get(bool *flag, const char **cmd_ptr, const char *pattern, int len);
 extern bool rs_check_nomodeline(const char **argp);
 
+// Phase 6: Display + Query
+extern void rs_au_show_for_event(int group, int event, const char *pat);
+extern void rs_au_show_for_all_events(int group, const char *pat);
+extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
+extern bool rs_au_exists(const char *arg);
+extern char *rs_aucmd_handler_to_string(int event, size_t idx);
+
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
 {
@@ -200,158 +207,12 @@ static inline const char *get_deleted_augroup(void) FUNC_ATTR_ALWAYS_INLINE
 
 static void au_show_for_all_events(int group, const char *pat)
 {
-  FOR_ALL_AUEVENTS(event) {
-    au_show_for_event(group, event, pat);
-  }
+  rs_au_show_for_all_events(group, pat);
 }
 
 static void au_show_for_event(int group, event_T event, const char *pat)
 {
-  AutoCmdVec *const acs = &autocmds[(int)event];
-  // Return early if there are no autocmds for this event
-  if (kv_size(*acs) == 0) {
-    return;
-  }
-
-  char buflocal_pat[BUFLOCAL_PAT_LEN];  // for "<buffer=X>"
-  int patlen;
-  if (*pat != NUL) {
-    patlen = (int)aucmd_pattern_length(pat);
-
-    // detect special <buffer[=X]> buffer-local patterns
-    if (aupat_is_buflocal(pat, patlen)) {
-      // normalize pat into standard "<buffer>#N" form
-      aupat_normalize_buflocal_pat(buflocal_pat, pat, patlen, aupat_get_buflocal_nr(pat, patlen));
-      pat = buflocal_pat;
-      patlen = (int)strlen(buflocal_pat);
-    }
-
-    if (patlen == 0) {
-      return;
-    }
-    assert(*pat != NUL);
-  } else {
-    pat = NULL;
-    patlen = 0;
-  }
-
-  // Loop through all the specified patterns.
-  while (true) {
-    AutoPat *last_ap = NULL;
-    int last_group = AUGROUP_ERROR;
-    const char *last_group_name = NULL;
-
-    for (size_t i = 0; i < kv_size(*acs); i++) {
-      AutoCmd *const ac = &kv_A(*acs, i);
-
-      // Skip deleted autocommands.
-      if (ac->pat == NULL) {
-        continue;
-      }
-
-      // Accept a pattern when:
-      // - a group was specified and it's that group
-      // - the length of the pattern matches
-      // - the pattern matches.
-      // For <buffer[=X]>, this condition works because we normalize
-      // all buffer-local patterns.
-      if ((group != AUGROUP_ALL && ac->pat->group != group)
-          || (pat != NULL
-              && (ac->pat->patlen != patlen || strncmp(pat, ac->pat->pat, (size_t)patlen) != 0))) {
-        continue;
-      }
-
-      // Show event name and group only if one of them changed.
-      if (ac->pat->group != last_group) {
-        last_group = ac->pat->group;
-        last_group_name = augroup_name(ac->pat->group);
-
-        if (got_int) {
-          return;
-        }
-
-        msg_putchar('\n');
-        if (got_int) {
-          return;
-        }
-
-        // When switching groups, we need to show the new group information.
-        // show the group name, if it's not the default group
-        if (ac->pat->group != AUGROUP_DEFAULT) {
-          if (last_group_name == NULL) {
-            msg_puts_hl(get_deleted_augroup(), HLF_E, false);
-          } else {
-            msg_puts_hl(last_group_name, HLF_T, false);
-          }
-          msg_puts("  ");
-        }
-        // show the event name
-        msg_puts_hl(event_nr2name(event), HLF_T, false);
-      }
-
-      // Show pattern only if it changed.
-      if (last_ap != ac->pat) {
-        last_ap = ac->pat;
-
-        msg_putchar('\n');
-        if (got_int) {
-          return;
-        }
-
-        msg_col = 4;
-        msg_outtrans(ac->pat->pat, 0, false);
-      }
-
-      if (got_int) {
-        return;
-      }
-
-      if (msg_col >= 14) {
-        msg_putchar('\n');
-      }
-      msg_col = 14;
-      if (got_int) {
-        return;
-      }
-
-      char *handler_str = aucmd_handler_to_string(ac);
-      if (ac->desc != NULL) {
-        size_t msglen = 100;
-        char *msg = xmallocz(msglen);
-        if (ac->handler_cmd) {
-          snprintf(msg, msglen, "%s [%s]", handler_str, ac->desc);
-        } else {
-          msg_puts_hl(handler_str, HLF_8, false);
-          snprintf(msg, msglen, " [%s]", ac->desc);
-        }
-        msg_outtrans(msg, 0, false);
-        XFREE_CLEAR(msg);
-      } else if (ac->handler_cmd) {
-        msg_outtrans(handler_str, 0, false);
-      } else {
-        msg_puts_hl(handler_str, HLF_8, false);
-      }
-      XFREE_CLEAR(handler_str);
-      if (p_verbose > 0) {
-        last_set_msg(ac->script_ctx);
-      }
-
-      if (got_int) {
-        return;
-      }
-    }
-
-    // If a pattern is provided, find next pattern. Otherwise exit after single iteration.
-    if (pat != NULL) {
-      pat = aucmd_next_pattern(pat, (size_t)patlen);
-      patlen = (int)aucmd_pattern_length(pat);
-      if (patlen == 0) {
-        break;
-      }
-    } else {
-      break;
-    }
-  }
+  rs_au_show_for_event(group, (int)event, pat);
 }
 
 // Delete autocommand.
@@ -2003,40 +1864,8 @@ char *getnextac(int c, void *cookie, int indent, bool do_concat)
 bool has_autocmd(event_T event, char *sfname, buf_T *buf)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  char *tail = path_tail(sfname);
-  bool retval = false;
-
-  char *fname = FullName_save(sfname, false);
-  if (fname == NULL) {
-    return false;
-  }
-
-#ifdef BACKSLASH_IN_FILENAME
-  // Replace all backslashes with forward slashes. This makes the
-  // autocommand patterns portable between Unix and Windows.
-  sfname = xstrdup(sfname);
-  forward_slash(sfname);
-  forward_slash(fname);
-#endif
-
-  AutoCmdVec *const acs = &autocmds[(int)event];
-  for (size_t i = 0; i < kv_size(*acs); i++) {
-    AutoPat *const ap = kv_A(*acs, i).pat;
-    if (ap != NULL
-        && (ap->buflocal_nr == 0
-            ? match_file_pat(NULL, &ap->reg_prog, fname, sfname, tail, ap->allow_dirs)
-            : buf != NULL && ap->buflocal_nr == buf->b_fnum)) {
-      retval = true;
-      break;
-    }
-  }
-
-  xfree(fname);
-#ifdef BACKSLASH_IN_FILENAME
-  xfree(sfname);
-#endif
-
-  return retval;
+  int buf_fnum = buf != NULL ? buf->b_fnum : 0;
+  return rs_has_autocmd((int)event, sfname, buf_fnum);
 }
 
 // Function given to ExpandGeneric() to obtain the list of autocommand group names.
@@ -2166,81 +1995,7 @@ bool autocmd_supported(const char *const event)
 bool au_exists(const char *const arg)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  buf_T *buflocal_buf = NULL;
-  bool retval = false;
-
-  // Make a copy so that we can change the '#' chars to a NUL.
-  char *const arg_save = xstrdup(arg);
-  char *p = strchr(arg_save, '#');
-  if (p != NULL) {
-    *p++ = NUL;
-  }
-
-  // First, look for an autocmd group name.
-  int group = augroup_find(arg_save);
-  char *event_name;
-  if (group == AUGROUP_ERROR) {
-    // Didn't match a group name, assume the first argument is an event.
-    group = AUGROUP_ALL;
-    event_name = arg_save;
-  } else {
-    if (p == NULL) {
-      // "Group": group name is present and it's recognized
-      retval = true;
-      goto theend;
-    }
-
-    // Must be "Group#Event" or "Group#Event#pat".
-    event_name = p;
-    p = strchr(event_name, '#');
-    if (p != NULL) {
-      *p++ = NUL;  // "Group#Event#pat"
-    }
-  }
-
-  char *pattern = p;  // "pattern" is NULL when there is no pattern.
-
-  // Find the index (enum) for the event name.
-  event_T event = event_name2nr(event_name, &p);
-
-  // return false if the event name is not recognized
-  if (event == NUM_EVENTS) {
-    goto theend;
-  }
-
-  // Find the first autocommand for this event.
-  // If there isn't any, return false;
-  // If there is one and no pattern given, return true;
-  AutoCmdVec *const acs = &autocmds[(int)event];
-  if (kv_size(*acs) == 0) {
-    goto theend;
-  }
-
-  // if pattern is "<buffer>", special handling is needed which uses curbuf
-  // for pattern "<buffer=N>, path_fnamecmp() will work fine
-  if (pattern != NULL && STRICMP(pattern, "<buffer>") == 0) {
-    buflocal_buf = curbuf;
-  }
-
-  // Check if there is an autocommand with the given pattern.
-  for (size_t i = 0; i < kv_size(*acs); i++) {
-    AutoPat *const ap = kv_A(*acs, i).pat;
-    // Only use a pattern when it has not been removed.
-    // For buffer-local autocommands, path_fnamecmp() works fine.
-    if (ap != NULL
-        && (group == AUGROUP_ALL || ap->group == group)
-        && (pattern == NULL
-            || (buflocal_buf == NULL
-                ? path_fnamecmp(ap->pat, pattern) == 0
-                : ap->buflocal_nr == buflocal_buf->b_fnum))) {
-      retval = true;
-      break;
-    }
-  }
-
-theend:
-  xfree(arg_save);
-  return retval;
+  return rs_au_exists(arg);
 }
 
 // Checks if a pattern is buflocal
@@ -2290,7 +2045,9 @@ bool autocmd_delete_id(int64_t id)
 }
 
 /// Gets an (allocated) string representation of an autocmd command/callback.
-char *aucmd_handler_to_string(AutoCmd *ac)
+/// NOTE: This is kept as the C implementation for internal use by accessors.
+/// The Rust-facing version is nvim_autocmd_get_handler_str(event, idx).
+static char *aucmd_handler_to_string(AutoCmd *ac)
   FUNC_ATTR_PURE
 {
   if (ac->handler_cmd) {
@@ -2772,3 +2529,194 @@ const char *nvim_autocmd_get_e_duparg2(void)
 }
 
 // nvim_skipwhite exists in fold.c
+
+// Phase 6: Display + Query accessors
+_Static_assert(HLF_8 == 1, "HLF_8 value changed");
+_Static_assert(HLF_E == 6, "HLF_E value changed");
+_Static_assert(HLF_T == 23, "HLF_T value changed");
+
+/// Get the pattern string of autocmd at (event, idx).
+const char *nvim_autocmd_get_pat_str(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
+    return NULL;
+  }
+  return kv_A(*acs, idx).pat->pat;
+}
+
+/// Get the pattern length of autocmd at (event, idx).
+int nvim_autocmd_get_pat_patlen(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
+    return 0;
+  }
+  return kv_A(*acs, idx).pat->patlen;
+}
+
+/// Get an opaque identifier for the pattern pointer (for same-pattern checks).
+uintptr_t nvim_autocmd_get_pat_id(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
+    return 0;
+  }
+  return (uintptr_t)kv_A(*acs, idx).pat;
+}
+
+/// Get an allocated string representation of the handler for autocmd at (event, idx).
+char *nvim_autocmd_get_handler_str(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return NULL;
+  }
+  AutoCmd *const ac = &kv_A(*acs, idx);
+  return aucmd_handler_to_string(ac);
+}
+
+/// Get the description string of autocmd at (event, idx). Returns NULL if no desc.
+const char *nvim_autocmd_get_desc(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return NULL;
+  }
+  return kv_A(*acs, idx).desc;
+}
+
+/// Check if autocmd at (event, idx) has a handler_cmd (vs callback).
+bool nvim_autocmd_has_handler_cmd(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return false;
+  }
+  return kv_A(*acs, idx).handler_cmd != NULL;
+}
+
+/// Call last_set_msg for the script context of autocmd at (event, idx).
+void nvim_autocmd_show_last_set(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx < kv_size(*acs)) {
+    last_set_msg(kv_A(*acs, idx).script_ctx);
+  }
+}
+
+/// Wrapper for msg_putchar.
+void nvim_autocmd_msg_putchar(int c)
+{
+  msg_putchar(c);
+}
+
+/// Wrapper for msg_puts with highlight.
+void nvim_autocmd_msg_puts_hl(const char *s, int hlf, bool append)
+{
+  msg_puts_hl(s, hlf, append);
+}
+
+/// Wrapper for msg_outtrans.
+void nvim_autocmd_msg_outtrans(const char *s)
+{
+  msg_outtrans(s, 0, false);
+}
+
+/// Set msg_col value.
+void nvim_autocmd_msg_col_set(int col)
+{
+  msg_col = col;
+}
+
+/// Get msg_col value.
+int nvim_autocmd_msg_col_get(void)
+{
+  return msg_col;
+}
+
+/// Get got_int flag.
+int nvim_autocmd_get_got_int(void)
+{
+  return got_int ? 1 : 0;
+}
+
+/// Get p_verbose.
+int nvim_autocmd_get_p_verbose(void)
+{
+  return (int)p_verbose;
+}
+
+/// Check if autocmd at (event, idx) matches file for has_autocmd.
+/// This consolidates the match_file_pat + buflocal check.
+bool nvim_autocmd_match_file(int event, size_t idx,
+                             const char *fname, const char *sfname,
+                             const char *tail, int buf_fnum)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return false;
+  }
+  AutoPat *const ap = kv_A(*acs, idx).pat;
+  if (ap == NULL) {
+    return false;
+  }
+  if (ap->buflocal_nr == 0) {
+    return match_file_pat(NULL, &ap->reg_prog,
+                          (char *)fname, (char *)sfname, (char *)tail,
+                          ap->allow_dirs);
+  }
+  return buf_fnum != 0 && ap->buflocal_nr == buf_fnum;
+}
+
+/// Wrapper for path_tail.
+const char *nvim_autocmd_path_tail(const char *fname)
+{
+  return path_tail((char *)fname);
+}
+
+/// Wrapper for FullName_save.
+char *nvim_autocmd_fullname_save(const char *fname)
+{
+  return FullName_save((char *)fname, false);
+}
+
+/// Wrapper for path_fnamecmp.
+int nvim_autocmd_path_fnamecmp(const char *a, const char *b)
+{
+  return path_fnamecmp(a, b);
+}
+
+/// Get curbuf->b_fnum for au_exists.
+int nvim_autocmd_get_curbuf_fnum(void)
+{
+  return curbuf->b_fnum;
+}
+
+/// Wrapper for msg_puts (no highlight).
+void nvim_autocmd_msg_puts(const char *s)
+{
+  msg_puts(s);
+}
+
+/// Wrapper for xmallocz.
+char *nvim_autocmd_xmallocz(size_t len)
+{
+  return xmallocz(len);
+}
+
+/// Wrapper for callback_to_string.
+char *nvim_autocmd_callback_to_string(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return NULL;
+  }
+  return callback_to_string(&kv_A(*acs, idx).handler_fn, NULL);
+}
+
+/// Wrapper for xstrdup.
+char *nvim_autocmd_xstrdup(const char *s)
+{
+  return xstrdup(s);
+}

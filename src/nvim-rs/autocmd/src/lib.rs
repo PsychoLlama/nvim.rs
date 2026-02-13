@@ -90,9 +90,41 @@ extern "C" {
     fn nvim_autocmd_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
     fn nvim_autocmd_xfree(ptr: *mut c_char);
 
+    // Phase 6: Display + Query accessors
+    fn nvim_autocmd_get_pat_str(event: c_int, idx: usize) -> *const c_char;
+    fn nvim_autocmd_get_pat_patlen(event: c_int, idx: usize) -> c_int;
+    fn nvim_autocmd_get_pat_id(event: c_int, idx: usize) -> usize;
+    fn nvim_autocmd_get_handler_str(event: c_int, idx: usize) -> *mut c_char;
+    fn nvim_autocmd_get_desc(event: c_int, idx: usize) -> *const c_char;
+    fn nvim_autocmd_has_handler_cmd(event: c_int, idx: usize) -> bool;
+    fn nvim_autocmd_show_last_set(event: c_int, idx: usize);
+    fn nvim_autocmd_msg_putchar(c: c_int);
+    fn nvim_autocmd_msg_puts_hl(s: *const c_char, hlf: c_int, append: bool);
+    fn nvim_autocmd_msg_outtrans(s: *const c_char);
+    fn nvim_autocmd_msg_col_set(col: c_int);
+    fn nvim_autocmd_msg_col_get() -> c_int;
+    fn nvim_autocmd_get_got_int() -> c_int;
+    fn nvim_autocmd_get_p_verbose() -> c_int;
+    fn nvim_autocmd_match_file(
+        event: c_int,
+        idx: usize,
+        fname: *const c_char,
+        sfname: *const c_char,
+        tail: *const c_char,
+        buf_fnum: c_int,
+    ) -> bool;
+    fn nvim_autocmd_path_tail(fname: *const c_char) -> *const c_char;
+    fn nvim_autocmd_fullname_save(fname: *const c_char) -> *mut c_char;
+    fn nvim_autocmd_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn nvim_autocmd_get_curbuf_fnum() -> c_int;
+    fn nvim_autocmd_msg_puts(s: *const c_char);
+    fn nvim_autocmd_xmallocz(len: usize) -> *mut c_char;
+    fn nvim_autocmd_xstrdup(s: *const c_char) -> *mut c_char;
+
     // Rust functions from other modules (called via FFI)
     fn rs_augroup_find(name: *const c_char) -> c_int;
     fn rs_augroup_add(name: *const c_char) -> c_int;
+    fn rs_augroup_name(group: c_int) -> *const c_char;
 }
 
 // Static "Unknown" string for invalid events
@@ -677,6 +709,449 @@ pub unsafe extern "C" fn rs_autocmd_supported(event: *const c_char) -> c_int {
 
     let result = nvim_event_name2nr(event, len);
     c_int::from(result != NUM_EVENTS)
+}
+
+// =============================================================================
+// Phase 6: Display + Query Functions
+// =============================================================================
+
+// Highlight constants from highlight_defs.h (verified with _Static_assert in autocmd.c)
+const HLF_8: c_int = 1; // Meta & special keys
+const HLF_E: c_int = 6; // Error messages
+const HLF_T: c_int = 23; // Titles
+
+/// Helper: compute C string length.
+unsafe fn c_strlen(s: *const c_char) -> usize {
+    let mut len = 0;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
+}
+
+/// Helper: compare two C strings for `len` bytes.
+unsafe fn c_strncmp(a: *const c_char, b: *const c_char, len: usize) -> bool {
+    for i in 0..len {
+        if *a.add(i) != *b.add(i) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Display autocommands for a specific event, optionally filtered by group and pattern.
+///
+/// # Safety
+/// `pat` must be a valid NUL-terminated C string (or empty string).
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_au_show_for_event(group: c_int, event: c_int, pat: *const c_char) {
+    // Return early if there are no autocmds for this event
+    if nvim_get_autocmds_count(event) == 0 {
+        return;
+    }
+
+    let mut buflocal_pat = [0u8; BUFLOCAL_PAT_LEN];
+    let mut pat = pat;
+    let mut patlen: c_int;
+
+    if !pat.is_null() && *pat != 0 {
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            patlen = rs_aucmd_pattern_length(pat) as c_int;
+        }
+
+        // detect special <buffer[=X]> buffer-local patterns
+        if rs_aupat_is_buflocal(pat, patlen) != 0 {
+            let buflocal_nr = rs_aupat_get_buflocal_nr(pat, patlen);
+            rs_aupat_normalize_buflocal_pat(
+                buflocal_pat.as_mut_ptr().cast(),
+                pat,
+                patlen,
+                buflocal_nr,
+            );
+            pat = buflocal_pat.as_ptr().cast();
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                patlen = c_strlen(pat) as c_int;
+            }
+        }
+
+        if patlen == 0 {
+            return;
+        }
+    } else {
+        pat = std::ptr::null();
+        patlen = 0;
+    }
+
+    // Loop through all the specified patterns
+    loop {
+        au_show_event_inner(group, event, pat, patlen);
+
+        // If a pattern is provided, find next pattern. Otherwise exit after single iteration.
+        if pat.is_null() {
+            break;
+        }
+        pat = rs_aucmd_next_pattern(pat, patlen as usize);
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            patlen = rs_aucmd_pattern_length(pat) as c_int;
+        }
+        if patlen == 0 {
+            break;
+        }
+    }
+}
+
+/// Inner loop for `rs_au_show_for_event` — iterates autocmds for one pattern.
+#[allow(clippy::too_many_lines)]
+unsafe fn au_show_event_inner(group: c_int, event: c_int, pat: *const c_char, patlen: c_int) {
+    let mut last_pat_id: usize = 0;
+    let mut last_group = group::AUGROUP_ERROR;
+
+    let size = nvim_get_autocmds_count(event);
+    for i in 0..size {
+        // Skip deleted autocommands
+        if nvim_autocmd_pat_is_null(event, i) != 0 {
+            continue;
+        }
+
+        let ac_group = nvim_autocmd_get_pat_group(event, i);
+        let ac_patlen = nvim_autocmd_get_pat_patlen(event, i);
+        let ac_pat = nvim_autocmd_get_pat_str(event, i);
+
+        // Filter by group and pattern
+        if (group != group::AUGROUP_ALL && ac_group != group)
+            || (!pat.is_null() && (ac_patlen != patlen || !c_strncmp(pat, ac_pat, patlen as usize)))
+        {
+            continue;
+        }
+
+        // Show event name and group only if one of them changed
+        if ac_group != last_group {
+            last_group = ac_group;
+            if !show_group_and_event(ac_group, event) {
+                return;
+            }
+        }
+
+        // Show pattern only if it changed
+        let pat_id = nvim_autocmd_get_pat_id(event, i);
+        if pat_id != last_pat_id {
+            last_pat_id = pat_id;
+            nvim_autocmd_msg_putchar(c_int::from(b'\n'));
+            if nvim_autocmd_get_got_int() != 0 {
+                return;
+            }
+            nvim_autocmd_msg_col_set(4);
+            nvim_autocmd_msg_outtrans(ac_pat);
+        }
+
+        if nvim_autocmd_get_got_int() != 0 {
+            return;
+        }
+
+        if nvim_autocmd_msg_col_get() >= 14 {
+            nvim_autocmd_msg_putchar(c_int::from(b'\n'));
+        }
+        nvim_autocmd_msg_col_set(14);
+        if nvim_autocmd_get_got_int() != 0 {
+            return;
+        }
+
+        show_handler_and_desc(event, i);
+
+        if nvim_autocmd_get_p_verbose() > 0 {
+            nvim_autocmd_show_last_set(event, i);
+        }
+
+        if nvim_autocmd_get_got_int() != 0 {
+            return;
+        }
+    }
+}
+
+/// Show group name and event name when group changes. Returns false if got_int.
+unsafe fn show_group_and_event(ac_group: c_int, event: c_int) -> bool {
+    let group_name = rs_augroup_name(ac_group);
+
+    if nvim_autocmd_get_got_int() != 0 {
+        return false;
+    }
+    nvim_autocmd_msg_putchar(c_int::from(b'\n'));
+    if nvim_autocmd_get_got_int() != 0 {
+        return false;
+    }
+
+    // Show group name if not the default group
+    if ac_group != group::AUGROUP_DEFAULT {
+        if group_name.is_null() {
+            extern "C" {
+                fn nvim_get_deleted_augroup() -> *const c_char;
+            }
+            nvim_autocmd_msg_puts_hl(nvim_get_deleted_augroup(), HLF_E, false);
+        } else {
+            nvim_autocmd_msg_puts_hl(group_name, HLF_T, false);
+        }
+        nvim_autocmd_msg_puts(c"  ".as_ptr());
+    }
+    // Show the event name
+    let event_name = rs_event_nr2name(event, NUM_EVENTS);
+    nvim_autocmd_msg_puts_hl(event_name, HLF_T, false);
+    true
+}
+
+/// Display handler string and description for one autocmd entry.
+unsafe fn show_handler_and_desc(event: c_int, idx: usize) {
+    let handler_str = nvim_autocmd_get_handler_str(event, idx);
+    let desc = nvim_autocmd_get_desc(event, idx);
+    let has_cmd = nvim_autocmd_has_handler_cmd(event, idx);
+
+    if !desc.is_null() {
+        let msglen: usize = 100;
+        let msg = nvim_autocmd_xmallocz(msglen);
+        if has_cmd {
+            format_handler_desc(msg, msglen, handler_str, desc);
+        } else {
+            nvim_autocmd_msg_puts_hl(handler_str, HLF_8, false);
+            format_desc_only(msg, msglen, desc);
+        }
+        nvim_autocmd_msg_outtrans(msg);
+        nvim_autocmd_xfree(msg);
+    } else if has_cmd {
+        nvim_autocmd_msg_outtrans(handler_str);
+    } else {
+        nvim_autocmd_msg_puts_hl(handler_str, HLF_8, false);
+    }
+    nvim_autocmd_xfree(handler_str);
+}
+
+/// Format "{handler_str} [{desc}]" into msg buffer.
+unsafe fn format_handler_desc(
+    msg: *mut c_char,
+    msglen: usize,
+    handler_str: *const c_char,
+    desc: *const c_char,
+) {
+    let handler_len = c_strlen(handler_str);
+    let desc_len = c_strlen(desc);
+    let mut pos = 0usize;
+    let h_copy = handler_len.min(msglen);
+    std::ptr::copy_nonoverlapping(handler_str, msg, h_copy);
+    pos += h_copy;
+    if pos + 2 <= msglen {
+        *msg.add(pos) = b' ' as c_char;
+        *msg.add(pos + 1) = b'[' as c_char;
+        pos += 2;
+    }
+    let d_copy = desc_len.min(msglen.saturating_sub(pos));
+    std::ptr::copy_nonoverlapping(desc, msg.add(pos), d_copy);
+    pos += d_copy;
+    if pos < msglen {
+        *msg.add(pos) = b']' as c_char;
+        pos += 1;
+    }
+    *msg.add(pos.min(msglen)) = 0;
+}
+
+/// Format " [{desc}]" into msg buffer.
+unsafe fn format_desc_only(msg: *mut c_char, msglen: usize, desc: *const c_char) {
+    let desc_len = c_strlen(desc);
+    let mut pos = 0usize;
+    if pos + 2 <= msglen {
+        *msg.add(pos) = b' ' as c_char;
+        *msg.add(pos + 1) = b'[' as c_char;
+        pos += 2;
+    }
+    let d_copy = desc_len.min(msglen.saturating_sub(pos));
+    std::ptr::copy_nonoverlapping(desc, msg.add(pos), d_copy);
+    pos += d_copy;
+    if pos < msglen {
+        *msg.add(pos) = b']' as c_char;
+        pos += 1;
+    }
+    *msg.add(pos.min(msglen)) = 0;
+}
+
+/// Display autocommands for all events, optionally filtered by group and pattern.
+///
+/// # Safety
+/// `pat` must be a valid NUL-terminated C string (or empty string).
+#[no_mangle]
+pub unsafe extern "C" fn rs_au_show_for_all_events(group: c_int, pat: *const c_char) {
+    for event in 0..NUM_EVENTS {
+        rs_au_show_for_event(group, event, pat);
+    }
+}
+
+/// Check if there is a matching autocommand for a filename.
+///
+/// # Safety
+/// `sfname` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_autocmd(
+    event: c_int,
+    sfname: *const c_char,
+    buf_fnum: c_int,
+) -> bool {
+    let tail = nvim_autocmd_path_tail(sfname);
+    let fname = nvim_autocmd_fullname_save(sfname);
+    if fname.is_null() {
+        return false;
+    }
+
+    let size = nvim_get_autocmds_count(event);
+    let mut retval = false;
+    for i in 0..size {
+        if nvim_autocmd_match_file(event, i, fname, sfname, tail, buf_fnum) {
+            retval = true;
+            break;
+        }
+    }
+
+    nvim_autocmd_xfree(fname);
+    retval
+}
+
+/// Check if an autocommand exists matching the given specification.
+///
+/// Parses comma-separated group#event#pattern syntax.
+///
+/// # Safety
+/// `arg` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_au_exists(arg: *const c_char) -> bool {
+    // Make a copy so we can modify '#' to NUL
+    let arg_save = nvim_autocmd_xstrdup(arg);
+
+    // Find first '#'
+    let mut p = arg_save;
+    while *p != 0 && *p != b'#' as c_char {
+        p = p.add(1);
+    }
+    let has_hash = *p == b'#' as c_char;
+    if has_hash {
+        *p = 0;
+        p = p.add(1);
+    }
+
+    // First, look for an autocmd group name
+    let group_id = rs_augroup_find(arg_save);
+
+    let retval = if group_id == group::AUGROUP_ERROR {
+        // Didn't match a group name, assume the first argument is an event
+        let event_name: *const c_char = arg_save;
+        let pattern = if has_hash {
+            p.cast_const()
+        } else {
+            std::ptr::null()
+        };
+        au_exists_inner(event_name, pattern, group::AUGROUP_ALL)
+    } else if !has_hash {
+        // "Group": group name is present and it's recognized
+        true
+    } else {
+        // Must be "Group#Event" or "Group#Event#pat"
+        let event_name: *const c_char = p.cast_const();
+        // Find second '#'
+        let mut p2 = p;
+        while *p2 != 0 && *p2 != b'#' as c_char {
+            p2 = p2.add(1);
+        }
+        let pattern = if *p2 == b'#' as c_char {
+            *p2 = 0;
+            p2 = p2.add(1);
+            p2.cast_const()
+        } else {
+            std::ptr::null()
+        };
+        au_exists_inner(event_name, pattern, group_id)
+    };
+
+    nvim_autocmd_xfree(arg_save);
+    retval
+}
+
+/// Inner helper for `rs_au_exists`: checks if an autocommand exists for event_name + pattern.
+unsafe fn au_exists_inner(event_name: *const c_char, pattern: *const c_char, group: c_int) -> bool {
+    // Find the event from the name
+    let result = event::rs_event_name2nr(event_name);
+    if result.event >= NUM_EVENTS {
+        return false;
+    }
+    let event = result.event;
+
+    // Check if there are any autocmds for this event
+    let size = nvim_get_autocmds_count(event);
+    if size == 0 {
+        return false;
+    }
+
+    // If no pattern given and we have autocmds, check if any match the group
+    if pattern.is_null() {
+        // Need at least one autocmd matching the group
+        for i in 0..size {
+            if nvim_autocmd_pat_is_null(event, i) != 0 {
+                continue;
+            }
+            if group == group::AUGROUP_ALL || nvim_autocmd_get_pat_group(event, i) == group {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Check for "<buffer>" pattern - use curbuf's fnum
+    let buflocal_fnum = if strnicmp_prefix_8(pattern, b"<buffer>") {
+        nvim_autocmd_get_curbuf_fnum()
+    } else {
+        0
+    };
+
+    // Check if there is an autocommand with the given pattern
+    for i in 0..size {
+        if nvim_autocmd_pat_is_null(event, i) != 0 {
+            continue;
+        }
+        let ac_group = nvim_autocmd_get_pat_group(event, i);
+        if group != group::AUGROUP_ALL && ac_group != group {
+            continue;
+        }
+
+        let ac_pat = nvim_autocmd_get_pat_str(event, i);
+        if buflocal_fnum != 0 {
+            // Buffer-local: compare buffer numbers
+            if nvim_autocmd_get_pat_buflocal_nr(event, i) == buflocal_fnum {
+                return true;
+            }
+        } else if nvim_autocmd_path_fnamecmp(ac_pat, pattern) == 0 {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Helper: case-insensitive check for "<buffer>" (8 bytes, NUL-terminated).
+unsafe fn strnicmp_prefix_8(s: *const c_char, prefix: &[u8; 8]) -> bool {
+    for (i, &expected) in prefix.iter().enumerate() {
+        let c = *s.add(i) as u8;
+        if !c.eq_ignore_ascii_case(&expected) {
+            return false;
+        }
+    }
+    // Must be exactly 8 chars (NUL-terminated)
+    *s.add(8) == 0
+}
+
+/// Get an allocated string representation of the handler for autocmd at (event, idx).
+///
+/// # Safety
+/// `event` and `idx` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_aucmd_handler_to_string(event: c_int, idx: usize) -> *mut c_char {
+    nvim_autocmd_get_handler_str(event, idx)
 }
 
 #[cfg(test)]
