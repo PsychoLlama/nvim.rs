@@ -3,7 +3,7 @@
 //! This module provides helper functions for rendering popup menu text
 //! with fuzzy match highlighting and proper attribute handling.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 /// Highlight group IDs used in popup menu rendering.
 pub mod hlf {
@@ -292,6 +292,56 @@ pub const extern "C" fn rs_pum_needs_truncation(
     available_cells: c_int,
 ) -> c_int {
     (text_cells > available_cells && available_cells > 0) as c_int
+}
+
+// C `_impl` functions for Phase 4 migration.
+extern "C" {
+    /// Compute text attributes for a popup menu item.
+    fn nvim_pum_compute_text_attrs_impl(
+        text: *mut c_char,
+        hlf: c_int,
+        user_hlattr: c_int,
+    ) -> *mut c_int;
+    /// Display text on the popup menu grid with per-cell attributes.
+    fn nvim_pum_grid_puts_with_attrs_impl(
+        col: c_int,
+        cells: c_int,
+        text: *const c_char,
+        textlen: c_int,
+        attrs: *const c_int,
+    );
+}
+
+/// Compute text attributes for a popup menu item.
+///
+/// Returns a pointer to an array of per-cell attributes, or null if
+/// all cells have the same attribute.
+///
+/// # Safety
+/// Calls C `_impl` function. `text` must be a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_compute_text_attrs(
+    text: *mut c_char,
+    hlf: c_int,
+    user_hlattr: c_int,
+) -> *mut c_int {
+    nvim_pum_compute_text_attrs_impl(text, hlf, user_hlattr)
+}
+
+/// Display text on the popup menu grid with per-cell attributes.
+///
+/// # Safety
+/// Calls C `_impl` function. `text` must be a valid C string,
+/// `attrs` must be a valid array of attributes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_grid_puts_with_attrs(
+    col: c_int,
+    cells: c_int,
+    text: *const c_char,
+    textlen: c_int,
+    attrs: *const c_int,
+) {
+    nvim_pum_grid_puts_with_attrs_impl(col, cells, text, textlen, attrs);
 }
 
 #[cfg(test)]

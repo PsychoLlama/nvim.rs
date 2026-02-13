@@ -111,6 +111,9 @@ extern void rs_pum_recompose(void);
 extern void rs_pum_check_clear(void);
 extern void rs_pum_set_event_info(dict_T *dict);
 extern void rs_pum_ui_flush(void);
+extern int *rs_pum_compute_text_attrs(char *text, int hlf, int user_hlattr);
+extern void rs_pum_grid_puts_with_attrs(int col, int cells, const char *text,
+                                        int textlen, const int *attrs);
 
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
@@ -618,7 +621,7 @@ void pum_display(pumitem_T *array, int size, int selected, bool array_changed, i
 
 /// Computes attributes of text on the popup menu.
 /// Returns attributes for every cell, or NULL if all attributes are the same.
-static int *pum_compute_text_attrs(char *text, hlf_T hlf, int user_hlattr)
+int *nvim_pum_compute_text_attrs_impl(char *text, int hlf, int user_hlattr)
 {
   if (*text == NUL || (hlf != HLF_PSI && hlf != HLF_PNI)
       || (win_hl_attr(curwin, HLF_PMSI) == win_hl_attr(curwin, HLF_PSI)
@@ -702,8 +705,8 @@ static int *pum_compute_text_attrs(char *text, hlf_T hlf, int user_hlattr)
 }
 
 /// Displays text on the popup menu with specific attributes.
-static void pum_grid_puts_with_attrs(int col, int cells, const char *text, int textlen,
-                                     const int *attrs)
+void nvim_pum_grid_puts_with_attrs_impl(int col, int cells, const char *text, int textlen,
+                                        const int *attrs)
 {
   const int col_start = col;
   const char *ptr = text;
@@ -946,7 +949,7 @@ void pum_redraw(void)
 
           int *attrs = NULL;
           if (item_type == CPT_ABBR) {
-            attrs = pum_compute_text_attrs(st, hlf,
+            attrs = rs_pum_compute_text_attrs(st, hlf,
                                            pum_array[idx].pum_user_abbr_hlattr);
           }
 
@@ -977,7 +980,7 @@ void pum_redraw(void)
             if (attrs == NULL) {
               grid_line_puts(grid_col - cells + 1, rt, -1, attr);
             } else {
-              pum_grid_puts_with_attrs(grid_col - cells + 1, cells, rt, -1, attrs);
+              rs_pum_grid_puts_with_attrs(grid_col - cells + 1, cells, rt, -1, attrs);
             }
 
             xfree(rt_start);
@@ -993,7 +996,7 @@ void pum_redraw(void)
             if (attrs == NULL) {
               grid_line_puts(grid_col, st, -1, attr);
             } else {
-              pum_grid_puts_with_attrs(grid_col, cells, st, -1, attrs);
+              rs_pum_grid_puts_with_attrs(grid_col, cells, st, -1, attrs);
             }
 
             xfree(st);
