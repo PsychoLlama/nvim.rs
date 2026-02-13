@@ -1,25 +1,26 @@
-Plan: ~/.claude/plans/precious-prancing-wilkes.md
+Plan: ~/.claude/plans/tranquil-noodling-pelican.md
 
-All 5 phases are complete. Here's the summary:
+All 7 phases of the profile migration plan are now complete. Here's a summary:
 
-## Migration Complete: ops.c Heavy Functions to Rust
+**Commits created (Phases 1-7):**
 
-All 5 phases committed successfully on the `rust-migration` branch:
+| Phase | Commit | Functions |
+|-------|--------|-----------|
+| 1 | `68f7cf118c` | timing wrappers + types foundation (6 fns) |
+| 2 | `e0512a522c` | input/wait profiling (3 fns) |
+| 3 | `70b6e65de3` | function line profiling (4 fns) |
+| 4 | `9a305a73f4` | script line profiling (5 fns) |
+| 5 | `998a7742e3` | child profiling (2 fns) |
+| 6 | `15fbc5750b` | startup timing (7 fns) |
+| 7 | `6300ad318e` | command handling, state mgmt, dump (5 fns + accessors) |
 
-| Commit | Phase | Function | Lines |
-|--------|-------|----------|-------|
-| `6e0eec2fa5` | 1 | `cursor_pos_info` | ~245 |
-| `ba3f15ca42` | 2 | `do_addsub` | ~352 |
-| `08417b5871` | 3 | `op_replace` | ~233 |
-| `813990a8a8` | 4 | `op_delete` | ~317 |
-| `3b2022654c` | 5 | `do_pending_operator` | ~638 |
+**What moved to Rust:**
+- All profiling statics: `prof_wait_time`, `wait_time`, `g_start_time`, `g_prev_time`, `profile_fname`, `pause_time`, `pexpand_what`, `pexpand_cmds`
+- ~27 `rs_*` functions across 7 Rust modules (`timing`, `input`, `func_line`, `script_line`, `child`, `startup`, `command`)
 
-**Total: ~1,785 lines of C logic migrated to Rust**
+**What remains in C:**
+- `profile_init` (directly manipulates `scriptitem_T` fields via `ga_init`)
+- `func_dump_profile`, `script_dump_profile`, `prof_func_line`, `prof_sort_list`, `prof_total_cmp`, `prof_self_cmp` (deep hashtable/garray iteration + file I/O)
+- All C accessor functions (thin wrappers exposing struct fields to Rust)
 
-All checks pass:
-- `just build` — clean (no new warnings)
-- `just smoke-test` — passes
-- `just rust-fmt-check` — passes
-- `just rust-clippy` — passes
-- `just rust-test` — 4,099 tests pass
-- Targeted functional tests (operators, increment/decrement, delete, replace, fold, put, join) — all ops-related tests pass; fold_spec failures are pre-existing
+All checks pass: `build`, `smoke-test`, `rust-fmt-check`, `rust-clippy`, `rust-test` (4102 tests).
