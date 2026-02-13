@@ -23,7 +23,6 @@
 #include "nvim/memory_defs.h"
 #include "nvim/option.h"
 #include "nvim/option_defs.h"
-#include "nvim/shada.h"
 
 #include "context.c.generated.h"
 

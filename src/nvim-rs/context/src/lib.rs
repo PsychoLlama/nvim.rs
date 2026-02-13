@@ -9,8 +9,8 @@
 
 use std::ffi::c_char;
 
-pub mod ffi;
 mod convert;
+pub mod ffi;
 mod restore;
 mod save;
 mod stack;
