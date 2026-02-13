@@ -7,6 +7,14 @@ use std::ffi::{c_char, c_void};
 
 use libc::c_int;
 
+use crate::data::{
+    DIGRAPH_DEFAULT, DG_START_ARABIC, DG_START_ARROWS, DG_START_BLOCK, DG_START_BOPOMOFO,
+    DG_START_CJK_SYMBOLS, DG_START_CURRENCY, DG_START_CYRILLIC, DG_START_DINGBATS,
+    DG_START_DRAWING, DG_START_GREEK, DG_START_GREEK_EXTENDED, DG_START_HEBREW,
+    DG_START_HIRAGANA, DG_START_KATAKANA, DG_START_LATIN, DG_START_LATIN_EXTENDED,
+    DG_START_MATH, DG_START_OTHER1, DG_START_OTHER2, DG_START_OTHER3, DG_START_PUNCTUATION,
+    DG_START_ROMAN, DG_START_SHAPES, DG_START_SUB_SUPER, DG_START_SYMBOLS, DG_START_TECHNICAL,
+};
 use crate::DigrT;
 
 // C accessor functions
@@ -16,9 +24,6 @@ extern "C" {
 
     /// Get length of user digraphs array.
     fn nvim_get_user_digraphs_len() -> c_int;
-
-    /// Get pointer to default digraphs array.
-    fn nvim_get_digraphdefault() -> *const c_void;
 
     /// Get exact digraph match.
     fn rs_getexactdigraph(char1: c_int, char2: c_int, meta_char: c_int) -> c_int;
@@ -33,34 +38,6 @@ extern "C" {
     /// Get display width of a character in cells.
     fn nvim_char2cells(c: c_int) -> c_int;
 }
-
-// Digraph header ranges - must match DG_START_* constants in digraph.c
-const DG_START_LATIN: c_int = 0xa1;
-const DG_START_GREEK: c_int = 0x0386;
-const DG_START_CYRILLIC: c_int = 0x0401;
-const DG_START_HEBREW: c_int = 0x05d0;
-const DG_START_ARABIC: c_int = 0x060c;
-const DG_START_LATIN_EXTENDED: c_int = 0x1e02;
-const DG_START_GREEK_EXTENDED: c_int = 0x1f00;
-const DG_START_PUNCTUATION: c_int = 0x2002;
-const DG_START_SUB_SUPER: c_int = 0x2070;
-const DG_START_CURRENCY: c_int = 0x20a4;
-const DG_START_OTHER1: c_int = 0x2103;
-const DG_START_ROMAN: c_int = 0x2160;
-const DG_START_ARROWS: c_int = 0x2190;
-const DG_START_MATH: c_int = 0x2200;
-const DG_START_TECHNICAL: c_int = 0x2302;
-const DG_START_OTHER2: c_int = 0x2423;
-const DG_START_DRAWING: c_int = 0x2500;
-const DG_START_BLOCK: c_int = 0x2580;
-const DG_START_SHAPES: c_int = 0x25a0;
-const DG_START_SYMBOLS: c_int = 0x2605;
-const DG_START_DINGBATS: c_int = 0x2713;
-const DG_START_CJK_SYMBOLS: c_int = 0x3000;
-const DG_START_HIRAGANA: c_int = 0x3041;
-const DG_START_KATAKANA: c_int = 0x30a1;
-const DG_START_BOPOMOFO: c_int = 0x3105;
-const DG_START_OTHER3: c_int = 0x3220;
 
 /// Header entries for digraph categories.
 /// Each entry has `(start_code, header_index)`.
@@ -306,31 +283,18 @@ pub unsafe extern "C" fn rs_digraph_iterate(
 
     // Iterate default digraphs first (if requested)
     if list_all != 0 {
-        let default_data = unsafe { nvim_get_digraphdefault() };
-        if !default_data.is_null() {
-            let default_digraphs = default_data.cast::<DigrT>();
-            let mut i = 0;
-            loop {
-                let dp = unsafe { &*default_digraphs.add(i) };
-                // Default array is null-terminated
-                if dp.char1 == 0 {
-                    break;
+        for dp in DIGRAPH_DEFAULT {
+            // Get actual result (may be overridden by user digraph)
+            let result =
+                unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), 0) };
+
+            // Skip if result is 0 or same as char2 (no digraph)
+            if result != 0 && result != c_int::from(dp.char2) {
+                let should_continue = unsafe { callback(dp.char1, dp.char2, result, ctx) };
+                if should_continue == 0 {
+                    return count;
                 }
-
-                // Get actual result (may be overridden by user digraph)
-                let result =
-                    unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), 0) };
-
-                // Skip if result is 0 or same as char2 (no digraph)
-                if result != 0 && result != c_int::from(dp.char2) {
-                    let should_continue = unsafe { callback(dp.char1, dp.char2, result, ctx) };
-                    if should_continue == 0 {
-                        return count;
-                    }
-                    count += 1;
-                }
-
-                i += 1;
+                count += 1;
             }
         }
     }
@@ -377,24 +341,10 @@ pub unsafe extern "C" fn rs_digraph_iterate_default(
     callback: DigraphIterCallback,
     ctx: *mut c_void,
 ) -> c_int {
-    let default_data = unsafe { nvim_get_digraphdefault() };
-    if default_data.is_null() {
-        return 1;
-    }
-
-    let default_digraphs = default_data.cast::<DigrT>();
-    let mut i = 0;
-
-    loop {
+    for dp in DIGRAPH_DEFAULT {
         // Check for user interrupt
         if unsafe { nvim_digraph_got_int() } != 0 {
             return 0;
-        }
-
-        let dp = unsafe { &*default_digraphs.add(i) };
-        // Default array is null-terminated
-        if dp.char1 == 0 {
-            break;
         }
 
         // Get actual result (may be overridden by user digraph)
@@ -410,7 +360,6 @@ pub unsafe extern "C" fn rs_digraph_iterate_default(
 
         // Check for breakcheck
         unsafe { nvim_digraph_fast_breakcheck() };
-        i += 1;
     }
 
     1

@@ -13,6 +13,7 @@ use std::ffi::c_void;
 
 use libc::c_int;
 
+pub mod data;
 mod input;
 mod list;
 mod parse;
@@ -21,6 +22,7 @@ mod validate;
 mod viml;
 
 // Re-export FFI functions
+pub use data::{rs_get_digraphdefault, rs_get_digraphdefault_len};
 pub use input::{
     rs_digraph_is_esc, rs_digraph_should_cancel, rs_do_digraph, rs_get_digraph_result,
 };
@@ -43,19 +45,13 @@ pub struct DigrT {
     pub result: c_int,
 }
 
-// C accessor functions for digraph tables
+// C accessor functions for user digraph tables
 extern "C" {
     /// Get pointer to user digraphs array data (opaque).
     fn nvim_get_user_digraphs_data() -> *const c_void;
 
     /// Get length of user digraphs array.
     fn nvim_get_user_digraphs_len() -> c_int;
-
-    /// Get pointer to default digraphs array (opaque).
-    fn nvim_get_digraphdefault() -> *const c_void;
-
-    /// Get length of default digraphs array.
-    fn nvim_get_digraphdefault_len() -> c_int;
 }
 
 /// Space character as `c_int`.
@@ -106,23 +102,10 @@ fn getexactdigraph_impl(char1: c_int, char2: c_int, meta_char: bool) -> c_int {
         }
     }
 
-    // Search default digraphs
-    let default_data = unsafe { nvim_get_digraphdefault() };
-    let default_len = unsafe { nvim_get_digraphdefault_len() };
-
-    if !default_data.is_null() && default_len > 0 {
-        let default_digraphs = default_data.cast::<DigrT>();
-        #[allow(clippy::cast_sign_loss)]
-        let len = default_len as usize;
-        for i in 0..len {
-            let dp = unsafe { &*default_digraphs.add(i) };
-            // Default array is null-terminated (char1 == 0 marks end)
-            if dp.char1 == 0 {
-                break;
-            }
-            if dp.char1 == char1_u8 && dp.char2 == char2_u8 {
-                return dp.result;
-            }
+    // Search default digraphs (now a Rust slice, no FFI hop)
+    for dp in data::DIGRAPH_DEFAULT {
+        if dp.char1 == char1_u8 && dp.char2 == char2_u8 {
+            return dp.result;
         }
     }
 

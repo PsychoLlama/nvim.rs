@@ -21,9 +21,6 @@ extern "C" {
     #[allow(dead_code)]
     fn nvim_get_user_digraphs_ptr() -> *mut c_void;
 
-    /// Get pointer to default digraphs array.
-    fn nvim_get_digraphdefault() -> *const c_void;
-
     /// Grow the user digraphs garray by n items.
     fn nvim_user_digraphs_grow(n: c_int);
 
@@ -123,23 +120,12 @@ fn get_digraph_for_char_impl(val: c_int, out_char1: &mut u8, out_char2: &mut u8)
         }
     }
 
-    // Search default digraphs
-    let default_data = unsafe { nvim_get_digraphdefault() };
-    if !default_data.is_null() {
-        let default_digraphs = default_data.cast::<DigrT>();
-        let mut i = 0;
-        loop {
-            let dp = unsafe { &*default_digraphs.add(i) };
-            // Default array is null-terminated (char1 == 0 marks end)
-            if dp.char1 == 0 {
-                break;
-            }
-            if dp.result == val {
-                *out_char1 = dp.char1;
-                *out_char2 = dp.char2;
-                return true;
-            }
-            i += 1;
+    // Search default digraphs (now a Rust slice, no FFI hop)
+    for dp in crate::data::DIGRAPH_DEFAULT {
+        if dp.result == val {
+            *out_char1 = dp.char1;
+            *out_char2 = dp.char2;
+            return true;
         }
     }
 
