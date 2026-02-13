@@ -59,6 +59,11 @@ extern void rs_stl_clear_click_defs(StlClickDefinition *click_defs, size_t click
 extern StlClickDefinition *rs_stl_alloc_click_defs(StlClickDefinition *cdp, int width, size_t *size);
 extern void rs_stl_fill_click_defs(StlClickDefinition *click_defs, StlClickRecord *click_recs,
                                    const char *buf, int width, bool tabline);
+// Phase 1 Rust implementations
+extern void rs_get_trans_bufname(buf_T *buf);
+extern void rs_redraw_custom_statusline(win_T *wp);
+extern int rs_build_statuscol_str(win_T *wp, linenr_T lnum, linenr_T relnum, char *buf,
+                                  statuscol_T *stcp);
 
 // Determines how deeply nested %{} blocks will be evaluated in statusline.
 #define MAX_STL_EVAL_DEPTH 100
@@ -119,12 +124,7 @@ void win_redr_status(win_T *wp)
 
 void get_trans_bufname(buf_T *buf)
 {
-  if (buf_spname(buf) != NULL) {
-    xstrlcpy(NameBuff, buf_spname(buf), MAXPATHL);
-  } else {
-    home_replace(buf, buf->b_fname, NameBuff, MAXPATHL, true);
-  }
-  trans_characters(NameBuff, MAXPATHL);
+  rs_get_trans_bufname(buf);
 }
 
 /// Only call if (wp->w_vsep_width != 0).
@@ -520,17 +520,7 @@ schar_T fillchar_status(hlf_T *group, win_T *wp)
 /// errors encountered.
 void redraw_custom_statusline(win_T *wp)
 {
-  static bool entered = false;
-
-  // When called recursively return.  This can happen when the statusline
-  // contains an expression that triggers a redraw.
-  if (entered) {
-    return;
-  }
-  entered = true;
-
-  win_redr_custom(wp, false, false, false);
-  entered = false;
+  rs_redraw_custom_statusline(wp);
 }
 
 static void ui_ext_tabline_update(void)
@@ -756,29 +746,7 @@ void draw_tabline(void)
 /// @return  The width of the built status column string for line "lnum"
 int build_statuscol_str(win_T *wp, linenr_T lnum, linenr_T relnum, char *buf, statuscol_T *stcp)
 {
-  // Only update click definitions once per window per redraw.
-  // Don't update when current width is 0, since it will be redrawn again if not empty.
-  const bool fillclick = relnum >= 0 && stcp->width > 0 && lnum == wp->w_topline;
-
-  if (relnum >= 0) {
-    set_vim_var_nr(VV_LNUM, lnum);
-    set_vim_var_nr(VV_RELNUM, relnum);
-  }
-
-  StlClickRecord *clickrec;
-  char *stc = xstrdup(wp->w_p_stc);
-  int width = build_stl_str_hl(wp, buf, MAXPATHL, stc, kOptStatuscolumn, OPT_LOCAL, 0,
-                               stcp->width, &stcp->hlrec, NULL, fillclick ? &clickrec : NULL, stcp);
-  xfree(stc);
-
-  if (fillclick) {
-    stl_clear_click_defs(wp->w_statuscol_click_defs, wp->w_statuscol_click_defs_size);
-    wp->w_statuscol_click_defs = stl_alloc_click_defs(wp->w_statuscol_click_defs, width,
-                                                      &wp->w_statuscol_click_defs_size);
-    stl_fill_click_defs(wp->w_statuscol_click_defs, clickrec, buf, width, false);
-  }
-
-  return width;
+  return rs_build_statuscol_str(wp, lnum, relnum, buf, stcp);
 }
 
 /// Build a string from the status line items in "fmt".
@@ -2224,3 +2192,98 @@ int nvim_stl_get_qf_info(win_T *wp, char *buf, int buflen)
   }
   return 0;
 }
+
+// Phase 1 accessors for Rust FFI
+
+/// Fill NameBuff with the translated buffer name via buf_spname/home_replace/trans_characters.
+void nvim_stl_get_trans_bufname(buf_T *buf)
+{
+  if (buf_spname(buf) != NULL) {
+    xstrlcpy(NameBuff, buf_spname(buf), MAXPATHL);
+  } else {
+    home_replace(buf, buf->b_fname, NameBuff, MAXPATHL, true);
+  }
+  trans_characters(NameBuff, MAXPATHL);
+}
+
+/// Call win_redr_custom(wp, false, false, false) for redraw_custom_statusline.
+void nvim_stl_win_redr_custom(win_T *wp)
+{
+  win_redr_custom(wp, false, false, false);
+}
+
+/// Set v:lnum variable.
+void nvim_stl_set_vv_lnum(int64_t lnum)
+{
+  set_vim_var_nr(VV_LNUM, lnum);
+}
+
+/// Set v:relnum variable.
+void nvim_stl_set_vv_relnum(int64_t relnum)
+{
+  set_vim_var_nr(VV_RELNUM, relnum);
+}
+
+/// Get wp->w_p_stc (statuscolumn option).
+const char *nvim_stl_win_get_p_stc(win_T *wp)
+{
+  return wp->w_p_stc;
+}
+
+/// Call build_stl_str_hl for statuscolumn rendering.
+/// Returns width.
+int nvim_stl_build_stl_str_hl(win_T *wp, char *buf, int buflen, const char *stc,
+                               int maxwidth, stl_hlrec_t **hlrec, StlClickRecord **clickrec,
+                               statuscol_T *stcp)
+{
+  // build_stl_str_hl requires a mutable copy of the format string
+  char *stc_copy = xstrdup(stc);
+  int width = build_stl_str_hl(wp, buf, (size_t)buflen, stc_copy, kOptStatuscolumn, OPT_LOCAL, 0,
+                                maxwidth, hlrec, NULL, clickrec, stcp);
+  xfree(stc_copy);
+  return width;
+}
+
+/// Get window statuscol click defs pointer.
+StlClickDefinition *nvim_stl_win_get_statuscol_click_defs(win_T *wp)
+{
+  return wp->w_statuscol_click_defs;
+}
+
+/// Get window statuscol click defs size.
+size_t nvim_stl_win_get_statuscol_click_defs_size(win_T *wp)
+{
+  return wp->w_statuscol_click_defs_size;
+}
+
+/// Set window statuscol click defs.
+void nvim_stl_win_set_statuscol_click_defs(win_T *wp, StlClickDefinition *defs)
+{
+  wp->w_statuscol_click_defs = defs;
+}
+
+/// Set window statuscol click defs size.
+void nvim_stl_win_set_statuscol_click_defs_size(win_T *wp, size_t size)
+{
+  wp->w_statuscol_click_defs_size = size;
+}
+
+/// Get stcp->width.
+int nvim_stl_stcp_get_width(statuscol_T *stcp)
+{
+  return stcp->width;
+}
+
+/// Get stcp->hlrec pointer address (for passing to build_stl_str_hl).
+stl_hlrec_t **nvim_stl_stcp_get_hlrec_ptr(statuscol_T *stcp)
+{
+  return &stcp->hlrec;
+}
+
+/// Get wp->w_topline.
+int nvim_stl_win_get_topline(win_T *wp)
+{
+  return wp->w_topline;
+}
+
+_Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL must be 0x02");

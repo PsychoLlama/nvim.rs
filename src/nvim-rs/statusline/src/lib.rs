@@ -1990,6 +1990,164 @@ pub unsafe extern "C" fn rs_stl_eval_arglist_status(
     }
 }
 
+// =============================================================================
+// Phase 1: Small Helper Functions (get_trans_bufname, redraw_custom_statusline,
+//          build_statuscol_str)
+// =============================================================================
+
+/// Opaque handle to C's statuscol_T
+type StatuscolHandle = *mut c_void;
+
+/// Opaque handle to C's stl_hlrec_t pointer-to-pointer
+type HlrecPtrPtr = *mut c_void;
+
+// Phase 1 C accessors
+extern "C" {
+    fn nvim_stl_get_trans_bufname(buf: BufHandle);
+    fn nvim_stl_win_redr_custom(wp: WinHandle);
+    fn nvim_stl_set_vv_lnum(lnum: i64);
+    fn nvim_stl_set_vv_relnum(relnum: i64);
+    fn nvim_stl_win_get_p_stc(wp: WinHandle) -> *const c_char;
+    fn nvim_stl_build_stl_str_hl(
+        wp: WinHandle,
+        buf: *mut c_char,
+        buflen: c_int,
+        stc: *const c_char,
+        maxwidth: c_int,
+        hlrec: HlrecPtrPtr,
+        clickrec: *mut *mut c_void,
+        stcp: StatuscolHandle,
+    ) -> c_int;
+    fn nvim_stl_win_get_statuscol_click_defs(wp: WinHandle) -> *mut c_void;
+    fn nvim_stl_win_get_statuscol_click_defs_size(wp: WinHandle) -> usize;
+    fn nvim_stl_win_set_statuscol_click_defs(wp: WinHandle, defs: *mut c_void);
+    fn nvim_stl_win_set_statuscol_click_defs_size(wp: WinHandle, size: usize);
+    fn nvim_stl_stcp_get_width(stcp: StatuscolHandle) -> c_int;
+    fn nvim_stl_stcp_get_hlrec_ptr(stcp: StatuscolHandle) -> HlrecPtrPtr;
+    fn nvim_stl_win_get_topline(wp: WinHandle) -> c_int;
+}
+
+/// MAXPATHL constant (matches C definition in os_defs.h).
+const MAXPATHL: usize = 4096;
+
+/// FFI export: Fill NameBuff with the translated buffer name.
+///
+/// This is the Rust replacement for `get_trans_bufname()` in statusline.c.
+/// The actual work is done by the C accessor `nvim_stl_get_trans_bufname`
+/// which calls buf_spname/home_replace/trans_characters.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_trans_bufname(buf: BufHandle) {
+    nvim_stl_get_trans_bufname(buf);
+}
+
+/// FFI export: Redraw the status line according to 'statusline'.
+///
+/// This is the Rust replacement for `redraw_custom_statusline()` in statusline.c.
+/// Uses a thread-local recursion guard and delegates to C `win_redr_custom`.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_redraw_custom_statusline(wp: WinHandle) {
+    use std::cell::Cell;
+
+    thread_local! {
+        static ENTERED: Cell<bool> = const { Cell::new(false) };
+    }
+
+    // When called recursively return.  This can happen when the statusline
+    // contains an expression that triggers a redraw.
+    let already_entered = ENTERED.with(|e| {
+        if e.get() {
+            true
+        } else {
+            e.set(true);
+            false
+        }
+    });
+
+    if already_entered {
+        return;
+    }
+
+    nvim_stl_win_redr_custom(wp);
+
+    ENTERED.with(|e| e.set(false));
+}
+
+/// FFI export: Build the 'statuscolumn' string for a line.
+///
+/// This is the Rust replacement for `build_statuscol_str()` in statusline.c.
+///
+/// @return The width of the built status column string for the line.
+///
+/// # Safety
+/// - `wp` must be a valid window handle.
+/// - `lnum` and `relnum` must be valid line numbers (relnum can be -1).
+/// - `buf` must be a valid pointer to a buffer of at least MAXPATHL bytes.
+/// - `stcp` must be a valid pointer to a statuscol_T struct.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_build_statuscol_str(
+    wp: WinHandle,
+    lnum: LinenrT,
+    relnum: LinenrT,
+    buf: *mut c_char,
+    stcp: StatuscolHandle,
+) -> c_int {
+    // Only update click definitions once per window per redraw.
+    // Don't update when current width is 0, since it will be redrawn again if not empty.
+    let stcp_width = nvim_stl_stcp_get_width(stcp);
+    let topline = nvim_stl_win_get_topline(wp);
+    let fillclick = relnum >= 0 && stcp_width > 0 && lnum == topline;
+
+    if relnum >= 0 {
+        nvim_stl_set_vv_lnum(i64::from(lnum));
+        nvim_stl_set_vv_relnum(i64::from(relnum));
+    }
+
+    let stc = nvim_stl_win_get_p_stc(wp);
+    let hlrec_ptr = nvim_stl_stcp_get_hlrec_ptr(stcp);
+
+    let mut clickrec: *mut c_void = std::ptr::null_mut();
+
+    let width = nvim_stl_build_stl_str_hl(
+        wp,
+        buf,
+        MAXPATHL as c_int,
+        stc,
+        stcp_width,
+        hlrec_ptr,
+        if fillclick {
+            &raw mut clickrec
+        } else {
+            std::ptr::null_mut()
+        },
+        stcp,
+    );
+
+    if fillclick {
+        // Clear existing click defs
+        let old_defs = nvim_stl_win_get_statuscol_click_defs(wp);
+        let old_size = nvim_stl_win_get_statuscol_click_defs_size(wp);
+        click::rs_stl_clear_click_defs(old_defs.cast(), old_size);
+
+        // Allocate new click defs
+        let mut new_size = old_size;
+        let new_defs = click::rs_stl_alloc_click_defs(old_defs.cast(), width, &raw mut new_size);
+        nvim_stl_win_set_statuscol_click_defs(wp, new_defs.cast::<c_void>());
+        nvim_stl_win_set_statuscol_click_defs_size(wp, new_size);
+
+        // Fill click defs
+        click::rs_stl_fill_click_defs(new_defs, clickrec.cast(), buf.cast(), width, false);
+    }
+
+    width
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
