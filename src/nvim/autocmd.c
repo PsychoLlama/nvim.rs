@@ -104,6 +104,13 @@ extern void rs_aucmd_del_for_event_and_group(int event, int group);
 extern void rs_au_cleanup(void);
 extern void rs_aubuflocal_remove(int bufnr);
 
+// Phase 5: :augroup command + arg parsing
+extern void rs_do_augroup(char *arg, bool del_group);
+extern int rs_arg_augroup_get(const char **argp);
+extern const char *rs_arg_event_skip(const char *arg, bool have_group);
+extern bool rs_arg_autocmd_flag_get(bool *flag, const char **cmd_ptr, const char *pattern, int len);
+extern bool rs_check_nomodeline(const char **argp);
+
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
 {
@@ -479,35 +486,7 @@ bool augroup_exists(const char *name)
 /// ":augroup {name}".
 void do_augroup(char *arg, bool del_group)
 {
-  if (del_group) {
-    if (*arg == NUL) {
-      emsg(_(e_argreq));
-    } else {
-      augroup_del(arg, true);
-    }
-  } else if (STRICMP(arg, "end") == 0) {  // ":aug end": back to group 0
-    current_augroup = AUGROUP_DEFAULT;
-  } else if (*arg) {  // ":aug xxx": switch to group xxx
-    current_augroup = augroup_add(arg);
-  } else {  // ":aug": list the group names
-    msg_start();
-    msg_ext_set_kind("list_cmd");
-
-    String name;
-    int value;
-    map_foreach(&map_augroup_name_to_id, name, value, {
-      if (value > 0) {
-        msg_puts(name.data);
-      } else {
-        msg_puts(augroup_name(value));
-      }
-
-      msg_puts("  ");
-    });
-
-    msg_clr_eos();
-    msg_end();
-  }
+  rs_do_augroup(arg, del_group);
 }
 
 #if defined(EXITFREE)
@@ -1100,11 +1079,7 @@ void ex_doautoall(exarg_T *eap)
 bool check_nomodeline(char **argp)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (strncmp(*argp, "<nomodeline>", 12) == 0) {
-    *argp = skipwhite(*argp + 12);
-    return false;
-  }
-  return true;
+  return rs_check_nomodeline((const char **)argp);
 }
 
 /// Prepare for executing autocommands for (hidden) buffer `buf`.
@@ -2330,28 +2305,7 @@ char *aucmd_handler_to_string(AutoCmd *ac)
 /// true when group name was found
 static char *arg_event_skip(char *arg, bool have_group)
 {
-  char *pat;
-  char *p;
-
-  if (*arg == '*') {
-    if (arg[1] && !ascii_iswhite(arg[1])) {
-      semsg(_("E215: Illegal character after *: %s"), arg);
-      return NULL;
-    }
-    pat = arg + 1;
-  } else {
-    for (pat = arg; *pat && *pat != '|' && !ascii_iswhite(*pat); pat = p) {
-      if ((int)event_name2nr(pat, &p) >= NUM_EVENTS) {
-        if (have_group) {
-          semsg(_("E216: No such event: %s"), pat);
-        } else {
-          semsg(_("E216: No such group or event: %s"), pat);
-        }
-        return NULL;
-      }
-    }
-  }
-  return pat;
+  return (char *)rs_arg_event_skip(arg, have_group);
 }
 
 // Find the group ID in a ":autocmd" or ":doautocmd" argument.
@@ -2360,39 +2314,13 @@ static char *arg_event_skip(char *arg, bool have_group)
 // Returns the group ID or AUGROUP_ALL.
 static int arg_augroup_get(char **argp)
 {
-  char *p;
-  char *arg = *argp;
-
-  for (p = arg; *p && !ascii_iswhite(*p) && *p != '|'; p++) {}
-  if (p <= arg) {
-    return AUGROUP_ALL;
-  }
-
-  char *group_name = xmemdupz(arg, (size_t)(p - arg));
-  int group = augroup_find(group_name);
-  if (group == AUGROUP_ERROR) {
-    group = AUGROUP_ALL;  // no match, use all groups
-  } else {
-    *argp = skipwhite(p);  // match, skip over group name
-  }
-  xfree(group_name);
-  return group;
+  return rs_arg_augroup_get((const char **)argp);
 }
 
 /// Handles grabbing arguments from `:autocmd` such as ++once and ++nested
 static bool arg_autocmd_flag_get(bool *flag, char **cmd_ptr, char *pattern, int len)
 {
-  if (strncmp(*cmd_ptr, pattern, (size_t)len) == 0 && ascii_iswhite((*cmd_ptr)[len])) {
-    if (*flag) {
-      semsg(_(e_duparg2), pattern);
-      return true;
-    }
-
-    *flag = true;
-    *cmd_ptr = skipwhite(*cmd_ptr + len);
-  }
-
-  return false;
+  return rs_arg_autocmd_flag_get(flag, (const char **)cmd_ptr, pattern, len);
 }
 
 /// When kFalse: VimSuspend should be triggered next.
@@ -2771,3 +2699,76 @@ void nvim_verbose_buflocal_remove(int event, int bufnr)
     verbose_leave();
   }
 }
+
+// Phase 5: :augroup command + arg parsing accessors
+
+/// Set current_augroup value.
+void nvim_autocmd_set_current_augroup(int val)
+{
+  current_augroup = val;
+}
+
+/// Iterate the augroup name→id map, calling msg_puts for each entry.
+void nvim_autocmd_list_group_names(void)
+{
+  msg_start();
+  msg_ext_set_kind("list_cmd");
+
+  String name;
+  int value;
+  map_foreach(&map_augroup_name_to_id, name, value, {
+    if (value > 0) {
+      msg_puts(name.data);
+    } else {
+      msg_puts(augroup_name(value));
+    }
+    msg_puts("  ");
+  });
+
+  msg_clr_eos();
+  msg_end();
+}
+
+/// Wrapper for emsg().
+void nvim_autocmd_emsg(const char *msg)
+{
+  emsg(msg);
+}
+
+/// Wrapper for semsg() with one string arg.
+void nvim_autocmd_semsg_str(const char *fmt, const char *arg)
+{
+  semsg(fmt, arg);
+}
+
+/// Get the localized e_argreq message string.
+const char *nvim_autocmd_get_e_argreq(void)
+{
+  return _(e_argreq);
+}
+
+/// Get the localized "No such event" error string (E216).
+const char *nvim_autocmd_get_e216_no_such_event(void)
+{
+  return _("E216: No such event: %s");
+}
+
+/// Get the localized "No such group or event" error string (E216).
+const char *nvim_autocmd_get_e216_no_such_group_or_event(void)
+{
+  return _("E216: No such group or event: %s");
+}
+
+/// Get the localized "Illegal character after *" error string (E215).
+const char *nvim_autocmd_get_e215(void)
+{
+  return _("E215: Illegal character after *: %s");
+}
+
+/// Get the localized e_duparg2 error string.
+const char *nvim_autocmd_get_e_duparg2(void)
+{
+  return _(e_duparg2);
+}
+
+// nvim_skipwhite exists in fold.c

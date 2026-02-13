@@ -75,6 +75,24 @@ extern "C" {
     fn nvim_get_autocmd_busy() -> bool;
     fn nvim_apc_invalidate_bufnr(bufnr: c_int);
     fn nvim_verbose_buflocal_remove(event: c_int, bufnr: c_int);
+
+    // Phase 5: :augroup command + arg parsing accessors
+    fn nvim_autocmd_set_current_augroup(val: c_int);
+    fn nvim_autocmd_list_group_names();
+    fn nvim_autocmd_emsg(msg: *const c_char);
+    fn nvim_autocmd_semsg_str(fmt: *const c_char, arg: *const c_char);
+    fn nvim_autocmd_get_e_argreq() -> *const c_char;
+    fn nvim_autocmd_get_e216_no_such_event() -> *const c_char;
+    fn nvim_autocmd_get_e216_no_such_group_or_event() -> *const c_char;
+    fn nvim_autocmd_get_e215() -> *const c_char;
+    fn nvim_autocmd_get_e_duparg2() -> *const c_char;
+    fn nvim_skipwhite(p: *const c_char) -> *mut c_char;
+    fn nvim_autocmd_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
+    fn nvim_autocmd_xfree(ptr: *mut c_char);
+
+    // Rust functions from other modules (called via FFI)
+    fn rs_augroup_find(name: *const c_char) -> c_int;
+    fn rs_augroup_add(name: *const c_char) -> c_int;
 }
 
 // Static "Unknown" string for invalid events
@@ -442,6 +460,197 @@ pub unsafe extern "C" fn rs_aubuflocal_remove(bufnr: c_int) {
         }
     }
     rs_au_cleanup();
+}
+
+// =============================================================================
+// Phase 5: :augroup Command + Arg Parsing
+// =============================================================================
+
+/// Handle `:augroup` command.
+///
+/// - `del_group` true: delete the named group
+/// - arg is "end": switch back to default group
+/// - arg is non-empty: switch to (or create) the named group
+/// - arg is empty: list all group names
+///
+/// # Safety
+/// `arg` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_augroup(arg: *mut c_char, del_group: bool) {
+    if del_group {
+        if *arg == 0 {
+            nvim_autocmd_emsg(nvim_autocmd_get_e_argreq());
+        } else {
+            // augroup_del is still in C (not yet migrated)
+            // We call it through the C wrapper
+            extern "C" {
+                fn augroup_del(name: *mut c_char, stupid_legacy_mode: bool);
+            }
+            augroup_del(arg, true);
+        }
+    } else if strnicmp_3(arg, b"end") && {
+        let after = *arg.add(3) as u8;
+        after == 0
+    } {
+        // ":aug end": back to group 0
+        nvim_autocmd_set_current_augroup(group::AUGROUP_DEFAULT);
+    } else if *arg != 0 {
+        // ":aug xxx": switch to group xxx
+        let id = rs_augroup_add(arg);
+        nvim_autocmd_set_current_augroup(id);
+    } else {
+        // ":aug": list the group names (msg_start, msg_ext_set_kind, iteration, msg_clr_eos, msg_end all in one C call)
+        nvim_autocmd_list_group_names();
+    }
+}
+
+/// Parse group name from `:autocmd` / `:doautocmd` argument.
+///
+/// Advances `*argp` past the group name if found.
+/// Returns the group ID or `AUGROUP_ALL`.
+///
+/// # Safety
+/// `argp` must be a valid pointer to a `*const c_char` pointing into a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_arg_augroup_get(argp: *mut *const c_char) -> c_int {
+    let arg = *argp;
+
+    // Scan to end of token (whitespace, pipe, or NUL)
+    let mut p = arg;
+    while *p != 0 && !is_ascii_white(*p as u8) && *p != b'|' as c_char {
+        p = p.add(1);
+    }
+
+    if p == arg {
+        return group::AUGROUP_ALL;
+    }
+
+    let len = p.offset_from(arg) as usize;
+    let group_name = nvim_autocmd_xmemdupz(arg, len);
+    let group_id = rs_augroup_find(group_name);
+    nvim_autocmd_xfree(group_name);
+
+    if group_id == group::AUGROUP_ERROR {
+        group::AUGROUP_ALL
+    } else {
+        *argp = nvim_skipwhite(p);
+        group_id
+    }
+}
+
+/// Validate and skip over event names in an autocmd argument.
+///
+/// Returns a pointer to the character after the last valid event name,
+/// or NULL if an error is encountered.
+///
+/// # Safety
+/// `arg` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_arg_event_skip(arg: *const c_char, have_group: bool) -> *const c_char {
+    if *arg == b'*' as c_char {
+        // Check for illegal character after *
+        if *arg.add(1) != 0 && !is_ascii_white(*arg.add(1) as u8) {
+            nvim_autocmd_semsg_str(nvim_autocmd_get_e215(), arg);
+            return std::ptr::null();
+        }
+        return arg.add(1);
+    }
+
+    let mut pat = arg;
+    while *pat != 0 && *pat != b'|' as c_char && !is_ascii_white(*pat as u8) {
+        let result = event::rs_event_name2nr(pat);
+        if result.event >= NUM_EVENTS {
+            if have_group {
+                nvim_autocmd_semsg_str(nvim_autocmd_get_e216_no_such_event(), pat);
+            } else {
+                nvim_autocmd_semsg_str(nvim_autocmd_get_e216_no_such_group_or_event(), pat);
+            }
+            return std::ptr::null();
+        }
+        pat = result.end_ptr;
+    }
+
+    pat
+}
+
+/// Parse `++once`, `++nested` flags from autocmd command.
+///
+/// If the flag matches and was not already set, sets it and advances `*cmd_ptr`.
+/// Returns true on duplicate flag error, false normally.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_arg_autocmd_flag_get(
+    flag: *mut bool,
+    cmd_ptr: *mut *const c_char,
+    pattern: *const c_char,
+    len: c_int,
+) -> bool {
+    let cmd = *cmd_ptr;
+    let len = len as usize;
+
+    // Check if cmd starts with pattern followed by whitespace
+    let mut matches = true;
+    for i in 0..len {
+        if *cmd.add(i) != *pattern.add(i) {
+            matches = false;
+            break;
+        }
+    }
+
+    if matches && is_ascii_white(*cmd.add(len) as u8) {
+        if *flag {
+            nvim_autocmd_semsg_str(nvim_autocmd_get_e_duparg2(), pattern);
+            return true;
+        }
+        *flag = true;
+        *cmd_ptr = nvim_skipwhite(cmd.add(len));
+    }
+
+    false
+}
+
+/// Check for `<nomodeline>` marker in argument.
+///
+/// If found, advances `*argp` past it and returns false (no modeline).
+/// Otherwise returns true (process modeline).
+///
+/// # Safety
+/// `argp` must be a valid pointer to a `*const c_char`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_nomodeline(argp: *mut *const c_char) -> bool {
+    let arg = *argp;
+    let marker = b"<nomodeline>";
+    let mut matches = true;
+    for (i, &expected) in marker.iter().enumerate() {
+        if *arg.add(i) as u8 != expected {
+            matches = false;
+            break;
+        }
+    }
+    if matches {
+        *argp = nvim_skipwhite(arg.add(12));
+        return false;
+    }
+    true
+}
+
+/// Helper: case-insensitive 3-byte prefix check against a known ASCII lowercase pattern.
+unsafe fn strnicmp_3(s: *const c_char, prefix: &[u8; 3]) -> bool {
+    for (i, &expected) in prefix.iter().enumerate() {
+        let c = *s.add(i) as u8;
+        if c.to_ascii_lowercase() != expected {
+            return false;
+        }
+    }
+    true
+}
+
+/// Helper: check if a byte is ASCII whitespace.
+#[inline]
+fn is_ascii_white(c: u8) -> bool {
+    c == b' ' || c == b'\t'
 }
 
 /// Check whether a given autocommand event name is supported.
