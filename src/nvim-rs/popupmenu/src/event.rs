@@ -171,6 +171,27 @@ pub unsafe extern "C" fn rs_pum_has_want() -> c_int {
     nvim_get_pum_want_active()
 }
 
+/// Opaque handle to a `dict_T`.
+#[repr(C)]
+pub struct DictHandle {
+    _private: [u8; 0],
+}
+
+// C _impl function for Phase 3 migration.
+extern "C" {
+    /// Set event info into a `dict_T`.
+    fn nvim_pum_set_event_info_impl(dict: *mut DictHandle);
+}
+
+/// Add size information about the popup menu to the given dictionary.
+///
+/// # Safety
+/// Calls C `_impl` function. `dict` must be a valid `dict_T` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_set_event_info(dict: *mut DictHandle) {
+    nvim_pum_set_event_info_impl(dict);
+}
+
 #[cfg(test)]
 mod tests {
     // Tests for pure functions would go here

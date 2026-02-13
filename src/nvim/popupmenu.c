@@ -107,6 +107,11 @@ extern PumHorizontalResult rs_pum_compute_horizontal(int cursor_col, int max_col
                                                      int pum_scrollbar, int pum_base_width,
                                                      int pum_kind_width, int pum_extra_width);
 
+extern void rs_pum_recompose(void);
+extern void rs_pum_check_clear(void);
+extern void rs_pum_set_event_info(dict_T *dict);
+extern void rs_pum_ui_flush(void);
+
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
 static int pum_selected;            // index of selected item or -1
@@ -1433,7 +1438,7 @@ void pum_undisplay(bool immediate)
   }
 }
 
-void pum_check_clear(void)
+void nvim_pum_check_clear_impl(void)
 {
   if (!pum_is_visible && pum_is_drawn) {
     if (pum_external) {
@@ -1454,6 +1459,11 @@ void pum_check_clear(void)
       win_close(wp, false, false);
     }
   }
+}
+
+void pum_check_clear(void)
+{
+  rs_pum_check_clear();
 }
 
 /// Clear the popup menu.  Currently only resets the offset to the first
@@ -1481,9 +1491,14 @@ void pum_invalidate(void)
   rs_pum_invalidate();
 }
 
-void pum_recompose(void)
+void nvim_pum_recompose_impl(void)
 {
   ui_comp_compose_grid(&pum_grid);
+}
+
+void pum_recompose(void)
+{
+  rs_pum_recompose();
 }
 
 void pum_ext_select_item(int item, bool insert, bool finish)
@@ -1501,7 +1516,7 @@ int pum_get_height(void)
 }
 
 /// Add size information about the pum to "dict".
-void pum_set_event_info(dict_T *dict)
+void nvim_pum_set_event_info_impl(dict_T *dict)
 {
   if (!pum_visible()) {
     return;
@@ -1520,6 +1535,11 @@ void pum_set_event_info(dict_T *dict)
   tv_dict_add_nr(dict, S_LEN("size"), pum_size);
   tv_dict_add_bool(dict, S_LEN("scrollbar"),
                    pum_scrollbar ? kBoolVarTrue : kBoolVarFalse);
+}
+
+void pum_set_event_info(dict_T *dict)
+{
+  rs_pum_set_event_info(dict);
 }
 
 static void pum_position_at_mouse(int min_width)
@@ -1790,7 +1810,7 @@ void pum_make_popup(const char *path_name, int use_mouse_pos)
   }
 }
 
-void pum_ui_flush(void)
+void nvim_pum_ui_flush_impl(void)
 {
   if (ui_has(kUIMultigrid) && pum_is_drawn && !pum_external && pum_grid.handle != 0
       && pum_grid.pending_comp_index_update) {
@@ -1802,4 +1822,9 @@ void pum_ui_flush(void)
                           pum_grid.comp_col);
     pum_grid.pending_comp_index_update = false;
   }
+}
+
+void pum_ui_flush(void)
+{
+  rs_pum_ui_flush();
 }

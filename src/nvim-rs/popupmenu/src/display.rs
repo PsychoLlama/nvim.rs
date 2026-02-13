@@ -313,6 +313,43 @@ pub const extern "C" fn rs_pum_has_room(height: c_int, size: c_int, border_width
     1
 }
 
+// C _impl functions for Phase 3 migration.
+extern "C" {
+    /// Recompose the popup menu grid.
+    fn nvim_pum_recompose_impl();
+    /// Check and clear the popup menu display.
+    fn nvim_pum_check_clear_impl();
+    /// Flush the popup menu UI position.
+    fn nvim_pum_ui_flush_impl();
+}
+
+/// Recompose the popup menu grid.
+///
+/// # Safety
+/// Calls C `_impl` function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_recompose() {
+    nvim_pum_recompose_impl();
+}
+
+/// Check and clear the popup menu display if needed.
+///
+/// # Safety
+/// Calls C `_impl` function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_check_clear() {
+    nvim_pum_check_clear_impl();
+}
+
+/// Flush the popup menu UI position in multigrid mode.
+///
+/// # Safety
+/// Calls C `_impl` function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_ui_flush() {
+    nvim_pum_ui_flush_impl();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
