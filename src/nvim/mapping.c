@@ -124,6 +124,17 @@ struct map_arguments {
   char *desc;  ///< map description
 };
 typedef struct map_arguments MapArguments;
+
+// Rust FFI declarations that depend on MapArguments
+extern int rs_str_to_mapargs(const char *strargs, int is_unmap, MapArguments *mapargs);
+extern int rs_set_maparg_lhs_rhs(const char *orig_lhs, size_t orig_lhs_len,
+                                  const char *orig_rhs, size_t orig_rhs_len,
+                                  LuaRef rhs_lua, const char *cpo_val,
+                                  MapArguments *mapargs);
+extern void rs_set_maparg_rhs(const char *orig_rhs, size_t orig_rhs_len,
+                               LuaRef rhs_lua, int sid, const char *cpo_val,
+                               MapArguments *mapargs);
+
 #define MAP_ARGUMENTS_INIT { false, false, false, false, false, false, false, false, \
                              { 0 }, 0, { 0 }, 0, NULL, 0, LUA_NOREF, false, NULL, 0, NULL }
 
@@ -249,70 +260,17 @@ static void showmap(mapblock_T *mp, bool local)
   msg_clr_eos();
 }
 
-/// Replace termcodes in the given LHS and RHS and store the results into the
-/// `lhs` and `rhs` of the given @ref MapArguments struct.
-///
-/// `rhs` and `orig_rhs` will both point to new allocated buffers. `orig_rhs`
-/// will hold a copy of the given `orig_rhs`.
-///
-/// The `*_len` variables will be set appropriately. If the length of
-/// the final `lhs` exceeds `MAXMAPLEN`, `lhs_len` will be set equal to the
-/// original larger length and `lhs` will be truncated.
-///
-/// If RHS should be <Nop>, `rhs` will be an empty string, `rhs_len` will be
-/// zero, and `rhs_is_noop` will be set to true.
-///
-/// Any memory allocated by @ref replace_termcodes is freed before this function
-/// returns.
-///
-/// @param[in] orig_lhs   Original mapping LHS, with characters to replace.
-/// @param[in] orig_lhs_len   `strlen` of orig_lhs.
-/// @param[in] orig_rhs   Original mapping RHS, with characters to replace.
-/// @param[in] rhs_lua   Lua reference for Lua mappings.
-/// @param[in] orig_rhs_len   `strlen` of orig_rhs.
-/// @param[in] cpo_val  See param docs for @ref replace_termcodes.
-/// @param[out] mapargs   MapArguments struct holding the replaced strings.
+// Argument parsing — now implemented in Rust (src/nvim-rs/mapping/src/args.rs).
+// These thin C wrappers delegate to the Rust implementations.
+
+/// Replace termcodes in the given LHS and RHS and store the results into mapargs.
 static bool set_maparg_lhs_rhs(const char *const orig_lhs, const size_t orig_lhs_len,
                                const char *const orig_rhs, const size_t orig_rhs_len,
                                const LuaRef rhs_lua, const char *const cpo_val,
                                MapArguments *const mapargs)
 {
-  char lhs_buf[128];
-
-  // If mapping has been given as ^V<C_UP> say, then replace the term codes
-  // with the appropriate two bytes. If it is a shifted special key, unshift
-  // it too, giving another two bytes.
-  //
-  // replace_termcodes() may move the result to allocated memory, which
-  // needs to be freed later (*lhs_buf and *rhs_buf).
-  // replace_termcodes() also removes CTRL-Vs and sometimes backslashes.
-  // If something like <C-H> is simplified to 0x08 then mark it as simplified
-  // and also add en entry with a modifier.
-  bool did_simplify = false;
-  const int flags = REPTERM_FROM_PART | REPTERM_DO_LT;
-  char *bufarg = lhs_buf;
-  char *replaced = replace_termcodes(orig_lhs, orig_lhs_len, &bufarg, 0,
-                                     flags, &did_simplify, cpo_val);
-  if (replaced == NULL) {
-    return false;
-  }
-  mapargs->lhs_len = strlen(replaced);
-  xstrlcpy(mapargs->lhs, replaced, sizeof(mapargs->lhs));
-  if (did_simplify) {
-    replaced = replace_termcodes(orig_lhs, orig_lhs_len, &bufarg, 0,
-                                 flags | REPTERM_NO_SIMPLIFY, NULL, cpo_val);
-    if (replaced == NULL) {
-      return false;
-    }
-    mapargs->alt_lhs_len = strlen(replaced);
-    xstrlcpy(mapargs->alt_lhs, replaced, sizeof(mapargs->alt_lhs));
-  } else {
-    mapargs->alt_lhs_len = 0;
-  }
-
-  set_maparg_rhs(orig_rhs, orig_rhs_len, rhs_lua, 0, cpo_val, mapargs);
-
-  return true;
+  return rs_set_maparg_lhs_rhs(orig_lhs, orig_lhs_len, orig_rhs, orig_rhs_len,
+                               rhs_lua, cpo_val, mapargs) != 0;
 }
 
 /// @see set_maparg_lhs_rhs
@@ -320,154 +278,13 @@ static void set_maparg_rhs(const char *const orig_rhs, const size_t orig_rhs_len
                            const LuaRef rhs_lua, const scid_T sid, const char *const cpo_val,
                            MapArguments *const mapargs)
 {
-  mapargs->rhs_lua = rhs_lua;
-
-  if (rhs_lua == LUA_NOREF) {
-    mapargs->orig_rhs_len = orig_rhs_len;
-    mapargs->orig_rhs = xcalloc(mapargs->orig_rhs_len + 1, sizeof(char));
-    xmemcpyz(mapargs->orig_rhs, orig_rhs, mapargs->orig_rhs_len);
-    if (STRICMP(orig_rhs, "<nop>") == 0) {  // "<Nop>" means nothing
-      mapargs->rhs = xcalloc(1, sizeof(char));  // single NUL-char
-      mapargs->rhs_len = 0;
-      mapargs->rhs_is_noop = true;
-    } else {
-      char *rhs_buf = NULL;
-      char *replaced = replace_termcodes(orig_rhs, orig_rhs_len, &rhs_buf, sid,
-                                         REPTERM_DO_LT, NULL, cpo_val);
-      mapargs->rhs_len = strlen(replaced);
-      // NB: replace_termcodes may produce an empty string even if orig_rhs is non-empty
-      // (e.g. a single ^V, see :h map-empty-rhs)
-      mapargs->rhs_is_noop = orig_rhs_len != 0 && mapargs->rhs_len == 0;
-      mapargs->rhs = replaced;
-    }
-  } else {
-    char tmp_buf[64];
-    // orig_rhs is not used for Lua mappings, but still needs to be a string.
-    mapargs->orig_rhs = xcalloc(1, sizeof(char));
-    mapargs->orig_rhs_len = 0;
-    // stores <lua>ref_no<cr> in map_str
-    mapargs->rhs_len = (size_t)vim_snprintf(S_LEN(tmp_buf), "%c%c%c%d\r", K_SPECIAL,
-                                            KS_EXTRA, KE_LUA, rhs_lua);
-    mapargs->rhs = xstrdup(tmp_buf);
-  }
+  rs_set_maparg_rhs(orig_rhs, orig_rhs_len, rhs_lua, sid, cpo_val, mapargs);
 }
 
-/// Parse a string of |:map-arguments| into a @ref MapArguments struct.
-///
-/// Termcodes, backslashes, CTRL-V's, etc. inside the extracted {lhs} and
-/// {rhs} are replaced by @ref set_maparg_lhs_rhs.
-///
-/// rhs and orig_rhs in the returned mapargs will be set to null or a pointer
-/// to allocated memory and should be freed even on error.
-///
-/// @param[in]  strargs   String of map args, e.g. "<buffer> <expr><silent>".
-///                       May contain leading or trailing whitespace.
-/// @param[in]  is_unmap  True, if strargs should be parsed like an |:unmap|
-///                       command. |:unmap| commands interpret *all* text to the
-///                       right of the last map argument as the {lhs} of the
-///                       mapping, i.e. a literal ' ' character is treated like
-///                       a "<space>", rather than separating the {lhs} from the
-///                       {rhs}.
-/// @param[out] mapargs   MapArguments struct holding all extracted argument
-///                       values.
-/// @return 0 on success, 1 if invalid arguments are detected.
+/// Parse a string of |:map-arguments| into a MapArguments struct.
 static int str_to_mapargs(const char *strargs, bool is_unmap, MapArguments *mapargs)
 {
-  const char *to_parse = strargs;
-  to_parse = skipwhite(to_parse);
-  CLEAR_POINTER(mapargs);
-
-  // Accept <buffer>, <nowait>, <silent>, <expr>, <script>, and <unique> in
-  // any order.
-  while (true) {
-    if (strncmp(to_parse, "<buffer>", 8) == 0) {
-      to_parse = skipwhite(to_parse + 8);
-      mapargs->buffer = true;
-      continue;
-    }
-
-    if (strncmp(to_parse, "<nowait>", 8) == 0) {
-      to_parse = skipwhite(to_parse + 8);
-      mapargs->nowait = true;
-      continue;
-    }
-
-    if (strncmp(to_parse, "<silent>", 8) == 0) {
-      to_parse = skipwhite(to_parse + 8);
-      mapargs->silent = true;
-      continue;
-    }
-
-    // Ignore obsolete "<special>" modifier.
-    if (strncmp(to_parse, "<special>", 9) == 0) {
-      to_parse = skipwhite(to_parse + 9);
-      continue;
-    }
-
-    if (strncmp(to_parse, "<script>", 8) == 0) {
-      to_parse = skipwhite(to_parse + 8);
-      mapargs->script = true;
-      continue;
-    }
-
-    if (strncmp(to_parse, "<expr>", 6) == 0) {
-      to_parse = skipwhite(to_parse + 6);
-      mapargs->expr = true;
-      continue;
-    }
-
-    if (strncmp(to_parse, "<unique>", 8) == 0) {
-      to_parse = skipwhite(to_parse + 8);
-      mapargs->unique = true;
-      continue;
-    }
-    break;
-  }
-
-  // Find the next whitespace character, call that the end of {lhs}.
-  //
-  // If a character (e.g. whitespace) is immediately preceded by a CTRL-V,
-  // "scan past" that character, i.e. don't "terminate" LHS with that character
-  // if it's whitespace.
-  //
-  // Treat backslash like CTRL-V when 'cpoptions' does not contain 'B'.
-  //
-  // With :unmap, literal white space is included in the {lhs}; there is no
-  // separate {rhs}.
-  const char *lhs_end = to_parse;
-  bool do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
-  while (*lhs_end && (is_unmap || !ascii_iswhite(*lhs_end))) {
-    if ((lhs_end[0] == Ctrl_V || (do_backslash && lhs_end[0] == '\\'))
-        && lhs_end[1] != NUL) {
-      lhs_end++;  // skip CTRL-V or backslash
-    }
-    lhs_end++;
-  }
-
-  // {lhs_end} is a pointer to the "terminating whitespace" after {lhs}.
-  // Use that to initialize {rhs_start}.
-  const char *rhs_start = skipwhite(lhs_end);
-
-  // Given {lhs} might be larger than MAXMAPLEN before replace_termcodes
-  // (e.g. "<Space>" is longer than ' '), so first copy into a buffer.
-  size_t orig_lhs_len = (size_t)(lhs_end - to_parse);
-  if (orig_lhs_len >= 256) {
-    return 1;
-  }
-  char lhs_to_replace[256];
-  xmemcpyz(lhs_to_replace, to_parse, orig_lhs_len);
-
-  size_t orig_rhs_len = strlen(rhs_start);
-  if (!set_maparg_lhs_rhs(lhs_to_replace, orig_lhs_len,
-                          rhs_start, orig_rhs_len, LUA_NOREF,
-                          p_cpo, mapargs)) {
-    return 1;
-  }
-
-  if (mapargs->lhs_len > MAXMAPLEN) {
-    return 1;
-  }
-  return 0;
+  return rs_str_to_mapargs(strargs, is_unmap ? 1 : 0, mapargs);
 }
 
 /// @param args  "rhs", "rhs_lua", "orig_rhs", "expr", "silent", "nowait",
@@ -2732,6 +2549,26 @@ mapblock_T *nvim_buf_get_first_abbr(buf_T *buf)
 {
   return buf ? buf->b_first_abbr : NULL;
 }
+
+// p_cpo accessor for Rust
+const char *nvim_mapping_get_p_cpo(void)
+{
+  return p_cpo;
+}
+
+// Static assertions for MapArguments struct layout (Rust #[repr(C)] must match)
+_Static_assert(sizeof(MapArguments) == 184,
+               "MapArguments size mismatch with Rust");
+_Static_assert(offsetof(struct map_arguments, buffer) == 0,
+               "MapArguments.buffer offset mismatch");
+_Static_assert(offsetof(struct map_arguments, lhs) == 8,
+               "MapArguments.lhs offset mismatch");
+_Static_assert(offsetof(struct map_arguments, rhs) == 136,
+               "MapArguments.rhs offset mismatch");
+_Static_assert(offsetof(struct map_arguments, rhs_lua) == 152,
+               "MapArguments.rhs_lua offset mismatch");
+_Static_assert(offsetof(struct map_arguments, desc) == 176,
+               "MapArguments.desc offset mismatch");
 
 // Langmap C accessors for Rust
 

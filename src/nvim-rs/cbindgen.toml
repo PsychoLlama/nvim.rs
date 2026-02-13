@@ -132,6 +132,7 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_map_to_exists", "rs_map_to_exists_mode", "rs_map_count",
            "rs_get_map_mode_string", "rs_get_map_mode",
            "rs_langmap_adjust_mb", "rs_langmap_init", "rs_langmap_parse",
+           "rs_str_to_mapargs", "rs_set_maparg_lhs_rhs", "rs_set_maparg_rhs",
            "MapblockHandle",
            "nvim_rs_version",
            # NFA state machine infrastructure (Phase 1-3)

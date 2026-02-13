@@ -14,6 +14,7 @@
 #![allow(clippy::must_use_candidate)] // Internal helper functions
 
 pub mod abbrev;
+pub mod args;
 pub mod flags;
 pub mod langmap;
 
