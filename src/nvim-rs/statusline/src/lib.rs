@@ -2148,6 +2148,155 @@ pub unsafe extern "C" fn rs_build_statuscol_str(
     width
 }
 
+// =============================================================================
+// Phase 2: Status/Winbar Entry Points (win_redr_status, win_redr_winbar)
+// =============================================================================
+
+/// Opaque handle to C's GridView
+type GridViewHandle = *mut c_void;
+
+// Phase 2 C accessors
+extern "C" {
+    fn nvim_global_stl_height() -> c_int;
+    fn nvim_stl_wildmenu_blocking() -> c_int;
+    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
+    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
+    fn nvim_set_redraw_cmdline(val: bool);
+    fn nvim_redrawing() -> c_int;
+    fn nvim_stl_win_get_p_stl(wp: WinHandle) -> *const c_char;
+    fn nvim_stl_get_p_stl() -> *const c_char;
+    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
+    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_fcs_vert(wp: WinHandle) -> ScharT;
+    fn nvim_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int;
+    fn nvim_get_default_gridview() -> GridViewHandle;
+    fn nvim_win_get_endrow(wp: WinHandle) -> c_int;
+    fn nvim_win_get_endcol(wp: WinHandle) -> c_int;
+    fn rs_grid_line_start(view: GridViewHandle, row: c_int);
+    fn rs_grid_line_put_schar(col: c_int, schar: ScharT, attr: c_int);
+    fn rs_grid_line_flush();
+    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
+    fn nvim_stl_get_p_wbr() -> *const c_char;
+    fn nvim_win_get_p_wbr(wp: WinHandle) -> *const c_char;
+    fn nvim_stl_win_redr_custom_winbar(wp: WinHandle);
+}
+
+/// HLF_C constant - window split separators highlight group.
+const HLF_C: c_int = 21;
+
+/// FFI export: Redraw the status line of window `wp`.
+///
+/// This is the Rust replacement for `win_redr_status()` in statusline.c.
+/// If inversion is possible we use it, else '=' characters are used.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_redr_status(wp: WinHandle) {
+    use std::cell::Cell;
+
+    thread_local! {
+        static BUSY: Cell<bool> = const { Cell::new(false) };
+    }
+
+    let is_stl_global = nvim_global_stl_height() > 0;
+
+    // May get here recursively when 'statusline' (indirectly)
+    // invokes ":redrawstatus".  Simply ignore the call then.
+    // Also ignore if wildmenu is showing.
+    let blocked = BUSY.with(Cell::get) || nvim_stl_wildmenu_blocking() != 0;
+    if blocked {
+        return;
+    }
+
+    BUSY.with(|b| b.set(true));
+    nvim_win_set_redr_status(wp, 0);
+
+    if nvim_win_get_status_height(wp) == 0 && !(is_stl_global && nvim_win_is_curwin(wp) != 0) {
+        // no status line, either global statusline is enabled or the window is a last window
+        nvim_set_redraw_cmdline(true);
+    } else if nvim_redrawing() == 0 {
+        // Don't redraw right now, do it later. Don't update status line when
+        // popup menu is visible and may be drawn over it
+        nvim_win_set_redr_status(wp, 1);
+    } else {
+        let w_p_stl = nvim_stl_win_get_p_stl(wp);
+        let p_stl = nvim_stl_get_p_stl();
+        let has_custom_stl = !w_p_stl.is_null() && *w_p_stl != 0;
+        let has_global_stl = !p_stl.is_null() && *p_stl != 0;
+        let is_floating = nvim_win_get_floating(wp) != 0;
+        let is_curwin = nvim_win_is_curwin(wp) != 0;
+
+        if has_custom_stl || (has_global_stl && (!is_floating || (is_stl_global && is_curwin))) {
+            // redraw custom status line
+            rs_redraw_custom_statusline(wp);
+        }
+    }
+
+    // May need to draw the character below the vertical separator.
+    let mut group: c_int = HLF_C;
+    if nvim_win_get_vsep_width(wp) != 0
+        && nvim_win_get_status_height(wp) != 0
+        && nvim_redrawing() != 0
+    {
+        let fillchar = if rs_stl_connected(wp) != 0 {
+            rs_fillchar_status(&raw mut group, wp)
+        } else {
+            nvim_win_get_fcs_vert(wp)
+        };
+        let attr = nvim_win_hl_attr(wp, group);
+        let gridview = nvim_get_default_gridview();
+        rs_grid_line_start(gridview, nvim_win_get_endrow(wp));
+        rs_grid_line_put_schar(nvim_win_get_endcol(wp), fillchar, attr);
+        rs_grid_line_flush();
+    }
+
+    BUSY.with(|b| b.set(false));
+}
+
+/// FFI export: Redraw the window bar of window `wp`.
+///
+/// This is the Rust replacement for `win_redr_winbar()` in statusline.c.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_redr_winbar(wp: WinHandle) {
+    use std::cell::Cell;
+
+    thread_local! {
+        static ENTERED: Cell<bool> = const { Cell::new(false) };
+    }
+
+    // Return when called recursively. This can happen when the winbar contains an expression
+    // that triggers a redraw.
+    let already_entered = ENTERED.with(|e| {
+        if e.get() {
+            true
+        } else {
+            e.set(true);
+            false
+        }
+    });
+
+    if already_entered {
+        return;
+    }
+
+    if nvim_win_get_winbar_height(wp) != 0 && nvim_redrawing() != 0 {
+        let p_wbr = nvim_stl_get_p_wbr();
+        let w_p_wbr = nvim_win_get_p_wbr(wp);
+        let has_global_wbr = !p_wbr.is_null() && *p_wbr != 0;
+        let has_win_wbr = !w_p_wbr.is_null() && *w_p_wbr != 0;
+
+        if has_global_wbr || has_win_wbr {
+            nvim_stl_win_redr_custom_winbar(wp);
+        }
+    }
+
+    ENTERED.with(|e| e.set(false));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

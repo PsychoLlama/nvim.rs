@@ -64,6 +64,9 @@ extern void rs_get_trans_bufname(buf_T *buf);
 extern void rs_redraw_custom_statusline(win_T *wp);
 extern int rs_build_statuscol_str(win_T *wp, linenr_T lnum, linenr_T relnum, char *buf,
                                   statuscol_T *stcp);
+// Phase 2 Rust implementations
+extern void rs_win_redr_status(win_T *wp);
+extern void rs_win_redr_winbar(win_T *wp);
 
 // Determines how deeply nested %{} blocks will be evaluated in statusline.
 #define MAX_STL_EVAL_DEPTH 100
@@ -80,46 +83,7 @@ typedef enum {
 /// If inversion is possible we use it. Else '=' characters are used.
 void win_redr_status(win_T *wp)
 {
-  bool is_stl_global = global_stl_height() > 0;
-  static bool busy = false;
-
-  // May get here recursively when 'statusline' (indirectly)
-  // invokes ":redrawstatus".  Simply ignore the call then.
-  if (busy
-      // Also ignore if wildmenu is showing.
-      || (wild_menu_showing != 0 && !ui_has(kUIWildmenu))) {
-    return;
-  }
-  busy = true;
-  wp->w_redr_status = false;
-  if (wp->w_status_height == 0 && !(is_stl_global && wp == curwin)) {
-    // no status line, either global statusline is enabled or the window is a last window
-    redraw_cmdline = true;
-  } else if (!redrawing()) {
-    // Don't redraw right now, do it later. Don't update status line when
-    // popup menu is visible and may be drawn over it
-    wp->w_redr_status = true;
-  } else if (*wp->w_p_stl != NUL
-             || (*p_stl != NUL && (!wp->w_floating || (is_stl_global && wp == curwin)))) {
-    // redraw custom status line
-    redraw_custom_statusline(wp);
-  }
-
-  hlf_T group = HLF_C;
-  // May need to draw the character below the vertical separator.
-  if (wp->w_vsep_width != 0 && wp->w_status_height != 0 && redrawing()) {
-    schar_T fillchar;
-    if (stl_connected(wp)) {
-      fillchar = fillchar_status(&group, wp);
-    } else {
-      fillchar = wp->w_p_fcs_chars.vert;
-    }
-    int attr = win_hl_attr(wp, (int)group);
-    grid_line_start(&default_gridview, W_ENDROW(wp));
-    grid_line_put_schar(W_ENDCOL(wp), fillchar, attr);
-    grid_line_flush();
-  }
-  busy = false;
+  rs_win_redr_status(wp);
 }
 
 void get_trans_bufname(buf_T *buf)
@@ -364,21 +328,7 @@ theend:
 
 void win_redr_winbar(win_T *wp)
 {
-  static bool entered = false;
-
-  // Return when called recursively. This can happen when the winbar contains an expression
-  // that triggers a redraw.
-  if (entered) {
-    return;
-  }
-  entered = true;
-
-  if (wp->w_winbar_height == 0 || !redrawing()) {
-    // Do nothing.
-  } else if (*p_wbr != NUL || *wp->w_p_wbr != NUL) {
-    win_redr_custom(wp, true, false, false);
-  }
-  entered = false;
+  rs_win_redr_winbar(wp);
 }
 
 void redraw_ruler(void)
@@ -2287,3 +2237,39 @@ int nvim_stl_win_get_topline(win_T *wp)
 }
 
 _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL must be 0x02");
+
+// Phase 2 accessors for Rust FFI
+
+/// Call win_redr_custom(wp, true, false, false) for winbar rendering.
+void nvim_stl_win_redr_custom_winbar(win_T *wp)
+{
+  win_redr_custom(wp, true, false, false);
+}
+
+/// Check if wildmenu is showing and UI does not have kUIWildmenu.
+/// Returns true if statusline redraw should be blocked.
+int nvim_stl_wildmenu_blocking(void)
+{
+  return wild_menu_showing != 0 && !ui_has(kUIWildmenu);
+}
+
+/// Get global p_wbr (winbar) option string.
+const char *nvim_stl_get_p_wbr(void)
+{
+  return p_wbr;
+}
+
+/// Get wp->w_p_stl (window-local statusline option).
+const char *nvim_stl_win_get_p_stl(win_T *wp)
+{
+  return wp->w_p_stl;
+}
+
+/// Get global p_stl (statusline option).
+const char *nvim_stl_get_p_stl(void)
+{
+  return p_stl;
+}
+
+_Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
+_Static_assert(HLF_C == 21, "HLF_C must be 21");
