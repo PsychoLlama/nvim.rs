@@ -17,12 +17,15 @@
 #include "nvim/cursor.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
+#include "nvim/errors.h"
+#include "nvim/ex_cmds_defs.h"
 #include "nvim/extmark.h"
 #include "nvim/extmark_defs.h"
 #include "nvim/globals.h"
 #include "nvim/indent.h"
 #include "nvim/mbyte.h"
 #include "nvim/memline.h"
+#include "nvim/message.h"
 #include "nvim/memory.h"
 #include "nvim/move.h"
 #include "nvim/ops.h"
@@ -50,6 +53,10 @@ _Static_assert(SIN_UNDO == 4, "SIN_UNDO must be 4");
 _Static_assert(SIN_NOMARK == 8, "SIN_NOMARK must be 8");
 _Static_assert(VREPLACE_FLAG == 0x200, "VREPLACE_FLAG must be 0x200");
 _Static_assert(INDENT_SET == 1, "INDENT_SET must be 1");
+_Static_assert(BL_SOL == 2, "BL_SOL must be 2");
+_Static_assert(BL_FIX == 4, "BL_FIX must be 4");
+_Static_assert(UPD_INVERTED == 20, "UPD_INVERTED must be 20");
+_Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS must be 0x0800");
 
 // =============================================================================
 // Phase 1: set_indent() accessors
@@ -142,3 +149,55 @@ void nvim_change_indent(int type, int amount, int round, bool call_changed_bytes
 {
   change_indent(type, amount, round, call_changed_bytes);
 }
+
+// =============================================================================
+// Phase 5: op_reindent() accessors
+// =============================================================================
+
+// Existing accessors from other files:
+//   nvim_get_curwin_cursor_lnum, nvim_set_curwin_cursor_lnum (change_ffi.c/insexpand.c)
+//   nvim_set_curwin_cursor_col (change_ffi.c)
+//   nvim_skipwhite (fold.c)
+//   nvim_get_cursor_line_ptr (change_ffi.c)
+//   nvim_beginline (normal.c)
+//   nvim_redraw_curbuf_later (fold.c)
+//   nvim_emsg_modifiable (undo.c)
+//   nvim_get_got_int (ex_eval.c)
+//   nvim_oap_get_line_count (normal.c)
+
+bool nvim_curbuf_is_modifiable(void) { return MODIFIABLE(curbuf); }
+
+int nvim_u_savecommon_range(linenr_T start, linenr_T count)
+{
+  return u_savecommon(curbuf, start - 1, start + count, start + count, false);
+}
+
+void nvim_smsg_lines_to_indent(int64_t i)
+{
+  smsg(0, _("%" PRId64 " lines to indent... "), i);
+}
+
+void nvim_smsg_lines_indented(int64_t count)
+{
+  smsg(0, NGETTEXT("%" PRId64 " line indented ",
+                    "%" PRId64 " lines indented ", (int)count), count);
+}
+
+int64_t nvim_get_p_report(void) { return p_report; }
+bool nvim_get_cmdmod_lockmarks(void) { return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0; }
+
+void nvim_indent_changed_lines(linenr_T first, linenr_T last, linenr_T xtra)
+{
+  changed_lines(curbuf, first, 0, last, xtra, true);
+}
+
+// oparg_T field accessors
+bool nvim_oap_is_visual(oparg_T *oap) { return oap->is_VIsual; }
+void nvim_oap_set_marks(oparg_T *oap)
+{
+  curbuf->b_op_start = oap->start;
+  curbuf->b_op_end = oap->end;
+}
+
+/// Compare a function pointer to get_lisp_indent.
+bool nvim_is_lisp_indent(Indenter how) { return how == get_lisp_indent; }
