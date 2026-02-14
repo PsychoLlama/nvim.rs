@@ -186,6 +186,11 @@ extern int rs_search_for_exact_line(void *buf, int *pos_lnum, int *pos_col,
 // Rust FFI declaration for Phase 8
 extern int rs_showmatch_find_match(int c, int *out_lnum, int *out_col, int *out_coladd);
 
+// Rust FFI declaration for Phase 9
+extern void rs_searchcount_compute(int pos_lnum, int pos_col, int pos_coladd,
+                                    int maxcount, int timeout, bool recompute,
+                                    const char *pattern, searchstat_T *stat);
+
 /// Get the lastcdir static variable (accessor for Rust).
 int nvim_get_lastcdir(void)
 {
@@ -1850,31 +1855,15 @@ void f_searchcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     }
   }
 
-  save_last_search_pattern();
-  save_incsearch_state();
-  if (pattern != NULL) {
-    if (*pattern == NUL) {
-      goto the_end;
-    }
-    xfree(spats[last_idx].pat);
-    spats[last_idx].patlen = strlen(pattern);
-    spats[last_idx].pat = xstrnsave(pattern, spats[last_idx].patlen);
-  }
-  if (spats[last_idx].pat == NULL || *spats[last_idx].pat == NUL) {
-    goto the_end;  // the previous pattern was never defined
-  }
-
-  update_search_stat(0, &pos, &pos, &stat, recompute, maxcount, timeout);
+  // Rust handles: save/restore patterns, pattern setup, stat computation
+  rs_searchcount_compute(pos.lnum, pos.col, pos.coladd,
+                          maxcount, timeout, recompute, pattern, &stat);
 
   tv_dict_add_nr(rettv->vval.v_dict, S_LEN("current"), stat.cur);
   tv_dict_add_nr(rettv->vval.v_dict, S_LEN("total"), stat.cnt);
   tv_dict_add_nr(rettv->vval.v_dict, S_LEN("exact_match"), stat.exact_match);
   tv_dict_add_nr(rettv->vval.v_dict, S_LEN("incomplete"), stat.incomplete);
   tv_dict_add_nr(rettv->vval.v_dict, S_LEN("maxcount"), stat.last_maxcount);
-
-the_end:
-  restore_last_search_pattern();
-  restore_incsearch_state();
 }
 
 /// Get line "lnum" and copy it into "buf[LSIZE]".
@@ -4481,6 +4470,29 @@ int nvim_showmatch_find_and_check(int *out_lnum, int *out_col, int *out_coladd)
 void nvim_showmatch_beep(void)
 {
   vim_beep(kOptBoFlagShowmatch);
+}
+
+// =============================================================================
+// Phase 9: f_searchcount accessors
+// =============================================================================
+
+/// Set spats[last_idx].pat for f_searchcount. Frees old pattern.
+/// Returns 0 if pattern is empty (caller should skip), 1 if ok.
+int nvim_searchcount_set_pattern(const char *pattern)
+{
+  if (*pattern == NUL) {
+    return 0;
+  }
+  xfree(spats[last_idx].pat);
+  spats[last_idx].patlen = strlen(pattern);
+  spats[last_idx].pat = xstrnsave(pattern, spats[last_idx].patlen);
+  return 1;
+}
+
+/// Check if spats[last_idx].pat is non-NULL and non-empty.
+int nvim_searchcount_has_pattern(void)
+{
+  return (spats[last_idx].pat != NULL && *spats[last_idx].pat != NUL) ? 1 : 0;
 }
 
 // Phase 4: find_pattern_in_path constants

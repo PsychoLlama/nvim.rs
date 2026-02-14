@@ -859,6 +859,64 @@ pub unsafe extern "C" fn rs_cmdline_search_stat(
     nvim_cmdline_stat_display(msgbuf);
 }
 
+// =============================================================================
+// Phase 9: f_searchcount computation
+// =============================================================================
+
+extern "C" {
+    fn nvim_searchcount_set_pattern(pattern: *const c_char) -> c_int;
+    fn nvim_searchcount_has_pattern() -> c_int;
+}
+
+/// Compute search count statistics for the searchcount() VimL function.
+///
+/// Handles: save/restore patterns, pattern setup, call update_search_stat.
+/// The caller (C) handles VimL argument parsing and result population.
+///
+/// # Safety
+/// `stat` must be a valid pointer. `pattern` may be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_searchcount_compute(
+    pos_lnum: c_int,
+    pos_col: c_int,
+    pos_coladd: c_int,
+    maxcount: c_int,
+    timeout: c_int,
+    recompute: bool,
+    pattern: *const c_char,
+    stat: *mut SearchStat,
+) {
+    // Save search state
+    crate::pattern::rs_save_last_search_pattern();
+    crate::incsearch::rs_save_incsearch_state();
+
+    if !pattern.is_null() && nvim_searchcount_set_pattern(pattern) == 0 {
+        // Empty pattern - skip computation
+        crate::pattern::rs_restore_last_search_pattern();
+        crate::incsearch::rs_restore_incsearch_state();
+        return;
+    }
+
+    if nvim_searchcount_has_pattern() == 0 {
+        // No previous pattern defined
+        crate::pattern::rs_restore_last_search_pattern();
+        crate::incsearch::rs_restore_incsearch_state();
+        return;
+    }
+
+    // dirc=0 means don't find next/previous match, just compute stats
+    rs_update_search_stat(
+        0,        // dirc
+        pos_lnum, // pos
+        pos_col, pos_coladd, pos_lnum, // cursor_pos (same as pos for searchcount)
+        pos_col, pos_coladd, stat, recompute, maxcount, timeout,
+    );
+
+    // Restore search state
+    crate::pattern::rs_restore_last_search_pattern();
+    crate::incsearch::rs_restore_incsearch_state();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
