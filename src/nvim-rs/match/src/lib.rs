@@ -19,6 +19,7 @@ pub mod lookup;
 pub mod position;
 pub mod priority;
 pub mod range;
+pub mod search;
 pub mod search_pos;
 pub mod viml;
 

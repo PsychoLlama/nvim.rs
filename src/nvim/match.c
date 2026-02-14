@@ -98,6 +98,11 @@ extern int rs_match_delete(win_T *wp, int id, int perr);
 extern void rs_clear_matches(win_T *wp);
 extern matchitem_T *rs_get_match(win_T *wp, int id);
 
+// search.rs - Core search engine (Phase 4)
+extern void rs_init_search_hl(win_T *wp, match_T *search_hl);
+extern void rs_next_search_hl(win_T *win, match_T *search_hl, match_T *shl,
+                              linenr_T lnum, colnr_T mincol, matchitem_T *cur);
+
 // search_pos.rs - Position match search (Phase 3)
 extern int rs_next_search_hl_pos(match_T *shl, linenr_T lnum,
                                  matchitem_T *match, colnr_T mincol);
@@ -489,6 +494,105 @@ void nvim_match_item_pos_swap(matchitem_T *m, int idx1, int idx2)
   m->mit_pos_array[idx2] = tmp;
 }
 
+// --- Phase 4 accessors (for search.rs) ---
+
+/// Get buf field of a match_T.
+buf_T *nvim_match_hl_get_buf(match_T *shl)
+{
+  return shl->buf;
+}
+
+/// Set buf field of a match_T.
+void nvim_match_hl_set_buf(match_T *shl, buf_T *buf)
+{
+  shl->buf = buf;
+}
+
+/// Get first_lnum field of a match_T.
+linenr_T nvim_match_hl_get_first_lnum(match_T *shl)
+{
+  return shl->first_lnum;
+}
+
+/// Set first_lnum field of a match_T.
+void nvim_match_hl_set_first_lnum(match_T *shl, linenr_T lnum)
+{
+  shl->first_lnum = lnum;
+}
+
+/// Set attr field of a match_T.
+void nvim_match_hl_set_attr(match_T *shl, int attr)
+{
+  shl->attr = attr;
+}
+
+/// Get the tm (proftime_T) from a match_T, cast to opaque pointer.
+void *nvim_match_hl_get_tm_ptr(match_T *shl)
+{
+  return &shl->tm;
+}
+
+/// Set the tm (proftime_T) of a match_T from a profile_setlimit call.
+void nvim_match_hl_set_tm(match_T *shl, int64_t msec)
+{
+  shl->tm = profile_setlimit(msec);
+}
+
+/// Get the regprog from a match_T.
+regprog_T *nvim_match_hl_get_regprog(match_T *shl)
+{
+  return shl->rm.regprog;
+}
+
+/// Set the regprog of a match_T (does NOT free the old one).
+void nvim_match_hl_set_regprog(match_T *shl, regprog_T *rp)
+{
+  shl->rm.regprog = rp;
+}
+
+/// Get the matchcol from a match_T.
+colnr_T nvim_match_hl_get_matchcol(match_T *shl)
+{
+  return shl->rm.rmm_matchcol;
+}
+
+/// Set the matchcol of a match_T.
+void nvim_match_hl_set_matchcol(match_T *shl, colnr_T col)
+{
+  shl->rm.rmm_matchcol = col;
+}
+
+/// Copy rm from match item to match_T: shl->rm = m->mit_match.
+void nvim_match_hl_copy_rm_from_item(match_T *shl, matchitem_T *m)
+{
+  if (m != NULL) {
+    shl->rm = m->mit_match;
+  }
+}
+
+/// Get mit_match.regprog from a match item.
+regprog_T *nvim_match_item_get_regprog(matchitem_T *m)
+{
+  return m != NULL ? m->mit_match.regprog : NULL;
+}
+
+/// Sync regprog: m->mit_match.regprog = shl->rm.regprog.
+void nvim_match_item_sync_regprog(matchitem_T *m, match_T *shl)
+{
+  if (m != NULL) {
+    m->mit_match.regprog = shl->rm.regprog;
+  }
+}
+
+/// Check if shl's regprog is a copy of the match item's.
+int nvim_match_hl_regprog_is_copy(match_T *shl, matchitem_T *cur)
+{
+  if (cur == NULL) {
+    return 0;
+  }
+  return (shl == &cur->mit_hl && cur->mit_match.regprog == cur->mit_hl.rm.regprog) ? 1 : 0;
+}
+
 // --- C function wrappers for Rust to call ---
 // Names prefixed with nvim_match_ to avoid symbol conflicts with other files.
 
@@ -520,6 +624,93 @@ void nvim_match_redraw_later(win_T *wp, int type)
 void nvim_match_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot)
 {
   redraw_win_range_later(wp, top, bot);
+}
+
+// --- Phase 4 function wrappers ---
+
+/// Wrapper for vim_regexec_multi with timer support.
+int nvim_match_vim_regexec_multi(match_T *shl, win_T *win, linenr_T lnum,
+                                 colnr_T col, int *timed_out)
+{
+  return vim_regexec_multi(&shl->rm, win, shl->buf, lnum, col, &shl->tm, timed_out);
+}
+
+/// Wrapper for vim_regfree.
+void nvim_match_vim_regfree(regprog_T *rp)
+{
+  vim_regfree(rp);
+}
+
+/// Wrapper for set_no_hlsearch.
+void nvim_match_set_no_hlsearch(int flag)
+{
+  set_no_hlsearch((bool)flag);
+}
+
+/// Wrapper for re_multiline.
+int nvim_match_re_multiline(regprog_T *rp)
+{
+  if (rp == NULL) {
+    return 0;
+  }
+  return re_multiline(rp);
+}
+
+/// Wrapper for ml_get_buf returning a byte at position.
+/// Returns 0 (NUL) if the position is at or past end of line.
+int nvim_match_ml_get_byte(buf_T *buf, linenr_T lnum, colnr_T col)
+{
+  char *line = ml_get_buf(buf, lnum);
+  return (unsigned char)line[col];
+}
+
+/// Wrapper for utfc_ptr2len at a position in a buffer line.
+int nvim_match_utfc_ptr2len(buf_T *buf, linenr_T lnum, colnr_T col)
+{
+  char *line = ml_get_buf(buf, lnum);
+  return utfc_ptr2len(line + col);
+}
+
+/// Check if CPO_SEARCH is set in 'cpoptions'.
+int nvim_match_has_cpo_search(void)
+{
+  return vim_strchr(p_cpo, CPO_SEARCH) != NULL ? 1 : 0;
+}
+
+/// Get search_first_line global.
+linenr_T nvim_match_get_search_first_line(void)
+{
+  return search_first_line;
+}
+
+/// Get search_last_line global.
+linenr_T nvim_match_get_search_last_line(void)
+{
+  return search_last_line;
+}
+
+/// Get p_rdt (redrawtime option).
+int64_t nvim_match_get_p_rdt(void)
+{
+  return p_rdt;
+}
+
+/// Get HLF_L constant.
+int nvim_match_get_HLF_L(void)
+{
+  return (int)HLF_L;
+}
+
+/// Get the window's buffer.
+buf_T *nvim_match_win_get_buffer(win_T *wp)
+{
+  return wp->w_buffer;
+}
+
+/// Get the window's topline.
+linenr_T nvim_match_win_get_topline(win_T *wp)
+{
+  return wp->w_topline;
 }
 
 // --- Error message wrappers ---
@@ -691,29 +882,7 @@ static matchitem_T *get_match(win_T *wp, int id)
 void init_search_hl(win_T *wp, match_T *search_hl)
   FUNC_ATTR_NONNULL_ALL
 {
-  // Setup for match and 'hlsearch' highlighting.  Disable any previous
-  // match
-  matchitem_T *cur = wp->w_match_head;
-  while (cur != NULL) {
-    cur->mit_hl.rm = cur->mit_match;
-    if (cur->mit_hlg_id == 0) {
-      cur->mit_hl.attr = 0;
-    } else {
-      cur->mit_hl.attr = syn_id2attr(cur->mit_hlg_id);
-    }
-    cur->mit_hl.buf = wp->w_buffer;
-    cur->mit_hl.lnum = 0;
-    cur->mit_hl.first_lnum = 0;
-    // Set the time limit to 'redrawtime'.
-    cur->mit_hl.tm = profile_setlimit(p_rdt);
-    cur = cur->mit_next;
-  }
-  search_hl->buf = wp->w_buffer;
-  search_hl->lnum = 0;
-  search_hl->first_lnum = 0;
-  search_hl->attr = win_hl_attr(wp, HLF_L);
-
-  // time limit is set at the toplevel, for all windows
+  rs_init_search_hl(wp, search_hl);
 }
 
 /// @param shl       points to a match. Fill on match.
@@ -728,114 +897,11 @@ static int next_search_hl_pos(match_T *shl, linenr_T lnum, matchitem_T *match, c
 }
 
 /// Search for a next 'hlsearch' or match.
-/// Uses shl->buf.
-/// Sets shl->lnum and shl->rm contents.
-/// Note: Assumes a previous match is always before "lnum", unless
-/// shl->lnum is zero.
-/// Careful: Any pointers for buffer lines will become invalid.
-///
-/// @param shl     points to search_hl or a match
-/// @param mincol  minimal column for a match
-/// @param cur     to retrieve match positions if any
 static void next_search_hl(win_T *win, match_T *search_hl, match_T *shl, linenr_T lnum,
                            colnr_T mincol, matchitem_T *cur)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-  colnr_T matchcol;
-  int nmatched = 0;
-  const int called_emsg_before = called_emsg;
-
-  // for :{range}s/pat only highlight inside the range
-  if ((lnum < search_first_line || lnum > search_last_line) && cur == NULL) {
-    shl->lnum = 0;
-    return;
-  }
-
-  if (shl->lnum != 0) {
-    // Check for three situations:
-    // 1. If the "lnum" is below a previous match, start a new search.
-    // 2. If the previous match includes "mincol", use it.
-    // 3. Continue after the previous match.
-    linenr_T l = shl->lnum + shl->rm.endpos[0].lnum - shl->rm.startpos[0].lnum;
-    if (lnum > l) {
-      shl->lnum = 0;
-    } else if (lnum < l || shl->rm.endpos[0].col > mincol) {
-      return;
-    }
-  }
-
-  // Repeat searching for a match until one is found that includes "mincol"
-  // or none is found in this line.
-  while (true) {
-    // Stop searching after passing the time limit.
-    if (profile_passed_limit(shl->tm)) {
-      shl->lnum = 0;                    // no match found in time
-      break;
-    }
-    // Three situations:
-    // 1. No useful previous match: search from start of line.
-    // 2. Not Vi compatible or empty match: continue at next character.
-    //    Break the loop if this is beyond the end of the line.
-    // 3. Vi compatible searching: continue at end of previous match.
-    if (shl->lnum == 0) {
-      matchcol = 0;
-    } else if (vim_strchr(p_cpo, CPO_SEARCH) == NULL
-               || (shl->rm.endpos[0].lnum == 0
-                   && shl->rm.endpos[0].col <= shl->rm.startpos[0].col)) {
-      matchcol = shl->rm.startpos[0].col;
-      char *ml = ml_get_buf(shl->buf, lnum) + matchcol;
-      if (*ml == NUL) {
-        matchcol++;
-        shl->lnum = 0;
-        break;
-      }
-      matchcol += utfc_ptr2len(ml);
-    } else {
-      matchcol = shl->rm.endpos[0].col;
-    }
-
-    shl->lnum = lnum;
-    if (shl->rm.regprog != NULL) {
-      // Remember whether shl->rm is using a copy of the regprog in
-      // cur->mit_match.
-      bool regprog_is_copy = (shl != search_hl && cur != NULL
-                              && shl == &cur->mit_hl
-                              && cur->mit_match.regprog == cur->mit_hl.rm.regprog);
-      int timed_out = false;
-
-      nmatched = vim_regexec_multi(&shl->rm, win, shl->buf, lnum, matchcol,
-                                   &(shl->tm), &timed_out);
-      // Copy the regprog, in case it got freed and recompiled.
-      if (regprog_is_copy) {
-        cur->mit_match.regprog = cur->mit_hl.rm.regprog;
-      }
-      if (called_emsg > called_emsg_before || got_int || timed_out) {
-        // Error while handling regexp: stop using this regexp.
-        if (shl == search_hl) {
-          // don't free regprog in the match list, it's a copy
-          vim_regfree(shl->rm.regprog);
-          set_no_hlsearch(true);
-        }
-        shl->rm.regprog = NULL;
-        shl->lnum = 0;
-        got_int = false;  // avoid the "Type :quit to exit Vim" message
-        break;
-      }
-    } else if (cur != NULL) {
-      nmatched = next_search_hl_pos(shl, lnum, cur, matchcol);
-    }
-    if (nmatched == 0) {
-      shl->lnum = 0;                    // no match found
-      break;
-    }
-    if (shl->rm.startpos[0].lnum > 0
-        || shl->rm.startpos[0].col >= mincol
-        || nmatched > 1
-        || shl->rm.endpos[0].col > mincol) {
-      shl->lnum += shl->rm.startpos[0].lnum;
-      break;                            // useful match found
-    }
-  }
+  rs_next_search_hl(win, search_hl, shl, lnum, mincol, cur);
 }
 
 /// Advance to the match in window "wp" line "lnum" or past it.
