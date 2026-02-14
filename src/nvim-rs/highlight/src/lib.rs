@@ -14,6 +14,45 @@ use std::sync::{LazyLock, Mutex};
 // Re-export API types for hlattrs2dict, hl_inspect, object_to_color
 use nvim_api::{Arena, Array, Dict, Error, NvimString, Object, ObjectType};
 
+/// Properly-sized Arena for stack allocation from Rust.
+/// Layout: { char *cur_blk; size_t pos; size_t size; } = 24 bytes on 64-bit.
+/// Initialized and freed via C accessors.
+#[repr(C)]
+struct SizedArena {
+    cur_blk: *mut c_char,
+    pos: usize,
+    size: usize,
+}
+
+impl SizedArena {
+    /// Create a new empty arena (ARENA_EMPTY equivalent).
+    fn new() -> Self {
+        let mut arena = SizedArena {
+            cur_blk: std::ptr::null_mut(),
+            pos: 0,
+            size: 0,
+        };
+        unsafe { nvim_arena_init(arena.as_arena_mut()) };
+        arena
+    }
+
+    /// Get a mutable Arena pointer suitable for passing to C/Rust FFI functions.
+    fn as_arena_mut(&mut self) -> *mut Arena {
+        self as *mut SizedArena as *mut Arena
+    }
+
+    /// Finish and free the arena memory.
+    fn finish_and_free(&mut self) {
+        unsafe { nvim_arena_finish_and_free(self.as_arena_mut()) };
+    }
+}
+
+impl Drop for SizedArena {
+    fn drop(&mut self) {
+        self.finish_and_free();
+    }
+}
+
 extern "C" {
     /// Get the terminal color count from C globals
     fn nvim_get_t_colors() -> c_int;
@@ -672,6 +711,9 @@ extern "C" {
     fn nvim_ui_call_hl_attr_define(id: c_int, attrs: HlAttrs, inspect: Array);
     /// C wrapper for emsg - reports table overflow error
     fn nvim_highlight_emsg_overflow();
+    /// Arena management
+    fn nvim_arena_init(arena: *mut Arena);
+    fn nvim_arena_finish_and_free(arena: *mut Arena);
     /// Reinit callbacks - called from rs_clear_hl_tables_full when reinit=true
     fn nvim_memset_highlight_attr_last();
     fn nvim_call_highlight_attr_set_all();
@@ -685,18 +727,13 @@ static GET_ATTR_ENTRY_RECURSIVE: std::sync::atomic::AtomicBool =
 
 /// Full get_attr_entry implementation with retry logic and UI dispatch.
 ///
-/// This is the complete replacement for C's get_attr_entry() function.
-/// It handles:
-/// - Adding/looking up attribute entries
-/// - Table overflow with retry (clear tables once and retry)
-/// - UI dispatch for new entries
+/// Core get_attr_entry implementation with caller-provided arena.
 ///
 /// Returns 0 for error, positive ID for success.
 ///
 /// # Safety
 /// - `arena` must be a valid Arena pointer for hl_inspect allocation
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_attr_entry_full(entry: HlEntry, arena: *mut Arena) -> c_int {
+unsafe fn get_attr_entry_impl(entry: HlEntry, arena: *mut Arena) -> c_int {
     use std::sync::atomic::Ordering;
 
     let mut retried = false;
@@ -739,6 +776,15 @@ pub unsafe extern "C" fn rs_get_attr_entry_full(entry: HlEntry, arena: *mut Aren
     }
 }
 
+/// Self-contained get_attr_entry: manages its own arena.
+/// This replaces both C's get_attr_entry() and rs_get_attr_entry_full().
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_attr_entry_full(entry: HlEntry) -> c_int {
+    let mut arena = SizedArena::new();
+    get_attr_entry_impl(entry, arena.as_arena_mut())
+    // arena dropped here, freeing memory
+}
+
 // ============================================================================
 // ui_send_all_hls - Send all highlights to a newly connected UI (Phase 22)
 // ============================================================================
@@ -772,6 +818,24 @@ pub unsafe extern "C" fn rs_ui_send_hl_group(ui: *mut c_void, hlf: c_int) {
     let highlight_attr = nvim_get_highlight_attr();
     let attr = *highlight_attr.add(hlf as usize);
     nvim_remote_ui_hl_group_set(ui, name, attr);
+}
+
+/// Send all highlights to a newly connected UI. Manages arena per iteration.
+///
+/// # Safety
+/// - `ui` must be a valid RemoteUI pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_send_all_hls(ui: *mut c_void) {
+    let count = rs_attr_entry_count();
+    for i in 1..count {
+        let mut arena = SizedArena::new();
+        rs_ui_send_hl_attr(ui, i, arena.as_arena_mut());
+        // arena dropped and freed here
+    }
+    let hlf_count = nvim_get_hlf_count();
+    for hlf in 0..hlf_count {
+        rs_ui_send_hl_group(ui, hlf);
+    }
 }
 
 /// Clear all highlight tables. If reinit is true, reinitialize after clearing.
@@ -1451,8 +1515,6 @@ extern "C" {
     fn c_syn_add_group(name: *const c_char, len: usize) -> c_int;
     /// Call ns_get_hl from C (handles Lua callback if needed)
     fn c_ns_get_hl(ns_id: *mut c_int, hl_id: c_int, link: bool, nodefault: c_int) -> c_int;
-    /// Call get_attr_entry from C (handles UI dispatch for new entries)
-    fn c_get_attr_entry(entry: HlEntry) -> c_int;
 }
 
 /// Find highlight group name in the table and return its ID.
@@ -1766,7 +1828,7 @@ pub extern "C" fn rs_hl_get_underline() -> c_int {
         id2: 0,
         winid: 0,
     };
-    unsafe { c_get_attr_entry(entry) }
+    unsafe { rs_get_attr_entry_full(entry) }
 }
 
 /// Get attribute code for forwarded :terminal highlights.
@@ -1787,7 +1849,7 @@ pub unsafe extern "C" fn rs_hl_get_term_attr(aep: *const HlAttrs) -> c_int {
         id2: 0,
         winid: 0,
     };
-    c_get_attr_entry(entry)
+    rs_get_attr_entry_full(entry)
 }
 
 /// Apply 'winblend' to highlight attributes.
@@ -1807,7 +1869,7 @@ pub extern "C" fn rs_hl_apply_winblend(winbl: c_int, attr: c_int) -> c_int {
     // if blend= attribute is not set, 'winblend' value overrides it.
     if entry.attr.hl_blend == -1 && winbl > 0 {
         entry.attr.hl_blend = winbl;
-        unsafe { c_get_attr_entry(entry) }
+        unsafe { rs_get_attr_entry_full(entry) }
     } else {
         attr
     }
@@ -2143,7 +2205,7 @@ pub unsafe extern "C" fn rs_hl_combine_attr(char_attr: c_int, prim_attr: c_int) 
     let new_en = rs_hl_combine_attrs_compute(input);
 
     // Get or create entry
-    let id = c_get_attr_entry(HlEntry {
+    let id = rs_get_attr_entry_full(HlEntry {
         attr: new_en,
         kind: HlKind::Combine,
         id1: char_attr,
@@ -2215,7 +2277,7 @@ pub unsafe extern "C" fn rs_hl_blend_attrs(
     } else {
         HlKind::Blend
     };
-    let id = c_get_attr_entry(HlEntry {
+    let id = rs_get_attr_entry_full(HlEntry {
         attr: cattrs,
         kind,
         id1: back_attr,
@@ -2253,7 +2315,7 @@ pub unsafe extern "C" fn rs_hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlA
         || at_en.rgb_ae_attr != 0
         || ns_id != 0
     {
-        return c_get_attr_entry(HlEntry {
+        return rs_get_attr_entry_full(HlEntry {
             attr: at_en,
             kind: HlKind::Syntax,
             id1: idx,
@@ -2283,7 +2345,7 @@ pub unsafe extern "C" fn rs_hl_add_url(attr: c_int, url: *const c_char) -> c_int
     attrs.url = k as i32;
 
     // Create new entry for the URL attribute
-    let new = c_get_attr_entry(HlEntry {
+    let new = rs_get_attr_entry_full(HlEntry {
         attr: attrs,
         kind: HlKind::UI,
         id1: 0,
@@ -2344,7 +2406,7 @@ pub unsafe extern "C" fn rs_hl_get_ui_attr(
         return 0;
     }
 
-    c_get_attr_entry(HlEntry {
+    rs_get_attr_entry_full(HlEntry {
         attr: attrs,
         kind: HlKind::UI,
         id1: idx,

@@ -66,26 +66,9 @@ extern HlAttrs rs_hl_blend_attrs_compute(HlBlendInput input);
 
 // Attribute entry management functions
 extern void rs_highlight_init(void);
-extern int rs_attr_entry_count(void);
 extern HlAttrs rs_syn_attr2entry(int attr);
-extern HlEntry rs_get_attr_entry_by_id(int attr);
-
-// Result type for rs_get_attr_entry
-typedef struct {
-  int id;
-  bool is_new;
-} GetAttrEntryResult;
-
-extern GetAttrEntryResult rs_get_attr_entry(HlEntry entry);
-
-// Cache functions
-extern int rs_combine_cache_get(int combine_tag);
-extern void rs_combine_cache_put(int combine_tag, int id);
-extern int rs_blend_cache_get(int combine_tag, bool through);
-extern void rs_blend_cache_put(int combine_tag, int id, bool through);
 
 // URL functions
-extern uint32_t rs_hl_add_url_index(const char *url);
 extern const char *rs_hl_get_url(uint32_t index);
 
 // Full attribute combination functions (Phase 14)
@@ -173,6 +156,10 @@ int nvim_get_hlf_mc(void) { return HLF_MC; }
 int nvim_get_hlf_cul(void) { return HLF_CUL; }
 // nvim_get_highlight_attr is already defined above (line 148)
 
+// Arena management accessors (callable from Rust)
+void nvim_arena_init(Arena *a) { *a = (Arena)ARENA_EMPTY; }
+void nvim_arena_finish_and_free(Arena *a) { arena_mem_free(arena_finish(a)); }
+
 // Accessors for clear_hl_tables reinit callbacks (Phase 2)
 void nvim_memset_highlight_attr_last(void) { memset(highlight_attr_last, -1, sizeof(highlight_attr_last)); }
 void nvim_call_highlight_attr_set_all(void) { highlight_attr_set_all(); }
@@ -227,39 +214,12 @@ bool highlight_use_hlstate(void)
   return rs_highlight_use_hlstate_full();
 }
 
-extern int rs_get_attr_entry_full(HlEntry entry, Arena *arena);
-
-/// Return the attr number for a set of colors and font, and optionally
-/// a semantic description (see ext_hlstate documentation).
-/// Add a new entry to the attr_entries array if the combination is new.
-/// @return 0 for error.
-static int get_attr_entry(HlEntry entry)
-{
-  // Rust handles the full flow: lookup/insert, retry on overflow, UI dispatch
-  // We just manage the arena for hl_inspect
-  Arena arena = ARENA_EMPTY;
-  int id = rs_get_attr_entry_full(entry, &arena);
-  arena_mem_free(arena_finish(&arena));
-  return id;
-}
-
-extern void rs_ui_send_hl_attr(RemoteUI *ui, int id, Arena *arena);
-extern void rs_ui_send_hl_group(RemoteUI *ui, int hlf);
+extern void rs_ui_send_all_hls(RemoteUI *ui);
 
 /// When a UI connects, we need to send it the table of highlights used so far.
 void ui_send_all_hls(RemoteUI *ui)
 {
-  // Send all highlight attribute entries
-  int count = rs_attr_entry_count();
-  for (int i = 1; i < count; i++) {
-    Arena arena = ARENA_EMPTY;
-    rs_ui_send_hl_attr(ui, i, &arena);
-    arena_mem_free(arena_finish(&arena));
-  }
-  // Send all highlight group names
-  for (int hlf = 0; hlf < HLF_COUNT; hlf++) {
-    rs_ui_send_hl_group(ui, hlf);
-  }
+  rs_ui_send_all_hls(ui);
 }
 
 /// Get attribute code for a syntax group.
@@ -288,13 +248,6 @@ int c_ns_get_hl(int *ns_id, int hl_id, bool link, int nodefault)
   int result = ns_get_hl(&ns, hl_id, link, nodefault);
   *ns_id = ns;
   return result;
-}
-
-// Wrapper for get_attr_entry callable from Rust
-// Allows Rust to create highlight attribute entries with proper UI dispatch
-int c_get_attr_entry(HlEntry entry)
-{
-  return get_attr_entry(entry);
 }
 
 int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
