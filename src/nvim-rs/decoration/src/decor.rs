@@ -3,7 +3,7 @@
 //! This module contains Rust implementations of decoration-related functions
 //! from `src/nvim/decoration.c`.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 use crate::{
     DecorKind, DecorRangeHandle, DecorStateHandle, DecorVirtTextHandle, VirtTextPos,
@@ -129,6 +129,35 @@ extern "C" {
 
     // Highlight functions
     fn syn_id2attr(hl_id: c_int) -> c_int;
+
+    // Phase 2: Memory management accessors
+    fn nvim_get_decor_freelist() -> u32;
+    fn nvim_set_decor_freelist(val: u32);
+    fn nvim_decor_items_size() -> u32;
+    fn nvim_decor_items_get_next(idx: u32) -> u32;
+    fn nvim_decor_items_set(idx: u32, item: DecorSignHighlight);
+    fn nvim_decor_items_push(item: DecorSignHighlight) -> u32;
+    fn nvim_xmalloc_decor_virt_text() -> *mut c_void;
+    fn nvim_xfree_ptr(ptr: *mut c_void);
+    fn nvim_get_to_free_virt() -> *mut c_void;
+    fn nvim_set_to_free_virt(val: *mut c_void);
+    fn nvim_get_to_free_sh() -> u32;
+    fn nvim_set_to_free_sh(val: u32);
+    fn nvim_decor_state_get_running_provider() -> c_int;
+    fn nvim_decor_vt_get_next(vt: *mut c_void) -> *mut c_void;
+    fn nvim_decor_vt_set_next(vt: *mut c_void, next: *mut c_void);
+    fn nvim_decor_vt_get_flags(vt: *mut c_void) -> u8;
+    fn nvim_clear_virttext(vt: *mut c_void);
+    fn nvim_clear_virtlines(vt: *mut c_void);
+    fn nvim_decor_vt_get_virt_text_data(vt: *mut c_void) -> *mut c_void;
+    fn nvim_decor_vt_get_virt_lines_data(vt: *mut c_void) -> *mut c_void;
+    fn nvim_decor_items_get_flags(idx: u32) -> u16;
+    fn nvim_decor_items_set_flags(idx: u32, flags: u16);
+    fn nvim_decor_items_set_next(idx: u32, next: u32);
+    fn nvim_decor_items_clear_sign_name(idx: u32);
+    fn nvim_decor_items_clear_url(idx: u32);
+    fn nvim_decor_vt_copy_to(dst: *mut c_void, src: *const c_void, size: usize);
+    fn nvim_decor_state_set_win(state: DecorStateHandle, win: *mut c_void);
 }
 
 // =============================================================================
@@ -922,6 +951,185 @@ pub const fn vt_repeat_linebreak(flags: u8) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_vt_repeat_linebreak(flags: u8) -> c_int {
     c_int::from(vt_repeat_linebreak(flags))
+}
+
+// =============================================================================
+// Phase 2: Memory Management
+// =============================================================================
+
+/// Allocate a DecorSignHighlight from the freelist or push to decor_items.
+///
+/// Rust implementation of `decor_put_sh()`.
+#[no_mangle]
+pub extern "C" fn rs_decor_put_sh(item: DecorSignHighlight) -> u32 {
+    unsafe {
+        let freelist = nvim_get_decor_freelist();
+        if freelist == DECOR_ID_INVALID {
+            nvim_decor_items_push(item)
+        } else {
+            let pos = freelist;
+            let next = nvim_decor_items_get_next(freelist);
+            nvim_set_decor_freelist(next);
+            nvim_decor_items_set(pos, item);
+            pos
+        }
+    }
+}
+
+/// Allocate a DecorVirtText on the heap, copy data, set next pointer.
+///
+/// Rust implementation of `decor_put_vt()`.
+///
+/// # Safety
+/// `vt_data` must point to a valid `DecorVirtText` of `vt_size` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_put_vt(
+    vt_data: *const c_void,
+    vt_size: usize,
+    next: *mut c_void,
+) -> *mut c_void {
+    let alloc = nvim_xmalloc_decor_virt_text();
+    nvim_decor_vt_copy_to(alloc, vt_data, vt_size);
+    nvim_decor_vt_set_next(alloc, next);
+    alloc
+}
+
+/// Clear a VirtText (free chunk texts + destroy kvec).
+///
+/// Rust implementation of `clear_virttext()`.
+/// Delegates to the C helper which handles kvec internals.
+///
+/// # Safety
+/// `text` must point to a valid `VirtText` or be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_virttext(text: *mut c_void) {
+    if text.is_null() {
+        return;
+    }
+    nvim_clear_virttext(text);
+}
+
+/// Clear VirtLines (free all lines + destroy kvec).
+///
+/// Rust implementation of `clear_virtlines()`.
+/// Delegates to the C helper which handles kvec internals.
+///
+/// # Safety
+/// `lines` must point to a valid `VirtLines` or be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_virtlines(lines: *mut c_void) {
+    if lines.is_null() {
+        return;
+    }
+    nvim_clear_virtlines(lines);
+}
+
+/// Free decoration inner data (virt text linked list + sign/highlight freelist).
+///
+/// Rust implementation of `decor_free_inner()`.
+///
+/// # Safety
+/// `vt` must point to a valid `DecorVirtText` linked list or be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_free_inner(mut vt: *mut c_void, first_idx: u32) {
+    // Walk and free DecorVirtText linked list
+    while !vt.is_null() {
+        let flags = nvim_decor_vt_get_flags(vt);
+        if flags & KVT_IS_LINES != 0 {
+            let lines_data = nvim_decor_vt_get_virt_lines_data(vt);
+            nvim_clear_virtlines(lines_data);
+        } else {
+            let text_data = nvim_decor_vt_get_virt_text_data(vt);
+            nvim_clear_virttext(text_data);
+        }
+        let next = nvim_decor_vt_get_next(vt);
+        nvim_xfree_ptr(vt);
+        vt = next;
+    }
+
+    // Walk and free DecorSignHighlight linked list, returning to freelist
+    let mut idx = first_idx;
+    while idx != DECOR_ID_INVALID {
+        let flags = nvim_decor_items_get_flags(idx);
+        if flags & KSH_IS_SIGN != 0 {
+            nvim_decor_items_clear_sign_name(idx);
+        }
+        nvim_decor_items_set_flags(idx, 0);
+        // Check and clear url
+        nvim_decor_items_clear_url(idx);
+
+        let next = nvim_decor_items_get_next(idx);
+        if next == DECOR_ID_INVALID {
+            // Last in chain: link to freelist
+            nvim_decor_items_set_next(idx, nvim_get_decor_freelist());
+            nvim_set_decor_freelist(first_idx);
+            break;
+        }
+        idx = next;
+    }
+}
+
+/// Free decoration, possibly deferring if in a decoration provider callback.
+///
+/// Rust implementation of `decor_free()`.
+///
+/// # Safety
+/// `vt_ptr` must point to a valid `DecorVirtText` linked list or be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_free(ext: c_int, vt_ptr: *mut c_void, sh_idx: u32) {
+    if ext == 0 {
+        return;
+    }
+
+    if nvim_decor_state_get_running_provider() != 0 {
+        // Defer deletion: append to to_free linked lists
+        let mut vt = vt_ptr;
+        let original_vt = vt_ptr;
+        while !vt.is_null() {
+            let next = nvim_decor_vt_get_next(vt);
+            if next.is_null() {
+                let to_free = nvim_get_to_free_virt();
+                nvim_decor_vt_set_next(vt, to_free);
+                nvim_set_to_free_virt(original_vt);
+                break;
+            }
+            vt = next;
+        }
+
+        let mut idx = sh_idx;
+        let original_idx = sh_idx;
+        while idx != DECOR_ID_INVALID {
+            let next = nvim_decor_items_get_next(idx);
+            if next == DECOR_ID_INVALID {
+                let to_free = nvim_get_to_free_sh();
+                nvim_decor_items_set_next(idx, to_free);
+                nvim_set_to_free_sh(original_idx);
+                break;
+            }
+            idx = next;
+        }
+    } else {
+        // Safe to delete right now
+        rs_decor_free_inner(vt_ptr, sh_idx);
+    }
+}
+
+/// Process deferred decoration deletions.
+///
+/// Rust implementation of `decor_check_to_be_deleted()`.
+#[no_mangle]
+pub extern "C" fn rs_decor_check_to_be_deleted() {
+    // Safety: accessing globals through C accessors
+    unsafe {
+        let to_free_virt = nvim_get_to_free_virt();
+        let to_free_sh = nvim_get_to_free_sh();
+        rs_decor_free_inner(to_free_virt, to_free_sh);
+    }
+    unsafe { nvim_set_to_free_virt(std::ptr::null_mut()) };
+    unsafe { nvim_set_to_free_sh(DECOR_ID_INVALID) };
+    // Also clear the win pointer (original C code does this)
+    let state = crate::get_decor_state();
+    unsafe { nvim_decor_state_set_win(state, std::ptr::null_mut()) };
 }
 
 // =============================================================================

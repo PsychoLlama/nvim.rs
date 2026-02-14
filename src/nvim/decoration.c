@@ -85,6 +85,20 @@ uint32_t decor_freelist = UINT32_MAX;
 DecorVirtText *to_free_virt = NULL;
 uint32_t to_free_sh = UINT32_MAX;
 
+// Rust implementations for Phase 1
+extern void rs_decor_state_invalidate(void *state, buf_T *buf);
+extern void rs_decor_redraw_end(void *state);
+extern void rs_decor_state_free(void *state);
+
+// Rust implementations for Phase 2
+extern uint32_t rs_decor_put_sh(DecorSignHighlight item);
+extern void *rs_decor_put_vt(void *vt_data, size_t vt_size, void *next);
+extern void rs_clear_virttext(void *text);
+extern void rs_clear_virtlines(void *lines);
+extern void rs_decor_free_inner(void *vt, uint32_t first_idx);
+extern void rs_decor_free(int ext, void *vt, uint32_t sh_idx);
+extern void rs_decor_check_to_be_deleted(void);
+
 /// Add highlighting to a buffer, bounded by two cursor positions,
 /// with an offset.
 ///
@@ -188,24 +202,12 @@ void decor_redraw_sh(buf_T *buf, int row1, int row2, DecorSignHighlight sh)
 
 uint32_t decor_put_sh(DecorSignHighlight item)
 {
-  if (decor_freelist != UINT32_MAX) {
-    uint32_t pos = decor_freelist;
-    decor_freelist = kv_A(decor_items, decor_freelist).next;
-    kv_A(decor_items, pos) = item;
-    return pos;
-  } else {
-    uint32_t pos = (uint32_t)kv_size(decor_items);
-    kv_push(decor_items, item);
-    return pos;
-  }
+  return rs_decor_put_sh(item);
 }
 
 DecorVirtText *decor_put_vt(DecorVirtText vt, DecorVirtText *next)
 {
-  DecorVirtText *decor_alloc = xmalloc(sizeof *decor_alloc);
-  *decor_alloc = vt;
-  decor_alloc->next = next;
-  return decor_alloc;
+  return rs_decor_put_vt(&vt, sizeof(vt), next);
 }
 
 DecorSignHighlight decor_sh_from_inline(DecorHighlightInline item)
@@ -292,69 +294,8 @@ void decor_free(DecorInline decor)
   if (!decor.ext) {
     return;
   }
-  DecorVirtText *vt = decor.data.ext.vt;
-  uint32_t idx = decor.data.ext.sh_idx;
-
-  if (decor_state.running_decor_provider) {
-    while (vt) {
-      if (vt->next == NULL) {
-        vt->next = to_free_virt;
-        to_free_virt = decor.data.ext.vt;
-        break;
-      }
-      vt = vt->next;
-    }
-    while (idx != DECOR_ID_INVALID) {
-      DecorSignHighlight *sh = &kv_A(decor_items, idx);
-      if (sh->next == DECOR_ID_INVALID) {
-        sh->next = to_free_sh;
-        to_free_sh = decor.data.ext.sh_idx;
-        break;
-      }
-      idx = sh->next;
-    }
-  } else {
-    // safe to delete right now
-    decor_free_inner(vt, idx);
-  }
+  rs_decor_free(1, decor.data.ext.vt, decor.data.ext.sh_idx);
 }
-
-static void decor_free_inner(DecorVirtText *vt, uint32_t first_idx)
-{
-  while (vt) {
-    if (rs_vt_is_lines(vt->flags)) {
-      clear_virtlines(&vt->data.virt_lines);
-    } else {
-      clear_virttext(&vt->data.virt_text);
-    }
-    DecorVirtText *tofree = vt;
-    vt = vt->next;
-    xfree(tofree);
-  }
-
-  uint32_t idx = first_idx;
-  while (idx != DECOR_ID_INVALID) {
-    DecorSignHighlight *sh = &kv_A(decor_items, idx);
-    if (rs_sh_is_sign(sh->flags)) {
-      XFREE_CLEAR(sh->sign_name);
-    }
-    sh->flags = 0;
-    if (sh->url != NULL) {
-      XFREE_CLEAR(sh->url);
-    }
-    if (sh->next == DECOR_ID_INVALID) {
-      sh->next = decor_freelist;
-      decor_freelist = first_idx;
-      break;
-    }
-    idx = sh->next;
-  }
-}
-
-// Rust implementations for Phase 1
-extern void rs_decor_state_invalidate(void *state, buf_T *buf);
-extern void rs_decor_redraw_end(void *state);
-extern void rs_decor_state_free(void *state);
 
 /// Check if we are in a callback while drawing, which might invalidate the marktree iterator.
 ///
@@ -368,10 +309,7 @@ void decor_state_invalidate(buf_T *buf)
 void decor_check_to_be_deleted(void)
 {
   assert(!decor_state.running_decor_provider);
-  decor_free_inner(to_free_virt, to_free_sh);
-  to_free_virt = NULL;
-  to_free_sh = DECOR_ID_INVALID;
-  decor_state.win = NULL;
+  rs_decor_check_to_be_deleted();
 }
 
 void decor_state_free(DecorState *state)
@@ -1412,6 +1350,189 @@ void nvim_decor_state_destroy_ranges_i(void *state_ptr)
 {
   DecorState *state = (DecorState *)state_ptr;
   kv_destroy(state->ranges_i);
+}
+
+// ============================================================================
+// Phase 2: Memory management accessors
+// ============================================================================
+
+/// Get decor_freelist global.
+uint32_t nvim_get_decor_freelist(void)
+{
+  return decor_freelist;
+}
+
+/// Set decor_freelist global.
+void nvim_set_decor_freelist(uint32_t val)
+{
+  decor_freelist = val;
+}
+
+/// Get size of decor_items kvec.
+uint32_t nvim_decor_items_size(void)
+{
+  return (uint32_t)kv_size(decor_items);
+}
+
+/// Get decor_items[idx].next field.
+uint32_t nvim_decor_items_get_next(uint32_t idx)
+{
+  return kv_A(decor_items, idx).next;
+}
+
+/// Set decor_items[idx] to item.
+void nvim_decor_items_set(uint32_t idx, DecorSignHighlight item)
+{
+  kv_A(decor_items, idx) = item;
+}
+
+/// Push item to decor_items, return its index.
+uint32_t nvim_decor_items_push(DecorSignHighlight item)
+{
+  uint32_t pos = (uint32_t)kv_size(decor_items);
+  kv_push(decor_items, item);
+  return pos;
+}
+
+/// Get pointer to decor_items[idx].
+DecorSignHighlight *nvim_decor_items_get(uint32_t idx)
+{
+  return &kv_A(decor_items, idx);
+}
+
+/// Allocate a DecorVirtText on the heap.
+void *nvim_xmalloc_decor_virt_text(void)
+{
+  return xmalloc(sizeof(DecorVirtText));
+}
+
+/// Free a heap-allocated pointer.
+void nvim_xfree_ptr(void *ptr)
+{
+  xfree(ptr);
+}
+
+/// Get to_free_virt global.
+void *nvim_get_to_free_virt(void)
+{
+  return to_free_virt;
+}
+
+/// Set to_free_virt global.
+void nvim_set_to_free_virt(void *val)
+{
+  to_free_virt = (DecorVirtText *)val;
+}
+
+/// Get to_free_sh global.
+uint32_t nvim_get_to_free_sh(void)
+{
+  return to_free_sh;
+}
+
+/// Set to_free_sh global.
+void nvim_set_to_free_sh(uint32_t val)
+{
+  to_free_sh = val;
+}
+
+/// Get running_decor_provider flag from global decor_state.
+int nvim_decor_state_get_running_provider(void)
+{
+  return decor_state.running_decor_provider ? 1 : 0;
+}
+
+/// Get next pointer from a DecorVirtText.
+void *nvim_decor_vt_get_next(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->next;
+}
+
+/// Set next pointer on a DecorVirtText.
+void nvim_decor_vt_set_next(void *vt_ptr, void *next)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  vt->next = (DecorVirtText *)next;
+}
+
+/// Get flags from a DecorVirtText.
+uint8_t nvim_decor_vt_get_flags(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->flags;
+}
+
+/// Clear VirtText (free chunks + destroy kvec). Does the actual work.
+void nvim_clear_virttext(void *vt_ptr)
+{
+  VirtText *text = (VirtText *)vt_ptr;
+  for (size_t i = 0; i < kv_size(*text); i++) {
+    xfree(kv_A(*text, i).text);
+  }
+  kv_destroy(*text);
+  *text = (VirtText)KV_INITIAL_VALUE;
+}
+
+/// Clear VirtLines (free all lines + destroy kvec). Does the actual work.
+void nvim_clear_virtlines(void *vt_ptr)
+{
+  VirtLines *lines = (VirtLines *)vt_ptr;
+  for (size_t i = 0; i < kv_size(*lines); i++) {
+    nvim_clear_virttext(&kv_A(*lines, i).line);
+  }
+  kv_destroy(*lines);
+  *lines = (VirtLines)KV_INITIAL_VALUE;
+}
+
+/// Get pointer to virt_text data inside DecorVirtText.
+void *nvim_decor_vt_get_virt_text_data(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return &vt->data.virt_text;
+}
+
+/// Get pointer to virt_lines data inside DecorVirtText.
+void *nvim_decor_vt_get_virt_lines_data(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return &vt->data.virt_lines;
+}
+
+/// Get flags from decor_items[idx].
+uint16_t nvim_decor_items_get_flags(uint32_t idx)
+{
+  return kv_A(decor_items, idx).flags;
+}
+
+/// Set flags on decor_items[idx].
+void nvim_decor_items_set_flags(uint32_t idx, uint16_t flags)
+{
+  kv_A(decor_items, idx).flags = flags;
+}
+
+/// Set next on decor_items[idx].
+void nvim_decor_items_set_next(uint32_t idx, uint32_t next)
+{
+  kv_A(decor_items, idx).next = next;
+}
+
+/// Clear and free sign_name on decor_items[idx] if it's a sign.
+void nvim_decor_items_clear_sign_name(uint32_t idx)
+{
+  XFREE_CLEAR(kv_A(decor_items, idx).sign_name);
+}
+
+/// Clear and free url on decor_items[idx].
+void nvim_decor_items_clear_url(uint32_t idx)
+{
+  XFREE_CLEAR(kv_A(decor_items, idx).url);
+}
+
+/// Copy a DecorVirtText struct to heap-allocated memory.
+void nvim_decor_vt_copy_to(void *dst, void *src, size_t size)
+{
+  memcpy(dst, src, size);
 }
 
 /// Get the row from decor_state.
