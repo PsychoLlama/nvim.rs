@@ -213,6 +213,15 @@ extern void rs_set_diff_option(win_T *wp, bool value);
 extern void rs_diff_fold_update(diff_T *dp, int skip_idx);
 extern bool rs_diff_mode_buf(buf_T *buf);
 
+// Phase 2: Diff block management migrations
+extern void rs_diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
+                                linenr_T amount, linenr_T amount_after);
+extern void rs_diff_mark_adjust_tp(tabpage_T *tp, int idx, linenr_T line1, linenr_T line2,
+                                   linenr_T amount, linenr_T amount_after);
+extern void rs_diff_check_unchanged(tabpage_T *tp, diff_T *dp);
+extern int rs_diffopt_changed(void);
+extern int rs_diffanchors_changed(bool buflocal);
+
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
 
@@ -362,13 +371,7 @@ void diff_invalidate(buf_T *buf)
 void diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
                       linenr_T amount_after)
 {
-  // Handle all tab pages that use "buf" in a diff.
-  FOR_ALL_TABS(tp) {
-    int idx = diff_buf_idx(buf, tp);
-    if (idx != DB_COUNT) {
-      diff_mark_adjust_tp(tp, idx, line1, line2, amount, amount_after);
-    }
-  }
+  rs_diff_mark_adjust(buf, line1, line2, amount, amount_after);
 }
 
 /// Update line numbers in tab page "tp" for the buffer with index "idx".
@@ -387,235 +390,7 @@ void diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amoun
 static void diff_mark_adjust_tp(tabpage_T *tp, int idx, linenr_T line1, linenr_T line2,
                                 linenr_T amount, linenr_T amount_after)
 {
-  if (diff_internal()) {
-    // Will update diffs before redrawing.  Set _invalid to update the
-    // diffs themselves, set _update to also update folds properly just
-    // before redrawing.
-    // Do update marks here, it is needed for :%diffput.
-    tp->tp_diff_invalid = true;
-    tp->tp_diff_update = true;
-  }
-
-  linenr_T inserted;
-  linenr_T deleted;
-  if (line2 == MAXLNUM) {
-    // mark_adjust(99, MAXLNUM, 9, 0): insert lines
-    inserted = amount;
-    deleted = 0;
-  } else if (amount_after > 0) {
-    // mark_adjust(99, 98, MAXLNUM, 9): a change that inserts lines
-    inserted = amount_after;
-    deleted = 0;
-  } else {
-    // mark_adjust(98, 99, MAXLNUM, -2): delete lines
-    inserted = 0;
-    deleted = -amount_after;
-  }
-
-  diff_T *dprev = NULL;
-  diff_T *dp = tp->tp_first_diff;
-
-  linenr_T lnum_deleted = line1;  // lnum of remaining deletion
-  while (true) {
-    // If the change is after the previous diff block and before the next
-    // diff block, thus not touching an existing change, create a new diff
-    // block.  Don't do this when ex_diffgetput() is busy.
-    if (((dp == NULL)
-         || (dp->df_lnum[idx] - 1 > line2)
-         || ((line2 == MAXLNUM) && (dp->df_lnum[idx] > line1)))
-        && ((dprev == NULL)
-            || (dprev->df_lnum[idx] + dprev->df_count[idx] < line1))
-        && !diff_busy) {
-      diff_T *dnext = diff_alloc_new(tp, dprev, dp);
-
-      dnext->df_lnum[idx] = line1;
-      dnext->df_count[idx] = inserted;
-      for (int i = 0; i < DB_COUNT; i++) {
-        if ((tp->tp_diffbuf[i] != NULL) && (i != idx)) {
-          if (dprev == NULL) {
-            dnext->df_lnum[i] = line1;
-          } else {
-            dnext->df_lnum[i] = line1
-                                + (dprev->df_lnum[i] + dprev->df_count[i])
-                                - (dprev->df_lnum[idx] + dprev->df_count[idx]);
-          }
-          dnext->df_count[i] = deleted;
-        }
-      }
-    }
-
-    // if at end of the list, quit
-    if (dp == NULL) {
-      break;
-    }
-
-    // Check for these situations:
-    //    1  2  3
-    //    1  2  3
-    // line1     2  3  4  5
-    //       2  3  4  5
-    //       2  3  4  5
-    // line2     2  3  4  5
-    //      3     5  6
-    //      3     5  6
-
-    // compute last line of this change
-    linenr_T last = dp->df_lnum[idx] + dp->df_count[idx] - 1;
-
-    // 1. change completely above line1: nothing to do
-    if (last >= line1 - 1) {
-      if (diff_busy) {
-        // Currently in the middle of updating diff blocks. All we want
-        // is to adjust the line numbers and nothing else.
-        if (dp->df_lnum[idx] > line2) {
-          dp->df_lnum[idx] += amount_after;
-        }
-
-        // Advance to next entry.
-        dprev = dp;
-        dp = dp->df_next;
-        continue;
-      }
-
-      // 6. change below line2: only adjust for amount_after; also when
-      // "deleted" became zero when deleted all lines between two diffs.
-      if (dp->df_lnum[idx] - (deleted + inserted != 0) > line2) {
-        if (amount_after == 0) {
-          // nothing left to change
-          break;
-        }
-        dp->df_lnum[idx] += amount_after;
-      } else {
-        bool check_unchanged = false;
-
-        // 2. 3. 4. 5.: inserted/deleted lines touching this diff.
-        if (deleted > 0) {
-          linenr_T n;
-          linenr_T off = 0;
-          if (dp->df_lnum[idx] >= line1) {
-            if (last <= line2) {
-              // 4. delete all lines of diff
-              if ((dp->df_next != NULL)
-                  && (dp->df_next->df_lnum[idx] - 1 <= line2)) {
-                // delete continues in next diff, only do
-                // lines until that one
-                n = dp->df_next->df_lnum[idx] - lnum_deleted;
-                deleted -= n;
-                n -= dp->df_count[idx];
-                lnum_deleted = dp->df_next->df_lnum[idx];
-              } else {
-                n = deleted - dp->df_count[idx];
-              }
-              dp->df_count[idx] = 0;
-            } else {
-              // 5. delete lines at or just before top of diff
-              off = dp->df_lnum[idx] - lnum_deleted;
-              n = off;
-              dp->df_count[idx] -= line2 - dp->df_lnum[idx] + 1;
-              check_unchanged = true;
-            }
-            dp->df_lnum[idx] = line1;
-          } else {
-            if (last < line2) {
-              // 2. delete at end of diff
-              dp->df_count[idx] -= last - lnum_deleted + 1;
-
-              if ((dp->df_next != NULL)
-                  && (dp->df_next->df_lnum[idx] - 1 <= line2)) {
-                // delete continues in next diff, only do
-                // lines until that one
-                n = dp->df_next->df_lnum[idx] - 1 - last;
-                deleted -= dp->df_next->df_lnum[idx] - lnum_deleted;
-                lnum_deleted = dp->df_next->df_lnum[idx];
-              } else {
-                n = line2 - last;
-              }
-              check_unchanged = true;
-            } else {
-              // 3. delete lines inside the diff
-              n = 0;
-              dp->df_count[idx] -= deleted;
-            }
-          }
-
-          for (int i = 0; i < DB_COUNT; i++) {
-            if ((tp->tp_diffbuf[i] != NULL) && (i != idx)) {
-              if (dp->df_lnum[i] > off) {
-                dp->df_lnum[i] -= off;
-              } else {
-                dp->df_lnum[i] = 1;
-              }
-              dp->df_count[i] += n;
-            }
-          }
-        } else {
-          if (dp->df_lnum[idx] <= line1) {
-            // inserted lines somewhere in this diff
-            dp->df_count[idx] += inserted;
-            check_unchanged = true;
-          } else {
-            // inserted lines somewhere above this diff
-            dp->df_lnum[idx] += inserted;
-          }
-        }
-
-        if (check_unchanged) {
-          // Check if inserted lines are equal, may reduce the size of the
-          // diff.
-          //
-          // TODO(unknown): also check for equal lines in the middle and perhaps split
-          // the block.
-          diff_check_unchanged(tp, dp);
-        }
-      }
-    }
-
-    // check if this block touches the previous one, may merge them.
-    if ((dprev != NULL) && !dp->is_linematched && !diff_busy
-        && (dprev->df_lnum[idx] + dprev->df_count[idx] == dp->df_lnum[idx])) {
-      for (int i = 0; i < DB_COUNT; i++) {
-        if (tp->tp_diffbuf[i] != NULL) {
-          dprev->df_count[i] += dp->df_count[i];
-        }
-      }
-      dp = diff_free(tp, dprev, dp);
-    } else {
-      // Advance to next entry.
-      dprev = dp;
-      dp = dp->df_next;
-    }
-  }
-
-  dprev = NULL;
-  dp = tp->tp_first_diff;
-
-  while (dp != NULL) {
-    // All counts are zero, remove this entry.
-    int i;
-    for (i = 0; i < DB_COUNT; i++) {
-      if ((tp->tp_diffbuf[i] != NULL) && (dp->df_count[i] != 0)) {
-        break;
-      }
-    }
-
-    if (i == DB_COUNT) {
-      dp = diff_free(tp, dprev, dp);
-    } else {
-      // Advance to next entry.
-      dprev = dp;
-      dp = dp->df_next;
-    }
-  }
-
-  if (tp == curtab) {
-    // Don't redraw right away, this updates the diffs, which can be slow.
-    need_diff_redraw = true;
-
-    // Need to recompute the scroll binding, may remove or add filler
-    // lines (e.g., when adding lines above w_topline). But it's slow when
-    // making many changes, postpone until redrawing.
-    diff_need_scrollbind = true;
-  }
+  rs_diff_mark_adjust_tp(tp, idx, line1, line2, amount, amount_after);
 }
 
 /// Allocate a new diff block and link it between "dprev" and "dp".
@@ -645,81 +420,7 @@ static diff_T *diff_free(tabpage_T *tp, diff_T *dprev, diff_T *dp)
 /// @param dp
 static void diff_check_unchanged(tabpage_T *tp, diff_T *dp)
 {
-  // Find the first buffers, use it as the original, compare the other
-  // buffer lines against this one.
-  int i_org;
-  for (i_org = 0; i_org < DB_COUNT; i_org++) {
-    if (tp->tp_diffbuf[i_org] != NULL) {
-      break;
-    }
-  }
-
-  // safety check
-  if (i_org == DB_COUNT) {
-    return;
-  }
-
-  if (diff_check_sanity(tp, dp) == FAIL) {
-    return;
-  }
-
-  // First check lines at the top, then at the bottom.
-  linenr_T off_org = 0;
-  linenr_T off_new = 0;
-  int dir = FORWARD;
-  while (true) {
-    // Repeat until a line is found which is different or the number of
-    // lines has become zero.
-    while (dp->df_count[i_org] > 0) {
-      // Copy the line, the next ml_get() will invalidate it.
-      if (dir == BACKWARD) {
-        off_org = dp->df_count[i_org] - 1;
-      }
-      char *line_org = xstrdup(ml_get_buf(tp->tp_diffbuf[i_org], dp->df_lnum[i_org] + off_org));
-
-      int i_new;
-      for (i_new = i_org + 1; i_new < DB_COUNT; i_new++) {
-        if (tp->tp_diffbuf[i_new] == NULL) {
-          continue;
-        }
-
-        if (dir == BACKWARD) {
-          off_new = dp->df_count[i_new] - 1;
-        }
-
-        // if other buffer doesn't have this line, it was inserted
-        if ((off_new < 0) || (off_new >= dp->df_count[i_new])) {
-          break;
-        }
-
-        if (diff_cmp(line_org, ml_get_buf(tp->tp_diffbuf[i_new],
-                                          dp->df_lnum[i_new] + off_new)) != 0) {
-          break;
-        }
-      }
-      xfree(line_org);
-
-      // Stop when a line isn't equal in all diff buffers.
-      if (i_new != DB_COUNT) {
-        break;
-      }
-
-      // Line matched in all buffers, remove it from the diff.
-      for (i_new = i_org; i_new < DB_COUNT; i_new++) {
-        if (tp->tp_diffbuf[i_new] != NULL) {
-          if (dir == FORWARD) {
-            dp->df_lnum[i_new]++;
-          }
-          dp->df_count[i_new]--;
-        }
-      }
-    }
-
-    if (dir == BACKWARD) {
-      break;
-    }
-    dir = BACKWARD;
-  }
+  rs_diff_check_unchanged(tp, dp);
 }
 
 /// Check if a diff block doesn't contain invalid line numbers.
@@ -2524,22 +2225,7 @@ static int parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int
 /// This is called when 'diffanchors' is changed.
 int diffanchors_changed(bool buflocal)
 {
-  int result = parse_diffanchors(true, curbuf, NULL, NULL);
-  if (result == OK && (diff_flags & DIFF_ANCHOR)) {
-    FOR_ALL_TABS(tp) {
-      if (!buflocal) {
-        tp->tp_diff_invalid = true;
-      } else {
-        for (int idx = 0; idx < DB_COUNT; idx++) {
-          if (tp->tp_diffbuf[idx] == curbuf) {
-            tp->tp_diff_invalid = true;
-            break;
-          }
-        }
-      }
-    }
-  }
-  return result;
+  return rs_diffanchors_changed(buflocal);
 }
 
 /// This is called when 'diffopt' is changed.
@@ -2547,32 +2233,7 @@ int diffanchors_changed(bool buflocal)
 /// @return
 int diffopt_changed(void)
 {
-  // Parse the diffopt string using Rust
-  DiffoptResult parsed = rs_diffopt_parse(p_dip);
-  if (parsed.result == FAIL) {
-    return FAIL;
-  }
-
-  // If flags were added or removed, or the algorithm was changed, need to
-  // update the diff.
-  if (diff_flags != parsed.diff_flags || diff_algorithm != parsed.diff_algorithm) {
-    FOR_ALL_TABS(tp) {
-      tp->tp_diff_invalid = true;
-    }
-  }
-
-  diff_flags = parsed.diff_flags;
-  diff_context = parsed.diff_context;
-  linematch_lines = parsed.linematch_lines;
-  diff_foldcolumn = parsed.diff_foldcolumn;
-  diff_algorithm = parsed.diff_algorithm;
-
-  diff_redraw(true);
-
-  // recompute the scroll binding with the new option value, may
-  // remove or add filler lines
-  check_scrollbind(0, 0);
-  return OK;
+  return rs_diffopt_changed();
 }
 
 /// Check that "diffopt" contains "horizontal".
@@ -4656,4 +4317,52 @@ bool nvim_diff_get_need_scrollbind(void)
 void nvim_diff_set_need_scrollbind(bool val)
 {
   diff_need_scrollbind = val;
+}
+
+// =============================================================================
+// Phase 2 Rust FFI accessor functions
+// =============================================================================
+
+// nvim_tabpage_set_diff_update already exists above
+
+/// Get MAXLNUM constant for Rust.
+linenr_T nvim_diff_maxlnum(void)
+{
+  return MAXLNUM;
+}
+
+/// Get the diff_algorithm setting.
+int nvim_diff_get_algorithm(void)
+{
+  return diff_algorithm;
+}
+
+/// Set diff option globals from parsed result.
+void nvim_diff_set_options(int flags, int context, int linematch, int foldcol, int algorithm)
+{
+  diff_flags = flags;
+  diff_context = context;
+  linematch_lines = linematch;
+  diff_foldcolumn = foldcol;
+  diff_algorithm = algorithm;
+}
+
+/// Wrapper for check_scrollbind() callable from Rust.
+void nvim_diff_check_scrollbind(void)
+{
+  check_scrollbind(0, 0);
+}
+
+/// Wrapper for parse_diffanchors() callable from Rust.
+int nvim_diff_parse_diffanchors(void)
+{
+  return parse_diffanchors(true, curbuf, NULL, NULL);
+}
+
+// nvim_get_curbuf already exists in window.c
+
+/// Get the p_dip (diffopt) option string.
+const char *nvim_diff_get_p_dip(void)
+{
+  return p_dip;
 }

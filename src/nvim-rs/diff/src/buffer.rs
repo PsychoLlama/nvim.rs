@@ -192,6 +192,25 @@ extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn utf_fold(c: c_int) -> c_int;
     fn utf_ptr2char(p: *const c_char) -> c_int;
+
+    // Phase 2: Additional accessors
+    fn nvim_diff_get_busy() -> bool;
+    fn nvim_diff_set_need_scrollbind(val: bool);
+    fn nvim_tabpage_set_diff_update(tp: TabpageHandle, val: c_int);
+    fn nvim_diffblock_is_linematched(dp: DiffBlockHandle) -> bool;
+    fn nvim_diff_maxlnum() -> LinenrT;
+    fn nvim_diff_get_algorithm() -> c_int;
+    fn nvim_diff_set_options(
+        flags: c_int,
+        context: c_int,
+        linematch: c_int,
+        foldcol: c_int,
+        algorithm: c_int,
+    );
+    fn nvim_diff_check_scrollbind();
+    fn nvim_diff_parse_diffanchors() -> c_int;
+    fn nvim_get_curbuf() -> BufHandle;
+    fn nvim_diff_get_p_dip() -> *const c_char;
 }
 
 use std::ffi::c_char;
@@ -200,6 +219,12 @@ use std::ffi::c_char;
 const DIFF_LINEMATCH: c_int = 0x1000;
 /// DIFF_ICASE flag value (must match C).
 const DIFF_ICASE: c_int = 0x004;
+/// DIFF_ANCHOR flag value (must match C).
+const DIFF_ANCHOR: c_int = 0x20000;
+/// DIFF_INTERNAL flag value (must match C).
+const DIFF_INTERNAL: c_int = 0x200;
+/// MAXLNUM constant (matches C).
+const MAXLNUM: LinenrT = 0x7fff_ffff;
 
 // =============================================================================
 // Diff Buffer State
@@ -1235,6 +1260,467 @@ pub unsafe extern "C" fn rs_diff_mode_buf(buf: BufHandle) -> bool {
         tp = nvim_tabpage_get_next(tp);
     }
     false
+}
+
+// =============================================================================
+// Phase 2: Diff Block Management
+// =============================================================================
+
+/// Wrapper for diff_internal() check.
+#[inline]
+unsafe fn diff_internal() -> bool {
+    nvim_diff_get_diff_flags() & DIFF_INTERNAL != 0
+}
+
+/// Called by mark_adjust(): update line numbers in all tabs for "buf".
+///
+/// Equivalent to C `diff_mark_adjust`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_mark_adjust(
+    buf: BufHandle,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+) {
+    if buf.is_null() {
+        return;
+    }
+    let mut tp = nvim_get_first_tabpage();
+    while !tp.is_null() {
+        let idx = rs_diff_buf_idx_tp(buf, tp);
+        if idx != DB_COUNT {
+            rs_diff_mark_adjust_tp(tp, idx, line1, line2, amount, amount_after);
+        }
+        tp = nvim_tabpage_get_next(tp);
+    }
+}
+
+/// Update diff blocks for tab `tp`, buffer index `idx`, after line changes.
+///
+/// Equivalent to C `diff_mark_adjust_tp`.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_diff_mark_adjust_tp(
+    tp: TabpageHandle,
+    idx: c_int,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+) {
+    if tp.is_null() {
+        return;
+    }
+
+    if diff_internal() {
+        nvim_tabpage_set_diff_invalid(tp, 1);
+        nvim_tabpage_set_diff_update(tp, 1);
+    }
+
+    let (inserted, deleted): (LinenrT, LinenrT) = if line2 == MAXLNUM {
+        (amount, 0)
+    } else if amount_after > 0 {
+        (amount_after, 0)
+    } else {
+        (0, -amount_after)
+    };
+
+    let mut dprev = DiffBlockHandle::null();
+    let mut dp = nvim_tabpage_get_first_diff(tp);
+    let mut lnum_deleted = line1;
+    let mut deleted = deleted;
+    let diff_busy = nvim_diff_get_busy();
+
+    loop {
+        // Create new diff block if change is between existing blocks
+        let should_create = {
+            let dp_cond = if dp.is_null() {
+                true
+            } else {
+                let dp_lnum = nvim_diffblock_get_lnum(dp, idx);
+                dp_lnum - 1 > line2 || (line2 == MAXLNUM && dp_lnum > line1)
+            };
+            let dprev_cond = if dprev.is_null() {
+                true
+            } else {
+                let prev_lnum = nvim_diffblock_get_lnum(dprev, idx);
+                let prev_count = nvim_diffblock_get_count(dprev, idx);
+                prev_lnum + prev_count < line1
+            };
+            dp_cond && dprev_cond && !diff_busy
+        };
+
+        if should_create {
+            let dnext = rs_diff_alloc_new(tp, dprev, dp);
+            nvim_diffblock_set_lnum(dnext, idx, line1);
+            nvim_diffblock_set_count(dnext, idx, inserted);
+
+            for i in 0..DB_COUNT {
+                if !nvim_tabpage_get_diffbuf(tp, i).is_null() && i != idx {
+                    if dprev.is_null() {
+                        nvim_diffblock_set_lnum(dnext, i, line1);
+                    } else {
+                        let prev_lnum_i = nvim_diffblock_get_lnum(dprev, i);
+                        let prev_count_i = nvim_diffblock_get_count(dprev, i);
+                        let prev_lnum_idx = nvim_diffblock_get_lnum(dprev, idx);
+                        let prev_count_idx = nvim_diffblock_get_count(dprev, idx);
+                        nvim_diffblock_set_lnum(
+                            dnext,
+                            i,
+                            line1 + (prev_lnum_i + prev_count_i) - (prev_lnum_idx + prev_count_idx),
+                        );
+                    }
+                    nvim_diffblock_set_count(dnext, i, deleted);
+                }
+            }
+        }
+
+        if dp.is_null() {
+            break;
+        }
+
+        let dp_lnum = nvim_diffblock_get_lnum(dp, idx);
+        let dp_count = nvim_diffblock_get_count(dp, idx);
+        let last = dp_lnum + dp_count - 1;
+
+        // 1. change completely above line1: nothing to do
+        if last >= line1 - 1 {
+            if diff_busy {
+                if dp_lnum > line2 {
+                    nvim_diffblock_set_lnum(dp, idx, dp_lnum + amount_after);
+                }
+                dprev = dp;
+                dp = nvim_diffblock_get_next(dp);
+                continue;
+            }
+
+            // 6. change below line2
+            if dp_lnum - LinenrT::from(deleted + inserted != 0) > line2 {
+                if amount_after == 0 {
+                    break;
+                }
+                nvim_diffblock_set_lnum(dp, idx, dp_lnum + amount_after);
+            } else {
+                let mut check_unchanged = false;
+
+                if deleted > 0 {
+                    let n: LinenrT;
+                    let off: LinenrT;
+                    let dp_lnum = nvim_diffblock_get_lnum(dp, idx);
+                    let dp_count = nvim_diffblock_get_count(dp, idx);
+
+                    if dp_lnum >= line1 {
+                        if last <= line2 {
+                            // 4. delete all lines of diff
+                            let dp_next = nvim_diffblock_get_next(dp);
+                            if !dp_next.is_null()
+                                && nvim_diffblock_get_lnum(dp_next, idx) - 1 <= line2
+                            {
+                                let next_lnum = nvim_diffblock_get_lnum(dp_next, idx);
+                                n = next_lnum - lnum_deleted;
+                                deleted -= n;
+                                let n = n - dp_count;
+                                lnum_deleted = next_lnum;
+                                adjust_other_bufs(tp, dp, idx, 0, n);
+                            } else {
+                                let n = deleted - dp_count;
+                                adjust_other_bufs(tp, dp, idx, 0, n);
+                            }
+                            nvim_diffblock_set_count(dp, idx, 0);
+                        } else {
+                            // 5. delete lines at or just before top of diff
+                            off = dp_lnum - lnum_deleted;
+                            n = off;
+                            nvim_diffblock_set_count(dp, idx, dp_count - (line2 - dp_lnum + 1));
+                            check_unchanged = true;
+                            adjust_other_bufs(tp, dp, idx, off, n);
+                        }
+                        nvim_diffblock_set_lnum(dp, idx, line1);
+                    } else if last < line2 {
+                        // 2. delete at end of diff
+                        nvim_diffblock_set_count(dp, idx, dp_count - (last - lnum_deleted + 1));
+
+                        let dp_next = nvim_diffblock_get_next(dp);
+                        if !dp_next.is_null() && nvim_diffblock_get_lnum(dp_next, idx) - 1 <= line2
+                        {
+                            let next_lnum = nvim_diffblock_get_lnum(dp_next, idx);
+                            n = next_lnum - 1 - last;
+                            deleted -= next_lnum - lnum_deleted;
+                            lnum_deleted = next_lnum;
+                        } else {
+                            n = line2 - last;
+                        }
+                        check_unchanged = true;
+                        adjust_other_bufs(tp, dp, idx, 0, n);
+                    } else {
+                        // 3. delete lines inside the diff
+                        nvim_diffblock_set_count(dp, idx, dp_count - deleted);
+                        adjust_other_bufs(tp, dp, idx, 0, 0);
+                    }
+                } else {
+                    let dp_lnum = nvim_diffblock_get_lnum(dp, idx);
+                    if dp_lnum <= line1 {
+                        let dp_count = nvim_diffblock_get_count(dp, idx);
+                        nvim_diffblock_set_count(dp, idx, dp_count + inserted);
+                        check_unchanged = true;
+                    } else {
+                        nvim_diffblock_set_lnum(dp, idx, dp_lnum + inserted);
+                    }
+                }
+
+                if check_unchanged {
+                    rs_diff_check_unchanged(tp, dp);
+                }
+            }
+        }
+
+        // Check if this block touches the previous one, may merge them.
+        let dp_lnum = nvim_diffblock_get_lnum(dp, idx);
+        if !dprev.is_null()
+            && !nvim_diffblock_is_linematched(dp)
+            && !diff_busy
+            && (nvim_diffblock_get_lnum(dprev, idx) + nvim_diffblock_get_count(dprev, idx)
+                == dp_lnum)
+        {
+            for i in 0..DB_COUNT {
+                if !nvim_tabpage_get_diffbuf(tp, i).is_null() {
+                    let prev_count = nvim_diffblock_get_count(dprev, i);
+                    let dp_count = nvim_diffblock_get_count(dp, i);
+                    nvim_diffblock_set_count(dprev, i, prev_count + dp_count);
+                }
+            }
+            dp = rs_diff_free(tp, dprev, dp);
+        } else {
+            dprev = dp;
+            dp = nvim_diffblock_get_next(dp);
+        }
+    }
+
+    // Second pass: remove entries where all counts are zero
+    dprev = DiffBlockHandle::null();
+    dp = nvim_tabpage_get_first_diff(tp);
+
+    while !dp.is_null() {
+        let mut all_zero = true;
+        for i in 0..DB_COUNT {
+            if !nvim_tabpage_get_diffbuf(tp, i).is_null() && nvim_diffblock_get_count(dp, i) != 0 {
+                all_zero = false;
+                break;
+            }
+        }
+
+        if all_zero {
+            dp = rs_diff_free(tp, dprev, dp);
+        } else {
+            dprev = dp;
+            dp = nvim_diffblock_get_next(dp);
+        }
+    }
+
+    let curtab = nvim_get_curtab();
+    if tp == curtab {
+        nvim_set_need_diff_redraw(true);
+        nvim_diff_set_need_scrollbind(true);
+    }
+}
+
+/// Helper: adjust lnum and count for other buffers in a diff block during deletion.
+unsafe fn adjust_other_bufs(
+    tp: TabpageHandle,
+    dp: DiffBlockHandle,
+    idx: c_int,
+    off: LinenrT,
+    n: LinenrT,
+) {
+    for i in 0..DB_COUNT {
+        if !nvim_tabpage_get_diffbuf(tp, i).is_null() && i != idx {
+            let lnum = nvim_diffblock_get_lnum(dp, i);
+            if lnum > off {
+                nvim_diffblock_set_lnum(dp, i, lnum - off);
+            } else {
+                nvim_diffblock_set_lnum(dp, i, 1);
+            }
+            let count = nvim_diffblock_get_count(dp, i);
+            nvim_diffblock_set_count(dp, i, count + n);
+        }
+    }
+}
+
+/// Check if a diff block can be made smaller by removing equal lines.
+///
+/// Equivalent to C `diff_check_unchanged`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_check_unchanged(tp: TabpageHandle, dp: DiffBlockHandle) {
+    if tp.is_null() || dp.is_null() {
+        return;
+    }
+
+    // Find the first buffer to use as the original
+    let mut i_org: c_int = -1;
+    for i in 0..DB_COUNT {
+        if !nvim_tabpage_get_diffbuf(tp, i).is_null() {
+            i_org = i;
+            break;
+        }
+    }
+    if i_org < 0 {
+        return;
+    }
+
+    if diff_check_sanity_internal(tp, dp) == FAIL {
+        return;
+    }
+
+    // FORWARD = 1, BACKWARD = -1
+    let mut off_org: LinenrT = 0;
+    let mut off_new: LinenrT;
+    let mut dir: c_int = 1; // FORWARD
+
+    loop {
+        // Repeat until a line is found which is different or count becomes zero
+        while nvim_diffblock_get_count(dp, i_org) > 0 {
+            if dir == -1 {
+                // BACKWARD
+                off_org = nvim_diffblock_get_count(dp, i_org) - 1;
+            }
+
+            let org_buf = nvim_tabpage_get_diffbuf(tp, i_org);
+            let org_lnum = nvim_diffblock_get_lnum(dp, i_org);
+            let line_org = nvim_diff_xstrdup(nvim_diff_ml_get_buf(org_buf, org_lnum + off_org));
+
+            let mut i_new = i_org + 1;
+            let mut found_mismatch = false;
+            while i_new < DB_COUNT {
+                if nvim_tabpage_get_diffbuf(tp, i_new).is_null() {
+                    i_new += 1;
+                    continue;
+                }
+
+                off_new = if dir == -1 {
+                    nvim_diffblock_get_count(dp, i_new) - 1
+                } else {
+                    0
+                };
+
+                if off_new < 0 || off_new >= nvim_diffblock_get_count(dp, i_new) {
+                    found_mismatch = true;
+                    break;
+                }
+
+                let new_buf = nvim_tabpage_get_diffbuf(tp, i_new);
+                let new_lnum = nvim_diffblock_get_lnum(dp, i_new);
+                if crate::rs_diff_cmp(line_org, nvim_diff_ml_get_buf(new_buf, new_lnum + off_new))
+                    != 0
+                {
+                    found_mismatch = true;
+                    break;
+                }
+                i_new += 1;
+            }
+
+            nvim_diff_xfree(line_org.cast::<c_void>());
+
+            // Stop when a line isn't equal in all diff buffers
+            if found_mismatch || i_new != DB_COUNT {
+                break;
+            }
+
+            // Line matched in all buffers, remove it from the diff
+            for j in i_org..DB_COUNT {
+                if !nvim_tabpage_get_diffbuf(tp, j).is_null() {
+                    if dir == 1 {
+                        // FORWARD
+                        let lnum = nvim_diffblock_get_lnum(dp, j);
+                        nvim_diffblock_set_lnum(dp, j, lnum + 1);
+                    }
+                    let count = nvim_diffblock_get_count(dp, j);
+                    nvim_diffblock_set_count(dp, j, count - 1);
+                }
+            }
+        }
+
+        if dir == -1 {
+            break;
+        }
+        dir = -1; // switch to BACKWARD
+    }
+}
+
+/// DiffoptResult matching the C struct.
+#[repr(C)]
+struct DiffoptResult {
+    diff_flags: c_int,
+    diff_algorithm: c_int,
+    diff_context: c_int,
+    diff_foldcolumn: c_int,
+    linematch_lines: c_int,
+    result: c_int,
+}
+
+extern "C" {
+    fn rs_diffopt_parse(p_dip: *const c_char) -> DiffoptResult;
+}
+
+/// Handle 'diffopt' option changes.
+///
+/// Equivalent to C `diffopt_changed`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diffopt_changed() -> c_int {
+    let p_dip = nvim_diff_get_p_dip();
+    let parsed = rs_diffopt_parse(p_dip);
+    if parsed.result == FAIL {
+        return FAIL;
+    }
+
+    // If flags or algorithm changed, invalidate all tabs
+    let old_flags = nvim_diff_get_diff_flags();
+    let old_algorithm = nvim_diff_get_algorithm();
+    if old_flags != parsed.diff_flags || old_algorithm != parsed.diff_algorithm {
+        let mut tp = nvim_get_first_tabpage();
+        while !tp.is_null() {
+            nvim_tabpage_set_diff_invalid(tp, 1);
+            tp = nvim_tabpage_get_next(tp);
+        }
+    }
+
+    nvim_diff_set_options(
+        parsed.diff_flags,
+        parsed.diff_context,
+        parsed.linematch_lines,
+        parsed.diff_foldcolumn,
+        parsed.diff_algorithm,
+    );
+
+    nvim_diff_redraw(true);
+    nvim_diff_check_scrollbind();
+    OK
+}
+
+/// Handle 'diffanchors' option changes.
+///
+/// Equivalent to C `diffanchors_changed`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diffanchors_changed(buflocal: bool) -> c_int {
+    let result = nvim_diff_parse_diffanchors();
+    if result == OK && (nvim_diff_get_diff_flags() & DIFF_ANCHOR != 0) {
+        let curbuf = nvim_get_curbuf();
+        let mut tp = nvim_get_first_tabpage();
+        while !tp.is_null() {
+            if buflocal {
+                for idx in 0..DB_COUNT {
+                    if nvim_tabpage_get_diffbuf(tp, idx) == curbuf {
+                        nvim_tabpage_set_diff_invalid(tp, 1);
+                        break;
+                    }
+                }
+            } else {
+                nvim_tabpage_set_diff_invalid(tp, 1);
+            }
+            tp = nvim_tabpage_get_next(tp);
+        }
+    }
+    result
 }
 
 #[cfg(test)]
