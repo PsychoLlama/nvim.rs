@@ -12,6 +12,7 @@ pub mod add;
 pub mod core;
 pub mod delete;
 pub mod display;
+pub mod highlight;
 pub mod id;
 pub mod item;
 pub mod lookup;

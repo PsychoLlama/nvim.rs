@@ -98,6 +98,11 @@ extern int rs_match_delete(win_T *wp, int id, int perr);
 extern void rs_clear_matches(win_T *wp);
 extern matchitem_T *rs_get_match(win_T *wp, int id);
 
+// highlight.rs - Highlight helpers (Phase 2)
+extern void rs_check_cur_search_hl(win_T *wp, match_T *shl);
+extern int rs_get_prevcol_hl_flag(win_T *wp, match_T *search_hl, colnr_T curcol);
+extern void rs_get_search_match_hl(win_T *wp, match_T *search_hl, colnr_T col, int *char_attr);
+
 static const char *e_invalwindow = N_("E957: Invalid window number");
 
 // =============================================================================
@@ -327,6 +332,74 @@ void nvim_match_pos_set(llpos_T *arr, int idx, linenr_T lnum, colnr_T col, int l
     arr[idx].col = col;
     arr[idx].len = len;
   }
+}
+
+// --- Phase 2 accessors (for highlight.rs) ---
+
+/// Get lnum field of a match_T.
+linenr_T nvim_match_hl_get_lnum(match_T *shl)
+{
+  return shl->lnum;
+}
+
+/// Set has_cursor field of a match_T.
+void nvim_match_hl_set_has_cursor(match_T *shl, int val)
+{
+  shl->has_cursor = (bool)val;
+}
+
+/// Get startcol field of a match_T.
+colnr_T nvim_match_hl_get_startcol(match_T *shl)
+{
+  return shl->startcol;
+}
+
+/// Get endcol field of a match_T.
+colnr_T nvim_match_hl_get_endcol(match_T *shl)
+{
+  return shl->endcol;
+}
+
+/// Get attr field of a match_T.
+int nvim_match_hl_get_attr(match_T *shl)
+{
+  return shl->attr;
+}
+
+/// Get is_addpos field of a match_T.
+int nvim_match_hl_get_is_addpos(match_T *shl)
+{
+  return shl->is_addpos ? 1 : 0;
+}
+
+/// Get rm.startpos[idx].lnum from a match_T.
+linenr_T nvim_match_hl_rm_startpos_lnum(match_T *shl, int idx)
+{
+  return shl->rm.startpos[idx].lnum;
+}
+
+/// Get rm.startpos[idx].col from a match_T.
+colnr_T nvim_match_hl_rm_startpos_col(match_T *shl, int idx)
+{
+  return shl->rm.startpos[idx].col;
+}
+
+/// Get rm.endpos[idx].lnum from a match_T.
+linenr_T nvim_match_hl_rm_endpos_lnum(match_T *shl, int idx)
+{
+  return shl->rm.endpos[idx].lnum;
+}
+
+/// Get rm.endpos[idx].col from a match_T.
+colnr_T nvim_match_hl_rm_endpos_col(match_T *shl, int idx)
+{
+  return shl->rm.endpos[idx].col;
+}
+
+/// Get pointer to mit_hl of a match item.
+match_T *nvim_match_item_get_hl(matchitem_T *m)
+{
+  return m != NULL ? &m->mit_hl : NULL;
 }
 
 // --- C function wrappers for Rust to call ---
@@ -783,16 +856,7 @@ void prepare_search_hl(win_T *wp, match_T *search_hl, linenr_T lnum)
 /// position.
 static void check_cur_search_hl(win_T *wp, match_T *shl)
 {
-  linenr_T linecount = shl->rm.endpos[0].lnum - shl->rm.startpos[0].lnum;
-
-  if (wp->w_cursor.lnum >= shl->lnum
-      && wp->w_cursor.lnum <= shl->lnum + linecount
-      && (wp->w_cursor.lnum > shl->lnum || wp->w_cursor.col >= shl->rm.startpos[0].col)
-      && (wp->w_cursor.lnum < shl->lnum + linecount || wp->w_cursor.col < shl->rm.endpos[0].col)) {
-    shl->has_cursor = true;
-  } else {
-    shl->has_cursor = false;
-  }
+  rs_check_cur_search_hl(wp, shl);
 }
 
 /// Prepare for 'hlsearch' and match highlighting in one window line.
@@ -1013,59 +1077,14 @@ int update_search_hl(win_T *wp, linenr_T lnum, colnr_T col, char **line, match_T
 
 bool get_prevcol_hl_flag(win_T *wp, match_T *search_hl, colnr_T curcol)
 {
-  colnr_T prevcol = curcol;
-
-  // we're not really at that column when skipping some text
-  if ((wp->w_p_wrap ? wp->w_skipcol : wp->w_leftcol) > prevcol) {
-    prevcol++;
-  }
-
-  // Highlight a character after the end of the line if the match started
-  // at the end of the line or when the match continues in the next line
-  // (match includes the line break).
-  if (!search_hl->is_addpos && (prevcol == search_hl->startcol
-                                || (prevcol > search_hl->startcol
-                                    && search_hl->endcol == MAXCOL))) {
-    return true;
-  }
-  matchitem_T *cur = wp->w_match_head;  // points to the match list
-  while (cur != NULL) {
-    if (!cur->mit_hl.is_addpos && (prevcol == cur->mit_hl.startcol
-                                   || (prevcol > cur->mit_hl.startcol
-                                       && cur->mit_hl.endcol == MAXCOL))) {
-      return true;
-    }
-    cur = cur->mit_next;
-  }
-
-  return false;
+  return rs_get_prevcol_hl_flag(wp, search_hl, curcol) != 0;
 }
 
 /// Get highlighting for the char after the text in "char_attr" from 'hlsearch'
 /// or match highlighting.
 void get_search_match_hl(win_T *wp, match_T *search_hl, colnr_T col, int *char_attr)
 {
-  matchitem_T *cur = wp->w_match_head;  // points to the match list
-  match_T *shl;                     // points to search_hl or a match
-  bool shl_flag = false;        // flag to indicate whether search_hl
-                                // has been processed or not
-
-  while (cur != NULL || !shl_flag) {
-    if (!shl_flag
-        && (cur == NULL || cur->mit_priority > SEARCH_HL_PRIORITY)) {
-      shl = search_hl;
-      shl_flag = true;
-    } else {
-      shl = &cur->mit_hl;
-    }
-    if (col - 1 == shl->startcol
-        && (shl == search_hl || !shl->is_addpos)) {
-      *char_attr = shl->attr;
-    }
-    if (shl != search_hl && cur != NULL) {
-      cur = cur->mit_next;
-    }
-  }
+  rs_get_search_match_hl(wp, search_hl, col, char_attr);
 }
 
 static int matchadd_dict_arg(typval_T *tv, const char **conceal_char, win_T **win)
