@@ -672,8 +672,11 @@ extern "C" {
     fn nvim_ui_call_hl_attr_define(id: c_int, attrs: HlAttrs, inspect: Array);
     /// C wrapper for emsg - reports table overflow error
     fn nvim_highlight_emsg_overflow();
-    /// C wrapper for clear_hl_tables - clears tables and triggers highlight_changed
-    fn clear_hl_tables(reinit: bool);
+    /// Reinit callbacks - called from rs_clear_hl_tables_full when reinit=true
+    fn nvim_memset_highlight_attr_last();
+    fn nvim_call_highlight_attr_set_all();
+    fn nvim_call_highlight_changed();
+    fn nvim_call_screen_invalidate_highlights();
 }
 
 /// Thread-local flag to detect recursive get_attr_entry calls
@@ -711,7 +714,7 @@ pub unsafe extern "C" fn rs_get_attr_entry_full(entry: HlEntry, arena: *mut Aren
             }
 
             GET_ATTR_ENTRY_RECURSIVE.store(true, Ordering::SeqCst);
-            clear_hl_tables(true);
+            rs_clear_hl_tables_full(true);
             GET_ATTR_ENTRY_RECURSIVE.store(false, Ordering::SeqCst);
 
             if entry.kind == HlKind::Combine {
@@ -787,6 +790,49 @@ pub extern "C" fn rs_clear_hl_tables(reinit: bool) {
         store.blendthrough_cache.clear();
         store.destroy_ns_hls();
     }
+}
+
+/// Full clear_hl_tables: clears Rust storage and runs reinit callbacks if needed.
+/// Replaces the combined C clear_hl_tables + reinit logic.
+///
+/// Note: we clear the store first (dropping the lock), then call callbacks.
+/// The callbacks (highlight_attr_set_all, etc.) re-enter Rust (hl_get_syn_attr),
+/// so the lock must not be held during callback execution.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_hl_tables_full(reinit: bool) {
+    // Phase 1: clear Rust storage (acquires and releases ATTR_STORE lock)
+    rs_clear_hl_tables(reinit);
+    // Phase 2: reinit callbacks (may re-enter Rust, so lock must be free)
+    if reinit {
+        nvim_memset_highlight_attr_last();
+        nvim_call_highlight_attr_set_all();
+        nvim_call_highlight_changed();
+        nvim_call_screen_invalidate_highlights();
+    }
+}
+
+/// Full hl_invalidate_blends: clears blend caches and refreshes highlights.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hl_invalidate_blends_full() {
+    rs_hl_invalidate_blends();
+    // highlight_changed and update_window_hl are called from C
+    // to avoid re-entrancy issues with curwin access
+    nvim_hl_invalidate_blends_callbacks();
+}
+
+extern "C" {
+    fn nvim_hl_invalidate_blends_callbacks();
+}
+
+/// Full highlight_use_hlstate: enables hlstate and clears tables if first time.
+/// Returns true if hl tables were reset.
+#[no_mangle]
+pub unsafe extern "C" fn rs_highlight_use_hlstate_full() -> bool {
+    if !rs_highlight_use_hlstate() {
+        return false;
+    }
+    rs_clear_hl_tables_full(true);
+    true
 }
 
 /// Enable hlstate mode. Returns true if the table was reset (first time enabling).

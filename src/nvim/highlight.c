@@ -77,9 +77,6 @@ typedef struct {
 } GetAttrEntryResult;
 
 extern GetAttrEntryResult rs_get_attr_entry(HlEntry entry);
-extern void rs_clear_hl_tables(bool reinit);
-extern bool rs_highlight_use_hlstate(void);
-extern void rs_hl_invalidate_blends(void);
 
 // Cache functions
 extern int rs_combine_cache_get(int combine_tag);
@@ -176,6 +173,12 @@ int nvim_get_hlf_mc(void) { return HLF_MC; }
 int nvim_get_hlf_cul(void) { return HLF_CUL; }
 // nvim_get_highlight_attr is already defined above (line 148)
 
+// Accessors for clear_hl_tables reinit callbacks (Phase 2)
+void nvim_memset_highlight_attr_last(void) { memset(highlight_attr_last, -1, sizeof(highlight_attr_last)); }
+void nvim_call_highlight_attr_set_all(void) { highlight_attr_set_all(); }
+void nvim_call_highlight_changed(void) { highlight_changed(); }
+void nvim_call_screen_invalidate_highlights(void) { screen_invalidate_highlights(); }
+
 extern void rs_update_ns_hl(int ns_id);
 // Wrapper for update_ns_hl - calls Rust version
 void nvim_update_ns_hl(int ns_id) { rs_update_ns_hl(ns_id); }
@@ -216,17 +219,12 @@ void highlight_init(void)
   rs_highlight_init();
 }
 
+extern bool rs_highlight_use_hlstate_full(void);
+
 /// @return true if hl table was reset
-/// Rust handles the state transition, C handles clear_hl_tables callback
 bool highlight_use_hlstate(void)
 {
-  // rs_highlight_use_hlstate returns true if this is the first time enabling
-  if (!rs_highlight_use_hlstate()) {
-    return false;
-  }
-  // hl tables must now be rebuilt.
-  clear_hl_tables(true);
-  return true;
+  return rs_highlight_use_hlstate_full();
 }
 
 extern int rs_get_attr_entry_full(HlEntry entry, Arena *arena);
@@ -442,27 +440,26 @@ int hl_get_term_attr(HlAttrs *aep)
   return rs_hl_get_term_attr(aep);
 }
 
+extern void rs_clear_hl_tables_full(bool reinit);
+
 /// Clear all highlight tables.
 void clear_hl_tables(bool reinit)
 {
-  // Rust handles all attribute entry, cache, URL, and namespace storage
-  rs_clear_hl_tables(reinit);
-
-  if (reinit) {
-    memset(highlight_attr_last, -1, sizeof(highlight_attr_last));
-    highlight_attr_set_all();
-    highlight_changed();
-    screen_invalidate_highlights();
-  }
-  // Note: ns_hls destruction is now handled by Rust in rs_clear_hl_tables
+  rs_clear_hl_tables_full(reinit);
 }
+
+// Callback for rs_hl_invalidate_blends_full - runs after blend caches are cleared
+void nvim_hl_invalidate_blends_callbacks(void)
+{
+  highlight_changed();
+  update_window_hl(curwin, true);
+}
+
+extern void rs_hl_invalidate_blends_full(void);
 
 void hl_invalidate_blends(void)
 {
-  // Rust handles blend cache management
-  rs_hl_invalidate_blends();
-  highlight_changed();
-  update_window_hl(curwin, true);
+  rs_hl_invalidate_blends_full();
 }
 
 // Combine special attributes (e.g., for spelling) with other attributes.
