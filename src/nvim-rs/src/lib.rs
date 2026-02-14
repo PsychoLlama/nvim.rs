@@ -83,6 +83,7 @@ pub use nvim_main::*;
 pub use nvim_mapping::*;
 pub use nvim_mark::*;
 pub use nvim_marktree::*;
+pub use nvim_match::*;
 pub use nvim_math::*;
 pub use nvim_mbyte::*;
 pub use nvim_memfile::*;

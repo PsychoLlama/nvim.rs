@@ -113,6 +113,7 @@ rust-test:
       -p nvim-mapping \
       -p nvim-mark \
       -p nvim-marktree \
+      -p nvim-match \
       -p nvim-math \
       -p nvim-memfile \
       -p nvim-memline \
