@@ -59,6 +59,22 @@ pub struct FoldingResult {
     pub fi_low_level: c_int,
 }
 
+/// Result struct matching C `foldinfo_T` layout.
+///
+/// Used by `fold_info()` to return fold information.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FoldInfoResult {
+    /// Line number where fold starts.
+    pub fi_lnum: LineNr,
+    /// Fold level (0 means no fold info).
+    pub fi_level: c_int,
+    /// Lowest fold level that starts in the same line.
+    pub fi_low_level: c_int,
+    /// Number of folded lines (0 if not folded).
+    pub fi_lines: LineNr,
+}
+
 // ============================================================================
 // Opaque Handle Types
 // ============================================================================
@@ -343,6 +359,34 @@ extern "C" {
 
     /// Set the pc mark (for jump list).
     fn nvim_setpcmark();
+
+    // ========================================================================
+    // Phase 3: Fold level statics and query accessors
+    // ========================================================================
+
+    /// Get the invalid_top static.
+    fn nvim_get_invalid_top() -> LineNr;
+
+    /// Get the invalid_bot static.
+    fn nvim_get_invalid_bot() -> LineNr;
+
+    /// Get the prev_lnum static.
+    fn nvim_get_prev_lnum() -> LineNr;
+
+    /// Get the prev_lnum_lvl static.
+    fn nvim_get_prev_lnum_lvl() -> c_int;
+
+    /// Get the p_fcl option value (pointer to NUL-terminated string).
+    fn nvim_get_p_fcl() -> *const c_char;
+
+    /// Call foldUpdate from Rust.
+    fn nvim_foldUpdate(wp: WinHandle, top: LineNr, bot: LineNr);
+
+    /// Get w_foldinvalid field.
+    fn nvim_win_get_foldinvalid(wp: WinHandle) -> c_int;
+
+    /// Set w_foldinvalid field.
+    fn nvim_win_set_foldinvalid(wp: WinHandle, val: c_int);
 }
 
 // ============================================================================
@@ -3392,6 +3436,124 @@ pub extern "C" fn rs_opFoldRange(
 #[no_mangle]
 pub extern "C" fn rs_foldOpenCursor() {
     fold_open_cursor_impl();
+}
+
+// ============================================================================
+// Phase 3: Fold Level Query Chain
+// ============================================================================
+
+/// Check if the folds in window "wp" are invalid and update them if needed.
+fn checkupdate_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    let foldinvalid = unsafe { nvim_win_get_foldinvalid(wp) };
+    if foldinvalid == 0 {
+        return;
+    }
+    unsafe {
+        nvim_foldUpdate(wp, 1, MAXLNUM);
+        nvim_win_set_foldinvalid(wp, 0);
+    }
+}
+
+/// Get fold level at line number "lnum" in the current window.
+///
+/// Uses cached values from the IEMS update algorithm. While updating,
+/// lines between invalid_top and invalid_bot have undefined fold level.
+fn fold_level_impl(lnum: LineNr) -> c_int {
+    let curwin = unsafe { nvim_get_curwin() };
+
+    let invalid_top = unsafe { nvim_get_invalid_top() };
+    if invalid_top == 0 {
+        checkupdate_impl(curwin);
+    } else {
+        let prev_lnum = unsafe { nvim_get_prev_lnum() };
+        let prev_lnum_lvl = unsafe { nvim_get_prev_lnum_lvl() };
+        if lnum == prev_lnum && prev_lnum_lvl >= 0 {
+            return prev_lnum_lvl;
+        }
+        let invalid_bot = unsafe { nvim_get_invalid_bot() };
+        if lnum >= invalid_top && lnum <= invalid_bot {
+            return -1;
+        }
+    }
+
+    // Return quickly when there is no folding at all in this window.
+    if !has_any_folding_impl(curwin) {
+        return 0;
+    }
+
+    fold_level_win_impl(curwin, lnum)
+}
+
+/// Count the number of lines that are folded at line number "lnum".
+///
+/// Returns fold info including fi_lines (number of folded lines, 0 if not folded).
+fn fold_info_impl(win: WinHandle, lnum: LineNr) -> FoldInfoResult {
+    let result = has_folding_win_impl(win, lnum, false);
+    if result.has_folding != 0 {
+        FoldInfoResult {
+            fi_lnum: result.fi_lnum,
+            fi_level: result.fi_level,
+            fi_low_level: result.fi_low_level,
+            fi_lines: result.last - lnum + 1,
+        }
+    } else {
+        FoldInfoResult {
+            fi_lnum: result.fi_lnum,
+            fi_level: result.fi_level,
+            fi_low_level: result.fi_low_level,
+            fi_lines: 0,
+        }
+    }
+}
+
+/// Apply 'foldclose' to all folds that don't contain the cursor.
+fn fold_check_close_impl() {
+    let p_fcl = unsafe { nvim_get_p_fcl() };
+    // p_fcl is NUL if empty
+    if p_fcl.is_null() || unsafe { *p_fcl } == 0 {
+        return;
+    }
+
+    let curwin = unsafe { nvim_get_curwin() };
+    // 'foldclose' can only be "all" right now
+    checkupdate_impl(curwin);
+
+    let gap = unsafe { nvim_win_get_folds(curwin) };
+    let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(curwin) };
+    let fdl = unsafe { nvim_win_get_p_fdl(curwin) };
+
+    if check_close_rec_impl(gap, cursor_lnum, fdl) {
+        unsafe { nvim_changed_window_setting(curwin) };
+    }
+}
+
+/// FFI export for foldLevel.
+#[no_mangle]
+pub extern "C" fn rs_foldLevel(lnum: LineNr) -> c_int {
+    fold_level_impl(lnum)
+}
+
+/// FFI export for checkupdate.
+#[no_mangle]
+pub extern "C" fn rs_checkupdate(wp: WinHandle) {
+    checkupdate_impl(wp);
+}
+
+/// FFI export for fold_info.
+///
+/// Returns a FoldInfoResult matching C foldinfo_T layout.
+#[no_mangle]
+pub extern "C" fn rs_fold_info(win: WinHandle, lnum: LineNr) -> FoldInfoResult {
+    fold_info_impl(win, lnum)
+}
+
+/// FFI export for foldCheckClose.
+#[no_mangle]
+pub extern "C" fn rs_foldCheckClose() {
+    fold_check_close_impl();
 }
 
 // ============================================================================

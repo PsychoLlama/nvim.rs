@@ -167,6 +167,11 @@ extern void rs_opFoldRange(linenr_T first_lnum, linenr_T last_lnum, int opening,
 extern void rs_foldOpenCursor(void);
 extern void rs_foldMoveRange(win_T *wp, garray_T *gap, linenr_T line1, linenr_T line2,
                              linenr_T dest);
+extern int rs_foldLevel(linenr_T lnum);
+extern void rs_checkupdate(win_T *wp);
+extern void rs_foldCheckClose(void);
+extern int rs_lineFolded(win_T *wp, linenr_T lnum);
+extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
 
 // Struct returned by rs_hasFoldingWin
 typedef struct {
@@ -272,22 +277,7 @@ bool hasFoldingWin(win_T *const win, const linenr_T lnum, linenr_T *const firstp
 /// @return  fold level at line number "lnum" in the current window.
 static int foldLevel(linenr_T lnum)
 {
-  // While updating the folds lines between invalid_top and invalid_bot have
-  // an undefined fold level.  Otherwise update the folds first.
-  if (invalid_top == 0) {
-    checkupdate(curwin);
-  } else if (lnum == prev_lnum && prev_lnum_lvl >= 0) {
-    return prev_lnum_lvl;
-  } else if (lnum >= invalid_top && lnum <= invalid_bot) {
-    return -1;
-  }
-
-  // Return quickly when there is no folding at all in this window.
-  if (!hasAnyFolding(curwin)) {
-    return 0;
-  }
-
-  return foldLevelWin(curwin, lnum);
+  return rs_foldLevel(lnum);
 }
 
 // lineFolded() {{{2
@@ -297,7 +287,7 @@ static int foldLevel(linenr_T lnum)
 ///          false if line is not folded.
 bool lineFolded(win_T *const win, const linenr_T lnum)
 {
-  return fold_info(win, lnum).fi_lines != 0;
+  return rs_lineFolded(win, lnum) != 0;
 }
 
 /// Wrapper for lineFolded for Rust FFI.
@@ -318,16 +308,7 @@ int nvim_lineFolded(win_T *wp, linenr_T lnum)
 ///                    or 0 if line is not folded.
 foldinfo_T fold_info(win_T *win, linenr_T lnum)
 {
-  foldinfo_T info;
-  linenr_T last;
-
-  if (hasFoldingWin(win, lnum, NULL, &last, false, &info)) {
-    info.fi_lines = (last - lnum + 1);
-  } else {
-    info.fi_lines = 0;
-  }
-
-  return info;
+  return rs_fold_info(win, lnum);
 }
 
 // foldmethodIsManual() {{{2
@@ -438,16 +419,7 @@ static void newFoldLevelWin(win_T *wp)
 /// Apply 'foldlevel' to all folds that don't contain the cursor.
 void foldCheckClose(void)
 {
-  if (*p_fcl == NUL) {
-    return;
-  }
-
-  // 'foldclose' can only be "all" right now
-  checkupdate(curwin);
-  if (checkCloseRec(&curwin->w_folds, curwin->w_cursor.lnum,
-                    (int)curwin->w_p_fdl)) {
-    changed_window_setting(curwin);
-  }
+  rs_foldCheckClose();
 }
 
 // checkCloseRec() {{{2
@@ -661,12 +633,7 @@ static int foldLevelWin(win_T *wp, linenr_T lnum)
 /// Check if the folds in window "wp" are invalid and update them if needed.
 static void checkupdate(win_T *wp)
 {
-  if (!wp->w_foldinvalid) {
-    return;
-  }
-
-  foldUpdate(wp, 1, (linenr_T)MAXLNUM);     // will update all
-  wp->w_foldinvalid = false;
+  rs_checkupdate(wp);
 }
 
 // setFoldRepeat() {{{2
@@ -3022,6 +2989,31 @@ int nvim_foldFind(garray_T *gap, linenr_T lnum, int *found_idx)
   int result = foldFind(gap, lnum, &fp);
   *found_idx = (int)(fp - (fold_T *)gap->ga_data);
   return result ? 1 : 0;
+}
+
+// Accessors for fold statics used by Rust (Phase 3)
+linenr_T nvim_get_invalid_top(void) { return invalid_top; }
+void nvim_set_invalid_top(linenr_T val) { invalid_top = val; }
+linenr_T nvim_get_invalid_bot(void) { return invalid_bot; }
+void nvim_set_invalid_bot(linenr_T val) { invalid_bot = val; }
+linenr_T nvim_get_prev_lnum(void) { return prev_lnum; }
+void nvim_set_prev_lnum(linenr_T val) { prev_lnum = val; }
+int nvim_get_prev_lnum_lvl(void) { return prev_lnum_lvl; }
+void nvim_set_prev_lnum_lvl(int val) { prev_lnum_lvl = val; }
+
+/// Get the p_fcl option value.
+char *nvim_get_p_fcl(void) { return p_fcl; }
+
+/// Get the disable_fold_update flag.
+int nvim_get_disable_fold_update(void) { return disable_fold_update; }
+
+/// Get the need_diff_redraw flag.
+int nvim_get_need_diff_redraw(void) { return need_diff_redraw; }
+
+/// Call foldUpdate from Rust.
+void nvim_foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
+{
+  foldUpdate(wp, top, bot);
 }
 
 // Note: nvim_win_get_p_fen is defined in window.c
