@@ -817,6 +817,86 @@ unsafe fn handle_default_match(
     true
 }
 
+// =============================================================================
+// Phase 8: showmatch — match-finding part
+// =============================================================================
+
+extern "C" {
+    fn nvim_showmatch_get_p_ri() -> c_int;
+    fn nvim_showmatch_find_and_check(
+        out_lnum: *mut c_int,
+        out_col: *mut c_int,
+        out_coladd: *mut c_int,
+    ) -> c_int;
+    fn nvim_showmatch_beep();
+}
+
+/// Scan matchpairs option, find match, and check visibility.
+///
+/// Returns 1 if a visible match was found (out_lnum/out_col/out_coladd are set),
+/// 0 if no visible match (caller should just return from showmatch).
+///
+/// # Safety
+/// All output pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_showmatch_find_match(
+    c: c_int,
+    out_lnum: *mut c_int,
+    out_col: *mut c_int,
+    out_coladd: *mut c_int,
+) -> c_int {
+    // Scan matchpairs option to see if c is one of the characters.
+    // 'matchpairs' is "x:y,x:y"
+    let mps = nvim_search_get_curbuf_b_p_mps();
+    if mps.is_null() {
+        return 0;
+    }
+
+    let w_p_rl = nvim_search_get_curwin_w_p_rl() != 0;
+    let p_ri_val = nvim_showmatch_get_p_ri() != 0;
+
+    let mut p = mps;
+    let mut found_in_mps = false;
+    while *p != 0 {
+        let ch1 = nvim_utf_ptr2char(p);
+        if ch1 == c && (w_p_rl ^ p_ri_val) {
+            found_in_mps = true;
+            break;
+        }
+        p = p.add(nvim_utfc_ptr2len(p) as usize + 1); // skip char + ':'
+        let ch2 = nvim_utf_ptr2char(p);
+        if ch2 == c && !(w_p_rl ^ p_ri_val) {
+            found_in_mps = true;
+            break;
+        }
+        p = p.add(nvim_utfc_ptr2len(p) as usize);
+        if *p == 0 {
+            return 0; // end of matchpairs, c not found
+        }
+        if *p == b',' as c_char {
+            p = p.add(1);
+        }
+    }
+
+    if !found_in_mps {
+        return 0;
+    }
+
+    // Call batch C helper for findmatch + visibility check
+    let result = nvim_showmatch_find_and_check(out_lnum, out_col, out_coladd);
+    if result == -1 {
+        // No match found, beep
+        nvim_showmatch_beep();
+        return 0;
+    }
+    if result == 0 {
+        // Match not visible
+        return 0;
+    }
+
+    1 // visible match found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

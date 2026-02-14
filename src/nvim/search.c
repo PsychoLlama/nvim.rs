@@ -183,6 +183,9 @@ extern int rs_is_zero_width(const char *pattern, size_t patternlen, bool move,
 extern int rs_search_for_exact_line(void *buf, int *pos_lnum, int *pos_col,
                                      int dir, const char *pat);
 
+// Rust FFI declaration for Phase 8
+extern int rs_showmatch_find_match(int c, int *out_lnum, int *out_col, int *out_coladd);
+
 /// Get the lastcdir static variable (accessor for Rust).
 int nvim_get_lastcdir(void)
 {
@@ -1528,52 +1531,16 @@ int check_linecomment(const char *line)
 /// @param c  char to show match for
 void showmatch(int c)
 {
-  pos_T *lpos;
-  colnr_T vcol;
   OptInt *so = curwin->w_p_so >= 0 ? &curwin->w_p_so : &p_so;
   OptInt *siso = curwin->w_p_siso >= 0 ? &curwin->w_p_siso : &p_siso;
-  char *p;
 
-  // Only show match for chars in the 'matchpairs' option.
-  // 'matchpairs' is "x:y,x:y"
-  for (p = curbuf->b_p_mps; *p != NUL; p++) {
-    if (utf_ptr2char(p) == c && (curwin->w_p_rl ^ p_ri)) {
-      break;
-    }
-    p += utfc_ptr2len(p) + 1;
-    if (utf_ptr2char(p) == c && !(curwin->w_p_rl ^ p_ri)) {
-      break;
-    }
-    p += utfc_ptr2len(p);
-    if (*p == NUL) {
-      return;
-    }
-  }
-  if (*p == NUL) {
+  // Rust handles: matchpairs scanning, findmatch, visibility check
+  int match_lnum, match_col, match_coladd;
+  if (!rs_showmatch_find_match(c, &match_lnum, &match_col, &match_coladd)) {
     return;
   }
 
-  if ((lpos = findmatch(NULL, NUL)) == NULL) {  // no match, so beep
-    vim_beep(kOptBoFlagShowmatch);
-    return;
-  }
-
-  if (lpos->lnum < curwin->w_topline || lpos->lnum >= curwin->w_botline) {
-    return;
-  }
-
-  if (!curwin->w_p_wrap) {
-    getvcol(curwin, lpos, NULL, &vcol, NULL);
-  }
-
-  bool col_visible = curwin->w_p_wrap
-                     || (vcol >= curwin->w_leftcol
-                         && vcol < curwin->w_leftcol + curwin->w_view_width);
-  if (!col_visible) {
-    return;
-  }
-
-  pos_T mpos = *lpos;  // save the pos, update_screen() may change it
+  pos_T mpos = { match_lnum, match_col, match_coladd };
   pos_T save_cursor = curwin->w_cursor;
   OptInt save_so = *so;
   OptInt save_siso = *siso;
@@ -4466,6 +4433,54 @@ int nvim_shortmess_search(void)
 void nvim_give_search_wrap_warning(int at_top)
 {
   give_warning(_(at_top ? top_bot_msg : bot_top_msg), true);
+}
+
+// =============================================================================
+// Phase 8: showmatch accessors
+// =============================================================================
+
+/// Get p_ri option (reverse insert).
+int nvim_showmatch_get_p_ri(void)
+{
+  return p_ri ? 1 : 0;
+}
+
+/// Call findmatch(NULL, NUL) and check if the match is visible.
+/// Returns: -1 = no match pair found (beep), 0 = match not visible, 1 = visible.
+/// On success (1), out_lnum/out_col/out_coladd are set.
+int nvim_showmatch_find_and_check(int *out_lnum, int *out_col, int *out_coladd)
+{
+  pos_T *lpos = findmatch(NULL, NUL);
+  if (lpos == NULL) {
+    return -1;  // no match
+  }
+
+  if (lpos->lnum < curwin->w_topline || lpos->lnum >= curwin->w_botline) {
+    return 0;  // not visible vertically
+  }
+
+  colnr_T vcol = 0;
+  if (!curwin->w_p_wrap) {
+    getvcol(curwin, lpos, NULL, &vcol, NULL);
+  }
+
+  bool col_visible = curwin->w_p_wrap
+                     || (vcol >= curwin->w_leftcol
+                         && vcol < curwin->w_leftcol + curwin->w_view_width);
+  if (!col_visible) {
+    return 0;  // not visible horizontally
+  }
+
+  *out_lnum = lpos->lnum;
+  *out_col = lpos->col;
+  *out_coladd = lpos->coladd;
+  return 1;
+}
+
+/// Beep for showmatch.
+void nvim_showmatch_beep(void)
+{
+  vim_beep(kOptBoFlagShowmatch);
 }
 
 // Phase 4: find_pattern_in_path constants
