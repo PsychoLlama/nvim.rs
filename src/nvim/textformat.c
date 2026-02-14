@@ -58,6 +58,7 @@ extern void rs_auto_format(int trailblank, int prev_line);
 extern void rs_check_auto_format(int end_insert);
 extern int rs_fex_format(linenr_T lnum, long count, int c);
 extern void rs_format_lines(linenr_T line_count, int avoid_fex);
+extern void rs_internal_format(int textwidth, int second_indent, int flags, int format_only, int c);
 
 /// C accessor for curbuf->b_p_fo (formatoptions).
 char *nvim_get_curbuf_b_p_fo(void)
@@ -441,6 +442,81 @@ int nvim_textfmt_get_expr_indent(void)
 }
 
 // =============================================================================
+// C Accessor Functions for internal_format (Phase 3)
+// =============================================================================
+
+_Static_assert(OPENLINE_DELSPACES == 0x01, "");
+_Static_assert(OPENLINE_DO_COM == 0x02, "");
+_Static_assert(OPENLINE_KEEPTRAIL == 0x04, "");
+_Static_assert(OPENLINE_MARKFIX == 0x08, "");
+_Static_assert(OPENLINE_COM_LIST == 0x10, "");
+_Static_assert(OPENLINE_FORMAT == 0x20, "");
+_Static_assert(FORWARD == 1, "");
+_Static_assert(VREPLACE_FLAG == 0x200, "");
+_Static_assert(UPD_VALID == 10, "");
+_Static_assert(INDENT_SET == 1, "");
+
+/// Call pchar_cursor (accessor for Rust).
+void nvim_textfmt_pchar_cursor(int c)
+{
+  pchar_cursor((char)c);
+}
+
+/// Call undisplay_dollar (accessor for Rust).
+void nvim_textfmt_undisplay_dollar(void)
+{
+  undisplay_dollar();
+}
+
+/// Call backspace_until_column (accessor for Rust).
+void nvim_textfmt_backspace_until_column(int col)
+{
+  backspace_until_column(col);
+}
+
+/// Call open_line (accessor for Rust).
+bool nvim_textfmt_open_line(int dir, int flags, int indent, bool *did_do_comment)
+{
+  return open_line(dir, flags, indent, did_do_comment);
+}
+
+/// Set replace_offset (accessor for Rust).
+void nvim_textfmt_set_replace_offset(int val)
+{
+  replace_offset = val;
+}
+
+/// Check utf_allow_break (accessor for Rust).
+bool nvim_textfmt_utf_allow_break(int cc, int ncc)
+{
+  return utf_allow_break(cc, ncc);
+}
+
+/// Check utf_allow_break_before (accessor for Rust).
+bool nvim_textfmt_utf_allow_break_before(int cc)
+{
+  return utf_allow_break_before(cc);
+}
+
+/// Get curwin->w_p_lbr (accessor for Rust).
+int nvim_textfmt_get_curwin_w_p_lbr(void)
+{
+  return curwin->w_p_lbr;
+}
+
+/// Set curwin->w_p_lbr (accessor for Rust).
+void nvim_textfmt_set_curwin_w_p_lbr(int val)
+{
+  curwin->w_p_lbr = val;
+}
+
+/// Get cursor position remaining length (accessor for Rust).
+int nvim_textfmt_get_cursor_pos_len(void)
+{
+  return get_cursor_pos_len();
+}
+
+// =============================================================================
 // C Accessor Functions for Auto-format (Phase T4)
 // =============================================================================
 
@@ -569,392 +645,7 @@ bool has_format_option(int x)
 /// @param c  character to be inserted (can be NUL)
 void internal_format(int textwidth, int second_indent, int flags, bool format_only, int c)
 {
-  int cc;
-  char save_char = NUL;
-  bool haveto_redraw = false;
-  const bool fo_ins_blank = has_format_option(FO_INS_BLANK);
-  const bool fo_multibyte = has_format_option(FO_MBYTE_BREAK);
-  const bool fo_rigor_tw = has_format_option(FO_RIGOROUS_TW);
-  const bool fo_white_par = has_format_option(FO_WHITE_PAR);
-  bool first_line = true;
-  colnr_T leader_len;
-  bool no_leader = false;
-  bool do_comments = (flags & INSCHAR_DO_COM);
-  int has_lbr = curwin->w_p_lbr;
-
-  // make sure win_charsize() counts correctly
-  curwin->w_p_lbr = false;
-
-  // When 'ai' is off we don't want a space under the cursor to be
-  // deleted.  Replace it with an 'x' temporarily.
-  if (!curbuf->b_p_ai && !(State & VREPLACE_FLAG)) {
-    cc = gchar_cursor();
-    if (ascii_iswhite(cc)) {
-      save_char = (char)cc;
-      pchar_cursor('x');
-    }
-  }
-
-  // Repeat breaking lines, until the current line is not too long.
-  while (!got_int) {
-    int startcol;                       // Cursor column at entry
-    int wantcol;                        // column at textwidth border
-    int foundcol;                       // column for start of spaces
-    int end_foundcol = 0;               // column for start of word
-    int orig_col = 0;
-    char *saved_text = NULL;
-    colnr_T col;
-    bool did_do_comment = false;
-
-    colnr_T virtcol = get_nolist_virtcol() + char2cells(c != NUL ? c : gchar_cursor());
-    if (virtcol <= (colnr_T)textwidth) {
-      break;
-    }
-
-    if (no_leader) {
-      do_comments = false;
-    } else if (!(flags & INSCHAR_FORMAT)
-               && has_format_option(FO_WRAP_COMS)) {
-      do_comments = true;
-    }
-
-    // Don't break until after the comment leader
-    if (do_comments) {
-      char *line = get_cursor_line_ptr();
-      leader_len = get_leader_len(line, NULL, false, true);
-      if (leader_len == 0 && curbuf->b_p_cin) {
-        // Check for a line comment after code.
-        int comment_start = check_linecomment(line);
-        if (comment_start != MAXCOL) {
-          leader_len = get_leader_len(line + comment_start, NULL, false, true);
-          if (leader_len != 0) {
-            leader_len += comment_start;
-          }
-        }
-      }
-    } else {
-      leader_len = 0;
-    }
-
-    // If the line doesn't start with a comment leader, then don't
-    // start one in a following broken line.  Avoids that a %word
-    // moved to the start of the next line causes all following lines
-    // to start with %.
-    if (leader_len == 0) {
-      no_leader = true;
-    }
-    if (!(flags & INSCHAR_FORMAT)
-        && leader_len == 0
-        && !has_format_option(FO_WRAP)) {
-      break;
-    }
-    if ((startcol = curwin->w_cursor.col) == 0) {
-      break;
-    }
-
-    // find column of textwidth border
-    coladvance(curwin, (colnr_T)textwidth);
-    wantcol = curwin->w_cursor.col;
-
-    curwin->w_cursor.col = startcol;
-    foundcol = 0;
-    int skip_pos = 0;
-
-    // Find position to break at.
-    // Stop at first entered white when 'formatoptions' has 'v'
-    while ((!fo_ins_blank && !has_format_option(FO_INS_VI))
-           || (flags & INSCHAR_FORMAT)
-           || curwin->w_cursor.lnum != Insstart.lnum
-           || curwin->w_cursor.col >= Insstart.col) {
-      if (curwin->w_cursor.col == startcol && c != NUL) {
-        cc = c;
-      } else {
-        cc = gchar_cursor();
-      }
-      if (WHITECHAR(cc)) {
-        // remember position of blank just before text
-        colnr_T end_col = curwin->w_cursor.col;
-
-        // find start of sequence of blanks
-        int wcc = 0;  // counter for whitespace chars
-        while (curwin->w_cursor.col > 0 && WHITECHAR(cc)) {
-          dec_cursor();
-          cc = gchar_cursor();
-
-          // Increment count of how many whitespace chars in this
-          // group; we only need to know if it's more than one.
-          if (wcc < 2) {
-            wcc++;
-          }
-        }
-        if (curwin->w_cursor.col == 0 && WHITECHAR(cc)) {
-          break;                        // only spaces in front of text
-        }
-
-        // Don't break after a period when 'formatoptions' has 'p' and
-        // there are less than two spaces.
-        if (has_format_option(FO_PERIOD_ABBR) && cc == '.' && wcc < 2) {
-          continue;
-        }
-
-        // Don't break until after the comment leader
-        if (curwin->w_cursor.col < leader_len) {
-          break;
-        }
-
-        if (has_format_option(FO_ONE_LETTER)) {
-          // do not break after one-letter words
-          if (curwin->w_cursor.col == 0) {
-            break;              // one-letter word at begin
-          }
-          // do not break "#a b" when 'tw' is 2
-          if (curwin->w_cursor.col <= leader_len) {
-            break;
-          }
-          col = curwin->w_cursor.col;
-          dec_cursor();
-          cc = gchar_cursor();
-
-          if (WHITECHAR(cc)) {
-            continue;                   // one-letter, continue
-          }
-          curwin->w_cursor.col = col;
-        }
-
-        inc_cursor();
-
-        end_foundcol = end_col + 1;
-        foundcol = curwin->w_cursor.col;
-        if (curwin->w_cursor.col <= (colnr_T)wantcol) {
-          break;
-        }
-      } else if ((cc >= 0x100 || !utf_allow_break_before(cc)) && fo_multibyte) {
-        int ncc;
-        bool allow_break;
-
-        // Break after or before a multi-byte character.
-        if (curwin->w_cursor.col != startcol) {
-          // Don't break until after the comment leader
-          if (curwin->w_cursor.col < leader_len) {
-            break;
-          }
-          col = curwin->w_cursor.col;
-          inc_cursor();
-          ncc = gchar_cursor();
-          allow_break = utf_allow_break(cc, ncc);
-
-          // If we have already checked this position, skip!
-          if (curwin->w_cursor.col != skip_pos && allow_break) {
-            foundcol = curwin->w_cursor.col;
-            end_foundcol = foundcol;
-            if (curwin->w_cursor.col <= (colnr_T)wantcol) {
-              break;
-            }
-          }
-          curwin->w_cursor.col = col;
-        }
-
-        if (curwin->w_cursor.col == 0) {
-          break;
-        }
-
-        ncc = cc;
-        col = curwin->w_cursor.col;
-
-        dec_cursor();
-        cc = gchar_cursor();
-
-        if (WHITECHAR(cc)) {
-          continue;                     // break with space
-        }
-        // Don't break until after the comment leader.
-        if (curwin->w_cursor.col < leader_len) {
-          break;
-        }
-
-        curwin->w_cursor.col = col;
-        skip_pos = curwin->w_cursor.col;
-
-        allow_break = utf_allow_break(cc, ncc);
-
-        // Must handle this to respect line break prohibition.
-        if (allow_break) {
-          foundcol = curwin->w_cursor.col;
-          end_foundcol = foundcol;
-        }
-        if (curwin->w_cursor.col <= (colnr_T)wantcol) {
-          const bool ncc_allow_break = utf_allow_break_before(ncc);
-
-          if (allow_break) {
-            break;
-          }
-          if (!ncc_allow_break && !fo_rigor_tw) {
-            // Enable at most 1 punct hang outside of textwidth.
-            if (curwin->w_cursor.col == startcol) {
-              // We are inserting a non-breakable char, postpone
-              // line break check to next insert.
-              end_foundcol = foundcol = 0;
-              break;
-            }
-
-            // Neither cc nor ncc is NUL if we are here, so
-            // it's safe to inc_cursor.
-            col = curwin->w_cursor.col;
-
-            inc_cursor();
-            cc = ncc;
-            ncc = gchar_cursor();
-            // handle insert
-            ncc = (ncc != NUL) ? ncc : c;
-
-            allow_break = utf_allow_break(cc, ncc);
-
-            if (allow_break) {
-              // Break only when we are not at end of line.
-              end_foundcol = foundcol = ncc == NUL ? 0 : curwin->w_cursor.col;
-              break;
-            }
-            curwin->w_cursor.col = col;
-          }
-        }
-      }
-      if (curwin->w_cursor.col == 0) {
-        break;
-      }
-      dec_cursor();
-    }
-
-    if (foundcol == 0) {                // no spaces, cannot break line
-      curwin->w_cursor.col = startcol;
-      break;
-    }
-
-    // Going to break the line, remove any "$" now.
-    undisplay_dollar();
-
-    // Offset between cursor position and line break is used by replace
-    // stack functions.  MODE_VREPLACE does not use this, and backspaces
-    // over the text instead.
-    if (State & VREPLACE_FLAG) {
-      orig_col = startcol;              // Will start backspacing from here
-    } else {
-      replace_offset = startcol - end_foundcol;
-    }
-
-    // adjust startcol for spaces that will be deleted and
-    // characters that will remain on top line
-    curwin->w_cursor.col = foundcol;
-    while ((cc = gchar_cursor(), WHITECHAR(cc))
-           && (!fo_white_par || curwin->w_cursor.col < startcol)) {
-      inc_cursor();
-    }
-    startcol -= curwin->w_cursor.col;
-    startcol = MAX(startcol, 0);
-
-    if (State & VREPLACE_FLAG) {
-      // In MODE_VREPLACE state, we will backspace over the text to be
-      // wrapped, so save a copy now to put on the next line.
-      saved_text = xstrnsave(get_cursor_pos_ptr(), (size_t)get_cursor_pos_len());
-      curwin->w_cursor.col = orig_col;
-      saved_text[startcol] = NUL;
-
-      // Backspace over characters that will move to the next line
-      if (!fo_white_par) {
-        backspace_until_column(foundcol);
-      }
-    } else {
-      // put cursor after pos. to break line
-      if (!fo_white_par) {
-        curwin->w_cursor.col = foundcol;
-      }
-    }
-
-    // Split the line just before the margin.
-    // Only insert/delete lines, but don't really redraw the window.
-    open_line(FORWARD, OPENLINE_DELSPACES + OPENLINE_MARKFIX
-              + (fo_white_par ? OPENLINE_KEEPTRAIL : 0)
-              + (do_comments ? OPENLINE_DO_COM : 0)
-              + OPENLINE_FORMAT
-              + ((flags & INSCHAR_COM_LIST) ? OPENLINE_COM_LIST : 0),
-              ((flags & INSCHAR_COM_LIST) ? second_indent : old_indent),
-              &did_do_comment);
-    if (!(flags & INSCHAR_COM_LIST)) {
-      old_indent = 0;
-    }
-
-    // If a comment leader was inserted, may also do this on a following
-    // line.
-    if (did_do_comment) {
-      no_leader = false;
-    }
-
-    replace_offset = 0;
-    if (first_line) {
-      if (!(flags & INSCHAR_COM_LIST)) {
-        // This section is for auto-wrap of numeric lists.  When not
-        // in insert mode (i.e. format_lines()), the INSCHAR_COM_LIST
-        // flag will be set and open_line() will handle it (as seen
-        // above).  The code here (and in get_number_indent()) will
-        // recognize comments if needed...
-        if (second_indent < 0 && has_format_option(FO_Q_NUMBER)) {
-          second_indent = get_number_indent(curwin->w_cursor.lnum - 1);
-        }
-        if (second_indent >= 0) {
-          if (State & VREPLACE_FLAG) {
-            change_indent(INDENT_SET, second_indent, false, true);
-          } else if (leader_len > 0 && second_indent - leader_len > 0) {
-            int padding = second_indent - leader_len;
-
-            // We started at the first_line of a numbered list
-            // that has a comment.  the open_line() function has
-            // inserted the proper comment leader and positioned
-            // the cursor at the end of the split line.  Now we
-            // add the additional whitespace needed after the
-            // comment leader for the numbered list.
-            for (int i = 0; i < padding; i++) {
-              ins_str(S_LEN(" "));
-            }
-          } else {
-            set_indent(second_indent, SIN_CHANGED);
-          }
-        }
-      }
-      first_line = false;
-    }
-
-    if (State & VREPLACE_FLAG) {
-      // In MODE_VREPLACE state we have backspaced over the text to be
-      // moved, now we re-insert it into the new line.
-      ins_bytes(saved_text);
-      xfree(saved_text);
-    } else {
-      // Check if cursor is not past the NUL off the line, cindent
-      // may have added or removed indent.
-      curwin->w_cursor.col += startcol;
-      colnr_T len = get_cursor_line_len();
-      curwin->w_cursor.col = MIN(curwin->w_cursor.col, len);
-    }
-
-    haveto_redraw = true;
-    set_can_cindent(true);
-    // moved the cursor, don't autoindent or cindent now
-    did_ai = false;
-    did_si = false;
-    can_si = false;
-    can_si_back = false;
-    line_breakcheck();
-  }
-
-  if (save_char != NUL) {               // put back space after cursor
-    pchar_cursor(save_char);
-  }
-
-  curwin->w_p_lbr = has_lbr;
-
-  if (!format_only && haveto_redraw) {
-    update_topline(curwin);
-    redraw_curbuf_later(UPD_VALID);
-  }
+  rs_internal_format(textwidth, second_indent, flags, format_only, c);
 }
 
 /// Blank lines, and lines containing only the comment leader, are left

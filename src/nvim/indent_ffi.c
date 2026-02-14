@@ -143,6 +143,7 @@ void nvim_shift_line(bool left, bool round, int amount, int call_changed_bytes)
   shift_line(left, round, amount, call_changed_bytes);
 }
 
+int nvim_get_old_indent(void) { return old_indent; }
 void nvim_set_old_indent(int val) { old_indent = val; }
 
 extern void rs_change_indent(int type, int amount, int round, bool call_changed_bytes);
