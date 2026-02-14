@@ -99,6 +99,12 @@ extern void rs_decor_free_inner(void *vt, uint32_t first_idx);
 extern void rs_decor_free(int ext, void *vt, uint32_t sh_idx);
 extern void rs_decor_check_to_be_deleted(void);
 
+// Rust implementations for Phase 3
+extern bool rs_decor_redraw_reset(void *wp, void *state);
+extern void rs_decor_state_pack(void *state);
+extern void rs_decor_redraw_line(void *wp, int row, void *state);
+extern bool rs_decor_has_more_decorations(void *state, int row);
+
 /// Add highlighting to a buffer, bounded by two cursor positions,
 /// with an offset.
 ///
@@ -397,33 +403,7 @@ next_mark:
 
 bool decor_redraw_reset(win_T *wp, DecorState *state)
 {
-  state->row = -1;
-  state->win = wp;
-
-  int *const indices = state->ranges_i.items;
-  DecorRangeSlot *const slots = state->slots.items;
-
-  int const beg_pos[] = { 0, state->future_begin };
-  int const end_pos[] = { state->current_end, (int)kv_size(state->ranges_i) };
-
-  for (int pos_i = 0; pos_i < 2; pos_i++) {
-    for (int i = beg_pos[pos_i]; i < end_pos[pos_i]; i++) {
-      DecorRange *const r = &slots[indices[i]].range;
-      if (r->owned && r->kind == kDecorKindVirtText) {
-        clear_virttext(&r->data.vt->data.virt_text);
-        xfree(r->data.vt);
-      }
-    }
-  }
-
-  kv_size(state->slots) = 0;
-  kv_size(state->ranges_i) = 0;
-  state->free_slot_i = -1;
-  state->current_end = 0;
-  state->future_begin = 0;
-  state->new_range_ordering = 0;
-
-  return wp->w_buffer->b_marktree->n_keys;
+  return rs_decor_redraw_reset(wp, state);
 }
 
 /// @return true if decor has a virtual position (virtual text or ui_watched)
@@ -464,51 +444,18 @@ bool decor_redraw_start(win_T *wp, int top_row, DecorState *state)
 
 static void decor_state_pack(DecorState *state)
 {
-  int count = (int)kv_size(state->ranges_i);
-  int const cur_end = state->current_end;
-  int fut_beg = state->future_begin;
-
-  // Move future ranges to start right after current ranges.
-  // Otherwise future ranges will grow forward indefinitely.
-  if (fut_beg == count) {
-    fut_beg = count = cur_end;
-  } else if (fut_beg != cur_end) {
-    int *const indices = state->ranges_i.items;
-    memmove(indices + cur_end, indices + fut_beg, (size_t)(count - fut_beg) * sizeof(indices[0]));
-
-    count = cur_end + (count - fut_beg);
-    fut_beg = cur_end;
-  }
-
-  kv_size(state->ranges_i) = (size_t)count;
-  state->future_begin = fut_beg;
+  rs_decor_state_pack(state);
 }
 
 void decor_redraw_line(win_T *wp, int row, DecorState *state)
 {
-  decor_state_pack(state);
-
-  if (state->row == -1) {
-    decor_redraw_start(wp, row, state);
-  } else if (!state->itr_valid) {
-    marktree_itr_get(wp->w_buffer->b_marktree, row, 0, state->itr);
-    state->itr_valid = true;
-  }
-
-  state->row = row;
-  state->col_until = -1;
-  state->eol_col = -1;
+  rs_decor_redraw_line(wp, row, state);
 }
 
 // Checks if there are (likely) more decorations on the current line.
 bool decor_has_more_decorations(DecorState *state, int row)
 {
-  if (state->current_end != 0 || state->future_begin != (int)kv_size(state->ranges_i)) {
-    return true;
-  }
-
-  MTKey k = marktree_itr_current(state->itr);
-  return (k.pos.row >= 0 && k.pos.row <= row);
+  return rs_decor_has_more_decorations(state, row);
 }
 
 static void decor_range_add_from_inline(DecorState *state, int start_row, int start_col,
@@ -1533,6 +1480,122 @@ void nvim_decor_items_clear_url(uint32_t idx)
 void nvim_decor_vt_copy_to(void *dst, void *src, size_t size)
 {
   memcpy(dst, src, size);
+}
+
+// ============================================================================
+// Phase 3: DecorState Reset and Line Setup accessors
+// ============================================================================
+
+/// Set decor_state.row.
+void nvim_decor_state_set_row(void *state_ptr, int val)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  state->row = val;
+}
+
+/// Set decor_state.col_until.
+void nvim_decor_state_set_col_until(void *state_ptr, int val)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  state->col_until = val;
+}
+
+/// Set decor_state.current_end.
+void nvim_decor_state_set_current_end(void *state_ptr, int val)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  state->current_end = val;
+}
+
+/// Set decor_state.future_begin.
+void nvim_decor_state_set_future_begin(void *state_ptr, int val)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  state->future_begin = val;
+}
+
+/// Set decor_state.new_range_ordering.
+void nvim_decor_state_set_new_range_ordering(void *state_ptr, int val)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  state->new_range_ordering = val;
+}
+
+/// Set decor_state.free_slot_i.
+void nvim_decor_state_set_free_slot_i(void *state_ptr, int val)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  state->free_slot_i = val;
+}
+
+/// Set kv_size(decor_state.slots).
+void nvim_decor_state_set_slots_size(void *state_ptr, int val)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  kv_size(state->slots) = (size_t)val;
+}
+
+/// Set kv_size(decor_state.ranges_i).
+void nvim_decor_state_set_ranges_i_size(void *state_ptr, int val)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  kv_size(state->ranges_i) = (size_t)val;
+}
+
+/// Memmove within decor_state.ranges_i.items.
+/// Moves count elements from src_idx to dst_idx.
+void nvim_decor_state_ranges_i_memmove(void *state_ptr, int dst_idx, int src_idx, int count)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  int *const indices = state->ranges_i.items;
+  memmove(indices + dst_idx, indices + src_idx, (size_t)count * sizeof(indices[0]));
+}
+
+/// Free owned ranges in decor_state between [beg, end).
+/// For each owned VirtText range, clears the virt_text data and frees the DecorVirtText.
+void nvim_decor_state_free_owned_ranges(void *state_ptr, int beg, int end)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  int *const indices = state->ranges_i.items;
+  DecorRangeSlot *const slots = state->slots.items;
+
+  for (int i = beg; i < end; i++) {
+    DecorRange *const r = &slots[indices[i]].range;
+    if (r->owned && r->kind == kDecorKindVirtText) {
+      clear_virttext(&r->data.vt->data.virt_text);
+      xfree(r->data.vt);
+    }
+  }
+}
+
+/// Get buf->b_marktree->n_keys.
+int nvim_buf_get_marktree_n_keys(void *buf_ptr)
+{
+  buf_T *buf = (buf_T *)buf_ptr;
+  return (int)buf->b_marktree->n_keys;
+}
+
+/// Get buffer from window: wp->w_buffer.
+void *nvim_decor_win_get_buffer(void *wp_ptr)
+{
+  win_T *wp = (win_T *)wp_ptr;
+  return wp->w_buffer;
+}
+
+/// Get the row from marktree_itr_current on decor_state.itr.
+int nvim_decor_state_itr_current_row(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  MTKey k = marktree_itr_current(state->itr);
+  return k.pos.row;
+}
+
+/// Call marktree_itr_get on decor_state.itr using the buffer's marktree.
+void nvim_decor_state_itr_get(void *state_ptr, void *buf_ptr, int row, int col)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  buf_T *buf = (buf_T *)buf_ptr;
+  marktree_itr_get(buf->b_marktree, row, col, state->itr);
 }
 
 /// Get the row from decor_state.

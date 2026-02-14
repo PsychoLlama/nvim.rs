@@ -47,6 +47,28 @@ extern "C" {
     fn nvim_decor_range_get_virt_text(range: DecorRangeHandle) -> crate::DecorVirtTextHandle;
     fn nvim_decor_virt_text_get_width(vt: crate::DecorVirtTextHandle) -> c_int;
 
+    // Phase 3 accessors
+    fn nvim_decor_state_set_row(state: DecorStateHandle, val: c_int);
+    fn nvim_decor_state_set_col_until(state: DecorStateHandle, val: c_int);
+    fn nvim_decor_state_set_current_end(state: DecorStateHandle, val: c_int);
+    fn nvim_decor_state_set_future_begin(state: DecorStateHandle, val: c_int);
+    fn nvim_decor_state_set_new_range_ordering(state: DecorStateHandle, val: c_int);
+    fn nvim_decor_state_set_free_slot_i(state: DecorStateHandle, val: c_int);
+    fn nvim_decor_state_set_slots_size(state: DecorStateHandle, val: c_int);
+    fn nvim_decor_state_set_ranges_i_size(state: DecorStateHandle, val: c_int);
+    fn nvim_decor_state_ranges_i_memmove(
+        state: DecorStateHandle,
+        dst_idx: c_int,
+        src_idx: c_int,
+        count: c_int,
+    );
+    fn nvim_decor_state_free_owned_ranges(state: DecorStateHandle, beg: c_int, end: c_int);
+    fn nvim_buf_get_marktree_n_keys(buf: BufHandle) -> c_int;
+    fn nvim_decor_win_get_buffer(wp: WinHandle) -> BufHandle;
+    fn nvim_decor_state_itr_current_row(state: DecorStateHandle) -> c_int;
+    fn nvim_decor_state_itr_get(state: DecorStateHandle, buf: BufHandle, row: c_int, col: c_int);
+    fn nvim_decor_state_get_itr_valid(state: DecorStateHandle) -> c_int;
+
     // C functions for decor operations
     fn decor_redraw_start(wp: WinHandle, top_row: c_int, state: DecorStateHandle) -> bool;
 }
@@ -162,27 +184,135 @@ pub unsafe extern "C" fn rs_redraw_line_state_reset(state: *mut RedrawLineState,
 // Redraw Line Functions
 // =============================================================================
 
-/// Check if there are more decorations on the current row.
+// =============================================================================
+// Phase 3: DecorState Reset and Line Setup
+// =============================================================================
+
+/// Reset decoration redraw state for a new window redraw pass.
 ///
-/// This checks both active and future ranges to determine if redraw
-/// should continue processing decorations.
+/// Frees owned ranges, resets all state fields, and returns whether the
+/// buffer's marktree has any keys.
+///
+/// Rust implementation of `decor_redraw_reset()`.
 #[no_mangle]
-pub extern "C" fn rs_decor_has_more_decorations(state: DecorStateHandle, _row: c_int) -> c_int {
+pub extern "C" fn rs_decor_redraw_reset(wp: WinHandle, state: DecorStateHandle) -> bool {
+    if state.is_null() || wp.is_null() {
+        return false;
+    }
+
+    unsafe {
+        nvim_decor_state_set_row(state, -1);
+        nvim_decor_state_set_win(state, wp);
+
+        let current_end = nvim_decor_state_get_current_end(state);
+        let future_begin = nvim_decor_state_get_future_begin(state);
+        let ranges_count = nvim_decor_state_get_ranges_count(state);
+
+        // Free owned ranges in [0, current_end) and [future_begin, count)
+        nvim_decor_state_free_owned_ranges(state, 0, current_end);
+        nvim_decor_state_free_owned_ranges(state, future_begin, ranges_count);
+
+        // Reset kvec sizes and state fields
+        nvim_decor_state_set_slots_size(state, 0);
+        nvim_decor_state_set_ranges_i_size(state, 0);
+        nvim_decor_state_set_free_slot_i(state, -1);
+        nvim_decor_state_set_current_end(state, 0);
+        nvim_decor_state_set_future_begin(state, 0);
+        nvim_decor_state_set_new_range_ordering(state, 0);
+
+        let buf = nvim_decor_win_get_buffer(wp);
+        nvim_buf_get_marktree_n_keys(buf) != 0
+    }
+}
+
+/// Compact the ranges_i array by closing the gap between current_end and future_begin.
+///
+/// Moves future ranges to start right after current ranges to prevent
+/// indefinite forward growth.
+///
+/// Rust implementation of `decor_state_pack()`.
+#[no_mangle]
+pub extern "C" fn rs_decor_state_pack(state: DecorStateHandle) {
     if state.is_null() {
-        return 0;
+        return;
     }
 
-    let current_end = unsafe { nvim_decor_state_get_current_end(state) };
-    let future_begin = unsafe { nvim_decor_state_get_future_begin(state) };
-    let ranges_count = unsafe { nvim_decor_state_get_ranges_count(state) };
+    unsafe {
+        let mut count = nvim_decor_state_get_ranges_count(state);
+        let cur_end = nvim_decor_state_get_current_end(state);
+        let mut fut_beg = nvim_decor_state_get_future_begin(state);
 
-    // If there are active or pending ranges
-    if current_end != 0 || future_begin != ranges_count {
-        return 1;
+        // Move future ranges to start right after current ranges.
+        // Otherwise future ranges will grow forward indefinitely.
+        if fut_beg == count {
+            count = cur_end;
+            fut_beg = cur_end;
+        } else if fut_beg != cur_end {
+            let move_count = count - fut_beg;
+            nvim_decor_state_ranges_i_memmove(state, cur_end, fut_beg, move_count);
+            count = cur_end + move_count;
+            fut_beg = cur_end;
+        }
+
+        nvim_decor_state_set_ranges_i_size(state, count);
+        nvim_decor_state_set_future_begin(state, fut_beg);
+    }
+}
+
+/// Per-line decoration redraw setup.
+///
+/// Packs the ranges_i array, optionally starts the marktree scan,
+/// and sets row/col_until/eol_col.
+///
+/// Rust implementation of `decor_redraw_line()`.
+#[no_mangle]
+pub extern "C" fn rs_decor_redraw_line(wp: WinHandle, row: c_int, state: DecorStateHandle) {
+    if state.is_null() || wp.is_null() {
+        return;
     }
 
-    // Check marktree iterator (handled by C caller)
-    0
+    unsafe {
+        rs_decor_state_pack(state);
+
+        let cur_row = nvim_decor_state_get_row(state);
+        if cur_row == -1 {
+            decor_redraw_start(wp, row, state);
+        } else if nvim_decor_state_get_itr_valid(state) == 0 {
+            let buf = nvim_decor_win_get_buffer(wp);
+            nvim_decor_state_itr_get(state, buf, row, 0);
+            nvim_decor_state_set_itr_valid(state, 1);
+        }
+
+        nvim_decor_state_set_row(state, row);
+        nvim_decor_state_set_col_until(state, -1);
+        nvim_decor_state_set_eol_col(state, -1);
+    }
+}
+
+/// Check if there are (likely) more decorations on the current line.
+///
+/// Checks active ranges, future ranges, and the marktree iterator position.
+///
+/// Rust implementation of `decor_has_more_decorations()`.
+#[no_mangle]
+pub extern "C" fn rs_decor_has_more_decorations(state: DecorStateHandle, row: c_int) -> bool {
+    if state.is_null() {
+        return false;
+    }
+
+    unsafe {
+        let current_end = nvim_decor_state_get_current_end(state);
+        let future_begin = nvim_decor_state_get_future_begin(state);
+        let ranges_count = nvim_decor_state_get_ranges_count(state);
+
+        if current_end != 0 || future_begin != ranges_count {
+            return true;
+        }
+
+        // Check marktree iterator position
+        let itr_row = nvim_decor_state_itr_current_row(state);
+        itr_row >= 0 && itr_row <= row
+    }
 }
 
 /// Calculate EOL virtual text widths for the current row.
