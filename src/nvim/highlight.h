@@ -109,6 +109,12 @@ EXTERN int *hl_attr_active INIT( = highlight_attr);
 // Enums need a typecast to be used as array index.
 #define HL_ATTR(n)      hl_attr_active[(int)(n)]
 
+// Result type for the Lua callback bridge (used by Rust FFI)
+typedef struct {
+  Object ret;
+  bool is_recursive;
+} NsGetHlLuaResult;
+
 #include "highlight.h.generated.h"
 
 static inline int win_hl_attr(win_T *wp, int hlf)

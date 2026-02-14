@@ -240,41 +240,19 @@ void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) 
   rs_ns_hl_def(ns_id, hl_id, attrs, link_id);
 }
 
-// Wrapper for ns_get_hl callable from Rust
-// nodefault is sg_set flags in this context
-int c_ns_get_hl(int *ns_id, int hl_id, bool link, int nodefault)
-{
-  NS ns = *ns_id;
-  int result = ns_get_hl(&ns, hl_id, link, nodefault);
-  *ns_id = ns;
-  return result;
-}
-
-int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
+// C bridge for ns_get_hl Lua callback.
+// Handles recursion guard, DecorProvider lookup, args building, and nlua_call_ref.
+NsGetHlLuaResult c_ns_get_hl_lua_call(int ns_id, int hl_id, bool link)
 {
   static int recursive = 0;
+  NsGetHlLuaResult result = { .ret = NIL, .is_recursive = false };
 
-  // Pre-callback phase: check cache, resolve namespace
-  NsGetHlPreResult pre = rs_ns_get_hl_pre(*ns_hl, hl_id, link, nodefault);
-  *ns_hl = pre.ns_id;
-
-  // If no callback needed, return the result directly
-  if (!pre.need_callback) {
-    if (pre.set_ns_to_zero) {
-      *ns_hl = 0;
-    }
-    return pre.result;
-  }
-
-  // Lua callback phase - only runs if cache miss and callback is defined
   if (recursive) {
-    // Avoid infinite recursion
-    return -1;
+    result.is_recursive = true;
+    return result;
   }
 
-  int ns_id = pre.ns_id;
   DecorProvider *p = get_decor_provider(ns_id, true);
-  ColorItem it = pre.item;
 
   MAXSIZE_TEMP_ARRAY(args, 3);
   ADD_C(args, INTEGER_OBJ((Integer)ns_id));
@@ -283,34 +261,17 @@ int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
 
   Error err = ERROR_INIT;
   recursive++;
-  Object ret = nlua_call_ref(p->hl_def, "hl_def", args, kRetObject, NULL, &err);
+  result.ret = nlua_call_ref(p->hl_def, "hl_def", args, kRetObject, NULL, &err);
   recursive--;
 
-  // Parse Lua callback result
-  bool fallback = true;
-  int tmp = false;
-  HlAttrs attrs = HLATTRS_INIT;
-  int link_id = it.link_id;
-  if (ret.type == kObjectTypeDict) {
-    fallback = false;
-    Dict(highlight) dict = KEYDICT_INIT;
-    if (api_dict_to_keydict(&dict, KeyDict_highlight_get_field, ret.data.dict, &err)) {
-      attrs = dict2hlattrs(&dict, true, &link_id, &err);
-      fallback = GET_BOOL_OR_TRUE(&dict, highlight, fallback);
-      tmp = dict.fallback;  // or false
-      if (link_id >= 0) {
-        fallback = true;
-      }
-    }
-  }
+  return result;
+}
 
-  // Post-callback phase: store result and compute final return value
-  NsGetHlPreResult post = rs_ns_get_hl_post(ns_id, hl_id, attrs, link_id,
-                                            fallback, tmp, link, nodefault);
-  if (post.set_ns_to_zero) {
-    *ns_hl = 0;
-  }
-  return post.result;
+extern int rs_ns_get_hl_full(NS *ns_hl, int hl_id, bool link, bool nodefault);
+
+int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
+{
+  return rs_ns_get_hl_full(ns_hl, hl_id, link, nodefault);
 }
 
 bool hl_check_ns(void)

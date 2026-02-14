@@ -1024,6 +1024,19 @@ pub struct NsGetHlPreResult {
     pub item: ColorItem,
 }
 
+/// Result from C bridge `c_ns_get_hl_lua_call()`.
+#[repr(C)]
+pub struct NsGetHlLuaResult {
+    pub ret: Object,
+    pub is_recursive: bool,
+}
+
+extern "C" {
+    /// C bridge for Lua callback in ns_get_hl.
+    /// Handles recursion guard, DecorProvider lookup, args building, and nlua_call_ref.
+    fn c_ns_get_hl_lua_call(ns_id: c_int, hl_id: c_int, link: bool) -> NsGetHlLuaResult;
+}
+
 /// Pre-callback phase of ns_get_hl().
 /// Checks if we have a valid cached entry or need to call Lua.
 ///
@@ -1199,6 +1212,83 @@ fn compute_ns_get_hl_result(
             item: *item,
         }
     }
+}
+
+/// Full implementation of ns_get_hl: pre + Lua callback + parse + post.
+///
+/// This replaces the old C ns_get_hl function body. The Lua callback is
+/// dispatched through a C bridge (`c_ns_get_hl_lua_call`), but all other
+/// logic (cache check, dict parsing, result storage) is in Rust.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ns_get_hl_full(
+    ns_hl: *mut c_int,
+    hl_id: c_int,
+    link: bool,
+    nodefault: bool,
+) -> c_int {
+    // Pre-callback phase: check cache, resolve namespace
+    let pre = rs_ns_get_hl_pre(*ns_hl, hl_id, link, nodefault);
+    *ns_hl = pre.ns_id;
+
+    // If no callback needed, return the result directly
+    if !pre.need_callback {
+        if pre.set_ns_to_zero {
+            *ns_hl = 0;
+        }
+        return pre.result;
+    }
+
+    // Lua callback phase via C bridge
+    let lua_result = c_ns_get_hl_lua_call(pre.ns_id, hl_id, link);
+
+    if lua_result.is_recursive {
+        return -1;
+    }
+
+    let ret = lua_result.ret;
+
+    // Parse Lua callback result
+    let mut fallback = true;
+    let mut version_offset: c_int = 0;
+    let mut attrs = HlAttrs::new();
+    let mut link_id = pre.item.link_id;
+
+    if ret.obj_type == ObjectType::Dict as c_int {
+        fallback = false;
+        let dict = ret.data.dict;
+        let mut err = Error {
+            err_type: -1,
+            msg: std::ptr::null_mut(),
+        };
+        let parsed = dict2hlattrs_impl(dict, true, true, &mut err);
+        if !error_is_set(&err) {
+            attrs = parsed.attrs;
+            link_id = parsed.link_id;
+            fallback = parsed.fallback;
+            version_offset = parsed.version_offset;
+            if parsed.link_id >= 0 {
+                fallback = true;
+            }
+        }
+    }
+
+    // Post-callback phase: store result and compute final return value
+    let post = rs_ns_get_hl_post(
+        pre.ns_id,
+        hl_id,
+        attrs,
+        link_id,
+        fallback,
+        version_offset,
+        link,
+        nodefault,
+    );
+
+    if post.set_ns_to_zero {
+        *ns_hl = 0;
+    }
+
+    post.result
 }
 
 // ============================================================================
@@ -1513,8 +1603,6 @@ pub unsafe extern "C" fn rs_syn_name2id_len(name: *const c_char, len: usize) -> 
 extern "C" {
     /// Add a new highlight group (stays in C due to Arena allocation)
     fn c_syn_add_group(name: *const c_char, len: usize) -> c_int;
-    /// Call ns_get_hl from C (handles Lua callback if needed)
-    fn c_ns_get_hl(ns_id: *mut c_int, hl_id: c_int, link: bool, nodefault: c_int) -> c_int;
 }
 
 /// Find highlight group name in the table and return its ID.
@@ -1580,7 +1668,7 @@ pub unsafe extern "C" fn rs_syn_ns_get_final_id(ns_id: *mut c_int, hl_idp: *mut 
         let sg_set = highlight_group_set(idx);
 
         // Check namespace override (link=true to get link target)
-        let check = c_ns_get_hl(ns_id, hl_id, true, sg_set);
+        let check = rs_ns_get_hl_full(ns_id, hl_id, true, sg_set != 0);
 
         if check == 0 {
             // Namespace explicitly defined this group to be empty (broke the link)
@@ -1656,7 +1744,7 @@ pub unsafe extern "C" fn rs_syn_ns_id2attr(
     let sg_set = highlight_group_set(idx);
 
     // Check namespace for attribute (link=false to get attr, not link target)
-    let attr = c_ns_get_hl(&mut ns_id, hl_id, false, sg_set);
+    let attr = rs_ns_get_hl_full(&mut ns_id, hl_id, false, sg_set != 0);
 
     // if a highlight group is optional, don't use the global value
     if attr >= 0 || (*optional && ns_id > 0) {
@@ -5214,6 +5302,9 @@ pub struct Dict2HlAttrsResult {
     pub link_id: c_int,
     pub fallback: bool,
     pub has_error: bool,
+    /// Raw value of the "fallback" key (0 if absent, 1 if explicitly true).
+    /// Used as version_offset in ns_get_hl: version = hl_valid - version_offset.
+    pub version_offset: c_int,
 }
 
 /// Helper: check if error is set
@@ -5273,6 +5364,7 @@ unsafe fn dict2hlattrs_impl(
         link_id: -1,
         fallback: true,
         has_error: false,
+        version_offset: 0,
     };
 
     let mut fg: i32 = -1;
@@ -5472,7 +5564,9 @@ unsafe fn dict2hlattrs_impl(
         // Fallback flag (used by ns_get_hl)
         else if key_eq(key, b"fallback") {
             has_fallback_key = true;
-            result.fallback = obj_get_bool(val);
+            let fb = obj_get_bool(val);
+            result.fallback = fb;
+            result.version_offset = fb as c_int;
         }
         // Ignore keys we don't handle (url, force, etc.)
     }
