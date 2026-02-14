@@ -180,6 +180,8 @@ extern void rs_nv_mousescroll(cmdarg_T *cap);
 extern void rs_ins_mouse(int c);
 extern void rs_ins_mousescroll(int dir);
 extern int rs_jump_to_mouse(int flags, bool *inclusive, int which_button);
+extern bool rs_do_mouse(oparg_T *oap, int c, int dir, int count, bool fixindent);
+extern void rs_nv_mouse(cmdarg_T *cap);
 
 /// Move the current tab to tab in same column as mouse or to end of the
 /// tabline if there is no tab there.
@@ -375,6 +377,12 @@ int nvim_do_popup_impl(int which_button, int m_pos_flag, pos_T m_pos)
 ///
 /// @return           true if start_arrow() should be called for edit mode.
 bool do_mouse(oparg_T *oap, int c, int dir, int count, bool fixindent)
+{
+  return rs_do_mouse(oap, c, dir, count, fixindent);
+}
+
+/// C accessor: the actual do_mouse logic — 619 lines touching nearly every subsystem.
+bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
 {
   int which_button;             // MOUSE_LEFT, _MIDDLE or _RIGHT
   bool is_click;                // If false it's a drag or release event
@@ -1626,6 +1634,12 @@ void nvim_nv_mousescroll_impl(cmdarg_T *cap)
 
 /// Mouse clicks and drags.
 void nv_mouse(cmdarg_T *cap)
+{
+  rs_nv_mouse(cap);
+}
+
+/// C accessor: nv_mouse logic accessing cmdarg_T fields.
+void nvim_nv_mouse_impl(cmdarg_T *cap)
 {
   do_mouse(cap->oap, cap->cmdchar, BACKWARD, cap->count1, 0);
 }

@@ -1007,6 +1007,9 @@ pub struct PosT {
 /// Opaque handle for `cmdarg_T *`
 pub type CmdargHandle = *mut std::ffi::c_void;
 
+/// Opaque handle for `oparg_T *`
+pub type OpargHandle = *mut std::ffi::c_void;
+
 // =============================================================================
 // Phase 4 — Window Find Functions
 // =============================================================================
@@ -1293,6 +1296,48 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
     which_button: c_int,
 ) -> c_int {
     nvim_jump_to_mouse_impl(flags, inclusive, which_button)
+}
+
+// =============================================================================
+// Phase 7 — do_mouse and nv_mouse
+// =============================================================================
+
+extern "C" {
+    /// C accessor: the actual `do_mouse` logic.
+    fn nvim_do_mouse_impl(
+        oap: OpargHandle,
+        c: c_int,
+        dir: c_int,
+        count: c_int,
+        fixindent: bool,
+    ) -> bool;
+
+    /// C accessor: `nv_mouse` logic accessing `cmdarg_T` fields.
+    fn nvim_nv_mouse_impl(cap: CmdargHandle);
+}
+
+/// Do the appropriate action for the current mouse click in the current mode.
+///
+/// # Safety
+/// `oap` may be null. Otherwise must be a valid `oparg_T` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_mouse(
+    oap: OpargHandle,
+    c: c_int,
+    dir: c_int,
+    count: c_int,
+    fixindent: bool,
+) -> bool {
+    nvim_do_mouse_impl(oap, c, dir, count, fixindent)
+}
+
+/// Mouse clicks and drags (Normal/Visual mode entry point).
+///
+/// # Safety
+/// `cap` must be a valid `cmdarg_T` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_mouse(cap: CmdargHandle) {
+    nvim_nv_mouse_impl(cap);
 }
 
 // =============================================================================
