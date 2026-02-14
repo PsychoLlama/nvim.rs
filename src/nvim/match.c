@@ -87,6 +87,17 @@ extern int64_t rs_match_range_include_line_bot(int64_t current_bot, int64_t lnum
 extern int rs_match_range_is_valid(int64_t top, int64_t bot);
 extern int rs_match_range_contains(int64_t top, int64_t bot, int64_t lnum);
 
+// core.rs - Core match management (Phase 1)
+extern int rs_match_add(win_T *wp, const char *grp, const char *pat,
+                        int prio, int id, const char *conceal_char);
+extern int rs_match_add_pos(win_T *wp, const char *grp, int prio, int id,
+                            const char *conceal_char,
+                            const linenr_T *lnums, const colnr_T *cols,
+                            const int *lens, int count);
+extern int rs_match_delete(win_T *wp, int id, int perr);
+extern void rs_clear_matches(win_T *wp);
+extern matchitem_T *rs_get_match(win_T *wp, int id);
+
 static const char *e_invalwindow = N_("E957: Invalid window number");
 
 // =============================================================================
@@ -217,6 +228,186 @@ llpos_T *nvim_match_alloc_positions(size_t count)
   return xcalloc(count, sizeof(llpos_T));
 }
 
+// --- Phase 1 accessors (for core.rs) ---
+
+/// Set the ID of a match item.
+void nvim_match_item_set_id(matchitem_T *m, int id)
+{
+  if (m != NULL) {
+    m->mit_id = id;
+  }
+}
+
+/// Set the priority of a match item.
+void nvim_match_item_set_priority(matchitem_T *m, int priority)
+{
+  if (m != NULL) {
+    m->mit_priority = priority;
+  }
+}
+
+/// Set the pattern of a match item (xstrdup).
+void nvim_match_item_set_pattern(matchitem_T *m, const char *pat)
+{
+  if (m != NULL) {
+    m->mit_pattern = pat != NULL ? xstrdup(pat) : NULL;
+  }
+}
+
+/// Set the highlight group ID of a match item.
+void nvim_match_item_set_hlg_id(matchitem_T *m, int hlg_id)
+{
+  if (m != NULL) {
+    m->mit_hlg_id = hlg_id;
+  }
+}
+
+/// Set the conceal character of a match item.
+void nvim_match_item_set_conceal_char(matchitem_T *m, int ch)
+{
+  if (m != NULL) {
+    m->mit_conceal_char = ch;
+  }
+}
+
+/// Set the top line number for position matches.
+void nvim_match_item_set_toplnum(matchitem_T *m, linenr_T lnum)
+{
+  if (m != NULL) {
+    m->mit_toplnum = lnum;
+  }
+}
+
+/// Set the bottom line number for position matches.
+void nvim_match_item_set_botlnum(matchitem_T *m, linenr_T lnum)
+{
+  if (m != NULL) {
+    m->mit_botlnum = lnum;
+  }
+}
+
+/// Set the regprog of a match item.
+void nvim_match_item_set_regprog(matchitem_T *m, regprog_T *regprog)
+{
+  if (m != NULL) {
+    m->mit_match.regprog = regprog;
+  }
+}
+
+/// Set rmm_ic of a match item.
+void nvim_match_item_set_rmm_ic(matchitem_T *m, int ic)
+{
+  if (m != NULL) {
+    m->mit_match.rmm_ic = (bool)ic;
+  }
+}
+
+/// Set rmm_maxcol of a match item.
+void nvim_match_item_set_rmm_maxcol(matchitem_T *m, colnr_T maxcol)
+{
+  if (m != NULL) {
+    m->mit_match.rmm_maxcol = maxcol;
+  }
+}
+
+/// Set position array and count for a match item.
+void nvim_match_item_set_pos_array(matchitem_T *m, llpos_T *arr, int count)
+{
+  if (m != NULL) {
+    m->mit_pos_array = arr;
+    m->mit_pos_count = count;
+  }
+}
+
+/// Set a single position entry in a position array.
+void nvim_match_pos_set(llpos_T *arr, int idx, linenr_T lnum, colnr_T col, int len)
+{
+  if (arr != NULL && idx >= 0) {
+    arr[idx].lnum = lnum;
+    arr[idx].col = col;
+    arr[idx].len = len;
+  }
+}
+
+// --- C function wrappers for Rust to call ---
+// Names prefixed with nvim_match_ to avoid symbol conflicts with other files.
+
+/// Wrapper for syn_check_group.
+int nvim_match_syn_check_group(const char *grp, size_t len)
+{
+  return syn_check_group(grp, len);
+}
+
+/// Wrapper for vim_regcomp.
+regprog_T *nvim_match_vim_regcomp(const char *pat, int flags)
+{
+  return vim_regcomp(pat, flags);
+}
+
+/// Wrapper for utf_ptr2char.
+int nvim_match_utf_ptr2char(const char *p)
+{
+  return utf_ptr2char(p);
+}
+
+/// Wrapper for redraw_later.
+void nvim_match_redraw_later(win_T *wp, int type)
+{
+  redraw_later(wp, type);
+}
+
+/// Wrapper for redraw_win_range_later.
+void nvim_match_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot)
+{
+  redraw_win_range_later(wp, top, bot);
+}
+
+// --- Error message wrappers ---
+
+void nvim_semsg_id_taken(int64_t id)
+{
+  semsg(_("E801: ID already taken: %" PRId64), id);
+}
+
+void nvim_semsg_invalid_id(int64_t id)
+{
+  semsg(_("E799: Invalid ID: %" PRId64
+          " (must be greater than or equal to 1)"), id);
+}
+
+void nvim_semsg_invalid_delete_id(int64_t id)
+{
+  semsg(_("E802: Invalid ID: %" PRId64
+          " (must be greater than or equal to 1)"), id);
+}
+
+void nvim_semsg_id_not_found(int64_t id)
+{
+  semsg(_("E803: ID not found: %" PRId64), id);
+}
+
+void nvim_semsg_invarg2(const char *arg)
+{
+  semsg(_(e_invarg2), arg);
+}
+
+// --- Constant accessors ---
+
+int nvim_get_RE_MAGIC(void)
+{
+  return RE_MAGIC;
+}
+
+int nvim_get_UPD_SOME_VALID(void)
+{
+  return UPD_SOME_VALID;
+}
+
+int nvim_get_UPD_VALID(void)
+{
+  return UPD_VALID;
+}
+
 #define SEARCH_HL_PRIORITY 0
 
 /// Add match to the match list of window "wp".
@@ -232,169 +423,87 @@ static int match_add(win_T *wp, const char *const grp, const char *const pat, in
                      list_T *pos_list, const char *const conceal_char)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
-  int hlg_id;
-  regprog_T *regprog = NULL;
-  int rtype = UPD_SOME_VALID;
+  if (pos_list == NULL || tv_list_len(pos_list) == 0) {
+    // Pattern-based match: delegate entirely to Rust
+    return rs_match_add(wp, grp, pat, prio, id, conceal_char);
+  }
 
-  if (*grp == NUL || (pat != NULL && *pat == NUL)) {
-    return -1;
-  }
-  if (id < -1 || id == 0) {
-    semsg(_("E799: Invalid ID: %" PRId64
-            " (must be greater than or equal to 1)"),
-          (int64_t)id);
-    return -1;
-  }
-  if (id == -1) {
-    // use the next available match ID
-    id = wp->w_next_match_id++;
-  } else {
-    // check the given ID is not already in use
-    for (matchitem_T *cur = wp->w_match_head; cur != NULL; cur = cur->mit_next) {
-      if (cur->mit_id == id) {
-        semsg(_("E801: ID already taken: %" PRId64), (int64_t)id);
-        return -1;
+  // Position-based match: extract positions from VimL list, then delegate to Rust.
+  // The extraction must stay in C because it depends on typval_T / list_T types.
+  int count = tv_list_len(pos_list);
+  linenr_T *lnums = xcalloc((size_t)count, sizeof(linenr_T));
+  colnr_T *cols = xcalloc((size_t)count, sizeof(colnr_T));
+  int *lens = xcalloc((size_t)count, sizeof(int));
+
+  int actual = 0;
+  int result = -1;
+  TV_LIST_ITER(pos_list, li, {
+    linenr_T lnum = 0;
+    colnr_T col = 0;
+    int len = 1;
+    bool error = false;
+
+    if (TV_LIST_ITEM_TV(li)->v_type == VAR_LIST) {
+      const list_T *const subl = TV_LIST_ITEM_TV(li)->vval.v_list;
+      const listitem_T *subli = tv_list_first(subl);
+      if (subli == NULL) {
+        semsg(_("E5030: Empty list at position %d"),
+              (int)tv_list_idx_of_item(pos_list, li));
+        goto cleanup;
       }
-    }
-
-    // Make sure the next match ID is always higher than the highest
-    // manually selected ID.  Add some extra in case a few more IDs are
-    // added soon.
-    if (wp->w_next_match_id < id + 100) {
-      wp->w_next_match_id = id + 100;
-    }
-  }
-
-  if ((hlg_id = syn_check_group(grp, strlen(grp))) == 0) {
-    return -1;
-  }
-  if (pat != NULL && (regprog = vim_regcomp(pat, RE_MAGIC)) == NULL) {
-    semsg(_(e_invarg2), pat);
-    return -1;
-  }
-
-  // Build new match.
-  matchitem_T *m = xcalloc(1, sizeof(matchitem_T));
-  if (tv_list_len(pos_list) > 0) {
-    m->mit_pos_array = xcalloc((size_t)tv_list_len(pos_list), sizeof(llpos_T));
-    m->mit_pos_count = tv_list_len(pos_list);
-  }
-  m->mit_id = id;
-  m->mit_priority = prio;
-  m->mit_pattern = pat == NULL ? NULL : xstrdup(pat);
-  m->mit_hlg_id = hlg_id;
-  m->mit_match.regprog = regprog;
-  m->mit_match.rmm_ic = false;
-  m->mit_match.rmm_maxcol = 0;
-  m->mit_conceal_char = 0;
-  if (conceal_char != NULL) {
-    m->mit_conceal_char = utf_ptr2char(conceal_char);
-  }
-
-  // Set up position matches
-  if (pos_list != NULL) {
-    linenr_T toplnum = 0;
-    linenr_T botlnum = 0;
-
-    int i = 0;
-    TV_LIST_ITER(pos_list, li, {
-      linenr_T lnum = 0;
-      colnr_T col = 0;
-      int len = 1;
-      bool error = false;
-
-      if (TV_LIST_ITEM_TV(li)->v_type == VAR_LIST) {
-        const list_T *const subl = TV_LIST_ITEM_TV(li)->vval.v_list;
-        const listitem_T *subli = tv_list_first(subl);
-        if (subli == NULL) {
-          semsg(_("E5030: Empty list at position %d"),
-                (int)tv_list_idx_of_item(pos_list, li));
-          goto fail;
-        }
-        lnum = (linenr_T)tv_get_number_chk(TV_LIST_ITEM_TV(subli), &error);
+      lnum = (linenr_T)tv_get_number_chk(TV_LIST_ITEM_TV(subli), &error);
+      if (error) {
+        goto cleanup;
+      }
+      if (lnum <= 0) {
+        continue;
+      }
+      subli = TV_LIST_ITEM_NEXT(subl, subli);
+      if (subli != NULL) {
+        col = (colnr_T)tv_get_number_chk(TV_LIST_ITEM_TV(subli), &error);
         if (error) {
-          goto fail;
+          goto cleanup;
         }
-        if (lnum <= 0) {
+        if (col < 0) {
           continue;
         }
-        m->mit_pos_array[i].lnum = lnum;
         subli = TV_LIST_ITEM_NEXT(subl, subli);
         if (subli != NULL) {
-          col = (colnr_T)tv_get_number_chk(TV_LIST_ITEM_TV(subli), &error);
-          if (error) {
-            goto fail;
-          }
-          if (col < 0) {
+          len = (colnr_T)tv_get_number_chk(TV_LIST_ITEM_TV(subli), &error);
+          if (len < 0) {
             continue;
           }
-          subli = TV_LIST_ITEM_NEXT(subl, subli);
-          if (subli != NULL) {
-            len = (colnr_T)tv_get_number_chk(TV_LIST_ITEM_TV(subli), &error);
-            if (len < 0) {
-              continue;
-            }
-            if (error) {
-              goto fail;
-            }
+          if (error) {
+            goto cleanup;
           }
         }
-        m->mit_pos_array[i].col = col;
-        m->mit_pos_array[i].len = len;
-      } else if (TV_LIST_ITEM_TV(li)->v_type == VAR_NUMBER) {
-        if (TV_LIST_ITEM_TV(li)->vval.v_number <= 0) {
-          continue;
-        }
-        m->mit_pos_array[i].lnum = (linenr_T)TV_LIST_ITEM_TV(li)->vval.v_number;
-        m->mit_pos_array[i].col = 0;
-        m->mit_pos_array[i].len = 0;
-      } else {
-        semsg(_("E5031: List or number required at position %d"),
-              (int)tv_list_idx_of_item(pos_list, li));
-        goto fail;
       }
-      if (toplnum == 0 || lnum < toplnum) {
-        toplnum = lnum;
+    } else if (TV_LIST_ITEM_TV(li)->v_type == VAR_NUMBER) {
+      if (TV_LIST_ITEM_TV(li)->vval.v_number <= 0) {
+        continue;
       }
-      if (botlnum == 0 || lnum >= botlnum) {
-        botlnum = lnum + 1;
-      }
-      i++;
-    });
-
-    // Calculate top and bottom lines for redrawing area
-    if (toplnum != 0) {
-      redraw_win_range_later(wp, toplnum, botlnum);
-      m->mit_toplnum = toplnum;
-      m->mit_botlnum = botlnum;
-      rtype = UPD_VALID;
+      lnum = (linenr_T)TV_LIST_ITEM_TV(li)->vval.v_number;
+      col = 0;
+      len = 0;
+    } else {
+      semsg(_("E5031: List or number required at position %d"),
+            (int)tv_list_idx_of_item(pos_list, li));
+      goto cleanup;
     }
-  }
+    lnums[actual] = lnum;
+    cols[actual] = col;
+    lens[actual] = len;
+    actual++;
+  });
 
-  // Insert new match.  The match list is in ascending order with regard to
-  // the match priorities.
-  matchitem_T *cur = wp->w_match_head;
-  matchitem_T *prev = cur;
-  while (cur != NULL && prio >= cur->mit_priority) {
-    prev = cur;
-    cur = cur->mit_next;
-  }
-  if (cur == prev) {
-    wp->w_match_head = m;
-  } else {
-    prev->mit_next = m;
-  }
-  m->mit_next = cur;
+  result = rs_match_add_pos(wp, grp, prio, id, conceal_char,
+                            lnums, cols, lens, actual);
 
-  redraw_later(wp, rtype);
-  return id;
-
-fail:
-  vim_regfree(regprog);
-  xfree(m->mit_pattern);
-  xfree(m->mit_pos_array);
-  xfree(m);
-  return -1;
+cleanup:
+  xfree(lnums);
+  xfree(cols);
+  xfree(lens);
+  return result;
 }
 
 /// Delete match with ID 'id' in the match list of window 'wp'.
@@ -402,68 +511,20 @@ fail:
 /// @param perr  print error messages if true.
 static int match_delete(win_T *wp, int id, bool perr)
 {
-  matchitem_T *cur = wp->w_match_head;
-  matchitem_T *prev = cur;
-  int rtype = UPD_SOME_VALID;
-
-  if (id < 1) {
-    if (perr) {
-      semsg(_("E802: Invalid ID: %" PRId64 " (must be greater than or equal to 1)"),
-            (int64_t)id);
-    }
-    return -1;
-  }
-  while (cur != NULL && cur->mit_id != id) {
-    prev = cur;
-    cur = cur->mit_next;
-  }
-  if (cur == NULL) {
-    if (perr) {
-      semsg(_("E803: ID not found: %" PRId64), (int64_t)id);
-    }
-    return -1;
-  }
-  if (cur == prev) {
-    wp->w_match_head = cur->mit_next;
-  } else {
-    prev->mit_next = cur->mit_next;
-  }
-  vim_regfree(cur->mit_match.regprog);
-  xfree(cur->mit_pattern);
-  if (cur->mit_toplnum != 0) {
-    redraw_win_range_later(wp, cur->mit_toplnum, cur->mit_botlnum);
-    rtype = UPD_VALID;
-  }
-  xfree(cur->mit_pos_array);
-  xfree(cur);
-  redraw_later(wp, rtype);
-  return 0;
+  return rs_match_delete(wp, id, (int)perr);
 }
 
 /// Delete all matches in the match list of window 'wp'.
 void clear_matches(win_T *wp)
 {
-  while (wp->w_match_head != NULL) {
-    matchitem_T *m = wp->w_match_head->mit_next;
-    vim_regfree(wp->w_match_head->mit_match.regprog);
-    xfree(wp->w_match_head->mit_pattern);
-    xfree(wp->w_match_head->mit_pos_array);
-    xfree(wp->w_match_head);
-    wp->w_match_head = m;
-  }
-  redraw_later(wp, UPD_SOME_VALID);
+  rs_clear_matches(wp);
 }
 
 /// Get match from ID 'id' in window 'wp'.
 /// Return NULL if match not found.
 static matchitem_T *get_match(win_T *wp, int id)
 {
-  matchitem_T *cur = wp->w_match_head;
-
-  while (cur != NULL && cur->mit_id != id) {
-    cur = cur->mit_next;
-  }
-  return cur;
+  return rs_get_match(wp, id);
 }
 
 /// Init for calling prepare_search_hl().

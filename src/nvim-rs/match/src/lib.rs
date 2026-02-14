@@ -9,6 +9,7 @@
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod add;
+pub mod core;
 pub mod delete;
 pub mod display;
 pub mod id;
