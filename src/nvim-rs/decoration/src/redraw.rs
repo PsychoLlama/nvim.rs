@@ -3,13 +3,13 @@
 //! This module contains Rust implementations for decoration redraw operations
 //! during line rendering, migrated from `src/nvim/decoration.c`.
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
-use crate::decor::DECOR_ID_INVALID;
+use crate::decor::{range_end_before, DECOR_ID_INVALID, KSH_CONCEAL, KSH_SPELL_OFF, KSH_SPELL_ON};
 use crate::range::DecorVtHandle;
 use crate::{
-    DecorKind, DecorRangeHandle, DecorStateHandle, VirtTextPos, WinHandle, DRAW_COL_JUST_ADDED,
-    DRAW_COL_UNSET, KVT_IS_LINES, KVT_LINES_ABOVE,
+    DecorKind, DecorRangeHandle, DecorStateHandle, ScharT, VirtTextPos, WinHandle,
+    DRAW_COL_JUST_ADDED, DRAW_COL_UNSET, KVT_IS_LINES, KVT_LINES_ABOVE,
 };
 
 /// Opaque handle to buf_T.
@@ -820,6 +820,200 @@ pub extern "C" fn rs_range_iterator_current(
         return DecorRangeHandle(std::ptr::null_mut());
     }
     unsafe { nvim_decor_state_get_range(state, iter.index) }
+}
+
+// =============================================================================
+// Phase 6: Core Column Rendering
+// =============================================================================
+
+/// Result from the C marktree advance + future-to-active promotion.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DecorColAdvanceResult {
+    pub col_until: c_int,
+    pub cur_end: c_int,
+    pub fut_beg: c_int,
+    pub count: c_int,
+}
+
+/// Flat view of a DecorRange, returned by batch accessor.
+/// All fields needed by the attribute computation loop in one FFI call.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct DecorRangeFlatView {
+    pub start_row: c_int,
+    pub start_col: c_int,
+    pub end_row: c_int,
+    pub end_col: c_int,
+    pub attr_id: c_int,
+    pub draw_col: c_int,
+    pub ordering: c_int,
+    pub priority_internal: u32,
+    pub kind: u8,
+    pub owned: bool,
+    pub sh_flags: u16,
+    pub sh_text0: ScharT,
+    pub sh_url: *const c_char,
+    pub has_virt_pos: bool,
+    pub slot_index: c_int,
+}
+
+extern "C" {
+    // Phase 6: C helpers
+    fn nvim_decor_col_advance(
+        wp: WinHandle,
+        col: c_int,
+        state: DecorStateHandle,
+    ) -> DecorColAdvanceResult;
+
+    fn nvim_decor_state_get_range_flat(state: DecorStateHandle, i: c_int) -> DecorRangeFlatView;
+
+    fn nvim_decor_col_retire_range(state: DecorStateHandle, slot_index: c_int);
+
+    fn nvim_decor_state_set_ranges_i_at(state: DecorStateHandle, pos: c_int, value: c_int);
+
+    fn nvim_decor_col_update_state(
+        state: DecorStateHandle,
+        col_until: c_int,
+        cur_end: c_int,
+        fut_beg: c_int,
+        count: c_int,
+        attr: c_int,
+        conceal: c_int,
+        conceal_char: ScharT,
+        conceal_attr: c_int,
+        spell: c_int,
+    );
+
+    fn nvim_decor_hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
+    fn nvim_hl_add_url(attr: c_int, url: *const c_char) -> c_int;
+    fn nvim_decor_col_init_draw_col(
+        state: DecorStateHandle,
+        slot_index: c_int,
+        win_col: c_int,
+        hidden: bool,
+    );
+}
+
+/// TriState values matching C enum: kNone = -1, kFalse = 0, kTrue = 1
+const KNONE: c_int = -1;
+const KTRUE: c_int = 1;
+const KFALSE: c_int = 0;
+
+/// Core column rendering implementation.
+///
+/// This is the hot-path function called for each column during line rendering.
+/// It:
+/// 1. Advances the marktree iterator and promotes future ranges (via C helper)
+/// 2. Computes highlight, conceal, and spell attributes for active ranges
+/// 3. Retires expired ranges
+/// 4. Updates DecorState output fields
+///
+/// Rust implementation of `decor_redraw_col_impl()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_redraw_col_impl(
+    wp: WinHandle,
+    col: c_int,
+    win_col: c_int,
+    hidden: bool,
+    state: DecorStateHandle,
+) -> c_int {
+    // Part 1: Advance marktree + promote future ranges (done in C)
+    let adv = nvim_decor_col_advance(wp, col, state);
+    let mut col_until = adv.col_until;
+    let cur_end = adv.cur_end;
+    let fut_beg = adv.fut_beg;
+    let count = adv.count;
+
+    let row = nvim_decor_state_get_row(state);
+
+    // Part 2: Attribute computation loop
+    let mut new_cur_end: c_int = 0;
+    let mut attr: c_int = 0;
+    let mut conceal: c_int = 0;
+    let mut conceal_char: ScharT = 0;
+    let mut conceal_attr: c_int = 0;
+    let mut spell: c_int = KNONE;
+
+    for i in 0..cur_end {
+        let v = nvim_decor_state_get_range_flat(state, i);
+
+        let keep;
+        if range_end_before(v.end_row, v.end_col, row, col) {
+            keep = v.start_row >= row && v.has_virt_pos;
+        } else {
+            keep = true;
+
+            if v.end_row == row && v.end_col > col {
+                col_until = col_until.min(v.end_col - 1);
+            }
+
+            if v.attr_id > 0 {
+                attr = nvim_decor_hl_combine_attr(attr, v.attr_id);
+            }
+
+            if v.kind == DecorKind::Highlight as u8 && (v.sh_flags & KSH_CONCEAL != 0) {
+                conceal = 1;
+                if v.start_row == row && v.start_col == col {
+                    conceal = 2;
+                    conceal_char = v.sh_text0;
+                    col_until = col_until.min(v.start_col);
+                    conceal_attr = v.attr_id;
+                }
+            }
+
+            if v.kind == DecorKind::Highlight as u8 {
+                if v.sh_flags & KSH_SPELL_ON != 0 {
+                    spell = KTRUE;
+                } else if v.sh_flags & KSH_SPELL_OFF != 0 {
+                    spell = KFALSE;
+                }
+                if !v.sh_url.is_null() {
+                    attr = nvim_hl_add_url(attr, v.sh_url);
+                }
+            }
+        }
+
+        if v.start_row == row
+            && v.start_col <= col
+            && v.has_virt_pos
+            && v.draw_col == DRAW_COL_JUST_ADDED
+        {
+            nvim_decor_col_init_draw_col(state, v.slot_index, win_col, hidden);
+        }
+
+        if keep {
+            nvim_decor_state_set_ranges_i_at(state, new_cur_end, v.slot_index);
+            new_cur_end += 1;
+        } else {
+            nvim_decor_col_retire_range(state, v.slot_index);
+        }
+    }
+
+    let final_cur_end = new_cur_end;
+    let mut final_fut_beg = fut_beg;
+    let mut final_count = count;
+
+    if final_fut_beg == final_count {
+        final_fut_beg = final_cur_end;
+        final_count = final_cur_end;
+    }
+
+    // Part 3: Update state
+    nvim_decor_col_update_state(
+        state,
+        col_until,
+        final_cur_end,
+        final_fut_beg,
+        final_count,
+        attr,
+        conceal,
+        conceal_char,
+        conceal_attr,
+        spell,
+    );
+
+    attr
 }
 
 // =============================================================================

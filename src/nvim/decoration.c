@@ -131,6 +131,9 @@ extern void rs_buf_decor_remove(void *buf, int row1, int row2, int col1,
                                 int hl_hl_id, uint32_t hl_conceal_char,
                                 bool do_free);
 
+// Rust implementations for Phase 6
+extern int rs_decor_redraw_col_impl(void *wp, int col, int win_col, bool hidden, void *state);
+
 /// Add highlighting to a buffer, bounded by two cursor positions,
 /// with an offset.
 ///
@@ -543,166 +546,7 @@ void decor_recheck_draw_col(int win_col, bool hidden, DecorState *state)
 
 int decor_redraw_col_impl(win_T *wp, int col, int win_col, bool hidden, DecorState *state)
 {
-  buf_T *const buf = wp->w_buffer;
-  int const row = state->row;
-  int col_until = MAXCOL;
-
-  while (true) {
-    // TODO(bfredl): check duplicate entry in "intersection"
-    // branch
-    MTKey mark = marktree_itr_current(state->itr);
-    if (mark.pos.row < 0 || mark.pos.row > row) {
-      break;
-    } else if (mark.pos.row == row && mark.pos.col > col) {
-      col_until = mark.pos.col - 1;
-      break;
-    }
-
-    if (mt_invalid(mark) || mt_end(mark) || !mt_decor_any(mark) || !ns_in_win(mark.ns, wp)) {
-      goto next_mark;
-    }
-
-    MTPos endpos = marktree_get_altpos(buf->b_marktree, mark, NULL);
-    decor_range_add_from_inline(state, mark.pos.row, mark.pos.col, endpos.row, endpos.col,
-                                mt_decor(mark), false, mark.ns, mark.id);
-
-next_mark:
-    marktree_itr_next(buf->b_marktree, state->itr);
-  }
-
-  int *const indices = state->ranges_i.items;
-  DecorRangeSlot *const slots = state->slots.items;
-
-  int count = (int)kv_size(state->ranges_i);
-  int cur_end = state->current_end;
-  int fut_beg = state->future_begin;
-
-  // Promote future ranges before the cursor to active.
-  for (; fut_beg < count; fut_beg++) {
-    int const index = indices[fut_beg];
-    DecorRange *const r = &slots[index].range;
-    if (r->start_row > row || (r->start_row == row && r->start_col > col)) {
-      break;
-    }
-    int const ordering = r->ordering;
-    DecorPriorityInternal const priority = r->priority_internal;
-
-    int begin = 0;
-    int end = cur_end;
-    while (begin < end) {
-      int mid = begin + ((end - begin) >> 1);
-      int mi = indices[mid];
-      DecorRange *mr = &slots[mi].range;
-      if (mr->priority_internal < priority
-          || (mr->priority_internal == priority && mr->ordering < ordering)) {
-        begin = mid + 1;
-      } else {
-        end = mid;
-      }
-    }
-
-    int *const item = indices + begin;
-    memmove(item + 1, item, (size_t)(cur_end - begin) * sizeof(*item));
-    *item = index;
-    cur_end++;
-  }
-
-  if (fut_beg < count) {
-    DecorRange *r = &slots[indices[fut_beg]].range;
-    if (r->start_row == row) {
-      col_until = MIN(col_until, r->start_col - 1);
-    }
-  }
-
-  int new_cur_end = 0;
-
-  int attr = 0;
-  int conceal = 0;
-  schar_T conceal_char = 0;
-  int conceal_attr = 0;
-  TriState spell = kNone;
-
-  for (int i = 0; i < cur_end; i++) {
-    int const index = indices[i];
-    DecorRangeSlot *const slot = slots + index;
-    DecorRange *const r = &slot->range;
-
-    bool keep;
-    if (rs_range_end_before(r->end_row, r->end_col, row, col)) {
-      keep = r->start_row >= row && decor_virt_pos(r);
-    } else {
-      keep = true;
-
-      if (r->end_row == row && r->end_col > col) {
-        col_until = MIN(col_until, r->end_col - 1);
-      }
-
-      if (r->attr_id > 0) {
-        attr = hl_combine_attr(attr, r->attr_id);
-      }
-
-      if (rs_decor_kind_is_highlight(r->kind) && rs_sh_is_conceal(r->data.sh.flags)) {
-        conceal = 1;
-        if (r->start_row == row && r->start_col == col) {
-          DecorSignHighlight *sh = &r->data.sh;
-          conceal = 2;
-          conceal_char = sh->text[0];
-          col_until = MIN(col_until, r->start_col);
-          conceal_attr = r->attr_id;
-        }
-      }
-
-      if (rs_decor_kind_is_highlight(r->kind)) {
-        if (rs_sh_is_spell_on(r->data.sh.flags)) {
-          spell = kTrue;
-        } else if (rs_sh_is_spell_off(r->data.sh.flags)) {
-          spell = kFalse;
-        }
-        if (r->data.sh.url != NULL) {
-          attr = hl_add_url(attr, r->data.sh.url);
-        }
-      }
-    }
-
-    if (r->start_row == row && r->start_col <= col
-        && decor_virt_pos(r) && rs_draw_col_is_just_added(r->draw_col)) {
-      decor_init_draw_col(win_col, hidden, r);
-    }
-
-    if (keep) {
-      indices[new_cur_end++] = index;
-    } else {
-      if (r->owned) {
-        if (rs_decor_kind_is_virt(r->kind)) {
-          clear_virttext(&r->data.vt->data.virt_text);
-          xfree(r->data.vt);
-        } else if (rs_decor_kind_is_highlight(r->kind)) {
-          xfree((void *)r->data.sh.url);
-        }
-      }
-
-      int *fi = &state->free_slot_i;
-      slot->next_free_i = *fi;
-      *fi = index;
-    }
-  }
-  cur_end = new_cur_end;
-
-  if (fut_beg == count) {
-    fut_beg = count = cur_end;
-  }
-
-  kv_size(state->ranges_i) = (size_t)count;
-  state->future_begin = fut_beg;
-  state->current_end = cur_end;
-  state->col_until = col_until;
-
-  state->current = attr;
-  state->conceal = conceal;
-  state->conceal_char = conceal_char;
-  state->conceal_attr = conceal_attr;
-  state->spell = spell;
-  return attr;
+  return rs_decor_redraw_col_impl(wp, col, win_col, hidden, state);
 }
 
 static const uint32_t conceal_filter[kMTMetaCount] = {[kMTMetaConcealLines] = kMTFilterSelect };
@@ -2219,4 +2063,191 @@ int nvim_decor_sh_get_sign_add_id(DecorSignHighlight *sh)
 uint16_t nvim_decor_type_flags(DecorInlineData data, bool ext)
 {
   return decor_type_flags((DecorInline){ .ext = ext, .data = data });
+}
+
+// ============================================================================
+// Phase 6: Core Column Rendering helpers
+// ============================================================================
+
+/// Advance the marktree iterator and promote future ranges to active.
+///
+/// This handles the first two loops of decor_redraw_col_impl:
+/// 1. Marktree iteration: advance iterator, add inline decorations
+/// 2. Future-to-active promotion: binary search insertion of promoted ranges
+///
+/// Returns updated state via DecorColAdvanceResult.
+DecorColAdvanceResult nvim_decor_col_advance(win_T *wp, int col, DecorState *state)
+{
+  buf_T *const buf = wp->w_buffer;
+  int const row = state->row;
+  int col_until = MAXCOL;
+
+  // Part 1: Advance marktree iterator, adding inline decorations
+  while (true) {
+    MTKey mark = marktree_itr_current(state->itr);
+    if (mark.pos.row < 0 || mark.pos.row > row) {
+      break;
+    } else if (mark.pos.row == row && mark.pos.col > col) {
+      col_until = mark.pos.col - 1;
+      break;
+    }
+
+    if (mt_invalid(mark) || mt_end(mark) || !mt_decor_any(mark) || !ns_in_win(mark.ns, wp)) {
+      goto next_mark;
+    }
+
+    MTPos endpos = marktree_get_altpos(buf->b_marktree, mark, NULL);
+    decor_range_add_from_inline(state, mark.pos.row, mark.pos.col, endpos.row, endpos.col,
+                                mt_decor(mark), false, mark.ns, mark.id);
+
+next_mark:
+    marktree_itr_next(buf->b_marktree, state->itr);
+  }
+
+  int *const indices = state->ranges_i.items;
+  DecorRangeSlot *const slots = state->slots.items;
+
+  int count = (int)kv_size(state->ranges_i);
+  int cur_end = state->current_end;
+  int fut_beg = state->future_begin;
+
+  // Part 2: Promote future ranges before the cursor to active.
+  for (; fut_beg < count; fut_beg++) {
+    int const index = indices[fut_beg];
+    DecorRange *const r = &slots[index].range;
+    if (r->start_row > row || (r->start_row == row && r->start_col > col)) {
+      break;
+    }
+    int const ordering = r->ordering;
+    DecorPriorityInternal const priority = r->priority_internal;
+
+    int begin = 0;
+    int end = cur_end;
+    while (begin < end) {
+      int mid = begin + ((end - begin) >> 1);
+      int mi = indices[mid];
+      DecorRange *mr = &slots[mi].range;
+      if (mr->priority_internal < priority
+          || (mr->priority_internal == priority && mr->ordering < ordering)) {
+        begin = mid + 1;
+      } else {
+        end = mid;
+      }
+    }
+
+    int *const item = indices + begin;
+    memmove(item + 1, item, (size_t)(cur_end - begin) * sizeof(*item));
+    *item = index;
+    cur_end++;
+  }
+
+  if (fut_beg < count) {
+    DecorRange *r = &slots[indices[fut_beg]].range;
+    if (r->start_row == row) {
+      col_until = MIN(col_until, r->start_col - 1);
+    }
+  }
+
+  return (DecorColAdvanceResult){
+    .col_until = col_until,
+    .cur_end = cur_end,
+    .fut_beg = fut_beg,
+    .count = count,
+  };
+}
+
+/// Get a flat view of the i-th active range.
+/// Returns all fields in one FFI call to minimize overhead.
+DecorRangeFlatView nvim_decor_state_get_range_flat(void *state_ptr, int i)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  int const index = kv_A(state->ranges_i, i);
+  DecorRangeSlot *const slot = &kv_A(state->slots, index);
+  DecorRange *const r = &slot->range;
+
+  DecorRangeFlatView view = {
+    .start_row = r->start_row,
+    .start_col = r->start_col,
+    .end_row = r->end_row,
+    .end_col = r->end_col,
+    .attr_id = r->attr_id,
+    .draw_col = r->draw_col,
+    .ordering = r->ordering,
+    .priority_internal = r->priority_internal,
+    .kind = r->kind,
+    .owned = r->owned,
+    .sh_flags = (r->kind == kDecorKindHighlight) ? r->data.sh.flags : 0,
+    .sh_text0 = (r->kind == kDecorKindHighlight) ? r->data.sh.text[0] : 0,
+    .sh_url = (r->kind == kDecorKindHighlight) ? r->data.sh.url : NULL,
+    .has_virt_pos = decor_virt_pos(r),
+    .slot_index = index,
+  };
+
+  return view;
+}
+
+/// Retire a range: free owned data and return slot to freelist.
+/// Called by Rust for each range that is no longer active.
+void nvim_decor_col_retire_range(void *state_ptr, int slot_index)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  DecorRangeSlot *const slot = &kv_A(state->slots, slot_index);
+  DecorRange *const r = &slot->range;
+
+  if (r->owned) {
+    if (r->kind == kDecorKindVirtText || r->kind == kDecorKindVirtLines) {
+      clear_virttext(&r->data.vt->data.virt_text);
+      xfree(r->data.vt);
+    } else if (r->kind == kDecorKindHighlight) {
+      xfree((void *)r->data.sh.url);
+    }
+  }
+
+  slot->next_free_i = state->free_slot_i;
+  state->free_slot_i = slot_index;
+}
+
+/// Write back an index into the ranges_i array.
+void nvim_decor_state_set_ranges_i_at(void *state_ptr, int pos, int value)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  kv_A(state->ranges_i, pos) = value;
+}
+
+/// Update DecorState output fields after attribute computation.
+void nvim_decor_col_update_state(void *state_ptr, int col_until, int cur_end,
+                                 int fut_beg, int count,
+                                 int attr, int conceal, schar_T conceal_char,
+                                 int conceal_attr, int spell)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  kv_size(state->ranges_i) = (size_t)count;
+  state->future_begin = fut_beg;
+  state->current_end = cur_end;
+  state->col_until = col_until;
+  state->current = attr;
+  state->conceal = conceal;
+  state->conceal_char = conceal_char;
+  state->conceal_attr = conceal_attr;
+  state->spell = spell;
+}
+
+/// Wrapper for hl_combine_attr for Rust FFI.
+int nvim_decor_hl_combine_attr(int char_attr, int prim_attr)
+{
+  return hl_combine_attr(char_attr, prim_attr);
+}
+
+/// Wrapper for hl_add_url for Rust FFI.
+int nvim_hl_add_url(int attr, const char *url)
+{
+  return hl_add_url(attr, url);
+}
+
+/// Call decor_init_draw_col on a range identified by slot index.
+void nvim_decor_col_init_draw_col(void *state_ptr, int slot_index, int win_col, bool hidden)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  DecorRange *r = &kv_A(state->slots, slot_index).range;
+  decor_init_draw_col(win_col, hidden, r);
 }
