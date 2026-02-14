@@ -2874,6 +2874,18 @@ void nvim_mt_itr_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags)
   rawkey(itr).flags = flags;
 }
 
+/// Get decor_data from rawkey at iterator position.
+DecorInlineData nvim_mt_itr_rawkey_get_decor_data(MarkTreeIter *itr)
+{
+  return rawkey(itr).decor_data;
+}
+
+/// Set decor_data on rawkey at iterator position.
+void nvim_mt_itr_rawkey_set_decor_data(MarkTreeIter *itr, DecorInlineData data)
+{
+  rawkey(itr).decor_data = data;
+}
+
 // ============================================================================
 // Iterator Overlap Accessor Functions (for Rust FFI)
 // ============================================================================

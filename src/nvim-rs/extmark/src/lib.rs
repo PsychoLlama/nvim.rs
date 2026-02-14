@@ -32,7 +32,7 @@ use std::ffi::{c_int, c_void};
 // Re-exports from dependencies for convenience
 pub use nvim_buffer::BufHandle;
 pub use nvim_marktree::{
-    flags::*, DecorInlineData, MTKey, MTPos, MarkTreeHandle, MarkTreeIterHandle,
+    flags::*, marktree_itr_valid, DecorInlineData, MTKey, MTPos, MarkTreeHandle, MarkTreeIterHandle,
 };
 
 // ============================================================================
@@ -284,6 +284,9 @@ extern "C" {
     /// Get namespace entry if it exists.
     fn nvim_extmark_ns_get_ref(buf: BufHandle, ns_id: u32) -> *mut u32;
 
+    /// Get or create namespace entry (initializes to 0 if new).
+    fn nvim_extmark_ns_put_ref(buf: BufHandle, ns_id: u32) -> *mut u32;
+
     /// Delete namespace entry.
     fn nvim_extmark_ns_del(buf: BufHandle, ns_id: u32);
 
@@ -378,6 +381,25 @@ extern "C" {
     /// Set flags on mark at iterator position (raw access).
     fn nvim_mt_itr_rawkey_set_flags(itr: MarkTreeIterHandle, flags: u16);
 
+    /// Get decor_data from mark at iterator position (raw access).
+    fn nvim_mt_itr_rawkey_get_decor_data(itr: MarkTreeIterHandle) -> DecorInlineData;
+
+    /// Set decor_data on mark at iterator position (raw access).
+    fn nvim_mt_itr_rawkey_set_decor_data(itr: MarkTreeIterHandle, data: DecorInlineData);
+
+    // ========================================================================
+    // Marktree put (insert mark)
+    // ========================================================================
+
+    /// Insert a mark into the marktree with optional end position.
+    fn nvim_marktree_put(
+        b: MarkTreeHandle,
+        key: MTKey,
+        end_row: c_int,
+        end_col: c_int,
+        end_right: bool,
+    );
+
     // ========================================================================
     // Decoration operations
     // ========================================================================
@@ -392,6 +414,7 @@ extern "C" {
         row2: c_int,
         col: ColnrT,
         decor_data: DecorInlineData,
+        decor_ext: bool,
         free: bool,
     );
 
@@ -606,6 +629,115 @@ fn get_curbuf() -> BufHandle {
 // Core Extmark Operations
 // ============================================================================
 
+/// Create or update an extmark.
+///
+/// Handles namespace ID tracking, in-place revision of existing marks,
+/// decoration registration, and mark insertion into the marktree.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn rs_extmark_set(
+    buf: BufHandle,
+    ns_id: u32,
+    idp: *mut u32,
+    row: c_int,
+    col: ColnrT,
+    end_row: c_int,
+    end_col: ColnrT,
+    decor: DecorInline,
+    decor_flags: u16,
+    right_gravity: bool,
+    end_right_gravity: bool,
+    no_undo: bool,
+    invalidate: bool,
+    _err: ErrorHandle,
+) {
+    let ns = unsafe { nvim_extmark_ns_put_ref(buf, ns_id) };
+    let mut id = if idp.is_null() { 0 } else { unsafe { *idp } };
+
+    let flags = mt_flags(right_gravity, no_undo, invalidate, decor.ext) | decor_flags;
+    let mut revised = false;
+
+    if id == 0 {
+        unsafe {
+            *ns += 1;
+            id = *ns;
+        }
+    } else {
+        let itr = unsafe { nvim_marktree_itr_alloc() };
+        let tree = unsafe { nvim_buf_get_marktree(buf) };
+        let old_mark = unsafe { nvim_marktree_lookup_ns(tree, ns_id, id, false, itr) };
+
+        if old_mark.id != 0 {
+            if mt_paired(old_mark) || end_row > -1 {
+                extmark_del_id(buf, ns_id, id);
+            } else {
+                assert!(marktree_itr_valid(itr));
+                if old_mark.pos.row == row && old_mark.pos.col == col {
+                    // not paired: we can revise in place
+                    if !mt_invalid(old_mark) && mt_decor_any(old_mark) {
+                        let cur_flags = unsafe { nvim_mt_itr_rawkey_get_flags(itr) };
+                        unsafe {
+                            nvim_mt_itr_rawkey_set_flags(itr, cur_flags & !MT_FLAG_EXTERNAL_MASK)
+                        };
+                        let (decor_data, ext) = mt_decor(old_mark);
+                        unsafe { nvim_buf_decor_remove(buf, row, row, col, decor_data, ext, true) };
+                    }
+                    let cur_flags = unsafe { nvim_mt_itr_rawkey_get_flags(itr) };
+                    unsafe { nvim_mt_itr_rawkey_set_flags(itr, cur_flags | flags) };
+                    unsafe { nvim_mt_itr_rawkey_set_decor_data(itr, decor.data) };
+                    unsafe { nvim_marktree_revise_meta(tree, itr, old_mark) };
+                    revised = true;
+                } else {
+                    unsafe { nvim_marktree_del_itr(tree, itr, false) };
+                    if !mt_invalid(old_mark) {
+                        let (decor_data, ext) = mt_decor(old_mark);
+                        unsafe {
+                            nvim_buf_decor_remove(
+                                buf,
+                                old_mark.pos.row,
+                                old_mark.pos.row,
+                                old_mark.pos.col,
+                                decor_data,
+                                ext,
+                                true,
+                            )
+                        };
+                    }
+                }
+            }
+        } else {
+            unsafe {
+                *ns = (*ns).max(id);
+            }
+        }
+
+        unsafe { nvim_marktree_itr_free(itr) };
+    }
+
+    if !revised {
+        let mark = MTKey {
+            pos: MTPos { row, col },
+            ns: ns_id,
+            id,
+            flags,
+            decor_data: decor.data,
+        };
+        let tree = unsafe { nvim_buf_get_marktree(buf) };
+        unsafe { nvim_marktree_put(tree, mark, end_row, end_col, end_right_gravity) };
+        unsafe { nvim_decor_state_invalidate(buf) };
+    }
+
+    if decor_flags != 0 || decor.ext {
+        let end = if end_row > -1 { end_row } else { row };
+        unsafe { nvim_buf_put_decor(buf, decor.data, decor.ext, row, end) };
+        unsafe { nvim_decor_redraw(buf, row, end, col, decor.data, decor.ext) };
+    }
+
+    if !idp.is_null() {
+        unsafe { *idp = id };
+    }
+}
+
 /// Remove an extmark by namespace and ID.
 ///
 /// Returns true if the mark was found and deleted.
@@ -662,9 +794,8 @@ pub fn extmark_del(buf: BufHandle, itr: MarkTreeIterHandle, key: MTKey, restore:
     }
 
     if mt_decor_any(key) {
-        let (decor_data, _) = mt_decor(key);
+        let (decor_data, ext) = mt_decor(key);
         if mt_invalid(key) {
-            let ext = mt_decor_ext(key);
             unsafe { nvim_decor_free(decor_data, ext) };
         } else {
             let (k, k2) = if mt_end(key) {
@@ -673,7 +804,7 @@ pub fn extmark_del(buf: BufHandle, itr: MarkTreeIterHandle, key: MTKey, restore:
                 (key, key2)
             };
             unsafe {
-                nvim_buf_decor_remove(buf, k.pos.row, k2.pos.row, k.pos.col, decor_data, true)
+                nvim_buf_decor_remove(buf, k.pos.row, k2.pos.row, k.pos.col, decor_data, ext, true)
             };
         }
     }
@@ -1198,7 +1329,7 @@ pub fn extmark_splice_delete(
                 let end_flags = unsafe { nvim_mt_itr_rawkey_get_flags(end_itr) };
                 unsafe { nvim_mt_itr_rawkey_set_flags(end_itr, end_flags | MT_FLAG_INVALID) };
                 unsafe { nvim_marktree_revise_meta(tree, itr, mark) };
-                let (decor_data, _) = mt_decor(mark);
+                let (decor_data, ext) = mt_decor(mark);
                 unsafe {
                     nvim_buf_decor_remove(
                         buf,
@@ -1206,6 +1337,7 @@ pub fn extmark_splice_delete(
                         endpos.row,
                         mark.pos.col,
                         decor_data,
+                        ext,
                         false,
                     )
                 };

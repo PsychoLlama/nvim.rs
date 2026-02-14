@@ -89,6 +89,11 @@ extern int rs_pos_eq(int row1, int col1, int row2, int col2);
 extern int rs_row_invalid(int row);
 extern int rs_pos_after(int row1, int col1, int row2, int col2);
 
+extern void rs_extmark_set(buf_T *buf, uint32_t ns_id, uint32_t *idp, int row, colnr_T col,
+                           int end_row, colnr_T end_col, DecorInline decor, uint16_t decor_flags,
+                           bool right_gravity, bool end_right_gravity, bool no_undo,
+                           bool invalidate, Error *err);
+
 /// Create or update an extmark
 ///
 /// must not be used during iteration!
@@ -96,56 +101,8 @@ void extmark_set(buf_T *buf, uint32_t ns_id, uint32_t *idp, int row, colnr_T col
                  colnr_T end_col, DecorInline decor, uint16_t decor_flags, bool right_gravity,
                  bool end_right_gravity, bool no_undo, bool invalidate, Error *err)
 {
-  uint32_t *ns = map_put_ref(uint32_t, uint32_t)(buf->b_extmark_ns, ns_id, NULL, NULL);
-  uint32_t id = idp ? *idp : 0;
-
-  uint16_t flags = rs_flags_compute(right_gravity, no_undo, invalidate, decor.ext) | decor_flags;
-  if (id == 0) {
-    id = ++*ns;
-  } else {
-    MarkTreeIter itr[1] = { 0 };
-    MTKey old_mark = marktree_lookup_ns(buf->b_marktree, ns_id, id, false, itr);
-    if (old_mark.id) {
-      if (rs_flags_paired(old_mark.flags) || end_row > -1) {
-        extmark_del_id(buf, ns_id, id);
-      } else {
-        assert(marktree_itr_valid(itr));
-        if (rs_pos_eq(old_mark.pos.row, old_mark.pos.col, row, col)) {
-          // not paired: we can revise in place
-          if (!rs_flags_invalid(old_mark.flags) && rs_flags_decor_any(old_mark.flags)) {
-            mt_itr_rawkey(itr).flags &= (uint16_t) ~MT_FLAG_EXTERNAL_MASK;
-            buf_decor_remove(buf, row, row, col, mt_decor(old_mark), true);
-          }
-          mt_itr_rawkey(itr).flags |= flags;
-          mt_itr_rawkey(itr).decor_data = decor.data;
-          marktree_revise_meta(buf->b_marktree, itr, old_mark);
-          goto revised;
-        }
-        marktree_del_itr(buf->b_marktree, itr, false);
-        if (!rs_flags_invalid(old_mark.flags)) {
-          buf_decor_remove(buf, old_mark.pos.row, old_mark.pos.row, old_mark.pos.col,
-                           mt_decor(old_mark), true);
-        }
-      }
-    } else {
-      *ns = MAX(*ns, id);
-    }
-  }
-
-  MTKey mark = { { row, col }, ns_id, id, flags, decor.data };
-
-  marktree_put(buf->b_marktree, mark, end_row, end_col, end_right_gravity);
-  decor_state_invalidate(buf);
-
-revised:
-  if (decor_flags || decor.ext) {
-    buf_put_decor(buf, decor, row, end_row > -1 ? end_row : row);
-    decor_redraw(buf, row, end_row > -1 ? end_row : row, col, decor);
-  }
-
-  if (idp) {
-    *idp = id;
-  }
+  rs_extmark_set(buf, ns_id, idp, row, col, end_row, end_col, decor, decor_flags, right_gravity,
+                 end_right_gravity, no_undo, invalidate, err);
 }
 
 
@@ -324,6 +281,13 @@ size_t nvim_extmark_ns_map_size(buf_T *buf)
 uint32_t *nvim_extmark_ns_get_ref(buf_T *buf, uint32_t ns_id)
 {
   return map_ref(uint32_t, uint32_t)(buf->b_extmark_ns, ns_id, NULL);
+}
+
+/// Get or create a namespace ID entry in the extmark namespace map.
+/// Returns a pointer to the ID counter (creates entry initialized to 0 if not found).
+uint32_t *nvim_extmark_ns_put_ref(buf_T *buf, uint32_t ns_id)
+{
+  return map_put_ref(uint32_t, uint32_t)(buf->b_extmark_ns, ns_id, NULL, NULL);
 }
 
 /// Delete a namespace ID from the extmark namespace map.

@@ -1781,10 +1781,10 @@ void nvim_decor_free(DecorInlineData data, bool ext)
 
 /// Remove decoration from a buffer.
 void nvim_buf_decor_remove(buf_T *buf, int row_start, int row_end, int col_start,
-                           DecorInlineData decor_data, bool free_decor)
+                           DecorInlineData decor_data, bool decor_ext, bool free_decor)
 {
   buf_decor_remove(buf, row_start, row_end, col_start,
-                   (DecorInline){ .ext = true, .data = decor_data }, free_decor);
+                   (DecorInline){ .ext = decor_ext, .data = decor_data }, free_decor);
 }
 
 /// Add decoration to a buffer.
