@@ -134,12 +134,6 @@
 #include "nvim/undo_defs.h"
 #include "nvim/vim_defs.h"
 
-/// Structure passed around between undofile functions.
-typedef struct {
-  buf_T *bi_buf;
-  FILE *bi_fp;
-} bufinfo_T;
-
 // Rust FFI function declarations
 extern bool rs_bufIsChanged(buf_T *buf);
 extern bool rs_anyBufIsChanged(void);
@@ -365,13 +359,10 @@ int u_savecommon(buf_T *buf, linenr_T top, linenr_T bot, linenr_T newbot, bool r
   return rs_u_savecommon(buf, top, bot, newbot, reload);
 }
 
-// magic at start of entry
-#define UF_ENTRY_MAGIC         0xf518
-// magic after last entry
-#define UF_ENTRY_END_MAGIC     0x3581
-
-// extra fields for uhp
-#define UHP_SAVE_NR            1
+// Static assertions for Rust FFI constant verification
+_Static_assert(kExtmarkSplice == 0, "kExtmarkSplice must be 0");
+_Static_assert(kExtmarkMove == 1, "kExtmarkMove must be 1");
+_Static_assert(NMARKS == 26, "NMARKS must be 26");
 
 /// Compute the hash for a buffer text into hash[UNDO_HASH_SIZE].
 ///
@@ -479,217 +470,9 @@ char *u_get_undo_file_name(const char *const buf_ffname, const bool reading)
   return undo_file_name;
 }
 
-/// Display an error for corrupted undo file
-///
-/// @param[in]  mesg  Identifier of the corruption kind.
-/// @param[in]  file_name  File in which error occurred.
-static void corruption_error(const char *const mesg, const char *const file_name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  semsg(_("E825: Corrupted undo file (%s): %s"), mesg, file_name);
-}
-
 static void u_free_uhp(u_header_T *uhp)
 {
   rs_u_free_uhp(uhp);
-}
-
-static u_header_T *unserialize_uhp(bufinfo_T *bi, const char *file_name)
-{
-  u_header_T *uhp = xmalloc(sizeof(u_header_T));
-  CLEAR_POINTER(uhp);
-#ifdef U_DEBUG
-  uhp->uh_magic = UH_MAGIC;
-#endif
-  uhp->uh_next.seq = undo_read_4c(bi);
-  uhp->uh_prev.seq = undo_read_4c(bi);
-  uhp->uh_alt_next.seq = undo_read_4c(bi);
-  uhp->uh_alt_prev.seq = undo_read_4c(bi);
-  uhp->uh_seq = undo_read_4c(bi);
-  if (uhp->uh_seq <= 0) {
-    corruption_error("uh_seq", file_name);
-    xfree(uhp);
-    return NULL;
-  }
-  unserialize_pos(bi, &uhp->uh_cursor);
-  uhp->uh_cursor_vcol = undo_read_4c(bi);
-  uhp->uh_flags = undo_read_2c(bi);
-  const Timestamp cur_timestamp = os_time();
-  for (size_t i = 0; i < (size_t)NMARKS; i++) {
-    unserialize_pos(bi, &uhp->uh_namedm[i].mark);
-    uhp->uh_namedm[i].timestamp = cur_timestamp;
-    uhp->uh_namedm[i].fnum = 0;
-  }
-  unserialize_visualinfo(bi, &uhp->uh_visual);
-  uhp->uh_time = undo_read_time(bi);
-
-  // Unserialize optional fields.
-  while (true) {
-    int len = undo_read_byte(bi);
-
-    if (len == EOF) {
-      corruption_error("truncated", file_name);
-      u_free_uhp(uhp);
-      return NULL;
-    }
-    if (len == 0) {
-      break;
-    }
-    int what = undo_read_byte(bi);
-    switch (what) {
-    case UHP_SAVE_NR:
-      uhp->uh_save_nr = undo_read_4c(bi);
-      break;
-    default:
-      // Field not supported, skip it.
-      while (--len >= 0) {
-        undo_read_byte(bi);
-      }
-    }
-  }
-
-  // Unserialize the uep list.
-  u_entry_T *last_uep = NULL;
-  int c;
-  while ((c = undo_read_2c(bi)) == UF_ENTRY_MAGIC) {
-    bool error = false;
-    u_entry_T *uep = unserialize_uep(bi, &error, file_name);
-    if (last_uep == NULL) {
-      uhp->uh_entry = uep;
-    } else {
-      last_uep->ue_next = uep;
-    }
-    last_uep = uep;
-    if (uep == NULL || error) {
-      u_free_uhp(uhp);
-      return NULL;
-    }
-  }
-  if (c != UF_ENTRY_END_MAGIC) {
-    corruption_error("entry end", file_name);
-    u_free_uhp(uhp);
-    return NULL;
-  }
-
-  // Unserialize all extmark undo information
-  kv_init(uhp->uh_extmark);
-
-  while ((c = undo_read_2c(bi)) == UF_ENTRY_MAGIC) {
-    bool error = false;
-    ExtmarkUndoObject *extup = unserialize_extmark(bi, &error, file_name);
-    if (error) {
-      kv_destroy(uhp->uh_extmark);
-      xfree(extup);
-      return NULL;
-    }
-    kv_push(uhp->uh_extmark, *extup);
-    xfree(extup);
-  }
-  if (c != UF_ENTRY_END_MAGIC) {
-    corruption_error("entry end", file_name);
-    u_free_uhp(uhp);
-    return NULL;
-  }
-
-  return uhp;
-}
-
-static ExtmarkUndoObject *unserialize_extmark(bufinfo_T *bi, bool *error, const char *filename)
-{
-  uint8_t *buf = NULL;
-
-  ExtmarkUndoObject *extup = xmalloc(sizeof(ExtmarkUndoObject));
-
-  UndoObjectType type = (UndoObjectType)undo_read_4c(bi);
-  extup->type = type;
-  if (type == kExtmarkSplice) {
-    size_t n_elems = (size_t)sizeof(ExtmarkSplice) / sizeof(uint8_t);
-    buf = xcalloc(n_elems, sizeof(uint8_t));
-    if (!undo_read(bi, buf, n_elems)) {
-      goto error;
-    }
-    extup->data.splice = *(ExtmarkSplice *)buf;
-  } else if (type == kExtmarkMove) {
-    size_t n_elems = (size_t)sizeof(ExtmarkMove) / sizeof(uint8_t);
-    buf = xcalloc(n_elems, sizeof(uint8_t));
-    if (!undo_read(bi, buf, n_elems)) {
-      goto error;
-    }
-    extup->data.move = *(ExtmarkMove *)buf;
-  } else {
-    goto error;
-  }
-
-  xfree(buf);
-
-  return extup;
-
-error:
-  xfree(extup);
-  if (buf) {
-    xfree(buf);
-  }
-  *error = true;
-  return NULL;
-}
-
-static u_entry_T *unserialize_uep(bufinfo_T *bi, bool *error, const char *file_name)
-{
-  u_entry_T *uep = xmalloc(sizeof(u_entry_T));
-  CLEAR_POINTER(uep);
-#ifdef U_DEBUG
-  uep->ue_magic = UE_MAGIC;
-#endif
-  uep->ue_top = undo_read_4c(bi);
-  uep->ue_bot = undo_read_4c(bi);
-  uep->ue_lcount = undo_read_4c(bi);
-  uep->ue_size = undo_read_4c(bi);
-
-  char **array = NULL;
-  if (uep->ue_size > 0) {
-    if ((size_t)uep->ue_size < SIZE_MAX / sizeof(char *)) {
-      array = xmalloc(sizeof(char *) * (size_t)uep->ue_size);
-      memset(array, 0, sizeof(char *) * (size_t)uep->ue_size);
-    }
-  }
-  uep->ue_array = array;
-
-  for (size_t i = 0; i < (size_t)uep->ue_size; i++) {
-    int line_len = undo_read_4c(bi);
-    char *line;
-    if (line_len >= 0) {
-      line = undo_read_string(bi, (size_t)line_len);
-    } else {
-      line = NULL;
-      corruption_error("line length", file_name);
-    }
-    if (line == NULL) {
-      *error = true;
-      return uep;
-    }
-    array[i] = line;
-  }
-  return uep;
-}
-
-/// Unserializes the pos_T at the current position.
-static void unserialize_pos(bufinfo_T *bi, pos_T *pos)
-{
-  pos->lnum = undo_read_4c(bi);
-  pos->lnum = MAX(pos->lnum, 0);
-  pos->col = undo_read_4c(bi);
-  pos->col = MAX(pos->col, 0);
-  pos->coladd = undo_read_4c(bi);
-  pos->coladd = MAX(pos->coladd, 0);
-}
-
-/// Unserializes the visualinfo_T at the current position.
-static void unserialize_visualinfo(bufinfo_T *bi, visualinfo_T *info)
-{
-  unserialize_pos(bi, &info->vi_start);
-  unserialize_pos(bi, &info->vi_end);
-  info->vi_mode = undo_read_4c(bi);
-  info->vi_curswant = undo_read_4c(bi);
 }
 
 /// Write the undo tree in an undo file.
@@ -719,60 +502,6 @@ void u_read_undo(char *name, const uint8_t *hash, const char *orig_name FUNC_ATT
   rs_u_read_undo(name, hash, orig_name);
 }
 
-
-static int undo_read_4c(bufinfo_T *bi)
-{
-  return get4c(bi->bi_fp);
-}
-
-static int undo_read_2c(bufinfo_T *bi)
-{
-  return get2c(bi->bi_fp);
-}
-
-static int undo_read_byte(bufinfo_T *bi)
-{
-  return getc(bi->bi_fp);
-}
-
-static time_t undo_read_time(bufinfo_T *bi)
-{
-  return get8ctime(bi->bi_fp);
-}
-
-/// Reads "buffer[size]" from the undo file.
-///
-/// @param bi     The buffer info
-/// @param buffer Character buffer to read data into
-/// @param size   The size of the character buffer
-///
-/// @returns false in case of an error.
-static bool undo_read(bufinfo_T *bi, uint8_t *buffer, size_t size)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  const bool retval = fread(buffer, size, 1, bi->bi_fp) == 1;
-  if (!retval) {
-    // Error may be checked for only later.  Fill with zeros,
-    // so that the reader won't use garbage.
-    memset(buffer, 0, size);
-  }
-  return retval;
-}
-
-/// Reads a string of length "len" from "bi->bi_fd" and appends a zero to it.
-///
-/// @param len can be zero to allocate an empty line.
-///
-/// @returns a pointer to allocated memory or NULL in case of an error.
-static char *undo_read_string(bufinfo_T *bi, size_t len)
-{
-  char *ptr = xmallocz(len);
-  if (len > 0 && !undo_read(bi, (uint8_t *)ptr, len)) {
-    xfree(ptr);
-    return NULL;
-  }
-  return ptr;
-}
 
 /// If 'cpoptions' contains 'u': Undo the previous undo or redo (vi compatible).
 /// If 'cpoptions' does not contain 'u': Always undo.
@@ -2707,15 +2436,6 @@ bool nvim_undo_check_owner(const char *orig_name, const char *file_name)
   return true;
 }
 
-u_header_T *nvim_unserialize_uhp(FILE *fp, const char *file_name)
-{
-  bufinfo_T bi = {
-    .bi_buf = curbuf,
-    .bi_fp = fp,
-  };
-  return unserialize_uhp(&bi, file_name);
-}
-
 int nvim_uhp_get_next_seq_for_swizzle(u_header_T *uhp)
 {
   return uhp->uh_next.seq;
@@ -2734,6 +2454,85 @@ int nvim_uhp_get_alt_next_seq_for_swizzle(u_header_T *uhp)
 int nvim_uhp_get_alt_prev_seq_for_swizzle(u_header_T *uhp)
 {
   return uhp->uh_alt_prev.seq;
+}
+
+// Set seq values for swizzle (deserialization)
+void nvim_uhp_set_next_seq(u_header_T *uhp, int seq)
+{
+  uhp->uh_next.seq = seq;
+}
+
+void nvim_uhp_set_prev_seq(u_header_T *uhp, int seq)
+{
+  uhp->uh_prev.seq = seq;
+}
+
+void nvim_uhp_set_alt_next_seq(u_header_T *uhp, int seq)
+{
+  uhp->uh_alt_next.seq = seq;
+}
+
+void nvim_uhp_set_alt_prev_seq(u_header_T *uhp, int seq)
+{
+  uhp->uh_alt_prev.seq = seq;
+}
+
+// Set a named mark in the undo header
+void nvim_uhp_set_namedm(u_header_T *uhp, int idx, linenr_T lnum, colnr_T col,
+                          colnr_T coladd, Timestamp timestamp, int fnum)
+{
+  uhp->uh_namedm[idx].mark.lnum = lnum;
+  uhp->uh_namedm[idx].mark.col = col;
+  uhp->uh_namedm[idx].mark.coladd = coladd;
+  uhp->uh_namedm[idx].timestamp = timestamp;
+  uhp->uh_namedm[idx].fnum = fnum;
+}
+
+// Set visual info in the undo header
+void nvim_uhp_set_visual(u_header_T *uhp,
+                         linenr_T start_lnum, colnr_T start_col, colnr_T start_coladd,
+                         linenr_T end_lnum, colnr_T end_col, colnr_T end_coladd,
+                         int mode, colnr_T curswant)
+{
+  uhp->uh_visual.vi_start.lnum = start_lnum;
+  uhp->uh_visual.vi_start.col = start_col;
+  uhp->uh_visual.vi_start.coladd = start_coladd;
+  uhp->uh_visual.vi_end.lnum = end_lnum;
+  uhp->uh_visual.vi_end.col = end_col;
+  uhp->uh_visual.vi_end.coladd = end_coladd;
+  uhp->uh_visual.vi_mode = mode;
+  uhp->uh_visual.vi_curswant = curswant;
+}
+
+// Push an extmark splice onto the undo header's extmark kvec
+void nvim_uhp_push_extmark_splice(u_header_T *uhp, const uint8_t *data, size_t size)
+{
+  ExtmarkUndoObject extup;
+  extup.type = kExtmarkSplice;
+  size_t copy_size = MIN(size, sizeof(ExtmarkSplice));
+  memcpy(&extup.data.splice, data, copy_size);
+  kv_push(uhp->uh_extmark, extup);
+}
+
+// Push an extmark move onto the undo header's extmark kvec
+void nvim_uhp_push_extmark_move(u_header_T *uhp, const uint8_t *data, size_t size)
+{
+  ExtmarkUndoObject extup;
+  extup.type = kExtmarkMove;
+  size_t copy_size = MIN(size, sizeof(ExtmarkMove));
+  memcpy(&extup.data.move, data, copy_size);
+  kv_push(uhp->uh_extmark, extup);
+}
+
+// Get sizeof(ExtmarkSplice) and sizeof(ExtmarkMove) for Rust
+size_t nvim_sizeof_extmark_splice(void)
+{
+  return sizeof(ExtmarkSplice);
+}
+
+size_t nvim_sizeof_extmark_move(void)
+{
+  return sizeof(ExtmarkMove);
 }
 
 // ============================================================================

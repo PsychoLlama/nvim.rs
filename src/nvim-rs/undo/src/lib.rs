@@ -3665,14 +3665,278 @@ extern "C" {
     fn nvim_u_free_uhp(uhp: UHeaderHandle);
     fn nvim_undo_check_owner(orig_name: *const c_char, file_name: *const c_char) -> bool;
 
-    // Deserialization helpers
-    fn nvim_unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHandle;
-
     // Get uh_seq from a header in seq mode (for pointer swizzling)
     fn nvim_uhp_get_next_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
     fn nvim_uhp_get_prev_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
     fn nvim_uhp_get_alt_next_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
     fn nvim_uhp_get_alt_prev_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
+
+    // Deserialization setters
+    fn nvim_uhp_set_next_seq(uhp: UHeaderHandle, seq: c_int);
+    fn nvim_uhp_set_prev_seq(uhp: UHeaderHandle, seq: c_int);
+    fn nvim_uhp_set_alt_next_seq(uhp: UHeaderHandle, seq: c_int);
+    fn nvim_uhp_set_alt_prev_seq(uhp: UHeaderHandle, seq: c_int);
+    fn nvim_uhp_set_namedm(
+        uhp: UHeaderHandle,
+        idx: c_int,
+        lnum: LinenrT,
+        col: ColnrT,
+        coladd: ColnrT,
+        timestamp: u64,
+        fnum: c_int,
+    );
+    fn nvim_uhp_set_visual(
+        uhp: UHeaderHandle,
+        start_lnum: LinenrT,
+        start_col: ColnrT,
+        start_coladd: ColnrT,
+        end_lnum: LinenrT,
+        end_col: ColnrT,
+        end_coladd: ColnrT,
+        mode: c_int,
+        curswant: ColnrT,
+    );
+    fn nvim_uhp_push_extmark_splice(uhp: UHeaderHandle, data: *const u8, size: usize);
+    fn nvim_uhp_push_extmark_move(uhp: UHeaderHandle, data: *const u8, size: usize);
+    fn nvim_sizeof_extmark_splice() -> usize;
+    fn nvim_sizeof_extmark_move() -> usize;
+}
+
+// =============================================================================
+// Deserialization Functions (migrated from C unserialize_*)
+// =============================================================================
+
+/// Deserialize a pos_T from the undo file.
+/// Returns (lnum, col, coladd), each clamped to >= 0.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+unsafe fn unserialize_pos(fp: FileHandle) -> (LinenrT, ColnrT, ColnrT) {
+    let lnum = undo_read_4c(fp).max(0);
+    let col = undo_read_4c(fp).max(0);
+    let coladd = undo_read_4c(fp).max(0);
+    (lnum, col, coladd)
+}
+
+/// Deserialize visual info from the undo file into the undo header.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `uhp` must be a valid undo header handle
+unsafe fn unserialize_visualinfo(fp: FileHandle, uhp: UHeaderHandle) {
+    let (start_lnum, start_col, start_coladd) = unserialize_pos(fp);
+    let (end_lnum, end_col, end_coladd) = unserialize_pos(fp);
+    let mode = undo_read_4c(fp);
+    let curswant = undo_read_4c(fp);
+    nvim_uhp_set_visual(
+        uhp,
+        start_lnum,
+        start_col,
+        start_coladd,
+        end_lnum,
+        end_col,
+        end_coladd,
+        mode,
+        curswant,
+    );
+}
+
+/// Deserialize an extmark undo object from the undo file.
+/// Returns true on success, false on error.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `uhp` must be a valid undo header handle
+unsafe fn unserialize_extmark(fp: FileHandle, uhp: UHeaderHandle) -> bool {
+    let ext_type = undo_read_4c(fp);
+
+    // kExtmarkSplice = 0
+    if ext_type == 0 {
+        let size = nvim_sizeof_extmark_splice();
+        let mut buf = vec![0u8; size];
+        if !undo_read(fp, buf.as_mut_ptr(), size) {
+            return false;
+        }
+        nvim_uhp_push_extmark_splice(uhp, buf.as_ptr(), size);
+        return true;
+    }
+
+    // kExtmarkMove = 1
+    if ext_type == 1 {
+        let size = nvim_sizeof_extmark_move();
+        let mut buf = vec![0u8; size];
+        if !undo_read(fp, buf.as_mut_ptr(), size) {
+            return false;
+        }
+        nvim_uhp_push_extmark_move(uhp, buf.as_ptr(), size);
+        return true;
+    }
+
+    // Unknown type
+    false
+}
+
+/// Deserialize a u_entry_T from the undo file.
+/// Returns the new entry handle and sets `error` to true on failure.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+unsafe fn unserialize_uep(fp: FileHandle, file_name: *const c_char) -> (UEntryHandle, bool) {
+    let uep = nvim_alloc_u_entry();
+    // Fields are zero-initialized by xcalloc in nvim_alloc_u_entry
+
+    nvim_uep_set_top(uep, undo_read_4c(fp));
+    nvim_uep_set_bot(uep, undo_read_4c(fp));
+    nvim_uep_set_lcount(uep, undo_read_4c(fp));
+    let size = undo_read_4c(fp);
+    nvim_uep_set_size(uep, size);
+
+    if size > 0 {
+        let ptr_size = std::mem::size_of::<*mut c_char>();
+        if (size as usize) < usize::MAX / ptr_size {
+            let array = nvim_xmallocz(ptr_size * size as usize) as *mut *mut c_char;
+            // Zero out the array
+            ptr::write_bytes(array, 0, size as usize);
+            nvim_uep_set_array(uep, array);
+
+            for i in 0..size as usize {
+                let line_len = undo_read_4c(fp);
+                if line_len >= 0 {
+                    let line = undo_read_string(fp, line_len as usize);
+                    if line.is_null() {
+                        return (uep, true); // error
+                    }
+                    *array.add(i) = line;
+                } else {
+                    nvim_undo_corruption_error(c"line length".as_ptr(), file_name);
+                    return (uep, true); // error
+                }
+            }
+        }
+    }
+
+    (uep, false)
+}
+
+/// Deserialize a u_header_T from the undo file.
+/// Returns null handle on error.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `file_name` must be a valid C string
+unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHandle {
+    let uhp = nvim_alloc_u_header();
+    // Fields are zero-initialized by xcalloc in nvim_alloc_u_header
+
+    // Read sequence numbers for pointer swizzling
+    nvim_uhp_set_next_seq(uhp, undo_read_4c(fp));
+    nvim_uhp_set_prev_seq(uhp, undo_read_4c(fp));
+    nvim_uhp_set_alt_next_seq(uhp, undo_read_4c(fp));
+    nvim_uhp_set_alt_prev_seq(uhp, undo_read_4c(fp));
+
+    let seq = undo_read_4c(fp);
+    nvim_uhp_set_seq(uhp, seq);
+    if seq <= 0 {
+        nvim_undo_corruption_error(c"uh_seq".as_ptr(), file_name);
+        nvim_xfree(uhp.0);
+        return UHeaderHandle(ptr::null_mut());
+    }
+
+    // Read cursor position
+    let (cursor_lnum, cursor_col, cursor_coladd) = unserialize_pos(fp);
+    nvim_uhp_set_cursor(uhp, cursor_lnum, cursor_col, cursor_coladd);
+    nvim_uhp_set_cursor_vcol(uhp, undo_read_4c(fp));
+    nvim_uhp_set_flags(uhp, undo_read_2c(fp));
+
+    // Read named marks
+    let cur_timestamp = nvim_undo_os_time() as u64;
+    for i in 0..NMARKS as c_int {
+        let (lnum, col, coladd) = unserialize_pos(fp);
+        nvim_uhp_set_namedm(uhp, i, lnum, col, coladd, cur_timestamp, 0);
+    }
+
+    // Read visual info
+    unserialize_visualinfo(fp, uhp);
+
+    // Read time
+    nvim_uhp_set_time(uhp, undo_read_time(fp));
+
+    // Read optional fields
+    loop {
+        let len = undo_read_byte(fp);
+        if len == -1 {
+            // EOF
+            nvim_undo_corruption_error(c"truncated".as_ptr(), file_name);
+            nvim_u_free_uhp(uhp);
+            return UHeaderHandle(ptr::null_mut());
+        }
+        if len == 0 {
+            break;
+        }
+        let what = undo_read_byte(fp);
+        if what == UHP_SAVE_NR as c_int {
+            nvim_uhp_set_save_nr(uhp, undo_read_4c(fp));
+        } else {
+            // Skip unknown field
+            let mut remaining = len;
+            while remaining > 0 {
+                remaining -= 1;
+                undo_read_byte(fp);
+            }
+        }
+    }
+
+    // Read the uep list
+    let mut last_uep = UEntryHandle(ptr::null_mut());
+    loop {
+        let c = undo_read_2c(fp);
+        if c != UF_ENTRY_MAGIC as c_int {
+            if c != UF_ENTRY_END_MAGIC as c_int {
+                nvim_undo_corruption_error(c"entry end".as_ptr(), file_name);
+                nvim_u_free_uhp(uhp);
+                return UHeaderHandle(ptr::null_mut());
+            }
+            break;
+        }
+        let (uep, error) = unserialize_uep(fp, file_name);
+        if last_uep.0.is_null() {
+            nvim_uhp_set_entry(uhp, uep);
+        } else {
+            nvim_uep_set_next(last_uep, uep);
+        }
+        last_uep = uep;
+        if uep.0.is_null() || error {
+            nvim_u_free_uhp(uhp);
+            return UHeaderHandle(ptr::null_mut());
+        }
+    }
+
+    // Read extmark undo information
+    nvim_uhp_init_extmark(uhp);
+    loop {
+        let c = undo_read_2c(fp);
+        if c != UF_ENTRY_MAGIC as c_int {
+            if c != UF_ENTRY_END_MAGIC as c_int {
+                nvim_undo_corruption_error(c"entry end".as_ptr(), file_name);
+                nvim_uhp_destroy_extmark(uhp);
+                nvim_u_free_uhp(uhp);
+                return UHeaderHandle(ptr::null_mut());
+            }
+            break;
+        }
+        if !unserialize_extmark(fp, uhp) {
+            nvim_uhp_destroy_extmark(uhp);
+            nvim_u_free_uhp(uhp);
+            return UHeaderHandle(ptr::null_mut());
+        }
+    }
+
+    uhp
 }
 
 /// Read the undo tree from an undo file.
@@ -3863,7 +4127,7 @@ pub unsafe extern "C" fn rs_u_read_undo(
             return;
         }
 
-        let uhp = nvim_unserialize_uhp(fp, file_name);
+        let uhp = unserialize_uhp(fp, file_name);
         if uhp.0.is_null() {
             cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
             return;
