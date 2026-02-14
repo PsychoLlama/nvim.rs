@@ -241,18 +241,10 @@ pub unsafe extern "C" fn rs_get_tagfname(
     let tnp = &mut *tnp;
 
     if first != 0 {
-        // Reset the iterator
-        if !tnp.tn_tags.is_null() {
-            xfree(tnp.tn_tags as *mut c_void);
-            tnp.tn_tags = ptr::null_mut();
-        }
-        if !tnp.tn_search_ctx.is_null() {
-            nvim_vim_findfile_cleanup(tnp.tn_search_ctx);
-            tnp.tn_search_ctx = ptr::null_mut();
-        }
-        tnp.tn_did_filefind_init = 0;
-        tnp.tn_hf_idx = 0;
-        tnp.tn_np = ptr::null_mut();
+        // Zero the entire struct, matching C's CLEAR_POINTER(tnp).
+        // The struct may be stack-allocated and uninitialized on the first call,
+        // so we must NOT dereference any pointers before zeroing.
+        ptr::write_bytes(tnp, 0, 1);
     }
 
     if nvim_curbuf_is_help() {
