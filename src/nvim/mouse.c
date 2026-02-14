@@ -170,6 +170,8 @@ extern linenr_T rs_find_longest_lnum(void);
 extern bool rs_do_mousescroll_horiz(colnr_T leftcol);
 extern bool rs_mouse_comp_pos(win_T *win, int *rowp, int *colp, linenr_T *lnump);
 extern colnr_T rs_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp);
+extern win_T *rs_mouse_find_win_inner(int *gridp, int *rowp, int *colp);
+extern win_T *rs_mouse_find_win_outer(int *gridp, int *rowp, int *colp);
 
 /// Move the current tab to tab in same column as mouse or to end of the
 /// tabline if there is no tab there.
@@ -1643,44 +1645,7 @@ bool mouse_comp_pos(win_T *win, int *rowp, int *colp, linenr_T *lnump)
 /// @return NULL when something is wrong.
 win_T *mouse_find_win_inner(int *gridp, int *rowp, int *colp)
 {
-  win_T *wp_grid = mouse_find_grid_win(gridp, rowp, colp);
-  if (wp_grid) {
-    return wp_grid;
-  } else if (*gridp > 1) {
-    return NULL;
-  }
-
-  frame_T *fp = topframe;
-  *rowp -= firstwin->w_winrow;
-  while (true) {
-    if (fp->fr_layout == FR_LEAF) {
-      break;
-    }
-    if (fp->fr_layout == FR_ROW) {
-      for (fp = fp->fr_child; fp->fr_next != NULL; fp = fp->fr_next) {
-        if (*colp < fp->fr_width) {
-          break;
-        }
-        *colp -= fp->fr_width;
-      }
-    } else {  // fr_layout == FR_COL
-      for (fp = fp->fr_child; fp->fr_next != NULL; fp = fp->fr_next) {
-        if (*rowp < fp->fr_height) {
-          break;
-        }
-        *rowp -= fp->fr_height;
-      }
-    }
-  }
-  // When using a timer that closes a window the window might not actually
-  // exist.
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp == fp->fr_win) {
-      *rowp -= wp->w_winbar_height;
-      return wp;
-    }
-  }
-  return NULL;
+  return rs_mouse_find_win_inner(gridp, rowp, colp);
 }
 
 /// Find the window at "grid" position "*rowp" and "*colp".  The positions are
@@ -1689,15 +1654,12 @@ win_T *mouse_find_win_inner(int *gridp, int *rowp, int *colp)
 /// @return NULL when something is wrong.
 win_T *mouse_find_win_outer(int *gridp, int *rowp, int *colp)
 {
-  win_T *wp = mouse_find_win_inner(gridp, rowp, colp);
-  if (wp) {
-    *rowp += wp->w_winrow_off;
-    *colp += wp->w_wincol_off;
-  }
-  return wp;
+  return rs_mouse_find_win_outer(gridp, rowp, colp);
 }
 
-static win_T *mouse_find_grid_win(int *gridp, int *rowp, int *colp)
+/// C accessor: resolve grid handle to window and adjust row/col.
+/// Handles msg_grid, floating windows, compositor focus, and pum_grid.
+win_T *nvim_mouse_find_grid_win(int *gridp, int *rowp, int *colp)
 {
   if (*gridp == msg_grid.handle) {
     *rowp += msg_grid_pos;
@@ -1733,6 +1695,44 @@ static win_T *mouse_find_grid_win(int *gridp, int *rowp, int *colp)
     // No grid found, return the default grid. With multigrid this happens for split separators for
     // example.
     *gridp = DEFAULT_GRID_HANDLE;
+  }
+  return NULL;
+}
+
+/// C accessor: traverse frame tree to find window at row/col position.
+/// Adjusts rowp/colp relative to the found window.
+/// Returns NULL if the window is not valid in the current tabpage.
+win_T *nvim_frame_find_win(int *rowp, int *colp)
+{
+  frame_T *fp = topframe;
+  *rowp -= firstwin->w_winrow;
+  while (true) {
+    if (fp->fr_layout == FR_LEAF) {
+      break;
+    }
+    if (fp->fr_layout == FR_ROW) {
+      for (fp = fp->fr_child; fp->fr_next != NULL; fp = fp->fr_next) {
+        if (*colp < fp->fr_width) {
+          break;
+        }
+        *colp -= fp->fr_width;
+      }
+    } else {  // fr_layout == FR_COL
+      for (fp = fp->fr_child; fp->fr_next != NULL; fp = fp->fr_next) {
+        if (*rowp < fp->fr_height) {
+          break;
+        }
+        *rowp -= fp->fr_height;
+      }
+    }
+  }
+  // When using a timer that closes a window the window might not actually
+  // exist.
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp == fp->fr_win) {
+      *rowp -= wp->w_winbar_height;
+      return wp;
+    }
   }
   return NULL;
 }

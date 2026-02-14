@@ -789,7 +789,12 @@ pub unsafe extern "C" fn rs_mouse_comp_pos(
             break; // Position is in this buffer line.
         }
 
-        nvim_hasFolding(win, lnum, std::ptr::null_mut(), std::ptr::addr_of_mut!(lnum));
+        nvim_hasFolding(
+            win,
+            lnum,
+            std::ptr::null_mut(),
+            std::ptr::addr_of_mut!(lnum),
+        );
 
         if lnum == line_count {
             retval = true;
@@ -802,7 +807,12 @@ pub unsafe extern "C" fn rs_mouse_comp_pos(
     // Mouse row reached, adjust lnum for concealed lines.
     while lnum < line_count && nvim_decor_conceal_line(win, lnum - 1, 0) != 0 {
         lnum += 1;
-        nvim_hasFolding(win, lnum, std::ptr::null_mut(), std::ptr::addr_of_mut!(lnum));
+        nvim_hasFolding(
+            win,
+            lnum,
+            std::ptr::null_mut(),
+            std::ptr::addr_of_mut!(lnum),
+        );
     }
 
     if !retval {
@@ -978,6 +988,73 @@ pub unsafe extern "C" fn rs_do_mousescroll_horiz(leftcol: c_int) -> bool {
     }
 
     rs_set_leftcol(leftcol)
+}
+
+// =============================================================================
+// Phase 4 — Window Find Functions
+// =============================================================================
+
+extern "C" {
+    /// C accessor: resolve grid handle to window and adjust row/col.
+    fn nvim_mouse_find_grid_win(gridp: *mut c_int, rowp: *mut c_int, colp: *mut c_int)
+        -> WinHandle;
+
+    /// C accessor: traverse frame tree to find window at row/col.
+    fn nvim_frame_find_win(rowp: *mut c_int, colp: *mut c_int) -> WinHandle;
+
+    /// Get `w_winrow_off` field.
+    fn nvim_win_get_winrow_off(wp: WinHandle) -> c_int;
+
+    /// Get `w_wincol_off` field.
+    fn nvim_win_get_wincol_off(wp: WinHandle) -> c_int;
+}
+
+/// Find the window at grid position `*rowp`, `*colp`.
+///
+/// Updates positions to be relative to the top-left of the window inner area.
+/// Returns NULL when something is wrong.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mouse_find_win_inner(
+    gridp: *mut c_int,
+    rowp: *mut c_int,
+    colp: *mut c_int,
+) -> WinHandle {
+    // First try grid-based resolution (floating windows, multigrid, etc.)
+    let wp_grid = nvim_mouse_find_grid_win(gridp, rowp, colp);
+    if !wp_grid.is_null() {
+        return wp_grid;
+    }
+    if *gridp > 1 {
+        return std::ptr::null_mut();
+    }
+
+    // Fall back to frame tree traversal
+    nvim_frame_find_win(rowp, colp)
+}
+
+/// Find the window at grid position `*rowp`, `*colp`.
+///
+/// Updates positions to be relative to the top-left of the window
+/// (including winbar, sign column, etc.).
+/// Returns NULL when something is wrong.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mouse_find_win_outer(
+    gridp: *mut c_int,
+    rowp: *mut c_int,
+    colp: *mut c_int,
+) -> WinHandle {
+    let wp = rs_mouse_find_win_inner(gridp, rowp, colp);
+    if !wp.is_null() {
+        *rowp += nvim_win_get_winrow_off(wp);
+        *colp += nvim_win_get_wincol_off(wp);
+    }
+    wp
 }
 
 // =============================================================================
