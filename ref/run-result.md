@@ -1,16 +1,29 @@
-Plan: ~/.claude/plans/misty-exploring-feather.md
+Plan: ~/.claude/plans/swirling-foraging-swan.md
 
-All 8 phases of the fold.c migration plan are complete. Here's a summary:
+All 6 phases of the mark.c migration plan are complete. Here's the summary:
 
-**Commits (6 total):**
-1. `a9dcfd12` - Phase 1: foldMoveRange + truncate_fold (~104 C lines)
-2. `a403074c` - Phase 2: foldMarkAdjustRecurse thin wrapper (~83 C lines)
-3. `2b18fd6e` - Phase 3: foldLevel + checkupdate + fold_info + lineFolded + foldCheckClose (~80 C lines)
-4. `17deacb4` - Phase 4a: expr/syntax level getter accessors (prep)
-5. `fc14d15c` - Phase 4b-4d: Unified IEMS for all fold methods (marker/expr/syntax support + dispatcher)
-6. `dc3bf6bb` - Phase 5: Dead code cleanup (644 lines deleted)
+## Mark Migration Summary
 
-**Results:**
-- `fold.c` went from ~3,216 lines to **2,436 lines** (~780 lines deleted across all phases)
-- All fold methods (indent, diff, marker, expr, syntax) now route through the unified Rust IEMS implementation
-- All checks pass: `build`, `smoke-test`, `rust-fmt-check`, `rust-clippy`, `rust-test` (4155 tests)
+### Commits (6 phases)
+| Phase | Commit | Functions | C Lines Deleted |
+|-------|--------|-----------|-----------------|
+| 1 | FFI + Memory ops | 7 | ~50 |
+| 2 | Simple win/buf ops | 8 | ~80 |
+| 3 | Mark get/set | 8 (2 deferred) | ~240 |
+| 4 | Jumplist/changelist nav | 7 | ~250 |
+| 5 | Mark adjustment core | 4 | ~240 |
+| 6 | Ex commands + remaining | 3 (5 deferred) | ~120 |
+| **Total** | | **37 migrated** | **~980** |
+
+### Deferred Functions
+**Phase 3:** `setmark`/`setmark_pos` — pointer comparison `pos == &curwin->w_cursor` can't be replicated in Rust FFI.
+
+**Phase 6 (presentation-layer):** `ex_marks`, `show_one_mark`, `ex_jumps`, `ex_changes`, `mark_line` — these are display functions that would just wrap C message subsystem calls (`msg_puts_title`, `msg_putchar`, `msg_outtrans`, `snprintf` into `IObuff`) with no meaningful logic to move to Rust.
+
+**Plan-deferred (11 functions):** VimL list iterators, ShaDa iterators, autocommand-triggering functions — heavy `list_T`/`dict_T` type dependencies.
+
+### What Was Built
+- Opaque `BufHandle`, `WinHandle`, `TabHandle` types
+- ~100+ C accessor functions for struct field access
+- `_Static_assert` verification for all shared constants
+- 37 `#[no_mangle] pub extern "C"` Rust functions replacing C implementations
