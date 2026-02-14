@@ -222,6 +222,14 @@ extern void rs_diff_check_unchanged(tabpage_T *tp, diff_T *dp);
 extern int rs_diffopt_changed(void);
 extern int rs_diffanchors_changed(bool buflocal);
 
+// Phase 3: Diff computation pipeline migrations
+extern void rs_diff_try_update(void *dio, int idx_orig, const exarg_T *eap);
+extern void rs_diff_read(int idx_orig, int idx_new, void *dio);
+extern void rs_process_hunk(diff_T **dpp, diff_T **dprevp, int idx_orig, int idx_new,
+                            linenr_T lnum_orig, int count_orig,
+                            linenr_T lnum_new, int count_new,
+                            bool *notsetp);
+
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
 
@@ -636,142 +644,7 @@ static int lnum_compare(const void *s1, const void *s2)
 /// @param eap   can be NULL
 static void diff_try_update(diffio_T *dio, int idx_orig, exarg_T *eap)
 {
-  if (dio->dio_internal) {
-    ga_init(&dio->dio_diff.dout_ga, sizeof(diffhunk_T), 100);
-  } else {
-    // We need three temp file names.
-    dio->dio_orig.din_fname = vim_tempname();
-    dio->dio_new.din_fname = vim_tempname();
-    dio->dio_diff.dout_fname = vim_tempname();
-    if (dio->dio_orig.din_fname == NULL
-        || dio->dio_new.din_fname == NULL
-        || dio->dio_diff.dout_fname == NULL) {
-      goto theend;
-    }
-    // Check external diff is actually working.
-    if (check_external_diff(dio) == FAIL) {
-      goto theend;
-    }
-  }
-
-  // :diffupdate!
-  if (eap != NULL && eap->forceit) {
-    for (int idx_new = idx_orig; idx_new < DB_COUNT; idx_new++) {
-      buf_T *buf = curtab->tp_diffbuf[idx_new];
-      if (buf_valid(buf)) {
-        buf_check_timestamp(buf);
-      }
-    }
-  }
-
-  // Parse and sort diff anchors if enabled
-  int num_anchors = INT_MAX;
-  linenr_T anchors[DB_COUNT][MAX_DIFF_ANCHORS];
-  CLEAR_FIELD(anchors);
-  if (diff_flags & DIFF_ANCHOR) {
-    for (int idx = 0; idx < DB_COUNT; idx++) {
-      if (curtab->tp_diffbuf[idx] == NULL) {
-        continue;
-      }
-      int buf_num_anchors = 0;
-      if (parse_diffanchors(false,
-                            curtab->tp_diffbuf[idx],
-                            anchors[idx],
-                            &buf_num_anchors) != OK) {
-        emsg(_(e_failed_to_find_all_diff_anchors));
-        num_anchors = 0;
-        CLEAR_FIELD(anchors);
-        break;
-      }
-      if (buf_num_anchors < num_anchors) {
-        num_anchors = buf_num_anchors;
-      }
-
-      if (buf_num_anchors > 0) {
-        qsort((void *)anchors[idx],
-              (size_t)buf_num_anchors,
-              sizeof(linenr_T),
-              lnum_compare);
-      }
-    }
-  }
-  if (num_anchors == INT_MAX) {
-    num_anchors = 0;
-  }
-
-  // Split the files into multiple sections by anchors. Each section starts
-  // from one anchor (inclusive) and ends at the next anchor (exclusive).
-  // Diff each section separately before combining the results. If we don't
-  // have any anchors, we will have one big section of the entire file.
-  for (int anchor_i = 0; anchor_i <= num_anchors; anchor_i++) {
-    diff_T *orig_diff = NULL;
-    if (anchor_i != 0) {
-      orig_diff = curtab->tp_first_diff;
-      curtab->tp_first_diff = NULL;
-    }
-    linenr_T lnum_start = (anchor_i == 0) ? 1 : anchors[idx_orig][anchor_i - 1];
-    linenr_T lnum_end = (anchor_i == num_anchors) ? -1 : anchors[idx_orig][anchor_i] - 1;
-
-    // Write the first buffer to a tempfile or mmfile_t.
-    buf_T *buf = curtab->tp_diffbuf[idx_orig];
-    if (diff_write(buf, &dio->dio_orig, lnum_start, lnum_end) == FAIL) {
-      if (orig_diff != NULL) {
-        // Clean up in-progress diff blocks
-        curtab->tp_first_diff = orig_diff;
-        diff_clear(curtab);
-      }
-      goto theend;
-    }
-
-    // Make a difference between the first buffer and every other.
-    for (int idx_new = idx_orig + 1; idx_new < DB_COUNT; idx_new++) {
-      buf = curtab->tp_diffbuf[idx_new];
-      if (buf == NULL || buf->b_ml.ml_mfp == NULL) {
-        continue;  // skip buffer that isn't loaded
-      }
-      lnum_start = anchor_i == 0 ? 1 : anchors[idx_new][anchor_i - 1];
-      lnum_end = anchor_i == num_anchors ? -1 : anchors[idx_new][anchor_i] - 1;
-
-      // Write the other buffer and diff with the first one.
-      if (diff_write(buf, &dio->dio_new, lnum_start, lnum_end) == FAIL) {
-        continue;
-      }
-      if (diff_file(dio) == FAIL) {
-        continue;
-      }
-
-      // Read the diff output and add each entry to the diff list.
-      diff_read(idx_orig, idx_new, dio);
-
-      clear_diffin(&dio->dio_new);
-      clear_diffout(&dio->dio_diff);
-    }
-    clear_diffin(&dio->dio_orig);
-
-    if (anchor_i != 0) {
-      // Combine the new diff blocks with the existing ones
-      for (diff_T *dp = curtab->tp_first_diff; dp != NULL; dp = dp->df_next) {
-        for (int idx = 0; idx < DB_COUNT; idx++) {
-          if (anchors[idx][anchor_i - 1] > 0) {
-            dp->df_lnum[idx] += anchors[idx][anchor_i - 1] - 1;
-          }
-        }
-      }
-      if (orig_diff != NULL) {
-        diff_T *last_diff = orig_diff;
-        while (last_diff->df_next != NULL) {
-          last_diff = last_diff->df_next;
-        }
-        last_diff->df_next = curtab->tp_first_diff;
-        curtab->tp_first_diff = orig_diff;
-      }
-    }
-  }
-
-theend:
-  xfree(dio->dio_orig.din_fname);
-  xfree(dio->dio_new.din_fname);
-  xfree(dio->dio_diff.dout_fname);
+  rs_diff_try_update(dio, idx_orig, eap);
 }
 
 /// Return true if the options are set to use the internal diff library.
@@ -1381,197 +1254,15 @@ void ex_diffoff(exarg_T *eap)
   }
 }
 
-static bool extract_hunk_internal(diffout_T *dout, diffhunk_T *hunk, int *line_idx)
-{
-  bool eof = *line_idx >= dout->dout_ga.ga_len;
-  if (!eof) {
-    *hunk = ((diffhunk_T *)dout->dout_ga.ga_data)[(*line_idx)++];
-  }
-  return eof;
-}
-
-// Extract hunk by parsing the diff output from file and calculate the diffstyle.
-static bool extract_hunk(FILE *fd, diffhunk_T *hunk, diffstyle_T *diffstyle)
-{
-  while (true) {
-    char line[LBUFLEN];  // only need to hold the diff line
-    if (vim_fgets(line, LBUFLEN, fd)) {
-      return true;  // end of file
-    }
-
-    if (*diffstyle == DIFF_NONE) {
-      // Determine diff style.
-      // ed like diff looks like this:
-      // {first}[,{last}]c{first}[,{last}]
-      // {first}a{first}[,{last}]
-      // {first}[,{last}]d{first}
-      //
-      // unified diff looks like this:
-      // --- file1       2018-03-20 13:23:35.783153140 +0100
-      // +++ file2       2018-03-20 13:23:41.183156066 +0100
-      // @@ -1,3 +1,5 @@
-      if (isdigit((uint8_t)(*line))) {
-        *diffstyle = DIFF_ED;
-      } else if ((strncmp(line, "@@ ", 3) == 0)) {
-        *diffstyle = DIFF_UNIFIED;
-      } else if ((strncmp(line, "--- ", 4) == 0)
-                 && (vim_fgets(line, LBUFLEN, fd) == 0)
-                 && (strncmp(line, "+++ ", 4) == 0)
-                 && (vim_fgets(line, LBUFLEN, fd) == 0)
-                 && (strncmp(line, "@@ ", 3) == 0)) {
-        *diffstyle = DIFF_UNIFIED;
-      } else {
-        // Format not recognized yet, skip over this line.  Cygwin diff
-        // may put a warning at the start of the file.
-        continue;
-      }
-    }
-
-    if (*diffstyle == DIFF_ED) {
-      if (!isdigit((uint8_t)(*line))) {
-        continue;   // not the start of a diff block
-      }
-      if (parse_diff_ed(line, hunk) == FAIL) {
-        continue;
-      }
-    } else {
-      assert(*diffstyle == DIFF_UNIFIED);
-      if (strncmp(line, "@@ ", 3) != 0) {
-        continue;   // not the start of a diff block
-      }
-      if (parse_diff_unified(line, hunk) == FAIL) {
-        continue;
-      }
-    }
-
-    // Successfully parsed diff output, can return
-    return false;
-  }
-}
+// extract_hunk_internal and extract_hunk have been migrated to Rust.
 
 static void process_hunk(diff_T **dpp, diff_T **dprevp, int idx_orig, int idx_new, diffhunk_T *hunk,
                          bool *notsetp)
 {
-  diff_T *dp = *dpp;
-  diff_T *dprev = *dprevp;
-
-  // Go over blocks before the change, for which orig and new are equal.
-  // Copy blocks from orig to new.
-  while (dp != NULL
-         && hunk->lnum_orig > dp->df_lnum[idx_orig] + dp->df_count[idx_orig]) {
-    if (*notsetp) {
-      diff_copy_entry(dprev, dp, idx_orig, idx_new);
-    }
-    dprev = dp;
-    dp = dp->df_next;
-    *notsetp = true;
-  }
-
-  if ((dp != NULL)
-      && (hunk->lnum_orig <= dp->df_lnum[idx_orig] + dp->df_count[idx_orig])
-      && (hunk->lnum_orig + hunk->count_orig >= dp->df_lnum[idx_orig])) {
-    // New block overlaps with existing block(s).
-    // First find last block that overlaps.
-    diff_T *dpl;
-    for (dpl = dp; dpl->df_next != NULL; dpl = dpl->df_next) {
-      if (hunk->lnum_orig + hunk->count_orig < dpl->df_next->df_lnum[idx_orig]) {
-        break;
-      }
-    }
-
-    // If the newly found block starts before the old one, set the
-    // start back a number of lines.
-    linenr_T off = dp->df_lnum[idx_orig] - hunk->lnum_orig;
-
-    if (off > 0) {
-      for (int i = idx_orig; i < idx_new; i++) {
-        if (curtab->tp_diffbuf[i] != NULL) {
-          dp->df_lnum[i] -= off;
-          dp->df_count[i] += off;
-        }
-      }
-      dp->df_lnum[idx_new] = hunk->lnum_new;
-      dp->df_count[idx_new] = (linenr_T)hunk->count_new;
-    } else if (*notsetp) {
-      // new block inside existing one, adjust new block
-      dp->df_lnum[idx_new] = hunk->lnum_new + off;
-      dp->df_count[idx_new] = (linenr_T)hunk->count_new - off;
-    } else {
-      // second overlap of new block with existing block
-
-      // if this hunk has different orig/new counts, adjust
-      // the diff block size first. When we handled the first hunk we
-      // would have expanded it to fit, without knowing that this
-      // hunk exists
-      int orig_size_in_dp = MIN(hunk->count_orig,
-                                dp->df_lnum[idx_orig] +
-                                dp->df_count[idx_orig] - hunk->lnum_orig);
-      int size_diff = hunk->count_new - orig_size_in_dp;
-      dp->df_count[idx_new] += size_diff;
-
-      // grow existing block to include the overlap completely
-      off = hunk->lnum_new + hunk->count_new
-            - (dp->df_lnum[idx_new] + dp->df_count[idx_new]);
-      if (off > 0) {
-        dp->df_count[idx_new] += off;
-      }
-    }
-
-    // Adjust the size of the block to include all the lines to the
-    // end of the existing block or the new diff, whatever ends last.
-    off = (hunk->lnum_orig + (linenr_T)hunk->count_orig)
-          - (dpl->df_lnum[idx_orig] + dpl->df_count[idx_orig]);
-
-    if (off < 0) {
-      // new change ends in existing block, adjust the end. We only
-      // need to do this once per block or we will over-adjust.
-      if (*notsetp || dp != dpl) {
-        // adjusting by 'off' here is only correct if
-        // there is not another hunk in this block. we
-        // adjust for this when we encounter a second
-        // overlap later.
-        dp->df_count[idx_new] += -off;
-      }
-      off = 0;
-    }
-
-    for (int i = idx_orig; i < idx_new; i++) {
-      if (curtab->tp_diffbuf[i] != NULL) {
-        dp->df_count[i] = dpl->df_lnum[i] + dpl->df_count[i]
-                          - dp->df_lnum[i] + off;
-      }
-    }
-
-    // Delete the diff blocks that have been merged into one.
-    diff_T *dn = dp->df_next;
-    dp->df_next = dpl->df_next;
-
-    while (dn != dp->df_next) {
-      dpl = dn->df_next;
-      clear_diffblock(dn);
-      dn = dpl;
-    }
-  } else {
-    // Allocate a new diffblock.
-    dp = diff_alloc_new(curtab, dprev, dp);
-
-    dp->df_lnum[idx_orig] = hunk->lnum_orig;
-    dp->df_count[idx_orig] = (linenr_T)hunk->count_orig;
-    dp->df_lnum[idx_new] = hunk->lnum_new;
-    dp->df_count[idx_new] = (linenr_T)hunk->count_new;
-
-    // Set values for other buffers, these must be equal to the
-    // original buffer, otherwise there would have been a change
-    // already.
-    for (int i = idx_orig + 1; i < idx_new; i++) {
-      if (curtab->tp_diffbuf[i] != NULL) {
-        diff_copy_entry(dprev, dp, idx_orig, i);
-      }
-    }
-  }
-  *notsetp = false;  // "*dp" has been set
-  *dpp = dp;
-  *dprevp = dprev;
+  rs_process_hunk(dpp, dprevp, idx_orig, idx_new,
+                  hunk->lnum_orig, hunk->count_orig,
+                  hunk->lnum_new, hunk->count_new,
+                  notsetp);
 }
 
 /// Read the diff output and add each entry to the diff list.
@@ -1581,48 +1272,7 @@ static void process_hunk(diff_T **dpp, diff_T **dprevp, int idx_orig, int idx_ne
 /// @dout diff output
 static void diff_read(int idx_orig, int idx_new, diffio_T *dio)
 {
-  FILE *fd = NULL;
-  int line_hunk_idx = 0;  // line or hunk index
-  diff_T *dprev = NULL;
-  diff_T *dp = curtab->tp_first_diff;
-  diffout_T *dout = &dio->dio_diff;
-  bool notset = true;  // block "*dp" not set yet
-  diffstyle_T diffstyle = DIFF_NONE;
-
-  if (!dio->dio_internal) {
-    fd = os_fopen(dout->dout_fname, "r");
-    if (fd == NULL) {
-      emsg(_("E98: Cannot read diff output"));
-      return;
-    }
-  }
-
-  while (true) {
-    diffhunk_T hunk = { 0 };
-    bool eof = dio->dio_internal
-               ? extract_hunk_internal(dout, &hunk, &line_hunk_idx)
-               : extract_hunk(fd, &hunk, &diffstyle);
-
-    if (eof) {
-      break;
-    }
-
-    process_hunk(&dp, &dprev, idx_orig, idx_new, &hunk, &notset);
-  }
-
-  // for remaining diff blocks orig and new are equal
-  while (dp != NULL) {
-    if (notset) {
-      diff_copy_entry(dprev, dp, idx_orig, idx_new);
-    }
-    dprev = dp;
-    dp = dp->df_next;
-    notset = true;
-  }
-
-  if (fd != NULL) {
-    fclose(fd);
-  }
+  rs_diff_read(idx_orig, idx_new, dio);
 }
 
 /// Copy an entry at "dp" from "idx_orig" to "idx_new".
@@ -4365,4 +4015,383 @@ int nvim_diff_parse_diffanchors(void)
 const char *nvim_diff_get_p_dip(void)
 {
   return p_dip;
+}
+
+// =============================================================================
+// Phase 3 Rust FFI accessor functions
+// =============================================================================
+
+/// Create a new zero-initialized diffio_T on the heap.
+void *nvim_diffio_new(bool use_internal)
+{
+  diffio_T *dio = xcalloc(1, sizeof(diffio_T));
+  dio->dio_internal = use_internal ? 1 : 0;
+  return dio;
+}
+
+/// Free a diffio_T.
+void nvim_diffio_free(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  xfree(dio);
+}
+
+/// Get whether dio uses internal diff.
+bool nvim_diffio_is_internal(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  return dio != NULL && dio->dio_internal;
+}
+
+/// Initialize garray for internal diff output.
+void nvim_diffio_init_ga(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio != NULL) {
+    ga_init(&dio->dio_diff.dout_ga, sizeof(diffhunk_T), 100);
+  }
+}
+
+/// Allocate temp filenames for external diff.
+/// Returns false if any allocation fails.
+bool nvim_diffio_alloc_tempfiles(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio == NULL) {
+    return false;
+  }
+  dio->dio_orig.din_fname = vim_tempname();
+  dio->dio_new.din_fname = vim_tempname();
+  dio->dio_diff.dout_fname = vim_tempname();
+  return (dio->dio_orig.din_fname != NULL
+          && dio->dio_new.din_fname != NULL
+          && dio->dio_diff.dout_fname != NULL);
+}
+
+/// Free all temp filenames.
+void nvim_diffio_free_tempfiles(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio == NULL) {
+    return;
+  }
+  xfree(dio->dio_orig.din_fname);
+  xfree(dio->dio_new.din_fname);
+  xfree(dio->dio_diff.dout_fname);
+  dio->dio_orig.din_fname = NULL;
+  dio->dio_new.din_fname = NULL;
+  dio->dio_diff.dout_fname = NULL;
+}
+
+/// Write buf to the "orig" slot of dio.
+int nvim_diffio_write_orig(void *dio_ptr, buf_T *buf, linenr_T start, linenr_T end)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio == NULL || buf == NULL) {
+    return FAIL;
+  }
+  return diff_write(buf, &dio->dio_orig, start, end);
+}
+
+/// Write buf to the "new" slot of dio.
+int nvim_diffio_write_new(void *dio_ptr, buf_T *buf, linenr_T start, linenr_T end)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio == NULL || buf == NULL) {
+    return FAIL;
+  }
+  return diff_write(buf, &dio->dio_new, start, end);
+}
+
+/// Run the diff (external or internal).
+int nvim_diffio_run_diff(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio == NULL) {
+    return FAIL;
+  }
+  return diff_file(dio);
+}
+
+/// Check external diff works.
+int nvim_diffio_check_external(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio == NULL) {
+    return FAIL;
+  }
+  return check_external_diff(dio);
+}
+
+/// Clear the "new" input.
+void nvim_diffio_clear_new(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio != NULL) {
+    clear_diffin(&dio->dio_new);
+  }
+}
+
+/// Clear the diff output.
+void nvim_diffio_clear_output(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio != NULL) {
+    clear_diffout(&dio->dio_diff);
+  }
+}
+
+/// Clear the "orig" input.
+void nvim_diffio_clear_orig(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio != NULL) {
+    clear_diffin(&dio->dio_orig);
+  }
+}
+
+/// Get the number of hunks in internal diff output.
+int nvim_diffio_get_hunk_count(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio == NULL) {
+    return 0;
+  }
+  return dio->dio_diff.dout_ga.ga_len;
+}
+
+/// Get a hunk from internal diff output by index.
+/// Returns hunk fields via out params.
+bool nvim_diffio_get_hunk(void *dio_ptr, int idx,
+                          linenr_T *lnum_orig, int *count_orig,
+                          linenr_T *lnum_new, int *count_new)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio == NULL || idx < 0 || idx >= dio->dio_diff.dout_ga.ga_len) {
+    return false;
+  }
+  diffhunk_T *hunks = (diffhunk_T *)dio->dio_diff.dout_ga.ga_data;
+  *lnum_orig = hunks[idx].lnum_orig;
+  *count_orig = hunks[idx].count_orig;
+  *lnum_new = hunks[idx].lnum_new;
+  *count_new = hunks[idx].count_new;
+  return true;
+}
+
+/// Open the external diff output file for reading.
+/// Returns an opaque file handle (NULL on failure).
+void *nvim_diffio_open_output(void *dio_ptr)
+{
+  diffio_T *dio = (diffio_T *)dio_ptr;
+  if (dio == NULL || dio->dio_diff.dout_fname == NULL) {
+    return NULL;
+  }
+  return os_fopen(dio->dio_diff.dout_fname, "r");
+}
+
+/// Read a line from external diff output file.
+/// Returns true on EOF.
+bool nvim_diff_fgets(void *fd, char *buf, int buflen)
+{
+  if (fd == NULL) {
+    return true;
+  }
+  return vim_fgets(buf, buflen, (FILE *)fd);
+}
+
+/// Close external diff output file.
+void nvim_diff_fclose(void *fd)
+{
+  if (fd != NULL) {
+    fclose((FILE *)fd);
+  }
+}
+
+/// Check if buf is valid.
+bool nvim_diff_buf_valid(buf_T *buf)
+{
+  return buf_valid(buf);
+}
+
+/// Check buffer timestamp.
+void nvim_diff_buf_check_timestamp(buf_T *buf)
+{
+  if (buf != NULL) {
+    buf_check_timestamp(buf);
+  }
+}
+
+/// Check if buffer is loaded (ml_mfp != NULL).
+bool nvim_diff_buf_is_loaded(buf_T *buf)
+{
+  return buf != NULL && buf->b_ml.ml_mfp != NULL;
+}
+
+/// Get the curtab first diff block and set it.
+void nvim_diff_curtab_set_first_diff(diff_T *dp)
+{
+  curtab->tp_first_diff = dp;
+}
+
+/// Get curtab first diff block.
+diff_T *nvim_diff_curtab_get_first_diff(void)
+{
+  return curtab->tp_first_diff;
+}
+
+/// Get diff block's df_next.
+diff_T *nvim_diff_block_get_next(diff_T *dp)
+{
+  return dp ? dp->df_next : NULL;
+}
+
+/// Set diff block's df_next.
+void nvim_diff_block_set_next(diff_T *dp, diff_T *next)
+{
+  if (dp) {
+    dp->df_next = next;
+  }
+}
+
+/// Get diff block df_lnum[idx].
+linenr_T nvim_diff_block_get_lnum(diff_T *dp, int idx)
+{
+  return dp ? dp->df_lnum[idx] : 0;
+}
+
+/// Set diff block df_lnum[idx].
+void nvim_diff_block_set_lnum(diff_T *dp, int idx, linenr_T lnum)
+{
+  if (dp) {
+    dp->df_lnum[idx] = lnum;
+  }
+}
+
+/// Get diff block df_count[idx].
+linenr_T nvim_diff_block_get_count(diff_T *dp, int idx)
+{
+  return dp ? dp->df_count[idx] : 0;
+}
+
+/// Set diff block df_count[idx].
+void nvim_diff_block_set_count(diff_T *dp, int idx, linenr_T count)
+{
+  if (dp) {
+    dp->df_count[idx] = count;
+  }
+}
+
+/// Check if eap is not NULL and forceit is true.
+bool nvim_eap_forceit(const exarg_T *eap)
+{
+  return eap != NULL && eap->forceit;
+}
+
+/// Get the curtab diff buffer.
+buf_T *nvim_diff_curtab_diffbuf(int idx)
+{
+  if (idx < 0 || idx >= DB_COUNT) {
+    return NULL;
+  }
+  return curtab->tp_diffbuf[idx];
+}
+
+/// Set curwin->w_valid_cursor.lnum = 0.
+void nvim_diff_invalidate_cursor(void)
+{
+  curwin->w_valid_cursor.lnum = 0;
+}
+
+/// Fire DiffUpdated autocmd.
+void nvim_diff_fire_diffupdated(void)
+{
+  apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf);
+}
+
+/// Get the diff_need_update flag.
+bool nvim_diff_get_need_update(void)
+{
+  return diff_need_update;
+}
+
+/// Set the diff_need_update flag.
+void nvim_diff_set_need_update(bool val)
+{
+  diff_need_update = val;
+}
+
+/// Set diff_busy flag.
+void nvim_diff_set_busy(bool val)
+{
+  diff_busy = val;
+}
+
+/// Get MAX_DIFF_ANCHORS constant.
+int nvim_diff_max_anchors(void)
+{
+  return MAX_DIFF_ANCHORS;
+}
+
+/// Emit E98 error.
+void nvim_diff_emsg_e98(void)
+{
+  emsg(_("E98: Cannot read diff output"));
+}
+
+/// Emit "failed to find all diff anchors" error.
+void nvim_diff_emsg_anchors(void)
+{
+  emsg(_(e_failed_to_find_all_diff_anchors));
+}
+
+/// Parse diff anchors for a specific buffer.
+/// Returns number of anchors found, -1 on error.
+int nvim_diff_parse_buf_anchors(buf_T *buf, linenr_T *anchors, int max_anchors)
+{
+  if (buf == NULL) {
+    return -1;
+  }
+  int num = 0;
+  if (parse_diffanchors(false, buf, anchors, &num) != OK) {
+    return -1;
+  }
+  return num;
+}
+
+/// Sort an array of line numbers.
+void nvim_diff_sort_lnums(linenr_T *arr, int count)
+{
+  if (arr != NULL && count > 0) {
+    qsort(arr, (size_t)count, sizeof(linenr_T), lnum_compare);
+  }
+}
+
+/// Parse diff output line in ED format.
+int nvim_diff_parse_ed(const char *line, linenr_T *lnum_orig, int *count_orig,
+                       linenr_T *lnum_new, int *count_new)
+{
+  diffhunk_T hunk = { 0 };
+  int r = parse_diff_ed((char *)line, &hunk);
+  if (r == OK) {
+    *lnum_orig = hunk.lnum_orig;
+    *count_orig = hunk.count_orig;
+    *lnum_new = hunk.lnum_new;
+    *count_new = hunk.count_new;
+  }
+  return r;
+}
+
+/// Parse diff output line in unified format.
+int nvim_diff_parse_unified(const char *line, linenr_T *lnum_orig, int *count_orig,
+                            linenr_T *lnum_new, int *count_new)
+{
+  diffhunk_T hunk = { 0 };
+  int r = parse_diff_unified((char *)line, &hunk);
+  if (r == OK) {
+    *lnum_orig = hunk.lnum_orig;
+    *count_orig = hunk.count_orig;
+    *lnum_new = hunk.lnum_new;
+    *count_new = hunk.count_new;
+  }
+  return r;
 }

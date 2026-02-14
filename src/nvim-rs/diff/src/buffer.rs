@@ -1723,6 +1723,645 @@ pub unsafe extern "C" fn rs_diffanchors_changed(buflocal: bool) -> c_int {
     result
 }
 
+// =============================================================================
+// Phase 3: Diff Computation Pipeline
+// =============================================================================
+
+/// Opaque handle to a diffio_T allocated on the C heap.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DiffioHandle(*mut c_void);
+
+impl DiffioHandle {
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
+/// Opaque exarg_T handle.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug)]
+pub struct ExargHandle(*const c_void);
+
+impl ExargHandle {
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+// Phase 3 C accessors
+#[allow(dead_code)]
+extern "C" {
+    fn nvim_diffio_new(use_internal: bool) -> DiffioHandle;
+    fn nvim_diffio_free(dio: DiffioHandle);
+    fn nvim_diffio_is_internal(dio: DiffioHandle) -> bool;
+    fn nvim_diffio_init_ga(dio: DiffioHandle);
+    fn nvim_diffio_alloc_tempfiles(dio: DiffioHandle) -> bool;
+    fn nvim_diffio_free_tempfiles(dio: DiffioHandle);
+    fn nvim_diffio_write_orig(
+        dio: DiffioHandle,
+        buf: BufHandle,
+        start: LinenrT,
+        end: LinenrT,
+    ) -> c_int;
+    fn nvim_diffio_write_new(
+        dio: DiffioHandle,
+        buf: BufHandle,
+        start: LinenrT,
+        end: LinenrT,
+    ) -> c_int;
+    fn nvim_diffio_run_diff(dio: DiffioHandle) -> c_int;
+    fn nvim_diffio_check_external(dio: DiffioHandle) -> c_int;
+    fn nvim_diffio_clear_new(dio: DiffioHandle);
+    fn nvim_diffio_clear_output(dio: DiffioHandle);
+    fn nvim_diffio_clear_orig(dio: DiffioHandle);
+    fn nvim_diffio_get_hunk_count(dio: DiffioHandle) -> c_int;
+    fn nvim_diffio_get_hunk(
+        dio: DiffioHandle,
+        idx: c_int,
+        lnum_orig: *mut LinenrT,
+        count_orig: *mut c_int,
+        lnum_new: *mut LinenrT,
+        count_new: *mut c_int,
+    ) -> bool;
+    fn nvim_diffio_open_output(dio: DiffioHandle) -> *mut c_void;
+    fn nvim_diff_fgets(fd: *mut c_void, buf: *mut c_char, buflen: c_int) -> bool;
+    fn nvim_diff_fclose(fd: *mut c_void);
+    fn nvim_diff_buf_valid(buf: BufHandle) -> bool;
+    fn nvim_diff_buf_check_timestamp(buf: BufHandle);
+    fn nvim_diff_buf_is_loaded(buf: BufHandle) -> bool;
+    fn nvim_diff_curtab_set_first_diff(dp: DiffBlockHandle);
+    fn nvim_diff_curtab_get_first_diff() -> DiffBlockHandle;
+    fn nvim_eap_forceit(eap: ExargHandle) -> bool;
+    fn nvim_diff_curtab_diffbuf(idx: c_int) -> BufHandle;
+    fn nvim_diff_invalidate_cursor();
+    fn nvim_diff_fire_diffupdated();
+    fn nvim_diff_get_need_update() -> bool;
+    fn nvim_diff_set_need_update(val: bool);
+    fn nvim_diff_set_busy(val: bool);
+    fn nvim_diff_max_anchors() -> c_int;
+    fn nvim_diff_emsg_e98();
+    fn nvim_diff_emsg_anchors();
+    fn nvim_diff_parse_buf_anchors(
+        buf: BufHandle,
+        anchors: *mut LinenrT,
+        max_anchors: c_int,
+    ) -> c_int;
+    fn nvim_diff_sort_lnums(arr: *mut LinenrT, count: c_int);
+    fn nvim_diff_parse_ed(
+        line: *const c_char,
+        lnum_orig: *mut LinenrT,
+        count_orig: *mut c_int,
+        lnum_new: *mut LinenrT,
+        count_new: *mut c_int,
+    ) -> c_int;
+    fn nvim_diff_parse_unified(
+        line: *const c_char,
+        lnum_orig: *mut LinenrT,
+        count_orig: *mut c_int,
+        lnum_new: *mut LinenrT,
+        count_new: *mut c_int,
+    ) -> c_int;
+}
+
+/// Diff output style.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum DiffStyle {
+    Ed,
+    Unified,
+    None,
+}
+
+/// A diff hunk (line numbers and counts for orig and new).
+#[derive(Clone, Copy, Debug, Default)]
+struct DiffHunk {
+    lnum_orig: LinenrT,
+    count_orig: c_int,
+    lnum_new: LinenrT,
+    count_new: c_int,
+}
+
+const LBUFLEN: usize = 50;
+
+/// Extract a hunk from internal diff output.
+/// Returns true on EOF.
+unsafe fn extract_hunk_internal(
+    dio: DiffioHandle,
+    hunk: &mut DiffHunk,
+    line_idx: &mut c_int,
+) -> bool {
+    let count = nvim_diffio_get_hunk_count(dio);
+    if *line_idx >= count {
+        return true;
+    }
+    let mut lnum_orig: LinenrT = 0;
+    let mut count_orig: c_int = 0;
+    let mut lnum_new: LinenrT = 0;
+    let mut count_new: c_int = 0;
+    if nvim_diffio_get_hunk(
+        dio,
+        *line_idx,
+        &raw mut lnum_orig,
+        &raw mut count_orig,
+        &raw mut lnum_new,
+        &raw mut count_new,
+    ) {
+        hunk.lnum_orig = lnum_orig;
+        hunk.count_orig = count_orig;
+        hunk.lnum_new = lnum_new;
+        hunk.count_new = count_new;
+        *line_idx += 1;
+    }
+    false
+}
+
+/// Extract a hunk from external diff file output.
+/// Returns true on EOF.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+unsafe fn extract_hunk_external(
+    fd: *mut c_void,
+    hunk: &mut DiffHunk,
+    diffstyle: &mut DiffStyle,
+) -> bool {
+    let mut line = [0u8; LBUFLEN];
+
+    loop {
+        if nvim_diff_fgets(fd, line.as_mut_ptr().cast::<c_char>(), LBUFLEN as c_int) {
+            return true; // EOF
+        }
+
+        if *diffstyle == DiffStyle::None {
+            // Determine diff style
+            if (line[0] as char).is_ascii_digit() {
+                *diffstyle = DiffStyle::Ed;
+            } else if line.starts_with(b"@@ ") {
+                *diffstyle = DiffStyle::Unified;
+            } else if line.starts_with(b"--- ") {
+                // Check for unified diff header: ---, +++, @@
+                let mut line2 = [0u8; LBUFLEN];
+                if nvim_diff_fgets(fd, line2.as_mut_ptr().cast::<c_char>(), LBUFLEN as c_int) {
+                    continue;
+                }
+                if !line2.starts_with(b"+++ ") {
+                    continue;
+                }
+                if nvim_diff_fgets(fd, line2.as_mut_ptr().cast::<c_char>(), LBUFLEN as c_int) {
+                    continue;
+                }
+                if line2.starts_with(b"@@ ") {
+                    *diffstyle = DiffStyle::Unified;
+                    // Use this line for parsing below
+                    line.copy_from_slice(&line2);
+                } else {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+        }
+
+        let mut lnum_orig: LinenrT = 0;
+        let mut count_orig: c_int = 0;
+        let mut lnum_new: LinenrT = 0;
+        let mut count_new: c_int = 0;
+
+        if *diffstyle == DiffStyle::Ed {
+            if !(line[0] as char).is_ascii_digit() {
+                continue;
+            }
+            if nvim_diff_parse_ed(
+                line.as_ptr().cast::<c_char>(),
+                &raw mut lnum_orig,
+                &raw mut count_orig,
+                &raw mut lnum_new,
+                &raw mut count_new,
+            ) == FAIL
+            {
+                continue;
+            }
+        } else {
+            // Unified
+            if !line.starts_with(b"@@ ") {
+                continue;
+            }
+            if nvim_diff_parse_unified(
+                line.as_ptr().cast::<c_char>(),
+                &raw mut lnum_orig,
+                &raw mut count_orig,
+                &raw mut lnum_new,
+                &raw mut count_new,
+            ) == FAIL
+            {
+                continue;
+            }
+        }
+
+        hunk.lnum_orig = lnum_orig;
+        hunk.count_orig = count_orig;
+        hunk.lnum_new = lnum_new;
+        hunk.count_new = count_new;
+        return false;
+    }
+}
+
+/// Process a single diff hunk into the diff block list.
+///
+/// Equivalent to C `process_hunk`.
+#[no_mangle]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::similar_names
+)]
+pub unsafe extern "C" fn rs_process_hunk(
+    dpp: *mut DiffBlockHandle,
+    dprevp: *mut DiffBlockHandle,
+    idx_orig: c_int,
+    idx_new: c_int,
+    lnum_orig: LinenrT,
+    count_orig: c_int,
+    lnum_new: LinenrT,
+    count_new: c_int,
+    notsetp: *mut bool,
+) {
+    if dpp.is_null() || dprevp.is_null() || notsetp.is_null() {
+        return;
+    }
+
+    let mut dp = *dpp;
+    let mut dprev = *dprevp;
+    let notset = &mut *notsetp;
+
+    // Go over blocks before the change, for which orig and new are equal.
+    // Copy blocks from orig to new.
+    while !dp.is_null()
+        && lnum_orig
+            > nvim_diffblock_get_lnum(dp, idx_orig) + nvim_diffblock_get_count(dp, idx_orig)
+    {
+        if *notset {
+            crate::rs_diff_copy_entry(dprev.as_ptr(), dp.as_ptr(), idx_orig, idx_new);
+        }
+        dprev = dp;
+        dp = nvim_diffblock_get_next(dp);
+        *notset = true;
+    }
+
+    if !dp.is_null()
+        && lnum_orig
+            <= nvim_diffblock_get_lnum(dp, idx_orig) + nvim_diffblock_get_count(dp, idx_orig)
+        && lnum_orig + count_orig as LinenrT >= nvim_diffblock_get_lnum(dp, idx_orig)
+    {
+        // New block overlaps with existing block(s).
+        // Find last block that overlaps.
+        let mut dpl = dp;
+        loop {
+            let dpl_next = nvim_diffblock_get_next(dpl);
+            if dpl_next.is_null() {
+                break;
+            }
+            if lnum_orig + (count_orig as LinenrT) < nvim_diffblock_get_lnum(dpl_next, idx_orig) {
+                break;
+            }
+            dpl = dpl_next;
+        }
+
+        let off = nvim_diffblock_get_lnum(dp, idx_orig) - lnum_orig;
+
+        if off > 0 {
+            for i in idx_orig..idx_new {
+                if !nvim_diff_curtab_diffbuf(i).is_null() {
+                    let lnum = nvim_diffblock_get_lnum(dp, i);
+                    let count = nvim_diffblock_get_count(dp, i);
+                    nvim_diffblock_set_lnum(dp, i, lnum - off);
+                    nvim_diffblock_set_count(dp, i, count + off);
+                }
+            }
+            nvim_diffblock_set_lnum(dp, idx_new, lnum_new);
+            nvim_diffblock_set_count(dp, idx_new, count_new as LinenrT);
+        } else if *notset {
+            // new block inside existing one, adjust new block
+            nvim_diffblock_set_lnum(dp, idx_new, lnum_new + off);
+            nvim_diffblock_set_count(dp, idx_new, count_new as LinenrT - off);
+        } else {
+            // second overlap of new block with existing block
+            let dp_lnum = nvim_diffblock_get_lnum(dp, idx_orig);
+            let dp_count = nvim_diffblock_get_count(dp, idx_orig);
+            let orig_size_in_dp = (count_orig as LinenrT).min(dp_lnum + dp_count - lnum_orig);
+            let size_diff = count_new as LinenrT - orig_size_in_dp;
+            let dp_count_new = nvim_diffblock_get_count(dp, idx_new);
+            nvim_diffblock_set_count(dp, idx_new, dp_count_new + size_diff);
+
+            // grow existing block to include the overlap completely
+            let dp_lnum_new = nvim_diffblock_get_lnum(dp, idx_new);
+            let dp_count_new = nvim_diffblock_get_count(dp, idx_new);
+            let grow = lnum_new + count_new as LinenrT - (dp_lnum_new + dp_count_new);
+            if grow > 0 {
+                nvim_diffblock_set_count(dp, idx_new, dp_count_new + grow);
+            }
+        }
+
+        // Adjust the size of the block to include all the lines to the end
+        let dpl_lnum = nvim_diffblock_get_lnum(dpl, idx_orig);
+        let dpl_count = nvim_diffblock_get_count(dpl, idx_orig);
+        let mut off = (lnum_orig + count_orig as LinenrT) - (dpl_lnum + dpl_count);
+
+        if off < 0 {
+            if *notset || dp != dpl {
+                let c = nvim_diffblock_get_count(dp, idx_new);
+                nvim_diffblock_set_count(dp, idx_new, c + (-off));
+            }
+            off = 0;
+        }
+
+        for i in idx_orig..idx_new {
+            if !nvim_diff_curtab_diffbuf(i).is_null() {
+                let dpl_l = nvim_diffblock_get_lnum(dpl, i);
+                let dpl_c = nvim_diffblock_get_count(dpl, i);
+                let dp_l = nvim_diffblock_get_lnum(dp, i);
+                nvim_diffblock_set_count(dp, i, dpl_l + dpl_c - dp_l + off);
+            }
+        }
+
+        // Delete merged diff blocks
+        let mut dn = nvim_diffblock_get_next(dp);
+        let dp_next_after_dpl = nvim_diffblock_get_next(dpl);
+        nvim_diff_set_next(dp, dp_next_after_dpl);
+
+        while dn != dp_next_after_dpl {
+            let dpl_next = nvim_diffblock_get_next(dn);
+            nvim_diffblock_clear_and_free(dn);
+            dn = dpl_next;
+        }
+    } else {
+        // Allocate a new diffblock.
+        dp = rs_diff_alloc_new(nvim_get_curtab(), dprev, dp);
+
+        nvim_diffblock_set_lnum(dp, idx_orig, lnum_orig);
+        nvim_diffblock_set_count(dp, idx_orig, count_orig as LinenrT);
+        nvim_diffblock_set_lnum(dp, idx_new, lnum_new);
+        nvim_diffblock_set_count(dp, idx_new, count_new as LinenrT);
+
+        // Set values for other buffers
+        for i in (idx_orig + 1)..idx_new {
+            if !nvim_diff_curtab_diffbuf(i).is_null() {
+                crate::rs_diff_copy_entry(dprev.as_ptr(), dp.as_ptr(), idx_orig, i);
+            }
+        }
+    }
+
+    *notset = false;
+    *dpp = dp;
+    *dprevp = dprev;
+}
+
+/// Read the diff output and add each entry to the diff list.
+///
+/// Equivalent to C `diff_read`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_read(idx_orig: c_int, idx_new: c_int, dio: DiffioHandle) {
+    let is_internal = nvim_diffio_is_internal(dio);
+    let mut line_hunk_idx: c_int = 0;
+    let mut dprev = DiffBlockHandle::null();
+    let mut dp = nvim_diff_curtab_get_first_diff();
+    let mut notset = true;
+    let mut diffstyle = DiffStyle::None;
+
+    let fd = if is_internal {
+        std::ptr::null_mut()
+    } else {
+        let f = nvim_diffio_open_output(dio);
+        if f.is_null() {
+            nvim_diff_emsg_e98();
+            return;
+        }
+        f
+    };
+
+    loop {
+        let mut hunk = DiffHunk::default();
+        let eof = if is_internal {
+            extract_hunk_internal(dio, &mut hunk, &mut line_hunk_idx)
+        } else {
+            extract_hunk_external(fd, &mut hunk, &mut diffstyle)
+        };
+
+        if eof {
+            break;
+        }
+
+        rs_process_hunk(
+            &raw mut dp,
+            &raw mut dprev,
+            idx_orig,
+            idx_new,
+            hunk.lnum_orig,
+            hunk.count_orig,
+            hunk.lnum_new,
+            hunk.count_new,
+            &raw mut notset,
+        );
+    }
+
+    // For remaining diff blocks, orig and new are equal
+    while !dp.is_null() {
+        if notset {
+            crate::rs_diff_copy_entry(dprev.as_ptr(), dp.as_ptr(), idx_orig, idx_new);
+        }
+        dprev = dp;
+        dp = nvim_diffblock_get_next(dp);
+        notset = true;
+    }
+
+    if !fd.is_null() {
+        nvim_diff_fclose(fd);
+    }
+}
+
+const MAX_DIFF_ANCHORS_RUST: usize = 20;
+
+/// Update diffs for all buffers involved.
+///
+/// Equivalent to C `diff_try_update`.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, eap: ExargHandle) {
+    if dio.is_null() {
+        return;
+    }
+
+    let is_internal = nvim_diffio_is_internal(dio);
+
+    if is_internal {
+        nvim_diffio_init_ga(dio);
+    } else {
+        // Allocate temp filenames
+        if !nvim_diffio_alloc_tempfiles(dio) {
+            // goto theend equivalent: free and return
+            nvim_diffio_free_tempfiles(dio);
+            return;
+        }
+        // Check external diff actually works
+        if nvim_diffio_check_external(dio) == FAIL {
+            nvim_diffio_free_tempfiles(dio);
+            return;
+        }
+    }
+
+    // :diffupdate! — check timestamps
+    if nvim_eap_forceit(eap) {
+        for idx_new in idx_orig..DB_COUNT {
+            let buf = nvim_diff_curtab_diffbuf(idx_new);
+            if nvim_diff_buf_valid(buf) {
+                nvim_diff_buf_check_timestamp(buf);
+            }
+        }
+    }
+
+    // Parse and sort diff anchors if enabled
+    let diff_flags = nvim_diff_get_diff_flags();
+    let max_anchors = nvim_diff_max_anchors();
+    let mut num_anchors: c_int = i32::MAX;
+    let mut anchors = [[0 as LinenrT; MAX_DIFF_ANCHORS_RUST]; DB_COUNT as usize];
+
+    if (diff_flags & DIFF_ANCHOR) != 0 {
+        for idx in 0..DB_COUNT {
+            let buf = nvim_diff_curtab_diffbuf(idx);
+            if buf.is_null() {
+                continue;
+            }
+            let buf_num =
+                nvim_diff_parse_buf_anchors(buf, anchors[idx as usize].as_mut_ptr(), max_anchors);
+            if buf_num < 0 {
+                nvim_diff_emsg_anchors();
+                num_anchors = 0;
+                anchors = [[0; MAX_DIFF_ANCHORS_RUST]; DB_COUNT as usize];
+                break;
+            }
+            if buf_num < num_anchors {
+                num_anchors = buf_num;
+            }
+            if buf_num > 0 {
+                nvim_diff_sort_lnums(anchors[idx as usize].as_mut_ptr(), buf_num);
+            }
+        }
+    }
+    if num_anchors == i32::MAX {
+        num_anchors = 0;
+    }
+
+    // Process sections split by anchors
+    for anchor_i in 0..=num_anchors {
+        let mut orig_diff = DiffBlockHandle::null();
+        if anchor_i != 0 {
+            orig_diff = nvim_diff_curtab_get_first_diff();
+            nvim_diff_curtab_set_first_diff(DiffBlockHandle::null());
+        }
+
+        let lnum_start = if anchor_i == 0 {
+            1
+        } else {
+            anchors[idx_orig as usize][(anchor_i - 1) as usize]
+        };
+        let lnum_end = if anchor_i == num_anchors {
+            -1
+        } else {
+            anchors[idx_orig as usize][anchor_i as usize] - 1
+        };
+
+        // Write the first buffer
+        let buf = nvim_diff_curtab_diffbuf(idx_orig);
+        if nvim_diffio_write_orig(dio, buf, lnum_start, lnum_end) == FAIL {
+            if !orig_diff.is_null() {
+                nvim_diff_curtab_set_first_diff(orig_diff);
+                rs_diff_clear(nvim_get_curtab());
+            }
+            nvim_diffio_free_tempfiles(dio);
+            return;
+        }
+
+        // Compare with every other buffer
+        for idx_new in (idx_orig + 1)..DB_COUNT {
+            let buf = nvim_diff_curtab_diffbuf(idx_new);
+            if buf.is_null() || !nvim_diff_buf_is_loaded(buf) {
+                continue;
+            }
+
+            let new_start = if anchor_i == 0 {
+                1
+            } else {
+                anchors[idx_new as usize][(anchor_i - 1) as usize]
+            };
+            let new_end = if anchor_i == num_anchors {
+                -1
+            } else {
+                anchors[idx_new as usize][anchor_i as usize] - 1
+            };
+
+            if nvim_diffio_write_new(dio, buf, new_start, new_end) == FAIL {
+                continue;
+            }
+            if nvim_diffio_run_diff(dio) == FAIL {
+                continue;
+            }
+
+            rs_diff_read(idx_orig, idx_new, dio);
+
+            nvim_diffio_clear_new(dio);
+            nvim_diffio_clear_output(dio);
+        }
+        nvim_diffio_clear_orig(dio);
+
+        if anchor_i != 0 {
+            // Combine new diff blocks with existing ones
+            let mut dp = nvim_diff_curtab_get_first_diff();
+            while !dp.is_null() {
+                for idx in 0..DB_COUNT {
+                    if anchors[idx as usize][(anchor_i - 1) as usize] > 0 {
+                        let lnum = nvim_diffblock_get_lnum(dp, idx);
+                        nvim_diffblock_set_lnum(
+                            dp,
+                            idx,
+                            lnum + anchors[idx as usize][(anchor_i - 1) as usize] - 1,
+                        );
+                    }
+                }
+                dp = nvim_diffblock_get_next(dp);
+            }
+
+            if !orig_diff.is_null() {
+                // Find last block in orig_diff chain
+                let mut last_diff = orig_diff;
+                loop {
+                    let next = nvim_diffblock_get_next(last_diff);
+                    if next.is_null() {
+                        break;
+                    }
+                    last_diff = next;
+                }
+                let cur_first = nvim_diff_curtab_get_first_diff();
+                nvim_diff_set_next(last_diff, cur_first);
+                nvim_diff_curtab_set_first_diff(orig_diff);
+            }
+        }
+    }
+
+    nvim_diffio_free_tempfiles(dio);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
