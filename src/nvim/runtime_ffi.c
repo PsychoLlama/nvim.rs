@@ -12,14 +12,27 @@
 #include <string.h>
 
 #include "nvim/autocmd_defs.h"
+#include "nvim/errors.h"
+#include "nvim/eval.h"
 #include "nvim/eval/typval.h"
+#include "nvim/eval/vars.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/userfunc.h"
+#include "nvim/ex_docmd.h"
 #include "nvim/ex_eval_defs.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
+#include "nvim/globals.h"
+#include "nvim/hashtab.h"
 #include "nvim/memory.h"
+#include "nvim/message.h"
+#include "nvim/os/input.h"
+#include "nvim/os/os.h"
+#include "nvim/option_vars.h"
+#include "nvim/path.h"
 #include "nvim/pos_defs.h"
+#include "nvim/profile.h"
+#include "nvim/regexp.h"
 #include "nvim/runtime.h"
 #include "nvim/runtime_defs.h"
 #include "nvim/strings.h"
@@ -391,3 +404,357 @@ const char *nvim_aucmd_get_scriptname(AutoPatCmd *apc)
   }
   return "";
 }
+
+// =============================================================================
+// Phase 2: Script registry accessors
+// =============================================================================
+
+// --- SID constant assertions ---
+_Static_assert(SID_MODELINE == -1, "SID_MODELINE");
+_Static_assert(SID_CMDARG == -2, "SID_CMDARG");
+_Static_assert(SID_CARG == -3, "SID_CARG");
+_Static_assert(SID_ENV == -4, "SID_ENV");
+_Static_assert(SID_ERROR == -5, "SID_ERROR");
+_Static_assert(SID_NONE == -6, "SID_NONE");
+_Static_assert(SID_WINLAYOUT == -7, "SID_WINLAYOUT");
+_Static_assert(SID_LUA == -8, "SID_LUA");
+_Static_assert(SID_API_CLIENT == -9, "SID_API_CLIENT");
+_Static_assert(SID_STR == -10, "SID_STR");
+
+// --- script_items garray operations ---
+
+/// Grow script_items garray by n entries.
+void nvim_script_items_ga_grow(int n)
+{
+  ga_grow(&script_items, n);
+}
+
+/// Increment script_items ga_len.
+void nvim_script_items_inc_len(void)
+{
+  script_items.ga_len++;
+}
+
+/// Set a script item at 1-based index.
+void nvim_script_items_set_item(int id, scriptitem_T *si)
+{
+  SCRIPT_ITEM(id) = si;
+}
+
+/// Allocate a new scriptitem_T (xcalloc).
+scriptitem_T *nvim_xcalloc_scriptitem(void)
+{
+  return xcalloc(1, sizeof(scriptitem_T));
+}
+
+/// Allocate script-local variables for a script.
+void nvim_new_script_vars(int sid)
+{
+  new_script_vars(sid);
+}
+
+/// Set the sn_name field of a script item.
+void nvim_scriptitem_set_name(scriptitem_T *si, char *name)
+{
+  si->sn_name = name;
+}
+
+/// Set the sn_prof_on field.
+void nvim_scriptitem_set_prof_on(scriptitem_T *si, bool val)
+{
+  si->sn_prof_on = val;
+}
+
+/// Compare two filenames (path_fnamecmp wrapper).
+int nvim_rt_path_fnamecmp(const char *a, const char *b)
+{
+  return path_fnamecmp(a, b);
+}
+
+// --- get_scriptname helper ---
+// This function has complex return semantics (static strings, IObuff, allocated
+// strings), so we delegate the entire implementation to C.
+
+/// Full implementation of get_scriptname, callable from Rust.
+char *nvim_rt_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free)
+{
+  sctx_T ctx = { .sc_sid = sc_sid, .sc_chan = sc_chan };
+  return get_scriptname(ctx, should_free);
+}
+
+// --- ex_scriptnames helpers ---
+
+/// Get exarg_T addr_count.
+int nvim_rt_exarg_get_addr_count(void *eap)
+{
+  return ((exarg_T *)eap)->addr_count;
+}
+
+/// Get exarg_T line2.
+linenr_T nvim_rt_exarg_get_line2(void *eap)
+{
+  return ((exarg_T *)eap)->line2;
+}
+
+/// Get exarg_T arg pointer.
+char *nvim_rt_exarg_get_arg(void *eap)
+{
+  return ((exarg_T *)eap)->arg;
+}
+
+/// Set exarg_T arg pointer.
+void nvim_rt_exarg_set_arg(void *eap, char *arg)
+{
+  ((exarg_T *)eap)->arg = arg;
+}
+
+/// Check if the first byte of exarg_T arg is NUL.
+bool nvim_exarg_arg_is_nul(void *eap)
+{
+  return *((exarg_T *)eap)->arg == NUL;
+}
+
+/// Call expand_env.
+void nvim_rt_expand_env(char *src, char *dst, int dstlen)
+{
+  expand_env(src, dst, dstlen);
+}
+
+/// Call do_exedit.
+void nvim_rt_do_exedit(void *eap)
+{
+  do_exedit((exarg_T *)eap, NULL);
+}
+
+/// Emit e_invarg error.
+void nvim_rt_emsg_invarg(void)
+{
+  emsg(_(e_invarg));
+}
+
+/// Get the got_int flag.
+bool nvim_rt_got_int(void)
+{
+  return got_int;
+}
+
+/// Get a pointer to NameBuff.
+char *nvim_rt_get_namebuff(void)
+{
+  return NameBuff;
+}
+
+/// Get the MAXPATHL constant.
+int nvim_rt_maxpathl(void)
+{
+  return MAXPATHL;
+}
+
+/// Get a pointer to IObuff.
+char *nvim_rt_get_iobuff(void)
+{
+  return IObuff;
+}
+
+/// Get the IOSIZE constant.
+int nvim_rt_iosize(void)
+{
+  return IOSIZE;
+}
+
+/// Call home_replace(NULL, name, buf, len, true).
+void nvim_rt_home_replace(const char *name, char *buf, size_t len)
+{
+  home_replace(NULL, name, buf, len, true);
+}
+
+/// Format script entry: vim_snprintf(IObuff, IOSIZE, "%3d: %s", i, namebuff)
+void nvim_rt_format_script_entry(int i, const char *namebuff)
+{
+  vim_snprintf(IObuff, (size_t)IOSIZE, "%3d: %s", i, namebuff);
+}
+
+/// Check message_filtered.
+bool nvim_rt_message_filtered(const char *msg)
+{
+  return message_filtered(msg);
+}
+
+/// Output a newline.
+void nvim_rt_msg_putchar_nl(void)
+{
+  msg_putchar('\n');
+}
+
+/// Output a translated string.
+void nvim_rt_msg_outtrans(const char *msg)
+{
+  msg_outtrans(msg, 0, false);
+}
+
+/// Check for line break.
+void nvim_rt_line_breakcheck(void)
+{
+  line_breakcheck();
+}
+
+// --- free_scriptnames and free_autoload_scriptnames helpers ---
+// These access static variables (ga_loaded, script_items with EXITFREE macros),
+// so their C helpers live in runtime.c as nvim_rt_free_scriptnames() and
+// nvim_rt_ga_clear_loaded(). See runtime.c for the implementations.
+
+// --- get_sourced_lnum helper ---
+// nvim_rt_get_sourced_lnum lives in runtime.c (uses LineGetter type).
+
+// --- get_script_local_funcs helper ---
+// nvim_rt_get_script_local_funcs lives in runtime.c.
+
+// --- f_getscriptinfo helpers ---
+
+/// Allocate a list and set it as the return value.
+void nvim_rt_list_alloc_ret(void *rettv, int count)
+{
+  tv_list_alloc_ret((typval_T *)rettv, count);
+}
+
+/// Check for optional dict argument. Returns true if OK.
+bool nvim_rt_check_for_opt_dict_arg(void *argvars)
+{
+  return tv_check_for_opt_dict_arg((typval_T *)argvars, 0) != FAIL;
+}
+
+/// Get the list from rettv.
+list_T *nvim_rt_get_rettv_list(void *rettv)
+{
+  return ((typval_T *)rettv)->vval.v_list;
+}
+
+/// Check if first arg is a dict.
+bool nvim_rt_argvars_is_dict(void *argvars)
+{
+  return ((typval_T *)argvars)[0].v_type == VAR_DICT;
+}
+
+/// Find "sid" in a dict from argvars.
+/// Returns: >0 = valid sid, -1 = not found, -2 = error, -3 = invalid value.
+int64_t nvim_rt_dict_find_sid(void *argvars)
+{
+  dict_T *dict = ((typval_T *)argvars)[0].vval.v_dict;
+  dictitem_T *sid_di = tv_dict_find(dict, S_LEN("sid"));
+  if (sid_di == NULL) {
+    return -1;
+  }
+  bool error = false;
+  varnumber_T sid = tv_get_number_chk(&sid_di->di_tv, &error);
+  if (error) {
+    return -2;
+  }
+  if (sid <= 0) {
+    semsg(_(e_invargNval), "sid", tv_get_string(&sid_di->di_tv));
+    return -3;
+  }
+  return sid;
+}
+
+/// Get "name" pattern string from dict in argvars. Returns allocated string or NULL.
+char *nvim_rt_dict_get_name_pat(void *argvars)
+{
+  dict_T *dict = ((typval_T *)argvars)[0].vval.v_dict;
+  return tv_dict_get_string(dict, "name", true);
+}
+
+/// Compile a regex pattern. Returns opaque handle or NULL on failure.
+void *nvim_rt_vim_regcomp(const char *pat)
+{
+  regmatch_T *rm = xcalloc(1, sizeof(regmatch_T));
+  rm->rm_ic = p_ic;
+  rm->regprog = vim_regcomp((char *)pat, RE_MAGIC + RE_STRING);
+  if (rm->regprog == NULL) {
+    xfree(rm);
+    return NULL;
+  }
+  return rm;
+}
+
+/// Test if a string matches a compiled regex.
+bool nvim_rt_vim_regexec(void *regmatch, const char *str)
+{
+  return vim_regexec((regmatch_T *)regmatch, (char *)str, 0);
+}
+
+/// Free a compiled regex.
+void nvim_rt_vim_regfree(void *regmatch)
+{
+  if (regmatch != NULL) {
+    regmatch_T *rm = (regmatch_T *)regmatch;
+    vim_regfree(rm->regprog);
+    xfree(rm);
+  }
+}
+
+/// Allocate a dict.
+dict_T *nvim_rt_p2_dict_alloc(void)
+{
+  return tv_dict_alloc();
+}
+
+/// Add a string to a dict.
+void nvim_rt_dict_add_str(dict_T *d, const char *key, size_t keylen,
+                          const char *val)
+{
+  tv_dict_add_str(d, key, keylen, val);
+}
+
+/// Add a number to a dict.
+void nvim_rt_dict_add_nr(dict_T *d, const char *key, size_t keylen,
+                         int64_t nr)
+{
+  tv_dict_add_nr(d, key, keylen, (varnumber_T)nr);
+}
+
+/// Add a bool to a dict.
+void nvim_rt_dict_add_bool(dict_T *d, const char *key, size_t keylen,
+                           bool val)
+{
+  tv_dict_add_bool(d, key, keylen, val ? kBoolVarTrue : kBoolVarFalse);
+}
+
+/// Append a dict to a list.
+void nvim_rt_p2_tv_list_append_dict(list_T *l, dict_T *d)
+{
+  tv_list_append_dict(l, d);
+}
+
+/// Copy script variables dict. Returns new dict (empty if sn_vars is NULL).
+dict_T *nvim_rt_copy_script_vars(int sid)
+{
+  scriptitem_T *si = SCRIPT_ITEM(sid);
+  if (si->sn_vars == NULL) {
+    return tv_dict_alloc();
+  }
+  return tv_dict_copy(NULL, &si->sn_vars->sv_dict, true, get_copyID());
+}
+
+/// Add a dict to a dict.
+void nvim_rt_dict_add_dict(dict_T *d, const char *key, size_t keylen,
+                           dict_T *val)
+{
+  tv_dict_add_dict(d, key, keylen, val);
+}
+
+/// Add a list to a dict.
+void nvim_rt_dict_add_list(dict_T *d, const char *key, size_t keylen,
+                           list_T *val)
+{
+  tv_dict_add_list(d, key, keylen, val);
+}
+
+// --- scriptnames_slash_adjust helper ---
+
+#if defined(BACKSLASH_IN_FILENAME)
+/// Adjust slashes in a filename (Windows only).
+void nvim_rt_slash_adjust(char *name)
+{
+  slash_adjust(name);
+}
+#endif

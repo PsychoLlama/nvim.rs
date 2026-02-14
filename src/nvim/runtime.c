@@ -111,7 +111,7 @@ static garray_T ga_loaded = { 0, 0, sizeof(char *), 4, NULL };
 /// last used sequence number for sourcing scripts (current_sctx.sc_seq)
 static int last_current_SID_seq = 0;
 
-// Rust implementations of execution stack functions
+// Rust implementations of execution stack functions (Phase 1)
 extern void rs_estack_init(void);
 extern estack_T *rs_estack_push(int type, char *name, linenr_T lnum);
 extern void rs_estack_push_ufunc(ufunc_T *ufunc, linenr_T lnum);
@@ -119,6 +119,71 @@ extern void rs_estack_pop(void);
 extern char *rs_estack_sfile(int which);
 extern list_T *rs_stacktrace_create(void);
 extern void rs_f_getstacktrace(typval_T *argvars, typval_T *rettv, void *fptr);
+
+// Rust implementations of script registry functions (Phase 2)
+extern scriptitem_T *rs_new_script_item(char *name, scid_T *sid_out);
+extern int rs_find_script_by_name(const char *name);
+extern bool rs_script_is_lua(scid_T sid);
+extern char *rs_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free);
+extern void rs_ex_scriptnames(void *eap);
+extern void rs_free_scriptnames(void);
+extern void rs_free_autoload_scriptnames(void);
+extern linenr_T rs_get_sourced_lnum(void *fgetline, void *cookie);
+extern void *rs_get_script_local_funcs(scid_T sid);
+extern void rs_f_getscriptinfo(void *argvars, void *rettv, void *fptr);
+extern void rs_scriptnames_slash_adjust(void);
+
+// C helpers called by Rust for functions that access static variables.
+// These live here (not in runtime_ffi.c) because ga_loaded is static.
+
+/// Helper for rs_free_autoload_scriptnames: clear ga_loaded.
+void nvim_rt_ga_clear_loaded(void)
+{
+  ga_clear_strings(&ga_loaded);
+}
+
+/// Helper for rs_free_scriptnames: full cleanup of script_items.
+void nvim_rt_free_scriptnames(void)
+{
+  profile_reset();
+
+#define FREE_SCRIPTNAME_RS(item) \
+  do { \
+    scriptitem_T *_si = *(item); \
+    xfree(_si->sn_vars); \
+    xfree(_si->sn_name); \
+    ga_clear(&_si->sn_prl_ga); \
+    xfree(_si); \
+  } while (0)
+
+  GA_DEEP_CLEAR(&script_items, scriptitem_T *, FREE_SCRIPTNAME_RS);
+}
+
+/// Helper for rs_get_sourced_lnum: compare function pointer to getsourceline.
+linenr_T nvim_rt_get_sourced_lnum(LineGetter fgetline, void *cookie)
+{
+  return fgetline == getsourceline
+         ? ((source_cookie_T *)cookie)->sourcing_lnum
+         : SOURCING_LNUM;
+}
+
+/// Helper for rs_get_script_local_funcs: get script-local functions as a list.
+list_T *nvim_rt_get_script_local_funcs(scid_T sid)
+{
+  hashtab_T *const functbl = func_tbl_get();
+  list_T *l = tv_list_alloc((ptrdiff_t)functbl->ht_used);
+
+  HASHTAB_ITER(functbl, hi, {
+    const ufunc_T *const fp = HI2UF(hi);
+    if (fp->uf_script_ctx.sc_sid == sid) {
+      const char *const name = fp->uf_name_exp != NULL
+                               ? fp->uf_name_exp : fp->uf_name;
+      tv_list_append_string(l, name, -1);
+    }
+  });
+
+  return l;
+}
 
 /// Initialize the execution stack.
 void estack_init(void)
@@ -1841,25 +1906,7 @@ static bool concat_continued_line(garray_T *const ga, const int init_growsize, c
 scriptitem_T *new_script_item(char *const name, scid_T *const sid_out)
   FUNC_ATTR_NONNULL_RET
 {
-  static scid_T last_current_SID = 0;
-  const scid_T sid = ++last_current_SID;
-  if (sid_out != NULL) {
-    *sid_out = sid;
-  }
-  ga_grow(&script_items, sid - script_items.ga_len);
-  while (script_items.ga_len < sid) {
-    scriptitem_T *si = xcalloc(1, sizeof(scriptitem_T));
-    script_items.ga_len++;
-    SCRIPT_ITEM(script_items.ga_len) = si;
-    si->sn_name = NULL;
-
-    // Allocate the local script variables to use for this script.
-    new_script_vars(script_items.ga_len);
-
-    si->sn_prof_on = false;
-  }
-  SCRIPT_ITEM(sid)->sn_name = name;
-  return SCRIPT_ITEM(sid);
+  return rs_new_script_item(name, sid_out);
 }
 
 /// Initialization for sourcing lines from the current buffer. Reads all the
@@ -2251,32 +2298,14 @@ int do_source(char *fname, bool check_other, int is_vimrc, int *ret_sid)
 /// Checks if the script with the given script ID is a Lua script.
 bool script_is_lua(scid_T sid)
 {
-  if (sid == SID_LUA) {
-    return true;
-  }
-  if (!SCRIPT_ID_VALID(sid)) {
-    return false;
-  }
-  return SCRIPT_ITEM(sid)->sn_lua;
+  return rs_script_is_lua(sid);
 }
 
 /// Find an already loaded script "name".
 /// If found returns its script ID.  If not found returns -1.
 int find_script_by_name(char *name)
 {
-  assert(script_items.ga_len >= 0);
-  for (int sid = script_items.ga_len; sid > 0; sid--) {
-    // We used to check inode here, but that doesn't work:
-    // - If a script is edited and written, it may get a different
-    //   inode number, even though to the user it is the same script.
-    // - If a script is deleted and another script is written, with a
-    //   different name, the inode may be re-used.
-    scriptitem_T *si = SCRIPT_ITEM(sid);
-    if (si->sn_name != NULL && path_fnamecmp(si->sn_name, name) == 0) {
-      return sid;
-    }
-  }
-  return -1;
+  return rs_find_script_by_name(name);
 }
 
 /// ":scriptnames"
