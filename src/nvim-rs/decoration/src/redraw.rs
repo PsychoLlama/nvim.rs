@@ -3,12 +3,17 @@
 //! This module contains Rust implementations for decoration redraw operations
 //! during line rendering, migrated from `src/nvim/decoration.c`.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 use crate::{
     DecorKind, DecorRangeHandle, DecorStateHandle, VirtTextPos, WinHandle, DRAW_COL_JUST_ADDED,
     DRAW_COL_UNSET,
 };
+
+/// Opaque handle to buf_T.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct BufHandle(*mut c_void);
 
 // =============================================================================
 // External C Functions
@@ -24,6 +29,13 @@ extern "C" {
     fn nvim_decor_state_get_range_by_idx(state: DecorStateHandle, idx: c_int) -> DecorRangeHandle;
     fn nvim_decor_state_get_range(state: DecorStateHandle, idx: c_int) -> DecorRangeHandle;
 
+    // Phase 1 accessors
+    fn nvim_decor_state_win_has_buffer(state: DecorStateHandle, buf: BufHandle) -> c_int;
+    fn nvim_decor_state_set_itr_valid(state: DecorStateHandle, val: c_int);
+    fn nvim_decor_state_set_win(state: DecorStateHandle, win: WinHandle);
+    fn nvim_decor_state_destroy_slots(state: DecorStateHandle);
+    fn nvim_decor_state_destroy_ranges_i(state: DecorStateHandle);
+
     // DecorRange accessors
     fn nvim_decor_range_get_start_row(range: DecorRangeHandle) -> c_int;
     fn nvim_decor_range_get_kind(range: DecorRangeHandle) -> c_int;
@@ -37,6 +49,49 @@ extern "C" {
 
     // C functions for decor operations
     fn decor_redraw_start(wp: WinHandle, top_row: c_int, state: DecorStateHandle) -> bool;
+}
+
+// =============================================================================
+// Phase 1: Simple State Helpers
+// =============================================================================
+
+/// Invalidate the decor_state marktree iterator if the given buffer
+/// is the one currently being drawn.
+///
+/// Rust implementation of `decor_state_invalidate()`.
+#[no_mangle]
+pub extern "C" fn rs_decor_state_invalidate(state: DecorStateHandle, buf: BufHandle) {
+    if state.is_null() {
+        return;
+    }
+    if unsafe { nvim_decor_state_win_has_buffer(state, buf) } != 0 {
+        unsafe { nvim_decor_state_set_itr_valid(state, 0) };
+    }
+}
+
+/// Mark the end of decoration redraw by clearing the window pointer.
+///
+/// Rust implementation of `decor_redraw_end()`.
+#[no_mangle]
+pub extern "C" fn rs_decor_redraw_end(state: DecorStateHandle) {
+    if state.is_null() {
+        return;
+    }
+    unsafe { nvim_decor_state_set_win(state, WinHandle(std::ptr::null_mut())) };
+}
+
+/// Free the memory used by DecorState's kvecs.
+///
+/// Rust implementation of `decor_state_free()`.
+#[no_mangle]
+pub extern "C" fn rs_decor_state_free(state: DecorStateHandle) {
+    if state.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_decor_state_destroy_slots(state);
+        nvim_decor_state_destroy_ranges_i(state);
+    }
 }
 
 // =============================================================================

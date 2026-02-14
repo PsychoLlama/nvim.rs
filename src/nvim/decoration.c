@@ -351,15 +351,18 @@ static void decor_free_inner(DecorVirtText *vt, uint32_t first_idx)
   }
 }
 
+// Rust implementations for Phase 1
+extern void rs_decor_state_invalidate(void *state, buf_T *buf);
+extern void rs_decor_redraw_end(void *state);
+extern void rs_decor_state_free(void *state);
+
 /// Check if we are in a callback while drawing, which might invalidate the marktree iterator.
 ///
 /// This should be called whenever a structural modification has been done to a
 /// marktree in a public API function (i e any change which adds or deletes marks).
 void decor_state_invalidate(buf_T *buf)
 {
-  if (decor_state.win && decor_state.win->w_buffer == buf) {
-    decor_state.itr_valid = false;
-  }
+  rs_decor_state_invalidate(&decor_state, buf);
 }
 
 void decor_check_to_be_deleted(void)
@@ -373,8 +376,7 @@ void decor_check_to_be_deleted(void)
 
 void decor_state_free(DecorState *state)
 {
-  kv_destroy(state->slots);
-  kv_destroy(state->ranges_i);
+  rs_decor_state_free(state);
 }
 
 void clear_virttext(VirtText *text)
@@ -1117,7 +1119,7 @@ void buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, TriState 
 
 void decor_redraw_end(DecorState *state)
 {
-  state->win = NULL;
+  rs_decor_redraw_end(state);
 }
 
 bool decor_redraw_eol(win_T *wp, DecorState *state, int *eol_attr, int eol_col)
@@ -1368,6 +1370,48 @@ Object hl_group_name(int hl_id, bool hl_name)
 void *nvim_get_decor_state(void)
 {
   return &decor_state;
+}
+
+/// Check if decor_state.win has a specific buffer.
+int nvim_decor_state_win_has_buffer(void *state_ptr, buf_T *buf)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return (state->win && state->win->w_buffer == buf) ? 1 : 0;
+}
+
+/// Set decor_state.itr_valid.
+void nvim_decor_state_set_itr_valid(void *state_ptr, int val)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  state->itr_valid = val != 0;
+}
+
+/// Get decor_state.itr_valid.
+int nvim_decor_state_get_itr_valid(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->itr_valid ? 1 : 0;
+}
+
+/// Set decor_state.win to NULL.
+void nvim_decor_state_set_win(void *state_ptr, void *win)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  state->win = (win_T *)win;
+}
+
+/// Destroy decor_state.slots kvec.
+void nvim_decor_state_destroy_slots(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  kv_destroy(state->slots);
+}
+
+/// Destroy decor_state.ranges_i kvec.
+void nvim_decor_state_destroy_ranges_i(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  kv_destroy(state->ranges_i);
 }
 
 /// Get the row from decor_state.
