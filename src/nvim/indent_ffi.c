@@ -266,3 +266,39 @@ int nvim_advance_to_vcol(char *line, int target_vcol, int *out_vcol)
 
 // Get curbuf handle for extmark_splice_cols
 buf_T *nvim_indent_get_curbuf(void) { return curbuf; }
+
+// =============================================================================
+// Phase 7: ex_retab() accessors
+// =============================================================================
+
+_Static_assert(UPD_NOT_VALID == 40, "UPD_NOT_VALID must be 40");
+
+bool nvim_eap_get_forceit(const exarg_T *eap) { return eap->forceit; }
+
+int nvim_u_save(linenr_T top, linenr_T bot)
+{
+  return u_save(top, bot);
+}
+
+colnr_T nvim_indent_win_chartabsize(const char *ptr, colnr_T vcol)
+{
+  return win_chartabsize(curwin, ptr, vcol);
+}
+
+colnr_T nvim_curwin_get_w_curswant(void) { return (colnr_T)curwin->w_curswant; }
+
+OptInt nvim_retab_curbuf_get_p_ts(void) { return curbuf->b_p_ts; }
+int *nvim_retab_curbuf_get_p_vts_array(void) { return curbuf->b_p_vts_array; }
+
+void nvim_retab_curbuf_set_p_ts(OptInt val) { curbuf->b_p_ts = val; }
+void nvim_retab_curbuf_set_p_vts_array(int *val) { curbuf->b_p_vts_array = val; }
+
+void nvim_set_option_direct_vts(const char *str)
+{
+  set_option_direct(kOptVartabstop, CSTR_AS_OPTVAL(str), OPT_LOCAL, 0);
+}
+
+void nvim_emsg_interr(void)
+{
+  emsg(_(e_interr));
+}

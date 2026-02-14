@@ -14,6 +14,7 @@ pub mod getters;
 pub mod helpers;
 pub mod ins_try_si;
 pub mod reindent;
+pub mod retab;
 pub mod set_indent;
 
 use std::ffi::c_char;
