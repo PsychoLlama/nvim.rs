@@ -1728,13 +1728,14 @@ fn fold_mark_adjust_recurse_impl(
         return;
     }
 
-    // Determine top boundary
     // In Insert mode an inserted line at the top of a fold is considered part
     // of the fold, otherwise it isn't.
-    // Note: We don't have access to State here, so we use simpler logic.
-    // The C code checks (State & MODE_INSERT) && amount == 1 && line2 == MAXLNUM
-    // For now, we use line1 as the top.
-    let top = line1;
+    let top = if (unsafe { nvim_get_state() } & MODE_INSERT) != 0 && amount == 1 && line2 == MAXLNUM
+    {
+        line1 + 1
+    } else {
+        line1
+    };
 
     // Find the fold containing or just below line1
     let Some((_, start_idx)) = fold_find_with_idx(gap, line1) else {
@@ -1798,24 +1799,35 @@ fn fold_mark_adjust_recurse_impl(
                 unsafe { nvim_fold_set_fd_len(fp, fd_len + amount_after) };
             }
         } else {
-            // 5. line1 is inside fold, line2 is below fold end
+            // 5. fold is below line1 and contains line2; need to
+            // correct nested folds too
+            let nested = unsafe { nvim_fold_get_fd_nested(fp) };
             if amount == LineNr::MAX {
-                // Move nested folds
-                let nested = unsafe { nvim_fold_get_fd_nested(fp) };
                 fold_mark_adjust_recurse_impl(
                     wp,
                     nested,
                     0,
                     line2 - fd_top,
-                    LineNr::MAX,
-                    fd_top - line2 - 1,
+                    amount,
+                    amount_after + (fd_top - top),
                 );
                 unsafe {
                     nvim_fold_set_fd_len(fp, fd_len - (line2 - fd_top + 1));
-                    nvim_fold_set_fd_top(fp, line2 + 1 + amount_after);
+                    nvim_fold_set_fd_top(fp, line1);
                 }
             } else {
-                unsafe { nvim_fold_set_fd_top(fp, fd_top + amount) };
+                fold_mark_adjust_recurse_impl(
+                    wp,
+                    nested,
+                    0,
+                    line2 - fd_top,
+                    amount,
+                    amount_after - amount,
+                );
+                unsafe {
+                    nvim_fold_set_fd_len(fp, fd_len + amount_after - amount);
+                    nvim_fold_set_fd_top(fp, fd_top + amount);
+                }
             }
         }
         i += 1;
