@@ -302,3 +302,90 @@ void nvim_emsg_interr(void)
 {
   emsg(_(e_interr));
 }
+
+// =============================================================================
+// Phase 8: get_lisp_indent() accessors
+// =============================================================================
+
+/// Compute vcol of the character at byte offset `col` in `line`, using
+/// the charsize machinery for window `wp` at line `lnum`.
+/// Also returns the pointer to the character at that column via *out_ptr.
+int nvim_lisp_vcol_at_col(linenr_T lnum, char *line, colnr_T col, char **out_ptr)
+{
+  CharsizeArg csarg;
+  CSType cstype = init_charsize_arg(&csarg, curwin, lnum, line);
+  StrCharInfo sci = utf_ptr2StrCharInfo(line);
+  int amount = 0;
+  colnr_T c = col;
+  while (*sci.ptr != NUL && c > 0) {
+    amount += win_charsize(cstype, amount, sci.ptr, sci.chr.value, &csarg).width;
+    sci = utfc_next(sci);
+    c--;
+  }
+  *out_ptr = sci.ptr;
+  return amount;
+}
+
+/// Compute the width of whitespace characters starting at `ptr` in the
+/// current charsize context (same line as the previous nvim_lisp_vcol_at_col
+/// call). Returns the total vcol after advancing past whitespace, and
+/// updates *out_ptr to point past the whitespace.
+///
+/// This is a higher-level helper that takes the current vcol `amount`,
+/// the line `line` and start position `lnum`, and advances past ASCII
+/// whitespace at `ptr`.
+int nvim_lisp_skip_whitespace(linenr_T lnum, char *line, int amount, char *ptr, char **out_ptr)
+{
+  CharsizeArg csarg;
+  CSType cstype = init_charsize_arg(&csarg, curwin, lnum, line);
+  int vcol = amount;
+  char *p = ptr;
+  while (ascii_iswhite(*p)) {
+    vcol += win_charsize(cstype, vcol, p, (uint8_t)(*p), &csarg).width;
+    p++;
+  }
+  *out_ptr = p;
+  return vcol;
+}
+
+/// Walk a "word" in lisp (non-whitespace with paren/quote tracking).
+/// Starting at `ptr` with given `amount` vcol, advance past the word.
+/// Returns the final vcol. Updates *out_ptr to point past the word.
+int nvim_lisp_skip_word(linenr_T lnum, char *line, int amount, char *ptr, char **out_ptr)
+{
+  CharsizeArg csarg;
+  CSType cstype = init_charsize_arg(&csarg, curwin, lnum, line);
+  int vcol = amount;
+  char *that = ptr;
+
+  CharInfo ci = utf_ptr2CharInfo(that);
+  int quotecount = 0;
+  int parencount = 0;
+  while (*that && (!ascii_iswhite(ci.value) || quotecount || parencount)) {
+    if (ci.value == '"') {
+      quotecount = !quotecount;
+    }
+    if (((ci.value == '(') || (ci.value == '[')) && !quotecount) {
+      parencount++;
+    }
+    if (((ci.value == ')') || (ci.value == ']')) && !quotecount) {
+      parencount--;
+    }
+    if ((ci.value == '\\') && (*(that + 1) != NUL)) {
+      vcol += win_charsize(cstype, vcol, that, ci.value, &csarg).width;
+      StrCharInfo next_sci = utfc_next((StrCharInfo){ that, ci });
+      that = next_sci.ptr;
+      ci = next_sci.chr;
+    }
+
+    vcol += win_charsize(cstype, vcol, that, ci.value, &csarg).width;
+    StrCharInfo next_sci = utfc_next((StrCharInfo){ that, ci });
+    that = next_sci.ptr;
+    ci = next_sci.chr;
+  }
+  *out_ptr = that;
+  return vcol;
+}
+
+/// Get the character value at ptr (for checking against '"', '\'', '#', digits).
+int nvim_utf_ptr2char_value(const char *ptr) { return utf_ptr2CharInfo(ptr).value; }

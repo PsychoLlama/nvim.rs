@@ -13,6 +13,7 @@ pub mod copy_indent;
 pub mod getters;
 pub mod helpers;
 pub mod ins_try_si;
+pub mod lisp_indent;
 pub mod reindent;
 pub mod retab;
 pub mod set_indent;
