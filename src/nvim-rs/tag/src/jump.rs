@@ -476,6 +476,119 @@ pub unsafe extern "C" fn rs_reset_tagpreview() {
 }
 
 // =============================================================================
+// Phase 10: rs_jumpto_tag — full tag jump orchestration
+// =============================================================================
+
+extern "C" {
+    fn nvim_tag_jumpto_execute(
+        fname: *mut c_char,
+        pbuf: *mut c_char,
+        pbuf_end: *mut c_char,
+        lbuf: *mut c_char,
+        forceit: c_int,
+        keep_help: bool,
+    ) -> c_int;
+}
+
+// Import Rust functions from sibling modules via extern "C"
+extern "C" {
+    fn rs_parse_match(lbuf: *mut c_char, tagp: *mut c_void) -> c_int;
+    fn rs_find_extra(pp: *mut *mut c_char) -> c_int;
+    fn rs_expand_tag_fname(fname: *mut c_char, tag_fname: *mut c_char, expand: bool)
+        -> *mut c_char;
+}
+
+use crate::parse::TagPtrs;
+
+/// Main tag jump function — replaces `jumpto_tag()` in C.
+///
+/// Parses the match line, expands the filename, checks file existence,
+/// then delegates the complex execution phase (window management, search,
+/// command execution) to `nvim_tag_jumpto_execute` in C.
+///
+/// # Safety
+/// - `lbuf_arg` must be a valid match line string
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_jumpto_tag(
+    lbuf_arg: *const c_char,
+    forceit: c_int,
+    keep_help: bool,
+) -> c_int {
+    // Check prerequisites
+    let postponed_split = nvim_get_postponed_split();
+    if postponed_split == 0 && !nvim_check_can_set_curbuf_forceit(forceit) {
+        return FAIL;
+    }
+
+    // Calculate match line length and copy it
+    let len = matching_line_len(lbuf_arg) + 1;
+    let lbuf = xmalloc(len).cast::<c_char>();
+    memmove(lbuf.cast(), lbuf_arg.cast(), len);
+
+    // Allocate pattern buffer
+    let pbuf = xmalloc(LSIZE).cast::<c_char>();
+
+    // Parse the match line
+    let mut tagp = TagPtrs::default();
+    if rs_parse_match(lbuf, (&raw mut tagp).cast()) == FAIL {
+        xfree(lbuf.cast());
+        xfree(pbuf.cast());
+        nvim_set_g_do_tagpreview(0);
+        return FAIL;
+    }
+
+    // Truncate filename so it can be used as a string
+    *tagp.fname_end = 0;
+    let fname = tagp.fname;
+
+    // Copy the command to pbuf[], remove trailing CR/NL
+    let mut str_p = tagp.command;
+    let mut pbuf_end = pbuf;
+    while *str_p != 0 && *str_p != b'\n' as c_char && *str_p != b'\r' as c_char {
+        *pbuf_end = *str_p;
+        pbuf_end = pbuf_end.add(1);
+        str_p = str_p.add(1);
+        if pbuf_end.offset_from(pbuf) as usize + 1 >= LSIZE {
+            break;
+        }
+    }
+    *pbuf_end = 0;
+
+    // Remove the "<Tab>fieldname:value" stuff
+    let mut extra_str = pbuf;
+    if rs_find_extra(&raw mut extra_str) == OK {
+        pbuf_end = extra_str;
+        *pbuf_end = 0;
+    }
+
+    // Expand filename
+    let expanded_fname = rs_expand_tag_fname(fname, tagp.tag_fname, true);
+
+    // Check if file exists
+    if !nvim_tag_path_exists(expanded_fname) && !nvim_has_bufreadcmd(expanded_fname) {
+        nvim_set_nofile_fname(expanded_fname);
+        xfree(lbuf.cast());
+        xfree(pbuf.cast());
+        xfree(expanded_fname.cast());
+        nvim_set_g_do_tagpreview(0);
+        return NOTAGFILE;
+    }
+
+    // Delegate the complex execution to C (window splitting, file loading,
+    // search/command execution, cursor management)
+    let retval = nvim_tag_jumpto_execute(expanded_fname, pbuf, pbuf_end, lbuf, forceit, keep_help);
+
+    // Cleanup
+    nvim_set_g_do_tagpreview(0);
+    xfree(lbuf.cast());
+    xfree(pbuf.cast());
+    xfree(expanded_fname.cast());
+
+    retval
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
