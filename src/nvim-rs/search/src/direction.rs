@@ -235,6 +235,26 @@ pub extern "C" fn rs_reverse_search_direction() {
     reverse_search_direction();
 }
 
+/// Set the search direction character without updating the vim variable.
+///
+/// This is the Rust equivalent of `set_search_direction()` in search.c
+/// which only sets `spats[0].off.dir` without calling `set_vv_searchforward()`.
+#[inline]
+pub fn set_search_direction_raw(dir: c_char) {
+    // SAFETY: Setting global state
+    unsafe {
+        nvim_set_spat_off_dir(state::RE_SEARCH, dir);
+    }
+}
+
+/// FFI: Set the search direction (raw, without updating vim variable).
+///
+/// This matches the C `set_search_direction()` semantics exactly.
+#[no_mangle]
+pub extern "C" fn rs_set_search_direction_raw(cdir: c_int) {
+    set_search_direction_raw(cdir as c_char);
+}
+
 /// FFI: Reset search direction to forward.
 #[no_mangle]
 pub extern "C" fn rs_reset_search_dir() {

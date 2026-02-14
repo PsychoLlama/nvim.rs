@@ -115,6 +115,12 @@ extern int rs_last_csearch_forward(void);
 extern int rs_last_csearch_until(void);
 extern const char *rs_last_csearch(void);
 extern int rs_search_was_last_used(void);
+extern void rs_set_last_csearch(int c, const char *s, int len);
+extern void rs_set_csearch_direction(int dir);
+extern void rs_set_csearch_until(int until);
+extern void rs_set_search_direction_raw(int cdir);
+extern void rs_reset_search_dir(void);
+extern int rs_search_linewhite(int lnum);
 
 // Rust FFI declarations for pattern utilities
 extern int rs_pat_has_uppercase(const char *pat);
@@ -203,6 +209,23 @@ void nvim_set_lastcdir(int dir)
 void nvim_set_last_t_cmd(int t_cmd)
 {
   last_t_cmd = t_cmd;
+}
+
+/// Bulk copy bytes into lastc_bytes[] and clear if len is 0 (accessor for Rust).
+void nvim_set_lastc_bytes_raw(const char *s, int len)
+{
+  if (len > 0 && s != NULL) {
+    memcpy(lastc_bytes, s, (size_t)len);
+  } else {
+    CLEAR_FIELD(lastc_bytes);
+  }
+}
+
+/// Check if line 'lnum' in curbuf is empty or has only white chars (accessor for Rust).
+/// Returns a pointer past whitespace in the line.
+char *nvim_search_skipwhite_ml_get(linenr_T lnum)
+{
+  return skipwhite(ml_get(lnum));
 }
 
 // copy of spats[], for keeping the search patterns while executing autocmds
@@ -789,23 +812,17 @@ int last_csearch_until(void)
 
 void set_last_csearch(int c, char *s, int len)
 {
-  *lastc = (uint8_t)c;
-  lastc_bytelen = len;
-  if (len) {
-    memcpy(lastc_bytes, s, (size_t)len);
-  } else {
-    CLEAR_FIELD(lastc_bytes);
-  }
+  rs_set_last_csearch(c, s, len);
 }
 
 void set_csearch_direction(Direction cdir)
 {
-  lastcdir = cdir;
+  rs_set_csearch_direction(cdir);
 }
 
 void set_csearch_until(int t_cmd)
 {
-  last_t_cmd = t_cmd;
+  rs_set_csearch_until(t_cmd);
 }
 
 char *last_search_pat(void)
@@ -816,8 +833,7 @@ char *last_search_pat(void)
 // Reset search direction to forward.  For "gd" and "gD" commands.
 void reset_search_dir(void)
 {
-  spats[0].off.dir = '/';
-  set_vv_searchforward();
+  rs_reset_search_dir();
 }
 
 // Set the last search pattern.  For ":let @/ =" and ShaDa file.
@@ -985,7 +1001,7 @@ int searchit(win_T *win, buf_T *buf, pos_T *pos, pos_T *end_pos, Direction dir, 
 
 void set_search_direction(int cdir)
 {
-  spats[0].off.dir = (char)cdir;
+  rs_set_search_direction_raw(cdir);
 }
 
 static void set_vv_searchforward(void)
@@ -2110,8 +2126,7 @@ static int is_zero_width(char *pattern, size_t patternlen, bool move, pos_T *cur
 /// @return  true if line 'lnum' is empty or has white chars only.
 bool linewhite(linenr_T lnum)
 {
-  char *p = skipwhite(ml_get(lnum));
-  return *p == NUL;
+  return rs_search_linewhite(lnum);
 }
 
 /// Add the search count "[3/19]" to "msgbuf".

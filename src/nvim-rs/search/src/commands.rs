@@ -20,6 +20,7 @@ extern "C" {
     fn nvim_get_lastc_bytes() -> *const c_char;
     fn nvim_get_lastc_bytelen() -> c_int;
     fn nvim_set_lastc_bytelen(len: c_int);
+    fn nvim_set_lastc_bytes_raw(s: *const c_char, len: c_int);
 }
 
 // =============================================================================
@@ -316,6 +317,27 @@ pub fn should_force_csearch_movement(count: c_int, until: bool, cpo_has_scolon: 
 // =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Set the last character search state (character, byte string, and byte length).
+///
+/// This is the Rust equivalent of `set_last_csearch()` in search.c.
+///
+/// # Safety
+/// `s` must be a valid pointer to `len` bytes (or NULL if `len` is 0).
+pub unsafe fn set_last_csearch(c: c_int, s: *const c_char, len: c_int) {
+    nvim_set_lastc(0, c as u8);
+    nvim_set_lastc_bytelen(len);
+    nvim_set_lastc_bytes_raw(s, len);
+}
+
+/// FFI: Set the last character search state.
+///
+/// # Safety
+/// `s` must be a valid pointer to `len` bytes (or NULL if `len` is 0).
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_last_csearch(c: c_int, s: *const c_char, len: c_int) {
+    set_last_csearch(c, s, len);
+}
 
 /// FFI: Create a new character search state.
 #[no_mangle]

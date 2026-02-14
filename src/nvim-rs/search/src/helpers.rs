@@ -3,7 +3,7 @@
 //! This module provides helper functions for pattern compilation,
 //! search argument initialization, and pattern matching utilities.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::state;
 
@@ -498,6 +498,12 @@ pub extern "C" fn rs_search_opt_mark() -> c_int {
 // Pattern Case Sensitivity
 // =============================================================================
 
+// External C functions for line/buffer access
+extern "C" {
+    /// Get skipwhite(ml_get(lnum)) for curbuf.
+    fn nvim_search_skipwhite_ml_get(lnum: i32) -> *const c_char;
+}
+
 // External C functions for pattern analysis
 extern "C" {
     /// Check if character is uppercase (multibyte aware).
@@ -676,6 +682,30 @@ pub unsafe extern "C" fn rs_ignorecase_opt(
     scs: c_int,
 ) -> c_int {
     c_int::from(ignorecase_opt(pat, ic != 0, scs != 0))
+}
+
+// =============================================================================
+// Line Content Helpers
+// =============================================================================
+
+/// Check if line 'lnum' is empty or has white chars only.
+///
+/// This is the Rust equivalent of `linewhite()` in search.c.
+///
+/// # Safety
+/// Calls C accessor to get line content.
+pub unsafe fn linewhite(lnum: i32) -> bool {
+    let p = nvim_search_skipwhite_ml_get(lnum);
+    !p.is_null() && *p == 0
+}
+
+/// FFI: Check if line is empty or whitespace only.
+///
+/// # Safety
+/// Calls C accessor to get line content from curbuf.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_linewhite(lnum: i32) -> c_int {
+    c_int::from(linewhite(lnum))
 }
 
 #[cfg(test)]
