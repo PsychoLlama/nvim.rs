@@ -1,31 +1,33 @@
-Plan: ~/.claude/plans/groovy-wiggling-dream.md
+Plan: ~/.claude/plans/iterative-stirring-puzzle.md
 
-## Migration Complete
+All phases of the highlight.c migration plan are complete. Here's a summary:
 
-All 8 phases of the `runtime.c` migration plan are done. Here's the summary:
+## Results
 
-| Phase | Description | Functions Migrated | Status |
-|-------|------------|-------------------|--------|
-| 1 | Execution Stack | 8 functions | Committed |
-| 2 | Script Registry | 11 functions | Committed |
-| 3 | Path Utilities & Default RTP | 9 functions | Committed |
-| 4 | Search Path Cache | 5 mgmt functions (data structures stay in C) | Committed |
-| 5 | Path Searching & Callbacks | 8 functions (4 kept in C: do_in_path, do_in_cached_path, etc.) | Committed |
-| 6 | Package Management | 7 functions (5 kept in C: add_pack_dir_to_rtp, etc.) | Committed |
-| 7 | Core Sourcing & Line Reading | **Skipped** - circular FFI risk with do_cmdline/getsourceline callback cycle | N/A |
-| 8 | Remaining Functions | 3 runtime command functions | Committed |
+**highlight.c**: 728 → 321 lines (**-56%**, ~407 lines deleted)
 
-**What stayed in C and why:**
-- **Core sourcing pipeline** (do_source_ext, getsourceline, get_one_sourceline) - circular FFI with `do_cmdline()` callback
-- **Complex data structure operations** (RuntimeSearchPath build/free/copy) - kvec_t macro-based C types
-- **Opaque struct accessors** (source_cookie_T, exarg_T field access) - FFI overhead exceeds benefit for trivial functions
-- **Expansion/completion** (ExpandRTDir_int, etc.) - garray_T + globpath heavy usage
+### Commits
+| Commit | Phase | Description |
+|--------|-------|-------------|
+| `24c7ac5788` | 1 | Delete dead static functions |
+| `7269d7f85d` | 2 | Migrate coordination functions (clear_hl_tables, hl_invalidate_blends, highlight_use_hlstate) |
+| `3cd625c1a3` | 3 | Migrate arena management (get_attr_entry, ui_send_all_hls) |
+| `ceb0cbaac0` | 4 | Migrate dict2hlattrs (~155 lines of dict parsing) |
+| `55ed43c36e` | 5 | Migrate ns_get_hl middle section (Lua callback orchestration) |
+| `a5f168d7ca` | 7 | Final cleanup (remove orphaned declarations, unused includes, reorganize) |
 
-**Commits:**
-1. `e766fac72d` - Phase 1: Execution Stack
-2. `af22aeafac` - Phase 2: Script Registry  
-3. `9c9e9f1707` - Phase 3: Path Utilities
-4. `550fae50bf` - Phase 4: Search Path Cache
-5. `f2d2aaaea6` - Phase 5: Path Searching
-6. `af531a0272` - Phase 6: Package Management
-7. `b6c0ec8220` - Phase 8: Runtime Commands
+### What remains in highlight.c
+- `_Static_assert` checks (6 lines)
+- Consolidated `extern rs_*` declarations (30 lines)
+- C accessor functions for globals/enums (45 lines)
+- C callback wrappers for UI dispatch, emsg, Lua bridge (55 lines)
+- Thin 1-line wrappers delegating to Rust (160 lines)
+- `dict2hlattrs` bridge (needs C `Dict(highlight)` type conversion)
+- `ns_hl_def` branch (ns_id==0 needs C `set_hl_group`)
+
+### All checks pass
+- `just build` - clean
+- `just smoke-test` - passes
+- `just rust-fmt-check` - clean
+- `just rust-clippy` - clean
+- `just rust-test` - 4296 tests pass
