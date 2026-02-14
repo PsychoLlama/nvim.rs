@@ -14,6 +14,7 @@
 use std::ptr::NonNull;
 
 use crate::node::{MTNode, MarkTree, MarkTreeIter};
+use crate::DecorInlineData;
 use crate::{compose, key_cmp, mt_lookup_id, relative, unrelative, MTKey, MTPos, MT_MAX_DEPTH};
 
 // ============================================================================
@@ -409,7 +410,7 @@ impl MarkTreeIter {
             } else {
                 0
             },
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
 
         self.pos = MTPos::new(0, 0);
@@ -616,21 +617,21 @@ mod tests {
             ns: 1,
             id: 1,
             flags: crate::flags::MT_FLAG_REAL,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         root.keys[1] = MTKey {
             pos: MTPos::new(0, 10),
             ns: 1,
             id: 2,
             flags: crate::flags::MT_FLAG_REAL,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         root.keys[2] = MTKey {
             pos: MTPos::new(1, 0),
             ns: 1,
             id: 3,
             flags: crate::flags::MT_FLAG_REAL,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         root.n = 3;
 
@@ -729,14 +730,14 @@ mod tests {
             ns: 0,
             id: 0,
             flags: 0,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         node.keys[1] = MTKey {
             pos: MTPos::new(0, 10),
             ns: 0,
             id: 0,
             flags: 0,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         node.n = 2;
 

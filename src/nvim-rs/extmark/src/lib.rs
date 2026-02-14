@@ -31,7 +31,9 @@ use std::ffi::{c_int, c_void};
 
 // Re-exports from dependencies for convenience
 pub use nvim_buffer::BufHandle;
-pub use nvim_marktree::{flags::*, MTKey, MTPos, MarkTreeHandle, MarkTreeIterHandle};
+pub use nvim_marktree::{
+    flags::*, DecorInlineData, MTKey, MTPos, MarkTreeHandle, MarkTreeIterHandle,
+};
 
 // ============================================================================
 // Type Aliases
@@ -245,7 +247,7 @@ pub struct ExtmarkUndoObject {
 #[derive(Debug, Clone, Copy)]
 pub struct DecorInline {
     pub ext: bool,
-    pub data: u64,
+    pub data: DecorInlineData,
 }
 
 // ============================================================================
@@ -381,7 +383,7 @@ extern "C" {
     // ========================================================================
 
     /// Free decoration data.
-    fn nvim_decor_free(decor: u64, ext: bool);
+    fn nvim_decor_free(decor: DecorInlineData, ext: bool);
 
     /// Remove decoration from buffer.
     fn nvim_buf_decor_remove(
@@ -389,14 +391,14 @@ extern "C" {
         row1: c_int,
         row2: c_int,
         col: ColnrT,
-        decor_data: u64,
+        decor_data: DecorInlineData,
         free: bool,
     );
 
     /// Add decoration to buffer.
     fn nvim_buf_put_decor(
         buf: BufHandle,
-        decor_data: u64,
+        decor_data: DecorInlineData,
         decor_ext: bool,
         row1: c_int,
         row2: c_int,
@@ -408,7 +410,7 @@ extern "C" {
         row1: c_int,
         row2: c_int,
         col: ColnrT,
-        decor_data: u64,
+        decor_data: DecorInlineData,
         decor_ext: bool,
     );
 
@@ -578,7 +580,7 @@ pub const fn mt_decor_ext(key: MTKey) -> bool {
 /// Get decoration data as (data, ext) pair.
 #[inline]
 #[must_use]
-pub const fn mt_decor(key: MTKey) -> (u64, bool) {
+pub const fn mt_decor(key: MTKey) -> (DecorInlineData, bool) {
     (key.decor_data, key.flags & MT_FLAG_DECOR_EXT != 0)
 }
 
@@ -962,6 +964,28 @@ pub extern "C" fn rs_extmark_splice_cols(
     );
 }
 
+/// Internal implementation of extmark splice (FFI export).
+#[no_mangle]
+pub extern "C" fn rs_extmark_splice_impl(
+    buf: BufHandle,
+    start_row: c_int,
+    start_col: ColnrT,
+    start_byte: BcountT,
+    old_row: c_int,
+    old_col: ColnrT,
+    old_byte: BcountT,
+    new_row: c_int,
+    new_col: ColnrT,
+    new_byte: BcountT,
+    undo: c_int,
+) {
+    let undo_op = ExtmarkOp::from_c_int(undo).unwrap_or(ExtmarkOp::Noop);
+    extmark_splice_impl(
+        buf, start_row, start_col, start_byte, old_row, old_col, old_byte, new_row, new_col,
+        new_byte, undo_op,
+    );
+}
+
 /// Internal implementation of extmark splice.
 pub fn extmark_splice_impl(
     buf: BufHandle,
@@ -1087,6 +1111,22 @@ pub fn extmark_splice_impl(
             unsafe { nvim_extmark_undo_vec_push(uvp, obj) };
         }
     }
+}
+
+/// Invalidate extmarks between range and copy to undo header (FFI export).
+#[no_mangle]
+pub extern "C" fn rs_extmark_splice_delete(
+    buf: BufHandle,
+    l_row: c_int,
+    l_col: ColnrT,
+    u_row: c_int,
+    u_col: ColnrT,
+    uvp: ExtmarkUndoVecHandle,
+    only_copy: bool,
+    op: c_int,
+) {
+    let op = ExtmarkOp::from_c_int(op).unwrap_or(ExtmarkOp::Noop);
+    extmark_splice_delete(buf, l_row, l_col, u_row, u_col, uvp, only_copy, op);
 }
 
 /// Invalidate extmarks between range and copy to undo header.
@@ -1509,7 +1549,7 @@ mod tests {
             ns: 1,
             id: 42,
             flags: MT_FLAG_PAIRED | MT_FLAG_END | MT_FLAG_RIGHT_GRAVITY,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
 
         assert!(mt_paired(key));
@@ -1537,14 +1577,14 @@ mod tests {
             ns: 1,
             id: 1,
             flags: 0,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         let end = MTKey {
             pos: MTPos::new(5, 10),
             ns: 1,
             id: 1,
             flags: MT_FLAG_END,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         let pair = MTPair::from_keys(start, end);
         assert_eq!(pair.start.pos.row, 1);
@@ -1584,7 +1624,7 @@ pub struct ExtmarkInfo {
     /// Mark flags
     pub flags: u16,
     /// Decoration data
-    pub decor_data: u64,
+    pub decor_data: DecorInlineData,
 }
 
 impl ExtmarkInfo {

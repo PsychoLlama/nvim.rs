@@ -694,6 +694,7 @@ impl MarkTree {
 mod tests {
     use super::*;
     use crate::flags::MT_FLAG_REAL;
+    use crate::DecorInlineData;
 
     fn create_key(row: i32, col: i32, id: u32) -> MTKey {
         MTKey {
@@ -701,7 +702,7 @@ mod tests {
             ns: 1,
             id,
             flags: MT_FLAG_REAL,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         }
     }
 

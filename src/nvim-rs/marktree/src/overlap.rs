@@ -15,6 +15,7 @@ use std::ptr::NonNull;
 
 use crate::iter::getp_aux;
 use crate::node::{MTNode, MarkTree, MarkTreeIter, MT_META_COUNT};
+use crate::DecorInlineData;
 use crate::{compose, mt_start, relative, MTKey, MTPair, MTPos, MARKTREE_END_FLAG};
 
 // ============================================================================
@@ -178,7 +179,7 @@ impl MarkTreeIter {
                 ns: 0,
                 id: 0,
                 flags: 0,
-                decor_data: 0,
+                decor_data: DecorInlineData::zero(),
             };
             let (p, _) = getp_aux(node, &k);
             let p = (p + 1) as usize;
@@ -289,7 +290,7 @@ mod tests {
             ns: 1,
             id: 1,
             flags: crate::flags::MT_FLAG_REAL | crate::flags::MT_FLAG_PAIRED,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         root.keys[1] = MTKey {
             pos: MTPos::new(0, 10),
@@ -298,7 +299,7 @@ mod tests {
             flags: crate::flags::MT_FLAG_REAL
                 | crate::flags::MT_FLAG_PAIRED
                 | crate::flags::MT_FLAG_END,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         root.n = 2;
 

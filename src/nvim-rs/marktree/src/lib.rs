@@ -124,9 +124,29 @@ impl MTPos {
     }
 }
 
+/// Opaque representation of C's `DecorInlineData` union (16 bytes).
+///
+/// In C this is a union of `DecorHighlightInline` (12 bytes) and
+/// `DecorExt` (16 bytes: `uint32_t sh_idx` + `DecorVirtText *vt`).
+/// We store the raw bytes as two `u64` values for FFI compatibility.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DecorInlineData {
+    pub data: [u64; 2],
+}
+
+impl DecorInlineData {
+    /// Create a zero/empty decoration data.
+    #[inline]
+    #[must_use]
+    pub const fn zero() -> Self {
+        Self { data: [0, 0] }
+    }
+}
+
 /// Key for a mark in the tree.
 ///
-/// The `decor_data` field is represented as a u64 to match the C union size.
+/// The `decor_data` field matches C's `DecorInlineData` union (16 bytes).
 /// The actual interpretation depends on the MT_FLAG_DECOR_EXT flag.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -136,8 +156,7 @@ pub struct MTKey {
     pub id: u32,
     pub flags: u16,
     /// Decoration data (union in C: DecorHighlightInline or DecorExt).
-    /// Stored as raw bytes for FFI compatibility.
-    pub decor_data: u64,
+    pub decor_data: DecorInlineData,
 }
 
 impl Default for MTKey {
@@ -147,7 +166,7 @@ impl Default for MTKey {
             ns: 0,
             id: 0,
             flags: 0,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         }
     }
 }
@@ -162,7 +181,7 @@ impl MTKey {
             ns: 0,
             id: 0,
             flags: 0,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         }
     }
 
@@ -1478,7 +1497,7 @@ pub fn marktree_itr_get_ext(
         ns: 0,
         id: 0,
         flags,
-        decor_data: 0,
+        decor_data: DecorInlineData::zero(),
     };
 
     unsafe {
@@ -2310,7 +2329,7 @@ pub fn marktree_itr_step_overlap(
             ns: 0,
             id: 0,
             flags: 0,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         let (found_i, _) = marktree_getp_aux(x, &k);
         i = found_i + 1;
@@ -3158,21 +3177,21 @@ mod tests {
             ns: 0,
             id: 0,
             flags: MT_FLAG_REAL,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         let k2 = MTKey {
             pos: MTPos::new(0, 5),
             ns: 0,
             id: 0,
             flags: MT_FLAG_REAL,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         let k3 = MTKey {
             pos: MTPos::new(1, 0),
             ns: 0,
             id: 0,
             flags: MT_FLAG_REAL,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
 
         // Row comparison

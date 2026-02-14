@@ -452,6 +452,7 @@ impl MarkTree {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DecorInlineData;
 
     #[test]
     fn test_put_single() {
@@ -462,7 +463,7 @@ mod tests {
             ns: 1,
             id: 1,
             flags: crate::flags::MT_FLAG_REAL,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
 
         tree.put_key(key);
@@ -484,7 +485,7 @@ mod tests {
                 ns: 1,
                 id: id as u32 + 1,
                 flags: crate::flags::MT_FLAG_REAL,
-                decor_data: 0,
+                decor_data: DecorInlineData::zero(),
             };
             tree.put_key(key);
         }
@@ -503,7 +504,7 @@ mod tests {
                 ns: 1,
                 id: id as u32 + 1,
                 flags: crate::flags::MT_FLAG_REAL,
-                decor_data: 0,
+                decor_data: DecorInlineData::zero(),
             };
             tree.put_key(key);
         }
@@ -523,7 +524,7 @@ mod tests {
             id: 1,
             flags: crate::flags::MT_FLAG_DECOR_VIRT_TEXT_INLINE
                 | crate::flags::MT_FLAG_DECOR_SIGNTEXT,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
 
         let mut meta = [0u32; MT_META_COUNT];
@@ -542,7 +543,7 @@ mod tests {
             ns: 1,
             id: 1,
             flags: 0,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         insert_into_leaf(&mut node, 0, key1);
         assert_eq!(node.n, 1);
@@ -552,7 +553,7 @@ mod tests {
             ns: 1,
             id: 2,
             flags: 0,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         insert_into_leaf(&mut node, 0, key2);
         assert_eq!(node.n, 2);

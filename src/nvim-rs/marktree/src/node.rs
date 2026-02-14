@@ -618,6 +618,7 @@ impl MarkTreeIter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DecorInlineData;
 
     #[test]
     fn test_mtnode_new_leaf() {
@@ -665,14 +666,14 @@ mod tests {
             ns: 1,
             id: 1,
             flags: 0,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
         let key2 = MTKey {
             pos: MTPos::new(0, 5),
             ns: 1,
             id: 2,
             flags: 0,
-            decor_data: 0,
+            decor_data: DecorInlineData::zero(),
         };
 
         node.set_key(0, key1);

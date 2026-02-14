@@ -4738,7 +4738,5 @@ bool nvim_buf_signcols_get_autom(buf_T *buf)
 void nvim_buf_signcols_clear(buf_T *buf)
 {
   buf->b_signcols.max = 0;
-  buf->b_signcols.count[0] = 0;
-  buf->b_signcols.count[1] = 0;
-  buf->b_signcols.count[2] = 0;
+  CLEAR_FIELD(buf->b_signcols.count);
 }

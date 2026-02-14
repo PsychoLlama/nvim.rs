@@ -1773,41 +1773,33 @@ int nvim_decor_range_get_virt_inline_hl_mode(void *range_ptr)
 // Extmark Decoration Accessor Functions (for Rust FFI - extmark crate)
 // ============================================================================
 
-// Helper to reconstruct DecorInline from u64 data and ext flag.
-// The u64 is a bitcast of DecorInlineData union.
-static inline DecorInline decor_from_u64(uint64_t data, bool ext)
-{
-  DecorInline decor;
-  decor.ext = ext;
-  // DecorInlineData is a union that fits in 64 bits
-  memcpy(&decor.data, &data, sizeof(data));
-  return decor;
-}
-
 /// Free decoration data.
-void nvim_decor_free(uint64_t data, bool ext)
+void nvim_decor_free(DecorInlineData data, bool ext)
 {
-  decor_free(decor_from_u64(data, ext));
+  decor_free((DecorInline){ .ext = ext, .data = data });
 }
 
 /// Remove decoration from a buffer.
 void nvim_buf_decor_remove(buf_T *buf, int row_start, int row_end, int col_start,
-                           uint64_t decor_data, bool free_decor)
+                           DecorInlineData decor_data, bool free_decor)
 {
-  buf_decor_remove(buf, row_start, row_end, col_start, decor_from_u64(decor_data, true), free_decor);
+  buf_decor_remove(buf, row_start, row_end, col_start,
+                   (DecorInline){ .ext = true, .data = decor_data }, free_decor);
 }
 
 /// Add decoration to a buffer.
-void nvim_buf_put_decor(buf_T *buf, uint64_t decor_data, bool decor_ext, int row_start, int row_end)
+void nvim_buf_put_decor(buf_T *buf, DecorInlineData decor_data, bool decor_ext,
+                        int row_start, int row_end)
 {
-  buf_put_decor(buf, decor_from_u64(decor_data, decor_ext), row_start, row_end);
+  buf_put_decor(buf, (DecorInline){ .ext = decor_ext, .data = decor_data }, row_start, row_end);
 }
 
 /// Redraw decoration in a buffer.
 void nvim_decor_redraw(buf_T *buf, int row_start, int row_end, int col_start,
-                       uint64_t decor_data, bool decor_ext)
+                       DecorInlineData decor_data, bool decor_ext)
 {
-  decor_redraw(buf, row_start, row_end, col_start, decor_from_u64(decor_data, decor_ext));
+  decor_redraw(buf, row_start, row_end, col_start,
+               (DecorInline){ .ext = decor_ext, .data = decor_data });
 }
 
 /// Invalidate decor state for buffer.
