@@ -138,6 +138,15 @@ extern void rs_set_substitute_pattern_shada(const SearchPattern *pat);
 extern void rs_set_last_used_pattern(int is_substitute_pattern);
 extern void rs_free_search_patterns(void);
 
+// Rust FFI declarations for search_regcomp and pattern compilation
+extern int rs_search_regcomp(char *pat, size_t patlen, char **used_pat,
+                              int pat_save, int pat_use, int options,
+                              regmmatch_T *regmatch);
+extern void rs_save_re_pat(int idx, const char *pat, size_t patlen, int magic);
+extern void rs_set_last_search_pat(const char *s, int idx, int magic, int setlast);
+extern void rs_last_pat_prog(regmmatch_T *regmatch);
+extern void rs_set_vv_searchforward(void);
+
 // Rust FFI declarations for pattern utilities
 extern int rs_pat_has_uppercase(const char *pat);
 extern int rs_ignorecase(const char *pat);
@@ -412,66 +421,7 @@ typedef struct {
 int search_regcomp(char *pat, size_t patlen, char **used_pat, int pat_save, int pat_use,
                    int options, regmmatch_T *regmatch)
 {
-  rc_did_emsg = false;
-  int magic = magic_isset();
-
-  // If no pattern given, use a previously defined pattern.
-  if (pat == NULL || *pat == NUL) {
-    int i;
-    if (pat_use == RE_LAST) {
-      i = last_idx;
-    } else {
-      i = pat_use;
-    }
-    if (spats[i].pat == NULL) {         // pattern was never defined
-      if (pat_use == RE_SUBST) {
-        emsg(_(e_nopresub));
-      } else {
-        emsg(_(e_noprevre));
-      }
-      rc_did_emsg = true;
-      return FAIL;
-    }
-    pat = spats[i].pat;
-    patlen = spats[i].patlen;
-    magic = spats[i].magic;
-    no_smartcase = spats[i].no_scs;
-  } else if (options & SEARCH_HIS) {      // put new pattern in history
-    add_to_history(HIST_SEARCH, pat, patlen, true, NUL);
-  }
-
-  if (used_pat) {
-    *used_pat = pat;
-  }
-
-  xfree(mr_pattern);
-  if (curwin->w_p_rl && *curwin->w_p_rlc == 's') {
-    mr_pattern = reverse_text(pat);
-  } else {
-    mr_pattern = xstrnsave(pat, patlen);
-  }
-  mr_patternlen = patlen;
-
-  // Save the currently used pattern in the appropriate place,
-  // unless the pattern should not be remembered.
-  if (!(options & SEARCH_KEEP) && (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) == 0) {
-    // search or global command
-    if (pat_save == RE_SEARCH || pat_save == RE_BOTH) {
-      save_re_pat(RE_SEARCH, pat, patlen, magic);
-    }
-    // substitute or global command
-    if (pat_save == RE_SUBST || pat_save == RE_BOTH) {
-      save_re_pat(RE_SUBST, pat, patlen, magic);
-    }
-  }
-
-  regmatch->rmm_ic = ignorecase(pat);
-  regmatch->rmm_maxcol = 0;
-  regmatch->regprog = vim_regcomp(pat, magic ? RE_MAGIC : 0);
-  if (regmatch->regprog == NULL) {
-    return FAIL;
-  }
-  return OK;
+  return rs_search_regcomp(pat, patlen, used_pat, pat_save, pat_use, options, regmatch);
 }
 
 /// Get search pattern used by search_regcomp().
@@ -482,23 +432,7 @@ char *get_search_pat(void)
 
 void save_re_pat(int idx, char *pat, size_t patlen, int magic)
 {
-  if (spats[idx].pat == pat) {
-    return;
-  }
-
-  free_spat(&spats[idx]);
-  spats[idx].pat = xstrnsave(pat, patlen);
-  spats[idx].patlen = patlen;
-  spats[idx].magic = magic;
-  spats[idx].no_scs = no_smartcase;
-  spats[idx].timestamp = os_time();
-  spats[idx].additional_data = NULL;
-  last_idx = idx;
-  // If 'hlsearch' set and search pat changed: need redraw.
-  if (p_hls) {
-    redraw_all_later(UPD_SOME_VALID);
-  }
-  set_no_hlsearch(false);
+  rs_save_re_pat(idx, pat, patlen, magic);
 }
 
 // Save the search patterns, so they can be restored later.
@@ -789,43 +723,7 @@ void reset_search_dir(void)
 // Also set the saved search pattern, so that this works in an autocommand.
 void set_last_search_pat(const char *s, int idx, int magic, bool setlast)
 {
-  free_spat(&spats[idx]);
-  // An empty string means that nothing should be matched.
-  if (*s == NUL) {
-    spats[idx].pat = NULL;
-    spats[idx].patlen = 0;
-  } else {
-    spats[idx].patlen = strlen(s);
-    spats[idx].pat = xstrnsave(s, spats[idx].patlen);
-  }
-  spats[idx].timestamp = os_time();
-  spats[idx].additional_data = NULL;
-  spats[idx].magic = magic;
-  spats[idx].no_scs = false;
-  spats[idx].off.dir = '/';
-  set_vv_searchforward();
-  spats[idx].off.line = false;
-  spats[idx].off.end = false;
-  spats[idx].off.off = 0;
-  if (setlast) {
-    last_idx = idx;
-  }
-  if (save_level) {
-    free_spat(&saved_spats[idx]);
-    saved_spats[idx] = spats[0];
-    if (spats[idx].pat == NULL) {
-      saved_spats[idx].pat = NULL;
-      saved_spats[idx].patlen = 0;
-    } else {
-      saved_spats[idx].pat = xstrnsave(spats[idx].pat, spats[idx].patlen);
-      saved_spats[idx].patlen = spats[idx].patlen;
-    }
-    saved_spats_last_idx = last_idx;
-  }
-  // If 'hlsearch' set and search pat changed: need redraw.
-  if (p_hls && idx == last_idx && !no_hlsearch) {
-    redraw_all_later(UPD_SOME_VALID);
-  }
+  rs_set_last_search_pat(s, idx, magic, setlast);
 }
 
 // Get a regexp program for the last used search pattern.
@@ -833,13 +731,7 @@ void set_last_search_pat(const char *s, int idx, int magic, bool setlast)
 // Values returned in regmatch->regprog and regmatch->rmm_ic.
 void last_pat_prog(regmmatch_T *regmatch)
 {
-  if (spats[last_idx].pat == NULL) {
-    regmatch->regprog = NULL;
-    return;
-  }
-  emsg_off++;           // So it doesn't beep if bad expr
-  search_regcomp("", 0, NULL, 0, last_idx, SEARCH_KEEP, regmatch);
-  emsg_off--;
+  rs_last_pat_prog(regmatch);
 }
 
 /// Lowest level search function.
@@ -3816,6 +3708,159 @@ void nvim_restore_incsearch_state_batch(void)
 }
 
 // =============================================================================
+// Batch accessors for search_regcomp and pattern compilation (Phase 4)
+// =============================================================================
+
+// nvim_emsg_noprevre is already defined in register.c
+
+/// Emit "no previous substitute regular expression" error.
+void nvim_emsg_nopresub(void)
+{
+  emsg(_(e_nopresub));
+}
+
+/// Set rc_did_emsg = true.
+void nvim_set_rc_did_emsg(void)
+{
+  rc_did_emsg = true;
+}
+
+/// Get rc_did_emsg.
+int nvim_get_rc_did_emsg(void)
+{
+  return rc_did_emsg;
+}
+
+/// Clear rc_did_emsg.
+void nvim_clear_rc_did_emsg(void)
+{
+  rc_did_emsg = false;
+}
+
+/// Add search pattern to history.
+void nvim_search_add_to_history(const char *pat, size_t patlen)
+{
+  add_to_history(HIST_SEARCH, pat, patlen, true, NUL);
+}
+
+/// Set mr_pattern from pat (or reversed if rl mode).
+void nvim_set_mr_pattern(const char *pat, size_t patlen)
+{
+  xfree(mr_pattern);
+  if (curwin->w_p_rl && *curwin->w_p_rlc == 's') {
+    mr_pattern = reverse_text(pat);
+  } else {
+    mr_pattern = xstrnsave(pat, patlen);
+  }
+  mr_patternlen = patlen;
+}
+
+/// Check if cmdmod has keeppatterns flag.
+int nvim_get_cmdmod_keeppatterns(void)
+{
+  return (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0;
+}
+
+/// Batch save_re_pat: update spats[idx] with new pattern.
+void nvim_save_re_pat_batch(int idx, const char *pat, size_t patlen, int magic)
+{
+  if (spats[idx].pat == pat) {
+    return;
+  }
+  free_spat(&spats[idx]);
+  spats[idx].pat = xstrnsave(pat, patlen);
+  spats[idx].patlen = patlen;
+  spats[idx].magic = magic;
+  spats[idx].no_scs = no_smartcase;
+  spats[idx].timestamp = os_time();
+  spats[idx].additional_data = NULL;
+  last_idx = idx;
+  if (p_hls) {
+    redraw_all_later(UPD_SOME_VALID);
+  }
+  set_no_hlsearch(false);
+}
+
+/// Compile regex: call vim_regcomp and set regmatch fields.
+/// Returns 1 on success, 0 on failure.
+int nvim_search_regcomp_compile(const char *pat, int magic, regmmatch_T *regmatch)
+{
+  regmatch->rmm_ic = ignorecase(pat);
+  regmatch->rmm_maxcol = 0;
+  regmatch->regprog = vim_regcomp(pat, magic ? RE_MAGIC : 0);
+  return regmatch->regprog != NULL ? 1 : 0;
+}
+
+/// Batch set_last_search_pat: update spats[idx] and saved_spats[idx] from a string.
+void nvim_set_last_search_pat_batch(const char *s, int idx, int magic, int setlast)
+{
+  free_spat(&spats[idx]);
+  if (*s == NUL) {
+    spats[idx].pat = NULL;
+    spats[idx].patlen = 0;
+  } else {
+    spats[idx].patlen = strlen(s);
+    spats[idx].pat = xstrnsave(s, spats[idx].patlen);
+  }
+  spats[idx].timestamp = os_time();
+  spats[idx].additional_data = NULL;
+  spats[idx].magic = magic;
+  spats[idx].no_scs = false;
+  spats[idx].off.dir = '/';
+  set_vv_searchforward();
+  spats[idx].off.line = false;
+  spats[idx].off.end = false;
+  spats[idx].off.off = 0;
+  if (setlast) {
+    last_idx = idx;
+  }
+  if (save_level) {
+    free_spat(&saved_spats[idx]);
+    saved_spats[idx] = spats[0];
+    if (spats[idx].pat == NULL) {
+      saved_spats[idx].pat = NULL;
+      saved_spats[idx].patlen = 0;
+    } else {
+      saved_spats[idx].pat = xstrnsave(spats[idx].pat, spats[idx].patlen);
+      saved_spats[idx].patlen = spats[idx].patlen;
+    }
+    saved_spats_last_idx = last_idx;
+  }
+  if (p_hls && idx == last_idx && !no_hlsearch) {
+    redraw_all_later(UPD_SOME_VALID);
+  }
+}
+
+// nvim_get_emsg_off is already defined in message.c
+
+/// Increment emsg_off.
+void nvim_inc_emsg_off(void)
+{
+  emsg_off++;
+}
+
+/// Decrement emsg_off.
+void nvim_dec_emsg_off(void)
+{
+  emsg_off--;
+}
+
+/// Check if spats[idx].pat is NULL.
+int nvim_spats_pat_is_null(int idx)
+{
+  return spats[idx].pat == NULL ? 1 : 0;
+}
+
+/// Get spats[idx].pat pointer and patlen.
+const char *nvim_spats_get_pat_and_len(int idx, size_t *patlen, int *magic, int *no_scs)
+{
+  if (patlen) *patlen = spats[idx].patlen;
+  if (magic) *magic = spats[idx].magic;
+  if (no_scs) *no_scs = spats[idx].no_scs;
+  return spats[idx].pat;
+}
+
+// =============================================================================
 // Batch accessors for ShaDa pattern get/set (Phase 2)
 // =============================================================================
 
@@ -3925,12 +3970,6 @@ colnr_T nvim_regmatch_rmm_matchcol(const void *regmatch)
 int nvim_cpo_has_search(void)
 {
   return vim_strchr(p_cpo, CPO_SEARCH) != NULL ? 1 : 0;
-}
-
-/// Get rc_did_emsg flag.
-int nvim_get_rc_did_emsg(void)
-{
-  return rc_did_emsg ? 1 : 0;
 }
 
 /// Check if profile time limit has been passed.
