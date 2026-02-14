@@ -3,9 +3,13 @@
 //! This module contains Rust implementations for decoration range
 //! priority comparison and insertion, migrated from `src/nvim/decoration.c`.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
-use crate::decor::DECOR_PRIORITY_BASE;
+use crate::decor::{
+    DECOR_ID_INVALID, DECOR_PRIORITY_BASE, KSH_CONCEAL, KSH_IS_SIGN, KSH_SPELL_OFF, KSH_SPELL_ON,
+    KSH_UI_WATCHED, KSH_UI_WATCHED_OVERLAY,
+};
+use crate::{DecorKind, DecorStateHandle, VirtTextPos, KVT_IS_LINES};
 
 // =============================================================================
 // Priority Types
@@ -494,6 +498,308 @@ pub extern "C" fn rs_virt_col_state_available(state: VirtColState) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_decor_default_priority() -> u16 {
     DECOR_PRIORITY_BASE
+}
+
+// =============================================================================
+// Phase 4: External C Functions
+// =============================================================================
+
+/// Opaque handle to DecorSignHighlight.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct DecorShHandle(*mut c_void);
+
+impl DecorShHandle {
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to DecorVirtText.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct DecorVtHandle(*mut c_void);
+
+impl DecorVtHandle {
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+extern "C" {
+    // Range insertion helpers (construct DecorRange in C, call decor_range_insert)
+    fn nvim_decor_range_insert_vt(
+        state: DecorStateHandle,
+        start_row: c_int,
+        start_col: c_int,
+        end_row: c_int,
+        end_col: c_int,
+        vt_ptr: DecorVtHandle,
+        owned: bool,
+        kind: c_int,
+        priority_internal: u32,
+    );
+    fn nvim_decor_range_insert_hl(
+        state: DecorStateHandle,
+        start_row: c_int,
+        start_col: c_int,
+        end_row: c_int,
+        end_col: c_int,
+        sh_ptr: DecorShHandle,
+        owned: bool,
+        priority_internal: u32,
+        attr_id: c_int,
+    );
+    fn nvim_decor_range_insert_ui(
+        state: DecorStateHandle,
+        start_row: c_int,
+        start_col: c_int,
+        end_row: c_int,
+        end_col: c_int,
+        ns_id: u32,
+        mark_id: u32,
+        pos: c_int,
+        owned: bool,
+        priority_internal: u32,
+        attr_id: c_int,
+    );
+
+    // DecorSignHighlight field accessors
+    fn nvim_decor_sh_get_flags(sh: DecorShHandle) -> u16;
+    fn nvim_decor_sh_ptr_get_priority(sh: DecorShHandle) -> u16;
+    fn nvim_decor_sh_ptr_get_hl_id(sh: DecorShHandle) -> c_int;
+    fn nvim_decor_sh_ptr_get_url(sh: DecorShHandle) -> *const std::ffi::c_char;
+    fn nvim_decor_sh_ptr_get_next(sh: DecorShHandle) -> u32;
+
+    // DecorVirtText field accessors
+    fn nvim_decor_vt_ptr_get_flags(vt: DecorVtHandle) -> u8;
+    fn nvim_decor_vt_ptr_get_priority(vt: DecorVtHandle) -> u16;
+    fn nvim_decor_vt_ptr_get_next(vt: DecorVtHandle) -> DecorVtHandle;
+
+    // decor_items global accessors
+    fn nvim_decor_items_get(idx: u32) -> DecorShHandle;
+
+    // syn_id2attr
+    fn nvim_syn_id2attr(hl_id: c_int) -> c_int;
+}
+
+// =============================================================================
+// Phase 4: Range Creation Functions
+// =============================================================================
+
+/// Add a virtual text decoration range to the state.
+///
+/// Constructs the appropriate DecorRange (VirtText or VirtLines) and inserts it.
+///
+/// Rust implementation of `decor_range_add_virt()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_range_add_virt(
+    state: DecorStateHandle,
+    start_row: c_int,
+    start_col: c_int,
+    end_row: c_int,
+    end_col: c_int,
+    vt: DecorVtHandle,
+    owned: bool,
+) {
+    if state.is_null() || vt.is_null() {
+        return;
+    }
+
+    let vt_flags = nvim_decor_vt_ptr_get_flags(vt);
+    let is_lines = vt_flags & KVT_IS_LINES != 0;
+    let kind = if is_lines {
+        DecorKind::VirtLines as c_int
+    } else {
+        DecorKind::VirtText as c_int
+    };
+    let priority = nvim_decor_vt_ptr_get_priority(vt);
+    let priority_internal = u32::from(priority) << 16;
+
+    nvim_decor_range_insert_vt(
+        state,
+        start_row,
+        start_col,
+        end_row,
+        end_col,
+        vt,
+        owned,
+        kind,
+        priority_internal,
+    );
+}
+
+/// Add a sign/highlight decoration range to the state.
+///
+/// Skips signs. For highlights, inserts if the sh has hl_id, url, conceal, or spell.
+/// For UI watched items, inserts an additional UI watched range.
+///
+/// Rust implementation of `decor_range_add_sh()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_range_add_sh(
+    state: DecorStateHandle,
+    start_row: c_int,
+    start_col: c_int,
+    end_row: c_int,
+    end_col: c_int,
+    sh: DecorShHandle,
+    owned: bool,
+    ns: u32,
+    mark_id: u32,
+    subpriority: u16,
+) {
+    if state.is_null() || sh.is_null() {
+        return;
+    }
+
+    let flags = nvim_decor_sh_get_flags(sh);
+
+    // Skip signs
+    if flags & KSH_IS_SIGN != 0 {
+        return;
+    }
+
+    let priority = nvim_decor_sh_ptr_get_priority(sh);
+    let priority_internal = (u32::from(priority) << 16) + u32::from(subpriority);
+    let hl_id = nvim_decor_sh_ptr_get_hl_id(sh);
+    let url = nvim_decor_sh_ptr_get_url(sh);
+
+    // Insert highlight range if there's something to highlight
+    let has_hl = hl_id != 0;
+    let has_url = !url.is_null();
+    let has_conceal = flags & KSH_CONCEAL != 0;
+    let has_spell_on = flags & KSH_SPELL_ON != 0;
+    let has_spell_off = flags & KSH_SPELL_OFF != 0;
+
+    if has_hl || has_url || has_conceal || has_spell_on || has_spell_off {
+        let attr_id = if has_hl { nvim_syn_id2attr(hl_id) } else { 0 };
+
+        nvim_decor_range_insert_hl(
+            state,
+            start_row,
+            start_col,
+            end_row,
+            end_col,
+            sh,
+            owned,
+            priority_internal,
+            attr_id,
+        );
+    }
+
+    // Insert UI watched range if applicable
+    if flags & KSH_UI_WATCHED != 0 {
+        let pos = if flags & KSH_UI_WATCHED_OVERLAY != 0 {
+            VirtTextPos::Overlay as c_int
+        } else {
+            VirtTextPos::EndOfLine as c_int
+        };
+        // attr_id for UI watched ranges is 0 (or same as highlight if also highlight)
+        let attr_id = if has_hl { nvim_syn_id2attr(hl_id) } else { 0 };
+
+        nvim_decor_range_insert_ui(
+            state,
+            start_row,
+            start_col,
+            end_row,
+            end_col,
+            ns,
+            mark_id,
+            pos,
+            owned,
+            priority_internal,
+            attr_id,
+        );
+    }
+}
+
+/// Dispatch inline decoration data to the appropriate range addition functions.
+///
+/// For ext decorations: walks the vt linked list and sh linked list.
+/// For inline highlights: converts to DecorSignHighlight and adds.
+///
+/// Rust implementation of `decor_range_add_from_inline()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_range_add_from_inline(
+    state: DecorStateHandle,
+    start_row: c_int,
+    start_col: c_int,
+    end_row: c_int,
+    end_col: c_int,
+    ext: bool,
+    vt: DecorVtHandle,
+    sh_idx: u32,
+    hl_flags: u16,
+    hl_priority: u16,
+    hl_hl_id: c_int,
+    hl_conceal_char: u32,
+    owned: bool,
+    ns: u32,
+    mark_id: u32,
+) {
+    if state.is_null() {
+        return;
+    }
+
+    if ext {
+        // Walk virtual text linked list
+        let mut cur_vt = vt;
+        while !cur_vt.is_null() {
+            rs_decor_range_add_virt(state, start_row, start_col, end_row, end_col, cur_vt, owned);
+            cur_vt = nvim_decor_vt_ptr_get_next(cur_vt);
+        }
+
+        // Walk sign/highlight linked list
+        let mut idx = sh_idx;
+        while idx != DECOR_ID_INVALID {
+            let sh = nvim_decor_items_get(idx);
+            rs_decor_range_add_sh(
+                state, start_row, start_col, end_row, end_col, sh, owned, ns, mark_id, 0,
+            );
+            idx = nvim_decor_sh_ptr_get_next(sh);
+        }
+    } else {
+        // Inline highlight - create a temporary DecorSignHighlight via
+        // decor_sh_from_inline and add it. We call through the existing
+        // rs_decor_sh_from_inline to get the struct, then use the C helper
+        // to build the range.
+        //
+        // For inline highlights, we create a stack-local DecorSignHighlight
+        // by calling the C-side decor_sh_from_inline and then passing it.
+        // However, since we can't easily construct the struct in Rust,
+        // we call a C helper that does the conversion and insertion.
+        nvim_decor_range_add_from_inline_hl(
+            state,
+            start_row,
+            start_col,
+            end_row,
+            end_col,
+            hl_flags,
+            hl_priority,
+            hl_hl_id,
+            hl_conceal_char,
+            owned,
+            ns,
+            mark_id,
+        );
+    }
+}
+
+extern "C" {
+    fn nvim_decor_range_add_from_inline_hl(
+        state: DecorStateHandle,
+        start_row: c_int,
+        start_col: c_int,
+        end_row: c_int,
+        end_col: c_int,
+        hl_flags: u16,
+        hl_priority: u16,
+        hl_hl_id: c_int,
+        hl_conceal_char: u32,
+        owned: bool,
+        ns: u32,
+        mark_id: u32,
+    );
 }
 
 // =============================================================================

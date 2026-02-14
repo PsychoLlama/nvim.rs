@@ -105,6 +105,20 @@ extern void rs_decor_state_pack(void *state);
 extern void rs_decor_redraw_line(void *wp, int row, void *state);
 extern bool rs_decor_has_more_decorations(void *state, int row);
 
+// Rust implementations for Phase 4
+extern void rs_decor_range_add_from_inline(void *state, int start_row, int start_col,
+                                           int end_row, int end_col, bool ext,
+                                           void *vt, uint32_t sh_idx,
+                                           uint16_t hl_flags, uint16_t hl_priority,
+                                           int hl_hl_id, uint32_t hl_conceal_char,
+                                           bool owned, uint32_t ns, uint32_t mark_id);
+extern void rs_decor_range_add_virt(void *state, int start_row, int start_col,
+                                    int end_row, int end_col, void *vt, bool owned);
+extern void rs_decor_range_add_sh(void *state, int start_row, int start_col,
+                                  int end_row, int end_col, void *sh,
+                                  bool owned, uint32_t ns, uint32_t mark_id,
+                                  uint16_t subpriority);
+
 /// Add highlighting to a buffer, bounded by two cursor positions,
 /// with an offset.
 ///
@@ -462,22 +476,11 @@ static void decor_range_add_from_inline(DecorState *state, int start_row, int st
                                         int end_row, int end_col, DecorInline decor, bool owned,
                                         uint32_t ns, uint32_t mark_id)
 {
-  if (decor.ext) {
-    DecorVirtText *vt = decor.data.ext.vt;
-    while (vt) {
-      decor_range_add_virt(state, start_row, start_col, end_row, end_col, vt, owned);
-      vt = vt->next;
-    }
-    uint32_t idx = decor.data.ext.sh_idx;
-    while (idx != DECOR_ID_INVALID) {
-      DecorSignHighlight *sh = &kv_A(decor_items, idx);
-      decor_range_add_sh(state, start_row, start_col, end_row, end_col, sh, owned, ns, mark_id, 0);
-      idx = sh->next;
-    }
-  } else {
-    DecorSignHighlight sh = decor_sh_from_inline(decor.data.hl);
-    decor_range_add_sh(state, start_row, start_col, end_row, end_col, &sh, owned, ns, mark_id, 0);
-  }
+  rs_decor_range_add_from_inline(state, start_row, start_col, end_row, end_col,
+                                 decor.ext, decor.data.ext.vt, decor.data.ext.sh_idx,
+                                 decor.data.hl.flags, decor.data.hl.priority,
+                                 decor.data.hl.hl_id, decor.data.hl.conceal_char,
+                                 owned, ns, mark_id);
 }
 
 static void decor_range_insert(DecorState *state, DecorRange *range)
@@ -530,52 +533,15 @@ static void decor_range_insert(DecorState *state, DecorRange *range)
 void decor_range_add_virt(DecorState *state, int start_row, int start_col, int end_row, int end_col,
                           DecorVirtText *vt, bool owned)
 {
-  bool is_lines = rs_vt_is_lines(vt->flags);
-  DecorRange range = {
-    .start_row = start_row, .start_col = start_col, .end_row = end_row, .end_col = end_col,
-    .kind = is_lines ? kDecorKindVirtLines : kDecorKindVirtText,
-    .data.vt = vt,
-    .attr_id = 0,
-    .owned = owned,
-    .priority_internal = ((DecorPriorityInternal)vt->priority << 16),
-    .draw_col = -10,
-  };
-  decor_range_insert(state, &range);
+  rs_decor_range_add_virt(state, start_row, start_col, end_row, end_col, vt, owned);
 }
 
 void decor_range_add_sh(DecorState *state, int start_row, int start_col, int end_row, int end_col,
                         DecorSignHighlight *sh, bool owned, uint32_t ns, uint32_t mark_id,
                         DecorPriority subpriority)
 {
-  if (rs_sh_is_sign(sh->flags)) {
-    return;
-  }
-
-  DecorRange range = {
-    .start_row = start_row, .start_col = start_col, .end_row = end_row, .end_col = end_col,
-    .kind = kDecorKindHighlight,
-    .data.sh = *sh,
-    .attr_id = 0,
-    .owned = owned,
-    .priority_internal = ((DecorPriorityInternal)sh->priority << 16) + subpriority,
-    .draw_col = -10,
-  };
-
-  if (sh->hl_id || (sh->url != NULL)
-      || rs_sh_is_conceal(sh->flags) || rs_sh_is_spell_on(sh->flags) || rs_sh_is_spell_off(sh->flags)) {
-    if (sh->hl_id) {
-      range.attr_id = syn_id2attr(sh->hl_id);
-    }
-    decor_range_insert(state, &range);
-  }
-
-  if (rs_sh_is_ui_watched(sh->flags)) {
-    range.kind = kDecorKindUIWatched;
-    range.data.ui.ns_id = ns;
-    range.data.ui.mark_id = mark_id;
-    range.data.ui.pos = (sh->flags & kSHUIWatchedOverlay) ? kVPosOverlay : kVPosEndOfLine;
-    decor_range_insert(state, &range);
-  }
+  rs_decor_range_add_sh(state, start_row, start_col, end_row, end_col, sh, owned, ns, mark_id,
+                        subpriority);
 }
 
 /// Initialize the draw_col of a newly-added virtual text item.
@@ -1596,6 +1562,146 @@ void nvim_decor_state_itr_get(void *state_ptr, void *buf_ptr, int row, int col)
   DecorState *state = (DecorState *)state_ptr;
   buf_T *buf = (buf_T *)buf_ptr;
   marktree_itr_get(buf->b_marktree, row, col, state->itr);
+}
+
+// ============================================================================
+// Phase 4: Range Insertion and Creation helpers
+// ============================================================================
+
+/// Insert a virtual text range into DecorState.
+/// Constructs a DecorRange and calls decor_range_insert.
+void nvim_decor_range_insert_vt(void *state_ptr, int start_row, int start_col,
+                                int end_row, int end_col, void *vt_ptr, bool owned,
+                                int kind, uint32_t priority_internal)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  DecorRange range = {
+    .start_row = start_row, .start_col = start_col,
+    .end_row = end_row, .end_col = end_col,
+    .kind = (DecorRangeKind)kind,
+    .data.vt = (DecorVirtText *)vt_ptr,
+    .attr_id = 0,
+    .owned = owned,
+    .priority_internal = priority_internal,
+    .draw_col = -10,
+  };
+  decor_range_insert(state, &range);
+}
+
+/// Insert a highlight range into DecorState.
+/// Constructs a DecorRange with a copy of the DecorSignHighlight and calls decor_range_insert.
+void nvim_decor_range_insert_hl(void *state_ptr, int start_row, int start_col,
+                                int end_row, int end_col, void *sh_ptr, bool owned,
+                                uint32_t priority_internal, int attr_id)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  DecorSignHighlight *sh = (DecorSignHighlight *)sh_ptr;
+  DecorRange range = {
+    .start_row = start_row, .start_col = start_col,
+    .end_row = end_row, .end_col = end_col,
+    .kind = kDecorKindHighlight,
+    .data.sh = *sh,
+    .attr_id = attr_id,
+    .owned = owned,
+    .priority_internal = priority_internal,
+    .draw_col = -10,
+  };
+  decor_range_insert(state, &range);
+}
+
+/// Insert a UI watched range into DecorState.
+void nvim_decor_range_insert_ui(void *state_ptr, int start_row, int start_col,
+                                int end_row, int end_col, uint32_t ns_id, uint32_t mark_id,
+                                int pos, bool owned, uint32_t priority_internal, int attr_id)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  DecorRange range = {
+    .start_row = start_row, .start_col = start_col,
+    .end_row = end_row, .end_col = end_col,
+    .kind = kDecorKindUIWatched,
+    .data.ui.ns_id = ns_id,
+    .data.ui.mark_id = mark_id,
+    .data.ui.pos = pos,
+    .attr_id = attr_id,
+    .owned = owned,
+    .priority_internal = priority_internal,
+    .draw_col = -10,
+  };
+  decor_range_insert(state, &range);
+}
+
+/// Get sh->flags from a DecorSignHighlight pointer.
+uint16_t nvim_decor_sh_get_flags(void *sh_ptr)
+{
+  DecorSignHighlight *sh = (DecorSignHighlight *)sh_ptr;
+  return sh->flags;
+}
+
+/// Get sh->priority from a DecorSignHighlight pointer.
+uint16_t nvim_decor_sh_ptr_get_priority(void *sh_ptr)
+{
+  DecorSignHighlight *sh = (DecorSignHighlight *)sh_ptr;
+  return sh->priority;
+}
+
+/// Get sh->hl_id from a DecorSignHighlight pointer.
+int nvim_decor_sh_ptr_get_hl_id(void *sh_ptr)
+{
+  DecorSignHighlight *sh = (DecorSignHighlight *)sh_ptr;
+  return sh->hl_id;
+}
+
+/// Get sh->url from a DecorSignHighlight pointer.
+const char *nvim_decor_sh_ptr_get_url(void *sh_ptr)
+{
+  DecorSignHighlight *sh = (DecorSignHighlight *)sh_ptr;
+  return sh->url;
+}
+
+/// Get sh->next from a DecorSignHighlight pointer.
+uint32_t nvim_decor_sh_ptr_get_next(void *sh_ptr)
+{
+  DecorSignHighlight *sh = (DecorSignHighlight *)sh_ptr;
+  return sh->next;
+}
+
+/// Get vt->flags from a DecorVirtText pointer.
+uint8_t nvim_decor_vt_ptr_get_flags(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->flags;
+}
+
+/// Get vt->priority from a DecorVirtText pointer.
+uint16_t nvim_decor_vt_ptr_get_priority(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->priority;
+}
+
+/// Get vt->next from a DecorVirtText pointer.
+void *nvim_decor_vt_ptr_get_next(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->next;
+}
+
+/// Handle the inline highlight path: convert DecorHighlightInline to
+/// DecorSignHighlight and add the range via rs_decor_range_add_sh.
+void nvim_decor_range_add_from_inline_hl(void *state, int start_row, int start_col,
+                                          int end_row, int end_col,
+                                          uint16_t hl_flags, uint16_t hl_priority,
+                                          int hl_hl_id, uint32_t hl_conceal_char,
+                                          bool owned, uint32_t ns, uint32_t mark_id)
+{
+  DecorHighlightInline hl = {
+    .flags = hl_flags,
+    .priority = hl_priority,
+    .hl_id = hl_hl_id,
+    .conceal_char = hl_conceal_char,
+  };
+  DecorSignHighlight sh = decor_sh_from_inline(hl);
+  rs_decor_range_add_sh(state, start_row, start_col, end_row, end_col, &sh, owned, ns, mark_id, 0);
 }
 
 /// Get the row from decor_state.
