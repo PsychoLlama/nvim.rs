@@ -230,6 +230,16 @@ extern void rs_process_hunk(diff_T **dpp, diff_T **dprevp, int idx_orig, int idx
                             linenr_T lnum_new, int count_new,
                             bool *notsetp);
 
+// Phase 4: Diff status checking & navigation migrations
+extern int rs_diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestatus);
+extern int rs_diff_check_fill(win_T *wp, linenr_T lnum);
+extern void rs_diff_set_topline(win_T *fromwin, win_T *towin);
+extern bool rs_diff_infold(win_T *wp, linenr_T lnum);
+extern int rs_diff_move_to(int dir, int count);
+extern linenr_T rs_diff_get_corresponding_line_int(buf_T *buf1, linenr_T lnum1);
+extern linenr_T rs_diff_get_corresponding_line(buf_T *buf1, linenr_T lnum1);
+extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
+
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
 
@@ -1306,125 +1316,8 @@ static int get_max_diff_length(const diff_T *dp)
   return rs_get_max_diff_length_c((diff_T *)dp);
 }
 
-/// Find the first diff block that includes the specified line. Also find the
-/// next diff block that's not in the current chain of adjacent blocks that are
-/// all touching each other directly.
-static void find_top_diff_block(diff_T **thistopdiff, diff_T **next_adjacent_blocks, int fromidx,
-                                int topline)
-{
-  diff_T *topdiff = NULL;
-  diff_T *localtopdiff = NULL;
-  int topdiffchange = 0;
-
-  for (topdiff = curtab->tp_first_diff; topdiff != NULL; topdiff = topdiff->df_next) {
-    // set the top of the current overlapping diff block set as we
-    // iterate through all of the sets of overlapping diff blocks
-    if (!localtopdiff || topdiffchange) {
-      localtopdiff = topdiff;
-      topdiffchange = 0;
-    }
-
-    // check if the fromwin topline is matched by the current diff. if so,
-    // set it to the top of the diff block
-    if (topline >= topdiff->df_lnum[fromidx] && topline <=
-        (topdiff->df_lnum[fromidx] + topdiff->df_count[fromidx])) {
-      // this line is inside the current diff block, so we will save the
-      // top block of the set of blocks to refer to later
-      if ((*thistopdiff) == NULL) {
-        (*thistopdiff) = localtopdiff;
-      }
-    }
-
-    // check if the next set of overlapping diff blocks is next
-    if (!(topdiff->df_next && (topdiff->df_next->df_lnum[fromidx] ==
-                               (topdiff->df_lnum[fromidx] + topdiff->df_count[fromidx])))) {
-      // mark that the next diff block is belongs to a different set of
-      // overlapping diff blocks
-      topdiffchange = 1;
-
-      // if we already have found that the line number is inside a diff block,
-      // set the marker of the next block and finish the iteration
-      if (*thistopdiff) {
-        (*next_adjacent_blocks) = topdiff->df_next;
-        break;
-      }
-    }
-  }
-}
-
-/// Calculates topline/topfill of a target diff window to fit the source diff window.
-static void calculate_topfill_and_topline(const int fromidx, const int toidx, const
-                                          int from_topline, const int from_topfill, int *topfill,
-                                          linenr_T *topline)
-{
-  // find the position from the top of the diff block, and the next diff
-  // block that's no longer adjacent to the current block. "Adjacency" means
-  // a chain of diff blocks that are directly touching each other, allowed by
-  // linematch and diff anchors.
-  diff_T *thistopdiff = NULL;
-  diff_T *next_adjacent_blocks = NULL;
-  int virtual_lines_passed = 0;
-
-  find_top_diff_block(&thistopdiff, &next_adjacent_blocks, fromidx, from_topline);
-
-  // count the virtual lines (either filler or concrete line) that have been
-  // passed in the source buffer. There could be multiple diff blocks if
-  // there are adjacent empty blocks (count == 0 at fromidx).
-
-  diff_T *curdif = thistopdiff;
-  while (curdif && (curdif->df_lnum[fromidx] + curdif->df_count[fromidx])
-         <= from_topline) {
-    virtual_lines_passed += get_max_diff_length(curdif);
-
-    curdif = curdif->df_next;
-  }
-
-  if (curdif != next_adjacent_blocks) {
-    virtual_lines_passed += from_topline - curdif->df_lnum[fromidx];
-  }
-  virtual_lines_passed -= from_topfill;
-
-  // clamp negative values in case from_topfill hasn't been updated yet and
-  // is larger than total virtual lines, which could happen when setting
-  // diffopt multiple times
-  if (virtual_lines_passed < 0) {
-    virtual_lines_passed = 0;
-  }
-
-  // move the same amount of virtual lines in the target buffer to find the
-  // cursor's line number
-  int curlinenum_to
-    = thistopdiff != NULL  // this should not be null, but just for safety
-      ? thistopdiff->df_lnum[toidx] : 1;
-
-  int virt_lines_left = virtual_lines_passed;
-  curdif = thistopdiff;
-  while (virt_lines_left > 0 && curdif != NULL && curdif != next_adjacent_blocks) {
-    curlinenum_to += MIN(virt_lines_left, curdif->df_count[toidx]);
-    virt_lines_left -= MIN(virt_lines_left, get_max_diff_length(curdif));
-    curdif = curdif->df_next;
-  }
-
-  // count the total number of virtual lines between the top diff block and
-  // the found line in the target buffer
-  int max_virt_lines = 0;
-  for (diff_T *dp = thistopdiff; dp != NULL; dp = dp->df_next) {
-    if (dp->df_lnum[toidx] + dp->df_count[toidx] <= curlinenum_to) {
-      max_virt_lines += get_max_diff_length(dp);
-    } else {
-      if (dp->df_lnum[toidx] <= curlinenum_to) {
-        max_virt_lines += curlinenum_to - dp->df_lnum[toidx];
-      }
-      break;
-    }
-  }
-
-  if (diff_flags & DIFF_FILLER) {
-    // should always be non-negative as max_virt_lines is larger
-    (*topfill) = max_virt_lines - virtual_lines_passed;
-  }
-  (*topline) = curlinenum_to;
-}
+// find_top_diff_block — migrated to Rust (internal to rs_diff_set_topline)
+// calculate_topfill_and_topline — migrated to Rust (internal to rs_diff_set_topline)
 
 // Apply results from the linematch algorithm and apply to 'dp' by splitting it into multiple
 // adjacent diff blocks.
@@ -1542,152 +1435,13 @@ static void run_linematch_algorithm(diff_T *dp)
 /// @return diff status.
 int diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestatus)
 {
-  buf_T *buf = wp->w_buffer;
-
-  if (linestatus != NULL) {
-    *linestatus = 0;
-  }
-
-  if (curtab->tp_diff_invalid) {
-    // update after a big change
-    ex_diffupdate(NULL);
-  }
-
-  // no diffs at all
-  if ((curtab->tp_first_diff == NULL) || !wp->w_p_diff) {
-    return 0;
-  }
-
-  // safety check: "lnum" must be a buffer line
-  if ((lnum < 1) || (lnum > buf->b_ml.ml_line_count + 1)) {
-    return 0;
-  }
-
-  int idx = diff_buf_idx(buf, curtab);  // index in tp_diffbuf[] for this buffer
-
-  if (idx == DB_COUNT) {
-    // no diffs for buffer "buf"
-    return 0;
-  }
-
-  // A closed fold never has filler lines.
-  if (hasFolding(wp, lnum, NULL, NULL) || decor_conceal_line(wp, lnum - 1, false)) {
-    return 0;
-  }
-
-  // search for a change that includes "lnum" in the list of diffblocks.
-  diff_T *dp;
-  for (dp = curtab->tp_first_diff; dp != NULL; dp = dp->df_next) {
-    if (lnum <= dp->df_lnum[idx] + dp->df_count[idx]) {
-      break;
-    }
-  }
-
-  if ((dp == NULL) || (lnum < dp->df_lnum[idx])) {
-    return 0;
-  }
-
-  // Don't run linematch when lnum is offscreen.
-  // Useful for scrollbind calculations which need to count all the filler lines
-  // above the screen.
-  if (lnum >= wp->w_topline && lnum < wp->w_botline
-      && !dp->is_linematched && diff_linematch(dp)
-      && diff_check_sanity(curtab, dp)) {
-    run_linematch_algorithm(dp);
-  }
-
-  // Insert filler lines above the line just below the change.  Will return 0
-  // when this buf had the max count.
-  int num_fill = 0;
-  while (lnum == dp->df_lnum[idx] + dp->df_count[idx]) {
-    // Only calculate fill lines if 'diffopt' contains "filler". Otherwise
-    // returns 0 filler lines.
-    if (diff_flags & DIFF_FILLER) {
-      int maxcount = get_max_diff_length(dp);
-      num_fill += maxcount - dp->df_count[idx];
-    }
-
-    // If there are adjacent blocks (e.g. linematch or anchor), loop
-    // through them. It's possible for multiple adjacent blocks to
-    // contribute to filler lines.
-    // This also helps us find the last diff block in the list of adjacent
-    // blocks which is necessary when it is a change/inserted line right
-    // after added lines.
-    if (dp->df_next != NULL
-        && lnum >= dp->df_next->df_lnum[idx]
-        && lnum <= dp->df_next->df_lnum[idx] + dp->df_next->df_count[idx]) {
-      dp = dp->df_next;
-    } else {
-      break;
-    }
-  }
-
-  if (lnum < dp->df_lnum[idx] + dp->df_count[idx]) {
-    bool zero = false;
-
-    // Changed or inserted line.  If the other buffers have a count of
-    // zero, the lines were inserted.  If the other buffers have the same
-    // count, check if the lines are identical.
-    bool cmp = false;
-
-    for (int i = 0; i < DB_COUNT; i++) {
-      if ((i != idx) && (curtab->tp_diffbuf[i] != NULL)) {
-        if (dp->df_count[i] == 0) {
-          zero = true;
-        } else {
-          if (dp->df_count[i] != dp->df_count[idx]) {
-            if (linestatus) {
-              *linestatus = -1;  // nr of lines changed.
-            }
-            return num_fill;
-          }
-          cmp = true;
-        }
-      }
-    }
-
-    if (cmp) {
-      // Compare all lines.  If they are equal the lines were inserted
-      // in some buffers, deleted in others, but not changed.
-      for (int i = 0; i < DB_COUNT; i++) {
-        if ((i != idx)
-            && (curtab->tp_diffbuf[i] != NULL)
-            && (dp->df_count[i] != 0)) {
-          if (!diff_equal_entry(dp, idx, i)) {
-            if (linestatus) {
-              *linestatus = -1;
-            }
-            return num_fill;
-          }
-        }
-      }
-    }
-
-    // If there is no buffer with zero lines then there is no difference
-    // any longer.  Happens when making a change (or undo) that removes
-    // the difference.  Can't remove the entry here, we might be halfway
-    // through updating the window.  Just report the text as unchanged.
-    // Other windows might still show the change though.
-    if (!zero) {
-      return num_fill;
-    }
-    if (linestatus) {
-      *linestatus = -2;
-    }
-    return num_fill;
-  }
-  return num_fill;
+  return rs_diff_check_with_linestatus(wp, lnum, linestatus);
 }
 
 /// See diff_check_with_linestatus
 int diff_check_fill(win_T *wp, linenr_T lnum)
 {
-  // be quick when there are no filler lines
-  if (!(diff_flags & DIFF_FILLER)) {
-    return 0;
-  }
-  int n = diff_check_with_linestatus(wp, lnum, NULL);
-  return MAX(n, 0);
+  return rs_diff_check_fill(wp, lnum);
 }
 
 /// Compare two entries in diff "dp" and return true if they are equal.
@@ -1729,70 +1483,7 @@ static int diff_cmp(char *s1, char *s2)
 /// @param towin
 void diff_set_topline(win_T *fromwin, win_T *towin)
 {
-  buf_T *frombuf = fromwin->w_buffer;
-
-  int fromidx = diff_buf_idx(frombuf, curtab);
-  if (fromidx == DB_COUNT) {
-    // safety check
-    return;
-  }
-
-  if (curtab->tp_diff_invalid) {
-    // update after a big change
-    ex_diffupdate(NULL);
-  }
-  linenr_T lnum = fromwin->w_topline;
-  towin->w_topfill = 0;
-
-  // search for a change that includes "lnum" in the list of diffblocks.
-  diff_T *dp;
-  for (dp = curtab->tp_first_diff; dp != NULL; dp = dp->df_next) {
-    if (lnum <= dp->df_lnum[fromidx] + dp->df_count[fromidx]) {
-      break;
-    }
-  }
-
-  if (dp == NULL) {
-    // After last change, compute topline relative to end of file; no
-    // filler lines.
-    towin->w_topline = towin->w_buffer->b_ml.ml_line_count
-                       - (frombuf->b_ml.ml_line_count - lnum);
-  } else {
-    // Find index for "towin".
-    int toidx = diff_buf_idx(towin->w_buffer, curtab);
-
-    if (toidx == DB_COUNT) {
-      // safety check
-      return;
-    }
-    towin->w_topline = lnum + (dp->df_lnum[toidx] - dp->df_lnum[fromidx]);
-
-    if (lnum >= dp->df_lnum[fromidx]) {
-      calculate_topfill_and_topline(fromidx, toidx,
-                                    fromwin->w_topline, fromwin->w_topfill,
-                                    &towin->w_topfill, &towin->w_topline);
-    }
-  }
-
-  // safety check (if diff info gets outdated strange things may happen)
-  towin->w_botfill = false;
-
-  if (towin->w_topline > towin->w_buffer->b_ml.ml_line_count) {
-    towin->w_topline = towin->w_buffer->b_ml.ml_line_count;
-    towin->w_botfill = true;
-  }
-
-  if (towin->w_topline < 1) {
-    towin->w_topline = 1;
-    towin->w_topfill = 0;
-  }
-
-  // When w_topline changes need to recompute w_botline and cursor position
-  invalidate_botline(towin);
-  changed_line_abv_curs_win(towin);
-
-  check_topfill(towin, false);
-  hasFolding(towin, towin->w_topline, &towin->w_topline, NULL);
+  rs_diff_set_topline(fromwin, towin);
 }
 
 /// Parse the diff anchors. If "check_only" is set, will only make sure the
@@ -2694,48 +2385,7 @@ bool diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline)
 bool diff_infold(win_T *wp, linenr_T lnum)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
 {
-  // Return if 'diff' isn't set.
-  if (!wp->w_p_diff) {
-    return false;
-  }
-
-  int idx = -1;
-  bool other = false;
-  for (int i = 0; i < DB_COUNT; i++) {
-    if (curtab->tp_diffbuf[i] == wp->w_buffer) {
-      idx = i;
-    } else if (curtab->tp_diffbuf[i] != NULL) {
-      other = true;
-    }
-  }
-
-  // return here if there are no diffs in the window
-  if ((idx == -1) || !other) {
-    return false;
-  }
-
-  if (curtab->tp_diff_invalid) {
-    // update after a big change
-    ex_diffupdate(NULL);
-  }
-
-  // Return if there are no diff blocks.  All lines will be folded.
-  if (curtab->tp_first_diff == NULL) {
-    return true;
-  }
-
-  for (diff_T *dp = curtab->tp_first_diff; dp != NULL; dp = dp->df_next) {
-    // If this change is below the line there can't be any further match.
-    if (dp->df_lnum[idx] - diff_context > lnum) {
-      break;
-    }
-
-    // If this change ends before the line we have a match.
-    if (dp->df_lnum[idx] + dp->df_count[idx] + diff_context > lnum) {
-      return false;
-    }
-  }
-  return true;
+  return rs_diff_infold(wp, lnum);
 }
 
 /// "dp" and "do" commands.
@@ -3152,170 +2802,27 @@ bool diff_mode_buf(buf_T *buf)
 /// @return FAIL if there isn't such a diff block.
 int diff_move_to(int dir, int count)
 {
-  linenr_T lnum = curwin->w_cursor.lnum;
-  int idx = diff_buf_idx(curbuf, curtab);
-  if ((idx == DB_COUNT) || (curtab->tp_first_diff == NULL)) {
-    return FAIL;
-  }
-
-  if (curtab->tp_diff_invalid) {
-    // update after a big change
-    ex_diffupdate(NULL);
-  }
-
-  if (curtab->tp_first_diff == NULL) {
-    // no diffs today
-    return FAIL;
-  }
-
-  while (--count >= 0) {
-    // Check if already before first diff.
-    if ((dir == BACKWARD) && (lnum <= curtab->tp_first_diff->df_lnum[idx])) {
-      break;
-    }
-
-    diff_T *dp;
-    for (dp = curtab->tp_first_diff;; dp = dp->df_next) {
-      if (dp == NULL) {
-        break;
-      }
-
-      if (((dir == FORWARD) && (lnum < dp->df_lnum[idx]))
-          || ((dir == BACKWARD)
-              && ((dp->df_next == NULL)
-                  || (lnum <= dp->df_next->df_lnum[idx])))) {
-        lnum = dp->df_lnum[idx];
-        break;
-      }
-    }
-  }
-
-  // don't end up past the end of the file
-  lnum = MIN(lnum, curbuf->b_ml.ml_line_count);
-
-  // When the cursor didn't move at all we fail.
-  if (lnum == curwin->w_cursor.lnum) {
-    return FAIL;
-  }
-
-  setpcmark();
-  curwin->w_cursor.lnum = lnum;
-  curwin->w_cursor.col = 0;
-
-  return OK;
+  return rs_diff_move_to(dir, count);
 }
 
 /// Return the line number in the current window that is closest to "lnum1" in
 /// "buf1" in diff mode.
 static linenr_T diff_get_corresponding_line_int(buf_T *buf1, linenr_T lnum1)
 {
-  linenr_T baseline = 0;
-
-  int idx1 = diff_buf_idx(buf1, curtab);
-  int idx2 = diff_buf_idx(curbuf, curtab);
-
-  if ((idx1 == DB_COUNT)
-      || (idx2 == DB_COUNT)
-      || (curtab->tp_first_diff == NULL)) {
-    return lnum1;
-  }
-
-  if (curtab->tp_diff_invalid) {
-    // update after a big change
-    ex_diffupdate(NULL);
-  }
-
-  if (curtab->tp_first_diff == NULL) {
-    // no diffs today
-    return lnum1;
-  }
-
-  for (diff_T *dp = curtab->tp_first_diff; dp != NULL; dp = dp->df_next) {
-    if (dp->df_lnum[idx1] > lnum1) {
-      return lnum1 - baseline;
-    }
-    if ((dp->df_lnum[idx1] + dp->df_count[idx1]) > lnum1) {
-      // Inside the diffblock
-      baseline = lnum1 - dp->df_lnum[idx1];
-      baseline = MIN(baseline, dp->df_count[idx2]);
-
-      return dp->df_lnum[idx2] + baseline;
-    }
-    if ((dp->df_lnum[idx1] == lnum1)
-        && (dp->df_count[idx1] == 0)
-        && (dp->df_lnum[idx2] <= curwin->w_cursor.lnum)
-        && ((dp->df_lnum[idx2] + dp->df_count[idx2])
-            > curwin->w_cursor.lnum)) {
-      // Special case: if the cursor is just after a zero-count
-      // block (i.e. all filler) and the target cursor is already
-      // inside the corresponding block, leave the target cursor
-      // unmoved. This makes repeated CTRL-W W operations work
-      // as expected.
-      return curwin->w_cursor.lnum;
-    }
-    baseline = (dp->df_lnum[idx1] + dp->df_count[idx1])
-               - (dp->df_lnum[idx2] + dp->df_count[idx2]);
-  }
-
-  // If we get here then the cursor is after the last diff
-  return lnum1 - baseline;
+  return rs_diff_get_corresponding_line_int(buf1, lnum1);
 }
 
 /// Finds the corresponding line in a diff.
-///
-/// @param buf1
-/// @param lnum1
-///
-/// @return The corresponding line.
 linenr_T diff_get_corresponding_line(buf_T *buf1, linenr_T lnum1)
 {
-  linenr_T lnum = diff_get_corresponding_line_int(buf1, lnum1);
-
-  // don't end up past the end of the file
-  return MIN(lnum, curbuf->b_ml.ml_line_count);
+  return rs_diff_get_corresponding_line(buf1, lnum1);
 }
 
 /// For line "lnum" in the current window find the equivalent lnum in window
 /// "wp", compensating for inserted/deleted lines.
 linenr_T diff_lnum_win(linenr_T lnum, win_T *wp)
 {
-  diff_T *dp;
-
-  int idx = diff_buf_idx(curbuf, curtab);
-
-  if (idx == DB_COUNT) {
-    // safety check
-    return 0;
-  }
-
-  if (curtab->tp_diff_invalid) {
-    // update after a big change
-    ex_diffupdate(NULL);
-  }
-
-  // search for a change that includes "lnum" in the list of diffblocks.
-  for (dp = curtab->tp_first_diff; dp != NULL; dp = dp->df_next) {
-    if (lnum <= dp->df_lnum[idx] + dp->df_count[idx]) {
-      break;
-    }
-  }
-
-  // When after the last change, compute relative to the last line number.
-  if (dp == NULL) {
-    return wp->w_buffer->b_ml.ml_line_count
-           - (curbuf->b_ml.ml_line_count - lnum);
-  }
-
-  // Find index for "wp".
-  int i = diff_buf_idx(wp->w_buffer, curtab);
-
-  if (i == DB_COUNT) {
-    // safety check
-    return 0;
-  }
-
-  linenr_T n = lnum + (dp->df_lnum[i] - dp->df_lnum[idx]);
-  return MIN(n, dp->df_lnum[i] + dp->df_count[i]);
+  return rs_diff_lnum_win(lnum, wp);
 }
 
 // Rust implementation for ED style diff parsing
@@ -4394,4 +3901,56 @@ int nvim_diff_parse_unified(const char *line, linenr_T *lnum_orig, int *count_or
     *count_new = hunk.count_new;
   }
   return r;
+}
+
+// Phase 4 C accessors (window accessors already exist in window.c)
+
+int nvim_diff_get_context(void)
+{
+  return diff_context;
+}
+
+bool nvim_diff_hasFolding(win_T *wp, linenr_T lnum)
+{
+  return hasFolding(wp, lnum, NULL, NULL);
+}
+
+bool nvim_diff_hasFolding_topline(win_T *wp, linenr_T lnum, linenr_T *topline)
+{
+  return hasFolding(wp, lnum, topline, NULL);
+}
+
+bool nvim_diff_decor_conceal_line(win_T *wp, linenr_T lnum)
+{
+  return decor_conceal_line(wp, lnum - 1, false);
+}
+
+void nvim_diff_invalidate_botline_win(win_T *wp)
+{
+  invalidate_botline(wp);
+}
+
+void nvim_diff_changed_line_abv_curs_win(win_T *wp)
+{
+  changed_line_abv_curs_win(wp);
+}
+
+void nvim_diff_check_topfill(win_T *wp, bool down)
+{
+  check_topfill(wp, down);
+}
+
+void nvim_diff_setpcmark(void)
+{
+  setpcmark();
+}
+
+void nvim_diff_ex_diffupdate(void)
+{
+  ex_diffupdate(NULL);
+}
+
+void nvim_diff_run_linematch(diff_T *dp)
+{
+  run_linematch_algorithm(dp);
 }

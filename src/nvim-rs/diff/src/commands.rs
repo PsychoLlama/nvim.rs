@@ -446,9 +446,9 @@ pub extern "C" fn rs_diff_calc_line_adjustment(
     diff_calc_line_adjustment(dp, idx_from, idx_to)
 }
 
-/// FFI export: Get corresponding line in another buffer.
+/// FFI export: Get corresponding line in another buffer (by index).
 #[no_mangle]
-pub extern "C" fn rs_diff_get_corresponding_line(
+pub extern "C" fn rs_diff_get_corresponding_line_by_idx(
     from_idx: c_int,
     to_idx: c_int,
     lnum: LinenrT,

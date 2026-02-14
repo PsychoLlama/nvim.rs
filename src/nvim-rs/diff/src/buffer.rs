@@ -133,7 +133,7 @@ extern "C" {
     fn nvim_get_curtab_diffbuf(idx: c_int) -> BufHandle;
     fn nvim_get_curtab_diff_invalid() -> c_int;
     fn nvim_tabpage_get_diffbuf(tp: TabpageHandle, idx: c_int) -> BufHandle;
-    fn nvim_tabpage_get_diff_invalid(tp: TabpageHandle) -> c_int;
+    fn nvim_tabpage_is_diff_invalid(tp: TabpageHandle) -> bool;
     fn nvim_tabpage_set_diff_invalid(tp: TabpageHandle, val: c_int);
 
     // Diff block accessors
@@ -223,8 +223,13 @@ const DIFF_ICASE: c_int = 0x004;
 const DIFF_ANCHOR: c_int = 0x20000;
 /// DIFF_INTERNAL flag value (must match C).
 const DIFF_INTERNAL: c_int = 0x200;
+/// DIFF_FILLER flag value (must match C).
+const DIFF_FILLER: c_int = 0x001;
 /// MAXLNUM constant (matches C).
 const MAXLNUM: LinenrT = 0x7fff_ffff;
+/// Direction constants (must match C).
+const FORWARD: c_int = 1;
+const BACKWARD: c_int = -1;
 
 // =============================================================================
 // Diff Buffer State
@@ -1834,6 +1839,32 @@ extern "C" {
     ) -> c_int;
 }
 
+// Phase 4 C accessors: window fields (from window.c), diff_context, external calls
+#[allow(dead_code)]
+extern "C" {
+    // Window field accessors (defined in window.c)
+    fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_topline(wp: WinHandle, lnum: LinenrT);
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+    fn nvim_win_set_topfill(wp: WinHandle, fill: c_int);
+    fn nvim_win_get_botline(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_botfill(wp: WinHandle, val: c_int);
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
+    fn nvim_win_set_cursor_col(wp: WinHandle, col: c_int);
+    // Diff-specific accessors (defined in diff.c)
+    fn nvim_diff_get_context() -> c_int;
+    fn nvim_diff_hasFolding(wp: WinHandle, lnum: LinenrT) -> bool;
+    fn nvim_diff_hasFolding_topline(wp: WinHandle, lnum: LinenrT, topline: *mut LinenrT) -> bool;
+    fn nvim_diff_decor_conceal_line(wp: WinHandle, lnum: LinenrT) -> bool;
+    fn nvim_diff_invalidate_botline_win(wp: WinHandle);
+    fn nvim_diff_changed_line_abv_curs_win(wp: WinHandle);
+    fn nvim_diff_check_topfill(wp: WinHandle, down: bool);
+    fn nvim_diff_setpcmark();
+    fn nvim_diff_ex_diffupdate();
+    fn nvim_diff_run_linematch(dp: DiffBlockHandle);
+}
+
 /// Diff output style.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum DiffStyle {
@@ -2360,6 +2391,577 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
     }
 
     nvim_diffio_free_tempfiles(dio);
+}
+
+// =============================================================================
+// Phase 4: Diff Status Checking & Navigation
+// =============================================================================
+
+/// Helper: find the top diff block containing `topline` for `fromidx`, and the
+/// next non-adjacent block after it.
+unsafe fn find_top_diff_block(
+    fromidx: c_int,
+    topline: LinenrT,
+) -> (DiffBlockHandle, DiffBlockHandle) {
+    let mut thistopdiff = DiffBlockHandle::null();
+    let mut next_adjacent = DiffBlockHandle::null();
+    let mut localtopdiff = DiffBlockHandle::null();
+    let mut topdiffchange = true;
+
+    let mut dp = nvim_diff_curtab_get_first_diff();
+    while !dp.is_null() {
+        if localtopdiff.is_null() || topdiffchange {
+            localtopdiff = dp;
+            topdiffchange = false;
+        }
+
+        let dp_lnum = nvim_diffblock_get_lnum(dp, fromidx);
+        let dp_count = nvim_diffblock_get_count(dp, fromidx);
+
+        if topline >= dp_lnum && topline <= dp_lnum + dp_count && thistopdiff.is_null() {
+            thistopdiff = localtopdiff;
+        }
+
+        let next = nvim_diffblock_get_next(dp);
+        let is_adjacent =
+            !next.is_null() && nvim_diffblock_get_lnum(next, fromidx) == dp_lnum + dp_count;
+
+        if !is_adjacent {
+            topdiffchange = true;
+            if !thistopdiff.is_null() {
+                next_adjacent = next;
+                break;
+            }
+        }
+
+        dp = next;
+    }
+
+    (thistopdiff, next_adjacent)
+}
+
+/// Helper: calculate topfill and topline for a target diff window.
+#[allow(clippy::too_many_lines)]
+unsafe fn calculate_topfill_and_topline(
+    fromidx: c_int,
+    toidx: c_int,
+    from_topline: LinenrT,
+    from_topfill: c_int,
+) -> (c_int, LinenrT) {
+    let (thistopdiff, next_adjacent) = find_top_diff_block(fromidx, from_topline);
+
+    let mut virtual_lines_passed: i32 = 0;
+    let mut curdif = thistopdiff;
+    while !curdif.is_null() && curdif != next_adjacent {
+        let cur_lnum = nvim_diffblock_get_lnum(curdif, fromidx);
+        let cur_count = nvim_diffblock_get_count(curdif, fromidx);
+        if cur_lnum + cur_count > from_topline {
+            break;
+        }
+        virtual_lines_passed += rs_get_max_diff_length_c(curdif);
+        curdif = nvim_diffblock_get_next(curdif);
+    }
+
+    if curdif != next_adjacent && !curdif.is_null() {
+        virtual_lines_passed += from_topline - nvim_diffblock_get_lnum(curdif, fromidx);
+    }
+    virtual_lines_passed -= from_topfill;
+    if virtual_lines_passed < 0 {
+        virtual_lines_passed = 0;
+    }
+
+    let mut curlinenum_to: LinenrT = if thistopdiff.is_null() {
+        1
+    } else {
+        nvim_diffblock_get_lnum(thistopdiff, toidx)
+    };
+
+    let mut virt_lines_left = virtual_lines_passed;
+    curdif = thistopdiff;
+    while virt_lines_left > 0 && !curdif.is_null() && curdif != next_adjacent {
+        let count_to = nvim_diffblock_get_count(curdif, toidx);
+        let max_len = rs_get_max_diff_length_c(curdif);
+        curlinenum_to += virt_lines_left.min(count_to);
+        virt_lines_left -= virt_lines_left.min(max_len);
+        curdif = nvim_diffblock_get_next(curdif);
+    }
+
+    let mut max_virt_lines: i32 = 0;
+    let mut dp = thistopdiff;
+    while !dp.is_null() {
+        let dp_lnum_to = nvim_diffblock_get_lnum(dp, toidx);
+        let dp_count_to = nvim_diffblock_get_count(dp, toidx);
+        if dp_lnum_to + dp_count_to <= curlinenum_to {
+            max_virt_lines += rs_get_max_diff_length_c(dp);
+        } else {
+            if dp_lnum_to <= curlinenum_to {
+                max_virt_lines += curlinenum_to - dp_lnum_to;
+            }
+            break;
+        }
+        dp = nvim_diffblock_get_next(dp);
+    }
+
+    let diff_flags = nvim_diff_get_diff_flags();
+    let topfill = if diff_flags & DIFF_FILLER != 0 {
+        max_virt_lines - virtual_lines_passed
+    } else {
+        0
+    };
+
+    (topfill, curlinenum_to)
+}
+
+/// Check diff status for line "lnum" in window "wp".
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_diff_check_with_linestatus(
+    wp: WinHandle,
+    lnum: LinenrT,
+    linestatus: *mut c_int,
+) -> c_int {
+    if !linestatus.is_null() {
+        *linestatus = 0;
+    }
+
+    let tp = nvim_get_curtab();
+    if nvim_tabpage_is_diff_invalid(tp) {
+        nvim_diff_ex_diffupdate();
+    }
+
+    let first_diff = nvim_tabpage_get_first_diff(tp);
+    if first_diff.is_null() || nvim_win_get_p_diff(wp) == 0 {
+        return 0;
+    }
+
+    let buf = nvim_win_get_w_buffer(wp);
+    let line_count = nvim_buf_get_ml_line_count(buf);
+    if lnum < 1 || lnum > line_count + 1 {
+        return 0;
+    }
+
+    let idx = rs_diff_buf_idx_tp(buf, tp);
+    if idx == DB_COUNT {
+        return 0;
+    }
+
+    if nvim_diff_hasFolding(wp, lnum) || nvim_diff_decor_conceal_line(wp, lnum) {
+        return 0;
+    }
+
+    // Find the diff block that includes lnum
+    let mut dp = nvim_tabpage_get_first_diff(tp);
+    while !dp.is_null() {
+        if lnum <= nvim_diffblock_get_lnum(dp, idx) + nvim_diffblock_get_count(dp, idx) {
+            break;
+        }
+        dp = nvim_diffblock_get_next(dp);
+    }
+
+    if dp.is_null() || lnum < nvim_diffblock_get_lnum(dp, idx) {
+        return 0;
+    }
+
+    // Run linematch if on-screen and not yet matched
+    let topline = nvim_win_get_topline(wp);
+    let botline = nvim_win_get_botline(wp);
+    if lnum >= topline
+        && lnum < botline
+        && !nvim_diffblock_is_linematched(dp)
+        && rs_diff_linematch(dp)
+        && rs_diff_check_sanity(tp, dp) != 0
+    {
+        nvim_diff_run_linematch(dp);
+    }
+
+    // Count filler lines from adjacent blocks
+    let diff_flags = nvim_diff_get_diff_flags();
+    let mut num_fill: c_int = 0;
+    while lnum == nvim_diffblock_get_lnum(dp, idx) + nvim_diffblock_get_count(dp, idx) {
+        if diff_flags & DIFF_FILLER != 0 {
+            let maxcount = rs_get_max_diff_length_c(dp);
+            num_fill += maxcount - nvim_diffblock_get_count(dp, idx);
+        }
+
+        let next = nvim_diffblock_get_next(dp);
+        if !next.is_null()
+            && lnum >= nvim_diffblock_get_lnum(next, idx)
+            && lnum <= nvim_diffblock_get_lnum(next, idx) + nvim_diffblock_get_count(next, idx)
+        {
+            dp = next;
+        } else {
+            break;
+        }
+    }
+
+    if lnum < nvim_diffblock_get_lnum(dp, idx) + nvim_diffblock_get_count(dp, idx) {
+        let mut zero = false;
+        let mut cmp = false;
+
+        for i in 0..DB_COUNT {
+            if i != idx && !nvim_get_curtab_diffbuf(i).is_null() {
+                if nvim_diffblock_get_count(dp, i) == 0 {
+                    zero = true;
+                } else if nvim_diffblock_get_count(dp, i) != nvim_diffblock_get_count(dp, idx) {
+                    if !linestatus.is_null() {
+                        *linestatus = -1;
+                    }
+                    return num_fill;
+                } else {
+                    cmp = true;
+                }
+            }
+        }
+
+        if cmp {
+            for i in 0..DB_COUNT {
+                if i != idx
+                    && !nvim_get_curtab_diffbuf(i).is_null()
+                    && nvim_diffblock_get_count(dp, i) != 0
+                    && !rs_diff_equal_entry_full(dp, idx, i)
+                {
+                    if !linestatus.is_null() {
+                        *linestatus = -1;
+                    }
+                    return num_fill;
+                }
+            }
+        }
+
+        if !zero {
+            return num_fill;
+        }
+        if !linestatus.is_null() {
+            *linestatus = -2;
+        }
+        return num_fill;
+    }
+
+    num_fill
+}
+
+/// Check filler lines for "lnum" in window "wp".
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_check_fill(wp: WinHandle, lnum: LinenrT) -> c_int {
+    let diff_flags = nvim_diff_get_diff_flags();
+    if diff_flags & DIFF_FILLER == 0 {
+        return 0;
+    }
+    let n = rs_diff_check_with_linestatus(wp, lnum, std::ptr::null_mut());
+    if n > 0 {
+        n
+    } else {
+        0
+    }
+}
+
+/// Set the topline of "towin" to match "fromwin" for diff scroll sync.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandle) {
+    let tp = nvim_get_curtab();
+    let frombuf = nvim_win_get_w_buffer(fromwin);
+    let fromidx = rs_diff_buf_idx_tp(frombuf, tp);
+    if fromidx == DB_COUNT {
+        return;
+    }
+
+    if nvim_tabpage_is_diff_invalid(tp) {
+        nvim_diff_ex_diffupdate();
+    }
+
+    let lnum = nvim_win_get_topline(fromwin);
+    nvim_win_set_topfill(towin, 0);
+
+    // Find diff block that includes lnum
+    let mut dp = nvim_tabpage_get_first_diff(tp);
+    while !dp.is_null() {
+        if lnum <= nvim_diffblock_get_lnum(dp, fromidx) + nvim_diffblock_get_count(dp, fromidx) {
+            break;
+        }
+        dp = nvim_diffblock_get_next(dp);
+    }
+
+    if dp.is_null() {
+        // After last change, compute relative to end of file
+        let to_buf = nvim_win_get_w_buffer(towin);
+        let to_line_count = nvim_buf_get_ml_line_count(to_buf);
+        let from_line_count = nvim_buf_get_ml_line_count(frombuf);
+        nvim_win_set_topline(towin, to_line_count - (from_line_count - lnum));
+    } else {
+        let tobuf = nvim_win_get_w_buffer(towin);
+        let toidx = rs_diff_buf_idx_tp(tobuf, tp);
+        if toidx == DB_COUNT {
+            return;
+        }
+        let new_topline =
+            lnum + (nvim_diffblock_get_lnum(dp, toidx) - nvim_diffblock_get_lnum(dp, fromidx));
+        nvim_win_set_topline(towin, new_topline);
+
+        if lnum >= nvim_diffblock_get_lnum(dp, fromidx) {
+            let from_topfill = nvim_win_get_topfill(fromwin);
+            let (topfill, topline) =
+                calculate_topfill_and_topline(fromidx, toidx, lnum, from_topfill);
+            nvim_win_set_topfill(towin, topfill);
+            nvim_win_set_topline(towin, topline);
+        }
+    }
+
+    // Safety checks
+    nvim_win_set_botfill(towin, 0);
+    let to_buf = nvim_win_get_w_buffer(towin);
+    let to_line_count = nvim_buf_get_ml_line_count(to_buf);
+
+    if nvim_win_get_topline(towin) > to_line_count {
+        nvim_win_set_topline(towin, to_line_count);
+        nvim_win_set_botfill(towin, 1);
+    }
+    if nvim_win_get_topline(towin) < 1 {
+        nvim_win_set_topline(towin, 1);
+        nvim_win_set_topfill(towin, 0);
+    }
+
+    nvim_diff_invalidate_botline_win(towin);
+    nvim_diff_changed_line_abv_curs_win(towin);
+    nvim_diff_check_topfill(towin, false);
+
+    let mut new_topline = nvim_win_get_topline(towin);
+    nvim_diff_hasFolding_topline(towin, new_topline, &raw mut new_topline);
+    nvim_win_set_topline(towin, new_topline);
+}
+
+/// Check if line should be folded in diff mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_infold(wp: WinHandle, lnum: LinenrT) -> bool {
+    if nvim_win_get_p_diff(wp) == 0 {
+        return false;
+    }
+
+    let tp = nvim_get_curtab();
+    let buf = nvim_win_get_w_buffer(wp);
+    let mut idx: c_int = -1;
+    let mut other = false;
+    for i in 0..DB_COUNT {
+        if nvim_tabpage_get_diffbuf(tp, i) == buf {
+            idx = i;
+        } else if !nvim_tabpage_get_diffbuf(tp, i).is_null() {
+            other = true;
+        }
+    }
+
+    if idx == -1 || !other {
+        return false;
+    }
+
+    if nvim_tabpage_is_diff_invalid(tp) {
+        nvim_diff_ex_diffupdate();
+    }
+
+    let first_diff = nvim_tabpage_get_first_diff(tp);
+    if first_diff.is_null() {
+        return true;
+    }
+
+    let diff_ctx = nvim_diff_get_context();
+    let mut dp = first_diff;
+    while !dp.is_null() {
+        let dp_lnum = nvim_diffblock_get_lnum(dp, idx);
+        let dp_count = nvim_diffblock_get_count(dp, idx);
+        if dp_lnum - diff_ctx > lnum {
+            break;
+        }
+        if dp_lnum + dp_count + diff_ctx > lnum {
+            return false;
+        }
+        dp = nvim_diffblock_get_next(dp);
+    }
+    true
+}
+
+/// Move cursor to next/prev diff block.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_move_to(dir: c_int, count: c_int) -> c_int {
+    let tp = nvim_get_curtab();
+    let curwin = nvim_get_curwin();
+    let curbuf = nvim_get_curbuf();
+    let mut lnum = nvim_win_get_cursor_lnum(curwin);
+    let idx = rs_diff_buf_idx_tp(curbuf, tp);
+
+    if idx == DB_COUNT || nvim_tabpage_get_first_diff(tp).is_null() {
+        return FAIL;
+    }
+
+    if nvim_tabpage_is_diff_invalid(tp) {
+        nvim_diff_ex_diffupdate();
+    }
+
+    if nvim_tabpage_get_first_diff(tp).is_null() {
+        return FAIL;
+    }
+
+    let mut remaining = count;
+    while remaining > 0 {
+        remaining -= 1;
+
+        let first_diff = nvim_tabpage_get_first_diff(tp);
+        if dir == BACKWARD && lnum <= nvim_diffblock_get_lnum(first_diff, idx) {
+            break;
+        }
+
+        let mut dp = first_diff;
+        loop {
+            if dp.is_null() {
+                break;
+            }
+
+            let next = nvim_diffblock_get_next(dp);
+            if (dir == FORWARD && lnum < nvim_diffblock_get_lnum(dp, idx))
+                || (dir == BACKWARD
+                    && (next.is_null() || lnum <= nvim_diffblock_get_lnum(next, idx)))
+            {
+                lnum = nvim_diffblock_get_lnum(dp, idx);
+                break;
+            }
+            dp = next;
+        }
+    }
+
+    // Clamp to buffer end
+    let line_count = nvim_buf_get_ml_line_count(curbuf);
+    if lnum > line_count {
+        lnum = line_count;
+    }
+
+    if lnum == nvim_win_get_cursor_lnum(curwin) {
+        return FAIL;
+    }
+
+    nvim_diff_setpcmark();
+    nvim_win_set_cursor_lnum(curwin, lnum);
+    nvim_win_set_cursor_col(curwin, 0);
+
+    OK
+}
+
+/// Find the corresponding line in curbuf for lnum1 in buf1.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_get_corresponding_line_int(
+    buf1: BufHandle,
+    lnum1: LinenrT,
+) -> LinenrT {
+    let tp = nvim_get_curtab();
+    let curbuf = nvim_get_curbuf();
+    let curwin = nvim_get_curwin();
+    let idx1 = rs_diff_buf_idx_tp(buf1, tp);
+    let idx2 = rs_diff_buf_idx_tp(curbuf, tp);
+
+    if idx1 == DB_COUNT || idx2 == DB_COUNT || nvim_tabpage_get_first_diff(tp).is_null() {
+        return lnum1;
+    }
+
+    if nvim_tabpage_is_diff_invalid(tp) {
+        nvim_diff_ex_diffupdate();
+    }
+
+    if nvim_tabpage_get_first_diff(tp).is_null() {
+        return lnum1;
+    }
+
+    let mut baseline: LinenrT = 0;
+    let mut dp = nvim_tabpage_get_first_diff(tp);
+    while !dp.is_null() {
+        let dp_lnum1 = nvim_diffblock_get_lnum(dp, idx1);
+        let dp_count1 = nvim_diffblock_get_count(dp, idx1);
+        let dp_lnum2 = nvim_diffblock_get_lnum(dp, idx2);
+        let dp_count2 = nvim_diffblock_get_count(dp, idx2);
+
+        if dp_lnum1 > lnum1 {
+            return lnum1 - baseline;
+        }
+        if dp_lnum1 + dp_count1 > lnum1 {
+            // Inside the diffblock
+            baseline = lnum1 - dp_lnum1;
+            if baseline > dp_count2 {
+                baseline = dp_count2;
+            }
+            return dp_lnum2 + baseline;
+        }
+        if dp_lnum1 == lnum1
+            && dp_count1 == 0
+            && dp_lnum2 <= nvim_win_get_cursor_lnum(curwin)
+            && dp_lnum2 + dp_count2 > nvim_win_get_cursor_lnum(curwin)
+        {
+            return nvim_win_get_cursor_lnum(curwin);
+        }
+        baseline = (dp_lnum1 + dp_count1) - (dp_lnum2 + dp_count2);
+
+        dp = nvim_diffblock_get_next(dp);
+    }
+
+    lnum1 - baseline
+}
+
+/// Find the corresponding line, clamped to buffer end.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_get_corresponding_line(
+    buf1: BufHandle,
+    lnum1: LinenrT,
+) -> LinenrT {
+    let lnum = rs_diff_get_corresponding_line_int(buf1, lnum1);
+    let curbuf = nvim_get_curbuf();
+    let line_count = nvim_buf_get_ml_line_count(curbuf);
+    if lnum < line_count {
+        lnum
+    } else {
+        line_count
+    }
+}
+
+/// For line "lnum" in the current window find the equivalent lnum in window "wp".
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_lnum_win(lnum: LinenrT, wp: WinHandle) -> LinenrT {
+    let tp = nvim_get_curtab();
+    let curbuf = nvim_get_curbuf();
+    let idx = rs_diff_buf_idx_tp(curbuf, tp);
+
+    if idx == DB_COUNT {
+        return 0;
+    }
+
+    if nvim_tabpage_is_diff_invalid(tp) {
+        nvim_diff_ex_diffupdate();
+    }
+
+    // Find the diff block that includes lnum
+    let mut dp = nvim_tabpage_get_first_diff(tp);
+    while !dp.is_null() {
+        if lnum <= nvim_diffblock_get_lnum(dp, idx) + nvim_diffblock_get_count(dp, idx) {
+            break;
+        }
+        dp = nvim_diffblock_get_next(dp);
+    }
+
+    if dp.is_null() {
+        // After last change, compute relative to end of file
+        let wp_buf = nvim_win_get_w_buffer(wp);
+        let wp_line_count = nvim_buf_get_ml_line_count(wp_buf);
+        let cur_line_count = nvim_buf_get_ml_line_count(curbuf);
+        return wp_line_count - (cur_line_count - lnum);
+    }
+
+    let wp_buf = nvim_win_get_w_buffer(wp);
+    let i = rs_diff_buf_idx_tp(wp_buf, tp);
+    if i == DB_COUNT {
+        return 0;
+    }
+
+    let n = lnum + (nvim_diffblock_get_lnum(dp, i) - nvim_diffblock_get_lnum(dp, idx));
+    let max_n = nvim_diffblock_get_lnum(dp, i) + nvim_diffblock_get_count(dp, i);
+    if n < max_n {
+        n
+    } else {
+        max_n
+    }
 }
 
 #[cfg(test)]
