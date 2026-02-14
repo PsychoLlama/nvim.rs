@@ -124,6 +124,11 @@ extern void rs_ex_packloadall(void *eap);
 extern void rs_load_plugins(void);
 extern void rs_ex_packadd(void *eap);
 
+// Rust FFI forward declarations (Phase 8 - Runtime command functions)
+extern int rs_get_runtime_cmd_flags(char **argp, size_t where_len);
+extern void rs_ex_runtime(void *eap);
+extern void rs_set_context_in_runtime_cmd(void *xp, const char *arg);
+
 garray_T exestack = { 0, 0, sizeof(estack_T), 50, NULL };
 garray_T script_items = { 0, 0, sizeof(scriptitem_T *), 20, NULL };
 
@@ -385,62 +390,35 @@ void runtime_init(void)
 /// "*argp" is advanced to after the [where] argument.
 static int get_runtime_cmd_flags(char **argp, size_t where_len)
 {
-  char *arg = *argp;
-
-  if (where_len == 0) {
-    return 0;
-  }
-
-  if (strncmp(arg, "START", where_len) == 0) {
-    *argp = skipwhite(arg + where_len);
-    return DIP_START + DIP_NORTP;
-  }
-  if (strncmp(arg, "OPT", where_len) == 0) {
-    *argp = skipwhite(arg + where_len);
-    return DIP_OPT + DIP_NORTP;
-  }
-  if (strncmp(arg, "PACK", where_len) == 0) {
-    *argp = skipwhite(arg + where_len);
-    return DIP_START + DIP_OPT + DIP_NORTP;
-  }
-  if (strncmp(arg, "ALL", where_len) == 0) {
-    *argp = skipwhite(arg + where_len);
-    return DIP_START + DIP_OPT;
-  }
-
-  return 0;
+  return rs_get_runtime_cmd_flags(argp, where_len);
 }
 
 /// ":runtime [where] {name}"
 void ex_runtime(exarg_T *eap)
 {
-  char *arg = eap->arg;
-  int flags = eap->forceit ? DIP_ALL : 0;
-  char *p = skiptowhite(arg);
-  flags += get_runtime_cmd_flags(&arg, (size_t)(p - arg));
-  assert(arg != NULL);  // suppress clang false positive
-  source_runtime(arg, flags);
+  rs_ex_runtime(eap);
 }
 
 static int runtime_expand_flags;
 
+// Phase 8: runtime_expand_flags accessors (static, so must live here)
+
+/// Get the runtime_expand_flags static variable.
+int nvim_rt_cmd_get_runtime_expand_flags(void)
+{
+  return runtime_expand_flags;
+}
+
+/// Set the runtime_expand_flags static variable.
+void nvim_rt_cmd_set_runtime_expand_flags(int val)
+{
+  runtime_expand_flags = val;
+}
+
 /// Set the completion context for the :runtime command.
 void set_context_in_runtime_cmd(expand_T *xp, const char *arg)
 {
-  char *p = skiptowhite(arg);
-  runtime_expand_flags
-    = *p != NUL ? get_runtime_cmd_flags((char **)&arg, (size_t)(p - arg)) : 0;
-  // Skip to the last argument.
-  while (*(p = skiptowhite_esc(arg)) != NUL) {
-    if (runtime_expand_flags == 0) {
-      // When there are multiple arguments and [where] is not specified,
-      // use an unrelated non-zero flag to avoid expanding [where].
-      runtime_expand_flags = DIP_ALL;
-    }
-    arg = skipwhite(p);
-  }
-  xp->xp_context = EXPAND_RUNTIME;
-  xp->xp_pattern = (char *)arg;
+  rs_set_context_in_runtime_cmd(xp, arg);
 }
 
 /// Source all .vim and .lua files in "fnames" with .vim files being sourced first.

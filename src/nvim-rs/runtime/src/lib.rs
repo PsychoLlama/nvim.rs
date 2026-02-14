@@ -352,6 +352,7 @@ pub fn rs_dip_is_package_search(flags: c_int) -> bool {
 // Re-exports from submodules
 // =============================================================================
 
+pub use commands::{rs_ex_runtime, rs_get_runtime_cmd_flags, rs_set_context_in_runtime_cmd};
 pub use package::{
     rs_add_pack_start_dirs, rs_ex_packadd, rs_ex_packloadall, rs_load_pack_plugin, rs_load_plugins,
     rs_load_start_packages, rs_pack_has_entries,

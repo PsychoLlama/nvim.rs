@@ -112,8 +112,9 @@ pub use nvim_register::*;
 pub use nvim_runtime::*;
 pub use nvim_runtime::{
     rs_add_pack_start_dirs, rs_do_in_path_and_pp, rs_do_in_runtimepath, rs_ex_packadd,
-    rs_ex_packloadall, rs_gen_expand_wildcards_and_cb, rs_load_pack_plugin, rs_load_plugins,
-    rs_load_start_packages, rs_pack_has_entries, rs_source_callback, rs_source_callback_vim_lua,
+    rs_ex_packloadall, rs_ex_runtime, rs_gen_expand_wildcards_and_cb, rs_get_runtime_cmd_flags,
+    rs_load_pack_plugin, rs_load_plugins, rs_load_start_packages, rs_pack_has_entries,
+    rs_set_context_in_runtime_cmd, rs_source_callback, rs_source_callback_vim_lua,
     rs_source_in_path_vim_lua, rs_source_runtime, rs_source_runtime_vim_lua,
 };
 pub use nvim_search::*;

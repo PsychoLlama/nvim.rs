@@ -2,7 +2,7 @@
 //!
 //! This module handles :source, :runtime, :packadd, and related commands.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::dip;
 
@@ -151,6 +151,116 @@ pub fn rs_where_all() -> *const c_char {
 }
 
 // =============================================================================
+// FFI: Runtime Command Functions (Phase 8)
+// =============================================================================
+
+/// EXPAND_RUNTIME value from cmdexpand_defs.h
+const EXPAND_RUNTIME: c_int = 51;
+
+extern "C" {
+    fn rs_skipwhite(s: *const c_char) -> *mut c_char;
+    fn rs_skiptowhite(s: *const c_char) -> *mut c_char;
+    fn rs_skiptowhite_esc(s: *const c_char) -> *mut c_char;
+
+    // exarg_T accessors (already in runtime_ffi.c)
+    fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
+    fn nvim_rt_pkg_exarg_get_forceit(eap: *mut c_void) -> bool;
+
+    // runtime_expand_flags accessors (in runtime.c, static variable)
+    fn nvim_rt_cmd_get_runtime_expand_flags() -> c_int;
+    fn nvim_rt_cmd_set_runtime_expand_flags(val: c_int);
+
+    // expand_T accessor (in runtime_ffi.c)
+    fn nvim_rt_cmd_expand_set_context(xp: *mut c_void, context: c_int, pattern: *const c_char);
+
+    // source_runtime is already in Rust (pathsearch.rs)
+    fn rs_source_runtime(name: *mut c_char, flags: c_int) -> c_int;
+}
+
+/// Get DIP_ flags from the [where] argument of a :runtime command.
+/// `*argp` is advanced to after the [where] argument.
+///
+/// # Safety
+/// `argp` must point to a valid `*mut c_char` pointer to a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_runtime_cmd_flags(
+    argp: *mut *mut c_char,
+    where_len: usize,
+) -> c_int {
+    let arg = *argp;
+
+    if where_len == 0 {
+        return 0;
+    }
+
+    if libc::strncmp(arg, c"START".as_ptr(), where_len) == 0 {
+        *argp = rs_skipwhite(arg.add(where_len));
+        return dip::START + dip::NORTP;
+    }
+    if libc::strncmp(arg, c"OPT".as_ptr(), where_len) == 0 {
+        *argp = rs_skipwhite(arg.add(where_len));
+        return dip::OPT + dip::NORTP;
+    }
+    if libc::strncmp(arg, c"PACK".as_ptr(), where_len) == 0 {
+        *argp = rs_skipwhite(arg.add(where_len));
+        return dip::START + dip::OPT + dip::NORTP;
+    }
+    if libc::strncmp(arg, c"ALL".as_ptr(), where_len) == 0 {
+        *argp = rs_skipwhite(arg.add(where_len));
+        return dip::START + dip::OPT;
+    }
+
+    0
+}
+
+/// ":runtime [where] {name}"
+///
+/// # Safety
+/// `eap` must be a valid pointer to an exarg_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_runtime(eap: *mut c_void) {
+    let mut arg = nvim_rt_exarg_get_arg(eap);
+    let forceit = nvim_rt_pkg_exarg_get_forceit(eap);
+    let mut flags: c_int = if forceit { dip::ALL } else { 0 };
+    let p = rs_skiptowhite(arg);
+    let where_len = p.offset_from(arg) as usize;
+    flags += rs_get_runtime_cmd_flags(&raw mut arg, where_len);
+    debug_assert!(!arg.is_null());
+    rs_source_runtime(arg, flags);
+}
+
+/// Set the completion context for the :runtime command.
+///
+/// # Safety
+/// `xp` must be a valid pointer to an expand_T.
+/// `arg` must be a valid pointer to a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_context_in_runtime_cmd(xp: *mut c_void, arg: *const c_char) {
+    let mut arg = arg.cast_mut();
+    let p = rs_skiptowhite(arg);
+    let expand_flags = if *p != 0 {
+        let where_len = p.offset_from(arg) as usize;
+        rs_get_runtime_cmd_flags(&raw mut arg, where_len)
+    } else {
+        0
+    };
+    nvim_rt_cmd_set_runtime_expand_flags(expand_flags);
+
+    // Skip to the last argument.
+    let mut p = rs_skiptowhite_esc(arg);
+    while *p != 0 {
+        if nvim_rt_cmd_get_runtime_expand_flags() == 0 {
+            // When there are multiple arguments and [where] is not specified,
+            // use an unrelated non-zero flag to avoid expanding [where].
+            nvim_rt_cmd_set_runtime_expand_flags(dip::ALL);
+        }
+        arg = rs_skipwhite(p);
+        p = rs_skiptowhite_esc(arg);
+    }
+    nvim_rt_cmd_expand_set_context(xp, EXPAND_RUNTIME, arg);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -209,5 +319,10 @@ mod tests {
         assert!(!rs_where_opt().is_null());
         assert!(!rs_where_pack().is_null());
         assert!(!rs_where_all().is_null());
+    }
+
+    #[test]
+    fn test_expand_runtime_constant() {
+        assert_eq!(EXPAND_RUNTIME, 51);
     }
 }

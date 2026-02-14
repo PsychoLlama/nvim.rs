@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "nvim/autocmd_defs.h"
+#include "nvim/cmdexpand_defs.h"
 #include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
@@ -930,4 +931,17 @@ void nvim_rt_pkg_do_cmdline_cmd(const char *cmd)
 void nvim_rt_pkg_time_msg(const char *msg)
 {
   TIME_MSG(msg);
+}
+
+// =============================================================================
+// Phase 8: Runtime command accessors
+// =============================================================================
+
+_Static_assert(EXPAND_RUNTIME == 51, "EXPAND_RUNTIME must be 51");
+
+/// Set xp_context and xp_pattern on an expand_T.
+void nvim_rt_cmd_expand_set_context(void *xp, int context, const char *pattern)
+{
+  ((expand_T *)xp)->xp_context = context;
+  ((expand_T *)xp)->xp_pattern = (char *)pattern;
 }
