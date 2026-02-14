@@ -7,6 +7,7 @@
 
 mod auto;
 mod fex;
+mod format_lines;
 mod ops;
 mod paragraph;
 mod textwidth;
@@ -16,6 +17,7 @@ use std::ffi::{c_char, c_int};
 // Re-export FFI functions from submodules
 pub use auto::{rs_auto_format, rs_check_auto_format};
 pub use fex::rs_fex_format;
+pub use format_lines::rs_format_lines;
 pub use ops::{rs_op_format, rs_op_formatexpr};
 pub use paragraph::{rs_ends_in_white, rs_fmt_check_par, rs_paragraph_start, rs_same_leader};
 pub use textwidth::rs_comp_textwidth;
@@ -30,7 +32,7 @@ extern "C" {
 /// Return true if format option 'x' is in effect.
 /// Take care of no formatting when 'paste' is set.
 #[inline]
-fn has_format_option_impl(x: c_int) -> bool {
+pub(crate) fn has_format_option_impl(x: c_int) -> bool {
     unsafe {
         // If paste is set, no format options are active
         if nvim_get_p_paste() != 0 {

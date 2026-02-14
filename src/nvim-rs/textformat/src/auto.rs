@@ -72,9 +72,6 @@ extern "C" {
     // Undo
     fn nvim_textfmt_u_save_cursor() -> c_int;
 
-    // Formatting
-    fn nvim_textfmt_format_lines(line_count: c_int, avoid_fex: bool);
-
     // Saved cursor management
     fn nvim_textfmt_set_saved_cursor(lnum: c_int, col: c_int);
     fn nvim_textfmt_get_saved_cursor_lnum() -> c_int;
@@ -186,7 +183,7 @@ unsafe fn auto_format_impl(trailblank: bool, prev_line: bool) {
     // Do the formatting and restore the cursor position. "saved_cursor" will
     // be adjusted for the text formatting.
     nvim_textfmt_set_saved_cursor(pos_lnum, pos_col);
-    nvim_textfmt_format_lines(-1, false);
+    crate::format_lines::format_lines_impl(-1, false);
     let saved_lnum = nvim_textfmt_get_saved_cursor_lnum();
     let saved_col = nvim_textfmt_get_saved_cursor_col();
     nvim_textfmt_set_curwin_cursor(saved_lnum, saved_col);

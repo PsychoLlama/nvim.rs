@@ -54,9 +54,6 @@ extern "C" {
     fn nvim_textfmt_get_saved_cursor_lnum() -> c_int;
     fn nvim_textfmt_clear_saved_cursor();
 
-    // Core formatting
-    fn nvim_textfmt_format_lines(line_count: c_int, avoid_fex: bool);
-
     // Cursor positioning
     fn nvim_textfmt_beginline(flags: c_int);
     fn nvim_textfmt_check_cursor(win: WinHandle);
@@ -134,7 +131,7 @@ unsafe fn op_format_impl(oap: OapHandle, keep_cursor: bool) {
     }
 
     let line_count = nvim_textfmt_oap_get_line_count(oap);
-    nvim_textfmt_format_lines(line_count, keep_cursor);
+    crate::format_lines::format_lines_impl(line_count, keep_cursor);
 
     // Leave the cursor at the first non-blank of the last formatted line.
     // If the cursor was moved one line back (e.g. with "Q}") go to the next

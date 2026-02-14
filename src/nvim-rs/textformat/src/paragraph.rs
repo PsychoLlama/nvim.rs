@@ -93,7 +93,7 @@ fn has_format_option(x: c_int) -> bool {
 /// Check if line `lnum` ends in a whitespace character.
 ///
 /// Returns `true` if the last character of the line is a space or tab.
-unsafe fn ends_in_white_impl(lnum: c_int) -> bool {
+pub(crate) unsafe fn ends_in_white_impl(lnum: c_int) -> bool {
     let s = nvim_textfmt_ml_get(lnum);
     if s.is_null() || *s == NUL {
         return false;
@@ -126,7 +126,7 @@ unsafe fn ends_in_white_impl(lnum: c_int) -> bool {
 ///
 /// # Returns
 /// `true` if line is a paragraph boundary.
-unsafe fn fmt_check_par_impl(
+pub(crate) unsafe fn fmt_check_par_impl(
     lnum: c_int,
     leader_len: *mut c_int,
     leader_flags: *mut *mut c_char,
@@ -183,7 +183,7 @@ unsafe fn fmt_check_par_impl(
 ///
 /// # Returns
 /// `true` if the leaders match (lines can be joined).
-unsafe fn same_leader_impl(
+pub(crate) unsafe fn same_leader_impl(
     lnum: c_int,
     leader1_len: c_int,
     leader1_flags: *mut c_char,

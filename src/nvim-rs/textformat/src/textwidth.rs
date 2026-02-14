@@ -69,7 +69,7 @@ extern "C" {
 ///
 /// # Returns
 /// The computed textwidth.
-unsafe fn comp_textwidth_impl(ff: bool) -> c_int {
+pub(crate) unsafe fn comp_textwidth_impl(ff: bool) -> c_int {
     let mut textwidth = nvim_textfmt_get_curbuf_b_p_tw();
 
     if textwidth == 0 && nvim_textfmt_get_curbuf_b_p_wm() != 0 {
