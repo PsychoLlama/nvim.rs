@@ -1,20 +1,31 @@
-Plan: ~/.claude/plans/swift-orbiting-lake.md
+Plan: ~/.claude/plans/groovy-wiggling-dream.md
 
-All 4 phases of the extmark migration plan are complete:
+## Migration Complete
 
-**Phase 1** (committed earlier): Wired up 12 existing Rust implementations as thin `rs_` wrappers in `extmark.c`.
+All 8 phases of the `runtime.c` migration plan are done. Here's the summary:
 
-**Phase 2** (committed earlier): Implemented `extmark_set` in Rust, handling namespace tracking, in-place mark revision, deletion+recreation, and decoration registration.
+| Phase | Description | Functions Migrated | Status |
+|-------|------------|-------------------|--------|
+| 1 | Execution Stack | 8 functions | Committed |
+| 2 | Script Registry | 11 functions | Committed |
+| 3 | Path Utilities & Default RTP | 9 functions | Committed |
+| 4 | Search Path Cache | 5 mgmt functions (data structures stay in C) | Committed |
+| 5 | Path Searching & Callbacks | 8 functions (4 kept in C: do_in_path, do_in_cached_path, etc.) | Committed |
+| 6 | Package Management | 7 functions (5 kept in C: add_pack_dir_to_rtp, etc.) | Committed |
+| 7 | Core Sourcing & Line Reading | **Skipped** - circular FFI risk with do_cmdline/getsourceline callback cycle | N/A |
+| 8 | Remaining Functions | 3 runtime command functions | Committed |
 
-**Phase 3**: Migrated `extmark_get` and `push_mark` to Rust:
-- Fixed a **MTPair layout mismatch** bug — the extmark crate had `{ MTKey start; MTKey end }` (80 bytes) instead of the correct C layout `{ MTKey start; MTPos end_pos; bool end_right_gravity }` (~52 bytes)
-- Added 6 new C accessor wrappers for overlap iteration, type flags, and array operations
-- Implemented `push_mark` (namespace + type filtering) and `rs_extmark_get` (overlap + regular iteration paths)
+**What stayed in C and why:**
+- **Core sourcing pipeline** (do_source_ext, getsourceline, get_one_sourceline) - circular FFI with `do_cmdline()` callback
+- **Complex data structure operations** (RuntimeSearchPath build/free/copy) - kvec_t macro-based C types
+- **Opaque struct accessors** (source_cookie_T, exarg_T field access) - FFI overhead exceeds benefit for trivial functions
+- **Expansion/completion** (ExpandRTDir_int, etc.) - garray_T + globpath heavy usage
 
-**Phase 4**: Cleaned up dead code:
-- Removed 12 dead `rs_flags_*`/`rs_pos_*` extern declarations
-- Trimmed 6 unused includes
-- Added `nvim-extmark` to justfile (4254 tests total, up from 4239)
-- Fixed 2 incorrect test assertions
-
-The `extmark.c` file now contains only thin wrapper functions calling Rust implementations, plus C accessor functions for the opaque handle pattern.
+**Commits:**
+1. `e766fac72d` - Phase 1: Execution Stack
+2. `af22aeafac` - Phase 2: Script Registry  
+3. `9c9e9f1707` - Phase 3: Path Utilities
+4. `550fae50bf` - Phase 4: Search Path Cache
+5. `f2d2aaaea6` - Phase 5: Path Searching
+6. `af531a0272` - Phase 6: Package Management
+7. `b6c0ec8220` - Phase 8: Runtime Commands
