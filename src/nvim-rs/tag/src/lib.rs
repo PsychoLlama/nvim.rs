@@ -935,13 +935,6 @@ extern "C" {
     fn nvim_tag_curwin_is_null() -> bool;
     fn nvim_do_tag_free();
 
-    // expand_tag_fname
-    fn nvim_expand_tag_fname(
-        fname: *const c_char,
-        tag_fname: *const c_char,
-        expand: bool,
-    ) -> *mut c_char;
-
     // Memory
     fn xfree(ptr: *mut c_void);
 

@@ -42,13 +42,6 @@ extern "C" {
     fn nvim_tag_path_exists(path: *const c_char) -> bool;
     fn nvim_has_bufreadcmd(fname: *const c_char) -> bool;
 
-    // Tag filename expansion
-    fn nvim_expand_tag_fname(
-        fname: *const c_char,
-        tag_fname: *const c_char,
-        expand: bool,
-    ) -> *mut c_char;
-
     // Global state accessors
     fn nvim_get_postponed_split() -> c_int;
     fn nvim_set_postponed_split(val: c_int);
@@ -446,18 +439,6 @@ pub unsafe extern "C" fn rs_can_open_tag_file(fname: *const c_char) -> bool {
     }
 
     nvim_tag_path_exists(fname) || nvim_has_bufreadcmd(fname)
-}
-
-/// Expand a tag file name relative to the tag file that contains it.
-///
-/// This is a thin wrapper around the C expand_tag_fname function.
-#[no_mangle]
-pub unsafe extern "C" fn rs_expand_tag_fname(
-    fname: *const c_char,
-    tag_fname: *const c_char,
-    expand: bool,
-) -> *mut c_char {
-    nvim_expand_tag_fname(fname, tag_fname, expand)
 }
 
 // =============================================================================

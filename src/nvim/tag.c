@@ -661,6 +661,11 @@ extern void rs_findtags_state_init(findtags_state_T *st, char *pat, int flags, i
 extern void rs_findtags_state_free(findtags_state_T *st);
 extern void rs_findtags_matchargs_init(findtags_match_args_T *margs, int flags);
 
+// Phase 3 tag file enumeration and filename expansion
+extern int rs_get_tagfname(tagname_T *tnp, int first, char *buf);
+extern bool rs_found_tagfile_cb(int num_fnames, char **fnames, bool all, void *cookie);
+extern char *rs_expand_tag_fname(char *fname, char *tag_fname, bool expand);
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
@@ -740,6 +745,38 @@ bool nvim_tag_curwin_is_null(void)
 void nvim_do_tag_free(void)
 {
   do_tag(NULL, DT_FREE, 0, 0, 0);
+}
+
+// ============================================================================
+// Rust FFI accessor functions for Phase 3 (expand_tag_fname)
+// ============================================================================
+
+/// Check if a path has wildcards
+bool nvim_path_has_wildcard(const char *fname)
+{
+  return path_has_wildcard(fname);
+}
+
+/// Expand wildcards in a filename (ExpandInit + ExpandOne)
+char *nvim_expand_one_file(char *fname)
+{
+  expand_T xpc;
+  ExpandInit(&xpc);
+  xpc.xp_context = EXPAND_FILES;
+  return ExpandOne(&xpc, fname, NULL,
+                   WILD_LIST_NOTFOUND|WILD_SILENT, WILD_EXPAND_FREE);
+}
+
+/// Check if a filename is absolute
+bool nvim_vim_isAbsName(const char *fname)
+{
+  return vim_isAbsName(fname);
+}
+
+/// Get the 'tagrelative' option value
+bool nvim_get_p_tr(void)
+{
+  return p_tr;
 }
 
 /// Reads the 'tagfunc' option value and convert that to a callback value.
@@ -2875,21 +2912,7 @@ static garray_T tag_fnames = GA_EMPTY_INIT_VALUE;
 // 'runtimepath' doc directories.
 static bool found_tagfile_cb(int num_fnames, char **fnames, bool all, void *cookie)
 {
-  for (int i = 0; i < num_fnames; i++) {
-    char *const tag_fname = xstrdup(fnames[i]);
-
-#ifdef BACKSLASH_IN_FILENAME
-    slash_adjust(tag_fname);
-#endif
-    simplify_filename(tag_fname);
-    GA_APPEND(char *, &tag_fnames, tag_fname);
-
-    if (!all) {
-      break;
-    }
-  }
-
-  return num_fnames > 0;
+  return rs_found_tagfile_cb(num_fnames, fnames, all, cookie);
 }
 
 // ============================================================================
@@ -2953,106 +2976,7 @@ void free_tag_stuff(void)
 /// @return  FAIL if no more tag file names, OK otherwise.
 int get_tagfname(tagname_T *tnp, int first, char *buf)
 {
-  char *fname = NULL;
-
-  if (first) {
-    CLEAR_POINTER(tnp);
-  }
-
-  if (curbuf->b_help) {
-    // For help files it's done in a completely different way:
-    // Find "doc/tags" and "doc/tags-??" in all directories in
-    // 'runtimepath'.
-    if (first) {
-      ga_clear_strings(&tag_fnames);
-      ga_init(&tag_fnames, (int)sizeof(char *), 10);
-      do_in_runtimepath("doc/tags doc/tags-??", DIP_ALL,
-                        found_tagfile_cb, NULL);
-    }
-
-    if (tnp->tn_hf_idx >= tag_fnames.ga_len) {
-      // Not found in 'runtimepath', use 'helpfile', if it exists and
-      // wasn't used yet, replacing "help.txt" with "tags".
-      if (tnp->tn_hf_idx > tag_fnames.ga_len || *p_hf == NUL) {
-        return FAIL;
-      }
-      tnp->tn_hf_idx++;
-      STRCPY(buf, p_hf);
-      STRCPY(path_tail(buf), "tags");
-#ifdef BACKSLASH_IN_FILENAME
-      slash_adjust(buf);
-#endif
-      simplify_filename(buf);
-
-      for (int i = 0; i < tag_fnames.ga_len; i++) {
-        if (strcmp(buf, ((char **)(tag_fnames.ga_data))[i]) == 0) {
-          return FAIL;  // avoid duplicate file names
-        }
-      }
-    } else {
-      xstrlcpy(buf, ((char **)(tag_fnames.ga_data))[tnp->tn_hf_idx++], MAXPATHL);
-    }
-    return OK;
-  }
-
-  if (first) {
-    // Init.  We make a copy of 'tags', because autocommands may change
-    // the value without notifying us.
-    tnp->tn_tags = xstrdup((*curbuf->b_p_tags != NUL) ? curbuf->b_p_tags : p_tags);
-    tnp->tn_np = tnp->tn_tags;
-  }
-
-  // Loop until we have found a file name that can be used.
-  // There are two states:
-  // tnp->tn_did_filefind_init == false: setup for next part in 'tags'.
-  // tnp->tn_did_filefind_init == true: find next file in this part.
-  while (true) {
-    if (tnp->tn_did_filefind_init) {
-      fname = vim_findfile(tnp->tn_search_ctx);
-      if (fname != NULL) {
-        break;
-      }
-
-      tnp->tn_did_filefind_init = false;
-    } else {
-      char *filename = NULL;
-
-      // Stop when used all parts of 'tags'.
-      if (*tnp->tn_np == NUL) {
-        vim_findfile_cleanup(tnp->tn_search_ctx);
-        tnp->tn_search_ctx = NULL;
-        return FAIL;
-      }
-
-      // Copy next file name into buf.
-      buf[0] = NUL;
-      copy_option_part(&tnp->tn_np, buf, MAXPATHL - 1, " ,");
-
-      char *r_ptr = vim_findfile_stopdir(buf);
-      // move the filename one char forward and truncate the
-      // filepath with a NUL
-      filename = path_tail(buf);
-      if (r_ptr != NULL) {
-        STRMOVE(r_ptr + 1, r_ptr);
-        r_ptr++;
-      }
-      STRMOVE(filename + 1, filename);
-      *filename++ = NUL;
-
-      tnp->tn_search_ctx = vim_findfile_init(buf, filename, strlen(filename),
-                                             r_ptr, 100,
-                                             false,                   // don't free visited list
-                                             FINDFILE_FILE,           // we search for a file
-                                             tnp->tn_search_ctx, true, curbuf->b_ffname);
-      if (tnp->tn_search_ctx != NULL) {
-        tnp->tn_did_filefind_init = true;
-      }
-    }
-  }
-
-  STRCPY(buf, fname);
-  xfree(fname);
-  return OK;
+  return rs_get_tagfname(tnp, first, buf);
 }
 
 // Free the contents of a tagname_T that was filled by get_tagfname().
@@ -3426,43 +3350,13 @@ erret:
 /// @return  a pointer to allocated memory.
 static char *expand_tag_fname(char *fname, char *const tag_fname, const bool expand)
 {
-  char *p;
-  char *expanded_fname = NULL;
-  expand_T xpc;
-
-  // Expand file name (for environment variables) when needed.
-  if (expand && path_has_wildcard(fname)) {
-    ExpandInit(&xpc);
-    xpc.xp_context = EXPAND_FILES;
-    expanded_fname = ExpandOne(&xpc, fname, NULL,
-                               WILD_LIST_NOTFOUND|WILD_SILENT, WILD_EXPAND_FREE);
-    if (expanded_fname != NULL) {
-      fname = expanded_fname;
-    }
-  }
-
-  char *retval;
-  if ((p_tr || curbuf->b_help)
-      && !vim_isAbsName(fname)
-      && (p = path_tail(tag_fname)) != tag_fname) {
-    retval = xmalloc(MAXPATHL);
-    STRCPY(retval, tag_fname);
-    xstrlcpy(retval + (p - tag_fname), fname, (size_t)(MAXPATHL - (p - tag_fname)));
-    // Translate names like "src/a/../b/file.c" into "src/b/file.c".
-    simplify_filename(retval);
-  } else {
-    retval = xstrdup(fname);
-  }
-
-  xfree(expanded_fname);
-
-  return retval;
+  return rs_expand_tag_fname(fname, tag_fname, expand);
 }
 
 /// Expand tag filename relative to tag file (wrapper for Rust)
 char *nvim_expand_tag_fname(const char *fname, const char *tag_fname, bool expand)
 {
-  return expand_tag_fname((char *)fname, (char *)tag_fname, expand);
+  return rs_expand_tag_fname((char *)fname, (char *)tag_fname, expand);
 }
 
 /// Check if we have a tag for the buffer with name "buf_ffname".

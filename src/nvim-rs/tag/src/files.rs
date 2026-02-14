@@ -87,15 +87,16 @@ extern "C" {
     // Path manipulation (for STRMOVE-like operation)
     fn memmove(dest: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
 
-    // Tag filename expansion
-    fn nvim_expand_tag_fname(
-        fname: *const c_char,
-        tag_fname: *const c_char,
-        expand: bool,
-    ) -> *mut c_char;
-
     // Path comparison (returns nonzero if files are the same)
     fn nvim_path_full_compare_equal(s1: *const c_char, s2: *const c_char) -> c_int;
+
+    // Phase 3: expand_tag_fname dependencies
+    fn nvim_path_has_wildcard(fname: *const c_char) -> bool;
+    fn nvim_expand_one_file(fname: *mut c_char) -> *mut c_char;
+    fn nvim_vim_isAbsName(fname: *const c_char) -> bool;
+    fn nvim_get_p_tr() -> bool;
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
 }
 
 /// FINDFILE_FILE constant from file_search.h
@@ -464,14 +465,18 @@ pub extern "C" fn rs_tag_fnames_count() -> c_int {
 // Helper function for C wrapper
 // =============================================================================
 
-/// Wrapper to call the tag file callback from C.
+/// Callback for finding all "tags" and "tags-??" files in 'runtimepath' doc
+/// directories. Called by `do_in_runtimepath`.
 ///
-/// This is called by C code when finding tag files in runtimepath.
+/// # Safety
+///
+/// - `fnames` must point to an array of `num_fnames` valid C strings
 #[no_mangle]
 pub unsafe extern "C" fn rs_found_tagfile_cb(
     num_fnames: c_int,
-    fnames: *const *const c_char,
-    _all: bool,
+    fnames: *mut *mut c_char,
+    all: bool,
+    _cookie: *mut c_void,
 ) -> bool {
     if fnames.is_null() || num_fnames <= 0 {
         return false;
@@ -490,6 +495,10 @@ pub unsafe extern "C" fn rs_found_tagfile_cb(
 
         nvim_simplify_filename(tag_fname);
         nvim_tag_fnames_add(tag_fname);
+
+        if !all {
+            break;
+        }
     }
 
     num_fnames > 0
@@ -529,7 +538,7 @@ pub unsafe extern "C" fn rs_tag_full_fname(tagp: *mut TagPtrs) -> *mut c_char {
     let saved_char = *tagp.fname_end;
     *tagp.fname_end = 0;
 
-    let fullname = nvim_expand_tag_fname(tagp.fname, tagp.tag_fname, false);
+    let fullname = rs_expand_tag_fname(tagp.fname, tagp.tag_fname, false);
 
     // Restore the original character
     *tagp.fname_end = saved_char;
@@ -562,13 +571,67 @@ pub unsafe extern "C" fn rs_test_for_current(
     let saved_char = *fname_end;
     *fname_end = 0;
 
-    let fullname = nvim_expand_tag_fname(fname, tag_fname, true);
+    let fullname = rs_expand_tag_fname(fname, tag_fname, true);
     let retval = nvim_path_full_compare_equal(fullname, buf_ffname);
 
     xfree(fullname as *mut c_void);
 
     // Restore the original character
     *fname_end = saved_char;
+
+    retval
+}
+
+// =============================================================================
+// Phase 3: expand_tag_fname
+// =============================================================================
+
+/// If `expand` is true, expand wildcards in `fname`.
+/// If 'tagrelative' option is set, change fname (name of file containing tag)
+/// according to `tag_fname` (name of tag file containing fname).
+///
+/// Returns a pointer to allocated memory (caller must free).
+///
+/// # Safety
+///
+/// - `fname` and `tag_fname` must be valid C strings
+#[no_mangle]
+pub unsafe extern "C" fn rs_expand_tag_fname(
+    mut fname: *mut c_char,
+    tag_fname: *mut c_char,
+    expand: bool,
+) -> *mut c_char {
+    let mut expanded_fname: *mut c_char = ptr::null_mut();
+
+    // Expand file name (for environment variables) when needed.
+    if expand && nvim_path_has_wildcard(fname) {
+        expanded_fname = nvim_expand_one_file(fname);
+        if !expanded_fname.is_null() {
+            fname = expanded_fname;
+        }
+    }
+
+    let retval;
+    let p_tr = nvim_get_p_tr();
+    let is_help = nvim_curbuf_is_help();
+
+    if (p_tr || is_help) && !nvim_vim_isAbsName(fname) {
+        let p = nvim_path_tail(tag_fname);
+        if p == tag_fname {
+            retval = xstrdup(fname);
+        } else {
+            retval = xmalloc(MAXPATHL).cast::<c_char>();
+            strcpy(retval, tag_fname);
+            let offset = p.offset_from(tag_fname) as usize;
+            xstrlcpy(retval.add(offset), fname, MAXPATHL - offset);
+            // Translate names like "src/a/../b/file.c" into "src/b/file.c".
+            nvim_simplify_filename(retval);
+        }
+    } else {
+        retval = xstrdup(fname);
+    }
+
+    xfree(expanded_fname as *mut c_void);
 
     retval
 }
