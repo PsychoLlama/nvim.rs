@@ -991,6 +991,23 @@ pub unsafe extern "C" fn rs_do_mousescroll_horiz(leftcol: c_int) -> bool {
 }
 
 // =============================================================================
+// pos_T representation
+// =============================================================================
+
+/// Buffer position: line number, column, and column add.
+/// Matches C `pos_T` layout exactly.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PosT {
+    pub lnum: linenr_T,
+    pub col: colnr_T,
+    pub coladd: colnr_T,
+}
+
+/// Opaque handle for `cmdarg_T *`
+pub type CmdargHandle = *mut std::ffi::c_void;
+
+// =============================================================================
 // Phase 4 — Window Find Functions
 // =============================================================================
 
@@ -1055,6 +1072,202 @@ pub unsafe extern "C" fn rs_mouse_find_win_outer(
         *colp += nvim_win_get_wincol_off(wp);
     }
     wp
+}
+
+// =============================================================================
+// Phase 5 — Mid-level Functions
+// =============================================================================
+
+extern "C" {
+    /// Get `mouse_grid` global.
+    fn nvim_get_mouse_grid() -> c_int;
+
+    /// Get `mouse_row` global.
+    fn nvim_get_mouse_row() -> c_int;
+
+    /// Get `w_p_stc` field (statuscolumn option string).
+    fn nvim_win_get_p_stc(wp: WinHandle) -> *const c_char;
+
+    /// Get `w_view_height` field.
+    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
+
+    /// Get `w_status_height` field.
+    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
+
+    /// Get `w_winbar_height` field.
+    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
+
+    /// Get `Rows` global.
+    fn nvim_get_Rows() -> c_int;
+
+    /// Get `p_ch` global (command height).
+    fn nvim_get_p_ch() -> i64;
+
+    /// Get `global_stl_height()`.
+    fn nvim_global_stl_height() -> c_int;
+
+    /// C accessor: grid-based vcol/flags lookup for mouse click.
+    fn nvim_mouse_check_grid_impl(vcolp: *mut colnr_T, flagsp: *mut c_int);
+
+    /// C accessor: popup menu logic.
+    fn nvim_do_popup_impl(which_button: c_int, m_pos_flag: c_int, m_pos: PosT) -> c_int;
+
+    /// C accessor: `ins_mouse` logic.
+    fn nvim_ins_mouse_impl(c: c_int);
+
+    /// C accessor: `do_mousescroll` logic.
+    fn nvim_do_mousescroll_impl(cap: CmdargHandle);
+
+    /// C accessor: `nv_mousescroll` logic.
+    fn nvim_nv_mousescroll_impl(cap: CmdargHandle);
+
+    /// C accessor: `ins_mousescroll` logic.
+    fn nvim_ins_mousescroll_impl(dir: c_int);
+}
+
+/// Check the mouse click grid for virtual column and fold flags.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mouse_check_grid(vcolp: *mut colnr_T, flagsp: *mut c_int) {
+    nvim_mouse_check_grid_impl(vcolp, flagsp);
+}
+
+/// Get the file position of the mouse click.
+///
+/// Returns `IN_BUFFER` if the click is on a valid buffer position,
+/// or one of the other `IN_*` / `MOUSE_*` flags.
+///
+/// # Safety
+/// `mpos` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_fpos_of_mouse(mpos: *mut PosT) -> c_int {
+    let row = nvim_get_mouse_row();
+    let col = nvim_get_mouse_col();
+    if row < 0 || col < 0 {
+        return IN_UNKNOWN;
+    }
+
+    let mut grid = nvim_get_mouse_grid();
+    let mut frow = row;
+    let mut fcol = col;
+    let wp = rs_mouse_find_win_inner(
+        std::ptr::addr_of_mut!(grid),
+        std::ptr::addr_of_mut!(frow),
+        std::ptr::addr_of_mut!(fcol),
+    );
+    if wp.is_null() {
+        return IN_UNKNOWN;
+    }
+    let winrow = frow;
+    let wincol = fcol;
+
+    let below_buffer = rs_mouse_comp_pos(
+        wp,
+        std::ptr::addr_of_mut!(frow),
+        std::ptr::addr_of_mut!(fcol),
+        std::ptr::addr_of_mut!((*mpos).lnum),
+    );
+
+    // Check for statuscolumn click
+    if !below_buffer {
+        let p_stc = nvim_win_get_p_stc(wp);
+        if !p_stc.is_null() && *p_stc != 0 {
+            let col_off = nvim_win_col_off(wp);
+            if nvim_win_get_p_rl(wp) != 0 {
+                if wincol >= nvim_win_get_view_width(wp) - col_off {
+                    return MOUSE_STATUSCOL;
+                }
+            } else if wincol < col_off {
+                return MOUSE_STATUSCOL;
+            }
+        }
+    }
+
+    let view_height = nvim_win_get_view_height(wp);
+    let status_height = nvim_win_get_status_height(wp);
+
+    if winrow >= view_height + status_height {
+        // Below window — check for global status line
+        let mouse_grid_val = nvim_get_mouse_grid();
+        let rows = nvim_get_Rows();
+        #[allow(clippy::cast_possible_truncation)]
+        let p_ch = nvim_get_p_ch() as c_int;
+        if mouse_grid_val <= 1 && row < rows - p_ch && row >= rows - p_ch - nvim_global_stl_height()
+        {
+            return IN_STATUS_LINE;
+        }
+        return IN_UNKNOWN;
+    } else if winrow >= view_height {
+        return IN_STATUS_LINE;
+    }
+
+    if winrow < 0 && winrow + nvim_win_get_winbar_height(wp) >= 0 {
+        return MOUSE_WINBAR;
+    }
+
+    if wincol >= nvim_win_get_view_width(wp) {
+        return IN_SEP_LINE;
+    }
+
+    let curwin = nvim_get_curwin();
+    if wp != curwin || below_buffer {
+        return IN_UNKNOWN;
+    }
+
+    (*mpos).col = rs_vcol2col(
+        wp,
+        (*mpos).lnum,
+        fcol,
+        std::ptr::addr_of_mut!((*mpos).coladd),
+    );
+    IN_BUFFER
+}
+
+/// Handle popup menu action for mouse click.
+///
+/// # Safety
+/// Requires valid mouse and visual mode state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: PosT) -> c_int {
+    nvim_do_popup_impl(which_button, m_pos_flag, m_pos)
+}
+
+/// Handle mouse click in Insert mode.
+///
+/// # Safety
+/// Requires valid window and insert mode state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_mouse(c: c_int) {
+    nvim_ins_mouse_impl(c);
+}
+
+/// Common mouse wheel scrolling for Normal/Visual modes.
+///
+/// # Safety
+/// `cap` must be a valid `cmdarg_T` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
+    nvim_do_mousescroll_impl(cap);
+}
+
+/// Normal/Visual mode mouse scroll handler.
+///
+/// # Safety
+/// `cap` must be a valid `cmdarg_T` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_mousescroll(cap: CmdargHandle) {
+    nvim_nv_mousescroll_impl(cap);
+}
+
+/// Insert mode mouse scroll handler.
+///
+/// # Safety
+/// Requires valid window and insert mode state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_mousescroll(dir: c_int) {
+    nvim_ins_mousescroll_impl(dir);
 }
 
 // =============================================================================

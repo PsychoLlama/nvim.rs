@@ -172,6 +172,13 @@ extern bool rs_mouse_comp_pos(win_T *win, int *rowp, int *colp, linenr_T *lnump)
 extern colnr_T rs_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp);
 extern win_T *rs_mouse_find_win_inner(int *gridp, int *rowp, int *colp);
 extern win_T *rs_mouse_find_win_outer(int *gridp, int *rowp, int *colp);
+extern void rs_mouse_check_grid(colnr_T *vcolp, int *flagsp);
+extern int rs_get_fpos_of_mouse(pos_T *mpos);
+extern int rs_do_popup(int which_button, int m_pos_flag, pos_T m_pos);
+extern void rs_do_mousescroll(cmdarg_T *cap);
+extern void rs_nv_mousescroll(cmdarg_T *cap);
+extern void rs_ins_mouse(int c);
+extern void rs_ins_mousescroll(int dir);
 
 /// Move the current tab to tab in same column as mouse or to end of the
 /// tabline if there is no tab there.
@@ -269,60 +276,17 @@ static void call_click_def_func(StlClickDefinition *click_defs, int col, int whi
 /// The column is one for the first column.
 static int get_fpos_of_mouse(pos_T *mpos)
 {
-  int grid = mouse_grid;
-  int row = mouse_row;
-  int col = mouse_col;
-
-  if (row < 0 || col < 0) {  // check if it makes sense
-    return IN_UNKNOWN;
-  }
-
-  // find the window where the row is in
-  win_T *wp = mouse_find_win_inner(&grid, &row, &col);
-  if (wp == NULL) {
-    return IN_UNKNOWN;
-  }
-  int winrow = row;
-  int wincol = col;
-
-  // compute the position in the buffer line from the posn on the screen
-  bool below_buffer = mouse_comp_pos(wp, &row, &col, &mpos->lnum);
-
-  if (!below_buffer && *wp->w_p_stc != NUL
-      && (wp->w_p_rl
-          ? wincol >= wp->w_view_width - win_col_off(wp)
-          : wincol < win_col_off(wp))) {
-    return MOUSE_STATUSCOL;
-  }
-
-  // winpos and height may change in win_enter()!
-  if (winrow >= wp->w_view_height + wp->w_status_height) {  // Below window
-    if (mouse_grid <= 1 && mouse_row < Rows - p_ch
-        && mouse_row >= Rows - p_ch - global_stl_height()) {  // In global status line
-      return IN_STATUS_LINE;
-    }
-    return IN_UNKNOWN;
-  } else if (winrow >= wp->w_view_height) {  // In window status line
-    return IN_STATUS_LINE;
-  }
-
-  if (winrow < 0 && winrow + wp->w_winbar_height >= 0) {  // In winbar
-    return MOUSE_WINBAR;
-  }
-
-  if (wincol >= wp->w_view_width) {  // In vertical separator line
-    return IN_SEP_LINE;
-  }
-
-  if (wp != curwin || below_buffer) {
-    return IN_UNKNOWN;
-  }
-
-  mpos->col = vcol2col(wp, mpos->lnum, col, &mpos->coladd);
-  return IN_BUFFER;
+  return rs_get_fpos_of_mouse(mpos);
 }
 
 static int do_popup(int which_button, int m_pos_flag, pos_T m_pos)
+{
+  return rs_do_popup(which_button, m_pos_flag, m_pos);
+}
+
+/// C accessor: perform the popup menu logic that depends on visual mode,
+/// jump_to_mouse, getvcols/getvcol, and UI flush.
+int nvim_do_popup_impl(int which_button, int m_pos_flag, pos_T m_pos)
 {
   int jump_flags = 0;
   if (strcmp(p_mousem, "popup_setpos") == 0) {
@@ -1032,6 +996,12 @@ bool do_mouse(oparg_T *oap, int c, int dir, int count, bool fixindent)
 
 void ins_mouse(int c)
 {
+  rs_ins_mouse(c);
+}
+
+/// C accessor: perform ins_mouse logic that deeply accesses insert mode state.
+void nvim_ins_mouse_impl(int c)
+{
   win_T *old_curwin = curwin;
 
   undisplay_dollar();
@@ -1073,6 +1043,13 @@ void ins_mouse(int c)
 /// differ from the window that actually has focus.
 void do_mousescroll(cmdarg_T *cap)
 {
+  rs_do_mousescroll(cap);
+}
+
+/// C accessor: perform the actual scroll logic.
+/// Accesses cmdarg_T fields, mod_mask, State, pagescroll, nv_scroll_line.
+void nvim_do_mousescroll_impl(cmdarg_T *cap)
+{
   bool shift_or_ctrl = mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL);
 
   if (cap->arg == MSCR_UP || cap->arg == MSCR_DOWN) {
@@ -1104,6 +1081,13 @@ void do_mousescroll(cmdarg_T *cap)
 /// Implementation for scrolling in Insert mode in direction "dir", which is one
 /// of the MSCR_ values.
 void ins_mousescroll(int dir)
+{
+  rs_ins_mousescroll(dir);
+}
+
+/// C accessor: perform ins_mousescroll logic that constructs cmdarg_T
+/// and accesses insert mode state.
+void nvim_ins_mousescroll_impl(int dir)
 {
   cmdarg_T cap;
   oparg_T oa;
@@ -1601,6 +1585,13 @@ static bool do_mousescroll_horiz(colnr_T leftcol)
 /// "cap->arg", which is one of the MSCR_ values.
 void nv_mousescroll(cmdarg_T *cap)
 {
+  rs_nv_mousescroll(cap);
+}
+
+/// C accessor: perform nv_mousescroll logic that accesses curwin/curbuf
+/// and cmdarg_T.
+void nvim_nv_mousescroll_impl(cmdarg_T *cap)
+{
   win_T *const old_curwin = curwin;
 
   if (mouse_row >= 0 && mouse_col >= 0) {
@@ -1803,6 +1794,14 @@ static linenr_T find_longest_lnum(void)
 
 /// Check clicked cell on its grid
 static void mouse_check_grid(colnr_T *vcolp, int *flagsp)
+  FUNC_ATTR_NONNULL_ALL
+{
+  rs_mouse_check_grid(vcolp, flagsp);
+}
+
+/// C accessor: perform grid-based vcol/flags lookup for mouse click.
+/// Encapsulates ScreenGrid access which is too opaque for Rust.
+void nvim_mouse_check_grid_impl(colnr_T *vcolp, int *flagsp)
   FUNC_ATTR_NONNULL_ALL
 {
   int click_grid = mouse_grid;

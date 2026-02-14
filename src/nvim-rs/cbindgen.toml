@@ -221,6 +221,9 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_mouse_comp_pos", "rs_vcol2col",
            "rs_scroll_line_len", "rs_find_longest_lnum", "rs_do_mousescroll_horiz",
            "rs_mouse_find_win_inner", "rs_mouse_find_win_outer",
+           "rs_mouse_check_grid", "rs_get_fpos_of_mouse", "PosT",
+           "rs_do_popup", "rs_ins_mouse", "rs_do_mousescroll",
+           "rs_nv_mousescroll", "rs_ins_mousescroll",
            # Cursor handling (Phase 9)
            "rs_cursor_pos_cmp", "rs_cursor_pos_equal", "rs_cursor_pos_less", "rs_cursor_pos_leq",
            "rs_cursor_get_line_count", "rs_cursor_clamp_lnum", "rs_cursor_valid_lnum",
