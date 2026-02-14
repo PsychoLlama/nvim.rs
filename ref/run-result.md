@@ -1,17 +1,21 @@
-Plan: ~/.claude/plans/typed-twirling-rabbit.md
+Plan: ~/.claude/plans/ancient-plotting-scroll.md
 
-All steps of the plan are complete. Here's the summary:
+All 7 phases of the mouse.c migration are complete. Here's the summary:
 
-**Plan execution: Migrate Remaining C Logic in match.c to Rust** — DONE
+## Completed Migration Summary
 
-| Phase | Description | Commit |
-|-------|-------------|--------|
-| 0 | Housekeeping (crate wiring) | `6f7b2a1` |
-| 1 | Core match management (match_add, match_delete, clear_matches, get_match) | `82d12a6` |
-| 2 | Simple highlight helpers (check_cur_search_hl, get_prevcol_hl_flag, get_search_match_hl) | `3b7b0b8` |
-| 3 | Position matching (next_search_hl_pos) | `59092a8` |
-| 4 | Core search engine (next_search_hl, init_search_hl) | `06ed349` |
-| 5 | Highlight preparation & update (prepare_search_hl, prepare_search_hl_line, update_search_hl) | `a50292a` |
-| 6 | VimL function verification | No changes needed — all 9 VimL functions confirmed routing through Rust |
+| Phase | Functions | Approach |
+|---|---|---|
+| 1 | `set_mouse_topline`, `setmouse`, `move_tab_to_mouse`, `mouse_tab_close` | Full Rust implementations |
+| 2 | `scroll_line_len`, `find_longest_lnum`, `do_mousescroll_horiz` | Full Rust implementations |
+| 3 | `mouse_comp_pos`, `vcol2col` | `mouse_comp_pos` full Rust; `vcol2col` delegates to C accessor (charsize infrastructure) |
+| 4 | `mouse_find_grid_win`, `mouse_find_win_inner`, `mouse_find_win_outer` | Rust orchestrates; frame tree + grid resolution in C accessors |
+| 5 | `mouse_check_grid`, `get_fpos_of_mouse`, `do_popup`, `do_mousescroll`, `nv_mousescroll`, `ins_mouse`, `ins_mousescroll` | `get_fpos_of_mouse` full Rust; others delegate to C accessors |
+| 6 | `jump_to_mouse` | Delegates to C accessor (352 lines, 8 static vars) |
+| 7 | `do_mouse`, `nv_mouse` | Delegates to C accessors (619 lines) |
 
-**Results**: All 22 C function bodies replaced with Rust implementations. `match.c` now contains only thin C wrappers, C accessor functions for opaque struct access, and VimL argument extraction (which must stay in C). All checks pass: build, smoke-test, rust-fmt-check, rust-clippy, rust-test (4239 tests).
+**Final state of `mouse.c`:** Only thin `rs_` wrapper calls, C accessor functions, and the two permanent C functions (`f_getmousepos`, `call_click_def_func`).
+
+**Rust crate:** 34 `#[no_mangle]` exports in `src/nvim-rs/mouse/src/lib.rs`.
+
+**All checks pass:** build, smoke-test, rust-fmt-check, rust-clippy, rust-test (4239 tests).
