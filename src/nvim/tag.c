@@ -694,6 +694,13 @@ extern int rs_add_llist_tags(const char *tag, int num_matches, char **matches);
 extern void rs_do_tags(void);
 extern int rs_add_tag_field(dict_T *dict, const char *field_name, const char *start, const char *end);
 
+// Phase 8 Rust implementations
+extern int rs_get_tags(void *list, char *pat, char *buf_fname);
+extern void rs_get_tag_details(void *tag, void *retdict);
+extern void rs_get_tagstack(void *wp, void *retdict);
+extern int rs_set_tagstack(void *wp, const void *d, int action);
+extern int rs_expand_tags(bool tagnames, char *pat, int *num_file, char ***file);
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
@@ -1686,6 +1693,201 @@ int nvim_tag_get_g_do_tagpreview(void)
 int nvim_tag_get_ptag_cur_match(void)
 {
   return ptag_entry.cur_match;
+}
+
+// ============================================================================
+// Rust FFI accessor functions for Phase 8 (VimL API and tag stack setters)
+// ============================================================================
+
+// Verify constants used in Rust
+_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL value for Rust");
+
+/// Wrapper for find_tags callable from Rust
+int nvim_tag_find_tags(char *pat, int *num_matches, char ***matchesp,
+                       int flags, int mincount, char *buf_ffname)
+{
+  return find_tags(pat, num_matches, matchesp, flags, mincount, buf_ffname);
+}
+
+/// Wrapper for FreeWild
+void nvim_tag_free_wild(int count, char **files)
+{
+  FreeWild(count, files);
+}
+
+/// Get curbuf->b_ffname
+char *nvim_tag_get_curbuf_ffname(void)
+{
+  return curbuf->b_ffname;
+}
+
+/// Wrapper for xrealloc
+void *nvim_tag_xrealloc(void *ptr, size_t size)
+{
+  return xrealloc(ptr, size);
+}
+
+/// Wrapper for memmove
+void nvim_tag_memmove(void *dest, const void *src, size_t n)
+{
+  memmove(dest, src, n);
+}
+
+/// MB_PTR_ADV wrapper - advance pointer past one multi-byte char
+const char *nvim_tag_mb_ptr_adv(const char *p)
+{
+  const char *result = p;
+  MB_PTR_ADV(result);
+  return result;
+}
+
+/// ascii_iswhite wrapper
+bool nvim_tag_ascii_iswhite(int c)
+{
+  return ascii_iswhite(c);
+}
+
+/// Get tfu_in_use flag
+bool nvim_tag_get_tfu_in_use(void)
+{
+  return tfu_in_use;
+}
+
+/// Get e_cannot_modify_tag_stack_within_tagfunc message
+void nvim_tag_emsg_tfu_in_use(void)
+{
+  emsg(_(e_cannot_modify_tag_stack_within_tagfunc));
+}
+
+/// Get e_listreq message
+void nvim_tag_emsg_listreq(void)
+{
+  emsg(_(e_listreq));
+}
+
+/// tv_dict_find returning opaque dictitem handle (NULL if not found)
+void *nvim_tag_tv_dict_find_item(const void *dict, const char *key, int key_len)
+{
+  return (void *)tv_dict_find((const dict_T *)dict, key, key_len);
+}
+
+/// Get the typval from a dictitem
+void *nvim_tag_dictitem_tv(void *di)
+{
+  return (void *)&((dictitem_T *)di)->di_tv;
+}
+
+/// Check if typval is a list type
+bool nvim_tag_tv_is_list(const void *tv)
+{
+  return ((const typval_T *)tv)->v_type == VAR_LIST;
+}
+
+/// Get list from typval
+void *nvim_tag_tv_get_list(const void *tv)
+{
+  return (void *)((const typval_T *)tv)->vval.v_list;
+}
+
+/// Get number from typval
+int64_t nvim_tag_tv_get_number(const void *tv)
+{
+  return (int64_t)tv_get_number((const typval_T *)tv);
+}
+
+/// Wrapper for tv_dict_get_string
+char *nvim_tag_tv_dict_get_string(const void *dict, const char *key, bool save)
+{
+  return tv_dict_get_string((const dict_T *)dict, key, save);
+}
+
+/// Wrapper for tv_dict_get_number
+int64_t nvim_tag_tv_dict_get_number(const void *dict, const char *key)
+{
+  return (int64_t)tv_dict_get_number((const dict_T *)dict, key);
+}
+
+/// Wrapper for tv_list_first
+void *nvim_tag_tv_list_first(const void *list)
+{
+  return (void *)tv_list_first((const list_T *)list);
+}
+
+/// Wrapper for TV_LIST_ITEM_NEXT
+void *nvim_tag_tv_list_item_next(const void *list, const void *li)
+{
+  return (void *)TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li);
+}
+
+/// Get dict from list item (NULL if not a dict)
+void *nvim_tag_tv_list_item_dict(const void *li)
+{
+  const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li);
+  if (tv->v_type != VAR_DICT || tv->vval.v_dict == NULL) {
+    return NULL;
+  }
+  return (void *)tv->vval.v_dict;
+}
+
+/// Wrapper for list2fpos - fills pos and fnum from a list typval
+/// Returns OK or FAIL
+int nvim_tag_list2fpos(void *tv, int32_t *lnum, int32_t *col, int32_t *coladd, int *fnum)
+{
+  pos_T pos;
+  int result = list2fpos((typval_T *)tv, &pos, fnum, NULL, false);
+  if (result == OK) {
+    *lnum = pos.lnum;
+    *col = pos.col;
+    *coladd = pos.coladd;
+  }
+  return result;
+}
+
+/// Wrapper for tv_list_append_number
+void nvim_tag_tv_list_append_number(void *list, int64_t nr)
+{
+  tv_list_append_number((list_T *)list, (varnumber_T)nr);
+}
+
+/// Wrapper for tv_dict_add_list
+void nvim_tag_tv_dict_add_list(void *dict, const char *key, size_t key_len, void *list)
+{
+  tv_dict_add_list((dict_T *)dict, key, key_len, (list_T *)list);
+}
+
+/// Get taggy_T user_data field
+const char *nvim_tag_taggy_get_user_data_val(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return tg->user_data;
+}
+
+/// Get fmark mark.col from taggy_T
+int nvim_tag_taggy_fmark_col(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return tg->fmark.mark.col;
+}
+
+/// Get fmark mark.coladd from taggy_T
+int nvim_tag_taggy_fmark_coladd(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return tg->fmark.mark.coladd;
+}
+
+/// Set w_tagstackidx directly
+void nvim_tag_win_set_tagstackidx(void *wp_void, int idx)
+{
+  win_T *wp = (win_T *)wp_void;
+  wp->w_tagstackidx = idx;
+}
+
+/// Get w_tagstacklen directly
+int nvim_tag_win_get_tagstacklen(const void *wp_void)
+{
+  const win_T *wp = (const win_T *)wp_void;
+  return wp->w_tagstacklen;
 }
 
 /// Reads the 'tagfunc' option value and convert that to a callback value.
@@ -3309,46 +3511,7 @@ void tagstack_clear_entry(taggy_T *item)
 /// @param tagnames  expand tag names
 int expand_tags(bool tagnames, char *pat, int *num_file, char ***file)
 {
-  size_t name_buf_size = 100;
-  int ret;
-
-  char *name_buf = xmalloc(name_buf_size);
-
-  int extra_flag = tagnames ? TAG_NAMES : 0;
-  if (pat[0] == '/') {
-    ret = find_tags(pat + 1, num_file, file,
-                    TAG_REGEXP | extra_flag | TAG_VERBOSE | TAG_NO_TAGFUNC,
-                    TAG_MANY, curbuf->b_ffname);
-  } else {
-    ret = find_tags(pat, num_file, file,
-                    TAG_REGEXP | extra_flag | TAG_VERBOSE | TAG_NO_TAGFUNC | TAG_NOIC,
-                    TAG_MANY, curbuf->b_ffname);
-  }
-  if (ret == OK && !tagnames) {
-    // Reorganize the tags for display and matching as strings of:
-    // "<tagname>\0<kind>\0<filename>\0"
-    for (int i = 0; i < *num_file; i++) {
-      tagptrs_T t_p;
-      parse_match((*file)[i], &t_p);
-      size_t len = (size_t)(t_p.tagname_end - t_p.tagname);
-      if (len > name_buf_size - 3) {
-        name_buf_size = len + 3;
-        char *buf = xrealloc(name_buf, name_buf_size);
-        name_buf = buf;
-      }
-
-      memmove(name_buf, t_p.tagname, len);
-      name_buf[len++] = 0;
-      name_buf[len++] = (t_p.tagkind != NULL && *t_p.tagkind)
-                        ? *t_p.tagkind : 'f';
-      name_buf[len++] = 0;
-      memmove((*file)[i] + len, t_p.fname, (size_t)(t_p.fname_end - t_p.fname));
-      (*file)[i][len + (size_t)(t_p.fname_end - t_p.fname)] = 0;
-      memmove((*file)[i], name_buf, len);
-    }
-  }
-  xfree(name_buf);
-  return ret;
+  return rs_expand_tags(tagnames, pat, num_file, file);
 }
 
 /// Add a tag field to the dictionary "dict".
@@ -3366,130 +3529,20 @@ static int add_tag_field(dict_T *dict, const char *field_name, const char *start
 /// as a dictionary. Use "buf_fname" for priority, unless NULL.
 int get_tags(list_T *list, char *pat, char *buf_fname)
 {
-  int num_matches;
-  char **matches;
-  tagptrs_T tp;
-
-  int ret = find_tags(pat, &num_matches, &matches, TAG_REGEXP | TAG_NOIC, MAXCOL, buf_fname);
-  if (ret != OK || num_matches <= 0) {
-    return ret;
-  }
-
-  for (int i = 0; i < num_matches; i++) {
-    if (parse_match(matches[i], &tp) == FAIL) {
-      xfree(matches[i]);
-      continue;
-    }
-
-    bool is_static = test_for_static(&tp);
-
-    // Skip pseudo-tag lines.
-    if (strncmp(tp.tagname, "!_TAG_", 6) == 0) {
-      xfree(matches[i]);
-      continue;
-    }
-
-    dict_T *dict = tv_dict_alloc();
-    tv_list_append_dict(list, dict);
-
-    char *full_fname = tag_full_fname(&tp);
-    if (add_tag_field(dict, "name", tp.tagname, tp.tagname_end) == FAIL
-        || add_tag_field(dict, "filename", full_fname, NULL) == FAIL
-        || add_tag_field(dict, "cmd", tp.command, tp.command_end) == FAIL
-        || add_tag_field(dict, "kind", tp.tagkind,
-                         tp.tagkind ? tp.tagkind_end : NULL) == FAIL
-        || tv_dict_add_nr(dict, S_LEN("static"), is_static) == FAIL) {
-      ret = FAIL;
-    }
-
-    xfree(full_fname);
-
-    if (tp.command_end != NULL) {
-      for (char *p = tp.command_end + 3;
-           *p != NUL && *p != '\n' && *p != '\r';
-           MB_PTR_ADV(p)) {
-        if (p == tp.tagkind
-            || (p + 5 == tp.tagkind && strncmp(p, "kind:", 5) == 0)) {
-          // skip "kind:<kind>" and "<kind>"
-          p = tp.tagkind_end - 1;
-        } else if (strncmp(p, "file:", 5) == 0) {
-          // skip "file:" (static tag)
-          p += 4;
-        } else if (!ascii_iswhite(*p)) {
-          int len;
-
-          // Add extra field as a dict entry.  Fields are
-          // separated by Tabs.
-          char *n = p;
-          while (*p != NUL && *p >= ' ' && *p < 127 && *p != ':') {
-            p++;
-          }
-          len = (int)(p - n);
-          if (*p == ':' && len > 0) {
-            char *s = ++p;
-            while (*p != NUL && (uint8_t)(*p) >= ' ') {
-              p++;
-            }
-            n[len] = NUL;
-            if (add_tag_field(dict, n, s, p) == FAIL) {
-              ret = FAIL;
-            }
-            n[len] = ':';
-          } else {
-            // Skip field without colon.
-            while (*p != NUL && (uint8_t)(*p) >= ' ') {
-              p++;
-            }
-          }
-          if (*p == NUL) {
-            break;
-          }
-        }
-      }
-    }
-
-    xfree(matches[i]);
-  }
-  xfree(matches);
-  return ret;
+  return rs_get_tags(list, pat, buf_fname);
 }
 
 // Return information about 'tag' in dict 'retdict'.
 static void get_tag_details(taggy_T *tag, dict_T *retdict)
 {
-  tv_dict_add_str(retdict, S_LEN("tagname"), tag->tagname);
-  tv_dict_add_nr(retdict, S_LEN("matchnr"), tag->cur_match + 1);
-  tv_dict_add_nr(retdict, S_LEN("bufnr"), tag->cur_fnum);
-  if (tag->user_data) {
-    tv_dict_add_str(retdict, S_LEN("user_data"), tag->user_data);
-  }
-
-  list_T *pos = tv_list_alloc(4);
-  tv_dict_add_list(retdict, S_LEN("from"), pos);
-
-  fmark_T *fmark = &tag->fmark;
-  tv_list_append_number(pos,
-                        (varnumber_T)(fmark->fnum != -1 ? fmark->fnum : 0));
-  tv_list_append_number(pos, (varnumber_T)fmark->mark.lnum);
-  tv_list_append_number(pos, (varnumber_T)(fmark->mark.col == MAXCOL
-                                           ? MAXCOL : fmark->mark.col + 1));
-  tv_list_append_number(pos, (varnumber_T)fmark->mark.coladd);
+  rs_get_tag_details(tag, retdict);
 }
 
 // Return the tag stack entries of the specified window 'wp' in dictionary
 // 'retdict'.
 void get_tagstack(win_T *wp, dict_T *retdict)
 {
-  tv_dict_add_nr(retdict, S_LEN("length"), wp->w_tagstacklen);
-  tv_dict_add_nr(retdict, S_LEN("curidx"), wp->w_tagstackidx + 1);
-  list_T *l = tv_list_alloc(2);
-  tv_dict_add_list(retdict, S_LEN("items"), l);
-
-  for (int i = 0; i < wp->w_tagstacklen; i++) {
-    dict_T *d = tv_dict_alloc();
-    tv_list_append_dict(l, d);
-    get_tag_details(&wp->w_tagstack[i], d);
-  }
+  rs_get_tagstack(wp, retdict);
 }
 
 // Free all the entries in the tag stack of the specified window
@@ -3505,58 +3558,8 @@ static void tagstack_shift(win_T *wp)
   rs_tagstack_shift(wp);
 }
 
-/// Push a new item to the tag stack
-static void tagstack_push_item(win_T *wp, char *tagname, int cur_fnum, int cur_match, pos_T mark,
-                               int fnum, char *user_data)
-{
-  rs_tagstack_push(wp, tagname, cur_fnum, cur_match, mark.lnum, mark.col, fnum, user_data);
-}
-
-/// Add a list of items to the tag stack in the specified window
-static void tagstack_push_items(win_T *wp, list_T *l)
-{
-  dictitem_T *di;
-  char *tagname;
-  pos_T mark;
-  int fnum;
-
-  // Add one entry at a time to the tag stack
-  for (listitem_T *li = tv_list_first(l); li != NULL; li = TV_LIST_ITEM_NEXT(l, li)) {
-    if (TV_LIST_ITEM_TV(li)->v_type != VAR_DICT
-        || TV_LIST_ITEM_TV(li)->vval.v_dict == NULL) {
-      continue;  // Skip non-dict items
-    }
-    dict_T *itemdict = TV_LIST_ITEM_TV(li)->vval.v_dict;
-
-    // parse 'from' for the cursor position before the tag jump
-    if ((di = tv_dict_find(itemdict, "from", -1)) == NULL) {
-      continue;
-    }
-    if (list2fpos(&di->di_tv, &mark, &fnum, NULL, false) != OK) {
-      continue;
-    }
-    if ((tagname = tv_dict_get_string(itemdict, "tagname", true)) == NULL) {
-      continue;
-    }
-
-    if (mark.col > 0) {
-      mark.col--;
-    }
-    tagstack_push_item(wp,
-                       tagname,
-                       (int)tv_dict_get_number(itemdict, "bufnr"),
-                       (int)tv_dict_get_number(itemdict, "matchnr") - 1,
-                       mark, fnum,
-                       tv_dict_get_string(itemdict, "user_data", true));
-  }
-}
-
-// Set the current index in the tag stack. Valid values are between 0
-// and the stack length (inclusive).
-static void tagstack_set_curidx(win_T *wp, int curidx)
-{
-  rs_tagstack_set_idx(wp, curidx);
-}
+// tagstack_push_item, tagstack_push_items, tagstack_set_curidx:
+// now handled by rs_set_tagstack in Rust
 
 // Set the tag stack entries of the specified window.
 // 'action' is set to one of:
@@ -3566,40 +3569,5 @@ static void tagstack_set_curidx(win_T *wp, int curidx)
 int set_tagstack(win_T *wp, const dict_T *d, int action)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  // not allowed to alter the tag stack entries from inside tagfunc
-  if (tfu_in_use) {
-    emsg(_(e_cannot_modify_tag_stack_within_tagfunc));
-    return FAIL;
-  }
-
-  dictitem_T *di;
-  list_T *l = NULL;
-
-  if ((di = tv_dict_find(d, "items", -1)) != NULL) {
-    if (di->di_tv.v_type != VAR_LIST) {
-      emsg(_(e_listreq));
-      return FAIL;
-    }
-    l = di->di_tv.vval.v_list;
-  }
-
-  if ((di = tv_dict_find(d, "curidx", -1)) != NULL) {
-    tagstack_set_curidx(wp, (int)tv_get_number(&di->di_tv) - 1);
-  }
-
-  if (action == 't') {  // truncate the stack
-    rs_tagstack_truncate(wp);
-  }
-
-  if (l != NULL) {
-    if (action == 'r') {  // replace the stack
-      tagstack_clear(wp);
-    }
-
-    tagstack_push_items(wp, l);
-    // set the current index after the last entry
-    wp->w_tagstackidx = wp->w_tagstacklen;
-  }
-
-  return OK;
+  return rs_set_tagstack(wp, d, action);
 }
