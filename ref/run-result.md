@@ -1,16 +1,11 @@
-Plan: ~/.claude/plans/jolly-snuggling-raven.md
+Plan: ~/.claude/plans/sparkling-tumbling-hummingbird.md
 
-All 8 phases of indent.c migration complete:
+All 3 phases of textformat.c migration complete:
 
 | Phase | Commit | Function | Lines Deleted |
 |-------|--------|----------|---------------|
-| 1 | `fdcf1fd` | set_indent() | ~250 |
-| 2 | `0a09ebd` | copy_indent() | ~100 |
-| 3 | `468962a` | get_breakindent_win() | ~120 |
-| 4 | `8da8a5a` | ins_try_si() | ~70 |
-| 5 | `d52e0d6` | op_reindent() | ~75 |
-| 6 | `88b28aa` | change_indent() | ~160 |
-| 7 | `f188188` | ex_retab() | ~180 |
-| 8 | `476c5be` | get_lisp_indent() | ~165 |
+| 1 | `b8f0146` | fex_format() | ~30 |
+| 2 | `4ff906b` | format_lines() | ~220 |
+| 3 | `890c82f` | internal_format() | ~389 |
 
-indent.c reduced from 1,727 → 581 lines (~1,146 lines of real C logic deleted and rewritten in Rust). All checks pass: build, smoke-test.
+textformat.c reduced from 1,187 → 753 lines (~639 lines of C logic deleted and rewritten in Rust, ~205 lines of new accessor functions added). All checks pass: build, smoke-test, rust-fmt-check, rust-clippy, rust-test.
