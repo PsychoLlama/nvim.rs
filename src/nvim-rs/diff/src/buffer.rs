@@ -151,7 +151,55 @@ extern "C" {
     // Tab iteration
     fn nvim_get_first_tabpage() -> TabpageHandle;
     fn nvim_tabpage_get_next(tp: TabpageHandle) -> TabpageHandle;
+
+    // Phase 1: State mutation accessors
+    fn nvim_curtab_set_diffbuf(idx: c_int, buf: BufHandle);
+    fn nvim_tabpage_set_diffbuf(tp: TabpageHandle, idx: c_int, buf: BufHandle);
+    fn nvim_tabpage_set_first_diff(tp: TabpageHandle, dp: DiffBlockHandle);
+    fn nvim_diff_set_next(dp: DiffBlockHandle, next: DiffBlockHandle);
+    fn nvim_diffblock_clear_and_free(dp: DiffBlockHandle);
+    fn nvim_diffblock_init_new(dp: DiffBlockHandle);
+    fn nvim_diff_alloc_new(
+        tp: TabpageHandle,
+        prev: DiffBlockHandle,
+        next: DiffBlockHandle,
+    ) -> DiffBlockHandle;
+    fn nvim_set_need_diff_redraw(val: bool);
+    fn nvim_diff_get_linematch_lines() -> c_int;
+    fn nvim_diff_get_diff_flags() -> c_int;
+    fn nvim_diff_redraw(dofold: bool);
+    fn nvim_diff_semsg_e96();
+    fn nvim_redraw_later_win(wp: WinHandle, typ: c_int);
+    fn nvim_upd_valid() -> c_int;
+
+    // Window/tab iteration accessors
+    fn nvim_tabpage_first_win(tp: TabpageHandle) -> WinHandle;
+    fn nvim_win_next(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
+    fn nvim_get_curwin() -> WinHandle;
+
+    // Diff block management accessors
+    fn nvim_diff_foldUpdate(wp: WinHandle, top: LinenrT, bot: LinenrT);
+    fn nvim_diff_set_diff_option(wp: WinHandle, value: bool);
+
+    // String/memory for diff_equal_entry
+    fn nvim_diff_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *const c_char;
+    fn nvim_diff_xstrdup(s: *const c_char) -> *mut c_char;
+    fn nvim_diff_xfree(p: *mut c_void);
+
+    // UTF-8 helpers for diff_equal_char
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_fold(c: c_int) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
 }
+
+use std::ffi::c_char;
+
+/// DIFF_LINEMATCH flag value (must match C).
+const DIFF_LINEMATCH: c_int = 0x1000;
+/// DIFF_ICASE flag value (must match C).
+const DIFF_ICASE: c_int = 0x004;
 
 // =============================================================================
 // Diff Buffer State
@@ -743,6 +791,450 @@ pub const extern "C" fn rs_diff_buf_iter_current(iter: &DiffBufIter) -> BufHandl
 #[no_mangle]
 pub const extern "C" fn rs_diff_buf_iter_idx(iter: &DiffBufIter) -> c_int {
     iter.idx
+}
+
+// =============================================================================
+// Phase 1: Migrated Utility Functions
+// =============================================================================
+
+/// Free a diff block: clear df_changes garray and free memory.
+///
+/// Equivalent to C `clear_diffblock`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_diffblock(dp: DiffBlockHandle) {
+    if dp.is_null() {
+        return;
+    }
+    nvim_diffblock_clear_and_free(dp);
+}
+
+/// Allocate a new diff block and link it between `dprev` and `dp`.
+///
+/// Equivalent to C `diff_alloc_new`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_alloc_new(
+    tp: TabpageHandle,
+    dprev: DiffBlockHandle,
+    dp: DiffBlockHandle,
+) -> DiffBlockHandle {
+    let dnew = nvim_diff_alloc_new(tp, dprev, dp);
+    if !dnew.is_null() {
+        nvim_diffblock_init_new(dnew);
+    }
+    dnew
+}
+
+/// Unlink and free a diff block, returning the next block.
+///
+/// Equivalent to C `diff_free`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_free(
+    tp: TabpageHandle,
+    dprev: DiffBlockHandle,
+    dp: DiffBlockHandle,
+) -> DiffBlockHandle {
+    if dp.is_null() {
+        return DiffBlockHandle::null();
+    }
+
+    let ret = nvim_diffblock_get_next(dp);
+
+    // Unlink from list
+    if dprev.is_null() {
+        nvim_tabpage_set_first_diff(tp, ret);
+    } else {
+        nvim_diff_set_next(dprev, ret);
+    }
+
+    // Free the block
+    nvim_diffblock_clear_and_free(dp);
+
+    ret
+}
+
+/// Free all diff blocks in a tabpage.
+///
+/// Equivalent to C `diff_clear`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_clear(tp: TabpageHandle) {
+    if tp.is_null() {
+        return;
+    }
+
+    let mut p = nvim_tabpage_get_first_diff(tp);
+    while !p.is_null() {
+        let next_p = nvim_diffblock_get_next(p);
+        nvim_diffblock_clear_and_free(p);
+        p = next_p;
+    }
+    nvim_tabpage_set_first_diff(tp, DiffBlockHandle::null());
+}
+
+/// Clear all diff buffers in the current tab.
+///
+/// Equivalent to C `diff_buf_clear`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_buf_clear() {
+    let tp = nvim_get_curtab();
+    for i in 0..DB_COUNT {
+        if !nvim_get_curtab_diffbuf(i).is_null() {
+            nvim_curtab_set_diffbuf(i, BufHandle::null());
+            nvim_tabpage_set_diff_invalid(tp, 1);
+            nvim_diff_redraw(true);
+        }
+    }
+}
+
+/// Mark the diff info involving buffer `buf` as invalid.
+///
+/// Equivalent to C `diff_invalidate`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_invalidate(buf: BufHandle) {
+    if buf.is_null() {
+        return;
+    }
+    let curtab = nvim_get_curtab();
+    let mut tp = nvim_get_first_tabpage();
+    while !tp.is_null() {
+        let i = rs_diff_buf_idx_tp(buf, tp);
+        if i != DB_COUNT {
+            nvim_tabpage_set_diff_invalid(tp, 1);
+            if tp == curtab {
+                nvim_diff_redraw(true);
+            }
+        }
+        tp = nvim_tabpage_get_next(tp);
+    }
+}
+
+/// Remove buffer from diff tracking in all tabs.
+///
+/// Equivalent to C `diff_buf_delete`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_buf_delete(buf: BufHandle) {
+    if buf.is_null() {
+        return;
+    }
+    let curtab = nvim_get_curtab();
+    let upd_valid = nvim_upd_valid();
+    let mut tp = nvim_get_first_tabpage();
+    while !tp.is_null() {
+        let i = rs_diff_buf_idx_tp(buf, tp);
+        if i != DB_COUNT {
+            nvim_tabpage_set_diffbuf(tp, i, BufHandle::null());
+            nvim_tabpage_set_diff_invalid(tp, 1);
+            if tp == curtab {
+                nvim_set_need_diff_redraw(true);
+                nvim_redraw_later_win(nvim_get_curwin(), upd_valid);
+            }
+        }
+        tp = nvim_tabpage_get_next(tp);
+    }
+}
+
+/// Add a buffer to the diff list for the current tab.
+///
+/// Equivalent to C `diff_buf_add`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_buf_add(buf: BufHandle) {
+    if buf.is_null() {
+        return;
+    }
+    let tp = nvim_get_curtab();
+
+    // Already there?
+    if rs_diff_buf_idx_tp(buf, tp) != DB_COUNT {
+        return;
+    }
+
+    // Find a free slot
+    for i in 0..DB_COUNT {
+        if nvim_get_curtab_diffbuf(i).is_null() {
+            nvim_curtab_set_diffbuf(i, buf);
+            nvim_tabpage_set_diff_invalid(tp, 1);
+            nvim_diff_redraw(true);
+            return;
+        }
+    }
+
+    nvim_diff_semsg_e96();
+}
+
+/// Check if buffer should be added/removed from diff list when window changes.
+///
+/// Equivalent to C `diff_buf_adjust`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_buf_adjust(win: WinHandle) {
+    if win.is_null() {
+        return;
+    }
+
+    if nvim_win_get_p_diff(win) == 0 {
+        // Window no longer in diff mode - check if any other window still shows
+        // this buffer in diff mode
+        let buf = nvim_win_get_w_buffer(win);
+        let curtab = nvim_get_curtab();
+        let mut found_win = false;
+
+        let mut wp = nvim_tabpage_first_win(curtab);
+        while !wp.is_null() {
+            if nvim_win_get_w_buffer(wp) == buf && nvim_win_get_p_diff(wp) != 0 {
+                found_win = true;
+                break;
+            }
+            wp = nvim_win_next(wp);
+        }
+
+        if !found_win {
+            let tp = nvim_get_curtab();
+            let i = rs_diff_buf_idx_tp(buf, tp);
+            if i != DB_COUNT {
+                nvim_curtab_set_diffbuf(i, BufHandle::null());
+                nvim_tabpage_set_diff_invalid(tp, 1);
+                nvim_diff_redraw(true);
+            }
+        }
+    } else {
+        rs_diff_buf_add(nvim_win_get_w_buffer(win));
+    }
+}
+
+/// Compare two characters at p1 and p2, possibly ignoring case.
+/// Sets *len to the byte length of the character.
+///
+/// Equivalent to C `diff_equal_char`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_equal_char(
+    p1: *const c_char,
+    p2: *const c_char,
+    len: *mut c_int,
+) -> bool {
+    if p1.is_null() || p2.is_null() || len.is_null() {
+        return false;
+    }
+
+    let l = utfc_ptr2len(p1);
+    if l != utfc_ptr2len(p2) {
+        return false;
+    }
+
+    let diff_flags = nvim_diff_get_diff_flags();
+
+    #[allow(clippy::cast_sign_loss)]
+    if l > 1 {
+        if !bytes_equal(p1, p2, l as usize)
+            && (diff_flags & DIFF_ICASE == 0
+                || utf_fold(utf_ptr2char(p1)) != utf_fold(utf_ptr2char(p2)))
+        {
+            return false;
+        }
+        *len = l;
+    } else {
+        #[allow(clippy::cast_sign_loss)]
+        let c1 = (*p1) as u8;
+        #[allow(clippy::cast_sign_loss)]
+        let c2 = (*p2) as u8;
+        if c1 != c2 && (diff_flags & DIFF_ICASE == 0 || tolower_loc(c1) != tolower_loc(c2)) {
+            return false;
+        }
+        *len = 1;
+    }
+    true
+}
+
+/// TOLOWER_LOC equivalent: lowercase ASCII byte.
+#[inline]
+const fn tolower_loc(c: u8) -> u8 {
+    if c.is_ascii_uppercase() {
+        c.to_ascii_lowercase()
+    } else {
+        c
+    }
+}
+
+/// Compare bytes in two pointers up to `len` bytes.
+///
+/// # Safety
+/// Both pointers must be valid for `len` bytes.
+#[inline]
+unsafe fn bytes_equal(p1: *const c_char, p2: *const c_char, len: usize) -> bool {
+    std::slice::from_raw_parts(p1.cast::<u8>(), len)
+        == std::slice::from_raw_parts(p2.cast::<u8>(), len)
+}
+
+/// Check if two entries in a diff block are equal (full line comparison).
+///
+/// Equivalent to C `diff_equal_entry`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_equal_entry_full(
+    dp: DiffBlockHandle,
+    idx1: c_int,
+    idx2: c_int,
+) -> bool {
+    if dp.is_null() {
+        return false;
+    }
+
+    let count1 = nvim_diffblock_get_count(dp, idx1);
+    let count2 = nvim_diffblock_get_count(dp, idx2);
+    if count1 != count2 {
+        return false;
+    }
+
+    let tp = nvim_get_curtab();
+    if diff_check_sanity_internal(tp, dp) == FAIL {
+        return false;
+    }
+
+    let buf1 = nvim_get_curtab_diffbuf(idx1);
+    let buf2 = nvim_get_curtab_diffbuf(idx2);
+    let lnum1 = nvim_diffblock_get_lnum(dp, idx1);
+    let lnum2 = nvim_diffblock_get_lnum(dp, idx2);
+
+    for i in 0..count1 {
+        let line = nvim_diff_xstrdup(nvim_diff_ml_get_buf(buf1, lnum1 + i));
+        let cmp = crate::rs_diff_cmp(line, nvim_diff_ml_get_buf(buf2, lnum2 + i));
+        nvim_diff_xfree(line.cast::<c_void>());
+        if cmp != 0 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Check if diff block qualifies for linematch.
+///
+/// Equivalent to C `diff_linematch`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_linematch(dp: DiffBlockHandle) -> bool {
+    if dp.is_null() {
+        return false;
+    }
+
+    let diff_flags = nvim_diff_get_diff_flags();
+    if diff_flags & DIFF_LINEMATCH == 0 {
+        return false;
+    }
+
+    let linematch_lines = nvim_diff_get_linematch_lines();
+    let mut tsize: c_int = 0;
+    for i in 0..DB_COUNT {
+        if !nvim_get_curtab_diffbuf(i).is_null() {
+            let count = nvim_diffblock_get_count(dp, i);
+            if count < 0 {
+                return false;
+            }
+            tsize += count;
+        }
+    }
+    tsize <= linematch_lines
+}
+
+/// Get max line count in a diff block across all buffers.
+///
+/// Equivalent to C `get_max_diff_length`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_max_diff_length_c(dp: DiffBlockHandle) -> c_int {
+    if dp.is_null() {
+        return 0;
+    }
+    let mut max_length: c_int = 0;
+    for k in 0..DB_COUNT {
+        if !nvim_get_curtab_diffbuf(k).is_null() {
+            let count = nvim_diffblock_get_count(dp, k);
+            if count > max_length {
+                max_length = count;
+            }
+        }
+    }
+    max_length
+}
+
+/// qsort comparator for line numbers.
+///
+/// Equivalent to C `lnum_compare`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_lnum_compare(s1: *const c_void, s2: *const c_void) -> c_int {
+    if s1.is_null() || s2.is_null() {
+        return 0;
+    }
+    let lnum1 = *s1.cast::<LinenrT>();
+    let lnum2 = *s2.cast::<LinenrT>();
+    match lnum1.cmp(&lnum2) {
+        std::cmp::Ordering::Less => -1,
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Greater => 1,
+    }
+}
+
+/// Check if a diff block is still in the current tab's list.
+///
+/// Equivalent to C `valid_diff`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_valid_diff(diff: DiffBlockHandle) -> bool {
+    if diff.is_null() {
+        return false;
+    }
+    let mut dp = nvim_get_diff_first_block();
+    while !dp.is_null() {
+        if dp == diff {
+            return true;
+        }
+        dp = nvim_diffblock_get_next(dp);
+    }
+    false
+}
+
+/// Set the 'diff' option on a window.
+///
+/// Equivalent to C `set_diff_option`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_diff_option(wp: WinHandle, value: bool) {
+    if wp.is_null() {
+        return;
+    }
+    nvim_diff_set_diff_option(wp, value);
+}
+
+/// Update folds for diff, skipping one buffer index.
+///
+/// Equivalent to C `diff_fold_update`.
+#[no_mangle]
+#[allow(clippy::suspicious_operation_groupings)]
+pub unsafe extern "C" fn rs_diff_fold_update(dp: DiffBlockHandle, skip_idx: c_int) {
+    if dp.is_null() {
+        return;
+    }
+    let curtab = nvim_get_curtab();
+    let mut wp = nvim_tabpage_first_win(curtab);
+    while !wp.is_null() {
+        for i in 0..DB_COUNT {
+            if nvim_get_curtab_diffbuf(i) == nvim_win_get_w_buffer(wp) && i != skip_idx {
+                let lnum = nvim_diffblock_get_lnum(dp, i);
+                let count = nvim_diffblock_get_count(dp, i);
+                nvim_diff_foldUpdate(wp, lnum, lnum + count);
+            }
+        }
+        wp = nvim_win_next(wp);
+    }
+}
+
+/// Check if buffer is in diff mode in any tab.
+///
+/// Equivalent to C `diff_mode_buf`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_mode_buf(buf: BufHandle) -> bool {
+    if buf.is_null() {
+        return false;
+    }
+    let mut tp = nvim_get_first_tabpage();
+    while !tp.is_null() {
+        if rs_diff_buf_idx_tp(buf, tp) != DB_COUNT {
+            return true;
+        }
+        tp = nvim_tabpage_get_next(tp);
+    }
+    false
 }
 
 #[cfg(test)]
