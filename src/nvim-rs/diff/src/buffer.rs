@@ -225,6 +225,10 @@ const DIFF_ANCHOR: c_int = 0x20000;
 const DIFF_INTERNAL: c_int = 0x200;
 /// DIFF_FILLER flag value (must match C).
 const DIFF_FILLER: c_int = 0x001;
+/// DIFF_IWHITE flag value (must match C).
+const DIFF_IWHITE: c_int = 0x008;
+/// DIFF_IWHITEALL flag value (must match C).
+const DIFF_IWHITEALL: c_int = 0x010;
 /// MAXLNUM constant (matches C).
 const MAXLNUM: LinenrT = 0x7fff_ffff;
 /// Direction constants (must match C).
@@ -1865,6 +1869,33 @@ extern "C" {
     fn nvim_diff_run_linematch(dp: DiffBlockHandle);
 }
 
+// Phase 5 C accessors for inline change detection
+type DiffLineChangeHandle = *mut c_void;
+type DifflineHandle = *mut c_void;
+
+extern "C" {
+    // diff block inline change accessors
+    fn nvim_diffblock_get_has_changes(dp: DiffBlockHandle) -> bool;
+    fn nvim_diffblock_set_has_changes(dp: DiffBlockHandle, val: bool);
+    fn nvim_diffblock_reset_changes_len(dp: DiffBlockHandle);
+    fn nvim_diffblock_get_changes_len(dp: DiffBlockHandle) -> c_int;
+    fn nvim_diffblock_get_change(dp: DiffBlockHandle, change_idx: c_int) -> DiffLineChangeHandle;
+    // simple_diffline_change sentinel
+    fn nvim_diff_get_simple_change() -> DiffLineChangeHandle;
+    fn nvim_diff_is_simple_change(change: DiffLineChangeHandle) -> bool;
+    // compute inline diff (calls static diff_find_change_inline_diff)
+    fn nvim_diff_compute_inline(dp: DiffBlockHandle);
+    // diffline_change_T field accessors
+    fn nvim_diffchange_get_start_lnum_off(change: DiffLineChangeHandle, idx: c_int) -> c_int;
+    fn nvim_diffchange_get_end_lnum_off(change: DiffLineChangeHandle, idx: c_int) -> c_int;
+    fn nvim_diffchange_get_start(change: DiffLineChangeHandle, idx: c_int) -> LinenrT;
+    fn nvim_diffchange_get_end(change: DiffLineChangeHandle, idx: c_int) -> LinenrT;
+    // string helpers
+    fn nvim_diff_skipwhite(p: *const c_char) -> *const c_char;
+    // UTF-8
+    fn utf_head_off(base: *const c_char, ptr: *const c_char) -> c_int;
+}
+
 /// Diff output style.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum DiffStyle {
@@ -2962,6 +2993,421 @@ pub unsafe extern "C" fn rs_diff_lnum_win(lnum: LinenrT, wp: WinHandle) -> Linen
     } else {
         max_n
     }
+}
+
+// =============================================================================
+// Phase 5: Inline Change Detection
+// =============================================================================
+
+const ALL_INLINE_DIFF: c_int = 0x8000 | 0x10000; // DIFF_INLINE_CHAR | DIFF_INLINE_WORD
+const DIFF_INLINE_NONE: c_int = 0x2000;
+const MAXCOL: LinenrT = i32::MAX;
+
+/// Rust-side representation of C diffline_T struct.
+/// Must match layout: { diffline_change_T *changes; int num_changes; int bufidx; int lineoff; }
+#[repr(C)]
+struct DifflineRepr {
+    changes: *mut c_void,
+    num_changes: c_int,
+    bufidx: c_int,
+    lineoff: c_int,
+}
+
+/// Rust-side representation of C diffline_change_T struct.
+/// Layout: { colnr_T dc_start[8]; colnr_T dc_end[8]; int dc_start_lnum_off[8]; int dc_end_lnum_off[8]; }
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct DifflineChangeRepr {
+    dc_start: [c_int; DB_COUNT as usize],
+    dc_end: [c_int; DB_COUNT as usize],
+    dc_start_lnum_off: [c_int; DB_COUNT as usize],
+    dc_end_lnum_off: [c_int; DB_COUNT as usize],
+}
+
+/// Invalidate the inline diff cache for the diff block containing `lnum`.
+///
+/// Called when a line is changed in Insert mode to clear cached inline diff results.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_diff_update_line(lnum: LinenrT) {
+    let diff_flags = nvim_diff_get_diff_flags();
+    if (diff_flags & ALL_INLINE_DIFF) == 0 {
+        // Only care if doing inline-diff where we cache results
+        return;
+    }
+
+    let curbuf = nvim_get_curbuf();
+    let tp = nvim_get_curtab();
+    let idx = rs_diff_buf_idx_tp(curbuf, tp);
+    if idx == DB_COUNT {
+        return;
+    }
+
+    let mut dp = nvim_tabpage_get_first_diff(tp);
+    while !dp.is_null() {
+        let dp_lnum = nvim_diffblock_get_lnum(dp, idx);
+        let dp_count = nvim_diffblock_get_count(dp, idx);
+        if lnum <= dp_lnum + dp_count {
+            break;
+        }
+        dp = nvim_diffblock_get_next(dp);
+    }
+
+    // Clear the inline change cache
+    if !dp.is_null() {
+        nvim_diffblock_set_has_changes(dp, false);
+        nvim_diffblock_reset_changes_len(dp);
+    }
+}
+
+/// Parse a diffline struct and return [start,end] byte offsets.
+///
+/// Returns true if this change was added (no other buffer has it).
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_diff_change_parse(
+    diffline: DifflineHandle,
+    change: DiffLineChangeHandle,
+    change_start: *mut c_int,
+    change_end: *mut c_int,
+) -> bool {
+    if diffline.is_null() || change.is_null() || change_start.is_null() || change_end.is_null() {
+        return false;
+    }
+
+    let dl = &*(diffline.cast::<DifflineRepr>());
+    let bufidx = dl.bufidx;
+    let lineoff = dl.lineoff;
+
+    let start_lnum_off = nvim_diffchange_get_start_lnum_off(change, bufidx);
+    let end_lnum_off = nvim_diffchange_get_end_lnum_off(change, bufidx);
+
+    if start_lnum_off < lineoff {
+        *change_start = 0;
+    } else {
+        *change_start = nvim_diffchange_get_start(change, bufidx);
+    }
+
+    if end_lnum_off > lineoff {
+        *change_end = i32::MAX;
+    } else {
+        *change_end = nvim_diffchange_get_end(change, bufidx);
+    }
+
+    // Check if this is the simple_diffline_change sentinel
+    if nvim_diff_is_simple_change(change) {
+        return false;
+    }
+
+    // Check if this is an addition: all other buffers have empty ranges
+    for i in 0..DB_COUNT {
+        if i == bufidx {
+            continue;
+        }
+        let dc_start = nvim_diffchange_get_start(change, i);
+        let dc_end = nvim_diffchange_get_end(change, i);
+        let dc_start_off = nvim_diffchange_get_start_lnum_off(change, i);
+        let dc_end_off = nvim_diffchange_get_end_lnum_off(change, i);
+        if dc_start != dc_end || dc_end_off != dc_start_off {
+            return false;
+        }
+    }
+    true
+}
+
+/// Compare two characters for diff equality — delegates to the existing rs_diff_equal_char.
+#[allow(clippy::ref_as_ptr)]
+unsafe fn diff_equal_char_p5(s1: *const c_char, s2: *const c_char, len: &mut c_int) -> bool {
+    rs_diff_equal_char(s1, s2, std::ptr::from_mut(len))
+}
+
+/// Find the difference within a changed line — simple algorithm.
+///
+/// Returns true if the line was added (not present in any other buffer).
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::ref_as_ptr
+)]
+pub unsafe extern "C" fn rs_diff_find_change_simple(
+    wp: WinHandle,
+    lnum: LinenrT,
+    dp: DiffBlockHandle,
+    idx: c_int,
+    startp: *mut c_int,
+    endp: *mut c_int,
+) -> bool {
+    if wp.is_null() || dp.is_null() || startp.is_null() || endp.is_null() {
+        return false;
+    }
+
+    let diff_flags = nvim_diff_get_diff_flags();
+    let buf = nvim_win_get_w_buffer(wp);
+
+    // Get the original line
+    let line_org: *mut c_char = if (diff_flags & DIFF_INLINE_NONE) != 0 {
+        std::ptr::null_mut()
+    } else {
+        // Make a copy, the next ml_get will invalidate it
+        nvim_diff_xstrdup(nvim_diff_ml_get_buf(buf, lnum))
+    };
+
+    let off = lnum - nvim_diffblock_get_lnum(dp, idx);
+    let mut added = true;
+
+    for i in 0..DB_COUNT {
+        let other_buf = nvim_get_curtab_diffbuf(i);
+        if other_buf.is_null() || i == idx {
+            continue;
+        }
+
+        // Skip lines not in the other change (filler lines)
+        let other_count = nvim_diffblock_get_count(dp, i);
+        if off >= other_count {
+            continue;
+        }
+
+        added = false;
+
+        if (diff_flags & DIFF_INLINE_NONE) != 0 {
+            break;
+        }
+
+        let other_lnum = nvim_diffblock_get_lnum(dp, i) + off;
+        let line_new = nvim_diff_ml_get_buf(other_buf, other_lnum);
+
+        if !line_org.is_null() && !line_new.is_null() {
+            // Find start of difference
+            let mut si_org: c_int = 0;
+            let mut si_new: c_int = 0;
+
+            while *line_org.offset(si_org as isize) != 0 {
+                if ((diff_flags & DIFF_IWHITE) != 0
+                    && is_white(*line_org.offset(si_org as isize) as u8)
+                    && is_white(*line_new.offset(si_new as isize) as u8))
+                    || ((diff_flags & DIFF_IWHITEALL) != 0
+                        && (is_white(*line_org.offset(si_org as isize) as u8)
+                            || is_white(*line_new.offset(si_new as isize) as u8)))
+                {
+                    // Skip whitespace
+                    let new_org = nvim_diff_skipwhite(line_org.offset(si_org as isize));
+                    si_org = new_org.offset_from(line_org) as c_int;
+                    let new_new = nvim_diff_skipwhite(line_new.offset(si_new as isize));
+                    si_new = new_new.offset_from(line_new) as c_int;
+                } else {
+                    let mut l: c_int = 0;
+                    if !diff_equal_char_p5(
+                        line_org.offset(si_org as isize),
+                        line_new.offset(si_new as isize),
+                        &mut l,
+                    ) {
+                        break;
+                    }
+                    si_org += l;
+                    si_new += l;
+                }
+            }
+
+            // Move back to first byte of character
+            si_org -= utf_head_off(line_org, line_org.offset(si_org as isize));
+            si_new -= utf_head_off(line_new, line_new.offset(si_new as isize));
+
+            *startp = (*startp).min(si_org);
+
+            // Search for end of difference
+            if *line_org.offset(si_org as isize) != 0 || *line_new.offset(si_new as isize) != 0 {
+                let mut ei_org: c_int = libc::strlen(line_org.cast()) as c_int;
+                let mut ei_new: c_int = libc::strlen(line_new.cast()) as c_int;
+
+                while ei_org >= *startp && ei_new >= si_new && ei_org >= 0 && ei_new >= 0 {
+                    if ((diff_flags & DIFF_IWHITE) != 0
+                        && is_white(*line_org.offset(ei_org as isize) as u8)
+                        && is_white(*line_new.offset(ei_new as isize) as u8))
+                        || ((diff_flags & DIFF_IWHITEALL) != 0
+                            && (is_white(*line_org.offset(ei_org as isize) as u8)
+                                || is_white(*line_new.offset(ei_new as isize) as u8)))
+                    {
+                        while ei_org >= *startp && is_white(*line_org.offset(ei_org as isize) as u8)
+                        {
+                            ei_org -= 1;
+                        }
+                        while ei_new >= si_new && is_white(*line_new.offset(ei_new as isize) as u8)
+                        {
+                            ei_new -= 1;
+                        }
+                    } else {
+                        let p1 = line_org.offset(ei_org as isize);
+                        let p2 = line_new.offset(ei_new as isize);
+                        let p1_adj = p1.offset(-(utf_head_off(line_org, p1) as isize));
+                        let p2_adj = p2.offset(-(utf_head_off(line_new, p2) as isize));
+
+                        let mut l: c_int = 0;
+                        if !diff_equal_char_p5(p1_adj, p2_adj, &mut l) {
+                            break;
+                        }
+                        ei_org -= l;
+                        ei_new -= l;
+                    }
+                }
+
+                *endp = (*endp).max(ei_org);
+            }
+        }
+    }
+
+    if !line_org.is_null() {
+        nvim_diff_xfree(line_org.cast());
+    }
+
+    added
+}
+
+/// Helper: check if byte is whitespace (space or tab).
+#[inline]
+const fn is_white(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+/// Find the difference within a changed line — main dispatcher.
+///
+/// Returns true if the line was added (no other buffer has it).
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::ref_as_ptr)]
+pub unsafe extern "C" fn rs_diff_find_change(
+    wp: WinHandle,
+    lnum: LinenrT,
+    diffline: DifflineHandle,
+) -> bool {
+    if wp.is_null() || diffline.is_null() {
+        return false;
+    }
+
+    let tp = nvim_get_curtab();
+    let buf = nvim_win_get_w_buffer(wp);
+    let idx = rs_diff_buf_idx_tp(buf, tp);
+
+    if idx == DB_COUNT {
+        return false;
+    }
+
+    // Search for the diff block containing lnum
+    let mut dp = nvim_tabpage_get_first_diff(tp);
+    while !dp.is_null() {
+        if lnum < nvim_diffblock_get_lnum(dp, idx) + nvim_diffblock_get_count(dp, idx) {
+            break;
+        }
+        dp = nvim_diffblock_get_next(dp);
+    }
+
+    if dp.is_null() || rs_diff_check_sanity(tp, dp) == FAIL {
+        return false;
+    }
+
+    let off = lnum - nvim_diffblock_get_lnum(dp, idx);
+    let diff_flags = nvim_diff_get_diff_flags();
+
+    if (diff_flags & ALL_INLINE_DIFF) == 0 {
+        // Simple algorithm
+        let mut change_start: c_int = MAXCOL;
+        let mut change_end: c_int = -1;
+
+        let ret = rs_diff_find_change_simple(
+            wp,
+            lnum,
+            dp,
+            idx,
+            &raw mut change_start,
+            &raw mut change_end,
+        );
+
+        // Convert from inclusive end to exclusive end
+        change_end += 1;
+
+        // Get the simple_diffline_change sentinel and fill it
+        let simple_change = nvim_diff_get_simple_change();
+
+        // Write diffline struct
+        let dl = &mut *(diffline.cast::<DifflineRepr>());
+        dl.changes = simple_change;
+        dl.num_changes = 1;
+        dl.bufidx = idx;
+        dl.lineoff = off;
+
+        // Zero and fill the simple change struct
+        let sc = &mut *(simple_change.cast::<DifflineChangeRepr>());
+        *sc = std::mem::zeroed();
+        sc.dc_start[idx as usize] = change_start;
+        sc.dc_end[idx as usize] = change_end;
+        sc.dc_start_lnum_off[idx as usize] = off;
+        sc.dc_end_lnum_off[idx as usize] = off;
+
+        return ret;
+    }
+
+    // Inline diff algorithm
+    if !nvim_diffblock_get_has_changes(dp) {
+        nvim_diff_compute_inline(dp);
+    }
+
+    let changes_len = nvim_diffblock_get_changes_len(dp);
+
+    // Linear search for changes on this line
+    let mut num_changes: c_int = 0;
+    let mut first_change: DiffLineChangeHandle = std::ptr::null_mut();
+    let mut last_change_idx: c_int = 0;
+
+    for change_idx in 0..changes_len {
+        let change = nvim_diffblock_get_change(dp, change_idx);
+        if change.is_null() {
+            continue;
+        }
+
+        let end_lnum_off = nvim_diffchange_get_end_lnum_off(change, idx);
+        let start_lnum_off = nvim_diffchange_get_start_lnum_off(change, idx);
+
+        if end_lnum_off < off {
+            continue;
+        }
+        if start_lnum_off > off {
+            last_change_idx = change_idx;
+            break;
+        }
+        if first_change.is_null() {
+            first_change = change;
+        }
+        num_changes += 1;
+        last_change_idx = change_idx + 1;
+    }
+
+    // Write diffline struct
+    let dl = &mut *(diffline.cast::<DifflineRepr>());
+    dl.changes = first_change;
+    dl.num_changes = num_changes;
+    dl.bufidx = idx;
+    dl.lineoff = off;
+
+    // Detect added lines
+    let mut added = false;
+    if num_changes == 1 && last_change_idx == changes_len {
+        added = true;
+        let last_change = nvim_diffblock_get_change(dp, changes_len - 1);
+        for i in 0..DB_COUNT {
+            if i == idx {
+                continue;
+            }
+            if nvim_get_curtab_diffbuf(i).is_null() {
+                continue;
+            }
+            if nvim_diffchange_get_start_lnum_off(last_change, i) != i32::MAX {
+                added = false;
+                break;
+            }
+        }
+    }
+
+    added
 }
 
 #[cfg(test)]

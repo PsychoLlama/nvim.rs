@@ -240,6 +240,14 @@ extern linenr_T rs_diff_get_corresponding_line_int(buf_T *buf1, linenr_T lnum1);
 extern linenr_T rs_diff_get_corresponding_line(buf_T *buf1, linenr_T lnum1);
 extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
 
+// Phase 5: Inline change detection migrations
+extern void rs_diff_update_line(linenr_T lnum);
+extern bool rs_diff_change_parse(diffline_T *diffline, diffline_change_T *change,
+                                 int *change_start, int *change_end);
+extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
+extern bool rs_diff_find_change_simple(win_T *wp, linenr_T lnum, const diff_T *dp, int idx,
+                                       int *startp, int *endp);
+
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
 
@@ -1721,27 +1729,7 @@ bool diff_should_use_internal(void)
 /// mode without waiting for global diff update later.
 void diff_update_line(linenr_T lnum)
 {
-  if (!(diff_flags & ALL_INLINE_DIFF)) {
-    // We only care if we are doing inline-diff where we cache the diff results
-    return;
-  }
-
-  int idx = diff_buf_idx(curbuf, curtab);
-  if (idx == DB_COUNT) {
-    return;
-  }
-  diff_T *dp;
-  FOR_ALL_DIFFBLOCKS_IN_TAB(curtab, dp) {
-    if (lnum <= dp->df_lnum[idx] + dp->df_count[idx]) {
-      break;
-    }
-  }
-
-  // clear the inline change cache as it's invalid
-  if (dp != NULL) {
-    dp->has_changes = false;
-    dp->df_changes.ga_len = 0;
-  }
+  rs_diff_update_line(lnum);
 }
 
 /// used for simple inline diff algorithm
@@ -1753,37 +1741,7 @@ static diffline_change_T simple_diffline_change;
 bool diff_change_parse(diffline_T *diffline, diffline_change_T *change, int *change_start,
                        int *change_end)
 {
-  if (change->dc_start_lnum_off[diffline->bufidx] < diffline->lineoff) {
-    *change_start = 0;
-  } else {
-    *change_start = change->dc_start[diffline->bufidx];
-  }
-  if (change->dc_end_lnum_off[diffline->bufidx] > diffline->lineoff) {
-    *change_end = INT_MAX;
-  } else {
-    *change_end = change->dc_end[diffline->bufidx];
-  }
-
-  if (change == &simple_diffline_change) {
-    // This is what we returned from simple inline diff. We always consider
-    // the range to be changed, rather than added for now.
-    return false;
-  }
-
-  // Find out whether this is an addition. Note that for multi buffer diff,
-  // to tell whether lines are additions we check whether all the other diff
-  // lines are identical (in diff_check_with_linestatus). If so, we mark them
-  // as add. We don't do that for inline diff here for simplicity.
-  for (int i = 0; i < DB_COUNT; i++) {
-    if (i == diffline->bufidx) {
-      continue;
-    }
-    if (change->dc_start[i] != change->dc_end[i]
-        || change->dc_end_lnum_off[i] != change->dc_start_lnum_off[i]) {
-      return false;
-    }
-  }
-  return true;
+  return rs_diff_change_parse(diffline, change, change_start, change_end);
 }
 
 /// Find the difference within a changed line and returns [startp,endp] byte
@@ -1803,109 +1761,7 @@ static bool diff_find_change_simple(win_T *wp, linenr_T lnum, const diff_T *dp, 
                                     int *startp, int *endp)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-  char *line_org;
-  if (diff_flags & DIFF_INLINE_NONE) {
-    // We only care about the return value, not the actual string comparisons.
-    line_org = NULL;
-  } else {
-    // Make a copy of the line, the next ml_get() will invalidate it.
-    line_org = xstrdup(ml_get_buf(wp->w_buffer, lnum));
-  }
-
-  int si_org;
-  int si_new;
-  int ei_org;
-  int ei_new;
-  bool added = true;
-
-  linenr_T off = lnum - dp->df_lnum[idx];
-  for (int i = 0; i < DB_COUNT; i++) {
-    if ((curtab->tp_diffbuf[i] != NULL) && (i != idx)) {
-      // Skip lines that are not in the other change (filler lines).
-      if (off >= dp->df_count[i]) {
-        continue;
-      }
-      added = false;
-      if (diff_flags & DIFF_INLINE_NONE) {
-        break;  // early terminate as we only care about the return value
-      }
-
-      char *line_new = ml_get_buf(curtab->tp_diffbuf[i], dp->df_lnum[i] + off);
-
-      // Search for start of difference
-      si_org = si_new = 0;
-
-      while (line_org[si_org] != NUL) {
-        if (((diff_flags & DIFF_IWHITE)
-             && ascii_iswhite(line_org[si_org])
-             && ascii_iswhite(line_new[si_new]))
-            || ((diff_flags & DIFF_IWHITEALL)
-                && (ascii_iswhite(line_org[si_org])
-                    || ascii_iswhite(line_new[si_new])))) {
-          si_org = (int)(skipwhite(line_org + si_org) - line_org);
-          si_new = (int)(skipwhite(line_new + si_new) - line_new);
-        } else {
-          int l;
-          if (!diff_equal_char(line_org + si_org, line_new + si_new, &l)) {
-            break;
-          }
-          si_org += l;
-          si_new += l;
-        }
-      }
-
-      // Move back to first byte of character in both lines (may
-      // have "nn^" in line_org and "n^ in line_new).
-      si_org -= utf_head_off(line_org, line_org + si_org);
-      si_new -= utf_head_off(line_new, line_new + si_new);
-
-      *startp = MIN(*startp, si_org);
-
-      // Search for end of difference, if any.
-      if ((line_org[si_org] != NUL) || (line_new[si_new] != NUL)) {
-        ei_org = (int)strlen(line_org);
-        ei_new = (int)strlen(line_new);
-
-        while (ei_org >= *startp
-               && ei_new >= si_new
-               && ei_org >= 0
-               && ei_new >= 0) {
-          if (((diff_flags & DIFF_IWHITE)
-               && ascii_iswhite(line_org[ei_org])
-               && ascii_iswhite(line_new[ei_new]))
-              || ((diff_flags & DIFF_IWHITEALL)
-                  && (ascii_iswhite(line_org[ei_org])
-                      || ascii_iswhite(line_new[ei_new])))) {
-            while (ei_org >= *startp && ascii_iswhite(line_org[ei_org])) {
-              ei_org--;
-            }
-
-            while (ei_new >= si_new && ascii_iswhite(line_new[ei_new])) {
-              ei_new--;
-            }
-          } else {
-            const char *p1 = line_org + ei_org;
-            const char *p2 = line_new + ei_new;
-
-            p1 -= utf_head_off(line_org, p1);
-            p2 -= utf_head_off(line_new, p2);
-
-            int l;
-            if (!diff_equal_char(p1, p2, &l)) {
-              break;
-            }
-            ei_org -= l;
-            ei_new -= l;
-          }
-        }
-
-        *endp = MAX(*endp, ei_org);
-      }
-    }
-  }
-
-  xfree(line_org);
-  return added;
+  return rs_diff_find_change_simple(wp, lnum, (diff_T *)dp, idx, startp, endp);
 }
 
 /// Mapping used for mapping from temporary mmfile created for inline diff back
@@ -2274,105 +2130,7 @@ done:
 bool diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-  int idx = diff_buf_idx(wp->w_buffer, curtab);
-  if (idx == DB_COUNT) {  // cannot happen
-    return false;
-  }
-
-  // search for a change that includes "lnum" in the list of diffblocks.
-  diff_T *dp;
-  FOR_ALL_DIFFBLOCKS_IN_TAB(curtab, dp) {
-    if (lnum < dp->df_lnum[idx] + dp->df_count[idx]) {
-      break;
-    }
-  }
-  if (dp == NULL || diff_check_sanity(curtab, dp) == FAIL) {
-    return false;
-  }
-
-  int off = lnum - dp->df_lnum[idx];
-
-  if (!(diff_flags & ALL_INLINE_DIFF)) {
-    // Use simple algorithm
-    int change_start = MAXCOL;  // first col of changed area
-    int change_end = -1;        // last col of changed area
-
-    int ret = diff_find_change_simple(wp, lnum, dp, idx, &change_start, &change_end);
-
-    // convert from inclusive end to exclusive end per diffline's contract
-    change_end += 1;
-
-    // Create a mock diffline struct. We always only have one so no need to
-    // allocate memory.
-    CLEAR_FIELD(simple_diffline_change);
-    diffline->changes = &simple_diffline_change;
-    diffline->num_changes = 1;
-    diffline->bufidx = idx;
-    diffline->lineoff = lnum - dp->df_lnum[idx];
-
-    simple_diffline_change.dc_start[idx] = change_start;
-    simple_diffline_change.dc_end[idx] = change_end;
-    simple_diffline_change.dc_start_lnum_off[idx] = off;
-    simple_diffline_change.dc_end_lnum_off[idx] = off;
-    return ret;
-  }
-
-  // Use inline diff algorithm.
-  // The diff changes are usually cached so we check that first.
-  if (!dp->has_changes) {
-    diff_find_change_inline_diff(dp);
-  }
-
-  garray_T *changes = &dp->df_changes;
-
-  // Use linear search to find the first change for this line. We could
-  // optimize this to use binary search, but there should usually be a
-  // limited number of inline changes per diff block, and limited number of
-  // diff blocks shown on screen, so it is not necessary.
-  int num_changes = 0;
-  int change_idx = 0;
-  diffline->changes = NULL;
-  for (change_idx = 0; change_idx < changes->ga_len; change_idx++) {
-    diffline_change_T *change =
-      &((diffline_change_T *)dp->df_changes.ga_data)[change_idx];
-    if (change->dc_end_lnum_off[idx] < off) {
-      continue;
-    }
-    if (change->dc_start_lnum_off[idx] > off) {
-      break;
-    }
-    if (diffline->changes == NULL) {
-      diffline->changes = change;
-    }
-    num_changes++;
-  }
-  diffline->num_changes = num_changes;
-  diffline->bufidx = idx;
-  diffline->lineoff = off;
-
-  // Detect simple cases of added lines in the end within a diff block. This
-  // has to be the last change of this diff block, and all other buffers are
-  // considering this to be an addition past their last line. Other scenarios
-  // will be considered a changed line instead.
-  bool added = false;
-  if (num_changes == 1 && change_idx == dp->df_changes.ga_len) {
-    added = true;
-    for (int i = 0; i < DB_COUNT; i++) {
-      if (idx == i) {
-        continue;
-      }
-      if (curtab->tp_diffbuf[i] == NULL) {
-        continue;
-      }
-      diffline_change_T *change =
-        &((diffline_change_T *)dp->df_changes.ga_data)[dp->df_changes.ga_len - 1];
-      if (change->dc_start_lnum_off[i] != INT_MAX) {
-        added = false;
-        break;
-      }
-    }
-  }
-  return added;
+  return rs_diff_find_change(wp, lnum, diffline);
 }
 
 /// Check that line "lnum" is not close to a diff block, this line should
@@ -3954,3 +3712,93 @@ void nvim_diff_run_linematch(diff_T *dp)
 {
   run_linematch_algorithm(dp);
 }
+
+// Phase 5 C accessors
+
+/// Check if diff block has cached inline changes (the has_changes field).
+bool nvim_diffblock_get_has_changes(diff_T *dp)
+{
+  if (dp == NULL) {
+    return false;
+  }
+  return dp->has_changes;
+}
+
+/// Set the has_changes field on a diff block.
+void nvim_diffblock_set_has_changes(diff_T *dp, bool val)
+{
+  if (dp != NULL) {
+    dp->has_changes = val;
+  }
+}
+
+/// Reset the df_changes ga_len to 0 (invalidate cache without freeing).
+void nvim_diffblock_reset_changes_len(diff_T *dp)
+{
+  if (dp != NULL) {
+    dp->df_changes.ga_len = 0;
+  }
+}
+
+/// Get pointer to the static simple_diffline_change sentinel.
+diffline_change_T *nvim_diff_get_simple_change(void)
+{
+  return &simple_diffline_change;
+}
+
+/// Compute inline diff for a diff block (calls the static function).
+void nvim_diff_compute_inline(diff_T *dp)
+{
+  if (dp != NULL) {
+    diff_find_change_inline_diff(dp);
+  }
+}
+
+/// Get the change at index from df_changes, returning start_lnum_off for idx.
+int nvim_diffchange_get_start_lnum_off(diffline_change_T *change, int idx)
+{
+  if (change == NULL || idx < 0 || idx >= DB_COUNT) {
+    return 0;
+  }
+  return change->dc_start_lnum_off[idx];
+}
+
+/// Get the change at index from df_changes, returning end_lnum_off for idx.
+int nvim_diffchange_get_end_lnum_off(diffline_change_T *change, int idx)
+{
+  if (change == NULL || idx < 0 || idx >= DB_COUNT) {
+    return 0;
+  }
+  return change->dc_end_lnum_off[idx];
+}
+
+/// Get dc_start for a change at buffer index.
+colnr_T nvim_diffchange_get_start(diffline_change_T *change, int idx)
+{
+  if (change == NULL || idx < 0 || idx >= DB_COUNT) {
+    return 0;
+  }
+  return change->dc_start[idx];
+}
+
+/// Get dc_end for a change at buffer index.
+colnr_T nvim_diffchange_get_end(diffline_change_T *change, int idx)
+{
+  if (change == NULL || idx < 0 || idx >= DB_COUNT) {
+    return 0;
+  }
+  return change->dc_end[idx];
+}
+
+/// Check if a change pointer is the simple_diffline_change sentinel.
+bool nvim_diff_is_simple_change(diffline_change_T *change)
+{
+  return change == &simple_diffline_change;
+}
+
+/// Get the skipwhite result offset.
+const char *nvim_diff_skipwhite(const char *p)
+{
+  return skipwhite(p);
+}
+
