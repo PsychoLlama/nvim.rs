@@ -538,7 +538,10 @@ pub unsafe extern "C" fn rs_jumpto_tag(
         return FAIL;
     }
 
-    // Truncate filename so it can be used as a string
+    // Temporarily truncate filename so it can be used as a string.
+    // Save and restore the original character so lbuf remains intact for
+    // nvim_tag_jumpto_execute which re-parses it.
+    let saved_fname_end = *tagp.fname_end;
     *tagp.fname_end = 0;
     let fname = tagp.fname;
 
@@ -564,6 +567,9 @@ pub unsafe extern "C" fn rs_jumpto_tag(
 
     // Expand filename
     let expanded_fname = rs_expand_tag_fname(fname, tagp.tag_fname, true);
+
+    // Restore the original character so lbuf can be re-parsed
+    *tagp.fname_end = saved_fname_end;
 
     // Check if file exists
     if !nvim_tag_path_exists(expanded_fname) && !nvim_has_bufreadcmd(expanded_fname) {
