@@ -1,9 +1,31 @@
-Plan: ~/.claude/plans/delightful-giggling-fern.md
+Plan: ~/.claude/plans/lexical-cooking-goblet.md
 
-The plan indicates that **no further migration work is needed for `ex_cmds2.c`**. The analysis found that:
+## Plan Execution Complete
 
-1. All original function bodies from the C file have already been migrated to Rust in `src/nvim-rs/ex_cmds2/` (2,286 lines across 11 modules).
-2. The remaining ~1,117 lines in the C file are **FFI glue only** — accessor functions, thin wrappers calling `rs_*` functions, and static assertions. This is the expected end-state for a migrated file.
-3. The one function with real logic (`nvim_ex2_listdo_restore_syntax`) was intentionally kept in C due to deep coupling with autocmd internals and stack-allocated structs.
+All phases from the plan at `/home/overlord/.claude/plans/lexical-cooking-goblet.md` have been executed (Phases 1-9). Phase 10 was skipped as it was explicitly marked optional with low ROI. Phase 11 was pre-deferred.
 
-**All steps are complete — there is nothing to implement.** If you'd like to continue migration work, I can help identify a new C file candidate to migrate.
+### Summary of commits:
+
+| Phase | Commit | Description |
+|-------|--------|-------------|
+| 1 | `9f32ef8c55` | 6 trivial standalone functions |
+| 2 | `6ba0ceb972` | Pattern getters/setters for ShaDa |
+| 3 | `61eb204d33` | Pattern save/restore |
+| 4 | `dfb1649b23` | search_regcomp and pattern compilation |
+| 5 | `df5812b343` | searchc() character search |
+| 6 | `9cabee02aa` | Search statistics |
+| 7a-c | `546ccbfef8` | check_linecomment, is_zero_width, search_for_exact_line |
+| 8 | `e101c67c03` | showmatch match-finding (partial) |
+| 9 | `277103d800` | f_searchcount computation (partial) |
+
+### What was migrated:
+- **~36 C functions** totaling ~985 lines of C code converted to Rust
+- Functions span: trivial helpers, pattern management, character search, search statistics, pattern compilation, line comment detection, zero-width matching, completion search, showmatch, and searchcount
+
+### What was deferred:
+- **Phase 7d** (`current_search`): Heavy editor state coupling (~15 accessors for VIsual mode)
+- **Phase 10**: do_search batch helpers (already working as C helpers called from Rust)
+- **Phase 11**: fpip batch helpers (high risk, pre-deferred)
+
+### Verification:
+All phases passed: `just build`, `just smoke-test`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test` (4296 tests).
