@@ -91,9 +91,6 @@ extern void rs_blend_cache_put(int combine_tag, int id, bool through);
 extern uint32_t rs_hl_add_url_index(const char *url);
 extern const char *rs_hl_get_url(uint32_t index);
 
-// Color forcing
-extern HlAttrs rs_get_colors_force(HlAttrs attrs);
-
 // Full attribute combination functions (Phase 14)
 extern int rs_hl_combine_attr(int char_attr, int prim_attr);
 extern int rs_hl_blend_attrs(int back_attr, int front_attr, bool *through);
@@ -178,9 +175,6 @@ int nvim_get_hlf_count(void) { return HLF_COUNT; }
 int nvim_get_hlf_mc(void) { return HLF_MC; }
 int nvim_get_hlf_cul(void) { return HLF_CUL; }
 // nvim_get_highlight_attr is already defined above (line 148)
-
-// Forward declaration for update_ns_hl
-static void update_ns_hl(int ns_id);
 
 extern void rs_update_ns_hl(int ns_id);
 // Wrapper for update_ns_hl - calls Rust version
@@ -410,36 +404,6 @@ void update_window_hl(win_T *wp, bool invalid)
   rs_update_window_hl(wp, invalid);
 }
 
-static void update_ns_hl(int ns_id)
-{
-  if (ns_id <= 0) {
-    return;
-  }
-  DecorProvider *p = get_decor_provider(ns_id, true);
-  if (p->hl_cached) {
-    return;
-  }
-
-  // Get or create the attribute array in Rust storage
-  int *hl_attrs = rs_ns_hl_attr_get_or_create(ns_id);
-
-  for (int hlf = 1; hlf < HLF_COUNT; hlf++) {
-    int id = syn_check_group(hlf_names[hlf], strlen(hlf_names[hlf]));
-    bool optional = (hlf == HLF_INACTIVE || hlf == HLF_NFLOAT);
-    hl_attrs[hlf] = hl_get_ui_attr(ns_id, hlf, id, optional);
-  }
-
-  // NOOOO! You cannot just pretend that "Normal" is just like any other
-  // syntax group! It needs at least 10 layers of special casing! Noooooo!
-  //
-  // haha, tema engine go brrr
-  int normality = syn_check_group(S_LEN("Normal"));
-  hl_attrs[HLF_NONE] = hl_get_ui_attr(ns_id, -1, normality, true);
-
-  // hl_get_ui_attr might have invalidated the decor provider
-  p = get_decor_provider(ns_id, true);
-  p->hl_cached = true;
-}
 
 int win_bg_attr(win_T *wp)
 {
@@ -505,15 +469,6 @@ void hl_invalidate_blends(void)
 int hl_combine_attr(int char_attr, int prim_attr)
 {
   return rs_hl_combine_attr(char_attr, prim_attr);
-}
-
-/// Get the used rgb colors for an attr group.
-///
-/// If colors are unset, use builtin default colors. Never returns -1
-/// Cterm colors are unchanged.
-static HlAttrs get_colors_force(HlAttrs attrs)
-{
-  return rs_get_colors_force(attrs);
 }
 
 /// Blend overlay attributes (for popupmenu) with other attributes.
