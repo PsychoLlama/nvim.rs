@@ -195,6 +195,16 @@ extern int rs_mark_check_line_bounds(buf_T *buf, linenr_T fm_mark_lnum,
                                       const char **errormsg, const char *e_markinval_str);
 extern void rs_fmarks_check_one(xfmark_T *fm, const char *name, buf_T *buf);
 
+// Phase 2: Simple window/buffer operations
+extern void rs_set_last_cursor(win_T *win);
+extern void rs_free_jumplist(win_T *wp);
+extern void rs_ex_clearjumps(win_T *win);
+extern void rs_free_all_marks(void);
+extern void rs_copy_jumplist(win_T *from, win_T *to);
+extern void rs_checkpcmark(win_T *win);
+extern void rs_mark_view_restore(const fmark_T *fm, win_T *win);
+extern int rs_mark_check(const fmark_T *fm, const char **errormsg, buf_T *curbuf);
+
 // =============================================================================
 // C accessor functions called from Rust
 // =============================================================================
@@ -228,6 +238,33 @@ int nvim_mark_path_fnamecmp(const char *a, const char *b)
 {
   return path_fnamecmp(a, b);
 }
+
+// Window jumplist accessors
+int nvim_mark_win_get_jumplistlen(win_T *win) { return win->w_jumplistlen; }
+void nvim_mark_win_set_jumplistlen(win_T *win, int len) { win->w_jumplistlen = len; }
+int nvim_mark_win_get_jumplistidx(win_T *win) { return win->w_jumplistidx; }
+void nvim_mark_win_set_jumplistidx(win_T *win, int idx) { win->w_jumplistidx = idx; }
+xfmark_T *nvim_mark_win_get_jumplist_entry(win_T *win, int idx) { return &win->w_jumplist[idx]; }
+
+// Window pcmark/cursor accessors
+pos_T nvim_mark_win_get_pcmark(win_T *win) { return win->w_pcmark; }
+void nvim_mark_win_set_pcmark(win_T *win, pos_T pos) { win->w_pcmark = pos; }
+pos_T nvim_mark_win_get_prev_pcmark(win_T *win) { return win->w_prev_pcmark; }
+void nvim_mark_win_set_prev_pcmark(win_T *win, pos_T pos) { win->w_prev_pcmark = pos; }
+pos_T nvim_mark_win_get_cursor(win_T *win) { return win->w_cursor; }
+buf_T *nvim_mark_win_get_buffer(win_T *win) { return win->w_buffer; }
+void nvim_mark_win_set_topline(win_T *win, linenr_T topline) { set_topline(win, topline); }
+
+// Buffer mark accessors
+fmark_T *nvim_mark_buf_get_last_cursor(buf_T *buf) { return &buf->b_last_cursor; }
+
+// Error message string accessors (with gettext)
+const char *nvim_mark_get_e_umark(void) { return _(e_umark); }
+const char *nvim_mark_get_e_marknotset(void) { return _(e_marknotset); }
+const char *nvim_mark_get_e_markinval(void) { return _(e_markinval); }
+
+// Clear the global namedfm array
+void nvim_mark_clear_namedfm(void) { CLEAR_FIELD(namedfm); }
 
 // =============================================================================
 // Rust wrapper functions
@@ -691,12 +728,7 @@ void setpcmark(void)
 // If pcmark was deleted (with "dG") the previous mark is restored.
 void checkpcmark(void)
 {
-  if (curwin->w_prev_pcmark.lnum != 0
-      && (equalpos(curwin->w_pcmark, curwin->w_cursor)
-          || curwin->w_pcmark.lnum == 0)) {
-    curwin->w_pcmark = curwin->w_prev_pcmark;
-  }
-  curwin->w_prev_pcmark.lnum = 0;  // it has been checked
+  rs_checkpcmark(curwin);
 }
 
 /// Get mark in "count" position in the |jumplist| relative to the current index.
@@ -1075,16 +1107,7 @@ end:
 /// @param  fm the named mark.
 void mark_view_restore(fmark_T *fm)
 {
-  if (fm == NULL) {
-    return;
-  }
-  // Use Rust implementation to calculate the topline
-  linenr_T topline = rs_mark_view_calc_topline(fm->mark.lnum, fm->view.topline_offset);
-  // If the mark does not have a view, topline_offset is MAXLNUM,
-  // and rs_mark_view_calc_topline returns -1 in that case.
-  if (topline >= 1) {
-    set_topline(curwin, topline);
-  }
+  rs_mark_view_restore(fm, curwin);
 }
 
 /// Create fmarkv_T from topline and position. Rust implementation.
@@ -1187,21 +1210,7 @@ static void fmarks_check_one(xfmark_T *fm, char *name, buf_T *buf)
 /// @return  true if the mark passes all the above checks, else false.
 bool mark_check(fmark_T *fm, const char **errormsg)
 {
-  if (fm == NULL) {
-    *errormsg = _(e_umark);
-    return false;
-  } else if (fm->mark.lnum <= 0) {
-    // In both cases it's an error but only raise when equals to 0
-    if (fm->mark.lnum == 0) {
-      *errormsg = _(e_marknotset);
-    }
-    return false;
-  }
-  // Only check for valid line number if the buffer is loaded.
-  if (fm->fnum == curbuf->handle && !mark_check_line_bounds(curbuf, fm, errormsg)) {
-    return false;
-  }
-  return true;
+  return rs_mark_check(fm, errormsg, curbuf) != 0;
 }
 
 /// Check if a mark line number is greater than the buffer line count, and set e_markinval.
@@ -1506,9 +1515,7 @@ void ex_jumps(exarg_T *eap)
 
 void ex_clearjumps(exarg_T *eap)
 {
-  free_jumplist(curwin);
-  curwin->w_jumplistlen = 0;
-  curwin->w_jumplistidx = 0;
+  rs_ex_clearjumps(curwin);
 }
 
 // print the changelist
@@ -1946,14 +1953,7 @@ void cleanup_jumplist(win_T *wp, bool loadfiles)
 // Copy the jumplist from window "from" to window "to".
 void copy_jumplist(win_T *from, win_T *to)
 {
-  for (int i = 0; i < from->w_jumplistlen; i++) {
-    to->w_jumplist[i] = from->w_jumplist[i];
-    if (from->w_jumplist[i].fname != NULL) {
-      to->w_jumplist[i].fname = xstrdup(from->w_jumplist[i].fname);
-    }
-  }
-  to->w_jumplistlen = from->w_jumplistlen;
-  to->w_jumplistidx = from->w_jumplistidx;
+  rs_copy_jumplist(from, to);
 }
 
 /// Iterate over jumplist items
@@ -2165,30 +2165,18 @@ bool mark_set_local(const char name, buf_T *const buf, const fmark_T fm, const b
 // Free items in the jumplist of window "wp".
 void free_jumplist(win_T *wp)
 {
-  for (int i = 0; i < wp->w_jumplistlen; i++) {
-    free_xfmark(wp->w_jumplist[i]);
-  }
-  wp->w_jumplistlen = 0;
+  rs_free_jumplist(wp);
 }
 
 void set_last_cursor(win_T *win)
 {
-  if (win->w_buffer != NULL) {
-    RESET_FMARK(&win->w_buffer->b_last_cursor, win->w_cursor, 0, ((fmarkv_T)INIT_FMARKV));
-  }
+  rs_set_last_cursor(win);
 }
 
 #if defined(EXITFREE)
 void free_all_marks(void)
 {
-  int i;
-
-  for (i = 0; i < NGLOBALMARKS; i++) {
-    if (namedfm[i].fmark.mark.lnum != 0) {
-      free_xfmark(namedfm[i]);
-    }
-  }
-  CLEAR_FIELD(namedfm);
+  rs_free_all_marks();
 }
 #endif
 

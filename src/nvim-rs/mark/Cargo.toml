@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 nvim-buffer = { path = "../buffer" }
+nvim-window = { path = "../window" }
 
 [lib]
 crate-type = ["staticlib", "rlib"]

@@ -5,17 +5,53 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use nvim_buffer::BufHandle;
+use nvim_window::WinHandle;
 
 // =============================================================================
 // FFI: C accessor functions called from Rust
 // =============================================================================
 extern "C" {
+    // Memory management
     fn nvim_mark_xfree(ptr: *mut c_void);
+    fn nvim_mark_xstrdup(s: *const c_char) -> *mut c_char;
+
+    // Buffer accessors
     fn nvim_buf_get_handle(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
+
+    // Global state
     fn nvim_mark_get_namedfm() -> *mut XfmarkT;
     fn nvim_mark_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    // Window jumplist accessors
+    fn nvim_mark_win_get_jumplistlen(win: WinHandle) -> c_int;
+    fn nvim_mark_win_set_jumplistlen(win: WinHandle, len: c_int);
+    fn nvim_mark_win_get_jumplistidx(win: WinHandle) -> c_int;
+    fn nvim_mark_win_set_jumplistidx(win: WinHandle, idx: c_int);
+    fn nvim_mark_win_get_jumplist_entry(win: WinHandle, idx: c_int) -> *mut XfmarkT;
+
+    // Window pcmark/cursor accessors
+    fn nvim_mark_win_get_pcmark(win: WinHandle) -> PosT;
+    fn nvim_mark_win_set_pcmark(win: WinHandle, pos: PosT);
+    fn nvim_mark_win_get_prev_pcmark(win: WinHandle) -> PosT;
+    fn nvim_mark_win_set_prev_pcmark(win: WinHandle, pos: PosT);
+    fn nvim_mark_win_get_cursor(win: WinHandle) -> PosT;
+    fn nvim_mark_win_get_buffer(win: WinHandle) -> BufHandle;
+    fn nvim_mark_win_set_topline(win: WinHandle, topline: LinenrT);
+
+    // Buffer mark accessors
+    fn nvim_mark_buf_get_last_cursor(buf: BufHandle) -> *mut FmarkT;
+
+    // Error message strings
+    fn nvim_mark_get_e_umark() -> *const c_char;
+    fn nvim_mark_get_e_marknotset() -> *const c_char;
+    fn nvim_mark_get_e_markinval() -> *const c_char;
+
+    // Timestamp
+    fn nvim_mark_os_time() -> Timestamp;
+
+    // Clear global marks array
+    fn nvim_mark_clear_namedfm();
 }
 
 /// Number of possible named marks (a-z)
@@ -2919,6 +2955,170 @@ pub unsafe extern "C" fn rs_fmarks_check_one(
         nvim_mark_xfree((*fm).fname as *mut c_void);
         (*fm).fname = std::ptr::null_mut();
     }
+}
+
+// =============================================================================
+// Phase 2: Simple Window/Buffer Operations
+// =============================================================================
+
+/// Set the last cursor position for the window's buffer.
+/// C equivalent of `set_last_cursor`.
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_last_cursor(win: WinHandle) {
+    let buf = nvim_mark_win_get_buffer(win);
+    if !buf.is_null() {
+        let cursor = nvim_mark_win_get_cursor(win);
+        let last_cursor = nvim_mark_buf_get_last_cursor(buf);
+        if !last_cursor.is_null() {
+            // RESET_FMARK: free old, then set new
+            rs_free_fmark(*last_cursor);
+            (*last_cursor).mark = cursor;
+            (*last_cursor).fnum = 0;
+            (*last_cursor).timestamp = nvim_mark_os_time();
+            (*last_cursor).view = FmarkvT {
+                topline_offset: MAXLNUM,
+            };
+            (*last_cursor).additional_data = std::ptr::null_mut();
+        }
+    }
+}
+
+/// Free items in the jumplist of a window.
+/// C equivalent of `free_jumplist`.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_jumplist(wp: WinHandle) {
+    let len = nvim_mark_win_get_jumplistlen(wp);
+    for i in 0..len {
+        let entry = nvim_mark_win_get_jumplist_entry(wp, i);
+        rs_free_xfmark(*entry);
+    }
+    nvim_mark_win_set_jumplistlen(wp, 0);
+}
+
+/// Clear the jump list (ex_clearjumps command).
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_clearjumps(win: WinHandle) {
+    rs_free_jumplist(win);
+    nvim_mark_win_set_jumplistlen(win, 0);
+    nvim_mark_win_set_jumplistidx(win, 0);
+}
+
+/// Free all global marks (EXITFREE cleanup).
+///
+/// # Safety
+/// Global namedfm array must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_all_marks() {
+    let namedfm = nvim_mark_get_namedfm();
+    for i in 0..NGLOBALMARKS {
+        let entry = &*namedfm.offset(i as isize);
+        if entry.fmark.mark.lnum != 0 {
+            rs_free_xfmark(*entry);
+        }
+    }
+    nvim_mark_clear_namedfm();
+}
+
+/// Copy the jumplist from one window to another.
+/// C equivalent of `copy_jumplist`.
+///
+/// # Safety
+/// Both `from` and `to` must be valid window handles.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_jumplist(from: WinHandle, to: WinHandle) {
+    let len = nvim_mark_win_get_jumplistlen(from);
+    for i in 0..len {
+        let src = nvim_mark_win_get_jumplist_entry(from, i);
+        let dst = nvim_mark_win_get_jumplist_entry(to, i);
+        *dst = *src;
+        if !(*src).fname.is_null() {
+            (*dst).fname = nvim_mark_xstrdup((*src).fname);
+        }
+    }
+    nvim_mark_win_set_jumplistlen(to, len);
+    nvim_mark_win_set_jumplistidx(to, nvim_mark_win_get_jumplistidx(from));
+}
+
+/// Check if pcmark should be restored to prev_pcmark.
+/// C equivalent of `checkpcmark`.
+///
+/// # Safety
+/// `win` must be a valid window handle (typically curwin).
+#[no_mangle]
+pub unsafe extern "C" fn rs_checkpcmark(win: WinHandle) {
+    let prev_pcmark = nvim_mark_win_get_prev_pcmark(win);
+    let pcmark = nvim_mark_win_get_pcmark(win);
+    let cursor = nvim_mark_win_get_cursor(win);
+    if prev_pcmark.lnum != 0 && (rs_equalpos(pcmark, cursor) != 0 || pcmark.lnum == 0) {
+        nvim_mark_win_set_pcmark(win, prev_pcmark);
+    }
+    nvim_mark_win_set_prev_pcmark(
+        win,
+        PosT {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        },
+    );
+}
+
+/// Restore mark view by setting topline based on mark's view offset.
+/// C equivalent of `mark_view_restore`.
+///
+/// # Safety
+/// `fm` may be null (function returns early). `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_view_restore(fm: *const FmarkT, win: WinHandle) {
+    if fm.is_null() {
+        return;
+    }
+    let topline = rs_mark_view_calc_topline((*fm).mark.lnum, (*fm).view.topline_offset);
+    if topline >= 1 {
+        nvim_mark_win_set_topline(win, topline);
+    }
+}
+
+/// Check the position in a mark is valid.
+/// C equivalent of `mark_check`.
+///
+/// # Safety
+/// `fm` may be null. `errormsg` must be a valid pointer. `curbuf_handle` is the
+/// handle of the current buffer for comparing fnum.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_check(
+    fm: *const FmarkT,
+    errormsg: *mut *const c_char,
+    curbuf: BufHandle,
+) -> c_int {
+    if fm.is_null() {
+        *errormsg = nvim_mark_get_e_umark();
+        return 0;
+    }
+    let lnum = (*fm).mark.lnum;
+    if lnum <= 0 {
+        if lnum == 0 {
+            *errormsg = nvim_mark_get_e_marknotset();
+        }
+        return 0;
+    }
+    // Only check for valid line number if the buffer is loaded.
+    let curbuf_handle = nvim_buf_get_handle(curbuf);
+    if (*fm).fnum == curbuf_handle {
+        let e_markinval_str = nvim_mark_get_e_markinval();
+        if rs_mark_check_line_bounds(curbuf, lnum, errormsg, e_markinval_str) == 0 {
+            return 0;
+        }
+    }
+    1
 }
 
 // =============================================================================
