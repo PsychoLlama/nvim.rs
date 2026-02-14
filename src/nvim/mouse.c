@@ -179,6 +179,7 @@ extern void rs_do_mousescroll(cmdarg_T *cap);
 extern void rs_nv_mousescroll(cmdarg_T *cap);
 extern void rs_ins_mouse(int c);
 extern void rs_ins_mousescroll(int dir);
+extern int rs_jump_to_mouse(int flags, bool *inclusive, int which_button);
 
 /// Move the current tab to tab in same column as mouse or to end of the
 /// tabline if there is no tab there.
@@ -1221,6 +1222,13 @@ void reset_dragwin(void)
 /// @param inclusive  used for inclusive operator, can be NULL
 /// @param which_button  MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE
 int jump_to_mouse(int flags, bool *inclusive, int which_button)
+{
+  return rs_jump_to_mouse(flags, inclusive, which_button);
+}
+
+/// C accessor: the actual jump_to_mouse logic with all static state and
+/// deep access to curwin, VIsual, grid layout, fold/topline management.
+int nvim_jump_to_mouse_impl(int flags, bool *inclusive, int which_button)
 {
   static int status_line_offset = 0;        // #lines offset from status line
   static int sep_line_offset = 0;           // #cols offset from sep line

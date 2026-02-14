@@ -1271,6 +1271,31 @@ pub unsafe extern "C" fn rs_ins_mousescroll(dir: c_int) {
 }
 
 // =============================================================================
+// Phase 6 — jump_to_mouse
+// =============================================================================
+
+extern "C" {
+    /// C accessor: the actual `jump_to_mouse` logic with static state.
+    fn nvim_jump_to_mouse_impl(flags: c_int, inclusive: *mut bool, which_button: c_int) -> c_int;
+}
+
+/// Move the cursor to the specified row and column on the screen.
+///
+/// Change current window if necessary. Returns an integer with the
+/// `CURSOR_MOVED` bit set if the cursor has moved or unset otherwise.
+///
+/// # Safety
+/// `inclusive` may be null. Otherwise must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_jump_to_mouse(
+    flags: c_int,
+    inclusive: *mut bool,
+    which_button: c_int,
+) -> c_int {
+    nvim_jump_to_mouse_impl(flags, inclusive, which_button)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
