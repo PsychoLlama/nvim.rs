@@ -345,9 +345,6 @@ extern "C" {
     // Buffer file path accessors
     fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
 
-    // Undo file path helper
-    fn nvim_u_get_undo_file_name(ffname: *const c_char, reading: bool) -> *mut c_char;
-
     // File system operations
     fn nvim_os_path_exists(path: *const c_char) -> bool;
     fn nvim_os_remove(path: *const c_char) -> c_int;
@@ -662,6 +659,47 @@ extern "C" {
 
     /// get_undolevel accessor
     fn nvim_get_undolevel_value(buf: BufHandle) -> i64;
+
+    // ==========================================================================
+    // Phase 5: u_get_undo_file_name FFI helpers
+    // ==========================================================================
+
+    /// Resolve symlink, returns allocated copy
+    fn nvim_undo_resolve_symlink(ffname: *const c_char) -> *mut c_char;
+
+    /// Get p_udir option value
+    fn nvim_undo_get_p_udir() -> *const c_char;
+
+    /// copy_option_part wrapper
+    fn nvim_undo_copy_option_part(
+        dirp: *mut *const c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+    ) -> usize;
+
+    /// Check if path is a directory
+    fn nvim_undo_os_isdir(path: *const c_char) -> bool;
+
+    /// Create directory recursively
+    fn nvim_undo_mkdir_recurse(dir: *const c_char, failed_dir: *mut *mut c_char) -> c_int;
+
+    /// E5003 error message
+    fn nvim_undo_semsg_mkdir(failed_dir: *const c_char, err: c_int);
+
+    /// path_tail offset
+    fn nvim_undo_path_tail_offset(path: *const c_char) -> usize;
+
+    /// vim_ispathsep check
+    fn nvim_undo_vim_ispathsep(c: c_int) -> bool;
+
+    /// Multibyte pointer char length
+    fn nvim_undo_mb_ptr_len(ptr: *const c_char) -> c_int;
+
+    /// concat_fnames wrapper
+    fn nvim_undo_concat_fnames(dir: *const c_char, fname: *const c_char) -> *mut c_char;
+
+    /// Get MAXPATHL value
+    fn nvim_undo_get_maxpathl() -> usize;
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -3890,7 +3928,7 @@ pub unsafe extern "C" fn rs_u_write_undo(
     // Get the undo file name
     if name.is_null() {
         let ffname = nvim_buf_get_b_ffname(buf);
-        file_name = nvim_u_get_undo_file_name(ffname, false);
+        file_name = u_get_undo_file_name(ffname, false);
         if file_name.is_null() {
             if nvim_get_p_verbose() > 0 {
                 nvim_undo_verbose_enter();
@@ -4422,7 +4460,7 @@ pub unsafe extern "C" fn rs_u_read_undo(
     // Get the undo file name
     if name.is_null() {
         let ffname = nvim_buf_get_b_ffname(buf);
-        file_name = nvim_u_get_undo_file_name(ffname, true);
+        file_name = u_get_undo_file_name(ffname, true);
         if file_name.is_null() {
             return;
         }
@@ -4983,6 +5021,115 @@ pub unsafe extern "C" fn rs_u_eval_tree(buf: BufHandle, first_uhp: UHeaderHandle
     list
 }
 
+/// Get the name of the undo file for a buffer's file name.
+/// When reading, find the first file that exists.
+/// When writing, use the first directory that exists or ".".
+///
+/// Returns an allocated string or null.
+///
+/// # Safety
+///
+/// `buf_ffname` must be a valid C string or null.
+unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> *mut c_char {
+    if buf_ffname.is_null() {
+        return ptr::null_mut();
+    }
+
+    // Resolve symlink
+    let ffname = nvim_undo_resolve_symlink(buf_ffname);
+
+    let maxpathl = nvim_undo_get_maxpathl();
+    let mut dir_name = vec![0u8; maxpathl + 1];
+    let mut munged_name: *mut c_char = ptr::null_mut();
+    let mut undo_file_name: *mut c_char = ptr::null_mut();
+
+    // Loop over 'undodir'
+    let p_udir = nvim_undo_get_p_udir();
+    let mut dirp = p_udir;
+
+    while *dirp != 0 {
+        let dir_len =
+            nvim_undo_copy_option_part(&mut dirp, dir_name.as_mut_ptr() as *mut c_char, maxpathl);
+
+        if dir_len == 1 && dir_name[0] == b'.' {
+            // Use same directory as the ffname: "dir/name" -> "dir/.name.un~"
+            let ffname_len = libc::strlen(ffname);
+            undo_file_name = nvim_xmalloc(ffname_len + 6) as *mut c_char;
+            libc::memcpy(
+                undo_file_name as *mut c_void,
+                ffname as *const c_void,
+                ffname_len + 1,
+            );
+            let tail_off = nvim_undo_path_tail_offset(undo_file_name);
+            let tail = undo_file_name.add(tail_off);
+            let tail_len = libc::strlen(tail);
+            // Shift tail right by 1 to make room for '.'
+            libc::memmove(
+                tail.add(1) as *mut c_void,
+                tail as *const c_void,
+                tail_len + 1,
+            );
+            *tail = b'.' as c_char;
+            // Append ".un~"
+            libc::memcpy(
+                tail.add(tail_len + 1) as *mut c_void,
+                c".un~".as_ptr() as *const c_void,
+                5,
+            );
+        } else {
+            dir_name[dir_len] = 0;
+
+            // Remove trailing path separators
+            let mut p = dir_len;
+            while p > 0 && nvim_undo_vim_ispathsep(dir_name[p - 1] as c_int) {
+                p -= 1;
+                dir_name[p] = 0;
+            }
+
+            let mut has_directory = nvim_undo_os_isdir(dir_name.as_ptr() as *const c_char);
+            if !has_directory && *dirp == 0 && !reading {
+                // Last directory in the list does not exist, create it.
+                let mut failed_dir: *mut c_char = ptr::null_mut();
+                let ret =
+                    nvim_undo_mkdir_recurse(dir_name.as_ptr() as *const c_char, &mut failed_dir);
+                if ret != 0 {
+                    nvim_undo_semsg_mkdir(failed_dir, ret);
+                    nvim_xfree(failed_dir as *mut c_void);
+                } else {
+                    has_directory = true;
+                }
+            }
+            if has_directory {
+                if munged_name.is_null() {
+                    munged_name = nvim_undo_xstrdup(ffname);
+                    let mut c = munged_name;
+                    while *c != 0 {
+                        if nvim_undo_vim_ispathsep(*c as c_int) {
+                            *c = b'%' as c_char;
+                        }
+                        c = c.add(nvim_undo_mb_ptr_len(c) as usize);
+                    }
+                }
+                undo_file_name =
+                    nvim_undo_concat_fnames(dir_name.as_ptr() as *const c_char, munged_name);
+            }
+        }
+
+        // When reading check if the file exists.
+        if !undo_file_name.is_null() && (!reading || nvim_os_path_exists(undo_file_name)) {
+            break;
+        }
+        if !undo_file_name.is_null() {
+            nvim_xfree(undo_file_name as *mut c_void);
+            undo_file_name = ptr::null_mut();
+        }
+    }
+
+    nvim_xfree(munged_name as *mut c_void);
+    nvim_xfree(ffname as *mut c_void);
+    undo_file_name
+}
+
 /// undofile(name) - return the undo file path for a file name.
 ///
 /// This is a Rust implementation that returns the path string.
@@ -5009,7 +5156,7 @@ pub unsafe extern "C" fn rs_f_undofile(fname: *const c_char) -> *mut c_char {
     }
 
     // Get undo file name
-    let result = nvim_u_get_undo_file_name(ffname, false);
+    let result = u_get_undo_file_name(ffname, false);
     nvim_xfree(ffname as *mut c_void);
 
     result

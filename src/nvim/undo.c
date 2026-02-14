@@ -380,102 +380,6 @@ void u_compute_hash(buf_T *buf, uint8_t *hash)
   rs_u_compute_hash(buf, hash);
 }
 
-/// Return an allocated string of the full path of the target undofile.
-///
-/// @param[in]  buf_ffname  Full file name for which undo file location should
-///                         be found.
-/// @param[in]  reading  If true, find the file to read by traversing all of the
-///                      directories in &undodir. If false use the first
-///                      existing directory. If none of the directories in
-///                      &undodir option exist then last directory in the list
-///                      will be automatically created.
-///
-/// @return [allocated] File name to read from/write to or NULL.
-char *u_get_undo_file_name(const char *const buf_ffname, const bool reading)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  const char *ffname = buf_ffname;
-
-  if (ffname == NULL) {
-    return NULL;
-  }
-
-#ifdef HAVE_READLINK
-  char fname_buf[MAXPATHL];
-  // Expand symlink in the file name, so that we put the undo file with the
-  // actual file instead of with the symlink.
-  if (resolve_symlink(ffname, fname_buf) == OK) {
-    ffname = fname_buf;
-  }
-#endif
-
-  char dir_name[MAXPATHL + 1];
-  char *munged_name = NULL;
-  char *undo_file_name = NULL;
-
-  // Loop over 'undodir'.  When reading find the first file that exists.
-  // When not reading use the first directory that exists or ".".
-  char *dirp = p_udir;
-  while (*dirp != NUL) {
-    size_t dir_len = copy_option_part(&dirp, dir_name, MAXPATHL, ",");
-    if (dir_len == 1 && dir_name[0] == '.') {
-      // Use same directory as the ffname,
-      // "dir/name" -> "dir/.name.un~"
-      const size_t ffname_len = strlen(ffname);
-      undo_file_name = xmalloc(ffname_len + 6);
-      memmove(undo_file_name, ffname, ffname_len + 1);
-      char *const tail = path_tail(undo_file_name);
-      const size_t tail_len = strlen(tail);
-      memmove(tail + 1, tail, tail_len + 1);
-      *tail = '.';
-      memmove(tail + tail_len + 1, ".un~", sizeof(".un~"));
-    } else {
-      dir_name[dir_len] = NUL;
-
-      // Remove trailing pathseps from directory name
-      char *p = &dir_name[dir_len - 1];
-      while (vim_ispathsep(*p)) {
-        *p-- = NUL;
-      }
-
-      bool has_directory = os_isdir(dir_name);
-      if (!has_directory && *dirp == NUL && !reading) {
-        // Last directory in the list does not exist, create it.
-        int ret;
-        char *failed_dir;
-        if ((ret = os_mkdir_recurse(dir_name, 0755, &failed_dir, NULL)) != 0) {
-          semsg(_("E5003: Unable to create directory \"%s\" for undo file: %s"),
-                failed_dir, os_strerror(ret));
-          xfree(failed_dir);
-        } else {
-          has_directory = true;
-        }
-      }
-      if (has_directory) {
-        if (munged_name == NULL) {
-          munged_name = xstrdup(ffname);
-          for (char *c = munged_name; *c != NUL; MB_PTR_ADV(c)) {
-            if (vim_ispathsep(*c)) {
-              *c = '%';
-            }
-          }
-        }
-        undo_file_name = concat_fnames(dir_name, munged_name, true);
-      }
-    }
-
-    // When reading check if the file exists.
-    if (undo_file_name != NULL
-        && (!reading || os_path_exists(undo_file_name))) {
-      break;
-    }
-    XFREE_CLEAR(undo_file_name);
-  }
-
-  xfree(munged_name);
-  return undo_file_name;
-}
-
 static void u_free_uhp(u_header_T *uhp)
 {
   rs_u_free_uhp(uhp);
@@ -1572,12 +1476,6 @@ time_t nvim_undo_get8ctime(FILE *fp)
   return get8ctime(fp);
 }
 
-// Undo file path helper
-char *nvim_u_get_undo_file_name(const char *ffname, bool reading)
-{
-  return u_get_undo_file_name(ffname, reading);
-}
-
 // File system operations
 bool nvim_os_path_exists(const char *path)
 {
@@ -2420,6 +2318,85 @@ bool nvim_undo_end_ml_empty(buf_T *buf)
 int64_t nvim_get_undolevel_value(buf_T *buf)
 {
   return (int64_t)get_undolevel(buf);
+}
+
+// ============================================================================
+// Phase 5: u_get_undo_file_name FFI Helpers
+// ============================================================================
+
+// Resolve symlink if available, returning resolved path or original
+// Returns allocated copy
+char *nvim_undo_resolve_symlink(const char *ffname)
+{
+#ifdef HAVE_READLINK
+  char fname_buf[MAXPATHL];
+  if (resolve_symlink(ffname, fname_buf) == OK) {
+    return xstrdup(fname_buf);
+  }
+#endif
+  return xstrdup(ffname);
+}
+
+// Get p_udir option value
+const char *nvim_undo_get_p_udir(void)
+{
+  return p_udir;
+}
+
+// Wrapper for copy_option_part
+size_t nvim_undo_copy_option_part(const char **dirp, char *buf, size_t maxlen)
+{
+  return copy_option_part((char **)dirp, buf, maxlen, ",");
+}
+
+// Check if path is a directory
+bool nvim_undo_os_isdir(const char *path)
+{
+  return os_isdir(path);
+}
+
+// Create directory recursively. Returns 0 on success, error code on failure.
+// On failure, *failed_dir is set to the directory that failed.
+int nvim_undo_mkdir_recurse(const char *dir, char **failed_dir)
+{
+  return os_mkdir_recurse(dir, 0755, failed_dir, NULL);
+}
+
+// Format and emit E5003 error message
+void nvim_undo_semsg_mkdir(const char *failed_dir, int err)
+{
+  semsg(_("E5003: Unable to create directory \"%s\" for undo file: %s"),
+        failed_dir, os_strerror(err));
+}
+
+// Get path_tail for a string (returns offset into the string)
+size_t nvim_undo_path_tail_offset(const char *path)
+{
+  return (size_t)(path_tail(path) - path);
+}
+
+// Check vim_ispathsep
+bool nvim_undo_vim_ispathsep(int c)
+{
+  return vim_ispathsep(c);
+}
+
+// Multibyte pointer advance: returns number of bytes for the char at ptr
+int nvim_undo_mb_ptr_len(const char *ptr)
+{
+  return utfc_ptr2len(ptr);
+}
+
+// concat_fnames wrapper
+char *nvim_undo_concat_fnames(const char *dir, const char *fname)
+{
+  return concat_fnames(dir, fname, true);
+}
+
+// Get MAXPATHL value
+size_t nvim_undo_get_maxpathl(void)
+{
+  return MAXPATHL;
 }
 
 // ============================================================================
