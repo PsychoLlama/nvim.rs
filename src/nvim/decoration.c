@@ -119,6 +119,18 @@ extern void rs_decor_range_add_sh(void *state, int start_row, int start_col,
                                   bool owned, uint32_t ns, uint32_t mark_id,
                                   uint16_t subpriority);
 
+// Rust implementations for Phase 5
+extern void rs_decor_redraw(void *buf, int row1, int row2, int col1,
+                            bool ext, void *vt, uint32_t sh_idx,
+                            uint16_t hl_flags, uint16_t hl_priority,
+                            int hl_hl_id, uint32_t hl_conceal_char);
+extern void rs_buf_put_decor(void *buf, bool ext, void *vt, uint32_t sh_idx, int row, int row2);
+extern void rs_buf_decor_remove(void *buf, int row1, int row2, int col1,
+                                bool ext, void *vt, uint32_t sh_idx,
+                                uint16_t hl_flags, uint16_t hl_priority,
+                                int hl_hl_id, uint32_t hl_conceal_char,
+                                bool do_free);
+
 /// Add highlighting to a buffer, bounded by two cursor positions,
 /// with an offset.
 ///
@@ -172,29 +184,9 @@ void bufhl_add_hl_pos_offset(buf_T *buf, int src_id, int hl_id, lpos_T pos_start
 
 void decor_redraw(buf_T *buf, int row1, int row2, int col1, DecorInline decor)
 {
-  if (decor.ext) {
-    DecorVirtText *vt = decor.data.ext.vt;
-    while (vt) {
-      bool below = rs_vt_is_lines(vt->flags) && !rs_vt_is_lines_above(vt->flags);
-      linenr_T vt_lnum = row1 + 1 + below;
-      redraw_buf_line_later(buf, vt_lnum, true);
-      if (rs_vt_is_lines(vt->flags) || vt->pos == kVPosInline) {
-        // changed_lines_redraw_buf(buf, vt_lnum, vt_lnum + 1, 0);
-        colnr_T vt_col = rs_vt_is_lines(vt->flags) ? 0 : col1;
-        changed_lines_invalidate_buf(buf, vt_lnum, vt_col, vt_lnum + 1, 0);
-      }
-      vt = vt->next;
-    }
-
-    uint32_t idx = decor.data.ext.sh_idx;
-    while (idx != DECOR_ID_INVALID) {
-      DecorSignHighlight *sh = &kv_A(decor_items, idx);
-      decor_redraw_sh(buf, row1, row2, *sh);
-      idx = sh->next;
-    }
-  } else {
-    decor_redraw_sh(buf, row1, row2, decor_sh_from_inline(decor.data.hl));
-  }
+  rs_decor_redraw(buf, row1, row2, col1, decor.ext, decor.data.ext.vt, decor.data.ext.sh_idx,
+                  decor.data.hl.flags, decor.data.hl.priority,
+                  decor.data.hl.hl_id, decor.data.hl.conceal_char);
 }
 
 void decor_redraw_sh(buf_T *buf, int row1, int row2, DecorSignHighlight sh)
@@ -239,15 +231,7 @@ DecorSignHighlight decor_sh_from_inline(DecorHighlightInline item)
 
 void buf_put_decor(buf_T *buf, DecorInline decor, int row, int row2)
 {
-  if (decor.ext && row < buf->b_ml.ml_line_count) {
-    uint32_t idx = decor.data.ext.sh_idx;
-    row2 = MIN(buf->b_ml.ml_line_count - 1, row2);
-    while (idx != DECOR_ID_INVALID) {
-      DecorSignHighlight *sh = &kv_A(decor_items, idx);
-      buf_put_decor_sh(buf, sh, row, row2);
-      idx = sh->next;
-    }
-  }
+  rs_buf_put_decor(buf, decor.ext, decor.data.ext.vt, decor.data.ext.sh_idx, row, row2);
 }
 
 /// When displaying signs in the 'number' column, if the width of the number
@@ -279,19 +263,9 @@ void buf_put_decor_sh(buf_T *buf, DecorSignHighlight *sh, int row1, int row2)
 
 void buf_decor_remove(buf_T *buf, int row1, int row2, int col1, DecorInline decor, bool free)
 {
-  decor_redraw(buf, row1, row2, col1, decor);
-  if (decor.ext && row1 < buf->b_ml.ml_line_count) {
-    uint32_t idx = decor.data.ext.sh_idx;
-    row2 = MIN(buf->b_ml.ml_line_count - 1, row2);
-    while (idx != DECOR_ID_INVALID) {
-      DecorSignHighlight *sh = &kv_A(decor_items, idx);
-      buf_remove_decor_sh(buf, row1, row2, sh);
-      idx = sh->next;
-    }
-  }
-  if (free) {
-    decor_free(decor);
-  }
+  rs_buf_decor_remove(buf, row1, row2, col1, decor.ext, decor.data.ext.vt, decor.data.ext.sh_idx,
+                      decor.data.hl.flags, decor.data.hl.priority,
+                      decor.data.hl.hl_id, decor.data.hl.conceal_char, free);
 }
 
 void buf_remove_decor_sh(buf_T *buf, int row1, int row2, DecorSignHighlight *sh)
@@ -1702,6 +1676,75 @@ void nvim_decor_range_add_from_inline_hl(void *state, int start_row, int start_c
   };
   DecorSignHighlight sh = decor_sh_from_inline(hl);
   rs_decor_range_add_sh(state, start_row, start_col, end_row, end_col, &sh, owned, ns, mark_id, 0);
+}
+
+// ============================================================================
+// Phase 5: Redraw Dispatch and Buffer Operations helpers
+// ============================================================================
+
+/// Wrapper for redraw_buf_line_later for Rust FFI.
+void nvim_redraw_buf_line_later(void *buf_ptr, int lnum, bool redraw)
+{
+  redraw_buf_line_later((buf_T *)buf_ptr, lnum, redraw);
+}
+
+/// Wrapper for changed_lines_invalidate_buf for Rust FFI.
+void nvim_changed_lines_invalidate_buf(void *buf_ptr, int lnum1, int col1, int lnum2, int xtra)
+{
+  changed_lines_invalidate_buf((buf_T *)buf_ptr, lnum1, col1, lnum2, xtra);
+}
+
+/// Wrapper for redraw_buf_range_later for Rust FFI.
+void nvim_redraw_buf_range_later(void *buf_ptr, int first, int last)
+{
+  redraw_buf_range_later((buf_T *)buf_ptr, first, last);
+}
+
+/// Get buf->b_ml.ml_line_count.
+int nvim_decor_buf_get_line_count(void *buf_ptr)
+{
+  buf_T *buf = (buf_T *)buf_ptr;
+  return buf->b_ml.ml_line_count;
+}
+
+/// Get VirtTextPos from a DecorVirtText pointer.
+int nvim_decor_vt_ptr_get_pos(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->pos;
+}
+
+/// Call decor_redraw_sh with decor_items[idx].
+void nvim_decor_redraw_sh_by_idx(void *buf_ptr, int row1, int row2, uint32_t idx)
+{
+  DecorSignHighlight sh = kv_A(decor_items, idx);
+  decor_redraw_sh((buf_T *)buf_ptr, row1, row2, sh);
+}
+
+/// Call decor_redraw_sh with inline highlight data.
+void nvim_decor_redraw_sh_inline(void *buf_ptr, int row1, int row2,
+                                 uint16_t hl_flags, uint16_t hl_priority,
+                                 int hl_hl_id, uint32_t hl_conceal_char)
+{
+  DecorHighlightInline hl = {
+    .flags = hl_flags,
+    .priority = hl_priority,
+    .hl_id = hl_hl_id,
+    .conceal_char = hl_conceal_char,
+  };
+  decor_redraw_sh((buf_T *)buf_ptr, row1, row2, decor_sh_from_inline(hl));
+}
+
+/// Call buf_put_decor_sh with decor_items[idx].
+void nvim_buf_put_decor_sh_by_idx(void *buf_ptr, uint32_t idx, int row1, int row2)
+{
+  buf_put_decor_sh((buf_T *)buf_ptr, &kv_A(decor_items, idx), row1, row2);
+}
+
+/// Call buf_remove_decor_sh with decor_items[idx].
+void nvim_buf_remove_decor_sh_by_idx(void *buf_ptr, int row1, int row2, uint32_t idx)
+{
+  buf_remove_decor_sh((buf_T *)buf_ptr, row1, row2, &kv_A(decor_items, idx));
 }
 
 /// Get the row from decor_state.

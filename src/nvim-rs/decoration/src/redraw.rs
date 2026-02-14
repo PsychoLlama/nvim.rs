@@ -5,9 +5,11 @@
 
 use std::ffi::{c_int, c_void};
 
+use crate::decor::DECOR_ID_INVALID;
+use crate::range::DecorVtHandle;
 use crate::{
     DecorKind, DecorRangeHandle, DecorStateHandle, VirtTextPos, WinHandle, DRAW_COL_JUST_ADDED,
-    DRAW_COL_UNSET,
+    DRAW_COL_UNSET, KVT_IS_LINES, KVT_LINES_ABOVE,
 };
 
 /// Opaque handle to buf_T.
@@ -71,6 +73,34 @@ extern "C" {
 
     // C functions for decor operations
     fn decor_redraw_start(wp: WinHandle, top_row: c_int, state: DecorStateHandle) -> bool;
+
+    // Phase 5: Redraw Dispatch accessors
+    fn nvim_redraw_buf_line_later(buf: BufHandle, lnum: c_int, redraw: bool);
+    fn nvim_changed_lines_invalidate_buf(
+        buf: BufHandle,
+        lnum1: c_int,
+        col1: c_int,
+        lnum2: c_int,
+        xtra: c_int,
+    );
+    fn nvim_redraw_buf_range_later(buf: BufHandle, first: c_int, last: c_int);
+    fn nvim_decor_buf_get_line_count(buf: BufHandle) -> c_int;
+    fn nvim_decor_vt_ptr_get_pos(vt: DecorVtHandle) -> c_int;
+    fn nvim_decor_vt_ptr_get_flags(vt: DecorVtHandle) -> u8;
+    fn nvim_decor_vt_ptr_get_next(vt: DecorVtHandle) -> DecorVtHandle;
+    fn nvim_decor_redraw_sh_by_idx(buf: BufHandle, row1: c_int, row2: c_int, idx: u32);
+    fn nvim_decor_redraw_sh_inline(
+        buf: BufHandle,
+        row1: c_int,
+        row2: c_int,
+        hl_flags: u16,
+        hl_priority: u16,
+        hl_hl_id: c_int,
+        hl_conceal_char: u32,
+    );
+    fn nvim_decor_items_get_next(idx: u32) -> u32;
+    fn nvim_buf_put_decor_sh_by_idx(buf: BufHandle, idx: u32, row1: c_int, row2: c_int);
+    fn nvim_buf_remove_decor_sh_by_idx(buf: BufHandle, row1: c_int, row2: c_int, idx: u32);
 }
 
 // =============================================================================
@@ -313,6 +343,172 @@ pub extern "C" fn rs_decor_has_more_decorations(state: DecorStateHandle, row: c_
         let itr_row = nvim_decor_state_itr_current_row(state);
         itr_row >= 0 && itr_row <= row
     }
+}
+
+// =============================================================================
+// Phase 5: Redraw Dispatch and Buffer Operations
+// =============================================================================
+
+/// Trigger redraw for a decoration.
+///
+/// For ext decorations: walks vt linked list (triggering line redraw for each),
+/// then walks sh linked list (triggering range redraw).
+/// For inline decorations: converts to sh and triggers range redraw.
+///
+/// Rust implementation of `decor_redraw()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_redraw(
+    buf: BufHandle,
+    row1: c_int,
+    row2: c_int,
+    col1: c_int,
+    ext: bool,
+    vt: DecorVtHandle,
+    sh_idx: u32,
+    hl_flags: u16,
+    hl_priority: u16,
+    hl_hl_id: c_int,
+    hl_conceal_char: u32,
+) {
+    if ext {
+        // Walk virtual text linked list
+        let mut cur_vt = vt;
+        while !cur_vt.is_null() {
+            let flags = nvim_decor_vt_ptr_get_flags(cur_vt);
+            let is_lines = flags & KVT_IS_LINES != 0;
+            let is_lines_above = flags & KVT_LINES_ABOVE != 0;
+            let below = is_lines && !is_lines_above;
+            let vt_lnum = row1 + 1 + c_int::from(below);
+            nvim_redraw_buf_line_later(buf, vt_lnum, true);
+
+            let pos = nvim_decor_vt_ptr_get_pos(cur_vt);
+            if is_lines || pos == VirtTextPos::Inline as c_int {
+                let vt_col = if is_lines { 0 } else { col1 };
+                nvim_changed_lines_invalidate_buf(buf, vt_lnum, vt_col, vt_lnum + 1, 0);
+            }
+            cur_vt = nvim_decor_vt_ptr_get_next(cur_vt);
+        }
+
+        // Walk sign/highlight linked list
+        let mut idx = sh_idx;
+        while idx != DECOR_ID_INVALID {
+            let next = nvim_decor_items_get_next(idx);
+            nvim_decor_redraw_sh_by_idx(buf, row1, row2, idx);
+            idx = next;
+        }
+    } else {
+        // Inline highlight
+        nvim_decor_redraw_sh_inline(
+            buf,
+            row1,
+            row2,
+            hl_flags,
+            hl_priority,
+            hl_hl_id,
+            hl_conceal_char,
+        );
+    }
+}
+
+/// Add decoration tracking to a buffer.
+///
+/// For ext decorations with signs, walks the sh linked list and calls
+/// buf_put_decor_sh for each.
+///
+/// Rust implementation of `buf_put_decor()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_put_decor(
+    buf: BufHandle,
+    ext: bool,
+    _vt: DecorVtHandle,
+    sh_idx: u32,
+    row: c_int,
+    row2: c_int,
+) {
+    if !ext {
+        return;
+    }
+    let line_count = nvim_decor_buf_get_line_count(buf);
+    if row >= line_count {
+        return;
+    }
+    let clamped_row2 = if row2 < line_count - 1 {
+        row2
+    } else {
+        line_count - 1
+    };
+
+    let mut idx = sh_idx;
+    while idx != DECOR_ID_INVALID {
+        let next = nvim_decor_items_get_next(idx);
+        nvim_buf_put_decor_sh_by_idx(buf, idx, row, clamped_row2);
+        idx = next;
+    }
+}
+
+/// Remove decoration from a buffer.
+///
+/// Triggers redraw, then for ext decorations walks sh linked list to remove
+/// sign tracking. Optionally frees the decoration.
+///
+/// Rust implementation of `buf_decor_remove()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_decor_remove(
+    buf: BufHandle,
+    row1: c_int,
+    row2: c_int,
+    col1: c_int,
+    ext: bool,
+    vt: DecorVtHandle,
+    sh_idx: u32,
+    hl_flags: u16,
+    hl_priority: u16,
+    hl_hl_id: c_int,
+    hl_conceal_char: u32,
+    do_free: bool,
+) {
+    // First trigger redraw
+    rs_decor_redraw(
+        buf,
+        row1,
+        row2,
+        col1,
+        ext,
+        vt,
+        sh_idx,
+        hl_flags,
+        hl_priority,
+        hl_hl_id,
+        hl_conceal_char,
+    );
+
+    // Remove sign tracking
+    if ext {
+        let line_count = nvim_decor_buf_get_line_count(buf);
+        if row1 < line_count {
+            let clamped_row2 = if row2 < line_count - 1 {
+                row2
+            } else {
+                line_count - 1
+            };
+            let mut idx = sh_idx;
+            while idx != DECOR_ID_INVALID {
+                let next = nvim_decor_items_get_next(idx);
+                nvim_buf_remove_decor_sh_by_idx(buf, row1, clamped_row2, idx);
+                idx = next;
+            }
+        }
+    }
+
+    // Optionally free
+    if do_free && ext {
+        // Call rs_decor_free which is already implemented
+        rs_decor_free(1, vt, sh_idx);
+    }
+}
+
+extern "C" {
+    fn rs_decor_free(ext: c_int, vt: DecorVtHandle, sh_idx: u32);
 }
 
 /// Calculate EOL virtual text widths for the current row.
