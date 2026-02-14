@@ -134,6 +134,9 @@ extern void rs_buf_decor_remove(void *buf, int row1, int row2, int col1,
 // Rust implementations for Phase 6
 extern int rs_decor_redraw_col_impl(void *wp, int col, int win_col, bool hidden, void *state);
 
+// Rust implementations for Phase 7
+extern void *rs_decor_find_sign(bool ext, uint32_t sh_idx);
+
 /// Add highlighting to a buffer, bounded by two cursor positions,
 /// with an offset.
 ///
@@ -699,20 +702,7 @@ void decor_redraw_signs(win_T *wp, buf_T *buf, int row, SignTextAttrs sattrs[], 
 
 DecorSignHighlight *decor_find_sign(DecorInline decor)
 {
-  if (!decor.ext) {
-    return NULL;
-  }
-  uint32_t decor_id = decor.data.ext.sh_idx;
-  while (true) {
-    if (decor_id == DECOR_ID_INVALID) {
-      return NULL;
-    }
-    DecorSignHighlight *sh = &kv_A(decor_items, decor_id);
-    if (sh->flags & kSHIsSign) {
-      return sh;
-    }
-    decor_id = sh->next;
-  }
+  return rs_decor_find_sign(decor.ext, decor.data.ext.sh_idx);
 }
 
 static const uint32_t signtext_filter[kMTMetaCount] = {[kMTMetaSignText] = kMTFilterSelect };
@@ -1127,6 +1117,12 @@ uint32_t nvim_decor_items_push(DecorSignHighlight item)
 
 /// Get pointer to decor_items[idx].
 DecorSignHighlight *nvim_decor_items_get(uint32_t idx)
+{
+  return &kv_A(decor_items, idx);
+}
+
+/// Get opaque pointer to decor_items[idx] (for FFI).
+void *nvim_decor_items_get_ptr(uint32_t idx)
 {
   return &kv_A(decor_items, idx);
 }

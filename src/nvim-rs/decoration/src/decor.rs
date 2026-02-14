@@ -1133,6 +1133,40 @@ pub extern "C" fn rs_decor_check_to_be_deleted() {
 }
 
 // =============================================================================
+// Phase 7: Marktree Scanning Functions
+// =============================================================================
+
+/// Find the first sign decoration in a linked list.
+///
+/// Walks the decor_items linked list starting from `sh_idx`, returning
+/// a pointer to the first DecorSignHighlight with the kSHIsSign flag.
+///
+/// Rust implementation of `decor_find_sign()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_find_sign(ext: bool, sh_idx: u32) -> *mut c_void {
+    if !ext {
+        return std::ptr::null_mut();
+    }
+    let mut decor_id = sh_idx;
+    loop {
+        if decor_id == DECOR_ID_INVALID {
+            return std::ptr::null_mut();
+        }
+        let flags = nvim_decor_items_get_flags(decor_id);
+        if flags & KSH_IS_SIGN != 0 {
+            // Return pointer to the item in decor_items
+            return nvim_decor_items_get_ptr(decor_id);
+        }
+        decor_id = nvim_decor_items_get_next(decor_id);
+    }
+}
+
+extern "C" {
+    /// Get a raw pointer to decor_items[idx] (returns DecorSignHighlight*).
+    fn nvim_decor_items_get_ptr(idx: u32) -> *mut c_void;
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
