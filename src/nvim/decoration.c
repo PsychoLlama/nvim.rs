@@ -1837,3 +1837,9 @@ int nvim_decor_sh_get_sign_add_id(DecorSignHighlight *sh)
 {
   return sh ? sh->sign_add_id : 0;
 }
+
+/// Get type flags for decoration data (for Rust extmark FFI).
+uint16_t nvim_decor_type_flags(DecorInlineData data, bool ext)
+{
+  return decor_type_flags((DecorInline){ .ext = ext, .data = data });
+}

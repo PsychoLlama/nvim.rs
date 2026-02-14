@@ -32,7 +32,8 @@ use std::ffi::{c_int, c_void};
 // Re-exports from dependencies for convenience
 pub use nvim_buffer::BufHandle;
 pub use nvim_marktree::{
-    flags::*, marktree_itr_valid, DecorInlineData, MTKey, MTPos, MarkTreeHandle, MarkTreeIterHandle,
+    flags::*, marktree_itr_valid, DecorInlineData, MTKey, MTPair, MTPos, MarkTreeHandle,
+    MarkTreeIterHandle,
 };
 
 // ============================================================================
@@ -163,26 +164,14 @@ impl UndoHeaderHandle {
     }
 }
 
+/// Opaque handle to an ExtmarkInfoArray (kvec_t(MTPair)).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExtmarkInfoArrayHandle(*mut c_void);
+
 // ============================================================================
 // Data Structures (for FFI boundary)
 // ============================================================================
-
-/// Mark pair (start and end keys).
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct MTPair {
-    pub start: MTKey,
-    pub end: MTKey,
-}
-
-impl MTPair {
-    /// Create a pair from two keys.
-    #[inline]
-    #[must_use]
-    pub const fn from_keys(start: MTKey, end: MTKey) -> Self {
-        Self { start, end }
-    }
-}
 
 /// Splice operation data for undo.
 #[repr(C)]
@@ -333,6 +322,29 @@ extern "C" {
     /// Get position of alternate end.
     fn nvim_marktree_get_altpos(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTPos;
 
+    /// Initialize overlap iteration at (row, col).
+    fn nvim_marktree_itr_get_overlap(
+        b: MarkTreeHandle,
+        row: c_int,
+        col: c_int,
+        itr: MarkTreeIterHandle,
+    ) -> bool;
+
+    /// Step overlap iteration, writing the next overlapping pair.
+    fn nvim_marktree_itr_step_overlap(
+        b: MarkTreeHandle,
+        itr: MarkTreeIterHandle,
+        pair: *mut MTPair,
+    ) -> bool;
+
+    /// Initialize iterator at position with simple params (no gravity, no filter).
+    fn nvim_marktree_itr_get_ext_simple(
+        b: MarkTreeHandle,
+        row: c_int,
+        col: c_int,
+        itr: MarkTreeIterHandle,
+    );
+
     /// Clear all marks from tree.
     fn nvim_marktree_clear(b: MarkTreeHandle);
 
@@ -439,6 +451,19 @@ extern "C" {
 
     /// Invalidate decoration state.
     fn nvim_decor_state_invalidate(buf: BufHandle);
+
+    /// Get type flags for decoration data.
+    fn nvim_decor_type_flags(data: DecorInlineData, ext: bool) -> u16;
+
+    // ========================================================================
+    // ExtmarkInfoArray operations
+    // ========================================================================
+
+    /// Get the size of an ExtmarkInfoArray.
+    fn nvim_extmark_array_size(array: ExtmarkInfoArrayHandle) -> i64;
+
+    /// Push an MTPair onto an ExtmarkInfoArray.
+    fn nvim_extmark_array_push(array: ExtmarkInfoArrayHandle, pair: MTPair);
 
     // ========================================================================
     // Buffer updates
@@ -889,6 +914,84 @@ pub fn extmark_clear(
     }
 
     marks_cleared_any
+}
+
+/// Filter and push a mark pair into the result array.
+///
+/// Filters by namespace and type before pushing.
+fn push_mark(array: ExtmarkInfoArrayHandle, ns_id: u32, type_filter: c_int, mark: MTPair) {
+    // Filter by namespace: UINT32_MAX means all namespaces
+    if !(ns_id == u32::MAX || mark.start.ns == ns_id) {
+        return;
+    }
+
+    // Filter by type
+    let k_extmark_none: c_int = 0x1;
+    if type_filter != k_extmark_none {
+        if !mt_decor_any(mark.start) {
+            return;
+        }
+        let (decor_data, ext) = mt_decor(mark.start);
+        let type_flags = unsafe { nvim_decor_type_flags(decor_data, ext) };
+        if c_int::from(type_flags) & type_filter == 0 {
+            return;
+        }
+    }
+
+    unsafe { nvim_extmark_array_push(array, mark) };
+}
+
+/// Get extmarks in a range, populating the given array.
+///
+/// Implements the overlap and regular iteration paths, filtering by namespace
+/// and decoration type.
+#[no_mangle]
+pub extern "C" fn rs_extmark_get(
+    buf: BufHandle,
+    ns_id: u32,
+    l_row: c_int,
+    l_col: ColnrT,
+    u_row: c_int,
+    u_col: ColnrT,
+    amount: i64,
+    type_filter: c_int,
+    overlap: bool,
+    array: ExtmarkInfoArrayHandle,
+) {
+    let tree = unsafe { nvim_buf_get_marktree(buf) };
+    let itr = unsafe { nvim_marktree_itr_alloc() };
+
+    if overlap {
+        // Find all marks overlapping the start position
+        if !unsafe { nvim_marktree_itr_get_overlap(tree, l_row, l_col, itr) } {
+            unsafe { nvim_marktree_itr_free(itr) };
+            return;
+        }
+
+        let mut pair = MTPair::zero();
+        while unsafe { nvim_marktree_itr_step_overlap(tree, itr, &raw mut pair) } {
+            push_mark(array, ns_id, type_filter, pair);
+        }
+    } else {
+        // Find all marks beginning at the start position
+        unsafe { nvim_marktree_itr_get_ext_simple(tree, l_row, l_col, itr) };
+    }
+
+    while unsafe { nvim_extmark_array_size(array) } < amount {
+        let mark = unsafe { nvim_marktree_itr_current(itr) };
+        if mark.pos.row < 0
+            || (mark.pos.row > u_row || (mark.pos.row == u_row && mark.pos.col > u_col))
+        {
+            break;
+        }
+        if !mt_end(mark) {
+            let end = unsafe { nvim_marktree_get_alt(tree, mark, MarkTreeIterHandle::null()) };
+            push_mark(array, ns_id, type_filter, MTPair::from_keys(mark, end));
+        }
+        unsafe { nvim_marktree_itr_next(tree, itr) };
+    }
+
+    unsafe { nvim_marktree_itr_free(itr) };
 }
 
 /// Lookup an extmark by ID and return the mark pair.
@@ -1720,7 +1823,7 @@ mod tests {
         };
         let pair = MTPair::from_keys(start, end);
         assert_eq!(pair.start.pos.row, 1);
-        assert_eq!(pair.end.pos.row, 5);
+        assert_eq!(pair.end_pos.row, 5);
     }
 
     #[test]
@@ -1775,16 +1878,16 @@ impl ExtmarkInfo {
         }
     }
 
-    /// Create from a mark pair.
+    /// Create from a start key and end position.
     #[must_use]
-    pub fn from_pair(start: MTKey, end: MTKey) -> Self {
+    pub fn from_pair_pos(start: MTKey, end_pos: MTPos) -> Self {
         Self {
             ns_id: start.ns,
             mark_id: start.id,
             row: start.pos.row,
             col: start.pos.col,
-            end_row: if end.pos.row >= 0 { end.pos.row } else { -1 },
-            end_col: end.pos.col,
+            end_row: if end_pos.row >= 0 { end_pos.row } else { -1 },
+            end_col: end_pos.col,
             flags: start.flags,
             decor_data: start.decor_data,
         }
@@ -1800,8 +1903,8 @@ pub extern "C" fn rs_extmark_get_by_id(buf: BufHandle, ns_id: u32, id: u32) -> E
 
     if pair.start.id == 0 {
         ExtmarkInfo::default()
-    } else if pair.end.pos.row >= 0 {
-        ExtmarkInfo::from_pair(pair.start, pair.end)
+    } else if pair.end_pos.row >= 0 {
+        ExtmarkInfo::from_pair_pos(pair.start, pair.end_pos)
     } else {
         ExtmarkInfo::from_key(pair.start)
     }

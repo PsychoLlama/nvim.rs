@@ -93,6 +93,9 @@ extern void rs_extmark_set(buf_T *buf, uint32_t ns_id, uint32_t *idp, int row, c
                            int end_row, colnr_T end_col, DecorInline decor, uint16_t decor_flags,
                            bool right_gravity, bool end_right_gravity, bool no_undo,
                            bool invalidate, Error *err);
+extern void rs_extmark_get(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_col,
+                            int u_row, colnr_T u_col, int64_t amount, ExtmarkType type_filter,
+                            bool overlap, ExtmarkInfoArray *array);
 
 /// Create or update an extmark
 ///
@@ -137,55 +140,8 @@ ExtmarkInfoArray extmark_get(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_co
                              colnr_T u_col, int64_t amount, ExtmarkType type_filter, bool overlap)
 {
   ExtmarkInfoArray array = KV_INITIAL_VALUE;
-  MarkTreeIter itr[1];
-
-  if (overlap) {
-    // Find all the marks overlapping the start position
-    if (!marktree_itr_get_overlap(buf->b_marktree, l_row, l_col, itr)) {
-      return array;
-    }
-
-    MTPair pair;
-    while (marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
-      push_mark(&array, ns_id, type_filter, pair);
-    }
-  } else {
-    // Find all the marks beginning with the start position
-    marktree_itr_get_ext(buf->b_marktree, MTPos(l_row, l_col),
-                         itr, false, false, NULL, NULL);
-  }
-
-  while ((int64_t)kv_size(array) < amount) {
-    MTKey mark = marktree_itr_current(itr);
-    if (rs_row_invalid(mark.pos.row) || rs_pos_after(mark.pos.row, mark.pos.col, u_row, u_col)) {
-      break;
-    }
-    if (!rs_flags_end(mark.flags)) {
-      MTKey end = marktree_get_alt(buf->b_marktree, mark, NULL);
-      push_mark(&array, ns_id, type_filter, mtpair_from(mark, end));
-    }
-    marktree_itr_next(buf->b_marktree, itr);
-  }
+  rs_extmark_get(buf, ns_id, l_row, l_col, u_row, u_col, amount, type_filter, overlap, &array);
   return array;
-}
-
-static void push_mark(ExtmarkInfoArray *array, uint32_t ns_id, ExtmarkType type_filter, MTPair mark)
-{
-  if (!(ns_id == UINT32_MAX || mark.start.ns == ns_id)) {
-    return;
-  }
-  if (type_filter != kExtmarkNone) {
-    if (!rs_flags_decor_any(mark.start.flags)) {
-      return;
-    }
-    uint16_t type_flags = decor_type_flags(mt_decor(mark.start));
-
-    if (!(type_flags & type_filter)) {
-      return;
-    }
-  }
-
-  kv_push(*array, mark);
 }
 
 /// Lookup an extmark by id
@@ -334,6 +290,24 @@ ExtmarkUndoObject *nvim_extmark_undo_vec_last(extmark_undo_vec_t *uvp)
 bool nvim_extmark_del_id(buf_T *buf, uint32_t ns_id, uint32_t id)
 {
   return extmark_del_id(buf, ns_id, id);
+}
+
+// ============================================================================
+// ExtmarkInfoArray Accessor Functions (for Rust FFI)
+// ============================================================================
+
+/// Get the size of an ExtmarkInfoArray.
+int64_t nvim_extmark_array_size(ExtmarkInfoArray *array)
+{
+  return array ? (int64_t)kv_size(*array) : 0;
+}
+
+/// Push an MTPair onto an ExtmarkInfoArray.
+void nvim_extmark_array_push(ExtmarkInfoArray *array, MTPair pair)
+{
+  if (array) {
+    kv_push(*array, pair);
+  }
 }
 
 // ============================================================================

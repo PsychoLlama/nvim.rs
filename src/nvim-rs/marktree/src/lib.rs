@@ -172,6 +172,19 @@ impl Default for MTKey {
 }
 
 impl MTKey {
+    /// Create a zero-initialized key.
+    #[inline]
+    #[must_use]
+    pub const fn zero() -> Self {
+        Self {
+            pos: MTPos::new(0, 0),
+            ns: 0,
+            id: 0,
+            flags: 0,
+            decor_data: DecorInlineData::zero(),
+        }
+    }
+
     /// Create an invalid key sentinel.
     #[inline]
     #[must_use]
@@ -1843,6 +1856,17 @@ pub struct MTPair {
 }
 
 impl MTPair {
+    /// Create a zero-initialized pair.
+    #[inline]
+    #[must_use]
+    pub const fn zero() -> Self {
+        Self {
+            start: MTKey::zero(),
+            end_pos: MTPos::new(0, 0),
+            end_right_gravity: false,
+        }
+    }
+
     /// Create a pair from start and end keys.
     #[inline]
     #[must_use]

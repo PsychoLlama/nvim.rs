@@ -2927,6 +2927,28 @@ void nvim_mtitr_set_intersect_idx(MarkTreeIter *itr, size_t idx)
 }
 
 // ============================================================================
+// Overlap Iteration Wrapper Functions (for Rust extmark FFI)
+// ============================================================================
+
+/// Initialize overlap iteration at (row, col).
+bool nvim_marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeIter *itr)
+{
+  return marktree_itr_get_overlap(b, row, col, itr);
+}
+
+/// Step overlap iteration, writing the next overlapping pair to *pair.
+bool nvim_marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair)
+{
+  return marktree_itr_step_overlap(b, itr, pair);
+}
+
+/// Initialize iterator at position with simple params (no gravity, no filter).
+void nvim_marktree_itr_get_ext_simple(MarkTree *b, int row, int col, MarkTreeIter *itr)
+{
+  marktree_itr_get_ext(b, MTPos(row, col), itr, false, false, NULL, NULL);
+}
+
+// ============================================================================
 // Node Intersection Accessor Functions (for Rust FFI)
 // ============================================================================
 
