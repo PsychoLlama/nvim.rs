@@ -456,166 +456,19 @@ void hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short
   rs_hlattrs2dict(hl, hl_attrs, ae, use_rgb, short_keys);
 }
 
+extern HlAttrs rs_dict2hlattrs(Dict dict, bool use_rgb, int *link_id, Error *err);
+
+// Generated table for Dict(highlight) fields
+extern KeySetLink highlight_table[];
+
 HlAttrs dict2hlattrs(Dict(highlight) *dict, bool use_rgb, int *link_id, Error *err)
 {
-#define HAS_KEY_X(d, key) HAS_KEY(d, highlight, key)
-  HlAttrs hlattrs = HLATTRS_INIT;
-  int32_t fg = -1;
-  int32_t bg = -1;
-  int32_t ctermfg = -1;
-  int32_t ctermbg = -1;
-  int32_t sp = -1;
-  int blend = -1;
-  int16_t mask = 0;
-  int16_t cterm_mask = 0;
-  bool cterm_mask_provided = false;
-
-#define CHECK_FLAG(d, m, name, extra, flag) \
-  if (d->name##extra) { \
-    if (flag & HL_UNDERLINE_MASK) { \
-      m &= ~HL_UNDERLINE_MASK; \
-    } \
-    m |= flag; \
-  }
-
-  CHECK_FLAG(dict, mask, reverse, , HL_INVERSE);
-  CHECK_FLAG(dict, mask, bold, , HL_BOLD);
-  CHECK_FLAG(dict, mask, italic, , HL_ITALIC);
-  CHECK_FLAG(dict, mask, underline, , HL_UNDERLINE);
-  CHECK_FLAG(dict, mask, undercurl, , HL_UNDERCURL);
-  CHECK_FLAG(dict, mask, underdouble, , HL_UNDERDOUBLE);
-  CHECK_FLAG(dict, mask, underdotted, , HL_UNDERDOTTED);
-  CHECK_FLAG(dict, mask, underdashed, , HL_UNDERDASHED);
-  CHECK_FLAG(dict, mask, standout, , HL_STANDOUT);
-  CHECK_FLAG(dict, mask, strikethrough, , HL_STRIKETHROUGH);
-  CHECK_FLAG(dict, mask, altfont, , HL_ALTFONT);
-  if (use_rgb) {
-    CHECK_FLAG(dict, mask, fg_indexed, , HL_FG_INDEXED);
-    CHECK_FLAG(dict, mask, bg_indexed, , HL_BG_INDEXED);
-  }
-  CHECK_FLAG(dict, mask, nocombine, , HL_NOCOMBINE);
-  CHECK_FLAG(dict, mask, default, _, HL_DEFAULT);
-
-  if (HAS_KEY_X(dict, fg)) {
-    fg = object_to_color(dict->fg, "fg", use_rgb, err);
-  } else if (HAS_KEY_X(dict, foreground)) {
-    fg = object_to_color(dict->foreground, "foreground", use_rgb, err);
-  }
-  if (ERROR_SET(err)) {
-    return hlattrs;
-  }
-
-  if (HAS_KEY_X(dict, bg)) {
-    bg = object_to_color(dict->bg, "bg", use_rgb, err);
-  } else if (HAS_KEY_X(dict, background)) {
-    bg = object_to_color(dict->background, "background", use_rgb, err);
-  }
-  if (ERROR_SET(err)) {
-    return hlattrs;
-  }
-
-  if (HAS_KEY_X(dict, sp)) {
-    sp = object_to_color(dict->sp, "sp", true, err);
-  } else if (HAS_KEY_X(dict, special)) {
-    sp = object_to_color(dict->special, "special", true, err);
-  }
-  if (ERROR_SET(err)) {
-    return hlattrs;
-  }
-
-  if (HAS_KEY_X(dict, blend)) {
-    Integer blend0 = dict->blend;
-    VALIDATE_RANGE((blend0 >= 0 && blend0 <= 100), "blend", {
-      return hlattrs;
-    });
-    blend = (int)blend0;
-  }
-
-  if (HAS_KEY_X(dict, link) || HAS_KEY_X(dict, global_link)) {
-    if (!link_id) {
-      api_set_error(err, kErrorTypeValidation, "Invalid Key: '%s'",
-                    HAS_KEY_X(dict, global_link) ? "global_link" : "link");
-      return hlattrs;
-    }
-    if (HAS_KEY_X(dict, global_link)) {
-      *link_id = (int)dict->global_link;
-      mask |= HL_GLOBAL;
-    } else {
-      *link_id = (int)dict->link;
-    }
-
-    if (ERROR_SET(err)) {
-      return hlattrs;
-    }
-  }
-
-  // Handle cterm attrs
-  if (dict->cterm.type == kObjectTypeDict) {
-    Dict(highlight_cterm) cterm[1] = KEYDICT_INIT;
-    if (!api_dict_to_keydict(cterm, KeyDict_highlight_cterm_get_field,
-                             dict->cterm.data.dict, err)) {
-      return hlattrs;
-    }
-
-    cterm_mask_provided = true;
-    CHECK_FLAG(cterm, cterm_mask, reverse, , HL_INVERSE);
-    CHECK_FLAG(cterm, cterm_mask, bold, , HL_BOLD);
-    CHECK_FLAG(cterm, cterm_mask, italic, , HL_ITALIC);
-    CHECK_FLAG(cterm, cterm_mask, underline, , HL_UNDERLINE);
-    CHECK_FLAG(cterm, cterm_mask, undercurl, , HL_UNDERCURL);
-    CHECK_FLAG(cterm, cterm_mask, underdouble, , HL_UNDERDOUBLE);
-    CHECK_FLAG(cterm, cterm_mask, underdotted, , HL_UNDERDOTTED);
-    CHECK_FLAG(cterm, cterm_mask, underdashed, , HL_UNDERDASHED);
-    CHECK_FLAG(cterm, cterm_mask, standout, , HL_STANDOUT);
-    CHECK_FLAG(cterm, cterm_mask, strikethrough, , HL_STRIKETHROUGH);
-    CHECK_FLAG(cterm, cterm_mask, altfont, , HL_ALTFONT);
-    CHECK_FLAG(cterm, cterm_mask, nocombine, , HL_NOCOMBINE);
-  } else if (dict->cterm.type == kObjectTypeArray && dict->cterm.data.array.size == 0) {
-    // empty list from Lua API should clear all cterm attributes
-    // TODO(clason): handle via gen_api_dispatch
-    cterm_mask_provided = true;
-  } else if (HAS_KEY_X(dict, cterm)) {
-    VALIDATE_EXP(false, "cterm", "Dict", api_typename(dict->cterm.type), {
-      return hlattrs;
-    });
-  }
-#undef CHECK_FLAG
-
-  if (HAS_KEY_X(dict, ctermfg)) {
-    ctermfg = object_to_color(dict->ctermfg, "ctermfg", false, err);
-    if (ERROR_SET(err)) {
-      return hlattrs;
-    }
-  }
-
-  if (HAS_KEY_X(dict, ctermbg)) {
-    ctermbg = object_to_color(dict->ctermbg, "ctermbg", false, err);
-    if (ERROR_SET(err)) {
-      return hlattrs;
-    }
-  }
-
-  if (use_rgb) {
-    // apply gui mask as default for cterm mask
-    if (!cterm_mask_provided) {
-      cterm_mask = mask;
-    }
-    hlattrs.rgb_ae_attr = mask;
-    hlattrs.rgb_bg_color = bg;
-    hlattrs.rgb_fg_color = fg;
-    hlattrs.rgb_sp_color = sp;
-    hlattrs.hl_blend = blend;
-    hlattrs.cterm_bg_color = ctermbg == -1 ? 0 : (int16_t)(ctermbg + 1);
-    hlattrs.cterm_fg_color = ctermfg == -1 ? 0 : (int16_t)(ctermfg + 1);
-    hlattrs.cterm_ae_attr = cterm_mask;
-  } else {
-    hlattrs.cterm_bg_color = bg == -1 ? 0 : (int16_t)(bg + 1);
-    hlattrs.cterm_fg_color = fg == -1 ? 0 : (int16_t)(fg + 1);
-    hlattrs.cterm_ae_attr = mask;
-  }
-
-  return hlattrs;
-#undef HAS_KEY_X
+  // Convert Dict(highlight)* to raw Dict for Rust parsing
+  Arena arena = ARENA_EMPTY;
+  Dict raw = api_keydict_to_dict(dict, highlight_table, 30, &arena);
+  HlAttrs attrs = rs_dict2hlattrs(raw, use_rgb, link_id, err);
+  arena_mem_free(arena_finish(&arena));
+  return attrs;
 }
 
 extern int rs_object_to_color(Object val, char *key, bool rgb, Error *err);

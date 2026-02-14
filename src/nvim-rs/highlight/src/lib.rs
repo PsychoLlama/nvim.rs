@@ -5204,6 +5204,355 @@ pub unsafe extern "C" fn rs_highlight_has_attr(
 }
 
 // ============================================================================
+// dict2hlattrs - Parse raw Dict into HlAttrs
+// ============================================================================
+
+/// Result of dict2hlattrs_full, returning all parsed information.
+#[repr(C)]
+pub struct Dict2HlAttrsResult {
+    pub attrs: HlAttrs,
+    pub link_id: c_int,
+    pub fallback: bool,
+    pub has_error: bool,
+}
+
+/// Helper: check if error is set
+unsafe fn error_is_set(err: *const Error) -> bool {
+    !err.is_null() && (*err).err_type != -1 // kErrorTypeNone = -1
+}
+
+/// Helper: match a key name against a byte string
+unsafe fn key_eq(key: &NvimString, name: &[u8]) -> bool {
+    if key.size != name.len() {
+        return false;
+    }
+    if key.data.is_null() {
+        return false;
+    }
+    let key_bytes = std::slice::from_raw_parts(key.data as *const u8, key.size);
+    key_bytes == name
+}
+
+/// Helper: get boolean value from an Object (expects kObjectTypeBoolean)
+unsafe fn obj_get_bool(obj: &Object) -> bool {
+    obj.data.boolean
+}
+
+/// Helper: get integer value from an Object (expects kObjectTypeInteger)
+unsafe fn obj_get_int(obj: &Object) -> i64 {
+    obj.data.integer
+}
+
+/// Helper: apply a boolean flag to a mask
+fn apply_flag(mask: &mut i16, flag: i16, value: bool) {
+    if value {
+        if flag & HL_UNDERLINE_MASK != 0 {
+            *mask &= !HL_UNDERLINE_MASK;
+        }
+        *mask |= flag;
+    }
+}
+
+/// Parse a raw Dict into HlAttrs.
+///
+/// This is the Rust implementation of C's dict2hlattrs. It iterates over
+/// raw Dict key-value pairs and matches key strings directly.
+///
+/// # Safety
+/// - `dict` must contain valid Dict data (items pointer valid for size elements)
+/// - `err` must be a valid Error pointer
+unsafe fn dict2hlattrs_impl(
+    dict: Dict,
+    use_rgb: bool,
+    allow_link: bool,
+    err: *mut Error,
+) -> Dict2HlAttrsResult {
+    let mut hlattrs = HlAttrs::new();
+    let mut result = Dict2HlAttrsResult {
+        attrs: hlattrs,
+        link_id: -1,
+        fallback: true,
+        has_error: false,
+    };
+
+    let mut fg: i32 = -1;
+    let mut bg: i32 = -1;
+    let mut ctermfg: i32 = -1;
+    let mut ctermbg: i32 = -1;
+    let mut sp: i32 = -1;
+    let mut blend: i32 = -1;
+    let mut mask: i16 = 0;
+    let mut cterm_mask: i16 = 0;
+    let mut cterm_mask_provided = false;
+    let mut has_fallback_key = false;
+
+    if dict.items.is_null() || dict.size == 0 {
+        return result;
+    }
+
+    let items = std::slice::from_raw_parts(dict.items, dict.size);
+
+    for kv in items {
+        let key = &kv.key;
+        let val = &kv.value;
+
+        // Boolean flags
+        if key_eq(key, b"bold") {
+            apply_flag(&mut mask, HL_BOLD, obj_get_bool(val));
+        } else if key_eq(key, b"italic") {
+            apply_flag(&mut mask, HL_ITALIC, obj_get_bool(val));
+        } else if key_eq(key, b"reverse") {
+            apply_flag(&mut mask, HL_INVERSE, obj_get_bool(val));
+        } else if key_eq(key, b"standout") {
+            apply_flag(&mut mask, HL_STANDOUT, obj_get_bool(val));
+        } else if key_eq(key, b"strikethrough") {
+            apply_flag(&mut mask, HL_STRIKETHROUGH, obj_get_bool(val));
+        } else if key_eq(key, b"underline") {
+            apply_flag(&mut mask, HL_UNDERLINE, obj_get_bool(val));
+        } else if key_eq(key, b"undercurl") {
+            apply_flag(&mut mask, HL_UNDERCURL, obj_get_bool(val));
+        } else if key_eq(key, b"underdouble") {
+            apply_flag(&mut mask, HL_UNDERDOUBLE, obj_get_bool(val));
+        } else if key_eq(key, b"underdotted") {
+            apply_flag(&mut mask, HL_UNDERDOTTED, obj_get_bool(val));
+        } else if key_eq(key, b"underdashed") {
+            apply_flag(&mut mask, HL_UNDERDASHED, obj_get_bool(val));
+        } else if key_eq(key, b"altfont") {
+            apply_flag(&mut mask, HL_ALTFONT, obj_get_bool(val));
+        } else if key_eq(key, b"nocombine") {
+            apply_flag(&mut mask, HL_NOCOMBINE, obj_get_bool(val));
+        } else if key_eq(key, b"default") {
+            apply_flag(&mut mask, HL_DEFAULT, obj_get_bool(val));
+        } else if key_eq(key, b"fg_indexed") {
+            if use_rgb {
+                apply_flag(&mut mask, HL_FG_INDEXED, obj_get_bool(val));
+            }
+        } else if key_eq(key, b"bg_indexed") {
+            if use_rgb {
+                apply_flag(&mut mask, HL_BG_INDEXED, obj_get_bool(val));
+            }
+        }
+        // Color fields
+        else if key_eq(key, b"fg") || key_eq(key, b"foreground") {
+            static KEY_FG: &[u8] = b"fg\0";
+            static KEY_FOREGROUND: &[u8] = b"foreground\0";
+            let key_name = if key_eq(key, b"fg") {
+                KEY_FG.as_ptr() as *mut c_char
+            } else {
+                KEY_FOREGROUND.as_ptr() as *mut c_char
+            };
+            fg = rs_object_to_color(*val, key_name, use_rgb, err);
+            if error_is_set(err) {
+                result.has_error = true;
+                return result;
+            }
+        } else if key_eq(key, b"bg") || key_eq(key, b"background") {
+            static KEY_BG: &[u8] = b"bg\0";
+            static KEY_BACKGROUND: &[u8] = b"background\0";
+            let key_name = if key_eq(key, b"bg") {
+                KEY_BG.as_ptr() as *mut c_char
+            } else {
+                KEY_BACKGROUND.as_ptr() as *mut c_char
+            };
+            bg = rs_object_to_color(*val, key_name, use_rgb, err);
+            if error_is_set(err) {
+                result.has_error = true;
+                return result;
+            }
+        } else if key_eq(key, b"sp") || key_eq(key, b"special") {
+            static KEY_SP: &[u8] = b"sp\0";
+            static KEY_SPECIAL: &[u8] = b"special\0";
+            let key_name = if key_eq(key, b"sp") {
+                KEY_SP.as_ptr() as *mut c_char
+            } else {
+                KEY_SPECIAL.as_ptr() as *mut c_char
+            };
+            sp = rs_object_to_color(*val, key_name, true, err);
+            if error_is_set(err) {
+                result.has_error = true;
+                return result;
+            }
+        }
+        // Integer fields
+        else if key_eq(key, b"blend") {
+            let blend0 = obj_get_int(val);
+            if blend0 < 0 || blend0 > 100 {
+                static FMT: &[u8] = b"Invalid 'blend': expected Integer in range [0, 100]\0";
+                api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char);
+                result.has_error = true;
+                return result;
+            }
+            blend = blend0 as i32;
+        } else if key_eq(key, b"link") {
+            if !allow_link {
+                static FMT: &[u8] = b"Invalid Key: 'link'\0";
+                api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char);
+                result.has_error = true;
+                return result;
+            }
+            result.link_id = obj_get_int(val) as c_int;
+        } else if key_eq(key, b"global_link") {
+            if !allow_link {
+                static FMT: &[u8] = b"Invalid Key: 'global_link'\0";
+                api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char);
+                result.has_error = true;
+                return result;
+            }
+            result.link_id = obj_get_int(val) as c_int;
+            mask |= HL_GLOBAL;
+        }
+        // Cterm dict
+        else if key_eq(key, b"cterm") {
+            if val.obj_type == ObjectType::Dict as c_int {
+                cterm_mask_provided = true;
+                let cterm_dict = val.data.dict;
+                if !cterm_dict.items.is_null() && cterm_dict.size > 0 {
+                    let cterm_items = std::slice::from_raw_parts(cterm_dict.items, cterm_dict.size);
+                    for ckv in cterm_items {
+                        let ckey = &ckv.key;
+                        let cval = &ckv.value;
+                        if key_eq(ckey, b"bold") {
+                            apply_flag(&mut cterm_mask, HL_BOLD, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"italic") {
+                            apply_flag(&mut cterm_mask, HL_ITALIC, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"reverse") {
+                            apply_flag(&mut cterm_mask, HL_INVERSE, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"standout") {
+                            apply_flag(&mut cterm_mask, HL_STANDOUT, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"strikethrough") {
+                            apply_flag(&mut cterm_mask, HL_STRIKETHROUGH, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"underline") {
+                            apply_flag(&mut cterm_mask, HL_UNDERLINE, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"undercurl") {
+                            apply_flag(&mut cterm_mask, HL_UNDERCURL, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"underdouble") {
+                            apply_flag(&mut cterm_mask, HL_UNDERDOUBLE, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"underdotted") {
+                            apply_flag(&mut cterm_mask, HL_UNDERDOTTED, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"underdashed") {
+                            apply_flag(&mut cterm_mask, HL_UNDERDASHED, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"altfont") {
+                            apply_flag(&mut cterm_mask, HL_ALTFONT, obj_get_bool(cval));
+                        } else if key_eq(ckey, b"nocombine") {
+                            apply_flag(&mut cterm_mask, HL_NOCOMBINE, obj_get_bool(cval));
+                        }
+                    }
+                }
+            } else if val.obj_type == ObjectType::Array as c_int && val.data.array.size == 0 {
+                // empty list from Lua API should clear all cterm attributes
+                cterm_mask_provided = true;
+            } else {
+                static FMT: &[u8] = b"Invalid 'cterm': expected Dict, got %s\0";
+                api_set_error(
+                    err,
+                    K_ERROR_TYPE_VALIDATION,
+                    FMT.as_ptr() as *const c_char,
+                    nvim_api::rs_api_typename(val.obj_type),
+                );
+                result.has_error = true;
+                return result;
+            }
+        }
+        // Cterm colors
+        else if key_eq(key, b"ctermfg") {
+            static KEY_CTERMFG: &[u8] = b"ctermfg\0";
+            ctermfg = rs_object_to_color(*val, KEY_CTERMFG.as_ptr() as *mut c_char, false, err);
+            if error_is_set(err) {
+                result.has_error = true;
+                return result;
+            }
+        } else if key_eq(key, b"ctermbg") {
+            static KEY_CTERMBG: &[u8] = b"ctermbg\0";
+            ctermbg = rs_object_to_color(*val, KEY_CTERMBG.as_ptr() as *mut c_char, false, err);
+            if error_is_set(err) {
+                result.has_error = true;
+                return result;
+            }
+        }
+        // Fallback flag (used by ns_get_hl)
+        else if key_eq(key, b"fallback") {
+            has_fallback_key = true;
+            result.fallback = obj_get_bool(val);
+        }
+        // Ignore keys we don't handle (url, force, etc.)
+    }
+
+    // Build final HlAttrs
+    if use_rgb {
+        if !cterm_mask_provided {
+            cterm_mask = mask;
+        }
+        hlattrs.rgb_ae_attr = mask;
+        hlattrs.rgb_bg_color = bg;
+        hlattrs.rgb_fg_color = fg;
+        hlattrs.rgb_sp_color = sp;
+        hlattrs.hl_blend = blend;
+        hlattrs.cterm_bg_color = if ctermbg == -1 {
+            0
+        } else {
+            (ctermbg + 1) as i16
+        };
+        hlattrs.cterm_fg_color = if ctermfg == -1 {
+            0
+        } else {
+            (ctermfg + 1) as i16
+        };
+        hlattrs.cterm_ae_attr = cterm_mask;
+    } else {
+        hlattrs.cterm_bg_color = if bg == -1 { 0 } else { (bg + 1) as i16 };
+        hlattrs.cterm_fg_color = if fg == -1 { 0 } else { (fg + 1) as i16 };
+        hlattrs.cterm_ae_attr = mask;
+    }
+
+    // If link_id was set and is >= 0, fallback should be true
+    // (matches C: if (link_id >= 0) fallback = true)
+    if result.link_id >= 0 && !has_fallback_key {
+        result.fallback = true;
+    }
+
+    result.attrs = hlattrs;
+    result
+}
+
+/// Parse a raw Dict into HlAttrs. FFI entry point.
+///
+/// Returns HlAttrs parsed from the dict. link_id is written to *link_id_out
+/// if non-null. Error information is written to *err.
+///
+/// # Safety
+/// - All pointers must be valid
+#[no_mangle]
+pub unsafe extern "C" fn rs_dict2hlattrs(
+    dict: Dict,
+    use_rgb: bool,
+    link_id_out: *mut c_int,
+    err: *mut Error,
+) -> HlAttrs {
+    let allow_link = !link_id_out.is_null();
+    let result = dict2hlattrs_impl(dict, use_rgb, allow_link, err);
+    if !link_id_out.is_null() {
+        *link_id_out = result.link_id;
+    }
+    result.attrs
+}
+
+/// Parse a raw Dict into HlAttrs with full result (for ns_get_hl).
+///
+/// Returns Dict2HlAttrsResult with attrs, link_id, fallback flag, and error status.
+///
+/// # Safety
+/// - All pointers must be valid
+#[no_mangle]
+pub unsafe extern "C" fn rs_dict2hlattrs_full(
+    dict: Dict,
+    use_rgb: bool,
+    allow_link: bool,
+    err: *mut Error,
+) -> Dict2HlAttrsResult {
+    dict2hlattrs_impl(dict, use_rgb, allow_link, err)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
