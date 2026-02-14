@@ -404,6 +404,90 @@ int64_t nvim_get_p_tl(void)
 }
 
 // ============================================================================
+// Rust FFI accessor functions for findtags_state_T initialization (Phase 2)
+// ============================================================================
+
+/// Allocate and set tag_fname field
+void nvim_findtags_init_tag_fname(void *st_void)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  st->tag_fname = xmalloc(MAXPATHL + 1);
+}
+
+/// Set fp to NULL
+void nvim_findtags_set_fp_null(void *st_void)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  st->fp = NULL;
+}
+
+/// Allocate orgpat and initialize it with pattern
+void nvim_findtags_init_orgpat(void *st_void, char *pat)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  st->orgpat = xmalloc(sizeof(pat_T));
+  st->orgpat->pat = pat;
+  st->orgpat->len = (int)strlen(pat);
+  st->orgpat->regmatch.regprog = NULL;
+}
+
+/// Set scalar fields of findtags_state_T
+void nvim_findtags_set_fields(void *st_void, int flags, int mincount)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  st->flags = flags;
+  st->tag_file_sorted = NUL;
+  st->help_lang_find = NULL;
+  st->is_txt = false;
+  st->did_open = false;
+  st->help_only = (flags & TAG_HELP);
+  st->get_searchpat = false;
+  st->help_lang[0] = NUL;
+  st->help_pri = 0;
+  st->mincount = mincount;
+  st->lbuf_size = LSIZE;
+  st->lbuf = xmalloc((size_t)st->lbuf_size);
+  st->match_count = 0;
+  st->stop_searching = false;
+}
+
+/// Initialize ga_match and ht_match arrays
+void nvim_findtags_init_match_arrays(void *st_void)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  for (int mtt = 0; mtt < MT_COUNT; mtt++) {
+    ga_init(&st->ga_match[mtt], sizeof(char *), 100);
+    hash_init(&st->ht_match[mtt]);
+  }
+}
+
+/// Free findtags_state_T inner resources
+void nvim_findtags_state_free_inner(void *st_void)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  xfree(st->tag_fname);
+  xfree(st->lbuf);
+  vim_regfree(st->orgpat->regmatch.regprog);
+  xfree(st->orgpat);
+}
+
+// ============================================================================
+// Rust FFI accessor functions for findtags_match_args_T (Phase 2)
+// ============================================================================
+
+/// Initialize findtags_match_args_T
+void nvim_findtags_matchargs_init(void *margs_void, int flags)
+{
+  findtags_match_args_T *margs = (findtags_match_args_T *)margs_void;
+  margs->matchoff = 0;
+  margs->match_re = false;
+  margs->match_no_ic = false;
+  margs->has_re = (flags & TAG_REGEXP);
+  margs->sortic = false;
+  margs->sort_error = false;
+}
+
+// ============================================================================
 // Rust FFI accessor functions for tag file iteration (functions not using tag_fnames)
 // ============================================================================
 
@@ -570,6 +654,12 @@ extern char *rs_tag_full_fname(tagptrs_T *tagp);
 extern int rs_test_for_current(char *fname, char *fname_end, char *tag_fname, char *buf_ffname);
 extern void rs_free_tag_stuff(void);
 extern void rs_tagname_free(void *tnp);
+
+// Phase 2 pattern/state initialization
+extern void rs_prepare_pats(pat_T *pats, bool has_re);
+extern void rs_findtags_state_init(findtags_state_T *st, char *pat, int flags, int mincount);
+extern void rs_findtags_state_free(findtags_state_T *st);
+extern void rs_findtags_matchargs_init(findtags_match_args_T *margs, int flags);
 
 #include "tag.c.generated.h"
 
@@ -1570,36 +1660,7 @@ static int tag_strnicmp(char *s1, char *s2, size_t len)
 // Extract info from the tag search pattern "pats->pat".
 static void prepare_pats(pat_T *pats, bool has_re)
 {
-  pats->head = pats->pat;
-  pats->headlen = pats->len;
-  if (has_re) {
-    // When the pattern starts with '^' or "\\<", binary searching can be
-    // used (much faster).
-    if (pats->pat[0] == '^') {
-      pats->head = pats->pat + 1;
-    } else if (pats->pat[0] == '\\' && pats->pat[1] == '<') {
-      pats->head = pats->pat + 2;
-    }
-    if (pats->head == pats->pat) {
-      pats->headlen = 0;
-    } else {
-      for (pats->headlen = 0; pats->head[pats->headlen] != NUL; pats->headlen++) {
-        if (vim_strchr(magic_isset() ? ".[~*\\$" : "\\$",
-                       (uint8_t)pats->head[pats->headlen]) != NULL) {
-          break;
-        }
-      }
-    }
-    if (p_tl != 0 && pats->headlen > p_tl) {    // adjust for 'taglength'
-      pats->headlen = (int)p_tl;
-    }
-  }
-
-  if (has_re) {
-    pats->regmatch.regprog = vim_regcomp(pats->pat, magic_isset() ? RE_MAGIC : 0);
-  } else {
-    pats->regmatch.regprog = NULL;
-  }
+  rs_prepare_pats(pats, has_re);
 }
 
 /// Call the user-defined function to generate a list of tags used by
@@ -1814,40 +1875,13 @@ static int find_tagfunc_tags(char *pat, garray_T *ga, int *match_count, int flag
 /// Initialize the state used by find_tags()
 static void findtags_state_init(findtags_state_T *st, char *pat, int flags, int mincount)
 {
-  st->tag_fname = xmalloc(MAXPATHL + 1);
-  st->fp = NULL;
-  st->orgpat = xmalloc(sizeof(pat_T));
-  st->orgpat->pat = pat;
-  st->orgpat->len = (int)strlen(pat);
-  st->orgpat->regmatch.regprog = NULL;
-  st->flags = flags;
-  st->tag_file_sorted = NUL;
-  st->help_lang_find = NULL;
-  st->is_txt = false;
-  st->did_open = false;
-  st->help_only = (flags & TAG_HELP);
-  st->get_searchpat = false;
-  st->help_lang[0] = NUL;
-  st->help_pri = 0;
-  st->mincount = mincount;
-  st->lbuf_size = LSIZE;
-  st->lbuf = xmalloc((size_t)st->lbuf_size);
-  st->match_count = 0;
-  st->stop_searching = false;
-
-  for (int mtt = 0; mtt < MT_COUNT; mtt++) {
-    ga_init(&st->ga_match[mtt], sizeof(char *), 100);
-    hash_init(&st->ht_match[mtt]);
-  }
+  rs_findtags_state_init(st, pat, flags, mincount);
 }
 
 /// Free the state used by find_tags()
 static void findtags_state_free(findtags_state_T *st)
 {
-  xfree(st->tag_fname);
-  xfree(st->lbuf);
-  vim_regfree(st->orgpat->regmatch.regprog);
-  xfree(st->orgpat);
+  rs_findtags_state_free(st);
 }
 
 /// Initialize the language and priority used for searching tags in a Vim help
@@ -2250,12 +2284,7 @@ static tagmatch_status_T findtags_parse_line(findtags_state_T *st, tagptrs_T *ta
 /// Initialize the structure used for tag matching.
 static void findtags_matchargs_init(findtags_match_args_T *margs, int flags)
 {
-  margs->matchoff = 0;                        // match offset
-  margs->match_re = false;                    // match with regexp
-  margs->match_no_ic = false;                 // matches with case
-  margs->has_re = (flags & TAG_REGEXP);       // regexp used
-  margs->sortic = false;                      // tag file sorted in nocase
-  margs->sort_error = false;                  // tags file not sorted
+  rs_findtags_matchargs_init(margs, flags);
 }
 
 /// Compares the tag name in "tagpp->tagname" with a search pattern in

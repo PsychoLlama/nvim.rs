@@ -11,7 +11,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::doc_markdown)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
 // Type aliases for C types
@@ -1112,6 +1112,74 @@ pub unsafe extern "C" fn rs_tag_match_cmp(
 
     // Then by name
     rs_tag_cmp_names(name1, name2, false)
+}
+
+// =============================================================================
+// Phase 2: C struct initialization via FFI
+// =============================================================================
+
+/// Opaque handle to `findtags_state_T`
+type FindTagsStateHandle = *mut c_void;
+/// Opaque handle to `findtags_match_args_T`
+type FindTagsMatchArgsHandle = *mut c_void;
+
+extern "C" {
+    fn nvim_findtags_init_tag_fname(st: FindTagsStateHandle);
+    fn nvim_findtags_set_fp_null(st: FindTagsStateHandle);
+    fn nvim_findtags_init_orgpat(st: FindTagsStateHandle, pat: *mut c_char);
+    fn nvim_findtags_set_fields(st: FindTagsStateHandle, flags: c_int, mincount: c_int);
+    fn nvim_findtags_init_match_arrays(st: FindTagsStateHandle);
+    fn nvim_findtags_state_free_inner(st: FindTagsStateHandle);
+    fn nvim_findtags_matchargs_init(margs: FindTagsMatchArgsHandle, flags: c_int);
+}
+
+/// Initialize a `findtags_state_T` struct for a tag search.
+///
+/// # Safety
+///
+/// - `st` must be a valid pointer to a `findtags_state_T` struct
+/// - `pat` must be a valid C string that outlives the search
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_state_init(
+    st: FindTagsStateHandle,
+    pat: *mut c_char,
+    flags: c_int,
+    mincount: c_int,
+) {
+    if st.is_null() {
+        return;
+    }
+    nvim_findtags_init_tag_fname(st);
+    nvim_findtags_set_fp_null(st);
+    nvim_findtags_init_orgpat(st, pat);
+    nvim_findtags_set_fields(st, flags, mincount);
+    nvim_findtags_init_match_arrays(st);
+}
+
+/// Free the inner resources of a `findtags_state_T` struct.
+///
+/// # Safety
+///
+/// - `st` must be a valid pointer to a `findtags_state_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_state_free(st: FindTagsStateHandle) {
+    if st.is_null() {
+        return;
+    }
+    nvim_findtags_state_free_inner(st);
+}
+
+/// Initialize a `findtags_match_args_T` struct.
+///
+/// # Safety
+///
+/// - `margs` must be a valid pointer to a `findtags_match_args_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_matchargs_init(margs: FindTagsMatchArgsHandle, flags: c_int) {
+    if margs.is_null() {
+        return;
+    }
+    nvim_findtags_matchargs_init(margs, flags);
 }
 
 // =============================================================================
