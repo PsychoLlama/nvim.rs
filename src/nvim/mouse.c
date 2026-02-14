@@ -165,6 +165,9 @@ extern void rs_set_mouse_topline(win_T *wp);
 extern void rs_setmouse(void);
 extern void rs_move_tab_to_mouse(void);
 extern void rs_mouse_tab_close(int c1);
+extern colnr_T rs_scroll_line_len(linenr_T lnum);
+extern linenr_T rs_find_longest_lnum(void);
+extern bool rs_do_mousescroll_horiz(colnr_T leftcol);
 
 /// Move the current tab to tab in same column as mouse or to end of the
 /// tabline if there is no tab there.
@@ -1587,22 +1590,7 @@ foldclick:;
 /// @return true if the cursor moved, false otherwise.
 static bool do_mousescroll_horiz(colnr_T leftcol)
 {
-  if (curwin->w_p_wrap) {
-    return false;  // no horizontal scrolling when wrapping
-  }
-  if (curwin->w_leftcol == leftcol) {
-    return false;  // already there
-  }
-
-  // When the line of the cursor is too short, move the cursor to the
-  // longest visible line.
-  if (!virtual_active(curwin)
-      && leftcol > scroll_line_len(curwin->w_cursor.lnum)) {
-    curwin->w_cursor.lnum = find_longest_lnum();
-    curwin->w_cursor.col = 0;
-  }
-
-  return set_leftcol(leftcol);
+  return rs_do_mousescroll_horiz(leftcol);
 }
 
 /// Normal and Visual modes implementation for scrolling in direction
@@ -1880,54 +1868,13 @@ static void set_mouse_topline(win_T *wp)
 /// Return length of line "lnum" for horizontal scrolling.
 static colnr_T scroll_line_len(linenr_T lnum)
 {
-  colnr_T col = 0;
-  char *line = ml_get(lnum);
-  if (*line != NUL) {
-    while (true) {
-      int numchar = win_chartabsize(curwin, line, col);
-      MB_PTR_ADV(line);
-      if (*line == NUL) {    // don't count the last character
-        break;
-      }
-      col += numchar;
-    }
-  }
-  return col;
+  return rs_scroll_line_len(lnum);
 }
 
 /// Find longest visible line number.
 static linenr_T find_longest_lnum(void)
 {
-  linenr_T ret = 0;
-
-  // Calculate maximum for horizontal scrollbar.  Check for reasonable
-  // line numbers, topline and botline can be invalid when displaying is
-  // postponed.
-  if (curwin->w_topline <= curwin->w_cursor.lnum
-      && curwin->w_botline > curwin->w_cursor.lnum
-      && curwin->w_botline <= curbuf->b_ml.ml_line_count + 1) {
-    colnr_T max = 0;
-
-    // Use maximum of all visible lines.  Remember the lnum of the
-    // longest line, closest to the cursor line.  Used when scrolling
-    // below.
-    for (linenr_T lnum = curwin->w_topline; lnum < curwin->w_botline; lnum++) {
-      colnr_T len = scroll_line_len(lnum);
-      if (len > max) {
-        max = len;
-        ret = lnum;
-      } else if (len == max
-                 && abs(lnum - curwin->w_cursor.lnum)
-                 < abs(ret - curwin->w_cursor.lnum)) {
-        ret = lnum;
-      }
-    }
-  } else {
-    // Use cursor line only.
-    ret = curwin->w_cursor.lnum;
-  }
-
-  return ret;
+  return rs_find_longest_lnum();
 }
 
 /// Check clicked cell on its grid

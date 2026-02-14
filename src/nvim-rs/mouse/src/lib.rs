@@ -664,6 +664,151 @@ pub unsafe extern "C" fn rs_mouse_tab_close(c1: c_int) {
 }
 
 // =============================================================================
+// Phase 2 — Scroll Helpers
+// =============================================================================
+
+extern "C" {
+    /// Get current window.
+    fn nvim_get_curwin() -> WinHandle;
+
+    /// Get `w_p_wrap` field.
+    fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
+
+    /// Get `w_leftcol` field.
+    fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
+
+    /// Get `w_topline` field.
+    fn nvim_win_get_botline(wp: WinHandle) -> linenr_T;
+
+    /// Get `w_cursor.lnum` field.
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> linenr_T;
+
+    /// Set `w_cursor.lnum` field.
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: linenr_T);
+
+    /// Set `w_cursor.col` field.
+    fn nvim_win_set_cursor_col(wp: WinHandle, col: c_int);
+
+    /// Get buffer line count for this window.
+    fn nvim_win_buf_line_count(wp: WinHandle) -> linenr_T;
+
+    /// Get line text from current buffer.
+    fn nvim_ml_get(lnum: linenr_T) -> *const c_char;
+
+    /// Check if virtual editing is active for window.
+    fn nvim_win_virtual_active(wp: WinHandle) -> c_int;
+
+    /// Compute char screen width at position in window.
+    fn rs_win_chartabsize(wp: WinHandle, p: *const c_char, col: c_int) -> c_int;
+
+    /// Set `w_leftcol` and adjust cursor. Returns true if cursor moved.
+    fn rs_set_leftcol(leftcol: c_int) -> bool;
+}
+
+/// Return length of line `lnum` for horizontal scrolling.
+///
+/// Iterates characters using `win_chartabsize` and advances with
+/// `utfc_ptr2len`, stopping before the last character.
+///
+/// # Safety
+/// Requires valid current window and buffer state.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_scroll_line_len(lnum: linenr_T) -> c_int {
+    let curwin = nvim_get_curwin();
+    let mut col: c_int = 0;
+    let line = nvim_ml_get(lnum);
+    if line.is_null() || *line == 0 {
+        return 0;
+    }
+
+    let mut p = line;
+    loop {
+        let numchar = rs_win_chartabsize(curwin, p, col);
+        let len = rs_utfc_ptr2len(p);
+        p = p.offset(len as isize);
+        if *p == 0 {
+            // Don't count the last character
+            break;
+        }
+        col += numchar;
+    }
+    col
+}
+
+/// Find the longest visible line number.
+///
+/// Returns the line number of the longest visible line, closest to the
+/// cursor line. Used for horizontal scrolling.
+///
+/// # Safety
+/// Requires valid current window and buffer state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_longest_lnum() -> linenr_T {
+    let curwin = nvim_get_curwin();
+    let topline = nvim_win_get_topline(curwin);
+    let botline = nvim_win_get_botline(curwin);
+    let cursor_lnum = nvim_win_get_cursor_lnum(curwin);
+    let line_count = nvim_win_buf_line_count(curwin);
+
+    // Check for reasonable line numbers
+    if topline > cursor_lnum || botline <= cursor_lnum || botline > line_count + 1 {
+        // Use cursor line only
+        return cursor_lnum;
+    }
+
+    let mut ret: linenr_T = 0;
+    let mut max: c_int = 0;
+
+    let mut lnum = topline;
+    while lnum < botline {
+        let len = rs_scroll_line_len(lnum);
+        if len > max {
+            max = len;
+            ret = lnum;
+        } else if len == max && (lnum - cursor_lnum).abs() < (ret - cursor_lnum).abs() {
+            ret = lnum;
+        }
+        lnum += 1;
+    }
+
+    if ret == 0 {
+        cursor_lnum
+    } else {
+        ret
+    }
+}
+
+/// Make a horizontal scroll to `leftcol`.
+///
+/// Returns true if the cursor moved, false otherwise.
+///
+/// # Safety
+/// Requires valid current window state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_mousescroll_horiz(leftcol: c_int) -> bool {
+    let curwin = nvim_get_curwin();
+
+    if nvim_win_get_p_wrap(curwin) != 0 {
+        return false; // no horizontal scrolling when wrapping
+    }
+    if nvim_win_get_leftcol(curwin) == leftcol {
+        return false; // already there
+    }
+
+    // When the line of the cursor is too short, move the cursor to the
+    // longest visible line.
+    if nvim_win_virtual_active(curwin) == 0
+        && leftcol > rs_scroll_line_len(nvim_win_get_cursor_lnum(curwin))
+    {
+        nvim_win_set_cursor_lnum(curwin, rs_find_longest_lnum());
+        nvim_win_set_cursor_col(curwin, 0);
+    }
+
+    rs_set_leftcol(leftcol)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
