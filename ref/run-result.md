@@ -1,14 +1,17 @@
-Plan: ~/.claude/plans/moonlit-sleeping-frost.md
+Plan: ~/.claude/plans/typed-twirling-rabbit.md
 
-6 phases of diff.c migration completed (agent timed out during Phase 7). All committed phases build and pass smoke tests.
+All steps of the plan are complete. Here's the summary:
 
-| Phase | Commit | Description |
-|-------|--------|-------------|
-| 1 | `97d6f1554e` | Migrate 18 utility functions to Rust |
-| 2 | `bb63a441f8` | Migrate diff block management to Rust |
-| 3 | `9c9e7ab5bc` | Migrate diff computation pipeline to Rust |
-| 4 | `11c1312f13` | Migrate diff status checking & navigation to Rust |
-| 5 | `f19cf462ca` | Migrate inline change detection to Rust |
-| 6 | `55aa3ddd3c` | Migrate ex_diffupdate to Rust |
+**Plan execution: Migrate Remaining C Logic in match.c to Rust** — DONE
 
-diff.c reduced from 4,620 → 3,757 lines (~863 lines of real C logic deleted). All checks pass: build, smoke-test.
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| 0 | Housekeeping (crate wiring) | `6f7b2a1` |
+| 1 | Core match management (match_add, match_delete, clear_matches, get_match) | `82d12a6` |
+| 2 | Simple highlight helpers (check_cur_search_hl, get_prevcol_hl_flag, get_search_match_hl) | `3b7b0b8` |
+| 3 | Position matching (next_search_hl_pos) | `59092a8` |
+| 4 | Core search engine (next_search_hl, init_search_hl) | `06ed349` |
+| 5 | Highlight preparation & update (prepare_search_hl, prepare_search_hl_line, update_search_hl) | `a50292a` |
+| 6 | VimL function verification | No changes needed — all 9 VimL functions confirmed routing through Rust |
+
+**Results**: All 22 C function bodies replaced with Rust implementations. `match.c` now contains only thin C wrappers, C accessor functions for opaque struct access, and VimL argument extraction (which must stay in C). All checks pass: build, smoke-test, rust-fmt-check, rust-clippy, rust-test (4239 tests).
