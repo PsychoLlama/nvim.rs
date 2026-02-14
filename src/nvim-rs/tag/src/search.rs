@@ -1489,6 +1489,566 @@ pub unsafe extern "C" fn rs_findtags_string_convert(st: FindTagsStateHandle) {
 }
 
 // =============================================================================
+// Phase 5: Search state machine — line parsing and matching
+// =============================================================================
+
+/// Opaque handle to `tagptrs_T`
+type TagPtrsHandle = *mut c_void;
+
+extern "C" {
+    // orgpat field accessors
+    fn nvim_findtags_get_orgpat_headlen(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_get_orgpat_head(st: FindTagsStateHandle) -> *const c_char;
+    fn nvim_findtags_get_orgpat_pat(st: FindTagsStateHandle) -> *const c_char;
+    fn nvim_findtags_get_orgpat_len(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_has_regprog(st: FindTagsStateHandle) -> bool;
+
+    // State field accessors (const)
+    fn nvim_findtags_get_help_only(st: *const c_void) -> bool;
+
+    // Regex operations
+    fn nvim_findtags_vim_regexec(st: FindTagsStateHandle, tagname: *const c_char) -> bool;
+    fn nvim_findtags_get_regmatch_startoff(
+        st: FindTagsStateHandle,
+        tagname: *const c_char,
+    ) -> c_int;
+
+    // Multi-byte string comparison
+    fn nvim_mb_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
+
+    // Tag file state accessors
+    fn nvim_findtags_get_tag_fname(st: FindTagsStateHandle) -> *const c_char;
+    fn nvim_findtags_get_help_lang(st: FindTagsStateHandle) -> *const c_char;
+    fn nvim_findtags_get_help_pri(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_get_searchpat(st: FindTagsStateHandle) -> bool;
+    fn nvim_findtags_set_searchpat(st: FindTagsStateHandle, val: bool);
+
+    // Match count
+    fn nvim_findtags_get_match_count_val(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_inc_match_count(st: FindTagsStateHandle);
+    fn nvim_findtags_set_match_count(st: FindTagsStateHandle, count: c_int);
+
+    // Global state accessors
+    fn nvim_get_current_State() -> c_int;
+    fn nvim_get_p_sft() -> bool;
+    fn nvim_get_p_tl() -> i64;
+
+    // Help heuristic
+    fn nvim_help_heuristic(tagname: *const c_char, match_offset: c_int, wrong_case: bool) -> c_int;
+
+    // Match entry operations
+    fn nvim_findtags_add_match_entry(
+        st: FindTagsStateHandle,
+        mtt: c_int,
+        mfp: *mut c_char,
+        hash: *mut usize,
+    ) -> bool;
+    fn nvim_findtags_ga_match_len(st: FindTagsStateHandle, mtt: c_int) -> c_int;
+    fn nvim_findtags_ga_match_get(st: FindTagsStateHandle, mtt: c_int, idx: c_int) -> *mut c_char;
+    fn nvim_findtags_clear_match(st: FindTagsStateHandle, mtt: c_int);
+
+    // Memory
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xmemcpyz(dst: *mut c_char, src: *const c_char, len: usize);
+
+    // Existing Rust functions we call across crate boundary
+    fn rs_parse_tag_line(lbuf: *mut c_char, tagp: *mut c_void) -> c_int;
+    fn rs_tag_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
+    fn rs_test_for_current(
+        fname: *const c_char,
+        fname_end: *const c_char,
+        tag_fname: *const c_char,
+        buf_ffname: *const c_char,
+    ) -> bool;
+    fn rs_test_for_static(tagp: *const c_void) -> bool;
+
+    // String operations
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
+}
+
+/// TAG_MATCH_SUCCESS etc. — tagmatch_status_T enum values
+const TAG_MATCH_SUCCESS: c_int = 1;
+const TAG_MATCH_FAIL: c_int = 2;
+const TAG_MATCH_STOP: c_int = 3;
+const TAG_MATCH_NEXT: c_int = 4;
+
+/// TAG_REGEXP flag
+const TAG_REGEXP: c_int = 4;
+/// TAG_NAMES flag
+const TAG_NAMES: c_int = 2;
+
+/// TAB character
+const TAB: c_int = 0x09;
+/// TAG_SEP character (0x02)
+const TAG_SEP: u8 = 0x02;
+
+/// MT_* match type constants
+const MT_ST_CUR: c_int = 0;
+const MT_GL_CUR: c_int = 1;
+const MT_GL_OTH: c_int = 2;
+const MT_ST_OTH: c_int = 3;
+const MT_IC_OFF: c_int = 4;
+const MT_RE_OFF: c_int = 8;
+
+/// MODE_INSERT
+const MODE_INSERT: c_int = 0x10;
+
+/// TOUPPER_ASC macro equivalent
+fn toupper_asc(c: u8) -> u8 {
+    if c.is_ascii_lowercase() {
+        c - b'a' + b'A'
+    } else {
+        c
+    }
+}
+
+/// Handle binary search state in `findtags_parse_line`.
+///
+/// Returns `Some(status)` if the function should return early,
+/// or `None` if matching should continue.
+#[allow(clippy::too_many_arguments)]
+unsafe fn parse_line_check_state(
+    st: FindTagsStateHandle,
+    tagpp: *mut TagPtrsFields,
+    margs: &mut FindTagsMatchArgs,
+    sinfo: &mut TagSearchInfo,
+    state: c_int,
+    cmplen: c_int,
+    headlen: c_int,
+    head: *const c_char,
+) -> Option<c_int> {
+    if state == TS_BINARY {
+        let first_byte = *(*tagpp).tagname as u8;
+        let i = if margs.sortic {
+            toupper_asc(first_byte)
+        } else {
+            first_byte
+        };
+        if (i as c_int) < sinfo.low_char || (i as c_int) > sinfo.high_char {
+            margs.sort_error = true;
+        }
+
+        let tagcmp = if margs.sortic {
+            rs_tag_strnicmp((*tagpp).tagname, head, cmplen as usize)
+        } else {
+            strncmp((*tagpp).tagname, head, cmplen as usize)
+        };
+        let tagcmp = if tagcmp == 0 {
+            match cmplen.cmp(&headlen) {
+                std::cmp::Ordering::Less => -1,
+                std::cmp::Ordering::Equal => 0,
+                std::cmp::Ordering::Greater => 1,
+            }
+        } else {
+            tagcmp
+        };
+
+        if tagcmp == 0 {
+            nvim_findtags_set_state_val(st, TS_SKIP_BACK);
+            sinfo.match_offset = sinfo.curr_offset;
+            return Some(TAG_MATCH_NEXT);
+        }
+        if tagcmp < 0 {
+            sinfo.curr_offset = nvim_findtags_ftell(st);
+            if sinfo.curr_offset < sinfo.high_offset {
+                sinfo.low_offset = sinfo.curr_offset;
+                sinfo.low_char = if margs.sortic {
+                    toupper_asc(first_byte) as c_int
+                } else {
+                    first_byte as c_int
+                };
+                return Some(TAG_MATCH_NEXT);
+            }
+        }
+        if tagcmp > 0 && sinfo.curr_offset != sinfo.high_offset {
+            sinfo.high_offset = sinfo.curr_offset;
+            sinfo.high_char = if margs.sortic {
+                toupper_asc(first_byte) as c_int
+            } else {
+                first_byte as c_int
+            };
+            return Some(TAG_MATCH_NEXT);
+        }
+        return Some(TAG_MATCH_STOP);
+    } else if state == TS_SKIP_BACK {
+        if nvim_mb_strnicmp((*tagpp).tagname, head, cmplen as usize) != 0 {
+            nvim_findtags_set_state_val(st, TS_STEP_FORWARD);
+        } else {
+            sinfo.curr_offset = sinfo.curr_offset_used;
+        }
+        return Some(TAG_MATCH_NEXT);
+    } else if state == TS_STEP_FORWARD {
+        if nvim_mb_strnicmp((*tagpp).tagname, head, cmplen as usize) != 0 {
+            return Some(if nvim_findtags_ftell(st) > sinfo.match_offset {
+                TAG_MATCH_STOP
+            } else {
+                TAG_MATCH_NEXT
+            });
+        }
+    } else if nvim_mb_strnicmp((*tagpp).tagname, head, cmplen as usize) != 0 {
+        return Some(TAG_MATCH_NEXT);
+    }
+    None
+}
+
+/// Parse a tag line read from a tags file.
+///
+/// Also compares the tag name in `tagpp->tagname` with a search pattern in
+/// `st->orgpat->head` as a quick check if the tag may match.
+///
+/// Returns:
+/// - `TAG_MATCH_SUCCESS` if the tag may match
+/// - `TAG_MATCH_FAIL` if the tag doesn't match
+/// - `TAG_MATCH_NEXT` to look for the next matching tag (used in a binary search)
+/// - `TAG_MATCH_STOP` if all the tags are processed without a match.
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_parse_line(
+    st: FindTagsStateHandle,
+    tagpp: TagPtrsHandle,
+    margs: *mut FindTagsMatchArgs,
+    sinfo_p: *mut TagSearchInfo,
+) -> c_int {
+    if st.is_null() || tagpp.is_null() || margs.is_null() || sinfo_p.is_null() {
+        return TAG_MATCH_FAIL;
+    }
+
+    let margs = &mut *margs;
+    let sinfo = &mut *sinfo_p;
+    let headlen = nvim_findtags_get_orgpat_headlen(st);
+    let lbuf = nvim_findtags_get_lbuf(st);
+    let tagpp_typed = tagpp.cast::<TagPtrsFields>();
+
+    let status;
+
+    if headlen != 0 {
+        std::ptr::write_bytes(tagpp_typed, 0, 1);
+        (*tagpp_typed).tagname = lbuf;
+        (*tagpp_typed).tagname_end = vim_strchr(lbuf, TAB);
+        if (*tagpp_typed).tagname_end.is_null() {
+            return TAG_MATCH_FAIL;
+        }
+
+        let mut cmplen = (*tagpp_typed)
+            .tagname_end
+            .offset_from((*tagpp_typed).tagname) as c_int;
+        let p_tl = nvim_get_p_tl();
+        if p_tl != 0 && (cmplen as i64) > p_tl {
+            cmplen = p_tl as c_int;
+        }
+
+        let flags = nvim_findtags_get_flags(st);
+        let state = nvim_findtags_get_state_val(st);
+
+        if (flags & TAG_REGEXP) != 0 && headlen < cmplen {
+            cmplen = headlen;
+        } else if state == TS_LINEAR && headlen != cmplen {
+            return TAG_MATCH_NEXT;
+        }
+
+        let head = nvim_findtags_get_orgpat_head(st);
+
+        if let Some(result) =
+            parse_line_check_state(st, tagpp_typed, margs, sinfo, state, cmplen, headlen, head)
+        {
+            return result;
+        }
+
+        // Can be a matching tag, isolate the file name and command.
+        (*tagpp_typed).fname = (*tagpp_typed).tagname_end.add(1);
+        (*tagpp_typed).fname_end = vim_strchr((*tagpp_typed).fname, TAB);
+        if (*tagpp_typed).fname_end.is_null() {
+            status = 0; // FAIL
+        } else {
+            (*tagpp_typed).command = (*tagpp_typed).fname_end.add(1);
+            status = 1; // OK
+        }
+    } else {
+        status = rs_parse_tag_line(lbuf, tagpp);
+    }
+
+    if status == 0 {
+        TAG_MATCH_FAIL
+    } else {
+        TAG_MATCH_SUCCESS
+    }
+}
+
+/// Compares the tag name in `tagpp->tagname` with a search pattern in
+/// `st->orgpat->pat`.
+/// Returns true if the tag matches, false if the tag doesn't match.
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_match_tag(
+    st: FindTagsStateHandle,
+    tagpp: TagPtrsHandle,
+    margs: *mut FindTagsMatchArgs,
+) -> bool {
+    if st.is_null() || tagpp.is_null() || margs.is_null() {
+        return false;
+    }
+
+    let margs = &mut *margs;
+    let tagpp_typed = tagpp.cast::<TagPtrsFields>();
+
+    // First try matching with the pattern literally (also when it is a regexp).
+    let mut cmplen = (*tagpp_typed)
+        .tagname_end
+        .offset_from((*tagpp_typed).tagname) as c_int;
+    let p_tl = nvim_get_p_tl();
+    if p_tl != 0 && (cmplen as i64) > p_tl {
+        cmplen = p_tl as c_int;
+    }
+
+    let orgpat_len = nvim_findtags_get_orgpat_len(st);
+
+    // if tag length does not match, don't try comparing
+    let mut matched = if orgpat_len == cmplen {
+        let rm_ic = nvim_findtags_get_orgpat_rm_ic(st);
+        let pat = nvim_findtags_get_orgpat_pat(st);
+
+        if rm_ic {
+            let m = nvim_mb_strnicmp((*tagpp_typed).tagname, pat, cmplen as usize) == 0;
+            if m {
+                margs.match_no_ic = strncmp((*tagpp_typed).tagname, pat, cmplen as usize) == 0;
+            }
+            m
+        } else {
+            strncmp((*tagpp_typed).tagname, pat, cmplen as usize) == 0
+        }
+    } else {
+        false
+    };
+
+    // Has a regexp: Also find tags matching regexp.
+    margs.match_re = false;
+    if !matched && nvim_findtags_has_regprog(st) {
+        let cc = *(*tagpp_typed).tagname_end;
+        *(*tagpp_typed).tagname_end = 0; // NUL
+
+        matched = nvim_findtags_vim_regexec(st, (*tagpp_typed).tagname);
+        if matched {
+            margs.matchoff = nvim_findtags_get_regmatch_startoff(st, (*tagpp_typed).tagname);
+            if nvim_findtags_get_orgpat_rm_ic(st) {
+                nvim_findtags_set_orgpat_rm_ic(st, false);
+                margs.match_no_ic = nvim_findtags_vim_regexec(st, (*tagpp_typed).tagname);
+                nvim_findtags_set_orgpat_rm_ic(st, true);
+            }
+        }
+        *(*tagpp_typed).tagname_end = cc;
+        margs.match_re = true;
+    }
+
+    matched
+}
+
+/// Build the match string for a help tag match.
+unsafe fn build_help_match(
+    st: FindTagsStateHandle,
+    tagpp: *mut TagPtrsFields,
+    margs: &FindTagsMatchArgs,
+) -> *mut c_char {
+    const ML_EXTRA: usize = 3;
+    *(*tagpp).tagname_end = 0; // NUL
+    let len = (*tagpp).tagname_end.offset_from((*tagpp).tagname) as usize;
+    let mfp_size = 1 + len + 10 + ML_EXTRA + 1;
+    let mfp = xmalloc(mfp_size).cast::<c_char>();
+
+    xmemcpyz(mfp, (*tagpp).tagname, len);
+    *mfp.add(len) = b'@' as c_char;
+    let help_lang = nvim_findtags_get_help_lang(st);
+    xmemcpyz(mfp.add(len + 1), help_lang, ML_EXTRA);
+    let heuristic = nvim_help_heuristic(
+        (*tagpp).tagname,
+        if margs.match_re { margs.matchoff } else { 0 },
+        !margs.match_no_ic,
+    ) + nvim_findtags_get_help_pri(st);
+    let remaining = mfp_size - (len + 1 + ML_EXTRA);
+    snprintf(
+        mfp.add(len + 1 + ML_EXTRA),
+        remaining,
+        c"%06d".as_ptr(),
+        heuristic,
+    );
+    *(*tagpp).tagname_end = TAB as c_char;
+    mfp
+}
+
+/// Build the match string for a name-only tag match.
+unsafe fn build_name_only_match(st: FindTagsStateHandle, tagpp: *mut TagPtrsFields) -> *mut c_char {
+    if nvim_findtags_get_searchpat(st) {
+        let mut temp_end = (*tagpp).command;
+        if *temp_end as u8 == b'/' {
+            while *temp_end != 0
+                && *temp_end as u8 != b'\r'
+                && *temp_end as u8 != b'\n'
+                && *temp_end as u8 != b'$'
+            {
+                temp_end = temp_end.add(1);
+            }
+        }
+        nvim_findtags_set_searchpat(st, false);
+        if (*tagpp).command.add(2) < temp_end {
+            let len = temp_end.offset_from((*tagpp).command) as usize - 2;
+            let mfp = xmalloc(len + 2).cast::<c_char>();
+            xmemcpyz(mfp, (*tagpp).command.add(2), len);
+            mfp
+        } else {
+            std::ptr::null_mut()
+        }
+    } else {
+        let len = (*tagpp).tagname_end.offset_from((*tagpp).tagname) as usize;
+        let mfp = xmalloc(1 + len + 1).cast::<c_char>();
+        xmemcpyz(mfp, (*tagpp).tagname, len);
+        if (nvim_get_current_State() & MODE_INSERT) != 0 {
+            nvim_findtags_set_searchpat(st, nvim_get_p_sft());
+        }
+        mfp
+    }
+}
+
+/// Add a matching tag found in a tags file to `st->ht_match` and `st->ga_match`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_add_match(
+    st: FindTagsStateHandle,
+    tagpp: TagPtrsHandle,
+    margs: *const FindTagsMatchArgs,
+    buf_ffname: *const c_char,
+    hash: *mut usize,
+) {
+    if st.is_null() || tagpp.is_null() || margs.is_null() {
+        return;
+    }
+
+    let margs = &*margs;
+    let tagpp_typed = tagpp.cast::<TagPtrsFields>();
+    let flags = nvim_findtags_get_flags(st);
+    let name_only = (flags & TAG_NAMES) != 0;
+
+    let is_current = rs_test_for_current(
+        (*tagpp_typed).fname,
+        (*tagpp_typed).fname_end,
+        nvim_findtags_get_tag_fname(st),
+        buf_ffname,
+    );
+    let is_static = rs_test_for_static(tagpp.cast::<c_void>());
+
+    let mut mtt = if is_static {
+        if is_current {
+            MT_ST_CUR
+        } else {
+            MT_ST_OTH
+        }
+    } else if is_current {
+        MT_GL_CUR
+    } else {
+        MT_GL_OTH
+    };
+
+    if nvim_findtags_get_orgpat_rm_ic(st) && !margs.match_no_ic {
+        mtt += MT_IC_OFF;
+    }
+    if margs.match_re {
+        mtt += MT_RE_OFF;
+    }
+
+    let mfp = if nvim_findtags_get_help_only(st) {
+        build_help_match(st, tagpp_typed, margs)
+    } else if name_only {
+        build_name_only_match(st, tagpp_typed)
+    } else {
+        let tag_fname = nvim_findtags_get_tag_fname(st);
+        let tag_fname_len = strlen(tag_fname);
+        let lbuf = nvim_findtags_get_lbuf(st);
+        let len = tag_fname_len + strlen(lbuf) + 3;
+        let p = xmalloc(1 + len + 1).cast::<c_char>();
+        *p = (mtt + 1) as u8 as c_char;
+        strcpy(p.add(1), tag_fname);
+        *p.add(tag_fname_len + 1) = TAG_SEP as c_char;
+        strcpy(p.add(1 + tag_fname_len + 1), lbuf);
+        p
+    };
+
+    if !mfp.is_null() && !nvim_findtags_add_match_entry(st, mtt, mfp, hash) {
+        xfree(mfp.cast::<c_void>());
+    }
+}
+
+/// Copy the tags found by `find_tags()` to `matchesp`.
+/// Returns the number of matches copied.
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_copy_matches(
+    st: FindTagsStateHandle,
+    matchesp: *mut *mut *mut c_char,
+) -> c_int {
+    if st.is_null() || matchesp.is_null() {
+        return 0;
+    }
+
+    let flags = nvim_findtags_get_flags(st);
+    let name_only = (flags & TAG_NAMES) != 0;
+    let total_match_count = nvim_findtags_get_match_count_val(st);
+
+    let matches: *mut *mut c_char = if total_match_count > 0 {
+        xmalloc((total_match_count as usize) * std::mem::size_of::<*mut c_char>())
+            .cast::<*mut c_char>()
+    } else {
+        std::ptr::null_mut()
+    };
+
+    nvim_findtags_set_match_count(st, 0);
+
+    for mtt in 0..MT_COUNT as c_int {
+        let ga_len = nvim_findtags_ga_match_len(st, mtt);
+        for i in 0..ga_len {
+            let mfp = nvim_findtags_ga_match_get(st, mtt, i);
+            if matches.is_null() {
+                xfree(mfp.cast::<c_void>());
+            } else {
+                if !name_only {
+                    // Change mtt back to zero-based.
+                    *mfp = (*mfp as u8).wrapping_sub(1) as c_char;
+
+                    // change the TAG_SEP back to NUL
+                    let mut p = mfp.add(1);
+                    while *p != 0 {
+                        if *p as u8 == TAG_SEP {
+                            *p = 0;
+                        }
+                        p = p.add(1);
+                    }
+                }
+                let idx = nvim_findtags_get_match_count_val(st);
+                *matches.add(idx as usize) = mfp;
+                nvim_findtags_inc_match_count(st);
+            }
+        }
+
+        nvim_findtags_clear_match(st, mtt);
+    }
+
+    *matchesp = matches;
+    nvim_findtags_get_match_count_val(st)
+}
+
+/// Helper struct matching the first few fields of `tagptrs_T` / `TagPtrs`
+/// so we can access them from Rust without importing the parse module.
+#[repr(C)]
+struct TagPtrsFields {
+    tagname: *mut c_char,
+    tagname_end: *mut c_char,
+    fname: *mut c_char,
+    fname_end: *mut c_char,
+    command: *mut c_char,
+    command_end: *mut c_char,
+    tag_fname: *mut c_char,
+    tagkind: *mut c_char,
+    tagkind_end: *mut c_char,
+    user_data: *mut c_char,
+    user_data_end: *mut c_char,
+    tagline: i32, // linenr_T
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

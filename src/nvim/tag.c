@@ -673,6 +673,15 @@ extern bool rs_findtags_start_state_handler(findtags_state_T *st, bool *sortic,
                                             tagsearch_info_T *sinfo_p);
 extern void rs_findtags_string_convert(findtags_state_T *st);
 
+// Phase 5 search state machine — line parsing and matching
+extern int rs_findtags_parse_line(findtags_state_T *st, tagptrs_T *tagpp,
+                                  findtags_match_args_T *margs, tagsearch_info_T *sinfo_p);
+extern bool rs_findtags_match_tag(findtags_state_T *st, tagptrs_T *tagpp,
+                                  findtags_match_args_T *margs);
+extern void rs_findtags_add_match(findtags_state_T *st, tagptrs_T *tagpp,
+                                  findtags_match_args_T *margs, char *buf_ffname, hash_T *hash);
+extern int rs_findtags_copy_matches(findtags_state_T *st, char ***matchesp);
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
@@ -923,6 +932,194 @@ char *nvim_findtags_string_convert(void *st_void)
 {
   findtags_state_T *st = (findtags_state_T *)st_void;
   return string_convert(&st->vimconv, st->lbuf, NULL);
+}
+
+// ============================================================================
+// Rust FFI accessor functions for Phase 5 (parse line and matching)
+// ============================================================================
+
+/// Get st->orgpat->headlen
+int nvim_findtags_get_orgpat_headlen(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->orgpat->headlen;
+}
+
+/// Get st->orgpat->head
+const char *nvim_findtags_get_orgpat_head(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->orgpat->head;
+}
+
+/// Get st->orgpat->pat
+const char *nvim_findtags_get_orgpat_pat(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->orgpat->pat;
+}
+
+/// Get st->orgpat->len
+int nvim_findtags_get_orgpat_len(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->orgpat->len;
+}
+
+/// Check if st->orgpat->regmatch.regprog is not NULL
+bool nvim_findtags_has_regprog(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->orgpat->regmatch.regprog != NULL;
+}
+
+/// Run vim_regexec on st->orgpat->regmatch with tagname
+bool nvim_findtags_vim_regexec(void *st_void, const char *tagname)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  return vim_regexec(&st->orgpat->regmatch, (char *)tagname, 0);
+}
+
+/// Get st->orgpat->regmatch.startp[0] offset from tagname
+int nvim_findtags_get_regmatch_startoff(const void *st_void, const char *tagname)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return (int)(st->orgpat->regmatch.startp[0] - tagname);
+}
+
+/// Call mb_strnicmp for tag comparison
+int nvim_mb_strnicmp(const char *s1, const char *s2, size_t len)
+{
+  return mb_strnicmp(s1, s2, len);
+}
+
+/// Get st->tag_fname
+const char *nvim_findtags_get_tag_fname(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->tag_fname;
+}
+
+/// Get st->help_lang (3-byte buffer)
+const char *nvim_findtags_get_help_lang(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->help_lang;
+}
+
+/// Get st->help_pri
+int nvim_findtags_get_help_pri(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->help_pri;
+}
+
+/// Get st->get_searchpat
+bool nvim_findtags_get_searchpat(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->get_searchpat;
+}
+
+/// Set st->get_searchpat
+void nvim_findtags_set_searchpat(void *st_void, bool val)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  st->get_searchpat = val;
+}
+
+/// Get st->match_count
+int nvim_findtags_get_match_count_val(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->match_count;
+}
+
+/// Increment st->match_count
+void nvim_findtags_inc_match_count(void *st_void)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  st->match_count++;
+}
+
+/// Set st->match_count
+void nvim_findtags_set_match_count(void *st_void, int count)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  st->match_count = count;
+}
+
+/// Get the current State for insert mode check
+int nvim_get_current_State(void)
+{
+  return State;
+}
+
+/// Get 'showfulltag' option
+bool nvim_get_p_sft(void)
+{
+  return p_sft;
+}
+
+/// Call help_heuristic
+int nvim_help_heuristic(const char *tagname, int match_offset, bool wrong_case)
+{
+  return help_heuristic((char *)tagname, match_offset, wrong_case);
+}
+
+// Verify hash_T size matches Rust usize assumption
+_Static_assert(sizeof(hash_T) == sizeof(size_t), "hash_T must be size_t");
+
+/// Add a match to ht_match/ga_match arrays.
+/// Returns true if the match was added (not a duplicate).
+bool nvim_findtags_add_match_entry(void *st_void, int mtt, char *mfp, hash_T *hash)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  *hash = hash_hash(mfp);
+  hashitem_T *hi = hash_lookup(&st->ht_match[mtt], mfp, strlen(mfp), *hash);
+  if (HASHITEM_EMPTY(hi)) {
+    hash_add_item(&st->ht_match[mtt], hi, mfp, *hash);
+    GA_APPEND(char *, &st->ga_match[mtt], mfp);
+    st->match_count++;
+    return true;
+  }
+  return false;
+}
+
+/// Get ga_match[mtt].ga_len
+int nvim_findtags_ga_match_len(const void *st_void, int mtt)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->ga_match[mtt].ga_len;
+}
+
+/// Get ga_match[mtt].ga_data[idx]
+char *nvim_findtags_ga_match_get(const void *st_void, int mtt, int idx)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return ((char **)(st->ga_match[mtt].ga_data))[idx];
+}
+
+/// Clear ga_match[mtt] and ht_match[mtt]
+void nvim_findtags_clear_match(void *st_void, int mtt)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  ga_clear(&st->ga_match[mtt]);
+  hash_clear(&st->ht_match[mtt]);
+}
+
+/// Get st->stop_searching
+bool nvim_findtags_get_stop_searching(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->stop_searching;
+}
+
+/// Set st->stop_searching
+void nvim_findtags_set_stop_searching(void *st_void, bool val)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  st->stop_searching = val;
 }
 
 /// Reads the 'tagfunc' option value and convert that to a callback value.
@@ -2192,133 +2389,7 @@ static tagmatch_status_T findtags_parse_line(findtags_state_T *st, tagptrs_T *ta
                                              findtags_match_args_T *margs,
                                              tagsearch_info_T *sinfo_p)
 {
-  int status;
-
-  // Figure out where the different strings are in this line.
-  // For "normal" tags: Do a quick check if the tag matches.
-  // This speeds up tag searching a lot!
-  if (st->orgpat->headlen) {
-    CLEAR_FIELD(*tagpp);
-    tagpp->tagname = st->lbuf;
-    tagpp->tagname_end = vim_strchr(st->lbuf, TAB);
-    if (tagpp->tagname_end == NULL) {
-      // Corrupted tag line.
-      return TAG_MATCH_FAIL;
-    }
-
-    // Skip this line if the length of the tag is different and
-    // there is no regexp, or the tag is too short.
-    int cmplen = (int)(tagpp->tagname_end - tagpp->tagname);
-    if (p_tl != 0 && cmplen > p_tl) {  // adjust for 'taglength'
-      cmplen = (int)p_tl;
-    }
-    if ((st->flags & TAG_REGEXP) && st->orgpat->headlen < cmplen) {
-      cmplen = st->orgpat->headlen;
-    } else if (st->state == TS_LINEAR && st->orgpat->headlen != cmplen) {
-      return TAG_MATCH_NEXT;
-    }
-
-    if (st->state == TS_BINARY) {
-      int tagcmp;
-      // Simplistic check for unsorted tags file.
-      int i = (uint8_t)tagpp->tagname[0];
-      if (margs->sortic) {
-        i = TOUPPER_ASC(tagpp->tagname[0]);
-      }
-      if (i < sinfo_p->low_char || i > sinfo_p->high_char) {
-        margs->sort_error = true;
-      }
-
-      // Compare the current tag with the searched tag.
-      if (margs->sortic) {
-        tagcmp = tag_strnicmp(tagpp->tagname, st->orgpat->head,
-                              (size_t)cmplen);
-      } else {
-        tagcmp = strncmp(tagpp->tagname, st->orgpat->head, (size_t)cmplen);
-      }
-
-      // A match with a shorter tag means to search forward.
-      // A match with a longer tag means to search backward.
-      if (tagcmp == 0) {
-        if (cmplen < st->orgpat->headlen) {
-          tagcmp = -1;
-        } else if (cmplen > st->orgpat->headlen) {
-          tagcmp = 1;
-        }
-      }
-
-      if (tagcmp == 0) {
-        // We've located the tag, now skip back and search
-        // forward until the first matching tag is found.
-        st->state = TS_SKIP_BACK;
-        sinfo_p->match_offset = sinfo_p->curr_offset;
-        return TAG_MATCH_NEXT;
-      }
-      if (tagcmp < 0) {
-        sinfo_p->curr_offset = vim_ftell(st->fp);
-        if (sinfo_p->curr_offset < sinfo_p->high_offset) {
-          sinfo_p->low_offset = sinfo_p->curr_offset;
-          if (margs->sortic) {
-            sinfo_p->low_char = TOUPPER_ASC(tagpp->tagname[0]);
-          } else {
-            sinfo_p->low_char = (uint8_t)tagpp->tagname[0];
-          }
-          return TAG_MATCH_NEXT;
-        }
-      }
-      if (tagcmp > 0 && sinfo_p->curr_offset != sinfo_p->high_offset) {
-        sinfo_p->high_offset = sinfo_p->curr_offset;
-        if (margs->sortic) {
-          sinfo_p->high_char = TOUPPER_ASC(tagpp->tagname[0]);
-        } else {
-          sinfo_p->high_char = (uint8_t)tagpp->tagname[0];
-        }
-        return TAG_MATCH_NEXT;
-      }
-
-      // No match yet and are at the end of the binary search.
-      return TAG_MATCH_STOP;
-    } else if (st->state == TS_SKIP_BACK) {
-      assert(cmplen >= 0);
-      if (mb_strnicmp(tagpp->tagname, st->orgpat->head, (size_t)cmplen) != 0) {
-        st->state = TS_STEP_FORWARD;
-      } else {
-        // Have to skip back more.  Restore the curr_offset
-        // used, otherwise we get stuck at a long line.
-        sinfo_p->curr_offset = sinfo_p->curr_offset_used;
-      }
-      return TAG_MATCH_NEXT;
-    } else if (st->state == TS_STEP_FORWARD) {
-      assert(cmplen >= 0);
-      if (mb_strnicmp(tagpp->tagname, st->orgpat->head, (size_t)cmplen) != 0) {
-        return ((off_T)vim_ftell(st->fp) > sinfo_p->match_offset)
-               ? TAG_MATCH_STOP   // past last match
-               : TAG_MATCH_NEXT;  // before first match
-      }
-    } else {
-      // skip this match if it can't match
-      assert(cmplen >= 0);
-      if (mb_strnicmp(tagpp->tagname, st->orgpat->head, (size_t)cmplen) != 0) {
-        return TAG_MATCH_NEXT;
-      }
-    }
-
-    // Can be a matching tag, isolate the file name and command.
-    tagpp->fname = tagpp->tagname_end + 1;
-    tagpp->fname_end = vim_strchr(tagpp->fname, TAB);
-    if (tagpp->fname_end == NULL) {
-      status = FAIL;
-    } else {
-      tagpp->command = tagpp->fname_end + 1;
-      status = OK;
-    }
-  } else {
-    status = parse_tag_line(st->lbuf, tagpp);
-  }
-
-  return status == FAIL
-         ? TAG_MATCH_FAIL
-         : TAG_MATCH_SUCCESS;
+  return (tagmatch_status_T)rs_findtags_parse_line(st, tagpp, margs, sinfo_p);
 }
 
 /// Initialize the structure used for tag matching.
@@ -2333,49 +2404,7 @@ static void findtags_matchargs_init(findtags_match_args_T *margs, int flags)
 /// Uses the values in "margs" for doing the comparison.
 static bool findtags_match_tag(findtags_state_T *st, tagptrs_T *tagpp, findtags_match_args_T *margs)
 {
-  bool match = false;
-
-  // First try matching with the pattern literally (also when it is
-  // a regexp).
-  int cmplen = (int)(tagpp->tagname_end - tagpp->tagname);
-  if (p_tl != 0 && cmplen > p_tl) {           // adjust for 'taglength'
-    cmplen = (int)p_tl;
-  }
-  // if tag length does not match, don't try comparing
-  if (st->orgpat->len != cmplen) {
-    match = false;
-  } else {
-    if (st->orgpat->regmatch.rm_ic) {
-      assert(cmplen >= 0);
-      match = mb_strnicmp(tagpp->tagname, st->orgpat->pat, (size_t)cmplen) == 0;
-      if (match) {
-        margs->match_no_ic = strncmp(tagpp->tagname, st->orgpat->pat, (size_t)cmplen) == 0;
-      }
-    } else {
-      match = strncmp(tagpp->tagname, st->orgpat->pat, (size_t)cmplen) == 0;
-    }
-  }
-
-  // Has a regexp: Also find tags matching regexp.
-  margs->match_re = false;
-  if (!match && st->orgpat->regmatch.regprog != NULL) {
-    char cc = *tagpp->tagname_end;
-    *tagpp->tagname_end = NUL;
-    match = vim_regexec(&st->orgpat->regmatch, tagpp->tagname, 0);
-    if (match) {
-      margs->matchoff = (int)(st->orgpat->regmatch.startp[0] - tagpp->tagname);
-      if (st->orgpat->regmatch.rm_ic) {
-        st->orgpat->regmatch.rm_ic = false;
-        margs->match_no_ic = vim_regexec(&st->orgpat->regmatch,
-                                         tagpp->tagname, 0);
-        st->orgpat->regmatch.rm_ic = true;
-      }
-    }
-    *tagpp->tagname_end = cc;
-    margs->match_re = true;
-  }
-
-  return match;
+  return rs_findtags_match_tag(st, tagpp, margs);
 }
 
 /// Convert the encoding of a line read from a tags file in "st->lbuf".
@@ -2391,127 +2420,7 @@ static void findtags_string_convert(findtags_state_T *st)
 static void findtags_add_match(findtags_state_T *st, tagptrs_T *tagpp, findtags_match_args_T *margs,
                                char *buf_ffname, hash_T *hash)
 {
-  const bool name_only = (st->flags & TAG_NAMES);
-  size_t len = 0;
-  size_t mfp_size = 0;
-  char *mfp;
-
-  // Decide in which array to store this match.
-  bool is_current = test_for_current(tagpp->fname, tagpp->fname_end,
-                                     st->tag_fname, buf_ffname);
-
-  // current tag line is static
-  bool is_static = test_for_static(tagpp);
-
-  // Decide in which of the sixteen tables to store this match.
-  int mtt = is_static
-            ? is_current ? MT_ST_CUR : MT_ST_OTH
-            : is_current ? MT_GL_CUR : MT_GL_OTH;
-
-  if (st->orgpat->regmatch.rm_ic && !margs->match_no_ic) {
-    mtt += MT_IC_OFF;
-  }
-  if (margs->match_re) {
-    mtt += MT_RE_OFF;
-  }
-
-  // Add the found match in ht_match[mtt] and ga_match[mtt].
-  // Store the info we need later, which depends on the kind of
-  // tags we are dealing with.
-  if (st->help_only) {
-#define ML_EXTRA 3
-    // Append the help-heuristic number after the tagname, for
-    // sorting it later.  The heuristic is ignored for
-    // detecting duplicates.
-    // The format is {tagname}@{lang}NUL{heuristic}NUL
-    *tagpp->tagname_end = NUL;
-    len = (size_t)(tagpp->tagname_end - tagpp->tagname);
-    mfp_size = sizeof(char) + len + 10 + ML_EXTRA + 1;
-    mfp = xmalloc(mfp_size);
-
-    char *p = mfp;
-    STRCPY(p, tagpp->tagname);
-    p[len] = '@';
-    STRCPY(p + len + 1, st->help_lang);
-    snprintf(p + len + 1 + ML_EXTRA, mfp_size - (len + 1 + ML_EXTRA), "%06d",
-             help_heuristic(tagpp->tagname,
-                            margs->match_re ? margs->matchoff : 0,
-                            !margs->match_no_ic) + st->help_pri);
-
-    *tagpp->tagname_end = TAB;
-  } else if (name_only) {
-    if (st->get_searchpat) {
-      char *temp_end = tagpp->command;
-
-      if (*temp_end == '/') {
-        while (*temp_end && *temp_end != '\r'
-               && *temp_end != '\n'
-               && *temp_end != '$') {
-          temp_end++;
-        }
-      }
-
-      if (tagpp->command + 2 < temp_end) {
-        len = (size_t)(temp_end - tagpp->command - 2);
-        mfp = xmalloc(len + 2);
-        xmemcpyz(mfp, tagpp->command + 2, len);
-      } else {
-        mfp = NULL;
-      }
-      st->get_searchpat = false;
-    } else {
-      len = (size_t)(tagpp->tagname_end - tagpp->tagname);
-      mfp = xmalloc(sizeof(char) + len + 1);
-      xmemcpyz(mfp, tagpp->tagname, len);
-
-      // if wanted, re-read line to get long form too
-      if (State & MODE_INSERT) {
-        st->get_searchpat = p_sft;
-      }
-    }
-  } else {
-    size_t tag_fname_len = strlen(st->tag_fname);
-    // Save the tag in a buffer.
-    // Use 0x02 to separate fields (Can't use NUL, because the
-    // hash key is terminated by NUL).
-    // Emacs tag: <mtt><tag_fname><0x02><ebuf><0x02><lbuf><NUL>
-    // other tag: <mtt><tag_fname><0x02><0x02><lbuf><NUL>
-    // without Emacs tags: <mtt><tag_fname><0x02><lbuf><NUL>
-    // Here <mtt> is the "mtt" value plus 1 to avoid NUL.
-    len = tag_fname_len + strlen(st->lbuf) + 3;
-    mfp = xmalloc(sizeof(char) + len + 1);
-    char *p = mfp;
-    p[0] = (char)(mtt + 1);
-    STRCPY(p + 1, st->tag_fname);
-#ifdef BACKSLASH_IN_FILENAME
-    // Ignore differences in slashes, avoid adding
-    // both path/file and path\file.
-    slash_adjust(p + 1);
-#endif
-    p[tag_fname_len + 1] = TAG_SEP;
-    char *s = p + 1 + tag_fname_len + 1;
-    STRCPY(s, st->lbuf);
-  }
-
-  if (mfp != NULL) {
-    hashitem_T *hi;
-
-    // Don't add identical matches.
-    // "mfp" is used as a hash key, there is a NUL byte to end
-    // the part that matters for comparing, more bytes may
-    // follow after it.  E.g. help tags store the priority
-    // after the NUL.
-    *hash = hash_hash(mfp);
-    hi = hash_lookup(&st->ht_match[mtt], mfp, strlen(mfp), *hash);
-    if (HASHITEM_EMPTY(hi)) {
-      hash_add_item(&st->ht_match[mtt], hi, mfp, *hash);
-      GA_APPEND(char *, &st->ga_match[mtt], mfp);
-      st->match_count++;
-    } else {
-      // duplicate tag, drop it
-      xfree(mfp);
-    }
-  }
+  rs_findtags_add_match(st, tagpp, margs, buf_ffname, hash);
 }
 
 /// Read and get all the tags from file st->tag_fname.
@@ -2674,40 +2583,7 @@ static void findtags_in_file(findtags_state_T *st, int flags, char *buf_ffname)
 /// Returns the number of matches copied.
 static int findtags_copy_matches(findtags_state_T *st, char ***matchesp)
 {
-  const bool name_only = (st->flags & TAG_NAMES);
-
-  char **matches = st->match_count > 0
-                   ? xmalloc((size_t)st->match_count * sizeof(char *))
-                   : NULL;
-
-  st->match_count = 0;
-  for (int mtt = 0; mtt < MT_COUNT; mtt++) {
-    for (int i = 0; i < st->ga_match[mtt].ga_len; i++) {
-      char *mfp = ((char **)(st->ga_match[mtt].ga_data))[i];
-      if (matches == NULL) {
-        xfree(mfp);
-      } else {
-        if (!name_only) {
-          // Change mtt back to zero-based.
-          *mfp = (char)(*mfp - 1);
-
-          // change the TAG_SEP back to NUL
-          for (char *p = mfp + 1; *p != NUL; p++) {
-            if (*p == TAG_SEP) {
-              *p = NUL;
-            }
-          }
-        }
-        matches[st->match_count++] = mfp;
-      }
-    }
-
-    ga_clear(&st->ga_match[mtt]);
-    hash_clear(&st->ht_match[mtt]);
-  }
-
-  *matchesp = matches;
-  return st->match_count;
+  return rs_findtags_copy_matches(st, matchesp);
 }
 
 /// find_tags() - search for tags in tags files
