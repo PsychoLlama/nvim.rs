@@ -49,6 +49,7 @@ pub mod commands;
 pub mod defaults;
 pub mod package;
 pub mod path;
+pub mod pathsearch;
 pub mod script;
 pub mod search;
 pub mod searchpath;
@@ -346,6 +347,16 @@ pub fn rs_dip_has_dirfile(flags: c_int) -> bool {
 pub fn rs_dip_is_package_search(flags: c_int) -> bool {
     (flags & (dip::START | dip::OPT)) != 0
 }
+
+// =============================================================================
+// Re-exports from submodules
+// =============================================================================
+
+pub use pathsearch::{
+    rs_do_in_path_and_pp, rs_do_in_runtimepath, rs_gen_expand_wildcards_and_cb, rs_source_callback,
+    rs_source_callback_vim_lua, rs_source_in_path_vim_lua, rs_source_runtime,
+    rs_source_runtime_vim_lua,
+};
 
 // =============================================================================
 // Tests

@@ -110,6 +110,11 @@ pub use nvim_quickfix::*;
 pub use nvim_regexp::*;
 pub use nvim_register::*;
 pub use nvim_runtime::*;
+pub use nvim_runtime::{
+    rs_do_in_path_and_pp, rs_do_in_runtimepath, rs_gen_expand_wildcards_and_cb, rs_source_callback,
+    rs_source_callback_vim_lua, rs_source_in_path_vim_lua, rs_source_runtime,
+    rs_source_runtime_vim_lua,
+};
 pub use nvim_search::*;
 pub use nvim_session::*;
 pub use nvim_shada::*;

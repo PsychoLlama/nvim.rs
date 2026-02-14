@@ -75,6 +75,9 @@ _Static_assert(DIP_DIRFILE == 0x200, "DIP_DIRFILE must be 0x200");
 _Static_assert(DOSO_NONE == 0, "DOSO_NONE must be 0");
 _Static_assert(DOSO_VIMRC == 1, "DOSO_VIMRC must be 1");
 
+_Static_assert(FAIL == 0, "FAIL must be 0");
+_Static_assert(OK == 1, "OK must be 1");
+
 // =============================================================================
 // Phase 1: Execution stack accessors
 // =============================================================================

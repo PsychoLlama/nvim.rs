@@ -102,6 +102,19 @@ typedef kvec_t(char *) CharVec;
 
 #include "runtime.c.generated.h"
 
+// Rust FFI forward declarations (Phase 5)
+extern bool rs_source_callback_vim_lua(int num_fnames, char **fnames, bool all, void *cookie);
+extern bool rs_source_callback(int num_fnames, char **fnames, bool all, void *cookie);
+extern int rs_gen_expand_wildcards_and_cb(int num_pat, char **pats, int flags, bool all,
+                                           DoInRuntimepathCB callback, void *cookie);
+extern int rs_do_in_path_and_pp(char *path, char *name, int flags,
+                                  DoInRuntimepathCB callback, void *cookie);
+extern int rs_do_in_runtimepath(char *name, int flags,
+                                  DoInRuntimepathCB callback, void *cookie);
+extern int rs_source_runtime(char *name, int flags);
+extern int rs_source_runtime_vim_lua(char *name, int flags);
+extern int rs_source_in_path_vim_lua(char *path, char *name, int flags);
+
 garray_T exestack = { 0, 0, sizeof(estack_T), 50, NULL };
 garray_T script_items = { 0, 0, sizeof(scriptitem_T *), 20, NULL };
 
@@ -424,53 +437,14 @@ void set_context_in_runtime_cmd(expand_T *xp, const char *arg)
 /// Source all .vim and .lua files in "fnames" with .vim files being sourced first.
 static bool source_callback_vim_lua(int num_fnames, char **fnames, bool all, void *cookie)
 {
-  bool did_one = false;
-
-  for (int i = 0; i < num_fnames; i++) {
-    if (path_with_extension(fnames[i], "vim")) {
-      do_source(fnames[i], false, DOSO_NONE, cookie);
-      did_one = true;
-      if (!all) {
-        return true;
-      }
-    }
-  }
-
-  for (int i = 0; i < num_fnames; i++) {
-    if (path_with_extension(fnames[i], "lua")) {
-      do_source(fnames[i], false, DOSO_NONE, cookie);
-      did_one = true;
-      if (!all) {
-        return true;
-      }
-    }
-  }
-
-  return did_one;
+  return rs_source_callback_vim_lua(num_fnames, fnames, all, cookie);
 }
 
 /// Source all files in "fnames" with .vim files sourced first, .lua files
 /// sourced second, and any remaining files sourced last.
 static bool source_callback(int num_fnames, char **fnames, bool all, void *cookie)
 {
-  bool did_one = source_callback_vim_lua(num_fnames, fnames, all, cookie);
-
-  if (!all && did_one) {
-    return true;
-  }
-
-  for (int i = 0; i < num_fnames; i++) {
-    if (!path_with_extension(fnames[i], "vim")
-        && !path_with_extension(fnames[i], "lua")) {
-      do_source(fnames[i], false, DOSO_NONE, cookie);
-      did_one = true;
-      if (!all) {
-        return true;
-      }
-    }
-  }
-
-  return did_one;
+  return rs_source_callback(num_fnames, fnames, all, cookie);
 }
 
 /// Find the patterns in "name" in all directories in "path" and invoke
@@ -603,7 +577,7 @@ static void runtime_search_path_unref(RuntimeSearchPath path, const int *ref)
 /// When "flags" has DIP_ERR: give an error message if there is no match.
 ///
 /// return FAIL when no file could be sourced, OK otherwise.
-static int do_in_cached_path(char *name, int flags, DoInRuntimepathCB callback, void *cookie)
+int do_in_cached_path(char *name, int flags, DoInRuntimepathCB callback, void *cookie)
 {
   bool did_one = false;
 
@@ -768,33 +742,7 @@ done:
 /// has done its job.
 int do_in_path_and_pp(char *path, char *name, int flags, DoInRuntimepathCB callback, void *cookie)
 {
-  int done = FAIL;
-
-  if ((flags & DIP_NORTP) == 0) {
-    done |= do_in_path(path, "", (name && !*name) ? NULL : name, flags, callback,
-                       cookie);
-  }
-
-  if ((done == FAIL || (flags & DIP_ALL)) && (flags & DIP_START)) {
-    const char *prefix
-      = (flags & DIP_AFTER) ? "pack/*/start/*/after/" : "pack/*/start/*/";  // NOLINT
-    done |= do_in_path(p_pp, prefix, name, flags & ~DIP_AFTER, callback, cookie);
-
-    if (done == FAIL || (flags & DIP_ALL)) {
-      prefix = (flags & DIP_AFTER) ? "start/*/after/" : "start/*/";  // NOLINT
-      done |= do_in_path(p_pp, prefix, name, flags & ~DIP_AFTER, callback, cookie);
-    }
-  }
-
-  if ((done == FAIL || (flags & DIP_ALL)) && (flags & DIP_OPT)) {
-    done |= do_in_path(p_pp, "pack/*/opt/*/", name, flags, callback, cookie);  // NOLINT
-
-    if (done == FAIL || (flags & DIP_ALL)) {
-      done |= do_in_path(p_pp, "opt/*/", name, flags, callback, cookie);  // NOLINT
-    }
-  }
-
-  return done;
+  return rs_do_in_path_and_pp(path, name, flags, callback, cookie);
 }
 
 static void push_path(RuntimeSearchPath *search_path, Set(String) *rtp_used, char *entry,
@@ -945,17 +893,7 @@ void runtime_search_path_validate(void)
 /// Just like do_in_path_and_pp(), using 'runtimepath' for "path".
 int do_in_runtimepath(char *name, int flags, DoInRuntimepathCB callback, void *cookie)
 {
-  int success = FAIL;
-  if (!(flags & DIP_NORTP)) {
-    success |= do_in_cached_path((name && !*name) ? NULL : name, flags, callback, cookie);
-    flags = (flags & ~DIP_START) | DIP_NORTP;
-  }
-  // TODO(bfredl): we could integrate disabled OPT dirs into the cached path
-  // which would effectivize ":packadd myoptpack" as well
-  if ((flags & (DIP_START|DIP_OPT)) && (success == FAIL || (flags & DIP_ALL))) {
-    success |= do_in_path_and_pp(p_rtp, name, flags, callback, cookie);
-  }
-  return success;
+  return rs_do_in_runtimepath(name, flags, callback, cookie);
 }
 
 /// Source the file "name" from all directories in 'runtimepath'.
@@ -965,13 +903,13 @@ int do_in_runtimepath(char *name, int flags, DoInRuntimepathCB callback, void *c
 /// return FAIL when no file could be sourced, OK otherwise.
 int source_runtime(char *name, int flags)
 {
-  return do_in_runtimepath(name, flags, source_callback, NULL);
+  return rs_source_runtime(name, flags);
 }
 
 /// Just like source_runtime(), but only source vim and lua files
 int source_runtime_vim_lua(char *name, int flags)
 {
-  return do_in_runtimepath(name, flags, source_callback_vim_lua, NULL);
+  return rs_source_runtime_vim_lua(name, flags);
 }
 
 /// Just like source_runtime(), but:
@@ -979,7 +917,7 @@ int source_runtime_vim_lua(char *name, int flags)
 /// - only source .vim and .lua files
 int source_in_path_vim_lua(char *path, char *name, int flags)
 {
-  return do_in_path_and_pp(path, name, flags, source_callback_vim_lua, NULL);
+  return rs_source_in_path_vim_lua(path, name, flags);
 }
 
 /// Expand wildcards in "pats" and invoke callback matches.
@@ -996,18 +934,7 @@ int source_in_path_vim_lua(char *path, char *name, int flags)
 static int gen_expand_wildcards_and_cb(int num_pat, char **pats, int flags, bool all,
                                        DoInRuntimepathCB callback, void *cookie)
 {
-  int num_files;
-  char **files;
-
-  if (gen_expand_wildcards(num_pat, pats, &num_files, &files, flags) != OK) {
-    return FAIL;
-  }
-
-  (*callback)(num_files, files, all, cookie);
-
-  FreeWild(num_files, files);
-
-  return OK;
+  return rs_gen_expand_wildcards_and_cb(num_pat, pats, flags, all, callback, cookie);
 }
 
 /// Add the package directory to 'runtimepath'
