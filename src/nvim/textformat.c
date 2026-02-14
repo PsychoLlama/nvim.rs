@@ -56,6 +56,7 @@ extern void rs_op_format(oparg_T *oap, int keep_cursor);
 extern void rs_op_formatexpr(oparg_T *oap);
 extern void rs_auto_format(int trailblank, int prev_line);
 extern void rs_check_auto_format(int end_insert);
+extern int rs_fex_format(linenr_T lnum, long count, int c);
 
 /// C accessor for curbuf->b_p_fo (formatoptions).
 char *nvim_get_curbuf_b_p_fo(void)
@@ -317,10 +318,77 @@ void nvim_textfmt_adjust_visual_windows(linenr_T old_line_count)
   }
 }
 
-/// Call fex_format (accessor for Rust).
-int nvim_textfmt_fex_format(linenr_T lnum, long count, int c)
+// =============================================================================
+// C Accessor Functions for fex_format (Phase fex)
+// =============================================================================
+
+/// Check if 'formatexpr' was set insecurely (accessor for Rust).
+bool nvim_textfmt_fex_was_set_insecurely(void)
 {
-  return fex_format(lnum, count, c);
+  return was_set_insecurely(curwin, kOptFormatexpr, OPT_LOCAL);
+}
+
+/// Set v:lnum (accessor for Rust).
+void nvim_textfmt_set_vv_lnum(int64_t val)
+{
+  set_vim_var_nr(VV_LNUM, (varnumber_T)val);
+}
+
+/// Set v:count (accessor for Rust).
+void nvim_textfmt_set_vv_count(int64_t val)
+{
+  set_vim_var_nr(VV_COUNT, (varnumber_T)val);
+}
+
+/// Set v:char (accessor for Rust).
+void nvim_textfmt_set_vv_char(int c)
+{
+  set_vim_var_char(c);
+}
+
+/// Clear v:char (accessor for Rust).
+void nvim_textfmt_clear_vv_char(void)
+{
+  set_vim_var_string(VV_CHAR, NULL, -1);
+}
+
+/// Get curbuf->b_p_fex (accessor for Rust).
+char *nvim_textfmt_get_curbuf_b_p_fex(void)
+{
+  return curbuf->b_p_fex;
+}
+
+static sctx_T fex_saved_sctx;
+
+/// Save current_sctx and set to curbuf's formatexpr script context (accessor for Rust).
+void nvim_textfmt_fex_save_sctx(void)
+{
+  fex_saved_sctx = current_sctx;
+  current_sctx = curbuf->b_p_script_ctx[kBufOptFormatexpr];
+}
+
+/// Restore current_sctx after fex evaluation (accessor for Rust).
+void nvim_textfmt_fex_restore_sctx(void)
+{
+  current_sctx = fex_saved_sctx;
+}
+
+/// Increment sandbox counter (accessor for Rust).
+void nvim_textfmt_sandbox_inc(void)
+{
+  sandbox++;
+}
+
+/// Decrement sandbox counter (accessor for Rust).
+void nvim_textfmt_sandbox_dec(void)
+{
+  sandbox--;
+}
+
+/// Evaluate expression and return number (accessor for Rust).
+int nvim_textfmt_eval_to_number(char *expr)
+{
+  return (int)eval_to_number(expr, true);
 }
 
 // =============================================================================
@@ -929,33 +997,7 @@ void op_formatexpr(oparg_T *oap)
 /// @param c  character to be inserted
 int fex_format(linenr_T lnum, long count, int c)
 {
-  bool use_sandbox = was_set_insecurely(curwin, kOptFormatexpr, OPT_LOCAL);
-  const sctx_T save_sctx = current_sctx;
-
-  // Set v:lnum to the first line number and v:count to the number of lines.
-  // Set v:char to the character to be inserted (can be NUL).
-  set_vim_var_nr(VV_LNUM, (varnumber_T)lnum);
-  set_vim_var_nr(VV_COUNT, (varnumber_T)count);
-  set_vim_var_char(c);
-
-  // Make a copy, the option could be changed while calling it.
-  char *fex = xstrdup(curbuf->b_p_fex);
-  current_sctx = curbuf->b_p_script_ctx[kBufOptFormatexpr];
-
-  // Evaluate the function.
-  if (use_sandbox) {
-    sandbox++;
-  }
-  int r = (int)eval_to_number(fex, true);
-  if (use_sandbox) {
-    sandbox--;
-  }
-
-  set_vim_var_string(VV_CHAR, NULL, -1);
-  xfree(fex);
-  current_sctx = save_sctx;
-
-  return r;
+  return rs_fex_format(lnum, count, c);
 }
 
 /// @param line_count  number of lines to format, starting at the cursor position.

@@ -6,6 +6,7 @@
 #![allow(unsafe_code)] // FFI requires unsafe
 
 mod auto;
+mod fex;
 mod ops;
 mod paragraph;
 mod textwidth;
@@ -14,6 +15,7 @@ use std::ffi::{c_char, c_int};
 
 // Re-export FFI functions from submodules
 pub use auto::{rs_auto_format, rs_check_auto_format};
+pub use fex::rs_fex_format;
 pub use ops::{rs_op_format, rs_op_formatexpr};
 pub use paragraph::{rs_ends_in_white, rs_fmt_check_par, rs_paragraph_start, rs_same_leader};
 pub use textwidth::rs_comp_textwidth;

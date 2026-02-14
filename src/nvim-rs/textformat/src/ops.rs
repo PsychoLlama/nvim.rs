@@ -5,7 +5,7 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 
-use std::ffi::{c_int, c_long, c_void};
+use std::ffi::{c_int, c_void};
 
 // =============================================================================
 // Opaque Handles
@@ -71,8 +71,6 @@ extern "C" {
     // Window iteration for visual mode adjustment
     fn nvim_textfmt_adjust_visual_windows(old_line_count: c_int);
 
-    // formatexpr evaluation
-    fn nvim_textfmt_fex_format(lnum: c_int, count: c_long, c: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -191,7 +189,7 @@ unsafe fn op_formatexpr_impl(oap: OapHandle) {
     let start_lnum = nvim_textfmt_oap_get_start_lnum(oap);
     let line_count = nvim_textfmt_oap_get_line_count(oap);
 
-    if nvim_textfmt_fex_format(start_lnum, line_count as c_long, 0) != 0 {
+    if crate::fex::fex_format_impl(start_lnum, line_count as std::ffi::c_long, 0) != 0 {
         // As documented: when 'formatexpr' returns non-zero fall back to
         // internal formatting.
         op_format_impl(oap, false);
