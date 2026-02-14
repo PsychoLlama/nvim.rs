@@ -122,6 +122,14 @@ extern void rs_set_search_direction_raw(int cdir);
 extern void rs_reset_search_dir(void);
 extern int rs_search_linewhite(int lnum);
 
+// Rust FFI declarations for ShaDa pattern get/set
+extern void rs_get_search_pattern_shada(SearchPattern *pat);
+extern void rs_get_substitute_pattern_shada(SearchPattern *pat);
+extern void rs_set_search_pattern_shada(const SearchPattern *pat);
+extern void rs_set_substitute_pattern_shada(const SearchPattern *pat);
+extern void rs_set_last_used_pattern(int is_substitute_pattern);
+extern void rs_free_search_patterns(void);
+
 // Rust FFI declarations for pattern utilities
 extern int rs_pat_has_uppercase(const char *pat);
 extern int rs_ignorecase(const char *pat);
@@ -546,13 +554,7 @@ static inline void free_spat(SearchPattern *const spat)
 #if defined(EXITFREE)
 void free_search_patterns(void)
 {
-  for (size_t i = 0; i < ARRAY_SIZE(spats); i++) {
-    free_spat(&spats[i]);
-  }
-  CLEAR_FIELD(spats);
-
-  XFREE_CLEAR(mr_pattern);
-  mr_patternlen = 0;
+  rs_free_search_patterns();
 }
 
 #endif
@@ -3717,30 +3719,25 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
 /// Get last search pattern
 void get_search_pattern(SearchPattern *const pat)
 {
-  memcpy(pat, &(spats[0]), sizeof(spats[0]));
+  rs_get_search_pattern_shada(pat);
 }
 
 /// Get last substitute pattern
 void get_substitute_pattern(SearchPattern *const pat)
 {
-  memcpy(pat, &(spats[1]), sizeof(spats[1]));
-  CLEAR_FIELD(pat->off);
+  rs_get_substitute_pattern_shada(pat);
 }
 
 /// Set last search pattern
 void set_search_pattern(const SearchPattern pat)
 {
-  free_spat(&spats[0]);
-  memcpy(&(spats[0]), &pat, sizeof(spats[0]));
-  set_vv_searchforward();
+  rs_set_search_pattern_shada(&pat);
 }
 
 /// Set last substitute pattern
 void set_substitute_pattern(const SearchPattern pat)
 {
-  free_spat(&spats[1]);
-  memcpy(&(spats[1]), &pat, sizeof(spats[1]));
-  CLEAR_FIELD(spats[1].off);
+  rs_set_substitute_pattern_shada(&pat);
 }
 
 /// Set last used search pattern
@@ -3749,13 +3746,63 @@ void set_substitute_pattern(const SearchPattern pat)
 ///                                    used. Otherwise sets search pattern.
 void set_last_used_pattern(const bool is_substitute_pattern)
 {
-  last_idx = (is_substitute_pattern ? 1 : 0);
+  rs_set_last_used_pattern(is_substitute_pattern);
 }
 
 /// Returns true if search pattern was the last used one
 bool search_was_last_used(void)
 {
   return rs_search_was_last_used() != 0;
+}
+
+// =============================================================================
+// Batch accessors for ShaDa pattern get/set (Phase 2)
+// =============================================================================
+
+/// Copy spats[idx] out to caller-provided buffer.
+void nvim_spat_memcpy_out(int idx, SearchPattern *out)
+{
+  if (idx >= 0 && idx < 2 && out != NULL) {
+    memcpy(out, &spats[idx], sizeof(spats[0]));
+  }
+}
+
+/// Free spats[idx] and copy new value in.
+void nvim_spat_memcpy_in(int idx, const SearchPattern *in)
+{
+  if (idx >= 0 && idx < 2 && in != NULL) {
+    free_spat(&spats[idx]);
+    memcpy(&spats[idx], in, sizeof(spats[0]));
+  }
+}
+
+/// Free the pattern and additional_data of spats[idx].
+void nvim_free_spat(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    free_spat(&spats[idx]);
+  }
+}
+
+/// Clear spats[idx].off fields.
+void nvim_clear_spat_off(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    CLEAR_FIELD(spats[idx].off);
+  }
+}
+
+/// Clear all spats entries (for free_search_patterns).
+void nvim_clear_spats(void)
+{
+  CLEAR_FIELD(spats);
+}
+
+/// Free mr_pattern and reset mr_patternlen.
+void nvim_free_mr_pattern(void)
+{
+  XFREE_CLEAR(mr_pattern);
+  mr_patternlen = 0;
 }
 
 // =============================================================================

@@ -15,6 +15,37 @@ use crate::state;
 extern "C" {
     /// Get the pattern string from spats array.
     fn nvim_get_spat_pat(idx: c_int) -> *const c_char;
+
+    // Batch accessors for ShaDa pattern get/set
+    fn nvim_spat_memcpy_out(idx: c_int, out: *mut SearchPatternC);
+    fn nvim_spat_memcpy_in(idx: c_int, inp: *const SearchPatternC);
+    fn nvim_free_spat(idx: c_int);
+    fn nvim_clear_spat_off(idx: c_int);
+    fn nvim_clear_spats();
+    fn nvim_free_mr_pattern();
+    fn nvim_call_set_vv_searchforward();
+}
+
+/// Opaque representation of C SearchPattern struct.
+/// Must match the C struct layout exactly.
+#[repr(C)]
+pub struct SearchPatternC {
+    pub pat: *mut c_char,
+    pub patlen: usize,
+    pub magic: bool,
+    pub no_scs: bool,
+    pub timestamp: u64, // Timestamp
+    pub off: SearchOffsetC,
+    pub additional_data: *mut std::ffi::c_void,
+}
+
+/// Opaque representation of C SearchOffset struct.
+#[repr(C)]
+pub struct SearchOffsetC {
+    pub dir: i8,
+    pub line: bool,
+    pub end: bool,
+    pub off: i64,
 }
 
 // =============================================================================
@@ -321,6 +352,77 @@ pub extern "C" fn rs_get_mr_pattern_len() -> usize {
 #[no_mangle]
 pub extern "C" fn rs_mr_pattern_is_empty() -> c_int {
     c_int::from(mr_pattern_is_empty())
+}
+
+// =============================================================================
+// ShaDa Pattern Get/Set (Phase 2)
+// =============================================================================
+
+/// Get last search pattern (memcpy spats[0] out).
+///
+/// # Safety
+/// `pat` must point to a valid, properly aligned SearchPattern-sized buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_search_pattern_shada(pat: *mut SearchPatternC) {
+    nvim_spat_memcpy_out(state::RE_SEARCH, pat);
+}
+
+/// Get last substitute pattern (memcpy spats[1] out, then clear off).
+///
+/// # Safety
+/// `pat` must point to a valid, properly aligned SearchPattern-sized buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_substitute_pattern_shada(pat: *mut SearchPatternC) {
+    nvim_spat_memcpy_out(state::RE_SUBST, pat);
+    // Clear the offset fields, matching original get_substitute_pattern behavior
+    if !pat.is_null() {
+        let off = &mut (*pat).off;
+        off.dir = b'/' as i8;
+        off.line = false;
+        off.end = false;
+        off.off = 0;
+    }
+}
+
+/// Set last search pattern (free old, memcpy in, update vv_searchforward).
+///
+/// # Safety
+/// `pat` must point to a valid SearchPattern.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_search_pattern_shada(pat: *const SearchPatternC) {
+    nvim_spat_memcpy_in(state::RE_SEARCH, pat);
+    nvim_call_set_vv_searchforward();
+}
+
+/// Set last substitute pattern (free old, memcpy in, clear off).
+///
+/// # Safety
+/// `pat` must point to a valid SearchPattern.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_substitute_pattern_shada(pat: *const SearchPatternC) {
+    nvim_spat_memcpy_in(state::RE_SUBST, pat);
+    nvim_clear_spat_off(state::RE_SUBST);
+}
+
+// rs_set_last_used_pattern is already defined in substitute.rs
+
+/// Free spat at given index.
+#[no_mangle]
+pub extern "C" fn rs_free_spat(idx: c_int) {
+    unsafe {
+        nvim_free_spat(idx);
+    }
+}
+
+/// Free all search patterns (for EXITFREE).
+#[no_mangle]
+pub extern "C" fn rs_free_search_patterns() {
+    unsafe {
+        nvim_free_spat(state::RE_SEARCH);
+        nvim_free_spat(state::RE_SUBST);
+        nvim_clear_spats();
+        nvim_free_mr_pattern();
+    }
 }
 
 #[cfg(test)]
