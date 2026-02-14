@@ -2842,6 +2842,24 @@ int nvim_foldmethod_is_marker(win_T *wp)
   return foldmethodIsMarker(wp) ? 1 : 0;
 }
 
+/// Check if foldmethod is expr.
+int nvim_foldmethod_is_expr(win_T *wp)
+{
+  return foldmethodIsExpr(wp) ? 1 : 0;
+}
+
+/// Check if foldmethod is syntax.
+int nvim_foldmethod_is_syntax(win_T *wp)
+{
+  return foldmethodIsSyntax(wp) ? 1 : 0;
+}
+
+/// Check if foldmethod is indent.
+int nvim_foldmethod_is_indent(win_T *wp)
+{
+  return foldmethodIsIndent(wp) ? 1 : 0;
+}
+
 /// Get diff_context global.
 linenr_T nvim_get_diff_context(void)
 {
@@ -2926,6 +2944,55 @@ FoldLevelResult_C nvim_foldlevelMarker(win_T *wp, linenr_T lnum, linenr_T off, i
   flp.had_end = MAX_LEVEL + 1;
 
   foldlevelMarker(&flp);
+
+  FoldLevelResult_C result = {
+    .lvl = flp.lvl,
+    .lvl_next = flp.lvl_next,
+    .start = flp.start,
+    .end = flp.end,
+  };
+  return result;
+}
+
+/// Wrapper for foldlevelExpr that returns the FoldLevelResult.
+/// current_lvl must be passed in (for 'a' and 's' codes that modify the level).
+FoldLevelResult_C nvim_foldlevelExpr(win_T *wp, linenr_T lnum, linenr_T off, int current_lvl)
+{
+  fline_T flp;
+  flp.wp = wp;
+  flp.lnum = lnum;
+  flp.off = off;
+  flp.lvl = current_lvl;
+  flp.lvl_next = -1;
+  flp.start = 0;
+  flp.end = MAX_LEVEL + 1;
+  flp.had_end = MAX_LEVEL + 1;
+
+  foldlevelExpr(&flp);
+
+  FoldLevelResult_C result = {
+    .lvl = flp.lvl,
+    .lvl_next = flp.lvl_next,
+    .start = flp.start,
+    .end = flp.end,
+  };
+  return result;
+}
+
+/// Wrapper for foldlevelSyntax that returns the FoldLevelResult.
+FoldLevelResult_C nvim_foldlevelSyntax(win_T *wp, linenr_T lnum, linenr_T off)
+{
+  fline_T flp;
+  flp.wp = wp;
+  flp.lnum = lnum;
+  flp.off = off;
+  flp.lvl = 0;
+  flp.lvl_next = -1;
+  flp.start = 0;
+  flp.end = MAX_LEVEL + 1;
+  flp.had_end = MAX_LEVEL + 1;
+
+  foldlevelSyntax(&flp);
 
   FoldLevelResult_C result = {
     .lvl = flp.lvl,

@@ -54,6 +54,9 @@ pub struct FoldLevelResult {
     pub lvl_next: c_int,
     /// Number of folds that start at this line.
     pub start: c_int,
+    /// Level of fold forced to end below this line.
+    /// Set by expr method ('s' and '<' codes). Default: MAX_LEVEL + 1.
+    pub end: c_int,
 }
 
 /// Calculate fold level using the "indent" method.
@@ -198,6 +201,7 @@ mod tests {
             lvl: 2,
             lvl_next: 3,
             start: 1,
+            end: 21,
         };
         let cloned = result;
         assert_eq!(cloned.lvl, 2);
@@ -211,6 +215,7 @@ mod tests {
             lvl: 5,
             lvl_next: 6,
             start: 2,
+            end: 21,
         };
         let copied = result;
         // Original should still be valid (Copy trait)
@@ -220,10 +225,10 @@ mod tests {
 
     #[test]
     fn test_fold_level_result_size() {
-        // Should be 3 * c_int (12 bytes on most platforms)
+        // Should be 4 * c_int (16 bytes on most platforms)
         assert_eq!(
             std::mem::size_of::<FoldLevelResult>(),
-            3 * std::mem::size_of::<c_int>()
+            4 * std::mem::size_of::<c_int>()
         );
     }
 
@@ -240,6 +245,7 @@ mod tests {
             lvl: -1,
             lvl_next: 0,
             start: 0,
+            end: 21,
         };
         assert_eq!(result.lvl, -1);
     }
@@ -250,6 +256,7 @@ mod tests {
             lvl: 1,
             lvl_next: 2,
             start: 0,
+            end: 21,
         };
         let debug_str = format!("{result:?}");
         assert!(debug_str.contains("lvl: 1"));
@@ -264,6 +271,7 @@ mod tests {
             lvl: 100,
             lvl_next: 101,
             start: 50,
+            end: 21,
         };
         assert_eq!(result.lvl, 100);
         assert_eq!(result.lvl_next, 101);
@@ -277,6 +285,7 @@ mod tests {
             lvl: 0,
             lvl_next: 0,
             start: 0,
+            end: 21,
         };
         assert_eq!(result.lvl, 0);
         assert_eq!(result.lvl_next, 0);

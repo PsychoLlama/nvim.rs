@@ -317,13 +317,48 @@ extern "C" {
         current_lvl: c_int,
     ) -> FoldLevelResult;
 
+    // Expr and Syntax level getters (call C implementations)
+    #[allow(dead_code)]
+    fn nvim_foldlevelExpr(
+        wp: WinHandle,
+        lnum: LinenrT,
+        off: LinenrT,
+        current_lvl: c_int,
+    ) -> FoldLevelResult;
+    #[allow(dead_code)]
+    fn nvim_foldlevelSyntax(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
+
     // Marker parsing
     #[allow(dead_code)]
     fn nvim_parseMarker(wp: WinHandle);
 
-    // Fold method check
+    // Fold method checks
     #[allow(dead_code)]
     fn nvim_foldmethod_is_marker(wp: WinHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_foldmethod_is_expr(wp: WinHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_foldmethod_is_syntax(wp: WinHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_foldmethod_is_indent(wp: WinHandle) -> c_int;
+
+    // Fold static variable accessors
+    #[allow(dead_code)]
+    fn nvim_get_invalid_top() -> LinenrT;
+    #[allow(dead_code)]
+    fn nvim_set_invalid_top(val: LinenrT);
+    #[allow(dead_code)]
+    fn nvim_get_invalid_bot() -> LinenrT;
+    #[allow(dead_code)]
+    fn nvim_set_invalid_bot(val: LinenrT);
+    #[allow(dead_code)]
+    fn nvim_get_prev_lnum() -> LinenrT;
+    #[allow(dead_code)]
+    fn nvim_set_prev_lnum(val: LinenrT);
+    #[allow(dead_code)]
+    fn nvim_get_prev_lnum_lvl() -> c_int;
+    #[allow(dead_code)]
+    fn nvim_set_prev_lnum_lvl(val: c_int);
 
     // Global fold changed flag
     fn nvim_get_fold_changed() -> bool;
@@ -434,6 +469,7 @@ fn call_diff_level_getter(flp: &mut FlineT) {
 }
 
 /// Call the marker level getter
+#[allow(dead_code)]
 fn call_marker_level_getter(flp: &mut FlineT) {
     // Marker method requires passing current level - it tracks fold state across lines
     let result = unsafe { nvim_foldlevelMarker(flp.wp, flp.lnum, flp.off, flp.lvl) };
@@ -452,6 +488,8 @@ enum LevelGetterKind {
     Indent,
     Diff,
     Marker,
+    Expr,
+    Syntax,
 }
 
 /// Call the appropriate level getter based on kind
@@ -461,7 +499,34 @@ fn call_level_getter(flp: &mut FlineT, kind: LevelGetterKind) {
         LevelGetterKind::Indent => call_indent_level_getter(flp),
         LevelGetterKind::Diff => call_diff_level_getter(flp),
         LevelGetterKind::Marker => call_marker_level_getter(flp),
+        LevelGetterKind::Expr => call_expr_level_getter(flp),
+        LevelGetterKind::Syntax => call_syntax_level_getter(flp),
     }
+}
+
+/// Call the expr level getter
+///
+/// The expr level getter modifies `end` field (for 's' and '<' codes).
+/// It also requires the current level for 'a' and 's' codes.
+#[allow(dead_code)]
+fn call_expr_level_getter(flp: &mut FlineT) {
+    let result = unsafe { nvim_foldlevelExpr(flp.wp, flp.lnum, flp.off, flp.lvl) };
+    flp.lvl = result.lvl;
+    flp.lvl_next = result.lvl_next;
+    flp.start = result.start;
+    flp.had_end = flp.end;
+    flp.end = result.end; // expr sets end for 's' and '<' codes
+}
+
+/// Call the syntax level getter
+#[allow(dead_code)]
+fn call_syntax_level_getter(flp: &mut FlineT) {
+    let result = unsafe { nvim_foldlevelSyntax(flp.wp, flp.lnum, flp.off) };
+    flp.lvl = result.lvl;
+    flp.lvl_next = result.lvl_next;
+    flp.start = result.start;
+    flp.had_end = flp.end;
+    flp.end = MAX_LEVEL + 1; // syntax doesn't set end
 }
 
 /// IEMS update for indent and diff methods only.
