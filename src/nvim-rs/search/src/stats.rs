@@ -3,7 +3,7 @@
 //! This module provides types and functions for managing search match
 //! statistics, like the [N/M] display shown after searching.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
 // Search Statistics Types
@@ -507,6 +507,356 @@ pub unsafe extern "C" fn rs_search_stat_state_needs_recompute(
         return 1;
     }
     c_int::from((*state).needs_recompute)
+}
+
+// =============================================================================
+// Phase 6: update_search_stat / cmdline_search_stat Implementation
+// =============================================================================
+
+extern "C" {
+    // Position comparison (from mark crate)
+    fn rs_lt(a: PosT, b: PosT) -> c_int;
+    fn rs_ltoreq(a: PosT, b: PosT) -> c_int;
+    fn rs_equalpos(a: PosT, b: PosT) -> c_int;
+    fn rs_empty_pos(a: PosT) -> c_int;
+
+    // Search state accessors
+    fn nvim_get_p_ws() -> c_int;
+    fn nvim_set_p_ws(val: c_int);
+    fn nvim_get_p_msc() -> i64;
+    fn nvim_curbuf_get_changedtick() -> c_int;
+    fn nvim_search_get_curbuf_ptr() -> *mut c_void;
+    fn nvim_get_got_int() -> c_int;
+    fn nvim_fast_breakcheck();
+
+    // Search stat specific
+    fn nvim_searchit_for_stat(
+        pos_lnum: *mut c_int,
+        pos_col: *mut c_int,
+        pos_coladd: *mut c_int,
+        end_lnum: *mut c_int,
+        end_col: *mut c_int,
+        end_coladd: *mut c_int,
+    ) -> c_int;
+    fn nvim_profile_setlimit_ms(timeout: c_int) -> u64;
+    fn nvim_profile_passed_limit_val(start: u64) -> c_int;
+    fn nvim_stat_spats_pat_matches(pat: *const c_char, patlen: usize) -> c_int;
+    fn nvim_stat_copy_spats_pat(out_len: *mut usize) -> *mut c_char;
+    fn nvim_stat_free_pat(pat: *mut c_char);
+
+    // Display
+    fn nvim_curwin_rl_with_rlc_s() -> c_int;
+    fn nvim_cmdline_stat_display(msgbuf: *const c_char);
+}
+
+/// Position type matching pos_T (lnum: i32, col: i32, coladd: i32).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+struct PosT {
+    lnum: i32,
+    col: i32,
+    coladd: i32,
+}
+
+const FAIL: c_int = 0;
+const SEARCH_STAT_BUF_LEN: usize = 16;
+
+/// Static cache for update_search_stat.
+/// These correspond to the function-local statics in the original C code.
+static mut STAT_CACHE: StatCache = StatCache::new();
+
+struct StatCache {
+    lastpos: PosT,
+    cur: c_int,
+    cnt: c_int,
+    exact_match: bool,
+    incomplete: c_int,
+    last_maxcount: c_int,
+    chgtick: c_int,
+    lastpat: *mut c_char,
+    lastpatlen: usize,
+    lbuf: *mut c_void,
+}
+
+// SAFETY: These statics are only accessed from the main thread (Neovim is single-threaded).
+unsafe impl Send for StatCache {}
+unsafe impl Sync for StatCache {}
+
+impl StatCache {
+    const fn new() -> Self {
+        Self {
+            lastpos: PosT {
+                lnum: 0,
+                col: 0,
+                coladd: 0,
+            },
+            cur: 0,
+            cnt: 0,
+            exact_match: false,
+            incomplete: 0,
+            last_maxcount: 0,
+            chgtick: 0,
+            lastpat: std::ptr::null_mut(),
+            lastpatlen: 0,
+            lbuf: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// Rust implementation of update_search_stat().
+///
+/// # Safety
+///
+/// `stat` must be a valid, non-null pointer to a `searchstat_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_update_search_stat(
+    dirc: c_int,
+    pos_lnum: c_int,
+    pos_col: c_int,
+    pos_coladd: c_int,
+    cursor_lnum: c_int,
+    cursor_col: c_int,
+    cursor_coladd: c_int,
+    stat: *mut SearchStat,
+    recompute: bool,
+    maxcount: c_int,
+    timeout: c_int,
+) {
+    let st = &mut *stat;
+    *st = SearchStat::new();
+
+    let p = PosT {
+        lnum: pos_lnum,
+        col: pos_col,
+        coladd: pos_coladd,
+    };
+    let cursor_pos = PosT {
+        lnum: cursor_lnum,
+        col: cursor_col,
+        coladd: cursor_coladd,
+    };
+
+    let cache = &raw mut STAT_CACHE;
+
+    if dirc == 0 && !recompute && rs_empty_pos((*cache).lastpos) == 0 {
+        st.cur = (*cache).cur;
+        st.cnt = (*cache).cnt;
+        st.exact_match = (*cache).exact_match;
+        st.incomplete = (*cache).incomplete;
+        st.last_maxcount = nvim_get_p_msc() as c_int;
+        return;
+    }
+
+    (*cache).last_maxcount = maxcount;
+    let wraparound = (dirc == b'?' as c_int && rs_lt((*cache).lastpos, p) != 0)
+        || (dirc == b'/' as c_int && rs_lt(p, (*cache).lastpos) != 0);
+
+    // If anything relevant changed the count has to be recomputed.
+    let cache_valid = (*cache).chgtick == nvim_curbuf_get_changedtick()
+        && !(*cache).lastpat.is_null()
+        && nvim_stat_spats_pat_matches((*cache).lastpat, (*cache).lastpatlen) != 0
+        && rs_equalpos((*cache).lastpos, cursor_pos) != 0
+        && (*cache).lbuf == nvim_search_get_curbuf_ptr();
+
+    if !cache_valid
+        || wraparound
+        || (*cache).cur < 0
+        || (maxcount > 0 && (*cache).cur > maxcount)
+        || recompute
+    {
+        (*cache).cur = 0;
+        (*cache).cnt = 0;
+        (*cache).exact_match = false;
+        (*cache).incomplete = 0;
+        (*cache).lastpos = PosT::default();
+        (*cache).lbuf = nvim_search_get_curbuf_ptr();
+    }
+
+    // when searching backwards and having jumped to the first occurrence,
+    // cur must remain greater than 1
+    if rs_equalpos((*cache).lastpos, cursor_pos) != 0
+        && !wraparound
+        && (if dirc == 0 || dirc == b'/' as c_int {
+            (*cache).cur < (*cache).cnt
+        } else {
+            (*cache).cur > 1
+        })
+    {
+        (*cache).cur += if dirc == 0 {
+            0
+        } else if dirc == b'/' as c_int {
+            1
+        } else {
+            -1
+        };
+    } else {
+        let save_ws = nvim_get_p_ws();
+        let mut done_search = false;
+        nvim_set_p_ws(0);
+
+        let start = if timeout > 0 {
+            nvim_profile_setlimit_ms(timeout)
+        } else {
+            0
+        };
+
+        let mut search_pos_lnum: c_int = (*cache).lastpos.lnum;
+        let mut search_pos_col: c_int = (*cache).lastpos.col;
+        let mut search_pos_coladd: c_int = (*cache).lastpos.coladd;
+        let mut end_lnum: c_int = 0;
+        let mut end_col: c_int = 0;
+        let mut end_coladd: c_int = 0;
+
+        while nvim_get_got_int() == 0
+            && nvim_searchit_for_stat(
+                &mut search_pos_lnum,
+                &mut search_pos_col,
+                &mut search_pos_coladd,
+                &mut end_lnum,
+                &mut end_col,
+                &mut end_coladd,
+            ) != FAIL
+        {
+            done_search = true;
+            (*cache).lastpos = PosT {
+                lnum: search_pos_lnum,
+                col: search_pos_col,
+                coladd: search_pos_coladd,
+            };
+
+            // Stop after passing the time limit.
+            if timeout > 0 && nvim_profile_passed_limit_val(start) != 0 {
+                (*cache).incomplete = 1;
+                break;
+            }
+            (*cache).cnt += 1;
+            let endpos = PosT {
+                lnum: end_lnum,
+                col: end_col,
+                coladd: end_coladd,
+            };
+            if rs_ltoreq((*cache).lastpos, p) != 0 {
+                (*cache).cur = (*cache).cnt;
+                if rs_lt(p, endpos) != 0 {
+                    (*cache).exact_match = true;
+                }
+            }
+            nvim_fast_breakcheck();
+            if maxcount > 0 && (*cache).cnt > maxcount {
+                (*cache).incomplete = 2; // max count exceeded
+                break;
+            }
+        }
+        if nvim_get_got_int() != 0 {
+            (*cache).cur = -1; // abort
+        }
+        if done_search {
+            nvim_stat_free_pat((*cache).lastpat);
+            let mut patlen: usize = 0;
+            (*cache).lastpat = nvim_stat_copy_spats_pat(&mut patlen);
+            (*cache).lastpatlen = patlen;
+            (*cache).chgtick = nvim_curbuf_get_changedtick();
+            (*cache).lbuf = nvim_search_get_curbuf_ptr();
+            (*cache).lastpos = p;
+        }
+        nvim_set_p_ws(save_ws);
+    }
+
+    st.cur = (*cache).cur;
+    st.cnt = (*cache).cnt;
+    st.exact_match = (*cache).exact_match;
+    st.incomplete = (*cache).incomplete;
+    st.last_maxcount = (*cache).last_maxcount;
+}
+
+/// Rust implementation of cmdline_search_stat().
+///
+/// # Safety
+///
+/// `msgbuf` must be a valid pointer to `msgbuflen` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cmdline_search_stat(
+    dirc: c_int,
+    pos_lnum: c_int,
+    pos_col: c_int,
+    pos_coladd: c_int,
+    cursor_lnum: c_int,
+    cursor_col: c_int,
+    cursor_coladd: c_int,
+    show_top_bot_msg: bool,
+    msgbuf: *mut c_char,
+    msgbuflen: usize,
+    recompute: bool,
+    maxcount: c_int,
+    timeout: c_int,
+) {
+    let mut stat = SearchStat::new();
+
+    rs_update_search_stat(
+        dirc,
+        pos_lnum,
+        pos_col,
+        pos_coladd,
+        cursor_lnum,
+        cursor_col,
+        cursor_coladd,
+        &mut stat,
+        recompute,
+        maxcount,
+        timeout,
+    );
+
+    if stat.cur <= 0 {
+        return;
+    }
+
+    let mut t = [0u8; SEARCH_STAT_BUF_LEN];
+    let is_rl = nvim_curwin_rl_with_rlc_s() != 0;
+
+    // Format the stat string
+    let formatted = if is_rl {
+        if stat.incomplete == 1 {
+            "[?/??]".to_string()
+        } else if stat.cnt > maxcount && stat.cur > maxcount {
+            format!("[>{}/>{maxcount}]", maxcount)
+        } else if stat.cnt > maxcount {
+            format!("[>{maxcount}/{}]", stat.cur)
+        } else {
+            format!("[{}/{}]", stat.cnt, stat.cur)
+        }
+    } else if stat.incomplete == 1 {
+        "[?/??]".to_string()
+    } else if stat.cnt > maxcount && stat.cur > maxcount {
+        format!("[>{}/>{maxcount}]", maxcount)
+    } else if stat.cnt > maxcount {
+        format!("[{}/>{maxcount}]", stat.cur)
+    } else {
+        format!("[{}/{}]", stat.cur, stat.cnt)
+    };
+
+    let bytes = formatted.as_bytes();
+    let mut len = bytes.len().min(SEARCH_STAT_BUF_LEN);
+    t[..len].copy_from_slice(&bytes[..len]);
+
+    if show_top_bot_msg && len + 2 < SEARCH_STAT_BUF_LEN {
+        // Shift right by 2 and prepend "W "
+        t.copy_within(0..len, 2);
+        t[0] = b'W';
+        t[1] = b' ';
+        len += 2;
+    }
+
+    if len > msgbuflen {
+        len = msgbuflen;
+    }
+
+    // Copy to the end of msgbuf
+    let msgbuf_slice = std::slice::from_raw_parts_mut(msgbuf as *mut u8, msgbuflen);
+    let dest_start = msgbuflen - len;
+    msgbuf_slice[dest_start..dest_start + len].copy_from_slice(&t[..len]);
+
+    // Display the message
+    nvim_cmdline_stat_display(msgbuf);
 }
 
 #[cfg(test)]

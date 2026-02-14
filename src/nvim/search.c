@@ -150,6 +150,16 @@ extern void rs_set_vv_searchforward(void);
 // Rust FFI declarations for searchc()
 extern int rs_searchc(cmdarg_T *cap, bool t_cmd);
 
+// Rust FFI declarations for search statistics
+extern void rs_update_search_stat(int dirc, int pos_lnum, int pos_col, int pos_coladd,
+                                  int cursor_lnum, int cursor_col, int cursor_coladd,
+                                  searchstat_T *stat, bool recompute,
+                                  int maxcount, int timeout);
+extern void rs_cmdline_search_stat(int dirc, int pos_lnum, int pos_col, int pos_coladd,
+                                   int cursor_lnum, int cursor_col, int cursor_coladd,
+                                   bool show_top_bot_msg, char *msgbuf, size_t msgbuflen,
+                                   bool recompute, int maxcount, int timeout);
+
 // Rust FFI declarations for pattern utilities
 extern int rs_pat_has_uppercase(const char *pat);
 extern int rs_ignorecase(const char *pat);
@@ -1900,67 +1910,10 @@ static void cmdline_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, bool sh
                                 char *msgbuf, size_t msgbuflen, bool recompute, int maxcount,
                                 int timeout)
 {
-  searchstat_T stat;
-
-  update_search_stat(dirc, pos, cursor_pos, &stat, recompute, maxcount,
-                     timeout);
-  if (stat.cur <= 0) {
-    return;
-  }
-
-  char t[SEARCH_STAT_BUF_LEN];
-  size_t len;
-
-  if (curwin->w_p_rl && *curwin->w_p_rlc == 's') {
-    if (stat.incomplete == 1) {
-      len = (size_t)vim_snprintf(t, SEARCH_STAT_BUF_LEN, "[?/??]");
-    } else if (stat.cnt > maxcount && stat.cur > maxcount) {
-      len = (size_t)vim_snprintf(t, SEARCH_STAT_BUF_LEN, "[>%d/>%d]",
-                                 maxcount, maxcount);
-    } else if (stat.cnt > maxcount) {
-      len = (size_t)vim_snprintf(t, SEARCH_STAT_BUF_LEN, "[>%d/%d]",
-                                 maxcount, stat.cur);
-    } else {
-      len = (size_t)vim_snprintf(t, SEARCH_STAT_BUF_LEN, "[%d/%d]",
-                                 stat.cnt, stat.cur);
-    }
-  } else {
-    if (stat.incomplete == 1) {
-      len = (size_t)vim_snprintf(t, SEARCH_STAT_BUF_LEN, "[?/??]");
-    } else if (stat.cnt > maxcount && stat.cur > maxcount) {
-      len = (size_t)vim_snprintf(t, SEARCH_STAT_BUF_LEN, "[>%d/>%d]",
-                                 maxcount, maxcount);
-    } else if (stat.cnt > maxcount) {
-      len = (size_t)vim_snprintf(t, SEARCH_STAT_BUF_LEN, "[%d/>%d]",
-                                 stat.cur, maxcount);
-    } else {
-      len = (size_t)vim_snprintf(t, SEARCH_STAT_BUF_LEN, "[%d/%d]",
-                                 stat.cur, stat.cnt);
-    }
-  }
-
-  if (show_top_bot_msg && len + 2 < SEARCH_STAT_BUF_LEN) {
-    memmove(t + 2, t, len);
-    t[0] = 'W';
-    t[1] = ' ';
-    len += 2;
-  }
-
-  if (len > msgbuflen) {
-    len = msgbuflen;
-  }
-  memmove(msgbuf + msgbuflen - len, t, len);
-
-  if (dirc == '?' && stat.cur == maxcount + 1) {
-    stat.cur = -1;
-  }
-
-  // keep the message even after redraw, but don't put in history
-  msg_hist_off = true;
-  msg_ext_overwrite = true;
-  msg_ext_set_kind("search_count");
-  give_warning(msgbuf, false);
-  msg_hist_off = false;
+  rs_cmdline_search_stat(dirc, pos->lnum, pos->col, pos->coladd,
+                         cursor_pos->lnum, cursor_pos->col, cursor_pos->coladd,
+                         show_top_bot_msg, msgbuf, msgbuflen,
+                         recompute, maxcount, timeout);
 }
 
 // Add the search count information to "stat".
@@ -1972,104 +1925,9 @@ static void cmdline_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, bool sh
 static void update_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, searchstat_T *stat,
                                bool recompute, int maxcount, int timeout)
 {
-  int save_ws = p_ws;
-  bool wraparound = false;
-  pos_T p = (*pos);
-  static pos_T lastpos = { 0, 0, 0 };
-  static int cur = 0;
-  static int cnt = 0;
-  static bool exact_match = false;
-  static int incomplete = 0;
-  static int last_maxcount = 0;
-  static int chgtick = 0;
-  static char *lastpat = NULL;
-  static size_t lastpatlen = 0;
-  static buf_T *lbuf = NULL;
-
-  CLEAR_POINTER(stat);
-
-  if (dirc == 0 && !recompute && !EMPTY_POS(lastpos)) {
-    stat->cur = cur;
-    stat->cnt = cnt;
-    stat->exact_match = exact_match;
-    stat->incomplete = incomplete;
-    stat->last_maxcount = (int)p_msc;
-    return;
-  }
-  last_maxcount = maxcount;
-  wraparound = ((dirc == '?' && lt(lastpos, p))
-                || (dirc == '/' && lt(p, lastpos)));
-
-  // If anything relevant changed the count has to be recomputed.
-  if (!(chgtick == buf_get_changedtick(curbuf)
-        && (lastpat != NULL  // suppress clang/NULL passed as nonnull parameter
-            && strncmp(lastpat, spats[last_idx].pat, lastpatlen) == 0
-            && lastpatlen == spats[last_idx].patlen)
-        && equalpos(lastpos, *cursor_pos)
-        && lbuf == curbuf)
-      || wraparound || cur < 0 || (maxcount > 0 && cur > maxcount)
-      || recompute) {
-    cur = 0;
-    cnt = 0;
-    exact_match = false;
-    incomplete = 0;
-    clearpos(&lastpos);
-    lbuf = curbuf;
-  }
-
-  // when searching backwards and having jumped to the first occurrence,
-  // cur must remain greater than 1
-  if (equalpos(lastpos, *cursor_pos) && !wraparound
-      && (dirc == 0 || dirc == '/' ? cur < cnt : cur > 1)) {
-    cur += dirc == 0 ? 0 : dirc == '/' ? 1 : -1;
-  } else {
-    proftime_T start;
-    bool done_search = false;
-    pos_T endpos = { 0, 0, 0 };
-    p_ws = false;
-    if (timeout > 0) {
-      start = profile_setlimit(timeout);
-    }
-    while (!got_int && searchit(curwin, curbuf, &lastpos, &endpos,
-                                FORWARD, NULL, 0, 1, SEARCH_KEEP, RE_LAST,
-                                NULL) != FAIL) {
-      done_search = true;
-      // Stop after passing the time limit.
-      if (timeout > 0 && profile_passed_limit(start)) {
-        incomplete = 1;
-        break;
-      }
-      cnt++;
-      if (ltoreq(lastpos, p)) {
-        cur = cnt;
-        if (lt(p, endpos)) {
-          exact_match = true;
-        }
-      }
-      fast_breakcheck();
-      if (maxcount > 0 && cnt > maxcount) {
-        incomplete = 2;    // max count exceeded
-        break;
-      }
-    }
-    if (got_int) {
-      cur = -1;  // abort
-    }
-    if (done_search) {
-      xfree(lastpat);
-      lastpat = xstrnsave(spats[last_idx].pat, spats[last_idx].patlen);
-      lastpatlen = spats[last_idx].patlen;
-      chgtick = (int)buf_get_changedtick(curbuf);
-      lbuf = curbuf;
-      lastpos = p;
-    }
-  }
-  stat->cur = cur;
-  stat->cnt = cnt;
-  stat->exact_match = exact_match;
-  stat->incomplete = incomplete;
-  stat->last_maxcount = last_maxcount;
-  p_ws = save_ws;
+  rs_update_search_stat(dirc, pos->lnum, pos->col, pos->coladd,
+                        cursor_pos->lnum, cursor_pos->col, cursor_pos->coladd,
+                        stat, recompute, maxcount, timeout);
 }
 
 // "searchcount()" function
@@ -4487,6 +4345,109 @@ void nvim_searchc_save_lastc_state(int c, int nchar_len, const char *composing_b
 const char *nvim_cap_get_nchar_composing_ptr(cmdarg_T *cap)
 {
   return cap ? cap->nchar_composing : NULL;
+}
+
+// =============================================================================
+// Phase 6: update_search_stat / cmdline_search_stat accessors
+// =============================================================================
+
+/// Set the p_ws option (wrapscan).
+void nvim_set_p_ws(int val)
+{
+  p_ws = val;
+}
+
+/// Get the p_msc option (maxsearchcount).
+long nvim_get_p_msc(void)
+{
+  return (long)p_msc;
+}
+
+/// Get buf_get_changedtick(curbuf).
+int nvim_curbuf_get_changedtick(void)
+{
+  return (int)buf_get_changedtick(curbuf);
+}
+
+/// Get curbuf as opaque pointer for identity comparison.
+void *nvim_search_get_curbuf_ptr(void)
+{
+  return (void *)curbuf;
+}
+
+/// Call searchit from Rust for update_search_stat.
+/// This wraps the pos_T marshalling.
+int nvim_searchit_for_stat(int *pos_lnum, int *pos_col, int *pos_coladd,
+                           int *end_lnum, int *end_col, int *end_coladd)
+{
+  pos_T pos = { *pos_lnum, *pos_col, *pos_coladd };
+  pos_T endpos = { 0, 0, 0 };
+  int retval = searchit(curwin, curbuf, &pos, &endpos,
+                         FORWARD, NULL, 0, 1, SEARCH_KEEP, RE_LAST, NULL);
+  *pos_lnum = pos.lnum;
+  *pos_col = pos.col;
+  *pos_coladd = pos.coladd;
+  *end_lnum = endpos.lnum;
+  *end_col = endpos.col;
+  *end_coladd = endpos.coladd;
+  return retval;
+}
+
+/// Set profile limit for search stat timeout.
+proftime_T nvim_profile_setlimit_ms(int timeout)
+{
+  return profile_setlimit(timeout);
+}
+
+/// Check if profile time limit has been passed (for search stat).
+int nvim_profile_passed_limit_val(proftime_T start)
+{
+  return profile_passed_limit(start) ? 1 : 0;
+}
+
+/// Check if spats[last_idx].pat matches a given pattern.
+int nvim_stat_spats_pat_matches(const char *pat, size_t patlen)
+{
+  if (pat == NULL || spats[last_idx].pat == NULL) {
+    return 0;
+  }
+  return (strncmp(pat, spats[last_idx].pat, patlen) == 0
+          && patlen == spats[last_idx].patlen) ? 1 : 0;
+}
+
+/// Copy spats[last_idx].pat using xstrnsave (for cache update).
+/// Returns a newly allocated string the caller must xfree.
+char *nvim_stat_copy_spats_pat(size_t *out_len)
+{
+  if (spats[last_idx].pat == NULL) {
+    *out_len = 0;
+    return NULL;
+  }
+  *out_len = spats[last_idx].patlen;
+  return xstrnsave(spats[last_idx].pat, spats[last_idx].patlen);
+}
+
+/// Free a pointer allocated by nvim_stat_copy_spats_pat.
+void nvim_stat_free_pat(char *pat)
+{
+  xfree(pat);
+}
+
+/// Check if curwin->w_p_rl is set and curwin->w_p_rlc starts with 's'.
+int nvim_curwin_rl_with_rlc_s(void)
+{
+  return (curwin->w_p_rl && *curwin->w_p_rlc == 's') ? 1 : 0;
+}
+
+/// Display the cmdline search stat message.
+/// Handles msg_hist_off, msg_ext_overwrite, msg_ext_set_kind, give_warning.
+void nvim_cmdline_stat_display(const char *msgbuf)
+{
+  msg_hist_off = true;
+  msg_ext_overwrite = true;
+  msg_ext_set_kind("search_count");
+  give_warning(msgbuf, false);
+  msg_hist_off = false;
 }
 
 // Phase 4: find_pattern_in_path constants
