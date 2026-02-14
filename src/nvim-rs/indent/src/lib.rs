@@ -7,6 +7,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 pub mod breakindent;
+pub mod change_indent;
 pub mod checks;
 pub mod copy_indent;
 pub mod getters;

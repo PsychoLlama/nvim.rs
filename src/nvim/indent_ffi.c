@@ -145,9 +145,10 @@ void nvim_shift_line(bool left, bool round, int amount, int call_changed_bytes)
 
 void nvim_set_old_indent(int val) { old_indent = val; }
 
+extern void rs_change_indent(int type, int amount, int round, bool call_changed_bytes);
 void nvim_change_indent(int type, int amount, int round, bool call_changed_bytes)
 {
-  change_indent(type, amount, round, call_changed_bytes);
+  rs_change_indent(type, amount, round, call_changed_bytes);
 }
 
 // =============================================================================
@@ -201,3 +202,67 @@ void nvim_oap_set_marks(oparg_T *oap)
 
 /// Compare a function pointer to get_lisp_indent.
 bool nvim_is_lisp_indent(Indenter how) { return how == get_lisp_indent; }
+
+// =============================================================================
+// Phase 6: change_indent() accessors
+// =============================================================================
+
+_Static_assert(MODE_INSERT == 0x10, "MODE_INSERT must be 0x10");
+_Static_assert(REPLACE_FLAG == 0x100, "REPLACE_FLAG must be 0x100");
+_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL must be 0x7fffffff");
+_Static_assert(BL_WHITE == 1, "BL_WHITE must be 1");
+_Static_assert(INDENT_DEC == 3, "INDENT_DEC must be 3");
+
+// Insstart col-only setter (lnum+col setter already in edit.c)
+void nvim_set_Insstart_col(colnr_T val) { Insstart.col = val; }
+
+// curwin->w_p_list setter
+void nvim_curwin_set_w_p_list(int val) { curwin->w_p_list = val; }
+
+// curwin->w_set_curswant setter
+void nvim_curwin_set_w_set_curswant(bool val) { curwin->w_set_curswant = val; }
+
+// curwin->w_virtcol setter
+void nvim_curwin_set_w_virtcol(colnr_T val) { curwin->w_virtcol = val; }
+
+// ml_replace for curwin cursor line
+int nvim_ml_replace_curline(char *line, bool copy)
+{
+  return ml_replace(curwin->w_cursor.lnum, line, copy);
+}
+
+// ins_str wrapper: inserts `len` bytes from `ptr` at cursor
+void nvim_ins_str(char *ptr, size_t len)
+{
+  ins_str(ptr, len);
+}
+
+/// Advance cursor in `line` until reaching `target_vcol`.
+/// Returns the byte offset in line, and writes final vcol to *out_vcol.
+int nvim_advance_to_vcol(char *line, int target_vcol, int *out_vcol)
+{
+  int vcol = 0;
+  int new_cursor_col = 0;
+  if (*line != NUL) {
+    CharsizeArg csarg;
+    CSType cstype = init_charsize_arg(&csarg, curwin, 0, line);
+    StrCharInfo ci = utf_ptr2StrCharInfo(line);
+    while (true) {
+      int next_vcol = vcol + win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &csarg).width;
+      if (next_vcol > target_vcol) {
+        break;
+      }
+      vcol = next_vcol;
+      ci = utfc_next(ci);
+      if (*ci.ptr == NUL) {
+        break;
+      }
+    }
+    new_cursor_col = (int)(ci.ptr - line);
+  }
+  *out_vcol = vcol;
+  return new_cursor_col;
+}
+
+// Get curbuf handle for extmark_splice_cols
+buf_T *nvim_indent_get_curbuf(void) { return curbuf; }
