@@ -2,9 +2,113 @@
 //!
 //! This module handles loading plugins from 'packpath' directories.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
+use std::ptr;
 
 use crate::dip;
+
+// =============================================================================
+// External C functions
+// =============================================================================
+
+extern "C" {
+    // Wildcard expansion (already declared in pathsearch.rs, repeated here for use)
+    fn gen_expand_wildcards(
+        num_pat: c_int,
+        pat: *mut *mut c_char,
+        num_file: *mut c_int,
+        file: *mut *mut *mut c_char,
+        flags: c_int,
+    ) -> c_int;
+    fn FreeWild(count: c_int, files: *mut *mut c_char);
+
+    // Path searching (remains in C)
+    fn do_in_path(
+        path: *const c_char,
+        prefix: *const c_char,
+        name: *mut c_char,
+        flags: c_int,
+        callback: Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>,
+        cookie: *mut c_void,
+    ) -> c_int;
+
+    // Global options
+    static p_pp: *mut c_char; // packpath
+    static p_rtp: *mut c_char; // runtimepath
+
+    // Memory management
+    fn xmallocz(size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn strlen(s: *const c_char) -> usize;
+
+    // Package management accessors (in runtime_ffi.c)
+    fn nvim_rt_pkg_get_did_source_packages() -> bool;
+    fn nvim_rt_pkg_set_did_source_packages(val: bool);
+    fn nvim_rt_pkg_get_p_lpl() -> bool;
+    fn nvim_rt_pkg_exarg_get_forceit(eap: *mut c_void) -> bool;
+    fn nvim_rt_pkg_fix_fname(fname: *const c_char) -> *mut c_char;
+    fn nvim_rt_pkg_snprintf(
+        buf: *mut c_char,
+        len: usize,
+        fmt: *const c_char,
+        arg: *const c_char,
+    ) -> c_int;
+    fn nvim_rt_pkg_eval_to_number(expr: *mut c_char) -> i64;
+    fn nvim_rt_pkg_do_cmdline_cmd(cmd: *const c_char);
+    fn nvim_rt_pkg_time_msg(msg: *const c_char);
+
+    // Cookie accessors (in runtime.c, because APP_* are static there)
+    fn nvim_rt_pkg_get_app_add_dir() -> *mut c_void;
+    fn nvim_rt_pkg_get_app_load() -> *mut c_void;
+    fn nvim_rt_pkg_get_app_both() -> *mut c_void;
+
+    // C callback function pointer getters (in runtime.c)
+    fn nvim_rt_pkg_get_cb_add_pack_start_dir(
+    ) -> Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>;
+    fn nvim_rt_pkg_get_cb_add_start_pack_plugins(
+    ) -> Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>;
+    fn nvim_rt_pkg_get_cb_add_opt_pack_plugins(
+    ) -> Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>;
+
+    // exarg_T field accessors (already in runtime_ffi.c)
+    fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
+}
+
+// Already in pathsearch.rs but we call them through the re-exported names
+extern "C" {
+    fn rs_gen_expand_wildcards_and_cb(
+        num_pat: c_int,
+        pats: *mut *mut c_char,
+        flags: c_int,
+        all: bool,
+        callback: Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>,
+        cookie: *mut c_void,
+    ) -> c_int;
+
+    fn rs_source_callback_vim_lua(
+        num_fnames: c_int,
+        fnames: *mut *mut c_char,
+        all: bool,
+        cookie: *mut c_void,
+    ) -> bool;
+
+    fn rs_source_in_path_vim_lua(path: *mut c_char, name: *mut c_char, flags: c_int) -> c_int;
+
+    fn rs_source_runtime_vim_lua(name: *mut c_char, flags: c_int) -> c_int;
+}
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+const FAIL: c_int = 0;
+const OK: c_int = 1;
+
+/// EW_DIR - expand directory names
+const EW_DIR: c_int = 0x01;
+/// EW_FILE - expand file names
+const EW_FILE: c_int = 0x02;
 
 // =============================================================================
 // Package Loading State
@@ -157,6 +261,297 @@ pub fn rs_plugin_dir_count() -> usize {
 }
 
 // =============================================================================
+// Phase 6: Migrated Package Management Functions
+// =============================================================================
+
+/// Check if a directory pattern has any matching entries.
+///
+/// Expands wildcards in `buf` looking for directories; returns true if any found.
+///
+/// # Safety
+///
+/// `buf` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pack_has_entries(buf: *mut c_char) -> bool {
+    let mut num_files: c_int = 0;
+    let mut files: *mut *mut c_char = ptr::null_mut();
+    let mut pat = buf;
+
+    if gen_expand_wildcards(1, &raw mut pat, &raw mut num_files, &raw mut files, EW_DIR) == OK {
+        FreeWild(num_files, files);
+    }
+
+    num_files > 0
+}
+
+/// Load scripts in "plugin" directory of the package.
+/// For opt packages, also load scripts in "ftdetect" (start packages already
+/// load these from filetype.lua).
+///
+/// # Safety
+///
+/// `fname` must be a valid null-terminated C string.
+#[no_mangle]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_load_pack_plugin(opt: bool, fname: *mut c_char) -> c_int {
+    let ffname = nvim_rt_pkg_fix_fname(fname);
+    if ffname.is_null() {
+        return OK;
+    }
+
+    let plugpat = c"%s/plugin/**/*".as_ptr();
+    let ftpat = c"%s/ftdetect/*".as_ptr();
+
+    let ffname_len = strlen(ffname);
+    // sizeof(plugpat) in C includes NUL; the longest pattern is "%s/plugin/**/*" = 15 bytes
+    let len = ffname_len + 16;
+    let mut pat = xmallocz(len).cast::<c_char>();
+
+    nvim_rt_pkg_snprintf(pat, len, plugpat, ffname);
+    rs_gen_expand_wildcards_and_cb(
+        1,
+        &raw mut pat,
+        EW_FILE,
+        true,
+        Some(rs_source_callback_vim_lua),
+        ptr::null_mut(),
+    );
+
+    let cmd = xstrdup(c"g:did_load_filetypes".as_ptr());
+
+    // If runtime/filetype.lua wasn't loaded yet, the scripts will be
+    // found when it loads.
+    if opt && nvim_rt_pkg_eval_to_number(cmd) > 0 {
+        nvim_rt_pkg_do_cmdline_cmd(c"augroup filetypedetect".as_ptr());
+        nvim_rt_pkg_snprintf(pat, len, ftpat, ffname);
+        rs_gen_expand_wildcards_and_cb(
+            1,
+            &raw mut pat,
+            EW_FILE,
+            true,
+            Some(rs_source_callback_vim_lua),
+            ptr::null_mut(),
+        );
+        nvim_rt_pkg_do_cmdline_cmd(c"augroup END".as_ptr());
+    }
+
+    xfree(cmd.cast());
+    xfree(pat.cast());
+    xfree(ffname.cast());
+
+    OK
+}
+
+/// Add all packages in the "start" directory to 'runtimepath'.
+///
+/// # Safety
+///
+/// Accesses global C state (p_pp, callbacks).
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_pack_start_dirs() {
+    let cb = nvim_rt_pkg_get_cb_add_pack_start_dir();
+    do_in_path(
+        p_pp,
+        c"".as_ptr(),
+        ptr::null_mut(),
+        dip::ALL + dip::DIR,
+        cb,
+        ptr::null_mut(),
+    );
+}
+
+/// Load plugins from all packages in the "start" directory.
+///
+/// # Safety
+///
+/// Accesses global C state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_load_start_packages() {
+    nvim_rt_pkg_set_did_source_packages(true);
+
+    let cb = nvim_rt_pkg_get_cb_add_start_pack_plugins();
+    let app_load = nvim_rt_pkg_get_app_load();
+
+    do_in_path(
+        p_pp,
+        c"".as_ptr(),
+        c"pack/*/start/*".as_ptr().cast_mut(),
+        dip::ALL + dip::DIR,
+        cb,
+        app_load,
+    );
+    do_in_path(
+        p_pp,
+        c"".as_ptr(),
+        c"start/*".as_ptr().cast_mut(),
+        dip::ALL + dip::DIR,
+        cb,
+        app_load,
+    );
+}
+
+/// ":packloadall" - Find plugins in the package directories and source them.
+///
+/// # Safety
+///
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_packloadall(eap: *mut c_void) {
+    let did_source = nvim_rt_pkg_get_did_source_packages();
+    let forceit = nvim_rt_pkg_exarg_get_forceit(eap);
+
+    if !did_source || forceit {
+        // First do a round to add all directories to 'runtimepath', then load
+        // the plugins. This allows for plugins to use an autoload directory
+        // of another plugin.
+        rs_add_pack_start_dirs();
+        rs_load_start_packages();
+    }
+}
+
+/// Read all the plugin files at startup.
+///
+/// # Safety
+///
+/// Accesses global C state (p_lpl, p_rtp, did_source_packages).
+#[no_mangle]
+pub unsafe extern "C" fn rs_load_plugins() {
+    if !nvim_rt_pkg_get_p_lpl() {
+        return;
+    }
+
+    let mut rtp_copy: *mut c_char = p_rtp;
+    let plugin_pattern = c"plugin/**/*".as_ptr().cast_mut();
+    let did_source = nvim_rt_pkg_get_did_source_packages();
+
+    if !did_source {
+        rtp_copy = xstrdup(p_rtp);
+        rs_add_pack_start_dirs();
+    }
+
+    // Don't use source_runtime_vim_lua() yet so we can check for :packloadall below.
+    // NB: after calling this "rtp_copy" may have been freed if it wasn't copied.
+    rs_source_in_path_vim_lua(rtp_copy, plugin_pattern, dip::ALL | dip::NOAFTER);
+    nvim_rt_pkg_time_msg(c"loading rtp plugins".as_ptr());
+
+    // Only source "start" packages if not done already with a :packloadall
+    // command.
+    if !did_source {
+        xfree(rtp_copy.cast());
+        rs_load_start_packages();
+    }
+    nvim_rt_pkg_time_msg(c"loading packages".as_ptr());
+
+    rs_source_runtime_vim_lua(plugin_pattern, dip::ALL | dip::AFTER);
+    nvim_rt_pkg_time_msg(c"loading after plugins".as_ptr());
+}
+
+/// ":packadd[!] {name}" - Add an optional package and load it.
+///
+/// # Safety
+///
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_packadd(eap: *mut c_void) {
+    let mut res = OK;
+
+    let arg = nvim_rt_exarg_get_arg(eap);
+    let forceit = nvim_rt_pkg_exarg_get_forceit(eap);
+
+    // "pack/*/start/" + arg + NUL, with room for "start" or "opt"
+    let arg_len = strlen(arg);
+    let len = 13 + arg_len + 5;
+    let pat = xmallocz(len).cast::<c_char>();
+
+    let cookie = if forceit {
+        nvim_rt_pkg_get_app_add_dir()
+    } else {
+        nvim_rt_pkg_get_app_both()
+    };
+
+    let cb_start = nvim_rt_pkg_get_cb_add_start_pack_plugins();
+    let cb_opt = nvim_rt_pkg_get_cb_add_opt_pack_plugins();
+
+    // Only look under "start" when loading packages wasn't done yet.
+    if !nvim_rt_pkg_get_did_source_packages() {
+        build_packadd_pattern(pat, len, c"start".as_ptr(), arg);
+
+        res = do_in_path(
+            p_pp,
+            c"".as_ptr(),
+            pat,
+            dip::ALL + dip::DIR,
+            cb_start,
+            cookie,
+        );
+    }
+
+    // Give a "not found" error if nothing was found in 'start' or 'opt'.
+    build_packadd_pattern(pat, len, c"opt".as_ptr(), arg);
+
+    let err_flag = if res == FAIL { dip::ERR } else { 0 };
+    do_in_path(
+        p_pp,
+        c"".as_ptr(),
+        pat,
+        dip::ALL + dip::DIR + err_flag,
+        cb_opt,
+        cookie,
+    );
+
+    xfree(pat.cast());
+}
+
+/// Build a "pack/*/{type}/{name}" pattern string.
+///
+/// # Safety
+///
+/// `buf` must have at least `len` bytes available.
+/// `pack_type` and `name` must be valid null-terminated C strings.
+unsafe fn build_packadd_pattern(
+    buf: *mut c_char,
+    len: usize,
+    pack_type: *const c_char,
+    name: *const c_char,
+) {
+    // Write "pack/*/"
+    let prefix = b"pack/*/";
+    let mut pos = 0usize;
+    for &b in prefix {
+        if pos >= len - 1 {
+            break;
+        }
+        *buf.add(pos) = b as c_char;
+        pos += 1;
+    }
+
+    // Append pack_type
+    let mut p = pack_type;
+    while *p != 0 && pos < len - 1 {
+        *buf.add(pos) = *p;
+        pos += 1;
+        p = p.add(1);
+    }
+
+    // Append "/"
+    if pos < len - 1 {
+        *buf.add(pos) = b'/' as c_char;
+        pos += 1;
+    }
+
+    // Append name
+    let mut p = name;
+    while *p != 0 && pos < len - 1 {
+        *buf.add(pos) = *p;
+        pos += 1;
+        p = p.add(1);
+    }
+
+    // NUL-terminate
+    *buf.add(pos) = 0;
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -212,5 +607,23 @@ mod tests {
         // Out of bounds returns null
         let oob = rs_get_plugin_dir(1000);
         assert!(oob.is_null());
+    }
+
+    #[test]
+    fn test_build_packadd_pattern() {
+        unsafe {
+            let mut buf = [0i8; 256];
+            let pack_type = CString::new("start").unwrap();
+            let name = CString::new("myplugin").unwrap();
+            build_packadd_pattern(buf.as_mut_ptr(), 256, pack_type.as_ptr(), name.as_ptr());
+            let result = std::ffi::CStr::from_ptr(buf.as_ptr());
+            assert_eq!(result.to_str().unwrap(), "pack/*/start/myplugin");
+
+            let pack_type = CString::new("opt").unwrap();
+            let name = CString::new("foo").unwrap();
+            build_packadd_pattern(buf.as_mut_ptr(), 256, pack_type.as_ptr(), name.as_ptr());
+            let result = std::ffi::CStr::from_ptr(buf.as_ptr());
+            assert_eq!(result.to_str().unwrap(), "pack/*/opt/foo");
+        }
     }
 }

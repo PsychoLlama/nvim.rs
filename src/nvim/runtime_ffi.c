@@ -870,3 +870,64 @@ size_t nvim_rt_get_iosize(void)
 {
   return (size_t)IOSIZE;
 }
+
+// =============================================================================
+// Phase 6: Package management accessors
+// =============================================================================
+
+_Static_assert(EW_DIR == 0x01, "EW_DIR must be 0x01");
+_Static_assert(EW_FILE == 0x02, "EW_FILE must be 0x02");
+
+/// Get the did_source_packages global.
+bool nvim_rt_pkg_get_did_source_packages(void)
+{
+  return did_source_packages;
+}
+
+/// Set the did_source_packages global.
+void nvim_rt_pkg_set_did_source_packages(bool val)
+{
+  did_source_packages = val;
+}
+
+/// Get the p_lpl (loadplugins) option value.
+bool nvim_rt_pkg_get_p_lpl(void)
+{
+  return p_lpl;
+}
+
+/// Get exarg_T forceit field.
+bool nvim_rt_pkg_exarg_get_forceit(void *eap)
+{
+  return ((exarg_T *)eap)->forceit;
+}
+
+/// Call fix_fname (returns allocated string).
+char *nvim_rt_pkg_fix_fname(const char *fname)
+{
+  return fix_fname(fname);
+}
+
+/// Call vim_snprintf.
+int nvim_rt_pkg_snprintf(char *buf, size_t len, const char *fmt, const char *arg)
+{
+  return vim_snprintf(buf, len, fmt, arg);
+}
+
+/// Call eval_to_number.
+int64_t nvim_rt_pkg_eval_to_number(char *expr)
+{
+  return (int64_t)eval_to_number(expr, false);
+}
+
+/// Call do_cmdline_cmd.
+void nvim_rt_pkg_do_cmdline_cmd(const char *cmd)
+{
+  do_cmdline_cmd(cmd);
+}
+
+/// Call TIME_MSG (time_msg if time_fd is set).
+void nvim_rt_pkg_time_msg(const char *msg)
+{
+  TIME_MSG(msg);
+}

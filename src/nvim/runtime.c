@@ -115,6 +115,15 @@ extern int rs_source_runtime(char *name, int flags);
 extern int rs_source_runtime_vim_lua(char *name, int flags);
 extern int rs_source_in_path_vim_lua(char *path, char *name, int flags);
 
+// Rust FFI forward declarations (Phase 6 - Package management)
+extern bool rs_pack_has_entries(char *buf);
+extern int rs_load_pack_plugin(bool opt, char *fname);
+extern void rs_add_pack_start_dirs(void);
+extern void rs_load_start_packages(void);
+extern void rs_ex_packloadall(void *eap);
+extern void rs_load_plugins(void);
+extern void rs_ex_packadd(void *eap);
+
 garray_T exestack = { 0, 0, sizeof(estack_T), 50, NULL };
 garray_T script_items = { 0, 0, sizeof(scriptitem_T *), 20, NULL };
 
@@ -1091,37 +1100,53 @@ theend:
 /// load these from filetype.lua)
 static int load_pack_plugin(bool opt, char *fname)
 {
-  static const char plugpat[] = "%s/plugin/**/*";  // NOLINT
-  static const char ftpat[] = "%s/ftdetect/*";  // NOLINT
-
-  char *const ffname = fix_fname(fname);
-  size_t len = strlen(ffname) + sizeof(plugpat);
-  char *pat = xmallocz(len);
-
-  vim_snprintf(pat, len, plugpat, ffname);
-  gen_expand_wildcards_and_cb(1, &pat, EW_FILE, true, source_callback_vim_lua, NULL);
-
-  char *cmd = xstrdup("g:did_load_filetypes");
-
-  // If runtime/filetype.lua wasn't loaded yet, the scripts will be
-  // found when it loads.
-  if (opt && eval_to_number(cmd, false) > 0) {
-    do_cmdline_cmd("augroup filetypedetect");
-    vim_snprintf(pat, len, ftpat, ffname);
-    gen_expand_wildcards_and_cb(1, &pat, EW_FILE, true, source_callback_vim_lua, NULL);
-    do_cmdline_cmd("augroup END");
-  }
-  xfree(cmd);
-  xfree(pat);
-  xfree(ffname);
-
-  return OK;
+  return rs_load_pack_plugin(opt, fname);
 }
 
 // used for "cookie" of add_pack_plugin()
 static int APP_ADD_DIR;
 static int APP_LOAD;
 static int APP_BOTH;
+
+// =============================================================================
+// Phase 6: Cookie and callback accessors for Rust package management
+// =============================================================================
+
+/// Get &APP_ADD_DIR cookie.
+void *nvim_rt_pkg_get_app_add_dir(void)
+{
+  return &APP_ADD_DIR;
+}
+
+/// Get &APP_LOAD cookie.
+void *nvim_rt_pkg_get_app_load(void)
+{
+  return &APP_LOAD;
+}
+
+/// Get &APP_BOTH cookie.
+void *nvim_rt_pkg_get_app_both(void)
+{
+  return &APP_BOTH;
+}
+
+/// Get the add_pack_start_dir callback as a function pointer.
+DoInRuntimepathCB nvim_rt_pkg_get_cb_add_pack_start_dir(void)
+{
+  return add_pack_start_dir;
+}
+
+/// Get the add_start_pack_plugins callback as a function pointer.
+DoInRuntimepathCB nvim_rt_pkg_get_cb_add_start_pack_plugins(void)
+{
+  return add_start_pack_plugins;
+}
+
+/// Get the add_opt_pack_plugins callback as a function pointer.
+DoInRuntimepathCB nvim_rt_pkg_get_cb_add_opt_pack_plugins(void)
+{
+  return add_opt_pack_plugins;
+}
 
 static void add_pack_plugins(bool opt, int num_fnames, char **fnames, bool all, void *cookie)
 {
@@ -1182,18 +1207,12 @@ static bool add_opt_pack_plugins(int num_fnames, char **fnames, bool all, void *
 /// Add all packages in the "start" directory to 'runtimepath'.
 void add_pack_start_dirs(void)
 {
-  do_in_path(p_pp, "", NULL, DIP_ALL + DIP_DIR, add_pack_start_dir, NULL);
+  rs_add_pack_start_dirs();
 }
 
 static bool pack_has_entries(char *buf)
 {
-  int num_files;
-  char **files;
-  char *(pat[]) = { buf };
-  if (gen_expand_wildcards(1, pat, &num_files, &files, EW_DIR) == OK) {
-    FreeWild(num_files, files);
-  }
-  return num_files > 0;
+  return rs_pack_has_entries(buf);
 }
 
 static bool add_pack_start_dir(int num_fnames, char **fnames, bool all, void *cookie)
@@ -1223,79 +1242,26 @@ static bool add_pack_start_dir(int num_fnames, char **fnames, bool all, void *co
 /// Load plugins from all packages in the "start" directory.
 void load_start_packages(void)
 {
-  did_source_packages = true;
-  do_in_path(p_pp, "", "pack/*/start/*", DIP_ALL + DIP_DIR,  // NOLINT
-             add_start_pack_plugins, &APP_LOAD);
-  do_in_path(p_pp, "", "start/*", DIP_ALL + DIP_DIR,  // NOLINT
-             add_start_pack_plugins, &APP_LOAD);
+  rs_load_start_packages();
 }
 
 // ":packloadall"
 // Find plugins in the package directories and source them.
 void ex_packloadall(exarg_T *eap)
 {
-  if (!did_source_packages || eap->forceit) {
-    // First do a round to add all directories to 'runtimepath', then load
-    // the plugins. This allows for plugins to use an autoload directory
-    // of another plugin.
-    add_pack_start_dirs();
-    load_start_packages();
-  }
+  rs_ex_packloadall(eap);
 }
 
 /// Read all the plugin files at startup
 void load_plugins(void)
 {
-  if (p_lpl) {
-    char *rtp_copy = p_rtp;
-    char *const plugin_pattern = "plugin/**/*";  // NOLINT
-
-    if (!did_source_packages) {
-      rtp_copy = xstrdup(p_rtp);
-      add_pack_start_dirs();
-    }
-
-    // Don't use source_runtime_vim_lua() yet so we can check for :packloadall below.
-    // NB: after calling this "rtp_copy" may have been freed if it wasn't copied.
-    source_in_path_vim_lua(rtp_copy, plugin_pattern, DIP_ALL | DIP_NOAFTER);
-    TIME_MSG("loading rtp plugins");
-
-    // Only source "start" packages if not done already with a :packloadall
-    // command.
-    if (!did_source_packages) {
-      xfree(rtp_copy);
-      load_start_packages();
-    }
-    TIME_MSG("loading packages");
-
-    source_runtime_vim_lua(plugin_pattern, DIP_ALL | DIP_AFTER);
-    TIME_MSG("loading after plugins");
-  }
+  rs_load_plugins();
 }
 
 /// ":packadd[!] {name}"
 void ex_packadd(exarg_T *eap)
 {
-  static const char plugpat[] = "pack/*/%s/%s";  // NOLINT
-  int res = OK;
-
-  const size_t len = sizeof(plugpat) + strlen(eap->arg) + 5;
-  char *pat = xmallocz(len);
-  void *cookie = eap->forceit ? &APP_ADD_DIR : &APP_BOTH;
-
-  // Only look under "start" when loading packages wasn't done yet.
-  if (!did_source_packages) {
-    vim_snprintf(pat, len, plugpat, "start", eap->arg);
-    res = do_in_path(p_pp, "", pat, DIP_ALL + DIP_DIR,
-                     add_start_pack_plugins, cookie);
-  }
-
-  // Give a "not found" error if nothing was found in 'start' or 'opt'.
-  vim_snprintf(pat, len, plugpat, "opt", eap->arg);
-  do_in_path(p_pp, "", pat, DIP_ALL + DIP_DIR + (res == FAIL ? DIP_ERR : 0),
-             add_opt_pack_plugins, cookie);
-
-  xfree(pat);
+  rs_ex_packadd(eap);
 }
 
 static void ExpandRTDir_int(char *pat, size_t pat_len, int flags, bool keep_ext, garray_T *gap,

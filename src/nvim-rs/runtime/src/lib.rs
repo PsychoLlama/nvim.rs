@@ -352,6 +352,10 @@ pub fn rs_dip_is_package_search(flags: c_int) -> bool {
 // Re-exports from submodules
 // =============================================================================
 
+pub use package::{
+    rs_add_pack_start_dirs, rs_ex_packadd, rs_ex_packloadall, rs_load_pack_plugin, rs_load_plugins,
+    rs_load_start_packages, rs_pack_has_entries,
+};
 pub use pathsearch::{
     rs_do_in_path_and_pp, rs_do_in_runtimepath, rs_gen_expand_wildcards_and_cb, rs_source_callback,
     rs_source_callback_vim_lua, rs_source_in_path_vim_lua, rs_source_runtime,
