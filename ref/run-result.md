@@ -1,21 +1,20 @@
-Plan: ~/.claude/plans/ancient-plotting-scroll.md
+Plan: ~/.claude/plans/swift-orbiting-lake.md
 
-All 7 phases of the mouse.c migration are complete. Here's the summary:
+All 4 phases of the extmark migration plan are complete:
 
-## Completed Migration Summary
+**Phase 1** (committed earlier): Wired up 12 existing Rust implementations as thin `rs_` wrappers in `extmark.c`.
 
-| Phase | Functions | Approach |
-|---|---|---|
-| 1 | `set_mouse_topline`, `setmouse`, `move_tab_to_mouse`, `mouse_tab_close` | Full Rust implementations |
-| 2 | `scroll_line_len`, `find_longest_lnum`, `do_mousescroll_horiz` | Full Rust implementations |
-| 3 | `mouse_comp_pos`, `vcol2col` | `mouse_comp_pos` full Rust; `vcol2col` delegates to C accessor (charsize infrastructure) |
-| 4 | `mouse_find_grid_win`, `mouse_find_win_inner`, `mouse_find_win_outer` | Rust orchestrates; frame tree + grid resolution in C accessors |
-| 5 | `mouse_check_grid`, `get_fpos_of_mouse`, `do_popup`, `do_mousescroll`, `nv_mousescroll`, `ins_mouse`, `ins_mousescroll` | `get_fpos_of_mouse` full Rust; others delegate to C accessors |
-| 6 | `jump_to_mouse` | Delegates to C accessor (352 lines, 8 static vars) |
-| 7 | `do_mouse`, `nv_mouse` | Delegates to C accessors (619 lines) |
+**Phase 2** (committed earlier): Implemented `extmark_set` in Rust, handling namespace tracking, in-place mark revision, deletion+recreation, and decoration registration.
 
-**Final state of `mouse.c`:** Only thin `rs_` wrapper calls, C accessor functions, and the two permanent C functions (`f_getmousepos`, `call_click_def_func`).
+**Phase 3**: Migrated `extmark_get` and `push_mark` to Rust:
+- Fixed a **MTPair layout mismatch** bug — the extmark crate had `{ MTKey start; MTKey end }` (80 bytes) instead of the correct C layout `{ MTKey start; MTPos end_pos; bool end_right_gravity }` (~52 bytes)
+- Added 6 new C accessor wrappers for overlap iteration, type flags, and array operations
+- Implemented `push_mark` (namespace + type filtering) and `rs_extmark_get` (overlap + regular iteration paths)
 
-**Rust crate:** 34 `#[no_mangle]` exports in `src/nvim-rs/mouse/src/lib.rs`.
+**Phase 4**: Cleaned up dead code:
+- Removed 12 dead `rs_flags_*`/`rs_pos_*` extern declarations
+- Trimmed 6 unused includes
+- Added `nvim-extmark` to justfile (4254 tests total, up from 4239)
+- Fixed 2 incorrect test assertions
 
-**All checks pass:** build, smoke-test, rust-fmt-check, rust-clippy, rust-test (4239 tests).
+The `extmark.c` file now contains only thin wrapper functions calling Rust implementations, plus C accessor functions for the opaque handle pattern.
