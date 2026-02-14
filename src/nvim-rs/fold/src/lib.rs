@@ -2566,13 +2566,24 @@ pub extern "C" fn rs_foldMarkAdjust(
 /// Update folds using IEMS algorithm for indent/diff methods.
 ///
 /// This function handles fold updates for 'foldmethod' values of "indent" and "diff".
-/// Other fold methods (marker, expr, syntax) continue to use the C implementation.
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
 #[no_mangle]
 pub extern "C" fn rs_foldUpdateIEMS_indent(wp: WinHandle, top: LineNr, bot: LineNr) {
     update::fold_update_iems_indent_impl(wp, top, bot);
+}
+
+/// Update folds using IEMS algorithm for all fold methods.
+///
+/// This function handles fold updates for all 'foldmethod' values that use the
+/// IEMS algorithm: indent, diff, marker, expr, and syntax.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldUpdateIEMS(wp: WinHandle, top: LineNr, bot: LineNr) {
+    update::fold_update_iems_all_impl(wp, top, bot);
 }
 
 // ============================================================================

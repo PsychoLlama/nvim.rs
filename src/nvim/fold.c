@@ -153,6 +153,7 @@ extern void rs_foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2,
 
 // Rust FFI declarations for Phase 2: IEMS Algorithm
 extern void rs_foldUpdateIEMS_indent(win_T *wp, linenr_T top, linenr_T bot);
+extern void rs_foldUpdateIEMS(win_T *wp, linenr_T top, linenr_T bot);
 
 // Rust FFI declarations for Phase 5: Navigation and Display
 extern void rs_foldAdjustCursor(win_T *wp);
@@ -492,20 +493,12 @@ void foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
     }
   }
 
-  if (foldmethodIsIndent(wp) || foldmethodIsDiff(wp)) {
-    // Phase 2: Use Rust implementation for indent/diff methods
+  if (foldmethodIsIndent(wp) || foldmethodIsDiff(wp)
+      || foldmethodIsExpr(wp) || foldmethodIsMarker(wp)
+      || foldmethodIsSyntax(wp)) {
     int save_got_int = got_int;
     got_int = false;
-    rs_foldUpdateIEMS_indent(wp, top, bot);
-    got_int |= save_got_int;
-  } else if (foldmethodIsExpr(wp)
-             || foldmethodIsMarker(wp)
-             || foldmethodIsSyntax(wp)) {
-    int save_got_int = got_int;
-
-    // reset got_int here, otherwise it won't work
-    got_int = false;
-    foldUpdateIEMS(wp, top, bot);
+    rs_foldUpdateIEMS(wp, top, bot);
     got_int |= save_got_int;
   }
 }
