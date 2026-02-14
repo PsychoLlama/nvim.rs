@@ -185,6 +185,50 @@ extern int rs_delmarks_global_idx(int c);
 extern int rs_delmarks_special_type(int c);
 extern int rs_marks_index_to_char(int idx, int is_global);
 
+// Phase 1: FFI infrastructure + memory/field operations
+extern void rs_free_fmark(fmark_T fm);
+extern void rs_free_xfmark(xfmark_T fm);
+extern void rs_clear_fmark(fmark_T *fm, Timestamp timestamp);
+extern fmark_T *rs_pos_to_mark(buf_T *buf, fmark_T *fmp, pos_T pos);
+extern xfmark_T rs_get_raw_global_mark(int name);
+extern int rs_mark_check_line_bounds(buf_T *buf, linenr_T fm_mark_lnum,
+                                      const char **errormsg, const char *e_markinval_str);
+extern void rs_fmarks_check_one(xfmark_T *fm, const char *name, buf_T *buf);
+
+// =============================================================================
+// C accessor functions called from Rust
+// =============================================================================
+
+/// Wrapper around xfree for Rust to call
+void nvim_mark_xfree(void *ptr)
+{
+  xfree(ptr);
+}
+
+/// Wrapper around xstrdup for Rust to call
+char *nvim_mark_xstrdup(const char *s)
+{
+  return xstrdup(s);
+}
+
+/// Wrapper around os_time for Rust to call
+Timestamp nvim_mark_os_time(void)
+{
+  return os_time();
+}
+
+/// Get pointer to the global namedfm array
+xfmark_T *nvim_mark_get_namedfm(void)
+{
+  return namedfm;
+}
+
+/// Compare file names using path_fnamecmp
+int nvim_mark_path_fnamecmp(const char *a, const char *b)
+{
+  return path_fnamecmp(a, b);
+}
+
 // =============================================================================
 // Rust wrapper functions
 // =============================================================================
@@ -455,23 +499,20 @@ int setmark(int c)
 /// Free fmark_T item
 void free_fmark(fmark_T fm)
 {
-  xfree(fm.additional_data);
+  rs_free_fmark(fm);
 }
 
 /// Free xfmark_T item
 void free_xfmark(xfmark_T fm)
 {
-  xfree(fm.fname);
-  free_fmark(fm.fmark);
+  rs_free_xfmark(fm);
 }
 
 /// Free and clear fmark_T item
 void clear_fmark(fmark_T *const fm, const Timestamp timestamp)
   FUNC_ATTR_NONNULL_ALL
 {
-  free_fmark(*fm);
-  *fm = (fmark_T)INIT_FMARK;
-  fm->timestamp = timestamp;
+  rs_clear_fmark(fm, timestamp);
 }
 
 // Set named mark "c" to position "pos".
@@ -941,11 +982,7 @@ fmark_T *mark_get_visual(buf_T *buf, int name)
 fmark_T *pos_to_mark(buf_T *buf, fmark_T *fmp, pos_T pos)
   FUNC_ATTR_NONNULL_RET
 {
-  static fmark_T fms = INIT_FMARK;
-  fmark_T *fm = fmp == NULL ? &fms : fmp;
-  fm->fnum = buf->handle;
-  fm->mark = pos;
-  return fm;
+  return rs_pos_to_mark(buf, fmp, pos);
 }
 
 /// Attempt to switch to the buffer of the given global mark
@@ -1134,12 +1171,7 @@ void fmarks_check_names(buf_T *buf)
 
 static void fmarks_check_one(xfmark_T *fm, char *name, buf_T *buf)
 {
-  if (fm->fmark.fnum == 0
-      && fm->fname != NULL
-      && path_fnamecmp(name, fm->fname) == 0) {
-    fm->fmark.fnum = buf->b_fnum;
-    XFREE_CLEAR(fm->fname);
-  }
+  rs_fmarks_check_one(fm, name, buf);
 }
 
 /// Check the position in @a fm is valid.
@@ -1181,11 +1213,7 @@ bool mark_check(fmark_T *fm, const char **errormsg)
 /// @return  true if below line count else false.
 bool mark_check_line_bounds(buf_T *buf, fmark_T *fm, const char **errormsg)
 {
-  if (buf != NULL && fm->mark.lnum > buf->b_ml.ml_line_count) {
-    *errormsg = _(e_markinval);
-    return false;
-  }
-  return true;
+  return rs_mark_check_line_bounds(buf, fm->mark.lnum, errormsg, _(e_markinval)) != 0;
 }
 
 /// Clear all marks and change list in the given buffer
@@ -2252,7 +2280,7 @@ void get_buf_local_marks(const buf_T *buf, list_T *l)
 /// @param[out] Global/file mark
 xfmark_T get_raw_global_mark(char name)
 {
-  return namedfm[mark_global_index(name)];
+  return rs_get_raw_global_mark((int)name);
 }
 
 /// Get information about global marks ('A' to 'Z' and '0' to '9')

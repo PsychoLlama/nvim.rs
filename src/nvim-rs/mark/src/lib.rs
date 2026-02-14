@@ -2,7 +2,21 @@
 //!
 //! This crate provides functions for working with marks and positions.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
+
+use nvim_buffer::BufHandle;
+
+// =============================================================================
+// FFI: C accessor functions called from Rust
+// =============================================================================
+extern "C" {
+    fn nvim_mark_xfree(ptr: *mut c_void);
+    fn nvim_buf_get_handle(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
+    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
+    fn nvim_mark_get_namedfm() -> *mut XfmarkT;
+    fn nvim_mark_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+}
 
 /// Number of possible named marks (a-z)
 pub const NMARKS: c_int = 26;
@@ -1235,6 +1249,7 @@ impl Default for FmarkT {
 /// xfmark_T structure matching Neovim's mark_defs.h
 /// Structure defining extended mark (mark with file name attached)
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct XfmarkT {
     /// Actual mark
     pub fmark: FmarkT,
@@ -2768,6 +2783,142 @@ pub extern "C" fn rs_marks_should_show(_mark_char: c_int, filter_len: c_int) -> 
     // If no filter, show all marks
     // The actual character matching is done in C with vim_strchr
     c_int::from(filter_len == 0)
+}
+
+// =============================================================================
+// Phase 1 (FFI): Memory/Field Operations
+// =============================================================================
+
+/// Free the additional_data pointer of an fmark_T.
+/// C equivalent: `xfree(fm.additional_data)`
+#[no_mangle]
+pub extern "C" fn rs_free_fmark(fm: FmarkT) {
+    if !fm.additional_data.is_null() {
+        unsafe {
+            nvim_mark_xfree(fm.additional_data as *mut c_void);
+        }
+    }
+}
+
+/// Free an xfmark_T: free fname and additional_data.
+/// C equivalent: `xfree(fm.fname); free_fmark(fm.fmark)`
+#[no_mangle]
+pub extern "C" fn rs_free_xfmark(fm: XfmarkT) {
+    if !fm.fname.is_null() {
+        unsafe {
+            nvim_mark_xfree(fm.fname as *mut c_void);
+        }
+    }
+    rs_free_fmark(fm.fmark);
+}
+
+/// Free and reinitialize an fmark_T with the given timestamp.
+/// C equivalent of `clear_fmark`.
+///
+/// # Safety
+/// `fm` must be a valid, non-null pointer to an `FmarkT`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_fmark(fm: *mut FmarkT, timestamp: Timestamp) {
+    rs_free_fmark(*fm);
+    *fm = FmarkT::default();
+    (*fm).timestamp = timestamp;
+}
+
+/// Wrap a pos_T into an fmark_T with the given buffer's fnum.
+///
+/// If `fmp` is non-null, writes into it; otherwise uses an internal static buffer.
+/// Returns a pointer to the filled fmark_T.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle. If `fmp` is non-null, it must point to a valid `FmarkT`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pos_to_mark(
+    buf: BufHandle,
+    fmp: *mut FmarkT,
+    pos: PosT,
+) -> *mut FmarkT {
+    static mut STATIC_FMARK: FmarkT = FmarkT {
+        mark: PosT {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        },
+        fnum: 0,
+        timestamp: 0,
+        view: FmarkvT {
+            topline_offset: MAXLNUM,
+        },
+        additional_data: std::ptr::null_mut(),
+    };
+
+    let fm = if fmp.is_null() {
+        // Reset static to INIT_FMARK equivalent
+        STATIC_FMARK = FmarkT::default();
+        &raw mut STATIC_FMARK
+    } else {
+        fmp
+    };
+    (*fm).fnum = nvim_buf_get_handle(buf);
+    (*fm).mark = pos;
+    fm
+}
+
+/// Get a raw global mark by name.
+/// Returns a copy of namedfm[mark_global_index(name)].
+///
+/// # Safety
+/// `name` must be a valid global mark character (A-Z or 0-9).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_raw_global_mark(name: c_int) -> XfmarkT {
+    let idx = rs_mark_global_index(name);
+    let namedfm = nvim_mark_get_namedfm();
+    *namedfm.offset(idx as isize)
+}
+
+/// Check if a mark's line number exceeds the buffer line count.
+/// Returns true (1) if within bounds, false (0) if out of bounds.
+/// Sets errormsg to e_markinval (via C accessor) if out of bounds.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle (or null). `errormsg` must be a valid
+/// pointer (or null). `e_markinval_str` must be a valid C string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_check_line_bounds(
+    buf: BufHandle,
+    fm_mark_lnum: LinenrT,
+    errormsg: *mut *const c_char,
+    e_markinval_str: *const c_char,
+) -> c_int {
+    if !buf.is_null() && fm_mark_lnum > nvim_buf_get_ml_line_count(buf) {
+        if !errormsg.is_null() {
+            *errormsg = e_markinval_str;
+        }
+        return 0;
+    }
+    1
+}
+
+/// Check a single xfmark_T: if fnum is 0 and fname matches, set fnum from buf and free fname.
+/// C equivalent of `fmarks_check_one`.
+///
+/// # Safety
+/// `fm` must be a valid pointer to an `XfmarkT`. `name` must be a valid C string.
+/// `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fmarks_check_one(
+    fm: *mut XfmarkT,
+    name: *const c_char,
+    buf: BufHandle,
+) {
+    if (*fm).fmark.fnum == 0
+        && !(*fm).fname.is_null()
+        && nvim_mark_path_fnamecmp(name, (*fm).fname) == 0
+    {
+        (*fm).fmark.fnum = nvim_buf_get_fnum(buf);
+        // XFREE_CLEAR: free and null the pointer
+        nvim_mark_xfree((*fm).fname as *mut c_void);
+        (*fm).fname = std::ptr::null_mut();
+    }
 }
 
 // =============================================================================
