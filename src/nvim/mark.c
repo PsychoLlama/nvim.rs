@@ -246,6 +246,11 @@ extern void rs_mark_adjust_buf(buf_T *buf, linenr_T line1, linenr_T line2, linen
 extern void rs_mark_col_adjust_all(linenr_T lnum, colnr_T mincol, linenr_T lnum_amount,
                                     colnr_T col_amount, int spaces_removed);
 
+// Phase 6: Ex commands + remaining
+extern void rs_ex_delmarks(const char *arg, int forceit, buf_T *curbuf_ptr);
+extern void rs_mark_mb_adjustpos(buf_T *buf, pos_T *lp);
+extern fmark_T *rs_mark_get_motion(buf_T *buf, win_T *win, int name);
+
 // =============================================================================
 // C accessor functions called from Rust
 // =============================================================================
@@ -444,6 +449,30 @@ pos_T *nvim_mark_win_get_tagstack_mark_ptr(win_T *win, int idx) { return &win->w
 
 // Phase 5: curtab accessor
 tabpage_T *nvim_mark_get_curtab(void) { return curtab; }
+
+// Phase 6: Error message wrappers
+void nvim_mark_emsg_invarg(void) { emsg(_(e_invarg)); }
+void nvim_mark_emsg_argreq(void) { emsg(_(e_argreq)); }
+void nvim_mark_semsg_invarg2(const char *p) { semsg(_(e_invarg2), p); }
+
+// Phase 6: Multibyte function wrappers
+const char *nvim_mark_ml_get_buf(buf_T *buf, linenr_T lnum) { return ml_get_buf(buf, lnum); }
+colnr_T nvim_mark_ml_get_buf_len(buf_T *buf, linenr_T lnum) { return ml_get_buf_len(buf, lnum); }
+int nvim_mark_utf_head_off(const char *base, const char *p) { return utf_head_off(base, p); }
+int nvim_mark_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
+int nvim_mark_vim_isprintc(int c) { return vim_isprintc(c); }
+int nvim_mark_ptr2cells(const char *p) { return ptr2cells(p); }
+
+// Phase 6: Motion function wrappers
+int nvim_mark_findpar(int *inclusive, int dir, int count, int what, int do_sentences) {
+  bool pincl = false;
+  int result = (int)findpar(&pincl, dir, count, what, (bool)do_sentences);
+  if (inclusive) { *inclusive = (int)pincl; }
+  return result;
+}
+int nvim_mark_findsent(int dir, int count) { return (int)findsent(dir, count); }
+void nvim_mark_set_listcmd_busy(int val) { listcmd_busy = (bool)val; }
+void nvim_mark_win_set_cursor(win_T *win, pos_T pos) { win->w_cursor = pos; }
 
 // Cross-function callbacks from Rust (Phase 3) - defined at end of file
 // after static functions they reference
@@ -912,23 +941,7 @@ fmark_T *mark_get_local(buf_T *buf, win_T *win, int name)
 /// @return[static] Mark.
 fmark_T *mark_get_motion(buf_T *buf, win_T *win, int name)
 {
-  fmark_T *mark = NULL;
-  const pos_T pos = curwin->w_cursor;
-  const bool slcb = listcmd_busy;
-  listcmd_busy = true;  // avoid that '' is changed
-  if (name == '{' || name == '}') {  // to previous/next paragraph
-    oparg_T oa;
-    if (findpar(&oa.inclusive, name == '}' ? FORWARD : BACKWARD, 1, NUL, false)) {
-      mark = pos_to_mark(buf, NULL, win->w_cursor);
-    }
-  } else if (name == '(' || name == ')') {  // to previous/next sentence
-    if (findsent(name == ')' ? FORWARD : BACKWARD, 1)) {
-      mark = pos_to_mark(buf, NULL, win->w_cursor);
-    }
-  }
-  curwin->w_cursor = pos;
-  listcmd_busy = slcb;
-  return mark;
+  return rs_mark_get_motion(buf, win, name);
 }
 
 /// Get visual marks '<', '>'
@@ -1301,87 +1314,7 @@ static void show_one_mark(int c, char *arg, pos_T *p, char *name_arg, int curren
 // ":delmarks[!] [marks]"
 void ex_delmarks(exarg_T *eap)
 {
-  int from, to;
-  int n;
-
-  if (*eap->arg == NUL && eap->forceit) {
-    // clear all marks
-    clrallmarks(curbuf, os_time());
-  } else if (eap->forceit) {
-    emsg(_(e_invarg));
-  } else if (*eap->arg == NUL) {
-    emsg(_(e_argreq));
-  } else {
-    // clear specified marks only
-    const Timestamp timestamp = os_time();
-    for (char *p = eap->arg; *p != NUL; p++) {
-      bool lower = ASCII_ISLOWER(*p);
-      bool digit = ascii_isdigit(*p);
-      if (lower || digit || ASCII_ISUPPER(*p)) {
-        if (p[1] == '-') {
-          // clear range of marks
-          from = (uint8_t)(*p);
-          to = (uint8_t)p[2];
-          if (!(lower ? ASCII_ISLOWER(p[2])
-                      : (digit ? ascii_isdigit(p[2])
-                               : ASCII_ISUPPER(p[2])))
-              || to < from) {
-            semsg(_(e_invarg2), p);
-            return;
-          }
-          p += 2;
-        } else {
-          // clear one lower case mark
-          from = to = (uint8_t)(*p);
-        }
-
-        for (int i = from; i <= to; i++) {
-          if (lower) {
-            curbuf->b_namedm[i - 'a'].mark.lnum = 0;
-            curbuf->b_namedm[i - 'a'].timestamp = timestamp;
-          } else {
-            if (digit) {
-              n = i - '0' + NMARKS;
-            } else {
-              n = i - 'A';
-            }
-            namedfm[n].fmark.mark.lnum = 0;
-            namedfm[n].fmark.fnum = 0;
-            namedfm[n].fmark.timestamp = timestamp;
-            XFREE_CLEAR(namedfm[n].fname);
-          }
-        }
-      } else {
-        switch (*p) {
-        case '"':
-          clear_fmark(&curbuf->b_last_cursor, timestamp);
-          break;
-        case '^':
-          clear_fmark(&curbuf->b_last_insert, timestamp);
-          break;
-        case ':':
-          // Readonly mark. No deletion allowed.
-          break;
-        case '.':
-          clear_fmark(&curbuf->b_last_change, timestamp);
-          break;
-        case '[':
-          curbuf->b_op_start.lnum = 0; break;
-        case ']':
-          curbuf->b_op_end.lnum = 0; break;
-        case '<':
-          curbuf->b_visual.vi_start.lnum = 0; break;
-        case '>':
-          curbuf->b_visual.vi_end.lnum = 0; break;
-        case ' ':
-          break;
-        default:
-          semsg(_(e_invarg2), p);
-          return;
-        }
-      }
-    }
-  }
+  rs_ex_delmarks(eap->arg, eap->forceit, curbuf);
 }
 
 // print the jumplist
@@ -1782,22 +1715,7 @@ void free_all_marks(void)
 void mark_mb_adjustpos(buf_T *buf, pos_T *lp)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (lp->col > 0 || lp->coladd > 1) {
-    const char *const p = ml_get_buf(buf, lp->lnum);
-    if (*p == NUL || ml_get_buf_len(buf, lp->lnum) < lp->col) {
-      lp->col = 0;
-    } else {
-      lp->col -= utf_head_off(p, p + lp->col);
-    }
-    // Reset "coladd" when the cursor would be on the right half of a
-    // double-wide character.
-    if (lp->coladd == 1
-        && p[lp->col] != TAB
-        && vim_isprintc(utf_ptr2char(p + lp->col))
-        && ptr2cells(p + lp->col) > 1) {
-      lp->coladd = 0;
-    }
-  }
+  rs_mark_mb_adjustpos(buf, lp);
 }
 
 // Add information about mark 'mname' to list 'l'
@@ -1901,6 +1819,3 @@ char *nvim_mark_buflist_nr2name(int fnum, int listed, int unstripped) {
   return buflist_nr2name(fnum, listed, unstripped);
 }
 char *nvim_mark_mark_line(pos_T *pos, int lead_len) { return mark_line(pos, lead_len); }
-fmark_T *nvim_mark_get_motion(buf_T *buf, win_T *win, int name) {
-  return mark_get_motion(buf, win, name);
-}

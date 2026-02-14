@@ -121,7 +121,6 @@ extern "C" {
     fn nvim_mark_win_tagstack_remove(win: WinHandle, from_idx: c_int, len: c_int);
     fn nvim_mark_buflist_nr2name(fnum: c_int, listed: c_int, unstripped: c_int) -> *mut c_char;
     fn nvim_mark_mark_line(pos: *mut PosT, lead_len: c_int) -> *mut c_char;
-    fn nvim_mark_get_motion(buf: BufHandle, win: WinHandle, name: c_int) -> *mut FmarkT;
 
     // Phase 5: Mark adjustment accessors
     fn nvim_mark_buf_get_visual_start_ptr(buf: BufHandle) -> *mut PosT;
@@ -188,6 +187,31 @@ extern "C" {
 
     // Phase 5: curtab
     fn nvim_mark_get_curtab() -> TabHandle;
+
+    // Phase 6: Error message wrappers
+    fn nvim_mark_emsg_invarg();
+    fn nvim_mark_emsg_argreq();
+    fn nvim_mark_semsg_invarg2(p: *const c_char);
+
+    // Phase 6: Multibyte functions
+    fn nvim_mark_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *const c_char;
+    fn nvim_mark_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
+    fn nvim_mark_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn nvim_mark_utf_ptr2char(p: *const c_char) -> c_int;
+    fn nvim_mark_vim_isprintc(c: c_int) -> c_int;
+    fn nvim_mark_ptr2cells(p: *const c_char) -> c_int;
+
+    // Phase 6: Motion functions
+    fn nvim_mark_findpar(
+        inclusive: *mut c_int,
+        dir: c_int,
+        count: LinenrT,
+        what: c_int,
+        do_sentences: c_int,
+    ) -> c_int;
+    fn nvim_mark_findsent(dir: c_int, count: LinenrT) -> c_int;
+    fn nvim_mark_set_listcmd_busy(val: c_int);
+    fn nvim_mark_win_set_cursor(win: WinHandle, pos: PosT);
 }
 
 /// Number of possible named marks (a-z)
@@ -2900,6 +2924,230 @@ pub unsafe extern "C" fn rs_mark_col_adjust_all(
 }
 
 // =============================================================================
+// Phase 6: Ex Commands + Remaining
+// =============================================================================
+
+/// NUL character constant
+const NUL_CHAR: c_int = 0;
+/// TAB character constant
+const TAB_CHAR: u8 = 0x09;
+
+/// Implementation of `:delmarks[!] [marks]` command.
+///
+/// Parses the argument string and deletes the specified marks.
+/// If `forceit` is set and arg is empty, clears all marks.
+///
+/// # Safety
+/// Pointers must be valid. `arg` must be a NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_delmarks(arg: *const c_char, forceit: c_int, curbuf: BufHandle) {
+    let arg_empty = arg.is_null() || *arg == 0;
+
+    if arg_empty && forceit != 0 {
+        // :delmarks! — clear all marks
+        let ts = nvim_mark_os_time();
+        rs_clrallmarks(curbuf, ts);
+        return;
+    }
+
+    if forceit != 0 {
+        // :delmarks! with args — error
+        nvim_mark_emsg_invarg();
+        return;
+    }
+
+    if arg_empty {
+        // :delmarks without args — error
+        nvim_mark_emsg_argreq();
+        return;
+    }
+
+    // Parse and clear specified marks
+    let timestamp = nvim_mark_os_time();
+    let namedfm_ptr = nvim_mark_get_namedfm();
+    let mut p = arg;
+    while *p != 0 {
+        let ch = *p as u8;
+        let is_lower = ascii_islower(ch);
+        let is_digit = ascii_isdigit(ch);
+        let is_upper = ascii_isupper(ch);
+
+        if is_lower || is_digit || is_upper {
+            let from: u8;
+            let to: u8;
+            if *p.add(1) == b'-' as c_char {
+                // Range: e.g., "a-z"
+                from = ch;
+                to = *p.add(2) as u8;
+                // Validate range types match and to >= from
+                let valid = if is_lower {
+                    ascii_islower(to)
+                } else if is_digit {
+                    ascii_isdigit(to)
+                } else {
+                    ascii_isupper(to)
+                };
+                if !valid || (to as c_int) < (from as c_int) {
+                    nvim_mark_semsg_invarg2(p);
+                    return;
+                }
+                p = p.add(2);
+            } else {
+                from = ch;
+                to = ch;
+            }
+
+            for i in (from as c_int)..=(to as c_int) {
+                if is_lower {
+                    let idx = i - b'a' as c_int;
+                    let fm = nvim_mark_buf_get_namedm(curbuf, idx);
+                    (*fm).mark.lnum = 0;
+                    (*fm).timestamp = timestamp;
+                } else {
+                    let n = if is_digit {
+                        i - b'0' as c_int + NMARKS
+                    } else {
+                        i - b'A' as c_int
+                    };
+                    let xfm = namedfm_ptr.offset(n as isize);
+                    (*xfm).fmark.mark.lnum = 0;
+                    (*xfm).fmark.fnum = 0;
+                    (*xfm).fmark.timestamp = timestamp;
+                    // XFREE_CLEAR(namedfm[n].fname)
+                    if !(*xfm).fname.is_null() {
+                        nvim_mark_xfree((*xfm).fname as *mut c_void);
+                        (*xfm).fname = std::ptr::null_mut();
+                    }
+                }
+            }
+        } else {
+            // Special marks
+            match ch {
+                b'"' => {
+                    let fm = nvim_mark_buf_get_last_cursor(curbuf);
+                    rs_clear_fmark(fm, timestamp);
+                }
+                b'^' => {
+                    let fm = nvim_mark_buf_get_last_insert(curbuf);
+                    rs_clear_fmark(fm, timestamp);
+                }
+                b':' => {
+                    // Readonly mark - no deletion allowed
+                }
+                b'.' => {
+                    let fm = nvim_mark_buf_get_last_change(curbuf);
+                    rs_clear_fmark(fm, timestamp);
+                }
+                b'[' => {
+                    let op_start = nvim_mark_buf_get_op_start(curbuf);
+                    (*op_start).lnum = 0;
+                }
+                b']' => {
+                    let op_end = nvim_mark_buf_get_op_end(curbuf);
+                    (*op_end).lnum = 0;
+                }
+                b'<' => {
+                    let vis = nvim_mark_buf_get_visual_start_ptr(curbuf);
+                    (*vis).lnum = 0;
+                }
+                b'>' => {
+                    let vis = nvim_mark_buf_get_visual_end_ptr(curbuf);
+                    (*vis).lnum = 0;
+                }
+                b' ' => {
+                    // Space: skip
+                }
+                _ => {
+                    nvim_mark_semsg_invarg2(p);
+                    return;
+                }
+            }
+        }
+        p = p.add(1);
+    }
+}
+
+/// Adjust position to point to the first byte of a multi-byte character.
+///
+/// If the position points to a tail byte, it is moved backwards to the head byte.
+///
+/// # Safety
+/// `buf` and `lp` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_mb_adjustpos(buf: BufHandle, lp: *mut PosT) {
+    if (*lp).col > 0 || (*lp).coladd > 1 {
+        let line = nvim_mark_ml_get_buf(buf, (*lp).lnum);
+        if *line == 0 || nvim_mark_ml_get_buf_len(buf, (*lp).lnum) < (*lp).col {
+            (*lp).col = 0;
+        } else {
+            (*lp).col -= nvim_mark_utf_head_off(line, line.offset((*lp).col as isize)) as ColnrT;
+        }
+        // Reset "coladd" when the cursor would be on the right half of a
+        // double-wide character.
+        if (*lp).coladd == 1
+            && *line.offset((*lp).col as isize) != TAB_CHAR as c_char
+            && nvim_mark_vim_isprintc(nvim_mark_utf_ptr2char(line.offset((*lp).col as isize))) != 0
+            && nvim_mark_ptr2cells(line.offset((*lp).col as isize)) > 1
+        {
+            (*lp).coladd = 0;
+        }
+    }
+}
+
+/// Get marks that are actually motions but return them as marks.
+///
+/// Gets the following motions as marks: '{', '}', '(', ')'
+///
+/// # Safety
+/// `buf` and `win` must be valid handles.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_get_motion(
+    buf: BufHandle,
+    win: WinHandle,
+    name: c_int,
+) -> *mut FmarkT {
+    let pos = nvim_mark_win_get_cursor(win);
+    let slcb = nvim_mark_get_listcmd_busy();
+    nvim_mark_set_listcmd_busy(1); // avoid that '' is changed
+
+    let mark: *mut FmarkT;
+    if name == b'{' as c_int || name == b'}' as c_int {
+        // to previous/next paragraph
+        let mut inclusive: c_int = 0;
+        let dir = if name == b'}' as c_int {
+            FORWARD
+        } else {
+            BACKWARD
+        };
+        if nvim_mark_findpar(&mut inclusive, dir, 1, NUL_CHAR, 0) != 0 {
+            let cursor = nvim_mark_win_get_cursor(win);
+            mark = rs_pos_to_mark(buf, std::ptr::null_mut(), cursor);
+        } else {
+            mark = std::ptr::null_mut();
+        }
+    } else if name == b'(' as c_int || name == b')' as c_int {
+        // to previous/next sentence
+        let dir = if name == b')' as c_int {
+            FORWARD
+        } else {
+            BACKWARD
+        };
+        if nvim_mark_findsent(dir, 1) != 0 {
+            let cursor = nvim_mark_win_get_cursor(win);
+            mark = rs_pos_to_mark(buf, std::ptr::null_mut(), cursor);
+        } else {
+            mark = std::ptr::null_mut();
+        }
+    } else {
+        mark = std::ptr::null_mut();
+    }
+
+    nvim_mark_win_set_cursor(win, pos);
+    nvim_mark_set_listcmd_busy(slcb);
+    mark
+}
+
+// =============================================================================
 // Phase 3 & 5 Tests
 // =============================================================================
 
@@ -4221,7 +4469,7 @@ pub unsafe extern "C" fn rs_mark_get_local(
     } else if name == c_int::from(b':') && nvim_mark_bt_prompt(buf) != 0 {
         mark = nvim_mark_buf_get_prompt_start(buf);
     } else {
-        mark = nvim_mark_get_motion(buf, win, name);
+        mark = rs_mark_get_motion(buf, win, name);
     }
 
     if !mark.is_null() {
