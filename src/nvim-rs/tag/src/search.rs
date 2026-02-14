@@ -620,22 +620,20 @@ pub mod find_tags_flags {
     pub const TAG_REGEXP: c_int = 4;
     /// Don't always ignore case
     pub const TAG_NOIC: c_int = 8;
-    /// Keep language for tag search
-    pub const TAG_KEEP_LANG: c_int = 0x10;
-    /// Don't call tagfunc
-    pub const TAG_NO_TAGFUNC: c_int = 0x20;
     /// Verbose message
-    pub const TAG_VERBOSE: c_int = 0x40;
-    /// Complete tag only
-    pub const TAG_CSCOPE: c_int = 0x80;
-    /// Used for ins_compl_add_infercase_addchar()
-    pub const TAG_INS_COMP: c_int = 0x100;
+    pub const TAG_VERBOSE: c_int = 32;
+    /// Currently doing insert completion
+    pub const TAG_INS_COMP: c_int = 64;
+    /// Keep language for tag search
+    pub const TAG_KEEP_LANG: c_int = 128;
+    /// Don't call tagfunc
+    pub const TAG_NO_TAGFUNC: c_int = 256;
 }
 
 /// MAXCOL constant for findall
 const MAXCOL: c_int = 0x7FFF_FFFF;
 /// TAG_MANY constant for finding multiple matches
-const TAG_MANY: c_int = 10000;
+const TAG_MANY: c_int = 300;
 
 /// Structure for find_tags search context
 #[repr(C)]
@@ -2046,6 +2044,399 @@ struct TagPtrsFields {
     user_data: *mut c_char,
     user_data_end: *mut c_char,
     tagline: i32, // linenr_T
+}
+
+// =============================================================================
+// Phase 6: Search orchestration — per-file and top-level search
+// =============================================================================
+
+/// Constants for Phase 6
+const TS_START: c_int = 0;
+const CONV_NONE: c_int = 0;
+const NUL_BYTE: u8 = 0;
+
+/// OK/FAIL/NOTDONE return values (matching C)
+#[allow(dead_code)]
+const OK: c_int = 1;
+#[allow(dead_code)]
+const FAIL: c_int = 0;
+#[allow(dead_code)]
+const NOTDONE: c_int = 2;
+
+/// kOptTcFlag values from option_vars.generated.h
+#[allow(dead_code)]
+const K_OPT_TC_FLAG_FOLLOWIC: c_int = 0x01;
+#[allow(dead_code)]
+const K_OPT_TC_FLAG_IGNORE: c_int = 0x02;
+#[allow(dead_code)]
+const K_OPT_TC_FLAG_MATCH: c_int = 0x04;
+#[allow(dead_code)]
+const K_OPT_TC_FLAG_FOLLOWSCS: c_int = 0x08;
+#[allow(dead_code)]
+const K_OPT_TC_FLAG_SMART: c_int = 0x10;
+
+#[allow(dead_code)]
+extern "C" {
+    // Phase 6 findtags_state_T field accessors
+    fn nvim_findtags_get_is_txt(st: FindTagsStateHandle) -> bool;
+    fn nvim_findtags_set_is_txt(st: FindTagsStateHandle, val: bool);
+    fn nvim_findtags_get_help_lang_find(st: FindTagsStateHandle) -> *const c_char;
+    fn nvim_findtags_set_help_lang_find(st: FindTagsStateHandle, val: *const c_char);
+    fn nvim_findtags_set_help_pri(st: FindTagsStateHandle, pri: c_int);
+    fn nvim_findtags_set_help_lang(st: FindTagsStateHandle, lang: *const c_char);
+    fn nvim_findtags_get_vimconv_type(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_set_vimconv_none(st: FindTagsStateHandle);
+    fn nvim_findtags_convert_cleanup(st: FindTagsStateHandle);
+    fn nvim_findtags_fopen(st: FindTagsStateHandle) -> bool;
+    fn nvim_findtags_fclose(st: FindTagsStateHandle);
+    fn nvim_findtags_set_did_open(st: FindTagsStateHandle);
+    fn nvim_findtags_get_did_open(st: FindTagsStateHandle) -> bool;
+    fn nvim_findtags_set_state_start(st: FindTagsStateHandle);
+    fn nvim_findtags_get_mincount(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_grow_lbuf(st: FindTagsStateHandle, sinfo: *mut c_void) -> bool;
+    fn nvim_findtags_get_help_only_val(st: FindTagsStateHandle) -> bool;
+    fn nvim_findtags_get_orgpat_len_val(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_set_orgpat_len(st: FindTagsStateHandle, len: c_int);
+    fn nvim_findtags_set_orgpat_pat(st: FindTagsStateHandle, pat: *mut c_char);
+    fn nvim_findtags_get_orgpat_headlen_val(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_has_regprog_val(st: FindTagsStateHandle) -> bool;
+    fn nvim_findtags_set_linear_val(st: FindTagsStateHandle, val: bool);
+    fn nvim_findtags_set_stop_searching(st: FindTagsStateHandle, val: bool);
+    fn nvim_findtags_get_stop_searching(st: FindTagsStateHandle) -> bool;
+
+    // Global variable accessors
+    fn nvim_set_p_ic(val: c_int);
+    fn nvim_get_p_tbs() -> bool;
+    fn nvim_get_tc_flags() -> c_int;
+    fn nvim_get_curbuf_tc_flags() -> c_int;
+    fn nvim_get_p_hlg() -> *const c_char;
+    fn nvim_get_p_verbose() -> c_int;
+    fn nvim_get_emsg_off() -> c_int;
+    fn nvim_set_emsg_off(val: c_int);
+    fn nvim_get_curbuf_b_fname() -> *const c_char;
+    fn nvim_get_curbuf_p_tfu() -> *const c_char;
+    fn nvim_set_curbuf_b_help(val: c_int);
+    fn nvim_get_curbuf_b_help() -> c_int;
+
+    // Function wrappers
+    fn nvim_line_breakcheck();
+    fn nvim_fast_breakcheck();
+    fn nvim_get_got_int() -> c_int;
+    fn nvim_ins_compl_check_keys(interval: c_int, pum_wanted: bool);
+    fn nvim_ins_compl_interrupted() -> bool;
+    fn nvim_verbose_searching_tags(tag_fname: *const c_char);
+    fn nvim_ignorecase(pat: *const c_char) -> bool;
+    fn nvim_ignorecase_opt(pat: *const c_char, ic_strstrp: bool, ic_strstrp2: bool) -> bool;
+
+    // Error messages
+    fn nvim_semsg_e431(tag_fname: *const c_char);
+    fn nvim_semsg_before_byte(offset: i64);
+    fn nvim_semsg_e432(tag_fname: *const c_char);
+    fn nvim_emsg_e433();
+
+    // tagfunc wrapper (stays in C)
+    fn nvim_findtags_apply_tfu(
+        st: FindTagsStateHandle,
+        pat: *mut c_char,
+        buf_ffname: *mut c_char,
+    ) -> c_int;
+
+    // Pattern preparation
+    fn nvim_findtags_prepare_pats(st: FindTagsStateHandle, has_re: bool);
+
+    // Memory
+    fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+
+    // String functions
+    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+}
+
+/// Initialize help language and priority for a tag search.
+///
+/// # Safety
+///
+/// - `st` must be a valid pointer to a `findtags_state_T`
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_in_help_init(st: FindTagsStateHandle) -> bool {
+    if st.is_null() {
+        return false;
+    }
+
+    let tag_fname = nvim_findtags_get_tag_fname(st);
+    let is_txt = nvim_findtags_get_is_txt(st);
+
+    // Keep "en" as the language if the file extension is ".txt"
+    if is_txt {
+        nvim_findtags_set_help_lang(st, c"en".as_ptr());
+    } else {
+        // Prefer help tags according to 'helplang'. Put the two-letter
+        // language name in help_lang[].
+        let fname_len = strlen(tag_fname) as c_int;
+        if fname_len > 3 && *tag_fname.offset((fname_len - 3) as isize) == b'-' as c_char {
+            // Copy the 2-char language code from the end of the filename
+            nvim_findtags_set_help_lang(st, tag_fname.offset((fname_len - 2) as isize));
+        } else {
+            nvim_findtags_set_help_lang(st, c"en".as_ptr());
+        }
+    }
+
+    // When searching for a specific language skip tags files for other languages.
+    let help_lang_find = nvim_findtags_get_help_lang_find(st);
+    let help_lang = nvim_findtags_get_help_lang(st);
+    if !help_lang_find.is_null() {
+        // STRICMP: case-insensitive compare
+        if rs_tag_strnicmp(help_lang, help_lang_find, 2) != 0 {
+            return false;
+        }
+    }
+
+    let flags = nvim_findtags_get_flags(st);
+
+    // For CTRL-] in a help file prefer a match with the same language.
+    let curbuf_fname = nvim_get_curbuf_b_fname();
+    if (flags & find_tags_flags::TAG_KEEP_LANG) != 0
+        && help_lang_find.is_null()
+        && !curbuf_fname.is_null()
+    {
+        let fname_len = strlen(curbuf_fname) as c_int;
+        if fname_len > 4
+            && *curbuf_fname.offset((fname_len - 1) as isize) == b'x' as c_char
+            && *curbuf_fname.offset((fname_len - 4) as isize) == b'.' as c_char
+            && nvim_mb_strnicmp(curbuf_fname.offset((fname_len - 3) as isize), help_lang, 2) == 0
+        {
+            nvim_findtags_set_help_pri(st, 0);
+            return true;
+        }
+    }
+
+    // Calculate help priority based on 'helplang' option
+    nvim_findtags_set_help_pri(st, 1);
+    let p_hlg = nvim_get_p_hlg();
+    let mut s = p_hlg.cast_mut();
+    let mut pri = 1;
+    let mut found = false;
+
+    while !s.is_null() && *s != NUL_BYTE as c_char {
+        if nvim_mb_strnicmp(s, help_lang, 2) == 0 {
+            found = true;
+            break;
+        }
+        pri += 1;
+        s = nvim_vim_strchr(s, b',' as c_int);
+        if s.is_null() {
+            break;
+        }
+        // skip past the comma
+        s = s.offset(1);
+    }
+
+    if !found {
+        // Language not in 'helplang': use last, prefer English
+        pri += 1;
+        // Check if help_lang is NOT "en"
+        if nvim_mb_strnicmp(help_lang, c"en".as_ptr(), 2) != 0 {
+            pri += 1;
+        }
+    }
+
+    nvim_findtags_set_help_pri(st, pri);
+    true
+}
+
+/// Main loop reading and parsing tags from a file.
+///
+/// Calls Phase 4-5 functions for each line:
+/// get_next_line, string_convert, start_state_handler, parse_line,
+/// match_tag, add_match.
+///
+/// The C `goto line_read_in` is replaced with a `get_searchpat` flag check.
+///
+/// # Safety
+///
+/// - `st` must be a valid pointer to a `findtags_state_T`
+/// - `margs` must be a valid pointer to a `findtags_match_args_T`
+/// - `buf_ffname` must be a valid C string or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_get_all_tags(
+    st: FindTagsStateHandle,
+    margs: FindTagsMatchArgsHandle,
+    buf_ffname: *mut c_char,
+) {
+    if st.is_null() || margs.is_null() {
+        return;
+    }
+
+    // tagptrs_T is allocated on stack, zeroed
+    let tagp_size = 256usize; // generous allocation for tagptrs_T
+    let tagp: TagPtrsHandle = xmalloc(tagp_size);
+    std::ptr::write_bytes(tagp.cast::<u8>(), 0, tagp_size);
+
+    // tagsearch_info_T on stack, zeroed
+    let mut sinfo = TagSearchInfo::default();
+
+    let mut hash: usize = 0;
+
+    let flags = nvim_findtags_get_flags(st);
+
+    // Cast margs to typed pointer for Phase 5 functions
+    let margs_typed: *mut FindTagsMatchArgs = margs.cast();
+
+    loop {
+        // Check for CTRL-C typed
+        let state = nvim_findtags_get_state_val(st);
+        if state == TS_BINARY || state == TS_SKIP_BACK {
+            nvim_line_breakcheck();
+        } else {
+            nvim_fast_breakcheck();
+        }
+
+        if (flags & find_tags_flags::TAG_INS_COMP) != 0 {
+            nvim_ins_compl_check_keys(30, false);
+        }
+
+        if nvim_get_got_int() != 0 || nvim_ins_compl_interrupted() {
+            nvim_findtags_set_stop_searching(st, true);
+            break;
+        }
+
+        // When mincount is TAG_MANY, stop when enough matches found
+        let mincount = nvim_findtags_get_mincount(st);
+        let match_count = nvim_findtags_get_match_count_val(st);
+        if mincount == TAG_MANY && match_count >= TAG_MANY {
+            nvim_findtags_set_stop_searching(st, true);
+            break;
+        }
+
+        // Handle goto line_read_in pattern
+        let get_searchpat = nvim_findtags_get_searchpat(st);
+        if !get_searchpat {
+            // Normal path: read next line
+            let retval = rs_findtags_get_next_line(st, &raw mut sinfo) as c_int;
+
+            if retval == TAGS_READ_IGNORE {
+                continue;
+            }
+            if retval == TAGS_READ_EOF {
+                break;
+            }
+        }
+
+        // line_read_in: (reached via get_searchpat or after successful read)
+
+        if nvim_findtags_get_vimconv_type(st) != CONV_NONE {
+            rs_findtags_string_convert(st);
+        }
+
+        // When still at the start of the file, check for Emacs tags file
+        // format, and for "not sorted" flag.
+        let state = nvim_findtags_get_state_val(st);
+        if state == TS_START {
+            let sortic_ptr = &raw mut (*margs_typed).sortic;
+            if !rs_findtags_start_state_handler(st, sortic_ptr, &raw mut sinfo) {
+                continue;
+            }
+        }
+
+        // Check if line is too long (needs lbuf grow)
+        if nvim_findtags_grow_lbuf(st, (&raw mut sinfo).cast()) {
+            continue;
+        }
+
+        // Parse the line and check for match
+        let retval = rs_findtags_parse_line(st, tagp, margs_typed, &raw mut sinfo) as c_int;
+
+        if retval == TAG_MATCH_NEXT {
+            continue;
+        }
+        if retval == TAG_MATCH_STOP {
+            break;
+        }
+        if retval == TAG_MATCH_FAIL {
+            let tag_fname = nvim_findtags_get_tag_fname(st);
+            nvim_semsg_e431(tag_fname);
+            let offset = nvim_findtags_ftell(st);
+            nvim_semsg_before_byte(offset);
+            nvim_findtags_set_stop_searching(st, true);
+            xfree(tagp);
+            return;
+        }
+
+        // If a match is found, add it to ht_match[] and ga_match[].
+        if rs_findtags_match_tag(st, tagp, margs_typed) {
+            rs_findtags_add_match(st, tagp, margs_typed, buf_ffname, &raw mut hash);
+        }
+    }
+
+    xfree(tagp);
+}
+
+/// Per-file search orchestration.
+///
+/// Sets up state, opens file, calls rs_findtags_get_all_tags, cleans up.
+///
+/// # Safety
+///
+/// - `st` must be a valid pointer to a `findtags_state_T`
+/// - `buf_ffname` must be a valid C string or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_in_file(
+    st: FindTagsStateHandle,
+    _flags: c_int,
+    buf_ffname: *mut c_char,
+) {
+    if st.is_null() {
+        return;
+    }
+
+    // Initialize per-file state
+    nvim_findtags_set_vimconv_none(st);
+    nvim_findtags_set_sorted(st, 0); // NUL
+    nvim_findtags_set_fp_null(st);
+
+    // Initialize match args on stack
+    let mut margs = FindTagsMatchArgs::default();
+    rs_findtags_matchargs_init((&raw mut margs).cast(), nvim_findtags_get_flags(st));
+
+    // For help files, initialize language/priority
+    if nvim_get_curbuf_b_help() != 0 && !rs_findtags_in_help_init(st) {
+        return;
+    }
+
+    // Open the tag file
+    if !nvim_findtags_fopen(st) {
+        return;
+    }
+
+    // Verbose message
+    if nvim_get_p_verbose() >= 5 {
+        let tag_fname = nvim_findtags_get_tag_fname(st);
+        nvim_verbose_searching_tags(tag_fname);
+    }
+
+    nvim_findtags_set_did_open(st);
+    nvim_findtags_set_state_start(st);
+
+    // Read and parse the lines in the file one by one
+    rs_findtags_get_all_tags(st, (&raw mut margs).cast(), buf_ffname);
+
+    // Cleanup
+    nvim_findtags_fclose(st);
+
+    if nvim_findtags_get_vimconv_type(st) != CONV_NONE {
+        nvim_findtags_convert_cleanup(st);
+    }
+
+    if margs.sort_error {
+        let tag_fname = nvim_findtags_get_tag_fname(st);
+        nvim_semsg_e432(tag_fname);
+    }
+
+    // Stop searching if sufficient tags have been found.
+    let match_count = nvim_findtags_get_match_count_val(st);
+    let mincount = nvim_findtags_get_mincount(st);
+    if match_count >= mincount {
+        nvim_findtags_set_stop_searching(st, true);
+    }
 }
 
 // =============================================================================
