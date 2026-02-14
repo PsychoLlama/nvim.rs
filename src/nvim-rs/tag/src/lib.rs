@@ -911,6 +911,165 @@ pub extern "C" fn rs_tag_type_to_cmd(cmd_type: c_int) -> *const c_char {
 }
 
 // =============================================================================
+// Phase 1 Migration: Trivial leaf utilities
+// =============================================================================
+
+#[allow(dead_code)]
+extern "C" {
+    // tagmatchname accessors
+    fn nvim_xfree_clear_tagmatchname();
+    fn nvim_get_tagmatchname() -> *const c_char;
+    fn nvim_set_tagmatchname(name: *mut c_char);
+
+    // ptag_entry accessor
+    fn nvim_get_ptag_entry() -> *mut c_void;
+
+    // msg functions
+    fn nvim_msg_putchar(c: c_int); // from message.c
+    fn nvim_tag_msg_advance(col: c_int);
+
+    // path comparison
+    fn nvim_path_full_compare_equal(s1: *const c_char, s2: *const c_char) -> c_int;
+
+    // curwin/do_tag
+    fn nvim_tag_curwin_is_null() -> bool;
+    fn nvim_do_tag_free();
+
+    // expand_tag_fname
+    fn nvim_expand_tag_fname(
+        fname: *const c_char,
+        tag_fname: *const c_char,
+        expand: bool,
+    ) -> *mut c_char;
+
+    // Memory
+    fn xfree(ptr: *mut c_void);
+
+    // tag_fnames
+    fn nvim_tag_fnames_clear();
+
+    // findfile cleanup
+    fn nvim_vim_findfile_cleanup(search_ctx: *mut c_void);
+}
+
+/// MAXCOL constant (0x7fffffff) — maximum column number
+const MAXCOL: c_int = 0x7fff_ffff;
+
+/// Free the tagmatchname global.
+///
+/// # Safety
+///
+/// Calls into C to free the global `tagmatchname` string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_freematch() {
+    nvim_xfree_clear_tagmatchname();
+}
+
+/// Advance message output position for tag display.
+///
+/// If `l == MAXCOL`, outputs a newline and advances to column 24.
+/// Otherwise advances to column `13 + l`.
+///
+/// # Safety
+///
+/// Calls into C msg_* functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_taglen_advance(l: c_int) {
+    if l == MAXCOL {
+        nvim_msg_putchar(c_int::from(b'\n'));
+        nvim_tag_msg_advance(24);
+    } else {
+        nvim_tag_msg_advance(13 + l);
+    }
+}
+
+/// Compare two strings ignoring ASCII case, for length `len`.
+///
+/// Case is folded to uppercase (like `sort -f`).
+///
+/// Returns 0 for match, < 0 if s1 < s2, > 0 if s1 > s2.
+///
+/// # Safety
+///
+/// - `s1` and `s2` must be valid C strings (or at least `len` bytes readable)
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_tag_strnicmp(
+    s1: *const c_char,
+    s2: *const c_char,
+    mut len: usize,
+) -> c_int {
+    if s1.is_null() || s2.is_null() {
+        return 0;
+    }
+
+    let mut p1 = s1;
+    let mut p2 = s2;
+
+    while len > 0 {
+        #[allow(clippy::cast_sign_loss)]
+        let c1 = c_int::from((*p1 as u8).to_ascii_uppercase());
+        #[allow(clippy::cast_sign_loss)]
+        let c2 = c_int::from((*p2 as u8).to_ascii_uppercase());
+        let diff = c1 - c2;
+        if diff != 0 {
+            return diff;
+        }
+        if *p1 == 0 {
+            break;
+        }
+        p1 = p1.add(1);
+        p2 = p2.add(1);
+        len -= 1;
+    }
+    0
+}
+
+/// Free all tag-related resources on exit.
+///
+/// # Safety
+///
+/// Calls into C to free globals and clear the tag stack.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_tag_stuff() {
+    nvim_tag_fnames_clear();
+    if !nvim_tag_curwin_is_null() {
+        nvim_do_tag_free();
+    }
+    rs_tag_freematch();
+    stack::rs_tagstack_clear_entry(nvim_get_ptag_entry());
+}
+
+/// Free the contents of a `tagname_T` (C-side struct) without freeing the struct itself.
+///
+/// # Safety
+///
+/// - `tnp` must be a valid pointer to a `tagname_T` (or Rust `TagFileIterator`)
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagname_free(tnp: *mut c_void) {
+    if tnp.is_null() {
+        return;
+    }
+    let tnp = tnp.cast::<files::TagFileIterator>();
+    let tnp = &mut *tnp;
+
+    // Free the tags string copy
+    if !tnp.tn_tags.is_null() {
+        xfree(tnp.tn_tags.cast::<c_void>());
+        tnp.tn_tags = std::ptr::null_mut();
+    }
+
+    // Cleanup file search context
+    if !tnp.tn_search_ctx.is_null() {
+        nvim_vim_findfile_cleanup(tnp.tn_search_ctx);
+        tnp.tn_search_ctx = std::ptr::null_mut();
+    }
+
+    // Clear the global help tag file names
+    nvim_tag_fnames_clear();
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1351,5 +1510,53 @@ mod tests {
     #[test]
     fn test_tagstacksize() {
         assert_eq!(TAGSTACKSIZE, 20);
+    }
+
+    // Phase 1 Migration tests
+
+    #[test]
+    fn test_maxcol_constant() {
+        assert_eq!(MAXCOL, 0x7fff_ffff);
+    }
+
+    #[test]
+    fn test_tag_strnicmp_equal() {
+        unsafe {
+            assert_eq!(rs_tag_strnicmp(c"abc".as_ptr(), c"ABC".as_ptr(), 3), 0);
+            assert_eq!(rs_tag_strnicmp(c"abc".as_ptr(), c"abc".as_ptr(), 3), 0);
+            assert_eq!(rs_tag_strnicmp(c"ABC".as_ptr(), c"ABC".as_ptr(), 3), 0);
+        }
+    }
+
+    #[test]
+    fn test_tag_strnicmp_different() {
+        unsafe {
+            // 'A' (65) vs 'B' (66) => -1
+            assert!(rs_tag_strnicmp(c"abc".as_ptr(), c"bcd".as_ptr(), 3) < 0);
+            assert!(rs_tag_strnicmp(c"bcd".as_ptr(), c"abc".as_ptr(), 3) > 0);
+        }
+    }
+
+    #[test]
+    fn test_tag_strnicmp_partial() {
+        unsafe {
+            // Only compare first 2 chars
+            assert_eq!(rs_tag_strnicmp(c"abX".as_ptr(), c"abY".as_ptr(), 2), 0);
+        }
+    }
+
+    #[test]
+    fn test_tag_strnicmp_nul_terminated() {
+        unsafe {
+            // Strings match until NUL even if len is larger
+            assert_eq!(rs_tag_strnicmp(c"ab".as_ptr(), c"ab".as_ptr(), 10), 0);
+        }
+    }
+
+    #[test]
+    fn test_tag_strnicmp_null() {
+        unsafe {
+            assert_eq!(rs_tag_strnicmp(std::ptr::null(), std::ptr::null(), 5), 0);
+        }
     }
 }

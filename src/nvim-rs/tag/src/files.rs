@@ -86,6 +86,16 @@ extern "C" {
 
     // Path manipulation (for STRMOVE-like operation)
     fn memmove(dest: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
+
+    // Tag filename expansion
+    fn nvim_expand_tag_fname(
+        fname: *const c_char,
+        tag_fname: *const c_char,
+        expand: bool,
+    ) -> *mut c_char;
+
+    // Path comparison (returns nonzero if files are the same)
+    fn nvim_path_full_compare_equal(s1: *const c_char, s2: *const c_char) -> c_int;
 }
 
 /// FINDFILE_FILE constant from file_search.h
@@ -483,6 +493,84 @@ pub unsafe extern "C" fn rs_found_tagfile_cb(
     }
 
     num_fnames > 0
+}
+
+// =============================================================================
+// Phase 1: Tag filename and current-file utilities
+// =============================================================================
+
+use crate::parse::TagPtrs;
+
+/// Find the actual file name of a tag by expanding the tag file's relative path.
+///
+/// Temporarily null-terminates the fname field, calls expand_tag_fname, then
+/// restores the original character.
+///
+/// Returns an allocated string (caller must free with xfree).
+///
+/// # Safety
+///
+/// - `tagp` must be a valid pointer to a `TagPtrs` struct
+/// - `tagp.fname` and `tagp.fname_end` must be valid pointers
+/// - `tagp.tag_fname` must be a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_full_fname(tagp: *mut TagPtrs) -> *mut c_char {
+    if tagp.is_null() {
+        return ptr::null_mut();
+    }
+
+    let tagp = &mut *tagp;
+
+    if tagp.fname.is_null() || tagp.fname_end.is_null() || tagp.tag_fname.is_null() {
+        return ptr::null_mut();
+    }
+
+    // Save and null-terminate the filename
+    let saved_char = *tagp.fname_end;
+    *tagp.fname_end = 0;
+
+    let fullname = nvim_expand_tag_fname(tagp.fname, tagp.tag_fname, false);
+
+    // Restore the original character
+    *tagp.fname_end = saved_char;
+
+    fullname
+}
+
+/// Check if a tag is for the current buffer.
+///
+/// Expands the tag's filename and compares it to the buffer's full filename.
+///
+/// Returns nonzero (true) if the tag is for the current file.
+///
+/// # Safety
+///
+/// - All pointers must be valid
+/// - `fname_end` must point into the same buffer as `fname`
+#[no_mangle]
+pub unsafe extern "C" fn rs_test_for_current(
+    fname: *mut c_char,
+    fname_end: *mut c_char,
+    tag_fname: *mut c_char,
+    buf_ffname: *mut c_char,
+) -> c_int {
+    if buf_ffname.is_null() {
+        return 0;
+    }
+
+    // Save and null-terminate the filename
+    let saved_char = *fname_end;
+    *fname_end = 0;
+
+    let fullname = nvim_expand_tag_fname(fname, tag_fname, true);
+    let retval = nvim_path_full_compare_equal(fullname, buf_ffname);
+
+    xfree(fullname as *mut c_void);
+
+    // Restore the original character
+    *fname_end = saved_char;
+
+    retval
 }
 
 // =============================================================================

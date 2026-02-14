@@ -562,6 +562,15 @@ extern bool rs_test_for_static(const tagptrs_T *tagp);
 extern size_t rs_matching_line_len(const char *lbuf);
 extern int rs_find_extra(char **pp);
 
+// Phase 1 leaf utilities
+extern void rs_tag_freematch(void);
+extern void rs_taglen_advance(int l);
+extern int rs_tag_strnicmp(const char *s1, const char *s2, size_t len);
+extern char *rs_tag_full_fname(tagptrs_T *tagp);
+extern int rs_test_for_current(char *fname, char *fname_end, char *tag_fname, char *buf_ffname);
+extern void rs_free_tag_stuff(void);
+extern void rs_tagname_free(void *tnp);
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
@@ -590,6 +599,58 @@ static Callback tfu_cb;          // 'tagfunc' callback function
 
 // Used instead of NUL to separate tag fields in the growarrays.
 #define TAG_SEP 0x02
+
+// ============================================================================
+// Rust FFI accessor functions for Phase 1 migration
+// ============================================================================
+
+/// Free and clear the tagmatchname global
+void nvim_xfree_clear_tagmatchname(void)
+{
+  XFREE_CLEAR(tagmatchname);
+}
+
+/// Get the tagmatchname global (name of last used tag)
+const char *nvim_get_tagmatchname(void)
+{
+  return tagmatchname;
+}
+
+/// Set the tagmatchname global (takes ownership of the string)
+void nvim_set_tagmatchname(char *name)
+{
+  tagmatchname = name;
+}
+
+/// Get a pointer to the ptag_entry global
+void *nvim_get_ptag_entry(void)
+{
+  return &ptag_entry;
+}
+
+/// Wrapper for msg_advance (msg_putchar already exists in message.c)
+void nvim_tag_msg_advance(int col)
+{
+  msg_advance(col);
+}
+
+/// Wrapper for path_full_compare with kEqualFiles check
+int nvim_path_full_compare_equal(const char *s1, const char *s2)
+{
+  return (path_full_compare((char *)s1, (char *)s2, true, true) & kEqualFiles);
+}
+
+/// Check if curwin is NULL
+bool nvim_tag_curwin_is_null(void)
+{
+  return curwin == NULL;
+}
+
+/// Call do_tag with DT_FREE to free cached matches
+void nvim_do_tag_free(void)
+{
+  do_tag(NULL, DT_FREE, 0, 0, 0);
+}
 
 /// Reads the 'tagfunc' option value and convert that to a callback value.
 /// Invoked when the 'tagfunc' option is set. The option value can be a name of
@@ -1457,17 +1518,12 @@ static int add_llist_tags(char *tag, int num_matches, char **matches)
 // Free cached tags.
 void tag_freematch(void)
 {
-  XFREE_CLEAR(tagmatchname);
+  rs_tag_freematch();
 }
 
 static void taglen_advance(int l)
 {
-  if (l == MAXCOL) {
-    msg_putchar('\n');
-    msg_advance(24);
-  } else {
-    msg_advance(13 + l);
-  }
+  rs_taglen_advance(l);
 }
 
 // Print the tag stack
@@ -1508,19 +1564,7 @@ void do_tags(exarg_T *eap)
 // Make sure case is folded to uppercase in comparison (like for 'sort -f')
 static int tag_strnicmp(char *s1, char *s2, size_t len)
 {
-  while (len > 0) {
-    int i = TOUPPER_ASC((uint8_t)(*s1)) - TOUPPER_ASC((uint8_t)(*s2));
-    if (i != 0) {
-      return i;                         // this character different
-    }
-    if (*s1 == NUL) {
-      break;                            // strings match until NUL
-    }
-    s1++;
-    s2++;
-    len--;
-  }
-  return 0;                             // strings match
+  return rs_tag_strnicmp(s1, s2, len);
 }
 
 // Extract info from the tag search pattern "pats->pat".
@@ -2865,13 +2909,7 @@ void nvim_do_in_runtimepath_for_tags(void)
 #if defined(EXITFREE)
 void free_tag_stuff(void)
 {
-  ga_clear_strings(&tag_fnames);
-  if (curwin != NULL) {
-    do_tag(NULL, DT_FREE, 0, 0, 0);
-  }
-  tag_freematch();
-
-  tagstack_clear_entry(&ptag_entry);
+  rs_free_tag_stuff();
 }
 
 #endif
@@ -2991,10 +3029,7 @@ int get_tagfname(tagname_T *tnp, int first, char *buf)
 // Free the contents of a tagname_T that was filled by get_tagfname().
 void tagname_free(tagname_T *tnp)
 {
-  xfree(tnp->tn_tags);
-  vim_findfile_cleanup(tnp->tn_search_ctx);
-  tnp->tn_search_ctx = NULL;
-  ga_clear_strings(&tag_fnames);
+  rs_tagname_free(tnp);
 }
 
 /// Parse one line from the tags file. Find start/end of tag name, start/end of
@@ -3054,12 +3089,7 @@ static int parse_match(char *lbuf, tagptrs_T *tagp)
 // Returns an allocated string.
 static char *tag_full_fname(tagptrs_T *tagp)
 {
-  char c = *tagp->fname_end;
-  *tagp->fname_end = NUL;
-  char *fullname = expand_tag_fname(tagp->fname, tagp->tag_fname, false);
-  *tagp->fname_end = c;
-
-  return fullname;
+  return rs_tag_full_fname(tagp);
 }
 
 /// Jump to a tag that has been found in one of the tag files
@@ -3413,21 +3443,7 @@ char *nvim_expand_tag_fname(const char *fname, const char *tag_fname, bool expan
 ///          file.
 static int test_for_current(char *fname, char *fname_end, char *tag_fname, char *buf_ffname)
 {
-  int retval = false;
-
-  if (buf_ffname != NULL) {     // if the buffer has a name
-    char c;
-    {
-      c = *fname_end;
-      *fname_end = NUL;
-    }
-    char *fullname = expand_tag_fname(fname, tag_fname, true);
-    retval = (path_full_compare(fullname, buf_ffname, true, true) & kEqualFiles);
-    xfree(fullname);
-    *fname_end = c;
-  }
-
-  return retval;
+  return rs_test_for_current(fname, fname_end, tag_fname, buf_ffname);
 }
 
 // Find the end of the tagaddress.
