@@ -96,6 +96,45 @@ int nvim_get_mouse_dragging(void)
   return mouse_dragging;
 }
 
+/// Get tabnr from tab_page_click_defs at given column.
+int nvim_mouse_get_tab_click_tabnr(int col)
+{
+  if (tab_page_click_defs == NULL || col < 0 || col >= (int)tab_page_click_defs_size) {
+    return 0;
+  }
+  return tab_page_click_defs[col].tabnr;
+}
+
+/// Wrapper for tabpage_move().
+void nvim_tabpage_move(int nr)
+{
+  tabpage_move(nr);
+}
+
+/// Wrapper for tabpage_close().
+void nvim_tabpage_close(int forceit)
+{
+  tabpage_close(forceit);
+}
+
+/// Wrapper for tabpage_close_other().
+void nvim_tabpage_close_other(tabpage_T *tp, int forceit)
+{
+  tabpage_close_other(tp, forceit);
+}
+
+/// Wrapper for ui_cursor_shape().
+void nvim_ui_cursor_shape(void)
+{
+  ui_cursor_shape();
+}
+
+/// Wrapper for ui_check_mouse().
+void nvim_ui_check_mouse(void)
+{
+  ui_check_mouse();
+}
+
 /// Get class of a character for selection: same class means same word.
 /// 0: blank
 /// 1: punctuation groups
@@ -121,38 +160,24 @@ static void find_end_of_word(pos_T *pos)
   pos->col = rs_find_end_of_word(line, pos->col, *p_sel == 'e');
 }
 
+// Rust implementations
+extern void rs_set_mouse_topline(win_T *wp);
+extern void rs_setmouse(void);
+extern void rs_move_tab_to_mouse(void);
+extern void rs_mouse_tab_close(int c1);
+
 /// Move the current tab to tab in same column as mouse or to end of the
 /// tabline if there is no tab there.
 static void move_tab_to_mouse(void)
 {
-  int tabnr = tab_page_click_defs[mouse_col].tabnr;
-  if (tabnr <= 0) {
-    tabpage_move(9999);
-  } else if (tabnr < tabpage_index(curtab)) {
-    tabpage_move(tabnr - 1);
-  } else {
-    tabpage_move(tabnr);
-  }
+  rs_move_tab_to_mouse();
 }
 /// Close the current or specified tab page.
 ///
 /// @param c1  tabpage number, or 999 for the current tabpage
 static void mouse_tab_close(int c1)
 {
-  tabpage_T *tp;
-
-  if (c1 == 999) {
-    tp = curtab;
-  } else {
-    tp = find_tabpage(c1);
-  }
-  if (tp == curtab) {
-    if (first_tabpage->tp_next != NULL) {
-      tabpage_close(false);
-    }
-  } else if (tp != NULL) {
-    tabpage_close_other(tp, false);
-  }
+  rs_mouse_tab_close(c1);
 }
 
 static bool got_click = false;  // got a click some time back
@@ -1842,16 +1867,14 @@ colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
 /// Emits mouse_on/mouse_off UI event (unless 'mouse' is empty).
 void setmouse(void)
 {
-  ui_cursor_shape();
-  ui_check_mouse();
+  rs_setmouse();
 }
 
 // Set orig_topline.  Used when jumping to another window, so that a double
 // click still works.
 static void set_mouse_topline(win_T *wp)
 {
-  orig_topline = wp->w_topline;
-  orig_topfill = wp->w_topfill;
+  rs_set_mouse_topline(wp);
 }
 
 /// Return length of line "lnum" for horizontal scrolling.

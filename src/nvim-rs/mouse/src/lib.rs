@@ -130,12 +130,15 @@ use nvim_mbyte::{rs_mb_get_class, rs_utf_ptr2len};
 // Type aliases for C types
 // =============================================================================
 
-/// Line number type (from `pos_defs.h`)
+/// Line number type (from `pos_defs.h` — `int32_t`)
 #[allow(non_camel_case_types)]
-pub type linenr_T = i64;
+pub type linenr_T = i32;
 
 /// Opaque handle for window pointer
 pub type WinHandle = *mut std::ffi::c_void;
+
+/// Opaque handle for tabpage pointer
+pub type TabpageHandle = *mut std::ffi::c_void;
 
 // =============================================================================
 // C accessors for mouse state
@@ -169,6 +172,56 @@ extern "C" {
 
     /// Check if a window is being dragged.
     fn nvim_is_dragging() -> bool;
+
+    // --- Window field accessors ---
+
+    /// Get `w_topline` field from a window.
+    fn nvim_win_get_topline(wp: WinHandle) -> linenr_T;
+
+    /// Get `w_topfill` field from a window.
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+
+    // --- Mouse globals ---
+
+    /// Get `mouse_col` global.
+    fn nvim_get_mouse_col() -> c_int;
+
+    // --- Tabpage operations ---
+
+    /// Get `tabnr` from `tab_page_click_defs` at given column.
+    fn nvim_mouse_get_tab_click_tabnr(col: c_int) -> c_int;
+
+    /// Get the current tabpage.
+    fn nvim_get_curtab() -> TabpageHandle;
+
+    /// Get the first tabpage.
+    fn nvim_get_first_tabpage() -> TabpageHandle;
+
+    /// Check if there is more than one tabpage.
+    fn nvim_first_tabpage_has_next() -> c_int;
+
+    /// Move current tab to position nr.
+    fn nvim_tabpage_move(nr: c_int);
+
+    /// Close the current tabpage.
+    fn nvim_tabpage_close(forceit: c_int);
+
+    /// Close another tabpage.
+    fn nvim_tabpage_close_other(tp: TabpageHandle, forceit: c_int);
+
+    /// Get tabpage index (Rust impl in window crate).
+    fn rs_tabpage_index(ftp: TabpageHandle) -> c_int;
+
+    /// Find tabpage by number (Rust impl in window crate).
+    fn rs_find_tabpage(n: c_int) -> TabpageHandle;
+
+    // --- UI operations ---
+
+    /// Call `ui_cursor_shape()`.
+    fn nvim_ui_cursor_shape();
+
+    /// Call `ui_check_mouse()`.
+    fn nvim_ui_check_mouse();
 }
 
 // =============================================================================
@@ -542,6 +595,72 @@ pub const extern "C" fn rs_is_vertical_scroll(scroll_dir: c_int) -> bool {
 #[no_mangle]
 pub const extern "C" fn rs_is_horizontal_scroll(scroll_dir: c_int) -> bool {
     scroll_dir == MSCR_LEFT || scroll_dir == MSCR_RIGHT
+}
+
+// =============================================================================
+// Phase 1 — Simple Leaf Helpers
+// =============================================================================
+
+/// Set `orig_topline` and `orig_topfill` from the given window.
+/// Used when jumping to another window so that double-click detection works.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_mouse_topline(wp: WinHandle) {
+    nvim_set_orig_topline(nvim_win_get_topline(wp));
+    nvim_set_orig_topfill(nvim_win_get_topfill(wp));
+}
+
+/// Set UI mouse depending on current mode and 'mouse'.
+///
+/// Emits `mouse_on`/`mouse_off` UI event (unless 'mouse' is empty).
+#[no_mangle]
+pub unsafe extern "C" fn rs_setmouse() {
+    nvim_ui_cursor_shape();
+    nvim_ui_check_mouse();
+}
+
+/// Move the current tab to the tab in the same column as the mouse,
+/// or to the end of the tabline if there is no tab there.
+///
+/// # Safety
+/// Requires valid `tab_page_click_defs` array and valid `mouse_col`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_move_tab_to_mouse() {
+    let tabnr = nvim_mouse_get_tab_click_tabnr(nvim_get_mouse_col());
+    if tabnr <= 0 {
+        nvim_tabpage_move(9999);
+    } else if tabnr < rs_tabpage_index(nvim_get_curtab()) {
+        nvim_tabpage_move(tabnr - 1);
+    } else {
+        nvim_tabpage_move(tabnr);
+    }
+}
+
+/// Close the current or specified tab page.
+///
+/// # Arguments
+/// * `c1` - tabpage number, or 999 for the current tabpage
+///
+/// # Safety
+/// Requires valid tabpage state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mouse_tab_close(c1: c_int) {
+    let tp = if c1 == 999 {
+        nvim_get_curtab()
+    } else {
+        rs_find_tabpage(c1)
+    };
+
+    let curtab = nvim_get_curtab();
+    if tp == curtab {
+        if nvim_first_tabpage_has_next() != 0 {
+            nvim_tabpage_close(0); // false
+        }
+    } else if !tp.is_null() {
+        nvim_tabpage_close_other(tp, 0); // false
+    }
 }
 
 // =============================================================================
