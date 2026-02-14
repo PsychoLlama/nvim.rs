@@ -3382,6 +3382,231 @@ pub extern "C" fn rs_foldOpenCursor() {
     fold_open_cursor_impl();
 }
 
+// ============================================================================
+// Fold Move Range
+// ============================================================================
+
+/// Helper: get the end line of a fold (fd_top + fd_len - 1).
+#[inline]
+fn fold_end(gap: GArrayHandle, idx: c_int) -> LineNr {
+    let fp = unsafe { nvim_ga_fold_at(gap, idx) };
+    let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+    let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+    fd_top + fd_len - 1
+}
+
+/// Helper: check if index is a valid fold in the garray.
+#[inline]
+fn valid_fold(gap: GArrayHandle, idx: c_int) -> bool {
+    let len = unsafe { nvim_ga_len(gap) };
+    len > 0 && idx < len
+}
+
+/// Truncate a fold to end at `end` (inclusive).
+///
+/// Removes nested folds past `end` and sets fd_len accordingly.
+fn truncate_fold_impl(wp: WinHandle, gap: GArrayHandle, idx: c_int, end: LineNr) {
+    let fp = unsafe { nvim_ga_fold_at(gap, idx) };
+    if fp.is_null() {
+        return;
+    }
+    let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+    let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+    // foldRemove stops *above* top, so we add 1 to stop *at* end
+    let remove_top = end + 1 - fd_top;
+    fold_remove_impl(wp, nested, remove_top, MAXLNUM);
+    unsafe { nvim_fold_set_fd_len(fp, end + 1 - fd_top) };
+}
+
+/// Move folds within a garray when buffer lines are moved (`:move` command).
+///
+/// Handles 10 distinct cases for folds relative to the moved range
+/// [line1, line2] and destination `dest` (where dest > line2).
+///
+/// Assumes dest > line2 (downward move).
+#[allow(clippy::too_many_lines)]
+fn fold_move_range_impl(
+    wp: WinHandle,
+    gap: GArrayHandle,
+    line1: LineNr,
+    line2: LineNr,
+    dest: LineNr,
+) {
+    let range_len = line2 - line1 + 1;
+    let move_len = dest - line2;
+
+    // Find fold at or containing line1 - 1
+    let Some((at_start, mut fp_idx)) = fold_find_with_idx(gap, line1 - 1) else {
+        return;
+    };
+
+    if at_start {
+        if fold_end(gap, fp_idx) > dest {
+            // Case 4 -- don't have to change this fold, but have to move nested
+            // folds.
+            let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+            let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+            fold_move_range_impl(wp, nested, line1 - fd_top, line2 - fd_top, dest - fd_top);
+            return;
+        } else if fold_end(gap, fp_idx) > line2 {
+            // Case 3 -- Remove nested folds between line1 and line2 & reduce the
+            // length of fold by "range_len".
+            // Folds after this one must be dealt with.
+            let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+            let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+            let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+            fold_mark_adjust_recurse_impl(
+                wp,
+                nested,
+                line1 - fd_top,
+                line2 - fd_top,
+                MAXLNUM,
+                -range_len,
+            );
+            unsafe { nvim_fold_set_fd_len(fp, fd_len - range_len) };
+        } else {
+            // Case 2 -- truncate fold *above* line1.
+            // Folds after this one must be dealt with.
+            truncate_fold_impl(wp, gap, fp_idx, line1 - 1);
+        }
+        // Look at the next fold, and treat that one as if it were the first after
+        // "line1" (because now it is).
+        fp_idx += 1;
+    }
+
+    if !valid_fold(gap, fp_idx) {
+        return;
+    }
+    let fd_top = unsafe { nvim_fold_get_fd_top(nvim_ga_fold_at(gap, fp_idx)) };
+    if fd_top > dest {
+        // No folds after "line1" and before "dest" — Case 10.
+        return;
+    }
+
+    if fd_top > line2 {
+        // Cases 8 and 9: folds between line2 and dest.
+        while valid_fold(gap, fp_idx) && fold_end(gap, fp_idx) <= dest {
+            // Case 9 -- shift up.
+            let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+            let top = unsafe { nvim_fold_get_fd_top(fp) };
+            unsafe { nvim_fold_set_fd_top(fp, top - range_len) };
+            fp_idx += 1;
+        }
+        if valid_fold(gap, fp_idx) {
+            let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+            let top = unsafe { nvim_fold_get_fd_top(fp) };
+            if top <= dest {
+                // Case 8 -- ensure truncated at dest, shift up
+                truncate_fold_impl(wp, gap, fp_idx, dest);
+                // Re-fetch after possible realloc
+                let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+                let top = unsafe { nvim_fold_get_fd_top(fp) };
+                unsafe { nvim_fold_set_fd_top(fp, top - range_len) };
+            }
+        }
+        return;
+    }
+
+    if fold_end(gap, fp_idx) > dest {
+        // Case 7 -- remove nested folds and shrink
+        let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+        let fd_top_val = unsafe { nvim_fold_get_fd_top(fp) };
+        let fd_len_val = unsafe { nvim_fold_get_fd_len(fp) };
+        let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+        fold_mark_adjust_recurse_impl(
+            wp,
+            nested,
+            line2 + 1 - fd_top_val,
+            dest - fd_top_val,
+            MAXLNUM,
+            -move_len,
+        );
+        unsafe {
+            nvim_fold_set_fd_len(fp, fd_len_val - move_len);
+            nvim_fold_set_fd_top(fp, fd_top_val + move_len);
+        }
+        return;
+    }
+
+    // Cases 5 and 6: changes rely on whether there are folds between the end of
+    // this fold and "dest".
+    let move_start = fp_idx;
+    let mut move_end: c_int = 0;
+    while valid_fold(gap, fp_idx) {
+        let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+        let top = unsafe { nvim_fold_get_fd_top(fp) };
+        if top > dest {
+            break;
+        }
+
+        if top <= line2 {
+            // 5, or 6
+            if fold_end(gap, fp_idx) > line2 {
+                // 6, truncate before moving
+                truncate_fold_impl(wp, gap, fp_idx, line2);
+            }
+            // Re-fetch fp after possible realloc in truncate_fold_impl
+            let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+            let top = unsafe { nvim_fold_get_fd_top(fp) };
+            unsafe { nvim_fold_set_fd_top(fp, top + move_len) };
+            fp_idx += 1;
+            continue;
+        }
+
+        // Record index of the first fold after the moved range.
+        if move_end == 0 {
+            move_end = fp_idx;
+        }
+
+        if fold_end(gap, fp_idx) > dest {
+            truncate_fold_impl(wp, gap, fp_idx, dest);
+        }
+
+        // Re-fetch fp after possible realloc
+        let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+        let top = unsafe { nvim_fold_get_fd_top(fp) };
+        unsafe { nvim_fold_set_fd_top(fp, top - range_len) };
+        fp_idx += 1;
+    }
+    let dest_index = fp_idx;
+
+    // All folds are now correct, but not necessarily in the correct order.
+    // We must swap folds in the range [move_end, dest_index) with those in the
+    // range [move_start, move_end).
+    if move_end == 0 {
+        // There are no folds after those moved, so none were moved out of order.
+        return;
+    }
+    fold_reverse_order_impl(gap, move_start as LineNr, (dest_index - 1) as LineNr);
+    fold_reverse_order_impl(
+        gap,
+        move_start as LineNr,
+        (move_start + dest_index - move_end - 1) as LineNr,
+    );
+    fold_reverse_order_impl(
+        gap,
+        (move_start + dest_index - move_end) as LineNr,
+        (dest_index - 1) as LineNr,
+    );
+}
+
+/// Move folds when buffer lines are moved (`:move` command).
+///
+/// # Safety
+/// All pointer parameters must be valid or null.
+#[no_mangle]
+pub extern "C" fn rs_foldMoveRange(
+    wp: WinHandle,
+    gap: GArrayHandle,
+    line1: LineNr,
+    line2: LineNr,
+    dest: LineNr,
+) {
+    fold_move_range_impl(wp, gap, line1, line2, dest);
+}
+
 #[cfg(test)]
 mod tests {
     // Tests require FFI stubs which aren't available in pure Rust testing.
