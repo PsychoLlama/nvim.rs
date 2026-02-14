@@ -25,25 +25,20 @@
 // that deletes an extmark with decoration will call back into the decoration
 // code for redrawing the line with the deleted decoration.
 
-#include <assert.h>
 #include <stddef.h>
+#include <string.h>
 
+#include "nvim/api/extmark.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/buffer_defs.h"
-#include "nvim/buffer_updates.h"
-#include "nvim/decoration.h"
 #include "nvim/decoration_defs.h"
 #include "nvim/extmark.h"
 #include "nvim/extmark_defs.h"
-#include "nvim/api/extmark.h"
 #include "nvim/globals.h"
 #include "nvim/map_defs.h"
 #include "nvim/marktree.h"
-#include "nvim/memline.h"
-#include "nvim/memory.h"
 #include "nvim/pos_defs.h"
 #include "nvim/types_defs.h"
-#include "nvim/undo.h"
 #include "nvim/undo_defs.h"
 
 #include "extmark.c.generated.h"
@@ -74,20 +69,6 @@ extern void rs_extmark_move_region(buf_T *buf, int start_row, colnr_T start_col,
                                     bcount_t start_byte, int extent_row, colnr_T extent_col,
                                     bcount_t extent_byte, int new_row, colnr_T new_col,
                                     bcount_t new_byte, ExtmarkOp undo);
-
-// Rust FFI declarations for extmark helpers (used by extmark_set and extmark_get)
-extern int rs_flags_paired(uint16_t flags);
-extern int rs_flags_end(uint16_t flags);
-extern int rs_flags_right(uint16_t flags);
-extern int rs_flags_invalid(uint16_t flags);
-extern int rs_flags_invalidate(uint16_t flags);
-extern int rs_flags_no_undo(uint16_t flags);
-extern int rs_flags_decor_any(uint16_t flags);
-extern int rs_flags_decor_ext(uint16_t flags);
-extern uint16_t rs_flags_compute(int right_gravity, int no_undo, int invalidate, int decor_ext);
-extern int rs_pos_eq(int row1, int col1, int row2, int col2);
-extern int rs_row_invalid(int row);
-extern int rs_pos_after(int row1, int col1, int row2, int col2);
 
 extern void rs_extmark_set(buf_T *buf, uint32_t ns_id, uint32_t *idp, int row, colnr_T col,
                            int end_row, colnr_T end_col, DecorInline decor, uint16_t decor_flags,
@@ -286,10 +267,10 @@ ExtmarkUndoObject *nvim_extmark_undo_vec_last(extmark_undo_vec_t *uvp)
   return &kv_last(*uvp);
 }
 
-/// Delete extmark by ID (wrapper for Rust FFI)
+/// Delete extmark by ID (wrapper for Rust FFI, used by sign crate)
 bool nvim_extmark_del_id(buf_T *buf, uint32_t ns_id, uint32_t id)
 {
-  return extmark_del_id(buf, ns_id, id);
+  return rs_extmark_del_id(buf, ns_id, id);
 }
 
 // ============================================================================

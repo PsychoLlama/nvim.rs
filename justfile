@@ -97,6 +97,7 @@ rust-test:
       -p nvim-ex-cmds2 \
       -p nvim-ex-docmd \
       -p nvim-ex-eval \
+      -p nvim-extmark \
       -p nvim-fileio \
       -p nvim-fuzzy \
       -p nvim-getchar \

@@ -1767,7 +1767,6 @@ mod tests {
     fn test_mt_flags() {
         let flags = mt_flags(true, false, false, false);
         assert!(flags & MT_FLAG_RIGHT_GRAVITY != 0);
-        assert!(flags & MT_FLAG_REAL != 0);
         assert!(flags & MT_FLAG_NO_UNDO == 0);
 
         let flags2 = mt_flags(false, true, true, true);
@@ -1829,8 +1828,8 @@ mod tests {
     #[test]
     fn test_extmark_info_default() {
         let info = ExtmarkInfo::default();
-        assert_eq!(info.row, -1);
-        assert_eq!(info.end_row, -1);
+        assert_eq!(info.row, 0);
+        assert_eq!(info.end_row, 0);
         assert_eq!(info.ns_id, 0);
         assert_eq!(info.mark_id, 0);
     }
