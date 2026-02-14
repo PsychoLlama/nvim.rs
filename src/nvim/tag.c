@@ -701,6 +701,13 @@ extern void rs_get_tagstack(void *wp, void *retdict);
 extern int rs_set_tagstack(void *wp, const void *d, int action);
 extern int rs_expand_tags(bool tagnames, char *pat, int *num_file, char ***file);
 
+// Phase 9 Rust implementations
+extern const char *rs_did_set_tagfunc(void *args);
+extern void rs_free_tagfunc_option(void);
+extern bool rs_set_ref_in_tagfunc(int copyID);
+extern void rs_set_buflocal_tfu_callback(void *buf);
+extern int rs_find_tagfunc_tags(char *pat, void *ga, int *match_count, int flags, char *buf_ffname);
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
@@ -1890,32 +1897,311 @@ int nvim_tag_win_get_tagstacklen(const void *wp_void)
   return wp->w_tagstacklen;
 }
 
+// ============================================================================
+// Phase 9 C accessor functions for tagfunc and option management
+// ============================================================================
+
+/// Free the global tfu_cb callback
+void nvim_tag_callback_free_tfu(void)
+{
+  callback_free(&tfu_cb);
+}
+
+/// Free the buffer-local tfu callback
+void nvim_tag_callback_free_buf_tfu(void *buf_void)
+{
+  buf_T *buf = (buf_T *)buf_void;
+  callback_free(&buf->b_tfu_cb);
+}
+
+/// Check if buffer's b_p_tfu is empty (NUL)
+bool nvim_tag_buf_tfu_is_empty(const void *buf_void)
+{
+  const buf_T *buf = (const buf_T *)buf_void;
+  return *buf->b_p_tfu == NUL;
+}
+
+/// Call option_set_callback_func with buf's b_p_tfu into tfu_cb
+/// Returns FAIL or OK
+int nvim_tag_option_set_tfu_callback(void *buf_void)
+{
+  buf_T *buf = (buf_T *)buf_void;
+  return option_set_callback_func(buf->b_p_tfu, &tfu_cb);
+}
+
+/// Copy global tfu_cb to buffer-local b_tfu_cb
+void nvim_tag_callback_copy_tfu_to_buf(void *buf_void)
+{
+  buf_T *buf = (buf_T *)buf_void;
+  callback_copy(&buf->b_tfu_cb, &tfu_cb);
+}
+
+/// Check if global tfu_cb is kCallbackNone
+bool nvim_tag_tfu_cb_is_none(void)
+{
+  return tfu_cb.type == kCallbackNone;
+}
+
+/// set_ref_in_callback for global tfu_cb
+bool nvim_tag_set_ref_in_tfu_callback(int copyID)
+{
+  return set_ref_in_callback(&tfu_cb, copyID, NULL, NULL);
+}
+
+/// Get the buf_T * from optset_T args (os_buf field)
+void *nvim_tag_optset_get_buf(const void *args_void)
+{
+  const optset_T *args = (const optset_T *)args_void;
+  return (void *)args->os_buf;
+}
+
+/// Get e_invarg pointer (for did_set_tagfunc return)
+const char *nvim_tag_get_e_invarg(void)
+{
+  return e_invarg;
+}
+
+/// Call the tagfunc callback and validate the result.
+/// Returns:
+///   0 (OK) with *out_list set to the returned list (caller must call nvim_tag_tv_clear_rettv)
+///   1 (FAIL) if callback call failed
+///   2 (NOTDONE) if result was v:null
+///   3 if result was not a list (emsg already shown)
+///   4 if curbuf tfu is empty or callback is none
+int nvim_tag_call_tagfunc(const char *pat, int flags, const char *buf_ffname,
+                          void **out_list, void *rettv_storage)
+{
+  typval_T *rettv = (typval_T *)rettv_storage;
+  typval_T args[4];
+  char flagString[4];
+
+  // Check prerequisites
+  if (*curbuf->b_p_tfu == NUL || curbuf->b_tfu_cb.type == kCallbackNone) {
+    return 4;
+  }
+
+  args[0].v_type = VAR_STRING;
+  args[0].vval.v_string = (char *)pat;
+  args[1].v_type = VAR_STRING;
+  args[1].vval.v_string = flagString;
+
+  // create 'info' dict argument
+  dict_T *const d = tv_dict_alloc_lock(VAR_FIXED);
+
+  // Get tag entry for user_data
+  taggy_T *tag = NULL;
+  if (curwin->w_tagstacklen > 0) {
+    if (curwin->w_tagstackidx == curwin->w_tagstacklen) {
+      tag = &curwin->w_tagstack[curwin->w_tagstackidx - 1];
+    } else {
+      tag = &curwin->w_tagstack[curwin->w_tagstackidx];
+    }
+  }
+  if (tag != NULL && tag->user_data != NULL) {
+    tv_dict_add_str(d, S_LEN("user_data"), tag->user_data);
+  }
+  if (buf_ffname != NULL) {
+    tv_dict_add_str(d, S_LEN("buf_ffname"), (char *)buf_ffname);
+  }
+
+  d->dv_refcount++;
+  args[2].v_type = VAR_DICT;
+  args[2].vval.v_dict = d;
+
+  args[3].v_type = VAR_UNKNOWN;
+
+  vim_snprintf(flagString, sizeof(flagString),
+               "%s%s%s",
+               g_tag_at_cursor ? "c" : "",
+               flags & TAG_INS_COMP ? "i" : "",
+               flags & TAG_REGEXP ? "r" : "");
+
+  pos_T save_pos = curwin->w_cursor;
+  int result = callback_call(&curbuf->b_tfu_cb, 3, args, rettv);
+  curwin->w_cursor = save_pos;
+  check_cursor(curwin);
+  d->dv_refcount--;
+
+  if (result == FAIL) {
+    return 1;
+  }
+  if (rettv->v_type == VAR_SPECIAL && rettv->vval.v_special == kSpecialVarNull) {
+    tv_clear(rettv);
+    return 2;
+  }
+  if (rettv->v_type != VAR_LIST || !rettv->vval.v_list) {
+    tv_clear(rettv);
+    emsg(_(e_invalid_return_value_from_tagfunc));
+    return 3;
+  }
+
+  *out_list = (void *)rettv->vval.v_list;
+  return 0;
+}
+
+/// Clear the rettv storage after tagfunc call is done
+void nvim_tag_tv_clear_rettv(void *rettv_storage)
+{
+  tv_clear((typval_T *)rettv_storage);
+}
+
+/// Get the size needed for rettv storage (sizeof(typval_T))
+size_t nvim_tag_rettv_size(void)
+{
+  return sizeof(typval_T);
+}
+
+/// Check if a list item is a dict type
+bool nvim_tag_listitem_is_dict(const void *li)
+{
+  const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li);
+  return tv->v_type == VAR_DICT;
+}
+
+/// Get the dict from a list item (returns dict handle, or NULL)
+void *nvim_tag_listitem_get_dict(const void *li)
+{
+  const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li);
+  if (tv->v_type != VAR_DICT || !tv->vval.v_dict) {
+    return NULL;
+  }
+  return (void *)tv->vval.v_dict;
+}
+
+/// Count string-valued entries in a dict, and compute total length
+/// needed for match string building. Returns count of string entries.
+int nvim_tag_dict_string_entry_count(const void *dict_void)
+{
+  const dict_T *dict = (const dict_T *)dict_void;
+  int count = 0;
+  TV_DICT_ITER(dict, di, {
+    if (di->di_tv.v_type == VAR_STRING && di->di_tv.vval.v_string != NULL) {
+      count++;
+    }
+  });
+  return count;
+}
+
+/// Compute total length needed for tagfunc match string from dict entries.
+/// Counts: sum of strlen(key) + 1 + strlen(value) + 1 for each string entry.
+size_t nvim_tag_dict_compute_match_len(const void *dict_void)
+{
+  const dict_T *dict = (const dict_T *)dict_void;
+  size_t len = 2;  // base overhead
+  TV_DICT_ITER(dict, di, {
+    if (di->di_tv.v_type == VAR_STRING && di->di_tv.vval.v_string != NULL) {
+      len += strlen(di->di_tv.vval.v_string) + 1;  // "\tVALUE"
+      // Non-standard keys also need key + ":"
+      if (strcmp(di->di_key, "name") != 0
+          && strcmp(di->di_key, "filename") != 0
+          && strcmp(di->di_key, "cmd") != 0
+          && strcmp(di->di_key, "kind") != 0) {
+        len += strlen(di->di_key) + 1;  // "KEY:"
+      }
+    }
+  });
+  return len;
+}
+
+/// Get specific fields from a tagfunc result dict.
+/// Fills in name, filename, cmd, kind pointers (NULL if missing).
+/// Also sets has_extra to true if there are extra fields beyond the standard 4.
+void nvim_tag_dict_get_tag_fields(const void *dict_void,
+                                  const char **res_name,
+                                  const char **res_fname,
+                                  const char **res_cmd,
+                                  const char **res_kind,
+                                  bool *has_extra)
+{
+  const dict_T *dict = (const dict_T *)dict_void;
+  *res_name = NULL;
+  *res_fname = NULL;
+  *res_cmd = NULL;
+  *res_kind = NULL;
+  *has_extra = false;
+
+  TV_DICT_ITER(dict, di, {
+    if (di->di_tv.v_type != VAR_STRING || di->di_tv.vval.v_string == NULL) {
+      continue;
+    }
+    if (!strcmp(di->di_key, "name")) {
+      *res_name = di->di_tv.vval.v_string;
+    } else if (!strcmp(di->di_key, "filename")) {
+      *res_fname = di->di_tv.vval.v_string;
+    } else if (!strcmp(di->di_key, "cmd")) {
+      *res_cmd = di->di_tv.vval.v_string;
+    } else if (!strcmp(di->di_key, "kind")) {
+      *res_kind = di->di_tv.vval.v_string;
+      *has_extra = true;
+    } else {
+      *has_extra = true;
+    }
+  });
+}
+
+/// Build the extra fields portion of a tagfunc match string.
+/// Writes extra tab-separated "KEY:VALUE" entries for non-standard fields.
+/// Returns number of bytes written.
+size_t nvim_tag_dict_write_extra_fields(const void *dict_void, char *p)
+{
+  const dict_T *dict = (const dict_T *)dict_void;
+  char *start = p;
+
+  TV_DICT_ITER(dict, di, {
+    if (di->di_tv.v_type != VAR_STRING || di->di_tv.vval.v_string == NULL) {
+      continue;
+    }
+    const char *key = di->di_key;
+    if (!strcmp(key, "name") || !strcmp(key, "filename")
+        || !strcmp(key, "cmd") || !strcmp(key, "kind")) {
+      continue;
+    }
+    *p++ = TAB;
+    STRCPY(p, key);
+    p += strlen(p);
+    STRCPY(p, ":");
+    p += 1;
+    STRCPY(p, di->di_tv.vval.v_string);
+    p += strlen(p);
+  });
+
+  return (size_t)(p - start);
+}
+
+/// emsg for e_invalid_return_value_from_tagfunc
+void nvim_tag_emsg_invalid_tagfunc_return(void)
+{
+  emsg(_(e_invalid_return_value_from_tagfunc));
+}
+
+/// Grow a garray_T by 1 and append a string pointer
+void nvim_tag_ga_grow_append(void *ga_void, char *mfp)
+{
+  garray_T *ga = (garray_T *)ga_void;
+  ga_grow(ga, 1);
+  ((char **)(ga->ga_data))[ga->ga_len++] = mfp;
+}
+
+_Static_assert(TAG_INS_COMP == 64, "TAG_INS_COMP value for Rust");
+_Static_assert(TAG_REGEXP == 4, "TAG_REGEXP value for Rust");
+_Static_assert(TAG_NAMES == 2, "TAG_NAMES value for Rust");
+
+// ============================================================================
+// End of Phase 9 C accessor functions
+// ============================================================================
+
 /// Reads the 'tagfunc' option value and convert that to a callback value.
 /// Invoked when the 'tagfunc' option is set. The option value can be a name of
 /// a function (string), or function(<name>) or funcref(<name>) or a lambda.
 const char *did_set_tagfunc(optset_T *args)
 {
-  buf_T *buf = (buf_T *)args->os_buf;
-
-  callback_free(&tfu_cb);
-  callback_free(&buf->b_tfu_cb);
-
-  if (*buf->b_p_tfu == NUL) {
-    return NULL;
-  }
-
-  if (option_set_callback_func(buf->b_p_tfu, &tfu_cb) == FAIL) {
-    return e_invarg;
-  }
-
-  callback_copy(&buf->b_tfu_cb, &tfu_cb);
-  return NULL;
+  return rs_did_set_tagfunc(args);
 }
 
 #if defined(EXITFREE)
 void free_tagfunc_option(void)
 {
-  callback_free(&tfu_cb);
+  rs_free_tagfunc_option();
 }
 #endif
 
@@ -1923,17 +2209,14 @@ void free_tagfunc_option(void)
 /// collected.
 bool set_ref_in_tagfunc(int copyID)
 {
-  return set_ref_in_callback(&tfu_cb, copyID, NULL, NULL);
+  return rs_set_ref_in_tagfunc(copyID);
 }
 
 /// Copy the global 'tagfunc' callback function to the buffer-local 'tagfunc'
 /// callback for 'buf'.
 void set_buflocal_tfu_callback(buf_T *buf)
 {
-  callback_free(&buf->b_tfu_cb);
-  if (tfu_cb.type != kCallbackNone) {
-    callback_copy(&buf->b_tfu_cb, &tfu_cb);
-  }
+  rs_set_buflocal_tfu_callback(buf);
 }
 
 /// Jump to tag; handling of tag commands and tag stack
@@ -2520,200 +2803,7 @@ static void prepare_pats(pat_T *pats, bool has_re)
 /// @param buf_ffname  name of buffer for priority
 static int find_tagfunc_tags(char *pat, garray_T *ga, int *match_count, int flags, char *buf_ffname)
 {
-  int ntags = 0;
-  typval_T args[4];
-  typval_T rettv;
-  char flagString[4];
-  taggy_T *tag = NULL;
-
-  if (curwin->w_tagstacklen > 0) {
-    if (curwin->w_tagstackidx == curwin->w_tagstacklen) {
-      tag = &curwin->w_tagstack[curwin->w_tagstackidx - 1];
-    } else {
-      tag = &curwin->w_tagstack[curwin->w_tagstackidx];
-    }
-  }
-
-  if (*curbuf->b_p_tfu == NUL || curbuf->b_tfu_cb.type == kCallbackNone) {
-    return FAIL;
-  }
-
-  args[0].v_type = VAR_STRING;
-  args[0].vval.v_string = pat;
-  args[1].v_type = VAR_STRING;
-  args[1].vval.v_string = flagString;
-
-  // create 'info' dict argument
-  dict_T *const d = tv_dict_alloc_lock(VAR_FIXED);
-  if (tag != NULL && tag->user_data != NULL) {
-    tv_dict_add_str(d, S_LEN("user_data"), tag->user_data);
-  }
-  if (buf_ffname != NULL) {
-    tv_dict_add_str(d, S_LEN("buf_ffname"), buf_ffname);
-  }
-
-  d->dv_refcount++;
-  args[2].v_type = VAR_DICT;
-  args[2].vval.v_dict = d;
-
-  args[3].v_type = VAR_UNKNOWN;
-
-  vim_snprintf(flagString, sizeof(flagString),
-               "%s%s%s",
-               g_tag_at_cursor ? "c" : "",
-               flags & TAG_INS_COMP ? "i" : "",
-               flags & TAG_REGEXP ? "r" : "");
-
-  pos_T save_pos = curwin->w_cursor;
-  int result = callback_call(&curbuf->b_tfu_cb, 3, args, &rettv);
-  curwin->w_cursor = save_pos;  // restore the cursor position
-  check_cursor(curwin);         // make sure cursor position is valid
-  d->dv_refcount--;
-
-  if (result == FAIL) {
-    return FAIL;
-  }
-  if (rettv.v_type == VAR_SPECIAL && rettv.vval.v_special == kSpecialVarNull) {
-    tv_clear(&rettv);
-    return NOTDONE;
-  }
-  if (rettv.v_type != VAR_LIST || !rettv.vval.v_list) {
-    tv_clear(&rettv);
-    emsg(_(e_invalid_return_value_from_tagfunc));
-    return FAIL;
-  }
-  list_T *taglist = rettv.vval.v_list;
-
-  TV_LIST_ITER_CONST(taglist, li, {
-    char *res_name;
-    char *res_fname;
-    char *res_cmd;
-    char *res_kind;
-    bool has_extra = false;
-    int name_only = flags & TAG_NAMES;
-
-    if (TV_LIST_ITEM_TV(li)->v_type != VAR_DICT) {
-      emsg(_(e_invalid_return_value_from_tagfunc));
-      break;
-    }
-
-    size_t len = 2;
-    res_name = NULL;
-    res_fname = NULL;
-    res_cmd = NULL;
-    res_kind = NULL;
-
-    TV_DICT_ITER(TV_LIST_ITEM_TV(li)->vval.v_dict, di, {
-      const char *dict_key = di->di_key;
-      typval_T *tv = &di->di_tv;
-
-      if (tv->v_type != VAR_STRING || tv->vval.v_string == NULL) {
-        continue;
-      }
-
-      len += strlen(tv->vval.v_string) + 1;   // Space for "\tVALUE"
-      if (!strcmp(dict_key, "name")) {
-        res_name = tv->vval.v_string;
-        continue;
-      }
-      if (!strcmp(dict_key, "filename")) {
-        res_fname = tv->vval.v_string;
-        continue;
-      }
-      if (!strcmp(dict_key, "cmd")) {
-        res_cmd = tv->vval.v_string;
-        continue;
-      }
-      has_extra = true;
-      if (!strcmp(dict_key, "kind")) {
-        res_kind = tv->vval.v_string;
-        continue;
-      }
-      // Other elements will be stored as "\tKEY:VALUE"
-      // Allocate space for the key and the colon
-      len += strlen(dict_key) + 1;
-    });
-
-    if (has_extra) {
-      len += 2;  // need space for ;"
-    }
-
-    if (!res_name || !res_fname || !res_cmd) {
-      emsg(_(e_invalid_return_value_from_tagfunc));
-      break;
-    }
-
-    char *const mfp = name_only ? xstrdup(res_name) : xmalloc(len + 2);
-
-    if (!name_only) {
-      char *p = mfp;
-
-      *p++ = MT_GL_OTH + 1;   // mtt
-      *p++ = TAG_SEP;     // no tag file name
-
-      STRCPY(p, res_name);
-      p += strlen(p);
-
-      *p++ = TAB;
-      STRCPY(p, res_fname);
-      p += strlen(p);
-
-      *p++ = TAB;
-      STRCPY(p, res_cmd);
-      p += strlen(p);
-
-      if (has_extra) {
-        STRCPY(p, ";\"");
-        p += strlen(p);
-
-        if (res_kind) {
-          *p++ = TAB;
-          STRCPY(p, res_kind);
-          p += strlen(p);
-        }
-
-        TV_DICT_ITER(TV_LIST_ITEM_TV(li)->vval.v_dict, di, {
-          const char *dict_key = di->di_key;
-          typval_T *tv = &di->di_tv;
-          if (tv->v_type != VAR_STRING || tv->vval.v_string == NULL) {
-            continue;
-          }
-
-          if (!strcmp(dict_key, "name")) {
-            continue;
-          }
-          if (!strcmp(dict_key, "filename")) {
-            continue;
-          }
-          if (!strcmp(dict_key, "cmd")) {
-            continue;
-          }
-          if (!strcmp(dict_key, "kind")) {
-            continue;
-          }
-
-          *p++ = TAB;
-          STRCPY(p, dict_key);
-          p += strlen(p);
-          STRCPY(p, ":");
-          p += strlen(p);
-          STRCPY(p, tv->vval.v_string);
-          p += strlen(p);
-        });
-      }
-    }
-
-    // Add all matches because tagfunc should do filtering.
-    ga_grow(ga, 1);
-    ((char **)(ga->ga_data))[ga->ga_len++] = (char *)mfp;
-    ntags++;
-    result = OK;
-  });
-
-  tv_clear(&rettv);
-
-  *match_count = ntags;
-  return result;
+  return rs_find_tagfunc_tags(pat, ga, match_count, flags, buf_ffname);
 }
 
 /// Initialize the state used by find_tags()

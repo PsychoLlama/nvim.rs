@@ -2440,6 +2440,197 @@ pub unsafe extern "C" fn rs_findtags_in_file(
 }
 
 // =============================================================================
+// Phase 9: find_tagfunc_tags — invoke user tagfunc and build match strings
+// =============================================================================
+
+extern "C" {
+    fn nvim_tag_call_tagfunc(
+        pat: *const c_char,
+        flags: c_int,
+        buf_ffname: *const c_char,
+        out_list: *mut *mut c_void,
+        rettv_storage: *mut c_void,
+    ) -> c_int;
+    fn nvim_tag_tv_clear_rettv(rettv_storage: *mut c_void);
+    fn nvim_tag_rettv_size() -> usize;
+    fn nvim_tag_tv_list_first(list: *const c_void) -> *mut c_void;
+    fn nvim_tag_tv_list_item_next(list: *const c_void, li: *const c_void) -> *mut c_void;
+    fn nvim_tag_listitem_is_dict(li: *const c_void) -> bool;
+    fn nvim_tag_listitem_get_dict(li: *const c_void) -> *mut c_void;
+    fn nvim_tag_dict_compute_match_len(dict: *const c_void) -> usize;
+    fn nvim_tag_dict_get_tag_fields(
+        dict: *const c_void,
+        res_name: *mut *const c_char,
+        res_fname: *mut *const c_char,
+        res_cmd: *mut *const c_char,
+        res_kind: *mut *const c_char,
+        has_extra: *mut bool,
+    );
+    fn nvim_tag_dict_write_extra_fields(dict: *const c_void, p: *mut c_char) -> usize;
+    fn nvim_tag_emsg_invalid_tagfunc_return();
+    fn nvim_tag_ga_grow_append(ga: *mut c_void, mfp: *mut c_char);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+}
+
+/// Invoke the user-defined tagfunc to get tag matches.
+///
+/// This replaces `find_tagfunc_tags()` in C. It calls the tagfunc callback
+/// via a C accessor, then iterates the returned list of dicts in Rust to
+/// build the encoded match strings.
+///
+/// # Panics
+/// Panics if `sizeof(typval_T)` exceeds 64 bytes (should never happen).
+///
+/// # Safety
+/// - `pat` must be a valid C string
+/// - `ga` must be a valid garray_T pointer (from findtags_state_T.ga_match)
+/// - `match_count` must be a valid pointer
+/// - `buf_ffname` may be null
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_find_tagfunc_tags(
+    pat: *mut c_char,
+    ga: *mut c_void,
+    match_count: *mut c_int,
+    flags: c_int,
+    buf_ffname: *mut c_char,
+) -> c_int {
+    // Allocate rettv storage on the stack (use max reasonable size)
+    // We use a byte array large enough for typval_T
+    let rettv_size = nvim_tag_rettv_size();
+    // typval_T should be <= 24 bytes; allocate 64 for safety
+    assert!(rettv_size <= 64);
+    let mut rettv_buf = [0u8; 64];
+    let rettv_ptr = rettv_buf.as_mut_ptr().cast::<c_void>();
+
+    let mut list: *mut c_void = std::ptr::null_mut();
+
+    let call_result = nvim_tag_call_tagfunc(pat, flags, buf_ffname, &raw mut list, rettv_ptr);
+
+    match call_result {
+        0 => {} // OK, list is valid
+        2 => return NOTDONE,
+        // 1=callback failed, 3=invalid return, 4=no tagfunc, other=unexpected
+        _ => return FAIL,
+    }
+
+    let name_only = (flags & TAG_NAMES) != 0;
+    let mut ntags: c_int = 0;
+    let mut result = FAIL;
+
+    let mut li = nvim_tag_tv_list_first(list);
+    while !li.is_null() {
+        if !nvim_tag_listitem_is_dict(li) {
+            nvim_tag_emsg_invalid_tagfunc_return();
+            break;
+        }
+
+        let dict = nvim_tag_listitem_get_dict(li);
+        if dict.is_null() {
+            nvim_tag_emsg_invalid_tagfunc_return();
+            break;
+        }
+
+        // Extract the standard fields
+        let mut tag_name: *const c_char = std::ptr::null();
+        let mut tag_file: *const c_char = std::ptr::null();
+        let mut tag_cmd: *const c_char = std::ptr::null();
+        let mut tag_kind: *const c_char = std::ptr::null();
+        let mut has_extra = false;
+
+        nvim_tag_dict_get_tag_fields(
+            dict,
+            &raw mut tag_name,
+            &raw mut tag_file,
+            &raw mut tag_cmd,
+            &raw mut tag_kind,
+            &raw mut has_extra,
+        );
+
+        if tag_name.is_null() || tag_file.is_null() || tag_cmd.is_null() {
+            nvim_tag_emsg_invalid_tagfunc_return();
+            break;
+        }
+
+        if name_only {
+            // Just return the tag name
+            let mfp = xstrdup(tag_name);
+            nvim_tag_ga_grow_append(ga, mfp);
+        } else {
+            // Compute total length needed
+            let mut len = nvim_tag_dict_compute_match_len(dict);
+            if has_extra {
+                len += 2; // for ;\"
+            }
+
+            let mfp = xmalloc(len + 2).cast::<c_char>();
+            let mut p = mfp;
+
+            // mtt byte + TAG_SEP
+            *p = (MT_GL_OTH + 1) as c_char;
+            p = p.add(1);
+            *p = TAG_SEP as c_char;
+            p = p.add(1);
+
+            // name
+            let name_len = strlen(tag_name);
+            std::ptr::copy_nonoverlapping(tag_name.cast::<u8>(), p.cast::<u8>(), name_len);
+            p = p.add(name_len);
+
+            // TAB + filename
+            *p = TAB as c_char;
+            p = p.add(1);
+            let file_len = strlen(tag_file);
+            std::ptr::copy_nonoverlapping(tag_file.cast::<u8>(), p.cast::<u8>(), file_len);
+            p = p.add(file_len);
+
+            // TAB + cmd
+            *p = TAB as c_char;
+            p = p.add(1);
+            let cmd_len = strlen(tag_cmd);
+            std::ptr::copy_nonoverlapping(tag_cmd.cast::<u8>(), p.cast::<u8>(), cmd_len);
+            p = p.add(cmd_len);
+
+            if has_extra {
+                // ;\"
+                *p = b';' as c_char;
+                p = p.add(1);
+                *p = b'"' as c_char;
+                p = p.add(1);
+
+                // kind field first
+                if !tag_kind.is_null() {
+                    *p = TAB as c_char;
+                    p = p.add(1);
+                    let kind_len = strlen(tag_kind);
+                    std::ptr::copy_nonoverlapping(tag_kind.cast::<u8>(), p.cast::<u8>(), kind_len);
+                    p = p.add(kind_len);
+                }
+
+                // Extra fields (KEY:VALUE)
+                let extra_written = nvim_tag_dict_write_extra_fields(dict, p);
+                p = p.add(extra_written);
+            }
+
+            // Null-terminate
+            *p = 0;
+
+            nvim_tag_ga_grow_append(ga, mfp);
+        }
+
+        ntags += 1;
+        result = OK;
+
+        li = nvim_tag_tv_list_item_next(list, li);
+    }
+
+    nvim_tag_tv_clear_rettv(rettv_ptr);
+
+    *match_count = ntags;
+    result
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

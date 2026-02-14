@@ -1063,6 +1063,79 @@ pub unsafe extern "C" fn rs_tagname_free(tnp: *mut c_void) {
 }
 
 // =============================================================================
+// Phase 9: Tagfunc option management
+// =============================================================================
+
+extern "C" {
+    fn nvim_tag_callback_free_tfu();
+    fn nvim_tag_callback_free_buf_tfu(buf: *mut c_void);
+    fn nvim_tag_buf_tfu_is_empty(buf: *const c_void) -> bool;
+    fn nvim_tag_option_set_tfu_callback(buf: *mut c_void) -> c_int;
+    fn nvim_tag_callback_copy_tfu_to_buf(buf: *mut c_void);
+    fn nvim_tag_tfu_cb_is_none() -> bool;
+    fn nvim_tag_set_ref_in_tfu_callback(copy_id: c_int) -> bool;
+    fn nvim_tag_optset_get_buf(args: *const c_void) -> *mut c_void;
+    fn nvim_tag_get_e_invarg() -> *const c_char;
+}
+
+const FAIL_I: c_int = 0;
+
+/// Reads the 'tagfunc' option value and converts it to a callback value.
+///
+/// # Safety
+/// - `args` must be a valid `optset_T` pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_tagfunc(args: *const c_void) -> *const c_char {
+    let buf = nvim_tag_optset_get_buf(args);
+
+    nvim_tag_callback_free_tfu();
+    nvim_tag_callback_free_buf_tfu(buf);
+
+    if nvim_tag_buf_tfu_is_empty(buf) {
+        return std::ptr::null();
+    }
+
+    if nvim_tag_option_set_tfu_callback(buf) == FAIL_I {
+        return nvim_tag_get_e_invarg();
+    }
+
+    nvim_tag_callback_copy_tfu_to_buf(buf);
+    std::ptr::null()
+}
+
+/// Free the global tagfunc callback option on exit.
+///
+/// # Safety
+/// Must only be called during EXITFREE cleanup.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_tagfunc_option() {
+    nvim_tag_callback_free_tfu();
+}
+
+/// Mark the global 'tagfunc' callback with "copyID" so that it is not
+/// garbage collected.
+///
+/// # Safety
+/// - `copy_id` must be a valid GC copy ID
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_ref_in_tagfunc(copy_id: c_int) -> bool {
+    nvim_tag_set_ref_in_tfu_callback(copy_id)
+}
+
+/// Copy the global 'tagfunc' callback to the buffer-local 'tagfunc'
+/// callback for `buf`.
+///
+/// # Safety
+/// - `buf` must be a valid `buf_T` pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_buflocal_tfu_callback(buf: *mut c_void) {
+    nvim_tag_callback_free_buf_tfu(buf);
+    if !nvim_tag_tfu_cb_is_none() {
+        nvim_tag_callback_copy_tfu_to_buf(buf);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
