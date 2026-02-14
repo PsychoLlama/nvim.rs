@@ -1183,6 +1183,312 @@ pub unsafe extern "C" fn rs_findtags_matchargs_init(margs: FindTagsMatchArgsHand
 }
 
 // =============================================================================
+// Phase 4: Search state machine — file reading and header parsing
+// =============================================================================
+
+extern "C" {
+    // findtags_state_T field accessors
+    fn nvim_findtags_get_state_val(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_set_state_val(st: FindTagsStateHandle, state: c_int);
+    fn nvim_findtags_get_lbuf(st: FindTagsStateHandle) -> *mut c_char;
+    fn nvim_findtags_get_lbuf_size(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_set_lbuf(st: FindTagsStateHandle, lbuf: *mut c_char, lbuf_size: c_int);
+
+    // File I/O through findtags_state_T
+    fn nvim_findtags_fgets(st: FindTagsStateHandle) -> bool;
+    fn nvim_findtags_fseek(st: FindTagsStateHandle, offset: i64, whence: c_int) -> c_int;
+    fn nvim_findtags_ftell(st: FindTagsStateHandle) -> i64;
+    fn nvim_findtags_fseek_zero(st: FindTagsStateHandle);
+    fn nvim_findtags_lbuf_is_blank(st: FindTagsStateHandle) -> bool;
+
+    // Other field accessors
+    fn nvim_findtags_get_flags(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_get_linear_val(st: FindTagsStateHandle) -> bool;
+    fn nvim_findtags_set_linear(st: FindTagsStateHandle, linear: bool);
+    fn nvim_findtags_get_sorted(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_set_sorted(st: FindTagsStateHandle, val: c_int);
+    fn nvim_findtags_get_orgpat_rm_ic(st: FindTagsStateHandle) -> bool;
+    fn nvim_findtags_set_orgpat_rm_ic(st: FindTagsStateHandle, ic: bool);
+    fn nvim_get_p_ic() -> c_int;
+
+    // Encoding conversion
+    fn nvim_findtags_convert_setup(st: FindTagsStateHandle, from: *const c_char);
+    fn nvim_findtags_string_convert(st: FindTagsStateHandle) -> *mut c_char;
+
+    // Memory
+    fn xfree(ptr: *mut c_void);
+    fn strcpy(dest: *mut c_char, src: *const c_char) -> *mut c_char;
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn strlen(s: *const c_char) -> usize;
+}
+
+/// C `tagsearch_state_T` enum values
+const TS_LINEAR: c_int = 1;
+const TS_BINARY: c_int = 2;
+const TS_SKIP_BACK: c_int = 3;
+const TS_STEP_FORWARD: c_int = 4;
+
+/// C tags_read_status_T enum values
+const TAGS_READ_SUCCESS: c_int = 1;
+const TAGS_READ_EOF: c_int = 2;
+const TAGS_READ_IGNORE: c_int = 3;
+
+/// SEEK_SET and SEEK_END
+const SEEK_SET: c_int = 0;
+const SEEK_END: c_int = 2;
+
+/// TAG_NOIC flag
+const TAG_NOIC: c_int = 8;
+
+/// Read the next line from a tags file during search.
+///
+/// Handles binary search seeking, linear reading, and blank line skipping.
+///
+/// # Safety
+///
+/// - `st` must be a valid pointer to a `findtags_state_T`
+/// - `sinfo_p` must be a valid pointer to a `tagsearch_info_T`
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_get_next_line(
+    st: FindTagsStateHandle,
+    sinfo_p: *mut TagSearchInfo,
+) -> c_int {
+    if st.is_null() || sinfo_p.is_null() {
+        return TAGS_READ_EOF;
+    }
+
+    let sinfo = &mut *sinfo_p;
+    let state = nvim_findtags_get_state_val(st);
+
+    // For binary search: compute the next offset to use.
+    if state == TS_BINARY {
+        let offset = sinfo.low_offset + ((sinfo.high_offset - sinfo.low_offset) / 2);
+        if offset == sinfo.curr_offset {
+            return TAGS_READ_EOF; // End the binary search without a match.
+        }
+        sinfo.curr_offset = offset;
+    } else if state == TS_SKIP_BACK {
+        // Skipping back (after a match during binary search).
+        let lbuf_size = nvim_findtags_get_lbuf_size(st) as i64;
+        sinfo.curr_offset -= lbuf_size * 2;
+        if sinfo.curr_offset < 0 {
+            sinfo.curr_offset = 0;
+            nvim_findtags_fseek_zero(st);
+            nvim_findtags_set_state_val(st, TS_STEP_FORWARD);
+        }
+    }
+
+    let state = nvim_findtags_get_state_val(st);
+
+    // When jumping around in the file, first read a line to find the
+    // start of the next line.
+    if state == TS_BINARY || state == TS_SKIP_BACK {
+        // Adjust the search file offset to the correct position
+        sinfo.curr_offset_used = sinfo.curr_offset;
+        let _ = nvim_findtags_fseek(st, sinfo.curr_offset, SEEK_SET);
+        let mut eof = nvim_findtags_fgets(st);
+        if !eof && sinfo.curr_offset != 0 {
+            sinfo.curr_offset = nvim_findtags_ftell(st);
+            if sinfo.curr_offset == sinfo.high_offset {
+                // oops, gone a bit too far; try from low offset
+                let _ = nvim_findtags_fseek(st, sinfo.low_offset, SEEK_SET);
+                sinfo.curr_offset = sinfo.low_offset;
+            }
+            eof = nvim_findtags_fgets(st);
+        }
+        // skip empty and blank lines
+        while !eof && nvim_findtags_lbuf_is_blank(st) {
+            sinfo.curr_offset = nvim_findtags_ftell(st);
+            eof = nvim_findtags_fgets(st);
+        }
+        if eof {
+            // Hit end of file.  Skip backwards.
+            nvim_findtags_set_state_val(st, TS_SKIP_BACK);
+            sinfo.match_offset = nvim_findtags_ftell(st);
+            sinfo.curr_offset = sinfo.curr_offset_used;
+            return TAGS_READ_IGNORE;
+        }
+    } else {
+        // Not jumping around in the file: Read the next line.
+        // skip empty and blank lines
+        let mut eof = nvim_findtags_fgets(st);
+        while !eof && nvim_findtags_lbuf_is_blank(st) {
+            eof = nvim_findtags_fgets(st);
+        }
+        if eof {
+            return TAGS_READ_EOF;
+        }
+    }
+
+    TAGS_READ_SUCCESS
+}
+
+/// Parse a tags file header line in `st->lbuf`.
+///
+/// Returns true if the current line is not a tags header line and should be
+/// parsed as a regular tag line. Returns false if the line is a header and
+/// the next header line should be read.
+///
+/// # Safety
+///
+/// - `st` must be a valid pointer to a `findtags_state_T`
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_hdr_parse(st: FindTagsStateHandle) -> bool {
+    if st.is_null() {
+        return true;
+    }
+
+    let lbuf = nvim_findtags_get_lbuf(st);
+    if lbuf.is_null() {
+        return true;
+    }
+
+    // Header lines in a tags file start with "!_TAG_"
+    if strncmp(lbuf, c"!_TAG_".as_ptr(), 6) != 0 {
+        // Non-header item before the header, e.g. "!" itself.
+        return true;
+    }
+
+    // Process the header line.
+    if strncmp(lbuf, c"!_TAG_FILE_SORTED\t".as_ptr(), 18) == 0 {
+        nvim_findtags_set_sorted(st, c_int::from(*lbuf.add(18) as u8));
+    }
+    if strncmp(lbuf, c"!_TAG_FILE_ENCODING\t".as_ptr(), 20) == 0 {
+        // Prepare to convert every line from the specified encoding to
+        // 'encoding'.
+        let mut p = lbuf.add(20);
+        while *p > b' ' as c_char && (*p as u8) < 127 {
+            p = p.add(1);
+        }
+        *p = 0;
+        nvim_findtags_convert_setup(st, lbuf.add(20));
+    }
+
+    // Read the next line.  Unrecognized flags are ignored.
+    false
+}
+
+/// Handler to initialize the state when starting to process a new tags file.
+///
+/// Called in the TS_START state when finding tags from a tags file.
+/// Returns true if the line read from the tags file should be parsed and
+/// false if the line should be ignored.
+///
+/// # Safety
+///
+/// - `st` must be a valid pointer to a `findtags_state_T`
+/// - `sortic` must be a valid pointer to a bool
+/// - `sinfo_p` must be a valid pointer to a `tagsearch_info_T`
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_start_state_handler(
+    st: FindTagsStateHandle,
+    sortic: *mut bool,
+    sinfo_p: *mut TagSearchInfo,
+) -> bool {
+    if st.is_null() || sortic.is_null() || sinfo_p.is_null() {
+        return true;
+    }
+
+    let sinfo = &mut *sinfo_p;
+    let flags = nvim_findtags_get_flags(st);
+    let noic = (flags & TAG_NOIC) != 0;
+    let lbuf = nvim_findtags_get_lbuf(st);
+
+    // The header ends when the line sorts below "!_TAG_".  When case is
+    // folded lower case letters sort before "_".
+    if strncmp(lbuf, c"!_TAG_".as_ptr(), 6) <= 0
+        || (*lbuf == b'!' as c_char && (*lbuf.add(1) as u8).is_ascii_lowercase())
+    {
+        return rs_findtags_hdr_parse(st);
+    }
+
+    // Headers ends.
+
+    let linear = nvim_findtags_get_linear_val(st);
+    let tag_file_sorted = nvim_findtags_get_sorted(st);
+
+    // When there is no tag head, or ignoring case, need to do a linear search.
+    // When no "!_TAG_" is found, default to binary search.
+    // When "!_TAG_FILE_SORTED" found: start binary search if flag set.
+    if linear {
+        nvim_findtags_set_state_val(st, TS_LINEAR);
+    } else if tag_file_sorted == 0 {
+        // NUL
+        nvim_findtags_set_state_val(st, TS_BINARY);
+    } else if tag_file_sorted == i32::from(b'1') {
+        nvim_findtags_set_state_val(st, TS_BINARY);
+    } else if tag_file_sorted == i32::from(b'2') {
+        nvim_findtags_set_state_val(st, TS_BINARY);
+        *sortic = true;
+        nvim_findtags_set_orgpat_rm_ic(st, nvim_get_p_ic() != 0 || !noic);
+    } else {
+        nvim_findtags_set_state_val(st, TS_LINEAR);
+    }
+
+    let state = nvim_findtags_get_state_val(st);
+    if state == TS_BINARY && nvim_findtags_get_orgpat_rm_ic(st) && !*sortic {
+        // Binary search won't work for ignoring case, use linear search.
+        nvim_findtags_set_linear(st, true);
+        nvim_findtags_set_state_val(st, TS_LINEAR);
+    }
+
+    // When starting a binary search, get the size of the file and
+    // compute the first offset.
+    let state = nvim_findtags_get_state_val(st);
+    if state == TS_BINARY {
+        if nvim_findtags_fseek(st, 0, SEEK_END) != 0 {
+            // can't seek, don't use binary search
+            nvim_findtags_set_state_val(st, TS_LINEAR);
+        } else {
+            // Get the tag file size.
+            let filesize = nvim_findtags_ftell(st);
+            let _ = nvim_findtags_fseek(st, 0, SEEK_SET);
+
+            // Calculate the first read offset in the file.
+            sinfo.low_offset = 0;
+            sinfo.low_char = 0;
+            sinfo.high_offset = filesize;
+            sinfo.curr_offset = 0;
+            sinfo.high_char = 0xff;
+        }
+        return false;
+    }
+
+    true
+}
+
+/// Convert the current line in `st->lbuf` using the encoding conversion
+/// set up by the `!_TAG_FILE_ENCODING` header.
+///
+/// # Safety
+///
+/// - `st` must be a valid pointer to a `findtags_state_T`
+#[no_mangle]
+pub unsafe extern "C" fn rs_findtags_string_convert(st: FindTagsStateHandle) {
+    if st.is_null() {
+        return;
+    }
+
+    let conv_line = nvim_findtags_string_convert(st);
+    if conv_line.is_null() {
+        return;
+    }
+
+    // Copy or swap lbuf and conv_line.
+    let len = strlen(conv_line) as c_int + 1;
+    let lbuf_size = nvim_findtags_get_lbuf_size(st);
+    let lbuf = nvim_findtags_get_lbuf(st);
+
+    if len > lbuf_size {
+        xfree(lbuf.cast::<c_void>());
+        nvim_findtags_set_lbuf(st, conv_line, len);
+    } else {
+        strcpy(lbuf, conv_line);
+        xfree(conv_line.cast::<c_void>());
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
