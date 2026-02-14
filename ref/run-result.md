@@ -1,15 +1,9 @@
-Plan: ~/.claude/plans/deep-hugging-lollipop.md
+Plan: ~/.claude/plans/delightful-giggling-fern.md
 
-All 8 phases of the decoration.c migration plan are now complete. Here's the final summary:
+The plan indicates that **no further migration work is needed for `ex_cmds2.c`**. The analysis found that:
 
-**Phase 7** (just completed): Migrated `decor_find_sign` to Rust. The other 3 marktree scanning functions (`decor_find_virttext`, `decor_conceal_line`, `decor_virt_lines`) remain in C due to tight coupling with marktree internals (stack-local iterators, filter arrays, overlap iteration).
+1. All original function bodies from the C file have already been migrated to Rust in `src/nvim-rs/ex_cmds2/` (2,286 lines across 11 modules).
+2. The remaining ~1,117 lines in the C file are **FFI glue only** — accessor functions, thin wrappers calling `rs_*` functions, and static assertions. This is the expected end-state for a migrated file.
+3. The one function with real logic (`nvim_ex2_listdo_restore_syntax`) was intentionally kept in C due to deep coupling with autocmd internals and stack-allocated structs.
 
-**Phase 8** (assessed, staying in C):
-- `decor_type_flags` — already has a Rust helper `rs_decor_type_flags`, but the C version handles multi-item linked list walking that can't be simplified through FFI
-- `next_virt_text_chunk` — kvec VirtText iteration, not practical to port
-- `bufhl_add_hl_pos_offset` — requires `extmark_set()` with 12+ params, not worth the FFI complexity
-
-**Final stats:**
-- 174 `rs_*` functions in the decoration crate
-- 6,441 lines of Rust across 7 modules
-- decoration.c: 2,249 lines (down from ~1,846 original + ~480 new accessor lines)
+**All steps are complete — there is nothing to implement.** If you'd like to continue migration work, I can help identify a new C file candidate to migrate.
