@@ -147,6 +147,9 @@ extern void rs_set_last_search_pat(const char *s, int idx, int magic, int setlas
 extern void rs_last_pat_prog(regmmatch_T *regmatch);
 extern void rs_set_vv_searchforward(void);
 
+// Rust FFI declarations for searchc()
+extern int rs_searchc(cmdarg_T *cap, bool t_cmd);
+
 // Rust FFI declarations for pattern utilities
 extern int rs_pat_has_uppercase(const char *pat);
 extern int rs_ignorecase(const char *pat);
@@ -970,86 +973,7 @@ int search_for_exact_line(buf_T *buf, pos_T *pos, Direction dir, char *pat)
 int searchc(cmdarg_T *cap, bool t_cmd)
   FUNC_ATTR_NONNULL_ALL
 {
-  int c = cap->nchar;                   // char to search for
-  int dir = cap->arg;                   // true for searching forward
-  int count = cap->count1;              // repeat count
-  bool stop = true;
-
-  if (c != NUL) {       // normal search: remember args for repeat
-    if (!KeyStuffed) {      // don't remember when redoing
-      *lastc = (uint8_t)c;
-      set_csearch_direction(dir);
-      set_csearch_until(t_cmd);
-      if (cap->nchar_len) {
-        lastc_bytelen = cap->nchar_len;
-        memcpy(lastc_bytes, cap->nchar_composing, (size_t)cap->nchar_len);
-      } else {
-        lastc_bytelen = utf_char2bytes(c, lastc_bytes);
-      }
-    }
-  } else {            // repeat previous search
-    if (*lastc == NUL && lastc_bytelen <= 1) {
-      return FAIL;
-    }
-    dir = dir  // repeat in opposite direction
-          ? -lastcdir
-          : lastcdir;
-    t_cmd = last_t_cmd;
-    c = *lastc;
-    // For multi-byte re-use last lastc_bytes[] and lastc_bytelen.
-
-    // Force a move of at least one char, so ";" and "," will move the
-    // cursor, even if the cursor is right in front of char we are looking
-    // at.
-    if (vim_strchr(p_cpo, CPO_SCOLON) == NULL && count == 1 && t_cmd) {
-      stop = false;
-    }
-  }
-
-  cap->oap->inclusive = dir != BACKWARD;
-
-  char *p = get_cursor_line_ptr();
-  int col = curwin->w_cursor.col;
-  int len = get_cursor_line_len();
-
-  while (count--) {
-    while (true) {
-      if (dir > 0) {
-        col += utfc_ptr2len(p + col);
-        if (col >= len) {
-          return FAIL;
-        }
-      } else {
-        if (col == 0) {
-          return FAIL;
-        }
-        col -= utf_head_off(p, p + col - 1) + 1;
-      }
-      if (lastc_bytelen <= 1) {
-        if (p[col] == c && stop) {
-          break;
-        }
-      } else if (strncmp(p + col, lastc_bytes, (size_t)lastc_bytelen) == 0 && stop) {
-        break;
-      }
-      stop = true;
-    }
-  }
-
-  if (t_cmd) {
-    // Backup to before the character (possibly double-byte).
-    col -= dir;
-    if (dir < 0) {
-      // Landed on the search char which is lastc_bytelen long.
-      col += lastc_bytelen - 1;
-    } else {
-      // To previous char, which may be multi-byte.
-      col -= utf_head_off(p, p + col);
-    }
-  }
-  curwin->w_cursor.col = col;
-
-  return OK;
+  return rs_searchc(cap, t_cmd);
 }
 
 // "Other" Searches
@@ -4538,6 +4462,31 @@ void nvim_search_set_oap_motion_type(void *oap, int motion_type)
   if (oap != NULL) {
     ((oparg_T *)oap)->motion_type = (MotionType)motion_type;
   }
+}
+
+// =============================================================================
+// Phase 5: searchc() accessors
+// =============================================================================
+
+/// Batch save lastc state for searchc() migration.
+/// Sets lastc[0], lastcdir, last_t_cmd, and the lastc_bytes/lastc_bytelen.
+/// If nchar_len > 0, copies composing_bytes to lastc_bytes.
+/// Otherwise, encodes `c` using utf_char2bytes into lastc_bytes.
+void nvim_searchc_save_lastc_state(int c, int nchar_len, const char *composing_bytes)
+{
+  *lastc = (uint8_t)c;
+  if (nchar_len > 0) {
+    lastc_bytelen = nchar_len;
+    memcpy(lastc_bytes, composing_bytes, (size_t)nchar_len);
+  } else {
+    lastc_bytelen = utf_char2bytes(c, lastc_bytes);
+  }
+}
+
+/// Get a pointer to cap->nchar_composing.
+const char *nvim_cap_get_nchar_composing_ptr(cmdarg_T *cap)
+{
+  return cap ? cap->nchar_composing : NULL;
 }
 
 // Phase 4: find_pattern_in_path constants

@@ -50,12 +50,7 @@ extern "C" {
         magic: c_int,
         regmatch: *mut std::ffi::c_void,
     ) -> c_int;
-    fn nvim_set_last_search_pat_batch(
-        s: *const c_char,
-        idx: c_int,
-        magic: c_int,
-        setlast: c_int,
-    );
+    fn nvim_set_last_search_pat_batch(s: *const c_char, idx: c_int, magic: c_int, setlast: c_int);
     fn nvim_inc_emsg_off();
     fn nvim_dec_emsg_off();
     fn nvim_spats_pat_is_null(idx: c_int) -> c_int;
@@ -507,12 +502,9 @@ pub unsafe extern "C" fn rs_search_regcomp(
 
         let mut spat_magic: c_int = 0;
         let mut spat_no_scs: c_int = 0;
-        actual_pat = nvim_spats_get_pat_and_len(
-            i,
-            &mut actual_patlen,
-            &mut spat_magic,
-            &mut spat_no_scs,
-        ) as *mut c_char;
+        actual_pat =
+            nvim_spats_get_pat_and_len(i, &mut actual_patlen, &mut spat_magic, &mut spat_no_scs)
+                as *mut c_char;
         magic = spat_magic;
         nvim_set_no_smartcase(spat_no_scs);
     } else if (options & SEARCH_HIS) != 0 {

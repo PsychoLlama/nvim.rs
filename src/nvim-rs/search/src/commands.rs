@@ -3,7 +3,7 @@
 //! This module provides functions for search commands like character search
 //! (f/F/t/T), line search, and related operations.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
 // C External Functions
@@ -21,6 +21,24 @@ extern "C" {
     fn nvim_get_lastc_bytelen() -> c_int;
     fn nvim_set_lastc_bytelen(len: c_int);
     fn nvim_set_lastc_bytes_raw(s: *const c_char, len: c_int);
+
+    // Phase 5: searchc() accessors
+    fn nvim_searchc_save_lastc_state(c: c_int, nchar_len: c_int, composing_bytes: *const c_char);
+    fn nvim_cap_get_nchar(cap: *const c_void) -> c_int;
+    fn nvim_cap_get_arg(cap: *const c_void) -> c_int;
+    fn nvim_cap_get_count1(cap: *const c_void) -> c_int;
+    fn nvim_cap_get_nchar_len(cap: *const c_void) -> c_int;
+    fn nvim_cap_get_nchar_composing_ptr(cap: *const c_void) -> *const c_char;
+    fn nvim_cap_get_oap(cap: *const c_void) -> *mut c_void;
+    fn nvim_oap_set_inclusive(oap: *mut c_void, val: bool);
+    fn nvim_get_keystuffed() -> c_int;
+    fn nvim_get_cursor_line_ptr() -> *const c_char;
+    fn nvim_get_cursor_line_len() -> c_int;
+    fn nvim_get_curwin_cursor_col() -> c_int;
+    fn nvim_set_curwin_cursor_col(col: c_int);
+    fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
 }
 
 // =============================================================================
@@ -447,6 +465,119 @@ pub extern "C" fn rs_should_force_csearch_movement(
 #[no_mangle]
 pub extern "C" fn rs_get_current_csearch_state() -> CharSearchState {
     get_current_csearch_state()
+}
+
+// =============================================================================
+// searchc() — f/F/t/T character search
+// =============================================================================
+
+/// CPO_SCOLON character value (';' = 59).
+const CPO_SCOLON: c_int = b';' as c_int;
+
+/// OK return value (matches C OK = 1).
+const OK: c_int = 1;
+/// FAIL return value (matches C FAIL = 0).
+const FAIL: c_int = 0;
+
+/// Search for a character in a line (f/F/t/T commands).
+///
+/// If `t_cmd` is false, move to the position of the character,
+/// otherwise move to just before the char.
+/// Does this `cap->count1` times.
+///
+/// # Safety
+///
+/// `cap` must be a valid, non-null pointer to a `cmdarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_searchc(cap: *mut c_void, t_cmd_arg: bool) -> c_int {
+    let mut c = nvim_cap_get_nchar(cap);
+    let mut dir = nvim_cap_get_arg(cap);
+    let mut count = nvim_cap_get_count1(cap);
+    let mut t_cmd = t_cmd_arg;
+    let mut stop = true;
+
+    if c != 0 {
+        // Normal search: remember args for repeat
+        if nvim_get_keystuffed() == 0 {
+            // Don't remember when redoing
+            let nchar_len = nvim_cap_get_nchar_len(cap);
+            let composing_ptr = nvim_cap_get_nchar_composing_ptr(cap);
+            nvim_searchc_save_lastc_state(c, nchar_len, composing_ptr);
+            set_csearch_direction(dir);
+            set_csearch_until(t_cmd);
+        }
+    } else {
+        // Repeat previous search
+        if nvim_get_lastc(0) == 0 && nvim_get_lastc_bytelen() <= 1 {
+            return FAIL;
+        }
+        let lastcdir = nvim_get_lastcdir();
+        dir = if dir != 0 { -lastcdir } else { lastcdir };
+        t_cmd = nvim_get_last_t_cmd() != 0;
+        c = nvim_get_lastc(0) as c_int;
+        // For multi-byte re-use last lastc_bytes[] and lastc_bytelen.
+
+        // Force a move of at least one char, so ";" and "," will move the
+        // cursor, even if the cursor is right in front of char we are looking at.
+        if !nvim_vim_strchr_p_cpo(CPO_SCOLON) && count == 1 && t_cmd {
+            stop = false;
+        }
+    }
+
+    // Set oap->inclusive
+    let oap = nvim_cap_get_oap(cap);
+    nvim_oap_set_inclusive(oap, dir != DIRECTION_BACKWARD);
+
+    let p = nvim_get_cursor_line_ptr();
+    let mut col = nvim_get_curwin_cursor_col();
+    let len = nvim_get_cursor_line_len();
+    let lastc_bytelen = nvim_get_lastc_bytelen();
+
+    while count > 0 {
+        count -= 1;
+        loop {
+            if dir > 0 {
+                col += nvim_utfc_ptr2len(p.add(col as usize));
+                if col >= len {
+                    return FAIL;
+                }
+            } else {
+                if col == 0 {
+                    return FAIL;
+                }
+                col -= nvim_utf_head_off(p, p.add(col as usize - 1)) + 1;
+            }
+            if lastc_bytelen <= 1 {
+                if *p.add(col as usize) == c as c_char && stop {
+                    break;
+                }
+            } else if col + lastc_bytelen <= len {
+                let lastc_bytes = nvim_get_lastc_bytes();
+                let blen = lastc_bytelen as usize;
+                let line_slice = std::slice::from_raw_parts(p.add(col as usize) as *const u8, blen);
+                let pat_slice = std::slice::from_raw_parts(lastc_bytes as *const u8, blen);
+                if line_slice == pat_slice && stop {
+                    break;
+                }
+            }
+            stop = true;
+        }
+    }
+
+    if t_cmd {
+        // Backup to before the character (possibly double-byte).
+        col -= dir;
+        if dir < 0 {
+            // Landed on the search char which is lastc_bytelen long.
+            col += lastc_bytelen - 1;
+        } else {
+            // To previous char, which may be multi-byte.
+            col -= nvim_utf_head_off(p, p.add(col as usize));
+        }
+    }
+    nvim_set_curwin_cursor_col(col);
+
+    OK
 }
 
 #[cfg(test)]
