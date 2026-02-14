@@ -111,49 +111,38 @@ static garray_T ga_loaded = { 0, 0, sizeof(char *), 4, NULL };
 /// last used sequence number for sourcing scripts (current_sctx.sc_seq)
 static int last_current_SID_seq = 0;
 
+// Rust implementations of execution stack functions
+extern void rs_estack_init(void);
+extern estack_T *rs_estack_push(int type, char *name, linenr_T lnum);
+extern void rs_estack_push_ufunc(ufunc_T *ufunc, linenr_T lnum);
+extern void rs_estack_pop(void);
+extern char *rs_estack_sfile(int which);
+extern list_T *rs_stacktrace_create(void);
+extern void rs_f_getstacktrace(typval_T *argvars, typval_T *rettv, void *fptr);
+
 /// Initialize the execution stack.
 void estack_init(void)
 {
-  ga_grow(&exestack, 10);
-  estack_T *entry = ((estack_T *)exestack.ga_data) + exestack.ga_len;
-  entry->es_type = ETYPE_TOP;
-  entry->es_name = NULL;
-  entry->es_lnum = 0;
-  entry->es_info.ufunc = NULL;
-  exestack.ga_len++;
+  rs_estack_init();
 }
 
 /// Add an item to the execution stack.
 /// @return  the new entry
 estack_T *estack_push(etype_T type, char *name, linenr_T lnum)
 {
-  ga_grow(&exestack, 1);
-  estack_T *entry = ((estack_T *)exestack.ga_data) + exestack.ga_len;
-  entry->es_type = type;
-  entry->es_name = name;
-  entry->es_lnum = lnum;
-  entry->es_info.ufunc = NULL;
-  exestack.ga_len++;
-  return entry;
+  return rs_estack_push((int)type, name, lnum);
 }
 
 /// Add a user function to the execution stack.
 void estack_push_ufunc(ufunc_T *ufunc, linenr_T lnum)
 {
-  estack_T *entry = estack_push(ETYPE_UFUNC,
-                                ufunc->uf_name_exp != NULL ? ufunc->uf_name_exp : ufunc->uf_name,
-                                lnum);
-  if (entry != NULL) {
-    entry->es_info.ufunc = ufunc;
-  }
+  rs_estack_push_ufunc(ufunc, lnum);
 }
 
 /// Take an item off of the execution stack.
 void estack_pop(void)
 {
-  if (exestack.ga_len > 1) {
-    exestack.ga_len--;
-  }
+  rs_estack_pop();
 }
 
 /// Get the current value for <sfile> in allocated memory.
@@ -161,129 +150,19 @@ void estack_pop(void)
 ///               ESTACK_SCRIPT for <script>.
 char *estack_sfile(estack_arg_T which)
 {
-  const estack_T *entry = ((estack_T *)exestack.ga_data) + exestack.ga_len - 1;
-  if (which == ESTACK_SFILE && entry->es_type != ETYPE_UFUNC) {
-    return entry->es_name != NULL ? xstrdup(entry->es_name) : NULL;
-  }
-
-  // If evaluated in a function or autocommand, return the path of the script
-  // where it is defined, at script level the current script path is returned
-  // instead.
-  if (which == ESTACK_SCRIPT) {
-    // Walk the stack backwards, starting from the current frame.
-    for (int idx = exestack.ga_len - 1; idx >= 0; idx--, entry--) {
-      if (entry->es_type == ETYPE_UFUNC || entry->es_type == ETYPE_AUCMD) {
-        const sctx_T *const def_ctx = (entry->es_type == ETYPE_UFUNC
-                                       ? &entry->es_info.ufunc->uf_script_ctx
-                                       : &entry->es_info.aucmd->script_ctx);
-        return def_ctx->sc_sid > 0
-               ? xstrdup((SCRIPT_ITEM(def_ctx->sc_sid)->sn_name))
-               : NULL;
-      } else if (entry->es_type == ETYPE_SCRIPT) {
-        return xstrdup(entry->es_name);
-      }
-    }
-    return NULL;
-  }
-
-  // Give information about each stack entry up to the root.
-  // For a function we compose the call stack, as it was done in the past:
-  //   "function One[123]..Two[456]..Three"
-  garray_T ga;
-  ga_init(&ga, sizeof(char), 100);
-  etype_T last_type = ETYPE_SCRIPT;
-  for (int idx = 0; idx < exestack.ga_len; idx++) {
-    entry = ((estack_T *)exestack.ga_data) + idx;
-    if (entry->es_name != NULL) {
-      size_t len = strlen(entry->es_name) + 15;
-      char *type_name = "";
-      if (entry->es_type != last_type) {
-        switch (entry->es_type) {
-        case ETYPE_SCRIPT:
-          type_name = "script "; break;
-        case ETYPE_UFUNC:
-          type_name = "function "; break;
-        default:
-          type_name = ""; break;
-        }
-        last_type = entry->es_type;
-      }
-      len += strlen(type_name);
-      ga_grow(&ga, (int)len);
-      linenr_T lnum = idx == exestack.ga_len - 1
-                      ? which == ESTACK_STACK ? SOURCING_LNUM : 0
-                      : entry->es_lnum;
-      char *dots = idx == exestack.ga_len - 1 ? "" : "..";
-      if (lnum == 0) {
-        // For the bottom entry of <sfile>: do not add the line number,
-        // it is used in <slnum>.  Also leave it out when the number is
-        // not set.
-        vim_snprintf((char *)ga.ga_data + ga.ga_len, len, "%s%s%s",
-                     type_name, entry->es_name, dots);
-      } else {
-        vim_snprintf((char *)ga.ga_data + ga.ga_len, len, "%s%s[%" PRIdLINENR "]%s",
-                     type_name, entry->es_name, lnum, dots);
-      }
-      ga.ga_len += (int)strlen((char *)ga.ga_data + ga.ga_len);
-    }
-  }
-
-  return (char *)ga.ga_data;
-}
-
-static void stacktrace_push_item(list_T *const l, ufunc_T *const fp, const char *const event,
-                                 const linenr_T lnum, char *const filepath)
-{
-  dict_T *const d = tv_dict_alloc_lock(VAR_FIXED);
-  typval_T tv = {
-    .v_type = VAR_DICT,
-    .v_lock = VAR_LOCKED,
-    .vval.v_dict = d,
-  };
-
-  if (fp != NULL) {
-    tv_dict_add_func(d, S_LEN("funcref"), fp);
-  }
-  if (event != NULL) {
-    tv_dict_add_str(d, S_LEN("event"), event);
-  }
-  tv_dict_add_nr(d, S_LEN("lnum"), lnum);
-  tv_dict_add_str(d, S_LEN("filepath"), filepath);
-
-  tv_list_append_tv(l, &tv);
+  return rs_estack_sfile((int)which);
 }
 
 /// Create the stacktrace from exestack.
 list_T *stacktrace_create(void)
 {
-  list_T *const l = tv_list_alloc(exestack.ga_len);
-
-  for (int i = 0; i < exestack.ga_len; i++) {
-    estack_T *const entry = &((estack_T *)exestack.ga_data)[i];
-    linenr_T lnum = entry->es_lnum;
-
-    if (entry->es_type == ETYPE_SCRIPT) {
-      stacktrace_push_item(l, NULL, NULL, lnum, entry->es_name);
-    } else if (entry->es_type == ETYPE_UFUNC) {
-      ufunc_T *const fp = entry->es_info.ufunc;
-      const sctx_T sctx = fp->uf_script_ctx;
-      char *filepath = sctx.sc_sid > 0 ? get_scriptname(sctx, NULL) : "";
-      lnum += sctx.sc_lnum;
-      stacktrace_push_item(l, fp, NULL, lnum, filepath);
-    } else if (entry->es_type == ETYPE_AUCMD) {
-      const sctx_T sctx = entry->es_info.aucmd->script_ctx;
-      char *filepath = sctx.sc_sid > 0 ? get_scriptname(sctx, NULL) : "";
-      lnum += sctx.sc_lnum;
-      stacktrace_push_item(l, NULL, entry->es_name, lnum, filepath);
-    }
-  }
-  return l;
+  return rs_stacktrace_create();
 }
 
 /// getstacktrace() function
 void f_getstacktrace(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  tv_list_set_ret(rettv, stacktrace_create());
+  rs_f_getstacktrace(argvars, rettv, &fptr);
 }
 
 static bool runtime_search_path_valid = false;

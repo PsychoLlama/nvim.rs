@@ -75,6 +75,7 @@ members = [
     "src/nvim-rs/quickfix",
     "src/nvim-rs/regexp",
     "src/nvim-rs/register",
+    "src/nvim-rs/runtime",
     "src/nvim-rs/search",
     "src/nvim-rs/sign",
     "src/nvim-rs/shada",

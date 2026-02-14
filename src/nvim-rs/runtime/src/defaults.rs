@@ -54,8 +54,7 @@ impl DefaultType {
 }
 
 /// Get directory name for a default type.
-#[no_mangle]
-pub extern "C" fn rs_default_type_dir(dtype: c_int) -> *const c_char {
+pub fn rs_default_type_dir(dtype: c_int) -> *const c_char {
     match DefaultType::from_int(dtype) {
         Some(t) => t.dir_name().as_ptr().cast(),
         None => std::ptr::null(),
@@ -74,32 +73,27 @@ pub const MENU_VIM: &[u8] = b"menu.vim\0";
 pub const DEFAULTS_VIM: &[u8] = b"defaults.vim\0";
 
 /// Get filetype.vim filename.
-#[no_mangle]
-pub extern "C" fn rs_filetype_vim() -> *const c_char {
+pub fn rs_filetype_vim() -> *const c_char {
     FILETYPE_VIM.as_ptr().cast()
 }
 
 /// Get filetype.lua filename.
-#[no_mangle]
-pub extern "C" fn rs_filetype_lua() -> *const c_char {
+pub fn rs_filetype_lua() -> *const c_char {
     FILETYPE_LUA.as_ptr().cast()
 }
 
 /// Get scripts.vim filename.
-#[no_mangle]
-pub extern "C" fn rs_scripts_vim() -> *const c_char {
+pub fn rs_scripts_vim() -> *const c_char {
     SCRIPTS_VIM.as_ptr().cast()
 }
 
 /// Get menu.vim filename.
-#[no_mangle]
-pub extern "C" fn rs_menu_vim() -> *const c_char {
+pub fn rs_menu_vim() -> *const c_char {
     MENU_VIM.as_ptr().cast()
 }
 
 /// Get defaults.vim filename.
-#[no_mangle]
-pub extern "C" fn rs_defaults_vim() -> *const c_char {
+pub fn rs_defaults_vim() -> *const c_char {
     DEFAULTS_VIM.as_ptr().cast()
 }
 
@@ -130,26 +124,22 @@ pub struct DefaultsLoaded {
 }
 
 /// Create default loaded state (nothing loaded).
-#[no_mangle]
-pub extern "C" fn rs_defaults_loaded_new() -> DefaultsLoaded {
+pub fn rs_defaults_loaded_new() -> DefaultsLoaded {
     DefaultsLoaded::default()
 }
 
 /// Check if basic filetype detection is loaded.
-#[no_mangle]
-pub extern "C" fn rs_defaults_has_filetype(loaded: &DefaultsLoaded) -> bool {
+pub fn rs_defaults_has_filetype(loaded: &DefaultsLoaded) -> bool {
     loaded.filetype || loaded.filetype_lua
 }
 
 /// Check if full filetype support is enabled.
-#[no_mangle]
-pub extern "C" fn rs_defaults_filetype_enabled(loaded: &DefaultsLoaded) -> bool {
+pub fn rs_defaults_filetype_enabled(loaded: &DefaultsLoaded) -> bool {
     loaded.filetype_on && rs_defaults_has_filetype(loaded)
 }
 
 /// Check if syntax highlighting is enabled.
-#[no_mangle]
-pub extern "C" fn rs_defaults_syntax_enabled(loaded: &DefaultsLoaded) -> bool {
+pub fn rs_defaults_syntax_enabled(loaded: &DefaultsLoaded) -> bool {
     loaded.syntax
 }
 
@@ -165,32 +155,27 @@ pub const EXRC: &[u8] = b".exrc\0";
 pub const GVIMRC: &[u8] = b".gvimrc\0";
 
 /// Get init.vim filename.
-#[no_mangle]
-pub extern "C" fn rs_init_vim() -> *const c_char {
+pub fn rs_init_vim() -> *const c_char {
     INIT_VIM.as_ptr().cast()
 }
 
 /// Get init.lua filename.
-#[no_mangle]
-pub extern "C" fn rs_init_lua() -> *const c_char {
+pub fn rs_init_lua() -> *const c_char {
     INIT_LUA.as_ptr().cast()
 }
 
 /// Get .vimrc filename.
-#[no_mangle]
-pub extern "C" fn rs_vimrc() -> *const c_char {
+pub fn rs_vimrc() -> *const c_char {
     VIMRC.as_ptr().cast()
 }
 
 /// Get .exrc filename.
-#[no_mangle]
-pub extern "C" fn rs_exrc() -> *const c_char {
+pub fn rs_exrc() -> *const c_char {
     EXRC.as_ptr().cast()
 }
 
 /// Get .gvimrc filename.
-#[no_mangle]
-pub extern "C" fn rs_gvimrc() -> *const c_char {
+pub fn rs_gvimrc() -> *const c_char {
     GVIMRC.as_ptr().cast()
 }
 

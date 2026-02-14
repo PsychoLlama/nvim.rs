@@ -26,8 +26,7 @@ extern "C" {
 /// Get a script item by ID.
 ///
 /// Returns null handle if ID is invalid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_script_item_get(id: ScidT) -> ScriptItemHandle {
+pub unsafe fn rs_script_item_get(id: ScidT) -> ScriptItemHandle {
     if id <= 0 || id > nvim_script_items_get_len() {
         return ScriptItemHandle::null();
     }
@@ -35,8 +34,7 @@ pub unsafe extern "C" fn rs_script_item_get(id: ScidT) -> ScriptItemHandle {
 }
 
 /// Get the name of a script item.
-#[no_mangle]
-pub unsafe extern "C" fn rs_script_item_name(si: ScriptItemHandle) -> *const c_char {
+pub unsafe fn rs_script_item_name(si: ScriptItemHandle) -> *const c_char {
     if si.is_null() {
         return std::ptr::null();
     }
@@ -44,8 +42,7 @@ pub unsafe extern "C" fn rs_script_item_name(si: ScriptItemHandle) -> *const c_c
 }
 
 /// Check if a script item is a Lua script.
-#[no_mangle]
-pub unsafe extern "C" fn rs_script_item_is_lua(si: ScriptItemHandle) -> bool {
+pub unsafe fn rs_script_item_is_lua(si: ScriptItemHandle) -> bool {
     if si.is_null() {
         return false;
     }
@@ -53,8 +50,7 @@ pub unsafe extern "C" fn rs_script_item_is_lua(si: ScriptItemHandle) -> bool {
 }
 
 /// Check if a script item has profiling enabled.
-#[no_mangle]
-pub unsafe extern "C" fn rs_script_item_profiling(si: ScriptItemHandle) -> bool {
+pub unsafe fn rs_script_item_profiling(si: ScriptItemHandle) -> bool {
     if si.is_null() {
         return false;
     }
@@ -66,22 +62,19 @@ pub unsafe extern "C" fn rs_script_item_profiling(si: ScriptItemHandle) -> bool 
 // =============================================================================
 
 /// Get the total number of sourced scripts.
-#[no_mangle]
-pub unsafe extern "C" fn rs_script_count() -> c_int {
+pub unsafe fn rs_script_count() -> c_int {
     nvim_script_items_get_len()
 }
 
 /// Check if a script ID is valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_script_id_is_valid(id: ScidT) -> bool {
+pub unsafe fn rs_script_id_is_valid(id: ScidT) -> bool {
     id > 0 && id <= nvim_script_items_get_len()
 }
 
 /// Get the name of a script by ID.
 ///
 /// Returns null if ID is invalid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_script_name_by_id(id: ScidT) -> *const c_char {
+pub unsafe fn rs_script_name_by_id(id: ScidT) -> *const c_char {
     let si = rs_script_item_get(id);
     rs_script_item_name(si)
 }
@@ -97,8 +90,7 @@ pub unsafe extern "C" fn rs_script_name_by_id(id: ScidT) -> *const c_char {
 /// # Safety
 ///
 /// `name` must be null or a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_script_find_by_name(name: *const c_char) -> ScidT {
+pub unsafe fn rs_script_find_by_name(name: *const c_char) -> ScidT {
     if name.is_null() {
         return 0;
     }

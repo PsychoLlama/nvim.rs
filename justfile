@@ -132,6 +132,7 @@ rust-test:
       -p nvim-regexp \
       -p nvim-register \
       -p nvim-rs \
+      -p nvim-runtime \
       -p nvim-search \
       -p nvim-session \
       -p nvim-shada \

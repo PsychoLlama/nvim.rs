@@ -38,14 +38,12 @@ impl PackageStatus {
 }
 
 /// Check if a package status indicates it can be loaded.
-#[no_mangle]
-pub extern "C" fn rs_package_can_load(status: c_int) -> bool {
+pub fn rs_package_can_load(status: c_int) -> bool {
     status == PackageStatus::NotLoaded as c_int
 }
 
 /// Check if a package status indicates it's already loaded.
-#[no_mangle]
-pub extern "C" fn rs_package_is_loaded(status: c_int) -> bool {
+pub fn rs_package_is_loaded(status: c_int) -> bool {
     status == PackageStatus::Loaded as c_int
 }
 
@@ -74,14 +72,12 @@ impl PackageType {
 }
 
 /// Get DIP flag for start packages.
-#[no_mangle]
-pub extern "C" fn rs_package_start_flag() -> c_int {
+pub fn rs_package_start_flag() -> c_int {
     PackageType::Start.to_dip_flag()
 }
 
 /// Get DIP flag for opt packages.
-#[no_mangle]
-pub extern "C" fn rs_package_opt_flag() -> c_int {
+pub fn rs_package_opt_flag() -> c_int {
     PackageType::Opt.to_dip_flag()
 }
 
@@ -96,8 +92,7 @@ pub extern "C" fn rs_package_opt_flag() -> c_int {
 /// # Safety
 ///
 /// `name` must be null or a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_package_name_valid(name: *const c_char) -> bool {
+pub unsafe fn rs_package_name_valid(name: *const c_char) -> bool {
     if name.is_null() {
         return false;
     }
@@ -149,8 +144,7 @@ pub const PLUGIN_DIR_COUNT: usize = PLUGIN_DIRS.len();
 /// Get a plugin directory name by index.
 ///
 /// Returns null if index is out of bounds.
-#[no_mangle]
-pub extern "C" fn rs_get_plugin_dir(idx: usize) -> *const c_char {
+pub fn rs_get_plugin_dir(idx: usize) -> *const c_char {
     if idx >= PLUGIN_DIR_COUNT {
         return std::ptr::null();
     }
@@ -158,8 +152,7 @@ pub extern "C" fn rs_get_plugin_dir(idx: usize) -> *const c_char {
 }
 
 /// Get the count of plugin directories.
-#[no_mangle]
-pub extern "C" fn rs_plugin_dir_count() -> usize {
+pub fn rs_plugin_dir_count() -> usize {
     PLUGIN_DIR_COUNT
 }
 

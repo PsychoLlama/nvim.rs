@@ -11,14 +11,12 @@ use crate::{doso, LinenrT, ScidT};
 // =============================================================================
 
 /// Check if sourcing a vimrc file.
-#[no_mangle]
-pub extern "C" fn rs_sourcing_vimrc(flags: c_int) -> bool {
+pub fn rs_sourcing_vimrc(flags: c_int) -> bool {
     flags == doso::VIMRC
 }
 
 /// Check if this is a regular source (not vimrc).
-#[no_mangle]
-pub extern "C" fn rs_sourcing_regular(flags: c_int) -> bool {
+pub fn rs_sourcing_regular(flags: c_int) -> bool {
     flags == doso::NONE
 }
 
@@ -55,18 +53,12 @@ impl Default for SourceState {
 }
 
 /// Create default source state.
-#[no_mangle]
-pub extern "C" fn rs_source_state_default() -> SourceState {
+pub fn rs_source_state_default() -> SourceState {
     SourceState::default()
 }
 
 /// Initialize source state for a script.
-#[no_mangle]
-pub extern "C" fn rs_source_state_init(
-    script_id: ScidT,
-    total_lines: LinenrT,
-    is_lua: bool,
-) -> SourceState {
+pub fn rs_source_state_init(script_id: ScidT, total_lines: LinenrT, is_lua: bool) -> SourceState {
     SourceState {
         current_lnum: 1,
         total_lines,
@@ -77,20 +69,17 @@ pub extern "C" fn rs_source_state_init(
 }
 
 /// Advance to the next line.
-#[no_mangle]
-pub extern "C" fn rs_source_state_next_line(state: &mut SourceState) {
+pub fn rs_source_state_next_line(state: &mut SourceState) {
     state.current_lnum += 1;
 }
 
 /// Check if we're at the end of the file.
-#[no_mangle]
-pub extern "C" fn rs_source_state_at_end(state: &SourceState) -> bool {
+pub fn rs_source_state_at_end(state: &SourceState) -> bool {
     state.current_lnum > state.total_lines
 }
 
 /// Get progress percentage (0-100).
-#[no_mangle]
-pub extern "C" fn rs_source_state_progress(state: &SourceState) -> c_int {
+pub fn rs_source_state_progress(state: &SourceState) -> c_int {
     if state.total_lines <= 0 {
         return 100;
     }
@@ -145,14 +134,12 @@ impl SourceResult {
 }
 
 /// Check if source result indicates success.
-#[no_mangle]
-pub extern "C" fn rs_source_result_ok(result: c_int) -> bool {
+pub fn rs_source_result_ok(result: c_int) -> bool {
     result == SourceResult::Ok as c_int
 }
 
 /// Check if source result indicates file not found.
-#[no_mangle]
-pub extern "C" fn rs_source_result_not_found(result: c_int) -> bool {
+pub fn rs_source_result_not_found(result: c_int) -> bool {
     result == SourceResult::FileNotFound as c_int
 }
 

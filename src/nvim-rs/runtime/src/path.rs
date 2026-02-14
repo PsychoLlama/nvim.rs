@@ -13,8 +13,7 @@ use std::ffi::{c_char, c_int};
 /// # Safety
 ///
 /// `path` must be null or a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_ends_with_sep(path: *const c_char) -> bool {
+pub unsafe fn rs_path_ends_with_sep(path: *const c_char) -> bool {
     if path.is_null() {
         return false;
     }
@@ -35,8 +34,7 @@ pub unsafe extern "C" fn rs_path_ends_with_sep(path: *const c_char) -> bool {
 }
 
 /// Check if a character is a path separator.
-#[no_mangle]
-pub extern "C" fn rs_is_path_sep(c: c_int) -> bool {
+pub fn rs_is_path_sep(c: c_int) -> bool {
     let c = c as u8;
     c == b'/' || c == b'\\'
 }
@@ -46,8 +44,7 @@ pub extern "C" fn rs_is_path_sep(c: c_int) -> bool {
 /// # Safety
 ///
 /// `path` must be null or a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_is_absolute(path: *const c_char) -> bool {
+pub unsafe fn rs_path_is_absolute(path: *const c_char) -> bool {
     if path.is_null() {
         return false;
     }
@@ -83,8 +80,7 @@ pub unsafe extern "C" fn rs_path_is_absolute(path: *const c_char) -> bool {
 /// # Safety
 ///
 /// `path` must be null or a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_strlen(path: *const c_char) -> usize {
+pub unsafe fn rs_path_strlen(path: *const c_char) -> usize {
     if path.is_null() {
         return 0;
     }
@@ -107,8 +103,7 @@ pub unsafe extern "C" fn rs_path_strlen(path: *const c_char) -> usize {
 /// # Safety
 ///
 /// `path` must be null or a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_has_wildcard(path: *const c_char) -> bool {
+pub unsafe fn rs_path_has_wildcard(path: *const c_char) -> bool {
     if path.is_null() {
         return false;
     }
@@ -130,8 +125,7 @@ pub unsafe extern "C" fn rs_path_has_wildcard(path: *const c_char) -> bool {
 /// # Safety
 ///
 /// `path` must be null or a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_is_after_dir(path: *const c_char) -> bool {
+pub unsafe fn rs_path_is_after_dir(path: *const c_char) -> bool {
     if path.is_null() {
         return false;
     }
@@ -164,8 +158,7 @@ pub unsafe extern "C" fn rs_path_is_after_dir(path: *const c_char) -> bool {
 /// # Safety
 ///
 /// `path` must be null or a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_has_vim_ext(path: *const c_char) -> bool {
+pub unsafe fn rs_path_has_vim_ext(path: *const c_char) -> bool {
     rs_path_has_ext(path, b".vim\0".as_ptr().cast())
 }
 
@@ -174,8 +167,7 @@ pub unsafe extern "C" fn rs_path_has_vim_ext(path: *const c_char) -> bool {
 /// # Safety
 ///
 /// `path` must be null or a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_has_lua_ext(path: *const c_char) -> bool {
+pub unsafe fn rs_path_has_lua_ext(path: *const c_char) -> bool {
     rs_path_has_ext(path, b".lua\0".as_ptr().cast())
 }
 
@@ -184,8 +176,7 @@ pub unsafe extern "C" fn rs_path_has_lua_ext(path: *const c_char) -> bool {
 /// # Safety
 ///
 /// Both `path` and `ext` must be null or valid null-terminated C strings.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_has_ext(path: *const c_char, ext: *const c_char) -> bool {
+pub unsafe fn rs_path_has_ext(path: *const c_char, ext: *const c_char) -> bool {
     if path.is_null() || ext.is_null() {
         return false;
     }

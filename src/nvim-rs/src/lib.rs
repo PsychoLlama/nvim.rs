@@ -109,6 +109,7 @@ pub use nvim_profile::*;
 pub use nvim_quickfix::*;
 pub use nvim_regexp::*;
 pub use nvim_register::*;
+pub use nvim_runtime::*;
 pub use nvim_search::*;
 pub use nvim_session::*;
 pub use nvim_shada::*;

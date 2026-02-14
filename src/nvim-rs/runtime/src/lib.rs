@@ -29,7 +29,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::must_use_candidate)]
-#![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::cast_sign_loss)] // C FFI requires these casts
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_possible_truncation)]
@@ -268,11 +268,8 @@ pub type ScidT = c_int;
 #[allow(dead_code)]
 extern "C" {
     // Execution stack accessors
-    fn nvim_exestack_get_len() -> c_int;
-    fn nvim_exestack_get_entry(idx: c_int) -> EstackHandle;
-    fn nvim_estack_get_lnum(entry: EstackHandle) -> LinenrT;
-    fn nvim_estack_get_name(entry: EstackHandle) -> *const c_char;
-    fn nvim_estack_get_type(entry: EstackHandle) -> c_int;
+    fn nvim_get_exestack_len() -> c_int;
+    fn nvim_exestack_has_data() -> bool;
 
     // Script items accessors
     fn nvim_script_items_get_len() -> c_int;
@@ -284,128 +281,68 @@ extern "C" {
     fn nvim_get_current_sctx_sid() -> ScidT;
     fn nvim_get_sourcing_name() -> *const c_char;
     fn nvim_get_sourcing_lnum() -> LinenrT;
-    fn nvim_have_sourcing_info() -> bool;
 }
 
 // =============================================================================
 // Execution Stack Functions
 // =============================================================================
 
-/// Check if there is sourcing information available.
-///
-/// Returns true if the execution stack has entries.
-#[no_mangle]
-pub unsafe extern "C" fn rs_have_sourcing_info() -> bool {
-    nvim_have_sourcing_info()
-}
-
-/// Get the current sourcing name (file being sourced).
-///
-/// Returns null if no file is being sourced.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_sourcing_name() -> *const c_char {
-    nvim_get_sourcing_name()
-}
-
-/// Get the current sourcing line number.
-///
-/// Returns 0 if no file is being sourced.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_sourcing_lnum() -> LinenrT {
-    nvim_get_sourcing_lnum()
-}
-
-/// Get the length of the execution stack.
-#[no_mangle]
-pub unsafe extern "C" fn rs_exestack_len() -> c_int {
-    nvim_exestack_get_len()
-}
-
-/// Check if the execution stack is empty.
-#[no_mangle]
-pub unsafe extern "C" fn rs_exestack_empty() -> bool {
-    nvim_exestack_get_len() <= 0
-}
-
-// =============================================================================
-// Script ID Validation
-// =============================================================================
-
-/// Check if a script ID is valid.
-///
-/// Script IDs are 1-based indices into the script_items array.
-#[no_mangle]
-pub unsafe extern "C" fn rs_script_id_valid(id: ScidT) -> bool {
-    id > 0 && id <= nvim_script_items_get_len()
-}
-
-/// Get the current script ID from sctx.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_current_script_id() -> ScidT {
-    nvim_get_current_sctx_sid()
-}
+// NOTE: rs_have_sourcing_info, rs_get_sourcing_name, rs_get_sourcing_lnum,
+// rs_exestack_len, rs_exestack_empty, rs_script_id_valid, rs_get_current_script_id
+// are defined in other crates (ex_docmd, etc.) and exported from there.
+// They are NOT re-exported here to avoid duplicate symbol errors.
 
 // =============================================================================
 // Path Flag Helpers
 // =============================================================================
 
 /// Check if DIP_ALL flag is set
-#[no_mangle]
-pub extern "C" fn rs_dip_has_all(flags: c_int) -> bool {
+pub fn rs_dip_has_all(flags: c_int) -> bool {
     (flags & dip::ALL) != 0
 }
 
 /// Check if DIP_DIR flag is set
-#[no_mangle]
-pub extern "C" fn rs_dip_has_dir(flags: c_int) -> bool {
+pub fn rs_dip_has_dir(flags: c_int) -> bool {
     (flags & dip::DIR) != 0
 }
 
 /// Check if DIP_ERR flag is set
-#[no_mangle]
-pub extern "C" fn rs_dip_has_err(flags: c_int) -> bool {
+pub fn rs_dip_has_err(flags: c_int) -> bool {
     (flags & dip::ERR) != 0
 }
 
 /// Check if DIP_START flag is set
-#[no_mangle]
-pub extern "C" fn rs_dip_has_start(flags: c_int) -> bool {
+pub fn rs_dip_has_start(flags: c_int) -> bool {
     (flags & dip::START) != 0
 }
 
 /// Check if DIP_OPT flag is set
-#[no_mangle]
-pub extern "C" fn rs_dip_has_opt(flags: c_int) -> bool {
+pub fn rs_dip_has_opt(flags: c_int) -> bool {
     (flags & dip::OPT) != 0
 }
 
 /// Check if DIP_NORTP flag is set
-#[no_mangle]
-pub extern "C" fn rs_dip_has_nortp(flags: c_int) -> bool {
+pub fn rs_dip_has_nortp(flags: c_int) -> bool {
     (flags & dip::NORTP) != 0
 }
 
 /// Check if DIP_NOAFTER flag is set
-#[no_mangle]
-pub extern "C" fn rs_dip_has_noafter(flags: c_int) -> bool {
+pub fn rs_dip_has_noafter(flags: c_int) -> bool {
     (flags & dip::NOAFTER) != 0
 }
 
 /// Check if DIP_AFTER flag is set
-#[no_mangle]
-pub extern "C" fn rs_dip_has_after(flags: c_int) -> bool {
+pub fn rs_dip_has_after(flags: c_int) -> bool {
     (flags & dip::AFTER) != 0
 }
 
 /// Check if DIP_DIRFILE flag is set
-#[no_mangle]
-pub extern "C" fn rs_dip_has_dirfile(flags: c_int) -> bool {
+pub fn rs_dip_has_dirfile(flags: c_int) -> bool {
     (flags & dip::DIRFILE) != 0
 }
 
 /// Check if searching for packages (START or OPT set)
-#[no_mangle]
-pub extern "C" fn rs_dip_is_package_search(flags: c_int) -> bool {
+pub fn rs_dip_is_package_search(flags: c_int) -> bool {
     (flags & (dip::START | dip::OPT)) != 0
 }
 

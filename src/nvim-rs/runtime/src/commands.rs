@@ -49,8 +49,8 @@ impl RuntimeCmd {
 /// Syntax: :runtime[!] [where] {file}
 ///
 /// Returns DIP flags based on arguments.
-#[no_mangle]
-pub extern "C" fn rs_runtime_flags(bang: bool, start: bool, opt: bool, after: bool) -> c_int {
+#[allow(clippy::fn_params_excessive_bools)]
+pub fn rs_runtime_flags(bang: bool, start: bool, opt: bool, after: bool) -> c_int {
     let mut flags = 0;
 
     // Bang means find all matches
@@ -73,8 +73,7 @@ pub extern "C" fn rs_runtime_flags(bang: bool, start: bool, opt: bool, after: bo
 }
 
 /// Check if :runtime should search all matches (bang used).
-#[no_mangle]
-pub extern "C" fn rs_runtime_find_all(flags: c_int) -> bool {
+pub fn rs_runtime_find_all(flags: c_int) -> bool {
     (flags & dip::ALL) != 0
 }
 
@@ -85,8 +84,7 @@ pub extern "C" fn rs_runtime_find_all(flags: c_int) -> bool {
 /// Parse :source command modifiers.
 ///
 /// Returns true if this is a :source! (re-source) command.
-#[no_mangle]
-pub extern "C" fn rs_source_is_reload(bang: bool) -> bool {
+pub fn rs_source_is_reload(bang: bool) -> bool {
     bang
 }
 
@@ -97,8 +95,7 @@ pub extern "C" fn rs_source_is_reload(bang: bool) -> bool {
 /// Parse :packadd command.
 ///
 /// Returns DIP flags for searching.
-#[no_mangle]
-pub extern "C" fn rs_packadd_flags(bang: bool) -> c_int {
+pub fn rs_packadd_flags(bang: bool) -> c_int {
     let mut flags = dip::OPT | dip::ALL | dip::DIRFILE;
 
     // Without bang, also search start directories
@@ -110,8 +107,7 @@ pub extern "C" fn rs_packadd_flags(bang: bool) -> c_int {
 }
 
 /// Check if :packadd should only search opt directories (bang used).
-#[no_mangle]
-pub extern "C" fn rs_packadd_opt_only(bang: bool) -> bool {
+pub fn rs_packadd_opt_only(bang: bool) -> bool {
     bang
 }
 
@@ -120,8 +116,7 @@ pub extern "C" fn rs_packadd_opt_only(bang: bool) -> bool {
 // =============================================================================
 
 /// Check if packloadall should force reload (bang used).
-#[no_mangle]
-pub extern "C" fn rs_packloadall_force(bang: bool) -> bool {
+pub fn rs_packloadall_force(bang: bool) -> bool {
     bang
 }
 
@@ -136,26 +131,22 @@ pub const WHERE_PACK: &[u8] = b"PACK\0";
 pub const WHERE_ALL: &[u8] = b"ALL\0";
 
 /// Get :runtime START keyword.
-#[no_mangle]
-pub extern "C" fn rs_where_start() -> *const c_char {
+pub fn rs_where_start() -> *const c_char {
     WHERE_START.as_ptr().cast()
 }
 
 /// Get :runtime OPT keyword.
-#[no_mangle]
-pub extern "C" fn rs_where_opt() -> *const c_char {
+pub fn rs_where_opt() -> *const c_char {
     WHERE_OPT.as_ptr().cast()
 }
 
 /// Get :runtime PACK keyword.
-#[no_mangle]
-pub extern "C" fn rs_where_pack() -> *const c_char {
+pub fn rs_where_pack() -> *const c_char {
     WHERE_PACK.as_ptr().cast()
 }
 
 /// Get :runtime ALL keyword.
-#[no_mangle]
-pub extern "C" fn rs_where_all() -> *const c_char {
+pub fn rs_where_all() -> *const c_char {
     WHERE_ALL.as_ptr().cast()
 }
 
