@@ -98,6 +98,10 @@ extern int rs_match_delete(win_T *wp, int id, int perr);
 extern void rs_clear_matches(win_T *wp);
 extern matchitem_T *rs_get_match(win_T *wp, int id);
 
+// search_pos.rs - Position match search (Phase 3)
+extern int rs_next_search_hl_pos(match_T *shl, linenr_T lnum,
+                                 matchitem_T *match, colnr_T mincol);
+
 // highlight.rs - Highlight helpers (Phase 2)
 extern void rs_check_cur_search_hl(win_T *wp, match_T *shl);
 extern int rs_get_prevcol_hl_flag(win_T *wp, match_T *search_hl, colnr_T curcol);
@@ -402,6 +406,89 @@ match_T *nvim_match_item_get_hl(matchitem_T *m)
   return m != NULL ? &m->mit_hl : NULL;
 }
 
+// --- Phase 3 accessors (for search_pos.rs) ---
+
+/// Set lnum field of a match_T.
+void nvim_match_hl_set_lnum(match_T *shl, linenr_T lnum)
+{
+  shl->lnum = lnum;
+}
+
+/// Set is_addpos field of a match_T.
+void nvim_match_hl_set_is_addpos(match_T *shl, int val)
+{
+  shl->is_addpos = (bool)val;
+}
+
+/// Set rm.startpos[idx] of a match_T.
+void nvim_match_hl_rm_set_startpos(match_T *shl, int idx, linenr_T lnum, colnr_T col)
+{
+  shl->rm.startpos[idx].lnum = lnum;
+  shl->rm.startpos[idx].col = col;
+}
+
+/// Set rm.endpos[idx] of a match_T.
+void nvim_match_hl_rm_set_endpos(match_T *shl, int idx, linenr_T lnum, colnr_T col)
+{
+  shl->rm.endpos[idx].lnum = lnum;
+  shl->rm.endpos[idx].col = col;
+}
+
+/// Get mit_pos_cur of a match item.
+int nvim_match_item_get_pos_cur(matchitem_T *m)
+{
+  return m != NULL ? m->mit_pos_cur : 0;
+}
+
+/// Set mit_pos_cur of a match item.
+void nvim_match_item_set_pos_cur(matchitem_T *m, int cur)
+{
+  if (m != NULL) {
+    m->mit_pos_cur = cur;
+  }
+}
+
+/// Get lnum from a position in the match item's position array.
+linenr_T nvim_match_item_pos_get_lnum(matchitem_T *m, int idx)
+{
+  if (m == NULL || m->mit_pos_array == NULL || idx < 0 || idx >= m->mit_pos_count) {
+    return 0;
+  }
+  return m->mit_pos_array[idx].lnum;
+}
+
+/// Get col from a position in the match item's position array.
+colnr_T nvim_match_item_pos_get_col(matchitem_T *m, int idx)
+{
+  if (m == NULL || m->mit_pos_array == NULL || idx < 0 || idx >= m->mit_pos_count) {
+    return 0;
+  }
+  return m->mit_pos_array[idx].col;
+}
+
+/// Get len from a position in the match item's position array.
+int nvim_match_item_pos_get_len(matchitem_T *m, int idx)
+{
+  if (m == NULL || m->mit_pos_array == NULL || idx < 0 || idx >= m->mit_pos_count) {
+    return 0;
+  }
+  return m->mit_pos_array[idx].len;
+}
+
+/// Swap two positions in the match item's position array.
+void nvim_match_item_pos_swap(matchitem_T *m, int idx1, int idx2)
+{
+  if (m == NULL || m->mit_pos_array == NULL) {
+    return;
+  }
+  if (idx1 < 0 || idx1 >= m->mit_pos_count || idx2 < 0 || idx2 >= m->mit_pos_count) {
+    return;
+  }
+  llpos_T tmp = m->mit_pos_array[idx1];
+  m->mit_pos_array[idx1] = m->mit_pos_array[idx2];
+  m->mit_pos_array[idx2] = tmp;
+}
+
 // --- C function wrappers for Rust to call ---
 // Names prefixed with nvim_match_ to avoid symbol conflicts with other files.
 
@@ -637,50 +724,7 @@ void init_search_hl(win_T *wp, match_T *search_hl)
 static int next_search_hl_pos(match_T *shl, linenr_T lnum, matchitem_T *match, colnr_T mincol)
   FUNC_ATTR_NONNULL_ALL
 {
-  int found = -1;
-
-  shl->lnum = 0;
-  for (int i = match->mit_pos_cur; i < match->mit_pos_count; i++) {
-    llpos_T *pos = &match->mit_pos_array[i];
-
-    if (pos->lnum == 0) {
-      break;
-    }
-    if (pos->len == 0 && pos->col < mincol) {
-      continue;
-    }
-    if (pos->lnum == lnum) {
-      if (found >= 0) {
-        // if this match comes before the one at "found" then swap them
-        if (pos->col < match->mit_pos_array[found].col) {
-          llpos_T tmp = *pos;
-
-          *pos = match->mit_pos_array[found];
-          match->mit_pos_array[found] = tmp;
-        }
-      } else {
-        found = i;
-      }
-    }
-  }
-  match->mit_pos_cur = 0;
-  if (found >= 0) {
-    colnr_T start = match->mit_pos_array[found].col == 0
-                    ? 0 : match->mit_pos_array[found].col - 1;
-    colnr_T end = match->mit_pos_array[found].col == 0
-                  ? MAXCOL : start + match->mit_pos_array[found].len;
-
-    shl->lnum = lnum;
-    shl->rm.startpos[0].lnum = 0;
-    shl->rm.startpos[0].col = start;
-    shl->rm.endpos[0].lnum = 0;
-    shl->rm.endpos[0].col = end;
-    shl->is_addpos = true;
-    shl->has_cursor = false;
-    match->mit_pos_cur = found + 1;
-    return 1;
-  }
-  return 0;
+  return rs_next_search_hl_pos(shl, lnum, match, mincol);
 }
 
 /// Search for a next 'hlsearch' or match.

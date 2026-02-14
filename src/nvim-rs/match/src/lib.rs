@@ -19,6 +19,7 @@ pub mod lookup;
 pub mod position;
 pub mod priority;
 pub mod range;
+pub mod search_pos;
 pub mod viml;
 
 use std::ffi::c_int;
