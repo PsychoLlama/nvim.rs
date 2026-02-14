@@ -2,7 +2,7 @@
 //!
 //! This crate provides functions for working with marks and positions.
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use nvim_buffer::BufHandle;
 use nvim_window::WinHandle;
@@ -67,8 +67,45 @@ extern "C" {
     // Global state / cross-function callbacks
     fn nvim_mark_clear_namedfm();
     fn nvim_mark_get_curbuf() -> BufHandle;
+    fn nvim_mark_buflist_findnr(fnum: c_int) -> BufHandle;
     fn nvim_mark_bt_prompt(buf: BufHandle) -> c_int;
     fn nvim_mark_fname2fnum(xfm: *mut XfmarkT);
+
+    // Phase 4: Global state
+    fn nvim_mark_get_global_busy() -> c_int;
+    fn nvim_mark_get_listcmd_busy() -> c_int;
+    fn nvim_mark_get_jop_flags() -> c_uint;
+    fn nvim_mark_get_cmod_flags() -> c_uint;
+    fn nvim_mark_setpcmark();
+
+    // Phase 4: Window topline/changelist
+    fn nvim_mark_win_get_topline(win: WinHandle) -> LinenrT;
+    fn nvim_mark_win_get_changelistidx(win: WinHandle) -> c_int;
+    fn nvim_mark_win_set_changelistidx(win: WinHandle, idx: c_int);
+
+    // Phase 4: Jumplist manipulation
+    fn nvim_mark_win_jumplist_remove(win: WinHandle, from_idx: c_int, len: c_int);
+    fn nvim_mark_win_jumplist_shift_down(win: WinHandle);
+    fn nvim_mark_win_jumplist_copy_entry(win: WinHandle, to_idx: c_int, from_idx: c_int);
+    fn nvim_mark_win_set_jumplist_xfmark(
+        win: WinHandle,
+        idx: c_int,
+        mark: PosT,
+        fnum: c_int,
+        view: FmarkvT,
+    );
+    fn nvim_mark_win_get_jumplist_fnum(win: WinHandle, idx: c_int) -> c_int;
+    fn nvim_mark_win_get_jumplist_lnum(win: WinHandle, idx: c_int) -> LinenrT;
+    fn nvim_mark_win_jumplist_free_fname(win: WinHandle, idx: c_int);
+
+    // Phase 4: Tag stack
+    fn nvim_mark_win_get_tagstacklen(win: WinHandle) -> c_int;
+    fn nvim_mark_win_set_tagstacklen(win: WinHandle, len: c_int);
+    fn nvim_mark_win_get_tagstackidx(win: WinHandle) -> c_int;
+    fn nvim_mark_win_set_tagstackidx(win: WinHandle, idx: c_int);
+    fn nvim_mark_win_get_tagstack_fnum(win: WinHandle, idx: c_int) -> c_int;
+    fn nvim_mark_win_tagstack_clear_entry(win: WinHandle, idx: c_int);
+    fn nvim_mark_win_tagstack_remove(win: WinHandle, from_idx: c_int, len: c_int);
     fn nvim_mark_buflist_nr2name(fnum: c_int, listed: c_int, unstripped: c_int) -> *mut c_char;
     fn nvim_mark_mark_line(pos: *mut PosT, lead_len: c_int) -> *mut c_char;
     fn nvim_mark_get_motion(buf: BufHandle, win: WinHandle, name: c_int) -> *mut FmarkT;
@@ -1726,6 +1763,12 @@ pub const JUMPLISTSIZE: c_int = 100;
 /// Maximum number of marks in change list
 pub const GETMARKLIST_MAXCHANGES: c_int = 100;
 
+/// CMOD_KEEPJUMPS flag value (from ex_cmds_defs.h)
+const CMOD_KEEPJUMPS: c_uint = 0x0400;
+
+/// kOptJopFlagStack flag value (from option_vars.generated.h)
+const K_OPT_JOP_FLAG_STACK: c_uint = 0x01;
+
 /// Calculate the new jumplist length after incrementing.
 ///
 /// Implements the logic: if ++len > JUMPLISTSIZE, len = JUMPLISTSIZE
@@ -1881,6 +1924,342 @@ pub extern "C" fn rs_pos_clamp_lnum_min(lnum: LinenrT) -> LinenrT {
     } else {
         lnum
     }
+}
+
+// =============================================================================
+// Phase 4: Jumplist/Changelist Navigation
+// =============================================================================
+
+/// Set the previous context mark to the current position and add it to the
+/// jump list.
+///
+/// # Safety
+/// `win` and `buf` must be valid pointers to the current window and buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_setpcmark(win: WinHandle, buf: BufHandle) {
+    // for :global the mark is set only once
+    if nvim_mark_get_global_busy() != 0
+        || nvim_mark_get_listcmd_busy() != 0
+        || (nvim_mark_get_cmod_flags() & CMOD_KEEPJUMPS) != 0
+    {
+        return;
+    }
+
+    let cursor = nvim_mark_win_get_cursor(win);
+    let pcmark = nvim_mark_win_get_pcmark(win);
+    nvim_mark_win_set_prev_pcmark(win, pcmark);
+    let mut new_pcmark = cursor;
+    new_pcmark.lnum = rs_pos_clamp_lnum_min(new_pcmark.lnum);
+    nvim_mark_win_set_pcmark(win, new_pcmark);
+
+    let mut jumplistlen = nvim_mark_win_get_jumplistlen(win);
+    let jumplistidx = nvim_mark_win_get_jumplistidx(win);
+
+    if (nvim_mark_get_jop_flags() & K_OPT_JOP_FLAG_STACK) != 0 {
+        // jumpoptions=stack: discard everything after current index
+        let trim_len = rs_jumplist_stack_trim(jumplistidx, jumplistlen);
+        if trim_len >= 0 {
+            jumplistlen = trim_len;
+            nvim_mark_win_set_jumplistlen(win, jumplistlen);
+        }
+    }
+
+    let is_full = jumplistlen >= JUMPLISTSIZE;
+    jumplistlen = rs_jumplist_new_len(jumplistlen);
+    nvim_mark_win_set_jumplistlen(win, jumplistlen);
+
+    // If jumplist is full: remove oldest entry
+    if is_full {
+        rs_free_xfmark(*nvim_mark_win_get_jumplist_entry(win, 0));
+        nvim_mark_win_jumplist_shift_down(win);
+    }
+
+    nvim_mark_win_set_jumplistidx(win, jumplistlen);
+
+    let new_pcmark_val = nvim_mark_win_get_pcmark(win);
+    let topline = nvim_mark_win_get_topline(win);
+    let view = rs_mark_view_make(topline, new_pcmark_val.lnum);
+    let fnum = nvim_buf_get_fnum(buf);
+    nvim_mark_win_set_jumplist_xfmark(win, jumplistlen - 1, new_pcmark_val, fnum, view);
+}
+
+/// Get mark in "count" position in the jumplist relative to the current index.
+///
+/// If the mark is in a different buffer, it will be skipped unless the buffer exists.
+/// Calls cleanup_jumplist and potentially setpcmark.
+///
+/// # Safety
+/// `win` and `curbuf_ptr` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_jumplist(
+    win: WinHandle,
+    curbuf_ptr: BufHandle,
+    count: c_int,
+) -> *mut FmarkT {
+    rs_cleanup_jumplist(win, 1);
+
+    if nvim_mark_win_get_jumplistlen(win) == 0 {
+        return std::ptr::null_mut();
+    }
+
+    let mut count = count;
+    loop {
+        let idx = nvim_mark_win_get_jumplistidx(win);
+        let len = nvim_mark_win_get_jumplistlen(win);
+
+        if idx + count < 0 || idx + count >= len {
+            return std::ptr::null_mut();
+        }
+
+        // if first CTRL-O or CTRL-I command after a jump, add cursor position
+        // to list. Careful: If there are duplicates (CTRL-O immediately after
+        // starting Vim on a file), another entry may have been removed.
+        if idx == len {
+            nvim_mark_setpcmark();
+            let new_idx = nvim_mark_win_get_jumplistidx(win) - 1;
+            nvim_mark_win_set_jumplistidx(win, new_idx);
+            if new_idx + count < 0 {
+                return std::ptr::null_mut();
+            }
+        }
+
+        let new_idx = nvim_mark_win_get_jumplistidx(win) + count;
+        nvim_mark_win_set_jumplistidx(win, new_idx);
+
+        let jmp = nvim_mark_win_get_jumplist_entry(win, new_idx);
+        if (*jmp).fmark.fnum == 0 {
+            // Resolve the fnum (buff number) in the mark before returning it (shada)
+            nvim_mark_fname2fnum(jmp);
+        }
+        let curbuf_fnum = nvim_buf_get_fnum(curbuf_ptr);
+        if (*jmp).fmark.fnum != curbuf_fnum {
+            // Needs to switch buffer, if it can't find it skip the mark
+            let found_buf = nvim_mark_buflist_findnr((*jmp).fmark.fnum);
+            if found_buf.is_null() {
+                count += if count < 0 { -1 } else { 1 };
+                continue;
+            }
+        }
+        return &mut (*jmp).fmark;
+    }
+}
+
+/// Get mark in "count" position in the changelist relative to the current index.
+///
+/// # Safety
+/// `buf` and `win` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_changelist(
+    buf: BufHandle,
+    win: WinHandle,
+    count: c_int,
+) -> *mut FmarkT {
+    let changelistlen = nvim_mark_buf_get_changelistlen(buf);
+    if changelistlen == 0 {
+        return std::ptr::null_mut();
+    }
+
+    let n = nvim_mark_win_get_changelistidx(win);
+    let new_n = rs_changelist_calc_idx(n, changelistlen, count);
+    if new_n < 0 {
+        return std::ptr::null_mut();
+    }
+
+    nvim_mark_win_set_changelistidx(win, new_n);
+    let fm = nvim_mark_buf_get_changelist(buf, new_n);
+    // Changelist marks are always buffer local
+    let buf_handle = nvim_buf_get_handle(buf);
+    (*fm).fnum = buf_handle;
+    fm
+}
+
+/// Clean up the jumplist, removing duplicate entries.
+///
+/// When `loadfiles` is true, resolve all fnum values first.
+///
+/// # Safety
+/// `wp` must be a valid window pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cleanup_jumplist(wp: WinHandle, loadfiles: c_int) {
+    let loadfiles = loadfiles != 0;
+
+    if loadfiles {
+        // Load all files from the jump list to properly clean up duplicates
+        let len = nvim_mark_win_get_jumplistlen(wp);
+        for i in 0..len {
+            let entry = nvim_mark_win_get_jumplist_entry(wp, i);
+            if (*entry).fmark.fnum == 0 && (*entry).fmark.mark.lnum != 0 {
+                nvim_mark_fname2fnum(entry);
+            }
+        }
+    }
+
+    let mut to = 0;
+    let len = nvim_mark_win_get_jumplistlen(wp);
+    let jop_flags = nvim_mark_get_jop_flags();
+
+    for from in 0..len {
+        if nvim_mark_win_get_jumplistidx(wp) == from {
+            nvim_mark_win_set_jumplistidx(wp, to);
+        }
+
+        // Check if this entry is a duplicate of a later entry
+        let from_fnum = nvim_mark_win_get_jumplist_fnum(wp, from);
+        let from_lnum = nvim_mark_win_get_jumplist_lnum(wp, from);
+
+        let mut dup_idx = len; // no duplicate found
+        for i in (from + 1)..len {
+            if nvim_mark_win_get_jumplist_fnum(wp, i) == from_fnum
+                && from_fnum != 0
+                && nvim_mark_win_get_jumplist_lnum(wp, i) == from_lnum
+            {
+                dup_idx = i;
+                break;
+            }
+        }
+
+        let mustfree;
+        if dup_idx >= len {
+            // not duplicate
+            mustfree = false;
+        } else if dup_idx > from + 1 {
+            // non-adjacent duplicate
+            // jumpoptions=stack: remove duplicates only when adjacent
+            mustfree = (jop_flags & K_OPT_JOP_FLAG_STACK) == 0;
+        } else {
+            // adjacent duplicate
+            mustfree = true;
+        }
+
+        if mustfree {
+            nvim_mark_win_jumplist_free_fname(wp, from);
+        } else {
+            if to != from {
+                nvim_mark_win_jumplist_copy_entry(wp, to, from);
+            }
+            to += 1;
+        }
+    }
+    if nvim_mark_win_get_jumplistidx(wp) == len {
+        nvim_mark_win_set_jumplistidx(wp, to);
+    }
+    nvim_mark_win_set_jumplistlen(wp, to);
+
+    // When pointer is below last jump, remove the jump if it matches the current
+    // line. This avoids useless/phantom jumps. #9805
+    let new_len = nvim_mark_win_get_jumplistlen(wp);
+    let new_idx = nvim_mark_win_get_jumplistidx(wp);
+    if loadfiles && new_len > 0 && new_idx == new_len {
+        let curbuf_ptr = nvim_mark_get_curbuf();
+        let curbuf_fnum = nvim_buf_get_fnum(curbuf_ptr);
+        let cursor_lnum = nvim_mark_win_get_cursor(wp).lnum;
+        let last_fnum = nvim_mark_win_get_jumplist_fnum(wp, new_len - 1);
+        let last_lnum = nvim_mark_win_get_jumplist_lnum(wp, new_len - 1);
+        if last_fnum == curbuf_fnum && last_lnum == cursor_lnum {
+            nvim_mark_win_jumplist_free_fname(wp, new_len - 1);
+            nvim_mark_win_set_jumplistlen(wp, new_len - 1);
+            nvim_mark_win_set_jumplistidx(wp, new_idx - 1);
+        }
+    }
+}
+
+/// Remove all jump list entries that match the given buffer fnum.
+///
+/// # Safety
+/// `wp` must be a valid window pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_jumplist_forget_file(wp: WinHandle, fnum: c_int) {
+    let mut i = nvim_mark_win_get_jumplistlen(wp) - 1;
+    while i >= 0 {
+        if nvim_mark_win_get_jumplist_fnum(wp, i) == fnum {
+            // Free the entry
+            rs_free_xfmark(*nvim_mark_win_get_jumplist_entry(wp, i));
+
+            // If the current jump list index is behind the entry, move it back
+            if nvim_mark_win_get_jumplistidx(wp) > i {
+                nvim_mark_win_set_jumplistidx(wp, nvim_mark_win_get_jumplistidx(wp) - 1);
+            }
+
+            // Remove the entry from the jump list
+            let new_len = nvim_mark_win_get_jumplistlen(wp) - 1;
+            nvim_mark_win_set_jumplistlen(wp, new_len);
+            nvim_mark_win_jumplist_remove(wp, i, new_len);
+        }
+        i -= 1;
+    }
+}
+
+/// Delete every entry referring to file "fnum" from both the jumplist and the
+/// tag stack.
+///
+/// # Safety
+/// `wp` must be a valid window pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_forget_file(wp: WinHandle, fnum: c_int) {
+    rs_mark_jumplist_forget_file(wp, fnum);
+
+    // Remove all tag stack entries that match the deleted buffer
+    let mut i = nvim_mark_win_get_tagstacklen(wp) - 1;
+    while i >= 0 {
+        if nvim_mark_win_get_tagstack_fnum(wp, i) == fnum {
+            nvim_mark_win_tagstack_clear_entry(wp, i);
+
+            if nvim_mark_win_get_tagstackidx(wp) > i {
+                nvim_mark_win_set_tagstackidx(wp, nvim_mark_win_get_tagstackidx(wp) - 1);
+            }
+
+            let new_len = nvim_mark_win_get_tagstacklen(wp) - 1;
+            nvim_mark_win_set_tagstacklen(wp, new_len);
+            nvim_mark_win_tagstack_remove(wp, i, new_len);
+        }
+        i -= 1;
+    }
+}
+
+/// Find the next named mark in the given direction from startpos.
+///
+/// # Safety
+/// `startpos` and `curbuf_ptr` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getnextmark(
+    startpos: *mut PosT,
+    dir: c_int,
+    begin_line: c_int,
+    curbuf_ptr: BufHandle,
+) -> *mut FmarkT {
+    let mut result: *mut FmarkT = std::ptr::null_mut();
+    let mut pos = *startpos;
+
+    // Adjust column based on direction and begin_line
+    pos.col = rs_getnextmark_adjust_col(pos.col, dir, begin_line);
+
+    for i in 0..NMARKS {
+        let namedm = nvim_mark_buf_get_namedm(curbuf_ptr, i);
+        let result_lnum = if result.is_null() {
+            0
+        } else {
+            (*result).mark.lnum
+        };
+        let result_col = if result.is_null() {
+            0
+        } else {
+            (*result).mark.col
+        };
+        if rs_getnextmark_is_better(
+            (*namedm).mark.lnum,
+            (*namedm).mark.col,
+            result_lnum,
+            result_col,
+            pos.lnum,
+            pos.col,
+            dir,
+        ) != 0
+        {
+            result = namedm;
+        }
+    }
+
+    result
 }
 
 // =============================================================================

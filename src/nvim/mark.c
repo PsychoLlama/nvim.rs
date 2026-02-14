@@ -56,6 +56,14 @@
 // shada).
 
 // =============================================================================
+// Static assertions for constants shared with Rust
+// =============================================================================
+_Static_assert(CMOD_KEEPJUMPS == 0x0400, "CMOD_KEEPJUMPS mismatch with Rust");
+_Static_assert(kOptJopFlagStack == 0x01, "kOptJopFlagStack mismatch with Rust");
+_Static_assert(JUMPLISTSIZE == 100, "JUMPLISTSIZE mismatch with Rust");
+_Static_assert(TAGSTACKSIZE == 20, "TAGSTACKSIZE mismatch with Rust");
+
+// =============================================================================
 // Rust FFI declarations
 // =============================================================================
 
@@ -216,6 +224,15 @@ extern int rs_mark_set_local(int name, buf_T *buf, fmark_T fm, int update);
 extern void rs_clrallmarks(buf_T *buf, Timestamp timestamp);
 extern char *rs_fm_getname(fmark_T *fmark, int lead_len, buf_T *curbuf_ptr);
 
+// Phase 4: Jumplist/changelist navigation
+extern void rs_setpcmark(win_T *win, buf_T *buf);
+extern fmark_T *rs_get_jumplist(win_T *win, buf_T *curbuf_ptr, int count);
+extern fmark_T *rs_get_changelist(buf_T *buf, win_T *win, int count);
+extern void rs_cleanup_jumplist(win_T *wp, int loadfiles);
+extern void rs_mark_jumplist_forget_file(win_T *wp, int fnum);
+extern void rs_mark_forget_file(win_T *wp, int fnum);
+extern fmark_T *rs_getnextmark(pos_T *startpos, int dir, int begin_line, buf_T *curbuf_ptr);
+
 // =============================================================================
 // C accessor functions called from Rust
 // =============================================================================
@@ -301,6 +318,65 @@ win_T *nvim_mark_get_curwin(void) { return curwin; }
 buf_T *nvim_mark_get_curbuf(void) { return curbuf; }
 buf_T *nvim_mark_buflist_findnr(int fnum) { return buflist_findnr(fnum); }
 int nvim_mark_bt_prompt(buf_T *buf) { return bt_prompt(buf); }
+
+// Phase 4: Global state accessors
+int nvim_mark_get_global_busy(void) { return global_busy; }
+int nvim_mark_get_listcmd_busy(void) { return (int)listcmd_busy; }
+unsigned nvim_mark_get_jop_flags(void) { return jop_flags; }
+unsigned nvim_mark_get_cmod_flags(void) { return cmdmod.cmod_flags; }
+
+// Phase 4: Window topline accessor
+linenr_T nvim_mark_win_get_topline(win_T *win) { return win->w_topline; }
+
+// Phase 4: Window changelist index
+int nvim_mark_win_get_changelistidx(win_T *win) { return win->w_changelistidx; }
+void nvim_mark_win_set_changelistidx(win_T *win, int idx) { win->w_changelistidx = idx; }
+
+// Phase 4: Jumplist memmove helper (moves entries [from_idx+1..len) down to [from_idx..])
+void nvim_mark_win_jumplist_remove(win_T *win, int from_idx, int len)
+{
+  memmove(&win->w_jumplist[from_idx], &win->w_jumplist[from_idx + 1],
+          (size_t)(len - from_idx) * sizeof(win->w_jumplist[0]));
+}
+
+// Phase 4: Jumplist shift down (remove oldest entry, shift all down by one)
+void nvim_mark_win_jumplist_shift_down(win_T *win)
+{
+  memmove(&win->w_jumplist[0], &win->w_jumplist[1],
+          (JUMPLISTSIZE - 1) * sizeof(win->w_jumplist[0]));
+}
+
+// Phase 4: Jumplist set entry by copying from another entry
+void nvim_mark_win_jumplist_copy_entry(win_T *win, int to_idx, int from_idx)
+{
+  win->w_jumplist[to_idx] = win->w_jumplist[from_idx];
+}
+
+// Phase 4: Tag stack accessors
+int nvim_mark_win_get_tagstacklen(win_T *win) { return win->w_tagstacklen; }
+void nvim_mark_win_set_tagstacklen(win_T *win, int len) { win->w_tagstacklen = len; }
+int nvim_mark_win_get_tagstackidx(win_T *win) { return win->w_tagstackidx; }
+void nvim_mark_win_set_tagstackidx(win_T *win, int idx) { win->w_tagstackidx = idx; }
+int nvim_mark_win_get_tagstack_fnum(win_T *win, int idx) { return win->w_tagstack[idx].fmark.fnum; }
+void nvim_mark_win_tagstack_clear_entry(win_T *win, int idx) { tagstack_clear_entry(&win->w_tagstack[idx]); }
+void nvim_mark_win_tagstack_remove(win_T *win, int from_idx, int len)
+{
+  memmove(&win->w_tagstack[from_idx], &win->w_tagstack[from_idx + 1],
+          (size_t)(len - from_idx) * sizeof(win->w_tagstack[0]));
+}
+
+// Phase 4: SET_XFMARK helper for jumplist
+void nvim_mark_win_set_jumplist_xfmark(win_T *win, int idx, pos_T mark, int fnum, fmarkv_T view)
+{
+  SET_XFMARK(&win->w_jumplist[idx], mark, fnum, view, NULL);
+}
+
+// Phase 4: Get jumplist entry fnum
+int nvim_mark_win_get_jumplist_fnum(win_T *win, int idx) { return win->w_jumplist[idx].fmark.fnum; }
+linenr_T nvim_mark_win_get_jumplist_lnum(win_T *win, int idx) { return win->w_jumplist[idx].fmark.mark.lnum; }
+
+// Phase 4: Free jumplist entry fname
+void nvim_mark_win_jumplist_free_fname(win_T *win, int idx) { xfree(win->w_jumplist[idx].fname); }
 
 // Cross-function callbacks from Rust (Phase 3) - defined at end of file
 // after static functions they reference
@@ -672,93 +748,21 @@ int setmark_pos(int c, pos_T *pos, int fnum, fmarkv_T *view_pt)
 /// This function will also adjust the current jump list index.
 void mark_jumplist_forget_file(win_T *wp, int fnum)
 {
-  // Remove all jump list entries that match the deleted buffer.
-  for (int i = wp->w_jumplistlen - 1; i >= 0; i--) {
-    if (wp->w_jumplist[i].fmark.fnum == fnum) {
-      // Found an entry that we want to delete.
-      free_xfmark(wp->w_jumplist[i]);
-
-      // If the current jump list index is behind the entry we want to delete,
-      // move it back by one.
-      if (wp->w_jumplistidx > i) {
-        wp->w_jumplistidx--;
-      }
-
-      // Actually remove the entry from the jump list.
-      wp->w_jumplistlen--;
-      memmove(&wp->w_jumplist[i], &wp->w_jumplist[i + 1],
-              (size_t)(wp->w_jumplistlen - i) * sizeof(wp->w_jumplist[i]));
-    }
-  }
+  rs_mark_jumplist_forget_file(wp, fnum);
 }
 
 /// Delete every entry referring to file "fnum" from both the jumplist and the
 /// tag stack.
 void mark_forget_file(win_T *wp, int fnum)
 {
-  mark_jumplist_forget_file(wp, fnum);
-
-  // Remove all tag stack entries that match the deleted buffer.
-  for (int i = wp->w_tagstacklen - 1; i >= 0; i--) {
-    if (wp->w_tagstack[i].fmark.fnum == fnum) {
-      // Found an entry that we want to delete.
-      tagstack_clear_entry(&wp->w_tagstack[i]);
-
-      // If the current tag stack index is behind the entry we want to delete,
-      // move it back by one.
-      if (wp->w_tagstackidx > i) {
-        wp->w_tagstackidx--;
-      }
-
-      // Actually remove the entry from the tag stack.
-      wp->w_tagstacklen--;
-      memmove(&wp->w_tagstack[i], &wp->w_tagstack[i + 1],
-              (size_t)(wp->w_tagstacklen - i) * sizeof(wp->w_tagstack[i]));
-    }
-  }
+  rs_mark_forget_file(wp, fnum);
 }
 
 // Set the previous context mark to the current position and add it to the
 // jump list.
 void setpcmark(void)
 {
-  xfmark_T *fm;
-
-  // for :global the mark is set only once
-  if (global_busy || listcmd_busy || (cmdmod.cmod_flags & CMOD_KEEPJUMPS)) {
-    return;
-  }
-
-  curwin->w_prev_pcmark = curwin->w_pcmark;
-  curwin->w_pcmark = curwin->w_cursor;
-
-  // Use Rust helper to ensure lnum is at least 1
-  curwin->w_pcmark.lnum = rs_pos_clamp_lnum_min(curwin->w_pcmark.lnum);
-
-  if (jop_flags & kOptJopFlagStack) {
-    // jumpoptions=stack: if we're somewhere in the middle of the jumplist
-    // discard everything after the current index. Use Rust helper to calculate trim length.
-    int trim_len = rs_jumplist_stack_trim(curwin->w_jumplistidx, curwin->w_jumplistlen);
-    if (trim_len >= 0) {
-      curwin->w_jumplistlen = trim_len;
-    }
-  }
-
-  // Use Rust helper to check if jumplist is full and calculate new length
-  bool is_full = rs_jumplist_is_full(curwin->w_jumplistlen);
-  curwin->w_jumplistlen = rs_jumplist_new_len(curwin->w_jumplistlen);
-
-  // If jumplist is full: remove oldest entry
-  if (is_full) {
-    free_xfmark(curwin->w_jumplist[0]);
-    memmove(&curwin->w_jumplist[0], &curwin->w_jumplist[1],
-            (JUMPLISTSIZE - 1) * sizeof(curwin->w_jumplist[0]));
-  }
-  curwin->w_jumplistidx = curwin->w_jumplistlen;
-  fm = &curwin->w_jumplist[curwin->w_jumplistlen - 1];
-
-  fmarkv_T view = mark_view_make(curwin->w_topline, curwin->w_pcmark);
-  SET_XFMARK(fm, curwin->w_pcmark, curbuf->b_fnum, view, NULL);
+  rs_setpcmark(curwin, curbuf);
 }
 
 // To change context, call setpcmark(), then move the current position to
@@ -771,96 +775,15 @@ void checkpcmark(void)
 }
 
 /// Get mark in "count" position in the |jumplist| relative to the current index.
-///
-/// If the mark is in a different buffer, it will be skipped unless the buffer exists.
-///
-/// @note cleanup_jumplist() is run, which removes duplicate marks, and
-///       changes win->w_jumplistidx.
-/// @param[in] win  window to get jumplist from.
-/// @param[in] count  count to move may be negative.
-///
-/// @return  mark, NULL if out of jumplist bounds.
 fmark_T *get_jumplist(win_T *win, int count)
 {
-  xfmark_T *jmp = NULL;
-
-  cleanup_jumplist(win, true);
-
-  if (win->w_jumplistlen == 0) {         // nothing to jump to
-    return NULL;
-  }
-
-  while (true) {
-    if (win->w_jumplistidx + count < 0
-        || win->w_jumplistidx + count >= win->w_jumplistlen) {
-      return NULL;
-    }
-
-    // if first CTRL-O or CTRL-I command after a jump, add cursor position
-    // to list.  Careful: If there are duplicates (CTRL-O immediately after
-    // starting Vim on a file), another entry may have been removed.
-    if (win->w_jumplistidx == win->w_jumplistlen) {
-      setpcmark();
-      win->w_jumplistidx--;          // skip the new entry
-      if (win->w_jumplistidx + count < 0) {
-        return NULL;
-      }
-    }
-
-    win->w_jumplistidx += count;
-
-    jmp = win->w_jumplist + win->w_jumplistidx;
-    if (jmp->fmark.fnum == 0) {
-      // Resolve the fnum (buff number) in the mark before returning it (shada)
-      fname2fnum(jmp);
-    }
-    if (jmp->fmark.fnum != curbuf->b_fnum) {
-      // Needs to switch buffer, if it can't find it skip the mark
-      if (buflist_findnr(jmp->fmark.fnum) == NULL) {
-        count += count < 0 ? -1 : 1;
-        continue;
-      }
-    }
-    break;
-  }
-  return &jmp->fmark;
+  return rs_get_jumplist(win, curbuf, count);
 }
 
 /// Get mark in "count" position in the |changelist| relative to the current index.
-///
-/// @note  Changes the win->w_changelistidx.
-/// @param[in] win  window to get jumplist from.
-/// @param[in] count  count to move may be negative.
-///
-/// @return  mark, NULL if out of bounds.
 fmark_T *get_changelist(buf_T *buf, win_T *win, int count)
 {
-  int n;
-  fmark_T *fm;
-
-  if (buf->b_changelistlen == 0) {       // nothing to jump to
-    return NULL;
-  }
-
-  n = win->w_changelistidx;
-  if (n + count < 0) {
-    if (n == 0) {
-      return NULL;
-    }
-    n = 0;
-  } else if (n + count >= buf->b_changelistlen) {
-    if (n == buf->b_changelistlen - 1) {
-      return NULL;
-    }
-    n = buf->b_changelistlen - 1;
-  } else {
-    n += count;
-  }
-  win->w_changelistidx = n;
-  fm = &(buf->b_changelist[n]);
-  // Changelist marks are always buffer local, Shada does not set it when loading
-  fm->fnum = curbuf->handle;
-  return &(buf->b_changelist[n]);
+  return rs_get_changelist(buf, win, count);
 }
 
 /// Get a named mark.
@@ -1079,24 +1002,7 @@ fmarkv_T mark_view_make(linenr_T topline, pos_T pos)
 /// @return  next mark or NULL if no mark is found.
 fmark_T *getnextmark(pos_T *startpos, int dir, int begin_line)
 {
-  fmark_T *result = NULL;
-  pos_T pos = *startpos;
-
-  // Use Rust helper to adjust column based on direction and begin_line
-  pos.col = rs_getnextmark_adjust_col(pos.col, dir, begin_line);
-
-  for (int i = 0; i < NMARKS; i++) {
-    // Use Rust helper to compare positions and determine if this mark is a better candidate
-    linenr_T result_lnum = result != NULL ? result->mark.lnum : 0;
-    colnr_T result_col = result != NULL ? result->mark.col : 0;
-    if (rs_getnextmark_is_better(curbuf->b_namedm[i].mark.lnum, curbuf->b_namedm[i].mark.col,
-                                  result_lnum, result_col,
-                                  pos.lnum, pos.col, dir)) {
-      result = &curbuf->b_namedm[i];
-    }
-  }
-
-  return result;
+  return rs_getnextmark(startpos, dir, begin_line, curbuf);
 }
 
 // For an xtended filemark: set the fnum from the fname.
@@ -1820,74 +1726,7 @@ void mark_col_adjust(linenr_T lnum, colnr_T mincol, linenr_T lnum_amount, colnr_
 // (this may be a bit slow).
 void cleanup_jumplist(win_T *wp, bool loadfiles)
 {
-  int i;
-
-  if (loadfiles) {
-    // If specified, load all the files from the jump list. This is
-    // needed to properly clean up duplicate entries, but will take some
-    // time.
-    for (i = 0; i < wp->w_jumplistlen; i++) {
-      if ((wp->w_jumplist[i].fmark.fnum == 0)
-          && (wp->w_jumplist[i].fmark.mark.lnum != 0)) {
-        fname2fnum(&wp->w_jumplist[i]);
-      }
-    }
-  }
-
-  int to = 0;
-  for (int from = 0; from < wp->w_jumplistlen; from++) {
-    if (wp->w_jumplistidx == from) {
-      wp->w_jumplistidx = to;
-    }
-    for (i = from + 1; i < wp->w_jumplistlen; i++) {
-      if (wp->w_jumplist[i].fmark.fnum
-          == wp->w_jumplist[from].fmark.fnum
-          && wp->w_jumplist[from].fmark.fnum != 0
-          && wp->w_jumplist[i].fmark.mark.lnum
-          == wp->w_jumplist[from].fmark.mark.lnum) {
-        break;
-      }
-    }
-
-    bool mustfree;
-    if (i >= wp->w_jumplistlen) {   // not duplicate
-      mustfree = false;
-    } else if (i > from + 1) {      // non-adjacent duplicate
-      // jumpoptions=stack: remove duplicates only when adjacent.
-      mustfree = !(jop_flags & kOptJopFlagStack);
-    } else {                        // adjacent duplicate
-      mustfree = true;
-    }
-
-    if (mustfree) {
-      xfree(wp->w_jumplist[from].fname);
-    } else {
-      if (to != from) {
-        // Not using wp->w_jumplist[to++] = wp->w_jumplist[from] because
-        // this way valgrind complains about overlapping source and destination
-        // in memcpy() call. (clang-3.6.0, debug build with -DEXITFREE).
-        wp->w_jumplist[to] = wp->w_jumplist[from];
-      }
-      to++;
-    }
-  }
-  if (wp->w_jumplistidx == wp->w_jumplistlen) {
-    wp->w_jumplistidx = to;
-  }
-  wp->w_jumplistlen = to;
-
-  // When pointer is below last jump, remove the jump if it matches the current
-  // line.  This avoids useless/phantom jumps. #9805
-  if (loadfiles  // otherwise (i.e.: Shada), last entry should be kept
-      && wp->w_jumplistlen && wp->w_jumplistidx == wp->w_jumplistlen) {
-    const xfmark_T *fm_last = &wp->w_jumplist[wp->w_jumplistlen - 1];
-    if (fm_last->fmark.fnum == curbuf->b_fnum
-        && fm_last->fmark.mark.lnum == wp->w_cursor.lnum) {
-      xfree(fm_last->fname);
-      wp->w_jumplistlen--;
-      wp->w_jumplistidx--;
-    }
-  }
+  rs_cleanup_jumplist(wp, (int)loadfiles);
 }
 
 // Copy the jumplist from window "from" to window "to".
