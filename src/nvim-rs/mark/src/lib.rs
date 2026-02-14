@@ -41,6 +41,20 @@ extern "C" {
 
     // Buffer mark accessors
     fn nvim_mark_buf_get_last_cursor(buf: BufHandle) -> *mut FmarkT;
+    fn nvim_mark_buf_get_namedm(buf: BufHandle, idx: c_int) -> *mut FmarkT;
+    fn nvim_mark_buf_get_last_insert(buf: BufHandle) -> *mut FmarkT;
+    fn nvim_mark_buf_get_last_change(buf: BufHandle) -> *mut FmarkT;
+    fn nvim_mark_buf_get_op_start(buf: BufHandle) -> *mut PosT;
+    fn nvim_mark_buf_get_op_end(buf: BufHandle) -> *mut PosT;
+    fn nvim_mark_buf_get_op_start_val(buf: BufHandle) -> PosT;
+    fn nvim_mark_buf_get_op_end_val(buf: BufHandle) -> PosT;
+    fn nvim_mark_buf_get_visual_start(buf: BufHandle) -> PosT;
+    fn nvim_mark_buf_get_visual_end(buf: BufHandle) -> PosT;
+    fn nvim_mark_buf_get_visual_mode(buf: BufHandle) -> c_int;
+    fn nvim_mark_buf_get_prompt_start(buf: BufHandle) -> *mut FmarkT;
+    fn nvim_mark_buf_get_changelist(buf: BufHandle, idx: c_int) -> *mut FmarkT;
+    fn nvim_mark_buf_get_changelistlen(buf: BufHandle) -> c_int;
+    fn nvim_mark_buf_set_changelistlen(buf: BufHandle, len: c_int);
 
     // Error message strings
     fn nvim_mark_get_e_umark() -> *const c_char;
@@ -50,8 +64,14 @@ extern "C" {
     // Timestamp
     fn nvim_mark_os_time() -> Timestamp;
 
-    // Clear global marks array
+    // Global state / cross-function callbacks
     fn nvim_mark_clear_namedfm();
+    fn nvim_mark_get_curbuf() -> BufHandle;
+    fn nvim_mark_bt_prompt(buf: BufHandle) -> c_int;
+    fn nvim_mark_fname2fnum(xfm: *mut XfmarkT);
+    fn nvim_mark_buflist_nr2name(fnum: c_int, listed: c_int, unstripped: c_int) -> *mut c_char;
+    fn nvim_mark_mark_line(pos: *mut PosT, lead_len: c_int) -> *mut c_char;
+    fn nvim_mark_get_motion(buf: BufHandle, win: WinHandle, name: c_int) -> *mut FmarkT;
 }
 
 /// Number of possible named marks (a-z)
@@ -557,6 +577,13 @@ mod tests {
 
 /// Number of file marks (A-Z + 0-9)
 pub const NGLOBALMARKS: c_int = NMARKS + 10; // 36
+
+/// Max value of local mark
+pub const NMARK_LOCAL_MAX: c_int = 126; // Index of '~'
+
+/// MarkGet enum values matching C
+const MARK_BUF_LOCAL: c_int = 0;
+const MARK_ALL_NO_RESOLVE: c_int = 2;
 
 /// Check if a character is a valid named mark (a-z).
 #[no_mangle]
@@ -3119,6 +3146,244 @@ pub unsafe extern "C" fn rs_mark_check(
         }
     }
     1
+}
+
+// =============================================================================
+// Phase 3: Mark Getting + Mark Setting
+// =============================================================================
+
+/// Get a global mark by name, optionally resolving fname to fnum.
+///
+/// # Safety
+/// `name` must be a valid global mark character.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_get_global(resolve: c_int, name: c_int) -> *mut XfmarkT {
+    let idx = rs_mark_global_index(name);
+    assert!(idx >= 0);
+    let namedfm = nvim_mark_get_namedfm();
+    let mark = namedfm.offset(idx as isize);
+    if resolve != 0 && (*mark).fmark.fnum == 0 {
+        nvim_mark_fname2fnum(mark);
+    }
+    mark
+}
+
+/// Get a local mark (lowercase and symbols).
+///
+/// # Safety
+/// `buf`, `win`, `curbuf_ptr` must be valid handles.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_get_local(
+    buf: BufHandle,
+    win: WinHandle,
+    name: c_int,
+    curbuf_ptr: BufHandle,
+) -> *mut FmarkT {
+    let idx = rs_mark_local_index(name);
+    let mark: *mut FmarkT;
+
+    if rs_mark_is_valid_named(name) {
+        mark = nvim_mark_buf_get_namedm(buf, idx);
+    } else if rs_mark_is_sentence(name) {
+        let pos = if name == c_int::from(b'[') {
+            nvim_mark_buf_get_op_start_val(buf)
+        } else {
+            nvim_mark_buf_get_op_end_val(buf)
+        };
+        mark = rs_pos_to_mark(buf, std::ptr::null_mut(), pos);
+    } else if rs_mark_is_visual(name) {
+        mark = rs_mark_get_visual(buf, name);
+    } else if rs_mark_is_jump_mark(name) {
+        let pcmark = nvim_mark_win_get_pcmark(win);
+        mark = rs_pos_to_mark(curbuf_ptr, std::ptr::null_mut(), pcmark);
+    } else if rs_mark_is_last_cursor(name) {
+        mark = nvim_mark_buf_get_last_cursor(buf);
+    } else if rs_mark_is_last_insert(name) {
+        mark = nvim_mark_buf_get_last_insert(buf);
+    } else if rs_mark_is_last_change(name) {
+        mark = nvim_mark_buf_get_last_change(buf);
+    } else if name == c_int::from(b':') && nvim_mark_bt_prompt(buf) != 0 {
+        mark = nvim_mark_buf_get_prompt_start(buf);
+    } else {
+        mark = nvim_mark_get_motion(buf, win, name);
+    }
+
+    if !mark.is_null() {
+        (*mark).fnum = nvim_buf_get_fnum(buf);
+    }
+
+    mark
+}
+
+/// Get a visual mark for '<' or '>'.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_get_visual(buf: BufHandle, name: c_int) -> *mut FmarkT {
+    if name != c_int::from(b'<') && name != c_int::from(b'>') {
+        return std::ptr::null_mut();
+    }
+    let startp = nvim_mark_buf_get_visual_start(buf);
+    let endp = nvim_mark_buf_get_visual_end(buf);
+    let use_end = rs_visual_mark_select(startp.lnum, startp.col, endp.lnum, endp.col, name);
+    let mark = if use_end == 0 {
+        rs_pos_to_mark(buf, std::ptr::null_mut(), startp)
+    } else {
+        rs_pos_to_mark(buf, std::ptr::null_mut(), endp)
+    };
+
+    let vi_mode = nvim_mark_buf_get_visual_mode(buf);
+    if vi_mode == c_int::from(b'V') {
+        if name == c_int::from(b'<') {
+            (*mark).mark.col = 0;
+        } else {
+            (*mark).mark.col = MAXCOL;
+        }
+        (*mark).mark.coladd = 0;
+    }
+    mark
+}
+
+/// Get a named mark. Dispatcher to global/local.
+///
+/// # Safety
+/// All handle params must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_get(
+    buf: BufHandle,
+    win: WinHandle,
+    fmp: *mut FmarkT,
+    flag: c_int,
+    name: c_int,
+) -> *mut FmarkT {
+    let mut fm: *mut FmarkT = std::ptr::null_mut();
+    if rs_mark_is_file_mark(name) {
+        let resolve = if flag != MARK_ALL_NO_RESOLVE { 1 } else { 0 };
+        let xfm = rs_mark_get_global(resolve, name);
+        fm = &raw mut (*xfm).fmark;
+        if flag == MARK_BUF_LOCAL && (*xfm).fmark.fnum != nvim_buf_get_handle(buf) {
+            let zero_pos = PosT {
+                lnum: 0,
+                col: 0,
+                coladd: 0,
+            };
+            return rs_pos_to_mark(buf, std::ptr::null_mut(), zero_pos);
+        }
+    } else if name > 0 && name < NMARK_LOCAL_MAX {
+        let curbuf_ptr = nvim_mark_get_curbuf();
+        fm = rs_mark_get_local(buf, win, name, curbuf_ptr);
+    }
+    if !fmp.is_null() && !fm.is_null() {
+        *fmp = *fm;
+        return fmp;
+    }
+    fm
+}
+
+/// Set a global mark.
+///
+/// # Safety
+/// `fm` is copied by value. Global namedfm array must be accessible.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_set_global(name: c_int, fm: XfmarkT, update: c_int) -> c_int {
+    let idx = rs_mark_global_index(name);
+    if idx == -1 {
+        return 0;
+    }
+    let namedfm = nvim_mark_get_namedfm();
+    let fm_tgt = namedfm.offset(idx as isize);
+    if update != 0 && fm.fmark.timestamp <= (*fm_tgt).fmark.timestamp {
+        return 0;
+    }
+    if (*fm_tgt).fmark.mark.lnum != 0 {
+        rs_free_xfmark(*fm_tgt);
+    }
+    *fm_tgt = fm;
+    1
+}
+
+/// Set a local mark in a buffer.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_set_local(
+    name: c_int,
+    buf: BufHandle,
+    fm: FmarkT,
+    update: c_int,
+) -> c_int {
+    let idx = rs_mark_local_index(name);
+    let fm_tgt: *mut FmarkT;
+
+    if rs_mark_is_valid_named(name) {
+        fm_tgt = nvim_mark_buf_get_namedm(buf, idx);
+    } else if rs_mark_is_last_cursor(name) {
+        fm_tgt = nvim_mark_buf_get_last_cursor(buf);
+    } else if rs_mark_is_last_insert(name) {
+        fm_tgt = nvim_mark_buf_get_last_insert(buf);
+    } else if name == c_int::from(b':') {
+        fm_tgt = nvim_mark_buf_get_prompt_start(buf);
+    } else if rs_mark_is_last_change(name) {
+        fm_tgt = nvim_mark_buf_get_last_change(buf);
+    } else {
+        return 0;
+    }
+
+    if update != 0 && fm.timestamp <= (*fm_tgt).timestamp {
+        return 0;
+    }
+    if (*fm_tgt).mark.lnum != 0 {
+        rs_free_fmark(*fm_tgt);
+    }
+    *fm_tgt = fm;
+    1
+}
+
+/// Clear all marks and change list in the given buffer.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clrallmarks(buf: BufHandle, timestamp: Timestamp) {
+    for i in 0..NMARKS {
+        let fm = nvim_mark_buf_get_namedm(buf, i);
+        rs_clear_fmark(fm, timestamp);
+    }
+    let last_cursor = nvim_mark_buf_get_last_cursor(buf);
+    rs_clear_fmark(last_cursor, timestamp);
+    (*last_cursor).mark.lnum = 1;
+    let last_insert = nvim_mark_buf_get_last_insert(buf);
+    rs_clear_fmark(last_insert, timestamp);
+    let last_change = nvim_mark_buf_get_last_change(buf);
+    rs_clear_fmark(last_change, timestamp);
+    let op_start = nvim_mark_buf_get_op_start(buf);
+    (*op_start).lnum = 0;
+    let op_end = nvim_mark_buf_get_op_end(buf);
+    (*op_end).lnum = 0;
+    let changelist_len = nvim_mark_buf_get_changelistlen(buf);
+    for i in 0..changelist_len {
+        let cl = nvim_mark_buf_get_changelist(buf, i);
+        rs_clear_fmark(cl, timestamp);
+    }
+    nvim_mark_buf_set_changelistlen(buf, 0);
+}
+
+/// Get filename from a mark. Returns allocated string.
+///
+/// # Safety
+/// `fmark` must be valid. `curbuf_ptr` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fm_getname(
+    fmark: *mut FmarkT,
+    lead_len: c_int,
+    curbuf_ptr: BufHandle,
+) -> *mut c_char {
+    if (*fmark).fnum == nvim_buf_get_fnum(curbuf_ptr) {
+        return nvim_mark_mark_line(&raw mut (*fmark).mark, lead_len);
+    }
+    nvim_mark_buflist_nr2name((*fmark).fnum, 0, 1)
 }
 
 // =============================================================================

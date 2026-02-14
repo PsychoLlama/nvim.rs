@@ -205,6 +205,17 @@ extern void rs_checkpcmark(win_T *win);
 extern void rs_mark_view_restore(const fmark_T *fm, win_T *win);
 extern int rs_mark_check(const fmark_T *fm, const char **errormsg, buf_T *curbuf);
 
+// Phase 3: Mark getting/setting
+extern fmark_T *rs_mark_get(buf_T *buf, win_T *win, fmark_T *fmp, int flag, int name);
+extern xfmark_T *rs_mark_get_global(int resolve, int name);
+extern fmark_T *rs_mark_get_local(buf_T *buf, win_T *win, int name, buf_T *curbuf_ptr);
+extern fmark_T *rs_mark_get_visual(buf_T *buf, int name);
+// setmark_pos stays in C due to pointer comparison (pos == &curwin->w_cursor)
+extern int rs_mark_set_global(int name, xfmark_T fm, int update);
+extern int rs_mark_set_local(int name, buf_T *buf, fmark_T fm, int update);
+extern void rs_clrallmarks(buf_T *buf, Timestamp timestamp);
+extern char *rs_fm_getname(fmark_T *fmark, int lead_len, buf_T *curbuf_ptr);
+
 // =============================================================================
 // C accessor functions called from Rust
 // =============================================================================
@@ -265,6 +276,34 @@ const char *nvim_mark_get_e_markinval(void) { return _(e_markinval); }
 
 // Clear the global namedfm array
 void nvim_mark_clear_namedfm(void) { CLEAR_FIELD(namedfm); }
+
+// Buffer mark field accessors (Phase 3)
+fmark_T *nvim_mark_buf_get_namedm(buf_T *buf, int idx) { return &buf->b_namedm[idx]; }
+fmark_T *nvim_mark_buf_get_last_insert(buf_T *buf) { return &buf->b_last_insert; }
+fmark_T *nvim_mark_buf_get_last_change(buf_T *buf) { return &buf->b_last_change; }
+pos_T *nvim_mark_buf_get_op_start(buf_T *buf) { return &buf->b_op_start; }
+pos_T *nvim_mark_buf_get_op_end(buf_T *buf) { return &buf->b_op_end; }
+pos_T nvim_mark_buf_get_op_start_val(buf_T *buf) { return buf->b_op_start; }
+pos_T nvim_mark_buf_get_op_end_val(buf_T *buf) { return buf->b_op_end; }
+pos_T nvim_mark_buf_get_visual_start(buf_T *buf) { return buf->b_visual.vi_start; }
+pos_T nvim_mark_buf_get_visual_end(buf_T *buf) { return buf->b_visual.vi_end; }
+pos_T *nvim_mark_buf_get_visual_start_ptr(buf_T *buf) { return &buf->b_visual.vi_start; }
+pos_T *nvim_mark_buf_get_visual_end_ptr(buf_T *buf) { return &buf->b_visual.vi_end; }
+int nvim_mark_buf_get_visual_mode(buf_T *buf) { return buf->b_visual.vi_mode; }
+void nvim_mark_buf_set_visual_mode(buf_T *buf, int mode) { buf->b_visual.vi_mode = mode; }
+fmark_T *nvim_mark_buf_get_prompt_start(buf_T *buf) { return &buf->b_prompt_start; }
+fmark_T *nvim_mark_buf_get_changelist(buf_T *buf, int idx) { return &buf->b_changelist[idx]; }
+int nvim_mark_buf_get_changelistlen(buf_T *buf) { return buf->b_changelistlen; }
+void nvim_mark_buf_set_changelistlen(buf_T *buf, int len) { buf->b_changelistlen = len; }
+
+// Global state (Phase 3)
+win_T *nvim_mark_get_curwin(void) { return curwin; }
+buf_T *nvim_mark_get_curbuf(void) { return curbuf; }
+buf_T *nvim_mark_buflist_findnr(int fnum) { return buflist_findnr(fnum); }
+int nvim_mark_bt_prompt(buf_T *buf) { return bt_prompt(buf); }
+
+// Cross-function callbacks from Rust (Phase 3) - defined at end of file
+// after static functions they reference
 
 // =============================================================================
 // Rust wrapper functions
@@ -840,24 +879,7 @@ fmark_T *get_changelist(buf_T *buf, win_T *win, int count)
 ///                  when no mark is found in @a buf.
 fmark_T *mark_get(buf_T *buf, win_T *win, fmark_T *fmp, MarkGet flag, int name)
 {
-  fmark_T *fm = NULL;
-  if (rs_mark_is_file_mark(name)) {
-    // Global marks (A-Z, 0-9)
-    xfmark_T *xfm = mark_get_global(flag != kMarkAllNoResolve, name);
-    fm = &xfm->fmark;
-    if (flag == kMarkBufLocal && xfm->fmark.fnum != buf->handle) {
-      // Only wanted marks belonging to the buffer
-      return pos_to_mark(buf, NULL, (pos_T){ .lnum = 0 });
-    }
-  } else if (name > 0 && name < NMARK_LOCAL_MAX) {
-    // Local Marks
-    fm = mark_get_local(buf, win, name);
-  }
-  if (fmp != NULL && fm != NULL) {
-    *fmp = *fm;
-    return fmp;
-  }
-  return fm;
+  return rs_mark_get(buf, win, fmp, (int)flag, name);
 }
 
 /// Get a global mark {A-Z0-9}.
@@ -869,15 +891,7 @@ fmark_T *mark_get(buf_T *buf, win_T *win, fmark_T *fmp, MarkGet flag, int name)
 /// @return  Mark
 xfmark_T *mark_get_global(bool resolve, int name)
 {
-  int idx = rs_mark_global_index(name);
-  assert(idx >= 0);  // Must be a valid global mark name
-  xfmark_T *mark = &namedfm[idx];
-
-  if (resolve && mark->fmark.fnum == 0) {
-    // Resolve filename to fnum (SHADA marks)
-    fname2fnum(mark);
-  }
-  return mark;
+  return rs_mark_get_global(resolve ? 1 : 0, name);
 }
 
 /// Get a local mark (lowercase and symbols).
@@ -895,43 +909,7 @@ xfmark_T *mark_get_global(bool resolve, int name)
 /// @return  Mark, NULL if not found.
 fmark_T *mark_get_local(buf_T *buf, win_T *win, int name)
 {
-  fmark_T *mark = NULL;
-  int idx = rs_mark_local_index(name);
-  if (rs_mark_is_valid_named(name)) {
-    // normal named mark (a-z)
-    mark = &buf->b_namedm[idx];
-  } else if (rs_mark_is_sentence(name)) {
-    // to start/end of previous operator
-    mark = pos_to_mark(buf, NULL, name == '[' ? buf->b_op_start : buf->b_op_end);
-  } else if (rs_mark_is_visual(name)) {
-    // visual marks
-    mark = mark_get_visual(buf, name);
-  } else if (rs_mark_is_jump_mark(name)) {
-    // previous context mark
-    // TODO(muniter): w_pcmark should be stored as a mark, but causes a nasty bug.
-    mark = pos_to_mark(curbuf, NULL, win->w_pcmark);
-  } else if (rs_mark_is_last_cursor(name)) {
-    // to position when leaving buffer
-    mark = &(buf->b_last_cursor);
-  } else if (rs_mark_is_last_insert(name)) {
-    // to where last Insert mode stopped
-    mark = &(buf->b_last_insert);
-  } else if (rs_mark_is_last_change(name)) {
-    // to where last change was made
-    mark = &buf->b_last_change;
-  } else if (name == ':' && bt_prompt(buf)) {
-    // prompt start location
-    mark = &(buf->b_prompt_start);
-  } else {
-    // Mark that are actually not marks but motions, e.g {, }, (, ), ...
-    mark = mark_get_motion(buf, win, name);
-  }
-
-  if (mark) {
-    mark->fnum = buf->b_fnum;
-  }
-
-  return mark;
+  return rs_mark_get_local(buf, win, name, curbuf);
 }
 
 /// Get marks that are actually motions but return them as marks
@@ -976,30 +954,7 @@ fmark_T *mark_get_motion(buf_T *buf, win_T *win, int name)
 /// @return[static]  Mark
 fmark_T *mark_get_visual(buf_T *buf, int name)
 {
-  fmark_T *mark = NULL;
-  if (name == '<' || name == '>') {
-    // start/end of visual area
-    pos_T startp = buf->b_visual.vi_start;
-    pos_T endp = buf->b_visual.vi_end;
-    // Use Rust implementation to determine which position to use
-    int use_end = rs_visual_mark_select(startp.lnum, startp.col,
-                                        endp.lnum, endp.col, name);
-    if (use_end == 0) {
-      mark = pos_to_mark(buf, NULL, startp);
-    } else {
-      mark = pos_to_mark(buf, NULL, endp);
-    }
-
-    if (buf->b_visual.vi_mode == 'V') {
-      if (name == '<') {
-        mark->mark.col = 0;
-      } else {
-        mark->mark.col = MAXCOL;
-      }
-      mark->mark.coladd = 0;
-    }
-  }
-  return mark;
+  return rs_mark_get_visual(buf, name);
 }
 
 /// Wrap a pos_T into an fmark_T, used to abstract marks handling.
@@ -1233,19 +1188,7 @@ bool mark_check_line_bounds(buf_T *buf, fmark_T *fm, const char **errormsg)
 void clrallmarks(buf_T *const buf, const Timestamp timestamp)
   FUNC_ATTR_NONNULL_ALL
 {
-  for (size_t i = 0; i < NMARKS; i++) {
-    clear_fmark(&buf->b_namedm[i], timestamp);
-  }
-  clear_fmark(&buf->b_last_cursor, timestamp);
-  buf->b_last_cursor.mark.lnum = 1;
-  clear_fmark(&buf->b_last_insert, timestamp);
-  clear_fmark(&buf->b_last_change, timestamp);
-  buf->b_op_start.lnum = 0;  // start/end op mark cleared
-  buf->b_op_end.lnum = 0;
-  for (int i = 0; i < buf->b_changelistlen; i++) {
-    clear_fmark(&buf->b_changelist[i], timestamp);
-  }
-  buf->b_changelistlen = 0;
+  rs_clrallmarks(buf, timestamp);
 }
 
 // Get name of file from a filemark.
@@ -1253,10 +1196,7 @@ void clrallmarks(buf_T *const buf, const Timestamp timestamp)
 // Returns an allocated string.
 char *fm_getname(fmark_T *fmark, int lead_len)
 {
-  if (fmark->fnum == curbuf->b_fnum) {              // current buffer
-    return mark_line(&(fmark->mark), lead_len);
-  }
-  return buflist_nr2name(fmark->fnum, false, true);
+  return rs_fm_getname(fmark, lead_len, curbuf);
 }
 
 /// Return the line at mark "mp".  Truncate to fit in window.
@@ -2110,19 +2050,7 @@ const void *mark_buffer_iter(const void *const iter, const buf_T *const buf, cha
 /// @return true on success, false on failure.
 bool mark_set_global(const char name, const xfmark_T fm, const bool update)
 {
-  const int idx = mark_global_index(name);
-  if (idx == -1) {
-    return false;
-  }
-  xfmark_T *const fm_tgt = &(namedfm[idx]);
-  if (update && fm.fmark.timestamp <= fm_tgt->fmark.timestamp) {
-    return false;
-  }
-  if (fm_tgt->fmark.mark.lnum != 0) {
-    free_xfmark(*fm_tgt);
-  }
-  *fm_tgt = fm;
-  return true;
+  return rs_mark_set_global((int)name, fm, update ? 1 : 0) != 0;
 }
 
 /// Set local mark
@@ -2137,29 +2065,7 @@ bool mark_set_global(const char name, const xfmark_T fm, const bool update)
 bool mark_set_local(const char name, buf_T *const buf, const fmark_T fm, const bool update)
   FUNC_ATTR_NONNULL_ALL
 {
-  fmark_T *fm_tgt = NULL;
-  int idx = rs_mark_local_index(name);
-  if (rs_mark_is_valid_named(name)) {
-    fm_tgt = &(buf->b_namedm[idx]);
-  } else if (rs_mark_is_last_cursor(name)) {
-    fm_tgt = &(buf->b_last_cursor);
-  } else if (rs_mark_is_last_insert(name)) {
-    fm_tgt = &(buf->b_last_insert);
-  } else if (name == ':') {
-    fm_tgt = &(buf->b_prompt_start);
-  } else if (rs_mark_is_last_change(name)) {
-    fm_tgt = &(buf->b_last_change);
-  } else {
-    return false;
-  }
-  if (update && fm.timestamp <= fm_tgt->timestamp) {
-    return false;
-  }
-  if (fm_tgt->mark.lnum != 0) {
-    free_fmark(*fm_tgt);
-  }
-  *fm_tgt = fm;
-  return true;
+  return rs_mark_set_local((int)name, buf, fm, update ? 1 : 0) != 0;
 }
 
 // Free items in the jumplist of window "wp".
@@ -2296,4 +2202,18 @@ void get_global_marks(list_T *l)
       }
     }
   }
+}
+
+// =============================================================================
+// Cross-function callbacks from Rust (Phase 3)
+// Placed at end of file after static function definitions
+// =============================================================================
+void nvim_mark_setpcmark(void) { setpcmark(); }
+void nvim_mark_fname2fnum(xfmark_T *xfm) { fname2fnum(xfm); }
+char *nvim_mark_buflist_nr2name(int fnum, int listed, int unstripped) {
+  return buflist_nr2name(fnum, listed, unstripped);
+}
+char *nvim_mark_mark_line(pos_T *pos, int lead_len) { return mark_line(pos, lead_len); }
+fmark_T *nvim_mark_get_motion(buf_T *buf, win_T *win, int name) {
+  return mark_get_motion(buf, win, name);
 }
