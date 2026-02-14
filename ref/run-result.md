@@ -1,24 +1,16 @@
-Plan: ~/.claude/plans/groovy-snuggling-clover.md
+Plan: ~/.claude/plans/jolly-snuggling-raven.md
 
-All phases complete. Here's a summary:
+All 8 phases of indent.c migration complete:
 
-## Completed
+| Phase | Commit | Function | Lines Deleted |
+|-------|--------|----------|---------------|
+| 1 | `fdcf1fd` | set_indent() | ~250 |
+| 2 | `0a09ebd` | copy_indent() | ~100 |
+| 3 | `468962a` | get_breakindent_win() | ~120 |
+| 4 | `8da8a5a` | ins_try_si() | ~70 |
+| 5 | `d52e0d6` | op_reindent() | ~75 |
+| 6 | `88b28aa` | change_indent() | ~160 |
+| 7 | `f188188` | ex_retab() | ~180 |
+| 8 | `476c5be` | get_lisp_indent() | ~165 |
 
-**Phase 0** — Fixed 7 wrong `DG_START_*` constants in Rust, added `_Static_assert` for all 26 in C.
-
-**Phase 1** — Moved `digraphdefault[]` (~1366 entries) from C to Rust `data.rs`. Script-generated from C source. Rust callers now access `DIGRAPH_DEFAULT` directly as a slice. C callers use `rs_get_digraphdefault()`/`rs_get_digraphdefault_len()` FFI. Removed ~1430 lines from `digraph.c`.
-
-**Phase 2** — Migrated `digraph_header()`, `printdigraph()`, and `listdigraphs()` to Rust. Moved `header_table[]` (26 translatable strings) to Rust. `ex_digraphs()` now calls `rs_listdigraphs()` directly.
-
-**Phase 3** — Migrated `get_digraph()` (Ctrl-K input) to Rust. Added 6 C accessor functions for globals (`no_mapping`, `allow_keys`, `cmdline_star`, `plain_vgetc`, `putcmdline`, `add_to_showcmd`).
-
-**Phases 4 & 5** — Deferred as planned (VimL eval functions and keymap functions stay in C).
-
-### Validation
-- `just build` — passes
-- `just smoke-test` — passes
-- `just rust-fmt-check` — passes
-- `just rust-clippy` — passes
-- `just rust-test` — 4155 tests pass
-- `digraph.c` reduced from ~2228 to 703 lines
-- 26 `#[no_mangle]` FFI exports in the digraph crate
+indent.c reduced from 1,727 → 581 lines (~1,146 lines of real C logic deleted and rewritten in Rust). All checks pass: build, smoke-test.
