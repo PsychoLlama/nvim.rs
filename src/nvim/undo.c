@@ -368,6 +368,7 @@ _Static_assert(UH_EMPTYBUF == 0x02, "UH_EMPTYBUF must be 0x02");
 _Static_assert(UH_RELOAD == 0x04, "UH_RELOAD must be 0x04");
 _Static_assert(MAXLNUM == 0x7fffffff, "MAXLNUM must be 0x7fffffff");
 _Static_assert(kExtmarkNOOP == 0, "kExtmarkNOOP must be 0");
+_Static_assert(kOptFdoFlagUndo == 0x200, "kOptFdoFlagUndo must be 0x200");
 
 /// Compute the hash for a buffer text into hash[UNDO_HASH_SIZE].
 ///
@@ -555,89 +556,6 @@ void undo_time(int step, bool sec, bool file, bool absolute)
 }
 
 
-/// If we deleted or added lines, report the number of less/more lines.
-/// Otherwise, report the number of changes (this may be incorrect
-/// in some cases, but it's better than nothing).
-///
-/// @param did_undo  just did an undo
-/// @param absolute  used ":undo N"
-static void u_undo_end(bool did_undo, bool absolute, bool quiet)
-{
-  if ((fdo_flags & kOptFdoFlagUndo) && KeyTyped) {
-    foldOpenCursor();
-  }
-
-  if (quiet
-      || global_busy        // no messages until global is finished
-      || !messaging()) {    // 'lazyredraw' set, don't do messages now
-    return;
-  }
-
-  if (curbuf->b_ml.ml_flags & ML_EMPTY) {
-    u_newcount--;
-  }
-
-  u_oldcount -= u_newcount;
-  char *msgstr;
-  if (u_oldcount == -1) {
-    msgstr = N_("more line");
-  } else if (u_oldcount < 0) {
-    msgstr = N_("more lines");
-  } else if (u_oldcount == 1) {
-    msgstr = N_("line less");
-  } else if (u_oldcount > 1) {
-    msgstr = N_("fewer lines");
-  } else {
-    u_oldcount = u_newcount;
-    if (u_newcount == 1) {
-      msgstr = N_("change");
-    } else {
-      msgstr = N_("changes");
-    }
-  }
-
-  u_header_T *uhp;
-  if (curbuf->b_u_curhead != NULL) {
-    // For ":undo N" we prefer a "after #N" message.
-    if (absolute && curbuf->b_u_curhead->uh_next.ptr != NULL) {
-      uhp = curbuf->b_u_curhead->uh_next.ptr;
-      did_undo = false;
-    } else if (did_undo) {
-      uhp = curbuf->b_u_curhead;
-    } else {
-      uhp = curbuf->b_u_curhead->uh_next.ptr;
-    }
-  } else {
-    uhp = curbuf->b_u_newhead;
-  }
-
-  char msgbuf[80];
-  if (uhp == NULL) {
-    *msgbuf = NUL;
-  } else {
-    undo_fmt_time(msgbuf, sizeof(msgbuf), uhp->uh_time);
-  }
-
-  {
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_buffer == curbuf && wp->w_p_cole > 0) {
-        redraw_later(wp, UPD_NOT_VALID);
-      }
-    }
-  }
-
-  if (VIsual_active) {
-    check_pos(curbuf, &VIsual);
-  }
-
-  smsg_keep(0, _("%" PRId64 " %s; %s #%" PRId64 "  %s"),
-            u_oldcount < 0 ? (int64_t)-u_oldcount : (int64_t)u_oldcount,
-            _(msgstr),
-            did_undo ? _("before") : _("after"),
-            uhp == NULL ? 0 : (int64_t)uhp->uh_seq,
-            msgbuf);
-}
-
 /// Put the timestamp of an undo header in "buf[buflen]" in a nice format.
 void undo_fmt_time(char *buf, size_t buflen, time_t tt)
 {
@@ -776,25 +694,6 @@ void u_clearallandblockfree(buf_T *buf)
   rs_u_clearallandblockfree(buf);
 }
 
-/// Save the line "lnum" for the "U" command.
-static void u_saveline(buf_T *buf, linenr_T lnum)
-{
-  if (lnum == buf->b_u_line_lnum) {      // line is already saved
-    return;
-  }
-  if (lnum < 1 || lnum > buf->b_ml.ml_line_count) {  // should never happen
-    return;
-  }
-  u_clearline(buf);
-  buf->b_u_line_lnum = lnum;
-  if (curwin->w_buffer == buf && curwin->w_cursor.lnum == lnum) {
-    buf->b_u_line_colnr = curwin->w_cursor.col;
-  } else {
-    buf->b_u_line_colnr = 0;
-  }
-  buf->b_u_line_ptr = u_save_line_buf(buf, lnum);
-}
-
 /// clear the line saved for the "U" command
 /// (this is used externally for crossing a line while in insert mode)
 void u_clearline(buf_T *buf)
@@ -809,23 +708,6 @@ void u_clearline(buf_T *buf)
 void u_undoline(void)
 {
   rs_u_undoline();
-}
-
-/// Allocate memory and copy curbuf line into it.
-///
-/// @param lnum the line to copy
-static char *u_save_line(linenr_T lnum)
-{
-  return u_save_line_buf(curbuf, lnum);
-}
-
-/// Allocate memory and copy line into it
-///
-/// @param lnum line to copy
-/// @param buf buffer to copy from
-static char *u_save_line_buf(buf_T *buf, linenr_T lnum)
-{
-  return xstrdup(ml_get_buf(buf, lnum));
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed (only need to
@@ -1388,11 +1270,6 @@ void nvim_msg_newest_change(void)
   msg(_("Already at newest change"), 0);
 }
 
-void nvim_u_undo_end(bool did_undo, bool absolute, bool quiet)
-{
-  u_undo_end(did_undo, absolute, quiet);
-}
-
 // Buffer line access (infrastructure for future migration)
 // Returns allocated copy of line - caller must free with nvim_xfree
 char *nvim_ml_get_buf_copy(buf_T *buf, linenr_T lnum)
@@ -1492,12 +1369,6 @@ void nvim_emsg_line_count_changed(void)
 bool nvim_buf_is_curbuf(buf_T *buf)
 {
   return buf == curbuf;
-}
-
-// u_saveline wrapper
-void nvim_u_saveline(buf_T *buf, linenr_T lnum)
-{
-  u_saveline(buf, lnum);
 }
 
 // Get/set undo_undoes global
@@ -2456,6 +2327,102 @@ void nvim_undoredo_update_seq(buf_T *buf, u_header_T *curhead, bool undo)
 }
 
 // ============================================================================
+// Phase 4: u_undo_end + helpers FFI
+// ============================================================================
+
+// Get the uh_seq for the message header pointer in u_undo_end.
+// Returns 0 if uhp is NULL, uhp->uh_seq otherwise.
+// Also sets *did_undo_out to the adjusted did_undo flag.
+int nvim_undo_end_get_uhp_seq(buf_T *buf, bool did_undo, bool absolute,
+                               bool *did_undo_out)
+{
+  u_header_T *uhp;
+  if (buf->b_u_curhead != NULL) {
+    if (absolute && buf->b_u_curhead->uh_next.ptr != NULL) {
+      uhp = buf->b_u_curhead->uh_next.ptr;
+      did_undo = false;
+    } else if (did_undo) {
+      uhp = buf->b_u_curhead;
+    } else {
+      uhp = buf->b_u_curhead->uh_next.ptr;
+    }
+  } else {
+    uhp = buf->b_u_newhead;
+  }
+  *did_undo_out = did_undo;
+  if (uhp == NULL) {
+    return 0;
+  }
+  return uhp->uh_seq;
+}
+
+// Format the time for the undo message into the provided buffer.
+// Returns uhp->uh_time or 0 if uhp is NULL.
+void nvim_undo_end_fmt_time(buf_T *buf, bool did_undo, bool absolute,
+                             char *timebuf, size_t buflen)
+{
+  u_header_T *uhp;
+  if (buf->b_u_curhead != NULL) {
+    if (absolute && buf->b_u_curhead->uh_next.ptr != NULL) {
+      uhp = buf->b_u_curhead->uh_next.ptr;
+    } else if (did_undo) {
+      uhp = buf->b_u_curhead;
+    } else {
+      uhp = buf->b_u_curhead->uh_next.ptr;
+    }
+  } else {
+    uhp = buf->b_u_newhead;
+  }
+  if (uhp == NULL) {
+    timebuf[0] = NUL;
+  } else {
+    undo_fmt_time(timebuf, buflen, uhp->uh_time);
+  }
+}
+
+// Redraw conceal for all windows showing this buffer
+void nvim_undo_end_redraw_conceal(buf_T *buf)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp->w_buffer == buf && wp->w_p_cole > 0) {
+      redraw_later(wp, UPD_NOT_VALID);
+    }
+  }
+}
+
+// Check VIsual and call check_pos
+void nvim_undo_end_check_visual(buf_T *buf)
+{
+  if (VIsual_active) {
+    check_pos(buf, &VIsual);
+  }
+}
+
+// Format and display the undo end message
+void nvim_undo_end_smsg(int64_t count, const char *msgstr, bool did_undo,
+                         int64_t seq, const char *timebuf)
+{
+  smsg_keep(0, _("%" PRId64 " %s; %s #%" PRId64 "  %s"),
+            count,
+            _(msgstr),
+            did_undo ? _("before") : _("after"),
+            seq,
+            timebuf);
+}
+
+// ML_EMPTY flag check for u_undo_end
+bool nvim_undo_end_ml_empty(buf_T *buf)
+{
+  return (buf->b_ml.ml_flags & ML_EMPTY) != 0;
+}
+
+// get_undolevel accessor
+int64_t nvim_get_undolevel_value(buf_T *buf)
+{
+  return (int64_t)get_undolevel(buf);
+}
+
+// ============================================================================
 // Ex Command FFI Functions (for Rust FFI)
 // ============================================================================
 
@@ -2689,7 +2656,8 @@ linenr_T nvim_undo_win_get_cursor_lnum(win_T *win)
 /// Save line for undo (returns allocated string)
 char *nvim_u_save_line_for_undo(buf_T *buf, linenr_T lnum)
 {
-  return u_save_line(lnum);
+  (void)buf;
+  return xstrdup(ml_get_buf(curbuf, lnum));
 }
 
 /// Get global_busy flag

@@ -272,7 +272,6 @@ extern "C" {
     fn nvim_beep_flush();
     fn nvim_msg_oldest_change();
     fn nvim_msg_newest_change();
-    fn nvim_u_undo_end(did_undo: bool, absolute: bool, quiet: bool);
 
     // Infrastructure for future migration (u_savecommon, etc.)
     fn nvim_ml_get_buf_copy(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
@@ -294,7 +293,6 @@ extern "C" {
     fn nvim_uep_set_array_from_buf(uep: UEntryHandle, idx: LinenrT, buf: BufHandle, lnum: LinenrT);
     fn nvim_emsg_line_count_changed();
     fn nvim_buf_is_curbuf(buf: BufHandle) -> bool;
-    fn nvim_u_saveline(buf: BufHandle, lnum: LinenrT);
     fn nvim_set_undo_undoes_false();
 
     // u_find_first_changed infrastructure
@@ -622,6 +620,48 @@ extern "C" {
 
     /// Return byte offset of visualinfo_T within saved marks buffer
     fn nvim_saved_marks_visual_offset() -> usize;
+
+    // ==========================================================================
+    // Phase 4: u_undo_end + helpers FFI
+    // ==========================================================================
+
+    /// Get uhp->uh_seq for the message, also adjusts did_undo
+    fn nvim_undo_end_get_uhp_seq(
+        buf: BufHandle,
+        did_undo: bool,
+        absolute: bool,
+        did_undo_out: *mut bool,
+    ) -> c_int;
+
+    /// Format time for undo message
+    fn nvim_undo_end_fmt_time(
+        buf: BufHandle,
+        did_undo: bool,
+        absolute: bool,
+        timebuf: *mut c_char,
+        buflen: usize,
+    );
+
+    /// Redraw conceal for all windows showing buffer
+    fn nvim_undo_end_redraw_conceal(buf: BufHandle);
+
+    /// Check VIsual and call check_pos
+    fn nvim_undo_end_check_visual(buf: BufHandle);
+
+    /// Format and display the undo end message
+    fn nvim_undo_end_smsg(
+        count: i64,
+        msgstr: *const c_char,
+        did_undo: bool,
+        seq: i64,
+        timebuf: *const c_char,
+    );
+
+    /// ML_EMPTY flag check
+    fn nvim_undo_end_ml_empty(buf: BufHandle) -> bool;
+
+    /// get_undolevel accessor
+    fn nvim_get_undolevel_value(buf: BufHandle) -> i64;
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -697,6 +737,34 @@ pub unsafe extern "C" fn rs_u_clearline(buf: BufHandle) {
     nvim_xfree(line_ptr as *mut c_void);
     nvim_buf_set_b_u_line_ptr(buf, std::ptr::null_mut());
     nvim_buf_set_b_u_line_lnum(buf, 0);
+}
+
+/// Save a line for the "U" command.
+/// This replaces the C `u_saveline` function.
+///
+/// # Safety
+///
+/// Must be called with valid buffer handle and line number.
+unsafe fn u_saveline(buf: BufHandle, lnum: LinenrT) {
+    if lnum == nvim_buf_get_b_u_line_lnum(buf) {
+        // line is already saved
+        return;
+    }
+    let line_count = nvim_buf_get_ml_line_count(buf);
+    if lnum < 1 || lnum > line_count {
+        // should never happen
+        return;
+    }
+    rs_u_clearline(buf);
+    nvim_buf_set_b_u_line_lnum(buf, lnum);
+    let win = nvim_undo_get_curwin();
+    let win_buf = nvim_undo_win_get_buffer(win);
+    if win_buf.0 == buf.0 && nvim_undo_win_get_cursor_lnum(win) == lnum {
+        nvim_buf_set_b_u_line_colnr(buf, nvim_undo_curwin_get_cursor_col());
+    } else {
+        nvim_buf_set_b_u_line_colnr(buf, 0);
+    }
+    nvim_buf_set_b_u_line_ptr(buf, nvim_ml_get_buf_copy(buf, lnum));
 }
 
 /// Free entry 'uep' and 'n' lines in uep->ue_array[].
@@ -1480,6 +1548,78 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     nvim_unblock_autocmds();
 }
 
+/// Report the result of an undo/redo operation.
+/// If we deleted or added lines, report the number of less/more lines.
+/// Otherwise, report the number of changes.
+unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
+    let buf = nvim_get_curbuf();
+
+    if (nvim_undo_get_fdo_flags() & K_OPT_FDO_FLAG_UNDO) != 0 && nvim_undo_get_key_typed() {
+        nvim_undo_foldOpenCursor();
+    }
+
+    if quiet || nvim_get_global_busy() || !nvim_messaging() {
+        return;
+    }
+
+    let mut u_newcount = nvim_get_u_newcount();
+    let mut u_oldcount = nvim_get_u_oldcount();
+
+    if nvim_undo_end_ml_empty(buf) {
+        u_newcount -= 1;
+    }
+
+    u_oldcount -= u_newcount;
+    let msgstr: &[u8] = if u_oldcount == -1 {
+        b"more line\0"
+    } else if u_oldcount < 0 {
+        b"more lines\0"
+    } else if u_oldcount == 1 {
+        b"line less\0"
+    } else if u_oldcount > 1 {
+        b"fewer lines\0"
+    } else {
+        u_oldcount = u_newcount;
+        if u_newcount == 1 {
+            b"change\0"
+        } else {
+            b"changes\0"
+        }
+    };
+
+    let mut adjusted_did_undo = did_undo;
+    let seq = nvim_undo_end_get_uhp_seq(buf, did_undo, absolute, &mut adjusted_did_undo);
+
+    let mut timebuf = [0u8; 80];
+    nvim_undo_end_fmt_time(
+        buf,
+        did_undo,
+        absolute,
+        timebuf.as_mut_ptr() as *mut c_char,
+        timebuf.len(),
+    );
+
+    nvim_undo_end_redraw_conceal(buf);
+    nvim_undo_end_check_visual(buf);
+
+    let count = if u_oldcount < 0 {
+        -u_oldcount as i64
+    } else {
+        u_oldcount as i64
+    };
+
+    nvim_undo_end_smsg(
+        count,
+        msgstr.as_ptr() as *const c_char,
+        adjusted_did_undo,
+        seq as i64,
+        timebuf.as_ptr() as *const c_char,
+    );
+}
+
+/// Undo fold flag constant. Verified by _Static_assert in undo.c.
+const K_OPT_FDO_FLAG_UNDO: c_int = 0x200;
+
 /// Core undo/redo loop.
 /// Performs the actual undo or redo operations based on the current state.
 ///
@@ -1565,7 +1705,7 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
     }
 
     let undo_undoes = nvim_get_undo_undoes();
-    nvim_u_undo_end(undo_undoes, false, quiet);
+    u_undo_end(undo_undoes, false, quiet);
 }
 
 /// Common code for various ways to save text before a change.
@@ -1913,7 +2053,7 @@ pub unsafe extern "C" fn rs_u_save_buf(buf: BufHandle, top: LinenrT, bot: Linenr
     }
 
     if top + 2 == bot {
-        nvim_u_saveline(buf, top + 1);
+        u_saveline(buf, top + 1);
     }
 
     rs_u_savecommon(buf, top, bot, 0, false)
@@ -2208,7 +2348,7 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
     // When "target" is 0; Back to origin.
     if target == 0 {
         undo_time_to_target(buf, target, 0, 0, above, &mut did_undo);
-        nvim_u_undo_end(did_undo, absolute, false);
+        u_undo_end(did_undo, absolute, false);
         return;
     }
 
@@ -2375,7 +2515,7 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
         above,
         &mut did_undo,
     );
-    nvim_u_undo_end(did_undo, absolute, false);
+    u_undo_end(did_undo, absolute, false);
 }
 
 /// Helper function to walk to target in undo tree.
