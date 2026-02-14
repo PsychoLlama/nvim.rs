@@ -27,6 +27,7 @@
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/os/input.h"
+#include "nvim/os/fs.h"
 #include "nvim/os/os.h"
 #include "nvim/option_vars.h"
 #include "nvim/path.h"
@@ -758,3 +759,111 @@ void nvim_rt_slash_adjust(char *name)
   slash_adjust(name);
 }
 #endif
+
+// =============================================================================
+// Phase 3: Path utilities and runtimepath accessors
+// =============================================================================
+
+// Static assertions for XDG types
+_Static_assert(kXDGNone == -1, "kXDGNone");
+_Static_assert(kXDGConfigHome == 0, "kXDGConfigHome");
+_Static_assert(kXDGDataHome == 1, "kXDGDataHome");
+_Static_assert(kXDGCacheHome == 2, "kXDGCacheHome");
+_Static_assert(kXDGStateHome == 3, "kXDGStateHome");
+_Static_assert(kXDGRuntimeDir == 4, "kXDGRuntimeDir");
+_Static_assert(kXDGConfigDirs == 5, "kXDGConfigDirs");
+_Static_assert(kXDGDataDirs == 6, "kXDGDataDirs");
+
+/// vim_env_iter wrapper - iterate forward through ENV_SEPCHAR-separated values.
+/// Returns NULL when done, or next iterator position.
+const void *nvim_rt_vim_env_iter(const char *val, const void *iter,
+                                 const char **dir, size_t *len)
+{
+  return vim_env_iter(ENV_SEPCHAR, val, iter, dir, len);
+}
+
+/// vim_env_iter_rev wrapper - iterate backwards.
+const void *nvim_rt_vim_env_iter_rev(const char *val, const void *iter,
+                                     const char **dir, size_t *len)
+{
+  return vim_env_iter_rev(ENV_SEPCHAR, val, iter, dir, len);
+}
+
+/// Check if position is after a path separator.
+bool nvim_rt_after_pathsep(const char *b, const char *s)
+{
+  return after_pathsep(b, s);
+}
+
+/// Count occurrences of a character in a buffer.
+size_t nvim_rt_memcnt(const void *s, int c, size_t n)
+{
+  return memcnt(s, c, n);
+}
+
+/// Get the application name.
+const char *nvim_rt_get_appname(void)
+{
+  return get_appname(false);
+}
+
+/// Get an XDG path variable. Returns allocated string.
+char *nvim_rt_stdpaths_get_xdg_var(int type)
+{
+  return stdpaths_get_xdg_var((XDGVarType)type);
+}
+
+/// Get environment variable value. Returns allocated string.
+char *nvim_rt_vim_getenv(const char *name)
+{
+  return vim_getenv(name);
+}
+
+/// Check if path is a directory.
+bool nvim_rt_os_isdir(const char *name)
+{
+  return os_isdir(name);
+}
+
+/// Get default_lib_dir global.
+const char *nvim_rt_get_default_lib_dir(void)
+{
+  return default_lib_dir;
+}
+
+/// Get prefix from exe path.
+void nvim_rt_vim_get_prefix_from_exepath(char *buf)
+{
+  vim_get_prefix_from_exepath(buf);
+}
+
+/// Append path component.
+int nvim_rt_append_path(char *path, const char *to_append, size_t max_len)
+{
+  return append_path(path, to_append, max_len);
+}
+
+/// Check if character is a path separator.
+bool nvim_rt_vim_ispathsep(int c)
+{
+  return vim_ispathsep(c);
+}
+
+/// xmemcpyz wrapper.
+void nvim_rt_xmemcpyz(void *dst, const void *src, size_t len)
+{
+  xmemcpyz(dst, src, len);
+}
+
+/// xstrlcat wrapper (already in Phase 2 as nvim_rt_get_iobuff, but adding
+/// explicit strlcat for Phase 3 use).
+size_t nvim_rt_p3_xstrlcat(char *dst, const char *src, size_t dstsize)
+{
+  return xstrlcat(dst, src, dstsize);
+}
+
+/// Get IOSIZE constant (already exists as nvim_rt_iosize, but alias for clarity).
+size_t nvim_rt_get_iosize(void)
+{
+  return (size_t)IOSIZE;
+}
