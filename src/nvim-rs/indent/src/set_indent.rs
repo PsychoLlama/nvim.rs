@@ -8,7 +8,7 @@ use nvim_memory::{xfree, xmalloc};
 use crate::{rs_tabstop_padding, TAB};
 
 // Constants matching C definitions (verified via _Static_assert in indent_ffi.c)
-const SIN_CHANGED: c_int = 1;
+pub const SIN_CHANGED: c_int = 1;
 const SIN_INSERT: c_int = 2;
 const SIN_UNDO: c_int = 4;
 const SIN_NOMARK: c_int = 8;

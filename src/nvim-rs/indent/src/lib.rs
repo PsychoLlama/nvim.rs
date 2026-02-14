@@ -11,6 +11,7 @@ pub mod checks;
 pub mod copy_indent;
 pub mod getters;
 pub mod helpers;
+pub mod ins_try_si;
 pub mod set_indent;
 
 use std::ffi::c_char;

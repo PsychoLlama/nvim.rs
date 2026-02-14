@@ -25,6 +25,7 @@
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/move.h"
+#include "nvim/ops.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
 #include "nvim/plines.h"
@@ -47,6 +48,8 @@ _Static_assert(SIN_CHANGED == 1, "SIN_CHANGED must be 1");
 _Static_assert(SIN_INSERT == 2, "SIN_INSERT must be 2");
 _Static_assert(SIN_UNDO == 4, "SIN_UNDO must be 4");
 _Static_assert(SIN_NOMARK == 8, "SIN_NOMARK must be 8");
+_Static_assert(VREPLACE_FLAG == 0x200, "VREPLACE_FLAG must be 0x200");
+_Static_assert(INDENT_SET == 1, "INDENT_SET must be 1");
 
 // =============================================================================
 // Phase 1: set_indent() accessors
@@ -113,4 +116,29 @@ int nvim_breakindent_flp_match(win_T *wp, const char *pat, const char *line,
   }
   vim_regfree(regmatch.regprog);
   return matched;
+}
+
+// =============================================================================
+// Phase 4: ins_try_si() accessors
+// =============================================================================
+
+// These accessors already exist in other files:
+//   nvim_get_did_si, nvim_get_can_si, nvim_get_can_si_back (change_ffi.c)
+//   nvim_get_ai_col, nvim_set_ai_col (change_ffi.c)
+//   nvim_get_State (window.c)
+//   nvim_ml_get, nvim_skipwhite (change_ffi.c, fold.c)
+//   nvim_findmatch, nvim_change_get_curwin_cursor, nvim_set_curwin_cursor (change_ffi.c)
+//   nvim_get_curwin_cursor_col, nvim_get_curwin_cursor_lnum (change_ffi.c, insexpand.c)
+//   nvim_set_curwin_cursor_lnum (change_ffi.c)
+
+void nvim_shift_line(bool left, bool round, int amount, int call_changed_bytes)
+{
+  shift_line(left, round, amount, call_changed_bytes);
+}
+
+void nvim_set_old_indent(int val) { old_indent = val; }
+
+void nvim_change_indent(int type, int amount, int round, bool call_changed_bytes)
+{
+  change_indent(type, amount, round, call_changed_bytes);
 }
