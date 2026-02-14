@@ -72,6 +72,12 @@ const OK: c_int = 1;
 /// Failure return value (matches Neovim's FAIL).
 const FAIL: c_int = 0;
 
+/// Maximum line number (invalid). Matches C `MAXLNUM`.
+const MAXLNUM: LinenrT = 0x7fff_ffff;
+
+/// Undo header flag: b_changed flag before undo/after redo.
+const UH_CHANGED: c_int = 0x01;
+
 // =============================================================================
 // Undo File Format Constants
 // =============================================================================
@@ -266,7 +272,6 @@ extern "C" {
     fn nvim_beep_flush();
     fn nvim_msg_oldest_change();
     fn nvim_msg_newest_change();
-    fn nvim_u_undoredo(undo: bool, do_buf_event: bool);
     fn nvim_u_undo_end(did_undo: bool, absolute: bool, quiet: bool);
 
     // Infrastructure for future migration (u_savecommon, etc.)
@@ -510,7 +515,7 @@ extern "C" {
     fn nvim_undo_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
 
     /// Save line for undo (returns allocated string)
-    fn nvim_u_save_line(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
+    fn nvim_u_save_line_for_undo(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
 
     /// Get global_busy flag
     fn nvim_get_global_busy() -> bool;
@@ -532,6 +537,91 @@ extern "C" {
 
     /// Get VIsual position
     fn nvim_undo_get_visual_pos(lnum: *mut LinenrT, col: *mut ColnrT, coladd: *mut ColnrT);
+
+    // ==========================================================================
+    // Phase 3: u_undoredo FFI helpers
+    // ==========================================================================
+
+    /// Compute new_flags for undo/redo based on current buffer state
+    fn nvim_undoredo_compute_new_flags(buf: BufHandle, curhead: UHeaderHandle) -> c_int;
+
+    /// Save named marks before undo/redo (zeros additional_data)
+    fn nvim_undoredo_save_marks(buf: BufHandle, curhead: UHeaderHandle);
+
+    /// Restore named marks from undo header to buffer and vice versa
+    fn nvim_undoredo_restore_marks(
+        buf: BufHandle,
+        curhead: UHeaderHandle,
+        saved_namedm: *const c_void,
+    );
+
+    /// Swap visual info between buffer and undo header
+    fn nvim_undoredo_swap_visual(
+        buf: BufHandle,
+        curhead: UHeaderHandle,
+        saved_visual: *const c_void,
+    );
+
+    /// Get saved namedm array and visual info from buffer
+    fn nvim_undoredo_get_buf_marks(
+        buf: BufHandle,
+        out_namedm: *mut c_void,
+        out_visual: *mut c_void,
+    );
+
+    /// Set b_op_start and b_op_end initial values
+    fn nvim_undoredo_init_op_marks(buf: BufHandle);
+
+    /// Get b_op_start.lnum
+    fn nvim_buf_get_op_start_lnum(buf: BufHandle) -> LinenrT;
+
+    /// Get b_op_end.lnum
+    fn nvim_buf_get_op_end_lnum(buf: BufHandle) -> LinenrT;
+
+    /// Set b_op_start.lnum
+    fn nvim_buf_set_op_start_lnum(buf: BufHandle, lnum: LinenrT);
+
+    /// Adjust b_op_start.lnum by delta
+    fn nvim_buf_adjust_op_start_lnum(buf: BufHandle, delta: LinenrT);
+
+    /// Set b_op_end.lnum
+    fn nvim_buf_set_op_end_lnum(buf: BufHandle, lnum: LinenrT);
+
+    /// Adjust b_op_end.lnum by delta
+    fn nvim_buf_adjust_op_end_lnum(buf: BufHandle, delta: LinenrT);
+
+    /// Clamp op marks to ml_line_count
+    fn nvim_undoredo_clamp_op_marks(buf: BufHandle);
+
+    /// Apply extmarks for undo/redo
+    fn nvim_undoredo_apply_extmarks(curhead: UHeaderHandle, undo: bool);
+
+    /// Set ML_EMPTY flag if needed
+    fn nvim_undoredo_set_ml_empty(buf: BufHandle, old_flags: c_int);
+
+    /// Cursor adjustment for u_undoredo
+    fn nvim_undoredo_adjust_cursor(curhead: UHeaderHandle);
+
+    /// Allocate saved marks buffer (fmark_T[NMARKS] + visualinfo_T)
+    fn nvim_alloc_saved_marks() -> *mut c_void;
+
+    /// Get ml_get result as non-allocating pointer for strcmp
+    fn nvim_undoredo_ml_get(lnum: LinenrT) -> *const c_char;
+
+    /// buf_updates_changedtick wrapper
+    fn nvim_undoredo_buf_updates_changedtick(buf: BufHandle);
+
+    /// Update sequence and time for undo/redo
+    fn nvim_undoredo_update_seq(buf: BufHandle, curhead: UHeaderHandle, undo: bool);
+
+    /// E438 error message wrapper
+    fn nvim_iemsg_undo_line_numbers_wrong();
+
+    /// xmalloc wrapper
+    fn nvim_xmalloc(size: usize) -> *mut c_void;
+
+    /// Return byte offset of visualinfo_T within saved marks buffer
+    fn nvim_saved_marks_visual_offset() -> usize;
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -889,9 +979,6 @@ pub unsafe extern "C" fn rs_u_clearallandblockfree(buf: BufHandle) {
     rs_u_clearall(buf);
 }
 
-/// UH_CHANGED flag value from undo_defs.h
-const UH_CHANGED: c_int = 0x01;
-
 /// Mark all headers in the branch as changed (recursive).
 ///
 /// # Safety
@@ -1165,6 +1252,234 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
     true
 }
 
+/// Core undo/redo function.
+/// The lines in the file are replaced by the lines in the entry list at
+/// curbuf->b_u_curhead. The replaced lines in the file are saved in the entry
+/// list for the next undo/redo.
+///
+/// # Safety
+///
+/// Must be called with valid global state (curbuf, curhead set correctly).
+unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
+    let buf = nvim_get_curbuf();
+    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let win = nvim_undo_get_curwin();
+
+    let mut newlnum: LinenrT = MAXLNUM;
+    let mut new_curpos_lnum = nvim_undo_win_get_cursor_lnum(win);
+
+    // Don't want autocommands using the undo structures here, they are
+    // invalid till the end.
+    nvim_block_autocmds();
+
+    let old_flags = nvim_uhp_get_flags(curhead);
+    let new_flags = nvim_undoredo_compute_new_flags(buf, curhead);
+    nvim_undo_setpcmark();
+
+    // Save marks before undo/redo
+    nvim_undoredo_save_marks(buf, curhead);
+    // Allocate buffer for saved namedm + visualinfo
+    let saved_marks = nvim_alloc_saved_marks();
+    // NMARKS fmark_T entries followed by one visualinfo_T
+    nvim_undoredo_get_buf_marks(
+        buf,
+        saved_marks,
+        saved_marks.add(nvim_saved_marks_visual_offset()),
+    );
+
+    nvim_undoredo_init_op_marks(buf);
+
+    let mut newlist = UEntryHandle(ptr::null_mut());
+    let mut uep = nvim_uhp_get_entry(curhead);
+
+    while !uep.0.is_null() {
+        let top = nvim_uep_get_top(uep);
+        let mut bot = nvim_uep_get_bot(uep);
+        let line_count = nvim_buf_get_ml_line_count(buf);
+
+        if bot == 0 {
+            bot = line_count + 1;
+        }
+
+        if top > line_count || top >= bot || bot > line_count + 1 {
+            nvim_unblock_autocmds();
+            nvim_iemsg_undo_line_numbers_wrong();
+            nvim_buf_changed(buf); // don't want UNCHANGED now
+            nvim_xfree(saved_marks);
+            return;
+        }
+
+        let oldsize = bot - top - 1; // number of lines before undo
+        let newsize = nvim_uep_get_size(uep); // number of lines after undo
+
+        // Decide about the cursor position, depending on what text changed.
+        if top < newlnum {
+            let cursor_lnum = nvim_uhp_get_cursor_lnum(curhead);
+            if cursor_lnum >= top && cursor_lnum <= top + newsize + 1 {
+                new_curpos_lnum = cursor_lnum;
+                newlnum = new_curpos_lnum - 1;
+            } else {
+                // Use the first line that actually changed.
+                let mut i: LinenrT = 0;
+                while i < newsize && i < oldsize {
+                    let array_line = nvim_uep_get_array_element(uep, i);
+                    let buf_line = nvim_undoredo_ml_get(top + 1 + i);
+                    if libc::strcmp(array_line, buf_line) != 0 {
+                        break;
+                    }
+                    i += 1;
+                }
+                let next_uep = nvim_uep_get_next(uep);
+                if i == newsize && newlnum == MAXLNUM && next_uep.0.is_null() {
+                    newlnum = top;
+                    new_curpos_lnum = newlnum + 1;
+                } else if i < newsize {
+                    newlnum = top + i;
+                    new_curpos_lnum = newlnum + 1;
+                }
+            }
+        }
+
+        let mut empty_buffer = false;
+
+        // Delete the lines between top and bot and save them in newarray.
+        let newarray: *mut *mut c_char;
+        if oldsize > 0 {
+            newarray = nvim_xmalloc(std::mem::size_of::<*mut c_char>() * oldsize as usize)
+                as *mut *mut c_char;
+            // delete backwards, it goes faster in most cases
+            let mut i = oldsize;
+            let mut lnum = bot - 1;
+            while {
+                i -= 1;
+                i >= 0
+            } {
+                *newarray.offset(i as isize) = nvim_u_save_line_for_undo(buf, lnum);
+                if nvim_buf_get_ml_line_count(buf) == 1 {
+                    empty_buffer = true;
+                }
+                nvim_ml_delete_lnum(lnum);
+                lnum -= 1;
+            }
+        } else {
+            newarray = ptr::null_mut();
+        }
+
+        // make sure the cursor is on a valid line after the deletions
+        nvim_undo_check_cursor_lnum(win);
+
+        // Insert the lines in u_array between top and bot.
+        if newsize > 0 {
+            let mut i: LinenrT = 0;
+            let mut lnum = top;
+            while i < newsize {
+                if empty_buffer && lnum == 0 {
+                    let line = nvim_uep_get_array_element(uep, i);
+                    nvim_ml_replace_lnum(1, line, true);
+                } else {
+                    let line = nvim_uep_get_array_element(uep, i);
+                    nvim_ml_append_flags(lnum, line, 0, 0);
+                }
+                nvim_xfree(nvim_uep_get_array_element(uep, i) as *mut c_void);
+                i += 1;
+                lnum += 1;
+            }
+            nvim_xfree(nvim_uep_get_array(uep) as *mut c_void);
+        }
+
+        // Adjust marks
+        if oldsize != newsize {
+            // kExtmarkNOOP = 0
+            nvim_undo_mark_adjust(top + 1, top + oldsize, MAXLNUM, newsize - oldsize);
+            let op_start = nvim_buf_get_op_start_lnum(buf);
+            if op_start > top + oldsize {
+                nvim_buf_adjust_op_start_lnum(buf, newsize - oldsize);
+            }
+            let op_end = nvim_buf_get_op_end_lnum(buf);
+            if op_end > top + oldsize {
+                nvim_buf_adjust_op_end_lnum(buf, newsize - oldsize);
+            }
+        }
+
+        if oldsize > 0 || newsize > 0 {
+            nvim_undo_changed_lines(buf, top + 1, 0, bot, newsize - oldsize, do_buf_event);
+            let line_count = nvim_buf_get_ml_line_count(buf);
+            if nvim_spell_check_window(win) && bot <= line_count {
+                nvim_redrawWinline(win, bot);
+            }
+        }
+
+        // Set the '[ mark.
+        let op_start = nvim_buf_get_op_start_lnum(buf);
+        if top + 1 < op_start {
+            nvim_buf_set_op_start_lnum(buf, top + 1);
+        }
+        // Set the '] mark.
+        let op_end = nvim_buf_get_op_end_lnum(buf);
+        if newsize == 0 && top + 1 > op_end {
+            nvim_buf_set_op_end_lnum(buf, top + 1);
+        } else if top + newsize > op_end {
+            nvim_buf_set_op_end_lnum(buf, top + newsize);
+        }
+
+        nvim_set_u_newcount(nvim_get_u_newcount() + newsize as c_int);
+        nvim_set_u_oldcount(nvim_get_u_oldcount() + oldsize as c_int);
+        nvim_uep_set_size(uep, oldsize);
+        nvim_uep_set_array(uep, newarray);
+        nvim_uep_set_bot(uep, top + newsize + 1);
+
+        // insert this entry in front of the new entry list
+        let nuep = nvim_uep_get_next(uep);
+        nvim_uep_set_next(uep, newlist);
+        newlist = uep;
+        uep = nuep;
+    }
+
+    // Ensure the '[ and '] marks are within bounds.
+    nvim_undoredo_clamp_op_marks(buf);
+
+    // Adjust Extmarks
+    nvim_undoredo_apply_extmarks(curhead, undo);
+
+    // Set the cursor to the desired position. Check that the line is valid.
+    nvim_undo_win_set_cursor_pos(win, new_curpos_lnum, 0, 0);
+    nvim_undo_check_cursor_lnum(win);
+
+    nvim_uhp_set_entry(curhead, newlist);
+    nvim_uhp_set_flags(curhead, new_flags);
+    nvim_undoredo_set_ml_empty(buf, old_flags);
+
+    if old_flags & UH_CHANGED != 0 {
+        nvim_buf_changed(buf);
+    } else {
+        nvim_buf_unchanged(buf, false, true);
+    }
+
+    // because the calls to changed()/unchanged() above will bump changedtick
+    // again, we need to send a nvim_buf_lines_event with just the new value of
+    // b:changedtick
+    if do_buf_event {
+        nvim_undoredo_buf_updates_changedtick(buf);
+    }
+
+    // restore marks from before undo/redo
+    nvim_undoredo_restore_marks(buf, curhead, saved_marks);
+    nvim_undoredo_swap_visual(
+        buf,
+        curhead,
+        saved_marks.add(nvim_saved_marks_visual_offset()),
+    );
+    nvim_xfree(saved_marks);
+
+    // Adjust cursor position
+    nvim_undoredo_adjust_cursor(curhead);
+
+    // Remember where we are for "g-" and ":earlier 10s".
+    nvim_undoredo_update_seq(buf, curhead, undo);
+
+    nvim_unblock_autocmds();
+}
+
 /// Core undo/redo loop.
 /// Performs the actual undo or redo operations based on the current state.
 ///
@@ -1223,7 +1538,7 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
                 break;
             }
 
-            nvim_u_undoredo(true, do_buf_event);
+            u_undoredo(true, do_buf_event);
         } else {
             let curhead = nvim_buf_get_b_u_curhead(buf);
             if curhead.0.is_null() || nvim_get_undolevel(buf) <= 0 {
@@ -1236,7 +1551,7 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
                 break;
             }
 
-            nvim_u_undoredo(false, do_buf_event);
+            u_undoredo(false, do_buf_event);
 
             // Advance for next redo. Set "newhead" when at the end of the
             // redoable changes.
@@ -2097,7 +2412,7 @@ unsafe fn undo_time_to_target(
         }
 
         nvim_buf_set_b_u_curhead(buf, uhp);
-        nvim_u_undoredo(true, true);
+        u_undoredo(true, true);
         if target > 0 {
             nvim_uhp_set_walk(uhp, nomark); // don't go back down here
         }
@@ -2177,7 +2492,7 @@ unsafe fn undo_time_to_target(
                 break;
             }
 
-            nvim_u_undoredo(false, true);
+            u_undoredo(false, true);
 
             // Advance "curhead" to below the header we last used. If it
             // becomes NULL then we need to set "newhead" to this leaf.

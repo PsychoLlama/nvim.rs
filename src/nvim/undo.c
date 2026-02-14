@@ -363,6 +363,11 @@ int u_savecommon(buf_T *buf, linenr_T top, linenr_T bot, linenr_T newbot, bool r
 _Static_assert(kExtmarkSplice == 0, "kExtmarkSplice must be 0");
 _Static_assert(kExtmarkMove == 1, "kExtmarkMove must be 1");
 _Static_assert(NMARKS == 26, "NMARKS must be 26");
+_Static_assert(UH_CHANGED == 0x01, "UH_CHANGED must be 0x01");
+_Static_assert(UH_EMPTYBUF == 0x02, "UH_EMPTYBUF must be 0x02");
+_Static_assert(UH_RELOAD == 0x04, "UH_RELOAD must be 0x04");
+_Static_assert(MAXLNUM == 0x7fffffff, "MAXLNUM must be 0x7fffffff");
+_Static_assert(kExtmarkNOOP == 0, "kExtmarkNOOP must be 0");
 
 /// Compute the hash for a buffer text into hash[UNDO_HASH_SIZE].
 ///
@@ -549,296 +554,6 @@ void undo_time(int step, bool sec, bool file, bool absolute)
   rs_undo_time(step, sec, file, absolute);
 }
 
-
-/// u_undoredo: common code for undo and redo
-///
-/// The lines in the file are replaced by the lines in the entry list at
-/// curbuf->b_u_curhead. The replaced lines in the file are saved in the entry
-/// list for the next undo/redo.
-///
-/// @param undo If `true`, go up the tree. Down if `false`.
-/// @param do_buf_event If `true`, send buffer updates.
-static void u_undoredo(bool undo, bool do_buf_event)
-{
-  char **newarray = NULL;
-  linenr_T newlnum = MAXLNUM;
-  pos_T new_curpos = curwin->w_cursor;
-  u_entry_T *nuep;
-  u_entry_T *newlist = NULL;
-  fmark_T namedm[NMARKS];
-  u_header_T *curhead = curbuf->b_u_curhead;
-
-  // Don't want autocommands using the undo structures here, they are
-  // invalid till the end.
-  block_autocmds();
-
-#ifdef U_DEBUG
-  u_check(false);
-#endif
-  int old_flags = curhead->uh_flags;
-  int new_flags = (curbuf->b_changed ? UH_CHANGED : 0)
-                  | ((curbuf->b_ml.ml_flags & ML_EMPTY) ? UH_EMPTYBUF : 0)
-                  | (old_flags & UH_RELOAD);
-  setpcmark();
-
-  // save marks before undo/redo
-  zero_fmark_additional_data(curbuf->b_namedm);
-  memmove(namedm, curbuf->b_namedm, sizeof(curbuf->b_namedm[0]) * NMARKS);
-  visualinfo_T visualinfo = curbuf->b_visual;
-  curbuf->b_op_start.lnum = curbuf->b_ml.ml_line_count;
-  curbuf->b_op_start.col = 0;
-  curbuf->b_op_end.lnum = 0;
-  curbuf->b_op_end.col = 0;
-
-  for (u_entry_T *uep = curhead->uh_entry; uep != NULL; uep = nuep) {
-    linenr_T top = uep->ue_top;
-    linenr_T bot = uep->ue_bot;
-    if (bot == 0) {
-      bot = curbuf->b_ml.ml_line_count + 1;
-    }
-    if (top > curbuf->b_ml.ml_line_count || top >= bot
-        || bot > curbuf->b_ml.ml_line_count + 1) {
-      unblock_autocmds();
-      iemsg(_("E438: u_undo: line numbers wrong"));
-      changed(curbuf);                // don't want UNCHANGED now
-      return;
-    }
-
-    linenr_T oldsize = bot - top - 1;        // number of lines before undo
-    linenr_T newsize = uep->ue_size;         // number of lines after undo
-
-    // Decide about the cursor position, depending on what text changed.
-    // Don't set it yet, it may be invalid if lines are going to be added.
-    if (top < newlnum) {
-      // If the saved cursor is somewhere in this undo block, move it to
-      // the remembered position.  Makes "gwap" put the cursor back
-      // where it was.
-      linenr_T lnum = curhead->uh_cursor.lnum;
-      if (lnum >= top && lnum <= top + newsize + 1) {
-        new_curpos = curhead->uh_cursor;
-        newlnum = new_curpos.lnum - 1;
-      } else {
-        // Use the first line that actually changed.  Avoids that
-        // undoing auto-formatting puts the cursor in the previous
-        // line.
-        int i;
-        for (i = 0; i < newsize && i < oldsize; i++) {
-          if (strcmp(uep->ue_array[i], ml_get(top + 1 + (linenr_T)i)) != 0) {
-            break;
-          }
-        }
-        if (i == newsize && newlnum == MAXLNUM && uep->ue_next == NULL) {
-          newlnum = top;
-          new_curpos.lnum = newlnum + 1;
-        } else if (i < newsize) {
-          newlnum = top + (linenr_T)i;
-          new_curpos.lnum = newlnum + 1;
-        }
-      }
-    }
-
-    bool empty_buffer = false;
-
-    // Delete the lines between top and bot and save them in newarray.
-    if (oldsize > 0) {
-      newarray = xmalloc(sizeof(char *) * (size_t)oldsize);
-      // delete backwards, it goes faster in most cases
-      int i;
-      linenr_T lnum;
-      for (lnum = bot - 1, i = oldsize; --i >= 0; lnum--) {
-        // what can we do when we run out of memory?
-        newarray[i] = u_save_line(lnum);
-        // remember we deleted the last line in the buffer, and a
-        // dummy empty line will be inserted
-        if (curbuf->b_ml.ml_line_count == 1) {
-          empty_buffer = true;
-        }
-        ml_delete(lnum);  // ML_DEL_UNDO
-      }
-    } else {
-      newarray = NULL;
-    }
-
-    // make sure the cursor is on a valid line after the deletions
-    check_cursor_lnum(curwin);
-
-    // Insert the lines in u_array between top and bot.
-    if (newsize) {
-      int i;
-      linenr_T lnum;
-      for (lnum = top, i = 0; i < newsize; i++, lnum++) {
-        // If the file is empty, there is an empty line 1 that we
-        // should get rid of, by replacing it with the new line
-        if (empty_buffer && lnum == 0) {
-          ml_replace(1, uep->ue_array[i], true);
-        } else {
-          ml_append_flags(lnum, uep->ue_array[i], 0, 0);  // ML_APPEND_UNDO
-        }
-        xfree(uep->ue_array[i]);
-      }
-      xfree(uep->ue_array);
-    }
-
-    // Adjust marks
-    if (oldsize != newsize) {
-      mark_adjust(top + 1, top + oldsize, MAXLNUM, newsize - oldsize, kExtmarkNOOP);
-      if (curbuf->b_op_start.lnum > top + oldsize) {
-        curbuf->b_op_start.lnum += newsize - oldsize;
-      }
-      if (curbuf->b_op_end.lnum > top + oldsize) {
-        curbuf->b_op_end.lnum += newsize - oldsize;
-      }
-    }
-
-    if (oldsize > 0 || newsize > 0) {
-      changed_lines(curbuf, top + 1, 0, bot, newsize - oldsize, do_buf_event);
-      // When text has been changed, possibly the start of the next line
-      // may have SpellCap that should be removed or it needs to be
-      // displayed.  Schedule the next line for redrawing just in case.
-      if (spell_check_window(curwin) && bot <= curbuf->b_ml.ml_line_count) {
-        redrawWinline(curwin, bot);
-      }
-    }
-
-    // Set the '[ mark.
-    curbuf->b_op_start.lnum = MIN(curbuf->b_op_start.lnum, top + 1);
-    // Set the '] mark.
-    if (newsize == 0 && top + 1 > curbuf->b_op_end.lnum) {
-      curbuf->b_op_end.lnum = top + 1;
-    } else if (top + newsize > curbuf->b_op_end.lnum) {
-      curbuf->b_op_end.lnum = top + newsize;
-    }
-
-    u_newcount += newsize;
-    u_oldcount += oldsize;
-    uep->ue_size = oldsize;
-    uep->ue_array = newarray;
-    uep->ue_bot = top + newsize + 1;
-
-    // insert this entry in front of the new entry list
-    nuep = uep->ue_next;
-    uep->ue_next = newlist;
-    newlist = uep;
-  }
-
-  // Ensure the '[ and '] marks are within bounds.
-  curbuf->b_op_start.lnum = MIN(curbuf->b_op_start.lnum, curbuf->b_ml.ml_line_count);
-  curbuf->b_op_end.lnum = MIN(curbuf->b_op_end.lnum, curbuf->b_ml.ml_line_count);
-
-  // Adjust Extmarks
-  if (undo) {
-    for (int i = (int)kv_size(curhead->uh_extmark) - 1; i > -1; i--) {
-      extmark_apply_undo(kv_A(curhead->uh_extmark, i), undo);
-    }
-    // redo
-  } else {
-    for (int i = 0; i < (int)kv_size(curhead->uh_extmark); i++) {
-      extmark_apply_undo(kv_A(curhead->uh_extmark, i), undo);
-    }
-  }
-  if (curhead->uh_flags & UH_RELOAD) {
-    // TODO(bfredl): this is a bit crude. When 'undoreload' is used we
-    // should have all info to send a buffer-reloaing on_lines/on_bytes event
-    buf_updates_unload(curbuf, true);
-  }
-  // Finish adjusting extmarks
-
-  // Set the cursor to the desired position.  Check that the line is valid.
-  curwin->w_cursor = new_curpos;
-  check_cursor_lnum(curwin);
-
-  curhead->uh_entry = newlist;
-  curhead->uh_flags = new_flags;
-  if ((old_flags & UH_EMPTYBUF) && buf_is_empty(curbuf)) {
-    curbuf->b_ml.ml_flags |= ML_EMPTY;
-  }
-  if (old_flags & UH_CHANGED) {
-    changed(curbuf);
-  } else {
-    unchanged(curbuf, false, true);
-  }
-
-  // because the calls to changed()/unchanged() above will bump changedtick
-  // again, we need to send a nvim_buf_lines_event with just the new value of
-  // b:changedtick
-  if (do_buf_event) {
-    buf_updates_changedtick(curbuf);
-  }
-
-  // restore marks from before undo/redo
-  for (int i = 0; i < NMARKS; i++) {
-    if (curhead->uh_namedm[i].mark.lnum != 0) {
-      free_fmark(curbuf->b_namedm[i]);
-      curbuf->b_namedm[i] = curhead->uh_namedm[i];
-    }
-    if (namedm[i].mark.lnum != 0) {
-      curhead->uh_namedm[i] = namedm[i];
-    } else {
-      curhead->uh_namedm[i].mark.lnum = 0;
-    }
-  }
-  if (curhead->uh_visual.vi_start.lnum != 0) {
-    curbuf->b_visual = curhead->uh_visual;
-    curhead->uh_visual = visualinfo;
-  }
-
-  // If the cursor is only off by one line, put it at the same position as
-  // before starting the change (for the "o" command).
-  // Otherwise the cursor should go to the first undone line.
-  if (curhead->uh_cursor.lnum + 1 == curwin->w_cursor.lnum
-      && curwin->w_cursor.lnum > 1) {
-    curwin->w_cursor.lnum--;
-  }
-  if (curwin->w_cursor.lnum <= curbuf->b_ml.ml_line_count) {
-    if (curhead->uh_cursor.lnum == curwin->w_cursor.lnum) {
-      curwin->w_cursor.col = curhead->uh_cursor.col;
-      if (virtual_active(curwin) && curhead->uh_cursor_vcol >= 0) {
-        coladvance(curwin, curhead->uh_cursor_vcol);
-      } else {
-        curwin->w_cursor.coladd = 0;
-      }
-    } else {
-      beginline(BL_SOL | BL_FIX);
-    }
-  } else {
-    // We get here with the current cursor line being past the end (eg
-    // after adding lines at the end of the file, and then undoing it).
-    // check_cursor() will move the cursor to the last line.  Move it to
-    // the first column here.
-    curwin->w_cursor.col = 0;
-    curwin->w_cursor.coladd = 0;
-  }
-
-  // Make sure the cursor is on an existing line and column.
-  check_cursor(curwin);
-
-  // Remember where we are for "g-" and ":earlier 10s".
-  curbuf->b_u_seq_cur = curhead->uh_seq;
-  if (undo) {
-    // We are below the previous undo.  However, to make ":earlier 1s"
-    // work we compute this as being just above the just undone change.
-    curbuf->b_u_seq_cur = curhead->uh_next.ptr
-                          ? curhead->uh_next.ptr->uh_seq : 0;
-  }
-
-  // Remember where we are for ":earlier 1f" and ":later 1f".
-  if (curhead->uh_save_nr != 0) {
-    if (undo) {
-      curbuf->b_u_save_nr_cur = curhead->uh_save_nr - 1;
-    } else {
-      curbuf->b_u_save_nr_cur = curhead->uh_save_nr;
-    }
-  }
-
-  // The timestamp can be the same for multiple changes, just use the one of
-  // the undone/redone change.
-  curbuf->b_u_time_cur = curhead->uh_time;
-
-  unblock_autocmds();
-#ifdef U_DEBUG
-  u_check(false);
-#endif
-}
 
 /// If we deleted or added lines, report the number of less/more lines.
 /// Otherwise, report the number of changes (this may be incorrect
@@ -1509,6 +1224,11 @@ void nvim_iemsg_undo_line_missing(void)
   iemsg(_(e_undo_line_missing));
 }
 
+void nvim_iemsg_undo_line_numbers_wrong(void)
+{
+  iemsg(_("E438: u_undo: line numbers wrong"));
+}
+
 // Global state accessors
 int nvim_get_no_u_sync(void)
 {
@@ -1666,11 +1386,6 @@ void nvim_msg_oldest_change(void)
 void nvim_msg_newest_change(void)
 {
   msg(_("Already at newest change"), 0);
-}
-
-void nvim_u_undoredo(bool undo, bool do_buf_event)
-{
-  u_undoredo(undo, do_buf_event);
 }
 
 void nvim_u_undo_end(bool did_undo, bool absolute, bool quiet)
@@ -2533,6 +2248,211 @@ size_t nvim_sizeof_extmark_splice(void)
 size_t nvim_sizeof_extmark_move(void)
 {
   return sizeof(ExtmarkMove);
+}
+
+// ============================================================================
+// Phase 3: u_undoredo FFI Helpers
+// ============================================================================
+
+// Compute new_flags for undo/redo based on current buffer state
+int nvim_undoredo_compute_new_flags(buf_T *buf, u_header_T *curhead)
+{
+  return (buf->b_changed ? UH_CHANGED : 0)
+         | ((buf->b_ml.ml_flags & ML_EMPTY) ? UH_EMPTYBUF : 0)
+         | (curhead->uh_flags & UH_RELOAD);
+}
+
+// Save named marks and visual info from buffer before undo/redo.
+// Clears additional_data, saves namedm to uhp_saved_namedm[],
+// and saves visual info. Returns opaque handle to saved state.
+// The saved state is stored directly in the undo header's namedm array
+// after swapping.
+void nvim_undoredo_save_marks(buf_T *buf, u_header_T *curhead)
+{
+  zero_fmark_additional_data(buf->b_namedm);
+}
+
+// Restore named marks from undo header to buffer and vice versa
+void nvim_undoredo_restore_marks(buf_T *buf, u_header_T *curhead,
+                                 const fmark_T *saved_namedm)
+{
+  for (int i = 0; i < NMARKS; i++) {
+    if (curhead->uh_namedm[i].mark.lnum != 0) {
+      free_fmark(buf->b_namedm[i]);
+      buf->b_namedm[i] = curhead->uh_namedm[i];
+    }
+    if (saved_namedm[i].mark.lnum != 0) {
+      curhead->uh_namedm[i] = saved_namedm[i];
+    } else {
+      curhead->uh_namedm[i].mark.lnum = 0;
+    }
+  }
+}
+
+// Swap visual info between buffer and undo header
+void nvim_undoredo_swap_visual(buf_T *buf, u_header_T *curhead,
+                               const visualinfo_T *saved_visual)
+{
+  if (curhead->uh_visual.vi_start.lnum != 0) {
+    buf->b_visual = curhead->uh_visual;
+    curhead->uh_visual = *saved_visual;
+  }
+}
+
+// Get saved namedm array and visual info from buffer (for save before undo)
+// Copies buf->b_namedm to output array and returns buf->b_visual
+void nvim_undoredo_get_buf_marks(buf_T *buf, fmark_T *out_namedm,
+                                 visualinfo_T *out_visual)
+{
+  memmove(out_namedm, buf->b_namedm, sizeof(fmark_T) * NMARKS);
+  *out_visual = buf->b_visual;
+}
+
+// Set b_op_start and b_op_end initial values
+void nvim_undoredo_init_op_marks(buf_T *buf)
+{
+  buf->b_op_start.lnum = buf->b_ml.ml_line_count;
+  buf->b_op_start.col = 0;
+  buf->b_op_end.lnum = 0;
+  buf->b_op_end.col = 0;
+}
+
+// Get b_op_start.lnum
+linenr_T nvim_buf_get_op_start_lnum(buf_T *buf)
+{
+  return buf->b_op_start.lnum;
+}
+
+// Get b_op_end.lnum
+linenr_T nvim_buf_get_op_end_lnum(buf_T *buf)
+{
+  return buf->b_op_end.lnum;
+}
+
+// Set b_op_start.lnum
+void nvim_buf_set_op_start_lnum(buf_T *buf, linenr_T lnum)
+{
+  buf->b_op_start.lnum = lnum;
+}
+
+// Adjust b_op_start.lnum by delta
+void nvim_buf_adjust_op_start_lnum(buf_T *buf, linenr_T delta)
+{
+  buf->b_op_start.lnum += delta;
+}
+
+// Set b_op_end.lnum
+void nvim_buf_set_op_end_lnum(buf_T *buf, linenr_T lnum)
+{
+  buf->b_op_end.lnum = lnum;
+}
+
+// Adjust b_op_end.lnum by delta
+void nvim_buf_adjust_op_end_lnum(buf_T *buf, linenr_T delta)
+{
+  buf->b_op_end.lnum += delta;
+}
+
+// Clamp op marks to ml_line_count
+void nvim_undoredo_clamp_op_marks(buf_T *buf)
+{
+  buf->b_op_start.lnum = MIN(buf->b_op_start.lnum, buf->b_ml.ml_line_count);
+  buf->b_op_end.lnum = MIN(buf->b_op_end.lnum, buf->b_ml.ml_line_count);
+}
+
+// Apply extmarks for undo/redo
+void nvim_undoredo_apply_extmarks(u_header_T *curhead, bool undo)
+{
+  if (undo) {
+    for (int i = (int)kv_size(curhead->uh_extmark) - 1; i > -1; i--) {
+      extmark_apply_undo(kv_A(curhead->uh_extmark, i), undo);
+    }
+  } else {
+    for (int i = 0; i < (int)kv_size(curhead->uh_extmark); i++) {
+      extmark_apply_undo(kv_A(curhead->uh_extmark, i), undo);
+    }
+  }
+  if (curhead->uh_flags & UH_RELOAD) {
+    buf_updates_unload(curbuf, true);
+  }
+}
+
+// Set ML_EMPTY flag if needed
+void nvim_undoredo_set_ml_empty(buf_T *buf, int old_flags)
+{
+  if ((old_flags & UH_EMPTYBUF) && buf_is_empty(buf)) {
+    buf->b_ml.ml_flags |= ML_EMPTY;
+  }
+}
+
+// Cursor adjustment for u_undoredo:
+// Handle the complex cursor positioning logic after undo/redo
+void nvim_undoredo_adjust_cursor(u_header_T *curhead)
+{
+  // If the cursor is only off by one line, put it at the same position as
+  // before starting the change (for the "o" command).
+  if (curhead->uh_cursor.lnum + 1 == curwin->w_cursor.lnum
+      && curwin->w_cursor.lnum > 1) {
+    curwin->w_cursor.lnum--;
+  }
+  if (curwin->w_cursor.lnum <= curbuf->b_ml.ml_line_count) {
+    if (curhead->uh_cursor.lnum == curwin->w_cursor.lnum) {
+      curwin->w_cursor.col = curhead->uh_cursor.col;
+      if (virtual_active(curwin) && curhead->uh_cursor_vcol >= 0) {
+        coladvance(curwin, curhead->uh_cursor_vcol);
+      } else {
+        curwin->w_cursor.coladd = 0;
+      }
+    } else {
+      beginline(BL_SOL | BL_FIX);
+    }
+  } else {
+    curwin->w_cursor.col = 0;
+    curwin->w_cursor.coladd = 0;
+  }
+  check_cursor(curwin);
+}
+
+// Opaque handle for saved named marks
+void *nvim_alloc_saved_marks(void)
+{
+  return xmalloc(sizeof(fmark_T) * NMARKS + sizeof(visualinfo_T));
+}
+
+// Return byte offset of visualinfo_T within saved marks buffer
+size_t nvim_saved_marks_visual_offset(void)
+{
+  return sizeof(fmark_T) * NMARKS;
+}
+
+// Get ml_get result as non-allocating pointer for strcmp
+const char *nvim_undoredo_ml_get(linenr_T lnum)
+{
+  return ml_get(lnum);
+}
+
+// buf_updates_changedtick wrapper
+void nvim_undoredo_buf_updates_changedtick(buf_T *buf)
+{
+  buf_updates_changedtick(buf);
+}
+
+// Update sequence current and save_nr for undo/redo
+void nvim_undoredo_update_seq(buf_T *buf, u_header_T *curhead, bool undo)
+{
+  buf->b_u_seq_cur = curhead->uh_seq;
+  if (undo) {
+    buf->b_u_seq_cur = curhead->uh_next.ptr
+                       ? curhead->uh_next.ptr->uh_seq : 0;
+  }
+  if (curhead->uh_save_nr != 0) {
+    if (undo) {
+      buf->b_u_save_nr_cur = curhead->uh_save_nr - 1;
+    } else {
+      buf->b_u_save_nr_cur = curhead->uh_save_nr;
+    }
+  }
+  buf->b_u_time_cur = curhead->uh_time;
 }
 
 // ============================================================================
