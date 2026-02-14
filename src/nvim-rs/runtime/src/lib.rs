@@ -51,6 +51,7 @@ pub mod package;
 pub mod path;
 pub mod script;
 pub mod search;
+pub mod searchpath;
 pub mod source;
 pub mod stack;
 

@@ -271,9 +271,92 @@ static RuntimeSearchPath runtime_search_path;
 static RuntimeSearchPath runtime_search_path_thread;
 static uv_mutex_t runtime_search_path_mutex;
 
-void runtime_init(void)
+// Rust implementations of search path management functions (Phase 4)
+extern void rs_runtime_init(void);
+extern const char *rs_did_set_runtimepackpath(optset_T *args);
+extern void rs_runtime_search_path_validate(void);
+extern void rs_runtime_search_path_get_cached(int *ref);
+extern bool rs_runtime_search_path_unref(const int *ref);
+
+// =============================================================================
+// Phase 4: Search path global state accessors (globals are static)
+// =============================================================================
+
+/// Get runtime_search_path_valid.
+bool nvim_rt_sp_get_valid(void)
+{
+  return runtime_search_path_valid;
+}
+
+/// Set runtime_search_path_valid.
+void nvim_rt_sp_set_valid(bool valid)
+{
+  runtime_search_path_valid = valid;
+}
+
+/// Get runtime_search_path_ref.
+int *nvim_rt_sp_get_ref(void)
+{
+  return runtime_search_path_ref;
+}
+
+/// Set runtime_search_path_ref.
+void nvim_rt_sp_set_ref(int *ref_ptr)
+{
+  runtime_search_path_ref = ref_ptr;
+}
+
+/// Initialize runtime_search_path_mutex.
+void nvim_rt_sp_mutex_init(void)
 {
   uv_mutex_init(&runtime_search_path_mutex);
+}
+
+/// Lock runtime_search_path_mutex.
+void nvim_rt_sp_mutex_lock(void)
+{
+  uv_mutex_lock(&runtime_search_path_mutex);
+}
+
+/// Unlock runtime_search_path_mutex.
+void nvim_rt_sp_mutex_unlock(void)
+{
+  uv_mutex_unlock(&runtime_search_path_mutex);
+}
+
+/// Check if deferred execution is safe.
+bool nvim_rt_nlua_is_deferred_safe(void)
+{
+  return nlua_is_deferred_safe();
+}
+
+static void runtime_search_path_free(RuntimeSearchPath path);
+static RuntimeSearchPath copy_runtime_search_path(const RuntimeSearchPath src);
+static RuntimeSearchPath runtime_search_path_build(void);
+
+/// Free the global runtime_search_path (items + kvec).
+void nvim_rt_sp_free_path(void)
+{
+  runtime_search_path_free(runtime_search_path);
+  runtime_search_path = (RuntimeSearchPath)KV_INITIAL_VALUE;
+}
+
+/// Build a new search path and set it as the global.
+void nvim_rt_sp_build_and_set(void)
+{
+  runtime_search_path = runtime_search_path_build();
+}
+
+/// Copy global search path to thread-safe copy (frees old thread copy first).
+void nvim_rt_sp_copy_to_thread(void)
+{
+  runtime_search_path_free(runtime_search_path_thread);
+  runtime_search_path_thread = copy_runtime_search_path(runtime_search_path);
+}
+
+void runtime_init(void)
+{
+  rs_runtime_init();
 }
 
 /// Get DIP_ flags from the [where] argument of a :runtime command.
@@ -489,15 +572,7 @@ int do_in_path(const char *path, const char *prefix, char *name, int flags,
 static RuntimeSearchPath runtime_search_path_get_cached(int *ref)
   FUNC_ATTR_NONNULL_ALL
 {
-  runtime_search_path_validate();
-
-  *ref = 0;
-  if (runtime_search_path_ref == NULL) {
-    // cached path was unreferenced. keep a ref to
-    // prevent runtime_search_path() to freeing it too early
-    (*ref)++;
-    runtime_search_path_ref = ref;
-  }
+  rs_runtime_search_path_get_cached(ref);
   return runtime_search_path;
 }
 
@@ -515,12 +590,8 @@ static RuntimeSearchPath copy_runtime_search_path(const RuntimeSearchPath src)
 static void runtime_search_path_unref(RuntimeSearchPath path, const int *ref)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (*ref) {
-    if (runtime_search_path_ref == ref) {
-      runtime_search_path_ref = NULL;
-    } else {
-      runtime_search_path_free(path);
-    }
+  if (rs_runtime_search_path_unref(ref)) {
+    runtime_search_path_free(path);
   }
 }
 
@@ -854,8 +925,7 @@ static RuntimeSearchPath runtime_search_path_build(void)
 
 const char *did_set_runtimepackpath(optset_T *args)
 {
-  runtime_search_path_valid = false;
-  return NULL;
+  return rs_did_set_runtimepackpath(args);
 }
 
 static void runtime_search_path_free(RuntimeSearchPath path)
@@ -869,25 +939,7 @@ static void runtime_search_path_free(RuntimeSearchPath path)
 
 void runtime_search_path_validate(void)
 {
-  if (!nlua_is_deferred_safe()) {
-    // Cannot rebuild search path in an async context. As a plugin will invoke
-    // itself asynchronously from sync code in the same plugin, the sought
-    // after lua/autoload module will most likely already be in the cached path.
-    // Thus prefer using the stale cache over erroring out in this situation.
-    return;
-  }
-  if (!runtime_search_path_valid) {
-    if (!runtime_search_path_ref) {
-      runtime_search_path_free(runtime_search_path);
-    }
-    runtime_search_path = runtime_search_path_build();
-    runtime_search_path_valid = true;
-    runtime_search_path_ref = NULL;  // initially unowned
-    uv_mutex_lock(&runtime_search_path_mutex);
-    runtime_search_path_free(runtime_search_path_thread);
-    runtime_search_path_thread = copy_runtime_search_path(runtime_search_path);
-    uv_mutex_unlock(&runtime_search_path_mutex);
-  }
+  rs_runtime_search_path_validate();
 }
 
 /// Just like do_in_path_and_pp(), using 'runtimepath' for "path".
