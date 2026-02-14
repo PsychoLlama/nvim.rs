@@ -664,6 +664,178 @@ pub unsafe extern "C" fn rs_mouse_tab_close(c1: c_int) {
 }
 
 // =============================================================================
+// Phase 3 — Position Computation
+// =============================================================================
+
+extern "C" {
+    /// Get `w_p_rl` (right-to-left) field.
+    fn nvim_win_get_p_rl(wp: WinHandle) -> c_int;
+
+    /// Get `w_view_width` field.
+    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
+
+    /// Get `w_skipcol` field.
+    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
+
+    /// Check if window may have filler lines.
+    fn nvim_win_may_fill(wp: WinHandle) -> c_int;
+
+    /// Get filler lines for a line in a window.
+    fn nvim_win_get_fill(wp: WinHandle, lnum: linenr_T) -> c_int;
+
+    /// Get number of physical lines a buffer line takes (no fill).
+    fn nvim_plines_win_nofill(wp: WinHandle, lnum: linenr_T, limit: c_int) -> c_int;
+
+    /// Get number of physical lines a buffer line takes (with fill).
+    fn nvim_plines_win(wp: WinHandle, lnum: linenr_T, limit: c_int) -> c_int;
+
+    /// Check if line is folded, optionally get first/last line of fold.
+    fn nvim_hasFolding(
+        wp: WinHandle,
+        lnum: linenr_T,
+        firstp: *mut linenr_T,
+        lastp: *mut linenr_T,
+    ) -> c_int;
+
+    /// Check if a line is concealed by decoration.
+    fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
+
+    /// Get column offset for line numbers etc.
+    fn nvim_win_col_off(wp: WinHandle) -> c_int;
+
+    /// Get secondary column offset.
+    fn nvim_win_col_off2(wp: WinHandle) -> c_int;
+
+    /// Convert virtual column to character column (C impl with charsize).
+    fn nvim_vcol2col(wp: WinHandle, lnum: linenr_T, vcol: c_int, coladdp: *mut c_int) -> c_int;
+}
+
+/// Convert a virtual (screen) column to a character column.
+///
+/// Delegates to the C `nvim_vcol2col` which has the charsize iteration
+/// infrastructure (inline functions not accessible from Rust).
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vcol2col(
+    wp: WinHandle,
+    lnum: linenr_T,
+    vcol: c_int,
+    coladdp: *mut c_int,
+) -> c_int {
+    nvim_vcol2col(wp, lnum, vcol, coladdp)
+}
+
+/// Compute the buffer line position from the screen position.
+///
+/// Given a window and row/col screen coordinates, computes the buffer
+/// line number and column. Handles folds, wrapping, smoothscroll,
+/// right-to-left mode, and concealed lines.
+///
+/// Returns true if the position is below the last line.
+///
+/// # Safety
+/// All pointers must be valid. `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mouse_comp_pos(
+    win: WinHandle,
+    rowp: *mut c_int,
+    colp: *mut c_int,
+    lnump: *mut linenr_T,
+) -> bool {
+    let mut col = *colp;
+    let mut row = *rowp;
+    let mut retval = false;
+
+    if nvim_win_get_p_rl(win) != 0 {
+        col = nvim_win_get_view_width(win) - 1 - col;
+    }
+
+    let topline = nvim_win_get_topline(win);
+    let mut lnum = topline;
+    let line_count = nvim_win_buf_line_count(win);
+    let view_width = nvim_win_get_view_width(win);
+
+    while row > 0 {
+        // Don't include filler lines in "count"
+        let count = if nvim_win_may_fill(win) != 0 {
+            let fill = if lnum == topline {
+                nvim_win_get_topfill(win)
+            } else {
+                nvim_win_get_fill(win, lnum)
+            };
+            row -= fill;
+            nvim_plines_win_nofill(win, lnum, 0)
+        } else {
+            nvim_plines_win(win, lnum, 0)
+        };
+
+        let mut adjusted_count = count;
+        if nvim_win_get_skipcol(win) > 0 && lnum == topline {
+            let width1 = view_width - nvim_win_col_off(win);
+            if width1 > 0 {
+                let skipcol = nvim_win_get_skipcol(win);
+                let skip_lines = if skipcol > width1 {
+                    (skipcol - width1) / (width1 + nvim_win_col_off2(win)) + 1
+                } else {
+                    i32::from(skipcol > 0)
+                };
+                adjusted_count -= skip_lines;
+            }
+        }
+
+        if adjusted_count > row {
+            break; // Position is in this buffer line.
+        }
+
+        nvim_hasFolding(win, lnum, std::ptr::null_mut(), std::ptr::addr_of_mut!(lnum));
+
+        if lnum == line_count {
+            retval = true;
+            break; // past end of file
+        }
+        row -= adjusted_count;
+        lnum += 1;
+    }
+
+    // Mouse row reached, adjust lnum for concealed lines.
+    while lnum < line_count && nvim_decor_conceal_line(win, lnum - 1, 0) != 0 {
+        lnum += 1;
+        nvim_hasFolding(win, lnum, std::ptr::null_mut(), std::ptr::addr_of_mut!(lnum));
+    }
+
+    if !retval {
+        // Compute the column without wrapping.
+        let off = nvim_win_col_off(win) - nvim_win_col_off2(win);
+        if col < off {
+            col = off;
+        }
+        col += row * (view_width - off);
+
+        // Add skip column for the topline.
+        if lnum == topline {
+            col += nvim_win_get_skipcol(win);
+        }
+    }
+
+    if nvim_win_get_p_wrap(win) == 0 {
+        col += nvim_win_get_leftcol(win);
+    }
+
+    // skip line number and fold column in front of the line
+    col -= nvim_win_col_off(win);
+    if col < 0 {
+        col = 0;
+    }
+
+    *colp = col;
+    *rowp = row;
+    *lnump = lnum;
+    retval
+}
+
+// =============================================================================
 // Phase 2 — Scroll Helpers
 // =============================================================================
 

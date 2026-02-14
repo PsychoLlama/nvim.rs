@@ -168,6 +168,8 @@ extern void rs_mouse_tab_close(int c1);
 extern colnr_T rs_scroll_line_len(linenr_T lnum);
 extern linenr_T rs_find_longest_lnum(void);
 extern bool rs_do_mousescroll_horiz(colnr_T leftcol);
+extern bool rs_mouse_comp_pos(win_T *win, int *rowp, int *colp, linenr_T *lnump);
+extern colnr_T rs_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp);
 
 /// Move the current tab to tab in same column as mouse or to end of the
 /// tabline if there is no tab there.
@@ -1632,90 +1634,7 @@ void nv_mouse(cmdarg_T *cap)
 /// Returns true if the position is below the last line.
 bool mouse_comp_pos(win_T *win, int *rowp, int *colp, linenr_T *lnump)
 {
-  int col = *colp;
-  int row = *rowp;
-  bool retval = false;
-  int count;
-
-  if (win->w_p_rl) {
-    col = win->w_view_width - 1 - col;
-  }
-
-  linenr_T lnum = win->w_topline;
-
-  while (row > 0) {
-    // Don't include filler lines in "count"
-    if (win_may_fill(win)) {
-      row -= lnum == win->w_topline ? win->w_topfill
-                                    : win_get_fill(win, lnum);
-      count = plines_win_nofill(win, lnum, false);
-    } else {
-      count = plines_win(win, lnum, false);
-    }
-
-    if (win->w_skipcol > 0 && lnum == win->w_topline) {
-      int width1 = win->w_view_width - win_col_off(win);
-
-      if (width1 > 0) {
-        int skip_lines = 0;
-
-        // Adjust for 'smoothscroll' clipping the top screen lines.
-        // A similar formula is used in curs_columns().
-        if (win->w_skipcol > width1) {
-          skip_lines = (win->w_skipcol - width1) / (width1 + win_col_off2(win)) + 1;
-        } else if (win->w_skipcol > 0) {
-          skip_lines = 1;
-        }
-
-        count -= skip_lines;
-      }
-    }
-
-    if (count > row) {
-      break;            // Position is in this buffer line.
-    }
-
-    hasFolding(win, lnum, NULL, &lnum);
-
-    if (lnum == win->w_buffer->b_ml.ml_line_count) {
-      retval = true;
-      break;                    // past end of file
-    }
-    row -= count;
-    lnum++;
-  }
-
-  // Mouse row reached, adjust lnum for concealed lines.
-  while (lnum < win->w_buffer->b_ml.ml_line_count
-         && decor_conceal_line(win, lnum - 1, false)) {
-    lnum++;
-    hasFolding(win, lnum, NULL, &lnum);
-  }
-
-  if (!retval) {
-    // Compute the column without wrapping.
-    int off = win_col_off(win) - win_col_off2(win);
-    col = MAX(col, off);
-    col += row * (win->w_view_width - off);
-
-    // Add skip column for the topline.
-    if (lnum == win->w_topline) {
-      col += win->w_skipcol;
-    }
-  }
-
-  if (!win->w_p_wrap) {
-    col += win->w_leftcol;
-  }
-
-  // skip line number and fold column in front of the line
-  col -= win_col_off(win);
-  col = MAX(col, 0);
-
-  *colp = col;
-  *rowp = row;
-  *lnump = lnum;
-  return retval;
+  return rs_mouse_comp_pos(win, rowp, colp, lnump);
 }
 
 /// Find the window at "grid" position "*rowp" and "*colp".  The positions are
@@ -1818,9 +1737,10 @@ static win_T *mouse_find_grid_win(int *gridp, int *rowp, int *colp)
   return NULL;
 }
 
-/// Convert a virtual (screen) column to a character column.
+/// C accessor: convert a virtual (screen) column to a character column.
+/// Contains the real implementation using charsize infrastructure.
 /// The first column is zero.
-colnr_T vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
+colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
   FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_WARN_UNUSED_RESULT
 {
   // try to advance to the specified column
@@ -1844,10 +1764,14 @@ colnr_T vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
   return (colnr_T)(ci.ptr - line);
 }
 
-/// Accessor for vcol2col() for Rust FFI.
-colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
+extern colnr_T rs_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp);
+
+/// Convert a virtual (screen) column to a character column.
+/// The first column is zero.
+colnr_T vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
+  FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return vcol2col(wp, lnum, vcol, coladdp);
+  return rs_vcol2col(wp, lnum, vcol, coladdp);
 }
 
 /// Set UI mouse depending on current mode and 'mouse'.
