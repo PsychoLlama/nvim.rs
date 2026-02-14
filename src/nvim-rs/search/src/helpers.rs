@@ -708,6 +708,261 @@ pub unsafe extern "C" fn rs_search_linewhite(lnum: i32) -> c_int {
     c_int::from(linewhite(lnum))
 }
 
+// =============================================================================
+// Phase 7a: check_linecomment
+// =============================================================================
+
+extern "C" {
+    fn nvim_curbuf_is_lisp() -> c_int;
+    fn nvim_is_pos_in_string(line: *const c_char, col: c_int) -> c_int;
+}
+
+/// MAXCOL constant (matches C MAXCOL = 0x7fffffff).
+const MAXCOL: c_int = 0x7fffffff;
+
+/// Check for a line comment in a line.
+///
+/// For Lisp, checks for `;` comments outside of strings.
+/// For other languages, checks for `//` comments outside of strings.
+///
+/// Returns the column of the comment start, or MAXCOL if none found.
+///
+/// # Safety
+/// `line` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_linecomment(line: *const c_char) -> c_int {
+    if line.is_null() {
+        return MAXCOL;
+    }
+
+    let bytes = line as *const u8;
+
+    if nvim_curbuf_is_lisp() != 0 {
+        // Lisp mode: scan for ';' outside of strings
+        // First check if there's a ';' at all
+        let mut has_semicolon = false;
+        let mut i: usize = 0;
+        while *bytes.add(i) != 0 {
+            if *bytes.add(i) == b';' {
+                has_semicolon = true;
+                break;
+            }
+            i += 1;
+        }
+
+        if !has_semicolon {
+            return MAXCOL;
+        }
+
+        // Scan for '"' and ';' handling string state
+        let mut in_str = false;
+        let mut idx: usize = 0;
+        loop {
+            // Find next '"' or ';'
+            while *bytes.add(idx) != 0 && *bytes.add(idx) != b'"' && *bytes.add(idx) != b';' {
+                idx += 1;
+            }
+            if *bytes.add(idx) == 0 {
+                return MAXCOL;
+            }
+
+            if *bytes.add(idx) == b'"' {
+                if in_str {
+                    // In string: skip escaped quote
+                    if idx >= 1 && *bytes.add(idx - 1) != b'\\' {
+                        in_str = false;
+                    }
+                } else if idx == 0
+                    || (idx >= 2 && *bytes.add(idx - 1) != b'\\' && *bytes.add(idx - 2) != b'#')
+                {
+                    // Not #\" form
+                    in_str = true;
+                }
+            } else {
+                // ';' found
+                if !in_str
+                    && (idx < 2 || (*bytes.add(idx - 1) != b'\\' && *bytes.add(idx - 2) != b'#'))
+                    && nvim_is_pos_in_string(line, idx as c_int) == 0
+                {
+                    return idx as c_int;
+                }
+            }
+            idx += 1;
+        }
+    } else {
+        // Non-lisp: scan for '//' outside strings
+        let mut idx: usize = 0;
+        loop {
+            // Find next '/'
+            while *bytes.add(idx) != 0 && *bytes.add(idx) != b'/' {
+                idx += 1;
+            }
+            if *bytes.add(idx) == 0 {
+                return MAXCOL;
+            }
+
+            // Accept a double /, unless preceded with * and followed by *,
+            // because * / / * is an end and start of a C comment.
+            if *bytes.add(idx + 1) == b'/'
+                && (idx == 0 || *bytes.add(idx - 1) != b'*' || *bytes.add(idx + 2) != b'*')
+                && nvim_is_pos_in_string(line, idx as c_int) == 0
+            {
+                return idx as c_int;
+            }
+            idx += 1;
+        }
+    }
+}
+
+// =============================================================================
+// Phase 7b: is_zero_width
+// =============================================================================
+
+/// Direction constants.
+const FORWARD: c_int = 1;
+#[allow(dead_code)]
+const BACKWARD: c_int = -1;
+/// FAIL constant.
+const FAIL: c_int = 0;
+
+extern "C" {
+    fn nvim_get_called_emsg() -> c_int;
+    fn nvim_get_last_spat_pat(out_len: *mut usize) -> *const c_char;
+    fn nvim_regmmatch_alloc() -> *mut c_void;
+    fn nvim_regmmatch_free(regmatch: *mut c_void);
+    fn nvim_is_zero_width_regcomp(
+        pat: *const c_char,
+        patlen: usize,
+        regmatch: *mut c_void,
+    ) -> c_int;
+    fn nvim_regmatch_set_startcol(regmatch: *mut c_void, col: c_int);
+    fn nvim_regmatch_get_startcol(regmatch: *const c_void) -> c_int;
+    fn nvim_regmatch_get_startlnum(regmatch: *const c_void) -> c_int;
+    fn nvim_regmatch_get_endcol(regmatch: *const c_void) -> c_int;
+    fn nvim_regmatch_get_endlnum(regmatch: *const c_void) -> c_int;
+    fn nvim_is_zero_width_regexec(regmatch: *mut c_void, lnum: c_int, col: c_int) -> c_int;
+    fn nvim_is_zero_width_searchit(
+        pat: *const c_char,
+        patlen: usize,
+        dir: c_int,
+        flags: c_int,
+        pos_lnum: *mut c_int,
+        pos_col: *mut c_int,
+        pos_coladd: *mut c_int,
+    ) -> c_int;
+}
+
+use std::ffi::c_void;
+
+/// Check if the current search pattern matches a zero-width string.
+///
+/// Returns 1 if zero-width match, 0 if not, -1 if pattern not found.
+///
+/// # Safety
+/// `pattern` may be null (uses last search pattern). If non-null, must be valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_zero_width(
+    pattern: *const c_char,
+    patternlen: usize,
+    do_move: bool,
+    cur_lnum: c_int,
+    cur_col: c_int,
+    cur_coladd: c_int,
+    direction: c_int,
+) -> c_int {
+    let mut result: c_int = -1;
+
+    let (pat, patlen) = if pattern.is_null() {
+        let mut len: usize = 0;
+        let p = nvim_get_last_spat_pat(&mut len);
+        (p, len)
+    } else {
+        (pattern, patternlen)
+    };
+
+    // Allocate regmmatch_T on the heap
+    let regmatch = nvim_regmmatch_alloc();
+    if regmatch.is_null() {
+        return -1;
+    }
+
+    if nvim_is_zero_width_regcomp(pat, patlen, regmatch) == FAIL {
+        nvim_regmmatch_free(regmatch);
+        return -1;
+    }
+
+    let called_emsg_before = nvim_get_called_emsg();
+
+    // Init startcol correctly
+    nvim_regmatch_set_startcol(regmatch, -1);
+
+    // Move to match
+    let mut pos_lnum: c_int;
+    let mut pos_col: c_int;
+    let mut pos_coladd: c_int;
+    let flag: c_int;
+    if do_move {
+        pos_lnum = 0;
+        pos_col = 0;
+        pos_coladd = 0;
+        flag = 0;
+    } else {
+        pos_lnum = cur_lnum;
+        pos_col = cur_col;
+        pos_coladd = cur_coladd;
+        // accept a match at the cursor position
+        flag = options::SEARCH_START;
+    };
+
+    if nvim_is_zero_width_searchit(
+        pat,
+        patlen,
+        direction,
+        flag,
+        &mut pos_lnum,
+        &mut pos_col,
+        &mut pos_coladd,
+    ) != FAIL
+    {
+        // Zero-width pattern should match somewhere, then we can check if
+        // start and end are in the same position.
+        let mut nmatched: c_int;
+        loop {
+            let startcol = nvim_regmatch_get_startcol(regmatch);
+            nvim_regmatch_set_startcol(regmatch, startcol + 1);
+            nmatched = nvim_is_zero_width_regexec(
+                regmatch,
+                pos_lnum,
+                nvim_regmatch_get_startcol(regmatch),
+            );
+            if nmatched != 0 {
+                break;
+            }
+            // Check loop condition: regprog may be NULL (checked implicitly by regexec returning 0)
+            let startcol = nvim_regmatch_get_startcol(regmatch);
+            let should_continue = if direction == FORWARD {
+                startcol < pos_col
+            } else {
+                startcol > pos_col
+            };
+            if !should_continue {
+                break;
+            }
+        }
+
+        if nvim_get_called_emsg() == called_emsg_before {
+            result = c_int::from(
+                nmatched != 0
+                    && nvim_regmatch_get_startlnum(regmatch) == nvim_regmatch_get_endlnum(regmatch)
+                    && nvim_regmatch_get_startcol(regmatch) == nvim_regmatch_get_endcol(regmatch),
+            );
+        }
+    }
+
+    nvim_regmmatch_free(regmatch);
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

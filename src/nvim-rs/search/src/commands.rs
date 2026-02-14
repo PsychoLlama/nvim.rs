@@ -580,6 +580,119 @@ pub unsafe extern "C" fn rs_searchc(cap: *mut c_void, t_cmd_arg: bool) -> c_int 
     OK
 }
 
+// =============================================================================
+// Phase 7c: search_for_exact_line
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_p_ws() -> c_int;
+    fn nvim_buf_ml_line_count(buf: *mut c_void) -> c_int;
+    fn nvim_buf_get_line_skipwhite(
+        buf: *mut c_void,
+        lnum: c_int,
+        skipwhite_off: *mut c_int,
+    ) -> *const c_char;
+    fn nvim_search_compl_status_adding() -> c_int;
+    fn nvim_search_compl_status_sol() -> c_int;
+    fn nvim_search_ins_compl_len() -> c_int;
+    fn nvim_mb_strcmp_ic_wrapper(ic: c_int, s1: *const c_char, s2: *const c_char) -> c_int;
+    fn nvim_mb_strnicmp_wrapper(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
+    fn nvim_search_get_p_ic() -> c_int;
+    fn nvim_shortmess_search() -> c_int;
+    fn nvim_give_search_wrap_warning(at_top: c_int);
+}
+
+/// Search for an exact line in a buffer (completion search).
+///
+/// Returns OK (1) if found, FAIL (0) if not.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle. `pat` must be a valid C string.
+/// `pos_lnum` and `pos_col` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_for_exact_line(
+    buf: *mut c_void,
+    pos_lnum: *mut c_int,
+    pos_col: *mut c_int,
+    dir: c_int,
+    pat: *const c_char,
+) -> c_int {
+    let mut start: c_int = 0;
+    let line_count = nvim_buf_ml_line_count(buf);
+
+    if line_count == 0 {
+        return FAIL;
+    }
+
+    loop {
+        *pos_lnum += dir;
+
+        if *pos_lnum < 1 {
+            if nvim_get_p_ws() != 0 {
+                *pos_lnum = line_count;
+                if nvim_shortmess_search() == 0 {
+                    nvim_give_search_wrap_warning(1); // top_bot_msg
+                }
+            } else {
+                *pos_lnum = 1;
+                break;
+            }
+        } else if *pos_lnum > line_count {
+            if nvim_get_p_ws() != 0 {
+                *pos_lnum = 1;
+                if nvim_shortmess_search() == 0 {
+                    nvim_give_search_wrap_warning(0); // bot_top_msg
+                }
+            } else {
+                *pos_lnum = 1;
+                break;
+            }
+        }
+
+        if *pos_lnum == start {
+            break;
+        }
+        if start == 0 {
+            start = *pos_lnum;
+        }
+
+        let mut skipwhite_off: c_int = 0;
+        let p = nvim_buf_get_line_skipwhite(buf, *pos_lnum, &mut skipwhite_off);
+        *pos_col = skipwhite_off;
+
+        // when adding lines the matching line may be empty but it is not
+        // ignored because we are interested in the next line -- Acevedo
+        if nvim_search_compl_status_adding() != 0 && nvim_search_compl_status_sol() == 0 {
+            if nvim_mb_strcmp_ic_wrapper(nvim_search_get_p_ic(), p, pat) == 0 {
+                return OK;
+            }
+        } else if !p.is_null() && *p != 0 {
+            // Ignore empty lines.
+            // Expanding lines or words.
+            let compl_len = nvim_search_ins_compl_len();
+            assert!(compl_len >= 0);
+            let cmp = if nvim_search_get_p_ic() != 0 {
+                nvim_mb_strnicmp_wrapper(p, pat, compl_len as usize)
+            } else {
+                // Case-sensitive strncmp equivalent
+                let len = compl_len as usize;
+                let s1 = std::slice::from_raw_parts(p as *const u8, len);
+                let s2 = std::slice::from_raw_parts(pat as *const u8, len);
+                match s1.cmp(s2) {
+                    std::cmp::Ordering::Equal => 0,
+                    std::cmp::Ordering::Less => -1,
+                    std::cmp::Ordering::Greater => 1,
+                }
+            };
+            if cmp == 0 {
+                return OK;
+            }
+        }
+    }
+
+    FAIL
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -176,6 +176,13 @@ extern const char *rs_get_mr_pattern(void);
 extern void rs_incsearch_state_save(void *state);
 extern void rs_incsearch_state_restore(const void *state);
 
+// Rust FFI declarations for Phase 7 integration functions
+extern int rs_check_linecomment(const char *line);
+extern int rs_is_zero_width(const char *pattern, size_t patternlen, bool move,
+                             int cur_lnum, int cur_col, int cur_coladd, int direction);
+extern int rs_search_for_exact_line(void *buf, int *pos_lnum, int *pos_col,
+                                     int dir, const char *pat);
+
 /// Get the lastcdir static variable (accessor for Rust).
 int nvim_get_lastcdir(void)
 {
@@ -918,60 +925,12 @@ int do_search(oparg_T *oap, int dirc, int search_delim, char *pat, size_t patlen
 // Return OK for success, or FAIL if no line found.
 int search_for_exact_line(buf_T *buf, pos_T *pos, Direction dir, char *pat)
 {
-  linenr_T start = 0;
-
-  if (buf->b_ml.ml_line_count == 0) {
-    return FAIL;
-  }
-  while (true) {
-    pos->lnum += dir;
-    if (pos->lnum < 1) {
-      if (p_ws) {
-        pos->lnum = buf->b_ml.ml_line_count;
-        if (!shortmess(SHM_SEARCH)) {
-          give_warning(_(top_bot_msg), true);
-        }
-      } else {
-        pos->lnum = 1;
-        break;
-      }
-    } else if (pos->lnum > buf->b_ml.ml_line_count) {
-      if (p_ws) {
-        pos->lnum = 1;
-        if (!shortmess(SHM_SEARCH)) {
-          give_warning(_(bot_top_msg), true);
-        }
-      } else {
-        pos->lnum = 1;
-        break;
-      }
-    }
-    if (pos->lnum == start) {
-      break;
-    }
-    if (start == 0) {
-      start = pos->lnum;
-    }
-    char *ptr = ml_get_buf(buf, pos->lnum);
-    char *p = skipwhite(ptr);
-    pos->col = (colnr_T)(p - ptr);
-
-    // when adding lines the matching line may be empty but it is not
-    // ignored because we are interested in the next line -- Acevedo
-    if (compl_status_adding() && !compl_status_sol()) {
-      if (mb_strcmp_ic((bool)p_ic, p, pat) == 0) {
-        return OK;
-      }
-    } else if (*p != NUL) {  // Ignore empty lines.
-      // Expanding lines or words.
-      assert(ins_compl_len() >= 0);
-      if ((p_ic ? mb_strnicmp(p, pat, (size_t)ins_compl_len())
-                : strncmp(p, pat, (size_t)ins_compl_len())) == 0) {
-        return OK;
-      }
-    }
-  }
-  return FAIL;
+  int lnum = pos->lnum;
+  int col = pos->col;
+  int result = rs_search_for_exact_line(buf, &lnum, &col, (int)dir, pat);
+  pos->lnum = lnum;
+  pos->col = col;
+  return result;
 }
 
 // Character Searches
@@ -1558,50 +1517,7 @@ static pos_T *findmatchlimit_old(oparg_T *oap, int initc, int flags, int64_t max
 /// @returns MAXCOL if not, otherwise return the column.
 int check_linecomment(const char *line)
 {
-  const char *p = line;  // scan from start
-  // skip Lispish one-line comments
-  if (curbuf->b_p_lisp) {
-    if (vim_strchr(p, ';') != NULL) {   // there may be comments
-      bool in_str = false;       // inside of string
-
-      while ((p = strpbrk(p, "\";")) != NULL) {
-        if (*p == '"') {
-          if (in_str) {
-            if (*(p - 1) != '\\') {             // skip escaped quote
-              in_str = false;
-            }
-          } else if (p == line || ((p - line) >= 2
-                                   // skip #\" form
-                                   && *(p - 1) != '\\' && *(p - 2) != '#')) {
-            in_str = true;
-          }
-        } else if (!in_str && ((p - line) < 2
-                               || (*(p - 1) != '\\' && *(p - 2) != '#'))
-                   && !is_pos_in_string(line, (colnr_T)(p - line))) {
-          break;                // found!
-        }
-        p++;
-      }
-    } else {
-      p = NULL;
-    }
-  } else {
-    while ((p = vim_strchr(p, '/')) != NULL) {
-      // Accept a double /, unless it's preceded with * and followed by *,
-      // because * / / * is an end and start of a C comment.  Only
-      // accept the position if it is not inside a string.
-      if (p[1] == '/' && (p == line || p[-1] != '*' || p[2] != '*')
-          && !is_pos_in_string(line, (colnr_T)(p - line))) {
-        break;
-      }
-      p++;
-    }
-  }
-
-  if (p == NULL) {
-    return MAXCOL;
-  }
-  return (int)(p - line);
+  return rs_check_linecomment(line);
 }
 
 /// Move cursor briefly to character matching the one under the cursor.
@@ -1843,59 +1759,9 @@ int current_search(int count, bool forward)
 static int is_zero_width(char *pattern, size_t patternlen, bool move, pos_T *cur,
                          Direction direction)
 {
-  regmmatch_T regmatch;
-  int result = -1;
-  pos_T pos;
-  const int called_emsg_before = called_emsg;
-  int flag = 0;
-
-  if (pattern == NULL) {
-    pattern = spats[last_idx].pat;
-    patternlen = spats[last_idx].patlen;
-  }
-
-  if (search_regcomp(pattern, patternlen, NULL, RE_SEARCH, RE_SEARCH,
-                     SEARCH_KEEP, &regmatch) == FAIL) {
-    return -1;
-  }
-
-  // init startcol correctly
-  regmatch.startpos[0].col = -1;
-  // move to match
-  if (move) {
-    clearpos(&pos);
-  } else {
-    pos = *cur;
-    // accept a match at the cursor position
-    flag = SEARCH_START;
-  }
-  if (searchit(curwin, curbuf, &pos, NULL, direction, pattern, patternlen, 1,
-               SEARCH_KEEP + flag, RE_SEARCH, NULL) != FAIL) {
-    int nmatched = 0;
-    // Zero-width pattern should match somewhere, then we can check if
-    // start and end are in the same position.
-    do {
-      regmatch.startpos[0].col++;
-      nmatched = vim_regexec_multi(&regmatch, curwin, curbuf,
-                                   pos.lnum, regmatch.startpos[0].col,
-                                   NULL, NULL);
-      if (nmatched != 0) {
-        break;
-      }
-    } while (regmatch.regprog != NULL
-             && direction == FORWARD
-             ? regmatch.startpos[0].col < pos.col
-             : regmatch.startpos[0].col > pos.col);
-
-    if (called_emsg == called_emsg_before) {
-      result = (nmatched != 0
-                && regmatch.startpos[0].lnum == regmatch.endpos[0].lnum
-                && regmatch.startpos[0].col == regmatch.endpos[0].col);
-    }
-  }
-
-  vim_regfree(regmatch.regprog);
-  return result;
+  return rs_is_zero_width(pattern, patternlen, move,
+                           cur ? cur->lnum : 0, cur ? cur->col : 0,
+                           cur ? cur->coladd : 0, (int)direction);
 }
 
 /// @return  true if line 'lnum' is empty or has white chars only.
@@ -4448,6 +4314,158 @@ void nvim_cmdline_stat_display(const char *msgbuf)
   msg_ext_set_kind("search_count");
   give_warning(msgbuf, false);
   msg_hist_off = false;
+}
+
+// =============================================================================
+// Phase 7: Integration function accessors
+// =============================================================================
+
+/// Check if curbuf has lisp mode enabled.
+int nvim_curbuf_is_lisp(void)
+{
+  return curbuf->b_p_lisp ? 1 : 0;
+}
+
+/// Wrap is_pos_in_string() for Rust.
+int nvim_is_pos_in_string(const char *line, int col)
+{
+  return is_pos_in_string(line, (colnr_T)col);
+}
+
+// Phase 7b: is_zero_width accessors
+// NOTE: nvim_get_called_emsg() already exists in message.c
+
+// nvim_regmmatch_alloc() and nvim_regmmatch_free() already defined above (~line 3717)
+
+/// Get spats[last_idx].pat and patlen for is_zero_width.
+const char *nvim_get_last_spat_pat(size_t *out_len)
+{
+  *out_len = spats[last_idx].patlen;
+  return spats[last_idx].pat;
+}
+
+/// Call search_regcomp for is_zero_width.
+int nvim_is_zero_width_regcomp(const char *pat, size_t patlen, void *regmatch)
+{
+  return search_regcomp((char *)pat, patlen, NULL, RE_SEARCH, RE_SEARCH,
+                         SEARCH_KEEP, (regmmatch_T *)regmatch);
+}
+
+/// Set regmatch.startpos[0].col.
+void nvim_regmatch_set_startcol(void *regmatch, int col)
+{
+  ((regmmatch_T *)regmatch)->startpos[0].col = (colnr_T)col;
+}
+
+/// Get regmatch.startpos[0].col.
+int nvim_regmatch_get_startcol(const void *regmatch)
+{
+  return ((const regmmatch_T *)regmatch)->startpos[0].col;
+}
+
+/// Get regmatch.startpos[0].lnum.
+int nvim_regmatch_get_startlnum(const void *regmatch)
+{
+  return ((const regmmatch_T *)regmatch)->startpos[0].lnum;
+}
+
+/// Get regmatch.endpos[0].col.
+int nvim_regmatch_get_endcol(const void *regmatch)
+{
+  return ((const regmmatch_T *)regmatch)->endpos[0].col;
+}
+
+/// Get regmatch.endpos[0].lnum.
+int nvim_regmatch_get_endlnum(const void *regmatch)
+{
+  return ((const regmmatch_T *)regmatch)->endpos[0].lnum;
+}
+
+/// Call vim_regexec_multi for is_zero_width.
+int nvim_is_zero_width_regexec(void *regmatch, int lnum, int col)
+{
+  return vim_regexec_multi((regmmatch_T *)regmatch, curwin, curbuf,
+                            (linenr_T)lnum, (colnr_T)col, NULL, NULL);
+}
+
+/// Call searchit for is_zero_width (pos_T marshalling).
+int nvim_is_zero_width_searchit(const char *pat, size_t patlen, int dir,
+                                int flags, int *pos_lnum, int *pos_col,
+                                int *pos_coladd)
+{
+  pos_T pos = { *pos_lnum, *pos_col, *pos_coladd };
+  int result = searchit(curwin, curbuf, &pos, NULL, (Direction)dir,
+                        (char *)pat, patlen, 1,
+                        SEARCH_KEEP + flags, RE_SEARCH, NULL);
+  *pos_lnum = pos.lnum;
+  *pos_col = pos.col;
+  *pos_coladd = pos.coladd;
+  return result;
+}
+
+// Phase 7c: search_for_exact_line accessors
+
+/// Get buf->b_ml.ml_line_count.
+int nvim_buf_ml_line_count(void *buf)
+{
+  return ((buf_T *)buf)->b_ml.ml_line_count;
+}
+
+/// Get ml_get_buf(buf, lnum) and skipwhite offset.
+const char *nvim_buf_get_line_skipwhite(void *buf, int lnum, int *skipwhite_off)
+{
+  char *ptr = ml_get_buf((buf_T *)buf, (linenr_T)lnum);
+  char *p = skipwhite(ptr);
+  *skipwhite_off = (int)(p - ptr);
+  return p;
+}
+
+/// Check compl_status_adding().
+int nvim_search_compl_status_adding(void)
+{
+  return compl_status_adding() ? 1 : 0;
+}
+
+/// Check compl_status_sol().
+int nvim_search_compl_status_sol(void)
+{
+  return compl_status_sol() ? 1 : 0;
+}
+
+/// Get ins_compl_len().
+int nvim_search_ins_compl_len(void)
+{
+  return ins_compl_len();
+}
+
+/// Compare with mb_strcmp_ic.
+int nvim_mb_strcmp_ic_wrapper(int ic, const char *s1, const char *s2)
+{
+  return mb_strcmp_ic((bool)ic, s1, s2);
+}
+
+/// Compare with mb_strnicmp.
+int nvim_mb_strnicmp_wrapper(const char *s1, const char *s2, size_t len)
+{
+  return mb_strnicmp(s1, s2, len);
+}
+
+/// Get p_ic option.
+int nvim_search_get_p_ic(void)
+{
+  return p_ic ? 1 : 0;
+}
+
+/// Call shortmess(SHM_SEARCH).
+int nvim_shortmess_search(void)
+{
+  return shortmess(SHM_SEARCH) ? 1 : 0;
+}
+
+/// Give top_bot_msg or bot_top_msg warning.
+void nvim_give_search_wrap_warning(int at_top)
+{
+  give_warning(_(at_top ? top_bot_msg : bot_top_msg), true);
 }
 
 // Phase 4: find_pattern_in_path constants
