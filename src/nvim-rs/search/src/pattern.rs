@@ -24,6 +24,17 @@ extern "C" {
     fn nvim_clear_spats();
     fn nvim_free_mr_pattern();
     fn nvim_call_set_vv_searchforward();
+
+    // Batch save/restore helpers (Phase 3)
+    fn nvim_inc_save_level() -> c_int;
+    fn nvim_dec_save_level() -> c_int;
+    fn nvim_save_search_patterns_batch();
+    fn nvim_restore_search_patterns_batch();
+    fn nvim_inc_did_save() -> c_int;
+    fn nvim_dec_did_save() -> c_int;
+    fn nvim_save_last_search_spat_batch();
+    fn nvim_restore_last_search_spat_batch();
+    fn nvim_call_iemsg_restore_mismatch();
 }
 
 /// Opaque representation of C SearchPattern struct.
@@ -405,6 +416,73 @@ pub unsafe extern "C" fn rs_set_substitute_pattern_shada(pat: *const SearchPatte
 }
 
 // rs_set_last_used_pattern is already defined in substitute.rs
+
+// =============================================================================
+// Pattern Save/Restore (Phase 3)
+// =============================================================================
+
+/// Save search patterns (for autocmds/user functions).
+///
+/// Uses nesting via save_level: only acts at the top level.
+#[no_mangle]
+pub extern "C" fn rs_save_search_patterns() {
+    unsafe {
+        // Increment save_level; only do the actual save if it was 0
+        if nvim_inc_save_level() != 0 {
+            return;
+        }
+        nvim_save_search_patterns_batch();
+    }
+}
+
+/// Restore search patterns (for autocmds/user functions).
+///
+/// Uses nesting via save_level: only acts when it reaches 0.
+#[no_mangle]
+pub extern "C" fn rs_restore_search_patterns() {
+    unsafe {
+        // Decrement save_level; only do the actual restore if it reaches 0
+        if nvim_dec_save_level() != 0 {
+            return;
+        }
+        nvim_restore_search_patterns_batch();
+    }
+}
+
+/// Save last search pattern for incremental search.
+///
+/// Uses nesting via did_save_last_search_spat.
+#[no_mangle]
+pub extern "C" fn rs_save_last_search_pattern() {
+    unsafe {
+        // Increment counter; only save if first call (old value was 0)
+        if nvim_inc_did_save() != 0 {
+            return;
+        }
+        nvim_save_last_search_spat_batch();
+    }
+}
+
+/// Restore last search pattern for incremental search.
+///
+/// Uses nesting via did_save_last_search_spat.
+#[no_mangle]
+pub extern "C" fn rs_restore_last_search_pattern() {
+    unsafe {
+        // Decrement counter
+        let new_val = nvim_dec_did_save();
+        if new_val > 0 {
+            // Nested call, nothing to do
+            return;
+        }
+        if new_val != 0 {
+            // Called more often than save
+            nvim_call_iemsg_restore_mismatch();
+            return;
+        }
+        nvim_restore_last_search_spat_batch();
+    }
+}
 
 /// Free spat at given index.
 #[no_mangle]

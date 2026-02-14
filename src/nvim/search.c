@@ -122,6 +122,14 @@ extern void rs_set_search_direction_raw(int cdir);
 extern void rs_reset_search_dir(void);
 extern int rs_search_linewhite(int lnum);
 
+// Rust FFI declarations for pattern save/restore
+extern void rs_save_search_patterns(void);
+extern void rs_restore_search_patterns(void);
+extern void rs_save_last_search_pattern(void);
+extern void rs_restore_last_search_pattern(void);
+extern void rs_save_incsearch_state(void);
+extern void rs_restore_incsearch_state(void);
+
 // Rust FFI declarations for ShaDa pattern get/set
 extern void rs_get_search_pattern_shada(SearchPattern *pat);
 extern void rs_get_substitute_pattern_shada(SearchPattern *pat);
@@ -505,44 +513,12 @@ int nvim_get_save_level(void)
 
 void save_search_patterns(void)
 {
-  if (save_level++ != 0) {
-    return;
-  }
-
-  for (size_t i = 0; i < ARRAY_SIZE(spats); i++) {
-    saved_spats[i] = spats[i];
-    if (spats[i].pat != NULL) {
-      saved_spats[i].pat = xstrnsave(spats[i].pat, spats[i].patlen);
-      saved_spats[i].patlen = spats[i].patlen;
-    }
-  }
-  if (mr_pattern == NULL) {
-    saved_mr_pattern = NULL;
-    saved_mr_patternlen = 0;
-  } else {
-    saved_mr_pattern = xstrnsave(mr_pattern, mr_patternlen);
-    saved_mr_patternlen = mr_patternlen;
-  }
-  saved_spats_last_idx = last_idx;
-  saved_spats_no_hlsearch = no_hlsearch;
+  rs_save_search_patterns();
 }
 
 void restore_search_patterns(void)
 {
-  if (--save_level != 0) {
-    return;
-  }
-
-  for (size_t i = 0; i < ARRAY_SIZE(spats); i++) {
-    free_spat(&spats[i]);
-    spats[i] = saved_spats[i];
-  }
-  set_vv_searchforward();
-  xfree(mr_pattern);
-  mr_pattern = saved_mr_pattern;
-  mr_patternlen = saved_mr_patternlen;
-  last_idx = saved_spats_last_idx;
-  set_no_hlsearch(saved_spats_no_hlsearch);
+  rs_restore_search_patterns();
 }
 
 static inline void free_spat(SearchPattern *const spat)
@@ -666,39 +642,12 @@ int nvim_get_p_hls(void)
 /// cancelling incremental searching even if it's called inside user functions.
 void save_last_search_pattern(void)
 {
-  if (++did_save_last_search_spat != 1) {
-    // nested call, nothing to do
-    return;
-  }
-
-  saved_last_search_spat = spats[RE_SEARCH];
-  if (spats[RE_SEARCH].pat != NULL) {
-    saved_last_search_spat.pat = xstrnsave(spats[RE_SEARCH].pat, spats[RE_SEARCH].patlen);
-    saved_last_search_spat.patlen = spats[RE_SEARCH].patlen;
-  }
-  saved_last_idx = last_idx;
-  saved_no_hlsearch = no_hlsearch;
+  rs_save_last_search_pattern();
 }
 
 void restore_last_search_pattern(void)
 {
-  if (--did_save_last_search_spat > 0) {
-    // nested call, nothing to do
-    return;
-  }
-  if (did_save_last_search_spat != 0) {
-    iemsg("restore_last_search_pattern() called more often than"
-          " save_last_search_pattern()");
-    return;
-  }
-
-  xfree(spats[RE_SEARCH].pat);
-  spats[RE_SEARCH] = saved_last_search_spat;
-  saved_last_search_spat.pat = NULL;
-  saved_last_search_spat.patlen = 0;
-  set_vv_searchforward();
-  last_idx = saved_last_idx;
-  set_no_hlsearch(saved_no_hlsearch);
+  rs_restore_last_search_pattern();
 }
 
 /// Save and restore the incsearch highlighting variables.
@@ -706,14 +655,12 @@ void restore_last_search_pattern(void)
 /// incsearch highlighting.
 static void save_incsearch_state(void)
 {
-  saved_search_match_endcol = search_match_endcol;
-  saved_search_match_lines = search_match_lines;
+  rs_save_incsearch_state();
 }
 
 static void restore_incsearch_state(void)
 {
-  search_match_endcol = saved_search_match_endcol;
-  search_match_lines = saved_search_match_lines;
+  rs_restore_incsearch_state();
 }
 
 char *last_search_pattern(void)
@@ -3753,6 +3700,119 @@ void set_last_used_pattern(const bool is_substitute_pattern)
 bool search_was_last_used(void)
 {
   return rs_search_was_last_used() != 0;
+}
+
+// =============================================================================
+// Batch accessors for pattern save/restore (Phase 3)
+// =============================================================================
+
+/// Save search patterns batch: deep-copy spats[] → saved_spats[], save mr_pattern,
+/// last_idx, no_hlsearch. Only acts at top level (save_level was 0).
+void nvim_save_search_patterns_batch(void)
+{
+  for (size_t i = 0; i < ARRAY_SIZE(spats); i++) {
+    saved_spats[i] = spats[i];
+    if (spats[i].pat != NULL) {
+      saved_spats[i].pat = xstrnsave(spats[i].pat, spats[i].patlen);
+      saved_spats[i].patlen = spats[i].patlen;
+    }
+  }
+  if (mr_pattern == NULL) {
+    saved_mr_pattern = NULL;
+    saved_mr_patternlen = 0;
+  } else {
+    saved_mr_pattern = xstrnsave(mr_pattern, mr_patternlen);
+    saved_mr_patternlen = mr_patternlen;
+  }
+  saved_spats_last_idx = last_idx;
+  saved_spats_no_hlsearch = no_hlsearch;
+}
+
+/// Restore search patterns batch: free spats[], restore from saved_spats[],
+/// restore mr_pattern, last_idx, no_hlsearch. Only acts when save_level reaches 0.
+void nvim_restore_search_patterns_batch(void)
+{
+  for (size_t i = 0; i < ARRAY_SIZE(spats); i++) {
+    free_spat(&spats[i]);
+    spats[i] = saved_spats[i];
+  }
+  set_vv_searchforward();
+  xfree(mr_pattern);
+  mr_pattern = saved_mr_pattern;
+  mr_patternlen = saved_mr_patternlen;
+  last_idx = saved_spats_last_idx;
+  set_no_hlsearch(saved_spats_no_hlsearch);
+}
+
+/// Increment save_level and return old value.
+int nvim_inc_save_level(void)
+{
+  return save_level++;
+}
+
+/// Decrement save_level and return new value.
+int nvim_dec_save_level(void)
+{
+  return --save_level;
+}
+
+/// Save last search pattern for incsearch: deep-copy spats[RE_SEARCH] →
+/// saved_last_search_spat, save last_idx, no_hlsearch.
+void nvim_save_last_search_spat_batch(void)
+{
+  saved_last_search_spat = spats[RE_SEARCH];
+  if (spats[RE_SEARCH].pat != NULL) {
+    saved_last_search_spat.pat = xstrnsave(spats[RE_SEARCH].pat, spats[RE_SEARCH].patlen);
+    saved_last_search_spat.patlen = spats[RE_SEARCH].patlen;
+  }
+  saved_last_idx = last_idx;
+  saved_no_hlsearch = no_hlsearch;
+}
+
+/// Restore last search pattern for incsearch: free spats[RE_SEARCH],
+/// restore from saved_last_search_spat, restore last_idx, no_hlsearch.
+void nvim_restore_last_search_spat_batch(void)
+{
+  xfree(spats[RE_SEARCH].pat);
+  spats[RE_SEARCH] = saved_last_search_spat;
+  saved_last_search_spat.pat = NULL;
+  saved_last_search_spat.patlen = 0;
+  set_vv_searchforward();
+  last_idx = saved_last_idx;
+  set_no_hlsearch(saved_no_hlsearch);
+}
+
+/// Increment did_save_last_search_spat and return old value.
+int nvim_inc_did_save(void)
+{
+  return did_save_last_search_spat++;
+}
+
+/// Decrement did_save_last_search_spat and return new value.
+int nvim_dec_did_save(void)
+{
+  return --did_save_last_search_spat;
+}
+
+/// Call iemsg() for the restore mismatch error.
+void nvim_call_iemsg_restore_mismatch(void)
+{
+  iemsg("restore_last_search_pattern() called more often than"
+        " save_last_search_pattern()");
+}
+
+/// Save incsearch state (search_match_endcol, search_match_lines).
+void nvim_save_incsearch_state_batch(void)
+{
+  saved_search_match_endcol = search_match_endcol;
+  saved_search_match_lines = search_match_lines;
+}
+
+/// Restore incsearch state.
+void nvim_restore_incsearch_state_batch(void)
+{
+  search_match_endcol = saved_search_match_endcol;
+  search_match_lines = saved_search_match_lines;
 }
 
 // =============================================================================
