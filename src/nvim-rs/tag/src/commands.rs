@@ -886,6 +886,640 @@ pub extern "C" fn rs_tag_is_current_match(
 }
 
 // =============================================================================
+// Phase 7: Tag display and location list functions
+// =============================================================================
+
+// Additional type aliases
+type DictHandle = *mut c_void;
+type ListHandle = *mut c_void;
+
+// Constants
+const TAB: u8 = 0x09;
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+const HLF_T: c_int = 23;
+const HLF_D: c_int = 5;
+const HLF_CM: c_int = 11;
+const MAXPATHL: usize = 4096;
+const CMDBUFFSIZE_C: usize = 1024;
+const MAXCOL: c_int = 0x7FFF_FFFF;
+
+#[allow(dead_code)]
+extern "C" {
+    // Parse and file name functions (already in Rust, callable via FFI)
+    fn rs_parse_match(lbuf: *mut c_char, tagp: *mut c_void) -> c_int;
+    fn rs_tag_full_fname(tagp: *mut c_void) -> *mut c_char;
+    fn rs_taglen_advance(l: c_int);
+
+    // Tag stack accessors (also in stack.rs extern block, re-declared here)
+    fn nvim_win_get_tagstack_entry(wp: *const c_void, idx: c_int) -> *const c_void;
+    fn nvim_taggy_get_cur_match(tg: *const c_void) -> c_int;
+    fn nvim_taggy_get_tagname(tg: *const c_void) -> *const c_char;
+    fn nvim_taggy_get_fmark(tg: *const c_void) -> *const c_void;
+
+    // Message output functions
+    fn nvim_msg_ext_set_kind(kind: *const c_char);
+    fn nvim_tag_msg_start();
+    fn nvim_msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
+    fn nvim_msg_clr_eos();
+    fn nvim_tag_msg_advance(col: c_int);
+    fn nvim_tag_msg_puts(s: *const c_char);
+    fn nvim_tag_msg_puts_title(s: *const c_char);
+    fn nvim_tag_msg_outtrans(str: *const c_char, attr: c_int, right: bool);
+    fn nvim_tag_msg_outtrans_len(str: *const c_char, len: c_int, attr: c_int, right: bool);
+    fn nvim_tag_msg_outtrans_one(p: *const c_char, hl_id: c_int, right: bool) -> *const c_char;
+    fn nvim_tag_msg_putchar(c: c_int);
+    fn nvim_tag_os_breakcheck();
+    fn nvim_tag_verbose_enter();
+    fn nvim_tag_verbose_leave();
+    fn nvim_tag_smsg_dup_field(field_name: *const c_char);
+
+    // Global variable accessors
+    fn nvim_get_msg_col() -> c_int;
+    fn nvim_set_msg_didout(val: c_int);
+    fn nvim_get_got_int() -> c_int;
+    fn nvim_set_got_int(val: c_int);
+    fn nvim_get_Columns() -> c_int;
+    fn nvim_get_p_verbose() -> c_int;
+    fn nvim_ui_has_messages() -> c_int;
+    fn nvim_ptr2cells(p: *const c_char) -> c_int;
+    fn nvim_get_curbuf_fnum() -> c_int;
+
+    // Tag-specific accessors
+    fn nvim_tag_get_mt_name(idx: c_int) -> *const c_char;
+    fn nvim_tag_get_g_do_tagpreview() -> c_int;
+    fn nvim_tag_get_ptag_cur_match() -> c_int;
+    fn nvim_tag_get_curwin() -> *mut c_void;
+    fn nvim_tag_fm_getname(tg: *const c_void, lead_len: c_int) -> *mut c_char;
+    fn nvim_tag_taggy_fmark_fnum(tg: *const c_void) -> c_int;
+    fn nvim_tag_list_format_entry(is_current: bool, i: c_int, mt_name: *const c_char);
+    fn nvim_tag_do_tags_line(
+        is_current: c_int,
+        idx: c_int,
+        cur_match: c_int,
+        tagname: *const c_char,
+        lnum: i64,
+    );
+
+    // Dictionary/list operations
+    fn nvim_tag_tv_dict_alloc() -> DictHandle;
+    fn nvim_tag_tv_dict_find(dict: DictHandle, key: *const c_char, key_len: c_int) -> bool;
+    fn nvim_tag_tv_dict_add_str(
+        dict: DictHandle,
+        key: *const c_char,
+        key_len: usize,
+        val: *mut c_char,
+    ) -> c_int;
+    fn nvim_tag_tv_dict_add_nr(
+        dict: DictHandle,
+        key: *const c_char,
+        key_len: usize,
+        nr: i64,
+    ) -> c_int;
+    fn nvim_tag_tv_list_alloc(count: c_int) -> ListHandle;
+    fn nvim_tag_tv_list_append_dict(list: ListHandle, dict: DictHandle);
+    fn nvim_tag_tv_list_free(list: ListHandle);
+    fn nvim_tag_set_errorlist(list: ListHandle, title: *const c_char);
+
+    // Memory management
+    fn nvim_tag_snprintf_iobuff(fmt: *const c_char, ...);
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
+    fn nvim_tag_xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize);
+    fn nvim_tag_xmemcpyz(dst: *mut c_char, src: *const c_char, len: usize);
+    fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn atoi(s: *const c_char) -> c_int;
+}
+
+// Helper to get TagPtrs fields. We know the TagPtrs layout from parse.rs.
+// We access it through the opaque handle because commands.rs doesn't import parse directly.
+// TagPtrs is a #[repr(C)] struct with known offsets.
+use crate::parse::TagPtrs;
+
+/// Access a field from tagptrs_T (tagname: offset 0)
+unsafe fn tagp_tagname(tagp: *const TagPtrs) -> *mut c_char {
+    (*tagp).tagname
+}
+unsafe fn tagp_tagname_end(tagp: *const TagPtrs) -> *mut c_char {
+    (*tagp).tagname_end
+}
+unsafe fn tagp_command(tagp: *const TagPtrs) -> *mut c_char {
+    (*tagp).command
+}
+unsafe fn tagp_command_end(tagp: *const TagPtrs) -> *mut c_char {
+    (*tagp).command_end
+}
+unsafe fn tagp_tagkind(tagp: *const TagPtrs) -> *mut c_char {
+    (*tagp).tagkind
+}
+unsafe fn tagp_tagkind_end(tagp: *const TagPtrs) -> *mut c_char {
+    (*tagp).tagkind_end
+}
+
+/// Check if a byte is an ASCII space character
+fn ascii_isspace(c: u8) -> bool {
+    matches!(c, b' ' | b'\t' | b'\n' | b'\r' | b'\x0b' | b'\x0c')
+}
+
+// -------------------------------------------------------------------------
+// rs_print_tag_list — format tag matches for :tselect display
+// -------------------------------------------------------------------------
+
+/// Print the tag list for :tselect display.
+///
+/// # Safety
+/// - `matches` must be a valid pointer to `num_matches` C strings
+/// - Each match string must be valid and parseable by `parse_match`
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_print_tag_list(
+    new_tag: bool,
+    use_tagstack: bool,
+    num_matches: c_int,
+    matches: *mut *mut c_char,
+) {
+    if matches.is_null() || num_matches <= 0 {
+        return;
+    }
+
+    let curwin = nvim_tag_get_curwin();
+
+    // Get current match info from tag stack
+    let tagstackidx = nvim_win_get_tagstackidx(curwin);
+    let tagstack_entry = nvim_win_get_tagstack_entry(curwin, tagstackidx);
+    let tagstack_cur_match = if tagstack_entry.is_null() {
+        -1
+    } else {
+        nvim_taggy_get_cur_match(tagstack_entry)
+    };
+
+    // Parse first match to determine tag name column width
+    let mut tagp: TagPtrs = TagPtrs::default();
+    let tagp_ptr: *mut TagPtrs = &raw mut tagp;
+    rs_parse_match(*matches, tagp_ptr.cast());
+
+    let tagname_len = tagp_tagname_end(tagp_ptr).offset_from(tagp_tagname(tagp_ptr)) as c_int + 2;
+    let taglen = if tagname_len < 18 { 18 } else { tagname_len };
+    let taglen = if taglen > nvim_get_Columns() - 25 {
+        MAXCOL
+    } else {
+        taglen
+    };
+
+    if nvim_get_msg_col() == 0 {
+        nvim_set_msg_didout(0); // overwrite previous message
+    }
+    nvim_msg_ext_set_kind(c"confirm".as_ptr());
+    nvim_tag_msg_start();
+    nvim_msg_puts_hl(c"  # pri kind tag".as_ptr(), HLF_T, false);
+    nvim_msg_clr_eos();
+    rs_taglen_advance(taglen);
+    nvim_msg_puts_hl(c"file\n".as_ptr(), HLF_T, false);
+
+    for i in 0..num_matches {
+        if nvim_get_got_int() != 0 {
+            break;
+        }
+
+        rs_parse_match(*matches.add(i as usize), tagp_ptr.cast());
+
+        // Determine if this is the current match
+        let is_current = !new_tag
+            && ((nvim_tag_get_g_do_tagpreview() != 0 && i == nvim_tag_get_ptag_cur_match())
+                || (use_tagstack && i == tagstack_cur_match));
+
+        // Format and print entry header
+        let match_byte = *(*matches.add(i as usize)) as u8;
+        let mt_idx = (match_byte & MT_MASK) as c_int;
+        let mt_name = nvim_tag_get_mt_name(mt_idx);
+        nvim_tag_list_format_entry(is_current, i, mt_name);
+
+        // Print tag kind if available
+        let tagkind = tagp_tagkind(tagp_ptr);
+        if !tagkind.is_null() {
+            let tagkind_end = tagp_tagkind_end(tagp_ptr);
+            let kind_len = tagkind_end.offset_from(tagkind) as c_int;
+            nvim_tag_msg_outtrans_len(tagkind, kind_len, 0, false);
+        }
+        nvim_tag_msg_advance(13);
+
+        // Print tag name
+        let tagname = tagp_tagname(tagp_ptr);
+        let tagname_end = tagp_tagname_end(tagp_ptr);
+        let name_len = tagname_end.offset_from(tagname) as c_int;
+        nvim_tag_msg_outtrans_len(tagname, name_len, HLF_T, false);
+        nvim_tag_msg_putchar(b' ' as c_int);
+        rs_taglen_advance(taglen);
+
+        // Print file name
+        let p = rs_tag_full_fname(tagp_ptr.cast());
+        if !p.is_null() {
+            nvim_tag_msg_outtrans(p, HLF_D, false);
+            xfree(p.cast());
+        }
+        if nvim_get_msg_col() > 0 {
+            nvim_tag_msg_putchar(b'\n' as c_int);
+        }
+        if nvim_get_got_int() != 0 {
+            break;
+        }
+        nvim_tag_msg_advance(15);
+
+        // Print extra fields
+        let command_end = tagp_command_end(tagp_ptr);
+        if command_end.is_null() {
+            // No command_end: find end of command
+            let mut p = tagp_command(tagp_ptr);
+            while *p != 0 && *p as u8 != b'\r' && *p as u8 != b'\n' {
+                p = p.add(1);
+            }
+        } else {
+            let mut p = command_end.add(3);
+            while *p != 0 && *p as u8 != b'\r' && *p as u8 != b'\n' {
+                // Skip TAB characters
+                while *p as u8 == TAB {
+                    p = p.add(1);
+                }
+
+                // skip "file:" without a value (static tag)
+                if strncmp(p, c"file:".as_ptr(), 5) == 0 && ascii_isspace(*p.add(5) as u8) {
+                    p = p.add(5);
+                    continue;
+                }
+
+                // skip "kind:<kind>" and "<kind>"
+                let tagkind = tagp_tagkind(tagp_ptr);
+                if p == tagkind || (p.add(5) == tagkind && strncmp(p, c"kind:".as_ptr(), 5) == 0) {
+                    p = tagp_tagkind_end(tagp_ptr);
+                    continue;
+                }
+
+                // print all other extra fields
+                let mut hl_id: c_int = HLF_CM;
+                while *p != 0 && *p as u8 != b'\r' && *p as u8 != b'\n' {
+                    if nvim_get_msg_col() + nvim_ptr2cells(p) >= nvim_get_Columns() {
+                        nvim_tag_msg_putchar(b'\n' as c_int);
+                        if nvim_get_got_int() != 0 {
+                            break;
+                        }
+                        nvim_tag_msg_advance(15);
+                    }
+                    p = nvim_tag_msg_outtrans_one(p, hl_id, false).cast_mut();
+                    if *p as u8 == TAB {
+                        nvim_msg_puts_hl(c" ".as_ptr(), hl_id, false);
+                        break;
+                    }
+                    if *p as u8 == b':' {
+                        hl_id = 0;
+                    }
+                }
+            }
+            if nvim_get_msg_col() > 15 {
+                nvim_tag_msg_putchar(b'\n' as c_int);
+                if nvim_get_got_int() != 0 {
+                    break;
+                }
+                nvim_tag_msg_advance(15);
+            }
+        }
+
+        // Put the info (in several lines) at column 15.
+        // Don't display "/^" and "?^".
+        let command_end_for_display = if tagp_command_end(tagp_ptr).is_null() {
+            // find end of command
+            let mut pe = tagp_command(tagp_ptr);
+            while *pe != 0 && *pe as u8 != b'\r' && *pe as u8 != b'\n' {
+                pe = pe.add(1);
+            }
+            pe
+        } else {
+            tagp_command_end(tagp_ptr)
+        };
+
+        let mut p = tagp_command(tagp_ptr);
+        if *p as u8 == b'/' || *p as u8 == b'?' {
+            p = p.add(1);
+            if *p as u8 == b'^' {
+                p = p.add(1);
+            }
+        }
+        // Remove leading whitespace from pattern
+        while p != command_end_for_display && ascii_isspace(*p as u8) {
+            p = p.add(1);
+        }
+
+        let command_char = *tagp_command(tagp_ptr) as u8;
+        while p != command_end_for_display {
+            let cell_width = if *p as u8 == TAB {
+                1
+            } else {
+                nvim_ptr2cells(p)
+            };
+            if nvim_get_msg_col() + cell_width > nvim_get_Columns() {
+                nvim_tag_msg_putchar(b'\n' as c_int);
+            }
+            if nvim_get_got_int() != 0 {
+                break;
+            }
+            nvim_tag_msg_advance(15);
+
+            // skip backslash used for escaping
+            if *p as u8 == b'\\' && (*p.add(1) as u8 == command_char || *p.add(1) as u8 == b'\\') {
+                p = p.add(1);
+            }
+
+            if *p as u8 == TAB {
+                nvim_tag_msg_putchar(b' ' as c_int);
+                p = p.add(1);
+            } else {
+                p = nvim_tag_msg_outtrans_one(p, 0, false).cast_mut();
+            }
+
+            // don't display the "$/;\"" and "$?;\""
+            if p == command_end_for_display.sub(2)
+                && *p as u8 == b'$'
+                && *p.add(1) as u8 == command_char
+            {
+                break;
+            }
+            // don't display matching '/' or '?'
+            if p == command_end_for_display.sub(1)
+                && *p as u8 == command_char
+                && (command_char == b'/' || command_char == b'?')
+            {
+                break;
+            }
+        }
+
+        if nvim_get_msg_col() != 0 && (nvim_ui_has_messages() == 0 || i < num_matches - 1) {
+            nvim_tag_msg_putchar(b'\n' as c_int);
+        }
+        nvim_tag_os_breakcheck();
+    }
+
+    if nvim_get_got_int() != 0 {
+        nvim_set_got_int(0); // only stop the listing
+    }
+}
+
+// -------------------------------------------------------------------------
+// rs_add_llist_tags — add matching tags to location list
+// -------------------------------------------------------------------------
+
+/// Add the matching tags to the location list for the current window.
+///
+/// # Safety
+/// - `tag` must be a valid C string
+/// - `matches` must point to `num_matches` valid C strings
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_llist_tags(
+    tag: *const c_char,
+    num_matches: c_int,
+    matches: *mut *mut c_char,
+) -> c_int {
+    if tag.is_null() || matches.is_null() || num_matches <= 0 {
+        return OK;
+    }
+
+    let fname: *mut c_char = xmalloc(MAXPATHL + 1).cast();
+    let cmd: *mut c_char = xmalloc(CMDBUFFSIZE_C + 1).cast();
+    let list = nvim_tag_tv_list_alloc(0);
+
+    let mut tagp: TagPtrs = TagPtrs::default();
+    let tagp_ptr: *mut TagPtrs = &raw mut tagp;
+
+    for i in 0..num_matches {
+        rs_parse_match(*matches.add(i as usize), tagp_ptr.cast());
+
+        // Save the tag name (max 128 chars)
+        let tagname = tagp_tagname(tagp_ptr);
+        let tagname_end = tagp_tagname_end(tagp_ptr);
+        let name_len = tagname_end.offset_from(tagname) as usize;
+        let name_len = if name_len > 128 { 128 } else { name_len };
+        let mut tag_name_buf = [0u8; 129];
+        std::ptr::copy_nonoverlapping(tagname as *const u8, tag_name_buf.as_mut_ptr(), name_len);
+        tag_name_buf[name_len] = 0;
+
+        // Save the tag file name
+        let p = rs_tag_full_fname(tagp_ptr.cast());
+        if p.is_null() {
+            continue;
+        }
+        nvim_tag_xstrlcpy(fname, p, MAXPATHL);
+        xfree(p.cast());
+
+        // Get the line number or the search pattern
+        let mut lnum: LinenrT = 0;
+        let command = tagp_command(tagp_ptr);
+        if (*command as u8).is_ascii_digit() {
+            // Line number
+            lnum = atoi(command) as LinenrT;
+        } else {
+            // Search pattern
+            let mut cmd_start = command;
+            let mut cmd_end = tagp_command_end(tagp_ptr);
+            if cmd_end.is_null() {
+                let mut pe = command;
+                while *pe != 0 && *pe as u8 != b'\r' && *pe as u8 != b'\n' {
+                    pe = pe.add(1);
+                }
+                cmd_end = pe;
+            }
+
+            // Adjust to point to last character
+            cmd_end = cmd_end.sub(1);
+
+            // Skip leading/trailing delimiters
+            if *cmd_start as u8 == b'/' || *cmd_start as u8 == b'?' {
+                cmd_start = cmd_start.add(1);
+            }
+            if *cmd_end as u8 == b'/' || *cmd_end as u8 == b'?' {
+                cmd_end = cmd_end.sub(1);
+            }
+
+            let mut pos = 0usize;
+            *cmd = 0;
+
+            // If "^" is present, copy it first
+            if *cmd_start as u8 == b'^' {
+                *cmd = b'^' as c_char;
+                pos = 1;
+                cmd_start = cmd_start.add(1);
+            }
+
+            // Precede with \V for very nomagic
+            *cmd.add(pos) = b'\\' as c_char;
+            *cmd.add(pos + 1) = b'V' as c_char;
+            pos += 2;
+
+            let content_len = cmd_end.offset_from(cmd_start) as usize + 1;
+            let max_copy = if content_len > CMDBUFFSIZE_C - 5 {
+                CMDBUFFSIZE_C - 5
+            } else {
+                content_len
+            };
+            snprintf(
+                cmd.add(pos),
+                CMDBUFFSIZE_C + 1 - pos,
+                c"%.*s".as_ptr(),
+                max_copy as c_int,
+                cmd_start,
+            );
+            pos += max_copy;
+
+            // Replace '$' at end with '\$'
+            if pos > 0 && *cmd.add(pos - 1) as u8 == b'$' {
+                *cmd.add(pos - 1) = b'\\' as c_char;
+                *cmd.add(pos) = b'$' as c_char;
+                pos += 1;
+            }
+
+            *cmd.add(pos) = 0;
+        }
+
+        let dict = nvim_tag_tv_dict_alloc();
+        nvim_tag_tv_list_append_dict(list, dict);
+
+        nvim_tag_tv_dict_add_str(dict, c"text".as_ptr(), 4, tag_name_buf.as_mut_ptr().cast());
+        nvim_tag_tv_dict_add_str(dict, c"filename".as_ptr(), 8, fname);
+        nvim_tag_tv_dict_add_nr(dict, c"lnum".as_ptr(), 4, lnum as i64);
+        if lnum == 0 {
+            nvim_tag_tv_dict_add_str(dict, c"pattern".as_ptr(), 7, cmd);
+        }
+    }
+
+    nvim_tag_snprintf_iobuff(c"ltag %s".as_ptr(), tag);
+    let iobuff = nvim_get_iobuff();
+    nvim_tag_set_errorlist(list, iobuff);
+
+    nvim_tag_tv_list_free(list);
+    xfree(fname.cast());
+    xfree(cmd.cast());
+
+    OK
+}
+
+extern "C" {
+    fn nvim_get_iobuff() -> *const c_char;
+}
+
+// -------------------------------------------------------------------------
+// rs_do_tags — print the tag stack
+// -------------------------------------------------------------------------
+
+/// Print the tag stack (`:tags` command).
+///
+/// # Safety
+/// - Called from C with a valid `exarg_T` pointer (unused in this implementation)
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_tags() {
+    let curwin = nvim_tag_get_curwin();
+    let tagstackidx = nvim_win_get_tagstackidx(curwin);
+    let tagstacklen = nvim_win_get_tagstacklen(curwin);
+
+    // Highlight title
+    nvim_tag_msg_puts_title(c"\n  # TO tag         FROM line  in file/text".as_ptr());
+
+    for i in 0..tagstacklen {
+        let entry = nvim_win_get_tagstack_entry(curwin, i);
+        let tagname = nvim_taggy_get_tagname(entry);
+        if tagname.is_null() {
+            continue;
+        }
+
+        let name = nvim_tag_fm_getname(entry, 30);
+        if name.is_null() {
+            continue; // file name not available
+        }
+
+        nvim_tag_msg_putchar(b'\n' as c_int);
+
+        // Get fmark lnum
+        let fmark = nvim_taggy_get_fmark(entry);
+        let lnum = nvim_fmark_get_lnum(fmark) as i64;
+        let cur_match = nvim_taggy_get_cur_match(entry);
+
+        nvim_tag_do_tags_line((i == tagstackidx) as c_int, i, cur_match, tagname, lnum);
+
+        let fmark_fnum = nvim_tag_taggy_fmark_fnum(entry);
+        let curbuf_fnum = nvim_get_curbuf_fnum();
+        let attr = if fmark_fnum == curbuf_fnum { HLF_D } else { 0 };
+        nvim_tag_msg_outtrans(name, attr, false);
+        xfree(name.cast());
+    }
+
+    if tagstackidx == tagstacklen {
+        // idx at top of stack
+        nvim_tag_msg_puts(c"\n>".as_ptr());
+    }
+}
+
+extern "C" {
+    fn nvim_fmark_get_lnum(fm: *const c_void) -> LinenrT;
+}
+
+// -------------------------------------------------------------------------
+// rs_add_tag_field — add a tag field to a dictionary
+// -------------------------------------------------------------------------
+
+/// Add a tag field to a dictionary, checking for duplicate field names.
+///
+/// # Safety
+/// - `dict` must be a valid dict_T pointer
+/// - `field_name` must be a valid C string
+/// - `start` may be null (empty value will be added)
+/// - `end` may be null (will use strlen to find end of start)
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_tag_field(
+    dict: DictHandle,
+    field_name: *const c_char,
+    start: *const c_char,
+    end: *const c_char,
+) -> c_int {
+    if dict.is_null() || field_name.is_null() {
+        return FAIL;
+    }
+
+    // Check that the field name doesn't exist yet
+    if nvim_tag_tv_dict_find(dict, field_name, -1) {
+        if nvim_get_p_verbose() > 0 {
+            nvim_tag_verbose_enter();
+            nvim_tag_smsg_dup_field(field_name);
+            nvim_tag_verbose_leave();
+        }
+        return FAIL;
+    }
+
+    let buf: *mut c_char = xmalloc(MAXPATHL).cast();
+    let mut len: usize = 0;
+
+    if !start.is_null() {
+        let actual_end = if end.is_null() {
+            let mut e = start.add(strlen(start));
+            while e > start && (*e.sub(1) as u8 == b'\r' || *e.sub(1) as u8 == b'\n') {
+                e = e.sub(1);
+            }
+            e
+        } else {
+            end
+        };
+
+        len = actual_end.offset_from(start) as usize;
+        if len > MAXPATHL - 1 {
+            len = MAXPATHL - 1;
+        }
+        nvim_tag_xmemcpyz(buf, start, len);
+    }
+    *buf.add(len) = 0;
+
+    let field_name_len = strlen(field_name);
+    let retval = nvim_tag_tv_dict_add_str(dict, field_name, field_name_len, buf);
+    xfree(buf.cast());
+    retval
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
