@@ -711,6 +711,9 @@ extern int rs_find_tagfunc_tags(char *pat, void *ga, int *match_count, int flags
 // Phase 10 Rust implementations
 extern int rs_jumpto_tag(const char *lbuf_arg, int forceit, bool keep_help);
 
+// Phase 11 Rust implementations
+extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
@@ -2405,6 +2408,306 @@ erret:
 // End of Phase 10 C accessor functions
 // ============================================================================
 
+// ============================================================================
+// Phase 11 C accessor functions for do_tag() migration
+// ============================================================================
+
+// Verify constants used by Rust
+_Static_assert(HLF_W == 26, "HLF_W value for Rust");
+_Static_assert(kOptFdoFlagTag == 0x80, "kOptFdoFlagTag value for Rust");
+_Static_assert(NOTAGFILE == 99, "NOTAGFILE value for Rust");
+_Static_assert(TAGSTACKSIZE == 20, "TAGSTACKSIZE value for Rust");
+_Static_assert(MT_IC_OFF == 4, "MT_IC_OFF value for Rust");
+
+/// Get the 'tagstack' option value
+bool nvim_tag_get_p_tgst(void)
+{
+  return p_tgst;
+}
+
+/// Get curbuf->b_fnum
+int nvim_tag_get_curbuf_fnum(void)
+{
+  return curbuf->b_fnum;
+}
+
+/// Get the got_int flag
+bool nvim_tag_get_got_int(void)
+{
+  return got_int;
+}
+
+/// Get msg_scroll flag
+int nvim_tag_get_msg_scroll(void)
+{
+  return msg_scroll;
+}
+
+/// Set msg_scroll flag
+void nvim_tag_set_msg_scroll(int val)
+{
+  msg_scroll = val;
+}
+
+/// Get msg_scrolled flag
+int nvim_tag_get_msg_scrolled(void)
+{
+  return msg_scrolled;
+}
+
+/// Get msg_silent flag
+int nvim_tag_get_msg_silent(void)
+{
+  return msg_silent;
+}
+
+/// Check if UI has kUIMessages
+bool nvim_tag_ui_has_messages(void)
+{
+  return ui_has(kUIMessages);
+}
+
+/// Call ui_flush
+void nvim_tag_ui_flush(void)
+{
+  ui_flush();
+}
+
+/// Call os_delay
+void nvim_tag_os_delay(int msec)
+{
+  os_delay(msec, true);
+}
+
+/// Wrapper for xstrdup
+char *nvim_tag_xstrdup(const char *s)
+{
+  return xstrdup(s);
+}
+
+/// Wrapper for xfree
+void nvim_tag_xfree(void *p)
+{
+  xfree(p);
+}
+
+/// Wrapper for xmemdupz
+char *nvim_tag_xmemdupz(const char *s, size_t len)
+{
+  return xmemdupz(s, len);
+}
+
+/// Wrapper for strcmp
+int nvim_tag_strcmp(const char *s1, const char *s2)
+{
+  return strcmp(s1, s2);
+}
+
+/// Get b_ffname for a buffer number (returns NULL if buffer not found)
+char *nvim_tag_buflist_findnr_ffname(int fnum)
+{
+  buf_T *buf = buflist_findnr(fnum);
+  return buf != NULL ? buf->b_ffname : NULL;
+}
+
+/// Handle the DT_POP jump: restore position from saved fmark.
+/// Returns: 0 = OK, 1 = FAIL (buflist_getfile failed), 2 = at top of stack
+int nvim_tag_do_pop_jump(void *tg_void, int count, int forceit,
+                         int tagstackidx, int tagstacklen)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  const bool old_KeyTyped = KeyTyped;
+
+  if (tagstackidx >= tagstacklen) {
+    // count == 0?
+    emsg(_(e_at_top_of_tag_stack));
+    return 2;
+  }
+
+  // Make a copy of the fmark, autocommands may invalidate the
+  // tagstack before it's used.
+  fmark_T saved_fmark = tg[tagstackidx].fmark;
+  if (saved_fmark.fnum != curbuf->b_fnum) {
+    if (buflist_getfile(saved_fmark.fnum, saved_fmark.mark.lnum,
+                        GETF_SETMARK, forceit) == FAIL) {
+      return 1;
+    }
+    curwin->w_cursor.lnum = saved_fmark.mark.lnum;
+  } else {
+    setpcmark();
+    curwin->w_cursor.lnum = saved_fmark.mark.lnum;
+  }
+  curwin->w_cursor.col = saved_fmark.mark.col;
+  curwin->w_set_curswant = true;
+  check_cursor(curwin);
+  if ((fdo_flags & kOptFdoFlagTag) && old_KeyTyped) {
+    foldOpenCursor();
+  }
+  return 0;
+}
+
+/// Check if the tagstack pointer has changed (window closed during search)
+bool nvim_tag_tagstack_changed(void *saved_tagstack)
+{
+  return saved_tagstack != curwin->w_tagstack;
+}
+
+/// Get the saved tagstack pointer for comparison
+void *nvim_tag_get_tagstack_ptr(void)
+{
+  return curwin->w_tagstack;
+}
+
+/// Save cursor position in tagstack entry
+void nvim_tag_save_cursor_in_entry(void *tg_void, int idx)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  tg[idx].fmark.mark = curwin->w_cursor;
+  tg[idx].fmark.fnum = curbuf->b_fnum;
+}
+
+/// Copy fmark from tagstack entry into opaque buffer (sizeof(fmark_T) bytes)
+void nvim_tag_copy_fmark_from_entry(void *tg_void, int idx, void *out_buf)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  memcpy(out_buf, &tg[idx].fmark, sizeof(fmark_T));
+}
+
+/// Restore fmark from opaque buffer into tagstack entry
+void nvim_tag_restore_fmark_to_entry(void *tg_void, int idx, const void *buf)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  memcpy(&tg[idx].fmark, buf, sizeof(fmark_T));
+}
+
+/// Get sizeof(fmark_T) for Rust allocation
+size_t nvim_tag_fmark_size(void)
+{
+  return sizeof(fmark_T);
+}
+_Static_assert(sizeof(fmark_T) <= 64, "fmark_T must fit in 64 bytes for Rust stack buffer");
+
+/// prompt_for_input(NULL, 0, false, NULL) for tag selection
+int nvim_tag_prompt_for_selection(void)
+{
+  return prompt_for_input(NULL, 0, false, NULL);
+}
+
+/// Set VV_SWAPCOMMAND with tag name
+void nvim_tag_set_swap_command(const char *name)
+{
+  vim_snprintf(IObuff, IOSIZE, ":ta %s\r", name);
+  set_vim_var_string(VV_SWAPCOMMAND, IObuff, -1);
+}
+
+/// Clear VV_SWAPCOMMAND
+void nvim_tag_clear_swap_command(void)
+{
+  set_vim_var_string(VV_SWAPCOMMAND, NULL, -1);
+}
+
+/// Show "tag X of Y" message with optional IC warning
+void nvim_tag_show_match_msg(int cur_match, int num_matches,
+                             int max_num_matches, int prev_num_matches,
+                             bool new_tag, bool ic)
+{
+  snprintf(IObuff, sizeof(IObuff), _("tag %d of %d%s"),
+           cur_match + 1,
+           num_matches,
+           max_num_matches != MAXCOL ? _(" or more") : "");
+  if (ic) {
+    xstrlcat(IObuff, _("  Using tag with different case!"), IOSIZE);
+  }
+  if ((num_matches > prev_num_matches || new_tag)
+      && num_matches > 1) {
+    msg(IObuff, ic ? HLF_W : 0);
+    msg_scroll = true;
+  } else {
+    give_warning(IObuff, ic);
+  }
+  if (ic && !msg_scrolled && msg_silent == 0 && !ui_has(kUIMessages)) {
+    ui_flush();
+    os_delay(1007, true);
+  }
+}
+
+/// emsg for "E73: Tag stack empty"
+void nvim_tag_emsg_stack_empty(void)
+{
+  emsg(_(e_tag_stack_empty));
+}
+
+/// emsg for "E555: At bottom of tag stack"
+void nvim_tag_emsg_at_bottom(void)
+{
+  emsg(_(e_at_bottom_of_tag_stack));
+}
+
+/// emsg for "E556: At top of tag stack"
+void nvim_tag_emsg_at_top(void)
+{
+  emsg(_(e_at_top_of_tag_stack));
+}
+
+/// semsg for "E426: Tag not found: %s"
+void nvim_tag_semsg_not_found(const char *name)
+{
+  semsg(_(e_tag_not_found_str), name);
+}
+
+/// emsg for "E425: Cannot go before first matching tag"
+void nvim_tag_emsg_before_first(void)
+{
+  emsg(_("E425: Cannot go before first matching tag"));
+}
+
+/// emsg for "E427: There is only one matching tag"
+void nvim_tag_emsg_only_one(void)
+{
+  emsg(_("E427: There is only one matching tag"));
+}
+
+/// emsg for "E428: Cannot go beyond last matching tag"
+void nvim_tag_emsg_beyond_last(void)
+{
+  emsg(_("E428: Cannot go beyond last matching tag"));
+}
+
+/// smsg for "File \"%s\" does not exist" (non-error)
+void nvim_tag_smsg_nofile(const char *fname)
+{
+  smsg(0, _("File \"%s\" does not exist"), fname);
+}
+
+/// semsg for "E429: File \"%s\" does not exist" (error)
+void nvim_tag_semsg_nofile(const char *fname)
+{
+  semsg(_("E429: File \"%s\" does not exist"), fname);
+}
+
+/// emsg for "E1299: Window unexpectedly closed while searching for tags"
+void nvim_tag_emsg_window_closed(void)
+{
+  emsg(_(e_window_unexpectedly_close_while_searching_for_tags));
+}
+
+/// free_string_option for nofile_fname and clear it
+void nvim_tag_free_nofile_fname(void)
+{
+  free_string_option(nofile_fname);
+  nofile_fname = NULL;
+}
+
+/// Check if nofile_fname is NULL
+bool nvim_tag_nofile_fname_is_null(void)
+{
+  return nofile_fname == NULL;
+}
+
+// ============================================================================
+// End of Phase 11 C accessor functions
+// ============================================================================
+
 /// Reads the 'tagfunc' option value and convert that to a callback value.
 /// Invoked when the 'tagfunc' option is set. The option value can be a name of
 /// a function (string), or function(<name>) or funcref(<name>) or a lambda.
@@ -2455,510 +2758,7 @@ void set_buflocal_tfu_callback(buf_T *buf)
 /// @param verbose  print "tag not found" message
 void do_tag(char *tag, int type, int count, int forceit, bool verbose)
 {
-  taggy_T *tagstack = curwin->w_tagstack;
-  int tagstackidx = curwin->w_tagstackidx;
-  int tagstacklen = curwin->w_tagstacklen;
-  int cur_match = 0;
-  int cur_fnum = curbuf->b_fnum;
-  int oldtagstackidx = tagstackidx;
-  int prevtagstackidx = tagstackidx;
-  bool new_tag = false;
-  bool no_regexp = false;
-  int error_cur_match = 0;
-  bool save_pos = false;
-  fmark_T saved_fmark;
-  int new_num_matches;
-  char **new_matches;
-  bool use_tagstack;
-  bool skip_msg = false;
-  char *buf_ffname = curbuf->b_ffname;  // name for priority computation
-  bool use_tfu = true;
-  char *tofree = NULL;
-
-  // remember the matches for the last used tag
-  static int num_matches = 0;
-  static int max_num_matches = 0;             // limit used for match search
-  static char **matches = NULL;
-  static int flags;
-
-#ifdef EXITFREE
-  if (type == DT_FREE) {
-    // remove the list of matches
-    FreeWild(num_matches, matches);
-    num_matches = 0;
-    return;
-  }
-#endif
-
-  if (tfu_in_use) {
-    emsg(_(e_cannot_modify_tag_stack_within_tagfunc));
-    return;
-  }
-
-  if (postponed_split == 0 && !check_can_set_curbuf_forceit(forceit)) {
-    return;
-  }
-
-  if (type == DT_HELP) {
-    type = DT_TAG;
-    no_regexp = true;
-    use_tfu = false;
-  }
-
-  int prev_num_matches = num_matches;
-  free_string_option(nofile_fname);
-  nofile_fname = NULL;
-
-  clearpos(&saved_fmark.mark);          // shutup gcc 4.0
-  saved_fmark.fnum = 0;
-
-  // Don't add a tag to the tagstack if 'tagstack' has been reset.
-  assert(tag != NULL);
-  if (!p_tgst && *tag != NUL) {
-    use_tagstack = false;
-    new_tag = true;
-    if (g_do_tagpreview != 0) {
-      tagstack_clear_entry(&ptag_entry);
-      ptag_entry.tagname = xstrdup(tag);
-    }
-  } else {
-    if (g_do_tagpreview != 0) {
-      use_tagstack = false;
-    } else {
-      use_tagstack = true;
-    }
-
-    // new pattern, add to the tag stack
-    if (*tag != NUL
-        && (type == DT_TAG || type == DT_SELECT || type == DT_JUMP
-            || type == DT_LTAG)) {
-      if (g_do_tagpreview != 0) {
-        if (ptag_entry.tagname != NULL
-            && strcmp(ptag_entry.tagname, tag) == 0) {
-          // Jumping to same tag: keep the current match, so that
-          // the CursorHold autocommand example works.
-          cur_match = ptag_entry.cur_match;
-          cur_fnum = ptag_entry.cur_fnum;
-        } else {
-          tagstack_clear_entry(&ptag_entry);
-          ptag_entry.tagname = xstrdup(tag);
-        }
-      } else {
-        // If the last used entry is not at the top, delete all tag
-        // stack entries above it.
-        while (tagstackidx < tagstacklen) {
-          tagstack_clear_entry(&tagstack[--tagstacklen]);
-        }
-
-        // if the tagstack is full: remove oldest entry
-        if (++tagstacklen > TAGSTACKSIZE) {
-          tagstacklen = TAGSTACKSIZE;
-          tagstack_clear_entry(&tagstack[0]);
-          for (int i = 1; i < tagstacklen; i++) {
-            tagstack[i - 1] = tagstack[i];
-          }
-          tagstack[--tagstackidx].user_data = NULL;
-        }
-
-        // put the tag name in the tag stack
-        tagstack[tagstackidx].tagname = xstrdup(tag);
-
-        curwin->w_tagstacklen = tagstacklen;
-
-        save_pos = true;                // save the cursor position below
-      }
-
-      new_tag = true;
-    } else {
-      if (g_do_tagpreview != 0 ? ptag_entry.tagname == NULL
-                               : tagstacklen == 0) {
-        // empty stack
-        emsg(_(e_tag_stack_empty));
-        goto end_do_tag;
-      }
-
-      if (type == DT_POP) {             // go to older position
-        const bool old_KeyTyped = KeyTyped;
-        if ((tagstackidx -= count) < 0) {
-          emsg(_(e_at_bottom_of_tag_stack));
-          if (tagstackidx + count == 0) {
-            // We did [num]^T from the bottom of the stack
-            tagstackidx = 0;
-            goto end_do_tag;
-          }
-          // We weren't at the bottom of the stack, so jump all the
-          // way to the bottom now.
-          tagstackidx = 0;
-        } else if (tagstackidx >= tagstacklen) {        // count == 0?
-          emsg(_(e_at_top_of_tag_stack));
-          goto end_do_tag;
-        }
-
-        // Make a copy of the fmark, autocommands may invalidate the
-        // tagstack before it's used.
-        saved_fmark = tagstack[tagstackidx].fmark;
-        if (saved_fmark.fnum != curbuf->b_fnum) {
-          // Jump to other file. If this fails (e.g. because the
-          // file was changed) keep original position in tag stack.
-          if (buflist_getfile(saved_fmark.fnum, saved_fmark.mark.lnum,
-                              GETF_SETMARK, forceit) == FAIL) {
-            tagstackidx = oldtagstackidx;              // back to old posn
-            goto end_do_tag;
-          }
-          // A BufReadPost autocommand may jump to the '" mark, but
-          // we don't what that here.
-          curwin->w_cursor.lnum = saved_fmark.mark.lnum;
-        } else {
-          setpcmark();
-          curwin->w_cursor.lnum = saved_fmark.mark.lnum;
-        }
-        curwin->w_cursor.col = saved_fmark.mark.col;
-        curwin->w_set_curswant = true;
-        check_cursor(curwin);
-        if ((fdo_flags & kOptFdoFlagTag) && old_KeyTyped) {
-          foldOpenCursor();
-        }
-
-        // remove the old list of matches
-        FreeWild(num_matches, matches);
-        num_matches = 0;
-        tag_freematch();
-        goto end_do_tag;
-      }
-
-      if (type == DT_TAG
-          || type == DT_LTAG) {
-        if (g_do_tagpreview != 0) {
-          cur_match = ptag_entry.cur_match;
-          cur_fnum = ptag_entry.cur_fnum;
-        } else {
-          // ":tag" (no argument): go to newer pattern
-          save_pos = true;              // save the cursor position below
-          if ((tagstackidx += count - 1) >= tagstacklen) {
-            // Beyond the last one, just give an error message and
-            // go to the last one.  Don't store the cursor
-            // position.
-            tagstackidx = tagstacklen - 1;
-            emsg(_(e_at_top_of_tag_stack));
-            save_pos = false;
-          } else if (tagstackidx < 0) {         // must have been count == 0
-            emsg(_(e_at_bottom_of_tag_stack));
-            tagstackidx = 0;
-            goto end_do_tag;
-          }
-          cur_match = tagstack[tagstackidx].cur_match;
-          cur_fnum = tagstack[tagstackidx].cur_fnum;
-        }
-        new_tag = true;
-      } else {                                // go to other matching tag
-        // Save index for when selection is cancelled.
-        prevtagstackidx = tagstackidx;
-
-        if (g_do_tagpreview != 0) {
-          cur_match = ptag_entry.cur_match;
-          cur_fnum = ptag_entry.cur_fnum;
-        } else {
-          if (--tagstackidx < 0) {
-            tagstackidx = 0;
-          }
-          cur_match = tagstack[tagstackidx].cur_match;
-          cur_fnum = tagstack[tagstackidx].cur_fnum;
-        }
-        switch (type) {
-        case DT_FIRST:
-          cur_match = count - 1; break;
-        case DT_SELECT:
-        case DT_JUMP:
-        case DT_LAST:
-          cur_match = MAXCOL - 1; break;
-        case DT_NEXT:
-          cur_match += count; break;
-        case DT_PREV:
-          cur_match -= count; break;
-        }
-        if (cur_match >= MAXCOL) {
-          cur_match = MAXCOL - 1;
-        } else if (cur_match < 0) {
-          emsg(_("E425: Cannot go before first matching tag"));
-          skip_msg = true;
-          cur_match = 0;
-          cur_fnum = curbuf->b_fnum;
-        }
-      }
-    }
-
-    if (g_do_tagpreview != 0) {
-      if (type != DT_SELECT && type != DT_JUMP) {
-        ptag_entry.cur_match = cur_match;
-        ptag_entry.cur_fnum = cur_fnum;
-      }
-    } else {
-      // For ":tag [arg]" or ":tselect" remember position before the jump.
-      saved_fmark = tagstack[tagstackidx].fmark;
-      if (save_pos) {
-        tagstack[tagstackidx].fmark.mark = curwin->w_cursor;
-        tagstack[tagstackidx].fmark.fnum = curbuf->b_fnum;
-      }
-
-      // Curwin will change in the call to jumpto_tag() if ":stag" was
-      // used or an autocommand jumps to another window; store value of
-      // tagstackidx now.
-      curwin->w_tagstackidx = tagstackidx;
-      if (type != DT_SELECT && type != DT_JUMP) {
-        curwin->w_tagstack[tagstackidx].cur_match = cur_match;
-        curwin->w_tagstack[tagstackidx].cur_fnum = cur_fnum;
-      }
-    }
-  }
-
-  // When not using the current buffer get the name of buffer "cur_fnum".
-  // Makes sure that the tag order doesn't change when using a remembered
-  // position for "cur_match".
-  if (cur_fnum != curbuf->b_fnum) {
-    buf_T *buf = buflist_findnr(cur_fnum);
-
-    if (buf != NULL) {
-      buf_ffname = buf->b_ffname;
-    }
-  }
-
-  // Repeat searching for tags, when a file has not been found.
-  while (true) {
-    char *name;
-
-    // When desired match not found yet, try to find it (and others).
-    if (use_tagstack) {
-      // make a copy, the tagstack may change in 'tagfunc'
-      name = xstrdup(tagstack[tagstackidx].tagname);
-      xfree(tofree);
-      tofree = name;
-    } else if (g_do_tagpreview != 0) {
-      name = ptag_entry.tagname;
-    } else {
-      name = tag;
-    }
-    bool other_name = (tagmatchname == NULL || strcmp(tagmatchname, name) != 0);
-    if (new_tag
-        || (cur_match >= num_matches && max_num_matches != MAXCOL)
-        || other_name) {
-      if (other_name) {
-        xfree(tagmatchname);
-        tagmatchname = xstrdup(name);
-      }
-
-      if (type == DT_SELECT || type == DT_JUMP
-          || type == DT_LTAG) {
-        cur_match = MAXCOL - 1;
-      }
-      max_num_matches = type == DT_TAG ? MAXCOL : cur_match + 1;
-
-      // when the argument starts with '/', use it as a regexp
-      if (!no_regexp && *name == '/') {
-        flags = TAG_REGEXP;
-        name++;
-      } else {
-        flags = TAG_NOIC;
-      }
-
-      flags |= verbose ? TAG_VERBOSE : 0;
-      flags |= !use_tfu ? TAG_NO_TAGFUNC : 0;
-
-      if (find_tags(name, &new_num_matches, &new_matches, flags,
-                    max_num_matches, buf_ffname) == OK
-          && new_num_matches < max_num_matches) {
-        max_num_matches = MAXCOL;  // If less than max_num_matches
-                                   // found: all matches found.
-      }
-
-      // A tag function may do anything, which may cause various
-      // information to become invalid.  At least check for the tagstack
-      // to still be the same.
-      if (tagstack != curwin->w_tagstack) {
-        emsg(_(e_window_unexpectedly_close_while_searching_for_tags));
-        FreeWild(new_num_matches, new_matches);
-        break;
-      }
-
-      // If there already were some matches for the same name, move them
-      // to the start.  Avoids that the order changes when using
-      // ":tnext" and jumping to another file.
-      if (!new_tag && !other_name) {
-        int idx = 0;
-        tagptrs_T tagp, tagp2;
-
-        // Find the position of each old match in the new list.  Need
-        // to use parse_match() to find the tag line.
-        for (int j = 0; j < num_matches; j++) {
-          parse_match(matches[j], &tagp);
-          for (int i = idx; i < new_num_matches; i++) {
-            parse_match(new_matches[i], &tagp2);
-            if (strcmp(tagp.tagname, tagp2.tagname) == 0) {
-              char *p = new_matches[i];
-              for (int k = i; k > idx; k--) {
-                new_matches[k] = new_matches[k - 1];
-              }
-              new_matches[idx++] = p;
-              break;
-            }
-          }
-        }
-      }
-      FreeWild(num_matches, matches);
-      num_matches = new_num_matches;
-      matches = new_matches;
-    }
-
-    if (num_matches <= 0) {
-      if (verbose) {
-        semsg(_(e_tag_not_found_str), name);
-      }
-      g_do_tagpreview = 0;
-    } else {
-      bool ask_for_selection = false;
-
-      if (type == DT_TAG && *tag != NUL) {
-        // If a count is supplied to the ":tag <name>" command, then
-        // jump to count'th matching tag.
-        cur_match = count > 0 ? count - 1 : 0;
-      } else if (type == DT_SELECT || (type == DT_JUMP && num_matches > 1)) {
-        print_tag_list(new_tag, use_tagstack, num_matches, matches);
-        ask_for_selection = true;
-      } else if (type == DT_LTAG) {
-        if (add_llist_tags(tag, num_matches, matches) == FAIL) {
-          goto end_do_tag;
-        }
-
-        cur_match = 0;                  // Jump to the first tag
-      }
-
-      if (ask_for_selection) {
-        // Ask to select a tag from the list.
-        int i = prompt_for_input(NULL, 0, false, NULL);
-        if (i <= 0 || i > num_matches || got_int) {
-          // no valid choice: don't change anything
-          if (use_tagstack) {
-            tagstack[tagstackidx].fmark = saved_fmark;
-            tagstackidx = prevtagstackidx;
-          }
-          break;
-        }
-        cur_match = i - 1;
-      }
-
-      if (cur_match >= num_matches) {
-        // Avoid giving this error when a file wasn't found and we're
-        // looking for a match in another file, which wasn't found.
-        // There will be an emsg("file doesn't exist") below then.
-        if ((type == DT_NEXT || type == DT_FIRST)
-            && nofile_fname == NULL) {
-          if (num_matches == 1) {
-            emsg(_("E427: There is only one matching tag"));
-          } else {
-            emsg(_("E428: Cannot go beyond last matching tag"));
-          }
-          skip_msg = true;
-        }
-        cur_match = num_matches - 1;
-      }
-      if (use_tagstack) {
-        tagptrs_T tagp2;
-
-        tagstack[tagstackidx].cur_match = cur_match;
-        tagstack[tagstackidx].cur_fnum = cur_fnum;
-
-        // store user-provided data originating from tagfunc
-        if (use_tfu && parse_match(matches[cur_match], &tagp2) == OK
-            && tagp2.user_data) {
-          XFREE_CLEAR(tagstack[tagstackidx].user_data);
-          tagstack[tagstackidx].user_data =
-            xmemdupz(tagp2.user_data, (size_t)(tagp2.user_data_end - tagp2.user_data));
-        }
-
-        tagstackidx++;
-      } else if (g_do_tagpreview != 0) {
-        ptag_entry.cur_match = cur_match;
-        ptag_entry.cur_fnum = cur_fnum;
-      }
-
-      // Only when going to try the next match, report that the previous
-      // file didn't exist.  Otherwise an emsg() is given below.
-      if (nofile_fname != NULL && error_cur_match != cur_match) {
-        smsg(0, _("File \"%s\" does not exist"), nofile_fname);
-      }
-
-      bool ic = (matches[cur_match][0] & MT_IC_OFF);
-      if (type != DT_TAG && type != DT_SELECT && type != DT_JUMP
-          && (num_matches > 1 || ic)
-          && !skip_msg) {
-        // Give an indication of the number of matching tags
-        snprintf(IObuff, sizeof(IObuff), _("tag %d of %d%s"),
-                 cur_match + 1,
-                 num_matches,
-                 max_num_matches != MAXCOL ? _(" or more") : "");
-        if (ic) {
-          xstrlcat(IObuff, _("  Using tag with different case!"), IOSIZE);
-        }
-        if ((num_matches > prev_num_matches || new_tag)
-            && num_matches > 1) {
-          msg(IObuff, ic ? HLF_W : 0);
-          msg_scroll = true;  // Don't overwrite this message.
-        } else {
-          give_warning(IObuff, ic);
-        }
-        if (ic && !msg_scrolled && msg_silent == 0 && !ui_has(kUIMessages)) {
-          ui_flush();
-          os_delay(1007, true);
-        }
-      }
-
-      // Let the SwapExists event know what tag we are jumping to.
-      vim_snprintf(IObuff, IOSIZE, ":ta %s\r", name);
-      set_vim_var_string(VV_SWAPCOMMAND, IObuff, -1);
-
-      // Jump to the desired match.
-      int i = jumpto_tag(matches[cur_match], forceit, true);
-
-      set_vim_var_string(VV_SWAPCOMMAND, NULL, -1);
-
-      if (i == NOTAGFILE) {
-        // File not found: try again with another matching tag
-        if ((type == DT_PREV && cur_match > 0)
-            || ((type == DT_TAG || type == DT_NEXT
-                 || type == DT_FIRST)
-                && (max_num_matches != MAXCOL
-                    || cur_match < num_matches - 1))) {
-          error_cur_match = cur_match;
-          if (use_tagstack) {
-            tagstackidx--;
-          }
-          if (type == DT_PREV) {
-            cur_match--;
-          } else {
-            type = DT_NEXT;
-            cur_match++;
-          }
-          continue;
-        }
-        semsg(_("E429: File \"%s\" does not exist"), nofile_fname);
-      } else {
-        // We may have jumped to another window, check that
-        // tagstackidx is still valid.
-        if (use_tagstack && tagstackidx > curwin->w_tagstacklen) {
-          tagstackidx = curwin->w_tagstackidx;
-        }
-      }
-    }
-    break;
-  }
-
-end_do_tag:
-  // Only store the new index when using the tagstack and it's valid.
-  if (use_tagstack && tagstackidx <= curwin->w_tagstacklen) {
-    curwin->w_tagstackidx = tagstackidx;
-  }
-  postponed_split = 0;          // don't split next time
-  g_do_tagpreview = 0;          // don't do tag preview next time
-  xfree(tofree);
+  rs_do_tag(tag, type, count, forceit, verbose);
 }
 
 // List all the matching tags.

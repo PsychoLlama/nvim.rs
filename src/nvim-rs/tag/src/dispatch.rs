@@ -12,7 +12,8 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::doc_markdown)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
+use std::ptr;
 
 // =============================================================================
 // Command type constants (match tag.h enum values)
@@ -53,9 +54,105 @@ const MAXCOL: c_int = 0x7FFF_FFFF;
 // External C accessor functions
 // =============================================================================
 
+type WinHandle = *const c_void;
+
 extern "C" {
     fn nvim_get_postponed_split() -> c_int;
+    fn nvim_set_postponed_split(val: c_int);
     fn nvim_get_g_do_tagpreview() -> c_int;
+    fn nvim_set_g_do_tagpreview(val: c_int);
+    fn nvim_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
+
+    // Phase 11 accessors
+    fn nvim_tag_get_p_tgst() -> bool;
+    fn nvim_tag_get_curbuf_fnum() -> c_int;
+    fn nvim_tag_get_got_int() -> bool;
+    fn nvim_tag_get_tfu_in_use() -> bool;
+    fn nvim_tag_emsg_tfu_in_use();
+    fn nvim_tag_buflist_findnr_ffname(fnum: c_int) -> *mut c_char;
+    fn nvim_tag_do_pop_jump(
+        tagstack: *mut c_void,
+        count: c_int,
+        forceit: c_int,
+        tagstackidx: c_int,
+        tagstacklen: c_int,
+    ) -> c_int;
+    fn nvim_tag_tagstack_changed(saved_tagstack: *mut c_void) -> bool;
+    fn nvim_tag_get_tagstack_ptr() -> *mut c_void;
+    fn nvim_tag_save_cursor_in_entry(tagstack: *mut c_void, idx: c_int);
+    fn nvim_tag_copy_fmark_from_entry(tagstack: *mut c_void, idx: c_int, out_buf: *mut c_void);
+    fn nvim_tag_restore_fmark_to_entry(tagstack: *mut c_void, idx: c_int, buf: *const c_void);
+    fn nvim_tag_prompt_for_selection() -> c_int;
+    fn nvim_tag_set_swap_command(name: *const c_char);
+    fn nvim_tag_clear_swap_command();
+    fn nvim_tag_show_match_msg(
+        cur_match: c_int,
+        num_matches: c_int,
+        max_num_matches: c_int,
+        prev_num_matches: c_int,
+        new_tag: bool,
+        ic: bool,
+    );
+    fn nvim_tag_emsg_stack_empty();
+    fn nvim_tag_emsg_at_bottom();
+    fn nvim_tag_emsg_at_top();
+    fn nvim_tag_semsg_not_found(name: *const c_char);
+    fn nvim_tag_emsg_before_first();
+    fn nvim_tag_emsg_only_one();
+    fn nvim_tag_emsg_beyond_last();
+    fn nvim_tag_smsg_nofile(fname: *const c_char);
+    fn nvim_tag_semsg_nofile(fname: *const c_char);
+    fn nvim_tag_emsg_window_closed();
+    fn nvim_tag_free_nofile_fname();
+    fn nvim_tag_nofile_fname_is_null() -> bool;
+    fn nvim_get_nofile_fname() -> *const c_char;
+    fn nvim_tag_xstrdup(s: *const c_char) -> *mut c_char;
+    fn nvim_tag_xfree(p: *mut c_void);
+    fn nvim_tag_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
+    fn nvim_tag_strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+
+    // Tag match cache
+    fn nvim_tag_find_tags(
+        pat: *mut c_char,
+        num_matches: *mut c_int,
+        matchesp: *mut *mut *mut c_char,
+        flags: c_int,
+        mincount: c_int,
+        buf_ffname: *mut c_char,
+    ) -> c_int;
+    fn nvim_tag_free_wild(count: c_int, files: *mut *mut c_char);
+
+    // Tag match name
+    fn nvim_get_tagmatchname() -> *const c_char;
+    fn nvim_xfree_clear_tagmatchname();
+    fn nvim_set_tagmatchname(name: *mut c_char);
+
+    // ptag_entry — use *const for getters, *mut for setters
+    fn nvim_get_ptag_entry() -> *mut c_void;
+
+    // Win/stack accessors
+    fn nvim_tag_get_curwin() -> *mut c_void;
+    fn nvim_win_get_tagstackidx(wp: WinHandle) -> c_int;
+    fn nvim_win_get_tagstacklen(wp: WinHandle) -> c_int;
+    fn nvim_win_set_tagstackidx(wp: *mut c_void, idx: c_int);
+
+    // Taggy getters (take *const c_void to match commands.rs)
+    fn nvim_taggy_get_cur_match(tg: *const c_void) -> c_int;
+    fn nvim_taggy_get_cur_fnum(tg: *const c_void) -> c_int;
+    fn nvim_taggy_get_tagname(tg: *const c_void) -> *const c_char;
+    fn nvim_taggy_get_user_data(tg: *const c_void) -> *const c_char;
+
+    // Taggy setters (take *mut c_void)
+    fn nvim_taggy_set_cur_match(tg: *mut c_void, match_idx: c_int);
+    fn nvim_taggy_set_cur_fnum(tg: *mut c_void, fnum: c_int);
+    fn nvim_taggy_set_user_data(tg: *mut c_void, data: *mut c_char);
+    fn nvim_taggy_set_tagname(tg: *mut c_void, name: *mut c_char);
+
+    // Stack entry accessor (returns *const to match commands.rs)
+    fn nvim_win_get_tagstack_entry(wp: WinHandle, idx: c_int) -> *const c_void;
+    fn nvim_win_set_tagstacklen(wp: *mut c_void, len: c_int);
+    fn nvim_tag_get_curbuf_ffname() -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
 }
 
 // =============================================================================
@@ -535,6 +632,598 @@ pub extern "C" fn rs_calc_retry_match(cmd_type: c_int, cur_match: c_int) -> c_in
         cur_match - 1
     } else {
         cur_match + 1
+    }
+}
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+/// NOTAGFILE return value from `jumpto_tag`
+const NOTAGFILE: c_int = 99;
+
+/// OK return value
+const OK: c_int = 1;
+
+/// FAIL return value
+const FAIL: c_int = 0;
+
+/// `MT_IC_OFF` flag in match priority byte
+const MT_IC_OFF: u8 = 4;
+
+/// TAGSTACKSIZE constant
+const TAGSTACKSIZE: c_int = 20;
+
+// =============================================================================
+// Main do_tag() implementation
+// =============================================================================
+
+/// Cached tag match state (replaces C static locals in `do_tag()`).
+///
+/// These are module-level statics that persist across calls, matching
+/// the behavior of the C static locals.
+static mut NUM_MATCHES: c_int = 0;
+static mut MAX_NUM_MATCHES: c_int = 0;
+static mut MATCHES: *mut *mut c_char = ptr::null_mut();
+static mut FLAGS: c_int = 0;
+
+/// Main tag command dispatcher.
+///
+/// Handles `:tag`, `:pop`, `:tnext`, `:tprev`, `:tfirst`, `:tlast`,
+/// `:tselect`, `:tjump`, `:ltag`, and tag preview commands.
+///
+/// # Safety
+///
+/// Calls many C accessor functions and manipulates global state.
+///
+/// # Panics
+///
+/// Panics if `tag` is null.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_do_tag(
+    tag: *mut c_char,
+    typ: c_int,
+    count: c_int,
+    forceit: c_int,
+    verbose: bool,
+) {
+    // DT_FREE: free cached matches and return
+    if typ == cmd_type::DT_FREE {
+        nvim_tag_free_wild(NUM_MATCHES, MATCHES);
+        NUM_MATCHES = 0;
+        MATCHES = ptr::null_mut();
+        return;
+    }
+
+    // Disallow recursive tagfunc calls
+    if nvim_tag_get_tfu_in_use() {
+        nvim_tag_emsg_tfu_in_use();
+        return;
+    }
+
+    if nvim_get_postponed_split() == 0 && !nvim_check_can_set_curbuf_forceit(forceit) {
+        return;
+    }
+
+    let mut cur_type = typ;
+    let is_help = cur_type == cmd_type::DT_HELP;
+    if is_help {
+        cur_type = cmd_type::DT_TAG;
+    }
+    let no_regexp = is_help;
+    let use_tfu = !is_help;
+
+    let prev_num_matches = NUM_MATCHES;
+    nvim_tag_free_nofile_fname();
+
+    // Determine stack/preview usage
+    assert!(!tag.is_null());
+    let tag_is_empty = *tag == 0;
+    let p_tgst = nvim_tag_get_p_tgst();
+    let g_do_tagpreview = nvim_get_g_do_tagpreview();
+    let curwin = nvim_tag_get_curwin();
+    let use_tagstack;
+    let mut new_tag = false;
+    let mut save_pos = false;
+    let mut cur_match: c_int = 0;
+    let mut cur_fnum = nvim_tag_get_curbuf_fnum();
+    let mut skip_msg = false;
+    let mut error_cur_match: c_int = 0;
+    let mut tofree: *mut c_char = ptr::null_mut();
+
+    // Opaque buffer for saved fmark (max 64 bytes per _Static_assert)
+    let mut saved_fmark_buf = [0u8; 64];
+
+    let mut tagstackidx = nvim_win_get_tagstackidx(curwin);
+    let mut tagstacklen = nvim_win_get_tagstacklen(curwin);
+    let oldtagstackidx = tagstackidx;
+    let mut prevtagstackidx = tagstackidx;
+    let tagstack_ptr = nvim_tag_get_tagstack_ptr();
+
+    let ptag_entry = nvim_get_ptag_entry();
+
+    if !p_tgst && !tag_is_empty {
+        // Don't add a tag to the tagstack if 'tagstack' has been reset.
+        use_tagstack = false;
+        new_tag = true;
+        if g_do_tagpreview != 0 {
+            crate::stack::rs_tagstack_clear_entry(ptag_entry);
+            nvim_taggy_set_tagname(ptag_entry, nvim_tag_xstrdup(tag));
+        }
+    } else {
+        use_tagstack = g_do_tagpreview == 0;
+
+        if !tag_is_empty
+            && (cur_type == cmd_type::DT_TAG
+                || cur_type == cmd_type::DT_SELECT
+                || cur_type == cmd_type::DT_JUMP
+                || cur_type == cmd_type::DT_LTAG)
+        {
+            // New pattern, add to tag stack
+            if g_do_tagpreview != 0 {
+                let ptag_name = nvim_taggy_get_tagname(ptag_entry);
+                if !ptag_name.is_null() && nvim_tag_strcmp(ptag_name, tag) == 0 {
+                    // Same tag: keep current match
+                    cur_match = nvim_taggy_get_cur_match(ptag_entry);
+                    cur_fnum = nvim_taggy_get_cur_fnum(ptag_entry);
+                } else {
+                    crate::stack::rs_tagstack_clear_entry(ptag_entry);
+                    nvim_taggy_set_tagname(ptag_entry, nvim_tag_xstrdup(tag));
+                }
+            } else {
+                // Delete entries above current position
+                while tagstackidx < tagstacklen {
+                    tagstacklen -= 1;
+                    let entry = nvim_win_get_tagstack_entry(curwin, tagstacklen);
+                    crate::stack::rs_tagstack_clear_entry(entry);
+                }
+
+                // If stack is full, remove oldest entry
+                tagstacklen += 1;
+                if tagstacklen > TAGSTACKSIZE {
+                    tagstacklen = TAGSTACKSIZE;
+                    let oldest = nvim_win_get_tagstack_entry(curwin, 0);
+                    crate::stack::rs_tagstack_clear_entry(oldest);
+                    for i in 1..tagstacklen {
+                        let dest = nvim_win_get_tagstack_entry(curwin, i - 1);
+                        let src = nvim_win_get_tagstack_entry(curwin, i);
+                        crate::stack::rs_tagstack_copy_entry(dest, src);
+                    }
+                    tagstackidx -= 1;
+                    let entry = nvim_win_get_tagstack_entry(curwin, tagstackidx);
+                    nvim_taggy_set_user_data(entry.cast_mut(), ptr::null_mut());
+                }
+
+                let entry = nvim_win_get_tagstack_entry(curwin, tagstackidx);
+                nvim_taggy_set_tagname(entry.cast_mut(), nvim_tag_xstrdup(tag));
+                nvim_win_set_tagstacklen(curwin, tagstacklen);
+                save_pos = true;
+            }
+            new_tag = true;
+        } else {
+            // No new tag — use existing stack
+            let stack_empty = if g_do_tagpreview != 0 {
+                nvim_taggy_get_tagname(ptag_entry).is_null()
+            } else {
+                tagstacklen == 0
+            };
+            if stack_empty {
+                nvim_tag_emsg_stack_empty();
+                do_tag_cleanup(use_tagstack, tagstackidx, tofree);
+                return;
+            }
+
+            if cur_type == cmd_type::DT_POP {
+                // Go to older position
+                tagstackidx -= count;
+                if tagstackidx < 0 {
+                    nvim_tag_emsg_at_bottom();
+                    if tagstackidx + count == 0 {
+                        tagstackidx = 0;
+                        do_tag_cleanup(use_tagstack, tagstackidx, tofree);
+                        return;
+                    }
+                    tagstackidx = 0;
+                }
+
+                let pop_result =
+                    nvim_tag_do_pop_jump(tagstack_ptr, count, forceit, tagstackidx, tagstacklen);
+                match pop_result {
+                    1 => {
+                        // buflist_getfile failed
+                        tagstackidx = oldtagstackidx;
+                        do_tag_cleanup(use_tagstack, tagstackidx, tofree);
+                        return;
+                    }
+                    2 => {
+                        // at top of stack (count == 0)
+                        do_tag_cleanup(use_tagstack, tagstackidx, tofree);
+                        return;
+                    }
+                    _ => {}
+                }
+
+                // Free old matches
+                nvim_tag_free_wild(NUM_MATCHES, MATCHES);
+                NUM_MATCHES = 0;
+                MATCHES = ptr::null_mut();
+                crate::rs_tag_freematch();
+                do_tag_cleanup(use_tagstack, tagstackidx, tofree);
+                return;
+            }
+
+            if cur_type == cmd_type::DT_TAG || cur_type == cmd_type::DT_LTAG {
+                if g_do_tagpreview != 0 {
+                    cur_match = nvim_taggy_get_cur_match(ptag_entry);
+                    cur_fnum = nvim_taggy_get_cur_fnum(ptag_entry);
+                } else {
+                    // Go to newer pattern
+                    save_pos = true;
+                    tagstackidx += count - 1;
+                    if tagstackidx >= tagstacklen {
+                        tagstackidx = tagstacklen - 1;
+                        nvim_tag_emsg_at_top();
+                        save_pos = false;
+                    } else if tagstackidx < 0 {
+                        nvim_tag_emsg_at_bottom();
+                        tagstackidx = 0;
+                        do_tag_cleanup(use_tagstack, tagstackidx, tofree);
+                        return;
+                    }
+                    let entry = nvim_win_get_tagstack_entry(curwin, tagstackidx);
+                    cur_match = nvim_taggy_get_cur_match(entry);
+                    cur_fnum = nvim_taggy_get_cur_fnum(entry);
+                }
+                new_tag = true;
+            } else {
+                // Navigation: DT_NEXT, DT_PREV, DT_FIRST, DT_LAST, DT_SELECT, DT_JUMP
+                prevtagstackidx = tagstackidx;
+
+                if g_do_tagpreview != 0 {
+                    cur_match = nvim_taggy_get_cur_match(ptag_entry);
+                    cur_fnum = nvim_taggy_get_cur_fnum(ptag_entry);
+                } else {
+                    tagstackidx -= 1;
+                    if tagstackidx < 0 {
+                        tagstackidx = 0;
+                    }
+                    let entry = nvim_win_get_tagstack_entry(curwin, tagstackidx);
+                    cur_match = nvim_taggy_get_cur_match(entry);
+                    cur_fnum = nvim_taggy_get_cur_fnum(entry);
+                }
+
+                match cur_type {
+                    cmd_type::DT_FIRST => cur_match = count - 1,
+                    cmd_type::DT_SELECT | cmd_type::DT_JUMP | cmd_type::DT_LAST => {
+                        cur_match = MAXCOL - 1;
+                    }
+                    cmd_type::DT_NEXT => cur_match += count,
+                    cmd_type::DT_PREV => cur_match -= count,
+                    _ => {}
+                }
+
+                if cur_match == MAXCOL {
+                    cur_match = MAXCOL - 1;
+                } else if cur_match < 0 {
+                    nvim_tag_emsg_before_first();
+                    skip_msg = true;
+                    cur_match = 0;
+                    cur_fnum = nvim_tag_get_curbuf_fnum();
+                }
+            }
+        }
+
+        // Save/update state in preview or tagstack
+        if g_do_tagpreview != 0 {
+            if cur_type != cmd_type::DT_SELECT && cur_type != cmd_type::DT_JUMP {
+                nvim_taggy_set_cur_match(ptag_entry, cur_match);
+                nvim_taggy_set_cur_fnum(ptag_entry, cur_fnum);
+            }
+        } else {
+            // Save the fmark before modifying the entry
+            let entry = nvim_win_get_tagstack_entry(curwin, tagstackidx);
+            nvim_tag_copy_fmark_from_entry(
+                tagstack_ptr,
+                tagstackidx,
+                saved_fmark_buf.as_mut_ptr().cast(),
+            );
+            if save_pos {
+                nvim_tag_save_cursor_in_entry(tagstack_ptr, tagstackidx);
+            }
+
+            nvim_win_set_tagstackidx(curwin, tagstackidx);
+            if cur_type != cmd_type::DT_SELECT && cur_type != cmd_type::DT_JUMP {
+                nvim_taggy_set_cur_match(entry.cast_mut(), cur_match);
+                nvim_taggy_set_cur_fnum(entry.cast_mut(), cur_fnum);
+            }
+        }
+    }
+
+    // Get buf_ffname for match priority
+    let mut buf_ffname = nvim_tag_get_curbuf_ffname();
+    if cur_fnum != nvim_tag_get_curbuf_fnum() {
+        let found = nvim_tag_buflist_findnr_ffname(cur_fnum);
+        if !found.is_null() {
+            buf_ffname = found;
+        }
+    }
+
+    // =========================================================================
+    // Search loop — repeat searching when a file is not found
+    // =========================================================================
+    loop {
+        let name: *mut c_char;
+
+        // Get the tag name to search for
+        if use_tagstack {
+            let entry = nvim_win_get_tagstack_entry(curwin, tagstackidx);
+            let tname = nvim_taggy_get_tagname(entry);
+            name = nvim_tag_xstrdup(tname);
+            nvim_tag_xfree(tofree.cast::<c_void>());
+            tofree = name;
+        } else if g_do_tagpreview != 0 {
+            name = nvim_taggy_get_tagname(ptag_entry).cast_mut();
+        } else {
+            name = tag;
+        }
+
+        let tagmatchname = nvim_get_tagmatchname();
+        let other_name = tagmatchname.is_null() || nvim_tag_strcmp(tagmatchname, name) != 0;
+
+        if new_tag || (cur_match >= NUM_MATCHES && MAX_NUM_MATCHES != MAXCOL) || other_name {
+            if other_name {
+                nvim_xfree_clear_tagmatchname();
+                nvim_set_tagmatchname(nvim_tag_xstrdup(name));
+            }
+
+            if cur_type == cmd_type::DT_SELECT
+                || cur_type == cmd_type::DT_JUMP
+                || cur_type == cmd_type::DT_LTAG
+            {
+                cur_match = MAXCOL - 1;
+            }
+            MAX_NUM_MATCHES = if cur_type == cmd_type::DT_TAG {
+                MAXCOL
+            } else {
+                cur_match + 1
+            };
+
+            // Build flags for find_tags
+            let mut search_name = name;
+            FLAGS = if !no_regexp && *name == b'/' as c_char {
+                search_name = name.add(1);
+                crate::search::find_tags_flags::TAG_REGEXP
+            } else {
+                crate::search::find_tags_flags::TAG_NOIC
+            };
+            if verbose {
+                FLAGS |= crate::search::find_tags_flags::TAG_VERBOSE;
+            }
+            if !use_tfu {
+                FLAGS |= crate::search::find_tags_flags::TAG_NO_TAGFUNC;
+            }
+
+            let mut new_num_matches: c_int = 0;
+            let mut new_matches: *mut *mut c_char = ptr::null_mut();
+
+            if nvim_tag_find_tags(
+                search_name,
+                &raw mut new_num_matches,
+                &raw mut new_matches,
+                FLAGS,
+                MAX_NUM_MATCHES,
+                buf_ffname,
+            ) == OK
+                && new_num_matches < MAX_NUM_MATCHES
+            {
+                MAX_NUM_MATCHES = MAXCOL;
+            }
+
+            // Check if tagstack pointer changed (window closed)
+            if nvim_tag_tagstack_changed(tagstack_ptr) {
+                nvim_tag_emsg_window_closed();
+                nvim_tag_free_wild(new_num_matches, new_matches);
+                break;
+            }
+
+            // Reorder matches to preserve order from previous search
+            if !new_tag && !other_name {
+                reorder_matches(NUM_MATCHES, MATCHES, new_num_matches, new_matches);
+            }
+
+            nvim_tag_free_wild(NUM_MATCHES, MATCHES);
+            NUM_MATCHES = new_num_matches;
+            MATCHES = new_matches;
+        }
+
+        if NUM_MATCHES <= 0 {
+            if verbose {
+                nvim_tag_semsg_not_found(name);
+            }
+            nvim_set_g_do_tagpreview(0);
+        } else {
+            let mut ask_for_selection = false;
+
+            if cur_type == cmd_type::DT_TAG && !tag_is_empty {
+                cur_match = if count > 0 { count - 1 } else { 0 };
+            } else if cur_type == cmd_type::DT_SELECT
+                || (cur_type == cmd_type::DT_JUMP && NUM_MATCHES > 1)
+            {
+                crate::commands::rs_print_tag_list(new_tag, use_tagstack, NUM_MATCHES, MATCHES);
+                ask_for_selection = true;
+            } else if cur_type == cmd_type::DT_LTAG {
+                if crate::commands::rs_add_llist_tags(tag, NUM_MATCHES, MATCHES) == FAIL {
+                    do_tag_cleanup(use_tagstack, tagstackidx, tofree);
+                    return;
+                }
+                cur_match = 0;
+            }
+
+            if ask_for_selection {
+                let selection = nvim_tag_prompt_for_selection();
+                if selection <= 0 || selection > NUM_MATCHES || nvim_tag_get_got_int() {
+                    // Cancelled — restore state
+                    if use_tagstack {
+                        nvim_tag_restore_fmark_to_entry(
+                            tagstack_ptr,
+                            tagstackidx,
+                            saved_fmark_buf.as_ptr().cast(),
+                        );
+                        tagstackidx = prevtagstackidx;
+                    }
+                    break;
+                }
+                cur_match = selection - 1;
+            }
+
+            if cur_match >= NUM_MATCHES {
+                if (cur_type == cmd_type::DT_NEXT || cur_type == cmd_type::DT_FIRST)
+                    && nvim_tag_nofile_fname_is_null()
+                {
+                    if NUM_MATCHES == 1 {
+                        nvim_tag_emsg_only_one();
+                    } else {
+                        nvim_tag_emsg_beyond_last();
+                    }
+                    skip_msg = true;
+                }
+                cur_match = NUM_MATCHES - 1;
+            }
+
+            // Update tagstack with current match
+            if use_tagstack {
+                let entry = nvim_win_get_tagstack_entry(curwin, tagstackidx);
+                let entry_mut = entry.cast_mut();
+                nvim_taggy_set_cur_match(entry_mut, cur_match);
+                nvim_taggy_set_cur_fnum(entry_mut, cur_fnum);
+
+                // Store user_data from tagfunc
+                if use_tfu {
+                    let match_ptr = *MATCHES.offset(cur_match as isize);
+                    let mut tagp2 = crate::parse::TagPtrs::default();
+                    if crate::parse::rs_parse_match(match_ptr, &raw mut tagp2) == OK
+                        && !tagp2.user_data.is_null()
+                    {
+                        let ud_len = tagp2.user_data_end.offset_from(tagp2.user_data) as usize;
+                        // Free existing user_data
+                        let old_ud = nvim_taggy_get_user_data(entry);
+                        if !old_ud.is_null() {
+                            xfree(old_ud.cast_mut().cast());
+                        }
+                        nvim_taggy_set_user_data(
+                            entry_mut,
+                            nvim_tag_xmemdupz(tagp2.user_data, ud_len),
+                        );
+                    }
+                }
+
+                tagstackidx += 1;
+            } else if g_do_tagpreview != 0 {
+                nvim_taggy_set_cur_match(ptag_entry, cur_match);
+                nvim_taggy_set_cur_fnum(ptag_entry, cur_fnum);
+            }
+
+            // Report previous file-not-found
+            if !nvim_tag_nofile_fname_is_null() && error_cur_match != cur_match {
+                nvim_tag_smsg_nofile(nvim_get_nofile_fname());
+            }
+
+            // Show "tag X of Y" message
+            let match_ptr = *MATCHES.offset(cur_match as isize);
+            let ic = (*match_ptr as u8 & MT_IC_OFF) != 0;
+            if cur_type != cmd_type::DT_TAG
+                && cur_type != cmd_type::DT_SELECT
+                && cur_type != cmd_type::DT_JUMP
+                && (NUM_MATCHES > 1 || ic)
+                && !skip_msg
+            {
+                nvim_tag_show_match_msg(
+                    cur_match,
+                    NUM_MATCHES,
+                    MAX_NUM_MATCHES,
+                    prev_num_matches,
+                    new_tag,
+                    ic,
+                );
+            }
+
+            // Set VV_SWAPCOMMAND and jump
+            nvim_tag_set_swap_command(name);
+            let jump_result =
+                crate::jump::rs_jumpto_tag(*MATCHES.offset(cur_match as isize), forceit, true);
+            nvim_tag_clear_swap_command();
+
+            if jump_result == NOTAGFILE {
+                // File not found: try next match
+                if rs_should_retry_match(cur_type, cur_match, NUM_MATCHES, MAX_NUM_MATCHES) {
+                    error_cur_match = cur_match;
+                    if use_tagstack {
+                        tagstackidx -= 1;
+                    }
+                    if cur_type == cmd_type::DT_PREV {
+                        cur_match -= 1;
+                    } else {
+                        cur_type = cmd_type::DT_NEXT;
+                        cur_match += 1;
+                    }
+                    continue;
+                }
+                nvim_tag_semsg_nofile(nvim_get_nofile_fname());
+            } else {
+                // May have jumped to another window
+                if use_tagstack && tagstackidx > nvim_win_get_tagstacklen(nvim_tag_get_curwin()) {
+                    tagstackidx = nvim_win_get_tagstackidx(nvim_tag_get_curwin());
+                }
+            }
+        }
+        break;
+    }
+
+    do_tag_cleanup(use_tagstack, tagstackidx, tofree);
+}
+
+/// Cleanup at end of `do_tag`: save tagstack index and reset globals.
+unsafe fn do_tag_cleanup(use_tagstack: bool, tagstackidx: c_int, tofree: *mut c_char) {
+    let curwin = nvim_tag_get_curwin();
+    if use_tagstack && tagstackidx <= nvim_win_get_tagstacklen(curwin) {
+        nvim_win_set_tagstackidx(curwin, tagstackidx);
+    }
+    nvim_set_postponed_split(0);
+    nvim_set_g_do_tagpreview(0);
+    nvim_tag_xfree(tofree.cast::<c_void>());
+}
+
+/// Reorder new matches to preserve the order of old matches at the front.
+///
+/// For each old match, find it in the new list and move it to the front.
+unsafe fn reorder_matches(
+    old_count: c_int,
+    old_matches: *mut *mut c_char,
+    new_count: c_int,
+    new_matches: *mut *mut c_char,
+) {
+    let mut idx: c_int = 0;
+    let mut tagp = crate::parse::TagPtrs::default();
+    let mut tagp2 = crate::parse::TagPtrs::default();
+
+    for j in 0..old_count {
+        crate::parse::rs_parse_match(*old_matches.offset(j as isize), &raw mut tagp);
+        for i in idx..new_count {
+            crate::parse::rs_parse_match(*new_matches.offset(i as isize), &raw mut tagp2);
+            if nvim_tag_strcmp(tagp.tagname, tagp2.tagname) == 0 {
+                let p = *new_matches.offset(i as isize);
+                // Shift entries right to make room
+                let mut k = i;
+                while k > idx {
+                    *new_matches.offset(k as isize) = *new_matches.offset((k - 1) as isize);
+                    k -= 1;
+                }
+                *new_matches.offset(idx as isize) = p;
+                idx += 1;
+                break;
+            }
+        }
     }
 }
 
