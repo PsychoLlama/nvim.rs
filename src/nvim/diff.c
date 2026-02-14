@@ -248,6 +248,9 @@ extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
 extern bool rs_diff_find_change_simple(win_T *wp, linenr_T lnum, const diff_T *dp, int idx,
                                        int *startp, int *endp);
 
+// Phase 6: Ex command migrations
+extern void rs_diff_ex_diffupdate(exarg_T *eap);
+
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
 
@@ -683,57 +686,7 @@ int diff_internal(void)
 /// @param eap can be NULL
 void ex_diffupdate(exarg_T *eap)
 {
-  if (diff_busy) {
-    diff_need_update = true;
-    return;
-  }
-
-  int had_diffs = curtab->tp_first_diff != NULL;
-
-  // Delete all diffblocks.
-  diff_clear(curtab);
-  curtab->tp_diff_invalid = false;
-
-  // Use the first buffer as the original text.
-  int idx_orig;
-  for (idx_orig = 0; idx_orig < DB_COUNT; idx_orig++) {
-    if (curtab->tp_diffbuf[idx_orig] != NULL) {
-      break;
-    }
-  }
-
-  if (idx_orig == DB_COUNT) {
-    goto theend;
-  }
-
-  // Only need to do something when there is another buffer.
-  int idx_new;
-  for (idx_new = idx_orig + 1; idx_new < DB_COUNT; idx_new++) {
-    if (curtab->tp_diffbuf[idx_new] != NULL) {
-      break;
-    }
-  }
-
-  if (idx_new == DB_COUNT) {
-    goto theend;
-  }
-
-  // Only use the internal method if it did not fail for one of the buffers.
-  diffio_T diffio = { 0 };
-  diffio.dio_internal = diff_internal();
-
-  diff_try_update(&diffio, idx_orig, eap);
-
-  // force updating cursor position on screen
-  curwin->w_valid_cursor.lnum = 0;
-
-theend:
-  // A redraw is needed if there were diffs and they were cleared, or there
-  // are diffs now, which means they got updated.
-  if (had_diffs || curtab->tp_first_diff != NULL) {
-    diff_redraw(true);
-    apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf);
-  }
+  rs_diff_ex_diffupdate(eap);
 }
 
 /// Do a quick test if "diff" really works.  Otherwise it looks like there

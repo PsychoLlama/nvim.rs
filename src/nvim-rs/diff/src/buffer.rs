@@ -1815,6 +1815,7 @@ extern "C" {
     fn nvim_diff_curtab_diffbuf(idx: c_int) -> BufHandle;
     fn nvim_diff_invalidate_cursor();
     fn nvim_diff_fire_diffupdated();
+    fn nvim_is_diffexpr_empty() -> bool;
     fn nvim_diff_get_need_update() -> bool;
     fn nvim_diff_set_need_update(val: bool);
     fn nvim_diff_set_busy(val: bool);
@@ -3408,6 +3409,70 @@ pub unsafe extern "C" fn rs_diff_find_change(
     }
 
     added
+}
+
+// =============================================================================
+// Phase 6: Ex command migrations
+// =============================================================================
+
+/// Rust implementation of `ex_diffupdate`.
+///
+/// Completely updates the diffs for the buffers involved in the current tab.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_ex_diffupdate(eap: ExargHandle) {
+    // If busy, defer the update.
+    if nvim_diff_get_busy() {
+        nvim_diff_set_need_update(true);
+        return;
+    }
+
+    let curtab = nvim_get_curtab();
+    let had_diffs = !nvim_tabpage_get_first_diff(curtab).is_null();
+
+    // Delete all diffblocks.
+    rs_diff_clear(curtab);
+    nvim_tabpage_set_diff_invalid(curtab, 0);
+
+    // Use the first buffer as the original text.
+    let mut idx_orig: c_int = 0;
+    while idx_orig < DB_COUNT {
+        if !nvim_get_curtab_diffbuf(idx_orig).is_null() {
+            break;
+        }
+        idx_orig += 1;
+    }
+
+    if idx_orig < DB_COUNT {
+        // Only need to do something when there is another buffer.
+        let mut idx_new = idx_orig + 1;
+        while idx_new < DB_COUNT {
+            if !nvim_get_curtab_diffbuf(idx_new).is_null() {
+                break;
+            }
+            idx_new += 1;
+        }
+
+        if idx_new < DB_COUNT {
+            // Only use the internal method if it did not fail for one of the buffers.
+            let use_internal =
+                (nvim_diff_get_diff_flags() & DIFF_INTERNAL) != 0 && nvim_is_diffexpr_empty();
+            let dio = nvim_diffio_new(use_internal);
+
+            rs_diff_try_update(dio, idx_orig, eap);
+            nvim_diffio_free(dio);
+
+            // Force updating cursor position on screen.
+            nvim_diff_invalidate_cursor();
+        }
+    }
+
+    // A redraw is needed if there were diffs and they were cleared, or there
+    // are diffs now, which means they got updated.
+    let curtab = nvim_get_curtab();
+    if had_diffs || !nvim_tabpage_get_first_diff(curtab).is_null() {
+        nvim_diff_redraw(true);
+        nvim_diff_fire_diffupdated();
+    }
 }
 
 #[cfg(test)]
