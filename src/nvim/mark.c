@@ -62,6 +62,13 @@ _Static_assert(CMOD_KEEPJUMPS == 0x0400, "CMOD_KEEPJUMPS mismatch with Rust");
 _Static_assert(kOptJopFlagStack == 0x01, "kOptJopFlagStack mismatch with Rust");
 _Static_assert(JUMPLISTSIZE == 100, "JUMPLISTSIZE mismatch with Rust");
 _Static_assert(TAGSTACKSIZE == 20, "TAGSTACKSIZE mismatch with Rust");
+_Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS mismatch with Rust");
+_Static_assert(kMarkAdjustNormal == 0, "kMarkAdjustNormal mismatch with Rust");
+_Static_assert(kMarkAdjustApi == 1, "kMarkAdjustApi mismatch with Rust");
+_Static_assert(kMarkAdjustTerm == 2, "kMarkAdjustTerm mismatch with Rust");
+_Static_assert(kExtmarkNOOP == 0, "kExtmarkNOOP mismatch with Rust");
+_Static_assert(BUF_HAS_QF_ENTRY == 1, "BUF_HAS_QF_ENTRY mismatch with Rust");
+_Static_assert(BUF_HAS_LL_ENTRY == 2, "BUF_HAS_LL_ENTRY mismatch with Rust");
 
 // =============================================================================
 // Rust FFI declarations
@@ -233,6 +240,12 @@ extern void rs_mark_jumplist_forget_file(win_T *wp, int fnum);
 extern void rs_mark_forget_file(win_T *wp, int fnum);
 extern fmark_T *rs_getnextmark(pos_T *startpos, int dir, int begin_line, buf_T *curbuf_ptr);
 
+// Phase 5: Mark adjustment
+extern void rs_mark_adjust_buf(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
+                                linenr_T amount_after, int adjust_folds, int mode, int op);
+extern void rs_mark_col_adjust_all(linenr_T lnum, colnr_T mincol, linenr_T lnum_amount,
+                                    colnr_T col_amount, int spaces_removed);
+
 // =============================================================================
 // C accessor functions called from Rust
 // =============================================================================
@@ -377,6 +390,60 @@ linenr_T nvim_mark_win_get_jumplist_lnum(win_T *win, int idx) { return win->w_ju
 
 // Phase 4: Free jumplist entry fname
 void nvim_mark_win_jumplist_free_fname(win_T *win, int idx) { xfree(win->w_jumplist[idx].fname); }
+
+// Phase 5: Mark adjustment accessors
+int nvim_mark_buf_get_has_qf_entry(buf_T *buf) { return buf->b_has_qf_entry; }
+void nvim_mark_buf_set_has_qf_entry(buf_T *buf, int val) { buf->b_has_qf_entry = val; }
+pos_T *nvim_mark_get_saved_cursor(void) { return &saved_cursor; }
+win_T *nvim_mark_win_get_next(win_T *win) { return win->w_next; }
+buf_T *nvim_mark_win_get_buf(win_T *win) { return win->w_buffer; }
+linenr_T nvim_mark_win_get_old_cursor_lnum(win_T *win) { return win->w_old_cursor_lnum; }
+linenr_T *nvim_mark_win_get_old_cursor_lnum_ptr(win_T *win) { return &win->w_old_cursor_lnum; }
+linenr_T *nvim_mark_win_get_old_visual_lnum_ptr(win_T *win) { return &win->w_old_visual_lnum; }
+linenr_T nvim_mark_win_get_topline_val(win_T *win) { return win->w_topline; }
+void nvim_mark_win_set_topline_val(win_T *win, linenr_T val) { win->w_topline = val; }
+void nvim_mark_win_set_topfill(win_T *win, int val) { win->w_topfill = val; }
+pos_T *nvim_mark_win_get_cursor_ptr(win_T *win) { return &win->w_cursor; }
+pos_T *nvim_mark_win_get_pcmark_ptr(win_T *win) { return &win->w_pcmark; }
+pos_T *nvim_mark_win_get_prev_pcmark_ptr(win_T *win) { return &win->w_prev_pcmark; }
+
+// Phase 5: Tabpage iteration
+tabpage_T *nvim_mark_get_first_tabpage(void) { return first_tabpage; }
+tabpage_T *nvim_mark_tabpage_next(tabpage_T *tp) { return tp->tp_next; }
+win_T *nvim_mark_tabpage_firstwin(tabpage_T *tp) { return (tp == curtab) ? firstwin : tp->tp_firstwin; }
+
+// Phase 5: External function callbacks (keep iteration in C)
+int nvim_mark_qf_mark_adjust(buf_T *buf, win_T *win, linenr_T line1, linenr_T line2,
+                              linenr_T amount, linenr_T amount_after)
+{
+  return qf_mark_adjust(buf, win, line1, line2, amount, amount_after);
+}
+void nvim_mark_extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
+                               linenr_T amount, linenr_T amount_after, int op)
+{
+  extmark_adjust(buf, line1, line2, amount, amount_after, (ExtmarkOp)op);
+}
+void nvim_mark_diff_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
+                            linenr_T amount, linenr_T amount_after)
+{
+  diff_mark_adjust(buf, line1, line2, amount, amount_after);
+}
+void nvim_mark_fold_adjust(win_T *win, linenr_T line1, linenr_T line2,
+                            linenr_T amount, linenr_T amount_after)
+{
+  foldMarkAdjust(win, line1, line2, amount, amount_after);
+}
+
+// Phase 5: Wininfo iteration
+int nvim_mark_buf_get_wininfo_count(buf_T *buf) { return (int)kv_size(buf->b_wininfo); }
+pos_T *nvim_mark_buf_get_wininfo_mark(buf_T *buf, int idx) { return &kv_A(buf->b_wininfo, idx)->wi_mark.mark; }
+
+// Phase 5: Jumplist/tagstack mark pointers for col_adjust
+pos_T *nvim_mark_win_get_jumplist_mark_ptr(win_T *win, int idx) { return &win->w_jumplist[idx].fmark.mark; }
+pos_T *nvim_mark_win_get_tagstack_mark_ptr(win_T *win, int idx) { return &win->w_tagstack[idx].fmark.mark; }
+
+// Phase 5: curtab accessor
+tabpage_T *nvim_mark_get_curtab(void) { return curtab; }
 
 // Cross-function callbacks from Rust (Phase 3) - defined at end of file
 // after static functions they reference
@@ -1470,161 +1537,7 @@ void mark_adjust_nofold(linenr_T line1, linenr_T line2, linenr_T amount, linenr_
 void mark_adjust_buf(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
                      linenr_T amount_after, bool adjust_folds, MarkAdjustMode mode, ExtmarkOp op)
 {
-  int fnum = buf->b_fnum;
-  linenr_T *lp;
-  static pos_T initpos = { 1, 0, 0 };
-
-  if (line2 < line1 && amount_after == 0) {        // nothing to do
-    return;
-  }
-
-  bool by_api = mode == kMarkAdjustApi;
-  bool by_term = mode == kMarkAdjustTerm;
-
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    // named marks, lower case and upper case
-    for (int i = 0; i < NMARKS; i++) {
-      ONE_ADJUST(&(buf->b_namedm[i].mark.lnum));
-      if (namedfm[i].fmark.fnum == fnum) {
-        ONE_ADJUST_NODEL(&(namedfm[i].fmark.mark.lnum));
-      }
-    }
-    for (int i = NMARKS; i < NGLOBALMARKS; i++) {
-      if (namedfm[i].fmark.fnum == fnum) {
-        ONE_ADJUST_NODEL(&(namedfm[i].fmark.mark.lnum));
-      }
-    }
-
-    // last Insert position
-    ONE_ADJUST(&(buf->b_last_insert.mark.lnum));
-
-    // last change position
-    ONE_ADJUST(&(buf->b_last_change.mark.lnum));
-
-    // last cursor position, if it was set
-    if (!equalpos(buf->b_last_cursor.mark, initpos)
-        && (!by_term || buf->b_last_cursor.mark.lnum < buf->b_ml.ml_line_count)) {
-      ONE_ADJUST(&(buf->b_last_cursor.mark.lnum));
-    }
-
-    // on prompt buffer adjust the last prompt start location mark
-    if (bt_prompt(buf)) {
-      ONE_ADJUST_NODEL(&(buf->b_prompt_start.mark.lnum));
-    }
-
-    // list of change positions
-    for (int i = 0; i < buf->b_changelistlen; i++) {
-      ONE_ADJUST_NODEL(&(buf->b_changelist[i].mark.lnum));
-    }
-
-    // Visual area
-    ONE_ADJUST_NODEL(&(buf->b_visual.vi_start.lnum));
-    ONE_ADJUST_NODEL(&(buf->b_visual.vi_end.lnum));
-
-    // quickfix marks
-    if (!qf_mark_adjust(buf, NULL, line1, line2, amount, amount_after)) {
-      buf->b_has_qf_entry &= ~BUF_HAS_QF_ENTRY;
-    }
-    // location lists
-    bool found_one = false;
-    FOR_ALL_TAB_WINDOWS(tab, win) {
-      found_one |= qf_mark_adjust(buf, win, line1, line2, amount, amount_after);
-    }
-    if (!found_one) {
-      buf->b_has_qf_entry &= ~BUF_HAS_LL_ENTRY;
-    }
-  }
-
-  if (op != kExtmarkNOOP) {
-    extmark_adjust(buf, line1, line2, amount, amount_after, op);
-  }
-
-  if (curwin->w_buffer == buf) {
-    // previous context mark
-    ONE_ADJUST(&(curwin->w_pcmark.lnum));
-
-    // previous pcpmark
-    ONE_ADJUST(&(curwin->w_prev_pcmark.lnum));
-
-    // saved cursor for formatting
-    if (saved_cursor.lnum != 0) {
-      ONE_ADJUST_NODEL(&(saved_cursor.lnum));
-    }
-  }
-
-  // Adjust items in all windows related to the current buffer.
-  FOR_ALL_TAB_WINDOWS(tab, win) {
-    if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-      // Marks in the jumplist.  When deleting lines, this may create
-      // duplicate marks in the jumplist, they will be removed later.
-      for (int i = 0; i < win->w_jumplistlen; i++) {
-        if (win->w_jumplist[i].fmark.fnum == fnum) {
-          ONE_ADJUST_NODEL(&(win->w_jumplist[i].fmark.mark.lnum));
-        }
-      }
-    }
-
-    if (win->w_buffer == buf) {
-      if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-        // marks in the tag stack
-        for (int i = 0; i < win->w_tagstacklen; i++) {
-          if (win->w_tagstack[i].fmark.fnum == fnum) {
-            ONE_ADJUST_NODEL(&(win->w_tagstack[i].fmark.mark.lnum));
-          }
-        }
-      }
-
-      // the displayed Visual area
-      if (win->w_old_cursor_lnum != 0) {
-        ONE_ADJUST_NODEL(&(win->w_old_cursor_lnum));
-        ONE_ADJUST_NODEL(&(win->w_old_visual_lnum));
-      }
-
-      // topline and cursor position for windows with the same buffer
-      // other than the current window
-      if (by_api || (by_term ? win->w_cursor.lnum < buf->b_ml.ml_line_count : win != curwin)) {
-        if (win->w_topline >= line1 && win->w_topline <= line2) {
-          if (amount == MAXLNUM) {                  // topline is deleted
-            if (by_api && amount_after > line1 - line2 - 1) {
-              // api: if the deleted region was replaced with new contents, topline will
-              // get adjusted later as an effect of the adjusted cursor in fix_cursor()
-            } else {
-              win->w_topline = MAX(line1 - 1, 1);
-            }
-          } else if (win->w_topline > line1) {
-            // keep topline on the same line, unless inserting just
-            // above it (we probably want to see that line then)
-            win->w_topline += amount;
-          }
-          win->w_topfill = 0;
-        } else if (amount_after
-                   // api: display new line if inserted right at topline
-                   // TODO(bfredl): maybe always?
-                   && win->w_topline > line2 + (by_api && line2 < line1 ? 1 : 0)) {
-          win->w_topline += amount_after;
-          win->w_topfill = 0;
-        }
-      }
-      if (!by_api && (by_term ? win->w_cursor.lnum < buf->b_ml.ml_line_count : win != curwin)) {
-        ONE_ADJUST_CURSOR(&(win->w_cursor));
-      }
-
-      if (adjust_folds) {
-        foldMarkAdjust(win, line1, line2, amount, amount_after);
-      }
-    }
-  }
-
-  // adjust diffs
-  diff_mark_adjust(buf, line1, line2, amount, amount_after);
-
-  // adjust per-window "last cursor" positions
-  for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
-    WinInfo *wip = kv_A(buf->b_wininfo, i);
-    if (!by_term || wip->wi_mark.mark.lnum < buf->b_ml.ml_line_count) {
-      ONE_ADJUST_CURSOR(&(wip->wi_mark.mark));
-    }
-  }
+  rs_mark_adjust_buf(buf, line1, line2, amount, amount_after, (int)adjust_folds, (int)mode, (int)op);
 }
 
 // This code is used often, needs to be fast.
@@ -1652,72 +1565,7 @@ void mark_adjust_buf(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount
 void mark_col_adjust(linenr_T lnum, colnr_T mincol, linenr_T lnum_amount, colnr_T col_amount,
                      int spaces_removed)
 {
-  int fnum = curbuf->b_fnum;
-  pos_T *posp;
-
-  if ((col_amount == 0 && lnum_amount == 0) || (cmdmod.cmod_flags & CMOD_LOCKMARKS)) {
-    return;     // nothing to do
-  }
-  // named marks, lower case and upper case
-  for (int i = 0; i < NMARKS; i++) {
-    COL_ADJUST(&(curbuf->b_namedm[i].mark));
-    if (namedfm[i].fmark.fnum == fnum) {
-      COL_ADJUST(&(namedfm[i].fmark.mark));
-    }
-  }
-  for (int i = NMARKS; i < NGLOBALMARKS; i++) {
-    if (namedfm[i].fmark.fnum == fnum) {
-      COL_ADJUST(&(namedfm[i].fmark.mark));
-    }
-  }
-
-  // last Insert position
-  COL_ADJUST(&(curbuf->b_last_insert.mark));
-
-  // last change position
-  COL_ADJUST(&(curbuf->b_last_change.mark));
-
-  // list of change positions
-  for (int i = 0; i < curbuf->b_changelistlen; i++) {
-    COL_ADJUST(&(curbuf->b_changelist[i].mark));
-  }
-
-  // Visual area
-  COL_ADJUST(&(curbuf->b_visual.vi_start));
-  COL_ADJUST(&(curbuf->b_visual.vi_end));
-
-  // previous context mark
-  COL_ADJUST(&(curwin->w_pcmark));
-
-  // previous pcmark
-  COL_ADJUST(&(curwin->w_prev_pcmark));
-
-  // saved cursor for formatting
-  COL_ADJUST(&saved_cursor);
-
-  // Adjust items in all windows related to the current buffer.
-  FOR_ALL_WINDOWS_IN_TAB(win, curtab) {
-    // marks in the jumplist
-    for (int i = 0; i < win->w_jumplistlen; i++) {
-      if (win->w_jumplist[i].fmark.fnum == fnum) {
-        COL_ADJUST(&(win->w_jumplist[i].fmark.mark));
-      }
-    }
-
-    if (win->w_buffer == curbuf) {
-      // marks in the tag stack
-      for (int i = 0; i < win->w_tagstacklen; i++) {
-        if (win->w_tagstack[i].fmark.fnum == fnum) {
-          COL_ADJUST(&(win->w_tagstack[i].fmark.mark));
-        }
-      }
-
-      // cursor position for other windows with the same buffer
-      if (win != curwin) {
-        COL_ADJUST(&win->w_cursor);
-      }
-    }
-  }
+  rs_mark_col_adjust_all(lnum, mincol, lnum_amount, col_amount, spaces_removed);
 }
 
 // When deleting lines, this may create duplicate marks in the

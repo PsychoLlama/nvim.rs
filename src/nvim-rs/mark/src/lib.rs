@@ -7,6 +7,18 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 use nvim_buffer::BufHandle;
 use nvim_window::WinHandle;
 
+/// Opaque handle to a tabpage (tab_T*).
+/// Used only for iteration, not for field access.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct TabHandle(*mut c_void);
+
+impl TabHandle {
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 // =============================================================================
 // FFI: C accessor functions called from Rust
 // =============================================================================
@@ -66,6 +78,7 @@ extern "C" {
 
     // Global state / cross-function callbacks
     fn nvim_mark_clear_namedfm();
+    fn nvim_mark_get_curwin() -> WinHandle;
     fn nvim_mark_get_curbuf() -> BufHandle;
     fn nvim_mark_buflist_findnr(fnum: c_int) -> BufHandle;
     fn nvim_mark_bt_prompt(buf: BufHandle) -> c_int;
@@ -109,6 +122,72 @@ extern "C" {
     fn nvim_mark_buflist_nr2name(fnum: c_int, listed: c_int, unstripped: c_int) -> *mut c_char;
     fn nvim_mark_mark_line(pos: *mut PosT, lead_len: c_int) -> *mut c_char;
     fn nvim_mark_get_motion(buf: BufHandle, win: WinHandle, name: c_int) -> *mut FmarkT;
+
+    // Phase 5: Mark adjustment accessors
+    fn nvim_mark_buf_get_visual_start_ptr(buf: BufHandle) -> *mut PosT;
+    fn nvim_mark_buf_get_visual_end_ptr(buf: BufHandle) -> *mut PosT;
+    fn nvim_mark_buf_get_has_qf_entry(buf: BufHandle) -> c_int;
+    fn nvim_mark_buf_set_has_qf_entry(buf: BufHandle, val: c_int);
+    fn nvim_mark_get_saved_cursor() -> *mut PosT;
+    fn nvim_mark_win_get_next(win: WinHandle) -> WinHandle;
+    fn nvim_mark_win_get_buf(win: WinHandle) -> BufHandle;
+    fn nvim_mark_win_get_old_cursor_lnum(win: WinHandle) -> LinenrT;
+    fn nvim_mark_win_get_old_cursor_lnum_ptr(win: WinHandle) -> *mut LinenrT;
+    fn nvim_mark_win_get_old_visual_lnum_ptr(win: WinHandle) -> *mut LinenrT;
+    fn nvim_mark_win_get_topline_val(win: WinHandle) -> LinenrT;
+    fn nvim_mark_win_set_topline_val(win: WinHandle, val: LinenrT);
+    fn nvim_mark_win_set_topfill(win: WinHandle, val: c_int);
+    fn nvim_mark_win_get_cursor_ptr(win: WinHandle) -> *mut PosT;
+    fn nvim_mark_win_get_pcmark_ptr(win: WinHandle) -> *mut PosT;
+    fn nvim_mark_win_get_prev_pcmark_ptr(win: WinHandle) -> *mut PosT;
+
+    // Phase 5: Tabpage iteration
+    fn nvim_mark_get_first_tabpage() -> TabHandle;
+    fn nvim_mark_tabpage_next(tp: TabHandle) -> TabHandle;
+    fn nvim_mark_tabpage_firstwin(tp: TabHandle) -> WinHandle;
+
+    // Phase 5: External function callbacks
+    fn nvim_mark_qf_mark_adjust(
+        buf: BufHandle,
+        win: WinHandle,
+        line1: LinenrT,
+        line2: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
+    ) -> c_int;
+    fn nvim_mark_extmark_adjust(
+        buf: BufHandle,
+        line1: LinenrT,
+        line2: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
+        op: c_int,
+    );
+    fn nvim_mark_diff_adjust(
+        buf: BufHandle,
+        line1: LinenrT,
+        line2: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
+    );
+    fn nvim_mark_fold_adjust(
+        win: WinHandle,
+        line1: LinenrT,
+        line2: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
+    );
+
+    // Phase 5: Wininfo iteration
+    fn nvim_mark_buf_get_wininfo_count(buf: BufHandle) -> c_int;
+    fn nvim_mark_buf_get_wininfo_mark(buf: BufHandle, idx: c_int) -> *mut PosT;
+
+    // Phase 5: Jumplist/tagstack mark pointers for col_adjust
+    fn nvim_mark_win_get_jumplist_mark_ptr(win: WinHandle, idx: c_int) -> *mut PosT;
+    fn nvim_mark_win_get_tagstack_mark_ptr(win: WinHandle, idx: c_int) -> *mut PosT;
+
+    // Phase 5: curtab
+    fn nvim_mark_get_curtab() -> TabHandle;
 }
 
 /// Number of possible named marks (a-z)
@@ -1769,6 +1848,20 @@ const CMOD_KEEPJUMPS: c_uint = 0x0400;
 /// kOptJopFlagStack flag value (from option_vars.generated.h)
 const K_OPT_JOP_FLAG_STACK: c_uint = 0x01;
 
+/// CMOD_LOCKMARKS flag value (from ex_cmds_defs.h)
+const CMOD_LOCKMARKS: c_uint = 0x0800;
+
+/// MarkAdjustMode values (from mark_defs.h)
+const MARK_ADJUST_API: c_int = 1;
+const MARK_ADJUST_TERM: c_int = 2;
+
+/// ExtmarkOp values (from extmark_defs.h)
+const EXTMARK_NOOP: c_int = 0;
+
+/// Buffer quickfix flags (from buffer_defs.h)
+const BUF_HAS_QF_ENTRY: c_int = 1;
+const BUF_HAS_LL_ENTRY: c_int = 2;
+
 /// Calculate the new jumplist length after incrementing.
 ///
 /// Implements the logic: if ++len > JUMPLISTSIZE, len = JUMPLISTSIZE
@@ -2260,6 +2353,550 @@ pub unsafe extern "C" fn rs_getnextmark(
     }
 
     result
+}
+
+// =============================================================================
+// Phase 5: Mark Adjustment (Core)
+// =============================================================================
+
+/// Helper: apply ONE_ADJUST logic to a lnum pointer
+unsafe fn one_adjust(
+    lp: *mut LinenrT,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+) {
+    let result = rs_mark_adjust_lnum(*lp, line1, line2, amount, amount_after);
+    if result.modified != 0 {
+        *lp = result.new_lnum;
+    }
+}
+
+/// Helper: apply ONE_ADJUST_NODEL logic to a lnum pointer
+unsafe fn one_adjust_nodel(
+    lp: *mut LinenrT,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+) {
+    let result = rs_mark_adjust_lnum_nodel(*lp, line1, line2, amount, amount_after);
+    if result.modified != 0 {
+        *lp = result.new_lnum;
+    }
+}
+
+/// Helper: apply ONE_ADJUST_CURSOR logic to a pos pointer
+unsafe fn one_adjust_cursor(
+    pp: *mut PosT,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+) {
+    let result = rs_mark_adjust_cursor((*pp).lnum, (*pp).col, line1, line2, amount, amount_after);
+    if result.modified != 0 {
+        (*pp).lnum = result.new_lnum;
+        (*pp).col = result.new_col;
+    }
+}
+
+/// Helper: apply COL_ADJUST logic to a pos pointer
+unsafe fn col_adjust(
+    pp: *mut PosT,
+    lnum: LinenrT,
+    mincol: ColnrT,
+    lnum_amount: LinenrT,
+    col_amount: ColnrT,
+    spaces_removed: c_int,
+) {
+    let result = rs_mark_col_adjust(
+        (*pp).lnum,
+        (*pp).col,
+        lnum,
+        mincol,
+        lnum_amount,
+        col_amount,
+        spaces_removed,
+    );
+    if result.modified != 0 {
+        (*pp).lnum = result.new_lnum;
+        (*pp).col = result.new_col;
+    }
+}
+
+/// Adjust marks between line1 and line2 (inclusive) to move amount lines.
+///
+/// Called from many places to adjust all marks when lines are inserted/deleted.
+/// This is the highest-risk function in the mark migration.
+///
+/// # Safety
+/// `buf` must be a valid buffer pointer. All window/tabpage pointers accessed
+/// via C accessors must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_adjust_buf(
+    buf: BufHandle,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+    adjust_folds: c_int,
+    mode: c_int,
+    op: c_int,
+) {
+    let fnum = nvim_buf_get_fnum(buf);
+    let initpos = PosT {
+        lnum: 1,
+        col: 0,
+        coladd: 0,
+    };
+
+    if line2 < line1 && amount_after == 0 {
+        return; // nothing to do
+    }
+
+    let by_api = mode == MARK_ADJUST_API;
+    let by_term = mode == MARK_ADJUST_TERM;
+    let lockmarks = (nvim_mark_get_cmod_flags() & CMOD_LOCKMARKS) != 0;
+
+    if !lockmarks {
+        // named marks, lower case and upper case
+        for i in 0..NMARKS {
+            let namedm = nvim_mark_buf_get_namedm(buf, i);
+            one_adjust(&mut (*namedm).mark.lnum, line1, line2, amount, amount_after);
+
+            let namedfm_ptr = nvim_mark_get_namedfm();
+            let gmark = &mut *namedfm_ptr.offset(i as isize);
+            if gmark.fmark.fnum == fnum {
+                one_adjust_nodel(
+                    &mut gmark.fmark.mark.lnum,
+                    line1,
+                    line2,
+                    amount,
+                    amount_after,
+                );
+            }
+        }
+        for i in NMARKS..NGLOBALMARKS {
+            let namedfm_ptr = nvim_mark_get_namedfm();
+            let gmark = &mut *namedfm_ptr.offset(i as isize);
+            if gmark.fmark.fnum == fnum {
+                one_adjust_nodel(
+                    &mut gmark.fmark.mark.lnum,
+                    line1,
+                    line2,
+                    amount,
+                    amount_after,
+                );
+            }
+        }
+
+        // last Insert position
+        let last_insert = nvim_mark_buf_get_last_insert(buf);
+        one_adjust(
+            &mut (*last_insert).mark.lnum,
+            line1,
+            line2,
+            amount,
+            amount_after,
+        );
+
+        // last change position
+        let last_change = nvim_mark_buf_get_last_change(buf);
+        one_adjust(
+            &mut (*last_change).mark.lnum,
+            line1,
+            line2,
+            amount,
+            amount_after,
+        );
+
+        // last cursor position, if it was set
+        let last_cursor = nvim_mark_buf_get_last_cursor(buf);
+        let lc_pos = (*last_cursor).mark;
+        if !(lc_pos.lnum == initpos.lnum
+            && lc_pos.col == initpos.col
+            && lc_pos.coladd == initpos.coladd)
+            && (!by_term || (*last_cursor).mark.lnum < nvim_buf_get_ml_line_count(buf))
+        {
+            one_adjust(
+                &mut (*last_cursor).mark.lnum,
+                line1,
+                line2,
+                amount,
+                amount_after,
+            );
+        }
+
+        // on prompt buffer adjust the last prompt start location mark
+        if nvim_mark_bt_prompt(buf) != 0 {
+            let prompt_start = nvim_mark_buf_get_prompt_start(buf);
+            one_adjust_nodel(
+                &mut (*prompt_start).mark.lnum,
+                line1,
+                line2,
+                amount,
+                amount_after,
+            );
+        }
+
+        // list of change positions
+        let changelistlen = nvim_mark_buf_get_changelistlen(buf);
+        for i in 0..changelistlen {
+            let cl = nvim_mark_buf_get_changelist(buf, i);
+            one_adjust_nodel(&mut (*cl).mark.lnum, line1, line2, amount, amount_after);
+        }
+
+        // Visual area
+        let vi_start = nvim_mark_buf_get_visual_start_ptr(buf);
+        one_adjust_nodel(&mut (*vi_start).lnum, line1, line2, amount, amount_after);
+        let vi_end = nvim_mark_buf_get_visual_end_ptr(buf);
+        one_adjust_nodel(&mut (*vi_end).lnum, line1, line2, amount, amount_after);
+
+        // quickfix marks
+        let qf_result =
+            nvim_mark_qf_mark_adjust(buf, WinHandle::null(), line1, line2, amount, amount_after);
+        if qf_result == 0 {
+            let has_qf = nvim_mark_buf_get_has_qf_entry(buf);
+            nvim_mark_buf_set_has_qf_entry(buf, has_qf & !BUF_HAS_QF_ENTRY);
+        }
+
+        // location lists
+        let mut found_one = false;
+        let mut tp = nvim_mark_get_first_tabpage();
+        while !tp.is_null() {
+            let mut win = nvim_mark_tabpage_firstwin(tp);
+            while !win.is_null() {
+                let result = nvim_mark_qf_mark_adjust(buf, win, line1, line2, amount, amount_after);
+                found_one |= result != 0;
+                win = nvim_mark_win_get_next(win);
+            }
+            tp = nvim_mark_tabpage_next(tp);
+        }
+        if !found_one {
+            let has_qf = nvim_mark_buf_get_has_qf_entry(buf);
+            nvim_mark_buf_set_has_qf_entry(buf, has_qf & !BUF_HAS_LL_ENTRY);
+        }
+    }
+
+    if op != EXTMARK_NOOP {
+        nvim_mark_extmark_adjust(buf, line1, line2, amount, amount_after, op);
+    }
+
+    let curwin = nvim_mark_get_curwin();
+
+    if nvim_mark_win_get_buf(curwin) == buf {
+        // previous context mark
+        let pcmark = nvim_mark_win_get_pcmark_ptr(curwin);
+        one_adjust(&mut (*pcmark).lnum, line1, line2, amount, amount_after);
+
+        // previous pcmark
+        let prev_pcmark = nvim_mark_win_get_prev_pcmark_ptr(curwin);
+        one_adjust(&mut (*prev_pcmark).lnum, line1, line2, amount, amount_after);
+
+        // saved cursor for formatting
+        let saved = nvim_mark_get_saved_cursor();
+        if (*saved).lnum != 0 {
+            one_adjust_nodel(&mut (*saved).lnum, line1, line2, amount, amount_after);
+        }
+    }
+
+    // Adjust items in all windows related to the current buffer.
+    let mut tp = nvim_mark_get_first_tabpage();
+    while !tp.is_null() {
+        let mut win = nvim_mark_tabpage_firstwin(tp);
+        while !win.is_null() {
+            if !lockmarks {
+                // Marks in the jumplist
+                let jlen = nvim_mark_win_get_jumplistlen(win);
+                for i in 0..jlen {
+                    if nvim_mark_win_get_jumplist_fnum(win, i) == fnum {
+                        let entry = nvim_mark_win_get_jumplist_entry(win, i);
+                        one_adjust_nodel(
+                            &mut (*entry).fmark.mark.lnum,
+                            line1,
+                            line2,
+                            amount,
+                            amount_after,
+                        );
+                    }
+                }
+            }
+
+            if nvim_mark_win_get_buf(win) == buf {
+                if !lockmarks {
+                    // marks in the tag stack
+                    let tlen = nvim_mark_win_get_tagstacklen(win);
+                    for i in 0..tlen {
+                        if nvim_mark_win_get_tagstack_fnum(win, i) == fnum {
+                            let tmark = nvim_mark_win_get_tagstack_mark_ptr(win, i);
+                            one_adjust_nodel(
+                                &mut (*tmark).lnum,
+                                line1,
+                                line2,
+                                amount,
+                                amount_after,
+                            );
+                        }
+                    }
+                }
+
+                // the displayed Visual area
+                if nvim_mark_win_get_old_cursor_lnum(win) != 0 {
+                    let old_cursor = nvim_mark_win_get_old_cursor_lnum_ptr(win);
+                    one_adjust_nodel(old_cursor, line1, line2, amount, amount_after);
+                    let old_visual = nvim_mark_win_get_old_visual_lnum_ptr(win);
+                    one_adjust_nodel(old_visual, line1, line2, amount, amount_after);
+                }
+
+                // topline and cursor position
+                let line_count = nvim_buf_get_ml_line_count(buf);
+                let cursor_lnum = (*nvim_mark_win_get_cursor_ptr(win)).lnum;
+                if by_api
+                    || (if by_term {
+                        cursor_lnum < line_count
+                    } else {
+                        win != curwin
+                    })
+                {
+                    let topline = nvim_mark_win_get_topline_val(win);
+                    if topline >= line1 && topline <= line2 {
+                        if amount == MAXLNUM {
+                            // topline is deleted
+                            if by_api && amount_after > line1 - line2 - 1 {
+                                // api: deleted region replaced with new contents,
+                                // topline adjusted later via fix_cursor()
+                            } else {
+                                let new_top = if line1 - 1 > 1 { line1 - 1 } else { 1 };
+                                nvim_mark_win_set_topline_val(win, new_top);
+                            }
+                        } else if topline > line1 {
+                            nvim_mark_win_set_topline_val(win, topline + amount);
+                        }
+                        nvim_mark_win_set_topfill(win, 0);
+                    } else if amount_after != 0
+                        && topline > line2 + (if by_api && line2 < line1 { 1 } else { 0 })
+                    {
+                        nvim_mark_win_set_topline_val(win, topline + amount_after);
+                        nvim_mark_win_set_topfill(win, 0);
+                    }
+                }
+                if !by_api
+                    && (if by_term {
+                        cursor_lnum < nvim_buf_get_ml_line_count(buf)
+                    } else {
+                        win != curwin
+                    })
+                {
+                    let cursor_ptr = nvim_mark_win_get_cursor_ptr(win);
+                    one_adjust_cursor(cursor_ptr, line1, line2, amount, amount_after);
+                }
+
+                if adjust_folds != 0 {
+                    nvim_mark_fold_adjust(win, line1, line2, amount, amount_after);
+                }
+            }
+
+            win = nvim_mark_win_get_next(win);
+        }
+        tp = nvim_mark_tabpage_next(tp);
+    }
+
+    // adjust diffs
+    nvim_mark_diff_adjust(buf, line1, line2, amount, amount_after);
+
+    // adjust per-window "last cursor" positions
+    let winfo_count = nvim_mark_buf_get_wininfo_count(buf);
+    for i in 0..winfo_count {
+        let wmark = nvim_mark_buf_get_wininfo_mark(buf, i);
+        if !by_term || (*wmark).lnum < nvim_buf_get_ml_line_count(buf) {
+            one_adjust_cursor(wmark, line1, line2, amount, amount_after);
+        }
+    }
+}
+
+/// Adjust marks in line "lnum" at column "mincol" and further.
+///
+/// # Safety
+/// All buffer/window pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_col_adjust_all(
+    lnum: LinenrT,
+    mincol: ColnrT,
+    lnum_amount: LinenrT,
+    col_amount: ColnrT,
+    spaces_removed: c_int,
+) {
+    let curbuf_ptr = nvim_mark_get_curbuf();
+    let fnum = nvim_buf_get_fnum(curbuf_ptr);
+
+    if (col_amount == 0 && lnum_amount == 0) || (nvim_mark_get_cmod_flags() & CMOD_LOCKMARKS) != 0 {
+        return; // nothing to do
+    }
+
+    // named marks, lower case and upper case
+    for i in 0..NMARKS {
+        let namedm = nvim_mark_buf_get_namedm(curbuf_ptr, i);
+        col_adjust(
+            &mut (*namedm).mark,
+            lnum,
+            mincol,
+            lnum_amount,
+            col_amount,
+            spaces_removed,
+        );
+
+        let namedfm_ptr = nvim_mark_get_namedfm();
+        let gmark = &mut *namedfm_ptr.offset(i as isize);
+        if gmark.fmark.fnum == fnum {
+            col_adjust(
+                &mut gmark.fmark.mark,
+                lnum,
+                mincol,
+                lnum_amount,
+                col_amount,
+                spaces_removed,
+            );
+        }
+    }
+    for i in NMARKS..NGLOBALMARKS {
+        let namedfm_ptr = nvim_mark_get_namedfm();
+        let gmark = &mut *namedfm_ptr.offset(i as isize);
+        if gmark.fmark.fnum == fnum {
+            col_adjust(
+                &mut gmark.fmark.mark,
+                lnum,
+                mincol,
+                lnum_amount,
+                col_amount,
+                spaces_removed,
+            );
+        }
+    }
+
+    // last Insert position
+    let last_insert = nvim_mark_buf_get_last_insert(curbuf_ptr);
+    col_adjust(
+        &mut (*last_insert).mark,
+        lnum,
+        mincol,
+        lnum_amount,
+        col_amount,
+        spaces_removed,
+    );
+
+    // last change position
+    let last_change = nvim_mark_buf_get_last_change(curbuf_ptr);
+    col_adjust(
+        &mut (*last_change).mark,
+        lnum,
+        mincol,
+        lnum_amount,
+        col_amount,
+        spaces_removed,
+    );
+
+    // list of change positions
+    let changelistlen = nvim_mark_buf_get_changelistlen(curbuf_ptr);
+    for i in 0..changelistlen {
+        let cl = nvim_mark_buf_get_changelist(curbuf_ptr, i);
+        col_adjust(
+            &mut (*cl).mark,
+            lnum,
+            mincol,
+            lnum_amount,
+            col_amount,
+            spaces_removed,
+        );
+    }
+
+    // Visual area
+    let vi_start = nvim_mark_buf_get_visual_start_ptr(curbuf_ptr);
+    col_adjust(
+        vi_start,
+        lnum,
+        mincol,
+        lnum_amount,
+        col_amount,
+        spaces_removed,
+    );
+    let vi_end = nvim_mark_buf_get_visual_end_ptr(curbuf_ptr);
+    col_adjust(
+        vi_end,
+        lnum,
+        mincol,
+        lnum_amount,
+        col_amount,
+        spaces_removed,
+    );
+
+    // previous context mark
+    let curwin = nvim_mark_get_curwin();
+    let pcmark = nvim_mark_win_get_pcmark_ptr(curwin);
+    col_adjust(
+        pcmark,
+        lnum,
+        mincol,
+        lnum_amount,
+        col_amount,
+        spaces_removed,
+    );
+
+    // previous pcmark
+    let prev_pcmark = nvim_mark_win_get_prev_pcmark_ptr(curwin);
+    col_adjust(
+        prev_pcmark,
+        lnum,
+        mincol,
+        lnum_amount,
+        col_amount,
+        spaces_removed,
+    );
+
+    // saved cursor for formatting
+    let saved = nvim_mark_get_saved_cursor();
+    col_adjust(saved, lnum, mincol, lnum_amount, col_amount, spaces_removed);
+
+    // Adjust items in all windows related to the current buffer (current tab only)
+    let curtab = nvim_mark_get_curtab();
+    let mut win = nvim_mark_tabpage_firstwin(curtab);
+    while !win.is_null() {
+        // marks in the jumplist
+        let jlen = nvim_mark_win_get_jumplistlen(win);
+        for i in 0..jlen {
+            if nvim_mark_win_get_jumplist_fnum(win, i) == fnum {
+                let jmark = nvim_mark_win_get_jumplist_mark_ptr(win, i);
+                col_adjust(jmark, lnum, mincol, lnum_amount, col_amount, spaces_removed);
+            }
+        }
+
+        if nvim_mark_win_get_buf(win) == curbuf_ptr {
+            // marks in the tag stack
+            let tlen = nvim_mark_win_get_tagstacklen(win);
+            for i in 0..tlen {
+                if nvim_mark_win_get_tagstack_fnum(win, i) == fnum {
+                    let tmark = nvim_mark_win_get_tagstack_mark_ptr(win, i);
+                    col_adjust(tmark, lnum, mincol, lnum_amount, col_amount, spaces_removed);
+                }
+            }
+
+            // cursor position for other windows with the same buffer
+            if win != curwin {
+                let cursor_ptr = nvim_mark_win_get_cursor_ptr(win);
+                col_adjust(
+                    cursor_ptr,
+                    lnum,
+                    mincol,
+                    lnum_amount,
+                    col_amount,
+                    spaces_removed,
+                );
+            }
+        }
+
+        win = nvim_mark_win_get_next(win);
+    }
 }
 
 // =============================================================================
