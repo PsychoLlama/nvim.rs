@@ -658,7 +658,7 @@ fn get_curbuf() -> BufHandle {
 ///
 /// Handles namespace ID tracking, in-place revision of existing marks,
 /// decoration registration, and mark insertion into the marktree.
-#[no_mangle]
+#[export_name = "extmark_set"]
 #[allow(clippy::too_many_arguments)]
 pub extern "C" fn rs_extmark_set(
     buf: BufHandle,
@@ -766,7 +766,7 @@ pub extern "C" fn rs_extmark_set(
 /// Remove an extmark by namespace and ID.
 ///
 /// Returns true if the mark was found and deleted.
-#[no_mangle]
+#[export_name = "extmark_del_id"]
 pub extern "C" fn rs_extmark_del_id(buf: BufHandle, ns_id: u32, id: u32) -> bool {
     extmark_del_id(buf, ns_id, id)
 }
@@ -789,7 +789,7 @@ pub fn extmark_del_id(buf: BufHandle, ns_id: u32, id: u32) -> bool {
 }
 
 /// Remove a (paired) extmark pointed to by iterator.
-#[no_mangle]
+#[export_name = "extmark_del"]
 pub extern "C" fn rs_extmark_del(
     buf: BufHandle,
     itr: MarkTreeIterHandle,
@@ -840,7 +840,7 @@ pub fn extmark_del(buf: BufHandle, itr: MarkTreeIterHandle, key: MTKey, restore:
 /// Clear extmarks in a namespace between lines.
 ///
 /// If ns_id is 0, clears all namespaces.
-#[no_mangle]
+#[export_name = "extmark_clear"]
 pub extern "C" fn rs_extmark_clear(
     buf: BufHandle,
     ns_id: u32,
@@ -995,7 +995,7 @@ pub extern "C" fn rs_extmark_get(
 }
 
 /// Lookup an extmark by ID and return the mark pair.
-#[no_mangle]
+#[export_name = "extmark_from_id"]
 pub extern "C" fn rs_extmark_from_id(buf: BufHandle, ns_id: u32, id: u32) -> MTPair {
     extmark_from_id(buf, ns_id, id)
 }
@@ -1017,7 +1017,7 @@ pub fn extmark_from_id(buf: BufHandle, ns_id: u32, id: u32) -> MTPair {
 }
 
 /// Free all extmarks from a buffer.
-#[no_mangle]
+#[export_name = "extmark_free_all"]
 pub extern "C" fn rs_extmark_free_all(buf: BufHandle) {
     extmark_free_all(buf);
 }
@@ -1051,7 +1051,7 @@ pub fn extmark_free_all(buf: BufHandle) {
 }
 
 /// Adjust extmark row for inserted/deleted rows.
-#[no_mangle]
+#[export_name = "extmark_adjust"]
 pub extern "C" fn rs_extmark_adjust(
     buf: BufHandle,
     line1: LinenrT,
@@ -1117,7 +1117,7 @@ pub fn extmark_adjust(
 }
 
 /// Splice extmarks for a text change.
-#[no_mangle]
+#[export_name = "extmark_splice"]
 pub extern "C" fn rs_extmark_splice(
     buf: BufHandle,
     start_row: c_int,
@@ -1174,7 +1174,7 @@ pub fn extmark_splice(
 }
 
 /// Splice extmarks (column-only change).
-#[no_mangle]
+#[export_name = "extmark_splice_cols"]
 pub extern "C" fn rs_extmark_splice_cols(
     buf: BufHandle,
     start_row: c_int,
@@ -1199,7 +1199,7 @@ pub extern "C" fn rs_extmark_splice_cols(
 }
 
 /// Internal implementation of extmark splice (FFI export).
-#[no_mangle]
+#[export_name = "extmark_splice_impl"]
 pub extern "C" fn rs_extmark_splice_impl(
     buf: BufHandle,
     start_row: c_int,
@@ -1348,7 +1348,7 @@ pub fn extmark_splice_impl(
 }
 
 /// Invalidate extmarks between range and copy to undo header (FFI export).
-#[no_mangle]
+#[export_name = "extmark_splice_delete"]
 pub extern "C" fn rs_extmark_splice_delete(
     buf: BufHandle,
     l_row: c_int,
@@ -1473,7 +1473,7 @@ pub fn extmark_splice_delete(
 }
 
 /// Apply undo or redo for an extmark operation.
-#[no_mangle]
+#[export_name = "extmark_apply_undo"]
 pub extern "C" fn rs_extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool) {
     extmark_apply_undo(undo_info, undo);
 }
@@ -1635,7 +1635,7 @@ fn extmark_setraw(buf: BufHandle, mark_id: u64, row: c_int, col: ColnrT, invalid
 }
 
 /// Move a region of marks.
-#[no_mangle]
+#[export_name = "extmark_move_region"]
 pub extern "C" fn rs_extmark_move_region(
     buf: BufHandle,
     start_row: c_int,

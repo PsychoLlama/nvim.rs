@@ -4,6 +4,8 @@
 #include <stdint.h>
 
 #include "klib/kvec.h"
+#include "nvim/api/private/defs.h"  // IWYU pragma: keep
+#include "nvim/decoration_defs.h"  // IWYU pragma: keep
 #include "nvim/extmark_defs.h"  // IWYU pragma: keep
 #include "nvim/macros_defs.h"
 #include "nvim/marktree_defs.h"
@@ -76,5 +78,36 @@ struct undo_object {
     ExtmarkSavePos savepos;
   } data;
 };
+
+// Rust-exported extmark functions (via #[export_name])
+extern void extmark_set(buf_T *buf, uint32_t ns_id, uint32_t *idp, int row, colnr_T col,
+                        int end_row, colnr_T end_col, DecorInline decor, uint16_t decor_flags,
+                        bool right_gravity, bool end_right_gravity, bool no_undo,
+                        bool invalidate, Error *err);
+extern bool extmark_del_id(buf_T *buf, uint32_t ns_id, uint32_t id);
+extern void extmark_del(buf_T *buf, MarkTreeIter *itr, MTKey key, bool restore);
+extern bool extmark_clear(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_col,
+                          int u_row, colnr_T u_col);
+extern MTPair extmark_from_id(buf_T *buf, uint32_t ns_id, uint32_t id);
+extern void extmark_free_all(buf_T *buf);
+extern void extmark_splice_delete(buf_T *buf, int l_row, colnr_T l_col, int u_row,
+                                  colnr_T u_col, extmark_undo_vec_t *uvp, bool only_copy,
+                                  ExtmarkOp op);
+extern void extmark_apply_undo(ExtmarkUndoObject undo_info, bool undo);
+extern void extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
+                           linenr_T amount_after, ExtmarkOp undo);
+extern void extmark_splice(buf_T *buf, int start_row, colnr_T start_col, int old_row,
+                           colnr_T old_col, bcount_t old_byte, int new_row, colnr_T new_col,
+                           bcount_t new_byte, ExtmarkOp undo);
+extern void extmark_splice_impl(buf_T *buf, int start_row, colnr_T start_col,
+                                bcount_t start_byte, int old_row, colnr_T old_col,
+                                bcount_t old_byte, int new_row, colnr_T new_col,
+                                bcount_t new_byte, ExtmarkOp undo);
+extern void extmark_splice_cols(buf_T *buf, int start_row, colnr_T start_col, colnr_T old_col,
+                                colnr_T new_col, ExtmarkOp undo);
+extern void extmark_move_region(buf_T *buf, int start_row, colnr_T start_col,
+                                bcount_t start_byte, int extent_row, colnr_T extent_col,
+                                bcount_t extent_byte, int new_row, colnr_T new_col,
+                                bcount_t new_byte, ExtmarkOp undo);
 
 #include "extmark.h.generated.h"

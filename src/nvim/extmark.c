@@ -43,73 +43,10 @@
 
 #include "extmark.c.generated.h"
 
-// Rust FFI declarations for extmark core functions
-extern bool rs_extmark_del_id(buf_T *buf, uint32_t ns_id, uint32_t id);
-extern void rs_extmark_del(buf_T *buf, MarkTreeIter *itr, MTKey key, bool restore);
-extern bool rs_extmark_clear(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_col,
-                              int u_row, colnr_T u_col);
-extern MTPair rs_extmark_from_id(buf_T *buf, uint32_t ns_id, uint32_t id);
-extern void rs_extmark_free_all(buf_T *buf);
-extern void rs_extmark_splice_delete(buf_T *buf, int l_row, colnr_T l_col, int u_row,
-                                      colnr_T u_col, extmark_undo_vec_t *uvp, bool only_copy,
-                                      ExtmarkOp op);
-extern void rs_extmark_apply_undo(ExtmarkUndoObject undo_info, bool undo);
-extern void rs_extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
-                               linenr_T amount_after, ExtmarkOp undo);
-extern void rs_extmark_splice(buf_T *buf, int start_row, colnr_T start_col, int old_row,
-                               colnr_T old_col, bcount_t old_byte, int new_row, colnr_T new_col,
-                               bcount_t new_byte, ExtmarkOp undo);
-extern void rs_extmark_splice_impl(buf_T *buf, int start_row, colnr_T start_col,
-                                    bcount_t start_byte, int old_row, colnr_T old_col,
-                                    bcount_t old_byte, int new_row, colnr_T new_col,
-                                    bcount_t new_byte, ExtmarkOp undo);
-extern void rs_extmark_splice_cols(buf_T *buf, int start_row, colnr_T start_col, colnr_T old_col,
-                                    colnr_T new_col, ExtmarkOp undo);
-extern void rs_extmark_move_region(buf_T *buf, int start_row, colnr_T start_col,
-                                    bcount_t start_byte, int extent_row, colnr_T extent_col,
-                                    bcount_t extent_byte, int new_row, colnr_T new_col,
-                                    bcount_t new_byte, ExtmarkOp undo);
-
-extern void rs_extmark_set(buf_T *buf, uint32_t ns_id, uint32_t *idp, int row, colnr_T col,
-                           int end_row, colnr_T end_col, DecorInline decor, uint16_t decor_flags,
-                           bool right_gravity, bool end_right_gravity, bool no_undo,
-                           bool invalidate, Error *err);
+// Rust FFI declaration for extmark_get helper
 extern void rs_extmark_get(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_col,
                             int u_row, colnr_T u_col, int64_t amount, ExtmarkType type_filter,
                             bool overlap, ExtmarkInfoArray *array);
-
-/// Create or update an extmark
-///
-/// must not be used during iteration!
-void extmark_set(buf_T *buf, uint32_t ns_id, uint32_t *idp, int row, colnr_T col, int end_row,
-                 colnr_T end_col, DecorInline decor, uint16_t decor_flags, bool right_gravity,
-                 bool end_right_gravity, bool no_undo, bool invalidate, Error *err)
-{
-  rs_extmark_set(buf, ns_id, idp, row, col, end_row, end_col, decor, decor_flags, right_gravity,
-                 end_right_gravity, no_undo, invalidate, err);
-}
-
-
-/// Remove an extmark in "ns_id" by "id"
-///
-/// @return false on missing id
-bool extmark_del_id(buf_T *buf, uint32_t ns_id, uint32_t id)
-{
-  return rs_extmark_del_id(buf, ns_id, id);
-}
-
-/// Remove a (paired) extmark "key" pointed to by "itr"
-void extmark_del(buf_T *buf, MarkTreeIter *itr, MTKey key, bool restore)
-{
-  rs_extmark_del(buf, itr, key, restore);
-}
-
-/// Free extmarks in a ns between lines
-/// if ns = 0, it means clear all namespaces
-bool extmark_clear(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_col, int u_row, colnr_T u_col)
-{
-  return rs_extmark_clear(buf, ns_id, l_row, l_col, u_row, u_col);
-}
 
 /// @return  the position of marks between a range,
 ///          marks found at the start or end index will be included.
@@ -123,74 +60,6 @@ ExtmarkInfoArray extmark_get(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_co
   ExtmarkInfoArray array = KV_INITIAL_VALUE;
   rs_extmark_get(buf, ns_id, l_row, l_col, u_row, u_col, amount, type_filter, overlap, &array);
   return array;
-}
-
-/// Lookup an extmark by id
-MTPair extmark_from_id(buf_T *buf, uint32_t ns_id, uint32_t id)
-{
-  return rs_extmark_from_id(buf, ns_id, id);
-}
-
-/// free extmarks from the buffer
-void extmark_free_all(buf_T *buf)
-{
-  rs_extmark_free_all(buf);
-}
-
-/// invalidate extmarks between range and copy to undo header
-///
-/// copying is useful when we cannot simply reverse the operation. This will do
-/// nothing on redo, enforces correct position when undo.
-void extmark_splice_delete(buf_T *buf, int l_row, colnr_T l_col, int u_row, colnr_T u_col,
-                           extmark_undo_vec_t *uvp, bool only_copy, ExtmarkOp op)
-{
-  rs_extmark_splice_delete(buf, l_row, l_col, u_row, u_col, uvp, only_copy, op);
-}
-
-/// undo or redo an extmark operation
-void extmark_apply_undo(ExtmarkUndoObject undo_info, bool undo)
-{
-  rs_extmark_apply_undo(undo_info, undo);
-}
-
-/// Adjust extmark row for inserted/deleted rows (columns stay fixed).
-void extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
-                    linenr_T amount_after, ExtmarkOp undo)
-{
-  rs_extmark_adjust(buf, line1, line2, amount, amount_after, undo);
-}
-
-// Adjusts extmarks after a text edit, and emits the `on_bytes` event (`:h api-buffer-updates`).
-void extmark_splice(buf_T *buf, int start_row, colnr_T start_col, int old_row, colnr_T old_col,
-                    bcount_t old_byte, int new_row, colnr_T new_col, bcount_t new_byte,
-                    ExtmarkOp undo)
-{
-  rs_extmark_splice(buf, start_row, start_col, old_row, old_col, old_byte,
-                    new_row, new_col, new_byte, undo);
-}
-
-void extmark_splice_impl(buf_T *buf, int start_row, colnr_T start_col, bcount_t start_byte,
-                         int old_row, colnr_T old_col, bcount_t old_byte, int new_row,
-                         colnr_T new_col, bcount_t new_byte, ExtmarkOp undo)
-{
-  rs_extmark_splice_impl(buf, start_row, start_col, start_byte,
-                         old_row, old_col, old_byte,
-                         new_row, new_col, new_byte, undo);
-}
-
-void extmark_splice_cols(buf_T *buf, int start_row, colnr_T start_col, colnr_T old_col,
-                         colnr_T new_col, ExtmarkOp undo)
-{
-  rs_extmark_splice_cols(buf, start_row, start_col, old_col, new_col, undo);
-}
-
-void extmark_move_region(buf_T *buf, int start_row, colnr_T start_col, bcount_t start_byte,
-                         int extent_row, colnr_T extent_col, bcount_t extent_byte, int new_row,
-                         colnr_T new_col, bcount_t new_byte, ExtmarkOp undo)
-{
-  rs_extmark_move_region(buf, start_row, start_col, start_byte,
-                         extent_row, extent_col, extent_byte,
-                         new_row, new_col, new_byte, undo);
 }
 
 // ============================================================================
@@ -270,7 +139,7 @@ ExtmarkUndoObject *nvim_extmark_undo_vec_last(extmark_undo_vec_t *uvp)
 /// Delete extmark by ID (wrapper for Rust FFI, used by sign crate)
 bool nvim_extmark_del_id(buf_T *buf, uint32_t ns_id, uint32_t id)
 {
-  return rs_extmark_del_id(buf, ns_id, id);
+  return extmark_del_id(buf, ns_id, id);
 }
 
 // ============================================================================
