@@ -89,7 +89,8 @@ unsafe fn xstrdup(s: *const c_char) -> *mut c_char {
 /// - `wp` must be a valid window handle.
 /// - `line` must be a valid null-terminated C string.
 /// - Accesses global editor state (single-threaded).
-#[no_mangle]
+#[must_use]
+#[export_name = "get_breakindent_win"]
 pub unsafe extern "C" fn rs_get_breakindent_win(wp: WinHandle, line: *const c_char) -> c_int {
     let cache = &raw mut CACHE;
 

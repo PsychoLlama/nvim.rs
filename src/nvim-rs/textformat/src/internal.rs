@@ -107,7 +107,9 @@ extern "C" {
     // Indent
     fn nvim_get_old_indent() -> c_int;
     fn nvim_set_old_indent(val: c_int);
+    #[link_name = "set_indent"]
     fn rs_set_indent(amount: c_int, flags: c_int) -> bool;
+    #[link_name = "change_indent"]
     fn rs_change_indent(typ: c_int, amount: c_int, round: c_int, call_changed_bytes: bool);
 }
 

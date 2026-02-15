@@ -170,6 +170,7 @@ extern "C" {
     fn rs_utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScharT;
 
     // Tab padding from indent crate
+    #[link_name = "tabstop_padding"]
     fn rs_tabstop_padding(col: c_int, ts: i64, vts: *const c_int) -> c_int;
 
     // VirtText iteration (from decoration.c)

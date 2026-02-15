@@ -70,7 +70,8 @@ unsafe fn ascii_iswhite(c: c_char) -> bool {
 ///
 /// # Safety
 /// Accesses global editor state (current buffer, window, cursor).
-#[no_mangle]
+#[must_use]
+#[export_name = "set_indent"]
 pub unsafe extern "C" fn rs_set_indent(size: c_int, flags: c_int) -> bool {
     let mut doit = false;
     let mut ind_done: c_int = 0;

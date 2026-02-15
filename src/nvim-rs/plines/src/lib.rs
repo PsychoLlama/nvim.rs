@@ -79,6 +79,7 @@ extern "C" {
     fn nvim_diffopt_filler() -> c_int;
 
     // Existing Rust functions we can call
+    #[link_name = "tabstop_padding"]
     fn rs_tabstop_padding(col: c_int, ts: i64, vts: *const c_int) -> c_int;
     fn rs_ptr2cells(p: *const c_char) -> c_int;
 

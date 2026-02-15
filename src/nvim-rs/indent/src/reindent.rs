@@ -60,7 +60,7 @@ const OK: c_int = 1;
 /// - `oap` must be a valid oparg_T handle.
 /// - `how` must be a valid function pointer.
 /// - Accesses global editor state (single-threaded).
-#[no_mangle]
+#[export_name = "op_reindent"]
 pub unsafe extern "C" fn rs_op_reindent(oap: OapHandle, how: Indenter) {
     let start_lnum = nvim_get_curwin_cursor_lnum();
     let line_count = nvim_oap_get_line_count(oap);

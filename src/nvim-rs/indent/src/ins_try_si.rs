@@ -55,7 +55,7 @@ extern "C" {
 /// # Safety
 /// - Accesses global editor state (current window, buffer, cursor).
 /// - Single-threaded (Neovim guarantee).
-#[no_mangle]
+#[export_name = "ins_try_si"]
 pub unsafe extern "C" fn rs_ins_try_si(c: c_int) {
     let did_si = nvim_get_did_si();
     let can_si = nvim_get_can_si();
@@ -99,7 +99,7 @@ pub unsafe extern "C" fn rs_ins_try_si(c: c_int) {
             if nvim_get_State() & VREPLACE_FLAG != 0 {
                 nvim_change_indent(INDENT_SET, indent, 0, true);
             } else {
-                rs_set_indent(indent, SIN_CHANGED);
+                let _ = rs_set_indent(indent, SIN_CHANGED);
             }
         } else if nvim_get_curwin_cursor_col() > 0 {
             // when inserting '{' after "O" reduce indent, but not
@@ -134,7 +134,7 @@ pub unsafe extern "C" fn rs_ins_try_si(c: c_int) {
     if nvim_get_curwin_cursor_col() > 0 && can_si && c == b'#' as c_int && rs_inindent(0) {
         // remember current indent for next line
         nvim_set_old_indent(rs_get_indent());
-        rs_set_indent(0, SIN_CHANGED);
+        let _ = rs_set_indent(0, SIN_CHANGED);
     }
 
     // Adjust ai_col, the char at this position can be deleted.

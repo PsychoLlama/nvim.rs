@@ -91,9 +91,13 @@ extern "C" {
     fn nvim_textfmt_get_number_indent(lnum: c_int) -> c_int;
 
     // Indent crate
+    #[link_name = "get_indent"]
     fn rs_get_indent() -> c_int;
+    #[link_name = "get_indent_lnum"]
     fn rs_get_indent_lnum(lnum: c_int) -> c_int;
+    #[link_name = "set_indent"]
     fn rs_set_indent(amount: c_int, flags: c_int) -> bool;
+    #[link_name = "get_lisp_indent"]
     fn rs_get_lisp_indent() -> c_int;
     fn rs_cindent_on() -> bool;
 

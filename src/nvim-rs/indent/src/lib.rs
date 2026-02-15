@@ -103,7 +103,7 @@ const TAB: c_char = b'\t' as c_char;
 ///
 /// # Safety
 /// Accesses global state (trylevel, got_int).
-#[no_mangle]
+#[export_name = "emsg_text_too_long"]
 pub unsafe extern "C" fn rs_emsg_text_too_long() {
     emsg(translate(e_resulting_text_too_long));
     // when not inside a try/catch set got_int to break out of any loop
@@ -139,7 +139,8 @@ pub unsafe extern "C" fn rs_cindent_on() -> bool {
 ///
 /// # Safety
 /// Calls C accessor functions for buffer and global options.
-#[no_mangle]
+#[must_use]
+#[export_name = "may_do_si"]
 pub unsafe extern "C" fn rs_may_do_si() -> bool {
     nvim_curbuf_get_p_si() != 0
         && nvim_curbuf_get_p_cin() == 0
@@ -159,7 +160,8 @@ const SPACE: c_char = b' ' as c_char;
 /// # Safety
 /// If `vts` is non-null, it must point to a valid array where vts[0] contains
 /// the count and vts[1..count+1] contains valid tabstop values.
-#[no_mangle]
+#[must_use]
+#[export_name = "tabstop_padding"]
 pub unsafe extern "C" fn rs_tabstop_padding(col: c_int, ts_arg: i64, vts: *const c_int) -> c_int {
     let ts: i64 = if ts_arg == 0 { 8 } else { ts_arg };
 
@@ -197,7 +199,8 @@ pub unsafe extern "C" fn rs_tabstop_padding(col: c_int, ts_arg: i64, vts: *const
 /// # Safety
 /// - `ptr` must point to a valid null-terminated C string.
 /// - If `vts` is non-null, it must point to a valid tabstop array.
-#[no_mangle]
+#[must_use]
+#[export_name = "indent_size_ts"]
 pub unsafe extern "C" fn rs_indent_size_ts(
     ptr: *const c_char,
     ts: i64,
@@ -278,7 +281,8 @@ pub unsafe extern "C" fn rs_indent_size_ts(
 /// # Safety
 /// If `vts` is non-null, it must point to a valid tabstop array where
 /// vts[0] is the count and vts[1..count+1] are the tabstop widths.
-#[no_mangle]
+#[must_use]
+#[export_name = "tabstop_at"]
 pub unsafe extern "C" fn rs_tabstop_at(
     col: c_int,
     ts: i64,
@@ -322,7 +326,8 @@ pub unsafe extern "C" fn rs_tabstop_at(
 ///
 /// # Safety
 /// If `vts` is non-null, it must point to a valid tabstop array.
-#[no_mangle]
+#[must_use]
+#[export_name = "tabstop_start"]
 pub unsafe extern "C" fn rs_tabstop_start(col: c_int, ts: c_int, vts: *const c_int) -> c_int {
     if vts.is_null() || *vts == 0 {
         return col - col % ts;
@@ -455,7 +460,8 @@ pub unsafe extern "C" fn rs_tabstop_fromto(
 ///
 /// # Safety
 /// If either pointer is non-null, it must point to a valid tabstop array.
-#[no_mangle]
+#[must_use]
+#[export_name = "tabstop_eq"]
 pub unsafe extern "C" fn rs_tabstop_eq(ts1: *const c_int, ts2: *const c_int) -> bool {
     // Handle null cases
     if ts1.is_null() && ts2.is_null() {
@@ -488,7 +494,8 @@ pub unsafe extern "C" fn rs_tabstop_eq(ts1: *const c_int, ts2: *const c_int) -> 
 ///
 /// # Safety
 /// If `ts` is non-null, it must point to a valid tabstop array.
-#[no_mangle]
+#[must_use]
+#[export_name = "tabstop_count"]
 pub unsafe extern "C" fn rs_tabstop_count(ts: *const c_int) -> c_int {
     if ts.is_null() {
         0
@@ -501,7 +508,8 @@ pub unsafe extern "C" fn rs_tabstop_count(ts: *const c_int) -> c_int {
 ///
 /// # Safety
 /// If `ts` is non-null, it must point to a valid tabstop array with at least 2 elements.
-#[no_mangle]
+#[must_use]
+#[export_name = "tabstop_first"]
 pub unsafe extern "C" fn rs_tabstop_first(ts: *const c_int) -> c_int {
     if ts.is_null() {
         8
@@ -519,7 +527,8 @@ pub unsafe extern "C" fn rs_tabstop_first(ts: *const c_int) -> c_int {
 /// # Safety
 /// - `ptr` must point to a valid null-terminated C string.
 /// - The global `g_chartab` array must be initialized.
-#[no_mangle]
+#[must_use]
+#[export_name = "indent_size_no_ts"]
 pub unsafe extern "C" fn rs_indent_size_no_ts(ptr: *const c_char) -> c_int {
     if ptr.is_null() {
         return 0;
@@ -571,7 +580,8 @@ fn is_ascii_digit(c: c_char) -> bool {
 /// * `var` must be a valid null-terminated C string
 /// * `array` must be a valid pointer to a `*mut c_int` (output parameter)
 /// * The returned array must be freed by the caller using `xfree`
-#[no_mangle]
+#[must_use]
+#[export_name = "tabstop_set"]
 pub unsafe extern "C" fn rs_tabstop_set(var: *const c_char, array: *mut *mut c_int) -> bool {
     if var.is_null() || array.is_null() {
         return false;
@@ -753,7 +763,8 @@ unsafe fn starts_with(s: *const c_char, prefix: &[u8]) -> bool {
 /// # Safety
 /// * If `briopt` is non-null, it must be a valid null-terminated string
 /// * If `wp` is non-null, it must be a valid window handle
-#[no_mangle]
+#[must_use]
+#[export_name = "briopt_check"]
 pub unsafe extern "C" fn rs_briopt_check(briopt: *const c_char, wp: WinHandle) -> bool {
     let mut values = BrioptValues::default();
 
@@ -837,7 +848,8 @@ pub unsafe extern "C" fn rs_briopt_check(briopt: *const c_char, wp: WinHandle) -
 ///
 /// # Safety
 /// The `buf` parameter must be a valid buffer pointer.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_sw_value_col"]
 pub unsafe extern "C" fn rs_get_sw_value_col(buf: BufHandle, col: c_int, left: bool) -> c_int {
     if buf.is_null() {
         return 8; // Default shiftwidth

@@ -29,7 +29,8 @@ extern "C" {
 ///
 /// # Safety
 /// Accesses current buffer state.
-#[no_mangle]
+#[must_use]
+#[export_name = "preprocs_left"]
 pub unsafe extern "C" fn rs_preprocs_left() -> bool {
     let si = nvim_curbuf_get_p_si() != 0;
     let cin = nvim_curbuf_get_p_cin() != 0;
@@ -54,7 +55,8 @@ pub unsafe extern "C" fn rs_preprocs_left() -> bool {
 ///
 /// # Safety
 /// Accesses current buffer state.
-#[no_mangle]
+#[must_use]
+#[export_name = "use_indentexpr_for_lisp"]
 pub unsafe extern "C" fn rs_use_indentexpr_for_lisp() -> bool {
     // Check if lisp is set
     if nvim_curbuf_get_p_lisp() == 0 {
@@ -104,7 +106,8 @@ pub unsafe extern "C" fn rs_use_indentexpr_for_lisp() -> bool {
 /// # Safety
 /// - `p` must point to a valid null-terminated C string
 /// - Accesses current buffer state for 'lispwords' option
-#[no_mangle]
+#[must_use]
+#[export_name = "lisp_match"]
 pub unsafe extern "C" fn rs_lisp_match(p: *const c_char) -> c_int {
     if p.is_null() {
         return 0;

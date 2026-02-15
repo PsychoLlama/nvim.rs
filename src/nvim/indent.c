@@ -52,134 +52,12 @@
 
 #include "indent.c.generated.h"
 
-extern int rs_tabstop_padding(int col, int64_t ts_arg, const int *vts);
-extern int rs_indent_size_ts(const char *ptr, int64_t ts, const int *vts);
-extern int rs_indent_size_no_ts(const char *ptr);
-extern bool rs_set_indent(int size, int flags);
-extern bool rs_copy_indent(int size, const char *src);
-extern int rs_get_breakindent_win(win_T *wp, const char *line);
-extern void rs_ins_try_si(int c);
-extern void rs_op_reindent(oparg_T *oap, Indenter how);
-extern int rs_tabstop_at(int col, int64_t ts, const int *vts, bool left);
-extern int rs_tabstop_start(int col, int ts, const int *vts);
-extern bool rs_tabstop_eq(const int *ts1, const int *ts2);
-extern int rs_tabstop_count(const int *ts);
-extern int rs_tabstop_first(const int *ts);
-
+// Rust implementations (functions not yet given #[export_name])
 typedef struct {
   int ntabs;
   int nspcs;
 } TabstopFromtoResult;
 extern TabstopFromtoResult rs_tabstop_fromto(int start_col, int end_col, int ts, const int *vts);
-extern int rs_get_sw_value_col(buf_T *buf, int col, bool left);
-extern bool rs_may_do_si(void);
-
-// Phase 138: Indentation helper functions
-// Character classification
-extern int rs_indent_is_space(char c);
-extern int rs_indent_is_tab(char c);
-extern int rs_indent_is_white(char c);
-extern int rs_indent_is_eol(char c);
-// Indent flags
-extern int rs_indent_flag_set(void);
-extern int rs_indent_flag_inc(void);
-extern int rs_indent_flag_dec(void);
-extern int rs_indent_is_set(int action);
-extern int rs_indent_is_inc(int action);
-extern int rs_indent_is_dec(int action);
-// Shiftround modes
-extern int rs_sr_round(void);
-extern int rs_sr_left(void);
-extern int rs_sr_right(void);
-extern int rs_sr_is_round(int mode);
-extern int rs_sr_is_left(int mode);
-extern int rs_sr_is_right(int mode);
-// Indent calculations
-extern int rs_indent_round(int indent, int sw);
-extern int rs_indent_floor(int indent, int sw);
-extern int rs_indent_ceil(int indent, int sw);
-extern int rs_indent_shift(int cur_indent, int sw, int count, int round);
-extern int rs_indent_on_boundary(int indent, int sw);
-// Whitespace counting
-extern int rs_count_leading_white(const char *ptr);
-extern int rs_count_leading_spaces(const char *ptr);
-extern int rs_count_leading_tabs(const char *ptr);
-extern int rs_line_is_blank(const char *ptr);
-extern int rs_line_no_indent(const char *ptr);
-// Column calculations
-extern int rs_col_add_spaces(int col, int spaces);
-extern int rs_col_add_tab(int col, int ts);
-extern int rs_tabs_to_spaces(int ntabs, int ts);
-extern int rs_spaces_to_tabs(int spaces, int ts);
-extern int rs_spaces_after_tabs(int spaces, int ts);
-// Expandtab helpers
-extern int rs_use_expandtab(int expandtab);
-extern int rs_indent_chars_needed(int indent, int ts, int expandtab);
-// Default values
-extern int rs_default_ts(void);
-extern int rs_default_sw(void);
-extern int rs_default_sts(void);
-extern int rs_normalize_ts(int ts);
-extern int rs_normalize_sw(int sw, int ts);
-
-// Phase: Getters (indent/getters.rs)
-extern int rs_get_sw_value(buf_T *buf);
-extern int rs_get_sw_value_indent(buf_T *buf, bool left);
-extern int rs_get_sts_value(void);
-extern int rs_get_indent(void);
-extern int rs_get_indent_lnum(linenr_T lnum);
-extern int rs_get_indent_buf(buf_T *buf, linenr_T lnum);
-extern bool rs_inindent(int extra);
-extern int *rs_tabstop_copy(const int *oldts);
-
-// Phase: Checks (indent/checks.rs)
-extern bool rs_preprocs_left(void);
-extern bool rs_use_indentexpr_for_lisp(void);
-extern int rs_lisp_match(const char *p);
-
-// Phase: Tabstop parsing (indent/lib.rs)
-extern bool rs_tabstop_set(const char *var, colnr_T **array);
-
-// Phase: Breakindent option parsing (indent/lib.rs)
-extern bool rs_briopt_check(const char *briopt, win_T *wp);
-
-// Phase: Error helpers (indent/lib.rs)
-extern void rs_emsg_text_too_long(void);
-
-/// Set the integer values corresponding to the string setting of 'vartabstop'.
-/// "array" will be set, caller must free it if needed.
-///
-/// @return  false for an error.
-bool tabstop_set(char *var, colnr_T **array)
-{
-  return rs_tabstop_set(var, array);
-}
-
-/// Calculate the number of screen spaces a tab will occupy.
-/// If "vts" is set then the tab widths are taken from that array,
-/// otherwise the value of ts is used.
-int tabstop_padding(colnr_T col, OptInt ts_arg, const colnr_T *vts)
-  FUNC_ATTR_PURE
-{
-  return rs_tabstop_padding(col, ts_arg, vts);
-}
-
-/// Find the size of the tab that covers a particular column.
-///
-/// If this is being called as part of a shift operation, col is not the cursor
-/// column but is the column number to the left of the first non-whitespace
-/// character in the line.  If the shift is to the left (left == true), then
-/// return the size of the tab interval to the left of the column.
-int tabstop_at(colnr_T col, OptInt ts, const colnr_T *vts, bool left)
-{
-  return rs_tabstop_at(col, ts, vts, left);
-}
-
-/// Find the column on which a tab starts.
-colnr_T tabstop_start(colnr_T col, int ts, colnr_T *vts)
-{
-  return rs_tabstop_start(col, ts, vts);
-}
 
 /// Find the number of tabs and spaces necessary to get from one column
 /// to another.
@@ -195,37 +73,6 @@ void tabstop_fromto(colnr_T start_col, colnr_T end_col, int ts_arg, const colnr_
   *nspcs = result.nspcs;
 }
 
-/// See if two tabstop arrays contain the same values.
-static bool tabstop_eq(const colnr_T *ts1, const colnr_T *ts2)
-{
-  return rs_tabstop_eq(ts1, ts2);
-}
-
-/// Copy a tabstop array, allocating space for the new array.
-int *tabstop_copy(const int *oldts)
-{
-  return rs_tabstop_copy(oldts);
-}
-
-/// Return a count of the number of tabstops.
-int tabstop_count(colnr_T *ts)
-{
-  return rs_tabstop_count(ts);
-}
-
-/// Return the first tabstop, or 8 if there are no tabstops defined.
-int tabstop_first(colnr_T *ts)
-{
-  return rs_tabstop_first(ts);
-}
-
-/// Return the effective shiftwidth value for current buffer, using the
-/// 'tabstop' value when 'shiftwidth' is zero.
-int get_sw_value(buf_T *buf)
-{
-  return rs_get_sw_value(buf);
-}
-
 /// Idem, using "pos".
 static int get_sw_value_pos(buf_T *buf, pos_T *pos, bool left)
 {
@@ -235,75 +82,6 @@ static int get_sw_value_pos(buf_T *buf, pos_T *pos, bool left)
   int sw_value = get_sw_value_col(buf, get_nolist_virtcol(), left);
   curwin->w_cursor = save_cursor;
   return sw_value;
-}
-
-/// Idem, using the first non-black in the current line.
-int get_sw_value_indent(buf_T *buf, bool left)
-{
-  return rs_get_sw_value_indent(buf, left);
-}
-
-/// Idem, using virtual column "col".
-int get_sw_value_col(buf_T *buf, colnr_T col, bool left)
-{
-  return rs_get_sw_value_col(buf, col, left);
-}
-
-/// Return the effective softtabstop value for the current buffer,
-/// using the shiftwidth  value when 'softtabstop' is negative.
-int get_sts_value(void)
-{
-  return rs_get_sts_value();
-}
-
-/// Count the size (in window cells) of the indent in the current line.
-int get_indent(void)
-{
-  return rs_get_indent();
-}
-
-/// Count the size (in window cells) of the indent in line "lnum".
-int get_indent_lnum(linenr_T lnum)
-{
-  return rs_get_indent_lnum(lnum);
-}
-
-/// Count the size (in window cells) of the indent in line "lnum" of buffer "buf".
-int get_indent_buf(buf_T *buf, linenr_T lnum)
-{
-  return rs_get_indent_buf(buf, lnum);
-}
-
-/// Compute the size of the indent (in window cells) in line "ptr",
-/// without tabstops (count tab as ^I or <09>).
-int indent_size_no_ts(char const *ptr)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  return rs_indent_size_no_ts(ptr);
-}
-
-/// Compute the size of the indent (in window cells) in line "ptr",
-/// using tabstops
-int indent_size_ts(char const *ptr, OptInt ts, colnr_T *vts)
-  FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_PURE
-{
-  return rs_indent_size_ts(ptr, ts, vts);
-}
-
-/// Set the indent of the current line.
-/// Leaves the cursor on the first non-blank in the line.
-/// Caller must take care of undo.
-/// "flags":
-///  SIN_CHANGED:    call changed_bytes() if the line was changed.
-///  SIN_INSERT: insert the indent in front of the line.
-///  SIN_UNDO:   save line for undo before changing it.
-///  SIN_NOMARK: don't move extmarks (because just after ml_append or something)
-///  @param size measured in spaces
-///
-/// @return  true if the line was changed.
-bool set_indent(int size, int flags)
-{
-  return rs_set_indent(size, flags);
 }
 
 // Return the indent of the current line after a number.  Return -1 if no
@@ -347,103 +125,11 @@ int get_number_indent(linenr_T lnum)
   return (int)col;
 }
 
-/// Check "briopt" as 'breakindentopt' and update the members of "wp".
-/// This is called when 'breakindentopt' is changed and when a window is
-/// initialized
-///
-/// @param briopt  when NULL: use "wp->w_p_briopt"
-/// @param wp      when NULL: only check "briopt"
-///
-/// @return  FAIL for failure, OK otherwise.
-bool briopt_check(char *briopt, win_T *wp)
-{
-  return rs_briopt_check(briopt, wp);
-}
-
-// Return appropriate space number for breakindent, taking influencing
-// parameters into account. Window must be specified, since it is not
-// necessarily always the current one.
-int get_breakindent_win(win_T *wp, char *line)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_get_breakindent_win(wp, line);
-}
-
 /// Get breakindent for window and line number (accessor for Rust FFI).
 /// Combines get_breakindent_win with ml_get_buf for convenience.
 int nvim_get_breakindent_win_lnum(win_T *wp, linenr_T lnum)
 {
   return get_breakindent_win(wp, ml_get_buf(wp->w_buffer, lnum));
-}
-
-// When extra == 0: Return true if the cursor is before or on the first
-// non-blank in the line.
-// When extra == 1: Return true if the cursor is before the first non-blank in
-// the line.
-bool inindent(int extra)
-{
-  return rs_inindent(extra);
-}
-
-/// Handle reindenting a block of lines.
-void op_reindent(oparg_T *oap, Indenter how)
-{
-  rs_op_reindent(oap, how);
-}
-
-/// @return  true if lines starting with '#' should be left aligned.
-bool preprocs_left(void)
-{
-  return rs_preprocs_left();
-}
-
-/// @return  true if the conditions are OK for smart indenting.
-bool may_do_si(void)
-{
-  return rs_may_do_si();
-}
-
-// Try to do some very smart auto-indenting.
-// Used when inserting a "normal" character.
-void ins_try_si(int c)
-{
-  rs_ins_try_si(c);
-}
-
-/// Insert an indent (for <Tab> or CTRL-T) or delete an indent (for CTRL-D).
-/// Keep the cursor on the same character.
-/// type == INDENT_INC   increase indent (for CTRL-T or <Tab>)
-/// type == INDENT_DEC   decrease indent (for CTRL-D)
-/// type == INDENT_SET   set indent to "amount"
-///
-/// @param round               if true, round the indent to 'shiftwidth' (only with _INC and _Dec).
-/// @param call_changed_bytes  call changed_bytes()
-extern void rs_change_indent(int type, int amount, int round, bool call_changed_bytes);
-void change_indent(int type, int amount, int round, bool call_changed_bytes)
-{
-  rs_change_indent(type, amount, round, call_changed_bytes);
-}
-
-/// Copy the indent from ptr to the current line (and fill to size).
-/// Leaves the cursor on the first non-blank in the line.
-///
-/// @return true if the line was changed.
-bool copy_indent(int size, char *src)
-{
-  return rs_copy_indent(size, src);
-}
-
-/// Give a "resulting text too long" error and maybe set got_int.
-static void emsg_text_too_long(void)
-{
-  rs_emsg_text_too_long();
-}
-
-extern void rs_ex_retab(exarg_T *eap);
-/// ":retab".
-void ex_retab(exarg_T *eap)
-{
-  rs_ex_retab(eap);
 }
 
 /// Get indent level from 'indentexpr'.
@@ -502,17 +188,6 @@ int get_expr_indent(void)
   return indent;
 }
 
-extern int rs_get_lisp_indent(void);
-int get_lisp_indent(void)
-{
-  return rs_get_lisp_indent();
-}
-
-static int lisp_match(char *p)
-{
-  return rs_lisp_match(p);
-}
-
 /// Re-indent the current line, based on the current contents of it and the
 /// surrounding lines. Fixing the cursor position seems really easy -- I'm very
 /// confused what all the part that handles Control-T is doing that I'm not.
@@ -529,13 +204,6 @@ void fixthisline(IndentGetter get_the_indent)
   if (linewhite(curwin->w_cursor.lnum)) {
     did_ai = true;  // delete the indent if the line stays empty
   }
-}
-
-/// Return true if 'indentexpr' should be used for Lisp indenting.
-/// Caller may want to check 'autoindent'.
-bool use_indentexpr_for_lisp(void)
-{
-  return rs_use_indentexpr_for_lisp();
 }
 
 /// Fix indent for 'lisp' and 'cindent'.

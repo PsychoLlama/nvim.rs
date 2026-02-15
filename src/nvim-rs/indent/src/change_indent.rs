@@ -109,7 +109,7 @@ extern "C" {
 /// # Safety
 /// - Accesses global editor state (current window, buffer, cursor).
 /// - Single-threaded (Neovim guarantee).
-#[no_mangle]
+#[export_name = "change_indent"]
 pub unsafe extern "C" fn rs_change_indent(
     type_: c_int,
     amount: c_int,
@@ -161,7 +161,7 @@ pub unsafe extern "C" fn rs_change_indent(
 
     // Set the new indent. The cursor will be put on the first non-blank.
     if type_ == INDENT_SET {
-        rs_set_indent(amount, if call_changed_bytes { SIN_CHANGED } else { 0 });
+        let _ = rs_set_indent(amount, if call_changed_bytes { SIN_CHANGED } else { 0 });
     } else {
         let save_state = nvim_get_State();
 

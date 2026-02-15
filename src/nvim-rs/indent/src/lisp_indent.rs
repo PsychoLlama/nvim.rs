@@ -60,6 +60,7 @@ extern "C" {
     fn nvim_utf_ptr2char_value(ptr: *const c_char) -> c_int;
 
     // Lisp match (already in checks.rs)
+    #[link_name = "lisp_match"]
     fn rs_lisp_match(p: *const c_char) -> c_int;
 }
 
@@ -68,7 +69,8 @@ extern "C" {
 /// # Safety
 /// - Accesses global editor state (current window, buffer, cursor).
 /// - Single-threaded (Neovim guarantee).
-#[no_mangle]
+#[must_use]
+#[export_name = "get_lisp_indent"]
 pub unsafe extern "C" fn rs_get_lisp_indent() -> c_int {
     let realpos = nvim_change_get_curwin_cursor();
     nvim_set_curwin_cursor_col(0);

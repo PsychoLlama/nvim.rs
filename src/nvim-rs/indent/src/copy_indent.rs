@@ -35,7 +35,8 @@ unsafe fn ascii_iswhite(c: c_char) -> bool {
 /// # Safety
 /// - `src` must be a valid null-terminated C string.
 /// - Accesses global editor state (current buffer, window, cursor).
-#[no_mangle]
+#[must_use]
+#[export_name = "copy_indent"]
 pub unsafe extern "C" fn rs_copy_indent(size: c_int, src: *const c_char) -> bool {
     let b_p_et = nvim_curbuf_get_p_et();
     let b_p_ts = nvim_curbuf_get_b_p_ts();

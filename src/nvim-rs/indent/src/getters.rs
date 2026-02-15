@@ -43,7 +43,8 @@ type LineNr = i32;
 ///
 /// # Safety
 /// The `buf` parameter must be a valid buffer pointer.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_sw_value"]
 pub unsafe extern "C" fn rs_get_sw_value(buf: BufHandle) -> c_int {
     rs_get_sw_value_col(buf, 0, false)
 }
@@ -52,7 +53,8 @@ pub unsafe extern "C" fn rs_get_sw_value(buf: BufHandle) -> c_int {
 ///
 /// # Safety
 /// Accesses current buffer state.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_sw_value_indent"]
 pub unsafe extern "C" fn rs_get_sw_value_indent(buf: BufHandle, left: bool) -> c_int {
     let whitecols = nvim_getwhitecols_curline();
     rs_get_sw_value_col(buf, whitecols, left)
@@ -68,7 +70,8 @@ pub unsafe extern "C" fn rs_get_sw_value_indent(buf: BufHandle, left: bool) -> c
 ///
 /// # Safety
 /// Accesses current buffer state.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_sts_value"]
 pub unsafe extern "C" fn rs_get_sts_value() -> c_int {
     let buf = nvim_get_curbuf();
     let sts = nvim_buf_get_p_sts(buf);
@@ -87,7 +90,8 @@ pub unsafe extern "C" fn rs_get_sts_value() -> c_int {
 ///
 /// # Safety
 /// Accesses current buffer and cursor state.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_indent"]
 pub unsafe extern "C" fn rs_get_indent() -> c_int {
     let buf = nvim_get_curbuf();
     let line = nvim_curbuf_get_line_ptr();
@@ -100,7 +104,8 @@ pub unsafe extern "C" fn rs_get_indent() -> c_int {
 ///
 /// # Safety
 /// The line number must be valid for the current buffer.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_indent_lnum"]
 pub unsafe extern "C" fn rs_get_indent_lnum(lnum: LineNr) -> c_int {
     let buf = nvim_get_curbuf();
     let line = nvim_curbuf_get_line_at(lnum);
@@ -113,7 +118,8 @@ pub unsafe extern "C" fn rs_get_indent_lnum(lnum: LineNr) -> c_int {
 ///
 /// # Safety
 /// The buffer and line number must be valid.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_indent_buf"]
 pub unsafe extern "C" fn rs_get_indent_buf(buf: BufHandle, lnum: LineNr) -> c_int {
     let line = nvim_buf_get_line_at(buf, lnum);
     let ts = nvim_buf_get_p_ts(buf);
@@ -132,7 +138,8 @@ pub unsafe extern "C" fn rs_get_indent_buf(buf: BufHandle, lnum: LineNr) -> c_in
 ///
 /// # Safety
 /// Accesses current window and buffer state.
-#[no_mangle]
+#[must_use]
+#[export_name = "inindent"]
 pub unsafe extern "C" fn rs_inindent(extra: c_int) -> bool {
     let line = nvim_curbuf_get_line_ptr();
     if line.is_null() {
@@ -164,7 +171,8 @@ pub unsafe extern "C" fn rs_inindent(extra: c_int) -> bool {
 /// # Safety
 /// If `oldts` is non-null, it must point to a valid tabstop array.
 /// The returned pointer must be freed by the caller.
-#[no_mangle]
+#[must_use]
+#[export_name = "tabstop_copy"]
 pub unsafe extern "C" fn rs_tabstop_copy(oldts: *const c_int) -> *mut c_int {
     if oldts.is_null() {
         return std::ptr::null_mut();

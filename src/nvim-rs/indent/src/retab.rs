@@ -96,7 +96,7 @@ use crate::rs_emsg_text_too_long;
 /// # Safety
 /// - `eap` must be a valid exarg_T handle.
 /// - Accesses global editor state (single-threaded).
-#[no_mangle]
+#[export_name = "ex_retab"]
 pub unsafe extern "C" fn rs_ex_retab(eap: EapHandle) {
     let mut got_tab = false;
     let mut num_spaces: c_int = 0;
