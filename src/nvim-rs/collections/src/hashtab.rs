@@ -12,12 +12,13 @@ use std::ptr;
 use nvim_memory::{xcalloc, xfree};
 use nvim_memutil::{rs_hash_hash, rs_hash_hash_len};
 
-// Import the C global for the removed marker
-// This ensures Rust and C use the same marker value
+// Global marker for removed items — used by both C and Rust.
+// Its *address* is the sentinel; the value is irrelevant.
+#[no_mangle]
+static mut hash_removed: c_char = 0;
+
 extern "C" {
-    /// The C global variable used as a marker for removed hash items.
-    /// Using the address of this variable as a magic marker.
-    static mut hash_removed: c_char;
+    fn nvim_siemsg_str(s: *const c_char, arg: *const c_char);
 }
 
 /// Initial size for a hashtable (must be a power of 2).
@@ -68,16 +69,12 @@ pub struct HashTab {
 }
 
 /// Get the address used to mark removed items.
-/// Uses the C global hash_removed for compatibility.
 ///
 /// # Safety
 ///
 /// This function accesses a mutable static, which requires unsafe.
-/// The global is defined in C and is guaranteed to exist.
-#[no_mangle]
+#[export_name = "_hash_key_removed"]
 pub extern "C" fn rs_hash_key_removed() -> *mut c_char {
-    // SAFETY: hash_removed is a global defined in C hashtab.c
-    // that is guaranteed to exist for the lifetime of the program.
     #[allow(unused_unsafe)]
     unsafe {
         ptr::addr_of_mut!(hash_removed)
@@ -95,7 +92,7 @@ fn hashitem_empty(hi: &HashItem) -> bool {
 /// # Safety
 ///
 /// `ht` must be a valid pointer to a `HashTab` structure.
-#[no_mangle]
+#[export_name = "hash_init"]
 pub unsafe extern "C" fn rs_hash_init(ht: *mut HashTab) {
     if ht.is_null() {
         return;
@@ -126,7 +123,7 @@ pub unsafe extern "C" fn rs_hash_init(ht: *mut HashTab) {
 /// # Safety
 ///
 /// `ht` must be a valid pointer to a `HashTab` structure.
-#[no_mangle]
+#[export_name = "hash_clear"]
 pub unsafe extern "C" fn rs_hash_clear(ht: *mut HashTab) {
     if ht.is_null() {
         return;
@@ -152,7 +149,7 @@ pub unsafe extern "C" fn rs_hash_clear(ht: *mut HashTab) {
 /// `ht` must be a valid pointer to a `HashTab` structure.
 /// All items in the hash table must have keys that point into structures
 /// that were allocated with xmalloc and can be freed with xfree.
-#[no_mangle]
+#[export_name = "hash_clear_all"]
 pub unsafe extern "C" fn rs_hash_clear_all(ht: *mut HashTab, off: libc::c_uint) {
     if ht.is_null() {
         return;
@@ -188,7 +185,7 @@ pub unsafe extern "C" fn rs_hash_clear_all(ht: *mut HashTab, off: libc::c_uint) 
 ///
 /// `ht` must be a valid pointer to a `HashTab` structure.
 /// `key` must be a valid pointer to at least `key_len` bytes.
-#[no_mangle]
+#[export_name = "hash_lookup"]
 pub unsafe extern "C" fn rs_hash_lookup(
     ht: *const HashTab,
     key: *const c_char,
@@ -267,7 +264,7 @@ fn key_matches(hi: *const HashItem, key: *const c_char, key_len: usize) -> bool 
 ///
 /// `ht` must be a valid pointer to a `HashTab` structure.
 /// `key` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "hash_find"]
 pub unsafe extern "C" fn rs_hash_find(ht: *const HashTab, key: *const c_char) -> *mut HashItem {
     if ht.is_null() || key.is_null() {
         return ptr::null_mut();
@@ -284,7 +281,7 @@ pub unsafe extern "C" fn rs_hash_find(ht: *const HashTab, key: *const c_char) ->
 ///
 /// `ht` must be a valid pointer to a `HashTab` structure.
 /// `key` must be a valid pointer to at least `len` bytes.
-#[no_mangle]
+#[export_name = "hash_find_len"]
 pub unsafe extern "C" fn rs_hash_find_len(
     ht: *const HashTab,
     key: *const c_char,
@@ -307,7 +304,7 @@ pub unsafe extern "C" fn rs_hash_find_len(
 /// `ht` must be a valid pointer to a `HashTab` structure.
 /// `hi` must be a pointer to an empty slot in the hash table.
 /// `key` must be a valid null-terminated C string that will remain valid.
-#[no_mangle]
+#[export_name = "hash_add_item"]
 pub unsafe extern "C" fn rs_hash_add_item(
     ht: *mut HashTab,
     hi: *mut HashItem,
@@ -338,12 +335,13 @@ pub unsafe extern "C" fn rs_hash_add_item(
 /// Add a key to the hash table.
 ///
 /// Returns 1 (OK) on success, 0 (FAIL) if key already exists.
+/// Reports an internal error via `siemsg` if the key is a duplicate.
 ///
 /// # Safety
 ///
 /// `ht` must be a valid pointer to a `HashTab` structure.
 /// `key` must be a valid null-terminated C string that will remain valid.
-#[no_mangle]
+#[export_name = "hash_add"]
 pub unsafe extern "C" fn rs_hash_add(ht: *mut HashTab, key: *mut c_char) -> c_int {
     if ht.is_null() || key.is_null() {
         return 0;
@@ -354,6 +352,13 @@ pub unsafe extern "C" fn rs_hash_add(ht: *mut HashTab, key: *mut c_char) -> c_in
     let hi = unsafe { rs_hash_lookup(ht, key, len, hash) };
 
     if hi.is_null() || !hashitem_empty(unsafe { &*hi }) {
+        // E685: Internal error: hash_add(): duplicate key "%s"
+        unsafe {
+            nvim_siemsg_str(
+                c"E685: Internal error: hash_add(): duplicate key \"%s\"".as_ptr(),
+                key,
+            );
+        }
         return 0; // FAIL - key already exists
     }
 
@@ -369,7 +374,7 @@ pub unsafe extern "C" fn rs_hash_add(ht: *mut HashTab, key: *mut c_char) -> c_in
 ///
 /// `ht` must be a valid pointer to a `HashTab` structure.
 /// `hi` must be a pointer to an item in the hash table.
-#[no_mangle]
+#[export_name = "hash_remove"]
 pub unsafe extern "C" fn rs_hash_remove(ht: *mut HashTab, hi: *mut HashItem) {
     if ht.is_null() || hi.is_null() {
         return;
@@ -390,7 +395,7 @@ pub unsafe extern "C" fn rs_hash_remove(ht: *mut HashTab, hi: *mut HashItem) {
 /// # Safety
 ///
 /// `ht` must be a valid pointer to a `HashTab` structure.
-#[no_mangle]
+#[export_name = "hash_lock"]
 pub unsafe extern "C" fn rs_hash_lock(ht: *mut HashTab) {
     if !ht.is_null() {
         unsafe { (*ht).ht_locked += 1 };
@@ -402,7 +407,7 @@ pub unsafe extern "C" fn rs_hash_lock(ht: *mut HashTab) {
 /// # Safety
 ///
 /// `ht` must be a valid pointer to a `HashTab` structure.
-#[no_mangle]
+#[export_name = "hash_unlock"]
 pub unsafe extern "C" fn rs_hash_unlock(ht: *mut HashTab) {
     if ht.is_null() {
         return;

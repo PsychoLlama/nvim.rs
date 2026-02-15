@@ -263,6 +263,7 @@ bool nvim_vim_strchr_cpo_listwm(void) { return vim_strchr(p_cpo, CPO_LISTWM) != 
 bool nvim_vim_strchr_cpo_dollar(void) { return vim_strchr(p_cpo, CPO_DOLLAR) != NULL; }
 
 void nvim_siemsg(const char *s, int64_t arg) { siemsg(s, arg); }
+void nvim_siemsg_str(const char *s, const char *arg) { siemsg(s, arg); }
 
 // =============================================================================
 // Curbuf field accessors (no buf_T* parameter)

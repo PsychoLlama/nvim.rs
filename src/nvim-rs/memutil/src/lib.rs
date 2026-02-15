@@ -230,7 +230,8 @@ pub unsafe extern "C" fn rs_time_to_bytes(time_: i64, buf: *mut u8) {
 /// # Safety
 ///
 /// `key` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "hash_hash"]
+#[must_use]
 pub unsafe extern "C" fn rs_hash_hash(key: *const c_char) -> HashT {
     if key.is_null() {
         return 0;
@@ -263,7 +264,8 @@ pub unsafe extern "C" fn rs_hash_hash(key: *const c_char) -> HashT {
 /// # Safety
 ///
 /// `key` must be a valid pointer to at least `len` bytes.
-#[no_mangle]
+#[export_name = "hash_hash_len"]
+#[must_use]
 pub unsafe extern "C" fn rs_hash_hash_len(key: *const c_char, len: usize) -> HashT {
     if key.is_null() || len == 0 {
         return 0;
