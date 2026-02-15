@@ -1919,6 +1919,68 @@ impl Default for HMLListEntry {
 }
 
 // =============================================================================
+// Map types (must match C layout from map_defs.h)
+// =============================================================================
+
+/// FFI-compatible representation of C's `MapHash` (32 bytes).
+#[repr(C)]
+pub struct MapHash {
+    pub n_buckets: u32,
+    pub size: u32,
+    pub n_occupied: u32,
+    pub upper_bound: u32,
+    pub n_keys: u32,
+    pub keys_capacity: u32,
+    pub hash: *mut u32,
+}
+
+impl Default for MapHash {
+    fn default() -> Self {
+        Self {
+            n_buckets: 0,
+            size: 0,
+            n_occupied: 0,
+            upper_bound: 0,
+            n_keys: 0,
+            keys_capacity: 0,
+            hash: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// FFI-compatible representation of C's `Set(cstr_t)` (40 bytes).
+#[repr(C)]
+pub struct SetCstrT {
+    pub h: MapHash,
+    pub keys: *mut *const c_char,
+}
+
+impl Default for SetCstrT {
+    fn default() -> Self {
+        Self {
+            h: MapHash::default(),
+            keys: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// FFI-compatible representation of C's `PMap(cstr_t)` aka `Map(cstr_t, ptr_t)` (48 bytes).
+#[repr(C)]
+pub struct PMapCstrT {
+    pub set: SetCstrT,
+    pub values: *mut *mut c_void,
+}
+
+impl Default for PMapCstrT {
+    fn default() -> Self {
+        Self {
+            set: SetCstrT::default(),
+            values: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
 // HML List (Hash Map-backed Linked List)
 // =============================================================================
 
@@ -1942,8 +2004,8 @@ pub struct HMLList {
     pub size: usize,
     /// Number of entries already used.
     pub num_entries: usize,
-    /// Map of history strings to entry pointers (opaque - handled by C).
-    pub contained_entries: *mut c_void,
+    /// Map of history strings to entry pointers (inline PMap(cstr_t), 48 bytes).
+    pub contained_entries: PMapCstrT,
 }
 
 impl Default for HMLList {
@@ -1956,7 +2018,7 @@ impl Default for HMLList {
             last_free_entry: std::ptr::null_mut(),
             size: 0,
             num_entries: 0,
-            contained_entries: std::ptr::null_mut(),
+            contained_entries: PMapCstrT::default(),
         }
     }
 }
@@ -2010,16 +2072,16 @@ extern "C" {
     ) -> *const c_void;
     /// Free ShaDa entry contents.
     fn nvim_shada_free_shada_entry(entry: *mut ShadaEntry);
-    /// Create contained entries map.
-    fn nvim_hmll_map_init() -> *mut c_void;
-    /// Destroy contained entries map.
-    fn nvim_hmll_map_destroy(map: *mut c_void);
+    /// Initialize contained entries map in place.
+    fn nvim_hmll_map_init(map: *mut PMapCstrT);
+    /// Destroy contained entries map contents.
+    fn nvim_hmll_map_destroy(map: *mut PMapCstrT);
     /// Get entry from map by string key.
-    fn nvim_hmll_map_get(map: *mut c_void, key: *const c_char) -> *mut HMLListEntry;
+    fn nvim_hmll_map_get(map: *mut PMapCstrT, key: *const c_char) -> *mut HMLListEntry;
     /// Put entry into map by string key.
-    fn nvim_hmll_map_put(map: *mut c_void, key: *const c_char, entry: *mut HMLListEntry);
+    fn nvim_hmll_map_put(map: *mut PMapCstrT, key: *const c_char, entry: *mut HMLListEntry);
     /// Remove entry from map by string key.
-    fn nvim_hmll_map_del(map: *mut c_void, key: *const c_char);
+    fn nvim_hmll_map_del(map: *mut PMapCstrT, key: *const c_char);
 }
 
 /// Initialize an HML linked list.
@@ -2043,8 +2105,9 @@ pub unsafe extern "C" fn rs_hmll_init(hmll: *mut HMLList, size: usize) {
         last_free_entry: entries,
         size,
         num_entries: 0,
-        contained_entries: nvim_hmll_map_init(),
+        contained_entries: PMapCstrT::default(),
     };
+    nvim_hmll_map_init(&raw mut (*hmll).contained_entries);
 }
 
 /// Remove an entry from the HML linked list.
@@ -2072,7 +2135,7 @@ pub unsafe extern "C" fn rs_hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HML
     // Remove from the contained entries map
     let key = entry.data.data.history_item.string;
     if !key.is_null() {
-        nvim_hmll_map_del(list.contained_entries, key);
+        nvim_hmll_map_del(&raw mut list.contained_entries, key);
     }
 
     // Update linked list pointers
@@ -2140,7 +2203,7 @@ pub unsafe extern "C" fn rs_hmll_insert(
 
     // Add to the contained entries map
     if !key.is_null() {
-        nvim_hmll_map_put(list.contained_entries, key, target_entry);
+        nvim_hmll_map_put(&raw mut list.contained_entries, key, target_entry);
     }
 
     list.num_entries += 1;
@@ -2176,9 +2239,7 @@ pub unsafe extern "C" fn rs_hmll_dealloc(hmll: *mut HMLList) {
     let list = &mut *hmll;
 
     // Destroy the map
-    if !list.contained_entries.is_null() {
-        nvim_hmll_map_destroy(list.contained_entries);
-    }
+    nvim_hmll_map_destroy(&raw mut list.contained_entries);
 
     // Free the entries array
     if !list.entries.is_null() {
@@ -2268,7 +2329,7 @@ pub unsafe extern "C" fn rs_hms_insert(
     let existing = if key.is_null() {
         std::ptr::null_mut()
     } else {
-        nvim_hmll_map_get((*hmll).contained_entries, key)
+        nvim_hmll_map_get(&raw mut (*hmll).contained_entries, key)
     };
 
     if !existing.is_null() {
@@ -2846,10 +2907,10 @@ pub struct WriteMergerState {
     pub sub_search_pattern: ShadaEntry,
     /// Last s// replacement string.
     pub replacement: ShadaEntry,
-    /// Names of already dumped variables (opaque - handled by C).
-    pub dumped_variables: *mut c_void,
-    /// All file marks (opaque - handled by C).
-    pub file_marks: *mut c_void,
+    /// Names of already dumped variables (inline Set(cstr_t), 40 bytes).
+    pub dumped_variables: SetCstrT,
+    /// All file marks (inline PMap(cstr_t), 48 bytes).
+    pub file_marks: PMapCstrT,
 }
 
 // WriteMergerState needs a custom Default
@@ -2870,8 +2931,8 @@ impl Default for WriteMergerState {
             search_pattern: ShadaEntry::default(),
             sub_search_pattern: ShadaEntry::default(),
             replacement: ShadaEntry::default(),
-            dumped_variables: std::ptr::null_mut(),
-            file_marks: std::ptr::null_mut(),
+            dumped_variables: SetCstrT::default(),
+            file_marks: PMapCstrT::default(),
         }
     }
 }
@@ -4272,7 +4333,7 @@ mod tests {
         assert!(list.last_free_entry.is_null());
         assert_eq!(list.size, 0);
         assert_eq!(list.num_entries, 0);
-        assert!(list.contained_entries.is_null());
+        assert_eq!(list.contained_entries.set.h.size, 0);
     }
 
     #[test]

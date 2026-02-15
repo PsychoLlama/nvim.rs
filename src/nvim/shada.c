@@ -3440,48 +3440,45 @@ void nvim_shada_read_string(String string, int flags)
 int nvim_get_shada_parameter(int type) { return get_shada_parameter(type); }
 char *nvim_find_shada_parameter(int type) { return find_shada_parameter(type); }
 
-// Map operations for Rust hmll implementation
-void *nvim_hmll_map_init(void)
+// Map operations for Rust hmll implementation (operate on inline PMap(cstr_t))
+void nvim_hmll_map_init(PMap(cstr_t) *map)
 {
-  PMap(cstr_t) *map = xcalloc(1, sizeof(PMap(cstr_t)));
   *map = (PMap(cstr_t)) MAP_INIT;
-  return map;
 }
 
-void nvim_hmll_map_destroy(void *map)
+void nvim_hmll_map_destroy(PMap(cstr_t) *map)
 {
   if (map) {
-    map_destroy(cstr_t, (PMap(cstr_t) *)map);
-    xfree(map);
+    map_destroy(cstr_t, map);
   }
 }
 
-void *nvim_hmll_map_get(void *map, const char *key)
+void *nvim_hmll_map_get(PMap(cstr_t) *map, const char *key)
 {
   if (!map || !key) {
     return NULL;
   }
-  return pmap_get(cstr_t)((PMap(cstr_t) *)map, key);
+  return pmap_get(cstr_t)(map, key);
 }
 
-void nvim_hmll_map_put(void *map, const char *key, void *entry)
+void nvim_hmll_map_put(PMap(cstr_t) *map, const char *key, void *entry)
 {
   if (!map || !key) {
     return;
   }
   bool new_item = false;
-  ptr_t *val = pmap_put_ref(cstr_t)((PMap(cstr_t) *)map, key, NULL, &new_item);
+  ptr_t *val = pmap_put_ref(cstr_t)(map, key, NULL, &new_item);
   if (val) {
     *val = entry;
   }
 }
 
-void nvim_hmll_map_del(void *map, const char *key)
+void nvim_hmll_map_del(PMap(cstr_t) *map, const char *key)
 {
   if (!map || !key) {
     return;
   }
-  pmap_del(cstr_t)((PMap(cstr_t) *)map, key, NULL);
+  pmap_del(cstr_t)(map, key, NULL);
 }
 
 // Wrapper for shada_free_shada_entry — delegates to Rust rs_shada_free_entry_contents
