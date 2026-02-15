@@ -115,7 +115,8 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     let wp_s = nvim_win_get_synblock(wp);
     let wp_buf = nvim_syn_win_get_buffer_ptr(wp);
 
-    if syn_block.0 != wp_s.0 || syn_buf.0 != wp_buf.0
+    if syn_block.0 != wp_s.0
+        || syn_buf.0 != wp_buf.0
         || CHANGEDTICK != nvim_syn_buf_get_changed_tick(wp_buf)
     {
         nvim_syn_invalidate_current_state();
@@ -256,6 +257,61 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     }
 
     nvim_syn_start_line();
+}
+
+/// Check if syntax at start of lnum changed since last time.
+///
+/// This will only be called just after get_syntax_attr() for the previous
+/// line, to check if the next line needs to be redrawn too.
+///
+/// # Safety
+/// Requires valid C global state.
+unsafe fn syntax_check_changed_impl(lnum: c_int) -> c_int {
+    let mut retval: c_int = 1; // true
+
+    // Check the state stack when lnum is just below the previously syntaxed line.
+    if nvim_syn_is_current_state_valid() != 0 && lnum == nvim_syn_get_current_lnum() + 1 {
+        let sp = nvim_syn_stack_find_entry_ptr(lnum);
+        if !sp.is_null() && nvim_synstate_get_lnum(sp) == lnum {
+            // finish the previous line (needed when not all of the line was drawn)
+            nvim_syn_finish_line(0);
+
+            // Compare the current state with the previously saved state.
+            if rs_syn_stack_equal(sp) != 0 {
+                retval = 0; // false — no change
+            }
+
+            // Store the current state in b_sst_array[] for later use.
+            let cur_lnum = nvim_syn_get_current_lnum();
+            nvim_syn_set_current_lnum(cur_lnum + 1);
+            rs_store_current_state();
+        }
+    }
+
+    retval
+}
+
+/// End parsing at a given line, updating the saved state entry.
+///
+/// # Safety
+/// Requires valid window handle and C global state.
+unsafe fn syntax_end_parsing_impl(wp: WinHandle, lnum: c_int) {
+    let block = nvim_syn_get_block();
+    let wp_s = nvim_win_get_synblock(wp);
+    if block.0 != wp_s.0 {
+        return; // not the right window
+    }
+    let sp = nvim_syn_stack_find_entry_ptr(lnum);
+    if sp.is_null() {
+        return;
+    }
+    let mut target = sp;
+    if nvim_synstate_get_lnum(sp) < lnum {
+        target = nvim_synstate_get_next(sp);
+    }
+    if !target.is_null() && nvim_synstate_get_change_lnum(target) != 0 {
+        nvim_synstate_set_change_lnum(target, lnum);
+    }
 }
 
 // =============================================================================
@@ -787,6 +843,18 @@ pub unsafe extern "C" fn rs_syn_current_context() -> SynContextInfo {
 #[no_mangle]
 pub unsafe extern "C" fn rs_syntax_start_at(wp: WinHandle, lnum: c_int) {
     start_syntax(wp, lnum);
+}
+
+/// Check if syntax at start of lnum changed since last time.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syntax_check_changed(lnum: c_int) -> c_int {
+    syntax_check_changed_impl(lnum)
+}
+
+/// End parsing at a given line for a window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syntax_end_parsing_impl(wp: WinHandle, lnum: c_int) {
+    syntax_end_parsing_impl(wp, lnum)
 }
 
 /// Check if buffer needs syntax state update based on modifications.

@@ -52,6 +52,8 @@
 // Rust FFI declarations
 extern int rs_syntax_present(win_T *win);
 extern void rs_syntax_start(win_T *wp, int lnum);
+extern int rs_syntax_check_changed(int lnum);
+extern void rs_syntax_end_parsing_impl(win_T *wp, int lnum);
 
 // Phase 541: Syntax state machine functions from Rust
 extern int rs_syn_current_lnum(void);
@@ -1043,19 +1045,7 @@ static bool syn_stack_equal(synstate_T *sp)
 // lnum ->  line below window
 void syntax_end_parsing(win_T *wp, linenr_T lnum)
 {
-  synstate_T *sp;
-
-  if (syn_block != wp->w_s) {
-    return;  // not the right window
-  }
-  sp = syn_stack_find_entry(lnum);
-  if (sp != NULL && sp->sst_lnum < lnum) {
-    sp = sp->sst_next;
-  }
-
-  if (sp != NULL && sp->sst_change_lnum != 0) {
-    sp->sst_change_lnum = lnum;
-  }
+  rs_syntax_end_parsing_impl(wp, (int)lnum);
 }
 
 // End of handling of the state stack.
@@ -1075,40 +1065,10 @@ static void validate_current_state(void)
   ga_set_growsize(&current_state, 3);
 }
 
-/// This will only be called just after get_syntax_attr() for the previous
-/// line, to check if the next line needs to be redrawn too.
-///
 /// @return  true if the syntax at start of lnum changed since last time.
 bool syntax_check_changed(linenr_T lnum)
 {
-  bool retval = true;
-  synstate_T *sp;
-
-  // Check the state stack when:
-  // - lnum is just below the previously syntaxed line.
-  // - lnum is not before the lines with saved states.
-  // - lnum is not past the lines with saved states.
-  // - lnum is at or before the last changed line.
-  if (VALID_STATE(&current_state) && lnum == current_lnum + 1) {
-    sp = syn_stack_find_entry(lnum);
-    if (sp != NULL && sp->sst_lnum == lnum) {
-      // finish the previous line (needed when not all of the line was
-      // drawn)
-      syn_finish_line(false);
-
-      // Compare the current state with the previously saved state of
-      // the line.
-      if (syn_stack_equal(sp)) {
-        retval = false;
-      }
-
-      // Store the current state in b_sst_array[] for later use.
-      current_lnum++;
-      store_current_state();
-    }
-  }
-
-  return retval;
+  return rs_syntax_check_changed((int)lnum) != 0;
 }
 
 /// Finish the current line.
