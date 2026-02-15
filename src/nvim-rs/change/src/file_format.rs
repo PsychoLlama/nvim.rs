@@ -121,7 +121,7 @@ fn file_ff_differs_impl(buf: BufHandle, ignore_empty: bool) -> bool {
 ///
 /// Return true if 'fileformat' and/or 'fileencoding' has a different value
 /// from when editing started.
-#[no_mangle]
+#[export_name = "file_ff_differs"]
 pub extern "C" fn rs_file_ff_differs(buf: BufHandle, ignore_empty: bool) -> bool {
     file_ff_differs_impl(buf, ignore_empty)
 }
@@ -153,7 +153,7 @@ fn save_file_ff_impl(buf: BufHandle) {
 ///
 /// Save the current values of 'fileformat' and 'fileencoding', so that we know
 /// the file must be considered changed when the value is different.
-#[no_mangle]
+#[export_name = "save_file_ff"]
 pub extern "C" fn rs_save_file_ff(buf: BufHandle) {
     save_file_ff_impl(buf);
 }
@@ -186,7 +186,7 @@ fn unchanged_impl(buf: BufHandle, ff: bool, always_inc_changedtick: bool) {
 /// FFI wrapper for `unchanged`.
 ///
 /// Mark buffer as unchanged. If "ff" is true, also save file format state.
-#[no_mangle]
+#[export_name = "unchanged"]
 pub extern "C" fn rs_unchanged(buf: BufHandle, ff: bool, always_inc_changedtick: bool) {
     unchanged_impl(buf, ff, always_inc_changedtick);
 }

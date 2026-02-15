@@ -616,7 +616,8 @@ pub unsafe extern "C" fn rs_cursor_at_last_line(win: WinHandle, lnum: i32) -> bo
 ///
 /// # Safety
 /// Requires valid global state (curwin, curbuf).
-#[no_mangle]
+#[must_use]
+#[export_name = "gchar_cursor"]
 pub unsafe extern "C" fn rs_gchar_cursor() -> c_int {
     let pos_ptr = nvim_cursor_get_pos_ptr();
     nvim_mbyte::rs_utf_ptr2char(pos_ptr)
@@ -632,7 +633,8 @@ pub unsafe extern "C" fn rs_gchar_cursor() -> c_int {
 ///
 /// # Safety
 /// Requires valid global state (curwin).
-#[no_mangle]
+#[must_use]
+#[export_name = "getviscol"]
 pub unsafe extern "C" fn rs_getviscol() -> c_int {
     let curwin = nvim_cursor_get_curwin();
     let cursor = nvim_cursor_get_curwin_cursor();
@@ -658,7 +660,8 @@ pub unsafe extern "C" fn rs_getviscol() -> c_int {
 ///
 /// # Safety
 /// Requires valid global state (curwin).
-#[no_mangle]
+#[must_use]
+#[export_name = "getviscol2"]
 pub unsafe extern "C" fn rs_getviscol2(col: i32, coladd: i32) -> c_int {
     let curwin = nvim_cursor_get_curwin();
     let cursor = nvim_cursor_get_curwin_cursor();
@@ -697,7 +700,7 @@ pub unsafe extern "C" fn rs_getviscol2(col: i32, coladd: i32) -> c_int {
 ///
 /// # Safety
 /// `wp` and `pos` must be valid pointers.
-#[no_mangle]
+#[export_name = "getvpos"]
 pub unsafe extern "C" fn rs_getvpos(wp: WinHandle, pos: *mut CursorPos, wcol: i32) -> c_int {
     nvim_getvpos(wp, pos, wcol)
 }
@@ -717,7 +720,8 @@ pub unsafe extern "C" fn rs_getvpos(wp: WinHandle, pos: *mut CursorPos, wcol: i3
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[must_use]
+#[export_name = "coladvance"]
 pub unsafe extern "C" fn rs_coladvance(wp: WinHandle, wcol: i32) -> c_int {
     let cursor = nvim_win_get_cursor_ptr(wp);
     let rc = nvim_getvpos(wp, cursor, wcol);
@@ -744,7 +748,8 @@ pub unsafe extern "C" fn rs_coladvance(wp: WinHandle, wcol: i32) -> c_int {
 ///
 /// # Safety
 /// Requires valid global state (curwin).
-#[no_mangle]
+#[must_use]
+#[export_name = "coladvance_force"]
 pub unsafe extern "C" fn rs_coladvance_force(wcol: i32) -> c_int {
     let curwin = nvim_cursor_get_curwin();
     let cursor = nvim_cursor_get_curwin_cursor();
@@ -768,9 +773,10 @@ pub unsafe extern "C" fn rs_coladvance_force(wcol: i32) -> c_int {
 ///
 /// # Safety
 /// Requires valid global state (curwin, curbuf).
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_cursor_line_ptr() -> *const c_char {
-    nvim_cursor_get_line_ptr()
+#[must_use]
+#[export_name = "get_cursor_line_ptr"]
+pub unsafe extern "C" fn rs_get_cursor_line_ptr() -> *mut c_char {
+    nvim_cursor_get_line_ptr().cast_mut()
 }
 
 /// Get pointer to cursor position in the line.
@@ -780,9 +786,10 @@ pub unsafe extern "C" fn rs_get_cursor_line_ptr() -> *const c_char {
 ///
 /// # Safety
 /// Requires valid global state (curwin, curbuf).
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_cursor_pos_ptr() -> *const c_char {
-    nvim_cursor_get_pos_ptr()
+#[must_use]
+#[export_name = "get_cursor_pos_ptr"]
+pub unsafe extern "C" fn rs_get_cursor_pos_ptr() -> *mut c_char {
+    nvim_cursor_get_pos_ptr().cast_mut()
 }
 
 /// Get length of the cursor line (excluding NUL).
@@ -792,7 +799,8 @@ pub unsafe extern "C" fn rs_get_cursor_pos_ptr() -> *const c_char {
 ///
 /// # Safety
 /// Requires valid global state (curwin, curbuf).
-#[no_mangle]
+#[must_use]
+#[export_name = "get_cursor_line_len"]
 pub unsafe extern "C" fn rs_get_cursor_line_len() -> i32 {
     nvim_cursor_get_line_len()
 }
@@ -804,7 +812,8 @@ pub unsafe extern "C" fn rs_get_cursor_line_len() -> i32 {
 ///
 /// # Safety
 /// Requires valid global state (curwin, curbuf).
-#[no_mangle]
+#[must_use]
+#[export_name = "get_cursor_pos_len"]
 pub unsafe extern "C" fn rs_get_cursor_pos_len() -> i32 {
     nvim_cursor_get_pos_len()
 }
@@ -821,7 +830,8 @@ pub unsafe extern "C" fn rs_get_cursor_pos_len() -> i32 {
 ///
 /// # Safety
 /// Requires valid global state (curwin, curbuf).
-#[no_mangle]
+#[must_use]
+#[export_name = "char_before_cursor"]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_char_before_cursor() -> c_int {
     let col = nvim_curwin_get_cursor_col();
@@ -843,7 +853,7 @@ pub unsafe extern "C" fn rs_char_before_cursor() -> c_int {
 ///
 /// # Safety
 /// Requires valid global state (curwin, curbuf).
-#[no_mangle]
+#[export_name = "adjust_cursor_col"]
 pub unsafe extern "C" fn rs_adjust_cursor_col() {
     let col = nvim_curwin_get_cursor_col();
     if col > 0 {
@@ -868,7 +878,7 @@ pub unsafe extern "C" fn rs_adjust_cursor_col() {
 ///
 /// # Safety
 /// `buf` and `pos` must be valid pointers.
-#[no_mangle]
+#[export_name = "check_pos"]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_check_pos(buf: BufHandle, pos: *mut CursorPos) {
     if buf.is_null() || pos.is_null() {
@@ -896,7 +906,7 @@ pub unsafe extern "C" fn rs_check_pos(buf: BufHandle, pos: *mut CursorPos) {
 ///
 /// # Safety
 /// `win` must be a valid window handle.
-#[no_mangle]
+#[export_name = "check_cursor_lnum"]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_check_cursor_lnum(win: WinHandle) {
     let buf = nvim_win_get_buffer_ptr(win);
@@ -929,7 +939,7 @@ pub unsafe extern "C" fn rs_check_cursor_lnum(win: WinHandle) {
 ///
 /// # Safety
 /// `win` must be a valid window handle.
-#[no_mangle]
+#[export_name = "check_cursor_col"]
 pub unsafe extern "C" fn rs_check_cursor_col(win: WinHandle) {
     let buf = nvim_win_get_buffer_ptr(win);
     if buf.is_null() {
@@ -1010,7 +1020,7 @@ pub unsafe extern "C" fn rs_check_cursor_col(win: WinHandle) {
 ///
 /// # Safety
 /// `win` must be a valid window handle.
-#[no_mangle]
+#[export_name = "check_cursor"]
 pub unsafe extern "C" fn rs_check_cursor(win: WinHandle) {
     rs_check_cursor_lnum(win);
     rs_check_cursor_col(win);
@@ -1021,7 +1031,7 @@ pub unsafe extern "C" fn rs_check_cursor(win: WinHandle) {
 ///
 /// # Safety
 /// Requires valid global state (curbuf).
-#[no_mangle]
+#[export_name = "check_visual_pos"]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_check_visual_pos() {
     let curbuf = nvim_cursor_get_curbuf();
@@ -1092,7 +1102,7 @@ pub unsafe extern "C" fn rs_dec_cursor() -> c_int {
 /// # Safety
 /// Requires valid global state (curwin, curbuf).
 /// The cursor must be at a valid position within the line.
-#[no_mangle]
+#[export_name = "pchar_cursor"]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_pchar_cursor(c: c_char) {
     let line = nvim_cursor_get_line_ptr_mut();
@@ -1119,7 +1129,8 @@ pub unsafe extern "C" fn rs_pchar_cursor(c: c_char) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_cursor_rel_lnum"]
 pub unsafe extern "C" fn rs_get_cursor_rel_lnum(wp: WinHandle, lnum: i32) -> i32 {
     let cursor = nvim_win_get_cursor_lnum(wp);
 
@@ -1177,7 +1188,8 @@ pub unsafe extern "C" fn rs_get_cursor_rel_lnum(wp: WinHandle, lnum: i32) -> i32
 ///
 /// # Safety
 /// Requires valid global state (curwin).
-#[no_mangle]
+#[must_use]
+#[export_name = "set_leftcol"]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_set_leftcol(leftcol: i32) -> bool {
     let curwin = nvim_cursor_get_curwin();
@@ -1206,10 +1218,10 @@ pub unsafe extern "C" fn rs_set_leftcol(leftcol: i32) -> bool {
 
     if virtcol > lastcol - i64::from(siso) {
         retval = true;
-        rs_coladvance(curwin, (lastcol - i64::from(siso)) as i32);
+        let _ = rs_coladvance(curwin, (lastcol - i64::from(siso)) as i32);
     } else if virtcol < i64::from(leftcol) + i64::from(siso) {
         retval = true;
-        rs_coladvance(curwin, leftcol + siso);
+        let _ = rs_coladvance(curwin, leftcol + siso);
     }
 
     // If the start of the character under the cursor is not on the screen,
@@ -1222,7 +1234,7 @@ pub unsafe extern "C" fn rs_set_leftcol(leftcol: i32) -> bool {
 
     if i64::from(e) > lastcol {
         retval = true;
-        rs_coladvance(curwin, s - 1);
+        let _ = rs_coladvance(curwin, s - 1);
     } else if s < leftcol {
         retval = true;
         if rs_coladvance(curwin, e + 1) == FAIL {

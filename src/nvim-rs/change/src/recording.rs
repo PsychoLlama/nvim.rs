@@ -107,7 +107,7 @@ fn changed_internal_impl(buf: BufHandle) {
 ///
 /// Internal part of changed(), no user interaction.
 /// Also used for recovery.
-#[no_mangle]
+#[export_name = "changed_internal"]
 pub extern "C" fn rs_changed_internal(buf: BufHandle) {
     changed_internal_impl(buf);
 }
@@ -197,7 +197,7 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
 /// FFI wrapper for `change_warning`.
 ///
 /// If the file is readonly, give a warning message with the first change.
-#[no_mangle]
+#[export_name = "change_warning"]
 pub extern "C" fn rs_change_warning(buf: BufHandle, col: c_int) {
     change_warning_impl(buf, col);
 }
@@ -257,7 +257,7 @@ fn changed_impl(buf: BufHandle) {
 ///
 /// Call this function when something in a buffer is changed.
 /// Most often called through changed_bytes() and changed_lines().
-#[no_mangle]
+#[export_name = "changed"]
 pub extern "C" fn rs_changed(buf: BufHandle) {
     changed_impl(buf);
 }

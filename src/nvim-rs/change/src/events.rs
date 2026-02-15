@@ -87,6 +87,7 @@ extern "C" {
     fn nvim_win_get_next_in_tab(win: WinHandle) -> WinHandle;
 
     // Changed function from recording module
+    #[link_name = "changed"]
     fn rs_changed(buf: BufHandle);
 
     // Changed common helper (we'll call into C for this complex function)
@@ -171,7 +172,7 @@ fn changed_lines_redraw_buf_impl(buf: BufHandle, lnum: LinenrT, lnume: LinenrT, 
 }
 
 /// FFI wrapper for `changed_lines_redraw_buf`.
-#[no_mangle]
+#[export_name = "changed_lines_redraw_buf"]
 pub extern "C" fn rs_changed_lines_redraw_buf(
     buf: BufHandle,
     lnum: LinenrT,
@@ -234,7 +235,7 @@ fn changed_bytes_impl(lnum: LinenrT, col: ColnrT) {
 }
 
 /// FFI wrapper for `changed_bytes`.
-#[no_mangle]
+#[export_name = "changed_bytes"]
 pub extern "C" fn rs_changed_bytes(lnum: LinenrT, col: ColnrT) {
     changed_bytes_impl(lnum, col);
 }
@@ -262,7 +263,7 @@ fn inserted_bytes_impl(lnum: LinenrT, start_col: ColnrT, old_col: c_int, new_col
 }
 
 /// FFI wrapper for `inserted_bytes`.
-#[no_mangle]
+#[export_name = "inserted_bytes"]
 pub extern "C" fn rs_inserted_bytes(
     lnum: LinenrT,
     start_col: ColnrT,
@@ -331,7 +332,7 @@ fn changed_lines_impl(
 }
 
 /// FFI wrapper for `changed_lines`.
-#[no_mangle]
+#[export_name = "changed_lines"]
 pub extern "C" fn rs_changed_lines(
     buf: BufHandle,
     lnum: LinenrT,
@@ -352,7 +353,7 @@ fn appended_lines_buf_impl(buf: BufHandle, lnum: LinenrT, count: LinenrT) {
 }
 
 /// FFI wrapper for `appended_lines_buf`.
-#[no_mangle]
+#[export_name = "appended_lines_buf"]
 pub extern "C" fn rs_appended_lines_buf(buf: BufHandle, lnum: LinenrT, count: LinenrT) {
     appended_lines_buf_impl(buf, lnum, count);
 }
@@ -369,7 +370,7 @@ fn appended_lines_impl(lnum: LinenrT, count: LinenrT) {
 }
 
 /// FFI wrapper for `appended_lines`.
-#[no_mangle]
+#[export_name = "appended_lines"]
 pub extern "C" fn rs_appended_lines(lnum: LinenrT, count: LinenrT) {
     appended_lines_impl(lnum, count);
 }
@@ -385,7 +386,7 @@ fn appended_lines_mark_impl(lnum: LinenrT, count: c_int) {
 }
 
 /// FFI wrapper for `appended_lines_mark`.
-#[no_mangle]
+#[export_name = "appended_lines_mark"]
 pub extern "C" fn rs_appended_lines_mark(lnum: LinenrT, count: c_int) {
     appended_lines_mark_impl(lnum, count);
 }
@@ -399,7 +400,7 @@ fn deleted_lines_buf_impl(buf: BufHandle, lnum: LinenrT, count: LinenrT) {
 }
 
 /// FFI wrapper for `deleted_lines_buf`.
-#[no_mangle]
+#[export_name = "deleted_lines_buf"]
 pub extern "C" fn rs_deleted_lines_buf(buf: BufHandle, lnum: LinenrT, count: LinenrT) {
     deleted_lines_buf_impl(buf, lnum, count);
 }
@@ -416,7 +417,7 @@ fn deleted_lines_impl(lnum: LinenrT, count: LinenrT) {
 }
 
 /// FFI wrapper for `deleted_lines`.
-#[no_mangle]
+#[export_name = "deleted_lines"]
 pub extern "C" fn rs_deleted_lines(lnum: LinenrT, count: LinenrT) {
     deleted_lines_impl(lnum, count);
 }
@@ -466,7 +467,7 @@ extern "C" {
 }
 
 /// FFI wrapper for `deleted_lines_mark`.
-#[no_mangle]
+#[export_name = "deleted_lines_mark"]
 pub extern "C" fn rs_deleted_lines_mark(lnum: LinenrT, count: c_int) {
     deleted_lines_mark_impl(lnum, count);
 }

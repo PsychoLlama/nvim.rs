@@ -83,6 +83,7 @@ extern "C" {
     fn nvim_siemsg(s: *const c_char, arg: i64);
 
     // Changed notification
+    #[link_name = "inserted_bytes"]
     fn rs_inserted_bytes(lnum: LinenrT, start_col: ColnrT, old_col: c_int, new_col: c_int);
 
     // Curbuf memline accessor
@@ -127,7 +128,7 @@ fn ins_bytes_impl(p: *const c_char) {
 }
 
 /// FFI wrapper for `ins_bytes`.
-#[no_mangle]
+#[export_name = "ins_bytes"]
 pub extern "C" fn rs_ins_bytes(p: *const c_char) {
     ins_bytes_impl(p);
 }
@@ -150,7 +151,7 @@ fn ins_bytes_len_impl(p: *const c_char, len: usize) {
 }
 
 /// FFI wrapper for `ins_bytes_len`.
-#[no_mangle]
+#[export_name = "ins_bytes_len"]
 pub extern "C" fn rs_ins_bytes_len(p: *const c_char, len: usize) {
     ins_bytes_len_impl(p, len);
 }
@@ -174,7 +175,7 @@ fn ins_char_impl(c: c_int) {
 }
 
 /// FFI wrapper for `ins_char`.
-#[no_mangle]
+#[export_name = "ins_char"]
 pub extern "C" fn rs_ins_char(c: c_int) {
     ins_char_impl(c);
 }
@@ -287,7 +288,7 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
 }
 
 /// FFI wrapper for `ins_char_bytes`.
-#[no_mangle]
+#[export_name = "ins_char_bytes"]
 pub extern "C" fn rs_ins_char_bytes(buf: *mut c_char, charlen: usize) {
     ins_char_bytes_impl(buf, charlen);
 }
@@ -325,7 +326,7 @@ fn ins_str_impl(s: *const c_char, slen: usize) {
 }
 
 /// FFI wrapper for `ins_str`.
-#[no_mangle]
+#[export_name = "ins_str"]
 pub extern "C" fn rs_ins_str(s: *const c_char, slen: usize) {
     ins_str_impl(s, slen);
 }
@@ -353,7 +354,7 @@ fn del_char_impl(fixpos: bool) -> c_int {
 }
 
 /// FFI wrapper for `del_char`.
-#[no_mangle]
+#[export_name = "del_char"]
 pub extern "C" fn rs_del_char(fixpos: bool) -> c_int {
     del_char_impl(fixpos)
 }
@@ -377,7 +378,7 @@ fn del_chars_impl(count: c_int, fixpos: c_int) -> c_int {
 }
 
 /// FFI wrapper for `del_chars`.
-#[no_mangle]
+#[export_name = "del_chars"]
 pub extern "C" fn rs_del_chars(count: c_int, fixpos: c_int) -> c_int {
     del_chars_impl(count, fixpos)
 }
@@ -489,7 +490,7 @@ fn del_bytes_impl(count: ColnrT, fixpos_arg: bool, use_delcombine: bool) -> c_in
 }
 
 /// FFI wrapper for `del_bytes`.
-#[no_mangle]
+#[export_name = "del_bytes"]
 pub extern "C" fn rs_del_bytes(count: ColnrT, fixpos_arg: bool, use_delcombine: bool) -> c_int {
     del_bytes_impl(count, fixpos_arg, use_delcombine)
 }

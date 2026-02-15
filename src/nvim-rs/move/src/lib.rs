@@ -830,7 +830,8 @@ extern "C" {
         ecol: *mut ColnrT,
     );
 
-    // check_cursor_lnum (from cursor crate)
+    // check_cursor_lnum (from cursor crate, exported as "check_cursor_lnum")
+    #[link_name = "check_cursor_lnum"]
     fn rs_check_cursor_lnum(wp: WinHandle);
 
     // curs_columns wrapper
@@ -1348,6 +1349,7 @@ extern "C" {
 
     // Fold/coladvance
     fn rs_foldAdjustCursor(wp: WinHandle);
+    #[link_name = "coladvance"]
     fn rs_coladvance(wp: WinHandle, wcol: ColnrT) -> c_int;
 
     // Cursor position setters

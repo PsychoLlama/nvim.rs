@@ -42,7 +42,9 @@ extern "C" {
     fn nvim_check_cursor_lnum(win: WinHandle);
 
     // Changed notification
+    #[link_name = "inserted_bytes"]
     fn rs_inserted_bytes(lnum: LinenrT, start_col: ColnrT, old_col: c_int, new_col: c_int);
+    #[link_name = "deleted_lines_mark"]
     fn rs_deleted_lines_mark(lnum: LinenrT, count: c_int);
 }
 
@@ -93,7 +95,7 @@ fn truncate_line_impl(fixpos: c_int) {
 /// Delete from cursor to end of line.
 /// Caller must have prepared for undo.
 /// If "fixpos" is true, fix the cursor position when done.
-#[no_mangle]
+#[export_name = "truncate_line"]
 pub extern "C" fn rs_truncate_line(fixpos: c_int) {
     truncate_line_impl(fixpos);
 }
@@ -146,7 +148,7 @@ fn del_lines_impl(nlines: LinenrT, undo: bool) {
 ///
 /// Delete "nlines" lines at the cursor.
 /// Saves the lines for undo first if "undo" is true.
-#[no_mangle]
+#[export_name = "del_lines"]
 pub extern "C" fn rs_del_lines(nlines: LinenrT, undo: bool) {
     del_lines_impl(nlines, undo);
 }

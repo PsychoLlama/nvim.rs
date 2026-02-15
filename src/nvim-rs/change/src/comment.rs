@@ -234,7 +234,7 @@ fn get_leader_len_impl(
 /// FFI wrapper for `get_leader_len`.
 ///
 /// Returns the length in bytes of the comment leader prefix.
-#[no_mangle]
+#[export_name = "get_leader_len"]
 pub extern "C" fn rs_get_leader_len(
     line: *const c_char,
     flags: *mut *mut c_char,
@@ -417,7 +417,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
 ///
 /// Return the offset at which the last comment in line starts.
 /// If there is no comment in the whole line, -1 is returned.
-#[no_mangle]
+#[export_name = "get_last_leader_offset"]
 pub extern "C" fn rs_get_last_leader_offset(line: *const c_char, flags: *mut *mut c_char) -> c_int {
     get_last_leader_offset_impl(line, flags)
 }

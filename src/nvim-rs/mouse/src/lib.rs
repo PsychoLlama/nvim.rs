@@ -884,6 +884,7 @@ extern "C" {
     fn rs_win_chartabsize(wp: WinHandle, p: *const c_char, col: c_int) -> c_int;
 
     /// Set `w_leftcol` and adjust cursor. Returns true if cursor moved.
+    #[link_name = "set_leftcol"]
     fn rs_set_leftcol(leftcol: c_int) -> bool;
 }
 

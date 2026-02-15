@@ -32,67 +32,8 @@
 _Static_assert(sizeof(pos_T) == 12, "pos_T size changed - update Rust CursorPos in cursor crate");
 
 // =============================================================================
-// Rust Function Declarations
+// Static Functions (real logic, not wrappers)
 // =============================================================================
-
-extern int rs_gchar_cursor(void);
-extern int rs_coladvance_force(colnr_T wcol);
-extern int rs_getviscol(void);
-extern int rs_getviscol2(colnr_T col, colnr_T coladd);
-extern int rs_getvpos(win_T *wp, pos_T *pos, colnr_T wcol);
-extern int rs_coladvance(win_T *wp, colnr_T wcol);
-extern const char *rs_get_cursor_line_ptr(void);
-extern const char *rs_get_cursor_pos_ptr(void);
-extern colnr_T rs_get_cursor_line_len(void);
-extern colnr_T rs_get_cursor_pos_len(void);
-extern int rs_char_before_cursor(void);
-extern void rs_adjust_cursor_col(void);
-extern void rs_check_pos(buf_T *buf, pos_T *pos);
-extern void rs_check_cursor_lnum(win_T *win);
-extern void rs_check_cursor_col(win_T *win);
-extern void rs_check_cursor(win_T *wp);
-extern void rs_check_visual_pos(void);
-extern int rs_inc_cursor(void);
-extern int rs_dec_cursor(void);
-extern void rs_pchar_cursor(char c);
-extern linenr_T rs_get_cursor_rel_lnum(win_T *wp, linenr_T lnum);
-extern bool rs_set_leftcol(colnr_T leftcol);
-
-// =============================================================================
-// Screen Column Functions
-// =============================================================================
-
-/// @return  the screen position of the cursor.
-int getviscol(void)
-{
-  return rs_getviscol();
-}
-
-/// @return the screen position of character col with a coladd in the cursor line.
-int getviscol2(colnr_T col, colnr_T coladd)
-{
-  return rs_getviscol2(col, coladd);
-}
-
-/// Go to column "wcol", and add/insert white space as necessary to get the
-/// cursor in that column.
-/// The caller must have saved the cursor line for undo!
-int coladvance_force(colnr_T wcol)
-{
-  return rs_coladvance_force(wcol);
-}
-
-/// Try to advance the Cursor to the specified screen column.
-/// If virtual editing: fine tune the cursor position.
-/// Note that all virtual positions off the end of a line should share
-/// a curwin->w_cursor.col value (n.b. this is equal to strlen(line)),
-/// beginning at coladd 0.
-///
-/// @return  OK if desired column is reached, FAIL if not
-int coladvance(win_T *wp, colnr_T wcol)
-{
-  return rs_coladvance(wp, wcol);
-}
 
 /// @param addspaces  change the text to achieve our goal? only for wp=curwin!
 /// @param finetune  change char offset for the exact column
@@ -253,14 +194,6 @@ static int coladvance2(win_T *wp, pos_T *pos, bool addspaces, bool finetune, col
   return OK;
 }
 
-/// Return in "pos" the position of the cursor advanced to screen column "wcol".
-///
-/// @return  OK if desired column is reached, FAIL if not
-int getvpos(win_T *wp, pos_T *pos, colnr_T wcol)
-{
-  return rs_getvpos(wp, pos, wcol);
-}
-
 /// Increment the cursor position.  See inc() for return values.
 int inc_cursor(void)
 {
@@ -273,107 +206,6 @@ int inc_cursor(void)
 int dec_cursor(void)
 {
   return dec(&curwin->w_cursor);
-}
-
-/// Get the line number relative to the current cursor position, i.e. the
-/// difference between line number and cursor position. Only look for lines that
-/// can be visible, folded lines don't count.
-///
-/// @param lnum line number to get the result for
-linenr_T get_cursor_rel_lnum(win_T *wp, linenr_T lnum)
-{
-  return rs_get_cursor_rel_lnum(wp, lnum);
-}
-
-/// Make sure "pos.lnum" and "pos.col" are valid in "buf".
-/// This allows for the col to be on the NUL byte.
-void check_pos(buf_T *buf, pos_T *pos)
-{
-  rs_check_pos(buf, pos);
-}
-
-/// Make sure curwin->w_cursor.lnum is valid.
-void check_cursor_lnum(win_T *win)
-{
-  rs_check_cursor_lnum(win);
-}
-
-/// Make sure win->w_cursor.col is valid. Special handling of insert-mode.
-/// @see mb_check_adjust_col
-void check_cursor_col(win_T *win)
-{
-  rs_check_cursor_col(win);
-}
-
-/// Make sure curwin->w_cursor in on a valid character
-void check_cursor(win_T *wp)
-{
-  rs_check_cursor(wp);
-}
-
-/// Check if VIsual position is valid, correct it if not.
-/// Can be called when in Visual mode and a change has been made.
-void check_visual_pos(void)
-{
-  rs_check_visual_pos();
-}
-
-/// Make sure curwin->w_cursor is not on the NUL at the end of the line.
-/// Allow it when in Visual mode and 'selection' is not "old".
-void adjust_cursor_col(void)
-{
-  rs_adjust_cursor_col();
-}
-
-/// Set "curwin->w_leftcol" to "leftcol".
-/// Adjust the cursor position if needed.
-///
-/// @return  true if the cursor was moved.
-bool set_leftcol(colnr_T leftcol)
-{
-  return rs_set_leftcol(leftcol);
-}
-
-int gchar_cursor(void)
-{
-  return rs_gchar_cursor();
-}
-
-/// Return the character immediately before the cursor.
-int char_before_cursor(void)
-{
-  return rs_char_before_cursor();
-}
-
-/// Write a character at the current cursor position.
-/// It is directly written into the block.
-void pchar_cursor(char c)
-{
-  rs_pchar_cursor(c);
-}
-
-/// @return  pointer to cursor line.
-char *get_cursor_line_ptr(void)
-{
-  return (char *)rs_get_cursor_line_ptr();
-}
-
-/// @return  pointer to cursor position.
-char *get_cursor_pos_ptr(void)
-{
-  return (char *)rs_get_cursor_pos_ptr();
-}
-
-/// @return  length (excluding the NUL) of the cursor line.
-colnr_T get_cursor_line_len(void)
-{
-  return rs_get_cursor_line_len();
-}
-
-/// @return  length (excluding the NUL) of the cursor position.
-colnr_T get_cursor_pos_len(void)
-{
-  return rs_get_cursor_pos_len();
 }
 
 // =============================================================================

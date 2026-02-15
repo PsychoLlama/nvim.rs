@@ -170,7 +170,7 @@ fn changed_lines_invalidate_buf_impl(
 /// FFI wrapper for `changed_lines_invalidate_buf`.
 ///
 /// Invalidate display for all windows displaying a buffer after line changes.
-#[no_mangle]
+#[export_name = "changed_lines_invalidate_buf"]
 pub extern "C" fn rs_changed_lines_invalidate_buf(
     buf: BufHandle,
     lnum: LinenrT,

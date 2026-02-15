@@ -1331,7 +1331,7 @@ fn open_line_impl(
 ///
 /// # Returns
 /// true on success, false on failure
-#[no_mangle]
+#[export_name = "open_line"]
 pub extern "C" fn rs_open_line(
     dir: c_int,
     flags: c_int,
