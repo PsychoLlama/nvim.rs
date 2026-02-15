@@ -25,7 +25,8 @@ pub const FP_NAN: c_int = 0;
 /// Returns one of: `FP_NORMAL`, `FP_SUBNORMAL`, `FP_ZERO`, `FP_INFINITE`, `FP_NAN`
 ///
 /// This is a portable implementation that doesn't rely on the system's fpclassify.
-#[no_mangle]
+#[export_name = "xfpclassify"]
+#[must_use]
 pub extern "C" fn rs_xfpclassify(d: f64) -> c_int {
     let bits: u64 = d.to_bits();
     let exponent = ((bits >> 52) & 0x7ff) as u32;
@@ -51,13 +52,15 @@ pub extern "C" fn rs_xfpclassify(d: f64) -> c_int {
 }
 
 /// Check if a floating-point number is infinite.
-#[no_mangle]
+#[export_name = "xisinf"]
+#[must_use]
 pub extern "C" fn rs_xisinf(d: f64) -> c_int {
     c_int::from(rs_xfpclassify(d) == FP_INFINITE)
 }
 
 /// Check if a floating-point number is NaN.
-#[no_mangle]
+#[export_name = "xisnan"]
+#[must_use]
 pub extern "C" fn rs_xisnan(d: f64) -> c_int {
     c_int::from(rs_xfpclassify(d) == FP_NAN)
 }
@@ -65,7 +68,8 @@ pub extern "C" fn rs_xisnan(d: f64) -> c_int {
 /// Count trailing zeroes in a 64-bit value.
 ///
 /// Returns 64 if the input is 0.
-#[no_mangle]
+#[export_name = "xctz"]
+#[must_use]
 #[allow(clippy::cast_possible_wrap)] // trailing_zeros returns at most 64, fits in i32
 pub extern "C" fn rs_xctz(x: u64) -> c_int {
     if x == 0 {
@@ -76,7 +80,8 @@ pub extern "C" fn rs_xctz(x: u64) -> c_int {
 }
 
 /// Count the number of set bits (population count) in a 64-bit value.
-#[no_mangle]
+#[export_name = "xpopcount"]
+#[must_use]
 pub extern "C" fn rs_xpopcount(x: u64) -> c_uint {
     x.count_ones()
 }
@@ -89,7 +94,7 @@ pub extern "C" fn rs_xpopcount(x: u64) -> c_uint {
 /// # Safety
 ///
 /// `value` must be a valid pointer to a writable `c_int`.
-#[no_mangle]
+#[export_name = "vim_append_digit_int"]
 pub unsafe extern "C" fn rs_vim_append_digit_int(value: *mut c_int, digit: c_int) -> c_int {
     if value.is_null() {
         return FAIL;
@@ -119,7 +124,8 @@ pub unsafe extern "C" fn rs_vim_append_digit_int(value: *mut c_int, digit: c_int
 ///
 /// Returns `INT_MAX` if `x > INT_MAX`, `INT_MIN` if `x < INT_MIN`,
 /// otherwise returns `x` as a `c_int`.
-#[no_mangle]
+#[export_name = "trim_to_int"]
+#[must_use]
 #[allow(clippy::cast_possible_truncation)] // Truncation is intentional - we clamp first
 pub extern "C" fn rs_trim_to_int(x: i64) -> c_int {
     if x > i64::from(c_int::MAX) {

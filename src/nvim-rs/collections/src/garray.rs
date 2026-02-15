@@ -40,7 +40,7 @@ impl Default for GArray {
 /// # Safety
 ///
 /// `gap` must be a valid pointer to a `GArray` structure.
-#[no_mangle]
+#[export_name = "ga_init"]
 pub unsafe extern "C" fn rs_ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int) {
     if gap.is_null() {
         return;
@@ -62,7 +62,7 @@ pub unsafe extern "C" fn rs_ga_init(gap: *mut GArray, itemsize: c_int, growsize:
 /// # Safety
 ///
 /// `gap` must be a valid pointer to a `GArray` structure.
-#[no_mangle]
+#[export_name = "ga_set_growsize"]
 pub unsafe extern "C" fn rs_ga_set_growsize(gap: *mut GArray, growsize: c_int) {
     if gap.is_null() {
         return;
@@ -78,7 +78,7 @@ pub unsafe extern "C" fn rs_ga_set_growsize(gap: *mut GArray, growsize: c_int) {
 /// # Safety
 ///
 /// `gap` must be a valid pointer to a `GArray` structure.
-#[no_mangle]
+#[export_name = "ga_clear"]
 pub unsafe extern "C" fn rs_ga_clear(gap: *mut GArray) {
     if gap.is_null() {
         return;
@@ -115,7 +115,7 @@ pub unsafe extern "C" fn rs_ga_empty(gap: *const GArray) -> c_int {
 /// # Safety
 ///
 /// `gap` must be a valid pointer to a `GArray` structure.
-#[no_mangle]
+#[export_name = "ga_grow"]
 pub unsafe extern "C" fn rs_ga_grow(gap: *mut GArray, n: c_int) {
     if gap.is_null() || n <= 0 {
         return;
@@ -172,7 +172,7 @@ pub unsafe extern "C" fn rs_ga_grow(gap: *mut GArray, n: c_int) {
 /// # Safety
 ///
 /// `gap` must be a valid pointer to a `GArray` structure with `ga_itemsize == 1`.
-#[no_mangle]
+#[export_name = "ga_append"]
 pub unsafe extern "C" fn rs_ga_append(gap: *mut GArray, c: u8) {
     if gap.is_null() {
         return;
@@ -195,7 +195,7 @@ pub unsafe extern "C" fn rs_ga_append(gap: *mut GArray, c: u8) {
 ///
 /// `gap` must be a valid pointer to a `GArray` structure.
 /// `item_size` should match `gap->ga_itemsize`.
-#[no_mangle]
+#[export_name = "ga_append_via_ptr"]
 pub unsafe extern "C" fn rs_ga_append_via_ptr(gap: *mut GArray, item_size: usize) -> *mut c_void {
     if gap.is_null() {
         return ptr::null_mut();
@@ -217,7 +217,7 @@ pub unsafe extern "C" fn rs_ga_append_via_ptr(gap: *mut GArray, item_size: usize
 ///
 /// `gap` must be a valid pointer to a `GArray` structure.
 /// `s` must be a valid null-terminated C string, or null.
-#[no_mangle]
+#[export_name = "ga_concat"]
 pub unsafe extern "C" fn rs_ga_concat(gap: *mut GArray, s: *const c_char) {
     if gap.is_null() || s.is_null() {
         return;
@@ -235,7 +235,7 @@ pub unsafe extern "C" fn rs_ga_concat(gap: *mut GArray, s: *const c_char) {
 ///
 /// `gap` must be a valid pointer to a `GArray` structure.
 /// `s` must be a valid pointer to at least `len` bytes.
-#[no_mangle]
+#[export_name = "ga_concat_len"]
 pub unsafe extern "C" fn rs_ga_concat_len(gap: *mut GArray, s: *const c_char, len: usize) {
     if gap.is_null() || s.is_null() || len == 0 {
         return;
@@ -257,7 +257,7 @@ pub unsafe extern "C" fn rs_ga_concat_len(gap: *mut GArray, s: *const c_char, le
 ///
 /// `gap` must be a valid pointer to a `GArray` structure containing
 /// char* pointers (strings allocated with xmalloc/xstrdup).
-#[no_mangle]
+#[export_name = "ga_clear_strings"]
 pub unsafe extern "C" fn rs_ga_clear_strings(gap: *mut GArray) {
     if gap.is_null() {
         return;
@@ -285,7 +285,7 @@ pub unsafe extern "C" fn rs_ga_clear_strings(gap: *mut GArray) {
 /// `gap` must be a valid pointer to a `GArray` structure containing
 /// char* pointers (null-terminated strings).
 /// `sep` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "ga_concat_strings"]
 pub unsafe extern "C" fn rs_ga_concat_strings(
     gap: *const GArray,
     sep: *const c_char,
@@ -363,7 +363,7 @@ pub unsafe extern "C" fn rs_ga_concat_strings(
 ///
 /// `gap` must be a valid pointer to a `GArray` structure containing
 /// `char*` pointers (null-terminated, allocated strings).
-#[no_mangle]
+#[export_name = "ga_remove_duplicate_strings"]
 pub unsafe extern "C" fn rs_ga_remove_duplicate_strings(gap: *mut GArray) {
     if gap.is_null() {
         return;
