@@ -102,6 +102,7 @@ extern "C" {
     fn rs_cindent_on() -> bool;
 
     // Charset crate
+    #[link_name = "getwhitecols_curline"]
     fn rs_getwhitecols_curline() -> c_int;
 }
 

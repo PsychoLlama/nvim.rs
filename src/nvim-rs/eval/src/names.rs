@@ -24,11 +24,13 @@ const FNE_INCL_BR: c_int = 1;
 const FNE_CHECK_START: c_int = 2;
 
 extern "C" {
-    fn rs_vim_isIDc(c: c_int) -> c_int;
+    #[link_name = "vim_isIDc"]
+    fn rs_vim_isIDc(c: c_int) -> bool;
     fn rs_eval_isnamec(c: c_int) -> bool;
     fn rs_eval_isnamec1(c: c_int) -> bool;
     fn rs_eval_isdictc(c: c_int) -> bool;
     fn rs_vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
+    #[link_name = "skipwhite"]
     fn rs_skipwhite(p: *const c_char) -> *const c_char;
     fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
 }
@@ -54,7 +56,7 @@ unsafe fn mb_ptr_adv(p: *const c_char) -> *const c_char {
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_env_len(arg: *mut *const c_char) -> c_int {
     let mut p = *arg;
-    while rs_vim_isIDc(c_int::from(*p as u8)) != 0 {
+    while rs_vim_isIDc(c_int::from(*p as u8)) {
         p = p.add(1);
     }
     if p == *arg {

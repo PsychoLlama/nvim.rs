@@ -158,8 +158,11 @@ pub fn rs_where_all() -> *const c_char {
 const EXPAND_RUNTIME: c_int = 51;
 
 extern "C" {
+    #[link_name = "skipwhite"]
     fn rs_skipwhite(s: *const c_char) -> *mut c_char;
+    #[link_name = "skiptowhite"]
     fn rs_skiptowhite(s: *const c_char) -> *mut c_char;
+    #[link_name = "skiptowhite_esc"]
     fn rs_skiptowhite_esc(s: *const c_char) -> *mut c_char;
 
     // exarg_T accessors (already in runtime_ffi.c)

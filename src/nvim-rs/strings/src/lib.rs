@@ -898,6 +898,7 @@ pub unsafe extern "C" fn rs_xstrlcat(dst: *mut c_char, src: *const c_char, dsize
 // External FFI functions from other Rust crates
 extern "C" {
     fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "rem_backslash"]
     fn rs_rem_backslash(s: *const c_char) -> bool;
 }
 

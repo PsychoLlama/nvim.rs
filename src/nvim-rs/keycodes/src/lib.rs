@@ -640,7 +640,7 @@ pub unsafe extern "C" fn rs_get_special_key_name(
     // extract modifiers.
     if c > 0 && nvim_mbyte::rs_utf_char2len(c) == 1 {
         if table_idx < 0
-            && (nvim_charset::rs_vim_isprintc(c) == 0 || (c & 0x7f) == c_int::from(b' '))
+            && (!nvim_charset::rs_vim_isprintc(c) || (c & 0x7f) == c_int::from(b' '))
             && (c & 0x80) != 0
         {
             c &= 0x7f;
@@ -648,7 +648,7 @@ pub unsafe extern "C" fn rs_get_special_key_name(
             // Try again, to find the un-alted key in the special key table
             table_idx = rs_find_special_key_in_table(c);
         }
-        if table_idx < 0 && nvim_charset::rs_vim_isprintc(c) == 0 && c < c_int::from(b' ') {
+        if table_idx < 0 && !nvim_charset::rs_vim_isprintc(c) && c < c_int::from(b' ') {
             c += c_int::from(b'@');
             modifiers |= MOD_MASK_CTRL;
         }
@@ -681,7 +681,7 @@ pub unsafe extern "C" fn rs_get_special_key_name(
         } else {
             // Not a special key, only modifiers, output directly.
             let len = nvim_mbyte::rs_utf_char2len(c);
-            if len == 1 && nvim_charset::rs_vim_isprintc(c) != 0 {
+            if len == 1 && nvim_charset::rs_vim_isprintc(c) {
                 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                 {
                     *string.add(idx) = c as u8;

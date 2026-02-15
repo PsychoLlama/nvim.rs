@@ -73,7 +73,9 @@ extern "C" {
     fn nvim_get_e_textlock() -> *const c_char;
 
     // Character classification from charset crate
-    fn rs_vim_isIDc(c: c_int) -> c_int;
+    #[link_name = "vim_isIDc"]
+    fn rs_vim_isIDc(c: c_int) -> bool;
+    #[link_name = "skiptowhite"]
     fn rs_skiptowhite(p: *const c_char) -> *const c_char;
 
     // Regex skipping from Rust regexp crate
@@ -331,7 +333,7 @@ pub unsafe extern "C" fn rs_skip_vimgrep_pat(
     let first_char = *p as u8;
 
     // Check if the first character is an identifier character
-    if rs_vim_isIDc(first_char as c_int) != 0 {
+    if rs_vim_isIDc(first_char as c_int) {
         // ":vimgrep pattern fname"
         if !s.is_null() {
             *s = p;

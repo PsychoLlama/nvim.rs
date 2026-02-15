@@ -401,6 +401,7 @@ pub unsafe extern "C" fn rs_msg_clamp_col(col: c_int) -> c_int {
 
 extern "C" {
     // Character width and length functions (from mbyte crate)
+    #[link_name = "ptr2cells"]
     fn rs_ptr2cells(p: *const c_char) -> c_int;
     fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
     fn rs_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;

@@ -1329,14 +1329,15 @@ pub extern "C" fn rs_cw_value(c: c_int) -> c_int {
 
 extern "C" {
     /// Check if a character is printable. Defined in charset.c.
-    fn rs_vim_isprintc(c: c_int) -> c_int;
+    #[link_name = "vim_isprintc"]
+    fn rs_vim_isprintc(c: c_int) -> bool;
 }
 
 /// Check if a character is printable (safe wrapper).
 #[inline]
 fn vim_isprintc(c: i32) -> bool {
     // SAFETY: rs_vim_isprintc is a safe function that just reads g_chartab
-    unsafe { rs_vim_isprintc(c) != 0 }
+    unsafe { rs_vim_isprintc(c) }
 }
 
 /// Check if 'ambiwidth' option is set to "double".
@@ -1498,6 +1499,7 @@ fn utf_ptr2char_strict(p: &[u8]) -> Option<i32> {
 
 extern "C" {
     /// char2cells from charset crate for overlong ASCII sequences
+    #[link_name = "char2cells"]
     fn rs_char2cells(c: c_int) -> c_int;
 }
 

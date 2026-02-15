@@ -252,6 +252,7 @@ pub extern "C" fn rs_cmod_has_noautocmd(flags: c_int) -> c_int {
 
 extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
+    #[link_name = "skipdigits"]
     fn rs_skipdigits(q: *const c_char) -> *const c_char;
     fn rs_ends_excmd(c: c_int) -> c_int;
     fn rs_checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool;

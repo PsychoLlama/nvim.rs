@@ -81,6 +81,7 @@ extern "C" {
     // Existing Rust functions we can call
     #[link_name = "tabstop_padding"]
     fn rs_tabstop_padding(col: c_int, ts: i64, vts: *const c_int) -> c_int;
+    #[link_name = "ptr2cells"]
     fn rs_ptr2cells(p: *const c_char) -> c_int;
 
     // Window properties for win_col_off
@@ -2334,7 +2335,7 @@ pub unsafe extern "C" fn rs_getvvcol(
 
             if pos.col < line_len {
                 let c = nvim_utf_ptr2char(ptr.add(pos.col as usize));
-                if c != TAB && rs_vim_isprintc(c) != 0 {
+                if c != TAB && rs_vim_isprintc(c) {
                     endadd = rs_ptr2cells(ptr.add(pos.col as usize)) - 1;
                     if coladd > endadd {
                         // past end of line
@@ -2364,7 +2365,8 @@ pub unsafe extern "C" fn rs_getvvcol(
 }
 
 extern "C" {
-    fn rs_vim_isprintc(c: c_int) -> c_int;
+    #[link_name = "vim_isprintc"]
+    fn rs_vim_isprintc(c: c_int) -> bool;
 }
 
 // ============================================================================

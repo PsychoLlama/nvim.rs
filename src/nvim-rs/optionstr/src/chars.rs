@@ -16,9 +16,11 @@ type ScharT = u32;
 extern "C" {
     /// Convert a hex pair to a number (e.g., "FF" -> 255)
     /// Returns -1 for invalid input
+    #[link_name = "hexhex2nr"]
     fn rs_hexhex2nr(p: *const c_char) -> c_int;
 
     /// Get the display width of a unicode character
+    #[link_name = "char2cells"]
     fn rs_char2cells(c: c_int) -> c_int;
 
     /// Get the byte length of a UTF-8 character including composing characters

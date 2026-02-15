@@ -76,7 +76,8 @@ const fn ascii_isxdigit(c: u8) -> bool {
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "skipwhite"]
+#[must_use]
 pub unsafe extern "C" fn rs_skipwhite(p: *const c_char) -> *const c_char {
     if p.is_null() {
         return p;
@@ -92,7 +93,8 @@ pub unsafe extern "C" fn rs_skipwhite(p: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// The pointer must be valid and accessible for at least `len` bytes.
-#[no_mangle]
+#[export_name = "skipwhite_len"]
+#[must_use]
 pub unsafe extern "C" fn rs_skipwhite_len(p: *const c_char, len: usize) -> *const c_char {
     if p.is_null() {
         return p;
@@ -110,7 +112,8 @@ pub unsafe extern "C" fn rs_skipwhite_len(p: *const c_char, len: usize) -> *cons
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "skipdigits"]
+#[must_use]
 pub unsafe extern "C" fn rs_skipdigits(q: *const c_char) -> *const c_char {
     if q.is_null() {
         return q;
@@ -126,7 +129,8 @@ pub unsafe extern "C" fn rs_skipdigits(q: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "skipbin"]
+#[must_use]
 pub unsafe extern "C" fn rs_skipbin(q: *const c_char) -> *const c_char {
     if q.is_null() {
         return q;
@@ -142,7 +146,8 @@ pub unsafe extern "C" fn rs_skipbin(q: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "skiphex"]
+#[must_use]
 pub unsafe extern "C" fn rs_skiphex(q: *const c_char) -> *const c_char {
     if q.is_null() {
         return q;
@@ -158,7 +163,8 @@ pub unsafe extern "C" fn rs_skiphex(q: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "skiptodigit"]
+#[must_use]
 pub unsafe extern "C" fn rs_skiptodigit(q: *const c_char) -> *const c_char {
     if q.is_null() {
         return q;
@@ -174,7 +180,8 @@ pub unsafe extern "C" fn rs_skiptodigit(q: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "skiptobin"]
+#[must_use]
 pub unsafe extern "C" fn rs_skiptobin(q: *const c_char) -> *const c_char {
     if q.is_null() {
         return q;
@@ -190,7 +197,8 @@ pub unsafe extern "C" fn rs_skiptobin(q: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "skiptohex"]
+#[must_use]
 pub unsafe extern "C" fn rs_skiptohex(q: *const c_char) -> *const c_char {
     if q.is_null() {
         return q;
@@ -206,7 +214,8 @@ pub unsafe extern "C" fn rs_skiptohex(q: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "skiptowhite"]
+#[must_use]
 pub unsafe extern "C" fn rs_skiptowhite(p: *const c_char) -> *const c_char {
     if p.is_null() {
         return p;
@@ -226,7 +235,8 @@ const CTRL_V: u8 = 22;
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "skiptowhite_esc"]
+#[must_use]
 pub unsafe extern "C" fn rs_skiptowhite_esc(p: *const c_char) -> *const c_char {
     if p.is_null() {
         return p;
@@ -246,7 +256,8 @@ pub unsafe extern "C" fn rs_skiptowhite_esc(p: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "getwhitecols"]
+#[must_use]
 pub unsafe extern "C" fn rs_getwhitecols(p: *const c_char) -> isize {
     if p.is_null() {
         return 0;
@@ -259,7 +270,8 @@ pub unsafe extern "C" fn rs_getwhitecols(p: *const c_char) -> isize {
 ///
 /// This function gets the cursor line pointer from C and returns the count
 /// of whitespace characters at the start of that line.
-#[no_mangle]
+#[export_name = "getwhitecols_curline"]
+#[must_use]
 pub unsafe extern "C" fn rs_getwhitecols_curline() -> isize {
     extern "C" {
         fn nvim_charset_get_cursor_line_ptr() -> *const c_char;
@@ -273,7 +285,8 @@ pub unsafe extern "C" fn rs_getwhitecols_curline() -> isize {
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "skip_to_newline"]
+#[must_use]
 pub unsafe extern "C" fn rs_skip_to_newline(p: *const c_char) -> *const c_char {
     if p.is_null() {
         return p;
@@ -295,7 +308,8 @@ pub unsafe extern "C" fn rs_skip_to_newline(p: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "vim_isblankline"]
+#[must_use]
 pub unsafe extern "C" fn rs_vim_isblankline(lbuf: *const c_char) -> bool {
     if lbuf.is_null() {
         return true;
@@ -329,7 +343,8 @@ pub extern "C" fn rs_nr2hex(n: u32) -> u32 {
 /// Only valid when the argument is '0'-'9', 'A'-'F', or 'a'-'f'.
 ///
 /// Returns the numeric value (0-15) of the hex digit.
-#[no_mangle]
+#[export_name = "hex2nr"]
+#[must_use]
 pub extern "C" fn rs_hex2nr(c: c_int) -> c_int {
     let c = c as u8;
     if (b'a'..=b'f').contains(&c) {
@@ -347,7 +362,8 @@ pub extern "C" fn rs_hex2nr(c: c_int) -> c_int {
 ///
 /// # Safety
 /// The pointer must be valid and point to at least 2 bytes.
-#[no_mangle]
+#[export_name = "hexhex2nr"]
+#[must_use]
 pub unsafe extern "C" fn rs_hexhex2nr(p: *const c_char) -> c_int {
     if p.is_null() {
         return -1;
@@ -372,7 +388,8 @@ pub unsafe extern "C" fn rs_hexhex2nr(p: *const c_char) -> c_int {
 /// # Safety
 /// The buffer must be valid and have at least 9 bytes of space
 /// (for the longest format: `<XXXXXX>\0`).
-#[no_mangle]
+#[export_name = "transchar_hex"]
+#[must_use]
 pub unsafe extern "C" fn rs_transchar_hex(buf: *mut c_char, c: c_int) -> usize {
     if buf.is_null() {
         return 0;
@@ -456,7 +473,7 @@ pub unsafe extern "C" fn rs_transchar_nonprint(
 
     if use_uhex || c > 0x7f {
         // 'display' has "uhex" or high-bit character
-        rs_transchar_hex(charbuf, c);
+        let _ = rs_transchar_hex(charbuf, c);
     } else {
         // 0x00 - 0x1f and 0x7f
         *charbuf = b'^' as c_char;
@@ -512,7 +529,7 @@ pub unsafe extern "C" fn rs_transchar_buf(
     }
 
     if (!chartab_initialized && (c >= b' ' as c_int && c <= b'~' as c_int))
-        || (c <= 0xFF && rs_vim_isprintc(c) != 0)
+        || (c <= 0xFF && rs_vim_isprintc(c))
     {
         // printable character
         *buf.add(i) = c as c_char;
@@ -520,7 +537,7 @@ pub unsafe extern "C" fn rs_transchar_buf(
     } else if c <= 0xFF {
         rs_transchar_nonprint(buf.add(i), c, use_uhex, fileformat);
     } else {
-        rs_transchar_hex(buf.add(i), c);
+        let _ = rs_transchar_hex(buf.add(i), c);
     }
 }
 
@@ -571,11 +588,12 @@ pub unsafe extern "C" fn rs_transchar_byte_buf(
 ///
 /// # Safety
 /// This function accesses the global `g_chartab` array which must be initialized.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_isfilec(c: c_int) -> c_int {
+#[export_name = "vim_isfilec"]
+#[must_use]
+pub unsafe extern "C" fn rs_vim_isfilec(c: c_int) -> bool {
     // Multibyte characters (>= 0x100) are valid file name characters
     // Single-byte characters need the CT_FNAME_CHAR flag set in g_chartab
-    c_int::from(c >= 0x100 || (c > 0 && (g_chartab[c as usize] & CT_FNAME_CHAR) != 0))
+    c >= 0x100 || (c > 0 && (g_chartab[c as usize] & CT_FNAME_CHAR) != 0)
 }
 
 /// Check if "c" is a valid file-name character, including characters left
@@ -583,15 +601,14 @@ pub unsafe extern "C" fn rs_vim_isfilec(c: c_int) -> c_int {
 ///
 /// # Safety
 /// This function accesses the global `g_chartab` array which must be initialized.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_is_fname_char(c: c_int) -> c_int {
-    c_int::from(
-        rs_vim_isfilec(c) != 0
-            || c == c_int::from(b',')
-            || c == c_int::from(b' ')
-            || c == c_int::from(b'@')
-            || c == c_int::from(b':'),
-    )
+#[export_name = "vim_is_fname_char"]
+#[must_use]
+pub unsafe extern "C" fn rs_vim_is_fname_char(c: c_int) -> bool {
+    rs_vim_isfilec(c)
+        || c == c_int::from(b',')
+        || c == c_int::from(b' ')
+        || c == c_int::from(b'@')
+        || c == c_int::from(b':')
 }
 
 /// Return number of display cells occupied by byte "b".
@@ -614,7 +631,8 @@ pub unsafe fn byte2cells(b: u8) -> c_int {
 ///
 /// # Safety
 /// This function accesses the global `g_chartab` array which must be initialized.
-#[no_mangle]
+#[export_name = "byte2cells"]
+#[must_use]
 pub unsafe extern "C" fn rs_byte2cells(b: c_int) -> c_int {
     byte2cells(b as u8)
 }
@@ -624,9 +642,11 @@ pub unsafe extern "C" fn rs_byte2cells(b: c_int) -> c_int {
 ///
 /// # Safety
 /// This function accesses the global `g_chartab` array which must be initialized.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_isIDc(c: c_int) -> c_int {
-    c_int::from(c > 0 && c < 0x100 && (g_chartab[c as usize] & CT_ID_CHAR) != 0)
+#[export_name = "vim_isIDc"]
+#[must_use]
+#[allow(non_snake_case)]
+pub unsafe extern "C" fn rs_vim_isIDc(c: c_int) -> bool {
+    c > 0 && c < 0x100 && (g_chartab[c as usize] & CT_ID_CHAR) != 0
 }
 
 // ============================================================================
@@ -677,9 +697,10 @@ fn vim_iswordc_buf_impl(c: c_int, buf: BufHandle) -> bool {
 /// # Safety
 ///
 /// - `buf` must be a valid buffer handle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_iswordc_buf(c: c_int, buf: *mut std::ffi::c_void) -> c_int {
-    c_int::from(vim_iswordc_buf_impl(c, BufHandle(buf)))
+#[export_name = "vim_iswordc_buf"]
+#[must_use]
+pub unsafe extern "C" fn rs_vim_iswordc_buf(c: c_int, buf: *mut std::ffi::c_void) -> bool {
+    vim_iswordc_buf_impl(c, BufHandle(buf))
 }
 
 /// Check if a character is a word character for the current buffer.
@@ -694,9 +715,10 @@ fn vim_iswordc_impl(c: c_int) -> bool {
 }
 
 /// FFI wrapper for `vim_iswordc`.
-#[no_mangle]
-pub extern "C" fn rs_vim_iswordc(c: c_int) -> c_int {
-    c_int::from(vim_iswordc_impl(c))
+#[export_name = "vim_iswordc"]
+#[must_use]
+pub extern "C" fn rs_vim_iswordc(c: c_int) -> bool {
+    vim_iswordc_impl(c)
 }
 
 // ============================================================================
@@ -735,15 +757,16 @@ fn vim_iswordp_buf_impl(p: &[u8], buf: BufHandle) -> bool {
 ///
 /// - `p` must be a valid pointer to a C string.
 /// - `buf` must be a valid buffer handle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_iswordp_buf(p: *const c_char, buf: *mut std::ffi::c_void) -> c_int {
+#[export_name = "vim_iswordp_buf"]
+#[must_use]
+pub unsafe extern "C" fn rs_vim_iswordp_buf(p: *const c_char, buf: *mut std::ffi::c_void) -> bool {
     if p.is_null() {
-        return 0;
+        return false;
     }
 
     // Create a slice from the pointer - need at least 4 bytes for UTF-8
     let slice = std::slice::from_raw_parts(p.cast::<u8>(), 6);
-    c_int::from(vim_iswordp_buf_impl(slice, BufHandle(buf)))
+    vim_iswordp_buf_impl(slice, BufHandle(buf))
 }
 
 /// Check if a pointer points to a word character for the current buffer.
@@ -762,15 +785,16 @@ fn vim_iswordp_impl(p: &[u8]) -> bool {
 /// # Safety
 ///
 /// - `p` must be a valid pointer to a C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_iswordp(p: *const c_char) -> c_int {
+#[export_name = "vim_iswordp"]
+#[must_use]
+pub unsafe extern "C" fn rs_vim_iswordp(p: *const c_char) -> bool {
     if p.is_null() {
-        return 0;
+        return false;
     }
 
     // Create a slice from the pointer - need at least 6 bytes for safety
     let slice = std::slice::from_raw_parts(p.cast::<u8>(), 6);
-    c_int::from(vim_iswordp_impl(slice))
+    vim_iswordp_impl(slice)
 }
 
 // Key code constants for char2cells (from keycodes.h)
@@ -820,7 +844,8 @@ pub fn char2cells(c: i32) -> i32 {
 ///
 /// # Safety
 /// This function accesses the global `g_chartab` array which must be initialized.
-#[no_mangle]
+#[export_name = "char2cells"]
+#[must_use]
 pub extern "C" fn rs_char2cells(c: c_int) -> c_int {
     char2cells(c)
 }
@@ -832,14 +857,15 @@ pub extern "C" fn rs_char2cells(c: c_int) -> c_int {
 ///
 /// # Safety
 /// This function accesses the global `g_chartab` array which must be initialized.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_isprintc(c: c_int) -> c_int {
+#[export_name = "vim_isprintc"]
+#[must_use]
+pub unsafe extern "C" fn rs_vim_isprintc(c: c_int) -> bool {
     if c >= 0x100 {
         // Use utf_printable from nvim-mbyte crate for multibyte chars
-        c_int::from(nvim_mbyte::utf_printable(c))
+        nvim_mbyte::utf_printable(c)
     } else {
         // Single-byte: check g_chartab
-        c_int::from(c > 0 && (g_chartab[c as usize] & CT_PRINT_CHAR) != 0)
+        c > 0 && (g_chartab[c as usize] & CT_PRINT_CHAR) != 0
     }
 }
 
@@ -873,7 +899,8 @@ pub fn ptr2cells(p: &[u8]) -> i32 {
 /// # Safety
 /// - The pointer must be valid and point to a null-terminated C string.
 /// - The global `g_chartab` array must be initialized.
-#[no_mangle]
+#[export_name = "ptr2cells"]
+#[must_use]
 pub unsafe extern "C" fn rs_ptr2cells(p: *const c_char) -> c_int {
     if p.is_null() {
         return 1;
@@ -896,7 +923,8 @@ const MAXCOL: c_int = 0x7fff_ffff;
 /// # Safety
 /// - The pointer must be valid and point to a null-terminated C string.
 /// - The global `g_chartab` array must be initialized.
-#[no_mangle]
+#[export_name = "vim_strsize"]
+#[must_use]
 pub unsafe extern "C" fn rs_vim_strsize(s: *const c_char) -> c_int {
     rs_vim_strnsize(s, MAXCOL)
 }
@@ -909,7 +937,8 @@ pub unsafe extern "C" fn rs_vim_strsize(s: *const c_char) -> c_int {
 /// # Safety
 /// - The pointer must be valid and point to a null-terminated C string.
 /// - The global `g_chartab` array must be initialized.
-#[no_mangle]
+#[export_name = "vim_strnsize"]
+#[must_use]
 pub unsafe extern "C" fn rs_vim_strnsize(s: *const c_char, len: c_int) -> c_int {
     if s.is_null() {
         return 0;
@@ -953,7 +982,7 @@ pub unsafe extern "C" fn rs_vim_strnsize(s: *const c_char, len: c_int) -> c_int 
 /// # Safety
 /// - `str` must be a valid pointer to a mutable C string.
 /// - If `end` is not null, `end` must point within the same string as `str`, after `str`.
-#[no_mangle]
+#[export_name = "rl_mirror_ascii"]
 pub unsafe extern "C" fn rs_rl_mirror_ascii(str: *mut c_char, end: *const c_char) {
     if str.is_null() {
         return;
@@ -989,7 +1018,7 @@ pub unsafe extern "C" fn rs_rl_mirror_ascii(str: *mut c_char, end: *const c_char
 ///
 /// # Safety
 /// - `p` must be a valid pointer to a mutable null-terminated C string.
-#[no_mangle]
+#[export_name = "backslash_halve"]
 pub unsafe extern "C" fn rs_backslash_halve(p: *mut c_char) {
     if p.is_null() {
         return;
@@ -1043,7 +1072,8 @@ pub unsafe extern "C" fn rs_backslash_halve(p: *mut c_char) {
 /// # Safety
 /// - `str` must be a valid pointer to a null-terminated C string.
 /// - On Windows, this accesses the global `g_chartab` array.
-#[no_mangle]
+#[export_name = "rem_backslash"]
+#[must_use]
 pub unsafe extern "C" fn rs_rem_backslash(s: *const c_char) -> bool {
     if s.is_null() {
         return false;
@@ -1061,8 +1091,7 @@ pub unsafe extern "C" fn rs_rem_backslash(s: *const c_char) -> bool {
         // On Windows: backslash is path separator, so only remove in specific cases
         // BACKSLASH_IN_FILENAME is defined on Windows
         c1 < 0x80
-            && (c1 == b' '
-                || (c1 != 0 && c1 != b'*' && c1 != b'?' && rs_vim_isfilec(c1 as c_int) == 0))
+            && (c1 == b' ' || (c1 != 0 && c1 != b'*' && c1 != b'?' && !rs_vim_isfilec(c1 as c_int)))
     }
 
     #[cfg(not(windows))]
@@ -1110,14 +1139,15 @@ pub fn vim_iswordc_tab(c: i32, chartab: &[u64; 4]) -> bool {
 /// # Safety
 ///
 /// - `chartab` must be a valid pointer to a `[u64; 4]` array
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_iswordc_tab(c: c_int, chartab: *const u64) -> c_int {
+#[export_name = "vim_iswordc_tab"]
+#[must_use]
+pub unsafe extern "C" fn rs_vim_iswordc_tab(c: c_int, chartab: *const u64) -> bool {
     if chartab.is_null() {
-        return 0;
+        return false;
     }
 
     let chartab_arr: &[u64; 4] = &*(chartab as *const [u64; 4]);
-    c_int::from(vim_iswordc_tab(c, chartab_arr))
+    vim_iswordc_tab(c, chartab_arr)
 }
 
 // ============================================================================
@@ -1199,7 +1229,8 @@ pub fn transstr_len(s: &[u8], untab: bool) -> usize {
 ///
 /// # Safety
 /// - `s` must be a valid pointer to a null-terminated string
-#[no_mangle]
+#[export_name = "transstr_len"]
+#[must_use]
 pub unsafe extern "C" fn rs_transstr_len(s: *const c_char, untab: bool) -> usize {
     if s.is_null() {
         return 0;
@@ -1418,7 +1449,8 @@ pub unsafe extern "C" fn rs_getdigits_int32(pp: *mut *mut c_char, strict: c_int,
 /// # Safety
 /// - `p` must be a valid pointer to a null-terminated C string.
 /// - The returned pointer must be freed with libc::free when no longer needed.
-#[no_mangle]
+#[export_name = "backslash_halve_save"]
+#[must_use]
 pub unsafe extern "C" fn rs_backslash_halve_save(p: *const c_char) -> *mut c_char {
     if p.is_null() {
         return std::ptr::null_mut();
@@ -1468,25 +1500,26 @@ extern "C" {
 ///
 /// # Safety
 /// - This function accesses global `g_chartab` for file character detection.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_isfilec_or_wc(c: c_int) -> c_int {
+#[export_name = "vim_isfilec_or_wc"]
+#[must_use]
+pub unsafe extern "C" fn rs_vim_isfilec_or_wc(c: c_int) -> bool {
     // Check if it's a valid file character
-    if rs_vim_isfilec(c) != 0 {
-        return 1;
+    if rs_vim_isfilec(c) {
+        return true;
     }
 
     // ']' is explicitly treated as wildcard (path_has_wildcard returns false for it)
     if c == b']' as c_int {
-        return 1;
+        return true;
     }
 
     // Check for wildcard characters
     let buf: [c_char; 2] = [c as c_char, 0];
     if rs_path_has_wildcard(buf.as_ptr()) != 0 {
-        return 1;
+        return true;
     }
 
-    0
+    false
 }
 
 // ============================================================================
@@ -1551,7 +1584,7 @@ enum Str2NrBase {
 /// # Safety
 /// * `start` must be a valid pointer to a null-terminated string
 /// * All non-null output pointers must be valid and writable
-#[no_mangle]
+#[export_name = "vim_str2nr"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_vim_str2nr(
     start: *const c_char,
@@ -2268,7 +2301,7 @@ fn translate_nonprint(buf: &mut [u8; 11], c: c_int, use_uhex: bool, fileformat: 
 /// # Safety
 /// - `buf` must be a valid pointer to a mutable null-terminated string
 /// - `bufsize` must be the total size of the buffer
-#[no_mangle]
+#[export_name = "trans_characters"]
 pub unsafe extern "C" fn rs_trans_characters(buf: *mut c_char, bufsize: c_int) {
     if buf.is_null() || bufsize <= 0 {
         return;
@@ -2321,7 +2354,8 @@ pub unsafe extern "C" fn rs_trans_characters(buf: *mut c_char, bufsize: c_int) {
 ///
 /// # Returns
 /// Length of the resulting string, without the NUL byte.
-#[no_mangle]
+#[export_name = "transstr_buf"]
+#[must_use]
 pub unsafe extern "C" fn rs_transstr_buf(
     s: *const c_char,
     slen: isize,
@@ -2416,7 +2450,7 @@ pub unsafe extern "C" fn rs_transstr(s: *const c_char, untab: bool) -> *mut c_ch
     }
 
     // Translate
-    rs_transstr_buf(s, -1, buf, len, untab);
+    let _ = rs_transstr_buf(s, -1, buf, len, untab);
     buf
 }
 

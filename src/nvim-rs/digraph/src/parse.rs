@@ -13,6 +13,7 @@ const ESC: u8 = 27;
 // External functions from charset crate (via FFI)
 extern "C" {
     /// Skip over whitespace characters.
+    #[link_name = "skipwhite"]
     fn rs_skipwhite(p: *const c_char) -> *const c_char;
 
     /// Get an integer from a string, advancing the pointer.

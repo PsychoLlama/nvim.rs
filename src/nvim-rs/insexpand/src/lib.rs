@@ -118,12 +118,16 @@ extern "C" {
     fn nvim_get_compl_was_interrupted() -> c_int;
     fn nvim_get_compl_opt_refresh_always() -> c_int;
     // Character checking functions from charset.c
-    fn rs_vim_isIDc(c: c_int) -> c_int;
-    fn rs_vim_isfilec(c: c_int) -> c_int;
+    #[link_name = "vim_isIDc"]
+    fn rs_vim_isIDc(c: c_int) -> bool;
+    #[link_name = "vim_isfilec"]
+    fn rs_vim_isfilec(c: c_int) -> bool;
     fn rs_vim_ispathsep(c: c_int) -> c_int;
-    fn rs_vim_isprintc(c: c_int) -> c_int;
+    #[link_name = "vim_isprintc"]
+    fn rs_vim_isprintc(c: c_int) -> bool;
     fn rs_ascii_iswhite(c: c_int) -> c_int;
-    fn rs_vim_iswordc(c: c_int) -> c_int;
+    #[link_name = "vim_iswordc"]
+    fn rs_vim_iswordc(c: c_int) -> bool;
 
     // Completion window/buffer accessors
     fn nvim_get_compl_curr_win() -> WinHandle;
@@ -456,7 +460,7 @@ pub unsafe extern "C" fn rs_ins_compl_accept_char(c: c_int) -> c_int {
 
     // When expanding an identifier only accept identifier chars
     if (ctrl_x_mode & CTRL_X_WANT_IDENT) != 0 {
-        return rs_vim_isIDc(c);
+        return c_int::from(rs_vim_isIDc(c));
     }
 
     match ctrl_x_mode {
@@ -464,18 +468,18 @@ pub unsafe extern "C" fn rs_ins_compl_accept_char(c: c_int) -> c_int {
             // When expanding file name only accept file name chars. But not
             // path separators, so that "proto/<Tab>" expands files in
             // "proto", not "proto/" as a whole
-            c_int::from(rs_vim_isfilec(c) != 0 && rs_vim_ispathsep(c) == 0)
+            c_int::from(rs_vim_isfilec(c) && rs_vim_ispathsep(c) == 0)
         }
         CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X | CTRL_X_OMNI => {
             // Command line and Omni completion can work with just about any
             // printable character, but do stop at white space.
-            c_int::from(rs_vim_isprintc(c) != 0 && rs_ascii_iswhite(c) == 0)
+            c_int::from(rs_vim_isprintc(c) && rs_ascii_iswhite(c) == 0)
         }
         CTRL_X_WHOLE_LINE => {
             // For whole line completion a space can be part of the line.
-            rs_vim_isprintc(c)
+            c_int::from(rs_vim_isprintc(c))
         }
-        _ => rs_vim_iswordc(c),
+        _ => c_int::from(rs_vim_iswordc(c)),
     }
 }
 

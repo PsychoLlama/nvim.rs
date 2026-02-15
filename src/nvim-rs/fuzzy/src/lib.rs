@@ -689,7 +689,8 @@ extern "C" {
     fn rs_find_word_start(ptr: *mut c_char) -> *mut c_char;
     fn rs_find_word_end(ptr: *mut c_char) -> *mut c_char;
     fn rs_find_line_end(ptr: *mut c_char) -> *mut c_char;
-    fn rs_vim_iswordp(p: *const c_char) -> c_int;
+    #[link_name = "vim_iswordp"]
+    fn rs_vim_iswordp(p: *const c_char) -> bool;
     fn rs_ctrl_x_mode_whole_line() -> c_int;
     fn rs_equalpos(a: PosT, b: PosT) -> c_int;
     fn nvim_ml_get_buf(buf: BufHandle, lnum: c_int) -> *mut c_char;
@@ -945,7 +946,7 @@ pub unsafe extern "C" fn rs_fuzzy_match_str_in_line(
 
         // Move to end of current word, then skip non-word chars
         str_cur = end;
-        while *str_cur != 0 && rs_vim_iswordp(str_cur.cast_const()) == 0 {
+        while *str_cur != 0 && !rs_vim_iswordp(str_cur.cast_const()) {
             str_cur = mb_ptr_adv(str_cur);
         }
     }

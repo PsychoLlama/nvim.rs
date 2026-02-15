@@ -79,6 +79,7 @@ extern "C" {
 
     fn nvim_vim_iswordp(p: *const c_char) -> c_int;
     fn nvim_mapping_utfc_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "skipwhite"]
     fn rs_skipwhite(p: *const c_char) -> *const c_char;
 
     fn nvim_mapblock_set_mode(mp: MapblockHandle, mode: c_int);

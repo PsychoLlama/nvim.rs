@@ -255,7 +255,7 @@ pub unsafe extern "C" fn rs_get_mouse_class(p: *const c_char) -> c_int {
         return CharClass::BLANK.0;
     }
 
-    if rs_vim_iswordc(c_int::from(first_byte)) != 0 {
+    if rs_vim_iswordc(c_int::from(first_byte)) {
         return CharClass::WORD.0;
     }
 
