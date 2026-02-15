@@ -13,6 +13,14 @@ description="$1"
 
 log "Running Claude in plan mode..."
 
+# Unset CLAUDECODE to avoid nested session guard
+unset CLAUDECODE
+
+# Check for previous run results
+if [[ -f "ref/run-result.md" ]]; then
+  log "Found previous run result"
+fi
+
 # JSON schema to extract the plan file path
 schema='{"type":"object","properties":{"plan_path":{"type":"string","description":"Absolute path to the plan file"}},"required":["plan_path"]}'
 

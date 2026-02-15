@@ -2,12 +2,7 @@
 
 - `rust-migration` is your main branch.
 - Commit your work regularly.
-- Before committing, ensure these pass:
-  - `just build` - full build with linking
-  - `just smoke-test` - verify nvim starts without crashing
-  - `just rust-fmt-check` - formatting
-  - `just rust-clippy` - lints
-  - `just rust-test` - unit tests
+- Before committing, run `just check` (builds, smoke-tests, formatting, clippy, tests).
 - Use `just` to run builds, tests, and static analysis.
 - Keep the `justfile` up to date.
 

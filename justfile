@@ -189,5 +189,8 @@ regexp-fuzz duration='30': build
 # Full build: Rust + C
 build-all: rust-build build
 
+# Full pre-commit check: build, smoke-test, and all Rust checks
+check: build smoke-test rust-check
+
 # Full check: all Rust checks + C tests
 check-all: rust-check test
