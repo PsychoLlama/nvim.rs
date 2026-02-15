@@ -385,6 +385,88 @@ pub unsafe extern "C" fn rs_syn_fold_compute_is_defined(result: *const FoldCompu
 }
 
 // =============================================================================
+// FFI for syn_get_foldlevel implementation
+// =============================================================================
+
+use crate::types::{SynBlockHandle, WinHandle};
+
+extern "C" {
+    fn nvim_win_get_synblock(wp: WinHandle) -> SynBlockHandle;
+    fn nvim_synblock_get_folditems(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_syn_error(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_syn_slow(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_syn_foldlevel(block: SynBlockHandle) -> c_int;
+    fn nvim_win_get_foldnestmax(wp: WinHandle) -> c_int;
+    fn nvim_syn_count_fold_items() -> c_int;
+    fn nvim_syn_is_current_finished() -> c_int;
+    fn nvim_syn_get_current_col() -> c_int;
+    fn nvim_syn_set_current_col(col: c_int);
+
+    fn rs_syntax_start(wp: WinHandle, lnum: c_int);
+    fn rs_syn_current_attr_impl(
+        syncing: c_int,
+        displaying: c_int,
+        can_spell: *mut c_int,
+        keep_state: c_int,
+    ) -> c_int;
+}
+
+/// SYNFLD_MINIMUM constant
+const SYNFLD_MINIMUM: c_int = 1;
+
+/// Real implementation of syn_get_foldlevel.
+///
+/// # Safety
+/// Requires valid window handle.
+unsafe fn syn_get_foldlevel_impl(wp: WinHandle, lnum: c_int) -> c_int {
+    let mut level = 0;
+    let block = nvim_win_get_synblock(wp);
+
+    // Return quickly when there are no fold items at all.
+    if nvim_synblock_get_folditems(block) != 0
+        && nvim_synblock_get_syn_error(block) == 0
+        && nvim_synblock_get_syn_slow(block) == 0
+    {
+        rs_syntax_start(wp, lnum);
+
+        // Start with the fold level at the start of the line.
+        level = nvim_syn_count_fold_items();
+
+        if nvim_synblock_get_syn_foldlevel(block) == SYNFLD_MINIMUM {
+            // Find the lowest fold level that is followed by a higher one.
+            let mut cur_level = level;
+            let mut low_level = cur_level;
+            while nvim_syn_is_current_finished() == 0 {
+                rs_syn_current_attr_impl(0, 0, std::ptr::null_mut(), 0);
+                cur_level = nvim_syn_count_fold_items();
+                if cur_level < low_level {
+                    low_level = cur_level;
+                } else if cur_level > low_level {
+                    level = low_level;
+                }
+                let col = nvim_syn_get_current_col();
+                nvim_syn_set_current_col(col + 1);
+            }
+        }
+    }
+
+    let fdn = nvim_win_get_foldnestmax(wp);
+    if level > fdn {
+        level = fdn;
+        if level < 0 {
+            level = 0;
+        }
+    }
+    level
+}
+
+/// Exported entry point for syn_get_foldlevel.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_foldlevel_impl(wp: WinHandle, lnum: c_int) -> c_int {
+    syn_get_foldlevel_impl(wp, lnum)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

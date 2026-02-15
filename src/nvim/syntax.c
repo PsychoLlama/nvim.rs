@@ -56,6 +56,7 @@ extern int rs_syntax_check_changed(int lnum);
 extern void rs_syntax_end_parsing_impl(win_T *wp, int lnum);
 extern void rs_load_current_state(synstate_T *from);
 extern int rs_get_syntax_attr(int col, int *can_spell, int keep_state);
+extern int rs_syn_get_foldlevel_impl(win_T *wp, int lnum);
 
 // Phase 541: Syntax state machine functions from Rust
 extern int rs_syn_current_lnum(void);
@@ -3291,54 +3292,10 @@ int syn_get_stack_item(int i)
   return CUR_STATE(i).si_id;
 }
 
-static int syn_cur_foldlevel(void)
-{
-  int level = 0;
-  for (int i = 0; i < current_state.ga_len; i++) {
-    if (CUR_STATE(i).si_flags & HL_FOLD) {
-      level++;
-    }
-  }
-  return level;
-}
-
 /// Function called to get folding level for line "lnum" in window "wp".
 int syn_get_foldlevel(win_T *wp, linenr_T lnum)
 {
-  int level = 0;
-
-  // Return quickly when there are no fold items at all.
-  if (wp->w_s->b_syn_folditems != 0
-      && !wp->w_s->b_syn_error
-      && !wp->w_s->b_syn_slow) {
-    syntax_start(wp, lnum);
-
-    // Start with the fold level at the start of the line.
-    level = syn_cur_foldlevel();
-
-    if (wp->w_s->b_syn_foldlevel == SYNFLD_MINIMUM) {
-      // Find the lowest fold level that is followed by a higher one.
-      int cur_level = level;
-      int low_level = cur_level;
-      while (!current_finished) {
-        syn_current_attr(false, false, NULL, false);
-        cur_level = syn_cur_foldlevel();
-        if (cur_level < low_level) {
-          low_level = cur_level;
-        } else if (cur_level > low_level) {
-          level = low_level;
-        }
-        current_col++;
-      }
-    }
-  }
-  if (level > wp->w_p_fdn) {
-    level = (int)wp->w_p_fdn;
-    if (level < 0) {
-      level = 0;
-    }
-  }
-  return level;
+  return rs_syn_get_foldlevel_impl(wp, (int)lnum);
 }
 
 // ":syntime".
@@ -5760,6 +5717,12 @@ void *nvim_syn_win_get_buffer_ptr(void *wp)
   return wp ? ((win_T *)wp)->w_buffer : NULL;
 }
 
+/// Get w_p_fdn (foldnestmax) from window
+int nvim_win_get_foldnestmax(void *wp)
+{
+  return wp ? (int)((win_T *)wp)->w_p_fdn : 0;
+}
+
 /// Get ml_line_count from buffer (void* input for FFI)
 int nvim_syn_buf_get_line_count(void *buf)
 {
@@ -5995,7 +5958,7 @@ win_T *nvim_syn_get_win(void)
 /// Get the current fold level from syntax state
 int nvim_syn_cur_foldlevel(void)
 {
-  return syn_cur_foldlevel();
+  return nvim_syn_count_fold_items();
 }
 
 // =============================================================================
