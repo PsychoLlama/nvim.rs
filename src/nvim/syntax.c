@@ -54,6 +54,7 @@ extern int rs_syntax_present(win_T *win);
 extern void rs_syntax_start(win_T *wp, int lnum);
 extern int rs_syntax_check_changed(int lnum);
 extern void rs_syntax_end_parsing_impl(win_T *wp, int lnum);
+extern void rs_load_current_state(synstate_T *from);
 
 // Phase 541: Syntax state machine functions from Rust
 extern int rs_syn_current_lnum(void);
@@ -830,210 +831,8 @@ static synstate_T *syn_stack_find_entry(linenr_T lnum)
   return prev;
 }
 
-// Try saving the current state in b_sst_array[].
-// The current state must be valid for the start of the current_lnum line!
-static synstate_T *store_current_state(void)
-{
-  int i;
-  synstate_T *p;
-  bufstate_T *bp;
-  stateitem_T *cur_si;
-  synstate_T *sp = syn_stack_find_entry(current_lnum);
 
-  // If the current state contains a start or end pattern that continues
-  // from the previous line, we can't use it.  Don't store it then.
-  for (i = current_state.ga_len - 1; i >= 0; i--) {
-    cur_si = &CUR_STATE(i);
-    if (cur_si->si_h_startpos.lnum >= current_lnum
-        || cur_si->si_m_endpos.lnum >= current_lnum
-        || cur_si->si_h_endpos.lnum >= current_lnum
-        || (cur_si->si_end_idx
-            && cur_si->si_eoe_pos.lnum >= current_lnum)) {
-      break;
-    }
-  }
-  if (i >= 0) {
-    if (sp != NULL) {
-      // find "sp" in the list and remove it
-      if (syn_block->b_sst_first == sp) {
-        // it's the first entry
-        syn_block->b_sst_first = sp->sst_next;
-      } else {
-        // find the entry just before this one to adjust sst_next
-        for (p = syn_block->b_sst_first; p != NULL; p = p->sst_next) {
-          if (p->sst_next == sp) {
-            break;
-          }
-        }
-        if (p != NULL) {        // just in case
-          p->sst_next = sp->sst_next;
-        }
-      }
-      syn_stack_free_entry(syn_block, sp);
-      sp = NULL;
-    }
-  } else if (sp == NULL || sp->sst_lnum != current_lnum) {
-    // Add a new entry
-    // If no free items, cleanup the array first.
-    if (syn_block->b_sst_freecount == 0) {
-      syn_stack_cleanup();
-      // "sp" may have been moved to the freelist now
-      sp = syn_stack_find_entry(current_lnum);
-    }
-    // Still no free items?  Must be a strange problem...
-    if (syn_block->b_sst_freecount == 0) {
-      sp = NULL;
-    } else {
-      // Take the first item from the free list and put it in the used
-      // list, after *sp
-      p = syn_block->b_sst_firstfree;
-      syn_block->b_sst_firstfree = p->sst_next;
-      syn_block->b_sst_freecount--;
-      if (sp == NULL) {
-        // Insert in front of the list
-        p->sst_next = syn_block->b_sst_first;
-        syn_block->b_sst_first = p;
-      } else {
-        // insert in list after *sp
-        p->sst_next = sp->sst_next;
-        sp->sst_next = p;
-      }
-      sp = p;
-      sp->sst_stacksize = 0;
-      sp->sst_lnum = current_lnum;
-    }
-  }
-  if (sp != NULL) {
-    // When overwriting an existing state stack, clear it first
-    clear_syn_state(sp);
-    sp->sst_stacksize = current_state.ga_len;
-    if (current_state.ga_len > SST_FIX_STATES) {
-      // Need to clear it, might be something remaining from when the
-      // length was less than SST_FIX_STATES.
-      ga_init(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1);
-      ga_grow(&sp->sst_union.sst_ga, current_state.ga_len);
-      sp->sst_union.sst_ga.ga_len = current_state.ga_len;
-      bp = SYN_STATE_P(&(sp->sst_union.sst_ga));
-    } else {
-      bp = sp->sst_union.sst_stack;
-    }
-    for (i = 0; i < sp->sst_stacksize; i++) {
-      bp[i].bs_idx = CUR_STATE(i).si_idx;
-      bp[i].bs_flags = CUR_STATE(i).si_flags;
-      bp[i].bs_seqnr = CUR_STATE(i).si_seqnr;
-      bp[i].bs_cchar = CUR_STATE(i).si_cchar;
-      bp[i].bs_extmatch = ref_extmatch(CUR_STATE(i).si_extmatch);
-    }
-    sp->sst_next_flags = current_next_flags;
-    sp->sst_next_list = current_next_list;
-    sp->sst_tick = display_tick;
-    sp->sst_change_lnum = 0;
-  }
-  current_state_stored = true;
-  return sp;
-}
 
-// Copy a state stack from "from" in b_sst_array[] to current_state;
-static void load_current_state(synstate_T *from)
-{
-  bufstate_T *bp;
-
-  clear_current_state();
-  validate_current_state();
-  keepend_level = -1;
-  if (from->sst_stacksize) {
-    ga_grow(&current_state, from->sst_stacksize);
-    if (from->sst_stacksize > SST_FIX_STATES) {
-      bp = SYN_STATE_P(&(from->sst_union.sst_ga));
-    } else {
-      bp = from->sst_union.sst_stack;
-    }
-    for (int i = 0; i < from->sst_stacksize; i++) {
-      CUR_STATE(i).si_idx = bp[i].bs_idx;
-      CUR_STATE(i).si_flags = bp[i].bs_flags;
-      CUR_STATE(i).si_seqnr = bp[i].bs_seqnr;
-      CUR_STATE(i).si_cchar = bp[i].bs_cchar;
-      CUR_STATE(i).si_extmatch = ref_extmatch(bp[i].bs_extmatch);
-      if (keepend_level < 0 && (CUR_STATE(i).si_flags & HL_KEEPEND)) {
-        keepend_level = i;
-      }
-      CUR_STATE(i).si_ends = false;
-      CUR_STATE(i).si_m_lnum = 0;
-      if (CUR_STATE(i).si_idx >= 0) {
-        CUR_STATE(i).si_next_list =
-          (SYN_ITEMS(syn_block)[CUR_STATE(i).si_idx]).sp_next_list;
-      } else {
-        CUR_STATE(i).si_next_list = NULL;
-      }
-      update_si_attr(i);
-    }
-    current_state.ga_len = from->sst_stacksize;
-  }
-  current_next_list = from->sst_next_list;
-  current_next_flags = from->sst_next_flags;
-  current_lnum = from->sst_lnum;
-}
-
-/// Compare saved state stack "*sp" with the current state.
-///
-/// @return  true when they are equal.
-static bool syn_stack_equal(synstate_T *sp)
-{
-  bufstate_T *bp;
-
-  // First a quick check if the stacks have the same size end nextlist.
-  if (sp->sst_stacksize != current_state.ga_len
-      || sp->sst_next_list != current_next_list) {
-    return false;
-  }
-
-  // Need to compare all states on both stacks.
-  if (sp->sst_stacksize > SST_FIX_STATES) {
-    bp = SYN_STATE_P(&(sp->sst_union.sst_ga));
-  } else {
-    bp = sp->sst_union.sst_stack;
-  }
-
-  int i;
-  for (i = current_state.ga_len; --i >= 0;) {
-    // If the item has another index the state is different.
-    if (bp[i].bs_idx != CUR_STATE(i).si_idx) {
-      break;
-    }
-    if (bp[i].bs_extmatch == CUR_STATE(i).si_extmatch) {
-      continue;
-    }
-    // When the extmatch pointers are different, the strings in them can
-    // still be the same.  Check if the extmatch references are equal.
-    reg_extmatch_T *bsx = bp[i].bs_extmatch;
-    reg_extmatch_T *six = CUR_STATE(i).si_extmatch;
-    // If one of the extmatch pointers is NULL the states are different.
-    if (bsx == NULL || six == NULL) {
-      break;
-    }
-    int j;
-    for (j = 0; j < NSUBEXP; j++) {
-      // Check each referenced match string. They must all be equal.
-      if (bsx->matches[j] != six->matches[j]) {
-        // If the pointer is different it can still be the same text.
-        // Compare the strings, ignore case when the start item has the
-        // sp_ic flag set.
-        if (bsx->matches[j] == NULL || six->matches[j] == NULL) {
-          break;
-        }
-        if (mb_strcmp_ic((SYN_ITEMS(syn_block)[CUR_STATE(i).si_idx]).sp_ic,
-                         (const char *)bsx->matches[j],
-                         (const char *)six->matches[j]) != 0) {
-          break;
-        }
-      }
-    }
-    if (j != NSUBEXP) {
-      break;
-    }
-  }
-  return i < 0 ? true : false;
-}
 
 // We stop parsing syntax above line "lnum".  If the stored state at or below
 // this line depended on a change before it, it now depends on the line below
@@ -6799,7 +6598,7 @@ _Static_assert(HL_SKIPEMPTY == 0x200, "HL_SKIPEMPTY");
 /// Wrap load_current_state() for Rust.
 void nvim_syn_load_current_state(synstate_T *from)
 {
-  load_current_state(from);
+  rs_load_current_state(from);
 }
 
 /// Wrap syn_match_linecont() for Rust.
