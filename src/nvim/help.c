@@ -50,22 +50,6 @@
 
 #include "help.c.generated.h"
 
-extern int rs_help_heuristic(const char *matched_string, int offset, bool wrong_case);
-extern char *rs_check_help_lang(char *arg);
-extern int rs_help_compare(const void *s1, const void *s2);
-extern int rs_find_help_tags(const char *arg, int *num_matches, char ***matches, bool keep_lang);
-extern void rs_cleanup_help_tags(int num_file, char **file);
-extern void rs_ex_exusage(void *eap);
-extern void rs_ex_viusage(void *eap);
-extern void rs_prepare_help_buffer(void);
-extern void rs_ex_help(void *eap);
-extern void rs_ex_helpclose(void *eap);
-extern void rs_ex_helptags(void *eap);
-extern void rs_get_local_additions(void);
-extern void rs_helptags_one(char *dir, const char *ext, const char *tagfname,
-                            bool add_help_tags, bool ignore_writeerr);
-extern void rs_do_helptags(char *dirname, bool add_help_tags, bool ignore_writeerr);
-
 // C accessors for ex_help / ex_helpclose
 char *nvim_help_eap_get_arg(exarg_T *eap) { return eap->arg; }
 void nvim_help_eap_set_arg(exarg_T *eap, char *arg) { eap->arg = arg; }
@@ -178,9 +162,6 @@ char *nvim_help_expand_dir(const char *arg)
 }
 
 /// Encapsulate encoding detection + conversion for get_local_additions.
-/// Takes IObuff (already populated), detects utf-8 vs latin1, converts to
-/// current 'encoding'. Returns IObuff if no conversion needed, or a newly
-/// allocated string (caller must xfree) if conversion was done.
 char *nvim_help_convert_help_line(char *buf)
 {
   TriState this_utf = kNone;
@@ -212,114 +193,4 @@ char *nvim_help_convert_help_line(char *buf)
   }
   convert_setup(&vc, NULL, NULL);
   return cp;
-}
-
-/// ":help": open a read-only window on a help file
-void ex_help(exarg_T *eap)
-{
-  rs_ex_help(eap);
-}
-
-/// ":helpclose": Close one help window
-void ex_helpclose(exarg_T *eap)
-{
-  rs_ex_helpclose(eap);
-}
-
-/// In an argument search for a language specifiers in the form "@xx".
-/// Changes the "@" to NUL if found, and returns a pointer to "xx".
-///
-/// @return  NULL if not found.
-char *check_help_lang(char *arg)
-{
-  return rs_check_help_lang(arg);
-}
-
-/// Return a heuristic indicating how well the given string matches.  The
-/// smaller the number, the better the match.  This is the order of priorities,
-/// from best match to worst match:
-///      - Match with least alphanumeric characters is better.
-///      - Match with least total characters is better.
-///      - Match towards the start is better.
-///      - Match starting with "+" is worse (feature instead of command)
-/// Assumption is made that the matched_string passed has already been found to
-/// match some string for which help is requested.  webb.
-///
-/// @param offset      offset for match
-/// @param wrong_case  no matching case
-///
-/// @return  a heuristic indicating how well the given string matches.
-int help_heuristic(char *matched_string, int offset, bool wrong_case)
-  FUNC_ATTR_PURE
-{
-  return rs_help_heuristic(matched_string, offset, wrong_case);
-}
-
-/// Compare functions for qsort() below, that checks the help heuristics number
-/// that has been put after the tagname by find_tags().
-static int help_compare(const void *s1, const void *s2)
-{
-  return rs_help_compare(s1, s2);
-}
-
-/// Find all help tags matching "arg", sort them and return in matches[], with
-/// the number of matches in num_matches.
-/// The matches will be sorted with a "best" match algorithm.
-/// When "keep_lang" is true try keeping the language of the current buffer.
-int find_help_tags(const char *arg, int *num_matches, char ***matches, bool keep_lang)
-{
-  return rs_find_help_tags(arg, num_matches, matches, keep_lang);
-}
-
-/// Cleanup matches for help tags:
-/// Remove "@ab" if the top of 'helplang' is "ab" and the language of the first
-/// tag matches it.  Otherwise remove "@en" if "en" is the only language.
-void cleanup_help_tags(int num_file, char **file)
-{
-  rs_cleanup_help_tags(num_file, file);
-}
-
-/// Called when starting to edit a buffer for a help file.
-void prepare_help_buffer(void)
-{
-  rs_prepare_help_buffer();
-}
-
-/// After reading a help file: if help.txt, populate *local-additions*
-void get_local_additions(void)
-{
-  rs_get_local_additions();
-}
-
-/// ":exusage"
-void ex_exusage(exarg_T *eap)
-{
-  rs_ex_exusage(eap);
-}
-
-/// ":viusage"
-void ex_viusage(exarg_T *eap)
-{
-  rs_ex_viusage(eap);
-}
-
-/// Generate tags in one help directory
-static void helptags_one(char *dir, const char *ext, const char *tagfname, bool add_help_tags,
-                         bool ignore_writeerr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_helptags_one(dir, ext, tagfname, add_help_tags, ignore_writeerr);
-}
-
-/// Generate tags in one help directory, taking care of translations.
-static void do_helptags(char *dirname, bool add_help_tags, bool ignore_writeerr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_do_helptags(dirname, add_help_tags, ignore_writeerr);
-}
-
-/// ":helptags"
-void ex_helptags(exarg_T *eap)
-{
-  rs_ex_helptags(eap);
 }

@@ -37,7 +37,8 @@ fn ascii_isalnum(c: u8) -> bool {
 ///
 /// # Returns
 /// A heuristic score (lower is better)
-#[no_mangle]
+#[must_use]
+#[export_name = "help_heuristic"]
 pub unsafe extern "C" fn rs_help_heuristic(
     matched_string: *const c_char,
     offset: c_int,
@@ -96,7 +97,8 @@ pub unsafe extern "C" fn rs_help_heuristic(
 ///
 /// # Safety
 /// `arg` must be a valid, mutable, NUL-terminated C string.
-#[no_mangle]
+#[must_use]
+#[export_name = "check_help_lang"]
 pub unsafe extern "C" fn rs_check_help_lang(arg: *mut c_char) -> *mut c_char {
     if arg.is_null() {
         return std::ptr::null_mut();
@@ -130,7 +132,8 @@ pub unsafe extern "C" fn rs_check_help_lang(arg: *mut c_char) -> *mut c_char {
 /// `s1` and `s2` must point to valid `*const c_char` pointers (i.e., `char **`),
 /// and each pointed-to string must be NUL-terminated with a second NUL-terminated
 /// string immediately following.
-#[no_mangle]
+#[must_use]
+#[export_name = "help_compare"]
 pub unsafe extern "C" fn rs_help_compare(s1: *const c_void, s2: *const c_void) -> c_int {
     let p1_str = unsafe { *(s1 as *const *const c_char) };
     let p2_str = unsafe { *(s2 as *const *const c_char) };
@@ -305,7 +308,8 @@ unsafe fn buf_write(buf: *mut c_char, offset: usize, src: &[u8]) -> usize {
 /// # Safety
 /// All pointer arguments must be valid. `arg` must be NUL-terminated.
 /// `num_matches` and `matches` must be valid pointers to write results into.
-#[no_mangle]
+#[must_use]
+#[export_name = "find_help_tags"]
 pub unsafe extern "C" fn rs_find_help_tags(
     arg: *const c_char,
     num_matches: *mut c_int,
@@ -633,7 +637,7 @@ pub unsafe extern "C" fn rs_find_help_tags(
 ///
 /// # Safety
 /// `file` must point to an array of `num_file` valid, mutable, NUL-terminated C strings.
-#[no_mangle]
+#[export_name = "cleanup_help_tags"]
 pub unsafe extern "C" fn rs_cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) {
     let mut buf = [0u8; 4];
     let mut buf_len: usize = 0;
@@ -713,7 +717,7 @@ const DT_HELP: c_int = 8;
 const FAIL: c_int = 0;
 
 /// `:helpclose` — close one help window in the current tab.
-#[no_mangle]
+#[export_name = "ex_helpclose"]
 pub unsafe extern "C" fn rs_ex_helpclose(eap: ExargHandle) {
     let forceit = unsafe { nvim_help_eap_get_forceit(eap) } != 0;
 
@@ -731,7 +735,7 @@ pub unsafe extern "C" fn rs_ex_helpclose(eap: ExargHandle) {
 }
 
 /// `:help` — open a read-only window on a help file.
-#[no_mangle]
+#[export_name = "ex_help"]
 pub unsafe extern "C" fn rs_ex_help(eap: ExargHandle) {
     let eap_is_null = eap.is_null();
 
@@ -932,7 +936,7 @@ pub unsafe extern "C" fn rs_ex_help(eap: ExargHandle) {
 
 /// Called when starting to edit a buffer for a help file.
 /// Sets buffer type, iskeyword, foldmethod, and various buffer/window options.
-#[no_mangle]
+#[export_name = "prepare_help_buffer"]
 pub unsafe extern "C" fn rs_prepare_help_buffer() {
     unsafe { nvim_help_set_curbuf_b_help(true) };
     unsafe { nvim_help_set_buftype_help() };
@@ -953,13 +957,13 @@ pub unsafe extern "C" fn rs_prepare_help_buffer() {
 }
 
 /// `:exusage` — open help for ex command index.
-#[no_mangle]
+#[export_name = "ex_exusage"]
 pub unsafe extern "C" fn rs_ex_exusage(_eap: ExargHandle) {
     unsafe { do_cmdline_cmd(c"help ex-cmd-index".as_ptr()) };
 }
 
 /// `:viusage` — open help for normal mode command index.
-#[no_mangle]
+#[export_name = "ex_viusage"]
 pub unsafe extern "C" fn rs_ex_viusage(_eap: ExargHandle) {
     unsafe { do_cmdline_cmd(c"help normal-index".as_ptr()) };
 }
@@ -1045,7 +1049,7 @@ extern "C" {
 ///
 /// Scans help files for `*tag*` patterns, sorts tags, checks for duplicates,
 /// and writes a tags file.
-#[no_mangle]
+#[export_name = "helptags_one"]
 pub unsafe extern "C" fn rs_helptags_one(
     dir: *mut c_char,
     ext: *const c_char,
@@ -1293,7 +1297,7 @@ pub unsafe extern "C" fn rs_helptags_one(
 /// Generate tags in one help directory, taking care of translations.
 ///
 /// Detects languages from filenames, then calls `rs_helptags_one` per language.
-#[no_mangle]
+#[export_name = "do_helptags"]
 pub unsafe extern "C" fn rs_do_helptags(
     dirname: *mut c_char,
     add_help_tags: bool,
@@ -1422,7 +1426,7 @@ pub unsafe extern "C" fn rs_helptags_cb(
 }
 
 /// `:helptags` — generate help tags for a directory or ALL runtimepath docs.
-#[no_mangle]
+#[export_name = "ex_helptags"]
 pub unsafe extern "C" fn rs_ex_helptags(eap: ExargHandle) {
     let mut arg = unsafe { nvim_help_eap_get_arg(eap) };
     let mut add_help_tags = false;
@@ -1464,7 +1468,7 @@ pub unsafe extern "C" fn rs_ex_helptags(eap: ExargHandle) {
 ///
 /// In the "help.txt" and "help.abx" file, add the locally added help
 /// files. This uses the very first line in the help file.
-#[no_mangle]
+#[export_name = "get_local_additions"]
 pub unsafe extern "C" fn rs_get_local_additions() {
     let fname = unsafe { path_tail(nvim_help_get_curbuf_fname()) };
     let fname_bytes = unsafe { CStr::from_ptr(fname) }.to_bytes();
