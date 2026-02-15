@@ -17,7 +17,7 @@ use crate::{HIST_INVALID, NUMBUFLEN, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 ///
 /// # Safety
 /// `argvars` and `rettv` must be valid typval pointers. Accesses C history arrays via FFI.
-#[no_mangle]
+#[export_name = "f_histadd"]
 pub unsafe extern "C" fn rs_f_histadd(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     ffi::nvim_cmdhist_rettv_set_number(rettv, 0);
     if ffi::nvim_cmdhist_check_secure() != 0 {
@@ -42,7 +42,7 @@ pub unsafe extern "C" fn rs_f_histadd(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
     }
 
     crate::modify::rs_init_history();
-    crate::modify::rs_add_to_history(histype, entry, ffi::nvim_cmdhist_strlen(entry), 0, 0);
+    crate::modify::rs_add_to_history(histype, entry, ffi::nvim_cmdhist_strlen(entry), false, 0);
     ffi::nvim_cmdhist_rettv_set_number(rettv, 1);
 }
 
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn rs_f_histadd(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
 ///
 /// # Safety
 /// `argvars` and `rettv` must be valid typval pointers. Accesses C history arrays via FFI.
-#[no_mangle]
+#[export_name = "f_histdel"]
 pub unsafe extern "C" fn rs_f_histdel(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     let tv0 = ffi::nvim_cmdhist_tv_idx(argvars, 0);
     let str = ffi::nvim_cmdhist_tv_get_string_chk(tv0);
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn rs_f_histdel(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
 ///
 /// # Safety
 /// `argvars` and `rettv` must be valid typval pointers. Accesses C history arrays via FFI.
-#[no_mangle]
+#[export_name = "f_histget"]
 pub unsafe extern "C" fn rs_f_histget(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     let tv0 = ffi::nvim_cmdhist_tv_idx(argvars, 0);
     let str = ffi::nvim_cmdhist_tv_get_string_chk(tv0);
@@ -134,7 +134,7 @@ pub unsafe extern "C" fn rs_f_histget(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
 ///
 /// # Safety
 /// `argvars` and `rettv` must be valid typval pointers. Accesses C history arrays via FFI.
-#[no_mangle]
+#[export_name = "f_histnr"]
 pub unsafe extern "C" fn rs_f_histnr(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     let tv0 = ffi::nvim_cmdhist_tv_idx(argvars, 0);
     let histname = ffi::nvim_cmdhist_tv_get_string_chk(tv0);

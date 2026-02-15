@@ -31,11 +31,12 @@ use crate::helpers::clear_hist_entry;
 /// `hist` must be a valid pointer to a `histentry_T`. `iter`, if non-NULL,
 /// must be a valid pointer previously returned by this function.
 /// Accesses C history arrays via FFI.
-#[no_mangle]
+#[export_name = "hist_iter"]
+#[must_use]
 pub unsafe extern "C" fn rs_hist_iter(
     iter: *const c_void,
     history_type: u8,
-    zero: c_int,
+    zero: bool,
     hist: HistEntryPtr,
 ) -> *const c_void {
     // Clear output entry
@@ -81,7 +82,7 @@ pub unsafe extern "C" fn rs_hist_iter(
     let hiter_entry = ffi::nvim_cmdhist_he_at(hist_base, hiter_idx);
     ffi::nvim_cmdhist_he_copy(hist, hiter_entry);
 
-    if zero != 0 {
+    if zero {
         clear_hist_entry(hiter_entry);
     }
 
@@ -115,7 +116,8 @@ extern "C" {
 /// # Safety
 /// `new_hisidx` and `new_hisnum` must be valid non-null pointers to `int *`.
 /// Accesses C history arrays via FFI.
-#[no_mangle]
+#[export_name = "hist_get_array"]
+#[must_use]
 pub unsafe extern "C" fn rs_hist_get_array(
     history_type: u8,
     new_hisidx: *mut *mut c_int,

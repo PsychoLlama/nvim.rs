@@ -62,7 +62,8 @@ const SHORT_NAMES: &[u8] = b":=@>?/";
 ///
 /// # Safety
 /// `xp` must be a valid `expand_T *`. `idx` must be a non-negative index.
-#[no_mangle]
+#[export_name = "get_history_arg"]
+#[must_use]
 pub unsafe extern "C" fn rs_get_history_arg(xp: ExpandPtr, idx: c_int) -> *mut c_char {
     let short_names_count = SHORT_NAMES.len() as c_int;
     // HISTORY_NAMES has 6 entries (5 names + 1 sentinel), so 5 valid names
@@ -92,7 +93,7 @@ pub unsafe extern "C" fn rs_get_history_arg(xp: ExpandPtr, idx: c_int) -> *mut c
 ///
 /// # Safety
 /// `eap` must be a valid `exarg_T *`. Accesses C history arrays via FFI.
-#[no_mangle]
+#[export_name = "ex_history"]
 pub unsafe extern "C" fn rs_ex_history(eap: ExargPtr) {
     let hislen = ffi::nvim_get_hislen();
     if hislen == 0 {

@@ -32,8 +32,6 @@
 
 #include "cmdhist.c.generated.h"
 
-extern HistoryType rs_hist_char2type(int c);
-extern int rs_get_hislen(void);
 extern HistoryType rs_get_histtype(const char *name, size_t len, int return_default);
 
 _Static_assert(sizeof(histentry_T) == 40,
@@ -53,12 +51,6 @@ static int hislen = 0;  ///< actual length of history tables
 int nvim_get_hislen(void)
 {
   return hislen;
-}
-
-/// Return the length of the history tables
-int get_hislen(void)
-{
-  return rs_get_hislen();
 }
 
 /// Return a pointer to a specified history table
@@ -240,10 +232,6 @@ int nvim_cmdhist_strcmp(const char *s1, const char *s2)
   return strcmp(s1, s2);
 }
 
-extern void rs_init_history(void);
-extern void rs_add_to_history(int histype, const char *new_entry, size_t new_entrylen, int in_map,
-                              int sep);
-extern int rs_clr_history(int histype);
 extern int nvim_cmdhist_get_last_maptick(void);
 extern void nvim_cmdhist_set_last_maptick(int val);
 
@@ -341,13 +329,6 @@ size_t nvim_cmdhist_strlen(const char *s)
 {
   return strlen(s);
 }
-
-extern void rs_f_histadd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_f_histdel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_f_histget(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_f_histnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_ex_history(exarg_T *eap);
-extern char *rs_get_history_arg(expand_T *xp, int idx);
 
 // =============================================================================
 // Phase 5: Ex Command Accessors
@@ -466,90 +447,8 @@ int nvim_cmdhist_ascii_isalpha(int c)
   return ASCII_ISALPHA(c);
 }
 
-/// Translate a history character to the associated type number
-HistoryType hist_char2type(const int c)
-  FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_hist_char2type(c);
-}
-
-/// Function given to ExpandGeneric() to obtain the possible first
-/// arguments of the ":history command.
-char *get_history_arg(expand_T *xp, int idx)
-{
-  return rs_get_history_arg(xp, idx);
-}
-
-/// Initialize command line history.
-void init_history(void)
-{
-  rs_init_history();
-}
-
-/// Add the given string to the given history.
-void add_to_history(int histype, const char *new_entry, size_t new_entrylen, bool in_map, int sep)
-{
-  rs_add_to_history(histype, new_entry, new_entrylen, in_map, sep);
-}
-
-/// Clear all entries in a history
-int clr_history(const int histype)
-{
-  return rs_clr_history(histype);
-}
-
-/// "histadd()" function
-void f_histadd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_histadd(argvars, rettv, fptr);
-}
-
-/// "histdel()" function
-void f_histdel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_histdel(argvars, rettv, fptr);
-}
-
-/// "histget()" function
-void f_histget(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_histget(argvars, rettv, fptr);
-}
-
-/// "histnr()" function
-void f_histnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_histnr(argvars, rettv, fptr);
-}
-
-/// :history command - print a history
-void ex_history(exarg_T *eap)
-{
-  rs_ex_history(eap);
-}
-
-extern const void *rs_hist_iter(const void *iter, uint8_t history_type, int zero,
-                                histentry_T *hist);
-extern histentry_T *rs_hist_get_array(uint8_t history_type, int **new_hisidx, int **new_hisnum);
-
 /// Convert a pointer within a history array to an index.
 int nvim_cmdhist_ptr_to_idx(histentry_T *base, histentry_T *ptr)
 {
   return (int)(ptr - base);
-}
-
-/// Iterate over history items
-const void *hist_iter(const void *const iter, const uint8_t history_type, const bool zero,
-                      histentry_T *const hist)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(4)
-{
-  return rs_hist_iter(iter, history_type, zero, hist);
-}
-
-/// Get array of history items
-histentry_T *hist_get_array(const uint8_t history_type, int **const new_hisidx,
-                            int **const new_hisnum)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_hist_get_array(history_type, new_hisidx, new_hisnum);
 }

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <stdbool.h>  // IWYU pragma: keep
 #include <stddef.h>  // IWYU pragma: keep
+#include <stdint.h>  // IWYU pragma: keep
 
 #include "nvim/cmdexpand_defs.h"  // IWYU pragma: keep
 #include "nvim/eval/typval_defs.h"  // IWYU pragma: keep
@@ -29,5 +31,20 @@ typedef struct {
   Timestamp timestamp;  ///< Time when entry was added.
   AdditionalData *additional_data;  ///< Additional entries from ShaDa file.
 } histentry_T;
+
+// Functions exported directly from Rust (cmdhist crate) via #[export_name]
+int get_hislen(void);
+int hist_char2type(int c);
+char *get_history_arg(expand_T *xp, int idx);
+void ex_history(exarg_T *eap);
+void init_history(void);
+void add_to_history(int histype, const char *new_entry, size_t new_entrylen, bool in_map, int sep);
+int clr_history(int histype);
+void f_histadd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_histdel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_histget(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_histnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+const void *hist_iter(const void *iter, uint8_t history_type, bool zero, histentry_T *hist);
+histentry_T *hist_get_array(uint8_t history_type, int **new_hisidx, int **new_hisnum);
 
 #include "cmdhist.h.generated.h"

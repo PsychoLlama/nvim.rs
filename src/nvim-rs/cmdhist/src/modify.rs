@@ -116,7 +116,7 @@ unsafe fn in_history(
 ///
 /// # Safety
 /// Accesses and modifies C history state.
-#[no_mangle]
+#[export_name = "init_history"]
 pub unsafe extern "C" fn rs_init_history() {
     let p_hi = ffi::nvim_cmdhist_get_p_hi();
     assert!(p_hi >= 0 && p_hi <= i64::from(c_int::MAX));
@@ -198,12 +198,12 @@ pub unsafe extern "C" fn rs_init_history() {
 ///
 /// # Safety
 /// `new_entry` must be a valid C string with at least `new_entrylen` bytes.
-#[no_mangle]
+#[export_name = "add_to_history"]
 pub unsafe extern "C" fn rs_add_to_history(
     histype: c_int,
     new_entry: *const c_char,
     new_entrylen: usize,
-    in_map: c_int,
+    in_map: bool,
     sep: c_int,
 ) {
     let hislen = ffi::nvim_get_hislen();
@@ -219,7 +219,7 @@ pub unsafe extern "C" fn rs_add_to_history(
     }
 
     // Searches inside the same mapping overwrite each other
-    if histype == HIST_SEARCH && in_map != 0 {
+    if histype == HIST_SEARCH && in_map {
         let hisidx_ptr = ffi::get_hisidx(HIST_SEARCH);
         if ffi::nvim_cmdhist_get_maptick() == LAST_MAPTICK && *hisidx_ptr >= 0 {
             let hist = ffi::get_histentry(HIST_SEARCH);
@@ -259,7 +259,7 @@ pub unsafe extern "C" fn rs_add_to_history(
     let hisnum_ptr = ffi::get_hisnum(histype);
     *hisnum_ptr += 1;
     ffi::nvim_cmdhist_he_set_hisnum(hisptr, *hisnum_ptr);
-    if histype == HIST_SEARCH && in_map != 0 {
+    if histype == HIST_SEARCH && in_map {
         LAST_MAPTICK = ffi::nvim_cmdhist_get_maptick();
     }
 }
@@ -272,7 +272,8 @@ pub unsafe extern "C" fn rs_add_to_history(
 ///
 /// # Safety
 /// Accesses C history arrays via FFI.
-#[no_mangle]
+#[export_name = "clr_history"]
+#[must_use]
 pub unsafe extern "C" fn rs_clr_history(histype: c_int) -> c_int {
     let hislen = ffi::nvim_get_hislen();
     if hislen != 0 && (0..HIST_COUNT).contains(&histype) {

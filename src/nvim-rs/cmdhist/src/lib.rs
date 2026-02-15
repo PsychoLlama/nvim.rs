@@ -31,7 +31,8 @@ pub const NUMBUFLEN: usize = 65;
 ///
 /// # Safety
 /// Calls C accessor function for `hislen`.
-#[no_mangle]
+#[export_name = "get_hislen"]
+#[must_use]
 pub unsafe extern "C" fn rs_get_hislen() -> c_int {
     ffi::nvim_get_hislen()
 }
@@ -54,7 +55,8 @@ pub const HIST_DEBUG: c_int = 4;
 /// - '>' -> HIST_DEBUG (debug history)
 /// - NUL, '/', '?' -> HIST_SEARCH (search history)
 /// - other -> HIST_INVALID
-#[no_mangle]
+#[export_name = "hist_char2type"]
+#[must_use]
 pub extern "C" fn rs_hist_char2type(c: c_int) -> c_int {
     match c as u8 as char {
         ':' => HIST_CMD,
