@@ -501,4 +501,21 @@ enum {
   FSK_SIMPLIFY   = 0x08,  ///< simplify <C-H>, etc.
 };
 
+// Rust-exported functions (from nvim-rs/keycodes)
+int name_to_mod_mask(int c);
+int simplify_key(int key, int *modifiers);
+int handle_x_keys(int key);
+char *get_special_key_name(int c, int modifiers);
+unsigned trans_special(const char **srcp, size_t src_len, char *dst, int flags, bool escape_ks,
+                       bool *did_simplify);
+unsigned special_to_buf(int key, int modifiers, bool escape_ks, char *dst);
+int find_special_key(const char **srcp, size_t src_len, int *modp, int flags,
+                     bool *did_simplify);
+int find_special_key_in_table(int c);
+int get_special_key_code(const char *name);
+int get_mouse_button(int code, bool *is_click, bool *is_drag);
+char *add_char2buf(int c, char *s);
+char *vim_strsave_escape_ks(char *p);
+void vim_unescape_ks(char *p);
+
 #include "keycodes.h.generated.h"

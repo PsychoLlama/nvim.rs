@@ -89,8 +89,8 @@ extern "C" {
     // For fix_input_buffer
     fn rs_using_script() -> c_int;
 
-    // External Rust functions
-    fn rs_special_to_buf(key: c_int, modifiers: c_int, escape_ks: c_int, dst: *mut u8) -> c_uint;
+    // External Rust functions (exported via #[export_name])
+    fn special_to_buf(key: c_int, modifiers: c_int, escape_ks: c_int, dst: *mut u8) -> c_uint;
     fn rs_ins_typebuf(
         str: *const u8,
         noremap: c_int,
@@ -478,7 +478,7 @@ const MB_MAXBYTES_TIMES_3_PLUS_4: usize = 22;
 /// The length of what was inserted
 ///
 /// # Safety
-/// Calls C accessor functions and rs_special_to_buf, rs_ins_typebuf.
+/// Calls C accessor functions and special_to_buf, rs_ins_typebuf.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_char_typebuf(
     c: c_int,
@@ -486,7 +486,7 @@ pub unsafe extern "C" fn rs_ins_char_typebuf(
     on_key_ignore: c_int,
 ) -> c_int {
     let mut buf = [0u8; MB_MAXBYTES_TIMES_3_PLUS_4];
-    let len = rs_special_to_buf(c, modifiers, 1, buf.as_mut_ptr());
+    let len = special_to_buf(c, modifiers, 1, buf.as_mut_ptr());
     // NUL-terminate the buffer
     buf[len as usize] = 0;
 

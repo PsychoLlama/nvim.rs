@@ -535,7 +535,8 @@ extern "C" {
 ///
 /// # Returns
 /// The index when found, -1 when not found.
-#[no_mangle]
+#[must_use]
+#[export_name = "find_special_key_in_table"]
 pub extern "C" fn rs_find_special_key_in_table(c: c_int) -> c_int {
     let len = unsafe { nvim_get_key_names_table_len() };
     for i in 0..len {
@@ -561,7 +562,8 @@ pub extern "C" fn rs_find_special_key_in_table(c: c_int) -> c_int {
 /// # Safety
 /// `name` must be a valid pointer to a C string with at least 4 readable bytes
 /// if the name starts with "t_".
-#[no_mangle]
+#[must_use]
+#[export_name = "get_special_key_code"]
 pub unsafe extern "C" fn rs_get_special_key_code(name: *const std::ffi::c_char) -> c_int {
     if name.is_null() {
         return 0;
@@ -602,7 +604,7 @@ static mut SPECIAL_KEY_NAME_BUF: [u8; MAX_KEY_NAME_LEN + 1] = [0; MAX_KEY_NAME_L
 /// # Safety
 /// This function uses a static mutable buffer. The returned pointer is valid
 /// until the next call to this function.
-#[no_mangle]
+#[export_name = "get_special_key_name"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_get_special_key_name(
     mut c: c_int,
@@ -726,7 +728,8 @@ pub unsafe extern "C" fn rs_get_special_key_name(
 ///
 /// E.g. 'S' for shift, 'C' for ctrl, 'M' for alt/meta.
 /// Returns 0 if the character doesn't correspond to a known modifier.
-#[no_mangle]
+#[must_use]
+#[export_name = "name_to_mod_mask"]
 pub extern "C" fn rs_name_to_mod_mask(c: c_int) -> c_int {
     let c = toupper_asc(c);
     for entry in MOD_MASK_TABLE {
@@ -741,7 +744,8 @@ pub extern "C" fn rs_name_to_mod_mask(c: c_int) -> c_int {
 ///
 /// Maps X-terminal specific key codes (like `K_XUP`, `K_XF1`) to their
 /// standard equivalents (`K_UP`, `K_F1`).
-#[no_mangle]
+#[must_use]
+#[export_name = "handle_x_keys"]
 pub extern "C" fn rs_handle_x_keys(key: c_int) -> c_int {
     match key {
         K_XUP => K_UP,
@@ -1220,7 +1224,7 @@ static MODIFIER_KEYS_TABLE: &[ModifierKeyEntry] = &[
 ///
 /// # Safety
 /// `modifiers` must be a valid pointer.
-#[no_mangle]
+#[export_name = "simplify_key"]
 pub unsafe extern "C" fn rs_simplify_key(key: c_int, modifiers: *mut c_int) -> c_int {
     if modifiers.is_null() {
         return key;
@@ -1440,7 +1444,7 @@ static MOUSE_TABLE: &[MouseTableEntry] = &[
 ///
 /// # Safety
 /// `is_click` and `is_drag` must be valid pointers.
-#[no_mangle]
+#[export_name = "get_mouse_button"]
 pub unsafe extern "C" fn rs_get_mouse_button(
     code: c_int,
     is_click: *mut bool,
@@ -1465,7 +1469,7 @@ pub unsafe extern "C" fn rs_get_mouse_button(
 /// # Safety
 /// `p` must be a valid pointer to a NUL-terminated C string that can be
 /// modified in place.
-#[no_mangle]
+#[export_name = "vim_unescape_ks"]
 pub unsafe extern "C" fn rs_vim_unescape_ks(p: *mut std::ffi::c_char) {
     if p.is_null() {
         return;
@@ -1502,7 +1506,7 @@ pub unsafe extern "C" fn rs_vim_unescape_ks(p: *mut std::ffi::c_char) {
 ///
 /// # Returns
 /// Pointer to after the added bytes.
-#[no_mangle]
+#[export_name = "add_char2buf"]
 pub unsafe extern "C" fn rs_add_char2buf(
     c: c_int,
     s: *mut std::ffi::c_char,
@@ -1545,7 +1549,7 @@ pub unsafe extern "C" fn rs_add_char2buf(
 ///
 /// # Returns
 /// Newly allocated string with `K_SPECIAL` bytes escaped. Caller must free.
-#[no_mangle]
+#[export_name = "vim_strsave_escape_ks"]
 pub unsafe extern "C" fn rs_vim_strsave_escape_ks(
     p: *mut std::ffi::c_char,
 ) -> *mut std::ffi::c_char {
@@ -1624,7 +1628,7 @@ unsafe fn strnicmp_prefix(s: *const u8, prefix: &[u8]) -> bool {
 /// - `srcp` must be a valid pointer to a valid C string pointer.
 /// - `modp` must be a valid pointer.
 /// - `did_simplify` may be null.
-#[no_mangle]
+#[export_name = "find_special_key"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_find_special_key(
     srcp: *mut *const std::ffi::c_char,
@@ -1854,7 +1858,7 @@ unsafe fn ptr_diff(end: *const u8, bp: *const u8) -> c_int {
 /// - `srcp` must be a valid pointer to a valid C string pointer.
 /// - `dst` must be a valid pointer with at least 19 bytes of space.
 /// - `did_simplify` may be null.
-#[no_mangle]
+#[export_name = "trans_special"]
 pub unsafe extern "C" fn rs_trans_special(
     srcp: *mut *const std::ffi::c_char,
     src_len: usize,
@@ -1888,7 +1892,7 @@ pub unsafe extern "C" fn rs_trans_special(
 /// # Returns
 ///
 /// Number of bytes written to `dst`.
-#[no_mangle]
+#[export_name = "special_to_buf"]
 pub unsafe extern "C" fn rs_special_to_buf(
     key: c_int,
     modifiers: c_int,
