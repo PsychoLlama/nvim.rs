@@ -164,7 +164,8 @@ pub unsafe extern "C" fn rs_cursor_mode_uses_syn_id(syn_id: c_int) -> c_int {
 ///
 /// # Safety
 /// Calls C accessor functions for global state.
-#[no_mangle]
+#[must_use]
+#[export_name = "cursor_get_mode_idx"]
 pub unsafe extern "C" fn rs_cursor_get_mode_idx() -> c_int {
     let state = nvim_get_state();
 
@@ -312,7 +313,8 @@ unsafe fn copy_shape_settings(from: c_int, to: c_int) {
 ///
 /// # Safety
 /// Calls C accessor functions for `shape_table` and global state.
-#[no_mangle]
+#[must_use]
+#[export_name = "parse_shape_opt"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_parse_shape_opt(what: c_int) -> *const c_char {
     use std::ffi::CStr;

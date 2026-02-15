@@ -22,10 +22,7 @@
 
 extern int rs_cursor_is_block_during_visual(int exclusive);
 extern int rs_cursor_mode_uses_syn_id(int syn_id);
-extern int rs_cursor_get_mode_idx(void);
 extern int rs_cursor_mode_str2int(const char *mode);
-extern void rs_clear_shape_table(void);
-extern const char *rs_parse_shape_opt(int what);
 
 /// Handling of cursor and mouse pointer shapes in various modes.
 cursorentry_T shape_table[SHAPE_IDX_COUNT] = {
@@ -96,18 +93,6 @@ Array mode_style_array(Arena *arena)
   return all;
 }
 
-/// Parses the 'guicursor' option.
-///
-/// Clears `shape_table` if 'guicursor' is empty.
-///
-/// @param what SHAPE_CURSOR or SHAPE_MOUSE ('mouseshape')
-///
-/// @returns error message for an illegal option, NULL otherwise.
-const char *parse_shape_opt(int what)
-{
-  return rs_parse_shape_opt(what);
-}
-
 /// Returns true if the cursor is non-blinking "block" shape during
 /// visual selection.
 ///
@@ -136,19 +121,6 @@ bool cursor_mode_uses_syn_id(int syn_id)
   FUNC_ATTR_PURE
 {
   return rs_cursor_mode_uses_syn_id(syn_id) != 0;
-}
-
-/// Return the index into shape_table[] for the current mode.
-int cursor_get_mode_idx(void)
-  FUNC_ATTR_PURE
-{
-  return rs_cursor_get_mode_idx();
-}
-
-/// Clears all entries in shape_table to block, blinkon0, and default color.
-static void clear_shape_table(void)
-{
-  rs_clear_shape_table();
 }
 
 // Rust FFI accessor functions for shape_table

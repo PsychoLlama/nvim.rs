@@ -55,4 +55,8 @@ typedef struct {
 
 extern cursorentry_T shape_table[SHAPE_IDX_COUNT];
 
+// Rust-exported functions
+const char *parse_shape_opt(int what);
+int cursor_get_mode_idx(void);
+
 #include "cursor_shape.h.generated.h"
