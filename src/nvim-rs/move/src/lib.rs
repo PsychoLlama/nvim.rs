@@ -79,6 +79,7 @@ extern "C" {
     fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
     fn rs_conceal_cursor_line(wp: WinHandle) -> c_int;
     fn nvim_decor_conceal_line(wp: WinHandle, lnum: LinenrT, check_toggle: c_int) -> c_int;
+    #[link_name = "changed_window_setting"]
     fn rs_changed_window_setting(wp: WinHandle);
 
     // Topline/botline
@@ -140,7 +141,7 @@ const VALID_COL_CHANGE: c_int = VALID_WROW | VALID_WCOL | VALID_VIRTCOL;
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "check_cursor_moved"]
 pub unsafe extern "C" fn rs_check_cursor_moved(wp: WinHandle) {
     if wp.is_null() {
         return;
@@ -223,7 +224,8 @@ pub unsafe extern "C" fn rs_check_cursor_moved(wp: WinHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[must_use]
+#[export_name = "cursor_valid"]
 pub unsafe extern "C" fn rs_cursor_valid(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
@@ -244,7 +246,7 @@ pub unsafe extern "C" fn rs_cursor_valid(wp: WinHandle) -> c_int {
 ///
 /// # Safety
 /// Accesses curwin global.
-#[no_mangle]
+#[export_name = "update_curswant_force"]
 pub unsafe extern "C" fn rs_update_curswant_force() {
     let wp = nvim_get_curwin();
     if wp.is_null() {
@@ -261,7 +263,7 @@ pub unsafe extern "C" fn rs_update_curswant_force() {
 ///
 /// # Safety
 /// Accesses curwin global.
-#[no_mangle]
+#[export_name = "update_curswant"]
 pub unsafe extern "C" fn rs_update_curswant() {
     let wp = nvim_get_curwin();
     if wp.is_null() {
@@ -520,7 +522,7 @@ const MAXCOL: c_int = i32::MAX;
 /// # Safety
 /// `wp` must be a valid window handle.
 /// `loff` must be a valid pointer to a `LineOff` struct.
-#[no_mangle]
+#[export_name = "topline_back_winheight"]
 pub unsafe extern "C" fn rs_topline_back_winheight(
     wp: WinHandle,
     loff: *mut LineOff,
@@ -565,7 +567,7 @@ pub unsafe extern "C" fn rs_topline_back_winheight(
 /// # Safety
 /// `wp` must be a valid window handle.
 /// `loff` must be a valid pointer to a `LineOff` struct.
-#[no_mangle]
+#[export_name = "topline_back"]
 pub unsafe extern "C" fn rs_topline_back(wp: WinHandle, loff: *mut LineOff) {
     rs_topline_back_winheight(wp, loff, 1);
 }
@@ -579,7 +581,7 @@ pub unsafe extern "C" fn rs_topline_back(wp: WinHandle, loff: *mut LineOff) {
 /// # Safety
 /// `wp` must be a valid window handle.
 /// `loff` must be a valid pointer to a `LineOff` struct.
-#[no_mangle]
+#[export_name = "botline_forw"]
 pub unsafe extern "C" fn rs_botline_forw(wp: WinHandle, loff: *mut LineOff) {
     if wp.is_null() || loff.is_null() {
         return;
@@ -729,7 +731,8 @@ pub unsafe extern "C" fn rs_cursor_at_or_below_botline(wp: WinHandle) -> c_int {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[must_use]
+#[export_name = "check_top_offset"]
 pub unsafe extern "C" fn rs_check_top_offset(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
@@ -809,6 +812,7 @@ extern "C" {
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
 
     // Plines accessor (from plines crate)
+    #[link_name = "adjust_plines_for_skipcol"]
     fn rs_adjust_plines_for_skipcol(wp: WinHandle) -> c_int;
 
     // Plines functions
@@ -857,7 +861,7 @@ const OPT_CULOPT_FLAG_SCREENLINE: c_int = 0x02;
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "reset_skipcol"]
 pub unsafe extern "C" fn rs_reset_skipcol(wp: WinHandle) {
     if wp.is_null() {
         return;
@@ -885,7 +889,7 @@ pub unsafe extern "C" fn rs_reset_skipcol(wp: WinHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "redraw_for_cursorline"]
 pub unsafe extern "C" fn rs_redraw_for_cursorline(wp: WinHandle) {
     if wp.is_null() {
         return;
@@ -914,7 +918,7 @@ pub unsafe extern "C" fn rs_redraw_for_cursorline(wp: WinHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "redraw_for_cursorcolumn"]
 pub unsafe extern "C" fn rs_redraw_for_cursorcolumn(wp: WinHandle) {
     if wp.is_null() {
         return;
@@ -969,6 +973,7 @@ pub unsafe extern "C" fn rs_redraw_for_cursorcolumn(wp: WinHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
+#[must_use]
 #[no_mangle]
 pub unsafe extern "C" fn rs_plines_correct_topline(
     wp: WinHandle,
@@ -1003,7 +1008,7 @@ pub unsafe extern "C" fn rs_plines_correct_topline(
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "comp_botline"]
 pub unsafe extern "C" fn rs_comp_botline(wp: WinHandle) {
     if wp.is_null() {
         return;
@@ -1082,7 +1087,7 @@ pub unsafe extern "C" fn rs_comp_botline(wp: WinHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "validate_virtcol"]
 pub unsafe extern "C" fn rs_validate_virtcol(wp: WinHandle) {
     if wp.is_null() {
         return;
@@ -1125,7 +1130,7 @@ pub unsafe extern "C" fn rs_validate_virtcol(wp: WinHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "validate_cheight"]
 pub unsafe extern "C" fn rs_validate_cheight(wp: WinHandle) {
     if wp.is_null() {
         return;
@@ -1160,7 +1165,7 @@ pub unsafe extern "C" fn rs_validate_cheight(wp: WinHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "validate_botline"]
 pub unsafe extern "C" fn rs_validate_botline(wp: WinHandle) {
     if wp.is_null() {
         return;
@@ -1178,7 +1183,7 @@ pub unsafe extern "C" fn rs_validate_botline(wp: WinHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "validate_cursor"]
 pub unsafe extern "C" fn rs_validate_cursor(wp: WinHandle) {
     if wp.is_null() {
         return;
@@ -1199,7 +1204,9 @@ pub unsafe extern "C" fn rs_validate_cursor(wp: WinHandle) {
 
 extern "C" {
     // Column offsets (from plines crate)
+    #[link_name = "win_col_off"]
     fn rs_win_col_off(wp: WinHandle) -> c_int;
+    #[link_name = "win_col_off2"]
     fn rs_win_col_off2(wp: WinHandle) -> c_int;
 
     // Window accessors for column operations
@@ -1364,7 +1371,7 @@ extern "C" {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "check_topfill"]
 pub unsafe extern "C" fn rs_check_topfill(wp: WinHandle, down: c_int) {
     if wp.is_null() {
         return;
@@ -1440,7 +1447,8 @@ const SCROLL_CURSOR_MOVED_BITS: c_int =
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[must_use]
+#[export_name = "scrolldown"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfold: c_int) -> c_int {
     if wp.is_null() {
@@ -1650,7 +1658,8 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[must_use]
+#[export_name = "scrollup"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_scrollup(wp: WinHandle, line_count: LinenrT, byfold: c_int) -> c_int {
     if wp.is_null() {
@@ -1811,7 +1820,7 @@ mod upd_valid {
 ///
 /// # Safety
 /// Accesses curwin global and modifies window state.
-#[no_mangle]
+#[export_name = "scroll_redraw"]
 pub unsafe extern "C" fn rs_scroll_redraw(up: c_int, count: LinenrT) {
     let wp = nvim_get_curwin();
     if wp.is_null() {
@@ -1913,6 +1922,7 @@ extern "C" {
 
 extern "C" {
     /// Calculate the skipcol value for a given number of physical lines offset.
+    #[link_name = "skipcol_from_plines"]
     fn rs_skipcol_from_plines(wp: WinHandle, plines_off: c_int) -> ColnrT;
 }
 
@@ -1931,7 +1941,7 @@ extern "C" {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "scroll_cursor_halfway"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_scroll_cursor_halfway(
     wp: WinHandle,
@@ -2135,7 +2145,7 @@ pub unsafe extern "C" fn rs_scroll_cursor_halfway(
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "scroll_cursor_top"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_scroll_cursor_top(wp: WinHandle, min_scroll: c_int, always: c_int) {
     if wp.is_null() {
@@ -2309,7 +2319,7 @@ pub unsafe extern "C" fn rs_scroll_cursor_top(wp: WinHandle, min_scroll: c_int, 
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "set_empty_rows"]
 pub unsafe extern "C" fn rs_set_empty_rows(wp: WinHandle, used: c_int) {
     if wp.is_null() {
         return;
@@ -2351,7 +2361,7 @@ pub unsafe extern "C" fn rs_set_empty_rows(wp: WinHandle, used: c_int) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "scroll_cursor_bot"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, set_topbot: c_int) {
     if wp.is_null() {
@@ -2621,9 +2631,9 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
         rs_scroll_cursor_halfway(wp, 0, 1);
     } else if line_count_scroll > 0 {
         if do_sms {
-            rs_scrollup(wp, scrolled, 1); // TODO(vim):
+            let _ = rs_scrollup(wp, scrolled, 1); // TODO(vim):
         } else {
-            rs_scrollup(wp, line_count_scroll, 1);
+            let _ = rs_scrollup(wp, line_count_scroll, 1);
         }
     }
 
@@ -2661,7 +2671,7 @@ extern "C" {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "set_valid_virtcol"]
 pub unsafe extern "C" fn rs_set_valid_virtcol(wp: WinHandle, vcol: ColnrT) {
     if wp.is_null() {
         return;
@@ -2689,7 +2699,7 @@ extern "C" {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "set_topline"]
 pub unsafe extern "C" fn rs_set_topline(wp: WinHandle, lnum: LinenrT) {
     if wp.is_null() {
         return;
@@ -2737,7 +2747,7 @@ extern "C" {
 ///
 /// # Safety
 /// Accesses curwin and curbuf globals.
-#[no_mangle]
+#[export_name = "scrolldown_clamp"]
 pub unsafe extern "C" fn rs_scrolldown_clamp() {
     let wp = nvim_get_curwin();
     if wp.is_null() {
@@ -2813,7 +2823,7 @@ pub unsafe extern "C" fn rs_scrolldown_clamp() {
 ///
 /// # Safety
 /// Accesses curwin and curbuf globals.
-#[no_mangle]
+#[export_name = "scrollup_clamp"]
 pub unsafe extern "C" fn rs_scrollup_clamp() {
     let wp = nvim_get_curwin();
     if wp.is_null() {
@@ -2875,6 +2885,7 @@ pub unsafe extern "C" fn rs_scrollup_clamp() {
 
 extern "C" {
     // Smooth scroll marker overlap
+    #[link_name = "sms_marker_overlap"]
     fn rs_sms_marker_overlap(wp: WinHandle, extra2: c_int) -> c_int;
 
     // Cursor position setters for coladd
@@ -2886,7 +2897,7 @@ extern "C" {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "cursor_correct_sms"]
 pub unsafe extern "C" fn rs_cursor_correct_sms(wp: WinHandle) {
     if wp.is_null() {
         return;
@@ -2998,7 +3009,7 @@ pub unsafe extern "C" fn rs_cursor_correct_sms(wp: WinHandle) {
 ///
 /// # Safety
 /// Accesses curwin global.
-#[no_mangle]
+#[export_name = "adjust_skipcol"]
 pub unsafe extern "C" fn rs_adjust_skipcol() {
     let wp = nvim_get_curwin();
     if wp.is_null() {
@@ -3118,7 +3129,7 @@ pub unsafe extern "C" fn rs_adjust_skipcol() {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "cursor_correct"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_cursor_correct(wp: WinHandle) {
     if wp.is_null() {
@@ -3290,7 +3301,8 @@ extern "C" {
 ///
 /// # Safety
 /// Accesses curwin and curbuf globals.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_scroll_overlap"]
 pub unsafe extern "C" fn rs_get_scroll_overlap(dir: c_int) -> c_int {
     let wp = nvim_get_curwin();
     if wp.is_null() {
@@ -3403,7 +3415,8 @@ pub unsafe extern "C" fn rs_get_scroll_overlap(dir: c_int) -> c_int {
 ///
 /// # Safety
 /// Accesses curwin global and modifies window state.
-#[no_mangle]
+#[must_use]
+#[export_name = "scroll_with_sms"]
 pub unsafe extern "C" fn rs_scroll_with_sms(
     dir: c_int,
     mut count: c_int,
@@ -3524,7 +3537,8 @@ extern "C" {
 ///
 /// # Safety
 /// Accesses curwin and curbuf globals.
-#[no_mangle]
+#[must_use]
+#[export_name = "pagescroll"]
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int) -> c_int {
@@ -3850,7 +3864,8 @@ pub unsafe extern "C" fn rs_textpos2screenpos(
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[must_use]
+#[export_name = "virtcol2col"]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_virtcol2col(wp: WinHandle, lnum: LinenrT, vcol: c_int) -> c_int {
     if wp.is_null() {
@@ -3959,7 +3974,7 @@ static mut PREV_CURSOR_COLADD: ColnrT = 0;
 ///
 /// # Safety
 /// Modifies global state (curwin, curbuf, `VIsual_select`, `VIsual_active`).
-#[no_mangle]
+#[export_name = "do_check_cursorbind"]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_do_check_cursorbind() {
     let curwin = nvim_get_curwin();
@@ -4086,7 +4101,7 @@ extern "C" {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "curs_rows"]
 #[allow(clippy::too_many_lines)] // Direct port of C function - complexity justified
 pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
     if wp.is_null() {
@@ -4271,7 +4286,7 @@ extern "C" {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "curs_columns"]
 #[allow(clippy::too_many_lines, clippy::similar_names)] // Direct port of C function
 pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
     if wp.is_null() {
@@ -4593,6 +4608,7 @@ extern "C" {
     fn nvim_win_buf_is_empty(wp: WinHandle) -> c_int;
 
     // Scrolljump value (from plines crate)
+    #[link_name = "scrolljump_value"]
     fn rs_scrolljump_value(wp: WinHandle) -> c_int;
 }
 
@@ -4618,7 +4634,7 @@ unsafe fn win_buf_is_empty(wp: WinHandle) -> bool {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "update_topline"]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
     if wp.is_null() {

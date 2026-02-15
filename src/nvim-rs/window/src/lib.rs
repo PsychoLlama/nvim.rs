@@ -2692,7 +2692,7 @@ fn invalidate_botline_impl(wp: WinHandle) {
 /// FFI wrapper for `invalidate_botline`.
 ///
 /// Clears the VALID_BOTLINE and VALID_BOTLINE_AP flags from the window.
-#[no_mangle]
+#[export_name = "invalidate_botline"]
 pub extern "C" fn rs_invalidate_botline(wp: WinHandle) {
     invalidate_botline_impl(wp);
 }
@@ -2715,7 +2715,7 @@ fn approximate_botline_win_impl(wp: WinHandle) {
 /// FFI wrapper for `approximate_botline_win`.
 ///
 /// Clears only the VALID_BOTLINE flag (keeps VALID_BOTLINE_AP).
-#[no_mangle]
+#[export_name = "approximate_botline_win"]
 pub extern "C" fn rs_approximate_botline_win(wp: WinHandle) {
     approximate_botline_win_impl(wp);
 }
@@ -2740,7 +2740,7 @@ fn changed_cline_bef_curs_impl(wp: WinHandle) {
 /// FFI wrapper for `changed_cline_bef_curs`.
 ///
 /// Clears validity flags when cursor line length changed before cursor.
-#[no_mangle]
+#[export_name = "changed_cline_bef_curs"]
 pub extern "C" fn rs_changed_cline_bef_curs(wp: WinHandle) {
     changed_cline_bef_curs_impl(wp);
 }
@@ -2770,7 +2770,7 @@ fn changed_line_abv_curs_impl() {
 /// FFI wrapper for `changed_line_abv_curs`.
 ///
 /// Clears validity flags on curwin when a line above cursor changed.
-#[no_mangle]
+#[export_name = "changed_line_abv_curs"]
 pub extern "C" fn rs_changed_line_abv_curs() {
     changed_line_abv_curs_impl();
 }
@@ -2794,7 +2794,7 @@ fn changed_line_abv_curs_win_impl(wp: WinHandle) {
 /// FFI wrapper for `changed_line_abv_curs_win`.
 ///
 /// Clears validity flags on the given window when a line above cursor changed.
-#[no_mangle]
+#[export_name = "changed_line_abv_curs_win"]
 pub extern "C" fn rs_changed_line_abv_curs_win(wp: WinHandle) {
     changed_line_abv_curs_win_impl(wp);
 }
@@ -2835,7 +2835,7 @@ fn changed_window_setting_impl(wp: WinHandle) {
 /// FFI wrapper for `changed_window_setting`.
 ///
 /// Handles window setting changes that require recomputation.
-#[no_mangle]
+#[export_name = "changed_window_setting"]
 pub extern "C" fn rs_changed_window_setting(wp: WinHandle) {
     changed_window_setting_impl(wp);
 }
@@ -2863,7 +2863,7 @@ fn changed_window_setting_all_impl() {
 /// FFI wrapper for `changed_window_setting_all`.
 ///
 /// Calls `changed_window_setting` for every window in all tabpages.
-#[no_mangle]
+#[export_name = "changed_window_setting_all"]
 pub extern "C" fn rs_changed_window_setting_all() {
     changed_window_setting_all_impl();
 }

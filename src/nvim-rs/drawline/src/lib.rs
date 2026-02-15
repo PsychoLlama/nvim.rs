@@ -115,7 +115,9 @@ extern "C" {
     fn rs_schar_from_char(c: c_int) -> ScharT;
 
     // Display width functions
+    #[link_name = "win_col_off"]
     fn rs_win_col_off(wp: WinHandle) -> c_int;
+    #[link_name = "win_col_off2"]
     fn rs_win_col_off2(wp: WinHandle) -> c_int;
     fn rs_number_width(wp: WinHandle) -> c_int;
 

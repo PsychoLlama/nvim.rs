@@ -819,7 +819,8 @@ pub extern "C" fn rs_win_may_fill(wp: WinHandle) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
+#[must_use]
+#[export_name = "win_col_off"]
 pub extern "C" fn rs_win_col_off(wp: WinHandle) -> c_int {
     win_col_off_impl(wp)
 }
@@ -828,7 +829,8 @@ pub extern "C" fn rs_win_col_off(wp: WinHandle) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
+#[must_use]
+#[export_name = "win_col_off2"]
 pub extern "C" fn rs_win_col_off2(wp: WinHandle) -> c_int {
     win_col_off2_impl(wp)
 }
@@ -858,7 +860,8 @@ pub extern "C" fn rs_get_showbreak_value(wp: WinHandle) -> *const c_char {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
+#[must_use]
+#[export_name = "sms_marker_overlap"]
 pub extern "C" fn rs_sms_marker_overlap(wp: WinHandle, extra2: c_int) -> c_int {
     sms_marker_overlap_impl(wp, extra2)
 }
@@ -2067,7 +2070,8 @@ fn adjust_plines_for_skipcol_impl(wp: WinHandle) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid window handle.
-#[no_mangle]
+#[must_use]
+#[export_name = "adjust_plines_for_skipcol"]
 pub extern "C" fn rs_adjust_plines_for_skipcol(wp: WinHandle) -> c_int {
     adjust_plines_for_skipcol_impl(wp)
 }
@@ -2099,7 +2103,8 @@ fn skipcol_from_plines_impl(wp: WinHandle, plines_off: c_int) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid window handle.
-#[no_mangle]
+#[must_use]
+#[export_name = "skipcol_from_plines"]
 pub extern "C" fn rs_skipcol_from_plines(wp: WinHandle, plines_off: c_int) -> c_int {
     skipcol_from_plines_impl(wp, plines_off)
 }
@@ -2132,7 +2137,8 @@ fn scrolljump_value_impl(wp: WinHandle) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid window handle.
-#[no_mangle]
+#[must_use]
+#[export_name = "scrolljump_value"]
 pub extern "C" fn rs_scrolljump_value(wp: WinHandle) -> c_int {
     scrolljump_value_impl(wp)
 }
