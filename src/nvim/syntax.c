@@ -57,6 +57,10 @@ extern void rs_syntax_end_parsing_impl(win_T *wp, int lnum);
 extern void rs_load_current_state(synstate_T *from);
 extern int rs_get_syntax_attr(int col, int *can_spell, int keep_state);
 extern int rs_syn_get_foldlevel_impl(win_T *wp, int lnum);
+extern void rs_pop_current_state(void);
+extern void rs_push_current_state(int idx);
+extern int rs_check_keyword_id(char *line, int startcol, int *endcolp, int *flagsp,
+                                int16_t **next_listp, stateitem_T *cur_si, int *ccharp);
 
 // Phase 541: Syntax state machine functions from Rust
 extern int rs_syn_current_lnum(void);
@@ -431,12 +435,6 @@ static void clear_syn_state(synstate_T *p)
   }
 }
 
-// Cleanup the current_state stack.
-static void clear_current_state(void)
-{
-#define UNREF_STATEITEM_EXTMATCH(si) unref_extmatch((si)->si_extmatch)
-  GA_DEEP_CLEAR(&current_state, stateitem_T, UNREF_STATEITEM_EXTMATCH);
-}
 
 // Try to find a synchronisation point for line "lnum".
 //
@@ -445,10 +443,6 @@ static void clear_current_state(void)
 // 1. Search backwards for the end of a C-comment.
 // 2. Search backwards for given sync patterns.
 // 3. Simply start on a given number of lines above "lnum".
-static void syn_sync(win_T *wp, linenr_T start_lnum, synstate_T *last_valid)
-{
-  rs_syn_sync(wp, start_lnum, last_valid);
-}
 
 static void save_chartab(char *chartab)
 {
@@ -499,7 +493,7 @@ static void syn_start_line(void)
   // previous line and regions that have "keepend".
   if (!GA_EMPTY(&current_state)) {
     syn_update_ends(true);
-    check_state_ends();
+    rs_check_state_ends();
   }
 
   next_match_idx = -1;
@@ -559,7 +553,7 @@ static void syn_update_ends(bool startofline)
       cur_si->si_h_startpos.lnum = current_lnum;
 
       if (!(cur_si->si_flags & HL_MATCHCONT)) {
-        update_si_end(cur_si, (int)current_col, !startofline);
+        rs_update_si_end(cur_si, (int)current_col, !startofline ? 1 : 0);
       }
 
       if (!startofline && (cur_si->si_flags & HL_KEEPEND)) {
@@ -567,7 +561,7 @@ static void syn_update_ends(bool startofline)
       }
     }
   }
-  check_keepend();
+  rs_check_keepend();
 }
 
 /////////////////////////////////////////
@@ -854,7 +848,7 @@ void syntax_end_parsing(win_T *wp, linenr_T lnum)
 
 static void invalidate_current_state(void)
 {
-  clear_current_state();
+  nvim_syn_clear_current_state();
   current_state.ga_itemsize = 0;        // mark current_state invalid
   current_next_list = NULL;
   keepend_level = -1;
@@ -873,15 +867,7 @@ bool syntax_check_changed(linenr_T lnum)
 }
 
 /// Finish the current line.
-/// This doesn't return any attributes, it only gets the state at the end of
-/// the line.  It can start anywhere in the line, as long as the current state
-/// is valid.
-///
-/// @param syncing  called for syncing
-static bool syn_finish_line(const bool syncing)
-{
-  return rs_syn_finish_line(syncing);
-}
+
 
 /// Gets highlight attributes for next character.
 /// Must first call syntax_start() once for the line.
@@ -904,50 +890,10 @@ int get_syntax_attr(const colnr_T col, bool *const can_spell, const bool keep_st
   return attr;
 }
 
-/// Get syntax attributes for current_lnum, current_col.
-///
-/// @param syncing     When true: called for syncing
-/// @param displaying  result will be displayed
-/// @param can_spell   return: do spell checking
-/// @param keep_state  keep syntax stack afterwards
-static int syn_current_attr(const bool syncing, const bool displaying, bool *const can_spell,
-                            const bool keep_state)
-{
-  return rs_syn_current_attr_impl(syncing, displaying, can_spell, keep_state);
-}
 
 
-/// @return  true if we already matched pattern "idx" at the current column.
-static bool did_match_already(int idx, garray_T *gap)
-{
-  return rs_did_match_already(idx, (int *)gap->ga_data, gap->ga_len);
-}
 
-// Push the next match onto the stack.
-static stateitem_T *push_next_match(void)
-{
-  return rs_push_next_match();
-}
 
-// Check for end of current state (and the states before it).
-static void check_state_ends(void)
-{
-  rs_check_state_ends();
-}
-
-// Update an entry in the current_state stack for a match or region.  This
-// fills in si_attr, si_next_list and si_cont_list.
-static void update_si_attr(int idx)
-{
-  rs_update_si_attr(idx);
-}
-
-// Check the current stack for patterns with "keepend" flag.
-// Propagate the match-end to contained items, until a "skipend" item is found.
-static void check_keepend(void)
-{
-  rs_check_keepend();
-}
 
 /// Update an entry in the current_state stack for a start-skip-end pattern.
 /// This finds the end of the current item, if it's in the current line.
@@ -955,63 +901,6 @@ static void check_keepend(void)
 /// @param startcol  where to start searching for the end
 /// @param force     when true overrule a previous end
 ///
-/// @return          the flags for the matched END.
-static void update_si_end(stateitem_T *sip, int startcol, bool force)
-{
-  rs_update_si_end(sip, startcol, force ? 1 : 0);
-}
-
-// Add a new state to the current state stack.
-// It is cleared and the index set to "idx".
-static void push_current_state(int idx)
-{
-  stateitem_T *p = GA_APPEND_VIA_PTR(stateitem_T, &current_state);
-  CLEAR_POINTER(p);
-  p->si_idx = idx;
-}
-
-// Remove a state from the current_state stack.
-static void pop_current_state(void)
-{
-  if (!GA_EMPTY(&current_state)) {
-    unref_extmatch(CUR_STATE(current_state.ga_len - 1).si_extmatch);
-    current_state.ga_len--;
-  }
-  // after the end of a pattern, try matching a keyword or pattern
-  next_match_idx = -1;
-
-  // if first state with "keepend" is popped, reset keepend_level
-  if (keepend_level >= current_state.ga_len) {
-    keepend_level = -1;
-  }
-}
-
-/// Find the end of a start/skip/end syntax region after "startpos".
-/// Only checks one line.
-/// Also handles a match item that continued from a previous line.
-/// If not found, the syntax item continues in the next line.  m_endpos->lnum
-/// will be 0.
-/// If found, the end of the region and the end of the highlighting is
-/// computed.
-///
-/// @param idx         index of the pattern
-/// @param startpos    where to start looking for an END match
-/// @param m_endpos    return: end of match
-/// @param hl_endpos   return: end of highlighting
-/// @param flagsp      return: flags of matching END
-/// @param end_endpos  return: end of end pattern match
-/// @param end_idx     return: group ID for end pat. match, or 0
-/// @param start_ext   submatches from the start pattern
-static void find_endpos(int idx, lpos_T *startpos, lpos_T *m_endpos, lpos_T *hl_endpos, int *flagsp,
-                        lpos_T *end_endpos, int *end_idx, reg_extmatch_T *start_ext)
-{
-  rs_find_endpos(idx, startpos->lnum, startpos->col,
-                 &m_endpos->lnum, &m_endpos->col,
-                 &hl_endpos->lnum, &hl_endpos->col,
-                 flagsp,
-                 &end_endpos->lnum, &end_endpos->col,
-                 end_idx, start_ext);
-}
 
 
 /// Get current line in syntax buffer.
@@ -1072,83 +961,6 @@ static bool syn_regexec(regmmatch_T *rmp, linenr_T lnum, colnr_T col, syn_time_T
   return false;
 }
 
-/// Check one position in a line for a matching keyword.
-/// The caller must check if a keyword can start at startcol.
-/// Return its ID if found, 0 otherwise.
-///
-/// @param startcol    position in line to check for keyword
-/// @param endcolp     return: character after found keyword
-/// @param flagsp      return: flags of matching keyword
-/// @param next_listp  return: next_list of matching keyword
-/// @param cur_si      item at the top of the stack
-/// @param ccharp      conceal substitution char
-static int check_keyword_id(char *const line, const int startcol, int *const endcolp,
-                            int *const flagsp, int16_t **const next_listp,
-                            stateitem_T *const cur_si, int *const ccharp)
-{
-  // Find first character after the keyword.  First character was already
-  // checked.
-  char *const kwp = line + startcol;
-  int kwlen = 0;
-  do {
-    kwlen += utfc_ptr2len(kwp + kwlen);
-  } while (vim_iswordp_buf(kwp + kwlen, syn_buf));
-
-  if (kwlen > MAXKEYWLEN) {
-    return 0;
-  }
-
-  // Must make a copy of the keyword, so we can add a NUL and make it
-  // lowercase.
-  char keyword[MAXKEYWLEN + 1];         // assume max. keyword len is 80
-  xmemcpyz(keyword, kwp, (size_t)kwlen);
-
-  keyentry_T *kp = NULL;
-
-  // matching case
-  if (syn_block->b_keywtab.ht_used != 0) {
-    kp = match_keyword(keyword, &syn_block->b_keywtab, cur_si);
-  }
-
-  // ignoring case
-  if (kp == NULL && syn_block->b_keywtab_ic.ht_used != 0) {
-    str_foldcase(kwp, kwlen, keyword, MAXKEYWLEN + 1);
-    kp = match_keyword(keyword, &syn_block->b_keywtab_ic, cur_si);
-  }
-
-  if (kp != NULL) {
-    *endcolp = startcol + kwlen;
-    *flagsp = kp->flags;
-    *next_listp = kp->next_list;
-    *ccharp = kp->k_char;
-    return kp->k_syn.id;
-  }
-
-  return 0;
-}
-
-/// Find keywords that match.  There can be several with different
-/// attributes.
-/// When current_next_list is non-zero accept only that group, otherwise:
-///  Accept a not-contained keyword at toplevel.
-///  Accept a keyword at other levels only if it is in the contains list.
-static keyentry_T *match_keyword(char *keyword, hashtab_T *ht, stateitem_T *cur_si)
-{
-  hashitem_T *hi = hash_find(ht, keyword);
-  if (!HASHITEM_EMPTY(hi)) {
-    for (keyentry_T *kp = HI2KE(hi); kp != NULL; kp = kp->ke_next) {
-      if (current_next_list != 0
-          ? in_id_list(NULL, current_next_list, &kp->k_syn, 0)
-          : (cur_si == NULL
-             ? !(kp->flags & HL_CONTAINED)
-             : in_id_list(cur_si, cur_si->si_cont_list,
-                          &kp->k_syn, kp->flags))) {
-        return kp;
-      }
-    }
-  }
-  return NULL;
-}
 
 // Handle ":syntax conceal" command.
 static void syn_cmd_conceal(exarg_T *eap, int syncing)
@@ -4525,7 +4337,8 @@ void nvim_syn_set_state_stored(int stored)
 /// Call clear_current_state()
 void nvim_syn_clear_current_state(void)
 {
-  clear_current_state();
+#define UNREF_STATEITEM_EXTMATCH(si) unref_extmatch((si)->si_extmatch)
+  GA_DEEP_CLEAR(&current_state, stateitem_T, UNREF_STATEITEM_EXTMATCH);
 }
 
 /// Call validate_current_state()
@@ -4655,7 +4468,7 @@ void nvim_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr
 void nvim_syn_update_si_attr(int idx)
 {
   if (idx >= 0 && idx < current_state.ga_len) {
-    update_si_attr(idx);
+    rs_update_si_attr(idx);
   }
 }
 
@@ -4918,31 +4731,43 @@ int16_t *nvim_syn_get_current_next_list_ptr(void)
 /// Call check_state_ends
 void nvim_syn_check_state_ends(void)
 {
-  check_state_ends();
+  rs_check_state_ends();
 }
 
 /// Call update_si_attr
 void nvim_syn_call_update_si_attr(int idx)
 {
-  update_si_attr(idx);
+  rs_update_si_attr(idx);
 }
 
 /// Call check_keepend
 void nvim_syn_check_keepend(void)
 {
-  check_keepend();
+  rs_check_keepend();
 }
 
 /// Call pop_current_state
 void nvim_syn_pop_current_state(void)
 {
-  pop_current_state();
+  if (!GA_EMPTY(&current_state)) {
+    unref_extmatch(CUR_STATE(current_state.ga_len - 1).si_extmatch);
+    current_state.ga_len--;
+  }
+  // after the end of a pattern, try matching a keyword or pattern
+  next_match_idx = -1;
+
+  // if first state with "keepend" is popped, reset keepend_level
+  if (keepend_level >= current_state.ga_len) {
+    keepend_level = -1;
+  }
 }
 
 /// Call push_current_state
 void nvim_syn_push_current_state(int idx)
 {
-  push_current_state(idx);
+  stateitem_T *p = GA_APPEND_VIA_PTR(stateitem_T, &current_state);
+  CLEAR_POINTER(p);
+  p->si_idx = idx;
 }
 
 /// Get the current line at the current column
@@ -5065,7 +4890,45 @@ int nvim_syn_check_keyword_id(char *line, int startcol, int *endcolp,
                                int *flagsp, int16_t **next_listp,
                                stateitem_T *cur_si, int *ccharp)
 {
-  return check_keyword_id(line, startcol, endcolp, flagsp, next_listp, cur_si, ccharp);
+  // Find first character after the keyword.  First character was already
+  // checked.
+  char *const kwp = line + startcol;
+  int kwlen = 0;
+  do {
+    kwlen += utfc_ptr2len(kwp + kwlen);
+  } while (vim_iswordp_buf(kwp + kwlen, syn_buf));
+
+  if (kwlen > MAXKEYWLEN) {
+    return 0;
+  }
+
+  // Must make a copy of the keyword, so we can add a NUL and make it
+  // lowercase.
+  char keyword[MAXKEYWLEN + 1];         // assume max. keyword len is 80
+  xmemcpyz(keyword, kwp, (size_t)kwlen);
+
+  keyentry_T *kp = NULL;
+
+  // matching case
+  if (syn_block->b_keywtab.ht_used != 0) {
+    kp = nvim_syn_match_keyword(keyword, 0, cur_si);
+  }
+
+  // ignoring case
+  if (kp == NULL && syn_block->b_keywtab_ic.ht_used != 0) {
+    str_foldcase(kwp, kwlen, keyword, MAXKEYWLEN + 1);
+    kp = nvim_syn_match_keyword(keyword, 1, cur_si);
+  }
+
+  if (kp != NULL) {
+    *endcolp = startcol + kwlen;
+    *flagsp = kp->flags;
+    *next_listp = kp->next_list;
+    *ccharp = kp->k_char;
+    return kp->k_syn.id;
+  }
+
+  return 0;
 }
 
 /// Call in_id_list from Rust
@@ -5149,7 +5012,20 @@ keyentry_T *nvim_syn_match_keyword(char *keyword, int use_ic, stateitem_T *cur_s
     return NULL;
   }
   hashtab_T *ht = use_ic ? &syn_block->b_keywtab_ic : &syn_block->b_keywtab;
-  return match_keyword(keyword, ht, cur_si);
+  hashitem_T *hi = hash_find(ht, keyword);
+  if (!HASHITEM_EMPTY(hi)) {
+    for (keyentry_T *kp = HI2KE(hi); kp != NULL; kp = kp->ke_next) {
+      if (current_next_list != 0
+          ? in_id_list(NULL, current_next_list, &kp->k_syn, 0)
+          : (cur_si == NULL
+             ? !(kp->flags & HL_CONTAINED)
+             : in_id_list(cur_si, cur_si->si_cont_list,
+                          &kp->k_syn, kp->flags))) {
+        return kp;
+      }
+    }
+  }
+  return NULL;
 }
 
 /// Copy and fold case for keyword
@@ -5312,13 +5188,13 @@ void nvim_syn_unref_extmatch(reg_extmatch_T *em)
 /// Call update_si_end from Rust
 void nvim_syn_update_si_end(stateitem_T *sip, int startcol, int force)
 {
-  update_si_end(sip, startcol, force != 0);
+  rs_update_si_end(sip, startcol, force);
 }
 
 /// Call push_next_match from Rust
 stateitem_T *nvim_syn_push_next_match(void)
 {
-  return push_next_match();
+  return rs_push_next_match();
 }
 
 /// Call find_endpos from Rust
@@ -5328,39 +5204,12 @@ void nvim_syn_find_endpos(int idx, int start_lnum, int start_col,
                           int *flagsp, int *end_end_lnum, int *end_end_col,
                           int *end_idx, reg_extmatch_T *start_ext)
 {
-  lpos_T startpos = { .lnum = start_lnum, .col = start_col };
-  lpos_T m_endpos = { 0 };
-  lpos_T hl_endpos = { 0 };
-  lpos_T end_endpos = { 0 };
-  int flags = 0;
-  int eidx = 0;
-
-  find_endpos(idx, &startpos, &m_endpos, &hl_endpos, &flags, &end_endpos, &eidx, start_ext);
-
-  if (m_end_lnum) {
-    *m_end_lnum = m_endpos.lnum;
-  }
-  if (m_end_col) {
-    *m_end_col = m_endpos.col;
-  }
-  if (hl_end_lnum) {
-    *hl_end_lnum = hl_endpos.lnum;
-  }
-  if (hl_end_col) {
-    *hl_end_col = hl_endpos.col;
-  }
-  if (flagsp) {
-    *flagsp = flags;
-  }
-  if (end_end_lnum) {
-    *end_end_lnum = end_endpos.lnum;
-  }
-  if (end_end_col) {
-    *end_end_col = end_endpos.col;
-  }
-  if (end_idx) {
-    *end_idx = eidx;
-  }
+  rs_find_endpos(idx, start_lnum, start_col,
+                 m_end_lnum, m_end_col,
+                 hl_end_lnum, hl_end_col,
+                 flagsp,
+                 end_end_lnum, end_end_col,
+                 end_idx, start_ext);
 }
 
 /// Get synpat sp_flags by index
@@ -5512,7 +5361,7 @@ void nvim_syn_start_line(void)
 /// Call syn_finish_line from Rust
 int nvim_syn_finish_line(int syncing)
 {
-  return syn_finish_line(syncing != 0) ? 1 : 0;
+  return rs_syn_finish_line(syncing);
 }
 
 /// Call syn_update_ends from Rust
@@ -6593,8 +6442,8 @@ linenr_T nvim_syn_ccomment_sync_setup(win_T *wp, linenr_T start_lnum)
           == syn_block->b_syn_sync_id
           && SYN_ITEMS(syn_block)[idx].sp_type == SPTYPE_START) {
         validate_current_state();
-        push_current_state(idx);
-        update_si_attr(current_state.ga_len - 1);
+        nvim_syn_push_current_state(idx);
+        rs_update_si_attr(current_state.ga_len - 1);
         break;
       }
     }
