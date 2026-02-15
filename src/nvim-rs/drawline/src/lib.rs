@@ -809,8 +809,8 @@ extern "C" {
     fn nvim_wlv_get_reset_extra_attr(wlv: WlvHandle) -> bool;
     fn nvim_wlv_set_reset_extra_attr(wlv: WlvHandle, val: bool);
 
-    // Highlight functions for set_line_attr_for_diff
-    fn rs_hl_get_underline() -> c_int;
+    // Highlight functions for set_line_attr_for_diff (Rust-exported)
+    fn hl_get_underline() -> c_int;
 
     // handle_breakindent accessors
     fn nvim_win_get_briopt_sbr(wp: WinHandle) -> bool;
@@ -1059,7 +1059,7 @@ unsafe fn set_line_attr_for_diff_impl(wp: WinHandle, wlv: WlvHandle) {
         let new_attr = if line_attr_lowprio != 0 {
             // Low-priority CursorLine: combine with underline
             let combined = hl_combine_attr(cul_attr, line_attr);
-            hl_combine_attr(combined, rs_hl_get_underline())
+            hl_combine_attr(combined, hl_get_underline())
         } else {
             // High-priority CursorLine
             hl_combine_attr(line_attr, cul_attr)

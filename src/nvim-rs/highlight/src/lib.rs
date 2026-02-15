@@ -101,9 +101,6 @@ extern "C" {
     /// Set hl_cached for a namespace. Creates provider if force=true.
     fn nvim_decor_provider_set_hl_cached(ns_id: c_int, cached: bool, force: bool);
 
-    // Highlight functions that need C interop
-    /// Get or create a syntax attribute entry
-    fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int;
     /// Set need_highlight_changed global
     fn nvim_set_need_highlight_changed(value: bool);
 
@@ -624,7 +621,7 @@ static ATTR_STORE: LazyLock<Mutex<AttrEntryStore>> =
 
 /// Initialize the highlight attribute table.
 /// This should be called once during Neovim startup.
-#[no_mangle]
+#[export_name = "highlight_init"]
 pub extern "C" fn rs_highlight_init() {
     let mut store = ATTR_STORE.lock().unwrap();
     store.init();
@@ -639,7 +636,8 @@ pub extern "C" fn rs_attr_entry_count() -> c_int {
 
 /// Get highlight attributes for an attribute ID.
 /// Returns HLATTRS_INIT if the ID is invalid or the tables were cleared.
-#[no_mangle]
+#[must_use]
+#[export_name = "syn_attr2entry"]
 pub extern "C" fn rs_syn_attr2entry(attr: c_int) -> HlAttrs {
     let store = ATTR_STORE.lock().unwrap();
     if let Some(entry) = store.get(attr) {
@@ -824,7 +822,7 @@ pub unsafe extern "C" fn rs_ui_send_hl_group(ui: *mut c_void, hlf: c_int) {
 ///
 /// # Safety
 /// - `ui` must be a valid RemoteUI pointer
-#[no_mangle]
+#[export_name = "ui_send_all_hls"]
 pub unsafe extern "C" fn rs_ui_send_all_hls(ui: *mut c_void) {
     let count = rs_attr_entry_count();
     for i in 1..count {
@@ -862,7 +860,7 @@ pub extern "C" fn rs_clear_hl_tables(reinit: bool) {
 /// Note: we clear the store first (dropping the lock), then call callbacks.
 /// The callbacks (highlight_attr_set_all, etc.) re-enter Rust (hl_get_syn_attr),
 /// so the lock must not be held during callback execution.
-#[no_mangle]
+#[export_name = "clear_hl_tables"]
 pub unsafe extern "C" fn rs_clear_hl_tables_full(reinit: bool) {
     // Phase 1: clear Rust storage (acquires and releases ATTR_STORE lock)
     rs_clear_hl_tables(reinit);
@@ -876,7 +874,7 @@ pub unsafe extern "C" fn rs_clear_hl_tables_full(reinit: bool) {
 }
 
 /// Full hl_invalidate_blends: clears blend caches and refreshes highlights.
-#[no_mangle]
+#[export_name = "hl_invalidate_blends"]
 pub unsafe extern "C" fn rs_hl_invalidate_blends_full() {
     rs_hl_invalidate_blends();
     // highlight_changed and update_window_hl are called from C
@@ -890,7 +888,7 @@ extern "C" {
 
 /// Full highlight_use_hlstate: enables hlstate and clears tables if first time.
 /// Returns true if hl tables were reset.
-#[no_mangle]
+#[export_name = "highlight_use_hlstate"]
 pub unsafe extern "C" fn rs_highlight_use_hlstate_full() -> bool {
     if !rs_highlight_use_hlstate() {
         return false;
@@ -980,7 +978,7 @@ pub extern "C" fn rs_ns_hl_def(ns_id: c_int, hl_id: c_int, attrs: HlAttrs, link_
     let attr_id = if link_id > 0 {
         -1
     } else {
-        unsafe { hl_get_syn_attr(ns_id, hl_id, attrs) }
+        unsafe { rs_hl_get_syn_attr(ns_id, hl_id, attrs) }
     };
 
     // Create and store the ColorItem
@@ -1143,7 +1141,7 @@ pub extern "C" fn rs_ns_get_hl_post(
     let attr_id = if fallback {
         -1
     } else {
-        unsafe { hl_get_syn_attr(ns_id, hl_id, attrs) }
+        unsafe { rs_hl_get_syn_attr(ns_id, hl_id, attrs) }
     };
 
     // Create and store ColorItem
@@ -1219,7 +1217,7 @@ fn compute_ns_get_hl_result(
 /// This replaces the old C ns_get_hl function body. The Lua callback is
 /// dispatched through a C bridge (`c_ns_get_hl_lua_call`), but all other
 /// logic (cache check, dict parsing, result storage) is in Rust.
-#[no_mangle]
+#[export_name = "ns_get_hl"]
 pub unsafe extern "C" fn rs_ns_get_hl_full(
     ns_hl: *mut c_int,
     hl_id: c_int,
@@ -1304,7 +1302,8 @@ pub unsafe extern "C" fn rs_ns_get_hl_full(
 /// 3. Update ns_hl_active and hl_attr_active
 /// 4. If namespace > 0, call update_ns_hl and get namespace attrs
 /// 5. Set need_highlight_changed = true
-#[no_mangle]
+#[must_use]
+#[export_name = "hl_check_ns"]
 pub extern "C" fn rs_hl_check_ns() -> bool {
     // Resolve namespace priority
     let ns_hl_fast = unsafe { nvim_get_ns_hl_fast() };
@@ -1877,7 +1876,7 @@ pub extern "C" fn rs_restore_cterm_colors() {
 ///
 /// # Safety
 /// The wp pointer must be either null or a valid pointer to a win_T struct.
-#[no_mangle]
+#[export_name = "win_check_ns_hl"]
 pub unsafe extern "C" fn rs_win_check_ns_hl(wp: *mut c_void) -> bool {
     // Set ns_hl_win based on whether wp is provided
     let ns_hl = if wp.is_null() {
@@ -1897,7 +1896,8 @@ pub unsafe extern "C" fn rs_win_check_ns_hl(wp: *mut c_void) -> bool {
 /// Creates an attribute entry with just underline style set.
 ///
 /// This mirrors the C function `hl_get_underline(void)`.
-#[no_mangle]
+#[must_use]
+#[export_name = "hl_get_underline"]
 pub extern "C" fn rs_hl_get_underline() -> c_int {
     let entry = HlEntry {
         attr: HlAttrs {
@@ -1925,7 +1925,7 @@ pub extern "C" fn rs_hl_get_underline() -> c_int {
 ///
 /// # Safety
 /// The aep pointer must be valid.
-#[no_mangle]
+#[export_name = "hl_get_term_attr"]
 pub unsafe extern "C" fn rs_hl_get_term_attr(aep: *const HlAttrs) -> c_int {
     if aep.is_null() {
         return 0;
@@ -1951,7 +1951,8 @@ pub unsafe extern "C" fn rs_hl_get_term_attr(aep: *const HlAttrs) -> c_int {
 ///
 /// # Returns
 /// The attribute code with 'winblend' applied.
-#[no_mangle]
+#[must_use]
+#[export_name = "hl_apply_winblend"]
 pub extern "C" fn rs_hl_apply_winblend(winbl: c_int, attr: c_int) -> c_int {
     let mut entry = rs_get_attr_entry_by_id(attr);
     // if blend= attribute is not set, 'winblend' value overrides it.
@@ -1985,7 +1986,8 @@ pub unsafe extern "C" fn rs_hl_add_url_index(url: *const c_char) -> u32 {
 /// This is safe because:
 /// 1. URLs are never removed individually (only during clear_hl_tables)
 /// 2. CString memory is stable (doesn't move during reallocations of Vec)
-#[no_mangle]
+#[must_use]
+#[export_name = "hl_get_url"]
 pub extern "C" fn rs_hl_get_url(index: u32) -> *const c_char {
     let store = ATTR_STORE.lock().unwrap();
     store.get_url_ptr(index)
@@ -2269,7 +2271,7 @@ fn cterm_blend_internal(ratio: c_int, c1: i16, c2: i16) -> i16 {
 ///
 /// # Returns
 /// The combined attribute ID.
-#[no_mangle]
+#[export_name = "hl_combine_attr"]
 pub unsafe extern "C" fn rs_hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
     // Early returns
     if char_attr == 0 {
@@ -2320,7 +2322,7 @@ pub unsafe extern "C" fn rs_hl_combine_attr(char_attr: c_int, prim_attr: c_int) 
 ///
 /// # Returns
 /// The blended attribute ID.
-#[no_mangle]
+#[export_name = "hl_blend_attrs"]
 pub unsafe extern "C" fn rs_hl_blend_attrs(
     back_attr: c_int,
     front_attr: c_int,
@@ -2391,7 +2393,7 @@ pub unsafe extern "C" fn rs_hl_blend_attrs(
 ///
 /// # Returns
 /// The attribute ID, or 0 if all attributes are cleared.
-#[no_mangle]
+#[export_name = "hl_get_syn_attr"]
 pub unsafe extern "C" fn rs_hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int {
     // Check if any meaningful attribute is set
     if at_en.cterm_fg_color != 0
@@ -2424,7 +2426,7 @@ pub unsafe extern "C" fn rs_hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlA
 ///
 /// # Returns
 /// Combined attribute with URL.
-#[no_mangle]
+#[export_name = "hl_add_url"]
 pub unsafe extern "C" fn rs_hl_add_url(attr: c_int, url: *const c_char) -> c_int {
     let mut attrs = HlAttrs::new();
 
@@ -2457,7 +2459,7 @@ pub unsafe extern "C" fn rs_hl_add_url(attr: c_int, url: *const c_char) -> c_int
 ///
 /// # Returns
 /// The attribute ID for the UI highlight.
-#[no_mangle]
+#[export_name = "hl_get_ui_attr"]
 pub unsafe extern "C" fn rs_hl_get_ui_attr(
     ns_id: c_int,
     idx: c_int,
@@ -2513,7 +2515,7 @@ pub unsafe extern "C" fn rs_hl_get_ui_attr(
 ///
 /// # Returns
 /// The background attribute ID for the window.
-#[no_mangle]
+#[export_name = "win_bg_attr"]
 pub unsafe extern "C" fn rs_win_bg_attr(wp: *mut c_void) -> c_int {
     let ns_hl_fast = nvim_get_ns_hl_fast();
     let curwin = nvim_get_curwin();
@@ -2552,7 +2554,7 @@ unsafe fn check_blending(wp: *mut c_void) {
 ///
 /// This function updates the highlight attributes for a window based on its
 /// namespace highlights and floating window configuration.
-#[no_mangle]
+#[export_name = "update_window_hl"]
 pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
     let ns_id = nvim_win_get_ns_hl(wp);
 
@@ -4722,7 +4724,7 @@ const HLATTRS_DICT_SIZE: usize = 16;
 /// # Safety
 /// - `hl` must be a valid pointer to a Dict with capacity >= HLATTRS_DICT_SIZE
 /// - `hl_attrs` must be NULL or a valid pointer to a Dict with capacity >= HLATTRS_DICT_SIZE
-#[no_mangle]
+#[export_name = "hlattrs2dict"]
 pub unsafe extern "C" fn rs_hlattrs2dict(
     hl: *mut Dict,
     hl_attrs: *mut Dict,
@@ -5048,7 +5050,7 @@ extern "C" {
 ///
 /// # Safety
 /// - `arena` must be a valid Arena pointer
-#[no_mangle]
+#[export_name = "hl_inspect"]
 pub unsafe extern "C" fn rs_hl_inspect(attr: c_int, arena: *mut Arena) -> Array {
     if !nvim_get_hlstate_active() {
         return Array::empty();
@@ -5100,7 +5102,7 @@ unsafe fn stricmp_none(data: *const c_char, size: usize) -> bool {
 /// # Safety
 /// - `key` must be a valid null-terminated C string
 /// - `err` must be a valid Error pointer
-#[no_mangle]
+#[export_name = "object_to_color"]
 pub unsafe extern "C" fn rs_object_to_color(
     val: Object,
     key: *const c_char,
@@ -5174,7 +5176,7 @@ const K_ERROR_TYPE_EXCEPTION: c_int = 0;
 /// # Safety
 /// - `arena` must be a valid Arena pointer
 /// - `err` must be a valid Error pointer
-#[no_mangle]
+#[export_name = "hl_get_attr_by_id"]
 pub unsafe extern "C" fn rs_hl_get_attr_by_id(
     attr_id: i64,
     rgb: bool,

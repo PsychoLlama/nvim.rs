@@ -647,8 +647,8 @@ extern "C" {
         wrap: bool,
     );
 
-    // hl_combine_attr from highlight module
-    fn rs_hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
+    // hl_combine_attr from highlight module (Rust-exported)
+    fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
 }
 
 /// Put a single schar at a column position.
@@ -1209,7 +1209,7 @@ pub unsafe extern "C" fn rs_grid_put_linebuf(
             let attr = *linebuf_attr.offset(c as isize) as c_int;
             #[allow(clippy::cast_possible_truncation)]
             {
-                *linebuf_attr.offset(c as isize) = rs_hl_combine_attr(bg_attr, attr) as SattrT;
+                *linebuf_attr.offset(c as isize) = hl_combine_attr(bg_attr, attr) as SattrT;
             }
         }
     }
@@ -1319,7 +1319,7 @@ pub unsafe extern "C" fn rs_grid_put_linebuf(
     }
 
     // Combine clear_attr with bg_attr
-    clear_attr = rs_hl_combine_attr(bg_attr, clear_attr);
+    clear_attr = hl_combine_attr(bg_attr, clear_attr);
 
     // Clear the rest of the line
     let space_char = schar_from_char_impl(b' ' as c_int);

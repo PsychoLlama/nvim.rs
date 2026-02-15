@@ -34,35 +34,11 @@ _Static_assert(HLF_E == 6, "HLF_E changed - update Rust constants");
 _Static_assert(HLF_S == 19, "HLF_S changed - update Rust constants");
 _Static_assert(HLF_MSG == 63, "HLF_MSG changed - update Rust constants");
 
-// Rust FFI declarations
-extern void rs_highlight_init(void);
-extern HlAttrs rs_syn_attr2entry(int attr);
-extern const char *rs_hl_get_url(uint32_t index);
-extern int rs_hl_combine_attr(int char_attr, int prim_attr);
-extern int rs_hl_blend_attrs(int back_attr, int front_attr, bool *through);
-extern int rs_hl_get_syn_attr(int ns_id, int idx, HlAttrs at_en);
-extern int rs_hl_add_url(int attr, const char *url);
-extern int rs_hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional);
-extern int rs_win_bg_attr(win_T *wp);
+// Rust FFI declarations (only for functions still called from C wrappers)
 extern bool rs_ns_hl_def(int ns_id, int hl_id, HlAttrs attrs, int link_id);
-extern bool rs_hl_check_ns(void);
-extern bool rs_win_check_ns_hl(win_T *wp);
-extern int rs_hl_apply_winblend(int winbl, int attr);
-extern void rs_update_window_hl(win_T *wp, bool invalid);
-extern int rs_hl_get_underline(void);
-extern int rs_hl_get_term_attr(HlAttrs *aep);
-extern void rs_clear_hl_tables_full(bool reinit);
-extern void rs_hl_invalidate_blends_full(void);
-extern bool rs_highlight_use_hlstate_full(void);
-extern void rs_ui_send_all_hls(RemoteUI *ui);
-extern Dict rs_hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err);
-extern void rs_hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short_keys);
 extern HlAttrs rs_dict2hlattrs(Dict dict, bool use_rgb, int *link_id, Error *err);
-extern int rs_object_to_color(Object val, char *key, bool rgb, Error *err);
-extern Array rs_hl_inspect(int attr, Arena *arena);
 extern void rs_update_ns_hl(int ns_id);
 extern bool rs_get_hlstate_active(void);
-extern int rs_ns_get_hl_full(NS *ns_hl, int hl_id, bool link, bool nodefault);
 
 // ============================================================================
 // C accessor functions (callable from Rust via FFI)
@@ -171,31 +147,8 @@ NsGetHlLuaResult c_ns_get_hl_lua_call(int ns_id, int hl_id, bool link)
 }
 
 // ============================================================================
-// Thin wrappers delegating to Rust
+// Functions with non-trivial C logic (not pure wrappers)
 // ============================================================================
-
-void highlight_init(void)
-{
-  rs_highlight_init();
-}
-
-/// @return true if hl table was reset
-bool highlight_use_hlstate(void)
-{
-  return rs_highlight_use_hlstate_full();
-}
-
-/// When a UI connects, we need to send it the table of highlights used so far.
-void ui_send_all_hls(RemoteUI *ui)
-{
-  rs_ui_send_all_hls(ui);
-}
-
-/// Get attribute code for a syntax group.
-int hl_get_syn_attr(int ns_id, int idx, HlAttrs at_en)
-{
-  return rs_hl_get_syn_attr(ns_id, idx, at_en);
-}
 
 void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) *dict)
 {
@@ -205,97 +158,6 @@ void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) 
     return;
   }
   rs_ns_hl_def(ns_id, hl_id, attrs, link_id);
-}
-
-int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
-{
-  return rs_ns_get_hl_full(ns_hl, hl_id, link, nodefault);
-}
-
-bool hl_check_ns(void)
-{
-  return rs_hl_check_ns();
-}
-
-bool win_check_ns_hl(win_T *wp)
-{
-  return rs_win_check_ns_hl(wp);
-}
-
-/// Get attribute code for a builtin highlight group.
-int hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional)
-{
-  return rs_hl_get_ui_attr(ns_id, idx, final_id, optional);
-}
-
-int hl_apply_winblend(int winbl, int attr)
-{
-  return rs_hl_apply_winblend(winbl, attr);
-}
-
-void update_window_hl(win_T *wp, bool invalid)
-{
-  rs_update_window_hl(wp, invalid);
-}
-
-int win_bg_attr(win_T *wp)
-{
-  return rs_win_bg_attr(wp);
-}
-
-int hl_get_underline(void)
-{
-  return rs_hl_get_underline();
-}
-
-int hl_add_url(int attr, const char *url)
-{
-  return rs_hl_add_url(attr, url);
-}
-
-const char *hl_get_url(uint32_t index)
-{
-  return rs_hl_get_url(index);
-}
-
-int hl_get_term_attr(HlAttrs *aep)
-{
-  return rs_hl_get_term_attr(aep);
-}
-
-void clear_hl_tables(bool reinit)
-{
-  rs_clear_hl_tables_full(reinit);
-}
-
-void hl_invalidate_blends(void)
-{
-  rs_hl_invalidate_blends_full();
-}
-
-int hl_combine_attr(int char_attr, int prim_attr)
-{
-  return rs_hl_combine_attr(char_attr, prim_attr);
-}
-
-int hl_blend_attrs(int back_attr, int front_attr, bool *through)
-{
-  return rs_hl_blend_attrs(back_attr, front_attr, through);
-}
-
-HlAttrs syn_attr2entry(int attr)
-{
-  return rs_syn_attr2entry(attr);
-}
-
-Dict hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err)
-{
-  return rs_hl_get_attr_by_id(attr_id, rgb, arena, err);
-}
-
-void hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short_keys)
-{
-  rs_hlattrs2dict(hl, hl_attrs, ae, use_rgb, short_keys);
 }
 
 // Generated table for Dict(highlight) fields
@@ -308,14 +170,4 @@ HlAttrs dict2hlattrs(Dict(highlight) *dict, bool use_rgb, int *link_id, Error *e
   HlAttrs attrs = rs_dict2hlattrs(raw, use_rgb, link_id, err);
   arena_mem_free(arena_finish(&arena));
   return attrs;
-}
-
-int object_to_color(Object val, char *key, bool rgb, Error *err)
-{
-  return rs_object_to_color(val, key, rgb, err);
-}
-
-Array hl_inspect(int attr, Arena *arena)
-{
-  return rs_hl_inspect(attr, arena);
 }

@@ -115,6 +115,32 @@ typedef struct {
   bool is_recursive;
 } NsGetHlLuaResult;
 
+// Rust-exported function declarations (from nvim-rs/highlight)
+void highlight_init(void);
+bool highlight_use_hlstate(void);
+void ui_send_all_hls(RemoteUI *ui);
+int hl_get_syn_attr(int ns_id, int idx, HlAttrs at_en);
+int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault);
+bool hl_check_ns(void);
+bool win_check_ns_hl(win_T *wp);
+int hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional);
+int hl_apply_winblend(int winbl, int attr);
+void update_window_hl(win_T *wp, bool invalid);
+int win_bg_attr(win_T *wp);
+int hl_get_underline(void);
+int hl_add_url(int attr, const char *url);
+const char *hl_get_url(uint32_t index);
+int hl_get_term_attr(HlAttrs *aep);
+void clear_hl_tables(bool reinit);
+void hl_invalidate_blends(void);
+int hl_combine_attr(int char_attr, int prim_attr);
+int hl_blend_attrs(int back_attr, int front_attr, bool *through);
+HlAttrs syn_attr2entry(int attr);
+Dict hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err);
+void hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short_keys);
+int object_to_color(Object val, char *key, bool rgb, Error *err);
+Array hl_inspect(int attr, Arena *arena);
+
 #include "highlight.h.generated.h"
 
 static inline int win_hl_attr(win_T *wp, int hlf)
