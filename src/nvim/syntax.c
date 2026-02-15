@@ -55,6 +55,7 @@ extern void rs_syntax_start(win_T *wp, int lnum);
 extern int rs_syntax_check_changed(int lnum);
 extern void rs_syntax_end_parsing_impl(win_T *wp, int lnum);
 extern void rs_load_current_state(synstate_T *from);
+extern int rs_get_syntax_attr(int col, int *can_spell, int keep_state);
 
 // Phase 541: Syntax state machine functions from Rust
 extern int rs_syn_current_lnum(void);
@@ -894,43 +895,11 @@ static bool syn_finish_line(const bool syncing)
 /// @return            highlight attributes for next character.
 int get_syntax_attr(const colnr_T col, bool *const can_spell, const bool keep_state)
 {
-  int attr = 0;
-
-  if (can_spell != NULL) {
-    // Default: Only do spelling when there is no @Spell cluster or when
-    // ":syn spell toplevel" was used.
-    *can_spell = syn_block->b_syn_spell == SYNSPL_DEFAULT
-                 ? (syn_block->b_spell_cluster_id == 0)
-                 : (syn_block->b_syn_spell == SYNSPL_TOP);
+  int cs = 0;
+  int attr = rs_get_syntax_attr((int)col, can_spell ? &cs : NULL, keep_state);
+  if (can_spell) {
+    *can_spell = cs != 0;
   }
-
-  // check for out of memory situation
-  if (syn_block->b_sst_array == NULL) {
-    return 0;
-  }
-
-  // After 'synmaxcol' the attribute is always zero.
-  if (syn_buf->b_p_smc > 0 && col >= (colnr_T)syn_buf->b_p_smc) {
-    clear_current_state();
-    current_id = 0;
-    current_trans_id = 0;
-    current_flags = 0;
-    current_seqnr = 0;
-    return 0;
-  }
-
-  // Make sure current_state is valid
-  if (INVALID_STATE(&current_state)) {
-    validate_current_state();
-  }
-
-  // Skip from the current column to "col", get the attributes for "col".
-  while (current_col <= col) {
-    attr = syn_current_attr(false, true, can_spell,
-                            current_col == col ? keep_state : false);
-    current_col++;
-  }
-
   return attr;
 }
 

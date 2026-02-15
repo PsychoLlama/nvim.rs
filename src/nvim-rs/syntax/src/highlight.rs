@@ -60,6 +60,24 @@ extern "C" {
     fn nvim_syn_get_next_match_attr() -> c_int;
     fn nvim_syn_get_next_match_idx() -> c_int;
     fn nvim_syn_get_next_match_col() -> c_int;
+
+    // get_syntax_attr dependencies
+    fn nvim_synblock_get_spell_cluster_id(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
+    fn nvim_syn_get_syn_block() -> SynBlockHandle;
+    fn nvim_syn_get_buf() -> crate::types::BufHandle;
+    fn nvim_syn_clear_current_state();
+    fn nvim_syn_set_current_id(id: c_int);
+    fn nvim_syn_set_current_trans_id(id: c_int);
+    fn nvim_syn_set_current_flags(flags: c_int);
+    fn nvim_syn_set_current_seqnr(seqnr: c_int);
+
+    fn rs_syn_current_attr_impl(
+        syncing: c_int,
+        displaying: c_int,
+        can_spell: *mut c_int,
+        keep_state: c_int,
+    ) -> c_int;
 }
 
 // =============================================================================
@@ -406,23 +424,78 @@ pub struct SyntaxAttrResult {
     pub can_spell: bool,
 }
 
+/// SYNSPL_DEFAULT and SYNSPL_TOP constants.
+const SYNSPL_DEFAULT: c_int = 0;
+const SYNSPL_TOP: c_int = 1;
+
 /// Get syntax attributes at a column in the current line.
 ///
 /// This is the main entry point for getting highlighting during redraw.
-///
-/// # Arguments
-/// * `col` - Column number (0-based)
-/// * `keep_state` - Whether to preserve state for subsequent calls
+/// Real Rust implementation replacing the C `get_syntax_attr`.
 ///
 /// # Safety
 /// Must be called after `syntax_start` has been called for the current window/line.
 #[must_use]
 pub unsafe fn get_syntax_attr(col: i32, keep_state: bool) -> SyntaxAttrResult {
-    let mut can_spell: c_int = 0;
-    let attr = nvim_get_syntax_attr(col, &mut can_spell, if keep_state { 1 } else { 0 });
+    get_syntax_attr_impl(col, keep_state)
+}
+
+/// Real implementation of get_syntax_attr.
+///
+/// # Safety
+/// Requires valid C global state.
+unsafe fn get_syntax_attr_impl(col: c_int, keep_state: bool) -> SyntaxAttrResult {
+    let block = nvim_syn_get_syn_block();
+    let buf = nvim_syn_get_buf();
+
+    // Default spell checking value
+    let syn_spell = nvim_synblock_get_syn_spell(block);
+    let can_spell = if syn_spell == SYNSPL_DEFAULT {
+        nvim_synblock_get_spell_cluster_id(block) == 0
+    } else {
+        syn_spell == SYNSPL_TOP
+    };
+
+    // Check for out of memory situation
+    if nvim_synblock_has_sst_array(block) == 0 {
+        return SyntaxAttrResult { attr: 0, can_spell };
+    }
+
+    // After 'synmaxcol' the attribute is always zero.
+    let synmaxcol = nvim_buf_get_synmaxcol(buf);
+    if synmaxcol > 0 && col >= synmaxcol {
+        nvim_syn_clear_current_state();
+        nvim_syn_set_current_id(0);
+        nvim_syn_set_current_trans_id(0);
+        nvim_syn_set_current_flags(0);
+        nvim_syn_set_current_seqnr(0);
+        return SyntaxAttrResult { attr: 0, can_spell };
+    }
+
+    // Make sure current_state is valid
+    if nvim_syn_current_state_valid() == 0 {
+        nvim_syn_ensure_current_state_valid();
+    }
+
+    // Skip from the current column to "col", get the attributes for "col".
+    let mut attr = 0;
+    let mut spell_result: c_int = if can_spell { 1 } else { 0 };
+    let mut current_col = nvim_syn_get_current_col();
+    while current_col <= col {
+        let ks = if current_col == col {
+            keep_state
+        } else {
+            false
+        };
+        attr = rs_syn_current_attr_impl(0, 1, &mut spell_result, if ks { 1 } else { 0 });
+        current_col = nvim_syn_get_current_col();
+        nvim_syn_set_current_col(current_col + 1);
+        current_col = nvim_syn_get_current_col();
+    }
+
     SyntaxAttrResult {
         attr,
-        can_spell: can_spell != 0,
+        can_spell: spell_result != 0,
     }
 }
 
@@ -432,7 +505,7 @@ pub unsafe fn get_syntax_attr(col: i32, keep_state: bool) -> SyntaxAttrResult {
 /// Must be called after `syntax_start` has been called for the current window/line.
 #[must_use]
 pub unsafe fn get_syntax_attr_simple(col: i32, keep_state: bool) -> i32 {
-    nvim_get_syntax_attr(col, std::ptr::null_mut(), if keep_state { 1 } else { 0 })
+    get_syntax_attr(col, keep_state).attr
 }
 
 /// Get the current column being processed.
