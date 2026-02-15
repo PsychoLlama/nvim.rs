@@ -133,7 +133,7 @@ unsafe fn destroy_cells(grid: *mut UGrid) {
 ///
 /// # Safety
 /// - `grid` must be a valid pointer to a `UGrid`
-#[no_mangle]
+#[export_name = "ugrid_init"]
 pub unsafe extern "C" fn rs_ugrid_init(grid: *mut UGrid) {
     (*grid).cells = ptr::null_mut();
 }
@@ -142,7 +142,7 @@ pub unsafe extern "C" fn rs_ugrid_init(grid: *mut UGrid) {
 ///
 /// # Safety
 /// - `grid` must be a valid pointer to an initialized `UGrid`
-#[no_mangle]
+#[export_name = "ugrid_free"]
 pub unsafe extern "C" fn rs_ugrid_free(grid: *mut UGrid) {
     destroy_cells(grid);
 }
@@ -154,7 +154,7 @@ pub unsafe extern "C" fn rs_ugrid_free(grid: *mut UGrid) {
 /// # Safety
 /// - `grid` must be a valid pointer to an initialized `UGrid`
 /// - `width` and `height` must be positive
-#[no_mangle]
+#[export_name = "ugrid_resize"]
 pub unsafe extern "C" fn rs_ugrid_resize(grid: *mut UGrid, width: c_int, height: c_int) {
     let grid = &mut *grid;
 
@@ -181,7 +181,7 @@ pub unsafe extern "C" fn rs_ugrid_resize(grid: *mut UGrid, width: c_int, height:
 ///
 /// # Safety
 /// - `grid` must be a valid pointer to an initialized `UGrid` with allocated cells
-#[no_mangle]
+#[export_name = "ugrid_clear"]
 pub unsafe extern "C" fn rs_ugrid_clear(grid: *mut UGrid) {
     let g = &*grid;
     clear_region(grid, 0, g.height - 1, 0, g.width - 1, 0);
@@ -195,7 +195,7 @@ pub unsafe extern "C" fn rs_ugrid_clear(grid: *mut UGrid) {
 /// - `grid` must be a valid pointer to an initialized `UGrid` with allocated cells
 /// - `row` must be within [0, height)
 /// - `col` and `endcol` must be within [0, width]
-#[no_mangle]
+#[export_name = "ugrid_clear_chunk"]
 pub unsafe extern "C" fn rs_ugrid_clear_chunk(
     grid: *mut UGrid,
     row: c_int,
@@ -210,7 +210,7 @@ pub unsafe extern "C" fn rs_ugrid_clear_chunk(
 ///
 /// # Safety
 /// - `grid` must be a valid pointer to a `UGrid`
-#[no_mangle]
+#[export_name = "ugrid_goto"]
 pub unsafe extern "C" fn rs_ugrid_goto(grid: *mut UGrid, row: c_int, col: c_int) {
     (*grid).row = row;
     (*grid).col = col;
@@ -226,7 +226,7 @@ pub unsafe extern "C" fn rs_ugrid_goto(grid: *mut UGrid, row: c_int, col: c_int)
 /// - `grid` must be a valid pointer to an initialized `UGrid` with allocated cells
 /// - The region must be within the grid bounds
 /// - `count` must be less than `bot - top + 1` in absolute value
-#[no_mangle]
+#[export_name = "ugrid_scroll"]
 pub unsafe extern "C" fn rs_ugrid_scroll(
     grid: *mut UGrid,
     top: c_int,

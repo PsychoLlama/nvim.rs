@@ -291,13 +291,15 @@ pub fn arabic_combine(one: c_int, two: c_int) -> bool {
 }
 
 /// C-compatible wrapper for `arabic_combine`.
-#[no_mangle]
+#[export_name = "arabic_combine"]
+#[must_use]
 pub extern "C" fn rs_arabic_combine(one: c_int, two: c_int) -> bool {
     arabic_combine_impl(one, two)
 }
 
 /// Export `arabic_maycombine` for C callers.
-#[no_mangle]
+#[export_name = "arabic_maycombine"]
+#[must_use]
 pub extern "C" fn rs_arabic_maycombine(two: c_int) -> bool {
     arabic_maycombine_impl(two)
 }
@@ -317,7 +319,7 @@ pub extern "C" fn rs_arabic_maycombine(two: c_int) -> bool {
 ///
 /// # Safety
 /// * `c1p` must be a valid pointer to a `c_int`
-#[no_mangle]
+#[export_name = "arabic_shape"]
 pub unsafe extern "C" fn rs_arabic_shape(
     c: c_int,
     c1p: *mut c_int,

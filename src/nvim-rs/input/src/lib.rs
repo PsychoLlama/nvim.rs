@@ -349,7 +349,7 @@ extern "C" {
 /// Ask the user for input through a cmdline prompt.
 ///
 /// Port of `prompt_for_input` from input.c.
-unsafe fn prompt_for_input(
+unsafe fn prompt_for_input_impl(
     prompt: *mut c_char,
     hl_id: c_int,
     one_key: bool,
@@ -412,7 +412,7 @@ unsafe fn prompt_for_input(
 /// Ask for a reply from the user, a 'y' or a 'n'.
 ///
 /// Port of `ask_yesno` from input.c.
-#[no_mangle]
+#[export_name = "ask_yesno"]
 pub unsafe extern "C" fn rs_ask_yesno(str: *const c_char) -> c_int {
     let save_state = nvim_get_State();
 
@@ -427,7 +427,7 @@ pub unsafe extern "C" fn rs_ask_yesno(str: *const c_char) -> c_int {
     let mut r: c_int = b' ' as c_int;
     while r != b'y' as c_int && r != b'n' as c_int {
         // Same highlighting as for wait_return()
-        r = prompt_for_input(prompt, HLF_R, true, std::ptr::null_mut());
+        r = prompt_for_input_impl(prompt, HLF_R, true, std::ptr::null_mut());
         if r == CTRL_C || r == ESC {
             r = b'n' as c_int;
             if nvim_ui_has_messages() == 0 {
@@ -449,7 +449,7 @@ pub unsafe extern "C" fn rs_ask_yesno(str: *const c_char) -> c_int {
 /// Get a key stroke directly from the user.
 ///
 /// Port of `get_keystroke` from input.c.
-#[no_mangle]
+#[export_name = "get_keystroke"]
 pub unsafe extern "C" fn rs_get_keystroke(events: *mut c_void) -> c_int {
     let mut buflen: usize = 150;
     let mut buf: Vec<u8> = Vec::with_capacity(buflen);
@@ -541,14 +541,14 @@ pub unsafe extern "C" fn rs_get_keystroke(events: *mut c_void) -> c_int {
 }
 
 /// Exported wrapper for prompt_for_input (called from C).
-#[no_mangle]
+#[export_name = "prompt_for_input"]
 pub unsafe extern "C" fn rs_prompt_for_input(
     prompt: *mut c_char,
     hl_id: c_int,
     one_key: bool,
     mouse_used: *mut bool,
 ) -> c_int {
-    prompt_for_input(prompt, hl_id, one_key, mouse_used)
+    prompt_for_input_impl(prompt, hl_id, one_key, mouse_used)
 }
 
 #[cfg(test)]

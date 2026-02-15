@@ -216,7 +216,7 @@ fn count_n_matched_chars(sp: &[MmFile], n: usize, iwhite: bool) -> c_int {
 }
 
 /// Fast-forward buffer to line number
-fn fastforward_buf_to_lnum(mut s: MmFile, lnum: LinenrT) -> MmFile {
+fn fastforward_buf_to_lnum_impl(mut s: MmFile, lnum: LinenrT) -> MmFile {
     for _ in 0..(lnum - 1) {
         if s.ptr.is_null() || s.size <= 0 {
             break;
@@ -276,7 +276,7 @@ fn try_possible_paths(
                     from_vals[k] -= 1;
                     // SAFETY: diff_blk[k] is valid
                     let blk = unsafe { &*diff_blk[k] };
-                    mm[k] = fastforward_buf_to_lnum(*blk, df_iters[k]);
+                    mm[k] = fastforward_buf_to_lnum_impl(*blk, df_iters[k]);
                 }
             }
 
@@ -427,9 +427,9 @@ fn test_charmatch_paths(
 ///
 /// # Safety
 /// - `s` must contain a valid pointer if size > 0
-#[no_mangle]
+#[export_name = "fastforward_buf_to_lnum"]
 pub unsafe extern "C" fn rs_fastforward_buf_to_lnum(s: MmFile, lnum: LinenrT) -> MmFile {
-    fastforward_buf_to_lnum(s, lnum)
+    fastforward_buf_to_lnum_impl(s, lnum)
 }
 
 /// Find optimal line alignment across multiple diff buffers.
@@ -439,7 +439,7 @@ pub unsafe extern "C" fn rs_fastforward_buf_to_lnum(s: MmFile, lnum: LinenrT) ->
 /// - `diff_len` must point to `ndiffs` valid integers
 /// - `decisions` must be a valid pointer to receive allocated result
 /// - `ndiffs` must be <= 8
-#[no_mangle]
+#[export_name = "linematch_nbuffers"]
 pub unsafe extern "C" fn rs_linematch_nbuffers(
     diff_blk: *const *const MmFile,
     diff_len: *const c_int,
@@ -580,9 +580,9 @@ mod tests {
     }
 
     #[test]
-    fn test_fastforward_buf_to_lnum() {
+    fn test_fastforward_buf_to_lnum_impl() {
         let m = make_mmfile("line1\nline2\nline3");
-        let result = fastforward_buf_to_lnum(m, 2);
+        let result = fastforward_buf_to_lnum_impl(m, 2);
         assert!(!result.ptr.is_null());
         let slice = unsafe { std::slice::from_raw_parts(result.ptr as *const u8, 5) };
         assert_eq!(slice, b"line2");

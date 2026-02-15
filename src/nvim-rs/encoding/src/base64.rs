@@ -193,7 +193,7 @@ pub fn decode(src: &[u8]) -> Option<Vec<u8>> {
 /// # Safety
 ///
 /// `src` must be a valid pointer to at least `src_len` bytes.
-#[no_mangle]
+#[export_name = "base64_encode"]
 pub unsafe extern "C" fn rs_base64_encode(src: *const u8, src_len: usize) -> *mut c_char {
     if src.is_null() {
         return ptr::null_mut();
@@ -226,7 +226,7 @@ pub unsafe extern "C" fn rs_base64_encode(src: *const u8, src_len: usize) -> *mu
 ///
 /// `src` must be a valid pointer to at least `src_len` bytes.
 /// `out_len` must be a valid pointer.
-#[no_mangle]
+#[export_name = "base64_decode"]
 pub unsafe extern "C" fn rs_base64_decode(
     src: *const u8,
     src_len: usize,
