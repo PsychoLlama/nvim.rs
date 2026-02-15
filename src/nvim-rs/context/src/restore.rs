@@ -11,7 +11,7 @@ const KCTX_FUNCS: c_int = 32;
 // kShaDaWantInfo (1) | kShaDaForceit (4)
 const SHADA_READ_FLAGS: c_int = 5;
 
-#[no_mangle]
+#[export_name = "ctx_restore"]
 pub unsafe extern "C" fn rs_ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
     let mut free_ctx = false;
     let ctx = if ctx.is_null() {

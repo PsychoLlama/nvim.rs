@@ -26,89 +26,10 @@
 
 #include "context.c.generated.h"
 
-extern size_t rs_ctx_size(void);
-extern void rs_ctx_free(Context *ctx);
-extern Context *rs_ctx_get(size_t index);
-extern void rs_ctx_free_all(void);
-extern void rs_ctx_save(Context *ctx, int flags);
-extern bool rs_ctx_restore(Context *ctx, int flags);
-extern Dict rs_ctx_to_dict(Context *ctx, Arena *arena);
-extern int rs_ctx_from_dict(Dict dict, Context *ctx, Error *err);
-
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
 
 static ContextVec ctx_stack = KV_INITIAL_VALUE;
-
-/// Clears and frees the context stack
-void ctx_free_all(void)
-{
-  rs_ctx_free_all();
-}
-
-/// Returns the size of the context stack.
-size_t ctx_size(void)
-  FUNC_ATTR_PURE
-{
-  return rs_ctx_size();
-}
-
-/// Returns pointer to Context object with given zero-based index from the top
-/// of context stack or NULL if index is out of bounds.
-Context *ctx_get(size_t index)
-  FUNC_ATTR_PURE
-{
-  return rs_ctx_get(index);
-}
-
-/// Free resources used by Context object.
-///
-/// param[in]  ctx  pointer to Context object to free.
-void ctx_free(Context *ctx)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_ctx_free(ctx);
-}
-
-/// Saves the editor state to a context.
-///
-/// If "context" is NULL, pushes context on context stack.
-/// Use "flags" to select particular types of context.
-///
-/// @param  ctx    Save to this context, or push on context stack if NULL.
-/// @param  flags  Flags, see ContextTypeFlags enum.
-void ctx_save(Context *ctx, const int flags)
-{
-  rs_ctx_save(ctx, flags);
-}
-
-/// Restores the editor state from a context.
-///
-/// If "context" is NULL, pops context from context stack.
-/// Use "flags" to select particular types of context.
-///
-/// @param  ctx    Restore from this context. Pop from context stack if NULL.
-/// @param  flags  Flags, see ContextTypeFlags enum.
-///
-/// @return true on success, false otherwise (i.e.: empty context stack).
-bool ctx_restore(Context *ctx, const int flags)
-{
-  return rs_ctx_restore(ctx, flags);
-}
-
-/// Converts Context to Dict representation.
-Dict ctx_to_dict(Context *ctx, Arena *arena)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_ctx_to_dict(ctx, arena);
-}
-
-/// Converts Dict representation of Context back to Context object.
-int ctx_from_dict(Dict dict, Context *ctx, Error *err)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_ctx_from_dict(dict, ctx, err);
-}
 
 // Rust FFI accessor functions
 

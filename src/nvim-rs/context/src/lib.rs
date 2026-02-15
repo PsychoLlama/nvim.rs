@@ -94,20 +94,22 @@ pub struct Context {
 }
 
 /// Returns the size of the context stack.
-#[no_mangle]
+#[must_use]
+#[export_name = "ctx_size"]
 pub unsafe extern "C" fn rs_ctx_size() -> usize {
     ffi::nvim_get_ctx_stack_size()
 }
 
 /// Returns pointer to Context object with given zero-based index from the top
 /// of context stack or NULL if index is out of bounds.
-#[no_mangle]
+#[must_use]
+#[export_name = "ctx_get"]
 pub unsafe extern "C" fn rs_ctx_get(index: usize) -> *mut Context {
     ffi::nvim_get_ctx_at_index(index)
 }
 
 /// Free resources used by a Context object.
-#[no_mangle]
+#[export_name = "ctx_free"]
 pub unsafe extern "C" fn rs_ctx_free(ctx: *mut Context) {
     if ctx.is_null() {
         return;

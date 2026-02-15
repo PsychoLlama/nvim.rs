@@ -9,7 +9,7 @@ const KCTX_GVARS: c_int = 8;
 const KCTX_SFUNCS: c_int = 16;
 const KCTX_FUNCS: c_int = 32;
 
-#[no_mangle]
+#[export_name = "ctx_save"]
 pub unsafe extern "C" fn rs_ctx_save(ctx: *mut Context, flags: c_int) {
     let ctx = if ctx.is_null() {
         ffi::nvim_ctx_stack_push_init();
