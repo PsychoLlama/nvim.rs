@@ -1172,6 +1172,12 @@ extern "C" {
 
     /// Get Rows global
     fn nvim_syn_get_rows() -> c_int;
+
+    /// Set the syn_buf pointer
+    fn nvim_syn_set_syn_buf(buf: BufHandle);
+
+    /// Set current_sub_char
+    fn nvim_syn_set_current_sub_char(c: c_int);
 }
 
 // =============================================================================
@@ -3834,7 +3840,7 @@ pub unsafe extern "C" fn rs_syn_start_line() {
 /// This function accesses C global state and must be called from the main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syntax_start(wp: WinHandle, lnum: c_int) {
-    nvim_syntax_start(wp, lnum);
+    crate::buffer::start_syntax(wp, lnum);
 }
 
 /// Call clear_current_state to clean up the current state stack.

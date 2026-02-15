@@ -8,16 +8,13 @@
 
 use std::ffi::c_int;
 
-use crate::types::{BufHandle, SynBlockHandle, WinHandle};
+use crate::types::{BufHandle, SynBlockHandle, SynStateHandle, WinHandle};
 
 // =============================================================================
 // FFI declarations for buffer operations
 // =============================================================================
 
 extern "C" {
-    // Buffer syntax state
-    fn syntax_start(wp: WinHandle, lnum: c_int);
-
     // Synblock settings
     fn nvim_synblock_get_syn_error(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_syn_slow(block: SynBlockHandle) -> c_int;
@@ -41,6 +38,43 @@ extern "C" {
 
     // Fold level computation
     fn nvim_syn_cur_foldlevel() -> c_int;
+
+    // syntax_start dependencies
+    fn nvim_syn_set_current_sub_char(c: c_int);
+    fn nvim_syn_invalidate_current_state();
+    fn nvim_syn_set_syn_buf(buf: BufHandle);
+    fn nvim_syn_set_syn_block(block: SynBlockHandle);
+    fn nvim_syn_set_syn_win(win: WinHandle);
+    fn nvim_syn_buf_get_changed_tick(buf: BufHandle) -> c_int;
+    fn nvim_syn_win_get_buffer_ptr(wp: WinHandle) -> BufHandle;
+    fn nvim_win_get_synblock(wp: WinHandle) -> SynBlockHandle;
+    fn nvim_syn_stack_alloc();
+    fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
+    fn nvim_syn_set_sst_lasttick(tick: c_int);
+    fn nvim_syn_get_display_tick() -> c_int;
+    fn nvim_syn_is_current_state_valid() -> c_int;
+    fn nvim_syn_get_current_lnum() -> c_int;
+    fn nvim_syn_set_current_lnum(lnum: c_int);
+    fn nvim_syn_buf_get_line_count(buf: BufHandle) -> c_int;
+    fn nvim_syn_finish_line(syncing: c_int) -> c_int;
+    fn nvim_syn_is_current_state_stored() -> c_int;
+    fn nvim_syn_get_sync_minlines() -> c_int;
+    fn nvim_syn_get_sst_len() -> c_int;
+    fn nvim_syn_get_rows() -> c_int;
+    fn nvim_syn_start_line();
+    fn nvim_syn_line_breakcheck();
+    fn nvim_syn_get_got_int() -> c_int;
+    fn nvim_syn_get_sst_first() -> SynStateHandle;
+    fn nvim_syn_stack_find_entry_ptr(lnum: c_int) -> SynStateHandle;
+    fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
+    fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
+    fn nvim_synstate_get_change_lnum(state: SynStateHandle) -> c_int;
+    fn nvim_synstate_set_change_lnum(p: SynStateHandle, lnum: c_int);
+
+    fn rs_store_current_state() -> SynStateHandle;
+    fn rs_load_current_state(from: SynStateHandle);
+    fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int;
+    fn rs_syn_sync(wp: WinHandle, start_lnum: c_int, last_valid: SynStateHandle);
 }
 
 // =============================================================================
@@ -49,12 +83,8 @@ extern "C" {
 
 /// Start syntax parsing for a line.
 ///
-/// This initializes or restores the syntax state for the given line number,
+/// Initializes or restores the syntax state for the given line number,
 /// ensuring that highlighting can be computed from that position.
-///
-/// # Arguments
-/// * `wp` - Window handle
-/// * `lnum` - Line number (1-based)
 ///
 /// # Safety
 /// The window handle must be valid.
@@ -62,7 +92,170 @@ pub unsafe fn start_syntax(wp: WinHandle, lnum: i32) {
     if wp.is_null() {
         return;
     }
-    syntax_start(wp, lnum);
+    syntax_start_impl(wp, lnum);
+}
+
+/// Static changedtick to detect buffer modifications between calls.
+static mut CHANGEDTICK: c_int = 0;
+
+/// Real implementation of syntax_start, replacing the C version.
+///
+/// # Safety
+/// Requires valid window handle and C global state.
+unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
+    let mut last_valid = SynStateHandle::null();
+    let mut last_min_valid = SynStateHandle::null();
+    let mut prev = SynStateHandle::null();
+
+    nvim_syn_set_current_sub_char(0); // NUL
+
+    // After switching buffers, invalidate current_state.
+    let syn_block = nvim_syn_get_block();
+    let syn_buf = nvim_syn_get_buf();
+    let wp_s = nvim_win_get_synblock(wp);
+    let wp_buf = nvim_syn_win_get_buffer_ptr(wp);
+
+    if syn_block.0 != wp_s.0 || syn_buf.0 != wp_buf.0
+        || CHANGEDTICK != nvim_syn_buf_get_changed_tick(wp_buf)
+    {
+        nvim_syn_invalidate_current_state();
+        nvim_syn_set_syn_buf(wp_buf);
+        nvim_syn_set_syn_block(wp_s);
+    }
+    let syn_buf = nvim_syn_get_buf();
+    CHANGEDTICK = nvim_syn_buf_get_changed_tick(syn_buf);
+    nvim_syn_set_syn_win(wp);
+
+    // Allocate syntax stack when needed.
+    nvim_syn_stack_alloc();
+    let block = nvim_syn_get_block();
+    if nvim_synblock_has_sst_array(block) == 0 {
+        return; // out of memory
+    }
+    nvim_syn_set_sst_lasttick(nvim_syn_get_display_tick());
+
+    // If the state of the end of the previous line is useful, store it.
+    let current_lnum = nvim_syn_get_current_lnum();
+    if nvim_syn_is_current_state_valid() != 0
+        && current_lnum < lnum
+        && current_lnum < nvim_syn_buf_get_line_count(syn_buf)
+    {
+        nvim_syn_finish_line(0);
+        if nvim_syn_is_current_state_stored() == 0 {
+            nvim_syn_set_current_lnum(current_lnum + 1);
+            rs_store_current_state();
+        }
+
+        // If current_lnum is now the same as "lnum", keep the current state.
+        // Otherwise invalidate current_state and figure it out below.
+        if nvim_syn_get_current_lnum() != lnum {
+            nvim_syn_invalidate_current_state();
+        }
+    } else {
+        nvim_syn_invalidate_current_state();
+    }
+
+    // Try to synchronize from a saved state in b_sst_array[].
+    if nvim_syn_is_current_state_valid() == 0 && nvim_synblock_has_sst_array(block) != 0 {
+        // Find last valid saved state before start_lnum.
+        let sync_minlines = nvim_syn_get_sync_minlines();
+        let mut p = nvim_syn_get_sst_first();
+        while !p.is_null() {
+            if nvim_synstate_get_lnum(p) > lnum {
+                break;
+            }
+            if nvim_synstate_get_change_lnum(p) == 0 {
+                last_valid = p;
+                if nvim_synstate_get_lnum(p) >= lnum - sync_minlines {
+                    last_min_valid = p;
+                }
+            }
+            p = nvim_synstate_get_next(p);
+        }
+        if !last_min_valid.is_null() {
+            rs_load_current_state(last_min_valid);
+        }
+    }
+
+    // If "lnum" is before or far beyond a line with a saved state, need to
+    // re-synchronize.
+    let first_stored;
+    if nvim_syn_is_current_state_valid() == 0 {
+        rs_syn_sync(wp, lnum, last_valid);
+        if nvim_syn_get_current_lnum() == 1 {
+            first_stored = 1;
+        } else {
+            first_stored = nvim_syn_get_current_lnum() + nvim_syn_get_sync_minlines();
+        }
+    } else {
+        first_stored = nvim_syn_get_current_lnum();
+    }
+
+    // Advance from the sync point or saved state until the current line.
+    let sst_len = nvim_syn_get_sst_len();
+    let rows = nvim_syn_get_rows();
+    let dist = if sst_len <= rows {
+        999999
+    } else {
+        nvim_syn_buf_get_line_count(syn_buf) / (sst_len - rows) + 1
+    };
+
+    while nvim_syn_get_current_lnum() < lnum {
+        nvim_syn_start_line();
+        nvim_syn_finish_line(0);
+        let cur_lnum = nvim_syn_get_current_lnum();
+        nvim_syn_set_current_lnum(cur_lnum + 1);
+
+        // If we parsed at least "minlines" lines or started at a valid
+        // state, the current state is considered valid.
+        let cur_lnum = nvim_syn_get_current_lnum();
+        if cur_lnum >= first_stored {
+            if prev.is_null() {
+                prev = nvim_syn_stack_find_entry_ptr(cur_lnum - 1);
+            }
+
+            let mut sp = if prev.is_null() {
+                nvim_syn_get_sst_first()
+            } else {
+                prev
+            };
+            while !sp.is_null() && nvim_synstate_get_lnum(sp) < cur_lnum {
+                sp = nvim_synstate_get_next(sp);
+            }
+
+            if !sp.is_null()
+                && nvim_synstate_get_lnum(sp) == cur_lnum
+                && rs_syn_stack_equal(sp) != 0
+            {
+                let parsed_lnum = cur_lnum;
+                prev = sp;
+                while !sp.is_null() && nvim_synstate_get_change_lnum(sp) <= parsed_lnum {
+                    if nvim_synstate_get_lnum(sp) <= lnum {
+                        prev = sp;
+                    } else if nvim_synstate_get_change_lnum(sp) == 0 {
+                        break;
+                    }
+                    nvim_synstate_set_change_lnum(sp, 0);
+                    sp = nvim_synstate_get_next(sp);
+                }
+                rs_load_current_state(prev);
+            } else if prev.is_null()
+                || cur_lnum == lnum
+                || cur_lnum >= nvim_synstate_get_lnum(prev) + dist
+            {
+                prev = rs_store_current_state();
+            }
+        }
+
+        // This can take a long time: break when CTRL-C pressed.
+        nvim_syn_line_breakcheck();
+        if nvim_syn_get_got_int() != 0 {
+            nvim_syn_set_current_lnum(lnum);
+            break;
+        }
+    }
+
+    nvim_syn_start_line();
 }
 
 // =============================================================================
