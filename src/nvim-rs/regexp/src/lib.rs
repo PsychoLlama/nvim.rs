@@ -85,7 +85,6 @@ extern "C" {
     fn nvim_regexp_set_rex_lnum(v: i32);
     fn nvim_regexp_set_rex_line_and_input(line: *mut u8);
     fn nvim_regexp_call_reg_getline(lnum: i32) -> *mut c_char;
-    fn nvim_regexp_call_reg_breakcheck();
 
     // reg_prev_class accessors
     fn nvim_regexp_get_rex_input() -> *mut u8;
@@ -5026,8 +5025,6 @@ extern "C" {
 
     // internal_error
     fn nvim_regexp_internal_error(msg: *const c_char);
-
-    // reg_breakcheck: use existing nvim_regexp_call_reg_breakcheck (declared at top)
 
     // regrepeat: use rs_regrepeat() directly from Rust (no wrapper needed)
 
@@ -12252,10 +12249,6 @@ extern "C" {
 
     // Character/utility functions
     fn nvim_regexp_call_ascii_iswhite(c: c_int) -> c_int;
-    fn nvim_regexp_call_reg_prev_class() -> c_int;
-    fn nvim_regexp_call_reg_match_visual() -> c_int;
-    fn nvim_regexp_call_reg_nextline();
-    // (nvim_regexp_call_cleanup_subexpr removed -- using rs_cleanup_subexpr() directly)
 
     // NFA prog field accessor
     fn nvim_nfa_prog_get_re_engine(prog: NfaProgHandle) -> c_int;
@@ -12356,7 +12349,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
     let mut r: RegsubsHandle;
 
     // Allow interrupting with CTRL-C.
-    nvim_regexp_call_reg_breakcheck();
+    rs_reg_breakcheck();
     if nvim_regexp_get_got_int() != 0 {
         return 0; // false
     }
@@ -12449,7 +12442,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
         let mut listidx: c_int = 0;
         while listidx < nvim_nfa_list_get_n(thislist) {
             // Allow interrupting with CTRL-C.
-            nvim_regexp_call_reg_breakcheck();
+            rs_reg_breakcheck();
             if nvim_regexp_get_got_int() != 0 {
                 break;
             }
@@ -12756,7 +12749,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             nvim_regexp_call_mb_get_class_tab(nvim_regexp_get_rex_input());
                         if this_class <= 1 {
                             result = 0;
-                        } else if nvim_regexp_call_reg_prev_class() == this_class {
+                        } else if rs_reg_prev_class() == this_class {
                             result = 0;
                         }
                     }
@@ -12773,7 +12766,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     } else {
                         let this_class =
                             nvim_regexp_call_mb_get_class_tab(nvim_regexp_get_rex_input());
-                        let prev_class = nvim_regexp_call_reg_prev_class();
+                        let prev_class = rs_reg_prev_class();
                         if this_class == prev_class || prev_class == 0 || prev_class == 1 {
                             result = 0;
                         }
@@ -13573,7 +13566,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_VISUAL => {
-                    result = nvim_regexp_call_reg_match_visual();
+                    result = rs_reg_match_visual();
                     if result != 0 {
                         add_here = true;
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
@@ -13827,14 +13820,14 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 && nvim_regexp_is_reg_multi() != 0
                 && nvim_regexp_get_rex_lnum() < nvim_regexp_get_nfa_endp_pos_lnum())
         {
-            nvim_regexp_call_reg_nextline();
+            rs_reg_nextline();
         } else {
             break 'outer;
         }
         go_to_nextline = false;
 
         // Allow interrupting with CTRL-C.
-        nvim_regexp_call_reg_breakcheck();
+        rs_reg_breakcheck();
         if nvim_regexp_get_got_int() != 0 {
             break 'outer;
         }

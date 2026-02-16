@@ -50,8 +50,6 @@ extern reg_extmatch_T *rs_make_extmatch(void);
 extern reg_extmatch_T *rs_ref_extmatch(reg_extmatch_T *em);
 extern void rs_unref_extmatch(reg_extmatch_T *em);
 extern void rs_cleanup_zsubexpr(void);
-extern int rs_reg_prev_class(void);
-extern void rs_reg_nextline(void);
 extern char *rs_skip_regexp_err(char *startp, int delim, int magic);
 // Rust FFI: NFA execution engine entry points
 extern int rs_nfa_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
@@ -683,8 +681,6 @@ int nvim_regexp_emsg2_fail(const char *msg, int is_magic_all)
   return FAIL;
 }
 
-extern void rs_reg_breakcheck(void);
-
 static bool can_f_submatch = false;  ///< true when submatch() can be used
 
 /// These pointers are used for reg_submatch().  Needed for when the
@@ -768,7 +764,6 @@ int32_t nvim_regexp_get_rex_lnum(void) { return (int32_t)rex.lnum; }
 void nvim_regexp_set_rex_lnum(int32_t v) { rex.lnum = (linenr_T)v; }
 void nvim_regexp_set_rex_line_and_input(uint8_t *line) { rex.line = line; rex.input = line; }
 char *nvim_regexp_call_reg_getline(int32_t lnum) { return reg_getline((linenr_T)lnum); }
-void nvim_regexp_call_reg_breakcheck(void) { rs_reg_breakcheck(); }
 
 // match_with_backref accessors for Rust FFI
 uint8_t *nvim_regexp_get_reg_tofree(void) { return reg_tofree; }
@@ -898,8 +893,6 @@ int32_t nvim_regexp_get_rex_reg_mmatch_startpos_col(int no) { return (int32_t)re
 int32_t nvim_regexp_get_rex_reg_mmatch_endpos_lnum(int no) { return (int32_t)rex.reg_mmatch->endpos[no].lnum; }
 int32_t nvim_regexp_get_rex_reg_mmatch_endpos_col(int no) { return (int32_t)rex.reg_mmatch->endpos[no].col; }
 int nvim_regexp_call_prog_magic_wrong(void) { return prog_magic_wrong(); }
-void nvim_regexp_call_emsg_null(void) { emsg(_(e_null)); }
-void nvim_regexp_call_emsg_sub_nesting(void) { emsg(_(e_substitute_nesting_too_deep)); }
 void nvim_regexp_call_iemsg_not_enough_space(void) { iemsg("vim_regsub_both(): not enough space"); }
 void nvim_regexp_call_iemsg_re_damg(void) { iemsg(_(e_re_damg)); }
 
@@ -923,8 +916,6 @@ void unref_extmatch(reg_extmatch_T *em)
 {
   rs_unref_extmatch(em);
 }
-
-extern int rs_reg_match_visual(void);
 
 // Check the regexp program for its magic number.
 // Return true if it's wrong.
@@ -1923,12 +1914,6 @@ static int64_t bl_minval;
 static int64_t bl_maxval;
 
 
-// Wrapper: now calls rs_regmatch (Rust implementation, Phase 7)
-extern int rs_regmatch(uint8_t *scan, const void *tm, int *timed_out);
-int nvim_regexp_call_regmatch(uint8_t *scan, const void *tm, int *timed_out) {
-  return rs_regmatch(scan, tm, timed_out);
-}
-
 // --- regmatch accessor functions for Rust FFI (rs_regmatch) ---
 
 // Regstack/backpos management
@@ -2278,8 +2263,6 @@ static const char e_ill_char_class[] = N_("E877: (NFA regexp) Invalid character 
 static const char e_value_too_large[] = N_("E951: \\% value too large");
 
 // --- Phase 3: NFA regatom accessor functions ---
-extern int rs_nfa_regatom(void);
-extern int rs_nfa_reg(int paren);
 void nvim_regexp_emsg_nul_found(void)
 {
   emsg(_(e_nul_found));
@@ -2313,14 +2296,6 @@ void nvim_regexp_emsg_value_too_large(void)
 void nvim_regexp_semsg_missing_value(int c)
 {
   semsg(_(e_nfa_regexp_missing_value_in_chr), c);
-}
-int nvim_regexp_call_nfa_reg(int paren)
-{
-  return rs_nfa_reg(paren);
-}
-int nvim_regexp_call_nfa_regatom(void)
-{
-  return rs_nfa_regatom();
 }
 uint8_t *nvim_regexp_get_classchars(void) { return classchars; }
 int nvim_regexp_get_nfa_classcodes(int index) { return nfa_classcodes[index]; }
@@ -2750,9 +2725,6 @@ int nvim_regexp_get_rex_nfa_nsubexpr(void) { return rex.nfa_nsubexpr; }
 
 // Character/utility functions callable from Rust
 int nvim_regexp_call_ascii_iswhite(int c) { return ascii_iswhite(c); }
-int nvim_regexp_call_reg_prev_class(void) { return rs_reg_prev_class(); }
-int nvim_regexp_call_reg_match_visual(void) { return rs_reg_match_visual(); }
-void nvim_regexp_call_reg_nextline(void) { rs_reg_nextline(); }
 
 // NFA prog field accessors for nfa_regmatch
 int nvim_nfa_prog_get_re_engine(void *prog) { return ((nfa_regprog_T *)prog)->re_engine; }
