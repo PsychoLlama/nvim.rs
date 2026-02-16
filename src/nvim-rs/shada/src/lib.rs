@@ -1948,6 +1948,9 @@ impl Default for MapHash {
     }
 }
 
+/// Sentinel value for "not found" in map operations.
+const MH_TOMBSTONE: u32 = u32::MAX;
+
 /// FFI-compatible representation of C's `Set(cstr_t)` (40 bytes).
 #[repr(C)]
 pub struct SetCstrT {
@@ -2078,6 +2081,8 @@ extern "C" {
     fn nvim_hmll_map_destroy(map: *mut PMapCstrT);
     /// Get entry from map by string key.
     fn nvim_hmll_map_get(map: *mut PMapCstrT, key: *const c_char) -> *mut HMLListEntry;
+    /// Get key index from set by string key (returns MH_TOMBSTONE if not found).
+    fn rs_mh_get_cstr_t(set: *mut SetCstrT, key: *const c_char) -> u32;
     /// Put entry into map by string key.
     fn nvim_hmll_map_put(map: *mut PMapCstrT, key: *const c_char, entry: *mut HMLListEntry);
     /// Remove entry from map by string key.
@@ -2338,9 +2343,17 @@ pub unsafe extern "C" fn rs_hms_insert(
             // New entry is newer, remove the old one
             rs_hmll_remove(hmll, existing);
         } else if !do_iter && entry.timestamp == existing_entry.data.timestamp {
-            // Same timestamp, prefer current Neovim instance entry
+            // Same timestamp, prefer current Neovim instance entry.
+            // The old key string is freed as part of freeing the entry, so
+            // we must update the key pointer in the map to the new string.
+            let new_key = entry.data.history_item.string;
+            let map = &raw mut (*hmll).contained_entries;
+            let ki = rs_mh_get_cstr_t(&raw mut (*map).set, key);
             nvim_shada_free_shada_entry(&raw mut existing_entry.data);
             existing_entry.data = entry;
+            if ki != MH_TOMBSTONE {
+                *(*map).set.keys.add(ki as usize) = new_key;
+            }
             return;
         } else {
             // Existing entry is newer or same timestamp from file, skip

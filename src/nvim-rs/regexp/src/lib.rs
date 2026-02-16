@@ -14726,6 +14726,10 @@ pub unsafe extern "C" fn rs_vim_regexec_string(
 ) -> c_int {
     let prog = nvim_regmatch_get_regprog(rmp);
 
+    if prog.is_null() {
+        return 0;
+    }
+
     // Cannot use the same prog recursively
     if nvim_regprog_get_re_in_use(prog) != 0 {
         nvim_regexp_call_emsg_recursive();
@@ -14798,6 +14802,10 @@ pub unsafe extern "C" fn rs_vim_regexec_multi(
     timed_out: *mut c_int,
 ) -> c_int {
     let prog = nvim_regmmatch_get_regprog(rmp);
+
+    if prog.is_null() {
+        return 0;
+    }
 
     // Cannot use the same prog recursively
     if nvim_regprog_get_re_in_use(prog) != 0 {
