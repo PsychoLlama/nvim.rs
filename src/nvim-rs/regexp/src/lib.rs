@@ -10229,7 +10229,6 @@ extern "C" {
     fn nvim_nfa_thread_get_pim_ptr(l: NfaListHandle, idx: c_int) -> NfaPimHandle;
 
     // C wrapper functions for complex operations
-    fn nvim_regexp_call_sub_equal(sub1: *mut c_void, sub2: *mut c_void) -> c_int;
     fn nvim_regexp_call_match_backref(
         sub: *mut c_void,
         subidx: c_int,
@@ -10269,11 +10268,6 @@ extern "C" {
         pim: NfaPimHandle,
         ip: *mut c_int,
     ) -> RegsubsHandle;
-    fn nvim_regexp_call_copy_sub(to: *mut c_void, from: *mut c_void);
-    fn nvim_regexp_call_copy_sub_off(to: *mut c_void, from: *mut c_void);
-    fn nvim_regexp_call_copy_ze_off(to: *mut c_void, from: *mut c_void);
-    fn nvim_regexp_call_clear_sub(sub: *mut c_void);
-    fn nvim_regexp_call_copy_pim(to: NfaPimHandle, from: NfaPimHandle);
     fn nvim_regexp_call_nfa_regmatch(
         prog: NfaProgHandle,
         start: NfaStateHandle,
@@ -10507,16 +10501,58 @@ pub unsafe extern "C" fn rs_sub_equal(
     sub2: *mut c_void,
     has_backref: c_int,
 ) -> c_int {
-    sub_equal(
-        sub1.cast::<RegsubT>(),
-        sub2.cast::<RegsubT>(),
-        has_backref,
-    ) as c_int
+    sub_equal(sub1.cast::<RegsubT>(), sub2.cast::<RegsubT>(), has_backref) as c_int
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn rs_copy_pim(to: *mut c_void, from: *mut c_void) {
     copy_pim(to.cast::<NfaPimT>(), from.cast::<NfaPimT>());
+}
+
+// --- Inline helpers for internal use (accept opaque handles) ---
+
+/// Copy submatch (opaque handle version for internal use).
+#[inline]
+unsafe fn copy_sub_o(to: *mut c_void, from: *mut c_void) {
+    copy_sub(to.cast::<RegsubT>(), from.cast::<RegsubT>());
+}
+
+/// Copy submatch excluding main match (opaque handle version).
+#[inline]
+unsafe fn copy_sub_off_o(to: *mut c_void, from: *mut c_void) {
+    copy_sub_off(to.cast::<RegsubT>(), from.cast::<RegsubT>());
+}
+
+/// Copy ze offset if \ze present (opaque handle version).
+#[inline]
+unsafe fn copy_ze_off_o(to: *mut c_void, from: *mut c_void) {
+    copy_ze_off(
+        to.cast::<RegsubT>(),
+        from.cast::<RegsubT>(),
+        nvim_regexp_get_rex_nfa_has_zend(),
+    );
+}
+
+/// Clear submatch (opaque handle version).
+#[inline]
+unsafe fn clear_sub_o(sub: *mut c_void) {
+    clear_sub(sub.cast::<RegsubT>(), nvim_regexp_get_rex_nfa_nsubexpr());
+}
+
+/// Copy PIM (opaque handle version).
+#[inline]
+unsafe fn copy_pim_o(to: *mut c_void, from: *mut c_void) {
+    copy_pim(to.cast::<NfaPimT>(), from.cast::<NfaPimT>());
+}
+
+/// Compare submatches (opaque handle version).
+#[inline]
+unsafe fn sub_equal_o(sub1: *mut c_void, sub2: *mut c_void) -> bool {
+    sub_equal(
+        sub1.cast::<RegsubT>(),
+        sub2.cast::<RegsubT>(),
+        nvim_regexp_get_rex_nfa_has_backref(),
+    )
 }
 
 /// Return true if "one" and "two" PIM states are equal.
@@ -10559,11 +10595,11 @@ pub unsafe extern "C" fn rs_has_state_with_pos(
         if nvim_nfa_thread_get_state_id(l, i) != state_id {
             continue;
         }
-        if nvim_regexp_call_sub_equal(nvim_nfa_thread_get_subs_norm(l, i), subs_norm) == 0 {
+        if !sub_equal_o(nvim_nfa_thread_get_subs_norm(l, i), subs_norm) {
             continue;
         }
         if nvim_regexp_get_nfa_has_zsubexpr() != 0
-            && nvim_regexp_call_sub_equal(nvim_nfa_thread_get_subs_synt(l, i), subs_synt) == 0
+            && !sub_equal_o(nvim_nfa_thread_get_subs_synt(l, i), subs_synt)
         {
             continue;
         }
@@ -10930,12 +10966,12 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         // break from match arm - continue to next state
                     } else {
                         nvim_regexp_set_nfa_match(1); // true
-                        nvim_regexp_call_copy_sub(
+                        copy_sub_o(
                             nvim_regexp_regsubs_get_norm(submatch),
                             nvim_nfa_thread_get_subs_norm(thislist, listidx),
                         );
                         if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
-                            nvim_regexp_call_copy_sub(
+                            copy_sub_o(
                                 nvim_regexp_regsubs_get_synt(submatch),
                                 nvim_nfa_thread_get_subs_synt(thislist, listidx),
                             );
@@ -10976,12 +11012,12 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     }
                     // do not set submatches for \@!
                     if state_c != NFA_END_INVISIBLE_NEG {
-                        nvim_regexp_call_copy_sub(
+                        copy_sub_o(
                             nvim_regexp_regsubs_get_norm(m),
                             nvim_nfa_thread_get_subs_norm(thislist, listidx),
                         );
                         if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
-                            nvim_regexp_call_copy_sub(
+                            copy_sub_o(
                                 nvim_regexp_regsubs_get_synt(m),
                                 nvim_nfa_thread_get_subs_synt(thislist, listidx),
                             );
@@ -11017,12 +11053,12 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         let in_use = nvim_regexp_regsubs_get_norm_in_use(m);
 
                         // Copy submatch info for the recursive call
-                        nvim_regexp_call_copy_sub_off(
+                        copy_sub_off_o(
                             nvim_regexp_regsubs_get_norm(m),
                             nvim_nfa_thread_get_subs_norm(thislist, listidx),
                         );
                         if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
-                            nvim_regexp_call_copy_sub_off(
+                            copy_sub_off_o(
                                 nvim_regexp_regsubs_get_synt(m),
                                 nvim_nfa_thread_get_subs_synt(thislist, listidx),
                             );
@@ -11049,18 +11085,18 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             || state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST;
                         if result != is_neg as c_int {
                             // Copy submatch info from the recursive call
-                            nvim_regexp_call_copy_sub_off(
+                            copy_sub_off_o(
                                 nvim_nfa_thread_get_subs_norm(thislist, listidx),
                                 nvim_regexp_regsubs_get_norm(m),
                             );
                             if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
-                                nvim_regexp_call_copy_sub_off(
+                                copy_sub_off_o(
                                     nvim_nfa_thread_get_subs_synt(thislist, listidx),
                                     nvim_regexp_regsubs_get_synt(m),
                                 );
                             }
                             // If the pattern has \ze and it matched, use it.
-                            nvim_regexp_call_copy_ze_off(
+                            copy_ze_off_o(
                                 nvim_nfa_thread_get_subs_norm(thislist, listidx),
                                 nvim_regexp_regsubs_get_norm(m),
                             );
@@ -11128,12 +11164,9 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         // Don't try to match pattern
                     } else {
                         // Copy submatch info to the recursive call
-                        nvim_regexp_call_copy_sub_off(nvim_regexp_regsubs_get_norm(m), subs_norm);
+                        copy_sub_off_o(nvim_regexp_regsubs_get_norm(m), subs_norm);
                         if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
-                            nvim_regexp_call_copy_sub_off(
-                                nvim_regexp_regsubs_get_synt(m),
-                                subs_synt,
-                            );
+                            copy_sub_off_o(nvim_regexp_regsubs_get_synt(m), subs_synt);
                         }
 
                         result = nvim_regexp_call_recursive_regmatch(
@@ -11151,12 +11184,12 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         }
                         if result != 0 {
                             // Copy submatch info from the recursive call
-                            nvim_regexp_call_copy_sub_off(
+                            copy_sub_off_o(
                                 nvim_nfa_thread_get_subs_norm(thislist, listidx),
                                 nvim_regexp_regsubs_get_norm(m),
                             );
                             if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
-                                nvim_regexp_call_copy_sub_off(
+                                copy_sub_off_o(
                                     nvim_nfa_thread_get_subs_synt(thislist, listidx),
                                     nvim_regexp_regsubs_get_synt(m),
                                 );
@@ -12114,12 +12147,12 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             || pim_state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST;
                         if result != is_neg as c_int {
                             // Copy submatch info from the recursive call
-                            nvim_regexp_call_copy_sub_off(
+                            copy_sub_off_o(
                                 nvim_nfa_pim_get_subs_norm(pim_ptr),
                                 nvim_regexp_regsubs_get_norm(m),
                             );
                             if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
-                                nvim_regexp_call_copy_sub_off(
+                                copy_sub_off_o(
                                     nvim_nfa_pim_get_subs_synt(pim_ptr),
                                     nvim_regexp_regsubs_get_synt(m),
                                 );
@@ -12137,12 +12170,12 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         || pim_state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST;
                     if result != is_neg as c_int {
                         // Copy submatch info
-                        nvim_regexp_call_copy_sub_off(
+                        copy_sub_off_o(
                             nvim_nfa_thread_get_subs_norm(thislist, listidx),
                             nvim_nfa_pim_get_subs_norm(pim_ptr),
                         );
                         if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
-                            nvim_regexp_call_copy_sub_off(
+                            copy_sub_off_o(
                                 nvim_nfa_thread_get_subs_synt(thislist, listidx),
                                 nvim_nfa_pim_get_subs_synt(pim_ptr),
                             );
@@ -12162,7 +12195,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 // adding the state causes the list to be reallocated.
                 if use_pim {
                     pim_copy = nvim_regexp_alloc_pim();
-                    nvim_regexp_call_copy_pim(pim_copy, pim_ptr);
+                    copy_pim_o(pim_copy, pim_ptr);
                     pim_ptr = pim_copy;
                 }
 
@@ -12418,10 +12451,10 @@ pub unsafe extern "C" fn rs_nfa_regtry(
     let subs_synt = nvim_regexp_regsubs_get_synt(subs);
     let m_norm = nvim_regexp_regsubs_get_norm(m);
     let m_synt = nvim_regexp_regsubs_get_synt(m);
-    nvim_regexp_call_clear_sub(subs_norm);
-    nvim_regexp_call_clear_sub(m_norm);
-    nvim_regexp_call_clear_sub(subs_synt);
-    nvim_regexp_call_clear_sub(m_synt);
+    clear_sub_o(subs_norm);
+    clear_sub_o(m_norm);
+    clear_sub_o(subs_synt);
+    clear_sub_o(m_synt);
 
     let result = rs_nfa_regmatch(prog, start, subs, m);
 

@@ -6737,10 +6737,6 @@ extern void rs_copy_ze_off(void *to, void *from, int has_zend);
 extern void rs_clear_sub(void *sub, int nsubexpr);
 extern void rs_copy_pim(void *to, void *from);
 
-int nvim_regexp_call_sub_equal(void *sub1, void *sub2)
-{
-  return rs_sub_equal(sub1, sub2, rex.nfa_has_backref);
-}
 int nvim_regexp_call_match_backref(void *sub, int subidx, int *bytelen)
 {
   return match_backref((regsub_T *)sub, subidx, bytelen);
@@ -6782,28 +6778,6 @@ void *nvim_regexp_call_addstate_here(void *l, void *state, void *subs, void *pim
 {
   return (void *)addstate_here((nfa_list_T *)l, (nfa_state_T *)state,
                                (regsubs_T *)subs, (nfa_pim_T *)pim, ip);
-}
-
-// Submatch operations wrappers — now delegating to Rust implementations
-void nvim_regexp_call_copy_sub(void *to, void *from)
-{
-  rs_copy_sub(to, from);
-}
-void nvim_regexp_call_copy_sub_off(void *to, void *from)
-{
-  rs_copy_sub_off(to, from);
-}
-void nvim_regexp_call_copy_ze_off(void *to, void *from)
-{
-  rs_copy_ze_off(to, from, rex.nfa_has_zend);
-}
-void nvim_regexp_call_clear_sub(void *sub)
-{
-  rs_clear_sub(sub, rex.nfa_nsubexpr);
-}
-void nvim_regexp_call_copy_pim(void *to, void *from)
-{
-  rs_copy_pim(to, from);
 }
 
 // nfa_regmatch wrapper (for recursive_regmatch to call from Rust)
