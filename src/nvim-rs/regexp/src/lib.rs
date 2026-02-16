@@ -6933,9 +6933,6 @@ extern "C" {
     fn nvim_regexp_set_rex_nfa_has_backref(v: c_int);
 
     fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
-
-    // NFA constant validation accessor
-    fn nvim_regexp_get_nfa_constant(index: c_int) -> c_int;
 }
 
 /// Emit a value into the NFA postfix buffer, growing if needed.

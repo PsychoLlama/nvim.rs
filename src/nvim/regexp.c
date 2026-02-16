@@ -76,26 +76,6 @@ typedef enum {
   RGLF_SUBMATCH = 0x04,
 } reg_getline_flags_T;
 
-enum {
-  /// In the NFA engine: how many braces are allowed.
-  /// TODO(RE): Use dynamic memory allocation instead of static, like here
-  NFA_MAX_BRACES = 20,
-};
-
-enum {
-  /// In the NFA engine: how many states are allowed.
-  NFA_MAX_STATES = 100000,
-  NFA_TOO_EXPENSIVE = -1,
-};
-
-/// Which regexp engine to use? Needed for vim_regcomp().
-/// Must match with 'regexpengine'.
-enum {
-  AUTOMATIC_ENGINE    = 0,
-  BACKTRACKING_ENGINE = 1,
-  NFA_ENGINE          = 2,
-};
-
 /// Structure returned by vim_regcomp() to pass on to vim_regexec().
 /// This is the general structure. For the actual matcher, two specific
 /// structures are used. See code below.
@@ -192,63 +172,6 @@ typedef struct {
   } se_u;
 } save_se_T;
 
-// Values for rs_state in regitem_T.
-typedef enum regstate_E {
-  RS_NOPEN = 0,         // NOPEN and NCLOSE
-  RS_MOPEN,             // MOPEN + [0-9]
-  RS_MCLOSE,            // MCLOSE + [0-9]
-  RS_ZOPEN,             // ZOPEN + [0-9]
-  RS_ZCLOSE,            // ZCLOSE + [0-9]
-  RS_BRANCH,            // BRANCH
-  RS_BRCPLX_MORE,       // BRACE_COMPLEX and trying one more match
-  RS_BRCPLX_LONG,       // BRACE_COMPLEX and trying longest match
-  RS_BRCPLX_SHORT,      // BRACE_COMPLEX and trying shortest match
-  RS_NOMATCH,           // NOMATCH
-  RS_BEHIND1,           // BEHIND / NOBEHIND matching rest
-  RS_BEHIND2,           // BEHIND / NOBEHIND matching behind part
-  RS_STAR_LONG,         // STAR/PLUS/BRACE_SIMPLE longest match
-  RS_STAR_SHORT,  // STAR/PLUS/BRACE_SIMPLE shortest match
-} regstate_T;
-
-// When there are alternatives a regstate_T is put on the regstack to remember
-// what we are doing.
-// Before it may be another type of item, depending on rs_state, to remember
-// more things.
-typedef struct regitem_S {
-  regstate_T rs_state;         // what we are doing, one of RS_ above
-  int16_t rs_no;            // submatch nr or BEHIND/NOBEHIND
-  uint8_t *rs_scan;         // current node in program
-  union {
-    save_se_T sesave;
-    regsave_T regsave;
-  } rs_un;                      // room for saving rex.input
-} regitem_T;
-
-// used for BEHIND and NOBEHIND matching
-typedef struct regbehind_S {
-  regsave_T save_after;
-  regsave_T save_behind;
-  int save_need_clear_subexpr;
-  save_se_T save_start[NSUBEXP];
-  save_se_T save_end[NSUBEXP];
-} regbehind_T;
-
-// Rust FFI: position save/restore (Phase 1)
-// Since the out pointers in the list are always
-// uninitialized, we use the pointers themselves
-// as storage for the Ptrlists.
-typedef union Ptrlist Ptrlist;
-union Ptrlist {
-  Ptrlist *next;
-  nfa_state_T *s;
-};
-
-struct Frag {
-  nfa_state_T *start;
-  Ptrlist *out;
-};
-typedef struct Frag Frag_T;
-
 typedef struct {
   int in_use;       ///< number of subexpr with useful info
 
@@ -289,7 +212,7 @@ struct nfa_pim_S {
 typedef struct {
   nfa_state_T *state;
   int count;
-  nfa_pim_T pim;                // if pim.result != NFA_PIM_UNUSED: postponed
+  nfa_pim_T pim;                // if pim.result != 0 (NFA_PIM_UNUSED): postponed
                                 // invisible match
   regsubs_T subs;               // submatch info, only party used
 } nfa_thread_T;
@@ -303,15 +226,6 @@ typedef struct {
   int has_pim;                  ///< true when any state has a PIM
 } nfa_list_T;
 
-// Magic characters have a special meaning, they don't match literally.
-// Magic characters are negative.  This separates them from literal characters
-// (possibly multi-byte).  Only ASCII characters can be Magic.
-#define Magic(x)        ((int)(x) - 256)
-#define un_Magic(x)     ((x) + 256)
-#define is_Magic(x)     ((x) < 0)
-
-typedef void (*fptr_T)(int *, int);
-
 // The first byte of the BT regexp internal "program" is actually this magic
 // number; the start node begins in the second byte.  It's used to catch the
 // most severe mutilation of the program by the caller.
@@ -319,21 +233,6 @@ typedef void (*fptr_T)(int *, int);
 
 // Utility definitions.
 #define UCHARAT(p)      ((int)(*(uint8_t *)(p)))
-
-// Used for an error (down from) vim_regcomp(): give the error message, set
-// rc_did_emsg and return NULL
-#define EMSG_RET_NULL(m) return (emsg(m), rc_did_emsg = true, (void *)NULL)
-#define IEMSG_RET_NULL(m) return (iemsg(m), rc_did_emsg = true, (void *)NULL)
-#define EMSG_RET_FAIL(m) return (emsg(m), rc_did_emsg = true, FAIL)
-#define EMSG2_RET_NULL(m, c) \
-  return (semsg((m), (c) ? "" : "\\"), rc_did_emsg = true, (void *)NULL)
-#define EMSG3_RET_NULL(m, c, a) \
-  return (semsg((m), (c) ? "" : "\\", (a)), rc_did_emsg = true, (void *)NULL)
-#define EMSG2_RET_FAIL(m, c) \
-  return (semsg((m), (c) ? "" : "\\"), rc_did_emsg = true, FAIL)
-#define EMSG_ONE_RET_NULL EMSG2_RET_NULL(_(e_invalid_item_in_str_brackets), reg_magic == MAGIC_ALL)
-
-#define MAX_LIMIT       (32767 << 16)
 
 static const char e_invalid_character_after_str_at[]
   = N_("E59: Invalid character after %s@");
@@ -366,16 +265,6 @@ static const char e_substitute_nesting_too_deep[] = N_("E1290: substitute nestin
 static const char e_unicode_val_too_large[]
   = N_("E1541: Value too large, max Unicode codepoint is U+10FFFF");
 
-#define NOT_MULTI       0
-#define MULTI_ONE       1
-#define MULTI_MULT      2
-
-// return values for regmatch()
-#define RA_FAIL         1       // something failed, abort
-#define RA_CONT         2       // continue in inner loop
-#define RA_BREAK        3       // break inner loop
-#define RA_MATCH        4       // successful match
-#define RA_NOMATCH      5       // didn't match
 static char *reg_prev_sub = NULL;
 static size_t reg_prev_sublen = 0;
 
@@ -402,28 +291,6 @@ void nvim_regexp_emsg_resulting_text_too_long(void) { emsg(_(e_resulting_text_to
 //  \U  - Long multibyte character code, eg \U12345678
 static char REGEXP_INRANGE[] = "]^-n\\";
 static char REGEXP_ABBR[] = "nrtebdoxuU";
-enum {
-  CLASS_ALNUM = 0,
-  CLASS_ALPHA,
-  CLASS_BLANK,
-  CLASS_CNTRL,
-  CLASS_DIGIT,
-  CLASS_GRAPH,
-  CLASS_LOWER,
-  CLASS_PRINT,
-  CLASS_PUNCT,
-  CLASS_SPACE,
-  CLASS_UPPER,
-  CLASS_XDIGIT,
-  CLASS_TAB,
-  CLASS_RETURN,
-  CLASS_BACKSPACE,
-  CLASS_ESCAPE,
-  CLASS_IDENT,
-  CLASS_KEYWORD,
-  CLASS_FNAME,
-  CLASS_NONE = 99,
-};
 
 /// Check for a character class name "[:name:]".  "pp" points to the '['.
 /// Returns one of the CLASS_ items. CLASS_NONE means that no item was
@@ -433,9 +300,7 @@ extern int rs_get_char_class(char **pp);
 // flags for regflags
 #define RF_ICASE    1   // ignore case
 #define RF_NOICASE  2   // don't ignore case
-#define RF_HASNL    4   // can match a NL
 #define RF_ICOMBINE 8   // ignore combining characters
-#define RF_LOOKBH   16  // uses "\@<=" or "\@<!"
 
 // Global work variables for vim_regcomp().
 
@@ -460,24 +325,6 @@ static int curchr;              // currently parsed character
 static int prevchr;
 static int prevprevchr;         // previous-previous character
 static int nextchr;             // used for ungetchr()
-
-// arguments for reg()
-#define REG_NOPAREN     0       // toplevel reg()
-#define REG_PAREN       1       // \(\)
-#define REG_ZPAREN      2       // \z(\)
-#define REG_NPAREN      3       // \%(\)
-
-typedef struct {
-  char *regparse;
-  int prevchr_len;
-  int curchr;
-  int prevchr;
-  int prevprevchr;
-  int nextchr;
-  int at_start;
-  int prev_at_start;
-  int regnpar;
-} parse_state_T;
 
 static regengine_T bt_regengine;
 static regengine_T nfa_regengine;
@@ -1298,113 +1145,6 @@ static void init_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_
   rex.reg_maxcol = rmp->rmm_maxcol;
 }
 
-// BT regexp engine opcodes and definitions
-
-// The opcodes are:
-
-// definition   number             opnd?    meaning
-#define END             0       //      End of program or NOMATCH operand.
-#define BOL             1       //      Match "" at beginning of line.
-#define EOL             2       //      Match "" at end of line.
-#define BRANCH          3       // node Match this alternative, or the
-                                //      next...
-#define BACK            4       //      Match "", "next" ptr points backward.
-#define EXACTLY         5       // str  Match this string.
-#define NOTHING         6       //      Match empty string.
-#define STAR            7       // node Match this (simple) thing 0 or more
-                                //      times.
-#define PLUS            8       // node Match this (simple) thing 1 or more
-                                //      times.
-#define MATCH           9       // node match the operand zero-width
-#define NOMATCH         10      // node check for no match with operand
-#define BEHIND          11      // node look behind for a match with operand
-#define NOBEHIND        12      // node look behind for no match with operand
-#define SUBPAT          13      // node match the operand here
-#define BRACE_SIMPLE    14      // node Match this (simple) thing between m and
-                                //      n times (\{m,n\}).
-#define BOW             15      //      Match "" after [^a-zA-Z0-9_]
-#define EOW             16      //      Match "" at    [^a-zA-Z0-9_]
-#define BRACE_LIMITS    17      // nr nr  define the min & max for BRACE_SIMPLE
-                                //      and BRACE_COMPLEX.
-#define NEWL            18      //      Match line-break
-#define BHPOS           19      //      End position for BEHIND or NOBEHIND
-
-// character classes: 20-48 normal, 50-78 include a line-break
-#define ADD_NL          30
-#define FIRST_NL        ANY + ADD_NL
-#define ANY             20      //      Match any one character.
-#define ANYOF           21      // str  Match any character in this string.
-#define ANYBUT          22      // str  Match any character not in this
-                                //      string.
-#define IDENT           23      //      Match identifier char
-#define SIDENT          24      //      Match identifier char but no digit
-#define KWORD           25      //      Match keyword char
-#define SKWORD          26      //      Match word char but no digit
-#define FNAME           27      //      Match file name char
-#define SFNAME          28      //      Match file name char but no digit
-#define PRINT           29      //      Match printable char
-#define SPRINT          30      //      Match printable char but no digit
-#define WHITE           31      //      Match whitespace char
-#define NWHITE          32      //      Match non-whitespace char
-#define DIGIT           33      //      Match digit char
-#define NDIGIT          34      //      Match non-digit char
-#define HEX             35      //      Match hex char
-#define NHEX            36      //      Match non-hex char
-#define OCTAL           37      //      Match octal char
-#define NOCTAL          38      //      Match non-octal char
-#define WORD            39      //      Match word char
-#define NWORD           40      //      Match non-word char
-#define HEAD            41      //      Match head char
-#define NHEAD           42      //      Match non-head char
-#define ALPHA           43      //      Match alpha char
-#define NALPHA          44      //      Match non-alpha char
-#define LOWER           45      //      Match lowercase char
-#define NLOWER          46      //      Match non-lowercase char
-#define UPPER           47      //      Match uppercase char
-#define NUPPER          48      //      Match non-uppercase char
-#define LAST_NL         NUPPER + ADD_NL
-#define WITH_NL(op)     ((op) >= FIRST_NL && (op) <= LAST_NL)
-
-#define MOPEN           80   // -89 Mark this point in input as start of
-                             //     \( … \) subexpr.  MOPEN + 0 marks start of
-                             //     match.
-#define MCLOSE          90   // -99 Analogous to MOPEN.  MCLOSE + 0 marks
-                             //     end of match.
-#define BACKREF         100  // -109 node Match same string again \1-\9.
-
-#define ZOPEN          110  // -119 Mark this point in input as start of
-                            //  \z( … \) subexpr.
-#define ZCLOSE         120  // -129 Analogous to ZOPEN.
-#define ZREF           130  // -139 node Match external submatch \z1-\z9
-
-#define BRACE_COMPLEX   140  // -149 node Match nodes between m & n times
-
-#define NOPEN           150     // Mark this point in input as start of
-                                // \%( subexpr.
-#define NCLOSE          151     // Analogous to NOPEN.
-
-#define MULTIBYTECODE   200     // mbc  Match one multi-byte character
-#define RE_BOF          201     //      Match "" at beginning of file.
-#define RE_EOF          202     //      Match "" at end of file.
-#define CURSOR          203     //      Match location of cursor.
-
-#define RE_LNUM         204     // nr cmp  Match line number
-#define RE_COL          205     // nr cmp  Match column number
-#define RE_VCOL         206     // nr cmp  Match virtual column number
-
-#define RE_MARK         207     // mark cmp  Match mark position
-#define RE_VISUAL       208     //      Match Visual area
-#define RE_COMPOSING    209     // any composing characters
-
-// Flags to be passed up and down.
-#define HASWIDTH        0x1     // Known never to match null string.
-#define SIMPLE          0x2     // Simple enough to be STAR/PLUS operand.
-#define SPSTART         0x4     // Starts with * or +.
-#define HASNL           0x8     // Contains some \n.
-#define HASLOOKBH       0x10    // Contains "\@<=" or "\@<!".
-#define WORST           0       // Worst case.
-
-static int prevchr_len;         ///< byte length of previous char
 static int num_complex_braces;  ///< Complex \{...} count
 static uint8_t *regcode;         ///< Code-emit pointer, or JUST_CALC_SIZE
 static int64_t regsize;            ///< Code size.
@@ -1620,15 +1360,6 @@ void nvim_regexp_emsg2_e369(int m)
   rc_did_emsg = true;
 }
 
-// used for STAR, PLUS and BRACE_SIMPLE matching
-typedef struct regstar_S {
-  int nextb;            // next byte
-  int nextb_ic;         // next byte reverse case
-  int64_t count;
-  int64_t minval;
-  int64_t maxval;
-} regstar_T;
-
 // used to store input position when a BACK was encountered, so that we now if
 // we made any progress since the last time.
 typedef struct backpos_S {
@@ -1642,17 +1373,6 @@ static regsave_T behind_pos;
 #define REGSTACK_INITIAL        2048
 #define BACKPOS_INITIAL         64
 
-// BT opcode macros
-#define OP(p)           ((int)(*(p)))
-#define NEXT(p)         (((*((p) + 1) & 0377) << 8) + (*((p) + 2) & 0377))
-#define OPERAND(p)      ((p) + 3)
-// Obtain an operand that was stored as four bytes, MSB first.
-#define OPERAND_MIN(p)  (((int64_t)(p)[3] << 24) + ((int64_t)(p)[4] << 16) \
-                         + ((int64_t)(p)[5] << 8) + (int64_t)(p)[6])
-// Obtain a second operand stored as four bytes.
-#define OPERAND_MAX(p)  OPERAND_MIN((p) + 4)
-// Obtain a second single-byte operand stored after a four bytes operand.
-#define OPERAND_CMP(p)  (p)[7]
 
 // Parse the lowest level — thin wrapper around rs_regatom (Rust).
 uint8_t *regatom(int *flagp)
@@ -1674,8 +1394,6 @@ static void bt_regfree(regprog_T *prog)
 {
   xfree(prog);
 }
-
-#define ADVANCE_REGINPUT() MB_PTR_ADV(rex.input)
 
 // The arguments from BRACE_LIMITS are stored here.  They are actually local
 // to regmatch(), but they are here to reduce the amount of stack space used
@@ -2062,7 +1780,6 @@ void nvim_regexp_emsg_e873(void)
   emsg(_("E873: (NFA regexp) proper termination error"));
   rc_did_emsg = true;
 }
-// state_ptr global -- defined after state_ptr declaration (see below)
 
 // nfa_state_T field accessors
 int nvim_nfa_state_get_c(void *s) { return ((nfa_state_T *)s)->c; }
@@ -2080,11 +1797,9 @@ void nvim_nfa_state_clear_lastlist(void *s)
   ((nfa_state_T *)s)->lastlist[1] = 0;
 }
 
-// Address-of accessors for Ptrlist pointer punning
+// Address-of accessors for NFA state pointer manipulation
 void **nvim_nfa_state_out_addr(void *s) { return (void **)&((nfa_state_T *)s)->out; }
 void **nvim_nfa_state_out1_addr(void *s) { return (void **)&((nfa_state_T *)s)->out1; }
-
-// state_ptr indexing — defined after state_ptr declaration (see below)
 
 // Error messages for post2nfa
 void nvim_regexp_emsg_e874(void)
@@ -2104,9 +1819,6 @@ void nvim_regexp_emsg_e876(void)
   rc_did_emsg = true;
 }
 
-// Forward declarations of Phase 6 Rust functions
-
-// Forward declaration of Phase 7 Rust function
 extern void *rs_nfa_regcomp(uint8_t *expr, int re_flags);
 
 // nfa_regprog_T field accessors
@@ -2179,20 +1891,11 @@ void *nvim_nfa_thread_get_pim_ptr(void *l, int idx) { return (void *)&((nfa_list
 
 int nvim_regexp_get_nfa_has_zsubexpr(void) { return rex.nfa_has_zsubexpr; }
 
-// NOTE: C wrapper functions and nfa_match/nfa_ll_index accessors are placed
-// after the static declarations and function definitions they reference.
-// See "Phase 8.2 (part 2)" below.
-
 // Variables only used in nfa_regcomp() and descendants.
 static int nfa_re_flags;  ///< re_flags passed to nfa_regcomp().
 static int *post_start;   ///< holds the postfix form of r.e.
 static int *post_end;
 static int *post_ptr;
-
-// Set when the pattern should use the NFA engine.
-// E.g. [[:upper:]] only allows 8bit characters for BT engine,
-// while NFA engine handles multibyte characters correctly.
-static bool wants_nfa;
 
 static int nstate;  ///< Number of states in the NFA. Also used when executing.
 static int istate;  ///< Index in the state vector, used in alloc_state()
@@ -2224,60 +1927,6 @@ void nvim_regexp_set_wants_nfa(int v) { wants_nfa = (bool)v; }
 void nvim_regexp_set_rex_nfa_has_zend(int v) { rex.nfa_has_zend = v; }
 void nvim_regexp_set_rex_nfa_has_backref(int v) { rex.nfa_has_backref = v; }
 
-// Validation accessor: returns NFA constant by index for Rust tests.
-int nvim_regexp_get_nfa_constant(int index)
-{
-  // Map index to NFA constant for validation
-  static const int nfa_constants[] = {
-    NFA_SPLIT, NFA_MATCH, NFA_EMPTY,
-    NFA_START_COLL, NFA_END_COLL, NFA_START_NEG_COLL, NFA_END_NEG_COLL,
-    NFA_RANGE, NFA_RANGE_MIN, NFA_RANGE_MAX,
-    NFA_CONCAT, NFA_OR, NFA_STAR, NFA_STAR_NONGREEDY,
-    NFA_QUEST, NFA_QUEST_NONGREEDY,
-    NFA_BOL, NFA_EOL, NFA_BOW, NFA_EOW, NFA_BOF, NFA_EOF, NFA_NEWL,
-    NFA_ZSTART, NFA_ZEND, NFA_NOPEN, NFA_NCLOSE,
-    NFA_ANY, NFA_DIGIT, NFA_NDIGIT,
-    NFA_MOPEN, NFA_MCLOSE, NFA_CLASS_ALNUM, NFA_CLASS_FNAME,
-  };
-  if (index < 0 || index >= (int)(sizeof(nfa_constants) / sizeof(nfa_constants[0]))) {
-    return 0x7FFFFFFF;  // sentinel for out-of-range
-  }
-  return nfa_constants[index];
-}
-
-// Helper functions used when doing re2post() ... regatom() parsing
-extern void rs_realloc_post_list(void);
-#define EMIT(c) \
-  do { \
-    if (post_ptr >= post_end) { \
-      rs_realloc_post_list(); \
-    } \
-    *post_ptr++ = c; \
-  } while (0)
-// Search between "start" and "end" and try to recognize a
-// character class in expanded form. For example [0-9].
-
-// Produce the bytes for equivalence class "c".
-// Currently only handles latin1, latin9 and utf-8.
-// Emits bytes in postfix notation: 'a,b,NFA_OR,c,NFA_OR' is
-// equivalent to 'a OR b OR c'
-//
-
-// Parse something followed by possible [*+=].
-//
-// A piece is an atom, possibly followed by a multi, an indication of how many
-// times the atom can be matched.  Example: "a*" matches any sequence of "a"
-// characters: "", "a", "aa", etc.
-//
-// piece   ::=      atom
-//      or  atom  multi
-// NB. Some of the code below is inspired by Russ's.
-
-// Represents an NFA state plus zero or one or two arrows exiting.
-// if c == MATCH, no arrows out; matching state.
-// If c == SPLIT, unlabeled arrows to out and out1 (if != NULL).
-// If c < 256, labeled arrow with character c to out.
-
 static nfa_state_T *state_ptr;  // points to nfa_prog->state
 
 // Phase 5 state_ptr accessors (placed after state_ptr declaration)
@@ -2297,18 +1946,11 @@ void *nvim_regexp_alloc_nfa_prog(int nstate_count)
 // NFA execution code.
 /////////////////////////////////////////////////////////////////
 
-// Values for done in nfa_pim_T.
-#define NFA_PIM_UNUSED   0      // pim not used
-#define NFA_PIM_TODO     1      // pim not done yet
-#define NFA_PIM_MATCH    2      // pim executed, matches
-#define NFA_PIM_NOMATCH  3      // pim executed, no match
 // Used during execution: whether a match has been found.
 static int nfa_match;
 static proftime_T *nfa_time_limit;
 static int *nfa_timed_out;
 static int nfa_time_count;
-// match_backref, match_zref, skip_to_start, find_match_text:
-// Migrated to Rust (rs_match_backref, rs_match_zref, rs_skip_to_start, rs_find_match_text)
 // NFA execution globals accessors
 int nvim_regexp_get_nfa_match(void) { return nfa_match; }
 void nvim_regexp_set_nfa_match(int v) { nfa_match = v; }
