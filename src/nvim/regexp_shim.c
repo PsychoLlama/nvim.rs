@@ -1,4 +1,13 @@
-// Handling of regular expressions: vim_regcomp(), vim_regexec(), vim_regsub()
+// regexp_shim.c -- FFI bridge between Neovim's C core and the Rust regexp engine.
+//
+// All regexp logic (matching, compilation, parsing, substitution) lives in
+// src/nvim-rs/regexp/src/lib.rs. This file contains only:
+//   - Struct/type definitions (regexec_T, bt_regprog_T, nfa_regprog_T, etc.)
+//   - Static global variables (rex, regstack, parser state, etc.)
+//   - Accessor functions that let Rust read/write C struct fields and globals
+//   - Error message helpers wrapping emsg()/semsg() with gettext
+//   - Engine vtable definitions (bt_regengine, nfa_regengine)
+//   - Thin wrappers for public API functions that need C type casts
 
 #include <assert.h>
 #include <ctype.h>
@@ -55,7 +64,6 @@ extern int rs_nfa_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
 extern int rs_bt_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
 extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                int32_t col, void *tm, int *timed_out);
-// vim_regfree and free_regexp_stuff are now directly exported from Rust
 extern int rs_vim_regexec(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_nl(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_prog(void **prog_ptr, int ignore_case, const uint8_t *line, int32_t col);
@@ -63,7 +71,6 @@ extern int rs_vim_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                 int32_t col, void *tm, int *timed_out);
 extern void *rs_vim_regcomp(const uint8_t *expr, int re_flags);
 extern void *rs_bt_regcomp(uint8_t *expr, int re_flags);
-// regatom is now directly exported from Rust
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -323,9 +330,7 @@ static int nextchr;             // used for ungetchr()
 static regengine_T bt_regengine;
 static regengine_T nfa_regengine;
 
-#include "regexp.c.generated.h"
-
-// re_multiline is now directly exported from Rust
+#include "regexp_shim.c.generated.h"
 
 // Accessors for Rust FFI (static helpers exposed for the regexp crate)
 int nvim_regexp_get_char_class(char **pp) { return rs_get_char_class(pp); }
@@ -356,10 +361,6 @@ char *skip_regexp(char *startp, int delim, int magic)
 {
   return skip_regexp_ex(startp, delim, magic, NULL, NULL, NULL);
 }
-
-/// Call skip_regexp() and when the delimiter does not match give an error and
-/// return NULL.
-// skip_regexp_err is now directly exported from Rust
 
 /// skip_regexp() with extra arguments:
 /// When "newp" is not NULL and "dirc" is '?', make an allocated copy of the
@@ -749,8 +750,6 @@ int32_t nvim_regexp_get_rsm_maxline(void) { return (int32_t)rsm.sm_maxline; }
 char *nvim_regexp_call_ml_get_buf(int32_t lnum) { return ml_get_buf(rex.reg_buf, (linenr_T)lnum); }
 int32_t nvim_regexp_call_ml_get_buf_len(int32_t lnum) { return (int32_t)ml_get_buf_len(rex.reg_buf, (linenr_T)lnum); }
 
-// ref_extmatch and unref_extmatch are now directly exported from Rust
-
 // prog_magic_wrong logic is now in Rust (rs_prog_magic_wrong).
 // The C accessor wraps the Rust implementation.
 extern int rs_prog_magic_wrong(void);
@@ -765,7 +764,6 @@ int nvim_regexp_prog_is_nfa_engine(void *prog) {
 }
 ////////////////////////////////////////////////////////////////
 //                    regsub stuff                            //
-// regtilde is now directly exported from Rust
 
 /// Put the submatches in "argv[argskip]" which is a list passed into
 /// call_func() by vim_regsub_both().
@@ -973,8 +971,6 @@ static char *reg_getline_submatch(linenr_T lnum)
   reg_getline_common(lnum, RGLF_LINE | RGLF_SUBMATCH, &line, NULL);
   return line;
 }
-
-// reg_submatch is now directly exported from Rust
 
 // Used for the submatch() function with the optional non-zero argument: get
 // the list of strings from the n'th submatch in allocated memory with NULs
@@ -1277,9 +1273,6 @@ static garray_T backpos = GA_EMPTY_INIT_VALUE;
 static regsave_T behind_pos;
 #define REGSTACK_INITIAL        2048
 #define BACKPOS_INITIAL         64
-
-
-// regatom is now directly exported from Rust
 
 // Thin wrapper: compile via Rust BT engine.
 static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
@@ -2487,9 +2480,6 @@ regprog_T *vim_regcomp(const char *expr_arg, int re_flags)
   return (regprog_T *)rs_vim_regcomp((const uint8_t *)expr_arg, re_flags);
 }
 
-// vim_regfree is now directly exported from Rust
-
-// free_regexp_stuff is now directly exported from Rust
 // Note: "*prog" may be freed and changed.
 // Return true if there is a match, false if not.
 bool vim_regexec_prog(regprog_T **prog, bool ignore_case, const char *line, colnr_T col)

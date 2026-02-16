@@ -27,4 +27,4 @@ extern char *skip_regexp_err(char *startp, int delim, int magic);
 extern void vim_regfree(regprog_T *prog);
 extern void free_regexp_stuff(void);
 
-#include "regexp.h.generated.h"
+#include "regexp_shim.h.generated.h"
