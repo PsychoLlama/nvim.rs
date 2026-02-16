@@ -6729,9 +6729,17 @@ static int nfa_did_time_out(void)
 // --- Phase 8.2 (part 2): C wrapper functions for Rust FFI ---
 // Placed here after the functions they wrap are defined.
 
+// Rust submatch operation declarations (migrated from C)
+extern int rs_sub_equal(void *sub1, void *sub2, int has_backref);
+extern void rs_copy_sub(void *to, void *from);
+extern void rs_copy_sub_off(void *to, void *from);
+extern void rs_copy_ze_off(void *to, void *from, int has_zend);
+extern void rs_clear_sub(void *sub, int nsubexpr);
+extern void rs_copy_pim(void *to, void *from);
+
 int nvim_regexp_call_sub_equal(void *sub1, void *sub2)
 {
-  return sub_equal((regsub_T *)sub1, (regsub_T *)sub2) ? 1 : 0;
+  return rs_sub_equal(sub1, sub2, rex.nfa_has_backref);
 }
 int nvim_regexp_call_match_backref(void *sub, int subidx, int *bytelen)
 {
@@ -6776,26 +6784,26 @@ void *nvim_regexp_call_addstate_here(void *l, void *state, void *subs, void *pim
                                (regsubs_T *)subs, (nfa_pim_T *)pim, ip);
 }
 
-// Submatch operations wrappers
+// Submatch operations wrappers — now delegating to Rust implementations
 void nvim_regexp_call_copy_sub(void *to, void *from)
 {
-  copy_sub((regsub_T *)to, (regsub_T *)from);
+  rs_copy_sub(to, from);
 }
 void nvim_regexp_call_copy_sub_off(void *to, void *from)
 {
-  copy_sub_off((regsub_T *)to, (regsub_T *)from);
+  rs_copy_sub_off(to, from);
 }
 void nvim_regexp_call_copy_ze_off(void *to, void *from)
 {
-  copy_ze_off((regsub_T *)to, (regsub_T *)from);
+  rs_copy_ze_off(to, from, rex.nfa_has_zend);
 }
 void nvim_regexp_call_clear_sub(void *sub)
 {
-  clear_sub((regsub_T *)sub);
+  rs_clear_sub(sub, rex.nfa_nsubexpr);
 }
 void nvim_regexp_call_copy_pim(void *to, void *from)
 {
-  copy_pim((nfa_pim_T *)to, (nfa_pim_T *)from);
+  rs_copy_pim(to, from);
 }
 
 // nfa_regmatch wrapper (for recursive_regmatch to call from Rust)

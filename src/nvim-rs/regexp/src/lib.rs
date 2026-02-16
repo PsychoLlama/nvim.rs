@@ -10090,7 +10090,112 @@ pub const unsafe extern "C" fn rs_nfa_re_num_cmp(val: usize, op: c_int, pos: usi
 // NFA Execution Engine — Phase 8.2: Submatch helpers and backref matching
 // ============================================================================
 
-/// Opaque handle types for NFA execution data structures.
+// --- Concrete struct types matching C layout in regexp.c ---
+
+/// Matches C `struct multipos` inside `regsub_T`.
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct MultiPos {
+    start_lnum: i32,  // linenr_T
+    end_lnum: i32,    // linenr_T
+    start_col: c_int, // colnr_T
+    end_col: c_int,   // colnr_T
+}
+
+/// Matches C `struct linepos` inside `regsub_T`.
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct LinePos {
+    start: *mut u8,
+    end: *mut u8,
+}
+
+/// Union inside `regsub_T`: multi-line or single-line positions.
+#[repr(C)]
+#[derive(Copy, Clone)]
+union RegsubList {
+    multi: [MultiPos; NSUBEXP],
+    line: [LinePos; NSUBEXP],
+}
+
+/// Matches C `regsub_T` — submatch position storage.
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct RegsubT {
+    in_use: c_int,
+    list: RegsubList,
+    orig_start_col: c_int, // colnr_T
+}
+
+/// Matches C `regsubs_T` — norm + synt submatches.
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct RegsubsT {
+    norm: RegsubT,
+    synt: RegsubT,
+}
+
+/// Matches C `nfa_state_T` — NFA state node.
+#[repr(C)]
+struct NfaStateT {
+    c: c_int,
+    out: *mut NfaStateT,
+    out1: *mut NfaStateT,
+    id: c_int,
+    lastlist: [c_int; 2],
+    val: c_int,
+}
+
+/// Matches C `nfa_pim_T` — Postponed Invisible Match.
+#[repr(C)]
+struct NfaPimT {
+    result: c_int,
+    state: *mut NfaStateT,
+    subs: RegsubsT,
+    end: SaveSeUnion, // union { lpos_T pos; uint8_t *ptr; }
+}
+
+/// Matches C `nfa_thread_T` — NFA execution thread.
+#[repr(C)]
+struct NfaThreadT {
+    state: *mut NfaStateT,
+    count: c_int,
+    pim: NfaPimT,
+    subs: RegsubsT,
+}
+
+/// Matches C `nfa_list_T` — list of NFA execution states.
+#[repr(C)]
+struct NfaListT {
+    t: *mut NfaThreadT,
+    n: c_int,
+    len: c_int,
+    id: c_int,
+    has_pim: c_int,
+}
+
+/// Matches C `nfa_regprog_T` (common prefix only, flexible array member follows).
+#[repr(C)]
+struct NfaRegprogT {
+    engine: *mut c_void, // regengine_T *
+    regflags: c_uint,
+    re_engine: c_uint,
+    re_flags: c_uint,
+    re_in_use: bool,
+    start: *mut NfaStateT,
+    reganch: c_int,
+    regstart: c_int,
+    match_text: *mut u8,
+    has_zend: c_int,
+    has_backref: c_int,
+    reghasz: c_int,
+    pattern: *mut c_char,
+    nsubexp: c_int,
+    nstate: c_int,
+    // state[] flexible array member follows — access via pointer arithmetic
+}
+
+/// Type aliases for backward compatibility with opaque handle code.
 type RegsubHandle = *mut c_void; // regsub_T*
 type NfaPimHandle = *mut c_void; // nfa_pim_T*
 type NfaListHandle = *mut c_void; // nfa_list_T*
@@ -10205,6 +10310,213 @@ extern "C" {
     fn nvim_regexp_set_nfa_timed_out(v: *mut c_int);
     fn nvim_regexp_get_nfa_time_count() -> c_int;
     fn nvim_regexp_set_nfa_time_count(v: c_int);
+}
+
+// ============================================================================
+// Submatch operations — migrated from C regexp.c
+// ============================================================================
+
+/// Clear the sub-expression matches in `sub`.
+unsafe fn clear_sub(sub: *mut RegsubT, nsubexpr: c_int) {
+    if nvim_regexp_is_reg_multi() != 0 {
+        // Use 0xff to set lnum to -1
+        core::ptr::write_bytes((*sub).list.multi.as_mut_ptr(), 0xff, nsubexpr as usize);
+    } else {
+        core::ptr::write_bytes((*sub).list.line.as_mut_ptr(), 0, nsubexpr as usize);
+    }
+    (*sub).in_use = 0;
+}
+
+/// Copy the submatches from `from` to `to`.
+unsafe fn copy_sub(to: *mut RegsubT, from: *const RegsubT) {
+    (*to).in_use = (*from).in_use;
+    if (*from).in_use <= 0 {
+        return;
+    }
+    if nvim_regexp_is_reg_multi() != 0 {
+        core::ptr::copy_nonoverlapping(
+            (*from).list.multi.as_ptr(),
+            (*to).list.multi.as_mut_ptr(),
+            (*from).in_use as usize,
+        );
+        (*to).orig_start_col = (*from).orig_start_col;
+    } else {
+        core::ptr::copy_nonoverlapping(
+            (*from).list.line.as_ptr(),
+            (*to).list.line.as_mut_ptr(),
+            (*from).in_use as usize,
+        );
+    }
+}
+
+/// Like `copy_sub()` but exclude the main match (index 0).
+unsafe fn copy_sub_off(to: *mut RegsubT, from: *const RegsubT) {
+    if (*to).in_use < (*from).in_use {
+        (*to).in_use = (*from).in_use;
+    }
+    if (*from).in_use <= 1 {
+        return;
+    }
+    if nvim_regexp_is_reg_multi() != 0 {
+        core::ptr::copy_nonoverlapping(
+            (*from).list.multi.as_ptr().add(1),
+            (*to).list.multi.as_mut_ptr().add(1),
+            ((*from).in_use - 1) as usize,
+        );
+    } else {
+        core::ptr::copy_nonoverlapping(
+            (*from).list.line.as_ptr().add(1),
+            (*to).list.line.as_mut_ptr().add(1),
+            ((*from).in_use - 1) as usize,
+        );
+    }
+}
+
+/// Like `copy_sub()` but only copy the end of the main match if `\ze` is present.
+unsafe fn copy_ze_off(to: *mut RegsubT, from: *const RegsubT, has_zend: c_int) {
+    if has_zend == 0 {
+        return;
+    }
+    if nvim_regexp_is_reg_multi() != 0 {
+        if (*from).list.multi[0].end_lnum >= 0 {
+            (*to).list.multi[0].end_lnum = (*from).list.multi[0].end_lnum;
+            (*to).list.multi[0].end_col = (*from).list.multi[0].end_col;
+        }
+    } else if !(*from).list.line[0].end.is_null() {
+        (*to).list.line[0].end = (*from).list.line[0].end;
+    }
+}
+
+/// Return true if `sub1` and `sub2` have the same start positions.
+/// When using back-references also check the end position.
+#[allow(clippy::cast_possible_truncation)]
+unsafe fn sub_equal(sub1: *const RegsubT, sub2: *const RegsubT, has_backref: c_int) -> bool {
+    let todo = if (*sub1).in_use > (*sub2).in_use {
+        (*sub1).in_use
+    } else {
+        (*sub2).in_use
+    };
+    if nvim_regexp_is_reg_multi() != 0 {
+        for i in 0..todo as usize {
+            let s1 = if (i as c_int) < (*sub1).in_use {
+                (*sub1).list.multi[i].start_lnum
+            } else {
+                -1
+            };
+            let s2 = if (i as c_int) < (*sub2).in_use {
+                (*sub2).list.multi[i].start_lnum
+            } else {
+                -1
+            };
+            if s1 != s2 {
+                return false;
+            }
+            if s1 != -1 && (*sub1).list.multi[i].start_col != (*sub2).list.multi[i].start_col {
+                return false;
+            }
+            if has_backref != 0 {
+                let e1 = if (i as c_int) < (*sub1).in_use {
+                    (*sub1).list.multi[i].end_lnum
+                } else {
+                    -1
+                };
+                let e2 = if (i as c_int) < (*sub2).in_use {
+                    (*sub2).list.multi[i].end_lnum
+                } else {
+                    -1
+                };
+                if e1 != e2 {
+                    return false;
+                }
+                if e1 != -1 && (*sub1).list.multi[i].end_col != (*sub2).list.multi[i].end_col {
+                    return false;
+                }
+            }
+        }
+    } else {
+        for i in 0..todo as usize {
+            let sp1 = if (i as c_int) < (*sub1).in_use {
+                (*sub1).list.line[i].start
+            } else {
+                core::ptr::null_mut()
+            };
+            let sp2 = if (i as c_int) < (*sub2).in_use {
+                (*sub2).list.line[i].start
+            } else {
+                core::ptr::null_mut()
+            };
+            if sp1 != sp2 {
+                return false;
+            }
+            if has_backref != 0 {
+                let ep1 = if (i as c_int) < (*sub1).in_use {
+                    (*sub1).list.line[i].end
+                } else {
+                    core::ptr::null_mut()
+                };
+                let ep2 = if (i as c_int) < (*sub2).in_use {
+                    (*sub2).list.line[i].end
+                } else {
+                    core::ptr::null_mut()
+                };
+                if ep1 != ep2 {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+/// Copy a Postponed Invisible Match.
+unsafe fn copy_pim(to: *mut NfaPimT, from: *const NfaPimT) {
+    (*to).result = (*from).result;
+    (*to).state = (*from).state;
+    copy_sub(&mut (*to).subs.norm, &(*from).subs.norm);
+    if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+        copy_sub(&mut (*to).subs.synt, &(*from).subs.synt);
+    }
+    (*to).end = (*from).end;
+}
+
+// --- Exported wrappers for the submatch operations (called from C during transition) ---
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_sub(sub: *mut c_void, nsubexpr: c_int) {
+    clear_sub(sub.cast::<RegsubT>(), nsubexpr);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_sub(to: *mut c_void, from: *mut c_void) {
+    copy_sub(to.cast::<RegsubT>(), from.cast::<RegsubT>());
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_sub_off(to: *mut c_void, from: *mut c_void) {
+    copy_sub_off(to.cast::<RegsubT>(), from.cast::<RegsubT>());
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_ze_off(to: *mut c_void, from: *mut c_void, has_zend: c_int) {
+    copy_ze_off(to.cast::<RegsubT>(), from.cast::<RegsubT>(), has_zend);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_sub_equal(
+    sub1: *mut c_void,
+    sub2: *mut c_void,
+    has_backref: c_int,
+) -> c_int {
+    sub_equal(
+        sub1.cast::<RegsubT>(),
+        sub2.cast::<RegsubT>(),
+        has_backref,
+    ) as c_int
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_pim(to: *mut c_void, from: *mut c_void) {
+    copy_pim(to.cast::<NfaPimT>(), from.cast::<NfaPimT>());
 }
 
 /// Return true if "one" and "two" PIM states are equal.
