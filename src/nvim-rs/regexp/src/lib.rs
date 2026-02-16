@@ -2360,6 +2360,144 @@ pub unsafe extern "C" fn rs_vim_regsub_literal(
 }
 
 // ---------------------------------------------------------------------------
+// vim_regsub_both: expression evaluation + dispatch
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    fn nvim_regexp_emsg_e_null();
+    fn nvim_regexp_emsg_e_substitute_nesting();
+    fn nvim_regexp_get_max_regsub_nesting() -> c_int;
+    fn nvim_regexp_get_regsub_nesting() -> c_int;
+    fn nvim_regexp_set_regsub_nesting(v: c_int);
+    fn nvim_regexp_get_eval_result(i: c_int) -> *mut c_char;
+    fn nvim_regexp_set_eval_result(i: c_int, v: *mut c_char);
+    fn nvim_regexp_free_eval_result(i: c_int);
+    fn nvim_regexp_eval_regsub_expr(
+        source: *mut c_char,
+        expr_ptr: *mut c_void,
+        flags: c_int,
+        nested: c_int,
+    ) -> c_int;
+    fn nvim_regexp_setup_vim_regsub(rmp: *mut c_void);
+    fn nvim_regexp_setup_vim_regsub_multi(rmp: *mut c_void, lnum: i32);
+}
+
+/// Core substitution function: handles both literal and `\=` expression paths.
+///
+/// If the substitution pattern starts with `\=`, delegates to the C compound
+/// accessor `nvim_regexp_eval_regsub_expr` which handles Vimscript evaluation.
+/// Otherwise, delegates to `rs_vim_regsub_literal`.
+#[no_mangle]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_vim_regsub_both(
+    source: *mut c_char,
+    expr: *mut c_void,
+    dest: *mut c_char,
+    destlen: c_int,
+    flags: c_int,
+) -> c_int {
+    let copy = flags & REGSUB_COPY != 0;
+
+    // Be paranoid...
+    if source.is_null() && expr.is_null() || dest.is_null() {
+        nvim_regexp_emsg_e_null();
+        return 0;
+    }
+    if nvim_regexp_call_prog_magic_wrong() != 0 {
+        return 0;
+    }
+    let max_nesting = nvim_regexp_get_max_regsub_nesting();
+    let nesting = nvim_regexp_get_regsub_nesting();
+    if nesting == max_nesting {
+        nvim_regexp_emsg_e_substitute_nesting();
+        return 0;
+    }
+    let nested = nesting;
+
+    // When the substitute part starts with "\=" evaluate it as an expression.
+    if !expr.is_null()
+        || (!source.is_null() && *source as u8 == b'\\' && *source.add(1) as u8 == b'=')
+    {
+        if copy {
+            // Copy from previously evaluated result
+            let eval_res = nvim_regexp_get_eval_result(nested);
+            if !eval_res.is_null() {
+                let eval_len = strlen(eval_res);
+                if eval_len < destlen as usize {
+                    std::ptr::copy_nonoverlapping(
+                        eval_res.cast::<u8>(),
+                        dest.cast::<u8>(),
+                        eval_len + 1,
+                    );
+                    let end = dest.add(eval_len);
+                    nvim_regexp_free_eval_result(nested);
+                    *end = 0;
+                    #[allow(clippy::cast_possible_truncation)]
+                    return (end.offset_from(dest) + 1) as c_int;
+                }
+            }
+            // If eval_result was NULL or too large, return just NUL
+            *dest = 0;
+            return 1;
+        }
+        // Evaluate the expression -- all VimL interaction happens in C
+        let eval_len = nvim_regexp_eval_regsub_expr(source, expr, flags, nested);
+        // The result is stored in eval_result[nested]; return its length + 1
+        #[allow(clippy::cast_possible_truncation)]
+        return eval_len + 1;
+    }
+
+    // Non-expression substitution: delegate to literal handler
+    rs_vim_regsub_literal(source, dest, destlen, flags)
+}
+
+/// Perform substitution after a `vim_regexec()` match (single-line).
+///
+/// Saves/restores `rex` state for recursive calls.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regsub(
+    rmp: *mut c_void,
+    source: *mut c_char,
+    expr: *mut c_void,
+    dest: *mut c_char,
+    destlen: c_int,
+    flags: c_int,
+) -> c_int {
+    let was_in_use = nvim_regexp_get_rex_in_use() != 0;
+    let buf = save_rex_state();
+    nvim_regexp_set_rex_in_use(1);
+    nvim_regexp_setup_vim_regsub(rmp);
+
+    let result = rs_vim_regsub_both(source, expr, dest, destlen, flags);
+
+    restore_rex_state(&buf, was_in_use);
+    result
+}
+
+/// Perform substitution after a `vim_regexec_multi()` match (multi-line).
+///
+/// Saves/restores `rex` state for recursive calls.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regsub_multi(
+    rmp: *mut c_void,
+    lnum: i32,
+    source: *mut c_char,
+    dest: *mut c_char,
+    destlen: c_int,
+    flags: c_int,
+) -> c_int {
+    let was_in_use = nvim_regexp_get_rex_in_use() != 0;
+    let buf = save_rex_state();
+    nvim_regexp_set_rex_in_use(1);
+    nvim_regexp_setup_vim_regsub_multi(rmp, lnum);
+
+    let result = rs_vim_regsub_both(source, core::ptr::null_mut(), dest, destlen, flags);
+
+    restore_rex_state(&buf, was_in_use);
+    result
+}
+
+// ---------------------------------------------------------------------------
 // Node management & compilation infrastructure
 // ---------------------------------------------------------------------------
 

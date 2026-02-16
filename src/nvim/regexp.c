@@ -731,6 +731,29 @@ int32_t nvim_regexp_get_rex_reg_mmatch_endpos_col(int no) { return (int32_t)rex.
 int nvim_regexp_call_prog_magic_wrong(void) { return prog_magic_wrong(); }
 void nvim_regexp_call_iemsg_not_enough_space(void) { iemsg("vim_regsub_both(): not enough space"); }
 void nvim_regexp_call_iemsg_re_damg(void) { iemsg(_(e_re_damg)); }
+void nvim_regexp_emsg_e_null(void) { emsg(_(e_null)); }
+void nvim_regexp_emsg_e_substitute_nesting(void) { emsg(_(e_substitute_nesting_too_deep)); }
+
+// Compound setup for vim_regsub: sets rex fields for single-line substitution
+void nvim_regexp_setup_vim_regsub(void *rmp)
+{
+  rex.reg_match = (regmatch_T *)rmp;
+  rex.reg_mmatch = NULL;
+  rex.reg_maxline = 0;
+  rex.reg_buf = curbuf;
+  rex.reg_line_lbr = true;
+}
+
+// Compound setup for vim_regsub_multi: sets rex fields for multi-line substitution
+void nvim_regexp_setup_vim_regsub_multi(void *rmp, int32_t lnum)
+{
+  rex.reg_match = NULL;
+  rex.reg_mmatch = (regmmatch_T *)rmp;
+  rex.reg_buf = curbuf;  // always works on the current buffer!
+  rex.reg_firstlnum = (linenr_T)lnum;
+  rex.reg_maxline = curbuf->b_ml.ml_line_count - (linenr_T)lnum;
+  rex.reg_line_lbr = false;
+}
 
 // reg_getline_common accessors for Rust FFI
 int32_t nvim_regexp_get_rex_reg_firstlnum(void) { return (int32_t)rex.reg_firstlnum; }
@@ -819,80 +842,28 @@ static void clear_submatch_list(staticList10_T *sl)
   });
 }
 
+// Rust FFI: vim_regsub functions
+extern int rs_vim_regsub(void *rmp, char *source, void *expr, char *dest, int destlen, int flags);
+extern int rs_vim_regsub_multi(void *rmp, int32_t lnum, char *source, char *dest, int destlen,
+                               int flags);
+
 /// vim_regsub() - perform substitutions after a vim_regexec() or
 /// vim_regexec_multi() match.
-///
-/// If "flags" has REGSUB_COPY really copy into "dest[destlen]".
-/// Otherwise nothing is copied, only compute the length of the result.
-///
-/// If "flags" has REGSUB_MAGIC then behave like 'magic' is set.
-///
-/// If "flags" has REGSUB_BACKSLASH a backslash will be removed later, need to
-/// double them to keep them, and insert a backslash before a CR to avoid it
-/// being replaced with a line break later.
-///
-/// Note: The matched text must not change between the call of
-/// vim_regexec()/vim_regexec_multi() and vim_regsub()!  It would make the back
-/// references invalid!
-///
-/// Returns the size of the replacement, including terminating NUL.
 int vim_regsub(regmatch_T *rmp, char *source, typval_T *expr, char *dest, int destlen, int flags)
 {
-  regexec_T rex_save;
-  bool rex_in_use_save = rex_in_use;
-
-  if (rex_in_use) {
-    // Being called recursively, save the state.
-    rex_save = rex;
-  }
-  rex_in_use = true;
-
-  rex.reg_match = rmp;
-  rex.reg_mmatch = NULL;
-  rex.reg_maxline = 0;
-  rex.reg_buf = curbuf;
-  rex.reg_line_lbr = true;
-  int result = vim_regsub_both(source, expr, dest, destlen, flags);
-
-  rex_in_use = rex_in_use_save;
-  if (rex_in_use) {
-    rex = rex_save;
-  }
-
-  return result;
+  return rs_vim_regsub(rmp, source, expr, dest, destlen, flags);
 }
 
 int vim_regsub_multi(regmmatch_T *rmp, linenr_T lnum, char *source, char *dest, int destlen,
                      int flags)
 {
-  regexec_T rex_save;
-  bool rex_in_use_save = rex_in_use;
-
-  if (rex_in_use) {
-    // Being called recursively, save the state.
-    rex_save = rex;
-  }
-  rex_in_use = true;
-
-  rex.reg_match = NULL;
-  rex.reg_mmatch = rmp;
-  rex.reg_buf = curbuf;  // always works on the current buffer!
-  rex.reg_firstlnum = lnum;
-  rex.reg_maxline = curbuf->b_ml.ml_line_count - lnum;
-  rex.reg_line_lbr = false;
-  int result = vim_regsub_both(source, NULL, dest, destlen, flags);
-
-  rex_in_use = rex_in_use_save;
-  if (rex_in_use) {
-    rex = rex_save;
-  }
-
-  return result;
+  return rs_vim_regsub_multi(rmp, (int32_t)lnum, source, dest, destlen, flags);
 }
 
 // When nesting more than a couple levels it's probably a mistake.
 #define MAX_REGSUB_NESTING 4
 static char *eval_result[MAX_REGSUB_NESTING] = { NULL, NULL, NULL, NULL };
+static int regsub_nesting = 0;
 
 #if defined(EXITFREE)
 void free_resub_eval_result(void)
@@ -903,155 +874,135 @@ void free_resub_eval_result(void)
 }
 #endif
 
-static int vim_regsub_both(char *source, typval_T *expr, char *dest, int destlen, int flags)
+// --- eval_result accessors for Rust FFI ---
+int nvim_regexp_get_max_regsub_nesting(void) { return MAX_REGSUB_NESTING; }
+int nvim_regexp_get_regsub_nesting(void) { return regsub_nesting; }
+void nvim_regexp_set_regsub_nesting(int v) { regsub_nesting = v; }
+char *nvim_regexp_get_eval_result(int i) { return eval_result[i]; }
+void nvim_regexp_set_eval_result(int i, char *v) { eval_result[i] = v; }
+void nvim_regexp_free_eval_result(int i) { XFREE_CLEAR(eval_result[i]); }
+
+/// Compound accessor: evaluate a \= substitution expression.
+/// Handles all VimL type interactions (call_func, eval_to_string, typval_T, etc.)
+/// so that Rust does not need to know about VimL types.
+///
+/// @param source     the substitution string (for eval_to_string path, source+2 is used)
+/// @param expr       opaque pointer to typval_T* (or NULL for string \= path)
+/// @param flags      REGSUB_* flags
+/// @param nested     nesting level (index into eval_result[])
+///
+/// Stores result in eval_result[nested] and returns its strlen, or -1 on error.
+/// Side effects: saves/restores can_f_submatch and rsm; increments/decrements nesting.
+int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int nested)
 {
-  char *s;
-  static int nesting = 0;
-  bool copy = flags & REGSUB_COPY;
+  typval_T *expr = (typval_T *)expr_ptr;
+  const bool prev_can_f_submatch = can_f_submatch;
+  regsubmatch_T rsm_save;
 
-  // Be paranoid...
-  if ((source == NULL && expr == NULL) || dest == NULL) {
-    emsg(_(e_null));
-    return 0;
-  }
-  if (prog_magic_wrong()) {
-    return 0;
-  }
-  if (nesting == MAX_REGSUB_NESTING) {
-    emsg(_(e_substitute_nesting_too_deep));
-    return 0;
-  }
-  int nested = nesting;
-  char *dst = dest;
+  XFREE_CLEAR(eval_result[nested]);
 
-  // When the substitute part starts with "\=" evaluate it as an expression.
-  if (expr != NULL || (source[0] == '\\' && source[1] == '=')) {
-    // To make sure that the length doesn't change between checking the
-    // length and copying the string, and to speed up things, the
-    // resulting string is saved from the call with
-    // "flags & REGSUB_COPY" == 0 to the call with
-    // "flags & REGSUB_COPY" != 0.
-    if (copy) {
-      if (eval_result[nested] != NULL) {
-        size_t eval_len = strlen(eval_result[nested]);
-        if (eval_len < (size_t)destlen) {
-          STRCPY(dest, eval_result[nested]);
-          dst += eval_len;
-          XFREE_CLEAR(eval_result[nested]);
-        }
-      }
+  // The expression may contain substitute(), which calls us
+  // recursively.  Make sure submatch() gets the text from the first
+  // level.
+  if (can_f_submatch) {
+    rsm_save = rsm;
+  }
+  can_f_submatch = true;
+  rsm.sm_match = rex.reg_match;
+  rsm.sm_mmatch = rex.reg_mmatch;
+  rsm.sm_firstlnum = rex.reg_firstlnum;
+  rsm.sm_maxline = rex.reg_maxline;
+  rsm.sm_line_lbr = rex.reg_line_lbr;
+
+  // Although unlikely, it is possible that the expression invokes a
+  // substitute command (it might fail, but still).  Therefore keep
+  // an array of eval results.
+  regsub_nesting++;
+
+  if (expr != NULL) {
+    typval_T argv[2];
+    typval_T rettv;
+    staticList10_T matchList = TV_LIST_STATIC10_INIT;
+    rettv.v_type = VAR_STRING;
+    rettv.vval.v_string = NULL;
+    argv[0].v_type = VAR_LIST;
+    argv[0].vval.v_list = &matchList.sl_list;
+    funcexe_T funcexe = FUNCEXE_INIT;
+    funcexe.fe_argv_func = fill_submatch_list;
+    funcexe.fe_evaluate = true;
+    char *s;
+    if (expr->v_type == VAR_FUNC) {
+      s = expr->vval.v_string;
+      call_func(s, -1, &rettv, 1, argv, &funcexe);
+    } else if (expr->v_type == VAR_PARTIAL) {
+      partial_T *partial = expr->vval.v_partial;
+
+      s = partial_name(partial);
+      funcexe.fe_partial = partial;
+      call_func(s, -1, &rettv, 1, argv, &funcexe);
+    }
+    if (tv_list_len(&matchList.sl_list) > 0) {
+      // fill_submatch_list() was called.
+      clear_submatch_list(&matchList);
+    }
+    if (rettv.v_type == VAR_UNKNOWN) {
+      // something failed, no need to report another error
+      eval_result[nested] = NULL;
     } else {
-      const bool prev_can_f_submatch = can_f_submatch;
-      regsubmatch_T rsm_save;
-
-      XFREE_CLEAR(eval_result[nested]);
-
-      // The expression may contain substitute(), which calls us
-      // recursively.  Make sure submatch() gets the text from the first
-      // level.
-      if (can_f_submatch) {
-        rsm_save = rsm;
-      }
-      can_f_submatch = true;
-      rsm.sm_match = rex.reg_match;
-      rsm.sm_mmatch = rex.reg_mmatch;
-      rsm.sm_firstlnum = rex.reg_firstlnum;
-      rsm.sm_maxline = rex.reg_maxline;
-      rsm.sm_line_lbr = rex.reg_line_lbr;
-
-      // Although unlikely, it is possible that the expression invokes a
-      // substitute command (it might fail, but still).  Therefore keep
-      // an array of eval results.
-      nesting++;
-
-      if (expr != NULL) {
-        typval_T argv[2];
-        typval_T rettv;
-        staticList10_T matchList = TV_LIST_STATIC10_INIT;
-        rettv.v_type = VAR_STRING;
-        rettv.vval.v_string = NULL;
-        argv[0].v_type = VAR_LIST;
-        argv[0].vval.v_list = &matchList.sl_list;
-        funcexe_T funcexe = FUNCEXE_INIT;
-        funcexe.fe_argv_func = fill_submatch_list;
-        funcexe.fe_evaluate = true;
-        if (expr->v_type == VAR_FUNC) {
-          s = expr->vval.v_string;
-          call_func(s, -1, &rettv, 1, argv, &funcexe);
-        } else if (expr->v_type == VAR_PARTIAL) {
-          partial_T *partial = expr->vval.v_partial;
-
-          s = partial_name(partial);
-          funcexe.fe_partial = partial;
-          call_func(s, -1, &rettv, 1, argv, &funcexe);
-        }
-        if (tv_list_len(&matchList.sl_list) > 0) {
-          // fill_submatch_list() was called.
-          clear_submatch_list(&matchList);
-        }
-        if (rettv.v_type == VAR_UNKNOWN) {
-          // something failed, no need to report another error
-          eval_result[nested] = NULL;
-        } else {
-          char buf[NUMBUFLEN];
-          eval_result[nested] = (char *)tv_get_string_buf_chk(&rettv, buf);
-          if (eval_result[nested] != NULL) {
-            eval_result[nested] = xstrdup(eval_result[nested]);
-          }
-        }
-        tv_clear(&rettv);
-      } else {
-        eval_result[nested] = eval_to_string(source + 2, true, false);
-      }
-      nesting--;
-
+      char buf[NUMBUFLEN];
+      eval_result[nested] = (char *)tv_get_string_buf_chk(&rettv, buf);
       if (eval_result[nested] != NULL) {
-        int had_backslash = false;
-
-        for (s = eval_result[nested]; *s != NUL; MB_PTR_ADV(s)) {
-          // Change NL to CR, so that it becomes a line break,
-          // unless called from vim_regexec_nl().
-          // Skip over a backslashed character.
-          if (*s == NL && !rsm.sm_line_lbr) {
-            *s = CAR;
-          } else if (*s == '\\' && s[1] != NUL) {
-            s++;
-            // Change NL to CR here too, so that this works:
-            // :s/abc\\\ndef/\="aaa\\\nbbb"/  on text:
-            //   abc{backslash}
-            //   def
-            // Not when called from vim_regexec_nl().
-            if (*s == NL && !rsm.sm_line_lbr) {
-              *s = CAR;
-            }
-            had_backslash = true;
-          }
-        }
-        if (had_backslash && (flags & REGSUB_BACKSLASH)) {
-          // Backslashes will be consumed, need to double them.
-          s = vim_strsave_escaped(eval_result[nested], "\\");
-          xfree(eval_result[nested]);
-          eval_result[nested] = s;
-        }
-
-        dst += strlen(eval_result[nested]);
-      }
-
-      can_f_submatch = prev_can_f_submatch;
-      if (can_f_submatch) {
-        rsm = rsm_save;
+        eval_result[nested] = xstrdup(eval_result[nested]);
       }
     }
+    tv_clear(&rettv);
   } else {
-    extern int rs_vim_regsub_literal(char *source, char *dest, int destlen, int flags);
-    return rs_vim_regsub_literal(source, dest, destlen, flags);
+    eval_result[nested] = eval_to_string(source + 2, true, false);
   }
-  if (copy) {
-    *dst = NUL;
+  regsub_nesting--;
+
+  if (eval_result[nested] != NULL) {
+    int had_backslash = false;
+
+    for (char *s = eval_result[nested]; *s != NUL; MB_PTR_ADV(s)) {
+      // Change NL to CR, so that it becomes a line break,
+      // unless called from vim_regexec_nl().
+      // Skip over a backslashed character.
+      if (*s == NL && !rsm.sm_line_lbr) {
+        *s = CAR;
+      } else if (*s == '\\' && s[1] != NUL) {
+        s++;
+        // Change NL to CR here too, so that this works:
+        // :s/abc\\\ndef/\="aaa\\\nbbb"/  on text:
+        //   abc{backslash}
+        //   def
+        // Not when called from vim_regexec_nl().
+        if (*s == NL && !rsm.sm_line_lbr) {
+          *s = CAR;
+        }
+        had_backslash = true;
+      }
+    }
+    if (had_backslash && (flags & REGSUB_BACKSLASH)) {
+      // Backslashes will be consumed, need to double them.
+      char *s = vim_strsave_escaped(eval_result[nested], "\\");
+      xfree(eval_result[nested]);
+      eval_result[nested] = s;
+    }
   }
 
-  return (int)((dst - dest) + 1);
+  can_f_submatch = prev_can_f_submatch;
+  if (can_f_submatch) {
+    rsm = rsm_save;
+  }
+
+  if (eval_result[nested] != NULL) {
+    return (int)strlen(eval_result[nested]);
+  }
+  return 0;
 }
+
+// vim_regsub_both is now implemented in Rust as rs_vim_regsub_both
 
 static char *reg_getline_submatch(linenr_T lnum)
 {
