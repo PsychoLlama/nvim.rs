@@ -52,12 +52,9 @@ extern char *rs_skip_regexp_ex(char *startp, int dirc, int magic, char **newp,
                                int *dropped, int *magic_val);
 // Rust FFI: regexp utility functions
 extern int rs_re_multiline(const regprog_T *prog);
-// Rust FFI: number parsers
-extern void rs_get_cpo_flags(void);
 extern reg_extmatch_T *rs_make_extmatch(void);
 extern reg_extmatch_T *rs_ref_extmatch(reg_extmatch_T *em);
 extern void rs_unref_extmatch(reg_extmatch_T *em);
-extern void rs_cleanup_subexpr(void);
 extern void rs_cleanup_zsubexpr(void);
 extern int rs_reg_prev_class(void);
 extern void rs_reg_nextline(void);
@@ -79,11 +76,8 @@ extern int rs_vim_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                 int32_t col, void *tm, int *timed_out);
 extern void *rs_vim_regcomp(const uint8_t *expr, int re_flags);
 extern void *rs_bt_regcomp(uint8_t *expr, int re_flags);
-// Rust FFI: node management and compilation infrastructure
-extern uint8_t *rs_regnext(uint8_t *p);
 // Rust FFI: recursive descent parser functions
 extern uint8_t *rs_regatom(int *flagp);
-extern uint8_t *rs_reg(int paren, int *flagp);
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -248,10 +242,6 @@ typedef struct regbehind_S {
 } regbehind_T;
 
 // Rust FFI: position save/restore (Phase 1)
-// Rust FFI: subexpression save/restore (Phase 2)
-// Rust FFI: regrepeat (Phase 3)
-extern int rs_regrepeat(uint8_t *p, int64_t maxcount);
-
 // Since the out pointers in the list are always
 // uninitialized, we use the pointers themselves
 // as storage for the Ptrlists.
@@ -502,11 +492,6 @@ typedef struct {
   int prev_at_start;
   int regnpar;
 } parse_state_T;
-
-// Rust FFI: state management
-extern void rs_initchr(char *str);
-extern int rs_cstrncmp(char *s1, char *s2, int *n);
-extern char *rs_cstrchr(const char *s, int c);
 
 static regengine_T bt_regengine;
 static regengine_T nfa_regengine;
@@ -1268,13 +1253,6 @@ static char *reg_getline_submatch(linenr_T lnum)
   char *line;
   reg_getline_common(lnum, RGLF_LINE | RGLF_SUBMATCH, &line, NULL);
   return line;
-}
-
-static colnr_T reg_getline_submatch_len(linenr_T lnum)
-{
-  colnr_T length;
-  reg_getline_common(lnum, RGLF_LENGTH | RGLF_SUBMATCH, NULL, &length);
-  return length;
 }
 
 /// Used for the submatch() function: get the string from the n'th submatch in
@@ -2044,20 +2022,7 @@ int nvim_regexp_call_mb_get_class_tab(uint8_t *p) {
   return mb_get_class_tab((char *)p, rex.reg_buf->b_chartab);
 }
 
-// cstrncmp / cstrchr: rs_regmatch calls rs_cstrncmp/rs_cstrchr directly from Rust
-
-// nvim_regexp_get_rex_reg_firstlnum() already exists above — reuse it
-
-// internal_error wrapper
 void nvim_regexp_internal_error(const char *msg) { internal_error(msg); }
-
-// reg_breakcheck: rs_regmatch calls rs_reg_breakcheck() directly from Rust
-
-// regrepeat: rs_regmatch calls rs_regrepeat() directly from Rust
-
-// regnext: rs_regmatch calls rs_regnext() directly from Rust
-
-// iemsg: rs_regmatch uses existing nvim_regexp_iemsg_re_corr()
 
 // z-subexpr element-pointer accessors for save_se/restore_se in rs_regmatch
 lpos_T *nvim_regexp_get_reg_startzpos_ptr(int i) { return &reg_startzpos[i]; }
@@ -2813,7 +2778,6 @@ int nvim_regexp_call_ascii_iswhite(int c) { return ascii_iswhite(c); }
 int nvim_regexp_call_reg_prev_class(void) { return rs_reg_prev_class(); }
 int nvim_regexp_call_reg_match_visual(void) { return rs_reg_match_visual(); }
 void nvim_regexp_call_reg_nextline(void) { rs_reg_nextline(); }
-// (nvim_regexp_call_cleanup_subexpr removed -- using rs_cleanup_subexpr() directly)
 
 // NFA prog field accessors for nfa_regmatch
 int nvim_nfa_prog_get_re_engine(void *prog) { return ((nfa_regprog_T *)prog)->re_engine; }
