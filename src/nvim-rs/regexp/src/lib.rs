@@ -10233,18 +10233,8 @@ extern "C" {
     fn nvim_nfa_thread_get_pim_ptr(l: NfaListHandle, idx: c_int) -> NfaPimHandle;
 
     // C wrapper functions for complex operations
-    fn nvim_regexp_call_match_backref(
-        sub: *mut c_void,
-        subidx: c_int,
-        bytelen: *mut c_int,
-    ) -> c_int;
-    fn nvim_regexp_call_match_zref(subidx: c_int, bytelen: *mut c_int) -> c_int;
-    fn nvim_regexp_call_find_match_text(
-        startcol: *mut c_int,
-        regstart: c_int,
-        match_text: *mut u8,
-    ) -> c_int;
-    fn nvim_regexp_call_skip_to_start(c: c_int, colp: *mut c_int) -> c_int;
+    // (match_backref, match_zref, find_match_text, skip_to_start
+    //  migrated to Rust -- extern declarations removed)
     // rex NFA state accessors
     fn nvim_regexp_get_nfa_has_zsubexpr() -> c_int;
     fn nvim_nfa_list_get_id(l: NfaListHandle) -> c_int;
@@ -11261,36 +11251,188 @@ pub unsafe extern "C" fn rs_state_in_list(
     0
 }
 
-/// Wrapper: check for a match with subexpression "subidx".
+/// Check for a match with subexpression "subidx".
+/// Migrated from C `match_backref()`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_match_backref(
     sub: *mut c_void,
     subidx: c_int,
     bytelen: *mut c_int,
 ) -> c_int {
-    nvim_regexp_call_match_backref(sub, subidx, bytelen)
+    match_backref_t(sub.cast::<RegsubT>(), subidx, bytelen)
 }
 
-/// Wrapper: check for a match with \z subexpression "subidx".
+/// Check for a match with subexpression "subidx".
+/// Migrated from C `match_backref()`.
+#[allow(clippy::cast_possible_truncation)]
+unsafe fn match_backref_t(sub: *const RegsubT, subidx: c_int, bytelen: *mut c_int) -> c_int {
+    if (*sub).in_use <= subidx {
+        // backref was not set, match an empty string
+        *bytelen = 0;
+        return 1; // true
+    }
+
+    if nvim_regexp_is_reg_multi() != 0 {
+        let m = &(*sub).list.multi[subidx as usize];
+        if m.start_lnum < 0 || m.end_lnum < 0 {
+            *bytelen = 0;
+            return 1; // true
+        }
+        let rex_lnum = nvim_regexp_get_rex_lnum();
+        if m.start_lnum == rex_lnum && m.end_lnum == rex_lnum {
+            let mut len = m.end_col - m.start_col;
+            let rex_line = nvim_regexp_get_rex_line();
+            let rex_input = nvim_regexp_get_rex_input();
+            if rs_cstrncmp(
+                rex_line.add(m.start_col as usize).cast::<c_char>(),
+                rex_input.cast::<c_char>(),
+                &mut len,
+            ) == 0
+            {
+                *bytelen = len;
+                return 1; // true
+            }
+        } else if rs_match_with_backref(m.start_lnum, m.start_col, m.end_lnum, m.end_col, bytelen)
+            == RA_MATCH
+        {
+            return 1; // true
+        }
+    } else {
+        let lp = &(*sub).list.line[subidx as usize];
+        if lp.start.is_null() || lp.end.is_null() {
+            *bytelen = 0;
+            return 1; // true
+        }
+        let mut len = lp.end.offset_from(lp.start) as c_int;
+        let rex_input = nvim_regexp_get_rex_input();
+        if rs_cstrncmp(
+            lp.start.cast::<c_char>(),
+            rex_input.cast::<c_char>(),
+            &mut len,
+        ) == 0
+        {
+            *bytelen = len;
+            return 1; // true
+        }
+    }
+    0 // false
+}
+
+/// Check for a match with \z subexpression "subidx".
+/// Migrated from C `match_zref()`.
+#[allow(clippy::cast_possible_truncation)]
 #[no_mangle]
 pub unsafe extern "C" fn rs_match_zref(subidx: c_int, bytelen: *mut c_int) -> c_int {
-    nvim_regexp_call_match_zref(subidx, bytelen)
+    rs_cleanup_zsubexpr();
+    let match_ptr = nvim_regexp_get_re_extmatch_in_match(subidx);
+    if match_ptr.is_null() {
+        // backref was not set, match an empty string
+        *bytelen = 0;
+        return 1; // true
+    }
+
+    let mut len = core::ffi::CStr::from_ptr(match_ptr.cast::<c_char>())
+        .to_bytes()
+        .len() as c_int;
+    let rex_input = nvim_regexp_get_rex_input();
+    if rs_cstrncmp(
+        match_ptr.cast::<c_char>(),
+        rex_input.cast::<c_char>(),
+        &mut len,
+    ) == 0
+    {
+        *bytelen = len;
+        return 1; // true
+    }
+    0 // false
 }
 
-/// Wrapper: check for a match with `match_text`.
+/// Skip until the char "c" we know a match must start with.
+/// Migrated from C `skip_to_start()`.
+#[allow(clippy::cast_possible_truncation)]
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_to_start(c: c_int, colp: *mut c_int) -> c_int {
+    let rex_line = nvim_regexp_get_rex_line();
+    let s = rs_cstrchr(rex_line.add(*colp as usize).cast::<c_char>(), c);
+    if s.is_null() {
+        return FAIL;
+    }
+    *colp = s.cast::<u8>().offset_from(rex_line) as c_int;
+    OK
+}
+
+/// Check for a match with `match_text`.
+/// Called after `rs_skip_to_start()` has found regstart.
+/// Returns zero for no match, 1 for a match.
+/// Migrated from C `find_match_text()`.
+#[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
 #[no_mangle]
 pub unsafe extern "C" fn rs_find_match_text(
     startcol: *mut c_int,
     regstart: c_int,
     match_text: *mut u8,
 ) -> c_int {
-    nvim_regexp_call_find_match_text(startcol, regstart, match_text)
-}
+    let mut col = *startcol;
+    let regstart_len = utf_char2len(regstart);
 
-/// Wrapper: skip until the char "c" we know a match must start with.
-#[no_mangle]
-pub unsafe extern "C" fn rs_skip_to_start(c: c_int, colp: *mut c_int) -> c_int {
-    nvim_regexp_call_skip_to_start(c, colp)
+    loop {
+        let mut matched = true;
+        let mut s1 = match_text;
+        let rex_line = nvim_regexp_get_rex_line();
+        // skip regstart
+        let mut regstart_len2 = regstart_len;
+        if regstart_len2 > 1
+            && utf_ptr2len(rex_line.add(col as usize).cast::<c_char>()) != regstart_len2
+        {
+            // because of case-folding of the previously matched text, we may need
+            // to skip fewer bytes than utf_char2len(regstart)
+            regstart_len2 = utf_char2len(utf_fold(regstart));
+        }
+        let mut s2 = rex_line.add((col + regstart_len2) as usize);
+        while *s1 != 0 {
+            let c1_len = utf_ptr2len(s1.cast::<c_char>());
+            let c1 = utf_ptr2char(s1.cast::<c_char>());
+            let c2_len = utf_ptr2len(s2.cast::<c_char>());
+            let c2 = utf_ptr2char(s2.cast::<c_char>());
+            if c1 != c2 && (nvim_regexp_get_rex_reg_ic() == 0 || utf_fold(c1) != utf_fold(c2)) {
+                matched = false;
+                break;
+            }
+            s1 = s1.add(c1_len as usize);
+            s2 = s2.add(c2_len as usize);
+        }
+        if matched
+            // check that no composing char follows
+            && utf_iscomposing_legacy(utf_ptr2char(s2.cast::<c_char>())) == 0
+        {
+            rs_cleanup_subexpr();
+            if nvim_regexp_is_reg_multi() != 0 {
+                let startpos = nvim_regexp_get_rex_startpos_array();
+                let endpos = nvim_regexp_get_rex_endpos_array();
+                let rex_lnum = nvim_regexp_get_rex_lnum();
+                (*startpos.add(0)).lnum = rex_lnum;
+                (*startpos.add(0)).col = col;
+                (*endpos.add(0)).lnum = rex_lnum;
+                (*endpos.add(0)).col = s2.offset_from(nvim_regexp_get_rex_line()) as c_int;
+            } else {
+                let startp = nvim_regexp_get_rex_startp_array();
+                let endp = nvim_regexp_get_rex_endp_array();
+                *startp.add(0) = nvim_regexp_get_rex_line().add(col as usize);
+                *endp.add(0) = s2;
+            }
+            *startcol = col;
+            return 1;
+        }
+
+        // Try finding regstart after the current match.
+        col += regstart_len; // skip regstart
+        if rs_skip_to_start(regstart, &mut col) == FAIL {
+            break;
+        }
+    }
+
+    *startcol = col;
+    0
 }
 
 /// Check if NFA execution has timed out.
@@ -11573,7 +11715,7 @@ extern "C" {
     fn nvim_regexp_call_reg_prev_class() -> c_int;
     fn nvim_regexp_call_reg_match_visual() -> c_int;
     fn nvim_regexp_call_reg_nextline();
-    fn nvim_regexp_call_cleanup_subexpr();
+    // (nvim_regexp_call_cleanup_subexpr removed -- using rs_cleanup_subexpr() directly)
 
     // NFA prog field accessor
     fn nvim_nfa_prog_get_re_engine(prog: NfaProgHandle) -> c_int;
@@ -12693,10 +12835,11 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
 
                     if state_c >= NFA_BACKREF1 && state_c <= NFA_BACKREF9 {
                         let subidx = state_c - NFA_BACKREF1 + 1;
-                        result = nvim_regexp_call_match_backref(t_subs_norm, subidx, &mut bytelen);
+                        result =
+                            match_backref_t(t_subs_norm.cast::<RegsubT>(), subidx, &mut bytelen);
                     } else {
                         let subidx = state_c - NFA_ZREF1 + 1;
-                        result = nvim_regexp_call_match_zref(subidx, &mut bytelen);
+                        result = rs_match_zref(subidx, &mut bytelen);
                     }
 
                     if result != 0 {
@@ -13085,11 +13228,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             - nvim_regexp_get_rex_line() as isize)
                             as i32
                             + clen;
-                        if nvim_regexp_call_skip_to_start(
-                            nvim_nfa_prog_get_regstart(prog),
-                            &mut col,
-                        ) == FAIL
-                        {
+                        if rs_skip_to_start(nvim_nfa_prog_get_regstart(prog), &mut col) == FAIL {
                             break 'outer;
                         }
                         // rex.input = rex.line + col - clen
@@ -13294,7 +13433,7 @@ pub unsafe extern "C" fn rs_nfa_regtry(
     }
 
     // Extract submatch data
-    nvim_regexp_call_cleanup_subexpr();
+    rs_cleanup_subexpr();
     if nvim_regexp_is_reg_multi() != 0 {
         nvim_regexp_nfa_regtry_extract_multi(subs, col);
     } else {
