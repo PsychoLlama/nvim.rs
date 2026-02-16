@@ -366,15 +366,7 @@ typedef struct {
 
 typedef void (*fptr_T)(int *, int);
 
-static int no_Magic(int x)
-{
-  return rs_no_magic(x);
-}
 
-static int toggle_Magic(int x)
-{
-  return rs_toggle_magic(x);
-}
 
 // The first byte of the BT regexp internal "program" is actually this magic
 // number; the start node begins in the second byte.  It's used to catch the
@@ -441,13 +433,6 @@ static const char e_unicode_val_too_large[]
 #define RA_MATCH        4       // successful match
 #define RA_NOMATCH      5       // didn't match
 
-/// Return NOT_MULTI if c is not a "multi" operator.
-/// Return MULTI_ONE if c is a single "multi" operator.
-/// Return MULTI_MULT if c is a multi "multi" operator.
-static int re_multi_type(int c)
-{
-  return rs_re_multi_type(c);
-}
 
 static char *reg_prev_sub = NULL;
 static size_t reg_prev_sublen = 0;
@@ -476,11 +461,6 @@ void nvim_regexp_emsg_resulting_text_too_long(void) { emsg(_(e_resulting_text_to
 static char REGEXP_INRANGE[] = "]^-n\\";
 static char REGEXP_ABBR[] = "nrtebdoxuU";
 
-// Translate '\x' to its control character, except "\n", which is Magic.
-static int backslash_trans(int c)
-{
-  return rs_backslash_trans(c);
-}
 
 enum {
   CLASS_ALNUM = 0,
@@ -624,51 +604,8 @@ int re_multiline(const regprog_T *prog)
   return rs_re_multiline(prog);
 }
 
-// Check for an equivalence class name "[=a=]".  "pp" points to the '['.
-// Returns a character representing the class. Zero means that no item was
-// recognized.  Otherwise "pp" is advanced to after the item.
-static int get_equi_class(char **pp)
-{
-  int c;
-  int l = 1;
-  char *p = *pp;
-
-  if (p[1] == '=' && p[2] != NUL) {
-    l = utfc_ptr2len(p + 2);
-    if (p[l + 2] == '=' && p[l + 3] == ']') {
-      c = utf_ptr2char(p + 2);
-      *pp += l + 4;
-      return c;
-    }
-  }
-  return 0;
-}
-
-// Check for a collating element "[.a.]".  "pp" points to the '['.
-// Returns a character. Zero means that no item was recognized.  Otherwise
-// "pp" is advanced to after the item.
-// Currently only single characters are recognized!
-static int get_coll_element(char **pp)
-{
-  int c;
-  int l = 1;
-  char *p = *pp;
-
-  if (p[0] != NUL && p[1] == '.' && p[2] != NUL) {
-    l = utfc_ptr2len(p + 2);
-    if (p[l + 2] == '.' && p[l + 3] == ']') {
-      c = utf_ptr2char(p + 2);
-      *pp += l + 4;
-      return c;
-    }
-  }
-  return 0;
-}
-
 // Accessors for Rust FFI (static helpers exposed for the regexp crate)
 int nvim_regexp_get_char_class(char **pp) { return get_char_class(pp); }
-int nvim_regexp_get_equi_class(char **pp) { return get_equi_class(pp); }
-int nvim_regexp_get_coll_element(char **pp) { return get_coll_element(pp); }
 
 unsigned int nvim_regexp_get_regflags(const regprog_T *prog);
 unsigned int nvim_regexp_get_regflags(const regprog_T *prog)
@@ -690,10 +627,6 @@ static void get_cpo_flags(void)
 /// The returned pointer is on the matching ']', or the terminating NUL.
 extern char *rs_skip_anyof(char *p);
 
-static char *skip_anyof(char *p)
-{
-  return rs_skip_anyof(p);
-}
 
 /// Skip past regular expression.
 /// Stop at end of "startp" or where "delim" is found ('/', '?', etc).
@@ -762,25 +695,10 @@ unsigned int nvim_regexp_get_regflags_compile(void) { return regflags; }
 void nvim_regexp_set_regflags_compile(unsigned int v) { regflags = v; }
 
 static void initchr(char *str) { rs_initchr(str); }
-static void save_parse_state(parse_state_T *ps) { rs_save_parse_state(ps); }
-static void restore_parse_state(parse_state_T *ps) { rs_restore_parse_state(ps); }
 
 static int peekchr(void) { return rs_peekchr(); }
-static void skipchr(void) { rs_skipchr(); }
-static void skipchr_keepstart(void) { rs_skipchr_keepstart(); }
-static int getchr(void) { return rs_getchr(); }
 static void ungetchr(void) { rs_ungetchr(); }
 
-// Get and return the value of the hex string at the current position.
-// Return -1 if there is no valid hex number.
-// The position is updated:
-//     blahblah\%x20asdf
-//         before-^ ^-after
-// The parameter controls the maximum number of input characters. This will be
-// 2 when reading a \%x20 sequence and 4 when reading a \%u20AC sequence.
-static int64_t gethexchrs(int maxinputlen) { return rs_gethexchrs(maxinputlen); }
-static int64_t getdecchrs(void) { return rs_getdecchrs(); }
-static int64_t getoctchrs(void) { return rs_getoctchrs(); }
 
 // read_limits - Read two integers to be taken as a minimum and maximum.
 // If the first character is '-', then the range is reversed.
@@ -1219,11 +1137,6 @@ static int match_with_backref(linenr_T start_lnum, colnr_T start_col, linenr_T e
                                (int32_t)end_lnum, (int32_t)end_col, bytelen);
 }
 
-/// Used in a place where no * or \+ can follow.
-static bool re_mult_next(char *what)
-{
-  return rs_re_mult_next(what);
-}
 
 /// Compare two strings, ignore case if rex.reg_ic set.
 static int cstrncmp(char *s1, char *s2, int *n)
@@ -1245,15 +1158,7 @@ static inline char *cstrchr(const char *const s, const int c)
 extern void rs_do_upper(int *d, int c);
 extern void rs_do_lower(int *d, int c);
 
-static void do_upper(int *d, int c)
-{
-  rs_do_upper(d, c);
-}
 
-static void do_lower(int *d, int c)
-{
-  rs_do_lower(d, c);
-}
 
 /// regtilde(): Replace tildes in the pattern by the old pattern.
 ///
@@ -2197,31 +2102,10 @@ static void regcomp_start(uint8_t *expr, int re_flags)                        //
   had_eol = false;
 }
 
-// Emit (if appropriate) a byte of code
-static void regc(int b)
-{
-  rs_regc(b);
-}
-
-// Emit (if appropriate) a multi-byte character of code
-static void regmbc(int c)
-{
-  rs_regmbc(c);
-}
 
 
-// Emit a node.
-// Return pointer to generated code.
-static uint8_t *regnode(int op)
-{
-  return rs_regnode(op);
-}
 
-// Write a four bytes number at "p" and return pointer to the next char.
-static uint8_t *re_put_uint32(uint8_t *p, uint32_t val)
-{
-  return rs_re_put_uint32(p, val);
-}
+
 
 // regnext - dig the "next" pointer out of a node
 // Returns NULL when calculating size, when there is no next item and when
@@ -2238,92 +2122,17 @@ static void regtail(uint8_t *p, const uint8_t *val)
   rs_regtail(p, val);
 }
 
-// Like regtail, on item after a BRANCH; nop if none.
-static void regoptail(uint8_t *p, uint8_t *val)
-{
-  rs_regoptail(p, val);
-}
 
-// Insert an operator in front of already-emitted operand
-//
-// Means relocating the operand.
-static void reginsert(int op, uint8_t *opnd)
-{
-  rs_reginsert(op, opnd);
-}
 
-// Insert an operator in front of already-emitted operand.
-// Add a number to the operator.
-static void reginsert_nr(int op, int64_t val, uint8_t *opnd)
-{
-  rs_reginsert_nr(op, val, opnd);
-}
 
-// Insert an operator in front of already-emitted operand.
-// The operator has the given limit values as operands.  Also set next pointer.
-//
-// Means relocating the operand.
-static void reginsert_limits(int op, int64_t minval, int64_t maxval, uint8_t *opnd)
-{
-  rs_reginsert_limits(op, minval, maxval, opnd);
-}
-
-/// Return true if the back reference is legal. We must have seen the close
-/// brace.
-/// TODO(vim): Should also check that we don't refer to something repeated
-/// (+*=): what instance of the repetition should we match?
-static int seen_endbrace(int refnum)
-{
-  if (!had_endbrace[refnum]) {
-    uint8_t *p;
-
-    // Trick: check if "@<=" or "@<!" follows, in which case
-    // the \1 can appear before the referenced match.
-    for (p = (uint8_t *)regparse; *p != NUL; p++) {
-      if (p[0] == '@' && p[1] == '<' && (p[2] == '!' || p[2] == '=')) {
-        break;
-      }
-    }
-
-    if (*p == NUL) {
-      emsg(_("E65: Illegal back reference"));
-      rc_did_emsg = true;
-      return false;
-    }
-  }
-  return true;
-}
 
 // Parse the lowest level — thin wrapper around rs_regatom (Rust).
 uint8_t *regatom(int *flagp)
 {
   return rs_regatom(flagp);
 }
-// Parse something followed by possible [*+=].
-//
-// Note that the branching code sequences used for = and the general cases
-// of * and + are somewhat optimized:  they use the same NOTHING node as
-// both the endmarker for their branch list and the body of the last branch.
-// It might seem that this node could be dispensed with entirely, but the
-// endmarker role is not redundant.
-static uint8_t *regpiece(int *flagp)
-{
-  return rs_regpiece(flagp);
-}
 
-// Parse one alternative of an | or & operator.
-// Implements the concatenation operator.
-static uint8_t *regconcat(int *flagp)
-{
-  return rs_regconcat(flagp);
-}
 
-// Parse one alternative of an | operator.
-// Implements the & operator.
-static uint8_t *regbranch(int *flagp)
-{
-  return rs_regbranch(flagp);
-}
 
 /// Parse regular expression, i.e. main body or parenthesized thing.
 ///
@@ -2368,36 +2177,6 @@ static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
 int vim_regcomp_had_eol(void)
 {
   return had_eol;
-}
-
-// Get a number after a backslash that is inside [].
-// When nothing is recognized return a backslash.
-static int coll_get_char(void)
-{
-  int64_t nr = -1;
-
-  switch (*regparse++) {
-  case 'd':
-    nr = getdecchrs(); break;
-  case 'o':
-    nr = getoctchrs(); break;
-  case 'x':
-    nr = gethexchrs(2); break;
-  case 'u':
-    nr = gethexchrs(4); break;
-  case 'U':
-    nr = gethexchrs(8); break;
-  }
-  if (nr < 0) {
-    // If getting the number fails be backwards compatible: the character
-    // is a backslash.
-    regparse--;
-    nr = '\\';
-  }
-  if (nr > INT_MAX) {
-    nr = INT_MAX;
-  }
-  return (int)nr;
 }
 
 // Free a compiled regexp program, returned by bt_regcomp().
@@ -3120,43 +2899,13 @@ extern void rs_realloc_post_list(void);
 
 extern void rs_nfa_regcomp_start(uint8_t *expr, int re_flags);
 
-/// Initialize internal variables before NFA compilation.
-///
-/// @param re_flags  @see vim_regcomp()
-static void nfa_regcomp_start(uint8_t *expr, int re_flags)
-{
-  rs_nfa_regcomp_start(expr, re_flags);
-}
-
-// Thin wrappers calling Rust Phase 6 functions.
-static int nfa_get_reganch(nfa_state_T *start, int depth)
-{
-  return rs_nfa_get_reganch((void *)start, depth);
-}
-static int nfa_get_regstart(nfa_state_T *start, int depth)
-{
-  return rs_nfa_get_regstart((void *)start, depth);
-}
-static uint8_t *nfa_get_match_text(nfa_state_T *start)
-{
-  return rs_nfa_get_match_text((void *)start);
-}
 
 
-// Allocate more space for post_start.  Called when
-// running above the estimated number of states.
-static void realloc_post_list(void)
-{
-  rs_realloc_post_list();
-}
+
 
 // Search between "start" and "end" and try to recognize a
 // character class in expanded form. For example [0-9].
 extern int rs_nfa_recognize_char_class(uint8_t *start, const uint8_t *end, int extra_newl);
-static int nfa_recognize_char_class(uint8_t *start, const uint8_t *end, int extra_newl)
-{
-  return rs_nfa_recognize_char_class(start, end, extra_newl);
-}
 
 // Produce the bytes for equivalence class "c".
 // Currently only handles latin1, latin9 and utf-8.
@@ -3165,33 +2914,8 @@ static int nfa_recognize_char_class(uint8_t *start, const uint8_t *end, int extr
 //
 extern void rs_nfa_emit_equi_class(int c);
 
-// NOTE! When changing this function, also update reg_equi_class()
-static void nfa_emit_equi_class(int c)
-{
-  rs_nfa_emit_equi_class(c);
-}
 
 
-// Code to parse regular expression.
-//
-// We try to reuse parsing functions in regexp.c to
-// minimize surprise and keep the syntax consistent.
-
-// Parse the lowest level.
-//
-// An atom can be one of a long list of items.  Many atoms match one character
-// in the text.  It is often an ordinary character or a character class.
-// Braces can be used to make a pattern into an atom.  The "\z(\)" construct
-// is only for syntax highlighting.
-//
-// atom    ::=     ordinary-atom
-//     or  \( pattern \)
-//     or  \%( pattern \)
-//     or  \z( pattern \)
-static int nfa_regatom(void)
-{
-  return rs_nfa_regatom();
-}
 
 
 // Parse something followed by possible [*+=].
@@ -3247,11 +2971,6 @@ static nfa_state_T *post2nfa(int *postfix, int *end, int nfa_calc_size)
 }
 
 
-// After building the NFA program, inspect it to add optimization hints.
-static void nfa_postprocess(nfa_regprog_T *prog)
-{
-  rs_nfa_postprocess((void *)prog);
-}
 
 
 /////////////////////////////////////////////////////////////////
@@ -4024,22 +3743,6 @@ static void report_re_switch(const char *pat)
   }
 }
 
-/// Match a regexp against a string.
-/// "rmp->regprog" must be a compiled regexp as returned by vim_regcomp().
-/// Note: "rmp->regprog" may be freed and changed.
-/// Uses curbuf for line count and 'iskeyword'.
-/// When "nl" is true consider a "\n" in "line" to be a line break.
-///
-/// @param rmp
-/// @param line the string to match against
-/// @param col  the column to start looking for match
-/// @param nl
-///
-/// @return true if there is a match, false if not.
-static bool vim_regexec_string(regmatch_T *rmp, const char *line, colnr_T col, bool nl)
-{
-  return rs_vim_regexec_string(rmp, (const uint8_t *)line, col, nl) > 0;
-}
 
 // Note: "*prog" may be freed and changed.
 // Return true if there is a match, false if not.

@@ -20,8 +20,6 @@ use std::ffi::c_long;
 extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_regexp_get_char_class(pp: *mut *mut c_char) -> c_int;
-    fn nvim_regexp_get_equi_class(pp: *mut *mut c_char) -> c_int;
-    fn nvim_regexp_get_coll_element(pp: *mut *mut c_char) -> c_int;
     fn nvim_get_p_cpo() -> *const c_char;
     fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
@@ -158,6 +156,39 @@ const MAGIC_OFF: c_int = 2;
 const MAGIC_ON: c_int = 3;
 const MAGIC_ALL: c_int = 4;
 
+/// Check for an equivalence class name "[=a=]".  `pp` points to the '['.
+/// Returns a character representing the class. Zero means that no item was
+/// recognized.  Otherwise `pp` is advanced to after the item.
+unsafe fn get_equi_class(pp: *mut *mut c_char) -> c_int {
+    let p = *pp;
+    if *p.add(1) == b'=' as c_char && *p.add(2) != 0 {
+        let l = utfc_ptr2len(p.add(2)) as usize;
+        if *p.add(l + 2) == b'=' as c_char && *p.add(l + 3) == b']' as c_char {
+            let c = utf_ptr2char(p.add(2));
+            *pp = p.add(l + 4);
+            return c;
+        }
+    }
+    0
+}
+
+/// Check for a collating element "[.a.]".  `pp` points to the '['.
+/// Returns a character. Zero means that no item was recognized.  Otherwise
+/// `pp` is advanced to after the item.
+/// Currently only single characters are recognized.
+unsafe fn get_coll_element(pp: *mut *mut c_char) -> c_int {
+    let p = *pp;
+    if *p != 0 && *p.add(1) == b'.' as c_char && *p.add(2) != 0 {
+        let l = utfc_ptr2len(p.add(2)) as usize;
+        if *p.add(l + 2) == b'.' as c_char && *p.add(l + 3) == b']' as c_char {
+            let c = utf_ptr2char(p.add(2));
+            *pp = p.add(l + 4);
+            return c;
+        }
+    }
+    0
+}
+
 /// Skip over a "[]" range. `p` must point to the character after the '['.
 /// The returned pointer is on the matching ']', or the terminating NUL.
 ///
@@ -187,8 +218,8 @@ unsafe fn skip_anyof_impl(mut p: *mut c_char, reg_cpo_lit: bool) -> *mut c_char 
             p = p.add(2);
         } else if *p == b'[' as c_char {
             if get_char_class_impl(&mut p) == CLASS_NONE
-                && nvim_regexp_get_equi_class(&mut p) == 0
-                && nvim_regexp_get_coll_element(&mut p) == 0
+                && get_equi_class(&mut p) == 0
+                && get_coll_element(&mut p) == 0
                 && *p != 0
             {
                 p = p.add(1);
@@ -2829,11 +2860,11 @@ unsafe fn seen_endbrace(refnum: c_int) -> bool {
 unsafe fn emit_posix_class(c_class: c_int, regparse_ptr: *mut *mut c_char) {
     match c_class {
         x if x == CLASS_NONE => {
-            let eq = nvim_regexp_get_equi_class(regparse_ptr);
+            let eq = get_equi_class(regparse_ptr);
             if eq != 0 {
                 reg_equi_class(eq);
             } else {
-                let coll = nvim_regexp_get_coll_element(regparse_ptr);
+                let coll = get_coll_element(regparse_ptr);
                 if coll != 0 {
                     rs_regmbc(coll);
                 } else {
@@ -3010,7 +3041,7 @@ unsafe fn parse_collection(flagp: *mut c_int, extra: c_int) -> *mut u8 {
                 let mut endc: c_int = 0;
                 if *regparse == b'[' as c_char {
                     let mut rp = regparse;
-                    endc = nvim_regexp_get_coll_element(&mut rp);
+                    endc = get_coll_element(&mut rp);
                     if endc != 0 {
                         regparse = rp;
                         nvim_regexp_set_regparse(regparse);
@@ -3115,13 +3146,13 @@ unsafe fn parse_collection(flagp: *mut c_int, extra: c_int) -> *mut u8 {
             // Characters assumed to be 8 bits!
             if c_class == CLASS_NONE {
                 // Try equivalence class, then collating element, then literal '['
-                let eq = nvim_regexp_get_equi_class(&mut rp);
+                let eq = get_equi_class(&mut rp);
                 if eq != 0 {
                     reg_equi_class(eq);
                     regparse = rp;
                     nvim_regexp_set_regparse(regparse);
                 } else {
-                    let coll = nvim_regexp_get_coll_element(&mut rp);
+                    let coll = get_coll_element(&mut rp);
                     if coll != 0 {
                         rs_regmbc(coll);
                         regparse = rp;
@@ -8127,12 +8158,12 @@ unsafe fn nfa_handle_collection(mut extra: c_int, old_rp: *mut c_char) -> c_int 
 
                 if charclass == CLASS_NONE {
                     let mut rp2 = nvim_regexp_get_regparse();
-                    let equiclass = nvim_regexp_get_equi_class(&mut rp2);
+                    let equiclass = get_equi_class(&mut rp2);
                     nvim_regexp_set_regparse(rp2);
 
                     if equiclass == 0 {
                         let mut rp3 = nvim_regexp_get_regparse();
-                        let collclass = nvim_regexp_get_coll_element(&mut rp3);
+                        let collclass = get_coll_element(&mut rp3);
                         nvim_regexp_set_regparse(rp3);
 
                         if collclass != 0 {
