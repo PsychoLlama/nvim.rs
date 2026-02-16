@@ -10137,6 +10137,7 @@ struct RegsubsT {
 
 /// Matches C `nfa_state_T` — NFA state node.
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct NfaStateT {
     c: c_int,
     out: *mut NfaStateT,
@@ -10148,6 +10149,7 @@ struct NfaStateT {
 
 /// Matches C `nfa_pim_T` — Postponed Invisible Match.
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct NfaPimT {
     result: c_int,
     state: *mut NfaStateT,
@@ -10157,6 +10159,7 @@ struct NfaPimT {
 
 /// Matches C `nfa_thread_T` — NFA execution thread.
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct NfaThreadT {
     state: *mut NfaStateT,
     count: c_int,
@@ -10166,6 +10169,7 @@ struct NfaThreadT {
 
 /// Matches C `nfa_list_T` — list of NFA execution states.
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct NfaListT {
     t: *mut NfaThreadT,
     n: c_int,
@@ -10253,21 +10257,6 @@ extern "C" {
     fn nvim_regexp_get_nfa_ll_index() -> c_int;
     fn nvim_regexp_set_nfa_ll_index(v: c_int);
 
-    // Phase 8.3: addstate/addstate_here/submatch wrappers
-    fn nvim_regexp_call_addstate(
-        l: NfaListHandle,
-        state: NfaStateHandle,
-        subs: RegsubsHandle,
-        pim: NfaPimHandle,
-        off: c_int,
-    ) -> RegsubsHandle;
-    fn nvim_regexp_call_addstate_here(
-        l: NfaListHandle,
-        state: NfaStateHandle,
-        subs: RegsubsHandle,
-        pim: NfaPimHandle,
-        ip: *mut c_int,
-    ) -> RegsubsHandle;
     fn nvim_regexp_call_nfa_regmatch(
         prog: NfaProgHandle,
         start: NfaStateHandle,
@@ -10553,6 +10542,659 @@ unsafe fn sub_equal_o(sub1: *mut c_void, sub2: *mut c_void) -> bool {
         sub2.cast::<RegsubT>(),
         nvim_regexp_get_rex_nfa_has_backref(),
     )
+}
+
+/// Opaque wrapper: calls typed `addstate_t` with cast pointers.
+#[inline]
+unsafe fn addstate_o(
+    l: NfaListHandle,
+    state: NfaStateHandle,
+    subs: RegsubsHandle,
+    pim: NfaPimHandle,
+    off: c_int,
+) -> RegsubsHandle {
+    addstate_t(
+        l.cast::<NfaListT>(),
+        state.cast::<NfaStateT>(),
+        subs.cast::<RegsubsT>(),
+        pim.cast::<NfaPimT>(),
+        off,
+    )
+    .cast::<c_void>()
+}
+
+/// Opaque wrapper: calls typed `addstate_here_t` with cast pointers.
+#[inline]
+unsafe fn addstate_here_o(
+    l: NfaListHandle,
+    state: NfaStateHandle,
+    subs: RegsubsHandle,
+    pim: NfaPimHandle,
+    ip: *mut c_int,
+) -> RegsubsHandle {
+    addstate_here_t(
+        l.cast::<NfaListT>(),
+        state.cast::<NfaStateT>(),
+        subs.cast::<RegsubsT>(),
+        pim.cast::<NfaPimT>(),
+        ip,
+    )
+    .cast::<c_void>()
+}
+
+const ADDSTATE_HERE_OFFSET: c_int = 10;
+
+/// Static depth counter for `addstate` recursion limit.
+static mut ADDSTATE_DEPTH: c_int = 0;
+
+/// Static `temp_subs` for `addstate` when realloc invalidates subs pointer.
+static mut ADDSTATE_TEMP_SUBS: core::mem::MaybeUninit<RegsubsT> = core::mem::MaybeUninit::uninit();
+
+/// Return true if "one" and "two" PIM states are equal (typed version).
+unsafe fn pim_equal_t(one: *const NfaPimT, two: *const NfaPimT) -> bool {
+    let one_unused = one.is_null() || (*one).result == NFA_PIM_UNUSED;
+    let two_unused = two.is_null() || (*two).result == NFA_PIM_UNUSED;
+
+    if one_unused {
+        return two_unused;
+    }
+    if two_unused {
+        return false;
+    }
+    // compare state id
+    if (*(*one).state).id != (*(*two).state).id {
+        return false;
+    }
+    // compare position
+    if nvim_regexp_is_reg_multi() != 0 {
+        return (*one).end.pos.lnum == (*two).end.pos.lnum
+            && (*one).end.pos.col == (*two).end.pos.col;
+    }
+    (*one).end.ptr == (*two).end.ptr
+}
+
+/// Return true if "state" with "subs" is in list "l" at the same positions.
+unsafe fn has_state_with_pos_t(
+    l: *mut NfaListT,
+    state: *mut NfaStateT,
+    subs: *const RegsubsT,
+    pim: *const NfaPimT,
+) -> bool {
+    for i in 0..(*l).n {
+        let thread = &*(*l).t.offset(i as isize);
+        if (*thread.state).id == (*state).id
+            && sub_equal(
+                &thread.subs.norm,
+                &(*subs).norm,
+                nvim_regexp_get_rex_nfa_has_backref(),
+            )
+            && (nvim_regexp_get_nfa_has_zsubexpr() == 0
+                || sub_equal(
+                    &thread.subs.synt,
+                    &(*subs).synt,
+                    nvim_regexp_get_rex_nfa_has_backref(),
+                ))
+            && pim_equal_t(&thread.pim, pim)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Return true if "state" leads to `NFA_MATCH` without advancing input.
+unsafe fn match_follows_t(startstate: *const NfaStateT, depth: c_int) -> bool {
+    let mut state = startstate;
+    if depth > 10 {
+        return false;
+    }
+    while !state.is_null() {
+        match (*state).c {
+            NFA_MATCH
+            | NFA_MCLOSE
+            | NFA_END_INVISIBLE
+            | NFA_END_INVISIBLE_NEG
+            | NFA_END_PATTERN => return true,
+
+            NFA_SPLIT => {
+                return match_follows_t((*state).out, depth + 1)
+                    || match_follows_t((*state).out1, depth + 1);
+            }
+
+            NFA_START_INVISIBLE
+            | NFA_START_INVISIBLE_FIRST
+            | NFA_START_INVISIBLE_BEFORE
+            | NFA_START_INVISIBLE_BEFORE_FIRST
+            | NFA_START_INVISIBLE_NEG
+            | NFA_START_INVISIBLE_NEG_FIRST
+            | NFA_START_INVISIBLE_BEFORE_NEG
+            | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+            | NFA_COMPOSING => {
+                state = (*(*state).out1).out;
+                continue;
+            }
+
+            NFA_ANY | NFA_ANY_COMPOSING | NFA_IDENT | NFA_SIDENT | NFA_KWORD | NFA_SKWORD
+            | NFA_FNAME | NFA_SFNAME | NFA_PRINT | NFA_SPRINT | NFA_WHITE | NFA_NWHITE
+            | NFA_DIGIT | NFA_NDIGIT | NFA_HEX | NFA_NHEX | NFA_OCTAL | NFA_NOCTAL | NFA_WORD
+            | NFA_NWORD | NFA_HEAD | NFA_NHEAD | NFA_ALPHA | NFA_NALPHA | NFA_LOWER
+            | NFA_NLOWER | NFA_UPPER | NFA_NUPPER | NFA_LOWER_IC | NFA_NLOWER_IC | NFA_UPPER_IC
+            | NFA_NUPPER_IC | NFA_START_COLL | NFA_START_NEG_COLL | NFA_NEWL => return false,
+
+            c if c > 0 => return false,
+            _ => {}
+        }
+        state = (*state).out;
+    }
+    false
+}
+
+/// Return true if "state" is already in list "l" (typed version).
+unsafe fn state_in_list_t(l: *mut NfaListT, state: *mut NfaStateT, subs: *const RegsubsT) -> bool {
+    let ll_index = nvim_regexp_get_nfa_ll_index();
+    if (*state).lastlist[ll_index as usize] == (*l).id
+        && (nvim_regexp_get_rex_nfa_has_backref() == 0
+            || has_state_with_pos_t(l, state, subs, core::ptr::null()))
+    {
+        return true;
+    }
+    false
+}
+
+/// Add "state" and possibly what follows to state list "l".
+/// Returns `subs_arg`, possibly copied into `temp_subs`.
+/// NULL when recursiveness is too deep or memory exceeded.
+#[allow(clippy::too_many_lines, clippy::match_same_arms)]
+unsafe fn addstate_t(
+    l: *mut NfaListT,
+    state: *mut NfaStateT,
+    subs_arg: *mut RegsubsT,
+    pim: *const NfaPimT,
+    off_arg: c_int,
+) -> *mut RegsubsT {
+    let mut off = off_arg;
+    let mut add_here = false;
+    let mut listindex: c_int = 0;
+    let found = false;
+    let mut subs = subs_arg;
+    let mut skip_add = false;
+
+    // Recursion depth limit
+    ADDSTATE_DEPTH += 1;
+    if ADDSTATE_DEPTH >= 5000 || subs.is_null() {
+        ADDSTATE_DEPTH -= 1;
+        return core::ptr::null_mut();
+    }
+
+    if off_arg <= -ADDSTATE_HERE_OFFSET {
+        add_here = true;
+        off = 0;
+        listindex = -(off_arg + ADDSTATE_HERE_OFFSET);
+    }
+
+    let state_c = (*state).c;
+
+    match state_c {
+        NFA_NCLOSE | NFA_MCLOSE | NFA_MCLOSE1 | NFA_MCLOSE2 | NFA_MCLOSE3 | NFA_MCLOSE4
+        | NFA_MCLOSE5 | NFA_MCLOSE6 | NFA_MCLOSE7 | NFA_MCLOSE8 | NFA_MCLOSE9 | NFA_ZCLOSE
+        | NFA_ZCLOSE1 | NFA_ZCLOSE2 | NFA_ZCLOSE3 | NFA_ZCLOSE4 | NFA_ZCLOSE5 | NFA_ZCLOSE6
+        | NFA_ZCLOSE7 | NFA_ZCLOSE8 | NFA_ZCLOSE9 | NFA_MOPEN | NFA_ZEND | NFA_SPLIT
+        | NFA_EMPTY => {
+            // These nodes are not added themselves but their "out" and/or
+            // "out1" may be added below.
+        }
+
+        NFA_BOL | NFA_BOF => {
+            // "^" won't match past end-of-line, don't bother trying.
+            let input = nvim_regexp_get_rex_input();
+            let line = nvim_regexp_get_rex_line();
+            let nfa_endp_ptr = nvim_regexp_get_nfa_endp();
+            if input > line
+                && *input != 0
+                && (nfa_endp_ptr.is_null()
+                    || nvim_regexp_is_reg_multi() == 0
+                    || nvim_regexp_get_rex_lnum() == nvim_regexp_get_nfa_endp_pos_lnum())
+            {
+                // skip_add
+                ADDSTATE_DEPTH -= 1;
+                return subs;
+            }
+            // Fall through to default handling
+            subs = addstate_default_add(
+                l,
+                state,
+                subs,
+                pim,
+                off_arg,
+                add_here,
+                listindex,
+                found,
+                &mut skip_add,
+            );
+            if subs.is_null() {
+                ADDSTATE_DEPTH -= 1;
+                return core::ptr::null_mut();
+            }
+        }
+
+        _ => {
+            subs = addstate_default_add(
+                l,
+                state,
+                subs,
+                pim,
+                off_arg,
+                add_here,
+                listindex,
+                found,
+                &mut skip_add,
+            );
+            if subs.is_null() {
+                ADDSTATE_DEPTH -= 1;
+                return core::ptr::null_mut();
+            }
+        }
+    }
+
+    // Second switch for recursive processing (skipped when state already in list)
+    if !skip_add {
+        match state_c {
+            NFA_MATCH => {}
+
+            NFA_SPLIT => {
+                subs = addstate_t(l, (*state).out, subs, pim, off_arg);
+                if !subs.is_null() {
+                    subs = addstate_t(l, (*state).out1, subs, pim, off_arg);
+                }
+            }
+
+            NFA_EMPTY | NFA_NOPEN | NFA_NCLOSE => {
+                subs = addstate_t(l, (*state).out, subs, pim, off_arg);
+            }
+
+            NFA_MOPEN | NFA_MOPEN1 | NFA_MOPEN2 | NFA_MOPEN3 | NFA_MOPEN4 | NFA_MOPEN5
+            | NFA_MOPEN6 | NFA_MOPEN7 | NFA_MOPEN8 | NFA_MOPEN9 | NFA_ZOPEN | NFA_ZOPEN1
+            | NFA_ZOPEN2 | NFA_ZOPEN3 | NFA_ZOPEN4 | NFA_ZOPEN5 | NFA_ZOPEN6 | NFA_ZOPEN7
+            | NFA_ZOPEN8 | NFA_ZOPEN9 | NFA_ZSTART => {
+                subs = addstate_handle_open(l, state, subs, pim, off_arg, off, state_c);
+            }
+
+            NFA_MCLOSE if nvim_regexp_get_rex_nfa_has_zend() != 0 => {
+                // Check if \ze already set the end position
+                let sub = &(*subs).norm;
+                let has_end = if nvim_regexp_is_reg_multi() != 0 {
+                    sub.list.multi[0].end_lnum >= 0
+                } else {
+                    !sub.list.line[0].end.is_null()
+                };
+                if has_end {
+                    // Do not overwrite the position set by \ze.
+                    subs = addstate_t(l, (*state).out, subs, pim, off_arg);
+                } else {
+                    subs = addstate_handle_close(l, state, subs, pim, off_arg, off, state_c);
+                }
+            }
+
+            NFA_MCLOSE | NFA_MCLOSE1 | NFA_MCLOSE2 | NFA_MCLOSE3 | NFA_MCLOSE4 | NFA_MCLOSE5
+            | NFA_MCLOSE6 | NFA_MCLOSE7 | NFA_MCLOSE8 | NFA_MCLOSE9 | NFA_ZCLOSE | NFA_ZCLOSE1
+            | NFA_ZCLOSE2 | NFA_ZCLOSE3 | NFA_ZCLOSE4 | NFA_ZCLOSE5 | NFA_ZCLOSE6 | NFA_ZCLOSE7
+            | NFA_ZCLOSE8 | NFA_ZCLOSE9 | NFA_ZEND => {
+                subs = addstate_handle_close(l, state, subs, pim, off_arg, off, state_c);
+            }
+
+            _ => {}
+        }
+    } // end if !skip_add
+
+    ADDSTATE_DEPTH -= 1;
+    subs
+}
+
+/// Handle the "default" add-to-list path in `addstate`.
+/// Sets `*skipped` to true if the state was already in the list and the caller
+/// should skip recursive processing (equivalent to C's `goto skip_add`).
+#[allow(clippy::too_many_arguments)]
+unsafe fn addstate_default_add(
+    l: *mut NfaListT,
+    state: *mut NfaStateT,
+    mut subs: *mut RegsubsT,
+    pim: *const NfaPimT,
+    _off_arg: c_int,
+    add_here: bool,
+    listindex: c_int,
+    mut found: bool,
+    skipped: *mut bool,
+) -> *mut RegsubsT {
+    let ll_index = nvim_regexp_get_nfa_ll_index() as usize;
+    let state_c = (*state).c;
+
+    if (*state).lastlist[ll_index] == (*l).id && state_c != NFA_SKIP {
+        // This state is already in the list
+        if nvim_regexp_get_rex_nfa_has_backref() == 0
+            && pim.is_null()
+            && (*l).has_pim == 0
+            && state_c != NFA_MATCH
+        {
+            if add_here {
+                let k_max = core::cmp::min((*l).n, listindex);
+                for k in 0..k_max {
+                    if (*(*(*l).t.offset(k as isize)).state).id == (*state).id {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if !add_here || found {
+                // skip_add - caller (addstate_t) skips recursive processing
+                *skipped = true;
+                return subs;
+            }
+        }
+        // Do not add the state again when it exists with the same positions.
+        if has_state_with_pos_t(l, state, subs, pim) {
+            // skip_add - caller (addstate_t) skips recursive processing
+            *skipped = true;
+            return subs;
+        }
+    }
+
+    // When there are backreferences or PIMs the number of states may
+    // be (a lot) bigger than anticipated.
+    if (*l).n == (*l).len {
+        let newlen = (*l).len * 3 / 2 + 50;
+        let newsize = (newlen as usize) * core::mem::size_of::<NfaThreadT>();
+
+        if ((newsize >> 10) as i64) >= nvim_regexp_get_p_mmp() {
+            nvim_regexp_emsg_maxmempattern();
+            // Return null - caller (addstate_t) handles depth
+            return core::ptr::null_mut();
+        }
+        let temp_subs = core::ptr::addr_of_mut!(ADDSTATE_TEMP_SUBS).cast::<RegsubsT>();
+        if subs != temp_subs {
+            // "subs" may point into the current array, need to make a
+            // copy before it becomes invalid.
+            copy_sub(&mut (*temp_subs).norm, &(*subs).norm);
+            if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                copy_sub(&mut (*temp_subs).synt, &(*subs).synt);
+            }
+            subs = temp_subs;
+        }
+
+        let newt = xrealloc((*l).t.cast::<c_void>(), newsize);
+        (*l).t = newt.cast::<NfaThreadT>();
+        (*l).len = newlen;
+    }
+
+    // add the state to the list
+    (*state).lastlist[ll_index] = (*l).id;
+    let thread = &mut *(*l).t.offset((*l).n as isize);
+    (*l).n += 1;
+    thread.state = state;
+    if pim.is_null() {
+        thread.pim.result = NFA_PIM_UNUSED;
+    } else {
+        copy_pim(&mut thread.pim, pim);
+        (*l).has_pim = 1;
+    }
+    copy_sub(&mut thread.subs.norm, &(*subs).norm);
+    if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+        copy_sub(&mut thread.subs.synt, &(*subs).synt);
+    }
+
+    subs
+}
+
+/// Handle `NFA_MOPEN`/`NFA_ZOPEN`/`NFA_ZSTART` in `addstate`.
+#[allow(
+    clippy::too_many_arguments,
+    clippy::cast_possible_truncation,
+    clippy::manual_range_contains
+)]
+unsafe fn addstate_handle_open(
+    l: *mut NfaListT,
+    state: *mut NfaStateT,
+    mut subs: *mut RegsubsT,
+    pim: *const NfaPimT,
+    off_arg: c_int,
+    off: c_int,
+    state_c: c_int,
+) -> *mut RegsubsT {
+    let (subidx, sub_is_synt) = if state_c == NFA_ZSTART {
+        (0, false)
+    } else if state_c >= NFA_ZOPEN && state_c <= NFA_ZOPEN9 {
+        ((state_c - NFA_ZOPEN) as usize, true)
+    } else {
+        ((state_c - NFA_MOPEN) as usize, false)
+    };
+
+    let sub = if sub_is_synt {
+        &mut (*subs).synt
+    } else {
+        &mut (*subs).norm
+    };
+
+    let mut save_ptr: *mut u8 = core::ptr::null_mut();
+    let mut save_multipos = MultiPos {
+        start_lnum: 0,
+        end_lnum: 0,
+        start_col: 0,
+        end_col: 0,
+    };
+    let save_in_use;
+
+    if nvim_regexp_is_reg_multi() != 0 {
+        if (subidx as c_int) < sub.in_use {
+            save_multipos = sub.list.multi[subidx];
+            save_in_use = -1;
+        } else {
+            save_in_use = sub.in_use;
+            for i in (sub.in_use as usize)..subidx {
+                sub.list.multi[i].start_lnum = -1;
+                sub.list.multi[i].end_lnum = -1;
+            }
+            sub.in_use = subidx as c_int + 1;
+        }
+        let input = nvim_regexp_get_rex_input();
+        let line = nvim_regexp_get_rex_line();
+        if off == -1 {
+            sub.list.multi[subidx].start_lnum = nvim_regexp_get_rex_lnum() + 1;
+            sub.list.multi[subidx].start_col = 0;
+        } else {
+            sub.list.multi[subidx].start_lnum = nvim_regexp_get_rex_lnum();
+            sub.list.multi[subidx].start_col = (input as isize - line as isize) as c_int + off;
+        }
+        sub.list.multi[subidx].end_lnum = -1;
+    } else {
+        if (subidx as c_int) < sub.in_use {
+            save_ptr = sub.list.line[subidx].start;
+            save_in_use = -1;
+        } else {
+            save_in_use = sub.in_use;
+            for i in (sub.in_use as usize)..subidx {
+                sub.list.line[i].start = core::ptr::null_mut();
+                sub.list.line[i].end = core::ptr::null_mut();
+            }
+            sub.in_use = subidx as c_int + 1;
+        }
+        let input = nvim_regexp_get_rex_input();
+        sub.list.line[subidx].start = input.offset(off as isize);
+    }
+
+    subs = addstate_t(l, (*state).out, subs, pim, off_arg);
+    if subs.is_null() {
+        return subs;
+    }
+    // "subs" may have changed, need to set "sub" again.
+    let sub = if sub_is_synt {
+        &mut (*subs).synt
+    } else {
+        &mut (*subs).norm
+    };
+
+    if save_in_use == -1 {
+        if nvim_regexp_is_reg_multi() != 0 {
+            sub.list.multi[subidx] = save_multipos;
+        } else {
+            sub.list.line[subidx].start = save_ptr;
+        }
+    } else {
+        sub.in_use = save_in_use;
+    }
+    subs
+}
+
+/// Handle `NFA_MCLOSE`/`NFA_ZCLOSE`/`NFA_ZEND` in `addstate`.
+#[allow(
+    clippy::too_many_arguments,
+    clippy::cast_possible_truncation,
+    clippy::manual_range_contains
+)]
+unsafe fn addstate_handle_close(
+    l: *mut NfaListT,
+    state: *mut NfaStateT,
+    mut subs: *mut RegsubsT,
+    pim: *const NfaPimT,
+    off_arg: c_int,
+    off: c_int,
+    state_c: c_int,
+) -> *mut RegsubsT {
+    let (subidx, sub_is_synt) = if state_c == NFA_ZEND {
+        (0, false)
+    } else if state_c >= NFA_ZCLOSE && state_c <= NFA_ZCLOSE9 {
+        ((state_c - NFA_ZCLOSE) as usize, true)
+    } else {
+        ((state_c - NFA_MCLOSE) as usize, false)
+    };
+
+    let sub = if sub_is_synt {
+        &mut (*subs).synt
+    } else {
+        &mut (*subs).norm
+    };
+
+    let save_in_use = sub.in_use;
+    if sub.in_use <= subidx as c_int {
+        sub.in_use = subidx as c_int + 1;
+    }
+
+    let mut save_ptr: *mut u8 = core::ptr::null_mut();
+    let mut save_multipos = MultiPos {
+        start_lnum: 0,
+        end_lnum: 0,
+        start_col: 0,
+        end_col: 0,
+    };
+
+    if nvim_regexp_is_reg_multi() != 0 {
+        save_multipos = sub.list.multi[subidx];
+        let input = nvim_regexp_get_rex_input();
+        let line = nvim_regexp_get_rex_line();
+        if off == -1 {
+            sub.list.multi[subidx].end_lnum = nvim_regexp_get_rex_lnum() + 1;
+            sub.list.multi[subidx].end_col = 0;
+        } else {
+            sub.list.multi[subidx].end_lnum = nvim_regexp_get_rex_lnum();
+            sub.list.multi[subidx].end_col = (input as isize - line as isize) as c_int + off;
+        }
+    } else {
+        save_ptr = sub.list.line[subidx].end;
+        let input = nvim_regexp_get_rex_input();
+        sub.list.line[subidx].end = input.offset(off as isize);
+    }
+
+    subs = addstate_t(l, (*state).out, subs, pim, off_arg);
+    if subs.is_null() {
+        return subs;
+    }
+    // "subs" may have changed, need to set "sub" again.
+    let sub = if sub_is_synt {
+        &mut (*subs).synt
+    } else {
+        &mut (*subs).norm
+    };
+
+    if nvim_regexp_is_reg_multi() != 0 {
+        sub.list.multi[subidx] = save_multipos;
+    } else {
+        sub.list.line[subidx].end = save_ptr;
+    }
+    sub.in_use = save_in_use;
+    subs
+}
+
+/// Like `addstate_t()`, but the new state(s) are put at position `*ip`.
+#[allow(clippy::cast_possible_truncation)]
+unsafe fn addstate_here_t(
+    l: *mut NfaListT,
+    state: *mut NfaStateT,
+    subs: *mut RegsubsT,
+    pim: *const NfaPimT,
+    ip: *mut c_int,
+) -> *mut RegsubsT {
+    let tlen = (*l).n;
+    let listidx = *ip;
+
+    let r = addstate_t(l, state, subs, pim, -listidx - ADDSTATE_HERE_OFFSET);
+    if r.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    // when "*ip" was at the end of the list, nothing to do
+    if listidx + 1 == tlen {
+        return r;
+    }
+
+    // re-order to put the new state at the current position
+    let count = (*l).n - tlen;
+    if count == 0 {
+        return r; // no state got added
+    }
+    if count == 1 {
+        // overwrite the current state
+        *(*l).t.offset(listidx as isize) = *(*l).t.offset(((*l).n - 1) as isize);
+    } else if count > 1 {
+        if (*l).n + count > (*l).len {
+            // not enough space, reallocate
+            let newlen = (*l).len * 3 / 2 + 50;
+            let newsize = (newlen as usize) * core::mem::size_of::<NfaThreadT>();
+
+            if ((newsize >> 10) as i64) >= nvim_regexp_get_p_mmp() {
+                nvim_regexp_emsg_maxmempattern();
+                return core::ptr::null_mut();
+            }
+            let newl = xmalloc(newsize).cast::<NfaThreadT>();
+            (*l).len = newlen;
+            core::ptr::copy_nonoverlapping((*l).t, newl, listidx as usize);
+            core::ptr::copy_nonoverlapping(
+                (*l).t.offset(((*l).n - count) as isize),
+                newl.offset(listidx as isize),
+                count as usize,
+            );
+            core::ptr::copy_nonoverlapping(
+                (*l).t.offset((listidx + 1) as isize),
+                newl.offset((listidx + count) as isize),
+                ((*l).n - count - listidx - 1) as usize,
+            );
+            nvim_regexp_xfree((*l).t.cast::<c_void>());
+            (*l).t = newl;
+        } else {
+            // make space for new states, then move them
+            core::ptr::copy(
+                (*l).t.offset((listidx + 1) as isize),
+                (*l).t.offset((listidx + count) as isize),
+                ((*l).n - listidx - 1) as usize,
+            );
+            core::ptr::copy(
+                (*l).t.offset(((*l).n - 1) as isize),
+                (*l).t.offset(listidx as isize),
+                count as usize,
+            );
+        }
+    }
+    (*l).n -= 1;
+    *ip = listidx - 1;
+
+    r
 }
 
 /// Return true if "one" and "two" PIM states are equal.
@@ -10873,7 +11515,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
             nvim_regexp_regsubs_set_line_start(m, 0, nvim_regexp_get_rex_input());
         }
         nvim_regexp_regsubs_set_norm_in_use(m, 1);
-        r = nvim_regexp_call_addstate(
+        r = addstate_o(
             thislist,
             nvim_nfa_state_get_out(start),
             m,
@@ -10881,7 +11523,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
             0,
         );
     } else {
-        r = nvim_regexp_call_addstate(thislist, start, m, core::ptr::null_mut(), 0);
+        r = addstate_o(thislist, start, m, core::ptr::null_mut(), 0);
     }
     if r.is_null() {
         nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
@@ -11125,14 +11767,8 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         // Add out1->out to thislist with PIM
                         let out1_out = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(t_state));
                         let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
-                        if nvim_regexp_call_addstate_here(
-                            thislist,
-                            out1_out,
-                            subs_ptr,
-                            pim,
-                            &mut listidx,
-                        )
-                        .is_null()
+                        if addstate_here_o(thislist, out1_out, subs_ptr, pim, &mut listidx)
+                            .is_null()
                         {
                             nvim_regexp_free_pim(pim);
                             nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
@@ -12201,16 +12837,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
 
                 if add_here {
                     let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
-                    r = nvim_regexp_call_addstate_here(
-                        thislist,
-                        add_state,
-                        subs_ptr,
-                        pim_ptr,
-                        &mut listidx,
-                    );
+                    r = addstate_here_o(thislist, add_state, subs_ptr, pim_ptr, &mut listidx);
                 } else {
                     let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
-                    r = nvim_regexp_call_addstate(nextlist, add_state, subs_ptr, pim_ptr, add_off);
+                    r = addstate_o(nextlist, add_state, subs_ptr, pim_ptr, add_off);
                     if add_count > 0 {
                         nvim_nfa_list_set_last_thread_count(nextlist, add_count);
                     }
@@ -12303,7 +12933,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             nvim_regexp_get_rex_input().offset(clen as isize),
                         );
                     }
-                    if nvim_regexp_call_addstate(
+                    if addstate_o(
                         nextlist,
                         nvim_nfa_state_get_out(start),
                         m,
@@ -12316,9 +12946,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         break 'outer;
                     }
                 }
-            } else if nvim_regexp_call_addstate(nextlist, start, m, core::ptr::null_mut(), clen)
-                .is_null()
-            {
+            } else if addstate_o(nextlist, start, m, core::ptr::null_mut(), clen).is_null() {
                 nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
                 break 'outer;
             }

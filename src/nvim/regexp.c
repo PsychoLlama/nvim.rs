@@ -6768,18 +6768,6 @@ void nvim_regexp_set_nfa_ll_index(int v) { nfa_ll_index = v; }
 
 // --- Phase 8.3: C wrappers for addstate/addstate_here + submatch ops ---
 
-// addstate / addstate_here wrappers
-void *nvim_regexp_call_addstate(void *l, void *state, void *subs, void *pim, int off)
-{
-  return (void *)addstate((nfa_list_T *)l, (nfa_state_T *)state,
-                          (regsubs_T *)subs, (nfa_pim_T *)pim, off);
-}
-void *nvim_regexp_call_addstate_here(void *l, void *state, void *subs, void *pim, int *ip)
-{
-  return (void *)addstate_here((nfa_list_T *)l, (nfa_state_T *)state,
-                               (regsubs_T *)subs, (nfa_pim_T *)pim, ip);
-}
-
 // nfa_regmatch wrapper (for recursive_regmatch to call from Rust)
 int nvim_regexp_call_nfa_regmatch(void *prog, void *start, void *submatch, void *m)
 {
