@@ -156,6 +156,11 @@ const MAGIC_OFF: c_int = 2;
 const MAGIC_ON: c_int = 3;
 const MAGIC_ALL: c_int = 4;
 
+// RE flags (matching regexp.h)
+const RE_MAGIC: c_int = 1;
+const RE_STRING: c_int = 2;
+const RE_STRICT: c_int = 4;
+
 /// Check for an equivalence class name "[=a=]".  `pp` points to the '['.
 /// Returns a character representing the class. Zero means that no item was
 /// recognized.  Otherwise `pp` is advanced to after the item.
@@ -449,6 +454,32 @@ const CLASS_TAB: [i16; 256] = {
     tab[b'\t' as usize] |= RI_WHITE;
     tab
 };
+
+/// Character class check using the compile-time `CLASS_TAB`.
+const fn ri_digit(c: c_int) -> c_int {
+    ((c < 0x100) && (CLASS_TAB[c as usize] & RI_DIGIT != 0)) as c_int
+}
+const fn ri_hex(c: c_int) -> c_int {
+    ((c < 0x100) && (CLASS_TAB[c as usize] & RI_HEX != 0)) as c_int
+}
+const fn ri_octal(c: c_int) -> c_int {
+    ((c < 0x100) && (CLASS_TAB[c as usize] & RI_OCTAL != 0)) as c_int
+}
+const fn ri_word(c: c_int) -> c_int {
+    ((c < 0x100) && (CLASS_TAB[c as usize] & RI_WORD != 0)) as c_int
+}
+const fn ri_head(c: c_int) -> c_int {
+    ((c < 0x100) && (CLASS_TAB[c as usize] & RI_HEAD != 0)) as c_int
+}
+const fn ri_alpha(c: c_int) -> c_int {
+    ((c < 0x100) && (CLASS_TAB[c as usize] & RI_ALPHA != 0)) as c_int
+}
+const fn ri_lower(c: c_int) -> c_int {
+    ((c < 0x100) && (CLASS_TAB[c as usize] & RI_LOWER != 0)) as c_int
+}
+const fn ri_upper(c: c_int) -> c_int {
+    ((c < 0x100) && (CLASS_TAB[c as usize] & RI_UPPER != 0)) as c_int
+}
 
 /// Copy the class table into a C-provided buffer.
 ///
@@ -2738,11 +2769,14 @@ extern "C" {
     fn nvim_regexp_get_one_exactly() -> c_int;
     fn nvim_regexp_set_one_exactly(v: c_int);
     fn nvim_regexp_get_reg_string() -> c_int;
+    fn nvim_regexp_set_reg_string(v: c_int);
     fn nvim_regexp_get_reg_do_extmatch() -> c_int;
     fn nvim_regexp_get_re_has_z() -> c_int;
     fn nvim_regexp_set_re_has_z(v: c_int);
     fn nvim_regexp_get_reg_strict() -> c_int;
+    fn nvim_regexp_set_reg_strict(v: c_int);
     fn nvim_regexp_get_had_endbrace(refnum: c_int) -> c_int;
+    fn nvim_regexp_clear_had_endbrace();
     fn nvim_regexp_get_curwin_lnum() -> i32;
     fn nvim_regexp_get_curwin_col() -> i32;
     fn nvim_regexp_get_curwin_vcol() -> i32;
@@ -6897,12 +6931,6 @@ extern "C" {
     fn nvim_regexp_set_rex_nfa_has_zend(v: c_int);
     fn nvim_regexp_set_rex_nfa_has_backref(v: c_int);
 
-    // Calls shared regcomp_start
-    fn nvim_regexp_call_regcomp_start(expr: *mut u8, re_flags: c_int);
-
-    // Calls init_class_tab
-    fn nvim_regexp_call_init_class_tab();
-
     fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
 
     // NFA constant validation accessor
@@ -6919,6 +6947,30 @@ unsafe fn nfa_emit(c: c_int) {
     let post_ptr = nvim_regexp_get_post_ptr();
     *post_ptr = c;
     nvim_regexp_set_post_ptr(post_ptr.add(1));
+}
+
+/// Initialize regexp compile state (shared between BT and NFA engines).
+/// This replaces the C `regcomp_start()` function.
+unsafe fn regcomp_start(expr: *mut u8, re_flags: c_int) {
+    rs_initchr(expr.cast::<c_char>());
+    if re_flags & RE_MAGIC != 0 {
+        nvim_regexp_set_reg_magic(MAGIC_ON);
+    } else {
+        nvim_regexp_set_reg_magic(MAGIC_OFF);
+    }
+    nvim_regexp_set_reg_string(re_flags & RE_STRING);
+    nvim_regexp_set_reg_strict(re_flags & RE_STRICT);
+    rs_get_cpo_flags();
+
+    nvim_regexp_set_num_complex_braces(0);
+    nvim_regexp_set_regnpar(1);
+    nvim_regexp_clear_had_endbrace();
+    nvim_regexp_set_regnzpar(1);
+    nvim_regexp_set_re_has_z(0);
+    nvim_regexp_set_regsize(0);
+    nvim_regexp_set_reg_toolong(0);
+    nvim_regexp_set_regflags_compile(0);
+    nvim_regexp_set_had_eol(0);
 }
 
 /// Initialize internal variables before NFA compilation.
@@ -6942,7 +6994,7 @@ pub unsafe extern "C" fn rs_nfa_regcomp_start(expr: *mut u8, re_flags: c_int) {
     nvim_regexp_set_rex_nfa_has_backref(0);
 
     // shared with BT engine
-    nvim_regexp_call_regcomp_start(expr, re_flags);
+    regcomp_start(expr, re_flags);
 }
 
 /// Grow the NFA postfix buffer by 1.5x.
@@ -10351,7 +10403,6 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
     }
 
     nvim_regexp_set_nfa_re_flags(re_flags);
-    nvim_regexp_call_init_class_tab();
     rs_nfa_regcomp_start(expr, re_flags);
 
     // Build postfix form of the regexp. Needed to build the NFA (and count its size).
@@ -12201,14 +12252,6 @@ extern "C" {
 
     // Character/utility functions
     fn nvim_regexp_call_ascii_iswhite(c: c_int) -> c_int;
-    fn nvim_regexp_call_ri_digit(c: c_int) -> c_int;
-    fn nvim_regexp_call_ri_hex(c: c_int) -> c_int;
-    fn nvim_regexp_call_ri_octal(c: c_int) -> c_int;
-    fn nvim_regexp_call_ri_word(c: c_int) -> c_int;
-    fn nvim_regexp_call_ri_head(c: c_int) -> c_int;
-    fn nvim_regexp_call_ri_alpha(c: c_int) -> c_int;
-    fn nvim_regexp_call_ri_lower(c: c_int) -> c_int;
-    fn nvim_regexp_call_ri_upper(c: c_int) -> c_int;
     fn nvim_regexp_call_reg_prev_class() -> c_int;
     fn nvim_regexp_call_reg_match_visual() -> c_int;
     fn nvim_regexp_call_reg_nextline();
@@ -13103,7 +13146,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_DIGIT => {
-                    result = nvim_regexp_call_ri_digit(curc);
+                    result = ri_digit(curc);
                     if result != 0 {
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
                         add_off = clen;
@@ -13111,7 +13154,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_NDIGIT => {
-                    result = if curc != 0 && nvim_regexp_call_ri_digit(curc) == 0 {
+                    result = if curc != 0 && ri_digit(curc) == 0 {
                         1
                     } else {
                         0
@@ -13123,7 +13166,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_HEX => {
-                    result = nvim_regexp_call_ri_hex(curc);
+                    result = ri_hex(curc);
                     if result != 0 {
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
                         add_off = clen;
@@ -13131,11 +13174,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_NHEX => {
-                    result = if curc != 0 && nvim_regexp_call_ri_hex(curc) == 0 {
-                        1
-                    } else {
-                        0
-                    };
+                    result = if curc != 0 && ri_hex(curc) == 0 { 1 } else { 0 };
                     if result != 0 {
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
                         add_off = clen;
@@ -13143,7 +13182,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_OCTAL => {
-                    result = nvim_regexp_call_ri_octal(curc);
+                    result = ri_octal(curc);
                     if result != 0 {
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
                         add_off = clen;
@@ -13151,7 +13190,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_NOCTAL => {
-                    result = if curc != 0 && nvim_regexp_call_ri_octal(curc) == 0 {
+                    result = if curc != 0 && ri_octal(curc) == 0 {
                         1
                     } else {
                         0
@@ -13163,7 +13202,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_WORD => {
-                    result = nvim_regexp_call_ri_word(curc);
+                    result = ri_word(curc);
                     if result != 0 {
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
                         add_off = clen;
@@ -13171,7 +13210,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_NWORD => {
-                    result = if curc != 0 && nvim_regexp_call_ri_word(curc) == 0 {
+                    result = if curc != 0 && ri_word(curc) == 0 {
                         1
                     } else {
                         0
@@ -13183,7 +13222,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_HEAD => {
-                    result = nvim_regexp_call_ri_head(curc);
+                    result = ri_head(curc);
                     if result != 0 {
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
                         add_off = clen;
@@ -13191,7 +13230,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_NHEAD => {
-                    result = if curc != 0 && nvim_regexp_call_ri_head(curc) == 0 {
+                    result = if curc != 0 && ri_head(curc) == 0 {
                         1
                     } else {
                         0
@@ -13203,7 +13242,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_ALPHA => {
-                    result = nvim_regexp_call_ri_alpha(curc);
+                    result = ri_alpha(curc);
                     if result != 0 {
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
                         add_off = clen;
@@ -13211,7 +13250,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_NALPHA => {
-                    result = if curc != 0 && nvim_regexp_call_ri_alpha(curc) == 0 {
+                    result = if curc != 0 && ri_alpha(curc) == 0 {
                         1
                     } else {
                         0
@@ -13223,7 +13262,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_LOWER => {
-                    result = nvim_regexp_call_ri_lower(curc);
+                    result = ri_lower(curc);
                     if result != 0 {
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
                         add_off = clen;
@@ -13231,7 +13270,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_NLOWER => {
-                    result = if curc != 0 && nvim_regexp_call_ri_lower(curc) == 0 {
+                    result = if curc != 0 && ri_lower(curc) == 0 {
                         1
                     } else {
                         0
@@ -13243,7 +13282,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_UPPER => {
-                    result = nvim_regexp_call_ri_upper(curc);
+                    result = ri_upper(curc);
                     if result != 0 {
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
                         add_off = clen;
@@ -13251,7 +13290,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_NUPPER => {
-                    result = if curc != 0 && nvim_regexp_call_ri_upper(curc) == 0 {
+                    result = if curc != 0 && ri_upper(curc) == 0 {
                         1
                     } else {
                         0
@@ -13263,9 +13302,8 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_LOWER_IC => {
-                    result = if nvim_regexp_call_ri_lower(curc) != 0
-                        || (nvim_regexp_get_rex_reg_ic() != 0
-                            && nvim_regexp_call_ri_upper(curc) != 0)
+                    result = if ri_lower(curc) != 0
+                        || (nvim_regexp_get_rex_reg_ic() != 0 && ri_upper(curc) != 0)
                     {
                         1
                     } else {
@@ -13279,9 +13317,8 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
 
                 x if x == NFA_NLOWER_IC => {
                     result = if curc != 0
-                        && !(nvim_regexp_call_ri_lower(curc) != 0
-                            || (nvim_regexp_get_rex_reg_ic() != 0
-                                && nvim_regexp_call_ri_upper(curc) != 0))
+                        && !(ri_lower(curc) != 0
+                            || (nvim_regexp_get_rex_reg_ic() != 0 && ri_upper(curc) != 0))
                     {
                         1
                     } else {
@@ -13294,9 +13331,8 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_UPPER_IC => {
-                    result = if nvim_regexp_call_ri_upper(curc) != 0
-                        || (nvim_regexp_get_rex_reg_ic() != 0
-                            && nvim_regexp_call_ri_lower(curc) != 0)
+                    result = if ri_upper(curc) != 0
+                        || (nvim_regexp_get_rex_reg_ic() != 0 && ri_lower(curc) != 0)
                     {
                         1
                     } else {
@@ -13310,9 +13346,8 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
 
                 x if x == NFA_NUPPER_IC => {
                     result = if curc != 0
-                        && !(nvim_regexp_call_ri_upper(curc) != 0
-                            || (nvim_regexp_get_rex_reg_ic() != 0
-                                && nvim_regexp_call_ri_lower(curc) != 0))
+                        && !(ri_upper(curc) != 0
+                            || (nvim_regexp_get_rex_reg_ic() != 0 && ri_lower(curc) != 0))
                     {
                         1
                     } else {
@@ -14754,10 +14789,8 @@ pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c
         return std::ptr::null_mut();
     }
 
-    nvim_regexp_call_init_class_tab();
-
     // First pass: determine size, legality.
-    nvim_regexp_call_regcomp_start(expr, re_flags);
+    regcomp_start(expr, re_flags);
     nvim_regexp_set_regcode(nvim_regexp_get_just_calc_size());
     rs_regc(REGMAGIC);
     let mut flags: c_int = 0;
@@ -14770,7 +14803,7 @@ pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c
     let r = nvim_regexp_alloc_bt_regprog(regsize_val);
 
     // Second pass: emit code.
-    nvim_regexp_call_regcomp_start(expr, re_flags);
+    regcomp_start(expr, re_flags);
     nvim_regexp_set_regcode(nvim_regexp_get_prog_program(r));
     rs_regc(REGMAGIC);
     flags = 0;

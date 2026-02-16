@@ -51,7 +51,6 @@
 extern char *rs_skip_regexp_ex(char *startp, int dirc, int magic, char **newp,
                                int *dropped, int *magic_val);
 // Rust FFI: regexp utility functions
-extern void rs_init_class_tab(int16_t *out);
 extern int rs_re_multiline(const regprog_T *prog);
 // Rust FFI: number parsers
 extern void rs_get_cpo_flags(void);
@@ -454,40 +453,6 @@ enum {
 /// Returns one of the CLASS_ items. CLASS_NONE means that no item was
 /// recognized.  Otherwise "pp" is advanced to after the item.
 extern int rs_get_char_class(char **pp);
-
-// Specific version of character class functions.
-// Using a table to keep this fast.
-static int16_t class_tab[256];
-
-#define     RI_DIGIT    0x01
-#define     RI_HEX      0x02
-#define     RI_OCTAL    0x04
-#define     RI_WORD     0x08
-#define     RI_HEAD     0x10
-#define     RI_ALPHA    0x20
-#define     RI_LOWER    0x40
-#define     RI_UPPER    0x80
-#define     RI_WHITE    0x100
-
-static void init_class_tab(void)
-{
-  static int done = false;
-  if (done) {
-    return;
-  }
-  rs_init_class_tab(class_tab);
-  done = true;
-}
-
-#define ri_digit(c)    ((c) < 0x100 && (class_tab[c] & RI_DIGIT))
-#define ri_hex(c)      ((c) < 0x100 && (class_tab[c] & RI_HEX))
-#define ri_octal(c)    ((c) < 0x100 && (class_tab[c] & RI_OCTAL))
-#define ri_word(c)     ((c) < 0x100 && (class_tab[c] & RI_WORD))
-#define ri_head(c)     ((c) < 0x100 && (class_tab[c] & RI_HEAD))
-#define ri_alpha(c)    ((c) < 0x100 && (class_tab[c] & RI_ALPHA))
-#define ri_lower(c)    ((c) < 0x100 && (class_tab[c] & RI_LOWER))
-#define ri_upper(c)    ((c) < 0x100 && (class_tab[c] & RI_UPPER))
-#define ri_white(c)    ((c) < 0x100 && (class_tab[c] & RI_WHITE))
 
 // flags for regflags
 #define RF_ICASE    1   // ignore case
@@ -1721,11 +1686,14 @@ void nvim_regexp_set_had_eol(int v) { had_eol = v; }
 int nvim_regexp_get_one_exactly(void) { return one_exactly; }
 void nvim_regexp_set_one_exactly(int v) { one_exactly = v; }
 int nvim_regexp_get_reg_string(void) { return reg_string; }
+void nvim_regexp_set_reg_string(int v) { reg_string = v; }
 int nvim_regexp_get_reg_do_extmatch(void) { return reg_do_extmatch; }
 int nvim_regexp_get_re_has_z(void) { return re_has_z; }
 void nvim_regexp_set_re_has_z(int v) { re_has_z = v; }
 int nvim_regexp_get_reg_strict(void) { return reg_strict; }
+void nvim_regexp_set_reg_strict(int v) { reg_strict = v; }
 int nvim_regexp_get_had_endbrace(int refnum) { return had_endbrace[refnum]; }
+void nvim_regexp_clear_had_endbrace(void) { CLEAR_FIELD(had_endbrace); }
 int32_t nvim_regexp_get_curwin_lnum(void) { return (int32_t)curwin->w_cursor.lnum; }
 int32_t nvim_regexp_get_curwin_col(void) { return (int32_t)curwin->w_cursor.col; }
 int32_t nvim_regexp_get_curwin_vcol(void)
@@ -1925,29 +1893,6 @@ static regsave_T behind_pos;
 // Obtain a second single-byte operand stored after a four bytes operand.
 #define OPERAND_CMP(p)  (p)[7]
 
-// Setup to parse the regexp.  Used once to get the length and once to do it.
-static void regcomp_start(uint8_t *expr, int re_flags)                        // see vim_regcomp()
-{
-  rs_initchr((char *)expr);
-  if (re_flags & RE_MAGIC) {
-    reg_magic = MAGIC_ON;
-  } else {
-    reg_magic = MAGIC_OFF;
-  }
-  reg_string = (re_flags & RE_STRING);
-  reg_strict = (re_flags & RE_STRICT);
-  rs_get_cpo_flags();
-
-  num_complex_braces = 0;
-  regnpar = 1;
-  CLEAR_FIELD(had_endbrace);
-  regnzpar = 1;
-  re_has_z = 0;
-  regsize = 0L;
-  reg_toolong = false;
-  regflags = 0;
-  had_eol = false;
-}
 
 
 
@@ -2649,9 +2594,6 @@ void nvim_regexp_set_wants_nfa(int v) { wants_nfa = (bool)v; }
 void nvim_regexp_set_rex_nfa_has_zend(int v) { rex.nfa_has_zend = v; }
 void nvim_regexp_set_rex_nfa_has_backref(int v) { rex.nfa_has_backref = v; }
 
-void nvim_regexp_call_regcomp_start(uint8_t *expr, int re_flags) { regcomp_start(expr, re_flags); }
-void nvim_regexp_call_init_class_tab(void) { init_class_tab(); }
-
 // Validation accessor: returns NFA constant by index for Rust tests.
 int nvim_regexp_get_nfa_constant(int index)
 {
@@ -2868,14 +2810,6 @@ int nvim_regexp_get_rex_nfa_nsubexpr(void) { return rex.nfa_nsubexpr; }
 
 // Character/utility functions callable from Rust
 int nvim_regexp_call_ascii_iswhite(int c) { return ascii_iswhite(c); }
-int nvim_regexp_call_ri_digit(int c) { return ri_digit(c); }
-int nvim_regexp_call_ri_hex(int c) { return ri_hex(c); }
-int nvim_regexp_call_ri_octal(int c) { return ri_octal(c); }
-int nvim_regexp_call_ri_word(int c) { return ri_word(c); }
-int nvim_regexp_call_ri_head(int c) { return ri_head(c); }
-int nvim_regexp_call_ri_alpha(int c) { return ri_alpha(c); }
-int nvim_regexp_call_ri_lower(int c) { return ri_lower(c); }
-int nvim_regexp_call_ri_upper(int c) { return ri_upper(c); }
 int nvim_regexp_call_reg_prev_class(void) { return rs_reg_prev_class(); }
 int nvim_regexp_call_reg_match_visual(void) { return rs_reg_match_visual(); }
 void nvim_regexp_call_reg_nextline(void) { rs_reg_nextline(); }
