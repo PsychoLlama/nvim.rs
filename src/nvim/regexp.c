@@ -312,8 +312,6 @@ typedef struct {
 
 typedef void (*fptr_T)(int *, int);
 
-
-
 // The first byte of the BT regexp internal "program" is actually this magic
 // number; the start node begins in the second byte.  It's used to catch the
 // most severe mutilation of the program by the caller.
@@ -378,8 +376,6 @@ static const char e_unicode_val_too_large[]
 #define RA_BREAK        3       // break inner loop
 #define RA_MATCH        4       // successful match
 #define RA_NOMATCH      5       // didn't match
-
-
 static char *reg_prev_sub = NULL;
 static size_t reg_prev_sublen = 0;
 
@@ -406,8 +402,6 @@ void nvim_regexp_emsg_resulting_text_too_long(void) { emsg(_(e_resulting_text_to
 //  \U  - Long multibyte character code, eg \U12345678
 static char REGEXP_INRANGE[] = "]^-n\\";
 static char REGEXP_ABBR[] = "nrtebdoxuU";
-
-
 enum {
   CLASS_ALNUM = 0,
   CLASS_ALPHA,
@@ -513,8 +507,6 @@ void nvim_regexp_set_reg_cpo_lit(int v) { reg_cpo_lit = v; }
 /// Skip over a "[]" range.
 /// "p" must point to the character after the '['.
 /// The returned pointer is on the matching ']', or the terminating NUL.
-
-
 /// Skip past regular expression.
 /// Stop at end of "startp" or where "delim" is found ('/', '?', etc).
 /// Take care of characters with a backslash in front of it.
@@ -580,8 +572,6 @@ int nvim_regexp_get_after_slash(void) { return after_slash; }
 void nvim_regexp_set_after_slash(int v) { after_slash = v; }
 unsigned int nvim_regexp_get_regflags_compile(void) { return regflags; }
 void nvim_regexp_set_regflags_compile(unsigned int v) { regflags = v; }
-
-
 // vim_regexec and friends
 
 // Global work variables for vim_regexec().
@@ -935,15 +925,9 @@ static int prog_magic_wrong(void)
   }
   return false;
 }
-
-
 ////////////////////////////////////////////////////////////////
 //                    regsub stuff                            //
 ////////////////////////////////////////////////////////////////
-
-
-
-
 /// regtilde(): Replace tildes in the pattern by the old pattern.
 ///
 /// Short explanation of the tilde: It stands for the previous replacement
@@ -1325,130 +1309,7 @@ static void init_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_
   rex.reg_maxcol = rmp->rmm_maxcol;
 }
 
-// regexp_bt.c {{{1
-
-// Backtracking regular expression implementation.
-//
-// NOTICE:
-//
-// This is NOT the original regular expression code as written by Henry
-// Spencer.  This code has been modified specifically for use with the VIM
-// editor, and should not be used separately from Vim.  If you want a good
-// regular expression library, get the original code.  The copyright notice
-// that follows is from the original.
-//
-// END NOTICE
-//
-//      Copyright (c) 1986 by University of Toronto.
-//      Written by Henry Spencer.  Not derived from licensed software.
-//
-//      Permission is granted to anyone to use this software for any
-//      purpose on any computer system, and to redistribute it freely,
-//      subject to the following restrictions:
-//
-//      1. The author is not responsible for the consequences of use of
-//              this software, no matter how awful, even if they arise
-//              from defects in it.
-//
-//      2. The origin of this software must not be misrepresented, either
-//              by explicit claim or by omission.
-//
-//      3. Altered versions must be plainly marked as such, and must not
-//              be misrepresented as being the original software.
-//
-// Beware that some of this code is subtly aware of the way operator
-// precedence is structured in regular expressions.  Serious changes in
-// regular-expression syntax might require a total rethink.
-//
-// Changes have been made by Tony Andrews, Olaf 'Rhialto' Seibert, Robert
-// Webb, Ciaran McCreesh and Bram Moolenaar.
-// Named character class support added by Walter Briscoe (1998 Jul 01)
-
-// The "internal use only" fields in regexp_defs.h are present to pass info from
-// compile to execute that permits the execute phase to run lots faster on
-// simple cases.  They are:
-//
-// regstart     char that must begin a match; NUL if none obvious; Can be a
-//              multi-byte character.
-// reganch      is the match anchored (at beginning-of-line only)?
-// regmust      string (pointer into program) that match must include, or NULL
-// regmlen      length of regmust string
-// regflags     RF_ values or'ed together
-//
-// Regstart and reganch permit very fast decisions on suitable starting points
-// for a match, cutting down the work a lot.  Regmust permits fast rejection
-// of lines that cannot possibly match.  The regmust tests are costly enough
-// that vim_regcomp() supplies a regmust only if the r.e. contains something
-// potentially expensive (at present, the only such thing detected is * or +
-// at the start of the r.e., which can involve a lot of backup).  Regmlen is
-// supplied because the test in vim_regexec() needs it and vim_regcomp() is
-// computing it anyway.
-
-// Structure for regexp "program".  This is essentially a linear encoding
-// of a nondeterministic finite-state machine (aka syntax charts or
-// "railroad normal form" in parsing technology).  Each node is an opcode
-// plus a "next" pointer, possibly plus an operand.  "Next" pointers of
-// all nodes except BRANCH and BRACES_COMPLEX implement concatenation; a "next"
-// pointer with a BRANCH on both ends of it is connecting two alternatives.
-// (Here we have one of the subtle syntax dependencies: an individual BRANCH
-// (as opposed to a collection of them) is never concatenated with anything
-// because of operator precedence).  The "next" pointer of a BRACES_COMPLEX
-// node points to the node after the stuff to be repeated.
-// The operand of some types of node is a literal string; for others, it is a
-// node leading into a sub-FSM.  In particular, the operand of a BRANCH node
-// is the first node of the branch.
-// (NB this is *not* a tree structure: the tail of the branch connects to the
-// thing following the set of BRANCHes.)
-//
-// pattern      is coded like:
-//
-//                        +-----------------+
-//                        |                 V
-// <aa>\|<bb>   BRANCH <aa> BRANCH <bb> --> END
-//                   |      ^    |          ^
-//                   +------+    +----------+
-//
-//
-//                     +------------------+
-//                     V                  |
-// <aa>*        BRANCH BRANCH <aa> --> BACK BRANCH --> NOTHING --> END
-//                   |      |               ^                      ^
-//                   |      +---------------+                      |
-//                   +---------------------------------------------+
-//
-//
-//                     +----------------------+
-//                     V                      |
-// <aa>\+       BRANCH <aa> --> BRANCH --> BACK  BRANCH --> NOTHING --> END
-//                   |               |           ^                      ^
-//                   |               +-----------+                      |
-//                   +--------------------------------------------------+
-//
-//
-//                                      +-------------------------+
-//                                      V                         |
-// <aa>\{}      BRANCH BRACE_LIMITS --> BRACE_COMPLEX <aa> --> BACK  END
-//                   |                              |                ^
-//                   |                              +----------------+
-//                   +-----------------------------------------------+
-//
-//
-// <aa>\@!<bb>  BRANCH NOMATCH <aa> --> END  <bb> --> END
-//                   |       |                ^       ^
-//                   |       +----------------+       |
-//                   +--------------------------------+
-//
-//                                                    +---------+
-//                                                    |         V
-// \z[abc]      BRANCH BRANCH  a  BRANCH  b  BRANCH  c  BRANCH  NOTHING --> END
-//                   |      |          |          |     ^                   ^
-//                   |      |          |          +-----+                   |
-//                   |      |          +----------------+                   |
-//                   |      +---------------------------+                   |
-//                   +------------------------------------------------------+
-//
-// They all start with a BRANCH for "\|" alternatives, even when there is only
-// one alternative.
+// BT regexp engine opcodes and definitions
 
 // The opcodes are:
 
@@ -1643,7 +1504,6 @@ void nvim_regexp_emsg_e488(void)
   rc_did_emsg = true;
 }
 
-// --- Phase 1: regatom accessors ---
 int nvim_regexp_get_had_eol(void) { return had_eol; }
 void nvim_regexp_set_had_eol(int v) { had_eol = v; }
 int nvim_regexp_get_one_exactly(void) { return one_exactly; }
@@ -1667,7 +1527,6 @@ int32_t nvim_regexp_get_curwin_vcol(void)
 }
 char *nvim_regexp_get_reg_prev_sub_ptr(void) { return reg_prev_sub; }
 
-// --- Phase 1: regatom error helpers ---
 void nvim_regexp_emsg_e63_underscore(void)
 {
   emsg(_(e_invalid_use_of_underscore));
@@ -1788,63 +1647,13 @@ typedef struct backpos_S {
   regsave_T bp_pos;           // last input position
 } backpos_T;
 
-// "regstack" and "backpos" are used by regmatch().  They are kept over calls
-// to avoid invoking malloc() and free() often.
-// "regstack" is a stack with regitem_T items, sometimes preceded by regstar_T
-// or regbehind_T.
-// "backpos_T" is a table with backpos_T for BACK
 static garray_T regstack = GA_EMPTY_INIT_VALUE;
 static garray_T backpos = GA_EMPTY_INIT_VALUE;
-
 static regsave_T behind_pos;
-
-// Both for regstack and backpos tables we use the following strategy of
-// allocation (to reduce malloc/free calls):
-// - Initial size is fairly small.
-// - When needed, the tables are grown bigger (8 times at first, double after
-//   that).
-// - After executing the match we free the memory only if the array has grown.
-//   Thus the memory is kept allocated when it's at the initial size.
-// This makes it fast while not keeping a lot of memory allocated.
-// A three times speed increase was observed when using many simple patterns.
 #define REGSTACK_INITIAL        2048
 #define BACKPOS_INITIAL         64
 
-// Opcode notes:
-//
-// BRANCH       The set of branches constituting a single choice are hooked
-//              together with their "next" pointers, since precedence prevents
-//              anything being concatenated to any individual branch.  The
-//              "next" pointer of the last BRANCH in a choice points to the
-//              thing following the whole choice.  This is also where the
-//              final "next" pointer of each individual branch points; each
-//              branch starts with the operand node of a BRANCH node.
-//
-// BACK         Normal "next" pointers all implicitly point forward; BACK
-//              exists to make loop structures possible.
-//
-// STAR,PLUS    '=', and complex '*' and '+', are implemented as circular
-//              BRANCH structures using BACK.  Simple cases (one character
-//              per match) are implemented with STAR and PLUS for speed
-//              and to minimize recursive plunges.
-//
-// BRACE_LIMITS This is always followed by a BRACE_SIMPLE or BRACE_COMPLEX
-//              node, and defines the min and max limits to be used for that
-//              node.
-//
-// MOPEN,MCLOSE ...are numbered at compile time.
-// ZOPEN,ZCLOSE ...ditto
-///
-//
-//
-// A node is one char of opcode followed by two chars of "next" pointer.
-// "Next" pointers are stored as two 8-bit bytes, high order first.  The
-// value is a positive offset from the opcode of the node containing it.
-// An operand, if any, simply follows the node.  (Note that much of the
-// code generation knows about this implicit relationship.)
-//
-// Using two bytes for the "next" pointer is vast overkill for most things,
-// but allows patterns to get big without disasters.
+// BT opcode macros
 #define OP(p)           ((int)(*(p)))
 #define NEXT(p)         (((*((p) + 1) & 0377) << 8) + (*((p) + 2) & 0377))
 #define OPERAND(p)      ((p) + 3)
@@ -1856,41 +1665,13 @@ static regsave_T behind_pos;
 // Obtain a second single-byte operand stored after a four bytes operand.
 #define OPERAND_CMP(p)  (p)[7]
 
-
-
-
-
-
-
-
-
 // Parse the lowest level — thin wrapper around rs_regatom (Rust).
 uint8_t *regatom(int *flagp)
 {
   return rs_regatom(flagp);
 }
 
-
-
-// bt_regcomp() - compile a regular expression into internal code for the
-// traditional back track matcher.
-// Returns the program in allocated space.  Returns NULL for an error.
-//
-// We can't allocate space until we know how big the compiled form will be,
-// but we can't compile it (and thus know how big it is) until we've got a
-// place to put the code.  So we cheat:  we compile it twice, once with code
-// generation turned off and size counting turned on, and once "for real".
-// This also means that we don't allocate space until we are sure that the
-// thing really will compile successfully, and we never have to move the
-// code and thus invalidate pointers into it.  (Note that it has to be in
-// one piece because free() must be able to free it all.)
-//
-// Whether upper/lower case is to be ignored is decided when executing the
-// program, it does not matter here.
-//
-// Beware that the optimization-preparation code in here knows about some
-// of the structure of the compiled regexp.
-// "re_flags": RE_MAGIC and/or RE_STRING.
+// Thin wrapper: compile via Rust BT engine.
 static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
 {
   return (regprog_T *)rs_bt_regcomp(expr, re_flags);
@@ -1912,8 +1693,6 @@ static void bt_regfree(regprog_T *prog)
 // (it can be called recursively many times).
 static int64_t bl_minval;
 static int64_t bl_maxval;
-
-
 // --- regmatch accessor functions for Rust FFI (rs_regmatch) ---
 
 // Regstack/backpos management
@@ -1976,10 +1755,6 @@ int32_t nvim_regexp_get_rex_reg_win_cursor_lnum(void) {
 int32_t nvim_regexp_get_rex_reg_win_cursor_col(void) {
   return rex.reg_win != NULL ? (int32_t)rex.reg_win->w_cursor.col : 0;
 }
-
-// nvim_regexp_call_win_linetabsize() already exists above — reuse it
-// nvim_regexp_call_reg_getline_len() already exists above — reuse it
-
 // Error/utility
 void nvim_regexp_emsg_maxmempattern(void) {
   emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
@@ -1987,7 +1762,6 @@ void nvim_regexp_emsg_maxmempattern(void) {
 int nvim_regexp_call_profile_passed_limit(const void *tm) {
   return profile_passed_limit(*(const proftime_T *)tm) ? 1 : 0;
 }
-// nvim_regexp_get_got_int() already exists above — reuse it in rs_regmatch
 int nvim_regexp_call_mb_isupper(int c) { return mb_isupper(c); }
 int nvim_regexp_call_mb_tolower(int c) { return mb_tolower(c); }
 int nvim_regexp_call_mb_toupper(int c) { return mb_toupper(c); }
@@ -2005,48 +1779,19 @@ lpos_T *nvim_regexp_get_reg_endzpos_ptr(int i) { return &reg_endzpos[i]; }
 uint8_t **nvim_regexp_get_reg_startzp_ptr(int i) { return &reg_startzp[i]; }
 uint8_t **nvim_regexp_get_reg_endzp_ptr(int i) { return &reg_endzp[i]; }
 
-// --- end regmatch accessor functions ---
-
-
-/// Match a regexp against a string.
-/// "rmp->regprog" is a compiled regexp as returned by vim_regcomp().
-/// Uses curbuf for line count and 'iskeyword'.
-/// If "line_lbr" is true, consider a "\n" in "line" to be a line break.
-///
-/// @param line  string to match against
-/// @param col   column to start looking for match
-///
-/// @return  0 for failure, number of lines contained in the match otherwise.
+// Thin wrappers: BT engine vtable entry points delegate to Rust.
 static int bt_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line_lbr)
 {
   return rs_bt_regexec_nl(rmp, line, col, line_lbr);
 }
 
-/// Matches a regexp against multiple lines.
-/// "rmp->regprog" is a compiled regexp as returned by vim_regcomp().
-/// Uses curbuf for line count and 'iskeyword'.
-///
-/// @param win Window in which to search or NULL
-/// @param buf Buffer in which to search
-/// @param lnum Number of line to start looking for match
-/// @param col Column to start looking for match
-/// @param tm Timeout limit or NULL
-///
-/// @return zero if there is no match and number of lines contained in the match
-///         otherwise.
 static int bt_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum, colnr_T col,
                             proftime_T *tm, int *timed_out)
 {
   return rs_bt_regexec_multi(rmp, win, buf, lnum, col, tm, timed_out);
 }
 
-
-
-
-// }}}1
-
-// regexp_nfa.c {{{1
-// NFA regular expression implementation.
+// NFA engine opcodes and definitions
 
 // Added to NFA_ANY - NFA_NUPPER_IC to include a NL.
 #define NFA_ADD_NL              31
@@ -2262,7 +2007,6 @@ static const char e_misplaced[] = N_("E866: (NFA regexp) Misplaced %c");
 static const char e_ill_char_class[] = N_("E877: (NFA regexp) Invalid character class: %" PRId64);
 static const char e_value_too_large[] = N_("E951: \\% value too large");
 
-// --- Phase 3: NFA regatom accessor functions ---
 void nvim_regexp_emsg_nul_found(void)
 {
   emsg(_(e_nul_found));
@@ -2302,9 +2046,7 @@ int nvim_regexp_get_nfa_classcodes(int index) { return nfa_classcodes[index]; }
 char *nvim_regexp_get_regexp_inrange(void) { return REGEXP_INRANGE; }
 char *nvim_regexp_get_regexp_abbr(void) { return REGEXP_ABBR; }
 void nvim_regexp_set_rc_did_emsg_true(void) { rc_did_emsg = true; }
-// --- End Phase 3 accessor functions ---
 
-// --- Phase 4: NFA parser error message wrappers ---
 void nvim_regexp_semsg_e869(int op)
 {
   semsg(_("E869: (NFA) Unknown operator '\\@%c'"), op);
@@ -2334,10 +2076,6 @@ void nvim_regexp_emsg_e873(void)
   emsg(_("E873: (NFA regexp) proper termination error"));
   rc_did_emsg = true;
 }
-// --- End Phase 4 accessor functions ---
-
-// --- Phase 5 accessor functions (nfa_state_T, state_ptr, post2nfa) ---
-
 // state_ptr global -- defined after state_ptr declaration (see below)
 
 // nfa_state_T field accessors
@@ -2379,9 +2117,7 @@ void nvim_regexp_emsg_e876(void)
          "Not enough space to store the whole NFA "));
   rc_did_emsg = true;
 }
-// --- End Phase 5 accessor functions ---
 
-// --- Phase 6 accessor functions (nfa_regprog_T fields) ---
 // Forward declarations of Phase 6 Rust functions
 
 // Forward declaration of Phase 7 Rust function
@@ -2400,9 +2136,7 @@ void nvim_nfa_prog_set_regstart(void *prog, int v) { ((nfa_regprog_T *)prog)->re
 void nvim_nfa_prog_set_match_text(void *prog, uint8_t *v) { ((nfa_regprog_T *)prog)->match_text = v; }
 void nvim_nfa_prog_set_reghasz(void *prog, int v) { ((nfa_regprog_T *)prog)->reghasz = v; }
 void nvim_nfa_prog_set_pattern(void *prog, char *v) { ((nfa_regprog_T *)prog)->pattern = v; }
-// --- End Phase 6 accessor functions ---
 
-// --- Phase 7 accessor functions (part 1: no state_ptr dependency) ---
 int nvim_regexp_get_rex_nfa_has_zend(void) { return rex.nfa_has_zend; }
 int nvim_regexp_get_rex_nfa_has_backref(void) { return rex.nfa_has_backref; }
 void nvim_regexp_set_nfa_prog_engine(void *prog) { ((nfa_regprog_T *)prog)->engine = &nfa_regengine; }
@@ -2410,7 +2144,6 @@ void nvim_nfa_prog_set_re_in_use(void *prog, int v) { ((nfa_regprog_T *)prog)->r
 void nvim_nfa_prog_set_start(void *prog, void *s) { ((nfa_regprog_T *)prog)->start = (nfa_state_T *)s; }
 void nvim_nfa_prog_set_nstate(void *prog, int v) { ((nfa_regprog_T *)prog)->nstate = v; }
 char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }
-// --- End Phase 7 accessor functions (part 1) ---
 
 // --- NFA Execution accessor functions (Phase 8: execution engine) ---
 
@@ -2434,9 +2167,6 @@ void nvim_regexp_siemsg_ill_char_class(int64_t cls)
 {
   siemsg(_(e_ill_char_class), cls);
 }
-
-// --- Phase 8.2: Submatch/comparison C wrappers for Rust FFI ---
-
 // regsub_T field accessors
 int nvim_regexp_regsub_get_in_use(void *sub) { return ((regsub_T *)sub)->in_use; }
 int32_t nvim_regexp_regsub_get_multi_start_lnum(void *sub, int idx) { return (int32_t)((regsub_T *)sub)->list.multi[idx].start_lnum; }
@@ -2463,7 +2193,6 @@ void *nvim_nfa_thread_get_pim_ptr(void *l, int idx) { return (void *)&((nfa_list
 
 int nvim_regexp_get_nfa_has_zsubexpr(void) { return rex.nfa_has_zsubexpr; }
 
-// --- End Phase 8.2 accessor functions (part 1: field accessors) ---
 // NOTE: C wrapper functions and nfa_match/nfa_ll_index accessors are placed
 // after the static declarations and function definitions they reference.
 // See "Phase 8.2 (part 2)" below.
@@ -2539,12 +2268,6 @@ extern void rs_realloc_post_list(void);
     } \
     *post_ptr++ = c; \
   } while (0)
-
-
-
-
-
-
 // Search between "start" and "end" and try to recognize a
 // character class in expanded form. For example [0-9].
 
@@ -2553,10 +2276,6 @@ extern void rs_realloc_post_list(void);
 // Emits bytes in postfix notation: 'a,b,NFA_OR,c,NFA_OR' is
 // equivalent to 'a OR b OR c'
 //
-
-
-
-
 
 // Parse something followed by possible [*+=].
 //
@@ -2588,8 +2307,6 @@ void *nvim_regexp_alloc_nfa_prog(int nstate_count)
   state_ptr = prog->state;
   return prog;
 }
-
-
 /////////////////////////////////////////////////////////////////
 // NFA execution code.
 /////////////////////////////////////////////////////////////////
@@ -2599,8 +2316,6 @@ void *nvim_regexp_alloc_nfa_prog(int nstate_count)
 #define NFA_PIM_TODO     1      // pim not done yet
 #define NFA_PIM_MATCH    2      // pim executed, matches
 #define NFA_PIM_NOMATCH  3      // pim executed, no match
-
-
 // Used during execution: whether a match has been found.
 static int nfa_match;
 static proftime_T *nfa_time_limit;
@@ -2613,9 +2328,6 @@ int nvim_regexp_get_nfa_match(void) { return nfa_match; }
 void nvim_regexp_set_nfa_match(int v) { nfa_match = v; }
 int nvim_regexp_get_nfa_ll_index(void) { return nfa_ll_index; }
 void nvim_regexp_set_nfa_ll_index(int v) { nfa_ll_index = v; }
-
-// --- End Phase 8.2 (part 2) ---
-
 // nfa_endp accessor
 void *nvim_regexp_get_nfa_endp(void) { return (void *)nfa_endp; }
 void nvim_regexp_set_nfa_endp(void *v) { nfa_endp = (save_se_T *)v; }
@@ -2659,10 +2371,6 @@ int *nvim_regexp_get_nfa_timed_out(void) { return nfa_timed_out; }
 void nvim_regexp_set_nfa_timed_out(int *v) { nfa_timed_out = v; }
 int nvim_regexp_get_nfa_time_count(void) { return nfa_time_count; }
 void nvim_regexp_set_nfa_time_count(int v) { nfa_time_count = v; }
-
-// --- End Phase 8.3 ---
-
-// --- Phase 8.4: C accessors for nfa_regmatch ---
 
 // Thread field accessors for the main loop
 int nvim_nfa_thread_get_state_c(void *l, int idx) { return ((nfa_list_T *)l)->t[idx].state->c; }
@@ -2804,10 +2512,6 @@ void *nvim_regexp_xmalloc(size_t size) { return xmalloc(size); }
 // nfa_alt_listid accessors (for recursive_regmatch in Rust)
 int nvim_regexp_get_rex_nfa_alt_listid(void) { return rex.nfa_alt_listid; }
 void nvim_regexp_set_rex_nfa_alt_listid(int v) { rex.nfa_alt_listid = v; }
-
-// --- End Phase 8.4 ---
-
-// --- Phase 8.5: C accessors for nfa_regtry / nfa_regexec entry points ---
 
 // Allocate/free regsubs_T on the heap (Rust cannot stack-allocate opaque C structs)
 void *nvim_regexp_alloc_regsubs(void) { return xcalloc(1, sizeof(regsubs_T)); }
@@ -3005,10 +2709,6 @@ void nvim_regexp_call_init_regexec_multi(void *rmp, void *win, void *buf, int32_
 // nfa_regexec_both: iemsg for null prog/line
 void nvim_regexp_call_iemsg_null(void) { iemsg(_(e_null)); }
 
-// --- End Phase 8.5 ---
-
-// --- End Phase 9.1 ---
-
 // Phase 9.2: bt_regexec_both accessors
 
 // Init regstack and backpos if not allocated yet
@@ -3043,9 +2743,6 @@ uint8_t *nvim_bt_prog_get_regmust(const void *prog) { return ((const bt_regprog_
 int nvim_bt_prog_get_regmlen(const void *prog) { return ((const bt_regprog_T *)prog)->regmlen; }
 int nvim_bt_prog_get_regstart(const void *prog) { return ((const bt_regprog_T *)prog)->regstart; }
 int nvim_bt_prog_get_reganch(const void *prog) { return ((const bt_regprog_T *)prog)->reganch; }
-
-// --- End Phase 9.2 ---
-
 // Phase 9.3: vim_regfree + free_regexp_stuff accessors
 void nvim_regexp_call_engine_regfree(void *prog) {
   ((regprog_T *)prog)->engine->regfree((regprog_T *)prog);
@@ -3057,9 +2754,6 @@ void nvim_regexp_call_free_regexp_stuff(void) {
   xfree(reg_tofree);
   xfree(reg_prev_sub);
 }
-
-// --- End Phase 9.3 ---
-
 // Phase 9.4: vim_regexec public API accessors
 
 // rex save/restore: opaque buffer approach
@@ -3155,9 +2849,6 @@ void nvim_regexp_init_regmatch(void *buf, void *prog, int rm_ic) {
   rmp->regprog = (regprog_T *)prog;
   rmp->rm_ic = (bool)rm_ic;
 }
-
-// --- End Phase 9.4 ---
-
 // Phase 9.5: vim_regcomp accessors
 
 // Forward declaration (defined later in file)
@@ -3190,9 +2881,6 @@ void nvim_regprog_set_re_flags(void *prog, unsigned v) { ((regprog_T *)prog)->re
 void nvim_regexp_call_emsg_e864(void) {
   emsg(_("E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used "));
 }
-
-// --- End Phase 9.5 ---
-
 // Phase 9.6: bt_regcomp accessors
 
 // Allocate bt_regprog_T with flexible array member for program bytes
@@ -3217,17 +2905,12 @@ void nvim_regexp_call_emsg_e339(void) {
   rc_did_emsg = true;
 }
 
-// --- End Phase 9.6 ---
-
-
 // Compile a regular expression into internal code for the NFA matcher.
 // Returns the program in allocated space.  Returns NULL for an error.
 static regprog_T *nfa_regcomp(uint8_t *expr, int re_flags)
 {
   return (regprog_T *)rs_nfa_regcomp(expr, re_flags);
 }
-
-
 // Free a compiled regexp program, returned by nfa_regcomp().
 static void nfa_regfree(regprog_T *prog)
 {
@@ -3240,61 +2923,17 @@ static void nfa_regfree(regprog_T *prog)
   xfree(prog);
 }
 
-/// Match a regexp against a string.
-/// "rmp->regprog" is a compiled regexp as returned by nfa_regcomp().
-/// Uses curbuf for line count and 'iskeyword'.
-/// If "line_lbr" is true, consider a "\n" in "line" to be a line break.
-///
-/// @param line  string to match against
-/// @param col   column to start looking for match
-///
-/// @return  <= 0 for failure, number of lines contained in the match otherwise.
+// Thin wrappers: NFA engine vtable entry points delegate to Rust.
 static int nfa_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line_lbr)
 {
   return rs_nfa_regexec_nl(rmp, line, col, line_lbr);
 }
 
-/// Matches a regexp against multiple lines.
-/// "rmp->regprog" is a compiled regexp as returned by vim_regcomp().
-/// Uses curbuf for line count and 'iskeyword'.
-///
-/// @param win Window in which to search or NULL
-/// @param buf Buffer in which to search
-/// @param lnum Number of line to start looking for match
-/// @param col Column to start looking for match
-/// @param tm Timeout limit or NULL
-/// @param timed_out Flag set on timeout or NULL
-///
-/// @return <= 0 if there is no match and number of lines contained in the match
-/// otherwise.
-///
-/// @note The body is the same as bt_regexec() except for nfa_regexec_both()
-///
-/// @warning
-/// Match may actually be in another line. e.g.:
-/// when r.e. is \nc, cursor is at 'a' and the text buffer looks like
-///
-/// @par
-///
-///     +-------------------------+
-///     |a                        |
-///     |b                        |
-///     |c                        |
-///     |                         |
-///     +-------------------------+
-///
-/// @par
-/// then nfa_regexec_multi() returns 3. while the original vim_regexec_multi()
-/// returns 0 and a second call at line 2 will return 2.
-///
-/// @par
-/// FIXME if this behavior is not compatible.
 static int nfa_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum, colnr_T col,
                              proftime_T *tm, int *timed_out)
 {
   return rs_nfa_regexec_multi(rmp, win, buf, lnum, col, tm, timed_out);
 }
-// }}}1
 
 static regengine_T bt_regengine = {
   bt_regcomp,
@@ -3313,8 +2952,6 @@ static regengine_T nfa_regengine = {
 // Which regexp engine to use? Needed for vim_regcomp().
 // Must match with 'regexpengine'.
 static int regexp_engine = 0;
-
-
 // Compile a regular expression into internal code.
 // Returns the program in allocated memory.
 // Use vim_regfree() to free the memory.
@@ -3337,8 +2974,6 @@ void free_regexp_stuff(void)
 }
 
 #endif
-
-
 // Note: "*prog" may be freed and changed.
 // Return true if there is a match, false if not.
 bool vim_regexec_prog(regprog_T **prog, bool ignore_case, const char *line, colnr_T col)
