@@ -17,4 +17,14 @@
 #define REX_USE        2       ///< to allow \z\1 et al.
 #define REX_ALL       (REX_SET | REX_USE)
 
+// Functions directly exported from Rust (no C wrapper).
+extern int re_multiline(const regprog_T *prog);
+extern reg_extmatch_T *ref_extmatch(reg_extmatch_T *em);
+extern void unref_extmatch(reg_extmatch_T *em);
+extern char *regtilde(char *source, int magic, bool preview);
+extern char *reg_submatch(int no);
+extern char *skip_regexp_err(char *startp, int delim, int magic);
+extern void vim_regfree(regprog_T *prog);
+extern void free_regexp_stuff(void);
+
 #include "regexp.h.generated.h"

@@ -44,13 +44,9 @@
 // Rust FFI: skip_regexp implementation
 extern char *rs_skip_regexp_ex(char *startp, int dirc, int magic, char **newp,
                                int *dropped, int *magic_val);
-// Rust FFI: regexp utility functions
-extern int rs_re_multiline(const regprog_T *prog);
+// Rust FFI: regexp utility functions (directly exported from Rust)
 extern reg_extmatch_T *rs_make_extmatch(void);
-extern reg_extmatch_T *rs_ref_extmatch(reg_extmatch_T *em);
-extern void rs_unref_extmatch(reg_extmatch_T *em);
 extern void rs_cleanup_zsubexpr(void);
-extern char *rs_skip_regexp_err(char *startp, int delim, int magic);
 // Rust FFI: NFA execution engine entry points
 extern int rs_nfa_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
 extern int rs_nfa_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
@@ -59,8 +55,7 @@ extern int rs_nfa_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
 extern int rs_bt_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
 extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                int32_t col, void *tm, int *timed_out);
-extern void rs_vim_regfree(void *prog);
-extern void rs_free_regexp_stuff(void);
+// vim_regfree and free_regexp_stuff are now directly exported from Rust
 extern int rs_vim_regexec(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_nl(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_prog(void **prog_ptr, int ignore_case, const uint8_t *line, int32_t col);
@@ -68,8 +63,7 @@ extern int rs_vim_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                 int32_t col, void *tm, int *timed_out);
 extern void *rs_vim_regcomp(const uint8_t *expr, int re_flags);
 extern void *rs_bt_regcomp(uint8_t *expr, int re_flags);
-// Rust FFI: recursive descent parser functions
-extern uint8_t *rs_regatom(int *flagp);
+// regatom is now directly exported from Rust
 typedef enum {
   RGLF_LINE = 0x01,
   RGLF_LENGTH = 0x02,
@@ -331,12 +325,7 @@ static regengine_T nfa_regengine;
 
 #include "regexp.c.generated.h"
 
-// Return true if compiled regular expression "prog" can match a line break.
-int re_multiline(const regprog_T *prog)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_re_multiline(prog);
-}
+// re_multiline is now directly exported from Rust
 
 // Accessors for Rust FFI (static helpers exposed for the regexp crate)
 int nvim_regexp_get_char_class(char **pp) { return rs_get_char_class(pp); }
@@ -370,10 +359,7 @@ char *skip_regexp(char *startp, int delim, int magic)
 
 /// Call skip_regexp() and when the delimiter does not match give an error and
 /// return NULL.
-char *skip_regexp_err(char *startp, int delim, int magic)
-{
-  return rs_skip_regexp_err(startp, delim, magic);
-}
+// skip_regexp_err is now directly exported from Rust
 
 /// skip_regexp() with extra arguments:
 /// When "newp" is not NULL and "dirc" is '?', make an allocated copy of the
@@ -763,18 +749,7 @@ int32_t nvim_regexp_get_rsm_maxline(void) { return (int32_t)rsm.sm_maxline; }
 char *nvim_regexp_call_ml_get_buf(int32_t lnum) { return ml_get_buf(rex.reg_buf, (linenr_T)lnum); }
 int32_t nvim_regexp_call_ml_get_buf_len(int32_t lnum) { return (int32_t)ml_get_buf_len(rex.reg_buf, (linenr_T)lnum); }
 
-// Add a reference to an extmatch.
-reg_extmatch_T *ref_extmatch(reg_extmatch_T *em)
-{
-  return rs_ref_extmatch(em);
-}
-
-// Remove a reference to an extmatch.  If there are no references left, free
-// the info.
-void unref_extmatch(reg_extmatch_T *em)
-{
-  rs_unref_extmatch(em);
-}
+// ref_extmatch and unref_extmatch are now directly exported from Rust
 
 // prog_magic_wrong logic is now in Rust (rs_prog_magic_wrong).
 // The C accessor wraps the Rust implementation.
@@ -790,13 +765,7 @@ int nvim_regexp_prog_is_nfa_engine(void *prog) {
 }
 ////////////////////////////////////////////////////////////////
 //                    regsub stuff                            //
-// Thin wrapper: delegate to Rust.
-extern char *rs_regtilde(char *source, int magic, bool preview);
-
-char *regtilde(char *source, int magic, bool preview)
-{
-  return rs_regtilde(source, magic, preview);
-}
+// regtilde is now directly exported from Rust
 
 /// Put the submatches in "argv[argskip]" which is a list passed into
 /// call_func() by vim_regsub_both().
@@ -1005,16 +974,7 @@ static char *reg_getline_submatch(linenr_T lnum)
   return line;
 }
 
-/// Used for the submatch() function: get the string from the n'th submatch in
-/// allocated memory.
-///
-/// @return  NULL when not in a ":s" command and for a non-existing submatch.
-extern char *rs_reg_submatch(int no);
-
-char *reg_submatch(int no)
-{
-  return rs_reg_submatch(no);
-}
+// reg_submatch is now directly exported from Rust
 
 // Used for the submatch() function with the optional non-zero argument: get
 // the list of strings from the n'th submatch in allocated memory with NULs
@@ -1319,11 +1279,7 @@ static regsave_T behind_pos;
 #define BACKPOS_INITIAL         64
 
 
-// Parse the lowest level — thin wrapper around rs_regatom (Rust).
-uint8_t *regatom(int *flagp)
-{
-  return rs_regatom(flagp);
-}
+// regatom is now directly exported from Rust
 
 // Thin wrapper: compile via Rust BT engine.
 static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
@@ -2531,19 +2487,9 @@ regprog_T *vim_regcomp(const char *expr_arg, int re_flags)
   return (regprog_T *)rs_vim_regcomp((const uint8_t *)expr_arg, re_flags);
 }
 
-// Free a compiled regexp program, returned by vim_regcomp().
-void vim_regfree(regprog_T *prog)
-{
-  rs_vim_regfree(prog);
-}
+// vim_regfree is now directly exported from Rust
 
-#if defined(EXITFREE)
-void free_regexp_stuff(void)
-{
-  rs_free_regexp_stuff();
-}
-
-#endif
+// free_regexp_stuff is now directly exported from Rust
 // Note: "*prog" may be freed and changed.
 // Return true if there is a match, false if not.
 bool vim_regexec_prog(regprog_T **prog, bool ignore_case, const char *line, colnr_T col)

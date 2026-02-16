@@ -45,7 +45,7 @@ run *ARGS:
 # leaving zombie processes. It exercises buffer search (vim_regexec_multi),
 # substitution, and syntax highlighting — paths the baseline test doesn't cover.
 smoke-test:
-    VIMRUNTIME=runtime ./build/bin/nvim --headless +qa
+    VIMRUNTIME=runtime ./build/bin/nvim --headless --clean +qa
     timeout 30 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_smoke.vim 2>&1' || { echo "FAIL: regexp smoke test timed out or failed (exit $?)"; exit 1; }
 
 # Show nvim version
@@ -175,11 +175,11 @@ rust-ffi-test: rust-build
 
 # Generate regexp baseline corpus from the C engine
 regexp-baseline: build
-    VIMRUNTIME=runtime ./build/bin/nvim --headless -S test/regexp_baseline.vim
+    VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_baseline.vim
 
 # Validate regexp corpus matches committed baseline (catches regressions)
 regexp-validate: build
-    VIMRUNTIME=runtime ./build/bin/nvim --headless -S test/regexp_baseline.vim
+    VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_baseline.vim
     @git diff --exit-code src/nvim-rs/test/regexp_corpus.json || (echo 'ERROR: regexp corpus diverged from committed baseline' && exit 1)
 
 # Fuzz test regexp engine with random patterns (catches crashes/hangs)

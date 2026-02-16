@@ -507,7 +507,7 @@ const RF_HASNL: c_uint = 4;
 ///
 /// `prog` must be a valid pointer to a `regprog_T`.
 #[no_mangle]
-pub unsafe extern "C" fn rs_re_multiline(prog: *const c_void) -> c_int {
+pub unsafe extern "C" fn re_multiline(prog: *const c_void) -> c_int {
     (nvim_regexp_get_regflags(prog) & RF_HASNL) as c_int
 }
 
@@ -1188,7 +1188,7 @@ pub unsafe extern "C" fn rs_make_extmatch() -> *mut RegExtmatchT {
 
 /// Add a reference to an extmatch. Returns the pointer unchanged.
 #[no_mangle]
-pub unsafe extern "C" fn rs_ref_extmatch(em: *mut RegExtmatchT) -> *mut RegExtmatchT {
+pub unsafe extern "C" fn ref_extmatch(em: *mut RegExtmatchT) -> *mut RegExtmatchT {
     if !em.is_null() {
         (*em).refcnt += 1;
     }
@@ -1197,7 +1197,7 @@ pub unsafe extern "C" fn rs_ref_extmatch(em: *mut RegExtmatchT) -> *mut RegExtma
 
 /// Remove a reference to an extmatch. If no references left, free it.
 #[no_mangle]
-pub unsafe extern "C" fn rs_unref_extmatch(em: *mut RegExtmatchT) {
+pub unsafe extern "C" fn unref_extmatch(em: *mut RegExtmatchT) {
     if !em.is_null() {
         (*em).refcnt -= 1;
         if (*em).refcnt <= 0 {
@@ -1434,7 +1434,7 @@ pub unsafe extern "C" fn rs_reg_match_visual() -> c_int {
 /// Call `skip_regexp` and check for delimiter mismatch. On mismatch, emit
 /// E654 and return null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_skip_regexp_err(
+pub unsafe extern "C" fn skip_regexp_err(
     startp: *mut c_char,
     delim: c_int,
     magic: c_int,
@@ -1560,7 +1560,7 @@ unsafe fn reg_getline_submatch_len(lnum: i32) -> i32 {
 /// Return the submatch (strdup'd) for the `submatch()` function.
 /// Returns NULL when not in a `:s` command or for a non-existing submatch.
 #[no_mangle]
-pub unsafe extern "C" fn rs_reg_submatch(no: c_int) -> *mut c_char {
+pub unsafe extern "C" fn reg_submatch(no: c_int) -> *mut c_char {
     if nvim_regexp_get_can_f_submatch() == 0 || no < 0 {
         return std::ptr::null_mut();
     }
@@ -1746,11 +1746,7 @@ extern "C" {
 /// Replace tildes in the pattern by the old pattern.
 /// Direct transliteration of C `regtilde()`.
 #[no_mangle]
-pub unsafe extern "C" fn rs_regtilde(
-    source: *mut c_char,
-    magic: c_int,
-    preview: bool,
-) -> *mut c_char {
+pub unsafe extern "C" fn regtilde(source: *mut c_char, magic: c_int, preview: bool) -> *mut c_char {
     let mut newsub = source;
     let mut newsublen: usize = 0;
     let mut error = false;
@@ -3054,7 +3050,7 @@ unsafe fn seen_endbrace(refnum: c_int) -> bool {
     true
 }
 
-// --- rs_regatom: Parse the lowest level ---
+// --- regatom: Parse the lowest level ---
 
 /// Handle a POSIX character class like `[:alpha:]` inside a collection.
 /// `c_class` is the class constant from `get_char_class`.
@@ -3422,7 +3418,7 @@ unsafe fn do_multibyte(c: c_int, flagp: *mut c_int) -> *mut u8 {
     clippy::cognitive_complexity,
     clippy::fn_to_numeric_cast_any
 )]
-pub unsafe extern "C" fn rs_regatom(flagp: *mut c_int) -> *mut u8 {
+pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
     let mut extra: c_int = 0;
     let save_prev_at_start = nvim_regexp_get_prev_at_start();
 
@@ -3745,7 +3741,7 @@ pub unsafe extern "C" fn rs_regatom(flagp: *mut c_int) -> *mut u8 {
 
                 rs_ungetchr();
                 nvim_regexp_set_one_exactly(1);
-                lastnode = rs_regatom(flagp);
+                lastnode = regatom(flagp);
                 nvim_regexp_set_one_exactly(0);
                 if lastnode.is_null() {
                     return std::ptr::null_mut();
@@ -3968,12 +3964,12 @@ pub unsafe extern "C" fn rs_regatom(flagp: *mut c_int) -> *mut u8 {
 
 /// Parse something followed by possible [*+=].
 ///
-/// Calls `rs_regatom` to parse the atom, then handles quantifiers.
+/// Calls `regatom` to parse the atom, then handles quantifiers.
 #[no_mangle]
 #[allow(clippy::too_many_lines, clippy::similar_names)]
 pub unsafe extern "C" fn rs_regpiece(flagp: *mut c_int) -> *mut u8 {
     let mut flags: c_int = 0;
-    let ret = rs_regatom(&mut flags);
+    let ret = regatom(&mut flags);
     if ret.is_null() {
         return std::ptr::null_mut();
     }
@@ -14538,7 +14534,7 @@ extern "C" {
 
 /// Free a compiled regexp program.
 #[no_mangle]
-pub unsafe extern "C" fn rs_vim_regfree(prog: *mut c_void) {
+pub unsafe extern "C" fn vim_regfree(prog: *mut c_void) {
     if !prog.is_null() {
         nvim_regexp_call_engine_regfree(prog);
     }
@@ -14546,7 +14542,7 @@ pub unsafe extern "C" fn rs_vim_regfree(prog: *mut c_void) {
 
 /// Free all regexp-related allocations (for EXITFREE).
 #[no_mangle]
-pub unsafe extern "C" fn rs_free_regexp_stuff() {
+pub unsafe extern "C" fn free_regexp_stuff() {
     nvim_regexp_call_free_regexp_stuff();
 }
 
