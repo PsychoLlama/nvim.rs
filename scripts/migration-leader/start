@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Launch the migration-leader as a plain claude session with subagent support.
+# Usage: ./scripts/migration-leader [extra claude args...]
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROMPT_FILE="$SCRIPT_DIR/prompt.md"
+
+exec claude \
+  --append-system-prompt "$(cat "$PROMPT_FILE")" \
+  --disallowed-tools "WebSearch,WebFetch" \
+  "$@"
