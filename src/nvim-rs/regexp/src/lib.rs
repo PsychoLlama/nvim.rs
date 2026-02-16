@@ -16,6 +16,12 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use std::ffi::c_long;
 
+/// Returns non-zero if `c` is a space or tab.
+#[inline]
+const fn ascii_iswhite(c: c_int) -> c_int {
+    (c == b' ' as c_int || c == b'\t' as c_int) as c_int
+}
+
 #[allow(dead_code)]
 extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
@@ -1848,7 +1854,7 @@ extern "C" {
     fn nvim_regexp_get_reg_tofreelen() -> c_uint;
     fn nvim_regexp_set_reg_tofreelen(v: c_uint);
     fn nvim_regexp_get_got_int() -> c_int;
-    fn nvim_regexp_call_mb_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
+    fn mb_strnicmp(s1: *const c_char, s2: *const c_char, nn: usize) -> c_int;
     fn nvim_regexp_get_rex_line_strlen() -> c_int;
     fn nvim_regexp_call_reg_getline_len(lnum: i32) -> i32;
 }
@@ -1919,7 +1925,7 @@ pub unsafe extern "C" fn rs_match_with_backref(
             }
         } else {
             // case-insensitive compare
-            if nvim_regexp_call_mb_strnicmp(p_ccol, input, len as usize) != 0 {
+            if mb_strnicmp(p_ccol, input, len as usize) != 0 {
                 return RA_NOMATCH;
             }
         }
@@ -5007,9 +5013,7 @@ extern "C" {
     fn nvim_regexp_emsg_maxmempattern();
     fn nvim_regexp_call_profile_passed_limit(tm: *const c_void) -> c_int;
     // got_int: reuse existing nvim_regexp_get_got_int (declared above)
-    fn nvim_regexp_call_mb_isupper(c: c_int) -> c_int;
-    fn nvim_regexp_call_mb_tolower(c: c_int) -> c_int;
-    fn nvim_regexp_call_mb_toupper(c: c_int) -> c_int;
+    fn nvim_mb_isupper(c: c_int) -> c_int;
 
     // mb_get_class_tab
     fn nvim_regexp_call_mb_get_class_tab(p: *mut u8) -> c_int;
@@ -5994,10 +5998,10 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         if op(next) == EXACTLY {
                             rst.nextb = c_int::from(*operand(next));
                             if nvim_regexp_get_rex_reg_ic() != 0 {
-                                if nvim_regexp_call_mb_isupper(rst.nextb) != 0 {
-                                    rst.nextb_ic = nvim_regexp_call_mb_tolower(rst.nextb);
+                                if nvim_mb_isupper(rst.nextb) != 0 {
+                                    rst.nextb_ic = mb_tolower(rst.nextb);
                                 } else {
-                                    rst.nextb_ic = nvim_regexp_call_mb_toupper(rst.nextb);
+                                    rst.nextb_ic = mb_toupper(rst.nextb);
                                 }
                             } else {
                                 rst.nextb_ic = rst.nextb;
@@ -12248,7 +12252,6 @@ extern "C" {
     fn nvim_regexp_get_rex_nfa_nsubexpr() -> c_int;
 
     // Character/utility functions
-    fn nvim_regexp_call_ascii_iswhite(c: c_int) -> c_int;
 
     // NFA prog field accessor
     fn nvim_nfa_prog_get_re_engine(prog: NfaProgHandle) -> c_int;
@@ -13119,7 +13122,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_WHITE => {
-                    result = nvim_regexp_call_ascii_iswhite(curc);
+                    result = ascii_iswhite(curc);
                     if result != 0 {
                         add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
                         add_off = clen;
@@ -13127,7 +13130,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_NWHITE => {
-                    result = if curc != 0 && nvim_regexp_call_ascii_iswhite(curc) == 0 {
+                    result = if curc != 0 && ascii_iswhite(curc) == 0 {
                         1
                     } else {
                         0

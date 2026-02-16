@@ -763,7 +763,6 @@ void nvim_regexp_set_reg_tofreelen(unsigned v) { reg_tofreelen = v; }
 void nvim_regexp_set_rex_line(uint8_t *line) { rex.line = line; }
 void nvim_regexp_set_rex_input(uint8_t *input) { rex.input = input; }
 int nvim_regexp_get_got_int(void) { return got_int; }
-int nvim_regexp_call_mb_strnicmp(const char *s1, const char *s2, size_t len) { return mb_strnicmp(s1, s2, len); }
 int nvim_regexp_get_rex_line_strlen(void) { return (int)strlen((char *)rex.line); }
 int32_t nvim_regexp_call_reg_getline_len(int32_t lnum) { return (int32_t)reg_getline_len((linenr_T)lnum); }
 
@@ -927,17 +926,7 @@ static int prog_magic_wrong(void)
 }
 ////////////////////////////////////////////////////////////////
 //                    regsub stuff                            //
-////////////////////////////////////////////////////////////////
-/// regtilde(): Replace tildes in the pattern by the old pattern.
-///
-/// Short explanation of the tilde: It stands for the previous replacement
-/// pattern.  If that previous pattern also contains a ~ we should go back a
-/// step further...  But we insert the previous pattern into the current one
-/// and remember that.
-/// This still does not handle the case where "magic" changes.  So require the
-/// user to keep his hands off of "magic".
-///
-/// The tildes are parsed once before the first call to vim_regsub().
+// Thin wrapper: delegate to Rust.
 extern char *rs_regtilde(char *source, int magic, bool preview);
 
 char *regtilde(char *source, int magic, bool preview)
@@ -1762,9 +1751,6 @@ void nvim_regexp_emsg_maxmempattern(void) {
 int nvim_regexp_call_profile_passed_limit(const void *tm) {
   return profile_passed_limit(*(const proftime_T *)tm) ? 1 : 0;
 }
-int nvim_regexp_call_mb_isupper(int c) { return mb_isupper(c); }
-int nvim_regexp_call_mb_tolower(int c) { return mb_tolower(c); }
-int nvim_regexp_call_mb_toupper(int c) { return mb_toupper(c); }
 
 // mb_get_class_tab accessor
 int nvim_regexp_call_mb_get_class_tab(uint8_t *p) {
@@ -2430,9 +2416,6 @@ int nvim_regexp_get_rex_nfa_listid(void) { return rex.nfa_listid; }
 void nvim_regexp_set_rex_nfa_listid(int v) { rex.nfa_listid = v; }
 int32_t nvim_regexp_get_rex_reg_maxcol(void) { return (int32_t)rex.reg_maxcol; }
 int nvim_regexp_get_rex_nfa_nsubexpr(void) { return rex.nfa_nsubexpr; }
-
-// Character/utility functions callable from Rust
-int nvim_regexp_call_ascii_iswhite(int c) { return ascii_iswhite(c); }
 
 // NFA prog field accessors for nfa_regmatch
 int nvim_nfa_prog_get_re_engine(void *prog) { return ((nfa_regprog_T *)prog)->re_engine; }
