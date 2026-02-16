@@ -776,23 +776,17 @@ void unref_extmatch(reg_extmatch_T *em)
   rs_unref_extmatch(em);
 }
 
-// Check the regexp program for its magic number.
-// Return true if it's wrong.
+// prog_magic_wrong logic is now in Rust (rs_prog_magic_wrong).
+// The C accessor wraps the Rust implementation.
+extern int rs_prog_magic_wrong(void);
 static int prog_magic_wrong(void)
 {
-  regprog_T *prog;
+  return rs_prog_magic_wrong();
+}
 
-  prog = REG_MULTI ? rex.reg_mmatch->regprog : rex.reg_match->regprog;
-  if (prog->engine == &nfa_regengine) {
-    // For NFA matcher we don't check the magic
-    return false;
-  }
-
-  if (UCHARAT(((bt_regprog_T *)prog)->program) != REGMAGIC) {
-    emsg(_(e_re_corr));
-    return true;
-  }
-  return false;
+// Accessor: check if a prog uses the NFA engine
+int nvim_regexp_prog_is_nfa_engine(void *prog) {
+  return ((regprog_T *)prog)->engine == &nfa_regengine ? 1 : 0;
 }
 ////////////////////////////////////////////////////////////////
 //                    regsub stuff                            //

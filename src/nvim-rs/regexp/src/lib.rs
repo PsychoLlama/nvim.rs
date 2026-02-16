@@ -2360,6 +2360,31 @@ pub unsafe extern "C" fn rs_vim_regsub_literal(
 }
 
 // ---------------------------------------------------------------------------
+// prog_magic_wrong: validate BT program magic number
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    fn nvim_regexp_prog_is_nfa_engine(prog: *mut c_void) -> c_int;
+}
+
+/// Check the regexp program for its magic number.
+/// Returns 1 if the magic is wrong (error emitted), 0 if OK.
+#[no_mangle]
+pub unsafe extern "C" fn rs_prog_magic_wrong() -> c_int {
+    let prog = nvim_regexp_nfa_regexec_both_get_prog();
+    if nvim_regexp_prog_is_nfa_engine(prog) != 0 {
+        // For NFA matcher we don't check the magic
+        return 0;
+    }
+    let program = nvim_regexp_get_prog_program(prog);
+    if *program as c_int != REGMAGIC {
+        nvim_regexp_iemsg_re_corr();
+        return 1;
+    }
+    0
+}
+
+// ---------------------------------------------------------------------------
 // vim_regsub_both: expression evaluation + dispatch
 // ---------------------------------------------------------------------------
 
