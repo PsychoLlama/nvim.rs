@@ -14416,8 +14416,11 @@ extern "C" {
     // reg_do_extmatch
     fn nvim_regexp_set_reg_do_extmatch(v: c_int);
 
-    // Reporting and error
-    fn nvim_regexp_call_report_re_switch(pat: *const c_char);
+    // Verbose messaging
+    fn nvim_regexp_get_p_verbose() -> i64;
+    fn verbose_enter();
+    fn verbose_leave();
+    fn msg_puts(s: *const c_char);
     fn nvim_regexp_call_vim_regcomp(pat: *const c_char, re_flags: c_int) -> *mut c_void;
     fn nvim_regexp_call_vim_regfree(prog: *mut c_void);
     fn nvim_regexp_call_emsg_recursive();
@@ -14446,6 +14449,17 @@ unsafe fn restore_rex_state(buf: &[u8], was_in_use: bool) {
     }
 }
 
+/// Report that the regexp engine is being switched to backtracking.
+/// Only prints when 'verbose' option is > 0.
+unsafe fn report_re_switch(pat: *const c_char) {
+    if nvim_regexp_get_p_verbose() > 0 {
+        verbose_enter();
+        msg_puts(c"Switching to backtracking RE engine for pattern: ".as_ptr());
+        msg_puts(pat);
+        verbose_leave();
+    }
+}
+
 /// Handle `NFA_TOO_EXPENSIVE` fallback for single-line matching.
 /// Returns the updated result after fallback attempt.
 #[allow(clippy::too_many_arguments)]
@@ -14457,7 +14471,7 @@ unsafe fn handle_nfa_fallback_nl(rmp: *mut c_void, line: *const u8, col: i32, nl
 
     nvim_regexp_set_p_re(BACKTRACKING_ENGINE);
     nvim_regexp_call_vim_regfree(prog);
-    nvim_regexp_call_report_re_switch(pat);
+    report_re_switch(pat);
     let new_prog = nvim_regexp_call_vim_regcomp(pat, re_flags);
     nvim_regmatch_set_regprog(rmp, new_prog);
 
@@ -14492,7 +14506,7 @@ unsafe fn handle_nfa_fallback_multi(
     nvim_regexp_set_p_re(BACKTRACKING_ENGINE);
     let prev_prog = prog;
 
-    nvim_regexp_call_report_re_switch(pat);
+    report_re_switch(pat);
     nvim_regexp_set_reg_do_extmatch(REX_ALL);
     let new_prog = nvim_regexp_call_vim_regcomp(pat, re_flags);
     nvim_regexp_set_reg_do_extmatch(0);
@@ -14698,7 +14712,7 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
         && nvim_regexp_get_called_emsg() == called_emsg_before
     {
         nvim_regexp_set_regexp_engine(BACKTRACKING_ENGINE);
-        nvim_regexp_call_report_re_switch(expr.cast::<c_char>());
+        report_re_switch(expr.cast::<c_char>());
         prog = nvim_regexp_call_bt_regcomp(expr, re_flags);
     }
 

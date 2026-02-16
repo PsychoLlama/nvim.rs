@@ -3286,9 +3286,6 @@ const char *nvim_nfa_prog_get_pattern(const void *prog) {
 // reg_do_extmatch setter
 void nvim_regexp_set_reg_do_extmatch(int v) { reg_do_extmatch = v; }
 
-// report_re_switch
-void nvim_regexp_call_report_re_switch(const char *pat) { report_re_switch(pat); }
-
 // vim_regcomp/vim_regfree calls (for NFA_TOO_EXPENSIVE recompile)
 void *nvim_regexp_call_vim_regcomp(const char *pat, int re_flags) {
   return vim_regcomp(pat, re_flags);
@@ -3299,6 +3296,9 @@ void nvim_regexp_call_vim_regfree(void *prog) {
 
 // Emit e_recursive error
 void nvim_regexp_call_emsg_recursive(void) { emsg(_(e_recursive)); }
+
+// p_verbose option
+int64_t nvim_regexp_get_p_verbose(void) { return p_verbose; }
 
 // regmatch_T size for Rust stack allocation
 size_t nvim_regexp_get_regmatch_size(void) { return sizeof(regmatch_T); }
@@ -3492,16 +3492,6 @@ void free_regexp_stuff(void)
 }
 
 #endif
-
-static void report_re_switch(const char *pat)
-{
-  if (p_verbose > 0) {
-    verbose_enter();
-    msg_puts(_("Switching to backtracking RE engine for pattern: "));
-    msg_puts(pat);
-    verbose_leave();
-  }
-}
 
 
 // Note: "*prog" may be freed and changed.
