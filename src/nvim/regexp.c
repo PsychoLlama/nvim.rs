@@ -51,42 +51,29 @@
 extern char *rs_skip_regexp_ex(char *startp, int dirc, int magic, char **newp,
                                int *dropped, int *magic_val);
 // Rust FFI: regexp utility functions
-extern int rs_no_magic(int x);
-extern int rs_toggle_magic(int x);
-extern int rs_re_multi_type(int c);
-extern int rs_backslash_trans(int c);
 extern void rs_init_class_tab(int16_t *out);
 extern int rs_re_multiline(const regprog_T *prog);
 // Rust FFI: number parsers
-extern int64_t rs_gethexchrs(int maxinputlen);
-extern int64_t rs_getdecchrs(void);
-extern int64_t rs_getoctchrs(void);
 extern void rs_get_cpo_flags(void);
 extern reg_extmatch_T *rs_make_extmatch(void);
 extern reg_extmatch_T *rs_ref_extmatch(reg_extmatch_T *em);
 extern void rs_unref_extmatch(reg_extmatch_T *em);
-extern bool rs_re_mult_next(const char *what);
 extern void rs_cleanup_subexpr(void);
 extern void rs_cleanup_zsubexpr(void);
 extern int rs_reg_prev_class(void);
 extern void rs_reg_nextline(void);
 extern char *rs_skip_regexp_err(char *startp, int delim, int magic);
 // Rust FFI: NFA execution engine entry points
-extern int rs_nfa_regmatch(void *prog, void *start, void *submatch, void *m);
-extern int rs_nfa_regtry(void *prog, int32_t col, void *tm, int *timed_out);
-extern int rs_nfa_regexec_both(uint8_t *line, int32_t startcol, void *tm, int *timed_out);
 extern int rs_nfa_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
 extern int rs_nfa_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                 int32_t col, void *tm, int *timed_out);
 // Rust FFI: BT execution engine entry points
-extern void rs_init_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum);
 extern int rs_bt_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
 extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                int32_t col, void *tm, int *timed_out);
 extern int rs_bt_regexec_both(uint8_t *line, int32_t startcol, void *tm, int *timed_out);
 extern void rs_vim_regfree(void *prog);
 extern void rs_free_regexp_stuff(void);
-extern int rs_vim_regexec_string(void *rmp, const uint8_t *line, int32_t col, int nl);
 extern int rs_vim_regexec(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_nl(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_prog(void **prog_ptr, int ignore_case, const uint8_t *line, int32_t col);
@@ -95,21 +82,9 @@ extern int rs_vim_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
 extern void *rs_vim_regcomp(const uint8_t *expr, int re_flags);
 extern void *rs_bt_regcomp(uint8_t *expr, int re_flags);
 // Rust FFI: node management and compilation infrastructure
-extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
-extern void rs_regc(int b);
-extern void rs_regmbc(int c);
-extern uint8_t *rs_regnode(int op);
 extern uint8_t *rs_regnext(uint8_t *p);
-extern void rs_regtail(uint8_t *p, const uint8_t *val);
-extern void rs_regoptail(uint8_t *p, uint8_t *val);
-extern void rs_reginsert(int op, uint8_t *opnd);
-extern void rs_reginsert_nr(int op, int64_t val, uint8_t *opnd);
-extern void rs_reginsert_limits(int op, int64_t minval, int64_t maxval, uint8_t *opnd);
 // Rust FFI: recursive descent parser functions
 extern uint8_t *rs_regatom(int *flagp);
-extern uint8_t *rs_regpiece(int *flagp);
-extern uint8_t *rs_regconcat(int *flagp);
-extern uint8_t *rs_regbranch(int *flagp);
 extern uint8_t *rs_reg(int paren, int *flagp);
 typedef enum {
   RGLF_LINE = 0x01,
@@ -275,14 +250,7 @@ typedef struct regbehind_S {
 } regbehind_T;
 
 // Rust FFI: position save/restore (Phase 1)
-extern void rs_reg_save(regsave_T *save, int ga_len);
-extern void rs_reg_restore(const regsave_T *save, int *ga_len);
-extern int rs_reg_save_equal(const regsave_T *save);
-extern void rs_save_se_multi(save_se_T *savep, lpos_T *posp);
-extern void rs_save_se_one(save_se_T *savep, uint8_t **pp);
 // Rust FFI: subexpression save/restore (Phase 2)
-extern void rs_save_subexpr(regbehind_T *bp);
-extern void rs_restore_subexpr(const regbehind_T *bp);
 // Rust FFI: regrepeat (Phase 3)
 extern int rs_regrepeat(uint8_t *p, int64_t maxcount);
 // Rust FFI: regtry (Phase 4)
@@ -580,13 +548,8 @@ typedef struct {
 
 // Rust FFI: state management
 extern void rs_initchr(char *str);
-extern void rs_save_parse_state(parse_state_T *ps);
-extern void rs_restore_parse_state(const parse_state_T *ps);
 // Rust FFI: core scanner
 extern int rs_peekchr(void);
-extern void rs_skipchr(void);
-extern void rs_skipchr_keepstart(void);
-extern int rs_getchr(void);
 extern void rs_ungetchr(void);
 extern int rs_read_limits(int *minval, int *maxval);
 extern int rs_cstrncmp(char *s1, char *s2, int *n);
@@ -625,7 +588,6 @@ static void get_cpo_flags(void)
 /// Skip over a "[]" range.
 /// "p" must point to the character after the '['.
 /// The returned pointer is on the matching ']', or the terminating NUL.
-extern char *rs_skip_anyof(char *p);
 
 
 /// Skip past regular expression.
@@ -1155,8 +1117,6 @@ static inline char *cstrchr(const char *const s, const int c)
 //                    regsub stuff                            //
 ////////////////////////////////////////////////////////////////
 
-extern void rs_do_upper(int *d, int c);
-extern void rs_do_lower(int *d, int c);
 
 
 
@@ -2116,12 +2076,6 @@ static uint8_t *regnext(uint8_t *p)
   return rs_regnext(p);
 }
 
-// Set the next-pointer at the end of a node chain.
-static void regtail(uint8_t *p, const uint8_t *val)
-{
-  rs_regtail(p, val);
-}
-
 
 
 
@@ -2733,10 +2687,6 @@ void nvim_regexp_emsg_e876(void)
 
 // --- Phase 6 accessor functions (nfa_regprog_T fields) ---
 // Forward declarations of Phase 6 Rust functions
-extern void rs_nfa_postprocess(void *prog);
-extern int rs_nfa_get_reganch(void *start, int depth);
-extern int rs_nfa_get_regstart(void *start, int depth);
-extern uint8_t *rs_nfa_get_match_text(void *start);
 
 // Forward declaration of Phase 7 Rust function
 extern void *rs_nfa_regcomp(uint8_t *expr, int re_flags);
@@ -2897,7 +2847,6 @@ extern void rs_realloc_post_list(void);
     *post_ptr++ = c; \
   } while (0)
 
-extern void rs_nfa_regcomp_start(uint8_t *expr, int re_flags);
 
 
 
@@ -2905,14 +2854,12 @@ extern void rs_nfa_regcomp_start(uint8_t *expr, int re_flags);
 
 // Search between "start" and "end" and try to recognize a
 // character class in expanded form. For example [0-9].
-extern int rs_nfa_recognize_char_class(uint8_t *start, const uint8_t *end, int extra_newl);
 
 // Produce the bytes for equivalence class "c".
 // Currently only handles latin1, latin9 and utf-8.
 // Emits bytes in postfix notation: 'a,b,NFA_OR,c,NFA_OR' is
 // equivalent to 'a OR b OR c'
 //
-extern void rs_nfa_emit_equi_class(int c);
 
 
 
