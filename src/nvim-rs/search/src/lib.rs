@@ -38,7 +38,7 @@ extern "C" {
     fn nvim_get_last_idx() -> c_int;
 
     /// Get whether last vim_regcomp() found EOL.
-    fn vim_regcomp_had_eol() -> c_int;
+    fn nvim_regexp_get_had_eol() -> c_int;
 
     /// Get the `magic_overruled` global value.
     fn nvim_get_magic_overruled() -> c_int;
@@ -125,7 +125,7 @@ pub extern "C" fn rs_search_was_last_used() -> c_int {
 /// Calls external C function to access static variable.
 #[no_mangle]
 pub unsafe extern "C" fn rs_vim_regcomp_had_eol() -> c_int {
-    vim_regcomp_had_eol()
+    nvim_regexp_get_had_eol()
 }
 
 /// Get the value of 'magic' taking "magic_overruled" into account.

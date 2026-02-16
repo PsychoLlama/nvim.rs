@@ -14394,8 +14394,6 @@ pub unsafe extern "C" fn rs_free_regexp_stuff() {
     nvim_regexp_call_free_regexp_stuff();
 }
 
-// --- End Phase 9.3 ---
-
 // --- Phase 9.4: Public execution API ---
 
 const BACKTRACKING_ENGINE: c_int = 1;

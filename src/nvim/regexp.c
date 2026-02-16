@@ -1,11 +1,5 @@
 // Handling of regular expressions: vim_regcomp(), vim_regexec(), vim_regsub()
 
-// By default: do not create debugging logs or files related to regular
-// expressions, even when compiling with -DDEBUG.
-// Uncomment the second line to get the regexp debugging.
-// #undef REGEXP_DEBUG
-// #define REGEXP_DEBUG
-
 #include <assert.h>
 #include <ctype.h>
 #include <inttypes.h>
@@ -1911,12 +1905,8 @@ static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
   return (regprog_T *)rs_bt_regcomp(expr, re_flags);
 }
 
-// Check if during the previous call to vim_regcomp the EOL item "$" has been
-// found.  This is messy, but it works fine.
-int vim_regcomp_had_eol(void)
-{
-  return had_eol;
-}
+extern int rs_vim_regcomp_had_eol(void);
+int vim_regcomp_had_eol(void) { return rs_vim_regcomp_had_eol(); }
 
 // Free a compiled regexp program, returned by bt_regcomp().
 static void bt_regfree(regprog_T *prog)
@@ -2072,21 +2062,6 @@ static int bt_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T l
 
 // regexp_nfa.c {{{1
 // NFA regular expression implementation.
-
-// Logging of NFA engine.
-//
-// The NFA engine can write four log files:
-// - Error log: Contains NFA engine's fatal errors.
-// - Dump log: Contains compiled NFA state machine's information.
-// - Run log: Contains information of matching procedure.
-// - Debug log: Contains detailed information of matching procedure. Can be
-//   disabled by undefining NFA_REGEXP_DEBUG_LOG.
-// The first one can also be used without debug mode.
-// The last three are enabled when compiled as debug mode and individually
-// disabled by commenting them out.
-// The log files can get quite big!
-// To disable all of this when compiling Vim for debugging, undefine REGEXP_DEBUG in
-// regexp.c
 
 // Added to NFA_ANY - NFA_NUPPER_IC to include a NL.
 #define NFA_ADD_NL              31
