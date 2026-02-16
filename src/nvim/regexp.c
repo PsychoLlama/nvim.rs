@@ -71,7 +71,6 @@ extern int rs_nfa_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
 extern int rs_bt_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
 extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                int32_t col, void *tm, int *timed_out);
-extern int rs_bt_regexec_both(uint8_t *line, int32_t startcol, void *tm, int *timed_out);
 extern void rs_vim_regfree(void *prog);
 extern void rs_free_regexp_stuff(void);
 extern int rs_vim_regexec(void *rmp, const uint8_t *line, int32_t col);
@@ -253,8 +252,6 @@ typedef struct regbehind_S {
 // Rust FFI: subexpression save/restore (Phase 2)
 // Rust FFI: regrepeat (Phase 3)
 extern int rs_regrepeat(uint8_t *p, int64_t maxcount);
-// Rust FFI: regtry (Phase 4)
-extern int rs_regtry(void *prog, int col, void *tm, int *timed_out);
 
 // Since the out pointers in the list are always
 // uninitialized, we use the pointers themselves
@@ -458,11 +455,6 @@ enum {
 /// recognized.  Otherwise "pp" is advanced to after the item.
 extern int rs_get_char_class(char **pp);
 
-static int get_char_class(char **pp)
-{
-  return rs_get_char_class(pp);
-}
-
 // Specific version of character class functions.
 // Using a table to keep this fast.
 static int16_t class_tab[256];
@@ -548,10 +540,6 @@ typedef struct {
 
 // Rust FFI: state management
 extern void rs_initchr(char *str);
-// Rust FFI: core scanner
-extern int rs_peekchr(void);
-extern void rs_ungetchr(void);
-extern int rs_read_limits(int *minval, int *maxval);
 extern int rs_cstrncmp(char *s1, char *s2, int *n);
 extern char *rs_cstrchr(const char *s, int c);
 
@@ -568,7 +556,7 @@ int re_multiline(const regprog_T *prog)
 }
 
 // Accessors for Rust FFI (static helpers exposed for the regexp crate)
-int nvim_regexp_get_char_class(char **pp) { return get_char_class(pp); }
+int nvim_regexp_get_char_class(char **pp) { return rs_get_char_class(pp); }
 
 unsigned int nvim_regexp_get_regflags(const regprog_T *prog);
 unsigned int nvim_regexp_get_regflags(const regprog_T *prog)
@@ -579,11 +567,6 @@ unsigned int nvim_regexp_get_regflags(const regprog_T *prog)
 static int reg_cpo_lit;  // 'cpoptions' contains 'l' flag
 int nvim_regexp_get_reg_cpo_lit(void) { return reg_cpo_lit; }
 void nvim_regexp_set_reg_cpo_lit(int v) { reg_cpo_lit = v; }
-
-static void get_cpo_flags(void)
-{
-  rs_get_cpo_flags();
-}
 
 /// Skip over a "[]" range.
 /// "p" must point to the character after the '['.
@@ -656,20 +639,6 @@ void nvim_regexp_set_after_slash(int v) { after_slash = v; }
 unsigned int nvim_regexp_get_regflags_compile(void) { return regflags; }
 void nvim_regexp_set_regflags_compile(unsigned int v) { regflags = v; }
 
-static void initchr(char *str) { rs_initchr(str); }
-
-static int peekchr(void) { return rs_peekchr(); }
-static void ungetchr(void) { rs_ungetchr(); }
-
-
-// read_limits - Read two integers to be taken as a minimum and maximum.
-// If the first character is '-', then the range is reversed.
-// Should end with 'end'.  If minval is missing, zero is default, if maxval is
-// missing, a very big number is the default.
-static int read_limits(int *minval, int *maxval)
-{
-  return rs_read_limits(minval, maxval);
-}
 
 // vim_regexec and friends
 
@@ -771,20 +740,6 @@ int nvim_regexp_emsg2_fail(const char *msg, int is_magic_all)
 }
 
 extern void rs_reg_breakcheck(void);
-
-static void reg_breakcheck(void)
-{
-  rs_reg_breakcheck();
-}
-
-extern int rs_reg_iswordc(int c);
-
-// Return true if character 'c' is included in 'iskeyword' option for
-// "reg_buf" buffer.
-static bool reg_iswordc(int c)
-{
-  return rs_reg_iswordc(c);
-}
 
 static bool can_f_submatch = false;  ///< true when submatch() can be used
 
@@ -1012,13 +967,6 @@ int32_t nvim_regexp_get_rsm_maxline(void) { return (int32_t)rsm.sm_maxline; }
 char *nvim_regexp_call_ml_get_buf(int32_t lnum) { return ml_get_buf(rex.reg_buf, (linenr_T)lnum); }
 int32_t nvim_regexp_call_ml_get_buf_len(int32_t lnum) { return (int32_t)ml_get_buf_len(rex.reg_buf, (linenr_T)lnum); }
 
-// Create a new extmatch and mark it as referenced once.
-static reg_extmatch_T *make_extmatch(void)
-  FUNC_ATTR_NONNULL_RET
-{
-  return rs_make_extmatch();
-}
-
 // Add a reference to an extmatch.
 reg_extmatch_T *ref_extmatch(reg_extmatch_T *em)
 {
@@ -1032,19 +980,7 @@ void unref_extmatch(reg_extmatch_T *em)
   rs_unref_extmatch(em);
 }
 
-// Get class of previous character.
-static int reg_prev_class(void)
-{
-  return rs_reg_prev_class();
-}
-
 extern int rs_reg_match_visual(void);
-
-// Return true if the current rex.input position matches the Visual area.
-static bool reg_match_visual(void)
-{
-  return rs_reg_match_visual();
-}
 
 // Check the regexp program for its magic number.
 // Return true if it's wrong.
@@ -1065,53 +1001,6 @@ static int prog_magic_wrong(void)
   return false;
 }
 
-// Cleanup the subexpressions, if this wasn't done yet.
-// This construction is used to clear the subexpressions only when they are
-// used (to increase speed).
-static void cleanup_subexpr(void)
-{
-  rs_cleanup_subexpr();
-}
-
-static void cleanup_zsubexpr(void)
-{
-  rs_cleanup_zsubexpr();
-}
-
-// Advance rex.lnum, rex.line and rex.input to the next line.
-static void reg_nextline(void)
-{
-  rs_reg_nextline();
-}
-
-// Check whether a backreference matches.
-// Returns RA_FAIL, RA_NOMATCH or RA_MATCH.
-// If "bytelen" is not NULL, it is set to the byte length of the match in the
-// last line.
-// Optional: ignore case if rex.reg_ic is set.
-extern int rs_match_with_backref(int32_t start_lnum, int32_t start_col, int32_t end_lnum,
-                                 int32_t end_col, int *bytelen);
-
-static int match_with_backref(linenr_T start_lnum, colnr_T start_col, linenr_T end_lnum,
-                              colnr_T end_col, int *bytelen)
-{
-  return rs_match_with_backref((int32_t)start_lnum, (int32_t)start_col,
-                               (int32_t)end_lnum, (int32_t)end_col, bytelen);
-}
-
-
-/// Compare two strings, ignore case if rex.reg_ic set.
-static int cstrncmp(char *s1, char *s2, int *n)
-{
-  return rs_cstrncmp(s1, s2, n);
-}
-
-static inline char *cstrchr(const char *const s, const int c)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-  FUNC_ATTR_ALWAYS_INLINE
-{
-  return rs_cstrchr(s, c);
-}
 
 ////////////////////////////////////////////////////////////////
 //                    regsub stuff                            //
@@ -2036,12 +1925,10 @@ static regsave_T behind_pos;
 // Obtain a second single-byte operand stored after a four bytes operand.
 #define OPERAND_CMP(p)  (p)[7]
 
-static uint8_t *reg(int paren, int *flagp);
-
 // Setup to parse the regexp.  Used once to get the length and once to do it.
 static void regcomp_start(uint8_t *expr, int re_flags)                        // see vim_regcomp()
 {
-  initchr((char *)expr);
+  rs_initchr((char *)expr);
   if (re_flags & RE_MAGIC) {
     reg_magic = MAGIC_ON;
   } else {
@@ -2049,7 +1936,7 @@ static void regcomp_start(uint8_t *expr, int re_flags)                        //
   }
   reg_string = (re_flags & RE_STRING);
   reg_strict = (re_flags & RE_STRICT);
-  get_cpo_flags();
+  rs_get_cpo_flags();
 
   num_complex_braces = 0;
   regnpar = 1;
@@ -2067,17 +1954,6 @@ static void regcomp_start(uint8_t *expr, int re_flags)                        //
 
 
 
-// regnext - dig the "next" pointer out of a node
-// Returns NULL when calculating size, when there is no next item and when
-// there is an error.
-static uint8_t *regnext(uint8_t *p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_regnext(p);
-}
-
-
-
 
 
 // Parse the lowest level — thin wrapper around rs_regatom (Rust).
@@ -2087,20 +1963,6 @@ uint8_t *regatom(int *flagp)
 }
 
 
-
-/// Parse regular expression, i.e. main body or parenthesized thing.
-///
-/// Caller must absorb opening parenthesis.
-///
-/// Combining parenthesis handling with the base level of regular expression
-/// is a trifle forced, but the need to tie the tails of the branches to what
-/// follows makes it hard to avoid.
-///
-/// @param paren  REG_NOPAREN, REG_PAREN, REG_NPAREN or REG_ZPAREN
-static uint8_t *reg(int paren, int *flagp)
-{
-  return rs_reg(paren, flagp);
-}
 
 // bt_regcomp() - compile a regular expression into internal code for the
 // traditional back track matcher.
@@ -2260,29 +2122,6 @@ uint8_t **nvim_regexp_get_reg_endzp_ptr(int i) { return &reg_endzp[i]; }
 
 // --- end regmatch accessor functions ---
 
-/// Try match of "prog" with at rex.line["col"].
-///
-/// @param tm         timeout limit or NULL
-/// @param timed_out  flag set on timeout or NULL
-///
-/// @return  0 for failure, or number of lines contained in the match.
-static int regtry(bt_regprog_T *prog, colnr_T col, proftime_T *tm, int *timed_out)
-{
-  return rs_regtry((void *)prog, col, (void *)tm, timed_out);
-}
-
-/// Match a regexp against a string ("line" points to the string) or multiple
-/// lines (if "line" is NULL, use reg_getline()).
-///
-/// @param startcol   column to start looking for match
-/// @param tm         timeout limit or NULL
-/// @param timed_out  flag set on timeout or NULL
-///
-/// @return  0 for failure, or number of lines contained in the match.
-static int bt_regexec_both(uint8_t *line, colnr_T startcol, proftime_T *tm, int *timed_out)
-{
-  return rs_bt_regexec_both(line, startcol, (void *)tm, timed_out);
-}
 
 /// Match a regexp against a string.
 /// "rmp->regprog" is a compiled regexp as returned by vim_regcomp().
@@ -2556,7 +2395,6 @@ static const char e_value_too_large[] = N_("E951: \\% value too large");
 // --- Phase 3: NFA regatom accessor functions ---
 extern int rs_nfa_regatom(void);
 extern int rs_nfa_reg(int paren);
-extern int *rs_re2post(void);
 void nvim_regexp_emsg_nul_found(void)
 {
   emsg(_(e_nul_found));
@@ -2639,10 +2477,8 @@ void nvim_regexp_emsg_e873(void)
 // --- End Phase 4 accessor functions ---
 
 // --- Phase 5 accessor functions (nfa_state_T, state_ptr, post2nfa) ---
-// Forward declarations of Phase 5 Rust functions
-extern nfa_state_T *rs_post2nfa(int *postfix, int *end, int nfa_calc_size);
 
-// state_ptr global — defined after state_ptr declaration (see below)
+// state_ptr global -- defined after state_ptr declaration (see below)
 
 // nfa_state_T field accessors
 int nvim_nfa_state_get_c(void *s) { return ((nfa_state_T *)s)->c; }
@@ -2873,21 +2709,6 @@ extern void rs_realloc_post_list(void);
 //
 // piece   ::=      atom
 //      or  atom  multi
-// nfa_reg thin wrapper — delegates to Rust
-static int nfa_reg(int paren)
-{
-  return rs_nfa_reg(paren);
-}
-
-// re2post thin wrapper — delegates to Rust
-static int *re2post(void)
-{
-  return rs_re2post();
-}
-
-
-
-
 // NB. Some of the code below is inspired by Russ's.
 
 // Represents an NFA state plus zero or one or two arrows exiting.
@@ -2910,14 +2731,6 @@ void *nvim_regexp_alloc_nfa_prog(int nstate_count)
   state_ptr = prog->state;
   return prog;
 }
-
-// Thin wrapper: call Rust rs_post2nfa, cast void* back to nfa_state_T*.
-static nfa_state_T *post2nfa(int *postfix, int *end, int nfa_calc_size)
-{
-  return (nfa_state_T *)rs_post2nfa(postfix, end, nfa_calc_size);
-}
-
-
 
 
 /////////////////////////////////////////////////////////////////
@@ -3063,9 +2876,9 @@ int nvim_regexp_call_ri_head(int c) { return ri_head(c); }
 int nvim_regexp_call_ri_alpha(int c) { return ri_alpha(c); }
 int nvim_regexp_call_ri_lower(int c) { return ri_lower(c); }
 int nvim_regexp_call_ri_upper(int c) { return ri_upper(c); }
-int nvim_regexp_call_reg_prev_class(void) { return reg_prev_class(); }
-int nvim_regexp_call_reg_match_visual(void) { return reg_match_visual(); }
-void nvim_regexp_call_reg_nextline(void) { reg_nextline(); }
+int nvim_regexp_call_reg_prev_class(void) { return rs_reg_prev_class(); }
+int nvim_regexp_call_reg_match_visual(void) { return rs_reg_match_visual(); }
+void nvim_regexp_call_reg_nextline(void) { rs_reg_nextline(); }
 // (nvim_regexp_call_cleanup_subexpr removed -- using rs_cleanup_subexpr() directly)
 
 // NFA prog field accessors for nfa_regmatch
@@ -3205,8 +3018,8 @@ void nvim_regexp_nfa_regtry_extract_single(void *subs_ptr, int32_t col) {
 // nfa_regtry: handle \z(...\) extmatch extraction
 void nvim_regexp_nfa_regtry_extract_extmatch(void *subs_ptr) {
   regsubs_T *subs = (regsubs_T *)subs_ptr;
-  cleanup_zsubexpr();
-  re_extmatch_out = make_extmatch();
+  rs_cleanup_zsubexpr();
+  re_extmatch_out = rs_make_extmatch();
   for (int i = 1; i < subs->synt.in_use; i++) {
     if (REG_MULTI) {
       struct multipos *mpos = &subs->synt.list.multi[i];
