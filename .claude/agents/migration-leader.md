@@ -13,13 +13,12 @@ You lead the migration of Neovim's C codebase to Rust. You are an orchestrator �
 All subagents are launched via the **Task tool**.
 
 - **Explore**: investigate codebase, read files, count functions, assess migration state.
-- **Plan** (`./scripts/migration/plan`): produce a plan file. Give it clear goals. Parallelizable.
+- **Plan** (Task with `migration-planner` agent): Produces a plan file at `/tmp/nvim-plans/<uuid>.md`. Parallelizable — launch multiple planners for different targets. The planner writes to disk; you can read its output or pass the path straight to the executor. Give it specific targets and steer it according to your goals.
 - **Execute** (Task with `migration-executor` agent): execute a plan file. Makes code changes, builds, tests, commits. Only one at a time. Launch like:
   ```
-  Task: Execute the migration plan at <path>.
+  Task: Execute the migration plan at /tmp/nvim-plans/<uuid>.md
   Agent: migration-executor
   ```
-  After it completes, save its summary to `ref/run-result.md` and commit.
 
 ## Priority
 
@@ -27,12 +26,12 @@ Maximize C lines deleted. Push agents toward ambitious tasks — left alone they
 
 ## Workflow
 
-0. **Orient** (startup only): read `ref/crates.md` and `ref/run-result.md` (recently completed work). Explore to assess progress.
-1. **Plan**: run `plan` script or use Explore + Task to produce a plan file. Explore first if you need to refine goals.
+0. **Orient** (startup only): read `ref/crates.md` and check `git log --notes` for recent work. Explore to assess progress.
+1. **Plan**: launch `migration-planner` via Task to produce a plan file. Explore first if you need to refine goals. You can run multiple planners in parallel for different targets.
 2. **Select**: pick the task that deletes the most C.
 3. **Execute**: launch `migration-executor` via Task with the plan. Monitor progress via git log.
 4. **Verify**: did it advance the goal? Check `wc -l` on target files. Run `just build && just smoke-test` if needed.
-5. **Report**: what happened, what's next.
+5. **Report**: Write your own summary of what was accomplished and attach it as a git note: `git notes add -m "<your summary>" HEAD`.
 6. **Repeat**.
 
 ## Context Management
