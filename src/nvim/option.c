@@ -120,123 +120,15 @@
 _Static_assert(sizeof(vimoption_T) == 160,
                "sizeof(vimoption_T) changed - update Rust VIMOPTION_SIZE in option/src/accessors.rs");
 
+// Rust FFI declarations (used by thin wrappers and internal code)
 extern int rs_valid_name(const char *val, const char *allowed);
 extern const char *rs_find_tty_option_end(const char *arg);
 extern int rs_is_tty_option(const char *name);
 extern const char *rs_skip_to_option_part(const char *p);
-
 extern int rs_get_fileformat(buf_T *buf);
-
 extern int rs_csh_like_shell(void);
 extern int rs_fish_like_shell(void);
 extern int rs_default_fileformat(void);
-
-// Option type checking (from Rust types.rs)
-extern int rs_opt_type_bool(void);
-extern int rs_opt_type_number(void);
-extern int rs_opt_type_string(void);
-extern int rs_is_bool_option(int opt_type);
-extern int rs_is_number_option(int opt_type);
-extern int rs_is_string_option(int opt_type);
-extern int rs_is_valid_bool(int value);
-extern int rs_opt_is_in_range(int64_t value, int64_t min, int64_t max);
-extern int rs_opt_allows_negative(int flags);
-extern int rs_opt_is_valid_number(int64_t value, int flags);
-extern int rs_opt_must_be_nonempty(int flags);
-extern int rs_opt_is_path_option(int flags);
-extern int rs_opt_is_comma_list(int flags);
-extern int rs_opt_is_flags_option(int flags);
-
-// Option scope functions (from Rust scope.rs)
-extern int rs_supports_scope(int flags, int scope);
-extern int rs_most_specific_scope(int flags);
-extern int rs_scope_priority(int scope);
-
-// Option defaults and state (from Rust defaults.rs)
-extern int rs_default_builtin(void);
-extern int rs_default_modeline(void);
-extern int rs_default_vimrc(void);
-extern int rs_default_env(void);
-extern int rs_default_system(void);
-extern int rs_opt_changed_flag(void);
-extern int rs_opt_user_set_flag(void);
-extern int rs_opt_modeline_set_flag(void);
-extern int rs_opt_script_set_flag(void);
-extern int rs_opt_factory_flag(void);
-extern int rs_opt_is_changed(int flags);
-extern int rs_opt_is_user_set(int flags);
-extern int rs_opt_is_modeline_set(int flags);
-extern int rs_opt_is_script_set(int flags);
-extern int rs_opt_is_factory_default(int flags);
-extern int rs_default_source_priority(int source);
-extern int rs_source_has_higher_priority(int source1, int source2);
-
-// Option groups and scope flags (from Rust groups.rs)
-extern int rs_opt_group_general(void);
-extern int rs_opt_group_window(void);
-extern int rs_opt_group_buffer(void);
-extern int rs_opt_group_display(void);
-extern int rs_opt_group_editing(void);
-extern int rs_opt_group_search(void);
-extern int rs_opt_group_indent(void);
-extern int rs_opt_group_terminal(void);
-extern int rs_opt_scope_global_flag(void);
-extern int rs_opt_scope_window_flag(void);
-extern int rs_opt_scope_buffer_flag(void);
-extern int rs_opt_has_global_scope(int scope_flags);
-extern int rs_opt_has_window_scope(int scope_flags);
-extern int rs_opt_has_buffer_scope(int scope_flags);
-extern int rs_opt_has_local_scope(int scope_flags);
-extern int rs_opt_is_global_only(int scope_flags);
-extern int rs_opt_is_global_local(int scope_flags);
-
-// Side effect functions (from Rust sideeffect.rs)
-extern int rs_redraw_level(uint32_t flags);
-extern int rs_needs_redraw(uint32_t flags);
-extern int rs_side_effect_category(int value);
-extern int rs_callback_type(int value);
-extern int rs_has_effect(int flags, int effect);
-
-// Modeline functions (from Rust modeline.rs)
-extern int rs_modeline_vim(void);
-extern int rs_modeline_first(void);
-extern int rs_modeline_last(void);
-extern int rs_modeline_ex(void);
-extern int rs_ml_secure_flag(void);
-extern int rs_ml_expr_ok_flag(void);
-extern int rs_ml_sandbox_flag(void);
-extern int rs_could_start_modeline(int c);
-extern int rs_is_secure_modeline(int flags);
-extern int rs_ml_allows_expressions(int flags);
-extern int rs_is_sandboxed_modeline(int flags);
-
-// Format functions (from Rust format.rs)
-extern int rs_format_bool(int value, int flags);
-extern int rs_needs_escape(int c);
-extern int rs_number_radix(int style);
-
-// Set command functions (from Rust setcmd.rs)
-extern int rs_set_command_type_from_flags(int flags);
-extern int rs_set_command_type_to_flags(int cmd_type);
-extern int rs_set_arg_modifies(int arg_type);
-extern int rs_set_arg_is_compound(int arg_type);
-extern int rs_show_mode_is_all(int mode);
-extern int rs_show_mode_is_changed(int mode);
-extern int rs_show_mode_is_terminal(int mode);
-extern int rs_resolve_effective_scope(int cmd_type, uint32_t opt_scope_support);
-extern int rs_copy_direction_for_new_win(void);
-extern int rs_copy_direction_local_to_global(void);
-
-// Set operations functions (from Rust setops.rs)
-extern int rs_scope_is_local(int opt_flags);
-extern int rs_scope_is_global(int opt_flags);
-extern int rs_scope_is_both(int opt_flags);
-extern int rs_is_modeline(int opt_flags);
-extern int rs_flags_to_scope(int opt_flags);
-extern int rs_str_values_same_ptr(const char *old, const char *new);
-extern int rs_should_set_was_set(const char *errmsg);
-extern uint32_t rs_add_was_set_flag(uint32_t flags);
-extern uint32_t rs_apply_insecure_flag_change(uint32_t flags, int change);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
@@ -250,111 +142,23 @@ _Static_assert(NO_SCREEN == 2, "NO_SCREEN mismatch with Rust NO_SCREEN constant"
 _Static_assert(Ctrl_C == 3, "Ctrl_C mismatch with Rust CTRL_C constant");
 _Static_assert(K_KENTER == -16715, "K_KENTER mismatch with Rust K_KENTER constant");
 
-// Value computation functions (from Rust value.rs)
-extern int64_t rs_apply_number_op(int64_t oldval, int64_t operand, int op);
-extern int rs_is_reset_to_default(int nextchar);
-extern int rs_is_reset_to_global(int nextchar);
-extern int rs_is_invert(int nextchar);
-
-// Validation functions (from Rust lib.rs)
-extern int rs_validate_nonnegative(int64_t value);
-extern int rs_validate_positive(int64_t value);
-extern int rs_validate_range(int64_t value, int64_t min, int64_t max);
-extern int64_t rs_clamp_value(int64_t value, int64_t min, int64_t max);
-extern int rs_validate_regexpengine(int64_t value);
-extern int rs_validate_history(int64_t value);
-extern int rs_validate_percentage(int64_t value);
-extern int64_t rs_clamp_percentage(int64_t value);
-extern int rs_validate_blend(int value);
-
-// Init functions (from Rust init.rs)
-extern int rs_is_unix(void);
-extern const char *rs_default_tmpdir(void);
-
-// Numeric validation callbacks (from Rust callbacks/numeric.rs)
-extern const char *rs_validate_num_range(int64_t value, int64_t min, int64_t max);
-extern const char *rs_validate_num_nonnegative(int64_t value);
-extern const char *rs_validate_num_positive(int64_t value);
-extern const char *rs_validate_cmdheight(int64_t value);
-extern const char *rs_validate_columns(int64_t value);
-extern const char *rs_validate_lines(int64_t value);
-extern const char *rs_validate_cmdwinheight(int64_t value);
-extern const char *rs_validate_helpheight(int64_t value);
-extern const char *rs_validate_laststatus(int64_t value);
-extern const char *rs_validate_boolean_int(int64_t value);
-extern const char *rs_validate_numberwidth(int64_t value);
-extern const char *rs_validate_pumheight(int64_t value);
-extern const char *rs_validate_pumwidth(int64_t value);
-extern const char *rs_validate_report(int64_t value);
-extern const char *rs_validate_scroll(int64_t value);
-extern const char *rs_validate_scrolljump(int64_t value);
-extern const char *rs_validate_scrolloff(int64_t value);
-extern const char *rs_validate_shiftwidth(int64_t value);
-extern const char *rs_validate_showtabline(int64_t value);
-extern const char *rs_validate_sidescroll(int64_t value);
-extern const char *rs_validate_sidescrolloff(int64_t value);
-extern const char *rs_validate_softtabstop(int64_t value);
-extern const char *rs_validate_tabstop(int64_t value);
-extern const char *rs_validate_textwidth(int64_t value);
-extern const char *rs_validate_timeoutlen(int64_t value);
-extern const char *rs_validate_titlelen(int64_t value);
-extern const char *rs_validate_updatecount(int64_t value);
-extern const char *rs_validate_updatetime(int64_t value);
-extern const char *rs_validate_winheight(int64_t value);
-extern const char *rs_validate_winminheight(int64_t value);
-extern const char *rs_validate_winminwidth(int64_t value);
-extern const char *rs_validate_winwidth(int64_t value);
-extern const char *rs_validate_wrapmargin(int64_t value);
-extern const char *rs_validate_foldlevel(int64_t value);
-extern const char *rs_validate_foldminlines(int64_t value);
-extern const char *rs_validate_foldnestmax(int64_t value);
-extern const char *rs_validate_foldcolumn(int64_t value);
-extern const char *rs_validate_conceallevel(int64_t value);
-extern const char *rs_validate_iminsert(int64_t value);
-extern const char *rs_validate_verbose(int64_t value);
-extern const char *rs_validate_undolevels(int64_t value);
-extern const char *rs_validate_synmaxcol(int64_t value);
-extern const char *rs_error_number_required(void);
-
-// Did-set callbacks (from Rust callbacks/mod.rs)
+// Did-set callbacks (from Rust callbacks)
 extern const char *rs_did_set_hlsearch(void);
 extern const char *rs_did_set_ignorecase(void);
 extern const char *rs_did_set_title_icon(void);
 extern void rs_did_set_title(void);
 extern const char *rs_did_set_titlelen(int64_t old_value);
-extern const char *rs_did_set_laststatus(void);
-extern const char *rs_did_set_showtabline(void);
 extern const char *rs_did_set_iminsert(void);
 extern const char *rs_did_set_langnoremap(void);
 extern const char *rs_did_set_langremap(void);
-extern const char *rs_did_set_paste(void);
 extern const char *rs_did_set_foldlevel(void);
-extern const char *rs_did_set_smoothscroll(void);
 extern const char *rs_did_set_textwidth(void);
 extern const char *rs_did_set_pumblend(void);
 extern const char *rs_did_set_winblend(win_T *win, int64_t old_value, int64_t new_value);
-
-// Display callbacks (from Rust callbacks/display.rs)
 extern const char *rs_did_set_smoothscroll_full(win_T *win);
 extern const char *rs_did_set_showtabline_full(void);
-extern const char *rs_did_set_ruler(void);
-extern const char *rs_did_set_showcmd(void);
-extern const char *rs_did_set_cursorline(void);
-extern const char *rs_did_set_cursorcolumn(void);
-extern const char *rs_did_set_colorcolumn(void);
-extern const char *rs_did_set_list(void);
-extern const char *rs_did_set_wrap(void);
-extern const char *rs_did_set_linebreak(void);
-extern const char *rs_did_set_breakindent(void);
-extern const char *rs_did_set_foldcolumn(void);
-extern const char *rs_did_set_conceallevel(void);
-extern const char *rs_did_set_concealcursor(void);
-extern const char *rs_did_set_fillchars(void);
-extern const char *rs_did_set_listchars(void);
 extern const char *rs_did_set_numberwidth(win_T *win);
 extern const char *rs_did_set_number_relativenumber(win_T *win);
-
-// Behavior callbacks (from Rust callbacks/behavior.rs)
 extern const char *rs_did_set_binary(void);
 extern const char *rs_did_set_diff(win_T *win);
 extern const char *rs_did_set_eof_eol_fixeol_bomb(void);
@@ -363,22 +167,8 @@ extern const char *rs_did_set_foldminlines(win_T *win);
 extern const char *rs_did_set_foldnestmax(win_T *win);
 extern const char *rs_did_set_helpheight(void);
 extern const char *rs_did_set_swapfile(buf_T *buf);
-extern const char *rs_did_set_autoread(void);
-extern const char *rs_did_set_autowrite(void);
-extern const char *rs_did_set_backup(void);
-extern const char *rs_did_set_expandtab(void);
-extern const char *rs_did_set_hidden(void);
-extern const char *rs_did_set_insertmode(void);
 extern const char *rs_did_set_modifiable(void);
-extern const char *rs_did_set_modified(void);
-extern const char *rs_did_set_readonly(void);
-extern const char *rs_did_set_spell(void);
-extern const char *rs_did_set_termguicolors(void);
-extern const char *rs_did_set_virtualedit(void);
-extern const char *rs_did_set_writebackup(void);
 extern const char *rs_did_set_updatecount(int64_t old_value);
-
-// Complex callbacks (from Rust callbacks/complex.rs)
 extern const char *rs_did_set_lisp(buf_T *buf);
 extern const char *rs_did_set_wildchar(int64_t c);
 extern const char *rs_did_set_window(void);
@@ -389,23 +179,6 @@ extern const char *rs_did_set_autochdir(void);
 extern void rs_optval_free(OptVal o);
 extern OptVal rs_optval_copy(OptVal o);
 extern int rs_optval_equal(OptVal o1, OptVal o2);
-
-// Phase 527-530: Option display and expansion functions from Rust
-extern int rs_bool_display_show_no(int value);
-extern int rs_count_num_digits(int64_t value);
-extern int rs_count_hex_digits(int64_t value);
-extern int rs_str_display_width(const char *value, int escape);
-extern int rs_char_needs_escape(int c);
-extern int rs_at_env_var(const char *str, int pos);
-extern int rs_find_env_start(const char *str, int pos);
-extern int rs_is_env_char(int c);
-extern int rs_env_name_len(const char *str);
-extern int rs_needs_home_expand(const char *str);
-extern int rs_tilde_user_len(const char *str);
-extern int rs_opt_is_path_sep(int c);
-extern int rs_find_last_path_sep(const char *str);
-extern int rs_opt_is_absolute_path(const char *str);
-extern int rs_count_csv_items(const char *str);
 
 // =============================================================================
 // Accessor functions for Rust code
