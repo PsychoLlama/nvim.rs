@@ -62,6 +62,7 @@
 #include "nvim/winfloat.h"
 
 // Rust FFI declarations
+extern void rs_win_setheight(int height);
 extern int rs_pum_visible(void);
 extern int rs_pum_drawn(void);
 extern void rs_pum_clear(void);
@@ -1416,7 +1417,7 @@ void nvim_pum_set_wipeout_options(void)
 /// Set window height (wrapper for win_setheight).
 void nvim_pum_win_setheight(int height)
 {
-  win_setheight(height);
+  rs_win_setheight(height);
 }
 
 /// Get curwin->w_height.
@@ -1675,6 +1676,7 @@ _Static_assert(kZIndexCmdlinePopupMenu == 250, "kZIndexCmdlinePopupMenu must be 
 _Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE must be 0x08");
 
 #include "popupmenu.c.generated.h"
+
 #define PUM_DEF_HEIGHT 10
 
 static void pum_compute_size(void)

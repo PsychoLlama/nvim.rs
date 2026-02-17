@@ -172,6 +172,9 @@ typedef enum {
 
 #include "diff_shim.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern void rs_set_fraction(win_T *wp);
+
 // Rust fold FFI declarations
 extern void rs_newFoldLevel(void);
 extern void rs_foldUpdateAll(win_T *win);
@@ -717,7 +720,7 @@ void ex_diffsplit(exarg_T *eap)
 
   // Need to compute w_fraction when no redraw happened yet.
   validate_cursor(curwin);
-  set_fraction(curwin);
+  rs_set_fraction(curwin);
 
   // don't use a new tab page, each tab page has its own diffs
   cmdmod.cmod_tab = 0;

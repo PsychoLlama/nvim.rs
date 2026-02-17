@@ -53,6 +53,11 @@
 
 #include "mouse.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_global_stl_height(void);
+extern void rs_win_drag_status_line(win_T *dragwin, int offset);
+extern void rs_win_drag_vsep_line(win_T *dragwin, int offset);
+
 extern int rs_get_scrolloff_value(win_T *wp);
 extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
 
@@ -675,7 +680,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
   bool in_winbar = (jump_flags & MOUSE_WINBAR);
   bool in_statuscol = (jump_flags & MOUSE_STATUSCOL);
   bool in_status_line = (jump_flags & IN_STATUS_LINE);
-  bool in_global_statusline = in_status_line && global_stl_height() > 0;
+  bool in_global_statusline = in_status_line && rs_global_stl_height() > 0;
   bool in_sep_line = (jump_flags & IN_SEP_LINE);
 
   if ((in_winbar || in_status_line || in_statuscol) && is_click) {
@@ -1437,7 +1442,7 @@ retnomove:
       // Drag the status line
       count = row - dragwin->w_winrow - dragwin->w_height + 1
               - status_line_offset;
-      win_drag_status_line(dragwin, count);
+      rs_win_drag_status_line(dragwin, count);
       did_drag |= count;
     }
     return IN_STATUS_LINE;                      // Cursor didn't move
@@ -1446,7 +1451,7 @@ retnomove:
       // Drag the separator column
       count = col - dragwin->w_wincol - dragwin->w_width + 1
               - sep_line_offset;
-      win_drag_vsep_line(dragwin, count);
+      rs_win_drag_vsep_line(dragwin, count);
       did_drag |= count;
     }
     return IN_SEP_LINE;                         // Cursor didn't move

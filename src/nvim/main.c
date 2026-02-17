@@ -139,6 +139,10 @@ enum {
 
 #include "main.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_win_count(void);
+extern void rs_win_equal(win_T *next_curwin, int current, int dir);
+
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
@@ -1708,7 +1712,7 @@ static void create_windows(mparm_T *parmp)
       parmp->window_count = make_windows(parmp->window_count, parmp->window_layout == WIN_VER);
       TIME_MSG("making windows");
     } else {
-      parmp->window_count = win_count();
+      parmp->window_count = rs_win_count();
     }
   } else {
     parmp->window_count = 1;
@@ -1913,7 +1917,7 @@ static void edit_buffers(mparm_T *parmp, char *cwd)
   autocmd_no_leave--;
   TIME_MSG("editing files in windows");
   if (parmp->window_count > 1 && parmp->window_layout != WIN_TABS) {
-    win_equal(curwin, false, 'b');      // adjust heights
+    rs_win_equal(curwin, 0, 'b');      // adjust heights
   }
 }
 

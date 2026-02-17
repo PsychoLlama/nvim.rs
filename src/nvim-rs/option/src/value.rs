@@ -76,9 +76,11 @@ extern "C" {
     fn nvim_option_get_p_wiw() -> OptInt;
 
     // Min rows for all tabpages
+    #[link_name = "rs_min_rows_for_all_tabpages"]
     fn min_rows_for_all_tabpages() -> c_int;
 
     // Window default scroll
+    #[link_name = "rs_win_default_scroll"]
     fn win_default_scroll(win: *mut std::ffi::c_void) -> OptInt;
 }
 

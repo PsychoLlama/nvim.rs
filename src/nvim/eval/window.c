@@ -34,6 +34,15 @@
 
 #include "eval/window.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern tabpage_T *rs_find_tabpage(int n);
+extern int rs_tabpage_index(tabpage_T *ftp);
+extern void rs_win_drag_status_line(win_T *dragwin, int offset);
+extern void rs_win_drag_vsep_line(win_T *dragwin, int offset);
+extern void rs_win_get_tabwin(int id, int *tabnr, int *winnr);
+extern void rs_win_new_height(win_T *wp, int height);
+extern void rs_win_new_width(win_T *wp, int width);
+
 static const char *e_invalwindow = N_("E957: Invalid window number");
 static const char e_cannot_resize_window_in_another_tab_page[]
   = N_("E1308: Cannot resize a window in another tab page");
@@ -91,7 +100,7 @@ static void win_id2tabwin(typval_T *const argvars, typval_T *const rettv)
 
   int winnr = 1;
   int tabnr = 1;
-  win_get_tabwin(id, &tabnr, &winnr);
+  rs_win_get_tabwin(id, &tabnr, &winnr);
 
   list_T *const list = tv_list_alloc_ret(rettv, 2);
   tv_list_append_number(list, tabnr);
@@ -202,7 +211,7 @@ win_T *find_tabwin(typval_T *wvp, typval_T *tvp)
     if (tvp->v_type != VAR_UNKNOWN) {
       int n = (int)tv_get_number(tvp);
       if (n >= 0) {
-        tp = find_tabpage(n);
+        tp = rs_find_tabpage(n);
       }
     } else {
       tp = curtab;
@@ -384,7 +393,7 @@ void f_gettabinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
   if (argvars[0].v_type != VAR_UNKNOWN) {
     // Information about one tab page
-    tparg = find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
+    tparg = rs_find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
     if (tparg == NULL) {
       return;
     }
@@ -470,15 +479,15 @@ void f_tabpagenr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     nr = 0;
     if (arg != NULL) {
       if (strcmp(arg, "$") == 0) {
-        nr = tabpage_index(NULL) - 1;
+        nr = rs_tabpage_index(NULL) - 1;
       } else if (strcmp(arg, "#") == 0) {
-        nr = valid_tabpage(lastused_tabpage) ? tabpage_index(lastused_tabpage) : 0;
+        nr = valid_tabpage(lastused_tabpage) ? rs_tabpage_index(lastused_tabpage) : 0;
       } else {
         semsg(_(e_invexpr2), arg);
       }
     }
   } else {
-    nr = tabpage_index(curtab);
+    nr = rs_tabpage_index(curtab);
   }
   rettv->vval.v_number = nr;
 }
@@ -487,7 +496,7 @@ void f_tabpagenr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 void f_tabpagewinnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   int nr = 1;
-  tabpage_T *const tp = find_tabpage((int)tv_get_number(&argvars[0]));
+  tabpage_T *const tp = rs_find_tabpage((int)tv_get_number(&argvars[0]));
   if (tp == NULL) {
     nr = 0;
   } else {
@@ -641,7 +650,7 @@ void f_win_move_separator(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   int offset = (int)tv_get_number(&argvars[1]);
-  win_drag_vsep_line(wp, offset);
+  rs_win_drag_vsep_line(wp, offset);
   rettv->vval.v_number = true;
 }
 
@@ -663,7 +672,7 @@ void f_win_move_statusline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
   }
 
   offset = (int)tv_get_number(&argvars[1]);
-  win_drag_status_line(wp, offset);
+  rs_win_drag_status_line(wp, offset);
   rettv->vval.v_number = true;
 }
 
@@ -811,7 +820,7 @@ void f_winlayout(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (argvars[0].v_type == VAR_UNKNOWN) {
     tp = curtab;
   } else {
-    tp = find_tabpage((int)tv_get_number(&argvars[0]));
+    tp = rs_find_tabpage((int)tv_get_number(&argvars[0]));
     if (tp == NULL) {
       return;
     }
@@ -899,8 +908,8 @@ void f_winrestview(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   check_cursor(curwin);
-  win_new_height(curwin, curwin->w_height);
-  win_new_width(curwin, curwin->w_width);
+  rs_win_new_height(curwin, curwin->w_height);
+  rs_win_new_width(curwin, curwin->w_width);
   changed_window_setting(curwin);
 
   if (curwin->w_topline <= 0) {

@@ -38,6 +38,9 @@
 
 #include "usercmd.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_tabpage_index(tabpage_T *ftp);
+
 garray_T ucmds = { 0, 0, sizeof(ucmd_T), 4, NULL };
 
 // ============================================================================
@@ -201,7 +204,7 @@ int nvim_uc_cmod_get_verbose(const void *cmod)
 
 int nvim_uc_tabpage_index_curtab(void)
 {
-  return tabpage_index(curtab);
+  return rs_tabpage_index(curtab);
 }
 
 // Rust FFI declarations (Phase 4: argument expansion)

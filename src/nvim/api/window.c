@@ -43,6 +43,12 @@ extern size_t rs_text_height_dict_size(void);
 
 #include "api/window.c.generated.h"  // IWYU pragma: keep
 
+// Rust FFI declarations (window wrappers removed)
+extern tabpage_T *rs_win_find_tabpage(win_T *win);
+extern void rs_win_get_tabwin(int id, int *tabnr, int *winnr);
+extern void rs_win_setheight_win(int height, win_T *win);
+extern void rs_win_setwidth_win(int width, win_T *wp);
+
 /// Gets the current buffer in a window
 ///
 /// @param window   |window-ID|, or 0 for current window
@@ -194,7 +200,7 @@ void nvim_win_set_height(Window window, Integer height, Error *err)
   }
 
   TRY_WRAP(err, {
-    win_setheight_win((int)height, win);
+    rs_win_setheight_win((int)height, win);
   });
 }
 
@@ -231,7 +237,7 @@ void nvim_win_set_width(Window window, Integer width, Error *err)
   }
 
   TRY_WRAP(err, {
-    win_setwidth_win((int)width, win);
+    rs_win_setwidth_win((int)width, win);
   });
 }
 
@@ -320,7 +326,7 @@ Tabpage nvim_win_get_tabpage(Window window, Error *err)
   win_T *win = find_window_by_handle(window, err);
 
   if (win) {
-    rv = win_find_tabpage(win)->handle;
+    rv = rs_win_find_tabpage(win)->handle;
   }
 
   return rv;
@@ -342,7 +348,7 @@ Integer nvim_win_get_number(Window window, Error *err)
   }
 
   int tabnr;
-  win_get_tabwin(win->handle, &tabnr, &rv);
+  rs_win_get_tabwin(win->handle, &tabnr, &rv);
 
   return rv;
 }
@@ -378,7 +384,7 @@ void nvim_win_hide(Window window, Error *err)
     return;
   }
 
-  tabpage_T *tabpage = win_find_tabpage(win);
+  tabpage_T *tabpage = rs_win_find_tabpage(win);
   TRY_WRAP(err, {
     // Never close the autocommand window.
     if (is_aucmd_win(win)) {
@@ -407,7 +413,7 @@ void nvim_win_close(Window window, Boolean force, Error *err)
     return;
   }
 
-  tabpage_T *tabpage = win_find_tabpage(win);
+  tabpage_T *tabpage = rs_win_find_tabpage(win);
   TRY_WRAP(err, {
     ex_win_close(force, win, tabpage == curtab ? NULL : tabpage);
   });
@@ -431,7 +437,7 @@ Object nvim_win_call(Window window, LuaRef fun, Error *err)
   if (!win) {
     return NIL;
   }
-  tabpage_T *tabpage = win_find_tabpage(win);
+  tabpage_T *tabpage = rs_win_find_tabpage(win);
 
   Object res = OBJECT_INIT;
   TRY_WRAP(err, {

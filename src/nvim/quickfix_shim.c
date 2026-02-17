@@ -1099,6 +1099,12 @@ typedef struct {
 
 #include "quickfix_shim.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern void rs_check_lnums(int do_curwin);
+extern int rs_tabline_height(void);
+extern void rs_win_setheight(int height);
+extern void rs_win_setwidth(int width);
+
 // Rust fold FFI declarations
 extern void rs_foldOpenCursor(void);
 extern void rs_foldUpdateAll(win_T *win);
@@ -4310,7 +4316,7 @@ int nvim_qf_win_split(int size, int flags)
 /// win_setheight wrapper
 void nvim_qf_win_setheight(int height)
 {
-  win_setheight(height);
+  rs_win_setheight(height);
 }
 
 /// Set restart_edit = 0
@@ -4600,7 +4606,7 @@ int nvim_qf_win_get_status_height(const void *win_void)
 /// Get tabline height
 int nvim_qf_tabline_height(void)
 {
-  return tabline_height();
+  return rs_tabline_height();
 }
 
 /// Get cmdline_row global
@@ -4612,7 +4618,7 @@ int nvim_qf_cmdline_row(void)
 /// Set window width
 void nvim_qf_win_setwidth(int width)
 {
-  win_setwidth(width);
+  rs_win_setwidth(width);
 }
 
 /// Reset visual mode
@@ -5122,7 +5128,7 @@ static int qf_open_new_cwindow(qf_info_T *qi, int height)
   // Only set the height when still in the same tab page and there is no
   // window to the side.
   if (curtab == prevtab && curwin->w_width == Columns) {
-    win_setheight(height);
+    rs_win_setheight(height);
   }
   curwin->w_p_wfh = true;  // set 'winfixheight'
   if (win_valid(win)) {
@@ -5569,7 +5575,7 @@ void nvim_qfga_clear(void)
 /// Correct cursor position
 void nvim_check_lnums_true(void)
 {
-  check_lnums(true);
+  rs_check_lnums(1);
 }
 
 /// Set filetype, apply autocmds, and redraw for new qf buffer fill

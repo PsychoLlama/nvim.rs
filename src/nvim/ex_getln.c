@@ -223,6 +223,12 @@ static int cedit_key = -1;  ///< key value of 'cedit' option
 
 #include "ex_getln.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_global_stl_height(void);
+extern win_T *rs_lastwin_nofloating(void);
+extern void rs_win_size_restore(garray_T *gap);
+extern void rs_win_size_save(garray_T *gap);
+
 extern int rs_csh_like_shell(void);
 extern int rs_magic_isset(void);
 extern int rs_cmdline_overstrike(void);
@@ -688,7 +694,7 @@ static void may_do_incsearch_highlighting(int firstc, int count, incsearch_state
   validate_cursor(curwin);
 
   // May redraw the status line to show the cursor position.
-  if (p_ru && (curwin->w_status_height > 0 || global_stl_height() > 0)) {
+  if (p_ru && (curwin->w_status_height > 0 || rs_global_stl_height() > 0)) {
     curwin->w_redr_status = true;
   }
 
@@ -2575,7 +2581,7 @@ static void cmdpreview_prepare(CpInfo *cpinfo)
 
   cpinfo->save_hls = p_hls;
   cpinfo->save_cmdmod = cmdmod;
-  win_size_save(&cpinfo->save_view);
+  rs_win_size_save(&cpinfo->save_view);
   save_search_patterns();
 
   p_hls = false;                 // Don't show search highlighting during live substitution
@@ -2654,7 +2660,7 @@ static void cmdpreview_restore_state(CpInfo *cpinfo)
   cmdmod = cpinfo->save_cmdmod;                // Restore cmdmod
   p_hls = cpinfo->save_hls;                    // Restore 'hlsearch'
   restore_search_patterns();           // Restore search patterns
-  win_size_restore(&cpinfo->save_view);        // Restore window sizes
+  rs_win_size_restore(&cpinfo->save_view);        // Restore window sizes
 
   ga_clear(&cpinfo->save_view);
   kv_destroy(cpinfo->win_info);
@@ -4144,9 +4150,9 @@ void compute_cmdrow(void)
   if (exmode_active || msg_scrolled != 0) {
     cmdline_row = Rows - 1;
   } else {
-    win_T *wp = lastwin_nofloating();
+    win_T *wp = rs_lastwin_nofloating();
     cmdline_row = wp->w_winrow + wp->w_height
-                  + wp->w_hsep_height + wp->w_status_height + global_stl_height();
+                  + wp->w_hsep_height + wp->w_status_height + rs_global_stl_height();
   }
   if (cmdline_row == Rows && p_ch > 0) {
     cmdline_row--;
@@ -4644,7 +4650,7 @@ static int open_cmdwin(void)
   set_bufref(&old_curbuf, curbuf);
 
   // Save current window sizes.
-  win_size_save(&winsizes);
+  rs_win_size_save(&winsizes);
 
   // When using completion in Insert mode with <C-R>=<C-F> one can open the
   // command line window, but we don't want the popup menu then.
@@ -4885,7 +4891,7 @@ static int open_cmdwin(void)
     }
 
     // Restore window sizes.
-    win_size_restore(&winsizes);
+    rs_win_size_restore(&winsizes);
     skip_win_fix_cursor = false;
   }
 

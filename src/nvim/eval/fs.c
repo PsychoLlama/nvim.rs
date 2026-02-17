@@ -49,6 +49,9 @@
 
 #include "eval/fs.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern tabpage_T *rs_find_tabpage(int n);
+
 static const char e_error_while_writing_str[] = N_("E80: Error while writing: %s");
 
 /// Adjust a filename, according to a string of modifiers.
@@ -666,7 +669,7 @@ void f_getcwd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
   // Find the tabpage by number
   if (scope_number[kCdScopeTabpage] > 0) {
-    tp = find_tabpage(scope_number[kCdScopeTabpage]);
+    tp = rs_find_tabpage(scope_number[kCdScopeTabpage]);
     if (!tp) {
       emsg(_("E5000: Cannot find tab number."));
       return;
@@ -988,7 +991,7 @@ void f_haslocaldir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
   // Find the tabpage by number
   if (scope_number[kCdScopeTabpage] > 0) {
-    tp = find_tabpage(scope_number[kCdScopeTabpage]);
+    tp = rs_find_tabpage(scope_number[kCdScopeTabpage]);
     if (!tp) {
       emsg(_("E5000: Cannot find tab number."));
       return;

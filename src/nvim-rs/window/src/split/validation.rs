@@ -53,9 +53,11 @@ extern "C" {
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 
     /// Get tabline height.
+    #[link_name = "rs_tabline_height"]
     fn tabline_height() -> c_int;
 
     /// Get global statusline height.
+    #[link_name = "rs_global_stl_height"]
     fn global_stl_height() -> c_int;
 
     /// Get p_wmh (winminheight option).

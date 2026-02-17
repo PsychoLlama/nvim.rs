@@ -116,6 +116,14 @@
 
 #include "buffer.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_get_last_winid(void);
+extern int rs_global_stl_height(void);
+extern win_T *rs_lastwin_nofloating(void);
+extern int rs_tabline_height(void);
+extern int rs_tabpage_index(tabpage_T *ftp);
+extern int rs_win_locked(win_T *wp);
+
 // Rust fold FFI declarations
 extern void rs_clearFolding(win_T *win);
 extern void rs_foldUpdateAll(win_T *win);
@@ -2090,7 +2098,7 @@ static int do_buffer_ext(int action, int start, int dir, int count, int flags)
     // When the autocommand window is involved win_close() may need to print an error message.
     // Repeat this so long as we end up in a window with this buffer.
     while (buf == curbuf
-           && !(win_locked(curwin) || curwin->w_buffer->b_locked > 0)
+           && !(rs_win_locked(curwin) || curwin->w_buffer->b_locked > 0)
            && (is_aucmd_win(lastwin) || !last_window(curwin))) {
       if (win_close(curwin, false, false) == FAIL) {
         break;
@@ -2303,7 +2311,7 @@ void set_curbuf(buf_T *buf, int action, bool update_jumplist)
   int unload = (action == DOBUF_UNLOAD || action == DOBUF_DEL
                 || action == DOBUF_WIPE);
   OptInt old_tw = curbuf->b_p_tw;
-  const int last_winid = get_last_winid();
+  const int last_winid = rs_get_last_winid();
 
   if (update_jumplist) {
     setpcmark();
@@ -2335,7 +2343,7 @@ void set_curbuf(buf_T *buf, int action, bool update_jumplist)
     // autocommands may have opened a new window
     // with prevbuf, grr
     if (unload
-        || (last_winid != get_last_winid()
+        || (last_winid != rs_get_last_winid()
             && strchr("wdu", prevbuf->b_p_bh[0]) != NULL)) {
       close_windows(prevbuf, false);
     }
@@ -4109,11 +4117,11 @@ void ex_buffer_all(exarg_T *eap)
            || wp->w_floating
            || ((cmdmod.cmod_split & WSP_VERT)
                ? wp->w_height + wp->w_hsep_height + wp->w_status_height < Rows - p_ch
-               - tabline_height() - global_stl_height()
+               - rs_tabline_height() - rs_global_stl_height()
                : wp->w_width != Columns)
            || (had_tab > 0 && wp != firstwin))
           && !ONE_WINDOW
-          && !(win_locked(curwin) || wp->w_buffer->b_locked > 0)
+          && !(rs_win_locked(curwin) || wp->w_buffer->b_locked > 0)
           && !is_aucmd_win(wp)) {
         if (win_close(wp, false, false) == FAIL) {
           break;
@@ -4142,7 +4150,7 @@ void ex_buffer_all(exarg_T *eap)
   // Don't execute Win/Buf Enter/Leave autocommands here.
   autocmd_no_enter++;
   // lastwin may be aucmd_win
-  win_enter(lastwin_nofloating(), false);
+  win_enter(rs_lastwin_nofloating(), false);
   autocmd_no_leave++;
   for (buf_T *buf = firstbuf; buf != NULL && open_wins < count; buf = buf->b_next) {
     // Check if this buffer needs a window
@@ -4222,7 +4230,7 @@ void ex_buffer_all(exarg_T *eap)
       break;
     }
     // When ":tab" was used open a new tab for a new window repeatedly.
-    if (had_tab > 0 && tabpage_index(NULL) <= p_tpm) {
+    if (had_tab > 0 && rs_tabpage_index(NULL) <= p_tpm) {
       cmdmod.cmod_tab = 9999;
     }
   }

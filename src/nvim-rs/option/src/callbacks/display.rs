@@ -17,8 +17,10 @@ extern "C" {
     // Screen/window functions
     fn command_height();
     fn win_new_screen_rows();
+    #[link_name = "rs_win_comp_pos"]
     fn win_comp_pos();
     fn status_redraw_curbuf();
+    #[link_name = "rs_last_status"]
     fn last_status(morestrict: c_int);
     fn win_float_update_statusline();
     fn frame_new_height(

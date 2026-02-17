@@ -88,6 +88,10 @@
 
 #include "api/vim.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_global_stl_height(void);
+extern tabpage_T *rs_win_find_tabpage(win_T *win);
+
 // Rust fold FFI declaration
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
 
@@ -967,7 +971,7 @@ void nvim_set_current_win(Window window, Error *err)
   }
 
   TRY_WRAP(err, {
-    goto_tabpage_win(win_find_tabpage(win), win);
+    goto_tabpage_win(rs_win_find_tabpage(win), win);
   });
 }
 
@@ -2178,7 +2182,7 @@ DictAs(eval_statusline_ret) nvim_eval_statusline(String str, Dict(eval_statuslin
     maxwidth = statuscol_lnum ? win_col_off(wp)
                               : (opts->use_tabline
                                  || (!opts->use_winbar
-                                     && global_stl_height() > 0)) ? Columns : wp->w_width;
+                                     && rs_global_stl_height() > 0)) ? Columns : wp->w_width;
   }
 
   result = arena_dict(arena, 3);

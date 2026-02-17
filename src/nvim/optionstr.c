@@ -58,6 +58,9 @@
 
 #include "optionstr.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_global_stl_height(void);
+
 // Rust fold FFI declarations
 extern void rs_foldUpdateAll(win_T *win);
 extern void rs_newFoldLevel(void);
@@ -792,7 +795,7 @@ const char *did_set_buftype(optset_T *args)
     pos_T next_prompt = { .lnum = buf->b_ml.ml_line_count, .col = 1, .coladd = 0 };
     RESET_FMARK(&buf->b_prompt_start, next_prompt, 0, ((fmarkv_T)INIT_FMARKV));
   }
-  if (win->w_status_height || global_stl_height()) {
+  if (win->w_status_height || rs_global_stl_height()) {
     win->w_redr_status = true;
     redraw_later(win, UPD_VALID);
   }

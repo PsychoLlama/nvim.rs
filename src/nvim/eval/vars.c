@@ -58,6 +58,9 @@ typedef int (*ex_unletlock_callback)(lval_T *, char *, exarg_T *, int);
 
 #include "eval/vars.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern tabpage_T *rs_find_tabpage(int n);
+
 extern void rs_optval_free(OptVal o);
 extern int rs_is_tty_option(const char *name);
 
@@ -3167,7 +3170,7 @@ static void getwinvar(typval_T *argvars, typval_T *rettv, int off)
   tabpage_T *tp;
 
   if (off == 1) {
-    tp = find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
+    tp = rs_find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
   } else {
     tp = curtab;
   }
@@ -3305,7 +3308,7 @@ static void setwinvar(typval_T *argvars, int off)
 
   tabpage_T *tp = NULL;
   if (off == 1) {
-    tp = find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
+    tp = rs_find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
   } else {
     tp = curtab;
   }
@@ -3515,7 +3518,7 @@ void var_redir_stop(void)
 void f_gettabvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   const char *const varname = tv_get_string_chk(&argvars[1]);
-  tabpage_T *const tp = find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
+  tabpage_T *const tp = rs_find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
   win_T *win = NULL;
 
   if (tp != NULL) {
@@ -3553,7 +3556,7 @@ void f_settabvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     return;
   }
 
-  tabpage_T *const tp = find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
+  tabpage_T *const tp = rs_find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
   const char *const varname = tv_get_string_chk(&argvars[1]);
   typval_T *const varp = &argvars[2];
 

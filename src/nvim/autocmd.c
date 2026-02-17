@@ -61,7 +61,15 @@
 #include "nvim/winfloat.h"
 
 #include "auevents_name_map.generated.h"
+
 #include "autocmd.c.generated.h"
+
+// Rust FFI declarations (window wrappers removed)
+extern void rs_check_lnums(int do_curwin);
+extern void rs_check_lnums_nested(int do_curwin);
+extern void rs_reset_lnums(void);
+extern int rs_valid_tabpage_win(tabpage_T *tpc);
+extern win_T *rs_win_find_by_handle(int handle);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -889,14 +897,14 @@ win_found:
     // used again.
     aucmd_win[aco->use_aucmd_win_idx].auc_win_used = false;
 
-    if (!valid_tabpage_win(curtab)) {
+    if (!rs_valid_tabpage_win(curtab)) {
       // no valid window in current tabpage
       close_tabpage(curtab);
     }
 
     unblock_autocmds();
 
-    win_T *const save_curwin = win_find_by_handle(aco->save_curwin_handle);
+    win_T *const save_curwin = rs_win_find_by_handle(aco->save_curwin_handle);
     if (save_curwin != NULL) {
       curwin = save_curwin;
     } else {
@@ -910,7 +918,7 @@ win_found:
       curbuf->b_prompt_insert = aco->save_prompt_insert;
     }
 
-    prevwin = win_find_by_handle(aco->save_prevwin_handle);
+    prevwin = rs_win_find_by_handle(aco->save_prevwin_handle);
     vars_clear(&awp->w_vars->dv_hashtab);         // free all w: variables
     hash_init(&awp->w_vars->dv_hashtab);          // re-use the hashtab
 
@@ -934,7 +942,7 @@ win_found:
   } else {
     // Restore curwin.  Use the window ID, a window may have been closed
     // and the memory re-used for another one.
-    win_T *const save_curwin = win_find_by_handle(aco->save_curwin_handle);
+    win_T *const save_curwin = rs_win_find_by_handle(aco->save_curwin_handle);
     if (save_curwin != NULL) {
       // Restore the buffer which was previously edited by curwin, if it was
       // changed, we are still the same window and the buffer is valid.
@@ -953,7 +961,7 @@ win_found:
 
       curwin = save_curwin;
       curbuf = curwin->w_buffer;
-      prevwin = win_find_by_handle(aco->save_prevwin_handle);
+      prevwin = rs_win_find_by_handle(aco->save_prevwin_handle);
 
       // In case the autocommand moves the cursor to a position that does not
       // exist in curbuf
@@ -1318,12 +1326,12 @@ bool apply_autocmds_group(event_T event, char *fname, char *fname_io, bool force
     retval = true;
 
     // Make sure cursor and topline are valid.  The first time the current
-    // values are saved, restored by reset_lnums().  When nested only the
+    // values are saved, restored by rs_reset_lnums().  When nested only the
     // values are corrected when needed.
     if (nesting == 1) {
-      check_lnums(true);
+      rs_check_lnums(1);
     } else {
-      check_lnums_nested(true);
+      rs_check_lnums_nested(1);
     }
 
     const int save_did_emsg = did_emsg;
@@ -1337,7 +1345,7 @@ bool apply_autocmds_group(event_T event, char *fname, char *fname_io, bool force
 
     if (nesting == 1) {
       // restore cursor and topline, unless they were changed
-      reset_lnums();
+      rs_reset_lnums();
     }
 
     if (eap != NULL) {

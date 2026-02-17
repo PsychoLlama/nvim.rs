@@ -85,6 +85,10 @@ typedef void *(*user_expand_func_T)(const char *, int, typval_T *);
 
 #include "cmdexpand.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_global_stl_height(void);
+extern void rs_last_status(int morewin);
+
 static bool cmd_showtail;  ///< Only show path tail in lists ?
 static bool may_expand_pattern = false;
 static pos_T pre_incsearch_pos;  ///< Cursor position when incsearch started
@@ -1641,12 +1645,12 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
         // Create status line if needed by setting 'laststatus' to 2.
         // Set 'winminheight' to zero to avoid that the window is
         // resized.
-        if (lastwin->w_status_height == 0 && global_stl_height() == 0) {
+        if (lastwin->w_status_height == 0 && rs_global_stl_height() == 0) {
           save_p_ls = (int)p_ls;
           save_p_wmh = (int)p_wmh;
           p_ls = 2;
           p_wmh = 0;
-          last_status(false);
+          rs_last_status(0);
         }
         wild_menu_showing = WM_SHOWN;
       }
@@ -3974,7 +3978,7 @@ void wildmenu_cleanup(CmdlineInfo *cclp)
     // restore 'laststatus' and 'winminheight'
     p_ls = save_p_ls;
     p_wmh = save_p_wmh;
-    last_status(false);
+    rs_last_status(0);
     update_screen();  // redraw the screen NOW
     redrawcmd();
     save_p_ls = -1;

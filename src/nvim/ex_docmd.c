@@ -235,6 +235,13 @@ extern int rs_get_scrolloff_value(win_T *wp);
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern void rs_do_window(int nchar, int Prenum, int xchar);
+extern tabpage_T *rs_find_tabpage(int n);
+extern int rs_tabpage_index(tabpage_T *ftp);
+extern void rs_win_setheight_win(int height, win_T *win);
+extern void rs_win_setwidth_win(int width, win_T *wp);
+
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
 int cmdname_first_char(int cmdidx)
@@ -3444,7 +3451,7 @@ static void ex_tabclose(exarg_T *eap)
     return;
   }
 
-  tabpage_T *tp = find_tabpage(tab_number);
+  tabpage_T *tp = rs_find_tabpage(tab_number);
   if (tp == NULL) {
     beep_flush();
     return;
@@ -3525,7 +3532,7 @@ void tabpage_close_other(tabpage_T *tp, int forceit)
   // Limit to 1000 windows, autocommands may add a window while we close
   // one.  OK, so I'm paranoid...
   while (++done < 1000) {
-    snprintf(prev_idx, sizeof(prev_idx), "%i", tabpage_index(tp));
+    snprintf(prev_idx, sizeof(prev_idx), "%i", rs_tabpage_index(tp));
     win_T *wp = tp->tp_lastwin;
     ex_win_close(forceit, wp, tp);
 
@@ -4158,14 +4165,14 @@ static void ex_resize(exarg_T *eap)
     } else if (n == 0 && eap->arg[0] == NUL) {  // default is very wide
       n = Columns;
     }
-    win_setwidth_win(n, wp);
+    rs_win_setwidth_win(n, wp);
   } else {
     if (*eap->arg == '-' || *eap->arg == '+') {
       n += wp->w_height;
     } else if (n == 0 && eap->arg[0] == NUL) {  // default is very high
       n = Rows - 1;
     }
-    win_setheight_win(n, wp);
+    rs_win_setheight_win(n, wp);
   }
 }
 
@@ -4777,7 +4784,7 @@ static void ex_wincmd(exarg_T *eap)
     // Pass flags on for ":vertical wincmd ]".
     postponed_split_flags = cmdmod.cmod_split;
     postponed_split_tab = cmdmod.cmod_tab;
-    do_window(*eap->arg, eap->addr_count > 0 ? eap->line2 : 0, xchar);
+    rs_do_window(*eap->arg, eap->addr_count > 0 ? eap->line2 : 0, xchar);
     postponed_split_flags = 0;
     postponed_split_tab = 0;
   }
@@ -7387,7 +7394,7 @@ char *nvim_docmd_get_e_invrange(void) { return _(e_invrange); }
 char *nvim_docmd_get_e_no_errors(void) { return _(e_no_errors); }
 
 // Tabpage accessors for get_tabpage_arg
-int nvim_docmd_tabpage_index_curtab(void) { return tabpage_index(curtab); }
+int nvim_docmd_tabpage_index_curtab(void) { return rs_tabpage_index(curtab); }
 
 int nvim_docmd_valid_lastused_tabpage(void)
 {
@@ -7396,7 +7403,7 @@ int nvim_docmd_valid_lastused_tabpage(void)
 
 int nvim_docmd_tabpage_index_lastused(void)
 {
-  return tabpage_index(lastused_tabpage);
+  return rs_tabpage_index(lastused_tabpage);
 }
 
 /// Call getdigits on a string, return the number and advance the pointer.

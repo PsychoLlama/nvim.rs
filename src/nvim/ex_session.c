@@ -52,6 +52,9 @@
 
 #include "ex_session.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_tabpage_index(tabpage_T *ftp);
+
 /// Whether ":lcd" or ":tcd" was produced for a session.
 static int did_lcd;
 
@@ -315,7 +318,7 @@ frame_T *nvim_ses_tp_get_topframe(const tabpage_T *tp) { return tp->tp_topframe;
 
 // Window globals
 win_T *nvim_ses_get_firstwin(void) { return firstwin; }
-int nvim_ses_tabpage_index(tabpage_T *tp) { return tabpage_index(tp); }
+int nvim_ses_tabpage_index(tabpage_T *tp) { return rs_tabpage_index(tp); }
 
 // Session option globals
 const char *nvim_ses_get_globaldir(void) { return globaldir; }

@@ -51,6 +51,10 @@
 #include "nvim/undo.h"
 #include "nvim/window.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern win_T *rs_lastwin_nofloating(void);
+extern int rs_tabline_height(void);
+
 // Rust implementations
 extern int rs_get_fileformat(buf_T *buf);
 extern int rs_stl_connected(win_T *wp);
@@ -1158,8 +1162,8 @@ void nvim_stl_win_set_p_crb(win_T *wp, int val) { wp->w_p_crb = val; }
 /// Get p_ru (ruler option).
 int nvim_stl_get_p_ru(void) { return p_ru ? 1 : 0; }
 
-/// Get lastwin_nofloating().
-win_T *nvim_stl_lastwin_nofloating(void) { return lastwin_nofloating(); }
+/// Get rs_lastwin_nofloating().
+win_T *nvim_stl_lastwin_nofloating(void) { return rs_lastwin_nofloating(); }
 
 /// Check if ui_has(kUIMessages).
 int nvim_stl_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
@@ -1238,8 +1242,8 @@ void nvim_stl_set_redraw_tabline(int val) { redraw_tabline = val ? true : false;
 /// Check ui_has(kUITabline).
 int nvim_stl_ui_has_tabline(void) { return ui_has(kUITabline) ? 1 : 0; }
 
-/// Get tabline_height().
-int nvim_stl_tabline_height(void) { return tabline_height(); }
+/// Get rs_tabline_height().
+int nvim_stl_tabline_height(void) { return rs_tabline_height(); }
 
 /// Start grid line on default_gridview at given row.
 void nvim_stl_default_grid_line_start(int row)

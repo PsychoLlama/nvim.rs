@@ -199,6 +199,9 @@ PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern tabpage_T *rs_find_tabpage(int n);
+
 PRAGMA_DIAG_POP
 PRAGMA_DIAG_POP
 
@@ -7571,7 +7574,7 @@ static void f_tabpagebuflist(typval_T *argvars, typval_T *rettv, EvalFuncData fp
   if (argvars[0].v_type == VAR_UNKNOWN) {
     wp = firstwin;
   } else {
-    tabpage_T *const tp = find_tabpage((int)tv_get_number(&argvars[0]));
+    tabpage_T *const tp = rs_find_tabpage((int)tv_get_number(&argvars[0]));
     if (tp != NULL) {
       wp = (tp == curtab) ? firstwin : tp->tp_firstwin;
     }

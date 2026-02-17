@@ -175,6 +175,18 @@ extern void rs_optval_free(OptVal o);
 extern OptVal rs_optval_copy(OptVal o);
 extern int rs_optval_equal(OptVal o1, OptVal o2);
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_global_stl_height(void);
+extern void rs_last_status(int morewin);
+extern int rs_min_rows(tabpage_T *tp);
+extern int rs_min_rows_for_all_tabpages(void);
+extern int rs_tabline_height(void);
+extern int rs_win_comp_pos(void);
+extern int64_t rs_win_default_scroll(win_T *wp);
+extern tabpage_T *rs_win_find_tabpage(win_T *win);
+extern void rs_win_setheight(int height);
+extern void rs_win_setwidth(int width);
+
 // =============================================================================
 // Accessor functions for Rust code
 // =============================================================================
@@ -401,9 +413,9 @@ void nvim_callback_set_p_ch(OptInt value) { p_ch = value; }
 int nvim_callback_get_rows(void) { return Rows; }
 frame_T *nvim_callback_get_topframe(void) { return topframe; }
 int nvim_callback_get_topframe_fr_height(void) { return topframe->fr_height; }
-int nvim_callback_tabline_height(void) { return tabline_height(); }
-int nvim_callback_global_stl_height(void) { return global_stl_height(); }
-int nvim_callback_min_rows_curtab(void) { return min_rows(curtab); }
+int nvim_callback_tabline_height(void) { return rs_tabline_height(); }
+int nvim_callback_global_stl_height(void) { return rs_global_stl_height(); }
+int nvim_callback_min_rows_curtab(void) { return rs_min_rows(curtab); }
 void nvim_callback_set_clear_cmdline(int value) { clear_cmdline = value != 0; }
 
 // Window accessors for display callbacks
@@ -838,7 +850,7 @@ void set_init_1(bool clean_arg)
   check_options();
 
   // set 'laststatus'
-  last_status(false);
+  rs_last_status(0);
 
   // Must be before option_expand(), because that one needs vim_isIDc()
   didset_options();
@@ -2338,15 +2350,15 @@ static const char *did_set_cmdheight(optset_T *args)
 {
   OptInt old_value = args->os_oldval.number;
 
-  if (p_ch > Rows - min_rows(curtab) + 1) {
-    p_ch = Rows - min_rows(curtab) + 1;
+  if (p_ch > Rows - rs_min_rows(curtab) + 1) {
+    p_ch = Rows - rs_min_rows(curtab) + 1;
   }
 
   // if p_ch changed value, change the command line height
   // Only compute the new window layout when startup has been
   // completed. Otherwise the frame sizes may be wrong.
   if ((p_ch != old_value
-       || tabline_height() + global_stl_height() + topframe->fr_height != Rows - p_ch)
+       || rs_tabline_height() + rs_global_stl_height() + topframe->fr_height != Rows - p_ch)
       && full_screen) {
     command_height();
   }
@@ -2365,18 +2377,18 @@ static const char *did_set_laststatus(optset_T *args)
   // Also clear the cmdline to remove the ruler if there is one
   if (value == 3 && old_value != 3) {
     frame_new_height(topframe, topframe->fr_height - STATUS_HEIGHT, false, false, false);
-    win_comp_pos();
+    rs_win_comp_pos();
     clear_cmdline = true;
   }
   // When switching from global statusline, increase height of topframe by STATUS_HEIGHT
   // in order to to re-add the space that was previously taken by the global statusline
   if (old_value == 3 && value != 3) {
     frame_new_height(topframe, topframe->fr_height + STATUS_HEIGHT, false, false, false);
-    win_comp_pos();
+    rs_win_comp_pos();
   }
 
   status_redraw_curbuf();
-  last_status(false);  // (re)set last window status line.
+  rs_last_status(0);  // (re)set last window status line.
   win_float_update_statusline();
   return NULL;
 }
@@ -2739,7 +2751,7 @@ static const char *did_set_winheight(optset_T *args)
   // Change window height NOW
   if (!ONE_WINDOW) {
     if (curwin->w_height < p_wh) {
-      win_setheight((int)p_wh);
+      rs_win_setheight((int)p_wh);
     }
   }
 
@@ -2750,7 +2762,7 @@ static const char *did_set_winheight(optset_T *args)
 static const char *did_set_winwidth(optset_T *args)
 {
   if (!ONE_WINDOW && curwin->w_width < p_wiw) {
-    win_setwidth((int)p_wiw);
+    rs_win_setwidth((int)p_wiw);
   }
   return NULL;
 }
@@ -2842,11 +2854,11 @@ static const char *check_num_option_bounds(OptIndex opt_idx, OptInt *newval, cha
 
   switch (opt_idx) {
   case kOptLines:
-    if (*newval < min_rows_for_all_tabpages() && full_screen) {
+    if (*newval < rs_min_rows_for_all_tabpages() && full_screen) {
       vim_snprintf(errbuf, errbuflen, _("E593: Need at least %d lines"),
-                   min_rows_for_all_tabpages());
+                   rs_min_rows_for_all_tabpages());
       errmsg = errbuf;
-      *newval = min_rows_for_all_tabpages();
+      *newval = rs_min_rows_for_all_tabpages();
     }
     // True max size is defined by check_screensize().
     *newval = MIN(*newval, INT_MAX);
@@ -2875,7 +2887,7 @@ static const char *check_num_option_bounds(OptIndex opt_idx, OptInt *newval, cha
       if (*newval != 0) {
         errmsg = e_scroll;
       }
-      *newval = win_default_scroll(curwin);
+      *newval = rs_win_default_scroll(curwin);
     }
     break;
   default:
@@ -3938,7 +3950,7 @@ static bool switch_option_context(void *const ctx, OptScope scope, void *const f
       return false;
     }
 
-    if (switch_win_noblock(switchwin, win, win_find_tabpage(win), true)
+    if (switch_win_noblock(switchwin, win, rs_win_find_tabpage(win), true)
         == FAIL) {
       restore_win_noblock(switchwin, true);
 

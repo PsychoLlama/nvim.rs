@@ -281,6 +281,7 @@ extern "C" {
     fn win_enter(wp: *mut c_void, undo_sync: bool);
     fn win_close(win: *mut c_void, free_buf: bool, force: bool) -> c_int;
     fn win_split(size: c_int, flags: c_int) -> c_int;
+    #[link_name = "rs_win_setheight"]
     fn win_setheight(height: c_int);
     fn do_tag(tag: *const c_char, tag_type: c_int, count: c_int, forceit: c_int, verbose: bool);
     fn xstrdup(s: *const c_char) -> *mut c_char;

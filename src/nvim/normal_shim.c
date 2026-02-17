@@ -116,6 +116,11 @@ static int VIsual_mode_orig = NUL;              // saved Visual mode
 
 #include "normal_shim.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern void rs_do_window(int nchar, int Prenum, int xchar);
+extern void rs_set_fraction(win_T *wp);
+extern void rs_win_setheight(int height);
+
 // Rust fold FFI declarations
 extern int rs_hasAnyFolding(win_T *win);
 extern void rs_foldOpenCursor(void);
@@ -2494,7 +2499,7 @@ void nvim_nv_open_impl(cmdarg_T *cap)
 /// Wrapper for do_window.
 void nvim_do_window(int nchar, int count, int xchar)
 {
-  do_window(nchar, count, xchar);
+  rs_do_window(nchar, count, xchar);
 }
 
 /// Wrapper for nv_colon.
@@ -4380,7 +4385,7 @@ static bool nv_z_get_count(cmdarg_T *cap, int *nchar_arg)
         break;
       }
     } else if (nchar == CAR) {
-      win_setheight(n);
+      rs_win_setheight(n);
       break;
     } else if (nchar == 'l'
                || nchar == 'h'
@@ -4514,7 +4519,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   case 't':
     scroll_cursor_top(curwin, 0, true);
     redraw_later(curwin, UPD_VALID);
-    set_fraction(curwin);
+    rs_set_fraction(curwin);
     break;
 
   // "z." and "zz": put cursor in middle of screen
@@ -4525,7 +4530,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   case 'z':
     scroll_cursor_halfway(curwin, true, false);
     redraw_later(curwin, UPD_VALID);
-    set_fraction(curwin);
+    rs_set_fraction(curwin);
     break;
 
   // "z^", "z-" and "zb": put cursor at bottom of screen
@@ -4548,7 +4553,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   case 'b':
     scroll_cursor_bot(curwin, 0, true);
     redraw_later(curwin, UPD_VALID);
-    set_fraction(curwin);
+    rs_set_fraction(curwin);
     break;
 
   // "zH" - scroll screen right half-page

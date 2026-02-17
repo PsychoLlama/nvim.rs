@@ -146,6 +146,7 @@ extern "C" {
     fn win_fix_scroll(size_changed: c_int);
 
     // --- lastwin_nofloating (called from C too) ---
+    #[link_name = "rs_lastwin_nofloating"]
     fn lastwin_nofloating() -> WinHandle;
 }
 

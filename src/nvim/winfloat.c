@@ -35,6 +35,12 @@
 
 #include "winfloat.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern win_T *rs_lastwin_nofloating(void);
+extern int rs_win_comp_pos(void);
+extern tabpage_T *rs_win_find_tabpage(win_T *win);
+extern void rs_win_remove_status_line(win_T *wp, int add_hsep);
+
 /// Create a new float.
 ///
 /// @param wp      if NULL, allocate a new window, otherwise turn existing window into a float.
@@ -46,14 +52,14 @@ win_T *win_new_float(win_T *wp, bool last, WinConfig fconfig, Error *err)
 {
   if (wp == NULL) {
     tabpage_T *tp = NULL;
-    win_T *tp_last = last ? lastwin : lastwin_nofloating();
+    win_T *tp_last = last ? lastwin : rs_lastwin_nofloating();
     if (fconfig.window != 0) {
       assert(!last);
       win_T *parent_wp = find_window_by_handle(fconfig.window, err);
       if (!parent_wp) {
         return NULL;
       }
-      tp = win_find_tabpage(parent_wp);
+      tp = rs_win_find_tabpage(parent_wp);
       if (!tp) {
         return NULL;
       }
@@ -77,7 +83,7 @@ win_T *win_new_float(win_T *wp, bool last, WinConfig fconfig, Error *err)
   } else {
     assert(!last);
     assert(!wp->w_floating);
-    if (firstwin == wp && lastwin_nofloating() == wp) {
+    if (firstwin == wp && rs_lastwin_nofloating() == wp) {
       // last non-float
       api_set_error(err, kErrorTypeException,
                     "Cannot change last window into float");
@@ -103,9 +109,9 @@ win_T *win_new_float(win_T *wp, bool last, WinConfig fconfig, Error *err)
     int dir;
     winframe_remove(wp, &dir, NULL, NULL);
     XFREE_CLEAR(wp->w_frame);
-    win_comp_pos();  // recompute window positions
+    rs_win_comp_pos();  // recompute window positions
     win_remove(wp, NULL);
-    win_append(lastwin_nofloating(), wp, NULL);
+    win_append(rs_lastwin_nofloating(), wp, NULL);
   }
   wp->w_floating = true;
   wp->w_status_height = wp->w_p_stl && *wp->w_p_stl != NUL
@@ -199,7 +205,7 @@ void win_config_float(win_T *wp, WinConfig fconfig)
   // Process statusline changes before applying new height from config
   bool show_stl = *wp->w_p_stl != NUL && (p_ls == 1 || p_ls == 2);
   if (wp->w_status_height && !show_stl) {
-    win_remove_status_line(wp, false);
+    rs_win_remove_status_line(wp, 0);
   } else if (wp->w_status_height == 0 && show_stl) {
     wp->w_status_height = STATUS_HEIGHT;
   }

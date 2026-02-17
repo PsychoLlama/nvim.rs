@@ -135,6 +135,9 @@ typedef struct {
 
 #include "ex_cmds_shim.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern void rs_check_lnums(int do_curwin);
+
 // Rust fold FFI declarations
 extern int rs_hasAnyFolding(win_T *win);
 extern void rs_foldMoveRange(win_T *wp, garray_T *gap, linenr_T line1, linenr_T line2,
@@ -2855,7 +2858,7 @@ int do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap, linenr_T newlnum
   }
 
   // Check if cursors in other windows on the same buffer are still valid
-  check_lnums(false);
+  rs_check_lnums(0);
 
   // Did not read the file, need to show some info about the file.
   // Do this after setting the cursor.

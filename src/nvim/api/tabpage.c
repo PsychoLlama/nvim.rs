@@ -13,6 +13,9 @@
 
 #include "api/tabpage.c.generated.h"  // IWYU pragma: keep
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_tabpage_index(tabpage_T *ftp);
+
 /// Gets the windows in a tabpage
 ///
 /// @param tabpage  |tab-ID|, or 0 for current tabpage
@@ -168,7 +171,7 @@ Integer nvim_tabpage_get_number(Tabpage tabpage, Error *err)
     return 0;
   }
 
-  return tabpage_index(tab);
+  return rs_tabpage_index(tab);
 }
 
 /// Checks if a tabpage is valid

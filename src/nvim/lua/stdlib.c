@@ -49,6 +49,9 @@
 
 #include "lua/stdlib.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern tabpage_T *rs_win_find_tabpage(win_T *win);
+
 static int regex_match(lua_State *lstate, regprog_T **prog, char *str)
 {
   regmatch_T rm;
@@ -629,7 +632,7 @@ static int nlua_with(lua_State *L)
     win_execute_T win_execute_args;
 
     if (win) {
-      tabpage_T *tabpage = win_find_tabpage(win);
+      tabpage_T *tabpage = rs_win_find_tabpage(win);
       if (!win_execute_before(&win_execute_args, win, tabpage)) {
         goto end;
       }

@@ -75,6 +75,13 @@ extern bool rs_config_win_equals_self(int config_win, int self_handle);
 
 #include "api/win_config.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern void rs_last_status(int morewin);
+extern int rs_win_comp_pos(void);
+extern tabpage_T *rs_win_find_tabpage(win_T *win);
+extern void rs_win_setheight_win(int height, win_T *win);
+extern void rs_win_setwidth_win(int width, win_T *wp);
+
 /// Opens a new split window, or a floating window if `relative` is specified,
 /// or an external window (managed by the UI) if `external` is specified.
 ///
@@ -279,7 +286,7 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
       api_set_error(err, kErrorTypeException, "Cannot split a floating window");
       goto cleanup;
     }
-    tp = win_find_tabpage(parent);
+    tp = rs_win_find_tabpage(parent);
   }
   if (is_split) {
     if (!check_split_disallowed_err(parent ? parent : curwin, err)) {
@@ -315,9 +322,9 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
         // Without room for the requested size, window sizes may have been equalized instead.
         // If the size differs from what was requested, try to set it again now.
         if (rs_is_vert_split(flags) && rs_need_size_adjust(size, wp->w_width)) {
-          win_setwidth_win(size, wp);
+          rs_win_setwidth_win(size, wp);
         } else if (!rs_is_vert_split(flags) && rs_need_size_adjust(size, wp->w_height)) {
-          win_setheight_win(size, wp);
+          rs_win_setheight_win(size, wp);
         }
       }
     }
@@ -349,13 +356,13 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
     assert(result == OK);
     (void)result;
     if (apply_autocmds(EVENT_WINNEW, NULL, NULL, false, curbuf)) {
-      tp = win_find_tabpage(wp);
+      tp = rs_win_find_tabpage(wp);
     }
     restore_win_noblock(&switchwin, true);
   }
   if (tp && enter) {
     goto_tabpage_win(tp, wp);
-    tp = win_find_tabpage(wp);
+    tp = rs_win_find_tabpage(wp);
   }
   if (tp && bufref_valid(&bufref) && buf != wp->w_buffer) {
     // win_set_buf temporarily makes `wp` the curwin to set the buffer.
@@ -367,7 +374,7 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
     }
     win_set_buf(wp, buf, err);
     if (!fconfig.noautocmd) {
-      tp = win_find_tabpage(wp);
+      tp = rs_win_find_tabpage(wp);
     }
     if (au_no_enter_leave) {
       autocmd_no_enter--;
@@ -435,7 +442,7 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
     return;
   }
 
-  tabpage_T *win_tp = win_find_tabpage(win);
+  tabpage_T *win_tp = rs_win_find_tabpage(win);
   bool was_split = !win->w_floating;
   bool has_split = HAS_KEY_X(config, split);
   bool has_vertical = HAS_KEY_X(config, vertical);
@@ -466,7 +473,7 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
       if (!parent) {
         return;
       }
-      parent_tp = win_find_tabpage(parent);
+      parent_tp = rs_win_find_tabpage(parent);
     }
     if (parent) {
       if (parent->w_floating) {
@@ -499,10 +506,10 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
     if ((!has_vertical && !has_split)
         || (was_split && !HAS_KEY_X(config, win) && old_split == fconfig.split)) {
       if (HAS_KEY_X(config, width)) {
-        win_setwidth_win(fconfig.width, win);
+        rs_win_setwidth_win(fconfig.width, win);
       }
       if (HAS_KEY_X(config, height)) {
-        win_setheight_win(fconfig.height, win);
+        rs_win_setheight_win(fconfig.height, win);
       }
       redraw_later(win, UPD_NOT_VALID);
       return;
@@ -537,7 +544,7 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
                       win->handle);
         return;
       }
-      win_tp = win_find_tabpage(win);
+      win_tp = rs_win_find_tabpage(win);
       if (!win_tp || !win_valid_any_tab(parent)) {
         api_set_error(err, kErrorTypeException, "Windows to split were closed");
         goto restore_curwin;
@@ -617,12 +624,12 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
 
     win_remove(win, win_tp == curtab ? NULL : win_tp);
     if (win_tp == curtab) {
-      last_status(false);  // may need to remove last status line
-      win_comp_pos();  // recompute window positions
+      rs_last_status(0);  // may need to remove last status line
+      rs_win_comp_pos();  // recompute window positions
     }
 
     int flags = win_split_flags(fconfig.split, parent == NULL) | WSP_NOENTER;
-    parent_tp = parent ? win_find_tabpage(parent) : curtab;
+    parent_tp = parent ? rs_win_find_tabpage(parent) : curtab;
 
     TRY_WRAP(err, {
       const bool need_switch = parent != NULL && parent != curwin;
@@ -667,10 +674,10 @@ restore_curwin:
     }
 
     if (HAS_KEY_X(config, width)) {
-      win_setwidth_win(fconfig.width, win);
+      rs_win_setwidth_win(fconfig.width, win);
     }
     if (HAS_KEY_X(config, height)) {
-      win_setheight_win(fconfig.height, win);
+      rs_win_setheight_win(fconfig.height, win);
     }
   } else {
     win_config_float(win, fconfig);

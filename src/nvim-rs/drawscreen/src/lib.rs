@@ -92,6 +92,7 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
 
     // Global functions
+    #[link_name = "rs_global_stl_height"]
     fn global_stl_height() -> c_int;
     fn nvim_get_p_ru() -> c_int;
     fn nvim_set_redraw_cmdline(val: bool);

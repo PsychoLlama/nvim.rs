@@ -131,6 +131,11 @@ typedef enum {
 
 #include "drawscreen.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern int rs_global_stl_height(void);
+extern int rs_min_rows(tabpage_T *tp);
+extern int rs_min_rows_for_all_tabpages(void);
+
 // Rust fold FFI declarations
 extern int rs_hasAnyFolding(win_T *win);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
@@ -309,7 +314,7 @@ void screen_resize(int width, int height)
   check_screensize();
   if (!ui_has(kUIMessages)) {
     // clamp 'cmdheight'
-    int max_p_ch = Rows - min_rows(curtab) + 1;
+    int max_p_ch = Rows - rs_min_rows(curtab) + 1;
     if (p_ch > 0 && p_ch > max_p_ch) {
       p_ch = MAX(max_p_ch, 1);
       curtab->tp_ch_used = p_ch;
@@ -319,7 +324,7 @@ void screen_resize(int width, int height)
       if (tp == curtab) {
         continue;  // already set above
       }
-      int max_tp_ch = Rows - min_rows(tp) + 1;
+      int max_tp_ch = Rows - rs_min_rows(tp) + 1;
       if (tp->tp_ch_used > 0 && tp->tp_ch_used > max_tp_ch) {
         tp->tp_ch_used = MAX(max_tp_ch, 1);
       }
@@ -455,7 +460,7 @@ int update_screen(void)
     }
   }
 
-  bool is_stl_global = global_stl_height() > 0;
+  bool is_stl_global = rs_global_stl_height() > 0;
 
   // Don't do anything if the screen structures are (not yet) valid.
   // A VimResized autocmd can invoke redrawing in the middle of a resize,
@@ -799,7 +804,7 @@ void show_cursor_info_later(bool force)
                             || VIsual.lnum != curwin->w_stl_visual_pos.lnum
                             || VIsual.col != curwin->w_stl_visual_pos.col
                             || VIsual.coladd != curwin->w_stl_visual_pos.coladd))) {
-    if (curwin->w_status_height || global_stl_height()) {
+    if (curwin->w_status_height || rs_global_stl_height()) {
       curwin->w_redr_status = true;
     } else {
       redraw_cmdline = true;
@@ -2487,7 +2492,7 @@ void redraw_buf_status_later(buf_T *buf)
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
     if (wp->w_buffer == buf
         && (wp->w_status_height
-            || (wp == curwin && global_stl_height())
+            || (wp == curwin && rs_global_stl_height())
             || wp->w_winbar_height)) {
       wp->w_redr_status = true;
       set_must_redraw(UPD_VALID);
@@ -2516,7 +2521,7 @@ void status_redraw_all(void)
 void nvim_status_redraw_all(void)
 {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_status_height > 0 || (wp == curwin && global_stl_height() > 0)) {
+    if (wp->w_status_height > 0 || (wp == curwin && rs_global_stl_height() > 0)) {
       wp->w_redr_status = true;
     }
     if (wp->w_winbar_height > 0) {
@@ -2728,8 +2733,8 @@ void nvim_set_Rows(int val) { Rows = val; }
 /// Set the Columns global.
 void nvim_set_Columns(int val) { Columns = val; }
 
-/// Wrapper for min_rows_for_all_tabpages() for Rust FFI.
-int nvim_min_rows_for_all_tabpages(void) { return min_rows_for_all_tabpages(); }
+/// Wrapper for rs_min_rows_for_all_tabpages() for Rust FFI.
+int nvim_min_rows_for_all_tabpages(void) { return rs_min_rows_for_all_tabpages(); }
 
 /// Check if cmdline mouse_used is set (for cmdline_number_prompt).
 int nvim_cmdline_mouse_used(void)

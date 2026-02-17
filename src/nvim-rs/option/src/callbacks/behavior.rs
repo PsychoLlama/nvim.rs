@@ -24,7 +24,9 @@ extern "C" {
     fn foldmethodIsIndent(win: WinHandle) -> c_int;
 
     // Window functions
+    #[link_name = "rs_win_equal"]
     fn win_equal(win: WinHandle, current: c_int, dir: c_int);
+    #[link_name = "rs_win_setheight"]
     fn win_setheight(height: c_int);
 
     // Title/redraw functions

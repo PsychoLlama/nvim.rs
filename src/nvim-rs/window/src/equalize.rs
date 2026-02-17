@@ -103,6 +103,7 @@ extern "C" {
     fn is_aucmd_win(wp: WinHandle) -> c_int;
 
     /// Get the tabline height.
+    #[link_name = "rs_tabline_height"]
     fn tabline_height() -> c_int;
 
     /// Get global p_ead (equalalways direction).

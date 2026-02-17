@@ -1191,9 +1191,11 @@ extern "C" {
     fn nvim_get_topframe() -> *mut Frame;
 
     /// Get the tabline height.
+    #[link_name = "rs_tabline_height"]
     fn tabline_height() -> c_int;
 
     /// Get the global statusline height.
+    #[link_name = "rs_global_stl_height"]
     fn global_stl_height() -> c_int;
 
     /// Call redraw_later from C.

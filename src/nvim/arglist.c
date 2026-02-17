@@ -66,6 +66,10 @@ typedef struct {
 
 #include "arglist.c.generated.h"
 
+// Rust FFI declarations (window wrappers removed)
+extern win_T *rs_lastwin_nofloating(void);
+extern int rs_tabpage_index(tabpage_T *ftp);
+
 extern int rs_magic_isset(void);
 
 static const char e_window_layout_changed_unexpectedly[]
@@ -348,7 +352,7 @@ int nvim_al_win_valid(win_T *wp) { return win_valid(wp); }
 void nvim_al_win_close(win_T *wp, int free_buf, int force) { win_close(wp, free_buf, force); }
 void nvim_al_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync); }
 void nvim_al_win_move_after(win_T *wp, win_T *after) { win_move_after(wp, after); }
-win_T *nvim_al_lastwin_nofloating(void) { return lastwin_nofloating(); }
+win_T *nvim_al_lastwin_nofloating(void) { return rs_lastwin_nofloating(); }
 int nvim_al_win_is_floating(win_T *wp) { return wp->w_floating; }
 win_T *nvim_al_win_get_prev(win_T *wp) { return wp->w_prev; }
 win_T *nvim_al_win_get_next(win_T *wp) { return wp->w_next; }
@@ -372,7 +376,7 @@ int nvim_al_ONE_WINDOW(void) { return ONE_WINDOW; }
 int nvim_al_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp); }
 void nvim_al_reset_VIsual_and_resel(void) { reset_VIsual_and_resel(); }
 void *nvim_al_xcalloc(size_t count, size_t size) { return xcalloc(count, size); }
-int nvim_al_tabpage_index(tabpage_T *tp) { return tabpage_index(tp); }
+int nvim_al_tabpage_index(tabpage_T *tp) { return rs_tabpage_index(tp); }
 int nvim_al_get_p_tpm(void) { return p_tpm; }
 int nvim_al_get_p_ea(void) { return p_ea; }
 void nvim_al_set_p_ea(int val) { p_ea = val; }

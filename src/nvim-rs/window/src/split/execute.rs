@@ -73,6 +73,7 @@ extern "C" {
     fn nvim_get_topframe() -> *mut Frame;
 
     /// Get lastwin_nofloating().
+    #[link_name = "rs_lastwin_nofloating"]
     fn lastwin_nofloating() -> WinHandle;
 }
 
