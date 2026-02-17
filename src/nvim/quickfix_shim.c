@@ -4573,6 +4573,9 @@ extern int rs_qf_jump_to_buffer(void *qi, int qf_index, void *qf_ptr, int forcei
                                  int prev_winid, bool *opened_window, int openfold,
                                  bool print_message);
 
+// Rust export for qf_jump_open_window
+extern int rs_qf_jump_open_window(void *qi, void *qf_ptr, bool newwin, bool *opened_window);
+
 /// Find a usable window for opening a file from the quickfix/location list. If
 /// a window is not found then open a new window. If 'newwin' is true, then open
 /// a new window.
@@ -4582,54 +4585,7 @@ extern int rs_qf_jump_to_buffer(void *qi, int qf_index, void *qf_ptr, int forcei
 ///          QF_ABORT if the quickfix/location list was modified by an autocmd.
 static int qf_jump_open_window(qf_info_T *qi, qfline_T *qf_ptr, bool newwin, bool *opened_window)
 {
-  qf_list_T *qfl = qf_get_curlist(qi);
-  int old_changetick = qfl->qf_changedtick;
-  int old_qf_curlist = qi->qf_curlist;
-  qfltype_T qfl_type = qfl->qfl_type;
-
-  // For ":helpgrep" find a help window or open one.
-  if (qf_ptr->qf_type == 1 && (!bt_help(curwin->w_buffer) || cmdmod.cmod_tab != 0)) {
-    if (jump_to_help_window(qi, newwin, opened_window) == FAIL) {
-      return FAIL;
-    }
-  }
-  if (old_qf_curlist != qi->qf_curlist
-      || old_changetick != qfl->qf_changedtick
-      || !is_qf_entry_present(qfl, qf_ptr)) {
-    if (qfl_type == QFLT_QUICKFIX) {
-      emsg(_(e_current_quickfix_list_was_changed));
-    } else {
-      emsg(_(e_current_location_list_was_changed));
-    }
-    return QF_ABORT;
-  }
-
-  // If currently in the quickfix window, find another window to show the
-  // file in.
-  if (bt_quickfix(curbuf) && !*opened_window) {
-    // If there is no file specified, we don't know where to go.
-    // But do advance, otherwise ":cn" gets stuck.
-    if (qf_ptr->qf_fnum == 0) {
-      return NOTDONE;
-    }
-
-    if (qf_jump_to_usable_window(qf_ptr->qf_fnum, newwin, opened_window)
-        == FAIL) {
-      return FAIL;
-    }
-  }
-  if (old_qf_curlist != qi->qf_curlist
-      || old_changetick != qfl->qf_changedtick
-      || !is_qf_entry_present(qfl, qf_ptr)) {
-    if (qfl_type == QFLT_QUICKFIX) {
-      emsg(_(e_current_quickfix_list_was_changed));
-    } else {
-      emsg(_(e_current_location_list_was_changed));
-    }
-    return QF_ABORT;
-  }
-
-  return OK;
+  return rs_qf_jump_open_window(qi, qf_ptr, newwin, opened_window);
 }
 
 /// Edit a selected file from the quickfix/location list and jump to a

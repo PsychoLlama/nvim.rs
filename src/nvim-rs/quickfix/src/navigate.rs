@@ -1620,6 +1620,16 @@ mod jump_machinery {
 
     #[allow(clashing_extern_declarations)]
     extern "C" {
+        // Phase 4 accessors (for qf_jump_open_window)
+        fn nvim_qf_get_curlist(qi: *const c_void) -> *const c_void;
+        fn nvim_qf_get_curlist_idx(qi: *const c_void) -> c_int;
+        fn nvim_qf_get_changedtick(qfl: *const c_void) -> c_int;
+        fn nvim_qf_get_qfl_type(qfl: *const c_void) -> c_int;
+        fn nvim_qfline_get_type(qfp: QfLineHandle) -> i8;
+        fn nvim_qf_entry_present(qfl: *const c_void, qf_ptr: QfLineHandle) -> bool;
+        fn nvim_qf_jump_emsg_qf_changed();
+        fn nvim_qf_jump_emsg_ll_changed();
+
         // Phase 3 wrappers
         fn nvim_qf_jump_goto_line(
             qf_lnum: LinenrT,
@@ -1711,6 +1721,94 @@ mod jump_machinery {
         }
 
         retval
+    }
+
+    const QFLT_QUICKFIX: c_int = 0;
+    const NOTDONE: c_int = 2;
+    const QF_ABORT: c_int = 6;
+
+    /// Check if the quickfix/location list was changed by an autocmd.
+    /// Returns `Some(QF_ABORT)` if changed, `None` if unchanged.
+    unsafe fn check_list_changed(
+        qi: QfInfoHandleMut,
+        qfl: *const c_void,
+        old_changetick: c_int,
+        old_qf_curlist: c_int,
+        qf_ptr: QfLineHandle,
+        qfl_type: c_int,
+    ) -> Option<c_int> {
+        if old_qf_curlist != nvim_qf_get_curlist_idx(qi)
+            || old_changetick != nvim_qf_get_changedtick(qfl)
+            || !nvim_qf_entry_present(qfl, qf_ptr)
+        {
+            if qfl_type == QFLT_QUICKFIX {
+                nvim_qf_jump_emsg_qf_changed();
+            } else {
+                nvim_qf_jump_emsg_ll_changed();
+            }
+            Some(QF_ABORT)
+        } else {
+            None
+        }
+    }
+
+    /// Open a window for the quickfix jump target.
+    /// Returns OK, FAIL, NOTDONE, or `QF_ABORT`.
+    ///
+    /// # Safety
+    ///
+    /// All pointer parameters must be valid.
+    #[no_mangle]
+    pub unsafe extern "C" fn rs_qf_jump_open_window(
+        qi: QfInfoHandleMut,
+        qf_ptr: QfLineHandle,
+        newwin: bool,
+        opened_window: *mut bool,
+    ) -> c_int {
+        let qfl = nvim_qf_get_curlist(qi);
+        let old_changetick = nvim_qf_get_changedtick(qfl);
+        let old_qf_curlist = nvim_qf_get_curlist_idx(qi);
+        let qfl_type = nvim_qf_get_qfl_type(qfl);
+
+        // For ":helpgrep" find a help window or open one.
+        if nvim_qfline_get_type(qf_ptr) == 1
+            && (!nvim_qf_curwin_buf_is_help() || nvim_qf_get_cmdmod_tab() != 0)
+            && rs_qf_jump_to_help_window(qi, newwin, opened_window) == FAIL
+        {
+            return FAIL;
+        }
+
+        // Check if list was changed by autocmds during help window opening
+        if let Some(abort) =
+            check_list_changed(qi, qfl, old_changetick, old_qf_curlist, qf_ptr, qfl_type)
+        {
+            return abort;
+        }
+
+        // If currently in the quickfix window, find another window to show the
+        // file in.
+        if nvim_qf_curbuf_is_quickfix() && !*opened_window {
+            // If there is no file specified, we don't know where to go.
+            // But do advance, otherwise ":cn" gets stuck.
+            if nvim_qfline_get_fnum(qf_ptr) == 0 {
+                return NOTDONE;
+            }
+
+            if rs_qf_jump_to_usable_window(nvim_qfline_get_fnum(qf_ptr), newwin, opened_window)
+                == FAIL
+            {
+                return FAIL;
+            }
+        }
+
+        // Second check if list was changed by autocmds
+        if let Some(abort) =
+            check_list_changed(qi, qfl, old_changetick, old_qf_curlist, qf_ptr, qfl_type)
+        {
+            return abort;
+        }
+
+        OK
     }
 }
 
