@@ -103,6 +103,7 @@ typedef kvec_t(char *) CharVec;
 #include "runtime.c.generated.h"
 
 // Rust FFI forward declarations (Phase 5)
+extern int rs_get_copyID(void);
 extern bool rs_source_callback_vim_lua(int num_fnames, char **fnames, bool all, void *cookie);
 extern bool rs_source_callback(int num_fnames, char **fnames, bool all, void *cookie);
 extern int rs_gen_expand_wildcards_and_cb(int num_pat, char **pats, int flags, bool all,
@@ -2189,7 +2190,7 @@ void f_getscriptinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     // When a script ID is specified, return information about only the
     // specified script, and add the script-local variables and functions.
     if (sid > 0) {
-      dict_T *var_dict = tv_dict_copy(NULL, &si->sn_vars->sv_dict, true, get_copyID());
+      dict_T *var_dict = tv_dict_copy(NULL, &si->sn_vars->sv_dict, true, rs_get_copyID());
       tv_dict_add_dict(d, S_LEN("variables"), var_dict);
       tv_dict_add_list(d, S_LEN("functions"), get_script_local_funcs((scid_T)sid));
     }

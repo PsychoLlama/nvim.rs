@@ -222,6 +222,7 @@ static bool getln_interrupted_highlight = false;
 static int cedit_key = -1;  ///< key value of 'cedit' option
 
 #include "ex_getln.c.generated.h"
+extern int rs_get_echo_hl_id(void);
 extern int rs_win_valid(win_T *win);
 extern int rs_last_window(win_T *win);
 
@@ -5070,7 +5071,7 @@ void get_user_input(const typval_T *const argvars, typval_T *const rettv, const 
       p = lastnl + 1;
       msg_start();
       msg_clr_eos();
-      msg_puts_len(prompt, p - prompt, get_echo_hl_id(), false);
+      msg_puts_len(prompt, p - prompt, rs_get_echo_hl_id(), false);
       msg_didout = false;
       msg_starthere();
     }
@@ -5081,7 +5082,7 @@ void get_user_input(const typval_T *const argvars, typval_T *const rettv, const 
 
   const int save_ex_normal_busy = ex_normal_busy;
   ex_normal_busy = 0;
-  rettv->vval.v_string = getcmdline_prompt(secret ? NUL : '@', p, get_echo_hl_id(),
+  rettv->vval.v_string = getcmdline_prompt(secret ? NUL : '@', p, rs_get_echo_hl_id(),
                                            xp_type, xp_arg, input_callback, false, NULL);
   ex_normal_busy = save_ex_normal_busy;
   callback_free(&input_callback);

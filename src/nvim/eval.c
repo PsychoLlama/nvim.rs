@@ -86,14 +86,12 @@
 extern int64_t rs_num_divide(int64_t n1, int64_t n2);
 extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
 
-extern bool rs_eval_isnamec(int c);
-extern bool rs_eval_isnamec1(int c);
 extern bool rs_eval_isdictc(int c);
 extern const char *rs_skip_luafunc_name(const char *p);
 extern int rs_check_luafunc_name(const char *str, bool paren);
-extern var_flavour_T rs_var_flavour(const char *varname);
-extern int rs_eval_expr_valid_arg(const typval_T *tv);
 extern bool rs_is_luafunc(partial_T *partial);
+extern char *rs_partial_name(partial_T *pt);
+extern int rs_get_copyID(void);
 
 // Rust FFI declarations (tag module)
 extern bool rs_set_ref_in_tagfunc(int copyID);
@@ -122,10 +120,6 @@ extern int rs_pattern_match(const char *pat, const char *text, bool ic);
 
 _Static_assert(RE_MAGIC == 1, "RE_MAGIC mismatch");
 _Static_assert(RE_STRING == 2, "RE_STRING mismatch");
-
-// Phase 4: Function comparison + callback conversion (Rust implementations)
-extern bool rs_func_equal(typval_T *tv1, typval_T *tv2, bool ic);
-extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 
 _Static_assert(VAR_NUMBER == 1, "VAR_NUMBER mismatch");
 _Static_assert(VAR_STRING == 2, "VAR_STRING mismatch");
@@ -203,9 +197,7 @@ void nvim_eval_emsg_e921(void)
   emsg(_("E921: Invalid callback argument"));
 }
 
-// Phase 5: GC reference marking (Rust implementations)
-extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
-extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
+// GC reference marking (Rust implementations)
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
                                list_stack_T **list_stack);
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
@@ -626,7 +618,7 @@ static int eval_expr_partial(const typval_T *expr, typval_T *argv, int argc, typ
     return FAIL;
   }
 
-  const char *const s = partial_name(partial);
+  const char *const s = rs_partial_name(partial);
   if (s == NULL || *s == NUL) {
     return FAIL;
   }
@@ -1477,13 +1469,13 @@ char *get_lval(char *const name, typval_T *const rettv, lval_T *const lp, const 
   if (skip) {
     // When skipping just find the end of the name.
     lp->ll_name = name;
-    return (char *)find_name_end(name, NULL, NULL, FNE_INCL_BR | fne_flags);
+    return (char *)rs_find_name_end(name, NULL, NULL, FNE_INCL_BR | fne_flags);
   }
 
   // Find the end of the name.
   char *expr_start;
   char *expr_end;
-  char *p = (char *)find_name_end(name, (const char **)&expr_start,
+  char *p = (char *)rs_find_name_end(name, (const char **)&expr_start,
                                   (const char **)&expr_end,
                                   fne_flags);
   if (expr_start != NULL) {
@@ -3099,7 +3091,7 @@ static int call_func_rettv(char **const arg, evalarg_T *const evalarg, typval_T 
     if (functv.v_type == VAR_PARTIAL) {
       pt = functv.vval.v_partial;
       is_lua = rs_is_luafunc(pt);
-      funcname = is_lua ? lua_funcname : partial_name(pt);
+      funcname = is_lua ? lua_funcname : rs_partial_name(pt);
     } else {
       funcname = functv.vval.v_string;
       if (funcname == NULL || *funcname == NUL) {
@@ -3254,7 +3246,7 @@ static int eval_method(char **const arg, typval_T *const rettv, evalarg_T *const
           }
           ret = FAIL;
         } else {
-          name = xstrdup(partial_name(ref.vval.v_partial));
+          name = xstrdup(rs_partial_name(ref.vval.v_partial));
           tofree = name;
           if (name == NULL) {
             ret = FAIL;
@@ -4050,15 +4042,6 @@ char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
   return NULL;
 }
 
-extern char *rs_partial_name(partial_T *pt);
-
-/// @return  the function name of the partial.
-char *partial_name(partial_T *pt)
-  FUNC_ATTR_PURE
-{
-  return rs_partial_name(pt);
-}
-
 static void partial_free(partial_T *pt)
 {
   for (int i = 0; i < pt->pt_argc; i++) {
@@ -4145,24 +4128,6 @@ failret:
   return OK;
 }
 
-/// @param ic  ignore case
-bool func_equal(typval_T *tv1, typval_T *tv2, bool ic)
-{
-  return rs_func_equal(tv1, tv2, ic);
-}
-
-extern int rs_get_copyID(void);
-
-/// Get next (unique) copy ID
-///
-/// Used for traversing nested structures e.g. when serializing them or garbage
-/// collecting.
-int get_copyID(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_get_copyID();
-}
-
 /// Garbage collection for lists and dictionaries.
 ///
 /// We use reference counts to be able to free most items right away when they
@@ -4217,7 +4182,7 @@ bool garbage_collect(bool testing)
 
   // We advance by two (COPYID_INC) because we add one for items referenced
   // through previous_funccal.
-  const int copyID = get_copyID();
+  const int copyID = rs_get_copyID();
 
   // 1. Go through all accessible variables and mark all lists and dicts
   // with copyID.
@@ -4232,16 +4197,16 @@ bool garbage_collect(bool testing)
 
   FOR_ALL_BUFFERS(buf) {
     // buffer-local variables
-    ABORTING(set_ref_in_item)(&buf->b_bufvar.di_tv, copyID, NULL, NULL);
+    ABORTING(rs_set_ref_in_item)(&buf->b_bufvar.di_tv, copyID, NULL, NULL);
 
     // buffer callback functions
-    ABORTING(set_ref_in_callback)(&buf->b_prompt_callback, copyID, NULL, NULL);
-    ABORTING(set_ref_in_callback)(&buf->b_prompt_interrupt, copyID, NULL, NULL);
-    ABORTING(set_ref_in_callback)(&buf->b_cfu_cb, copyID, NULL, NULL);
-    ABORTING(set_ref_in_callback)(&buf->b_ofu_cb, copyID, NULL, NULL);
-    ABORTING(set_ref_in_callback)(&buf->b_tsrfu_cb, copyID, NULL, NULL);
-    ABORTING(set_ref_in_callback)(&buf->b_tfu_cb, copyID, NULL, NULL);
-    ABORTING(set_ref_in_callback)(&buf->b_ffu_cb, copyID, NULL, NULL);
+    ABORTING(rs_set_ref_in_callback)(&buf->b_prompt_callback, copyID, NULL, NULL);
+    ABORTING(rs_set_ref_in_callback)(&buf->b_prompt_interrupt, copyID, NULL, NULL);
+    ABORTING(rs_set_ref_in_callback)(&buf->b_cfu_cb, copyID, NULL, NULL);
+    ABORTING(rs_set_ref_in_callback)(&buf->b_ofu_cb, copyID, NULL, NULL);
+    ABORTING(rs_set_ref_in_callback)(&buf->b_tsrfu_cb, copyID, NULL, NULL);
+    ABORTING(rs_set_ref_in_callback)(&buf->b_tfu_cb, copyID, NULL, NULL);
+    ABORTING(rs_set_ref_in_callback)(&buf->b_ffu_cb, copyID, NULL, NULL);
     if (!abort && buf->b_p_cpt_cb != NULL) {
       ABORTING(set_ref_in_cpt_callbacks)(buf->b_p_cpt_cb, buf->b_p_cpt_count, copyID);
     }
@@ -4261,12 +4226,12 @@ bool garbage_collect(bool testing)
 
   FOR_ALL_TAB_WINDOWS(tp, wp) {
     // window-local variables
-    ABORTING(set_ref_in_item)(&wp->w_winvar.di_tv, copyID, NULL, NULL);
+    ABORTING(rs_set_ref_in_item)(&wp->w_winvar.di_tv, copyID, NULL, NULL);
   }
   // window-local variables in autocmd windows
   for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
     if (aucmd_win[i].auc_win != NULL) {
-      ABORTING(set_ref_in_item)(&aucmd_win[i].auc_win->w_winvar.di_tv, copyID, NULL, NULL);
+      ABORTING(rs_set_ref_in_item)(&aucmd_win[i].auc_win->w_winvar.di_tv, copyID, NULL, NULL);
     }
   }
 
@@ -4293,7 +4258,7 @@ bool garbage_collect(bool testing)
 
   // tabpage-local variables
   FOR_ALL_TABS(tp) {
-    ABORTING(set_ref_in_item)(&tp->tp_winvar.di_tv, copyID, NULL, NULL);
+    ABORTING(rs_set_ref_in_item)(&tp->tp_winvar.di_tv, copyID, NULL, NULL);
   }
 
   // global variables
@@ -4311,7 +4276,7 @@ bool garbage_collect(bool testing)
     map_foreach_value(&channels, data, {
       rs_set_ref_in_callback_reader(&data->on_data, copyID, NULL, NULL);
       rs_set_ref_in_callback_reader(&data->on_stderr, copyID, NULL, NULL);
-      set_ref_in_callback(&data->on_exit, copyID, NULL, NULL);
+      rs_set_ref_in_callback(&data->on_exit, copyID, NULL, NULL);
     })
   }
 
@@ -4319,7 +4284,7 @@ bool garbage_collect(bool testing)
   {
     timer_T *timer;
     map_foreach_value(&timers, timer, {
-      set_ref_in_callback(&timer->callback, copyID, NULL, NULL);
+      rs_set_ref_in_callback(&timer->callback, copyID, NULL, NULL);
     })
   }
 
@@ -4413,48 +4378,6 @@ static int free_unref_items(int copyID)
   }
   tv_in_free_unref_items = false;
   return did_free;
-}
-
-/// Mark all lists and dicts referenced through hashtab "ht" with "copyID".
-///
-/// @param ht            Hashtab content will be marked.
-/// @param copyID        New mark for lists and dicts.
-/// @param list_stack    Used to add lists to be marked. Can be NULL.
-///
-/// @returns             true if setting references failed somehow.
-bool set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_set_ref_in_ht(ht, copyID, list_stack);
-}
-
-/// Mark all lists and dicts referenced through list "l" with "copyID".
-///
-/// @param l             List content will be marked.
-/// @param copyID        New mark for lists and dicts.
-/// @param ht_stack      Used to add hashtabs to be marked. Can be NULL.
-///
-/// @returns             true if setting references failed somehow.
-bool set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_set_ref_in_list_items(l, copyID, ht_stack);
-}
-
-/// Mark the dict "dd" with "copyID".
-/// Also see set_ref_in_item().
-/// Mark all lists and dicts referenced through typval "tv" with "copyID".
-///
-/// @param tv            Typval content will be marked.
-/// @param copyID        New mark for lists and dicts.
-/// @param ht_stack      Used to add hashtabs to be marked. Can be NULL.
-/// @param list_stack    Used to add lists to be marked. Can be NULL.
-///
-/// @returns             true if setting references failed somehow.
-bool set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_set_ref_in_item(tv, copyID, ht_stack, list_stack);
 }
 
 /// Get the key for #{key: val} into "tv" and advance "arg".
@@ -4838,13 +4761,6 @@ void f_systemlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   get_system_output_as_rettv(argvars, rettv, true);
 }
 
-/// Get a callback from "arg".  It can be a Funcref or a function name.
-bool callback_from_typval(Callback *const callback, const typval_T *const arg)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_callback_from_typval(callback, arg);
-}
-
 static int callback_depth = 0;
 
 extern int rs_get_callback_depth(void);
@@ -4889,7 +4805,7 @@ bool callback_call(Callback *const callback, const int argcount_in, typval_T *co
 
   case kCallbackPartial:
     partial = callback->data.partial;
-    name = partial_name(partial);
+    name = rs_partial_name(partial);
     break;
 
   case kCallbackLua:
@@ -4911,12 +4827,6 @@ bool callback_call(Callback *const callback, const int argcount_in, typval_T *co
   int ret = call_func(name, -1, rettv, argcount_in, argvars_in, &funcexe);
   callback_depth--;
   return ret;
-}
-
-bool set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
-                         list_stack_T **list_stack)
-{
-  return rs_set_ref_in_callback(callback, copyID, ht_stack, list_stack);
 }
 
 timer_T *find_timer_by_nr(varnumber_T xx)
@@ -5406,7 +5316,7 @@ int get_name_len(const char **const arg, char **alias, bool evaluate, bool verbo
   // Find the end of the name; check for {} construction.
   char *expr_start;
   char *expr_end;
-  const char *p = find_name_end((*arg), (const char **)&expr_start, (const char **)&expr_end,
+  const char *p = rs_find_name_end((*arg), (const char **)&expr_start, (const char **)&expr_end,
                                 len > 0 ? 0 : FNE_CHECK_START);
   if (expr_start != NULL) {
     if (!evaluate) {
@@ -5434,21 +5344,6 @@ int get_name_len(const char **const arg, char **alias, bool evaluate, bool verbo
   }
 
   return len;
-}
-
-/// Find the end of a variable or function name, taking care of magic braces.
-///
-/// @param expr_start  if not NULL, then `expr_start` and `expr_end` are set to the
-///                    start and end of the first magic braces item.
-///
-/// @param flags  can have FNE_INCL_BR and FNE_CHECK_START.
-///
-/// @return  a pointer to just after the name.  Equal to "arg" if there is no
-///          valid name.
-const char *find_name_end(const char *arg, const char **expr_start, const char **expr_end,
-                          int flags)
-{
-  return rs_find_name_end(arg, expr_start, expr_end, flags);
 }
 
 /// Expands out the 'magic' {}'s in a variable/function name.
@@ -5491,7 +5386,7 @@ static char *make_expanded_name(const char *in_start, char *expr_start, char *ex
   *expr_end = '}';
 
   if (retval != NULL) {
-    temp_result = (char *)find_name_end(retval,
+    temp_result = (char *)rs_find_name_end(retval,
                                         (const char **)&expr_start,
                                         (const char **)&expr_end, 0);
     if (expr_start != NULL) {
@@ -5819,18 +5714,10 @@ void ex_echohl(exarg_T *eap)
   echo_hl_id = syn_name2id(eap->arg);
 }
 
-extern int rs_get_echo_hl_id(void);
-
 /// C accessor for echo_hl_id static.
 int nvim_get_echo_hl_id(void)
 {
   return echo_hl_id;
-}
-
-/// Returns the :echo highlight id
-int get_echo_hl_id(void)
-{
-  return rs_get_echo_hl_id();
 }
 
 /// ":execute expr1 ..." execute the result of an expression.
@@ -5929,12 +5816,6 @@ const char *find_option_var_end(const char **const arg, OptIndex *const opt_idxp
   const char *end = find_option_end(p, opt_idxp);
   *arg = end == NULL ? *arg : p;
   return end;
-}
-
-var_flavour_T var_flavour(char *varname)
-  FUNC_ATTR_PURE
-{
-  return rs_var_flavour(varname);
 }
 
 void var_set_global(const char *const name, typval_T vartv)

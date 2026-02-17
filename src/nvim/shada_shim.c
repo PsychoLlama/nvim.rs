@@ -96,6 +96,10 @@ extern int rs_shada_read_file(const char *file, int flags);
 extern int rs_shada_read_marks(void);
 extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
 extern void rs_check_marks_read(void);
+extern var_flavour_T rs_var_flavour(const char *varname);
+extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
+extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
+extern int rs_get_copyID(void);
 
 #define rs_hist_type2char rs_shada_hist_type2char
 
@@ -529,7 +533,7 @@ static const void *var_shada_iter(const void *const iter, const char **const nam
     hi = globvarht->ht_array;
     while ((size_t)(hi - hifirst) < hinum
            && (HASHITEM_EMPTY(hi)
-               || !(var_flavour(hi->hi_key) & flavour))) {
+               || !(rs_var_flavour(hi->hi_key) & flavour))) {
       hi++;
     }
     if ((size_t)(hi - hifirst) == hinum) {
@@ -541,7 +545,7 @@ static const void *var_shada_iter(const void *const iter, const char **const nam
   *name = TV_DICT_HI2DI(hi)->di_key;
   tv_copy(&TV_DICT_HI2DI(hi)->di_tv, rettv);
   while ((size_t)(++hi - hifirst) < hinum) {
-    if (!HASHITEM_EMPTY(hi) && (var_flavour(hi->hi_key) & flavour)) {
+    if (!HASHITEM_EMPTY(hi) && (rs_var_flavour(hi->hi_key) & flavour)) {
       return hi;
     }
   }
@@ -1791,8 +1795,8 @@ static ShaDaWriteResult shada_write(FileDescriptor *const sd_writer,
         continue;
       case VAR_DICT: {
         dict_T *di = vartv.vval.v_dict;
-        int copyID = get_copyID();
-        if (!set_ref_in_ht(&di->dv_hashtab, copyID, NULL)
+        int copyID = rs_get_copyID();
+        if (!rs_set_ref_in_ht(&di->dv_hashtab, copyID, NULL)
             && copyID == di->dv_copyID) {
           tv_clear(&vartv);
           continue;
@@ -1801,8 +1805,8 @@ static ShaDaWriteResult shada_write(FileDescriptor *const sd_writer,
       }
       case VAR_LIST: {
         list_T *l = vartv.vval.v_list;
-        int copyID = get_copyID();
-        if (!set_ref_in_list_items(l, copyID, NULL)
+        int copyID = rs_get_copyID();
+        if (!rs_set_ref_in_list_items(l, copyID, NULL)
             && copyID == l->lv_copyID) {
           tv_clear(&vartv);
           continue;

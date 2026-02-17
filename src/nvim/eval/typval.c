@@ -50,6 +50,9 @@ extern listitem_T *rs_tv_list_find(list_T *l, int n);
 extern int rs_tv_list_idx_of_item(const list_T *l, const listitem_T *item);
 extern void rs_tv_list_reverse(list_T *l);
 extern bool rs_tv_blob_equal(const blob_T *b1, const blob_T *b2);
+extern bool rs_func_equal(typval_T *tv1, typval_T *tv2, bool ic);
+extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
+extern char *rs_partial_name(partial_T *pt);
 
 // Type checking functions from Rust
 extern int rs_tv_check_for_string_arg(TypevalHandle args, int idx);
@@ -1300,7 +1303,7 @@ static int item_compare2(const void *s1, const void *s2, bool keep_zero)
   if (partial == NULL) {
     func_name = sortinfo->item_compare_func;
   } else {
-    func_name = partial_name(partial);
+    func_name = rs_partial_name(partial);
   }
 
   // Copy the values.  This is needed to be able to set v_lock to VAR_FIXED
@@ -2371,7 +2374,7 @@ bool tv_dict_get_callback(dict_T *const d, const char *const key, const ptrdiff_
   typval_T tv;
   tv_copy(&di->di_tv, &tv);
   set_selfdict(&tv, d);
-  const bool res = callback_from_typval(result, &tv);
+  const bool res = rs_callback_from_typval(result, &tv);
   tv_clear(&tv);
   return res;
 }
@@ -3907,7 +3910,7 @@ bool tv_equal(typval_T *const tv1, typval_T *const tv2, const bool ic)
       return false;
     }
     recursive_cnt++;
-    const bool r = func_equal(tv1, tv2, ic);
+    const bool r = rs_func_equal(tv1, tv2, ic);
     recursive_cnt--;
     return r;
   }

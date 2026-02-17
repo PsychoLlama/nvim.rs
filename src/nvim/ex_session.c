@@ -54,6 +54,7 @@
 
 // Rust FFI declarations (window wrappers removed)
 extern int rs_tabpage_index(tabpage_T *ftp);
+extern var_flavour_T rs_var_flavour(const char *varname);
 
 /// Whether ":lcd" or ":tcd" was produced for a session.
 static int did_lcd;
@@ -178,7 +179,7 @@ int nvim_ses_foreach_session_global(
   TV_DICT_ITER(get_globvar_dict(), this_var, {
     if ((this_var->di_tv.v_type == VAR_NUMBER
          || this_var->di_tv.v_type == VAR_STRING)
-        && var_flavour(this_var->di_key) == VAR_FLAVOUR_SESSION) {
+        && rs_var_flavour(this_var->di_key) == VAR_FLAVOUR_SESSION) {
       // Escape special characters with a backslash. Turn LF/CR into \n and \r.
       char *const p = vim_strsave_escaped(tv_get_string(&this_var->di_tv), "\\\"\n\r");
       for (char *t = p; *t != NUL; t++) {
@@ -195,7 +196,7 @@ int nvim_ses_foreach_session_global(
         return FAIL;
       }
     } else if (this_var->di_tv.v_type == VAR_FLOAT
-               && var_flavour(this_var->di_key) == VAR_FLAVOUR_SESSION) {
+               && rs_var_flavour(this_var->di_key) == VAR_FLAVOUR_SESSION) {
       float_T f = this_var->di_tv.vval.v_float;
       int sign = ' ';
       if (f < 0) {

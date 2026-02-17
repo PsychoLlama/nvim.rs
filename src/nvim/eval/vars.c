@@ -68,6 +68,9 @@ extern int64_t rs_num_divide(int64_t n1, int64_t n2);
 extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
 extern bool rs_eval_isnamec1(int c);
 extern int rs_get_env_len(const char **arg);
+extern const char *rs_find_name_end(const char *arg, const char **expr_start,
+                                    const char **expr_end, int flags);
+extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
 
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
@@ -393,12 +396,12 @@ void evalvars_clear(void)
 
 int garbage_collect_globvars(int copyID)
 {
-  return set_ref_in_ht(&globvarht, copyID, NULL);
+  return rs_set_ref_in_ht(&globvarht, copyID, NULL);
 }
 
 bool garbage_collect_vimvars(int copyID)
 {
-  return set_ref_in_ht(&vimvarht, copyID, NULL);
+  return rs_set_ref_in_ht(&vimvarht, copyID, NULL);
 }
 
 bool garbage_collect_scriptvars(int copyID)
@@ -406,7 +409,7 @@ bool garbage_collect_scriptvars(int copyID)
   bool abort = false;
 
   for (int i = 1; i <= script_items.ga_len; i++) {
-    abort = abort || set_ref_in_ht(&SCRIPT_VARS(i), copyID, NULL);
+    abort = abort || rs_set_ref_in_ht(&SCRIPT_VARS(i), copyID, NULL);
   }
 
   return abort;
@@ -1149,7 +1152,7 @@ static const char *skip_var_one(const char *arg)
   if (*arg == '@' && arg[1] != NUL) {
     return arg + 2;
   }
-  return find_name_end(*arg == '$' || *arg == '&' ? arg + 1 : arg,
+  return rs_find_name_end(*arg == '$' || *arg == '&' ? arg + 1 : arg,
                        NULL, NULL, FNE_INCL_BR | FNE_CHECK_START);
 }
 
@@ -1219,7 +1222,7 @@ static const char *list_arg_vars(exarg_T *eap, const char *arg, int *first)
 
   while (!ends_excmd(*arg) && !got_int) {
     if (error || eap->skip) {
-      arg = find_name_end(arg, NULL, NULL, FNE_INCL_BR | FNE_CHECK_START);
+      arg = rs_find_name_end(arg, NULL, NULL, FNE_INCL_BR | FNE_CHECK_START);
       if (!ascii_iswhite(*arg) && !ends_excmd(*arg)) {
         emsg_severe = true;
         semsg(_(e_trailing_arg), arg);

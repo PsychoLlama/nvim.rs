@@ -22,6 +22,8 @@ typedef enum {
 
 #include "eval/list.c.generated.h"
 
+extern int rs_get_copyID(void);
+
 static const char e_argument_of_str_must_be_list_string_or_dictionary[]
   = N_("E706: Argument of %s must be a List, String or Dictionary");
 static const char e_argument_of_str_must_be_list_string_dictionary_or_blob[]
@@ -596,7 +598,7 @@ static void extend_dict(typval_T *argvars, const char *arg_errmsg, bool is_new, 
   }
 
   if (is_new) {
-    d1 = tv_dict_copy(NULL, d1, false, get_copyID());
+    d1 = tv_dict_copy(NULL, d1, false, rs_get_copyID());
     if (d1 == NULL) {
       return;
     }
@@ -658,7 +660,7 @@ static void extend_list(typval_T *argvars, const char *arg_errmsg, bool is_new, 
   }
 
   if (is_new) {
-    l1 = tv_list_copy(NULL, l1, false, get_copyID());
+    l1 = tv_list_copy(NULL, l1, false, rs_get_copyID());
     if (l1 == NULL) {
       return;
     }

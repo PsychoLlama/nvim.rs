@@ -61,6 +61,7 @@ static uint64_t next_chan_id = CHAN_STDERR + 1;
 #include "channel.c.generated.h"
 
 // Rust implementation in nvim-event crate
+extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 extern int rs_stream_is_closed(Stream *stream);
 extern int rs_proc_get_status(Proc *proc);
 extern int rs_proc_get_type(Proc *proc);
@@ -1051,7 +1052,7 @@ void f_prompt_setcallback(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   if (argvars[1].v_type != VAR_STRING || *argvars[1].vval.v_string != NUL) {
-    if (!callback_from_typval(&prompt_callback, &argvars[1])) {
+    if (!rs_callback_from_typval(&prompt_callback, &argvars[1])) {
       return;
     }
   }
@@ -1074,7 +1075,7 @@ void f_prompt_setinterrupt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
   }
 
   if (argvars[1].v_type != VAR_STRING || *argvars[1].vval.v_string != NUL) {
-    if (!callback_from_typval(&interrupt_callback, &argvars[1])) {
+    if (!rs_callback_from_typval(&interrupt_callback, &argvars[1])) {
       return;
     }
   }

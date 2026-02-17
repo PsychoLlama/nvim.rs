@@ -634,6 +634,8 @@ const char *nvim_get_nofile_fname(void)
 // Parse functions
 extern int rs_parse_match(char *lbuf, tagptrs_T *tagp);
 extern bool rs_test_for_static(const tagptrs_T *tagp);
+extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
+                                   list_stack_T **list_stack);
 
 // Leaf utilities
 extern void rs_tagname_free(void *tnp);
@@ -1904,7 +1906,7 @@ bool nvim_tag_tfu_cb_is_none(void)
 /// set_ref_in_callback for global tfu_cb
 bool nvim_tag_set_ref_in_tfu_callback(int copyID)
 {
-  return set_ref_in_callback(&tfu_cb, copyID, NULL, NULL);
+  return rs_set_ref_in_callback(&tfu_cb, copyID, NULL, NULL);
 }
 
 /// Get the buf_T * from optset_T args (os_buf field)

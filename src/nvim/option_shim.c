@@ -121,6 +121,7 @@ _Static_assert(sizeof(vimoption_T) == 160,
                "sizeof(vimoption_T) changed - update Rust VIMOPTION_SIZE in option/src/accessors.rs");
 
 // Rust FFI declarations (used by internal code)
+extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 extern const char *rs_find_tty_option_end(const char *arg);
 extern int rs_is_tty_option(const char *name);
 extern const char *rs_skip_to_option_part(const char *p);
@@ -6125,7 +6126,7 @@ int option_set_callback_func(char *optval, Callback *optcb)
   }
 
   Callback cb;
-  if (!callback_from_typval(&cb, tv) || cb.type == kCallbackNone) {
+  if (!rs_callback_from_typval(&cb, tv) || cb.type == kCallbackNone) {
     tv_free(tv);
     return FAIL;
   }

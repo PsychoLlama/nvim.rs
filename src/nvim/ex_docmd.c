@@ -112,6 +112,9 @@
 #include "nvim/winfloat.h"
 
 // Rust implementations - declarations
+extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
+                                   list_stack_T **list_stack);
+extern int rs_get_copyID(void);
 extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
 extern void rs_listdigraphs(int use_headers);
 extern int rs_ends_excmd(int c);
@@ -3743,7 +3746,7 @@ static list_T *call_findfunc(char *pat, BoolVarValue cmdcomplete)
 
   if (retval == OK) {
     if (rettv.v_type == VAR_LIST) {
-      retlist = tv_list_copy(NULL, rettv.vval.v_list, false, get_copyID());
+      retlist = tv_list_copy(NULL, rettv.vval.v_list, false, rs_get_copyID());
     } else {
       emsg(_(e_invalid_return_type_from_findfunc));
     }
@@ -3868,7 +3871,7 @@ void free_findfunc_option(void)
 bool set_ref_in_findfunc(int copyID)
 {
   bool abort = false;
-  abort = set_ref_in_callback(&ffu_cb, copyID, NULL, NULL);
+  abort = rs_set_ref_in_callback(&ffu_cb, copyID, NULL, NULL);
   return abort;
 }
 

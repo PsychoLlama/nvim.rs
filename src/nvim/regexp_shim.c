@@ -51,6 +51,7 @@
 #include "nvim/vim_defs.h"
 
 // Rust FFI: skip_regexp implementation
+extern char *rs_partial_name(partial_T *pt);
 extern char *rs_skip_regexp_ex(char *startp, int dirc, int magic, char **newp,
                                int *dropped, int *magic_val);
 // Rust FFI: regexp utility functions (directly exported from Rust)
@@ -898,7 +899,7 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
     } else if (expr->v_type == VAR_PARTIAL) {
       partial_T *partial = expr->vval.v_partial;
 
-      s = partial_name(partial);
+      s = rs_partial_name(partial);
       funcexe.fe_partial = partial;
       call_func(s, -1, &rettv, 1, argv, &funcexe);
     }

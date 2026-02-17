@@ -83,6 +83,8 @@
 #include "nvim/winfloat.h"
 
 // Rust rs_* function declarations (only those still called from this file)
+extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
+                                   list_stack_T **list_stack);
 extern int rs_magic_isset(void);
 extern int rs_ctrl_x_mode_normal(void);
 extern int rs_ctrl_x_mode_scroll(void);
@@ -2636,7 +2638,7 @@ bool set_ref_in_cpt_callbacks(Callback *callbacks, int count, int copyID)
   }
 
   for (int i = 0; i < count; i++) {
-    abort = abort || set_ref_in_callback(&callbacks[i], copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback(&callbacks[i], copyID, NULL, NULL);
   }
   return abort;
 }
@@ -2645,9 +2647,9 @@ bool set_ref_in_cpt_callbacks(Callback *callbacks, int count, int copyID)
 /// "copyID" so that they are not garbage collected.
 bool set_ref_in_insexpand_funcs(int copyID)
 {
-  bool abort = set_ref_in_callback(&cfu_cb, copyID, NULL, NULL);
-  abort = abort || set_ref_in_callback(&ofu_cb, copyID, NULL, NULL);
-  abort = abort || set_ref_in_callback(&tsrfu_cb, copyID, NULL, NULL);
+  bool abort = rs_set_ref_in_callback(&cfu_cb, copyID, NULL, NULL);
+  abort = abort || rs_set_ref_in_callback(&ofu_cb, copyID, NULL, NULL);
+  abort = abort || rs_set_ref_in_callback(&tsrfu_cb, copyID, NULL, NULL);
   abort = abort || set_ref_in_cpt_callbacks(cpt_cb, cpt_cb_count, copyID);
 
   return abort;

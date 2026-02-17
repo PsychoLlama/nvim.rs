@@ -1,5 +1,8 @@
 // uncrustify:off
 
+extern char *rs_partial_name(partial_T *pt);
+extern int rs_get_copyID(void);
+
 /// @file eval/typval_encode.c.h
 ///
 /// Contains set of macros used to convert (possibly recursive) typval_T into
@@ -352,7 +355,7 @@ static int TYPVAL_ENCODE_CONVERT_ONE_VALUE(
   case VAR_PARTIAL: {
     partial_T *const pt = tv->vval.v_partial;
     (void)pt;
-    TYPVAL_ENCODE_CONV_FUNC_START(tv, (pt == NULL ? NULL : partial_name(pt)));
+    TYPVAL_ENCODE_CONV_FUNC_START(tv, (pt == NULL ? NULL : rs_partial_name(pt)));
     kvi_push(*mpstack, ((MPConvStackVal) {
         .type = kMPConvPartial,
         .tv = tv,
@@ -652,7 +655,7 @@ TYPVAL_ENCODE_SCOPE int TYPVAL_ENCODE_ENCODE(
                                              TYPVAL_ENCODE_FIRST_ARG_TYPE TYPVAL_ENCODE_FIRST_ARG_NAME, typval_T *const top_tv,
                                              const char *const objname)
 {
-  const int copyID = get_copyID();
+  const int copyID = rs_get_copyID();
   MPConvStack mpstack;
   kvi_init(mpstack);
   if (TYPVAL_ENCODE_CONVERT_ONE_VALUE(TYPVAL_ENCODE_FIRST_ARG_NAME, &mpstack,

@@ -214,6 +214,9 @@ extern size_t rs_string2float(const char *text, float_T *ret_value);
 extern int rs_buf_byteidx_to_charidx(buf_T *buf, linenr_T lnum, int byteidx);
 extern int rs_buf_charidx_to_byteidx(buf_T *buf, linenr_T lnum, int charidx);
 extern int rs_get_callback_depth(void);
+extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
+extern char *rs_partial_name(partial_T *pt);
+extern int rs_get_copyID(void);
 
 PRAGMA_DIAG_POP
 PRAGMA_DIAG_POP
@@ -659,7 +662,7 @@ static void f_call(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     func = argvars[0].vval.v_string;
   } else if (argvars[0].v_type == VAR_PARTIAL) {
     partial = argvars[0].vval.v_partial;
-    func = partial_name(partial);
+    func = rs_partial_name(partial);
   } else if (nlua_is_table_from_lua(&argvars[0])) {
     // TODO(tjdevries): UnifiedCallback
     func = nlua_register_table_as_callable(&argvars[0]);
@@ -1182,7 +1185,7 @@ static void f_deepcopy(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     noref = tv_get_bool_chk(&argvars[1], NULL);
   }
 
-  var_item_copy(NULL, &argvars[0], rettv, true, (noref == 0 ? get_copyID() : 0));
+  var_item_copy(NULL, &argvars[0], rettv, true, (noref == 0 ? rs_get_copyID() : 0));
 }
 
 /// dictwatcheradd(dict, key, funcref) function
@@ -1214,7 +1217,7 @@ static void f_dictwatcheradd(typval_T *argvars, typval_T *rettv, EvalFuncData fp
   const size_t key_pattern_len = strlen(key_pattern);
 
   Callback callback;
-  if (!callback_from_typval(&callback, &argvars[2])) {
+  if (!rs_callback_from_typval(&callback, &argvars[2])) {
     semsg(_(e_invarg2), "funcref");
     return;
   }
@@ -1246,7 +1249,7 @@ static void f_dictwatcherdel(typval_T *argvars, typval_T *rettv, EvalFuncData fp
   }
 
   Callback callback;
-  if (!callback_from_typval(&callback, &argvars[2])) {
+  if (!rs_callback_from_typval(&callback, &argvars[2])) {
     return;
   }
 
@@ -1711,7 +1714,7 @@ static void flatten_common(typval_T *argvars, typval_T *rettv, bool make_copy)
   }
 
   if (make_copy) {
-    list = tv_list_copy(NULL, list, false, get_copyID());
+    list = tv_list_copy(NULL, list, false, rs_get_copyID());
     rettv->vval.v_list = list;
     if (list == NULL) {
       return;
@@ -1800,7 +1803,7 @@ static void common_function(typval_T *argvars, typval_T *rettv, bool is_funcref)
              && argvars[0].vval.v_partial != NULL) {
     // function(dict.MyFunc, [arg])
     arg_pt = argvars[0].vval.v_partial;
-    s = partial_name(arg_pt);
+    s = rs_partial_name(arg_pt);
     // TODO(bfredl): do the entire nlua_is_table_from_lua dance
   } else {
     // function('MyFunc', [arg], dict)
@@ -2019,7 +2022,7 @@ static void f_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
       const char *const what = tv_get_string(&argvars[1]);
 
       if (strcmp(what, "func") == 0 || strcmp(what, "name") == 0) {
-        const char *name = partial_name(pt);
+        const char *name = rs_partial_name(pt);
         rettv->v_type = (*what == 'f' ? VAR_FUNC : VAR_STRING);
         assert(name != NULL);
         if (rettv->v_type == VAR_FUNC) {
@@ -2045,7 +2048,7 @@ static void f_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
         int required = 0;
         int optional = 0;
         bool varargs = false;
-        const char *name = partial_name(pt);
+        const char *name = rs_partial_name(pt);
 
         get_func_arity(name, &required, &optional, &varargs);
 
@@ -5560,7 +5563,7 @@ static void f_reduce(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (argvars[1].v_type == VAR_FUNC) {
     func_name = argvars[1].vval.v_string;
   } else if (argvars[1].v_type == VAR_PARTIAL) {
-    func_name = partial_name(argvars[1].vval.v_partial);
+    func_name = rs_partial_name(argvars[1].vval.v_partial);
   } else {
     func_name = tv_get_string(&argvars[1]);
   }
@@ -7701,7 +7704,7 @@ static void f_timer_start(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   Callback callback;
-  if (!callback_from_typval(&callback, &argvars[1])) {
+  if (!rs_callback_from_typval(&callback, &argvars[1])) {
     return;
   }
   rettv->vval.v_number = (varnumber_T)timer_start(tv_get_number(&argvars[0]), repeat, &callback);

@@ -62,6 +62,13 @@ extern bool rs_eval_isnamec1(int c);
 extern int rs_get_id_len(const char **arg);
 extern int rs_check_luafunc_name(const char *str, bool paren);
 extern bool rs_is_luafunc(partial_T *partial);
+extern const char *rs_find_name_end(const char *arg, const char **expr_start,
+                                    const char **expr_end, int flags);
+extern char *rs_partial_name(partial_T *pt);
+extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
+extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
+extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
+                               list_stack_T **list_stack);
 
 #include "eval/userfunc.c.generated.h"
 
@@ -484,7 +491,7 @@ char *deref_func_name(const char *name, int *lenp, partial_T **const partialp, b
     if (partialp != NULL) {
       *partialp = pt;
     }
-    char *s = partial_name(pt);
+    char *s = rs_partial_name(pt);
     *lenp = (int)strlen(s);
     return s;
   }
@@ -2016,7 +2023,7 @@ char *trans_function_name(char **pp, bool skip, int flags, funcdict_T *fdp, part
         semsg(_(e_invarg2), start);
       }
     } else {
-      *pp = (char *)find_name_end(start, NULL, NULL, FNE_INCL_BR);
+      *pp = (char *)rs_find_name_end(start, NULL, NULL, FNE_INCL_BR);
     }
     goto theend;
   }
@@ -2043,7 +2050,7 @@ char *trans_function_name(char **pp, bool skip, int flags, funcdict_T *fdp, part
         memcpy(name, end + 1, (size_t)len);
         *pp = (char *)end + 1 + len;
       } else {
-        name = xstrdup(partial_name(lv.ll_tv->vval.v_partial));
+        name = xstrdup(rs_partial_name(lv.ll_tv->vval.v_partial));
         *pp = (char *)end;
       }
       if (partial != NULL) {
@@ -4065,9 +4072,9 @@ bool set_ref_in_previous_funccal(int copyID)
   for (funccall_T *fc = previous_funccal; fc != NULL;
        fc = fc->fc_caller) {
     fc->fc_copyID = copyID + 1;
-    if (set_ref_in_ht(&fc->fc_l_vars.dv_hashtab, copyID + 1, NULL)
-        || set_ref_in_ht(&fc->fc_l_avars.dv_hashtab, copyID + 1, NULL)
-        || set_ref_in_list_items(&fc->fc_l_varlist, copyID + 1, NULL)) {
+    if (rs_set_ref_in_ht(&fc->fc_l_vars.dv_hashtab, copyID + 1, NULL)
+        || rs_set_ref_in_ht(&fc->fc_l_avars.dv_hashtab, copyID + 1, NULL)
+        || rs_set_ref_in_list_items(&fc->fc_l_varlist, copyID + 1, NULL)) {
       return true;
     }
   }
@@ -4078,9 +4085,9 @@ static bool set_ref_in_funccal(funccall_T *fc, int copyID)
 {
   if (fc->fc_copyID != copyID) {
     fc->fc_copyID = copyID;
-    if (set_ref_in_ht(&fc->fc_l_vars.dv_hashtab, copyID, NULL)
-        || set_ref_in_ht(&fc->fc_l_avars.dv_hashtab, copyID, NULL)
-        || set_ref_in_list_items(&fc->fc_l_varlist, copyID, NULL)
+    if (rs_set_ref_in_ht(&fc->fc_l_vars.dv_hashtab, copyID, NULL)
+        || rs_set_ref_in_ht(&fc->fc_l_avars.dv_hashtab, copyID, NULL)
+        || rs_set_ref_in_list_items(&fc->fc_l_varlist, copyID, NULL)
         || set_ref_in_func(NULL, fc->fc_func, copyID)) {
       return true;
     }
@@ -4133,7 +4140,7 @@ bool set_ref_in_functions(int copyID)
 bool set_ref_in_func_args(int copyID)
 {
   for (int i = 0; i < funcargs.ga_len; i++) {
-    if (set_ref_in_item(((typval_T **)funcargs.ga_data)[i],
+    if (rs_set_ref_in_item(((typval_T **)funcargs.ga_data)[i],
                         copyID, NULL, NULL)) {
       return true;
     }

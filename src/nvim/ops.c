@@ -88,6 +88,8 @@ extern void rs_foldCreate(win_T *wp, linenr_T start_lnum, linenr_T end_lnum);
 extern void rs_opFoldRange(linenr_T first_lnum, linenr_T last_lnum, int opening, int recurse, bool had_visual);
 
 extern int rs_get_fileformat(buf_T *buf);
+extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
+                                   list_stack_T **list_stack);
 
 // Rust implementations of operator functions
 extern int rs_op_on_lines(int op);
@@ -3280,7 +3282,7 @@ void free_operatorfunc_option(void)
 /// garbage collected.
 bool set_ref_in_opfunc(int copyID)
 {
-  return set_ref_in_callback(&opfunc_cb, copyID, NULL, NULL);
+  return rs_set_ref_in_callback(&opfunc_cb, copyID, NULL, NULL);
 }
 
 /// Handle the "g@" operator: call 'operatorfunc'.

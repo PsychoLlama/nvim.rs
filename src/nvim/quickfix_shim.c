@@ -171,6 +171,11 @@ static unsigned last_qf_id = 0;   // Last Used quickfix list id
 // Rust FFI declarations and accessor functions
 // ============================================================================
 
+extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
+extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
+                               list_stack_T **list_stack);
+extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
+                                   list_stack_T **list_stack);
 extern bool rs_qf_stack_empty(const void *qi);
 extern bool rs_qf_list_empty(const void *qfl);
 extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
@@ -7414,7 +7419,7 @@ static int qf_setprop_qftf(qf_list_T *qfl, dictitem_T *di)
   Callback cb;
 
   callback_free(&qfl->qf_qftf_cb);
-  if (callback_from_typval(&cb, &di->di_tv)) {
+  if (rs_callback_from_typval(&cb, &di->di_tv)) {
     qfl->qf_qftf_cb = cb;
   }
   return OK;
@@ -7889,7 +7894,7 @@ static bool mark_quickfix_user_data(qf_info_T *qi, int copyID)
       typval_T *user_data = &qfp->qf_user_data;
       if (user_data != NULL && user_data->v_type != VAR_NUMBER
           && user_data->v_type != VAR_STRING && user_data->v_type != VAR_FLOAT) {
-        abort = abort || set_ref_in_item(user_data, copyID, NULL, NULL);
+        abort = abort || rs_set_ref_in_item(user_data, copyID, NULL, NULL);
       }
     }
   }
@@ -7906,11 +7911,11 @@ static bool mark_quickfix_ctx(qf_info_T *qi, int copyID)
     typval_T *ctx = qi->qf_lists[i].qf_ctx;
     if (ctx != NULL && ctx->v_type != VAR_NUMBER
         && ctx->v_type != VAR_STRING && ctx->v_type != VAR_FLOAT) {
-      abort = set_ref_in_item(ctx, copyID, NULL, NULL);
+      abort = rs_set_ref_in_item(ctx, copyID, NULL, NULL);
     }
 
     Callback *cb = &qi->qf_lists[i].qf_qftf_cb;
-    abort = abort || set_ref_in_callback(cb, copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback(cb, copyID, NULL, NULL);
   }
 
   return abort;
@@ -7923,7 +7928,7 @@ bool set_ref_in_quickfix(int copyID)
   assert(ql_info != NULL);
   if (mark_quickfix_ctx(ql_info, copyID)
       || mark_quickfix_user_data(ql_info, copyID)
-      || set_ref_in_callback(&qftf_cb, copyID, NULL, NULL)) {
+      || rs_set_ref_in_callback(&qftf_cb, copyID, NULL, NULL)) {
     return true;
   }
 

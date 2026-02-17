@@ -43,6 +43,8 @@
 
 #include "runtime_ffi.c.generated.h"
 
+extern int rs_get_copyID(void);
+
 // =============================================================================
 // Static assertions for constants used in Rust code
 // =============================================================================
@@ -737,7 +739,7 @@ dict_T *nvim_rt_copy_script_vars(int sid)
   if (si->sn_vars == NULL) {
     return tv_dict_alloc();
   }
-  return tv_dict_copy(NULL, &si->sn_vars->sv_dict, true, get_copyID());
+  return tv_dict_copy(NULL, &si->sn_vars->sv_dict, true, rs_get_copyID());
 }
 
 /// Add a dict to a dict.
