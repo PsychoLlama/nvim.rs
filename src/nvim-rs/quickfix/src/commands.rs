@@ -1530,3 +1530,38 @@ pub unsafe extern "C" fn rs_ex_cbottom(eap: EapHandle) {
         nvim_qf_win_goto_lnum(win, line_count);
     }
 }
+
+extern "C" {
+    // Temporary bridge to C ex_copen until Phase 4 migrates it
+    fn ex_copen(eap: EapHandle);
+}
+
+/// `:cwindow` / `:lwindow` -- open qf window if errors, close if not.
+///
+/// # Safety
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_cwindow(eap: EapHandle) {
+    let qi = nvim_qf_cmd_get_stack(eap, true);
+    if qi.is_null() {
+        return;
+    }
+
+    let qfl = nvim_qf_get_curlist_mut(qi);
+
+    // Look for an existing quickfix window
+    let win = find_win_for_stack(qi);
+
+    // If stack is empty, no valid entries, or list is empty -> close window
+    // Otherwise if no window exists -> open it
+    if crate::rs_qf_stack_empty(qi.cast_const())
+        || crate::nvim_qf_get_nonevalid(qfl.cast_const())
+        || crate::rs_qf_list_empty(qfl.cast_const())
+    {
+        if !win.is_null() {
+            rs_ex_cclose(eap);
+        }
+    } else if win.is_null() {
+        ex_copen(eap);
+    }
+}

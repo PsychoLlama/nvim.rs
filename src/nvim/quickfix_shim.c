@@ -4908,6 +4908,7 @@ extern void rs_qf_view_result(bool split);
 extern void rs_ex_cbelow(void *eap);
 extern void rs_ex_cclose(void *eap);
 extern void rs_ex_cbottom(void *eap);
+extern void rs_ex_cwindow(void *eap);
 
 /// ":colder [count]": Up in the quickfix stack.
 /// ":cnewer [count]": Down in the quickfix stack.
@@ -5032,29 +5033,7 @@ void qf_view_result(bool split)
 //             close it if not.
 void ex_cwindow(exarg_T *eap)
 {
-  qf_info_T *qi;
-
-  if ((qi = qf_cmd_get_stack(eap, true)) == NULL) {
-    return;
-  }
-
-  qf_list_T *qfl = qf_get_curlist(qi);
-
-  // Look for an existing quickfix window.
-  win_T *win = qf_find_win(qi);
-
-  // If a quickfix window is open but we have no errors to display,
-  // close the window.  If a quickfix window is not open, then open
-  // it if we have errors; otherwise, leave it closed.
-  if (rs_qf_stack_empty(qi)
-      || qfl->qf_nonevalid
-      || rs_qf_list_empty(qfl)) {
-    if (win != NULL) {
-      ex_cclose(eap);
-    }
-  } else if (win == NULL) {
-    ex_copen(eap);
-  }
+  rs_ex_cwindow(eap);
 }
 
 // ":cclose": close the window showing the list of errors.
