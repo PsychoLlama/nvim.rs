@@ -110,6 +110,11 @@ extern int rs_ins_compl_has_preinsert(void);
 extern int rs_ins_compl_preinsert_effect(void);
 extern int rs_ins_compl_has_autocomplete(void);
 extern int rs_compl_status_local(void);
+extern int rs_ins_compl_is_match_selected(void);
+extern int rs_ins_compl_preinsert_longest(void);
+extern int rs_ins_compl_has_shown_match(void);
+extern int rs_ins_compl_long_shown_match(void);
+extern int rs_pum_wanted(void);
 
 typedef struct {
   VimState state;
@@ -2051,7 +2056,7 @@ static int insert_execute(VimState *state, int key)
   // and the cursor is still in the completed word.  Only when there is
   // a match, skip this when no matches were found.
   if (rs_ins_compl_active() && curwin->w_cursor.col >= rs_ins_compl_col()
-      && ins_compl_has_shown_match() && pum_wanted()) {
+      && rs_ins_compl_has_shown_match() && rs_pum_wanted()) {
     // BS: Delete one character from "compl_leader".
     if ((s->c == K_BS || s->c == Ctrl_H)
         && curwin->w_cursor.col > rs_ins_compl_col()
@@ -2066,7 +2071,7 @@ static int insert_execute(VimState *state, int key)
       // there is nothing to add, CTRL-L works like CTRL-P then.
       if (s->c == Ctrl_L
           && (!rs_ctrl_x_mode_line_or_eval()
-              || ins_compl_long_shown_match())) {
+              || rs_ins_compl_long_shown_match())) {
         ins_compl_addfrommatch();
         return 1;  // continue
       }
@@ -2095,7 +2100,7 @@ static int insert_execute(VimState *state, int key)
                && (s->c == CAR || s->c == K_KENTER || s->c == NL)))
           && stop_arrow() == OK) {
         ins_compl_delete(false);
-        if (ins_compl_preinsert_longest() && !ins_compl_is_match_selected()) {
+        if (rs_ins_compl_preinsert_longest() && !rs_ins_compl_is_match_selected()) {
           ins_compl_insert(false, true);
           ins_compl_init_get_longest();
           return 1;  // continue

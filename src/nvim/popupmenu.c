@@ -63,6 +63,8 @@
 
 // Rust FFI declarations
 extern int rs_ins_compl_active(void);
+extern const char *rs_ins_compl_leader(void);
+extern int rs_compl_match_curr_select(int selected);
 extern void rs_win_setheight(int height);
 extern int rs_pum_visible(void);
 extern int rs_pum_drawn(void);
@@ -661,7 +663,7 @@ void *nvim_pum_menu_find(const char *path_name)
 /// Get completion leader string.
 char *nvim_pum_get_compl_leader(void)
 {
-  return (State & MODE_CMDLINE) ? cmdline_compl_pattern() : ins_compl_leader();
+  return (State & MODE_CMDLINE) ? cmdline_compl_pattern() : (char *)rs_ins_compl_leader();
 }
 
 /// Check if completion is fuzzy.
@@ -782,7 +784,7 @@ void nvim_pum_win_config_set_and_apply(win_T *wp, int width, int col, int anchor
 /// Check if the selected item matches the current completion selection.
 int nvim_pum_compl_match_curr_select(int selected)
 {
-  return compl_match_curr_select(selected) ? 1 : 0;
+  return rs_compl_match_curr_select(selected);
 }
 
 /// Block autocmds.

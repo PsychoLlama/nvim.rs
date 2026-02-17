@@ -171,6 +171,8 @@ extern int rs_compl_status_adding(void);
 extern int rs_compl_status_sol(void);
 extern int rs_ins_compl_len(void);
 extern int rs_ins_compl_interrupted(void);
+extern char *rs_find_word_start(char *ptr);
+extern char *rs_find_word_end(char *ptr);
 extern int rs_pat_has_uppercase(const char *pat);
 extern int rs_ignorecase(const char *pat);
 extern int rs_ignorecase_opt(const char *pat, int ic, int scs);
@@ -2294,9 +2296,9 @@ search_line:
           if (vim_iswordp(p)) {
             goto exit_matched;
           }
-          p = find_word_start(p);
+          p = rs_find_word_start(p);
         }
-        p = find_word_end(p);
+        p = rs_find_word_end(p);
         i = (int)(p - aux);
 
         if (rs_compl_status_adding() && i == rs_ins_compl_len()) {
@@ -2313,8 +2315,8 @@ search_line:
           }
 
           already = aux = p = skipwhite(line);
-          p = find_word_start(p);
-          p = find_word_end(p);
+          p = rs_find_word_start(p);
+          p = rs_find_word_end(p);
           if (p > aux) {
             if (*aux != ')' && IObuff[i - 1] != TAB) {
               if (IObuff[i - 1] != ' ') {
@@ -2863,9 +2865,9 @@ search_line:
           if (vim_iswordp(p)) {
             goto exit_matched;
           }
-          p = find_word_start(p);
+          p = rs_find_word_start(p);
         }
-        p = find_word_end(p);
+        p = rs_find_word_end(p);
         i = (int)(p - aux);
 
         if (rs_compl_status_adding() && i == rs_ins_compl_len()) {
@@ -2889,8 +2891,8 @@ search_line:
           // if depth >= 0 we'll increase files[depth].lnum far
           // below  -- Acevedo
           already = aux = p = skipwhite(line);
-          p = find_word_start(p);
-          p = find_word_end(p);
+          p = rs_find_word_start(p);
+          p = rs_find_word_end(p);
           if (p > aux) {
             if (*aux != ')' && IObuff[i - 1] != TAB) {
               if (IObuff[i - 1] != ' ') {
