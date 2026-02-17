@@ -579,4 +579,11 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_source_callback_vim_lua", "rs_source_callback",
            "rs_gen_expand_wildcards_and_cb", "rs_do_in_path_and_pp",
            "rs_do_in_runtimepath", "rs_source_runtime",
-           "rs_source_runtime_vim_lua", "rs_source_in_path_vim_lua"]
+           "rs_source_runtime_vim_lua", "rs_source_in_path_vim_lua",
+           # Insert-mode completion (insexpand)
+           "rs_ctrl_x_mode_none", "rs_ctrl_x_mode_normal", "rs_ctrl_x_mode_not_default", "rs_ctrl_x_mode_not_defined_yet",
+           "rs_compl_status_adding", "rs_compl_status_sol", "rs_compl_status_local",
+           "rs_ins_compl_active", "rs_ins_compl_interrupted", "rs_ins_compl_col", "rs_ins_compl_len",
+           "rs_ins_compl_win_active", "rs_ins_compl_has_autocomplete",
+           "rs_find_word_start", "rs_find_word_end",
+           "rs_pum_wanted", "rs_get_cot_flags"]
