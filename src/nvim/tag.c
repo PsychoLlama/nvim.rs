@@ -632,86 +632,45 @@ const char *nvim_get_nofile_fname(void)
 // ============================================================================
 
 extern void rs_tagstack_clear_entry(void *tg);
-extern void rs_tagstack_clear(void *wp);
-extern void rs_tagstack_shift(void *wp);
-extern void rs_tagstack_push(void *wp, char *tagname, int cur_fnum, int cur_match,
-                             linenr_T mark_lnum, int mark_col, int fnum, char *user_data);
-extern void rs_tagstack_set_idx(void *wp, int idx);
-extern void rs_tagstack_truncate(void *wp);
 
 // Parse functions
-extern int rs_parse_tag_line(char *lbuf, tagptrs_T *tagp);
 extern int rs_parse_match(char *lbuf, tagptrs_T *tagp);
 extern bool rs_test_for_static(const tagptrs_T *tagp);
-extern size_t rs_matching_line_len(const char *lbuf);
-extern int rs_find_extra(char **pp);
 
-// Phase 1 leaf utilities
+// Leaf utilities
 extern void rs_tag_freematch(void);
-extern void rs_taglen_advance(int l);
-extern int rs_tag_strnicmp(const char *s1, const char *s2, size_t len);
-extern char *rs_tag_full_fname(tagptrs_T *tagp);
-extern int rs_test_for_current(char *fname, char *fname_end, char *tag_fname, char *buf_ffname);
 extern void rs_free_tag_stuff(void);
 extern void rs_tagname_free(void *tnp);
 
-// Phase 2 pattern/state initialization
+// Pattern/state initialization
 extern void rs_prepare_pats(pat_T *pats, bool has_re);
 extern void rs_findtags_state_init(findtags_state_T *st, char *pat, int flags, int mincount);
 extern void rs_findtags_state_free(findtags_state_T *st);
-extern void rs_findtags_matchargs_init(findtags_match_args_T *margs, int flags);
 
-// Phase 3 tag file enumeration and filename expansion
+// Tag file enumeration and filename expansion
 extern int rs_get_tagfname(tagname_T *tnp, int first, char *buf);
 extern bool rs_found_tagfile_cb(int num_fnames, char **fnames, bool all, void *cookie);
 extern char *rs_expand_tag_fname(char *fname, char *tag_fname, bool expand);
 
-// Phase 4 search state machine — file reading and header parsing
-extern int rs_findtags_get_next_line(findtags_state_T *st, tagsearch_info_T *sinfo_p);
-extern bool rs_findtags_hdr_parse(findtags_state_T *st);
-extern bool rs_findtags_start_state_handler(findtags_state_T *st, bool *sortic,
-                                            tagsearch_info_T *sinfo_p);
-extern void rs_findtags_string_convert(findtags_state_T *st);
-
-// Phase 5 search state machine — line parsing and matching
-extern int rs_findtags_parse_line(findtags_state_T *st, tagptrs_T *tagpp,
-                                  findtags_match_args_T *margs, tagsearch_info_T *sinfo_p);
-extern bool rs_findtags_match_tag(findtags_state_T *st, tagptrs_T *tagpp,
-                                  findtags_match_args_T *margs);
-extern void rs_findtags_add_match(findtags_state_T *st, tagptrs_T *tagpp,
-                                  findtags_match_args_T *margs, char *buf_ffname, hash_T *hash);
+// Search orchestration
 extern int rs_findtags_copy_matches(findtags_state_T *st, char ***matchesp);
-
-// Phase 6 search orchestration
-extern bool rs_findtags_in_help_init(findtags_state_T *st);
-extern void rs_findtags_get_all_tags(findtags_state_T *st, findtags_match_args_T *margs,
-                                     char *buf_ffname);
 extern void rs_findtags_in_file(findtags_state_T *st, int flags, char *buf_ffname);
 
-// Phase 7 Rust implementations
-extern void rs_print_tag_list(bool new_tag, bool use_tagstack, int num_matches, char **matches);
-extern int rs_add_llist_tags(const char *tag, int num_matches, char **matches);
+// Tag display and queries
 extern void rs_do_tags(void);
-extern int rs_add_tag_field(dict_T *dict, const char *field_name, const char *start, const char *end);
-
-// Phase 8 Rust implementations
 extern int rs_get_tags(void *list, char *pat, char *buf_fname);
-extern void rs_get_tag_details(void *tag, void *retdict);
 extern void rs_get_tagstack(void *wp, void *retdict);
 extern int rs_set_tagstack(void *wp, const void *d, int action);
 extern int rs_expand_tags(bool tagnames, char *pat, int *num_file, char ***file);
 
-// Phase 9 Rust implementations
+// Tagfunc option management
 extern const char *rs_did_set_tagfunc(void *args);
 extern void rs_free_tagfunc_option(void);
 extern bool rs_set_ref_in_tagfunc(int copyID);
 extern void rs_set_buflocal_tfu_callback(void *buf);
 extern int rs_find_tagfunc_tags(char *pat, void *ga, int *match_count, int flags, char *buf_ffname);
 
-// Phase 10 Rust implementations
-extern int rs_jumpto_tag(const char *lbuf_arg, int forceit, bool keep_help);
-
-// Phase 11 Rust implementations
+// Tag operations
 extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
 
 #include "tag.c.generated.h"
@@ -1473,8 +1432,8 @@ int nvim_findtags_apply_tfu(void *st_void, char *pat, char *buf_ffname)
   }
 
   tfu_in_use = true;
-  int retval = find_tagfunc_tags(pat, st->ga_match, &st->match_count,
-                                 st->flags, buf_ffname);
+  int retval = rs_find_tagfunc_tags(pat, st->ga_match, &st->match_count,
+                                   st->flags, buf_ffname);
   tfu_in_use = false;
   return retval;
 }
@@ -1483,7 +1442,7 @@ int nvim_findtags_apply_tfu(void *st_void, char *pat, char *buf_ffname)
 void nvim_findtags_prepare_pats(void *st_void, bool has_re)
 {
   findtags_state_T *st = (findtags_state_T *)st_void;
-  prepare_pats(st->orgpat, has_re);
+  rs_prepare_pats(st->orgpat, has_re);
 }
 
 // ============================================================================
@@ -2231,7 +2190,7 @@ int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
   const int l_g_do_tagpreview = g_do_tagpreview;
 
   tagptrs_T tagp;
-  if (parse_match(lbuf, &tagp) == FAIL) {
+  if (rs_parse_match(lbuf, &tagp) == FAIL) {
     return FAIL;
   }
 
@@ -2321,7 +2280,7 @@ int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
         if (!do_search(NULL, pbuf[0], pbuf[0], pbuf + 1, pbuflen - 1, 1,
                        search_options, NULL)) {
           found = 2;
-          test_for_static(&tagp);
+          rs_test_for_static(&tagp);
           char cc = *tagp.tagname_end;
           *tagp.tagname_end = NUL;
           pbuflen = (size_t)snprintf(pbuf, LSIZE, "^%s\\s\\*(", tagp.tagname);
@@ -2765,195 +2724,16 @@ void do_tag(char *tag, int type, int count, int forceit, bool verbose)
   rs_do_tag(tag, type, count, forceit, verbose);
 }
 
-// List all the matching tags.
-static void print_tag_list(bool new_tag, bool use_tagstack, int num_matches, char **matches)
-{
-  rs_print_tag_list(new_tag, use_tagstack, num_matches, matches);
-}
-
-/// Add the matching tags to the location list for the current
-/// window.
-static int add_llist_tags(char *tag, int num_matches, char **matches)
-{
-  return rs_add_llist_tags(tag, num_matches, matches);
-}
-
 // Free cached tags.
 void tag_freematch(void)
 {
   rs_tag_freematch();
 }
 
-static void taglen_advance(int l)
-{
-  rs_taglen_advance(l);
-}
-
 // Print the tag stack
 void do_tags(exarg_T *eap)
 {
   rs_do_tags();
-}
-
-// Compare two strings, for length "len", ignoring case the ASCII way.
-// return 0 for match, < 0 for smaller, > 0 for bigger
-// Make sure case is folded to uppercase in comparison (like for 'sort -f')
-static int tag_strnicmp(char *s1, char *s2, size_t len)
-{
-  return rs_tag_strnicmp(s1, s2, len);
-}
-
-// Extract info from the tag search pattern "pats->pat".
-static void prepare_pats(pat_T *pats, bool has_re)
-{
-  rs_prepare_pats(pats, has_re);
-}
-
-/// Call the user-defined function to generate a list of tags used by
-/// find_tags().
-///
-/// Return OK if at least 1 tag has been successfully found,
-/// NOTDONE if the function returns v:null, and FAIL otherwise.
-///
-/// @param pat  pattern supplied to the user-defined function
-/// @param ga  the tags will be placed here
-/// @param match_count  here the number of tags found will be placed
-/// @param flags  flags from find_tags (TAG_*)
-/// @param buf_ffname  name of buffer for priority
-static int find_tagfunc_tags(char *pat, garray_T *ga, int *match_count, int flags, char *buf_ffname)
-{
-  return rs_find_tagfunc_tags(pat, ga, match_count, flags, buf_ffname);
-}
-
-/// Initialize the state used by find_tags()
-static void findtags_state_init(findtags_state_T *st, char *pat, int flags, int mincount)
-{
-  rs_findtags_state_init(st, pat, flags, mincount);
-}
-
-/// Free the state used by find_tags()
-static void findtags_state_free(findtags_state_T *st)
-{
-  rs_findtags_state_free(st);
-}
-
-/// Initialize the language and priority used for searching tags in a Vim help
-/// file.
-/// Returns true to process the help file for tags and false to skip the file.
-static bool findtags_in_help_init(findtags_state_T *st)
-{
-  return rs_findtags_in_help_init(st);
-}
-
-/// Use the function set in 'tagfunc' (if configured and enabled) to get the
-/// tags.
-/// Return OK if at least 1 tag has been successfully found, NOTDONE if the
-/// 'tagfunc' is not used, still executing or the 'tagfunc' returned v:null and
-/// FAIL otherwise.
-static int findtags_apply_tfu(findtags_state_T *st, char *pat, char *buf_ffname)
-{
-  return nvim_findtags_apply_tfu(st, pat, buf_ffname);
-}
-
-/// Read the next line from a tags file.
-/// Returns TAGS_READ_SUCCESS if a tags line is successfully read and should be
-/// processed.
-/// Returns TAGS_READ_EOF if the end of file is reached.
-/// Returns TAGS_READ_IGNORE if the current line should be ignored (used when
-/// reached end of a emacs included tags file)
-static tags_read_status_T findtags_get_next_line(findtags_state_T *st, tagsearch_info_T *sinfo_p)
-{
-  return (tags_read_status_T)rs_findtags_get_next_line(st, sinfo_p);
-}
-
-/// Parse a tags file header line in "st->lbuf".
-/// Returns true if the current line in st->lbuf is not a tags header line and
-/// should be parsed as a regular tag line. Returns false if the line is a
-/// header line and the next header line should be read.
-static bool findtags_hdr_parse(findtags_state_T *st)
-{
-  return rs_findtags_hdr_parse(st);
-}
-
-/// Handler to initialize the state when starting to process a new tags file.
-/// Called in the TS_START state when finding tags from a tags file.
-/// Returns true if the line read from the tags file should be parsed and
-/// false if the line should be ignored.
-static bool findtags_start_state_handler(findtags_state_T *st, bool *sortic,
-                                         tagsearch_info_T *sinfo_p)
-{
-  return rs_findtags_start_state_handler(st, sortic, sinfo_p);
-}
-
-/// Parse a tag line read from a tags file.
-/// Also compares the tag name in "tagpp->tagname" with a search pattern in
-/// "st->orgpat->head" as a quick check if the tag may match.
-/// Returns:
-/// - TAG_MATCH_SUCCESS if the tag may match
-/// - TAG_MATCH_FAIL if the tag doesn't match
-/// - TAG_MATCH_NEXT to look for the next matching tag (used in a binary search)
-/// - TAG_MATCH_STOP if all the tags are processed without a match.
-/// Uses the values in "margs" for doing the comparison.
-static tagmatch_status_T findtags_parse_line(findtags_state_T *st, tagptrs_T *tagpp,
-                                             findtags_match_args_T *margs,
-                                             tagsearch_info_T *sinfo_p)
-{
-  return (tagmatch_status_T)rs_findtags_parse_line(st, tagpp, margs, sinfo_p);
-}
-
-/// Initialize the structure used for tag matching.
-static void findtags_matchargs_init(findtags_match_args_T *margs, int flags)
-{
-  rs_findtags_matchargs_init(margs, flags);
-}
-
-/// Compares the tag name in "tagpp->tagname" with a search pattern in
-/// "st->orgpat->pat".
-/// Returns true if the tag matches, false if the tag doesn't match.
-/// Uses the values in "margs" for doing the comparison.
-static bool findtags_match_tag(findtags_state_T *st, tagptrs_T *tagpp, findtags_match_args_T *margs)
-{
-  return rs_findtags_match_tag(st, tagpp, margs);
-}
-
-/// Convert the encoding of a line read from a tags file in "st->lbuf".
-/// Converting the pattern from 'enc' to the tags file encoding doesn't work,
-/// because characters are not recognized. The converted line is saved in
-/// st->lbuf.
-static void findtags_string_convert(findtags_state_T *st)
-{
-  rs_findtags_string_convert(st);
-}
-
-/// Add a matching tag found in a tags file to st->ht_match and st->ga_match.
-static void findtags_add_match(findtags_state_T *st, tagptrs_T *tagpp, findtags_match_args_T *margs,
-                               char *buf_ffname, hash_T *hash)
-{
-  rs_findtags_add_match(st, tagpp, margs, buf_ffname, hash);
-}
-
-/// Read and get all the tags from file st->tag_fname.
-/// Sets "st->stop_searching" to true to stop searching for additional tags.
-static void findtags_get_all_tags(findtags_state_T *st, findtags_match_args_T *margs,
-                                  char *buf_ffname)
-{
-  rs_findtags_get_all_tags(st, margs, buf_ffname);
-}
-
-/// Search for tags matching "st->orgpat.pat" in the "st->tag_fname" tags file.
-/// Information needed to search for the tags is in the "st" state structure.
-/// The matching tags are returned in "st". If an error is encountered, then
-/// "st->stop_searching" is set to true.
-static void findtags_in_file(findtags_state_T *st, int flags, char *buf_ffname)
-{
-  rs_findtags_in_file(st, flags, buf_ffname);
-}
-
-/// Copy the tags found by find_tags() to "matchesp".
-/// Returns the number of matches copied.
-static int findtags_copy_matches(findtags_state_T *st, char ***matchesp)
-{
-  return rs_findtags_copy_matches(st, matchesp);
 }
 
 /// find_tags() - search for tags in tags files
@@ -3030,7 +2810,7 @@ int find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int minc
 
   int help_save = curbuf->b_help;
 
-  findtags_state_init(&st, pat, flags, mincount);
+  rs_findtags_state_init(&st, pat, flags, mincount);
 
   // Initialize a few variables
   if (st.help_only) {                           // want tags from help file
@@ -3055,13 +2835,13 @@ int find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int minc
 
   int save_emsg_off = emsg_off;
   emsg_off = true;    // don't want error for invalid RE here
-  prepare_pats(st.orgpat, has_re);
+  rs_prepare_pats(st.orgpat, has_re);
   emsg_off = save_emsg_off;
   if (has_re && st.orgpat->regmatch.regprog == NULL) {
     goto findtag_end;
   }
 
-  retval = findtags_apply_tfu(&st, pat, buf_ffname);
+  retval = nvim_findtags_apply_tfu(&st, pat, buf_ffname);
   if (retval != NOTDONE) {
     goto findtag_end;
   }
@@ -3093,16 +2873,16 @@ int find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int minc
 
     // Try tag file names from tags option one by one.
     for (first_file = true;
-         get_tagfname(&tn, first_file, st.tag_fname) == OK;
+         rs_get_tagfname(&tn, first_file, st.tag_fname) == OK;
          first_file = false) {
-      findtags_in_file(&st, flags, buf_ffname);
+      rs_findtags_in_file(&st, flags, buf_ffname);
       if (st.stop_searching) {
         retval = OK;
         break;
       }
     }   // end of for-each-file loop
 
-    tagname_free(&tn);
+    rs_tagname_free(&tn);
 
     // stop searching when already did a linear search, or when TAG_NOIC
     // used, and 'ignorecase' not set or already did case-ignore search
@@ -3123,7 +2903,7 @@ int find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int minc
   }
 
 findtag_end:
-  findtags_state_free(&st);
+  rs_findtags_state_free(&st);
 
   // Move the matches from the ga_match[] arrays into one list of
   // matches.  When retval == FAIL, free the matches.
@@ -3131,7 +2911,7 @@ findtag_end:
     st.match_count = 0;
   }
 
-  *num_matches = findtags_copy_matches(&st, matchesp);
+  *num_matches = rs_findtags_copy_matches(&st, matchesp);
 
   curbuf->b_help = help_save;
   xfree(saved_pat);
@@ -3142,13 +2922,6 @@ findtag_end:
 }
 
 static garray_T tag_fnames = GA_EMPTY_INIT_VALUE;
-
-// Callback function for finding all "tags" and "tags-??" files in
-// 'runtimepath' doc directories.
-static bool found_tagfile_cb(int num_fnames, char **fnames, bool all, void *cookie)
-{
-  return rs_found_tagfile_cb(num_fnames, fnames, all, cookie);
-}
 
 // ============================================================================
 // Rust FFI accessor functions for tag_fnames
@@ -3190,7 +2963,7 @@ void nvim_tag_fnames_add(char *fname)
 /// Do in runtimepath for tags (finds doc/tags files)
 void nvim_do_in_runtimepath_for_tags(void)
 {
-  do_in_runtimepath("doc/tags doc/tags-??", DIP_ALL, found_tagfile_cb, NULL);
+  do_in_runtimepath("doc/tags doc/tags-??", DIP_ALL, rs_found_tagfile_cb, NULL);
 }
 
 #if defined(EXITFREE)
@@ -3220,109 +2993,10 @@ void tagname_free(tagname_T *tnp)
   rs_tagname_free(tnp);
 }
 
-/// Parse one line from the tags file. Find start/end of tag name, start/end of
-/// file name and start of search pattern.
-///
-/// If is_etag is true, tagp->fname and tagp->fname_end are not set.
-///
-/// @param lbuf  line to be parsed
-///
-/// @return  FAIL if there is a format error in this line, OK otherwise.
-static int parse_tag_line(char *lbuf, tagptrs_T *tagp)
-{
-  return rs_parse_tag_line(lbuf, tagp);
-}
-
-// Check if tagname is a static tag
-//
-// Static tags produced by the older ctags program have the format:
-//      'file:tag  file  /pattern'.
-// This is only recognized when both occurrence of 'file' are the same, to
-// avoid recognizing "string::string" or ":exit".
-//
-// Static tags produced by the new ctags program have the format:
-//      'tag  file  /pattern/;"<Tab>file:'          "
-//
-// Return true if it is a static tag and adjust *tagname to the real tag.
-// Return false if it is not a static tag.
-static bool test_for_static(tagptrs_T *tagp)
-{
-  return rs_test_for_static(tagp);
-}
-
-/// @return  the length of a matching tag line.
-static size_t matching_line_len(const char *const lbuf)
-{
-  return rs_matching_line_len(lbuf);
-}
-
-/// Parse a line from a matching tag.  Does not change the line itself.
-///
-/// The line that we get looks like this:
-/// Emacs tag: <mtt><tag_fname><NUL><ebuf><NUL><lbuf>
-/// other tag: <mtt><tag_fname><NUL><NUL><lbuf>
-/// without Emacs tags: <mtt><tag_fname><NUL><lbuf>
-///
-/// @param lbuf  input: matching line
-/// @param tagp  output: pointers into the line
-///
-/// @return  OK or FAIL.
-static int parse_match(char *lbuf, tagptrs_T *tagp)
-{
-  return rs_parse_match(lbuf, tagp);
-}
-
-// Find out the actual file name of a tag.  Concatenate the tags file name
-// with the matching tag file name.
-// Returns an allocated string.
-static char *tag_full_fname(tagptrs_T *tagp)
-{
-  return rs_tag_full_fname(tagp);
-}
-
-/// Jump to a tag that has been found in one of the tag files
-///
-/// @param lbuf_arg  line from the tags file for this tag
-/// @param forceit  :ta with !
-/// @param keep_help  keep help flag
-///
-/// @return  OK for success, NOTAGFILE when file not found, FAIL otherwise.
-static int jumpto_tag(const char *lbuf_arg, int forceit, bool keep_help)
-{
-  return rs_jumpto_tag(lbuf_arg, forceit, keep_help);
-}
-
-/// If "expand" is true, expand wildcards in fname.
-/// If 'tagrelative' option set, change fname (name of file containing tag)
-/// according to tag_fname (name of tag file containing fname).
-///
-/// @return  a pointer to allocated memory.
-static char *expand_tag_fname(char *fname, char *const tag_fname, const bool expand)
-{
-  return rs_expand_tag_fname(fname, tag_fname, expand);
-}
-
 /// Expand tag filename relative to tag file (wrapper for Rust)
 char *nvim_expand_tag_fname(const char *fname, const char *tag_fname, bool expand)
 {
   return rs_expand_tag_fname((char *)fname, (char *)tag_fname, expand);
-}
-
-/// Check if we have a tag for the buffer with name "buf_ffname".
-/// This is a bit slow, because of the full path compare in path_full_compare().
-///
-/// @return  true if tag for file "fname" if tag file "tag_fname" is for current
-///          file.
-static int test_for_current(char *fname, char *fname_end, char *tag_fname, char *buf_ffname)
-{
-  return rs_test_for_current(fname, fname_end, tag_fname, buf_ffname);
-}
-
-// Find the end of the tagaddress.
-// Return OK if ";\"" is following, FAIL otherwise.
-static int find_extra(char **pp)
-{
-  return rs_find_extra(pp);
 }
 
 /// Free a single entry in a tag stack
@@ -3337,28 +3011,11 @@ int expand_tags(bool tagnames, char *pat, int *num_file, char ***file)
   return rs_expand_tags(tagnames, pat, num_file, file);
 }
 
-/// Add a tag field to the dictionary "dict".
-/// Return OK or FAIL.
-///
-/// @param start  start of the value
-/// @param end  after the value; can be NULL
-static int add_tag_field(dict_T *dict, const char *field_name, const char *start, const char *end)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  return rs_add_tag_field(dict, field_name, start, end);
-}
-
 /// Add the tags matching the specified pattern "pat" to the list "list"
 /// as a dictionary. Use "buf_fname" for priority, unless NULL.
 int get_tags(list_T *list, char *pat, char *buf_fname)
 {
   return rs_get_tags(list, pat, buf_fname);
-}
-
-// Return information about 'tag' in dict 'retdict'.
-static void get_tag_details(taggy_T *tag, dict_T *retdict)
-{
-  rs_get_tag_details(tag, retdict);
 }
 
 // Return the tag stack entries of the specified window 'wp' in dictionary
@@ -3367,22 +3024,6 @@ void get_tagstack(win_T *wp, dict_T *retdict)
 {
   rs_get_tagstack(wp, retdict);
 }
-
-// Free all the entries in the tag stack of the specified window
-static void tagstack_clear(win_T *wp)
-{
-  rs_tagstack_clear(wp);
-}
-
-// Remove the oldest entry from the tag stack and shift the rest of
-// the entries to free up the top of the stack.
-static void tagstack_shift(win_T *wp)
-{
-  rs_tagstack_shift(wp);
-}
-
-// tagstack_push_item, tagstack_push_items, tagstack_set_curidx:
-// now handled by rs_set_tagstack in Rust
 
 // Set the tag stack entries of the specified window.
 // 'action' is set to one of:
