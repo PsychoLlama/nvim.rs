@@ -4457,9 +4457,13 @@ bool nvim_qf_win_is_wfb(const void *win)
   return ((const win_T *)win)->w_p_wfb;
 }
 
-/// Go to the error line in the current file using either line/column number or
-/// a search pattern.
-static void qf_jump_goto_line(linenr_T qf_lnum, int qf_col, char qf_viscol, char *qf_pattern)
+// =============================================================================
+// Phase 3 (jump machinery): Cursor positioning and message display wrappers
+// =============================================================================
+
+/// Position cursor at the quickfix error location.
+/// qf_pattern may be NULL (use line/col instead).
+void nvim_qf_jump_goto_line(linenr_T qf_lnum, int qf_col, char qf_viscol, const char *qf_pattern)
 {
   if (qf_pattern == NULL) {
     // Go to line with error, unless qf_lnum is 0.
@@ -4484,16 +4488,21 @@ static void qf_jump_goto_line(linenr_T qf_lnum, int qf_col, char qf_viscol, char
     // Move the cursor to the first line in the buffer
     pos_T save_cursor = curwin->w_cursor;
     curwin->w_cursor.lnum = 0;
-    if (!do_search(NULL, '/', '/', qf_pattern, strlen(qf_pattern), 1, SEARCH_KEEP, NULL)) {
+    if (!do_search(NULL, '/', '/', (char *)qf_pattern, strlen(qf_pattern), 1, SEARCH_KEEP,
+                   NULL)) {
       curwin->w_cursor = save_cursor;
     }
   }
 }
 
-/// Display quickfix list index and size message
-static void qf_jump_print_msg(qf_info_T *qi, int qf_index, qfline_T *qf_ptr, buf_T *old_curbuf,
-                              linenr_T old_lnum)
+/// Print the "(N of M)" quickfix jump status message.
+void nvim_qf_jump_print_msg(void *qi_void, int qf_index, void *qf_ptr_void,
+                             void *old_curbuf_void, linenr_T old_lnum)
 {
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  qfline_T *qf_ptr = (qfline_T *)qf_ptr_void;
+  buf_T *old_curbuf = (buf_T *)old_curbuf_void;
+
   garray_T *const gap = qfga_get();
 
   // Update the screen before showing the message, unless messages scrolled.
@@ -4528,6 +4537,41 @@ static void qf_jump_print_msg(qf_info_T *qi, int qf_index, qfline_T *qf_ptr, buf
 
   qfga_clear();
 }
+
+/// Get curbuf as opaque handle (for saving/comparing)
+void *nvim_qf_get_curbuf(void)
+{
+  return curbuf;
+}
+
+/// Check if (fdo_flags & kOptFdoFlagQuickfix) is set
+bool nvim_qf_fdo_quickfix(void)
+{
+  return (fdo_flags & kOptFdoFlagQuickfix) != 0;
+}
+
+/// foldOpenCursor() wrapper
+void nvim_qf_fold_open_cursor(void)
+{
+  foldOpenCursor();
+}
+
+/// setpcmark() wrapper
+void nvim_qf_setpcmark(void)
+{
+  setpcmark();
+}
+
+/// Check if curbuf == given buf handle
+bool nvim_qf_curbuf_is(const void *buf)
+{
+  return curbuf == (const buf_T *)buf;
+}
+
+// Rust export for qf_jump_to_buffer
+extern int rs_qf_jump_to_buffer(void *qi, int qf_index, void *qf_ptr, int forceit,
+                                 int prev_winid, bool *opened_window, int openfold,
+                                 bool print_message);
 
 /// Find a usable window for opening a file from the quickfix/location list. If
 /// a window is not found then open a new window. If 'newwin' is true, then open
@@ -4597,35 +4641,8 @@ static int qf_jump_open_window(qf_info_T *qi, qfline_T *qf_ptr, bool newwin, boo
 static int qf_jump_to_buffer(qf_info_T *qi, int qf_index, qfline_T *qf_ptr, int forceit,
                              int prev_winid, bool *opened_window, int openfold, bool print_message)
 {
-  // If there is a file name, read the wanted file if needed, and check
-  // autowrite etc.
-  buf_T *old_curbuf = curbuf;
-  linenr_T old_lnum = curwin->w_cursor.lnum;
-  int retval = OK;
-
-  if (qf_ptr->qf_fnum != 0) {
-    retval = rs_qf_jump_edit_buffer(qi, qf_ptr, forceit, prev_winid,
-                                 opened_window);
-    if (retval != OK) {
-      return retval;
-    }
-  }
-
-  // When not switched to another buffer, still need to set pc mark
-  if (curbuf == old_curbuf) {
-    setpcmark();
-  }
-
-  qf_jump_goto_line(qf_ptr->qf_lnum, qf_ptr->qf_col, qf_ptr->qf_viscol, qf_ptr->qf_pattern);
-
-  if ((fdo_flags & kOptFdoFlagQuickfix) && openfold) {
-    foldOpenCursor();
-  }
-  if (print_message) {
-    qf_jump_print_msg(qi, qf_index, qf_ptr, old_curbuf, old_lnum);
-  }
-
-  return retval;
+  return rs_qf_jump_to_buffer(qi, qf_index, qf_ptr, forceit, prev_winid,
+                              opened_window, openfold, print_message);
 }
 
 /// Jump to a quickfix line and try to use an existing window.

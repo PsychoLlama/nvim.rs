@@ -1611,6 +1611,107 @@ mod jump_machinery {
 
         OK
     }
+
+    // Phase 3 extern declarations
+    type QfLineHandle = *const c_void;
+    type BufHandle = *mut c_void;
+    /// Line number type (matches `linenr_T` in Neovim)
+    type LinenrT = i32;
+
+    #[allow(clashing_extern_declarations)]
+    extern "C" {
+        // Phase 3 wrappers
+        fn nvim_qf_jump_goto_line(
+            qf_lnum: LinenrT,
+            qf_col: c_int,
+            qf_viscol: i8,
+            qf_pattern: *const i8,
+        );
+        fn nvim_qf_jump_print_msg(
+            qi: QfInfoHandleMut,
+            qf_index: c_int,
+            qf_ptr: QfLineHandle,
+            old_curbuf: BufHandle,
+            old_lnum: LinenrT,
+        );
+        fn nvim_qf_get_curbuf() -> BufHandle;
+        fn nvim_qf_fdo_quickfix() -> bool;
+        fn nvim_qf_fold_open_cursor();
+        fn nvim_qf_setpcmark();
+        fn nvim_qf_curbuf_is(buf: *const c_void) -> bool;
+
+        // Entry accessors (already exist)
+        fn nvim_qfline_get_fnum(qfp: QfLineHandle) -> c_int;
+        fn nvim_qfline_get_lnum(qfp: QfLineHandle) -> LinenrT;
+        fn nvim_qfline_get_col(qfp: QfLineHandle) -> c_int;
+        fn nvim_qfline_get_viscol(qfp: QfLineHandle) -> bool;
+        fn nvim_qfline_get_pattern(qfp: QfLineHandle) -> *const i8;
+
+        // Existing accessor
+        fn nvim_qf_get_cursor_lnum() -> LinenrT;
+
+        // Edit buffer (from jump_edit module)
+        fn rs_qf_jump_edit_buffer(
+            qi: QfInfoHandleMut,
+            qf_ptr: QfLineHandle,
+            forceit: c_int,
+            prev_winid: c_int,
+            opened_window: *mut bool,
+        ) -> c_int;
+    }
+
+    /// Edit buffer, position cursor, open folds, and print message.
+    /// Returns OK, FAIL, or `QF_ABORT`.
+    ///
+    /// # Safety
+    ///
+    /// All pointer parameters must be valid.
+    #[no_mangle]
+    pub unsafe extern "C" fn rs_qf_jump_to_buffer(
+        qi: QfInfoHandleMut,
+        qf_index: c_int,
+        qf_ptr: QfLineHandle,
+        forceit: c_int,
+        prev_winid: c_int,
+        opened_window: *mut bool,
+        openfold: c_int,
+        print_message: bool,
+    ) -> c_int {
+        // Save old state before buffer operations
+        let old_curbuf = nvim_qf_get_curbuf();
+        let old_lnum = nvim_qf_get_cursor_lnum();
+        let mut retval = OK;
+
+        // If there is a file name, read the wanted file if needed, and check
+        // autowrite etc.
+        if nvim_qfline_get_fnum(qf_ptr) != 0 {
+            retval = rs_qf_jump_edit_buffer(qi, qf_ptr, forceit, prev_winid, opened_window);
+            if retval != OK {
+                return retval;
+            }
+        }
+
+        // When not switched to another buffer, still need to set pc mark
+        if nvim_qf_curbuf_is(old_curbuf) {
+            nvim_qf_setpcmark();
+        }
+
+        nvim_qf_jump_goto_line(
+            nvim_qfline_get_lnum(qf_ptr),
+            nvim_qfline_get_col(qf_ptr),
+            i8::from(nvim_qfline_get_viscol(qf_ptr)),
+            nvim_qfline_get_pattern(qf_ptr),
+        );
+
+        if nvim_qf_fdo_quickfix() && openfold != 0 {
+            nvim_qf_fold_open_cursor();
+        }
+        if print_message {
+            nvim_qf_jump_print_msg(qi, qf_index, qf_ptr, old_curbuf, old_lnum);
+        }
+
+        retval
+    }
 }
 
 // =============================================================================
