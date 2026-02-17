@@ -170,7 +170,7 @@ typedef enum {
   DIFF_NONE,
 } diffstyle_T;
 
-#include "diff.c.generated.h"
+#include "diff_shim.c.generated.h"
 
 #define FOR_ALL_DIFFBLOCKS_IN_TAB(tp, dp) \
   for ((dp) = (tp)->tp_first_diff; (dp) != NULL; (dp) = (dp)->df_next)

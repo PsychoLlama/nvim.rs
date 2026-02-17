@@ -14,4 +14,4 @@ EXTERN bool diff_need_scrollbind INIT( = false);
 
 EXTERN bool need_diff_redraw INIT( = false);  ///< need to call diff_redraw()
 
-#include "diff.h.generated.h"
+#include "diff_shim.h.generated.h"
