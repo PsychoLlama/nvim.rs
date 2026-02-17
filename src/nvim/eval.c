@@ -1120,16 +1120,6 @@ Object eval_foldtext(win_T *wp)
   return retval;
 }
 
-/// Find the end of a variable or function name.  Unlike find_name_end() this
-/// does not recognize magic braces.
-/// When "use_namespace" is true recognize "b:", "s:", etc.
-/// Return a pointer to just after the name.  Equal to "arg" if there is no
-/// valid name.
-static const char *to_name_end(const char *arg, bool use_namespace)
-{
-  return rs_to_name_end(arg, use_namespace);
-}
-
 /// Get an Dict lval variable that can be assigned a value to: "name",
 /// "name[expr]", "name[expr][expr]", "name.key", "name.key[expr]" etc.
 /// "name" points to the start of the name.
@@ -2135,12 +2125,12 @@ int may_call_simple_func(const char *arg, typval_T *rettv)
   if (parens != NULL && *skipwhite(parens + 2) == NUL) {
     if (strnequal(arg, "v:lua.", 6)) {
       const char *p = arg + 6;
-      if (p != parens && skip_luafunc_name(p) == parens) {
+      if (p != parens && rs_skip_luafunc_name(p) == parens) {
         r = call_simple_luafunc(p, (size_t)(parens - p), rettv);
       }
     } else {
       const char *p = strncmp(arg, "<SNR>", 5) == 0 ? skipdigits(arg + 5) : arg;
-      if (to_name_end(p, true) == parens) {
+      if (rs_to_name_end(p, true) == parens) {
         r = call_simple_func(arg, (size_t)(parens - arg), rettv);
       }
     }
@@ -3230,7 +3220,7 @@ static int eval_method(char **const arg, typval_T *const rettv, evalarg_T *const
   char *alias = NULL;
   if (strnequal(name, "v:lua.", 6)) {
     lua_funcname = name + 6;
-    *arg = (char *)skip_luafunc_name(lua_funcname);
+    *arg = (char *)rs_skip_luafunc_name(lua_funcname);
     *arg = skipwhite(*arg);  // to detect trailing whitespace later
     len = (int)(*arg - lua_funcname);
   } else {
@@ -3367,7 +3357,7 @@ static int eval_index(char **arg, typval_T *rettv, evalarg_T *const evalarg, boo
   if (**arg == '.') {
     // dict.name
     key = *arg + 1;
-    for (keylen = 0; eval_isdictc(key[keylen]); keylen++) {}
+    for (keylen = 0; rs_eval_isdictc(key[keylen]); keylen++) {}
     if (keylen == 0) {
       return FAIL;
     }
@@ -3533,9 +3523,9 @@ static int eval_index_inner(typval_T *rettv, bool is_range, typval_T *var1, typv
     int len = (int)strlen(s);
     if (exclusive) {
       if (is_range) {
-        v = string_slice(s, n1, n2, exclusive);
+        v = rs_string_slice(s, n1, n2, exclusive);
       } else {
-        v = char_from_string(s, n1);
+        v = rs_char_from_string(s, n1);
       }
     } else if (is_range) {
       // The resulting variable is a substring.  If the indexes
@@ -4340,8 +4330,8 @@ bool garbage_collect(bool testing)
   {
     Channel *data;
     map_foreach_value(&channels, data, {
-      set_ref_in_callback_reader(&data->on_data, copyID, NULL, NULL);
-      set_ref_in_callback_reader(&data->on_stderr, copyID, NULL, NULL);
+      rs_set_ref_in_callback_reader(&data->on_data, copyID, NULL, NULL);
+      rs_set_ref_in_callback_reader(&data->on_stderr, copyID, NULL, NULL);
       set_ref_in_callback(&data->on_exit, copyID, NULL, NULL);
     })
   }
@@ -4961,12 +4951,6 @@ bool set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                          list_stack_T **list_stack)
 {
   return rs_set_ref_in_callback(callback, copyID, ht_stack, list_stack);
-}
-
-static bool set_ref_in_callback_reader(CallbackReader *reader, int copyID, ht_stack_T **ht_stack,
-                                       list_stack_T **list_stack)
-{
-  return rs_set_ref_in_callback_reader(reader, copyID, ht_stack, list_stack);
 }
 
 timer_T *find_timer_by_nr(varnumber_T xx)
@@ -5607,13 +5591,6 @@ bool eval_isnamec1(int c)
   return rs_eval_isnamec1(c);
 }
 
-/// @return  true if character "c" can be used as the first character of a
-///          dictionary key.
-bool eval_isdictc(int c)
-{
-  return rs_eval_isdictc(c);
-}
-
 /// Set the v:argv list.
 void set_argv_var(char **argv, int argc)
 {
@@ -5648,39 +5625,11 @@ static bool tv_is_luafunc(typval_T *tv)
   return tv->v_type == VAR_PARTIAL && is_luafunc(tv->vval.v_partial);
 }
 
-/// Skips one character past the end of the name of a v:lua function.
-/// @param p  Pointer to the char AFTER the "v:lua." prefix.
-/// @return Pointer to the char one past the end of the function's name.
-const char *skip_luafunc_name(const char *p)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_skip_luafunc_name(p);
-}
-
 /// check the function name after "v:lua."
 int check_luafunc_name(const char *const str, const bool paren)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return rs_check_luafunc_name(str, paren);
-}
-
-/// Return the character "str[index]" where "index" is the character index,
-/// including composing characters.
-/// If "index" is out of range NULL is returned.
-char *char_from_string(const char *str, varnumber_T index)
-{
-  return rs_char_from_string(str, index);
-}
-
-/// Return the slice "str[first : last]" using character indexes.  Composing
-/// characters are included.
-///
-/// @param exclusive  true for slice().
-///
-/// Return NULL when the result is empty.
-char *string_slice(const char *str, varnumber_T first, varnumber_T last, bool exclusive)
-{
-  return rs_string_slice(str, first, last, exclusive);
 }
 
 /// Handle:
