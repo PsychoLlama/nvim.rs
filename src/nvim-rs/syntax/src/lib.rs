@@ -175,67 +175,17 @@ extern "C" {
 
     /// Get b_syn_spell (SYNSPL_ values)
     fn nvim_synblock_get_syn_spell(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_foldlevel
-    fn nvim_synblock_get_syn_foldlevel(block: SynBlockHandle) -> c_int;
-
     /// Get b_syn_containedin (true if any item has containedin)
     fn nvim_synblock_get_containedin(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_sync_flags
-    fn nvim_synblock_get_sync_flags(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_sync_id
-    fn nvim_synblock_get_sync_id(block: SynBlockHandle) -> i16;
-
-    /// Get b_syn_sync_minlines
-    fn nvim_synblock_get_sync_minlines(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_sync_maxlines
-    fn nvim_synblock_get_sync_maxlines(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_sync_linebreaks
-    fn nvim_synblock_get_sync_linebreaks(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_topgrp (for :syntax include)
-    fn nvim_synblock_get_topgrp(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_conceal (auto-conceal for :syn cmds)
-    fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
-
     /// Get b_syn_folditems (number of patterns with HL_FOLD)
     fn nvim_synblock_get_folditems(block: SynBlockHandle) -> c_int;
-
-    /// Get b_sst_len (number of entries in b_sst_array)
-    fn nvim_synblock_get_sst_len(block: SynBlockHandle) -> c_int;
-
-    /// Get b_sst_freecount (number of free entries)
-    fn nvim_synblock_get_sst_freecount(block: SynBlockHandle) -> c_int;
-
-    /// Get b_sst_check_lnum (entries after this need to be checked)
-    fn nvim_synblock_get_sst_check_lnum(block: SynBlockHandle) -> c_int;
-
     /// Get b_syn_error (true when error occurred in HL)
     fn nvim_synblock_get_syn_error(block: SynBlockHandle) -> c_int;
 
     /// Get b_syn_slow (true when 'redrawtime' reached)
     fn nvim_synblock_get_syn_slow(block: SynBlockHandle) -> c_int;
-
-    /// Get b_spell_cluster_id (@Spell cluster ID or 0)
-    fn nvim_synblock_get_spell_cluster_id(block: SynBlockHandle) -> c_int;
-
-    /// Get b_nospell_cluster_id (@NoSpell cluster ID or 0)
-    fn nvim_synblock_get_nospell_cluster_id(block: SynBlockHandle) -> c_int;
-
     /// Get b_sst_first (first used entry in state array)
     fn nvim_synblock_get_sst_first(block: SynBlockHandle) -> SynStateHandle;
-
-    /// Get b_sst_firstfree (first free entry in state array)
-    fn nvim_synblock_get_sst_firstfree(block: SynBlockHandle) -> SynStateHandle;
-
-    /// Check if b_sst_array is allocated
-    fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
-
     /// Get synpat_T at index from b_syn_patterns
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
 
@@ -257,10 +207,6 @@ extern "C" {
 
     /// Get sst_next_flags (flags for sst_next_list)
     fn nvim_synstate_get_next_flags(state: SynStateHandle) -> c_int;
-
-    /// Get sst_tick (tick when last displayed)
-    fn nvim_synstate_get_tick(state: SynStateHandle) -> c_int;
-
     /// Get sst_change_lnum (line where change may have invalidated state)
     fn nvim_synstate_get_change_lnum(state: SynStateHandle) -> c_int;
 
@@ -273,44 +219,13 @@ extern "C" {
 
     /// Get sp_syncing (this item used for syncing)
     fn nvim_synpat_get_syncing(pat: SynPatHandle) -> c_int;
-
-    /// Get sp_syn_match_id (highlight group ID of pattern)
-    fn nvim_synpat_get_syn_match_id(pat: SynPatHandle) -> i16;
-
-    /// Get sp_off_flags (offset flags)
-    fn nvim_synpat_get_off_flags(pat: SynPatHandle) -> i16;
-
     /// Get sp_flags (HL_ flags)
     fn nvim_synpat_get_flags(pat: SynPatHandle) -> c_int;
-
-    /// Get sp_cchar (conceal substitute character)
-    fn nvim_synpat_get_cchar(pat: SynPatHandle) -> c_int;
-
-    /// Get sp_ic (ignore-case flag for sp_prog)
-    fn nvim_synpat_get_ic(pat: SynPatHandle) -> c_int;
-
-    /// Get sp_sync_idx (sync item index, syncing only)
-    fn nvim_synpat_get_sync_idx(pat: SynPatHandle) -> c_int;
-
-    /// Get sp_pattern (pattern string)
-    fn nvim_synpat_get_pattern(pat: SynPatHandle) -> *const c_char;
-
     /// Get sp_syn.id (highlight group ID)
     fn nvim_synpat_get_syn_id(pat: SynPatHandle) -> i16;
-
-    /// Get sp_syn.inc_tag (include tag)
-    fn nvim_synpat_get_syn_inc_tag(pat: SynPatHandle) -> c_int;
-
     // -------------------------------------------------------------------------
     // syn_cluster_T accessors (syntax cluster)
     // -------------------------------------------------------------------------
-
-    /// Get scl_name (cluster name)
-    fn nvim_syncluster_get_name(cluster: SynClusterHandle) -> *const c_char;
-
-    /// Get scl_name_u (uppercase cluster name)
-    fn nvim_syncluster_get_name_u(cluster: SynClusterHandle) -> *const c_char;
-
     // -------------------------------------------------------------------------
     // stateitem_T accessors (current state item)
     // -------------------------------------------------------------------------
@@ -332,44 +247,11 @@ extern "C" {
 
     /// Get si_attr (attributes in this state)
     fn nvim_stateitem_get_attr(item: StateItemHandle) -> c_int;
-
-    /// Get si_flags (HL_ flags and skip flags)
-    fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
-
-    /// Get si_seqnr (sequence number)
-    fn nvim_stateitem_get_seqnr(item: StateItemHandle) -> c_int;
-
     /// Get si_cchar (substitution character for conceal)
     fn nvim_stateitem_get_cchar(item: StateItemHandle) -> c_int;
-
-    /// Get si_end_idx (group ID for end pattern or zero)
-    fn nvim_stateitem_get_end_idx(item: StateItemHandle) -> c_int;
-
-    /// Get si_ends (if match ends before si_m_endpos)
-    fn nvim_stateitem_get_ends(item: StateItemHandle) -> c_int;
-
     // -------------------------------------------------------------------------
     // keyentry_T accessors (keyword entry)
     // -------------------------------------------------------------------------
-
-    /// Get ke_next (next entry with identical keyword)
-    fn nvim_keyentry_get_next(ke: KeyEntryHandle) -> KeyEntryHandle;
-
-    /// Get k_syn.id (highlight group ID)
-    fn nvim_keyentry_get_syn_id(ke: KeyEntryHandle) -> i16;
-
-    /// Get k_syn.inc_tag (include tag)
-    fn nvim_keyentry_get_syn_inc_tag(ke: KeyEntryHandle) -> c_int;
-
-    /// Get flags
-    fn nvim_keyentry_get_flags(ke: KeyEntryHandle) -> c_int;
-
-    /// Get k_char (conceal substitute character)
-    fn nvim_keyentry_get_char(ke: KeyEntryHandle) -> c_int;
-
-    /// Get keyword string
-    fn nvim_keyentry_get_keyword(ke: KeyEntryHandle) -> *const c_char;
-
     // -------------------------------------------------------------------------
     // Syntax state global accessors
     // -------------------------------------------------------------------------
@@ -583,19 +465,6 @@ extern "C" {
     // -------------------------------------------------------------------------
     // Phase 18a: Synblock setters for :syntax commands
     // -------------------------------------------------------------------------
-
-    /// Set b_syn_ic (ignore case for :syn cmds)
-    fn nvim_synblock_set_syn_ic(block: SynBlockHandle, ic: c_int);
-
-    /// Set b_syn_spell (SYNSPL_ values)
-    fn nvim_synblock_set_syn_spell(block: SynBlockHandle, spell: c_int);
-
-    /// Set b_syn_foldlevel
-    fn nvim_synblock_set_syn_foldlevel(block: SynBlockHandle, foldlevel: c_int);
-
-    /// Set b_syn_conceal (auto-conceal for :syn cmds)
-    fn nvim_synblock_set_conceal(block: SynBlockHandle, conceal: c_int);
-
     /// Get the number of subcommands
     fn nvim_syn_get_subcommand_count() -> c_int;
 
@@ -644,10 +513,6 @@ extern "C" {
 
     /// Call validate_current_state()
     fn nvim_syn_validate_current_state();
-
-    /// Call invalidate_current_state()
-    fn nvim_syn_invalidate_current_state();
-
     /// Set keepend_level
     fn nvim_syn_set_keepend_level(level: c_int);
 
@@ -713,270 +578,19 @@ extern "C" {
 
     /// Get NSUBEXP constant
     fn nvim_syn_get_nsubexp() -> c_int;
-
-    /// Get the sp_ic (ignore case) flag for a pattern at index
-    fn nvim_synblock_pattern_ic(pat_idx: c_int) -> c_int;
-
     /// Get si_extmatch from a stateitem
     fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
 
     // -------------------------------------------------------------------------
     // Phase 24.2: Core Pattern Matching Helpers
     // -------------------------------------------------------------------------
-
-    /// Get si_m_endpos.lnum from stateitem
-    fn nvim_stateitem_get_m_endpos_lnum(item: StateItemHandle) -> c_int;
-
-    /// Get si_m_endpos.col from stateitem
-    fn nvim_stateitem_get_m_endpos_col(item: StateItemHandle) -> c_int;
-
-    /// Get si_h_startpos.lnum from stateitem
-    fn nvim_stateitem_get_h_startpos_lnum(item: StateItemHandle) -> c_int;
-
-    /// Get si_h_startpos.col from stateitem
-    fn nvim_stateitem_get_h_startpos_col(item: StateItemHandle) -> c_int;
-
-    /// Get si_h_endpos.lnum from stateitem
-    fn nvim_stateitem_get_h_endpos_lnum(item: StateItemHandle) -> c_int;
-
-    /// Get si_h_endpos.col from stateitem
-    fn nvim_stateitem_get_h_endpos_col(item: StateItemHandle) -> c_int;
-
-    /// Get si_eoe_pos.lnum from stateitem
-    fn nvim_stateitem_get_eoe_pos_lnum(item: StateItemHandle) -> c_int;
-
-    /// Get si_eoe_pos.col from stateitem
-    fn nvim_stateitem_get_eoe_pos_col(item: StateItemHandle) -> c_int;
-
-    /// Set si_m_endpos
-    fn nvim_stateitem_set_m_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
-
-    /// Set si_h_endpos
-    fn nvim_stateitem_set_h_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
-
-    /// Set si_eoe_pos
-    fn nvim_stateitem_set_eoe_pos(item: StateItemHandle, lnum: c_int, col: c_int);
-
-    /// Set si_idx
-    fn nvim_stateitem_set_idx(item: StateItemHandle, idx: c_int);
-
-    /// Set si_end_idx
-    fn nvim_stateitem_set_end_idx(item: StateItemHandle, end_idx: c_int);
-
-    /// Set si_flags
-    fn nvim_stateitem_set_flags(item: StateItemHandle, flags: c_int);
-
-    /// Add flags to si_flags
-    fn nvim_stateitem_add_flags(item: StateItemHandle, flags: c_int);
-
-    /// Set si_seqnr
-    fn nvim_stateitem_set_seqnr(item: StateItemHandle, seqnr: c_int);
-
-    /// Set si_ends
-    fn nvim_stateitem_set_ends(item: StateItemHandle, ends: c_int);
-
-    /// Set si_id
-    fn nvim_stateitem_set_id(item: StateItemHandle, id: c_int);
-
-    /// Set si_trans_id
-    fn nvim_stateitem_set_trans_id(item: StateItemHandle, trans_id: c_int);
-
-    /// Set si_attr
-    fn nvim_stateitem_set_attr(item: StateItemHandle, attr: c_int);
-
-    /// Set si_cont_list
-    fn nvim_stateitem_set_cont_list(item: StateItemHandle, list: IdListHandle);
-
-    /// Get next_match_idx
-    fn nvim_syn_get_next_match_idx_value() -> c_int;
-
-    /// Set next_match_idx
-    fn nvim_syn_set_next_match_idx(idx: c_int);
-
-    /// Set next_match_col
-    fn nvim_syn_set_next_match_col(col: c_int);
-
-    /// Set current_next_list
-    fn nvim_syn_set_current_next_list_ptr(list: IdListHandle);
-
-    /// Get current_next_list
-    fn nvim_syn_get_current_next_list_ptr() -> IdListHandle;
-
-    /// Call check_state_ends
-    fn nvim_syn_check_state_ends();
-
-    /// Call update_si_attr
-    fn nvim_syn_call_update_si_attr(idx: c_int);
-
-    /// Call pop_current_state
-    fn nvim_syn_pop_current_state();
-
-    /// Call push_current_state
-    fn nvim_syn_push_current_state(idx: c_int);
-
-    /// Get the current line at the current column
-    fn nvim_syn_getcurline_at_col() -> c_char;
-
-    /// Check if current_state is empty
-    fn nvim_syn_current_state_is_empty() -> c_int;
-
-    /// Set current_finished
-    fn nvim_syn_set_current_finished(finished: c_int);
-
-    /// Get synpat_T sp_type for pattern at index
-    fn nvim_synblock_pattern_type(idx: c_int) -> c_int;
-
-    /// Get synpat_T sp_flags for pattern at index
-    fn nvim_synblock_pattern_flags(idx: c_int) -> c_int;
-
-    /// Get synpat_T sp_syn.id for pattern at index
-    fn nvim_synblock_pattern_syn_id(idx: c_int) -> c_int;
-
-    /// Get synpat_T sp_syn_match_id for pattern at index
-    fn nvim_synblock_pattern_match_id(idx: c_int) -> c_int;
-
-    /// Get synpat_T sp_cont_list for pattern at index
-    fn nvim_synblock_pattern_cont_list(idx: c_int) -> IdListHandle;
-
-    /// Get synpat_T sp_next_list for pattern at index
-    fn nvim_synblock_pattern_next_list(idx: c_int) -> IdListHandle;
-
-    /// Call syn_id2attr
-    fn nvim_syn_id2attr_wrapper(syn_id: c_int) -> c_int;
-
-    /// Call syn_update_ends
-    fn nvim_syn_call_syn_update_ends(syncing: c_int);
-
-    /// Get si_next_list from stateitem
-    fn nvim_stateitem_get_next_list(item: StateItemHandle) -> IdListHandle;
-
-    /// Set si_next_list for stateitem
-    fn nvim_stateitem_set_next_list(item: StateItemHandle, list: IdListHandle);
-
-    /// Check if the ID_LIST_ALL constant matches a pointer
-    fn nvim_syn_is_id_list_all(list: IdListHandle) -> c_int;
-
-    /// Get the ID_LIST_ALL pointer
-    fn nvim_syn_get_id_list_all() -> IdListHandle;
-
     // -------------------------------------------------------------------------
     // Phase 24.3: Keyword Matching Helpers
     // -------------------------------------------------------------------------
-
-    /// Call check_keyword_id from Rust
-    fn nvim_syn_check_keyword_id(
-        line: *mut c_char,
-        startcol: c_int,
-        endcolp: *mut c_int,
-        flagsp: *mut c_int,
-        next_listp: *mut IdListHandle,
-        cur_si: StateItemHandle,
-        ccharp: *mut c_int,
-    ) -> c_int;
-
-    /// Call in_id_list from Rust
-    fn nvim_syn_in_id_list(
-        cur_si: StateItemHandle,
-        list: IdListHandle,
-        id: c_int,
-        inc_tag: c_int,
-        cont_in_list: IdListHandle,
-        flags: c_int,
-    ) -> c_int;
-
-    /// Check if there are keywords (case sensitive) in synblock
-    fn nvim_syn_has_keywords() -> c_int;
-
-    /// Check if there are keywords (case insensitive) in synblock
-    fn nvim_syn_has_keywords_ic() -> c_int;
-
-    /// Get the current line from syn_getcurline
-    fn nvim_syn_getcurline() -> *mut c_char;
-
-    /// Call save_chartab for syntax iskeyword
-    fn nvim_syn_save_chartab(buf: *mut c_char);
-
-    /// Call restore_chartab
-    fn nvim_syn_restore_chartab(buf: *mut c_char);
-
     // NOTE: Keyword-related FFI functions moved to keyword.rs module
-
-    /// Get syn_buf pointer (for keyword char checks)
-    fn nvim_syn_get_buf() -> *mut std::ffi::c_void;
-
     // -------------------------------------------------------------------------
     // Phase 24.4: Pattern Stack Operations Helpers (new declarations only)
     // -------------------------------------------------------------------------
-
-    /// Get the current_state garray length
-    fn nvim_syn_current_state_len() -> c_int;
-
-    /// Get a stateitem from current_state by index
-    fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
-
-    /// Get top stateitem from current_state
-    fn nvim_syn_get_top_stateitem() -> StateItemHandle;
-
-    /// Get next_seqnr global
-    fn nvim_syn_get_next_seqnr() -> c_int;
-
-    /// Set next_seqnr global
-    fn nvim_syn_set_next_seqnr(seqnr: c_int);
-
-    /// Increment and get next_seqnr global
-    fn nvim_syn_incr_next_seqnr() -> c_int;
-
-    /// Get next_match_h_startpos
-    fn nvim_syn_get_next_match_h_startpos(lnum: *mut c_int, col: *mut c_int);
-
-    /// Get next_match_m_endpos
-    fn nvim_syn_get_next_match_m_endpos(lnum: *mut c_int, col: *mut c_int);
-
-    /// Get next_match_h_endpos
-    fn nvim_syn_get_next_match_h_endpos(lnum: *mut c_int, col: *mut c_int);
-
-    /// Get next_match_eos_pos
-    fn nvim_syn_get_next_match_eos_pos(lnum: *mut c_int, col: *mut c_int);
-
-    /// Get next_match_eoe_pos
-    fn nvim_syn_get_next_match_eoe_pos(lnum: *mut c_int, col: *mut c_int);
-
-    /// Get next_match_flags
-    fn nvim_syn_get_next_match_flags() -> c_int;
-
-    /// Get next_match_end_idx
-    fn nvim_syn_get_next_match_end_idx() -> c_int;
-
-    /// Get next_match_extmatch
-    fn nvim_syn_get_next_match_extmatch() -> ExtMatchHandle;
-
-    /// Call ref_extmatch
-    fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
-
-    /// Call unref_extmatch
-    fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
-
-    /// Call push_next_match from Rust
-    fn nvim_syn_push_next_match() -> StateItemHandle;
-
-    /// Get synpat sp_flags by index
-    fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
-
-    /// Get synpat sp_cchar by index
-    fn nvim_syn_get_pattern_cchar(idx: c_int) -> c_int;
-
-    /// Get synpat sp_next_list by index
-    fn nvim_syn_get_pattern_next_list(idx: c_int) -> IdListHandle;
-
-    /// Get synpat sp_type by index
-    fn nvim_syn_get_pattern_type(idx: c_int) -> c_int;
-
-    /// Get synpat sp_syn_match_id by index
-    fn nvim_syn_get_pattern_syn_match_id(idx: c_int) -> c_int;
-
-    /// Get GA_EMPTY(&current_state) check
-    fn nvim_syn_is_current_state_empty() -> c_int;
-
     /// Set si_h_startpos
     fn nvim_stateitem_set_h_startpos(item: StateItemHandle, lnum: c_int, col: c_int);
 
@@ -985,160 +599,13 @@ extern "C" {
 
     /// Set si_m_lnum
     fn nvim_stateitem_set_m_lnum(item: StateItemHandle, lnum: c_int);
-
-    /// Or si_flags with a value
-    fn nvim_stateitem_or_flags(item: StateItemHandle, flags: c_int);
-
     /// Set si_cchar
     fn nvim_stateitem_set_cchar(item: StateItemHandle, cchar: c_int);
-
-    /// Set si_extmatch
-    fn nvim_stateitem_set_extmatch(item: StateItemHandle, em: ExtMatchHandle);
-
-    /// Get SPTYPE_START constant
-    fn nvim_syn_get_sptype_start() -> c_int;
-
-    /// Get HL_ONELINE constant
-    fn nvim_syn_get_hl_oneline() -> c_int;
-
-    /// Get HL_KEEPEND constant
-    fn nvim_syn_get_hl_keepend() -> c_int;
-
-    /// Get HL_MATCH constant
-    fn nvim_syn_get_hl_match() -> c_int;
-
-    /// Get HL_CONCEAL constant
-    fn nvim_syn_get_hl_conceal() -> c_int;
-
-    /// Get HL_CONCEALENDS constant
-    fn nvim_syn_get_hl_concealends() -> c_int;
-
     // -------------------------------------------------------------------------
     // Phase 24.5: Sync and Line Operations Helpers
     // -------------------------------------------------------------------------
-
-    /// Call syn_start_line from Rust
-    fn nvim_syn_start_line();
-
-    /// Call syn_finish_line from Rust
-    fn nvim_syn_finish_line(syncing: c_int) -> c_int;
-
-    /// Call syn_update_ends from Rust
-    fn nvim_syn_update_ends(startofline: c_int);
-
-    /// Get current_line_id global
-    fn nvim_syn_get_current_line_id() -> c_int;
-
-    /// Increment current_line_id global
-    fn nvim_syn_incr_current_line_id();
-
-    /// Get syn_block pointer
-    fn nvim_syn_get_syn_block() -> SynBlockHandle;
-
-    /// Set syn_block pointer
-    fn nvim_syn_set_syn_block(block: SynBlockHandle);
-
-    /// Get syn_win pointer
-    fn nvim_syn_get_syn_win() -> WinHandle;
-
-    /// Set syn_win pointer
-    fn nvim_syn_set_syn_win(win: WinHandle);
-
-    /// Get b_syn_sync_minlines from syn_block
-    fn nvim_syn_get_sync_minlines() -> c_int;
-
-    /// Get b_syn_sync_maxlines from syn_block
-    fn nvim_syn_get_sync_maxlines() -> c_int;
-
-    /// Get b_syn_sync_flags from syn_block
-    fn nvim_syn_get_sync_flags() -> c_int;
-
-    /// Get b_syn_sync_id from syn_block
-    fn nvim_syn_get_sync_id() -> c_int;
-
-    /// Get b_sst_first from syn_block (first in valid state list)
-    fn nvim_syn_get_sst_first() -> SynStateHandle;
-
-    /// Get b_sst_array from syn_block
-    fn nvim_syn_get_sst_array() -> *mut std::ffi::c_void;
-
-    /// Get b_sst_len from syn_block
-    fn nvim_syn_get_sst_len() -> c_int;
-
     /// Set synstate sst_change_lnum
     fn nvim_synstate_set_change_lnum(p: SynStateHandle, lnum: c_int);
-
-    /// Call syn_stack_find_entry from Rust (void* return for FFI)
-    fn nvim_syn_stack_find_entry_ptr(lnum: c_int) -> SynStateHandle;
-
-    /// Set current_id global
-    fn nvim_syn_set_current_id(id: c_int);
-
-    /// Set current_trans_id global
-    fn nvim_syn_set_current_trans_id(id: c_int);
-
-    /// Set current_flags global
-    fn nvim_syn_set_current_flags(flags: c_int);
-
-    /// Set current_seqnr global
-    fn nvim_syn_set_current_seqnr(seqnr: c_int);
-
-    /// Get HL_MATCHCONT constant
-    fn nvim_syn_get_hl_matchcont() -> c_int;
-
-    /// Get HL_EXTEND constant
-    fn nvim_syn_get_hl_extend() -> c_int;
-
-    /// Get SF_CCOMMENT constant
-    fn nvim_syn_get_sf_ccomment() -> c_int;
-
-    /// Get SF_MATCH constant
-    fn nvim_syn_get_sf_match() -> c_int;
-
-    /// Get HL_SYNC_HERE constant
-    fn nvim_syn_get_hl_sync_here() -> c_int;
-
-    /// Get HL_SYNC_THERE constant
-    fn nvim_syn_get_hl_sync_there() -> c_int;
-
-    /// Get SPTYPE_MATCH constant
-    fn nvim_syn_get_sptype_match() -> c_int;
-
-    /// Call syn_stack_alloc from Rust
-    fn nvim_syn_stack_alloc();
-
-    /// Get w_s from window (synblock)
-    fn nvim_win_get_synblock(wp: WinHandle) -> SynBlockHandle;
-
-    /// Get w_buffer from window (void* return for FFI)
-    fn nvim_syn_win_get_buffer_ptr(wp: WinHandle) -> BufHandle;
-
-    /// Get ml_line_count from buffer (void* input for FFI)
-    fn nvim_syn_buf_get_line_count(buf: BufHandle) -> c_int;
-
-    /// Call buf_get_changedtick from Rust (void* input for FFI)
-    fn nvim_syn_buf_get_changed_tick(buf: BufHandle) -> c_int;
-
-    /// Set b_sst_lasttick in syn_block
-    fn nvim_syn_set_sst_lasttick(tick: c_int);
-
-    /// Get display_tick global
-    fn nvim_syn_get_display_tick() -> c_int;
-
-    /// Call line_breakcheck from Rust
-    fn nvim_syn_line_breakcheck();
-
-    /// Get got_int global
-    fn nvim_syn_get_got_int() -> c_int;
-
-    /// Get Rows global
-    fn nvim_syn_get_rows() -> c_int;
-
-    /// Set the syn_buf pointer
-    fn nvim_syn_set_syn_buf(buf: BufHandle);
-
-    /// Set current_sub_char
-    fn nvim_syn_set_current_sub_char(c: c_int);
 }
 
 // =============================================================================
@@ -3183,13 +2650,6 @@ pub extern "C" fn rs_syn_running_inc_tag() -> c_int {
 
 extern "C" {
     // Additional C accessors for Phase 143
-    fn nvim_get_syntax_info(seqnrp: *mut c_int) -> c_int;
-
-    fn nvim_syntax_end_parsing(wp: WinHandle, lnum: c_int);
-
-    fn nvim_synstate_set_tick(state: SynStateHandle, tick: c_int);
-
-    fn nvim_synstate_get_tick_val(state: SynStateHandle) -> c_int;
 }
 /// Get stateitem m_lnum field.
 ///
@@ -3898,9 +3358,6 @@ pub const extern "C" fn rs_syn_timeout_is_valid(timeout: c_int) -> bool {
 // Note: The extern declarations for these functions are already present
 // earlier in the file. We just add new Rust exports below.
 extern "C" {
-    fn nvim_syn_cluster_name2id(name: *const c_char) -> c_int;
-    fn nvim_synblock_is_spell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
-    fn nvim_synblock_is_nospell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
     // nvim_synblock_get_spell_cluster_id and nvim_synblock_get_nospell_cluster_id
     // are already declared earlier in the file.
 }
