@@ -177,9 +177,6 @@ extern void rs_check_marks_read(void);
 /// Common prefix for all ignorable “write” errors
 #define WERR "E574: "
 
-/// Callback function for add_search_pattern
-typedef void (*SearchPatternGetter)(SearchPattern *);
-
 /// Possible ShaDa entry types
 ///
 /// @warning Enum values are part of the API and must not be altered.
@@ -466,16 +463,6 @@ static const ShadaEntry sd_default_values[] = {
 #undef DEFAULT_POS
 #undef DEF_SDE
 
-/// Initialize new linked list
-///
-/// @param[out]  hmll       List to initialize.
-/// @param[in]   size       Maximum size of the list.
-static inline void hmll_init(HMLList *const hmll, const size_t size)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_hmll_init(hmll, size);
-}
-
 /// Iterate over HMLList in forward direction
 ///
 /// @param  hmll       Pointer to the list.
@@ -488,38 +475,6 @@ static inline void hmll_init(HMLList *const hmll, const size_t size)
        (cur_entry) = (cur_entry)->next) { \
     code \
   } \
-
-/// Remove entry from the linked list
-///
-/// @param  hmll        List to remove from.
-/// @param  hmll_entry  Entry to remove.
-static inline void hmll_remove(HMLList *const hmll, HMLListEntry *const hmll_entry)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_hmll_remove(hmll, hmll_entry);
-}
-
-/// Insert entry to the linked list
-///
-/// @param[out]  hmll            List to insert to.
-/// @param[in]   hmll_entry      Entry to insert after or NULL if it is needed
-///                              to insert at the first entry.
-/// @param[in]   data            Data to insert.
-/// @param[in]   can_free_entry  True if data can be freed.
-static inline void hmll_insert(HMLList *const hmll, HMLListEntry *hmll_entry, const ShadaEntry data)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  rs_hmll_insert(hmll, hmll_entry, data);
-}
-
-/// Free linked list
-///
-/// @param[in]  hmll  List to free.
-static inline void hmll_dealloc(HMLList *const hmll)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_hmll_dealloc(hmll);
-}
 
 /// Wrapper for read that can be used when lseek cannot be used
 ///
@@ -549,108 +504,6 @@ static ShaDaReadResult sd_reader_skip(FileDescriptor *const sd_reader, const siz
     return kSDReadStatusNotShaDa;
   }
   return kSDReadStatusSuccess;
-}
-
-/// Wrapper for closing file descriptors
-static void close_file(FileDescriptor *cookie)
-{
-  rs_close_file(cookie);
-}
-
-/// Read ShaDa file
-///
-/// @param[in]  file   File to read or NULL to use default name.
-/// @param[in]  flags  Flags, see ShaDaReadFileFlags enum.
-///
-/// @return FAIL if reading failed for some reason and OK otherwise.
-static int shada_read_file(const char *const file, const int flags)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_shada_read_file(file, flags);
-}
-
-/// Wrapper for hist_iter() function which produces ShadaEntry values
-///
-/// @param[in]   iter          Current iteration state.
-/// @param[in]   history_type  Type of the history (HIST_*).
-/// @param[in]   zero          If true, then item is removed from instance
-///                            memory upon reading.
-/// @param[out]  hist          Location where iteration results should be saved.
-///
-/// @return Next iteration state.
-static const void *shada_hist_iter(const void *const iter, const uint8_t history_type,
-                                   const bool zero, ShadaEntry *const hist)
-  FUNC_ATTR_NONNULL_ARG(4) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_shada_hist_iter(iter, history_type, zero ? 1 : 0, hist);
-}
-
-/// Insert history entry
-///
-/// Inserts history entry at the end of the ring buffer (may insert earlier
-/// according to the timestamp). If entry was already in the ring buffer
-/// existing entry will be removed unless it has greater timestamp.
-///
-/// Before the new entry entries from the current Neovim history will be
-/// inserted unless `do_iter` argument is false.
-///
-/// @param[in,out]  hms_p           Ring buffer and associated structures.
-/// @param[in]      entry           Inserted entry.
-/// @param[in]      do_iter         Determines whether Neovim own history should
-///                                 be used. Must be true only if inserting
-///                                 entry from current Neovim history.
-static void hms_insert(HistoryMergerState *const hms_p, const ShadaEntry entry, const bool do_iter)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_hms_insert(hms_p, entry, do_iter ? 1 : 0);
-}
-
-/// Initialize the history merger
-///
-/// @param[out]  hms_p         Structure to be initialized.
-/// @param[in]   history_type  History type (one of HIST_\* values).
-/// @param[in]   num_elements  Number of elements in the result.
-/// @param[in]   do_merge      Prepare structure for merging elements.
-/// @param[in]   reading       If true, then merger is reading history for use
-///                            in Neovim.
-static inline void hms_init(HistoryMergerState *const hms_p, const uint8_t history_type,
-                            const size_t num_elements, const bool do_merge, const bool reading)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_hms_init(hms_p, history_type, num_elements, do_merge ? 1 : 0, reading ? 1 : 0);
-}
-
-/// Merge in all remaining Neovim own history entries
-///
-/// @param[in,out]  hms_p  Merger structure into which history should be
-///                        inserted.
-static inline void hms_insert_whole_neovim_history(HistoryMergerState *const hms_p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_hms_insert_whole_neovim_history(hms_p);
-}
-
-/// Convert merger structure to Neovim internal structure for history
-///
-/// @param[in]   hms_p       Converted merger structure.
-/// @param[out]  hist_array  Array with the results.
-/// @param[out]  new_hisidx  New last history entry index.
-/// @param[out]  new_hisnum  Amount of history items in merger structure.
-static inline void hms_to_he_array(const HistoryMergerState *const hms_p,
-                                   histentry_T *const hist_array, int *const new_hisidx,
-                                   int *const new_hisnum)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_hms_to_he_array(hms_p, hist_array, new_hisidx, new_hisnum);
-}
-
-/// Free history merger structure
-///
-/// @param[in]  hms_p  Structure to be freed.
-static inline void hms_dealloc(HistoryMergerState *const hms_p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_hms_dealloc(hms_p);
 }
 
 /// Iterate over all history entries in history merger, in order
@@ -734,19 +587,6 @@ static buf_T *find_buffer(PMap(cstr_t) *const fname_bufs, const char *const fnam
   }
   *ref = NULL;
   return NULL;
-}
-
-/// Compare two marks
-static inline bool marks_equal(const pos_T a, const pos_T b)
-{
-  return (a.lnum == b.lnum) && (a.col == b.col);
-}
-
-/// adjust "jumps_arr" to make space to insert an item just before the item at "i"
-/// Delegated to Rust rs_marklist_insert.
-static int marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i)
-{
-  return rs_marklist_insert(jumps_arr, jump_size, jl_len, i);
 }
 
 /// Read data from ShaDa file
@@ -1108,13 +948,6 @@ shada_read_main_cycle_end:
   set_destroy(cstr_t, &oldfiles_set);
 }
 
-
-/// Get the default ShaDa file
-static const char *shada_get_default_file(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_shada_get_default_file();
-}
 
 /// Get the ShaDa file name to use
 ///
@@ -1818,89 +1651,6 @@ static inline ShaDaWriteResult shada_read_when_writing(FileDescriptor *const sd_
   }
 #undef COMPARE_WITH_ENTRY
   return ret;
-}
-
-/// Check whether buffer should be ignored
-///
-/// @param[in]  buf  buf_T* to check.
-/// @param[in]  removable_bufs  Cache of buffers ignored due to their location.
-///
-/// @return true or false.
-/// Delegated to Rust rs_ignore_buf.
-static inline bool ignore_buf(const buf_T *const buf, Set(ptr_t) *const removable_bufs)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_ALWAYS_INLINE
-{
-  return rs_ignore_buf(buf, removable_bufs) != 0;
-}
-
-/// Get list of buffers to write to the shada file
-///
-/// @param[in]  removable_bufs  Buffers which are ignored
-///
-/// @return  ShadaEntry  List of buffers to save, kSDItemBufferList entry.
-static inline ShadaEntry shada_get_buflist(Set(ptr_t) *const removable_bufs)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_ALWAYS_INLINE
-{
-  return rs_shada_get_buflist(removable_bufs);
-}
-
-/// Save search pattern to ShadaEntry
-///
-/// @param[out]  ret_pse  Location where result will be saved.
-/// @param[in]  get_pattern  Function used to get pattern.
-/// @param[in]  is_substitute_pattern  True if pattern in question is substitute
-///                                    pattern. Also controls whether some
-///                                    fields should be initialized to default
-///                                    or values from get_pattern.
-/// @param[in]  search_last_used  Result of search_was_last_used().
-/// @param[in]  search_highlighted  True if search pattern was highlighted by
-///                                 &hlsearch and this information should be
-///                                 saved.
-static inline void add_search_pattern(ShadaEntry *const ret_pse,
-                                      const SearchPatternGetter get_pattern,
-                                      const bool is_substitute_pattern, const bool search_last_used,
-                                      const bool search_highlighted)
-  FUNC_ATTR_ALWAYS_INLINE
-{
-  rs_add_search_pattern(ret_pse, is_substitute_pattern ? 1 : 0,
-                        search_last_used ? 1 : 0, search_highlighted ? 1 : 0);
-}
-
-/// Initialize registers for writing to the ShaDa file
-///
-/// @param[in]  wms  The WriteMergerState used when writing.
-/// @param[in]  max_reg_lines  The maximum number of register lines.
-static inline void shada_initialize_registers(WriteMergerState *const wms, int max_reg_lines)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_ALWAYS_INLINE
-{
-  rs_shada_initialize_registers(wms, max_reg_lines);
-}
-
-/// Replace numbered mark in WriteMergerState
-///
-/// Frees the last mark, moves marks from idx to last-but-one and saves new mark.
-/// Delegated to Rust rs_replace_numbered_mark.
-static inline void replace_numbered_mark(WriteMergerState *const wms, const size_t idx,
-                                         const ShadaEntry entry)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_ALWAYS_INLINE
-{
-  rs_replace_numbered_mark(wms, idx, entry);
-}
-
-/// Find buffers ignored due to their location.
-///
-/// @param[out]  removable_bufs  Cache of buffers ignored due to their location.
-/// Delegated to Rust rs_find_removable_bufs.
-static inline void find_removable_bufs(Set(ptr_t) *removable_bufs)
-{
-  rs_find_removable_bufs(removable_bufs);
-}
-
-/// Translate a history type number to the associated character
-static int hist_type2char(const int type)
-  FUNC_ATTR_CONST
-{
-  return rs_hist_type2char(type);
 }
 
 static PackerBuffer packer_buffer_for_file(FileDescriptor *file)
@@ -3216,30 +2966,6 @@ shada_read_next_item_error:
   xfree(error_alloc);
   kv_destroy(ad);
   goto shada_read_next_item_end;
-}
-
-/// Check whether "name" is on removable media (according to 'shada')
-///
-/// @param[in]  name  Checked name.
-///
-/// @return True if it is, false otherwise.
-/// Delegated to Rust rs_shada_removable.
-static bool shada_removable(const char *name)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_shada_removable(name) != 0;
-}
-
-/// Initialize ShaDa jumplist entries.
-///
-/// @param[in,out]  jumps           Array of ShaDa entries to set.
-/// @param[in]      removable_bufs  Cache of buffers ignored due to their
-///                                 location.
-///
-/// @return number of jumplist entries
-static inline size_t shada_init_jumps(ShadaEntry *jumps, Set(ptr_t) *const removable_bufs)
-{
-  return rs_shada_init_jumps(jumps, removable_bufs);
 }
 
 /// Write registers ShaDa entries in given msgpack_sbuffer.
