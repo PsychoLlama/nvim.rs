@@ -883,7 +883,7 @@ OptVal get_option_default(const OptIndex opt_idx, int opt_flags)
 static void alloc_options_default(void)
 {
   for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-    options[opt_idx].def_val = optval_copy(options[opt_idx].def_val);
+    options[opt_idx].def_val = rs_optval_copy(options[opt_idx].def_val);
   }
 }
 
@@ -1064,12 +1064,12 @@ void set_init_3(void)
       const OptVal sp =
         is_csh ? STATIC_CSTR_AS_OPTVAL("|& tee") : STATIC_CSTR_AS_OPTVAL("2>&1| tee");
       set_option_direct(kOptShellpipe, sp, 0, SID_NONE);
-      change_option_default(kOptShellpipe, optval_copy(sp));
+      change_option_default(kOptShellpipe, rs_optval_copy(sp));
     }
     if (do_srr) {
       const OptVal srr = is_csh ? STATIC_CSTR_AS_OPTVAL(">&") : STATIC_CSTR_AS_OPTVAL(">%s 2>&1");
       set_option_direct(kOptShellredir, srr, 0, SID_NONE);
-      change_option_default(kOptShellredir, optval_copy(srr));
+      change_option_default(kOptShellredir, rs_optval_copy(srr));
     }
   }
   xfree(p);
@@ -1501,7 +1501,7 @@ static OptVal get_option_newval(OptIndex opt_idx, int opt_flags, set_prefix_T pr
     // ":set opt&": Reset to default value.
     // NOTE: Use OPT_GLOBAL instead of opt_flags to ensure we don't use the unset local value for
     // global-local options when OPT_LOCAL is used.
-    return optval_copy(get_option_default(opt_idx, OPT_GLOBAL));
+    return rs_optval_copy(get_option_default(opt_idx, OPT_GLOBAL));
   } else if (nextchar == '<') {
     // ":set opt<": Reset to global value.
     // ":setlocal opt<": Copy global value to local value.
@@ -3339,18 +3339,6 @@ void optval_free(OptVal o)
   rs_optval_free(o);
 }
 
-/// Copy an OptVal.
-OptVal optval_copy(OptVal o)
-{
-  return rs_optval_copy(o);
-}
-
-/// Check if two option values are equal.
-bool optval_equal(OptVal o1, OptVal o2)
-{
-  return rs_optval_equal(o1, o2) != 0;
-}
-
 /// Get type of option.
 static OptValType option_get_type(const OptIndex opt_idx)
 {
@@ -3591,7 +3579,7 @@ OptVal get_option_value(OptIndex opt_idx, int opt_flags)
   vimoption_T *opt = &options[opt_idx];
   void *varp = get_varp_scope(opt, opt_flags);
 
-  return optval_copy(optval_from_varp(opt_idx, varp));
+  return rs_optval_copy(optval_from_varp(opt_idx, varp));
 }
 
 /// Return information for option at 'opt_idx'
@@ -3655,7 +3643,7 @@ static bool is_option_local_value_unset(OptIndex opt_idx)
   OptVal local_value = optval_from_varp(opt_idx, varp_local);
   OptVal unset_local_value = get_option_unset_value(opt_idx);
 
-  return optval_equal(local_value, unset_local_value);
+  return rs_optval_equal(local_value, unset_local_value) != 0;
 }
 
 /// Handle side-effects of setting an option.
@@ -3702,7 +3690,7 @@ static const char *did_set_option(OptIndex opt_idx, void *varp, OptVal old_value
     // Don't do any extra processing if setting directly.
   }
   // Disallow changing immutable options.
-  else if (opt->immutable && !optval_equal(old_value, new_value)) {
+  else if (opt->immutable && rs_optval_equal(old_value, new_value) == 0) {
     errmsg = e_unsupportedoption;
   }
   // Disallow changing some options from secure mode.
@@ -3757,11 +3745,11 @@ static const char *did_set_option(OptIndex opt_idx, void *varp, OptVal old_value
       // Free the local value and clear it.
       void *varp_local = get_varp_scope(opt, OPT_LOCAL);
       OptVal local_unset_value = get_option_unset_value(opt_idx);
-      set_option_varp(opt_idx, varp_local, optval_copy(local_unset_value), true);
+      set_option_varp(opt_idx, varp_local, rs_optval_copy(local_unset_value), true);
     } else {
       // May set global value for local option.
       void *varp_global = get_varp_scope(opt, OPT_GLOBAL);
-      set_option_varp(opt_idx, varp_global, optval_copy(new_value), true);
+      set_option_varp(opt_idx, varp_global, rs_optval_copy(new_value), true);
     }
   }
 
@@ -3841,7 +3829,7 @@ static const char *validate_option_value(const OptIndex opt_idx, OptVal *newval,
 
   // Always allow unsetting local value of global-local option.
   if (option_is_global_local(opt_idx) && (opt_flags & OPT_LOCAL)
-      && optval_equal(*newval, get_option_unset_value(opt_idx))) {
+      && rs_optval_equal(*newval, get_option_unset_value(opt_idx)) != 0) {
     return NULL;
   }
 
@@ -3852,7 +3840,7 @@ static const char *validate_option_value(const OptIndex opt_idx, OptVal *newval,
     if (opt_flags == OPT_GLOBAL) {
       errmsg = _("Cannot unset global option value");
     } else {
-      *newval = optval_copy(get_option_unset_value(opt_idx));
+      *newval = rs_optval_copy(get_option_unset_value(opt_idx));
     }
   } else if (!option_has_type(opt_idx, newval->type)) {
     char *rep = optval_to_cstr(*newval);
@@ -3930,11 +3918,11 @@ static const char *set_option(const OptIndex opt_idx, OptVal value, int opt_flag
                           : old_value;
 
   // Save the old values and the new value in case they get changed.
-  OptVal saved_used_value = optval_copy(used_old_value);
-  OptVal saved_old_global_value = optval_copy(old_global_value);
-  OptVal saved_old_local_value = optval_copy(old_local_value);
+  OptVal saved_used_value = rs_optval_copy(used_old_value);
+  OptVal saved_old_global_value = rs_optval_copy(old_global_value);
+  OptVal saved_old_local_value = rs_optval_copy(old_local_value);
   // New value (and varp) may become invalid if the buffer is closed by autocommands.
-  OptVal saved_new_value = optval_copy(value);
+  OptVal saved_new_value = rs_optval_copy(value);
 
   uint32_t *p = insecure_flag(curwin, opt_idx, opt_flags);
   const int secure_saved = secure;
@@ -3989,7 +3977,7 @@ void set_option_direct(OptIndex opt_idx, OptVal value, int opt_flags, scid_T set
     return;
   }
 
-  const char *errmsg = set_option(opt_idx, optval_copy(value), opt_flags, set_sid, true, true,
+  const char *errmsg = set_option(opt_idx, rs_optval_copy(value), opt_flags, set_sid, true, true,
                                   errbuf, sizeof(errbuf));
   assert(errmsg == NULL);
   (void)errmsg;  // ignore unused warning
@@ -4051,7 +4039,7 @@ const char *set_option_value(const OptIndex opt_idx, const OptVal value, int opt
     return _(e_sandbox);
   }
 
-  return set_option(opt_idx, optval_copy(value), opt_flags, 0, false, true, errbuf, sizeof(errbuf));
+  return set_option(opt_idx, rs_optval_copy(value), opt_flags, 0, false, true, errbuf, sizeof(errbuf));
 }
 
 /// Unset the local value of a global-local option.
@@ -4343,7 +4331,7 @@ static int optval_default(OptIndex opt_idx, void *varp)
   OptVal current_val = optval_from_varp(opt_idx, varp);
   OptVal default_val = opt->def_val;
 
-  return optval_equal(current_val, default_val);
+  return rs_optval_equal(current_val, default_val) != 0;
 }
 
 /// Send update to UIs with values of UI relevant options
@@ -4549,7 +4537,7 @@ static int put_set(FILE *fd, char *cmd, OptIndex opt_idx, void *varp)
   uint64_t flags = opt->flags;
 
   if (option_is_global_local(opt_idx) && varp != opt->var
-      && optval_equal(value, get_option_unset_value(opt_idx))) {
+      && rs_optval_equal(value, get_option_unset_value(opt_idx)) != 0) {
     // Processing unset local value of global-local option. Do nothing.
     return OK;
   }
