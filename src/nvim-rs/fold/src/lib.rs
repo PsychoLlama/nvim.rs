@@ -216,9 +216,6 @@ extern "C" {
     #[allow(dead_code)]
     fn nvim_win_get_w_foldinvalid(wp: WinHandle) -> bool;
 
-    /// Call checkupdate for a window.
-    fn nvim_checkupdate(wp: WinHandle);
-
     /// Set the fd_flags field of a fold.
     fn nvim_fold_set_fd_flags(fp: FoldHandle, flags: c_int);
 
@@ -592,7 +589,7 @@ fn fold_find(gap: GArrayHandle, lnum: LineNr) -> Option<(FoldHandle, bool)> {
 /// Get fold level at line number `lnum` in window `wp`.
 ///
 /// Recursively searches for folds that contain `lnum`.
-fn fold_level_win_impl(wp: WinHandle, lnum: LineNr) -> c_int {
+pub(crate) fn fold_level_win_impl(wp: WinHandle, lnum: LineNr) -> c_int {
     if wp.is_null() {
         return 0;
     }
@@ -646,7 +643,7 @@ fn get_deepest_nesting_impl(wp: WinHandle) -> c_int {
     }
 
     // First, update folds if needed
-    unsafe { nvim_checkupdate(wp) };
+    checkupdate_impl(wp);
 
     let gap = unsafe { nvim_win_get_folds(wp) };
     get_deepest_nesting_recurse(gap)
@@ -806,7 +803,7 @@ fn fold_open_nested_impl(fp: FoldHandle) {
 /// Set small flags in a fold array to kNone.
 ///
 /// This resets the fd_small field so it will be recalculated.
-fn set_small_maybe_impl(gap: GArrayHandle) {
+pub(crate) fn set_small_maybe_impl(gap: GArrayHandle) {
     if gap.is_null() {
         return;
     }
@@ -881,7 +878,7 @@ fn has_folding_win_impl(win: WinHandle, lnum: LineNr, cache: bool) -> FoldingRes
     }
 
     // First update folds
-    unsafe { nvim_checkupdate(win) };
+    checkupdate_impl(win);
 
     // Return quickly when there is no folding at all in this window.
     if !has_any_folding_impl(win) {
@@ -1332,7 +1329,7 @@ pub unsafe extern "C" fn rs_check_closed(
 ///
 /// Grows the array if needed, shifts existing folds, and initializes the new fold's
 /// nested garray.
-fn fold_insert_impl(gap: GArrayHandle, i: c_int) {
+pub(crate) fn fold_insert_impl(gap: GArrayHandle, i: c_int) {
     if gap.is_null() || i < 0 {
         return;
     }
@@ -1364,7 +1361,12 @@ fn fold_insert_impl(gap: GArrayHandle, i: c_int) {
 ///
 /// When `recursive` is true, also delete all the folds contained in it.
 /// When `recursive` is false, contained folds are moved one level up.
-fn delete_fold_entry_impl(wp: WinHandle, gap: GArrayHandle, idx: c_int, recursive: bool) {
+pub(crate) fn delete_fold_entry_impl(
+    wp: WinHandle,
+    gap: GArrayHandle,
+    idx: c_int,
+    recursive: bool,
+) {
     if wp.is_null() || gap.is_null() || idx < 0 {
         return;
     }
@@ -1465,7 +1467,13 @@ fn delete_fold_entry_impl(wp: WinHandle, gap: GArrayHandle, idx: c_int, recursiv
 /// "bot" in two pieces, one ending above "top" and the other starting below "bot".
 ///
 /// The caller must first have taken care of any nested folds from "top" to "bot"!
-fn fold_split_impl(buf: BufHandle, gap: GArrayHandle, i: c_int, top: LineNr, bot: LineNr) {
+pub(crate) fn fold_split_impl(
+    buf: BufHandle,
+    gap: GArrayHandle,
+    i: c_int,
+    top: LineNr,
+    bot: LineNr,
+) {
     if buf.is_null() || gap.is_null() || i < 0 {
         return;
     }
@@ -1557,7 +1565,7 @@ fn fold_split_impl(buf: BufHandle, gap: GArrayHandle, i: c_int, top: LineNr, bot
 /// 4: deleted
 /// 5: made to start below "bot".
 /// 6: not changed
-fn fold_remove_impl(wp: WinHandle, gap: GArrayHandle, top: LineNr, bot: LineNr) {
+pub(crate) fn fold_remove_impl(wp: WinHandle, gap: GArrayHandle, top: LineNr, bot: LineNr) {
     if wp.is_null() || gap.is_null() || bot < top {
         return;
     }
@@ -1642,7 +1650,7 @@ fn fold_remove_impl(wp: WinHandle, gap: GArrayHandle, top: LineNr, bot: LineNr) 
 /// must end just above "fp2".
 /// The resulting fold is "fp1", nested folds are moved from "fp2" to "fp1".
 /// Fold entry "fp2" in "gap" is deleted.
-fn fold_merge_impl(wp: WinHandle, fp1_idx: c_int, gap: GArrayHandle, fp2_idx: c_int) {
+pub(crate) fn fold_merge_impl(wp: WinHandle, fp1_idx: c_int, gap: GArrayHandle, fp2_idx: c_int) {
     if wp.is_null() || gap.is_null() {
         return;
     }
@@ -1755,7 +1763,7 @@ fn fold_find_with_idx(gap: GArrayHandle, lnum: LineNr) -> Option<(bool, c_int)> 
 /// Update line numbers of folds in a garray for inserted/deleted lines.
 ///
 /// Recursive helper used by foldMarkAdjust.
-fn fold_mark_adjust_recurse_impl(
+pub(crate) fn fold_mark_adjust_recurse_impl(
     wp: WinHandle,
     gap: GArrayHandle,
     line1: LineNr,
@@ -1998,7 +2006,7 @@ fn set_manual_fold_win_impl(
     }
 
     // checkupdate(wp)
-    unsafe { nvim_checkupdate(wp) };
+    checkupdate_impl(wp);
 
     let mut level = 0;
     let mut use_level = false;
@@ -2194,7 +2202,7 @@ fn new_fold_level_win_impl(wp: WinHandle) {
         return;
     }
 
-    unsafe { nvim_checkupdate(wp) };
+    checkupdate_impl(wp);
 
     let w_fold_manual = unsafe { nvim_win_get_w_fold_manual(wp) };
     if w_fold_manual != 0 {
@@ -2753,7 +2761,7 @@ fn fold_move_to_impl(updown: bool, dir: c_int, count: c_int) -> c_int {
     let mut retval = FAIL;
 
     // Update folds first
-    unsafe { nvim_checkupdate(curwin) };
+    checkupdate_impl(curwin);
 
     // Repeat "count" times
     for _ in 0..count {
@@ -3041,7 +3049,7 @@ fn fold_create_impl(wp: WinHandle, mut start_lnum: LineNr, mut end_lnum: LineNr)
     }
 
     // checkupdate(wp)
-    unsafe { nvim_checkupdate(wp) };
+    checkupdate_impl(wp);
 
     let mut use_level = false;
     let mut closed = false;
@@ -3214,7 +3222,7 @@ fn delete_fold_impl(wp: WinHandle, start: LineNr, end: LineNr, recursive: bool, 
     }
 
     // checkupdate(wp)
-    unsafe { nvim_checkupdate(wp) };
+    checkupdate_impl(wp);
 
     let mut lnum = start;
     let mut did_one = false;
@@ -3375,7 +3383,7 @@ fn fold_open_cursor_impl() {
     let curwin = unsafe { nvim_get_curwin() };
 
     // checkupdate(curwin)
-    unsafe { nvim_checkupdate(curwin) };
+    checkupdate_impl(curwin);
 
     if !has_any_folding_impl(curwin) {
         return;
@@ -3454,7 +3462,7 @@ pub extern "C" fn rs_foldOpenCursor() {
 // ============================================================================
 
 /// Check if the folds in window "wp" are invalid and update them if needed.
-fn checkupdate_impl(wp: WinHandle) {
+pub(crate) fn checkupdate_impl(wp: WinHandle) {
     if wp.is_null() {
         return;
     }

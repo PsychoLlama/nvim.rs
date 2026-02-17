@@ -301,7 +301,6 @@ extern "C" {
     fn nvim_foldmethod_is_diff(wp: WinHandle) -> c_int;
 
     // Fold operations
-    fn nvim_foldLevelWin(wp: WinHandle, lnum: LinenrT) -> c_int;
     fn nvim_changed_window_setting(wp: WinHandle);
     fn nvim_redraw_win_range_later(wp: WinHandle, top: LinenrT, bot: LinenrT);
 
@@ -354,22 +353,6 @@ extern "C" {
     fn nvim_get_diff_context() -> LinenrT;
 
     // Fold manipulation
-    fn nvim_foldRemove(wp: WinHandle, gap: GArrayHandle, top: LinenrT, bot: LinenrT);
-    fn nvim_foldInsert(gap: GArrayHandle, i: c_int);
-    fn nvim_foldSplit(buf: BufHandle, gap: GArrayHandle, i: c_int, top: LinenrT, bot: LinenrT);
-    fn nvim_deleteFoldEntry(wp: WinHandle, gap: GArrayHandle, idx: c_int, recursive: c_int);
-    fn nvim_foldMerge(wp: WinHandle, fp1_idx: c_int, gap: GArrayHandle, fp2_idx: c_int);
-    fn nvim_foldMarkAdjustRecurse(
-        wp: WinHandle,
-        gap: GArrayHandle,
-        line1: LinenrT,
-        line2: LinenrT,
-        amount: LinenrT,
-        amount_after: LinenrT,
-    );
-
-    // setSmallMaybe
-    fn nvim_setSmallMaybe(gap: GArrayHandle);
 
     // foldFind - returns index or -1 if not found
     fn nvim_foldFind(gap: GArrayHandle, lnum: LinenrT, found_idx: *mut c_int) -> c_int;
@@ -569,7 +552,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
 
         // Mark all folds as maybe-small
         let gap = unsafe { nvim_win_get_folds(wp) };
-        unsafe { nvim_setSmallMaybe(gap) };
+        crate::set_small_maybe_impl(gap);
     }
 
     // Add context for diff folding
@@ -604,7 +587,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
         // Need to get the level of the line above top, it is used if there is
         // no marker at the top.
         if top > 1 {
-            let level = unsafe { nvim_foldLevelWin(wp, top - 1) };
+            let level = crate::fold_level_win_impl(wp, top - 1);
             flp.lnum = top - 1;
             flp.lvl = level;
             call_marker_level_getter(&mut flp);
@@ -725,7 +708,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
                 end = ft + fl - 1;
                 should_break = false;
             } else if kind == LevelGetterKind::Syntax
-                && unsafe { nvim_foldLevelWin(wp, flp.lnum) } != flp.lvl
+                && crate::fold_level_win_impl(wp, flp.lnum) != flp.lvl
             {
                 // For "syntax" method: Compare the foldlevel that the syntax
                 // tells us to the foldlevel from the existing folds.
@@ -766,7 +749,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
     }
 
     // Remove any remaining folds from start to end
-    unsafe { nvim_foldRemove(wp, gap, start, end) };
+    crate::fold_remove_impl(wp, gap, start, end);
 
     // Redraw if folds changed
     if unsafe { nvim_get_fold_changed() } && unsafe { nvim_win_get_p_fen(wp) } != 0 {
@@ -953,7 +936,7 @@ fn fold_update_iems_recurse(
                                 if fd_top > firstlnum {
                                     unsafe {
                                         let nested = nvim_fold_get_fd_nested(fp);
-                                        nvim_foldMarkAdjustRecurse(
+                                        crate::fold_mark_adjust_recurse_impl(
                                             wp,
                                             nested,
                                             0,
@@ -965,7 +948,7 @@ fn fold_update_iems_recurse(
                                 } else {
                                     unsafe {
                                         let nested = nvim_fold_get_fd_nested(fp);
-                                        nvim_foldMarkAdjustRecurse(
+                                        crate::fold_mark_adjust_recurse_impl(
                                             wp,
                                             nested,
                                             0,
@@ -993,15 +976,19 @@ fn fold_update_iems_recurse(
                                 let fp = unsafe { nvim_ga_fold_at(gap, found_idx) };
                                 let nested = unsafe { nvim_fold_get_fd_nested(fp) };
                                 let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
-                                unsafe {
-                                    nvim_foldRemove(
-                                        wp,
-                                        nested,
-                                        breakstart - fd_top,
-                                        breakend - fd_top,
-                                    );
-                                    nvim_foldSplit(buf, gap, found_idx, breakstart, breakend - 1);
-                                }
+                                crate::fold_remove_impl(
+                                    wp,
+                                    nested,
+                                    breakstart - fd_top,
+                                    breakend - fd_top,
+                                );
+                                crate::fold_split_impl(
+                                    buf,
+                                    gap,
+                                    found_idx,
+                                    breakstart,
+                                    breakend - 1,
+                                );
                                 fp_idx = found_idx + 1;
 
                                 // Divergence point 3a: finish flag after split
@@ -1019,9 +1006,7 @@ fn fold_update_iems_recurse(
                                     let fd2_top = unsafe { nvim_fold_get_fd_top(fp2) };
                                     let fd2_len = unsafe { nvim_fold_get_fd_len(fp2) };
                                     if fd2_top + fd2_len == fd_top {
-                                        unsafe {
-                                            nvim_foldMerge(wp, fp_idx - 1, gap, fp_idx);
-                                        }
+                                        crate::fold_merge_impl(wp, fp_idx - 1, gap, fp_idx);
                                         fp_idx -= 1;
                                     }
                                 }
@@ -1031,15 +1016,13 @@ fn fold_update_iems_recurse(
                         if fd_top >= startlnum {
                             // Delete fold that's no longer valid. Continue
                             // looking for the next one.
-                            unsafe {
-                                nvim_deleteFoldEntry(wp, gap, found_idx, 1);
-                            }
+                            crate::delete_fold_entry_impl(wp, gap, found_idx, true);
                         } else {
                             // Truncate fold that extends past startlnum
                             unsafe {
                                 nvim_fold_set_fd_len(fp, startlnum - fd_top);
                                 let nested = nvim_fold_get_fd_nested(fp);
-                                nvim_foldMarkAdjustRecurse(
+                                crate::fold_mark_adjust_recurse_impl(
                                     wp,
                                     nested,
                                     startlnum - fd_top,
@@ -1061,7 +1044,7 @@ fn fold_update_iems_recurse(
                             idx = fi;
                         }
 
-                        unsafe { nvim_foldInsert(gap, idx) };
+                        crate::fold_insert_impl(gap, idx);
                         let fp = unsafe { nvim_ga_fold_at(gap, idx) };
 
                         unsafe {
@@ -1095,7 +1078,7 @@ fn fold_update_iems_recurse(
                 } else {
                     // gap is empty, insert a new fold
                     let idx = 0;
-                    unsafe { nvim_foldInsert(gap, idx) };
+                    crate::fold_insert_impl(gap, idx);
                     let fp = unsafe { nvim_ga_fold_at(gap, idx) };
 
                     unsafe {
@@ -1222,9 +1205,7 @@ fn fold_update_iems_recurse(
     // Delete contained folds from end of last found to current position
     let nested = unsafe { nvim_fold_get_fd_nested(fp) };
     let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
-    unsafe {
-        nvim_foldRemove(wp, nested, startlnum2 - fd_top, flp.lnum - 1 - fd_top);
-    }
+    crate::fold_remove_impl(wp, nested, startlnum2 - fd_top, flp.lnum - 1 - fd_top);
 
     // Handle fold end
     // Divergence point 4: Truncate vs split
@@ -1242,9 +1223,7 @@ fn fold_update_iems_recurse(
                     }
                 } else {
                     // indent/diff: split fold to create a new one below bot
-                    unsafe {
-                        nvim_foldSplit(buf, gap, fp_idx, flp.lnum, bot);
-                    }
+                    crate::fold_split_impl(buf, gap, fp_idx, flp.lnum, bot);
                 }
             } else {
                 unsafe {
@@ -1275,7 +1254,7 @@ fn fold_update_iems_recurse(
                 // Make fold start at lnum
                 let nested = unsafe { nvim_fold_get_fd_nested(fp2) };
                 unsafe {
-                    nvim_foldMarkAdjustRecurse(
+                    crate::fold_mark_adjust_recurse_impl(
                         wp,
                         nested,
                         0,
@@ -1291,17 +1270,13 @@ fn fold_update_iems_recurse(
 
             if lvl >= level {
                 // Merge with following fold
-                unsafe {
-                    nvim_foldMerge(wp, fp_idx, gap, fp_idx + 1);
-                }
+                crate::fold_merge_impl(wp, fp_idx, gap, fp_idx + 1);
             }
             break;
         }
 
-        unsafe {
-            nvim_set_fold_changed(true);
-            nvim_deleteFoldEntry(wp, gap, fp_idx + 1, 1);
-        }
+        unsafe { nvim_set_fold_changed(true) };
+        crate::delete_fold_entry_impl(wp, gap, fp_idx + 1, true);
     }
 
     max(bot, flp.lnum - 1)

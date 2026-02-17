@@ -103,9 +103,6 @@ extern int rs_foldManualAllowed(bool create);
 extern bool rs_diff_infold(win_T *wp, linenr_T lnum);
 extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
 
-// Rust FFI declarations for Phase 1: Pure recursive functions
-extern void rs_setSmallMaybe(garray_T *gap);
-
 // Rust FFI declarations for Phase 3: State query functions
 extern void rs_checkSmall(win_T *wp, fold_T *fp, linenr_T lnum_off);
 extern int rs_check_closed(win_T *wp, fold_T *fp, bool *use_level, int level,
@@ -118,15 +115,6 @@ extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
 
 // Rust FFI declarations for Phase 2: Core query functions
 extern int rs_getDeepestNesting(win_T *wp);
-
-// Rust FFI declarations for Phase 1: Fold Tree Manipulation
-extern void rs_foldInsert(garray_T *gap, int i);
-extern void rs_deleteFoldEntry(win_T *wp, garray_T *gap, int idx, bool recursive);
-extern void rs_foldSplit(buf_T *buf, garray_T *gap, int i, linenr_T top, linenr_T bot);
-extern void rs_foldRemove(win_T *wp, garray_T *gap, linenr_T top, linenr_T bot);
-extern void rs_foldMerge(win_T *wp, int fp1_idx, garray_T *gap, int fp2_idx);
-extern void rs_foldMarkAdjustRecurse(win_T *wp, garray_T *gap, linenr_T line1,
-                                     linenr_T line2, linenr_T amount, linenr_T amount_after);
 
 // Rust FFI declarations for Phase 2: Fold State Management
 extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
@@ -155,7 +143,6 @@ extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive
 extern void rs_foldMoveRange(win_T *wp, garray_T *gap, linenr_T line1, linenr_T line2,
                              linenr_T dest);
 extern int rs_foldLevel(linenr_T lnum);
-extern void rs_checkupdate(win_T *wp);
 extern void rs_foldCheckClose(void);
 extern int rs_lineFolded(win_T *wp, linenr_T lnum);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
@@ -391,20 +378,6 @@ static bool foldFind(const garray_T *gap, linenr_T lnum, fold_T **fpp)
   }
   *fpp = fp + low;
   return false;
-}
-
-// foldLevelWin() {{{2
-/// @return  fold level at line number "lnum" in window "wp".
-static int foldLevelWin(win_T *wp, linenr_T lnum)
-{
-  return rs_foldLevelWin(wp, lnum);
-}
-
-// checkupdate() {{{2
-/// Check if the folds in window "wp" are invalid and update them if needed.
-static void checkupdate(win_T *wp)
-{
-  rs_checkupdate(wp);
 }
 
 // deleteFoldRecurse() {{{2
@@ -1049,7 +1022,7 @@ static int put_foldopen_recurse(FILE *fd, win_T *wp, garray_T *gap, linenr_T off
         // Open or close the leaf according to the window foldlevel.
         // Do not close a leaf that is already closed, as it will close
         // the parent.
-        int level = foldLevelWin(wp, off + fp->fd_top);
+        int level = rs_foldLevelWin(wp, off + fp->fd_top);
         if ((fp->fd_flags == FD_CLOSED && wp->w_p_fdl >= level)
             || (fp->fd_flags != FD_CLOSED && wp->w_p_fdl < level)) {
           if (put_fold_open_close(fd, fp, off) == FAIL) {
@@ -1286,12 +1259,6 @@ int nvim_fold_get_fd_flags(fold_T *fp)
 bool nvim_win_get_w_foldinvalid(win_T *wp)
 {
   return wp->w_foldinvalid;
-}
-
-/// Call checkupdate for a window.
-void nvim_checkupdate(win_T *wp)
-{
-  checkupdate(wp);
 }
 
 /// Get the w_lines_valid field from a window.
@@ -1788,12 +1755,6 @@ linenr_T nvim_get_diff_context(void)
   return diff_context;
 }
 
-/// Wrapper for foldLevelWin.
-int nvim_foldLevelWin(win_T *wp, linenr_T lnum)
-{
-  return foldLevelWin(wp, lnum);
-}
-
 /// Redraw window range later.
 void nvim_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot)
 {
@@ -1923,49 +1884,6 @@ FoldLevelResult_C nvim_foldlevelSyntax(win_T *wp, linenr_T lnum, linenr_T off)
     .end = flp.end,
   };
   return result;
-}
-
-/// Wrapper for foldRemove.
-void nvim_foldRemove(win_T *wp, garray_T *gap, linenr_T top, linenr_T bot)
-{
-  rs_foldRemove(wp, gap, top, bot);
-}
-
-/// Wrapper for foldInsert.
-void nvim_foldInsert(garray_T *gap, int i)
-{
-  rs_foldInsert(gap, i);
-}
-
-/// Wrapper for foldSplit.
-void nvim_foldSplit(buf_T *buf, garray_T *gap, int i, linenr_T top, linenr_T bot)
-{
-  rs_foldSplit(buf, gap, i, top, bot);
-}
-
-/// Wrapper for deleteFoldEntry.
-void nvim_deleteFoldEntry(win_T *wp, garray_T *gap, int idx, int recursive)
-{
-  rs_deleteFoldEntry(wp, gap, idx, recursive != 0);
-}
-
-/// Wrapper for foldMerge.
-void nvim_foldMerge(win_T *wp, int fp1_idx, garray_T *gap, int fp2_idx)
-{
-  rs_foldMerge(wp, fp1_idx, gap, fp2_idx);
-}
-
-/// Wrapper for foldMarkAdjustRecurse.
-void nvim_foldMarkAdjustRecurse(win_T *wp, garray_T *gap, linenr_T line1,
-                                linenr_T line2, linenr_T amount, linenr_T amount_after)
-{
-  rs_foldMarkAdjustRecurse(wp, gap, line1, line2, amount, amount_after);
-}
-
-/// Wrapper for setSmallMaybe.
-void nvim_setSmallMaybe(garray_T *gap)
-{
-  rs_setSmallMaybe(gap);
 }
 
 /// Wrapper for foldFind that returns index.
