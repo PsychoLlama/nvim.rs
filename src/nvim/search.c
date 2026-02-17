@@ -167,6 +167,10 @@ extern void rs_cmdline_search_stat(int dirc, int pos_lnum, int pos_col, int pos_
 
 // Rust FFI declarations for pattern utilities
 extern int rs_ctrl_x_mode_not_default(void);
+extern int rs_compl_status_adding(void);
+extern int rs_compl_status_sol(void);
+extern int rs_ins_compl_len(void);
+extern int rs_ins_compl_interrupted(void);
 extern int rs_pat_has_uppercase(const char *pat);
 extern int rs_ignorecase(const char *pat);
 extern int rs_ignorecase_opt(const char *pat, int ic, int scs);
@@ -1883,7 +1887,7 @@ static char *get_line_and_copy(linenr_T lnum, char *buf)
 }
 
 /// Find identifiers or defines in included files.
-/// If p_ic && compl_status_sol() then ptr must be in lowercase.
+/// If p_ic && rs_compl_status_sol() then ptr must be in lowercase.
 ///
 /// @param ptr            pointer to search pattern
 /// @param dir            direction of expansion
@@ -1981,7 +1985,7 @@ FpipInitResult nvim_fpip_init(const char *ptr, int dir, size_t len,
   st->file_line = xmalloc(LSIZE);
 
   if (type != CHECK_PATH && type != FIND_DEFINE
-      && !compl_status_sol()) {
+      && !rs_compl_status_sol()) {
     size_t patsize = len + 5;
     char *pat = xmalloc(patsize);
     assert(len <= INT_MAX);
@@ -2232,7 +2236,7 @@ search_line:
       }
 
       if (def_regmatch->regprog == NULL || define_matched) {
-        if (define_matched || compl_status_sol()) {
+        if (define_matched || rs_compl_status_sol()) {
           startp = skipwhite(p);
           if (p_ic) {
             matched = !mb_strnicmp(startp, ptr, len);
@@ -2285,8 +2289,8 @@ search_line:
         }
         found = true;
         char *aux = p = startp;
-        if (compl_status_adding() && (int)strlen(p) >= ins_compl_len()) {
-          p += ins_compl_len();
+        if (rs_compl_status_adding() && (int)strlen(p) >= rs_ins_compl_len()) {
+          p += rs_ins_compl_len();
           if (vim_iswordp(p)) {
             goto exit_matched;
           }
@@ -2295,7 +2299,7 @@ search_line:
         p = find_word_end(p);
         i = (int)(p - aux);
 
-        if (compl_status_adding() && i == ins_compl_len()) {
+        if (rs_compl_status_adding() && i == rs_ins_compl_len()) {
           strncpy(IObuff, aux, (size_t)i);  // NOLINT(runtime/printf)
 
           if (depth < 0) {
@@ -2333,7 +2337,7 @@ search_line:
           IObuff[i] = NUL;
           aux = IObuff;
 
-          if (i == ins_compl_len()) {
+          if (i == rs_ins_compl_len()) {
             goto exit_matched;
           }
         }
@@ -2432,7 +2436,7 @@ exit_matched:
       matched = false;
       if (def_regmatch->regprog == NULL
           && action == ACTION_EXPAND
-          && !compl_status_sol()
+          && !rs_compl_status_sol()
           && *startp != NUL
           && *(startp + utfc_ptr2len(startp)) != NUL) {
         goto search_line;
@@ -2442,7 +2446,7 @@ exit_matched:
     if (action == ACTION_EXPAND) {
       ins_compl_check_keys(30, false);
     }
-    if (got_int || ins_compl_interrupted()) {
+    if (got_int || rs_ins_compl_interrupted()) {
       break;
     }
 
@@ -2494,7 +2498,7 @@ exit_matched:
       }
     }
   } else if (!found && action != ACTION_EXPAND && !st->silent) {
-    if (got_int || ins_compl_interrupted()) {
+    if (got_int || rs_ins_compl_interrupted()) {
       emsg(_(e_interr));
     } else if (type == FIND_DEFINE) {
       emsg(_("E388: Couldn't find definition"));
@@ -2564,7 +2568,7 @@ static void find_pattern_in_path_old(char *ptr, Direction dir, size_t len, bool 
   if (type != CHECK_PATH && type != FIND_DEFINE
       // when CONT_SOL is set compare "ptr" with the beginning of the
       // line is faster than quote_meta/regcomp/regexec "ptr" -- Acevedo
-      && !compl_status_sol()) {
+      && !rs_compl_status_sol()) {
     size_t patsize = len + 5;
     char *pat = xmalloc(patsize);
     assert(len <= INT_MAX);
@@ -2791,7 +2795,7 @@ search_line:
       // Look for a match.  Don't do this if we are looking for a
       // define and this line didn't match define_prog above.
       if (def_regmatch.regprog == NULL || define_matched) {
-        if (define_matched || compl_status_sol()) {
+        if (define_matched || rs_compl_status_sol()) {
           // compare the first "len" chars from "ptr"
           startp = skipwhite(p);
           if (p_ic) {
@@ -2854,8 +2858,8 @@ search_line:
         }
         found = true;
         char *aux = p = startp;
-        if (compl_status_adding() && (int)strlen(p) >= ins_compl_len()) {
-          p += ins_compl_len();
+        if (rs_compl_status_adding() && (int)strlen(p) >= rs_ins_compl_len()) {
+          p += rs_ins_compl_len();
           if (vim_iswordp(p)) {
             goto exit_matched;
           }
@@ -2864,7 +2868,7 @@ search_line:
         p = find_word_end(p);
         i = (int)(p - aux);
 
-        if (compl_status_adding() && i == ins_compl_len()) {
+        if (rs_compl_status_adding() && i == rs_ins_compl_len()) {
           // IOSIZE > compl_length, so the strncpy works
           strncpy(IObuff, aux, (size_t)i);  // NOLINT(runtime/printf)
 
@@ -2911,7 +2915,7 @@ search_line:
           IObuff[i] = NUL;
           aux = IObuff;
 
-          if (i == ins_compl_len()) {
+          if (i == rs_ins_compl_len()) {
             goto exit_matched;
           }
         }
@@ -3021,7 +3025,7 @@ exit_matched:
       // are not at the end of it already
       if (def_regmatch.regprog == NULL
           && action == ACTION_EXPAND
-          && !compl_status_sol()
+          && !rs_compl_status_sol()
           && *startp != NUL
           && *(startp + utfc_ptr2len(startp)) != NUL) {
         goto search_line;
@@ -3031,7 +3035,7 @@ exit_matched:
     if (action == ACTION_EXPAND) {
       ins_compl_check_keys(30, false);
     }
-    if (got_int || ins_compl_interrupted()) {
+    if (got_int || rs_ins_compl_interrupted()) {
       break;
     }
 
@@ -3088,7 +3092,7 @@ exit_matched:
       }
     }
   } else if (!found && action != ACTION_EXPAND && !silent) {
-    if (got_int || ins_compl_interrupted()) {
+    if (got_int || rs_ins_compl_interrupted()) {
       emsg(_(e_interr));
     } else if (type == FIND_DEFINE) {
       emsg(_("E388: Couldn't find definition"));
@@ -4382,22 +4386,22 @@ const char *nvim_buf_get_line_skipwhite(void *buf, int lnum, int *skipwhite_off)
   return p;
 }
 
-/// Check compl_status_adding().
+/// Check rs_compl_status_adding().
 int nvim_search_compl_status_adding(void)
 {
-  return compl_status_adding() ? 1 : 0;
+  return rs_compl_status_adding() ? 1 : 0;
 }
 
-/// Check compl_status_sol().
+/// Check rs_compl_status_sol().
 int nvim_search_compl_status_sol(void)
 {
-  return compl_status_sol() ? 1 : 0;
+  return rs_compl_status_sol() ? 1 : 0;
 }
 
-/// Get ins_compl_len().
+/// Get rs_ins_compl_len().
 int nvim_search_ins_compl_len(void)
 {
-  return ins_compl_len();
+  return rs_ins_compl_len();
 }
 
 /// Compare with mb_strcmp_ic.

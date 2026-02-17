@@ -233,7 +233,8 @@ void nvim_set_curwin_cursor_coladd(colnr_T coladd) { curwin->w_cursor.coladd = c
 
 void nvim_replace_push(const char *ptr, size_t len) { replace_push(ptr, len); }
 void nvim_replace_push_nul(void) { replace_push_nul(); }
-bool nvim_ins_compl_active(void) { return ins_compl_active(); }
+extern int rs_ins_compl_active(void);
+bool nvim_ins_compl_active(void) { return rs_ins_compl_active(); }
 void nvim_showmatch(int c) { showmatch(c); }
 
 // =============================================================================

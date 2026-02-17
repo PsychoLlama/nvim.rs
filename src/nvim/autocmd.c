@@ -64,7 +64,8 @@
 
 #include "autocmd.c.generated.h"
 
-// Rust FFI declarations (window wrappers removed)
+// Rust FFI declarations
+extern int rs_ins_compl_active(void);
 extern void rs_check_lnums(int do_curwin);
 extern void rs_check_lnums_nested(int do_curwin);
 extern void rs_reset_lnums(void);
@@ -1268,7 +1269,7 @@ bool apply_autocmds_group(event_T event, char *fname, char *fname_io, bool force
   // When starting to execute autocommands, save the search patterns.
   if (!autocmd_busy) {
     save_search_patterns();
-    if (!ins_compl_active()) {
+    if (!rs_ins_compl_active()) {
       saveRedobuff(&save_redo);
       did_save_redobuff = true;
     }

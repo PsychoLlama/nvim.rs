@@ -62,6 +62,7 @@
 #include "nvim/winfloat.h"
 
 // Rust FFI declarations
+extern int rs_ins_compl_active(void);
 extern void rs_win_setheight(int height);
 extern int rs_pum_visible(void);
 extern int rs_pum_drawn(void);
@@ -1486,7 +1487,7 @@ void nvim_pum_goto_tabpage(tabpage_T *tp)
 /// Check if insert completion is active (wrapper for ins_compl_active).
 int nvim_pum_ins_compl_active(void)
 {
-  return ins_compl_active() ? 1 : 0;
+  return rs_ins_compl_active();
 }
 
 /// Set curwin->w_redr_status.

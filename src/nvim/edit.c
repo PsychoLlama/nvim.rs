@@ -99,6 +99,17 @@ extern int rs_ctrl_x_mode_omni(void);
 extern int rs_ctrl_x_mode_spell(void);
 extern int rs_ctrl_x_mode_line_or_eval(void);
 extern int rs_ctrl_x_mode_register(void);
+extern int rs_ins_compl_active(void);
+extern int rs_ins_compl_accept_char(int c);
+extern void rs_ins_compl_clear(void);
+extern int rs_ins_compl_win_active(win_T *wp);
+extern int rs_ins_compl_used_match(void);
+extern int rs_ins_compl_enter_selects(void);
+extern int rs_ins_compl_col(void);
+extern int rs_ins_compl_has_preinsert(void);
+extern int rs_ins_compl_preinsert_effect(void);
+extern int rs_ins_compl_has_autocomplete(void);
+extern int rs_compl_status_local(void);
 
 typedef struct {
   VimState state;
@@ -1620,7 +1631,7 @@ _Static_assert(kOptBoFlagCopy == 0x10, "kOptBoFlagCopy mismatch");
 
 #define MAY_TRIGGER_AUTOCOMPLETE(c) \
   do { \
-    if (ins_compl_has_autocomplete() && !char_avail() && curwin->w_cursor.col > 0) { \
+    if (rs_ins_compl_has_autocomplete() && !char_avail() && curwin->w_cursor.col > 0) { \
       (c) = char_before_cursor(); \
       if (vim_isprintc(c)) { \
         TRIGGER_AUTOCOMPLETE(); \
@@ -1643,7 +1654,7 @@ static void insert_enter(InsertState *s)
   // set Insstart_orig to Insstart
   update_Insstart_orig = true;
 
-  ins_compl_clear();        // clear stuff for CTRL-X mode
+  rs_ins_compl_clear();        // clear stuff for CTRL-X mode
 
   // Trigger InsertEnter autocommands.  Do not do this for "r<CR>" or "grx".
   if (s->cmdchar != 'r' && s->cmdchar != 'v') {
@@ -1880,7 +1891,7 @@ static int insert_check(VimState *state)
     stuffcharReadbuff(K_NOP);
   }
 
-  if (stop_insert_mode && !ins_compl_active()) {
+  if (stop_insert_mode && !rs_ins_compl_active()) {
     // ":stopinsert" used
     s->count = 0;
     return 0;  // exit insert mode
@@ -1997,7 +2008,7 @@ static int insert_check(VimState *state)
   // character is typed.
   if (s->ins_just_started) {
     s->ins_just_started = false;
-    if (ins_compl_has_autocomplete() && !char_avail() && curwin->w_cursor.col > 0) {
+    if (rs_ins_compl_has_autocomplete() && !char_avail() && curwin->w_cursor.col > 0) {
       s->c = char_before_cursor();
       if (vim_isprintc(s->c)) {
         ins_compl_enable_autocomplete();
@@ -2039,17 +2050,17 @@ static int insert_execute(VimState *state, int key)
   // Special handling of keys while the popup menu is visible or wanted
   // and the cursor is still in the completed word.  Only when there is
   // a match, skip this when no matches were found.
-  if (ins_compl_active() && curwin->w_cursor.col >= ins_compl_col()
+  if (rs_ins_compl_active() && curwin->w_cursor.col >= rs_ins_compl_col()
       && ins_compl_has_shown_match() && pum_wanted()) {
     // BS: Delete one character from "compl_leader".
     if ((s->c == K_BS || s->c == Ctrl_H)
-        && curwin->w_cursor.col > ins_compl_col()
+        && curwin->w_cursor.col > rs_ins_compl_col()
         && (s->c = ins_compl_bs()) == NUL) {
       return 1;  // continue
     }
 
     // When no match was selected or it was edited.
-    if (!ins_compl_used_match()) {
+    if (!rs_ins_compl_used_match()) {
       // CTRL-L: Add one character from the current match to
       // "compl_leader".  Except when at the original match and
       // there is nothing to add, CTRL-L works like CTRL-P then.
@@ -2062,7 +2073,7 @@ static int insert_execute(VimState *state, int key)
 
       // A non-white character that fits in with the current
       // completion: Add to "compl_leader".
-      if (ins_compl_accept_char(s->c)) {
+      if (rs_ins_compl_accept_char(s->c)) {
         // Trigger InsertCharPre.
         char *str = do_insert_char_pre(s->c);
 
@@ -2080,7 +2091,7 @@ static int insert_execute(VimState *state, int key)
       // Pressing CTRL-Y selects the current match.  When
       // compl_enter_selects is set the Enter key does the same.
       if ((s->c == Ctrl_Y
-           || (ins_compl_enter_selects()
+           || (rs_ins_compl_enter_selects()
                && (s->c == CAR || s->c == K_KENTER || s->c == NL)))
           && stop_arrow() == OK) {
         ins_compl_delete(false);
@@ -2091,7 +2102,7 @@ static int insert_execute(VimState *state, int key)
         } else {
           ins_compl_insert(false, false);
         }
-      } else if (ascii_iswhite_nl_or_nul(s->c) && ins_compl_preinsert_effect()) {
+      } else if (ascii_iswhite_nl_or_nul(s->c) && rs_ins_compl_preinsert_effect()) {
         // Delete preinserted text when typing special chars
         ins_compl_delete(false);
       }
@@ -2279,7 +2290,7 @@ static int insert_handle_key(InsertState *s)
     break;
 
   case Ctrl_R:        // insert the contents of a register
-    if (rs_ctrl_x_mode_register() && !ins_compl_active()) {
+    if (rs_ctrl_x_mode_register() && !rs_ins_compl_active()) {
       insert_do_complete(s);
       break;
     }
@@ -2640,7 +2651,7 @@ check_pum:
     // but it is under other ^X modes
     if (*curbuf->b_p_cpt == NUL
         && (rs_ctrl_x_mode_normal() || rs_ctrl_x_mode_whole_line())
-        && !compl_status_local()) {
+        && !rs_compl_status_local()) {
       goto normalchar;
     }
 
@@ -2717,7 +2728,7 @@ normalchar:
     // closed fold.
     rs_foldOpenCursor();
     // Trigger autocompletion
-    if (ins_compl_has_autocomplete() && !char_avail() && vim_isprintc(s->c)) {
+    if (rs_ins_compl_has_autocomplete() && !char_avail() && vim_isprintc(s->c)) {
       TRIGGER_AUTOCOMPLETE();
     }
 
@@ -2762,7 +2773,7 @@ static void insert_handle_key_post(InsertState *s)
 
   // Check if we need to cancel completion mode because the window
   // or tab page was changed
-  if (ins_compl_active() && !ins_compl_win_active(curwin)) {
+  if (rs_ins_compl_active() && !rs_ins_compl_win_active(curwin)) {
     ins_compl_cancel();
   }
 
@@ -2821,7 +2832,7 @@ bool edit(int cmdchar, bool startln, int count)
   // caller of getcmdline() may get confused.
   // Don't allow recursive insert mode when busy with completion.
   // Allow in dummy buffers since they are only used internally
-  if (textlock != 0 || ins_compl_active() || compl_busy || pum_visible()
+  if (textlock != 0 || rs_ins_compl_active() || compl_busy || pum_visible()
       || expr_map_locked()) {
     emsg(_(e_textlock));
     return false;
@@ -2929,7 +2940,7 @@ void ins_redraw(bool ready)
 
   // Trigger SafeState if nothing is pending.
   may_trigger_safestate(ready
-                        && !ins_compl_active()
+                        && !rs_ins_compl_active()
                         && !pum_visible());
 
   pum_check_clear();

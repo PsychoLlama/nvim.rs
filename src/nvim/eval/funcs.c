@@ -133,6 +133,7 @@
 #include "nvim/window.h"
 
 // Rust implementation in nvim-event crate
+extern int rs_ins_compl_active(void);
 extern int rs_proc_get_pid(Proc *proc);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define proc_get_pid(p) rs_proc_get_pid(p)
@@ -4662,7 +4663,7 @@ static void f_state(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (autocmd_busy) {
     may_add_state_char(&ga, include, 'x');
   }
-  if (ins_compl_active()) {
+  if (rs_ins_compl_active()) {
     may_add_state_char(&ga, include, 'a');
   }
   if (!get_was_safe_state()) {

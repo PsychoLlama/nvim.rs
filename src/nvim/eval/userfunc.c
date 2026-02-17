@@ -56,6 +56,8 @@
 #include "nvim/ui_defs.h"
 #include "nvim/vim_defs.h"
 
+extern int rs_ins_compl_active(void);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -1012,7 +1014,7 @@ void call_user_func(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rett
   depth++;
   // Save search patterns and redo buffer.
   save_search_patterns();
-  if (!ins_compl_active()) {
+  if (!rs_ins_compl_active()) {
     saveRedobuff(&save_redo);
     did_save_redo = true;
   }

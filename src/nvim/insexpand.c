@@ -131,6 +131,16 @@ extern int rs_ins_compl_pum_key(int c);
 extern int rs_ins_compl_key2count(int c);
 extern int rs_ins_compl_use_match(int c);
 extern void rs_ins_compl_make_linear(void);
+extern void rs_ins_compl_clear(void);
+extern int rs_ins_compl_win_active(win_T *wp);
+extern int rs_ins_compl_used_match(void);
+extern int rs_ins_compl_interrupted(void);
+extern int rs_ins_compl_enter_selects(void);
+extern int rs_ins_compl_col(void);
+extern int rs_ins_compl_len(void);
+extern int rs_ins_compl_has_preinsert(void);
+extern int rs_ins_compl_preinsert_effect(void);
+extern int rs_ins_compl_has_autocomplete(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -440,10 +450,6 @@ int nvim_curbuf_get_b_p_inf(void)
   return curbuf->b_p_inf ? 1 : 0;
 }
 
-bool compl_status_adding(void) { return rs_compl_status_adding() != 0; }
-bool compl_status_sol(void) { return rs_compl_status_sol() != 0; }
-bool compl_status_local(void) { return rs_compl_status_local() != 0; }
-
 /// Clear the completion status flags
 void compl_status_clear(void)
 {
@@ -523,17 +529,6 @@ static void do_autocmd_completedone(int c, int mode, char *word)
 
   ins_apply_autocmds(EVENT_COMPLETEDONE);
   restore_v_event(v_event, &save_v_event);
-}
-
-/// Check that character "c" is part of the item currently being
-/// completed.  Used to decide whether to abandon complete mode when the menu
-/// is visible.
-///
-/// @param  c  character to check
-bool ins_compl_accept_char(int c)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_ins_compl_accept_char(c) != 0;
 }
 
 /// Get the completed text by inferring the case of the originally typed text.
@@ -936,7 +931,7 @@ char *ins_compl_leader(void)
 /// -1 means normal item.
 int ins_compl_col_range_attr(linenr_T lnum, int col)
 {
-  const bool has_preinsert = ins_compl_has_preinsert() || ins_compl_preinsert_longest();
+  const bool has_preinsert = rs_ins_compl_has_preinsert() || ins_compl_preinsert_longest();
 
   int attr;
   if (rs_cot_fuzzy()
@@ -1271,7 +1266,7 @@ static int ins_compl_build_pum(void)
   }
 
   bool compl_no_select = (get_cot_flags() & kOptCotFlagNoselect) != 0
-                         || (compl_autocomplete && !ins_compl_has_preinsert());
+                         || (compl_autocomplete && !rs_ins_compl_has_preinsert());
 
   compl_T *match_head = NULL, *match_tail = NULL;
   int *match_count = NULL;
@@ -1644,7 +1639,7 @@ static void ins_compl_files(int count, char **files, bool thesaurus, int flags,
   char *leader = rs_cot_fuzzy() ? ins_compl_leader() : NULL;
   int leader_len = rs_cot_fuzzy() ? (int)rs_ins_compl_leader_len() : 0;
 
-  for (int i = 0; i < count && !got_int && !ins_compl_interrupted(); i++) {
+  for (int i = 0; i < count && !got_int && !rs_ins_compl_interrupted(); i++) {
     FILE *fp = os_fopen(files[i], "r");  // open dictionary file
     if (flags != DICT_EXACT && !shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete) {
       msg_hist_off = true;  // reset in msg_trunc()
@@ -1660,7 +1655,7 @@ static void ins_compl_files(int count, char **files, bool thesaurus, int flags,
 
     // Read dictionary file line by line.
     // Check each line for a match.
-    while (!got_int && !ins_compl_interrupted() && !vim_fgets(buf, LSIZE, fp)) {
+    while (!got_int && !rs_ins_compl_interrupted() && !vim_fgets(buf, LSIZE, fp)) {
       char *ptr = buf;
       if (rs_cot_fuzzy() && leader_len > 0) {
         char *line_end = find_line_end(ptr);
@@ -1775,40 +1770,6 @@ static void ins_compl_free(void)
   compl_first_match = compl_curr_match = NULL;
   compl_shown_match = NULL;
   compl_old_match = NULL;
-}
-
-/// Reset/clear the completion state.
-extern void rs_ins_compl_clear(void);
-
-void ins_compl_clear(void)
-{
-  rs_ins_compl_clear();
-}
-
-/// Check that Insert completion is active.
-bool ins_compl_active(void)
-  FUNC_ATTR_PURE
-{
-  return rs_ins_compl_active() != 0;
-}
-
-// Rust implementation
-extern int rs_ins_compl_win_active(win_T *wp);
-
-/// Return true when wp is the actual completion window
-bool ins_compl_win_active(win_T *wp)
-{
-  return rs_ins_compl_win_active(wp) != 0;
-}
-
-// Rust implementation
-extern int rs_ins_compl_used_match(void);
-
-/// Selected one of the matches.  When false, the match was edited or
-/// using the longest common string.
-bool ins_compl_used_match(void)
-{
-  return rs_ins_compl_used_match() != 0;
 }
 
 /// Initialize get longest common string.
@@ -1929,63 +1890,13 @@ const char *nvim_get_leader_for_startcol_data(void *match, int cached) {
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
-// Rust implementations
-extern int rs_ins_compl_interrupted(void);
-extern int rs_ins_compl_enter_selects(void);
-extern int rs_ins_compl_len(void);
-
-/// Returns true when insert completion is interrupted.
-bool ins_compl_interrupted(void)
-{
-  return rs_ins_compl_interrupted() != 0;
-}
-
-/// Returns true if the <Enter> key selects a match in the completion popup
-/// menu.
-bool ins_compl_enter_selects(void)
-{
-  return rs_ins_compl_enter_selects() != 0;
-}
-
-// Rust implementation
-extern int rs_ins_compl_col(void);
-
-/// Return the column where the text starts that is being completed
-colnr_T ins_compl_col(void)
-{
-  return rs_ins_compl_col();
-}
-
-/// Return the length in bytes of the text being completed
-int ins_compl_len(void)
-{
-  return rs_ins_compl_len();
-}
-
-extern int rs_ins_compl_has_preinsert(void);
-extern int rs_ins_compl_preinsert_effect(void);
-
-/// Return true when the 'completeopt' "preinsert" flag is in effect,
-/// otherwise return false.
-bool ins_compl_has_preinsert(void)
-{
-  return rs_ins_compl_has_preinsert() != 0;
-}
-
-/// Returns true if the pre-insert effect is valid and the cursor is within
-/// the `compl_ins_end_col` range.
-bool ins_compl_preinsert_effect(void)
-{
-  return rs_ins_compl_preinsert_effect() != 0;
-}
-
 /// Delete one character before the cursor and show the subset of the matches
 /// that match the word that is now before the cursor.
 /// Returns the character to be used, NUL if the work is done and another char
 /// to be got from the user.
 int ins_compl_bs(void)
 {
-  if (ins_compl_preinsert_effect()) {
+  if (rs_ins_compl_preinsert_effect()) {
     ins_compl_delete(false);
   }
 
@@ -2021,7 +1932,7 @@ int ins_compl_bs(void)
                                 (size_t)(p_off - (ptrdiff_t)compl_col));
 
   // Clear selection if a menu item is currently selected in autocompletion
-  if (compl_autocomplete && compl_first_match && !ins_compl_has_preinsert()) {
+  if (compl_autocomplete && compl_first_match && !rs_ins_compl_has_preinsert()) {
     compl_shown_match = compl_first_match;
   }
 
@@ -2031,14 +1942,6 @@ int ins_compl_bs(void)
     compl_curr_match = compl_shown_match;
   }
   return NUL;
-}
-
-extern int rs_ins_compl_has_autocomplete(void);
-
-/// Return true if 'autocomplete' option is set
-bool ins_compl_has_autocomplete(void)
-{
-  return rs_ins_compl_has_autocomplete() != 0;
 }
 
 /// Calculate fuzzy score and sort completion matches unless sorting is disabled.
@@ -2092,7 +1995,7 @@ static void ins_compl_new_leader(void)
     // Matches were cleared, need to search for them now.
     // Set "compl_restarting" to avoid that the first match is inserted.
     compl_restarting = true;
-    if (ins_compl_has_autocomplete()) {
+    if (rs_ins_compl_has_autocomplete()) {
       ins_compl_enable_autocomplete();
     } else {
       compl_autocomplete = false;
@@ -2111,10 +2014,10 @@ static void ins_compl_new_leader(void)
   // Don't let Enter select the original text when there is no popup menu.
   if (compl_match_array == NULL) {
     compl_enter_selects = false;
-  } else if (ins_compl_has_preinsert() && compl_leader.size > 0) {
+  } else if (rs_ins_compl_has_preinsert() && compl_leader.size > 0) {
     ins_compl_insert(true, false);
   } else if (compl_started && ins_compl_preinsert_longest()
-             && compl_leader.size > 0 && !ins_compl_preinsert_effect()) {
+             && compl_leader.size > 0 && !rs_ins_compl_preinsert_effect()) {
     ins_compl_insert(true, true);
   }
   // Don't let Enter select when use user function and refresh_always is set
@@ -2129,7 +2032,7 @@ void ins_compl_addleader(int c)
 {
   int cc;
 
-  if (ins_compl_preinsert_effect()) {
+  if (rs_ins_compl_preinsert_effect()) {
     ins_compl_delete(false);
   }
 
@@ -2360,7 +2263,7 @@ static bool set_ctrl_x_mode(const int c)
 static bool ins_compl_stop(const int c, const int prev_mode, bool retval)
 {
   // Remove pre-inserted text when present.
-  if (ins_compl_preinsert_effect() && ins_compl_win_active(curwin)) {
+  if (rs_ins_compl_preinsert_effect() && rs_ins_compl_win_active(curwin)) {
     ins_compl_delete(false);
   }
 
@@ -3100,7 +3003,7 @@ static void set_completion(colnr_T startcol, list_T *list)
   if (rs_ctrl_x_mode_not_default()) {
     ins_compl_prep(' ');
   }
-  ins_compl_clear();
+  rs_ins_compl_clear();
   ins_compl_free();
   compl_get_longest = compl_longest;
 
@@ -3192,7 +3095,7 @@ void f_complete_check(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
   RedrawingDisabled = 0;
   ins_compl_check_keys(0, true);
-  rettv->vval.v_number = ins_compl_interrupted();
+  rettv->vval.v_number = rs_ins_compl_interrupted();
   RedrawingDisabled = saved;
 }
 
@@ -3883,7 +3786,7 @@ static char *ins_compl_get_next_word_or_line(buf_T *ins_buf, pos_T *cur_match_po
   char *ptr = ml_get_buf(ins_buf, cur_match_pos->lnum) + cur_match_pos->col;
   int len = ml_get_buf_len(ins_buf, cur_match_pos->lnum) - cur_match_pos->col;
   if (rs_ctrl_x_mode_line_or_eval()) {
-    if (compl_status_adding()) {
+    if (rs_compl_status_adding()) {
       if (cur_match_pos->lnum >= ins_buf->b_ml.ml_line_count) {
         return NULL;
       }
@@ -3898,7 +3801,7 @@ static char *ins_compl_get_next_word_or_line(buf_T *ins_buf, pos_T *cur_match_po
   } else {
     char *tmp_ptr = ptr;
 
-    if (compl_status_adding() && compl_length <= len) {
+    if (rs_compl_status_adding() && compl_length <= len) {
       tmp_ptr += compl_length;
       // Skip if already inside a word.
       if (vim_iswordp(tmp_ptr)) {
@@ -3911,7 +3814,7 @@ static char *ins_compl_get_next_word_or_line(buf_T *ins_buf, pos_T *cur_match_po
     tmp_ptr = find_word_end(tmp_ptr);
     len = (int)(tmp_ptr - ptr);
 
-    if (compl_status_adding() && len == compl_length) {
+    if (rs_compl_status_adding() && len == compl_length) {
       if (cur_match_pos->lnum < ins_buf->b_ml.ml_line_count) {
         // Try next line, if any. the new word will be "join" as if the
         // normal command "J" was used. IOSIZE is always greater than
@@ -3969,7 +3872,7 @@ static int get_next_default_completion(ins_compl_next_state_T *st, pos_T *start_
 {
   char *ptr = NULL;
   int len = 0;
-  bool in_fuzzy_collect = !compl_status_adding() && rs_cot_fuzzy() && compl_length > 0;
+  bool in_fuzzy_collect = !rs_compl_status_adding() && rs_cot_fuzzy() && compl_length > 0;
   char *leader = ins_compl_leader();
   int score = FUZZY_SCORE_NONE;
   const bool in_curbuf = st->ins_buf == curbuf;
@@ -4049,7 +3952,7 @@ static int get_next_default_completion(ins_compl_next_state_T *st, pos_T *start_
     }
 
     // when ADDING, the text before the cursor matches, skip it
-    if (compl_status_adding() && in_curbuf
+    if (rs_compl_status_adding() && in_curbuf
         && start_pos->lnum == st->cur_match_pos->lnum
         && start_pos->col == st->cur_match_pos->col) {
       continue;
@@ -4059,7 +3962,7 @@ static int get_next_default_completion(ins_compl_next_state_T *st, pos_T *start_
       ptr = ins_compl_get_next_word_or_line(st->ins_buf,
                                             st->cur_match_pos, &len, &cont_s_ipos);
     }
-    if (ptr == NULL || (ins_compl_has_preinsert()
+    if (ptr == NULL || (rs_ins_compl_has_preinsert()
                         && strcmp(ptr, ins_compl_leader()) == 0)) {
       continue;
     }
@@ -4092,7 +3995,7 @@ static int get_next_default_completion(ins_compl_next_state_T *st, pos_T *start_
 static void get_register_completion(void)
 {
   Direction dir = compl_direction;
-  bool adding_mode = compl_status_adding();
+  bool adding_mode = rs_compl_status_adding();
 
   for (int i = 0; i < NUM_REGISTERS; i++) {
     int regname = get_register_name(i);
@@ -4567,7 +4470,7 @@ static int ins_compl_get_exp(pos_T *ini)
   may_trigger_modechanged();
 
   if (match_count > 0 && !rs_ctrl_x_mode_spell()) {
-    if (rs_is_nearest_active() && !ins_compl_has_preinsert()) {
+    if (rs_is_nearest_active() && !rs_ins_compl_has_preinsert()) {
       sort_compl_match_list(cp_compare_nearest);
     }
 
@@ -4626,9 +4529,9 @@ void ins_compl_delete(bool new_leader)
 
   // In insert mode: Delete the typed part.
   // In replace mode: Put the old characters back, if any.
-  int col = compl_col + (compl_status_adding() ? compl_length : orig_col);
+  int col = compl_col + (rs_compl_status_adding() ? compl_length : orig_col);
 
-  if (ins_compl_preinsert_effect()) {
+  if (rs_ins_compl_preinsert_effect()) {
     col += (int)rs_ins_compl_leader_len();
     curwin->w_cursor.col = compl_ins_end_col;
   }
@@ -4814,7 +4717,7 @@ static char *find_common_prefix(size_t *prefix_len, bool curbuf_only)
 void ins_compl_insert(bool move_cursor, bool insert_prefix)
 {
   int compl_len = rs_get_compl_len();
-  bool preinsert = ins_compl_has_preinsert();
+  bool preinsert = rs_ins_compl_has_preinsert();
   char *cp_str = compl_shown_match->cp_str.data;
   size_t cp_str_len = compl_shown_match->cp_str.size;
   size_t leader_len = rs_ins_compl_leader_len();
@@ -4934,7 +4837,7 @@ static int find_next_completion_match(bool allow_get_expansion, int todo, bool a
   compl_T *found_compl = NULL;
   unsigned cur_cot_flags = get_cot_flags();
   bool compl_no_select = (cur_cot_flags & kOptCotFlagNoselect) != 0
-                         || (compl_autocomplete && !ins_compl_has_preinsert());
+                         || (compl_autocomplete && !rs_ins_compl_has_preinsert());
 
   while (--todo >= 0) {
     if (rs_compl_shows_dir_forward() && compl_shown_match->cp_next != NULL) {
@@ -5045,8 +4948,8 @@ static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match
   buf_T *const orig_curbuf = curbuf;
   unsigned cur_cot_flags = get_cot_flags();
   bool compl_no_insert = (cur_cot_flags & kOptCotFlagNoinsert) != 0
-                         || (compl_autocomplete && !ins_compl_has_preinsert());
-  bool compl_preinsert = ins_compl_has_preinsert();
+                         || (compl_autocomplete && !rs_ins_compl_has_preinsert());
+  bool compl_preinsert = rs_ins_compl_has_preinsert();
   bool has_autocomplete_delay = (compl_autocomplete && p_acl > 0);
 
   // When user complete function return -1 for findstart which is next
@@ -5206,7 +5109,7 @@ void ins_compl_check_keys(int frequency, bool in_compl_func)
   if (compl_pending
       && !got_int
       && !(cot_flags & (kOptCotFlagNoinsert | kOptCotFlagFuzzy))
-      && (!compl_autocomplete || ins_compl_has_preinsert())) {
+      && (!compl_autocomplete || rs_ins_compl_has_preinsert())) {
     // Insert the first match immediately and advance compl_shown_match,
     // before finding other matches.
     int todo = compl_pending > 0 ? compl_pending : -compl_pending;
@@ -5223,7 +5126,7 @@ void ins_compl_check_keys(int frequency, bool in_compl_func)
 static int get_normal_compl_info(char *line, int startcol, colnr_T curs_col)
 {
   if ((compl_cont_status & CONT_SOL) || rs_ctrl_x_mode_path_defines()) {
-    if (!compl_status_adding()) {
+    if (!rs_compl_status_adding()) {
       while (--startcol >= 0 && vim_isIDc((uint8_t)line[startcol])) {}
       compl_col += ++startcol;
       compl_length = curs_col - startcol;
@@ -5234,7 +5137,7 @@ static int get_normal_compl_info(char *line, int startcol, colnr_T curs_col)
     } else {
       compl_pattern = cbuf_to_string(line + compl_col, (size_t)compl_length);
     }
-  } else if (compl_status_adding()) {
+  } else if (rs_compl_status_adding()) {
     char *prefix = "\\<";
     size_t prefixlen = STRLEN_LITERAL("\\<");
 
@@ -5640,7 +5543,7 @@ static int ins_compl_start(void)
   }
 
   int startcol = 0;  // column where searched text starts
-  if (!compl_status_adding()) {   // normal expansion
+  if (!rs_compl_status_adding()) {   // normal expansion
     compl_cont_mode = ctrl_x_mode;
     if (rs_ctrl_x_mode_not_default()) {
       // Remove LOCAL if ctrl_x_mode != CTRL_X_NORMAL
@@ -5667,7 +5570,7 @@ static int ins_compl_start(void)
     line = ml_get(curwin->w_cursor.lnum);
   }
 
-  if (compl_status_adding()) {
+  if (rs_compl_status_adding()) {
     if (!shortmess(SHM_COMPLETIONMENU)) {
       edit_submode_pre = _(" Adding");
     }
@@ -5740,7 +5643,7 @@ static void ins_compl_show_statusmsg(void)
 {
   // we found no match if the list has only the "compl_orig_text"-entry
   if (is_first_match(compl_first_match->cp_next)) {
-    edit_submode_extra = compl_status_adding() && compl_length > 1 ? _(e_hitend) : _(e_patnotf);
+    edit_submode_extra = rs_compl_status_adding() && compl_length > 1 ? _(e_hitend) : _(e_patnotf);
     edit_submode_highl = HLF_E;
   }
 
@@ -5858,7 +5761,7 @@ int ins_complete(int c, bool enable_pum)
     // ^P, ^N, ^X^I or ^X^D we might want to add-expand a single-char-word
     // (such as M in M'exico) if not tried already.  -- Acevedo
     if (compl_length > 1
-        || compl_status_adding()
+        || rs_compl_status_adding()
         || (rs_ctrl_x_mode_not_default()
             && !rs_ctrl_x_mode_path_patterns()
             && !rs_ctrl_x_mode_path_defines())) {
@@ -5883,7 +5786,7 @@ int ins_complete(int c, bool enable_pum)
     ui_flush();
     do {
       if (char_avail()) {
-        if (ins_compl_preinsert_effect() && ins_compl_win_active(curwin)) {
+        if (rs_ins_compl_preinsert_effect() && rs_ins_compl_win_active(curwin)) {
           ins_compl_delete(false);  // Remove pre-inserted text
           compl_ins_end_col = compl_col;
         }
@@ -6219,7 +6122,7 @@ static void cpt_compl_refresh(void)
 /// "preinserted()" function
 void f_preinserted(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (ins_compl_preinsert_effect()) {
+  if (rs_ins_compl_preinsert_effect()) {
     rettv->vval.v_number = 1;
   }
 }

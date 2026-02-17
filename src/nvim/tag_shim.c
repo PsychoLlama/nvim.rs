@@ -1361,9 +1361,10 @@ void nvim_ins_compl_check_keys(int interval, bool pum_wanted)
 }
 
 /// ins_compl_interrupted wrapper
+extern int rs_ins_compl_interrupted(void);
 bool nvim_ins_compl_interrupted(void)
 {
-  return ins_compl_interrupted();
+  return rs_ins_compl_interrupted();
 }
 
 /// verbose_enter/leave + smsg for "Searching tags file %s"

@@ -133,6 +133,7 @@ typedef struct {
 #include "drawline.c.generated.h"
 
 // Rust implementations
+extern int rs_ins_compl_win_active(win_T *wp);
 extern const char *rs_get_showbreak_value(win_T *win);
 extern schar_T rs_get_lcs_ext(win_T *wp);
 extern void rs_margin_columns_win(win_T *wp, int *left_col, int *right_col);
@@ -1660,7 +1661,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
     ptr = line + v;  // "line" may have been updated
   }
 
-  if ((State & MODE_INSERT) && ins_compl_win_active(wp)
+  if ((State & MODE_INSERT) && rs_ins_compl_win_active(wp)
       && (in_curline || ins_compl_lnum_in_range(lnum))) {
     area_highlighting = true;
   }
@@ -1922,7 +1923,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
         }
 
         // Check if ComplMatchIns highlight is needed.
-        if ((State & MODE_INSERT) && ins_compl_win_active(wp)
+        if ((State & MODE_INSERT) && rs_ins_compl_win_active(wp)
             && (in_curline || ins_compl_lnum_in_range(lnum))) {
           int ins_match_attr = ins_compl_col_range_attr(lnum, (int)(ptr - line));
           if (ins_match_attr > 0) {

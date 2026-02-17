@@ -188,6 +188,7 @@ bool did_set_spelltab;
 
 #include "spell.c.generated.h"
 extern int rs_win_valid_any_tab(win_T *win);
+extern int rs_ins_compl_interrupted(void);
 
 extern void rs_optval_free(OptVal o);
 
@@ -3574,7 +3575,7 @@ void spell_dump_compl(char *pat, int ic, Direction *dir, int dumpflags_arg)
       arridx[0] = 0;
       curi[0] = 1;
       while (depth >= 0 && !got_int
-             && (pat == NULL || !ins_compl_interrupted())) {
+             && (pat == NULL || !rs_ins_compl_interrupted())) {
         if (curi[depth] > byts[arridx[depth]]) {
           // Done all bytes at this node, go up one level.
           depth--;
