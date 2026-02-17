@@ -1054,11 +1054,6 @@ extern "C" {
     /// Call syn_update_ends from Rust
     fn nvim_syn_update_ends(startofline: c_int);
 
-    // nvim_syn_sync removed - syn_sync is now implemented in sync.rs
-
-    /// Call syntax_start from Rust
-    fn nvim_syntax_start(wp: WinHandle, lnum: c_int);
-
     /// Call clear_syn_state from Rust
     fn nvim_syn_clear_syn_state(p: SynStateHandle);
 
@@ -1103,9 +1098,6 @@ extern "C" {
 
     /// Set synstate sst_change_lnum
     fn nvim_synstate_set_change_lnum(p: SynStateHandle, lnum: c_int);
-
-    /// Get synstate sst_next (void* return for FFI)
-    fn nvim_syn_synstate_get_next_ptr(p: SynStateHandle) -> SynStateHandle;
 
     /// Call syn_stack_find_entry from Rust (void* return for FFI)
     fn nvim_syn_stack_find_entry_ptr(lnum: c_int) -> SynStateHandle;

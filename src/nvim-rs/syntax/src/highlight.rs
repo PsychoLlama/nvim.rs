@@ -47,7 +47,6 @@ extern "C" {
     fn syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int;
 
     // Phase 32.4: Line highlighting
-    fn nvim_get_syntax_attr(col: c_int, can_spell: *mut c_int, keep_state: c_int) -> c_int;
     fn nvim_syn_get_current_col() -> c_int;
     fn nvim_syn_set_current_col(col: c_int);
     fn nvim_syn_get_current_finished() -> c_int;

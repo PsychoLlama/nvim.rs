@@ -5205,14 +5205,6 @@ void nvim_syn_update_ends(int startofline)
   syn_update_ends(startofline != 0);
 }
 
-// nvim_syn_sync removed - syn_sync is now implemented in Rust (sync.rs)
-
-/// Call syntax_start from Rust
-void nvim_syntax_start(void *wp, int lnum)
-{
-  syntax_start((win_T *)wp, (linenr_T)lnum);
-}
-
 /// Call clear_syn_state from Rust
 void nvim_syn_clear_syn_state(void *p)
 {
@@ -5295,12 +5287,6 @@ void *nvim_syn_get_sst_array(void)
 int nvim_syn_get_sst_len(void)
 {
   return syn_block ? syn_block->b_sst_len : 0;
-}
-
-/// Get synstate sst_next (Phase 24.5 void* version for Rust FFI)
-void *nvim_syn_synstate_get_next_ptr(synstate_T *p)
-{
-  return p ? p->sst_next : NULL;
 }
 
 /// Set synstate sst_change_lnum
@@ -5550,16 +5536,7 @@ int nvim_synblock_is_nospell_cluster(synblock_T *block, int id)
 // Rust-callable wrappers for line highlighting (Phase 32.4)
 // =============================================================================
 
-/// Wrapper for get_syntax_attr - get syntax attributes at a column
-int nvim_get_syntax_attr(int col, int *can_spell, int keep_state)
-{
-  bool spell = false;
-  int attr = get_syntax_attr(col, can_spell ? &spell : NULL, keep_state != 0);
-  if (can_spell) {
-    *can_spell = spell ? 1 : 0;
-  }
-  return attr;
-}
+
 
 // nvim_syn_get_current_lnum already defined at line ~6119
 // nvim_syn_get_current_col already defined at line ~6125
@@ -5954,12 +5931,6 @@ void nvim_syn_clear_extmatch_in(void)
 {
   unref_extmatch(re_extmatch_in);
   re_extmatch_in = NULL;
-}
-
-/// Get the next_match_col static.
-int nvim_syn_get_next_match_col_val(void)
-{
-  return next_match_col;
 }
 
 /// Set the next_match_col static.
