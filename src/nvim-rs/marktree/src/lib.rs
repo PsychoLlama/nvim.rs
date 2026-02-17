@@ -1485,18 +1485,23 @@ pub extern "C" fn rs_marktree_itr_get(
     marktree_itr_get(b, row, col, itr)
 }
 
-/// Extended version of iterator positioning.
+/// Extended version of iterator positioning with full parameters.
 ///
 /// If `last` is true, position at the last key <= position.
 /// If `gravity` is true, consider right gravity when positioning.
+/// If `oldbase` is non-null, records base positions at each level.
+/// If `meta_filter` is non-null, skips subtrees that don't match the filter.
 #[allow(clippy::many_single_char_names)] // Matching C code naming conventions
+#[allow(clippy::cast_sign_loss)] // Level values are always non-negative
 #[must_use]
-pub fn marktree_itr_get_ext(
+pub fn marktree_itr_get_ext_full(
     b: MarkTreeHandle,
     p: MTPos,
     itr: MarkTreeIterHandle,
     last: bool,
     gravity: bool,
+    oldbase: *mut MTPos,
+    meta_filter: MetaFilter,
 ) -> bool {
     if marktree_n_keys(b) == 0 {
         unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
@@ -1528,9 +1533,13 @@ pub fn marktree_itr_get_ext(
     let mut current_pos = MTPos::new(0, 0);
     let mut lvl = 0;
 
+    if !oldbase.is_null() {
+        unsafe { *oldbase.add(lvl as usize) = current_pos };
+    }
+
     loop {
-        let (i, _) = marktree_getp_aux(x, &k);
-        let i = i + 1; // marktree_getp_aux returns position before, we want after
+        let (getp_i, _) = marktree_getp_aux(x, &k);
+        let i = getp_i + 1; // marktree_getp_aux returns position before, we want after
 
         if mtnode_level(x) == 0 {
             unsafe {
@@ -1540,6 +1549,20 @@ pub fn marktree_itr_get_ext(
                 nvim_mtitr_set_pos(itr, current_pos);
             }
             break;
+        }
+
+        if !meta_filter.is_null() {
+            let meta = mtnode_meta(x, i);
+            if !meta_has(&meta, meta_filter) {
+                // This takes us to the internal position after the first rejected node
+                unsafe {
+                    nvim_mtitr_set_x(itr, x);
+                    nvim_mtitr_set_i(itr, i);
+                    nvim_mtitr_set_lvl(itr, lvl);
+                    nvim_mtitr_set_pos(itr, current_pos);
+                }
+                break;
+            }
         }
 
         unsafe {
@@ -1554,6 +1577,10 @@ pub fn marktree_itr_get_ext(
         }
         x = mtnode_ptr(x, i);
         lvl += 1;
+
+        if !oldbase.is_null() {
+            unsafe { *oldbase.add(lvl as usize) = current_pos };
+        }
     }
 
     if last {
@@ -1562,15 +1589,35 @@ pub fn marktree_itr_get_ext(
         let i = unsafe { nvim_mtitr_get_i(itr) };
         let x = unsafe { nvim_mtitr_get_x(itr) };
         if i >= mtnode_n(x) {
-            // Need to go to next internal key
-            marktree_itr_next(b, itr)
+            // No need for "meta_filter" here, this just goes up one step
+            marktree_itr_next_skip(b, itr, true, false, std::ptr::null_mut(), std::ptr::null())
         } else {
             true
         }
     }
 }
 
-/// Exported FFI version of `marktree_itr_get_ext`.
+/// Simple version without oldbase/meta_filter (convenience wrapper).
+#[must_use]
+pub fn marktree_itr_get_ext(
+    b: MarkTreeHandle,
+    p: MTPos,
+    itr: MarkTreeIterHandle,
+    last: bool,
+    gravity: bool,
+) -> bool {
+    marktree_itr_get_ext_full(
+        b,
+        p,
+        itr,
+        last,
+        gravity,
+        std::ptr::null_mut(),
+        std::ptr::null(),
+    )
+}
+
+/// Exported FFI version of `marktree_itr_get_ext` (simple, no oldbase/meta_filter).
 #[no_mangle]
 pub extern "C" fn rs_marktree_itr_get_ext(
     b: MarkTreeHandle,
@@ -1580,6 +1627,20 @@ pub extern "C" fn rs_marktree_itr_get_ext(
     gravity: bool,
 ) -> bool {
     marktree_itr_get_ext(b, p, itr, last, gravity)
+}
+
+/// Exported FFI version of `marktree_itr_get_ext` with full parameters.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_get_ext_full(
+    b: MarkTreeHandle,
+    p: MTPos,
+    itr: MarkTreeIterHandle,
+    last: bool,
+    gravity: bool,
+    oldbase: *mut MTPos,
+    meta_filter: MetaFilter,
+) -> bool {
+    marktree_itr_get_ext_full(b, p, itr, last, gravity, oldbase, meta_filter)
 }
 
 // ============================================================================
@@ -2059,14 +2120,17 @@ pub fn marktree_meta_root(b: MarkTreeHandle) -> [u32; K_MT_META_COUNT] {
 ///
 /// If `skip` is true, skips the subtree rooted at current position.
 /// If `meta_filter` is non-null, uses it to filter which subtrees to enter.
+/// If `oldbase` is non-null, updates the base position array for each level traversed.
 #[allow(clippy::many_single_char_names)]
 #[allow(clippy::branches_sharing_code)] // Different branches have different control flow
+#[allow(clippy::cast_sign_loss)] // Level values are always non-negative
 #[must_use]
 pub fn marktree_itr_next_skip(
     _b: MarkTreeHandle,
     itr: MarkTreeIterHandle,
     mut skip: bool,
     preload: bool,
+    oldbase: *mut MTPos,
     meta_filter: MetaFilter,
 ) -> bool {
     let x = unsafe { nvim_mtitr_get_x(itr) };
@@ -2140,6 +2204,11 @@ pub fn marktree_itr_next_skip(
                 let key = mtnode_key(current_x, current_i - 1);
                 compose(&mut current_pos, key.pos);
             }
+            if !oldbase.is_null() && current_i == 0 {
+                unsafe {
+                    *oldbase.add((current_lvl + 1) as usize) = *oldbase.add(current_lvl as usize);
+                }
+            }
             unsafe { nvim_mtitr_set_s_i(itr, current_lvl, current_i) };
             current_lvl += 1;
             current_x = mtnode_ptr(current_x, current_i);
@@ -2166,6 +2235,19 @@ pub fn marktree_itr_next_skip(
         }
     }
     true
+}
+
+/// Exported FFI version of `marktree_itr_next_skip`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_next_skip(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    skip: bool,
+    preload: bool,
+    oldbase: *mut MTPos,
+    meta_filter: MetaFilter,
+) -> bool {
+    marktree_itr_next_skip(b, itr, skip, preload, oldbase, meta_filter)
 }
 
 /// Meta map for converting meta index to flag.
@@ -2208,10 +2290,22 @@ fn marktree_itr_check_filter(
         }
 
         // Skip subtrees but not keys
-        if !marktree_itr_next_skip(b, itr, false, false, meta_filter) {
+        if !marktree_itr_next_skip(b, itr, false, false, std::ptr::null_mut(), meta_filter) {
             return false;
         }
     }
+}
+
+/// Exported FFI version of `marktree_itr_check_filter`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_check_filter(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    stop_row: i32,
+    stop_col: i32,
+    meta_filter: MetaFilter,
+) -> bool {
+    marktree_itr_check_filter(b, itr, stop_row, stop_col, meta_filter)
 }
 
 /// Position iterator at a given position with meta filtering.
@@ -2265,7 +2359,7 @@ pub fn marktree_itr_next_filter(
     stop_col: i32,
     meta_filter: MetaFilter,
 ) -> bool {
-    if !marktree_itr_next_skip(b, itr, false, false, meta_filter) {
+    if !marktree_itr_next_skip(b, itr, false, false, std::ptr::null_mut(), meta_filter) {
         return false;
     }
 
@@ -2320,7 +2414,7 @@ pub fn marktree_itr_step_out_filter(
         unsafe { nvim_mtitr_set_i(itr, n) };
 
         // Step to parent
-        let _ = marktree_itr_next_skip(b, itr, true, false, std::ptr::null());
+        let _ = marktree_itr_next_skip(b, itr, true, false, std::ptr::null_mut(), std::ptr::null());
     }
 
     let x = unsafe { nvim_mtitr_get_x(itr) };

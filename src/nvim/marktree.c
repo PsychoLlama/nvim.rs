@@ -110,6 +110,15 @@ extern MTPos rs_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr);
 extern MTKey rs_marktree_itr_set_node(MarkTree *b, MarkTreeIter *itr, MTNode *n, int i);
 extern void rs_marktree_itr_fix_pos(MarkTree *b, MarkTreeIter *itr);
 
+// Extended iterator functions
+extern bool rs_marktree_itr_get_ext_full(MarkTree *b, MTPos p, MarkTreeIter *itr, bool last,
+                                         bool gravity, MTPos *oldbase,
+                                         MetaFilter meta_filter);
+extern bool rs_marktree_itr_next_skip(MarkTree *b, MarkTreeIter *itr, bool skip, bool preload,
+                                      MTPos *oldbase, MetaFilter meta_filter);
+extern bool rs_marktree_itr_check_filter(MarkTree *b, MarkTreeIter *itr, int stop_row,
+                                         int stop_col, MetaFilter meta_filter);
+
 // Tree operations
 extern void rs_marktree_put_key(MarkTree *b, MTKey k);
 extern void rs_marktree_clear(MarkTree *b);
@@ -1457,55 +1466,7 @@ bool marktree_itr_get(MarkTree *b, int32_t row, int col, MarkTreeIter *itr)
 bool marktree_itr_get_ext(MarkTree *b, MTPos p, MarkTreeIter *itr, bool last, bool gravity,
                           MTPos *oldbase, MetaFilter meta_filter)
 {
-  if (b->n_keys == 0) {
-    itr->x = NULL;
-    return false;
-  }
-
-  MTKey k = { .pos = p, .flags = gravity ? MT_FLAG_RIGHT_GRAVITY : 0 };
-  if (last && !gravity) {
-    k.flags = MT_FLAG_LAST;
-  }
-  itr->pos = (MTPos){ 0, 0 };
-  itr->x = b->root;
-  itr->lvl = 0;
-  if (oldbase) {
-    oldbase[itr->lvl] = itr->pos;
-  }
-  while (true) {
-    itr->i = marktree_getp_aux(itr->x, k, 0) + 1;
-
-    if (itr->x->level == 0) {
-      break;
-    }
-    if (meta_filter) {
-      if (!meta_has(itr->x->meta[itr->i], meta_filter)) {
-        // this takes us to the internal position after the first rejected node
-        break;
-      }
-    }
-
-    itr->s[itr->lvl].i = itr->i;
-    itr->s[itr->lvl].oldcol = itr->pos.col;
-
-    if (itr->i > 0) {
-      compose(&itr->pos, itr->x->key[itr->i - 1].pos);
-      relative(itr->x->key[itr->i - 1].pos, &k.pos);
-    }
-    itr->x = itr->x->ptr[itr->i];
-    itr->lvl++;
-    if (oldbase) {
-      oldbase[itr->lvl] = itr->pos;
-    }
-  }
-
-  if (last) {
-    return marktree_itr_prev(b, itr);
-  } else if (itr->i >= itr->x->n) {
-    // no need for "meta_filter" here, this just goes up one step
-    return marktree_itr_next_skip(b, itr, true, false, NULL, NULL);
-  }
-  return true;
+  return rs_marktree_itr_get_ext_full(b, p, itr, last, gravity, oldbase, meta_filter);
 }
 
 bool marktree_itr_first(MarkTree *b, MarkTreeIter *itr)
@@ -1526,67 +1487,7 @@ bool marktree_itr_next(MarkTree *b, MarkTreeIter *itr)
 static bool marktree_itr_next_skip(MarkTree *b, MarkTreeIter *itr, bool skip, bool preload,
                                    MTPos oldbase[], MetaFilter meta_filter)
 {
-  if (!itr->x) {
-    return false;
-  }
-  itr->i++;
-  if (meta_filter && itr->x->level > 0) {
-    if (!meta_has(itr->x->meta[itr->i], meta_filter)) {
-      skip = true;
-    }
-  }
-  if (itr->x->level == 0 || skip) {
-    if (preload && itr->x->level == 0 && skip) {
-      // skip rest of this leaf node
-      itr->i = itr->x->n;
-    } else if (itr->i < itr->x->n) {
-      // TODO(bfredl): this is the common case,
-      // and could be handled by inline wrapper
-      return true;
-    }
-    // we ran out of non-internal keys. Go up until we find an internal key
-    while (itr->i >= itr->x->n) {
-      itr->x = itr->x->parent;
-      if (itr->x == NULL) {
-        return false;
-      }
-      itr->lvl--;
-      itr->i = itr->s[itr->lvl].i;
-      if (itr->i > 0) {
-        itr->pos.row -= itr->x->key[itr->i - 1].pos.row;
-        itr->pos.col = itr->s[itr->lvl].oldcol;
-      }
-    }
-  } else {
-    // we stood at an "internal" key. Go down to the first non-internal
-    // key after it.
-    while (itr->x->level > 0) {
-      // internal key, there is always a child after
-      if (itr->i > 0) {
-        itr->s[itr->lvl].oldcol = itr->pos.col;
-        compose(&itr->pos, itr->x->key[itr->i - 1].pos);
-      }
-      if (oldbase && itr->i == 0) {
-        oldbase[itr->lvl + 1] = oldbase[itr->lvl];
-      }
-      itr->s[itr->lvl].i = itr->i;
-      assert(itr->x->ptr[itr->i]->parent == itr->x);
-      itr->lvl++;
-      itr->x = itr->x->ptr[itr->i];
-      if (preload && itr->x->level) {
-        itr->i = -1;
-        break;
-      }
-      itr->i = 0;
-      if (meta_filter && itr->x->level) {
-        if (!meta_has(itr->x->meta[0], meta_filter)) {
-          // itr->x has filtered keys but x->ptr[0] does not, don't enter the latter
-          break;
-        }
-      }
-    }
-  }
-  return true;
+  return rs_marktree_itr_next_skip(b, itr, skip, preload, oldbase, meta_filter);
 }
 
 bool marktree_itr_get_filter(MarkTree *b, int32_t row, int col, int stop_row, int stop_col,
@@ -1638,39 +1539,10 @@ bool marktree_itr_next_filter(MarkTree *b, MarkTreeIter *itr, int stop_row, int 
   return marktree_itr_check_filter(b, itr, stop_row, stop_col, meta_filter);
 }
 
-const uint32_t meta_map[kMTMetaCount] = {
-  MT_FLAG_DECOR_VIRT_TEXT_INLINE,
-  MT_FLAG_DECOR_VIRT_LINES,
-  MT_FLAG_DECOR_SIGNHL,
-  MT_FLAG_DECOR_SIGNTEXT,
-  MT_FLAG_DECOR_CONCEAL_LINES
-};
 static bool marktree_itr_check_filter(MarkTree *b, MarkTreeIter *itr, int stop_row, int stop_col,
                                       MetaFilter meta_filter)
 {
-  MTPos stop_pos = MTPos(stop_row, stop_col);
-
-  uint32_t key_filter = 0;
-  for (int m = 0; m < kMTMetaCount; m++) {
-    key_filter |= meta_map[m]&meta_filter[m];
-  }
-
-  while (true) {
-    if (pos_leq(stop_pos, marktree_itr_pos(itr))) {
-      itr->x = NULL;
-      return false;
-    }
-
-    MTKey k = rawkey(itr);
-    if (!mt_end(k) && (k.flags & key_filter)) {
-      return true;
-    }
-
-    // this skips subtrees, but not keys, thus the outer loop
-    if (!marktree_itr_next_skip(b, itr, false, false, NULL, meta_filter)) {
-      return false;
-    }
-  }
+  return rs_marktree_itr_check_filter(b, itr, stop_row, stop_col, meta_filter);
 }
 
 bool marktree_itr_prev(MarkTree *b, MarkTreeIter *itr)
