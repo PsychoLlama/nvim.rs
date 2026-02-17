@@ -12,7 +12,7 @@ pub mod display;
 pub mod numeric;
 pub mod string;
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use crate::OptInt;
@@ -156,7 +156,7 @@ fn get_titlelen() -> OptInt {
 /// Callback for 'hlsearch' option.
 /// When 'hlsearch' is set or reset, reset no_hlsearch flag.
 #[no_mangle]
-pub extern "C" fn rs_did_set_hlsearch() -> CallbackResult {
+pub extern "C" fn rs_did_set_hlsearch(_args: *mut c_void) -> CallbackResult {
     unsafe { set_no_hlsearch(0) };
     callback_ok()
 }
@@ -164,7 +164,7 @@ pub extern "C" fn rs_did_set_hlsearch() -> CallbackResult {
 /// Callback for 'ignorecase' option.
 /// When 'ignorecase' is set/reset and 'hlsearch' is set, redraw.
 #[no_mangle]
-pub extern "C" fn rs_did_set_ignorecase() -> CallbackResult {
+pub extern "C" fn rs_did_set_ignorecase(_args: *mut c_void) -> CallbackResult {
     if get_hlsearch() {
         request_redraw_all(UpdateType::SomeValid);
     }
@@ -174,7 +174,7 @@ pub extern "C" fn rs_did_set_ignorecase() -> CallbackResult {
 /// Callback for 'title' and 'icon' options.
 /// When 'title' or 'icon' changes, may need to update the title.
 #[no_mangle]
-pub extern "C" fn rs_did_set_title_icon() -> CallbackResult {
+pub extern "C" fn rs_did_set_title_icon(_args: *mut c_void) -> CallbackResult {
     rs_did_set_title();
     callback_ok()
 }
@@ -219,7 +219,7 @@ pub extern "C" fn rs_did_set_showtabline() -> CallbackResult {
 /// Callback for 'iminsert' option.
 /// Show/unshow value of 'keymap' in status lines.
 #[no_mangle]
-pub extern "C" fn rs_did_set_iminsert() -> CallbackResult {
+pub extern "C" fn rs_did_set_iminsert(_args: *mut c_void) -> CallbackResult {
     unsafe {
         showmode();
         status_redraw_curbuf();
@@ -230,7 +230,7 @@ pub extern "C" fn rs_did_set_iminsert() -> CallbackResult {
 /// Callback for 'langnoremap' option.
 /// 'langnoremap' -> !'langremap': toggle the paired option.
 #[no_mangle]
-pub extern "C" fn rs_did_set_langnoremap() -> CallbackResult {
+pub extern "C" fn rs_did_set_langnoremap(_args: *mut c_void) -> CallbackResult {
     // p_lrm = !p_lnr
     let lnr = unsafe { nvim_callback_get_p_lnr() };
     unsafe { nvim_callback_set_p_lrm(c_int::from(lnr == 0)) };
@@ -240,7 +240,7 @@ pub extern "C" fn rs_did_set_langnoremap() -> CallbackResult {
 /// Callback for 'langremap' option.
 /// 'langremap' -> !'langnoremap': toggle the paired option.
 #[no_mangle]
-pub extern "C" fn rs_did_set_langremap() -> CallbackResult {
+pub extern "C" fn rs_did_set_langremap(_args: *mut c_void) -> CallbackResult {
     // p_lnr = !p_lrm
     let lrm = unsafe { nvim_callback_get_p_lrm() };
     unsafe { nvim_callback_set_p_lnr(c_int::from(lrm == 0)) };
@@ -260,7 +260,7 @@ pub extern "C" fn rs_did_set_paste() -> CallbackResult {
 /// Callback for 'foldlevel' option.
 /// Recalculate fold levels when 'foldlevel' changes.
 #[no_mangle]
-pub extern "C" fn rs_did_set_foldlevel() -> CallbackResult {
+pub extern "C" fn rs_did_set_foldlevel(_args: *mut c_void) -> CallbackResult {
     unsafe { newFoldLevel() };
     callback_ok()
 }
@@ -282,7 +282,7 @@ unsafe extern "C" fn check_colorcolumn_for_win(win: crate::WinHandle) {
 /// Callback for 'textwidth' option.
 /// Check colorcolumn for all windows when textwidth changes.
 #[no_mangle]
-pub extern "C" fn rs_did_set_textwidth() -> CallbackResult {
+pub extern "C" fn rs_did_set_textwidth(_args: *mut c_void) -> CallbackResult {
     unsafe { nvim_callback_for_all_tab_windows(check_colorcolumn_for_win) };
     callback_ok()
 }
@@ -291,7 +291,7 @@ pub extern "C" fn rs_did_set_textwidth() -> CallbackResult {
 /// Update popup menu transparency: invalidate blends, update pum_grid.blending,
 /// and redraw popup menu if visible.
 #[no_mangle]
-pub extern "C" fn rs_did_set_pumblend() -> CallbackResult {
+pub extern "C" fn rs_did_set_pumblend(_args: *mut c_void) -> CallbackResult {
     unsafe {
         hl_invalidate_blends();
         let pb = nvim_callback_get_p_pb();

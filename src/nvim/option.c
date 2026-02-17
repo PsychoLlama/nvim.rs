@@ -139,36 +139,36 @@ _Static_assert(Ctrl_C == 3, "Ctrl_C mismatch with Rust CTRL_C constant");
 _Static_assert(K_KENTER == -16715, "K_KENTER mismatch with Rust K_KENTER constant");
 
 // Did-set callbacks (from Rust callbacks)
-extern const char *rs_did_set_hlsearch(void);
-extern const char *rs_did_set_ignorecase(void);
-extern const char *rs_did_set_title_icon(void);
+extern const char *rs_did_set_hlsearch(optset_T *args);
+extern const char *rs_did_set_ignorecase(optset_T *args);
+extern const char *rs_did_set_title_icon(optset_T *args);
 extern const char *rs_did_set_titlelen(int64_t old_value);
-extern const char *rs_did_set_iminsert(void);
-extern const char *rs_did_set_langnoremap(void);
-extern const char *rs_did_set_langremap(void);
-extern const char *rs_did_set_foldlevel(void);
-extern const char *rs_did_set_textwidth(void);
-extern const char *rs_did_set_pumblend(void);
+extern const char *rs_did_set_iminsert(optset_T *args);
+extern const char *rs_did_set_langnoremap(optset_T *args);
+extern const char *rs_did_set_langremap(optset_T *args);
+extern const char *rs_did_set_foldlevel(optset_T *args);
+extern const char *rs_did_set_textwidth(optset_T *args);
+extern const char *rs_did_set_pumblend(optset_T *args);
 extern const char *rs_did_set_winblend(win_T *win, int64_t old_value, int64_t new_value);
 extern const char *rs_did_set_smoothscroll_full(win_T *win);
-extern const char *rs_did_set_showtabline_full(void);
+extern const char *rs_did_set_showtabline_full(optset_T *args);
 extern const char *rs_did_set_numberwidth(win_T *win);
 extern const char *rs_did_set_number_relativenumber(win_T *win);
 extern const char *rs_did_set_binary(void);
 extern const char *rs_did_set_diff(win_T *win);
-extern const char *rs_did_set_eof_eol_fixeol_bomb(void);
+extern const char *rs_did_set_eof_eol_fixeol_bomb(optset_T *args);
 extern const char *rs_did_set_equalalways(win_T *win, int old_value);
 extern const char *rs_did_set_foldminlines(win_T *win);
 extern const char *rs_did_set_foldnestmax(win_T *win);
-extern const char *rs_did_set_helpheight(void);
+extern const char *rs_did_set_helpheight(optset_T *args);
 extern const char *rs_did_set_swapfile(buf_T *buf);
-extern const char *rs_did_set_modifiable(void);
+extern const char *rs_did_set_modifiable(optset_T *args);
 extern const char *rs_did_set_updatecount(int64_t old_value);
 extern const char *rs_did_set_lisp(buf_T *buf);
 extern const char *rs_did_set_wildchar(int64_t c);
-extern const char *rs_did_set_window(void);
+extern const char *rs_did_set_window(optset_T *args);
 extern const char *rs_did_set_scrollbind(win_T *win);
-extern const char *rs_did_set_autochdir(void);
+extern const char *rs_did_set_autochdir(optset_T *args);
 
 // OptVal storage operations (from Rust storage.rs)
 extern void rs_optval_free(OptVal o);
@@ -2276,12 +2276,6 @@ static const char *did_set_arabic(optset_T *args)
   return errmsg;
 }
 
-/// Process the updated 'autochdir' option value.
-static const char *did_set_autochdir(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_autochdir();
-}
-
 /// Process the updated 'binary' option value.
 static const char *did_set_binary(optset_T *args)
 {
@@ -2334,10 +2328,6 @@ static const char *did_set_diff(optset_T *args)
 
 /// Process the updated 'endoffile' or 'endofline' or 'fixendofline' or 'bomb'
 /// option value.
-static const char *did_set_eof_eol_fixeol_bomb(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_eof_eol_fixeol_bomb();
-}
 
 /// Process the updated 'equalalways' option value.
 static const char *did_set_equalalways(optset_T *args)
@@ -2346,11 +2336,6 @@ static const char *did_set_equalalways(optset_T *args)
 }
 
 /// Process the new 'foldlevel' option value.
-static const char *did_set_foldlevel(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_foldlevel();
-}
-
 /// Process the new 'foldminlines' option value.
 static const char *did_set_foldminlines(optset_T *args)
 {
@@ -2364,40 +2349,6 @@ static const char *did_set_foldnestmax(optset_T *args)
 }
 
 /// Process the new 'helpheight' option value.
-static const char *did_set_helpheight(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_helpheight();
-}
-
-/// Process the updated 'hlsearch' option value.
-static const char *did_set_hlsearch(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_hlsearch();
-}
-
-/// Process the updated 'ignorecase' option value.
-static const char *did_set_ignorecase(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_ignorecase();
-}
-
-/// Process the new 'iminset' option value.
-static const char *did_set_iminsert(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_iminsert();
-}
-
-/// Process the updated 'langnoremap' option value.
-static const char *did_set_langnoremap(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_langnoremap();
-}
-
-/// Process the updated 'langremap' option value.
-static const char *did_set_langremap(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_langremap();
-}
 
 /// Process the new 'laststatus' option value.
 static const char *did_set_laststatus(optset_T *args)
@@ -2467,12 +2418,6 @@ static const char *did_set_lines_or_columns(optset_T *args)
 static const char *did_set_lisp(optset_T *args)
 {
   return rs_did_set_lisp((buf_T *)args->os_buf);
-}
-
-/// Process the updated 'modifiable' option value.
-static const char *did_set_modifiable(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_modifiable();
 }
 
 /// Process the updated 'modified' option value.
@@ -2648,12 +2593,6 @@ static const char *did_set_previewwindow(optset_T *args)
   return NULL;
 }
 
-/// Process the new 'pumblend' option value.
-static const char *did_set_pumblend(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_pumblend();
-}
-
 /// Process the updated 'readonly' option value.
 static const char *did_set_readonly(optset_T *args)
 {
@@ -2735,12 +2674,6 @@ static const char *did_set_shiftwidth_tabstop(optset_T *args)
   return NULL;
 }
 
-/// Process the new 'showtabline' option value.
-static const char *did_set_showtabline(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_showtabline_full();
-}
-
 /// Process the updated 'smoothscroll' option value.
 static const char *did_set_smoothscroll(optset_T *args)
 {
@@ -2762,18 +2695,6 @@ static const char *did_set_spell(optset_T *args)
 static const char *did_set_swapfile(optset_T *args)
 {
   return rs_did_set_swapfile((buf_T *)args->os_buf);
-}
-
-/// Process the new 'textwidth' option value.
-static const char *did_set_textwidth(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_textwidth();
-}
-
-/// Process the updated 'title' or the 'icon' option value.
-static const char *did_set_title_icon(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_title_icon();
 }
 
 /// Process the new 'titlelen' option value.
@@ -2864,12 +2785,6 @@ static const char *did_set_wildchar(optset_T *args)
 static const char *did_set_winblend(optset_T *args)
 {
   return rs_did_set_winblend((win_T *)args->os_win, args->os_oldval.number, args->os_newval.number);
-}
-
-/// Process the new 'window' option value.
-static const char *did_set_window(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_window();
 }
 
 /// Process the new 'winheight' value.

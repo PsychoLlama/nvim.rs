@@ -212,7 +212,7 @@ local options = {
     },
     {
       abbreviation = 'acd',
-      cb = 'did_set_autochdir',
+      cb = 'rs_did_set_autochdir',
       defaults = false,
       desc = [=[
         When on, Vim will change the current working directory whenever you
@@ -754,7 +754,7 @@ local options = {
       varname = 'p_bin',
     },
     {
-      cb = 'did_set_eof_eol_fixeol_bomb',
+      cb = 'rs_did_set_eof_eol_fixeol_bomb',
       defaults = false,
       desc = [=[
         When writing a file and the following conditions are met, a BOM (Byte
@@ -2683,7 +2683,7 @@ local options = {
     },
     {
       abbreviation = 'eof',
-      cb = 'did_set_eof_eol_fixeol_bomb',
+      cb = 'rs_did_set_eof_eol_fixeol_bomb',
       defaults = false,
       desc = [=[
         Indicates that a CTRL-Z character was found at the end of the file
@@ -2703,7 +2703,7 @@ local options = {
     },
     {
       abbreviation = 'eol',
-      cb = 'did_set_eof_eol_fixeol_bomb',
+      cb = 'rs_did_set_eof_eol_fixeol_bomb',
       defaults = true,
       desc = [=[
         When writing a file and this option is off and the 'binary' option
@@ -3348,7 +3348,7 @@ local options = {
     },
     {
       abbreviation = 'fixeol',
-      cb = 'did_set_eof_eol_fixeol_bomb',
+      cb = 'rs_did_set_eof_eol_fixeol_bomb',
       defaults = true,
       desc = [=[
         When writing a file and this option is on, <EOL> at the end of file
@@ -3485,7 +3485,7 @@ local options = {
     },
     {
       abbreviation = 'fdl',
-      cb = 'did_set_foldlevel',
+      cb = 'rs_did_set_foldlevel',
       defaults = 0,
       desc = [=[
         Sets the fold level: Folds with a higher level will be closed.
@@ -4285,7 +4285,7 @@ local options = {
     },
     {
       abbreviation = 'hh',
-      cb = 'did_set_helpheight',
+      cb = 'rs_did_set_helpheight',
       defaults = 20,
       desc = [=[
         Minimal initial height of the help window when it is opened with the
@@ -4402,7 +4402,7 @@ local options = {
     },
     {
       abbreviation = 'hls',
-      cb = 'did_set_hlsearch',
+      cb = 'rs_did_set_hlsearch',
       defaults = true,
       desc = [=[
         When there is a previous search pattern, highlight all its matches.
@@ -4433,7 +4433,7 @@ local options = {
       varname = 'p_hls',
     },
     {
-      cb = 'did_set_title_icon',
+      cb = 'rs_did_set_title_icon',
       defaults = {
         if_true = false,
         doc = 'off, on when title can be restored',
@@ -4472,7 +4472,7 @@ local options = {
     },
     {
       abbreviation = 'ic',
-      cb = 'did_set_ignorecase',
+      cb = 'rs_did_set_ignorecase',
       defaults = false,
       desc = [=[
         Ignore case in search patterns, |cmdline-completion|, when
@@ -4524,7 +4524,7 @@ local options = {
     },
     {
       abbreviation = 'imi',
-      cb = 'did_set_iminsert',
+      cb = 'rs_did_set_iminsert',
       defaults = macros('B_IMODE_NONE', 'number'),
       desc = [=[
         Specifies whether :lmap or an Input Method (IM) is to be used in
@@ -5166,7 +5166,7 @@ local options = {
     },
     {
       abbreviation = 'lnr',
-      cb = 'did_set_langnoremap',
+      cb = 'rs_did_set_langnoremap',
       defaults = true,
       full_name = 'langnoremap',
       scope = { 'global' },
@@ -5176,7 +5176,7 @@ local options = {
     },
     {
       abbreviation = 'lrm',
-      cb = 'did_set_langremap',
+      cb = 'rs_did_set_langremap',
       defaults = false,
       desc = [=[
         When off, setting 'langmap' does not apply to characters resulting
@@ -5891,7 +5891,7 @@ local options = {
     },
     {
       abbreviation = 'ma',
-      cb = 'did_set_modifiable',
+      cb = 'rs_did_set_modifiable',
       defaults = true,
       desc = [=[
         When off the buffer contents cannot be changed.  The 'fileformat' and
@@ -6633,7 +6633,7 @@ local options = {
     },
     {
       abbreviation = 'pb',
-      cb = 'did_set_pumblend',
+      cb = 'rs_did_set_pumblend',
       defaults = 0,
       desc = [=[
         Enables pseudo-transparency for the |popup-menu|. Valid values are in
@@ -8150,7 +8150,7 @@ local options = {
     },
     {
       abbreviation = 'stal',
-      cb = 'did_set_showtabline',
+      cb = 'rs_did_set_showtabline_full',
       defaults = 1,
       desc = [=[
         The value of this option specifies when the line with tab page labels
@@ -9535,7 +9535,7 @@ local options = {
     },
     {
       abbreviation = 'tw',
-      cb = 'did_set_textwidth',
+      cb = 'rs_did_set_textwidth',
       defaults = 0,
       desc = [=[
         Maximum width of text that is being inserted.  A longer line will be
@@ -9643,7 +9643,7 @@ local options = {
       varname = 'p_tm',
     },
     {
-      cb = 'did_set_title_icon',
+      cb = 'rs_did_set_title_icon',
       defaults = false,
       desc = [=[
         When on, the title of the window will be set to the value of
@@ -10574,7 +10574,7 @@ local options = {
     },
     {
       abbreviation = 'wi',
-      cb = 'did_set_window',
+      cb = 'rs_did_set_window',
       defaults = {
         if_true = 0,
         doc = 'screen height - 1',

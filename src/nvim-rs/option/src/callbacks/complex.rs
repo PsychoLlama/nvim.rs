@@ -6,7 +6,7 @@
 
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use super::{callback_ok, CallbackResult};
 
@@ -898,7 +898,7 @@ extern "C" {
 /// Callback for 'autochdir' option.
 /// Change directories when the 'acd' option is set now.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_autochdir() -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_autochdir(_args: *mut c_void) -> CallbackResult {
     do_autochdir();
     callback_ok()
 }
@@ -958,7 +958,7 @@ extern "C" {
 /// Callback for 'window' option.
 /// Ensure 'window' is clamped to [1, Rows-1].
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_window() -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_window(_args: *mut c_void) -> CallbackResult {
     let rows = nvim_get_Rows();
     let window = nvim_get_p_window();
 

@@ -4,7 +4,7 @@
 //! callbacks. These callbacks handle options that affect editor behavior
 //! such as diff mode, spell checking, swap files, undo, folds, etc.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 use crate::callbacks::{callback_ok, CallbackResult};
 use crate::{BufHandle, OptInt, WinHandle};
@@ -120,7 +120,7 @@ pub unsafe extern "C" fn rs_did_set_diff(win: WinHandle) -> CallbackResult {
 ///
 /// Redraws the window title and tab page text.
 #[no_mangle]
-pub extern "C" fn rs_did_set_eof_eol_fixeol_bomb() -> CallbackResult {
+pub extern "C" fn rs_did_set_eof_eol_fixeol_bomb(_args: *mut c_void) -> CallbackResult {
     unsafe { redraw_titles() };
     callback_ok()
 }
@@ -165,7 +165,7 @@ pub unsafe extern "C" fn rs_did_set_foldnestmax(win: WinHandle) -> CallbackResul
 ///
 /// Changes window height if in help buffer and window is too short.
 #[no_mangle]
-pub extern "C" fn rs_did_set_helpheight() -> CallbackResult {
+pub extern "C" fn rs_did_set_helpheight(_args: *mut c_void) -> CallbackResult {
     if !is_one_window() && is_curbuf_help() {
         let hh = get_helpheight();
         #[allow(clippy::cast_possible_truncation)]
@@ -273,7 +273,7 @@ pub extern "C" fn rs_did_set_insertmode() -> CallbackResult {
 ///
 /// Redraws window title when modifiable state changes.
 #[no_mangle]
-pub extern "C" fn rs_did_set_modifiable() -> CallbackResult {
+pub extern "C" fn rs_did_set_modifiable(_args: *mut c_void) -> CallbackResult {
     unsafe { redraw_titles() };
     callback_ok()
 }

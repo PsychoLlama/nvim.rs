@@ -4,7 +4,7 @@
 //! callbacks. These callbacks handle options that affect how the screen is
 //! drawn, window layouts, status lines, and visual appearance.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::callbacks::{callback_ok, request_redraw_all, CallbackResult, UpdateType};
 use crate::{OptInt, WinHandle};
@@ -176,7 +176,7 @@ pub unsafe extern "C" fn rs_did_set_laststatus_full(
 ///
 /// Recomputes window positions and heights when tabline visibility changes.
 #[no_mangle]
-pub extern "C" fn rs_did_set_showtabline_full() -> CallbackResult {
+pub extern "C" fn rs_did_set_showtabline_full(_args: *mut c_void) -> CallbackResult {
     unsafe {
         win_new_screen_rows();
     }
