@@ -3957,26 +3957,6 @@ static bool is_qf_entry_present(qf_list_T *qfl, qfline_T *qf_ptr)
 // =============================================================================
 
 /// Result of getting an entry from the quickfix list (from Rust)
-typedef struct {
-  void *qf_ptr;       ///< Pointer to the entry (null if not found)
-  int qf_index;       ///< New index (1-based)
-  bool errored;       ///< Whether an error message was emitted
-} QfGetEntryResult;
-
-/// Rust implementation of entry selection (with error message emission)
-extern QfGetEntryResult rs_qf_get_entry_with_msg(const void *qfl, int errornr, int dir);
-
-/// Get a entry specified by 'errornr' and 'dir' from the current
-/// quickfix/location list. 'errornr' specifies the index of the entry and 'dir'
-/// specifies the direction (FORWARD/BACKWARD/FORWARD_FILE/BACKWARD_FILE).
-/// Returns a pointer to the entry and the index of the new entry is stored in
-/// 'new_qfidx'.
-static qfline_T *qf_get_entry(qf_list_T *qfl, int errornr, int dir, int *new_qfidx)
-{
-  QfGetEntryResult result = rs_qf_get_entry_with_msg(qfl, errornr, dir);
-  *new_qfidx = result.qf_index;
-  return (qfline_T *)result.qf_ptr;
-}
 
 // Find a window displaying a Vim help file in the current tab page.
 static win_T *qf_find_help_win(void)
@@ -3998,18 +3978,8 @@ static void win_set_loclist(win_T *wp, qf_info_T *qi)
 }
 
 // Rust exports for jump machinery
-extern int rs_qf_jump_to_help_window(void *qi, bool newwin, bool *opened_window);
-extern void rs_qf_goto_win_with_ll_file(void *use_win, int qf_fnum, void *ll_ref);
-extern void rs_qf_goto_win_with_qfl_file(int qf_fnum);
-extern int rs_qf_jump_to_usable_window(int qf_fnum, bool newwin, bool *opened_window);
 extern void rs_qf_jump_newwin(void *qi, int dir, int errornr, int forceit, bool newwin);
 
-/// Find a help window or open one. If 'newwin' is true, then open a new help
-/// window.
-static int jump_to_help_window(qf_info_T *qi, bool newwin, bool *opened_window)
-{
-  return rs_qf_jump_to_help_window(qi, newwin, opened_window);
-}
 
 /// Find a non-quickfix window using the given location list stack in the
 /// current tabpage.
@@ -4050,54 +4020,6 @@ static bool qf_goto_tabwin_with_file(int fnum)
   return false;
 }
 
-// Create a new window to show a file above the quickfix window. Called when
-// only the quickfix window is present.
-static int qf_open_new_file_win(qf_info_T *ll_ref)
-{
-  int flags = WSP_ABOVE;
-  if (ll_ref != NULL) {
-    flags |= WSP_NEWLOC;
-  }
-  if (win_split(0, flags) == FAIL) {
-    return FAIL;  // not enough room for window
-  }
-  p_swb = empty_string_option;  // don't split again
-  swb_flags = 0;
-  RESET_BINDING(curwin);
-  if (ll_ref != NULL) {
-    // The new window should use the location list from the
-    // location list window
-    win_set_loclist(curwin, ll_ref);
-  }
-  return OK;
-}
-
-// Go to a window that shows the right buffer. If the window is not found, go
-// to the window just above the location list window. This is used for opening
-// a file from a location window and not from a quickfix window. If some usable
-// window is previously found, then it is supplied in 'use_win'.
-static void qf_goto_win_with_ll_file(win_T *use_win, int qf_fnum, qf_info_T *ll_ref)
-{
-  rs_qf_goto_win_with_ll_file(use_win, qf_fnum, ll_ref);
-}
-
-// Go to a window that shows the specified file. If a window is not found, go
-// to the window just above the quickfix window. This is used for opening a
-// file from a quickfix window and not from a location window.
-static void qf_goto_win_with_qfl_file(int qf_fnum)
-{
-  rs_qf_goto_win_with_qfl_file(qf_fnum);
-}
-
-// Find a suitable window for opening a file (qf_fnum) from the
-// quickfix/location list and jump to it.  If the file is already opened in a
-// window, jump to it. Otherwise open a new window to display the file. If
-// 'newwin' is true, then always open a new window. This is called from either
-// a quickfix or a location list window.
-static int qf_jump_to_usable_window(int qf_fnum, bool newwin, bool *opened_window)
-{
-  return rs_qf_jump_to_usable_window(qf_fnum, newwin, opened_window);
-}
 
 // =============================================================================
 // Phase 5: qf_jump_edit_buffer accessor functions for Rust
@@ -4594,38 +4516,8 @@ void nvim_qf_restore_swb(void *old_swb, unsigned old_swb_flags)
   }
 }
 
-// Rust export for qf_jump_to_buffer
-extern int rs_qf_jump_to_buffer(void *qi, int qf_index, void *qf_ptr, int forceit,
-                                 int prev_winid, bool *opened_window, int openfold,
-                                 bool print_message);
 
-// Rust export for qf_jump_open_window
-extern int rs_qf_jump_open_window(void *qi, void *qf_ptr, bool newwin, bool *opened_window);
 
-/// Find a usable window for opening a file from the quickfix/location list. If
-/// a window is not found then open a new window. If 'newwin' is true, then open
-/// a new window.
-/// @return  OK if successfully jumped or opened a window.
-///          FAIL if not able to jump/open a window.
-///          NOTDONE if a file is not associated with the entry.
-///          QF_ABORT if the quickfix/location list was modified by an autocmd.
-static int qf_jump_open_window(qf_info_T *qi, qfline_T *qf_ptr, bool newwin, bool *opened_window)
-{
-  return rs_qf_jump_open_window(qi, qf_ptr, newwin, opened_window);
-}
-
-/// Edit a selected file from the quickfix/location list and jump to a
-/// particular line/column, adjust the folds and display a message about the
-/// jump.
-/// @return  OK on success and FAIL on failing to open the file/buffer.
-///          QF_ABORT if the quickfix/location list is freed by an autocmd when opening
-///          the file.
-static int qf_jump_to_buffer(qf_info_T *qi, int qf_index, qfline_T *qf_ptr, int forceit,
-                             int prev_winid, bool *opened_window, int openfold, bool print_message)
-{
-  return rs_qf_jump_to_buffer(qi, qf_index, qf_ptr, forceit, prev_winid,
-                              opened_window, openfold, print_message);
-}
 
 /// Jump to a quickfix line and try to use an existing window.
 void qf_jump(qf_info_T *qi, int dir, int errornr, int forceit)
@@ -4633,19 +4525,6 @@ void qf_jump(qf_info_T *qi, int dir, int errornr, int forceit)
   rs_qf_jump_newwin(qi, dir, errornr, forceit, false);
 }
 
-// Jump to a quickfix line.
-// If dir == 0 go to entry "errornr".
-// If dir == FORWARD go "errornr" valid entries forward.
-// If dir == BACKWARD go "errornr" valid entries backward.
-// If dir == FORWARD_FILE go "errornr" valid entries files backward.
-// If dir == BACKWARD_FILE go "errornr" valid entries files backward
-// else if "errornr" is zero, redisplay the same line
-// If 'forceit' is true, then can discard changes to the current buffer.
-// If 'newwin' is true, then open the file in a new window.
-static void qf_jump_newwin(qf_info_T *qi, int dir, int errornr, int forceit, bool newwin)
-{
-  rs_qf_jump_newwin(qi, dir, errornr, forceit, newwin);
-}
 
 // Highlight ids used for displaying entries from the quickfix list.
 static int qfFile_hl_id;
@@ -6066,7 +5945,7 @@ void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg)
 /// Wrapper for qf_jump callable from Rust
 void nvim_qf_jump(void *qi_void, int dir, int errornr, int forceit)
 {
-  qf_jump((qf_info_T *)qi_void, dir, errornr, forceit);
+  rs_qf_jump_newwin(qi_void, dir, errornr, forceit, false);
 }
 
 /// Wrapper for qf_msg callable from Rust
@@ -6132,7 +6011,7 @@ void *nvim_qf_curwin_get_loclist(void)
 /// Wrapper for qf_jump_newwin callable from Rust
 void nvim_qf_jump_newwin(void *qi_void, int dir, int errornr, int forceit, bool newwin)
 {
-  qf_jump_newwin((qf_info_T *)qi_void, dir, errornr, forceit, newwin);
+  rs_qf_jump_newwin(qi_void, dir, errornr, forceit, newwin);
 }
 
 /// Get curwin->w_cursor.lnum for Rust
