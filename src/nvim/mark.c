@@ -250,6 +250,8 @@ extern void rs_mark_col_adjust_all(linenr_T lnum, colnr_T mincol, linenr_T lnum_
 extern void rs_ex_delmarks(const char *arg, int forceit, buf_T *curbuf_ptr);
 extern void rs_mark_mb_adjustpos(buf_T *buf, pos_T *lp);
 extern fmark_T *rs_mark_get_motion(buf_T *buf, win_T *win, int name);
+extern void rs_diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
+                                linenr_T amount, linenr_T amount_after);
 
 // =============================================================================
 // C accessor functions called from Rust
@@ -431,7 +433,7 @@ void nvim_mark_extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
 void nvim_mark_diff_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
                             linenr_T amount, linenr_T amount_after)
 {
-  diff_mark_adjust(buf, line1, line2, amount, amount_after);
+  rs_diff_mark_adjust(buf, line1, line2, amount, amount_after);
 }
 void nvim_mark_fold_adjust(win_T *win, linenr_T line1, linenr_T line2,
                             linenr_T amount, linenr_T amount_after)

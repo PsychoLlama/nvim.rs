@@ -184,6 +184,8 @@ extern win_T *rs_nav_get_prev_nonfloat(win_T *wp, int wrap);
 extern int rs_nav_is_horizontal_dir(int dir);
 extern int rs_nav_is_vertical_dir(int dir);
 
+extern void rs_diff_clear(tabpage_T *tp);
+
 // Phase 1: Pure calculations and thin wrappers
 extern void rs_set_fraction(win_T *wp);
 extern int64_t rs_win_default_scroll(win_T *wp);
@@ -4382,7 +4384,7 @@ static tabpage_T *alloc_tabpage(void)
 void free_tabpage(tabpage_T *tp)
 {
   pmap_del(int)(&tabpage_handles, tp->handle, NULL);
-  diff_clear(tp);
+  rs_diff_clear(tp);
   for (int idx = 0; idx < SNAP_COUNT; idx++) {
     clear_snapshot(tp, idx);
   }

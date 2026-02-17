@@ -135,6 +135,9 @@ typedef struct {
 
 #include "ex_cmds_shim.c.generated.h"
 
+extern void rs_diff_buf_add(buf_T *buf);
+extern void rs_diff_invalidate(buf_T *buf);
+
 // =============================================================================
 // ExArg accessor functions for Rust (Wave 2)
 // =============================================================================
@@ -2808,8 +2811,8 @@ int do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap, linenr_T newlnum
   // Also needed when re-editing the same buffer, because unloading will
   // have removed it as a diff buffer.
   if (curwin->w_p_diff) {
-    diff_buf_add(curbuf);
-    diff_invalidate(curbuf);
+    rs_diff_buf_add(curbuf);
+    rs_diff_invalidate(curbuf);
   }
 
   // If the window options were changed may need to set the spell language.

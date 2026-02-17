@@ -312,49 +312,6 @@ typedef enum {
 #define FOR_ALL_DIFFBLOCKS_IN_TAB(tp, dp) \
   for ((dp) = (tp)->tp_first_diff; (dp) != NULL; (dp) = (dp)->df_next)
 
-/// Called when deleting or unloading a buffer: No longer make a diff with it.
-///
-/// @param buf
-void diff_buf_delete(buf_T *buf)
-{
-  rs_diff_buf_delete(buf);
-}
-
-/// Add a buffer to make diffs for.
-///
-/// Call this when a new buffer is being edited in the current window where
-/// 'diff' is set.
-/// Marks the current buffer as being part of the diff and requiring updating.
-/// This must be done before any autocmd, because a command may use info
-/// about the screen contents.
-///
-/// @param buf The buffer to add.
-void diff_buf_add(buf_T *buf)
-{
-  rs_diff_buf_add(buf);
-}
-
-/// Mark the diff info involving buffer "buf" as invalid, it will be updated
-/// when info is requested.
-///
-/// @param buf
-void diff_invalidate(buf_T *buf)
-{
-  rs_diff_invalidate(buf);
-}
-
-/// Called by mark_adjust(): update line numbers in "buf".
-///
-/// @param line1
-/// @param line2
-/// @param amount
-/// @param amount_after
-void diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
-                      linenr_T amount_after)
-{
-  rs_diff_mark_adjust(buf, line1, line2, amount, amount_after);
-}
-
 /// Mark all diff buffers in the current tab page for redraw.
 ///
 /// @param dofold Also recompute the folds
@@ -381,7 +338,7 @@ void diff_redraw(bool dofold)
 
     // A change may have made filler lines invalid, need to take care of
     // that for other windows.
-    int n = diff_check_fill(wp, wp->w_topline);
+    int n = rs_diff_check_fill(wp, wp->w_topline);
 
     if (((wp != curwin) && (wp->w_topfill > 0)) || (n > 0)) {
       if (wp->w_topfill > n) {
@@ -402,11 +359,11 @@ void diff_redraw(bool dofold)
     if (used_max_fill_curwin) {
       // The current window was set to use the maximum number of filler
       // lines, may need to reduce them.
-      diff_set_topline(wp_other, curwin);
+      rs_diff_set_topline(wp_other, curwin);
     } else if (used_max_fill_other) {
       // The other window was set to use the maximum number of filler
       // lines, may need to reduce them.
-      diff_set_topline(curwin, wp_other);
+      rs_diff_set_topline(curwin, wp_other);
     }
   }
 }
@@ -544,20 +501,7 @@ static int diff_write(buf_T *buf, diffin_T *din, linenr_T start, linenr_T end)
   return r;
 }
 
-/// Return true if the options are set to use the internal diff library.
-/// Note that if the internal diff failed for one of the buffers, the external
-/// diff will be used anyway.
-int diff_internal(void)
-  FUNC_ATTR_PURE
-{
-  return rs_diff_internal();
-}
-
 /// Completely update the diffs for the buffers involved.
-///
-/// When using the external "diff" command the buffers are written to a file,
-/// also for unmodified buffers (the file could have been produced by
-/// autocommands, e.g. the netrw plugin).
 ///
 /// @param eap can be NULL
 void ex_diffupdate(exarg_T *eap)
@@ -1015,7 +959,7 @@ void diff_win_options(win_T *wp, bool addbuf)
   rs_set_diff_option(wp, true);
 
   if (addbuf) {
-    diff_buf_add(wp->w_buffer);
+    rs_diff_buf_add(wp->w_buffer);
   }
   redraw_later(wp, UPD_NOT_VALID);
 }
@@ -1087,7 +1031,7 @@ void ex_diffoff(exarg_T *eap)
     diff_need_update = false;
     curtab->tp_diff_invalid = false;
     curtab->tp_diff_update = false;
-    diff_clear(curtab);
+    rs_diff_clear(curtab);
   }
 
   // Remove "hor" from 'scrollopt' if there are no diff windows left.
@@ -1099,13 +1043,6 @@ void ex_diffoff(exarg_T *eap)
 // extract_hunk_internal and extract_hunk have been migrated to Rust.
 
 /// Clear the list of diffblocks for tab page "tp".
-///
-/// @param tp
-void diff_clear(tabpage_T *tp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_diff_clear(tp);
-}
 
 // find_top_diff_block — migrated to Rust (internal to rs_diff_set_topline)
 // calculate_topfill_and_topline — migrated to Rust (internal to rs_diff_set_topline)
@@ -1222,28 +1159,8 @@ static void run_linematch_algorithm(diff_T *dp)
 /// @param wp
 /// @param lnum
 /// @param[out] linestatus
-///
-/// @return diff status.
-int diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestatus)
-{
-  return rs_diff_check_with_linestatus(wp, lnum, linestatus);
-}
 
-/// See diff_check_with_linestatus
-int diff_check_fill(win_T *wp, linenr_T lnum)
-{
-  return rs_diff_check_fill(wp, lnum);
-}
 
-/// Set the topline of "towin" to match the position in "fromwin", so that they
-/// show the same diff'ed lines.
-///
-/// @param fromwin
-/// @param towin
-void diff_set_topline(win_T *fromwin, win_T *towin)
-{
-  rs_diff_set_topline(fromwin, towin);
-}
 
 /// Parse the diff anchors. If "check_only" is set, will only make sure the
 /// syntax is correct.
@@ -1322,19 +1239,7 @@ static int parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int
   return OK;
 }
 
-/// This is called when 'diffanchors' is changed.
-int diffanchors_changed(bool buflocal)
-{
-  return rs_diffanchors_changed(buflocal);
-}
 
-/// This is called when 'diffopt' is changed.
-///
-/// @return
-int diffopt_changed(void)
-{
-  return rs_diffopt_changed();
-}
 
 /// Check that "diffopt" contains "horizontal".
 bool diffopt_horizontal(void)
@@ -1476,24 +1381,10 @@ bool diff_should_use_internal(void)
   return rs_diff_should_use_internal() != 0;
 }
 
-/// Called when a line has been updated. Used for updating inline diff in Insert
-/// mode without waiting for global diff update later.
-void diff_update_line(linenr_T lnum)
-{
-  rs_diff_update_line(lnum);
-}
 
 /// used for simple inline diff algorithm
 static diffline_change_T simple_diffline_change;
 
-/// Parse a diffline struct and returns the [start,end] byte offsets
-///
-/// Returns true if this change was added, no other buffer has it.
-bool diff_change_parse(diffline_T *diffline, diffline_change_T *change, int *change_start,
-                       int *change_end)
-{
-  return rs_diff_change_parse(diffline, change, change_start, change_end);
-}
 
 /// Mapping used for mapping from temporary mmfile created for inline diff back
 /// to original buffer's line/col.
@@ -1842,7 +1733,7 @@ done:
 
   dp->has_changes = true;
 
-  diff_clear(curtab);
+  rs_diff_clear(curtab);
   curtab->tp_first_diff = orig_diff;
   memcpy(curtab->tp_diffbuf, orig_diffbuf, sizeof(orig_diffbuf));
 
@@ -1856,26 +1747,7 @@ done:
   }
 }
 
-/// Find the difference within a changed line.
-/// Returns true if the line was added, no other buffer has it.
-bool diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_diff_find_change(wp, lnum, diffline);
-}
 
-/// Check that line "lnum" is not close to a diff block, this line should
-/// be in a fold.
-///
-/// @param  wp    window containing the buffer to check
-/// @param  lnum  line number to check within the buffer
-///
-/// @return false if there are no diff blocks at all in this window.
-bool diff_infold(win_T *wp, linenr_T lnum)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_diff_infold(wp, lnum);
-}
 
 /// "dp" and "do" commands.
 void nv_diffgetput(bool put, size_t count)
@@ -2002,10 +1874,10 @@ void ex_diffgetput(exarg_T *eap)
     // the cursor line when there is no difference above the cursor.
     int linestatus = 0;
     if (eap->line1 == curbuf->b_ml.ml_line_count
-        && (diff_check_with_linestatus(curwin, eap->line1, &linestatus) == 0
+        && (rs_diff_check_with_linestatus(curwin, eap->line1, &linestatus) == 0
             && linestatus == 0)
         && (eap->line1 == 1
-            || (diff_check_with_linestatus(curwin, eap->line1 - 1, &linestatus) >= 0
+            || (rs_diff_check_with_linestatus(curwin, eap->line1 - 1, &linestatus) >= 0
                 && linestatus == 0))) {
       eap->line2++;
     } else if (eap->line1 > 0) {
@@ -2054,7 +1926,7 @@ theend:
   diff_busy = false;
 
   if (diff_need_update) {
-    ex_diffupdate(NULL);
+    rs_diff_ex_diffupdate(NULL);
   }
 
   // Check that the cursor is on a valid character and update its
@@ -2257,31 +2129,8 @@ static void diffgetput(const int addr_count, const int idx_cur, const int idx_fr
 }
 
 /// Checks that the buffer is in diff-mode.
-///
-/// @param  buf  buffer to check.
-bool diff_mode_buf(buf_T *buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_diff_mode_buf(buf);
-}
 
-/// Move "count" times in direction "dir" to the next diff block.
-///
-/// @param dir
-/// @param count
-///
-/// @return FAIL if there isn't such a diff block.
-int diff_move_to(int dir, int count)
-{
-  return rs_diff_move_to(dir, count);
-}
 
-/// For line "lnum" in the current window find the equivalent lnum in window
-/// "wp", compensating for inserted/deleted lines.
-linenr_T diff_lnum_win(linenr_T lnum, win_T *wp)
-{
-  return rs_diff_lnum_win(lnum, wp);
-}
 
 // Rust implementation for ED style diff parsing
 extern int rs_parse_diff_ed(const char *line, diffhunk_T *hunk);
@@ -2306,7 +2155,7 @@ static int xdiff_out(int start_a, int count_a, int start_b, int count_b, void *p
 /// "diff_filler()" function
 void f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = MAX(0, diff_check_fill(curwin, tv_get_lnum(argvars)));
+  rettv->vval.v_number = MAX(0, rs_diff_check_fill(curwin, tv_get_lnum(argvars)));
 }
 
 /// "diff_hlID()" function
@@ -2337,12 +2186,12 @@ void f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
       || diff_flags != prev_diff_flags) {
     // New line, buffer, change: need to get the values.
     int linestatus = 0;
-    diff_check_with_linestatus(curwin, lnum, &linestatus);
+    rs_diff_check_with_linestatus(curwin, lnum, &linestatus);
     if (linestatus < 0) {
       if (linestatus == -1) {
         change_start = MAXCOL;
         change_end = -1;
-        if (diff_find_change(curwin, lnum, &diffline)) {
+        if (rs_diff_find_change(curwin, lnum, &diffline)) {
           hlID = HLF_ADD;               // added line
         } else {
           hlID = HLF_CHD;               // changed line
@@ -2377,7 +2226,7 @@ void f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     } else {
       hlID = HLF_CHD;
       for (int i = 0; i < diffline.num_changes; i++) {
-        bool added = diff_change_parse(&diffline, &diffline.changes[i],
+        bool added = rs_diff_change_parse(&diffline, &diffline.changes[i],
                                        &change_start, &change_end);
         if (col >= change_start && col < change_end) {
           hlID = added ? HLF_TXA : HLF_TXD;
@@ -3390,7 +3239,7 @@ void nvim_diff_setpcmark(void)
 
 void nvim_diff_ex_diffupdate(void)
 {
-  ex_diffupdate(NULL);
+  rs_diff_ex_diffupdate(NULL);
 }
 
 void nvim_diff_run_linematch(diff_T *dp)

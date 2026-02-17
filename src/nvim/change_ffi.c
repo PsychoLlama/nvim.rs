@@ -288,7 +288,8 @@ char *nvim_curbuf_get_b_p_com(void) { return curbuf->b_p_com; }
 // Diff functions
 // =============================================================================
 
-bool nvim_diff_internal(void) { return diff_internal(); }
+extern int rs_diff_internal(void);
+bool nvim_diff_internal(void) { return rs_diff_internal(); }
 
 // =============================================================================
 // Spell

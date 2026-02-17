@@ -58,6 +58,9 @@
 
 #include "change.c.generated.h"
 
+extern int rs_diff_internal(void);
+extern void rs_diff_update_line(linenr_T lnum);
+
 /// Invalidate a window's w_valid flags and w_lines[] entries after changing lines.
 static void changed_lines_invalidate_win(win_T *wp, linenr_T lnum, colnr_T col, linenr_T lnume,
                                          linenr_T xtra)
@@ -125,9 +128,9 @@ void changed_common(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume, line
   changed(buf);
 
   FOR_ALL_WINDOWS_IN_TAB(win, curtab) {
-    if (win->w_buffer == buf && win->w_p_diff && diff_internal()) {
+    if (win->w_buffer == buf && win->w_p_diff && rs_diff_internal()) {
       curtab->tp_diff_update = true;
-      diff_update_line(lnum);
+      rs_diff_update_line(lnum);
     }
   }
 

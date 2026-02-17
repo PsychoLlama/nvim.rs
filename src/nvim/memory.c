@@ -72,6 +72,7 @@ extern char *rs_xstpcpy(char *restrict dst, const char *restrict src);
 extern char *rs_xstpncpy(char *restrict dst, const char *restrict src, size_t maxlen);
 extern size_t rs_xstrlcpy(char *restrict dst, const char *restrict src, size_t dsize);
 extern size_t rs_xstrlcat(char *dst, const char *src, size_t dsize);
+extern void rs_diff_clear(tabpage_T *tp);
 
 #ifdef EXITFREE
 bool entered_free_all_mem = false;
@@ -868,7 +869,7 @@ void free_all_mem(void)
   free_signs();
   set_expr_line(NULL);
   if (curtab != NULL) {
-    diff_clear(curtab);
+    rs_diff_clear(curtab);
   }
   clear_sb_text(true);            // free any scrollback text
 

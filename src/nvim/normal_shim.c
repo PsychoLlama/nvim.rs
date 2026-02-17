@@ -228,6 +228,9 @@ extern void rs_nv_tagpop(cmdarg_T *cap);
 extern void rs_nv_regreplay(cmdarg_T *cap);
 extern void rs_nv_ctrlh(cmdarg_T *cap);
 extern void rs_do_ascii(exarg_T *eap);
+extern void rs_diff_ex_diffupdate(exarg_T *eap);
+extern void rs_diff_set_topline(win_T *fromwin, win_T *towin);
+extern int rs_diff_move_to(int dir, int count);
 
 /// This table contains one entry for every Normal or Visual mode command.
 /// The order doesn't matter, init_normal_cmds() will create a sorted index.
@@ -3370,7 +3373,7 @@ bool nvim_curtab_needs_diff_update(void)
 }
 
 /// ex_diffupdate(NULL) wrapper.
-void nvim_ex_diffupdate_wrapper(void) { ex_diffupdate(NULL); }
+void nvim_ex_diffupdate_wrapper(void) { rs_diff_ex_diffupdate(NULL); }
 
 /// Clear curtab diff update flag.
 void nvim_curtab_clear_diff_update(void) { curtab->tp_diff_update = false; }
@@ -3962,7 +3965,7 @@ void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
     // do the vertical scroll
     if (want_ver) {
       if (old_curwin->w_p_diff && curwin->w_p_diff) {
-        diff_set_topline(old_curwin, curwin);
+        rs_diff_set_topline(old_curwin, curwin);
       } else {
         curwin->w_scbind_pos += vtopline_diff;
         int curr_vtopline = get_vtopline(curwin);
@@ -5803,7 +5806,7 @@ static void nv_brackets_impl(cmdarg_T *cap)
     }
   } else if (cap->nchar == 'c') {
     // "[c" and "]c": move to next or previous diff-change.
-    if (diff_move_to(cap->cmdchar == ']' ? FORWARD : BACKWARD,
+    if (rs_diff_move_to(cap->cmdchar == ']' ? FORWARD : BACKWARD,
                      cap->count1) == false) {
       clearopbeep(cap->oap);
     }

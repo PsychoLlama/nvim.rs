@@ -162,6 +162,10 @@ extern bool rs_has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v);
 extern void rs_handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t v, bool selected);
 extern void rs_wlv_put_linebuf(win_T *wp, const winlinevars_T *wlv, int endcol, bool clear_end,
                                int bg_attr, int flags);
+extern int rs_diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestatus);
+extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
+extern bool rs_diff_change_parse(diffline_T *diffline, diffline_change_T *change,
+                                 int *change_start, int *change_end);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -1291,15 +1295,15 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
   int bg_attr = win_bg_attr(wp);
 
   int linestatus = 0;
-  wlv.filler_lines = diff_check_with_linestatus(wp, lnum, &linestatus);
+  wlv.filler_lines = rs_diff_check_with_linestatus(wp, lnum, &linestatus);
   diffline_T line_changes = { 0 };
   int change_index = -1;
   if (linestatus < 0) {
     if (linestatus == -1) {
-      if (diff_find_change(wp, lnum, &line_changes)) {
+      if (rs_diff_find_change(wp, lnum, &line_changes)) {
         wlv.diff_hlf = HLF_ADD;      // added line
       } else if (line_changes.num_changes > 0) {
-        bool added = diff_change_parse(&line_changes, &line_changes.changes[0],
+        bool added = rs_diff_change_parse(&line_changes, &line_changes.changes[0],
                                        &change_start, &change_end);
         if (change_start == 0) {
           if (added) {
@@ -1938,7 +1942,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
         bool added = false;
         if (line_changes.num_changes > 0 && change_index >= 0
             && change_index < line_changes.num_changes) {
-          added = diff_change_parse(&line_changes, &line_changes.changes[change_index],
+          added = rs_diff_change_parse(&line_changes, &line_changes.changes[change_index],
                                     &change_start, &change_end);
         }
         // When there is extra text (eg: virtual text) it gets the

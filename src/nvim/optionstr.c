@@ -88,6 +88,8 @@ extern int rs_is_valid_cpo_flag(int c);
 extern int rs_is_valid_cocu_flag(int c);
 extern int rs_is_valid_mouse_flag(int c);
 extern int rs_is_valid_ww_flag(int c);
+extern int rs_diffanchors_changed(bool buflocal);
+extern int rs_diffopt_changed(void);
 
 // Number validation utilities
 extern int rs_opt_num_in_range(int64_t value, int64_t min, int64_t max);
@@ -1117,7 +1119,7 @@ const char *did_set_cursorlineopt(optset_T *args)
 /// The 'diffanchors' option is changed.
 const char *did_set_diffanchors(optset_T *args)
 {
-  if (diffanchors_changed(args->os_flags & OPT_LOCAL) == FAIL) {
+  if (rs_diffanchors_changed(args->os_flags & OPT_LOCAL) == FAIL) {
     return e_invarg;
   }
 
@@ -1127,7 +1129,7 @@ const char *did_set_diffanchors(optset_T *args)
 /// The 'diffopt' option is changed.
 const char *did_set_diffopt(optset_T *args FUNC_ATTR_UNUSED)
 {
-  return diffopt_changed() == FAIL ? e_invarg : NULL;
+  return rs_diffopt_changed() == FAIL ? e_invarg : NULL;
 }
 
 int expand_set_diffopt(optexpand_T *args, int *numMatches, char ***matches)

@@ -154,6 +154,9 @@ extern char *rs_buf_spname(buf_T *buf);
 extern char *rs_getaltfname(bool errmsg);
 extern int rs_append_arg_number(win_T *wp, char *buf, size_t buflen);
 extern int rs_get_rel_pos(win_T *wp, char *buf, int buflen);
+extern void rs_diff_buf_delete(buf_T *buf);
+extern void rs_diff_buf_add(buf_T *buf);
+extern bool rs_diff_mode_buf(buf_T *buf);
 
 // Phase 1 (Wave 2): buffer state management functions from Rust
 extern void rs_buf_clear_file(buf_T *buf);
@@ -1307,7 +1310,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
   }
 
   if (diffopt_hiddenoff() && !unload_buf && buf->b_nwindows == 0) {
-    diff_buf_delete(buf);   // Clear 'diff' for hidden buffer.
+    rs_diff_buf_delete(buf);   // Clear 'diff' for hidden buffer.
   }
 
   // Return when a window is displaying the buffer or when it's not
@@ -1522,7 +1525,7 @@ void buf_freeall(buf_T *buf, int flags)
   if (buf == curbuf && !is_curbuf) {
     return;
   }
-  diff_buf_delete(buf);             // Can't use 'diff' for unloaded buffer.
+  rs_diff_buf_delete(buf);             // Can't use 'diff' for unloaded buffer.
   // Remove any ownsyntax, unless exiting.
   if (curwin != NULL && curwin->w_buffer == buf) {
     reset_synblock(curwin);
@@ -2404,7 +2407,7 @@ static void enter_buffer(buf_T *buf)
   foldUpdateAll(curwin);        // update folds (later).
 
   if (curwin->w_p_diff) {
-    diff_buf_add(curbuf);
+    rs_diff_buf_add(curbuf);
   }
 
   curwin->w_s = &(curbuf->b_s);
@@ -2968,7 +2971,7 @@ int buflist_findpat(const char *pattern, const char *pattern_end, bool unlisted,
   if (pattern_end == pattern + 1 && (*pattern == '%' || *pattern == '#')) {
     match = *pattern == '%' ? curbuf->b_fnum : curwin->w_alt_fnum;
     buf_T *found_buf = buflist_findnr(match);
-    if (diffmode && !(found_buf && diff_mode_buf(found_buf))) {
+    if (diffmode && !(found_buf && rs_diff_mode_buf(found_buf))) {
       match = -1;
     }
   } else {
@@ -3012,7 +3015,7 @@ int buflist_findpat(const char *pattern, const char *pattern_end, bool unlisted,
             return -1;
           }
           if (buf->b_p_bl == find_listed
-              && (!diffmode || diff_mode_buf(buf))
+              && (!diffmode || rs_diff_mode_buf(buf))
               && buflist_match(&regmatch, buf, false) != NULL) {
             if (curtab_only) {
               // Ignore the match if the buffer is not open in
@@ -3127,7 +3130,7 @@ int ExpandBufnames(char *pat, int *num_file, char ***file, int options)
       if (options & BUF_DIFF_FILTER) {
         // Skip buffers not suitable for
         // :diffget or :diffput completion.
-        if (buf == curbuf || !diff_mode_buf(buf)) {
+        if (buf == curbuf || !rs_diff_mode_buf(buf)) {
           continue;
         }
       }

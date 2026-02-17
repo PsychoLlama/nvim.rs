@@ -35,7 +35,7 @@ extern "C" {
     fn nvim_get_sw_value(buf: BufHandle) -> c_int;
 
     /// Check if a line is in a diff fold.
-    fn nvim_diff_infold(wp: WinHandle, lnum: LineNr) -> c_int;
+    fn rs_diff_infold(wp: WinHandle, lnum: LineNr) -> bool;
 
     /// Skip whitespace at the beginning of a string.
     fn nvim_skipwhite(s: *const c_char) -> *const c_char;
@@ -153,8 +153,8 @@ fn foldlevel_diff_impl(wp: WinHandle, lnum: LineNr, off: LineNr) -> c_int {
 
     let actual_lnum = lnum + off;
 
-    let in_fold = unsafe { nvim_diff_infold(wp, actual_lnum) };
-    c_int::from(in_fold != 0)
+    let in_fold = unsafe { rs_diff_infold(wp, actual_lnum) };
+    c_int::from(in_fold)
 }
 
 // ============================================================================

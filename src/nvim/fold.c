@@ -100,6 +100,8 @@ extern int rs_foldmethodIsSyntax(win_T *wp);
 extern int rs_foldmethodIsDiff(win_T *wp);
 extern int rs_hasAnyFolding(win_T *win);
 extern int rs_foldManualAllowed(bool create);
+extern bool rs_diff_infold(win_T *wp, linenr_T lnum);
+extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
 
 // Rust FFI declarations for Phase 1: Pure recursive functions
 extern int rs_checkCloseRec(garray_T *gap, linenr_T lnum, int level);
@@ -1201,7 +1203,7 @@ static void foldlevelIndent(fline_T *flp)
 /// Doesn't use any caching.
 static void foldlevelDiff(fline_T *flp)
 {
-  flp->lvl = (diff_infold(flp->wp, flp->lnum + flp->off)) ? 1 : 0;
+  flp->lvl = (rs_diff_infold(flp->wp, flp->lnum + flp->off)) ? 1 : 0;
 }
 
 // foldlevelExpr() {{{2
@@ -1886,9 +1888,9 @@ int nvim_get_sw_value(buf_T *buf)
 }
 
 /// Check if a line is in a diff fold (wrapper for diff_infold).
-int nvim_diff_infold(win_T *wp, linenr_T lnum)
+int nvim_rs_diff_infold(win_T *wp, linenr_T lnum)
 {
-  return diff_infold(wp, lnum);
+  return rs_diff_infold(wp, lnum);
 }
 
 /// Skip whitespace at the beginning of a string (wrapper for skipwhite).
@@ -2014,7 +2016,7 @@ win_T *nvim_get_first_win_in_tab(void)
 /// Wrapper for diff_lnum_win.
 linenr_T nvim_diff_lnum_win(linenr_T lnum, win_T *wp)
 {
-  return diff_lnum_win(lnum, wp);
+  return rs_diff_lnum_win(lnum, wp);
 }
 
 /// Set the w_p_fdl (foldlevel) field in a window.

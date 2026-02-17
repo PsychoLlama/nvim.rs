@@ -99,6 +99,7 @@ extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, i
 extern bool rs_is_dev_fd_file(const char *fname);
 extern const char *rs_check_for_bom(const uint8_t *data, int size, int *lenp, int flags);
 extern void rs_check_marks_read(void);
+extern void rs_diff_invalidate(buf_T *buf);
 
 #include "fileio.c.generated.h"
 
@@ -1682,7 +1683,7 @@ failed:
       redraw_curbuf_later(UPD_NOT_VALID);
       // After reading the text into the buffer the diff info needs to
       // be updated.
-      diff_invalidate(curbuf);
+      rs_diff_invalidate(curbuf);
       // All folds in the window are invalid now.  Mark them for update
       // before triggering autocommands.
       foldUpdateAll(curwin);
@@ -3128,7 +3129,7 @@ void buf_reload(buf_T *buf, int orig_mode, bool reload_options)
   }
 
   // Invalidate diff info if necessary.
-  diff_invalidate(curbuf);
+  rs_diff_invalidate(curbuf);
 
   // Restore the topline and cursor position and check it (lines may
   // have been removed).

@@ -56,6 +56,7 @@ extern void rs_getvcols(win_T *wp, pos_T pos1, pos_T pos2, colnr_T *left, colnr_
 extern int64_t rs_win_text_height(win_T *wp, linenr_T start_lnum, int64_t start_vcol,
                                   linenr_T *end_lnum, int64_t *end_vcol, int64_t *fill,
                                   int64_t max);
+extern int rs_diff_check_fill(win_T *wp, linenr_T lnum);
 
 // Filter for inline virtual text marks
 static const uint32_t inline_filter[kMTMetaCount] = {[kMTMetaInline] = kMTFilterSelect };
@@ -568,7 +569,7 @@ int win_get_fill(win_T *wp, linenr_T lnum)
 
   // be quick when there are no filler lines
   if (diffopt_filler()) {
-    int n = diff_check_fill(wp, lnum);
+    int n = rs_diff_check_fill(wp, lnum);
 
     if (n > 0) {
       return virt_lines + n;
@@ -709,7 +710,7 @@ int plines_m_win_fill(win_T *wp, linenr_T first, linenr_T last)
   if (diffopt_filler()) {
     for (int lnum = first; lnum <= last; lnum++) {
       // Note: this also considers folds (no filler lines inside folds).
-      int n = diff_check_fill(wp, lnum);
+      int n = rs_diff_check_fill(wp, lnum);
       count += MAX(n, 0);
     }
   }
