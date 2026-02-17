@@ -283,7 +283,7 @@ extern "C" {
     fn win_split(size: c_int, flags: c_int) -> c_int;
     #[link_name = "rs_win_setheight"]
     fn win_setheight(height: c_int);
-    fn do_tag(tag: *const c_char, tag_type: c_int, count: c_int, forceit: c_int, verbose: bool);
+    fn rs_do_tag(tag: *const c_char, tag_type: c_int, count: c_int, forceit: c_int, verbose: bool);
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn FreeWild(count: c_int, files: *mut *mut c_char);
     fn buflist_findnr(nr: c_int) -> *mut c_void;
@@ -912,7 +912,7 @@ pub unsafe extern "C" fn rs_ex_help(eap: ExargHandle) {
     if success {
         unsafe { nvim_help_set_restart_edit(0) };
         unsafe { nvim_help_set_KeyTyped(old_key_typed) };
-        unsafe { do_tag(tag, DT_HELP, 1, 0, true) };
+        unsafe { rs_do_tag(tag, DT_HELP, 1, 0, true) };
 
         // Delete the empty buffer if we're not using it.
         if empty_fnum != 0 && unsafe { nvim_help_get_curbuf_fnum() } != empty_fnum {

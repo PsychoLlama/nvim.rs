@@ -85,6 +85,9 @@ typedef void *(*user_expand_func_T)(const char *, int, typval_T *);
 
 #include "cmdexpand.c.generated.h"
 
+// Rust FFI declarations (tag module)
+extern int rs_expand_tags(bool tagnames, char *pat, int *num_file, char ***file);
+
 // Rust FFI declarations (window wrappers removed)
 extern int rs_global_stl_height(void);
 extern void rs_last_status(int morewin);
@@ -3169,7 +3172,7 @@ static int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numM
   }
   if (xp->xp_context == EXPAND_TAGS
       || xp->xp_context == EXPAND_TAGS_LISTFILES) {
-    return expand_tags(xp->xp_context == EXPAND_TAGS, pat, numMatches, matches);
+    return rs_expand_tags(xp->xp_context == EXPAND_TAGS, pat, numMatches, matches);
   }
   if (xp->xp_context == EXPAND_COLORS) {
     char *directories[] = { "colors", NULL };

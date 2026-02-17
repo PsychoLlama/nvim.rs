@@ -631,15 +631,11 @@ const char *nvim_get_nofile_fname(void)
 // Rust FFI function declarations
 // ============================================================================
 
-extern void rs_tagstack_clear_entry(void *tg);
-
 // Parse functions
 extern int rs_parse_match(char *lbuf, tagptrs_T *tagp);
 extern bool rs_test_for_static(const tagptrs_T *tagp);
 
 // Leaf utilities
-extern void rs_tag_freematch(void);
-extern void rs_free_tag_stuff(void);
 extern void rs_tagname_free(void *tnp);
 
 // Pattern/state initialization
@@ -656,18 +652,11 @@ extern char *rs_expand_tag_fname(char *fname, char *tag_fname, bool expand);
 extern int rs_findtags_copy_matches(findtags_state_T *st, char ***matchesp);
 extern void rs_findtags_in_file(findtags_state_T *st, int flags, char *buf_ffname);
 
-// Tag display and queries
+// Tag display
 extern void rs_do_tags(void);
-extern int rs_get_tags(void *list, char *pat, char *buf_fname);
-extern void rs_get_tagstack(void *wp, void *retdict);
-extern int rs_set_tagstack(void *wp, const void *d, int action);
-extern int rs_expand_tags(bool tagnames, char *pat, int *num_file, char ***file);
 
 // Tagfunc option management
 extern const char *rs_did_set_tagfunc(void *args);
-extern void rs_free_tagfunc_option(void);
-extern bool rs_set_ref_in_tagfunc(int copyID);
-extern void rs_set_buflocal_tfu_callback(void *buf);
 extern int rs_find_tagfunc_tags(char *pat, void *ga, int *match_count, int flags, char *buf_ffname);
 
 // Tag operations
@@ -755,7 +744,7 @@ bool nvim_tag_curwin_is_null(void)
 /// Call do_tag with DT_FREE to free cached matches
 void nvim_do_tag_free(void)
 {
-  do_tag(NULL, DT_FREE, 0, 0, 0);
+  rs_do_tag(NULL, DT_FREE, 0, 0, 0);
 }
 
 // ============================================================================
@@ -2679,57 +2668,6 @@ const char *did_set_tagfunc(optset_T *args)
   return rs_did_set_tagfunc(args);
 }
 
-#if defined(EXITFREE)
-void free_tagfunc_option(void)
-{
-  rs_free_tagfunc_option();
-}
-#endif
-
-/// Mark the global 'tagfunc' callback with "copyID" so that it is not garbage
-/// collected.
-bool set_ref_in_tagfunc(int copyID)
-{
-  return rs_set_ref_in_tagfunc(copyID);
-}
-
-/// Copy the global 'tagfunc' callback function to the buffer-local 'tagfunc'
-/// callback for 'buf'.
-void set_buflocal_tfu_callback(buf_T *buf)
-{
-  rs_set_buflocal_tfu_callback(buf);
-}
-
-/// Jump to tag; handling of tag commands and tag stack
-///
-/// *tag != NUL: ":tag {tag}", jump to new tag, add to tag stack
-///
-/// type == DT_TAG:      ":tag [tag]", jump to newer position or same tag again
-/// type == DT_HELP:     like DT_TAG, but don't use regexp.
-/// type == DT_POP:      ":pop" or CTRL-T, jump to old position
-/// type == DT_NEXT:     jump to next match of same tag
-/// type == DT_PREV:     jump to previous match of same tag
-/// type == DT_FIRST:    jump to first match of same tag
-/// type == DT_LAST:     jump to last match of same tag
-/// type == DT_SELECT:   ":tselect [tag]", select tag from a list of all matches
-/// type == DT_JUMP:     ":tjump [tag]", jump to tag or select tag from a list
-/// type == DT_LTAG:     use location list for displaying tag matches
-/// type == DT_FREE:     free cached matches
-///
-/// @param tag  tag (pattern) to jump to
-/// @param forceit  :ta with !
-/// @param verbose  print "tag not found" message
-void do_tag(char *tag, int type, int count, int forceit, bool verbose)
-{
-  rs_do_tag(tag, type, count, forceit, verbose);
-}
-
-// Free cached tags.
-void tag_freematch(void)
-{
-  rs_tag_freematch();
-}
-
 // Print the tag stack
 void do_tags(exarg_T *eap)
 {
@@ -2966,72 +2904,8 @@ void nvim_do_in_runtimepath_for_tags(void)
   do_in_runtimepath("doc/tags doc/tags-??", DIP_ALL, rs_found_tagfile_cb, NULL);
 }
 
-#if defined(EXITFREE)
-void free_tag_stuff(void)
-{
-  rs_free_tag_stuff();
-}
-
-#endif
-
-/// Get the next name of a tag file from the tag file list.
-/// For help files, use "tags" file only.
-///
-/// @param tnp  holds status info
-/// @param first  true when first file name is wanted
-/// @param buf  pointer to buffer of MAXPATHL chars
-///
-/// @return  FAIL if no more tag file names, OK otherwise.
-int get_tagfname(tagname_T *tnp, int first, char *buf)
-{
-  return rs_get_tagfname(tnp, first, buf);
-}
-
-// Free the contents of a tagname_T that was filled by get_tagfname().
-void tagname_free(tagname_T *tnp)
-{
-  rs_tagname_free(tnp);
-}
-
 /// Expand tag filename relative to tag file (wrapper for Rust)
 char *nvim_expand_tag_fname(const char *fname, const char *tag_fname, bool expand)
 {
   return rs_expand_tag_fname((char *)fname, (char *)tag_fname, expand);
-}
-
-/// Free a single entry in a tag stack
-void tagstack_clear_entry(taggy_T *item)
-{
-  rs_tagstack_clear_entry(item);
-}
-
-/// @param tagnames  expand tag names
-int expand_tags(bool tagnames, char *pat, int *num_file, char ***file)
-{
-  return rs_expand_tags(tagnames, pat, num_file, file);
-}
-
-/// Add the tags matching the specified pattern "pat" to the list "list"
-/// as a dictionary. Use "buf_fname" for priority, unless NULL.
-int get_tags(list_T *list, char *pat, char *buf_fname)
-{
-  return rs_get_tags(list, pat, buf_fname);
-}
-
-// Return the tag stack entries of the specified window 'wp' in dictionary
-// 'retdict'.
-void get_tagstack(win_T *wp, dict_T *retdict)
-{
-  rs_get_tagstack(wp, retdict);
-}
-
-// Set the tag stack entries of the specified window.
-// 'action' is set to one of:
-//    'a' for append
-//    'r' for replace
-//    't' for truncate
-int set_tagstack(win_T *wp, const dict_T *d, int action)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_set_tagstack(wp, d, action);
 }

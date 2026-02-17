@@ -175,6 +175,10 @@ extern void rs_optval_free(OptVal o);
 extern OptVal rs_optval_copy(OptVal o);
 extern int rs_optval_equal(OptVal o1, OptVal o2);
 
+// Rust FFI declarations (tag module)
+extern void rs_free_tagfunc_option(void);
+extern void rs_set_buflocal_tfu_callback(void *buf);
+
 // Rust FFI declarations (window wrappers removed)
 extern int rs_global_stl_height(void);
 extern void rs_last_status(int morewin);
@@ -1047,7 +1051,7 @@ void free_all_options(void)
     rs_optval_free(options[opt_idx].def_val);
   }
   free_operatorfunc_option();
-  free_tagfunc_option();
+  rs_free_tagfunc_option();
   free_findfunc_option();
   XFREE_CLEAR(fenc_default);
   XFREE_CLEAR(p_term);
@@ -5208,7 +5212,7 @@ void buf_copy_options(buf_T *buf, int flags)
       set_buflocal_ofu_callback(buf);
       buf->b_p_tfu = xstrdup(p_tfu);
       COPY_OPT_SCTX(buf, kBufOptTagfunc);
-      set_buflocal_tfu_callback(buf);
+      rs_set_buflocal_tfu_callback(buf);
       buf->b_p_sts = p_sts;
       COPY_OPT_SCTX(buf, kBufOptSofttabstop);
       buf->b_p_sts_nopaste = p_sts_nopaste;

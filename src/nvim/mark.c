@@ -51,6 +51,9 @@
 extern void rs_foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2,
                               linenr_T amount, linenr_T amount_after);
 
+// Rust FFI declarations (tag module)
+extern void rs_tagstack_clear_entry(void *tg);
+
 // This file contains routines to maintain and manipulate marks.
 
 // If a named file mark's lnum is non-zero, it is valid.
@@ -382,7 +385,7 @@ void nvim_mark_win_set_tagstacklen(win_T *win, int len) { win->w_tagstacklen = l
 int nvim_mark_win_get_tagstackidx(win_T *win) { return win->w_tagstackidx; }
 void nvim_mark_win_set_tagstackidx(win_T *win, int idx) { win->w_tagstackidx = idx; }
 int nvim_mark_win_get_tagstack_fnum(win_T *win, int idx) { return win->w_tagstack[idx].fmark.fnum; }
-void nvim_mark_win_tagstack_clear_entry(win_T *win, int idx) { tagstack_clear_entry(&win->w_tagstack[idx]); }
+void nvim_mark_win_tagstack_clear_entry(win_T *win, int idx) { rs_tagstack_clear_entry(&win->w_tagstack[idx]); }
 void nvim_mark_win_tagstack_remove(win_T *win, int from_idx, int len)
 {
   memmove(&win->w_tagstack[from_idx], &win->w_tagstack[from_idx + 1],

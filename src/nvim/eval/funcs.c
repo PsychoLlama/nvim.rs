@@ -149,6 +149,13 @@ typedef enum {
 
 #include "eval/funcs.c.generated.h"
 
+// Rust FFI declarations (tag module)
+extern int rs_get_tagfname(tagname_T *tnp, int first, char *buf);
+extern void rs_tagname_free(void *tnp);
+extern int rs_get_tags(void *list, char *pat, char *buf_fname);
+extern void rs_get_tagstack(void *wp, void *retdict);
+extern int rs_set_tagstack(void *wp, const void *d, int action);
+
 // Rust implementations of math functions (from nvim-rs/eval/src/funcs/math.rs)
 extern void rs_f_abs(typval_T *argvars, typval_T *rettv);
 extern void rs_f_sin(typval_T *argvars, typval_T *rettv);
@@ -2680,7 +2687,7 @@ static void f_gettagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     }
   }
 
-  get_tagstack(wp, rettv->vval.v_dict);
+  rs_get_tagstack(wp, rettv->vval.v_dict);
 }
 
 /// Dummy timer callback. Used by f_wait().
@@ -6800,7 +6807,7 @@ static void f_settagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     }
   }
 
-  if (set_tagstack(wp, d, action) == OK) {
+  if (rs_set_tagstack(wp, d, action) == OK) {
     rettv->vval.v_number = 0;
   }
 }
@@ -7596,12 +7603,12 @@ static void f_tagfiles(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
   bool first = true;
   tagname_T tn;
-  while (get_tagfname(&tn, first, fname) == OK) {
+  while (rs_get_tagfname(&tn, first, fname) == OK) {
     tv_list_append_string(rettv->vval.v_list, fname, -1);
     first = false;
   }
 
-  tagname_free(&tn);
+  rs_tagname_free(&tn);
   xfree(fname);
 }
 
@@ -7619,8 +7626,8 @@ static void f_taglist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (argvars[1].v_type != VAR_UNKNOWN) {
     fname = tv_get_string(&argvars[1]);
   }
-  get_tags(tv_list_alloc_ret(rettv, kListLenUnknown),
-           (char *)tag_pattern, (char *)fname);
+  rs_get_tags(tv_list_alloc_ret(rettv, kListLenUnknown),
+              (char *)tag_pattern, (char *)fname);
 }
 
 /// "timer_info([timer])" function

@@ -47,6 +47,9 @@
 #include "nvim/ui.h"
 #include "nvim/vim_defs.h"
 
+// Rust FFI declarations (tag module)
+extern void rs_tag_freematch(void);
+
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
 extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
@@ -747,7 +750,7 @@ int call_shell(char *cmd, int opts, char *extra_shell_arg)
     retval = -1;
   } else {
     // The external command may update a tags file, clear cached tags.
-    tag_freematch();
+    rs_tag_freematch();
 
     retval = os_call_shell(cmd, opts, extra_shell_arg);
   }

@@ -94,6 +94,9 @@ extern int rs_check_luafunc_name(const char *str, bool paren);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern int rs_eval_expr_valid_arg(const typval_T *tv);
 
+// Rust FFI declarations (tag module)
+extern bool rs_set_ref_in_tagfunc(int copyID);
+
 // Phase 1: String/Float utilities (Rust implementations)
 extern size_t rs_string2float(const char *text, float_T *ret_value);
 extern char *rs_char_from_string(const char *str, varnumber_T index);
@@ -4282,7 +4285,7 @@ bool garbage_collect(bool testing)
   ABORTING(set_ref_in_opfunc)(copyID);
 
   // 'tagfunc' callback
-  ABORTING(set_ref_in_tagfunc)(copyID);
+  ABORTING(rs_set_ref_in_tagfunc)(copyID);
 
   // 'findfunc' callback
   ABORTING(set_ref_in_findfunc)(copyID);

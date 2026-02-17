@@ -116,6 +116,9 @@ static int VIsual_mode_orig = NUL;              // saved Visual mode
 
 #include "normal_shim.c.generated.h"
 
+// Rust FFI declarations (tag module)
+extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
+
 // Rust FFI declarations (window wrappers removed)
 extern void rs_do_window(int nchar, int Prenum, int xchar);
 extern void rs_set_fraction(win_T *wp);
@@ -1776,7 +1779,7 @@ void nvim_set_vcount_call(int64_t count, int64_t count1, bool set_prevcount)
 /// Wrapper for do_tag("", DT_POP, count1, false, true).
 void nvim_do_tag_pop(int count1)
 {
-  do_tag("", DT_POP, count1, false, true);
+  rs_do_tag("", DT_POP, count1, false, true);
 }
 
 /// Wrapper for do_execreg with reg_recorded.

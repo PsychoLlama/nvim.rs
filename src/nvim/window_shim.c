@@ -86,6 +86,9 @@
 
 #include "window_shim.c.generated.h"
 
+// Rust FFI declarations (tag module)
+extern void rs_tagstack_clear_entry(void *tg);
+
 // Rust fold FFI declarations
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
 extern void rs_clearFolding(win_T *win);
@@ -5059,7 +5062,7 @@ void win_free(win_T *wp, tabpage_T *tp)
   xfree(wp->w_lines);
 
   for (int i = 0; i < wp->w_tagstacklen; i++) {
-    tagstack_clear_entry(&wp->w_tagstack[i]);
+    rs_tagstack_clear_entry(&wp->w_tagstack[i]);
   }
 
   xfree(wp->w_localdir);

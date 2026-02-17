@@ -56,6 +56,9 @@ MemRealloc mem_realloc = &realloc;
 
 #include "memory.c.generated.h"
 
+// Rust FFI declarations (tag module)
+extern void rs_free_tag_stuff(void);
+
 extern size_t rs_xstrnlen(const char *s, size_t n);
 extern char *rs_xstrchrnul(const char *str, char c);
 extern void *rs_xmemscan(const void *addr, char c, size_t size);
@@ -864,7 +867,7 @@ void free_all_mem(void)
   free_insexpand_stuff();
   free_prev_shellcmd();
   free_regexp_stuff();
-  free_tag_stuff();
+  rs_free_tag_stuff();
   free_cd_dir();
   free_signs();
   set_expr_line(NULL);
