@@ -84,6 +84,8 @@
 // Rust fold FFI declarations
 extern void rs_foldOpenCursor(void);
 extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive, bool had_visual);
+extern void rs_foldCreate(win_T *wp, linenr_T start_lnum, linenr_T end_lnum);
+extern void rs_opFoldRange(linenr_T first_lnum, linenr_T last_lnum, int opening, int recurse, bool had_visual);
 
 extern int rs_get_fileformat(buf_T *buf);
 
@@ -3927,7 +3929,7 @@ void nvim_dpo_dispatch_operator(cmdarg_T *cap, int gui_yank)
 
   case OP_FOLD:
     VIsual_reselect = false;
-    foldCreate(curwin, oap->start, oap->end);
+    rs_foldCreate(curwin, oap->start.lnum, oap->end.lnum);
     break;
 
   case OP_FOLDOPEN:
@@ -3935,10 +3937,10 @@ void nvim_dpo_dispatch_operator(cmdarg_T *cap, int gui_yank)
   case OP_FOLDCLOSE:
   case OP_FOLDCLOSEREC:
     VIsual_reselect = false;
-    opFoldRange(oap->start, oap->end,
-                oap->op_type == OP_FOLDOPEN || oap->op_type == OP_FOLDOPENREC,
-                oap->op_type == OP_FOLDOPENREC || oap->op_type == OP_FOLDCLOSEREC,
-                oap->is_VIsual);
+    rs_opFoldRange(oap->start.lnum, oap->end.lnum,
+                   oap->op_type == OP_FOLDOPEN || oap->op_type == OP_FOLDOPENREC,
+                   oap->op_type == OP_FOLDOPENREC || oap->op_type == OP_FOLDCLOSEREC,
+                   oap->is_VIsual);
     break;
 
   case OP_FOLDDEL:

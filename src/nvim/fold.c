@@ -129,12 +129,7 @@ extern void rs_foldMarkAdjustRecurse(win_T *wp, garray_T *gap, linenr_T line1,
                                      linenr_T line2, linenr_T amount, linenr_T amount_after);
 
 // Rust FFI declarations for Phase 2: Fold State Management
-extern linenr_T rs_setManualFoldWin(win_T *wp, linenr_T lnum, bool opening,
-                                    bool recurse, int *donep);
-extern linenr_T rs_setManualFold(linenr_T lnum, bool opening, bool recurse, int *donep);
 extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
-extern void rs_newFoldLevelWin(win_T *wp);
-extern void rs_newFoldLevel(void);
 
 // Rust FFI declarations for Phase 3: Fold Creation and Deletion
 extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
@@ -155,12 +150,8 @@ extern void rs_foldAdjustCursor(win_T *wp);
 extern void rs_foldAdjustVisual(void);
 extern int rs_foldMoveTo(bool updown, int dir, int count);
 
-// Rust FFI declarations for Phase 1: Manual Fold Operations
-extern void rs_foldCreate(win_T *wp, linenr_T start_lnum, linenr_T end_lnum);
+// Rust FFI declarations: Fold Operations
 extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive, bool had_visual);
-extern void rs_opFoldRange(linenr_T first_lnum, linenr_T last_lnum, int opening,
-                           int recurse, bool had_visual);
-extern void rs_foldOpenCursor(void);
 extern void rs_foldMoveRange(win_T *wp, garray_T *gap, linenr_T line1, linenr_T line2,
                              linenr_T dest);
 extern int rs_foldLevel(linenr_T lnum);
@@ -316,58 +307,6 @@ bool foldmethodIsDiff(win_T *wp)
   return rs_foldmethodIsDiff(wp) != 0;
 }
 
-// closeFold() {{{2
-/// Close fold for current window at position "pos".
-/// Repeat "count" times.
-void closeFold(pos_T pos, int count)
-{
-  setFoldRepeat(pos, count, false);
-}
-
-// closeFoldRecurse() {{{2
-/// Close fold for current window at position `pos` recursively.
-void closeFoldRecurse(pos_T pos)
-{
-  setManualFold(pos, false, true, NULL);
-}
-
-// opFoldRange() {{{2
-///
-/// Open or Close folds for current window in lines "first" to "last".
-/// Used for "zo", "zO", "zc" and "zC" in Visual mode.
-///
-/// @param opening     true to open, false to close
-/// @param recurse     true to do it recursively
-/// @param had_visual  true when Visual selection used
-void opFoldRange(pos_T firstpos, pos_T lastpos, int opening, int recurse, bool had_visual)
-{
-  rs_opFoldRange(firstpos.lnum, lastpos.lnum, opening, recurse, had_visual);
-}
-
-// openFold() {{{2
-/// Open fold for current window at position "pos".
-/// Repeat "count" times.
-void openFold(pos_T pos, int count)
-{
-  setFoldRepeat(pos, count, true);
-}
-
-// openFoldRecurse() {{{2
-/// Open fold for current window at position `pos` recursively.
-void openFoldRecurse(pos_T pos)
-{
-  setManualFold(pos, true, true, NULL);
-}
-
-
-// foldCreate() {{{2
-/// Create a fold from line "start" to line "end" (inclusive) in the current
-/// window.
-void foldCreate(win_T *wp, pos_T start, pos_T end)
-{
-  rs_foldCreate(wp, start.lnum, end.lnum);
-}
-
 // foldUpdate() {{{2
 /// Update folds for changes in the buffer of a window.
 /// Note that inserted/deleted lines must have already been taken care of by
@@ -466,25 +405,6 @@ static int foldLevelWin(win_T *wp, linenr_T lnum)
 static void checkupdate(win_T *wp)
 {
   rs_checkupdate(wp);
-}
-
-// setFoldRepeat() {{{2
-/// Open or close fold for current window at position `pos`.
-/// Repeat "count" times.
-static void setFoldRepeat(pos_T pos, int count, int do_open)
-{
-  rs_setFoldRepeat(pos.lnum, count, do_open);
-}
-
-// setManualFold() {{{2
-/// Open or close the fold in the current window which contains "lnum".
-/// Also does this for other windows in diff mode when needed.
-///
-/// @param opening  true when opening, false when closing
-/// @param recurse  true when closing/opening recursive
-static linenr_T setManualFold(pos_T pos, bool opening, bool recurse, int *donep)
-{
-  return rs_setManualFold(pos.lnum, opening, recurse, donep);
 }
 
 // deleteFoldRecurse() {{{2
@@ -1737,8 +1657,7 @@ void nvim_foldCreateMarkers(win_T *wp, linenr_T start_lnum, linenr_T end_lnum)
 /// Wrapper for closeFold for Rust.
 void nvim_closeFold(linenr_T lnum, int count)
 {
-  pos_T pos = { lnum, 0, 0 };
-  closeFold(pos, count);
+  rs_setFoldRepeat(lnum, count, false);
 }
 
 /// Emit the "no fold found" error message (e_nofold).

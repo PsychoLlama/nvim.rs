@@ -224,8 +224,10 @@ struct dbg_stuff {
 
 #include "ex_docmd.c.generated.h"
 
-// Rust fold FFI declaration
+// Rust fold FFI declarations
 extern int rs_foldManualAllowed(bool create);
+extern void rs_foldCreate(win_T *wp, linenr_T start_lnum, linenr_T end_lnum);
+extern void rs_opFoldRange(linenr_T first_lnum, linenr_T last_lnum, int opening, int recurse, bool had_visual);
 
 extern int rs_magic_isset(void);
 extern int rs_get_scrolloff_value(win_T *wp);
@@ -6276,17 +6278,13 @@ static void ex_nohlsearch(exarg_T *eap)
 static void ex_fold(exarg_T *eap)
 {
   if (rs_foldManualAllowed(true)) {
-    pos_T start = { eap->line1, 1, 0 };
-    pos_T end = { eap->line2, 1, 0 };
-    foldCreate(curwin, start, end);
+    rs_foldCreate(curwin, eap->line1, eap->line2);
   }
 }
 
 static void ex_foldopen(exarg_T *eap)
 {
-  pos_T start = { eap->line1, 1, 0 };
-  pos_T end = { eap->line2, 1, 0 };
-  opFoldRange(start, end, eap->cmdidx == CMD_foldopen, eap->forceit, false);
+  rs_opFoldRange(eap->line1, eap->line2, eap->cmdidx == CMD_foldopen, eap->forceit, false);
 }
 
 static void ex_folddo(exarg_T *eap)

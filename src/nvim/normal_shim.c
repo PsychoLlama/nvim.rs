@@ -128,6 +128,8 @@ extern void rs_foldAdjustVisual(void);
 extern int rs_getDeepestNesting(win_T *wp);
 extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive, bool had_visual);
 extern void rs_foldUpdateAfterInsert(void);
+extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
+extern linenr_T rs_setManualFold(linenr_T lnum, bool opening, bool recurse, int *donep);
 
 static const char e_changelist_is_empty[] = N_("E664: Changelist is empty");
 static const char e_cmdline_window_already_open[]
@@ -4690,9 +4692,9 @@ static void nv_zet_impl(cmdarg_T *cap)
   // "za": open closed fold or close open fold at cursor
   case 'a':
     if (hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL)) {
-      openFold(curwin->w_cursor, cap->count1);
+      rs_setFoldRepeat(curwin->w_cursor.lnum, cap->count1, true);
     } else {
-      closeFold(curwin->w_cursor, cap->count1);
+      rs_setFoldRepeat(curwin->w_cursor.lnum, cap->count1, false);
       curwin->w_p_fen = true;
     }
     break;
@@ -4700,9 +4702,9 @@ static void nv_zet_impl(cmdarg_T *cap)
   // "zA": open fold at cursor recursively
   case 'A':
     if (hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL)) {
-      openFoldRecurse(curwin->w_cursor);
+      rs_setManualFold(curwin->w_cursor.lnum, true, true, NULL);
     } else {
-      closeFoldRecurse(curwin->w_cursor);
+      rs_setManualFold(curwin->w_cursor.lnum, false, true, NULL);
       curwin->w_p_fen = true;
     }
     break;
@@ -4712,7 +4714,7 @@ static void nv_zet_impl(cmdarg_T *cap)
     if (VIsual_active) {
       rs_nv_operator(cap);
     } else {
-      openFold(curwin->w_cursor, cap->count1);
+      rs_setFoldRepeat(curwin->w_cursor.lnum, cap->count1, true);
     }
     break;
 
@@ -4721,7 +4723,7 @@ static void nv_zet_impl(cmdarg_T *cap)
     if (VIsual_active) {
       rs_nv_operator(cap);
     } else {
-      openFoldRecurse(curwin->w_cursor);
+      rs_setManualFold(curwin->w_cursor.lnum, true, true, NULL);
     }
     break;
 
@@ -4730,7 +4732,7 @@ static void nv_zet_impl(cmdarg_T *cap)
     if (VIsual_active) {
       rs_nv_operator(cap);
     } else {
-      closeFold(curwin->w_cursor, cap->count1);
+      rs_setFoldRepeat(curwin->w_cursor.lnum, cap->count1, false);
     }
     curwin->w_p_fen = true;
     break;
@@ -4740,7 +4742,7 @@ static void nv_zet_impl(cmdarg_T *cap)
     if (VIsual_active) {
       rs_nv_operator(cap);
     } else {
-      closeFoldRecurse(curwin->w_cursor);
+      rs_setManualFold(curwin->w_cursor.lnum, false, true, NULL);
     }
     curwin->w_p_fen = true;
     break;

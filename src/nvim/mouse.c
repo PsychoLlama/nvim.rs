@@ -54,6 +54,7 @@
 #include "mouse.c.generated.h"
 
 extern int rs_get_scrolloff_value(win_T *wp);
+extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
 
 // Rust implementations
 extern int rs_get_mouse_class(const char *p);
@@ -748,9 +749,9 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       && which_button == MOUSE_LEFT) {
     // open or close a fold at this line
     if (jump_flags & MOUSE_FOLD_OPEN) {
-      openFold(curwin->w_cursor, 1);
+      rs_setFoldRepeat(curwin->w_cursor.lnum, 1, true);
     } else {
-      closeFold(curwin->w_cursor, 1);
+      rs_setFoldRepeat(curwin->w_cursor.lnum, 1, false);
     }
     // don't move the cursor if still in the same window
     if (curwin == old_curwin) {
