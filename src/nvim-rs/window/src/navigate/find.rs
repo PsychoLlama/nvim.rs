@@ -60,10 +60,10 @@ extern "C" {
     fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
 
     /// Get window height.
-    fn nvim_win_get_height(wp: WinHandle) -> c_int;
+    fn nvim_win_field_height(wp: WinHandle) -> c_int;
 
     /// Get window width.
-    fn nvim_win_get_width(wp: WinHandle) -> c_int;
+    fn nvim_win_field_width(wp: WinHandle) -> c_int;
 }
 
 // =============================================================================
@@ -248,8 +248,8 @@ fn find_at_pos_impl(row: c_int, col: c_int) -> WinHandle {
         while !wp.is_null() {
             let winrow = nvim_win_get_winrow(wp);
             let wincol = nvim_win_get_wincol(wp);
-            let height = nvim_win_get_height(wp);
-            let width = nvim_win_get_width(wp);
+            let height = nvim_win_field_height(wp);
+            let width = nvim_win_field_width(wp);
 
             // Check if position is within window bounds
             if row >= winrow && row < winrow + height && col >= wincol && col < wincol + width {

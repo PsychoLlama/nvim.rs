@@ -42,10 +42,10 @@ extern "C" {
     fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
 
     /// Get window height.
-    fn nvim_win_get_height(wp: WinHandle) -> c_int;
+    fn nvim_win_field_height(wp: WinHandle) -> c_int;
 
     /// Get window width.
-    fn nvim_win_get_width(wp: WinHandle) -> c_int;
+    fn nvim_win_field_width(wp: WinHandle) -> c_int;
 }
 
 // =============================================================================
@@ -86,7 +86,7 @@ fn find_left_impl(wp: WinHandle) -> WinHandle {
     unsafe {
         let col = nvim_win_get_wincol(wp);
         let row = nvim_win_get_winrow(wp);
-        let height = nvim_win_get_height(wp);
+        let height = nvim_win_field_height(wp);
         let mid_row = row + height / 2;
 
         // Find rightmost window left of current that overlaps vertically
@@ -97,9 +97,9 @@ fn find_left_impl(wp: WinHandle) -> WinHandle {
         while !w.is_null() {
             if w != wp && nvim_win_get_floating(w) == 0 {
                 let w_col = nvim_win_get_wincol(w);
-                let w_width = nvim_win_get_width(w);
+                let w_width = nvim_win_field_width(w);
                 let w_row = nvim_win_get_winrow(w);
-                let w_height = nvim_win_get_height(w);
+                let w_height = nvim_win_field_height(w);
 
                 // Must be left of current window
                 if w_col + w_width <= col {
@@ -130,9 +130,9 @@ fn find_right_impl(wp: WinHandle) -> WinHandle {
 
     unsafe {
         let col = nvim_win_get_wincol(wp);
-        let width = nvim_win_get_width(wp);
+        let width = nvim_win_field_width(wp);
         let row = nvim_win_get_winrow(wp);
-        let height = nvim_win_get_height(wp);
+        let height = nvim_win_field_height(wp);
         let mid_row = row + height / 2;
         let right_edge = col + width;
 
@@ -145,7 +145,7 @@ fn find_right_impl(wp: WinHandle) -> WinHandle {
             if w != wp && nvim_win_get_floating(w) == 0 {
                 let w_col = nvim_win_get_wincol(w);
                 let w_row = nvim_win_get_winrow(w);
-                let w_height = nvim_win_get_height(w);
+                let w_height = nvim_win_field_height(w);
 
                 // Must be right of current window
                 if w_col >= right_edge {
@@ -176,7 +176,7 @@ fn find_above_impl(wp: WinHandle) -> WinHandle {
 
     unsafe {
         let col = nvim_win_get_wincol(wp);
-        let width = nvim_win_get_width(wp);
+        let width = nvim_win_field_width(wp);
         let row = nvim_win_get_winrow(wp);
         let mid_col = col + width / 2;
 
@@ -188,9 +188,9 @@ fn find_above_impl(wp: WinHandle) -> WinHandle {
         while !w.is_null() {
             if w != wp && nvim_win_get_floating(w) == 0 {
                 let w_col = nvim_win_get_wincol(w);
-                let w_width = nvim_win_get_width(w);
+                let w_width = nvim_win_field_width(w);
                 let w_row = nvim_win_get_winrow(w);
-                let w_height = nvim_win_get_height(w);
+                let w_height = nvim_win_field_height(w);
 
                 // Must be above current window
                 if w_row + w_height <= row {
@@ -221,9 +221,9 @@ fn find_below_impl(wp: WinHandle) -> WinHandle {
 
     unsafe {
         let col = nvim_win_get_wincol(wp);
-        let width = nvim_win_get_width(wp);
+        let width = nvim_win_field_width(wp);
         let row = nvim_win_get_winrow(wp);
-        let height = nvim_win_get_height(wp);
+        let height = nvim_win_field_height(wp);
         let mid_col = col + width / 2;
         let bottom_edge = row + height;
 
@@ -235,7 +235,7 @@ fn find_below_impl(wp: WinHandle) -> WinHandle {
         while !w.is_null() {
             if w != wp && nvim_win_get_floating(w) == 0 {
                 let w_col = nvim_win_get_wincol(w);
-                let w_width = nvim_win_get_width(w);
+                let w_width = nvim_win_field_width(w);
                 let w_row = nvim_win_get_winrow(w);
 
                 // Must be below current window

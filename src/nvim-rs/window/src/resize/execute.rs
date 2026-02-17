@@ -28,10 +28,10 @@ extern "C" {
     fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     /// Get w_height from window.
-    fn nvim_win_get_height(wp: WinHandle) -> c_int;
+    fn nvim_win_field_height(wp: WinHandle) -> c_int;
 
     /// Get w_width from window.
-    fn nvim_win_get_width(wp: WinHandle) -> c_int;
+    fn nvim_win_field_width(wp: WinHandle) -> c_int;
 
     /// Get w_vsep_width from window.
     fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
@@ -157,7 +157,7 @@ fn win_total_height_impl(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        nvim_win_get_height(wp) + nvim_win_get_status_height(wp) + nvim_win_get_hsep_height(wp)
+        nvim_win_field_height(wp) + nvim_win_get_status_height(wp) + nvim_win_get_hsep_height(wp)
     }
 }
 
@@ -167,7 +167,7 @@ fn win_total_width_impl(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    unsafe { nvim_win_get_width(wp) + nvim_win_get_vsep_width(wp) }
+    unsafe { nvim_win_field_width(wp) + nvim_win_get_vsep_width(wp) }
 }
 
 /// Calculate how much height is available for the text area.
@@ -181,7 +181,7 @@ fn win_text_height_impl(wp: WinHandle) -> c_int {
     unsafe {
         let frame = nvim_win_get_frame(wp);
         if frame.is_null() {
-            return nvim_win_get_height(wp);
+            return nvim_win_field_height(wp);
         }
 
         let frame_height = (*frame).fr_height;
@@ -203,7 +203,7 @@ fn win_text_width_impl(wp: WinHandle) -> c_int {
     unsafe {
         let frame = nvim_win_get_frame(wp);
         if frame.is_null() {
-            return nvim_win_get_width(wp);
+            return nvim_win_field_width(wp);
         }
 
         let frame_width = (*frame).fr_width;
@@ -393,7 +393,6 @@ pub extern "C" fn rs_resize_curwin_total_width() -> c_int {
 extern "C" {
     fn rs_win_setheight_win(height: c_int, win: WinHandle);
     fn rs_win_setwidth_win(width: c_int, wp: WinHandle);
-    fn nvim_win_field_height(wp: WinHandle) -> c_int;
     fn nvim_win_field_set_height(wp: WinHandle, val: c_int);
     fn nvim_win_field_set_width(wp: WinHandle, val: c_int);
     fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
