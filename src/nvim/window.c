@@ -99,24 +99,19 @@ extern int rs_global_stl_height(void);
 extern int rs_win_locked(win_T *wp);
 extern int rs_win_valid(win_T *win);
 extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
-extern int rs_only_one_window(void);
 extern int rs_win_valid_any_tab(win_T *win);
 extern int rs_valid_tabpage(tabpage_T *tpc);
 extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
 extern int rs_last_window(win_T *win);
 extern int rs_last_stl_height(int morewin);
-extern int rs_win_count(void);
 extern int rs_tabpage_index(tabpage_T *ftp);
-extern int rs_valid_tabpage_win(tabpage_T *tpc);
 extern int rs_frame_fixed_height(frame_T *frp);
 extern int rs_frame_fixed_width(frame_T *frp);
 extern int rs_is_bottom_win(win_T *wp);
 extern int rs_frame_check_height(frame_T *topfrp, int height);
 extern int rs_frame_check_width(frame_T *topfrp, int width);
-extern win_T *rs_win_find_by_handle(int handle);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
 extern tabpage_T *rs_find_tabpage(int n);
-extern int rs_get_last_winid(void);
 extern win_T *rs_lastwin_nofloating(void);
 extern win_T *rs_frame2win(frame_T *frp);
 extern frame_T *rs_win_altframe(win_T *win);
@@ -132,7 +127,6 @@ extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
 extern int rs_frame_minwidth(frame_T *topfrp, win_T *next_curwin);
 extern int rs_win_comp_pos(void);
 extern void rs_frame_comp_pos(frame_T *topfrp, int *row, int *col);
-extern void rs_frame_setheight(frame_T *curfrp, int height);
 extern void rs_win_setheight_win(int height, win_T *win);
 extern void rs_win_setwidth_win(int width, win_T *wp);
 extern void rs_frame_add_height(frame_T *frp, int n);
@@ -160,37 +154,26 @@ extern void rs_diff_clear(tabpage_T *tp);
 extern int rs_diffopt_closeoff(void);
 extern int rs_diffopt_filler(void);
 
-// Phase 1: Pure calculations and thin wrappers
+// Pure calculations and thin wrappers
 extern void rs_set_fraction(win_T *wp);
 extern int64_t rs_win_default_scroll(win_T *wp);
 extern void rs_win_setheight(int height);
 extern void rs_win_setwidth(int width);
-extern int rs_min_rows(tabpage_T *tp);
-extern int rs_min_rows_for_all_tabpages(void);
-extern void rs_win_get_tabwin(int id, int *tabnr, int *winnr);
 
-// Phase 2: Option validation + height/width setters
+// Option validation + height/width setters
 extern const char *rs_did_set_winminheight(void);
 extern const char *rs_did_set_winminwidth(void);
 extern void rs_win_new_height(win_T *wp, int height);
 extern void rs_win_new_width(win_T *wp, int width);
 
-// Phase 3: Snapshot lifecycle
+// Snapshot lifecycle
 extern void rs_clear_snapshot(tabpage_T *tp, int idx);
 extern void rs_make_snapshot(int idx);
 extern int rs_check_snapshot_rec(frame_T *sn, frame_T *fr);
 extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
 
-// Phase 4: Size save/restore + cursor line validation
-extern void rs_win_size_save(garray_T *gap);
-extern void rs_win_size_restore(garray_T *gap);
-extern void rs_check_lnums(int do_curwin);
-extern void rs_check_lnums_nested(int do_curwin);
-extern void rs_reset_lnums(void);
-
-// Phase 5: Status line management
+// Status line management
 extern void rs_last_status(int morewin);
-extern void rs_win_remove_status_line(win_T *wp, int add_hsep);
 extern int rs_resize_frame_for_winbar(frame_T *fr);
 
 // win_split_ins migration: Rust orchestrator
@@ -224,9 +207,6 @@ extern int rs_win_close_validate(win_T *win, int free_buf, int force);
 extern WinCloseStructResult rs_win_close_structural(win_T *win, int help_window,
                                                      frame_T *win_frame);
 extern void rs_win_close_post_layout(int was_floating, int dir, frame_T *win_frame);
-
-// do_window migration: Rust dispatcher
-extern void rs_do_window(int nchar, int Prenum, int xchar);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
