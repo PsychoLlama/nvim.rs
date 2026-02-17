@@ -142,32 +142,32 @@ _Static_assert(K_KENTER == -16715, "K_KENTER mismatch with Rust K_KENTER constan
 extern const char *rs_did_set_hlsearch(optset_T *args);
 extern const char *rs_did_set_ignorecase(optset_T *args);
 extern const char *rs_did_set_title_icon(optset_T *args);
-extern const char *rs_did_set_titlelen(int64_t old_value);
+extern const char *rs_did_set_titlelen(optset_T *args);
 extern const char *rs_did_set_iminsert(optset_T *args);
 extern const char *rs_did_set_langnoremap(optset_T *args);
 extern const char *rs_did_set_langremap(optset_T *args);
 extern const char *rs_did_set_foldlevel(optset_T *args);
 extern const char *rs_did_set_textwidth(optset_T *args);
 extern const char *rs_did_set_pumblend(optset_T *args);
-extern const char *rs_did_set_winblend(win_T *win, int64_t old_value, int64_t new_value);
-extern const char *rs_did_set_smoothscroll_full(win_T *win);
+extern const char *rs_did_set_winblend(optset_T *args);
+extern const char *rs_did_set_smoothscroll_full(optset_T *args);
 extern const char *rs_did_set_showtabline_full(optset_T *args);
-extern const char *rs_did_set_numberwidth(win_T *win);
-extern const char *rs_did_set_number_relativenumber(win_T *win);
+extern const char *rs_did_set_numberwidth(optset_T *args);
+extern const char *rs_did_set_number_relativenumber(optset_T *args);
 extern const char *rs_did_set_binary(void);
-extern const char *rs_did_set_diff(win_T *win);
+extern const char *rs_did_set_diff(optset_T *args);
 extern const char *rs_did_set_eof_eol_fixeol_bomb(optset_T *args);
-extern const char *rs_did_set_equalalways(win_T *win, int old_value);
-extern const char *rs_did_set_foldminlines(win_T *win);
-extern const char *rs_did_set_foldnestmax(win_T *win);
+extern const char *rs_did_set_equalalways(optset_T *args);
+extern const char *rs_did_set_foldminlines(optset_T *args);
+extern const char *rs_did_set_foldnestmax(optset_T *args);
 extern const char *rs_did_set_helpheight(optset_T *args);
-extern const char *rs_did_set_swapfile(buf_T *buf);
+extern const char *rs_did_set_swapfile(optset_T *args);
 extern const char *rs_did_set_modifiable(optset_T *args);
-extern const char *rs_did_set_updatecount(int64_t old_value);
-extern const char *rs_did_set_lisp(buf_T *buf);
-extern const char *rs_did_set_wildchar(int64_t c);
+extern const char *rs_did_set_updatecount(optset_T *args);
+extern const char *rs_did_set_lisp(optset_T *args);
+extern const char *rs_did_set_wildchar(optset_T *args);
 extern const char *rs_did_set_window(optset_T *args);
-extern const char *rs_did_set_scrollbind(win_T *win);
+extern const char *rs_did_set_scrollbind(optset_T *args);
 extern const char *rs_did_set_autochdir(optset_T *args);
 
 // OptVal storage operations (from Rust storage.rs)
@@ -178,6 +178,37 @@ extern int rs_optval_equal(OptVal o1, OptVal o2);
 // =============================================================================
 // Accessor functions for Rust code
 // =============================================================================
+
+// optset_T field accessors for Rust callbacks
+void *nvim_optset_get_win(const void *args)
+{
+  return (void *)((const optset_T *)args)->os_win;
+}
+
+void *nvim_optset_get_buf(const void *args)
+{
+  return (void *)((const optset_T *)args)->os_buf;
+}
+
+int nvim_optset_get_oldval_boolean(const void *args)
+{
+  return (int)((const optset_T *)args)->os_oldval.boolean;
+}
+
+int64_t nvim_optset_get_oldval_number(const void *args)
+{
+  return ((const optset_T *)args)->os_oldval.number;
+}
+
+int64_t nvim_optset_get_newval_number(const void *args)
+{
+  return ((const optset_T *)args)->os_newval.number;
+}
+
+void *nvim_optset_get_varp(const void *args)
+{
+  return ((const optset_T *)args)->os_varp;
+}
 
 // String option accessors
 const char *nvim_option_get_sh(void) { return p_sh; }
@@ -2321,35 +2352,6 @@ static const char *did_set_cmdheight(optset_T *args)
 }
 
 /// Process the updated 'diff' option value.
-static const char *did_set_diff(optset_T *args)
-{
-  return rs_did_set_diff((win_T *)args->os_win);
-}
-
-/// Process the updated 'endoffile' or 'endofline' or 'fixendofline' or 'bomb'
-/// option value.
-
-/// Process the updated 'equalalways' option value.
-static const char *did_set_equalalways(optset_T *args)
-{
-  return rs_did_set_equalalways((win_T *)args->os_win, (int)args->os_oldval.boolean);
-}
-
-/// Process the new 'foldlevel' option value.
-/// Process the new 'foldminlines' option value.
-static const char *did_set_foldminlines(optset_T *args)
-{
-  return rs_did_set_foldminlines((win_T *)args->os_win);
-}
-
-/// Process the new 'foldnestmax' option value.
-static const char *did_set_foldnestmax(optset_T *args)
-{
-  return rs_did_set_foldnestmax((win_T *)args->os_win);
-}
-
-/// Process the new 'helpheight' option value.
-
 /// Process the new 'laststatus' option value.
 static const char *did_set_laststatus(optset_T *args)
 {
@@ -2414,12 +2416,6 @@ static const char *did_set_lines_or_columns(optset_T *args)
   return NULL;
 }
 
-/// Process the updated 'lisp' option value.
-static const char *did_set_lisp(optset_T *args)
-{
-  return rs_did_set_lisp((buf_T *)args->os_buf);
-}
-
 /// Process the updated 'modified' option value.
 static const char *did_set_modified(optset_T *args)
 {
@@ -2430,18 +2426,6 @@ static const char *did_set_modified(optset_T *args)
   redraw_titles();
   buf->b_modified_was_set = (int)args->os_newval.boolean;
   return NULL;
-}
-
-/// Process the updated 'number' or 'relativenumber' option value.
-static const char *did_set_number_relativenumber(optset_T *args)
-{
-  return rs_did_set_number_relativenumber((win_T *)args->os_win);
-}
-
-/// Process the new 'numberwidth' option value.
-static const char *did_set_numberwidth(optset_T *args)
-{
-  return rs_did_set_numberwidth((win_T *)args->os_win);
 }
 
 /// Process the updated 'paste' option value.
@@ -2627,12 +2611,6 @@ static const char *did_set_scrollback(optset_T *args)
   return NULL;
 }
 
-/// Process the updated 'scrollbind' option value.
-static const char *did_set_scrollbind(optset_T *args)
-{
-  return rs_did_set_scrollbind((win_T *)args->os_win);
-}
-
 #ifdef BACKSLASH_IN_FILENAME
 /// Process the updated 'shellslash' option value.
 static const char *did_set_shellslash(optset_T *args FUNC_ATTR_UNUSED)
@@ -2674,12 +2652,6 @@ static const char *did_set_shiftwidth_tabstop(optset_T *args)
   return NULL;
 }
 
-/// Process the updated 'smoothscroll' option value.
-static const char *did_set_smoothscroll(optset_T *args)
-{
-  return rs_did_set_smoothscroll_full((win_T *)args->os_win);
-}
-
 /// Process the updated 'spell' option value.
 static const char *did_set_spell(optset_T *args)
 {
@@ -2692,17 +2664,6 @@ static const char *did_set_spell(optset_T *args)
 }
 
 /// Process the updated 'swapfile' option value.
-static const char *did_set_swapfile(optset_T *args)
-{
-  return rs_did_set_swapfile((buf_T *)args->os_buf);
-}
-
-/// Process the new 'titlelen' option value.
-static const char *did_set_titlelen(optset_T *args)
-{
-  return rs_did_set_titlelen(args->os_oldval.number);
-}
-
 /// Process the updated 'undofile' option value.
 static const char *did_set_undofile(optset_T *args)
 {
@@ -2767,24 +2728,6 @@ static const char *did_set_undolevels(optset_T *args)
   }
 
   return NULL;
-}
-
-/// Process the new 'updatecount' option value.
-static const char *did_set_updatecount(optset_T *args)
-{
-  return rs_did_set_updatecount(args->os_oldval.number);
-}
-
-/// Process the new 'wildchar' / 'wildcharm' option value.
-static const char *did_set_wildchar(optset_T *args)
-{
-  return rs_did_set_wildchar(*(OptInt *)args->os_varp);
-}
-
-/// Process the new 'winblend' option value.
-static const char *did_set_winblend(optset_T *args)
-{
-  return rs_did_set_winblend((win_T *)args->os_win, args->os_oldval.number, args->os_newval.number);
 }
 
 /// Process the new 'winheight' value.

@@ -92,6 +92,12 @@ extern "C" {
     fn nvim_callback_win_clamp_winbl(win: crate::WinHandle);
     fn nvim_callback_win_set_hl_needs_update(win: crate::WinHandle, value: c_int);
     fn check_blending(win: crate::WinHandle);
+
+    // optset_T field accessors
+    fn nvim_optset_get_win(args: *const c_void) -> crate::WinHandle;
+    fn nvim_optset_get_oldval_number(args: *const c_void) -> i64;
+    fn nvim_optset_get_newval_number(args: *const c_void) -> i64;
+    fn nvim_optset_get_varp(args: *const c_void) -> *mut c_void;
 }
 
 // =============================================================================
@@ -192,7 +198,8 @@ pub extern "C" fn rs_did_set_title() {
 /// Callback for 'titlelen' option.
 /// If 'titlelen' changed, redraw the title.
 #[no_mangle]
-pub extern "C" fn rs_did_set_titlelen(old_value: OptInt) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_titlelen(args: *mut c_void) -> CallbackResult {
+    let old_value = nvim_optset_get_oldval_number(args);
     if screen_available() && old_value != get_titlelen() {
         request_maketitle();
     }
@@ -306,11 +313,10 @@ pub extern "C" fn rs_did_set_pumblend(_args: *mut c_void) -> CallbackResult {
 /// Callback for 'winblend' option.
 /// Clamp value to [0, 100], update highlight blending if changed.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_winblend(
-    win: crate::WinHandle,
-    old_value: OptInt,
-    new_value: OptInt,
-) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_winblend(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    let old_value = nvim_optset_get_oldval_number(args);
+    let new_value = nvim_optset_get_newval_number(args);
     if new_value != old_value {
         nvim_callback_win_clamp_winbl(win);
         nvim_callback_win_set_hl_needs_update(win, 1);

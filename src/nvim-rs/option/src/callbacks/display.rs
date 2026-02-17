@@ -47,6 +47,9 @@ extern "C" {
     fn nvim_option_win_set_nrwidth(win: WinHandle, value: c_int);
     fn nvim_option_win_get_sms(win: WinHandle) -> c_int;
     fn nvim_option_win_set_skipcol(win: WinHandle, value: c_int);
+
+    // optset_T field accessors
+    fn nvim_optset_get_win(args: *const c_void) -> WinHandle;
 }
 
 // =============================================================================
@@ -187,7 +190,8 @@ pub extern "C" fn rs_did_set_showtabline_full(_args: *mut c_void) -> CallbackRes
 ///
 /// When these options change and 'statuscolumn' is set, reset width.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_number_relativenumber(win: WinHandle) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_number_relativenumber(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
     let stc = nvim_option_win_get_stc(win);
     if !stc.is_null() && *stc != 0 {
         nvim_option_win_set_nrwidth(win, 0);
@@ -200,7 +204,8 @@ pub unsafe extern "C" fn rs_did_set_number_relativenumber(win: WinHandle) -> Cal
 ///
 /// Triggers a redraw by resetting the line count used for number width calculation.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_numberwidth(win: WinHandle) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_numberwidth(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
     nvim_option_win_set_nrwidth(win, 0);
     callback_ok()
 }
@@ -209,7 +214,8 @@ pub unsafe extern "C" fn rs_did_set_numberwidth(win: WinHandle) -> CallbackResul
 ///
 /// Resets skipcol when smoothscroll is disabled.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_smoothscroll_full(win: WinHandle) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_smoothscroll_full(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
     if nvim_option_win_get_sms(win) == 0 {
         nvim_option_win_set_skipcol(win, 0);
     }

@@ -48,6 +48,12 @@ extern "C" {
     fn nvim_callback_get_p_hh() -> OptInt;
     // Buffer accessors
     fn nvim_buf_get_p_swf(buf: BufHandle) -> c_int;
+
+    // optset_T field accessors
+    fn nvim_optset_get_win(args: *const c_void) -> WinHandle;
+    fn nvim_optset_get_buf(args: *const c_void) -> BufHandle;
+    fn nvim_optset_get_oldval_boolean(args: *const c_void) -> c_int;
+    fn nvim_optset_get_oldval_number(args: *const c_void) -> i64;
 }
 
 // =============================================================================
@@ -108,7 +114,8 @@ pub extern "C" fn rs_did_set_binary() -> CallbackResult {
 ///
 /// Adjusts diff buffer list and updates folds if using diff fold method.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_diff(win: WinHandle) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_diff(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
     rs_diff_buf_adjust(win);
     if foldmethodIsDiff(win) != 0 {
         foldUpdateAll(win);
@@ -129,10 +136,9 @@ pub extern "C" fn rs_did_set_eof_eol_fixeol_bomb(_args: *mut c_void) -> Callback
 ///
 /// When 'equalalways' is set, make all windows equal size.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_equalalways(
-    win: WinHandle,
-    old_value: c_int,
-) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_equalalways(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    let old_value = nvim_optset_get_oldval_boolean(args);
     if get_equalalways() && old_value == 0 {
         win_equal(win, 0, 0);
     }
@@ -145,7 +151,8 @@ pub unsafe extern "C" fn rs_did_set_equalalways(
 ///
 /// Updates all folds in the window.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_foldminlines(win: WinHandle) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_foldminlines(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
     foldUpdateAll(win);
     callback_ok()
 }
@@ -154,7 +161,8 @@ pub unsafe extern "C" fn rs_did_set_foldminlines(win: WinHandle) -> CallbackResu
 ///
 /// Updates folds if using syntax or indent fold method.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_foldnestmax(win: WinHandle) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_foldnestmax(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
     if foldmethodIsSyntax(win) != 0 || foldmethodIsIndent(win) != 0 {
         foldUpdateAll(win);
     }
@@ -181,7 +189,8 @@ pub extern "C" fn rs_did_set_helpheight(_args: *mut c_void) -> CallbackResult {
 ///
 /// Creates or removes swap file based on option value.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_swapfile(buf: BufHandle) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_swapfile(args: *mut c_void) -> CallbackResult {
+    let buf = nvim_optset_get_buf(args);
     if nvim_buf_get_p_swf(buf) != 0 && get_updatecount() != 0 {
         ml_open_file(buf); // create the swap file
     } else {
@@ -214,7 +223,8 @@ pub unsafe extern "C" fn rs_did_set_undolevels(
 ///
 /// When 'updatecount' changes from zero to non-zero, open swap files.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_updatecount(old_value: OptInt) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_updatecount(args: *mut c_void) -> CallbackResult {
+    let old_value = nvim_optset_get_oldval_number(args);
     if get_updatecount() != 0 && old_value == 0 {
         ml_open_files();
     }

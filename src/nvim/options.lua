@@ -2283,7 +2283,7 @@ local options = {
       varname = 'p_dict',
     },
     {
-      cb = 'did_set_diff',
+      cb = 'rs_did_set_diff',
       defaults = false,
       desc = [=[
         Join the current window in the group of windows that shows differences
@@ -2729,7 +2729,7 @@ local options = {
     },
     {
       abbreviation = 'ea',
-      cb = 'did_set_equalalways',
+      cb = 'rs_did_set_equalalways',
       defaults = true,
       desc = [=[
         When on, all the windows are automatically made the same size after
@@ -3562,7 +3562,7 @@ local options = {
     },
     {
       abbreviation = 'fml',
-      cb = 'did_set_foldminlines',
+      cb = 'rs_did_set_foldminlines',
       defaults = 1,
       desc = [=[
         Sets the number of screen lines above which a fold can be displayed
@@ -3581,7 +3581,7 @@ local options = {
     },
     {
       abbreviation = 'fdn',
-      cb = 'did_set_foldnestmax',
+      cb = 'rs_did_set_foldnestmax',
       defaults = 20,
       desc = [=[
         Sets the maximum nesting of folds for the "indent" and "syntax"
@@ -5312,7 +5312,7 @@ local options = {
       varname = 'p_linespace',
     },
     {
-      cb = 'did_set_lisp',
+      cb = 'rs_did_set_lisp',
       defaults = false,
       desc = [=[
         Lisp mode: When <Enter> is typed in insert mode set the indent for
@@ -6289,7 +6289,7 @@ local options = {
     },
     {
       abbreviation = 'nu',
-      cb = 'did_set_number_relativenumber',
+      cb = 'rs_did_set_number_relativenumber',
       defaults = false,
       desc = [=[
         Print the line number in front of each line.  When the 'n' option is
@@ -6322,7 +6322,7 @@ local options = {
     },
     {
       abbreviation = 'nuw',
-      cb = 'did_set_numberwidth',
+      cb = 'rs_did_set_numberwidth',
       defaults = 4,
       desc = [=[
         Minimal number of columns to use for the line number.  Only relevant
@@ -6894,7 +6894,7 @@ local options = {
     },
     {
       abbreviation = 'rnu',
-      cb = 'did_set_number_relativenumber',
+      cb = 'rs_did_set_number_relativenumber',
       defaults = false,
       desc = [=[
         Show the line number relative to the line with the cursor in front of
@@ -7206,7 +7206,7 @@ local options = {
     },
     {
       abbreviation = 'scb',
-      cb = 'did_set_scrollbind',
+      cb = 'rs_did_set_scrollbind',
       defaults = false,
       desc = [=[
         See also |scroll-binding|.  When this option is set, scrolling the
@@ -8337,7 +8337,7 @@ local options = {
     },
     {
       abbreviation = 'sms',
-      cb = 'did_set_smoothscroll',
+      cb = 'rs_did_set_smoothscroll_full',
       defaults = false,
       desc = [=[
         Scrolling works with screen lines.  When 'wrap' is set and the first
@@ -9033,7 +9033,7 @@ local options = {
     },
     {
       abbreviation = 'swf',
-      cb = 'did_set_swapfile',
+      cb = 'rs_did_set_swapfile',
       defaults = true,
       desc = [=[
         Use a swapfile for the buffer.  This option can be reset when a
@@ -9665,7 +9665,7 @@ local options = {
       varname = 'p_title',
     },
     {
-      cb = 'did_set_titlelen',
+      cb = 'rs_did_set_titlelen',
       defaults = 85,
       desc = [=[
         Gives the percentage of 'columns' to use for the length of the window
@@ -9894,7 +9894,7 @@ local options = {
     },
     {
       abbreviation = 'uc',
-      cb = 'did_set_updatecount',
+      cb = 'rs_did_set_updatecount',
       defaults = 200,
       desc = [=[
         After typing this many characters the swap file will be written to
@@ -10209,7 +10209,7 @@ local options = {
     },
     {
       abbreviation = 'wc',
-      cb = 'did_set_wildchar',
+      cb = 'rs_did_set_wildchar',
       defaults = {
         if_true = macros('TAB', 'number'),
         doc = '<Tab>',
@@ -10243,7 +10243,7 @@ local options = {
     },
     {
       abbreviation = 'wcm',
-      cb = 'did_set_wildchar',
+      cb = 'rs_did_set_wildchar',
       defaults = 0,
       desc = [=[
         'wildcharm' works exactly like 'wildchar', except that it is
@@ -10531,7 +10531,7 @@ local options = {
     },
     {
       abbreviation = 'winbl',
-      cb = 'did_set_winblend',
+      cb = 'rs_did_set_winblend',
       defaults = 0,
       desc = [=[
         Enables pseudo-transparency for a floating window. Valid values are in

@@ -819,13 +819,19 @@ extern "C" {
     fn do_check_scrollbind(check: c_int);
     fn get_vtopline(win: crate::WinHandle) -> c_int;
     fn nvim_callback_win_set_scbind_pos(win: crate::WinHandle, value: c_int);
+
+    // optset_T field accessors
+    fn nvim_optset_get_win(args: *const c_void) -> crate::WinHandle;
+    fn nvim_optset_get_buf(args: *const c_void) -> crate::BufHandle;
+    fn nvim_optset_get_varp(args: *const c_void) -> *mut c_void;
 }
 
 /// Callback for 'scrollbind' option.
 /// When 'scrollbind' is set, snapshot the current position to avoid a jump
 /// at the end of normal_cmd().
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_scrollbind(win: crate::WinHandle) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_scrollbind(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
     if nvim_win_get_p_scb(win) == 0 {
         return callback_ok();
     }
@@ -880,7 +886,8 @@ extern "C" {
 /// Callback for 'lisp' option.
 /// When 'lisp' option changes, include/exclude '-' in keyword characters.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_lisp(buf: crate::BufHandle) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_lisp(args: *mut c_void) -> CallbackResult {
+    let buf = nvim_optset_get_buf(args);
     // Reinitialize character table — this updates iskeyword-like classification
     // to include/exclude '-' depending on whether 'lisp' is set.
     buf_init_chartab(buf, 0); // ignore errors (false = not global)
@@ -938,7 +945,9 @@ const K_KENTER: i64 = -16715;
 /// Don't allow key values that wouldn't work as wildchar.
 /// The value `c` is the current option value (from `*(OptInt *)args->os_varp`).
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_wildchar(c: crate::OptInt) -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_wildchar(args: *mut c_void) -> CallbackResult {
+    let varp = nvim_optset_get_varp(args) as *const crate::OptInt;
+    let c = *varp;
     if c == CTRL_C || c == i64::from(b'\n') || c == i64::from(b'\r') || c == K_KENTER {
         return nvim_callback_get_e_invarg();
     }
