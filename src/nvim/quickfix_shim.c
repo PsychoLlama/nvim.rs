@@ -4909,6 +4909,7 @@ extern void rs_ex_cbelow(void *eap);
 extern void rs_ex_cclose(void *eap);
 extern void rs_ex_cbottom(void *eap);
 extern void rs_ex_cwindow(void *eap);
+extern void rs_ex_copen(void *eap);
 
 /// ":colder [count]": Up in the quickfix stack.
 /// ":cnewer [count]": Down in the quickfix stack.
@@ -5043,31 +5044,6 @@ void ex_cclose(exarg_T *eap)
   rs_ex_cclose(eap);
 }
 
-// Goto a quickfix or location list window (if present).
-// Returns OK if the window is found, FAIL otherwise.
-static int qf_goto_cwindow(const qf_info_T *qi, bool resize, int sz, bool vertsplit)
-{
-  win_T *const win = qf_find_win(qi);
-  if (win == NULL) {
-    return FAIL;
-  }
-
-  win_goto(win);
-  if (resize) {
-    if (vertsplit) {
-      if (sz != win->w_width) {
-        win_setwidth(sz);
-      }
-    } else if (sz != win->w_height
-               && (win->w_height + win->w_hsep_height + win->w_status_height + tabline_height()
-                   < cmdline_row)) {
-      win_setheight(sz);
-    }
-  }
-
-  return OK;
-}
-
 // Set options for the buffer in the quickfix or location list window.
 static void qf_set_cwindow_options(void)
 {
@@ -5162,55 +5138,7 @@ static void qf_set_title_var(qf_list_T *qfl)
 /// ":lopen": open a window that shows the location list.
 void ex_copen(exarg_T *eap)
 {
-  qf_info_T *qi;
-
-  if ((qi = qf_cmd_get_stack(eap, true)) == NULL) {
-    return;
-  }
-
-  incr_quickfix_busy();
-
-  int height;
-  if (eap->addr_count != 0) {
-    height = (int)eap->line2;
-  } else {
-    // Use Rust function to calculate optimal height based on entry count
-    qf_list_T *qfl_temp = qf_get_curlist(qi);
-    height = rs_qf_calc_window_height(qfl_temp, 3, QF_WINHEIGHT);
-  }
-  reset_VIsual_and_resel();  // stop Visual mode
-
-  // Find an existing quickfix window, or open a new one.
-  int status = FAIL;
-  if (cmdmod.cmod_tab == 0) {
-    status = qf_goto_cwindow(qi, eap->addr_count != 0, height,
-                             cmdmod.cmod_split & WSP_VERT);
-  }
-  if (status == FAIL) {
-    if (qf_open_new_cwindow(qi, height) == FAIL) {
-      decr_quickfix_busy();
-      return;
-    }
-  }
-
-  qf_list_T *qfl = qf_get_curlist(qi);
-  qf_set_title_var(qfl);
-  // Save the current index here, as updating the quickfix buffer may free
-  // the quickfix list. Use Rust function for cursor line calculation.
-  linenr_T lnum = rs_qf_cursor_line(qfl);
-  if (lnum == 0) {
-    lnum = 1;  // Default to first line if empty
-  }
-
-  // Fill the buffer with the quickfix list.
-  rs_qf_fill_buffer(qfl, curbuf, NULL, curwin->handle);
-
-  decr_quickfix_busy();
-
-  curwin->w_cursor.lnum = lnum;
-  curwin->w_cursor.col = 0;
-  check_cursor(curwin);
-  update_topline(curwin);             // scroll to show the line
+  rs_ex_copen(eap);
 }
 
 // Move the cursor in the quickfix window to "lnum".

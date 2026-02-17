@@ -1476,11 +1476,14 @@ pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
 // Phase W2: Window Ex command implementations
 // =============================================================================
 
+/// C `linenr_T` is `int32_t`.
+type CLinenrT = i32;
+
 extern "C" {
     fn nvim_qf_win_close(win: *mut c_void);
-    fn nvim_qf_win_get_cursor_lnum(win: *const c_void) -> LinenrT;
-    fn nvim_qf_win_get_buf_line_count(win: *const c_void) -> LinenrT;
-    fn nvim_qf_win_goto_lnum(win: *mut c_void, lnum: LinenrT);
+    fn nvim_qf_win_get_cursor_lnum(win: *const c_void) -> CLinenrT;
+    fn nvim_qf_win_get_buf_line_count(win: *const c_void) -> CLinenrT;
+    fn nvim_qf_win_goto_lnum(win: *mut c_void, lnum: CLinenrT);
 }
 
 /// Find the quickfix window for a given stack.
@@ -1531,11 +1534,6 @@ pub unsafe extern "C" fn rs_ex_cbottom(eap: EapHandle) {
     }
 }
 
-extern "C" {
-    // Temporary bridge to C ex_copen until Phase 4 migrates it
-    fn ex_copen(eap: EapHandle);
-}
-
 /// `:cwindow` / `:lwindow` -- open qf window if errors, close if not.
 ///
 /// # Safety
@@ -1562,6 +1560,135 @@ pub unsafe extern "C" fn rs_ex_cwindow(eap: EapHandle) {
             rs_ex_cclose(eap);
         }
     } else if win.is_null() {
-        ex_copen(eap);
+        rs_ex_copen(eap);
     }
+}
+
+// =============================================================================
+// Phase W4: ex_copen + qf_goto_cwindow
+// =============================================================================
+
+// Constants
+const QF_WINHEIGHT: c_int = 10;
+const OK_VAL: c_int = 1;
+const FAIL_VAL: c_int = 0;
+const WSP_VERT: c_int = 0x02;
+
+extern "C" {
+    fn nvim_qf_reset_visual();
+    fn nvim_qf_get_cmdmod_tab() -> c_int;
+    fn nvim_qf_get_cmdmod_split() -> c_int;
+    fn nvim_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_int) -> c_int;
+    fn nvim_qf_set_title_var(qfl: *mut c_void);
+    fn nvim_qf_curwin_set_cursor(lnum: CLinenrT, col: c_int);
+    fn nvim_qf_check_cursor_curwin();
+    fn nvim_qf_update_topline_curwin();
+    fn nvim_qf_win_get_width(win: *const c_void) -> c_int;
+    fn nvim_qf_win_get_height(win: *const c_void) -> c_int;
+    fn nvim_qf_win_get_hsep_height(win: *const c_void) -> c_int;
+    fn nvim_qf_win_get_status_height(win: *const c_void) -> c_int;
+    fn nvim_qf_tabline_height() -> c_int;
+    fn nvim_qf_cmdline_row() -> c_int;
+    fn nvim_qf_win_setwidth(width: c_int);
+    fn nvim_qf_win_setheight(height: c_int);
+    fn nvim_qf_win_goto(win: *mut c_void);
+    fn nvim_qf_curwin_handle() -> c_int;
+    fn nvim_qf_get_curbuf() -> *mut c_void;
+}
+
+/// Goto a quickfix or location list window, optionally resizing.
+/// Returns OK if found, FAIL if not.
+#[allow(clippy::cast_possible_truncation)]
+unsafe fn qf_goto_cwindow_rs(
+    qi: QfInfoHandleMut,
+    resize: bool,
+    sz: c_int,
+    vertsplit: bool,
+) -> c_int {
+    let win = find_win_for_stack(qi);
+    if win.is_null() {
+        return FAIL_VAL;
+    }
+
+    nvim_qf_win_goto(win);
+    if resize {
+        if vertsplit {
+            if sz != nvim_qf_win_get_width(win) {
+                nvim_qf_win_setwidth(sz);
+            }
+        } else {
+            let win_h = nvim_qf_win_get_height(win);
+            let hsep = nvim_qf_win_get_hsep_height(win);
+            let status = nvim_qf_win_get_status_height(win);
+            let tabline = nvim_qf_tabline_height();
+            let cmdrow = nvim_qf_cmdline_row();
+            if sz != win_h && (win_h + hsep + status + tabline < cmdrow) {
+                nvim_qf_win_setheight(sz);
+            }
+        }
+    }
+
+    OK_VAL
+}
+
+/// `:copen` / `:lopen` -- open a window showing the quickfix/location list.
+///
+/// # Safety
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_ex_copen(eap: EapHandle) {
+    let qi = nvim_qf_cmd_get_stack(eap, true);
+    if qi.is_null() {
+        return;
+    }
+
+    nvim_incr_quickfix_busy();
+
+    let addr_count = nvim_eap_get_addr_count(eap);
+    let height = if addr_count != 0 {
+        nvim_eap_get_line2(eap) as c_int
+    } else {
+        let qfl_temp = nvim_qf_get_curlist_mut(qi);
+        rs_qf_calc_window_height(qfl_temp.cast_const(), 3, QF_WINHEIGHT)
+    };
+
+    nvim_qf_reset_visual();
+
+    // Find an existing quickfix window, or open a new one
+    let status = if nvim_qf_get_cmdmod_tab() == 0 {
+        qf_goto_cwindow_rs(
+            qi,
+            addr_count != 0,
+            height,
+            (nvim_qf_get_cmdmod_split() & WSP_VERT) != 0,
+        )
+    } else {
+        FAIL_VAL
+    };
+    if status == FAIL_VAL && nvim_qf_open_new_cwindow(qi, height) == FAIL_VAL {
+        nvim_decr_quickfix_busy();
+        return;
+    }
+
+    let qfl = nvim_qf_get_curlist_mut(qi);
+    nvim_qf_set_title_var(qfl);
+
+    // Calculate cursor line
+    let mut lnum = crate::window::rs_qf_cursor_line(qfl.cast_const());
+    if lnum == 0 {
+        lnum = 1;
+    }
+
+    // Fill the buffer with quickfix list
+    let curbuf = nvim_qf_get_curbuf();
+    let curwin_handle = nvim_qf_curwin_handle();
+    crate::display::rs_qf_fill_buffer(qfl, curbuf, std::ptr::null(), curwin_handle);
+
+    nvim_decr_quickfix_busy();
+
+    // Position cursor
+    nvim_qf_curwin_set_cursor(lnum, 0);
+    nvim_qf_check_cursor_curwin();
+    nvim_qf_update_topline_curwin();
 }
