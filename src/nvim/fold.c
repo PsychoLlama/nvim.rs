@@ -116,9 +116,6 @@ extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
 // Rust FFI declarations for Phase 2: Core query functions
 extern int rs_getDeepestNesting(win_T *wp);
 
-// Rust FFI declarations for Phase 2: Fold State Management
-extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
-
 // Rust FFI declarations for Phase 3: Fold Creation and Deletion
 extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
@@ -1261,6 +1258,12 @@ bool nvim_win_get_w_foldinvalid(win_T *wp)
   return wp->w_foldinvalid;
 }
 
+/// Set the w_foldinvalid field in a window.
+void nvim_win_set_w_foldinvalid(win_T *wp, bool val)
+{
+  wp->w_foldinvalid = val;
+}
+
 /// Get the w_lines_valid field from a window.
 int nvim_win_get_w_lines_valid(win_T *wp)
 {
@@ -1591,24 +1594,6 @@ bool nvim_ga_is_empty(garray_T *gap)
   return GA_EMPTY(gap);
 }
 
-/// Get the w_folds field from a window.
-garray_T *nvim_win_get_w_folds(win_T *wp)
-{
-  return &wp->w_folds;
-}
-
-/// Set the w_foldinvalid field in a window.
-void nvim_win_set_w_foldinvalid(win_T *wp, bool val)
-{
-  wp->w_foldinvalid = val;
-}
-
-/// Wrapper for deleteFoldRecurse for Rust.
-void nvim_deleteFoldRecurse_c(buf_T *buf, garray_T *gap)
-{
-  deleteFoldRecurse(buf, gap);
-}
-
 // ============================================================================
 // Phase 1: Manual Fold Operations accessors
 // ============================================================================
@@ -1619,18 +1604,6 @@ void nvim_foldCreateMarkers(win_T *wp, linenr_T start_lnum, linenr_T end_lnum)
   pos_T start = { start_lnum, 0, 0 };
   pos_T end = { end_lnum, 0, 0 };
   foldCreateMarkers(wp, start, end);
-}
-
-/// Wrapper for closeFold for Rust.
-void nvim_closeFold(linenr_T lnum, int count)
-{
-  rs_setFoldRepeat(lnum, count, false);
-}
-
-/// Emit the "no fold found" error message (e_nofold).
-void nvim_emsg_e_nofold(void)
-{
-  emsg(_(e_nofold));
 }
 
 /// Wrapper for parseMarker for Rust.
@@ -1705,48 +1678,6 @@ void nvim_line_breakcheck(void)
 linenr_T nvim_fold_buf_get_line_count(buf_T *buf)
 {
   return buf->b_ml.ml_line_count;
-}
-
-/// Get w_foldinvalid field.
-int nvim_win_get_foldinvalid(win_T *wp)
-{
-  return wp->w_foldinvalid ? 1 : 0;
-}
-
-/// Set w_foldinvalid field.
-void nvim_win_set_foldinvalid(win_T *wp, int val)
-{
-  wp->w_foldinvalid = val != 0;
-}
-
-/// Check if foldmethod is diff.
-int nvim_foldmethod_is_diff(win_T *wp)
-{
-  return foldmethodIsDiff(wp) ? 1 : 0;
-}
-
-/// Check if foldmethod is marker.
-int nvim_foldmethod_is_marker(win_T *wp)
-{
-  return foldmethodIsMarker(wp) ? 1 : 0;
-}
-
-/// Check if foldmethod is expr.
-int nvim_foldmethod_is_expr(win_T *wp)
-{
-  return foldmethodIsExpr(wp) ? 1 : 0;
-}
-
-/// Check if foldmethod is syntax.
-int nvim_foldmethod_is_syntax(win_T *wp)
-{
-  return foldmethodIsSyntax(wp) ? 1 : 0;
-}
-
-/// Check if foldmethod is indent.
-int nvim_foldmethod_is_indent(win_T *wp)
-{
-  return foldmethodIsIndent(wp) ? 1 : 0;
 }
 
 /// Get diff_context global.

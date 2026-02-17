@@ -281,8 +281,8 @@ extern "C" {
     // Buffer accessors
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_fold_buf_get_line_count(buf: BufHandle) -> LinenrT;
-    fn nvim_win_get_foldinvalid(wp: WinHandle) -> c_int;
-    fn nvim_win_set_foldinvalid(wp: WinHandle, val: c_int);
+    fn nvim_win_get_w_foldinvalid(wp: WinHandle) -> bool;
+    fn nvim_win_set_w_foldinvalid(wp: WinHandle, val: bool);
 
     // Fold array accessors
     fn nvim_win_get_folds(wp: WinHandle) -> GArrayHandle;
@@ -296,9 +296,6 @@ extern "C" {
     fn nvim_fold_set_fd_len(fp: FoldHandle, len: LinenrT);
     fn nvim_fold_set_fd_flags(fp: FoldHandle, flags: c_int);
     fn nvim_fold_set_fd_small(fp: FoldHandle, small: c_int);
-
-    // Fold method checks
-    fn nvim_foldmethod_is_diff(wp: WinHandle) -> c_int;
 
     // Fold operations
     fn nvim_changed_window_setting(wp: WinHandle);
@@ -325,13 +322,6 @@ extern "C" {
 
     // Marker parsing
     fn nvim_parseMarker(wp: WinHandle);
-
-    // Fold method checks
-    fn nvim_foldmethod_is_marker(wp: WinHandle) -> c_int;
-    fn nvim_foldmethod_is_expr(wp: WinHandle) -> c_int;
-    fn nvim_foldmethod_is_syntax(wp: WinHandle) -> c_int;
-    #[allow(dead_code)]
-    fn nvim_foldmethod_is_indent(wp: WinHandle) -> c_int;
 
     // Fold static variable accessors
     #[allow(dead_code)]
@@ -498,7 +488,7 @@ fn call_syntax_level_getter(flp: &mut FlineT) {
 /// This delegates to the unified `fold_update_iems_impl` with the appropriate
 /// level getter kind for indent or diff methods.
 pub fn fold_update_iems_indent_impl(wp: WinHandle, top: LinenrT, bot: LinenrT) {
-    let kind = if unsafe { nvim_foldmethod_is_diff(wp) } != 0 {
+    let kind = if crate::foldmethod_is_diff_impl(wp) {
         LevelGetterKind::Diff
     } else {
         LevelGetterKind::Indent
@@ -515,13 +505,13 @@ pub fn fold_update_iems_all_impl(wp: WinHandle, top: LinenrT, bot: LinenrT) {
         return;
     }
 
-    let kind = if unsafe { nvim_foldmethod_is_marker(wp) } != 0 {
+    let kind = if crate::foldmethod_is_marker_impl(wp) {
         LevelGetterKind::Marker
-    } else if unsafe { nvim_foldmethod_is_expr(wp) } != 0 {
+    } else if crate::foldmethod_is_expr_impl(wp) {
         LevelGetterKind::Expr
-    } else if unsafe { nvim_foldmethod_is_syntax(wp) } != 0 {
+    } else if crate::foldmethod_is_syntax_impl(wp) {
         LevelGetterKind::Syntax
-    } else if unsafe { nvim_foldmethod_is_diff(wp) } != 0 {
+    } else if crate::foldmethod_is_diff_impl(wp) {
         LevelGetterKind::Diff
     } else {
         LevelGetterKind::Indent
@@ -545,10 +535,10 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
     }
 
     // Handle w_foldinvalid
-    if unsafe { nvim_win_get_foldinvalid(wp) } != 0 {
+    if unsafe { nvim_win_get_w_foldinvalid(wp) } {
         top = 1;
         bot = unsafe { nvim_fold_buf_get_line_count(buf) };
-        unsafe { nvim_win_set_foldinvalid(wp, 0) };
+        unsafe { nvim_win_set_w_foldinvalid(wp, false) };
 
         // Mark all folds as maybe-small
         let gap = unsafe { nvim_win_get_folds(wp) };

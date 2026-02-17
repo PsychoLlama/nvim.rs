@@ -378,12 +378,6 @@ extern "C" {
 
     /// Call foldUpdate from Rust.
     fn nvim_foldUpdate(wp: WinHandle, top: LineNr, bot: LineNr);
-
-    /// Get w_foldinvalid field.
-    fn nvim_win_get_foldinvalid(wp: WinHandle) -> c_int;
-
-    /// Set w_foldinvalid field.
-    fn nvim_win_set_foldinvalid(wp: WinHandle, val: c_int);
 }
 
 // ============================================================================
@@ -395,7 +389,7 @@ extern "C" {
 /// Manual folding requires explicit fold creation by the user.
 /// The check is `wp->w_p_fdm[3] == 'u'` (matching "man**u**al").
 #[inline]
-fn foldmethod_is_manual_impl(wp: WinHandle) -> bool {
+pub(crate) fn foldmethod_is_manual_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
@@ -408,7 +402,7 @@ fn foldmethod_is_manual_impl(wp: WinHandle) -> bool {
 /// Indent folding creates folds based on line indentation.
 /// The check is `wp->w_p_fdm[0] == 'i'` (matching "**i**ndent").
 #[inline]
-fn foldmethod_is_indent_impl(wp: WinHandle) -> bool {
+pub(crate) fn foldmethod_is_indent_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
@@ -421,7 +415,7 @@ fn foldmethod_is_indent_impl(wp: WinHandle) -> bool {
 /// Expression folding uses 'foldexpr' to determine fold levels.
 /// The check is `wp->w_p_fdm[1] == 'x'` (matching "e**x**pr").
 #[inline]
-fn foldmethod_is_expr_impl(wp: WinHandle) -> bool {
+pub(crate) fn foldmethod_is_expr_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
@@ -434,7 +428,7 @@ fn foldmethod_is_expr_impl(wp: WinHandle) -> bool {
 /// Marker folding uses special markers in the text (e.g., `{{{` and `}}}`).
 /// The check is `wp->w_p_fdm[2] == 'r'` (matching "ma**r**ker").
 #[inline]
-fn foldmethod_is_marker_impl(wp: WinHandle) -> bool {
+pub(crate) fn foldmethod_is_marker_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
@@ -447,7 +441,7 @@ fn foldmethod_is_marker_impl(wp: WinHandle) -> bool {
 /// Syntax folding uses syntax highlighting to determine folds.
 /// The check is `wp->w_p_fdm[0] == 's'` (matching "**s**yntax").
 #[inline]
-fn foldmethod_is_syntax_impl(wp: WinHandle) -> bool {
+pub(crate) fn foldmethod_is_syntax_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
@@ -460,7 +454,7 @@ fn foldmethod_is_syntax_impl(wp: WinHandle) -> bool {
 /// Diff folding creates folds for unchanged text in diff mode.
 /// The check is `wp->w_p_fdm[0] == 'd'` (matching "**d**iff").
 #[inline]
-fn foldmethod_is_diff_impl(wp: WinHandle) -> bool {
+pub(crate) fn foldmethod_is_diff_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
@@ -2321,14 +2315,9 @@ extern "C" {
     /// Check if a garray is empty.
     fn nvim_ga_is_empty(gap: GArrayHandle) -> bool;
 
-    /// Get the w_folds field from a window.
-    fn nvim_win_get_w_folds(wp: WinHandle) -> GArrayHandle;
-
     /// Set the w_foldinvalid field in a window.
     fn nvim_win_set_w_foldinvalid(wp: WinHandle, val: bool);
 
-    /// Call deleteFoldRecurse (C implementation).
-    fn nvim_deleteFoldRecurse_c(buf: BufHandle, gap: GArrayHandle);
 }
 
 /// Deep copy a garray of folds.
@@ -2397,8 +2386,8 @@ fn copy_folding_state_impl(wp_from: WinHandle, wp_to: WinHandle) {
         nvim_win_set_w_foldinvalid(wp_to, foldinvalid);
 
         // Clone the folds
-        let from_folds = nvim_win_get_w_folds(wp_from);
-        let to_folds = nvim_win_get_w_folds(wp_to);
+        let from_folds = nvim_win_get_folds(wp_from);
+        let to_folds = nvim_win_get_folds(wp_to);
         clone_fold_grow_array_impl(from_folds, to_folds);
     }
 }
@@ -2411,8 +2400,8 @@ fn clear_folding_impl(win: WinHandle) {
 
     unsafe {
         let buf = nvim_win_get_buffer(win);
-        let folds = nvim_win_get_w_folds(win);
-        nvim_deleteFoldRecurse_c(buf, folds);
+        let folds = nvim_win_get_folds(win);
+        nvim_deleteFoldRecurse(buf, folds);
         nvim_win_set_w_foldinvalid(win, false);
     }
 }
@@ -2975,15 +2964,9 @@ extern "C" {
     /// Call foldCreateMarkers in C (for marker method).
     fn nvim_foldCreateMarkers(wp: WinHandle, start_lnum: LineNr, end_lnum: LineNr);
 
-    /// Call closeFold in C.
-    fn nvim_closeFold(lnum: LineNr, count: c_int);
-
     /// Check if foldmethod is marker for the window.
     #[allow(dead_code)]
     fn nvim_foldmethodIsMarker(wp: WinHandle) -> c_int;
-
-    /// Emit error message for no fold found.
-    fn nvim_emsg_e_nofold();
 
     /// Call parseMarker for the window (sets global foldstartmarkerlen/foldendmarker).
     fn nvim_parseMarker(wp: WinHandle);
@@ -3201,7 +3184,7 @@ fn fold_create_impl(wp: WinHandle, mut start_lnum: LineNr, mut end_lnum: LineNr)
     // of using 'foldlevel', need to adjust fd_flags of containing folds.
     let fdl = unsafe { nvim_win_get_p_fdl(wp) };
     if use_level && !closed && level < fdl {
-        unsafe { nvim_closeFold(start_lnum, 1) };
+        set_fold_repeat_impl(start_lnum, 1, false);
     }
     if !use_level {
         unsafe { nvim_win_set_w_fold_manual(wp, true) };
@@ -3303,7 +3286,7 @@ fn delete_fold_impl(wp: WinHandle, start: LineNr, end: LineNr, recursive: bool, 
         // Deleting markers may make cursor column invalid
         unsafe { nvim_check_cursor_col(wp) };
     } else {
-        unsafe { nvim_emsg_e_nofold() };
+        unsafe { nvim_emsg_nofold() };
         // Force a redraw to remove the Visual highlighting.
         if had_visual {
             let buf = unsafe { nvim_win_get_buffer(wp) };
@@ -3369,7 +3352,7 @@ fn op_fold_range_impl(
     }
 
     if done == done_flags::DONE_NOTHING {
-        unsafe { nvim_emsg_e_nofold() };
+        unsafe { nvim_emsg_nofold() };
     }
 
     // Force a redraw to remove the Visual highlighting.
@@ -3466,13 +3449,13 @@ pub(crate) fn checkupdate_impl(wp: WinHandle) {
     if wp.is_null() {
         return;
     }
-    let foldinvalid = unsafe { nvim_win_get_foldinvalid(wp) };
-    if foldinvalid == 0 {
+    let foldinvalid = unsafe { nvim_win_get_w_foldinvalid(wp) };
+    if !foldinvalid {
         return;
     }
     unsafe {
         nvim_foldUpdate(wp, 1, MAXLNUM);
-        nvim_win_set_foldinvalid(wp, 0);
+        nvim_win_set_w_foldinvalid(wp, false);
     }
 }
 
