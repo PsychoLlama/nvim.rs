@@ -83,49 +83,49 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
+// Rust FFI declarations
 extern int64_t rs_num_divide(int64_t n1, int64_t n2);
 extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
-
 extern bool rs_eval_isdictc(int c);
 extern const char *rs_skip_luafunc_name(const char *p);
 extern int rs_check_luafunc_name(const char *str, bool paren);
 extern bool rs_is_luafunc(partial_T *partial);
 extern char *rs_partial_name(partial_T *pt);
 extern int rs_get_copyID(void);
-
-// Rust FFI declarations (tag module)
 extern bool rs_set_ref_in_tagfunc(int copyID);
-
-// Phase 1: String/Float utilities (Rust implementations)
 extern size_t rs_string2float(const char *text, float_T *ret_value);
 extern char *rs_char_from_string(const char *str, varnumber_T index);
 extern char *rs_string_slice(const char *str, varnumber_T first, varnumber_T last, bool exclusive);
-
-_Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
-
-// Phase 2: Name parsing utilities (Rust implementations)
 extern int rs_get_env_len(const char **arg);
 extern int rs_get_id_len(const char **arg);
 extern const char *rs_to_name_end(const char *arg, bool use_namespace);
 extern const char *rs_find_name_end(const char *arg, const char **expr_start,
                                     const char **expr_end, int flags);
-
-_Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
-_Static_assert(FNE_CHECK_START == 2, "FNE_CHECK_START mismatch");
-
-// Phase 3: Buffer index conversion + pattern match (Rust implementations)
 extern int rs_buf_byteidx_to_charidx(buf_T *buf, linenr_T lnum, int byteidx);
 extern int rs_buf_charidx_to_byteidx(buf_T *buf, linenr_T lnum, int charidx);
 extern int rs_pattern_match(const char *pat, const char *text, bool ic);
+extern int rs_is_tty_option(const char *name);
+extern int rs_get_callback_depth(void);
+extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
+                               list_stack_T **list_stack);
+extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
+                                   list_stack_T **list_stack);
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
+                                          ht_stack_T **ht_stack, list_stack_T **list_stack);
 
+_Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
+_Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
+_Static_assert(FNE_CHECK_START == 2, "FNE_CHECK_START mismatch");
 _Static_assert(RE_MAGIC == 1, "RE_MAGIC mismatch");
 _Static_assert(RE_STRING == 2, "RE_STRING mismatch");
-
 _Static_assert(VAR_NUMBER == 1, "VAR_NUMBER mismatch");
 _Static_assert(VAR_STRING == 2, "VAR_STRING mismatch");
 _Static_assert(VAR_FUNC == 3, "VAR_FUNC mismatch");
 _Static_assert(VAR_SPECIAL == 8, "VAR_SPECIAL mismatch");
 _Static_assert(VAR_PARTIAL == 9, "VAR_PARTIAL mismatch");
+_Static_assert(VAR_DICT == 5, "VAR_DICT mismatch");
+_Static_assert(VAR_LIST == 4, "VAR_LIST mismatch");
 _Static_assert(kCallbackNone == 0, "kCallbackNone mismatch");
 _Static_assert(kCallbackFuncref == 1, "kCallbackFuncref mismatch");
 _Static_assert(kCallbackPartial == 2, "kCallbackPartial mismatch");
@@ -196,18 +196,6 @@ void nvim_eval_emsg_e921(void)
 {
   emsg(_("E921: Invalid callback argument"));
 }
-
-// GC reference marking (Rust implementations)
-extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
-                               list_stack_T **list_stack);
-extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
-                                   list_stack_T **list_stack);
-extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
-                                          ht_stack_T **ht_stack, list_stack_T **list_stack);
-
-_Static_assert(VAR_DICT == 5, "VAR_DICT mismatch");
-_Static_assert(VAR_LIST == 4, "VAR_LIST mismatch");
-_Static_assert(kCallbackPartial == 2, "kCallbackPartial mismatch Phase5");
 
 // C accessors for typval dict/list fields
 dict_T *nvim_eval_tv_get_dict(const typval_T *tv)
@@ -413,8 +401,6 @@ void nvim_eval_restore_cpo(void)
   p_cpo = saved_eval_p_cpo;
 }
 
-// Rust implementation in nvim-event crate
-extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
@@ -470,8 +456,6 @@ typedef enum {
 } glv_status_T;
 
 #include "eval.c.generated.h"
-
-extern int rs_is_tty_option(const char *name);
 
 static uint64_t last_timer_id = 1;
 static PMap(uint64_t) timers = MAP_INIT;
@@ -4762,8 +4746,6 @@ void f_systemlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 static int callback_depth = 0;
-
-extern int rs_get_callback_depth(void);
 
 /// C accessor for callback_depth static.
 int nvim_get_callback_depth(void)
