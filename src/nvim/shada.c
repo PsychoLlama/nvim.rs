@@ -65,7 +65,7 @@
 #include "nvim/version.h"
 #include "nvim/vim_defs.h"
 
-// Phase 562: Rust ShaDa implementations
+// Rust rs_* function declarations (from src/nvim-rs/shada/src/lib.rs)
 extern int rs_shada_hist_type2char(int hist_type);
 extern int rs_shada_hist_char2type(int c);
 extern int rs_get_shada_parameter(int typ);
@@ -77,36 +77,25 @@ extern uint64_t rs_vim_htobe64(uint64_t host_64_bits);
 extern int rs_shada_entry_type_from_raw(uint64_t raw_type);
 extern int rs_shada_is_unknown_entry(uint64_t entry_type);
 extern int rs_shada_should_write_entry(size_t packed_size, size_t max_kbyte);
-
-// Phase 1: Stateless helpers
 extern int rs_marks_equal(pos_T a, pos_T b);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
-
-// Phase 2: Buffer/path filtering helpers
 extern int rs_shada_removable(const char *name);
 extern int rs_ignore_buf(const void *buf, const void *removable_bufs);
 extern void rs_find_removable_bufs(void *removable_bufs);
-
-// Phase 3: Data collection functions (those not needing WriteMergerState)
 extern const void *rs_shada_hist_iter(const void *iter, uint8_t history_type,
                                       int zero, ShadaEntry *hist);
 extern void rs_add_search_pattern(ShadaEntry *ret_pse, int is_substitute,
                                   int search_last_used, int search_highlighted);
 extern ShadaEntry rs_shada_get_buflist(void *removable_bufs);
 extern size_t rs_shada_init_jumps(ShadaEntry *jumps, void *removable_bufs);
-
-// Phase 5: File I/O wrappers
 extern void rs_close_file(void *cookie);
 extern const char *rs_shada_get_default_file(void);
 extern int rs_shada_read_file(const char *file, int flags);
-
-// Phase 6: Public API wrappers
 extern int rs_shada_read_marks(void);
 extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
 extern void rs_check_marks_read(void);
 
-// Legacy alias
 #define rs_hist_type2char rs_shada_hist_type2char
 
 #ifdef HAVE_BE64TOH
@@ -353,7 +342,7 @@ typedef struct {
   uint8_t history_type;
 } HistoryMergerState;
 
-// Phase 7: History merger deduplication (needs HMLList, HMLListEntry, HistoryMergerState)
+// Rust rs_* declarations (need HMLList, HMLListEntry, HistoryMergerState types)
 extern void rs_hmll_init(HMLList *hmll, size_t size);
 extern void rs_hmll_remove(HMLList *hmll, HMLListEntry *entry);
 extern void rs_hmll_insert(HMLList *hmll, HMLListEntry *after, ShadaEntry data);
@@ -393,9 +382,8 @@ typedef struct {
   PMap(cstr_t) file_marks;  ///< All file marks.
 } WriteMergerState;
 
-// Phase 1: Rust helper for replace_numbered_mark (needs WriteMergerState typedef)
+// Rust rs_* declarations (need WriteMergerState type)
 extern void rs_replace_numbered_mark(WriteMergerState *wms, size_t idx, ShadaEntry entry);
-// Phase 3: Rust helper for shada_initialize_registers (needs WriteMergerState typedef)
 extern void rs_shada_initialize_registers(WriteMergerState *wms, int max_reg_lines);
 
 #include "shada.c.generated.h"
@@ -912,7 +900,7 @@ static void shada_read(FileDescriptor *const sd_reader, const int flags)
     }
   }
 shada_read_main_cycle_end:
-  // Warning: shada_hist_iter returns ShadaEntry elements which use strings from
+  // Warning: rs_shada_hist_iter returns ShadaEntry elements which use strings from
   //          original history list. This means that once such entry is removed
   //          from the history Neovim array will no longer be valid. To reduce
   //          amount of memory allocations ShaDa file reader allocates enough
@@ -3188,14 +3176,14 @@ void nvim_shada_free_shada_entry(ShadaEntry *entry)
   rs_shada_free_entry_contents(entry);
 }
 
-// Wrapper for shada_hist_iter
+// Accessor for rs_shada_hist_iter
 const void *nvim_shada_hist_iter(const void *iter, uint8_t history_type,
                                   int reading, ShadaEntry *out_entry)
 {
   return rs_shada_hist_iter(iter, history_type, reading, out_entry);
 }
 
-// Wrapper for shada_get_default_file
+// Accessor for rs_shada_get_default_file
 const char *nvim_shada_get_default_file(void)
 {
   return rs_shada_get_default_file();
