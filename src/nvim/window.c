@@ -97,16 +97,13 @@ extern int rs_win_locked(win_T *wp);
 extern int rs_win_valid(win_T *win);
 extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
 extern int rs_only_one_window(void);
-extern int rs_one_window(void);
 extern int rs_win_valid_any_tab(win_T *win);
 extern int rs_valid_tabpage(tabpage_T *tpc);
-extern int rs_one_tabpage(void);
 extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
 extern int rs_last_window(win_T *win);
 extern int rs_win_count(void);
 extern int rs_tabpage_index(tabpage_T *ftp);
 extern int rs_valid_tabpage_win(tabpage_T *tpc);
-extern int rs_frame_has_win(frame_T *frp, win_T *wp);
 extern int rs_frame_fixed_height(frame_T *frp);
 extern int rs_frame_fixed_width(frame_T *frp);
 extern int rs_is_bottom_win(win_T *wp);
@@ -132,11 +129,8 @@ extern int rs_frame_minwidth(frame_T *topfrp, win_T *next_curwin);
 extern int rs_win_comp_pos(void);
 extern void rs_frame_comp_pos(frame_T *topfrp, int *row, int *col);
 extern void rs_frame_setheight(frame_T *curfrp, int height);
-extern void rs_frame_setwidth(frame_T *curfrp, int width);
 extern void rs_win_setheight_win(int height, win_T *win);
 extern void rs_win_setwidth_win(int width, win_T *wp);
-extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int wfh, int set_ch);
-extern void rs_frame_new_width(frame_T *topfrp, int width, int leftfirst, int wfw);
 extern void rs_frame_add_height(frame_T *frp, int n);
 extern void rs_frame_add_statusline(frame_T *frp);
 extern void rs_frame_set_vsep(const frame_T *frp, int add);
@@ -158,39 +152,6 @@ extern int rs_split_make_windows_flags(int vertical);
 
 // Close validation functions from Rust
 extern int rs_close_can_close_floating(void);
-extern int rs_close_count_nonfloating(tabpage_T *tp);
-extern int rs_close_count_total(tabpage_T *tp);
-
-// Frame tree operations from Rust (operations.rs)
-extern void rs_frame_init(frame_T *frp);
-extern void rs_frame_clear_links(frame_T *frp);
-extern void rs_frame_copy_size(frame_T *dest, const frame_T *src);
-extern frame_T *rs_frame_first_leaf(frame_T *frp);
-extern frame_T *rs_frame_last_leaf(frame_T *frp);
-extern frame_T *rs_frame_next_leaf(frame_T *frp);
-extern frame_T *rs_frame_prev_leaf(frame_T *frp);
-extern int rs_frame_count_leaves(const frame_T *frp);
-extern int rs_frame_is_valid(const frame_T *frp);
-extern int rs_frame_contains_win(const frame_T *frp, win_T *wp);
-extern int rs_frame_children_width(const frame_T *frp);
-extern int rs_frame_children_height(const frame_T *frp);
-extern int rs_frame_max_child_width(const frame_T *frp);
-extern int rs_frame_max_child_height(const frame_T *frp);
-extern void rs_frame_propagate_size(frame_T *frp);
-
-// Window navigation from Rust (navigate/movement.rs)
-extern win_T *rs_nav_find_in_direction(int dir);
-extern win_T *rs_nav_find_left(win_T *wp);
-extern win_T *rs_nav_find_right(win_T *wp);
-extern win_T *rs_nav_find_above(win_T *wp);
-extern win_T *rs_nav_find_below(win_T *wp);
-extern win_T *rs_nav_get_next(win_T *wp, int wrap);
-extern win_T *rs_nav_get_prev(win_T *wp, int wrap);
-extern win_T *rs_nav_get_next_nonfloat(win_T *wp, int wrap);
-extern win_T *rs_nav_get_prev_nonfloat(win_T *wp, int wrap);
-extern int rs_nav_is_horizontal_dir(int dir);
-extern int rs_nav_is_vertical_dir(int dir);
-
 extern void rs_diff_clear(tabpage_T *tp);
 extern int rs_diffopt_closeoff(void);
 extern int rs_diffopt_filler(void);
@@ -213,7 +174,6 @@ extern void rs_win_new_width(win_T *wp, int width);
 // Phase 3: Snapshot lifecycle
 extern void rs_clear_snapshot(tabpage_T *tp, int idx);
 extern void rs_make_snapshot(int idx);
-extern win_T *rs_get_snapshot_curwin(int idx);
 extern int rs_check_snapshot_rec(frame_T *sn, frame_T *fr);
 extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
 
@@ -3892,16 +3852,6 @@ win_T *frame2win(frame_T *frp)
   return rs_frame2win(frp);
 }
 
-/// Check that the frame "frp" contains the window "wp".
-///
-/// @param  frp  frame
-/// @param  wp   window
-static bool frame_has_win(const frame_T *frp, const win_T *wp)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_frame_has_win((frame_T *)frp, (win_T *)wp) != 0;
-}
-
 /// Check if current window is at the bottom
 /// Returns true if there are no windows below current window
 static bool is_bottom_win(win_T *wp)
@@ -5891,15 +5841,6 @@ void win_setwidth_win(int width, win_T *wp)
   rs_win_setwidth_win(width, wp);
 }
 
-// Set the width of a frame to "width" and take care that all frames and
-// windows inside it are resized.  Also resize frames above and below if the
-// are in the same FR_ROW frame.
-//
-// Strategy is similar to frame_setheight().
-static void frame_setwidth(frame_T *curfrp, int width)
-{
-  rs_frame_setwidth(curfrp, width);
-}
 
 // Check 'winminheight' for a valid value and reduce it if needed.
 const char *did_set_winminheight(optset_T *args FUNC_ATTR_UNUSED)
@@ -6462,11 +6403,6 @@ static void clear_snapshot(tabpage_T *tp, int idx)
   rs_clear_snapshot(tp, idx);
 }
 
-/// @return  the current window stored in the snapshot or NULL.
-static win_T *get_snapshot_curwin(int idx)
-{
-  return rs_get_snapshot_curwin(idx);
-}
 
 /// Restore a previously created snapshot, if there is any.
 /// This is only done if the screen size didn't change and the window layout is
