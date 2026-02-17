@@ -157,6 +157,7 @@ extern int rs_get_rel_pos(win_T *wp, char *buf, int buflen);
 extern void rs_diff_buf_delete(buf_T *buf);
 extern void rs_diff_buf_add(buf_T *buf);
 extern bool rs_diff_mode_buf(buf_T *buf);
+extern int rs_diffopt_hiddenoff(void);
 
 // Phase 1 (Wave 2): buffer state management functions from Rust
 extern void rs_buf_clear_file(buf_T *buf);
@@ -1309,7 +1310,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
     buf->b_nwindows--;
   }
 
-  if (diffopt_hiddenoff() && !unload_buf && buf->b_nwindows == 0) {
+  if (rs_diffopt_hiddenoff() && !unload_buf && buf->b_nwindows == 0) {
     rs_diff_buf_delete(buf);   // Clear 'diff' for hidden buffer.
   }
 

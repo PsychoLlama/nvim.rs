@@ -185,6 +185,8 @@ extern int rs_nav_is_horizontal_dir(int dir);
 extern int rs_nav_is_vertical_dir(int dir);
 
 extern void rs_diff_clear(tabpage_T *tp);
+extern int rs_diffopt_closeoff(void);
+extern int rs_diffopt_filler(void);
 
 // Phase 1: Pure calculations and thin wrappers
 extern void rs_set_fraction(win_T *wp);
@@ -1095,7 +1097,7 @@ int nvim_win_buf_meta_total_lines(win_T *wp)
 /// Get diffopt filler state.
 int nvim_diffopt_filler(void)
 {
-  return diffopt_filler();
+  return rs_diffopt_filler();
 }
 
 /// Check if window is the command-line window.
@@ -3421,7 +3423,7 @@ int win_close(win_T *win, bool free_buf, bool force)
     restore_snapshot(SNAP_HELP_IDX, res.close_curwin);
   }
 
-  if (diffopt_closeoff() && had_diffmode && curtab == prev_curtab) {
+  if (rs_diffopt_closeoff() && had_diffmode && curtab == prev_curtab) {
     int diffcount = 0;
 
     FOR_ALL_WINDOWS_IN_TAB(dwin, curtab) {

@@ -142,6 +142,7 @@ enum {
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
+extern int rs_diffopt_horizontal(void);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 Loop main_loop;
@@ -1583,7 +1584,7 @@ static char *get_fname(mparm_T *parmp, char *cwd)
 static void set_window_layout(mparm_T *paramp)
 {
   if (paramp->diff_mode && paramp->window_layout == 0) {
-    if (diffopt_horizontal()) {
+    if (rs_diffopt_horizontal()) {
       paramp->window_layout = WIN_HOR;             // use horizontal split
     } else {
       paramp->window_layout = WIN_VER;             // use vertical split
