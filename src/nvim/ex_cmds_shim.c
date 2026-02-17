@@ -133,7 +133,7 @@ typedef struct {
   linenr_T lines_needed;  // lines needed in the preview window
 } PreviewLines;
 
-#include "ex_cmds.c.generated.h"
+#include "ex_cmds_shim.c.generated.h"
 
 // =============================================================================
 // ExArg accessor functions for Rust (Wave 2)
