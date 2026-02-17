@@ -154,8 +154,6 @@ extern "C" {
     fn nvim_set_curswant(val: c_int);
     fn nvim_virtual_active() -> bool;
     fn nvim_gchar_cursor() -> c_int;
-    #[allow(dead_code)]
-    fn nvim_nv_pipe(cap: CapHandle);
     fn nvim_coladvance(col: c_int);
 
     // oparg_T motion accessors

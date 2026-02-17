@@ -1021,12 +1021,6 @@ int nvim_gchar_cursor(void)
   return utf_ptr2char(get_cursor_pos_ptr());
 }
 
-/// Call nv_pipe for <Home> command implementation.
-void nvim_nv_pipe(cmdarg_T *cap)
-{
-  rs_nv_pipe(cap);
-}
-
 /// Wrapper for coladvance.
 void nvim_coladvance(colnr_T col)
 {
@@ -1627,18 +1621,6 @@ int nvim_cap_dec_count1(cmdarg_T *cap)
     return --cap->count1;
   }
   return 0;
-}
-
-/// Wrapper for nv_right.
-void nvim_nv_right(cmdarg_T *cap)
-{
-  rs_nv_right(cap);
-}
-
-/// Wrapper for nv_down.
-void nvim_nv_down(cmdarg_T *cap)
-{
-  rs_nv_down(cap);
 }
 
 /// Internal nv_visual implementation (full C logic).
