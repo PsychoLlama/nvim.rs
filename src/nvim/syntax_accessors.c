@@ -5753,19 +5753,6 @@ int nvim_synstate_get_tick_val(synstate_T *state)
   return state ? state->sst_tick : 0;
 }
 
-/// Get display_tick global
-int nvim_syn_get_display_tick_val(void)
-{
-  return display_tick;
-}
-
-/// Set sst_lasttick global
-void nvim_syn_set_sst_lasttick_val(int tick)
-{
-  // This is used for state cache invalidation
-  // sst_lasttick isn't a direct global but this is placeholder
-}
-
 // Note: The following accessor functions are already defined earlier in the file:
 // nvim_stateitem_get_m_lnum, nvim_stateitem_get_m_startcol,
 // nvim_stateitem_set_m_lnum, nvim_stateitem_set_m_startcol,
@@ -5829,15 +5816,6 @@ int nvim_syn_get_pattern_syn_id(int idx)
     return 0;
   }
   return SYN_ITEMS(syn_block)[idx].sp_syn.id;
-}
-
-/// Get the sp_ic by pattern index.
-int nvim_syn_get_pattern_ic(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_ic;
 }
 
 /// Get the sp_cont_list by pattern index.
@@ -6115,12 +6093,6 @@ int nvim_syn_ascii_iswhite(int c)
   return ascii_iswhite(c);
 }
 
-/// Get pattern's sp_syn.id (for in_id_list calls)
-int nvim_syn_get_pattern_sp_syn_id(int idx)
-{
-  return SYN_ITEMS(syn_block)[idx].sp_syn.id;
-}
-
 /// Set next_match positions (bulk setter for all next_match_* variables)
 void nvim_syn_set_next_match_state(
     int idx, int col,
@@ -6207,12 +6179,6 @@ int nvim_syn_get_pattern_sync_idx(int idx)
 char *nvim_syn_ml_get(linenr_T lnum)
 {
   return ml_get_buf(syn_buf, lnum);
-}
-
-/// Get the line length (ml_get_len) for a given lnum using syn_buf.
-int nvim_syn_ml_get_len(linenr_T lnum)
-{
-  return (int)ml_get_buf_len(syn_buf, lnum);
 }
 
 /// Handle the entire C-comment sync setup path.
@@ -6537,18 +6503,6 @@ void nvim_syn_free_compiled_pattern(synpat_T *pat)
     xfree(pat->sp_pattern);
     xfree(pat);
   }
-}
-
-/// Get the sp_flags from a compiled pattern.
-int nvim_syn_compiled_pat_get_flags(const synpat_T *pat)
-{
-  return pat->sp_flags;
-}
-
-/// Set sp_flags on a compiled pattern (OR in additional flags).
-void nvim_syn_compiled_pat_or_flags(synpat_T *pat, int flags)
-{
-  pat->sp_flags |= flags;
 }
 
 /// Wrap syn_incl_toplevel() for Rust.
