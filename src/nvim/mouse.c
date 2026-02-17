@@ -53,6 +53,8 @@
 
 #include "mouse.c.generated.h"
 
+extern int rs_get_scrolloff_value(win_T *wp);
+
 // Rust implementations
 extern int rs_get_mouse_class(const char *p);
 extern bool rs_mouse_model_popup(const char *p_mousem);
@@ -758,7 +760,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
 
   // Set global flag that we are extending the Visual area with mouse dragging;
   // temporarily minimize 'scrolloff'.
-  if (VIsual_active && is_drag && get_scrolloff_value(curwin)) {
+  if (VIsual_active && is_drag && rs_get_scrolloff_value(curwin)) {
     // In the very first line, allow scrolling one line
     if (mouse_row == 0) {
       mouse_dragging = 2;

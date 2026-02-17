@@ -106,6 +106,9 @@ typedef struct {
 } InsertState;
 
 #include "edit.c.generated.h"
+
+extern int rs_get_scrolloff_value(win_T *wp);
+
 enum {
   BACKSPACE_CHAR = 1,
   BACKSPACE_WORD = 2,
@@ -1913,7 +1916,7 @@ static int insert_check(VimState *state)
                                                 curbuf->b_p_ts,
                                                 curbuf->b_p_vts_array,
                                                 false)
-        && curwin->w_wrow == curwin->w_view_height - 1 - get_scrolloff_value(curwin)
+        && curwin->w_wrow == curwin->w_view_height - 1 - rs_get_scrolloff_value(curwin)
         && (curwin->w_cursor.lnum != curwin->w_topline
             || curwin->w_topfill > 0)) {
       if (curwin->w_topfill > 0) {

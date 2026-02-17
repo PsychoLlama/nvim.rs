@@ -86,6 +86,7 @@
 
 #include "window.c.generated.h"
 
+extern int rs_get_scrolloff_value(win_T *wp);
 extern int rs_win_locked(win_T *wp);
 extern int rs_win_valid(win_T *win);
 extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
@@ -6004,7 +6005,7 @@ static void win_fix_cursor(bool normal)
 
   wp->w_do_win_fix_cursor = false;
   // Determine valid cursor range.
-  int so = MIN(wp->w_view_height / 2, get_scrolloff_value(wp));
+  int so = MIN(wp->w_view_height / 2, rs_get_scrolloff_value(wp));
   linenr_T lnum = wp->w_cursor.lnum;
 
   wp->w_cursor.lnum = wp->w_topline;

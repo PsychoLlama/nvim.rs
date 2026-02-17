@@ -103,6 +103,8 @@ extern void rs_diff_invalidate(buf_T *buf);
 
 #include "fileio.c.generated.h"
 
+extern int rs_default_fileformat(void);
+
 static const char *e_auchangedbuf = N_("E812: Autocommands changed buffer or buffer name");
 
 void filemess(buf_T *buf, char *name, char *s)
@@ -1460,7 +1462,7 @@ rewind_retry:
           } else if (fileformat == EOL_UNKNOWN && try_mac == 1) {
             // Looking for CR but found no end-of-line markers at all:
             // use the default format.
-            fileformat = default_fileformat();
+            fileformat = rs_default_fileformat();
           }
         }
 
@@ -1471,7 +1473,7 @@ rewind_retry:
 
         // Still nothing found?  Use first format in 'ffs'
         if (fileformat == EOL_UNKNOWN) {
-          fileformat = default_fileformat();
+          fileformat = rs_default_fileformat();
         }
 
         // May set 'p_ff' if editing a new file.
@@ -1949,7 +1951,7 @@ void set_file_options(bool set_options, exarg_T *eap)
     if (eap != NULL && eap->force_ff != 0) {
       set_fileformat(get_fileformat_force(curbuf, eap), OPT_LOCAL);
     } else if (*p_ffs != NUL) {
-      set_fileformat(default_fileformat(), OPT_LOCAL);
+      set_fileformat(rs_default_fileformat(), OPT_LOCAL);
     }
   }
 

@@ -66,7 +66,7 @@ extern "C" {
     fn rem_backslash(s: *const c_char) -> c_int;
     fn menu_is_separator(s: *const c_char) -> c_int;
     fn ptr2cells(s: *const c_char) -> c_int;
-    fn csh_like_shell() -> c_int;
+    fn rs_csh_like_shell() -> c_int;
 }
 
 // =============================================================================
@@ -254,7 +254,7 @@ pub unsafe extern "C" fn rs_skip_wildmenu_char(xp: *const (), s: *const c_char) 
 
     let is_backslash_escape = rem_backslash(s) != 0;
     let is_shell = nvim_expand_get_shell(xp) != 0;
-    let is_csh_like = csh_like_shell() != 0;
+    let is_csh_like = rs_csh_like_shell() != 0;
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     {

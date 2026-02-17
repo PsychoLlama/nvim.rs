@@ -120,14 +120,11 @@
 _Static_assert(sizeof(vimoption_T) == 160,
                "sizeof(vimoption_T) changed - update Rust VIMOPTION_SIZE in option/src/accessors.rs");
 
-// Rust FFI declarations (used by thin wrappers and internal code)
-extern int rs_valid_name(const char *val, const char *allowed);
+// Rust FFI declarations (used by internal code)
 extern const char *rs_find_tty_option_end(const char *arg);
 extern int rs_is_tty_option(const char *name);
 extern const char *rs_skip_to_option_part(const char *p);
 extern int rs_get_fileformat(buf_T *buf);
-extern int rs_csh_like_shell(void);
-extern int rs_fish_like_shell(void);
 extern int rs_default_fileformat(void);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
@@ -146,7 +143,6 @@ _Static_assert(K_KENTER == -16715, "K_KENTER mismatch with Rust K_KENTER constan
 extern const char *rs_did_set_hlsearch(void);
 extern const char *rs_did_set_ignorecase(void);
 extern const char *rs_did_set_title_icon(void);
-extern void rs_did_set_title(void);
 extern const char *rs_did_set_titlelen(int64_t old_value);
 extern const char *rs_did_set_iminsert(void);
 extern const char *rs_did_set_langnoremap(void);
@@ -1077,7 +1073,7 @@ void set_init_3(void)
   if (buf_is_empty(curbuf)) {
     // Apply the first entry of 'fileformats' to the initial buffer.
     if (options[kOptFileformats].flags & kOptFlagWasSet) {
-      set_fileformat(default_fileformat(), OPT_LOCAL);
+      set_fileformat(rs_default_fileformat(), OPT_LOCAL);
     }
   }
 
@@ -1442,15 +1438,6 @@ static int validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_
 
 /// Skip over the name of a TTY option or keycode option.
 ///
-/// @param[in]  arg  Start of TTY or keycode option name.
-///
-/// @return NULL when option isn't a TTY or keycode option. Otherwise pointer to the char after the
-/// option name.
-static const char *find_tty_option_end(const char *arg)
-{
-  return rs_find_tty_option_end(arg);
-}
-
 /// Skip over the name of an option.
 ///
 /// @param[in]   arg       Start of option name.
@@ -1462,7 +1449,7 @@ const char *find_option_end(const char *arg, OptIndex *opt_idxp)
   const char *p;
 
   // Handle TTY and keycode options separately.
-  if ((p = find_tty_option_end(arg)) != NULL) {
+  if ((p = rs_find_tty_option_end(arg)) != NULL) {
     *opt_idxp = kOptInvalid;
     return p;
   } else {
@@ -1862,13 +1849,6 @@ int string_to_key(char *arg)
 
 // When changing 'title', 'titlestring', 'icon' or 'iconstring', call
 // maketitle() to create and display it.
-// When switching the title or icon off, call ui_set_{icon,title}(NULL) to get
-// the old value back.
-void did_set_title(void)
-{
-  rs_did_set_title();
-}
-
 /// set_options_bin -  called when 'bin' changes value.
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
@@ -2075,14 +2055,6 @@ void redraw_titles(void)
 {
   need_maketitle = true;
   redraw_tabline = true;
-}
-
-/// Return true if "val" is a valid name: only consists of alphanumeric ASCII
-/// characters or characters in "allowed".
-bool valid_name(const char *val, const char *allowed)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_valid_name(val, allowed);
 }
 
 void check_blending(win_T *wp)
@@ -6405,12 +6377,6 @@ int get_fileformat_force(const buf_T *buf, const exarg_T *eap)
   return EOL_DOS;
 }
 
-/// Return the default fileformat from 'fileformats'.
-int default_fileformat(void)
-{
-  return rs_default_fileformat();
-}
-
 /// Set the current end-of-line type to EOL_UNIX, EOL_MAC, or EOL_DOS.
 ///
 /// Sets 'fileformat'.
@@ -6488,18 +6454,6 @@ size_t copy_option_part(char **option, char *buf, size_t maxlen, char *sep_chars
   return len;
 }
 
-/// Return true when 'shell' has "csh" in the tail.
-int csh_like_shell(void)
-{
-  return rs_csh_like_shell();
-}
-
-/// Return true when 'shell' has "fish" in the tail.
-bool fish_like_shell(void)
-{
-  return rs_fish_like_shell();
-}
-
 /// Get window or buffer local options
 dict_T *get_winbuf_options(const int bufopt)
   FUNC_ATTR_WARN_UNUSED_RESULT
@@ -6527,29 +6481,16 @@ extern int rs_get_scrolloff_value(win_T *wp);
 extern int rs_get_sidescrolloff_value(win_T *wp);
 
 /// Return the effective 'scrolloff' value for the current window, using the
-/// global value when appropriate.
-int get_scrolloff_value(win_T *wp)
+/// Wrapper for rs_get_scrolloff_value (Rust FFI)
+int nvim_get_scrolloff_value(win_T *wp)
 {
   return rs_get_scrolloff_value(wp);
 }
 
-/// Return the effective 'sidescrolloff' value for the current window, using the
-/// global value when appropriate.
-int get_sidescrolloff_value(win_T *wp)
-{
-  return rs_get_sidescrolloff_value(wp);
-}
-
-/// Wrapper for get_scrolloff_value (Rust FFI)
-int nvim_get_scrolloff_value(win_T *wp)
-{
-  return get_scrolloff_value(wp);
-}
-
-/// Wrapper for get_sidescrolloff_value (Rust FFI)
+/// Wrapper for rs_get_sidescrolloff_value (Rust FFI)
 int nvim_get_sidescrolloff_value(win_T *wp)
 {
-  return get_sidescrolloff_value(wp);
+  return rs_get_sidescrolloff_value(wp);
 }
 
 Dict get_vimoption(String name, int opt_flags, buf_T *buf, win_T *win, Arena *arena, Error *err)

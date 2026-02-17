@@ -223,6 +223,7 @@ static int cedit_key = -1;  ///< key value of 'cedit' option
 
 #include "ex_getln.c.generated.h"
 
+extern int rs_csh_like_shell(void);
 extern int rs_cmdline_overstrike(void);
 extern int rs_cmdline_at_end(void);
 extern int rs_is_in_cmdwin(void);
@@ -4243,7 +4244,7 @@ char *vim_strsave_fnameescape(const char *const fname, const int what)
   char *p = vim_strsave_escaped(fname,
                                 what == VSE_SHELL ? SHELL_ESC_CHARS : what ==
                                 VSE_BUFFER ? BUFFER_ESC_CHARS : PATH_ESC_CHARS);
-  if (what == VSE_SHELL && csh_like_shell()) {
+  if (what == VSE_SHELL && rs_csh_like_shell()) {
     // For csh and similar shells need to put two backslashes before '!'.
     // One is taken by Vim, one by the shell.
     char *s = vim_strsave_escaped(p, "!");

@@ -38,6 +38,8 @@
 #include "strings.c.generated.h"
 
 // Rust implementations - declarations
+extern int rs_csh_like_shell(void);
+extern int rs_fish_like_shell(void);
 extern int rs_vim_stricmp(const char *s1, const char *s2);
 extern int rs_vim_strnicmp(const char *s1, const char *s2, size_t len);
 extern int rs_striequal(const char *s1, const char *s2);
@@ -153,11 +155,11 @@ char *vim_strsave_shellescape(const char *string, bool do_special, bool do_newli
   // the like we must not put a backslash before it, it will be taken
   // literally.  If do_special is set the '!' will be escaped twice.
   // Csh also needs to have "\n" escaped twice when do_special is set.
-  int csh_like = csh_like_shell();
+  int csh_like = rs_csh_like_shell();
 
   // Fish shell uses '\' as an escape character within single quotes, so '\'
   // itself must be escaped to get a literal '\'.
-  bool fish_like = fish_like_shell();
+  bool fish_like = rs_fish_like_shell();
 
   // First count the number of extra bytes required.
   size_t length = strlen(string) + 3;       // two quotes and a trailing NUL

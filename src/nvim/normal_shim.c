@@ -453,6 +453,7 @@ extern int rs_unshift_special(int cmdchar, int *modp);
 extern bool rs_is_ident(const char *line, int offset);
 extern bool rs_find_is_eval_item(const char *ptr, int *colp, int *bnp, int dir);
 extern int rs_get_vtopline(win_T *wp);
+extern int rs_get_sidescrolloff_value(win_T *wp);
 extern void rs_clearop(oparg_T *oap);
 extern void rs_clearopbeep(oparg_T *oap);
 extern bool rs_checkclearop(oparg_T *oap);
@@ -4448,7 +4449,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   int old_fdl = (int)curwin->w_p_fdl;
   int old_fen = curwin->w_p_fen;
 
-  int siso = get_sidescrolloff_value(curwin);
+  int siso = rs_get_sidescrolloff_value(curwin);
 
   if (ascii_isdigit(nchar) && !nv_z_get_count(cap, &nchar)) {
     return;

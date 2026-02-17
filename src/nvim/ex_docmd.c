@@ -224,6 +224,8 @@ struct dbg_stuff {
 
 #include "ex_docmd.c.generated.h"
 
+extern int rs_get_scrolloff_value(win_T *wp);
+
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
 
@@ -4383,7 +4385,7 @@ static void ex_syncbind(exarg_T *eap)
     FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
       if (wp->w_p_scb && wp->w_buffer) {
         linenr_T y = plines_m_win_fill(wp, 1, wp->w_buffer->b_ml.ml_line_count)
-                     - get_scrolloff_value(curwin);
+                     - rs_get_scrolloff_value(curwin);
         vtopline = MIN(vtopline, y);
       }
     }

@@ -58,6 +58,9 @@
 
 #include "optionstr.c.generated.h"
 
+extern void rs_did_set_title(void);
+extern int rs_valid_name(const char *val, const char *allowed);
+
 // String option flag utilities (from Rust optionstr crate)
 extern int rs_optflags_is_comma_list(uint32_t flags);
 extern int rs_optflags_is_flag_list(uint32_t flags);
@@ -290,7 +293,7 @@ void check_string_option(char **pp)
 static bool valid_filetype(const char *val)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return valid_name(val, ".-_");
+  return rs_valid_name(val, ".-_");
 }
 
 /// Handle setting 'signcolumn' for value 'val'. Store minimum and maximum width.
@@ -2014,7 +2017,7 @@ static const char *did_set_titleiconstring(optset_T *args, int flagval)
   } else {
     stl_syntax &= ~flagval;
   }
-  did_set_title();
+  rs_did_set_title();
 
   return NULL;
 }
