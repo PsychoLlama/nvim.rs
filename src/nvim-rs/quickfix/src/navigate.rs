@@ -1810,6 +1810,186 @@ mod jump_machinery {
 
         OK
     }
+
+    // Phase 5 extern declarations
+    extern "C" {
+        fn nvim_get_ql_info() -> QfInfoHandleMut;
+        fn rs_qf_stack_empty(qi: *const c_void) -> bool;
+        fn rs_qf_list_empty(qfl: *const c_void) -> bool;
+        fn nvim_emsg_no_errors();
+        fn nvim_incr_quickfix_busy();
+        fn nvim_decr_quickfix_busy();
+        fn nvim_qf_get_ptr(qfl: *const c_void) -> QfLineHandle;
+        fn nvim_qf_get_index(qfl: *const c_void) -> c_int;
+        fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: QfLineHandle);
+        fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
+        fn nvim_qf_win_pos_update(qi: *mut c_void, old_qf_index: c_int) -> bool;
+        fn nvim_qf_curwin_handle() -> c_int;
+        fn nvim_qf_win_close_curwin();
+        fn nvim_qf_get_p_swb() -> *mut c_void;
+        fn nvim_qf_get_swb_flags() -> u32;
+        fn nvim_qf_restore_swb(old_swb: *mut c_void, old_swb_flags: u32);
+        fn nvim_qf_get_key_typed() -> bool;
+        fn rs_qf_get_entry_with_msg(
+            qfl: *const c_void,
+            errornr: c_int,
+            dir: c_int,
+        ) -> super::QfGetEntryResult;
+    }
+
+    /// Internal result for the jump operation, used to communicate
+    /// state between the inner logic and the cleanup path.
+    struct JumpResult {
+        /// The `qi` pointer (may be nulled out on `QF_ABORT`)
+        qi: QfInfoHandleMut,
+        /// The `qf_ptr` to store back (may be reverted to old)
+        qf_ptr: QfLineHandle,
+        /// The `qf_index` to store back (may be reverted to old)
+        qf_index: c_int,
+    }
+
+    /// Main jump orchestrator. Replaces `qf_jump_newwin`.
+    ///
+    /// # Safety
+    ///
+    /// `qi` may be null (uses global `ql_info`). Other globals must be valid.
+    #[no_mangle]
+    pub unsafe extern "C" fn rs_qf_jump_newwin(
+        mut qi: QfInfoHandleMut,
+        dir: c_int,
+        errornr: c_int,
+        forceit: c_int,
+        newwin: bool,
+    ) {
+        let old_swb = nvim_qf_get_p_swb();
+        let old_swb_flags = nvim_qf_get_swb_flags();
+        let old_key_typed = nvim_qf_get_key_typed();
+
+        if qi.is_null() {
+            qi = nvim_get_ql_info();
+        }
+
+        if rs_qf_stack_empty(qi) || rs_qf_list_empty(nvim_qf_get_curlist(qi)) {
+            nvim_emsg_no_errors();
+            return;
+        }
+
+        nvim_incr_quickfix_busy();
+
+        let qfl = nvim_qf_get_curlist(qi).cast_mut();
+        let result = jump_newwin_inner(qi, qfl, dir, errornr, forceit, newwin, old_key_typed);
+
+        // Cleanup: restore qfl state and swb
+        if !result.qi.is_null() {
+            nvim_qf_set_ptr(qfl, result.qf_ptr);
+            nvim_qf_set_index(qfl, result.qf_index);
+        }
+        nvim_qf_restore_swb(old_swb, old_swb_flags);
+        nvim_decr_quickfix_busy();
+    }
+
+    /// Inner function implementing the jump logic with structured control flow.
+    /// Returns the final state to be applied in the cleanup path.
+    unsafe fn jump_newwin_inner(
+        qi: QfInfoHandleMut,
+        qfl: *mut c_void,
+        dir: c_int,
+        errornr: c_int,
+        forceit: c_int,
+        newwin: bool,
+        old_key_typed: bool,
+    ) -> JumpResult {
+        let old_qf_ptr = nvim_qf_get_ptr(qfl);
+        let old_qf_index = nvim_qf_get_index(qfl);
+
+        // Select the entry
+        let entry_result = rs_qf_get_entry_with_msg(qfl, errornr, dir);
+
+        if entry_result.qf_ptr.is_null() || entry_result.errored {
+            // Entry selection failed; restore old state
+            return JumpResult {
+                qi,
+                qf_ptr: old_qf_ptr,
+                qf_index: old_qf_index,
+            };
+        }
+
+        let mut qf_ptr = entry_result.qf_ptr;
+        let mut qf_index = entry_result.qf_index;
+
+        // Set the new index/ptr on the list
+        nvim_qf_set_index(qfl, qf_index);
+        nvim_qf_set_ptr(qfl, qf_ptr);
+
+        // No need to print the error message if it's visible in the error window
+        let print_message = !nvim_qf_win_pos_update(qi, old_qf_index);
+
+        let prev_winid = nvim_qf_curwin_handle();
+
+        let mut opened_window = false;
+        let retval = rs_qf_jump_open_window(qi, qf_ptr, newwin, &raw mut opened_window);
+
+        if retval == FAIL {
+            // Jump to the "failed" path: restore old index
+            return JumpResult {
+                qi,
+                qf_ptr: old_qf_ptr,
+                qf_index: old_qf_index,
+            };
+        }
+        if retval == QF_ABORT {
+            // qi and qf_ptr are nulled out
+            return JumpResult {
+                qi: ptr::null_mut(),
+                qf_ptr: ptr::null(),
+                qf_index,
+            };
+        }
+        if retval == NOTDONE {
+            return JumpResult {
+                qi,
+                qf_ptr,
+                qf_index,
+            };
+        }
+
+        let retval = rs_qf_jump_to_buffer(
+            qi,
+            qf_index,
+            qf_ptr,
+            forceit,
+            prev_winid,
+            &raw mut opened_window,
+            i32::from(old_key_typed),
+            print_message,
+        );
+
+        if retval == QF_ABORT {
+            // Quickfix/location list was modified by an autocmd
+            return JumpResult {
+                qi: ptr::null_mut(),
+                qf_ptr: ptr::null(),
+                qf_index,
+            };
+        }
+
+        if retval != OK {
+            if opened_window {
+                nvim_qf_win_close_curwin();
+            }
+            if !qf_ptr.is_null() && nvim_qfline_get_fnum(qf_ptr) != 0 {
+                // Couldn't open file, so put index back where it was.
+                qf_ptr = old_qf_ptr;
+                qf_index = old_qf_index;
+            }
+        }
+
+        JumpResult {
+            qi,
+            qf_ptr,
+            qf_index,
+        }
+    }
 }
 
 // =============================================================================

@@ -4002,6 +4002,7 @@ extern int rs_qf_jump_to_help_window(void *qi, bool newwin, bool *opened_window)
 extern void rs_qf_goto_win_with_ll_file(void *use_win, int qf_fnum, void *ll_ref);
 extern void rs_qf_goto_win_with_qfl_file(int qf_fnum);
 extern int rs_qf_jump_to_usable_window(int qf_fnum, bool newwin, bool *opened_window);
+extern void rs_qf_jump_newwin(void *qi, int dir, int errornr, int forceit, bool newwin);
 
 /// Find a help window or open one. If 'newwin' is true, then open a new help
 /// window.
@@ -4568,6 +4569,31 @@ bool nvim_qf_curbuf_is(const void *buf)
   return curbuf == (const buf_T *)buf;
 }
 
+// =============================================================================
+// Phase 3 (jump machinery): p_swb save/restore for Rust (Phase 5)
+// =============================================================================
+
+/// Save p_swb pointer for later comparison
+void *nvim_qf_get_p_swb(void)
+{
+  return p_swb;
+}
+
+/// Get swb_flags value
+unsigned nvim_qf_get_swb_flags(void)
+{
+  return swb_flags;
+}
+
+/// Restore p_swb if it was changed to empty_string_option
+void nvim_qf_restore_swb(void *old_swb, unsigned old_swb_flags)
+{
+  if (p_swb != (char *)old_swb && p_swb == empty_string_option) {
+    p_swb = (char *)old_swb;
+    swb_flags = old_swb_flags;
+  }
+}
+
 // Rust export for qf_jump_to_buffer
 extern int rs_qf_jump_to_buffer(void *qi, int qf_index, void *qf_ptr, int forceit,
                                  int prev_winid, bool *opened_window, int openfold,
@@ -4604,7 +4630,7 @@ static int qf_jump_to_buffer(qf_info_T *qi, int qf_index, qfline_T *qf_ptr, int 
 /// Jump to a quickfix line and try to use an existing window.
 void qf_jump(qf_info_T *qi, int dir, int errornr, int forceit)
 {
-  qf_jump_newwin(qi, dir, errornr, forceit, false);
+  rs_qf_jump_newwin(qi, dir, errornr, forceit, false);
 }
 
 // Jump to a quickfix line.
@@ -4618,90 +4644,7 @@ void qf_jump(qf_info_T *qi, int dir, int errornr, int forceit)
 // If 'newwin' is true, then open the file in a new window.
 static void qf_jump_newwin(qf_info_T *qi, int dir, int errornr, int forceit, bool newwin)
 {
-  char *old_swb = p_swb;
-  unsigned old_swb_flags = swb_flags;
-  const bool old_KeyTyped = KeyTyped;           // getting file may reset it
-
-  if (qi == NULL) {
-    assert(ql_info != NULL);
-    qi = ql_info;
-  }
-
-  if (rs_qf_stack_empty(qi) || rs_qf_list_empty(qf_get_curlist(qi))) {
-    emsg(_(e_no_errors));
-    return;
-  }
-
-  incr_quickfix_busy();
-
-  qf_list_T *qfl = qf_get_curlist(qi);
-
-  qfline_T *qf_ptr = qfl->qf_ptr;
-  qfline_T *old_qf_ptr = qf_ptr;
-  int qf_index = qfl->qf_index;
-  int old_qf_index = qf_index;
-
-  qf_ptr = qf_get_entry(qfl, errornr, dir, &qf_index);
-  if (qf_ptr == NULL) {
-    qf_ptr = old_qf_ptr;
-    qf_index = old_qf_index;
-    goto theend;
-  }
-
-  qfl->qf_index = qf_index;
-  qfl->qf_ptr = qf_ptr;
-
-  // No need to print the error message if it's visible in the error window
-  bool print_message = !qf_win_pos_update(qi, old_qf_index);
-
-  int prev_winid = curwin->handle;
-
-  bool opened_window = false;
-  int retval = qf_jump_open_window(qi, qf_ptr, newwin, &opened_window);
-  if (retval == FAIL) {
-    goto failed;
-  }
-  if (retval == QF_ABORT) {
-    qi = NULL;
-    qf_ptr = NULL;
-    goto theend;
-  }
-  if (retval == NOTDONE) {
-    goto theend;
-  }
-
-  retval = qf_jump_to_buffer(qi, qf_index, qf_ptr, forceit, prev_winid,
-                             &opened_window, old_KeyTyped, print_message);
-  if (retval == QF_ABORT) {
-    // Quickfix/location list was modified by an autocmd
-    qi = NULL;
-    qf_ptr = NULL;
-  }
-
-  if (retval != OK) {
-    if (opened_window) {
-      win_close(curwin, true, false);          // Close opened window
-    }
-    if (qf_ptr != NULL && qf_ptr->qf_fnum != 0) {
-      // Couldn't open file, so put index back where it was.  This could
-      // happen if the file was readonly and we changed something.
-failed:
-      qf_ptr = old_qf_ptr;
-      qf_index = old_qf_index;
-    }
-  }
-theend:
-  if (qi != NULL) {
-    qfl->qf_ptr = qf_ptr;
-    qfl->qf_index = qf_index;
-  }
-  if (p_swb != old_swb && p_swb == empty_string_option) {
-    // Restore old 'switchbuf' value, but not when an autocommand or
-    // modeline has changed the value.
-    p_swb = old_swb;
-    swb_flags = old_swb_flags;
-  }
-  decr_quickfix_busy();
+  rs_qf_jump_newwin(qi, dir, errornr, forceit, newwin);
 }
 
 // Highlight ids used for displaying entries from the quickfix list.
