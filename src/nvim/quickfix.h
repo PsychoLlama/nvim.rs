@@ -18,4 +18,4 @@ enum {
   VGR_FUZZY  = 4,
 };
 
-#include "quickfix.h.generated.h"
+#include "quickfix_shim.h.generated.h"
