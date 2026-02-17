@@ -3053,16 +3053,6 @@ pub unsafe extern "C" fn rs_pop_current_state() {
 pub unsafe extern "C" fn rs_push_current_state(idx: c_int) {
     nvim_syn_push_current_state(idx);
 }
-
-/// Get the next sequence number and increment it.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_next_seqnr() -> c_int {
-    nvim_syn_next_seqnr()
-}
-
 /// Get the attribute for a syntax ID (syntax crate version).
 ///
 /// # Safety
@@ -3071,43 +3061,6 @@ pub unsafe extern "C" fn rs_syn_next_seqnr() -> c_int {
 pub unsafe extern "C" fn rs_syntax_id2attr(syn_id: c_int) -> c_int {
     nvim_syn_id2attr_wrapper(syn_id)
 }
-
-/// Check if the current state stack is empty.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_state_is_empty() -> c_int {
-    nvim_syn_current_state_is_empty()
-}
-
-/// Get the character at the current column.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_getcurline_at_col() -> c_char {
-    nvim_syn_getcurline_at_col()
-}
-
-/// Set the current_finished flag.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_set_finished(finished: c_int) {
-    nvim_syn_set_current_finished(finished);
-}
-
-/// Call syn_update_ends.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_update_ends(syncing: c_int) {
-    nvim_syn_call_syn_update_ends(syncing);
-}
-
 /// Set the next_match_idx value.
 ///
 /// # Safety
@@ -3386,49 +3339,11 @@ pub unsafe extern "C" fn rs_in_id_list(
 ) -> c_int {
     nvim_syn_in_id_list(cur_si, list, id, inc_tag, cont_in_list, flags)
 }
-
-/// Check if there are case-sensitive keywords in the synblock.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_has_keywords() -> c_int {
-    nvim_syn_has_keywords()
-}
-
-/// Check if there are case-insensitive keywords in the synblock.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_has_keywords_ic() -> c_int {
-    nvim_syn_has_keywords_ic()
-}
-
 /// Get the cont_list from a stateitem.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stateitem_get_cont_list(item: StateItemHandle) -> IdListHandle {
     nvim_stateitem_get_cont_list(item)
 }
-
-/// Check if a character at position is a keyword character.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_is_keyword_char(line: *mut c_char, pos: c_int) -> c_int {
-    nvim_syn_is_keyword_char(line, pos)
-}
-
-/// Get the current line being processed.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_getcurline() -> *mut c_char {
-    nvim_syn_getcurline()
-}
-
 /// Save the chartab for syntax iskeyword.
 ///
 /// # Safety
@@ -3437,79 +3352,6 @@ pub unsafe extern "C" fn rs_syn_getcurline() -> *mut c_char {
 pub unsafe extern "C" fn rs_syn_save_chartab(buf: *mut c_char) {
     nvim_syn_save_chartab(buf);
 }
-
-/// Restore the chartab.
-///
-/// # Safety
-/// Buffer must be the same as passed to rs_syn_save_chartab.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_restore_chartab(buf: *mut c_char) {
-    nvim_syn_restore_chartab(buf);
-}
-
-/// Get the maximum keyword length constant.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_maxkeywlen() -> c_int {
-    keyword::max_keyword_len()
-}
-
-/// Find a keyword in the hashtab.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_keyword_find(
-    keyword: *mut c_char,
-    use_ic: c_int,
-) -> KeyEntryHandle {
-    keyword::keyword_find(keyword, use_ic != 0)
-}
-
-/// Match a keyword against the hashtab.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_match_keyword(
-    keyword: *mut c_char,
-    use_ic: c_int,
-    cur_si: StateItemHandle,
-) -> KeyEntryHandle {
-    keyword::match_keyword(keyword, use_ic != 0, cur_si)
-}
-
-/// Fold case for keyword comparison.
-///
-/// # Safety
-/// src and dst must be valid pointers.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_keyword_foldcase(
-    src: *mut c_char,
-    srclen: c_int,
-    dst: *mut c_char,
-    dstlen: c_int,
-) {
-    keyword::keyword_foldcase(src, srclen, dst, dstlen);
-}
-
-/// Get UTF character length.
-///
-/// # Safety
-/// p must be a valid pointer to a UTF-8 string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_utfc_ptr2len(p: *mut c_char) -> c_int {
-    keyword::utfc_ptr2len(p)
-}
-
-/// Get the syn_buf pointer.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_buf() -> *mut std::ffi::c_void {
-    nvim_syn_get_buf()
-}
-
 // =============================================================================
 // Phase 24.4: Pattern Stack Operations Exports (new unique functions only)
 // =============================================================================
@@ -3812,16 +3654,6 @@ pub unsafe extern "C" fn rs_get_hl_concealends() -> c_int {
 // =============================================================================
 // Phase 24.5: Sync and Line Operations Exports
 // =============================================================================
-
-/// Call syn_start_line to prepare current state for start of a line.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_start_line() {
-    nvim_syn_start_line();
-}
-
 // syn_finish_line is now implemented in current_attr.rs module
 
 // rs_syn_sync is now implemented in sync.rs module
@@ -3834,25 +3666,6 @@ pub unsafe extern "C" fn rs_syn_start_line() {
 pub unsafe extern "C" fn rs_syntax_start(wp: WinHandle, lnum: c_int) {
     crate::buffer::start_syntax(wp, lnum);
 }
-
-/// Call clear_current_state to clean up the current state stack.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_clear_current_state() {
-    nvim_syn_clear_current_state();
-}
-
-/// Call clear_syn_state to clean up a synstate entry.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_clear_syn_state(p: SynStateHandle) {
-    nvim_syn_clear_syn_state(p);
-}
-
 /// Get current_finished global.
 ///
 /// # Safety
@@ -4140,25 +3953,6 @@ pub unsafe extern "C" fn rs_get_hl_sync_there() -> c_int {
 pub unsafe extern "C" fn rs_get_sptype_match() -> c_int {
     nvim_syn_get_sptype_match()
 }
-
-/// Call syn_stack_alloc to allocate syntax stack.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_stack_alloc() {
-    nvim_syn_stack_alloc();
-}
-
-/// Call syn_stack_find_entry to find a synstate entry for a line.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_stack_find_entry_24_5(lnum: c_int) -> SynStateHandle {
-    nvim_syn_stack_find_entry_ptr(lnum)
-}
-
 /// Get w_s (synblock) from window.
 ///
 /// # Safety
@@ -4230,38 +4024,9 @@ pub unsafe extern "C" fn rs_line_breakcheck() {
 pub unsafe extern "C" fn rs_get_got_int() -> c_int {
     nvim_syn_get_got_int()
 }
-
-/// Get Rows global (for syntax).
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_rows() -> c_int {
-    nvim_syn_get_rows()
-}
-
 // =============================================================================
 // Phase 32.1: Stack management exports
 // =============================================================================
-
-/// Free all syntax state entries for a synblock.
-///
-/// # Safety
-/// The caller must ensure the synblock handle is valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_stack_free_all(block: SynBlockHandle) {
-    state::stack_free_all(block);
-}
-
-/// Apply buffer changes to syntax states.
-///
-/// # Safety
-/// The caller must ensure the buffer handle is valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_stack_apply_changes(buf: BufHandle) {
-    state::stack_apply_changes(buf);
-}
-
 /// Get the line where a buffer change starts.
 ///
 /// # Safety
@@ -4496,20 +4261,6 @@ pub unsafe extern "C" fn rs_get_syntax_attr(
 pub unsafe extern "C" fn rs_syn_set_current_col(col: c_int) {
     highlight::set_current_col(col);
 }
-
-/// Check if current state has been stored.
-///
-/// # Safety
-/// Must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_current_state_stored() -> c_int {
-    if highlight::current_state_stored() {
-        1
-    } else {
-        0
-    }
-}
-
 /// Get the spell setting for a synblock.
 ///
 /// # Safety
@@ -4527,16 +4278,6 @@ pub unsafe extern "C" fn rs_synblock_syn_spell(block: SynBlockHandle) -> c_int {
 pub unsafe extern "C" fn rs_buf_synmaxcol(buf: BufHandle) -> c_int {
     highlight::buf_synmaxcol(buf)
 }
-
-/// Ensure current state is valid, validating if needed.
-///
-/// # Safety
-/// Must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_ensure_current_state_valid() {
-    highlight::ensure_current_state_valid();
-}
-
 // Note: rs_syn_current_col, rs_syn_is_finished, rs_syn_is_state_valid,
 // rs_syn_next_match_idx, rs_syn_next_match_col, rs_syn_has_next_match
 // are already defined earlier in this file.
@@ -4681,16 +4422,6 @@ pub unsafe extern "C" fn rs_can_compute_folds(block: SynBlockHandle) -> c_int {
 // =============================================================================
 // Phase 32.6: Ex commands exports
 // =============================================================================
-
-/// Get the command line pointer.
-///
-/// # Safety
-/// Must be called during command execution.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_cmdlinep() -> *mut *mut c_char {
-    commands::cmdlinep()
-}
-
 // Note: rs_curwin_synblock already defined at line ~2543
 
 /// Get current window handle.
@@ -4737,42 +4468,6 @@ pub extern "C" fn rs_syn_include_none() -> c_int {
 pub extern "C" fn rs_syn_running_inc_tag() -> c_int {
     commands::running_inc_tag()
 }
-
-/// Set running include tag.
-///
-/// # Safety
-/// Must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_set_running_inc_tag(tag: c_int) {
-    commands::set_running_inc_tag(tag);
-}
-
-/// Get conceal setting for synblock.
-///
-/// # Safety
-/// The synblock handle must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_conceal_setting(block: SynBlockHandle) -> c_int {
-    if commands::synblock_conceal_setting(block) {
-        1
-    } else {
-        0
-    }
-}
-
-/// Get case-insensitive setting for synblock.
-///
-/// # Safety
-/// The synblock handle must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_ic_setting(block: SynBlockHandle) -> c_int {
-    if commands::synblock_ic_setting(block) {
-        1
-    } else {
-        0
-    }
-}
-
 // =============================================================================
 // Phase 143: Syntax State Machine Migration
 // =============================================================================
@@ -4811,45 +4506,6 @@ extern "C" {
     // nvim_stateitem_get_end_idx, nvim_stateitem_get_ends are already
     // declared in the main extern block near the top of the file.
 }
-
-/// Get syntax ID at a file position.
-/// This is the main entry point for getting syntax highlighting info.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_id(
-    wp: WinHandle,
-    lnum: c_int,
-    col: c_int,
-    trans: c_int,
-    spellp: *mut c_int,
-    keep_state: c_int,
-) -> c_int {
-    nvim_syn_get_id(wp, lnum, col, trans, spellp, keep_state)
-}
-
-/// Return the syntax ID at position "i" in the current stack.
-/// The caller must have called syn_get_id() before to fill the stack.
-/// Returns -1 when "i" is out of range.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_stack_item(i: c_int) -> c_int {
-    let state_len = nvim_syn_get_current_state_len();
-    if i >= state_len {
-        nvim_syn_invalidate_current_state();
-        return -1;
-    }
-
-    let item = nvim_syn_get_cur_state(i);
-    if item.is_null() {
-        return -1;
-    }
-    nvim_stateitem_get_id(item)
-}
-
 /// Get extra information about the syntax item.
 /// Must be called right after get_syntax_attr().
 /// Returns the current flags.
@@ -4860,26 +4516,6 @@ pub unsafe extern "C" fn rs_syn_get_stack_item(i: c_int) -> c_int {
 pub unsafe extern "C" fn rs_get_syntax_info(seqnrp: *mut c_int) -> c_int {
     nvim_get_syntax_info(seqnrp)
 }
-
-/// Get the sequence number of the concealed file position.
-/// Returns seqnr if the file position is concealed, 0 otherwise.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int {
-    nvim_syn_get_concealed_id(wp, lnum, col)
-}
-
-/// Get folding level for line "lnum" in window "wp".
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_foldlevel(wp: WinHandle, lnum: c_int) -> c_int {
-    nvim_syn_get_foldlevel(wp, lnum)
-}
-
 /// End parsing syntax above line "lnum".
 ///
 /// # Safety
@@ -4888,35 +4524,6 @@ pub unsafe extern "C" fn rs_syn_get_foldlevel(wp: WinHandle, lnum: c_int) -> c_i
 pub unsafe extern "C" fn rs_syntax_end_parsing(wp: WinHandle, lnum: c_int) {
     nvim_syntax_end_parsing(wp, lnum);
 }
-
-/// Clean up the syntax state stack.
-/// Returns 1 if an entry was freed, 0 otherwise.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_stack_cleanup() -> c_int {
-    nvim_syn_stack_cleanup()
-}
-
-/// Get the synmaxcol setting for the current syntax buffer.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_buf_get_synmaxcol() -> c_int {
-    nvim_syn_buf_get_synmaxcol()
-}
-
-/// Get the sync linebreaks from the current synblock.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_sync_linebreaks() -> c_int {
-    nvim_syn_get_sync_linebreaks()
-}
-
 /// Set the tick value for a synstate.
 ///
 /// # Safety
@@ -5920,372 +5527,7 @@ pub const extern "C" fn rs_syn_timeout_is_valid(timeout: c_int) -> bool {
 
 // Note: The extern declarations for these functions are already present
 // earlier in the file. We just add new Rust exports below.
-
-/// Check state ends - clean up finished states from the stack.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_check_state_ends() {
-    nvim_syn_check_state_ends();
-}
-
-/// Push next match onto the state stack.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_push_next_match() -> StateItemHandle {
-    nvim_syn_push_next_match()
-}
-
-/// Find end position for a syntax pattern.
-///
-/// # Safety
-/// This function accesses C global state. All output pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_find_endpos(
-    idx: c_int,
-    start_lnum: c_int,
-    start_col: c_int,
-    m_end_lnum: *mut c_int,
-    m_end_col: *mut c_int,
-    hl_end_lnum: *mut c_int,
-    hl_end_col: *mut c_int,
-    flagsp: *mut c_int,
-    end_end_lnum: *mut c_int,
-    end_end_col: *mut c_int,
-    end_idx: *mut c_int,
-    start_ext: ExtMatchHandle,
-) {
-    nvim_syn_find_endpos(
-        idx,
-        start_lnum,
-        start_col,
-        m_end_lnum,
-        m_end_col,
-        hl_end_lnum,
-        hl_end_col,
-        flagsp,
-        end_end_lnum,
-        end_end_col,
-        end_idx,
-        start_ext,
-    );
-}
-
-/// Update state item end position.
-///
-/// # Safety
-/// The state item handle must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_update_si_end(sip: StateItemHandle, startcol: c_int, force: c_int) {
-    if !sip.is_null() {
-        nvim_syn_update_si_end(sip, startcol, force);
-    }
-}
-
-/// Get pattern flags for a syntax pattern.
-///
-/// # Safety
-/// The index must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_pattern_flags(idx: c_int) -> c_int {
-    nvim_syn_get_pattern_flags(idx)
-}
-
-/// Get pattern conceal character.
-///
-/// # Safety
-/// The index must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_pattern_cchar(idx: c_int) -> c_int {
-    nvim_syn_get_pattern_cchar(idx)
-}
-
-/// Get pattern type (SPTYPE_MATCH, SPTYPE_START, SPTYPE_END, SPTYPE_SKIP).
-///
-/// # Safety
-/// The index must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_pattern_type(idx: c_int) -> c_int {
-    nvim_syn_get_pattern_type(idx)
-}
-
-/// Get syntax match ID from pattern.
-///
-/// # Safety
-/// The index must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_pattern_syn_match_id(idx: c_int) -> c_int {
-    nvim_syn_get_pattern_syn_match_id(idx)
-}
-
-/// Check if ID list represents "ALL".
-///
-/// # Safety
-/// The list handle must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_is_id_list_all(list: IdListHandle) -> c_int {
-    nvim_syn_is_id_list_all(list)
-}
-
 // Note: rs_syn_get_next_match_attr is defined in highlight.rs.
-
-/// Get highlight start position for next match.
-///
-/// # Safety
-/// Output pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_next_match_h_startpos(lnum: *mut c_int, col: *mut c_int) {
-    nvim_syn_get_next_match_h_startpos(lnum, col);
-}
-
-/// Get match end position for next match.
-///
-/// # Safety
-/// Output pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_next_match_m_endpos(lnum: *mut c_int, col: *mut c_int) {
-    nvim_syn_get_next_match_m_endpos(lnum, col);
-}
-
-/// Get highlight end position for next match.
-///
-/// # Safety
-/// Output pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_next_match_h_endpos(lnum: *mut c_int, col: *mut c_int) {
-    nvim_syn_get_next_match_h_endpos(lnum, col);
-}
-
-/// Get end of start position for next match.
-///
-/// # Safety
-/// Output pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_next_match_eos_pos(lnum: *mut c_int, col: *mut c_int) {
-    nvim_syn_get_next_match_eos_pos(lnum, col);
-}
-
-/// Get end of end position for next match.
-///
-/// # Safety
-/// Output pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_next_match_eoe_pos(lnum: *mut c_int, col: *mut c_int) {
-    nvim_syn_get_next_match_eoe_pos(lnum, col);
-}
-
-/// Get flags for next match.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_next_match_flags() -> c_int {
-    nvim_syn_get_next_match_flags()
-}
-
-/// Get end index for next match.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_next_match_end_idx() -> c_int {
-    nvim_syn_get_next_match_end_idx()
-}
-
-/// Get next sequence number.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_next_seqnr() -> c_int {
-    nvim_syn_get_next_seqnr()
-}
-
-/// Set next sequence number.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_set_next_seqnr(seqnr: c_int) {
-    nvim_syn_set_next_seqnr(seqnr);
-}
-
-/// Increment and return next sequence number.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_incr_next_seqnr() -> c_int {
-    nvim_syn_incr_next_seqnr()
-}
-
-/// Unreference an extmatch structure.
-///
-/// # Safety
-/// The handle must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_unref_extmatch_p144(em: ExtMatchHandle) {
-    if !em.is_null() {
-        nvim_syn_unref_extmatch(em);
-    }
-}
-
-/// Update syntax item attribute.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_call_update_si_attr(idx: c_int) {
-    nvim_syn_call_update_si_attr(idx);
-}
-
-/// Check keepend flag propagation.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_check_keepend() {
-    nvim_syn_check_keepend();
-}
-
-/// Pop current state from stack.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_pop_current_state() {
-    nvim_syn_pop_current_state();
-}
-
-/// Push state onto current state stack.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_push_current_state(idx: c_int) {
-    nvim_syn_push_current_state(idx);
-}
-
-/// Get HL_ONELINE flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_hl_oneline() -> c_int {
-    nvim_syn_get_hl_oneline()
-}
-
-/// Get HL_KEEPEND flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_hl_keepend() -> c_int {
-    nvim_syn_get_hl_keepend()
-}
-
-/// Get HL_MATCH flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_hl_match() -> c_int {
-    nvim_syn_get_hl_match()
-}
-
-/// Get HL_CONCEAL flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_hl_conceal() -> c_int {
-    nvim_syn_get_hl_conceal()
-}
-
-/// Get HL_CONCEALENDS flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_hl_concealends() -> c_int {
-    nvim_syn_get_hl_concealends()
-}
-
-/// Get HL_MATCHCONT flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_hl_matchcont() -> c_int {
-    nvim_syn_get_hl_matchcont()
-}
-
-/// Get HL_EXTEND flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_hl_extend() -> c_int {
-    nvim_syn_get_hl_extend()
-}
-
-/// Get SF_CCOMMENT sync flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_sf_ccomment() -> c_int {
-    nvim_syn_get_sf_ccomment()
-}
-
-/// Get SF_MATCH sync flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_sf_match() -> c_int {
-    nvim_syn_get_sf_match()
-}
-
-/// Get HL_SYNC_HERE flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_hl_sync_here() -> c_int {
-    nvim_syn_get_hl_sync_here()
-}
-
-/// Get HL_SYNC_THERE flag.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_hl_sync_there() -> c_int {
-    nvim_syn_get_hl_sync_there()
-}
-
-/// Get SPTYPE_MATCH constant.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_sptype_match() -> c_int {
-    nvim_syn_get_sptype_match()
-}
-
-/// Get SPTYPE_START constant.
-///
-/// # Safety
-/// This function accesses C global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_sptype_start() -> c_int {
-    nvim_syn_get_sptype_start()
-}
-
 // Note: rs_syn_extmatch_equal, rs_syn_extmatch_strings_equal are already
 // defined earlier in the file using ExtMatchHandle.
 
@@ -6302,19 +5544,6 @@ extern "C" {
     // nvim_synblock_get_spell_cluster_id and nvim_synblock_get_nospell_cluster_id
     // are already declared earlier in the file.
 }
-
-/// Get cluster ID by name.
-///
-/// # Safety
-/// The name must be a valid C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_cluster_name2id(name: *const c_char) -> c_int {
-    if name.is_null() {
-        return 0;
-    }
-    nvim_syn_cluster_name2id(name)
-}
-
 /// Check if cluster ID is the spell cluster.
 ///
 /// # Safety
@@ -6441,66 +5670,6 @@ pub unsafe extern "C" fn rs_syncluster_get_list(cluster: SynClusterHandle) -> Id
 
 // Note: Extern declarations for state caching functions are already declared
 // earlier in the file (around lines 586-659 and 1058-1061).
-
-/// Remove an entry from the state stack.
-///
-/// # Safety
-/// The state handle must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_stack_remove_entry(sp: SynStateHandle) {
-    if !sp.is_null() {
-        nvim_syn_stack_remove_entry(sp);
-    }
-}
-
-/// Allocate a new entry in the state stack.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_stack_alloc_entry(
-    lnum: c_int,
-    after: SynStateHandle,
-) -> SynStateHandle {
-    nvim_syn_stack_alloc_entry(lnum, after)
-}
-
-/// Store current state to a stack entry.
-///
-/// # Safety
-/// The state handle must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_store_state_to_entry(sp: SynStateHandle) {
-    if !sp.is_null() {
-        nvim_syn_store_state_to_entry(sp);
-    }
-}
-
-/// Set current state item at index.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_set_cur_state_item(
-    idx: c_int,
-    si_idx: c_int,
-    si_flags: c_int,
-    si_seqnr: c_int,
-    si_cchar: c_int,
-    extmatch: ExtMatchHandle,
-) {
-    nvim_syn_set_cur_state_item(idx, si_idx, si_flags, si_seqnr, si_cchar, extmatch);
-}
-
-/// Check if a state item spans past a line.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_state_item_spans_line(idx: c_int, lnum: c_int) -> c_int {
-    nvim_syn_state_item_spans_line(idx, lnum)
-}
-
 /// Get sst_check_lnum from synblock.
 ///
 /// # Safety
@@ -6512,34 +5681,6 @@ pub unsafe extern "C" fn rs_synblock_get_sst_check_lnum(block: SynBlockHandle) -
     }
     nvim_synblock_get_sst_check_lnum(block)
 }
-
-/// Get first state in sst array (using current syn_block).
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_sst_first() -> SynStateHandle {
-    nvim_syn_get_sst_first()
-}
-
-/// Get sst array pointer.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_get_sst_array() -> *mut std::ffi::c_void {
-    nvim_syn_get_sst_array()
-}
-
-/// Find entry in stack by line number.
-///
-/// # Safety
-/// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_stack_find_entry_ptr(lnum: c_int) -> SynStateHandle {
-    nvim_syn_stack_find_entry_ptr(lnum)
-}
-
 // =============================================================================
 // Phase 82 Tests
 // =============================================================================
