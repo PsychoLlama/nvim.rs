@@ -152,7 +152,8 @@ int nvim_ml_append(linenr_T lnum, const char *line, colnr_T len, bool newfile)
 {
   return ml_append(lnum, (char *)line, len, newfile);
 }
-bool nvim_ml_line_alloced(void) { return ml_line_alloced(); }
+extern int rs_ml_line_alloced(void);
+bool nvim_ml_line_alloced(void) { return rs_ml_line_alloced(); }
 void nvim_ml_add_deleted_len(char *ptr, colnr_T len) { ml_add_deleted_len(ptr, len); }
 
 // =============================================================================

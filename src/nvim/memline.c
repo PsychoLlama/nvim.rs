@@ -2006,17 +2006,6 @@ bool fnamecmp_ino_c(char *fname_c, char *fname_s, long ino_block0) {
 void long_to_char_c(long n, char *s) { long_to_char(n, s); }
 long char_to_long_c(const char *s) { return char_to_long(s); }
 
-// Rust implementation
-extern int rs_ml_line_alloced(void);
-
-/// Check if a line that was just obtained by a call to ml_get
-/// is in allocated memory.
-/// This ignores ML_ALLOCATED to get the same behavior as without ML_GET_ALLOC_LINES.
-int ml_line_alloced(void)
-{
-  return rs_ml_line_alloced();
-}
-
 /// @param lnum  append after this line (can be 0)
 /// @param line_arg  text of the new line
 /// @param len_arg  length of line, including NUL, or 0
