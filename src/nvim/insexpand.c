@@ -405,7 +405,7 @@ static int compl_match_arraysize;
 /// CTRL-X pressed in Insert mode.
 void ins_ctrl_x(void)
 {
-  if (!ctrl_x_mode_cmdline()) {
+  if (!rs_ctrl_x_mode_cmdline()) {
     // if the next ^X<> won't ADD nothing, then reset compl_cont_status
     if (compl_cont_status & CONT_N_ADDS) {
       compl_cont_status |= CONT_INTRPT;
@@ -426,32 +426,12 @@ void ins_ctrl_x(void)
   may_trigger_modechanged();
 }
 
-// Functions to check the current CTRL-X mode.
-
-bool ctrl_x_mode_none(void) { return rs_ctrl_x_mode_none() != 0; }
-bool ctrl_x_mode_normal(void) { return rs_ctrl_x_mode_normal() != 0; }
-bool ctrl_x_mode_scroll(void) { return rs_ctrl_x_mode_scroll() != 0; }
-bool ctrl_x_mode_whole_line(void) { return rs_ctrl_x_mode_whole_line() != 0; }
-bool ctrl_x_mode_files(void) { return rs_ctrl_x_mode_files() != 0; }
-bool ctrl_x_mode_tags(void) { return rs_ctrl_x_mode_tags() != 0; }
-bool ctrl_x_mode_path_patterns(void) { return rs_ctrl_x_mode_path_patterns() != 0; }
-bool ctrl_x_mode_path_defines(void) { return rs_ctrl_x_mode_path_defines() != 0; }
-bool ctrl_x_mode_dictionary(void) { return rs_ctrl_x_mode_dictionary() != 0; }
-bool ctrl_x_mode_thesaurus(void) { return rs_ctrl_x_mode_thesaurus() != 0; }
-bool ctrl_x_mode_cmdline(void) { return rs_ctrl_x_mode_cmdline() != 0; }
-bool ctrl_x_mode_function(void) { return rs_ctrl_x_mode_function() != 0; }
-bool ctrl_x_mode_omni(void) { return rs_ctrl_x_mode_omni() != 0; }
-bool ctrl_x_mode_spell(void) { return rs_ctrl_x_mode_spell() != 0; }
 static bool ctrl_x_mode_eval(void) { return ctrl_x_mode == CTRL_X_EVAL; }  // static, not exported
-bool ctrl_x_mode_line_or_eval(void) { return rs_ctrl_x_mode_line_or_eval() != 0; }
-bool ctrl_x_mode_register(void) { return rs_ctrl_x_mode_register() != 0; }
-bool ctrl_x_mode_not_default(void) { return rs_ctrl_x_mode_not_default() != 0; }
-bool ctrl_x_mode_not_defined_yet(void) { return rs_ctrl_x_mode_not_defined_yet() != 0; }
 
 /// Accessor for Rust FFI: check if ctrl-x mode is not default.
 int nvim_ctrl_x_mode_not_default(void)
 {
-  return ctrl_x_mode_not_default() ? 1 : 0;
+  return rs_ctrl_x_mode_not_default();
 }
 
 /// Accessor for Rust FFI: get curbuf->b_p_inf (infercase option).
@@ -1325,7 +1305,7 @@ static int ins_compl_build_pum(void)
     String *leader = get_leader_for_startcol(comp, true);
 
     // Apply 'smartcase' behavior during normal mode
-    if (ctrl_x_mode_normal() && !p_inf && leader->data
+    if (rs_ctrl_x_mode_normal() && !p_inf && leader->data
         && !ignorecase(leader->data) && !rs_cot_fuzzy()) {
       comp->cp_flags &= ~CP_ICASE;
     }
@@ -1546,7 +1526,7 @@ static void ins_compl_dictionaries(char *dict_start, char *pat, int flags, bool 
   // When invoked to match whole lines for CTRL-X CTRL-L adjust the pattern
   // to only match at the start of a line.  Otherwise just match the
   // pattern. Also need to double backslashes.
-  if (ctrl_x_mode_line_or_eval()) {
+  if (rs_ctrl_x_mode_line_or_eval()) {
     char *pat_esc = vim_strsave_escaped(pat, "\\");
 
     size_t len = strlen(pat_esc) + 10;
@@ -1688,7 +1668,7 @@ static void ins_compl_files(int count, char **files, bool thesaurus, int flags,
           int score = 0;
           int len = 0;
           if (fuzzy_match_str_in_line(&ptr, leader, &len, NULL, &score)) {
-            char *end_ptr = ctrl_x_mode_line_or_eval()
+            char *end_ptr = rs_ctrl_x_mode_line_or_eval()
                             ? find_line_end(ptr) : find_word_end(ptr);
             int add_r = ins_compl_add_infercase(ptr, (int)(end_ptr - ptr),
                                                 p_ic, files[i], *dir, false, score);
@@ -1696,7 +1676,7 @@ static void ins_compl_files(int count, char **files, bool thesaurus, int flags,
               break;
             }
             ptr = end_ptr;  // start from next word
-            if (compl_get_longest && ctrl_x_mode_normal()
+            if (compl_get_longest && rs_ctrl_x_mode_normal()
                 && compl_first_match->cp_next
                 && score == compl_first_match->cp_next->cp_score) {
               compl_num_bests++;
@@ -1706,7 +1686,7 @@ static void ins_compl_files(int count, char **files, bool thesaurus, int flags,
       } else if (regmatch != NULL) {
         while (vim_regexec(regmatch, buf, (colnr_T)(ptr - buf))) {
           ptr = regmatch->startp[0];
-          ptr = ctrl_x_mode_line_or_eval() ? find_line_end(ptr) : find_word_end(ptr);
+          ptr = rs_ctrl_x_mode_line_or_eval() ? find_line_end(ptr) : find_word_end(ptr);
           int add_r = ins_compl_add_infercase(regmatch->startp[0],
                                               (int)(ptr - regmatch->startp[0]),
                                               p_ic, files[i], *dir, false,
@@ -2018,7 +1998,7 @@ int ins_compl_bs(void)
   // allow the word to be deleted, we won't match everything.
   // Respect the 'backspace' option.
   if ((int)(p - line) - (int)compl_col < 0
-      || ((int)(p - line) - (int)compl_col == 0 && !ctrl_x_mode_omni())
+      || ((int)(p - line) - (int)compl_col == 0 && !rs_ctrl_x_mode_omni())
       || ctrl_x_mode_eval()
       || (!can_bs(BS_START) && (int)(p - line) - (int)compl_col
           - compl_length < 0)) {
@@ -2560,20 +2540,20 @@ bool ins_compl_prep(int c)
   }
 
   // Set "compl_get_longest" when finding the first matches.
-  if (ctrl_x_mode_not_defined_yet()
-      || (ctrl_x_mode_normal() && !compl_started)) {
+  if (rs_ctrl_x_mode_not_defined_yet()
+      || (rs_ctrl_x_mode_normal() && !compl_started)) {
     compl_get_longest = (get_cot_flags() & kOptCotFlagLongest) != 0;
     compl_used_match = true;
   }
 
-  if (ctrl_x_mode_not_defined_yet()) {
+  if (rs_ctrl_x_mode_not_defined_yet()) {
     // We have just typed CTRL-X and aren't quite sure which CTRL-X mode
     // it will be yet.  Now we decide.
     retval = set_ctrl_x_mode(c);
-  } else if (ctrl_x_mode_not_default()) {
+  } else if (rs_ctrl_x_mode_not_default()) {
     // We're already in CTRL-X mode, do we stay in it?
     if (!vim_is_ctrl_x_key(c)) {
-      ctrl_x_mode = ctrl_x_mode_scroll() ? CTRL_X_NORMAL : CTRL_X_FINISHED;
+      ctrl_x_mode = rs_ctrl_x_mode_scroll() ? CTRL_X_NORMAL : CTRL_X_FINISHED;
       edit_submode = NULL;
     }
     redraw_mode = true;
@@ -2584,7 +2564,7 @@ bool ins_compl_prep(int c)
     // 'Pattern not found') until another key is hit, then go back to
     // showing what mode we are in.
     redraw_mode = true;
-    if ((ctrl_x_mode_normal()
+    if ((rs_ctrl_x_mode_normal()
          && c != Ctrl_N
          && c != Ctrl_P
          && c != Ctrl_R
@@ -3117,7 +3097,7 @@ static void set_completion(colnr_T startcol, list_T *list)
   bool compl_no_select = (cur_cot_flags & kOptCotFlagNoselect) != 0;
 
   // If already doing completions stop it.
-  if (ctrl_x_mode_not_default()) {
+  if (rs_ctrl_x_mode_not_default()) {
     ins_compl_prep(' ');
   }
   ins_compl_clear();
@@ -3219,7 +3199,7 @@ void f_complete_check(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// Return Insert completion mode name string
 static char *ins_compl_mode(void)
 {
-  if (ctrl_x_mode_not_defined_yet() || ctrl_x_mode_scroll() || compl_started) {
+  if (rs_ctrl_x_mode_not_defined_yet() || rs_ctrl_x_mode_scroll() || compl_started) {
     return ctrl_x_mode_names[ctrl_x_mode & ~CTRL_X_WANT_IDENT];
   }
   return "";
@@ -3488,7 +3468,7 @@ static int process_next_cpt_value(ins_compl_next_state_T *st, int *compl_type_ar
     st->first_match_pos = *start_match_pos;
     // Move the cursor back one character so that ^N can match the
     // word immediately after the cursor.
-    if (ctrl_x_mode_normal() && (!fuzzy_collect && dec(&st->first_match_pos) < 0)) {
+    if (rs_ctrl_x_mode_normal() && (!fuzzy_collect && dec(&st->first_match_pos) < 0)) {
       // Move the cursor to after the last character in the
       // buffer, so that word at start of buffer is found
       // correctly.
@@ -3535,7 +3515,7 @@ static int process_next_cpt_value(ins_compl_next_state_T *st, int *compl_type_ar
   } else if (*st->e_cpt == NUL) {
     status = INS_COMPL_CPT_END;
   } else {
-    if (ctrl_x_mode_line_or_eval()) {
+    if (rs_ctrl_x_mode_line_or_eval()) {
       // compl_type = -1;
     } else if (*st->e_cpt == 'F' || *st->e_cpt == 'o') {
       compl_type = CTRL_X_FUNCTION;
@@ -3630,7 +3610,7 @@ static void get_next_tag_completion(void)
   int num_matches;
   if (find_tags(compl_pattern.data, &num_matches, &matches,
                 TAG_REGEXP | TAG_NAMES | TAG_NOIC | TAG_INS_COMP
-                | (ctrl_x_mode_not_default() ? TAG_VERBOSE : 0),
+                | (rs_ctrl_x_mode_not_default() ? TAG_VERBOSE : 0),
                 TAG_MANY, curbuf->b_ffname) == OK && num_matches > 0) {
     ins_compl_add_matches(num_matches, matches, p_ic);
   }
@@ -3668,7 +3648,7 @@ static void fuzzy_longest_match(void)
   compl_T *nn_compl = compl_first_match->cp_next->cp_next;
   bool more_candidates = nn_compl && nn_compl != compl_first_match;
 
-  compl_T *compl = ctrl_x_mode_whole_line() ? compl_first_match
+  compl_T *compl = rs_ctrl_x_mode_whole_line() ? compl_first_match
                                             : compl_first_match->cp_next;
   if (compl_num_bests == 1) {
     // no more candidates insert the match str
@@ -3902,7 +3882,7 @@ static char *ins_compl_get_next_word_or_line(buf_T *ins_buf, pos_T *cur_match_po
   *match_len = 0;
   char *ptr = ml_get_buf(ins_buf, cur_match_pos->lnum) + cur_match_pos->col;
   int len = ml_get_buf_len(ins_buf, cur_match_pos->lnum) - cur_match_pos->col;
-  if (ctrl_x_mode_line_or_eval()) {
+  if (rs_ctrl_x_mode_line_or_eval()) {
     if (compl_status_adding()) {
       if (cur_match_pos->lnum >= ins_buf->b_ml.ml_line_count) {
         return NULL;
@@ -4022,9 +4002,9 @@ static int get_next_default_completion(ins_compl_next_state_T *st, pos_T *start_
       found_new_match = search_for_fuzzy_match(st->ins_buf,
                                                st->cur_match_pos, leader, compl_direction,
                                                start_pos, &len, &ptr, &score);
-      // ctrl_x_mode_line_or_eval() || word-wise search that
+      // rs_ctrl_x_mode_line_or_eval() || word-wise search that
       // has added a word that was at the beginning of the line.
-    } else if (ctrl_x_mode_whole_line() || ctrl_x_mode_eval()
+    } else if (rs_ctrl_x_mode_whole_line() || ctrl_x_mode_eval()
                || (compl_cont_status & CONT_SOL)) {
       found_new_match = search_for_exact_line(st->ins_buf, st->cur_match_pos,
                                               compl_direction, compl_pattern.data);
@@ -4256,7 +4236,7 @@ static bool get_next_completion_match(int type, ins_compl_next_state_T *st, pos_
     break;
 
   case CTRL_X_FUNCTION:
-    if (ctrl_x_mode_normal()) {  // Invoked by a func in 'cpt' option
+    if (rs_ctrl_x_mode_normal()) {  // Invoked by a func in 'cpt' option
       get_cpt_func_completion_matches(st->func_cb);
     } else {
       expand_by_function(type, compl_pattern.data, NULL);
@@ -4444,7 +4424,7 @@ static int ins_compl_get_exp(pos_T *ini)
   compl_old_match = compl_curr_match;   // remember the last current match
   st.cur_match_pos = rs_compl_dir_forward() ? &st.last_match_pos : &st.first_match_pos;
 
-  bool normal_mode_strict = ctrl_x_mode_normal() && !ctrl_x_mode_line_or_eval()
+  bool normal_mode_strict = rs_ctrl_x_mode_normal() && !rs_ctrl_x_mode_line_or_eval()
                             && !(compl_cont_status & CONT_LOCAL)
                             && cpt_sources_array != NULL;
   if (normal_mode_strict) {
@@ -4466,7 +4446,7 @@ static int ins_compl_get_exp(pos_T *ini)
     // For ^N/^P pick a new entry from e_cpt if compl_started is off,
     // or if found_all says this entry is done.  For ^X^L only use the
     // entries from 'complete' that look in loaded buffers.
-    if ((ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval())
+    if ((rs_ctrl_x_mode_normal() || rs_ctrl_x_mode_line_or_eval())
         && (!compl_started || st.found_all)) {
       int status = process_next_cpt_value(&st, &type, &start_pos,
                                           rs_cot_fuzzy(), &may_advance_cpt_idx);
@@ -4515,7 +4495,7 @@ static int ins_compl_get_exp(pos_T *ini)
 
     // break the loop for specialized modes (use 'complete' just for the
     // generic ctrl_x_mode == CTRL_X_NORMAL) or when we've found a new match
-    if ((ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval())
+    if ((rs_ctrl_x_mode_not_default() && !rs_ctrl_x_mode_line_or_eval())
         || found_new_match != FAIL) {
       if (got_int) {
         break;
@@ -4525,7 +4505,7 @@ static int ins_compl_get_exp(pos_T *ini)
         ins_compl_check_keys(0, false);
       }
 
-      if ((ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval())
+      if ((rs_ctrl_x_mode_not_default() && !rs_ctrl_x_mode_line_or_eval())
           || compl_interrupted) {
         break;
       }
@@ -4558,14 +4538,14 @@ static int ins_compl_get_exp(pos_T *ini)
   cpt_sources_index = -1;
   compl_started = true;
 
-  if ((ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval())
+  if ((rs_ctrl_x_mode_normal() || rs_ctrl_x_mode_line_or_eval())
       && *st.e_cpt == NUL) {  // Got to end of 'complete'
     found_new_match = FAIL;
   }
 
   int match_count = -1;  // total of matches, unknown
   if (found_new_match == FAIL
-      || (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval())) {
+      || (rs_ctrl_x_mode_not_default() && !rs_ctrl_x_mode_line_or_eval())) {
     match_count = rs_ins_compl_make_cyclic();
   }
 
@@ -4586,7 +4566,7 @@ static int ins_compl_get_exp(pos_T *ini)
   }
   may_trigger_modechanged();
 
-  if (match_count > 0 && !ctrl_x_mode_spell()) {
+  if (match_count > 0 && !rs_ctrl_x_mode_spell()) {
     if (rs_is_nearest_active() && !ins_compl_has_preinsert()) {
       sort_compl_match_list(cp_compare_nearest);
     }
@@ -4751,7 +4731,7 @@ static char *find_common_prefix(size_t *prefix_len, bool curbuf_only)
     String *leader = get_leader_for_startcol(compl, true);
 
     // Apply 'smartcase' behavior during normal mode
-    if (ctrl_x_mode_normal() && !p_inf && leader->data && !ignorecase(leader->data)) {
+    if (rs_ctrl_x_mode_normal() && !p_inf && leader->data && !ignorecase(leader->data)) {
       compl->cp_flags &= ~CP_ICASE;
     }
 
@@ -5215,7 +5195,7 @@ void ins_compl_check_keys(int frequency, bool in_compl_func)
       }
     }
   } else {
-    bool normal_mode_strict = ctrl_x_mode_normal() && !ctrl_x_mode_line_or_eval()
+    bool normal_mode_strict = rs_ctrl_x_mode_normal() && !rs_ctrl_x_mode_line_or_eval()
                               && !(compl_cont_status & CONT_LOCAL)
                               && cpt_sources_array != NULL && cpt_sources_index >= 0;
     if (normal_mode_strict && (compl_autocomplete || p_cto > 0)) {
@@ -5242,7 +5222,7 @@ void ins_compl_check_keys(int frequency, bool in_compl_func)
 /// Uses the global variables: compl_cont_status and ctrl_x_mode
 static int get_normal_compl_info(char *line, int startcol, colnr_T curs_col)
 {
-  if ((compl_cont_status & CONT_SOL) || ctrl_x_mode_path_defines()) {
+  if ((compl_cont_status & CONT_SOL) || rs_ctrl_x_mode_path_defines()) {
     if (!compl_status_adding()) {
       while (--startcol >= 0 && vim_isIDc((uint8_t)line[startcol])) {}
       compl_col += ++startcol;
@@ -5312,7 +5292,7 @@ static int get_normal_compl_info(char *line, int startcol, colnr_T curs_col)
   }
 
   // Call functions in 'complete' with 'findstart=1'
-  if (ctrl_x_mode_normal() && !(compl_cont_status & CONT_LOCAL)) {
+  if (rs_ctrl_x_mode_normal() && !(compl_cont_status & CONT_LOCAL)) {
     // ^N completion, not complete() or ^X^N
     setup_cpt_sources();
     prepare_cpt_compl_funcs();
@@ -5446,7 +5426,7 @@ static int get_userdefined_compl_info(colnr_T curs_col, Callback *cb, int *start
     // length as a string
     char *funcname = get_complete_funcname(ctrl_x_mode);
     if (*funcname == NUL) {
-      semsg(_(e_notset), ctrl_x_mode_function() ? "completefunc" : "omnifunc");
+      semsg(_(e_notset), rs_ctrl_x_mode_function() ? "completefunc" : "omnifunc");
       return FAIL;
     }
     cb = get_insert_callback(ctrl_x_mode);
@@ -5543,26 +5523,26 @@ static int get_spell_compl_info(int startcol, colnr_T curs_col)
 /// @return  OK on success.
 static int compl_get_info(char *line, int startcol, colnr_T curs_col, bool *line_invalid)
 {
-  if (ctrl_x_mode_normal() || ctrl_x_mode_register()
+  if (rs_ctrl_x_mode_normal() || rs_ctrl_x_mode_register()
       || ((ctrl_x_mode & CTRL_X_WANT_IDENT)
           && !thesaurus_func_complete(ctrl_x_mode))) {
     if (get_normal_compl_info(line, startcol, curs_col) != OK) {
       return FAIL;
     }
     *line_invalid = true;  // 'cpt' func may have invalidated "line"
-  } else if (ctrl_x_mode_line_or_eval()) {
+  } else if (rs_ctrl_x_mode_line_or_eval()) {
     return get_wholeline_compl_info(line, curs_col);
-  } else if (ctrl_x_mode_files()) {
+  } else if (rs_ctrl_x_mode_files()) {
     return get_filename_compl_info(line, startcol, curs_col);
   } else if (ctrl_x_mode == CTRL_X_CMDLINE) {
     return get_cmdline_compl_info(line, curs_col);
-  } else if (ctrl_x_mode_function() || ctrl_x_mode_omni()
+  } else if (rs_ctrl_x_mode_function() || rs_ctrl_x_mode_omni()
              || thesaurus_func_complete(ctrl_x_mode)) {
     if (get_userdefined_compl_info(curs_col, NULL, NULL) != OK) {
       return FAIL;
     }
     *line_invalid = true;  // "line" may have become invalid
-  } else if (ctrl_x_mode_spell()) {
+  } else if (rs_ctrl_x_mode_spell()) {
     if (get_spell_compl_info(startcol, curs_col) == FAIL) {
       return FAIL;
     }
@@ -5587,9 +5567,9 @@ static void ins_compl_continue_search(char *line)
 {
   // it is a continued search
   compl_cont_status &= ~CONT_INTRPT;  // remove INTRPT
-  if (ctrl_x_mode_normal()
-      || ctrl_x_mode_path_patterns()
-      || ctrl_x_mode_path_defines()) {
+  if (rs_ctrl_x_mode_normal()
+      || rs_ctrl_x_mode_path_patterns()
+      || rs_ctrl_x_mode_path_defines()) {
     if (compl_startpos.lnum != curwin->w_cursor.lnum) {
       // line (probably) wrapped, set compl_startpos to the
       // first non_blank in the line, if it is not a wordchar
@@ -5622,7 +5602,7 @@ static void ins_compl_continue_search(char *line)
     if (compl_length < 1) {
       compl_cont_status &= CONT_LOCAL;
     }
-  } else if (ctrl_x_mode_line_or_eval() || ctrl_x_mode_register()) {
+  } else if (rs_ctrl_x_mode_line_or_eval() || rs_ctrl_x_mode_register()) {
     compl_cont_status = CONT_ADDING | CONT_N_ADDS;
   } else {
     compl_cont_status = 0;
@@ -5662,7 +5642,7 @@ static int ins_compl_start(void)
   int startcol = 0;  // column where searched text starts
   if (!compl_status_adding()) {   // normal expansion
     compl_cont_mode = ctrl_x_mode;
-    if (ctrl_x_mode_not_default()) {
+    if (rs_ctrl_x_mode_not_default()) {
       // Remove LOCAL if ctrl_x_mode != CTRL_X_NORMAL
       compl_cont_status = 0;
     }
@@ -5675,7 +5655,7 @@ static int ins_compl_start(void)
   // Work out completion pattern and original text -- webb
   bool line_invalid = false;
   if (compl_get_info(line, startcol, curs_col, &line_invalid) == FAIL) {
-    if (ctrl_x_mode_function() || ctrl_x_mode_omni()
+    if (rs_ctrl_x_mode_function() || rs_ctrl_x_mode_omni()
         || thesaurus_func_complete(ctrl_x_mode)) {
       // restore did_ai, so that adding comment leader works
       did_ai = save_did_ai;
@@ -5691,7 +5671,7 @@ static int ins_compl_start(void)
     if (!shortmess(SHM_COMPLETIONMENU)) {
       edit_submode_pre = _(" Adding");
     }
-    if (ctrl_x_mode_line_or_eval()) {
+    if (rs_ctrl_x_mode_line_or_eval()) {
       // Insert a new line, keep indentation but ignore 'comments'.
       char *old = curbuf->b_p_com;
 
@@ -5828,7 +5808,7 @@ static void ins_compl_show_statusmsg(void)
 /// Returns OK if completion was done, FAIL if something failed.
 int ins_complete(int c, bool enable_pum)
 {
-  const bool disable_ac_delay = compl_started && ctrl_x_mode_normal()
+  const bool disable_ac_delay = compl_started && rs_ctrl_x_mode_normal()
                                 && (c == Ctrl_N || c == Ctrl_P || c == Ctrl_R
                                     || rs_ins_compl_pum_key(c));
 
@@ -5879,9 +5859,9 @@ int ins_complete(int c, bool enable_pum)
     // (such as M in M'exico) if not tried already.  -- Acevedo
     if (compl_length > 1
         || compl_status_adding()
-        || (ctrl_x_mode_not_default()
-            && !ctrl_x_mode_path_patterns()
-            && !ctrl_x_mode_path_defines())) {
+        || (rs_ctrl_x_mode_not_default()
+            && !rs_ctrl_x_mode_path_patterns()
+            && !rs_ctrl_x_mode_path_defines())) {
       compl_cont_status &= ~CONT_N_ADDS;
     }
   }
@@ -5965,7 +5945,7 @@ static unsigned quote_meta(char *dest, char *src, int len)
     case '.':
     case '*':
     case '[':
-      if (ctrl_x_mode_dictionary() || ctrl_x_mode_thesaurus()) {
+      if (rs_ctrl_x_mode_dictionary() || rs_ctrl_x_mode_thesaurus()) {
         break;
       }
       FALLTHROUGH;
@@ -5975,7 +5955,7 @@ static unsigned quote_meta(char *dest, char *src, int len)
       }
       FALLTHROUGH;
     case '\\':
-      if (ctrl_x_mode_dictionary() || ctrl_x_mode_thesaurus()) {
+      if (rs_ctrl_x_mode_dictionary() || rs_ctrl_x_mode_thesaurus()) {
         break;
       }
       FALLTHROUGH;

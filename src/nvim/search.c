@@ -166,6 +166,7 @@ extern void rs_cmdline_search_stat(int dirc, int pos_lnum, int pos_col, int pos_
                                    bool recompute, int maxcount, int timeout);
 
 // Rust FFI declarations for pattern utilities
+extern int rs_ctrl_x_mode_not_default(void);
 extern int rs_pat_has_uppercase(const char *pat);
 extern int rs_ignorecase(const char *pat);
 extern int rs_ignorecase_opt(const char *pat, int ic, int scs);
@@ -652,7 +653,7 @@ int ignorecase_opt(char *pat, int ic_in, int scs)
 {
   int ic = ic_in;
   if (ic && !no_smartcase && scs
-      && !(ctrl_x_mode_not_default()
+      && !(rs_ctrl_x_mode_not_default()
            && curbuf->b_p_inf)) {
     ic = !pat_has_uppercase(pat);
   }

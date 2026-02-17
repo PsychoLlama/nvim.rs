@@ -77,6 +77,10 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 #define loop_get_events(l) rs_loop_get_events(l)
 
+// Rust implementations from insexpand crate
+extern int rs_ctrl_x_mode_not_default(void);
+extern int rs_compl_status_local(void);
+
 extern int rs_stuff_empty(void);
 extern int rs_readbuf1_empty(void);
 extern int rs_typebuf_changed(int tb_change_cnt);
@@ -1602,8 +1606,8 @@ static bool at_ins_compl_key(void)
   if (typebuf.tb_len > 3 && c == K_SPECIAL && p[1] == KS_MODIFIER && (p[2] & MOD_MASK_CTRL)) {
     c = p[3] & 0x1f;
   }
-  return (ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c))
-         || (compl_status_local() && (c == Ctrl_N || c == Ctrl_P));
+  return (rs_ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c))
+         || (rs_compl_status_local() && (c == Ctrl_N || c == Ctrl_P));
 }
 
 /// Check if typebuf.tb_buf[] contains a modifier plus key that can be changed

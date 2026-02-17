@@ -82,6 +82,24 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
+// Rust implementations (called directly instead of C wrappers)
+extern int rs_ctrl_x_mode_none(void);
+extern int rs_ctrl_x_mode_normal(void);
+extern int rs_ctrl_x_mode_scroll(void);
+extern int rs_ctrl_x_mode_whole_line(void);
+extern int rs_ctrl_x_mode_files(void);
+extern int rs_ctrl_x_mode_tags(void);
+extern int rs_ctrl_x_mode_path_patterns(void);
+extern int rs_ctrl_x_mode_path_defines(void);
+extern int rs_ctrl_x_mode_dictionary(void);
+extern int rs_ctrl_x_mode_thesaurus(void);
+extern int rs_ctrl_x_mode_cmdline(void);
+extern int rs_ctrl_x_mode_function(void);
+extern int rs_ctrl_x_mode_omni(void);
+extern int rs_ctrl_x_mode_spell(void);
+extern int rs_ctrl_x_mode_line_or_eval(void);
+extern int rs_ctrl_x_mode_register(void);
+
 typedef struct {
   VimState state;
   cmdarg_T *ca;
@@ -1487,7 +1505,7 @@ int nvim_edit_ins_ctrl_ey(int tc)
 {
   int c = tc;
 
-  if (ctrl_x_mode_scroll()) {
+  if (rs_ctrl_x_mode_scroll()) {
     if (c == Ctrl_Y) {
       scrolldown_clamp();
     } else {
@@ -2036,7 +2054,7 @@ static int insert_execute(VimState *state, int key)
       // "compl_leader".  Except when at the original match and
       // there is nothing to add, CTRL-L works like CTRL-P then.
       if (s->c == Ctrl_L
-          && (!ctrl_x_mode_line_or_eval()
+          && (!rs_ctrl_x_mode_line_or_eval()
               || ins_compl_long_shown_match())) {
         ins_compl_addfrommatch();
         return 1;  // continue
@@ -2116,7 +2134,7 @@ static int insert_execute(VimState *state, int key)
     s->c = do_digraph(s->c);
   }
 
-  if ((s->c == Ctrl_V || s->c == Ctrl_Q) && ctrl_x_mode_cmdline()) {
+  if ((s->c == Ctrl_V || s->c == Ctrl_Q) && rs_ctrl_x_mode_cmdline()) {
     insert_do_complete(s);
     insert_handle_key_post(s);
     return 1;
@@ -2128,7 +2146,7 @@ static int insert_execute(VimState *state, int key)
     return 1;  // continue
   }
 
-  if (cindent_on() && ctrl_x_mode_none()) {
+  if (cindent_on() && rs_ctrl_x_mode_none()) {
     s->line_is_white = inindent(0);
     // A key name preceded by a bang means this key is not to be
     // inserted.  Skip ahead to the re-indenting below.
@@ -2209,7 +2227,7 @@ static int insert_handle_key(InsertState *s)
     goto normalchar;                // insert CTRL-Z as normal char
 
   case Ctrl_O:        // execute one command
-    if (ctrl_x_mode_omni()) {
+    if (rs_ctrl_x_mode_omni()) {
       insert_do_complete(s);
       break;
     }
@@ -2261,7 +2279,7 @@ static int insert_handle_key(InsertState *s)
     break;
 
   case Ctrl_R:        // insert the contents of a register
-    if (ctrl_x_mode_register() && !ins_compl_active()) {
+    if (rs_ctrl_x_mode_register() && !ins_compl_active()) {
       insert_do_complete(s);
       break;
     }
@@ -2286,14 +2304,14 @@ static int insert_handle_key(InsertState *s)
     break;
 
   case Ctrl_D:        // Make indent one shiftwidth smaller.
-    if (ctrl_x_mode_path_defines()) {
+    if (rs_ctrl_x_mode_path_defines()) {
       insert_do_complete(s);
       break;
     }
     FALLTHROUGH;
 
   case Ctrl_T:        // Make indent one shiftwidth greater.
-    if (s->c == Ctrl_T && ctrl_x_mode_thesaurus()) {
+    if (s->c == Ctrl_T && rs_ctrl_x_mode_thesaurus()) {
       if (check_compl_option(false)) {
         insert_do_complete(s);
       }
@@ -2338,7 +2356,7 @@ static int insert_handle_key(InsertState *s)
 
   case Ctrl_U:        // delete all inserted text in current line
     // CTRL-X CTRL-U completes with 'completefunc'.
-    if (ctrl_x_mode_function()) {
+    if (rs_ctrl_x_mode_function()) {
       insert_do_complete(s);
     } else {
       s->did_backspace = ins_bs(s->c, BACKSPACE_LINE, &s->inserted_space);
@@ -2520,7 +2538,7 @@ check_pum:
     FALLTHROUGH;
 
   case TAB:           // TAB or Complete patterns along path
-    if (ctrl_x_mode_path_patterns()) {
+    if (rs_ctrl_x_mode_path_patterns()) {
       insert_do_complete(s);
       break;
     }
@@ -2568,7 +2586,7 @@ check_pum:
     break;
 
   case Ctrl_K:        // digraph or keyword completion
-    if (ctrl_x_mode_dictionary()) {
+    if (rs_ctrl_x_mode_dictionary()) {
       if (check_compl_option(true)) {
         insert_do_complete(s);
       }
@@ -2586,7 +2604,7 @@ check_pum:
     break;
 
   case Ctrl_RSB:      // Tag name completion after ^X
-    if (!ctrl_x_mode_tags()) {
+    if (!rs_ctrl_x_mode_tags()) {
       goto normalchar;
     } else {
       insert_do_complete(s);
@@ -2594,7 +2612,7 @@ check_pum:
     break;
 
   case Ctrl_F:        // File name completion after ^X
-    if (!ctrl_x_mode_files()) {
+    if (!rs_ctrl_x_mode_files()) {
       goto normalchar;
     } else {
       insert_do_complete(s);
@@ -2603,7 +2621,7 @@ check_pum:
 
   case 's':           // Spelling completion after ^X
   case Ctrl_S:
-    if (!ctrl_x_mode_spell()) {
+    if (!rs_ctrl_x_mode_spell()) {
       goto normalchar;
     } else {
       insert_do_complete(s);
@@ -2611,7 +2629,7 @@ check_pum:
     break;
 
   case Ctrl_L:        // Whole line completion after ^X
-    if (!ctrl_x_mode_whole_line()) {
+    if (!rs_ctrl_x_mode_whole_line()) {
       goto normalchar;
     }
     FALLTHROUGH;
@@ -2621,7 +2639,7 @@ check_pum:
     // if 'complete' is empty then plain ^P is no longer special,
     // but it is under other ^X modes
     if (*curbuf->b_p_cpt == NUL
-        && (ctrl_x_mode_normal() || ctrl_x_mode_whole_line())
+        && (rs_ctrl_x_mode_normal() || rs_ctrl_x_mode_whole_line())
         && !compl_status_local()) {
       goto normalchar;
     }
@@ -2738,7 +2756,7 @@ static void insert_handle_key_post(InsertState *s)
   // If typed something may trigger CursorHoldI again.
   if (s->c != K_EVENT
       // but not in CTRL-X mode, a script can't restore the state
-      && ctrl_x_mode_normal()) {
+      && rs_ctrl_x_mode_normal()) {
     did_cursorhold = false;
   }
 
@@ -2753,7 +2771,7 @@ static void insert_handle_key_post(InsertState *s)
     s->inserted_space = false;
   }
 
-  if (can_cindent && cindent_on() && ctrl_x_mode_normal()) {
+  if (can_cindent && cindent_on() && rs_ctrl_x_mode_normal()) {
     insert_do_cindent(s);
   }
 }

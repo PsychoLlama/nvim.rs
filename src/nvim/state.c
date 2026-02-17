@@ -37,8 +37,9 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 #define loop_get_events(l) rs_loop_get_events(l)
 
-// Rust implementation
+// Rust implementations
 extern int rs_get_real_state(void);
+extern int rs_ctrl_x_mode_not_defined_yet(void);
 
 void state_enter(VimState *s)
   FUNC_ATTR_NONNULL_ALL
@@ -204,7 +205,7 @@ void get_mode(char *buf)
     }
     if (ins_compl_active()) {
       buf[i++] = 'c';
-    } else if (ctrl_x_mode_not_defined_yet()) {
+    } else if (rs_ctrl_x_mode_not_defined_yet()) {
       buf[i++] = 'x';
     }
   } else if ((State & MODE_CMDLINE) || exmode_active) {
