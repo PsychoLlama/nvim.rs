@@ -119,6 +119,18 @@ extern bool rs_marktree_itr_next_skip(MarkTree *b, MarkTreeIter *itr, bool skip,
 extern bool rs_marktree_itr_check_filter(MarkTree *b, MarkTreeIter *itr, int stop_row,
                                          int stop_col, MetaFilter meta_filter);
 
+// Filter functions
+extern bool rs_marktree_itr_get_filter(MarkTree *b, int32_t row, int col, int stop_row,
+                                       int stop_col, MetaFilter meta_filter, MarkTreeIter *itr);
+extern bool rs_marktree_itr_next_filter(MarkTree *b, MarkTreeIter *itr, int stop_row,
+                                        int stop_col, MetaFilter meta_filter);
+extern bool rs_marktree_itr_step_out_filter(MarkTree *b, MarkTreeIter *itr,
+                                            MetaFilter meta_filter);
+
+// Overlap functions
+extern bool rs_marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeIter *itr);
+extern bool rs_marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair);
+
 // Tree operations
 extern void rs_marktree_put_key(MarkTree *b, MTKey k);
 extern void rs_marktree_clear(MarkTree *b);
@@ -1493,50 +1505,18 @@ static bool marktree_itr_next_skip(MarkTree *b, MarkTreeIter *itr, bool skip, bo
 bool marktree_itr_get_filter(MarkTree *b, int32_t row, int col, int stop_row, int stop_col,
                              MetaFilter meta_filter, MarkTreeIter *itr)
 {
-  if (!meta_has(b->meta_root, meta_filter)) {
-    return false;
-  }
-  if (!marktree_itr_get_ext(b, MTPos(row, col), itr, false, false, NULL, meta_filter)) {
-    return false;
-  }
-
-  return marktree_itr_check_filter(b, itr, stop_row, stop_col, meta_filter);
+  return rs_marktree_itr_get_filter(b, row, col, stop_row, stop_col, meta_filter, itr);
 }
 
-/// use after marktree_itr_get_overlap() to continue in a filtered fashion
-///
-/// not strictly needed but steps out to the right parent node where there
-/// might be "start" keys matching the filter ("end" keys are properly handled
-/// by marktree_itr_step_overlap() already)
 bool marktree_itr_step_out_filter(MarkTree *b, MarkTreeIter *itr, MetaFilter meta_filter)
 {
-  if (!meta_has(b->meta_root, meta_filter)) {
-    itr->x = NULL;
-    return false;
-  }
-
-  while (itr->x && itr->x->parent) {
-    if (meta_has(itr->x->parent->meta[itr->x->p_idx], meta_filter)) {
-      return true;
-    }
-
-    itr->i = itr->x->n;
-
-    // no filter needed, just reuse the code path for step to parent
-    marktree_itr_next_skip(b, itr, true, false, NULL, NULL);
-  }
-
-  return itr->x;
+  return rs_marktree_itr_step_out_filter(b, itr, meta_filter);
 }
 
 bool marktree_itr_next_filter(MarkTree *b, MarkTreeIter *itr, int stop_row, int stop_col,
                               MetaFilter meta_filter)
 {
-  if (!marktree_itr_next_skip(b, itr, false, false, NULL, meta_filter)) {
-    return false;
-  }
-
-  return marktree_itr_check_filter(b, itr, stop_row, stop_col, meta_filter);
+  return rs_marktree_itr_next_filter(b, itr, stop_row, stop_col, meta_filter);
 }
 
 static bool marktree_itr_check_filter(MarkTree *b, MarkTreeIter *itr, int stop_row, int stop_col,
@@ -1588,113 +1568,12 @@ static bool itr_eq(MarkTreeIter *itr1, MarkTreeIter *itr2)
 ///               could return false
 bool marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeIter *itr)
 {
-  if (b->n_keys == 0) {
-    itr->x = NULL;
-    return false;
-  }
-
-  itr->x = b->root;
-  itr->i = -1;
-  itr->lvl = 0;
-  itr->pos = MTPos(0, 0);
-  itr->intersect_pos = MTPos(row, col);
-  // intersect_pos but will be adjusted relative itr->x
-  itr->intersect_pos_x = MTPos(row, col);
-  itr->intersect_idx = 0;
-  return true;
+  return rs_marktree_itr_get_overlap(b, row, col, itr);
 }
 
-/// Step through all overlapping pairs at a position.
-///
-/// This function must only be used with an iterator from |marktree_itr_step_overlap|
-///
-/// @return true if a valid pair was found (returned as `pair`)
-/// When all overlapping mark pairs have been found, false will be returned. `itr`
-/// is then valid as an ordinary iterator at the (row, col) position specified in
-/// marktree_itr_step_overlap
 bool marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair)
 {
-  // phase one: we start at the root node and step inwards towards itr->intersect_pos
-  // (the position queried in marktree_itr_get_overlap)
-  //
-  // For each node (ancestor node to the node containing the sought position)
-  // we return all intersecting intervals, one at a time
-  while (itr->i == -1) {
-    if (itr->intersect_idx < kv_size(itr->x->intersect)) {
-      uint64_t id = kv_A(itr->x->intersect, itr->intersect_idx++);
-      *pair = mtpair_from(marktree_lookup(b, id, NULL),
-                          marktree_lookup(b, id|MARKTREE_END_FLAG, NULL));
-      return true;
-    }
-
-    if (itr->x->level == 0) {
-      itr->s[itr->lvl].i = itr->i = 0;
-      break;
-    }
-
-    MTKey k = { .pos = itr->intersect_pos_x, .flags = 0 };
-    itr->i = marktree_getp_aux(itr->x, k, 0) + 1;
-
-    itr->s[itr->lvl].i = itr->i;
-    itr->s[itr->lvl].oldcol = itr->pos.col;
-
-    if (itr->i > 0) {
-      compose(&itr->pos, itr->x->key[itr->i - 1].pos);
-      relative(itr->x->key[itr->i - 1].pos, &itr->intersect_pos_x);
-    }
-    itr->x = itr->x->ptr[itr->i];
-    itr->lvl++;
-    itr->i = -1;
-    itr->intersect_idx = 0;
-  }
-
-  // phase two: we now need to handle the node found at itr->intersect_pos
-  // first consider all start nodes in the node before this position.
-  while (itr->i < itr->x->n && pos_less(rawkey(itr).pos, itr->intersect_pos_x)) {
-    MTKey k = itr->x->key[itr->i++];
-    itr->s[itr->lvl].i = itr->i;
-    if (mt_start(k)) {
-      MTKey end = marktree_lookup(b, mt_lookup_id(k.ns, k.id, true), NULL);
-      if (pos_less(end.pos, itr->intersect_pos)) {
-        continue;
-      }
-
-      unrelative(itr->pos, &k.pos);
-      *pair = mtpair_from(k, end);
-      return true;  // it's a start!
-    }
-  }
-
-  // phase 2B: We also need to step to the end of this node and consider all end marks, which
-  // might end an interval overlapping itr->intersect_pos
-  while (itr->i < itr->x->n) {
-    MTKey k = itr->x->key[itr->i++];
-    if (mt_end(k)) {
-      uint64_t id = mt_lookup_id(k.ns, k.id, false);
-      if (id2node(b, id) == itr->x) {
-        continue;
-      }
-      unrelative(itr->pos, &k.pos);
-      MTKey start = marktree_lookup(b, id, NULL);
-      if (pos_leq(itr->intersect_pos, start.pos)) {
-        continue;
-      }
-      *pair = mtpair_from(start, k);
-      return true;  // end of a range which began before us!
-    }
-  }
-
-  // when returning false, get back to the queried position, to ensure the caller
-  // can keep using it as an ordinary iterator at the queried position. The docstring
-  // for marktree_itr_get_overlap explains how this is useful.
-  itr->i = itr->s[itr->lvl].i;
-  assert(itr->i >= 0);
-  if (itr->i >= itr->x->n) {
-    marktree_itr_next(b, itr);
-  }
-
-  // either on or after the intersected position, bail out
-  return false;
+  return rs_marktree_itr_step_overlap(b, itr, pair);
 }
 
 static void swap_keys(MarkTree *b, MarkTreeIter *itr1, MarkTreeIter *itr2, DamageList *damage)
