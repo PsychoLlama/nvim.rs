@@ -233,7 +233,7 @@ extern "C" {
     fn nvim_win_get_w_grid(wp: WinHandle) -> *mut c_void;
     fn nvim_win_get_lcs_prec(wp: WinHandle) -> u32;
     fn rs_linebuf_mirror(firstp: *mut c_int, lastp: *mut c_int, clearp: *mut c_int, width: c_int);
-    fn get_showbreak_value(wp: WinHandle) -> *const c_char;
+    fn rs_get_showbreak_value(wp: WinHandle) -> *const c_char;
     fn rs_grid_adjust(view: *mut c_void, row_off: *mut c_int, col_off: *mut c_int) -> *mut c_void;
     fn rs_grid_put_linebuf(
         grid: *mut c_void,
@@ -833,7 +833,7 @@ extern "C" {
     fn nvim_wlv_get_vcol_sbr(wlv: WlvHandle) -> ColnrT;
     fn nvim_wlv_set_vcol_sbr(wlv: WlvHandle, val: ColnrT);
     fn nvim_win_get_fcs_diff(wp: WinHandle) -> ScharT;
-    // get_showbreak_value already declared above
+    // rs_get_showbreak_value already declared above
 
     // has_more_inline_virt accessors
     fn nvim_wlv_get_virt_inline_i(wlv: WlvHandle) -> usize;
@@ -1188,7 +1188,7 @@ unsafe fn handle_showbreak_and_filler_impl(wp: WinHandle, wlv: WlvHandle) {
     }
 
     // Draw 'showbreak' at the start of each broken line
-    let sbr = get_showbreak_value(wp);
+    let sbr = rs_get_showbreak_value(wp);
     let need_showbreak = nvim_wlv_get_need_showbreak(wlv);
 
     if !sbr.is_null() && *sbr != 0 && need_showbreak {
@@ -2105,7 +2105,7 @@ unsafe fn wlv_put_linebuf_impl(
     // Take care of putting "<<<" on the first line for 'smoothscroll'.
     let wlv_row = nvim_wlv_get_row(wlv);
     let skipcol = nvim_win_get_skipcol(wp);
-    let showbreak = get_showbreak_value(wp);
+    let showbreak = rs_get_showbreak_value(wp);
     let p_nu = nvim_win_get_p_nu(wp);
     let p_rnu = nvim_win_get_p_rnu(wp);
     let p_list = nvim_win_get_p_list(wp);

@@ -26,6 +26,8 @@
 
 #include "context.c.generated.h"
 
+extern void rs_optval_free(OptVal o);
+
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
 
@@ -112,7 +114,7 @@ void nvim_ctx_set_shada_restore(void)
 void nvim_ctx_restore_shada_opt(void)
 {
   set_option_value(kOptShada, saved_shada_opt, OPT_GLOBAL);
-  optval_free(saved_shada_opt);
+  rs_optval_free(saved_shada_opt);
 }
 
 /// Restores functions from a context (C accessor for Rust).

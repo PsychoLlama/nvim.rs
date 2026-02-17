@@ -231,6 +231,8 @@ typedef enum {
 
 #include "memline.c.generated.h"
 
+extern int rs_get_fileformat(buf_T *buf);
+
 // Phase 6: Rust implementations for memline
 
 // Constants and flags
@@ -794,7 +796,7 @@ int ml_open(buf_T *buf)
 
   if (!buf->b_spell) {
     b0p->b0_dirty = buf->b_changed ? B0_DIRTY : 0;
-    b0p->b0_flags = (char)(get_fileformat(buf) + 1);
+    b0p->b0_flags = (char)(rs_get_fileformat((buf_T *)buf) + 1);
     set_b0_fname(b0p, buf);
     os_get_username(b0p->b0_uname, B0_UNAME_SIZE);
     b0p->b0_uname[B0_UNAME_SIZE - 1] = NUL;
@@ -4317,7 +4319,7 @@ void ml_setflags(buf_T *buf)
   if (hp) {
     ZeroBlock *b0p = hp->bh_data;
     b0p->b0_dirty = buf->b_changed ? B0_DIRTY : 0;
-    b0p->b0_flags = (char)((b0p->b0_flags & ~B0_FF_MASK) | (uint8_t)(get_fileformat(buf) + 1));
+    b0p->b0_flags = (char)((b0p->b0_flags & ~B0_FF_MASK) | (uint8_t)(rs_get_fileformat((buf_T *)buf) + 1));
     add_b0_fenc(b0p, buf);
     hp->bh_flags |= BH_DIRTY;
     mf_sync(buf->b_ml.ml_mfp, MFS_ZERO);
@@ -4528,7 +4530,7 @@ int ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff)
   bhdr_T *hp;
   int text_end;
   int offset;
-  int ffdos = !no_ff && (get_fileformat(buf) == EOL_DOS);
+  int ffdos = !no_ff && (rs_get_fileformat((buf_T *)buf) == EOL_DOS);
   int extra = 0;
 
   // take care of cached line first. Only needed if the cached line is before

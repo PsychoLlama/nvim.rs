@@ -188,6 +188,8 @@ bool did_set_spelltab;
 
 #include "spell.c.generated.h"
 
+extern void rs_optval_free(OptVal o);
+
 // Rust implementations of spell functions
 extern bool rs_spell_valid_case(int wordflags, int treeflags);
 extern bool rs_byte_in_str(const uint8_t *str, int n);
@@ -3456,7 +3458,7 @@ void ex_spelldump(exarg_T *eap)
   // enable spelling locally in the new window
   set_option_value_give_err(kOptSpell, BOOLEAN_OPTVAL(true), OPT_LOCAL);
   set_option_value_give_err(kOptSpelllang, spl, OPT_LOCAL);
-  optval_free(spl);
+  rs_optval_free(spl);
 
   if (!buf_is_empty(curbuf)) {
     return;

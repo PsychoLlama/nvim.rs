@@ -475,6 +475,8 @@ typedef enum {
 
 #include "eval.c.generated.h"
 
+extern int rs_is_tty_option(const char *name);
+
 static uint64_t last_timer_id = 1;
 static PMap(uint64_t) timers = MAP_INIT;
 
@@ -3649,7 +3651,7 @@ int eval_option(const char **const arg, typval_T *const rettv, const bool evalua
   *option_end = NUL;
 
   int ret = OK;
-  bool is_tty_opt = is_tty_option(*arg);
+  bool is_tty_opt = rs_is_tty_option(*arg);
 
   if (opt_idx == kOptInvalid && !is_tty_opt) {
     // Only give error if result is going to be used.

@@ -34,6 +34,7 @@
 #include "plines.c.generated.h"
 
 // Rust implementations
+extern const char *rs_get_showbreak_value(win_T *win);
 extern int rs_charsize_nowrap(buf_T *buf, const char *cur, int use_tabstop, int vcol, int32_t cur_char);
 extern int rs_win_may_fill(win_T *wp);
 extern int rs_in_win_border(win_T *wp, int vcol);
@@ -395,7 +396,7 @@ CSType init_charsize_arg(CharsizeArg *csarg, win_T *wp, linenr_T lnum, char *lin
   }
 
   if (csarg->virt_row >= 0
-      || (wp->w_p_wrap && (wp->w_p_lbr || wp->w_p_bri || *get_showbreak_value(wp) != NUL))) {
+      || (wp->w_p_wrap && (wp->w_p_lbr || wp->w_p_bri || *rs_get_showbreak_value(wp) != NUL))) {
     return kCharsizeRegular;
   } else {
     return kCharsizeFast;

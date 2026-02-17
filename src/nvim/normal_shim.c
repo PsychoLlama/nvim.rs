@@ -454,6 +454,7 @@ extern bool rs_is_ident(const char *line, int offset);
 extern bool rs_find_is_eval_item(const char *ptr, int *colp, int *bnp, int dir);
 extern int rs_get_vtopline(win_T *wp);
 extern int rs_get_sidescrolloff_value(win_T *wp);
+extern const char *rs_get_showbreak_value(win_T *win);
 extern void rs_clearop(oparg_T *oap);
 extern void rs_clearopbeep(oparg_T *oap);
 extern bool rs_checkclearop(oparg_T *oap);
@@ -4305,8 +4306,8 @@ bool nv_screengo(oparg_T *oap, int dir, int dist, bool skip_conceal)
     // screenline or move two screenlines.
     validate_virtcol(curwin);
     colnr_T virtcol = curwin->w_virtcol;
-    if (virtcol > (colnr_T)width1 && *get_showbreak_value(curwin) != NUL) {
-      virtcol -= vim_strsize(get_showbreak_value(curwin));
+    if (virtcol > (colnr_T)width1 && *rs_get_showbreak_value(curwin) != NUL) {
+      virtcol -= vim_strsize((char *)rs_get_showbreak_value(curwin));
     }
 
     int c = utf_ptr2char(get_cursor_pos_ptr());

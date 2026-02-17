@@ -135,6 +135,7 @@ typedef struct {
 
 #include "ex_cmds_shim.c.generated.h"
 
+extern int rs_get_fileformat(buf_T *buf);
 extern void rs_diff_buf_add(buf_T *buf);
 extern void rs_diff_invalidate(buf_T *buf);
 
@@ -309,7 +310,7 @@ void nvim_check_pos_visual(void)
 /// Get file format of curbuf (EOL_UNIX=0, EOL_DOS=1, EOL_MAC=2).
 int nvim_get_fileformat_curbuf(void)
 {
-  return get_fileformat(curbuf);
+  return rs_get_fileformat((buf_T *)curbuf);
 }
 
 /// Wrapper for msg_multiline taking a C string.

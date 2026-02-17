@@ -104,6 +104,7 @@ extern void rs_diff_invalidate(buf_T *buf);
 #include "fileio.c.generated.h"
 
 extern int rs_default_fileformat(void);
+extern int rs_get_fileformat(buf_T *buf);
 
 static const char *e_auchangedbuf = N_("E812: Autocommands changed buffer or buffer name");
 
@@ -765,7 +766,7 @@ retry:
       fileformat = EOL_UNIX;                    // binary: use Unix format
     } else if (*p_ffs ==
                NUL) {
-      fileformat = get_fileformat(curbuf);      // use format from buffer
+      fileformat = rs_get_fileformat((buf_T *)curbuf);      // use format from buffer
     } else {
       fileformat = EOL_UNKNOWN;                 // detect from file
     }

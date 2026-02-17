@@ -58,6 +58,9 @@ typedef int (*ex_unletlock_callback)(lval_T *, char *, exarg_T *, int);
 
 #include "eval/vars.c.generated.h"
 
+extern void rs_optval_free(OptVal o);
+extern int rs_is_tty_option(const char *name);
+
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
 #define DICT_MAXNEST 100        // maximum nesting of lists and dicts
@@ -1358,7 +1361,7 @@ static char *ex_let_option(char *arg, typval_T *const tv, const bool is_const,
   const char c1 = *p;
   *p = NUL;
 
-  bool is_tty_opt = is_tty_option(arg);
+  bool is_tty_opt = rs_is_tty_option(arg);
   bool hidden = is_option_hidden(opt_idx);
   OptVal curval = is_tty_opt ? get_tty_option(arg) : get_option_value(opt_idx, opt_flags);
   OptVal newval = NIL_OPTVAL;
@@ -1415,7 +1418,7 @@ static char *ex_let_option(char *arg, typval_T *const tv, const bool is_const,
       if (curval_data != NULL && newval_data != NULL) {
         OptVal newval_old = newval;
         newval = CSTR_AS_OPTVAL(concat_str(curval_data, newval_data));
-        optval_free(newval_old);
+        rs_optval_free(newval_old);
       }
     }
   }
@@ -1428,8 +1431,8 @@ static char *ex_let_option(char *arg, typval_T *const tv, const bool is_const,
 
 theend:
   *p = c1;
-  optval_free(curval);
-  optval_free(newval);
+  rs_optval_free(curval);
+  rs_optval_free(newval);
   return arg_end;
 }
 
@@ -3188,7 +3191,7 @@ static OptVal tv_to_optval(typval_T *tv, OptIndex opt_idx, const char *option, b
   OptVal value = NIL_OPTVAL;
   char nbuf[NUMBUFLEN];
   bool err = false;
-  const bool is_tty_opt = is_tty_option(option);
+  const bool is_tty_opt = rs_is_tty_option(option);
   const bool option_has_bool = !is_tty_opt && option_has_type(opt_idx, kOptValTypeBoolean);
   const bool option_has_num = !is_tty_opt && option_has_type(opt_idx, kOptValTypeNumber);
   const bool option_has_str = is_tty_opt || option_has_type(opt_idx, kOptValTypeString);
@@ -3290,7 +3293,7 @@ static void set_option_from_tv(const char *varname, typval_T *varp)
       emsg(errmsg);
     }
   }
-  optval_free(value);
+  rs_optval_free(value);
 }
 
 /// "setwinvar()" and "settabwinvar()" functions

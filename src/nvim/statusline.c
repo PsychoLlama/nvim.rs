@@ -52,6 +52,7 @@
 #include "nvim/window.h"
 
 // Rust implementations
+extern int rs_get_fileformat(buf_T *buf);
 extern int rs_stl_connected(win_T *wp);
 extern schar_T rs_fillchar_status(int *group, win_T *wp);
 extern int rs_tabwidth_calc(int columns, int tabcount);
@@ -585,7 +586,7 @@ const char *nvim_stl_path_tail(const char *s)
 /// Get file format of buffer (returns EOL_* value).
 int nvim_stl_get_fileformat(buf_T *buf)
 {
-  return get_fileformat(buf);
+  return rs_get_fileformat(buf);
 }
 
 /// Get utf_ptr2char at the given pointer.

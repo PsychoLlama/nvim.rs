@@ -81,6 +81,8 @@
 
 #include "ops.c.generated.h"
 
+extern int rs_get_fileformat(buf_T *buf);
+
 // Rust implementations of operator functions
 extern int rs_op_on_lines(int op);
 extern int rs_op_is_change(int op);
@@ -2882,7 +2884,7 @@ int nvim_cpi_get_ml_line_count(void)
 /// Get EOL size based on file format (1 for unix, 2 for DOS).
 int nvim_cpi_get_eol_size(void)
 {
-  return (get_fileformat(curbuf) == EOL_DOS) ? 2 : 1;
+  return (rs_get_fileformat((buf_T *)curbuf) == EOL_DOS) ? 2 : 1;
 }
 
 /// Get visual mode state in one batch call.

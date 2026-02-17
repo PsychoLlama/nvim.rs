@@ -21,6 +21,8 @@
 
 #include "api/options.c.generated.h"
 
+extern void rs_optval_free(OptVal o);
+
 static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *opt_idxp,
                                       int *opt_flags, OptScope *scope, void **from, char **filetype,
                                       Error *err)
@@ -200,7 +202,7 @@ Object nvim_get_option_value(String name, Dict(option) *opts, Error *err)
 
   return optval_as_object(value);
 err:
-  optval_free(value);
+  rs_optval_free(value);
   return (Object)OBJECT_INIT;
 }
 

@@ -469,7 +469,7 @@ extern "C" {
 
     // Option lookup and validation
     fn find_option_end(arg: *const c_char, opt_idx: *mut c_int) -> *const c_char;
-    fn is_tty_option(name: *const c_char) -> c_int;
+    fn rs_is_tty_option(name: *const c_char) -> c_int;
     fn get_varp_scope(opt: *const std::ffi::c_void, opt_flags: c_int) -> *mut std::ffi::c_void;
     fn nvim_validate_opt_idx(
         win: *const std::ffi::c_void,
@@ -802,7 +802,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
 
     if opt_idx != K_OPT_INVALID {
         // Valid option found
-    } else if is_tty_option(arg) != 0 {
+    } else if rs_is_tty_option(arg) != 0 {
         // Silently ignore TTY options
         return;
     } else {

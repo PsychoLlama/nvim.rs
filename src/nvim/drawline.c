@@ -133,6 +133,7 @@ typedef struct {
 #include "drawline.c.generated.h"
 
 // Rust implementations
+extern const char *rs_get_showbreak_value(win_T *win);
 extern schar_T rs_get_lcs_ext(win_T *wp);
 extern void rs_margin_columns_win(win_T *wp, int *left_col, int *right_col);
 extern int rs_get_rightmost_vcol(win_T *wp, const int *color_cols);
@@ -2430,7 +2431,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
         if (mb_c == TAB && (!wp->w_p_list || wp->w_p_lcs_chars.tab1)) {
           int tab_len = 0;
           colnr_T vcol_adjusted = wlv.vcol;  // removed showbreak length
-          char *const sbr = get_showbreak_value(wp);
+          char *const sbr = (char *)rs_get_showbreak_value(wp);
 
           // Only adjust the tab_len, when at the first column after the
           // showbreak value was drawn.

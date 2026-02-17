@@ -33,6 +33,8 @@
 
 #include "charset.c.generated.h"
 
+extern int rs_get_fileformat(buf_T *buf);
+
 // Rust functions that keep their rs_ prefix (have C wrapper logic)
 extern void rs_transchar_nonprint(char *charbuf, int c, bool use_uhex, int fileformat);
 extern void rs_transchar_buf(char *buf, int c, bool chartab_initialized, bool use_uhex, int fileformat);
@@ -275,7 +277,7 @@ char *transchar(int c)
 char *transchar_buf(const buf_T *buf, int c)
 {
   bool use_uhex = (dy_flags & kOptDyFlagUhex) != 0;
-  int fileformat = (buf != NULL) ? get_fileformat(buf) : -1;
+  int fileformat = (buf != NULL) ? rs_get_fileformat((buf_T *)buf) : -1;
   rs_transchar_buf((char *)transchar_charbuf, c, chartab_initialized, use_uhex, fileformat);
   return (char *)transchar_charbuf;
 }
@@ -304,7 +306,7 @@ char *transchar_byte_buf(const buf_T *buf, const int c)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
   bool use_uhex = (dy_flags & kOptDyFlagUhex) != 0;
-  int fileformat = (buf != NULL) ? get_fileformat(buf) : -1;
+  int fileformat = (buf != NULL) ? rs_get_fileformat((buf_T *)buf) : -1;
   rs_transchar_byte_buf((char *)transchar_charbuf, c, chartab_initialized, use_uhex, fileformat);
   return (char *)transchar_charbuf;
 }
@@ -321,7 +323,7 @@ char *transchar_byte_buf(const buf_T *buf, const int c)
 void transchar_nonprint(const buf_T *buf, char *charbuf, int c)
 {
   bool use_uhex = (dy_flags & kOptDyFlagUhex) != 0;
-  int fileformat = (buf != NULL) ? get_fileformat(buf) : -1;
+  int fileformat = (buf != NULL) ? rs_get_fileformat((buf_T *)buf) : -1;
   rs_transchar_nonprint(charbuf, c, use_uhex, fileformat);
 }
 

@@ -124,7 +124,6 @@ _Static_assert(sizeof(vimoption_T) == 160,
 extern const char *rs_find_tty_option_end(const char *arg);
 extern int rs_is_tty_option(const char *name);
 extern const char *rs_skip_to_option_part(const char *p);
-extern int rs_get_fileformat(buf_T *buf);
 extern int rs_default_fileformat(void);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
@@ -889,7 +888,7 @@ static void alloc_options_default(void)
 /// @param  value    New default value. Must be allocated.
 static void change_option_default(const OptIndex opt_idx, OptVal value)
 {
-  optval_free(options[opt_idx].def_val);
+  rs_optval_free(options[opt_idx].def_val);
   options[opt_idx].def_val = value;
 }
 
@@ -993,13 +992,13 @@ void free_all_options(void)
       // global option: free value and default value.
       // hidden option: free default value only.
       if (!hidden) {
-        optval_free(optval_from_varp(opt_idx, options[opt_idx].var));
+        rs_optval_free(optval_from_varp(opt_idx, options[opt_idx].var));
       }
     } else if (!option_is_window_local(opt_idx)) {
       // buffer-local option: free global value.
-      optval_free(optval_from_varp(opt_idx, options[opt_idx].var));
+      rs_optval_free(optval_from_varp(opt_idx, options[opt_idx].var));
     }
-    optval_free(options[opt_idx].def_val);
+    rs_optval_free(options[opt_idx].def_val);
   }
   free_operatorfunc_option();
   free_tagfunc_option();
@@ -1602,7 +1601,7 @@ static void do_one_set_option(int opt_flags, char **argp, bool *did_show, char *
 
   if (opt_idx != kOptInvalid) {
     assert(option_end >= arg);
-  } else if (is_tty_option(arg)) {  // Silently ignore TTY options.
+  } else if (rs_is_tty_option(arg)) {  // Silently ignore TTY options.
     return;
   } else {                          // Invalid option name, skip.
     *errmsg = e_unknown_option;
@@ -3226,12 +3225,6 @@ void check_redraw(uint32_t flags)
   check_redraw_for(curbuf, curwin, flags);
 }
 
-bool is_tty_option(const char *name)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_is_tty_option(name);
-}
-
 /// Get value of TTY option.
 ///
 /// @param  name  Name of TTY option.
@@ -3252,7 +3245,7 @@ OptVal get_tty_option(const char *name)
     value = p_term ? xstrdup(p_term) : xstrdup("nvim");
   } else if (strequal(name, "ttytype")) {
     value = p_ttytype ? xstrdup(p_ttytype) : xstrdup("nvim");
-  } else if (is_tty_option(name)) {
+  } else if (rs_is_tty_option(name)) {
     // XXX: All other t_* options were removed in 3baba1e7.
     value = xstrdup("");
   }
@@ -3305,11 +3298,7 @@ OptIndex find_option(const char *const name)
   return find_option_len(name, strlen(name));
 }
 
-/// Free an allocated OptVal.
-void optval_free(OptVal o)
-{
-  rs_optval_free(o);
-}
+
 
 /// Get type of option.
 static OptValType option_get_type(const OptIndex opt_idx)
@@ -3359,7 +3348,7 @@ static void set_option_varp(OptIndex opt_idx, void *varp, OptVal value, bool fre
   assert(option_has_type(opt_idx, value.type));
 
   if (free_oldval) {
-    optval_free(optval_from_varp(opt_idx, varp));
+    rs_optval_free(optval_from_varp(opt_idx, varp));
   }
 
   switch (value.type) {
@@ -3707,7 +3696,7 @@ static const char *did_set_option(OptIndex opt_idx, void *varp, OptVal old_value
     set_option_sctx(opt_idx, opt_flags, script_ctx);
   }
 
-  optval_free(old_value);
+  rs_optval_free(old_value);
 
   const bool scope_both = (opt_flags & (OPT_LOCAL | OPT_GLOBAL)) == 0;
 
@@ -3855,7 +3844,7 @@ static const char *set_option(const OptIndex opt_idx, OptVal value, int opt_flag
     errmsg = validate_option_value(opt_idx, &value, opt_flags, errbuf, errbuflen);
 
     if (errmsg != NULL) {
-      optval_free(value);
+      rs_optval_free(value);
       return errmsg;
     }
   }
@@ -3925,10 +3914,10 @@ static const char *set_option(const OptIndex opt_idx, OptVal value, int opt_flag
   }
 
   // Free copied values as they are not needed anymore
-  optval_free(saved_used_value);
-  optval_free(saved_old_local_value);
-  optval_free(saved_old_global_value);
-  optval_free(saved_new_value);
+  rs_optval_free(saved_used_value);
+  rs_optval_free(saved_old_local_value);
+  rs_optval_free(saved_old_global_value);
+  rs_optval_free(saved_new_value);
 
   return errmsg;
 }
@@ -4042,7 +4031,7 @@ const char *set_option_value_handle_tty(const char *name, OptIndex opt_idx, cons
   static char errbuf[IOSIZE];
 
   if (opt_idx == kOptInvalid) {
-    if (is_tty_option(name)) {
+    if (rs_is_tty_option(name)) {
       return NULL;  // Fail silently; many old vimrcs set t_xx options.
     }
 
@@ -6329,25 +6318,6 @@ unsigned get_ve_flags(win_T *wp)
 {
   return (wp->w_ve_flags ? wp->w_ve_flags : ve_flags)
          & ~(unsigned)(kOptVeFlagNone | kOptVeFlagNoneU);
-}
-
-extern char *rs_get_showbreak_value(win_T *win);
-
-/// Get the local or global value of 'showbreak'.
-///
-/// @param win  If not NULL, the window to get the local option from; global
-///             otherwise.
-char *get_showbreak_value(win_T *const win)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_get_showbreak_value((win_T *)win);
-}
-
-/// Return the current end-of-line type: EOL_DOS, EOL_UNIX or EOL_MAC.
-int get_fileformat(const buf_T *buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_get_fileformat((buf_T *)buf);
 }
 
 /// Like get_fileformat(), but override 'fileformat' with "p" for "++opt=val"

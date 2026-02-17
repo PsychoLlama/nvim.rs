@@ -60,6 +60,7 @@
 
 extern void rs_did_set_title(void);
 extern int rs_valid_name(const char *val, const char *allowed);
+extern int rs_get_fileformat(buf_T *buf);
 
 // String option flag utilities (from Rust optionstr crate)
 extern int rs_optflags_is_comma_list(uint32_t flags);
@@ -1282,7 +1283,7 @@ const char *did_set_fileformat(optset_T *args)
   ml_setflags(buf);
   // Redraw needed when switching to/from "mac": a CR in the text
   // will be displayed differently.
-  if (get_fileformat(buf) == EOL_MAC || *oldval == 'm') {
+  if (rs_get_fileformat((buf_T *)buf) == EOL_MAC || *oldval == 'm') {
     redraw_buf_later(buf, UPD_NOT_VALID);
   }
   return NULL;
