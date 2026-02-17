@@ -538,7 +538,7 @@ typedef enum {
   PREFIX_INV,     ///< "inv" prefix
 } set_prefix_T;
 
-#include "option.c.generated.h"
+#include "option_shim.c.generated.h"
 
 // options[] is initialized in options.generated.h.
 // The options with a NULL variable are 'hidden': a set command for them is
