@@ -57,6 +57,7 @@ _Static_assert(VV_TESTING == 76, "VV_TESTING changed - update Rust constants");
 typedef int (*ex_unletlock_callback)(lval_T *, char *, exarg_T *, int);
 
 #include "eval/vars.c.generated.h"
+extern int rs_valid_tabpage(tabpage_T *tpc);
 
 // Rust FFI declarations (window wrappers removed)
 extern tabpage_T *rs_find_tabpage(int n);
@@ -3576,9 +3577,9 @@ void f_settabvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   xfree(tabvarname);
 
   // Restore current tabpage and last accessed tabpage.
-  if (valid_tabpage(save_curtab)) {
+  if (rs_valid_tabpage(save_curtab)) {
     goto_tabpage_tp(save_curtab, false, false);
-    if (valid_tabpage(save_lu_tp)) {
+    if (rs_valid_tabpage(save_lu_tp)) {
       lastused_tabpage = save_lu_tp;
     }
   }

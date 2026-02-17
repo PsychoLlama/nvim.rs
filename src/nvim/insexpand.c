@@ -228,6 +228,7 @@ typedef struct {
 } ins_compl_next_state_T;
 
 #include "insexpand.c.generated.h"
+extern int rs_win_valid(win_T *win);
 
 /// values for cp_flags
 typedef enum {
@@ -2706,7 +2707,7 @@ static buf_T *ins_compl_next_buf(buf_T *buf, int flag)
   static win_T *wp = NULL;
 
   if (flag == 'w') {            // just windows
-    if (buf == curbuf || !win_valid(wp)) {
+    if (buf == curbuf || !rs_win_valid(wp)) {
       // first call for this flag/expansion or window was closed
       wp = curwin;
     }

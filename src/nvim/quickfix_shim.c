@@ -1098,6 +1098,7 @@ typedef struct {
 } vgr_args_T;
 
 #include "quickfix_shim.c.generated.h"
+extern int rs_win_valid(win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
 extern void rs_check_lnums(int do_curwin);
@@ -1148,13 +1149,13 @@ static char *qf_types(int c, int nr);
 static win_T *qf_find_win(const qf_info_T *qi);
 
 /// Check if a window pointer is still valid for Rust
-/// This wraps win_valid() from window.c
+/// This wraps rs_win_valid() from Rust
 bool nvim_win_valid(const void *wp_void)
 {
   if (wp_void == NULL) {
     return false;
   }
-  return win_valid((win_T *)wp_void);
+  return rs_win_valid((win_T *)wp_void) != 0;
 }
 
 /// Get the location list for a window for Rust
@@ -3922,7 +3923,7 @@ static bool qflist_valid(win_T *wp, unsigned qf_id)
   qf_info_T *qi = ql_info;
 
   if (wp) {
-    if (!win_valid(wp)) {
+    if (!rs_win_valid(wp)) {
       return false;
     }
     qi = GET_LOC_LIST(wp);  // Location list
@@ -4064,7 +4065,7 @@ int nvim_qf_jump_open_file(void *qi_void, int fnum, int forceit, bool *opened_wi
       return -2;  // sentinel: location list winfixbuf early return
     }
 
-    if (win_valid(prevwin) && !prevwin->w_p_wfb
+    if (rs_win_valid(prevwin) && !prevwin->w_p_wfb
         && !bt_quickfix(prevwin->w_buffer)) {
       win_goto(prevwin);
     }
@@ -4370,7 +4371,7 @@ bool nvim_qf_win_bt_normal(const void *win)
 /// Get swb_flags & kOptSwbFlagUselast, and also check prevwin validity + w_p_wfb
 bool nvim_qf_swb_uselast_prevwin_ok(void)
 {
-  return (swb_flags & kOptSwbFlagUselast) && win_valid(prevwin) && !prevwin->w_p_wfb;
+  return (swb_flags & kOptSwbFlagUselast) && rs_win_valid(prevwin) && !prevwin->w_p_wfb;
 }
 
 /// Get prevwin
@@ -5131,7 +5132,7 @@ static int qf_open_new_cwindow(qf_info_T *qi, int height)
     rs_win_setheight(height);
   }
   curwin->w_p_wfh = true;  // set 'winfixheight'
-  if (win_valid(win)) {
+  if (rs_win_valid(win)) {
     prevwin = win;
   }
   return OK;

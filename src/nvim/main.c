@@ -138,6 +138,7 @@ enum {
 };
 
 #include "main.c.generated.h"
+extern int rs_only_one_window(void);
 
 // Rust FFI declarations (window wrappers removed)
 extern int rs_win_count(void);
@@ -1768,7 +1769,7 @@ static void create_windows(mparm_T *parmp)
         open_buffer(false, NULL, 0);
 
         if (swap_exists_action == SEA_QUIT) {
-          if (got_int || only_one_window()) {
+          if (got_int || rs_only_one_window()) {
             // abort selected or quit and only one window
             did_emsg = false;               // avoid hit-enter prompt
             ui_call_error_exit(1);
@@ -1871,7 +1872,7 @@ static void edit_buffers(mparm_T *parmp, char *cwd)
               : NULL, NULL, NULL, ECMD_LASTL, ECMD_HIDE, curwin);
       if (swap_exists_did_quit) {
         // abort or quit selected
-        if (got_int || only_one_window()) {
+        if (got_int || rs_only_one_window()) {
           // abort selected and only one window
           did_emsg = false;             // avoid hit-enter prompt
           ui_call_error_exit(1);

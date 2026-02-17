@@ -187,6 +187,7 @@ spelltab_T spelltab;
 bool did_set_spelltab;
 
 #include "spell.c.generated.h"
+extern int rs_win_valid_any_tab(win_T *win);
 
 extern void rs_optval_free(OptVal o);
 
@@ -2297,7 +2298,7 @@ char *parse_spelllang(win_T *wp)
         spell_load_lang(lang);
         // SpellFileMissing autocommands may do anything, including
         // destroying the buffer we are using or closing the window.
-        if (!bufref_valid(&bufref) || !win_valid_any_tab(wp)) {
+        if (!bufref_valid(&bufref) || !rs_win_valid_any_tab(wp)) {
           ret_msg = N_("E797: SpellFileMissing autocommand deleted buffer");
           goto theend;
         }

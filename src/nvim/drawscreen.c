@@ -135,6 +135,7 @@ typedef enum {
 extern int rs_global_stl_height(void);
 extern int rs_min_rows(tabpage_T *tp);
 extern int rs_min_rows_for_all_tabpages(void);
+extern int rs_last_stl_height(int morewin);
 
 // Rust fold FFI declarations
 extern int rs_hasAnyFolding(win_T *win);
@@ -2765,7 +2766,7 @@ int nvim_get_ru_col(void) { return ru_col; }
 void nvim_set_ru_col(int val) { ru_col = val; }
 
 /// Wrapper for last_stl_height(false) for Rust FFI.
-int nvim_last_stl_height(void) { return last_stl_height(false); }
+int nvim_last_stl_height(void) { return rs_last_stl_height(0); }
 
 /// Set v:echospace variable.
 void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }

@@ -34,6 +34,8 @@
 #include "nvim/winfloat.h"
 
 #include "winfloat.c.generated.h"
+extern int rs_win_valid(win_T *win);
+extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
 extern win_T *rs_lastwin_nofloating(void);
@@ -88,7 +90,7 @@ win_T *win_new_float(win_T *wp, bool last, WinConfig fconfig, Error *err)
       api_set_error(err, kErrorTypeException,
                     "Cannot change last window into float");
       return NULL;
-    } else if (!win_valid(wp)) {
+    } else if (!rs_win_valid(wp)) {
       api_set_error(err, kErrorTypeException,
                     "Cannot change window from different tabpage into float");
       return NULL;
@@ -314,7 +316,7 @@ void win_float_remove(bool bang, int count)
   }
   for (size_t i = 0; i < float_win_arr.size; i++) {
     win_T *wp = float_win_arr.items[i];
-    if (win_valid(wp) && win_close(wp, false, false) == FAIL) {
+    if (rs_win_valid(wp) && win_close(wp, false, false) == FAIL) {
       break;
     }
     if (!bang) {
@@ -401,12 +403,12 @@ win_T *win_float_find_altwin(const win_T *win, const tabpage_T *tp)
 {
   win_T *wp = prevwin;
   if (tp == NULL) {
-    return (win_valid(wp) && wp != win && wp->w_config.focusable
+    return (rs_win_valid(wp) && wp != win && wp->w_config.focusable
             && !wp->w_config.hide) ? wp : firstwin;
   }
 
   assert(tp != curtab);
-  wp = tabpage_win_valid(tp, tp->tp_prevwin) ? tp->tp_prevwin : tp->tp_firstwin;
+  wp = rs_tabpage_win_valid((tabpage_T *)tp, tp->tp_prevwin) ? tp->tp_prevwin : tp->tp_firstwin;
   return (wp->w_config.focusable && !wp->w_config.hide) ? wp : tp->tp_firstwin;
 }
 

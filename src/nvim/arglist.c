@@ -69,6 +69,8 @@ typedef struct {
 // Rust FFI declarations (window wrappers removed)
 extern win_T *rs_lastwin_nofloating(void);
 extern int rs_tabpage_index(tabpage_T *ftp);
+extern int rs_valid_tabpage(tabpage_T *tpc);
+extern int rs_win_valid(win_T *win);
 
 extern int rs_magic_isset(void);
 
@@ -347,8 +349,8 @@ void nvim_al_goto_tabpage_tp(tabpage_T *tp, int trigger_enter, int trigger_leave
 {
   goto_tabpage_tp(tp, trigger_enter, trigger_leave);
 }
-int nvim_al_valid_tabpage(tabpage_T *tp) { return valid_tabpage(tp); }
-int nvim_al_win_valid(win_T *wp) { return win_valid(wp); }
+int nvim_al_valid_tabpage(tabpage_T *tp) { return rs_valid_tabpage(tp); }
+int nvim_al_win_valid(win_T *wp) { return rs_win_valid(wp); }
 void nvim_al_win_close(win_T *wp, int free_buf, int force) { win_close(wp, free_buf, force); }
 void nvim_al_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync); }
 void nvim_al_win_move_after(win_T *wp, win_T *after) { win_move_after(wp, after); }

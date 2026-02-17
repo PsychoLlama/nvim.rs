@@ -79,6 +79,8 @@ typedef struct {
 } PumAlignOrder;
 extern PumAlignOrder rs_pum_get_current_align_order(void);
 
+extern int rs_win_valid(win_T *win);
+extern int rs_valid_tabpage(tabpage_T *tpc);
 extern const char *rs_pum_get_item(const pumitem_T *array, int index, int item_type);
 extern int rs_pum_user_attr_combine(const pumitem_T *array, int idx, int item_type, int attr);
 
@@ -1463,16 +1465,16 @@ int nvim_pum_curbuf_line_count(void)
   return (int)curbuf->b_ml.ml_line_count;
 }
 
-/// Check if a window pointer is valid (wrapper for win_valid).
+/// Check if a window pointer is valid (wrapper for rs_win_valid).
 int nvim_pum_win_valid(win_T *wp)
 {
-  return win_valid(wp) ? 1 : 0;
+  return rs_win_valid(wp);
 }
 
-/// Check if a tabpage pointer is valid (wrapper for valid_tabpage).
+/// Check if a tabpage pointer is valid (wrapper for rs_valid_tabpage).
 int nvim_pum_tabpage_valid(tabpage_T *tp)
 {
-  return valid_tabpage(tp) ? 1 : 0;
+  return rs_valid_tabpage(tp);
 }
 
 /// Go to a tabpage (wrapper for goto_tabpage_tp).

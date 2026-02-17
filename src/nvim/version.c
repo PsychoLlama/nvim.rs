@@ -75,6 +75,7 @@ char *version_cflags = "Compilation: " NVIM_VERSION_CFLAGS;
 #endif
 
 #include "version.c.generated.h"
+extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
 
 // clang-format off
 static const int vim_versions[] = { 801, 802, 900, 901 };
@@ -4501,7 +4502,7 @@ bool may_show_intro(void)
           && (curbuf->b_fname == NULL)
           && (curbuf->handle == 1)
           && (curwin->handle == LOWEST_WIN_ID)
-          && one_window(curwin, NULL)
+          && rs_one_window_in_tab(curwin, NULL)
           && (vim_strchr(p_shm, SHM_INTRO) == NULL));
 }
 

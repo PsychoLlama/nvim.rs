@@ -126,6 +126,7 @@ typedef struct {
 } TerminalState;
 
 #include "terminal.c.generated.h"
+extern int rs_win_valid(win_T *win);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -736,7 +737,7 @@ static void unset_terminal_winopts(TerminalState *const s)
     return;
   }
 
-  if (win_valid(wp)) {  // No need to redraw if window not in curtab.
+  if (rs_win_valid(wp)) {  // No need to redraw if window not in curtab.
     if (s->save_w_p_cuc != wp->w_p_cuc) {
       redraw_later(wp, UPD_SOME_VALID);
     } else if (s->save_w_p_cul != wp->w_p_cul

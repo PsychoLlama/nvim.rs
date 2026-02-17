@@ -32,6 +32,7 @@ pub const SNAP_COUNT: c_int = 2;
 
 extern "C" {
     /// Check if window is valid.
+    #[link_name = "rs_win_valid"]
     fn win_valid(wp: WinHandle) -> c_int;
 }
 

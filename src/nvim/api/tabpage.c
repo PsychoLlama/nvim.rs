@@ -12,6 +12,8 @@
 #include "nvim/window.h"
 
 #include "api/tabpage.c.generated.h"  // IWYU pragma: keep
+extern int rs_valid_tabpage(tabpage_T *tpc);
+extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
 extern int rs_tabpage_index(tabpage_T *ftp);
@@ -27,7 +29,7 @@ ArrayOf(Window) nvim_tabpage_list_wins(Tabpage tabpage, Arena *arena, Error *err
   Array rv = ARRAY_DICT_INIT;
   tabpage_T *tab = find_tab_by_handle(tabpage, err);
 
-  if (!tab || !valid_tabpage(tab)) {
+  if (!tab || !rs_valid_tabpage(tab)) {
     return rv;
   }
 
@@ -108,7 +110,7 @@ Window nvim_tabpage_get_win(Tabpage tabpage, Error *err)
 {
   tabpage_T *tab = find_tab_by_handle(tabpage, err);
 
-  if (!tab || !valid_tabpage(tab)) {
+  if (!tab || !rs_valid_tabpage(tab)) {
     return 0;
   }
 
@@ -142,7 +144,7 @@ void nvim_tabpage_set_win(Tabpage tabpage, Window win, Error *err)
     return;
   }
 
-  if (!tabpage_win_valid(tp, wp)) {
+  if (!rs_tabpage_win_valid(tp, wp)) {
     api_set_error(err, kErrorTypeException, "Window does not belong to tabpage %d", tp->handle);
     return;
   }

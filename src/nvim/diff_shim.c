@@ -171,6 +171,7 @@ typedef enum {
 } diffstyle_T;
 
 #include "diff_shim.c.generated.h"
+extern int rs_win_valid(win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
 extern void rs_set_fraction(win_T *wp);
@@ -672,7 +673,7 @@ void ex_diffpatch(exarg_T *eap)
       do_exedit(eap, old_curwin);
 
       // check that split worked and editing tmp_new
-      if ((curwin != old_curwin) && win_valid(old_curwin)) {
+      if ((curwin != old_curwin) && rs_win_valid(old_curwin)) {
         // Set 'diff', 'scrollbind' on and 'wrap' off.
         diff_win_options(curwin, true);
         diff_win_options(old_curwin, true);
@@ -740,7 +741,7 @@ void ex_diffsplit(exarg_T *eap)
 
   // Set 'diff', 'scrollbind' on and 'wrap' off.
   diff_win_options(curwin, true);
-  if (win_valid(old_curwin)) {
+  if (rs_win_valid(old_curwin)) {
     diff_win_options(old_curwin, true);
 
     if (bufref_valid(&old_curbuf)) {

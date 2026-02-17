@@ -74,6 +74,8 @@ extern bool rs_config_win_equals_self(int config_win, int self_handle);
 #include "nvim/winfloat.h"
 
 #include "api/win_config.c.generated.h"
+extern int rs_win_valid(win_T *win);
+extern int rs_win_valid_any_tab(win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
 extern void rs_last_status(int morewin);
@@ -545,7 +547,7 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
         return;
       }
       win_tp = rs_win_find_tabpage(win);
-      if (!win_tp || !win_valid_any_tab(parent)) {
+      if (!win_tp || !rs_win_valid_any_tab(parent)) {
         api_set_error(err, kErrorTypeException, "Windows to split were closed");
         goto restore_curwin;
       }
@@ -662,7 +664,7 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
 restore_curwin:
       // If `win` was the original curwin, and autocommands didn't move it outside of curtab, be a
       // good citizen and try to return to it.
-      if (curwin_moving_tp && win_valid(win)) {
+      if (curwin_moving_tp && rs_win_valid(win)) {
         win_goto(win);
       }
       return;

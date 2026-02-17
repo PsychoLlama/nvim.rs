@@ -40,8 +40,12 @@ extern int rs_tabpage_index(tabpage_T *ftp);
 extern void rs_win_drag_status_line(win_T *dragwin, int offset);
 extern void rs_win_drag_vsep_line(win_T *dragwin, int offset);
 extern void rs_win_get_tabwin(int id, int *tabnr, int *winnr);
+extern win_T *rs_win_vert_neighbor(tabpage_T *tp, win_T *wp, int up, int count);
+extern win_T *rs_win_horz_neighbor(tabpage_T *tp, win_T *wp, int left, int count);
 extern void rs_win_new_height(win_T *wp, int height);
 extern void rs_win_new_width(win_T *wp, int width);
+extern int rs_win_valid(win_T *win);
+extern int rs_valid_tabpage(tabpage_T *tpc);
 
 static const char *e_invalwindow = N_("E957: Invalid window number");
 static const char e_cannot_resize_window_in_another_tab_page[]
@@ -289,13 +293,13 @@ static int get_winnr(tabpage_T *tp, typval_T *argvar)
       }
       if (endp != NULL && *endp != NUL) {
         if (strequal(endp, "j")) {
-          twin = win_vert_neighbor(tp, twin, false, count);
+          twin = rs_win_vert_neighbor(tp, twin, 0, count);
         } else if (strequal(endp, "k")) {
-          twin = win_vert_neighbor(tp, twin, true, count);
+          twin = rs_win_vert_neighbor(tp, twin, 1, count);
         } else if (strequal(endp, "h")) {
-          twin = win_horz_neighbor(tp, twin, true, count);
+          twin = rs_win_horz_neighbor(tp, twin, 1, count);
         } else if (strequal(endp, "l")) {
-          twin = win_horz_neighbor(tp, twin, false, count);
+          twin = rs_win_horz_neighbor(tp, twin, 0, count);
         } else {
           invalid_arg = true;
         }
@@ -481,7 +485,7 @@ void f_tabpagenr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
       if (strcmp(arg, "$") == 0) {
         nr = rs_tabpage_index(NULL) - 1;
       } else if (strcmp(arg, "#") == 0) {
-        nr = valid_tabpage(lastused_tabpage) ? rs_tabpage_index(lastused_tabpage) : 0;
+        nr = rs_valid_tabpage(lastused_tabpage) ? rs_tabpage_index(lastused_tabpage) : 0;
       } else {
         semsg(_(e_invexpr2), arg);
       }
@@ -555,7 +559,7 @@ void win_execute_after(win_execute_T *args)
   }
 
   // Update the status line if the cursor moved.
-  if (win_valid(args->wp) && !equalpos(args->curpos, args->wp->w_cursor)) {
+  if (rs_win_valid(args->wp) && !equalpos(args->curpos, args->wp->w_cursor)) {
     args->wp->w_redr_status = true;
   }
 
@@ -644,7 +648,7 @@ void f_win_move_separator(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (wp == NULL || wp->w_floating) {
     return;
   }
-  if (!win_valid(wp)) {
+  if (!rs_win_valid(wp)) {
     emsg(_(e_cannot_resize_window_in_another_tab_page));
     return;
   }
@@ -666,7 +670,7 @@ void f_win_move_statusline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
   if (wp == NULL || wp->w_floating) {
     return;
   }
-  if (!win_valid(wp)) {
+  if (!rs_win_valid(wp)) {
     emsg(_(e_cannot_resize_window_in_another_tab_page));
     return;
   }
@@ -695,7 +699,7 @@ void f_win_splitmove(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_number = -1;
 
   if (wp == NULL || targetwin == NULL || wp == targetwin
-      || !win_valid(wp) || !win_valid(targetwin)
+      || !rs_win_valid(wp) || !rs_win_valid(targetwin)
       || targetwin->w_floating) {
     emsg(_(e_invalwindow));
     return;
@@ -732,7 +736,7 @@ void f_win_splitmove(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   // Autocommands may have sent us elsewhere or closed "wp" or "oldwin".
-  if (curwin == targetwin && win_valid(wp)) {
+  if (curwin == targetwin && rs_win_valid(wp)) {
     if (win_splitmove(wp, size, flags) == OK) {
       rettv->vval.v_number = 0;
     }
@@ -740,7 +744,7 @@ void f_win_splitmove(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     emsg(_(e_auabort));
   }
 
-  if (oldwin != curwin && win_valid(oldwin)) {
+  if (oldwin != curwin && rs_win_valid(oldwin)) {
     win_goto(oldwin);
   }
 }
@@ -986,7 +990,7 @@ int switch_win_noblock(switchwin_T *switchwin, win_T *win, tabpage_T *tp, bool n
       goto_tabpage_tp(tp, false, false);
     }
   }
-  if (!win_valid(win)) {
+  if (!rs_win_valid(win)) {
     return FAIL;
   }
   curwin = win;
@@ -1006,7 +1010,7 @@ void restore_win(switchwin_T *switchwin, bool no_display)
 /// As restore_win() but without unblocking autocommands.
 void restore_win_noblock(switchwin_T *switchwin, bool no_display)
 {
-  if (switchwin->sw_curtab != NULL && valid_tabpage(switchwin->sw_curtab)) {
+  if (switchwin->sw_curtab != NULL && rs_valid_tabpage(switchwin->sw_curtab)) {
     if (no_display) {
       win_T *const old_tp_curwin = curtab->tp_curwin;
 
@@ -1023,7 +1027,7 @@ void restore_win_noblock(switchwin_T *switchwin, bool no_display)
     VIsual_active = switchwin->sw_visual_active;
   }
 
-  if (win_valid(switchwin->sw_curwin)) {
+  if (rs_win_valid(switchwin->sw_curwin)) {
     curwin = switchwin->sw_curwin;
     curbuf = curwin->w_buffer;
   }

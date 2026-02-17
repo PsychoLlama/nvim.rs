@@ -222,6 +222,8 @@ static bool getln_interrupted_highlight = false;
 static int cedit_key = -1;  ///< key value of 'cedit' option
 
 #include "ex_getln.c.generated.h"
+extern int rs_win_valid(win_T *win);
+extern int rs_last_window(win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
 extern int rs_global_stl_height(void);
@@ -4669,7 +4671,7 @@ static int open_cmdwin(void)
   // win_split() autocommands may have messed with the old window or buffer.
   // Treat it as abandoning this command-line.
   // Use Rust helper for validation check.
-  if (rs_cmdwin_split_invalid(win_valid(old_curwin), curwin == old_curwin,
+  if (rs_cmdwin_split_invalid(rs_win_valid(old_curwin), curwin == old_curwin,
                               bufref_valid(&old_curbuf),
                               old_curwin->w_buffer != old_curbuf.br_buf)) {
     beep_flush();
@@ -4688,15 +4690,15 @@ static int open_cmdwin(void)
   // Create empty command-line buffer.  Be especially cautious of BufLeave
   // autocommands from do_ecmd(), as cmdwin restrictions do not apply to them!
   const int newbuf_status = buf_open_scratch(0, NULL);
-  const bool cmdwin_valid = win_valid(cmdwin_win);
+  const bool cmdwin_valid = rs_win_valid(cmdwin_win);
   // Use Rust helper for buffer creation validation.
   if (rs_cmdwin_buffer_invalid(newbuf_status == OK, cmdwin_valid, curwin == cmdwin_win,
-                               win_valid(old_curwin), bufref_valid(&old_curbuf),
+                               rs_win_valid(old_curwin), bufref_valid(&old_curbuf),
                                old_curwin->w_buffer != old_curbuf.br_buf)) {
     if (newbuf_status == OK) {
       set_bufref(&bufref, curbuf);
     }
-    if (cmdwin_valid && !last_window(cmdwin_win)) {
+    if (cmdwin_valid && !rs_last_window(cmdwin_win)) {
       win_close(cmdwin_win, true, false);
     }
     // win_close() autocommands may have already deleted the buffer.
@@ -4813,7 +4815,7 @@ static int open_cmdwin(void)
 
   // Safety check: The old window or buffer was changed or deleted: It's a bug
   // when this happens! Use Rust helper for validation.
-  if (rs_cmdwin_cleanup_had_error(win_valid(old_curwin), bufref_valid(&old_curbuf),
+  if (rs_cmdwin_cleanup_had_error(rs_win_valid(old_curwin), bufref_valid(&old_curbuf),
                                   old_curwin->w_buffer != old_curbuf.br_buf)) {
     cmdwin_result = Ctrl_C;
     emsg(_(e_active_window_or_buffer_changed_or_deleted));
@@ -4880,7 +4882,7 @@ static int open_cmdwin(void)
 
     // win_goto() may trigger an autocommand that already closes the
     // cmdline window.
-    if (win_valid(wp) && wp != curwin) {
+    if (rs_win_valid(wp) && wp != curwin) {
       win_close(wp, true, false);
     }
 

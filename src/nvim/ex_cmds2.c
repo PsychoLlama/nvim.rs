@@ -85,6 +85,8 @@ extern void rs_ex_pydo3(exarg_T *eap);
 extern void rs_ex_perl(exarg_T *eap);
 extern void rs_ex_perlfile(exarg_T *eap);
 extern void rs_ex_perldo(exarg_T *eap);
+extern int rs_win_valid(win_T *win);
+extern int rs_valid_tabpage(tabpage_T *tpc);
 
 // =============================================================================
 // Rust extern declarations — autowrite / buffer check functions
@@ -820,7 +822,7 @@ void nvim_ex2_au_event_restore(char *save_ei)
 
 bool nvim_ex2_win_valid(win_T *win)
 {
-  return win_valid(win);
+  return rs_win_valid(win) != 0;
 }
 
 void nvim_ex2_buf_clear_bf_syn_set(buf_T *buf)
@@ -910,7 +912,7 @@ bool nvim_ex2_win_get_w_config_focusable(win_T *win)
 
 bool nvim_ex2_valid_tabpage(tabpage_T *tp)
 {
-  return valid_tabpage(tp);
+  return rs_valid_tabpage(tp) != 0;
 }
 
 void nvim_ex2_goto_tabpage_tp(tabpage_T *tp, bool trigger_enter, bool trigger_leave)

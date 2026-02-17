@@ -64,6 +64,7 @@
 #include "nvim/window.h"
 
 #include "search.c.generated.h"
+extern int rs_win_valid(win_T *win);
 
 // Rust fold FFI declaration
 extern void rs_foldOpenCursor(void);
@@ -2393,7 +2394,7 @@ search_line:
           }
           if (depth == -1) {
             if (l_g_do_tagpreview != 0) {
-              if (!win_valid(curwin_save)) {
+              if (!rs_win_valid(curwin_save)) {
                 break;
               }
               if (!GETFILE_SUCCESS(getfile(curwin_save->w_buffer->b_fnum, NULL,
@@ -2419,7 +2420,7 @@ search_line:
         }
 
         if (l_g_do_tagpreview != 0
-            && curwin != curwin_save && win_valid(curwin_save)) {
+            && curwin != curwin_save && rs_win_valid(curwin_save)) {
           validate_cursor(curwin);
           redraw_later(curwin, UPD_VALID);
           win_enter(curwin_save, true);
@@ -2977,7 +2978,7 @@ search_line:
           if (depth == -1) {
             // match in current file
             if (l_g_do_tagpreview != 0) {
-              if (!win_valid(curwin_save)) {
+              if (!rs_win_valid(curwin_save)) {
                 break;
               }
               if (!GETFILE_SUCCESS(getfile(curwin_save->w_buffer->b_fnum, NULL,
@@ -3005,7 +3006,7 @@ search_line:
         }
 
         if (l_g_do_tagpreview != 0
-            && curwin != curwin_save && win_valid(curwin_save)) {
+            && curwin != curwin_save && rs_win_valid(curwin_save)) {
           // Return cursor to where we were
           validate_cursor(curwin);
           redraw_later(curwin, UPD_VALID);

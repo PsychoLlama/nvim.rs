@@ -715,6 +715,7 @@ extern int rs_jumpto_tag(const char *lbuf_arg, int forceit, bool keep_help);
 extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
 
 #include "tag.c.generated.h"
+extern int rs_win_valid(win_T *win);
 
 // Rust fold FFI declaration
 extern void rs_foldOpenCursor(void);
@@ -2387,7 +2388,7 @@ int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
     }
 
     if (l_g_do_tagpreview != 0
-        && curwin != curwin_save && win_valid(curwin_save)) {
+        && curwin != curwin_save && rs_win_valid(curwin_save)) {
       validate_cursor(curwin);
       redraw_later(curwin, UPD_VALID);
       win_enter(curwin_save, true);

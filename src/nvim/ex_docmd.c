@@ -223,6 +223,9 @@ struct dbg_stuff {
 };
 
 #include "ex_docmd.c.generated.h"
+extern int rs_win_valid(win_T *win);
+extern int rs_only_one_window(void);
+extern int rs_valid_tabpage(tabpage_T *tpc);
 
 // Rust fold FFI declarations
 extern int rs_foldManualAllowed(bool create);
@@ -3091,7 +3094,7 @@ static int check_more(bool message, bool forceit)
 {
   int n = ARGCOUNT - curwin->w_arg_idx - 1;
 
-  if (!forceit && only_one_window()
+  if (!forceit && rs_only_one_window()
       && ARGCOUNT > 1 && !arg_had_last && n > 0 && quitmore == 0) {
     if (message) {
       if ((p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) && curbuf->b_fname != NULL) {
@@ -3170,19 +3173,19 @@ bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit)
   // Bail out when autocommands closed the window.
   // Refuse to quit when the buffer in the last window is being closed (can
   // only happen in autocommands).
-  if (!win_valid(wp)
+  if (!rs_win_valid(wp)
       || curbuf_locked()
       || (wp->w_buffer->b_nwindows == 1 && wp->w_buffer->b_locked > 0)) {
     return true;
   }
 
   if (quit_all
-      || (check_more(false, forceit) == OK && only_one_window())) {
+      || (check_more(false, forceit) == OK && rs_only_one_window())) {
     apply_autocmds(EVENT_EXITPRE, NULL, NULL, false, curbuf);
     // Refuse to quit when locked or when the window was closed or the
     // buffer in the last window is being closed (can only happen in
     // autocommands).
-    if (!win_valid(wp)
+    if (!rs_win_valid(wp)
         || curbuf_locked()
         || (curbuf->b_nwindows == 1 && curbuf->b_locked > 0)) {
       return true;
@@ -3231,7 +3234,7 @@ static void ex_quit(exarg_T *eap)
   }
 
   // If there is only one relevant window we will exit.
-  if (check_more(false, eap->forceit) == OK && only_one_window()) {
+  if (check_more(false, eap->forceit) == OK && rs_only_one_window()) {
     exiting = true;
   }
   if ((!buf_hide(wp->w_buffer)
@@ -3239,16 +3242,16 @@ static void ex_quit(exarg_T *eap)
                         | (eap->forceit ? CCGD_FORCEIT : 0)
                         | CCGD_EXCMD))
       || check_more(true, eap->forceit) == FAIL
-      || (only_one_window() && check_changed_any(eap->forceit, true))) {
+      || (rs_only_one_window() && check_changed_any(eap->forceit, true))) {
     not_exiting();
   } else {
     // quit last window
-    // Note: only_one_window() returns true, even so a help window is
+    // Note: rs_only_one_window() returns true, even so a help window is
     // still open. In that case only quit, if no address has been
     // specified. Example:
     // :h|wincmd w|1q     - don't quit
     // :h|wincmd w|q      - quit
-    if (only_one_window() && (ONE_WINDOW || eap->addr_count == 0)) {
+    if (rs_only_one_window() && (ONE_WINDOW || eap->addr_count == 0)) {
       getout(0);
     }
     not_exiting();
@@ -3490,7 +3493,7 @@ static void ex_tabonly(exarg_T *eap)
       if (tp->tp_topframe != topframe) {
         tabpage_close_other(tp, eap->forceit);
         // if we failed to close it quit
-        if (valid_tabpage(tp)) {
+        if (rs_valid_tabpage(tp)) {
           done = 1000;
         }
         // start over, "tp" is now invalid
@@ -3538,7 +3541,7 @@ void tabpage_close_other(tabpage_T *tp, int forceit)
 
     // Autocommands may delete the tab page under our fingers and we may
     // fail to close a window with a modified buffer.
-    if (!valid_tabpage(tp) || tp->tp_lastwin == wp) {
+    if (!rs_valid_tabpage(tp) || tp->tp_lastwin == wp) {
       break;
     }
   }
@@ -3618,7 +3621,7 @@ static void ex_exit(exarg_T *eap)
   }
 
   // we plan to exit if there is only one relevant window
-  if (check_more(false, eap->forceit) == OK && only_one_window()) {
+  if (check_more(false, eap->forceit) == OK && rs_only_one_window()) {
     exiting = true;
   }
   // Write the buffer for ":wq" or when it was changed.
@@ -3627,10 +3630,10 @@ static void ex_exit(exarg_T *eap)
   if (((eap->cmdidx == CMD_wq || curbufIsChanged()) && do_write(eap) == FAIL)
       || before_quit_autocmds(curwin, false, eap->forceit)
       || check_more(true, eap->forceit) == FAIL
-      || (only_one_window() && check_changed_any(eap->forceit, false))) {
+      || (rs_only_one_window() && check_changed_any(eap->forceit, false))) {
     not_exiting();
   } else {
-    if (only_one_window()) {
+    if (rs_only_one_window()) {
       // quit last window, exit Vim
       getout(0);
     }
@@ -3925,7 +3928,7 @@ void ex_splitview(exarg_T *eap)
 
       // set the alternate buffer for the window we came from
       if (curwin != old_curwin
-          && win_valid(old_curwin)
+          && rs_win_valid(old_curwin)
           && old_curwin->w_buffer != curbuf
           && (cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
         old_curwin->w_alt_fnum = curbuf->b_fnum;
@@ -4022,7 +4025,7 @@ static void ex_tabs(exarg_T *eap)
   msg_start();
   msg_scroll = true;
 
-  win_T *lastused_win = valid_tabpage(lastused_tabpage)
+  win_T *lastused_win = rs_valid_tabpage(lastused_tabpage)
                         ? lastused_tabpage->tp_curwin
                         : NULL;
 
@@ -4352,7 +4355,7 @@ void do_exedit(exarg_T *eap, win_T *old_curwin)
   if (old_curwin != NULL
       && *eap->arg != NUL
       && curwin != old_curwin
-      && win_valid(old_curwin)
+      && rs_win_valid(old_curwin)
       && old_curwin->w_buffer != curbuf
       && (cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
     old_curwin->w_alt_fnum = curbuf->b_fnum;
@@ -5660,7 +5663,7 @@ static void prepare_preview_window(void)
 
 static void back_to_current_window(win_T *curwin_save)
 {
-  if (curwin != curwin_save && win_valid(curwin_save)) {
+  if (curwin != curwin_save && rs_win_valid(curwin_save)) {
     // Return cursor to where we were
     validate_cursor(curwin);
     redraw_later(curwin, UPD_VALID);
@@ -7398,7 +7401,7 @@ int nvim_docmd_tabpage_index_curtab(void) { return rs_tabpage_index(curtab); }
 
 int nvim_docmd_valid_lastused_tabpage(void)
 {
-  return valid_tabpage(lastused_tabpage);
+  return rs_valid_tabpage(lastused_tabpage);
 }
 
 int nvim_docmd_tabpage_index_lastused(void)

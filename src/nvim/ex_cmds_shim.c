@@ -134,6 +134,8 @@ typedef struct {
 } PreviewLines;
 
 #include "ex_cmds_shim.c.generated.h"
+extern int rs_win_valid(win_T *win);
+extern int rs_win_valid_any_tab(win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
 extern void rs_check_lnums(int do_curwin);
@@ -2405,7 +2407,7 @@ int do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap, linenr_T newlnum
   reset_VIsual();
 
   // autocommands freed window :(
-  if (oldwin != NULL && !win_valid(oldwin)) {
+  if (oldwin != NULL && !rs_win_valid(oldwin)) {
     oldwin = NULL;
   }
 
@@ -2574,7 +2576,7 @@ int do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap, linenr_T newlnum
                          false, false);
 
         // Autocommands may have closed the window.
-        if (win_valid(the_curwin)) {
+        if (rs_win_valid(the_curwin)) {
           the_curwin->w_locked = false;
         }
         buf->b_locked--;
@@ -2598,7 +2600,7 @@ int do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap, linenr_T newlnum
           if (did_decrement && buf_valid(was_curbuf)) {
             was_curbuf->b_nwindows++;
           }
-          if (win_valid_any_tab(oldwin) && oldwin->w_buffer == NULL) {
+          if (rs_win_valid_any_tab(oldwin) && oldwin->w_buffer == NULL) {
             oldwin->w_buffer = was_curbuf;
           }
           auto_buf = true;

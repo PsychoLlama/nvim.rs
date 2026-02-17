@@ -115,6 +115,10 @@
 #include "nvim/winfloat.h"
 
 #include "buffer.c.generated.h"
+extern int rs_win_valid(win_T *win);
+extern int rs_win_valid_any_tab(win_T *win);
+extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
+extern int rs_last_window(win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
 extern int rs_get_last_winid(void);
@@ -1249,7 +1253,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
 
   // check no autocommands closed the window
   if (win != NULL  // Avoid bogus clang warning.
-      && win_valid_any_tab(win)) {
+      && rs_win_valid_any_tab(win)) {
     // Set b_last_cursor when closing the last window for the buffer.
     // Remember the last cursor position and window options of the buffer.
     // This used to be only for the current window, but then options like
@@ -1277,7 +1281,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
     }
     buf->b_locked--;
     buf->b_locked_split--;
-    if (abort_if_last && win != NULL && one_window(win, NULL)) {
+    if (abort_if_last && win != NULL && rs_one_window_in_tab(win, NULL)) {
       // Autocommands made this the only window.
       emsg(_(e_auabort));
       return false;
@@ -1296,7 +1300,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
       }
       buf->b_locked--;
       buf->b_locked_split--;
-      if (abort_if_last && win != NULL && one_window(win, NULL)) {
+      if (abort_if_last && win != NULL && rs_one_window_in_tab(win, NULL)) {
         // Autocommands made this the only window.
         emsg(_(e_auabort));
         return false;
@@ -1311,7 +1315,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
   // If the buffer was in curwin and the window has changed, go back to that
   // window, if it still exists.  This avoids that ":edit x" triggering a
   // "tabnext" BufUnload autocmd leaves a window behind without a buffer.
-  if (is_curwin && curwin != the_curwin && win_valid_any_tab(the_curwin)) {
+  if (is_curwin && curwin != the_curwin && rs_win_valid_any_tab(the_curwin)) {
     block_autocmds();
     goto_tabpage_win(the_curtab, the_curwin);
     unblock_autocmds();
@@ -1387,7 +1391,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
 
   bool clear_w_buf = false;
   if (win != NULL  // Avoid bogus clang warning.
-      && win_valid_any_tab(win)
+      && rs_win_valid_any_tab(win)
       && win->w_buffer == buf) {
     // Defer clearing w_buffer until after operations that may invoke dict
     // watchers (e.g., buf_clear_file()), so callers like tabpagebuflist()
@@ -1523,7 +1527,7 @@ void buf_freeall(buf_T *buf, int flags)
   // If the buffer was in curwin and the window has changed, go back to that
   // window, if it still exists.  This avoids that ":edit x" triggering a
   // "tabnext" BufUnload autocmd leaves a window behind without a buffer.
-  if (is_curwin && curwin != the_curwin && win_valid_any_tab(the_curwin)) {
+  if (is_curwin && curwin != the_curwin && rs_win_valid_any_tab(the_curwin)) {
     block_autocmds();
     goto_tabpage_win(the_curtab, the_curwin);
     unblock_autocmds();
@@ -2099,7 +2103,7 @@ static int do_buffer_ext(int action, int start, int dir, int count, int flags)
     // Repeat this so long as we end up in a window with this buffer.
     while (buf == curbuf
            && !(rs_win_locked(curwin) || curwin->w_buffer->b_locked > 0)
-           && (is_aucmd_win(lastwin) || !last_window(curwin))) {
+           && (is_aucmd_win(lastwin) || !rs_last_window(curwin))) {
       if (win_close(curwin, false, false) == FAIL) {
         break;
       }
@@ -2363,7 +2367,7 @@ void set_curbuf(buf_T *buf, int action, bool update_jumplist)
                    : (action == DOBUF_GOTO && !buf_hide(prevbuf)
                       && !bufIsChanged(prevbuf)) ? DOBUF_UNLOAD : 0,
                    false, false);
-      if (curwin != previouswin && win_valid(previouswin)) {
+      if (curwin != previouswin && rs_win_valid(previouswin)) {
         // autocommands changed curwin, Grr!
         curwin = previouswin;
       }
@@ -4242,7 +4246,7 @@ void ex_buffer_all(exarg_T *eap)
   for (win_T *wp = lastwin; open_wins > count;) {
     bool r = (buf_hide(wp->w_buffer) || !bufIsChanged(wp->w_buffer)
               || autowrite(wp->w_buffer, false) == OK) && !is_aucmd_win(wp);
-    if (!win_valid(wp)) {
+    if (!rs_win_valid(wp)) {
       // BufWrite Autocommands made the window invalid, start over
       wp = lastwin;
     } else if (r) {

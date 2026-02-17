@@ -52,6 +52,7 @@
 #include "nvim/window.h"
 
 #include "mouse.c.generated.h"
+extern int rs_win_valid(win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
 extern int rs_global_stl_height(void);
@@ -1027,7 +1028,7 @@ void nvim_ins_mouse_impl(int c)
   if (do_mouse(NULL, c, BACKWARD, 1, 0)) {
     win_T *new_curwin = curwin;
 
-    if (curwin != old_curwin && win_valid(old_curwin)) {
+    if (curwin != old_curwin && rs_win_valid(old_curwin)) {
       // Mouse took us to another window.  We need to go back to the
       // previous one to stop insert there properly.
       curwin = old_curwin;
@@ -1038,7 +1039,7 @@ void nvim_ins_mouse_impl(int c)
       }
     }
     start_arrow(curwin == old_curwin ? &tpos : NULL);
-    if (curwin != new_curwin && win_valid(new_curwin)) {
+    if (curwin != new_curwin && rs_win_valid(new_curwin)) {
       curwin = new_curwin;
       curbuf = curwin->w_buffer;
     }
