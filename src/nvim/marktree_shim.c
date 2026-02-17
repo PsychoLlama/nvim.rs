@@ -136,53 +136,15 @@ extern void rs_marktree_put_key(MarkTree *b, MTKey k);
 extern void rs_marktree_clear(MarkTree *b);
 extern void rs_marktree_check(MarkTree *b);
 
+// Binary search
+extern int rs_marktree_getp_aux(const MTNode *x, MTKey k, bool *match);
+
 #define T MT_BRANCH_FACTOR
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 
 #define ID_INCR (((uint64_t)1) << 2)
 
 #define rawkey(itr) ((itr)->x->key[(itr)->i])
-
-static bool pos_leq(MTPos a, MTPos b)
-{
-  return a.row < b.row || (a.row == b.row && a.col <= b.col);
-}
-
-static bool pos_less(MTPos a, MTPos b)
-{
-  return !pos_leq(b, a);
-}
-
-static void relative(MTPos base, MTPos *val)
-{
-  assert(pos_leq(base, *val));
-  if (val->row == base.row) {
-    val->row = 0;
-    val->col -= base.col;
-  } else {
-    val->row -= base.row;
-  }
-}
-
-static void unrelative(MTPos base, MTPos *val)
-{
-  if (val->row == 0) {
-    val->row = base.row;
-    val->col += base.col;
-  } else {
-    val->row += base.row;
-  }
-}
-
-static void compose(MTPos *base, MTPos val)
-{
-  if (val.row == 0) {
-    base->col += val.col;
-  } else {
-    base->row += val.row;
-    base->col = val.col;
-  }
-}
 
 // Used by `marktree_splice`. Need to keep track of marks which moved
 // in order to repair intersections.
@@ -194,55 +156,6 @@ typedef struct {
 typedef kvec_withinit_t(Damage, 8) DamageList;
 
 #include "marktree_shim.c.generated.h"
-
-#define mt_generic_cmp(a, b) (((b) < (a)) - ((a) < (b)))
-static int key_cmp(MTKey a, MTKey b)
-{
-  int cmp = mt_generic_cmp(a.pos.row, b.pos.row);
-  if (cmp != 0) {
-    return cmp;
-  }
-  cmp = mt_generic_cmp(a.pos.col, b.pos.col);
-  if (cmp != 0) {
-    return cmp;
-  }
-
-  // TODO(bfredl): MT_FLAG_REAL could go away if we fix marktree_getp_aux for real
-  const uint16_t cmp_mask = MT_FLAG_RIGHT_GRAVITY | MT_FLAG_END | MT_FLAG_REAL | MT_FLAG_LAST;
-  return mt_generic_cmp(a.flags & cmp_mask, b.flags & cmp_mask);
-}
-
-/// @return position of k if it exists in the node, otherwise the position
-/// it should be inserted, which ranges from 0 to x->n _inclusively_
-/// @param match (optional) set to TRUE if match (pos, gravity) was found
-static inline int marktree_getp_aux(const MTNode *x, MTKey k, bool *match)
-{
-  bool dummy_match;
-  bool *m = match ? match : &dummy_match;
-
-  int begin = 0;
-  int end = x->n;
-  if (x->n == 0) {
-    *m = false;
-    return -1;
-  }
-  while (begin < end) {
-    int mid = (begin + end) >> 1;
-    if (key_cmp(x->key[mid], k) < 0) {
-      begin = mid + 1;
-    } else {
-      end = mid;
-    }
-  }
-  if (begin == x->n) {
-    *m = false;
-    return x->n - 1;
-  }
-  if (!(*m = (key_cmp(k, x->key[begin]) == 0))) {
-    begin--;
-  }
-  return begin;
-}
 
 static inline void refkey(MarkTree *b, MTNode *x, int i)
 {
@@ -331,10 +244,10 @@ static inline void split_node(MarkTree *b, MTNode *x, const int i, MTKey next)
   }
 
   for (int j = 0; j < T - 1; j++) {
-    relative(x->key[i].pos, &z->key[j].pos);
+    rs_relative(x->key[i].pos, &z->key[j].pos);
   }
   if (i > 0) {
-    unrelative(x->key[i - 1].pos, &x->key[i].pos);
+    rs_unrelative(x->key[i - 1].pos, &x->key[i].pos);
   }
 
   if (y->level) {
@@ -350,7 +263,7 @@ static inline void marktree_putp_aux(MarkTree *b, MTNode *x, MTKey k, uint32_t *
 {
   // TODO(bfredl): ugh, make sure this is the _last_ valid (pos, gravity) position,
   // to minimize movement
-  int i = marktree_getp_aux(x, k, NULL) + 1;
+  int i = rs_marktree_getp_aux(x, k, NULL) + 1;
   if (x->level == 0) {
     if (i != x->n) {
       memmove(&x->key[i + 1], &x->key[i],
@@ -362,12 +275,12 @@ static inline void marktree_putp_aux(MarkTree *b, MTNode *x, MTKey k, uint32_t *
   } else {
     if (x->ptr[i]->n == 2 * T - 1) {
       split_node(b, x, i, k);
-      if (key_cmp(k, x->key[i]) > 0) {
+      if (rs_key_cmp(k, x->key[i]) > 0) {
         i++;
       }
     }
     if (i > 0) {
-      relative(x->key[i - 1].pos, &k.pos);
+      rs_relative(x->key[i - 1].pos, &k.pos);
     }
     marktree_putp_aux(b, x->ptr[i], k, meta_inc);
     for (int m = 0; m < kMTMetaCount; m++) {
@@ -556,15 +469,6 @@ static void meta_describe_node(uint32_t *meta_node, MTNode *x)
   }
 }
 
-static bool meta_has(const uint32_t *meta_count, MetaFilter meta_filter)
-{
-  uint32_t count = 0;
-  for (int m = 0; m < kMTMetaCount; m++) {
-    count += meta_count[m] & meta_filter[m];
-  }
-  return count > 0;
-}
-
 void marktree_put_key(MarkTree *b, MTKey k)
 {
   k.flags |= MT_FLAG_REAL;  // let's be real.
@@ -690,7 +594,7 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
       int i = itr->s[ilvl].i;
       assert(p->ptr[i] == lnode);
       if (i > 0) {
-        unrelative(p->key[i - 1].pos, &intkey.pos);
+        rs_unrelative(p->key[i - 1].pos, &intkey.pos);
       }
 
       if (p != cur && start_id) {
@@ -727,12 +631,12 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
       }
     }
 
-    relative(intkey.pos, &deleted.pos);
+    rs_relative(intkey.pos, &deleted.pos);
     MTNode *y = cur->ptr[curi + 1];
     if (deleted.pos.row || deleted.pos.col) {
       while (y) {
         for (int k = 0; k < y->n; k++) {
-          unrelative(deleted.pos, &y->key[k].pos);
+          rs_unrelative(deleted.pos, &y->key[k].pos);
         }
         y = y->level ? y->ptr[0] : NULL;
       }
@@ -1115,7 +1019,7 @@ static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
   x->key[x->n] = p->key[i];
   refkey(b, x, x->n);
   if (i > 0) {
-    relative(p->key[i - 1].pos, &x->key[x->n].pos);
+    rs_relative(p->key[i - 1].pos, &x->key[x->n].pos);
   }
 
   uint32_t meta_inc[kMTMetaCount];
@@ -1124,7 +1028,7 @@ static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
   memmove(&x->key[x->n + 1], y->key, (size_t)y->n * sizeof(MTKey));
   for (int k = 0; k < y->n; k++) {
     refkey(b, x, x->n + 1 + k);
-    unrelative(x->key[x->n].pos, &x->key[x->n + 1 + k].pos);
+    rs_unrelative(x->key[x->n].pos, &x->key[x->n + 1 + k].pos);
   }
   if (x->level) {
     // bubble down: ranges that intersected old-x but not old-y or vice versa
@@ -1231,11 +1135,11 @@ static void pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, const int i)
   x->n--;
   y->n++;
   if (i > 0) {
-    unrelative(p->key[i - 1].pos, &p->key[i].pos);
+    rs_unrelative(p->key[i - 1].pos, &p->key[i].pos);
   }
-  relative(p->key[i].pos, &y->key[0].pos);
+  rs_relative(p->key[i].pos, &y->key[0].pos);
   for (int k = 1; k < y->n; k++) {
-    unrelative(y->key[0].pos, &y->key[k].pos);
+    rs_unrelative(y->key[0].pos, &y->key[k].pos);
   }
 
   // repair intersections of x
@@ -1282,11 +1186,11 @@ static void pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
   // reverse from how we "always" do it. but pivot_left
   // is just the inverse of pivot_right, so reverse it literally.
   for (int k = 1; k < y->n; k++) {
-    relative(y->key[0].pos, &y->key[k].pos);
+    rs_relative(y->key[0].pos, &y->key[k].pos);
   }
-  unrelative(p->key[i].pos, &y->key[0].pos);
+  rs_unrelative(p->key[i].pos, &y->key[0].pos);
   if (i > 0) {
-    relative(p->key[i - 1].pos, &p->key[i].pos);
+    rs_relative(p->key[i - 1].pos, &p->key[i].pos);
   }
 
   x->key[x->n] = p->key[i];
@@ -1403,12 +1307,12 @@ void marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col)
     if (x->parent != NULL) {
       // strictly _after_ key before `x`
       // (not optimal when x is very first leaf of the entire tree, but that's fine)
-      if (pos_less(itr->pos, newpos)) {
-        relative(itr->pos, &newpos);
+      if (rs_pos_less(itr->pos, newpos)) {
+        rs_relative(itr->pos, &newpos);
 
         // strictly before the end of x. (this could be made sharper by
         // finding the internal key just after x, but meh)
-        if (pos_less(newpos, x->key[x->n - 1].pos)) {
+        if (rs_pos_less(newpos, x->key[x->n - 1].pos)) {
           internal = true;
         }
       }
@@ -1424,7 +1328,7 @@ void marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col)
       key.pos = newpos;
       bool match;
       // tricky: could minimize movement in either direction better
-      int new_i = marktree_getp_aux(x, key, &match);
+      int new_i = rs_marktree_getp_aux(x, key, &match);
       if (!match) {
         new_i++;
       }
@@ -1517,12 +1421,6 @@ bool marktree_itr_next_filter(MarkTree *b, MarkTreeIter *itr, int stop_row, int 
                               MetaFilter meta_filter)
 {
   return rs_marktree_itr_next_filter(b, itr, stop_row, stop_col, meta_filter);
-}
-
-static bool marktree_itr_check_filter(MarkTree *b, MarkTreeIter *itr, int stop_row, int stop_col,
-                                      MetaFilter meta_filter)
-{
-  return rs_marktree_itr_check_filter(b, itr, stop_row, stop_col, meta_filter);
 }
 
 bool marktree_itr_prev(MarkTree *b, MarkTreeIter *itr)
@@ -1643,8 +1541,8 @@ bool marktree_splice(MarkTree *b, int32_t start_line, int start_col, int old_ext
 
   bool may_delete = (old_extent.row != 0 || old_extent.col != 0);
   bool same_line = old_extent.row == 0 && new_extent.row == 0;
-  unrelative(start, &old_extent);
-  unrelative(start, &new_extent);
+  rs_unrelative(start, &old_extent);
+  rs_unrelative(start, &new_extent);
   MarkTreeIter itr[1] = { 0 };
   MarkTreeIter enditr[1] = { 0 };
 
@@ -1660,7 +1558,7 @@ bool marktree_splice(MarkTree *b, int32_t start_line, int start_col, int old_ext
 
   if (may_delete) {
     MTPos ipos = marktree_itr_pos(itr);
-    if (!pos_leq(old_extent, ipos)
+    if (!rs_pos_leq(old_extent, ipos)
         || (old_extent.row == ipos.row && old_extent.col == ipos.col
             && !mt_right(rawkey(itr)))) {
       marktree_itr_get_ext(b, old_extent, enditr, true, true, NULL, NULL);
@@ -1683,14 +1581,14 @@ bool marktree_splice(MarkTree *b, int32_t start_line, int start_col, int old_ext
     while (itr->x && !past_right) {
       MTPos loc_start = start;
       MTPos loc_old = old_extent;
-      relative(itr->pos, &loc_start);
+      rs_relative(itr->pos, &loc_start);
 
-      relative(oldbase[itr->lvl], &loc_old);
+      rs_relative(oldbase[itr->lvl], &loc_old);
 
 continue_same_node:
       // NB: strictly should be less than the right gravity of loc_old, but
       // the iter comparison below will already break on that.
-      if (!pos_leq(rawkey(itr).pos, loc_old)) {
+      if (!rs_pos_leq(rawkey(itr).pos, loc_old)) {
         break;
       }
 
@@ -1716,7 +1614,7 @@ continue_same_node:
       moved = true;
       if (itr->x->level) {
         oldbase[itr->lvl + 1] = rawkey(itr).pos;
-        unrelative(oldbase[itr->lvl], &oldbase[itr->lvl + 1]);
+        rs_unrelative(oldbase[itr->lvl], &oldbase[itr->lvl + 1]);
         rawkey(itr).pos = loc_start;
         marktree_itr_next_skip(b, itr, false, false, oldbase, NULL);
       } else {
@@ -1733,14 +1631,14 @@ continue_same_node:
     }
     while (itr->x) {
       MTPos loc_new = new_extent;
-      relative(itr->pos, &loc_new);
+      rs_relative(itr->pos, &loc_new);
       MTPos limit = old_extent;
 
-      relative(oldbase[itr->lvl], &limit);
+      rs_relative(oldbase[itr->lvl], &limit);
 
 past_continue_same_node:
 
-      if (pos_leq(limit, rawkey(itr).pos)) {
+      if (rs_pos_leq(limit, rawkey(itr).pos)) {
         break;
       }
 
@@ -1749,7 +1647,7 @@ past_continue_same_node:
       moved = true;
       if (itr->x->level) {
         oldbase[itr->lvl + 1] = oldpos;
-        unrelative(oldbase[itr->lvl], &oldbase[itr->lvl + 1]);
+        rs_unrelative(oldbase[itr->lvl], &oldbase[itr->lvl + 1]);
 
         marktree_itr_next_skip(b, itr, false, false, oldbase, NULL);
       } else {
@@ -1764,7 +1662,7 @@ past_continue_same_node:
   }
 
   while (itr->x) {
-    unrelative(oldbase[itr->lvl], &rawkey(itr).pos);
+    rs_unrelative(oldbase[itr->lvl], &rawkey(itr).pos);
     int realrow = rawkey(itr).pos.row;
     assert(realrow >= old_extent.row);
     bool done = false;
@@ -1782,7 +1680,7 @@ past_continue_same_node:
       rawkey(itr).pos.row += delta.row;
       moved = true;
     }
-    relative(itr->pos, &rawkey(itr).pos);
+    rs_relative(itr->pos, &rawkey(itr).pos);
     if (done) {
       break;
     }
@@ -1854,17 +1752,17 @@ void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int ext
   MTPos start = { start_row, start_col };
   MTPos size = { extent_row, extent_col };
   MTPos end = size;
-  unrelative(start, &end);
+  rs_unrelative(start, &end);
   MarkTreeIter itr[1] = { 0 };
   marktree_itr_get_ext(b, start, itr, false, true, NULL, NULL);
   kvec_t(MTKey) saved = KV_INITIAL_VALUE;
   while (itr->x) {
     MTKey k = marktree_itr_current(itr);
-    if (!pos_leq(k.pos, end) || (k.pos.row == end.row && k.pos.col == end.col
+    if (!rs_pos_leq(k.pos, end) || (k.pos.row == end.row && k.pos.col == end.col
                                  && mt_right(k))) {
       break;
     }
-    relative(start, &k.pos);
+    rs_relative(start, &k.pos);
     kv_push(saved, k);
     marktree_del_itr(b, itr, false);
   }
@@ -1876,7 +1774,7 @@ void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int ext
 
   for (size_t i = 0; i < kv_size(saved); i++) {
     MTKey item = kv_A(saved, i);
-    unrelative(new, &item.pos);
+    rs_unrelative(new, &item.pos);
     marktree_put_key(b, item);
     if (mt_paired(item)) {
       // other end might be later in `saved`, this will safely bail out then
@@ -2026,9 +1924,9 @@ size_t marktree_check_node(MarkTree *b, MTNode *x, MTPos *last, bool *last_right
       *last = (MTPos) { 0, 0 };
     }
     if (i > 0) {
-      unrelative(x->key[i - 1].pos, last);
+      rs_unrelative(x->key[i - 1].pos, last);
     }
-    assert(pos_leq(*last, x->key[i].pos));
+    assert(rs_pos_leq(*last, x->key[i].pos));
     if (last->row == x->key[i].pos.row && last->col == x->key[i].pos.col) {
       assert(!*last_right || mt_right(x->key[i]));
     }
@@ -2039,7 +1937,7 @@ size_t marktree_check_node(MarkTree *b, MTNode *x, MTPos *last, bool *last_right
 
   if (x->level) {
     n_keys += marktree_check_node(b, x->ptr[x->n], last, last_right, x->meta[x->n]);
-    unrelative(x->key[x->n - 1].pos, last);
+    rs_unrelative(x->key[x->n - 1].pos, last);
 
     for (int i = 0; i < x->n + 1; i++) {
       assert(x->ptr[i]->parent == x);
@@ -2209,7 +2107,7 @@ static void mt_inspect_node(MarkTree *b, garray_T *ga, bool keys, MTNode *n, MTP
   }
   for (int i = 0; i < n->n; i++) {
     MTPos p = n->key[i].pos;
-    unrelative(off, &p);
+    rs_unrelative(off, &p);
     GA_PRINT("%d/%d", p.row, p.col);
     if (keys) {
       MTKey key = n->key[i];
@@ -2277,7 +2175,7 @@ static void mt_inspect_dotfile_node(MarkTree *b, garray_T *ga, MTNode *n, MTPos 
   }
   for (int i = 0; i < n->n; i++) {
     MTPos p = n->key[i].pos;
-    unrelative(off, &p);
+    rs_unrelative(off, &p);
     if (n->level) {
       mt_inspect_dotfile_node(b, ga, n->ptr[i + 1], p, namebuf);
     }
