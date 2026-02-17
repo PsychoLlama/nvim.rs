@@ -250,7 +250,7 @@ typedef struct {
   Callback *func_cb;      ///< callback of function in 'cpt' option
 } ins_compl_next_state_T;
 
-#include "insexpand.c.generated.h"
+#include "insexpand_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
 
 /// values for cp_flags
