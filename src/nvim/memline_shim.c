@@ -229,7 +229,7 @@ typedef enum {
   SEA_CHOICE_ABORT = 6,
 } sea_choice_T;
 
-#include "memline.c.generated.h"
+#include "memline_shim.c.generated.h"
 
 extern int rs_get_fileformat(buf_T *buf);
 

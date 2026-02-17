@@ -6,7 +6,7 @@
 #include "nvim/pos_defs.h"  // IWYU pragma: keep
 #include "nvim/types_defs.h"  // IWYU pragma: keep
 
-#include "memline.h.generated.h"
+#include "memline_shim.h.generated.h"
 
 /// LINEEMPTY() - return true if the line is empty
 #define LINEEMPTY(p) (*ml_get(p) == NUL)
