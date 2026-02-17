@@ -2428,9 +2428,9 @@ int win_split(int size, int flags)
   // When creating the help window make a snapshot of the window layout.
   // Otherwise clear the snapshot, it's now invalid.
   if (flags & WSP_HELP) {
-    make_snapshot(SNAP_HELP_IDX);
+    rs_make_snapshot(SNAP_HELP_IDX);
   } else {
-    clear_snapshot(curtab, SNAP_HELP_IDX);
+    rs_clear_snapshot(curtab, SNAP_HELP_IDX);
   }
 
   return win_split_ins(size, flags, NULL, 0, NULL) == NULL ? FAIL : OK;
@@ -2685,18 +2685,18 @@ static void win_exchange(int Prenum)
   frame_T *frp2 = curwin->w_frame->fr_prev;
   if (wp->w_prev != curwin) {
     win_remove(curwin, NULL);
-    frame_remove(curwin->w_frame);
+    rs_frame_remove(curwin->w_frame);
     win_append(wp->w_prev, curwin, NULL);
-    frame_insert(frp, curwin->w_frame);
+    rs_frame_insert(frp, curwin->w_frame);
   }
   if (wp != wp2) {
     win_remove(wp, NULL);
-    frame_remove(wp->w_frame);
+    rs_frame_remove(wp->w_frame);
     win_append(wp2, wp, NULL);
     if (frp2 == NULL) {
-      frame_insert(wp->w_frame->fr_parent->fr_child, wp->w_frame);
+      rs_frame_insert(wp->w_frame->fr_parent->fr_child, wp->w_frame);
     } else {
-      frame_append(frp2, wp->w_frame);
+      rs_frame_append(frp2, wp->w_frame);
     }
   }
   int temp = curwin->w_status_height;
@@ -2709,10 +2709,10 @@ static void win_exchange(int Prenum)
   curwin->w_hsep_height = wp->w_hsep_height;
   wp->w_hsep_height = temp;
 
-  frame_fix_height(curwin);
-  frame_fix_height(wp);
-  frame_fix_width(curwin);
-  frame_fix_width(wp);
+  rs_frame_fix_height(curwin);
+  rs_frame_fix_height(wp);
+  rs_frame_fix_width(curwin);
+  rs_frame_fix_width(wp);
 
   win_comp_pos();                 // recompute window positions
 
@@ -2761,13 +2761,13 @@ static void win_rotate(bool upwards, int count)
       assert(frp != NULL);
       wp1 = frp->fr_win;
       win_remove(wp1, NULL);
-      frame_remove(frp);
+      rs_frame_remove(frp);
       assert(frp->fr_parent->fr_child);
 
       // find last frame and append removed window/frame after it
       for (; frp->fr_next != NULL; frp = frp->fr_next) {}
       win_append(frp->fr_win, wp1, NULL);
-      frame_append(frp, wp1->w_frame);
+      rs_frame_append(frp, wp1->w_frame);
 
       wp2 = frp->fr_win;                // previously last window
     } else {                  // last window becomes first window
@@ -2777,12 +2777,12 @@ static void win_rotate(bool upwards, int count)
       wp1 = frp->fr_win;
       wp2 = wp1->w_prev;                    // will become last window
       win_remove(wp1, NULL);
-      frame_remove(frp);
+      rs_frame_remove(frp);
       assert(frp->fr_parent->fr_child);
 
       // append the removed window/frame before the first in the list
       win_append(frp->fr_parent->fr_child->fr_win->w_prev, wp1, NULL);
-      frame_insert(frp->fr_parent->fr_child, frp);
+      rs_frame_insert(frp->fr_parent->fr_child, frp);
     }
 
     // exchange status height, winbar height, hsep height and vsep width of old and new last window
@@ -2792,13 +2792,13 @@ static void win_rotate(bool upwards, int count)
     n = wp2->w_hsep_height;
     wp2->w_hsep_height = wp1->w_hsep_height;
     wp1->w_hsep_height = n;
-    frame_fix_height(wp1);
-    frame_fix_height(wp2);
+    rs_frame_fix_height(wp1);
+    rs_frame_fix_height(wp2);
     n = wp2->w_vsep_width;
     wp2->w_vsep_width = wp1->w_vsep_width;
     wp1->w_vsep_width = n;
-    frame_fix_width(wp1);
-    frame_fix_width(wp2);
+    rs_frame_fix_width(wp1);
+    rs_frame_fix_width(wp2);
 
     // recompute w_winrow and w_wincol for all windows
     win_comp_pos();
@@ -2919,9 +2919,9 @@ void win_move_after(win_T *win1, win_T *win2)
       }
     }
     win_remove(win1, NULL);
-    frame_remove(win1->w_frame);
+    rs_frame_remove(win1->w_frame);
     win_append(win2, win1, NULL);
-    frame_append(win2->w_frame, win1->w_frame);
+    rs_frame_append(win2->w_frame, win1->w_frame);
 
     win_comp_pos();  // recompute w_winrow for all windows
     redraw_later(curwin, UPD_NOT_VALID);
@@ -3296,7 +3296,7 @@ int win_close(win_T *win, bool free_buf, bool force)
   if (bt_help(win->w_buffer)) {
     help_window = true;
   } else {
-    clear_snapshot(curtab, SNAP_HELP_IDX);
+    rs_clear_snapshot(curtab, SNAP_HELP_IDX);
   }
 
   win_T *wp;
@@ -3624,11 +3624,11 @@ win_T *winframe_remove(win_T *win, int *dirp, tabpage_T *tp, frame_T **unflat_al
   // If this is a rightmost window, remove vertical separators to the left.
   if (win->w_vsep_width == 0 && frp_close->fr_parent->fr_layout == FR_ROW
       && frp_close->fr_prev != NULL) {
-    frame_set_vsep(frp_close->fr_prev, false);
+    rs_frame_set_vsep(frp_close->fr_prev, 0);
   }
 
   // Remove this frame from the list of frames.
-  frame_remove(frp_close);
+  rs_frame_remove(frp_close);
 
   if (*dirp == 'v') {
     frame_new_height(altfr, altfr->fr_height + frp_close->fr_height,
@@ -3642,7 +3642,7 @@ win_T *winframe_remove(win_T *win, int *dirp, tabpage_T *tp, frame_T **unflat_al
   // If the altframe wasn't adjacent and left/above, resizing it will have
   // changed window positions within the parent frame.  Recompute them.
   if (altfr != frp_close->fr_prev) {
-    frame_comp_pos(frp_close->fr_parent, &row, &col);
+    rs_frame_comp_pos(frp_close->fr_parent, &row, &col);
   }
 
   if (unflat_altfr == NULL) {
@@ -3760,22 +3760,22 @@ void winframe_restore(win_T *wp, int dir, frame_T *unflat_altfr)
 
   // Put "wp"'s frame back where it was.
   if (frp->fr_prev != NULL) {
-    frame_append(frp->fr_prev, frp);
+    rs_frame_append(frp->fr_prev, frp);
   } else {
-    frame_insert(frp->fr_next, frp);
+    rs_frame_insert(frp->fr_next, frp);
   }
 
   // Vertical separators to the left may have been lost.  Restore them.
   if (wp->w_vsep_width == 0 && frp->fr_parent->fr_layout == FR_ROW && frp->fr_prev != NULL) {
-    frame_set_vsep(frp->fr_prev, true);
+    rs_frame_set_vsep(frp->fr_prev, 1);
   }
 
   // Statuslines or horizontal separators above may have been lost.  Restore them.
   if (frp->fr_parent->fr_layout == FR_COL && frp->fr_prev != NULL) {
     if (global_stl_height() == 0 && wp->w_status_height == 0) {
-      frame_add_statusline(frp->fr_prev);
+      rs_frame_add_statusline(frp->fr_prev);
     } else if (global_stl_height() > 0 && wp->w_hsep_height == 0) {
-      frame_add_hsep(frp->fr_prev);
+      rs_frame_add_hsep(frp->fr_prev);
     }
   }
 
@@ -3796,7 +3796,7 @@ void winframe_restore(win_T *wp, int dir, frame_T *unflat_altfr)
     int row = topleft->w_winrow;
     int col = topleft->w_wincol;
 
-    frame_comp_pos(frp->fr_parent, &row, &col);
+    rs_frame_comp_pos(frp->fr_parent, &row, &col);
   }
 }
 
@@ -3852,14 +3852,6 @@ win_T *frame2win(frame_T *frp)
   return rs_frame2win(frp);
 }
 
-/// Check if current window is at the bottom
-/// Returns true if there are no windows below current window
-static bool is_bottom_win(win_T *wp)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_is_bottom_win(wp) != 0;
-}
-
 /// Set a new height for a frame.  Recursively sets the height for contained
 /// frames and windows.  Caller must take care of positions.
 ///
@@ -3883,7 +3875,7 @@ void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool
   if (topfrp->fr_win != NULL) {
     // Simple case: just one window.
     win_T *wp = topfrp->fr_win;
-    if (is_bottom_win(wp)) {
+    if (rs_is_bottom_win(wp)) {
       wp->w_hsep_height = 0;
     }
     win_new_height(wp, height - wp->w_hsep_height - wp->w_status_height);
@@ -3907,7 +3899,7 @@ void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool
     frame_T *frp = topfrp->fr_child;
     if (wfh) {
       // Advance past frames with one window with 'wfh' set.
-      while (frame_fixed_height(frp)) {
+      while (rs_frame_fixed_height(frp)) {
         frp = frp->fr_next;
         if (frp == NULL) {
           return;                   // no frame without 'wfh', give up
@@ -3921,7 +3913,7 @@ void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool
       }
       if (wfh) {
         // Advance back for frames with one window with 'wfh' set.
-        while (frame_fixed_height(frp)) {
+        while (rs_frame_fixed_height(frp)) {
           frp = frp->fr_prev;
         }
       }
@@ -3931,7 +3923,7 @@ void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool
     if (extra_lines < 0) {
       // reduce height of contained frames, bottom or top frame first
       while (frp != NULL) {
-        int h = frame_minheight(frp, NULL);
+        int h = rs_frame_minheight(frp, NULL);
         if (frp->fr_height + extra_lines < h) {
           extra_lines += frp->fr_height - h;
           frame_new_height(frp, h, topfirst, wfh, set_ch);
@@ -3942,11 +3934,11 @@ void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool
         if (topfirst) {
           do {
             frp = frp->fr_next;
-          } while (wfh && frp != NULL && frame_fixed_height(frp));
+          } while (wfh && frp != NULL && rs_frame_fixed_height(frp));
         } else {
           do {
             frp = frp->fr_prev;
-          } while (wfh && frp != NULL && frame_fixed_height(frp));
+          } while (wfh && frp != NULL && rs_frame_fixed_height(frp));
         }
         // Increase "height" if we could not reduce enough frames.
         if (frp == NULL) {
@@ -3959,37 +3951,6 @@ void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool
     }
   }
   topfrp->fr_height = height;
-}
-
-/// Return true if height of frame "frp" should not be changed because of
-/// the 'winfixheight' option.
-///
-/// @param  frp  frame
-///
-/// @return true if the frame has a fixed height
-static bool frame_fixed_height(frame_T *frp)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_frame_fixed_height(frp) != 0;
-}
-
-/// Return true if width of frame "frp" should not be changed because of
-/// the 'winfixwidth' option.
-///
-/// @param  frp  frame
-///
-/// @return true if the frame has a fixed width
-static bool frame_fixed_width(frame_T *frp)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_frame_fixed_width(frp) != 0;
-}
-
-// Add a status line to windows at the bottom of "frp".
-// Note: Does not check if there is room!
-static void frame_add_statusline(frame_T *frp)
-{
-  rs_frame_add_statusline(frp);
 }
 
 /// Set width of a frame.  Handles recursively going through contained frames.
@@ -4034,7 +3995,7 @@ static void frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw
     frame_T *frp = topfrp->fr_child;
     if (wfw) {
       // Advance past frames with one window with 'wfw' set.
-      while (frame_fixed_width(frp)) {
+      while (rs_frame_fixed_width(frp)) {
         frp = frp->fr_next;
         if (frp == NULL) {
           return;                   // no frame without 'wfw', give up
@@ -4048,7 +4009,7 @@ static void frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw
       }
       if (wfw) {
         // Advance back for frames with one window with 'wfw' set.
-        while (frame_fixed_width(frp)) {
+        while (rs_frame_fixed_width(frp)) {
           frp = frp->fr_prev;
         }
       }
@@ -4058,7 +4019,7 @@ static void frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw
     if (extra_cols < 0) {
       // reduce frame width, rightmost frame first
       while (frp != NULL) {
-        int w = frame_minwidth(frp, NULL);
+        int w = rs_frame_minwidth(frp, NULL);
         if (frp->fr_width + extra_cols < w) {
           extra_cols += frp->fr_width - w;
           frame_new_width(frp, w, leftfirst, wfw);
@@ -4070,11 +4031,11 @@ static void frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw
         if (leftfirst) {
           do {
             frp = frp->fr_next;
-          } while (wfw && frp != NULL && frame_fixed_width(frp));
+          } while (wfw && frp != NULL && rs_frame_fixed_width(frp));
         } else {
           do {
             frp = frp->fr_prev;
-          } while (wfw && frp != NULL && frame_fixed_width(frp));
+          } while (wfw && frp != NULL && rs_frame_fixed_width(frp));
         }
         // Increase "width" if we could not reduce enough frames.
         if (frp == NULL) {
@@ -4087,54 +4048,6 @@ static void frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw
     }
   }
   topfrp->fr_width = width;
-}
-
-/// Add or remove the vertical separator of windows to the right side of "frp".
-/// Note: Does not check if there is room!
-static void frame_set_vsep(const frame_T *frp, bool add)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  rs_frame_set_vsep(frp, add ? 1 : 0);
-}
-
-/// Add the horizontal separator to windows at the bottom of "frp".
-/// Note: Does not check if there is room or whether the windows have a statusline!
-static void frame_add_hsep(const frame_T *frp)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  rs_frame_add_hsep(frp);
-}
-
-// Set frame width from the window it contains.
-static void frame_fix_width(win_T *wp)
-{
-  rs_frame_fix_width(wp);
-}
-
-// Set frame height from the window it contains.
-static void frame_fix_height(win_T *wp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_frame_fix_height(wp);
-}
-
-/// Compute the minimal height for frame "topfrp". Uses the 'winminheight' option.
-/// When "next_curwin" isn't NULL, use p_wh for this window.
-/// When "next_curwin" is NOWIN, don't use at least one line for the current window.
-static int frame_minheight(frame_T *topfrp, win_T *next_curwin)
-{
-  return rs_frame_minheight(topfrp, next_curwin);
-}
-
-/// Compute the minimal width for frame "topfrp".
-/// When "next_curwin" isn't NULL, use p_wiw for this window.
-/// When "next_curwin" is NOWIN, don't use at least one column for the current
-/// window.
-///
-/// @param next_curwin  use p_wh and p_wiw for next_curwin
-static int frame_minwidth(frame_T *topfrp, win_T *next_curwin)
-{
-  return rs_frame_minwidth(topfrp, next_curwin);
 }
 
 /// Try to close all windows except current one.
@@ -4345,7 +4258,7 @@ void free_tabpage(tabpage_T *tp)
   pmap_del(int)(&tabpage_handles, tp->handle, NULL);
   rs_diff_clear(tp);
   for (int idx = 0; idx < SNAP_COUNT; idx++) {
-    clear_snapshot(tp, idx);
+    rs_clear_snapshot(tp, idx);
   }
   vars_clear(&tp->tp_vars->dv_hashtab);         // free all t: variables
   hash_init(&tp->tp_vars->dv_hashtab);
@@ -5406,24 +5319,6 @@ void win_remove(win_T *wp, tabpage_T *tp)
   rs_win_remove(wp, tp);
 }
 
-// Append frame "frp" in a frame list after frame "after".
-static void frame_append(frame_T *after, frame_T *frp)
-{
-  rs_frame_append(after, frp);
-}
-
-// Insert frame "frp" in a frame list before frame "before".
-static void frame_insert(frame_T *before, frame_T *frp)
-{
-  rs_frame_insert(before, frp);
-}
-
-// Remove a frame from a frame list.
-static void frame_remove(frame_T *frp)
-{
-  rs_frame_remove(frp);
-}
-
 void win_new_screensize(void)
 {
   static int old_Rows = 0;
@@ -5451,12 +5346,12 @@ void win_new_screen_rows(void)
   if (firstwin == NULL) {       // not initialized yet
     return;
   }
-  int h = MAX((int)ROWS_AVAIL, frame_minheight(topframe, NULL));
+  int h = MAX((int)ROWS_AVAIL, rs_frame_minheight(topframe, NULL));
 
   // First try setting the heights of windows with 'winfixheight'.  If
   // that doesn't result in the right height, forget about that option.
   frame_new_height(topframe, h, false, true, false);
-  if (!frame_check_height(topframe, h)) {
+  if (!rs_frame_check_height(topframe, h)) {
     frame_new_height(topframe, h, false, false, false);
   }
 
@@ -5480,7 +5375,7 @@ void win_new_screen_cols(void)
   // First try setting the widths of windows with 'winfixwidth'.  If that
   // doesn't result in the right width, forget about that option.
   frame_new_width(topframe, Columns, false, true);
-  if (!frame_check_width(topframe, Columns)) {
+  if (!rs_frame_check_width(topframe, Columns)) {
     frame_new_width(topframe, Columns, false, false);
   }
 
@@ -5790,15 +5685,6 @@ int win_comp_pos(void)
   return rs_win_comp_pos();
 }
 
-// Update the position of the windows in frame "topfrp", using the width and
-// height of the frames.
-// "*row" and "*col" are the top-left position of the frame.  They are updated
-// to the bottom-right position plus one.
-static void frame_comp_pos(frame_T *topfrp, int *row, int *col)
-{
-  rs_frame_comp_pos(topfrp, row, col);
-}
-
 // Set current window height and take care of repositioning other windows to
 // fit around it.
 void win_setheight(int height)
@@ -5811,22 +5697,6 @@ void win_setheight(int height)
 void win_setheight_win(int height, win_T *win)
 {
   rs_win_setheight_win(height, win);
-}
-
-// Set the height of a frame to "height" and take care that all frames and
-// windows inside it are resized.  Also resize frames on the left and right if
-// the are in the same FR_ROW frame.
-//
-// Strategy:
-// If the frame is part of a FR_COL frame, try fitting the frame in that
-// frame.  If that doesn't work (the FR_COL frame is too small), recursively
-// go to containing frames to resize them and make room.
-// If the frame is part of a FR_ROW frame, all frames must be resized as well.
-// Check for the minimal height of the FR_ROW frame.
-// At the top level we can also use change the command line height.
-static void frame_setheight(frame_T *curfrp, int height)
-{
-  rs_frame_setheight(curfrp, height);
 }
 
 // Set current window width and take care of repositioning other windows to
@@ -6202,13 +6072,13 @@ void command_height(void)
       p_ch = old_p_ch;
       break;
     }
-    int h = MIN((int)(p_ch - old_p_ch), frp->fr_height - frame_minheight(frp, NULL));
-    frame_add_height(frp, -h);
+    int h = MIN((int)(p_ch - old_p_ch), frp->fr_height - rs_frame_minheight(frp, NULL));
+    rs_frame_add_height(frp, -h);
     old_p_ch += h;
     frp = frp->fr_prev;
   }
   if (p_ch < old_p_ch && command_frame_height && frp != NULL) {
-    frame_add_height(frp, (int)(old_p_ch - p_ch));
+    rs_frame_add_height(frp, (int)(old_p_ch - p_ch));
   }
 
   // Recompute window positions.
@@ -6232,13 +6102,6 @@ void command_height(void)
   // p_ch was changed in another tab page.
   curtab->tp_ch_used = p_ch;
   min_set_ch = p_ch;
-}
-
-// Resize frame "frp" to be "n" lines higher (negative for less high).
-// Also resize the frames it is contained in.
-static void frame_add_height(frame_T *frp, int n)
-{
-  rs_frame_add_height(frp, n);
 }
 
 /// Add or remove a status line from window(s), according to the
@@ -6391,19 +6254,6 @@ void reset_lnums(void)
 // fr_child
 // fr_win (only valid for the old curwin, NULL otherwise)
 
-// Create a snapshot of the current frame sizes.
-void make_snapshot(int idx)
-{
-  rs_make_snapshot(idx);
-}
-
-// Remove any existing snapshot.
-static void clear_snapshot(tabpage_T *tp, int idx)
-{
-  rs_clear_snapshot(tp, idx);
-}
-
-
 /// Restore a previously created snapshot, if there is any.
 /// This is only done if the screen size didn't change and the window layout is
 /// still the same.
@@ -6414,50 +6264,15 @@ void restore_snapshot(int idx, int close_curwin)
   if (curtab->tp_snapshot[idx] != NULL
       && curtab->tp_snapshot[idx]->fr_width == topframe->fr_width
       && curtab->tp_snapshot[idx]->fr_height == topframe->fr_height
-      && check_snapshot_rec(curtab->tp_snapshot[idx], topframe) == OK) {
-    win_T *wp = restore_snapshot_rec(curtab->tp_snapshot[idx], topframe);
+      && rs_check_snapshot_rec(curtab->tp_snapshot[idx], topframe) == OK) {
+    win_T *wp = rs_restore_snapshot_rec(curtab->tp_snapshot[idx], topframe);
     win_comp_pos();
     if (wp != NULL && close_curwin) {
       win_goto(wp);
     }
     redraw_all_later(UPD_NOT_VALID);
   }
-  clear_snapshot(curtab, idx);
-}
-
-/// Check if frames "sn" and "fr" have the same layout, same following frames
-/// and same children.  And the window pointer is valid.
-static int check_snapshot_rec(frame_T *sn, frame_T *fr)
-{
-  return rs_check_snapshot_rec(sn, fr);
-}
-
-// Copy the size of snapshot frame "sn" to frame "fr".  Do the same for all
-// following frames and children.
-// Returns a pointer to the old current window, or NULL.
-static win_T *restore_snapshot_rec(frame_T *sn, frame_T *fr)
-{
-  return rs_restore_snapshot_rec(sn, fr);
-}
-
-/// Check that "topfrp" and its children are at the right height.
-///
-/// @param  topfrp  top frame pointer
-/// @param  height  expected height
-static bool frame_check_height(const frame_T *topfrp, int height)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_frame_check_height((frame_T *)topfrp, height) != 0;
-}
-
-/// Check that "topfrp" and its children are at the right width.
-///
-/// @param  topfrp  top frame pointer
-/// @param  width   expected width
-static bool frame_check_width(const frame_T *topfrp, int width)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_frame_check_width((frame_T *)topfrp, width) != 0;
+  rs_clear_snapshot(curtab, idx);
 }
 
 /// Simple int comparison function for use with qsort()
