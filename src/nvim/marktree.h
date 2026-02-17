@@ -136,4 +136,4 @@ static inline DecorVirtText *mt_decor_virt(MTKey mark)
   return (mark.flags & MT_FLAG_DECOR_EXT) ? mark.decor_data.ext.vt : NULL;
 }
 
-#include "marktree.h.generated.h"
+#include "marktree_shim.h.generated.h"

@@ -193,7 +193,7 @@ typedef struct {
 } Damage;
 typedef kvec_withinit_t(Damage, 8) DamageList;
 
-#include "marktree.c.generated.h"
+#include "marktree_shim.c.generated.h"
 
 #define mt_generic_cmp(a, b) (((b) < (a)) - ((a) < (b)))
 static int key_cmp(MTKey a, MTKey b)
