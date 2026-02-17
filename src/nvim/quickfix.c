@@ -924,31 +924,25 @@ bool nvim_qf_get_has_user_data(const void *qfl_void)
   return qfl->qf_has_user_data;
 }
 
-// Forward declarations for static functions that will be wrapped
-static void qf_new_list(qf_info_T *qi, const char *qf_title);
-static void qf_free(qf_list_T *qfl);
-static void qf_free_items(qf_list_T *qfl);
+// Forward declarations for static functions
 static void qf_store_title(qf_list_T *qfl, const char *title);
 
-/// Wrapper for qf_new_list - callable from Rust
+/// Wrapper for rs_qf_new_list - callable from Rust
 void nvim_qf_new_list(void *qi_void, const char *title)
 {
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  qf_new_list(qi, title);
+  rs_qf_new_list(qi_void, title);
 }
 
-/// Wrapper for qf_free - callable from Rust
+/// Wrapper for rs_qf_free_list - callable from Rust
 void nvim_qf_free_list(void *qfl_void)
 {
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qf_free(qfl);
+  rs_qf_free_list(qfl_void);
 }
 
-/// Wrapper for qf_free_items - callable from Rust
+/// Wrapper for rs_qf_free_items - callable from Rust
 void nvim_qf_free_items(void *qfl_void)
 {
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qf_free_items(qfl);
+  rs_qf_free_items(qfl_void);
 }
 
 /// Wrapper for qf_store_title - callable from Rust
@@ -1237,8 +1231,6 @@ void nvim_emsg_e_no_more_items(void)
 // Forward declaration
 // =============================================================================
 
-static void qf_pop_stack(qf_info_T *qi, bool adjust);
-
 /// Pop the oldest list from the quickfix stack for Rust
 /// @param adjust If true, adjust listcount and curlist
 void nvim_qf_pop_stack(void *qi_void, bool adjust)
@@ -1246,7 +1238,7 @@ void nvim_qf_pop_stack(void *qi_void, bool adjust)
   if (qi_void == NULL) {
     return;
   }
-  qf_pop_stack((qf_info_T *)qi_void, adjust);
+  rs_qf_pop_stack(qi_void, adjust);
 }
 
 /// Increment the list count after adding a list
@@ -2109,7 +2101,6 @@ void *nvim_win_get_llist_ref(const void *win_void)
 // Forward declarations
 // =============================================================================
 
-static int qf_add_entries(qf_info_T *qi, int qf_idx, list_T *list, char *title, int action);
 static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title);
 static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict);
 
@@ -2249,7 +2240,7 @@ static int qf_init_process_nextline(qf_list_T *qfl, efm_T *fmt_first, qfstate_T 
     return status;
   }
 
-  return qf_add_entry(qfl,
+  return rs_qf_add_entry(qfl,
                       qfl->qf_directory,
                       (*fields->namebuf || qfl->qf_directory != NULL)
                       ? fields->namebuf
@@ -2287,7 +2278,7 @@ int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, i
   qf_info_T *qi = wp == NULL ? ql_info : ll_get_or_alloc_list(wp);
   assert(qi != NULL);
 
-  return qf_init_ext(qi, qi->qf_curlist, efile, curbuf, NULL, errorformat,
+  return rs_qf_init_ext(qi, qi->qf_curlist, efile, curbuf, NULL, errorformat,
                      newlist, 0, 0, qf_title, enc);
 }
 
@@ -2361,21 +2352,6 @@ static void free_efm_list(efm_T **efm_first)
   fmt_start = NULL;
 }
 
-/// Compute the size of the buffer used to convert a 'errorformat' pattern into
-/// a regular expression pattern.
-/// Now calls Rust implementation.
-static size_t efm_regpat_bufsz(char *efm)
-{
-  return rs_efm_regpat_bufsz(efm, strlen(efm));
-}
-
-/// Return the length of a 'errorformat' option part (separated by ",").
-/// Now calls Rust implementation.
-static int efm_option_part_len(const char *efm)
-{
-  return rs_efm_option_part_len(efm, strlen(efm));
-}
-
 /// Parse the 'errorformat' option. Multiple parts in the 'errorformat' option
 /// are parsed and converted to regular expressions. Returns information about
 /// the parsed 'errorformat' option.
@@ -2385,7 +2361,7 @@ static efm_T *parse_efm_option(char *efm)
   efm_T *fmt_last = NULL;
 
   // Get some space to modify the format string into.
-  size_t sz = efm_regpat_bufsz(efm);
+  size_t sz = rs_efm_regpat_bufsz(efm, strlen(efm));
   char *fmtstr = xmalloc(sz);
 
   while (efm[0] != NUL) {
@@ -2399,7 +2375,7 @@ static efm_T *parse_efm_option(char *efm)
     fmt_last = fmt_ptr;
 
     // Isolate one part in the 'errorformat' option
-    int len = efm_option_part_len(efm);
+    int len = rs_efm_option_part_len(efm, strlen(efm));
 
     if (efm_to_regpat(efm, len, fmt_ptr, fmtstr) == FAIL) {
       goto parse_efm_error;
@@ -2656,232 +2632,11 @@ static int qf_get_nextline(qfstate_T *state)
   return QF_OK;
 }
 
-/// Returns true if the specified quickfix/location stack is empty. Rust implementation.
-static bool qf_stack_empty(const qf_info_T *qi)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_stack_empty(qi);
-}
-
-/// Returns true if the specified quickfix/location list is empty. Rust implementation.
-static bool qf_list_empty(qf_list_T *qfl)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_list_empty(qfl);
-}
-
-/// Returns true if the specified quickfix/location list is not empty and
-/// has valid entries. Rust implementation.
-static bool qf_list_has_valid_entries(qf_list_T *qfl)
-{
-  return rs_qf_list_has_valid_entries(qfl);
-}
-
 /// Return a pointer to a list in the specified quickfix stack
 static qf_list_T *qf_get_list(qf_info_T *qi, int idx)
   FUNC_ATTR_NONNULL_ALL
 {
   return &qi->qf_lists[idx];
-}
-
-// =============================================================================
-// Phase 6: Wrapper functions using Rust implementations
-// =============================================================================
-
-/// Check if we can navigate to an older list. Rust implementation.
-static bool qf_can_go_older(const qf_info_T *qi)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_can_go_older(qi);
-}
-
-/// Check if we can navigate to a newer list. Rust implementation.
-static bool qf_can_go_newer(const qf_info_T *qi)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_can_go_newer(qi);
-}
-
-/// Count entries of a specific type. Rust implementation.
-static int qf_count_by_type(const qf_list_T *qfl, char entry_type)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_count_by_type(qfl, entry_type);
-}
-
-/// Count informational entries. Rust implementation.
-static int qf_count_info(const qf_list_T *qfl)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_count_info(qfl);
-}
-
-/// Count entries in a buffer. Rust implementation.
-static int qf_count_in_buffer(const qf_list_T *qfl, int bnr)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_count_in_buffer(qfl, bnr);
-}
-
-/// Count valid entries in a buffer. Rust implementation.
-static int qf_count_valid_in_buffer(const qf_list_T *qfl, int bnr)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_count_valid_in_buffer(qfl, bnr);
-}
-
-/// Count entries on a specific line. Rust implementation.
-static int qf_count_on_line(const qf_list_T *qfl, int bnr, linenr_T lnum)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_count_on_line(qfl, bnr, lnum);
-}
-
-/// Check if entry text contains pattern. Rust implementation.
-static bool qf_entry_text_contains(const qfline_T *qfp, const char *pattern)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_entry_text_contains(qfp, pattern);
-}
-
-/// Check if there are valid entries in a buffer. Rust implementation.
-static bool qf_has_valid_in_buffer(const qf_list_T *qfl, int bnr)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_has_valid_in_buffer(qfl, bnr);
-}
-
-/// Check if all entries are invalid. Rust implementation.
-static bool qf_all_invalid(const qf_list_T *qfl)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_all_invalid(qfl);
-}
-
-/// Check if list has entries of a specific valid type. Rust implementation.
-static bool qf_has_valid_type(const qf_list_T *qfl, char entry_type)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_has_valid_type(qfl, entry_type);
-}
-
-/// Check if list has errors. Rust implementation.
-static bool qf_has_errors(const qf_list_T *qfl)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_has_errors(qfl);
-}
-
-/// Check if list has warnings or errors. Rust implementation.
-static bool qf_has_warnings_or_errors(const qf_list_T *qfl)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_has_warnings_or_errors(qfl);
-}
-
-/// Count entries in file. Rust implementation.
-static int qf_entry_count_in_file(const qf_list_T *qfl, int bnr)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_entry_count_in_file(qfl, bnr);
-}
-
-/// Count valid entries. Rust implementation.
-static int qf_count_valid_entries(const qf_list_T *qfl)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_count_valid_entries(qfl);
-}
-
-/// Check if entry is in file. Rust implementation.
-static bool qf_entry_in_file(const qfline_T *qfp, int bnr)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_entry_in_file(qfp, bnr);
-}
-
-/// Check if entry is active. Rust implementation.
-static bool qf_entry_is_active(const qfline_T *qfp)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_entry_is_active(qfp);
-}
-
-/// Check if entry has specific type. Rust implementation.
-static bool qf_entry_has_type(const qfline_T *qfp, char type_char)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_entry_has_type(qfp, type_char);
-}
-
-/// Compare two quickfix entries. Rust implementation.
-static int qf_cmp_entries(const qfline_T *a, const qfline_T *b)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_cmp_entries(a, b);
-}
-
-/// Find the Nth valid entry from current position. Rust implementation.
-static int qf_find_nth_valid(const qf_list_T *qfl, int n)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_find_nth_valid(qfl, n);
-}
-
-/// Calculate available age steps (older/newer). Rust implementation.
-static int qf_available_age_steps(const qf_info_T *qi, bool go_older)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_available_age_steps(qi, go_older);
-}
-
-/// Calculate available nav steps (forward/backward). Rust implementation.
-static int qf_available_nav_steps(const qf_list_T *qfl, bool forward)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_available_nav_steps(qfl, forward);
-}
-
-/// Check if there are entries in a range. Rust implementation.
-static bool qf_has_entries_in_range(const qf_list_T *qfl, int bnr, linenr_T start, linenr_T end)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_has_entries_in_range(qfl, bnr, start, end);
-}
-
-/// Count entries in a range. Rust implementation.
-static int qf_count_in_range(const qf_list_T *qfl, int bnr, linenr_T start, linenr_T end)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_count_in_range(qfl, bnr, start, end);
-}
-
-/// Calculate jump target for a specific entry index. Rust implementation.
-static QfJumpTarget qf_calc_jump_target(const qf_list_T *qfl, int idx)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_calc_jump_target(qfl, idx);
-}
-
-/// Find entry index for a line number in a buffer. Rust implementation.
-static int qf_idx_for_lnum(const qf_list_T *qfl, int bnr, linenr_T lnum)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_idx_for_lnum(qfl, bnr, lnum);
-}
-
-/// Find the first entry index in a file. Rust implementation.
-static int qf_first_entry_in_file(const qf_list_T *qfl, int bnr)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_first_entry_in_file(qfl, bnr);
-}
-
-/// Find the last entry index in a file. Rust implementation.
-static int qf_last_entry_in_file(const qf_list_T *qfl, int bnr)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_last_entry_in_file(qfl, bnr);
 }
 
 /// Parse a line and get the quickfix fields.
@@ -3168,7 +2923,7 @@ void nvim_qf_init_emsg_readerrf(void)
 void nvim_qf_init_error_cleanup(void *qi_void, void *qfl_void)
 {
   qf_info_T *qi = (qf_info_T *)qi_void;
-  qf_free((qf_list_T *)qfl_void);
+  rs_qf_free_list((qf_list_T *)qfl_void);
   qi->qf_listcount--;
   if (qi->qf_curlist > 0) {
     qi->qf_curlist--;
@@ -3186,20 +2941,6 @@ _Static_assert(QF_FAIL == 0, "QF_FAIL must be 0");
 /// Then "lnumfirst" and "lnumlast" specify the range of lines to use.
 /// Set the title of the list to "qf_title".
 ///
-/// @param newlist  true: start a new error list
-/// @param lnumfirst  first line number to use
-/// @param lnumlast  last line number to use
-///
-/// @return  -1 for error, number of errors for success.
-static int qf_init_ext(qf_info_T *qi, int qf_idx, const char *restrict efile, buf_T *buf,
-                       typval_T *tv, char *restrict errorformat, bool newlist, linenr_T lnumfirst,
-                       linenr_T lnumlast, const char *restrict qf_title, char *restrict enc)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_qf_init_ext(qi, qf_idx, efile, buf, tv, errorformat, newlist, lnumfirst,
-                        lnumlast, qf_title, enc);
-}
-
 /// Set the title of the specified quickfix list. Frees the previous title.
 /// Prepends ':' to the title.
 static void qf_store_title(qf_list_T *qfl, const char *title)
@@ -3236,28 +2977,6 @@ static qf_list_T *qf_get_curlist(qf_info_T *qi)
   FUNC_ATTR_NONNULL_ALL
 {
   return qf_get_list(qi, qi->qf_curlist);
-}
-
-/// Pop a quickfix list from the quickfix/location list stack
-/// Automatically adjust qf_curlist so that it stays pointed
-/// to the same list, unless it is deleted, if so then use the
-/// newest created list instead. qf_listcount will be set correctly.
-/// The above will only happen if <adjust> is true.
-///
-/// NOTE: Implementation now in Rust (rs_qf_pop_stack). This is a thin wrapper.
-static void qf_pop_stack(qf_info_T *qi, bool adjust)
-{
-  rs_qf_pop_stack((void *)qi, adjust);
-}
-
-/// Prepare for adding a new quickfix list. If the current list is in the
-/// middle of the stack, then all the following lists are freed and then
-/// the new list is added.
-///
-/// NOTE: Implementation now in Rust (rs_qf_new_list). This is a thin wrapper.
-static void qf_new_list(qf_info_T *qi, const char *qf_title)
-{
-  rs_qf_new_list((void *)qi, qf_title);
 }
 
 /// Parse the match for filename ('%f') pattern in regmatch.
@@ -3735,7 +3454,7 @@ static void wipe_qf_buffer(qf_info_T *qi)
 static void qf_free_list_stack_items(qf_info_T *qi)
 {
   for (int i = 0; i < qi->qf_listcount; i++) {
-    qf_free(qf_get_list(qi, i));
+    rs_qf_free_list(qf_get_list(qi, i));
   }
 }
 
@@ -3832,35 +3551,6 @@ void check_quickfix_busy(void)
 }
 #endif
 
-/// Add an entry to the end of the list of errors.
-///
-/// @param  qfl      quickfix list entry
-/// @param  dir      optional directory name
-/// @param  fname    file name or NULL
-/// @param  module   module name or NULL
-/// @param  bufnum   buffer number or zero
-/// @param  mesg     message
-/// @param  lnum     line number
-/// @param  end_lnum  line number for end
-/// @param  col      column
-/// @param  end_col  column for end
-/// @param  vis_col  using visual column
-/// @param  pattern  search pattern
-/// @param  nr       error number
-/// @param  type     type character
-/// @param  user_data  custom user data or NULL
-/// @param  valid    valid entry
-///
-/// @return  QF_OK on success or QF_FAIL on failure.
-static int qf_add_entry(qf_list_T *qfl, char *dir, char *fname, char *module, int bufnum,
-                        char *mesg, linenr_T lnum, linenr_T end_lnum, int col, int end_col,
-                        char vis_col, char *pattern, int nr, char type, typval_T *user_data,
-                        char valid)
-{
-  return rs_qf_add_entry(qfl, dir, fname, module, bufnum, mesg, lnum, end_lnum,
-                         col, end_col, vis_col, pattern, nr, type, user_data, valid);
-}
-
 /// Resize quickfix stack to be able to hold n amount of lists.
 void qf_resize_stack(int n)
 {
@@ -3898,7 +3588,7 @@ static void qf_resize_stack_base(qf_info_T *qi, int n)
     amount_to_rm = qi->qf_listcount - n;
 
     for (int i = 0; i < amount_to_rm; i++) {
-      qf_pop_stack(qi, true);
+      rs_qf_pop_stack(qi, true);
     }
   }
 
@@ -4043,7 +3733,7 @@ static int copy_loclist_entries(const qf_list_T *from_qfl, qf_list_T *to_qfl)
 
   // copy all the location entries in this list
   FOR_ALL_QFL_ITEMS(from_qfl, from_qfp, i) {
-    if (qf_add_entry(to_qfl,
+    if (rs_qf_add_entry(to_qfl,
                      NULL,
                      NULL,
                      from_qfp->qf_module,
@@ -4640,17 +4330,6 @@ _Static_assert(QFLT_QUICKFIX == 0, "QFLT_QUICKFIX must be 0");
 _Static_assert(QFLT_LOCATION == 1, "QFLT_LOCATION must be 1");
 _Static_assert(QF_ABORT == 6, "QF_ABORT must be 6");
 
-/// Edit the selected file or help file.
-/// @return  OK if successfully edited the file.
-///          FAIL on failing to open the buffer.
-///          QF_ABORT if the quickfix/location list was freed by an autocmd
-///          when opening the buffer.
-static int qf_jump_edit_buffer(qf_info_T *qi, qfline_T *qf_ptr, int forceit, int prev_winid,
-                               bool *opened_window)
-{
-  return rs_qf_jump_edit_buffer(qi, qf_ptr, forceit, prev_winid, opened_window);
-}
-
 /// Go to the error line in the current file using either line/column number or
 /// a search pattern.
 static void qf_jump_goto_line(linenr_T qf_lnum, int qf_col, char qf_viscol, char *qf_pattern)
@@ -4798,7 +4477,7 @@ static int qf_jump_to_buffer(qf_info_T *qi, int qf_index, qfline_T *qf_ptr, int 
   int retval = OK;
 
   if (qf_ptr->qf_fnum != 0) {
-    retval = qf_jump_edit_buffer(qi, qf_ptr, forceit, prev_winid,
+    retval = rs_qf_jump_edit_buffer(qi, qf_ptr, forceit, prev_winid,
                                  opened_window);
     if (retval != OK) {
       return retval;
@@ -4848,7 +4527,7 @@ static void qf_jump_newwin(qf_info_T *qi, int dir, int errornr, int forceit, boo
     qi = ql_info;
   }
 
-  if (qf_stack_empty(qi) || qf_list_empty(qf_get_curlist(qi))) {
+  if (rs_qf_stack_empty(qi) || rs_qf_list_empty(qf_get_curlist(qi))) {
     emsg(_(e_no_errors));
     return;
   }
@@ -5019,7 +4698,7 @@ void qf_list(exarg_T *eap)
     return;
   }
 
-  if (qf_stack_empty(qi) || qf_list_empty(qf_get_curlist(qi))) {
+  if (rs_qf_stack_empty(qi) || rs_qf_list_empty(qf_get_curlist(qi))) {
     emsg(_(e_no_errors));
     return;
   }
@@ -5210,31 +4889,13 @@ void qf_history(exarg_T *eap)
     return;
   }
 
-  if (qf_stack_empty(qi)) {
+  if (rs_qf_stack_empty(qi)) {
     msg(_("No entries"), 0);
   } else {
     for (int i = 0; i < qi->qf_listcount; i++) {
       qf_msg(qi, i, i == qi->qf_curlist ? "> " : "  ");
     }
   }
-}
-
-/// Free all the entries in the error list "idx". Note that other information
-/// associated with the list like context and title are not freed.
-///
-/// NOTE: Implementation now in Rust (rs_qf_free_items). This is a thin wrapper.
-static void qf_free_items(qf_list_T *qfl)
-{
-  rs_qf_free_items((void *)qfl);
-}
-
-/// Free error list "idx". Frees all the entries in the quickfix list,
-/// associated context information and the title.
-///
-/// NOTE: Implementation now in Rust (rs_qf_free_list). This is a thin wrapper.
-static void qf_free(qf_list_T *qfl)
-{
-  rs_qf_free_list((void *)qfl);
 }
 
 /// Adjust error list entries for changed line numbers
@@ -5263,7 +4924,7 @@ bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linen
   bool found_one = false;
   for (int idx = 0; idx < qi->qf_listcount; idx++) {
     qf_list_T *qfl = qf_get_list(qi, idx);
-    if (!qf_list_empty(qfl)) {
+    if (!rs_qf_list_empty(qfl)) {
       FOR_ALL_QFL_ITEMS(qfl, qfp, i) {
         if (qfp->qf_fnum == buf->b_fnum) {
           found_one = true;
@@ -5343,7 +5004,7 @@ void qf_view_result(bool split)
     qi = GET_LOC_LIST(curwin);
   }
 
-  if (qf_list_empty(qf_get_curlist(qi))) {
+  if (rs_qf_list_empty(qf_get_curlist(qi))) {
     emsg(_(e_no_errors));
     return;
   }
@@ -5378,9 +5039,9 @@ void ex_cwindow(exarg_T *eap)
   // If a quickfix window is open but we have no errors to display,
   // close the window.  If a quickfix window is not open, then open
   // it if we have errors; otherwise, leave it closed.
-  if (qf_stack_empty(qi)
+  if (rs_qf_stack_empty(qi)
       || qfl->qf_nonevalid
-      || qf_list_empty(qfl)) {
+      || rs_qf_list_empty(qfl)) {
     if (win != NULL) {
       ex_cclose(eap);
     }
@@ -5566,7 +5227,7 @@ void ex_copen(exarg_T *eap)
   }
 
   // Fill the buffer with the quickfix list.
-  qf_fill_buffer(qfl, curbuf, NULL, curwin->handle);
+  rs_qf_fill_buffer(qfl, curbuf, NULL, curwin->handle);
 
   decr_quickfix_busy();
 
@@ -5779,7 +5440,7 @@ static void qf_update_buffer(qf_info_T *qi, qfline_T *old_last)
 
   qf_update_win_titlevar(qi);
 
-  qf_fill_buffer(qf_get_curlist(qi), buf, old_last, qf_winid);
+  rs_qf_fill_buffer(qf_get_curlist(qi), buf, old_last, qf_winid);
 
   linenr_T new_line_count = buf->b_ml.ml_line_count;
   colnr_T new_endcol = ml_get_buf_len(buf, new_line_count);
@@ -5948,7 +5609,7 @@ bool nvim_qf_delete_all_lines(void)
 {
   while ((curbuf->b_ml.ml_flags & ML_EMPTY) == 0) {
     if (ml_delete(1) == FAIL) {
-      internal_error("qf_fill_buffer()");
+      internal_error("rs_qf_fill_buffer()");
       return false;
     }
   }
@@ -6042,7 +5703,7 @@ void nvim_qf_set_key_typed(bool val)
 /// Report internal error for qf_fill_buffer
 void nvim_qf_fill_buffer_internal_error(void)
 {
-  internal_error("qf_fill_buffer()");
+  internal_error("rs_qf_fill_buffer()");
 }
 
 /// Get qf_start from a list (returns NULL if qfl is NULL)
@@ -6054,42 +5715,16 @@ void *nvim_qf_get_start_nonnull(const void *qfl)
   return ((const qf_list_T *)qfl)->qf_start;
 }
 
-static void qf_fill_buffer(qf_list_T *qfl, buf_T *buf, qfline_T *old_last, int qf_winid)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  rs_qf_fill_buffer(qfl, buf, old_last, qf_winid);
-}
-
 static void qf_list_changed(qf_list_T *qfl)
 {
   qfl->qf_changedtick++;
-}
-
-/// Return the quickfix/location list number with the given identifier.
-/// Rust implementation.
-/// @returns -1 if list is not found.
-static int qf_id2nr(const qf_info_T *const qi, const unsigned qfid)
-{
-  return rs_qf_id2nr(qi, qfid);
-}
-
-/// If the current list is not "save_qfid" and we can find the list with that ID
-/// then make it the current list.
-/// This is used when autocommands may have changed the current list.
-/// Returns OK if successfully restored the list. Returns FAIL if the list with
-/// the specified identifier (save_qfid) is not found in the stack.
-/// Rust implementation.
-static int qf_restore_list(qf_info_T *qi, unsigned save_qfid)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_qf_restore_list(qi, save_qfid);
 }
 
 // Jump to the first entry if there is one.
 static void qf_jump_first(qf_info_T *qi, unsigned save_qfid, int forceit)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (qf_restore_list(qi, save_qfid) == FAIL) {
+  if (rs_qf_restore_list(qi, save_qfid) == FAIL) {
     return;
   }
 
@@ -6098,7 +5733,7 @@ static void qf_jump_first(qf_info_T *qi, unsigned save_qfid, int forceit)
   }
 
   // Autocommands might have cleared the list, check for that
-  if (!qf_list_empty(qf_get_curlist(qi))) {
+  if (!rs_qf_list_empty(qf_get_curlist(qi))) {
     qf_jump(qi, 0, 0, forceit);
   }
 }
@@ -6366,7 +6001,7 @@ int qf_get_cur_valid_idx(exarg_T *eap)
   qf_list_T *qfl = qf_get_curlist(qi);
 
   // Check if the list has valid errors.
-  if (!qf_list_has_valid_entries(qfl)) {
+  if (!rs_qf_list_has_valid_entries(qfl)) {
     return 1;
   }
 
@@ -6405,7 +6040,7 @@ static size_t qf_get_nth_valid_entry(qf_list_T *qfl, size_t n, bool fdo)
   FUNC_ATTR_NONNULL_ALL
 {
   // Check if the list has valid errors.
-  if (!qf_list_has_valid_entries(qfl)) {
+  if (!rs_qf_list_has_valid_entries(qfl)) {
     return 1;
   }
 
@@ -6569,7 +6204,7 @@ void ex_cbelow(exarg_T *eap)
 
   qf_list_T *qfl = qf_get_curlist(qi);
   // check if the list has valid errors
-  if (!qf_list_has_valid_entries(qfl)) {
+  if (!rs_qf_list_has_valid_entries(qfl)) {
     emsg(_(e_no_errors));
     return;
   }
@@ -6783,10 +6418,10 @@ static bool vgr_qflist_valid(win_T *wp, qf_info_T *qi, unsigned qfid, char *titl
       return false;
     }
     // Quickfix list is not found, create a new one.
-    qf_new_list(qi, title);
+    rs_qf_new_list(qi, title);
     return true;
   }
-  if (qf_restore_list(qi, qfid) == FAIL) {
+  if (rs_qf_restore_list(qi, qfid) == FAIL) {
     return false;
   }
 
@@ -6845,15 +6480,6 @@ _Static_assert(VGR_GLOBAL == 1, "VGR_GLOBAL mismatch");
 _Static_assert(VGR_NOJUMP == 2, "VGR_NOJUMP mismatch");
 _Static_assert(VGR_FUZZY == 4, "VGR_FUZZY mismatch");
 _Static_assert(FUZZY_MATCH_MAX_LEN == 1024, "FUZZY_MATCH_MAX_LEN mismatch");
-
-/// Search for a pattern in all the lines in a buffer and add the matching lines
-/// to a quickfix list.
-static bool vgr_match_buflines(qf_list_T *qfl, char *fname, buf_T *buf, char *spat,
-                               regmmatch_T *regmatch, int *tomatch, int duplicate_name, int flags)
-  FUNC_ATTR_NONNULL_ARG(1, 3, 4, 5, 6)
-{
-  return rs_vgr_match_buflines(qfl, fname, buf, spat, regmatch, tomatch, duplicate_name, flags);
-}
 
 /// Jump to the first match and update the directory.
 static void vgr_jump_to_match(qf_info_T *qi, int forceit, bool *redraw_for_dummy,
@@ -7052,19 +6678,6 @@ void nvim_vgr_handle_dummy_buf(void *buf_void, bool found_match, bool duplicate_
   aucmd_restbuf(&aco);
 }
 
-/// Search for a pattern in a list of files and populate the quickfix list with
-/// the matches.
-static int vgr_process_files(win_T *wp, qf_info_T *qi, vgr_args_T *cmd_args, bool *redraw_for_dummy,
-                             buf_T **first_match_buf, char **target_dir)
-{
-  return rs_vgr_process_files(wp, qi,
-                              cmd_args->fcount, (const char *const *)cmd_args->fnames,
-                              cmd_args->spat, &cmd_args->regmatch,
-                              &cmd_args->tomatch, cmd_args->flags,
-                              cmd_args->qf_title,
-                              redraw_for_dummy, (void **)first_match_buf, target_dir);
-}
-
 // =============================================================================
 // Phase 7: ex_vimgrep accessor functions for Rust
 // =============================================================================
@@ -7108,8 +6721,8 @@ bool nvim_vgr_setup(void *eap_void, void **qi_out, void **wp_out, void **args_ou
 
   if ((eap->cmdidx != CMD_grepadd && eap->cmdidx != CMD_lgrepadd
        && eap->cmdidx != CMD_vimgrepadd && eap->cmdidx != CMD_lvimgrepadd)
-      || qf_stack_empty(qi)) {
-    qf_new_list(qi, args->qf_title);
+      || rs_qf_stack_empty(qi)) {
+    rs_qf_new_list(qi, args->qf_title);
   }
 
   return true;
@@ -7167,7 +6780,7 @@ void nvim_vgr_post_autocmd(void *eap_void)
 bool nvim_vgr_list_still_valid(void *wp_void, void *qi_void, unsigned save_qfid)
 {
   return qflist_valid((win_T *)wp_void, save_qfid)
-         && qf_restore_list((qf_info_T *)qi_void, save_qfid) != FAIL;
+         && rs_qf_restore_list((qf_info_T *)qi_void, save_qfid) != FAIL;
 }
 
 /// Jump to first match or emit nomatch error.
@@ -7177,7 +6790,7 @@ void nvim_vgr_jump_or_nomatch(void *qi_void, void *eap_void, bool *redraw_for_du
 {
   qf_info_T *qi = (qf_info_T *)qi_void;
   exarg_T *eap = (exarg_T *)eap_void;
-  if (!qf_list_empty(qf_get_curlist(qi))) {
+  if (!rs_qf_list_empty(qf_get_curlist(qi))) {
     if ((flags & VGR_NOJUMP) == 0) {
       vgr_jump_to_match(qi, eap->forceit, redraw_for_dummy,
                         (buf_T *)first_match_buf, target_dir);
@@ -7481,7 +7094,7 @@ static int get_errorlist(qf_info_T *qi_arg, win_T *wp, int qf_idx, int eidx, lis
   }
 
   qf_list_T *qfl = qf_get_list(qi, qf_idx);
-  if (qf_list_empty(qfl)) {
+  if (rs_qf_list_empty(qfl)) {
     return FAIL;
   }
 
@@ -7544,10 +7157,10 @@ static int qf_get_list_from_lines(dict_T *what, dictitem_T *di, dict_T *retdict)
   list_T *l = tv_list_alloc(kListLenMayKnow);
   qf_info_T *const qi = qf_alloc_stack(QFLT_INTERNAL, 1);
 
-  if (qf_init_ext(qi, 0, NULL, NULL, &di->di_tv, errorformat,
+  if (rs_qf_init_ext(qi, 0, NULL, NULL, &di->di_tv, errorformat,
                   true, 0, 0, NULL, NULL) > 0) {
     get_errorlist(qi, NULL, 0, 0, l);
-    qf_free(&qi->qf_lists[0]);
+    rs_qf_free_list(&qi->qf_lists[0]);
   }
 
   qf_free_lists(qi);
@@ -7678,7 +7291,7 @@ static int qf_getprop_qfidx(qf_info_T *qi, dict_T *what)
     if (di->di_tv.v_type == VAR_NUMBER) {
       // For zero, use the current list or the list specified by 'nr'
       if (di->di_tv.vval.v_number != 0) {
-        qf_idx = qf_id2nr(qi, (unsigned)di->di_tv.vval.v_number);
+        qf_idx = rs_qf_id2nr(qi, (unsigned)di->di_tv.vval.v_number);
       }
     } else {
       qf_idx = INVALID_QFIDX;
@@ -7794,7 +7407,7 @@ static int qf_getprop_idx(qf_list_T *qfl, int eidx, dict_T *retdict)
 {
   if (eidx == 0) {
     eidx = qfl->qf_index;
-    if (qf_list_empty(qfl)) {
+    if (rs_qf_list_empty(qfl)) {
       // For empty lists, current index is set to 0
       eidx = 0;
     }
@@ -7843,12 +7456,12 @@ static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict)
 
   const int flags = qf_getprop_keys2flags(what, wp != NULL);
 
-  if (!qf_stack_empty(qi)) {
+  if (!rs_qf_stack_empty(qi)) {
     qf_idx = qf_getprop_qfidx(qi, what);
   }
 
   // List is not present or is empty
-  if (qf_stack_empty(qi) || qf_idx == INVALID_QFIDX) {
+  if (rs_qf_stack_empty(qi) || qf_idx == INVALID_QFIDX) {
     return qf_getprop_defaults(qi, flags, wp != NULL, retdict);
   }
 
@@ -7971,7 +7584,7 @@ static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry, b
     valid = tv_dict_get_number(d, "valid");
   }
 
-  const int status = qf_add_entry(qfl,
+  const int status = rs_qf_add_entry(qfl,
                                   NULL,      // dir
                                   filename,
                                   module,
@@ -7999,14 +7612,6 @@ static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry, b
   }
 
   return status;
-}
-
-/// Check if `entry` is closer to the target than `other_entry`.
-/// Rust implementation.
-static bool entry_is_closer_to_target(qfline_T *entry, qfline_T *other_entry, int target_fnum,
-                                      int target_lnum, int target_col)
-{
-  return rs_qf_entry_is_closer_to_target(entry, other_entry, target_fnum, target_lnum, target_col);
 }
 
 // ============================================================================
@@ -8074,13 +7679,6 @@ bool nvim_tv_list_item_is_first(const void *list, const void *li)
   return li == tv_list_first((const list_T *)list);
 }
 
-/// Add list of entries to quickfix/location list. Each list entry is
-/// a dictionary with item information.
-static int qf_add_entries(qf_info_T *qi, int qf_idx, list_T *list, char *title, int action)
-{
-  return rs_qf_add_entries(qi, qf_idx, list, title, action);
-}
-
 /// Get the quickfix list index from 'nr' or 'id'
 static int qf_setprop_get_qfidx(const qf_info_T *qi, const dict_T *what, int action, bool *newlist)
   FUNC_ATTR_NONNULL_ALL
@@ -8101,14 +7699,14 @@ static int qf_setprop_get_qfidx(const qf_info_T *qi, const dict_T *what, int act
         // non-available list and add the new list at the end of the
         // stack.
         *newlist = true;
-        qf_idx = qf_stack_empty(qi) ? 0 : qi->qf_listcount - 1;
+        qf_idx = rs_qf_stack_empty(qi) ? 0 : qi->qf_listcount - 1;
       } else if (qf_idx < 0 || qf_idx >= qi->qf_listcount) {
         return INVALID_QFIDX;
       } else if (action != ' ') {
         *newlist = false;  // use the specified list
       }
     } else if (di->di_tv.v_type == VAR_STRING && strequal(di->di_tv.vval.v_string, "$")) {
-      if (!qf_stack_empty(qi)) {
+      if (!rs_qf_stack_empty(qi)) {
         qf_idx = qi->qf_listcount - 1;
       } else if (*newlist) {
         qf_idx = 0;
@@ -8125,7 +7723,7 @@ static int qf_setprop_get_qfidx(const qf_info_T *qi, const dict_T *what, int act
     if (di->di_tv.v_type != VAR_NUMBER) {
       return INVALID_QFIDX;
     }
-    return qf_id2nr(qi, (unsigned)di->di_tv.vval.v_number);
+    return rs_qf_id2nr(qi, (unsigned)di->di_tv.vval.v_number);
   }
 
   return qf_idx;
@@ -8158,7 +7756,7 @@ static int qf_setprop_items(qf_info_T *qi, int qf_idx, dictitem_T *di, int actio
   }
 
   char *title_save = xstrdup(qi->qf_lists[qf_idx].qf_title);
-  const int retval = qf_add_entries(qi, qf_idx, di->di_tv.vval.v_list, title_save,
+  const int retval = rs_qf_add_entries(qi, qf_idx, di->di_tv.vval.v_list, title_save,
                                     action == ' ' ? 'a' : action);
   xfree(title_save);
 
@@ -8189,9 +7787,9 @@ static int qf_setprop_items_from_lines(qf_info_T *qi, int qf_idx, const dict_T *
   }
 
   if (action == 'r' || action == 'u') {
-    qf_free_items(&qi->qf_lists[qf_idx]);
+    rs_qf_free_items(&qi->qf_lists[qf_idx]);
   }
-  if (qf_init_ext(qi, qf_idx, NULL, NULL, &di->di_tv, errorformat,
+  if (rs_qf_init_ext(qi, qf_idx, NULL, NULL, &di->di_tv, errorformat,
                   false, 0, 0, NULL, NULL) >= 0) {
     retval = OK;
   }
@@ -8257,7 +7855,7 @@ static int qf_setprop_curidx(qf_info_T *qi, qf_list_T *qfl, const dictitem_T *di
 static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title)
   FUNC_ATTR_NONNULL_ALL
 {
-  bool newlist = action == ' ' || qf_stack_empty(qi);
+  bool newlist = action == ' ' || rs_qf_stack_empty(qi);
   int qf_idx = qf_setprop_get_qfidx(qi, what, action, &newlist);
   if (qf_idx == INVALID_QFIDX) {  // List not found
     return FAIL;
@@ -8265,7 +7863,7 @@ static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char
 
   if (newlist) {
     qi->qf_curlist = qf_idx;
-    qf_new_list(qi, title);
+    rs_qf_new_list(qi, title);
     qf_idx = qi->qf_curlist;
   }
 
@@ -8310,7 +7908,7 @@ static void qf_free_stack(win_T *wp, qf_info_T *qi)
   if (qfwin != NULL) {
     // If the quickfix/location list window is open, then clear it
     if (qi->qf_curlist < qi->qf_listcount) {
-      qf_free(qf_get_curlist(qi));
+      rs_qf_free_list(qf_get_curlist(qi));
     }
     qf_update_buffer(qi, NULL);
   }
@@ -8378,7 +7976,7 @@ int set_errorlist(win_T *wp, list_T *list, int action, char *title, dict_T *what
   if (what != NULL) {
     retval = qf_set_properties(qi, what, action, title);
   } else {
-    retval = qf_add_entries(qi, qi->qf_curlist, list, title, action);
+    retval = rs_qf_add_entries(qi, qi->qf_curlist, list, title, action);
     if (retval == OK) {
       qf_list_changed(qf_get_curlist(qi));
     }
@@ -8560,11 +8158,11 @@ void ex_cbuffer(exarg_T *eap)
 
   incr_quickfix_busy();
 
-  int res = qf_init_ext(qi, qi->qf_curlist, NULL, buf, NULL, p_efm,
+  int res = rs_qf_init_ext(qi, qi->qf_curlist, NULL, buf, NULL, p_efm,
                         (eap->cmdidx != CMD_caddbuffer
                          && eap->cmdidx != CMD_laddbuffer),
                         eap->line1, eap->line2, qf_title, NULL);
-  if (qf_stack_empty(qi)) {
+  if (rs_qf_stack_empty(qi)) {
     decr_quickfix_busy();
     return;
   }
@@ -8640,12 +8238,12 @@ void ex_cexpr(exarg_T *eap)
   if ((tv->v_type == VAR_STRING && tv->vval.v_string != NULL)
       || tv->v_type == VAR_LIST) {
     incr_quickfix_busy();
-    int res = qf_init_ext(qi, qi->qf_curlist, NULL, NULL, tv, p_efm,
+    int res = rs_qf_init_ext(qi, qi->qf_curlist, NULL, NULL, tv, p_efm,
                           (eap->cmdidx != CMD_caddexpr
                            && eap->cmdidx != CMD_laddexpr),
                           0, 0,
                           qf_cmdtitle(*eap->cmdlinep), NULL);
-    if (qf_stack_empty(qi)) {
+    if (rs_qf_stack_empty(qi)) {
       decr_quickfix_busy();
       goto cleanup;
     }
@@ -8712,7 +8310,7 @@ static void hgr_search_file(qf_list_T *qfl, char *fname, regmatch_T *p_regmatch)
         line[--l] = NUL;
       }
 
-      if (qf_add_entry(qfl,
+      if (rs_qf_add_entry(qfl,
                        NULL,   // dir
                        fname,
                        NULL,
@@ -8859,7 +8457,7 @@ bool nvim_hgr_compile_and_search(void *eap_void, void *qi_void)
     return false;
   }
 
-  qf_new_list(qi, qf_cmdtitle(*eap->cmdlinep));
+  rs_qf_new_list(qi, qf_cmdtitle(*eap->cmdlinep));
   qf_list_T *const qfl = qf_get_curlist(qi);
 
   hgr_search_in_rtp(qfl, &regmatch, lang);
@@ -8922,7 +8520,7 @@ void nvim_hgr_jump_or_nomatch(void *eap_void, void *qi_void)
   exarg_T *eap = (exarg_T *)eap_void;
   qf_info_T *qi = (qf_info_T *)qi_void;
 
-  if (!qf_list_empty(qf_get_curlist(qi))) {
+  if (!rs_qf_list_empty(qf_get_curlist(qi))) {
     qf_jump(qi, 0, 0, false);
   } else {
     semsg(_(e_nomatch2), eap->arg);
