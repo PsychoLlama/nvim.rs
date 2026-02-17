@@ -209,6 +209,11 @@ PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 
 // Rust FFI declarations (window wrappers removed)
 extern tabpage_T *rs_find_tabpage(int n);
+extern int rs_eval_expr_valid_arg(const typval_T *tv);
+extern size_t rs_string2float(const char *text, float_T *ret_value);
+extern int rs_buf_byteidx_to_charidx(buf_T *buf, linenr_T lnum, int byteidx);
+extern int rs_buf_charidx_to_byteidx(buf_T *buf, linenr_T lnum, int charidx);
+extern int rs_get_callback_depth(void);
 
 PRAGMA_DIAG_POP
 PRAGMA_DIAG_POP
@@ -1100,7 +1105,7 @@ static void set_cursorpos(typval_T *argvars, typval_T *rettv, bool charcol)
     }
     col = (colnr_T)tv_get_number_chk(&argvars[1], NULL);
     if (charcol) {
-      col = buf_charidx_to_byteidx(curbuf, lnum, (int)col) + 1;
+      col = rs_buf_charidx_to_byteidx(curbuf, lnum, (int)col) + 1;
     }
     if (argvars[2].v_type != VAR_UNKNOWN) {
       coladd = (colnr_T)tv_get_number_chk(&argvars[2], NULL);
@@ -2155,7 +2160,7 @@ static void getpos_both(typval_T *argvars, typval_T *rettv, bool getcurpos, bool
     }
     if (fp != NULL && charcol) {
       pos = *fp;
-      pos.col = buf_byteidx_to_charidx(wp->w_buffer, pos.lnum, pos.col);
+      pos.col = rs_buf_byteidx_to_charidx(wp->w_buffer, pos.lnum, pos.col);
       fp = &pos;
     }
   } else {
@@ -4669,7 +4674,7 @@ static void f_state(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (!get_was_safe_state()) {
     may_add_state_char(&ga, include, 'S');
   }
-  for (int i = 0; i < get_callback_depth() && i < 3; i++) {
+  for (int i = 0; i < rs_get_callback_depth() && i < 3; i++) {
     may_add_state_char(&ga, include, 'c');
   }
   if (msg_scrolled > 0) {
@@ -5682,7 +5687,7 @@ static int search_cmn(typval_T *argvars, pos_T *match_pos, int *flagsp)
       if (time_limit < 0) {
         goto theend;
       }
-      use_skip = eval_expr_valid_arg(&argvars[4]);
+      use_skip = rs_eval_expr_valid_arg(&argvars[4]) != 0;
     }
   }
 
@@ -6205,7 +6210,7 @@ int do_searchpair(const char *spat, const char *mpat, const char *epat, int dir,
   }
 
   if (skip != NULL) {
-    use_skip = eval_expr_valid_arg(skip);
+    use_skip = rs_eval_expr_valid_arg(skip) != 0;
   }
 
   pos_T save_cursor = curwin->w_cursor;
@@ -7215,7 +7220,7 @@ static void f_str2float(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (*p == '+' || *p == '-') {
     p = skipwhite(p + 1);
   }
-  string2float(p, &rettv->vval.v_float);
+  rs_string2float(p, &rettv->vval.v_float);
   if (isneg) {
     rettv->vval.v_float *= -1;
   }

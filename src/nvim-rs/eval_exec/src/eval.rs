@@ -175,9 +175,9 @@ extern "C" {
     // Options
     fn p_ic_get() -> c_int;
 
-    // Division helpers (from C)
-    fn num_divide(n1: i64, n2: i64) -> i64;
-    fn num_modulus(n1: i64, n2: i64) -> i64;
+    // Division helpers (Rust exports)
+    fn rs_num_divide(n1: i64, n2: i64) -> i64;
+    fn rs_num_modulus(n1: i64, n2: i64) -> i64;
 
     // Forward declarations for eval6 and eval7 (still in C for now)
     fn eval6(

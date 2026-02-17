@@ -93,6 +93,7 @@ extern const char *rs_skip_luafunc_name(const char *p);
 extern int rs_check_luafunc_name(const char *str, bool paren);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern int rs_eval_expr_valid_arg(const typval_T *tv);
+extern bool rs_is_luafunc(partial_T *partial);
 
 // Rust FFI declarations (tag module)
 extern bool rs_set_ref_in_tagfunc(int copyID);
@@ -508,20 +509,6 @@ void restore_v_event(dict_T *v_event, save_v_event_T *sve)
   }
 }
 
-/// @return  "n1" divided by "n2", taking care of dividing by zero.
-varnumber_T num_divide(varnumber_T n1, varnumber_T n2)
-  FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_num_divide(n1, n2);
-}
-
-/// @return  "n1" modulus "n2", taking care of dividing by zero.
-varnumber_T num_modulus(varnumber_T n1, varnumber_T n2)
-  FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_num_modulus(n1, n2);
-}
-
 /// Initialize the global and v: variables.
 void eval_init(void)
 {
@@ -626,14 +613,6 @@ static int eval1_emsg(char **arg, typval_T *rettv, exarg_T *eap)
   }
   clear_evalarg(&evalarg, eap);
   return ret;
-}
-
-/// @return  whether a typval is a valid expression to pass to eval_expr_typval()
-///          or eval_expr_to_bool().  An empty string returns false;
-bool eval_expr_valid_arg(const typval_T *const tv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_CONST
-{
-  return rs_eval_expr_valid_arg(tv) != 0;
 }
 
 /// Evaluate a partial.
@@ -956,7 +935,7 @@ int call_vim_function(const char *func, int argc, typval_T *argv, typval_T *rett
 
   if (len >= 6 && !memcmp(func, "v:lua.", 6)) {
     func += 6;
-    len = check_luafunc_name(func, false);
+    len = rs_check_luafunc_name(func, false);
     if (len == 0) {
       ret = FAIL;
       goto fail;
@@ -2770,9 +2749,9 @@ static int eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op)
     if (op == '*') {
       n1 = n1 * n2;
     } else if (op == '/') {
-      n1 = num_divide(n1, n2);
+      n1 = rs_num_divide(n1, n2);
     } else {
-      n1 = num_modulus(n1, n2);
+      n1 = rs_num_modulus(n1, n2);
     }
     tv1->v_type = VAR_NUMBER;
     tv1->vval.v_number = n1;
@@ -3119,7 +3098,7 @@ static int call_func_rettv(char **const arg, evalarg_T *const evalarg, typval_T 
     // Invoke the function.  Recursive!
     if (functv.v_type == VAR_PARTIAL) {
       pt = functv.vval.v_partial;
-      is_lua = is_luafunc(pt);
+      is_lua = rs_is_luafunc(pt);
       funcname = is_lua ? lua_funcname : partial_name(pt);
     } else {
       funcname = functv.vval.v_string;
@@ -3701,7 +3680,7 @@ static int eval_number(char **arg, typval_T *rettv, bool evaluate, bool want_str
   }
   if (get_float) {
     float_T f;
-    *arg += string2float(*arg, &f);
+    *arg += rs_string2float(*arg, &f);
     if (evaluate) {
       rettv->v_type = VAR_FLOAT;
       rettv->vval.v_float = f;
@@ -4632,16 +4611,6 @@ static int eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *const evalarg)
 /// This uses strtod().  setlocale(LC_NUMERIC, "C") has been used earlier to
 /// make sure this always uses a decimal point.
 ///
-/// @param[in] text  String to convert.
-/// @param[out] ret_value  Location where conversion result is saved.
-///
-/// @return  Length of the text that was consumed.
-size_t string2float(const char *const text, float_T *const ret_value)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_string2float(text, ret_value);
-}
-
 /// Get the value of an environment variable.
 ///
 /// If the environment variable was not set, silently assume it is empty.
@@ -4653,7 +4622,7 @@ static int eval_env_var(char **arg, typval_T *rettv, int evaluate)
 {
   (*arg)++;
   char *name = *arg;
-  int len = get_env_len((const char **)arg);
+  int len = rs_get_env_len((const char **)arg);
 
   if (evaluate) {
     if (len == 0) {
@@ -4886,10 +4855,7 @@ int nvim_get_callback_depth(void)
   return callback_depth;
 }
 
-int get_callback_depth(void)
-{
-  return rs_get_callback_depth();
-}
+
 
 /// @return  whether the callback could be called.
 bool callback_call(Callback *const callback, const int argcount_in, typval_T *const argvars_in,
@@ -4911,7 +4877,7 @@ bool callback_call(Callback *const callback, const int argcount_in, typval_T *co
     int len = (int)strlen(name);
     if (len >= 6 && !memcmp(name, "v:lua.", 6)) {
       name += 6;
-      len = check_luafunc_name(name, false);
+      len = rs_check_luafunc_name(name, false);
       if (len == 0) {
         return false;
       }
@@ -5198,24 +5164,6 @@ char *save_tv_as_string(typval_T *tv, ptrdiff_t *const len, bool endnl, bool crl
   return ret;
 }
 
-/// Convert the specified byte index of line 'lnum' in buffer 'buf' to a
-/// character index.  Works only for loaded buffers. Returns -1 on failure.
-/// The index of the first byte and the first character is zero.
-int buf_byteidx_to_charidx(buf_T *buf, linenr_T lnum, int byteidx)
-{
-  return rs_buf_byteidx_to_charidx(buf, lnum, byteidx);
-}
-
-/// Convert the specified character index of line 'lnum' in buffer 'buf' to a
-/// byte index.  Works only for loaded buffers.
-/// The index of the first byte and the first character is zero.
-///
-/// @return  -1 on failure.
-int buf_charidx_to_byteidx(buf_T *buf, linenr_T lnum, int charidx)
-{
-  return rs_buf_charidx_to_byteidx(buf, lnum, charidx);
-}
-
 /// Translate a Vimscript object into a position
 ///
 /// Accepts VAR_LIST and VAR_STRING objects. Does not give an error for invalid
@@ -5314,7 +5262,7 @@ pos_T *var2fpos(const typval_T *const tv, const bool dollar_lnum, int *const ret
   }
   if (pos.lnum != 0) {
     if (charcol) {
-      pos.col = buf_byteidx_to_charidx(curbuf, pos.lnum, pos.col);
+      pos.col = rs_buf_byteidx_to_charidx(curbuf, pos.lnum, pos.col);
     }
     return &pos;
   }
@@ -5410,7 +5358,7 @@ int list2fpos(typval_T *arg, pos_T *posp, int *fnump, colnr_T *curswantp, bool c
     if (buf == NULL || buf->b_ml.ml_mfp == NULL) {
       return FAIL;
     }
-    n = buf_charidx_to_byteidx(buf,
+    n = rs_buf_charidx_to_byteidx(buf,
                                posp->lnum == 0 ? curwin->w_cursor.lnum : posp->lnum,
                                n) + 1;
   }
@@ -5430,25 +5378,6 @@ int list2fpos(typval_T *arg, pos_T *posp, int *fnump, colnr_T *curswantp, bool c
   return OK;
 }
 
-/// Get the length of an environment variable name.
-/// Advance "arg" to the first character after the name.
-///
-/// @return  0 for error.
-int get_env_len(const char **arg)
-{
-  return rs_get_env_len(arg);
-}
-
-/// Get the length of the name of a function or internal variable.
-///
-/// @param arg  is advanced to the first non-white character after the name.
-///
-/// @return  0 if something is wrong.
-int get_id_len(const char **const arg)
-{
-  return rs_get_id_len(arg);
-}
-
 /// Get the length of the name of a variable or function.
 /// Only the name is recognized, does not handle ".key" or "[idx]".
 ///
@@ -5466,7 +5395,7 @@ int get_name_len(const char **const arg, char **alias, bool evaluate, bool verbo
       && (*arg)[2] == (char)KE_SNR) {
     // Hard coded <SNR>, already translated.
     *arg += 3;
-    return get_id_len(arg) + 3;
+    return rs_get_id_len(arg) + 3;
   }
   int len = eval_fname_script(*arg);
   if (len > 0) {
@@ -5497,7 +5426,7 @@ int get_name_len(const char **const arg, char **alias, bool evaluate, bool verbo
     return (int)strlen(temp_string);
   }
 
-  len += get_id_len(arg);
+  len += rs_get_id_len(arg);
   // Only give an error when there is something, otherwise it will be
   // reported at a higher level.
   if (len == 0 && verbose && **arg != NUL) {
@@ -5577,20 +5506,6 @@ static char *make_expanded_name(const char *in_start, char *expr_start, char *ex
   return retval;
 }
 
-/// @return  true if character "c" can be used in a variable or function name.
-///          Does not include '{' or '}' for magic braces.
-bool eval_isnamec(int c)
-{
-  return rs_eval_isnamec(c);
-}
-
-/// @return  true if character "c" can be used as the first character in a
-///          variable or function name (excluding '{' and '}').
-bool eval_isnamec1(int c)
-{
-  return rs_eval_isnamec1(c);
-}
-
 /// Set the v:argv list.
 void set_argv_var(char **argv, int argc)
 {
@@ -5610,26 +5525,10 @@ partial_T *nvim_get_vlua_partial(void)
   return get_vim_var_partial(VV_LUA);
 }
 
-extern bool rs_is_luafunc(partial_T *partial);
-
-/// check if special v:lua value for calling lua functions
-bool is_luafunc(partial_T *partial)
-  FUNC_ATTR_PURE
-{
-  return rs_is_luafunc(partial);
-}
-
 /// check if special v:lua value for calling lua functions
 static bool tv_is_luafunc(typval_T *tv)
 {
-  return tv->v_type == VAR_PARTIAL && is_luafunc(tv->vval.v_partial);
-}
-
-/// check the function name after "v:lua."
-int check_luafunc_name(const char *const str, const bool paren)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_check_luafunc_name(str, paren);
+  return tv->v_type == VAR_PARTIAL && rs_is_luafunc(tv->vval.v_partial);
 }
 
 /// Handle:
@@ -5663,7 +5562,7 @@ int handle_subscript(const char **const arg, typval_T *rettv, evalarg_T *const e
       (*arg)++;
 
       lua_funcname = *arg;
-      const int len = check_luafunc_name(*arg, true);
+      const int len = rs_check_luafunc_name(*arg, true);
       if (len == 0) {
         tv_clear(rettv);
         ret = FAIL;

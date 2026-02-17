@@ -157,7 +157,7 @@ extern "C" {
 
     // Function type checks
     fn nvim_is_builtin_function(name: *const c_char, len: c_int) -> c_int;
-    fn is_luafunc(partial: PartialHandle) -> c_int;
+    fn rs_is_luafunc(partial: PartialHandle) -> c_int;
 
     // Typval operations
     fn tv_clear(tv: TypevalHandle);
@@ -272,7 +272,7 @@ pub unsafe fn lookup_function(
     partial: PartialHandle,
 ) -> FuncLookupResult {
     // Check for Lua function via partial
-    if !partial.is_null() && is_luafunc(partial) != 0 {
+    if !partial.is_null() && rs_is_luafunc(partial) != 0 {
         return FuncLookupResult::Lua;
     }
 

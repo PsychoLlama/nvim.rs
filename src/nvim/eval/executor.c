@@ -15,6 +15,9 @@
 
 #include "eval/executor.c.generated.h"
 
+extern int64_t rs_num_divide(int64_t n1, int64_t n2);
+extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
+
 /// Handle "blob1 += blob2".
 /// Returns OK or FAIL.
 static int tv_op_blob(typval_T *tv1, const typval_T *tv2, const char *op)
@@ -105,9 +108,9 @@ static int tv_op_number(typval_T *tv1, const typval_T *tv2, const char *op)
     case '*':
       n *= tv_get_number(tv2); break;
     case '/':
-      n = num_divide(n, tv_get_number(tv2)); break;
+      n = rs_num_divide(n, tv_get_number(tv2)); break;
     case '%':
-      n = num_modulus(n, tv_get_number(tv2)); break;
+      n = rs_num_modulus(n, tv_get_number(tv2)); break;
     }
     tv_clear(tv1);
     tv1->v_type = VAR_NUMBER;

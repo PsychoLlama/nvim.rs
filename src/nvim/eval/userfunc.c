@@ -57,6 +57,11 @@
 #include "nvim/vim_defs.h"
 
 extern int rs_ins_compl_active(void);
+extern bool rs_eval_isnamec(int c);
+extern bool rs_eval_isnamec1(int c);
+extern int rs_get_id_len(const char **arg);
+extern int rs_check_luafunc_name(const char *str, bool paren);
+extern bool rs_is_luafunc(partial_T *partial);
 
 #include "eval/userfunc.c.generated.h"
 
@@ -1725,7 +1730,7 @@ int call_func(const char *funcname, int len, typval_T *rettv, int argcount_in, t
     rettv->vval.v_number = 0;
     error = FCERR_UNKNOWN;
 
-    if (is_luafunc(partial)) {
+    if (rs_is_luafunc(partial)) {
       if (len > 0) {
         error = FCERR_NONE;
         argv_add_base(funcexe->fe_basetv, &argvars, &argcount, argv, &argv_base);
@@ -1982,7 +1987,7 @@ char *trans_function_name(char **pp, bool skip, int flags, funcdict_T *fdp, part
   // command).
   if ((uint8_t)(*pp)[0] == K_SPECIAL && (uint8_t)(*pp)[1] == KS_EXTRA && (*pp)[2] == KE_SNR) {
     *pp += 3;
-    len = get_id_len((const char **)pp) + 3;
+    len = rs_get_id_len((const char **)pp) + 3;
     return xmemdupz(start, (size_t)len);
   }
 
@@ -2028,8 +2033,8 @@ char *trans_function_name(char **pp, bool skip, int flags, funcdict_T *fdp, part
       *pp = (char *)end;
     } else if (lv.ll_tv->v_type == VAR_PARTIAL
                && lv.ll_tv->vval.v_partial != NULL) {
-      if (is_luafunc(lv.ll_tv->vval.v_partial) && *end == '.') {
-        len = check_luafunc_name(end + 1, true);
+      if (rs_is_luafunc(lv.ll_tv->vval.v_partial) && *end == '.') {
+        len = rs_check_luafunc_name(end + 1, true);
         if (len == 0) {
           semsg(e_invexpr2, "v:lua");
           goto theend;
@@ -2732,8 +2737,8 @@ void ex_function(exarg_T *eap)
       }
       int i;
       for (i = 0; name_base[i] != NUL && (i == 0
-                                          ? eval_isnamec1(name_base[i])
-                                          : eval_isnamec(name_base[i])); i++) {}
+                                          ? rs_eval_isnamec1(name_base[i])
+                                          : rs_eval_isnamec(name_base[i])); i++) {}
       if (name_base[i] != NUL) {
         emsg_funcname(e_invarg2, arg);
         goto ret_free;

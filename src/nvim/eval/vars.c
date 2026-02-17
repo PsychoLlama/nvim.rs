@@ -64,6 +64,10 @@ extern tabpage_T *rs_find_tabpage(int n);
 
 extern void rs_optval_free(OptVal o);
 extern int rs_is_tty_option(const char *name);
+extern int64_t rs_num_divide(int64_t n1, int64_t n2);
+extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
+extern bool rs_eval_isnamec1(int c);
+extern int rs_get_env_len(const char **arg);
 
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
@@ -1307,7 +1311,7 @@ static char *ex_let_env(char *arg, typval_T *const tv, const bool is_const,
   char *arg_end = NULL;
   arg++;
   char *name = arg;
-  int len = get_env_len((const char **)&arg);
+  int len = rs_get_env_len((const char **)&arg);
   if (len == 0) {
     semsg(_(e_invarg2), name - 1);
   } else {
@@ -1405,9 +1409,9 @@ static char *ex_let_option(char *arg, typval_T *const tv, const bool is_const,
       case '*':
         new_n = cur_n * new_n; break;
       case '/':
-        new_n = num_divide(cur_n, new_n); break;
+        new_n = rs_num_divide(cur_n, new_n); break;
       case '%':
-        new_n = num_modulus(cur_n, new_n); break;
+        new_n = rs_num_modulus(cur_n, new_n); break;
       }
 
       if (curval.type == kOptValTypeNumber) {
@@ -1505,7 +1509,7 @@ static char *ex_let_one(char *arg, typval_T *const tv, const bool copy, const bo
   } else if (*arg == '@') {
     // ":let @r = expr": Set register contents.
     return ex_let_register(arg, tv, is_const, endchars, op);
-  } else if (eval_isnamec1(*arg) || *arg == '{') {
+  } else if (rs_eval_isnamec1(*arg) || *arg == '{') {
     // ":let var = expr": Set internal variable.
     // ":let {expr} = expr": Idem, name made with curly braces
     lval_T lv;
@@ -1571,7 +1575,7 @@ static void ex_unletlock(exarg_T *eap, char *argstart, int deep, int glv_flags,
       lv.ll_name = arg;
       lv.ll_tv = NULL;
       arg++;
-      if (get_env_len((const char **)&arg) == 0) {
+      if (rs_get_env_len((const char **)&arg) == 0) {
         semsg(_(e_invarg2), arg - 1);
         return;
       }
@@ -3058,7 +3062,7 @@ bool valid_varname(const char *varname)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   for (const char *p = varname; *p != NUL; p++) {
-    if (!eval_isnamec1((int)(uint8_t)(*p))
+    if (!rs_eval_isnamec1((int)(uint8_t)(*p))
         && (p == varname || !ascii_isdigit(*p))
         && *p != AUTOLOAD_CHAR) {
       semsg(_(e_illvar), varname);
@@ -3409,7 +3413,7 @@ static char *redir_varname = NULL;
 int var_redir_start(char *name, bool append)
 {
   // Catch a bad name early.
-  if (!eval_isnamec1(*name)) {
+  if (!rs_eval_isnamec1(*name)) {
     emsg(_(e_invarg));
     return FAIL;
   }
