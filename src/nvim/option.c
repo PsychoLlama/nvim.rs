@@ -6219,14 +6219,7 @@ int fill_culopt_flags(char *val, win_T *wp)
   return OK;
 }
 
-// Rust implementation of magic_isset
-extern int rs_magic_isset(void);
 
-/// Get the value of 'magic' taking "magic_overruled" into account.
-bool magic_isset(void)
-{
-  return rs_magic_isset() != 0;
-}
 
 /// Set the callback function value for an option that accepts a function name,
 /// lambda, et al. (e.g. 'operatorfunc', 'tagfunc', etc.)

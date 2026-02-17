@@ -29,7 +29,7 @@ extern "C" {
     fn rs_skip_vimgrep_pat(p: *mut c_char, s: *mut *mut c_char, flags: *mut c_int) -> *mut c_char;
     fn find_nextcmd(p: *const c_char) -> *const c_char;
     fn ends_excmd(c: c_int) -> c_int;
-    fn magic_isset() -> c_int;
+    fn rs_magic_isset() -> c_int;
     fn match_user(name: *const c_char) -> c_int;
     fn utf_ptr2char(p: *const c_char) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
@@ -135,7 +135,7 @@ pub unsafe extern "C" fn rs_find_cmd_after_substitute_cmd(arg: *const c_char) ->
     if delim != 0 {
         // Skip "from" part.
         p = p.add(1);
-        p = skip_regexp(p.cast_mut(), c_int::from(delim), magic_isset());
+        p = skip_regexp(p.cast_mut(), c_int::from(delim), rs_magic_isset());
 
         if *p != 0 && *p as u8 == delim {
             // Skip "to" part.
@@ -279,7 +279,7 @@ pub unsafe extern "C" fn rs_set_context_in_match_cmd(
         p = skipwhite(skiptowhite(p));
         if *p != 0 {
             nvim_expand_set_context(xp, ExpandContext::Nothing.to_raw());
-            p = skip_regexp(p.add(1).cast_mut(), c_int::from(*p as u8), magic_isset());
+            p = skip_regexp(p.add(1).cast_mut(), c_int::from(*p as u8), rs_magic_isset());
         }
     }
     find_nextcmd(p)

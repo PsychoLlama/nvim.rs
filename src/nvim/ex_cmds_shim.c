@@ -135,6 +135,7 @@ typedef struct {
 
 #include "ex_cmds_shim.c.generated.h"
 
+extern int rs_magic_isset(void);
 extern int rs_get_fileformat(buf_T *buf);
 extern void rs_diff_buf_add(buf_T *buf);
 extern void rs_diff_invalidate(buf_T *buf);
@@ -3187,7 +3188,7 @@ static bool sub_joining_lines(exarg_T *eap, char *pat, size_t patlen, const char
 
     if (save) {
       if (!keeppatterns) {
-        save_re_pat(RE_SUBST, pat, patlen, magic_isset());
+        save_re_pat(RE_SUBST, pat, patlen, rs_magic_isset());
       }
       // put pattern in history
       add_to_history(HIST_SEARCH, pat, patlen, true, NUL);
@@ -3441,7 +3442,7 @@ static int do_sub(exarg_T *eap, const proftime_T timeout, const int cmdpreview_n
       which_pat = RE_LAST;                  // use last used regexp
       delimiter = (uint8_t)(*cmd++);                   // remember delimiter character
       pat = cmd;                            // remember start of search pat
-      cmd = skip_regexp_ex(cmd, delimiter, magic_isset(), &eap->arg, NULL, NULL);
+      cmd = skip_regexp_ex(cmd, delimiter, rs_magic_isset(), &eap->arg, NULL, NULL);
       if (cmd[0] == delimiter) {            // end delimiter found
         *cmd++ = NUL;                       // replace it with a NUL
         has_second_delim = true;
@@ -3560,7 +3561,7 @@ static int do_sub(exarg_T *eap, const proftime_T timeout, const int cmdpreview_n
     xfree(sub);
     sub = p;
   } else {
-    char *p = regtilde(sub, magic_isset(), cmdpreview_ns > 0);
+    char *p = regtilde(sub, rs_magic_isset(), cmdpreview_ns > 0);
     if (p != sub) {
       xfree(sub);
       sub = p;
@@ -3983,7 +3984,7 @@ static int do_sub(exarg_T *eap, const proftime_T timeout, const int cmdpreview_n
                                     sub_firstlnum - regmatch.startpos[0].lnum,
                                     sub, sub_firstline, 0,
                                     REGSUB_BACKSLASH
-                                    | (magic_isset() ? REGSUB_MAGIC : 0));
+                                    | (rs_magic_isset() ? REGSUB_MAGIC : 0));
           textlock--;
 
           // If getting the substitute string caused an error, don't do
@@ -4030,7 +4031,7 @@ static int do_sub(exarg_T *eap, const proftime_T timeout, const int cmdpreview_n
                            sub_firstlnum - regmatch.startpos[0].lnum,
                            sub, new_end, sublen,
                            REGSUB_COPY | REGSUB_BACKSLASH
-                           | (magic_isset() ? REGSUB_MAGIC : 0));
+                           | (rs_magic_isset() ? REGSUB_MAGIC : 0));
           textlock--;
           sub_nsubs++;
           did_sub = true;
@@ -4509,7 +4510,7 @@ void ex_global(exarg_T *eap)
     delim = *cmd;               // get the delimiter
     cmd++;                      // skip delimiter if there is one
     pat = cmd;                  // remember start of pattern
-    cmd = skip_regexp_ex(cmd, delim, magic_isset(), &eap->arg, NULL, NULL);
+    cmd = skip_regexp_ex(cmd, delim, rs_magic_isset(), &eap->arg, NULL, NULL);
     if (cmd[0] == delim) {                  // end delimiter found
       *cmd++ = NUL;                         // replace it with a NUL
     }

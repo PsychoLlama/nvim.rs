@@ -99,6 +99,7 @@ static int compl_selected;
 /// cmdline before expansion
 static char *cmdline_orig = NULL;
 
+extern int rs_magic_isset(void);
 extern int rs_cmdline_fuzzy_complete(const char *fuzzystr);
 extern int rs_cmdline_pum_active(void);
 extern int rs_cmdline_fuzzy_completion_supported(int context);
@@ -3218,7 +3219,7 @@ static int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numM
   }
 
   if (!fuzzy) {
-    regmatch.regprog = vim_regcomp(pat, magic_isset() ? RE_MAGIC : 0);
+    regmatch.regprog = vim_regcomp(pat, rs_magic_isset() ? RE_MAGIC : 0);
     if (regmatch.regprog == NULL) {
       return FAIL;
     }

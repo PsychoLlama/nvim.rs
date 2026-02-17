@@ -23,7 +23,7 @@ const NSUBEXP: usize = 10;
 
 extern "C" {
     /// Check if 'magic' option is set
-    fn magic_isset() -> bool;
+    fn rs_magic_isset() -> bool;
 
     /// Get the value of 'taglength' option
     fn nvim_get_p_tl() -> i64;
@@ -152,7 +152,7 @@ pub unsafe extern "C" fn rs_prepare_pats(pats: *mut TagPattern, has_re: bool) {
             pats.headlen = 0;
         } else {
             // Find length of fixed prefix before regexp metacharacters
-            let meta_chars = if magic_isset() {
+            let meta_chars = if rs_magic_isset() {
                 c".[~*\\$".as_ptr()
             } else {
                 c"\\$".as_ptr()
@@ -177,7 +177,7 @@ pub unsafe extern "C" fn rs_prepare_pats(pats: *mut TagPattern, has_re: bool) {
 
     // Compile the regexp if using regex
     if has_re {
-        let flags = if magic_isset() { RE_MAGIC } else { 0 };
+        let flags = if rs_magic_isset() { RE_MAGIC } else { 0 };
         pats.regmatch.regprog = vim_regcomp(pats.pat, flags);
     } else {
         pats.regmatch.regprog = ptr::null_mut();

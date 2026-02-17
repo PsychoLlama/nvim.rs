@@ -117,6 +117,7 @@
 #include "buffer.c.generated.h"
 
 // Rust implementations
+extern int rs_magic_isset(void);
 extern int rs_calc_percentage(int64_t part, int64_t whole);
 extern int rs_bt_prompt(buf_T *buf);
 extern int rs_bt_normal(buf_T *buf);
@@ -3007,7 +3008,7 @@ int buflist_findpat(const char *pattern, const char *pattern_end, bool unlisted,
         }
 
         regmatch_T regmatch;
-        regmatch.regprog = vim_regcomp(p, magic_isset() ? RE_MAGIC : 0);
+        regmatch.regprog = vim_regcomp(p, rs_magic_isset() ? RE_MAGIC : 0);
 
         FOR_ALL_BUFFERS_BACKWARDS(buf) {
           if (regmatch.regprog == NULL) {

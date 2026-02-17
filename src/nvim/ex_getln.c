@@ -224,6 +224,7 @@ static int cedit_key = -1;  ///< key value of 'cedit' option
 #include "ex_getln.c.generated.h"
 
 extern int rs_csh_like_shell(void);
+extern int rs_magic_isset(void);
 extern int rs_cmdline_overstrike(void);
 extern int rs_cmdline_at_end(void);
 extern int rs_is_in_cmdwin(void);
@@ -487,7 +488,7 @@ bool parse_pattern_and_range(pos_T *incsearch_start, int *search_delim, int *ski
   int delim = (delim_optional && vim_isIDc((uint8_t)(*p))) ? ' ' : *p++;
   *search_delim = delim;
 
-  char *end = skip_regexp_ex(p, delim, magic_isset(), NULL, NULL, &magic);
+  char *end = skip_regexp_ex(p, delim, rs_magic_isset(), NULL, NULL, &magic);
   bool use_last_pat = end == p && *end == delim;
 
   if (end == p && !use_last_pat) {
@@ -743,7 +744,7 @@ static int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s)
         *c = mb_tolower(*c);
       }
       if (*c == search_delim
-          || vim_strchr((magic_isset() ? "\\~^$.*[" : "\\^$"), *c) != NULL) {
+          || vim_strchr((rs_magic_isset() ? "\\~^$.*[" : "\\^$"), *c) != NULL) {
         // put a backslash before special characters
         stuffcharReadbuff(*c);
         *c = '\\';
@@ -2344,7 +2345,7 @@ static bool empty_pattern(char *p, size_t len, int delim)
   magic_T magic_val = MAGIC_ON;
 
   if (len > 0) {
-    skip_regexp_ex(p, delim, magic_isset(), NULL, NULL, &magic_val);
+    skip_regexp_ex(p, delim, rs_magic_isset(), NULL, NULL, &magic_val);
   } else {
     return true;
   }

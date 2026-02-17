@@ -224,6 +224,7 @@ struct dbg_stuff {
 
 #include "ex_docmd.c.generated.h"
 
+extern int rs_magic_isset(void);
 extern int rs_get_scrolloff_value(win_T *wp);
 
 // Declare cmdnames[].
@@ -5587,7 +5588,7 @@ static void ex_findpat(exarg_T *eap)
   if (*eap->arg == '/') {   // Match regexp, not just whole words
     whole = false;
     eap->arg++;
-    char *p = skip_regexp(eap->arg, '/', magic_isset());
+    char *p = skip_regexp(eap->arg, '/', rs_magic_isset());
     if (*p) {
       *p++ = NUL;
       p = skipwhite(p);
@@ -7658,7 +7659,7 @@ int nvim_docmd_compute_buf_local_count(int addr_type, linenr_T lnum, int offset)
 }
 
 /// Wrap magic_isset for Rust.
-int nvim_docmd_magic_isset(void) { return magic_isset(); }
+int nvim_docmd_magic_isset(void) { return rs_magic_isset(); }
 
 /// Wrap getdigits_int32 for Rust.
 int nvim_docmd_getdigits_int32(char **pp)

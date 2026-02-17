@@ -161,6 +161,7 @@ typedef void (*nv_func_T)(cmdarg_T *cap);
 // =============================================================================
 // Rust implementations (forward declarations needed by dispatch table)
 // =============================================================================
+extern int rs_magic_isset(void);
 extern void rs_nv_ignore(cmdarg_T *cap);
 extern void rs_nv_nop(cmdarg_T *cap);
 extern void rs_nv_error(cmdarg_T *cap);
@@ -5080,9 +5081,9 @@ static void nv_ident_impl(cmdarg_T *cap)
   } else {
     char *aux_ptr;
     if (cmdchar == '*') {
-      aux_ptr = (magic_isset() ? "/.*~[^$\\" : "/^$\\");
+      aux_ptr = (rs_magic_isset() ? "/.*~[^$\\" : "/^$\\");
     } else if (cmdchar == '#') {
-      aux_ptr = (magic_isset() ? "/?.*~[^$\\" : "/?^$\\");
+      aux_ptr = (rs_magic_isset() ? "/?.*~[^$\\" : "/?^$\\");
     } else if (tag_cmd) {
       if (strcmp(curbuf->b_p_ft, "help") == 0) {
         // ":help" handles unescaped argument

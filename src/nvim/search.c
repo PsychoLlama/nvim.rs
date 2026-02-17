@@ -121,6 +121,7 @@ extern void rs_set_csearch_until(int until);
 extern void rs_set_search_direction_raw(int cdir);
 extern void rs_reset_search_dir(void);
 extern int rs_search_linewhite(int lnum);
+extern int rs_magic_isset(void);
 
 // Rust FFI declarations for pattern save/restore
 extern void rs_save_search_patterns(void);
@@ -664,7 +665,7 @@ bool pat_has_uppercase(char *pat)
   magic_T magic_val = MAGIC_ON;
 
   // get the magicness of the pattern
-  skip_regexp_ex(pat, NUL, magic_isset(), NULL, NULL, &magic_val);
+  skip_regexp_ex(pat, NUL, rs_magic_isset(), NULL, NULL, &magic_val);
 
   while (*p != NUL) {
     const int l = utfc_ptr2len(p);
@@ -1981,7 +1982,7 @@ FpipInitResult nvim_fpip_init(const char *ptr, int dir, size_t len,
     assert(len <= INT_MAX);
     snprintf(pat, patsize, st->whole ? "\\<%.*s\\>" : "%.*s", (int)len, ptr);
     st->regmatch.rm_ic = ignorecase(pat);
-    st->regmatch.regprog = vim_regcomp(pat, magic_isset() ? RE_MAGIC : 0);
+    st->regmatch.regprog = vim_regcomp(pat, rs_magic_isset() ? RE_MAGIC : 0);
     xfree(pat);
     if (st->regmatch.regprog == NULL) {
       return (FpipInitResult){ st, 0 };
@@ -1990,7 +1991,7 @@ FpipInitResult nvim_fpip_init(const char *ptr, int dir, size_t len,
 
   st->inc_opt = (*curbuf->b_p_inc == NUL) ? p_inc : curbuf->b_p_inc;
   if (*st->inc_opt != NUL) {
-    st->incl_regmatch.regprog = vim_regcomp(st->inc_opt, magic_isset() ? RE_MAGIC : 0);
+    st->incl_regmatch.regprog = vim_regcomp(st->inc_opt, rs_magic_isset() ? RE_MAGIC : 0);
     if (st->incl_regmatch.regprog == NULL) {
       return (FpipInitResult){ st, 0 };
     }
@@ -2000,7 +2001,7 @@ FpipInitResult nvim_fpip_init(const char *ptr, int dir, size_t len,
   if (type == FIND_DEFINE && (*curbuf->b_p_def != NUL || *p_def != NUL)) {
     st->def_regmatch.regprog = vim_regcomp(
         *curbuf->b_p_def == NUL ? p_def : curbuf->b_p_def,
-        magic_isset() ? RE_MAGIC : 0);
+        rs_magic_isset() ? RE_MAGIC : 0);
     if (st->def_regmatch.regprog == NULL) {
       return (FpipInitResult){ st, 0 };
     }
@@ -2565,7 +2566,7 @@ static void find_pattern_in_path_old(char *ptr, Direction dir, size_t len, bool 
     snprintf(pat, patsize, whole ? "\\<%.*s\\>" : "%.*s", (int)len, ptr);
     // ignore case according to p_ic, p_scs and pat
     regmatch.rm_ic = ignorecase(pat);
-    regmatch.regprog = vim_regcomp(pat, magic_isset() ? RE_MAGIC : 0);
+    regmatch.regprog = vim_regcomp(pat, rs_magic_isset() ? RE_MAGIC : 0);
     xfree(pat);
     if (regmatch.regprog == NULL) {
       goto fpip_end;
@@ -2573,7 +2574,7 @@ static void find_pattern_in_path_old(char *ptr, Direction dir, size_t len, bool 
   }
   char *inc_opt = (*curbuf->b_p_inc == NUL) ? p_inc : curbuf->b_p_inc;
   if (*inc_opt != NUL) {
-    incl_regmatch.regprog = vim_regcomp(inc_opt, magic_isset() ? RE_MAGIC : 0);
+    incl_regmatch.regprog = vim_regcomp(inc_opt, rs_magic_isset() ? RE_MAGIC : 0);
     if (incl_regmatch.regprog == NULL) {
       goto fpip_end;
     }
@@ -2581,7 +2582,7 @@ static void find_pattern_in_path_old(char *ptr, Direction dir, size_t len, bool 
   }
   if (type == FIND_DEFINE && (*curbuf->b_p_def != NUL || *p_def != NUL)) {
     def_regmatch.regprog = vim_regcomp(*curbuf->b_p_def == NUL ? p_def : curbuf->b_p_def,
-                                       magic_isset() ? RE_MAGIC : 0);
+                                       rs_magic_isset() ? RE_MAGIC : 0);
     if (def_regmatch.regprog == NULL) {
       goto fpip_end;
     }
@@ -3725,7 +3726,7 @@ size_t nvim_do_search_get_subst_patlen(void)
 /// Returns: pointer to end of regexp.  Sets *newp if copy was made.
 char *nvim_do_search_skip_regexp(char *pat, int delim, char **newp)
 {
-  return skip_regexp_ex(pat, delim, magic_isset(), newp, NULL, NULL);
+  return skip_regexp_ex(pat, delim, rs_magic_isset(), newp, NULL, NULL);
 }
 
 /// Set the searchcmdlen global.

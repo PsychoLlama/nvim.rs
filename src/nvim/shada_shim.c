@@ -66,6 +66,7 @@
 #include "nvim/vim_defs.h"
 
 // Rust rs_* function declarations (from src/nvim-rs/shada/src/lib.rs)
+extern int rs_magic_isset(void);
 extern int rs_shada_hist_type2char(int hist_type);
 extern int rs_shada_hist_char2type(int c);
 extern int rs_get_shada_parameter(int typ);
@@ -710,7 +711,7 @@ static void shada_read(FileDescriptor *const sd_reader, const int flags)
       // string is close to useless: you can only use it with :& or :~ and
       // that’s all because s//~ is not available until the first call to
       // regtilde. Vim was not calling this for some reason.
-      regtilde(cur_entry.data.sub_string.sub, magic_isset(), false);
+      regtilde(cur_entry.data.sub_string.sub, rs_magic_isset(), false);
       // Do not free shada entry: its allocated memory was saved above.
       break;
     case kSDItemHistoryEntry:

@@ -83,6 +83,7 @@
 #include "nvim/winfloat.h"
 
 // Rust implementations of ctrl_x_mode_* functions
+extern int rs_magic_isset(void);
 extern int rs_ctrl_x_mode_none(void);
 extern int rs_ctrl_x_mode_normal(void);
 extern int rs_ctrl_x_mode_scroll(void);
@@ -1603,7 +1604,7 @@ static void ins_compl_dictionaries(char *dict_start, char *pat, int flags, bool 
     xfree(pat_esc);
     xfree(ptr);
   } else {
-    regmatch.regprog = vim_regcomp(pat, magic_isset() ? RE_MAGIC : 0);
+    regmatch.regprog = vim_regcomp(pat, rs_magic_isset() ? RE_MAGIC : 0);
     if (regmatch.regprog == NULL) {
       goto theend;
     }
@@ -6110,7 +6111,7 @@ static unsigned quote_meta(char *dest, char *src, int len)
       }
       FALLTHROUGH;
     case '~':
-      if (!magic_isset()) {  // quote these only if magic is set
+      if (!rs_magic_isset()) {  // quote these only if magic is set
         break;
       }
       FALLTHROUGH;
