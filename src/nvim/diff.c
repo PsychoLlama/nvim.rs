@@ -313,11 +313,6 @@ typedef enum {
 #define FOR_ALL_DIFFBLOCKS_IN_TAB(tp, dp) \
   for ((dp) = (tp)->tp_first_diff; (dp) != NULL; (dp) = (dp)->df_next)
 
-static void clear_diffblock(diff_T *dp)
-{
-  rs_clear_diffblock(dp);
-}
-
 /// Called when deleting or unloading a buffer: No longer make a diff with it.
 ///
 /// @param buf
@@ -349,23 +344,6 @@ void diff_buf_add(buf_T *buf)
   rs_diff_buf_add(buf);
 }
 
-/// Remove all buffers to make diffs for.
-static void diff_buf_clear(void)
-{
-  rs_diff_buf_clear();
-}
-
-/// Find buffer "buf" in the list of diff buffers for tab page "tp".
-///
-/// @param buf
-/// @param tp
-///
-/// @return its index or DB_COUNT if not found.
-static int diff_buf_idx(buf_T *buf, tabpage_T *tp)
-{
-  return rs_diff_buf_idx_tp(buf, tp);
-}
-
 /// Mark the diff info involving buffer "buf" as invalid, it will be updated
 /// when info is requested.
 ///
@@ -385,23 +363,6 @@ void diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amoun
                       linenr_T amount_after)
 {
   rs_diff_mark_adjust(buf, line1, line2, amount, amount_after);
-}
-
-/// Allocate a new diff block and link it between "dprev" and "dp".
-///
-/// @param tp
-/// @param dprev
-/// @param dp
-///
-/// @return The new diff block.
-static diff_T *diff_alloc_new(tabpage_T *tp, diff_T *dprev, diff_T *dp)
-{
-  return rs_diff_alloc_new(tp, dprev, dp);
-}
-
-static diff_T *diff_free(tabpage_T *tp, diff_T *dprev, diff_T *dp)
-{
-  return rs_diff_free(tp, dprev, dp);
 }
 
 /// Mark all diff buffers in the current tab page for redraw.
@@ -591,11 +552,6 @@ static int diff_write(buf_T *buf, diffin_T *din, linenr_T start, linenr_T end)
   buf->b_p_ff = save_ff;
   buf->b_ml.ml_flags = (buf->b_ml.ml_flags & ~ML_EMPTY) | (save_ml_flags & ML_EMPTY);
   return r;
-}
-
-static int lnum_compare(const void *s1, const void *s2)
-{
-  return rs_lnum_compare(s1, s2);
 }
 
 /// Return true if the options are set to use the internal diff library.
@@ -1001,11 +957,6 @@ void ex_diffthis(exarg_T *eap)
   diff_win_options(curwin, true);
 }
 
-static void set_diff_option(win_T *wp, bool value)
-{
-  rs_set_diff_option(wp, value);
-}
-
 /// Set options in window "wp" for diff mode.
 ///
 /// @param addbuf Add buffer to diff.
@@ -1071,7 +1022,7 @@ void diff_win_options(win_T *wp, bool addbuf)
   // Save the current values, to be restored in ex_diffoff().
   wp->w_p_diff_saved = true;
 
-  set_diff_option(wp, true);
+  rs_set_diff_option(wp, true);
 
   if (addbuf) {
     diff_buf_add(wp->w_buffer);
@@ -1092,7 +1043,7 @@ void ex_diffoff(exarg_T *eap)
       // Set 'diff' off. If option values were saved in
       // diff_win_options(), restore the ones whose settings seem to have
       // been left over from diff mode.
-      set_diff_option(wp, false);
+      rs_set_diff_option(wp, false);
 
       if (wp->w_p_diff_saved) {
         if (wp->w_p_scb) {
@@ -1139,7 +1090,7 @@ void ex_diffoff(exarg_T *eap)
 
   // Also remove hidden buffers from the list.
   if (eap->forceit) {
-    diff_buf_clear();
+    rs_diff_buf_clear();
   }
 
   if (!diffwin) {
@@ -1156,16 +1107,6 @@ void ex_diffoff(exarg_T *eap)
 }
 
 // extract_hunk_internal and extract_hunk have been migrated to Rust.
-
-/// Read the diff output and add each entry to the diff list.
-///
-/// @param idx_orig idx of original file
-/// @param idx_new idx of new file
-/// @dout diff output
-static void diff_read(int idx_orig, int idx_new, diffio_T *dio)
-{
-  rs_diff_read(idx_orig, idx_new, dio);
-}
 
 /// Clear the list of diffblocks for tab page "tp".
 ///
@@ -1213,7 +1154,7 @@ static void apply_linematch_results(diff_T *dp, size_t decisions_length, const i
     if (i != 0 && (decisions[i - 1] != decisions[i])) {
       // create new sub diff blocks to segment the original diff block which we
       // further divided by running the linematch algorithm
-      dp_s = diff_alloc_new(curtab, dp_s, dp_s->df_next);
+      dp_s = rs_diff_alloc_new(curtab, dp_s, dp_s->df_next);
       dp_s->is_linematched = true;
       for (int j = 0; j < DB_COUNT; j++) {
         if (curtab->tp_diffbuf[j] != NULL) {
@@ -1308,19 +1249,6 @@ int diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestatus)
 int diff_check_fill(win_T *wp, linenr_T lnum)
 {
   return rs_diff_check_fill(wp, lnum);
-}
-
-/// Compare two entries in diff "dp" and return true if they are equal.
-///
-/// @param  dp    diff
-/// @param  idx1  first entry in diff "dp"
-/// @param  idx2  second entry in diff "dp"
-///
-/// @return true if two entries are equal.
-static bool diff_equal_entry(diff_T *dp, int idx1, int idx2)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_diff_equal_entry_full(dp, idx1, idx2);
 }
 
 /// Set the topline of "towin" to match the position in "fromwin", so that they
@@ -1644,7 +1572,7 @@ static void diff_refine_inline_char_highlight(diff_T *dp_orig, garray_T *linemap
           }
           diff_T *dp_next = dp->df_next;
           dp->df_next = dp_next->df_next;
-          clear_diffblock(dp_next);
+          rs_clear_diffblock(dp_next);
           has_merged_gaps = true;
           continue;
         } else {
@@ -1879,7 +1807,7 @@ static void diff_find_change_inline_diff(diff_T *dp)
         goto done;
       }
 
-      diff_read(0, i, &dio);
+      rs_diff_read(0, i, &dio);
       clear_diffout(&dio.dio_diff);
     }
   }
@@ -1994,12 +1922,6 @@ void nv_diffgetput(bool put, size_t count)
   ex_diffgetput(&ea);
 }
 
-/// Return true if "diff" appears in the list of diff blocks of the current tab.
-static bool valid_diff(diff_T *diff)
-{
-  return rs_valid_diff(diff);
-}
-
 /// ":diffget" and ":diffput"
 ///
 /// @param eap
@@ -2008,7 +1930,7 @@ void ex_diffgetput(exarg_T *eap)
   int idx_other;
 
   // Find the current buffer in the list of diff buffers.
-  int idx_cur = diff_buf_idx(curbuf, curtab);
+  int idx_cur = rs_diff_buf_idx_tp(curbuf, curtab);
   if (idx_cur == DB_COUNT) {
     emsg(_("E99: Current buffer is not in diff mode"));
     return;
@@ -2080,7 +2002,7 @@ void ex_diffgetput(exarg_T *eap)
       // nothing to do
       return;
     }
-    idx_other = diff_buf_idx(buf, curtab);
+    idx_other = rs_diff_buf_idx_tp(buf, curtab);
 
     if (idx_other == DB_COUNT) {
       semsg(_("E103: Buffer \"%s\" is not in diff mode"), eap->arg);
@@ -2125,7 +2047,7 @@ void ex_diffgetput(exarg_T *eap)
   // everything up.
   if (!curbuf->b_changed) {
     change_warning(curbuf, 0);
-    if (diff_buf_idx(curbuf, curtab) != idx_to) {
+    if (rs_diff_buf_idx_tp(curbuf, curtab) != idx_to) {
       emsg(_("E787: Buffer changed unexpectedly"));
       goto theend;
     }
@@ -2291,7 +2213,7 @@ static void diffgetput(const int addr_count, const int idx_cur, const int idx_fr
           if ((curtab->tp_diffbuf[i] != NULL)
               && (i != idx_from)
               && (i != idx_to)
-              && !diff_equal_entry(dp, idx_from, i)) {
+              && !rs_diff_equal_entry_full(dp, idx_from, i)) {
             break;
           }
         }
@@ -2300,7 +2222,7 @@ static void diffgetput(const int addr_count, const int idx_cur, const int idx_fr
           // delete the diff entry, the buffers are now equal here
           dfree = *dp;
           did_free = true;
-          dp = diff_free(curtab, dprev, dp);
+          dp = rs_diff_free(curtab, dprev, dp);
         }
       }
 
@@ -2322,12 +2244,12 @@ static void diffgetput(const int addr_count, const int idx_cur, const int idx_fr
 
       if (did_free) {
         // Diff is deleted, update folds in other windows.
-        diff_fold_update(&dfree, idx_to);
+        rs_diff_fold_update(&dfree, idx_to);
       }
 
       // mark_adjust() may have made "dp" invalid.  We don't know where
       // to continue then, bail out.
-      if (added != 0 && !valid_diff(dp)) {
+      if (added != 0 && !rs_valid_diff(dp)) {
         break;
       }
 
@@ -2348,18 +2270,6 @@ static void diffgetput(const int addr_count, const int idx_cur, const int idx_fr
       dp = dp->df_next;
     }
   }
-}
-
-/// Update folds for all diff buffers for entry "dp".
-///
-/// Skip buffer with index "skip_idx".
-/// When there are no diffs, all folds are removed.
-///
-/// @param dp
-/// @param skip_idx
-static void diff_fold_update(diff_T *dp, int skip_idx)
-{
-  rs_diff_fold_update(dp, skip_idx);
 }
 
 /// Checks that the buffer is in diff-mode.
@@ -2398,23 +2308,8 @@ linenr_T diff_lnum_win(linenr_T lnum, win_T *wp)
 // Rust implementation for ED style diff parsing
 extern int rs_parse_diff_ed(const char *line, diffhunk_T *hunk);
 
-/// Handle an ED style diff line.
-///
-/// @return  FAIL if the line does not contain diff info.
-static int parse_diff_ed(char *line, diffhunk_T *hunk)
-{
-  return rs_parse_diff_ed(line, hunk);
-}
-
 // Rust implementation for unified diff parsing
 extern int rs_parse_diff_unified(const char *line, diffhunk_T *hunk);
-
-/// Parses unified diff with zero(!) context lines.
-/// Return FAIL if there is no diff information in "line".
-static int parse_diff_unified(char *line, diffhunk_T *hunk)
-{
-  return rs_parse_diff_unified(line, hunk);
-}
 
 /// Callback function for the xdl_diff() function.
 /// Stores the diff output in a grow array.
@@ -2822,7 +2717,7 @@ diffline_change_T *nvim_diffblock_get_change(diff_T *dp, int change_idx)
 /// @return Index (0 to DB_COUNT-1) or DB_COUNT if not found
 int nvim_diff_buf_idx(buf_T *buf, tabpage_T *tp)
 {
-  return diff_buf_idx(buf, tp);
+  return rs_diff_buf_idx_tp(buf, tp);
 }
 
 /// Write buffer contents to a memory file for diff comparison.
@@ -3439,7 +3334,7 @@ int nvim_diff_parse_buf_anchors(buf_T *buf, linenr_T *anchors, int max_anchors)
 void nvim_diff_sort_lnums(linenr_T *arr, int count)
 {
   if (arr != NULL && count > 0) {
-    qsort(arr, (size_t)count, sizeof(linenr_T), lnum_compare);
+    qsort(arr, (size_t)count, sizeof(linenr_T), rs_lnum_compare);
   }
 }
 
@@ -3448,7 +3343,7 @@ int nvim_diff_parse_ed(const char *line, linenr_T *lnum_orig, int *count_orig,
                        linenr_T *lnum_new, int *count_new)
 {
   diffhunk_T hunk = { 0 };
-  int r = parse_diff_ed((char *)line, &hunk);
+  int r = rs_parse_diff_ed(line, &hunk);
   if (r == OK) {
     *lnum_orig = hunk.lnum_orig;
     *count_orig = hunk.count_orig;
@@ -3463,7 +3358,7 @@ int nvim_diff_parse_unified(const char *line, linenr_T *lnum_orig, int *count_or
                             linenr_T *lnum_new, int *count_new)
 {
   diffhunk_T hunk = { 0 };
-  int r = parse_diff_unified((char *)line, &hunk);
+  int r = rs_parse_diff_unified(line, &hunk);
   if (r == OK) {
     *lnum_orig = hunk.lnum_orig;
     *count_orig = hunk.count_orig;
