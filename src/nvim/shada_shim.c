@@ -386,7 +386,7 @@ typedef struct {
 extern void rs_replace_numbered_mark(WriteMergerState *wms, size_t idx, ShadaEntry entry);
 extern void rs_shada_initialize_registers(WriteMergerState *wms, int max_reg_lines);
 
-#include "shada.c.generated.h"
+#include "shada_shim.c.generated.h"
 
 #define DEF_SDE(name, attr, ...) \
   [kSDItem##name] = { \
