@@ -84,8 +84,6 @@ extern int rs_diffopt_iwhiteeol(void);
 extern int rs_diffopt_iblank(void);
 extern int rs_diffopt_followwrap(void);
 extern int rs_diffopt_linematch(void);
-extern int rs_diff_cmp(const char *s1, const char *s2);
-extern void rs_diff_copy_entry(diff_T *dprev, diff_T *dp, int idx_orig, int idx_new);
 
 /// Result of parsing diffopt string from Rust.
 typedef struct {
@@ -172,7 +170,6 @@ extern int rs_diffopt_inline_any(void);
 extern int rs_diffopt_inline_diff(void);
 extern int rs_diff_buf_idx(const void *buf);
 extern int rs_diff_buf_idx_tp(buf_T *buf, tabpage_T *tp);
-extern int rs_diff_check_sanity(tabpage_T *tp, diff_T *dp);
 extern int rs_diff_check_invalid(void);
 extern int rs_diff_count_buffers(void);
 extern int rs_diff_buf_is_diffed(const void *buf);
@@ -203,10 +200,8 @@ extern void rs_diff_invalidate(buf_T *buf);
 extern void rs_diff_buf_delete(buf_T *buf);
 extern void rs_diff_buf_add(buf_T *buf);
 extern void rs_diff_buf_adjust(win_T *win);
-extern bool rs_diff_equal_char(const char *p1, const char *p2, int *len);
 extern bool rs_diff_equal_entry_full(diff_T *dp, int idx1, int idx2);
 extern bool rs_diff_linematch(diff_T *dp);
-extern int rs_get_max_diff_length_c(diff_T *dp);
 extern int rs_lnum_compare(const void *s1, const void *s2);
 extern bool rs_valid_diff(diff_T *diff);
 extern void rs_set_diff_option(win_T *wp, bool value);
@@ -216,19 +211,11 @@ extern bool rs_diff_mode_buf(buf_T *buf);
 // Phase 2: Diff block management migrations
 extern void rs_diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
                                 linenr_T amount, linenr_T amount_after);
-extern void rs_diff_mark_adjust_tp(tabpage_T *tp, int idx, linenr_T line1, linenr_T line2,
-                                   linenr_T amount, linenr_T amount_after);
-extern void rs_diff_check_unchanged(tabpage_T *tp, diff_T *dp);
 extern int rs_diffopt_changed(void);
 extern int rs_diffanchors_changed(bool buflocal);
 
 // Phase 3: Diff computation pipeline migrations
-extern void rs_diff_try_update(void *dio, int idx_orig, const exarg_T *eap);
 extern void rs_diff_read(int idx_orig, int idx_new, void *dio);
-extern void rs_process_hunk(diff_T **dpp, diff_T **dprevp, int idx_orig, int idx_new,
-                            linenr_T lnum_orig, int count_orig,
-                            linenr_T lnum_new, int count_new,
-                            bool *notsetp);
 
 // Phase 4: Diff status checking & navigation migrations
 extern int rs_diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestatus);
@@ -236,7 +223,6 @@ extern int rs_diff_check_fill(win_T *wp, linenr_T lnum);
 extern void rs_diff_set_topline(win_T *fromwin, win_T *towin);
 extern bool rs_diff_infold(win_T *wp, linenr_T lnum);
 extern int rs_diff_move_to(int dir, int count);
-extern linenr_T rs_diff_get_corresponding_line_int(buf_T *buf1, linenr_T lnum1);
 extern linenr_T rs_diff_get_corresponding_line(buf_T *buf1, linenr_T lnum1);
 extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
 
@@ -245,8 +231,6 @@ extern void rs_diff_update_line(linenr_T lnum);
 extern bool rs_diff_change_parse(diffline_T *diffline, diffline_change_T *change,
                                  int *change_start, int *change_end);
 extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
-extern bool rs_diff_find_change_simple(win_T *wp, linenr_T lnum, const diff_T *dp, int idx,
-                                       int *startp, int *endp);
 
 // Phase 6: Ex command migrations
 extern void rs_diff_ex_diffupdate(exarg_T *eap);
@@ -403,25 +387,6 @@ void diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amoun
   rs_diff_mark_adjust(buf, line1, line2, amount, amount_after);
 }
 
-/// Update line numbers in tab page "tp" for the buffer with index "idx".
-///
-/// This attempts to update the changes as much as possible:
-/// When inserting/deleting lines outside of existing change blocks, create a
-/// new change block and update the line numbers in following blocks.
-/// When inserting/deleting lines in existing change blocks, update them.
-///
-/// @param tp
-/// @param idx
-/// @param line1
-/// @param line2
-/// @param amount
-/// @amount_after
-static void diff_mark_adjust_tp(tabpage_T *tp, int idx, linenr_T line1, linenr_T line2,
-                                linenr_T amount, linenr_T amount_after)
-{
-  rs_diff_mark_adjust_tp(tp, idx, line1, line2, amount, amount_after);
-}
-
 /// Allocate a new diff block and link it between "dprev" and "dp".
 ///
 /// @param tp
@@ -437,31 +402,6 @@ static diff_T *diff_alloc_new(tabpage_T *tp, diff_T *dprev, diff_T *dp)
 static diff_T *diff_free(tabpage_T *tp, diff_T *dprev, diff_T *dp)
 {
   return rs_diff_free(tp, dprev, dp);
-}
-
-/// Check if the diff block "dp" can be made smaller for lines at the start and
-/// end that are equal.  Called after inserting lines.
-///
-/// This may result in a change where all buffers have zero lines, the caller
-/// must take care of removing it.
-///
-/// @param tp
-/// @param dp
-static void diff_check_unchanged(tabpage_T *tp, diff_T *dp)
-{
-  rs_diff_check_unchanged(tp, dp);
-}
-
-/// Check if a diff block doesn't contain invalid line numbers.
-/// This can happen when the diff program returns invalid results.
-///
-/// @param tp
-/// @param dp
-///
-/// @return OK if the diff block doesn't contain invalid line numbers.
-static int diff_check_sanity(tabpage_T *tp, diff_T *dp)
-{
-  return rs_diff_check_sanity(tp, dp);
 }
 
 /// Mark all diff buffers in the current tab page for redraw.
@@ -656,16 +596,6 @@ static int diff_write(buf_T *buf, diffin_T *din, linenr_T start, linenr_T end)
 static int lnum_compare(const void *s1, const void *s2)
 {
   return rs_lnum_compare(s1, s2);
-}
-
-/// Update the diffs for all buffers involved.
-///
-/// @param dio
-/// @param idx_orig
-/// @param eap   can be NULL
-static void diff_try_update(diffio_T *dio, int idx_orig, exarg_T *eap)
-{
-  rs_diff_try_update(dio, idx_orig, eap);
 }
 
 /// Return true if the options are set to use the internal diff library.
@@ -1227,15 +1157,6 @@ void ex_diffoff(exarg_T *eap)
 
 // extract_hunk_internal and extract_hunk have been migrated to Rust.
 
-static void process_hunk(diff_T **dpp, diff_T **dprevp, int idx_orig, int idx_new, diffhunk_T *hunk,
-                         bool *notsetp)
-{
-  rs_process_hunk(dpp, dprevp, idx_orig, idx_new,
-                  hunk->lnum_orig, hunk->count_orig,
-                  hunk->lnum_new, hunk->count_new,
-                  notsetp);
-}
-
 /// Read the diff output and add each entry to the diff list.
 ///
 /// @param idx_orig idx of original file
@@ -1244,17 +1165,6 @@ static void process_hunk(diff_T **dpp, diff_T **dprevp, int idx_orig, int idx_ne
 static void diff_read(int idx_orig, int idx_new, diffio_T *dio)
 {
   rs_diff_read(idx_orig, idx_new, dio);
-}
-
-/// Copy an entry at "dp" from "idx_orig" to "idx_new".
-///
-/// @param dprev
-/// @param dp
-/// @param idx_orig
-/// @param idx_new
-static void diff_copy_entry(diff_T *dprev, diff_T *dp, int idx_orig, int idx_new)
-{
-  rs_diff_copy_entry(dprev, dp, idx_orig, idx_new);
 }
 
 /// Clear the list of diffblocks for tab page "tp".
@@ -1270,11 +1180,6 @@ void diff_clear(tabpage_T *tp)
 bool diff_linematch(diff_T *dp)
 {
   return rs_diff_linematch(dp);
-}
-
-static int get_max_diff_length(const diff_T *dp)
-{
-  return rs_get_max_diff_length_c((diff_T *)dp);
 }
 
 // find_top_diff_block — migrated to Rust (internal to rs_diff_set_topline)
@@ -1416,25 +1321,6 @@ static bool diff_equal_entry(diff_T *dp, int idx1, int idx2)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
 {
   return rs_diff_equal_entry_full(dp, idx1, idx2);
-}
-
-// Compare the characters at "p1" and "p2".  If they are equal (possibly
-// ignoring case) return true and set "len" to the number of bytes.
-static bool diff_equal_char(const char *const p1, const char *const p2, int *const len)
-{
-  return rs_diff_equal_char(p1, p2, len);
-}
-
-/// Compare strings "s1" and "s2" according to 'diffopt'.
-/// Return non-zero when they are different.
-///
-/// @param s1 The first string
-/// @param s2 The second string
-///
-/// @return on-zero if the two strings are different.
-static int diff_cmp(char *s1, char *s2)
-{
-  return rs_diff_cmp(s1, s2);
 }
 
 /// Set the topline of "towin" to match the position in "fromwin", so that they
@@ -1695,26 +1581,6 @@ bool diff_change_parse(diffline_T *diffline, diffline_change_T *change, int *cha
                        int *change_end)
 {
   return rs_diff_change_parse(diffline, change, change_start, change_end);
-}
-
-/// Find the difference within a changed line and returns [startp,endp] byte
-/// positions.  Performs a simple algorithm by finding a single range in the
-/// middle.
-///
-/// If diffopt has DIFF_INLINE_NONE set, then this will only calculate the return
-/// value (added or changed), but startp/endp will not be calculated.
-///
-/// @param  wp      window whose current buffer to check
-/// @param  lnum    line number to check within the buffer
-/// @param  startp  first char of the change
-/// @param  endp    last char of the change
-///
-/// @return true if the line was added, no other buffer has it.
-static bool diff_find_change_simple(win_T *wp, linenr_T lnum, const diff_T *dp, int idx,
-                                    int *startp, int *endp)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_diff_find_change_simple(wp, lnum, (diff_T *)dp, idx, startp, endp);
 }
 
 /// Mapping used for mapping from temporary mmfile created for inline diff back
@@ -2514,13 +2380,6 @@ bool diff_mode_buf(buf_T *buf)
 int diff_move_to(int dir, int count)
 {
   return rs_diff_move_to(dir, count);
-}
-
-/// Return the line number in the current window that is closest to "lnum1" in
-/// "buf1" in diff mode.
-static linenr_T diff_get_corresponding_line_int(buf_T *buf1, linenr_T lnum1)
-{
-  return rs_diff_get_corresponding_line_int(buf1, lnum1);
 }
 
 /// Finds the corresponding line in a diff.
