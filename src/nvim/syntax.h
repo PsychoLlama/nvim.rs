@@ -34,4 +34,5 @@ enum {
 /// Array of highlight definitions, used for unit testing
 extern const char *const highlight_init_cmdline[];
 
-#include "syntax.h.generated.h"
+#include "syntax_accessors.h.generated.h"
+#include "syntax_bridge.h.generated.h"

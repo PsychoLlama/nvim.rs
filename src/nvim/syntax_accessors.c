@@ -1,4 +1,5 @@
-// syntax.c: code for syntax highlighting
+// syntax_accessors.c: syntax highlighting - struct definitions, static state,
+// helper functions, and FFI accessor functions for Rust interop
 
 #include <assert.h>
 #include <inttypes.h>
@@ -270,7 +271,7 @@ typedef struct {
   char *pattern;
 } time_entry_T;
 
-#include "syntax.c.generated.h"
+#include "syntax_accessors.c.generated.h"
 
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
@@ -411,15 +412,6 @@ void syn_set_timeout(proftime_T *tm)
   syn_tm = tm;
 }
 
-// Start the syntax recognition for a line.  This function is normally called
-// from the screen updating, once for each displayed line.
-// The buffer is remembered in syn_buf, because get_syntax_attr() doesn't get
-// it.  Careful: curbuf and curwin are likely to point to another buffer and
-// window.
-void syntax_start(win_T *wp, linenr_T lnum)
-{
-  rs_syntax_start(wp, (int)lnum);
-}
 
 // We cannot simply discard growarrays full of state_items or buf_states; we
 // have to manually release their extmatch pointers first.
@@ -830,19 +822,6 @@ static synstate_T *syn_stack_find_entry(linenr_T lnum)
 
 
 
-// We stop parsing syntax above line "lnum".  If the stored state at or below
-// this line depended on a change before it, it now depends on the line below
-// the last parsed line.
-// The window looks like this:
-//          line which changed
-//          displayed line
-//          displayed line
-// lnum ->  line below window
-void syntax_end_parsing(win_T *wp, linenr_T lnum)
-{
-  rs_syntax_end_parsing_impl(wp, (int)lnum);
-}
-
 // End of handling of the state stack.
 // **************************************
 
@@ -859,38 +838,6 @@ static void validate_current_state(void)
   current_state.ga_itemsize = sizeof(stateitem_T);
   ga_set_growsize(&current_state, 3);
 }
-
-/// @return  true if the syntax at start of lnum changed since last time.
-bool syntax_check_changed(linenr_T lnum)
-{
-  return rs_syntax_check_changed((int)lnum) != 0;
-}
-
-/// Finish the current line.
-
-
-/// Gets highlight attributes for next character.
-/// Must first call syntax_start() once for the line.
-/// "col" is normally 0 for the first use in a line, and increments by one each
-/// time.  It's allowed to skip characters and to stop before the end of the
-/// line.  But only a "col" after a previously used column is allowed.
-/// When "can_spell" is not NULL set it to true when spell-checking should be
-/// done.
-///
-/// @param keep_state  keep state of char at "col"
-///
-/// @return            highlight attributes for next character.
-int get_syntax_attr(const colnr_T col, bool *const can_spell, const bool keep_state)
-{
-  int cs = 0;
-  int attr = rs_get_syntax_attr((int)col, can_spell ? &cs : NULL, keep_state);
-  if (can_spell) {
-    *can_spell = cs != 0;
-  }
-  return attr;
-}
-
-
 
 
 
@@ -2916,11 +2863,6 @@ void ex_ownsyntax(exarg_T *eap)
   }
 }
 
-bool syntax_present(win_T *win)
-{
-  return rs_syntax_present(win) != 0;
-}
-
 static enum {
   EXP_SUBCMD,       // expand ":syn" sub-commands
   EXP_CASE,         // expand ":syn case" arguments
@@ -3080,15 +3022,6 @@ int syn_get_concealed_id(win_T *wp, linenr_T lnum, colnr_T col)
 // C accessor for current_sub_char (used by Rust)
 int nvim_get_current_sub_char(void) { return current_sub_char; }
 
-// Rust implementation
-extern int rs_syn_get_sub_char(void);
-
-// Return conceal substitution character
-int syn_get_sub_char(void)
-{
-  return rs_syn_get_sub_char();
-}
-
 // Return the syntax ID at position "i" in the current stack.
 // The caller must have called syn_get_id() before to fill the stack.
 // Returns -1 when "i" is out of range.
@@ -3102,12 +3035,6 @@ int syn_get_stack_item(int i)
     return -1;
   }
   return CUR_STATE(i).si_id;
-}
-
-/// Function called to get folding level for line "lnum" in window "wp".
-int syn_get_foldlevel(win_T *wp, linenr_T lnum)
-{
-  return rs_syn_get_foldlevel_impl(wp, (int)lnum);
 }
 
 // ":syntime".
