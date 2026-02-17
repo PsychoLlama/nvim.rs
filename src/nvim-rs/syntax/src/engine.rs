@@ -281,69 +281,6 @@ impl LineContext {
 pub extern "C" fn rs_syntax_engine_state_new() -> EngineState {
     EngineState::new()
 }
-
-/// Reset engine state for a new line.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syntax_engine_reset(state: *mut EngineState, start_col: c_int) {
-    if !state.is_null() {
-        (*state).reset_for_line(start_col);
-    }
-}
-
-/// Advance engine state.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syntax_engine_advance(state: *mut EngineState, count: c_int) {
-    if !state.is_null() {
-        (*state).advance(count);
-    }
-}
-
-/// Set current match in engine state.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syntax_engine_set_match(
-    state: *mut EngineState,
-    syn_id: c_int,
-    attr_id: c_int,
-    end_col: c_int,
-) {
-    if !state.is_null() {
-        (*state).set_match(syn_id, attr_id, end_col);
-    }
-}
-
-/// Get attribute from engine state.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syntax_engine_get_attr(state: *const EngineState) -> c_int {
-    if state.is_null() {
-        return 0;
-    }
-    (*state).get_attr()
-}
-
-/// Check if engine has active match.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syntax_engine_has_match(state: *const EngineState) -> c_int {
-    if state.is_null() {
-        return 0;
-    }
-    c_int::from((*state).has_match())
-}
-
 /// Create match result indicating no match.
 #[no_mangle]
 pub extern "C" fn rs_match_result_no_match() -> MatchResult {
@@ -360,48 +297,11 @@ pub extern "C" fn rs_match_result_found(
 ) -> MatchResult {
     MatchResult::found(syn_id, start_col, end_col, attr_id)
 }
-
-/// Check if match result indicates a match was found.
-///
-/// # Safety
-/// `result` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_match_result_is_found(result: *const MatchResult) -> c_int {
-    if result.is_null() {
-        return 0;
-    }
-    c_int::from((*result).found)
-}
-
 /// Create a new line context.
 #[no_mangle]
 pub extern "C" fn rs_line_context_new(lnum: c_int, line_len: c_int) -> LineContext {
     LineContext::new(lnum, line_len)
 }
-
-/// Check if line context is at end of line.
-///
-/// # Safety
-/// `ctx` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_line_context_at_eol(ctx: *const LineContext) -> c_int {
-    if ctx.is_null() {
-        return 1;
-    }
-    c_int::from((*ctx).at_eol())
-}
-
-/// Advance line context position.
-///
-/// # Safety
-/// `ctx` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_line_context_advance(ctx: *mut LineContext, count: c_int) {
-    if !ctx.is_null() {
-        (*ctx).advance(count);
-    }
-}
-
 /// Check engine flag.
 #[no_mangle]
 pub extern "C" fn rs_syntax_has_engine_flag(flags: c_int, flag: c_int) -> c_int {

@@ -287,42 +287,6 @@ impl SynArgKeyword {
 pub extern "C" fn rs_syn_parse_state_new(cmd_type: c_int) -> SynParseState {
     SynParseState::new(SynCmdType::from_c_int(cmd_type))
 }
-
-/// Check if parse state is OK.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_parse_state_is_ok(state: *const SynParseState) -> c_int {
-    if state.is_null() {
-        return 0;
-    }
-    c_int::from((*state).ok)
-}
-
-/// Mark parse state as failed.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_parse_state_fail(state: *mut SynParseState) {
-    if !state.is_null() {
-        (*state).fail();
-    }
-}
-
-/// Check if parse state is complete.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_parse_state_is_complete(state: *const SynParseState) -> c_int {
-    if state.is_null() {
-        return 0;
-    }
-    c_int::from((*state).is_complete())
-}
-
 /// Check if command type is a definition command.
 #[no_mangle]
 pub extern "C" fn rs_syn_cmd_type_is_definition(cmd_type: c_int) -> c_int {

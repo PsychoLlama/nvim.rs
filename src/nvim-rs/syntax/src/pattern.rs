@@ -651,34 +651,6 @@ use std::ffi::c_void;
 
 /// Opaque handle to synblock_T for FFI
 pub type SynBlockPtr = *const c_void;
-
-/// FFI export: Get pattern count from synblock
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_pattern_count(block: SynBlockPtr) -> c_int {
-    synblock_pattern_count(SynBlockHandle(block.cast_mut()))
-}
-
-/// FFI export: Get fold item count from synblock
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_fold_item_count(block: SynBlockPtr) -> c_int {
-    synblock_fold_item_count(SynBlockHandle(block.cast_mut()))
-}
-
-/// FFI export: Check if pattern at index is syncing
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_pattern_is_syncing(block: SynBlockPtr, idx: c_int) -> c_int {
-    c_int::from(synblock_pattern_is_syncing(
-        SynBlockHandle(block.cast_mut()),
-        idx,
-    ))
-}
-
-/// FFI export: Count patterns for a specific ID
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_count_patterns_for_id(block: SynBlockPtr, id: c_int) -> c_int {
-    synblock_count_patterns_for_id(SynBlockHandle(block.cast_mut()), id)
-}
-
 /// FFI export: Check if offset is specified in flags
 #[no_mangle]
 pub extern "C" fn rs_syn_has_offset(off_flags: c_int, offset_idx: c_int) -> c_int {

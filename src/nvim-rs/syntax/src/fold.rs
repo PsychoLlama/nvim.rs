@@ -254,106 +254,11 @@ pub extern "C" fn rs_syn_fold_level_start(level: c_int) -> FoldLevel {
 pub extern "C" fn rs_syn_fold_level_end(level: c_int) -> FoldLevel {
     FoldLevel::end(level)
 }
-
-/// Check if fold level is start.
-///
-/// # Safety
-/// `fl` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_fold_level_is_start(fl: *const FoldLevel) -> c_int {
-    if fl.is_null() {
-        return 0;
-    }
-    c_int::from((*fl).is_start())
-}
-
-/// Check if fold level is end.
-///
-/// # Safety
-/// `fl` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_fold_level_is_end(fl: *const FoldLevel) -> c_int {
-    if fl.is_null() {
-        return 0;
-    }
-    c_int::from((*fl).is_end())
-}
-
-/// Get effective fold level.
-///
-/// # Safety
-/// `fl` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_fold_level_effective(fl: *const FoldLevel) -> c_int {
-    if fl.is_null() {
-        return 0;
-    }
-    (*fl).effective_level()
-}
-
 /// Create new fold state.
 #[no_mangle]
 pub extern "C" fn rs_syn_fold_state_new() -> SynFoldState {
     SynFoldState::new()
 }
-
-/// Enter fold region.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_fold_state_enter(state: *mut SynFoldState) {
-    if !state.is_null() {
-        (*state).enter_fold();
-    }
-}
-
-/// Leave fold region.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_fold_state_leave(state: *mut SynFoldState) {
-    if !state.is_null() {
-        (*state).leave_fold();
-    }
-}
-
-/// Reset fold state.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_fold_state_reset(state: *mut SynFoldState) {
-    if !state.is_null() {
-        (*state).reset();
-    }
-}
-
-/// Get fold state level.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_fold_state_level(state: *const SynFoldState) -> c_int {
-    if state.is_null() {
-        return 0;
-    }
-    (*state).level()
-}
-
-/// Check if fold state is valid.
-///
-/// # Safety
-/// `state` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_fold_state_is_valid(state: *const SynFoldState) -> c_int {
-    if state.is_null() {
-        return 0;
-    }
-    c_int::from((*state).valid)
-}
-
 /// Create fold compute result for a line.
 #[no_mangle]
 pub extern "C" fn rs_syn_fold_compute_line(level: c_int) -> FoldComputeResult {
@@ -371,19 +276,6 @@ pub extern "C" fn rs_syn_fold_compute_start(level: c_int) -> FoldComputeResult {
 pub extern "C" fn rs_syn_fold_compute_end(level: c_int) -> FoldComputeResult {
     FoldComputeResult::end(level)
 }
-
-/// Check if fold compute result is defined.
-///
-/// # Safety
-/// `result` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_fold_compute_is_defined(result: *const FoldComputeResult) -> c_int {
-    if result.is_null() {
-        return 0;
-    }
-    c_int::from((*result).is_defined())
-}
-
 // =============================================================================
 // FFI for syn_get_foldlevel implementation
 // =============================================================================

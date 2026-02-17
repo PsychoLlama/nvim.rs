@@ -581,21 +581,6 @@ pub unsafe fn check_state_ends() {
 // =============================================================================
 // Exported FFI functions
 // =============================================================================
-
-/// Rust implementation of did_match_already.
-#[no_mangle]
-pub unsafe extern "C" fn rs_did_match_already(
-    idx: c_int,
-    gap_data: *mut c_int,
-    gap_len: c_int,
-) -> c_int {
-    if did_match_already(idx, gap_data, gap_len) {
-        1
-    } else {
-        0
-    }
-}
-
 /// Rust implementation of update_si_attr.
 #[no_mangle]
 pub unsafe extern "C" fn rs_update_si_attr(idx: c_int) {

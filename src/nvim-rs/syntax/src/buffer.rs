@@ -638,63 +638,6 @@ pub struct BufferSyntaxStatus {
     /// Whether there are containedin items
     pub has_containedin: c_int,
 }
-
-/// Get the syntax status for a synblock.
-#[no_mangle]
-pub unsafe extern "C" fn rs_synblock_status(block: SynBlockPtr) -> BufferSyntaxStatus {
-    let handle = SynBlockHandle(block as *mut c_void);
-    if handle.is_null() {
-        return BufferSyntaxStatus {
-            active: 0,
-            has_error: 0,
-            is_slow: 0,
-            conceal_enabled: 0,
-            has_containedin: 0,
-        };
-    }
-
-    let has_error = synblock_has_error(handle);
-    let is_slow = synblock_is_slow(handle);
-
-    BufferSyntaxStatus {
-        active: if !has_error && !is_slow { 1 } else { 0 },
-        has_error: if has_error { 1 } else { 0 },
-        is_slow: if is_slow { 1 } else { 0 },
-        conceal_enabled: if synblock_conceal_enabled(handle) {
-            1
-        } else {
-            0
-        },
-        has_containedin: if synblock_has_containedin(handle) {
-            1
-        } else {
-            0
-        },
-    }
-}
-
-/// Check if syntax highlighting can be performed for a synblock.
-#[no_mangle]
-pub unsafe extern "C" fn rs_synblock_can_highlight(block: SynBlockPtr) -> c_int {
-    let handle = SynBlockHandle(block as *mut c_void);
-    if can_highlight(handle) {
-        1
-    } else {
-        0
-    }
-}
-
-/// Check if syntax-based folding can be computed for a synblock.
-#[no_mangle]
-pub unsafe extern "C" fn rs_synblock_can_fold(block: SynBlockPtr) -> c_int {
-    let handle = SynBlockHandle(block as *mut c_void);
-    if can_compute_folds(handle) {
-        1
-    } else {
-        0
-    }
-}
-
 /// Buffer modification info structure for FFI
 #[repr(C)]
 pub struct BufModInfo {
@@ -707,28 +650,6 @@ pub struct BufModInfo {
     /// Whether there are any modifications
     pub has_mods: c_int,
 }
-
-/// Get buffer modification info.
-#[no_mangle]
-pub unsafe extern "C" fn rs_buf_mod_info(buf: BufPtr) -> BufModInfo {
-    let handle = BufHandle(buf as *mut c_void);
-    let info = ModificationInfo::from_buffer(handle);
-
-    BufModInfo {
-        top: info.top,
-        bot: info.bot,
-        xlines: info.xlines,
-        has_mods: if info.has_modifications() { 1 } else { 0 },
-    }
-}
-
-/// Apply buffer changes to invalidate syntax state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_buf_apply_syntax_changes(buf: BufPtr) {
-    let handle = BufHandle(buf as *mut c_void);
-    apply_buffer_changes(handle);
-}
-
 /// Fold level mode constants
 #[no_mangle]
 pub const extern "C" fn rs_synfld_start() -> c_int {
@@ -739,25 +660,6 @@ pub const extern "C" fn rs_synfld_start() -> c_int {
 pub const extern "C" fn rs_synfld_minimum() -> c_int {
     foldlevel_mode::MINIMUM
 }
-
-/// Get fold level mode for a synblock.
-#[no_mangle]
-pub unsafe extern "C" fn rs_synblock_get_foldlevel_mode(block: SynBlockPtr) -> c_int {
-    let handle = SynBlockHandle(block as *mut c_void);
-    synblock_foldlevel_mode(handle).to_raw()
-}
-
-/// Check if synblock uses minimum fold level mode.
-#[no_mangle]
-pub unsafe extern "C" fn rs_synblock_uses_minimum_foldlevel(block: SynBlockPtr) -> c_int {
-    let handle = SynBlockHandle(block as *mut c_void);
-    if synblock_foldlevel_mode(handle) == FoldLevelMode::Minimum {
-        1
-    } else {
-        0
-    }
-}
-
 /// Syntax fold info structure
 #[repr(C)]
 pub struct SynFoldInfo {
@@ -768,44 +670,6 @@ pub struct SynFoldInfo {
     /// The fold level mode (START or MINIMUM)
     pub fold_mode: c_int,
 }
-
-/// Get fold information for a synblock.
-#[no_mangle]
-pub unsafe extern "C" fn rs_synblock_fold_info(block: SynBlockPtr) -> SynFoldInfo {
-    let handle = SynBlockHandle(block as *mut c_void);
-    if handle.is_null() {
-        return SynFoldInfo {
-            fold_items: 0,
-            can_fold: 0,
-            fold_mode: foldlevel_mode::START,
-        };
-    }
-
-    SynFoldInfo {
-        fold_items: synblock_folditems(handle),
-        can_fold: if can_compute_folds(handle) { 1 } else { 0 },
-        fold_mode: synblock_foldlevel_mode(handle).to_raw(),
-    }
-}
-
-/// Get the current syntax buffer handle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_current_buf() -> BufHandle {
-    current_syn_buf()
-}
-
-/// Get the current synblock handle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_current_block() -> SynBlockHandle {
-    current_syn_block()
-}
-
-/// Get the current syntax window handle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_current_win() -> WinHandle {
-    current_syn_win()
-}
-
 /// Current syntax context information
 #[repr(C)]
 pub struct SynContextInfo {
@@ -818,33 +682,6 @@ pub struct SynContextInfo {
     /// Whether syntax highlighting is active
     pub active: c_int,
 }
-
-/// Get the current syntax context.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_current_context() -> SynContextInfo {
-    let buf = current_syn_buf();
-    let block = current_syn_block();
-    let win = current_syn_win();
-    let active = if !block.is_null() && can_highlight(block) {
-        1
-    } else {
-        0
-    };
-
-    SynContextInfo {
-        buf,
-        block,
-        win,
-        active,
-    }
-}
-
-/// Start syntax highlighting at a line.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syntax_start_at(wp: WinHandle, lnum: c_int) {
-    start_syntax(wp, lnum);
-}
-
 /// Check if syntax at start of lnum changed since last time.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syntax_check_changed(lnum: c_int) -> c_int {
@@ -856,19 +693,6 @@ pub unsafe extern "C" fn rs_syntax_check_changed(lnum: c_int) -> c_int {
 pub unsafe extern "C" fn rs_syntax_end_parsing_impl(wp: WinHandle, lnum: c_int) {
     syntax_end_parsing_impl(wp, lnum)
 }
-
-/// Check if buffer needs syntax state update based on modifications.
-#[no_mangle]
-pub unsafe extern "C" fn rs_buf_needs_syntax_update(buf: BufPtr) -> c_int {
-    let handle = BufHandle(buf as *mut c_void);
-    let info = ModificationInfo::from_buffer(handle);
-    if info.has_modifications() {
-        1
-    } else {
-        0
-    }
-}
-
 /// Get the range of lines affected by buffer modifications.
 /// Returns 0 for both if no modifications.
 #[repr(C)]
@@ -876,17 +700,6 @@ pub struct LineRange {
     pub start: c_int,
     pub end: c_int,
 }
-
-#[no_mangle]
-pub unsafe extern "C" fn rs_buf_modified_range(buf: BufPtr) -> LineRange {
-    let handle = BufHandle(buf as *mut c_void);
-    let info = ModificationInfo::from_buffer(handle);
-    match info.modified_range() {
-        Some((start, end)) => LineRange { start, end },
-        None => LineRange { start: 0, end: 0 },
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

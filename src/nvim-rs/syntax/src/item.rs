@@ -287,43 +287,6 @@ pub extern "C" fn rs_syn_item_clear_flag(flags: c_int, flag: c_int) -> c_int {
 pub extern "C" fn rs_syn_item_info_new(item_type: c_int, syn_id: c_int) -> SynItemInfo {
     SynItemInfo::new(SynItemType::from_c_int(item_type), syn_id)
 }
-
-/// Check if item info is contained.
-///
-/// # Safety
-/// `info` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_item_info_is_contained(info: *const SynItemInfo) -> c_int {
-    if info.is_null() {
-        return 0;
-    }
-    c_int::from((*info).is_contained())
-}
-
-/// Check if item info is transparent.
-///
-/// # Safety
-/// `info` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_item_info_is_transparent(info: *const SynItemInfo) -> c_int {
-    if info.is_null() {
-        return 0;
-    }
-    c_int::from((*info).is_transparent())
-}
-
-/// Check if item info creates fold.
-///
-/// # Safety
-/// `info` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_syn_item_info_creates_fold(info: *const SynItemInfo) -> c_int {
-    if info.is_null() {
-        return 0;
-    }
-    c_int::from((*info).creates_fold())
-}
-
 /// Create success operation result.
 #[no_mangle]
 pub extern "C" fn rs_syn_item_op_result_ok(item_id: c_int) -> ItemOpResult {
