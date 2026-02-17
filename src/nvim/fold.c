@@ -91,56 +91,18 @@ static bool fold_changed;
 
 #include "fold.c.generated.h"
 
-// Rust FFI declarations for fold method checks
+// Rust FFI declarations
 extern int rs_foldmethodIsManual(win_T *wp);
 extern int rs_foldmethodIsIndent(win_T *wp);
 extern int rs_foldmethodIsExpr(win_T *wp);
 extern int rs_foldmethodIsMarker(win_T *wp);
 extern int rs_foldmethodIsSyntax(win_T *wp);
 extern int rs_foldmethodIsDiff(win_T *wp);
-extern int rs_hasAnyFolding(win_T *win);
-extern int rs_foldManualAllowed(bool create);
 extern bool rs_diff_infold(win_T *wp, linenr_T lnum);
 extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
-
-// Rust FFI declarations for Phase 3: State query functions
-extern void rs_checkSmall(win_T *wp, fold_T *fp, linenr_T lnum_off);
-extern int rs_check_closed(win_T *wp, fold_T *fp, bool *use_level, int level,
-                           bool *maybe_small, linenr_T lnum_off);
-
-// Rust FFI declarations for Phase 1: Foundation functions
-extern void rs_foldInitWin(win_T *wp);
-extern int rs_find_wl_entry(win_T *win, linenr_T lnum);
 extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
-
-// Rust FFI declarations for Phase 2: Core query functions
-extern int rs_getDeepestNesting(win_T *wp);
-
-// Rust FFI declarations for Phase 3: Fold Creation and Deletion
-extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
-extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
-extern void rs_clearFolding(win_T *win);
-
-// Rust FFI declarations for Phase 4: Fold Update System
-extern void rs_foldUpdateAll(win_T *win);
-extern void rs_foldUpdateAfterInsert(void);
-extern void rs_foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2,
-                              linenr_T amount, linenr_T amount_after);
-
-// Rust FFI declarations for Phase 2: IEMS Algorithm
 extern void rs_foldUpdateIEMS(win_T *wp, linenr_T top, linenr_T bot);
-
-// Rust FFI declarations for Phase 5: Navigation and Display
-extern void rs_foldAdjustCursor(win_T *wp);
-extern void rs_foldAdjustVisual(void);
-extern int rs_foldMoveTo(bool updown, int dir, int count);
-
-// Rust FFI declarations: Fold Operations
-extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive, bool had_visual);
-extern void rs_foldMoveRange(win_T *wp, garray_T *gap, linenr_T line1, linenr_T line2,
-                             linenr_T dest);
 extern int rs_foldLevel(linenr_T lnum);
-extern void rs_foldCheckClose(void);
 extern int rs_lineFolded(win_T *wp, linenr_T lnum);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
 
