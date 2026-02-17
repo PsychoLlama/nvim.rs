@@ -787,9 +787,6 @@ extern "C" {
     /// Set si_cont_list
     fn nvim_stateitem_set_cont_list(item: StateItemHandle, list: IdListHandle);
 
-    /// Get next_seqnr and increment it
-    fn nvim_syn_next_seqnr() -> c_int;
-
     /// Get next_match_idx
     fn nvim_syn_get_next_match_idx_value() -> c_int;
 
@@ -810,9 +807,6 @@ extern "C" {
 
     /// Call update_si_attr
     fn nvim_syn_call_update_si_attr(idx: c_int);
-
-    /// Call check_keepend
-    fn nvim_syn_check_keepend();
 
     /// Call pop_current_state
     fn nvim_syn_pop_current_state();
@@ -896,9 +890,6 @@ extern "C" {
     /// Check if there are keywords (case insensitive) in synblock
     fn nvim_syn_has_keywords_ic() -> c_int;
 
-    /// Check if a char is a keyword character at position in syn_buf
-    fn nvim_syn_is_keyword_char(line: *mut c_char, pos: c_int) -> c_int;
-
     /// Get the current line from syn_getcurline
     fn nvim_syn_getcurline() -> *mut c_char;
 
@@ -965,27 +956,8 @@ extern "C" {
     /// Call unref_extmatch
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
 
-    /// Call update_si_end from Rust
-    fn nvim_syn_update_si_end(sip: StateItemHandle, startcol: c_int, force: c_int);
-
     /// Call push_next_match from Rust
     fn nvim_syn_push_next_match() -> StateItemHandle;
-
-    /// Call find_endpos from Rust
-    fn nvim_syn_find_endpos(
-        idx: c_int,
-        start_lnum: c_int,
-        start_col: c_int,
-        m_end_lnum: *mut c_int,
-        m_end_col: *mut c_int,
-        hl_end_lnum: *mut c_int,
-        hl_end_col: *mut c_int,
-        flagsp: *mut c_int,
-        end_end_lnum: *mut c_int,
-        end_end_col: *mut c_int,
-        end_idx: *mut c_int,
-        start_ext: ExtMatchHandle,
-    );
 
     /// Get synpat sp_flags by index
     fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
@@ -1053,9 +1025,6 @@ extern "C" {
 
     /// Call syn_update_ends from Rust
     fn nvim_syn_update_ends(startofline: c_int);
-
-    /// Call clear_syn_state from Rust
-    fn nvim_syn_clear_syn_state(p: SynStateHandle);
 
     /// Get current_line_id global
     fn nvim_syn_get_current_line_id() -> c_int;
@@ -4474,37 +4443,13 @@ pub extern "C" fn rs_syn_running_inc_tag() -> c_int {
 
 extern "C" {
     // Additional C accessors for Phase 143
-    fn nvim_syn_get_id(
-        wp: WinHandle,
-        lnum: c_int,
-        col: c_int,
-        trans: c_int,
-        spellp: *mut c_int,
-        keep_state: c_int,
-    ) -> c_int;
-
-    fn nvim_syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int;
-
     fn nvim_get_syntax_info(seqnrp: *mut c_int) -> c_int;
 
-    fn nvim_syn_get_foldlevel(wp: WinHandle, lnum: c_int) -> c_int;
-
     fn nvim_syntax_end_parsing(wp: WinHandle, lnum: c_int);
-
-    fn nvim_syn_stack_cleanup() -> c_int;
-
-    fn nvim_syn_buf_get_synmaxcol() -> c_int;
-
-    fn nvim_syn_get_sync_linebreaks() -> c_int;
 
     fn nvim_synstate_set_tick(state: SynStateHandle, tick: c_int);
 
     fn nvim_synstate_get_tick_val(state: SynStateHandle) -> c_int;
-
-    // Note: nvim_stateitem_get_m_lnum, nvim_stateitem_get_m_startcol,
-    // nvim_stateitem_set_m_lnum, nvim_stateitem_set_m_startcol,
-    // nvim_stateitem_get_end_idx, nvim_stateitem_get_ends are already
-    // declared in the main extern block near the top of the file.
 }
 /// Get extra information about the syntax item.
 /// Must be called right after get_syntax_attr().
