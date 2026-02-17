@@ -1024,7 +1024,7 @@ int nvim_gchar_cursor(void)
 /// Call nv_pipe for <Home> command implementation.
 void nvim_nv_pipe(cmdarg_T *cap)
 {
-  nv_pipe(cap);
+  rs_nv_pipe(cap);
 }
 
 /// Wrapper for coladvance.
@@ -1632,13 +1632,13 @@ int nvim_cap_dec_count1(cmdarg_T *cap)
 /// Wrapper for nv_right.
 void nvim_nv_right(cmdarg_T *cap)
 {
-  nv_right(cap);
+  rs_nv_right(cap);
 }
 
 /// Wrapper for nv_down.
 void nvim_nv_down(cmdarg_T *cap)
 {
-  nv_down(cap);
+  rs_nv_down(cap);
 }
 
 /// Internal nv_visual implementation (full C logic).
@@ -2190,7 +2190,7 @@ void nvim_nv_edit_impl(cmdarg_T *cap)
     // in Visual mode and after an operator "a" and "i" are for text objects
   } else if ((cap->cmdchar == 'a' || cap->cmdchar == 'i')
              && (cap->oap->op_type != OP_NOP || VIsual_active)) {
-    nv_object(cap);
+    rs_nv_object(cap);
   } else if (!curbuf->b_p_ma && !curbuf->terminal) {
     emsg(_(e_modifiable));
     clearop(cap->oap);
@@ -4057,7 +4057,7 @@ static void nv_addsub(cmdarg_T *cap)
     op_addsub(cap->oap, cap->count1, cap->arg);
     cap->oap->op_type = OP_NOP;
   } else if (VIsual_active) {
-    nv_operator(cap);
+    rs_nv_operator(cap);
   } else {
     clearop(cap->oap);
   }
@@ -4664,11 +4664,11 @@ static void nv_zet_impl(cmdarg_T *cap)
   // "zp", "zP" in block mode put without adding trailing spaces
   case 'P':
   case 'p':
-    nv_put(cap);
+    rs_nv_put(cap);
     break;
   // "zy" Yank without trailing spaces
   case 'y':
-    nv_operator(cap);
+    rs_nv_operator(cap);
     break;
 
   // "zF": create fold command
@@ -4677,12 +4677,12 @@ static void nv_zet_impl(cmdarg_T *cap)
   case 'f':
     if (foldManualAllowed(true)) {
       cap->nchar = 'f';
-      nv_operator(cap);
+      rs_nv_operator(cap);
       curwin->w_p_fen = true;
 
       // "zF" is like "zfzf"
       if (nchar == 'F' && cap->oap->op_type == OP_FOLD) {
-        nv_operator(cap);
+        rs_nv_operator(cap);
         finish_op = true;
       }
     } else {
@@ -4696,7 +4696,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   case 'D':
     if (foldManualAllowed(false)) {
       if (VIsual_active) {
-        nv_operator(cap);
+        rs_nv_operator(cap);
       } else {
         deleteFold(curwin, curwin->w_cursor.lnum,
                    curwin->w_cursor.lnum, nchar == 'D', false);
@@ -4754,7 +4754,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   // "zo": open fold at cursor or Visual area
   case 'o':
     if (VIsual_active) {
-      nv_operator(cap);
+      rs_nv_operator(cap);
     } else {
       openFold(curwin->w_cursor, cap->count1);
     }
@@ -4763,7 +4763,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   // "zO": open fold recursively
   case 'O':
     if (VIsual_active) {
-      nv_operator(cap);
+      rs_nv_operator(cap);
     } else {
       openFoldRecurse(curwin->w_cursor);
     }
@@ -4772,7 +4772,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   // "zc": close fold at cursor or Visual area
   case 'c':
     if (VIsual_active) {
-      nv_operator(cap);
+      rs_nv_operator(cap);
     } else {
       closeFold(curwin->w_cursor, cap->count1);
     }
@@ -4782,7 +4782,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   // "zC": close fold recursively
   case 'C':
     if (VIsual_active) {
-      nv_operator(cap);
+      rs_nv_operator(cap);
     } else {
       closeFoldRecurse(curwin->w_cursor);
     }
@@ -4902,7 +4902,7 @@ static void nv_colon(cmdarg_T *cap)
   bool is_lua = cap->cmdchar == K_LUA;
 
   if (VIsual_active && !is_cmdkey && !is_lua) {
-    nv_operator(cap);
+    rs_nv_operator(cap);
     return;
   }
 
@@ -4993,7 +4993,7 @@ void do_nv_ident(int c1, int c2)
   ca.oap = &oa;
   ca.cmdchar = c1;
   ca.nchar = c2;
-  nv_ident(&ca);
+  rs_nv_ident(&ca);
 }
 
 /// 'K' normal-mode command. Get the command to lookup the keyword under the
@@ -5398,7 +5398,7 @@ static void nv_right_impl(cmdarg_T *cap)
     if (mod_mask & MOD_MASK_CTRL) {
       cap->arg = true;
     }
-    nv_wordcmd(cap);
+    rs_nv_wordcmd(cap);
     return;
   }
 
@@ -5484,7 +5484,7 @@ static void nv_left_impl(cmdarg_T *cap)
     if (mod_mask & MOD_MASK_CTRL) {
       cap->arg = 1;
     }
-    nv_bck_word(cap);
+    rs_nv_bck_word(cap);
     return;
   }
 
@@ -5545,7 +5545,7 @@ static void nv_up_impl(cmdarg_T *cap)
   if (mod_mask & MOD_MASK_SHIFT) {
     // <S-Up> is page up
     cap->arg = BACKWARD;
-    nv_page(cap);
+    rs_nv_page(cap);
     return;
   }
 
@@ -5571,7 +5571,7 @@ static void nv_down_impl(cmdarg_T *cap)
   if (mod_mask & MOD_MASK_SHIFT) {
     // <S-Down> is page down
     cap->arg = FORWARD;
-    nv_page(cap);
+    rs_nv_page(cap);
   } else if (bt_quickfix(curbuf) && cap->cmdchar == CAR) {
     // Quickfix window only: view the result under the cursor.
     qf_view_result(false);
@@ -5661,7 +5661,7 @@ static void nv_search_impl(cmdarg_T *cap)
     // Translate "g??" to "g?g?"
     cap->cmdchar = 'g';
     cap->nchar = '?';
-    nv_operator(cap);
+    rs_nv_operator(cap);
     return;
   }
 
@@ -6070,9 +6070,9 @@ static void nv_undo_impl(cmdarg_T *cap)
     // translate "<Visual>u" to "<Visual>gu" and "guu" to "gugu"
     cap->cmdchar = 'g';
     cap->nchar = 'u';
-    nv_operator(cap);
+    rs_nv_operator(cap);
   } else {
-    nv_kundo(cap);
+    rs_nv_kundo(cap);
   }
 }
 
@@ -6133,7 +6133,7 @@ static void nv_replace_impl(cmdarg_T *cap)
         cap->nchar = REPLACE_NL_NCHAR;
       }
     }
-    nv_operator(cap);
+    rs_nv_operator(cap);
     return;
   }
 
@@ -6257,7 +6257,7 @@ static void nv_Replace_impl(cmdarg_T *cap)
     cap->nchar = NUL;
     VIsual_mode_orig = VIsual_mode;     // remember original area for gv
     VIsual_mode = 'V';
-    nv_operator(cap);
+    rs_nv_operator(cap);
     return;
   }
 
@@ -6287,7 +6287,7 @@ static void nv_vreplace_impl(cmdarg_T *cap)
   if (VIsual_active) {
     cap->cmdchar = 'r';
     cap->nchar = cap->extra_char;
-    nv_replace(cap);            // Do same as "r" in Visual mode for now
+    rs_nv_replace(cap);         // Do same as "r" in Visual mode for now
     return;
   }
 
@@ -6576,9 +6576,9 @@ static void nv_visual_impl(cmdarg_T *cap)
       if (cap->count0 > 0 && --cap->count1 > 0) {
         // With a count select that many characters or lines.
         if (VIsual_mode == 'v' || VIsual_mode == Ctrl_V) {
-          nv_right(cap);
+          rs_nv_right(cap);
         } else if (VIsual_mode == 'V') {
-          nv_down(cap);
+          rs_nv_down(cap);
         }
       }
     }
@@ -6812,11 +6812,11 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
   // "gR": Enter virtual replace mode.
   case 'R':
     cap->arg = true;
-    nv_Replace(cap);
+    rs_nv_Replace(cap);
     break;
 
   case 'r':
-    nv_vreplace(cap);
+    rs_nv_vreplace(cap);
     break;
 
   case '&':
@@ -6826,7 +6826,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
   // "gv": Reselect the previous Visual area.  If Visual already active,
   //       exchange previous and current Visual area.
   case 'v':
-    nv_gv_cmd(cap);
+    rs_nv_gv_cmd(cap);
     break;
   // "gV": Don't reselect the previous Visual area after a Select mode mapping of menu.
   case 'V':
@@ -6844,7 +6844,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
   case Ctrl_H:
     cap->cmdchar = cap->nchar + ('v' - 'h');
     cap->arg = true;
-    nv_visual(cap);
+    rs_nv_visual(cap);
     break;
 
   // "gn", "gN" visually select next/previous search match
@@ -6889,7 +6889,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
 
   // "gJ": join two lines without inserting a space.
   case 'J':
-    nv_join(cap);
+    rs_nv_join(cap);
     break;
 
   // "g0", "g^" : Like "0" and "^" but for screen lines.
@@ -6916,7 +6916,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
 
   // "g_": to the last non-blank character in the line or <count> lines downward.
   case '_':
-    nv_g_underscore_cmd(cap);
+    rs_nv_g_underscore_cmd(cap);
     break;
 
   // "g$" : Like "$" but for screen lines.
@@ -6934,7 +6934,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
 #endif
   case Ctrl_RSB:                // :tag or :tselect for current identifier
   case ']':                     // :tselect for current identifier
-    nv_ident(cap);
+    rs_nv_ident(cap);
     break;
 
   // ge and gE: go back to end of word
@@ -6955,7 +6955,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
 
   // "gi": start Insert at the last position.
   case 'i':
-    nv_gi_cmd(cap);
+    rs_nv_gi_cmd(cap);
     break;
 
   // "gI": Start insert in column 1.
@@ -6978,7 +6978,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
     cap->arg = true;
     FALLTHROUGH;
   case '`':
-    nv_gomark(cap);
+    rs_nv_gomark(cap);
     break;
 
   // "gs": Goto sleep.
@@ -7011,7 +7011,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
   // that line number like for "G". -- webb
   case 'g':
     cap->arg = false;
-    nv_goto(cap);
+    rs_nv_goto(cap);
     break;
 
   //  Two-character operators:
@@ -7031,7 +7031,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
   case 'U':
   case '?':
   case '@':
-    nv_operator(cap);
+    rs_nv_operator(cap);
     break;
 
   // "gd": Find first occurrence of pattern under the cursor in the current function
@@ -7068,7 +7068,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
   // "gP" and "gp": same as "P" and "p" but leave cursor just after new text
   case 'p':
   case 'P':
-    nv_put(cap);
+    rs_nv_put(cap);
     break;
 
   // "go": goto byte count from start of buffer
@@ -7085,12 +7085,12 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
     break;
 
   case ',':
-    nv_pcmark(cap);
+    rs_nv_pcmark(cap);
     break;
 
   case ';':
     cap->count1 = -cap->count1;
-    nv_pcmark(cap);
+    rs_nv_pcmark(cap);
     break;
 
   case 't':
@@ -7223,7 +7223,7 @@ static void nv_Undo_impl(cmdarg_T *cap)
     // translate "gUU" to "gUgU"
     cap->cmdchar = 'g';
     cap->nchar = 'U';
-    nv_operator(cap);
+    rs_nv_operator(cap);
     return;
   }
 
@@ -7275,7 +7275,7 @@ static void nv_operator_impl(cmdarg_T *cap)
   }
 
   if (op_type == cap->oap->op_type) {       // double operator works on lines
-    nv_lineop(cap);
+    rs_nv_lineop(cap);
   } else if (!checkclearop(cap->oap)) {
     cap->oap->start = curwin->w_cursor;
     cap->oap->op_type = op_type;
@@ -7429,7 +7429,7 @@ static void nv_select_impl(cmdarg_T *cap)
   } else if (VIsual_reselect) {
     cap->nchar = 'v';               // fake "gv" command
     cap->arg = true;
-    nv_g_cmd(cap);
+    rs_nv_g_cmd(cap);
   }
 }
 
@@ -7597,7 +7597,7 @@ static void nv_record(cmdarg_T *cap)
     // "gqq" is the same as "gqgq": format line
     cap->cmdchar = 'g';
     cap->nchar = 'q';
-    nv_operator(cap);
+    rs_nv_operator(cap);
     return;
   }
 
@@ -7663,7 +7663,7 @@ static void nv_join(cmdarg_T *cap)
 static void nv_join_impl(cmdarg_T *cap)
 {
   if (VIsual_active) {  // join the visual lines
-    nv_operator(cap);
+    rs_nv_operator(cap);
     return;
   }
 
@@ -7777,7 +7777,7 @@ static void nv_put_opt(cmdarg_T *cap, bool fix_indent)
       cap->nchar = NUL;
       cap->oap->regname = keep_registers ? '_' : NUL;
       msg_silent++;
-      nv_operator(cap);
+      rs_nv_operator(cap);
       do_pending_operator(cap, 0, false);
       empty = (curbuf->b_ml.ml_flags & ML_EMPTY);
       msg_silent--;

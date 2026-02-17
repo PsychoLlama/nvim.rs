@@ -177,6 +177,7 @@ extern int rs_get_fpos_of_mouse(pos_T *mpos);
 extern int rs_do_popup(int which_button, int m_pos_flag, pos_T m_pos);
 extern void rs_do_mousescroll(cmdarg_T *cap);
 extern void rs_nv_mousescroll(cmdarg_T *cap);
+extern void rs_nv_scroll_line(cmdarg_T *cap);
 extern void rs_ins_mouse(int c);
 extern void rs_ins_mousescroll(int dir);
 extern int rs_jump_to_mouse(int flags, bool *inclusive, int which_button);
@@ -1075,7 +1076,7 @@ void nvim_do_mousescroll_impl(cmdarg_T *cap)
       }
       if (cap->count1 > 0) {
         cap->count0 = cap->count1;
-        nv_scroll_line(cap);
+        rs_nv_scroll_line(cap);
       }
     }
   } else {
