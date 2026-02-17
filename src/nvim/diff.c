@@ -70,134 +70,12 @@
 #include "nvim/window.h"
 #include "xdiff/xdiff.h"
 
-// Rust implementations
-extern int rs_diffopt_horizontal(void);
-extern int rs_diffopt_hiddenoff(void);
-extern int rs_diffopt_closeoff(void);
-extern int rs_diffopt_filler(void);
-extern int rs_diff_internal(void);
-extern int rs_diffopt_vertical(void);
-extern int rs_diffopt_icase(void);
-extern int rs_diffopt_iwhite(void);
-extern int rs_diffopt_iwhiteall(void);
-extern int rs_diffopt_iwhiteeol(void);
-extern int rs_diffopt_iblank(void);
-extern int rs_diffopt_followwrap(void);
-extern int rs_diffopt_linematch(void);
-
-/// Result of parsing diffopt string from Rust.
-typedef struct {
-  int diff_flags;
-  int diff_algorithm;
-  int diff_context;
-  int diff_foldcolumn;
-  int linematch_lines;
-  int result;
-} DiffoptResult;
-
-extern DiffoptResult rs_diffopt_parse(const char *p_dip);
-
-// Phase 136: Diff helper functions
-extern int rs_diff_has_filler(int flags);
-extern int rs_diff_has_iblank(int flags);
-extern int rs_diff_has_icase(int flags);
-extern int rs_diff_has_iwhite(int flags);
-extern int rs_diff_has_iwhiteall(int flags);
-extern int rs_diff_has_iwhiteeol(int flags);
-extern int rs_diff_has_any_white(int flags);
-extern int rs_diff_has_horizontal(int flags);
-extern int rs_diff_has_vertical(int flags);
-extern int rs_diff_has_hiddenoff(int flags);
-extern int rs_diff_has_internal(int flags);
-extern int rs_diff_has_closeoff(int flags);
-extern int rs_diff_has_followwrap(int flags);
-extern int rs_diff_has_linematch(int flags);
-extern int rs_diff_has_anchor(int flags);
-extern int rs_diff_has_any_inline(int flags);
-extern int rs_diff_has_inline_none(int flags);
-extern int rs_diff_has_inline_simple(int flags);
-extern int rs_diff_has_inline_char(int flags);
-extern int rs_diff_has_inline_word(int flags);
-extern int rs_diff_flag_filler(void);
-extern int rs_diff_flag_iblank(void);
-extern int rs_diff_flag_icase(void);
-extern int rs_diff_flag_iwhite(void);
-extern int rs_diff_flag_iwhiteall(void);
-extern int rs_diff_flag_iwhiteeol(void);
-extern int rs_diff_flag_horizontal(void);
-extern int rs_diff_flag_vertical(void);
-extern int rs_diff_flag_hiddenoff(void);
-extern int rs_diff_flag_internal(void);
-extern int rs_diff_flag_closeoff(void);
-extern int rs_diff_flag_followwrap(void);
-extern int rs_diff_flag_linematch(void);
-extern int rs_diff_flag_anchor(void);
-extern int rs_diff_mask_all_white(void);
-extern int rs_diff_mask_all_inline(void);
-extern int rs_diff_db_count(void);
-extern int rs_diff_idx_valid(int idx);
-extern int rs_diff_idx_next(int idx);
-extern int rs_diff_idx_prev(int idx);
-extern int rs_diff_lnum_valid(int lnum);
-extern int rs_diff_count_valid(int count);
-extern int rs_diff_block_end(int lnum, int count);
-extern int rs_diff_lnum_in_block(int lnum, int block_lnum, int count);
-extern int rs_diff_block_offset(int lnum1, int count1, int lnum2, int count2);
-extern int rs_diff_block_is_empty(int count);
-extern int rs_diff_block_is_insert(int count);
-extern int rs_diff_block_is_delete(int count, int target_count);
-extern int rs_diff_block_is_change(int count1, int count2);
-extern int rs_diff_filler_count(int this_count, int max_other_count);
-extern int rs_diff_ok(void);
-extern int rs_diff_fail(void);
-extern int rs_diff_is_ok(int result);
-extern int rs_diff_is_fail(int result);
-extern int rs_diff_default_context(void);
-extern int rs_diff_context_min1(int context);
-extern int rs_diff_lnum_in_context(int lnum, int block_lnum, int count, int context);
-extern int rs_diff_default_foldcolumn(void);
-extern int rs_diff_foldcolumn_clamp(int foldcol);
-extern int rs_diff_default_linematch(void);
-extern int rs_diff_linematch_enabled(int lines);
-
-// Phase 558: Additional diff functions from Rust
-extern int rs_diffopt_inline_none(void);
-extern int rs_diffopt_inline_simple(void);
-extern int rs_diffopt_inline_char(void);
-extern int rs_diffopt_inline_word(void);
-extern int rs_diffopt_anchor(void);
-extern int rs_diffopt_inline_any(void);
-extern int rs_diffopt_inline_diff(void);
-extern int rs_diff_buf_idx(const void *buf);
-extern int rs_diff_buf_idx_tp(buf_T *buf, tabpage_T *tp);
-extern int rs_diff_check_invalid(void);
-extern int rs_diff_count_buffers(void);
-extern int rs_diff_buf_is_diffed(const void *buf);
-extern void *rs_diff_find_block_for_line(int buf_idx, linenr_T lnum);
-extern int rs_diff_get_filler_lines(int buf_idx, linenr_T lnum);
-extern linenr_T rs_diff_find_next_hunk(int buf_idx, linenr_T lnum);
-extern linenr_T rs_diff_find_prev_hunk(int buf_idx, linenr_T lnum);
-extern int rs_diff_lnum_in_hunk(int buf_idx, linenr_T lnum);
-extern int rs_diff_should_use_internal(void);
-extern linenr_T rs_diff_total_count_for_buf(int buf_idx);
-
-// Phase 558: Diff hunk bounds struct from Rust
-typedef struct {
-  linenr_T start;
-  linenr_T end;
-  int count;
-  bool valid;
-} DiffHunkBounds;
-extern DiffHunkBounds rs_diff_hunk_start_end(int buf_idx, linenr_T lnum);
-
-// Phase 1: Utility function migrations
+// Rust implementations (only declarations still referenced by remaining C code)
 extern void rs_clear_diffblock(diff_T *dp);
 extern diff_T *rs_diff_alloc_new(tabpage_T *tp, diff_T *dprev, diff_T *dp);
 extern diff_T *rs_diff_free(tabpage_T *tp, diff_T *dprev, diff_T *dp);
 extern void rs_diff_clear(tabpage_T *tp);
 extern void rs_diff_buf_clear(void);
-extern void rs_diff_invalidate(buf_T *buf);
-extern void rs_diff_buf_delete(buf_T *buf);
 extern void rs_diff_buf_add(buf_T *buf);
 extern void rs_diff_buf_adjust(win_T *win);
 extern bool rs_diff_equal_entry_full(diff_T *dp, int idx1, int idx2);
@@ -205,33 +83,15 @@ extern int rs_lnum_compare(const void *s1, const void *s2);
 extern bool rs_valid_diff(diff_T *diff);
 extern void rs_set_diff_option(win_T *wp, bool value);
 extern void rs_diff_fold_update(diff_T *dp, int skip_idx);
-extern bool rs_diff_mode_buf(buf_T *buf);
-
-// Phase 2: Diff block management migrations
-extern void rs_diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
-                                linenr_T amount, linenr_T amount_after);
-extern int rs_diffopt_changed(void);
-extern int rs_diffanchors_changed(bool buflocal);
-
-// Phase 3: Diff computation pipeline migrations
+extern int rs_diff_buf_idx_tp(buf_T *buf, tabpage_T *tp);
 extern void rs_diff_read(int idx_orig, int idx_new, void *dio);
-
-// Phase 4: Diff status checking & navigation migrations
 extern int rs_diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestatus);
 extern int rs_diff_check_fill(win_T *wp, linenr_T lnum);
 extern void rs_diff_set_topline(win_T *fromwin, win_T *towin);
-extern bool rs_diff_infold(win_T *wp, linenr_T lnum);
-extern int rs_diff_move_to(int dir, int count);
 extern linenr_T rs_diff_get_corresponding_line(buf_T *buf1, linenr_T lnum1);
-extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
-
-// Phase 5: Inline change detection migrations
-extern void rs_diff_update_line(linenr_T lnum);
 extern bool rs_diff_change_parse(diffline_T *diffline, diffline_change_T *change,
                                  int *change_start, int *change_end);
 extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
-
-// Phase 6: Ex command migrations
 extern void rs_diff_ex_diffupdate(exarg_T *eap);
 
 static bool diff_busy = false;         // using diff structs, don't change them
@@ -292,6 +152,9 @@ typedef struct {
   linenr_T lnum_new;
   int count_new;
 } diffhunk_T;
+
+extern int rs_parse_diff_ed(const char *line, diffhunk_T *hunk);
+extern int rs_parse_diff_unified(const char *line, diffhunk_T *hunk);
 
 // two diff inputs and one result
 typedef struct {
@@ -1990,12 +1853,6 @@ static void diffgetput(const int addr_count, const int idx_cur, const int idx_fr
 /// Checks that the buffer is in diff-mode.
 
 
-
-// Rust implementation for ED style diff parsing
-extern int rs_parse_diff_ed(const char *line, diffhunk_T *hunk);
-
-// Rust implementation for unified diff parsing
-extern int rs_parse_diff_unified(const char *line, diffhunk_T *hunk);
 
 /// Callback function for the xdl_diff() function.
 /// Stores the diff output in a grow array.
