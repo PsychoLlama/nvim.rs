@@ -4330,6 +4330,128 @@ _Static_assert(QFLT_QUICKFIX == 0, "QFLT_QUICKFIX must be 0");
 _Static_assert(QFLT_LOCATION == 1, "QFLT_LOCATION must be 1");
 _Static_assert(QF_ABORT == 6, "QF_ABORT must be 6");
 
+// =============================================================================
+// Phase 3 (jump machinery): Window-finding C wrappers for Rust
+// =============================================================================
+
+/// Find a help window in the current tab. Returns win handle or NULL.
+void *nvim_qf_find_help_win(void)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (bt_help(wp->w_buffer) && !wp->w_config.hide && wp->w_config.focusable) {
+      return wp;
+    }
+  }
+  return NULL;
+}
+
+/// Find a non-quickfix window using the given location list. Returns win handle or NULL.
+void *nvim_qf_find_win_with_loclist(const void *ll)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp->w_llist == (qf_info_T *)ll && !bt_quickfix(wp->w_buffer)) {
+      return wp;
+    }
+  }
+  return NULL;
+}
+
+/// Find a window containing a normal buffer in the current tab. Returns win handle or NULL.
+void *nvim_qf_find_win_with_normal_buf(void)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (bt_normal(wp->w_buffer)) {
+      return wp;
+    }
+  }
+  return NULL;
+}
+
+/// Go to a tab/window containing the specified file number.
+/// Returns true if successfully jumped.
+bool nvim_qf_goto_tabwin_with_file(int fnum)
+{
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    if (wp->w_buffer->b_fnum == fnum) {
+      goto_tabpage_win(tp, wp);
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Open a new window above the quickfix window for displaying a file.
+/// ll_ref may be NULL. Returns OK or FAIL.
+int nvim_qf_open_new_file_win(void *ll_ref)
+{
+  int flags = WSP_ABOVE;
+  if (ll_ref != NULL) {
+    flags |= WSP_NEWLOC;
+  }
+  if (win_split(0, flags) == FAIL) {
+    return FAIL;
+  }
+  p_swb = empty_string_option;
+  swb_flags = 0;
+  RESET_BINDING(curwin);
+  if (ll_ref != NULL) {
+    win_set_loclist(curwin, (qf_info_T *)ll_ref);
+  }
+  return OK;
+}
+
+// =============================================================================
+// Phase 3 (jump machinery): Window/buffer state accessors for Rust
+// =============================================================================
+
+/// Get curwin->w_llist_ref (location list reference)
+void *nvim_qf_curwin_get_llist_ref(void)
+{
+  return curwin->w_llist_ref;
+}
+
+/// Check if curbuf is quickfix buffer type
+bool nvim_qf_curbuf_is_quickfix(void)
+{
+  return bt_quickfix(curbuf);
+}
+
+/// Check if curwin buffer is help buffer type
+bool nvim_qf_curwin_buf_is_help(void)
+{
+  return bt_help(curwin->w_buffer);
+}
+
+/// Get cmdmod.cmod_tab value
+int nvim_qf_get_cmdmod_tab(void)
+{
+  return cmdmod.cmod_tab;
+}
+
+/// Check if ONE_WINDOW (only one window) condition is true
+bool nvim_qf_is_one_window(void)
+{
+  return ONE_WINDOW;
+}
+
+/// Check swb_flags for usetab
+bool nvim_qf_swb_has_usetab(void)
+{
+  return (swb_flags & kOptSwbFlagUsetab) != 0;
+}
+
+/// Get curwin->handle (window ID)
+int nvim_qf_curwin_handle(void)
+{
+  return curwin->handle;
+}
+
+/// Close current window (for error recovery in qf_jump_newwin)
+void nvim_qf_win_close_curwin(void)
+{
+  win_close(curwin, true, false);
+}
+
 /// Go to the error line in the current file using either line/column number or
 /// a search pattern.
 static void qf_jump_goto_line(linenr_T qf_lnum, int qf_col, char qf_viscol, char *qf_pattern)
