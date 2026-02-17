@@ -98,6 +98,17 @@ extern bool rs_marktree_itr_node_done(MarkTreeIter *itr);
 extern bool rs_marktree_itr_next(MarkTree *b, MarkTreeIter *itr);
 extern bool rs_marktree_itr_prev(MarkTree *b, MarkTreeIter *itr);
 extern bool rs_marktree_itr_first(MarkTree *b, MarkTreeIter *itr);
+extern bool rs_marktree_itr_last(MarkTree *b, MarkTreeIter *itr);
+extern bool rs_marktree_itr_get(MarkTree *b, int32_t row, int col, MarkTreeIter *itr);
+
+// Lookup and pair functions
+extern MTKey rs_marktree_lookup(MarkTree *b, uint64_t id, MarkTreeIter *itr);
+extern MTKey rs_marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool end,
+                                   MarkTreeIter *itr);
+extern MTKey rs_marktree_get_alt(MarkTree *b, MTKey mark, MarkTreeIter *itr);
+extern MTPos rs_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr);
+extern MTKey rs_marktree_itr_set_node(MarkTree *b, MarkTreeIter *itr, MTNode *n, int i);
+extern void rs_marktree_itr_fix_pos(MarkTree *b, MarkTreeIter *itr);
 
 // Tree operations
 extern void rs_marktree_put_key(MarkTree *b, MTKey k);
@@ -1440,7 +1451,7 @@ void marktree_restore_pair(MarkTree *b, MTKey key)
 
 bool marktree_itr_get(MarkTree *b, int32_t row, int col, MarkTreeIter *itr)
 {
-  return marktree_itr_get_ext(b, MTPos(row, col), itr, false, false, NULL, NULL);
+  return rs_marktree_itr_get(b, row, col, itr);
 }
 
 bool marktree_itr_get_ext(MarkTree *b, MTPos p, MarkTreeIter *itr, bool last, bool gravity,
@@ -1499,57 +1510,17 @@ bool marktree_itr_get_ext(MarkTree *b, MTPos p, MarkTreeIter *itr, bool last, bo
 
 bool marktree_itr_first(MarkTree *b, MarkTreeIter *itr)
 {
-  if (b->n_keys == 0) {
-    itr->x = NULL;
-    return false;
-  }
-
-  itr->x = b->root;
-  itr->i = 0;
-  itr->lvl = 0;
-  itr->pos = MTPos(0, 0);
-  while (itr->x->level > 0) {
-    itr->s[itr->lvl].i = 0;
-    itr->s[itr->lvl].oldcol = 0;
-    itr->lvl++;
-    itr->x = itr->x->ptr[0];
-  }
-  return true;
+  return rs_marktree_itr_first(b, itr);
 }
 
-// gives the first key that is greater or equal to p
 int marktree_itr_last(MarkTree *b, MarkTreeIter *itr)
 {
-  if (b->n_keys == 0) {
-    itr->x = NULL;
-    return false;
-  }
-  itr->pos = MTPos(0, 0);
-  itr->x = b->root;
-  itr->lvl = 0;
-  while (true) {
-    itr->i = itr->x->n;
-
-    if (itr->x->level == 0) {
-      break;
-    }
-
-    itr->s[itr->lvl].i = itr->i;
-    itr->s[itr->lvl].oldcol = itr->pos.col;
-
-    assert(itr->i > 0);
-    compose(&itr->pos, itr->x->key[itr->i - 1].pos);
-
-    itr->x = itr->x->ptr[itr->i];
-    itr->lvl++;
-  }
-  itr->i--;
-  return true;
+  return rs_marktree_itr_last(b, itr);
 }
 
 bool marktree_itr_next(MarkTree *b, MarkTreeIter *itr)
 {
-  return marktree_itr_next_skip(b, itr, false, false, NULL, NULL);
+  return rs_marktree_itr_next(b, itr);
 }
 
 static bool marktree_itr_next_skip(MarkTree *b, MarkTreeIter *itr, bool skip, bool preload,
@@ -1704,69 +1675,22 @@ static bool marktree_itr_check_filter(MarkTree *b, MarkTreeIter *itr, int stop_r
 
 bool marktree_itr_prev(MarkTree *b, MarkTreeIter *itr)
 {
-  if (!itr->x) {
-    return false;
-  }
-  if (itr->x->level == 0) {
-    itr->i--;
-    if (itr->i >= 0) {
-      // TODO(bfredl): this is the common case,
-      // and could be handled by inline wrapper
-      return true;
-    }
-    // we ran out of non-internal keys. Go up until we find a non-internal key
-    while (itr->i < 0) {
-      itr->x = itr->x->parent;
-      if (itr->x == NULL) {
-        return false;
-      }
-      itr->lvl--;
-      itr->i = itr->s[itr->lvl].i - 1;
-      if (itr->i >= 0) {
-        itr->pos.row -= itr->x->key[itr->i].pos.row;
-        itr->pos.col = itr->s[itr->lvl].oldcol;
-      }
-    }
-  } else {
-    // we stood at an "internal" key. Go down to the last non-internal
-    // key before it.
-    while (itr->x->level > 0) {
-      // internal key, there is always a child before
-      if (itr->i > 0) {
-        itr->s[itr->lvl].oldcol = itr->pos.col;
-        compose(&itr->pos, itr->x->key[itr->i - 1].pos);
-      }
-      itr->s[itr->lvl].i = itr->i;
-      assert(itr->x->ptr[itr->i]->parent == itr->x);
-      itr->x = itr->x->ptr[itr->i];
-      itr->i = itr->x->n;
-      itr->lvl++;
-    }
-    itr->i--;
-  }
-  return true;
+  return rs_marktree_itr_prev(b, itr);
 }
 
 bool marktree_itr_node_done(MarkTreeIter *itr)
 {
-  return !itr->x || itr->i == itr->x->n - 1;
+  return rs_marktree_itr_node_done(itr);
 }
 
 MTPos marktree_itr_pos(MarkTreeIter *itr)
 {
-  MTPos pos = rawkey(itr).pos;
-  unrelative(itr->pos, &pos);
-  return pos;
+  return rs_marktree_itr_pos(itr);
 }
 
 MTKey marktree_itr_current(MarkTreeIter *itr)
 {
-  if (itr->x) {
-    MTKey key = rawkey(itr);
-    key.pos = marktree_itr_pos(itr);
-    return key;
-  }
-  return MT_INVALID_KEY;
+  return rs_marktree_itr_current(itr);
 }
 
 static bool itr_eq(MarkTreeIter *itr1, MarkTreeIter *itr2)
@@ -2214,7 +2138,7 @@ void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int ext
 /// @param itr OPTIONAL. set itr to pos.
 MTKey marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool end, MarkTreeIter *itr)
 {
-  return marktree_lookup(b, mt_lookup_id(ns, id, end), itr);
+  return rs_marktree_lookup_ns(b, ns, id, end, itr);
 }
 
 static uint64_t pseudo_index(MTNode *x, int i)
@@ -2260,75 +2184,28 @@ static uint64_t pseudo_index_for_id(MarkTree *b, uint64_t id, bool sloppy)
 /// @param itr OPTIONAL. set itr to pos.
 MTKey marktree_lookup(MarkTree *b, uint64_t id, MarkTreeIter *itr)
 {
-  MTNode *n = id2node(b, id);
-  if (n == NULL) {
-    if (itr) {
-      itr->x = NULL;
-    }
-    return MT_INVALID_KEY;
-  }
-  int i = 0;
-  for (i = 0; i < n->n; i++) {
-    if (mt_lookup_key(n->key[i]) == id) {
-      return marktree_itr_set_node(b, itr, n, i);
-    }
-  }
-
-  abort();
+  return rs_marktree_lookup(b, id, itr);
 }
 
 MTKey marktree_itr_set_node(MarkTree *b, MarkTreeIter *itr, MTNode *n, int i)
 {
-  MTKey key = n->key[i];
-  if (itr) {
-    itr->i = i;
-    itr->x = n;
-    itr->lvl = b->root->level - n->level;
-  }
-  while (n->parent != NULL) {
-    MTNode *p = n->parent;
-    i = n->p_idx;
-    assert(p->ptr[i] == n);
-
-    if (itr) {
-      itr->s[b->root->level - p->level].i = i;
-    }
-    if (i > 0) {
-      unrelative(p->key[i - 1].pos, &key.pos);
-    }
-    n = p;
-  }
-  if (itr) {
-    marktree_itr_fix_pos(b, itr);
-  }
-  return key;
+  return rs_marktree_itr_set_node(b, itr, n, i);
 }
 
 MTPos marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr)
 {
-  return marktree_get_alt(b, mark, itr).pos;
+  return rs_marktree_get_altpos(b, mark, itr);
 }
 
 /// @return alt mark for a paired mark or mark itself for unpaired mark
 MTKey marktree_get_alt(MarkTree *b, MTKey mark, MarkTreeIter *itr)
 {
-  return mt_paired(mark) ? marktree_lookup_ns(b, mark.ns, mark.id, !mt_end(mark), itr) : mark;
+  return rs_marktree_get_alt(b, mark, itr);
 }
 
 static void marktree_itr_fix_pos(MarkTree *b, MarkTreeIter *itr)
 {
-  itr->pos = (MTPos){ 0, 0 };
-  MTNode *x = b->root;
-  for (int lvl = 0; lvl < itr->lvl; lvl++) {
-    itr->s[lvl].oldcol = itr->pos.col;
-    int i = itr->s[lvl].i;
-    if (i > 0) {
-      compose(&itr->pos, x->key[i - 1].pos);
-    }
-    assert(x->level);
-    x = x->ptr[i];
-  }
-  assert(x == itr->x);
+  rs_marktree_itr_fix_pos(b, itr);
 }
 
 // for unit test

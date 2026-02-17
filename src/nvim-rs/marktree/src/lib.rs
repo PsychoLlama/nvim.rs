@@ -370,9 +370,11 @@ extern "C" {
     // ========================================================================
 
     /// Lookup a mark by its ID and optionally set iterator.
+    #[allow(dead_code)]
     fn nvim_marktree_lookup(b: MarkTreeHandle, id: u64, itr: MarkTreeIterHandle) -> MTKey;
 
     /// Lookup a mark by namespace and ID.
+    #[allow(dead_code)]
     fn nvim_marktree_lookup_ns(
         b: MarkTreeHandle,
         ns: u32,
@@ -382,9 +384,11 @@ extern "C" {
     ) -> MTKey;
 
     /// Get the alternate end of a paired mark.
+    #[allow(dead_code)]
     fn nvim_marktree_get_alt(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTKey;
 
     /// Get the position of the alternate end of a paired mark.
+    #[allow(dead_code)]
     fn nvim_marktree_get_altpos(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTPos;
 
     // ========================================================================
@@ -446,6 +450,7 @@ extern "C" {
     fn nvim_pseudo_index_for_id(b: MarkTreeHandle, id: u64, sloppy: bool) -> u64;
 
     /// Set iterator to point at node n, index i.
+    #[allow(dead_code)]
     fn nvim_marktree_itr_set_node(
         b: MarkTreeHandle,
         itr: MarkTreeIterHandle,
@@ -454,6 +459,7 @@ extern "C" {
     ) -> MTKey;
 
     /// Fix iterator position after setting node directly.
+    #[allow(dead_code)]
     fn nvim_marktree_itr_fix_pos(b: MarkTreeHandle, itr: MarkTreeIterHandle);
 
     /// Describe meta counts for a key incrementally.
@@ -1586,7 +1592,23 @@ pub extern "C" fn rs_marktree_itr_get_ext(
 /// If `itr` is not null, positions the iterator at the found mark.
 #[must_use]
 pub fn marktree_lookup(b: MarkTreeHandle, id: u64, itr: MarkTreeIterHandle) -> MTKey {
-    unsafe { nvim_marktree_lookup(b, id, itr) }
+    let n = marktree_id2node(b, id);
+    if n.is_null() {
+        if !itr.is_null() {
+            unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+        }
+        return MTKey::invalid();
+    }
+    let n_keys = mtnode_n(n);
+    for i in 0..n_keys {
+        let key = mtnode_key(n, i);
+        if mt_lookup_key(&key) == id {
+            return marktree_itr_set_node(b, itr, n, i);
+        }
+    }
+    // Should not reach here if id2node returned a valid node
+    // In C this calls abort(), but we use the same pattern
+    unreachable!("marktree_lookup: id found in id2node but not in node keys");
 }
 
 /// Exported FFI version of `marktree_lookup`.
@@ -1606,7 +1628,7 @@ pub fn marktree_lookup_ns(
     end: bool,
     itr: MarkTreeIterHandle,
 ) -> MTKey {
-    unsafe { nvim_marktree_lookup_ns(b, ns, id, end, itr) }
+    marktree_lookup(b, mt_lookup_id(ns, id, end), itr)
 }
 
 /// Exported FFI version of `marktree_lookup_ns`.
@@ -1627,7 +1649,11 @@ pub extern "C" fn rs_marktree_lookup_ns(
 /// For an unpaired mark, returns the mark itself.
 #[must_use]
 pub fn marktree_get_alt(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTKey {
-    unsafe { nvim_marktree_get_alt(b, mark, itr) }
+    if mt_paired(&mark) {
+        marktree_lookup_ns(b, mark.ns, mark.id, !mt_end(&mark), itr)
+    } else {
+        mark
+    }
 }
 
 /// Exported FFI version of `marktree_get_alt`.
@@ -1645,7 +1671,7 @@ pub extern "C" fn rs_marktree_get_alt(
 /// Convenience function that just returns the position.
 #[must_use]
 pub fn marktree_get_altpos(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTPos {
-    unsafe { nvim_marktree_get_altpos(b, mark, itr) }
+    marktree_get_alt(b, mark, itr).pos
 }
 
 /// Exported FFI version of `marktree_get_altpos`.
@@ -1797,7 +1823,9 @@ pub extern "C" fn rs_pseudo_index_for_id(b: MarkTreeHandle, id: u64, sloppy: boo
 
 /// Set iterator to point at a specific node and index.
 ///
-/// Returns the key with absolute position.
+/// Walks up from node `n` to the root, unrelativizing the key position
+/// and recording the path in the iterator's stack. Returns the key with
+/// absolute position.
 #[must_use]
 pub fn marktree_itr_set_node(
     b: MarkTreeHandle,
@@ -1805,7 +1833,42 @@ pub fn marktree_itr_set_node(
     n: MTNodeHandle,
     i: i32,
 ) -> MTKey {
-    unsafe { nvim_marktree_itr_set_node(b, itr, n, i) }
+    let mut key = mtnode_key(n, i);
+    let root_level = mtnode_level(marktree_root(b));
+
+    if !itr.is_null() {
+        unsafe {
+            nvim_mtitr_set_i(itr, i);
+            nvim_mtitr_set_x(itr, n);
+            nvim_mtitr_set_lvl(itr, root_level - mtnode_level(n));
+        }
+    }
+
+    // Walk up from n to root, unrelativizing position
+    let mut current = n;
+    loop {
+        let parent = unsafe { nvim_mtnode_get_parent(current) };
+        if parent.is_null() {
+            break;
+        }
+        let current_i = unsafe { nvim_mtnode_get_p_idx(current) };
+
+        if !itr.is_null() {
+            let s_lvl = root_level - mtnode_level(parent);
+            unsafe { nvim_mtitr_set_s_i(itr, s_lvl, current_i) };
+        }
+
+        if current_i > 0 {
+            let parent_key_pos = mtnode_key(parent, current_i - 1).pos;
+            unrelative(parent_key_pos, &mut key.pos);
+        }
+        current = parent;
+    }
+
+    if !itr.is_null() {
+        marktree_itr_fix_pos(b, itr);
+    }
+    key
 }
 
 /// Exported FFI version of `marktree_itr_set_node`.
@@ -1820,8 +1883,27 @@ pub extern "C" fn rs_marktree_itr_set_node(
 }
 
 /// Fix iterator position after setting node directly.
+///
+/// Walks from root down to the iterator's current level, computing the
+/// absolute position by composing key positions along the path.
 pub fn marktree_itr_fix_pos(b: MarkTreeHandle, itr: MarkTreeIterHandle) {
-    unsafe { nvim_marktree_itr_fix_pos(b, itr) }
+    let mut pos = MTPos::new(0, 0);
+    let mut x = marktree_root(b);
+    let lvl = unsafe { nvim_mtitr_get_lvl(itr) };
+
+    for l in 0..lvl {
+        let oldcol = pos.col;
+        unsafe { nvim_mtitr_set_s_oldcol(itr, l, oldcol) };
+        let i = unsafe { nvim_mtitr_get_s_i(itr, l) };
+        if i > 0 {
+            let key_pos = mtnode_key(x, i - 1).pos;
+            compose(&mut pos, key_pos);
+        }
+        debug_assert!(mtnode_level(x) > 0);
+        x = mtnode_ptr(x, i);
+    }
+    // x should now be itr->x
+    unsafe { nvim_mtitr_set_pos(itr, pos) };
 }
 
 /// Exported FFI version of `marktree_itr_fix_pos`.
