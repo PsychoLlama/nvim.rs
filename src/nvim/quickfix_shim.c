@@ -4906,6 +4906,8 @@ extern void rs_qf_age(void *eap);
 extern void rs_qf_history(void *eap);
 extern void rs_qf_view_result(bool split);
 extern void rs_ex_cbelow(void *eap);
+extern void rs_ex_cclose(void *eap);
+extern void rs_ex_cbottom(void *eap);
 
 /// ":colder [count]": Up in the quickfix stack.
 /// ":cnewer [count]": Down in the quickfix stack.
@@ -5059,17 +5061,7 @@ void ex_cwindow(exarg_T *eap)
 // ":lclose": close the window showing the location list
 void ex_cclose(exarg_T *eap)
 {
-  qf_info_T *qi;
-
-  if ((qi = qf_cmd_get_stack(eap, false)) == NULL) {
-    return;
-  }
-
-  // Find existing quickfix window and close it.
-  win_T *win = qf_find_win(qi);
-  if (win != NULL) {
-    win_close(win, false, false);
-  }
+  rs_ex_cclose(eap);
 }
 
 // Goto a quickfix or location list window (if present).
@@ -5263,17 +5255,7 @@ static void qf_win_goto(win_T *win, linenr_T lnum)
 /// :cbottom/:lbottom command.
 void ex_cbottom(exarg_T *eap)
 {
-  qf_info_T *qi;
-
-  if ((qi = qf_cmd_get_stack(eap, true)) == NULL) {
-    return;
-  }
-
-  win_T *win = qf_find_win(qi);
-
-  if (win != NULL && win->w_cursor.lnum != win->w_buffer->b_ml.ml_line_count) {
-    qf_win_goto(win, win->w_buffer->b_ml.ml_line_count);
-  }
+  rs_ex_cbottom(eap);
 }
 
 // Return the number of the current entry (line number in the quickfix

@@ -1471,3 +1471,62 @@ pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
         nvim_emsg_e_no_more_items();
     }
 }
+
+// =============================================================================
+// Phase W2: Window Ex command implementations
+// =============================================================================
+
+extern "C" {
+    fn nvim_qf_win_close(win: *mut c_void);
+    fn nvim_qf_win_get_cursor_lnum(win: *const c_void) -> LinenrT;
+    fn nvim_qf_win_get_buf_line_count(win: *const c_void) -> LinenrT;
+    fn nvim_qf_win_goto_lnum(win: *mut c_void, lnum: LinenrT);
+}
+
+/// Find the quickfix window for a given stack.
+/// Returns a mutable pointer to the window, or null.
+unsafe fn find_win_for_stack(qi: QfInfoHandleMut) -> *mut c_void {
+    // The C function takes const void* and returns void*.
+    // lib.rs declares it as returning *const c_void, so we cast back.
+    crate::nvim_qf_find_win_for_stack(qi.cast_const()).cast_mut()
+}
+
+/// `:cclose` / `:lclose` -- close the quickfix/location list window.
+///
+/// # Safety
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_cclose(eap: EapHandle) {
+    let qi = nvim_qf_cmd_get_stack(eap, false);
+    if qi.is_null() {
+        return;
+    }
+
+    let win = find_win_for_stack(qi);
+    if !win.is_null() {
+        nvim_qf_win_close(win);
+    }
+}
+
+/// `:cbottom` / `:lbottom` -- move cursor to last line in qf window.
+///
+/// # Safety
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_cbottom(eap: EapHandle) {
+    let qi = nvim_qf_cmd_get_stack(eap, true);
+    if qi.is_null() {
+        return;
+    }
+
+    let win = find_win_for_stack(qi);
+    if win.is_null() {
+        return;
+    }
+
+    let cursor_lnum = nvim_qf_win_get_cursor_lnum(win);
+    let line_count = nvim_qf_win_get_buf_line_count(win);
+    if cursor_lnum != line_count {
+        nvim_qf_win_goto_lnum(win, line_count);
+    }
+}
