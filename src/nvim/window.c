@@ -93,6 +93,7 @@ extern void rs_foldInitWin(win_T *wp);
 extern int rs_getDeepestNesting(win_T *wp);
 
 extern int rs_get_scrolloff_value(win_T *wp);
+extern int rs_global_winbar_height(void);
 extern int rs_win_locked(win_T *wp);
 extern int rs_win_valid(win_T *win);
 extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
@@ -1178,7 +1179,7 @@ OptInt nvim_get_p_stal(void)
 /// Get the global winbar height (wrapper for Rust FFI).
 int nvim_global_winbar_height(void)
 {
-  return global_winbar_height();
+  return rs_global_winbar_height();
 }
 
 /// Get the global statusline height (wrapper for Rust FFI).
@@ -2936,8 +2937,8 @@ void win_move_after(win_T *win1, win_T *win2)
 static int get_maximum_wincount(frame_T *fr, int height)
 {
   if (fr->fr_layout != FR_COL) {
-    return (height / ((int)p_wmh + STATUS_HEIGHT + frame2win(fr)->w_winbar_height));
-  } else if (global_winbar_height()) {
+    return (height / ((int)p_wmh + STATUS_HEIGHT + rs_frame2win(fr)->w_winbar_height));
+  } else if (rs_global_winbar_height()) {
     // If winbar is globally enabled, no need to check each window for it.
     return (height / ((int)p_wmh + STATUS_HEIGHT + 1));
   }
@@ -2947,7 +2948,7 @@ static int get_maximum_wincount(frame_T *fr, int height)
 
   // First, try to fit all child frames of "fr" into "height"
   FOR_ALL_FRAMES(frp, fr->fr_child) {
-    win_T *wp = frame2win(frp);
+    win_T *wp = rs_frame2win(frp);
 
     if (height < (p_wmh + STATUS_HEIGHT + wp->w_winbar_height)) {
       break;
@@ -3305,7 +3306,7 @@ int win_close(win_T *win, bool free_buf, bool force)
   if (win == curwin) {
     leaving_window(curwin);
 
-    wp = win->w_floating ? win_float_find_altwin(win, NULL) : frame2win(win_altframe(win, NULL));
+    wp = win->w_floating ? win_float_find_altwin(win, NULL) : rs_frame2win(win_altframe(win, NULL));
 
     if (wp->w_buffer != curbuf) {
       reset_VIsual_and_resel();
@@ -3617,7 +3618,7 @@ win_T *winframe_remove(win_T *win, int *dirp, tabpage_T *tp, frame_T **unflat_al
 
   // Save the position of the containing frame (which will also contain the
   // altframe) before we remove anything, to recompute window positions later.
-  const win_T *const topleft = frame2win(frp_close->fr_parent);
+  const win_T *const topleft = rs_frame2win(frp_close->fr_parent);
   int row = topleft->w_winrow;
   int col = topleft->w_wincol;
 
@@ -3682,7 +3683,7 @@ win_T *winframe_find_altwin(win_T *win, int *dirp, tabpage_T *tp, frame_T **altf
   frp2 = result.altfr;
   *dirp = result.dir;
 
-  win_T *wp = frame2win(frp2);
+  win_T *wp = rs_frame2win(frp2);
 
   assert(wp != win && frp2 != win->w_frame);
   if (altfr != NULL) {
@@ -3792,7 +3793,7 @@ void winframe_restore(win_T *wp, int dir, frame_T *unflat_altfr)
   // Recompute window positions within the parent frame to restore them.
   // Positions were unchanged if the altframe was adjacent and left/above.
   if (unflat_altfr != frp->fr_prev) {
-    const win_T *const topleft = frame2win(frp->fr_parent);
+    const win_T *const topleft = rs_frame2win(frp->fr_parent);
     int row = topleft->w_winrow;
     int col = topleft->w_wincol;
 
@@ -3843,13 +3844,6 @@ static tabpage_T *alt_tabpage(void)
   }
 
   return tp;
-}
-
-// Find the left-upper window in frame "frp".
-win_T *frame2win(frame_T *frp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_frame2win(frp);
 }
 
 /// Set a new height for a frame.  Recursively sets the height for contained
@@ -6176,15 +6170,8 @@ int tabline_height(void)
   return rs_tabline_height();
 }
 
-extern int rs_global_winbar_height(void);
 extern int rs_global_stl_height(void);
 extern int rs_last_stl_height(int morewin);
-
-/// Return the number of lines used by default by the window bar.
-int global_winbar_height(void)
-{
-  return rs_global_winbar_height();
-}
 
 /// Return the number of lines used by the global statusline
 int global_stl_height(void)

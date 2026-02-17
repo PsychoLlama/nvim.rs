@@ -66,6 +66,7 @@ extern "C" {
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 
     /// Get global_winbar_height.
+    #[link_name = "rs_global_winbar_height"]
     fn global_winbar_height() -> c_int;
 
     /// Get topframe.
