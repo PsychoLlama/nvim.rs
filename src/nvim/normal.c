@@ -158,235 +158,9 @@ typedef void (*nv_func_T)(cmdarg_T *cap);
 // line oriented motion.  Then, if an operator is in effect, the operation
 // becomes character or line oriented accordingly.
 
-/// This table contains one entry for every Normal or Visual mode command.
-/// The order doesn't matter, init_normal_cmds() will create a sorted index.
-/// It is faster when all keys from zero to '~' are present.
-static const struct nv_cmd {
-  int cmd_char;                 ///< (first) command character
-  nv_func_T cmd_func;           ///< function for this command
-  uint16_t cmd_flags;           ///< NV_ flags
-  int16_t cmd_arg;              ///< value for ca.arg
-} nv_cmds[] = {
-  { NUL,       nv_error,       0,                      0 },
-  { Ctrl_A,    nv_addsub,      0,                      0 },
-  { Ctrl_B,    nv_page,        NV_STS,                 BACKWARD },
-  { Ctrl_C,    nv_esc,         0,                      true },
-  { Ctrl_D,    nv_halfpage,    0,                      0 },
-  { Ctrl_E,    nv_scroll_line, 0,                      true },
-  { Ctrl_F,    nv_page,        NV_STS,                 FORWARD },
-  { Ctrl_G,    nv_ctrlg,       0,                      0 },
-  { Ctrl_H,    nv_ctrlh,       0,                      0 },
-  { Ctrl_I,    nv_pcmark,      0,                      0 },
-  { NL,        nv_down,        0,                      false },
-  { Ctrl_K,    nv_error,       0,                      0 },
-  { Ctrl_L,    nv_clear,       0,                      0 },
-  { CAR,       nv_down,        0,                      true },
-  { Ctrl_N,    nv_down,        NV_STS,                 false },
-  { Ctrl_O,    nv_ctrlo,       0,                      0 },
-  { Ctrl_P,    nv_up,          NV_STS,                 false },
-  { Ctrl_Q,    nv_visual,      0,                      false },
-  { Ctrl_R,    nv_redo_or_register, 0,                      0 },
-  { Ctrl_S,    nv_ignore,      0,                      0 },
-  { Ctrl_T,    nv_tagpop,      NV_NCW,                 0 },
-  { Ctrl_U,    nv_halfpage,    0,                      0 },
-  { Ctrl_V,    nv_visual,      0,                      false },
-  { 'V',       nv_visual,      0,                      false },
-  { 'v',       nv_visual,      0,                      false },
-  { Ctrl_W,    nv_window,      0,                      0 },
-  { Ctrl_X,    nv_addsub,      0,                      0 },
-  { Ctrl_Y,    nv_scroll_line, 0,                      false },
-  { Ctrl_Z,    nv_suspend,     0,                      0 },
-  { ESC,       nv_esc,         0,                      false },
-  { Ctrl_BSL,  nv_normal,      NV_NCH_ALW,             0 },
-  { Ctrl_RSB,  nv_ident,       NV_NCW,                 0 },
-  { Ctrl_HAT,  nv_hat,         NV_NCW,                 0 },
-  { Ctrl__,    nv_error,       0,                      0 },
-  { ' ',       nv_right,       0,                      0 },
-  { '!',       nv_operator,    0,                      0 },
-  { '"',       nv_regname,     NV_NCH_NOP|NV_KEEPREG,  0 },
-  { '#',       nv_ident,       0,                      0 },
-  { '$',       nv_dollar,      0,                      0 },
-  { '%',       nv_percent,     0,                      0 },
-  { '&',       nv_optrans,     0,                      0 },
-  { '\'',      nv_gomark,      NV_NCH_ALW,             true },
-  { '(',       nv_brace,       0,                      BACKWARD },
-  { ')',       nv_brace,       0,                      FORWARD },
-  { '*',       nv_ident,       0,                      0 },
-  { '+',       nv_down,        0,                      true },
-  { ',',       nv_csearch,     0,                      true },
-  { '-',       nv_up,          0,                      true },
-  { '.',       nv_dot,         NV_KEEPREG,             0 },
-  { '/',       nv_search,      0,                      false },
-  { '0',       nv_beginline,   0,                      0 },
-  { '1',       nv_ignore,      0,                      0 },
-  { '2',       nv_ignore,      0,                      0 },
-  { '3',       nv_ignore,      0,                      0 },
-  { '4',       nv_ignore,      0,                      0 },
-  { '5',       nv_ignore,      0,                      0 },
-  { '6',       nv_ignore,      0,                      0 },
-  { '7',       nv_ignore,      0,                      0 },
-  { '8',       nv_ignore,      0,                      0 },
-  { '9',       nv_ignore,      0,                      0 },
-  { ':',       nv_colon,       0,                      0 },
-  { ';',       nv_csearch,     0,                      false },
-  { '<',       nv_operator,    NV_RL,                  0 },
-  { '=',       nv_operator,    0,                      0 },
-  { '>',       nv_operator,    NV_RL,                  0 },
-  { '?',       nv_search,      0,                      false },
-  { '@',       nv_at,          NV_NCH_NOP,             false },
-  { 'A',       nv_edit,        0,                      0 },
-  { 'B',       nv_bck_word,    0,                      1 },
-  { 'C',       nv_abbrev,      NV_KEEPREG,             0 },
-  { 'D',       nv_abbrev,      NV_KEEPREG,             0 },
-  { 'E',       nv_wordcmd,     0,                      true },
-  { 'F',       nv_csearch,     NV_NCH_ALW|NV_LANG,     BACKWARD },
-  { 'G',       nv_goto,        0,                      true },
-  { 'H',       nv_scroll,      0,                      0 },
-  { 'I',       nv_edit,        0,                      0 },
-  { 'J',       nv_join,        0,                      0 },
-  { 'K',       nv_ident,       0,                      0 },
-  { 'L',       nv_scroll,      0,                      0 },
-  { 'M',       nv_scroll,      0,                      0 },
-  { 'N',       nv_next,        0,                      SEARCH_REV },
-  { 'O',       nv_open,        0,                      0 },
-  { 'P',       nv_put,         0,                      0 },
-  { 'Q',       nv_regreplay, 0,                      0 },
-  { 'R',       nv_Replace,     0,                      false },
-  { 'S',       nv_subst,       NV_KEEPREG,             0 },
-  { 'T',       nv_csearch,     NV_NCH_ALW|NV_LANG,     BACKWARD },
-  { 'U',       nv_Undo,        0,                      0 },
-  { 'W',       nv_wordcmd,     0,                      true },
-  { 'X',       nv_abbrev,      NV_KEEPREG,             0 },
-  { 'Y',       nv_abbrev,      NV_KEEPREG,             0 },
-  { 'Z',       nv_Zet,         NV_NCH_NOP|NV_NCW,      0 },
-  { '[',       nv_brackets,    NV_NCH_ALW,             BACKWARD },
-  { '\\',      nv_error,       0,                      0 },
-  { ']',       nv_brackets,    NV_NCH_ALW,             FORWARD },
-  { '^',       nv_beginline,   0,                      BL_WHITE | BL_FIX },
-  { '_',       nv_lineop,      0,                      0 },
-  { '`',       nv_gomark,      NV_NCH_ALW,             false },
-  { 'a',       nv_edit,        NV_NCH,                 0 },
-  { 'b',       nv_bck_word,    0,                      0 },
-  { 'c',       nv_operator,    0,                      0 },
-  { 'd',       nv_operator,    0,                      0 },
-  { 'e',       nv_wordcmd,     0,                      false },
-  { 'f',       nv_csearch,     NV_NCH_ALW|NV_LANG,     FORWARD },
-  { 'g',       nv_g_cmd,       NV_NCH_ALW,             false },
-  { 'h',       nv_left,        NV_RL,                  0 },
-  { 'i',       nv_edit,        NV_NCH,                 0 },
-  { 'j',       nv_down,        0,                      false },
-  { 'k',       nv_up,          0,                      false },
-  { 'l',       nv_right,       NV_RL,                  0 },
-  { 'm',       nv_mark,        NV_NCH_NOP,             0 },
-  { 'n',       nv_next,        0,                      0 },
-  { 'o',       nv_open,        0,                      0 },
-  { 'p',       nv_put,         0,                      0 },
-  { 'q',       nv_record,      NV_NCH,                 0 },
-  { 'r',       nv_replace,     NV_NCH_NOP|NV_LANG,     0 },
-  { 's',       nv_subst,       NV_KEEPREG,             0 },
-  { 't',       nv_csearch,     NV_NCH_ALW|NV_LANG,     FORWARD },
-  { 'u',       nv_undo,        0,                      0 },
-  { 'w',       nv_wordcmd,     0,                      false },
-  { 'x',       nv_abbrev,      NV_KEEPREG,             0 },
-  { 'y',       nv_operator,    0,                      0 },
-  { 'z',       nv_zet,         NV_NCH_ALW,             0 },
-  { '{',       nv_findpar,     0,                      BACKWARD },
-  { '|',       nv_pipe,        0,                      0 },
-  { '}',       nv_findpar,     0,                      FORWARD },
-  { '~',       nv_tilde,       0,                      0 },
-
-  // pound sign
-  { POUND,     nv_ident,       0,                      0 },
-  { K_MOUSEUP, nv_mousescroll, 0,                      MSCR_UP },
-  { K_MOUSEDOWN, nv_mousescroll, 0,                    MSCR_DOWN },
-  { K_MOUSELEFT, nv_mousescroll, 0,                    MSCR_LEFT },
-  { K_MOUSERIGHT, nv_mousescroll, 0,                   MSCR_RIGHT },
-  { K_LEFTMOUSE, nv_mouse,     0,                      0 },
-  { K_LEFTMOUSE_NM, nv_mouse,  0,                      0 },
-  { K_LEFTDRAG, nv_mouse,      0,                      0 },
-  { K_LEFTRELEASE, nv_mouse,   0,                      0 },
-  { K_LEFTRELEASE_NM, nv_mouse, 0,                     0 },
-  { K_MOUSEMOVE, nv_mouse,     0,                      0 },
-  { K_MIDDLEMOUSE, nv_mouse,   0,                      0 },
-  { K_MIDDLEDRAG, nv_mouse,    0,                      0 },
-  { K_MIDDLERELEASE, nv_mouse, 0,                      0 },
-  { K_RIGHTMOUSE, nv_mouse,    0,                      0 },
-  { K_RIGHTDRAG, nv_mouse,     0,                      0 },
-  { K_RIGHTRELEASE, nv_mouse,  0,                      0 },
-  { K_X1MOUSE, nv_mouse,       0,                      0 },
-  { K_X1DRAG, nv_mouse,        0,                      0 },
-  { K_X1RELEASE, nv_mouse,     0,                      0 },
-  { K_X2MOUSE, nv_mouse,       0,                      0 },
-  { K_X2DRAG, nv_mouse,        0,                      0 },
-  { K_X2RELEASE, nv_mouse,     0,                      0 },
-  { K_IGNORE,  nv_ignore,      NV_KEEPREG,             0 },
-  { K_NOP,     nv_nop,         0,                      0 },
-  { K_INS,     nv_edit,        0,                      0 },
-  { K_KINS,    nv_edit,        0,                      0 },
-  { K_BS,      nv_ctrlh,       0,                      0 },
-  { K_UP,      nv_up,          NV_SSS|NV_STS,          false },
-  { K_S_UP,    nv_page,        NV_SS,                  BACKWARD },
-  { K_DOWN,    nv_down,        NV_SSS|NV_STS,          false },
-  { K_S_DOWN,  nv_page,        NV_SS,                  FORWARD },
-  { K_LEFT,    nv_left,        NV_SSS|NV_STS|NV_RL,    0 },
-  { K_S_LEFT,  nv_bck_word,    NV_SS|NV_RL,            0 },
-  { K_C_LEFT,  nv_bck_word,    NV_SSS|NV_RL|NV_STS,    1 },
-  { K_RIGHT,   nv_right,       NV_SSS|NV_STS|NV_RL,    0 },
-  { K_S_RIGHT, nv_wordcmd,     NV_SS|NV_RL,            false },
-  { K_C_RIGHT, nv_wordcmd,     NV_SSS|NV_RL|NV_STS,    true },
-  { K_PAGEUP,  nv_page,        NV_SSS|NV_STS,          BACKWARD },
-  { K_KPAGEUP, nv_page,        NV_SSS|NV_STS,          BACKWARD },
-  { K_PAGEDOWN, nv_page,       NV_SSS|NV_STS,          FORWARD },
-  { K_KPAGEDOWN, nv_page,      NV_SSS|NV_STS,          FORWARD },
-  { K_END,     nv_end,         NV_SSS|NV_STS,          false },
-  { K_KEND,    nv_end,         NV_SSS|NV_STS,          false },
-  { K_S_END,   nv_end,         NV_SS,                  false },
-  { K_C_END,   nv_end,         NV_SSS|NV_STS,          true },
-  { K_HOME,    nv_home,        NV_SSS|NV_STS,          0 },
-  { K_KHOME,   nv_home,        NV_SSS|NV_STS,          0 },
-  { K_S_HOME,  nv_home,        NV_SS,                  0 },
-  { K_C_HOME,  nv_goto,        NV_SSS|NV_STS,          false },
-  { K_DEL,     nv_abbrev,      0,                      0 },
-  { K_KDEL,    nv_abbrev,      0,                      0 },
-  { K_UNDO,    nv_kundo,       0,                      0 },
-  { K_HELP,    nv_help,        NV_NCW,                 0 },
-  { K_F1,      nv_help,        NV_NCW,                 0 },
-  { K_XF1,     nv_help,        NV_NCW,                 0 },
-  { K_SELECT,  nv_select,      0,                      0 },
-  { K_PASTE_START, nv_paste,   NV_KEEPREG,             0 },
-  { K_EVENT,   nv_event,       NV_KEEPREG,             0 },
-  { K_COMMAND, nv_colon,       0,                      0 },
-  { K_LUA, nv_colon,           0,                      0 },
-};
-
-// Number of commands in nv_cmds[].
-#define NV_CMDS_SIZE ARRAY_SIZE(nv_cmds)
-
-// Sorted index of commands in nv_cmds[].
-static int16_t nv_cmd_idx[NV_CMDS_SIZE];
-
-// The highest index for which
-// nv_cmds[idx].cmd_char == nv_cmd_idx[nv_cmds[idx].cmd_char]
-static int nv_max_linear;
-
 // =============================================================================
-// Rust implementations (forward declarations)
+// Rust implementations (forward declarations needed by dispatch table)
 // =============================================================================
-extern bool rs_op_pending(void);
-extern int rs_find_command(int cmdchar);
-extern int rs_invert_horizontal(int cmdchar);
-extern int rs_unshift_special(int cmdchar, int *modp);
-extern bool rs_is_ident(const char *line, int offset);
-extern bool rs_find_is_eval_item(const char *ptr, int *colp, int *bnp, int dir);
-extern int rs_get_vtopline(win_T *wp);
-extern void rs_clearop(oparg_T *oap);
-extern void rs_clearopbeep(oparg_T *oap);
-extern bool rs_checkclearop(oparg_T *oap);
-extern bool rs_checkclearopq(oparg_T *oap);
-extern bool rs_check_text_locked(oparg_T *oap);
-extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
-extern void rs_prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5);
-extern void rs_prep_redo_num2(int regname, int num1, int cmd1, int cmd2, int num2, int cmd3, int cmd4, int cmd5);
 extern void rs_nv_ignore(cmdarg_T *cap);
 extern void rs_nv_nop(cmdarg_T *cap);
 extern void rs_nv_error(cmdarg_T *cap);
@@ -428,7 +202,6 @@ extern void rs_nv_operator(cmdarg_T *cap);
 extern void rs_nv_optrans(cmdarg_T *cap);
 extern void rs_nv_tilde(cmdarg_T *cap);
 extern void rs_nv_subst(cmdarg_T *cap);
-extern void rs_nv_object(cmdarg_T *cap);
 extern void rs_nv_select(cmdarg_T *cap);
 extern void rs_nv_brackets(cmdarg_T *cap);
 extern void rs_nv_undo(cmdarg_T *cap);
@@ -437,7 +210,6 @@ extern void rs_nv_dot(cmdarg_T *cap);
 extern void rs_nv_redo_or_register(cmdarg_T *cap);
 extern void rs_nv_replace(cmdarg_T *cap);
 extern void rs_nv_Replace(cmdarg_T *cap);
-extern void rs_nv_vreplace(cmdarg_T *cap);
 extern void rs_nv_zet(cmdarg_T *cap);
 extern void rs_nv_scroll(cmdarg_T *cap);
 extern void rs_nv_right(cmdarg_T *cap);
@@ -448,6 +220,245 @@ extern void rs_nv_g_cmd(cmdarg_T *cap);
 extern void rs_nv_at(cmdarg_T *cap);
 extern void rs_nv_join(cmdarg_T *cap);
 extern void rs_nv_open(cmdarg_T *cap);
+extern void rs_nv_abbrev(cmdarg_T *cap);
+extern void rs_nv_lineop(cmdarg_T *cap);
+extern void rs_nv_normal(cmdarg_T *cap);
+extern void rs_nv_percent(cmdarg_T *cap);
+extern void rs_nv_tagpop(cmdarg_T *cap);
+extern void rs_nv_regreplay(cmdarg_T *cap);
+extern void rs_nv_ctrlh(cmdarg_T *cap);
+
+/// This table contains one entry for every Normal or Visual mode command.
+/// The order doesn't matter, init_normal_cmds() will create a sorted index.
+/// It is faster when all keys from zero to '~' are present.
+static const struct nv_cmd {
+  int cmd_char;                 ///< (first) command character
+  nv_func_T cmd_func;           ///< function for this command
+  uint16_t cmd_flags;           ///< NV_ flags
+  int16_t cmd_arg;              ///< value for ca.arg
+} nv_cmds[] = {
+  { NUL,       rs_nv_error,    0,                      0 },
+  { Ctrl_A,    nv_addsub,      0,                      0 },
+  { Ctrl_B,    rs_nv_page,     NV_STS,                 BACKWARD },
+  { Ctrl_C,    rs_nv_esc,      0,                      true },
+  { Ctrl_D,    rs_nv_halfpage, 0,                      0 },
+  { Ctrl_E,    rs_nv_scroll_line, 0,                   true },
+  { Ctrl_F,    rs_nv_page,     NV_STS,                 FORWARD },
+  { Ctrl_G,    rs_nv_ctrlg,    0,                      0 },
+  { Ctrl_H,    rs_nv_ctrlh,    0,                      0 },
+  { Ctrl_I,    rs_nv_pcmark,   0,                      0 },
+  { NL,        rs_nv_down,     0,                      false },
+  { Ctrl_K,    rs_nv_error,    0,                      0 },
+  { Ctrl_L,    rs_nv_clear,    0,                      0 },
+  { CAR,       rs_nv_down,     0,                      true },
+  { Ctrl_N,    rs_nv_down,     NV_STS,                 false },
+  { Ctrl_O,    rs_nv_ctrlo,    0,                      0 },
+  { Ctrl_P,    rs_nv_up,       NV_STS,                 false },
+  { Ctrl_Q,    rs_nv_visual,   0,                      false },
+  { Ctrl_R,    rs_nv_redo_or_register, 0,              0 },
+  { Ctrl_S,    rs_nv_ignore,   0,                      0 },
+  { Ctrl_T,    rs_nv_tagpop,   NV_NCW,                 0 },
+  { Ctrl_U,    rs_nv_halfpage, 0,                      0 },
+  { Ctrl_V,    rs_nv_visual,   0,                      false },
+  { 'V',       rs_nv_visual,   0,                      false },
+  { 'v',       rs_nv_visual,   0,                      false },
+  { Ctrl_W,    rs_nv_window,   0,                      0 },
+  { Ctrl_X,    nv_addsub,      0,                      0 },
+  { Ctrl_Y,    rs_nv_scroll_line, 0,                   false },
+  { Ctrl_Z,    rs_nv_suspend,  0,                      0 },
+  { ESC,       rs_nv_esc,      0,                      false },
+  { Ctrl_BSL,  rs_nv_normal,   NV_NCH_ALW,             0 },
+  { Ctrl_RSB,  rs_nv_ident,    NV_NCW,                 0 },
+  { Ctrl_HAT,  rs_nv_hat,      NV_NCW,                 0 },
+  { Ctrl__,    rs_nv_error,    0,                      0 },
+  { ' ',       rs_nv_right,    0,                      0 },
+  { '!',       rs_nv_operator, 0,                      0 },
+  { '"',       rs_nv_regname,  NV_NCH_NOP|NV_KEEPREG,  0 },
+  { '#',       rs_nv_ident,    0,                      0 },
+  { '$',       rs_nv_dollar,   0,                      0 },
+  { '%',       rs_nv_percent,  0,                      0 },
+  { '&',       rs_nv_optrans,  0,                      0 },
+  { '\'',      rs_nv_gomark,   NV_NCH_ALW,             true },
+  { '(',       rs_nv_brace,    0,                      BACKWARD },
+  { ')',       rs_nv_brace,    0,                      FORWARD },
+  { '*',       rs_nv_ident,    0,                      0 },
+  { '+',       rs_nv_down,     0,                      true },
+  { ',',       rs_nv_csearch,  0,                      true },
+  { '-',       rs_nv_up,       0,                      true },
+  { '.',       rs_nv_dot,      NV_KEEPREG,             0 },
+  { '/',       rs_nv_search,   0,                      false },
+  { '0',       rs_nv_beginline, 0,                     0 },
+  { '1',       rs_nv_ignore,   0,                      0 },
+  { '2',       rs_nv_ignore,   0,                      0 },
+  { '3',       rs_nv_ignore,   0,                      0 },
+  { '4',       rs_nv_ignore,   0,                      0 },
+  { '5',       rs_nv_ignore,   0,                      0 },
+  { '6',       rs_nv_ignore,   0,                      0 },
+  { '7',       rs_nv_ignore,   0,                      0 },
+  { '8',       rs_nv_ignore,   0,                      0 },
+  { '9',       rs_nv_ignore,   0,                      0 },
+  { ':',       nv_colon,       0,                      0 },
+  { ';',       rs_nv_csearch,  0,                      false },
+  { '<',       rs_nv_operator, NV_RL,                  0 },
+  { '=',       rs_nv_operator, 0,                      0 },
+  { '>',       rs_nv_operator, NV_RL,                  0 },
+  { '?',       rs_nv_search,   0,                      false },
+  { '@',       rs_nv_at,       NV_NCH_NOP,             false },
+  { 'A',       rs_nv_edit,     0,                      0 },
+  { 'B',       rs_nv_bck_word, 0,                      1 },
+  { 'C',       rs_nv_abbrev,   NV_KEEPREG,             0 },
+  { 'D',       rs_nv_abbrev,   NV_KEEPREG,             0 },
+  { 'E',       rs_nv_wordcmd,  0,                      true },
+  { 'F',       rs_nv_csearch,  NV_NCH_ALW|NV_LANG,     BACKWARD },
+  { 'G',       rs_nv_goto,     0,                      true },
+  { 'H',       rs_nv_scroll,   0,                      0 },
+  { 'I',       rs_nv_edit,     0,                      0 },
+  { 'J',       rs_nv_join,     0,                      0 },
+  { 'K',       rs_nv_ident,    0,                      0 },
+  { 'L',       rs_nv_scroll,   0,                      0 },
+  { 'M',       rs_nv_scroll,   0,                      0 },
+  { 'N',       rs_nv_next,     0,                      SEARCH_REV },
+  { 'O',       rs_nv_open,     0,                      0 },
+  { 'P',       rs_nv_put,      0,                      0 },
+  { 'Q',       rs_nv_regreplay, 0,                     0 },
+  { 'R',       rs_nv_Replace,  0,                      false },
+  { 'S',       rs_nv_subst,    NV_KEEPREG,             0 },
+  { 'T',       rs_nv_csearch,  NV_NCH_ALW|NV_LANG,     BACKWARD },
+  { 'U',       rs_nv_Undo,     0,                      0 },
+  { 'W',       rs_nv_wordcmd,  0,                      true },
+  { 'X',       rs_nv_abbrev,   NV_KEEPREG,             0 },
+  { 'Y',       rs_nv_abbrev,   NV_KEEPREG,             0 },
+  { 'Z',       rs_nv_Zet,      NV_NCH_NOP|NV_NCW,      0 },
+  { '[',       rs_nv_brackets, NV_NCH_ALW,             BACKWARD },
+  { '\\',      rs_nv_error,    0,                      0 },
+  { ']',       rs_nv_brackets, NV_NCH_ALW,             FORWARD },
+  { '^',       rs_nv_beginline, 0,                     BL_WHITE | BL_FIX },
+  { '_',       rs_nv_lineop,   0,                      0 },
+  { '`',       rs_nv_gomark,   NV_NCH_ALW,             false },
+  { 'a',       rs_nv_edit,     NV_NCH,                 0 },
+  { 'b',       rs_nv_bck_word, 0,                      0 },
+  { 'c',       rs_nv_operator, 0,                      0 },
+  { 'd',       rs_nv_operator, 0,                      0 },
+  { 'e',       rs_nv_wordcmd,  0,                      false },
+  { 'f',       rs_nv_csearch,  NV_NCH_ALW|NV_LANG,     FORWARD },
+  { 'g',       rs_nv_g_cmd,    NV_NCH_ALW,             false },
+  { 'h',       rs_nv_left,     NV_RL,                  0 },
+  { 'i',       rs_nv_edit,     NV_NCH,                 0 },
+  { 'j',       rs_nv_down,     0,                      false },
+  { 'k',       rs_nv_up,       0,                      false },
+  { 'l',       rs_nv_right,    NV_RL,                  0 },
+  { 'm',       rs_nv_mark,     NV_NCH_NOP,             0 },
+  { 'n',       rs_nv_next,     0,                      0 },
+  { 'o',       rs_nv_open,     0,                      0 },
+  { 'p',       rs_nv_put,      0,                      0 },
+  { 'q',       nv_record,      NV_NCH,                 0 },
+  { 'r',       rs_nv_replace,  NV_NCH_NOP|NV_LANG,     0 },
+  { 's',       rs_nv_subst,    NV_KEEPREG,             0 },
+  { 't',       rs_nv_csearch,  NV_NCH_ALW|NV_LANG,     FORWARD },
+  { 'u',       rs_nv_undo,     0,                      0 },
+  { 'w',       rs_nv_wordcmd,  0,                      false },
+  { 'x',       rs_nv_abbrev,   NV_KEEPREG,             0 },
+  { 'y',       rs_nv_operator, 0,                      0 },
+  { 'z',       rs_nv_zet,      NV_NCH_ALW,             0 },
+  { '{',       rs_nv_findpar,  0,                      BACKWARD },
+  { '|',       rs_nv_pipe,     0,                      0 },
+  { '}',       rs_nv_findpar,  0,                      FORWARD },
+  { '~',       rs_nv_tilde,    0,                      0 },
+
+  // pound sign
+  { POUND,     rs_nv_ident,    0,                      0 },
+  { K_MOUSEUP, nv_mousescroll, 0,                      MSCR_UP },
+  { K_MOUSEDOWN, nv_mousescroll, 0,                    MSCR_DOWN },
+  { K_MOUSELEFT, nv_mousescroll, 0,                    MSCR_LEFT },
+  { K_MOUSERIGHT, nv_mousescroll, 0,                   MSCR_RIGHT },
+  { K_LEFTMOUSE, nv_mouse,     0,                      0 },
+  { K_LEFTMOUSE_NM, nv_mouse,  0,                      0 },
+  { K_LEFTDRAG, nv_mouse,      0,                      0 },
+  { K_LEFTRELEASE, nv_mouse,   0,                      0 },
+  { K_LEFTRELEASE_NM, nv_mouse, 0,                     0 },
+  { K_MOUSEMOVE, nv_mouse,     0,                      0 },
+  { K_MIDDLEMOUSE, nv_mouse,   0,                      0 },
+  { K_MIDDLEDRAG, nv_mouse,    0,                      0 },
+  { K_MIDDLERELEASE, nv_mouse, 0,                      0 },
+  { K_RIGHTMOUSE, nv_mouse,    0,                      0 },
+  { K_RIGHTDRAG, nv_mouse,     0,                      0 },
+  { K_RIGHTRELEASE, nv_mouse,  0,                      0 },
+  { K_X1MOUSE, nv_mouse,       0,                      0 },
+  { K_X1DRAG, nv_mouse,        0,                      0 },
+  { K_X1RELEASE, nv_mouse,     0,                      0 },
+  { K_X2MOUSE, nv_mouse,       0,                      0 },
+  { K_X2DRAG, nv_mouse,        0,                      0 },
+  { K_X2RELEASE, nv_mouse,     0,                      0 },
+  { K_IGNORE,  rs_nv_ignore,   NV_KEEPREG,             0 },
+  { K_NOP,     rs_nv_nop,      0,                      0 },
+  { K_INS,     rs_nv_edit,     0,                      0 },
+  { K_KINS,    rs_nv_edit,     0,                      0 },
+  { K_BS,      rs_nv_ctrlh,    0,                      0 },
+  { K_UP,      rs_nv_up,       NV_SSS|NV_STS,          false },
+  { K_S_UP,    rs_nv_page,     NV_SS,                  BACKWARD },
+  { K_DOWN,    rs_nv_down,     NV_SSS|NV_STS,          false },
+  { K_S_DOWN,  rs_nv_page,     NV_SS,                  FORWARD },
+  { K_LEFT,    rs_nv_left,     NV_SSS|NV_STS|NV_RL,    0 },
+  { K_S_LEFT,  rs_nv_bck_word, NV_SS|NV_RL,            0 },
+  { K_C_LEFT,  rs_nv_bck_word, NV_SSS|NV_RL|NV_STS,    1 },
+  { K_RIGHT,   rs_nv_right,    NV_SSS|NV_STS|NV_RL,    0 },
+  { K_S_RIGHT, rs_nv_wordcmd,  NV_SS|NV_RL,            false },
+  { K_C_RIGHT, rs_nv_wordcmd,  NV_SSS|NV_RL|NV_STS,    true },
+  { K_PAGEUP,  rs_nv_page,     NV_SSS|NV_STS,          BACKWARD },
+  { K_KPAGEUP, rs_nv_page,     NV_SSS|NV_STS,          BACKWARD },
+  { K_PAGEDOWN, rs_nv_page,    NV_SSS|NV_STS,          FORWARD },
+  { K_KPAGEDOWN, rs_nv_page,   NV_SSS|NV_STS,          FORWARD },
+  { K_END,     rs_nv_end,      NV_SSS|NV_STS,          false },
+  { K_KEND,    rs_nv_end,      NV_SSS|NV_STS,          false },
+  { K_S_END,   rs_nv_end,      NV_SS,                  false },
+  { K_C_END,   rs_nv_end,      NV_SSS|NV_STS,          true },
+  { K_HOME,    rs_nv_home,     NV_SSS|NV_STS,          0 },
+  { K_KHOME,   rs_nv_home,     NV_SSS|NV_STS,          0 },
+  { K_S_HOME,  rs_nv_home,     NV_SS,                  0 },
+  { K_C_HOME,  rs_nv_goto,     NV_SSS|NV_STS,          false },
+  { K_DEL,     rs_nv_abbrev,   0,                      0 },
+  { K_KDEL,    rs_nv_abbrev,   0,                      0 },
+  { K_UNDO,    rs_nv_kundo,    0,                      0 },
+  { K_HELP,    rs_nv_help,     NV_NCW,                 0 },
+  { K_F1,      rs_nv_help,     NV_NCW,                 0 },
+  { K_XF1,     rs_nv_help,     NV_NCW,                 0 },
+  { K_SELECT,  rs_nv_select,   0,                      0 },
+  { K_PASTE_START, nv_paste,   NV_KEEPREG,             0 },
+  { K_EVENT,   nv_event,       NV_KEEPREG,             0 },
+  { K_COMMAND, nv_colon,       0,                      0 },
+  { K_LUA, nv_colon,           0,                      0 },
+};
+
+// Number of commands in nv_cmds[].
+#define NV_CMDS_SIZE ARRAY_SIZE(nv_cmds)
+
+// Sorted index of commands in nv_cmds[].
+static int16_t nv_cmd_idx[NV_CMDS_SIZE];
+
+// The highest index for which
+// nv_cmds[idx].cmd_char == nv_cmd_idx[nv_cmds[idx].cmd_char]
+static int nv_max_linear;
+
+// =============================================================================
+// Rust implementations (forward declarations)
+// =============================================================================
+extern bool rs_op_pending(void);
+extern int rs_find_command(int cmdchar);
+extern int rs_invert_horizontal(int cmdchar);
+extern int rs_unshift_special(int cmdchar, int *modp);
+extern bool rs_is_ident(const char *line, int offset);
+extern bool rs_find_is_eval_item(const char *ptr, int *colp, int *bnp, int dir);
+extern int rs_get_vtopline(win_T *wp);
+extern void rs_clearop(oparg_T *oap);
+extern void rs_clearopbeep(oparg_T *oap);
+extern bool rs_checkclearop(oparg_T *oap);
+extern bool rs_checkclearopq(oparg_T *oap);
+extern bool rs_check_text_locked(oparg_T *oap);
+extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
+extern void rs_prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5);
+extern void rs_prep_redo_num2(int regname, int num1, int cmd1, int cmd2, int num2, int cmd3, int cmd4, int cmd5);
+extern void rs_nv_object(cmdarg_T *cap);
+extern void rs_nv_vreplace(cmdarg_T *cap);
 
 // Wave 2 Phase 1 functions
 extern void rs_reset_VIsual_and_resel(void);
@@ -458,27 +469,20 @@ extern void rs_may_clear_cmdline(void);
 // Wave 2 Phase 2 functions
 extern void rs_prep_redo_cmd(cmdarg_T *cap);
 extern void rs_set_vcount_ca(cmdarg_T *cap, bool *set_prevcount);
-extern void rs_nv_tagpop(cmdarg_T *cap);
-extern void rs_nv_regreplay(cmdarg_T *cap);
-extern void rs_nv_ctrlh(cmdarg_T *cap);
 
 // Wave 2 Phase 3 functions
 extern void rs_v_visop(cmdarg_T *cap);
-extern void rs_nv_abbrev(cmdarg_T *cap);
-extern void rs_nv_lineop(cmdarg_T *cap);
 
 // Wave 2 Phase 4 functions
 extern void rs_start_selection(void);
 extern void rs_may_start_select(int c);
 extern void rs_nv_g_underscore_cmd(cmdarg_T *cap);
 extern void rs_nv_gi_cmd(cmdarg_T *cap);
-extern void rs_nv_normal(cmdarg_T *cap);
 
 // Wave 2 Phase 5 functions
 extern void rs_nv_gv_cmd(cmdarg_T *cap);
 extern void rs_v_swap_corners(int cmdchar);
 extern bool rs_unadjust_for_sel(void);
-extern void rs_nv_percent(cmdarg_T *cap);
 
 // Phase 1A: find_ident_at_pos
 extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
