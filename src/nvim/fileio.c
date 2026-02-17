@@ -98,6 +98,7 @@ extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, i
                            int fat_tolerance);
 extern bool rs_is_dev_fd_file(const char *fname);
 extern const char *rs_check_for_bom(const uint8_t *data, int size, int *lenp, int flags);
+extern void rs_check_marks_read(void);
 
 #include "fileio.c.generated.h"
 
@@ -480,7 +481,7 @@ int readfile(char *fname, char *sfname, linenr_T from, linenr_T lines_to_skip,
       }
       // Even though this is a new file, it might have been
       // edited before and deleted.  Get the old marks.
-      check_marks_read();
+      rs_check_marks_read();
       // Set forced 'fileencoding'.
       if (eap != NULL) {
         set_forced_fenc(eap);
@@ -1697,7 +1698,7 @@ failed:
         }
       }
       msg_scroll = msg_save;
-      check_marks_read();
+      rs_check_marks_read();
       retval = OK;        // an interrupt isn't really an error
       goto theend;
     }
@@ -1816,7 +1817,7 @@ failed:
   msg_scroll = msg_save;
 
   // Get the marks before executing autocommands, so they can be used there.
-  check_marks_read();
+  rs_check_marks_read();
 
   // We remember if the last line of the read didn't have
   // an eol even when 'binary' is off, to support turning 'fixeol' off,

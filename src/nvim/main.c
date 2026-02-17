@@ -141,6 +141,7 @@ enum {
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
+extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 Loop main_loop;
@@ -503,7 +504,7 @@ int main(int argc, char **argv)
   // Read in registers, history etc, from the ShaDa file.
   // This is where v:oldfiles gets filled.
   if (*p_shada != NUL) {
-    shada_read_everything(NULL, false, true);
+    rs_shada_read_everything(NULL, false, true);
     TIME_MSG("reading ShaDa");
   }
   // It's better to make v:oldfiles an empty list than NULL.

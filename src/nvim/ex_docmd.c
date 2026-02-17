@@ -158,6 +158,7 @@ extern int rs_parse_cmd_address(exarg_T *eap, const char **errormsg, bool silent
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
+extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 static const char e_ambiguous_use_of_user_defined_command[]
@@ -6103,7 +6104,7 @@ static void ex_shada(exarg_T *eap)
     p_shada = "'100";
   }
   if (eap->cmdidx == CMD_rviminfo || eap->cmdidx == CMD_rshada) {
-    shada_read_everything(eap->arg, eap->forceit, false);
+    rs_shada_read_everything(eap->arg, eap->forceit, false);
   } else {
     shada_write_file(eap->arg, eap->forceit);
   }

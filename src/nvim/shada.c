@@ -2330,27 +2330,6 @@ shada_write_file_did_not_remove:
   return OK;
 }
 
-/// Read marks information from ShaDa file
-///
-/// @return OK in case of success, FAIL otherwise.
-int shada_read_marks(void)
-{
-  return rs_shada_read_marks();
-}
-
-/// Read all information from ShaDa file
-///
-/// @param[in]  fname    File to write to. If it is NULL or empty then default
-/// @param[in]  forceit  If true, use forced reading (prioritize file contents
-///                      over current Neovim state).
-/// @param[in]  missing_ok  If true, do not error out when file is missing.
-///
-/// @return OK in case of success, FAIL otherwise.
-int shada_read_everything(const char *const fname, const bool forceit, const bool missing_ok)
-{
-  return rs_shada_read_everything(fname, forceit, missing_ok);
-}
-
 static void shada_free_shada_entry(ShadaEntry *const entry)
 {
   if (entry == NULL || !entry->can_free_entry) {
@@ -3115,13 +3094,6 @@ char *find_shada_parameter(int type)
     }
   }
   return NULL;
-}
-
-/// Read marks for the current buffer from the ShaDa file, when we support
-/// buffer marks and the buffer has a name.
-void check_marks_read(void)
-{
-  rs_check_marks_read();
 }
 
 // =============================================================================
