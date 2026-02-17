@@ -662,7 +662,7 @@ extern int rs_find_tagfunc_tags(char *pat, void *ga, int *match_count, int flags
 // Tag operations
 extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
 
-#include "tag.c.generated.h"
+#include "tag_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
 
 // Rust fold FFI declaration
