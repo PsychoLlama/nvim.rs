@@ -1083,3 +1083,391 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
         nvim_hgr_cleanup(qi, new_qi);
     }
 }
+
+// =============================================================================
+// Phase 2: Ex command implementations
+// =============================================================================
+
+// Direction constants (matching vim_defs.h)
+const FORWARD: c_int = 1;
+const BACKWARD: c_int = -1;
+const FORWARD_FILE: c_int = 3;
+const BACKWARD_FILE: c_int = -3;
+
+// CMD_* enum values (from ex_cmds_enum.generated.h)
+const CMD_CC: c_int = 62;
+const CMD_LL: c_int = 246;
+const CMD_CREWIND: c_int = 107;
+const CMD_LREWIND: c_int = 264;
+const CMD_CFIRST: c_int = 70;
+const CMD_LFIRST: c_int = 238;
+const CMD_CDO: c_int = 65;
+const CMD_LDO: c_int = 231;
+const CMD_CFDO: c_int = 69;
+const CMD_LFDO: c_int = 237;
+const CMD_CPREVIOUS: c_int = 104;
+const CMD_LPREVIOUS: c_int = 262;
+const CMD_CNFILE: c_int = 89;
+const CMD_LNFILE: c_int = 255;
+const CMD_CPFILE: c_int = 105;
+const CMD_LPFILE: c_int = 263;
+const CMD_CNFILE_BIG: c_int = 48; // CMD_cNfile
+const CMD_LNFILE_BIG: c_int = 215; // CMD_lNfile
+const CMD_CNEXT_BIG: c_int = 47; // CMD_cNext
+const CMD_LNEXT_BIG: c_int = 214; // CMD_lNext
+const CMD_COLDER: c_int = 94;
+const CMD_LOLDER: c_int = 260;
+const CMD_CABOVE: c_int = 51;
+const CMD_CBELOW: c_int = 60;
+const CMD_LABOVE: c_int = 217;
+const CMD_LBELOW: c_int = 226;
+const CMD_CAFTER: c_int = 55;
+const CMD_CBEFORE: c_int = 59;
+const CMD_LBEFORE: c_int = 225;
+
+// BUF_HAS_* flags
+const BUF_HAS_QF_ENTRY: c_int = 1;
+const BUF_HAS_LL_ENTRY: c_int = 2;
+
+type LinenrT = i64;
+
+extern "C" {
+    fn nvim_qf_cmd_get_stack(eap: EapHandle, print_emsg: bool) -> QfInfoHandleMut;
+    fn nvim_eap_get_cmdidx(eap: EapHandle) -> c_int;
+    fn nvim_eap_get_addr_count(eap: EapHandle) -> c_int;
+    fn nvim_eap_get_line1(eap: EapHandle) -> LinenrT;
+    fn nvim_eap_get_line2(eap: EapHandle) -> LinenrT;
+    fn nvim_eap_get_forceit(eap: EapHandle) -> bool;
+    fn nvim_qf_jump(qi: QfInfoHandleMut, dir: c_int, errornr: c_int, forceit: c_int);
+    fn nvim_qf_msg(qi: QfInfoHandleMut, which: c_int, lead: *const u8);
+    fn nvim_qf_get_nth_valid_entry(qfl: *mut c_void, n: c_int, fdo: bool) -> c_int;
+    fn nvim_emsg_loclist();
+    fn nvim_emsg_no_errors();
+    fn nvim_emsg_at_bottom();
+    fn nvim_emsg_at_top();
+    fn nvim_msg_no_entries();
+    fn nvim_emsg_invrange();
+    fn nvim_qf_curwin_is_ll() -> bool;
+    fn nvim_qf_curwin_get_loclist() -> QfInfoHandleMut;
+    fn nvim_qf_jump_newwin(
+        qi: QfInfoHandleMut,
+        dir: c_int,
+        errornr: c_int,
+        forceit: c_int,
+        newwin: bool,
+    );
+    fn nvim_qf_get_cursor_lnum() -> LinenrT;
+    fn nvim_do_cmdline_cmd(cmd: *const u8);
+
+    // From crate (already declared in lib.rs)
+    fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
+    fn nvim_qf_set_curlist_idx(qi: QfInfoHandleMut, idx: c_int);
+
+    fn rs_qf_list_empty(qfl: *const c_void) -> bool;
+    fn rs_qf_list_has_valid_entries(qfl: *const c_void) -> bool;
+    fn rs_qf_stack_empty(qi: *const c_void) -> bool;
+    fn rs_qf_find_nth_adj_entry(
+        qfl: *const c_void,
+        bnr: c_int,
+        pos: *const c_void,
+        n: LinenrT,
+        dir: c_int,
+        linewise: bool,
+    ) -> c_int;
+
+    fn nvim_qf_curbuf_has_flag(flag: c_int) -> bool;
+    fn nvim_qf_curbuf_fnum() -> c_int;
+    fn nvim_qf_curwin_pos_adj() -> *const c_void;
+    fn nvim_emsg_e_no_more_items();
+}
+
+/// `:cc`, `:crewind`, `:cfirst`, `:clast`, `:ll`, `:lrewind`, `:lfirst`,
+/// `:llast`, `:cdo`, `:ldo`, `:cfdo`, `:lfdo`
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_ex_cc(eap: EapHandle) {
+    let qi = nvim_qf_cmd_get_stack(eap, true);
+    if qi.is_null() {
+        return;
+    }
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let addr_count = nvim_eap_get_addr_count(eap);
+    let is_do_cmd =
+        cmdidx == CMD_CDO || cmdidx == CMD_LDO || cmdidx == CMD_CFDO || cmdidx == CMD_LFDO;
+
+    // For cdo/ldo/cfdo/lfdo commands, jump to the nth valid error/file entry.
+    // For other commands, compute the target error number from the address or command type.
+    let errornr = if is_do_cmd {
+        let n = if addr_count > 0 {
+            let line1 = nvim_eap_get_line1(eap);
+            if line1 >= 0 {
+                line1 as c_int
+            } else {
+                1
+            }
+        } else {
+            1
+        };
+        let fdo = cmdidx == CMD_CFDO || cmdidx == CMD_LFDO;
+        let qfl = nvim_qf_get_curlist_mut(qi);
+        nvim_qf_get_nth_valid_entry(qfl, n, fdo)
+    } else if addr_count > 0 {
+        nvim_eap_get_line2(eap) as c_int
+    } else {
+        match cmdidx {
+            CMD_CC | CMD_LL => 0,
+            CMD_CREWIND | CMD_LREWIND | CMD_CFIRST | CMD_LFIRST => 1,
+            _ => 32767, // CMD_clast, CMD_llast
+        }
+    };
+
+    nvim_qf_jump(qi, 0, errornr, c_int::from(nvim_eap_get_forceit(eap)));
+}
+
+/// `:cnext`, `:cprevious`, `:cNext`, `:cnfile`, `:cNfile`, `:cpfile`,
+/// `:lnext`, `:lprevious`, `:lNext`, `:lnfile`, `:lNfile`, `:lpfile`,
+/// `:cdo`, `:ldo`, `:cfdo`, `:lfdo`
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_ex_cnext(eap: EapHandle) {
+    let qi = nvim_qf_cmd_get_stack(eap, true);
+    if qi.is_null() {
+        return;
+    }
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let addr_count = nvim_eap_get_addr_count(eap);
+
+    let errornr: c_int = if addr_count > 0
+        && cmdidx != CMD_CDO
+        && cmdidx != CMD_LDO
+        && cmdidx != CMD_CFDO
+        && cmdidx != CMD_LFDO
+    {
+        nvim_eap_get_line2(eap) as c_int
+    } else {
+        1
+    };
+
+    // Depending on the command jump to either next or previous entry/file.
+    let dir = match cmdidx {
+        CMD_CPREVIOUS | CMD_LPREVIOUS | CMD_CNEXT_BIG | CMD_LNEXT_BIG => BACKWARD,
+        CMD_CNFILE | CMD_LNFILE | CMD_CFDO | CMD_LFDO => FORWARD_FILE,
+        CMD_CPFILE | CMD_LPFILE | CMD_CNFILE_BIG | CMD_LNFILE_BIG => BACKWARD_FILE,
+        _ => FORWARD, // CMD_cnext, CMD_lnext, CMD_cdo, CMD_ldo
+    };
+
+    nvim_qf_jump(qi, dir, errornr, c_int::from(nvim_eap_get_forceit(eap)));
+}
+
+/// `:colder`, `:cnewer`, `:lolder`, `:lnewer`
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_qf_age(eap: EapHandle) {
+    let qi = nvim_qf_cmd_get_stack(eap, true);
+    if qi.is_null() {
+        return;
+    }
+
+    let addr_count = nvim_eap_get_addr_count(eap);
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+
+    let mut count = if addr_count != 0 {
+        nvim_eap_get_line2(eap) as c_int
+    } else {
+        1
+    };
+
+    while count > 0 {
+        count -= 1;
+        if cmdidx == CMD_COLDER || cmdidx == CMD_LOLDER {
+            if nvim_qf_get_curlist_idx(qi) == 0 {
+                nvim_emsg_at_bottom();
+                break;
+            }
+            let new_idx = nvim_qf_get_curlist_idx(qi) - 1;
+            nvim_qf_set_curlist_idx(qi, new_idx);
+        } else {
+            let cur = nvim_qf_get_curlist_idx(qi);
+            let lc = nvim_qf_get_listcount(qi);
+            if cur >= lc - 1 {
+                nvim_emsg_at_top();
+                break;
+            }
+            nvim_qf_set_curlist_idx(qi, cur + 1);
+        }
+    }
+
+    let cur = nvim_qf_get_curlist_idx(qi);
+    nvim_qf_msg(qi, cur, c"".as_ptr().cast::<u8>());
+    nvim_qf_update_buffer(qi, std::ptr::null());
+}
+
+/// `:chistory`, `:lhistory`
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_qf_history(eap: EapHandle) {
+    let qi = nvim_qf_cmd_get_stack(eap, false);
+
+    if nvim_eap_get_addr_count(eap) > 0 {
+        if qi.is_null() {
+            nvim_emsg_loclist();
+            return;
+        }
+
+        // Jump to the specified quickfix list
+        let line2 = nvim_eap_get_line2(eap) as c_int;
+        let listcount = nvim_qf_get_listcount(qi);
+        if line2 > 0 && line2 <= listcount {
+            nvim_qf_set_curlist_idx(qi, line2 - 1);
+            nvim_qf_msg(qi, line2 - 1, c"".as_ptr().cast::<u8>());
+            nvim_qf_update_buffer(qi, std::ptr::null());
+        } else {
+            nvim_emsg_invrange();
+        }
+
+        return;
+    }
+
+    if rs_qf_stack_empty(qi) {
+        nvim_msg_no_entries();
+    } else {
+        let listcount = nvim_qf_get_listcount(qi);
+        let curlist = nvim_qf_get_curlist_idx(qi);
+        for i in 0..listcount {
+            let lead = if i == curlist {
+                c"> ".as_ptr().cast::<u8>()
+            } else {
+                c"  ".as_ptr().cast::<u8>()
+            };
+            nvim_qf_msg(qi, i, lead);
+        }
+    }
+}
+
+/// Open the entry/result under the cursor.
+/// When `split` is true, open in a new window.
+///
+/// # Safety
+///
+/// Must be called with valid global state (curwin, curbuf).
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_qf_view_result(split: bool) {
+    let qi = if nvim_qf_curwin_is_ll() {
+        nvim_qf_curwin_get_loclist()
+    } else {
+        nvim_get_ql_info()
+    };
+
+    let qfl = nvim_qf_get_curlist_mut(qi);
+    if rs_qf_list_empty(qfl) {
+        nvim_emsg_no_errors();
+        return;
+    }
+
+    if split {
+        // Open the selected entry in a new window
+        let lnum = nvim_qf_get_cursor_lnum() as c_int;
+        nvim_qf_jump_newwin(qi, 0, lnum, 0, true);
+        nvim_do_cmdline_cmd(c"clearjumps".as_ptr().cast::<u8>());
+        return;
+    }
+
+    if nvim_qf_curwin_is_ll() {
+        nvim_do_cmdline_cmd(c".ll".as_ptr().cast::<u8>());
+    } else {
+        nvim_do_cmdline_cmd(c".cc".as_ptr().cast::<u8>());
+    }
+}
+
+/// `:cabove`, `:cbelow`, `:labove`, `:lbelow`,
+/// `:cafter`, `:cbefore`, `:lafter`, `:lbefore`
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
+    let addr_count = nvim_eap_get_addr_count(eap);
+    if addr_count > 0 && nvim_eap_get_line2(eap) <= 0 {
+        nvim_emsg_invrange();
+        return;
+    }
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+
+    // Check whether the current buffer has any quickfix entries
+    let buf_has_flag = if cmdidx == CMD_CABOVE
+        || cmdidx == CMD_CBELOW
+        || cmdidx == CMD_CBEFORE
+        || cmdidx == CMD_CAFTER
+    {
+        BUF_HAS_QF_ENTRY
+    } else {
+        BUF_HAS_LL_ENTRY
+    };
+
+    if !nvim_qf_curbuf_has_flag(buf_has_flag) {
+        nvim_emsg_no_errors();
+        return;
+    }
+
+    let qi = nvim_qf_cmd_get_stack(eap, true);
+    if qi.is_null() {
+        return;
+    }
+
+    let qfl = nvim_qf_get_curlist_mut(qi);
+    if !rs_qf_list_has_valid_entries(qfl) {
+        nvim_emsg_no_errors();
+        return;
+    }
+
+    let n = if addr_count > 0 {
+        nvim_eap_get_line2(eap)
+    } else {
+        0
+    };
+
+    let dir: c_int = if cmdidx == CMD_CABOVE || cmdidx == CMD_LABOVE {
+        BACKWARD
+    } else if cmdidx == CMD_CBELOW || cmdidx == CMD_LBELOW {
+        FORWARD
+    } else if cmdidx == CMD_CBEFORE || cmdidx == CMD_LBEFORE {
+        BACKWARD
+    } else {
+        FORWARD // CMD_cafter, CMD_lafter
+    };
+
+    let linewise = cmdidx == CMD_CABOVE
+        || cmdidx == CMD_LABOVE
+        || cmdidx == CMD_CBELOW
+        || cmdidx == CMD_LBELOW;
+
+    let bnr = nvim_qf_curbuf_fnum();
+    let pos = nvim_qf_curwin_pos_adj();
+    let errornr = rs_qf_find_nth_adj_entry(qfl, bnr, pos, n, dir, linewise);
+    if errornr > 0 {
+        nvim_qf_jump(qi, 0, errornr, 0);
+    } else {
+        nvim_emsg_e_no_more_items();
+    }
+}

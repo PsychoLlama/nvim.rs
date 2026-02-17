@@ -4834,68 +4834,27 @@ static void qf_msg(qf_info_T *qi, int which, char *lead)
   msg(buf, 0);
 }
 
+// Rust implementations of ex commands
+extern void rs_ex_cc(void *eap);
+extern void rs_ex_cnext(void *eap);
+extern void rs_qf_age(void *eap);
+extern void rs_qf_history(void *eap);
+extern void rs_qf_view_result(bool split);
+extern void rs_ex_cbelow(void *eap);
+
 /// ":colder [count]": Up in the quickfix stack.
 /// ":cnewer [count]": Down in the quickfix stack.
 /// ":lolder [count]": Up in the location list stack.
 /// ":lnewer [count]": Down in the location list stack.
 void qf_age(exarg_T *eap)
 {
-  qf_info_T *qi;
-
-  if ((qi = qf_cmd_get_stack(eap, true)) == NULL) {
-    return;
-  }
-
-  int count = (eap->addr_count != 0) ? (int)eap->line2 : 1;
-  while (count--) {
-    if (eap->cmdidx == CMD_colder || eap->cmdidx == CMD_lolder) {
-      if (qi->qf_curlist == 0) {
-        emsg(_("E380: At bottom of quickfix stack"));
-        break;
-      }
-      qi->qf_curlist--;
-    } else {
-      if (qi->qf_curlist >= qi->qf_listcount - 1) {
-        emsg(_("E381: At top of quickfix stack"));
-        break;
-      }
-      qi->qf_curlist++;
-    }
-  }
-  qf_msg(qi, qi->qf_curlist, "");
-  qf_update_buffer(qi, NULL);
+  rs_qf_age(eap);
 }
 
 /// Display the information about all the quickfix/location lists in the stack.
 void qf_history(exarg_T *eap)
 {
-  qf_info_T *qi = qf_cmd_get_stack(eap, false);
-
-  if (eap->addr_count > 0) {
-    if (qi == NULL) {
-      emsg(_(e_loclist));
-      return;
-    }
-
-    // Jump to the specified quickfix list
-    if (eap->line2 > 0 && eap->line2 <= qi->qf_listcount) {
-      qi->qf_curlist = eap->line2 - 1;
-      qf_msg(qi, qi->qf_curlist, "");
-      qf_update_buffer(qi, NULL);
-    } else {
-      emsg(_(e_invrange));
-    }
-
-    return;
-  }
-
-  if (rs_qf_stack_empty(qi)) {
-    msg(_("No entries"), 0);
-  } else {
-    for (int i = 0; i < qi->qf_listcount; i++) {
-      qf_msg(qi, i, i == qi->qf_curlist ? "> " : "  ");
-    }
-  }
+  rs_qf_history(eap);
 }
 
 /// Adjust error list entries for changed line numbers
@@ -4997,26 +4956,7 @@ static char *qf_types(int c, int nr)
 // When "split" is true: Open the entry/result under the cursor in a new window.
 void qf_view_result(bool split)
 {
-  qf_info_T *qi = ql_info;
-  assert(qi != NULL);
-
-  if (IS_LL_WINDOW(curwin)) {
-    qi = GET_LOC_LIST(curwin);
-  }
-
-  if (rs_qf_list_empty(qf_get_curlist(qi))) {
-    emsg(_(e_no_errors));
-    return;
-  }
-
-  if (split) {
-    // Open the selected entry in a new window
-    qf_jump_newwin(qi, 0, (int)curwin->w_cursor.lnum, false, true);
-    do_cmdline_cmd("clearjumps");
-    return;
-  }
-
-  do_cmdline_cmd((IS_LL_WINDOW(curwin) ? ".ll" : ".cc"));
+  rs_qf_view_result(split);
 }
 
 // ":cwindow": open the quickfix window if we have errors to display,
@@ -6070,56 +6010,135 @@ static size_t qf_get_nth_valid_entry(qf_list_T *qfl, size_t n, bool fdo)
   return i <= qfl->qf_count ? (size_t)i : 1;
 }
 
+// =============================================================================
+// Phase 2: Ex command accessor functions for Rust
+// =============================================================================
+
+/// Get the quickfix stack for an ex command (wraps qf_cmd_get_stack)
+void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg)
+{
+  return qf_cmd_get_stack((exarg_T *)eap_void, print_emsg);
+}
+
+/// Wrapper for qf_jump callable from Rust
+void nvim_qf_jump(void *qi_void, int dir, int errornr, int forceit)
+{
+  qf_jump((qf_info_T *)qi_void, dir, errornr, forceit);
+}
+
+/// Wrapper for qf_msg callable from Rust
+void nvim_qf_msg(void *qi_void, int which, const char *lead)
+{
+  qf_msg((qf_info_T *)qi_void, which, (char *)lead);
+}
+
+/// Wrapper for qf_get_nth_valid_entry callable from Rust
+int nvim_qf_get_nth_valid_entry(void *qfl_void, int n, bool fdo)
+{
+  return (int)qf_get_nth_valid_entry((qf_list_T *)qfl_void, (size_t)n, fdo);
+}
+
+/// Emit loclist error message for Rust
+void nvim_emsg_loclist(void)
+{
+  emsg(_(e_loclist));
+}
+
+/// Emit "No errors" message for Rust
+void nvim_emsg_no_errors(void)
+{
+  emsg(_(e_no_errors));
+}
+
+/// Emit "At bottom of quickfix stack" error (E380) for Rust
+void nvim_emsg_at_bottom(void)
+{
+  emsg(_("E380: At bottom of quickfix stack"));
+}
+
+/// Emit "At top of quickfix stack" error (E381) for Rust
+void nvim_emsg_at_top(void)
+{
+  emsg(_("E381: At top of quickfix stack"));
+}
+
+/// Emit "No entries" message for Rust
+void nvim_msg_no_entries(void)
+{
+  msg(_("No entries"), 0);
+}
+
+/// Emit invalid range error for Rust
+void nvim_emsg_invrange(void)
+{
+  emsg(_(e_invrange));
+}
+
+/// Wrapper for qf_view_result helper: check if curwin is LL window
+bool nvim_qf_curwin_is_ll(void)
+{
+  return IS_LL_WINDOW(curwin);
+}
+
+/// Wrapper for qf_view_result: get location list for current window
+void *nvim_qf_curwin_get_loclist(void)
+{
+  return GET_LOC_LIST(curwin);
+}
+
+/// Wrapper for qf_jump_newwin callable from Rust
+void nvim_qf_jump_newwin(void *qi_void, int dir, int errornr, int forceit, bool newwin)
+{
+  qf_jump_newwin((qf_info_T *)qi_void, dir, errornr, forceit, newwin);
+}
+
+/// Get curwin->w_cursor.lnum for Rust
+linenr_T nvim_qf_get_cursor_lnum(void)
+{
+  return curwin->w_cursor.lnum;
+}
+
+/// Execute a command string for Rust (wraps do_cmdline_cmd)
+void nvim_do_cmdline_cmd(const char *cmd)
+{
+  do_cmdline_cmd(cmd);
+}
+
+/// Check if curbuf has a specific quickfix/loclist flag
+bool nvim_qf_curbuf_has_flag(int flag)
+{
+  return (curbuf->b_has_qf_entry & flag) != 0;
+}
+
+/// Get curbuf file number for Rust
+int nvim_qf_curbuf_fnum(void)
+{
+  return curbuf->b_fnum;
+}
+
+/// Get curwin cursor position (with col adjusted +1 for 1-based qf columns) for Rust.
+/// Returns pointer to static storage; only valid until next call.
+const void *nvim_qf_curwin_pos_adj(void)
+{
+  static pos_T pos;
+  pos = curwin->w_cursor;
+  pos.col++;
+  return &pos;
+}
+
+/// Get mutable pointer to current list in quickfix stack for Rust
+void *nvim_qf_get_curlist_mut(void *qi_void)
+{
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  return (void *)&qi->qf_lists[qi->qf_curlist];
+}
+
 /// ":cc", ":crewind", ":cfirst" and ":clast".
 /// ":ll", ":lrewind", ":lfirst" and ":llast".
 /// ":cdo", ":ldo", ":cfdo" and ":lfdo".
 void ex_cc(exarg_T *eap)
 {
-  qf_info_T *qi;
-
-  if ((qi = qf_cmd_get_stack(eap, true)) == NULL) {
-    return;
-  }
-
-  int errornr;
-  if (eap->addr_count > 0) {
-    errornr = (int)eap->line2;
-  } else {
-    switch (eap->cmdidx) {
-    case CMD_cc:
-    case CMD_ll:
-      errornr = 0;
-      break;
-    case CMD_crewind:
-    case CMD_lrewind:
-    case CMD_cfirst:
-    case CMD_lfirst:
-      errornr = 1;
-      break;
-    default:
-      errornr = 32767;
-      break;
-    }
-  }
-
-  // For cdo and ldo commands, jump to the nth valid error.
-  // For cfdo and lfdo commands, jump to the nth valid file entry.
-  if (eap->cmdidx == CMD_cdo || eap->cmdidx == CMD_ldo
-      || eap->cmdidx == CMD_cfdo || eap->cmdidx == CMD_lfdo) {
-    size_t n;
-    if (eap->addr_count > 0) {
-      assert(eap->line1 >= 0);
-      n = (size_t)eap->line1;
-    } else {
-      n = 1;
-    }
-    size_t valid_entry = qf_get_nth_valid_entry(qf_get_curlist(qi), n,
-                                                eap->cmdidx == CMD_cfdo || eap->cmdidx == CMD_lfdo);
-    assert(valid_entry <= INT_MAX);
-    errornr = (int)valid_entry;
-  }
-
-  qf_jump(qi, 0, errornr, eap->forceit);
+  rs_ex_cc(eap);
 }
 
 /// ":cnext", ":cnfile", ":cNext" and ":cprevious".
@@ -6127,52 +6146,7 @@ void ex_cc(exarg_T *eap)
 /// ":cdo", ":ldo", ":cfdo" and ":lfdo".
 void ex_cnext(exarg_T *eap)
 {
-  qf_info_T *qi;
-
-  if ((qi = qf_cmd_get_stack(eap, true)) == NULL) {
-    return;
-  }
-
-  int errornr;
-  if (eap->addr_count > 0
-      && (eap->cmdidx != CMD_cdo && eap->cmdidx != CMD_ldo
-          && eap->cmdidx != CMD_cfdo && eap->cmdidx != CMD_lfdo)) {
-    errornr = (int)eap->line2;
-  } else {
-    errornr = 1;
-  }
-
-  // Depending on the command jump to either next or previous entry/file.
-  Direction dir;
-  switch (eap->cmdidx) {
-  case CMD_cprevious:
-  case CMD_lprevious:
-  case CMD_cNext:
-  case CMD_lNext:
-    dir = BACKWARD;
-    break;
-  case CMD_cnfile:
-  case CMD_lnfile:
-  case CMD_cfdo:
-  case CMD_lfdo:
-    dir = FORWARD_FILE;
-    break;
-  case CMD_cpfile:
-  case CMD_lpfile:
-  case CMD_cNfile:
-  case CMD_lNfile:
-    dir = BACKWARD_FILE;
-    break;
-  case CMD_cnext:
-  case CMD_lnext:
-  case CMD_cdo:
-  case CMD_ldo:
-  default:
-    dir = FORWARD;
-    break;
-  }
-
-  qf_jump(qi, dir, errornr, eap->forceit);
+  rs_ex_cnext(eap);
 }
 
 /// Jump to a quickfix entry in the current file nearest to the current line or
@@ -6181,59 +6155,7 @@ void ex_cnext(exarg_T *eap)
 /// ":lafter" and ":lbefore" commands
 void ex_cbelow(exarg_T *eap)
 {
-  if (eap->addr_count > 0 && eap->line2 <= 0) {
-    emsg(_(e_invrange));
-    return;
-  }
-
-  // Check whether the current buffer has any quickfix entries
-  int buf_has_flag = (eap->cmdidx == CMD_cabove
-                      || eap->cmdidx == CMD_cbelow
-                      || eap->cmdidx == CMD_cbefore
-                      || eap->cmdidx == CMD_cafter) ? BUF_HAS_QF_ENTRY : BUF_HAS_LL_ENTRY;
-
-  if (!(curbuf->b_has_qf_entry & buf_has_flag)) {
-    emsg(_(e_no_errors));
-    return;
-  }
-
-  qf_info_T *qi;
-  if ((qi = qf_cmd_get_stack(eap, true)) == NULL) {
-    return;
-  }
-
-  qf_list_T *qfl = qf_get_curlist(qi);
-  // check if the list has valid errors
-  if (!rs_qf_list_has_valid_entries(qfl)) {
-    emsg(_(e_no_errors));
-    return;
-  }
-
-  // Forward motion commands
-  int dir = (eap->cmdidx == CMD_cbelow
-             || eap->cmdidx == CMD_lbelow
-             || eap->cmdidx == CMD_cafter
-             || eap->cmdidx == CMD_lafter) ? FORWARD : BACKWARD;
-
-  pos_T pos = curwin->w_cursor;
-  // A quickfix entry column number is 1 based whereas cursor column
-  // number is 0 based. Adjust the column number.
-  pos.col++;
-  const int errornr = rs_qf_find_nth_adj_entry(qfl,
-                                               curbuf->b_fnum,
-                                               &pos,
-                                               eap->addr_count > 0 ? eap->line2 : 0,
-                                               dir,
-                                               eap->cmdidx == CMD_cbelow
-                                               || eap->cmdidx == CMD_lbelow
-                                               || eap->cmdidx == CMD_cabove
-                                               || eap->cmdidx == CMD_labove);
-
-  if (errornr > 0) {
-    qf_jump(qi, 0, errornr, false);
-  } else {
-    emsg(_(e_no_more_items));
-  }
+  rs_ex_cbelow(eap);
 }
 
 /// Return the autocmd name for the :cfile Ex commands
