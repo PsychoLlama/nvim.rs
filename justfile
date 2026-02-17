@@ -5,6 +5,8 @@ _:
 build:
     cargo build --release
     @test -f build/build.ninja || cmake -B build -G Ninja -DUSE_BUNDLED=OFF
+    @# Force relink when Rust library is newer than the binary (cmake doesn't track imported libs)
+    @if [ -f build/bin/nvim ] && [ target/release/libnvim_rs.a -nt build/bin/nvim ]; then rm -f build/bin/nvim; fi
     cmake --build build
 
 # Build with bundled dependencies (downloads deps)
