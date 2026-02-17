@@ -173,6 +173,7 @@ static unsigned last_qf_id = 0;   // Last Used quickfix list id
 
 extern bool rs_qf_stack_empty(const void *qi);
 extern bool rs_qf_list_empty(const void *qfl);
+extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
 
 // Phase 1: List lifecycle functions implemented in Rust
 extern void rs_qf_new_list(void *qi, const char *title);
@@ -6405,7 +6406,7 @@ static int vgr_process_args(exarg_T *eap, vgr_args_T *args)
   args->tomatch = eap->addr_count > 0 ? eap->line2 : MAXLNUM;
 
   // Get the search pattern: either white-separated or enclosed in //
-  char *p = skip_vimgrep_pat(eap->arg, &args->spat, &args->flags);
+  char *p = rs_skip_vimgrep_pat(eap->arg, &args->spat, &args->flags);
   if (p == NULL) {
     emsg(_(e_invalpat));
     return FAIL;

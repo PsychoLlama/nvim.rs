@@ -140,7 +140,7 @@ M.cmds = {
     command = 'ascii',
     flags = bit.bor(TRLBAR, SBOXOK, CMDWIN, LOCK_OK),
     addr_type = 'ADDR_NONE',
-    func = 'do_ascii',
+    func = 'rs_do_ascii',
   },
   {
     command = 'autocmd',
@@ -302,7 +302,7 @@ M.cmds = {
     command = 'change',
     flags = bit.bor(BANG, WHOLEFOLD, RANGE, COUNT, TRLBAR, CMDWIN, LOCK_OK, MODIFY),
     addr_type = 'ADDR_LINES',
-    func = 'ex_change',
+    func = 'rs_ex_change',
   },
   {
     command = 'cNext',
@@ -422,7 +422,7 @@ M.cmds = {
     command = 'center',
     flags = bit.bor(TRLBAR, RANGE, WHOLEFOLD, EXTRA, CMDWIN, LOCK_OK, MODIFY),
     addr_type = 'ADDR_LINES',
-    func = 'ex_align',
+    func = 'rs_ex_align',
   },
   {
     command = 'cexpr',
@@ -1420,7 +1420,7 @@ M.cmds = {
     command = 'left',
     flags = bit.bor(TRLBAR, RANGE, WHOLEFOLD, EXTRA, CMDWIN, LOCK_OK, MODIFY),
     addr_type = 'ADDR_LINES',
-    func = 'ex_align',
+    func = 'rs_ex_align',
   },
   {
     command = 'leftabove',
@@ -2280,7 +2280,7 @@ M.cmds = {
     command = 'right',
     flags = bit.bor(TRLBAR, RANGE, WHOLEFOLD, EXTRA, CMDWIN, LOCK_OK, MODIFY),
     addr_type = 'ADDR_LINES',
-    func = 'ex_align',
+    func = 'rs_ex_align',
   },
   {
     command = 'rightbelow',
@@ -3327,7 +3327,7 @@ M.cmds = {
     command = 'z',
     flags = bit.bor(RANGE, WHOLEFOLD, BANG, EXTRA, FLAGS, TRLBAR, CMDWIN, LOCK_OK),
     addr_type = 'ADDR_LINES',
-    func = 'ex_z',
+    func = 'rs_ex_z',
   },
   -- commands that don't start with a letter
   {

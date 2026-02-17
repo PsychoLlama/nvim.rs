@@ -26,7 +26,7 @@ extern "C" {
     fn skiptowhite(p: *const c_char) -> *const c_char;
     fn skipdigits(p: *const c_char) -> *mut c_char;
     fn skip_regexp(p: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
-    fn skip_vimgrep_pat(p: *mut c_char, s: *mut *mut c_char, flags: *mut c_int) -> *mut c_char;
+    fn rs_skip_vimgrep_pat(p: *mut c_char, s: *mut *mut c_char, flags: *mut c_int) -> *mut c_char;
     fn find_nextcmd(p: *const c_char) -> *const c_char;
     fn ends_excmd(c: c_int) -> c_int;
     fn magic_isset() -> c_int;
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn rs_set_context_in_filter_cmd(
 ) -> *const c_char {
     let mut p = arg;
     if *p != 0 {
-        p = skip_vimgrep_pat(p.cast_mut(), std::ptr::null_mut(), std::ptr::null_mut());
+        p = rs_skip_vimgrep_pat(p.cast_mut(), std::ptr::null_mut(), std::ptr::null_mut());
     }
     if p.is_null() || *p == 0 {
         nvim_expand_set_context(xp, ExpandContext::Nothing.to_raw());

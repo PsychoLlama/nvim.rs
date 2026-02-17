@@ -99,14 +99,6 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-// Rust implementations (used by public wrapper functions below)
-extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
-extern void rs_ex_align(exarg_T *eap);
-extern void rs_ex_z(exarg_T *eap);
-extern void rs_ex_copy(linenr_T line1, linenr_T line2, linenr_T dest);
-extern void rs_do_ascii(exarg_T *eap);
-extern void rs_ex_change(exarg_T *eap);
-
 /// Case matching style to use for :substitute
 typedef enum {
   kSubHonorOptions = 0,  ///< Honor the user's 'ignorecase'/'smartcase' options
@@ -360,18 +352,6 @@ _Static_assert(BL_FIX == 4, "BL_FIX mismatch");
 _Static_assert(TAB == '\011', "TAB mismatch");
 _Static_assert(EXFLAG_LIST == 0x01, "EXFLAG_LIST mismatch");
 _Static_assert(EXFLAG_NR == 0x02, "EXFLAG_NR mismatch");
-
-/// ":ascii" and "ga" implementation
-void do_ascii(exarg_T *eap)
-{
-  rs_do_ascii(eap);
-}
-
-/// ":left", ":center" and ":right": align text. Rust implementation.
-void ex_align(exarg_T *eap)
-{
-  rs_ex_align(eap);
-}
 
 // Buffer for two lines used during sorting.  They are allocated to
 // contain the longest line being sorted.
@@ -1061,12 +1041,6 @@ int do_move(linenr_T line1, linenr_T line2, linenr_T dest)
   buf_updates_send_changes(curbuf, line1 + extra, 0, num_lines);
 
   return OK;
-}
-
-/// ":copy"
-void ex_copy(linenr_T line1, linenr_T line2, linenr_T n)
-{
-  rs_ex_copy(line1, line2, n);
 }
 
 static char *prevcmd = NULL;        // the previous command
@@ -3112,17 +3086,6 @@ void ex_append(exarg_T *eap)
   ex_no_reprint = true;
 }
 
-/// ":change"
-void ex_change(exarg_T *eap)
-{
-  rs_ex_change(eap);
-}
-
-void ex_z(exarg_T *eap)
-{
-  rs_ex_z(eap);
-}
-
 /// @return  true if the secure flag is set and also give an error message.
 ///          Otherwise, return false.
 bool check_secure(void)
@@ -4828,18 +4791,6 @@ int ex_substitute_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_b
   }
 
   return 0;
-}
-
-/// Skip over the pattern argument of ":vimgrep /pat/[g][j]".
-/// Put the start of the pattern in "*s", unless "s" is NULL.
-///
-/// @param flags  if not NULL, put the flags in it: VGR_GLOBAL, VGR_NOJUMP.
-/// @param s      if not NULL, terminate the pattern with a NUL.
-///
-/// @return  a pointer to the char just past the pattern plus flags.
-char *skip_vimgrep_pat(char *p, char **s, int *flags)
-{
-  return rs_skip_vimgrep_pat(p, s, flags);
 }
 
 /// List v:oldfiles in a nice way.

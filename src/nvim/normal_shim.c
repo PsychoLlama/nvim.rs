@@ -227,6 +227,7 @@ extern void rs_nv_percent(cmdarg_T *cap);
 extern void rs_nv_tagpop(cmdarg_T *cap);
 extern void rs_nv_regreplay(cmdarg_T *cap);
 extern void rs_nv_ctrlh(cmdarg_T *cap);
+extern void rs_do_ascii(exarg_T *eap);
 
 /// This table contains one entry for every Normal or Visual mode command.
 /// The order doesn't matter, init_normal_cmds() will create a sorted index.
@@ -6648,7 +6649,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
   // "ga": Display the ascii value of the character under the
   // cursor.    It is displayed in decimal, hex, and octal. -- webb
   case 'a':
-    do_ascii(NULL);
+    rs_do_ascii(NULL);
     break;
 
   // "g8": Display the bytes used for the UTF-8 character under the

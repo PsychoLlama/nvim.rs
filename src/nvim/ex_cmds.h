@@ -20,4 +20,10 @@ enum {
   ECMD_ONE   = 1,   ///< use first line
 };
 
+// Rust Ex command implementations (dispatch table targets)
+extern void rs_do_ascii(exarg_T *eap);
+extern void rs_ex_align(exarg_T *eap);
+extern void rs_ex_change(exarg_T *eap);
+extern void rs_ex_z(exarg_T *eap);
+
 #include "ex_cmds.h.generated.h"

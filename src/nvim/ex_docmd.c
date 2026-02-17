@@ -159,6 +159,8 @@ extern int rs_parse_cmd_address(exarg_T *eap, const char **errormsg, bool silent
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
+extern void rs_ex_copy(linenr_T line1, linenr_T line2, linenr_T dest);
+extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 static const char e_ambiguous_use_of_user_defined_command[]
@@ -4873,7 +4875,7 @@ static void ex_copymove(exarg_T *eap)
       return;
     }
   } else {
-    ex_copy(eap->line1, eap->line2, n);
+    rs_ex_copy(eap->line1, eap->line2, n);
   }
   u_clearline(curbuf);
   beginline(BL_SOL | BL_FIX);
@@ -7549,7 +7551,7 @@ char *nvim_docmd_xstrdup(const char *s) { return xstrdup(s); }
 /// Wrap skip_vimgrep_pat for Rust.
 char *nvim_docmd_skip_vimgrep_pat(char *p, char **s, int *flags)
 {
-  return skip_vimgrep_pat(p, s, flags);
+  return rs_skip_vimgrep_pat(p, s, flags);
 }
 
 /// Wrap LAST_TAB_NR for Rust.
