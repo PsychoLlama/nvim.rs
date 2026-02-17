@@ -52,11 +52,6 @@
 
 // Rust FFI declarations - functions called from C code in this file
 extern void rs_load_current_state(synstate_T *from);
-extern void rs_find_endpos(int idx, int start_lnum, int start_col,
-                           int *m_endpos_lnum, int *m_endpos_col,
-                           int *hl_endpos_lnum, int *hl_endpos_col,
-                           int *flagsp, int *end_endpos_lnum, int *end_endpos_col,
-                           int *end_idx, reg_extmatch_T *start_ext);
 extern void rs_update_si_end(stateitem_T *sip, int startcol, int force);
 extern void rs_check_state_ends(void);
 extern void rs_update_si_attr(int idx);
@@ -4527,12 +4522,6 @@ void nvim_stateitem_set_cont_list(stateitem_T *item, int16_t *list)
   }
 }
 
-/// Get next_seqnr and increment it
-int nvim_syn_next_seqnr(void)
-{
-  return next_seqnr++;
-}
-
 /// Get next_match_idx
 int nvim_syn_get_next_match_idx_value(void)
 {
@@ -4573,12 +4562,6 @@ void nvim_syn_check_state_ends(void)
 void nvim_syn_call_update_si_attr(int idx)
 {
   rs_update_si_attr(idx);
-}
-
-/// Call check_keepend
-void nvim_syn_check_keepend(void)
-{
-  rs_check_keepend();
 }
 
 /// Call pop_current_state
@@ -4788,15 +4771,6 @@ int nvim_syn_has_keywords(void)
 int nvim_syn_has_keywords_ic(void)
 {
   return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0;
-}
-
-/// Check if a char is a keyword character at position in syn_buf
-int nvim_syn_is_keyword_char(char *line, int pos)
-{
-  if (syn_buf == NULL || line == NULL) {
-    return 0;
-  }
-  return vim_iswordp_buf(line + pos, syn_buf) ? 1 : 0;
 }
 
 /// Get the current line from syn_getcurline
@@ -5020,32 +4994,13 @@ void nvim_syn_unref_extmatch(reg_extmatch_T *em)
   unref_extmatch(em);
 }
 
-/// Call update_si_end from Rust
-void nvim_syn_update_si_end(stateitem_T *sip, int startcol, int force)
-{
-  rs_update_si_end(sip, startcol, force);
-}
-
 /// Call push_next_match from Rust
 stateitem_T *nvim_syn_push_next_match(void)
 {
   return rs_push_next_match();
 }
 
-/// Call find_endpos from Rust
-void nvim_syn_find_endpos(int idx, int start_lnum, int start_col,
-                          int *m_end_lnum, int *m_end_col,
-                          int *hl_end_lnum, int *hl_end_col,
-                          int *flagsp, int *end_end_lnum, int *end_end_col,
-                          int *end_idx, reg_extmatch_T *start_ext)
-{
-  rs_find_endpos(idx, start_lnum, start_col,
-                 m_end_lnum, m_end_col,
-                 hl_end_lnum, hl_end_col,
-                 flagsp,
-                 end_end_lnum, end_end_col,
-                 end_idx, start_ext);
-}
+
 
 /// Get synpat sp_flags by index
 int nvim_syn_get_pattern_flags(int idx)
@@ -5203,12 +5158,6 @@ int nvim_syn_finish_line(int syncing)
 void nvim_syn_update_ends(int startofline)
 {
   syn_update_ends(startofline != 0);
-}
-
-/// Call clear_syn_state from Rust
-void nvim_syn_clear_syn_state(void *p)
-{
-  clear_syn_state((synstate_T *)p);
 }
 
 /// Get current_line_id global
@@ -5686,57 +5635,16 @@ int nvim_syn_get_ic_setting(synblock_T *block)
 // Phase 143: Syntax State Machine Migration - C Accessors
 // =============================================================================
 
-/// Wrapper for syn_get_id - get syntax ID at a file position
-int nvim_syn_get_id(win_T *wp, int lnum, int col, int trans, int *spellp, int keep_state)
-{
-  bool spell = false;
-  int id = syn_get_id(wp, (linenr_T)lnum, (colnr_T)col, trans, spellp ? &spell : NULL, keep_state);
-  if (spellp) {
-    *spellp = spell ? 1 : 0;
-  }
-  return id;
-}
-
 /// Wrapper for get_syntax_info - get extra info about syntax item
 int nvim_get_syntax_info(int *seqnrp)
 {
   return get_syntax_info(seqnrp);
 }
 
-/// Wrapper for syn_get_concealed_id
-int nvim_syn_get_concealed_id(win_T *wp, int lnum, int col)
-{
-  return syn_get_concealed_id(wp, (linenr_T)lnum, (colnr_T)col);
-}
-
-/// Wrapper for syn_get_foldlevel
-int nvim_syn_get_foldlevel(win_T *wp, int lnum)
-{
-  return syn_get_foldlevel(wp, (linenr_T)lnum);
-}
-
 /// Wrapper for syntax_end_parsing
 void nvim_syntax_end_parsing(win_T *wp, int lnum)
 {
   syntax_end_parsing(wp, (linenr_T)lnum);
-}
-
-/// Wrapper for syn_stack_cleanup
-int nvim_syn_stack_cleanup(void)
-{
-  return syn_stack_cleanup() ? 1 : 0;
-}
-
-/// Get synmaxcol from current syntax buffer
-int nvim_syn_buf_get_synmaxcol(void)
-{
-  return (int)syn_buf->b_p_smc;
-}
-
-/// Get sync linebreaks from current synblock
-int nvim_syn_get_sync_linebreaks(void)
-{
-  return syn_block->b_syn_sync_linebreaks;
 }
 
 /// Set tick on synstate
