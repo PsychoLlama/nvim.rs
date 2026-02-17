@@ -84,7 +84,7 @@
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
-#include "window.c.generated.h"
+#include "window_shim.c.generated.h"
 
 // Rust fold FFI declarations
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);

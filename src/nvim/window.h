@@ -35,4 +35,4 @@ enum {
 
 EXTERN int tabpage_move_disallowed INIT( = 0);  ///< moving tabpages around disallowed
 
-#include "window.h.generated.h"
+#include "window_shim.h.generated.h"
