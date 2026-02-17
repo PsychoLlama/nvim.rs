@@ -1099,6 +1099,10 @@ typedef struct {
 
 #include "quickfix_shim.c.generated.h"
 
+// Rust fold FFI declarations
+extern void rs_foldOpenCursor(void);
+extern void rs_foldUpdateAll(win_T *win);
+
 static const char *e_no_more_items = N_("E553: No more items");
 static const char *e_current_quickfix_list_was_changed =
   N_("E925: Current quickfix list was changed");
@@ -4474,10 +4478,10 @@ bool nvim_qf_fdo_quickfix(void)
   return (fdo_flags & kOptFdoFlagQuickfix) != 0;
 }
 
-/// foldOpenCursor() wrapper
+/// rs_foldOpenCursor() wrapper
 void nvim_qf_fold_open_cursor(void)
 {
-  foldOpenCursor();
+  rs_foldOpenCursor();
 }
 
 /// setpcmark() wrapper
@@ -6692,7 +6696,7 @@ void nvim_decr_quickfix_busy(void)
 /// Fold update for current window after vimgrep.
 void nvim_vgr_foldUpdateAll_curwin(void)
 {
-  foldUpdateAll(curwin);
+  rs_foldUpdateAll(curwin);
 }
 
 /// Cleanup vgr_args: free title and regprog.

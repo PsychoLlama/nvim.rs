@@ -103,6 +103,9 @@ extern void rs_diff_invalidate(buf_T *buf);
 
 #include "fileio.c.generated.h"
 
+// Rust fold FFI declaration
+extern void rs_foldUpdateAll(win_T *win);
+
 extern int rs_default_fileformat(void);
 extern int rs_get_fileformat(buf_T *buf);
 
@@ -1689,7 +1692,7 @@ failed:
       rs_diff_invalidate(curbuf);
       // All folds in the window are invalid now.  Mark them for update
       // before triggering autocommands.
-      foldUpdateAll(curwin);
+      rs_foldUpdateAll(curwin);
     } else if (linecnt) {               // appended at least one line
       appended_lines_mark(from, linecnt);
     }
@@ -3146,7 +3149,7 @@ void buf_reload(buf_T *buf, int orig_mode, bool reload_options)
   FOR_ALL_TAB_WINDOWS(tp, wp) {
     if (wp->w_buffer == curwin->w_buffer
         && !foldmethodIsManual(wp)) {
-      foldUpdateAll(wp);
+      rs_foldUpdateAll(wp);
     }
   }
 

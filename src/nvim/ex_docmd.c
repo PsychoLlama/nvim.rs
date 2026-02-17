@@ -224,6 +224,9 @@ struct dbg_stuff {
 
 #include "ex_docmd.c.generated.h"
 
+// Rust fold FFI declaration
+extern int rs_foldManualAllowed(bool create);
+
 extern int rs_magic_isset(void);
 extern int rs_get_scrolloff_value(win_T *wp);
 
@@ -6272,7 +6275,7 @@ static void ex_nohlsearch(exarg_T *eap)
 
 static void ex_fold(exarg_T *eap)
 {
-  if (foldManualAllowed(true)) {
+  if (rs_foldManualAllowed(true)) {
     pos_T start = { eap->line1, 1, 0 };
     pos_T end = { eap->line2, 1, 0 };
     foldCreate(curwin, start, end);

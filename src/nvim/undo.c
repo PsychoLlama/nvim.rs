@@ -179,6 +179,9 @@ extern char *rs_f_undofile(const char *fname);
 
 #include "undo.c.generated.h"
 
+// Rust fold FFI declaration
+extern void rs_foldOpenCursor(void);
+
 static const char e_undo_list_corrupt[]
   = N_("E439: Undo list corrupt");
 static const char e_undo_line_missing[]
@@ -2664,7 +2667,7 @@ int nvim_undo_get_fdo_flags(void)
 /// Fold open cursor
 void nvim_undo_foldOpenCursor(void)
 {
-  foldOpenCursor();
+  rs_foldOpenCursor();
 }
 
 /// Check VIsual_active

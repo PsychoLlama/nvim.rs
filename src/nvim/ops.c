@@ -81,6 +81,10 @@
 
 #include "ops.c.generated.h"
 
+// Rust fold FFI declarations
+extern void rs_foldOpenCursor(void);
+extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive, bool had_visual);
+
 extern int rs_get_fileformat(buf_T *buf);
 
 // Rust implementations of operator functions
@@ -203,7 +207,7 @@ void op_shift(oparg_T *oap, bool curs_top, int amount)
     curwin->w_cursor.lnum--;            // put cursor on last line, for ":>"
   }
   // The cursor line is not in a closed fold
-  foldOpenCursor();
+  rs_foldOpenCursor();
 
   if (oap->line_count > p_report) {
     char *op = oap->op_type == OP_RSHIFT ? ">" : "<";
@@ -3940,7 +3944,7 @@ void nvim_dpo_dispatch_operator(cmdarg_T *cap, int gui_yank)
   case OP_FOLDDEL:
   case OP_FOLDDELREC:
     VIsual_reselect = false;
-    deleteFold(curwin, oap->start.lnum, oap->end.lnum,
+    rs_deleteFold(curwin, oap->start.lnum, oap->end.lnum,
                oap->op_type == OP_FOLDDELREC, oap->is_VIsual);
     break;
 

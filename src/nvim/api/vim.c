@@ -88,6 +88,9 @@
 
 #include "api/vim.c.generated.h"
 
+// Rust fold FFI declaration
+extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
+
 /// Gets a highlight group by name
 ///
 /// similar to |hlID()|, but allocates a new ID if not present.
@@ -2142,7 +2145,7 @@ DictAs(eval_statusline_ret) nvim_eval_statusline(String str, Dict(eval_statuslin
     decor_redraw_signs(wp, wp->w_buffer, lnum - 1, sattrs, &line_id, &cul_id, &num_id);
 
     statuscol.sattrs = sattrs;
-    statuscol.foldinfo = fold_info(wp, lnum);
+    statuscol.foldinfo = rs_fold_info(wp, lnum);
     win_update_cursorline(wp, &cursorline_fi);
     statuscol.sign_cul_id = use_cursor_line_highlight(wp, lnum) ? cul_id : 0;
     scl_hl_id = use_cursor_line_highlight(wp, lnum) ? HLF_CLS : HLF_SC;

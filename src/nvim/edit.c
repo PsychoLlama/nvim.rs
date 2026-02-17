@@ -109,6 +109,11 @@ typedef struct {
 
 extern int rs_get_scrolloff_value(win_T *wp);
 
+// Rust fold FFI declarations
+extern void rs_foldOpenCursor(void);
+extern void rs_foldCheckClose(void);
+extern void rs_foldUpdateAfterInsert(void);
+
 enum {
   BACKSPACE_CHAR = 1,
   BACKSPACE_WORD = 2,
@@ -929,10 +934,10 @@ linenr_T nvim_edit_curbuf_line_count(void)
   return curbuf->b_ml.ml_line_count;
 }
 
-/// Call foldOpenCursor() (accessor for Rust).
+/// Call rs_foldOpenCursor() (accessor for Rust).
 void nvim_edit_foldOpenCursor(void)
 {
-  foldOpenCursor();
+  rs_foldOpenCursor();
 }
 
 /// Call plain_vgetc() (accessor for Rust).
@@ -1416,7 +1421,7 @@ int nvim_edit_ins_eol(int c)
                      old_indent, NULL);
   old_indent = 0;
   can_cindent = true;
-  foldOpenCursor();
+  rs_foldOpenCursor();
 
   return i;
 }
@@ -1772,7 +1777,7 @@ static void insert_enter(InsertState *s)
   can_cindent = true;
   // The cursor line is not in a closed fold, unless restarting.
   if (did_restart_edit == 0) {
-    foldOpenCursor();
+    rs_foldOpenCursor();
   }
 
   // If 'showmode' is set, show the current (insert/replace/..) mode.
@@ -1814,7 +1819,7 @@ static void insert_enter(InsertState *s)
 
   pum_check_clear();
 
-  foldUpdateAfterInsert();
+  rs_foldUpdateAfterInsert();
   // When CTRL-C was typed got_int will be set, with the result
   // that the autocommands won't be executed. When mapped got_int
   // is not set, but let's keep the behavior the same.
@@ -1882,12 +1887,12 @@ static int insert_check(VimState *state)
 
   // Open fold at the cursor line, according to 'foldopen'.
   if (fdo_flags & kOptFdoFlagInsert) {
-    foldOpenCursor();
+    rs_foldOpenCursor();
   }
 
   // Close folds where the cursor isn't, according to 'foldclose'
   if (!char_avail()) {
-    foldCheckClose();
+    rs_foldCheckClose();
   }
 
   if (bt_prompt(curbuf)) {
@@ -2692,7 +2697,7 @@ normalchar:
 
     // When inserting a character the cursor line must never be in a
     // closed fold.
-    foldOpenCursor();
+    rs_foldOpenCursor();
     // Trigger autocompletion
     if (ins_compl_has_autocomplete() && !char_avail() && vim_isprintc(s->c)) {
       TRIGGER_AUTOCOMPLETE();
@@ -4267,7 +4272,7 @@ static bool ins_bs(int c, int mode, int *inserted_space_p)
   // E.g., when 'foldmethod' is indent and deleting the first non-white
   // char before a Tab.
   if (did_backspace) {
-    foldOpenCursor();
+    rs_foldOpenCursor();
   }
   return did_backspace;
 }

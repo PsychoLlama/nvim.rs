@@ -69,7 +69,7 @@ extern "C" {
     fn nvim_callback_set_need_maketitle(value: c_int);
 
     // Fold functions
-    fn newFoldLevel();
+    fn rs_newFoldLevel();
 
     // Langnoremap/langremap accessors
     fn nvim_callback_get_p_lnr() -> c_int;
@@ -268,7 +268,7 @@ pub extern "C" fn rs_did_set_paste() -> CallbackResult {
 /// Recalculate fold levels when 'foldlevel' changes.
 #[no_mangle]
 pub extern "C" fn rs_did_set_foldlevel(_args: *mut c_void) -> CallbackResult {
-    unsafe { newFoldLevel() };
+    unsafe { rs_newFoldLevel() };
     callback_ok()
 }
 

@@ -17,7 +17,7 @@ extern "C" {
     // Diff functions
     fn rs_diff_buf_adjust(win: WinHandle);
     fn foldmethodIsDiff(win: WinHandle) -> c_int;
-    fn foldUpdateAll(win: WinHandle);
+    fn rs_foldUpdateAll(win: WinHandle);
 
     // Fold functions
     fn foldmethodIsSyntax(win: WinHandle) -> c_int;
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn rs_did_set_diff(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
     rs_diff_buf_adjust(win);
     if foldmethodIsDiff(win) != 0 {
-        foldUpdateAll(win);
+        rs_foldUpdateAll(win);
     }
     callback_ok()
 }
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn rs_did_set_equalalways(args: *mut c_void) -> CallbackRe
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_foldminlines(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
-    foldUpdateAll(win);
+    rs_foldUpdateAll(win);
     callback_ok()
 }
 
@@ -164,7 +164,7 @@ pub unsafe extern "C" fn rs_did_set_foldminlines(args: *mut c_void) -> CallbackR
 pub unsafe extern "C" fn rs_did_set_foldnestmax(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
     if foldmethodIsSyntax(win) != 0 || foldmethodIsIndent(win) != 0 {
-        foldUpdateAll(win);
+        rs_foldUpdateAll(win);
     }
     callback_ok()
 }

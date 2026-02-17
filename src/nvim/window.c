@@ -86,6 +86,12 @@
 
 #include "window.c.generated.h"
 
+// Rust fold FFI declarations
+extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
+extern void rs_clearFolding(win_T *win);
+extern void rs_foldInitWin(win_T *wp);
+extern int rs_getDeepestNesting(win_T *wp);
+
 extern int rs_get_scrolloff_value(win_T *wp);
 extern int rs_win_locked(win_T *wp);
 extern int rs_win_valid(win_T *win);
@@ -2206,7 +2212,7 @@ int win_fdccol_count(win_T *wp)
   // auto:<NUM>
   if (strncmp(fdc, "auto", 4) == 0) {
     const int fdccol = fdc[4] == ':' ? fdc[5] - '0' : 1;
-    int needed_fdccols = getDeepestNesting(wp);
+    int needed_fdccols = rs_getDeepestNesting(wp);
     return MIN(fdccol, needed_fdccols);
   }
   return fdc[0] - '0';
@@ -2572,7 +2578,7 @@ void win_init(win_T *newp, win_T *oldp, int flags)
   // Keep same changelist position in new window.
   newp->w_changelistidx = oldp->w_changelistidx;
 
-  copyFoldingState(oldp, newp);
+  rs_copyFoldingState(oldp, newp);
 
   win_init_some(newp, oldp);
 
@@ -5294,7 +5300,7 @@ win_T *win_alloc(win_T *after, bool hidden)
   new_wp->w_fraction = 0;
   new_wp->w_prev_fraction_row = -1;
 
-  foldInitWin(new_wp);
+  rs_foldInitWin(new_wp);
   unblock_autocmds();
   new_wp->w_next_match_id = 1000;  // up to 1000 can be picked by the user
   return new_wp;
@@ -5316,7 +5322,7 @@ void free_wininfo(WinInfo *wip, buf_T *bp)
 void win_free(win_T *wp, tabpage_T *tp)
 {
   pmap_del(int)(&window_handles, wp->handle, NULL);
-  clearFolding(wp);
+  rs_clearFolding(wp);
 
   // reduce the reference count to the argument list.
   alist_unlink(wp->w_alist);

@@ -65,6 +65,9 @@
 
 #include "search.c.generated.h"
 
+// Rust fold FFI declaration
+extern void rs_foldOpenCursor(void);
+
 static const char e_search_hit_top_without_match_for_str[]
   = N_("E384: Search hit TOP without match for: %s");
 static const char e_search_hit_bottom_without_match_for_str[]
@@ -1713,7 +1716,7 @@ int current_search(int count, bool forward)
   }
 
   if (fdo_flags & kOptFdoFlagSearch && KeyTyped) {
-    foldOpenCursor();
+    rs_foldOpenCursor();
   }
 
   may_start_select('c');

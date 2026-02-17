@@ -116,6 +116,19 @@ static int VIsual_mode_orig = NUL;              // saved Visual mode
 
 #include "normal_shim.c.generated.h"
 
+// Rust fold FFI declarations
+extern int rs_hasAnyFolding(win_T *win);
+extern void rs_foldOpenCursor(void);
+extern void rs_foldCheckClose(void);
+extern void rs_newFoldLevel(void);
+extern int rs_foldManualAllowed(bool create);
+extern void rs_clearFolding(win_T *win);
+extern int rs_foldMoveTo(bool updown, int dir, int count);
+extern void rs_foldAdjustVisual(void);
+extern int rs_getDeepestNesting(win_T *wp);
+extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive, bool had_visual);
+extern void rs_foldUpdateAfterInsert(void);
+
 static const char e_changelist_is_empty[] = N_("E664: Changelist is empty");
 static const char e_cmdline_window_already_open[]
   = N_("E1292: Command-line window is already open");
@@ -1001,7 +1014,7 @@ unsigned int nvim_get_fdo_flags(void)
 /// Wrapper for foldOpenCursor.
 void nvim_foldOpenCursor(void)
 {
-  foldOpenCursor();
+  rs_foldOpenCursor();
 }
 
 /// Set ins_at_eol global.
@@ -2260,7 +2273,7 @@ void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
   }
 
   if ((fdo_flags & kOptFdoFlagSearch) && KeyTyped && oap->op_type == OP_NOP) {
-    foldOpenCursor();
+    rs_foldOpenCursor();
   }
   // clear any search statistics
   if (messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT)) {
@@ -3236,17 +3249,17 @@ static void normal_check_safe_state(NormalState *s)
 static void normal_check_folds(NormalState *s)
 {
   // Include a closed fold completely in the Visual area.
-  foldAdjustVisual();
+  rs_foldAdjustVisual();
 
   // When 'foldclose' is set, apply 'foldlevel' to folds that don't
   // contain the cursor.
   // When 'foldopen' is "all", open the fold(s) under the cursor.
   // This may mark the window for redrawing.
-  if (hasAnyFolding(curwin) && !char_avail()) {
-    foldCheckClose();
+  if (rs_hasAnyFolding(curwin) && !char_avail()) {
+    rs_foldCheckClose();
 
     if (fdo_flags & kOptFdoFlagAll) {
-      foldOpenCursor();
+      rs_foldOpenCursor();
     }
   }
 }
@@ -4039,7 +4052,7 @@ static void nv_gd(oparg_T *oap, int nchar, int thisblock)
   }
 
   if ((fdo_flags & kOptFdoFlagSearch) && KeyTyped && oap->op_type == OP_NOP) {
-    foldOpenCursor();
+    rs_foldOpenCursor();
   }
   // clear any search statistics
   if (messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT)) {
@@ -4618,7 +4631,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   // "zf": create fold operator
   case 'F':
   case 'f':
-    if (foldManualAllowed(true)) {
+    if (rs_foldManualAllowed(true)) {
       cap->nchar = 'f';
       rs_nv_operator(cap);
       curwin->w_p_fen = true;
@@ -4637,11 +4650,11 @@ static void nv_zet_impl(cmdarg_T *cap)
   // "zD": delete fold at cursor recursively
   case 'd':
   case 'D':
-    if (foldManualAllowed(false)) {
+    if (rs_foldManualAllowed(false)) {
       if (VIsual_active) {
         rs_nv_operator(cap);
       } else {
-        deleteFold(curwin, curwin->w_cursor.lnum,
+        rs_deleteFold(curwin, curwin->w_cursor.lnum,
                    curwin->w_cursor.lnum, nchar == 'D', false);
       }
     }
@@ -4650,10 +4663,10 @@ static void nv_zet_impl(cmdarg_T *cap)
   // "zE": erase all folds
   case 'E':
     if (foldmethodIsManual(curwin)) {
-      clearFolding(curwin);
+      rs_clearFolding(curwin);
       changed_window_setting(curwin);
     } else if (foldmethodIsMarker(curwin)) {
-      deleteFold(curwin, 1, curbuf->b_ml.ml_line_count, true, false);
+      rs_deleteFold(curwin, 1, curbuf->b_ml.ml_line_count, true, false);
     } else {
       emsg(_("E352: Cannot erase folds with current 'foldmethod'"));
     }
@@ -4734,15 +4747,15 @@ static void nv_zet_impl(cmdarg_T *cap)
 
   // "zv": open folds at the cursor
   case 'v':
-    foldOpenCursor();
+    rs_foldOpenCursor();
     break;
 
   // "zx": re-apply 'foldlevel' and open folds at the cursor
   case 'x':
     curwin->w_p_fen = true;
     curwin->w_foldinvalid = true;               // recompute folds
-    newFoldLevel();                             // update right now
-    foldOpenCursor();
+    rs_newFoldLevel();                             // update right now
+    rs_foldOpenCursor();
     break;
 
   // "zX": undo manual opens/closes, re-apply 'foldlevel'
@@ -4773,19 +4786,19 @@ static void nv_zet_impl(cmdarg_T *cap)
   case 'r':
     curwin->w_p_fdl += cap->count1;
     {
-      int d = getDeepestNesting(curwin);
+      int d = rs_getDeepestNesting(curwin);
       curwin->w_p_fdl = MIN(curwin->w_p_fdl, d);
     }
     break;
 
   case 'R':     //  "zR": open all folds
-    curwin->w_p_fdl = getDeepestNesting(curwin);
+    curwin->w_p_fdl = rs_getDeepestNesting(curwin);
     old_fdl = -1;                       // force an update
     break;
 
   case 'j':     // "zj" move to next fold downwards
   case 'k':     // "zk" move to next fold upwards
-    if (foldMoveTo(true, nchar == 'j' ? FORWARD : BACKWARD,
+    if (rs_foldMoveTo(true, nchar == 'j' ? FORWARD : BACKWARD,
                    cap->count1) == false) {
       clearopbeep(cap->oap);
     }
@@ -4827,7 +4840,7 @@ static void nv_zet_impl(cmdarg_T *cap)
 
   // Redraw when 'foldlevel' changed.
   if (old_fdl != curwin->w_p_fdl) {
-    newFoldLevel();
+    rs_newFoldLevel();
   }
 }
 
@@ -5330,7 +5343,7 @@ static void nv_right_impl(cmdarg_T *cap)
   }
   if (n != cap->count1 && (fdo_flags & kOptFdoFlagHor) && KeyTyped
       && cap->oap->op_type == OP_NOP) {
-    foldOpenCursor();
+    rs_foldOpenCursor();
   }
 }
 
@@ -5389,7 +5402,7 @@ static void nv_left_impl(cmdarg_T *cap)
   }
   if (n != cap->count1 && (fdo_flags & kOptFdoFlagHor) && KeyTyped
       && cap->oap->op_type == OP_NOP) {
-    foldOpenCursor();
+    rs_foldOpenCursor();
   }
 }
 
@@ -5562,7 +5575,7 @@ static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int o
     }
     curwin->w_cursor.coladd = 0;
     if (cap->oap->op_type == OP_NOP && (fdo_flags & kOptFdoFlagSearch) && KeyTyped) {
-      foldOpenCursor();
+      rs_foldOpenCursor();
     }
   }
   // Redraw the window to refresh the highlighted matches.
@@ -5691,7 +5704,7 @@ static void nv_bracket_block(cmdarg_T *cap, const pos_T *old_pos)
     curwin->w_set_curswant = true;
     if ((fdo_flags & kOptFdoFlagBlock) && KeyTyped
         && cap->oap->op_type == OP_NOP) {
-      foldOpenCursor();
+      rs_foldOpenCursor();
     }
   }
 }
@@ -5770,7 +5783,7 @@ static void nv_brackets_impl(cmdarg_T *cap)
         beginline(BL_WHITE | BL_FIX);
       }
       if ((fdo_flags & kOptFdoFlagBlock) && KeyTyped && cap->oap->op_type == OP_NOP) {
-        foldOpenCursor();
+        rs_foldOpenCursor();
       }
     }
   } else if (cap->nchar == 'p' || cap->nchar == 'P') {
@@ -5803,7 +5816,7 @@ static void nv_brackets_impl(cmdarg_T *cap)
              cap->count1, PUT_FIXINDENT);
   } else if (cap->nchar == 'z') {
     // "[z" and "]z": move to start or end of open fold.
-    if (foldMoveTo(false, cap->cmdchar == ']' ? FORWARD : BACKWARD,
+    if (rs_foldMoveTo(false, cap->cmdchar == ']' ? FORWARD : BACKWARD,
                    cap->count1) == false) {
       clearopbeep(cap->oap);
     }
@@ -5828,7 +5841,7 @@ static void nv_brackets_impl(cmdarg_T *cap)
       curwin->w_set_curswant = true;
     }
     if (cap->oap->op_type == OP_NOP && (fdo_flags & kOptFdoFlagSearch) && KeyTyped) {
-      foldOpenCursor();
+      rs_foldOpenCursor();
     }
   } else {
     // Not a valid cap->nchar.
@@ -5995,7 +6008,7 @@ static void nv_replace_impl(cmdarg_T *cap)
     set_last_insert(cap->nchar);
   }
 
-  foldUpdateAfterInsert();
+  rs_foldUpdateAfterInsert();
 }
 
 /// 'o': Exchange start and end of Visual area.
@@ -6317,7 +6330,7 @@ static void n_start_visual_mode(int c)
   }
   VIsual = curwin->w_cursor;
 
-  foldAdjustVisual();
+  rs_foldAdjustVisual();
 
   may_trigger_modechanged();
   setmouse();
@@ -6381,7 +6394,7 @@ void nv_g_home_m_cmd(cmdarg_T *cap)
     curwin->w_valid &= ~VALID_WCOL;
   }
   curwin->w_set_curswant = true;
-  if (hasAnyFolding(curwin)) {
+  if (rs_hasAnyFolding(curwin)) {
     validate_cheight(curwin);
     if (curwin->w_cline_folded) {
       update_curswant_force();

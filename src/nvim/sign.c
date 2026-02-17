@@ -51,6 +51,9 @@
 
 #include "sign.c.generated.h"
 
+// Rust fold FFI declaration
+extern void rs_foldOpenCursor(void);
+
 // Rust FFI declarations
 extern int rs_sign_cmd_idx(const char *cmd);
 extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
@@ -763,7 +766,7 @@ linenr_T nvim_sign_jump_impl(int id, char *group, buf_T *buf)
     xfree(cmd);
   }
 
-  foldOpenCursor();
+  rs_foldOpenCursor();
   return lnum;
 }
 

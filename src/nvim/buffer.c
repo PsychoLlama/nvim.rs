@@ -116,6 +116,11 @@
 
 #include "buffer.c.generated.h"
 
+// Rust fold FFI declarations
+extern void rs_clearFolding(win_T *win);
+extern void rs_foldUpdateAll(win_T *win);
+extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
+
 // Rust implementations
 extern int rs_magic_isset(void);
 extern int rs_calc_percentage(int64_t part, int64_t whole);
@@ -1079,7 +1084,7 @@ int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg)
 
   // Need to update automatic folding.  Do this before the autocommands,
   // they may use the fold info.
-  foldUpdateAll(curwin);
+  rs_foldUpdateAll(curwin);
 
   // need to set w_topline, unless some autocommand already did that.
   if (!(curwin->w_valid & VALID_TOPLINE)) {
@@ -1536,7 +1541,7 @@ void buf_freeall(buf_T *buf, int flags)
   // No folds in an empty buffer.
   FOR_ALL_TAB_WINDOWS(tp, win) {
     if (win->w_buffer == buf) {
-      clearFolding(win);
+      rs_clearFolding(win);
     }
   }
 
@@ -2404,9 +2409,9 @@ static void enter_buffer(buf_T *buf)
     get_winopts(buf);
   } else {
     // Remove all folds in the window.
-    clearFolding(curwin);
+    rs_clearFolding(curwin);
   }
-  foldUpdateAll(curwin);        // update folds (later).
+  rs_foldUpdateAll(curwin);        // update folds (later).
 
   if (curwin->w_p_diff) {
     rs_diff_buf_add(curbuf);
@@ -3355,7 +3360,7 @@ void buflist_setfpos(buf_T *const buf, win_T *const win, linenr_T lnum, colnr_T 
     // Save the window-specific option values.
     copy_winopt(&win->w_onebuf_opt, &wip->wi_opt);
     wip->wi_fold_manual = win->w_fold_manual;
-    cloneFoldGrowArray(&win->w_folds, &wip->wi_folds);
+    rs_cloneFoldGrowArray(&win->w_folds, &wip->wi_folds);
     wip->wi_optset = true;
   }
 
@@ -3433,7 +3438,7 @@ static WinInfo *find_wininfo(buf_T *buf, bool need_options, bool skip_diff_buffe
 void get_winopts(buf_T *buf)
 {
   clear_winopt(&curwin->w_onebuf_opt);
-  clearFolding(curwin);
+  rs_clearFolding(curwin);
 
   WinInfo *const wip = find_wininfo(buf, true, true);
   if (wip != NULL && wip->wi_win != curwin && wip->wi_win != NULL
@@ -3442,12 +3447,12 @@ void get_winopts(buf_T *buf)
     copy_winopt(&wp->w_onebuf_opt, &curwin->w_onebuf_opt);
     curwin->w_fold_manual = wp->w_fold_manual;
     curwin->w_foldinvalid = true;
-    cloneFoldGrowArray(&wp->w_folds, &curwin->w_folds);
+    rs_cloneFoldGrowArray(&wp->w_folds, &curwin->w_folds);
   } else if (wip != NULL && wip->wi_optset) {
     copy_winopt(&wip->wi_opt, &curwin->w_onebuf_opt);
     curwin->w_fold_manual = wip->wi_fold_manual;
     curwin->w_foldinvalid = true;
-    cloneFoldGrowArray(&wip->wi_folds, &curwin->w_folds);
+    rs_cloneFoldGrowArray(&wip->wi_folds, &curwin->w_folds);
   } else {
     copy_winopt(&curwin->w_allbuf_opt, &curwin->w_onebuf_opt);
   }

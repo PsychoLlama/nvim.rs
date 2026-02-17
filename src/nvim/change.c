@@ -61,6 +61,10 @@
 extern int rs_diff_internal(void);
 extern void rs_diff_update_line(linenr_T lnum);
 
+// Rust fold FFI declarations
+extern int rs_hasAnyFolding(win_T *win);
+extern int rs_find_wl_entry(win_T *win, linenr_T lnum);
+
 /// Invalidate a window's w_valid flags and w_lines[] entries after changing lines.
 static void changed_lines_invalidate_win(win_T *wp, linenr_T lnum, colnr_T col, linenr_T lnume,
                                          linenr_T xtra)
@@ -68,7 +72,7 @@ static void changed_lines_invalidate_win(win_T *wp, linenr_T lnum, colnr_T col, 
   // If the changed line is in a range of previously folded lines,
   // compare with the first line in that range.
   if (wp->w_cursor.lnum <= lnum) {
-    int i = find_wl_entry(wp, lnum);
+    int i = rs_find_wl_entry(wp, lnum);
     if (i >= 0 && wp->w_cursor.lnum > wp->w_lines[i].wl_lnum) {
       changed_line_abv_curs_win(wp);
     }
@@ -263,7 +267,7 @@ void changed_common(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume, line
 
       // Take care of side effects for setting w_topline when folds have
       // changed.  Esp. when the buffer was changed in another window.
-      if (hasAnyFolding(wp)) {
+      if (rs_hasAnyFolding(wp)) {
         set_topline(wp, wp->w_topline);
       }
 

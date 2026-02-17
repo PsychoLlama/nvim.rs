@@ -30,6 +30,9 @@
 
 #include "decoration.c.generated.h"
 
+// Rust fold FFI declaration
+extern int rs_hasAnyFolding(win_T *win);
+
 // Rust implementations
 extern int rs_decor_virt_pos(void *range);
 extern int rs_decor_virt_pos_kind(void *range);
@@ -611,7 +614,7 @@ int nvim_decor_conceal_line(win_T *wp, int row, int check_cursor)
 /// @return whether a window may have folded or concealed lines
 bool win_lines_concealed(win_T *wp)
 {
-  return hasAnyFolding(wp) || wp->w_p_cole >= 2;
+  return rs_hasAnyFolding(wp) || wp->w_p_cole >= 2;
 }
 
 /// Wrapper for win_lines_concealed for Rust FFI.

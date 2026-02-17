@@ -47,6 +47,10 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+// Rust fold FFI declaration
+extern void rs_foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2,
+                              linenr_T amount, linenr_T amount_after);
+
 // This file contains routines to maintain and manipulate marks.
 
 // If a named file mark's lnum is non-zero, it is valid.
@@ -438,7 +442,7 @@ void nvim_mark_diff_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
 void nvim_mark_fold_adjust(win_T *win, linenr_T line1, linenr_T line2,
                             linenr_T amount, linenr_T amount_after)
 {
-  foldMarkAdjust(win, line1, line2, amount, amount_after);
+  rs_foldMarkAdjust(win, line1, line2, amount, amount_after);
 }
 
 // Phase 5: Wininfo iteration

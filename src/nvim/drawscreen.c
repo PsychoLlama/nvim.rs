@@ -131,6 +131,10 @@ typedef enum {
 
 #include "drawscreen.c.generated.h"
 
+// Rust fold FFI declarations
+extern int rs_hasAnyFolding(win_T *win);
+extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
+
 // Rust FFI declarations for display calculations
 extern int rs_compute_foldcolumn(win_T *wp, int col);
 extern int rs_number_width(win_T *wp);
@@ -1809,7 +1813,7 @@ static void win_update(win_T *wp)
                         || (did_update == DID_LINE
                             && syntax_present(wp)
                             && ((foldmethodIsSyntax(wp)
-                                 && hasAnyFolding(wp))
+                                 && rs_hasAnyFolding(wp))
                                 || syntax_check_changed(lnum)))
                         // match in fixed position might need redraw
                         // if lines were inserted or deleted
@@ -1825,7 +1829,7 @@ static void win_update(win_T *wp)
       // Otherwise, display normally (can be several display lines when
       // 'wrap' is on).
       foldinfo_T foldinfo = wp->w_p_cul && lnum == wp->w_cursor.lnum
-                            ? cursorline_fi : fold_info(wp, lnum);
+                            ? cursorline_fi : rs_fold_info(wp, lnum);
 
       // If the line is concealed and has no filler lines, go to the next line.
       bool concealed = decor_conceal_line(wp, lnum - 1, false);
@@ -2057,7 +2061,7 @@ static void win_update(win_T *wp)
            && buf->b_mod_set && buf->b_mod_xlines != 0)
           || (wp->w_p_rnu && wp->w_last_cursor_lnum_rnu != wp->w_cursor.lnum)) {
         foldinfo_T info = wp->w_p_cul && lnum == wp->w_cursor.lnum
-                          ? cursorline_fi : fold_info(wp, lnum);
+                          ? cursorline_fi : rs_fold_info(wp, lnum);
         win_line(wp, lnum, srow, wp->w_view_height, wp->w_lines[idx].wl_size, false, &spv, info);
       }
 
@@ -2840,7 +2844,7 @@ linenr_T nvim_win_get_w_cursorline(win_T *wp) { return wp ? wp->w_cursorline : 0
 int nvim_fold_info(win_T *wp, linenr_T lnum, linenr_T *out_fi_lnum, linenr_T *out_fi_lines,
                    foldinfo_T *out_foldinfo)
 {
-  foldinfo_T fi = fold_info(wp, lnum);
+  foldinfo_T fi = rs_fold_info(wp, lnum);
   if (out_foldinfo) {
     *out_foldinfo = fi;
   }

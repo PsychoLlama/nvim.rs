@@ -363,7 +363,8 @@ win_T *nvim_win_get_next_in_tab(win_T *wp) { return wp->w_next; }
 
 void nvim_changed_line_abv_curs_win(win_T *wp) { changed_line_abv_curs_win(wp); }
 void nvim_approximate_botline_win(win_T *wp) { approximate_botline_win(wp); }
-int nvim_find_wl_entry(win_T *wp, linenr_T lnum) { return find_wl_entry(wp, lnum); }
+extern int rs_find_wl_entry(win_T *win, linenr_T lnum);
+int nvim_find_wl_entry(win_T *wp, linenr_T lnum) { return rs_find_wl_entry(wp, lnum); }
 // nvim_changed_cline_bef_curs exists in move.c
 
 // Window w_lines[] array accessors

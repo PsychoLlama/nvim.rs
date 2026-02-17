@@ -135,6 +135,12 @@ typedef struct {
 
 #include "ex_cmds_shim.c.generated.h"
 
+// Rust fold FFI declarations
+extern int rs_hasAnyFolding(win_T *win);
+extern void rs_foldMoveRange(win_T *wp, garray_T *gap, linenr_T line1, linenr_T line2,
+                             linenr_T dest);
+extern void rs_foldUpdateAll(win_T *win);
+
 extern int rs_magic_isset(void);
 extern int rs_get_fileformat(buf_T *buf);
 extern void rs_diff_buf_add(buf_T *buf);
@@ -973,7 +979,7 @@ int do_move(linenr_T line1, linenr_T line2, linenr_T dest)
     mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP);
     FOR_ALL_TAB_WINDOWS(tab, win) {
       if (win->w_buffer == curbuf) {
-        foldMoveRange(win, &win->w_folds, line1, line2, dest);
+        rs_foldMoveRange(win, &win->w_folds, line1, line2, dest);
       }
     }
     if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
@@ -986,7 +992,7 @@ int do_move(linenr_T line1, linenr_T line2, linenr_T dest)
     mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP);
     FOR_ALL_TAB_WINDOWS(tab, win) {
       if (win->w_buffer == curbuf) {
-        foldMoveRange(win, &win->w_folds, dest + 1, line1 - 1, line2);
+        rs_foldMoveRange(win, &win->w_folds, dest + 1, line1 - 1, line2);
       }
     }
     if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
@@ -2745,7 +2751,7 @@ int do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap, linenr_T newlnum
     // automatic folding for all windows where it's used.
     FOR_ALL_TAB_WINDOWS(tp, win) {
       if (win->w_buffer == curbuf) {
-        foldUpdateAll(win);
+        rs_foldUpdateAll(win);
       }
     }
 
@@ -4352,7 +4358,7 @@ skip:
     }
   }
 
-  if (subflags.do_ask && hasAnyFolding(curwin)) {
+  if (subflags.do_ask && rs_hasAnyFolding(curwin)) {
     // Cursor position may require updating
     changed_window_setting(curwin);
   }

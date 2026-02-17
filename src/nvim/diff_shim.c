@@ -172,6 +172,10 @@ typedef enum {
 
 #include "diff_shim.c.generated.h"
 
+// Rust fold FFI declarations
+extern void rs_newFoldLevel(void);
+extern void rs_foldUpdateAll(win_T *win);
+
 #define FOR_ALL_DIFFBLOCKS_IN_TAB(tp, dp) \
   for ((dp) = (tp)->tp_first_diff; (dp) != NULL; (dp) = (dp)->df_next)
 
@@ -196,7 +200,7 @@ void diff_redraw(bool dofold)
       wp_other = wp;
     }
     if (dofold && foldmethodIsDiff(wp)) {
-      foldUpdateAll(wp);
+      rs_foldUpdateAll(wp);
     }
 
     // A change may have made filler lines invalid, need to take care of
@@ -763,7 +767,7 @@ void diff_win_options(win_T *wp, bool addbuf)
 
   // close the manually opened folds
   curwin = wp;
-  newFoldLevel();
+  rs_newFoldLevel();
   curwin = old_curwin;
 
   // Use 'scrollbind' and 'cursorbind' when available
@@ -808,7 +812,7 @@ void diff_win_options(win_T *wp, bool addbuf)
   snprintf(wp->w_p_fdc, strlen(wp->w_p_fdc) + 1, "%d", diff_foldcolumn);
   wp->w_p_fen = true;
   wp->w_p_fdl = 0;
-  foldUpdateAll(wp);
+  rs_foldUpdateAll(wp);
 
   // make sure topline is not halfway through a fold
   changed_window_setting(wp);
@@ -870,7 +874,7 @@ void ex_diffoff(exarg_T *eap)
           wp->w_p_fen = foldmethodIsManual(wp) ? false : wp->w_p_fen_save;
         }
 
-        foldUpdateAll(wp);
+        rs_foldUpdateAll(wp);
       }
       // remove filler lines
       wp->w_topfill = 0;
@@ -1661,7 +1665,7 @@ theend:
   if (curtab->tp_first_diff == NULL) {
     FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
       if (wp->w_p_diff && wp->w_p_fdm[0] == 'd' && wp->w_p_fen) {
-        foldUpdateAll(wp);
+        rs_foldUpdateAll(wp);
       }
     }
   }

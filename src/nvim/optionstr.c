@@ -58,6 +58,10 @@
 
 #include "optionstr.c.generated.h"
 
+// Rust fold FFI declarations
+extern void rs_foldUpdateAll(win_T *win);
+extern void rs_newFoldLevel(void);
+
 extern void rs_did_set_title(void);
 extern int rs_valid_name(const char *val, const char *allowed);
 extern int rs_get_fileformat(buf_T *buf);
@@ -1324,7 +1328,7 @@ const char *did_set_foldexpr(optset_T *args)
   win_T *win = (win_T *)args->os_win;
   did_set_optexpr(args);
   if (foldmethodIsExpr(win)) {
-    foldUpdateAll(win);
+    rs_foldUpdateAll(win);
   }
   return NULL;
 }
@@ -1334,7 +1338,7 @@ const char *did_set_foldignore(optset_T *args)
 {
   win_T *win = (win_T *)args->os_win;
   if (foldmethodIsIndent(win)) {
-    foldUpdateAll(win);
+    rs_foldUpdateAll(win);
   }
   return NULL;
 }
@@ -1355,7 +1359,7 @@ const char *did_set_foldmarker(optset_T *args)
   }
 
   if (foldmethodIsMarker(win)) {
-    foldUpdateAll(win);
+    rs_foldUpdateAll(win);
   }
 
   return NULL;
@@ -1369,9 +1373,9 @@ const char *did_set_foldmethod(optset_T *args)
     return errmsg;
   }
   win_T *win = (win_T *)args->os_win;
-  foldUpdateAll(win);
+  rs_foldUpdateAll(win);
   if (foldmethodIsDiff(win)) {
-    newFoldLevel();
+    rs_newFoldLevel();
   }
   return NULL;
 }
@@ -2085,7 +2089,7 @@ const char *did_set_vartabstop(optset_T *args)
   if (tabstop_set(*varp, &(buf->b_p_vts_array))) {
     xfree(oldarray);
     if (foldmethodIsIndent(win)) {
-      foldUpdateAll(win);
+      rs_foldUpdateAll(win);
     }
   } else {
     return e_invarg;

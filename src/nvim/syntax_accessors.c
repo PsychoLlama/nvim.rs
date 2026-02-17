@@ -176,6 +176,9 @@ typedef struct {
 
 #include "syntax_accessors.c.generated.h"
 
+// Rust fold FFI declaration
+extern void rs_foldUpdateAll(win_T *win);
+
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
 
@@ -514,7 +517,7 @@ void syn_stack_free_all(synblock_T *block)
   // When using "syntax" fold method, must update all folds.
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
     if (wp->w_s == block && foldmethodIsSyntax(wp)) {
-      foldUpdateAll(wp);
+      rs_foldUpdateAll(wp);
     }
   }
 }
@@ -6224,10 +6227,10 @@ int nvim_syn_foldmethod_is_syntax_curwin(void)
   return foldmethodIsSyntax(curwin);
 }
 
-/// Wrap foldUpdateAll(curwin) for Rust.
+/// Wrap rs_foldUpdateAll(curwin) for Rust.
 void nvim_syn_fold_update_all_curwin(void)
 {
-  foldUpdateAll(curwin);
+  rs_foldUpdateAll(curwin);
 }
 
 /// Find the pattern index matching sync_id + SPTYPE_START in curwin's patterns.

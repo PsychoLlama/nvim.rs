@@ -540,6 +540,9 @@ typedef enum {
 
 #include "option_shim.c.generated.h"
 
+// Rust fold FFI declaration
+extern void rs_foldUpdateAll(win_T *win);
+
 // options[] is initialized in options.generated.h.
 // The options with a NULL variable are 'hidden': a set command for them is
 // ignored and they are not printed.
@@ -2641,7 +2644,7 @@ static const char *did_set_shiftwidth_tabstop(optset_T *args)
   OptInt *pp = (OptInt *)args->os_varp;
 
   if (foldmethodIsIndent(win)) {
-    foldUpdateAll(win);
+    rs_foldUpdateAll(win);
   }
   // When 'shiftwidth' changes, or it's zero and 'tabstop' changes:
   // parse 'cinoptions'.

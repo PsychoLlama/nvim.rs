@@ -201,19 +201,6 @@ static char *foldendmarker;
 static size_t foldendmarkerlen;
 
 // Exported folding functions. {{{1
-// copyFoldingState() {{{2
-/// Copy that folding state from window "wp_from" to window "wp_to".
-void copyFoldingState(win_T *wp_from, win_T *wp_to)
-{
-  rs_copyFoldingState(wp_from, wp_to);
-}
-
-// hasAnyFolding() {{{2
-/// @return  true if there may be folded lines in window "win".
-int hasAnyFolding(win_T *win)
-{
-  return rs_hasAnyFolding(win);
-}
 
 // hasFolding() {{{2
 /// When returning true, *firstp and *lastp are set to the first and last
@@ -285,21 +272,6 @@ bool lineFolded(win_T *const win, const linenr_T lnum)
 int nvim_lineFolded(win_T *wp, linenr_T lnum)
 {
   return lineFolded(wp, lnum) ? 1 : 0;
-}
-
-// fold_info() {{{2
-///
-/// Count the number of lines that are folded at line number "lnum".
-/// Normally "lnum" is the first line of a possible fold, and the returned
-/// number is the number of lines in the fold.
-/// Doesn't use caching from the displayed window.
-///
-/// @return with the fold level info.
-///         fi_lines = number of folded lines from "lnum",
-///                    or 0 if line is not folded.
-foldinfo_T fold_info(win_T *win, linenr_T lnum)
-{
-  return rs_fold_info(win, lnum);
 }
 
 // foldmethodIsManual() {{{2
@@ -387,34 +359,6 @@ void openFoldRecurse(pos_T pos)
   setManualFold(pos, true, true, NULL);
 }
 
-// foldOpenCursor() {{{2
-/// Open folds until the cursor line is not in a closed fold.
-void foldOpenCursor(void)
-{
-  rs_foldOpenCursor();
-}
-
-// newFoldLevel() {{{2
-/// Set new foldlevel for current window.
-void newFoldLevel(void)
-{
-  rs_newFoldLevel();
-}
-
-// foldCheckClose() {{{2
-/// Apply 'foldlevel' to all folds that don't contain the cursor.
-void foldCheckClose(void)
-{
-  rs_foldCheckClose();
-}
-
-// foldManualAllowed() {{{2
-/// @return  true if it's allowed to manually create or delete a fold or,
-///          give an error message and return false if not.
-int foldManualAllowed(bool create)
-{
-  return rs_foldManualAllowed(create);
-}
 
 // foldCreate() {{{2
 /// Create a fold from line "start" to line "end" (inclusive) in the current
@@ -422,24 +366,6 @@ int foldManualAllowed(bool create)
 void foldCreate(win_T *wp, pos_T start, pos_T end)
 {
   rs_foldCreate(wp, start.lnum, end.lnum);
-}
-
-// deleteFold() {{{2
-/// @param start delete all folds from start to end when not 0
-/// @param end delete all folds from start to end when not 0
-/// @param recursive delete recursively if true
-/// @param had_visual true when Visual selection used
-void deleteFold(win_T *const wp, const linenr_T start, const linenr_T end, const int recursive,
-                const bool had_visual)
-{
-  rs_deleteFold(wp, start, end, recursive, had_visual);
-}
-
-// clearFolding() {{{2
-/// Remove all folding for window "win".
-void clearFolding(win_T *win)
-{
-  rs_clearFolding(win);
 }
 
 // foldUpdate() {{{2
@@ -482,22 +408,6 @@ void foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
   }
 }
 
-/// Updates folds when leaving insert-mode.
-void foldUpdateAfterInsert(void)
-{
-  rs_foldUpdateAfterInsert();
-}
-
-// foldUpdateAll() {{{2
-/// Update all lines in a window for folding.
-/// Used when a fold setting changes or after reloading the buffer.
-/// The actual updating is postponed until fold info is used, to avoid doing
-/// every time a setting is changed or a syntax item is added.
-void foldUpdateAll(win_T *win)
-{
-  rs_foldUpdateAll(win);
-}
-
 // C accessor for foldUpdateAll (for Rust to call from foldUpdateAfterInsert)
 void nvim_foldUpdateAll_c(win_T *win)
 {
@@ -505,57 +415,7 @@ void nvim_foldUpdateAll_c(win_T *win)
   redraw_later(win, UPD_NOT_VALID);
 }
 
-// foldMoveTo() {{{2
-///
-/// If "updown" is false: Move to the start or end of the fold.
-/// If "updown" is true: move to fold at the same level.
-/// @return FAIL if not moved.
-///
-/// @param dir  FORWARD or BACKWARD
-int foldMoveTo(const bool updown, const int dir, const int count)
-{
-  return rs_foldMoveTo(updown, dir, count);
-}
-
-// foldInitWin() {{{2
-/// Init the fold info in a new window.
-void foldInitWin(win_T *new_win)
-{
-  rs_foldInitWin(new_win);
-}
-
-// find_wl_entry() {{{2
-/// Find an entry in the win->w_lines[] array for buffer line "lnum".
-/// Only valid entries are considered (for entries where wl_valid is false the
-/// line number can be wrong).
-///
-/// @return  index of entry or -1 if not found.
-int find_wl_entry(win_T *win, linenr_T lnum)
-{
-  return rs_find_wl_entry(win, lnum);
-}
-
-// foldAdjustVisual() {{{2
-/// Adjust the Visual area to include any fold at the start or end completely.
-void foldAdjustVisual(void)
-{
-  rs_foldAdjustVisual();
-}
-
-// foldAdjustCursor() {{{2
-/// Move the cursor to the first line of a closed fold.
-void foldAdjustCursor(win_T *wp)
-{
-  rs_foldAdjustCursor(wp);
-}
-
 // Internal functions for "fold_T" {{{1
-// cloneFoldGrowArray() {{{2
-/// Will "clone" (i.e deep copy) a garray_T of folds.
-void cloneFoldGrowArray(garray_T *from, garray_T *to)
-{
-  rs_cloneFoldGrowArray(from, to);
-}
 
 // foldFind() {{{2
 /// Search for line "lnum" in folds of growarray "gap".
@@ -633,25 +493,6 @@ void deleteFoldRecurse(buf_T *bp, garray_T *gap)
 {
 #define DELETE_FOLD_NESTED(fd) deleteFoldRecurse(bp, &((fd)->fd_nested))
   GA_DEEP_CLEAR(gap, fold_T, DELETE_FOLD_NESTED);
-}
-
-// foldMarkAdjust() {{{2
-/// Update line numbers of folds for inserted/deleted lines.
-///
-/// We are adjusting the folds in the range from line1 til line2,
-/// make sure that line2 does not get smaller than line1
-void foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2, linenr_T amount,
-                    linenr_T amount_after)
-{
-  rs_foldMarkAdjust(wp, line1, line2, amount, amount_after);
-}
-
-// getDeepestNesting() {{{2
-/// Get the lowest 'foldlevel' value that makes the deepest nested fold in
-/// window `wp`.
-int getDeepestNesting(win_T *wp)
-{
-  return rs_getDeepestNesting(wp);
 }
 
 // foldCreateMarkers() {{{2
@@ -983,42 +824,6 @@ static void foldtext_cleanup(char *str)
       MB_PTR_ADV(s);
     }
   }
-}
-
-// foldMoveRange() {{{2
-/// Move folds within the inclusive range "line1" to "line2" to after "dest"
-/// require "line1" <= "line2" <= "dest"
-///
-/// There are the following situations for the first fold at or below line1 - 1.
-///       1  2  3  4
-///       1  2  3  4
-/// line1    2  3  4
-///          2  3  4  5  6  7
-/// line2       3  4  5  6  7
-///             3  4     6  7  8  9
-/// dest           4        7  8  9
-///                4        7  8    10
-///                4        7  8    10
-///
-/// In the following descriptions, "moved" means moving in the buffer, *and* in
-/// the fold array.
-/// Meanwhile, "shifted" just means moving in the buffer.
-/// 1. not changed
-/// 2. truncated above line1
-/// 3. length reduced by  line2 - line1, folds starting between the end of 3 and
-///    dest are truncated and shifted up
-/// 4. internal folds moved (from [line1, line2] to dest)
-/// 5. moved to dest.
-/// 6. truncated below line2 and moved.
-/// 7. length reduced by line2 - dest, folds starting between line2 and dest are
-///    removed, top is moved down by move_len.
-/// 8. truncated below dest and shifted up.
-/// 9. shifted up
-/// 10. not changed
-void foldMoveRange(win_T *const wp, garray_T *gap, const linenr_T line1, const linenr_T line2,
-                   const linenr_T dest)
-{
-  rs_foldMoveRange(wp, gap, line1, line2, dest);
 }
 
 // foldlevelIndent() {{{2
@@ -1456,7 +1261,7 @@ void f_foldtextresult(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   // Treat illegal types and illegal string values for {lnum} the same.
   lnum = MAX(lnum, 0);
 
-  foldinfo_T info = fold_info(curwin, lnum);
+  foldinfo_T info = rs_fold_info(curwin, lnum);
   if (info.fi_lines > 0) {
     VirtText vt = VIRTTEXT_EMPTY;
     char *text = get_foldtext(curwin, lnum, lnum + info.fi_lines - 1, info, buf, &vt);

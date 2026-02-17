@@ -716,6 +716,9 @@ extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose)
 
 #include "tag.c.generated.h"
 
+// Rust fold FFI declaration
+extern void rs_foldOpenCursor(void);
+
 static const char e_tag_stack_empty[]
   = N_("E73: Tag stack empty");
 static const char e_tag_not_found_str[]
@@ -2379,7 +2382,7 @@ int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
         set_topline(curwin, curwin->w_cursor.lnum);
       }
       if ((fdo_flags & kOptFdoFlagTag) && old_KeyTyped) {
-        foldOpenCursor();
+        rs_foldOpenCursor();
       }
     }
 
@@ -2541,7 +2544,7 @@ int nvim_tag_do_pop_jump(void *tg_void, int count, int forceit,
   curwin->w_set_curswant = true;
   check_cursor(curwin);
   if ((fdo_flags & kOptFdoFlagTag) && old_KeyTyped) {
-    foldOpenCursor();
+    rs_foldOpenCursor();
   }
   return 0;
 }
