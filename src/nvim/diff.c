@@ -201,7 +201,6 @@ extern void rs_diff_buf_delete(buf_T *buf);
 extern void rs_diff_buf_add(buf_T *buf);
 extern void rs_diff_buf_adjust(win_T *win);
 extern bool rs_diff_equal_entry_full(diff_T *dp, int idx1, int idx2);
-extern bool rs_diff_linematch(diff_T *dp);
 extern int rs_lnum_compare(const void *s1, const void *s2);
 extern bool rs_valid_diff(diff_T *diff);
 extern void rs_set_diff_option(win_T *wp, bool value);
@@ -319,15 +318,6 @@ typedef enum {
 void diff_buf_delete(buf_T *buf)
 {
   rs_diff_buf_delete(buf);
-}
-
-/// Check if the current buffer should be added to or removed from the list of
-/// diff buffers.
-///
-/// @param win
-void diff_buf_adjust(win_T *win)
-{
-  rs_diff_buf_adjust(win);
 }
 
 /// Add a buffer to make diffs for.
@@ -941,8 +931,8 @@ void ex_diffsplit(exarg_T *eap)
 
     if (bufref_valid(&old_curbuf)) {
       // Move the cursor position to that of the old window.
-      curwin->w_cursor.lnum = diff_get_corresponding_line(old_curbuf.br_buf,
-                                                          old_curwin->w_cursor.lnum);
+      curwin->w_cursor.lnum = rs_diff_get_corresponding_line(old_curbuf.br_buf,
+                                                             old_curwin->w_cursor.lnum);
     }
   }
   // Now that lines are folded scroll to show the cursor at the same
@@ -1083,7 +1073,7 @@ void ex_diffoff(exarg_T *eap)
       changed_window_setting(wp);
 
       // Note: 'sbo' is not restored, it's a global option.
-      diff_buf_adjust(wp);
+      rs_diff_buf_adjust(wp);
     }
     diffwin |= wp->w_p_diff;
   }
@@ -1115,12 +1105,6 @@ void diff_clear(tabpage_T *tp)
   FUNC_ATTR_NONNULL_ALL
 {
   rs_diff_clear(tp);
-}
-
-/// Return true if the options are set to use diff linematch.
-bool diff_linematch(diff_T *dp)
-{
-  return rs_diff_linematch(dp);
 }
 
 // find_top_diff_block — migrated to Rust (internal to rs_diff_set_topline)
@@ -2292,12 +2276,6 @@ int diff_move_to(int dir, int count)
   return rs_diff_move_to(dir, count);
 }
 
-/// Finds the corresponding line in a diff.
-linenr_T diff_get_corresponding_line(buf_T *buf1, linenr_T lnum1)
-{
-  return rs_diff_get_corresponding_line(buf1, lnum1);
-}
-
 /// For line "lnum" in the current window find the equivalent lnum in window
 /// "wp", compensating for inserted/deleted lines.
 linenr_T diff_lnum_win(linenr_T lnum, win_T *wp)
@@ -2735,7 +2713,7 @@ void nvim_diff_write_buffer(buf_T *buf, void *m, linenr_T start, linenr_T end)
 /// Wrapper for diff_get_corresponding_line for Rust FFI.
 linenr_T nvim_diff_get_corresponding_line(buf_T *buf, linenr_T lnum)
 {
-  return diff_get_corresponding_line(buf, lnum);
+  return rs_diff_get_corresponding_line(buf, lnum);
 }
 
 // =============================================================================

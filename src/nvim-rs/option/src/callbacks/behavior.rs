@@ -15,7 +15,7 @@ use crate::{BufHandle, OptInt, WinHandle};
 
 extern "C" {
     // Diff functions
-    fn diff_buf_adjust(win: WinHandle);
+    fn rs_diff_buf_adjust(win: WinHandle);
     fn foldmethodIsDiff(win: WinHandle) -> c_int;
     fn foldUpdateAll(win: WinHandle);
 
@@ -109,7 +109,7 @@ pub extern "C" fn rs_did_set_binary() -> CallbackResult {
 /// Adjusts diff buffer list and updates folds if using diff fold method.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_diff(win: WinHandle) -> CallbackResult {
-    diff_buf_adjust(win);
+    rs_diff_buf_adjust(win);
     if foldmethodIsDiff(win) != 0 {
         foldUpdateAll(win);
     }
