@@ -94,6 +94,7 @@ extern tabpage_T *rs_win_find_tabpage(win_T *win);
 
 // Rust fold FFI declaration
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
+extern unsigned rs_get_cot_flags(void);
 
 /// Gets a highlight group by name
 ///
@@ -2266,7 +2267,7 @@ DictAs(eval_statusline_ret) nvim_eval_statusline(String str, Dict(eval_statuslin
 DictOf(Float) nvim__complete_set(Integer index, Dict(complete_set) *opts, Arena *arena, Error *err)
 {
   Dict rv = arena_dict(arena, 2);
-  if ((get_cot_flags() & kOptCotFlagPopup) == 0) {
+  if ((rs_get_cot_flags() & kOptCotFlagPopup) == 0) {
     api_set_error(err, kErrorTypeException, "completeopt option does not include popup");
     return rv;
   }

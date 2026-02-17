@@ -82,14 +82,12 @@
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
-// Rust implementations of ctrl_x_mode_* functions
+// Rust rs_* function declarations (only those still called from this file)
 extern int rs_magic_isset(void);
-extern int rs_ctrl_x_mode_none(void);
 extern int rs_ctrl_x_mode_normal(void);
 extern int rs_ctrl_x_mode_scroll(void);
 extern int rs_ctrl_x_mode_whole_line(void);
 extern int rs_ctrl_x_mode_files(void);
-extern int rs_ctrl_x_mode_tags(void);
 extern int rs_ctrl_x_mode_path_patterns(void);
 extern int rs_ctrl_x_mode_path_defines(void);
 extern int rs_ctrl_x_mode_dictionary(void);
@@ -102,16 +100,10 @@ extern int rs_ctrl_x_mode_line_or_eval(void);
 extern int rs_ctrl_x_mode_register(void);
 extern int rs_ctrl_x_mode_not_default(void);
 extern int rs_ctrl_x_mode_not_defined_yet(void);
-// Rust implementations of compl_status_* functions
 extern int rs_compl_status_adding(void);
-extern int rs_compl_status_sol(void);
-extern int rs_compl_status_local(void);
-extern int rs_ins_compl_active(void);
-extern int rs_ins_compl_accept_char(int c);
 extern char *rs_find_word_start(char *ptr);
 extern char *rs_find_word_end(char *ptr);
 extern char *rs_find_line_end(char *ptr);
-// Rust implementations of internal helper functions (Phase 1)
 extern int rs_compl_dir_forward(void);
 extern int rs_compl_shows_dir_forward(void);
 extern int rs_compl_shows_dir_backward(void);
@@ -133,23 +125,15 @@ extern int rs_ins_compl_use_match(int c);
 extern void rs_ins_compl_make_linear(void);
 extern void rs_ins_compl_clear(void);
 extern int rs_ins_compl_win_active(win_T *wp);
-extern int rs_ins_compl_used_match(void);
 extern int rs_ins_compl_interrupted(void);
-extern int rs_ins_compl_enter_selects(void);
-extern int rs_ins_compl_col(void);
-extern int rs_ins_compl_len(void);
 extern int rs_ins_compl_has_preinsert(void);
 extern int rs_ins_compl_preinsert_effect(void);
 extern int rs_ins_compl_has_autocomplete(void);
-extern int rs_ins_compl_is_match_selected(void);
 extern int rs_ins_compl_preinsert_longest(void);
 extern const char *rs_ins_compl_leader(void);
 extern size_t rs_ins_compl_leader_len(void);
-extern int rs_ins_compl_has_shown_match(void);
-extern int rs_ins_compl_long_shown_match(void);
-extern int rs_ins_compl_lnum_in_range(int lnum);
-extern int rs_compl_match_curr_select(int selected);
 extern int rs_pum_wanted(void);
+extern unsigned rs_get_cot_flags(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -1011,12 +995,6 @@ static void ins_compl_add_matches(int num_matches, char **matches, int icase)
   FreeWild(num_matches, matches);
 }
 
-/// Get the local or global value of 'completeopt' flags.
-unsigned get_cot_flags(void)
-{
-  return curbuf->b_cot_flags != 0 ? curbuf->b_cot_flags : cot_flags;
-}
-
 /// Remove any popup menu.
 static void ins_compl_del_pum(void)
 {
@@ -1035,7 +1013,7 @@ extern int rs_pum_enough_matches(int menuone);
 static bool pum_enough_matches(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return rs_pum_enough_matches(((get_cot_flags() & kOptCotFlagMenuone) != 0)
+  return rs_pum_enough_matches(((rs_get_cot_flags() & kOptCotFlagMenuone) != 0)
                                || compl_autocomplete) != 0;
 }
 
@@ -1223,7 +1201,7 @@ static int ins_compl_build_pum(void)
     XFREE_CLEAR(compl_leader);
   }
 
-  bool compl_no_select = (get_cot_flags() & kOptCotFlagNoselect) != 0
+  bool compl_no_select = (rs_get_cot_flags() & kOptCotFlagNoselect) != 0
                          || (compl_autocomplete && !rs_ins_compl_has_preinsert());
 
   compl_T *match_head = NULL, *match_tail = NULL;
@@ -1870,7 +1848,7 @@ int ins_compl_bs(void)
 /// Calculate fuzzy score and sort completion matches unless sorting is disabled.
 static void ins_compl_fuzzy_sort(void)
 {
-  unsigned cur_cot_flags = get_cot_flags();
+  unsigned cur_cot_flags = rs_get_cot_flags();
 
   // Set the fuzzy score in cp_score and sort
   rs_set_fuzzy_score();
@@ -2368,7 +2346,7 @@ bool ins_compl_prep(int c)
   // Set "compl_get_longest" when finding the first matches.
   if (rs_ctrl_x_mode_not_defined_yet()
       || (rs_ctrl_x_mode_normal() && !compl_started)) {
-    compl_get_longest = (get_cot_flags() & kOptCotFlagLongest) != 0;
+    compl_get_longest = (rs_get_cot_flags() & kOptCotFlagLongest) != 0;
     compl_used_match = true;
   }
 
@@ -2917,7 +2895,7 @@ static void restore_orig_extmarks(void)
 static void set_completion(colnr_T startcol, list_T *list)
 {
   int flags = CP_ORIGINAL_TEXT;
-  unsigned cur_cot_flags = get_cot_flags();
+  unsigned cur_cot_flags = rs_get_cot_flags();
   bool compl_longest = (cur_cot_flags & kOptCotFlagLongest) != 0;
   bool compl_no_insert = (cur_cot_flags & kOptCotFlagNoinsert) != 0;
   bool compl_no_select = (cur_cot_flags & kOptCotFlagNoselect) != 0;
@@ -4758,7 +4736,7 @@ static int find_next_completion_match(bool allow_get_expansion, int todo, bool a
 {
   bool found_end = false;
   compl_T *found_compl = NULL;
-  unsigned cur_cot_flags = get_cot_flags();
+  unsigned cur_cot_flags = rs_get_cot_flags();
   bool compl_no_select = (cur_cot_flags & kOptCotFlagNoselect) != 0
                          || (compl_autocomplete && !rs_ins_compl_has_preinsert());
 
@@ -4869,7 +4847,7 @@ static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match
   int todo = count;
   const bool started = compl_started;
   buf_T *const orig_curbuf = curbuf;
-  unsigned cur_cot_flags = get_cot_flags();
+  unsigned cur_cot_flags = rs_get_cot_flags();
   bool compl_no_insert = (cur_cot_flags & kOptCotFlagNoinsert) != 0
                          || (compl_autocomplete && !rs_ins_compl_has_preinsert());
   bool compl_preinsert = rs_ins_compl_has_preinsert();

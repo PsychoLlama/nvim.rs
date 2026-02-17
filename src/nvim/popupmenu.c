@@ -65,6 +65,7 @@
 extern int rs_ins_compl_active(void);
 extern const char *rs_ins_compl_leader(void);
 extern int rs_compl_match_curr_select(int selected);
+extern unsigned rs_get_cot_flags(void);
 extern void rs_win_setheight(int height);
 extern int rs_pum_visible(void);
 extern int rs_pum_drawn(void);
@@ -670,7 +671,7 @@ char *nvim_pum_get_compl_leader(void)
 int nvim_pum_compl_is_fuzzy(void)
 {
   return (State & MODE_CMDLINE) ? cmdline_compl_is_fuzzy()
-                                : (get_cot_flags() & kOptCotFlagFuzzy) != 0;
+                                : (rs_get_cot_flags() & kOptCotFlagFuzzy) != 0;
 }
 
 /// Fuzzy match helper: returns flat array of matching positions and count.
@@ -1318,7 +1319,7 @@ void nvim_pum_border_cfg_free(PumBorderConfig *cfg)
 /// Get 'completeopt' flags.
 unsigned nvim_pum_get_cot_flags(void)
 {
-  return get_cot_flags();
+  return rs_get_cot_flags();
 }
 
 /// Hide a floating preview window by setting its hide flag and reconfiguring.
