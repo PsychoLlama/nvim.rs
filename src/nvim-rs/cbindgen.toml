@@ -574,7 +574,7 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            # Regexp utility functions
            "rs_no_magic", "rs_toggle_magic", "rs_re_multi_type", "rs_backslash_trans",
            "rs_init_class_tab",
-           "rs_re_multiline",
+           "re_multiline",
            # Runtime path searching (Phase 5)
            "rs_source_callback_vim_lua", "rs_source_callback",
            "rs_gen_expand_wildcards_and_cb", "rs_do_in_path_and_pp",

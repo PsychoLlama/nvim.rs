@@ -147,7 +147,7 @@ extern int rs_toggle_magic(int x);
 extern int rs_re_multi_type(int c);
 extern int rs_backslash_trans(int c);
 extern void rs_init_class_tab(int16_t *out);
-extern int rs_re_multiline(const void *prog);
+extern int re_multiline(const void *prog);
 extern int64_t rs_gethexchrs(int maxinputlen);
 extern int64_t rs_getdecchrs(void);
 extern int64_t rs_getoctchrs(void);
@@ -709,7 +709,7 @@ struct mock_regprog {
 
 #define RF_HASNL 4
 
-// Accessor stub — rs_re_multiline calls this via FFI
+// Accessor stub — re_multiline calls this via FFI
 unsigned int nvim_regexp_get_regflags(const void *prog) {
     const struct mock_regprog *p = (const struct mock_regprog *)prog;
     return p->regflags;
@@ -721,28 +721,28 @@ void test_re_multiline(void) {
     // Test 1: RF_HASNL set
     {
         struct mock_regprog prog = { .engine = NULL, .regflags = RF_HASNL };
-        int result = rs_re_multiline(&prog);
+        int result = re_multiline(&prog);
         TEST("RF_HASNL set -> non-zero", result != 0);
     }
 
     // Test 2: RF_HASNL not set
     {
         struct mock_regprog prog = { .engine = NULL, .regflags = 0 };
-        int result = rs_re_multiline(&prog);
+        int result = re_multiline(&prog);
         TEST("no flags -> 0", result == 0);
     }
 
     // Test 3: RF_HASNL set among other flags
     {
         struct mock_regprog prog = { .engine = NULL, .regflags = 1 | RF_HASNL | 8 };
-        int result = rs_re_multiline(&prog);
+        int result = re_multiline(&prog);
         TEST("mixed flags with RF_HASNL -> non-zero", result != 0);
     }
 
     // Test 4: other flags without RF_HASNL
     {
         struct mock_regprog prog = { .engine = NULL, .regflags = 1 | 2 | 8 };
-        int result = rs_re_multiline(&prog);
+        int result = re_multiline(&prog);
         TEST("other flags without RF_HASNL -> 0", result == 0);
     }
 }
