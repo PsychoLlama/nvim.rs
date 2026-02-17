@@ -404,7 +404,7 @@ int64_t nvim_get_p_tl(void)
 }
 
 // ============================================================================
-// Rust FFI accessor functions for findtags_state_T initialization (Phase 2)
+// Rust FFI accessor functions for findtags_state_T initialization
 // ============================================================================
 
 /// Allocate and set tag_fname field
@@ -472,7 +472,7 @@ void nvim_findtags_state_free_inner(void *st_void)
 }
 
 // ============================================================================
-// Rust FFI accessor functions for findtags_match_args_T (Phase 2)
+// Rust FFI accessor functions for findtags_match_args_T
 // ============================================================================
 
 /// Initialize findtags_match_args_T
@@ -696,7 +696,7 @@ static Callback tfu_cb;          // 'tagfunc' callback function
 #define TAG_SEP 0x02
 
 // ============================================================================
-// Rust FFI accessor functions for Phase 1 migration
+// Rust FFI accessor functions for tag globals
 // ============================================================================
 
 /// Free and clear the tagmatchname global
@@ -748,7 +748,7 @@ void nvim_do_tag_free(void)
 }
 
 // ============================================================================
-// Rust FFI accessor functions for Phase 3 (expand_tag_fname)
+// Rust FFI accessor functions for expand_tag_fname
 // ============================================================================
 
 /// Check if a path has wildcards
@@ -780,7 +780,7 @@ bool nvim_get_p_tr(void)
 }
 
 // ============================================================================
-// Rust FFI accessor functions for Phase 4 (search state machine)
+// Rust FFI accessor functions for search state machine
 // ============================================================================
 
 /// Get st->state
@@ -919,7 +919,7 @@ char *nvim_findtags_string_convert(void *st_void)
 }
 
 // ============================================================================
-// Rust FFI accessor functions for Phase 5 (parse line and matching)
+// Rust FFI accessor functions for parse line and matching
 // ============================================================================
 
 /// Get st->orgpat->headlen
@@ -1114,7 +1114,7 @@ void nvim_findtags_set_stop_searching(void *st_void, bool val)
 }
 
 // ============================================================================
-// Rust FFI accessor functions for Phase 6 (search orchestration)
+// Rust FFI accessor functions for search orchestration
 // ============================================================================
 
 /// Get st->is_txt
@@ -1296,7 +1296,7 @@ void nvim_findtags_set_linear_val(void *st_void, bool val)
   st->linear = val;
 }
 
-// Global variable accessors for Phase 6
+// Global variable accessors for search orchestration
 
 /// Set p_ic (ignorecase)
 void nvim_set_p_ic(int val)
@@ -1352,7 +1352,7 @@ int nvim_get_curbuf_b_help(void)
   return curbuf->b_help;
 }
 
-// Function wrappers for Phase 6
+// Function wrappers for search orchestration
 
 /// ins_compl_check_keys wrapper
 void nvim_ins_compl_check_keys(int interval, bool pum_wanted)
@@ -1435,7 +1435,7 @@ void nvim_findtags_prepare_pats(void *st_void, bool has_re)
 }
 
 // ============================================================================
-// Rust FFI accessor functions for Phase 7 (tag display and location list)
+// Rust FFI accessor functions for tag display and location list
 // ============================================================================
 
 // Verify highlight constants used in Rust
@@ -1661,7 +1661,7 @@ int nvim_tag_get_ptag_cur_match(void)
 }
 
 // ============================================================================
-// Rust FFI accessor functions for Phase 8 (VimL API and tag stack setters)
+// Rust FFI accessor functions for VimL API and tag stack setters
 // ============================================================================
 
 // Verify constants used in Rust
@@ -1856,7 +1856,7 @@ int nvim_tag_win_get_tagstacklen(const void *wp_void)
 }
 
 // ============================================================================
-// Phase 9 C accessor functions for tagfunc and option management
+// C accessor functions for tagfunc and option management
 // ============================================================================
 
 /// Free the global tfu_cb callback
@@ -2145,7 +2145,7 @@ _Static_assert(TAG_REGEXP == 4, "TAG_REGEXP value for Rust");
 _Static_assert(TAG_NAMES == 2, "TAG_NAMES value for Rust");
 
 // ============================================================================
-// Phase 10 C accessor functions for jumpto_tag
+// C accessor functions for jumpto_tag
 // ============================================================================
 
 /// High-level executor for jumpto_tag.
@@ -2357,11 +2357,11 @@ erret:
 }
 
 // ============================================================================
-// End of Phase 10 C accessor functions
+// End of jumpto_tag accessor functions
 // ============================================================================
 
 // ============================================================================
-// Phase 11 C accessor functions for do_tag() migration
+// C accessor functions for do_tag()
 // ============================================================================
 
 // Verify constants used by Rust
@@ -2657,7 +2657,7 @@ bool nvim_tag_nofile_fname_is_null(void)
 }
 
 // ============================================================================
-// End of Phase 11 C accessor functions
+// End of do_tag() accessor functions
 // ============================================================================
 
 /// Reads the 'tagfunc' option value and convert that to a callback value.
