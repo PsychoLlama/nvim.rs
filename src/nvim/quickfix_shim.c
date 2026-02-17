@@ -3997,51 +3997,17 @@ static void win_set_loclist(win_T *wp, qf_info_T *qi)
   qi->qf_refcount++;
 }
 
+// Rust exports for jump machinery
+extern int rs_qf_jump_to_help_window(void *qi, bool newwin, bool *opened_window);
+extern void rs_qf_goto_win_with_ll_file(void *use_win, int qf_fnum, void *ll_ref);
+extern void rs_qf_goto_win_with_qfl_file(int qf_fnum);
+extern int rs_qf_jump_to_usable_window(int qf_fnum, bool newwin, bool *opened_window);
+
 /// Find a help window or open one. If 'newwin' is true, then open a new help
 /// window.
 static int jump_to_help_window(qf_info_T *qi, bool newwin, bool *opened_window)
 {
-  win_T *wp = (cmdmod.cmod_tab != 0 || newwin) ? NULL : qf_find_help_win();
-
-  if (wp != NULL && wp->w_buffer->b_nwindows > 0) {
-    win_enter(wp, true);
-  } else {
-    // Split off help window; put it at far top if no position
-    // specified, the current window is vertically split and narrow.
-    int flags = WSP_HELP;
-    if (cmdmod.cmod_split == 0
-        && curwin->w_width != Columns
-        && curwin->w_width < 80) {
-      flags |= WSP_TOP;
-    }
-
-    // If the user asks to open a new window, then copy the location list.
-    // Otherwise, don't copy the location list.
-    if (IS_LL_STACK(qi) && !newwin) {
-      flags |= WSP_NEWLOC;
-    }
-
-    if (win_split(0, flags) == FAIL) {
-      return FAIL;
-    }
-
-    *opened_window = true;
-
-    if (curwin->w_height < p_hh) {
-      win_setheight((int)p_hh);
-    }
-
-    // When using location list, the new window should use the supplied
-    // location list. If the user asks to open a new window, then the new
-    // window will get a copy of the location list.
-    if (IS_LL_STACK(qi) && !newwin) {
-      win_set_loclist(curwin, qi);
-    }
-  }
-
-  restart_edit = 0;  // don't want insert mode in help file
-
-  return OK;
+  return rs_qf_jump_to_help_window(qi, newwin, opened_window);
 }
 
 /// Find a non-quickfix window using the given location list stack in the
@@ -4111,40 +4077,7 @@ static int qf_open_new_file_win(qf_info_T *ll_ref)
 // window is previously found, then it is supplied in 'use_win'.
 static void qf_goto_win_with_ll_file(win_T *use_win, int qf_fnum, qf_info_T *ll_ref)
 {
-  win_T *win = use_win;
-
-  if (win == NULL) {
-    // Find the window showing the selected file in the current tab page.
-    FOR_ALL_WINDOWS_IN_TAB(win2, curtab) {
-      if (win2->w_buffer->b_fnum == qf_fnum) {
-        win = win2;
-        break;
-      }
-    }
-    if (win == NULL) {
-      // Find a previous usable window
-      win = curwin;
-      do {
-        if (bt_normal(win->w_buffer)) {
-          break;
-        }
-        if (win->w_prev == NULL) {
-          win = lastwin;      // wrap around the top
-        } else {
-          win = win->w_prev;  // go to previous window
-        }
-      } while (win != curwin);
-    }
-  }
-  win_goto(win);
-
-  // If the location list for the window is not set, then set it
-  // to the location list from the location window
-  if (win->w_llist == NULL && ll_ref != NULL) {
-    // The new window should use the location list from the
-    // location list window
-    win_set_loclist(win, ll_ref);
-  }
+  rs_qf_goto_win_with_ll_file(use_win, qf_fnum, ll_ref);
 }
 
 // Go to a window that shows the specified file. If a window is not found, go
@@ -4152,45 +4085,7 @@ static void qf_goto_win_with_ll_file(win_T *use_win, int qf_fnum, qf_info_T *ll_
 // file from a quickfix window and not from a location window.
 static void qf_goto_win_with_qfl_file(int qf_fnum)
 {
-  win_T *win = curwin;
-  win_T *altwin = NULL;
-  while (true) {
-    if (win->w_buffer->b_fnum == qf_fnum) {
-      break;
-    }
-    if (win->w_prev == NULL) {
-      win = lastwin;      // wrap around the top
-    } else {
-      win = win->w_prev;  // go to previous window
-    }
-
-    if (IS_QF_WINDOW(win)) {
-      // Didn't find it, go to the window before the quickfix
-      // window, unless 'switchbuf' contains 'uselast': in this case we
-      // try to jump to the previously used window first.
-      if ((swb_flags & kOptSwbFlagUselast) && win_valid(prevwin)
-          && !prevwin->w_p_wfb) {
-        win = prevwin;
-      } else if (altwin != NULL) {
-        win = altwin;
-      } else if (curwin->w_prev != NULL) {
-        win = curwin->w_prev;
-      } else {
-        win = curwin->w_next;
-      }
-      break;
-    }
-
-    // Remember a usable window.
-    if (altwin == NULL
-        && !win->w_p_pvw
-        && !win->w_p_wfb
-        && bt_normal(win->w_buffer)) {
-      altwin = win;
-    }
-  }
-
-  win_goto(win);
+  rs_qf_goto_win_with_qfl_file(qf_fnum);
 }
 
 // Find a suitable window for opening a file (qf_fnum) from the
@@ -4200,51 +4095,7 @@ static void qf_goto_win_with_qfl_file(int qf_fnum)
 // a quickfix or a location list window.
 static int qf_jump_to_usable_window(int qf_fnum, bool newwin, bool *opened_window)
 {
-  win_T *usable_wp = NULL;
-  bool usable_win = false;
-
-  // If opening a new window, then don't use the location list referred by
-  // the current window.  Otherwise two windows will refer to the same
-  // location list.
-  qf_info_T *ll_ref = newwin ? NULL : curwin->w_llist_ref;
-  if (ll_ref != NULL) {
-    // Find a non-quickfix window with this location list
-    usable_wp = qf_find_win_with_loclist(ll_ref);
-    if (usable_wp != NULL) {
-      usable_win = true;
-    }
-  }
-
-  if (!usable_win) {
-    // Locate a window showing a normal buffer
-    win_T *win = qf_find_win_with_normal_buf();
-    if (win != NULL) {
-      usable_win = true;
-    }
-  }
-
-  // If no usable window is found and 'switchbuf' contains "usetab"
-  // then search in other tabs.
-  if (!usable_win && (swb_flags & kOptSwbFlagUsetab)) {
-    usable_win = qf_goto_tabwin_with_file(qf_fnum);
-  }
-
-  // If there is only one window and it is the quickfix window, create a
-  // new one above the quickfix window.
-  if ((ONE_WINDOW && bt_quickfix(curbuf)) || !usable_win || newwin) {
-    if (qf_open_new_file_win(ll_ref) != OK) {
-      return FAIL;
-    }
-    *opened_window = true;  // close it when fail
-  } else {
-    if (curwin->w_llist_ref != NULL) {  // In a location window
-      qf_goto_win_with_ll_file(usable_wp, qf_fnum, ll_ref);
-    } else {  // In a quickfix window
-      qf_goto_win_with_qfl_file(qf_fnum);
-    }
-  }
-
-  return OK;
+  return rs_qf_jump_to_usable_window(qf_fnum, newwin, opened_window);
 }
 
 // =============================================================================
@@ -4450,6 +4301,160 @@ int nvim_qf_curwin_handle(void)
 void nvim_qf_win_close_curwin(void)
 {
   win_close(curwin, true, false);
+}
+
+// =============================================================================
+// Phase 3 (jump machinery): Window operations for Rust orchestration (Phase 2)
+// =============================================================================
+
+/// Navigate to a window (win_goto wrapper)
+void nvim_qf_win_goto(void *win)
+{
+  win_goto((win_T *)win);
+}
+
+/// Enter a window (win_enter wrapper)
+void nvim_qf_win_enter(void *win)
+{
+  win_enter((win_T *)win, true);
+}
+
+/// Get w_buffer->b_nwindows for a window
+int nvim_qf_win_buf_nwindows(const void *win)
+{
+  return ((const win_T *)win)->w_buffer->b_nwindows;
+}
+
+/// Get w_buffer->b_fnum for a window
+int nvim_qf_win_buf_fnum(const void *win)
+{
+  return ((const win_T *)win)->w_buffer->b_fnum;
+}
+
+/// Get w_llist for a window (location list pointer)
+void *nvim_qf_win_get_llist(const void *win)
+{
+  return ((const win_T *)win)->w_llist;
+}
+
+/// Set location list for window+qi
+void nvim_qf_win_set_loclist(void *win, void *qi)
+{
+  win_set_loclist((win_T *)win, (qf_info_T *)qi);
+}
+
+/// Get cmdmod.cmod_split
+int nvim_qf_get_cmdmod_split(void)
+{
+  return cmdmod.cmod_split;
+}
+
+/// Get curwin->w_width
+int nvim_qf_curwin_width(void)
+{
+  return curwin->w_width;
+}
+
+/// Get Columns global
+int nvim_qf_get_columns(void)
+{
+  return Columns;
+}
+
+/// Get curwin->w_height
+int nvim_qf_curwin_height(void)
+{
+  return curwin->w_height;
+}
+
+/// Get p_hh (help height option)
+int nvim_qf_get_p_hh(void)
+{
+  return (int)p_hh;
+}
+
+/// win_split wrapper
+int nvim_qf_win_split(int size, int flags)
+{
+  return win_split(size, flags);
+}
+
+/// win_setheight wrapper
+void nvim_qf_win_setheight(int height)
+{
+  win_setheight(height);
+}
+
+/// Set restart_edit = 0
+void nvim_qf_clear_restart_edit(void)
+{
+  restart_edit = 0;
+}
+
+/// IS_LL_STACK check
+bool nvim_qf_is_ll_stack_qi(const void *qi)
+{
+  return IS_LL_STACK((const qf_info_T *)qi);
+}
+
+/// IS_QF_WINDOW check for a window
+bool nvim_qf_win_is_qf_window(const void *win)
+{
+  return IS_QF_WINDOW((const win_T *)win);
+}
+
+/// win->w_prev
+void *nvim_qf_win_prev(const void *win)
+{
+  return ((const win_T *)win)->w_prev;
+}
+
+/// win->w_next
+void *nvim_qf_win_next(const void *win)
+{
+  return ((const win_T *)win)->w_next;
+}
+
+/// Get lastwin global
+void *nvim_qf_get_lastwin(void)
+{
+  return lastwin;
+}
+
+/// Get curwin global (as void*)
+void *nvim_qf_get_curwin(void)
+{
+  return curwin;
+}
+
+/// bt_normal check on a window's buffer
+bool nvim_qf_win_bt_normal(const void *win)
+{
+  return bt_normal(((const win_T *)win)->w_buffer);
+}
+
+/// Get swb_flags & kOptSwbFlagUselast, and also check prevwin validity + w_p_wfb
+bool nvim_qf_swb_uselast_prevwin_ok(void)
+{
+  return (swb_flags & kOptSwbFlagUselast) && win_valid(prevwin) && !prevwin->w_p_wfb;
+}
+
+/// Get prevwin
+void *nvim_qf_get_prevwin(void)
+{
+  return prevwin;
+}
+
+/// Check win->w_p_pvw (preview window)
+bool nvim_qf_win_is_preview(const void *win)
+{
+  return ((const win_T *)win)->w_p_pvw;
+}
+
+/// Check win->w_p_wfb (winfixbuf)
+bool nvim_qf_win_is_wfb(const void *win)
+{
+  return ((const win_T *)win)->w_p_wfb;
 }
 
 /// Go to the error line in the current file using either line/column number or

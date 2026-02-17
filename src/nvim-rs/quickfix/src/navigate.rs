@@ -1302,6 +1302,318 @@ mod jump_edit {
 }
 
 // =============================================================================
+// Jump machinery migration
+// =============================================================================
+
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+mod jump_machinery {
+    use std::ffi::{c_int, c_void};
+    use std::ptr;
+
+    /// Opaque handles
+    type QfInfoHandleMut = *mut c_void;
+    type WinHandle = *mut c_void;
+
+    const OK: c_int = 1;
+    const FAIL: c_int = 0;
+
+    // WSP_ flags matching src/nvim/window.h
+    const WSP_HELP: c_int = 0x20;
+    const WSP_TOP: c_int = 0x08;
+    const WSP_NEWLOC: c_int = 0x100;
+
+    #[allow(dead_code)]
+    extern "C" {
+        // Window-finding wrappers (Phase 1)
+        fn nvim_qf_find_help_win() -> WinHandle;
+        fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> WinHandle;
+        fn nvim_qf_find_win_with_normal_buf() -> WinHandle;
+        fn nvim_qf_goto_tabwin_with_file(fnum: c_int) -> bool;
+        fn nvim_qf_open_new_file_win(ll_ref: *mut c_void) -> c_int;
+
+        // Window/buffer state accessors (Phase 1)
+        fn nvim_qf_curwin_get_llist_ref() -> *mut c_void;
+        fn nvim_qf_curbuf_is_quickfix() -> bool;
+        fn nvim_qf_curwin_buf_is_help() -> bool;
+        fn nvim_qf_get_cmdmod_tab() -> c_int;
+        fn nvim_qf_is_one_window() -> bool;
+        fn nvim_qf_swb_has_usetab() -> bool;
+
+        // Window operations (Phase 2)
+        fn nvim_qf_win_goto(win: WinHandle);
+        fn nvim_qf_win_enter(win: WinHandle);
+        fn nvim_qf_win_buf_nwindows(win: *const c_void) -> c_int;
+        fn nvim_qf_win_buf_fnum(win: *const c_void) -> c_int;
+        fn nvim_qf_win_get_llist(win: *const c_void) -> *mut c_void;
+        fn nvim_qf_win_set_loclist(win: WinHandle, qi: *mut c_void);
+        fn nvim_qf_get_cmdmod_split() -> c_int;
+        fn nvim_qf_curwin_width() -> c_int;
+        fn nvim_qf_get_columns() -> c_int;
+        fn nvim_qf_curwin_height() -> c_int;
+        fn nvim_qf_get_p_hh() -> c_int;
+        fn nvim_qf_win_split(size: c_int, flags: c_int) -> c_int;
+        fn nvim_qf_win_setheight(height: c_int);
+        fn nvim_qf_clear_restart_edit();
+        fn nvim_qf_is_ll_stack_qi(qi: *const c_void) -> bool;
+        fn nvim_qf_win_is_qf_window(win: *const c_void) -> bool;
+        fn nvim_qf_win_prev(win: *const c_void) -> WinHandle;
+        fn nvim_qf_win_next(win: *const c_void) -> WinHandle;
+        fn nvim_qf_get_lastwin() -> WinHandle;
+        fn nvim_qf_get_curwin() -> WinHandle;
+        fn nvim_qf_win_bt_normal(win: *const c_void) -> bool;
+        fn nvim_qf_swb_uselast_prevwin_ok() -> bool;
+        fn nvim_qf_get_prevwin() -> WinHandle;
+        fn nvim_qf_win_is_preview(win: *const c_void) -> bool;
+        fn nvim_qf_win_is_wfb(win: *const c_void) -> bool;
+    }
+
+    /// Find or open a help window. Returns OK or FAIL.
+    /// Sets `*opened_window = true` if a new window was split.
+    ///
+    /// # Safety
+    ///
+    /// All pointer parameters must be valid.
+    #[no_mangle]
+    pub unsafe extern "C" fn rs_qf_jump_to_help_window(
+        qi: QfInfoHandleMut,
+        newwin: bool,
+        opened_window: *mut bool,
+    ) -> c_int {
+        let wp = if nvim_qf_get_cmdmod_tab() != 0 || newwin {
+            ptr::null_mut()
+        } else {
+            nvim_qf_find_help_win()
+        };
+
+        if !wp.is_null() && nvim_qf_win_buf_nwindows(wp) > 0 {
+            nvim_qf_win_enter(wp);
+        } else {
+            // Split off help window; put it at far top if no position
+            // specified, the current window is vertically split and narrow.
+            let mut flags = WSP_HELP;
+            if nvim_qf_get_cmdmod_split() == 0
+                && nvim_qf_curwin_width() != nvim_qf_get_columns()
+                && nvim_qf_curwin_width() < 80
+            {
+                flags |= WSP_TOP;
+            }
+
+            // If the user asks to open a new window, then copy the location list.
+            // Otherwise, don't copy the location list.
+            if nvim_qf_is_ll_stack_qi(qi) && !newwin {
+                flags |= WSP_NEWLOC;
+            }
+
+            if nvim_qf_win_split(0, flags) == FAIL {
+                return FAIL;
+            }
+
+            *opened_window = true;
+
+            if nvim_qf_curwin_height() < nvim_qf_get_p_hh() {
+                nvim_qf_win_setheight(nvim_qf_get_p_hh());
+            }
+
+            // When using location list, the new window should use the supplied
+            // location list.
+            if nvim_qf_is_ll_stack_qi(qi) && !newwin {
+                nvim_qf_win_set_loclist(nvim_qf_get_curwin(), qi);
+            }
+        }
+
+        nvim_qf_clear_restart_edit(); // don't want insert mode in help file
+
+        OK
+    }
+
+    /// Navigate to a window showing the given file, for location list context.
+    /// `use_win` may be NULL.
+    ///
+    /// # Safety
+    ///
+    /// All pointer parameters must be valid (or null where noted).
+    #[no_mangle]
+    pub unsafe extern "C" fn rs_qf_goto_win_with_ll_file(
+        use_win: WinHandle,
+        qf_fnum: c_int,
+        ll_ref: QfInfoHandleMut,
+    ) {
+        let mut win = use_win;
+
+        if win.is_null() {
+            // Find the window showing the selected file in the current tab page.
+            // We use the C wrapper that iterates FOR_ALL_WINDOWS_IN_TAB.
+            // We need to walk windows manually via w_next from firstwin.
+            // Actually, we don't have a firstwin accessor. Let's use
+            // nvim_qf_get_curwin() and walk via w_prev/w_next.
+            // But that won't iterate all windows. We need a different approach.
+            //
+            // Use nvim_qf_find_win_with_loclist won't work here either because
+            // we need to find by buffer fnum, not by loclist.
+            // Let's walk from curwin backwards like the original C code.
+
+            // First try: walk all windows to find one showing the file.
+            // We walk backwards from curwin (like original C code does for the
+            // fallback path), but first we need to try all windows.
+            // Walk from lastwin backwards to find the file.
+            let mut w = nvim_qf_get_lastwin();
+            while !w.is_null() {
+                if nvim_qf_win_buf_fnum(w) == qf_fnum {
+                    win = w;
+                    break;
+                }
+                w = nvim_qf_win_prev(w);
+            }
+
+            if win.is_null() {
+                // Find a previous usable window (walk backwards from curwin)
+                win = nvim_qf_get_curwin();
+                loop {
+                    if nvim_qf_win_bt_normal(win) {
+                        break;
+                    }
+                    let prev = nvim_qf_win_prev(win);
+                    if prev.is_null() {
+                        win = nvim_qf_get_lastwin(); // wrap around the top
+                    } else {
+                        win = prev; // go to previous window
+                    }
+                    if win == nvim_qf_get_curwin() {
+                        break;
+                    }
+                }
+            }
+        }
+        nvim_qf_win_goto(win);
+
+        // If the location list for the window is not set, then set it
+        // to the location list from the location window
+        if nvim_qf_win_get_llist(win).is_null() && !ll_ref.is_null() {
+            nvim_qf_win_set_loclist(win, ll_ref);
+        }
+    }
+
+    /// Navigate to a window showing the given file, for quickfix context.
+    ///
+    /// # Safety
+    ///
+    /// Globals must be in a valid state.
+    #[no_mangle]
+    pub unsafe extern "C" fn rs_qf_goto_win_with_qfl_file(qf_fnum: c_int) {
+        let mut win = nvim_qf_get_curwin();
+        let mut altwin: WinHandle = ptr::null_mut();
+
+        loop {
+            if nvim_qf_win_buf_fnum(win) == qf_fnum {
+                break;
+            }
+            let prev = nvim_qf_win_prev(win);
+            if prev.is_null() {
+                win = nvim_qf_get_lastwin(); // wrap around the top
+            } else {
+                win = prev; // go to previous window
+            }
+
+            if nvim_qf_win_is_qf_window(win) {
+                // Didn't find it, go to the window before the quickfix
+                // window, unless 'switchbuf' contains 'uselast': in this case we
+                // try to jump to the previously used window first.
+                if nvim_qf_swb_uselast_prevwin_ok() {
+                    win = nvim_qf_get_prevwin();
+                } else if !altwin.is_null() {
+                    win = altwin;
+                } else {
+                    let cur_prev = nvim_qf_win_prev(nvim_qf_get_curwin());
+                    if cur_prev.is_null() {
+                        win = nvim_qf_win_next(nvim_qf_get_curwin());
+                    } else {
+                        win = cur_prev;
+                    }
+                }
+                break;
+            }
+
+            // Remember a usable window.
+            if altwin.is_null()
+                && !nvim_qf_win_is_preview(win)
+                && !nvim_qf_win_is_wfb(win)
+                && nvim_qf_win_bt_normal(win)
+            {
+                altwin = win;
+            }
+        }
+
+        nvim_qf_win_goto(win);
+    }
+
+    /// Find a usable window and jump to it. Returns OK or FAIL.
+    /// Sets `*opened_window = true` if a new window was opened.
+    ///
+    /// # Safety
+    ///
+    /// All pointer parameters must be valid.
+    #[no_mangle]
+    pub unsafe extern "C" fn rs_qf_jump_to_usable_window(
+        qf_fnum: c_int,
+        newwin: bool,
+        opened_window: *mut bool,
+    ) -> c_int {
+        let mut usable_win = false;
+        let mut usable_wp: WinHandle = ptr::null_mut();
+
+        // If opening a new window, then don't use the location list referred by
+        // the current window. Otherwise two windows will refer to the same
+        // location list.
+        let ll_ref = if newwin {
+            ptr::null_mut()
+        } else {
+            nvim_qf_curwin_get_llist_ref()
+        };
+
+        if !ll_ref.is_null() {
+            // Find a non-quickfix window with this location list
+            usable_wp = nvim_qf_find_win_with_loclist(ll_ref);
+            if !usable_wp.is_null() {
+                usable_win = true;
+            }
+        }
+
+        if !usable_win {
+            // Locate a window showing a normal buffer
+            let win = nvim_qf_find_win_with_normal_buf();
+            if !win.is_null() {
+                usable_win = true;
+            }
+        }
+
+        // If no usable window is found and 'switchbuf' contains "usetab"
+        // then search in other tabs.
+        if !usable_win && nvim_qf_swb_has_usetab() {
+            usable_win = nvim_qf_goto_tabwin_with_file(qf_fnum);
+        }
+
+        // If there is only one window and it is the quickfix window, create a
+        // new one above the quickfix window.
+        if (nvim_qf_is_one_window() && nvim_qf_curbuf_is_quickfix()) || !usable_win || newwin {
+            if nvim_qf_open_new_file_win(ll_ref) != OK {
+                return FAIL;
+            }
+            *opened_window = true; // close it when fail
+        } else if !nvim_qf_curwin_get_llist_ref().is_null() {
+            // In a location window
+            rs_qf_goto_win_with_ll_file(usable_wp, qf_fnum, ll_ref);
+        } else {
+            // In a quickfix window
+            rs_qf_goto_win_with_qfl_file(qf_fnum);
+        }
+
+        OK
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
