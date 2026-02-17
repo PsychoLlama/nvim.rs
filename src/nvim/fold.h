@@ -20,4 +20,4 @@ typedef struct {
   int end;
 } FoldLevelResult_C;
 
-#include "fold.h.generated.h"
+#include "fold_shim.h.generated.h"

@@ -89,7 +89,7 @@ static bool fold_changed;
 
 // static functions {{{2
 
-#include "fold.c.generated.h"
+#include "fold_shim.c.generated.h"
 
 // Rust FFI declarations
 extern int rs_foldmethodIsManual(win_T *wp);
