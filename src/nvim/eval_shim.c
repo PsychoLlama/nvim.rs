@@ -455,7 +455,7 @@ typedef enum {
   GLV_STOP,
 } glv_status_T;
 
-#include "eval.c.generated.h"
+#include "eval_shim.c.generated.h"
 
 static uint64_t last_timer_id = 1;
 static PMap(uint64_t) timers = MAP_INIT;
