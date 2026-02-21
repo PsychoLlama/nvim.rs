@@ -3467,18 +3467,12 @@ static void wipe_qf_buffer(qf_info_T *qi)
   }
 }
 
-/// Free all lists in the stack (not including the stack)
-static void qf_free_list_stack_items(qf_info_T *qi)
+/// Free a qf_info_T struct completely
+static void qf_free_lists(qf_info_T *qi)
 {
   for (int i = 0; i < qi->qf_listcount; i++) {
     rs_qf_free_list(qf_get_list(qi, i));
   }
-}
-
-/// Free a qf_info_T struct completely
-static void qf_free_lists(qf_info_T *qi)
-{
-  qf_free_list_stack_items(qi);
 
   xfree(qi->qf_lists);
   xfree(qi);
@@ -3520,7 +3514,9 @@ void qf_free_all(win_T *wp)
     ll_free_all(&wp->w_llist);
     ll_free_all(&wp->w_llist_ref);
   } else if (qi != NULL) {
-    qf_free_list_stack_items(qi);  // quickfix list
+    for (int i = 0; i < qi->qf_listcount; i++) {
+      rs_qf_free_list(qf_get_list(qi, i));
+    }
   }
 }
 
