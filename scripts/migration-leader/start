@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROMPT_FILE="$SCRIPT_DIR/prompt.md"
 
 exec claude \
+  --model opus \
   --append-system-prompt "$(cat "$PROMPT_FILE")" \
   --disallowed-tools "WebSearch,WebFetch" \
   "$@"
