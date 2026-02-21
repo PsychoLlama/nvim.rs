@@ -478,7 +478,6 @@ extern int rs_find_command(int cmdchar);
 extern int rs_invert_horizontal(int cmdchar);
 extern int rs_unshift_special(int cmdchar, int *modp);
 extern bool rs_is_ident(const char *line, int offset);
-extern bool rs_find_is_eval_item(const char *ptr, int *colp, int *bnp, int dir);
 extern int rs_get_vtopline(win_T *wp);
 extern int rs_get_sidescrolloff_value(win_T *wp);
 extern const char *rs_get_showbreak_value(win_T *win);
@@ -524,12 +523,6 @@ extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
 // Phase 1B: clear_showcmd
 extern void rs_clear_showcmd(void);
 
-// Phase 2B: normal_get_additional_char
-extern void rs_normal_get_additional_char(void *s);
-
-// Phase 3: normal_finish_command
-extern void rs_normal_finish_command(void *s);
-
 // Phase 4A: normal_check
 extern int rs_normal_check(void *s);
 
@@ -538,15 +531,6 @@ extern int rs_normal_execute(void *s, int key);
 
 // Execute module functions
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
-extern bool rs_cmd_has_lang_flag(int idx);
-extern bool rs_cmd_has_ncw_flag(int idx);
-extern bool rs_cmd_has_rl_flag(int idx);
-extern bool rs_cmd_has_keepreg_flag(int idx);
-extern bool rs_cmd_has_ss_flag(int idx);
-extern bool rs_cmd_has_sss_flag(int idx);
-extern bool rs_cmd_has_sts_flag(int idx);
-extern int rs_multiply_counts(int opcount, int count0);
-extern bool rs_is_operator_pending(oparg_T *oap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -587,20 +571,6 @@ void init_normal_cmds(void)
   nv_max_linear = i - 1;
 }
 
-/// Search for a command in the commands table.
-///
-/// @return  -1 for invalid command.
-static int find_command(int cmdchar)
-{
-  return rs_find_command(cmdchar);
-}
-
-/// If currently editing a cmdline or text is locked: beep and give an error
-/// message, return true.
-static bool check_text_locked(oparg_T *oap)
-{
-  return rs_check_text_locked(oap);
-}
 
 /// If text is locked, "curbuf->b_ro_locked" or "allbuf_lock" is set:
 /// Give an error message, possibly beep and return true.
@@ -2685,7 +2655,7 @@ static void normal_prepare(NormalState *s)
   // that v:count can be used in an expression mapping when there is no count.
   // Do set it for redo
   if (s->toplevel && readbuf1_empty()) {
-    set_vcount_ca(&s->ca, &s->set_prevcount);
+    rs_set_vcount_ca(&s->ca, &s->set_prevcount);
   }
 }
 
@@ -2703,7 +2673,7 @@ static bool normal_handle_special_visual_command(NormalState *s)
   if (km_startsel) {
     if (nv_cmds[s->idx].cmd_flags & NV_SS) {
       unshift_special(&s->ca);
-      s->idx = find_command(s->ca.cmdchar);
+      s->idx = rs_find_command(s->ca.cmdchar);
       if (s->idx < 0) {
         // Just in case
         clearopbeep(&s->oa);
@@ -2923,15 +2893,10 @@ void nvim_normal_handle_composing_chars(void *sp)
   no_u_sync--;
 }
 
-static void normal_get_additional_char(NormalState *s)
-{
-  rs_normal_get_additional_char(s);
-}
-
 static void normal_invert_horizontal(NormalState *s)
 {
   s->ca.cmdchar = rs_invert_horizontal(s->ca.cmdchar);
-  s->idx = find_command(s->ca.cmdchar);
+  s->idx = rs_find_command(s->ca.cmdchar);
 }
 
 static bool normal_get_command_count(NormalState *s)
@@ -2957,7 +2922,7 @@ static bool normal_get_command_count(NormalState *s)
     // command, so that v:count can be used in an expression mapping
     // right after the count. Do set it for redo.
     if (s->toplevel && readbuf1_empty()) {
-      set_vcount_ca(&s->ca, &s->set_prevcount);
+      rs_set_vcount_ca(&s->ca, &s->set_prevcount);
     }
 
     if (s->ctrl_w) {
@@ -3065,11 +3030,6 @@ void nvim_edit_wrapper(int cmd, bool startln, int count) { edit(cmd, startln, co
 
 /// showmode() wrapper.
 void nvim_showmode_wrapper(void) { showmode(); }
-
-static void normal_finish_command(NormalState *s)
-{
-  rs_normal_finish_command(s);
-}
 
 // =============================================================================
 // Phase 4B: normal_execute accessors for Rust FFI
@@ -3467,13 +3427,6 @@ static int normal_check(VimState *state)
   return rs_normal_check((NormalState *)state);
 }
 
-/// Set v:count and v:count1 according to "cap".
-/// Set v:prevcount only when "set_prevcount" is true.
-static void set_vcount_ca(cmdarg_T *cap, bool *set_prevcount)
-{
-  rs_set_vcount_ca(cap, set_prevcount);
-}
-
 /// End Visual mode.
 /// This function should ALWAYS be called to end Visual mode, except from
 /// do_pending_operator().
@@ -3515,19 +3468,6 @@ void reset_VIsual(void)
 void restore_visual_mode(void)
 {
   rs_restore_visual_mode();
-}
-
-/// Check for a balloon-eval special item to include when searching for an
-/// identifier.  When "dir" is BACKWARD "ptr[-1]" must be valid!
-///
-/// @return  true if the character at "*ptr" should be included.
-///
-/// @param dir    the direction of searching, is either FORWARD or BACKWARD
-/// @param *colp  is in/decremented if "ptr[-dir]" should also be included.
-/// @param bnp    points to a counter for square brackets.
-static bool find_is_eval_item(const char *const ptr, int *const colp, int *const bnp, const int dir)
-{
-  return rs_find_is_eval_item(ptr, colp, bnp, dir);
 }
 
 /// Find the identifier under or to the right of the cursor.
@@ -6771,7 +6711,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
 
   // "gQ": improved Ex mode
   case 'Q':
-    if (!check_text_locked(cap->oap) && !checkclearopq(oap)) {
+    if (!rs_check_text_locked(cap->oap) && !checkclearopq(oap)) {
       do_exmode();
     }
     break;
