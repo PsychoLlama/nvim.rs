@@ -64,7 +64,7 @@ extern "C" {
     fn nvim_stuff_empty() -> bool;
 
     // Phase 3 wrappers
-    fn nvim_clearop_wrapper(oap: OapHandle);
+    fn rs_clearop(oap: OapHandle);
     fn nvim_set_reg_var_default();
     fn nvim_typebuf_maplen_wrapper() -> c_int;
     fn nvim_do_pending_operator_call(ca: CapHandle, old_col: c_int, gui_yank: bool);
@@ -114,7 +114,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
             && nvim_oap_get_op_type_ptr(oa) == 0
             && (idx < 0 || (nvim_get_nv_cmd_flags(idx) & NV_KEEPREG == 0))
         {
-            nvim_clearop_wrapper(oa);
+            rs_clearop(oa);
             nvim_set_reg_var_default();
         }
 

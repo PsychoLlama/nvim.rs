@@ -171,6 +171,7 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
 extern bool rs_qf_stack_empty(const void *qi);
 extern bool rs_qf_list_empty(const void *qfl);
 extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
+extern void rs_reset_VIsual_and_resel(void);
 
 // Phase 1: List lifecycle functions implemented in Rust
 extern void rs_qf_new_list(void *qi, const char *title);
@@ -4010,7 +4011,7 @@ void nvim_qf_win_setwidth(int width)
 /// Reset visual mode
 void nvim_qf_reset_visual(void)
 {
-  reset_VIsual_and_resel();
+  rs_reset_VIsual_and_resel();
 }
 
 /// Wrap entire qf_open_new_cwindow

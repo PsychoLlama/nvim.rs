@@ -68,6 +68,7 @@ extern int rs_win_valid(win_T *win);
 
 // Rust fold FFI declaration
 extern void rs_foldOpenCursor(void);
+extern void rs_may_start_select(int c);
 
 static const char e_search_hit_top_without_match_for_str[]
   = N_("E384: Search hit TOP without match for: %s");
@@ -1727,7 +1728,7 @@ int current_search(int count, bool forward)
     rs_foldOpenCursor();
   }
 
-  may_start_select('c');
+  rs_may_start_select('c');
   setmouse();
   redraw_curbuf_later(UPD_INVERTED);
   showmode();

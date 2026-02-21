@@ -376,7 +376,8 @@ void nvim_al_bufref_destroy(void *br) { xfree(br); }
 void nvim_al_set_bufref(void *br, buf_T *buf) { set_bufref((bufref_T *)br, buf); }
 int nvim_al_ONE_WINDOW(void) { return ONE_WINDOW; }
 int nvim_al_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp); }
-void nvim_al_reset_VIsual_and_resel(void) { reset_VIsual_and_resel(); }
+extern void rs_reset_VIsual_and_resel(void);
+void nvim_al_reset_VIsual_and_resel(void) { rs_reset_VIsual_and_resel(); }
 void *nvim_al_xcalloc(size_t count, size_t size) { return xcalloc(count, size); }
 int nvim_al_tabpage_index(tabpage_T *tp) { return rs_tabpage_index(tp); }
 int nvim_al_get_p_tpm(void) { return p_tpm; }

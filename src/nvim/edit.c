@@ -318,6 +318,8 @@ extern void rs_start_arrow_common(void *end_insert_pos, int end_change);
 extern int rs_stop_arrow(void);
 extern void rs_insert_special(int c, int allow_modmask, int ctrlv);
 extern int rs_get_literal(int no_simplify);
+extern void rs_clear_showcmd(void);
+extern void rs_start_selection(void);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -1293,7 +1295,7 @@ int nvim_edit_ins_start_select(int c)
   case K_S_DOWN:
   case K_S_END:
   case K_S_HOME:
-    start_selection();
+    rs_start_selection();
     stuffcharReadbuff(Ctrl_O);
     if (mod_mask) {
       const char buf[] = { (char)K_SPECIAL, (char)KS_MODIFIER,
@@ -1479,7 +1481,7 @@ void nvim_edit_ins_ctrl_v(void)
   if (did_putchar) {
     edit_unputchar();
   }
-  clear_showcmd();
+  rs_clear_showcmd();
   insert_special(c, true, true);
   revins_chars++;
   revins_legal++;
@@ -1570,7 +1572,7 @@ int nvim_edit_ins_digraph(void)
   }
 
   if (IS_SPECIAL(c) || mod_mask) {
-    clear_showcmd();
+    rs_clear_showcmd();
     insert_special(c, true, false);
     return NUL;
   }
@@ -1596,11 +1598,11 @@ int nvim_edit_ins_digraph(void)
     if (cc != ESC) {
       AppendToRedobuff(CTRL_V_STR);
       c = digraph_get(c, cc, true);
-      clear_showcmd();
+      rs_clear_showcmd();
       return c;
     }
   }
-  clear_showcmd();
+  rs_clear_showcmd();
   return NUL;
 }
 
@@ -1757,7 +1759,7 @@ static void insert_enter(InsertState *s)
   }
 
   setmouse();
-  clear_showcmd();
+  rs_clear_showcmd();
   // there is no reverse replace mode
   revins_on = (State == MODE_INSERT && p_ri);
   if (revins_on) {
@@ -3796,7 +3798,7 @@ static void ins_reg(void)
   if (need_redraw || stuff_empty()) {
     edit_unputchar();
   }
-  clear_showcmd();
+  rs_clear_showcmd();
 
   // Disallow starting Visual mode here, would get a weird mode.
   if (!vis_active && VIsual_active) {

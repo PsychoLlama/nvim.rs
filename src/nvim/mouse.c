@@ -67,6 +67,10 @@ extern int rs_get_mouse_class(const char *p);
 extern bool rs_mouse_model_popup(const char *p_mousem);
 extern int rs_find_start_of_word(const char *line, int col);
 extern int rs_find_end_of_word(const char *line, int col, bool sel_exclusive);
+extern void rs_clearop(oparg_T *oap);
+extern void rs_clearopbeep(oparg_T *oap);
+extern void rs_prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5);
+extern void rs_may_start_select(int c);
 
 static linenr_T orig_topline = 0;
 static int orig_topfill = 0;
@@ -498,7 +502,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       // If an operator was pending, we don't know what the user wanted to do.
       // Go back to normal mode: Clear the operator and beep().
       if (oap != NULL && oap->op_type != OP_NOP) {
-        clearopbeep(oap);
+        rs_clearopbeep(oap);
         return false;
       }
 
@@ -746,7 +750,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
   // When jumping to another window, clear a pending operator.  That's a bit
   // friendlier than beeping and not jumping to that window.
   if (curwin != old_curwin && oap != NULL && oap->op_type != OP_NOP) {
-    clearop(oap);
+    rs_clearop(oap);
   }
 
   if (mod_mask == 0
@@ -875,7 +879,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       c1 = (dir == FORWARD) ? 'p' : 'P';
       c2 = NUL;
     }
-    prep_redo(regname, count, NUL, c1, NUL, c2, NUL);
+    rs_prep_redo(regname, count, NUL, c1, NUL, c2, NUL);
 
     // Remember where the paste started, so in edit() Insstart can be set to this position
     if (restart_edit != 0) {
@@ -926,7 +930,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
         VIsual_active = true;
         VIsual_reselect = true;
         // start Select mode if 'selectmode' contains "mouse"
-        may_start_select('o');
+        rs_may_start_select('o');
         setmouse();
       }
       if ((mod_mask & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK) {
@@ -1566,7 +1570,7 @@ foldclick:;
     VIsual_active = true;
     VIsual_reselect = true;
     // if 'selectmode' contains "mouse", start Select mode
-    may_start_select('o');
+    rs_may_start_select('o');
     setmouse();
 
     if (p_smd && msg_silent == 0) {

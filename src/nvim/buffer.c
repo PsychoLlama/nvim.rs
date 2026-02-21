@@ -197,6 +197,7 @@ extern int rs_buflist_add(char *fname, int flags);
 extern void rs_buflist_altfpos(win_T *win);
 extern linenr_T rs_buflist_findlnum(buf_T *buf);
 extern void rs_set_buflisted(int on);
+extern void rs_reset_VIsual_and_resel(void);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
@@ -4101,7 +4102,7 @@ void ex_buffer_all(exarg_T *eap)
 
   // Stop Visual mode, the cursor and "VIsual" may very well be invalid after
   // switching to another buffer.
-  reset_VIsual_and_resel();
+  rs_reset_VIsual_and_resel();
 
   setpcmark();
 

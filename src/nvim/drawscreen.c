@@ -140,6 +140,7 @@ extern int rs_last_stl_height(int morewin);
 // Rust fold FFI declarations
 extern int rs_hasAnyFolding(win_T *win);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
+extern void rs_clear_showcmd(void);
 
 // Rust FFI declarations for display calculations
 extern int rs_compute_foldcolumn(win_T *wp, int col);
@@ -1014,7 +1015,7 @@ int showmode(void)
 
   // In Visual mode the size of the selected area must be redrawn.
   if (VIsual_active) {
-    clear_showcmd();
+    rs_clear_showcmd();
   }
 
   redraw_ruler();      // check if ruler should be redrawn

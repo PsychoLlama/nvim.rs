@@ -97,7 +97,7 @@ extern "C" {
     // Function wrappers (existing)
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
     fn nvim_typebuf_maplen_wrapper() -> c_int;
-    fn nvim_clearop_wrapper(oap: OapHandle);
+    fn rs_clearop(oap: OapHandle);
 
     // Phase 3
     fn rs_normal_finish_command(s: NormalStateHandle);
@@ -111,7 +111,7 @@ extern "C" {
     fn nvim_normal_get_command_count_loop(s: NormalStateHandle);
     fn nvim_set_vcount_call(count: i64, count1: i64, set_prevcount: bool);
     fn rs_find_command(cmdchar: c_int) -> c_int;
-    fn nvim_clearopbeep_wrapper(oap: OapHandle);
+    fn rs_clearopbeep(oap: OapHandle);
     fn nvim_check_text_or_curbuf_locked_wrapper(oap: OapHandle) -> bool;
     fn nvim_normal_handle_special_visual_command_wrapper(s: NormalStateHandle) -> bool;
     fn nvim_normal_invert_horizontal_wrapper(s: NormalStateHandle);
@@ -232,7 +232,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 
     'finish: {
         if idx < 0 {
-            nvim_clearopbeep_wrapper(oa);
+            rs_clearopbeep(oa);
             nvim_ns_set_command_finished(s, true);
             break 'finish;
         }
@@ -275,7 +275,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         nvim_set_State(MODE_NORMAL);
 
         if nvim_cap_get_nchar(ca) == ESC || nvim_cap_get_extra_char(ca) == ESC {
-            nvim_clearop_wrapper(oa);
+            rs_clearop(oa);
             nvim_ns_set_command_finished(s, true);
             break 'finish;
         }

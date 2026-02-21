@@ -88,6 +88,8 @@
 
 // Rust FFI declarations (tag module)
 extern void rs_tagstack_clear_entry(void *tg);
+extern void rs_reset_VIsual_and_resel(void);
+extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
 
 // Rust fold FFI declarations
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
@@ -2657,7 +2659,7 @@ static void win_exchange(int Prenum)
   rs_win_comp_pos();                 // recompute window positions
 
   if (wp->w_buffer != curbuf) {
-    reset_VIsual_and_resel();
+    rs_reset_VIsual_and_resel();
   } else if (VIsual_active) {
     wp->w_cursor = curwin->w_cursor;
   }
@@ -3221,7 +3223,7 @@ int win_close(win_T *win, bool free_buf, bool force)
     wp = win->w_floating ? win_float_find_altwin(win, NULL) : rs_frame2win(win_altframe(win, NULL));
 
     if (wp->w_buffer != curbuf) {
-      reset_VIsual_and_resel();
+      rs_reset_VIsual_and_resel();
 
       other_buffer = true;
       if (!rs_win_valid(win)) {
@@ -4346,7 +4348,7 @@ static int leave_tabpage(buf_T *new_curbuf, bool trigger_leave_autocmds)
   tabpage_T *tp = curtab;
 
   leaving_window(curwin);
-  reset_VIsual_and_resel();     // stop Visual mode
+  rs_reset_VIsual_and_resel();     // stop Visual mode
   if (trigger_leave_autocmds) {
     if (new_curbuf != curbuf) {
       apply_autocmds(EVENT_BUFLEAVE, NULL, NULL, false, curbuf);
@@ -4657,7 +4659,7 @@ void win_goto(win_T *wp)
 
   if (wp->w_buffer != curbuf) {
     // careful: triggers ModeChanged autocommand
-    reset_VIsual_and_resel();
+    rs_reset_VIsual_and_resel();
   } else if (VIsual_active) {
     wp->w_cursor = curwin->w_cursor;
   }
@@ -6888,10 +6890,10 @@ int nvim_win_splitmove_wrapper(win_T *wp, int size, int flags)
   return win_splitmove(wp, size, flags);
 }
 
-/// Wrapper: reset_VIsual_and_resel().
+/// Wrapper: rs_reset_VIsual_and_resel().
 void nvim_reset_visual_wrapper(void)
 {
-  reset_VIsual_and_resel();
+  rs_reset_VIsual_and_resel();
 }
 
 /// Wrapper: do_cmdline_cmd(cmd).
@@ -7035,7 +7037,7 @@ void nvim_do_window_T(int Prenum)
 /// Wrapper: '^' split-and-edit-alternate command.
 void nvim_do_window_hat(int Prenum)
 {
-  reset_VIsual_and_resel();
+  rs_reset_VIsual_and_resel();
 
   if (buflist_findnr(Prenum == 0 ? curwin->w_alt_fnum : Prenum) == NULL) {
     if (Prenum == 0) {
@@ -7115,7 +7117,7 @@ void nvim_do_window_tag(int nchar, int Prenum)
 /// Wrapper: The 'f'/'F'/Ctrl-F file-goto command.
 void nvim_do_window_goto_file(int nchar, int Prenum1)
 {
-  if (check_text_or_curbuf_locked(NULL)) {
+  if (rs_check_text_or_curbuf_locked(NULL)) {
     return;
   }
 

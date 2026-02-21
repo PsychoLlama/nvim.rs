@@ -41,8 +41,6 @@ extern "C" {
     fn nvim_oap_set_motion_type(oap: OapHandle, val: c_int);
 
     // Utility functions
-    fn clearop(oap: OapHandle);
-    fn clearopbeep(oap: OapHandle);
     fn beep_flush();
 }
 

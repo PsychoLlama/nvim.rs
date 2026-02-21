@@ -572,14 +572,6 @@ void init_normal_cmds(void)
 }
 
 
-/// If text is locked, "curbuf->b_ro_locked" or "allbuf_lock" is set:
-/// Give an error message, possibly beep and return true.
-/// "oap" may be NULL.
-bool check_text_or_curbuf_locked(oparg_T *oap)
-{
-  return rs_check_text_or_curbuf_locked(oap);
-}
-
 static oparg_T *current_oap = NULL;
 
 // =============================================================================
@@ -1312,7 +1304,7 @@ bool nvim_get_VIsual_select_exclu_adj(void)
 /// Wrapper for unadjust_for_sel.
 bool nvim_unadjust_for_sel(void)
 {
-  return unadjust_for_sel();
+  return rs_unadjust_for_sel();
 }
 
 /// Wrapper for searchc.
@@ -1570,9 +1562,9 @@ void nvim_set_VIsual_reselect(bool val)
 }
 
 /// Wrapper for may_start_select.
-void nvim_may_start_select(int val)
+void nvim_rs_may_start_select(int val)
 {
-  may_start_select(val);
+  rs_may_start_select(val);
 }
 
 /// Wrapper for setmouse.
@@ -1722,7 +1714,7 @@ void nvim_set_clear_cmdline(bool val)
 /// Wrapper for clear_showcmd().
 void nvim_clear_showcmd_call(void)
 {
-  clear_showcmd();
+  rs_clear_showcmd();
 }
 
 // =============================================================================
@@ -2109,7 +2101,7 @@ void nvim_nv_Zet_impl(cmdarg_T *cap)
     break;
 
   default:
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
   }
 }
 
@@ -2158,7 +2150,7 @@ void nvim_nv_esc_impl(cmdarg_T *cap)
   } else if (no_reason) {
     vim_beep(kOptBoFlagEsc);
   }
-  clearop(cap->oap);
+  rs_clearop(cap->oap);
 }
 
 /// Wrapper for nv_edit C implementation.
@@ -2178,7 +2170,7 @@ void nvim_nv_edit_impl(cmdarg_T *cap)
     rs_nv_object(cap);
   } else if (!curbuf->b_p_ma && !curbuf->terminal) {
     emsg(_(e_modifiable));
-    clearop(cap->oap);
+    rs_clearop(cap->oap);
   } else if (!rs_checkclearopq(cap->oap)) {
     switch (cap->cmdchar) {
     case 'A':           // "A"ppend after the line
@@ -2251,7 +2243,7 @@ void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
   char *ptr;
   if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0
       || !find_decl(ptr, len, nchar == 'd', thisblock, SEARCH_START)) {
-    clearopbeep(oap);
+    rs_clearopbeep(oap);
     return;
   }
 
@@ -2484,12 +2476,6 @@ void nvim_nv_colon(cmdarg_T *cap)
   nv_colon(cap);
 }
 
-/// Check if an operator was started but not finished yet.
-/// Includes typing a count or a register name.
-bool op_pending(void)
-{
-  return rs_op_pending();
-}
 
 // =============================================================================
 // Phase 1A: find_ident_at_pos accessors for Rust FFI
@@ -2676,7 +2662,7 @@ static bool normal_handle_special_visual_command(NormalState *s)
       s->idx = rs_find_command(s->ca.cmdchar);
       if (s->idx < 0) {
         // Just in case
-        clearopbeep(&s->oa);
+        rs_clearopbeep(&s->oa);
         return true;
       }
     } else if ((nv_cmds[s->idx].cmd_flags & NV_SSS)
@@ -2971,8 +2957,8 @@ _Static_assert(OP_COLON == 10, "OP_COLON changed");
 _Static_assert(CA_COMMAND_BUSY == 1, "CA_COMMAND_BUSY changed");
 _Static_assert(NV_KEEPREG == 0x100, "NV_KEEPREG changed");
 
-/// clearop(&oa) via oap handle.
-void nvim_clearop_wrapper(oparg_T *oap) { clearop(oap); }
+/// rs_clearop(&oa) via oap handle.
+void nvim_clearop_wrapper(oparg_T *oap) { rs_clearop(oap); }
 
 /// set_reg_var(get_default_register_name()).
 void nvim_set_reg_var_default(void) { set_reg_var(get_default_register_name()); }
@@ -3079,13 +3065,13 @@ void nvim_normal_get_command_count_loop(void *sp)
   while (normal_get_command_count((NormalState *)sp)) {}
 }
 
-/// clearopbeep(&oa) via oap handle.
-void nvim_clearopbeep_wrapper(oparg_T *oap) { clearopbeep(oap); }
+/// rs_clearopbeep(&oa) via oap handle.
+void nvim_clearopbeep_wrapper(oparg_T *oap) { rs_clearopbeep(oap); }
 
-/// check_text_or_curbuf_locked(&oa) via oap handle.
+/// rs_check_text_or_curbuf_locked(&oa) via oap handle.
 bool nvim_check_text_or_curbuf_locked_wrapper(oparg_T *oap)
 {
-  return check_text_or_curbuf_locked(oap);
+  return rs_check_text_or_curbuf_locked(oap);
 }
 
 /// normal_handle_special_visual_command wrapper.
@@ -3110,7 +3096,7 @@ bool nvim_normal_need_additional_char_wrapper(void *sp)
 void nvim_ui_flush_wrapper(void) { ui_flush(); }
 
 /// start_selection() wrapper.
-void nvim_start_selection_wrapper(void) { start_selection(); }
+void nvim_start_selection_wrapper(void) { rs_start_selection(); }
 
 /// unshift_special(&ca) wrapper.
 void nvim_unshift_special_wrapper(cmdarg_T *ca) { ca->cmdchar = rs_unshift_special(ca->cmdchar, &mod_mask); }
@@ -3216,7 +3202,7 @@ static void normal_check_buffer_modified(NormalState *s)
 /// type a character, trigger SafeState.
 static void normal_check_safe_state(NormalState *s)
 {
-  may_trigger_safestate(!op_pending() && restart_edit == 0);
+  may_trigger_safestate(!rs_op_pending() && restart_edit == 0);
 }
 
 static void normal_check_folds(NormalState *s)
@@ -3447,27 +3433,10 @@ void end_visual_mode(void)
     curwin->w_cursor.coladd = 0;
   }
 
-  may_clear_cmdline();
+  rs_may_clear_cmdline();
 
   adjust_cursor_eol();
   may_trigger_modechanged();
-}
-
-/// Reset VIsual_active and VIsual_reselect.
-void reset_VIsual_and_resel(void)
-{
-  rs_reset_VIsual_and_resel();
-}
-
-/// Reset VIsual_active and VIsual_reselect if it's set.
-void reset_VIsual(void)
-{
-  rs_reset_VIsual();
-}
-
-void restore_visual_mode(void)
-{
-  rs_restore_visual_mode();
 }
 
 /// Find the identifier under or to the right of the cursor.
@@ -3493,50 +3462,8 @@ void restore_visual_mode(void)
 size_t find_ident_under_cursor(char **text, int find_type)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  return find_ident_at_pos(curwin, curwin->w_cursor.lnum,
-                           curwin->w_cursor.col, text, NULL, find_type);
-}
-
-/// Like find_ident_under_cursor(), but for any window and any position.
-/// However: Uses 'iskeyword' from the current window!.
-///
-/// @param textcol  column where "text" starts, can be NULL
-size_t find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol, char **text, int *textcol,
-                         int find_type)
-  FUNC_ATTR_NONNULL_ARG(1, 4)
-{
-  return rs_find_ident_at_pos(wp, lnum, startcol, text, textcol, find_type);
-}
-
-/// Prepare for redo of any command.
-/// Note that only the last argument can be a multi-byte char.
-void prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5)
-{
-  rs_prep_redo(regname, num, cmd1, cmd2, cmd3, cmd4, cmd5);
-}
-
-/// Prepare for redo of any command with extra count after "cmd2".
-void prep_redo_num2(int regname, int num1, int cmd1, int cmd2, int num2, int cmd3, int cmd4,
-                    int cmd5)
-{
-  rs_prep_redo_num2(regname, num1, cmd1, cmd2, num2, cmd3, cmd4, cmd5);
-}
-
-void clearop(oparg_T *oap)
-{
-  rs_clearop(oap);
-}
-
-void clearopbeep(oparg_T *oap)
-{
-  rs_clearopbeep(oap);
-}
-
-/// If the mode is currently displayed clear the command line or update the
-/// command displayed.
-void may_clear_cmdline(void)
-{
-  rs_may_clear_cmdline();
+  return rs_find_ident_at_pos(curwin, curwin->w_cursor.lnum,
+                              curwin->w_cursor.col, text, NULL, find_type);
 }
 
 // Routines for displaying a partly typed command
@@ -3656,11 +3583,6 @@ bool nvim_clear_showcmd_visual_info(void)
   int limit = ui_has(kUIMessages) ? SHOWCMD_BUFLEN - 1 : SHOWCMD_COLS;
   showcmd_buf[limit] = NUL;
   return true;
-}
-
-void clear_showcmd(void)
-{
-  rs_clear_showcmd();
 }
 
 /// Add 'c' to string of shown command chars.
@@ -3824,11 +3746,6 @@ static void display_showcmd(void)
   grid_line_flush();
 }
 
-int get_vtopline(win_T *wp)
-{
-  return rs_get_vtopline(wp);
-}
-
 /// When "check" is false, prepare for commands that scroll the window.
 /// When "check" is true, take care of scroll-binding after the window has
 /// scrolled.  Called from normal_cmd() and edit().
@@ -3839,7 +3756,7 @@ void do_check_scrollbind(bool check)
   static buf_T *old_buf = NULL;
   static colnr_T old_leftcol = 0;
 
-  int vtopline = get_vtopline(curwin);
+  int vtopline = rs_get_vtopline(curwin);
 
   if (check && curwin->w_p_scb) {
     // If a ":syncbind" command was just used, don't scroll, only reset
@@ -3909,7 +3826,7 @@ void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
         rs_diff_set_topline(old_curwin, curwin);
       } else {
         curwin->w_scbind_pos += vtopline_diff;
-        int curr_vtopline = get_vtopline(curwin);
+        int curr_vtopline = rs_get_vtopline(curwin);
 
         // Perf: reuse curr_vtopline to reduce the time in plines_m_win_fill().
         // Equivalent to:
@@ -3950,7 +3867,7 @@ void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
 static void nv_addsub(cmdarg_T *cap)
 {
   if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
   } else if (!VIsual_active && cap->oap->op_type == OP_NOP) {
     rs_prep_redo_cmd(cap);
     cap->oap->op_type = cap->cmdchar == Ctrl_A ? OP_NR_ADD : OP_NR_SUB;
@@ -3959,7 +3876,7 @@ static void nv_addsub(cmdarg_T *cap)
   } else if (VIsual_active) {
     rs_nv_operator(cap);
   } else {
-    clearop(cap->oap);
+    rs_clearop(cap->oap);
   }
 }
 
@@ -3972,7 +3889,7 @@ static void nv_gd(oparg_T *oap, int nchar, int thisblock)
   char *ptr;
   if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0
       || !find_decl(ptr, len, nchar == 'd', thisblock, SEARCH_START)) {
-    clearopbeep(oap);
+    rs_clearopbeep(oap);
     return;
   }
 
@@ -4292,7 +4209,7 @@ static bool nv_z_get_count(cmdarg_T *cap, int *nchar_arg)
       n /= 10;
     } else if (ascii_isdigit(nchar)) {
       if (vim_append_digit_int(&n, nchar - '0') == FAIL) {
-        clearopbeep(cap->oap);
+        rs_clearopbeep(cap->oap);
         break;
       }
     } else if (nchar == CAR) {
@@ -4306,7 +4223,7 @@ static bool nv_z_get_count(cmdarg_T *cap, int *nchar_arg)
       *nchar_arg = nchar;
       return true;
     } else {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
       break;
     }
   }
@@ -4333,7 +4250,7 @@ static int nv_zg_zw(cmdarg_T *cap, int nchar)
     add_to_showcmd(nchar);
 
     if (vim_strchr("gGwW", nchar) == NULL) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
       return OK;
     }
     undo = true;
@@ -4560,7 +4477,7 @@ static void nv_zet_impl(cmdarg_T *cap)
         finish_op = true;
       }
     } else {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
     }
     break;
 
@@ -4718,7 +4635,7 @@ static void nv_zet_impl(cmdarg_T *cap)
   case 'k':     // "zk" move to next fold upwards
     if (rs_foldMoveTo(true, nchar == 'j' ? FORWARD : BACKWARD,
                    cap->count1) == false) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
     }
     break;
 
@@ -4739,7 +4656,7 @@ static void nv_zet_impl(cmdarg_T *cap)
     break;
 
   default:
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
   }
 
   // Redraw when 'foldenable' changed
@@ -4802,13 +4719,13 @@ static void nv_colon(cmdarg_T *cap)
 
   if (cmd_result == false) {
     // The Ex command failed, do not execute the operator.
-    clearop(cap->oap);
+    rs_clearop(cap->oap);
   } else if (cap->oap->op_type != OP_NOP
              && (cap->oap->start.lnum > curbuf->b_ml.ml_line_count
                  || cap->oap->start.col > ml_get_len(cap->oap->start.lnum)
                  || did_emsg)) {
     // The start of the operator has become invalid by the Ex command.
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
   }
 }
 
@@ -4925,7 +4842,7 @@ static void nv_ident_impl(cmdarg_T *cap)
                                                     || cmdchar == '#')
                                                    ? FIND_IDENT|FIND_STRING
                                                    : FIND_IDENT))) == 0) {
-    clearop(cap->oap);
+    rs_clearop(cap->oap);
     return;
   }
 
@@ -5082,11 +4999,11 @@ static void nv_ident_impl(cmdarg_T *cap)
 bool get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp)
 {
   if (VIsual_mode != 'V') {
-    unadjust_for_sel();
+    rs_unadjust_for_sel();
   }
   if (VIsual.lnum != curwin->w_cursor.lnum) {
     if (cap != NULL) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
     }
     return false;
   }
@@ -5109,7 +5026,7 @@ bool get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp)
       *lenp += (size_t)(utfc_ptr2len(*pp + (*lenp - 1)) - 1);
     }
   }
-  reset_VIsual_and_resel();
+  rs_reset_VIsual_and_resel();
   return true;
 }
 
@@ -5337,7 +5254,7 @@ static void nv_up_impl(cmdarg_T *cap)
 
   cap->oap->motion_type = kMTLineWise;
   if (cursor_up(cap->count1, cap->oap->op_type == OP_NOP) == false) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
   } else if (cap->arg) {
     beginline(BL_WHITE | BL_FIX);
   }
@@ -5368,7 +5285,7 @@ static void nv_down_impl(cmdarg_T *cap)
     } else {
       cap->oap->motion_type = kMTLineWise;
       if (cursor_down(cap->count1, cap->oap->op_type == OP_NOP) == false) {
-        clearopbeep(cap->oap);
+        rs_clearopbeep(cap->oap);
       } else if (cap->arg) {
         beginline(BL_WHITE | BL_FIX);
       }
@@ -5381,7 +5298,7 @@ static void nv_gotofile(cmdarg_T *cap)
 {
   linenr_T lnum = -1;
 
-  if (check_text_or_curbuf_locked(cap->oap)) {
+  if (rs_check_text_or_curbuf_locked(cap->oap)) {
     return;
   }
 
@@ -5406,7 +5323,7 @@ static void nv_gotofile(cmdarg_T *cap)
     }
     xfree(ptr);
   } else {
-    clearop(cap->oap);
+    rs_clearop(cap->oap);
   }
 }
 
@@ -5430,7 +5347,7 @@ static void nv_search_impl(cmdarg_T *cap)
   cap->searchbuf = getcmdline(cap->cmdchar, cap->count1, 0, true);
 
   if (cap->searchbuf == NULL) {
-    clearop(oap);
+    rs_clearop(oap);
     return;
   }
 
@@ -5486,7 +5403,7 @@ static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int o
     *wrapped = sia.sa_wrapped;
   }
   if (i == 0) {
-    clearop(cap->oap);
+    rs_clearop(cap->oap);
   } else {
     if (i == 2) {
       cap->oap->motion_type = kMTLineWise;
@@ -5542,7 +5459,7 @@ static void nv_bracket_block(cmdarg_T *cap, const pos_T *old_pos)
                               (cap->cmdchar == '[') ? FM_BACKWARD : FM_FORWARD, 0)) == NULL) {
       if (new_pos.lnum == 0) {        // nothing found
         if (cap->nchar != 'm' && cap->nchar != 'M') {
-          clearopbeep(cap->oap);
+          rs_clearopbeep(cap->oap);
         }
       } else {
         pos = &new_pos;               // use last one found
@@ -5580,7 +5497,7 @@ static void nv_bracket_block(cmdarg_T *cap, const pos_T *old_pos)
         if ((findc == '{' ? dec_cursor() : inc_cursor()) < 0) {
           // if not found anything, that's an error
           if (pos == NULL) {
-            clearopbeep(cap->oap);
+            rs_clearopbeep(cap->oap);
           }
           n = 0;
           break;
@@ -5613,7 +5530,7 @@ static void nv_bracket_block(cmdarg_T *cap, const pos_T *old_pos)
     }
     curwin->w_cursor = *old_pos;
     if (pos == NULL && new_pos.lnum != 0) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
     }
   }
   if (pos != NULL) {
@@ -5654,7 +5571,7 @@ static void nv_brackets_impl(cmdarg_T *cap)
     size_t len;
 
     if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
-      clearop(cap->oap);
+      rs_clearop(cap->oap);
     } else {
       // Make a copy, if the line was changed it will be freed.
       ptr = xmemdupz(ptr, len);
@@ -5695,7 +5612,7 @@ static void nv_brackets_impl(cmdarg_T *cap)
     if (!findpar(&cap->oap->inclusive, cap->arg, cap->count1, flag,
                  (cap->oap->op_type != OP_NOP
                   && cap->arg == FORWARD && flag == '{'))) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
     } else {
       if (cap->oap->op_type == OP_NOP) {
         beginline(BL_WHITE | BL_FIX);
@@ -5736,13 +5653,13 @@ static void nv_brackets_impl(cmdarg_T *cap)
     // "[z" and "]z": move to start or end of open fold.
     if (rs_foldMoveTo(false, cap->cmdchar == ']' ? FORWARD : BACKWARD,
                    cap->count1) == false) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
     }
   } else if (cap->nchar == 'c') {
     // "[c" and "]c": move to next or previous diff-change.
     if (rs_diff_move_to(cap->cmdchar == ']' ? FORWARD : BACKWARD,
                      cap->count1) == false) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
     }
   } else if (cap->nchar == 'r' || cap->nchar == 's' || cap->nchar == 'S') {
     // "[r", "[s", "[S", "]r", "]s" and "]S": move to next spell error.
@@ -5753,7 +5670,7 @@ static void nv_brackets_impl(cmdarg_T *cap)
                         ? SMT_ALL
                         : cap->nchar == 'r' ? SMT_RARE : SMT_BAD,
                         false, NULL) == 0) {
-        clearopbeep(cap->oap);
+        rs_clearopbeep(cap->oap);
         break;
       }
       curwin->w_set_curswant = true;
@@ -5763,7 +5680,7 @@ static void nv_brackets_impl(cmdarg_T *cap)
     }
   } else {
     // Not a valid cap->nchar.
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
   }
 }
 
@@ -5790,7 +5707,7 @@ static void nv_replace_impl(cmdarg_T *cap)
     return;
   }
   if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
     return;
   }
 
@@ -5808,7 +5725,7 @@ static void nv_replace_impl(cmdarg_T *cap)
 
   // Abort if the character is a special key.
   if (IS_SPECIAL(cap->nchar)) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
     return;
   }
 
@@ -5848,7 +5765,7 @@ static void nv_replace_impl(cmdarg_T *cap)
   // Abort if not enough characters to replace.
   if ((size_t)get_cursor_pos_len() < (unsigned)cap->count1
       || (mb_charlen(get_cursor_pos_ptr()) < cap->count1)) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
     return;
   }
 
@@ -5883,7 +5800,7 @@ static void nv_replace_impl(cmdarg_T *cap)
     // Give 'r' to edit(), to get the redo command right.
     invoke_edit(cap, true, 'r', false);
   } else {
-    prep_redo(cap->oap->regname, cap->count1, NUL, 'r', NUL, had_ctrl_v, 0);
+    rs_prep_redo(cap->oap->regname, cap->count1, NUL, 'r', NUL, had_ctrl_v, 0);
 
     curbuf->b_op_start = curwin->w_cursor;
     const int old_State = State;
@@ -6001,7 +5918,7 @@ static void n_swapchar(cmdarg_T *cap)
   }
 
   if (LINEEMPTY(curwin->w_cursor.lnum) && vim_strchr(p_ww, '~') == NULL) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
     return;
   }
 
@@ -6058,7 +5975,7 @@ static MarkMoveRes nv_mark_move_to(cmdarg_T *cap, MarkMove flags, fmark_T *fm)
 {
   MarkMoveRes res = mark_move_to(fm, flags);
   if (res & kMarkMoveFailed) {
-    clearop(cap->oap);
+    rs_clearop(cap->oap);
   }
   cap->oap->motion_type = flags & kMarkBeginLine ? kMTLineWise : kMTCharWise;
   if (cap->cmdchar == '`') {
@@ -6074,7 +5991,7 @@ static MarkMoveRes nv_mark_move_to(cmdarg_T *cap, MarkMove flags, fmark_T *fm)
 static void nv_subst_impl(cmdarg_T *cap)
 {
   if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
     return;
   }
   if (VIsual_active) {  // "vs" and "vS" are the same as "vc"
@@ -6140,7 +6057,7 @@ static void nv_visual_impl(cmdarg_T *cap)
       VIsual_reselect = true;
       if (!cap->arg) {
         // start Select mode when 'selectmode' contains "cmd"
-        may_start_select('c');
+        rs_may_start_select('c');
       }
       setmouse();
       if (p_smd && msg_silent == 0) {
@@ -6188,7 +6105,7 @@ static void nv_visual_impl(cmdarg_T *cap)
     } else {
       if (!cap->arg) {
         // start Select mode when 'selectmode' contains "cmd"
-        may_start_select('c');
+        rs_may_start_select('c');
       }
       n_start_visual_mode(cap->cmdchar);
       if (VIsual_mode != 'V' && *p_sel == 'e') {
@@ -6206,19 +6123,6 @@ static void nv_visual_impl(cmdarg_T *cap)
       }
     }
   }
-}
-
-/// Start selection for Shift-movement keys.
-void start_selection(void)
-{
-  rs_start_selection();
-}
-
-/// Start Select mode, if "c" is in 'selectmode' and not in a mapping or menu.
-/// When "c" is 'o' (checking for "mouse") then also when mapped.
-void may_start_select(int c)
-{
-  rs_may_start_select(c);
 }
 
 /// Start Visual mode "c".
@@ -6344,7 +6248,7 @@ static void nv_g_dollar_cmd(cmdarg_T *cap)
         }
       }
     } else if (nv_screengo(oap, FORWARD, cap->count1 - 1, false) == false) {
-      clearopbeep(oap);
+      rs_clearopbeep(oap);
     }
   } else {
     if (cap->count1 > 1) {
@@ -6391,7 +6295,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
       cap->nchar = NUL;
       nv_addsub(cap);
     } else {
-      clearopbeep(oap);
+      rs_clearopbeep(oap);
     }
     break;
 
@@ -6439,7 +6343,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
   case 'N':
   case 'n':
     if (!current_search(cap->count1, cap->nchar == 'n')) {
-      clearopbeep(oap);
+      rs_clearopbeep(oap);
     }
     break;
 
@@ -6455,7 +6359,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
       i = nv_screengo(oap, FORWARD, cap->count1, false);
     }
     if (!i) {
-      clearopbeep(oap);
+      rs_clearopbeep(oap);
     }
     break;
 
@@ -6469,7 +6373,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
       i = nv_screengo(oap, BACKWARD, cap->count1, false);
     }
     if (!i) {
-      clearopbeep(oap);
+      rs_clearopbeep(oap);
     }
     break;
 
@@ -6530,7 +6434,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
     curwin->w_set_curswant = true;
     oap->inclusive = true;
     if (bckend_word(cap->count1, cap->nchar == 'E', false) == false) {
-      clearopbeep(oap);
+      rs_clearopbeep(oap);
     }
     break;
 
@@ -6692,7 +6596,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
 
   case TAB:
     if (!rs_checkclearop(oap) && !goto_tabpage_lastused()) {
-      clearopbeep(oap);
+      rs_clearopbeep(oap);
     }
     break;
 
@@ -6705,7 +6609,7 @@ static void nv_g_cmd_impl(cmdarg_T *cap)
     break;
 
   default:
-    clearopbeep(oap);
+    rs_clearopbeep(oap);
     break;
   }
 }
@@ -6752,7 +6656,7 @@ static void nv_dot_impl(cmdarg_T *cap)
   // instead of the last command (inserting text). This is used for
   // CTRL-O <.> in insert mode.
   if (start_redo(cap->count0, restart_edit != 0 && !arrow_used) == false) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
   }
 }
 
@@ -6808,7 +6712,7 @@ static void nv_tilde_impl(cmdarg_T *cap)
 {
   if (!p_to && !VIsual_active && cap->oap->op_type != OP_TILDE) {
     if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
       return;
     }
     n_swapchar(cap);
@@ -6824,7 +6728,7 @@ static void nv_operator_impl(cmdarg_T *cap)
 
   if (bt_prompt(curbuf) && op_is_change(op_type)
       && !prompt_curpos_editable()) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
     return;
   }
 
@@ -6888,15 +6792,6 @@ static void adjust_for_sel(cmdarg_T *cap)
     cap->oap->inclusive = false;
     VIsual_select_exclu_adj = true;
   }
-}
-
-/// Exclude last character at end of Visual area for 'selection' == "exclusive".
-/// Should check VIsual_mode before calling this.
-///
-/// @return  true when backed up to the previous line.
-bool unadjust_for_sel(void)
-{
-  return rs_unadjust_for_sel();
 }
 
 /// Move position "*pp" back one character for 'selection' == "exclusive".
@@ -7056,7 +6951,7 @@ static void nv_object_impl(cmdarg_T *cap)
 
   curbuf->b_p_mps = mps_save;
   if (!flag) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
   }
   adjust_cursor_col();
   curwin->w_set_curswant = true;
@@ -7089,7 +6984,7 @@ static void nv_record(cmdarg_T *cap)
     // (stop) recording into a named register, unless executing a
     // register.
     if (reg_executing == 0 && do_record(cap->nchar) == FAIL) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
     }
   }
 }
@@ -7107,7 +7002,7 @@ static void nv_at_impl(cmdarg_T *cap)
   }
   while (cap->count1-- && !got_int) {
     if (do_execreg(cap->nchar, false, false, false) == false) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
       break;
     }
     line_breakcheck();
@@ -7132,13 +7027,13 @@ static void nv_join_impl(cmdarg_T *cap)
       curbuf->b_ml.ml_line_count) {
     // can't join when on the last line
     if (cap->count0 <= 2) {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
       return;
     }
     cap->count0 = curbuf->b_ml.ml_line_count - curwin->w_cursor.lnum + 1;
   }
 
-  prep_redo(cap->oap->regname, cap->count0,
+  rs_prep_redo(cap->oap->regname, cap->count0,
             NUL, cap->cmdchar, NUL, NUL, cap->nchar);
   do_join((size_t)cap->count0, cap->nchar == NUL, true, true, true);
 }
@@ -7158,11 +7053,11 @@ static void nv_put_opt(cmdarg_T *cap, bool fix_indent)
   if (cap->oap->op_type != OP_NOP) {
     // "dp" is ":diffput"
     if (cap->oap->op_type == OP_DELETE && cap->cmdchar == 'p') {
-      clearop(cap->oap);
+      rs_clearop(cap->oap);
       assert(cap->opcount >= 0);
       nv_diffgetput(true, (size_t)cap->opcount);
     } else {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
     }
     return;
   }
@@ -7174,7 +7069,7 @@ static void nv_put_opt(cmdarg_T *cap, bool fix_indent)
       // paste before that.
       cap->cmdchar = 'P';
     } else {
-      clearopbeep(cap->oap);
+      rs_clearopbeep(cap->oap);
       return;
     }
   }
@@ -7301,14 +7196,14 @@ static void nv_open_impl(cmdarg_T *cap)
 {
   // "do" is ":diffget"
   if (cap->oap->op_type == OP_DELETE && cap->cmdchar == 'o') {
-    clearop(cap->oap);
+    rs_clearop(cap->oap);
     assert(cap->opcount >= 0);
     nv_diffgetput(false, (size_t)cap->opcount);
   } else if (VIsual_active) {
     // switch start and end of visual/
     rs_v_swap_corners(cap->cmdchar);
   } else if (bt_prompt(curbuf) && curwin->w_cursor.lnum < curbuf->b_prompt_start.mark.lnum) {
-    clearopbeep(cap->oap);
+    rs_clearopbeep(cap->oap);
   } else {
     n_opencmd(cap);
   }

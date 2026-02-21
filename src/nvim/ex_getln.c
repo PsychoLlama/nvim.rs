@@ -231,6 +231,7 @@ extern int rs_global_stl_height(void);
 extern win_T *rs_lastwin_nofloating(void);
 extern void rs_win_size_restore(garray_T *gap);
 extern void rs_win_size_save(garray_T *gap);
+extern void rs_clear_showcmd(void);
 
 extern int rs_csh_like_shell(void);
 extern int rs_magic_isset(void);
@@ -4777,7 +4778,7 @@ static int open_cmdwin(void)
 
   State = MODE_NORMAL;
   setmouse();
-  clear_showcmd();
+  rs_clear_showcmd();
 
   // Reset here so it can be set by a CmdwinEnter autocommand.
   cmdwin_result = 0;

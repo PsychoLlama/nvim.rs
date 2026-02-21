@@ -157,6 +157,8 @@ extern int rs_get_tags(void *list, char *pat, char *buf_fname);
 extern void rs_get_tagstack(void *wp, void *retdict);
 extern int rs_set_tagstack(void *wp, const void *d, int action);
 
+extern bool rs_op_pending(void);
+
 // Rust implementations of math functions (from nvim-rs/eval/src/funcs/math.rs)
 extern void rs_f_abs(typval_T *argvars, typval_T *rettv);
 extern void rs_f_sin(typval_T *argvars, typval_T *rettv);
@@ -4665,7 +4667,7 @@ static void f_state(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (!(stuff_empty() && typebuf.tb_len == 0 && !using_script())) {
     may_add_state_char(&ga, include, 'm');
   }
-  if (op_pending()) {
+  if (rs_op_pending()) {
     may_add_state_char(&ga, include, 'o');
   }
   if (autocmd_busy) {

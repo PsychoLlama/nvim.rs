@@ -53,6 +53,7 @@ extern void rs_findsent_forward(int count, bool at_start_sent);
 extern int rs_current_sent(oparg_T *oap, int count, bool include);
 extern int rs_current_block(oparg_T *oap, int count, bool include, int what, int other);
 extern bool rs_in_html_tag(bool end_tag);
+extern bool rs_unadjust_for_sel(void);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -161,7 +162,7 @@ void nvim_textobj_set_cursor_col(int col)
 void nvim_textobj_unadjust_for_sel_if_needed(void)
 {
   if (*p_sel == 'e' && VIsual_active && VIsual_mode == 'v' && VIsual_select_exclu_adj) {
-    unadjust_for_sel();
+    rs_unadjust_for_sel();
   }
 }
 

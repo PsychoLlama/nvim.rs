@@ -136,6 +136,7 @@ typedef struct {
 #include "ex_cmds_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
 extern int rs_win_valid_any_tab(win_T *win);
+extern void rs_reset_VIsual(void);
 
 // Rust FFI declarations (window wrappers removed)
 extern void rs_check_lnums(int do_curwin);
@@ -2404,7 +2405,7 @@ int do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap, linenr_T newlnum
   // Careful: may trigger ModeChanged() autocommand
 
   // Should we block autocommands here?
-  reset_VIsual();
+  rs_reset_VIsual();
 
   // autocommands freed window :(
   if (oldwin != NULL && !rs_win_valid(oldwin)) {

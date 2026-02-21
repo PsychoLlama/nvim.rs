@@ -248,6 +248,7 @@ extern tabpage_T *rs_find_tabpage(int n);
 extern int rs_tabpage_index(tabpage_T *ftp);
 extern void rs_win_setheight_win(int height, win_T *win);
 extern void rs_win_setwidth_win(int width, win_T *wp);
+extern int rs_get_vtopline(win_T *wp);
 
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
@@ -4401,7 +4402,7 @@ static void ex_syncbind(exarg_T *eap)
 
   // determine max (virtual) topline
   if (curwin->w_p_scb) {
-    vtopline = get_vtopline(curwin);
+    vtopline = rs_get_vtopline(curwin);
     FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
       if (wp->w_p_scb && wp->w_buffer) {
         linenr_T y = plines_m_win_fill(wp, 1, wp->w_buffer->b_ml.ml_line_count)
@@ -4417,7 +4418,7 @@ static void ex_syncbind(exarg_T *eap)
   // Set all scrollbind windows to the same topline.
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
     if (wp->w_p_scb) {
-      int y = vtopline - get_vtopline(wp);
+      int y = vtopline - rs_get_vtopline(wp);
       if (y > 0) {
         scrollup(wp, y, true);
       } else {

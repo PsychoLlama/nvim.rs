@@ -87,6 +87,14 @@ extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive
 extern void rs_foldCreate(win_T *wp, linenr_T start_lnum, linenr_T end_lnum);
 extern void rs_opFoldRange(linenr_T first_lnum, linenr_T last_lnum, int opening, int recurse, bool had_visual);
 
+extern void rs_restore_visual_mode(void);
+extern void rs_prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5);
+extern void rs_prep_redo_num2(int regname, int num1, int cmd1, int cmd2, int num2, int cmd3, int cmd4, int cmd5);
+extern void rs_clearop(oparg_T *oap);
+extern void rs_clearopbeep(oparg_T *oap);
+extern void rs_may_clear_cmdline(void);
+extern bool rs_unadjust_for_sel(void);
+
 extern int rs_get_fileformat(buf_T *buf);
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                                    list_stack_T **list_stack);
@@ -3475,7 +3483,7 @@ void nvim_dpo_preamble(cmdarg_T *cap, int gui_yank)
       && oap->op_type != OP_FOLDCLOSEREC
       && oap->op_type != OP_FOLDDEL
       && oap->op_type != OP_FOLDDELREC) {
-    prep_redo(oap->regname, cap->count0,
+    rs_prep_redo(oap->regname, cap->count0,
               get_op_char(oap->op_type), get_extra_op_char(oap->op_type),
               oap->motion_force, cap->cmdchar, cap->nchar);
     if (cap->cmdchar == '/' || cap->cmdchar == '?') {
@@ -3527,7 +3535,7 @@ void nvim_dpo_preamble(cmdarg_T *cap, int gui_yank)
       curbuf->b_visual.vi_start = VIsual;
       curbuf->b_visual.vi_end = curwin->w_cursor;
       curbuf->b_visual.vi_mode = VIsual_mode;
-      restore_visual_mode();
+      rs_restore_visual_mode();
       curbuf->b_visual.vi_curswant = curwin->w_curswant;
       curbuf->b_visual_mode_eval = VIsual_mode;
     }
@@ -3543,7 +3551,7 @@ void nvim_dpo_preamble(cmdarg_T *cap, int gui_yank)
       }
       VIsual_mode = 'v';
     } else if (VIsual_mode == 'v') {
-      include_line_break = unadjust_for_sel();
+      include_line_break = rs_unadjust_for_sel();
     }
 
     oap->start = VIsual;
@@ -3637,7 +3645,7 @@ void nvim_dpo_setup_positions(cmdarg_T *cap, int gui_yank)
         && oap->op_type != OP_FOLDDELREC
         && oap->motion_force == NUL) {
       if (cap->cmdchar == 'g' && (cap->nchar == 'n' || cap->nchar == 'N')) {
-        prep_redo(oap->regname, cap->count0,
+        rs_prep_redo(oap->regname, cap->count0,
                   get_op_char(oap->op_type), get_extra_op_char(oap->op_type),
                   oap->motion_force, cap->cmdchar, cap->nchar);
       } else if (!is_ex_cmdchar(cap) && cap->cmdchar != K_LUA) {
@@ -3650,9 +3658,9 @@ void nvim_dpo_setup_positions(cmdarg_T *cap, int gui_yank)
           nchar = NL;
         }
         if (opchar == 'g' && extra_opchar == '@') {
-          prep_redo_num2(oap->regname, 0, NUL, 'v', cap->count0, opchar, extra_opchar, nchar);
+          rs_prep_redo_num2(oap->regname, 0, NUL, 'v', cap->count0, opchar, extra_opchar, nchar);
         } else {
-          prep_redo(oap->regname, 0, NUL, 'v', opchar, extra_opchar, nchar);
+          rs_prep_redo(oap->regname, 0, NUL, 'v', opchar, extra_opchar, nchar);
         }
       }
       if (!redo_VIsual_busy) {
@@ -3692,7 +3700,7 @@ void nvim_dpo_setup_positions(cmdarg_T *cap, int gui_yank)
       VIsual_active = false;
       setmouse();
       mouse_dragging = 0;
-      may_clear_cmdline();
+      rs_may_clear_cmdline();
       if ((oap->op_type == OP_YANK
            || oap->op_type == OP_COLON
            || oap->op_type == OP_FUNCTION
@@ -3967,7 +3975,7 @@ void nvim_dpo_dispatch_operator(cmdarg_T *cap, int gui_yank)
     break;
 
   default:
-    clearopbeep(oap);
+    rs_clearopbeep(oap);
   }
 }
 
@@ -3987,7 +3995,7 @@ void nvim_dpo_postamble(cmdarg_T *cap, int old_col, int gui_yank)
   } else {
     curwin->w_cursor = dpo_saved_old_cursor;
   }
-  clearop(oap);
+  rs_clearop(oap);
   motion_force = NUL;
 }
 
