@@ -131,9 +131,16 @@ extern "C" {
     #[link_name = "rs_one_window_in_tab"]
     fn nvim_one_window_curwin(wp: WinHandle, tp: TabpageHandle) -> c_int;
     fn nvim_msg_onlyone();
-    fn nvim_win_goto_ver_wrapper(up: c_int, count: c_int);
-    fn nvim_win_goto_hor_wrapper(left: c_int, count: c_int);
     fn nvim_win_goto_wrapper(wp: WinHandle);
+    fn nvim_get_curtab() -> TabpageHandle;
+    fn rs_win_vert_neighbor(tp: TabpageHandle, wp: WinHandle, up: c_int, count: c_int)
+        -> WinHandle;
+    fn rs_win_horz_neighbor(
+        tp: TabpageHandle,
+        wp: WinHandle,
+        left: c_int,
+        count: c_int,
+    ) -> WinHandle;
     fn nvim_win_exchange_wrapper(prenum: c_int);
     fn nvim_win_rotate_wrapper(upwards: c_int, count: c_int);
     fn nvim_win_splitmove_wrapper(wp: WinHandle, size: c_int, flags: c_int) -> c_int;
@@ -303,7 +310,10 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_win_goto_ver_wrapper(0, prenum1);
+                let win = rs_win_vert_neighbor(nvim_get_curtab(), nvim_get_curwin(), 0, prenum1);
+                if !win.is_null() {
+                    nvim_win_goto_wrapper(win);
+                }
             }
 
             // =================================================================
@@ -313,7 +323,10 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_win_goto_ver_wrapper(1, prenum1);
+                let win = rs_win_vert_neighbor(nvim_get_curtab(), nvim_get_curwin(), 1, prenum1);
+                if !win.is_null() {
+                    nvim_win_goto_wrapper(win);
+                }
             }
 
             // =================================================================
@@ -323,7 +336,10 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_win_goto_hor_wrapper(1, prenum1);
+                let win = rs_win_horz_neighbor(nvim_get_curtab(), nvim_get_curwin(), 1, prenum1);
+                if !win.is_null() {
+                    nvim_win_goto_wrapper(win);
+                }
             }
 
             // =================================================================
@@ -333,7 +349,10 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_win_goto_hor_wrapper(0, prenum1);
+                let win = rs_win_horz_neighbor(nvim_get_curtab(), nvim_get_curwin(), 0, prenum1);
+                if !win.is_null() {
+                    nvim_win_goto_wrapper(win);
+                }
             }
 
             // =================================================================

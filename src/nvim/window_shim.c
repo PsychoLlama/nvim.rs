@@ -4507,30 +4507,6 @@ void win_goto(win_T *wp)
   }
 }
 
-/// Move to window above or below "count" times.
-///
-/// @param up     true to go to win above
-/// @param count  go count times into direction
-static void win_goto_ver(bool up, int count)
-{
-  win_T *win = rs_win_vert_neighbor(curtab, curwin, up ? 1 : 0, count);
-  if (win != NULL) {
-    win_goto(win);
-  }
-}
-
-/// Move to left or right window.
-///
-/// @param left   true to go to left window
-/// @param count  go count times into direction
-static void win_goto_hor(bool left, int count)
-{
-  win_T *win = rs_win_horz_neighbor(curtab, curwin, left ? 1 : 0, count);
-  if (win != NULL) {
-    win_goto(win);
-  }
-}
-
 /// Make window `wp` the current window.
 ///
 /// @warning Autocmds may close the window immediately, so caller must check
@@ -6563,18 +6539,6 @@ void nvim_win_exchange_wrapper(int Prenum)
 void nvim_win_rotate_wrapper(int upwards, int count)
 {
   win_rotate(upwards != 0, count);
-}
-
-/// Wrapper for static win_goto_ver(up, count).
-void nvim_win_goto_ver_wrapper(int up, int count)
-{
-  win_goto_ver(up != 0, count);
-}
-
-/// Wrapper for static win_goto_hor(left, count).
-void nvim_win_goto_hor_wrapper(int left, int count)
-{
-  win_goto_hor(left != 0, count);
 }
 
 /// Get swb_flags global.
