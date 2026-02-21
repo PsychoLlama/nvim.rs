@@ -1966,14 +1966,8 @@ extern "C" {
     fn nvim_qf_get_has_user_data(qfl: QfListHandle) -> bool;
 
     // Phase 5: List lifecycle wrappers (call C functions)
-    fn nvim_qf_new_list(qi: QfInfoHandleMut, title: *const c_char);
-    fn nvim_qf_free_list(qfl: QfListHandleMut);
-    fn nvim_qf_free_items(qfl: QfListHandleMut);
     fn nvim_qf_store_title(qfl: QfListHandleMut, title: *const c_char);
     fn nvim_get_ql_info() -> QfInfoHandleMut;
-
-    // Phase 3: List modification accessors
-    fn nvim_qf_pop_stack(qi: QfInfoHandleMut, adjust: bool);
     fn nvim_qf_increment_listcount(qi: QfInfoHandleMut);
     fn nvim_qf_decrement_listcount(qi: QfInfoHandleMut);
     fn nvim_qf_set_start(qfl: QfListHandleMut, start: QfLineHandle);
@@ -2241,7 +2235,7 @@ pub unsafe extern "C" fn rs_qf_new_list(qi: QfInfoHandleMut, title: *const c_cha
         count -= 1;
         let qfl = nvim_qf_get_list_at_mut(qi, count);
         if !qfl.is_null() {
-            nvim_qf_free_list(qfl);
+            rs_qf_free_list(qfl);
         }
         nvim_qf_set_listcount(qi, count);
     }
@@ -2250,7 +2244,7 @@ pub unsafe extern "C" fn rs_qf_new_list(qi: QfInfoHandleMut, title: *const c_cha
     // Otherwise, add a new entry.
     let new_cur_list;
     if count == max_count {
-        nvim_qf_pop_stack(qi, false);
+        rs_qf_pop_stack(qi, false);
         new_cur_list = count - 1; // point to new empty list
     } else {
         new_cur_list = count;

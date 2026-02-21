@@ -930,24 +930,6 @@ bool nvim_qf_get_has_user_data(const void *qfl_void)
 // Forward declarations for static functions
 static void qf_store_title(qf_list_T *qfl, const char *title);
 
-/// Wrapper for rs_qf_new_list - callable from Rust
-void nvim_qf_new_list(void *qi_void, const char *title)
-{
-  rs_qf_new_list(qi_void, title);
-}
-
-/// Wrapper for rs_qf_free_list - callable from Rust
-void nvim_qf_free_list(void *qfl_void)
-{
-  rs_qf_free_list(qfl_void);
-}
-
-/// Wrapper for rs_qf_free_items - callable from Rust
-void nvim_qf_free_items(void *qfl_void)
-{
-  rs_qf_free_items(qfl_void);
-}
-
 /// Wrapper for qf_store_title - callable from Rust
 void nvim_qf_store_title(void *qfl_void, const char *title)
 {
@@ -1244,16 +1226,6 @@ void nvim_emsg_e_no_more_items(void)
 // Phase 3: List modification accessor functions for Rust
 // Forward declaration
 // =============================================================================
-
-/// Pop the oldest list from the quickfix stack for Rust
-/// @param adjust If true, adjust listcount and curlist
-void nvim_qf_pop_stack(void *qi_void, bool adjust)
-{
-  if (qi_void == NULL) {
-    return;
-  }
-  rs_qf_pop_stack(qi_void, adjust);
-}
 
 /// Increment the list count after adding a list
 void nvim_qf_increment_listcount(void *qi_void)
@@ -2931,17 +2903,6 @@ void nvim_qf_init_finalize_list(void *qfl_void)
 void nvim_qf_init_emsg_readerrf(void)
 {
   emsg(_(e_readerrf));
-}
-
-/// Handle error cleanup: free the new list and adjust listcount/curlist.
-void nvim_qf_init_error_cleanup(void *qi_void, void *qfl_void)
-{
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  rs_qf_free_list((qf_list_T *)qfl_void);
-  qi->qf_listcount--;
-  if (qi->qf_curlist > 0) {
-    qi->qf_curlist--;
-  }
 }
 
 _Static_assert(QF_END_OF_INPUT == 2, "QF_END_OF_INPUT must be 2");
@@ -5914,12 +5875,6 @@ void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg)
   return qf_cmd_get_stack((exarg_T *)eap_void, print_emsg);
 }
 
-/// Wrapper for qf_jump callable from Rust
-void nvim_qf_jump(void *qi_void, int dir, int errornr, int forceit)
-{
-  rs_qf_jump_newwin(qi_void, dir, errornr, forceit, false);
-}
-
 /// Wrapper for qf_msg callable from Rust
 void nvim_qf_msg(void *qi_void, int which, const char *lead)
 {
@@ -5978,12 +5933,6 @@ bool nvim_qf_curwin_is_ll(void)
 void *nvim_qf_curwin_get_loclist(void)
 {
   return GET_LOC_LIST(curwin);
-}
-
-/// Wrapper for qf_jump_newwin callable from Rust
-void nvim_qf_jump_newwin(void *qi_void, int dir, int errornr, int forceit, bool newwin)
-{
-  rs_qf_jump_newwin(qi_void, dir, errornr, forceit, newwin);
 }
 
 /// Get curwin->w_cursor.lnum for Rust

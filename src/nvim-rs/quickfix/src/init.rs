@@ -329,10 +329,6 @@ mod init_ext {
         fn nvim_qf_get_last(qfl: QfListHandle) -> QfLineHandle;
         fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
 
-        // Existing Rust functions called via FFI
-        fn rs_qf_new_list(qi: QfInfoHandleMut, title: *const c_char);
-        fn rs_qf_list_empty(qfl: *const c_void) -> bool;
-
         // Globals
         fn nvim_get_got_int() -> c_int;
         fn nvim_set_got_int(val: c_int);
@@ -366,7 +362,8 @@ mod init_ext {
         fn nvim_qf_init_state_no_fd_error(state: StateHandle) -> bool;
         fn nvim_qf_init_finalize_list(qfl: QfListHandleMut);
         fn nvim_qf_init_emsg_readerrf();
-        fn nvim_qf_init_error_cleanup(qi: QfInfoHandleMut, qfl: QfListHandleMut);
+        fn nvim_qf_decrement_listcount(qi: QfInfoHandleMut);
+        fn nvim_qf_set_curlist_idx(qi: QfInfoHandleMut, idx: c_int);
     }
 
     /// Initialize quickfix list from error file/buffer/string/list.
@@ -408,14 +405,14 @@ mod init_ext {
 
             if newlist || qf_idx == nvim_qf_get_listcount(qi) {
                 // Make place for a new list
-                rs_qf_new_list(qi, qf_title);
+                crate::rs_qf_new_list(qi, qf_title);
                 qf_idx = nvim_qf_get_curlist_idx(qi);
                 qfl = nvim_qf_get_list_at_mut(qi, qf_idx);
             } else {
                 // Adding to existing list, use last entry.
                 adding = true;
                 qfl = nvim_qf_get_list_at_mut(qi, qf_idx);
-                if !rs_qf_list_empty(qfl) {
+                if !crate::rs_qf_list_empty(qfl) {
                     old_last = nvim_qf_get_last(qfl);
                 }
             }
@@ -457,7 +454,13 @@ mod init_ext {
 
         // error2: free the new list on error if we weren't appending
         if retval == -1 && !adding && !qfl.is_null() {
-            nvim_qf_init_error_cleanup(qi, qfl);
+            // Inline error cleanup: free the list, decrement listcount/curlist
+            crate::rs_qf_free_list(qfl);
+            nvim_qf_decrement_listcount(qi);
+            let cur = nvim_qf_get_curlist_idx(qi);
+            if cur > 0 {
+                nvim_qf_set_curlist_idx(qi, cur - 1);
+            }
         }
 
         // qf_init_end: always-run cleanup

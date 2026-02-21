@@ -1308,7 +1308,7 @@ mod jump_edit {
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_sign_loss)]
-mod jump_machinery {
+pub mod jump_machinery {
     use std::ffi::{c_int, c_void};
     use std::ptr;
 

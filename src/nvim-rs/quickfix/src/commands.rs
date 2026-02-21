@@ -1138,7 +1138,6 @@ extern "C" {
     fn nvim_eap_get_line1(eap: EapHandle) -> LinenrT;
     fn nvim_eap_get_line2(eap: EapHandle) -> LinenrT;
     fn nvim_eap_get_forceit(eap: EapHandle) -> bool;
-    fn nvim_qf_jump(qi: QfInfoHandleMut, dir: c_int, errornr: c_int, forceit: c_int);
     fn nvim_qf_msg(qi: QfInfoHandleMut, which: c_int, lead: *const u8);
     fn nvim_qf_get_nth_valid_entry(qfl: *mut c_void, n: c_int, fdo: bool) -> c_int;
     fn nvim_emsg_loclist();
@@ -1149,13 +1148,6 @@ extern "C" {
     fn nvim_emsg_invrange();
     fn nvim_qf_curwin_is_ll() -> bool;
     fn nvim_qf_curwin_get_loclist() -> QfInfoHandleMut;
-    fn nvim_qf_jump_newwin(
-        qi: QfInfoHandleMut,
-        dir: c_int,
-        errornr: c_int,
-        forceit: c_int,
-        newwin: bool,
-    );
     fn nvim_qf_get_cursor_lnum() -> LinenrT;
     fn nvim_do_cmdline_cmd(cmd: *const u8);
 
@@ -1163,8 +1155,6 @@ extern "C" {
     fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
     fn nvim_qf_set_curlist_idx(qi: QfInfoHandleMut, idx: c_int);
 
-    fn rs_qf_list_empty(qfl: *const c_void) -> bool;
-    fn rs_qf_list_has_valid_entries(qfl: *const c_void) -> bool;
     fn rs_qf_stack_empty(qi: *const c_void) -> bool;
     fn rs_qf_find_nth_adj_entry(
         qfl: *const c_void,
@@ -1226,7 +1216,13 @@ pub unsafe extern "C" fn rs_ex_cc(eap: EapHandle) {
         }
     };
 
-    nvim_qf_jump(qi, 0, errornr, c_int::from(nvim_eap_get_forceit(eap)));
+    crate::navigate::jump_machinery::rs_qf_jump_newwin(
+        qi,
+        0,
+        errornr,
+        c_int::from(nvim_eap_get_forceit(eap)),
+        false,
+    );
 }
 
 /// `:cnext`, `:cprevious`, `:cNext`, `:cnfile`, `:cNfile`, `:cpfile`,
@@ -1266,7 +1262,13 @@ pub unsafe extern "C" fn rs_ex_cnext(eap: EapHandle) {
         _ => FORWARD, // CMD_cnext, CMD_lnext, CMD_cdo, CMD_ldo
     };
 
-    nvim_qf_jump(qi, dir, errornr, c_int::from(nvim_eap_get_forceit(eap)));
+    crate::navigate::jump_machinery::rs_qf_jump_newwin(
+        qi,
+        dir,
+        errornr,
+        c_int::from(nvim_eap_get_forceit(eap)),
+        false,
+    );
 }
 
 /// `:colder`, `:cnewer`, `:lolder`, `:lnewer`
@@ -1378,7 +1380,7 @@ pub unsafe extern "C" fn rs_qf_view_result(split: bool) {
     };
 
     let qfl = nvim_qf_get_curlist_mut(qi);
-    if rs_qf_list_empty(qfl) {
+    if crate::rs_qf_list_empty(qfl) {
         nvim_emsg_no_errors();
         return;
     }
@@ -1386,7 +1388,7 @@ pub unsafe extern "C" fn rs_qf_view_result(split: bool) {
     if split {
         // Open the selected entry in a new window
         let lnum = nvim_qf_get_cursor_lnum() as c_int;
-        nvim_qf_jump_newwin(qi, 0, lnum, 0, true);
+        crate::navigate::jump_machinery::rs_qf_jump_newwin(qi, 0, lnum, 0, true);
         nvim_do_cmdline_cmd(c"clearjumps".as_ptr().cast::<u8>());
         return;
     }
@@ -1436,7 +1438,7 @@ pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
     }
 
     let qfl = nvim_qf_get_curlist_mut(qi);
-    if !rs_qf_list_has_valid_entries(qfl) {
+    if !crate::rs_qf_list_has_valid_entries(qfl) {
         nvim_emsg_no_errors();
         return;
     }
@@ -1466,7 +1468,7 @@ pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
     let pos = nvim_qf_curwin_pos_adj();
     let errornr = rs_qf_find_nth_adj_entry(qfl, bnr, pos, n, dir, linewise);
     if errornr > 0 {
-        nvim_qf_jump(qi, 0, errornr, 0);
+        crate::navigate::jump_machinery::rs_qf_jump_newwin(qi, 0, errornr, 0, false);
     } else {
         nvim_emsg_e_no_more_items();
     }

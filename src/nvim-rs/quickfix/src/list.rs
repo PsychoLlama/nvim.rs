@@ -66,10 +66,7 @@ extern "C" {
     fn nvim_qfline_get_viscol(qfp: QfLineHandle) -> bool;
 
     // List operations
-    fn nvim_qf_new_list(qi: QfInfoHandleMut, title: *const c_char);
     fn nvim_qf_store_title(qfl: QfListHandleMut, title: *const c_char);
-    fn nvim_qf_free_list(qfl: QfListHandleMut);
-    fn nvim_qf_free_items(qfl: QfListHandleMut);
 
     // Stack maxcount
     fn nvim_qf_get_maxcount(qi: QfInfoHandle) -> c_int;
@@ -77,9 +74,6 @@ extern "C" {
     // Entry modification
     fn nvim_qfline_get_cleared(qfp: QfLineHandle) -> bool;
     fn nvim_qfline_set_cleared(qfp: *mut c_void, cleared: c_char);
-
-    // Phase Q2: Free items (implemented in lib.rs)
-    fn rs_qf_free_items(qfl: QfListHandleMut);
 
     // Phase 2: qf_add_entries accessors
     fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
@@ -912,7 +906,7 @@ pub unsafe extern "C" fn rs_qf_clear_entries(qfl: QfListHandleMut) {
     if qfl.is_null() {
         return;
     }
-    rs_qf_free_items(qfl);
+    crate::rs_qf_free_items(qfl);
 }
 
 /// Mark an entry as cleared (deleted but still in list).
@@ -1013,7 +1007,7 @@ pub unsafe extern "C" fn rs_qf_add_entries(
     let action_char = action as u8;
     if action_char == b' ' || qf_idx == nvim_qf_get_listcount(qi) {
         select_first_entry = true;
-        nvim_qf_new_list(qi, title);
+        crate::rs_qf_new_list(qi, title);
         qf_idx = nvim_qf_get_curlist_idx(qi);
         qfl = nvim_qf_get_list_at_mut(qi, qf_idx);
     } else if action_char == b'a' {
@@ -1024,11 +1018,11 @@ pub unsafe extern "C" fn rs_qf_add_entries(
         }
     } else if action_char == b'r' {
         select_first_entry = true;
-        rs_qf_free_items(qfl);
+        crate::rs_qf_free_items(qfl);
         nvim_qf_store_title(qfl, title);
     } else if action_char == b'u' {
         select_nearest_entry = true;
-        rs_qf_free_items(qfl);
+        crate::rs_qf_free_items(qfl);
         nvim_qf_store_title(qfl, title);
     }
 
