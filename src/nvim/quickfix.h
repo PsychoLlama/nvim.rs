@@ -18,4 +18,17 @@ enum {
   VGR_FUZZY  = 4,
 };
 
+// Rust ex command implementations (called directly from command dispatch table)
+extern void rs_ex_cc(void *eap);
+extern void rs_ex_cnext(void *eap);
+extern void rs_ex_cbelow(void *eap);
+extern void rs_ex_cclose(void *eap);
+extern void rs_ex_cbottom(void *eap);
+extern void rs_ex_cwindow(void *eap);
+extern void rs_ex_copen(void *eap);
+extern void rs_ex_vimgrep(void *eap);
+extern void rs_ex_helpgrep(void *eap);
+extern void rs_qf_age(void *eap);
+extern void rs_qf_history(void *eap);
+
 #include "quickfix_shim.h.generated.h"

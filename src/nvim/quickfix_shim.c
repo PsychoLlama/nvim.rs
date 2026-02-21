@@ -854,9 +854,6 @@ extern int rs_vgr_process_files(void *wp, void *qi,
 // ex_vimgrep command
 extern void rs_ex_vimgrep(void *eap);
 
-// ex_helpgrep command
-extern void rs_ex_helpgrep(void *eap);
-
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -4912,32 +4909,7 @@ static void qf_msg(qf_info_T *qi, int which, char *lead)
   msg(buf, 0);
 }
 
-// Rust implementations of ex commands
-extern void rs_ex_cc(void *eap);
-extern void rs_ex_cnext(void *eap);
-extern void rs_qf_age(void *eap);
-extern void rs_qf_history(void *eap);
 extern void rs_qf_view_result(bool split);
-extern void rs_ex_cbelow(void *eap);
-extern void rs_ex_cclose(void *eap);
-extern void rs_ex_cbottom(void *eap);
-extern void rs_ex_cwindow(void *eap);
-extern void rs_ex_copen(void *eap);
-
-/// ":colder [count]": Up in the quickfix stack.
-/// ":cnewer [count]": Down in the quickfix stack.
-/// ":lolder [count]": Up in the location list stack.
-/// ":lnewer [count]": Down in the location list stack.
-void qf_age(exarg_T *eap)
-{
-  rs_qf_age(eap);
-}
-
-/// Display the information about all the quickfix/location lists in the stack.
-void qf_history(exarg_T *eap)
-{
-  rs_qf_history(eap);
-}
 
 /// Adjust error list entries for changed line numbers
 ///
@@ -5041,22 +5013,6 @@ void qf_view_result(bool split)
   rs_qf_view_result(split);
 }
 
-// ":cwindow": open the quickfix window if we have errors to display,
-//             close it if not.
-// ":lwindow": open the location list window if we have locations to display,
-//             close it if not.
-void ex_cwindow(exarg_T *eap)
-{
-  rs_ex_cwindow(eap);
-}
-
-// ":cclose": close the window showing the list of errors.
-// ":lclose": close the window showing the location list
-void ex_cclose(exarg_T *eap)
-{
-  rs_ex_cclose(eap);
-}
-
 // Set options for the buffer in the quickfix or location list window.
 static void qf_set_cwindow_options(void)
 {
@@ -5147,13 +5103,6 @@ static void qf_set_title_var(qf_list_T *qfl)
   }
 }
 
-/// ":copen": open a window that shows the list of errors.
-/// ":lopen": open a window that shows the location list.
-void ex_copen(exarg_T *eap)
-{
-  rs_ex_copen(eap);
-}
-
 // Move the cursor in the quickfix window to "lnum".
 static void qf_win_goto(win_T *win, linenr_T lnum)
 {
@@ -5170,12 +5119,6 @@ static void qf_win_goto(win_T *win, linenr_T lnum)
   curwin->w_redr_status = true;  // update ruler
   curwin = old_curwin;
   curbuf = curwin->w_buffer;
-}
-
-/// :cbottom/:lbottom command.
-void ex_cbottom(exarg_T *eap)
-{
-  rs_ex_cbottom(eap);
 }
 
 // Return the number of the current entry (line number in the quickfix
@@ -5714,7 +5657,7 @@ void ex_make(exarg_T *eap)
 
   // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
   if (grep_internal(eap->cmdidx)) {
-    ex_vimgrep(eap);
+    rs_ex_vimgrep(eap);
     return;
   }
 
@@ -6098,31 +6041,6 @@ void *nvim_qf_get_curlist_mut(void *qi_void)
 {
   qf_info_T *qi = (qf_info_T *)qi_void;
   return (void *)&qi->qf_lists[qi->qf_curlist];
-}
-
-/// ":cc", ":crewind", ":cfirst" and ":clast".
-/// ":ll", ":lrewind", ":lfirst" and ":llast".
-/// ":cdo", ":ldo", ":cfdo" and ":lfdo".
-void ex_cc(exarg_T *eap)
-{
-  rs_ex_cc(eap);
-}
-
-/// ":cnext", ":cnfile", ":cNext" and ":cprevious".
-/// ":lnext", ":lNext", ":lprevious", ":lnfile", ":lNfile" and ":lpfile".
-/// ":cdo", ":ldo", ":cfdo" and ":lfdo".
-void ex_cnext(exarg_T *eap)
-{
-  rs_ex_cnext(eap);
-}
-
-/// Jump to a quickfix entry in the current file nearest to the current line or
-/// current line/col.
-/// ":cabove", ":cbelow", ":labove", ":lbelow", ":cafter", ":cbefore",
-/// ":lafter" and ":lbefore" commands
-void ex_cbelow(exarg_T *eap)
-{
-  rs_ex_cbelow(eap);
 }
 
 /// Return the autocmd name for the :cfile Ex commands
@@ -6717,15 +6635,6 @@ void nvim_vgr_cleanup_args(void *args_void)
   xfree(args->qf_title);
   vim_regfree(args->regmatch.regprog);
   xfree(args);
-}
-
-/// ":vimgrep {pattern} file(s)"
-/// ":vimgrepadd {pattern} file(s)"
-/// ":lvimgrep {pattern} file(s)"
-/// ":lvimgrepadd {pattern} file(s)"
-void ex_vimgrep(exarg_T *eap)
-{
-  rs_ex_vimgrep(eap);
 }
 
 // Restore current working directory to "dirname_start" if they differ, taking
@@ -8439,12 +8348,6 @@ void nvim_hgr_cleanup(void *qi_void, bool new_qi)
     // before. Associate the new location list now.
     curwin->w_llist = qi;
   }
-}
-
-// ":helpgrep {pattern}"
-void ex_helpgrep(exarg_T *eap)
-{
-  rs_ex_helpgrep(eap);
 }
 
 #if defined(EXITFREE)

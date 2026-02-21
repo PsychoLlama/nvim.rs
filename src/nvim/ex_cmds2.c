@@ -855,14 +855,17 @@ size_t nvim_ex2_qf_get_cur_idx(exarg_T *eap)
   return qf_get_cur_idx(eap);
 }
 
+extern void rs_ex_cc(void *eap);
+extern void rs_ex_cnext(void *eap);
+
 void nvim_ex2_ex_cc(exarg_T *eap)
 {
-  ex_cc(eap);
+  rs_ex_cc(eap);
 }
 
 void nvim_ex2_ex_cnext(exarg_T *eap)
 {
-  ex_cnext(eap);
+  rs_ex_cnext(eap);
 }
 
 bool nvim_ex2_get_got_int(void)

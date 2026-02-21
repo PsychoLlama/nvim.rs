@@ -69,8 +69,8 @@ extern "C" {
     // quickfix
     fn nvim_ex2_qf_get_valid_size(eap: *mut ExArgHandle) -> usize;
     fn nvim_ex2_qf_get_cur_idx(eap: *mut ExArgHandle) -> usize;
-    fn nvim_ex2_ex_cc(eap: *mut ExArgHandle);
-    fn nvim_ex2_ex_cnext(eap: *mut ExArgHandle);
+    fn rs_ex_cc(eap: *mut ExArgHandle);
+    fn rs_ex_cnext(eap: *mut ExArgHandle);
 
     // listdo operations
     fn nvim_ex2_get_got_int() -> bool;
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn rs_ex_listdo(eap: *mut ExArgHandle) {
             if qf_size == 0 || (line1 as usize) > qf_size {
                 buf = std::ptr::null_mut();
             } else {
-                unsafe { nvim_ex2_ex_cc(eap) };
+                unsafe { rs_ex_cc(eap) };
                 buf = unsafe { nvim_ex2_get_curbuf() };
                 i = line1 - 1;
                 if unsafe { nvim_ex2_eap_get_addr_count(eap) } <= 0 {
@@ -333,7 +333,7 @@ pub unsafe extern "C" fn rs_ex_listdo(eap: *mut ExArgHandle) {
                 }
 
                 let qf_idx = unsafe { nvim_ex2_qf_get_cur_idx(eap) };
-                unsafe { nvim_ex2_ex_cnext(eap) };
+                unsafe { rs_ex_cnext(eap) };
 
                 if unsafe { nvim_ex2_qf_get_cur_idx(eap) } == qf_idx {
                     break;
