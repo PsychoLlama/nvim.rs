@@ -95,3 +95,6 @@ Cargo.lock
 
 # Claude Code loop state
 .claude/loop-state.local.md
+
+# Migration plans (local work, not committed)
+/ref/plans/

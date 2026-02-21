@@ -8,7 +8,7 @@ All subagents are launched via the **Task tool**.
 - **Plan** (Task with `migration-planner` agent): Produces a plan file. Parallelizable if necessary. Give it specific targets and steer it according to your goals. Never tell it where to save the plan. Read its result to find the plan path.
 - **Execute** (Task with `migration-executor` agent): execute a plan file. Makes code changes, builds, tests, commits. Only one at a time. Launch like:
   ```
-  Task: Execute the migration plan at /tmp/nvim-plans/<uuid>.md
+  Task: Execute the migration plan at ref/plans/<uuid>.md
   Agent: migration-executor
   ```
 
