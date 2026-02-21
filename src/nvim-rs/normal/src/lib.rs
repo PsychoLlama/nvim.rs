@@ -212,7 +212,7 @@ extern "C" {
     fn nvim_set_curbuf_visual_vi_mode(val: c_int);
     fn nvim_get_mode_displayed() -> bool;
     fn nvim_set_clear_cmdline(val: bool);
-    fn nvim_clear_showcmd_call();
+    fn rs_clear_showcmd();
 
     // Wave 2 Phase 2: Redo/count/handler accessors
     fn nvim_oap_get_regname_ptr(oap: OapHandle) -> c_int;
@@ -2484,7 +2484,7 @@ pub extern "C" fn rs_may_clear_cmdline() {
         if nvim_get_mode_displayed() {
             nvim_set_clear_cmdline(true);
         } else {
-            nvim_clear_showcmd_call();
+            rs_clear_showcmd();
         }
     }
 }

@@ -112,13 +112,13 @@ extern "C" {
     fn nvim_set_vcount_call(count: i64, count1: i64, set_prevcount: bool);
     fn rs_find_command(cmdchar: c_int) -> c_int;
     fn rs_clearopbeep(oap: OapHandle);
-    fn nvim_check_text_or_curbuf_locked_wrapper(oap: OapHandle) -> bool;
+    fn rs_check_text_or_curbuf_locked(oap: OapHandle) -> bool;
     fn nvim_normal_handle_special_visual_command_wrapper(s: NormalStateHandle) -> bool;
     fn nvim_normal_invert_horizontal_wrapper(s: NormalStateHandle);
     fn nvim_normal_need_additional_char_wrapper(s: NormalStateHandle) -> bool;
     fn rs_normal_get_additional_char(s: NormalStateHandle);
     fn nvim_ui_flush_wrapper();
-    fn nvim_start_selection_wrapper();
+    fn rs_start_selection();
     fn nvim_unshift_special_wrapper(ca: CapHandle);
     fn nvim_mod_mask_clear_shift();
     fn nvim_execute_nv_cmd(idx: c_int, ca: CapHandle);
@@ -237,9 +237,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             break 'finish;
         }
 
-        if (nvim_get_nv_cmd_flags(idx) & NV_NCW != 0)
-            && nvim_check_text_or_curbuf_locked_wrapper(oa)
-        {
+        if (nvim_get_nv_cmd_flags(idx) & NV_NCW != 0) && rs_check_text_or_curbuf_locked(oa) {
             nvim_ns_set_command_finished(s, true);
             break 'finish;
         }
@@ -292,13 +290,13 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             let cur_idx = nvim_ns_get_idx(s);
             let flags = nvim_get_nv_cmd_flags(cur_idx);
             if flags & NV_SS != 0 {
-                nvim_start_selection_wrapper();
+                rs_start_selection();
                 nvim_unshift_special_wrapper(ca);
                 let new_idx = rs_find_command(nvim_cap_get_cmdchar(ca));
                 debug_assert!(new_idx >= 0);
                 nvim_ns_set_idx(s, new_idx);
             } else if (flags & NV_SSS != 0) && (nvim_get_mod_mask() & MOD_MASK_SHIFT != 0) {
-                nvim_start_selection_wrapper();
+                rs_start_selection();
                 nvim_mod_mask_clear_shift();
             }
         }

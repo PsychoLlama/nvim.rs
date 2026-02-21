@@ -116,28 +116,6 @@ static int VIsual_mode_orig = NUL;              // saved Visual mode
 
 #include "normal_shim.c.generated.h"
 
-// Rust FFI declarations (window wrappers)
-extern void rs_set_fraction(win_T *wp);
-extern void rs_win_setheight(int height);
-
-// Rust quickfix FFI declarations
-extern void rs_qf_view_result(bool split);
-
-// Rust fold FFI declarations
-extern int rs_hasAnyFolding(win_T *win);
-extern void rs_foldOpenCursor(void);
-extern void rs_foldCheckClose(void);
-extern void rs_newFoldLevel(void);
-extern int rs_foldManualAllowed(bool create);
-extern void rs_clearFolding(win_T *win);
-extern int rs_foldMoveTo(bool updown, int dir, int count);
-extern void rs_foldAdjustVisual(void);
-extern int rs_getDeepestNesting(win_T *wp);
-extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive, bool had_visual);
-extern void rs_foldUpdateAfterInsert(void);
-extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
-extern linenr_T rs_setManualFold(linenr_T lnum, bool opening, bool recurse, int *donep);
-
 static const char e_changelist_is_empty[] = N_("E664: Changelist is empty");
 static const char e_cmdline_window_already_open[]
   = N_("E1292: Command-line window is already open");
@@ -180,9 +158,7 @@ typedef void (*nv_func_T)(cmdarg_T *cap);
 // line oriented motion.  Then, if an operator is in effect, the operation
 // becomes character or line oriented accordingly.
 
-// =============================================================================
-// Rust implementations (forward declarations needed by dispatch table)
-// =============================================================================
+// Rust command handlers (forward declarations needed by dispatch table)
 extern int rs_magic_isset(void);
 extern void rs_nv_ignore(cmdarg_T *cap);
 extern void rs_nv_nop(cmdarg_T *cap);
@@ -250,9 +226,11 @@ extern void rs_nv_percent(cmdarg_T *cap);
 extern void rs_nv_tagpop(cmdarg_T *cap);
 extern void rs_nv_regreplay(cmdarg_T *cap);
 extern void rs_nv_ctrlh(cmdarg_T *cap);
-extern void rs_do_ascii(exarg_T *eap);
-extern void rs_diff_set_topline(win_T *fromwin, win_T *towin);
-extern int rs_diff_move_to(int dir, int count);
+extern void rs_nv_object(cmdarg_T *cap);
+extern void rs_nv_vreplace(cmdarg_T *cap);
+extern void rs_nv_g_underscore_cmd(cmdarg_T *cap);
+extern void rs_nv_gi_cmd(cmdarg_T *cap);
+extern void rs_nv_gv_cmd(cmdarg_T *cap);
 
 /// This table contains one entry for every Normal or Visual mode command.
 /// The order doesn't matter, init_normal_cmds() will create a sorted index.
@@ -466,16 +444,20 @@ static int16_t nv_cmd_idx[NV_CMDS_SIZE];
 static int nv_max_linear;
 
 // =============================================================================
-// Rust implementations (forward declarations)
+// Rust FFI declarations (non-dispatch-table)
 // =============================================================================
+
+// Normal mode state machine
+extern int rs_normal_check(void *s);
+extern int rs_normal_execute(void *s, int key);
+extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
+
+// Operator/command helpers
 extern bool rs_op_pending(void);
 extern int rs_find_command(int cmdchar);
 extern int rs_invert_horizontal(int cmdchar);
 extern int rs_unshift_special(int cmdchar, int *modp);
 extern bool rs_is_ident(const char *line, int offset);
-extern int rs_get_vtopline(win_T *wp);
-extern int rs_get_sidescrolloff_value(win_T *wp);
-extern const char *rs_get_showbreak_value(win_T *win);
 extern void rs_clearop(oparg_T *oap);
 extern void rs_clearopbeep(oparg_T *oap);
 extern bool rs_checkclearop(oparg_T *oap);
@@ -483,49 +465,40 @@ extern bool rs_checkclearopq(oparg_T *oap);
 extern bool rs_check_text_locked(oparg_T *oap);
 extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
 extern void rs_prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5);
-extern void rs_prep_redo_num2(int regname, int num1, int cmd1, int cmd2, int num2, int cmd3, int cmd4, int cmd5);
-extern void rs_nv_object(cmdarg_T *cap);
-extern void rs_nv_vreplace(cmdarg_T *cap);
-
-// Wave 2 Phase 1 functions
-extern void rs_reset_VIsual_and_resel(void);
-extern void rs_reset_VIsual(void);
-extern void rs_restore_visual_mode(void);
-extern void rs_may_clear_cmdline(void);
-
-// Wave 2 Phase 2 functions
 extern void rs_prep_redo_cmd(cmdarg_T *cap);
 extern void rs_set_vcount_ca(cmdarg_T *cap, bool *set_prevcount);
-
-// Wave 2 Phase 3 functions
+extern void rs_reset_VIsual_and_resel(void);
+extern void rs_may_clear_cmdline(void);
 extern void rs_v_visop(cmdarg_T *cap);
-
-// Wave 2 Phase 4 functions
-extern void rs_start_selection(void);
 extern void rs_may_start_select(int c);
-extern void rs_nv_g_underscore_cmd(cmdarg_T *cap);
-extern void rs_nv_gi_cmd(cmdarg_T *cap);
-
-// Wave 2 Phase 5 functions
-extern void rs_nv_gv_cmd(cmdarg_T *cap);
 extern void rs_v_swap_corners(int cmdchar);
 extern bool rs_unadjust_for_sel(void);
-
-// Phase 1A: find_ident_at_pos
 extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
                                    char **text, int *textcol, int find_type);
 
-// Phase 1B: clear_showcmd
-extern void rs_clear_showcmd(void);
-
-// Phase 4A: normal_check
-extern int rs_normal_check(void *s);
-
-// Phase 4B: normal_execute
-extern int rs_normal_execute(void *s, int key);
-
-// Execute module functions
-extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
+// Window/fold/quickfix/diff helpers
+extern void rs_set_fraction(win_T *wp);
+extern void rs_win_setheight(int height);
+extern void rs_qf_view_result(bool split);
+extern int rs_hasAnyFolding(win_T *win);
+extern void rs_foldOpenCursor(void);
+extern void rs_foldCheckClose(void);
+extern void rs_newFoldLevel(void);
+extern int rs_foldManualAllowed(bool create);
+extern void rs_clearFolding(win_T *win);
+extern int rs_foldMoveTo(bool updown, int dir, int count);
+extern void rs_foldAdjustVisual(void);
+extern int rs_getDeepestNesting(win_T *wp);
+extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive, bool had_visual);
+extern void rs_foldUpdateAfterInsert(void);
+extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
+extern linenr_T rs_setManualFold(linenr_T lnum, bool opening, bool recurse, int *donep);
+extern void rs_do_ascii(exarg_T *eap);
+extern void rs_diff_set_topline(win_T *fromwin, win_T *towin);
+extern int rs_diff_move_to(int dir, int count);
+extern int rs_get_vtopline(win_T *wp);
+extern int rs_get_sidescrolloff_value(win_T *wp);
+extern const char *rs_get_showbreak_value(win_T *win);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -565,7 +538,6 @@ void init_normal_cmds(void)
   }
   nv_max_linear = i - 1;
 }
-
 
 static oparg_T *current_oap = NULL;
 
@@ -1617,7 +1589,7 @@ void nvim_nv_visual_impl(cmdarg_T *cap)
 }
 
 // =============================================================================
-// Phase 1 command accessors for Rust FFI
+// Command handler accessors for Rust FFI
 // =============================================================================
 
 /// Clear all syntax states and redraw for nv_clear.
@@ -1661,7 +1633,7 @@ int nvim_get_GETF_ALT(void)
 }
 
 // =============================================================================
-// Wave 2 Phase 1 accessors for Rust FFI
+// Visual mode accessors for Rust FFI
 // =============================================================================
 
 /// Get VIsual_mode_orig (static global).
@@ -1700,14 +1672,8 @@ void nvim_set_clear_cmdline(bool val)
   clear_cmdline = val;
 }
 
-/// Wrapper for clear_showcmd().
-void nvim_clear_showcmd_call(void)
-{
-  rs_clear_showcmd();
-}
-
 // =============================================================================
-// Wave 2 Phase 2 accessors for Rust FFI
+// Redo/count accessors for Rust FFI
 // =============================================================================
 
 /// Get cap->nchar_len.
@@ -1750,10 +1716,8 @@ void nvim_normal_line_breakcheck(void)
 }
 
 // =============================================================================
-// Wave 2 Phase 3 accessors for Rust FFI
+// Visual operator accessors for Rust FFI
 // =============================================================================
-
-// Verify constants used in Phase 3
 _Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
 _Static_assert(OP_DELETE == 1, "OP_DELETE mismatch");
 _Static_assert(OP_YANK == 2, "OP_YANK mismatch");
@@ -1767,10 +1731,8 @@ _Static_assert(K_KDEL == TERMCAP2KEY(KS_EXTRA, KE_KDEL), "K_KDEL mismatch");
 _Static_assert(kMTLineWise == 1, "kMTLineWise mismatch");
 
 // =============================================================================
-// Wave 2 Phase 4 accessors for Rust FFI
+// Selection/g-cmd accessors for Rust FFI
 // =============================================================================
-
-// Verify constants used in Phase 4
 _Static_assert(Ctrl_N == 14, "Ctrl_N mismatch");
 _Static_assert(Ctrl_G == 7, "Ctrl_G mismatch");
 _Static_assert(Ctrl_C == 3, "Ctrl_C mismatch");
@@ -1832,7 +1794,7 @@ int nvim_get_cursor_line_len(void)
   return (int)get_cursor_line_len();
 }
 
-/// Get curwin->w_cursor.coladd (for Phase 4 g-cmds).
+/// Get curwin->w_cursor.coladd.
 int nvim_get_cursor_coladd(void)
 {
   return curwin->w_cursor.coladd;
@@ -1851,7 +1813,7 @@ void nvim_set_cmdwin_result(int val)
 }
 
 // =============================================================================
-// Wave 2 Phase 5: Visual complex function accessors
+// Visual complex function accessors for Rust FFI
 // =============================================================================
 
 // Guards: ensure Rust constants match C values
@@ -2187,7 +2149,7 @@ void nvim_nv_edit_impl(cmdarg_T *cap)
 }
 
 // =============================================================================
-// Phase 2 command accessors for Rust FFI (Search handlers)
+// Search handler accessors for Rust FFI
 // =============================================================================
 
 // Forward declarations for search handlers
@@ -2234,7 +2196,7 @@ void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
 }
 
 // =============================================================================
-// Phase 3 command accessors for Rust FFI (Operator handlers)
+// Operator handler accessors for Rust FFI
 // =============================================================================
 
 // Forward declarations for operator handlers
@@ -2268,7 +2230,7 @@ void nvim_nv_subst_impl(cmdarg_T *cap)
 }
 
 // =============================================================================
-// Phase 4 command accessors for Rust FFI (Text object handlers)
+// Text object handler accessors for Rust FFI
 // =============================================================================
 
 // Forward declarations for text object handlers
@@ -2295,7 +2257,7 @@ void nvim_nv_brackets_impl(cmdarg_T *cap)
 }
 
 // =============================================================================
-// Phase 5 command accessors for Rust FFI (Undo/Redo handlers)
+// Undo/Redo handler accessors for Rust FFI
 // =============================================================================
 
 // Forward declarations for undo/redo handlers
@@ -2329,7 +2291,7 @@ void nvim_nv_redo_or_register_impl(cmdarg_T *cap)
 }
 
 // =============================================================================
-// Phase 6 command accessors for Rust FFI (Insert mode entry handlers)
+// Insert mode entry handler accessors for Rust FFI
 // =============================================================================
 
 // Forward declarations for insert mode entry handlers
@@ -2356,7 +2318,7 @@ void nvim_nv_vreplace_impl(cmdarg_T *cap)
 }
 
 // =============================================================================
-// Phase 7 command accessors for Rust FFI (Scroll and screen handlers)
+// Scroll and screen handler accessors for Rust FFI
 // =============================================================================
 
 // Forward declarations for scroll/screen handlers
@@ -2404,7 +2366,7 @@ void nvim_nv_down_impl(cmdarg_T *cap)
 }
 
 // =============================================================================
-// Phase 8 command accessors for Rust FFI (Miscellaneous handlers)
+// Miscellaneous handler accessors for Rust FFI
 // =============================================================================
 
 // Forward declarations for miscellaneous handlers
@@ -2447,9 +2409,8 @@ void nvim_nv_colon(cmdarg_T *cap)
   nv_colon(cap);
 }
 
-
 // =============================================================================
-// Phase 1A: find_ident_at_pos accessors for Rust FFI
+// find_ident_at_pos accessors for Rust FFI
 // =============================================================================
 
 /// Constants for find_ident_at_pos (verified with _Static_assert).
@@ -2496,7 +2457,7 @@ void nvim_emsg_no_ident_under_cursor(void)
 }
 
 // =============================================================================
-// Phase 2A: NormalState field accessors for Rust FFI
+// NormalState field accessors for Rust FFI
 // All take void* (opaque NormalState handle) and cast internally.
 // =============================================================================
 
@@ -2733,7 +2694,7 @@ static void normal_redraw_mode_message(NormalState *s)
 }
 
 // =============================================================================
-// Phase 2B: normal_get_additional_char accessors for Rust FFI
+// normal_get_additional_char accessors for Rust FFI
 // =============================================================================
 
 _Static_assert(MODE_REPLACE == 0x110, "MODE_REPLACE changed");
@@ -2917,7 +2878,7 @@ static bool normal_get_command_count(NormalState *s)
 }
 
 // =============================================================================
-// Phase 3: normal_finish_command accessors for Rust FFI
+// normal_finish_command accessors for Rust FFI
 // =============================================================================
 
 _Static_assert(K_IGNORE == -13821, "K_IGNORE changed");
@@ -2927,9 +2888,6 @@ _Static_assert(OP_NOP == 0, "OP_NOP changed");
 _Static_assert(OP_COLON == 10, "OP_COLON changed");
 _Static_assert(CA_COMMAND_BUSY == 1, "CA_COMMAND_BUSY changed");
 _Static_assert(NV_KEEPREG == 0x100, "NV_KEEPREG changed");
-
-/// rs_clearop(&oa) via oap handle.
-void nvim_clearop_wrapper(oparg_T *oap) { rs_clearop(oap); }
 
 /// set_reg_var(get_default_register_name()).
 void nvim_set_reg_var_default(void) { set_reg_var(get_default_register_name()); }
@@ -2989,7 +2947,7 @@ void nvim_edit_wrapper(int cmd, bool startln, int count) { edit(cmd, startln, co
 void nvim_showmode_wrapper(void) { showmode(); }
 
 // =============================================================================
-// Phase 4B: normal_execute accessors for Rust FFI
+// normal_execute accessors for Rust FFI
 // =============================================================================
 
 _Static_assert(K_IGNORE == -13821, "K_IGNORE changed");
@@ -3036,15 +2994,6 @@ void nvim_normal_get_command_count_loop(void *sp)
   while (normal_get_command_count((NormalState *)sp)) {}
 }
 
-/// rs_clearopbeep(&oa) via oap handle.
-void nvim_clearopbeep_wrapper(oparg_T *oap) { rs_clearopbeep(oap); }
-
-/// rs_check_text_or_curbuf_locked(&oa) via oap handle.
-bool nvim_check_text_or_curbuf_locked_wrapper(oparg_T *oap)
-{
-  return rs_check_text_or_curbuf_locked(oap);
-}
-
 /// normal_handle_special_visual_command wrapper.
 bool nvim_normal_handle_special_visual_command_wrapper(void *sp)
 {
@@ -3065,9 +3014,6 @@ bool nvim_normal_need_additional_char_wrapper(void *sp)
 
 /// ui_flush() wrapper.
 void nvim_ui_flush_wrapper(void) { ui_flush(); }
-
-/// start_selection() wrapper.
-void nvim_start_selection_wrapper(void) { rs_start_selection(); }
 
 /// unshift_special(&ca) wrapper.
 void nvim_unshift_special_wrapper(cmdarg_T *ca) { ca->cmdchar = rs_unshift_special(ca->cmdchar, &mod_mask); }
@@ -3243,7 +3189,7 @@ static void normal_redraw(NormalState *s)
 }
 
 // =============================================================================
-// Phase 4A: normal_check accessors for Rust FFI
+// normal_check accessors for Rust FFI
 // =============================================================================
 
 /// normal_check_stuff_buffer wrapper.
@@ -3440,7 +3386,7 @@ static bool showcmd_is_clear = true;
 static bool showcmd_visual = false;
 
 // =============================================================================
-// Phase 1B: clear_showcmd accessors for Rust FFI
+// showcmd accessors for Rust FFI
 // =============================================================================
 
 /// Constants for clear_showcmd (verified with _Static_assert).
@@ -5814,7 +5760,6 @@ static void nv_replace_impl(cmdarg_T *cap)
   rs_foldUpdateAfterInsert();
 }
 
-
 /// "R" (cap->arg is false) and "gR" (cap->arg is true) (implementation).
 static void nv_Replace_impl(cmdarg_T *cap)
 {
@@ -5953,7 +5898,6 @@ static MarkMoveRes nv_mark_move_to(cmdarg_T *cap, MarkMove flags, fmark_T *fm)
   curwin->w_set_curswant = true;
   return res;
 }
-
 
 /// Implementation of "s" and "S" commands.
 static void nv_subst_impl(cmdarg_T *cap)
