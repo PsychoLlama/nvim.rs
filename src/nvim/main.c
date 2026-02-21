@@ -570,7 +570,7 @@ int main(int argc, char **argv)
 
   // When started with "-q errorfile" jump to first error now.
   if (params.edit_type == EDIT_QF) {
-    qf_jump(NULL, 0, 0, false);
+    rs_qf_jump_newwin(NULL, 0, 0, false, false);
     TIME_MSG("jump to first error");
   }
 
@@ -1974,7 +1974,7 @@ static void exe_commands(mparm_T *parmp)
 
   // When started with "-q errorfile" jump to first error again.
   if (parmp->edit_type == EDIT_QF) {
-    qf_jump(NULL, 0, 0, false);
+    rs_qf_jump_newwin(NULL, 0, 0, false, false);
   }
   TIME_MSG("executing command arguments");
 }

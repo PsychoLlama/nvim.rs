@@ -7249,10 +7249,12 @@ void nvim_do_window_g(int Prenum, int xchar)
   }
 }
 
+extern void rs_qf_view_result(bool split);
+
 /// Wrapper: qf_view_result(true).
 void nvim_qf_view_result_split(void)
 {
-  qf_view_result(true);
+  rs_qf_view_result(true);
 }
 
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");

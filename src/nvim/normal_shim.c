@@ -124,6 +124,9 @@ extern void rs_do_window(int nchar, int Prenum, int xchar);
 extern void rs_set_fraction(win_T *wp);
 extern void rs_win_setheight(int height);
 
+// Rust quickfix FFI declarations
+extern void rs_qf_view_result(bool split);
+
 // Rust fold FFI declarations
 extern int rs_hasAnyFolding(win_T *win);
 extern void rs_foldOpenCursor(void);
@@ -5445,7 +5448,7 @@ static void nv_down_impl(cmdarg_T *cap)
     rs_nv_page(cap);
   } else if (bt_quickfix(curbuf) && cap->cmdchar == CAR) {
     // Quickfix window only: view the result under the cursor.
-    qf_view_result(false);
+    rs_qf_view_result(false);
   } else {
     // In the cmdline window a <CR> executes the command.
     if (cmdwin_type != 0 && cap->cmdchar == CAR) {

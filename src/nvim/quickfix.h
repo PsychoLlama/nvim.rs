@@ -18,6 +18,10 @@ enum {
   VGR_FUZZY  = 4,
 };
 
+// Rust quickfix implementations (called from external C files)
+extern void rs_qf_view_result(bool split);
+extern void rs_qf_jump_newwin(void *qi, int dir, int errornr, int forceit, bool newwin);
+
 // Rust ex command implementations (called directly from command dispatch table)
 extern void rs_ex_cc(void *eap);
 extern void rs_ex_cnext(void *eap);

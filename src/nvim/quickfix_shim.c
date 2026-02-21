@@ -4672,13 +4672,6 @@ void nvim_qf_update_win_titlevar(void *qi_void)
   qf_update_win_titlevar((qf_info_T *)qi_void);
 }
 
-/// Jump to a quickfix line and try to use an existing window.
-void qf_jump(qf_info_T *qi, int dir, int errornr, int forceit)
-{
-  rs_qf_jump_newwin(qi, dir, errornr, forceit, false);
-}
-
-
 // Highlight ids used for displaying entries from the quickfix list.
 static int qfFile_hl_id;
 static int qfSep_hl_id;
@@ -4909,8 +4902,6 @@ static void qf_msg(qf_info_T *qi, int which, char *lead)
   msg(buf, 0);
 }
 
-extern void rs_qf_view_result(bool split);
-
 /// Adjust error list entries for changed line numbers
 ///
 /// Note: `buf` is the changed buffer, but `wp` is a potential location list
@@ -5004,13 +4995,6 @@ static char *qf_types(int c, int nr)
   static char buf[20];
   snprintf(buf, sizeof(buf), "%s %3d", p, nr);
   return buf;
-}
-
-// When "split" is false: Open the entry/result under the cursor.
-// When "split" is true: Open the entry/result under the cursor in a new window.
-void qf_view_result(bool split)
-{
-  rs_qf_view_result(split);
 }
 
 // Set options for the buffer in the quickfix or location list window.
@@ -5584,7 +5568,7 @@ static void qf_jump_first(qf_info_T *qi, unsigned save_qfid, int forceit)
 
   // Autocommands might have cleared the list, check for that
   if (!rs_qf_list_empty(qf_get_curlist(qi))) {
-    qf_jump(qi, 0, 0, forceit);
+    rs_qf_jump_newwin(qi, 0, 0, forceit, false);
   }
 }
 
@@ -6293,7 +6277,7 @@ static void vgr_jump_to_match(qf_info_T *qi, int forceit, bool *redraw_for_dummy
                               buf_T *first_match_buf, char *target_dir)  // NOLINT(readability-non-const-parameter)
 {
   buf_T *buf = curbuf;
-  qf_jump(qi, 0, 0, forceit);
+  rs_qf_jump_newwin(qi, 0, 0, forceit, false);
   if (buf != curbuf) {
     // If we jumped to another buffer redrawing will already be
     // taken care of.
@@ -8319,7 +8303,7 @@ void nvim_hgr_jump_or_nomatch(void *eap_void, void *qi_void)
   qf_info_T *qi = (qf_info_T *)qi_void;
 
   if (!rs_qf_list_empty(qf_get_curlist(qi))) {
-    qf_jump(qi, 0, 0, false);
+    rs_qf_jump_newwin(qi, 0, 0, false, false);
   } else {
     semsg(_(e_nomatch2), eap->arg);
   }
