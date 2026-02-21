@@ -1,7 +1,7 @@
 ---
 name: migration-executor
 description: Executes a migration plan — makes code changes, builds, tests, and commits phase by phase.
-model: inherit
+model: sonnet
 color: red
 ---
 
