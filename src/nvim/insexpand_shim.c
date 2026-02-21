@@ -1737,7 +1737,7 @@ void nvim_ins_compl_del_pum(void) { ins_compl_del_pum(); }
 void nvim_pum_clear(void) { pum_clear(); }
 int nvim_get_compl_match_array_exists(void) { return compl_match_array != NULL ? 1 : 0; }
 
-// Phase 2 accessors for Rust
+// Completion state accessors (used by Rust insexpand crate)
 int nvim_compl_match_get_cp_number(void *m) {
   return m ? ((compl_T *)m)->cp_number : -1;
 }
@@ -1749,7 +1749,6 @@ uint64_t nvim_get_compl_timeout_ms(void) { return compl_timeout_ms; }
 void nvim_set_compl_time_slice_expired(int val) { compl_time_slice_expired = val != 0; }
 void nvim_decay_compl_timeout(void) { DECAY_COMPL_TIMEOUT(); }
 
-// Phase 3 accessors for Rust (ins_compl_clear setters)
 void nvim_set_compl_cont_status(int val) { compl_cont_status = val; }
 void nvim_set_compl_started(int val) { compl_started = val != 0; }
 void nvim_set_compl_matches(int val) { compl_matches = val; }
@@ -1769,7 +1768,6 @@ void nvim_set_completed_item_empty(void) {
   set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
 }
 
-// Phase 4 accessors for Rust (redo buffer fixup and fuzzy scoring)
 void nvim_append_char_to_redobuff(int c) { AppendCharToRedobuff(c); }
 void nvim_append_to_redobuff_lit(const char *s, int len) {
   AppendToRedobuffLit(s, len);
