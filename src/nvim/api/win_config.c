@@ -78,6 +78,8 @@ extern int rs_win_valid(win_T *win);
 extern int rs_win_valid_any_tab(win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
+extern void rs_win_append(win_T *after, win_T *wp, tabpage_T *tp);
+extern void rs_win_remove(win_T *wp, tabpage_T *tp);
 extern void rs_last_status(int morewin);
 extern int rs_win_comp_pos(void);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
@@ -624,7 +626,7 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
       altwin = win_float_find_altwin(win, win_tp == curtab ? NULL : win_tp);
     }
 
-    win_remove(win, win_tp == curtab ? NULL : win_tp);
+    rs_win_remove(win, win_tp == curtab ? NULL : win_tp);
     if (win_tp == curtab) {
       rs_last_status(0);  // may need to remove last status line
       rs_win_comp_pos();  // recompute window positions
@@ -645,7 +647,7 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
       to_split_ok = win_split_ins(0, flags, win, 0, unflat_altfr) != NULL;
       if (!to_split_ok) {
         // Restore `win` to the window list now, so it's valid for restore_win (if used).
-        win_append(win->w_prev, win, win_tp == curtab ? NULL : win_tp);
+        rs_win_append(win->w_prev, win, win_tp == curtab ? NULL : win_tp);
       }
       if (need_switch) {
         restore_win(&switchwin, true);

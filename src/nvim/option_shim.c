@@ -159,6 +159,8 @@ extern const char *rs_did_set_binary(void);
 extern const char *rs_did_set_diff(optset_T *args);
 extern const char *rs_did_set_eof_eol_fixeol_bomb(optset_T *args);
 extern const char *rs_did_set_equalalways(optset_T *args);
+extern const char *rs_did_set_winminheight(optset_T *args);
+extern const char *rs_did_set_winminwidth(optset_T *args);
 extern const char *rs_did_set_foldminlines(optset_T *args);
 extern const char *rs_did_set_foldnestmax(optset_T *args);
 extern const char *rs_did_set_helpheight(optset_T *args);

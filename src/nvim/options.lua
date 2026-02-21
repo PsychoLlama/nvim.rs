@@ -10703,7 +10703,7 @@ local options = {
     },
     {
       abbreviation = 'wmh',
-      cb = 'did_set_winminheight',
+      cb = 'rs_did_set_winminheight',
       defaults = 1,
       desc = [=[
         The minimal height of a window, when it's not the current window.
@@ -10724,7 +10724,7 @@ local options = {
     },
     {
       abbreviation = 'wmw',
-      cb = 'did_set_winminwidth',
+      cb = 'rs_did_set_winminwidth',
       defaults = 1,
       desc = [=[
         The minimal width of a window, when it's not the current window.

@@ -35,6 +35,7 @@ extern "C" {
     // Window display properties
     fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
+    #[link_name = "rs_win_fdccol_count"]
     fn nvim_win_fdccol_count(wp: WinHandle) -> c_int;
     fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
 

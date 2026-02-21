@@ -111,6 +111,9 @@ fn win_append_impl(after: WinHandle, wp: WinHandle, tp: TabpageHandle) {
 /// Appends a window in the window list after another window.
 #[no_mangle]
 pub extern "C" fn rs_win_append(after: WinHandle, wp: WinHandle, tp: TabpageHandle) {
+    unsafe {
+        debug_assert!(tp.is_null() || tp != nvim_get_curtab());
+    }
     win_append_impl(after, wp, tp);
 }
 
@@ -159,6 +162,9 @@ fn win_remove_impl(wp: WinHandle, tp: TabpageHandle) {
 /// Removes a window from the window list.
 #[no_mangle]
 pub extern "C" fn rs_win_remove(wp: WinHandle, tp: TabpageHandle) {
+    unsafe {
+        debug_assert!(tp.is_null() || tp != nvim_get_curtab());
+    }
     win_remove_impl(wp, tp);
 }
 

@@ -3273,6 +3273,58 @@ pub extern "C" fn rs_frame_remove(frp: *mut Frame) {
     unsafe { frame_remove_impl(frp) }
 }
 
+// =============================================================================
+// Fold column count
+// =============================================================================
+
+extern "C" {
+    /// Get the fold column display string (w_p_fdc) from a window.
+    fn nvim_win_get_w_p_fdc(wp: WinHandle) -> *const std::ffi::c_char;
+
+    /// Get the deepest nesting level for folds in a window.
+    fn rs_getDeepestNesting(wp: WinHandle) -> c_int;
+}
+
+/// Return the number of fold columns to display.
+///
+/// Equivalent to C `win_fdccol_count(wp)` in window.c.
+#[allow(clippy::cast_possible_truncation)]
+fn win_fdccol_count_impl(wp: WinHandle) -> c_int {
+    unsafe {
+        let fdc = nvim_win_get_w_p_fdc(wp);
+        if fdc.is_null() {
+            return 0;
+        }
+
+        // Convert to a byte slice for easier comparison
+        let fdc_cstr = std::ffi::CStr::from_ptr(fdc);
+        let fdc_bytes = fdc_cstr.to_bytes();
+
+        // Check for "auto" or "auto:<NUM>" prefix
+        if fdc_bytes.starts_with(b"auto") {
+            let fdccol: c_int = if fdc_bytes.len() > 5 && fdc_bytes[4] == b':' {
+                c_int::from(fdc_bytes[5]) - c_int::from(b'0')
+            } else {
+                1
+            };
+            let needed = rs_getDeepestNesting(wp);
+            return std::cmp::min(fdccol, needed);
+        }
+
+        if fdc_bytes.is_empty() {
+            return 0;
+        }
+
+        c_int::from(fdc_bytes[0]) - c_int::from(b'0')
+    }
+}
+
+/// FFI: Return the number of fold columns to display.
+#[no_mangle]
+pub extern "C" fn rs_win_fdccol_count(wp: WinHandle) -> c_int {
+    win_fdccol_count_impl(wp)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

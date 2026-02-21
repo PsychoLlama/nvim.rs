@@ -38,6 +38,8 @@ extern int rs_win_valid(win_T *win);
 extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
+extern void rs_win_append(win_T *after, win_T *wp, tabpage_T *tp);
+extern void rs_win_remove(win_T *wp, tabpage_T *tp);
 extern win_T *rs_lastwin_nofloating(void);
 extern int rs_win_comp_pos(void);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
@@ -112,8 +114,8 @@ win_T *win_new_float(win_T *wp, bool last, WinConfig fconfig, Error *err)
     winframe_remove(wp, &dir, NULL, NULL);
     XFREE_CLEAR(wp->w_frame);
     rs_win_comp_pos();  // recompute window positions
-    win_remove(wp, NULL);
-    win_append(rs_lastwin_nofloating(), wp, NULL);
+    rs_win_remove(wp, NULL);
+    rs_win_append(rs_lastwin_nofloating(), wp, NULL);
   }
   wp->w_floating = true;
   wp->w_status_height = wp->w_p_stl && *wp->w_p_stl != NUL
@@ -420,7 +422,7 @@ static inline win_T *handle_error_and_cleanup(win_T *wp, Error *err)
     api_clear_error(err);
   }
   if (wp) {
-    win_remove(wp, NULL);
+    rs_win_remove(wp, NULL);
     win_free(wp, NULL);
   }
   unblock_autocmds();

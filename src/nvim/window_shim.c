@@ -163,9 +163,7 @@ extern int64_t rs_win_default_scroll(win_T *wp);
 extern void rs_win_setheight(int height);
 extern void rs_win_setwidth(int width);
 
-// Option validation + height/width setters
-extern const char *rs_did_set_winminheight(void);
-extern const char *rs_did_set_winminwidth(void);
+// Height/width setters
 extern void rs_win_new_height(win_T *wp, int height);
 extern void rs_win_new_width(win_T *wp, int width);
 
@@ -651,10 +649,10 @@ buf_T *nvim_win_get_w_buffer(win_T *wp)
   return wp->w_buffer;
 }
 
-/// Get the fold column count for a window.
-int nvim_win_fdccol_count(win_T *wp)
+/// Get the fold column display string (w_p_fdc) from a window.
+const char *nvim_win_get_w_p_fdc(win_T *wp)
 {
-  return win_fdccol_count(wp);
+  return wp->w_p_fdc;
 }
 
 /// Check if the given window is the current window.
@@ -1987,19 +1985,6 @@ void win_set_buf(win_T *win, buf_T *buf, Error *err)
   RedrawingDisabled--;
 }
 
-/// Return the number of fold columns to display
-int win_fdccol_count(win_T *wp)
-{
-  const char *fdc = wp->w_p_fdc;
-
-  // auto:<NUM>
-  if (strncmp(fdc, "auto", 4) == 0) {
-    const int fdccol = fdc[4] == ':' ? fdc[5] - '0' : 1;
-    int needed_fdccols = rs_getDeepestNesting(wp);
-    return MIN(fdccol, needed_fdccols);
-  }
-  return fdc[0] - '0';
-}
 
 /// Merges two window configs, freeing replaced fields if necessary.
 void merge_win_config(WinConfig *dst, const WinConfig src)
@@ -2468,15 +2453,15 @@ static void win_exchange(int Prenum)
   win_T *wp2 = curwin->w_prev;
   frame_T *frp2 = curwin->w_frame->fr_prev;
   if (wp->w_prev != curwin) {
-    win_remove(curwin, NULL);
+    rs_win_remove(curwin, NULL);
     rs_frame_remove(curwin->w_frame);
-    win_append(wp->w_prev, curwin, NULL);
+    rs_win_append(wp->w_prev, curwin, NULL);
     rs_frame_insert(frp, curwin->w_frame);
   }
   if (wp != wp2) {
-    win_remove(wp, NULL);
+    rs_win_remove(wp, NULL);
     rs_frame_remove(wp->w_frame);
-    win_append(wp2, wp, NULL);
+    rs_win_append(wp2, wp, NULL);
     if (frp2 == NULL) {
       rs_frame_insert(wp->w_frame->fr_parent->fr_child, wp->w_frame);
     } else {
@@ -2544,13 +2529,13 @@ static void win_rotate(bool upwards, int count)
       frp = curwin->w_frame->fr_parent->fr_child;
       assert(frp != NULL);
       wp1 = frp->fr_win;
-      win_remove(wp1, NULL);
+      rs_win_remove(wp1, NULL);
       rs_frame_remove(frp);
       assert(frp->fr_parent->fr_child);
 
       // find last frame and append removed window/frame after it
       for (; frp->fr_next != NULL; frp = frp->fr_next) {}
-      win_append(frp->fr_win, wp1, NULL);
+      rs_win_append(frp->fr_win, wp1, NULL);
       rs_frame_append(frp, wp1->w_frame);
 
       wp2 = frp->fr_win;                // previously last window
@@ -2560,12 +2545,12 @@ static void win_rotate(bool upwards, int count)
            frp = frp->fr_next) {}
       wp1 = frp->fr_win;
       wp2 = wp1->w_prev;                    // will become last window
-      win_remove(wp1, NULL);
+      rs_win_remove(wp1, NULL);
       rs_frame_remove(frp);
       assert(frp->fr_parent->fr_child);
 
       // append the removed window/frame before the first in the list
-      win_append(frp->fr_parent->fr_child->fr_win->w_prev, wp1, NULL);
+      rs_win_append(frp->fr_parent->fr_child->fr_win->w_prev, wp1, NULL);
       rs_frame_insert(frp->fr_parent->fr_child, frp);
     }
 
@@ -2612,13 +2597,13 @@ int win_splitmove(win_T *wp, int size, int flags)
 
   frame_T *unflat_altfr = NULL;
   if (wp->w_floating) {
-    win_remove(wp, NULL);
+    rs_win_remove(wp, NULL);
   } else {
     // Remove the window and frame from the tree of frames.  Don't flatten any
     // frames yet so we can restore things if win_split_ins fails.
     winframe_remove(wp, &dir, NULL, &unflat_altfr);
     assert(unflat_altfr != NULL);
-    win_remove(wp, NULL);
+    rs_win_remove(wp, NULL);
     rs_last_status(0);  // may need to remove last status line
     rs_win_comp_pos();  // recompute window positions
   }
@@ -2631,7 +2616,7 @@ int win_splitmove(win_T *wp, int size, int flags)
       // existing window, so just undo winframe_remove.
       winframe_restore(wp, dir, unflat_altfr);
     }
-    win_append(wp->w_prev, wp, NULL);
+    rs_win_append(wp->w_prev, wp, NULL);
     return FAIL;
   }
 
@@ -2702,9 +2687,9 @@ void win_move_after(win_T *win1, win_T *win2)
         win1->w_frame->fr_width -= 1;
       }
     }
-    win_remove(win1, NULL);
+    rs_win_remove(win1, NULL);
     rs_frame_remove(win1->w_frame);
-    win_append(win2, win1, NULL);
+    rs_win_append(win2, win1, NULL);
     rs_frame_append(win2->w_frame, win1->w_frame);
 
     rs_win_comp_pos();  // recompute w_winrow for all windows
@@ -3321,7 +3306,7 @@ void win_free_all(void)
 
   while (lastwin != NULL && lastwin->w_floating) {
     win_T *wp = lastwin;
-    win_remove(lastwin, NULL);
+    rs_win_remove(lastwin, NULL);
     int dummy;
     win_free_mem(wp, &dummy, NULL);
     for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
@@ -4306,8 +4291,8 @@ static void tabpage_check_windows(tabpage_T *old_curtab)
     next_wp = wp->w_next;
     if (wp->w_floating) {
       if (wp->w_config.external) {
-        win_remove(wp, old_curtab);
-        win_append(rs_lastwin_nofloating(), wp, NULL);
+        rs_win_remove(wp, old_curtab);
+        rs_win_append(rs_lastwin_nofloating(), wp, NULL);
       } else {
         ui_comp_remove_grid(&wp->w_grid_alloc);
       }
@@ -4822,7 +4807,7 @@ win_T *win_alloc(win_T *after, bool hidden)
         tp = NULL;
       }
     }
-    win_append(after, new_wp, tp);
+    rs_win_append(after, new_wp, tp);
   }
 
   new_wp->w_wincol = 0;
@@ -4964,7 +4949,7 @@ void win_free(win_T *wp, tabpage_T *tp)
   win_free_grid(wp, false);
 
   if (rs_win_valid_any_tab(wp)) {
-    win_remove(wp, tp);
+    rs_win_remove(wp, tp);
   }
   if (autocmd_busy) {
     wp->w_next = au_pending_free_win;
@@ -4988,25 +4973,6 @@ void win_free_grid(win_T *wp, bool reinit)
   }
 }
 
-/// Append window "wp" in the window list after window "after".
-///
-/// @param tp  tab page "win" (and "after", if not NULL) is in, NULL for current
-void win_append(win_T *after, win_T *wp, tabpage_T *tp)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  assert(tp == NULL || tp != curtab);
-  rs_win_append(after, wp, tp);
-}
-
-/// Remove a window from the window list.
-///
-/// @param tp  tab page "win" is in, NULL for current
-void win_remove(win_T *wp, tabpage_T *tp)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  assert(tp == NULL || tp != curtab);
-  rs_win_remove(wp, tp);
-}
 
 void win_new_screensize(void)
 {
@@ -5353,17 +5319,6 @@ void may_trigger_win_scrolled_resized(void)
 }
 
 
-// Check 'winminheight' for a valid value and reduce it if needed.
-const char *did_set_winminheight(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_winminheight();
-}
-
-// Check 'winminwidth' for a valid value and reduce it if needed.
-const char *did_set_winminwidth(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_winminwidth();
-}
 
 #define FRACTION_MULT   16384
 

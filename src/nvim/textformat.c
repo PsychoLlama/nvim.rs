@@ -45,6 +45,7 @@
 #include "textformat.c.generated.h"
 
 // Rust implementations
+extern int rs_win_fdccol_count(win_T *wp);
 extern int rs_has_format_option(int x);
 extern int rs_ends_in_white(linenr_T lnum);
 extern int rs_fmt_check_par(linenr_T lnum, int *leader_len, char **leader_flags, int do_comments);
@@ -139,7 +140,7 @@ void *nvim_textfmt_get_curwin(void)
 /// Get fold column count for window (accessor for Rust).
 int nvim_textfmt_win_fdccol_count(void *win)
 {
-  return win_fdccol_count((win_T *)win);
+  return rs_win_fdccol_count((win_T *)win);
 }
 
 /// Get curwin->w_scwidth (sign column width, accessor for Rust).

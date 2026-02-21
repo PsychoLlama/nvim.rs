@@ -83,15 +83,19 @@ fn did_set_winminwidth_impl() -> *const c_char {
 
 /// FFI: Check 'winminheight' for a valid value and reduce it if needed.
 /// Returns NULL (success).
+///
+/// The `_args` parameter is required by the option callback system but unused.
 #[unsafe(no_mangle)]
-pub extern "C" fn rs_did_set_winminheight() -> *const c_char {
+pub extern "C" fn rs_did_set_winminheight(_args: *mut std::ffi::c_void) -> *const c_char {
     did_set_winminheight_impl()
 }
 
 /// FFI: Check 'winminwidth' for a valid value and reduce it if needed.
 /// Returns NULL (success).
+///
+/// The `_args` parameter is required by the option callback system but unused.
 #[unsafe(no_mangle)]
-pub extern "C" fn rs_did_set_winminwidth() -> *const c_char {
+pub extern "C" fn rs_did_set_winminwidth(_args: *mut std::ffi::c_void) -> *const c_char {
     did_set_winminwidth_impl()
 }
 

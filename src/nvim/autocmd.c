@@ -65,6 +65,8 @@
 #include "autocmd.c.generated.h"
 
 // Rust FFI declarations
+extern void rs_win_append(win_T *after, win_T *wp, tabpage_T *tp);
+extern void rs_win_remove(win_T *wp, tabpage_T *tp);
 extern int rs_ins_compl_active(void);
 extern void rs_check_lnums(int do_curwin);
 extern void rs_check_lnums_nested(int do_curwin);
@@ -827,7 +829,7 @@ void aucmd_prepbuf(aco_save_T *aco, buf_T *buf)
 
     block_autocmds();  // We don't want BufEnter/WinEnter autocommands.
     if (need_append) {
-      win_append(lastwin, auc_win, NULL);
+      rs_win_append(lastwin, auc_win, NULL);
       pmap_put(int)(&window_handles, auc_win->handle, auc_win);
       win_config_float(auc_win, auc_win->w_config);
     }
@@ -886,7 +888,7 @@ win_found:
       stop_insert_mode = save_stop_insert_mode;
     }
     // Remove the window.
-    win_remove(curwin, NULL);
+    rs_win_remove(curwin, NULL);
     pmap_del(int)(&window_handles, curwin->handle, NULL);
     if (curwin->w_grid_alloc.chars != NULL) {
       ui_comp_remove_grid(&curwin->w_grid_alloc);

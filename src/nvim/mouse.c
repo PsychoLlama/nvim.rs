@@ -55,6 +55,7 @@
 extern int rs_win_valid(win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
+extern int rs_win_fdccol_count(win_T *wp);
 extern int rs_global_stl_height(void);
 extern void rs_win_drag_status_line(win_T *dragwin, int offset);
 extern void rs_win_drag_vsep_line(win_T *dragwin, int offset);
@@ -1365,7 +1366,7 @@ retnomove:
       goto foldclick;
     }
 
-    fdc = win_fdccol_count(wp);
+    fdc = rs_win_fdccol_count(wp);
     dragwin = NULL;
 
     // winpos and height may change in win_enter()!
