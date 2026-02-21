@@ -1108,6 +1108,7 @@ extern "C" {
     fn nvim_get_p_ch() -> i64;
 
     /// Get `global_stl_height()`.
+    #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
 
     /// C accessor: grid-based vcol/flags lookup for mouse click.

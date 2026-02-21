@@ -21,6 +21,7 @@ extern "C" {
     fn nvim_win_buf_line_count(wp: WinHandle) -> c_int;
 
     // Global state accessors
+    #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
 }
 

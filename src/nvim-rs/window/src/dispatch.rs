@@ -11,7 +11,7 @@
 
 use std::ffi::c_int;
 
-use crate::WinHandle;
+use crate::{TabpageHandle, WinHandle};
 
 // =============================================================================
 // Key code constants (verified by _Static_assert in window.c)
@@ -128,7 +128,8 @@ extern "C" {
     fn nvim_cmd_with_count_exec(cmd: *const u8, prenum: i64);
     fn nvim_do_cmdline_cmd_wrapper(cmd: *const u8) -> c_int;
     fn nvim_beep_flush_wrapper();
-    fn nvim_one_window_curwin() -> c_int;
+    #[link_name = "rs_one_window_in_tab"]
+    fn nvim_one_window_curwin(wp: WinHandle, tp: TabpageHandle) -> c_int;
     fn nvim_msg_onlyone();
     fn nvim_win_goto_ver_wrapper(up: c_int, count: c_int);
     fn nvim_win_goto_hor_wrapper(left: c_int, count: c_int);
@@ -146,6 +147,7 @@ extern "C" {
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_get_cmdwin_type() -> c_int;
+    #[link_name = "rs_lastwin_nofloating"]
     fn nvim_lastwin_nofloating_wrapper() -> WinHandle;
     fn nvim_get_valid_prevwin() -> WinHandle;
 
@@ -409,7 +411,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                if nvim_one_window_curwin() != 0 {
+                if nvim_one_window_curwin(nvim_get_curwin(), TabpageHandle::null()) != 0 {
                     nvim_beep_flush_wrapper();
                 } else {
                     let vert = if nchar == CH_H_UPPER || nchar == CH_L_UPPER {

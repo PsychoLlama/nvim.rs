@@ -76,6 +76,7 @@ extern "C" {
     // Window properties for win_may_fill
     fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
     fn nvim_win_buf_meta_total_lines(wp: WinHandle) -> c_int;
+    #[link_name = "rs_diffopt_filler"]
     fn nvim_diffopt_filler() -> c_int;
 
     // Existing Rust functions we can call

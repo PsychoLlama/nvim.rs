@@ -52,6 +52,7 @@ extern "C" {
     // Global state
     fn nvim_stl_get_curwin() -> WinHandle;
     fn nvim_stl_lastwin_nofloating() -> WinHandle;
+    #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
     fn nvim_stl_get_p_ru() -> c_int;
     fn nvim_stl_get_p_ch() -> i64;

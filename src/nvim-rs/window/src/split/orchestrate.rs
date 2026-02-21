@@ -18,7 +18,7 @@ use std::ffi::c_int;
 use crate::frame::constants::{
     STATUS_HEIGHT, WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_NOENTER, WSP_ROOM, WSP_TOP, WSP_VERT,
 };
-use crate::{Frame, WinHandle, FR_COL, FR_ROW};
+use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_ROW};
 
 // =============================================================================
 // FFI constants
@@ -106,10 +106,14 @@ extern "C" {
     fn nvim_msg_clr_eos_force();
     fn nvim_comp_col();
     fn nvim_win_float_anchor_laststatus();
+    #[link_name = "rs_set_fraction"]
     fn nvim_set_fraction_wrapper(wp: WinHandle);
+    #[link_name = "rs_win_setheight_win"]
     fn nvim_win_setheight_win_wrapper(height: c_int, wp: WinHandle);
+    #[link_name = "rs_win_setwidth_win"]
     fn nvim_win_setwidth_win_wrapper(width: c_int, wp: WinHandle);
-    fn nvim_one_window_firstwin() -> c_int;
+    #[link_name = "rs_one_window_in_tab"]
+    fn nvim_one_window_firstwin(firstwin: WinHandle, tp: TabpageHandle) -> c_int;
     fn nvim_is_aucmd_win(wp: WinHandle) -> c_int;
     fn nvim_fixup_external_curwin(wp: WinHandle);
     fn nvim_set_msg_row_val(val: c_int);
@@ -367,7 +371,7 @@ unsafe fn get_oldwin(flags: c_int) -> WinHandle {
 
 /// Calculate need_status: 1 if we need to add a status line, 0 otherwise.
 unsafe fn calc_need_status(oldwin: WinHandle) -> c_int {
-    if nvim_one_window_firstwin() != 0
+    if nvim_one_window_firstwin(nvim_get_firstwin(), TabpageHandle::null()) != 0
         && nvim_get_p_ls() == 1
         && nvim_win_get_status_height(oldwin) == 0
     {

@@ -63,6 +63,7 @@ extern "C" {
     fn nvim_stl_get_p_ch() -> i64;
     fn nvim_stl_get_ru_col() -> c_int;
     fn nvim_stl_get_curwin() -> WinHandle;
+    #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
 
     // Option strings

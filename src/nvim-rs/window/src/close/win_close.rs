@@ -61,8 +61,10 @@ extern "C" {
     fn nvim_set_curwin(wp: WinHandle);
     fn nvim_set_curbuf_from_curwin();
     fn nvim_check_cursor_win_wrapper(wp: WinHandle);
+    #[link_name = "rs_win_valid"]
     fn nvim_win_valid_wrapper(wp: WinHandle) -> c_int;
     fn nvim_win_free_mem_wrapper(win: WinHandle, dirp: *mut c_int, tp: TabpageHandle) -> WinHandle;
+    #[link_name = "rs_win_equal"]
     fn nvim_win_equal_wrapper(wp: WinHandle, current: c_int, dir: c_int);
     fn nvim_win_fix_scroll(upd_topline: bool);
     fn nvim_win_get_frame_parent(wp: WinHandle) -> *mut Frame;

@@ -2223,6 +2223,7 @@ type GridViewHandle = *mut c_void;
 
 // Phase 2 C accessors
 extern "C" {
+    #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
     fn nvim_stl_wildmenu_blocking() -> c_int;
     fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);

@@ -64,9 +64,11 @@ extern "C" {
     fn nvim_get_Columns() -> c_int;
 
     /// Check if winbar is globally enabled.
+    #[link_name = "rs_global_winbar_height"]
     fn nvim_global_winbar_height() -> c_int;
 
     /// Get global_stl_height().
+    #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
 
     /// Frame minheight calculation.

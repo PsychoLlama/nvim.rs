@@ -133,7 +133,6 @@ extern int rs_frame_minwidth(frame_T *topfrp, win_T *next_curwin);
 extern int rs_win_comp_pos(void);
 extern void rs_frame_comp_pos(frame_T *topfrp, int *row, int *col);
 extern void rs_win_setheight_win(int height, win_T *win);
-extern void rs_win_setwidth_win(int width, win_T *wp);
 extern void rs_frame_add_height(frame_T *frp, int n);
 extern void rs_frame_add_statusline(frame_T *frp);
 extern void rs_frame_set_vsep(const frame_T *frp, int add);
@@ -157,7 +156,6 @@ extern int rs_split_make_windows_flags(int vertical);
 extern int rs_close_can_close_floating(void);
 extern void rs_diff_clear(tabpage_T *tp);
 extern int rs_diffopt_closeoff(void);
-extern int rs_diffopt_filler(void);
 
 // Pure calculations and thin wrappers
 extern void rs_set_fraction(win_T *wp);
@@ -555,60 +553,11 @@ int nvim_tabpage_get_handle(tabpage_T *tp)
   return (int)tp->handle;
 }
 
-// Frame accessors for Rust opaque handle pattern.
-
-/// Get the fr_layout field from a frame (accessor for Rust).
-/// Returns FR_LEAF (0), FR_ROW (1), or FR_COL (2).
-int nvim_frame_get_layout(frame_T *frp)
-{
-  return frp->fr_layout;
-}
-
-/// Get the fr_win field from a frame (accessor for Rust).
-/// Only valid when fr_layout == FR_LEAF.
-win_T *nvim_frame_get_win(frame_T *frp)
-{
-  return frp->fr_win;
-}
-
-/// Get the fr_child field from a frame (accessor for Rust).
-/// First child frame (for FR_ROW or FR_COL layouts).
-frame_T *nvim_frame_get_child(frame_T *frp)
-{
-  return frp->fr_child;
-}
-
-/// Get the fr_next field from a frame (accessor for Rust).
-/// Next sibling frame in parent.
-frame_T *nvim_frame_get_next(frame_T *frp)
-{
-  return frp->fr_next;
-}
-
-/// Get the fr_parent field from a frame (accessor for Rust).
-/// Parent frame in the frame tree.
-frame_T *nvim_frame_get_parent(frame_T *frp)
-{
-  return frp->fr_parent;
-}
-
 /// Get the w_frame field from a window (accessor for Rust).
 /// The window's frame in the frame tree.
 frame_T *nvim_win_get_frame(win_T *wp)
 {
   return wp->w_frame;
-}
-
-/// Get fr_height field from a frame (accessor for Rust).
-int nvim_frame_get_height(frame_T *frp)
-{
-  return frp->fr_height;
-}
-
-/// Get fr_width field from a frame (accessor for Rust).
-int nvim_frame_get_width(frame_T *frp)
-{
-  return frp->fr_width;
 }
 
 /// Get w_p_wfh (winfixheight) from a window (accessor for Rust).
@@ -894,18 +843,6 @@ void nvim_frame_set_width(frame_T *frp, int val)
   frp->fr_width = val;
 }
 
-/// Wrapper for win_new_height().
-void nvim_win_new_height(win_T *wp, int height)
-{
-  rs_win_new_height(wp, height);
-}
-
-/// Wrapper for win_new_width().
-void nvim_win_new_width(win_T *wp, int width)
-{
-  rs_win_new_width(wp, width);
-}
-
 /// Wrapper for frame_new_height().
 void nvim_frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool set_ch)
 {
@@ -1050,12 +987,6 @@ int nvim_win_buf_meta_total_lines(win_T *wp)
   return buf_meta_total(wp->w_buffer, kMTMetaLines) > 0;
 }
 
-/// Get diffopt filler state.
-int nvim_diffopt_filler(void)
-{
-  return rs_diffopt_filler();
-}
-
 /// Check if window is the command-line window.
 int nvim_win_is_cmdwin(win_T *wp)
 {
@@ -1164,18 +1095,6 @@ OptInt nvim_get_p_stal(void)
   return p_stal;
 }
 
-/// Get the global winbar height (wrapper for Rust FFI).
-int nvim_global_winbar_height(void)
-{
-  return rs_global_winbar_height();
-}
-
-/// Get the global statusline height (wrapper for Rust FFI).
-int nvim_global_stl_height(void)
-{
-  return rs_global_stl_height();
-}
-
 /// Get the global 'eadirection' option (p_ead).
 const char *nvim_get_p_ead(void)
 {
@@ -1260,12 +1179,6 @@ int nvim_win_get_config_relative(win_T *wp)
 int nvim_win_get_config_window(win_T *wp)
 {
   return wp ? wp->w_config.window : 0;
-}
-
-/// Get the w_config.anchor field.
-int nvim_win_get_config_anchor(win_T *wp)
-{
-  return wp ? (int)wp->w_config.anchor : 0;
 }
 
 /// Get the w_config.zindex field.
@@ -1368,44 +1281,9 @@ int nvim_win_get_endrow(win_T *wp)
   return W_ENDROW(wp);
 }
 
-// Statusline accessors for Rust statusline crate
-char *nvim_win_get_p_stl(win_T *wp)
-{
-  return wp ? wp->w_p_stl : NULL;
-}
-
-StlClickDefinition *nvim_win_get_status_click_defs(win_T *wp)
-{
-  return wp ? wp->w_status_click_defs : NULL;
-}
-
 size_t nvim_win_get_status_click_defs_size(win_T *wp)
 {
   return wp ? wp->w_status_click_defs_size : 0;
-}
-
-void nvim_win_set_status_click_defs(win_T *wp, StlClickDefinition *cd)
-{
-  if (wp) {
-    wp->w_status_click_defs = cd;
-  }
-}
-
-void nvim_win_set_status_click_defs_size(win_T *wp, size_t sz)
-{
-  if (wp) {
-    wp->w_status_click_defs_size = sz;
-  }
-}
-
-StlClickDefinition *nvim_win_get_winbar_click_defs(win_T *wp)
-{
-  return wp ? wp->w_winbar_click_defs : NULL;
-}
-
-size_t nvim_win_get_winbar_click_defs_size(win_T *wp)
-{
-  return wp ? wp->w_winbar_click_defs_size : 0;
 }
 
 int nvim_win_get_redr_status(win_T *wp)
@@ -1413,35 +1291,9 @@ int nvim_win_get_redr_status(win_T *wp)
   return wp ? wp->w_redr_status : 0;
 }
 
-// Global statusline/tabline accessors
-char *nvim_get_p_tal(void)
-{
-  return p_tal;
-}
-
-char *nvim_get_p_stl(void)
-{
-  return p_stl;
-}
-
-StlClickDefinition *nvim_get_tab_page_click_defs(void)
-{
-  return tab_page_click_defs;
-}
-
 size_t nvim_get_tab_page_click_defs_size(void)
 {
   return tab_page_click_defs_size;
-}
-
-void nvim_set_tab_page_click_defs(StlClickDefinition *cd)
-{
-  tab_page_click_defs = cd;
-}
-
-void nvim_set_tab_page_click_defs_size(size_t sz)
-{
-  tab_page_click_defs_size = sz;
 }
 
 /// Get W_ENDCOL(wp) - the column after the window content.
@@ -1600,12 +1452,6 @@ linenr_T nvim_win_get_topline(win_T *wp)
 void nvim_win_set_topline(win_T *wp, linenr_T val)
 {
   wp->w_topline = val;
-}
-
-/// Get the window's topline_was_set flag.
-int nvim_win_get_topline_was_set(win_T *wp)
-{
-  return wp ? wp->w_topline_was_set : 0;
 }
 
 /// Set the window's topline_was_set flag.
@@ -2089,11 +1935,7 @@ OptInt nvim_get_min_set_ch(void)
   return min_set_ch;
 }
 
-// Rust FFI declarations for drag functions
-extern void rs_win_drag_status_line(win_T *dragwin, int offset);
-extern void rs_win_drag_vsep_line(win_T *dragwin, int offset);
 
-// Rust FFI declarations for equalization
 extern void rs_win_equal(win_T *next_curwin, int current, int dir);
 
 static void cmd_with_count(char *cmd, char *bufp, size_t bufsize, int64_t Prenum)
@@ -6586,42 +6428,6 @@ void nvim_msg_clr_eos_force(void)
   msg_clr_eos_force();
 }
 
-/// Wrapper: set_fraction(wp).
-void nvim_set_fraction_wrapper(win_T *wp)
-{
-  rs_set_fraction(wp);
-}
-
-/// Wrapper: win_setheight_win(height, wp).
-void nvim_win_setheight_win_wrapper(int height, win_T *wp)
-{
-  rs_win_setheight_win(height, wp);
-}
-
-/// Wrapper: win_setwidth_win(width, wp).
-void nvim_win_setwidth_win_wrapper(int width, win_T *wp)
-{
-  rs_win_setwidth_win(width, wp);
-}
-
-/// Wrapper: win_enter_ext(wp, flags).
-void nvim_win_enter_ext_wrapper(win_T *wp, int flags)
-{
-  win_enter_ext(wp, flags);
-}
-
-/// Wrapper: rs_win_valid(wp).
-int nvim_win_valid_wrapper(win_T *wp)
-{
-  return rs_win_valid(wp);
-}
-
-/// Wrapper: rs_one_window_in_tab(firstwin, NULL).
-int nvim_one_window_firstwin(void)
-{
-  return rs_one_window_in_tab(firstwin, NULL);
-}
-
 /// Wrapper: is_aucmd_win(wp).
 int nvim_is_aucmd_win(win_T *wp)
 {
@@ -6767,12 +6573,6 @@ void nvim_check_cursor_win_wrapper(win_T *wp)
   check_cursor(wp);
 }
 
-/// Wrapper: win_equal(wp, current, dir).
-void nvim_win_equal_wrapper(win_T *wp, int current, int dir)
-{
-  rs_win_equal(wp, current, dir);
-}
-
 /// Get w_frame->fr_parent from a window (for win_close frame comparison).
 frame_T *nvim_win_get_frame_parent(win_T *wp)
 {
@@ -6780,26 +6580,6 @@ frame_T *nvim_win_get_frame_parent(win_T *wp)
     return wp->w_frame->fr_parent;
   }
   return NULL;
-}
-
-/// Wrapper: free_tabpage(tp).
-void nvim_free_tabpage_wrapper(tabpage_T *tp)
-{
-  free_tabpage(tp);
-}
-
-/// Wrapper: close_buffer(win, buf, action, abort_if_last, ignore_abort).
-/// Returns did_decrement (1 if decrement happened).
-int nvim_close_buffer_wrapper(win_T *win, buf_T *buf, int action, int abort_if_last,
-                              int ignore_abort)
-{
-  return close_buffer(win, buf, action, abort_if_last != 0, ignore_abort != 0) ? 1 : 0;
-}
-
-/// Wrapper: do_autocmd_winclosed(win).
-void nvim_do_autocmd_winclosed(win_T *win)
-{
-  do_autocmd_winclosed(win);
 }
 
 /// Get firstbuf global (for buffer recovery in leave_open).
@@ -6842,34 +6622,10 @@ void nvim_win_goto_hor_wrapper(int left, int count)
   win_goto_hor(left != 0, count);
 }
 
-/// Get cmdmod.cmod_split.
-int nvim_get_cmdmod_cmod_split(void)
-{
-  return cmdmod.cmod_split;
-}
-
-/// Get cmdmod.cmod_tab.
-int nvim_get_cmdmod_cmod_tab(void)
-{
-  return cmdmod.cmod_tab;
-}
-
-/// Set cmdmod.cmod_tab.
-void nvim_set_cmdmod_cmod_tab(int val)
-{
-  cmdmod.cmod_tab = val;
-}
-
 /// Get swb_flags global.
 unsigned nvim_get_swb_flags(void)
 {
   return swb_flags;
-}
-
-/// Get p_pvh (preview height) option.
-int64_t nvim_get_p_pvh(void)
-{
-  return p_pvh;
 }
 
 /// Wrapper: win_goto(wp).
@@ -6914,22 +6670,10 @@ int nvim_bt_quickfix_curbuf(void)
   return bt_quickfix(curbuf) ? 1 : 0;
 }
 
-/// Wrapper: rs_one_window_in_tab(curwin, NULL).
-int nvim_one_window_curwin(void)
-{
-  return rs_one_window_in_tab(curwin, NULL);
-}
-
 /// Wrapper: msg(_(m_onlyone), 0).
 void nvim_msg_onlyone(void)
 {
   msg(_(m_onlyone), 0);
-}
-
-/// Wrapper: lastwin_nofloating().
-win_T *nvim_lastwin_nofloating_wrapper(void)
-{
-  return rs_lastwin_nofloating();
 }
 
 /// Wrapper: rs_win_valid(prevwin) check for 'p' command.
