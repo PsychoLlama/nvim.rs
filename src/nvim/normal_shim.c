@@ -116,11 +116,7 @@ static int VIsual_mode_orig = NUL;              // saved Visual mode
 
 #include "normal_shim.c.generated.h"
 
-// Rust FFI declarations (tag module)
-extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
-
-// Rust FFI declarations (window wrappers removed)
-extern void rs_do_window(int nchar, int Prenum, int xchar);
+// Rust FFI declarations (window wrappers)
 extern void rs_set_fraction(win_T *wp);
 extern void rs_win_setheight(int height);
 
@@ -255,7 +251,6 @@ extern void rs_nv_tagpop(cmdarg_T *cap);
 extern void rs_nv_regreplay(cmdarg_T *cap);
 extern void rs_nv_ctrlh(cmdarg_T *cap);
 extern void rs_do_ascii(exarg_T *eap);
-extern void rs_diff_ex_diffupdate(exarg_T *eap);
 extern void rs_diff_set_topline(win_T *fromwin, win_T *towin);
 extern int rs_diff_move_to(int dir, int count);
 
@@ -984,12 +979,6 @@ unsigned int nvim_get_fdo_flags(void)
   _Static_assert(kOptFdoFlagMark == 0x08,
                  "kOptFdoFlagMark changed - update K_OPT_FDO_FLAG_MARK in normal/src/lib.rs");
   return fdo_flags;
-}
-
-/// Wrapper for foldOpenCursor.
-void nvim_foldOpenCursor(void)
-{
-  rs_foldOpenCursor();
 }
 
 /// Set ins_at_eol global.
@@ -1741,12 +1730,6 @@ void nvim_set_vcount_call(int64_t count, int64_t count1, bool set_prevcount)
   set_vcount(count, count1, set_prevcount);
 }
 
-/// Wrapper for do_tag("", DT_POP, count1, false, true).
-void nvim_do_tag_pop(int count1)
-{
-  rs_do_tag("", DT_POP, count1, false, true);
-}
-
 /// Wrapper for do_execreg with reg_recorded.
 /// Returns true on success, false on failure.
 bool nvim_do_execreg_recorded(void)
@@ -1764,12 +1747,6 @@ bool nvim_normal_get_got_int(void)
 void nvim_normal_line_breakcheck(void)
 {
   line_breakcheck();
-}
-
-/// Wrapper for v_visop (calls Rust via thin C wrapper).
-void nvim_v_visop(cmdarg_T *cap)
-{
-  rs_v_visop(cap);
 }
 
 // =============================================================================
@@ -2463,12 +2440,6 @@ void nvim_nv_open_impl(cmdarg_T *cap)
 // =============================================================================
 // Window command accessors for Rust FFI
 // =============================================================================
-
-/// Wrapper for do_window.
-void nvim_do_window(int nchar, int count, int xchar)
-{
-  rs_do_window(nchar, count, xchar);
-}
 
 /// Wrapper for nv_colon.
 void nvim_nv_colon(cmdarg_T *cap)
@@ -3346,9 +3317,6 @@ bool nvim_curtab_needs_diff_update(void)
 {
   return curtab->tp_diff_update || curtab->tp_diff_invalid;
 }
-
-/// ex_diffupdate(NULL) wrapper.
-void nvim_ex_diffupdate_wrapper(void) { rs_diff_ex_diffupdate(NULL); }
 
 /// Clear curtab diff update flag.
 void nvim_curtab_clear_diff_update(void) { curtab->tp_diff_update = false; }

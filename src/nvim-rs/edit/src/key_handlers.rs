@@ -71,7 +71,7 @@ extern "C" {
     fn nvim_gchar_cursor() -> c_int;
 
     // Fold
-    fn nvim_foldOpenCursor();
+    fn rs_foldOpenCursor();
 
     // Scrolling / tab pages
     fn nvim_edit_pagescroll_backward() -> c_int;
@@ -145,7 +145,7 @@ unsafe fn ins_left_impl() {
     let end_change = nvim_get_dont_sync_undo() == K_FALSE;
 
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
     rs_undisplay_dollar();
     nvim_edit_save_cursor(0); // save to slot 0
@@ -187,7 +187,7 @@ unsafe fn ins_right_impl() {
     let end_change = nvim_get_dont_sync_undo() == K_FALSE;
 
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
     rs_undisplay_dollar();
     if nvim_gchar_cursor() != 0 || nvim_edit_virtual_active() != 0 {
@@ -236,7 +236,7 @@ unsafe fn ins_s_left_impl() {
     let end_change = nvim_get_dont_sync_undo() == K_FALSE;
 
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
     rs_undisplay_dollar();
     if nvim_curwin_get_cursor_lnum() > 1 || nvim_curwin_get_cursor_col() > 0 {
@@ -266,7 +266,7 @@ unsafe fn ins_s_right_impl() {
     let end_change = nvim_get_dont_sync_undo() == K_FALSE;
 
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
     rs_undisplay_dollar();
     if nvim_curwin_get_cursor_lnum() < nvim_edit_curwin_buf_line_count() || nvim_gchar_cursor() != 0
@@ -295,7 +295,7 @@ pub unsafe extern "C" fn rs_ins_s_right() {
 /// Handle Home key in Insert mode.
 unsafe fn ins_home_impl(c: c_int) {
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
     rs_undisplay_dollar();
     nvim_edit_save_cursor(0);
@@ -320,7 +320,7 @@ pub unsafe extern "C" fn rs_ins_home(c: c_int) {
 /// Handle End key in Insert mode.
 unsafe fn ins_end_impl(c: c_int) {
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
     rs_undisplay_dollar();
     nvim_edit_save_cursor(0);

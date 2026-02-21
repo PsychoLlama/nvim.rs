@@ -148,7 +148,7 @@ extern "C" {
     fn nvim_cursor_down(n: c_int, upd_topline: bool) -> bool;
     fn nvim_get_KeyTyped() -> bool;
     fn nvim_get_fdo_flags() -> c_uint;
-    fn nvim_foldOpenCursor();
+    fn rs_foldOpenCursor();
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_get_curswant() -> c_int;
     fn nvim_set_curswant(val: c_int);
@@ -219,12 +219,16 @@ extern "C" {
     fn nvim_cap_get_nchar_len(cap: CapHandle) -> c_int;
     fn nvim_cap_append_nchar_composing_to_redobuff(cap: CapHandle);
     fn nvim_set_vcount_call(count: i64, count1: i64, set_prevcount: bool);
-    fn nvim_do_tag_pop(count1: c_int);
+    fn rs_do_tag(
+        tag: *mut std::ffi::c_char,
+        typ: c_int,
+        count: c_int,
+        forceit: c_int,
+        verbose: bool,
+    );
     fn nvim_do_execreg_recorded() -> bool;
     fn nvim_normal_get_got_int() -> bool;
     fn nvim_normal_line_breakcheck();
-    #[allow(dead_code)]
-    fn nvim_v_visop(cap: CapHandle);
 
     // Wave 2 Phase 3: Visual operator accessors
     fn nvim_set_VIsual_mode(val: c_int);
@@ -302,6 +306,9 @@ extern "C" {
     fn nvim_emsg_no_string_under_cursor();
     fn nvim_emsg_no_ident_under_cursor();
 }
+
+// Tag command type (must match tag_defs.h)
+const DT_POP: c_int = 2;
 
 // Operator type constants (must match ops.h)
 const OP_NOP: c_int = 0;
@@ -1149,7 +1156,7 @@ pub unsafe extern "C" fn rs_nv_goto(cap: CapHandle) {
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
     {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
 }
 
@@ -1172,7 +1179,7 @@ pub unsafe extern "C" fn rs_nv_beginline(cap: CapHandle) {
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
     {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
     nvim_set_ins_at_eol(false);
 }
@@ -1203,7 +1210,7 @@ pub unsafe extern "C" fn rs_nv_dollar(cap: CapHandle) {
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
     {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
 }
 
@@ -1326,7 +1333,7 @@ extern "C" {
     fn nvim_nv_visual_impl(cap: CapHandle);
 
     // Window command functions
-    fn nvim_do_window(nchar: c_int, count: c_int, xchar: c_int);
+    fn rs_do_window(nchar: c_int, count: c_int, xchar: c_int);
     fn nvim_nv_colon(cap: CapHandle);
 }
 
@@ -1419,7 +1426,7 @@ pub unsafe extern "C" fn rs_nv_bck_word(cap: CapHandle) {
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
     {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
 }
 
@@ -1489,7 +1496,7 @@ pub unsafe extern "C" fn rs_nv_wordcmd(cap: CapHandle) {
             && nvim_get_KeyTyped()
             && nvim_oap_get_op_type_ptr(oap) == OP_NOP
         {
-            nvim_foldOpenCursor();
+            rs_foldOpenCursor();
         }
     }
 }
@@ -1523,7 +1530,7 @@ pub unsafe extern "C" fn rs_nv_findpar(cap: CapHandle) {
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
     {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
 }
 
@@ -1557,7 +1564,7 @@ pub unsafe extern "C" fn rs_nv_brace(cap: CapHandle) {
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
     {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
 }
 
@@ -1661,7 +1668,7 @@ pub unsafe extern "C" fn rs_nv_gomark(cap: CapHandle) {
         && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_MARK) != 0
         && old_key_typed
     {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
 }
 
@@ -1728,7 +1735,7 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
         && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_MARK) != 0
         && old_key_typed
     {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
 }
 
@@ -1772,7 +1779,7 @@ pub unsafe extern "C" fn rs_nv_window(cap: CapHandle) {
         nvim_nv_colon(cap);
     } else if !rs_checkclearop(oap) {
         let count0 = nvim_cap_get_count0(cap);
-        nvim_do_window(nchar, count0, c_int::from(NUL));
+        rs_do_window(nchar, count0, c_int::from(NUL));
     }
 }
 
@@ -1880,7 +1887,7 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
     {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
 }
 
@@ -2543,7 +2550,13 @@ pub unsafe extern "C" fn rs_set_vcount_ca(cap: CapHandle, set_prevcount: *mut bo
 pub unsafe extern "C" fn rs_nv_tagpop(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     if !rs_checkclearopq(oap) {
-        nvim_do_tag_pop(nvim_cap_get_count1(cap));
+        rs_do_tag(
+            c"".as_ptr().cast_mut(),
+            DT_POP,
+            nvim_cap_get_count1(cap),
+            0,
+            true,
+        );
     }
 }
 
@@ -3043,7 +3056,7 @@ pub unsafe extern "C" fn rs_nv_percent(cap: CapHandle) {
         && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_PERCENT) != 0
         && nvim_get_KeyTyped()
     {
-        nvim_foldOpenCursor();
+        rs_foldOpenCursor();
     }
 }
 

@@ -54,7 +54,7 @@ extern "C" {
     fn nvim_update_topline_curwin_wrapper();
     fn nvim_validate_cursor();
     fn nvim_curtab_needs_diff_update() -> bool;
-    fn nvim_ex_diffupdate_wrapper();
+    fn rs_diff_ex_diffupdate(eap: *mut std::ffi::c_void);
     fn nvim_curtab_clear_diff_update();
     fn nvim_check_scrollbind_zero_wrapper();
     fn nvim_time_msg_first_screen_and_finish();
@@ -111,7 +111,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
         // Updating diffs from changed() does not always work properly,
         // esp. updating folds. Do an update just before redrawing if needed.
         if nvim_curtab_needs_diff_update() {
-            nvim_ex_diffupdate_wrapper();
+            rs_diff_ex_diffupdate(std::ptr::null_mut());
             nvim_curtab_clear_diff_update();
         }
 

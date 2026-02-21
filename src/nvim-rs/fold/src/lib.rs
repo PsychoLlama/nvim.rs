@@ -2450,9 +2450,6 @@ extern "C" {
 
     /// Call foldUpdateAll in C.
     fn nvim_foldUpdateAll_c(win: WinHandle);
-
-    /// Call foldOpenCursor in C.
-    fn nvim_foldOpenCursor();
 }
 
 /// UPD_NOT_VALID redraw type.
@@ -2488,8 +2485,8 @@ fn fold_update_after_insert_impl() {
 
     unsafe {
         nvim_foldUpdateAll_c(curwin);
-        nvim_foldOpenCursor();
     }
+    fold_open_cursor_impl();
 }
 
 /// Update line numbers of folds for inserted/deleted lines.
