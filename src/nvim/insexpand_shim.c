@@ -136,6 +136,8 @@ extern const char *rs_ins_compl_leader(void);
 extern size_t rs_ins_compl_leader_len(void);
 extern int rs_pum_wanted(void);
 extern unsigned rs_get_cot_flags(void);
+extern int rs_ctrl_x_mode_eval(void);
+extern void rs_ins_compl_free(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -431,7 +433,6 @@ void ins_ctrl_x(void)
   may_trigger_modechanged();
 }
 
-static bool ctrl_x_mode_eval(void) { return ctrl_x_mode == CTRL_X_EVAL; }  // static, not exported
 
 /// Accessor for Rust FFI: check if ctrl-x mode is not default.
 int nvim_ctrl_x_mode_not_default(void)
@@ -1010,15 +1011,6 @@ static void ins_compl_del_pum(void)
 
 extern int rs_pum_enough_matches(int menuone);
 
-/// Check that there are two or more matches to be shown in the popup menu.
-/// One if "completopt" contains "menuone".
-static bool pum_enough_matches(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_pum_enough_matches(((rs_get_cot_flags() & kOptCotFlagMenuone) != 0)
-                               || compl_autocomplete) != 0;
-}
-
 /// Convert to complete item dict
 static dict_T *ins_compl_dict_alloc(compl_T *match)
 {
@@ -1355,7 +1347,9 @@ static int ins_compl_build_pum(void)
 /// Also adjusts "compl_shown_match" to an entry that is actually displayed.
 void ins_compl_show_pum(void)
 {
-  if (!rs_pum_wanted() || !pum_enough_matches()) {
+  if (!rs_pum_wanted()
+      || !rs_pum_enough_matches(((rs_get_cot_flags() & kOptCotFlagMenuone) != 0)
+                                || compl_autocomplete)) {
     return;
   }
 
@@ -1651,30 +1645,6 @@ static void ins_compl_item_free(compl_T *match)
   xfree(match);
 }
 
-/// Free the list of completions
-static void ins_compl_free(void)
-{
-  API_CLEAR_STRING(compl_pattern);
-  API_CLEAR_STRING(compl_leader);
-
-  if (compl_first_match == NULL) {
-    return;
-  }
-
-  ins_compl_del_pum();
-  pum_clear();
-
-  compl_curr_match = compl_first_match;
-  do {
-    compl_T *match = compl_curr_match;
-    compl_curr_match = compl_curr_match->cp_next;
-    ins_compl_item_free(match);
-  } while (compl_curr_match != NULL && !is_first_match(compl_curr_match));
-  compl_first_match = compl_curr_match = NULL;
-  compl_shown_match = NULL;
-  compl_old_match = NULL;
-}
-
 /// Initialize get longest common string.
 void ins_compl_init_get_longest(void)
 {
@@ -1811,7 +1781,7 @@ int ins_compl_bs(void)
   // Respect the 'backspace' option.
   if ((int)(p - line) - (int)compl_col < 0
       || ((int)(p - line) - (int)compl_col == 0 && !rs_ctrl_x_mode_omni())
-      || ctrl_x_mode_eval()
+      || rs_ctrl_x_mode_eval()
       || (!can_bs(BS_START) && (int)(p - line) - (int)compl_col
           - compl_length < 0)) {
     return K_BS;
@@ -1969,7 +1939,7 @@ static void ins_compl_restart(void)
   // so if complete is blocked,
   // will stay to the last popup menu and reduce flicker
   update_screen();  // TODO(bfredl): no.
-  ins_compl_free();
+  rs_ins_compl_free();
   compl_started = false;
   compl_matches = 0;
   compl_cont_status = 0;
@@ -2258,7 +2228,7 @@ static bool ins_compl_stop(const int c, const int prev_mode, bool retval)
   ctrl_x_mode = prev_mode;
   ins_apply_autocmds(EVENT_COMPLETEDONEPRE);
 
-  ins_compl_free();
+  rs_ins_compl_free();
   compl_started = false;
   compl_matches = 0;
   if (!shortmess(SHM_COMPLETIONMENU)) {
@@ -2905,7 +2875,7 @@ static void set_completion(colnr_T startcol, list_T *list)
     ins_compl_prep(' ');
   }
   rs_ins_compl_clear();
-  ins_compl_free();
+  rs_ins_compl_free();
   compl_get_longest = compl_longest;
 
   compl_direction = FORWARD;
@@ -3808,7 +3778,7 @@ static int get_next_default_completion(ins_compl_next_state_T *st, pos_T *start_
                                                start_pos, &len, &ptr, &score);
       // rs_ctrl_x_mode_line_or_eval() || word-wise search that
       // has added a word that was at the beginning of the line.
-    } else if (rs_ctrl_x_mode_whole_line() || ctrl_x_mode_eval()
+    } else if (rs_ctrl_x_mode_whole_line() || rs_ctrl_x_mode_eval()
                || (compl_cont_status & CONT_SOL)) {
       found_new_match = search_for_exact_line(st->ins_buf, st->cur_match_pos,
                                               compl_direction, compl_pattern.data);
