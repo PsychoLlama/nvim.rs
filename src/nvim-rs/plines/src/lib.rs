@@ -100,6 +100,7 @@ extern "C" {
     fn nvim_win_get_p_list(wp: WinHandle) -> c_int;
     fn nvim_win_get_lcs_prec(wp: WinHandle) -> u32;
     fn nvim_win_get_lcs_tab1(wp: WinHandle) -> u32;
+    #[link_name = "nvim_win_get_p_list"]
     fn nvim_win_get_w_p_list(wp: WinHandle) -> c_int;
 
     // Window properties for win_cursorline_standout
@@ -113,6 +114,7 @@ extern "C" {
     fn nvim_get_p_siso() -> i64;
 
     // Terminal mode check
+    #[link_name = "nvim_win_buf_has_terminal"]
     fn nvim_win_buf_is_terminal(wp: WinHandle) -> c_int;
 
     // Global options for statusline/winbar

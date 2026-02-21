@@ -95,7 +95,6 @@ extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
 extern void rs_clearFolding(win_T *win);
 extern void rs_foldInitWin(win_T *wp);
-extern int rs_getDeepestNesting(win_T *wp);
 
 extern int rs_get_scrolloff_value(win_T *wp);
 extern int rs_global_winbar_height(void);
@@ -139,8 +138,6 @@ extern void rs_frame_set_vsep(const frame_T *frp, int add);
 extern void rs_frame_add_hsep(const frame_T *frp);
 extern void rs_frame_fix_width(win_T *wp);
 extern void rs_frame_fix_height(win_T *wp);
-extern win_T *rs_win_vert_neighbor(tabpage_T *tp, win_T *wp, int up, int count);
-extern win_T *rs_win_horz_neighbor(tabpage_T *tp, win_T *wp, int left, int count);
 extern void rs_frame_append(frame_T *after, frame_T *frp);
 extern void rs_frame_insert(frame_T *before, frame_T *frp);
 extern void rs_frame_remove(frame_T *frp);
@@ -1069,12 +1066,6 @@ OptInt nvim_get_p_siso(void)
   return p_siso;
 }
 
-/// Check if the buffer in window is a terminal.
-int nvim_win_buf_is_terminal(win_T *wp)
-{
-  return wp->w_buffer->terminal != NULL;
-}
-
 /// Get the global 'laststatus' option.
 OptInt nvim_get_p_ls(void)
 {
@@ -1752,12 +1743,6 @@ int nvim_win_get_p_arab(win_T *wp)
 void *nvim_win_get_w_grid(win_T *wp)
 {
   return &wp->w_grid;
-}
-
-/// Get the window's 'list' option.
-int nvim_win_get_w_p_list(win_T *wp)
-{
-  return wp->w_p_list;
 }
 
 /// Get the window's 'listchars' tab1 character (first tab char).
@@ -5293,8 +5278,6 @@ void may_trigger_win_scrolled_resized(void)
 
   recursive = false;
 }
-
-
 
 #define FRACTION_MULT   16384
 
