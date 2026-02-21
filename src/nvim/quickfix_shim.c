@@ -117,10 +117,6 @@ typedef enum {
   //   getqflist()/getloclist()
 } qfltype_T;
 
-/// Quickfix/Location list definition
-///
-/// Usually the list contains one or more entries. But an empty list can be
-/// created using setqflist()/setloclist() with a title and/or user context
 /// information and entries can be added later using setqflist()/setloclist().
 typedef struct {
   unsigned qf_id;         ///< Unique identifier for this list
@@ -147,7 +143,6 @@ typedef struct {
   int qf_changedtick;
 } qf_list_T;
 
-/// Quickfix/Location list stack definition
 /// Contains a list of quickfix/location lists (qf_list_T)
 struct qf_info_S {
   // Count of references to this list. Used only for location lists.
@@ -167,9 +162,6 @@ static qf_info_T ql_info_actual;  // global quickfix list
 static qf_info_T *ql_info;        // points to ql_info_actual after allocation
 static unsigned last_qf_id = 0;   // Last Used quickfix list id
 
-// ============================================================================
-// Rust FFI declarations and accessor functions
-// ============================================================================
 
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
@@ -397,362 +389,20 @@ int nvim_qf_get_maxcount(const void *qi_void)
 }
 
 extern bool rs_qf_list_has_valid_entries(const void *qfl);
-extern bool rs_qf_entry_after_pos(const void *qfp, const void *pos, bool linewise);
-extern bool rs_qf_entry_before_pos(const void *qfp, const void *pos, bool linewise);
-extern bool rs_qf_entry_on_or_after_pos(const void *qfp, const void *pos, bool linewise);
-extern bool rs_qf_entry_on_or_before_pos(const void *qfp, const void *pos, bool linewise);
-extern bool rs_qf_valid_idx(const void *qi, int idx);
-extern int rs_qf_get_size(const void *qfl);
-extern void *rs_qf_find_first_entry_in_buf(const void *qfl, int bnr, int *out_idx);
-extern void *rs_qf_find_first_entry_on_line(const void *entry, int idx, int *out_idx);
-extern void *rs_qf_find_last_entry_on_line(const void *entry, int idx, int *out_idx);
-extern void *rs_qf_find_entry_after_pos(int bnr, const void *pos, bool linewise, const void *qfp,
-                                        int *errornr);
-extern void *rs_qf_find_entry_before_pos(int bnr, const void *pos, bool linewise, const void *qfp,
-                                         int *errornr);
-extern void *rs_qf_find_closest_entry(const void *qfl, int bnr, const void *pos, int dir,
-                                      bool linewise, int *errornr);
-extern void rs_qf_get_nth_below_entry(const void *entry, linenr_T n, bool linewise, int *errornr);
-extern void rs_qf_get_nth_above_entry(const void *entry, linenr_T n, bool linewise, int *errornr);
-extern int rs_qf_find_nth_adj_entry(const void *qfl, int bnr, const void *pos, linenr_T n, int dir,
-                                    bool linewise);
 
-// Phase 6: Filter and query functions from Rust
-extern int rs_qf_count_by_type(const void *qfl, char entry_type);
-extern int rs_qf_count_info(const void *qfl);
-extern int rs_qf_count_in_buffer(const void *qfl, int bnr);
-extern int rs_qf_count_valid_in_buffer(const void *qfl, int bnr);
-extern int rs_qf_count_on_line(const void *qfl, int bnr, linenr_T lnum);
-extern bool rs_qf_entry_text_contains(const void *qfp, const char *pattern);
-extern int rs_qf_find_text(const void *qfl, const char *pattern);
-extern int rs_qf_find_text_after(const void *qfl, int start_idx, const char *pattern);
-extern int rs_qf_count_text_matches(const void *qfl, const char *pattern);
-extern bool rs_qf_has_valid_in_buffer(const void *qfl, int bnr);
-extern bool rs_qf_all_invalid(const void *qfl);
-extern bool rs_qf_has_valid_type(const void *qfl, char entry_type);
-extern bool rs_qf_has_entries_in_range(const void *qfl, int bnr, linenr_T start, linenr_T end);
-extern int rs_qf_count_in_range(const void *qfl, int bnr, linenr_T start, linenr_T end);
-
-// Phase 6: Navigation and command functions from Rust
-extern bool rs_qf_can_go_older(const void *qi);
-extern bool rs_qf_can_go_newer(const void *qi);
-extern int rs_qf_calc_age_target(const void *qi, int count, bool go_older);
-extern int rs_qf_available_age_steps(const void *qi, bool go_older);
-extern bool rs_qf_can_go_next(const void *qfl);
-extern bool rs_qf_can_go_prev(const void *qfl);
-extern int rs_qf_calc_nav_target(const void *qfl, int count, bool forward, bool valid_only);
-extern int rs_qf_available_nav_steps(const void *qfl, bool forward);
-extern int rs_qf_find_nth_valid(const void *qfl, int n);
 
 // Phase 6: Entry iteration and comparison functions from Rust
-extern int rs_qf_entry_count_in_file(const void *qfl, int bnr);
-extern int rs_qf_count_valid_entries(const void *qfl);
-extern void *rs_qf_get_nth_valid_entry(const void *qfl, int n, int *out_idx);
-extern void *rs_qf_get_entry_at_idx(const void *qfl, int idx);
-extern void *rs_qf_find_first_of_type(const void *qfl, char type_char);
-extern void *rs_qf_find_last_of_type(const void *qfl, char type_char);
-extern int rs_qf_cmp_entries(const void *a, const void *b);
-extern bool rs_qf_entry_is_closer_to_target(const void *entry, const void *other_entry,
-                                            int target_fnum, int target_lnum, int target_col);
-extern bool rs_qf_entry_in_file(const void *qfp, int bnr);
-extern bool rs_qf_entry_is_active(const void *qfp);
-extern bool rs_qf_entry_has_type(const void *qfp, char type_char);
 extern int rs_qf_id2nr(const void *qi, unsigned qf_id);
 extern int rs_qf_restore_list(void *qi, unsigned save_qfid);
 extern void *rs_qf_get_nth_entry(const void *qfl, int errornr, int *new_qfidx);
 
-// Phase 6: ID and metadata functions from Rust
-extern unsigned rs_qf_get_id(const void *qfl);
-extern int rs_qf_get_changedtick(const void *qfl);
-extern int rs_qf_get_listcount(const void *qi);
-extern int rs_qf_get_curlist_idx(const void *qi);
-extern void *rs_qf_get_curlist(const void *qi);
-extern void *rs_qf_get_list_at(const void *qi, int idx);
-
-// Phase 6: External output functions from Rust
-extern bool rs_qf_has_errors(const void *qfl);
-extern bool rs_qf_has_warnings_or_errors(const void *qfl);
 
 // Phase 554: Display and window functions from Rust
-extern linenr_T rs_qf_cursor_line(const void *qfl);
 extern bool rs_qf_should_update_cursor(const void *qfl, int old_idx);
-extern int rs_qf_calc_scroll(const void *qfl, linenr_T top_line, int window_height);
-extern linenr_T rs_qf_calc_centered_top(const void *qfl, int window_height);
-extern void *rs_qf_entry_at_line(const void *qfl, int line);
-extern int rs_qf_count_with_position(const void *qfl);
-extern int rs_qf_count_with_file(const void *qfl);
-extern int rs_qf_lnum_display_width(int lnum);
 extern unsigned char rs_qf_type_display_char(unsigned char type_code);
 extern int rs_qf_is_error_type(unsigned char type_code);
 extern int rs_qf_is_warning_type(unsigned char type_code);
-extern int rs_qf_display_scroll_percent(int total, int first_visible, int visible_lines);
 
-// Phase 554: Display range calculation struct from Rust
-typedef struct {
-  int start_idx;
-  int end_idx;
-  int total;
-  int current;
-} QfDisplayRange;
-extern QfDisplayRange rs_qf_calc_display_range(const void *qfl, int window_height);
-
-// Phase 554: Entry display info struct from Rust
-typedef struct {
-  int fnum;
-  linenr_T lnum;
-  int col;
-  linenr_T end_lnum;
-  int end_col;
-  int nr;
-  char entry_type;
-  bool valid;
-  bool has_position;
-  bool has_range;
-} QfEntryDisplay;
-extern QfEntryDisplay rs_qf_entry_display_info(const void *qfp);
-extern QfEntryDisplay rs_qf_current_entry_display(const void *qfl);
-
-// Phase 554: Command result struct from Rust
-typedef struct {
-  bool success;
-  int new_idx;
-  int count;
-  bool update_window;
-} QfCmdResult;
-extern QfCmdResult rs_qf_cmd_cc_result(const void *qfl, int target_idx);
-extern QfCmdResult rs_qf_cmd_nav_result(const void *qfl, int count, bool forward);
-
-// Phase 554: List info struct from Rust
-typedef struct {
-  int list_idx;
-  int count;
-  int current_idx;
-  bool is_current;
-  bool has_title;
-} QfListInfo;
-extern QfListInfo rs_qf_get_list_info(const void *qi, int list_idx);
-extern QfListInfo rs_qf_current_list_info(const void *qfl);
-
-// Phase 554: Range validation functions from Rust
-extern bool rs_qf_valid_list_range(const void *qfl, int start, int end);
-extern void rs_qf_clamp_range(const void *qfl, int start, int end, int *out_start, int *out_end);
-extern int rs_qf_calc_window_height(const void *qfl, int min_height, int max_height);
-
-// Phase 555: Filter statistics struct from Rust
-typedef struct {
-  int total;
-  int valid;
-  int errors;
-  int warnings;
-  int info;
-  int in_buffer;
-} QfFilterStats;
-extern QfFilterStats rs_qf_filter_stats(const void *qfl, int bnr);
-extern int rs_qf_find_matching(const void *qfl, int bnr, char entry_type, bool valid_only);
-extern int rs_qf_find_matching_after(const void *qfl, int start_idx, int bnr, char entry_type,
-                                     bool valid_only);
-extern int rs_qf_find_in_range(const void *qfl, int bnr, linenr_T start_lnum, linenr_T end_lnum);
-
-// Navigation jump target struct from Rust
-typedef struct {
-  int entry_idx;
-  linenr_T lnum;
-  int col;
-  int fnum;
-  bool valid;
-} QfJumpTarget;
-extern QfJumpTarget rs_qf_calc_jump_target(const void *qfl, int idx);
-extern int rs_qf_idx_for_lnum(const void *qfl, int bnr, linenr_T lnum);
-extern int rs_qf_first_entry_in_file(const void *qfl, int bnr);
-extern int rs_qf_last_entry_in_file(const void *qfl, int bnr);
-extern int rs_qf_entry_after_pos_idx(const void *qfl, const void *pos, int bnr);
-extern int rs_qf_entry_before_pos_idx(const void *qfl, const void *pos, int bnr);
-
-// Entry position and validation from Rust
-extern bool rs_qf_at_first(const void *qfl);
-extern bool rs_qf_at_last(const void *qfl);
-extern bool rs_qf_entry_covers_line(const void *qfp, linenr_T lnum);
-extern bool rs_qf_entry_has_valid_range(const void *qfp);
-extern bool rs_qf_entry_has_valid_col_range(const void *qfp);
-extern bool rs_qf_entry_has_module(const void *qfp);
-extern bool rs_qf_entry_has_nr(const void *qfp);
-extern int rs_qf_entry_line_span(const void *qfp);
-extern bool rs_qf_entry_is_complete(const void *qfp);
-extern bool rs_qf_entry_is_diagnostic(const void *qfp);
-extern int rs_qf_entry_severity(const void *qfp);
-
-// Entry counting from Rust
-extern int rs_qf_count_errors(const void *qfl);
-extern int rs_qf_count_warnings(const void *qfl);
-extern int rs_qf_curlist_entry_count(const void *qi);
-extern int rs_qf_curlist_valid_count(const void *qi);
-
-// =============================================================================
-// Phase 4 (Window Management): Text formatting functions from Rust
-// =============================================================================
-
-/// Format quickfix entry text for display (replaces newlines with spaces)
-extern size_t rs_qf_fmt_text(const char *text, char *out, size_t out_size);
-
-/// Format range text for a quickfix entry (e.g., "10-15 col 5-8")
-extern size_t rs_qf_range_text(linenr_T lnum, linenr_T end_lnum, int col, int end_col,
-                               char *out, size_t out_size);
-
-/// Format a quickfix entry for display (filename|lnum col type|)
-extern size_t rs_qf_format_entry_line(const void *qfp, const char *fname,
-                                      char *out, size_t out_size);
-
-// =============================================================================
-// Phase 5 (VimL API): getqflist()/setqflist() helper functions from Rust
-// =============================================================================
-
-/// What flags for getqflist/setqflist
-extern int rs_qf_what_wants_idx(uint32_t flags);
-extern int rs_qf_what_wants_items(uint32_t flags);
-extern int rs_qf_what_wants_id(uint32_t flags);
-extern int rs_qf_what_wants_title(uint32_t flags);
-extern int rs_qf_what_wants_size(uint32_t flags);
-extern int rs_qf_what_wants_context(uint32_t flags);
-extern int rs_qf_what_wants_nr(uint32_t flags);
-extern int rs_qf_what_wants_changedtick(uint32_t flags);
-extern int rs_qf_what_wants_qfbufnr(uint32_t flags);
-extern int rs_qf_what_wants_filewinid(uint32_t flags);
-extern int rs_qf_what_wants_quickfixtextfunc(uint32_t flags);
-
-/// Build what flags from individual booleans
-extern uint32_t rs_qf_build_what_flags(bool all, bool idx, bool nr, bool items,
-                                        bool id, bool title, bool context, bool size,
-                                        bool changedtick, bool qfbufnr, bool filewinid,
-                                        bool quickfixtextfunc);
-
-/// Parse action character for setqflist/setloclist
-extern int rs_qf_parse_action(uint8_t action);
-
-/// Check if action is valid
-extern int rs_qf_is_valid_action(uint8_t action);
-
-/// Resolve list number (0 = current, negative = from end, positive = 1-based)
-extern int rs_qf_resolve_list_nr(int nr, int curlist, int listcount);
-
-/// Check if list number is valid
-extern bool rs_qf_valid_list_nr(int nr, int listcount);
-
-// =============================================================================
-// Phase 6 (Major Commands): Command helper functions from Rust
-// =============================================================================
-
-/// Command types for quickfix operations
-typedef enum {
-  QF_CMD_CREATE = 0,
-  QF_CMD_GET = 1,
-  QF_CMD_ADD = 2,
-} QfCmdType;
-
-/// Check if command creates a new list
-extern bool rs_qf_cmd_creates_list(QfCmdType cmd_type);
-
-/// Check if command adds to existing list
-extern bool rs_qf_cmd_adds_to_list(QfCmdType cmd_type);
-
-/// Result of parsing a grep/vimgrep pattern
-typedef struct {
-  int pattern_start;
-  int pattern_len;
-  uint8_t delimiter;
-  bool valid;
-  bool has_delimiter;
-} GrepPatternResult;
-
-/// Parse a vimgrep-style pattern
-extern GrepPatternResult rs_qf_parse_grep_pattern(const char *input);
-
-/// Check if a character is valid in a shell filename
-extern bool rs_qf_is_shell_filename_char(uint8_t c);
-
-/// Estimate file count from pattern and argument count
-extern int rs_qf_estimate_file_count(bool has_pattern, int arg_count);
-
-/// Information about a make/grep command
-typedef struct {
-  bool is_grep;
-  bool is_add;
-  bool is_loclist;
-  bool jump_first;
-} MakeGrepInfo;
-
-/// Get action character for a make/grep command
-extern uint8_t rs_qf_make_grep_action(MakeGrepInfo info);
-
-// =============================================================================
-// Phase 7 (ListDo and Cleanup): List-do and utility functions from Rust
-// =============================================================================
-
-/// List-do operation types
-typedef enum {
-  LISTDO_CDO = 0,
-  LISTDO_CFDO = 1,
-  LISTDO_LDO = 2,
-  LISTDO_LFDO = 3,
-} ListDoType;
-
-/// List-do state
-typedef struct {
-  int current;
-  int first;
-  int last;
-  int total;
-  int processed;
-  int errors;
-  bool stop_on_error;
-  bool done;
-} ListDoState;
-
-/// Create new list-do state
-extern ListDoState rs_listdo_state_new(int first, int last, int total);
-
-/// Check if there are more entries
-extern bool rs_listdo_state_has_more(const ListDoState *state);
-
-/// Advance to next entry
-extern void rs_listdo_state_advance(ListDoState *state);
-
-/// Record an error
-extern bool rs_listdo_state_record_error(ListDoState *state);
-
-/// Validate list-do range
-extern bool rs_listdo_validate_range(int first, int last, int total,
-                                      int *out_first, int *out_last);
-
-/// Line number adjustment for mark_adjust
-extern int rs_qf_adjust_lnum(int lnum, int line1, int line2,
-                              int amount, int amount_after);
-
-/// Check if line number was deleted
-extern bool rs_qf_lnum_deleted(int lnum, int line1, int line2);
-
-/// Calculate stack resize
-extern int rs_qf_calc_resize(int current_count, int new_max);
-
-/// Calculate lists to remove on resize
-extern int rs_qf_lists_to_remove(int current_count, int new_max);
-
-// =============================================================================
-// Phase 1 (Parser Migration): Errorformat parsing functions from Rust
-// =============================================================================
-
-/// Result of analyzing an errorformat prefix
-typedef struct {
-  char prefix;
-  char flags;
-  int status;
-} EfmPrefixResult;
-
-/// Result of converting an errorformat pattern to regex
-typedef struct {
-  size_t bytes_written;
-  int round;
-  int status;
-} EfmPatResult;
 
 /// Result of the full errorformat-to-regex conversion
 typedef struct {
@@ -765,27 +415,6 @@ typedef struct {
   char error_char;
 } EfmToRegpatResult;
 
-// Pattern index helpers
-extern int rs_efm_find_pattern_idx(char c);
-extern const char *rs_efm_get_pattern(int idx);
-extern size_t rs_efm_get_pattern_len(int idx);
-
-// Prefix analysis
-extern EfmPrefixResult rs_efm_analyze_prefix(const char *efmp, size_t efmp_len);
-extern bool rs_efm_pattern_valid_for_prefix(int idx, char prefix);
-
-// Scanf format conversion
-extern int rs_efm_scanf_to_regpat(const char *efmp, size_t efmp_len,
-                                   char *out, size_t out_size);
-
-// Single pattern conversion
-extern EfmPatResult rs_efmpat_to_regpat(char efmpat, char next_char,
-                                         char *addr, int idx, int round,
-                                         char prefix, char *out, size_t out_size);
-
-// Character classification
-extern bool rs_efm_is_regex_magic(char c);
-extern bool rs_efm_is_format_magic(char c);
 
 // Full errorformat to regex conversion
 extern EfmToRegpatResult rs_efm_to_regpat(const char *efm, size_t efm_len,
@@ -795,21 +424,13 @@ extern EfmToRegpatResult rs_efm_to_regpat(const char *efm, size_t efm_len,
 extern size_t rs_efm_regpat_bufsz(const char *efm, size_t efm_len);
 extern int rs_efm_option_part_len(const char *efm, size_t efm_max_len);
 
-// =============================================================================
-// Phase Q2: Line parsing helpers from Rust
-// =============================================================================
 
 // Prefix type helpers
 extern char rs_qf_parse_prefix_type(char prefix);
 extern bool rs_qf_should_skip_line(char flags);
 extern bool rs_qf_is_continuation(char prefix);
 extern bool rs_qf_starts_multiline(char prefix);
-extern bool rs_qf_is_dir_handler(char prefix);
 extern bool rs_qf_is_file_handler(char prefix);
-
-// Type validation helpers
-extern bool rs_qf_type_is_printable(char type_char);
-extern char rs_qf_normalize_type(char type_char);
 
 // Entry creation
 extern int rs_qf_add_entry(void *qfl, char *dir, const char *fname, const char *module,
@@ -820,7 +441,6 @@ extern int rs_qf_add_entry(void *qfl, char *dir, const char *fname, const char *
 // Directory stack operations (Phase 7)
 extern const char *rs_qf_push_dir(void *qfl, char *dirbuf, bool is_file_stack);
 extern const char *rs_qf_pop_dir(void *qfl, bool is_file_stack);
-extern void rs_qf_clean_dir_stack(void *qfl, bool is_file_stack);
 extern const char *rs_qf_guess_filepath(void *qfl, char *filename);
 
 // Vimgrep functions
@@ -838,25 +458,8 @@ extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
                            void *tv, char *errorformat, bool newlist, linenr_T lnumfirst,
                            linenr_T lnumlast, const char *qf_title, char *enc);
 
-// Jump/edit functions
-extern int rs_qf_jump_edit_buffer(void *qi, const void *qf_ptr, int forceit,
-                                   int prev_winid, bool *opened_window);
-
-// Vimgrep file processing
-extern int rs_vgr_process_files(void *wp, void *qi,
-                                 int fcount, const char *const *fnames,
-                                 const char *spat, void *regmatch,
-                                 int *tomatch, int flags,
-                                 const char *qf_title,
-                                 bool *redraw_for_dummy,
-                                 void **first_match_buf, char **target_dir);
-
-// ex_vimgrep command
 extern void rs_ex_vimgrep(void *eap);
 
-// =============================================================================
-// Phase 5: List management setters and wrappers for Rust
-// =============================================================================
 
 /// Set the current list index in qf_info_T for Rust
 void nvim_qf_set_curlist_idx(void *qi_void, int idx)
@@ -943,9 +546,6 @@ void *nvim_get_ql_info(void)
   return (void *)ql_info;
 }
 
-// =============================================================================
-// Phase 6: Multiline state accessors for Rust
-// =============================================================================
 
 /// Get multiline flag from qf_list_T for Rust
 bool nvim_qf_get_multiline(const void *qfl_void)
@@ -1017,7 +617,6 @@ struct efm_S {
   int conthere;                 // %> used
 };
 
-/// List of location lists to be deleted.
 /// Used to delay the deletion of locations lists by autocmds.
 typedef struct qf_delq_S {
   struct qf_delq_S *next;
@@ -1034,7 +633,6 @@ enum {
   QF_ABORT = 6,
 };
 
-/// State information used to parse lines and add entries to a quickfix/location
 /// list.
 typedef struct {
   char *linebuf;
@@ -1124,15 +722,10 @@ enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
        !got_int && (i) <= (qfl)->qf_count && (qfp) != NULL; \
        (i)++, (qfp) = (qfp)->qf_next)
 
-// =============================================================================
-// Phase 1: Validation accessor functions for Rust
-// Forward declarations of static functions we need
-// =============================================================================
 
 static char *qf_types(int c, int nr);
 static win_T *qf_find_win(const qf_info_T *qi);
 
-/// Check if a window pointer is still valid for Rust
 /// This wraps rs_win_valid() from Rust
 bool nvim_win_valid(const void *wp_void)
 {
@@ -1142,7 +735,6 @@ bool nvim_win_valid(const void *wp_void)
   return rs_win_valid((win_T *)wp_void) != 0;
 }
 
-/// Get the location list for a window for Rust
 /// Returns the location list (w_llist or w_llist_ref) or NULL
 void *nvim_win_get_loclist(const void *wp_void)
 {
@@ -1153,7 +745,6 @@ void *nvim_win_get_loclist(const void *wp_void)
   return (void *)GET_LOC_LIST(wp);
 }
 
-/// Find the quickfix window for a quickfix stack for Rust
 /// Returns the window pointer or NULL
 void *nvim_qf_find_win_handle(const void *qi_void)
 {
@@ -1172,7 +763,6 @@ int nvim_qf_win_get_handle(const void *wp_void)
   return ((win_T *)wp_void)->handle;
 }
 
-/// Check if a quickfix list with the given ID exists in the stack for Rust
 /// This is equivalent to qflist_valid() but works with a quickfix stack pointer
 bool nvim_qflist_valid(const void *qi_void, unsigned qf_id)
 {
@@ -1188,7 +778,6 @@ bool nvim_qflist_valid(const void *qi_void, unsigned qf_id)
   return false;
 }
 
-/// Check if an entry is present in a quickfix list for Rust
 /// This is equivalent to is_qf_entry_present()
 bool nvim_qf_entry_present(const void *qfl_void, const void *qf_ptr_void)
 {
@@ -1208,8 +797,6 @@ bool nvim_qf_entry_present(const void *qfl_void, const void *qf_ptr_void)
   return false;
 }
 
-/// Get the error type string for display for Rust
-/// Returns a pointer to a static string (like " error", " warning", etc.)
 /// The caller must not free this string.
 const char *nvim_qf_types(int c, int nr)
 {
@@ -1222,10 +809,6 @@ void nvim_emsg_e_no_more_items(void)
   emsg(_(e_no_more_items));
 }
 
-// =============================================================================
-// Phase 3: List modification accessor functions for Rust
-// Forward declaration
-// =============================================================================
 
 /// Increment the list count after adding a list
 void nvim_qf_increment_listcount(void *qi_void)
@@ -1319,9 +902,6 @@ void nvim_qfline_set_prev(void *qfp_void, void *prev)
   qfp->qf_prev = (qfline_T *)prev;
 }
 
-// =============================================================================
-// Phase 3 Extension: qfline_T allocation and field-setting accessors for Rust
-// =============================================================================
 
 /// Allocate a new qfline_T structure, zero-initialized
 void *nvim_qfline_alloc(void)
@@ -1527,7 +1107,6 @@ int nvim_qf_get_fnum_for_entry(void *qfl_void, char *directory, char *fname)
   return qf_get_fnum(qfl, directory, fname);
 }
 
-/// Fix filename and get shortened path if buffer has different name
 /// Returns allocated string or NULL (caller must free)
 char *nvim_qf_fix_fname(const char *fname, int bufnum)
 {
@@ -1562,9 +1141,6 @@ bool nvim_qf_is_printc(int c)
   return vim_isprintc(c);
 }
 
-// =============================================================================
-// Phase 1: Core List Lifecycle accessor functions for Rust
-// =============================================================================
 
 /// Set the quickfix list ID
 void nvim_qf_set_id(void *qfl_void, unsigned id)
@@ -1666,7 +1242,6 @@ void nvim_qf_set_changedtick(void *qfl_void, int changedtick)
   qfl->qf_changedtick = changedtick;
 }
 
-/// Shift lists down by one position (for pop_stack)
 /// Copies lists[1..count] to lists[0..count-1]
 void nvim_qf_shift_lists_down(void *qi_void)
 {
@@ -1717,9 +1292,6 @@ void nvim_qf_decr_listcount(void *qi_void)
   }
 }
 
-// =============================================================================
-// Phase 4: File Stack and Path Resolution accessor functions for Rust
-// =============================================================================
 
 static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname);
 
@@ -1803,7 +1375,6 @@ void nvim_qf_set_currfile(void *qfl_void, char *file)
   qfl->qf_currfile = file;
 }
 
-/// Get the buffer number for a file, creating the buffer if needed
 /// Returns the buffer number or 0 if not found/created
 int nvim_qf_get_fnum(void *qfl_void, char *directory, char *fname)
 {
@@ -1813,20 +1384,14 @@ int nvim_qf_get_fnum(void *qfl_void, char *directory, char *fname)
   return qf_get_fnum((qf_list_T *)qfl_void, directory, fname);
 }
 
-// =============================================================================
-// Phase 5: Error Format Parsing accessor functions for Rust
-// Forward declarations
-// =============================================================================
 
 static efm_T *parse_efm_option(char *efm);
 static void free_efm_list(efm_T **efm_first);
 static int qf_parse_line(qf_list_T *qfl, char *linebuf, size_t linelen, efm_T *fmt_first,
                          qffields_T *fields);
 
-/// Opaque handle to efm_T (errorformat pattern list)
 // EfmHandle is now defined in quickfix.h
 
-/// Parse the errorformat option string and return a handle to the pattern list
 /// The returned handle must be freed with nvim_qf_free_efm_list
 EfmHandle nvim_qf_parse_efm_option(char *efm)
 {
@@ -1879,7 +1444,6 @@ int nvim_efm_get_conthere(EfmHandle efm)
   return ((efm_T *)efm)->conthere;
 }
 
-/// Get the address array entry for a pattern index
 /// Returns the capture group number (1-based) or 0 if not used
 char nvim_efm_get_addr(EfmHandle efm, int idx)
 {
@@ -1889,11 +1453,6 @@ char nvim_efm_get_addr(EfmHandle efm, int idx)
   return ((efm_T *)efm)->addr[idx];
 }
 
-
-// =============================================================================
-// Phase 6: Input Sources and Buffer Operations accessor functions for Rust
-// Forward declarations
-// =============================================================================
 
 static int qf_get_nextline(qfstate_T *state);
 static int qf_setup_state(qfstate_T *pstate, char *restrict enc, const char *restrict efile,
@@ -1917,7 +1476,6 @@ void nvim_qf_state_free(QfStateHandle state)
   }
 }
 
-/// Setup the parser state for reading from a file
 /// Returns OK on success, FAIL on error
 int nvim_qf_state_setup_file(QfStateHandle state, char *enc, const char *efile)
 {
@@ -1927,7 +1485,6 @@ int nvim_qf_state_setup_file(QfStateHandle state, char *enc, const char *efile)
   return qf_setup_state((qfstate_T *)state, enc, efile, NULL, NULL, 0, 0);
 }
 
-/// Setup the parser state for reading from a buffer
 /// Returns OK on success, FAIL on error
 int nvim_qf_state_setup_buffer(QfStateHandle state, void *buf, int lnumfirst, int lnumlast)
 {
@@ -1938,7 +1495,6 @@ int nvim_qf_state_setup_buffer(QfStateHandle state, void *buf, int lnumfirst, in
                         (buf_T *)buf, lnumfirst, lnumlast);
 }
 
-/// Get the next line from the input source
 /// Returns QF_OK, QF_END_OF_INPUT, or QF_FAIL
 int nvim_qf_state_get_nextline(QfStateHandle state)
 {
@@ -1993,17 +1549,12 @@ bool nvim_qf_state_has_buf(QfStateHandle state)
   return ((qfstate_T *)state)->buf != NULL;
 }
 
-// =============================================================================
-// Phase 7: Window and Display Management accessor functions for Rust
-// Forward declarations
-// =============================================================================
 
 static win_T *qf_find_win(const qf_info_T *qi);
 static buf_T *qf_find_buf(qf_info_T *qi);
 static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index);
 static void qf_update_buffer(qf_info_T *qi, qfline_T *old_last);
 
-/// Find the quickfix window for a given quickfix stack
 /// Returns the window handle or NULL if not found
 void *nvim_qf_find_win_for_stack(const void *qi_void)
 {
@@ -2013,7 +1564,6 @@ void *nvim_qf_find_win_for_stack(const void *qi_void)
   return qf_find_win((const qf_info_T *)qi_void);
 }
 
-/// Find the quickfix buffer for a given quickfix stack
 /// Returns the buffer handle or NULL if not found
 void *nvim_qf_find_buf_for_stack(void *qi_void)
 {
@@ -2023,7 +1573,6 @@ void *nvim_qf_find_buf_for_stack(void *qi_void)
   return qf_find_buf((qf_info_T *)qi_void);
 }
 
-/// Update the cursor position in the quickfix window
 /// Returns true if there is a quickfix window
 bool nvim_qf_win_pos_update(void *qi_void, int old_qf_index)
 {
@@ -2082,10 +1631,6 @@ void *nvim_win_get_llist_ref(const void *win_void)
   return ((const win_T *)win_void)->w_llist_ref;
 }
 
-// =============================================================================
-// Phase 8: Ex Commands and API Functions accessor functions for Rust
-// Forward declarations
-// =============================================================================
 
 static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title);
 static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict);
@@ -2173,7 +1718,6 @@ static bufref_T qf_last_bufref = { NULL, 0, 0 };
 
 static garray_T qfga;
 
-/// Get a growarray to buffer text in.  Shared between various commands to avoid
 /// many alloc/free calls.
 static garray_T *qfga_get(void)
 {
@@ -2191,9 +1735,6 @@ static garray_T *qfga_get(void)
   return &qfga;
 }
 
-/// The "qfga" grow array buffer is reused across multiple quickfix commands as
-/// a temporary buffer to reduce the number of alloc/free calls.  But if the
-/// buffer size is large, then to avoid holding on to that memory, clear the
 /// grow array.  Otherwise just reset the grow array length.
 static void qfga_clear(void)
 {
@@ -2209,7 +1750,6 @@ static void qfga_clear(void)
 static int quickfix_busy = 0;
 static qf_delq_T *qf_delq_head = NULL;
 
-/// Process the next line from a file/buffer/list/string and add it
 /// to the quickfix list 'qfl'.
 static int qf_init_process_nextline(qf_list_T *qfl, efm_T *fmt_first, qfstate_T *state,
                                     qffields_T *fields)
@@ -2247,16 +1787,6 @@ static int qf_init_process_nextline(qf_list_T *qfl, efm_T *fmt_first, qfstate_T 
                       fields->valid);
 }
 
-/// Read the errorfile "efile" into memory, line by line, building the error
-/// list. Set the error list's title to qf_title.
-///
-/// @params  wp  If non-NULL, make a location list
-/// @params  efile  If non-NULL, errorfile to parse
-/// @params  errorformat  'errorformat' string used to parse the error lines
-/// @params  newlist  If true, create a new error list
-/// @params  qf_title  If non-NULL, title of the error list
-/// @params  enc  If non-NULL, encoding used to parse errors
-///
 /// @returns -1 for error, number of errors for success.
 int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, int newlist,
             const char *restrict qf_title, char *restrict enc)
@@ -2338,8 +1868,6 @@ static void free_efm_list(efm_T **efm_first)
   fmt_start = NULL;
 }
 
-/// Parse the 'errorformat' option. Multiple parts in the 'errorformat' option
-/// are parsed and converted to regular expressions. Returns information about
 /// the parsed 'errorformat' option.
 static efm_T *parse_efm_option(char *efm)
 {
@@ -2625,7 +2153,6 @@ static qf_list_T *qf_get_list(qf_info_T *qi, int idx)
   return &qi->qf_lists[idx];
 }
 
-/// Parse a line and get the quickfix fields.
 /// Return the QF_ status.
 static int qf_parse_line(qf_list_T *qfl, char *linebuf, size_t linelen, efm_T *fmt_first,
                          qffields_T *fields)
@@ -2780,9 +2307,6 @@ static void qf_cleanup_state(qfstate_T *pstate)
   }
 }
 
-// =============================================================================
-// Phase 4: qf_init_ext accessor functions for Rust
-// =============================================================================
 
 /// Allocate a qffields_T and return it as an opaque handle.
 void *nvim_qf_init_alloc_fields(void)
@@ -2832,9 +2356,6 @@ void nvim_qf_init_clear_last_bufname(void)
   XFREE_CLEAR(qf_last_bufname);
 }
 
-/// Resolve the effective errorformat string.
-/// If errorformat == p_efm and tv is NULL and buf has a local 'efm', use that.
-/// Otherwise use the provided errorformat.
 /// Returns the efm string to use (NOT a copy - do not free).
 char *nvim_qf_init_resolve_efm(char *errorformat, void *tv_void, void *buf_void)
 {
@@ -2846,8 +2367,6 @@ char *nvim_qf_init_resolve_efm(char *errorformat, void *tv_void, void *buf_void)
   return errorformat;
 }
 
-/// Update the cached efm parsing. Returns the parsed format list (opaque handle).
-/// Manages static local cache: only re-parses if efm changed.
 /// Returns NULL if parsing failed.
 static efm_T *s_fmt_first = NULL;
 static char *s_last_efm = NULL;
@@ -2873,7 +2392,6 @@ int nvim_qf_init_process_nextline(void *qfl_void, void *fmt_first_void,
                                   (qfstate_T *)state_void, (qffields_T *)fields_void);
 }
 
-/// Check if state had no file error (fd == NULL or no ferror).
 /// Returns true if there was NO file error (success path).
 bool nvim_qf_init_state_no_fd_error(void *state_void)
 {
@@ -2881,7 +2399,6 @@ bool nvim_qf_init_state_no_fd_error(void *state_void)
   return pstate->fd == NULL || !ferror(pstate->fd);
 }
 
-/// Finalize a quickfix list after successful parsing.
 /// Sets qf_ptr, qf_index, and qf_nonevalid based on whether valid entries exist.
 void nvim_qf_init_finalize_list(void *qfl_void)
 {
@@ -2908,15 +2425,6 @@ void nvim_qf_init_emsg_readerrf(void)
 _Static_assert(QF_END_OF_INPUT == 2, "QF_END_OF_INPUT must be 2");
 _Static_assert(QF_FAIL == 0, "QF_FAIL must be 0");
 
-/// Read the errorfile "efile" into memory, line by line, building the error
-/// list.
-/// Alternative: when "efile" is NULL read errors from buffer "buf".
-/// Alternative: when "tv" is not NULL get errors from the string or list.
-/// Always use 'errorformat' from "buf" if there is a local value.
-/// Then "lnumfirst" and "lnumlast" specify the range of lines to use.
-/// Set the title of the list to "qf_title".
-///
-/// Set the title of the specified quickfix list. Frees the previous title.
 /// Prepends ':' to the title.
 static void qf_store_title(qf_list_T *qfl, const char *title)
   FUNC_ATTR_NONNULL_ARG(1)
@@ -2934,9 +2442,6 @@ static void qf_store_title(qf_list_T *qfl, const char *title)
   xstrlcpy(p, title, len + 1);
 }
 
-/// The title of a quickfix/location list is set, by default, to the command
-/// that created the quickfix list with the ":" prefix.
-/// Create a quickfix list title string by prepending ":" to a user command.
 /// Returns a pointer to a static buffer with the title.
 static char *qf_cmdtitle(char *cmd)
 {
@@ -2954,7 +2459,6 @@ static qf_list_T *qf_get_curlist(qf_info_T *qi)
   return qf_get_list(qi, qi->qf_curlist);
 }
 
-/// Parse the match for filename ('%f') pattern in regmatch.
 /// Return the matched value in "fields->namebuf".
 static int qf_parse_fmt_f(regmatch_T *rmp, int midx, qffields_T *fields, int prefix)
 {
@@ -2977,7 +2481,6 @@ static int qf_parse_fmt_f(regmatch_T *rmp, int midx, qffields_T *fields, int pre
   return QF_OK;
 }
 
-/// Parse the match for buffer number ('%b') pattern in regmatch.
 /// Return the matched value in "fields->bnr".
 static int qf_parse_fmt_b(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -2992,7 +2495,6 @@ static int qf_parse_fmt_b(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Parse the match for error number ('%n') pattern in regmatch.
 /// Return the matched value in "fields->enr".
 static int qf_parse_fmt_n(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3003,7 +2505,6 @@ static int qf_parse_fmt_n(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Parse the match for line number ('%l') pattern in regmatch.
 /// Return the matched value in "fields->lnum".
 static int qf_parse_fmt_l(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3014,7 +2515,6 @@ static int qf_parse_fmt_l(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Parse the match for end line number ('%e') pattern in regmatch.
 /// Return the matched value in "fields->end_lnum".
 static int qf_parse_fmt_e(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3025,7 +2525,6 @@ static int qf_parse_fmt_e(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Parse the match for column number ('%c') pattern in regmatch.
 /// Return the matched value in "fields->col".
 static int qf_parse_fmt_c(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3036,7 +2535,6 @@ static int qf_parse_fmt_c(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Parse the match for end line number ('%e') pattern in regmatch.
 /// Return the matched value in "fields->end_lnum".
 static int qf_parse_fmt_k(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3047,7 +2545,6 @@ static int qf_parse_fmt_k(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Parse the match for error type ('%t') pattern in regmatch.
 /// Return the matched value in "fields->type".
 static int qf_parse_fmt_t(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3058,7 +2555,6 @@ static int qf_parse_fmt_t(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Copy a non-error line into the error string.  Return the matched line in
 /// "fields->errmsg".
 static int copy_nonerror_line(const char *linebuf, size_t linelen, qffields_T *fields)
   FUNC_ATTR_NONNULL_ALL
@@ -3074,7 +2570,6 @@ static int copy_nonerror_line(const char *linebuf, size_t linelen, qffields_T *f
   return QF_OK;
 }
 
-/// Parse the match for error message ('%m') pattern in regmatch.
 /// Return the matched value in "fields->errmsg".
 static int qf_parse_fmt_m(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3091,7 +2586,6 @@ static int qf_parse_fmt_m(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Parse the match for rest of a single-line file message ('%r') pattern.
 /// Return the matched value in "tail".
 static int qf_parse_fmt_r(regmatch_T *rmp, int midx, char **tail)
 {
@@ -3102,7 +2596,6 @@ static int qf_parse_fmt_r(regmatch_T *rmp, int midx, char **tail)
   return QF_OK;
 }
 
-/// Parse the match for the pointer line ('%p') pattern in regmatch.
 /// Return the matched value in "fields->col".
 static int qf_parse_fmt_p(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3123,7 +2616,6 @@ static int qf_parse_fmt_p(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Parse the match for the virtual column number ('%v') pattern in regmatch.
 /// Return the matched value in "fields->col".
 static int qf_parse_fmt_v(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3135,7 +2627,6 @@ static int qf_parse_fmt_v(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Parse the match for the search text ('%s') pattern in regmatch.
 /// Return the matched value in "fields->pattern".
 static int qf_parse_fmt_s(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3152,7 +2643,6 @@ static int qf_parse_fmt_s(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// Parse the match for the module ('%o') pattern in regmatch.
 /// Return the matched value in "fields->module".
 static int qf_parse_fmt_o(regmatch_T *rmp, int midx, qffields_T *fields)
 {
@@ -3166,9 +2656,6 @@ static int qf_parse_fmt_o(regmatch_T *rmp, int midx, qffields_T *fields)
   return QF_OK;
 }
 
-/// 'errorformat' format pattern parser functions.
-/// The '%f' and '%r' formats are parsed differently from other formats.
-/// See qf_parse_match() for details.
 /// Keep in sync with fmt_pat[].
 static int (*qf_parse_fmt[FMT_PATTERNS])(regmatch_T *, int, qffields_T *) = {
   NULL,  // %f
@@ -3187,9 +2674,6 @@ static int (*qf_parse_fmt[FMT_PATTERNS])(regmatch_T *, int, qffields_T *) = {
   qf_parse_fmt_o
 };
 
-/// Parse the error format matches in 'regmatch' and set the values in 'fields'.
-/// fmt_ptr contains the 'efm' format specifiers/prefixes that have a match.
-/// Returns QF_OK if all the matches are successfully parsed. On failure,
 /// returns QF_FAIL or QF_NOMEM.
 static int qf_parse_match(char *linebuf, size_t linelen, efm_T *fmt_ptr, regmatch_T *regmatch,
                           qffields_T *fields, int qf_multiline, int qf_multiscan, char **tail)
@@ -3229,9 +2713,6 @@ static int qf_parse_match(char *linebuf, size_t linelen, efm_T *fmt_ptr, regmatc
   return QF_OK;
 }
 
-/// Parse an error line in 'linebuf' using a single error format string in
-/// 'fmt_ptr->prog' and return the matching values in 'fields'.
-/// Returns QF_OK if the efm format matches completely and the fields are
 /// successfully copied. Otherwise returns QF_FAIL or QF_NOMEM.
 static int qf_parse_get_fields(char *linebuf, size_t linelen, efm_T *fmt_ptr, qffields_T *fields,
                                int qf_multiline, int qf_multiscan, char **tail)
@@ -3271,8 +2752,6 @@ static int qf_parse_get_fields(char *linebuf, size_t linelen, efm_T *fmt_ptr, qf
   return status;
 }
 
-/// Parse directory error format prefixes (%D and %X).
-/// Push and pop directories from the directory stack when scanning directory
 /// names.
 static int qf_parse_dir_pfx(int idx, qffields_T *fields, qf_list_T *qfl)
 {
@@ -3313,7 +2792,6 @@ static int qf_parse_file_pfx(int idx, qffields_T *fields, qf_list_T *qfl, char *
   return QF_OK;
 }
 
-/// Parse a non-error line (a line which doesn't match any of the error
 /// format in 'efm').
 static int qf_parse_line_nomatch(char *linebuf, size_t linelen, qffields_T *fields)
 {
@@ -3393,7 +2871,6 @@ int qf_stack_get_bufnr(void)
   return ql_info->qf_bufnr;
 }
 
-/// Wipe the quickfix window buffer (if present) for the specified
 /// quickfix/location list.
 static void wipe_qf_buffer(qf_info_T *qi)
   FUNC_ATTR_NONNULL_ALL
@@ -3478,9 +2955,6 @@ void qf_free_all(win_T *wp)
   }
 }
 
-/// Delay freeing of location list stacks when the quickfix code is running.
-/// Used to avoid problems with autocmds freeing location list stacks when the
-/// quickfix code is still referencing the stack.
 /// Must always call decr_quickfix_busy() exactly once after this.
 static void incr_quickfix_busy(void)
 {
@@ -3607,7 +3081,6 @@ static void qf_sync_win_to_llw(win_T *pwp)
   }
 }
 
-/// Allocate a new quickfix/location list stack that is able to hold
 /// up to n amount of lists
 static qf_info_T *qf_alloc_stack(qfltype_T qfltype, int n)
   FUNC_ATTR_NONNULL_RET
@@ -3634,7 +3107,6 @@ static qf_list_T *qf_alloc_list_stack(int n)
   return xcalloc((size_t)n, sizeof(qf_list_T));
 }
 
-/// Return the location list stack for window 'wp'.
 /// If not present, allocate a location list stack
 static qf_info_T *ll_get_or_alloc_list(win_T *wp)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
@@ -3656,9 +3128,6 @@ static qf_info_T *ll_get_or_alloc_list(win_T *wp)
   return wp->w_llist;
 }
 
-/// Get the quickfix/location list stack to use for the specified Ex command.
-/// For a location list command, returns the stack for the current window.  If
-/// the location list is not found, then returns NULL and prints an error
 /// message if 'print_emsg' is true.
 static qf_info_T *qf_cmd_get_stack(exarg_T *eap, bool print_emsg)
 {
@@ -3678,9 +3147,6 @@ static qf_info_T *qf_cmd_get_stack(exarg_T *eap, bool print_emsg)
   return qi;
 }
 
-/// Get the quickfix/location list stack to use for the specified Ex command.
-/// For a location list command, returns the stack for the current window.
-/// If the location list is not present, then allocates a new one.
 /// For a location list command, sets 'pwinp' to curwin.
 static qf_info_T *qf_cmd_get_or_alloc_stack(const exarg_T *eap, win_T **pwinp)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
@@ -3819,7 +3285,6 @@ void copy_loclist_stack(win_T *from, win_T *to)
   to->w_llist->qf_curlist = qi->qf_curlist;  // current list
 }
 
-/// Get buffer number for file "directory/fname".
 /// Also sets the b_has_qf_entry flag.
 static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname)
 {
@@ -3900,9 +3365,6 @@ static bool qflist_valid(win_T *wp, unsigned qf_id)
   return false;
 }
 
-/// When loading a file from the quickfix, the autocommands may modify it.
-/// This may invalidate the current quickfix entry.  This function checks
-/// whether an entry is still present in the quickfix list.
 /// Similar to location list.
 static bool is_qf_entry_present(qf_list_T *qfl, qfline_T *qf_ptr)
 {
@@ -3923,11 +3385,6 @@ static bool is_qf_entry_present(qf_list_T *qfl, qfline_T *qf_ptr)
   return true;
 }
 
-// =============================================================================
-// Phase 9.1: Entry selection logic (migrated to Rust)
-// =============================================================================
-
-/// Result of getting an entry from the quickfix list (from Rust)
 
 // Find a window displaying a Vim help file in the current tab page.
 static win_T *qf_find_help_win(void)
@@ -3952,8 +3409,6 @@ static void win_set_loclist(win_T *wp, qf_info_T *qi)
 extern void rs_qf_jump_newwin(void *qi, int dir, int errornr, int forceit, bool newwin);
 
 
-/// Find a non-quickfix window using the given location list stack in the
-/// current tabpage.
 /// Returns NULL if a matching window is not found.
 static win_T *qf_find_win_with_loclist(const qf_info_T *ll)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
@@ -3992,12 +3447,6 @@ static bool qf_goto_tabwin_with_file(int fnum)
 }
 
 
-// =============================================================================
-// Phase 5: qf_jump_edit_buffer accessor functions for Rust
-// =============================================================================
-
-/// Open a help file from quickfix.
-/// Returns OK if do_ecmd succeeded, FAIL if do_ecmd failed (continue to
 /// post-validation), or -2 if can_abandon failed (skip post-validation).
 int nvim_qf_jump_open_help(int qf_fnum, int forceit, int prev_winid)
 {
@@ -4010,8 +3459,6 @@ int nvim_qf_jump_open_help(int qf_fnum, int forceit, int prev_winid)
                  prev_winid == curwin->handle ? curwin : NULL);
 }
 
-/// Handle winfixbuf logic and open file from quickfix.
-/// Returns OK/FAIL normally, or -2 for location-list winfixbuf early return.
 /// Sets *opened_window if a new window was split.
 int nvim_qf_jump_open_file(void *qi_void, int fnum, int forceit, bool *opened_window)
 {
@@ -4075,9 +3522,6 @@ _Static_assert(QFLT_QUICKFIX == 0, "QFLT_QUICKFIX must be 0");
 _Static_assert(QFLT_LOCATION == 1, "QFLT_LOCATION must be 1");
 _Static_assert(QF_ABORT == 6, "QF_ABORT must be 6");
 
-// =============================================================================
-// Phase 3 (jump machinery): Window-finding C wrappers for Rust
-// =============================================================================
 
 /// Find a help window in the current tab. Returns win handle or NULL.
 void *nvim_qf_find_help_win(void)
@@ -4112,7 +3556,6 @@ void *nvim_qf_find_win_with_normal_buf(void)
   return NULL;
 }
 
-/// Go to a tab/window containing the specified file number.
 /// Returns true if successfully jumped.
 bool nvim_qf_goto_tabwin_with_file(int fnum)
 {
@@ -4125,7 +3568,6 @@ bool nvim_qf_goto_tabwin_with_file(int fnum)
   return false;
 }
 
-/// Open a new window above the quickfix window for displaying a file.
 /// ll_ref may be NULL. Returns OK or FAIL.
 int nvim_qf_open_new_file_win(void *ll_ref)
 {
@@ -4145,9 +3587,6 @@ int nvim_qf_open_new_file_win(void *ll_ref)
   return OK;
 }
 
-// =============================================================================
-// Phase 3 (jump machinery): Window/buffer state accessors for Rust
-// =============================================================================
 
 /// Get curwin->w_llist_ref (location list reference)
 void *nvim_qf_curwin_get_llist_ref(void)
@@ -4197,9 +3636,6 @@ void nvim_qf_win_close_curwin(void)
   win_close(curwin, true, false);
 }
 
-// =============================================================================
-// Phase 3 (jump machinery): Window operations for Rust orchestration (Phase 2)
-// =============================================================================
 
 /// Navigate to a window (win_goto wrapper)
 void nvim_qf_win_goto(void *win)
@@ -4351,11 +3787,7 @@ bool nvim_qf_win_is_wfb(const void *win)
   return ((const win_T *)win)->w_p_wfb;
 }
 
-// =============================================================================
-// Phase 3 (jump machinery): Cursor positioning and message display wrappers
-// =============================================================================
 
-/// Position cursor at the quickfix error location.
 /// qf_pattern may be NULL (use line/col instead).
 void nvim_qf_jump_goto_line(linenr_T qf_lnum, int qf_col, char qf_viscol, const char *qf_pattern)
 {
@@ -4462,9 +3894,6 @@ bool nvim_qf_curbuf_is(const void *buf)
   return curbuf == (const buf_T *)buf;
 }
 
-// =============================================================================
-// Phase 3 (jump machinery): p_swb save/restore for Rust (Phase 5)
-// =============================================================================
 
 /// Save p_swb pointer for later comparison
 void *nvim_qf_get_p_swb(void)
@@ -4487,9 +3916,6 @@ void nvim_qf_restore_swb(void *old_swb, unsigned old_swb_flags)
   }
 }
 
-// =============================================================================
-// Phase W1: Window command accessors for Rust orchestration
-// =============================================================================
 
 /// Close a specific quickfix window
 void nvim_qf_win_close(void *win_void)
@@ -4638,9 +4064,6 @@ static int qfFile_hl_id;
 static int qfSep_hl_id;
 static int qfLine_hl_id;
 
-/// Display information about a single entry from the quickfix/location list.
-/// Used by ":clist/:llist" commands.
-/// 'cursel' will be set to true for the currently selected entry in the
 /// quickfix list.
 static void qf_list_entry(qfline_T *qfp, int qf_idx, bool cursel)
 {
@@ -4790,7 +4213,6 @@ void qf_list(exarg_T *eap)
   qfga_clear();
 }
 
-/// Remove newlines and leading whitespace from an error message.
 /// Add the result to the grow array "gap".
 static void qf_fmt_text(garray_T *gap, const char *restrict text)
   FUNC_ATTR_NONNULL_ALL
@@ -4810,7 +4232,6 @@ static void qf_fmt_text(garray_T *gap, const char *restrict text)
   }
 }
 
-/// Add the range information from the lnum, col, end_lnum, and end_col values
 /// of a quickfix entry to the grow array "gap".
 static void qf_range_text(garray_T *gap, const qfline_T *qfp)
 {
@@ -4836,7 +4257,6 @@ static void qf_range_text(garray_T *gap, const qfline_T *qfp)
   ga_concat_len(gap, buf, len);
 }
 
-/// Display information (list number, list size and the title) about a
 /// quickfix/location list.
 static void qf_msg(qf_info_T *qi, int which, char *lead)
 {
@@ -4863,9 +4283,6 @@ static void qf_msg(qf_info_T *qi, int which, char *lead)
   msg(buf, 0);
 }
 
-/// Adjust error list entries for changed line numbers
-///
-/// Note: `buf` is the changed buffer, but `wp` is a potential location list
 /// into that buffer, or NULL to check the quickfix list.
 bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linenr_T amount,
                     linenr_T amount_after)
@@ -5087,9 +4504,6 @@ linenr_T nvim_qf_current_entry(win_T *wp)
   return qf_current_entry(wp);
 }
 
-/// Update the cursor position in the quickfix window to the current error.
-/// Return true if there is a quickfix window.
-///
 /// @param old_qf_index  previous qf_index or zero
 static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index)
 {
@@ -5109,7 +4523,6 @@ static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index)
   return win != NULL;
 }
 
-/// Checks whether the given window is displaying the specified
 /// quickfix/location stack.
 static int is_qf_win(const win_T *win, const qf_info_T *qi)
   FUNC_ATTR_NONNULL_ARG(2) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
@@ -5128,7 +4541,6 @@ static int is_qf_win(const win_T *win, const qf_info_T *qi)
   return false;
 }
 
-/// Find a window displaying the quickfix/location stack 'qi' in the current tab
 /// page.
 static win_T *qf_find_win(const qf_info_T *qi)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
@@ -5142,7 +4554,6 @@ static win_T *qf_find_win(const qf_info_T *qi)
   return NULL;
 }
 
-/// Find a quickfix buffer.
 /// Searches in windows opened in all the tab pages.
 static buf_T *qf_find_buf(qf_info_T *qi)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
@@ -5174,7 +4585,6 @@ const char *did_set_quickfixtextfunc(optset_T *args FUNC_ATTR_UNUSED)
   return NULL;
 }
 
-/// Update the w:quickfix_title variable in the quickfix/location list window in
 /// all the tab pages.
 static void qf_update_win_titlevar(qf_info_T *qi)
   FUNC_ATTR_NONNULL_ALL
@@ -5383,14 +4793,6 @@ static list_T *call_qftf_func(qf_list_T *qfl, int qf_winid, int start_idx, int e
   return qftf_list;
 }
 
-/// Fill current buffer with quickfix errors, replacing any previous contents.
-/// curbuf must be the quickfix buffer!
-/// If "old_last" is not NULL append the items after this one.
-/// When "old_last" is NULL then "buf" must equal "curbuf"!  Because ml_delete()
-/// is used and autocommands will be triggered.
-// ============================================================================
-// Phase 3: qf_fill_buffer accessors for Rust FFI
-// ============================================================================
 
 /// Check if buf == curbuf
 bool nvim_qf_buf_is_curbuf(const void *buf)
@@ -5398,7 +4800,6 @@ bool nvim_qf_buf_is_curbuf(const void *buf)
   return (const buf_T *)buf == curbuf;
 }
 
-/// Delete all lines from curbuf (for qf_fill_buffer).
 /// Returns true on success.
 bool nvim_qf_delete_all_lines(void)
 {
@@ -5766,7 +5167,6 @@ size_t qf_get_valid_size(exarg_T *eap)
   return sz;
 }
 
-/// Returns the current index of the quickfix/location list.
 /// Returns 0 if there is an error.
 size_t qf_get_cur_idx(exarg_T *eap)
   FUNC_ATTR_NONNULL_ALL
@@ -5781,8 +5181,6 @@ size_t qf_get_cur_idx(exarg_T *eap)
   return (size_t)qf_get_curlist(qi)->qf_index;
 }
 
-/// Returns the current index in the quickfix/location list,
-/// counting only valid entries.
 /// Returns 1 if there are no valid entries.
 int qf_get_cur_valid_idx(exarg_T *eap)
   FUNC_ATTR_NONNULL_ALL
@@ -5826,10 +5224,6 @@ int qf_get_cur_valid_idx(exarg_T *eap)
   return eidx != 0 ? eidx : 1;
 }
 
-/// Get the 'n'th valid error entry in the quickfix or location list.
-///
-/// Used by :cdo, :ldo, :cfdo and :lfdo commands.
-/// For :cdo and :ldo, returns the 'n'th valid error entry.
 /// For :cfdo and :lfdo, returns the 'n'th valid file entry.
 static size_t qf_get_nth_valid_entry(qf_list_T *qfl, size_t n, bool fdo)
   FUNC_ATTR_NONNULL_ALL
@@ -5865,9 +5259,6 @@ static size_t qf_get_nth_valid_entry(qf_list_T *qfl, size_t n, bool fdo)
   return i <= qfl->qf_count ? (size_t)i : 1;
 }
 
-// =============================================================================
-// Phase 2: Ex command accessor functions for Rust
-// =============================================================================
 
 /// Get the quickfix stack for an ex command (wraps qf_cmd_get_stack)
 void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg)
@@ -5959,7 +5350,6 @@ int nvim_qf_curbuf_fnum(void)
   return curbuf->b_fnum;
 }
 
-/// Get curwin cursor position (with col adjusted +1 for 1-based qf columns) for Rust.
 /// Returns pointer to static storage; only valid until next call.
 const void *nvim_qf_curwin_pos_adj(void)
 {
@@ -6145,8 +5535,6 @@ static buf_T *vgr_load_dummy_buf(char *fname, char *dirname_start, char *dirname
   return buf;
 }
 
-/// Check whether a quickfix/location list is valid. Autocmds may remove or
-/// change a quickfix list when vimgrep is running. If the list is not found,
 /// create a new list.
 static bool vgr_qflist_valid(win_T *wp, qf_info_T *qi, unsigned qfid, char *title)
 {
@@ -6168,9 +5556,6 @@ static bool vgr_qflist_valid(win_T *wp, qf_info_T *qi, unsigned qfid, char *titl
   return true;
 }
 
-// ============================================================================
-// Phase 1: vgr_match_buflines accessors for Rust FFI
-// ============================================================================
 
 /// Wrapper for vim_regexec_multi (simplified for vimgrep use)
 int nvim_vim_regexec_multi(regmmatch_T *rm, void *win, void *buf, linenr_T lnum, colnr_T col)
@@ -6257,8 +5642,6 @@ static bool existing_swapfile(const buf_T *buf)
   return false;
 }
 
-/// Process :vimgrep command arguments. The command syntax is:
-///
 /// :{count}vimgrep /{pattern}/[g][j] {file} ...
 static int vgr_process_args(exarg_T *eap, vgr_args_T *args)
 {
@@ -6296,11 +5679,7 @@ static int vgr_process_args(exarg_T *eap, vgr_args_T *args)
   return OK;
 }
 
-// =============================================================================
-// Phase 6: vgr_process_files accessor functions for Rust
-// =============================================================================
 
-/// Allocate dirname_start and dirname_now buffers, fill dirname_start with cwd.
 /// Returns dirname_start via *start_out, dirname_now via *now_out.
 void nvim_vgr_alloc_dirnames(char **start_out, char **now_out)
 {
@@ -6328,7 +5707,6 @@ void nvim_vgr_display_fname_wrapper(const char *fname)
   vgr_display_fname((char *)fname);
 }
 
-/// Try to find a loaded buffer for the given filename.
 /// Returns: the buffer handle (or NULL), and sets *has_mfp if buffer has ml_mfp.
 void *nvim_vgr_find_buf(const char *fname, bool *has_mfp)
 {
@@ -6365,8 +5743,6 @@ long nvim_vgr_time_now(void)
   return (long)time(NULL);
 }
 
-/// Handle dummy buffer cleanup after matching. This encapsulates the complex
-/// wipe/unload/keep logic including aucmd_prepbuf, modelines, etc.
 /// first_match_buf and target_dir may be updated.
 void nvim_vgr_handle_dummy_buf(void *buf_void, bool found_match, bool duplicate_name,
                                 int flags, char *dirname_start, char *dirname_now,
@@ -6418,11 +5794,7 @@ void nvim_vgr_handle_dummy_buf(void *buf_void, bool found_match, bool duplicate_
   aucmd_restbuf(&aco);
 }
 
-// =============================================================================
-// Phase 7: ex_vimgrep accessor functions for Rust
-// =============================================================================
 
-/// Pre-check for vimgrep: check_can_set_curbuf_forceit + QuickFixCmdPre autocmd.
 /// Returns false if we should abort.
 bool nvim_vgr_pre_check(void *eap_void)
 {
@@ -6440,8 +5812,6 @@ bool nvim_vgr_pre_check(void *eap_void)
   return true;
 }
 
-/// Setup vimgrep: get stack, parse args, maybe create new list.
-/// Returns: qi handle via *qi_out, wp handle via *wp_out, args handle via *args_out.
 /// Returns false if vgr_process_args failed.
 bool nvim_vgr_setup(void *eap_void, void **qi_out, void **wp_out, void **args_out)
 {
@@ -6590,18 +5960,6 @@ static void restore_start_dir(char *dirname_start)
   xfree(dirname_now);
 }
 
-/// Load file "fname" into a dummy buffer and return the buffer pointer,
-/// placing the directory resulting from the buffer load into the
-/// "resulting_dir" pointer. "resulting_dir" must be allocated by the caller
-/// prior to calling this function. Restores directory to "dirname_start" prior
-/// to returning, if autocmds or the 'autochdir' option have changed it.
-///
-/// If creating the dummy buffer does not fail, must call unload_dummy_buffer()
-/// or wipe_dummy_buffer() later!
-///
-/// @param dirname_start  in: old directory
-/// @param resulting_dir  out: new directory
-///
 /// @return  NULL if it fails.
 static buf_T *load_dummy_buffer(char *fname, char *dirname_start, char *resulting_dir)
 {
@@ -6686,8 +6044,6 @@ static buf_T *load_dummy_buffer(char *fname, char *dirname_start, char *resultin
   return newbuf;
 }
 
-/// Wipe out the dummy buffer that load_dummy_buffer() created. Restores
-/// directory to "dirname_start" if not NULL prior to returning, if autocmds or
 /// the 'autochdir' option have changed it.
 static void wipe_dummy_buffer(buf_T *buf, char *dirname_start)
   FUNC_ATTR_NONNULL_ARG(1)
@@ -6739,8 +6095,6 @@ fail:
   buf->b_flags &= ~BF_DUMMY;
 }
 
-/// Unload the dummy buffer that load_dummy_buffer() created. Restores
-/// directory to "dirname_start" prior to returning, if autocmds or the
 /// 'autochdir' option have changed it.
 static void unload_dummy_buffer(buf_T *buf, char *dirname_start)
 {
@@ -6754,7 +6108,6 @@ static void unload_dummy_buffer(buf_T *buf, char *dirname_start)
   restore_start_dir(dirname_start);
 }
 
-/// Copy the specified quickfix entry items into a new dict and append the dict
 /// to 'list'.  Returns OK on success.
 static int get_qfline_items(qfline_T *qfp, list_T *list)
 {
@@ -6794,9 +6147,6 @@ static int get_qfline_items(qfline_T *qfp, list_T *list)
   return OK;
 }
 
-/// Add each quickfix error to list "list" as a dictionary.
-/// If qf_idx is -1, use the current list. Otherwise, use the specified list.
-/// If eidx is not 0, then return only the specified entry. Otherwise return
 /// all the entries.
 static int get_errorlist(qf_info_T *qi_arg, win_T *wp, int qf_idx, int eidx, list_T *list)
 {
@@ -6862,7 +6212,6 @@ enum {
   QF_GETLIST_ALL = 0xFFF,
 };
 
-/// Parse text from 'di' and return the quickfix list items.
 /// Existing quickfix lists are not modified.
 static int qf_get_list_from_lines(dict_T *what, dictitem_T *di, dict_T *retdict)
 {
@@ -6917,8 +6266,6 @@ static int qf_winid(qf_info_T *qi)
   return 0;
 }
 
-/// Returns the number of the buffer displayed in the quickfix/location list
-/// window. If there is no buffer associated with the list or the buffer is
 /// wiped out, then returns 0.
 static int qf_getprop_qfbufnr(const qf_info_T *qi, dict_T *retdict)
   FUNC_ATTR_NONNULL_ARG(2)
@@ -6985,14 +6332,6 @@ static int qf_getprop_keys2flags(const dict_T *what, bool loclist)
   return flags;
 }
 
-/// Return the quickfix list index based on 'nr' or 'id' in 'what'.
-///
-/// If 'nr' and 'id' are not present in 'what' then return the current
-/// quickfix list index.
-/// If 'nr' is zero then return the current quickfix list index.
-/// If 'nr' is '$' then return the last quickfix list index.
-/// If 'id' is present then return the index of the quickfix list with that id.
-/// If 'id' is zero then return the quickfix list index specified by 'nr'.
 /// Return -1, if quickfix list is not present or if the stack is empty.
 static int qf_getprop_qfidx(qf_info_T *qi, dict_T *what)
 {
@@ -7102,7 +6441,6 @@ static int qf_getprop_filewinid(const win_T *wp, const qf_info_T *qi, dict_T *re
   return tv_dict_add_nr(retdict, S_LEN("filewinid"), winid);
 }
 
-/// Return the quickfix list items/entries as 'items' in retdict.
 /// If eidx is not 0, then return the item at the specified index.
 static int qf_getprop_items(qf_info_T *qi, int qf_idx, int eidx, dict_T *retdict)
 {
@@ -7132,7 +6470,6 @@ static int qf_getprop_ctx(qf_list_T *qfl, dict_T *retdict)
   return status;
 }
 
-/// Return the current quickfix list index as 'idx' in retdict.
 /// If a specific entry index (eidx) is supplied, then use that.
 static int qf_getprop_idx(qf_list_T *qfl, int eidx, dict_T *retdict)
 {
@@ -7146,7 +6483,6 @@ static int qf_getprop_idx(qf_list_T *qfl, int eidx, dict_T *retdict)
   return tv_dict_add_nr(retdict, S_LEN("idx"), eidx);
 }
 
-/// Return the 'quickfixtextfunc' function of a quickfix/location list
 /// @return OK or FAIL
 static int qf_getprop_qftf(qf_list_T *qfl, dict_T *retdict)
   FUNC_ATTR_NONNULL_ALL
@@ -7166,8 +6502,6 @@ static int qf_getprop_qftf(qf_list_T *qfl, dict_T *retdict)
   return status;
 }
 
-/// Return quickfix/location list details (title) as a dictionary.
-/// 'what' contains the details to return. If 'list_idx' is -1,
 /// then current list is used. Otherwise the specified list is used.
 static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict)
 {
@@ -7249,7 +6583,6 @@ static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict)
   return status;
 }
 
-/// Set the current index in the specified quickfix list
 /// @return OK
 static int qf_setprop_qftf(qf_list_T *qfl, dictitem_T *di)
   FUNC_ATTR_NONNULL_ALL
@@ -7263,8 +6596,6 @@ static int qf_setprop_qftf(qf_list_T *qfl, dictitem_T *di)
   return OK;
 }
 
-/// Add a new quickfix entry to list at 'qf_idx' in the stack 'qi' from the
-/// items in the dict 'd'. If it is a valid error entry, then set 'valid_entry'
 /// to true.
 static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry, bool *valid_entry)
   FUNC_ATTR_NONNULL_ALL
@@ -7345,9 +6676,6 @@ static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry, b
   return status;
 }
 
-// ============================================================================
-// Phase 2: qf_add_entries accessors for Rust FFI
-// ============================================================================
 
 /// Get the first item in a VimL list
 void *nvim_tv_list_first(const void *list)
@@ -7580,8 +6908,6 @@ static int qf_setprop_curidx(qf_info_T *qi, qf_list_T *qfl, const dictitem_T *di
   return OK;
 }
 
-/// Set quickfix/location list properties (title, items, context).
-/// Also used to add items from parsing a list of lines.
 /// Used by the setqflist() and setloclist() Vim script functions.
 static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title)
   FUNC_ATTR_NONNULL_ALL
@@ -7674,10 +7000,6 @@ static void qf_free_stack(win_T *wp, qf_info_T *qi)
   }
 }
 
-/// Populate the quickfix list with the items supplied in the list
-/// of dictionaries. "title" will be copied to w:quickfix_title
-/// "action" is 'a' for add, 'r' for replace, 'u' for update.  Otherwise
-/// create a new list.
 /// When "what" is not NULL then only set some properties.
 int set_errorlist(win_T *wp, list_T *list, int action, char *title, dict_T *what)
 {
@@ -7739,7 +7061,6 @@ static bool mark_quickfix_user_data(qf_info_T *qi, int copyID)
   return abort;
 }
 
-/// Mark the quickfix context and callback function as in use for all the lists
 /// in a quickfix stack.
 static bool mark_quickfix_ctx(qf_info_T *qi, int copyID)
 {
@@ -7759,7 +7080,6 @@ static bool mark_quickfix_ctx(qf_info_T *qi, int copyID)
   return abort;
 }
 
-/// Mark the context of the quickfix list and the location lists (if present) as
 /// "in use". So that garbage collection doesn't free the context.
 bool set_ref_in_quickfix(int copyID)
 {
@@ -7813,7 +7133,6 @@ static char *cbuffer_get_auname(cmdidx_T cmdidx)
   }
 }
 
-/// Process and validate the arguments passed to the :cbuffer, :caddbuffer,
 /// :cgetbuffer, :lbuffer, :laddbuffer, :lgetbuffer Ex commands.
 static int cbuffer_process_args(exarg_T *eap, buf_T **bufp, linenr_T *line1, linenr_T *line2)
 {
@@ -7944,7 +7263,6 @@ static char *cexpr_get_auname(cmdidx_T cmdidx)
   }
 }
 
-/// ":cexpr {expr}", ":cgetexpr {expr}", ":caddexpr {expr}" command.
 /// ":lexpr {expr}", ":lgetexpr {expr}", ":laddexpr {expr}" command.
 void ex_cexpr(exarg_T *eap)
 {
@@ -8121,11 +7439,7 @@ static void hgr_search_in_rtp(qf_list_T *qfl, regmatch_T *p_regmatch, const char
   }
 }
 
-// =============================================================================
-// Phase 8: ex_helpgrep C accessors for Rust
-// =============================================================================
 
-/// Pre-check: dispatch au_name from cmdidx, fire EVENT_QUICKFIXCMDPRE.
 /// Returns true if we should proceed, false if aborting.
 bool nvim_hgr_pre_check(void *eap_void)
 {
@@ -8148,7 +7462,6 @@ bool nvim_hgr_pre_check(void *eap_void)
   return true;
 }
 
-/// Save p_cpo and set it to empty_string_option.
 /// Returns the saved value as an opaque pointer.
 void *nvim_hgr_save_cpo(void)
 {
@@ -8164,15 +7477,12 @@ bool nvim_hgr_is_loclist_cmd(const void *eap_void)
   return is_loclist_cmd(eap->cmdidx);
 }
 
-/// Get or allocate a location list for :lhelpgrep.
-/// Sets *new_qi_out to true if a new qi was allocated.
 /// Returns the qi pointer (may be newly allocated).
 void *nvim_hgr_get_ll(bool *new_qi_out)
 {
   return hgr_get_ll(new_qi_out);
 }
 
-/// Compile regex, create new list, search help files, finalize list.
 /// Returns true if the list was updated (regex compiled + search done).
 bool nvim_hgr_compile_and_search(void *eap_void, void *qi_void)
 {
@@ -8202,7 +7512,6 @@ bool nvim_hgr_compile_and_search(void *eap_void, void *qi_void)
   return true;
 }
 
-/// Restore p_cpo from the saved value, handling the case where a plugin
 /// changed p_cpo while we had it set to empty_string_option.
 void nvim_hgr_restore_cpo(void *saved_cpo_void)
 {
@@ -8219,7 +7528,6 @@ void nvim_hgr_restore_cpo(void *saved_cpo_void)
   }
 }
 
-/// Fire EVENT_QUICKFIXCMDPOST and check loclist validity.
 /// Returns true if we should continue (not early-return).
 bool nvim_hgr_post_autocmd(void *eap_void, void *qi_void, bool new_qi)
 {
@@ -8332,20 +7640,6 @@ void f_getqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   get_qf_loc_list(true, NULL, &argvars[0], rettv);
 }
 
-/// Create quickfix/location list from Vimscript values
-///
-/// Used by `setqflist()` and `setloclist()` functions. Accepts invalid
-/// args argument in which case errors out, including VAR_UNKNOWN parameters.
-///
-/// @param[in,out]  wp  Window to create location list for. May be NULL in
-///                     which case quickfix list will be created.
-/// @param[in]  args  [list, action, what]
-/// @param[in]  args[0]  Quickfix list contents.
-/// @param[in]  args[1]  Optional. Action to perform:
-///                      append to an existing list, replace its content,
-///                      or create a new one.
-/// @param[in]  args[2]  Optional. Quickfix list properties or title.
-///                      Defaults to caller function name.
 /// @param[out]  rettv  Return value: 0 in case of success, -1 otherwise.
 static void set_qf_ll_list(win_T *wp, typval_T *args, typval_T *rettv)
   FUNC_ATTR_NONNULL_ARG(2, 3)
