@@ -121,6 +121,8 @@ extern int rs_eval_func(char **arg, evalarg_T *evalarg, char *name, int name_len
 extern char *rs_get_lval(char *name, typval_T *rettv, lval_T *lp, bool unlet, bool skip,
                          int flags, int fne_flags);
 extern void rs_clear_lval(lval_T *lp);
+extern void rs_set_var_lval(lval_T *lp, char *endp, typval_T *rettv, bool copy,
+                            bool is_const, const char *op);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -1470,136 +1472,7 @@ void clear_lval(lval_T *lp)
 void set_var_lval(lval_T *lp, char *endp, typval_T *rettv, bool copy, const bool is_const,
                   const char *op)
 {
-  int cc;
-  dictitem_T *di;
-
-  if (lp->ll_tv == NULL) {
-    cc = (uint8_t)(*endp);
-    *endp = NUL;
-    if (lp->ll_blob != NULL) {
-      if (op != NULL && *op != '=') {
-        semsg(_(e_letwrong), op);
-        return;
-      }
-      if (value_check_lock(lp->ll_blob->bv_lock, lp->ll_name, TV_CSTRING)) {
-        return;
-      }
-
-      if (lp->ll_range && rettv->v_type == VAR_BLOB) {
-        if (lp->ll_empty2) {
-          lp->ll_n2 = tv_blob_len(lp->ll_blob) - 1;
-        }
-
-        if (tv_blob_set_range(lp->ll_blob, lp->ll_n1, lp->ll_n2, rettv) == FAIL) {
-          return;
-        }
-      } else {
-        bool error = false;
-        const char val = (char)tv_get_number_chk(rettv, &error);
-        if (!error) {
-          tv_blob_set_append(lp->ll_blob, lp->ll_n1, (uint8_t)val);
-        }
-      }
-    } else if (op != NULL && *op != '=') {
-      typval_T tv;
-
-      if (is_const) {
-        emsg(_(e_cannot_mod));
-        *endp = (char)cc;
-        return;
-      }
-
-      // handle +=, -=, *=, /=, %= and .=
-      di = NULL;
-      if (eval_variable(lp->ll_name, (int)lp->ll_name_len,
-                        &tv, &di, true, false) == OK) {
-        if ((di == NULL
-             || (!var_check_ro(di->di_flags, lp->ll_name, TV_CSTRING)
-                 && !tv_check_lock(&di->di_tv, lp->ll_name, TV_CSTRING)))
-            && eexe_mod_op(&tv, rettv, op) == OK) {
-          set_var(lp->ll_name, lp->ll_name_len, &tv, false);
-        }
-        tv_clear(&tv);
-      }
-    } else {
-      set_var_const(lp->ll_name, lp->ll_name_len, rettv, copy, is_const);
-    }
-    *endp = (char)cc;
-  } else if (value_check_lock(lp->ll_newkey == NULL
-                              ? lp->ll_tv->v_lock
-                              : lp->ll_tv->vval.v_dict->dv_lock,
-                              lp->ll_name, TV_CSTRING)) {
-    // Skip
-  } else if (lp->ll_range) {
-    if (is_const) {
-      emsg(_("E996: Cannot lock a range"));
-      return;
-    }
-
-    tv_list_assign_range(lp->ll_list, rettv->vval.v_list,
-                         lp->ll_n1, lp->ll_n2, lp->ll_empty2, op, lp->ll_name);
-  } else {
-    typval_T oldtv = TV_INITIAL_VALUE;
-    dict_T *dict = lp->ll_dict;
-    bool watched = tv_dict_is_watched(dict);
-
-    if (is_const) {
-      emsg(_("E996: Cannot lock a list or dict"));
-      return;
-    }
-
-    // Assign to a List or Dictionary item.
-    if (lp->ll_newkey != NULL) {
-      if (op != NULL && *op != '=') {
-        semsg(_(e_dictkey), lp->ll_newkey);
-        return;
-      }
-      if (tv_dict_wrong_func_name(lp->ll_tv->vval.v_dict, rettv, lp->ll_newkey)) {
-        return;
-      }
-
-      // Need to add an item to the Dictionary.
-      di = tv_dict_item_alloc(lp->ll_newkey);
-      if (tv_dict_add(lp->ll_tv->vval.v_dict, di) == FAIL) {
-        xfree(di);
-        return;
-      }
-      lp->ll_tv = &di->di_tv;
-    } else {
-      if (watched) {
-        tv_copy(lp->ll_tv, &oldtv);
-      }
-
-      if (op != NULL && *op != '=') {
-        eexe_mod_op(lp->ll_tv, rettv, op);
-        goto notify;
-      } else {
-        tv_clear(lp->ll_tv);
-      }
-    }
-
-    // Assign the value to the variable or list item.
-    if (copy) {
-      tv_copy(rettv, lp->ll_tv);
-    } else {
-      *lp->ll_tv = *rettv;
-      lp->ll_tv->v_lock = VAR_UNLOCKED;
-      tv_init(rettv);
-    }
-
-notify:
-    if (watched) {
-      if (oldtv.v_type == VAR_UNKNOWN) {
-        assert(lp->ll_newkey != NULL);
-        tv_dict_watcher_notify(dict, lp->ll_newkey, lp->ll_tv, NULL);
-      } else {
-        dictitem_T *di_ = lp->ll_di;
-        assert(di_->di_key != NULL);
-        tv_dict_watcher_notify(dict, di_->di_key, lp->ll_tv, &oldtv);
-        tv_clear(&oldtv);
-      }
-    }
-  }
+  rs_set_var_lval(lp, endp, rettv, copy, is_const, op);
 }
 
 /// Evaluate the expression used in a ":for var in expr" command.
@@ -5891,6 +5764,229 @@ void nvim_semsg_trailing_arg(const char *p)
 void nvim_semsg_undef_var(int len, const char *name)
 {
   semsg(_("E121: Undefined variable: %.*s"), len, name);
+}
+
+// =============================================================================
+// Phase 3: set_var_lval helpers (additional lval_T accessors for rs_set_var_lval)
+// =============================================================================
+
+/// Get ll_blob field from lval_T - accessor for Rust.
+blob_T *nvim_lval_get_blob(const lval_T *lp)
+{
+  return lp->ll_blob;
+}
+
+/// Get ll_range field from lval_T - accessor for Rust.
+bool nvim_lval_get_range(const lval_T *lp)
+{
+  return lp->ll_range;
+}
+
+/// Get ll_empty2 field from lval_T - accessor for Rust.
+bool nvim_lval_get_empty2(const lval_T *lp)
+{
+  return lp->ll_empty2;
+}
+
+/// Get ll_n1 field from lval_T - accessor for Rust.
+int nvim_lval_get_n1(const lval_T *lp)
+{
+  return lp->ll_n1;
+}
+
+/// Get ll_n2 field from lval_T - accessor for Rust.
+int nvim_lval_get_n2(const lval_T *lp)
+{
+  return lp->ll_n2;
+}
+
+/// Set ll_n2 field in lval_T - accessor for Rust.
+void nvim_lval_set_n2(lval_T *lp, int n2)
+{
+  lp->ll_n2 = n2;
+}
+
+/// Get ll_list field from lval_T - accessor for Rust.
+list_T *nvim_lval_get_list(const lval_T *lp)
+{
+  return lp->ll_list;
+}
+
+/// Get ll_dict field from lval_T - accessor for Rust.
+dict_T *nvim_lval_get_dict(const lval_T *lp)
+{
+  return lp->ll_dict;
+}
+
+/// Get ll_di field from lval_T - accessor for Rust.
+dictitem_T *nvim_lval_get_di(const lval_T *lp)
+{
+  return lp->ll_di;
+}
+
+/// Get bv_lock from a blob_T - accessor for Rust.
+VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob)
+{
+  return blob->bv_lock;
+}
+
+/// Get v_lock from a typval_T - accessor for Rust.
+VarLockStatus nvim_tv_get_v_lock(const typval_T *tv)
+{
+  return tv->v_lock;
+}
+
+/// Set v_lock in a typval_T - accessor for Rust.
+void nvim_tv_set_v_lock(typval_T *tv, VarLockStatus lock)
+{
+  tv->v_lock = lock;
+}
+
+/// Get dv_lock from ll_tv->vval.v_dict - composite accessor for Rust.
+/// Returns 0 (VAR_UNLOCKED) if ll_tv or v_dict is NULL.
+VarLockStatus nvim_lval_get_dict_dv_lock(const lval_T *lp)
+{
+  if (lp->ll_tv == NULL || lp->ll_tv->vval.v_dict == NULL) {
+    return VAR_UNLOCKED;
+  }
+  return lp->ll_tv->vval.v_dict->dv_lock;
+}
+
+/// Get value_check_lock condition for set_var_lval - composite accessor for Rust.
+///
+/// Returns true if the lock check should skip assignment (locked).
+/// Mirrors: value_check_lock(lp->ll_newkey == NULL ? lp->ll_tv->v_lock
+///                                                 : lp->ll_tv->vval.v_dict->dv_lock, ...)
+bool nvim_lval_check_tv_lock(const lval_T *lp, const char *name)
+{
+  VarLockStatus lock = lp->ll_newkey == NULL
+                       ? lp->ll_tv->v_lock
+                       : lp->ll_tv->vval.v_dict->dv_lock;
+  return value_check_lock(lock, name, TV_CSTRING);
+}
+
+/// Direct struct copy: *dst = *src for typval_T - accessor for Rust.
+void nvim_tv_assign_direct(typval_T *dst, const typval_T *src)
+{
+  *dst = *src;
+}
+
+/// Call tv_init on a typval_T - accessor for Rust.
+void nvim_tv_init(typval_T *tv)
+{
+  tv_init(tv);
+}
+
+/// Get di_key from a dictitem_T - accessor for Rust.
+const char *nvim_di_get_key(const dictitem_T *di)
+{
+  return di->di_key;
+}
+
+/// Get v_lock constant VAR_UNLOCKED - accessor for Rust.
+int nvim_var_unlocked(void)
+{
+  return VAR_UNLOCKED;
+}
+
+/// Emit "E988: cannot modify existing variable" error via e_cannot_mod - accessor for Rust.
+void nvim_emsg_cannot_mod(void)
+{
+  emsg(_(e_cannot_mod));
+}
+
+/// Emit "E1223: letwrong" error with operator - accessor for Rust.
+void nvim_semsg_letwrong(const char *op)
+{
+  semsg(_(e_letwrong), op);
+}
+
+/// Emit "E996: Cannot lock a range" error - accessor for Rust.
+void nvim_emsg_cannot_lock_range(void)
+{
+  emsg(_("E996: Cannot lock a range"));
+}
+
+/// Emit "E996: Cannot lock a list or dict" error - accessor for Rust.
+void nvim_emsg_cannot_lock_list_or_dict(void)
+{
+  emsg(_("E996: Cannot lock a list or dict"));
+}
+
+/// Emit e_dictkey error for a key - accessor for Rust.
+void nvim_semsg_dictkey(const char *key)
+{
+  semsg(_(e_dictkey), key);
+}
+
+/// Get TV_CSTRING constant value - accessor for Rust.
+int nvim_tv_cstring_flag(void)
+{
+  return TV_CSTRING;
+}
+
+/// value_check_lock wrapper - accessor for Rust.
+bool nvim_value_check_lock(int lock, const char *name)
+{
+  return value_check_lock((VarLockStatus)lock, name, TV_CSTRING);
+}
+
+/// Get vval.v_dict from a typval_T (direct field) - accessor for Rust.
+dict_T *nvim_tv_get_v_dict(const typval_T *tv)
+{
+  return tv->vval.v_dict;
+}
+
+/// Get vval.v_list from a typval_T (direct field) - accessor for Rust.
+list_T *nvim_tv_get_v_list(const typval_T *tv)
+{
+  return tv->vval.v_list;
+}
+
+/// Allocate and initialize a zero typval_T on the heap - accessor for Rust.
+/// Replaces TV_INITIAL_VALUE macro (which initializes on the stack).
+typval_T *nvim_tv_alloc_zero(void)
+{
+  typval_T *tv = xcalloc(1, sizeof(typval_T));
+  tv->v_type = VAR_UNKNOWN;
+  return tv;
+}
+
+/// Free a heap-allocated typval_T - accessor for Rust.
+void nvim_tv_free(typval_T *tv)
+{
+  xfree(tv);
+}
+
+/// Check if di_flags indicate read-only and report error - accessor for Rust.
+bool nvim_di_check_ro(const dictitem_T *di, const char *name)
+{
+  return var_check_ro(di->di_flags, name, TV_CSTRING);
+}
+
+/// Check if di has lock set and report error - accessor for Rust.
+bool nvim_di_check_lock(const dictitem_T *di, const char *name)
+{
+  return tv_check_lock(&di->di_tv, name, TV_CSTRING);
+}
+
+/// Set lp->ll_tv to &di->di_tv - composite setter for Rust.
+void nvim_lval_set_tv_from_di(lval_T *lp, dictitem_T *di)
+{
+  lp->ll_tv = &di->di_tv;
+}
+
+/// Wrapper for tv_dict_is_watched inline function - accessor for Rust.
+bool nvim_tv_dict_is_watched(const dict_T *d)
+{
+  return tv_dict_is_watched(d);
+}
+
+
+/// Free a dictitem_T that failed to be added - accessor for Rust.
+void nvim_tv_dict_item_free(dictitem_T *di)
+{
+  xfree(di);
 }
 
 // =============================================================================

@@ -346,3 +346,322 @@ unsafe fn clear_lval_impl(lp: LvalHandle) {
 pub unsafe extern "C" fn rs_clear_lval(lp: LvalHandle) {
     clear_lval_impl(lp)
 }
+
+// =============================================================================
+// Phase 3: set_var_lval migration
+// =============================================================================
+
+extern "C" {
+    // lval_T field accessors (Phase 3)
+    fn nvim_lval_get_blob(lp: LvalHandle) -> *mut c_void; // blob_T*
+    fn nvim_lval_get_range(lp: LvalHandle) -> bool;
+    fn nvim_lval_get_empty2(lp: LvalHandle) -> bool;
+    fn nvim_lval_get_n1(lp: LvalHandle) -> c_int;
+    fn nvim_lval_get_n2(lp: LvalHandle) -> c_int;
+    fn nvim_lval_set_n2(lp: LvalHandle, n2: c_int);
+    fn nvim_lval_get_list(lp: LvalHandle) -> *mut c_void; // list_T*
+    fn nvim_lval_get_dict(lp: LvalHandle) -> *mut c_void; // dict_T*
+    fn nvim_lval_get_di(lp: LvalHandle) -> DictitemHandle;
+    fn nvim_lval_set_tv_from_di(lp: LvalHandle, di: DictitemHandle);
+
+    // Blob accessors
+    fn nvim_blob_get_bv_lock(blob: *const c_void) -> c_int;
+
+    // typval field accessors
+    fn nvim_tv_set_v_lock(tv: TypevalHandle, lock: c_int);
+    fn nvim_tv_get_v_dict(tv: TypevalHandle) -> *mut c_void; // dict_T*
+    fn nvim_tv_get_v_list(tv: TypevalHandle) -> *mut c_void; // list_T*
+    fn nvim_tv_assign_direct(dst: TypevalHandle, src: TypevalHandle);
+    fn nvim_tv_init(tv: TypevalHandle);
+    fn nvim_tv_alloc_zero() -> TypevalHandle;
+    fn nvim_tv_free(tv: TypevalHandle);
+
+    // composite lock check for the ll_tv path
+    fn nvim_lval_check_tv_lock(lp: LvalHandle, name: *const c_char) -> bool;
+
+    // dictitem_T accessors
+    fn nvim_di_get_key(di: DictitemHandle) -> *const c_char;
+    fn nvim_di_check_ro(di: DictitemHandle, name: *const c_char) -> bool;
+    fn nvim_di_check_lock(di: DictitemHandle, name: *const c_char) -> bool;
+
+    // VAR_UNLOCKED constant
+    fn nvim_var_unlocked() -> c_int;
+
+    // Error message helpers (Phase 3)
+    fn nvim_emsg_cannot_mod();
+    fn nvim_semsg_letwrong(op: *const c_char);
+    fn nvim_emsg_cannot_lock_range();
+    fn nvim_emsg_cannot_lock_list_or_dict();
+    fn nvim_semsg_dictkey(key: *const c_char);
+    fn nvim_value_check_lock(lock: c_int, name: *const c_char) -> bool;
+
+    // C functions used by set_var_lval
+    fn tv_clear(tv: TypevalHandle);
+    fn tv_copy(from: TypevalHandle, to: TypevalHandle);
+    fn tv_get_number_chk(tv: TypevalHandle, error: *mut bool) -> i64;
+    fn eval_variable(
+        name: *const c_char,
+        len: c_int,
+        rettv: TypevalHandle,
+        dip: *mut DictitemHandle,
+        verbose: bool,
+        no_autoload: bool,
+    ) -> c_int;
+    fn eexe_mod_op(tv1: TypevalHandle, tv2: TypevalHandle, op: *const c_char) -> c_int;
+    fn set_var(name: *const c_char, len: usize, tv: TypevalHandle, copy: bool);
+    fn set_var_const(
+        name: *const c_char,
+        len: usize,
+        tv: TypevalHandle,
+        copy: bool,
+        is_const: bool,
+    );
+    fn nvim_blob_get_len(blob: *const c_void) -> c_int;
+    fn tv_blob_set_range(blob: *mut c_void, n1: c_int, n2: c_int, tv: TypevalHandle) -> c_int;
+    fn tv_blob_set_append(blob: *mut c_void, idx: c_int, val: u8);
+    fn tv_list_assign_range(
+        list: *mut c_void,
+        src_list: *mut c_void,
+        n1: c_int,
+        n2: c_int,
+        empty2: bool,
+        op: *const c_char,
+        name: *const c_char,
+    );
+    fn nvim_tv_dict_is_watched(dict: *const c_void) -> bool;
+    fn tv_dict_wrong_func_name(dict: *mut c_void, tv: TypevalHandle, key: *const c_char) -> c_int;
+    fn tv_dict_item_alloc(key: *const c_char) -> DictitemHandle;
+    fn tv_dict_add(dict: *mut c_void, di: DictitemHandle) -> c_int;
+    fn tv_dict_watcher_notify(
+        dict: *mut c_void,
+        key: *const c_char,
+        newtv: TypevalHandle,
+        oldtv: TypevalHandle,
+    );
+    fn nvim_tv_dict_item_free(di: DictitemHandle);
+}
+
+/// VAR_BLOB type constant (must match C enum)
+const VAR_BLOB: c_int = 10;
+
+/// Get type from a TypevalHandle using nvim_tv_get_type.
+unsafe fn nvim_tv_get_type(tv: TypevalHandle) -> c_int {
+    // We declare this locally to avoid conflicts with eval.rs
+    extern "C" {
+        fn nvim_tv_get_type(tv: TypevalHandle) -> c_int;
+    }
+    nvim_tv_get_type(tv)
+}
+
+/// Implementation of set_var_lval.
+///
+/// Assigns `rettv` to the lvalue described by `lp`.
+///
+/// # Safety
+/// - `lp` must be a valid lval_T pointer
+/// - `endp` must point to just after the parsed name
+/// - `rettv` must be a valid typval_T pointer
+/// - `op` can be null
+unsafe fn set_var_lval_impl(
+    lp: LvalHandle,
+    endp: *mut c_char,
+    rettv: TypevalHandle,
+    copy: bool,
+    is_const: bool,
+    op: *const c_char,
+) {
+    let lp_tv = nvim_lval_get_tv(lp);
+
+    if lp_tv.is_null() {
+        // Plain variable path
+        let cc = *endp as u8;
+        *endp = 0i8; // NUL
+
+        let blob = nvim_lval_get_blob(lp);
+        if !blob.is_null() {
+            // Blob assignment
+            if !op.is_null() && *op != b'=' as c_char {
+                nvim_semsg_letwrong(op);
+                *endp = cc as c_char;
+                return;
+            }
+            let bv_lock = nvim_blob_get_bv_lock(blob);
+            if nvim_value_check_lock(bv_lock, nvim_lval_get_name(lp)) {
+                *endp = cc as c_char;
+                return;
+            }
+
+            if nvim_lval_get_range(lp) && nvim_tv_get_type(rettv) == VAR_BLOB {
+                if nvim_lval_get_empty2(lp) {
+                    nvim_lval_set_n2(lp, nvim_blob_get_len(blob) - 1);
+                }
+                if tv_blob_set_range(blob, nvim_lval_get_n1(lp), nvim_lval_get_n2(lp), rettv)
+                    == FAIL
+                {
+                    *endp = cc as c_char;
+                    return;
+                }
+            } else {
+                let mut error = false;
+                let val = tv_get_number_chk(rettv, &mut error) as i8;
+                if !error {
+                    tv_blob_set_append(blob, nvim_lval_get_n1(lp), val as u8);
+                }
+            }
+        } else if !op.is_null() && *op != b'=' as c_char {
+            // Operator assignment (+=, -=, etc.)
+            if is_const {
+                nvim_emsg_cannot_mod();
+                *endp = cc as c_char;
+                return;
+            }
+
+            let tv_tmp = nvim_tv_alloc_zero();
+            let mut di_ptr: DictitemHandle = DictitemHandle(std::ptr::null_mut());
+            if eval_variable(
+                nvim_lval_get_name(lp),
+                nvim_lval_get_name_len(lp) as c_int,
+                tv_tmp,
+                &mut di_ptr,
+                true,
+                false,
+            ) == OK
+            {
+                let can_modify = di_ptr.is_null()
+                    || (!nvim_di_check_ro(di_ptr, nvim_lval_get_name(lp))
+                        && !nvim_di_check_lock(di_ptr, nvim_lval_get_name(lp)));
+                if can_modify && eexe_mod_op(tv_tmp, rettv, op) == OK {
+                    set_var(
+                        nvim_lval_get_name(lp),
+                        nvim_lval_get_name_len(lp),
+                        tv_tmp,
+                        false,
+                    );
+                }
+                tv_clear(tv_tmp);
+            }
+            nvim_tv_free(tv_tmp);
+        } else {
+            // Simple assignment
+            set_var_const(
+                nvim_lval_get_name(lp),
+                nvim_lval_get_name_len(lp),
+                rettv,
+                copy,
+                is_const,
+            );
+        }
+        *endp = cc as c_char;
+    } else if nvim_lval_check_tv_lock(lp, nvim_lval_get_name(lp)) {
+        // Locked: skip
+    } else if nvim_lval_get_range(lp) {
+        // List range assignment
+        if is_const {
+            nvim_emsg_cannot_lock_range();
+            return;
+        }
+        tv_list_assign_range(
+            nvim_lval_get_list(lp),
+            nvim_tv_get_v_list(rettv),
+            nvim_lval_get_n1(lp),
+            nvim_lval_get_n2(lp),
+            nvim_lval_get_empty2(lp),
+            op,
+            nvim_lval_get_name(lp),
+        );
+    } else {
+        // Dict/list item assignment
+        if is_const {
+            nvim_emsg_cannot_lock_list_or_dict();
+            return;
+        }
+
+        let dict = nvim_lval_get_dict(lp);
+        let watched = nvim_tv_dict_is_watched(dict);
+        let oldtv = nvim_tv_alloc_zero();
+        let mut skip_assign = false;
+        let mut is_new_key = false;
+
+        let newkey = nvim_lval_get_newkey(lp);
+        if !newkey.is_null() {
+            // New dict key
+            is_new_key = true;
+            if !op.is_null() && *op != b'=' as c_char {
+                nvim_semsg_dictkey(newkey);
+                nvim_tv_free(oldtv);
+                return;
+            }
+            if tv_dict_wrong_func_name(nvim_tv_get_v_dict(nvim_lval_get_tv(lp)), rettv, newkey) != 0
+            {
+                nvim_tv_free(oldtv);
+                return;
+            }
+            // Add item to dict
+            let di = tv_dict_item_alloc(newkey);
+            if tv_dict_add(nvim_tv_get_v_dict(nvim_lval_get_tv(lp)), di) == FAIL {
+                nvim_tv_dict_item_free(di);
+                nvim_tv_free(oldtv);
+                return;
+            }
+            nvim_lval_set_tv_from_di(lp, di);
+        } else {
+            // Existing item
+            if watched {
+                tv_copy(nvim_lval_get_tv(lp), oldtv);
+            }
+            if !op.is_null() && *op != b'=' as c_char {
+                eexe_mod_op(nvim_lval_get_tv(lp), rettv, op);
+                // Equivalent to goto notify - skip normal assign, go to notify block
+                skip_assign = true;
+            } else {
+                tv_clear(nvim_lval_get_tv(lp));
+            }
+        }
+
+        if !skip_assign {
+            // Assign the value
+            let lp_tv2 = nvim_lval_get_tv(lp);
+            if copy {
+                tv_copy(rettv, lp_tv2);
+            } else {
+                nvim_tv_assign_direct(lp_tv2, rettv);
+                nvim_tv_set_v_lock(lp_tv2, nvim_var_unlocked());
+                nvim_tv_init(rettv);
+            }
+        }
+
+        // notify watchers
+        if watched {
+            if is_new_key || nvim_tv_get_type(oldtv) == 0 {
+                // VAR_UNKNOWN (0): new entry
+                tv_dict_watcher_notify(
+                    dict,
+                    nvim_lval_get_newkey(lp),
+                    nvim_lval_get_tv(lp),
+                    TypevalHandle::null(),
+                );
+            } else {
+                let di = nvim_lval_get_di(lp);
+                tv_dict_watcher_notify(dict, nvim_di_get_key(di), nvim_lval_get_tv(lp), oldtv);
+                tv_clear(oldtv);
+            }
+        }
+        nvim_tv_free(oldtv);
+    }
+}
+
+/// FFI export for set_var_lval.
+///
+/// # Safety
+/// See `set_var_lval_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_var_lval(
+    lp: LvalHandle,
+    endp: *mut c_char,
+    rettv: TypevalHandle,
+    copy: bool,
+    is_const: bool,
+    op: *const c_char,
+) {
+    set_var_lval_impl(lp, endp, rettv, copy, is_const, op)
+}
