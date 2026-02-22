@@ -134,179 +134,63 @@ typedef struct {
 } PreviewLines;
 
 #include "ex_cmds_shim.c.generated.h"
+
+// Rust FFI declarations
 extern int rs_win_valid(win_T *win);
 extern int rs_win_valid_any_tab(win_T *win);
 extern void rs_reset_VIsual(void);
-
-// Rust FFI declarations (window wrappers removed)
 extern void rs_check_lnums(int do_curwin);
-
-// Rust fold FFI declarations
 extern int rs_hasAnyFolding(win_T *win);
 extern void rs_foldMoveRange(win_T *wp, garray_T *gap, linenr_T line1, linenr_T line2,
                              linenr_T dest);
 extern void rs_foldUpdateAll(win_T *win);
-
 extern int rs_magic_isset(void);
 extern void rs_diff_buf_add(buf_T *buf);
 extern void rs_diff_invalidate(buf_T *buf);
 extern int rs_check_regexp_delim(int c);
 extern char *rs_skip_substitute(char *start, int delimiter);
 
-// =============================================================================
-// ExArg accessor functions for Rust (Wave 2)
-// =============================================================================
+// ExArg accessors
+int nvim_exarg_get_cmdidx(exarg_T *eap) { return (int)eap->cmdidx; }
+const char *nvim_exarg_get_arg(exarg_T *eap) { return eap->arg; }
+linenr_T nvim_exarg_get_line1(exarg_T *eap) { return eap->line1; }
+linenr_T nvim_exarg_get_line2(exarg_T *eap) { return eap->line2; }
+int nvim_exarg_get_addr_count(exarg_T *eap) { return eap->addr_count; }
+int nvim_exarg_get_forceit(exarg_T *eap) { return eap->forceit ? 1 : 0; }
+int nvim_exarg_get_flags(exarg_T *eap) { return eap->flags; }
+void nvim_exarg_set_line2(exarg_T *eap, linenr_T line2) { eap->line2 = line2; }
 
-/// Get command index from exarg_T.
-int nvim_exarg_get_cmdidx(exarg_T *eap)
-{
-  return (int)eap->cmdidx;
-}
+// Window/buffer accessors
+int nvim_curwin_get_w_p_rl(void) { return curwin->w_p_rl; }
+int nvim_curbuf_get_b_p_tw(void) { return (int)curbuf->b_p_tw; }
+int nvim_curbuf_get_b_p_wm(void) { return (int)curbuf->b_p_wm; }
+int nvim_curwin_get_view_width(void) { return curwin->w_view_width; }
+void nvim_curwin_set_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = lnum; }
+int nvim_linetabsize_str(char *s) { return linetabsize_col(0, s); }
+int nvim_is_one_window(void) { return ONE_WINDOW ? 1 : 0; }
+int64_t nvim_curwin_get_p_scr(void) { return curwin->w_p_scr; }
+int nvim_curwin_get_view_height(void) { return curwin->w_view_height; }
+void nvim_set_ex_no_reprint(int val) { ex_no_reprint = val != 0; }
+int nvim_cmdmod_has_lockmarks(void) { return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0; }
+int nvim_curbuf_get_b_p_ai(void) { return curbuf->b_p_ai; }
+void nvim_check_pos_visual(void) { check_pos(curbuf, &VIsual); }
+void nvim_transchar_nonprint_curbuf(char *buf, int c) { transchar_nonprint(curbuf, buf, c); }
 
-/// Get argument string from exarg_T.
-const char *nvim_exarg_get_arg(exarg_T *eap)
-{
-  return eap->arg;
-}
-
-/// Get line1 from exarg_T.
-linenr_T nvim_exarg_get_line1(exarg_T *eap)
-{
-  return eap->line1;
-}
-
-/// Get line2 from exarg_T.
-linenr_T nvim_exarg_get_line2(exarg_T *eap)
-{
-  return eap->line2;
-}
-
-/// Get addr_count from exarg_T.
-int nvim_exarg_get_addr_count(exarg_T *eap)
-{
-  return eap->addr_count;
-}
-
-/// Get forceit from exarg_T.
-int nvim_exarg_get_forceit(exarg_T *eap)
-{
-  return eap->forceit ? 1 : 0;
-}
-
-/// Get flags (EXFLAG_*) from exarg_T.
-int nvim_exarg_get_flags(exarg_T *eap)
-{
-  return eap->flags;
-}
-
-/// Get curwin->w_p_rl (right-to-left flag).
-int nvim_curwin_get_w_p_rl(void)
-{
-  return curwin->w_p_rl;
-}
-
-/// Get curbuf->b_p_tw (textwidth).
-int nvim_curbuf_get_b_p_tw(void)
-{
-  return (int)curbuf->b_p_tw;
-}
-
-/// Get curbuf->b_p_wm (wrapmargin).
-int nvim_curbuf_get_b_p_wm(void)
-{
-  return (int)curbuf->b_p_wm;
-}
-
-/// Get curwin->w_view_width.
-int nvim_curwin_get_view_width(void)
-{
-  return curwin->w_view_width;
-}
-
-/// Set curwin->w_cursor.lnum.
-void nvim_curwin_set_cursor_lnum(linenr_T lnum)
-{
-  curwin->w_cursor.lnum = lnum;
-}
-
-/// Wrapper for linetabsize_col(0, s) since linetabsize_str is inline.
-int nvim_linetabsize_str(char *s)
-{
-  return linetabsize_col(0, s);
-}
-
-/// Check if there is only one window (ONE_WINDOW macro).
-int nvim_is_one_window(void)
-{
-  return ONE_WINDOW ? 1 : 0;
-}
-
-/// Get curwin->w_p_scr (scroll option).
-int64_t nvim_curwin_get_p_scr(void)
-{
-  return curwin->w_p_scr;
-}
-
-/// Get curwin->w_view_height.
-int nvim_curwin_get_view_height(void)
-{
-  return curwin->w_view_height;
-}
-
-/// Set ex_no_reprint flag.
-void nvim_set_ex_no_reprint(int val)
-{
-  ex_no_reprint = val != 0;
-}
-
-/// Check if CMOD_LOCKMARKS is set in cmdmod.
-int nvim_cmdmod_has_lockmarks(void)
-{
-  return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0;
-}
-
-/// Set curbuf->b_op_start.
 void nvim_curbuf_set_op_start(linenr_T lnum, colnr_T col)
 {
   curbuf->b_op_start.lnum = lnum;
   curbuf->b_op_start.col = col;
 }
 
-/// Set curbuf->b_op_end.
 void nvim_curbuf_set_op_end(linenr_T lnum, colnr_T col)
 {
   curbuf->b_op_end.lnum = lnum;
   curbuf->b_op_end.col = col;
 }
 
-/// Call check_pos(curbuf, &VIsual).
-void nvim_check_pos_visual(void)
-{
-  check_pos(curbuf, &VIsual);
-}
-
-/// Wrapper for msg_multiline taking a C string.
 void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear)
 {
   msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear);
-}
-
-/// Wrapper for transchar_nonprint into a caller-provided buffer.
-void nvim_transchar_nonprint_curbuf(char *buf, int c)
-{
-  transchar_nonprint(curbuf, buf, c);
-}
-
-/// Get curbuf->b_p_ai (autoindent).
-int nvim_curbuf_get_b_p_ai(void)
-{
-  return curbuf->b_p_ai;
-}
-
-/// Set eap->line2.
-void nvim_exarg_set_line2(exarg_T *eap, linenr_T line2)
-{
-  eap->line2 = line2;
 }
 
 // print_line accessors
