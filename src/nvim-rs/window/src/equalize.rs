@@ -95,9 +95,6 @@ extern "C" {
         set_ch: bool,
     );
 
-    /// Call frame_new_width (C wrapper).
-    fn nvim_frame_new_width(topfrp: *mut Frame, width: c_int, leftfirst: bool, wfw: bool);
-
     /// Call redraw_all_later (C wrapper).
     fn nvim_redraw_all_later(redraw_type: c_int);
 
@@ -520,7 +517,7 @@ fn win_equal_rec_impl(
                     nvim_win_set_winrow(wp, row);
                     nvim_frame_new_height(topfr, height, false, false, false);
                     nvim_win_set_wincol(wp, col);
-                    nvim_frame_new_width(topfr, width, false, false);
+                    crate::resize::frame::frame_new_width_impl(topfr, width, false, false);
                     nvim_redraw_all_later(UPD_NOT_VALID);
                 }
             }

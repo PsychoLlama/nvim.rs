@@ -12,7 +12,7 @@
 
 use std::ffi::c_int;
 
-use crate::{Frame, WinHandle, FR_COL, FR_ROW};
+use crate::{Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
 // =============================================================================
 // External C Functions
@@ -30,6 +30,21 @@ extern "C" {
 
     /// Get p_wmw (winminwidth).
     fn nvim_get_p_wmw() -> i64;
+
+    /// Check if frame has fixed width (winfixwidth set).
+    fn rs_frame_fixed_width(frp: *const Frame) -> c_int;
+
+    /// Get minimum width of a frame.
+    fn rs_frame_minwidth(topfrp: *const Frame, next_curwin: WinHandle) -> c_int;
+
+    /// Set new width of a window.
+    fn rs_win_new_width(wp: WinHandle, width: c_int);
+
+    /// Get w_vsep_width from a window.
+    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
+
+    /// Set w_vsep_width on a window.
+    fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
 }
 
 // =============================================================================
@@ -285,6 +300,139 @@ fn get_resize_direction_impl(frp: *const Frame) -> c_int {
             0
         }
     }
+}
+
+// =============================================================================
+// frame_new_width / frame_new_height Implementations
+// =============================================================================
+
+/// Recursively set the width of a frame tree.
+///
+/// This is the Rust implementation of `frame_new_width()` from `window_shim.c`.
+///
+/// Handles:
+/// - FR_LEAF: clears `w_vsep_width` if this is the rightmost window, then calls
+///   `rs_win_new_width`
+/// - FR_COL: propagates the same width to all children, restarting if any child
+///   ends up wider
+/// - FR_ROW: distributes extra columns starting from the leftmost (or rightmost
+///   if `leftfirst` is false) non-fixed-width frame
+///
+/// # Safety
+/// `topfrp` must be non-null and point to a valid Frame.
+pub(crate) unsafe fn frame_new_width_impl(
+    topfrp: *mut Frame,
+    mut width: c_int,
+    leftfirst: bool,
+    wfw: bool,
+) {
+    let layout = (*topfrp).fr_layout;
+
+    if layout == FR_LEAF {
+        let wp = (*topfrp).fr_win;
+        // Find out if there are any windows to the right of this one.
+        let mut frp = topfrp;
+        loop {
+            let parent = (*frp).fr_parent;
+            if parent.is_null() {
+                break;
+            }
+            if (*parent).fr_layout == FR_ROW && !(*frp).fr_next.is_null() {
+                break;
+            }
+            frp = parent;
+        }
+        if (*frp).fr_parent.is_null() {
+            nvim_win_set_vsep_width(wp, 0);
+        }
+        rs_win_new_width(wp, width - nvim_win_get_vsep_width(wp));
+    } else if layout == FR_COL {
+        // All frames in this column get the same new width.
+        loop {
+            let mut frp = (*topfrp).fr_child;
+            let mut restart = false;
+            while !frp.is_null() {
+                frame_new_width_impl(frp, width, leftfirst, wfw);
+                if (*frp).fr_width > width {
+                    // Could not fit the windows, make whole column wider.
+                    width = (*frp).fr_width;
+                    restart = true;
+                    break;
+                }
+                frp = (*frp).fr_next;
+            }
+            if !restart {
+                break;
+            }
+        }
+    } else {
+        // FR_ROW: distribute width across row frames.
+        let mut frp = (*topfrp).fr_child;
+
+        if wfw {
+            // Advance past frames with 'winfixwidth' set.
+            while rs_frame_fixed_width(frp) != 0 {
+                frp = (*frp).fr_next;
+                if frp.is_null() {
+                    // No frame without wfw, give up.
+                    (*topfrp).fr_width = width;
+                    return;
+                }
+            }
+        }
+
+        if !leftfirst {
+            // Find the rightmost frame of this row.
+            while !(*frp).fr_next.is_null() {
+                frp = (*frp).fr_next;
+            }
+            if wfw {
+                // Advance back past frames with 'winfixwidth' set.
+                while rs_frame_fixed_width(frp) != 0 {
+                    frp = (*frp).fr_prev;
+                }
+            }
+        }
+
+        let mut extra_cols = width - (*topfrp).fr_width;
+        if extra_cols < 0 {
+            // Reduce frame width, rightmost (or leftmost) frame first.
+            while !frp.is_null() {
+                let w = rs_frame_minwidth(frp, WinHandle::null());
+                if (*frp).fr_width + extra_cols < w {
+                    extra_cols += (*frp).fr_width - w;
+                    frame_new_width_impl(frp, w, leftfirst, wfw);
+                } else {
+                    frame_new_width_impl(frp, (*frp).fr_width + extra_cols, leftfirst, wfw);
+                    break;
+                }
+                if leftfirst {
+                    loop {
+                        frp = (*frp).fr_next;
+                        if !(wfw && !frp.is_null() && rs_frame_fixed_width(frp) != 0) {
+                            break;
+                        }
+                    }
+                } else {
+                    loop {
+                        frp = (*frp).fr_prev;
+                        if !(wfw && !frp.is_null() && rs_frame_fixed_width(frp) != 0) {
+                            break;
+                        }
+                    }
+                }
+                // Increase "width" if we could not reduce enough frames.
+                if frp.is_null() {
+                    width -= extra_cols;
+                }
+            }
+        } else if extra_cols > 0 {
+            // Increase width of rightmost (or leftmost) frame.
+            frame_new_width_impl(frp, (*frp).fr_width + extra_cols, leftfirst, wfw);
+        }
+    }
+
+    (*topfrp).fr_width = width;
 }
 
 // =============================================================================

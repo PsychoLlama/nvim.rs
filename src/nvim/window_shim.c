@@ -163,6 +163,8 @@ extern void rs_win_setwidth(int width);
 // Height/width setters
 extern void rs_win_new_height(win_T *wp, int height);
 extern void rs_win_new_width(win_T *wp, int width);
+extern void rs_frame_new_width(frame_T *topfrp, int width, int leftfirst, int wfw);
+extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int wfh, int set_ch);
 
 // Snapshot lifecycle
 extern void rs_clear_snapshot(tabpage_T *tp, int idx);
@@ -378,7 +380,6 @@ void nvim_win_set_vsep_width(win_T *wp, int val) { wp->w_vsep_width = val; }
 void nvim_frame_set_height(frame_T *frp, int val) { frp->fr_height = val; }
 void nvim_frame_set_width(frame_T *frp, int val) { frp->fr_width = val; }
 void nvim_frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool set_ch) { frame_new_height(topfrp, height, topfirst, wfh, set_ch); }
-void nvim_frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw) { frame_new_width(topfrp, width, leftfirst, wfw); }
 void nvim_win_config_float(win_T *wp) { win_config_float(wp, wp->w_config); }
 void nvim_win_fix_scroll(bool upd_topline) { win_fix_scroll(upd_topline); }
 void nvim_redraw_all_later(int type) { redraw_all_later(type); }
@@ -2425,101 +2426,10 @@ void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool
   topfrp->fr_height = height;
 }
 
-/// Set width of a frame.  Handles recursively going through contained frames.
-/// May remove separator line for windows at the right side (for win_close()).
-///
-/// @param leftfirst  resize leftmost contained frame first.
-/// @param wfw        obey 'winfixwidth' when there is a choice;
-///                   may cause the width not to be set.
+/// Set width of a frame (thin wrapper -- implementation is in Rust).
 static void frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw)
 {
-  if (topfrp->fr_layout == FR_LEAF) {
-    // Simple case: just one window.
-    win_T *wp = topfrp->fr_win;
-    // Find out if there are any windows right of this one.
-    frame_T *frp;
-    for (frp = topfrp; frp->fr_parent != NULL; frp = frp->fr_parent) {
-      if (frp->fr_parent->fr_layout == FR_ROW && frp->fr_next != NULL) {
-        break;
-      }
-    }
-    if (frp->fr_parent == NULL) {
-      wp->w_vsep_width = 0;
-    }
-    rs_win_new_width(wp, width - wp->w_vsep_width);
-  } else if (topfrp->fr_layout == FR_COL) {
-    frame_T *frp;
-    do {
-      // All frames in this column get the same new width.
-      FOR_ALL_FRAMES(frp, topfrp->fr_child) {
-        frame_new_width(frp, width, leftfirst, wfw);
-        if (frp->fr_width > width) {
-          // Could not fit the windows, make whole column wider.
-          width = frp->fr_width;
-          break;
-        }
-      }
-    } while (frp != NULL);
-  } else {  // fr_layout == FR_ROW
-    // Complicated case: Resize a row of frames.  Resize the rightmost
-    // frame first, frames left of it when needed.
-
-    frame_T *frp = topfrp->fr_child;
-    if (wfw) {
-      // Advance past frames with one window with 'wfw' set.
-      while (rs_frame_fixed_width(frp)) {
-        frp = frp->fr_next;
-        if (frp == NULL) {
-          return;                   // no frame without 'wfw', give up
-        }
-      }
-    }
-    if (!leftfirst) {
-      // Find the rightmost frame of this row
-      while (frp->fr_next != NULL) {
-        frp = frp->fr_next;
-      }
-      if (wfw) {
-        // Advance back for frames with one window with 'wfw' set.
-        while (rs_frame_fixed_width(frp)) {
-          frp = frp->fr_prev;
-        }
-      }
-    }
-
-    int extra_cols = width - topfrp->fr_width;
-    if (extra_cols < 0) {
-      // reduce frame width, rightmost frame first
-      while (frp != NULL) {
-        int w = rs_frame_minwidth(frp, NULL);
-        if (frp->fr_width + extra_cols < w) {
-          extra_cols += frp->fr_width - w;
-          frame_new_width(frp, w, leftfirst, wfw);
-        } else {
-          frame_new_width(frp, frp->fr_width + extra_cols,
-                          leftfirst, wfw);
-          break;
-        }
-        if (leftfirst) {
-          do {
-            frp = frp->fr_next;
-          } while (wfw && frp != NULL && rs_frame_fixed_width(frp));
-        } else {
-          do {
-            frp = frp->fr_prev;
-          } while (wfw && frp != NULL && rs_frame_fixed_width(frp));
-        }
-        // Increase "width" if we could not reduce enough frames.
-        if (frp == NULL) {
-          width -= extra_cols;
-        }
-      }
-    } else if (extra_cols > 0) {
-      // increase width of rightmost frame
-      frame_new_width(frp, frp->fr_width + extra_cols, leftfirst, wfw);
-    }
-  }
-  topfrp->fr_width = width;
+  rs_frame_new_width(topfrp, width, leftfirst, wfw);
 }
 
 /// Try to close all windows except current one.

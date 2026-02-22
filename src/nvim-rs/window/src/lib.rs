@@ -1598,9 +1598,6 @@ extern "C" {
         set_ch: bool,
     );
 
-    /// Wrapper for frame_new_width().
-    fn nvim_frame_new_width(topfrp: *mut Frame, width: c_int, leftfirst: bool, wfw: bool);
-
     /// Wrapper for win_config_float().
     fn nvim_win_config_float(wp: WinHandle);
 
@@ -1872,6 +1869,7 @@ pub extern "C" fn rs_frame_setheight(curfrp: *mut Frame, height: c_int) {
 /// This is the Rust equivalent of `frame_setwidth()` in window.c.
 /// Strategy is similar to frame_setheight().
 #[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::too_many_lines)]
 fn frame_setwidth_impl(curfrp: *mut Frame, mut width: c_int) {
     if curfrp.is_null() {
         return;
@@ -1955,7 +1953,7 @@ fn frame_setwidth_impl(curfrp: *mut Frame, mut width: c_int) {
             }
 
             // set the current frame to the new width
-            nvim_frame_new_width(curfrp, width, false, false);
+            crate::resize::frame::frame_new_width_impl(curfrp, width, false, false);
 
             // First take columns from the frames right of the current frame.
             // If that is not enough, takes columns from frames left of the current frame.
@@ -1980,14 +1978,24 @@ fn frame_setwidth_impl(curfrp: *mut Frame, mut width: c_int) {
                                 room_reserved = fr.fr_width - take;
                             }
                             take -= fr.fr_width - room_reserved;
-                            nvim_frame_new_width(frp, room_reserved, false, false);
+                            crate::resize::frame::frame_new_width_impl(
+                                frp,
+                                room_reserved,
+                                false,
+                                false,
+                            );
                             room_reserved = 0;
                         }
                     } else if fr.fr_width - take < w {
                         take -= fr.fr_width - w;
-                        nvim_frame_new_width(frp, w, false, false);
+                        crate::resize::frame::frame_new_width_impl(frp, w, false, false);
                     } else {
-                        nvim_frame_new_width(frp, fr.fr_width - take, false, false);
+                        crate::resize::frame::frame_new_width_impl(
+                            frp,
+                            fr.fr_width - take,
+                            false,
+                            false,
+                        );
                         take = 0;
                     }
                     frp = if run == 0 { fr.fr_next } else { fr.fr_prev };
@@ -2303,7 +2311,7 @@ fn win_drag_vsep_line_impl(dragwin: WinHandle, mut offset: c_int) {
         }
 
         // grow frame fr by offset lines
-        nvim_frame_new_width(fr, (*fr).fr_width + offset, left, false);
+        crate::resize::frame::frame_new_width_impl(fr, (*fr).fr_width + offset, left, false);
 
         // shrink other frames: current and at the left or at the right
         let shrink_fr = if left {
@@ -2318,9 +2326,14 @@ fn win_drag_vsep_line_impl(dragwin: WinHandle, mut offset: c_int) {
             let n = frame_minwidth_impl(frp, WinHandle::null());
             if (*frp).fr_width - remaining <= n {
                 remaining -= (*frp).fr_width - n;
-                nvim_frame_new_width(frp, n, !left, false);
+                crate::resize::frame::frame_new_width_impl(frp, n, !left, false);
             } else {
-                nvim_frame_new_width(frp, (*frp).fr_width - remaining, !left, false);
+                crate::resize::frame::frame_new_width_impl(
+                    frp,
+                    (*frp).fr_width - remaining,
+                    !left,
+                    false,
+                );
                 break;
             }
             frp = if left { (*frp).fr_prev } else { (*frp).fr_next };
@@ -2353,7 +2366,7 @@ pub extern "C" fn rs_frame_new_height(
 }
 
 /// FFI wrapper for `frame_new_width`.
-/// Delegates to the C implementation which handles complex logic.
+/// Calls the Rust implementation directly.
 #[no_mangle]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn rs_frame_new_width(
@@ -2362,8 +2375,11 @@ pub extern "C" fn rs_frame_new_width(
     leftfirst: c_int,
     wfw: c_int,
 ) {
-    // SAFETY: nvim_frame_new_width is a C function that handles the pointer
-    unsafe { nvim_frame_new_width(topfrp, width, leftfirst != 0, wfw != 0) }
+    if topfrp.is_null() {
+        return;
+    }
+    // SAFETY: topfrp is non-null and points to a valid Frame.
+    unsafe { crate::resize::frame::frame_new_width_impl(topfrp, width, leftfirst != 0, wfw != 0) }
 }
 
 // ============================================================================
