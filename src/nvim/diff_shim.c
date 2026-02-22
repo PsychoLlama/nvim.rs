@@ -2054,7 +2054,6 @@ void nvim_diff_invalidate_botline_win(win_T *wp) { invalidate_botline(wp); }
 void nvim_diff_changed_line_abv_curs_win(win_T *wp) { changed_line_abv_curs_win(wp); }
 void nvim_diff_check_topfill(win_T *wp, bool down) { check_topfill(wp, down); }
 void nvim_diff_setpcmark(void) { setpcmark(); }
-void nvim_diff_ex_diffupdate(void) { rs_diff_ex_diffupdate(NULL); }
 void nvim_diff_run_linematch(diff_T *dp) { run_linematch_algorithm(dp); }
 bool nvim_diffblock_get_has_changes(diff_T *dp) { if (dp == NULL) { return false; } return dp->has_changes; }
 void nvim_diffblock_set_has_changes(diff_T *dp, bool val) { if (dp != NULL) { dp->has_changes = val; } }

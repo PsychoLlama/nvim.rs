@@ -1866,7 +1866,6 @@ extern "C" {
     fn nvim_diff_changed_line_abv_curs_win(wp: WinHandle);
     fn nvim_diff_check_topfill(wp: WinHandle, down: bool);
     fn nvim_diff_setpcmark();
-    fn nvim_diff_ex_diffupdate();
     fn nvim_diff_run_linematch(dp: DiffBlockHandle);
 }
 
@@ -2558,7 +2557,7 @@ pub unsafe extern "C" fn rs_diff_check_with_linestatus(
 
     let tp = nvim_get_curtab();
     if nvim_tabpage_is_diff_invalid(tp) {
-        nvim_diff_ex_diffupdate();
+        rs_diff_ex_diffupdate(ExargHandle(std::ptr::null()));
     }
 
     let first_diff = nvim_tabpage_get_first_diff(tp);
@@ -2699,7 +2698,7 @@ pub unsafe extern "C" fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandl
     }
 
     if nvim_tabpage_is_diff_invalid(tp) {
-        nvim_diff_ex_diffupdate();
+        rs_diff_ex_diffupdate(ExargHandle(std::ptr::null()));
     }
 
     let lnum = nvim_win_get_topline(fromwin);
@@ -2786,7 +2785,7 @@ pub unsafe extern "C" fn rs_diff_infold(wp: WinHandle, lnum: LinenrT) -> bool {
     }
 
     if nvim_tabpage_is_diff_invalid(tp) {
-        nvim_diff_ex_diffupdate();
+        rs_diff_ex_diffupdate(ExargHandle(std::ptr::null()));
     }
 
     let first_diff = nvim_tabpage_get_first_diff(tp);
@@ -2824,7 +2823,7 @@ pub unsafe extern "C" fn rs_diff_move_to(dir: c_int, count: c_int) -> c_int {
     }
 
     if nvim_tabpage_is_diff_invalid(tp) {
-        nvim_diff_ex_diffupdate();
+        rs_diff_ex_diffupdate(ExargHandle(std::ptr::null()));
     }
 
     if nvim_tabpage_get_first_diff(tp).is_null() {
@@ -2892,7 +2891,7 @@ pub unsafe extern "C" fn rs_diff_get_corresponding_line_int(
     }
 
     if nvim_tabpage_is_diff_invalid(tp) {
-        nvim_diff_ex_diffupdate();
+        rs_diff_ex_diffupdate(ExargHandle(std::ptr::null()));
     }
 
     if nvim_tabpage_get_first_diff(tp).is_null() {
@@ -2961,7 +2960,7 @@ pub unsafe extern "C" fn rs_diff_lnum_win(lnum: LinenrT, wp: WinHandle) -> Linen
     }
 
     if nvim_tabpage_is_diff_invalid(tp) {
-        nvim_diff_ex_diffupdate();
+        rs_diff_ex_diffupdate(ExargHandle(std::ptr::null()));
     }
 
     // Find the diff block that includes lnum
