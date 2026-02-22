@@ -105,6 +105,7 @@ extern "C" {
     fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
     fn nvim_oap_set_op_type(oap: OapHandle, val: c_int);
     fn nvim_oap_set_regname(oap: OapHandle, val: c_int);
+    fn nvim_oap_get_regname_ptr(oap: OapHandle) -> c_int;
     fn nvim_oap_set_motion_force(oap: OapHandle, val: c_int);
     fn nvim_oap_set_use_reg_one(oap: OapHandle, val: bool);
 
@@ -215,7 +216,6 @@ extern "C" {
     fn rs_clear_showcmd();
 
     // Wave 2 Phase 2: Redo/count/handler accessors
-    fn nvim_oap_get_regname_ptr(oap: OapHandle) -> c_int;
     fn nvim_cap_get_nchar_len(cap: CapHandle) -> c_int;
     fn nvim_cap_append_nchar_composing_to_redobuff(cap: CapHandle);
     fn nvim_set_vcount_call(count: i64, count1: i64, set_prevcount: bool);
@@ -1328,7 +1328,30 @@ extern "C" {
     fn nvim_get_expr_register() -> c_int;
     fn nvim_valid_yank_reg(regname: c_int, writing: bool) -> bool;
     fn nvim_set_reg_var(regname: c_int);
-    fn nvim_nv_put_opt(cap: CapHandle, fix_indent: bool);
+    // nv_put_opt C accessors
+    fn nvim_put_check_op_type(cap: CapHandle) -> bool;
+    fn nvim_put_check_prompt(cap: CapHandle) -> c_int;
+    fn nvim_put_get_save_fen() -> c_int;
+    fn nvim_get_cb_flags() -> c_int;
+    fn nvim_put_copy_register(regname: c_int) -> *mut std::ffi::c_void;
+    fn nvim_put_visual_delete(
+        cap: CapHandle,
+        keep_registers: bool,
+        regname: c_int,
+        empty: *mut bool,
+    );
+    fn nvim_put_visual_flags(flags: c_int, dir: *mut c_int) -> c_int;
+    fn nvim_put_do_put(
+        regname: c_int,
+        savereg: *mut std::ffi::c_void,
+        dir: c_int,
+        count: c_int,
+        flags: c_int,
+    );
+    fn nvim_put_free_register(savereg: *mut std::ffi::c_void);
+    fn nvim_put_was_visual_cleanup(save_fen: bool);
+    fn nvim_put_delete_empty_line();
+    fn nvim_auto_format_call();
 
     // Visual mode functions
     fn nvim_nv_visual_impl(cap: CapHandle);
@@ -1820,7 +1843,111 @@ pub unsafe extern "C" fn rs_nv_regname(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_put(cap: CapHandle) {
-    nvim_nv_put_opt(cap, false);
+    nv_put_opt_impl(cap, false);
+}
+
+// PUT_* flag constants for do_put()
+const PUT_FIXINDENT: c_int = 1;
+const PUT_CURSEND: c_int = 2;
+const PUT_BLOCK_INNER: c_int = 64;
+
+// Clipboard flag constants
+const CB_FLAG_UNNAMED: c_int = 0x01;
+const CB_FLAG_UNNAMEDPLUS: c_int = 0x02;
+
+/// Implementation of nv_put_opt - paste with optional indent fixing.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[allow(clippy::cast_lossless)]
+unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
+    let oap = nvim_cap_get_oap(cap);
+
+    // Check if there's a pending operator (e.g., "dp" for :diffput)
+    if nvim_put_check_op_type(cap) {
+        return;
+    }
+
+    // Check prompt buffer restrictions
+    if nvim_put_check_prompt(cap) != 0 {
+        return;
+    }
+
+    let save_fen = nvim_put_get_save_fen() != 0;
+    let mut savereg: *mut std::ffi::c_void = std::ptr::null_mut();
+    let mut empty = false;
+    let mut was_visual = false;
+
+    // Determine direction and flags
+    let mut dir;
+    let mut flags: c_int = 0;
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let nchar = nvim_cap_get_nchar(cap);
+
+    if fix_indent {
+        dir = if cmdchar == b']' as c_int && nchar == b'p' as c_int {
+            FORWARD
+        } else {
+            BACKWARD
+        };
+        flags |= PUT_FIXINDENT;
+    } else {
+        dir = if cmdchar == b'P' as c_int
+            || ((cmdchar == b'g' as c_int || cmdchar == b'z' as c_int) && nchar == b'P' as c_int)
+        {
+            BACKWARD
+        } else {
+            FORWARD
+        };
+    }
+
+    rs_prep_redo_cmd(cap);
+
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    if cmdchar == b'g' as c_int {
+        flags |= PUT_CURSEND;
+    } else if cmdchar == b'z' as c_int {
+        flags |= PUT_BLOCK_INNER;
+    }
+
+    if nvim_get_VIsual_active() != 0 {
+        was_visual = true;
+        let regname = nvim_oap_get_regname_ptr(oap);
+        let keep_registers = nvim_cap_get_cmdchar(cap) == b'P' as c_int;
+        let clipoverwrite = (regname == b'+' as c_int || regname == b'*' as c_int)
+            && (nvim_get_cb_flags() & (CB_FLAG_UNNAMED | CB_FLAG_UNNAMEDPLUS)) != 0;
+        if regname == 0
+            || regname == b'"' as c_int
+            || clipoverwrite
+            || nvim_ascii_isdigit(regname)
+            || regname == b'-' as c_int
+        {
+            savereg = nvim_put_copy_register(regname);
+        }
+
+        // Do the visual delete
+        nvim_put_visual_delete(cap, keep_registers, regname, &raw mut empty);
+
+        // Adjust flags for visual mode
+        flags = nvim_put_visual_flags(flags, &raw mut dir);
+    }
+
+    let regname = nvim_oap_get_regname_ptr(oap);
+    let count1 = nvim_cap_get_count1(cap);
+    nvim_put_do_put(regname, savereg, dir, count1, flags);
+
+    // Free saved register
+    nvim_put_free_register(savereg);
+
+    if was_visual {
+        nvim_put_was_visual_cleanup(save_fen);
+    }
+
+    // Delete empty line left by do_put() when all lines were deleted
+    if empty {
+        nvim_put_delete_empty_line();
+    }
+    nvim_auto_format_call();
 }
 
 // =============================================================================
@@ -2201,7 +2328,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
         }
     } else if nchar == b'p' as c_int || nchar == b'P' as c_int {
         // "[p", "[P", "]P" and "]p": put with indent adjustment
-        nvim_nv_put_opt(cap, true);
+        nv_put_opt_impl(cap, true);
     } else if nchar == b'\'' as c_int || nchar == b'`' as c_int {
         // "['", "[`", "]'" and "]`": jump to next mark
         nvim_bracket_mark_jump(cap);

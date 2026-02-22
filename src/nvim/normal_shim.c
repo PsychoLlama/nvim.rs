@@ -976,7 +976,112 @@ bool nvim_valid_yank_reg(int regname, bool writing) { return valid_yank_reg(regn
 
 void nvim_set_reg_var(int regname) { set_reg_var(regname); }
 
-void nvim_nv_put_opt(cmdarg_T *cap, bool fix_indent) { nv_put_opt(cap, fix_indent); }
+// nv_put_opt C accessors for Rust FFI
+// Returns true if the function should return early (op_type handling done in C)
+bool nvim_put_check_op_type(cmdarg_T *cap)
+{
+  if (cap->oap->op_type != OP_NOP) {
+    if (cap->oap->op_type == OP_DELETE && cap->cmdchar == 'p') {
+      rs_clearop(cap->oap);
+      assert(cap->opcount >= 0);
+      nv_diffgetput(true, (size_t)cap->opcount);
+    } else {
+      rs_clearopbeep(cap->oap);
+    }
+    return true;
+  }
+  return false;
+}
+// Returns true if prompt check handled the case (and we should return early on false result)
+int nvim_put_check_prompt(cmdarg_T *cap)
+{
+  if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
+    if (curwin->w_cursor.lnum == curbuf->b_prompt_start.mark.lnum) {
+      curwin->w_cursor.col = (int)strlen(prompt_text());
+      cap->cmdchar = 'P';
+      return 0; // continue
+    } else {
+      rs_clearopbeep(cap->oap);
+      return 1; // early return
+    }
+  }
+  return 0; // continue
+}
+int nvim_put_get_save_fen(void) { return curwin->w_p_fen; }
+void nvim_put_set_fen(bool val) { curwin->w_p_fen = val; }
+int nvim_get_cb_flags(void) { return cb_flags; }
+void *nvim_put_copy_register(int regname) { return copy_register(regname); }
+void nvim_put_visual_delete(cmdarg_T *cap, bool keep_registers, int regname, bool *empty)
+{
+  // Temporarily disable folding
+  curwin->w_p_fen = false;
+
+  if (!VIsual_active || VIsual_mode == 'V' || regname != '.') {
+    cap->cmdchar = 'd';
+    cap->nchar = NUL;
+    cap->oap->regname = keep_registers ? '_' : NUL;
+    msg_silent++;
+    rs_nv_operator(cap);
+    do_pending_operator(cap, 0, false);
+    *empty = (curbuf->b_ml.ml_flags & ML_EMPTY);
+    msg_silent--;
+    cap->oap->regname = regname;
+  }
+}
+int nvim_put_visual_flags(int flags, int *dir)
+{
+  if (VIsual_mode == 'V') {
+    flags |= PUT_LINE;
+  } else if (VIsual_mode == 'v') {
+    flags |= PUT_LINE_SPLIT;
+  }
+  if (VIsual_mode == Ctrl_V && *dir == FORWARD) {
+    flags |= PUT_LINE_FORWARD;
+  }
+  *dir = BACKWARD;
+  if ((VIsual_mode != 'V'
+       && curwin->w_cursor.col < curbuf->b_op_start.col)
+      || (VIsual_mode == 'V'
+          && curwin->w_cursor.lnum < curbuf->b_op_start.lnum)) {
+    *dir = FORWARD;
+  }
+  VIsual_active = true;
+  return flags;
+}
+void nvim_put_do_put(int regname, void *savereg, int dir, int count, int flags)
+{
+  do_put(regname, (yankreg_T *)savereg, dir, count, flags);
+}
+void nvim_put_free_register(void *savereg)
+{
+  if (savereg != NULL) {
+    free_register((yankreg_T *)savereg);
+    xfree(savereg);
+  }
+}
+void nvim_put_was_visual_cleanup(bool save_fen)
+{
+  if (save_fen) {
+    curwin->w_p_fen = true;
+  }
+  curbuf->b_visual.vi_start = curbuf->b_op_start;
+  curbuf->b_visual.vi_end = curbuf->b_op_end;
+  if (*p_sel == 'e') {
+    inc(&curbuf->b_visual.vi_end);
+  }
+}
+void nvim_put_delete_empty_line(void)
+{
+  if (*ml_get(curbuf->b_ml.ml_line_count) == NUL) {
+    ml_delete_flags(curbuf->b_ml.ml_line_count, ML_DEL_MESSAGE);
+    deleted_lines(curbuf->b_ml.ml_line_count + 1, 1);
+    if (curwin->w_cursor.lnum > curbuf->b_ml.ml_line_count) {
+      curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
+      coladvance(curwin, MAXCOL);
+    }
+  }
+}
+void nvim_auto_format_call(void) { auto_format(false, true); }
 
 // =============================================================================
 // Visual mode accessors for Rust FFI
@@ -5089,159 +5194,6 @@ static void nv_join_impl(cmdarg_T *cap)
   rs_prep_redo(cap->oap->regname, cap->count0,
             NUL, cap->cmdchar, NUL, NUL, cap->nchar);
   do_join((size_t)cap->count0, cap->nchar == NUL, true, true, true);
-}
-
-/// "P", "gP", "p" and "gp" commands.
-///
-/// @param fix_indent  true for "[p", "[P", "]p" and "]P".
-static void nv_put_opt(cmdarg_T *cap, bool fix_indent)
-{
-  yankreg_T *savereg = NULL;
-  bool empty = false;
-  bool was_visual = false;
-  int dir;
-  int flags = 0;
-  const int save_fen = curwin->w_p_fen;
-
-  if (cap->oap->op_type != OP_NOP) {
-    // "dp" is ":diffput"
-    if (cap->oap->op_type == OP_DELETE && cap->cmdchar == 'p') {
-      rs_clearop(cap->oap);
-      assert(cap->opcount >= 0);
-      nv_diffgetput(true, (size_t)cap->opcount);
-    } else {
-      rs_clearopbeep(cap->oap);
-    }
-    return;
-  }
-
-  if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
-    if (curwin->w_cursor.lnum == curbuf->b_prompt_start.mark.lnum) {
-      curwin->w_cursor.col = (int)strlen(prompt_text());
-      // Since we've shifted the cursor to the first editable char. We want to
-      // paste before that.
-      cap->cmdchar = 'P';
-    } else {
-      rs_clearopbeep(cap->oap);
-      return;
-    }
-  }
-
-  if (fix_indent) {
-    dir = (cap->cmdchar == ']' && cap->nchar == 'p')
-          ? FORWARD : BACKWARD;
-    flags |= PUT_FIXINDENT;
-  } else {
-    dir = (cap->cmdchar == 'P'
-           || ((cap->cmdchar == 'g' || cap->cmdchar == 'z')
-               && cap->nchar == 'P')) ? BACKWARD : FORWARD;
-  }
-  rs_prep_redo_cmd(cap);
-  if (cap->cmdchar == 'g') {
-    flags |= PUT_CURSEND;
-  } else if (cap->cmdchar == 'z') {
-    flags |= PUT_BLOCK_INNER;
-  }
-
-  if (VIsual_active) {
-    // Putting in Visual mode: The put text replaces the selected
-    // text.  First delete the selected text, then put the new text.
-    // Need to save and restore the registers that the delete
-    // overwrites if the old contents is being put.
-    was_visual = true;
-    int regname = cap->oap->regname;
-    bool keep_registers = cap->cmdchar == 'P';
-    // '+' and '*' could be the same selection
-    bool clipoverwrite = (regname == '+' || regname == '*')
-                         && (cb_flags & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus));
-    if (regname == 0 || regname == '"' || clipoverwrite
-        || ascii_isdigit(regname) || regname == '-') {
-      // The delete might overwrite the register we want to put, save it first
-      savereg = copy_register(regname);
-    }
-
-    // Temporarily disable folding, as deleting a fold marker may cause
-    // the cursor to be included in a fold.
-    curwin->w_p_fen = false;
-
-    // To place the cursor correctly after a blockwise put, and to leave the
-    // text in the correct position when putting over a selection with
-    // 'virtualedit' and past the end of the line, we use the 'c' operator in
-    // do_put(), which requires the visual selection to still be active.
-    if (!VIsual_active || VIsual_mode == 'V' || regname != '.') {
-      // Now delete the selected text. Avoid messages here.
-      cap->cmdchar = 'd';
-      cap->nchar = NUL;
-      cap->oap->regname = keep_registers ? '_' : NUL;
-      msg_silent++;
-      rs_nv_operator(cap);
-      do_pending_operator(cap, 0, false);
-      empty = (curbuf->b_ml.ml_flags & ML_EMPTY);
-      msg_silent--;
-
-      // delete PUT_LINE_BACKWARD;
-      cap->oap->regname = regname;
-    }
-
-    // When deleted a linewise Visual area, put the register as
-    // lines to avoid it joined with the next line.  When deletion was
-    // charwise, split a line when putting lines.
-    if (VIsual_mode == 'V') {
-      flags |= PUT_LINE;
-    } else if (VIsual_mode == 'v') {
-      flags |= PUT_LINE_SPLIT;
-    }
-    if (VIsual_mode == Ctrl_V && dir == FORWARD) {
-      flags |= PUT_LINE_FORWARD;
-    }
-    dir = BACKWARD;
-    if ((VIsual_mode != 'V'
-         && curwin->w_cursor.col < curbuf->b_op_start.col)
-        || (VIsual_mode == 'V'
-            && curwin->w_cursor.lnum < curbuf->b_op_start.lnum)) {
-      // cursor is at the end of the line or end of file, put
-      // forward.
-      dir = FORWARD;
-    }
-    // May have been reset in do_put().
-    VIsual_active = true;
-  }
-  do_put(cap->oap->regname, savereg, dir, cap->count1, flags);
-
-  // If a register was saved, free it
-  if (savereg != NULL) {
-    free_register(savereg);
-    xfree(savereg);
-  }
-
-  if (was_visual) {
-    if (save_fen) {
-      curwin->w_p_fen = true;
-    }
-    // What to reselect with "gv"?  Selecting the just put text seems to
-    // be the most useful, since the original text was removed.
-    curbuf->b_visual.vi_start = curbuf->b_op_start;
-    curbuf->b_visual.vi_end = curbuf->b_op_end;
-    // need to adjust cursor position
-    if (*p_sel == 'e') {
-      inc(&curbuf->b_visual.vi_end);
-    }
-  }
-
-  // When all lines were selected and deleted do_put() leaves an empty
-  // line that needs to be deleted now.
-  if (empty && *ml_get(curbuf->b_ml.ml_line_count) == NUL) {
-    ml_delete_flags(curbuf->b_ml.ml_line_count, ML_DEL_MESSAGE);
-    deleted_lines(curbuf->b_ml.ml_line_count + 1, 1);
-
-    // If the cursor was in that line, move it to the end of the last
-    // line.
-    if (curwin->w_cursor.lnum > curbuf->b_ml.ml_line_count) {
-      curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-      coladvance(curwin, MAXCOL);
-    }
-  }
-  auto_format(false, true);
 }
 
 /// "o" and "O" commands (implementation).
