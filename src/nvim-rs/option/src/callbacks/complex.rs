@@ -914,17 +914,10 @@ pub unsafe extern "C" fn rs_did_set_autochdir(_args: *mut c_void) -> CallbackRes
 // Shellslash Option Callback (Windows-specific)
 // =============================================================================
 
-extern "C" {
-    fn invalidate_fname_path();
-}
-
 /// Callback for 'shellslash' option.
-/// When 'shellslash' changes, invalidate filename paths.
+/// On Unix this is a no-op; on Windows it would invalidate filename paths.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_shellslash() -> CallbackResult {
-    // This is only meaningful on Windows, but we still need to
-    // invalidate paths when it changes
-    invalidate_fname_path();
     callback_ok()
 }
 

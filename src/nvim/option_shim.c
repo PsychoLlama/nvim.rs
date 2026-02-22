@@ -139,7 +139,7 @@ _Static_assert(NO_SCREEN == 2, "NO_SCREEN mismatch with Rust NO_SCREEN constant"
 _Static_assert(Ctrl_C == 3, "Ctrl_C mismatch with Rust CTRL_C constant");
 _Static_assert(K_KENTER == -16715, "K_KENTER mismatch with Rust K_KENTER constant");
 
-// Did-set callbacks (from Rust callbacks)
+// Rust FFI callback declarations (referenced by options.generated.h)
 extern const char *rs_did_set_hlsearch(optset_T *args);
 extern const char *rs_did_set_ignorecase(optset_T *args);
 extern const char *rs_did_set_title_icon(optset_T *args);
@@ -182,7 +182,7 @@ extern int rs_optval_equal(OptVal o1, OptVal o2);
 extern void rs_free_tagfunc_option(void);
 extern void rs_set_buflocal_tfu_callback(void *buf);
 
-// Rust FFI declarations (window wrappers removed)
+// Rust FFI declarations (window/layout module)
 extern int rs_global_stl_height(void);
 extern void rs_last_status(int morewin);
 extern int rs_min_rows(tabpage_T *tp);
@@ -360,11 +360,6 @@ int nvim_callback_get_no_hlsearch(void) { return no_hlsearch; }
 
 // State setters for callbacks
 void nvim_callback_set_need_maketitle(int value) { need_maketitle = value != 0; }
-void nvim_callback_set_redraw_tabline(int value) { redraw_tabline = value != 0; }
-
-// =============================================================================
-// Accessor functions for Rust index module (Phase 163)
-// =============================================================================
 
 // Window diff accessor
 int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
@@ -372,10 +367,6 @@ int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
 // Known option index accessors
 OptIndex nvim_get_opt_idx_foldmethod(void) { return kOptFoldmethod; }
 OptIndex nvim_get_opt_idx_wrap(void) { return kOptWrap; }
-
-// =============================================================================
-// Accessor functions for Rust value module (Phase 164)
-// =============================================================================
 
 // Full screen state (option module specific)
 int nvim_option_get_full_screen(void) { return full_screen; }
@@ -392,15 +383,6 @@ OptInt nvim_option_get_p_wh(void) { return p_wh; }
 OptInt nvim_option_get_p_wmw(void) { return p_wmw; }
 OptInt nvim_option_get_p_wiw(void) { return p_wiw; }
 
-// Phase 165: Core set operations accessors
-// Option variable pointer accessors
-const char *nvim_option_get_p_mouse(void) { return (const char *)p_mouse; }
-const char *nvim_option_get_p_flp(void) { return (const char *)p_flp; }
-const char *nvim_option_get_p_wbr(void) { return (const char *)p_wbr; }
-
-// Buffer variable pointer accessors
-const char *nvim_buf_get_p_flp(buf_T *buf) { return buf ? (const char *)buf->b_p_flp : NULL; }
-
 // Window variable pointer accessors
 const char *nvim_win_get_p_wbr(win_T *win) { return win ? (const char *)win->w_p_wbr : NULL; }
 
@@ -413,7 +395,7 @@ void nvim_win_set_briopt_sbr(win_T *win, int val) { if (win) { win->w_briopt_sbr
 void nvim_win_set_briopt_list(win_T *win, int val) { if (win) { win->w_briopt_list = val; } }
 void nvim_win_set_briopt_vcol(win_T *win, int val) { if (win) { win->w_briopt_vcol = val; } }
 
-// Phase 166: Display callback accessors
+// Display callback accessors
 int nvim_callback_get_full_screen(void) { return full_screen; }
 OptInt nvim_callback_get_p_ch(void) { return p_ch; }
 void nvim_callback_set_p_ch(OptInt value) { p_ch = value; }
@@ -431,19 +413,17 @@ void nvim_option_win_set_nrwidth(win_T *win, int value) { if (win) win->w_nrwidt
 int nvim_option_win_get_sms(win_T *win) { return win ? win->w_p_sms : 0; }
 void nvim_option_win_set_skipcol(win_T *win, int value) { if (win) win->w_skipcol = value; }
 
-// Phase 167: Behavior callback accessors
+// Behavior callback accessors
 OptInt nvim_callback_get_p_uc(void) { return p_uc; }
 int nvim_callback_get_p_ea(void) { return p_ea; }
 int nvim_callback_is_one_window(void) { return ONE_WINDOW; }
 int nvim_callback_is_curbuf_help(void) { return curbuf->b_help; }
 int nvim_callback_get_curwin_height(void) { return curwin->w_height; }
 OptInt nvim_callback_get_p_hh(void) { return p_hh; }
-win_T *nvim_callback_get_curwin(void) { return curwin; }
 
 // Buffer accessors for behavior callbacks
 int nvim_buf_get_p_swf(buf_T *buf) { return buf ? buf->b_p_swf : 0; }
 int nvim_buf_get_p_udf(buf_T *buf) { return buf ? buf->b_p_udf : 0; }
-int nvim_callback_get_p_udf(void) { return p_udf; }
 
 // Colorcolumn check wrapper
 void check_colorcolumn_win(win_T *win) { check_colorcolumn(NULL, win); }
@@ -455,17 +435,17 @@ void nvim_callback_for_all_tab_windows(void (*callback)(win_T *)) {
   }
 }
 
-// Phase 2 callback accessors: langnoremap/langremap toggle
+// Langnoremap/langremap toggle accessors
 int nvim_callback_get_p_lnr(void) { return p_lnr; }
 int nvim_callback_get_p_lrm(void) { return p_lrm; }
 void nvim_callback_set_p_lnr(int value) { p_lnr = value; }
 void nvim_callback_set_p_lrm(int value) { p_lrm = value; }
 
-// Phase 2 callback accessors: pumblend
+// Pumblend accessors
 OptInt nvim_callback_get_p_pb(void) { return p_pb; }
 void nvim_callback_set_pum_grid_blending(int value) { pum_grid.blending = (value != 0); }
 
-// Phase 2 callback accessors: winblend
+// Winblend accessors
 void nvim_callback_win_clamp_winbl(win_T *win) {
   if (win) {
     if (win->w_p_winbl > 100) win->w_p_winbl = 100;
@@ -476,12 +456,12 @@ void nvim_callback_win_set_hl_needs_update(win_T *win, int value) {
   if (win) win->w_hl_needs_update = (value != 0);
 }
 
-// Phase 4 callback accessors: scrollbind
+// Scrollbind accessor
 void nvim_callback_win_set_scbind_pos(win_T *win, int value) {
   if (win) win->w_scbind_pos = value;
 }
 
-// Phase 4 callback accessors: e_invarg error message
+// Error message accessor
 const char *nvim_callback_get_e_invarg(void) { return e_invarg; }
 
 // =============================================================================
@@ -502,19 +482,13 @@ void nvim_set_silent_mode(int val) { silent_mode = val != 0; }
 void nvim_set_info_message(int val) { info_message = val != 0; }
 
 // Global option accessors for Rust callbacks
-int nvim_get_p_acd(void) { return p_acd; }
 const char *nvim_get_p_path(void) { return p_path; }
 const char *nvim_get_p_cdpath(void) { return p_cdpath; }
-int nvim_get_p_wc(void) { return (int)p_wc; }
-void nvim_set_p_wc(int val) { p_wc = val; }
 OptInt nvim_get_p_window(void) { return p_window; }
 void nvim_set_p_window(OptInt val) { p_window = val; }
 void nvim_set_p_arshape(int val) { p_arshape = val != 0; }
 const char *nvim_get_p_enc(void) { return (const char *)p_enc; }
 void nvim_set_p_deco(int val) { p_deco = val != 0; }
-
-// Stub for invalidate_fname_path (Windows-only, no-op on Unix)
-void invalidate_fname_path(void) {}
 
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
