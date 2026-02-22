@@ -3,6 +3,9 @@
 //! This module implements:
 //! - `rs_set_ctrl_x_mode`: validates a key after CTRL-X and sets the completion mode
 //! - `rs_may_advance_cpt_index`: checks if the 'complete' option index can advance
+//! - `rs_ins_compl_prep`: prepares for or stops insert-mode completion
+//! - `rs_ins_compl_stop`: finalizes completion, handles cleanup and redo
+//! - `rs_ins_compl_cancel`: thin wrapper around rs_ins_compl_stop
 
 #![allow(clippy::doc_markdown)]
 #![allow(dead_code)]
@@ -28,6 +31,8 @@ const CTRL_X_CMDLINE: c_int = 11;
 const CTRL_X_FUNCTION: c_int = 12;
 const CTRL_X_OMNI: c_int = 13;
 const CTRL_X_SPELL: c_int = 14;
+const CTRL_X_LOCAL_MSG: c_int = 15; // only used in ctrl_x_msgs / ins_compl_prep
+const CTRL_X_FINISHED: c_int = 8;
 const CTRL_X_EVAL: c_int = 16;
 const CTRL_X_CMDLINE_CTRL_X: c_int = 17;
 const CTRL_X_BUFNAMES: c_int = 18;
@@ -74,15 +79,44 @@ const fn termcap2key(a: c_int, b: c_int) -> c_int {
 }
 
 const KS_EXTRA: c_int = 253;
+const KS_SELECT: c_int = 245;
+const KE_FILLER: c_int = b'X' as c_int; // 88
+
+const KE_MOUSEDOWN: c_int = 75;
+const KE_MOUSEUP: c_int = 76;
+const KE_MOUSELEFT: c_int = 77;
+const KE_MOUSERIGHT: c_int = 78;
+const KE_MOUSEMOVE: c_int = 100;
+
+const K_SELECT: c_int = termcap2key(KS_SELECT, KE_FILLER);
+const K_MOUSEDOWN: c_int = termcap2key(KS_EXTRA, KE_MOUSEDOWN);
+const K_MOUSEUP: c_int = termcap2key(KS_EXTRA, KE_MOUSEUP);
+const K_MOUSELEFT: c_int = termcap2key(KS_EXTRA, KE_MOUSELEFT);
+const K_MOUSERIGHT: c_int = termcap2key(KS_EXTRA, KE_MOUSERIGHT);
+const K_MOUSEMOVE: c_int = termcap2key(KS_EXTRA, KE_MOUSEMOVE);
+
+const KE_EVENT: c_int = 102;
+const KE_COMMAND: c_int = 104;
+const KE_LUA: c_int = 107;
+const K_EVENT: c_int = termcap2key(KS_EXTRA, KE_EVENT);
+const K_COMMAND: c_int = termcap2key(KS_EXTRA, KE_COMMAND);
+const K_LUA: c_int = termcap2key(KS_EXTRA, KE_LUA);
 
 // K_S_TAB = TERMCAP2KEY('k', 'B')
 const K_S_TAB: c_int = termcap2key(b'k' as c_int, b'B' as c_int);
 
+// K_KENTER = TERMCAP2KEY('K', 'A')
+const K_KENTER: c_int = termcap2key(b'K' as c_int, b'A' as c_int);
+
+// Completeopt flags
+const K_OPT_COT_FLAG_LONGEST: u32 = 0x04;
+
 // =============================================================================
-// C accessor FFI declarations (Phase 1)
+// C accessor FFI declarations
 // =============================================================================
 
 extern "C" {
+    // Phase 1 accessors
     fn nvim_set_ctrl_x_mode(val: c_int);
     fn nvim_set_compl_cont_mode(val: c_int);
     fn nvim_set_compl_cont_status(val: c_int);
@@ -95,6 +129,22 @@ extern "C" {
     fn nvim_spell_back_safe();
     fn nvim_vpeekc() -> c_int;
     fn nvim_get_cpt_sources_index() -> c_int;
+
+    // Phase 2 accessors
+    fn nvim_get_ctrl_x_mode() -> c_int;
+    fn nvim_get_compl_started() -> c_int;
+    fn nvim_set_compl_used_match(val: c_int);
+    fn nvim_set_compl_get_longest(val: c_int);
+    fn nvim_get_cot_flags_global() -> u32;
+    fn nvim_curbuf_get_b_cot_flags() -> u32;
+    fn nvim_clear_edit_submode_extra();
+
+    // Phase 2: C functions called (not pure accessors)
+    fn vim_is_ctrl_x_key(c: c_int) -> bool;
+    fn ins_compl_stop(c: c_int, prev_mode: c_int, retval: bool) -> bool;
+    fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c_char);
+    fn may_trigger_modechanged();
+    fn rs_ins_compl_pum_key(c: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -226,6 +276,132 @@ pub unsafe extern "C" fn rs_may_advance_cpt_index(cpt: *const c_char) -> c_int {
     }
 
     c_int::from(!p.is_null() && *p != 0)
+}
+
+// =============================================================================
+// Phase 2 helper: get effective cot_flags
+// =============================================================================
+
+unsafe fn get_cot_flags() -> u32 {
+    let b = nvim_curbuf_get_b_cot_flags();
+    if b != 0 {
+        b
+    } else {
+        nvim_get_cot_flags_global()
+    }
+}
+
+// =============================================================================
+// Phase 2: rs_ins_compl_prep
+// =============================================================================
+
+/// Prepare for Insert mode completion, or stop it.
+/// Called just after typing a character in Insert mode.
+///
+/// Returns 1 when the character is not to be inserted, 0 otherwise.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
+    let mut retval = false;
+    let prev_mode = nvim_get_ctrl_x_mode();
+
+    // Forget any previous 'special' messages if this is actually a ^X mode key
+    // - bar ^R, in which case we wait to see what it gives us.
+    if c != CTRL_R && vim_is_ctrl_x_key(c) {
+        nvim_clear_edit_submode_extra();
+    }
+
+    // Ignore end of Select mode mapping and mouse scroll/movement.
+    if c == K_SELECT
+        || c == K_MOUSEDOWN
+        || c == K_MOUSEUP
+        || c == K_MOUSELEFT
+        || c == K_MOUSERIGHT
+        || c == K_MOUSEMOVE
+        || c == K_EVENT
+        || c == K_COMMAND
+        || c == K_LUA
+    {
+        return 0;
+    }
+
+    if nvim_get_ctrl_x_mode() == CTRL_X_CMDLINE_CTRL_X && c != CTRL_X {
+        // In all cases, drop back to CMDLINE mode first.
+        nvim_set_ctrl_x_mode(CTRL_X_CMDLINE);
+        if c == CTRL_V
+            || c == CTRL_Q
+            || c == CTRL_Z
+            || rs_ins_compl_pum_key(c) != 0
+            || !vim_is_ctrl_x_key(c)
+        {
+            // Not starting another completion mode.
+            // CTRL-X CTRL-Z should stop completion without inserting anything.
+            if c == CTRL_Z {
+                retval = true;
+            }
+        } else {
+            // Other CTRL-X keys first stop completion, then start another
+            // completion mode.
+            rs_ins_compl_prep(c_int::from(b' '));
+            nvim_set_ctrl_x_mode(CTRL_X_NOT_DEFINED_YET);
+        }
+    }
+
+    // Set "compl_get_longest" when finding the first matches.
+    if nvim_get_ctrl_x_mode() == CTRL_X_NOT_DEFINED_YET
+        || (nvim_get_ctrl_x_mode() == CTRL_X_NORMAL && nvim_get_compl_started() == 0)
+    {
+        let longest = (get_cot_flags() & K_OPT_COT_FLAG_LONGEST) != 0;
+        nvim_set_compl_get_longest(c_int::from(longest));
+        nvim_set_compl_used_match(1);
+    }
+
+    if nvim_get_ctrl_x_mode() == CTRL_X_NOT_DEFINED_YET {
+        // We have just typed CTRL-X and aren't sure which mode yet. Now decide.
+        retval = rs_set_ctrl_x_mode(c) != 0;
+    } else if nvim_get_ctrl_x_mode() != CTRL_X_NORMAL {
+        // We're already in CTRL-X mode, do we stay in it?
+        if !vim_is_ctrl_x_key(c) {
+            let new_mode = if nvim_get_ctrl_x_mode() == CTRL_X_SCROLL {
+                CTRL_X_NORMAL
+            } else {
+                CTRL_X_FINISHED
+            };
+            nvim_set_ctrl_x_mode(new_mode);
+            nvim_set_edit_submode_null();
+        }
+        nvim_set_redraw_mode_true();
+    }
+
+    if nvim_get_compl_started() != 0 || nvim_get_ctrl_x_mode() == CTRL_X_FINISHED {
+        // Show error message from attempted keyword completion until another key
+        // is hit, then go back to showing what mode we are in.
+        nvim_set_redraw_mode_true();
+        if (nvim_get_ctrl_x_mode() == CTRL_X_NORMAL
+            && c != CTRL_N
+            && c != CTRL_P
+            && c != CTRL_R
+            && rs_ins_compl_pum_key(c) == 0)
+            || nvim_get_ctrl_x_mode() == CTRL_X_FINISHED
+        {
+            retval = ins_compl_stop(c, prev_mode, retval);
+        }
+    } else if nvim_get_ctrl_x_mode() == CTRL_X_LOCAL_MSG {
+        // Trigger the CompleteDone event to give scripts a chance to act upon
+        // the (possibly failed) completion.
+        do_autocmd_completedone(c, nvim_get_ctrl_x_mode(), std::ptr::null_mut());
+    }
+
+    may_trigger_modechanged();
+
+    // reset continue_* if we left expansion mode; if we stay they'll be
+    // (re)set properly in ins_complete()
+    if !vim_is_ctrl_x_key(c) {
+        nvim_set_compl_cont_status(0);
+        nvim_set_compl_cont_mode(0);
+    }
+
+    c_int::from(retval)
 }
 
 #[cfg(test)]

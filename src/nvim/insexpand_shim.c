@@ -495,7 +495,7 @@ static bool is_first_match(const compl_T *const match)
   return match == compl_first_match;
 }
 
-static void do_autocmd_completedone(int c, int mode, char *word)
+void do_autocmd_completedone(int c, int mode, char *word)
 {
   save_v_event_T save_v_event;
   dict_T *v_event = get_v_event(&save_v_event);
@@ -1963,7 +1963,7 @@ static bool set_ctrl_x_mode(const int c)
 }
 
 /// Stop insert completion mode
-static bool ins_compl_stop(const int c, const int prev_mode, bool retval)
+bool ins_compl_stop(const int c, const int prev_mode, bool retval)
 {
   // Remove pre-inserted text when present.
   if (rs_ins_compl_preinsert_effect() && rs_ins_compl_win_active(curwin)) {
@@ -2109,91 +2109,7 @@ bool ins_compl_cancel(void)
 /// @return true when the character is not to be inserted;
 bool ins_compl_prep(int c)
 {
-  bool retval = false;
-  const int prev_mode = ctrl_x_mode;
-
-  // Forget any previous 'special' messages if this is actually
-  // a ^X mode key - bar ^R, in which case we wait to see what it gives us.
-  if (c != Ctrl_R && vim_is_ctrl_x_key(c)) {
-    edit_submode_extra = NULL;
-  }
-
-  // Ignore end of Select mode mapping and mouse scroll/movement.
-  if (c == K_SELECT || c == K_MOUSEDOWN || c == K_MOUSEUP
-      || c == K_MOUSELEFT || c == K_MOUSERIGHT || c == K_MOUSEMOVE
-      || c == K_EVENT || c == K_COMMAND || c == K_LUA) {
-    return retval;
-  }
-
-  if (ctrl_x_mode == CTRL_X_CMDLINE_CTRL_X && c != Ctrl_X) {
-    if (c == Ctrl_V || c == Ctrl_Q || c == Ctrl_Z || rs_ins_compl_pum_key(c)
-        || !vim_is_ctrl_x_key(c)) {
-      // Not starting another completion mode.
-      ctrl_x_mode = CTRL_X_CMDLINE;
-
-      // CTRL-X CTRL-Z should stop completion without inserting anything
-      if (c == Ctrl_Z) {
-        retval = true;
-      }
-    } else {
-      ctrl_x_mode = CTRL_X_CMDLINE;
-
-      // Other CTRL-X keys first stop completion, then start another
-      // completion mode.
-      ins_compl_prep(' ');
-      ctrl_x_mode = CTRL_X_NOT_DEFINED_YET;
-    }
-  }
-
-  // Set "compl_get_longest" when finding the first matches.
-  if (rs_ctrl_x_mode_not_defined_yet()
-      || (rs_ctrl_x_mode_normal() && !compl_started)) {
-    compl_get_longest = (rs_get_cot_flags() & kOptCotFlagLongest) != 0;
-    compl_used_match = true;
-  }
-
-  if (rs_ctrl_x_mode_not_defined_yet()) {
-    // We have just typed CTRL-X and aren't quite sure which CTRL-X mode
-    // it will be yet.  Now we decide.
-    retval = set_ctrl_x_mode(c);
-  } else if (rs_ctrl_x_mode_not_default()) {
-    // We're already in CTRL-X mode, do we stay in it?
-    if (!vim_is_ctrl_x_key(c)) {
-      ctrl_x_mode = rs_ctrl_x_mode_scroll() ? CTRL_X_NORMAL : CTRL_X_FINISHED;
-      edit_submode = NULL;
-    }
-    redraw_mode = true;
-  }
-
-  if (compl_started || ctrl_x_mode == CTRL_X_FINISHED) {
-    // Show error message from attempted keyword completion (probably
-    // 'Pattern not found') until another key is hit, then go back to
-    // showing what mode we are in.
-    redraw_mode = true;
-    if ((rs_ctrl_x_mode_normal()
-         && c != Ctrl_N
-         && c != Ctrl_P
-         && c != Ctrl_R
-         && !rs_ins_compl_pum_key(c))
-        || ctrl_x_mode == CTRL_X_FINISHED) {
-      retval = ins_compl_stop(c, prev_mode, retval);
-    }
-  } else if (ctrl_x_mode == CTRL_X_LOCAL_MSG) {
-    // Trigger the CompleteDone event to give scripts a chance to act
-    // upon the (possibly failed) completion.
-    do_autocmd_completedone(c, ctrl_x_mode, NULL);
-  }
-
-  may_trigger_modechanged();
-
-  // reset continue_* if we left expansion-mode, if we stay they'll be
-  // (re)set properly in ins_complete()
-  if (!vim_is_ctrl_x_key(c)) {
-    compl_cont_status = 0;
-    compl_cont_mode = 0;
-  }
-
-  return retval;
+  return rs_ins_compl_prep(c) != 0;
 }
 
 /// Loops through the list of windows, loaded-buffers or non-loaded-buffers
