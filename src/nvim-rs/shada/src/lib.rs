@@ -2066,15 +2066,6 @@ impl Default for HistoryMergerState {
 
 // C accessor functions for history operations
 extern "C" {
-    /// Get next history entry from Neovim.
-    fn nvim_shada_hist_iter(
-        iter: *const c_void,
-        history_type: u8,
-        reading: bool,
-        entry: *mut ShadaEntry,
-    ) -> *const c_void;
-    /// Free ShaDa entry contents.
-    fn nvim_shada_free_shada_entry(entry: *mut ShadaEntry);
     /// Initialize contained entries map in place.
     fn nvim_hmll_map_init(map: *mut PMapCstrT);
     /// Destroy contained entries map contents.
@@ -2159,7 +2150,7 @@ pub unsafe extern "C" fn rs_hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HML
     list.num_entries -= 1;
 
     // Free the entry data
-    nvim_shada_free_shada_entry(&raw mut entry.data);
+    rs_shada_free_entry_contents(&raw mut entry.data);
 }
 
 /// Insert an entry into the HML linked list.
@@ -2280,10 +2271,10 @@ pub unsafe extern "C" fn rs_hms_init(
     hms.history_type = history_type;
 
     // Initialize iterator and get first history entry
-    hms.iter = nvim_shada_hist_iter(
+    hms.iter = rs_shada_hist_iter(
         std::ptr::null(),
         history_type,
-        reading,
+        c_int::from(reading),
         &raw mut hms.last_hist_entry,
     );
 }
@@ -2318,10 +2309,10 @@ pub unsafe extern "C" fn rs_hms_insert(
                 hms.last_hist_entry.entry_type = ShadaEntryType::Missing;
                 break;
             }
-            hms.iter = nvim_shada_hist_iter(
+            hms.iter = rs_shada_hist_iter(
                 hms.iter,
                 hms.history_type,
-                hms.reading,
+                c_int::from(hms.reading),
                 &raw mut hms.last_hist_entry,
             );
         }
@@ -2349,7 +2340,7 @@ pub unsafe extern "C" fn rs_hms_insert(
             let new_key = entry.data.history_item.string;
             let map = &raw mut (*hmll).contained_entries;
             let ki = rs_mh_get_cstr_t(&raw mut (*map).set, key);
-            nvim_shada_free_shada_entry(&raw mut existing_entry.data);
+            rs_shada_free_entry_contents(&raw mut existing_entry.data);
             existing_entry.data = entry;
             if ki != MH_TOMBSTONE {
                 *(*map).set.keys.add(ki as usize) = new_key;
@@ -2393,10 +2384,10 @@ pub unsafe extern "C" fn rs_hms_insert_whole_neovim_history(hms_p: *mut HistoryM
         if hms.iter.is_null() {
             break;
         }
-        hms.iter = nvim_shada_hist_iter(
+        hms.iter = rs_shada_hist_iter(
             hms.iter,
             hms.history_type,
-            hms.reading,
+            c_int::from(hms.reading),
             &raw mut hms.last_hist_entry,
         );
     }
@@ -2498,8 +2489,6 @@ pub unsafe extern "C" fn rs_hms_to_he_array(
 
 // C accessor functions for high-level API
 extern "C" {
-    /// Get default ShaDa file path.
-    fn nvim_shada_get_default_file() -> *const c_char;
     /// Get current p_shadafile option.
     fn nvim_get_p_shadafile() -> *const c_char;
     /// Expand environment variables in path.
@@ -2542,7 +2531,7 @@ pub unsafe extern "C" fn rs_shada_filename(file: *const c_char) -> *mut c_char {
             // Check for -n parameter or use default
             let param_file = nvim_find_shada_parameter(c_int::from(b'n'));
             if param_file.is_null() || *param_file == 0 {
-                let default_file = nvim_shada_get_default_file();
+                let default_file = rs_shada_get_default_file();
                 // Expand environment variables
                 let mut name_buff = [0i8; MAXPATHL];
                 let len = nvim_expand_env(default_file, name_buff.as_mut_ptr(), MAXPATHL);
@@ -3475,7 +3464,7 @@ pub unsafe extern "C" fn rs_replace_numbered_mark(
     let last = EXTRA_MARKS - 1;
 
     // Free the last entry
-    nvim_shada_free_shada_entry(std::ptr::addr_of_mut!(wms.numbered_marks[last]));
+    rs_shada_free_entry_contents(std::ptr::addr_of_mut!(wms.numbered_marks[last]));
 
     // Adjust names of marks that will shift down
     for i in idx..last {

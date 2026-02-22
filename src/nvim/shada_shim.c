@@ -1245,14 +1245,6 @@ static inline ShaDaWriteResult shada_pack_pfreed_entry(PackerBuffer *const packe
   return ret;
 }
 
-/// Compare two FileMarks structure to order them by greatest_timestamp.
-/// Delegated to Rust rs_compare_file_marks.
-static int compare_file_marks(const void *a, const void *b)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_compare_file_marks(a, b);
-}
-
 /// Parse msgpack object that has given length
 ///
 /// @param[in]   sd_reader     Structure containing file reader definition.
@@ -1981,7 +1973,7 @@ static ShaDaWriteResult shada_write(FileDescriptor *const sd_writer,
     *cur_file_marks++ = val;
   })
   qsort((void *)all_file_markss, file_markss_size, sizeof(*all_file_markss),
-        &compare_file_marks);
+        &rs_compare_file_marks);
   const size_t file_markss_to_dump = MIN(num_marked_files, file_markss_size);
   for (size_t i = 0; i < file_markss_to_dump; i++) {
     PACK_WMS_ARRAY(all_file_markss[i]->marks);
@@ -2856,7 +2848,7 @@ shada_read_next_item_error:
 /// Write registers ShaDa entries in given msgpack_sbuffer.
 ///
 /// @param[in]  sbuf  target msgpack_sbuffer to write to.
-String shada_encode_regs(void)
+String nvim_shada_encode_regs(void)
   FUNC_ATTR_NONNULL_ALL
 {
   WriteMergerState *const wms = xcalloc(1, sizeof(*wms));
@@ -2877,7 +2869,7 @@ String shada_encode_regs(void)
 /// Write jumplist ShaDa entries in given msgpack_sbuffer.
 ///
 /// @param[in]  sbuf            target msgpack_sbuffer to write to.
-String shada_encode_jumps(void)
+String nvim_shada_encode_jumps(void)
   FUNC_ATTR_NONNULL_ALL
 {
   Set(ptr_t) removable_bufs = SET_INIT;
@@ -2896,7 +2888,7 @@ String shada_encode_jumps(void)
 /// Write buffer list ShaDa entry in given msgpack_sbuffer.
 ///
 /// @param[in]  sbuf            target msgpack_sbuffer to write to.
-String shada_encode_buflist(void)
+String nvim_shada_encode_buflist(void)
   FUNC_ATTR_NONNULL_ALL
 {
   Set(ptr_t) removable_bufs = SET_INIT;
@@ -2914,7 +2906,7 @@ String shada_encode_buflist(void)
 /// Write global variables ShaDa entries in given msgpack_sbuffer.
 ///
 /// @param[in]  sbuf            target msgpack_sbuffer to write to.
-String shada_encode_gvars(void)
+String nvim_shada_encode_gvars(void)
   FUNC_ATTR_NONNULL_ALL
 {
   PackerBuffer packer = packer_string_buffer();
@@ -2956,7 +2948,7 @@ String shada_encode_gvars(void)
 ///
 /// @param[in]  string   string to read from.
 /// @param[in]  flags  Flags, see ShaDaReadFileFlags enum.
-void shada_read_string(String string, const int flags)
+void nvim_shada_read_string(String string, const int flags)
   FUNC_ATTR_NONNULL_ALL
 {
   if (string.size == 0) {
@@ -3034,12 +3026,6 @@ void nvim_shada_packer_flush(PackerBuffer *packer)
   }
 }
 
-/// Read a string from shada data
-void nvim_shada_read_string(String string, int flags)
-{
-  shada_read_string(string, flags);
-}
-
 // Wrapper functions for existing shada functions (nvim_ prefix for Rust FFI)
 int nvim_get_shada_parameter(int type) { return get_shada_parameter(type); }
 char *nvim_find_shada_parameter(int type) { return find_shada_parameter(type); }
@@ -3085,28 +3071,6 @@ void nvim_hmll_map_del(PMap(cstr_t) *map, const char *key)
   pmap_del(cstr_t)(map, key, NULL);
 }
 
-// Wrapper for shada_free_shada_entry — delegates to Rust rs_shada_free_entry_contents
-// which handles all entry types (delegating back to C for Variable and Register
-// due to struct layout differences).
-extern void rs_shada_free_entry_contents(ShadaEntry *entry);
-void nvim_shada_free_shada_entry(ShadaEntry *entry)
-{
-  rs_shada_free_entry_contents(entry);
-}
-
-// Accessor for rs_shada_hist_iter
-const void *nvim_shada_hist_iter(const void *iter, uint8_t history_type,
-                                  int reading, ShadaEntry *out_entry)
-{
-  return rs_shada_hist_iter(iter, history_type, reading, out_entry);
-}
-
-// Accessor for rs_shada_get_default_file
-const char *nvim_shada_get_default_file(void)
-{
-  return rs_shada_get_default_file();
-}
-
 // Option value accessors for shada
 int64_t nvim_get_p_hi(void) { return p_hi; }
 const char *nvim_get_p_shadafile(void) { return p_shadafile; }
@@ -3137,16 +3101,6 @@ bool nvim_strequal(const char *s1, const char *s2)
   return strcmp(s1, s2) == 0;
 }
 
-// Shada encode wrappers (forward declarations)
-extern String shada_encode_regs(void);
-extern String shada_encode_jumps(void);
-extern String shada_encode_buflist(void);
-extern String shada_encode_gvars(void);
-
-String nvim_shada_encode_regs(void) { return shada_encode_regs(); }
-String nvim_shada_encode_jumps(void) { return shada_encode_jumps(); }
-String nvim_shada_encode_buflist(void) { return shada_encode_buflist(); }
-String nvim_shada_encode_gvars(void) { return shada_encode_gvars(); }
 
 // Phase 1: FileMarks accessor for Rust FFI
 Timestamp nvim_filemarks_get_greatest_timestamp(const void *fm_ptr)
