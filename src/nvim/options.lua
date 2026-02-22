@@ -716,7 +716,7 @@ local options = {
     },
     {
       abbreviation = 'bin',
-      cb = 'did_set_binary',
+      cb = 'rs_did_set_binary_full',
       defaults = false,
       desc = [=[
         This option should be set before editing a binary file.  You can also
@@ -5908,7 +5908,7 @@ local options = {
     },
     {
       abbreviation = 'mod',
-      cb = 'did_set_modified',
+      cb = 'rs_did_set_modified',
       defaults = false,
       desc = [=[
         When on, the buffer is considered to be modified.  This option is set
@@ -6777,7 +6777,7 @@ local options = {
     },
     {
       abbreviation = 'ro',
-      cb = 'did_set_readonly',
+      cb = 'rs_did_set_readonly',
       defaults = false,
       desc = [=[
         If on, writes fail unless you use a '!'.  Protects you from
@@ -7183,7 +7183,7 @@ local options = {
     },
     {
       abbreviation = 'scbk',
-      cb = 'did_set_scrollback',
+      cb = 'rs_did_set_scrollback',
       defaults = {
         if_true = -1,
         doc = '10000',
@@ -9843,7 +9843,7 @@ local options = {
     },
     {
       abbreviation = 'ul',
-      cb = 'did_set_undolevels',
+      cb = 'rs_did_set_undolevels_full',
       defaults = 1000,
       desc = [=[
         Maximum number of changes that can be undone.  Since undo information
@@ -10642,7 +10642,7 @@ local options = {
     },
     {
       abbreviation = 'wh',
-      cb = 'did_set_winheight',
+      cb = 'rs_did_set_winheight',
       defaults = 1,
       desc = [=[
         Minimal number of lines for the current window.  This is not a hard
@@ -10746,7 +10746,7 @@ local options = {
     },
     {
       abbreviation = 'wiw',
-      cb = 'did_set_winwidth',
+      cb = 'rs_did_set_winwidth',
       defaults = 20,
       desc = [=[
         Minimal number of columns for the current window.  This is not a hard
@@ -10767,7 +10767,7 @@ local options = {
       varname = 'p_wiw',
     },
     {
-      cb = 'did_set_wrap',
+      cb = 'rs_did_set_wrap',
       defaults = true,
       desc = [=[
         This option changes how text is displayed.  It doesn't change the text

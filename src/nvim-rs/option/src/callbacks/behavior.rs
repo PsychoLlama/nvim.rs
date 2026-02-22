@@ -56,7 +56,43 @@ extern "C" {
     fn nvim_optset_get_buf(args: *const c_void) -> BufHandle;
     fn nvim_optset_get_oldval_boolean(args: *const c_void) -> c_int;
     fn nvim_optset_get_oldval_number(args: *const c_void) -> i64;
+    fn nvim_optset_get_newval_number(args: *const c_void) -> i64;
+    fn nvim_optset_get_varp(args: *const c_void) -> *mut c_void;
+
+    // Additional window/option accessors for full callbacks
+    #[link_name = "rs_win_setwidth"]
+    fn win_setwidth(width: c_int);
+    fn nvim_option_get_p_wh() -> OptInt;
+    fn nvim_option_get_p_wiw() -> OptInt;
+    fn nvim_callback_get_curwin_width() -> c_int;
+
+    // Modified/readonly callback accessors
+    fn save_file_ff(buf: BufHandle);
+    fn nvim_optset_get_newval_boolean(args: *const c_void) -> c_int;
+    fn nvim_optset_get_flags(args: *const c_void) -> c_int;
+    fn nvim_option_buf_set_modified_was_set(buf: BufHandle, val: c_int);
+    fn nvim_option_buf_get_b_p_ro(buf: BufHandle) -> c_int;
+    fn nvim_option_buf_set_b_did_warn(buf: BufHandle, val: c_int);
+    fn nvim_callback_set_readonlymode(val: c_int);
+
+    // Scrollback callback accessors
+    fn nvim_option_buf_get_terminal_ptr(buf: BufHandle) -> *mut c_void;
+    fn on_scrollback_option_changed(terminal: *mut c_void);
+
+    // Undolevels callback accessors
+    fn nvim_callback_get_p_ul_addr() -> *mut c_void;
+
+    // Binary callback
+    fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: c_int);
+    fn nvim_option_buf_get_b_p_bin(buf: BufHandle) -> c_int;
 }
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+/// OPT_LOCAL flag from option.h
+const OPT_LOCAL: c_int = 0x02;
 
 // =============================================================================
 // Helper Functions
@@ -233,6 +269,122 @@ pub unsafe extern "C" fn rs_did_set_updatecount(args: *mut c_void) -> CallbackRe
     callback_ok()
 }
 
+/// Callback for 'winheight' option (full replacement).
+///
+/// Change window height if needed when 'winheight' increases.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_did_set_winheight(_args: *mut c_void) -> CallbackResult {
+    if !is_one_window() {
+        let p_wh = nvim_option_get_p_wh() as c_int;
+        if get_curwin_height() < p_wh {
+            win_setheight(p_wh);
+        }
+    }
+    callback_ok()
+}
+
+/// Callback for 'winwidth' option (full replacement).
+///
+/// Change window width if needed when 'winwidth' increases.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_did_set_winwidth(_args: *mut c_void) -> CallbackResult {
+    let p_wiw = nvim_option_get_p_wiw() as c_int;
+    if !is_one_window() && nvim_callback_get_curwin_width() < p_wiw {
+        win_setwidth(p_wiw);
+    }
+    callback_ok()
+}
+
+/// Callback for 'binary' option (full replacement).
+///
+/// When 'bin' is set, also set some other options and redraw titles.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_binary_full(args: *mut c_void) -> CallbackResult {
+    let buf = nvim_optset_get_buf(args);
+    let old_val = nvim_optset_get_oldval_boolean(args);
+    let new_val = nvim_option_buf_get_b_p_bin(buf);
+    set_options_bin(old_val, new_val, nvim_optset_get_flags(args));
+    redraw_titles();
+    callback_ok()
+}
+
+/// Callback for 'modified' option (full replacement).
+///
+/// When 'modified' is cleared, save file format. Always redraw titles.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_modified(args: *mut c_void) -> CallbackResult {
+    let buf = nvim_optset_get_buf(args);
+    let newval = nvim_optset_get_newval_boolean(args);
+    if newval == 0 {
+        save_file_ff(buf);
+    }
+    redraw_titles();
+    nvim_option_buf_set_modified_was_set(buf, newval);
+    callback_ok()
+}
+
+/// Callback for 'readonly' option (full replacement).
+///
+/// When 'readonly' is reset globally, also reset readonlymode.
+/// When 'readonly' is set, allow W10 warning again.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_readonly(args: *mut c_void) -> CallbackResult {
+    let buf = nvim_optset_get_buf(args);
+    let flags = nvim_optset_get_flags(args);
+
+    // when 'readonly' is reset globally, also reset readonlymode
+    if nvim_option_buf_get_b_p_ro(buf) == 0 && (flags & OPT_LOCAL) == 0 {
+        nvim_callback_set_readonlymode(0);
+    }
+
+    // when 'readonly' is set may give W10 again
+    if nvim_option_buf_get_b_p_ro(buf) != 0 {
+        nvim_option_buf_set_b_did_warn(buf, 0);
+    }
+
+    redraw_titles();
+    callback_ok()
+}
+
+/// Callback for 'scrollback' option (full replacement).
+///
+/// When scrollback decreases, force immediate effect for terminal buffers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_scrollback(args: *mut c_void) -> CallbackResult {
+    let buf = nvim_optset_get_buf(args);
+    let old_value = nvim_optset_get_oldval_number(args);
+    let new_value = nvim_optset_get_newval_number(args);
+
+    let terminal = nvim_option_buf_get_terminal_ptr(buf);
+    if !terminal.is_null() && new_value < old_value {
+        on_scrollback_option_changed(terminal);
+    }
+    callback_ok()
+}
+
+/// Callback for 'undolevels' option (full replacement).
+///
+/// Handles both global and buffer-local undolevels changes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_undolevels_full(args: *mut c_void) -> CallbackResult {
+    let buf = nvim_optset_get_buf(args);
+    let varp = nvim_optset_get_varp(args);
+    let new_value = nvim_optset_get_newval_number(args);
+    let old_value = nvim_optset_get_oldval_number(args);
+
+    let p_ul_addr = nvim_callback_get_p_ul_addr();
+    if varp == p_ul_addr {
+        // global 'undolevels'
+        did_set_global_undolevels(new_value, old_value);
+    } else {
+        // buffer local 'undolevels'
+        did_set_buflocal_undolevels(buf, new_value, old_value);
+    }
+    callback_ok()
+}
+
 /// Callback for 'autoread' option.
 ///
 /// Placeholder - actual behavior is handled elsewhere.
@@ -286,24 +438,6 @@ pub extern "C" fn rs_did_set_insertmode() -> CallbackResult {
 /// Redraws window title when modifiable state changes.
 #[no_mangle]
 pub extern "C" fn rs_did_set_modifiable(_args: *mut c_void) -> CallbackResult {
-    unsafe { redraw_titles() };
-    callback_ok()
-}
-
-/// Callback for 'modified' option.
-///
-/// Redraws titles when modified state changes.
-#[no_mangle]
-pub extern "C" fn rs_did_set_modified() -> CallbackResult {
-    unsafe { redraw_titles() };
-    callback_ok()
-}
-
-/// Callback for 'readonly' option.
-///
-/// Redraws titles when readonly state changes.
-#[no_mangle]
-pub extern "C" fn rs_did_set_readonly() -> CallbackResult {
     unsafe { redraw_titles() };
     callback_ok()
 }

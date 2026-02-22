@@ -53,6 +53,10 @@ extern "C" {
 
     // optset_T field accessors
     fn nvim_optset_get_win(args: *const c_void) -> WinHandle;
+
+    // Window field accessors for wrap callback
+    fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
+    fn nvim_win_set_leftcol(wp: WinHandle, val: c_int);
 }
 
 // =============================================================================
@@ -280,12 +284,17 @@ pub extern "C" fn rs_did_set_list() -> CallbackResult {
     callback_ok()
 }
 
-/// Callback for 'wrap' option.
+/// Callback for 'wrap' option (full replacement).
 ///
-/// Triggers redraw when wrap mode changes.
+/// When wrap is enabled, reset leftcol. When disabled, reset skipcol.
 #[no_mangle]
-pub extern "C" fn rs_did_set_wrap() -> CallbackResult {
-    request_redraw_all(UpdateType::NotValid);
+pub unsafe extern "C" fn rs_did_set_wrap(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    if nvim_win_get_p_wrap(win) != 0 {
+        nvim_win_set_leftcol(win, 0);
+    } else {
+        nvim_option_win_set_skipcol(win, 0);
+    }
     callback_ok()
 }
 

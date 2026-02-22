@@ -172,6 +172,14 @@ extern const char *rs_did_set_wildchar(optset_T *args);
 extern const char *rs_did_set_window(optset_T *args);
 extern const char *rs_did_set_scrollbind(optset_T *args);
 extern const char *rs_did_set_autochdir(optset_T *args);
+extern const char *rs_did_set_wrap(optset_T *args);
+extern const char *rs_did_set_winheight(optset_T *args);
+extern const char *rs_did_set_winwidth(optset_T *args);
+extern const char *rs_did_set_binary_full(optset_T *args);
+extern const char *rs_did_set_modified(optset_T *args);
+extern const char *rs_did_set_readonly(optset_T *args);
+extern const char *rs_did_set_scrollback(optset_T *args);
+extern const char *rs_did_set_undolevels_full(optset_T *args);
 
 // OptVal storage operations (from Rust storage.rs)
 extern void rs_optval_free(OptVal o);
@@ -227,6 +235,16 @@ int64_t nvim_optset_get_newval_number(const void *args)
 void *nvim_optset_get_varp(const void *args)
 {
   return ((const optset_T *)args)->os_varp;
+}
+
+int nvim_optset_get_newval_boolean(const void *args)
+{
+  return (int)((const optset_T *)args)->os_newval.boolean;
+}
+
+int nvim_optset_get_flags(const void *args)
+{
+  return ((const optset_T *)args)->os_flags;
 }
 
 // String option accessors
@@ -408,11 +426,19 @@ int nvim_callback_get_p_ea(void) { return p_ea; }
 int nvim_callback_is_one_window(void) { return ONE_WINDOW; }
 int nvim_callback_is_curbuf_help(void) { return curbuf->b_help; }
 int nvim_callback_get_curwin_height(void) { return curwin->w_height; }
+int nvim_callback_get_curwin_width(void) { return curwin->w_width; }
 OptInt nvim_callback_get_p_hh(void) { return p_hh; }
 
 // Buffer accessors for behavior callbacks
 int nvim_buf_get_p_swf(buf_T *buf) { return buf ? buf->b_p_swf : 0; }
 int nvim_buf_get_p_udf(buf_T *buf) { return buf ? buf->b_p_udf : 0; }
+void nvim_option_buf_set_modified_was_set(buf_T *buf, int val) { if (buf) buf->b_modified_was_set = val; }
+int nvim_option_buf_get_b_p_ro(buf_T *buf) { return buf ? buf->b_p_ro : 0; }
+void nvim_option_buf_set_b_did_warn(buf_T *buf, int val) { if (buf) buf->b_did_warn = val != 0; }
+void nvim_callback_set_readonlymode(int val) { readonlymode = val != 0; }
+void *nvim_option_buf_get_terminal_ptr(buf_T *buf) { return buf ? buf->terminal : NULL; }
+int nvim_option_buf_get_b_p_bin(buf_T *buf) { return buf ? buf->b_p_bin : 0; }
+void *nvim_callback_get_p_ul_addr(void) { return (void *)&p_ul; }
 
 // Colorcolumn check wrapper
 void check_colorcolumn_win(win_T *win) { check_colorcolumn(NULL, win); }
@@ -2292,16 +2318,6 @@ static const char *did_set_arabic(optset_T *args)
   return errmsg;
 }
 
-/// Process the updated 'binary' option value.
-static const char *did_set_binary(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-
-  // when 'bin' is set also set some other options
-  set_options_bin((int)args->os_oldval.boolean, buf->b_p_bin, args->os_flags);
-  return rs_did_set_binary();
-}
-
 /// Process the updated 'buflisted' option value.
 static const char *did_set_buflisted(optset_T *args)
 {
@@ -2398,18 +2414,6 @@ static const char *did_set_lines_or_columns(optset_T *args)
     p_sj = Rows / 2;
   }
 
-  return NULL;
-}
-
-/// Process the updated 'modified' option value.
-static const char *did_set_modified(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  if (!args->os_newval.boolean) {
-    save_file_ff(buf);  // Buffer is unchanged
-  }
-  redraw_titles();
-  buf->b_modified_was_set = (int)args->os_newval.boolean;
   return NULL;
 }
 
@@ -2562,39 +2566,6 @@ static const char *did_set_previewwindow(optset_T *args)
   return NULL;
 }
 
-/// Process the updated 'readonly' option value.
-static const char *did_set_readonly(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-
-  // when 'readonly' is reset globally, also reset readonlymode
-  if (!buf->b_p_ro && (args->os_flags & OPT_LOCAL) == 0) {
-    readonlymode = false;
-  }
-
-  // when 'readonly' is set may give W10 again
-  if (buf->b_p_ro) {
-    buf->b_did_warn = false;
-  }
-
-  redraw_titles();
-
-  return NULL;
-}
-
-/// Process the new 'scrollback' option value.
-static const char *did_set_scrollback(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  OptInt old_value = args->os_oldval.number;
-  OptInt value = args->os_newval.number;
-
-  if (buf->terminal && value < old_value) {
-    // Force the scrollback to take immediate effect only when decreasing it.
-    on_scrollback_option_changed(buf->terminal);
-  }
-  return NULL;
-}
 
 #ifdef BACKSLASH_IN_FILENAME
 /// Process the updated 'shellslash' option value.
@@ -2697,57 +2668,6 @@ const char *did_set_buflocal_undolevels(buf_T *buf, OptInt value, OptInt old_val
   buf->b_p_ul = old_value;
   u_sync(true);
   buf->b_p_ul = value;
-  return NULL;
-}
-
-/// Process the new 'undolevels' option value.
-static const char *did_set_undolevels(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  OptInt *pp = (OptInt *)args->os_varp;
-
-  if (pp == &p_ul) {                  // global 'undolevels'
-    did_set_global_undolevels(args->os_newval.number, args->os_oldval.number);
-  } else if (pp == &buf->b_p_ul) {      // buffer local 'undolevels'
-    did_set_buflocal_undolevels(buf, args->os_newval.number, args->os_oldval.number);
-  }
-
-  return NULL;
-}
-
-/// Process the new 'winheight' value.
-static const char *did_set_winheight(optset_T *args)
-{
-  // Change window height NOW
-  if (!ONE_WINDOW) {
-    if (curwin->w_height < p_wh) {
-      rs_win_setheight((int)p_wh);
-    }
-  }
-
-  return NULL;
-}
-
-/// Process the new 'winwidth' option value.
-static const char *did_set_winwidth(optset_T *args)
-{
-  if (!ONE_WINDOW && curwin->w_width < p_wiw) {
-    rs_win_setwidth((int)p_wiw);
-  }
-  return NULL;
-}
-
-/// Process the updated 'wrap' option value.
-static const char *did_set_wrap(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  // Set w_leftcol or w_skipcol to zero.
-  if (win->w_p_wrap) {
-    win->w_leftcol = 0;
-  } else {
-    win->w_skipcol = 0;
-  }
-
   return NULL;
 }
 
