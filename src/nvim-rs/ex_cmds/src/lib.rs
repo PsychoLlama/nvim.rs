@@ -647,6 +647,8 @@ extern "C" {
     // Exarg mutation
     /// Set eap->nextcmd.
     pub fn nvim_exarg_set_nextcmd(eap: *mut ExArgHandle, p: *const c_char);
+    /// Check if eap->nextcmd is NULL.
+    pub fn nvim_exarg_is_nextcmd_null(eap: *mut ExArgHandle) -> c_int;
 
     // Mark/extmark
     /// mark_adjust wrapper.

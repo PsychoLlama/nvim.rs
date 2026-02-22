@@ -3027,7 +3027,7 @@ M.cmds = {
     command = 'uniq',
     flags = bit.bor(RANGE, DFLALL, WHOLEFOLD, BANG, EXTRA, NOTRLCOM, MODIFY),
     addr_type = 'ADDR_LINES',
-    func = 'ex_uniq',
+    func = 'rs_ex_uniq',
   },
   {
     command = 'unlet',

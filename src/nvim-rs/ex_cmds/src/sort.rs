@@ -875,6 +875,274 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
     }
 }
 
+/// `:uniq` command implementation.
+///
+/// Removes duplicate adjacent lines, with optional regex-based comparison
+/// and three modes: default (remove adjacent duplicates), keep-only-unique (u),
+/// and keep-only-not-unique (!).
+///
+/// # Safety
+/// `eap` must be a valid pointer to an exarg_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
+    use crate::{
+        beginline, changed_lines, fast_breakcheck, ml_delete, ml_get, ml_get_len, msgmore,
+        nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg, nvim_exarg_get_forceit,
+        nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_is_nextcmd_null,
+        nvim_exarg_set_nextcmd, nvim_excmds_check_nextcmd, nvim_excmds_emsg_interr,
+        nvim_excmds_emsg_noprevre, nvim_excmds_get_p_ic, nvim_excmds_got_int,
+        nvim_excmds_last_search_pat, nvim_excmds_mark_adjust, nvim_excmds_regcomp,
+        nvim_excmds_regexec, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
+        nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2,
+        nvim_excmds_skip_regexp_err, nvim_get_curbuf, u_save,
+    };
+
+    let line1 = nvim_exarg_get_line1(eap);
+    let line2 = nvim_exarg_get_line2(eap);
+    let mut count: c_int = line2 - line1 + 1;
+    let keep_only_not_unique = nvim_exarg_get_forceit(eap) != 0;
+    let mut keep_only_unique = false;
+    let mut deleted: c_int = 0;
+
+    // Uniq one line is really quick!
+    if count <= 1 {
+        return;
+    }
+
+    if u_save(line1 - 1, line2 + 1) == FAIL {
+        return;
+    }
+
+    let mut regmatch: *mut crate::RegmatchHandle = std::ptr::null_mut();
+    let mut sort_ic = false;
+    let mut sort_lc = false;
+    let mut sort_rx = false;
+    let mut change_occurred = false;
+
+    // Parse flags from eap->arg
+    let mut p = nvim_exarg_get_arg(eap) as *mut c_char;
+    loop {
+        let c = *p;
+        if c == 0 {
+            break;
+        }
+        if c == b' ' as c_char || c == b'\t' as c_char {
+            // skip whitespace
+        } else if c == b'i' as c_char {
+            sort_ic = true;
+        } else if c == b'l' as c_char {
+            sort_lc = true;
+        } else if c == b'r' as c_char {
+            sort_rx = true;
+        } else if c == b'u' as c_char {
+            // 'u' is only valid when '!' is not given.
+            if !keep_only_not_unique {
+                keep_only_unique = true;
+            }
+        } else if c == b'"' as c_char {
+            // comment start
+            break;
+        } else if nvim_exarg_is_nextcmd_null(eap) != 0 && !nvim_excmds_check_nextcmd(p).is_null() {
+            nvim_exarg_set_nextcmd(eap, nvim_excmds_check_nextcmd(p));
+            break;
+        } else if !((c as u8).is_ascii_alphabetic()) && regmatch.is_null() {
+            let s = nvim_excmds_skip_regexp_err(p.add(1), c as c_int);
+            if s.is_null() {
+                return;
+            }
+            *s = 0;
+
+            if std::ptr::eq(s, p.add(1)) {
+                let last_pat = nvim_excmds_last_search_pat();
+                if last_pat.is_null() {
+                    nvim_excmds_emsg_noprevre();
+                    return;
+                }
+                regmatch = nvim_excmds_regcomp(last_pat, RE_MAGIC);
+            } else {
+                regmatch = nvim_excmds_regcomp(p.add(1), RE_MAGIC);
+            }
+            if regmatch.is_null() {
+                return;
+            }
+            p = s;
+            nvim_excmds_regmatch_set_ic(regmatch, nvim_excmds_get_p_ic());
+        } else {
+            nvim_excmds_semsg_invarg2(p);
+            nvim_excmds_regfree(regmatch);
+            return;
+        }
+        p = p.add(1);
+    }
+
+    // Find the length of the longest line.
+    let mut maxlen: c_int = 0;
+    for lnum in line1..=line2 {
+        let len = ml_get_len(lnum);
+        if len > maxlen {
+            maxlen = len;
+        }
+        if nvim_excmds_got_int() != 0 {
+            nvim_excmds_regfree(regmatch);
+            nvim_excmds_emsg_interr();
+            return;
+        }
+    }
+
+    // Allocate a buffer that can hold the longest line.
+    let buf_size = (maxlen as usize) + 1;
+    let mut sortbuf1: Vec<u8> = vec![0u8; buf_size];
+
+    // Delete lines according to options.
+    let mut match_continue = false;
+    let mut next_is_unmatch = false;
+    let mut done_lnum: c_int = line1 - 1;
+    let mut i: c_int = 0;
+
+    while i < count {
+        let get_lnum = line1 + i;
+
+        let s = ml_get(get_lnum) as *mut c_char;
+        let len = ml_get_len(get_lnum);
+
+        let mut start_col: c_int = 0;
+        let mut end_col: c_int = len;
+        if !regmatch.is_null() && nvim_excmds_regexec(regmatch, s) != 0 {
+            if sort_rx {
+                start_col = nvim_excmds_regmatch_startp0(regmatch).offset_from(s) as c_int;
+                end_col = nvim_excmds_regmatch_endp0(regmatch).offset_from(s) as c_int;
+            } else {
+                start_col = nvim_excmds_regmatch_endp0(regmatch).offset_from(s) as c_int;
+            }
+        } else if !regmatch.is_null() {
+            end_col = 0;
+        }
+
+        let save_c: c_char = if end_col > 0 {
+            let c = *s.add(end_col as usize);
+            *s.add(end_col as usize) = 0;
+            c
+        } else {
+            0
+        };
+
+        let mut is_match = if i > 0 {
+            string_compare(
+                s.add(start_col as usize),
+                sortbuf1.as_ptr() as *const c_char,
+                sort_lc,
+                sort_ic,
+            ) == 0
+        } else {
+            false
+        };
+
+        let mut delete_lnum: c_int = 0;
+        if next_is_unmatch {
+            is_match = false;
+            next_is_unmatch = false;
+        }
+
+        if !keep_only_unique && !keep_only_not_unique {
+            // Default mode: remove adjacent duplicates
+            if is_match {
+                delete_lnum = get_lnum;
+            } else {
+                let slen = libc::strlen(s.add(start_col as usize));
+                std::ptr::copy_nonoverlapping(
+                    s.add(start_col as usize) as *const u8,
+                    sortbuf1.as_mut_ptr(),
+                    slen + 1,
+                );
+            }
+        } else if keep_only_not_unique {
+            // Keep only non-unique lines (! mode)
+            if is_match {
+                done_lnum = get_lnum - 1;
+                delete_lnum = get_lnum;
+                match_continue = true;
+            } else {
+                if i > 0 && !match_continue && get_lnum - 1 > done_lnum {
+                    delete_lnum = get_lnum - 1;
+                    next_is_unmatch = true;
+                } else if i >= count - 1 {
+                    delete_lnum = get_lnum;
+                }
+                match_continue = false;
+                let slen = libc::strlen(s.add(start_col as usize));
+                std::ptr::copy_nonoverlapping(
+                    s.add(start_col as usize) as *const u8,
+                    sortbuf1.as_mut_ptr(),
+                    slen + 1,
+                );
+            }
+        } else {
+            // keep_only_unique mode (u flag)
+            if is_match {
+                if !match_continue {
+                    delete_lnum = get_lnum - 1;
+                } else {
+                    delete_lnum = get_lnum;
+                }
+                match_continue = true;
+            } else {
+                if i == 0 && match_continue {
+                    delete_lnum = get_lnum;
+                }
+                match_continue = false;
+                let slen = libc::strlen(s.add(start_col as usize));
+                std::ptr::copy_nonoverlapping(
+                    s.add(start_col as usize) as *const u8,
+                    sortbuf1.as_mut_ptr(),
+                    slen + 1,
+                );
+            }
+        }
+
+        if end_col > 0 {
+            *s.add(end_col as usize) = save_c;
+        }
+
+        if delete_lnum > 0 {
+            ml_delete(delete_lnum);
+            i -= get_lnum - delete_lnum + 1;
+            count -= 1;
+            deleted += 1;
+            change_occurred = true;
+        }
+
+        fast_breakcheck();
+        if nvim_excmds_got_int() != 0 {
+            nvim_excmds_regfree(regmatch);
+            nvim_excmds_emsg_interr();
+            return;
+        }
+        i += 1;
+    }
+
+    // Adjust marks for deleted lines and prepare for displaying.
+    let etype = if change_occurred {
+        KEXTMARK_UNDO
+    } else {
+        KEXTMARK_NOOP
+    };
+    nvim_excmds_mark_adjust(line2 - deleted, line2, MAXLNUM, -deleted, etype);
+    msgmore(-deleted);
+
+    if change_occurred {
+        changed_lines(nvim_get_curbuf(), line1, 0, line2 + 1, -deleted, 1);
+    }
+
+    nvim_curwin_set_cursor_lnum(line1);
+    beginline(BL_WHITE_FIX);
+
+    // Cleanup
+    nvim_excmds_regfree(regmatch);
+    if nvim_excmds_got_int() != 0 {
+        nvim_excmds_emsg_interr();
+    }
+}
+
 /// Parse sort flags from a string.
 ///
 /// Returns a bitmask:
