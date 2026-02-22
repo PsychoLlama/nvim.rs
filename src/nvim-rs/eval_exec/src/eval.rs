@@ -420,6 +420,7 @@ pub unsafe fn eval1_impl(
         } else {
             orig_flags & !EVAL_EVALUATE
         };
+        let var2_evaluated = (new_flags & EVAL_EVALUATE) != 0;
         if !evalarg.is_null() {
             evalarg_set_flags(evalarg, new_flags);
         }
@@ -435,8 +436,9 @@ pub unsafe fn eval1_impl(
             return FAIL;
         }
 
-        if !op_falsy || !result {
-            // Copy var2 to rettv
+        // Only copy var2 to rettv if var2 was actually evaluated (not VAR_UNKNOWN)
+        if evaluate && var2_evaluated && (!op_falsy || !result) {
+            // Copy var2 to rettv (rettv was already cleared above)
             tv_copy(var2, rettv);
         }
         tv_clear(var2);
