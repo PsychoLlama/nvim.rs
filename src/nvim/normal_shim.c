@@ -1582,7 +1582,6 @@ void nvim_nv_addsub(cmdarg_T *cap) { nv_addsub(cap); }
 bool nvim_current_search(int count, bool forward) { return current_search(count, forward); }
 int nvim_cursor_up(int count, bool upd_topline) { return cursor_up(count, upd_topline); }
 int nvim_cursor_down_call(int count, bool upd_topline) { return cursor_down(count, upd_topline); }
-int nvim_nv_screengo_full(oparg_T *oap, int dir, int dist, bool conceal) { return nv_screengo(oap, dir, dist, conceal); }
 int nvim_linetabsize_curwin(int lnum) { return linetabsize(curwin, lnum); }
 void nvim_coladvance_curwin(int col) { coladvance(curwin, (colnr_T)col); }
 void nvim_cursor_pos_info_call(void) { cursor_pos_info(NULL); }
@@ -1600,6 +1599,20 @@ void nvim_set_curwin_w_set_curswant(bool val) { curwin->w_set_curswant = val; }
 void nvim_nv_g_home_m_cmd_call(cmdarg_T *cap) { nv_g_home_m_cmd(cap); }
 static void nv_g_dollar_cmd(cmdarg_T *cap);
 void nvim_nv_g_dollar_cmd(cmdarg_T *cap) { nv_g_dollar_cmd(cap); }
+
+// nv_screengo C accessors for Rust FFI
+int nvim_get_curwin_w_virtcol(void) { return curwin->w_virtcol; }
+void nvim_set_curwin_w_curswant_int(int val) { curwin->w_curswant = val; }
+int nvim_get_curwin_ml_line_count(void) { return curwin->w_buffer->b_ml.ml_line_count; }
+int nvim_win_col_off2_curwin(void) { return win_col_off2(curwin); }
+void nvim_cursor_up_inner_curwin(int n, bool skip_conceal) { cursor_up_inner(curwin, n, skip_conceal); }
+void nvim_cursor_down_inner_curwin(int n, bool skip_conceal) { cursor_down_inner(curwin, n, skip_conceal); }
+int nvim_oneright_call(void) { return oneright(); }
+int nvim_get_cursor_char(void) { return utf_ptr2char(get_cursor_pos_ptr()); }
+bool nvim_vim_isprintc(int c) { return vim_isprintc(c); }
+int nvim_vim_strsize_call(const char *s) { return vim_strsize((char *)s); }
+void nvim_adjust_skipcol_call(void) { adjust_skipcol(); }
+void nvim_dec_cursor_col(void) { curwin->w_cursor.col--; }
 
 void nvim_nv_at_impl(cmdarg_T *cap) { nv_at_impl(cap); }
 
@@ -2986,151 +2999,11 @@ bool find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_ar
 }
 
 /// Move 'dist' lines in direction 'dir', counting lines by *screen*
-/// lines rather than lines in the file.
-/// 'dist' must be positive.
-///
-/// @return  true if able to move cursor, false otherwise.
+/// lines rather than lines in the file (thin wrapper calling Rust).
+extern bool rs_nv_screengo(oparg_T *oap, int dir, int dist, bool skip_conceal);
 bool nv_screengo(oparg_T *oap, int dir, int dist, bool skip_conceal)
 {
-  int linelen = linetabsize(curwin, curwin->w_cursor.lnum);
-  bool retval = true;
-  bool atend = false;
-  int col_off1;                 // margin offset for first screen line
-  int col_off2;                 // margin offset for wrapped screen line
-  int width1;                   // text width for first screen line
-  int width2;                   // text width for wrapped screen line
-
-  oap->motion_type = kMTCharWise;
-  oap->inclusive = (curwin->w_curswant == MAXCOL);
-
-  col_off1 = win_col_off(curwin);
-  col_off2 = col_off1 - win_col_off2(curwin);
-  width1 = curwin->w_view_width - col_off1;
-  width2 = curwin->w_view_width - col_off2;
-
-  if (width2 == 0) {
-    width2 = 1;  // Avoid divide by zero.
-  }
-
-  if (curwin->w_view_width != 0) {
-    int n;
-    // Instead of sticking at the last character of the buffer line we
-    // try to stick in the last column of the screen.
-    if (curwin->w_curswant == MAXCOL) {
-      atend = true;
-      validate_virtcol(curwin);
-      if (width1 <= 0) {
-        curwin->w_curswant = 0;
-      } else {
-        curwin->w_curswant = width1 - 1;
-        if (curwin->w_virtcol > curwin->w_curswant) {
-          curwin->w_curswant += ((curwin->w_virtcol
-                                  - curwin->w_curswant -
-                                  1) / width2 + 1) * width2;
-        }
-      }
-    } else {
-      if (linelen > width1) {
-        n = ((linelen - width1 - 1) / width2 + 1) * width2 + width1;
-      } else {
-        n = width1;
-      }
-      curwin->w_curswant = MIN(curwin->w_curswant, n - 1);
-    }
-
-    while (dist--) {
-      if (dir == BACKWARD) {
-        if (curwin->w_curswant >= width1
-            && !hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL)) {
-          // Move back within the line. This can give a negative value
-          // for w_curswant if width1 < width2 (with cpoptions+=n),
-          // which will get clipped to column 0.
-          curwin->w_curswant -= width2;
-        } else {
-          // to previous line
-          if (curwin->w_cursor.lnum <= 1) {
-            retval = false;
-            break;
-          }
-          cursor_up_inner(curwin, 1, skip_conceal);
-
-          linelen = linetabsize(curwin, curwin->w_cursor.lnum);
-          if (linelen > width1) {
-            int w = (((linelen - width1 - 1) / width2) + 1) * width2;
-            assert(curwin->w_curswant <= INT_MAX - w);
-            curwin->w_curswant += w;
-          }
-        }
-      } else {  // dir == FORWARD
-        if (linelen > width1) {
-          n = ((linelen - width1 - 1) / width2 + 1) * width2 + width1;
-        } else {
-          n = width1;
-        }
-        if (curwin->w_curswant + width2 < (colnr_T)n
-            && !hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL)) {
-          // move forward within line
-          curwin->w_curswant += width2;
-        } else {
-          // to next line
-          if (curwin->w_cursor.lnum >= curwin->w_buffer->b_ml.ml_line_count) {
-            retval = false;
-            break;
-          }
-          cursor_down_inner(curwin, 1, skip_conceal);
-          curwin->w_curswant %= width2;
-
-          // Check if the cursor has moved below the number display
-          // when width1 < width2 (with cpoptions+=n). Subtract width2
-          // to get a negative value for w_curswant, which will get
-          // clipped to column 0.
-          if (curwin->w_curswant >= width1) {
-            curwin->w_curswant -= width2;
-          }
-          linelen = linetabsize(curwin, curwin->w_cursor.lnum);
-        }
-      }
-    }
-  }
-
-  if (virtual_active(curwin) && atend) {
-    coladvance(curwin, MAXCOL);
-  } else {
-    coladvance(curwin, curwin->w_curswant);
-  }
-
-  if (curwin->w_cursor.col > 0 && curwin->w_p_wrap) {
-    // Check for landing on a character that got split at the end of the
-    // last line.  We want to advance a screenline, not end up in the same
-    // screenline or move two screenlines.
-    validate_virtcol(curwin);
-    colnr_T virtcol = curwin->w_virtcol;
-    if (virtcol > (colnr_T)width1 && *rs_get_showbreak_value(curwin) != NUL) {
-      virtcol -= vim_strsize((char *)rs_get_showbreak_value(curwin));
-    }
-
-    int c = utf_ptr2char(get_cursor_pos_ptr());
-    if (dir == FORWARD && virtcol < curwin->w_curswant
-        && (curwin->w_curswant <= (colnr_T)width1)
-        && !vim_isprintc(c) && c > 255) {
-      oneright();
-    }
-
-    if (virtcol > curwin->w_curswant
-        && (curwin->w_curswant < (colnr_T)width1
-            ? (curwin->w_curswant > (colnr_T)width1 / 2)
-            : ((curwin->w_curswant - width1) % width2
-               > (colnr_T)width2 / 2))) {
-      curwin->w_cursor.col--;
-    }
-  }
-
-  if (atend) {
-    curwin->w_curswant = MAXCOL;            // stick in the last column
-  }
-  adjust_skipcol();
-
-  return retval;
+  return rs_nv_screengo(oap, dir, dist, skip_conceal);
 }
 
 /// Get the count specified after a 'z' command. Only the 'z<CR>', 'zl', 'zh',

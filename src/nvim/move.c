@@ -290,12 +290,13 @@ void nvim_cursor_up_inner(win_T *wp, linenr_T n, int skip_conceal)
   cursor_up_inner(wp, n, skip_conceal != 0);
 }
 
-/// Wrapper for nv_screengo() (accessor for Rust).
+/// Wrapper for rs_nv_screengo() (accessor for Rust).
 /// Returns 1 on success, 0 on failure.
+extern bool rs_nv_screengo(oparg_T *oap, int dir, int dist, bool skip_conceal);
 int nvim_nv_screengo(int dir, int dist, int skip_conceal)
 {
   oparg_T oa = { 0 };
-  return nv_screengo(&oa, dir, dist, skip_conceal != 0) ? 1 : 0;
+  return rs_nv_screengo(&oa, dir, dist, skip_conceal != 0) ? 1 : 0;
 }
 
 /// Wrapper for beginline() (accessor for Rust).

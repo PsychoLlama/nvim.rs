@@ -2900,7 +2900,6 @@ extern "C" {
     fn nvim_current_search(count: c_int, forward: bool) -> bool;
     fn nvim_cursor_up(count: c_int, upd_topline: bool) -> c_int;
     fn nvim_cursor_down_call(count: c_int, upd_topline: bool) -> c_int;
-    fn nvim_nv_screengo_full(oap: OapHandle, dir: c_int, dist: c_int, conceal: bool) -> c_int;
     fn nvim_linetabsize_curwin(lnum: c_int) -> c_int;
     fn nvim_coladvance_curwin(col: c_int);
     fn nvim_cursor_pos_info_call();
@@ -2921,6 +2920,194 @@ extern "C" {
     fn nvim_do_sleep_wrapper(ms: c_int, allow_int: bool);
     fn nvim_do_exmode_wrapper();
     fn rs_do_ascii(eap: *mut std::ffi::c_void);
+}
+
+// =============================================================================
+// nv_screengo: screen-based movement for gj/gk
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_curwin_w_virtcol() -> c_int;
+    fn nvim_set_curwin_w_curswant_int(val: c_int);
+    fn nvim_get_curwin_ml_line_count() -> c_int;
+    fn nvim_win_col_off2_curwin() -> c_int;
+    fn nvim_validate_virtcol_curwin();
+    fn nvim_cursor_up_inner_curwin(n: c_int, skip_conceal: bool);
+    fn nvim_cursor_down_inner_curwin(n: c_int, skip_conceal: bool);
+    fn nvim_oneright_call() -> c_int;
+    fn nvim_get_cursor_char() -> c_int;
+    fn nvim_vim_isprintc(c: c_int) -> bool;
+    fn nvim_vim_strsize_call(s: *const c_char) -> c_int;
+    fn nvim_adjust_skipcol_call();
+    fn nvim_dec_cursor_col();
+    fn rs_get_showbreak_value(wp: WinHandle) -> *const c_char;
+    fn nvim_get_curwin_w_curswant() -> c_int;
+}
+
+/// Screen-based cursor movement for gj/gk commands.
+///
+/// Moves the cursor up or down by screen lines (not file lines),
+/// handling wrapped lines, column offsets, and multi-byte characters.
+///
+/// # Safety
+/// `oap` must be a valid oparg_T pointer.
+#[no_mangle]
+#[allow(clippy::too_many_lines, clippy::cast_lossless)]
+pub unsafe extern "C" fn rs_nv_screengo(
+    oap: OapHandle,
+    dir: c_int,
+    dist: c_int,
+    skip_conceal: bool,
+) -> bool {
+    let mut linelen = nvim_linetabsize_curwin(nvim_get_cursor_lnum());
+    let mut retval = true;
+    let mut atend = false;
+
+    nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
+    nvim_oap_set_inclusive(oap, nvim_get_curwin_w_curswant() == MAXCOL);
+
+    let col_off1 = nvim_win_col_off_curwin();
+    let col_off2 = col_off1 - nvim_win_col_off2_curwin();
+    let width1 = nvim_get_curwin_w_view_width() - col_off1;
+    let mut width2 = nvim_get_curwin_w_view_width() - col_off2;
+
+    if width2 == 0 {
+        width2 = 1; // Avoid divide by zero.
+    }
+
+    if nvim_get_curwin_w_view_width() != 0 {
+        // Instead of sticking at the last character of the buffer line we
+        // try to stick in the last column of the screen.
+        if nvim_get_curwin_w_curswant() == MAXCOL {
+            atend = true;
+            nvim_validate_virtcol_curwin();
+            if width1 <= 0 {
+                nvim_set_curwin_w_curswant_int(0);
+            } else {
+                nvim_set_curwin_w_curswant_int(width1 - 1);
+                if nvim_get_curwin_w_virtcol() > nvim_get_curwin_w_curswant() {
+                    let extra = ((nvim_get_curwin_w_virtcol() - nvim_get_curwin_w_curswant() - 1)
+                        / width2
+                        + 1)
+                        * width2;
+                    nvim_set_curwin_w_curswant_int(nvim_get_curwin_w_curswant() + extra);
+                }
+            }
+        } else {
+            let n = if linelen > width1 {
+                ((linelen - width1 - 1) / width2 + 1) * width2 + width1
+            } else {
+                width1
+            };
+            if nvim_get_curwin_w_curswant() >= n {
+                nvim_set_curwin_w_curswant_int(n - 1);
+            }
+        }
+
+        let mut remaining = dist;
+        while remaining > 0 {
+            remaining -= 1;
+            if dir == BACKWARD {
+                if nvim_get_curwin_w_curswant() >= width1
+                    && !nvim_hasFolding_curwin(nvim_get_cursor_lnum())
+                {
+                    // Move back within the line. This can give a negative value
+                    // for w_curswant if width1 < width2 (with cpoptions+=n),
+                    // which will get clipped to column 0.
+                    nvim_set_curwin_w_curswant_int(nvim_get_curwin_w_curswant() - width2);
+                } else {
+                    // to previous line
+                    if nvim_get_cursor_lnum() <= 1 {
+                        retval = false;
+                        break;
+                    }
+                    nvim_cursor_up_inner_curwin(1, skip_conceal);
+
+                    linelen = nvim_linetabsize_curwin(nvim_get_cursor_lnum());
+                    if linelen > width1 {
+                        let w = (((linelen - width1 - 1) / width2) + 1) * width2;
+                        nvim_set_curwin_w_curswant_int(nvim_get_curwin_w_curswant() + w);
+                    }
+                }
+            } else {
+                // dir == FORWARD
+                let n = if linelen > width1 {
+                    ((linelen - width1 - 1) / width2 + 1) * width2 + width1
+                } else {
+                    width1
+                };
+                if nvim_get_curwin_w_curswant() + width2 < n
+                    && !nvim_hasFolding_curwin(nvim_get_cursor_lnum())
+                {
+                    // move forward within line
+                    nvim_set_curwin_w_curswant_int(nvim_get_curwin_w_curswant() + width2);
+                } else {
+                    // to next line
+                    if nvim_get_cursor_lnum() >= nvim_get_curwin_ml_line_count() {
+                        retval = false;
+                        break;
+                    }
+                    nvim_cursor_down_inner_curwin(1, skip_conceal);
+                    let remainder = nvim_get_curwin_w_curswant() % width2;
+                    nvim_set_curwin_w_curswant_int(remainder);
+
+                    // Check if the cursor has moved below the number display
+                    // when width1 < width2 (with cpoptions+=n). Subtract width2
+                    // to get a negative value for w_curswant, which will get
+                    // clipped to column 0.
+                    if nvim_get_curwin_w_curswant() >= width1 {
+                        nvim_set_curwin_w_curswant_int(nvim_get_curwin_w_curswant() - width2);
+                    }
+                    linelen = nvim_linetabsize_curwin(nvim_get_cursor_lnum());
+                }
+            }
+        }
+    }
+
+    if nvim_virtual_active() && atend {
+        nvim_coladvance_curwin(MAXCOL);
+    } else {
+        nvim_coladvance_curwin(nvim_get_curwin_w_curswant());
+    }
+
+    if nvim_get_cursor_col() > 0 && nvim_get_curwin_w_p_wrap() {
+        // Check for landing on a character that got split at the end of the
+        // last line. We want to advance a screenline, not end up in the same
+        // screenline or move two screenlines.
+        nvim_validate_virtcol_curwin();
+        let mut virtcol = nvim_get_curwin_w_virtcol();
+        let sbr = rs_get_showbreak_value(nvim_get_curwin());
+        if virtcol > width1 && !sbr.is_null() && *sbr != 0 {
+            virtcol -= nvim_vim_strsize_call(sbr);
+        }
+
+        let c = nvim_get_cursor_char();
+        if dir == FORWARD
+            && virtcol < nvim_get_curwin_w_curswant()
+            && nvim_get_curwin_w_curswant() <= width1
+            && !nvim_vim_isprintc(c)
+            && c > 255
+        {
+            nvim_oneright_call();
+        }
+
+        if virtcol > nvim_get_curwin_w_curswant()
+            && (if nvim_get_curwin_w_curswant() < width1 {
+                nvim_get_curwin_w_curswant() > width1 / 2
+            } else {
+                (nvim_get_curwin_w_curswant() - width1) % width2 > width2 / 2
+            })
+        {
+            nvim_dec_cursor_col();
+        }
+    }
+
+    if atend {
+        nvim_set_curwin_w_curswant_int(MAXCOL); // stick in the last column
+    }
+    nvim_adjust_skipcol_call();
+
+    retval
 }
 
 // g-command key constants
@@ -3054,31 +3241,31 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
 
         // "gj" and "gk": screen-line movement
         n if n == b'j' as c_int || n == K_DOWN => {
-            let i = if nvim_get_curwin_w_p_wrap() {
-                nvim_nv_screengo_full(oap, FORWARD, nvim_cap_get_count1(cap), false)
+            let ok = if nvim_get_curwin_w_p_wrap() {
+                rs_nv_screengo(oap, FORWARD, nvim_cap_get_count1(cap), false)
             } else {
                 nvim_oap_set_motion_type(oap, K_MT_LINEWISE);
                 nvim_cursor_down_call(
                     nvim_cap_get_count1(cap),
                     nvim_oap_get_op_type_ptr(oap) == OP_NOP,
-                )
+                ) != 0
             };
-            if i == 0 {
+            if !ok {
                 rs_clearopbeep(oap);
             }
         }
 
         n if n == b'k' as c_int || n == K_UP => {
-            let i = if nvim_get_curwin_w_p_wrap() {
-                nvim_nv_screengo_full(oap, BACKWARD, nvim_cap_get_count1(cap), false)
+            let ok = if nvim_get_curwin_w_p_wrap() {
+                rs_nv_screengo(oap, BACKWARD, nvim_cap_get_count1(cap), false)
             } else {
                 nvim_oap_set_motion_type(oap, K_MT_LINEWISE);
                 nvim_cursor_up(
                     nvim_cap_get_count1(cap),
                     nvim_oap_get_op_type_ptr(oap) == OP_NOP,
-                )
+                ) != 0
             };
-            if i == 0 {
+            if !ok {
                 rs_clearopbeep(oap);
             }
         }
