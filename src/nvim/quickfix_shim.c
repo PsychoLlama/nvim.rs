@@ -162,7 +162,6 @@ static qf_info_T ql_info_actual;  // global quickfix list
 static qf_info_T *ql_info;        // points to ql_info_actual after allocation
 static unsigned last_qf_id = 0;   // Last Used quickfix list id
 
-
 extern const char *rs_skip_to_option_part(const char *p);
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
@@ -174,237 +173,81 @@ extern bool rs_qf_list_empty(const void *qfl);
 extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
 extern void rs_reset_VIsual_and_resel(void);
 
-// Phase 1: List lifecycle functions implemented in Rust
 extern void rs_qf_new_list(void *qi, const char *title);
 extern void rs_qf_free_items(void *qfl);
 extern void rs_qf_free_list(void *qfl);
 extern void rs_qf_pop_stack(void *qi, bool adjust);
 
-/// Get listcount from qf_info_T for Rust (using void* to avoid type visibility issues)
-int nvim_qf_get_listcount(const void *qi_void)
-{
-  const qf_info_T *qi = (const qf_info_T *)qi_void;
-  return qi->qf_listcount;
-}
+int nvim_qf_get_listcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_listcount; }
 
-/// Get count from qf_list_T for Rust (using void* to avoid type visibility issues)
-int nvim_qf_get_count(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_count;
-}
+int nvim_qf_get_count(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_count; }
 
-/// Get nonevalid flag from qf_list_T for Rust (using void* to avoid type visibility issues)
-bool nvim_qf_get_nonevalid(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_nonevalid;
-}
+bool nvim_qf_get_nonevalid(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_nonevalid; }
 
-/// Get line number from qfline_T for Rust
-linenr_T nvim_qfline_get_lnum(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_lnum;
-}
+linenr_T nvim_qfline_get_lnum(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_lnum; }
 
-/// Get column from qfline_T for Rust
-int nvim_qfline_get_col(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_col;
-}
+int nvim_qfline_get_col(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_col; }
 
-/// Get line number from pos_T for Rust (via opaque pointer)
-linenr_T nvim_qf_pos_get_lnum(const void *pos_void)
-{
-  const pos_T *pos = (const pos_T *)pos_void;
-  return pos->lnum;
-}
+linenr_T nvim_qf_pos_get_lnum(const void *pos_void) { return ((const pos_T *)pos_void)->lnum; }
 
-/// Get column from pos_T for Rust (via opaque pointer)
-int nvim_qf_pos_get_col(const void *pos_void)
-{
-  const pos_T *pos = (const pos_T *)pos_void;
-  return pos->col;
-}
+int nvim_qf_pos_get_col(const void *pos_void) { return ((const pos_T *)pos_void)->col; }
 
-/// Get current list from qf_info_T for Rust
-void *nvim_qf_get_curlist(const void *qi_void)
-{
-  const qf_info_T *qi = (const qf_info_T *)qi_void;
-  return (void *)&qi->qf_lists[qi->qf_curlist];
-}
+void *nvim_qf_get_curlist(const void *qi_void) { return (void *)&((const qf_info_T *)qi_void)->qf_lists[((const qf_info_T *)qi_void)->qf_curlist]; }
 
-/// Get list by index from qf_info_T for Rust
-void *nvim_qf_get_list_at(const void *qi_void, int idx)
-{
-  const qf_info_T *qi = (const qf_info_T *)qi_void;
-  return (void *)&qi->qf_lists[idx];
-}
+void *nvim_qf_get_list_at(const void *qi_void, int idx) { return (void *)&((const qf_info_T *)qi_void)->qf_lists[idx]; }
 
-/// Get current list index from qf_info_T for Rust
-int nvim_qf_get_curlist_idx(const void *qi_void)
-{
-  const qf_info_T *qi = (const qf_info_T *)qi_void;
-  return qi->qf_curlist;
-}
+int nvim_qf_get_curlist_idx(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_curlist; }
 
-/// Get current index (cursor position) from qf_list_T for Rust
-int nvim_qf_get_index(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_index;
-}
+int nvim_qf_get_index(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_index; }
 
-/// Get current entry pointer from qf_list_T for Rust
-void *nvim_qf_get_ptr(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return (void *)qfl->qf_ptr;
-}
+void *nvim_qf_get_ptr(const void *qfl_void) { return (void *)((const qf_list_T *)qfl_void)->qf_ptr; }
 
-/// Get first entry pointer from qf_list_T for Rust
-void *nvim_qf_get_start(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return (void *)qfl->qf_start;
-}
+void *nvim_qf_get_start(const void *qfl_void) { return (void *)((const qf_list_T *)qfl_void)->qf_start; }
 
-/// Get next entry pointer from qfline_T for Rust
-void *nvim_qfline_get_next(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return (void *)qfp->qf_next;
-}
+void *nvim_qfline_get_next(const void *qfp_void) { return (void *)((const qfline_T *)qfp_void)->qf_next; }
 
-/// Get previous entry pointer from qfline_T for Rust
-void *nvim_qfline_get_prev(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return (void *)qfp->qf_prev;
-}
+void *nvim_qfline_get_prev(const void *qfp_void) { return (void *)((const qfline_T *)qfp_void)->qf_prev; }
 
-/// Get valid flag from qfline_T for Rust
-bool nvim_qfline_get_valid(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_valid != 0;
-}
+bool nvim_qfline_get_valid(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_valid != 0; }
 
-/// Get type from qfline_T for Rust
-char nvim_qfline_get_type(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_type;
-}
+char nvim_qfline_get_type(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_type; }
 
-/// Get file number from qfline_T for Rust
-int nvim_qfline_get_fnum(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_fnum;
-}
+int nvim_qfline_get_fnum(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_fnum; }
 
-/// Get end line number from qfline_T for Rust
-linenr_T nvim_qfline_get_end_lnum(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_end_lnum;
-}
+linenr_T nvim_qfline_get_end_lnum(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_end_lnum; }
 
-/// Get end column from qfline_T for Rust
-int nvim_qfline_get_end_col(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_end_col;
-}
+int nvim_qfline_get_end_col(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_end_col; }
 
-/// Get error number from qfline_T for Rust
-int nvim_qfline_get_nr(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_nr;
-}
+int nvim_qfline_get_nr(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_nr; }
 
-/// Get text string from qfline_T for Rust
-const char *nvim_qfline_get_text(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_text;
-}
+const char *nvim_qfline_get_text(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_text; }
 
-/// Get module string from qfline_T for Rust
-const char *nvim_qfline_get_module(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_module;
-}
+const char *nvim_qfline_get_module(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_module; }
 
-/// Get pattern string from qfline_T for Rust
-const char *nvim_qfline_get_pattern(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_pattern;
-}
+const char *nvim_qfline_get_pattern(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_pattern; }
 
-/// Get cleared flag from qfline_T for Rust
-bool nvim_qfline_get_cleared(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_cleared != 0;
-}
+bool nvim_qfline_get_cleared(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_cleared != 0; }
 
-/// Get viscol flag from qfline_T for Rust
-bool nvim_qfline_get_viscol(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_viscol != 0;
-}
+bool nvim_qfline_get_viscol(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_viscol != 0; }
 
-/// Get unique identifier from qf_list_T for Rust
-unsigned nvim_qf_get_id(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_id;
-}
+unsigned nvim_qf_get_id(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_id; }
 
-/// Get changedtick from qf_list_T for Rust
-int nvim_qf_get_changedtick(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_changedtick;
-}
+int nvim_qf_get_changedtick(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_changedtick; }
 
-/// Get title from qf_list_T for Rust
-const char *nvim_qf_get_title(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_title;
-}
+const char *nvim_qf_get_title(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_title; }
 
-/// Get maxcount from qf_info_T for Rust
-int nvim_qf_get_maxcount(const void *qi_void)
-{
-  const qf_info_T *qi = (const qf_info_T *)qi_void;
-  return qi->qf_maxcount;
-}
+int nvim_qf_get_maxcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_maxcount; }
 
 extern bool rs_qf_list_has_valid_entries(const void *qfl);
 
-
-// Phase 6: Entry iteration and comparison functions from Rust
 extern int rs_qf_id2nr(const void *qi, unsigned qf_id);
 extern int rs_qf_restore_list(void *qi, unsigned save_qfid);
 extern void *rs_qf_get_nth_entry(const void *qfl, int errornr, int *new_qfidx);
 
-
-// Phase 554: Display and window functions from Rust
 extern bool rs_qf_should_update_cursor(const void *qfl, int old_idx);
 extern unsigned char rs_qf_type_display_char(unsigned char type_code);
 extern int rs_qf_is_error_type(unsigned char type_code);
 extern int rs_qf_is_warning_type(unsigned char type_code);
-
 
 /// Result of the full errorformat-to-regex conversion
 typedef struct {
@@ -417,7 +260,6 @@ typedef struct {
   char error_char;
 } EfmToRegpatResult;
 
-
 // Full errorformat to regex conversion
 extern EfmToRegpatResult rs_efm_to_regpat(const char *efm, size_t efm_len,
                                            char *addr, char *out, size_t out_size);
@@ -425,7 +267,6 @@ extern EfmToRegpatResult rs_efm_to_regpat(const char *efm, size_t efm_len,
 // Buffer size and part length helpers
 extern size_t rs_efm_regpat_bufsz(const char *efm, size_t efm_len);
 extern int rs_efm_option_part_len(const char *efm, size_t efm_max_len);
-
 
 // Prefix type helpers
 extern char rs_qf_parse_prefix_type(char prefix);
@@ -462,134 +303,44 @@ extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
 
 extern void rs_ex_vimgrep(void *eap);
 
+void nvim_qf_set_curlist_idx(void *qi_void, int idx) { ((qf_info_T *)qi_void)->qf_curlist = idx; }
 
-/// Set the current list index in qf_info_T for Rust
-void nvim_qf_set_curlist_idx(void *qi_void, int idx)
-{
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  qi->qf_curlist = idx;
-}
+void nvim_qf_set_listcount(void *qi_void, int count) { ((qf_info_T *)qi_void)->qf_listcount = count; }
 
-/// Set the listcount in qf_info_T for Rust
-void nvim_qf_set_listcount(void *qi_void, int count)
-{
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  qi->qf_listcount = count;
-}
+void nvim_qf_set_index(void *qfl_void, int idx) { ((qf_list_T *)qfl_void)->qf_index = idx; }
 
-/// Set the current index (cursor position) in qf_list_T for Rust
-void nvim_qf_set_index(void *qfl_void, int idx)
-{
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_index = idx;
-}
+void nvim_qf_set_ptr(void *qfl_void, void *ptr) { ((qf_list_T *)qfl_void)->qf_ptr = (qfline_T *)ptr; }
 
-/// Set the current entry pointer in qf_list_T for Rust
-void nvim_qf_set_ptr(void *qfl_void, void *ptr)
-{
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_ptr = (qfline_T *)ptr;
-}
+int nvim_qf_get_qfl_type(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qfl_type; }
 
-/// Get the qfl_type from qf_list_T for Rust
-int nvim_qf_get_qfl_type(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qfl_type;
-}
+int nvim_qf_get_qi_type(const void *qi_void) { return ((const qf_info_T *)qi_void)->qfl_type; }
 
-/// Get the qfl_type from qf_info_T for Rust
-int nvim_qf_get_qi_type(const void *qi_void)
-{
-  const qf_info_T *qi = (const qf_info_T *)qi_void;
-  return qi->qfl_type;
-}
+int nvim_qi_get_qfl_type(const void *qi_void) { return nvim_qf_get_qi_type(qi_void); }
 
-/// Alias for nvim_qf_get_qi_type (Rust FFI expects this name)
-int nvim_qi_get_qfl_type(const void *qi_void)
-{
-  return nvim_qf_get_qi_type(qi_void);
-}
+void *nvim_qf_get_last(const void *qfl_void) { return (void *)((const qf_list_T *)qfl_void)->qf_last; }
 
-/// Get last entry pointer from qf_list_T for Rust
-void *nvim_qf_get_last(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return (void *)qfl->qf_last;
-}
+const char *nvim_qfline_get_fname(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_fname; }
 
-/// Get fname string from qfline_T for Rust
-const char *nvim_qfline_get_fname(const void *qfp_void)
-{
-  const qfline_T *qfp = (const qfline_T *)qfp_void;
-  return qfp->qf_fname;
-}
-
-/// Check if list has user data
-bool nvim_qf_get_has_user_data(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_has_user_data;
-}
+bool nvim_qf_get_has_user_data(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_has_user_data; }
 
 // Forward declarations for static functions
 static void qf_store_title(qf_list_T *qfl, const char *title);
 
-/// Wrapper for qf_store_title - callable from Rust
-void nvim_qf_store_title(void *qfl_void, const char *title)
-{
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qf_store_title(qfl, title);
-}
+void nvim_qf_store_title(void *qfl_void, const char *title) { qf_store_title(((qf_list_T *)qfl_void), title); }
 
-/// Get global quickfix stack for Rust
-void *nvim_get_ql_info(void)
-{
-  return (void *)ql_info;
-}
+void *nvim_get_ql_info(void) { return (void *)ql_info; }
 
+bool nvim_qf_get_multiline(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_multiline; }
 
-/// Get multiline flag from qf_list_T for Rust
-bool nvim_qf_get_multiline(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_multiline;
-}
+void nvim_qf_set_multiline(void *qfl_void, bool multiline) { ((qf_list_T *)qfl_void)->qf_multiline = multiline; }
 
-/// Set multiline flag in qf_list_T for Rust
-void nvim_qf_set_multiline(void *qfl_void, bool multiline)
-{
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_multiline = multiline;
-}
+bool nvim_qf_get_multiignore(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_multiignore; }
 
-/// Get multiignore flag from qf_list_T for Rust
-bool nvim_qf_get_multiignore(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_multiignore;
-}
+void nvim_qf_set_multiignore(void *qfl_void, bool multiignore) { ((qf_list_T *)qfl_void)->qf_multiignore = multiignore; }
 
-/// Set multiignore flag in qf_list_T for Rust
-void nvim_qf_set_multiignore(void *qfl_void, bool multiignore)
-{
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_multiignore = multiignore;
-}
+bool nvim_qf_get_multiscan(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_multiscan; }
 
-/// Get multiscan flag from qf_list_T for Rust
-bool nvim_qf_get_multiscan(const void *qfl_void)
-{
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_multiscan;
-}
-
-/// Set multiscan flag in qf_list_T for Rust
-void nvim_qf_set_multiscan(void *qfl_void, bool multiscan)
-{
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_multiscan = multiscan;
-}
+void nvim_qf_set_multiscan(void *qfl_void, bool multiscan) { ((qf_list_T *)qfl_void)->qf_multiscan = multiscan; }
 
 #define FMT_PATTERNS 14           // maximum number of % recognized
 
@@ -724,7 +475,6 @@ enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
        !got_int && (i) <= (qfl)->qf_count && (qfp) != NULL; \
        (i)++, (qfp) = (qfp)->qf_next)
 
-
 static char *qf_types(int c, int nr);
 static win_T *qf_find_win(const qf_info_T *qi);
 
@@ -799,18 +549,9 @@ bool nvim_qf_entry_present(const void *qfl_void, const void *qf_ptr_void)
   return false;
 }
 
-/// The caller must not free this string.
-const char *nvim_qf_types(int c, int nr)
-{
-  return qf_types(c, nr);
-}
+const char *nvim_qf_types(int c, int nr) { return qf_types(c, nr); }
 
-/// Emit the "No more items" error message (E553) for Rust
-void nvim_emsg_e_no_more_items(void)
-{
-  emsg(_(e_no_more_items));
-}
-
+void nvim_emsg_e_no_more_items(void) { emsg(_(e_no_more_items)); }
 
 /// Increment the list count after adding a list
 void nvim_qf_increment_listcount(void *qi_void)
@@ -904,12 +645,7 @@ void nvim_qfline_set_prev(void *qfp_void, void *prev)
   qfp->qf_prev = (qfline_T *)prev;
 }
 
-
-/// Allocate a new qfline_T structure, zero-initialized
-void *nvim_qfline_alloc(void)
-{
-  return xcalloc(1, sizeof(qfline_T));
-}
+void *nvim_qfline_alloc(void) { return xcalloc(1, sizeof(qfline_T)); }
 
 /// Free a qfline_T structure and its string fields
 void nvim_qfline_free(void *qfp_void)
@@ -1137,12 +873,7 @@ char *nvim_qf_fix_fname(const char *fname, int bufnum)
   return NULL;
 }
 
-/// Check if a character is printable (for type validation)
-bool nvim_qf_is_printc(int c)
-{
-  return vim_isprintc(c);
-}
-
+bool nvim_qf_is_printc(int c) { return vim_isprintc(c); }
 
 /// Set the quickfix list ID
 void nvim_qf_set_id(void *qfl_void, unsigned id)
@@ -1187,11 +918,7 @@ void *nvim_qf_get_list_at_mut(void *qi_void, int idx)
   return &qi->qf_lists[idx];
 }
 
-/// Allocate and return the next quickfix list ID
-unsigned nvim_qf_alloc_next_id(void)
-{
-  return ++last_qf_id;
-}
+unsigned nvim_qf_alloc_next_id(void) { return ++last_qf_id; }
 
 /// Clear a quickfix list structure (zero all fields)
 void nvim_qf_clear_list_struct(void *qfl_void)
@@ -1294,7 +1021,6 @@ void nvim_qf_decr_listcount(void *qi_void)
   }
 }
 
-
 static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname);
 
 /// Get the directory stack pointer from a quickfix list
@@ -1386,7 +1112,6 @@ int nvim_qf_get_fnum(void *qfl_void, char *directory, char *fname)
   return qf_get_fnum((qf_list_T *)qfl_void, directory, fname);
 }
 
-
 static efm_T *parse_efm_option(char *efm);
 static void free_efm_list(efm_T **efm_first);
 static int qf_parse_line(qf_list_T *qfl, char *linebuf, size_t linelen, efm_T *fmt_first,
@@ -1403,12 +1128,7 @@ EfmHandle nvim_qf_parse_efm_option(char *efm)
   return parse_efm_option(efm);
 }
 
-/// Free an errorformat pattern list
-void nvim_qf_free_efm_list(EfmHandle efm_first)
-{
-  efm_T *efm = (efm_T *)efm_first;
-  free_efm_list(&efm);
-}
+void nvim_qf_free_efm_list(EfmHandle efm_first) { efm_T *efm = (efm_T *)efm_first; free_efm_list(&efm); }
 
 /// Get the next pattern in the errorformat list
 EfmHandle nvim_efm_get_next(EfmHandle efm)
@@ -1455,7 +1175,6 @@ char nvim_efm_get_addr(EfmHandle efm, int idx)
   return ((efm_T *)efm)->addr[idx];
 }
 
-
 static int qf_get_nextline(qfstate_T *state);
 static int qf_setup_state(qfstate_T *pstate, char *restrict enc, const char *restrict efile,
                           typval_T *tv, buf_T *buf, linenr_T lnumfirst, linenr_T lnumlast);
@@ -1463,11 +1182,7 @@ static void qf_cleanup_state(qfstate_T *pstate);
 
 // QfStateHandle is now defined in quickfix.h
 
-/// Allocate a new parser state object
-QfStateHandle nvim_qf_state_alloc(void)
-{
-  return xcalloc(1, sizeof(qfstate_T));
-}
+QfStateHandle nvim_qf_state_alloc(void) { return xcalloc(1, sizeof(qfstate_T)); }
 
 /// Free a parser state object
 void nvim_qf_state_free(QfStateHandle state)
@@ -1551,7 +1266,6 @@ bool nvim_qf_state_has_buf(QfStateHandle state)
   return ((qfstate_T *)state)->buf != NULL;
 }
 
-
 static win_T *qf_find_win(const qf_info_T *qi);
 static buf_T *qf_find_buf(qf_info_T *qi);
 static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index);
@@ -1633,7 +1347,6 @@ void *nvim_win_get_llist_ref(const void *win_void)
   return ((const win_T *)win_void)->w_llist_ref;
 }
 
-
 static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title);
 static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict);
 
@@ -1702,7 +1415,6 @@ bool nvim_qf_has_user_data(const void *qfl_void)
   }
   return ((const qf_list_T *)qfl_void)->qf_has_user_data;
 }
-
 
 /// Increment the changedtick of a quickfix list
 void nvim_qf_incr_changedtick(void *qfl_void)
@@ -2309,7 +2021,6 @@ static void qf_cleanup_state(qfstate_T *pstate)
   }
 }
 
-
 /// Allocate a qffields_T and return it as an opaque handle.
 void *nvim_qf_init_alloc_fields(void)
 {
@@ -2352,11 +2063,7 @@ void nvim_qf_init_cleanup_state(void *state_void)
   xfree(state_void);
 }
 
-/// Clear the qf_last_bufname cache.
-void nvim_qf_init_clear_last_bufname(void)
-{
-  XFREE_CLEAR(qf_last_bufname);
-}
+void nvim_qf_init_clear_last_bufname(void) { XFREE_CLEAR(qf_last_bufname); }
 
 /// Returns the efm string to use (NOT a copy - do not free).
 char *nvim_qf_init_resolve_efm(char *errorformat, void *tv_void, void *buf_void)
@@ -2394,12 +2101,7 @@ int nvim_qf_init_process_nextline(void *qfl_void, void *fmt_first_void,
                                   (qfstate_T *)state_void, (qffields_T *)fields_void);
 }
 
-/// Returns true if there was NO file error (success path).
-bool nvim_qf_init_state_no_fd_error(void *state_void)
-{
-  qfstate_T *pstate = (qfstate_T *)state_void;
-  return pstate->fd == NULL || !ferror(pstate->fd);
-}
+bool nvim_qf_init_state_no_fd_error(void *state_void) { return ((qfstate_T *)state_void)->fd == NULL || !ferror(((qfstate_T *)state_void)->fd); }
 
 /// Sets qf_ptr, qf_index, and qf_nonevalid based on whether valid entries exist.
 void nvim_qf_init_finalize_list(void *qfl_void)
@@ -2418,11 +2120,7 @@ void nvim_qf_init_finalize_list(void *qfl_void)
   }
 }
 
-/// Emit "Error while reading errorfile" message.
-void nvim_qf_init_emsg_readerrf(void)
-{
-  emsg(_(e_readerrf));
-}
+void nvim_qf_init_emsg_readerrf(void) { emsg(_(e_readerrf)); }
 
 _Static_assert(QF_END_OF_INPUT == 2, "QF_END_OF_INPUT must be 2");
 _Static_assert(QF_FAIL == 0, "QF_FAIL must be 0");
@@ -2866,12 +2564,7 @@ static void locstack_queue_delreq(qf_info_T *qi)
   qf_delq_head = q;
 }
 
-/// Return the global quickfix stack window buffer number.
-int qf_stack_get_bufnr(void)
-{
-  assert(ql_info != NULL);
-  return ql_info->qf_bufnr;
-}
+int qf_stack_get_bufnr(void) { assert(ql_info != NULL); return ql_info->qf_bufnr; }
 
 /// quickfix/location list.
 static void wipe_qf_buffer(qf_info_T *qi)
@@ -2957,11 +2650,7 @@ void qf_free_all(win_T *wp)
   }
 }
 
-/// Must always call decr_quickfix_busy() exactly once after this.
-static void incr_quickfix_busy(void)
-{
-  quickfix_busy++;
-}
+static void incr_quickfix_busy(void) { quickfix_busy++; }
 
 /// Safe to free location list stacks. Process any delayed delete requests.
 static void decr_quickfix_busy(void)
@@ -2998,12 +2687,7 @@ void check_quickfix_busy(void)
 }
 #endif
 
-/// Resize quickfix stack to be able to hold n amount of lists.
-void qf_resize_stack(int n)
-{
-  assert(ql_info != NULL);
-  qf_resize_stack_base(ql_info, n);
-}
+void qf_resize_stack(int n) { assert(ql_info != NULL); qf_resize_stack_base(ql_info, n); }
 
 /// Resize location list stack for window 'wp' to be able to hold n amount of lists.
 void ll_resize_stack(win_T *wp, int n)
@@ -3052,11 +2736,7 @@ static void qf_resize_stack_base(qf_info_T *qi, int n)
   qf_update_buffer(qi, NULL);
 }
 
-/// Initialize quickfix list, should only be called once.
-void qf_init_stack(void)
-{
-  ql_info = qf_alloc_stack(QFLT_QUICKFIX, (int)p_chi);
-}
+void qf_init_stack(void) { ql_info = qf_alloc_stack(QFLT_QUICKFIX, (int)p_chi); }
 
 /// Sync a location list window's 'lhistory' value to the parent window
 static void qf_sync_llw_to_win(win_T *llw)
@@ -3387,7 +3067,6 @@ static bool is_qf_entry_present(qf_list_T *qfl, qfline_T *qf_ptr)
   return true;
 }
 
-
 // Find a window displaying a Vim help file in the current tab page.
 static win_T *qf_find_help_win(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
@@ -3400,16 +3079,10 @@ static win_T *qf_find_help_win(void)
   return NULL;
 }
 
-/// Set the location list for the specified window to 'qi'.
-static void win_set_loclist(win_T *wp, qf_info_T *qi)
-{
-  wp->w_llist = qi;
-  qi->qf_refcount++;
-}
+static void win_set_loclist(win_T *wp, qf_info_T *qi) { wp->w_llist = qi; qi->qf_refcount++; }
 
 // Rust exports for jump machinery
 extern void rs_qf_jump_newwin(void *qi, int dir, int errornr, int forceit, bool newwin);
-
 
 /// Returns NULL if a matching window is not found.
 static win_T *qf_find_win_with_loclist(const qf_info_T *ll)
@@ -3447,7 +3120,6 @@ static bool qf_goto_tabwin_with_file(int fnum)
   }
   return false;
 }
-
 
 /// post-validation), or -2 if can_abandon failed (skip post-validation).
 int nvim_qf_jump_open_help(int qf_fnum, int forceit, int prev_winid)
@@ -3502,28 +3174,15 @@ bool nvim_qf_jump_loc_win_closed(int prev_winid, void *qi_void)
   return wp == NULL && curwin->w_llist != qi;
 }
 
-/// Emit "Current window was closed" error.
-void nvim_qf_jump_emsg_win_closed(void)
-{
-  emsg(_("E924: Current window was closed"));
-}
+void nvim_qf_jump_emsg_win_closed(void) { emsg(_("E924: Current window was closed")); }
 
-/// Emit "Current quickfix list was changed" error.
-void nvim_qf_jump_emsg_qf_changed(void)
-{
-  emsg(_(e_current_quickfix_list_was_changed));
-}
+void nvim_qf_jump_emsg_qf_changed(void) { emsg(_(e_current_quickfix_list_was_changed)); }
 
-/// Emit "Current location list was changed" error.
-void nvim_qf_jump_emsg_ll_changed(void)
-{
-  emsg(_(e_current_location_list_was_changed));
-}
+void nvim_qf_jump_emsg_ll_changed(void) { emsg(_(e_current_location_list_was_changed)); }
 
 _Static_assert(QFLT_QUICKFIX == 0, "QFLT_QUICKFIX must be 0");
 _Static_assert(QFLT_LOCATION == 1, "QFLT_LOCATION must be 1");
 _Static_assert(QF_ABORT == 6, "QF_ABORT must be 6");
-
 
 /// Find a help window in the current tab. Returns win handle or NULL.
 void *nvim_qf_find_help_win(void)
@@ -3589,206 +3248,71 @@ int nvim_qf_open_new_file_win(void *ll_ref)
   return OK;
 }
 
+void *nvim_qf_curwin_get_llist_ref(void) { return curwin->w_llist_ref; }
 
-/// Get curwin->w_llist_ref (location list reference)
-void *nvim_qf_curwin_get_llist_ref(void)
-{
-  return curwin->w_llist_ref;
-}
+bool nvim_qf_curbuf_is_quickfix(void) { return bt_quickfix(curbuf); }
 
-/// Check if curbuf is quickfix buffer type
-bool nvim_qf_curbuf_is_quickfix(void)
-{
-  return bt_quickfix(curbuf);
-}
+bool nvim_qf_curwin_buf_is_help(void) { return bt_help(curwin->w_buffer); }
 
-/// Check if curwin buffer is help buffer type
-bool nvim_qf_curwin_buf_is_help(void)
-{
-  return bt_help(curwin->w_buffer);
-}
+int nvim_qf_get_cmdmod_tab(void) { return cmdmod.cmod_tab; }
 
-/// Get cmdmod.cmod_tab value
-int nvim_qf_get_cmdmod_tab(void)
-{
-  return cmdmod.cmod_tab;
-}
+bool nvim_qf_is_one_window(void) { return ONE_WINDOW; }
 
-/// Check if ONE_WINDOW (only one window) condition is true
-bool nvim_qf_is_one_window(void)
-{
-  return ONE_WINDOW;
-}
+bool nvim_qf_swb_has_usetab(void) { return (swb_flags & kOptSwbFlagUsetab) != 0; }
 
-/// Check swb_flags for usetab
-bool nvim_qf_swb_has_usetab(void)
-{
-  return (swb_flags & kOptSwbFlagUsetab) != 0;
-}
+int nvim_qf_curwin_handle(void) { return curwin->handle; }
 
-/// Get curwin->handle (window ID)
-int nvim_qf_curwin_handle(void)
-{
-  return curwin->handle;
-}
+void nvim_qf_win_close_curwin(void) { win_close(curwin, true, false); }
 
-/// Close current window (for error recovery in qf_jump_newwin)
-void nvim_qf_win_close_curwin(void)
-{
-  win_close(curwin, true, false);
-}
+void nvim_qf_win_goto(void *win) { win_goto((win_T *)win); }
 
+void nvim_qf_win_enter(void *win) { win_enter((win_T *)win, true); }
 
-/// Navigate to a window (win_goto wrapper)
-void nvim_qf_win_goto(void *win)
-{
-  win_goto((win_T *)win);
-}
+int nvim_qf_win_buf_nwindows(const void *win) { return ((const win_T *)win)->w_buffer->b_nwindows; }
 
-/// Enter a window (win_enter wrapper)
-void nvim_qf_win_enter(void *win)
-{
-  win_enter((win_T *)win, true);
-}
+int nvim_qf_win_buf_fnum(const void *win) { return ((const win_T *)win)->w_buffer->b_fnum; }
 
-/// Get w_buffer->b_nwindows for a window
-int nvim_qf_win_buf_nwindows(const void *win)
-{
-  return ((const win_T *)win)->w_buffer->b_nwindows;
-}
+void *nvim_qf_win_get_llist(const void *win) { return ((const win_T *)win)->w_llist; }
 
-/// Get w_buffer->b_fnum for a window
-int nvim_qf_win_buf_fnum(const void *win)
-{
-  return ((const win_T *)win)->w_buffer->b_fnum;
-}
+void nvim_qf_win_set_loclist(void *win, void *qi) { win_set_loclist((win_T *)win, (qf_info_T *)qi); }
 
-/// Get w_llist for a window (location list pointer)
-void *nvim_qf_win_get_llist(const void *win)
-{
-  return ((const win_T *)win)->w_llist;
-}
+int nvim_qf_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 
-/// Set location list for window+qi
-void nvim_qf_win_set_loclist(void *win, void *qi)
-{
-  win_set_loclist((win_T *)win, (qf_info_T *)qi);
-}
+int nvim_qf_curwin_width(void) { return curwin->w_width; }
 
-/// Get cmdmod.cmod_split
-int nvim_qf_get_cmdmod_split(void)
-{
-  return cmdmod.cmod_split;
-}
+int nvim_qf_get_columns(void) { return Columns; }
 
-/// Get curwin->w_width
-int nvim_qf_curwin_width(void)
-{
-  return curwin->w_width;
-}
+int nvim_qf_curwin_height(void) { return curwin->w_height; }
 
-/// Get Columns global
-int nvim_qf_get_columns(void)
-{
-  return Columns;
-}
+int nvim_qf_get_p_hh(void) { return (int)p_hh; }
 
-/// Get curwin->w_height
-int nvim_qf_curwin_height(void)
-{
-  return curwin->w_height;
-}
+int nvim_qf_win_split(int size, int flags) { return win_split(size, flags); }
 
-/// Get p_hh (help height option)
-int nvim_qf_get_p_hh(void)
-{
-  return (int)p_hh;
-}
+void nvim_qf_win_setheight(int height) { rs_win_setheight(height); }
 
-/// win_split wrapper
-int nvim_qf_win_split(int size, int flags)
-{
-  return win_split(size, flags);
-}
+void nvim_qf_clear_restart_edit(void) { restart_edit = 0; }
 
-/// win_setheight wrapper
-void nvim_qf_win_setheight(int height)
-{
-  rs_win_setheight(height);
-}
+bool nvim_qf_is_ll_stack_qi(const void *qi) { return IS_LL_STACK((const qf_info_T *)qi); }
 
-/// Set restart_edit = 0
-void nvim_qf_clear_restart_edit(void)
-{
-  restart_edit = 0;
-}
+bool nvim_qf_win_is_qf_window(const void *win) { return IS_QF_WINDOW((const win_T *)win); }
 
-/// IS_LL_STACK check
-bool nvim_qf_is_ll_stack_qi(const void *qi)
-{
-  return IS_LL_STACK((const qf_info_T *)qi);
-}
+void *nvim_qf_win_prev(const void *win) { return ((const win_T *)win)->w_prev; }
 
-/// IS_QF_WINDOW check for a window
-bool nvim_qf_win_is_qf_window(const void *win)
-{
-  return IS_QF_WINDOW((const win_T *)win);
-}
+void *nvim_qf_win_next(const void *win) { return ((const win_T *)win)->w_next; }
 
-/// win->w_prev
-void *nvim_qf_win_prev(const void *win)
-{
-  return ((const win_T *)win)->w_prev;
-}
+void *nvim_qf_get_lastwin(void) { return lastwin; }
 
-/// win->w_next
-void *nvim_qf_win_next(const void *win)
-{
-  return ((const win_T *)win)->w_next;
-}
+void *nvim_qf_get_curwin(void) { return curwin; }
 
-/// Get lastwin global
-void *nvim_qf_get_lastwin(void)
-{
-  return lastwin;
-}
+bool nvim_qf_win_bt_normal(const void *win) { return bt_normal(((const win_T *)win)->w_buffer); }
 
-/// Get curwin global (as void*)
-void *nvim_qf_get_curwin(void)
-{
-  return curwin;
-}
+bool nvim_qf_swb_uselast_prevwin_ok(void) { return (swb_flags & kOptSwbFlagUselast) && rs_win_valid(prevwin) && !prevwin->w_p_wfb; }
 
-/// bt_normal check on a window's buffer
-bool nvim_qf_win_bt_normal(const void *win)
-{
-  return bt_normal(((const win_T *)win)->w_buffer);
-}
+void *nvim_qf_get_prevwin(void) { return prevwin; }
 
-/// Get swb_flags & kOptSwbFlagUselast, and also check prevwin validity + w_p_wfb
-bool nvim_qf_swb_uselast_prevwin_ok(void)
-{
-  return (swb_flags & kOptSwbFlagUselast) && rs_win_valid(prevwin) && !prevwin->w_p_wfb;
-}
+bool nvim_qf_win_is_preview(const void *win) { return ((const win_T *)win)->w_p_pvw; }
 
-/// Get prevwin
-void *nvim_qf_get_prevwin(void)
-{
-  return prevwin;
-}
-
-/// Check win->w_p_pvw (preview window)
-bool nvim_qf_win_is_preview(const void *win)
-{
-  return ((const win_T *)win)->w_p_pvw;
-}
-
-/// Check win->w_p_wfb (winfixbuf)
-bool nvim_qf_win_is_wfb(const void *win)
-{
-  return ((const win_T *)win)->w_p_wfb;
-}
-
+bool nvim_qf_win_is_wfb(const void *win) { return ((const win_T *)win)->w_p_wfb; }
 
 /// qf_pattern may be NULL (use line/col instead).
 void nvim_qf_jump_goto_line(linenr_T qf_lnum, int qf_col, char qf_viscol, const char *qf_pattern)
@@ -3866,48 +3390,19 @@ void nvim_qf_jump_print_msg(void *qi_void, int qf_index, void *qf_ptr_void,
   qfga_clear();
 }
 
-/// Get curbuf as opaque handle (for saving/comparing)
-void *nvim_qf_get_curbuf(void)
-{
-  return curbuf;
-}
+void *nvim_qf_get_curbuf(void) { return curbuf; }
 
-/// Check if (fdo_flags & kOptFdoFlagQuickfix) is set
-bool nvim_qf_fdo_quickfix(void)
-{
-  return (fdo_flags & kOptFdoFlagQuickfix) != 0;
-}
+bool nvim_qf_fdo_quickfix(void) { return (fdo_flags & kOptFdoFlagQuickfix) != 0; }
 
-/// rs_foldOpenCursor() wrapper
-void nvim_qf_fold_open_cursor(void)
-{
-  rs_foldOpenCursor();
-}
+void nvim_qf_fold_open_cursor(void) { rs_foldOpenCursor(); }
 
-/// setpcmark() wrapper
-void nvim_qf_setpcmark(void)
-{
-  setpcmark();
-}
+void nvim_qf_setpcmark(void) { setpcmark(); }
 
-/// Check if curbuf == given buf handle
-bool nvim_qf_curbuf_is(const void *buf)
-{
-  return curbuf == (const buf_T *)buf;
-}
+bool nvim_qf_curbuf_is(const void *buf) { return curbuf == (const buf_T *)buf; }
 
+void *nvim_qf_get_p_swb(void) { return p_swb; }
 
-/// Save p_swb pointer for later comparison
-void *nvim_qf_get_p_swb(void)
-{
-  return p_swb;
-}
-
-/// Get swb_flags value
-unsigned nvim_qf_get_swb_flags(void)
-{
-  return swb_flags;
-}
+unsigned nvim_qf_get_swb_flags(void) { return swb_flags; }
 
 /// Restore p_swb if it was changed to empty_string_option
 void nvim_qf_restore_swb(void *old_swb, unsigned old_swb_flags)
@@ -3917,7 +3412,6 @@ void nvim_qf_restore_swb(void *old_swb, unsigned old_swb_flags)
     swb_flags = old_swb_flags;
   }
 }
-
 
 /// Close a specific quickfix window
 void nvim_qf_win_close(void *win_void)
@@ -3991,29 +3485,13 @@ int nvim_qf_win_get_status_height(const void *win_void)
   return ((const win_T *)win_void)->w_status_height;
 }
 
-/// Get tabline height
-int nvim_qf_tabline_height(void)
-{
-  return rs_tabline_height();
-}
+int nvim_qf_tabline_height(void) { return rs_tabline_height(); }
 
-/// Get cmdline_row global
-int nvim_qf_cmdline_row(void)
-{
-  return (int)cmdline_row;
-}
+int nvim_qf_cmdline_row(void) { return (int)cmdline_row; }
 
-/// Set window width
-void nvim_qf_win_setwidth(int width)
-{
-  rs_win_setwidth(width);
-}
+void nvim_qf_win_setwidth(int width) { rs_win_setwidth(width); }
 
-/// Reset visual mode
-void nvim_qf_reset_visual(void)
-{
-  rs_reset_VIsual_and_resel();
-}
+void nvim_qf_reset_visual(void) { rs_reset_VIsual_and_resel(); }
 
 /// Wrap entire qf_open_new_cwindow
 int nvim_qf_open_new_cwindow(void *qi_void, int height)
@@ -4033,24 +3511,11 @@ void nvim_qf_set_title_var(void *qfl_void)
   qf_set_title_var((qf_list_T *)qfl_void);
 }
 
-/// Set cursor position in curwin
-void nvim_qf_curwin_set_cursor(linenr_T lnum, int col)
-{
-  curwin->w_cursor.lnum = lnum;
-  curwin->w_cursor.col = col;
-}
+void nvim_qf_curwin_set_cursor(linenr_T lnum, int col) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; }
 
-/// check_cursor(curwin)
-void nvim_qf_check_cursor_curwin(void)
-{
-  check_cursor(curwin);
-}
+void nvim_qf_check_cursor_curwin(void) { check_cursor(curwin); }
 
-/// update_topline(curwin)
-void nvim_qf_update_topline_curwin(void)
-{
-  update_topline(curwin);
-}
+void nvim_qf_update_topline_curwin(void) { update_topline(curwin); }
 
 /// Wrap qf_update_win_titlevar
 void nvim_qf_update_win_titlevar(void *qi_void)
@@ -4500,11 +3965,7 @@ linenr_T qf_current_entry(win_T *wp)
   return qf_get_curlist(qi)->qf_index;
 }
 
-/// Accessor for qf_current_entry for Rust FFI.
-linenr_T nvim_qf_current_entry(win_T *wp)
-{
-  return qf_current_entry(wp);
-}
+linenr_T nvim_qf_current_entry(win_T *wp) { return qf_current_entry(wp); }
 
 /// @param old_qf_index  previous qf_index or zero
 static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index)
@@ -4795,12 +4256,7 @@ static list_T *call_qftf_func(qf_list_T *qfl, int qf_winid, int start_idx, int e
   return qftf_list;
 }
 
-
-/// Check if buf == curbuf
-bool nvim_qf_buf_is_curbuf(const void *buf)
-{
-  return (const buf_T *)buf == curbuf;
-}
+bool nvim_qf_buf_is_curbuf(const void *buf) { return (const buf_T *)buf == curbuf; }
 
 /// Returns true on success.
 bool nvim_qf_delete_all_lines(void)
@@ -4824,17 +4280,9 @@ void nvim_qf_zero_skipcol_for_curbuf(void)
   }
 }
 
-/// Remove all undo information from curbuf
-void nvim_qf_u_clearallandblockfree(void)
-{
-  u_clearallandblockfree(curbuf);
-}
+void nvim_qf_u_clearallandblockfree(void) { u_clearallandblockfree(curbuf); }
 
-/// Call the quickfix text formatting function
-void *nvim_call_qftf_func(void *qfl, int qf_winid, linenr_T start, int count)
-{
-  return call_qftf_func((qf_list_T *)qfl, qf_winid, start, count);
-}
+void *nvim_call_qftf_func(void *qfl, int qf_winid, linenr_T start, int count) { return call_qftf_func((qf_list_T *)qfl, qf_winid, start, count); }
 
 /// Get string from a list item, or NULL if not a string
 char *nvim_tv_list_item_string(const void *li)
@@ -4853,23 +4301,11 @@ int nvim_qf_buf_add_line(void *qfl, void *buf, linenr_T lnum, void *qfp,
                          dirname, qftf_str, first_in_file);
 }
 
-/// Delete a line at the given line number
-void nvim_ml_delete_one(linenr_T lnum)
-{
-  ml_delete(lnum);
-}
+void nvim_ml_delete_one(linenr_T lnum) { ml_delete(lnum); }
 
-/// Clear the qfga buffer
-void nvim_qfga_clear(void)
-{
-  qfga_clear();
-}
+void nvim_qfga_clear(void) { qfga_clear(); }
 
-/// Correct cursor position
-void nvim_check_lnums_true(void)
-{
-  rs_check_lnums(1);
-}
+void nvim_check_lnums_true(void) { rs_check_lnums(1); }
 
 /// Set filetype, apply autocmds, and redraw for new qf buffer fill
 void nvim_qf_set_filetype_and_autocmds(void)
@@ -4887,22 +4323,11 @@ void nvim_qf_set_filetype_and_autocmds(void)
   redraw_curbuf_later(UPD_NOT_VALID);
 }
 
-/// Get/set KeyTyped for qf_fill_buffer
-bool nvim_qf_get_key_typed(void)
-{
-  return KeyTyped;
-}
+bool nvim_qf_get_key_typed(void) { return KeyTyped; }
 
-void nvim_qf_set_key_typed(bool val)
-{
-  KeyTyped = val;
-}
+void nvim_qf_set_key_typed(bool val) { KeyTyped = val; }
 
-/// Report internal error for qf_fill_buffer
-void nvim_qf_fill_buffer_internal_error(void)
-{
-  internal_error("rs_qf_fill_buffer()");
-}
+void nvim_qf_fill_buffer_internal_error(void) { internal_error("rs_qf_fill_buffer()"); }
 
 /// Get qf_start from a list (returns NULL if qfl is NULL)
 void *nvim_qf_get_start_nonnull(const void *qfl)
@@ -4913,10 +4338,7 @@ void *nvim_qf_get_start_nonnull(const void *qfl)
   return ((const qf_list_T *)qfl)->qf_start;
 }
 
-static void qf_list_changed(qf_list_T *qfl)
-{
-  qfl->qf_changedtick++;
-}
+static void qf_list_changed(qf_list_T *qfl) { qfl->qf_changedtick++; }
 
 // Jump to the first entry if there is one.
 static void qf_jump_first(qf_info_T *qi, unsigned save_qfid, int forceit)
@@ -5261,96 +4683,35 @@ static size_t qf_get_nth_valid_entry(qf_list_T *qfl, size_t n, bool fdo)
   return i <= qfl->qf_count ? (size_t)i : 1;
 }
 
+void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg) { return qf_cmd_get_stack((exarg_T *)eap_void, print_emsg); }
 
-/// Get the quickfix stack for an ex command (wraps qf_cmd_get_stack)
-void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg)
-{
-  return qf_cmd_get_stack((exarg_T *)eap_void, print_emsg);
-}
+void nvim_qf_msg(void *qi_void, int which, const char *lead) { qf_msg((qf_info_T *)qi_void, which, (char *)lead); }
 
-/// Wrapper for qf_msg callable from Rust
-void nvim_qf_msg(void *qi_void, int which, const char *lead)
-{
-  qf_msg((qf_info_T *)qi_void, which, (char *)lead);
-}
+int nvim_qf_get_nth_valid_entry(void *qfl_void, int n, bool fdo) { return (int)qf_get_nth_valid_entry((qf_list_T *)qfl_void, (size_t)n, fdo); }
 
-/// Wrapper for qf_get_nth_valid_entry callable from Rust
-int nvim_qf_get_nth_valid_entry(void *qfl_void, int n, bool fdo)
-{
-  return (int)qf_get_nth_valid_entry((qf_list_T *)qfl_void, (size_t)n, fdo);
-}
+void nvim_emsg_loclist(void) { emsg(_(e_loclist)); }
 
-/// Emit loclist error message for Rust
-void nvim_emsg_loclist(void)
-{
-  emsg(_(e_loclist));
-}
+void nvim_emsg_no_errors(void) { emsg(_(e_no_errors)); }
 
-/// Emit "No errors" message for Rust
-void nvim_emsg_no_errors(void)
-{
-  emsg(_(e_no_errors));
-}
+void nvim_emsg_at_bottom(void) { emsg(_("E380: At bottom of quickfix stack")); }
 
-/// Emit "At bottom of quickfix stack" error (E380) for Rust
-void nvim_emsg_at_bottom(void)
-{
-  emsg(_("E380: At bottom of quickfix stack"));
-}
+void nvim_emsg_at_top(void) { emsg(_("E381: At top of quickfix stack")); }
 
-/// Emit "At top of quickfix stack" error (E381) for Rust
-void nvim_emsg_at_top(void)
-{
-  emsg(_("E381: At top of quickfix stack"));
-}
+void nvim_msg_no_entries(void) { msg(_("No entries"), 0); }
 
-/// Emit "No entries" message for Rust
-void nvim_msg_no_entries(void)
-{
-  msg(_("No entries"), 0);
-}
+void nvim_emsg_invrange(void) { emsg(_(e_invrange)); }
 
-/// Emit invalid range error for Rust
-void nvim_emsg_invrange(void)
-{
-  emsg(_(e_invrange));
-}
+bool nvim_qf_curwin_is_ll(void) { return IS_LL_WINDOW(curwin); }
 
-/// Wrapper for qf_view_result helper: check if curwin is LL window
-bool nvim_qf_curwin_is_ll(void)
-{
-  return IS_LL_WINDOW(curwin);
-}
+void *nvim_qf_curwin_get_loclist(void) { return GET_LOC_LIST(curwin); }
 
-/// Wrapper for qf_view_result: get location list for current window
-void *nvim_qf_curwin_get_loclist(void)
-{
-  return GET_LOC_LIST(curwin);
-}
+linenr_T nvim_qf_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 
-/// Get curwin->w_cursor.lnum for Rust
-linenr_T nvim_qf_get_cursor_lnum(void)
-{
-  return curwin->w_cursor.lnum;
-}
+void nvim_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
 
-/// Execute a command string for Rust (wraps do_cmdline_cmd)
-void nvim_do_cmdline_cmd(const char *cmd)
-{
-  do_cmdline_cmd(cmd);
-}
+bool nvim_qf_curbuf_has_flag(int flag) { return (curbuf->b_has_qf_entry & flag) != 0; }
 
-/// Check if curbuf has a specific quickfix/loclist flag
-bool nvim_qf_curbuf_has_flag(int flag)
-{
-  return (curbuf->b_has_qf_entry & flag) != 0;
-}
-
-/// Get curbuf file number for Rust
-int nvim_qf_curbuf_fnum(void)
-{
-  return curbuf->b_fnum;
-}
+int nvim_qf_curbuf_fnum(void) { return curbuf->b_fnum; }
 
 /// Returns pointer to static storage; only valid until next call.
 const void *nvim_qf_curwin_pos_adj(void)
@@ -5361,12 +4722,7 @@ const void *nvim_qf_curwin_pos_adj(void)
   return &pos;
 }
 
-/// Get mutable pointer to current list in quickfix stack for Rust
-void *nvim_qf_get_curlist_mut(void *qi_void)
-{
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  return (void *)&qi->qf_lists[qi->qf_curlist];
-}
+void *nvim_qf_get_curlist_mut(void *qi_void) { return (void *)&((qf_info_T *)qi_void)->qf_lists[((qf_info_T *)qi_void)->qf_curlist]; }
 
 /// Return the autocmd name for the :cfile Ex commands
 static char *cfile_get_auname(cmdidx_T cmdidx)
@@ -5558,42 +4914,17 @@ static bool vgr_qflist_valid(win_T *wp, qf_info_T *qi, unsigned qfid, char *titl
   return true;
 }
 
+int nvim_vim_regexec_multi(regmmatch_T *rm, void *win, void *buf, linenr_T lnum, colnr_T col) { return vim_regexec_multi(rm, (win_T *)win, (buf_T *)buf, lnum, col, NULL, NULL); }
 
-/// Wrapper for vim_regexec_multi (simplified for vimgrep use)
-int nvim_vim_regexec_multi(regmmatch_T *rm, void *win, void *buf, linenr_T lnum, colnr_T col)
-{
-  return vim_regexec_multi(rm, (win_T *)win, (buf_T *)buf, lnum, col, NULL, NULL);
-}
+linenr_T nvim_regmatch_startpos_lnum(const regmmatch_T *rm, int idx) { return rm->startpos[idx].lnum; }
 
-/// Get startpos[idx].lnum from regmmatch_T
-linenr_T nvim_regmatch_startpos_lnum(const regmmatch_T *rm, int idx)
-{
-  return rm->startpos[idx].lnum;
-}
+colnr_T nvim_regmatch_startpos_col(const regmmatch_T *rm, int idx) { return rm->startpos[idx].col; }
 
-/// Get startpos[idx].col from regmmatch_T
-colnr_T nvim_regmatch_startpos_col(const regmmatch_T *rm, int idx)
-{
-  return rm->startpos[idx].col;
-}
+linenr_T nvim_regmatch_endpos_lnum(const regmmatch_T *rm, int idx) { return rm->endpos[idx].lnum; }
 
-/// Get endpos[idx].lnum from regmmatch_T
-linenr_T nvim_regmatch_endpos_lnum(const regmmatch_T *rm, int idx)
-{
-  return rm->endpos[idx].lnum;
-}
+colnr_T nvim_regmatch_endpos_col(const regmmatch_T *rm, int idx) { return rm->endpos[idx].col; }
 
-/// Get endpos[idx].col from regmmatch_T
-colnr_T nvim_regmatch_endpos_col(const regmmatch_T *rm, int idx)
-{
-  return rm->endpos[idx].col;
-}
-
-/// Wrapper for ml_get_buf_len
-colnr_T nvim_ml_get_buf_len(void *buf, linenr_T lnum)
-{
-  return ml_get_buf_len((buf_T *)buf, lnum);
-}
+colnr_T nvim_ml_get_buf_len(void *buf, linenr_T lnum) { return ml_get_buf_len((buf_T *)buf, lnum); }
 
 /// Wrapper for fuzzy_match
 int nvim_fuzzy_match(const char *str, const char *pat, bool matchseq,
@@ -5681,7 +5012,6 @@ static int vgr_process_args(exarg_T *eap, vgr_args_T *args)
   return OK;
 }
 
-
 /// Returns dirname_start via *start_out, dirname_now via *now_out.
 void nvim_vgr_alloc_dirnames(char **start_out, char **now_out)
 {
@@ -5690,24 +5020,11 @@ void nvim_vgr_alloc_dirnames(char **start_out, char **now_out)
   os_dirname(*start_out, MAXPATHL);
 }
 
-/// Free dirname buffers.
-void nvim_vgr_free_dirnames(char *start, char *now)
-{
-  xfree(now);
-  xfree(start);
-}
+void nvim_vgr_free_dirnames(char *start, char *now) { xfree(now); xfree(start); }
 
-/// Get the shortened filename for a vimgrep file.
-char *nvim_vgr_shorten_fname(const char *full_fname)
-{
-  return path_try_shorten_fname((char *)full_fname);
-}
+char *nvim_vgr_shorten_fname(const char *full_fname) { return path_try_shorten_fname((char *)full_fname); }
 
-/// Display vimgrep progress for a filename (every second).
-void nvim_vgr_display_fname_wrapper(const char *fname)
-{
-  vgr_display_fname((char *)fname);
-}
+void nvim_vgr_display_fname_wrapper(const char *fname) { vgr_display_fname((char *)fname); }
 
 /// Returns: the buffer handle (or NULL), and sets *has_mfp if buffer has ml_mfp.
 void *nvim_vgr_find_buf(const char *fname, bool *has_mfp)
@@ -5721,29 +5038,13 @@ void *nvim_vgr_find_buf(const char *fname, bool *has_mfp)
   return buf;
 }
 
-/// Load a dummy buffer for vimgrep scanning.
-void *nvim_vgr_load_dummy_buf_wrapper(const char *fname, char *dirname_start, char *dirname_now)
-{
-  return vgr_load_dummy_buf((char *)fname, dirname_start, dirname_now);
-}
+void *nvim_vgr_load_dummy_buf_wrapper(const char *fname, char *dirname_start, char *dirname_now) { return vgr_load_dummy_buf((char *)fname, dirname_start, dirname_now); }
 
-/// Check whether the vimgrep quickfix list is still valid.
-bool nvim_vgr_qflist_valid_wrapper(void *wp, void *qi, unsigned qfid, const char *title)
-{
-  return vgr_qflist_valid((win_T *)wp, (qf_info_T *)qi, qfid, title);
-}
+bool nvim_vgr_qflist_valid_wrapper(void *wp, void *qi, unsigned qfid, const char *title) { return vgr_qflist_valid((win_T *)wp, (qf_info_T *)qi, qfid, title); }
 
-/// Emit "Cannot open file" message.
-void nvim_vgr_smsg_cannot_open(const char *fname)
-{
-  smsg(0, _("Cannot open file \"%s\""), fname);
-}
+void nvim_vgr_smsg_cannot_open(const char *fname) { smsg(0, _("Cannot open file \"%s\""), fname); }
 
-/// Get the current time in seconds (for progress display throttling).
-long nvim_vgr_time_now(void)
-{
-  return (long)time(NULL);
-}
+long nvim_vgr_time_now(void) { return (long)time(NULL); }
 
 /// first_match_buf and target_dir may be updated.
 void nvim_vgr_handle_dummy_buf(void *buf_void, bool found_match, bool duplicate_name,
@@ -5795,7 +5096,6 @@ void nvim_vgr_handle_dummy_buf(void *buf_void, bool found_match, bool duplicate_
   do_modelines(OPT_NOWIN);
   aucmd_restbuf(&aco);
 }
-
 
 /// Returns false if we should abort.
 bool nvim_vgr_pre_check(void *eap_void)
@@ -5888,12 +5188,7 @@ void nvim_vgr_post_autocmd(void *eap_void)
   }
 }
 
-/// Check if the vimgrep quickfix list is still valid after autocmds.
-bool nvim_vgr_list_still_valid(void *wp_void, void *qi_void, unsigned save_qfid)
-{
-  return qflist_valid((win_T *)wp_void, save_qfid)
-         && rs_qf_restore_list((qf_info_T *)qi_void, save_qfid) != FAIL;
-}
+bool nvim_vgr_list_still_valid(void *wp_void, void *qi_void, unsigned save_qfid) { return qflist_valid((win_T *)wp_void, save_qfid) && rs_qf_restore_list((qf_info_T *)qi_void, save_qfid) != FAIL; }
 
 /// Jump to first match or emit nomatch error.
 void nvim_vgr_jump_or_nomatch(void *qi_void, void *eap_void, bool *redraw_for_dummy,
@@ -5912,23 +5207,11 @@ void nvim_vgr_jump_or_nomatch(void *qi_void, void *eap_void, bool *redraw_for_du
   }
 }
 
-/// Increment quickfix busy counter.
-void nvim_incr_quickfix_busy(void)
-{
-  incr_quickfix_busy();
-}
+void nvim_incr_quickfix_busy(void) { incr_quickfix_busy(); }
 
-/// Decrement quickfix busy counter.
-void nvim_decr_quickfix_busy(void)
-{
-  decr_quickfix_busy();
-}
+void nvim_decr_quickfix_busy(void) { decr_quickfix_busy(); }
 
-/// Fold update for current window after vimgrep.
-void nvim_vgr_foldUpdateAll_curwin(void)
-{
-  rs_foldUpdateAll(curwin);
-}
+void nvim_vgr_foldUpdateAll_curwin(void) { rs_foldUpdateAll(curwin); }
 
 /// Cleanup vgr_args: free title and regprog.
 void nvim_vgr_cleanup_args(void *args_void)
@@ -6419,11 +5702,7 @@ static int qf_getprop_defaults(qf_info_T *qi, int flags, int locstack, dict_T *r
   return status;
 }
 
-/// Return the quickfix list title as 'title' in retdict
-static int qf_getprop_title(qf_list_T *qfl, dict_T *retdict)
-{
-  return tv_dict_add_str(retdict, S_LEN("title"), qfl->qf_title);
-}
+static int qf_getprop_title(qf_list_T *qfl, dict_T *retdict) { return tv_dict_add_str(retdict, S_LEN("title"), qfl->qf_title); }
 
 // Returns the identifier of the window used to display files from a location
 // list.  If there is no associated window, then returns 0. Useful only when
@@ -6678,7 +5957,6 @@ static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry, b
   return status;
 }
 
-
 /// Get the first item in a VimL list
 void *nvim_tv_list_first(const void *list)
 {
@@ -6710,11 +5988,7 @@ void *nvim_tv_list_item_dict(const void *li)
   return tv->vval.v_dict;
 }
 
-/// Wrapper for qf_add_entry_from_dict (keeps dict handling in C)
-int nvim_qf_add_entry_from_dict(void *qfl, void *d, bool first_entry, bool *valid_entry)
-{
-  return qf_add_entry_from_dict((qf_list_T *)qfl, (dict_T *)d, first_entry, valid_entry);
-}
+int nvim_qf_add_entry_from_dict(void *qfl, void *d, bool first_entry, bool *valid_entry) { return qf_add_entry_from_dict((qf_list_T *)qfl, (dict_T *)d, first_entry, valid_entry); }
 
 /// Get the current entry's fnum, lnum, col as a group
 void nvim_qf_get_ptr_position(const void *qfl_void, int *fnum, int *lnum, int *col)
@@ -7441,7 +6715,6 @@ static void hgr_search_in_rtp(qf_list_T *qfl, regmatch_T *p_regmatch, const char
   }
 }
 
-
 /// Returns true if we should proceed, false if aborting.
 bool nvim_hgr_pre_check(void *eap_void)
 {
@@ -7472,18 +6745,9 @@ void *nvim_hgr_save_cpo(void)
   return save_cpo;
 }
 
-/// Check if eap->cmdidx is a location list command.
-bool nvim_hgr_is_loclist_cmd(const void *eap_void)
-{
-  const exarg_T *eap = (const exarg_T *)eap_void;
-  return is_loclist_cmd(eap->cmdidx);
-}
+bool nvim_hgr_is_loclist_cmd(const void *eap_void) { return is_loclist_cmd(((const exarg_T *)eap_void)->cmdidx); }
 
-/// Returns the qi pointer (may be newly allocated).
-void *nvim_hgr_get_ll(bool *new_qi_out)
-{
-  return hgr_get_ll(new_qi_out);
-}
+void *nvim_hgr_get_ll(bool *new_qi_out) { return hgr_get_ll(new_qi_out); }
 
 /// Returns true if the list was updated (regex compiled + search done).
 bool nvim_hgr_compile_and_search(void *eap_void, void *qi_void)
@@ -7568,12 +6832,7 @@ void nvim_hgr_jump_or_nomatch(void *eap_void, void *qi_void)
   }
 }
 
-/// Check if eap->cmdidx == CMD_lhelpgrep.
-bool nvim_hgr_is_lhelpgrep(const void *eap_void)
-{
-  const exarg_T *eap = (const exarg_T *)eap_void;
-  return eap->cmdidx == CMD_lhelpgrep;
-}
+bool nvim_hgr_is_lhelpgrep(const void *eap_void) { return ((const exarg_T *)eap_void)->cmdidx == CMD_lhelpgrep; }
 
 /// Cleanup for :lhelpgrep — free location list if not needed.
 void nvim_hgr_cleanup(void *qi_void, bool new_qi)
@@ -7629,18 +6888,9 @@ static void get_qf_loc_list(bool is_qf, win_T *wp, typval_T *what_arg, typval_T 
   }
 }
 
-/// "getloclist()" function
-void f_getloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  win_T *wp = find_win_by_nr_or_id(&argvars[0]);
-  get_qf_loc_list(false, wp, &argvars[1], rettv);
-}
+void f_getloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { win_T *wp = find_win_by_nr_or_id(&argvars[0]); get_qf_loc_list(false, wp, &argvars[1], rettv); }
 
-/// "getqflist()" functions
-void f_getqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  get_qf_loc_list(true, NULL, &argvars[0], rettv);
-}
+void f_getqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { get_qf_loc_list(true, NULL, &argvars[0], rettv); }
 
 /// @param[out]  rettv  Return value: 0 in case of success, -1 otherwise.
 static void set_qf_ll_list(win_T *wp, typval_T *args, typval_T *rettv)
@@ -7720,8 +6970,4 @@ void f_setloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "setqflist()" function
-void f_setqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  set_qf_ll_list(NULL, argvars, rettv);
-}
+void f_setqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { set_qf_ll_list(NULL, argvars, rettv); }
