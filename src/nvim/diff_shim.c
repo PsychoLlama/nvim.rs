@@ -911,13 +911,6 @@ void ex_diffoff(exarg_T *eap)
   }
 }
 
-// extract_hunk_internal and extract_hunk have been migrated to Rust.
-
-/// Clear the list of diffblocks for tab page "tp".
-
-// find_top_diff_block — migrated to Rust (internal to rs_diff_set_topline)
-// calculate_topfill_and_topline — migrated to Rust (internal to rs_diff_set_topline)
-
 // Apply results from the linematch algorithm and apply to 'dp' by splitting it into multiple
 // adjacent diff blocks.
 static void apply_linematch_results(diff_T *dp, size_t decisions_length, const int *decisions)
@@ -1966,10 +1959,6 @@ void f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_number = hlID;
 }
 
-// =============================================================================
-// Rust FFI accessor functions
-// =============================================================================
-
 /// C accessor for the static diff_flags variable (used by Rust FFI).
 int nvim_get_diff_flags(void)
 {
@@ -2155,63 +2144,6 @@ void nvim_tabpage_set_diff_update(tabpage_T *tp, int val)
   }
 }
 
-/// Get the next diff block in the linked list.
-/// @param dp Diff block pointer
-/// @return Next diff block or NULL
-diff_T *nvim_diff_get_next(diff_T *dp)
-{
-  if (dp == NULL) {
-    return NULL;
-  }
-  return dp->df_next;
-}
-
-/// Get the line number for a buffer index in a diff block.
-/// @param dp  Diff block pointer
-/// @param idx Buffer index (0 to DB_COUNT-1)
-/// @return Line number or 0 if invalid
-linenr_T nvim_diff_get_lnum(diff_T *dp, int idx)
-{
-  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
-    return 0;
-  }
-  return dp->df_lnum[idx];
-}
-
-/// Set the line number for a buffer index in a diff block.
-/// @param dp   Diff block pointer
-/// @param idx  Buffer index (0 to DB_COUNT-1)
-/// @param lnum Line number to set
-void nvim_diff_set_lnum(diff_T *dp, int idx, linenr_T lnum)
-{
-  if (dp != NULL && idx >= 0 && idx < DB_COUNT) {
-    dp->df_lnum[idx] = lnum;
-  }
-}
-
-/// Get the line count for a buffer index in a diff block.
-/// @param dp  Diff block pointer
-/// @param idx Buffer index (0 to DB_COUNT-1)
-/// @return Line count or 0 if invalid
-linenr_T nvim_diff_get_count(diff_T *dp, int idx)
-{
-  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
-    return 0;
-  }
-  return dp->df_count[idx];
-}
-
-/// Set the line count for a buffer index in a diff block.
-/// @param dp    Diff block pointer
-/// @param idx   Buffer index (0 to DB_COUNT-1)
-/// @param count Line count to set
-void nvim_diff_set_count(diff_T *dp, int idx, linenr_T count)
-{
-  if (dp != NULL && idx >= 0 && idx < DB_COUNT) {
-    dp->df_count[idx] = count;
-  }
-}
-
 /// Allocate a new diff block and insert it into the linked list.
 /// @param tp   Tabpage pointer
 /// @param prev Previous diff block (NULL to insert at head)
@@ -2261,16 +2193,6 @@ diffline_change_T *nvim_diffblock_get_change(diff_T *dp, int change_idx)
   return &((diffline_change_T *)dp->df_changes.ga_data)[change_idx];
 }
 
-/// Get the buffer index for a buffer in a tabpage's diff list.
-/// Wrapper for diff_buf_idx that can be called from Rust.
-/// @param buf Buffer handle
-/// @param tp  Tabpage handle
-/// @return Index (0 to DB_COUNT-1) or DB_COUNT if not found
-int nvim_diff_buf_idx(buf_T *buf, tabpage_T *tp)
-{
-  return rs_diff_buf_idx_tp(buf, tp);
-}
-
 /// Write buffer contents to a memory file for diff comparison.
 /// This is a wrapper for diff_write_buffer for Rust FFI.
 /// Uses void* to avoid exposing mmfile_t in generated header.
@@ -2288,10 +2210,6 @@ linenr_T nvim_diff_get_corresponding_line(buf_T *buf, linenr_T lnum)
 {
   return rs_diff_get_corresponding_line(buf, lnum);
 }
-
-// =============================================================================
-// Phase 1 Rust FFI accessor functions
-// =============================================================================
 
 /// Set a diff buffer slot in the current tab.
 void nvim_curtab_set_diffbuf(int idx, buf_T *buf)
@@ -2412,14 +2330,6 @@ win_T *nvim_win_next(win_T *wp)
   return wp->w_next;
 }
 
-// nvim_win_get_p_diff already exists in window.c
-
-// nvim_win_get_w_buffer already exists in window.c
-
-// nvim_get_curwin already exists in window.c
-
-// nvim_get_curtab already exists in window.c
-
 /// Wrapper for foldUpdate() callable from Rust.
 void nvim_diff_foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
 {
@@ -2492,12 +2402,6 @@ void nvim_diff_set_need_scrollbind(bool val)
   diff_need_scrollbind = val;
 }
 
-// =============================================================================
-// Phase 2 Rust FFI accessor functions
-// =============================================================================
-
-// nvim_tabpage_set_diff_update already exists above
-
 /// Get MAXLNUM constant for Rust.
 linenr_T nvim_diff_maxlnum(void)
 {
@@ -2532,17 +2436,11 @@ int nvim_diff_parse_diffanchors(void)
   return parse_diffanchors(true, curbuf, NULL, NULL);
 }
 
-// nvim_get_curbuf already exists in window.c
-
 /// Get the p_dip (diffopt) option string.
 const char *nvim_diff_get_p_dip(void)
 {
   return p_dip;
 }
-
-// =============================================================================
-// Phase 3 Rust FFI accessor functions
-// =============================================================================
 
 /// Create a new zero-initialized diffio_T on the heap.
 void *nvim_diffio_new(bool use_internal)
@@ -2760,48 +2658,6 @@ void nvim_diff_curtab_set_first_diff(diff_T *dp)
 diff_T *nvim_diff_curtab_get_first_diff(void)
 {
   return curtab->tp_first_diff;
-}
-
-/// Get diff block's df_next.
-diff_T *nvim_diff_block_get_next(diff_T *dp)
-{
-  return dp ? dp->df_next : NULL;
-}
-
-/// Set diff block's df_next.
-void nvim_diff_block_set_next(diff_T *dp, diff_T *next)
-{
-  if (dp) {
-    dp->df_next = next;
-  }
-}
-
-/// Get diff block df_lnum[idx].
-linenr_T nvim_diff_block_get_lnum(diff_T *dp, int idx)
-{
-  return dp ? dp->df_lnum[idx] : 0;
-}
-
-/// Set diff block df_lnum[idx].
-void nvim_diff_block_set_lnum(diff_T *dp, int idx, linenr_T lnum)
-{
-  if (dp) {
-    dp->df_lnum[idx] = lnum;
-  }
-}
-
-/// Get diff block df_count[idx].
-linenr_T nvim_diff_block_get_count(diff_T *dp, int idx)
-{
-  return dp ? dp->df_count[idx] : 0;
-}
-
-/// Set diff block df_count[idx].
-void nvim_diff_block_set_count(diff_T *dp, int idx, linenr_T count)
-{
-  if (dp) {
-    dp->df_count[idx] = count;
-  }
 }
 
 /// Check if eap is not NULL and forceit is true.
