@@ -88,8 +88,6 @@ extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stac
 extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
 extern int rs_get_copyID(void);
 
-#define rs_hist_type2char rs_shada_hist_type2char
-
 #ifdef HAVE_BE64TOH
 # define _BSD_SOURCE 1  // NOLINT(bugprone-reserved-identifier)
 # define _DEFAULT_SOURCE 1  // NOLINT(bugprone-reserved-identifier)
@@ -116,27 +114,6 @@ extern int rs_get_copyID(void);
 #define KEY_COL c
 #define KEY_FILE f
 #define KEY_NAME_CHAR n
-
-// Error messages formerly used by viminfo code:
-//   E136: viminfo: Too many errors, skipping rest of file
-//   E137: Viminfo file is not writable: %s
-//   E138: Can't write viminfo file %s!
-//   E195: Cannot open ShaDa file for reading
-//   E574: Unknown register type %d
-//   E575: Illegal starting char
-//   E576: Missing '>'
-//   E577: Illegal register name
-//   E886: Can't rename viminfo file to %s!
-//   E929: Too many viminfo temp files, like %s!
-// Now only six of them are used:
-//   E137: ShaDa file is not writeable (for pre-open checks)
-//   E929: All %s.tmp.X files exist, cannot write ShaDa file!
-//   RCERR (E576) for critical read errors.
-//   RNERR (E136) for various errors when renaming.
-//   RERR (E575) for various errors inside read ShaDa file.
-//   SERR (E886) for various “system” errors (always contains output of
-//   strerror)
-//   WERR (E574) for various ignorable write errors
 
 /// Common prefix for all errors inside ShaDa file
 ///
@@ -1609,7 +1586,7 @@ static ShaDaWriteResult shada_write(FileDescriptor *const sd_writer,
 
   // Initialize history merger
   for (int i = 0; i < HIST_COUNT; i++) {
-    int num_saved = get_shada_parameter(rs_hist_type2char(i));
+    int num_saved = get_shada_parameter(rs_shada_hist_type2char(i));
     if (num_saved == -1) {
       num_saved = (int)p_hi;
     }
@@ -3102,14 +3079,12 @@ bool nvim_strequal(const char *s1, const char *s2)
 }
 
 
-// Phase 1: FileMarks accessor for Rust FFI
 Timestamp nvim_filemarks_get_greatest_timestamp(const void *fm_ptr)
 {
   const FileMarks *fm = fm_ptr;
   return fm ? fm->greatest_timestamp : 0;
 }
 
-// Phase 2: Buffer/path filtering accessors for Rust FFI
 const char *nvim_shada_get_p_shada(void) { return p_shada; }
 char *nvim_shada_home_replace_save(const void *buf, const char *src)
 {
@@ -3119,14 +3094,8 @@ void nvim_shada_home_replace(const void *buf, const char *src, char *dst, size_t
 {
   home_replace((buf_T *)buf, src, dst, dstlen, one != 0);
 }
-size_t nvim_shada_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep_chars)
-{
-  return copy_option_part(option, buf, maxlen, (char *)sep_chars);
-}
-int nvim_shada_mb_strnicmp(const char *s1, const char *s2, size_t n)
-{
-  return mb_strnicmp(s1, s2, n);
-}
+size_t nvim_shada_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep_chars) { return copy_option_part(option, buf, maxlen, (char *)sep_chars); }
+int nvim_shada_mb_strnicmp(const char *s1, const char *s2, size_t n) { return mb_strnicmp(s1, s2, n); }
 char *nvim_shada_get_namebuff(void) { return NameBuff; }
 const void *nvim_shada_buf_first(void) { return firstbuf; }
 const void *nvim_shada_buf_next(const void *buf)
@@ -3137,18 +3106,9 @@ const char *nvim_shada_buf_get_ffname(const void *buf)
 {
   return buf ? ((const buf_T *)buf)->b_ffname : NULL;
 }
-int nvim_shada_buf_is_listed(const void *buf)
-{
-  return buf ? ((const buf_T *)buf)->b_p_bl : 0;
-}
-int nvim_shada_buf_is_quickfix(const void *buf)
-{
-  return buf ? bt_quickfix((const buf_T *)buf) : 0;
-}
-int nvim_shada_buf_is_terminal(const void *buf)
-{
-  return buf ? bt_terminal((const buf_T *)buf) : 0;
-}
+int nvim_shada_buf_is_listed(const void *buf) { return buf ? ((const buf_T *)buf)->b_p_bl : 0; }
+int nvim_shada_buf_is_quickfix(const void *buf) { return buf ? bt_quickfix((const buf_T *)buf) : 0; }
+int nvim_shada_buf_is_terminal(const void *buf) { return buf ? bt_terminal((const buf_T *)buf) : 0; }
 
 // Set(ptr_t) operations for Rust FFI
 void *nvim_shada_set_init_ptr(void)
@@ -3157,10 +3117,7 @@ void *nvim_shada_set_init_ptr(void)
   *s = (Set(ptr_t))SET_INIT;
   return s;
 }
-int nvim_shada_set_has_ptr(const void *set, const void *ptr)
-{
-  return set ? set_has(ptr_t, (Set(ptr_t) *)set, (ptr_t)ptr) : 0;
-}
+int nvim_shada_set_has_ptr(const void *set, const void *ptr) { return set ? set_has(ptr_t, (Set(ptr_t) *)set, (ptr_t)ptr) : 0; }
 void nvim_shada_set_put_ptr(void *set, const void *ptr)
 {
   if (set) {
@@ -3174,8 +3131,6 @@ void nvim_shada_set_destroy_ptr(void *set)
     xfree(set);
   }
 }
-
-// Phase 3: Data collection accessors for Rust FFI
 
 // hist_iter wrapper that returns individual fields instead of histentry_T
 const void *nvim_shada_hist_iter_raw(const void *iter, uint8_t history_type, int zero,
@@ -3297,8 +3252,6 @@ void nvim_shada_siemsg(const char *msg)
   siemsg("%s", msg);
 }
 
-// Phase 4: FFI wrappers for shada_free_shada_entry consolidation
-
 /// Free a Dict (api_free_dict wrapper)
 void nvim_shada_api_free_dict(Dict value)
 {
@@ -3330,13 +3283,8 @@ void nvim_shada_free_variable(ShadaEntry *entry)
   tv_clear(&entry->data.global_var.value);
 }
 
-// Phase 5: File I/O wrappers
-
 /// Open a file for reading. Returns 0 on success, error code on failure.
-int nvim_shada_file_open(void *fd, const char *fname)
-{
-  return file_open((FileDescriptor *)fd, fname, kFileReadOnly, 0);
-}
+int nvim_shada_file_open(void *fd, const char *fname) { return file_open((FileDescriptor *)fd, fname, kFileReadOnly, 0); }
 
 /// Read shada data from an open file descriptor.
 void nvim_shada_read(void *fd, int flags)
@@ -3363,10 +3311,7 @@ void nvim_shada_verbose_leave(void)
 }
 
 /// Get p_verbose value
-int nvim_shada_get_p_verbose(void)
-{
-  return (int)p_verbose;
-}
+int nvim_shada_get_p_verbose(void) { return (int)p_verbose; }
 
 /// Non-variadic smsg wrapper for "Reading ShaDa file" verbose message
 void nvim_shada_smsg_reading(const char *fname, int want_info, int want_marks,
@@ -3381,10 +3326,7 @@ void nvim_shada_smsg_reading(const char *fname, int want_info, int want_marks,
 }
 
 /// Get p_fs value (for file sync)
-int nvim_shada_get_p_fs(void)
-{
-  return !!p_fs;
-}
+int nvim_shada_get_p_fs(void) { return !!p_fs; }
 
 /// Wrapper for stdpaths_user_state_subpath + concat_fnames_realloc
 /// to build the default shada file path.
@@ -3408,17 +3350,9 @@ void nvim_shada_semsg_open_error(const char *fname, const char *strerror_msg)
 }
 
 /// Get the size of FileDescriptor struct for Rust allocation
-size_t nvim_shada_file_descriptor_size(void)
-{
-  return sizeof(FileDescriptor);
-}
+size_t nvim_shada_file_descriptor_size(void) { return sizeof(FileDescriptor); }
 
-// Phase 6: curbuf accessors for check_marks_read
-
-int nvim_shada_curbuf_marks_read(void)
-{
-  return curbuf->b_marks_read;
-}
+int nvim_shada_curbuf_marks_read(void) { return curbuf->b_marks_read; }
 
 void nvim_shada_curbuf_set_marks_read(int val)
 {
@@ -3429,8 +3363,6 @@ const char *nvim_shada_curbuf_ffname(void)
 {
   return curbuf->b_ffname;
 }
-
-// Phase 7: histentry_T accessor for hms_to_he_array
 
 /// Set a histentry_T element at the given index.
 void nvim_shada_set_histentry(void *hist_array, int idx, uint64_t ts,
