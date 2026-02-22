@@ -437,12 +437,6 @@ void ins_ctrl_x(void)
 }
 
 
-/// Accessor for Rust FFI: check if ctrl-x mode is not default.
-int nvim_ctrl_x_mode_not_default(void)
-{
-  return rs_ctrl_x_mode_not_default();
-}
-
 /// Accessor for Rust FFI: get curbuf->b_p_inf (infercase option).
 int nvim_curbuf_get_b_p_inf(void)
 {
