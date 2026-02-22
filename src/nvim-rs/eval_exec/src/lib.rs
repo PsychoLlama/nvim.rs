@@ -862,6 +862,7 @@ impl EvalFlags {
 
 pub mod errors;
 pub mod eval;
+pub mod lval;
 pub mod operators;
 
 // Re-export FFI functions from the eval module

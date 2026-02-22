@@ -118,6 +118,9 @@ extern int rs_eval1(char **arg, typval_T *rettv, void *evalarg);
 extern int rs_eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op);
 extern int rs_eval_func(char **arg, evalarg_T *evalarg, char *name, int name_len,
                         typval_T *rettv, int flags, typval_T *basetv);
+extern char *rs_get_lval(char *name, typval_T *rettv, lval_T *lp, bool unlet, bool skip,
+                         int flags, int fne_flags);
+extern void rs_clear_lval(lval_T *lp);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -1271,8 +1274,8 @@ static int get_lval_list(lval_T *lp, typval_T *var1, typval_T *var2, bool empty1
 ///
 /// @return A pointer to the character after the subscript on success or NULL on
 ///         failure.
-static char *get_lval_subscript(lval_T *lp, char *p, char *name, typval_T *rettv, hashtab_T *ht,
-                                dictitem_T *v, bool unlet, int flags)
+char *nvim_get_lval_subscript(lval_T *lp, char *p, char *name, typval_T *rettv, hashtab_T *ht,
+                              dictitem_T *v, bool unlet, int flags)
 {
   bool quiet = flags & GLV_QUIET;
   typval_T var1;
@@ -1450,94 +1453,13 @@ char *get_lval(char *const name, typval_T *const rettv, lval_T *const lp, const 
                const bool skip, const int flags, const int fne_flags)
   FUNC_ATTR_NONNULL_ARG(1, 3)
 {
-  int quiet = flags & GLV_QUIET;
-
-  // Clear everything in "lp".
-  CLEAR_POINTER(lp);
-
-  if (skip) {
-    // When skipping just find the end of the name.
-    lp->ll_name = name;
-    return (char *)rs_find_name_end(name, NULL, NULL, FNE_INCL_BR | fne_flags);
-  }
-
-  // Find the end of the name.
-  char *expr_start;
-  char *expr_end;
-  char *p = (char *)rs_find_name_end(name, (const char **)&expr_start,
-                                  (const char **)&expr_end,
-                                  fne_flags);
-  if (expr_start != NULL) {
-    // Don't expand the name when we already know there is an error.
-    if (unlet && !ascii_iswhite(*p) && !ends_excmd(*p)
-        && *p != '[' && *p != '.') {
-      semsg(_(e_trailing_arg), p);
-      return NULL;
-    }
-
-    lp->ll_exp_name = make_expanded_name(name, expr_start, expr_end, p);
-    lp->ll_name = lp->ll_exp_name;
-    if (lp->ll_exp_name == NULL) {
-      // Report an invalid expression in braces, unless the
-      // expression evaluation has been cancelled due to an
-      // aborting error, an interrupt, or an exception.
-      if (!aborting() && !quiet) {
-        emsg_severe = true;
-        semsg(_(e_invarg2), name);
-        return NULL;
-      }
-      lp->ll_name_len = 0;
-    } else {
-      lp->ll_name_len = strlen(lp->ll_name);
-    }
-  } else {
-    lp->ll_name = name;
-    lp->ll_name_len = (size_t)(p - lp->ll_name);
-  }
-
-  // Without [idx] or .key we are done.
-  if ((*p != '[' && *p != '.') || lp->ll_name == NULL) {
-    return p;
-  }
-
-  hashtab_T *ht = NULL;
-
-  // Only pass &ht when we would write to the variable, it prevents autoload
-  // as well.
-  dictitem_T *v = find_var(lp->ll_name, lp->ll_name_len,
-                           (flags & GLV_READ_ONLY) ? NULL : &ht,
-                           flags & GLV_NO_AUTOLOAD);
-  if (v == NULL && !quiet) {
-    semsg(_("E121: Undefined variable: %.*s"),
-          (int)lp->ll_name_len, lp->ll_name);
-  }
-  if (v == NULL) {
-    return NULL;
-  }
-
-  lp->ll_tv = &v->di_tv;
-
-  if (tv_is_luafunc(lp->ll_tv)) {
-    // For v:lua just return a pointer to the "." after the "v:lua".
-    // If the caller is trans_function_name() it will check for a Lua function name.
-    return p;
-  }
-
-  // If the next character is a "." or a "[", then process the subitem.
-  p = get_lval_subscript(lp, p, name, rettv, ht, v, unlet, flags);
-  if (p == NULL) {
-    return NULL;
-  }
-
-  lp->ll_name_len = (size_t)(p - lp->ll_name);
-  return p;
+  return rs_get_lval(name, rettv, lp, unlet, skip, flags, fne_flags);
 }
 
 /// Clear lval "lp" that was filled by get_lval().
 void clear_lval(lval_T *lp)
 {
-  xfree(lp->ll_exp_name);
-  xfree(lp->ll_newkey);
+  rs_clear_lval(lp);
 }
 
 /// Set a variable that was parsed by get_lval() to "rettv".
@@ -5846,6 +5768,134 @@ const char *nvim_get_tv_empty_string(void)
 {
   return tv_empty_string;
 }
+
+// =============================================================================
+// Phase 2: get_lval / clear_lval helpers (lval_T accessors for rs_get_lval)
+// =============================================================================
+
+/// Zero out lval_T struct - accessor for Rust.
+void nvim_lval_clear(lval_T *lp)
+{
+  CLEAR_POINTER(lp);
+}
+
+/// Get ll_name field from lval_T - accessor for Rust.
+const char *nvim_lval_get_name(const lval_T *lp)
+{
+  return lp->ll_name;
+}
+
+/// Set ll_name field in lval_T - accessor for Rust.
+void nvim_lval_set_name(lval_T *lp, const char *name)
+{
+  lp->ll_name = name;
+}
+
+/// Get ll_name_len field from lval_T - accessor for Rust.
+size_t nvim_lval_get_name_len(const lval_T *lp)
+{
+  return lp->ll_name_len;
+}
+
+/// Set ll_name_len field in lval_T - accessor for Rust.
+void nvim_lval_set_name_len(lval_T *lp, size_t len)
+{
+  lp->ll_name_len = len;
+}
+
+/// Get ll_exp_name field from lval_T - accessor for Rust.
+char *nvim_lval_get_exp_name(const lval_T *lp)
+{
+  return lp->ll_exp_name;
+}
+
+/// Set ll_exp_name field in lval_T - accessor for Rust.
+void nvim_lval_set_exp_name(lval_T *lp, char *exp_name)
+{
+  lp->ll_exp_name = exp_name;
+}
+
+/// Get ll_tv field from lval_T - accessor for Rust.
+typval_T *nvim_lval_get_tv(const lval_T *lp)
+{
+  return lp->ll_tv;
+}
+
+/// Set ll_tv field in lval_T - accessor for Rust.
+void nvim_lval_set_tv(lval_T *lp, typval_T *tv)
+{
+  lp->ll_tv = tv;
+}
+
+/// Get ll_newkey field from lval_T - accessor for Rust.
+char *nvim_lval_get_newkey(const lval_T *lp)
+{
+  return lp->ll_newkey;
+}
+
+/// Check if ll_name is NULL - accessor for Rust.
+bool nvim_lval_name_is_null(const lval_T *lp)
+{
+  return lp->ll_name == NULL;
+}
+
+/// Wrapper for the static make_expanded_name - accessor for Rust.
+char *nvim_make_expanded_name(const char *in_start, char *expr_start, char *expr_end,
+                              char *in_end)
+{
+  return make_expanded_name(in_start, expr_start, expr_end, in_end);
+}
+
+/// Wrapper for find_var with no-write mode - accessor for Rust.
+/// Returns dictitem_T* for the named variable. Sets *htp if not NULL.
+dictitem_T *nvim_find_var(const char *name, size_t name_len, hashtab_T **htp,
+                          bool no_autoload)
+{
+  return find_var(name, name_len, htp, no_autoload);
+}
+
+/// Get a pointer to di->di_tv from a dictitem_T - accessor for Rust.
+typval_T *nvim_di_get_tv(dictitem_T *di)
+{
+  return &di->di_tv;
+}
+
+/// Check if a typval_T is a Lua function - accessor for Rust.
+/// This wraps the static tv_is_luafunc function.
+bool nvim_tv_is_luafunc_wrapper(typval_T *tv)
+{
+  return tv_is_luafunc(tv);
+}
+
+/// Return address of the EVALARG_EVALUATE global - accessor for Rust.
+evalarg_T *nvim_get_evalarg_evaluate_ptr(void)
+{
+  return &EVALARG_EVALUATE;
+}
+
+/// Set ll_name_len to (p - ll_name) - accessor for Rust.
+void nvim_lval_compute_name_len(lval_T *lp, const char *p)
+{
+  lp->ll_name_len = (size_t)(p - lp->ll_name);
+}
+
+/// Emit "E488: Trailing characters: %s" error - accessor for Rust.
+void nvim_semsg_trailing_arg(const char *p)
+{
+  semsg(_(e_trailing_arg), p);
+}
+
+// nvim_semsg_invarg2 already exists in match.c - reuse it.
+
+/// Emit "E121: Undefined variable: %.*s" error - accessor for Rust.
+void nvim_semsg_undef_var(int len, const char *name)
+{
+  semsg(_("E121: Undefined variable: %.*s"), len, name);
+}
+
+// =============================================================================
+// Phase 1 continuation: funcexe wrapper
+// =============================================================================
 
 /// Construct funcexe_T and call get_func_tv - wrapper for Rust eval_func.
 ///
