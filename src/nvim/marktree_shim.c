@@ -744,14 +744,14 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
     // tricky: we stand at the deleted space in the previous leaf node.
     // But the inner key is now the previous key we stole, so we need
     // to skip that one as well.
-    marktree_itr_next(b, itr);
-    marktree_itr_next(b, itr);
+    rs_marktree_itr_next(b, itr);
+    rs_marktree_itr_next(b, itr);
   } else {
     if (itr->x && itr->i >= itr->x->n) {
       // we deleted the last key of a leaf node
       // go to the inner key after that.
       assert(itr->x->level == 0);
-      marktree_itr_next(b, itr);
+      rs_marktree_itr_next(b, itr);
     }
   }
 
@@ -1372,67 +1372,9 @@ void marktree_restore_pair(MarkTree *b, MTKey key)
   marktree_intersect_pair(b, mt_lookup_key_side(key, false), itr, end_itr, false);
 }
 
-bool marktree_itr_get(MarkTree *b, int32_t row, int col, MarkTreeIter *itr)
-{
-  return rs_marktree_itr_get(b, row, col, itr);
-}
-
-bool marktree_itr_next(MarkTree *b, MarkTreeIter *itr)
-{
-  return rs_marktree_itr_next(b, itr);
-}
-
-bool marktree_itr_get_filter(MarkTree *b, int32_t row, int col, int stop_row, int stop_col,
-                             MetaFilter meta_filter, MarkTreeIter *itr)
-{
-  return rs_marktree_itr_get_filter(b, row, col, stop_row, stop_col, meta_filter, itr);
-}
-
-bool marktree_itr_step_out_filter(MarkTree *b, MarkTreeIter *itr, MetaFilter meta_filter)
-{
-  return rs_marktree_itr_step_out_filter(b, itr, meta_filter);
-}
-
-bool marktree_itr_next_filter(MarkTree *b, MarkTreeIter *itr, int stop_row, int stop_col,
-                              MetaFilter meta_filter)
-{
-  return rs_marktree_itr_next_filter(b, itr, stop_row, stop_col, meta_filter);
-}
-
-MTKey marktree_itr_current(MarkTreeIter *itr)
-{
-  return rs_marktree_itr_current(itr);
-}
-
 static bool itr_eq(MarkTreeIter *itr1, MarkTreeIter *itr2)
 {
   return (&rawkey(itr1) == &rawkey(itr2));
-}
-
-/// Get all marks which overlaps the position (row,col)
-///
-/// After calling this function, use marktree_itr_step_overlap to step through
-/// one overlapping mark at a time, until it returns false
-///
-/// NOTE: It's possible to get all marks which overlaps a region (row,col) to (row_end,col_end)
-/// To do this, first call marktree_itr_get_overlap with the start position and
-/// keep calling marktree_itr_step_overlap until it returns false.
-/// After this, as a second loop, keep calling the marktree_itr_next() until
-/// the iterator is invalid or reaches past (row_end, col_end). In this loop,
-/// consider all "start" marks (and unpaired marks if relevant), but skip over
-/// all "end" marks, using mt_end(mark).
-///
-/// @return false if we already know no marks can be found
-///               even if "true" the first call to marktree_itr_step_overlap
-///               could return false
-bool marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeIter *itr)
-{
-  return rs_marktree_itr_get_overlap(b, row, col, itr);
-}
-
-bool marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair)
-{
-  return rs_marktree_itr_step_overlap(b, itr, pair);
 }
 
 static void swap_keys(MarkTree *b, MarkTreeIter *itr1, MarkTreeIter *itr2, DamageList *damage)
@@ -1586,7 +1528,7 @@ continue_same_node:
             goto continue_same_node;
           }
         } else {
-          marktree_itr_next(b, itr);
+          rs_marktree_itr_next(b, itr);
         }
       }
     }
@@ -1616,7 +1558,7 @@ past_continue_same_node:
           itr->i++;
           goto past_continue_same_node;
         } else {
-          marktree_itr_next(b, itr);
+          rs_marktree_itr_next(b, itr);
         }
       }
     }
@@ -1718,7 +1660,7 @@ void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int ext
   rs_marktree_itr_get_ext_full(b, start, itr, false, true, NULL, NULL);
   kvec_t(MTKey) saved = KV_INITIAL_VALUE;
   while (itr->x) {
-    MTKey k = marktree_itr_current(itr);
+    MTKey k = rs_marktree_itr_current(itr);
     if (!rs_pos_leq(k.pos, end) || (k.pos.row == end.row && k.pos.col == end.col
                                  && mt_right(k))) {
       break;
@@ -1743,12 +1685,6 @@ void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int ext
     }
   }
   kv_destroy(saved);
-}
-
-/// @param itr OPTIONAL. set itr to pos.
-MTKey marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool end, MarkTreeIter *itr)
-{
-  return rs_marktree_lookup_ns(b, ns, id, end, itr);
 }
 
 static uint64_t pseudo_index(MTNode *x, int i)
@@ -1791,11 +1727,6 @@ static uint64_t pseudo_index_for_id(MarkTree *b, uint64_t id, bool sloppy)
   return pseudo_index(n, i);
 }
 
-MTPos marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr)
-{
-  return rs_marktree_get_altpos(b, mark, itr);
-}
-
 // for unit test
 void marktree_put_test(MarkTree *b, uint32_t ns, uint32_t id, int row, int col, bool right_gravity,
                        int end_row, int end_col, bool end_right, bool meta_inline)
@@ -1818,7 +1749,7 @@ bool mt_right_test(MTKey key)
 void marktree_del_pair_test(MarkTree *b, uint32_t ns, uint32_t id)
 {
   MarkTreeIter itr[1];
-  marktree_lookup_ns(b, ns, id, false, itr);
+  rs_marktree_lookup_ns(b, ns, id, false, itr);
 
   uint64_t other = marktree_del_itr(b, itr, false);
   assert(other);
@@ -1915,7 +1846,7 @@ bool marktree_check_intersections(MarkTree *b)
   MarkTreeIter itr[1];
   rs_marktree_itr_first(b, itr);
   while (true) {
-    MTKey mark = marktree_itr_current(itr);
+    MTKey mark = rs_marktree_itr_current(itr);
     if (mark.pos.row < 0) {
       break;
     }
@@ -1931,7 +1862,7 @@ bool marktree_check_intersections(MarkTree *b)
       }
     }
 
-    marktree_itr_next(b, itr);
+    rs_marktree_itr_next(b, itr);
   }
 
   // 3. for each node check if the recreated intersection
@@ -2157,9 +2088,9 @@ void nvim_mtitr_set_s_oldcol(MarkTreeIter *itr, int lvl, int oldcol) { itr->s[lv
 // ============================================================================
 
 MTKey nvim_marktree_lookup(MarkTree *b, uint64_t id, MarkTreeIter *itr) { return rs_marktree_lookup(b, id, itr); }
-MTKey nvim_marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool end, MarkTreeIter *itr) { return marktree_lookup_ns(b, ns, id, end, itr); }
+MTKey nvim_marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool end, MarkTreeIter *itr) { return rs_marktree_lookup_ns(b, ns, id, end, itr); }
 MTKey nvim_marktree_get_alt(MarkTree *b, MTKey mark, MarkTreeIter *itr) { return rs_marktree_get_alt(b, mark, itr); }
-MTPos nvim_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr) { return marktree_get_altpos(b, mark, itr); }
+MTPos nvim_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr) { return rs_marktree_get_altpos(b, mark, itr); }
 
 // ============================================================================
 // Iterator Allocation Functions (for Rust FFI - extmark crate)
@@ -2168,9 +2099,9 @@ MTPos nvim_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr) { ret
 MarkTreeIter *nvim_marktree_itr_alloc(void) { return xcalloc(1, sizeof(MarkTreeIter)); }
 void nvim_marktree_itr_free(MarkTreeIter *itr) { xfree(itr); }
 void nvim_marktree_itr_copy(MarkTreeIter *dst, MarkTreeIter *src) { *dst = *src; }
-void nvim_marktree_itr_get(MarkTree *b, int row, int col, MarkTreeIter *itr) { marktree_itr_get(b, row, col, itr); }
-bool nvim_marktree_itr_next(MarkTree *b, MarkTreeIter *itr) { return marktree_itr_next(b, itr); }
-MTKey nvim_marktree_itr_current(MarkTreeIter *itr) { return marktree_itr_current(itr); }
+void nvim_marktree_itr_get(MarkTree *b, int row, int col, MarkTreeIter *itr) { rs_marktree_itr_get(b, row, col, itr); }
+bool nvim_marktree_itr_next(MarkTree *b, MarkTreeIter *itr) { return rs_marktree_itr_next(b, itr); }
+MTKey nvim_marktree_itr_current(MarkTreeIter *itr) { return rs_marktree_itr_current(itr); }
 uint16_t nvim_mt_itr_rawkey_get_flags(MarkTreeIter *itr) { return rawkey(itr).flags; }
 void nvim_mt_itr_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags = flags; }
 DecorInlineData nvim_mt_itr_rawkey_get_decor_data(MarkTreeIter *itr) { return rawkey(itr).decor_data; }
@@ -2191,8 +2122,8 @@ void nvim_mtitr_set_intersect_idx(MarkTreeIter *itr, size_t idx) { itr->intersec
 // Overlap Iteration Wrapper Functions (for Rust extmark FFI)
 // ============================================================================
 
-bool nvim_marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeIter *itr) { return marktree_itr_get_overlap(b, row, col, itr); }
-bool nvim_marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair) { return marktree_itr_step_overlap(b, itr, pair); }
+bool nvim_marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeIter *itr) { return rs_marktree_itr_get_overlap(b, row, col, itr); }
+bool nvim_marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair) { return rs_marktree_itr_step_overlap(b, itr, pair); }
 void nvim_marktree_itr_get_ext_simple(MarkTree *b, int row, int col, MarkTreeIter *itr) { rs_marktree_itr_get_ext_full(b, MTPos(row, col), itr, false, false, NULL, NULL); }
 
 // ============================================================================

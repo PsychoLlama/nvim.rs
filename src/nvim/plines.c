@@ -140,35 +140,35 @@ void nvim_csarg_set_cur_text_width_right(CharsizeArg *csarg, int value)
 /// Get the current mark's row position.
 int nvim_csarg_itr_current_row(CharsizeArg *csarg)
 {
-  MTKey mark = marktree_itr_current(csarg->iter);
+  MTKey mark = rs_marktree_itr_current(csarg->iter);
   return mark.pos.row;
 }
 
 /// Get the current mark's column position.
 int nvim_csarg_itr_current_col(CharsizeArg *csarg)
 {
-  MTKey mark = marktree_itr_current(csarg->iter);
+  MTKey mark = rs_marktree_itr_current(csarg->iter);
   return mark.pos.col;
 }
 
 /// Check if the current mark is invalid.
 int nvim_csarg_itr_mark_invalid(CharsizeArg *csarg)
 {
-  MTKey mark = marktree_itr_current(csarg->iter);
+  MTKey mark = rs_marktree_itr_current(csarg->iter);
   return mt_invalid(mark) ? 1 : 0;
 }
 
 /// Check if the current mark has right gravity.
 int nvim_csarg_itr_mark_right(CharsizeArg *csarg)
 {
-  MTKey mark = marktree_itr_current(csarg->iter);
+  MTKey mark = rs_marktree_itr_current(csarg->iter);
   return mt_right(mark) ? 1 : 0;
 }
 
 /// Check if the current mark's namespace is visible in the window.
 int nvim_csarg_itr_ns_in_win(CharsizeArg *csarg)
 {
-  MTKey mark = marktree_itr_current(csarg->iter);
+  MTKey mark = rs_marktree_itr_current(csarg->iter);
   return ns_in_win(mark.ns, csarg->win) ? 1 : 0;
 }
 
@@ -176,7 +176,7 @@ int nvim_csarg_itr_ns_in_win(CharsizeArg *csarg)
 /// Returns the left and right widths added to the output parameters.
 void nvim_csarg_itr_get_virt_text_widths(CharsizeArg *csarg, int *left_width, int *right_width)
 {
-  MTKey mark = marktree_itr_current(csarg->iter);
+  MTKey mark = rs_marktree_itr_current(csarg->iter);
   *left_width = 0;
   *right_width = 0;
 
@@ -201,7 +201,7 @@ void nvim_csarg_itr_get_virt_text_widths(CharsizeArg *csarg, int *left_width, in
 /// Advance the iterator to the next inline virtual text mark.
 void nvim_csarg_itr_next(CharsizeArg *csarg)
 {
-  marktree_itr_next_filter(csarg->win->w_buffer->b_marktree, csarg->iter,
+  rs_marktree_itr_next_filter(csarg->win->w_buffer->b_marktree, csarg->iter,
                            csarg->virt_row + 1, 0, inline_filter);
 }
 
@@ -389,7 +389,7 @@ CSType init_charsize_arg(CharsizeArg *csarg, win_T *wp, linenr_T lnum, char *lin
   csarg->use_tabstop = !wp->w_p_list || wp->w_p_lcs_chars.tab1;
 
   if (lnum > 0) {
-    if (marktree_itr_get_filter(wp->w_buffer->b_marktree, lnum - 1, 0, lnum, 0,
+    if (rs_marktree_itr_get_filter(wp->w_buffer->b_marktree, lnum - 1, 0, lnum, 0,
                                 inline_filter, csarg->iter)) {
       csarg->virt_row = lnum - 1;
     }

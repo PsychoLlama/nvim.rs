@@ -566,7 +566,7 @@ void nvim_sign_build_decor_and_set(buf_T *buf, uint32_t ns, uint32_t *id, int ro
 /// Returns the 1-based line number, or 0 if not found.
 linenr_T nvim_sign_marktree_lookup_row(buf_T *buf, uint32_t ns, uint32_t id)
 {
-  MTKey mark = marktree_lookup_ns(buf->b_marktree, ns, id, false, NULL);
+  MTKey mark = rs_marktree_lookup_ns(buf->b_marktree, ns, id, false, NULL);
   return mark.pos.row + 1;
 }
 
@@ -800,22 +800,22 @@ int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
 
   // Store signs at a specific line number to remove one later.
   if (atlnum > 0) {
-    if (!marktree_itr_get_overlap(buf->b_marktree, row, 0, itr)) {
+    if (!rs_marktree_itr_get_overlap(buf->b_marktree, row, 0, itr)) {
       return FAIL;
     }
 
     MTPair pair;
-    while (marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
+    while (rs_marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
       if ((ns == UINT32_MAX || ns == pair.start.ns) && mt_decor_sign(pair.start)) {
         kv_push(signs, pair.start);
       }
     }
   } else {
-    marktree_itr_get(buf->b_marktree, 0, 0, itr);
+    rs_marktree_itr_get(buf->b_marktree, 0, 0, itr);
   }
 
   while (itr->x) {
-    MTKey mark = marktree_itr_current(itr);
+    MTKey mark = rs_marktree_itr_current(itr);
     if (row && mark.pos.row > row) {
       break;
     }
@@ -824,12 +824,12 @@ int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
         && (ns == UINT32_MAX || ns == mark.ns)) {
       if (atlnum > 0) {
         kv_push(signs, mark);
-        marktree_itr_next(buf->b_marktree, itr);
+        rs_marktree_itr_next(buf->b_marktree, itr);
       } else {
         extmark_del(buf, itr, mark, true);
       }
     } else {
-      marktree_itr_next(buf->b_marktree, itr);
+      rs_marktree_itr_next(buf->b_marktree, itr);
     }
   }
 
@@ -868,15 +868,15 @@ void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
     if (ns >= 0) {
       MarkTreeIter itr[1];
       kvec_t(MTKey) signs = KV_INITIAL_VALUE;
-      marktree_itr_get(buf->b_marktree, 0, 0, itr);
+      rs_marktree_itr_get(buf->b_marktree, 0, 0, itr);
 
       while (itr->x) {
-        MTKey mark = marktree_itr_current(itr);
+        MTKey mark = rs_marktree_itr_current(itr);
         if (!mt_end(mark) && mt_decor_sign(mark)
             && (ns == UINT32_MAX || ns == mark.ns)) {
           kv_push(signs, mark);
         }
-        marktree_itr_next(buf->b_marktree, itr);
+        rs_marktree_itr_next(buf->b_marktree, itr);
       }
 
       if (kv_size(signs)) {
@@ -1481,14 +1481,14 @@ list_T *nvim_get_buffer_signs_impl(buf_T *buf)
 {
   list_T *const l = tv_list_alloc(kListLenMayKnow);
   MarkTreeIter itr[1];
-  marktree_itr_get(buf->b_marktree, 0, 0, itr);
+  rs_marktree_itr_get(buf->b_marktree, 0, 0, itr);
 
   while (itr->x) {
-    MTKey mark = marktree_itr_current(itr);
+    MTKey mark = rs_marktree_itr_current(itr);
     if (!mt_end(mark) && mt_decor_sign(mark)) {
       tv_list_append_dict(l, nvim_sign_get_placed_info_dict_impl(&mark));
     }
-    marktree_itr_next(buf->b_marktree, itr);
+    rs_marktree_itr_next(buf->b_marktree, itr);
   }
 
   return l;
@@ -1513,10 +1513,10 @@ void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, co
 
   MarkTreeIter itr[1];
   kvec_t(MTKey) signs = KV_INITIAL_VALUE;
-  marktree_itr_get(buf->b_marktree, lnum ? lnum - 1 : 0, 0, itr);
+  rs_marktree_itr_get(buf->b_marktree, lnum ? lnum - 1 : 0, 0, itr);
 
   while (itr->x) {
-    MTKey mark = marktree_itr_current(itr);
+    MTKey mark = rs_marktree_itr_current(itr);
     if (lnum && mark.pos.row >= lnum) {
       break;
     }
@@ -1530,7 +1530,7 @@ void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, co
         kv_push(signs, mark);
       }
     }
-    marktree_itr_next(buf->b_marktree, itr);
+    rs_marktree_itr_next(buf->b_marktree, itr);
   }
 
   if (kv_size(signs)) {

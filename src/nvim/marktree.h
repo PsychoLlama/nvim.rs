@@ -136,4 +136,20 @@ static inline DecorVirtText *mt_decor_virt(MTKey mark)
   return (mark.flags & MT_FLAG_DECOR_EXT) ? mark.decor_data.ext.vt : NULL;
 }
 
+// Rust marktree FFI declarations (iterator, lookup, overlap)
+extern bool rs_marktree_itr_get(MarkTree *b, int32_t row, int col, MarkTreeIter *itr);
+extern bool rs_marktree_itr_next(MarkTree *b, MarkTreeIter *itr);
+extern MTKey rs_marktree_itr_current(MarkTreeIter *itr);
+extern bool rs_marktree_itr_get_filter(MarkTree *b, int32_t row, int col, int stop_row,
+                                       int stop_col, MetaFilter meta_filter, MarkTreeIter *itr);
+extern bool rs_marktree_itr_step_out_filter(MarkTree *b, MarkTreeIter *itr,
+                                            MetaFilter meta_filter);
+extern bool rs_marktree_itr_next_filter(MarkTree *b, MarkTreeIter *itr, int stop_row,
+                                        int stop_col, MetaFilter meta_filter);
+extern bool rs_marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeIter *itr);
+extern bool rs_marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair);
+extern MTKey rs_marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool end,
+                                   MarkTreeIter *itr);
+extern MTPos rs_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr);
+
 #include "marktree_shim.h.generated.h"

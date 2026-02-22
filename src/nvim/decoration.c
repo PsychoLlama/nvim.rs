@@ -377,9 +377,9 @@ char *next_virt_text_chunk(VirtText vt, size_t *pos, int *attr)
 DecorVirtText *decor_find_virttext(buf_T *buf, int row, uint64_t ns_id)
 {
   MarkTreeIter itr[1] = { 0 };
-  marktree_itr_get(buf->b_marktree, row, 0,  itr);
+  rs_marktree_itr_get(buf->b_marktree, row, 0,  itr);
   while (true) {
-    MTKey mark = marktree_itr_current(itr);
+    MTKey mark = rs_marktree_itr_current(itr);
     if (mark.pos.row < 0 || mark.pos.row > row) {
       break;
     } else if (mt_invalid(mark)) {
@@ -393,7 +393,7 @@ DecorVirtText *decor_find_virttext(buf_T *buf, int row, uint64_t ns_id)
       return decor;
     }
 next_mark:
-    marktree_itr_next(buf->b_marktree, itr);
+    rs_marktree_itr_next(buf->b_marktree, itr);
   }
   return NULL;
 }
@@ -420,12 +420,12 @@ bool decor_redraw_start(win_T *wp, int top_row, DecorState *state)
   state->top_row = top_row;
   state->itr_valid = true;
 
-  if (!marktree_itr_get_overlap(buf->b_marktree, top_row, 0, state->itr)) {
+  if (!rs_marktree_itr_get_overlap(buf->b_marktree, top_row, 0, state->itr)) {
     return false;
   }
   MTPair pair;
 
-  while (marktree_itr_step_overlap(buf->b_marktree, state->itr, &pair)) {
+  while (rs_marktree_itr_step_overlap(buf->b_marktree, state->itr, &pair)) {
     MTKey m = pair.start;
     if (mt_invalid(m) || !mt_decor_any(m)) {
       continue;
@@ -582,24 +582,24 @@ bool decor_conceal_line(win_T *wp, int row, bool check_cursor)
   // Scan the marktree for any conceal_line marks on this row.
   MTPair pair;
   MarkTreeIter itr[1];
-  marktree_itr_get_overlap(wp->w_buffer->b_marktree, row, 0, itr);
-  while (marktree_itr_step_overlap(wp->w_buffer->b_marktree, itr, &pair)) {
+  rs_marktree_itr_get_overlap(wp->w_buffer->b_marktree, row, 0, itr);
+  while (rs_marktree_itr_step_overlap(wp->w_buffer->b_marktree, itr, &pair)) {
     if (mt_conceal_lines(pair.start) && ns_in_win(pair.start.ns, wp)) {
       return true;
     }
   }
 
-  marktree_itr_step_out_filter(wp->w_buffer->b_marktree, itr, conceal_filter);
+  rs_marktree_itr_step_out_filter(wp->w_buffer->b_marktree, itr, conceal_filter);
 
   while (itr->x) {
-    MTKey mark = marktree_itr_current(itr);
+    MTKey mark = rs_marktree_itr_current(itr);
     if (mark.pos.row > row) {
       break;
     }
     if (mt_conceal_lines(mark) && ns_in_win(pair.start.ns, wp)) {
       return true;
     }
-    marktree_itr_next_filter(wp->w_buffer->b_marktree, itr, row + 1, 0, conceal_filter);
+    rs_marktree_itr_next_filter(wp->w_buffer->b_marktree, itr, row + 1, 0, conceal_filter);
   }
 
   return decor_providers_invoke_conceal_line(wp, row);
@@ -652,8 +652,8 @@ void decor_redraw_signs(win_T *wp, buf_T *buf, int row, SignTextAttrs sattrs[], 
   MarkTreeIter itr[1];
   kvec_t(SignItem) signs = KV_INITIAL_VALUE;
   // TODO(bfredl): integrate with main decor loop.
-  marktree_itr_get_overlap(buf->b_marktree, row, 0, itr);
-  while (marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
+  rs_marktree_itr_get_overlap(buf->b_marktree, row, 0, itr);
+  while (rs_marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
     if (!mt_invalid(pair.start) && mt_decor_sign(pair.start) && ns_in_win(pair.start.ns, wp)) {
       DecorSignHighlight *sh = decor_find_sign(mt_decor(pair.start));
       num_text += (sh->text[0] != NUL);
@@ -661,10 +661,10 @@ void decor_redraw_signs(win_T *wp, buf_T *buf, int row, SignTextAttrs sattrs[], 
     }
   }
 
-  marktree_itr_step_out_filter(buf->b_marktree, itr, sign_filter);
+  rs_marktree_itr_step_out_filter(buf->b_marktree, itr, sign_filter);
 
   while (itr->x) {
-    MTKey mark = marktree_itr_current(itr);
+    MTKey mark = rs_marktree_itr_current(itr);
     if (mark.pos.row != row) {
       break;
     }
@@ -674,7 +674,7 @@ void decor_redraw_signs(win_T *wp, buf_T *buf, int row, SignTextAttrs sattrs[], 
       kv_push(signs, ((SignItem){ sh, mark.id }));
     }
 
-    marktree_itr_next_filter(buf->b_marktree, itr, row + 1, 0, sign_filter);
+    rs_marktree_itr_next_filter(buf->b_marktree, itr, row + 1, 0, sign_filter);
   }
 
   if (kv_size(signs)) {
@@ -727,8 +727,8 @@ void buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, TriState 
   MTPair pair = { 0 };
 
   // Increment count array for signs that start before "row1" but do overlap the range.
-  marktree_itr_get_overlap(buf->b_marktree, row1, 0, itr);
-  while (marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
+  rs_marktree_itr_get_overlap(buf->b_marktree, row1, 0, itr);
+  while (rs_marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
     if ((pair.start.flags & MT_FLAG_DECOR_SIGNTEXT) && !mt_invalid(pair.start)) {
       for (int i = row1; i <= MIN(row2, pair.end_pos.row); i++) {
         count[i - row1]++;
@@ -736,23 +736,23 @@ void buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, TriState 
     }
   }
 
-  marktree_itr_step_out_filter(buf->b_marktree, itr, signtext_filter);
+  rs_marktree_itr_step_out_filter(buf->b_marktree, itr, signtext_filter);
 
   // Continue traversing the marktree until beyond "row2".
   while (itr->x) {
-    MTKey mark = marktree_itr_current(itr);
+    MTKey mark = rs_marktree_itr_current(itr);
     if (mark.pos.row > row2) {
       break;
     }
     if ((mark.flags & MT_FLAG_DECOR_SIGNTEXT) && !mt_invalid(mark) && !mt_end(mark)) {
       // Increment count array for the range of a paired sign mark.
-      MTPos end = marktree_get_altpos(buf->b_marktree, mark, NULL);
+      MTPos end = rs_marktree_get_altpos(buf->b_marktree, mark, NULL);
       for (int i = mark.pos.row; i <= MIN(row2, end.row); i++) {
         count[i - row1]++;
       }
     }
 
-    marktree_itr_next_filter(buf->b_marktree, itr, row2 + 1, 0, signtext_filter);
+    rs_marktree_itr_next_filter(buf->b_marktree, itr, row2 + 1, 0, signtext_filter);
   }
 
   // For each row increment "b_signcols.count" at the number of counted signs,
@@ -819,7 +819,7 @@ int decor_virt_lines(win_T *wp, int start_row, int end_row, int *num_below, Virt
   }
 
   MarkTreeIter itr[1] = { 0 };
-  if (!marktree_itr_get_filter(buf->b_marktree, MAX(start_row - 1, 0), 0, end_row, 0,
+  if (!rs_marktree_itr_get_filter(buf->b_marktree, MAX(start_row - 1, 0), 0, end_row, 0,
                                lines_filter, itr)) {
     return 0;
   }
@@ -828,7 +828,7 @@ int decor_virt_lines(win_T *wp, int start_row, int end_row, int *num_below, Virt
 
   int virt_lines = 0;
   while (true) {
-    MTKey mark = marktree_itr_current(itr);
+    MTKey mark = rs_marktree_itr_current(itr);
     DecorVirtText *vt = mt_decor_virt(mark);
     if (!mt_invalid(mark) && ns_in_win(mark.ns, wp)) {
       while (vt) {
@@ -852,7 +852,7 @@ int decor_virt_lines(win_T *wp, int start_row, int end_row, int *num_below, Virt
       }
     }
 
-    if (!marktree_itr_next_filter(buf->b_marktree, itr, end_row, 0, lines_filter)) {
+    if (!rs_marktree_itr_next_filter(buf->b_marktree, itr, end_row, 0, lines_filter)) {
       break;
     }
   }
@@ -1369,7 +1369,7 @@ void *nvim_decor_win_get_buffer(void *wp_ptr)
 int nvim_decor_state_itr_current_row(void *state_ptr)
 {
   DecorState *state = (DecorState *)state_ptr;
-  MTKey k = marktree_itr_current(state->itr);
+  MTKey k = rs_marktree_itr_current(state->itr);
   return k.pos.row;
 }
 
@@ -1378,7 +1378,7 @@ void nvim_decor_state_itr_get(void *state_ptr, void *buf_ptr, int row, int col)
 {
   DecorState *state = (DecorState *)state_ptr;
   buf_T *buf = (buf_T *)buf_ptr;
-  marktree_itr_get(buf->b_marktree, row, col, state->itr);
+  rs_marktree_itr_get(buf->b_marktree, row, col, state->itr);
 }
 
 // ============================================================================
@@ -2083,7 +2083,7 @@ DecorColAdvanceResult nvim_decor_col_advance(win_T *wp, int col, DecorState *sta
 
   // Part 1: Advance marktree iterator, adding inline decorations
   while (true) {
-    MTKey mark = marktree_itr_current(state->itr);
+    MTKey mark = rs_marktree_itr_current(state->itr);
     if (mark.pos.row < 0 || mark.pos.row > row) {
       break;
     } else if (mark.pos.row == row && mark.pos.col > col) {
@@ -2095,12 +2095,12 @@ DecorColAdvanceResult nvim_decor_col_advance(win_T *wp, int col, DecorState *sta
       goto next_mark;
     }
 
-    MTPos endpos = marktree_get_altpos(buf->b_marktree, mark, NULL);
+    MTPos endpos = rs_marktree_get_altpos(buf->b_marktree, mark, NULL);
     decor_range_add_from_inline(state, mark.pos.row, mark.pos.col, endpos.row, endpos.col,
                                 mt_decor(mark), false, mark.ns, mark.id);
 
 next_mark:
-    marktree_itr_next(buf->b_marktree, state->itr);
+    rs_marktree_itr_next(buf->b_marktree, state->itr);
   }
 
   int *const indices = state->ranges_i.items;
