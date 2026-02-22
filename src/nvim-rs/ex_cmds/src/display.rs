@@ -413,9 +413,9 @@ const IOSIZE: usize = 1025;
 pub unsafe extern "C" fn rs_do_ascii(_eap: *mut ExArgHandle) {
     use crate::{
         get_cursor_pos_ptr, get_digraph_for_char, msg, msg_clr_eos, msg_end, msg_sb_eol, msg_start,
-        nvim_get_fileformat_curbuf, nvim_msg_multiline_cstr, nvim_transchar_nonprint_curbuf,
-        transchar, utf_char2bytes, utf_iscomposing_first, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
-        vim_isprintc,
+        nvim_get_curbuf, nvim_msg_multiline_cstr, nvim_transchar_nonprint_curbuf,
+        rs_get_fileformat, transchar, utf_char2bytes, utf_iscomposing_first, utf_ptr2char,
+        utf_ptr2len, utfc_ptr2len, vim_isprintc,
     };
 
     let data = get_cursor_pos_ptr();
@@ -439,7 +439,7 @@ pub unsafe extern "C" fn rs_do_ascii(_eap: *mut ExArgHandle) {
             // NUL is stored as NL
             c = NUL;
         }
-        let cval = if c == CAR && nvim_get_fileformat_curbuf() == EOL_MAC {
+        let cval = if c == CAR && rs_get_fileformat(nvim_get_curbuf()) == EOL_MAC {
             NL // NL is stored as CR
         } else {
             c
@@ -615,7 +615,7 @@ fn format_multibyte_no_digraph(buf: &mut [u8], c: c_int) -> usize {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
     use crate::{
-        emsg, msg_putchar, nvim_curbuf_get_line_count, nvim_curwin_get_cursor_lnum,
+        emsg, msg_putchar, nvim_curbuf_get_b_ml_ml_line_count, nvim_curwin_get_cursor_lnum,
         nvim_curwin_get_p_scr, nvim_curwin_get_view_height, nvim_curwin_set_cursor_col,
         nvim_curwin_set_cursor_lnum, nvim_exarg_get_addr_count, nvim_exarg_get_arg,
         nvim_exarg_get_flags, nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_get_Columns,
@@ -668,7 +668,7 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
         bigness = atol(arg.add(pos)) as i64;
 
         // bigness could be < 0 if atol overflows
-        let line_count_2x = 2 * i64::from(nvim_curbuf_get_line_count());
+        let line_count_2x = 2 * i64::from(nvim_curbuf_get_b_ml_ml_line_count());
         if bigness > line_count_2x || bigness < 0 {
             bigness = line_count_2x;
         }
@@ -719,7 +719,7 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
 
     // Recalculate for Plus case with proper semantics
     let bigness_nr = bigness as LineNr;
-    let line_count = nvim_curbuf_get_line_count();
+    let line_count = nvim_curbuf_get_b_ml_ml_line_count();
 
     let range = if kind == ZKind::Plus {
         // Handle Plus/default case directly since it has special repeat logic

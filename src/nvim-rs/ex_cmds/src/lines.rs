@@ -385,7 +385,7 @@ const ML_EMPTY: c_int = 0x01;
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_change(eap: *mut crate::ExArgHandle) {
     use crate::{
-        deleted_lines_mark, ex_append, get_indent_lnum, ml_delete, nvim_check_cursor_lnum_curwin,
+        deleted_lines_mark, ex_append, get_indent_lnum, ml_delete, nvim_check_cursor_lnum_call,
         nvim_curbuf_get_b_p_ai, nvim_curbuf_get_ml_flags, nvim_exarg_get_forceit,
         nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_line2, nvim_set_append_indent,
         u_save,
@@ -416,7 +416,7 @@ pub unsafe extern "C" fn rs_ex_change(eap: *mut crate::ExArgHandle) {
     }
 
     // Make sure the cursor is not beyond the end of the file now
-    nvim_check_cursor_lnum_curwin();
+    nvim_check_cursor_lnum_call();
     deleted_lines_mark(line1, line2 - lnum);
 
     // ":append" on the line above the deleted lines

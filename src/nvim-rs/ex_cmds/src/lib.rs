@@ -475,7 +475,7 @@ extern "C" {
     /// Set ex_no_reprint flag
     pub fn nvim_set_ex_no_reprint(val: c_int);
     /// Get curbuf->b_ml.ml_line_count
-    pub fn nvim_curbuf_get_line_count() -> c_int;
+    pub fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
     /// Get Rows (screen height)
     pub fn nvim_get_Rows() -> c_int;
     /// Get Columns (screen width)
@@ -540,8 +540,8 @@ extern "C" {
     pub fn nvim_transchar_nonprint_curbuf(buf: *mut c_char, c: c_int);
     /// Get digraph string for a character (NULL if none)
     pub fn get_digraph_for_char(val_arg: c_int) -> *const c_char;
-    /// Get file format of curbuf (0=unix, 1=dos, 2=mac)
-    pub fn nvim_get_fileformat_curbuf() -> c_int;
+    /// Get file format of a buffer (0=unix, 1=dos, 2=mac)
+    pub fn rs_get_fileformat(buf: *mut BufHandle) -> c_int;
     /// Display a message
     pub fn msg(s: *const c_char, hl_id: c_int) -> c_int;
     /// Start message output
@@ -569,7 +569,7 @@ extern "C" {
     /// Set eap->line2
     pub fn nvim_exarg_set_line2(eap: *mut ExArgHandle, line2: c_int);
     /// Call check_cursor_lnum(curwin)
-    pub fn nvim_check_cursor_lnum_curwin();
+    pub fn nvim_check_cursor_lnum_call();
     /// Get curbuf->b_ml.ml_flags
     pub fn nvim_curbuf_get_ml_flags() -> c_int;
     /// Get indent of a line

@@ -148,7 +148,6 @@ extern void rs_foldMoveRange(win_T *wp, garray_T *gap, linenr_T line1, linenr_T 
 extern void rs_foldUpdateAll(win_T *win);
 
 extern int rs_magic_isset(void);
-extern int rs_get_fileformat(buf_T *buf);
 extern void rs_diff_buf_add(buf_T *buf);
 extern void rs_diff_invalidate(buf_T *buf);
 
@@ -258,12 +257,6 @@ void nvim_set_ex_no_reprint(int val)
   ex_no_reprint = val != 0;
 }
 
-/// Get curbuf->b_ml.ml_line_count.
-linenr_T nvim_curbuf_get_line_count(void)
-{
-  return curbuf->b_ml.ml_line_count;
-}
-
 /// Check if CMOD_LOCKMARKS is set in cmdmod.
 int nvim_cmdmod_has_lockmarks(void)
 {
@@ -290,12 +283,6 @@ void nvim_check_pos_visual(void)
   check_pos(curbuf, &VIsual);
 }
 
-/// Get file format of curbuf (EOL_UNIX=0, EOL_DOS=1, EOL_MAC=2).
-int nvim_get_fileformat_curbuf(void)
-{
-  return rs_get_fileformat((buf_T *)curbuf);
-}
-
 /// Wrapper for msg_multiline taking a C string.
 void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear)
 {
@@ -318,12 +305,6 @@ int nvim_curbuf_get_b_p_ai(void)
 void nvim_exarg_set_line2(exarg_T *eap, linenr_T line2)
 {
   eap->line2 = line2;
-}
-
-/// Call check_cursor_lnum(curwin).
-void nvim_check_cursor_lnum_curwin(void)
-{
-  check_cursor_lnum(curwin);
 }
 
 _Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS mismatch");
