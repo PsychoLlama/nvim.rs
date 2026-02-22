@@ -4781,7 +4781,6 @@ unsigned nvim_get_swb_flags(void) { return swb_flags; }
 void nvim_win_goto_wrapper(win_T *wp) { win_goto(wp); }
 int nvim_win_split_wrapper(int size, int flags) { return win_split(size, flags); }
 int nvim_win_splitmove_wrapper(win_T *wp, int size, int flags) { return win_splitmove(wp, size, flags); }
-void nvim_reset_visual_wrapper(void) { rs_reset_VIsual_and_resel(); }
 int nvim_do_cmdline_cmd_wrapper(const char *cmd) { return do_cmdline_cmd(cmd); }
 void nvim_emsg_e_cmdwin(void) { emsg(_(e_cmdwin)); }
 int nvim_bt_quickfix_curbuf(void) { return bt_quickfix(curbuf) ? 1 : 0; }
@@ -5105,10 +5104,6 @@ void nvim_do_window_g(int Prenum, int xchar)
     break;
   }
 }
-
-extern void rs_qf_view_result(bool split);
-
-void nvim_qf_view_result_split(void) { rs_qf_view_result(true); }
 
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
 _Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");

@@ -118,10 +118,11 @@ extern "C" {
     fn nvim_do_window_goto_file(nchar: c_int, prenum1: c_int);
     fn nvim_do_window_find_in_path(nchar: c_int, prenum: c_int, prenum1: c_int);
     fn nvim_do_window_g(prenum: c_int, xchar: c_int);
-    fn nvim_qf_view_result_split();
+    fn rs_qf_view_result(split: bool);
 
     // --- Simple wrappers ---
     fn nvim_emsg_e_cmdwin();
+    #[link_name = "rs_reset_VIsual_and_resel"]
     fn nvim_reset_visual_wrapper();
     fn nvim_bt_quickfix_curbuf() -> c_int;
     fn nvim_win_split_wrapper(size: c_int, flags: c_int) -> c_int;
@@ -544,7 +545,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // =================================================================
             K_KENTER | CAR => {
                 if nvim_bt_quickfix_curbuf() != 0 {
-                    nvim_qf_view_result_split();
+                    rs_qf_view_result(true);
                 }
             }
 
