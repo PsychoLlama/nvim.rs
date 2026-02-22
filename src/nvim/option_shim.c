@@ -2564,7 +2564,7 @@ static const char *did_set_shiftwidth_tabstop(optset_T *args)
   win_T *win = (win_T *)args->os_win;
   OptInt *pp = (OptInt *)args->os_varp;
 
-  if (foldmethodIsIndent(win)) {
+  if (rs_foldmethodIsIndent(win)) {
     rs_foldUpdateAll(win);
   }
   // When 'shiftwidth' changes, or it's zero and 'tabstop' changes:

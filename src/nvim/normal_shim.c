@@ -3379,10 +3379,10 @@ static void nv_zet_impl(cmdarg_T *cap)
 
   // "zE": erase all folds
   case 'E':
-    if (foldmethodIsManual(curwin)) {
+    if (rs_foldmethodIsManual(curwin)) {
       rs_clearFolding(curwin);
       changed_window_setting(curwin);
-    } else if (foldmethodIsMarker(curwin)) {
+    } else if (rs_foldmethodIsMarker(curwin)) {
       rs_deleteFold(curwin, 1, curbuf->b_ml.ml_line_count, true, false);
     } else {
       emsg(_("E352: Cannot erase folds with current 'foldmethod'"));
@@ -3543,10 +3543,10 @@ static void nv_zet_impl(cmdarg_T *cap)
 
   // Redraw when 'foldenable' changed
   if (old_fen != curwin->w_p_fen) {
-    if (foldmethodIsDiff(curwin) && curwin->w_p_scb) {
+    if (rs_foldmethodIsDiff(curwin) && curwin->w_p_scb) {
       // Adjust 'foldenable' in diff-synced windows.
       FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-        if (wp != curwin && foldmethodIsDiff(wp) && wp->w_p_scb) {
+        if (wp != curwin && rs_foldmethodIsDiff(wp) && wp->w_p_scb) {
           wp->w_p_fen = curwin->w_p_fen;
           changed_window_setting(wp);
         }

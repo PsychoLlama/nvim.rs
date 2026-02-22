@@ -203,7 +203,7 @@ void diff_redraw(bool dofold)
     if (wp != curwin) {
       wp_other = wp;
     }
-    if (dofold && foldmethodIsDiff(wp)) {
+    if (dofold && rs_foldmethodIsDiff(wp)) {
       rs_foldUpdateAll(wp);
     }
 
@@ -875,7 +875,7 @@ void ex_diffoff(exarg_T *eap)
         // Only restore 'foldenable' when 'foldmethod' is not
         // "manual", otherwise we continue to show the diff folds.
         if (wp->w_p_fen) {
-          wp->w_p_fen = foldmethodIsManual(wp) ? false : wp->w_p_fen_save;
+          wp->w_p_fen = rs_foldmethodIsManual(wp) ? false : wp->w_p_fen_save;
         }
 
         rs_foldUpdateAll(wp);

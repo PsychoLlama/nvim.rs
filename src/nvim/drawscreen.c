@@ -1819,7 +1819,7 @@ static void win_update(win_T *wp)
                         || did_update == DID_FOLD
                         || (did_update == DID_LINE
                             && syntax_present(wp)
-                            && ((foldmethodIsSyntax(wp)
+                            && ((rs_foldmethodIsSyntax(wp)
                                  && rs_hasAnyFolding(wp))
                                 || syntax_check_changed(lnum)))
                         // match in fixed position might need redraw

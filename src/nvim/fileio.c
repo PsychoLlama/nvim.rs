@@ -3148,7 +3148,7 @@ void buf_reload(buf_T *buf, int orig_mode, bool reload_options)
   // Update folds unless they are defined manually.
   FOR_ALL_TAB_WINDOWS(tp, wp) {
     if (wp->w_buffer == curwin->w_buffer
-        && !foldmethodIsManual(wp)) {
+        && !rs_foldmethodIsManual(wp)) {
       rs_foldUpdateAll(wp);
     }
   }

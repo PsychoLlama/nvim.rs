@@ -516,7 +516,7 @@ void syn_stack_free_all(synblock_T *block)
 
   // When using "syntax" fold method, must update all folds.
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_s == block && foldmethodIsSyntax(wp)) {
+    if (wp->w_s == block && rs_foldmethodIsSyntax(wp)) {
       rs_foldUpdateAll(wp);
     }
   }
@@ -6224,7 +6224,7 @@ void nvim_syn_vim_regfree(void *regprog)
 /// Wrap foldmethodIsSyntax(curwin) for Rust.
 int nvim_syn_foldmethod_is_syntax_curwin(void)
 {
-  return foldmethodIsSyntax(curwin);
+  return rs_foldmethodIsSyntax(curwin);
 }
 
 /// Wrap rs_foldUpdateAll(curwin) for Rust.

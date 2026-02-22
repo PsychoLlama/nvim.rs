@@ -1331,7 +1331,7 @@ const char *did_set_foldexpr(optset_T *args)
 {
   win_T *win = (win_T *)args->os_win;
   did_set_optexpr(args);
-  if (foldmethodIsExpr(win)) {
+  if (rs_foldmethodIsExpr(win)) {
     rs_foldUpdateAll(win);
   }
   return NULL;
@@ -1341,7 +1341,7 @@ const char *did_set_foldexpr(optset_T *args)
 const char *did_set_foldignore(optset_T *args)
 {
   win_T *win = (win_T *)args->os_win;
-  if (foldmethodIsIndent(win)) {
+  if (rs_foldmethodIsIndent(win)) {
     rs_foldUpdateAll(win);
   }
   return NULL;
@@ -1362,7 +1362,7 @@ const char *did_set_foldmarker(optset_T *args)
     return e_invarg;
   }
 
-  if (foldmethodIsMarker(win)) {
+  if (rs_foldmethodIsMarker(win)) {
     rs_foldUpdateAll(win);
   }
 
@@ -1378,7 +1378,7 @@ const char *did_set_foldmethod(optset_T *args)
   }
   win_T *win = (win_T *)args->os_win;
   rs_foldUpdateAll(win);
-  if (foldmethodIsDiff(win)) {
+  if (rs_foldmethodIsDiff(win)) {
     rs_newFoldLevel();
   }
   return NULL;
@@ -2092,7 +2092,7 @@ const char *did_set_vartabstop(optset_T *args)
   colnr_T *oldarray = buf->b_p_vts_array;
   if (tabstop_set(*varp, &(buf->b_p_vts_array))) {
     xfree(oldarray);
-    if (foldmethodIsIndent(win)) {
+    if (rs_foldmethodIsIndent(win)) {
       rs_foldUpdateAll(win);
     }
   } else {

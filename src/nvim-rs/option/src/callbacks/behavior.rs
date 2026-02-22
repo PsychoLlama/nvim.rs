@@ -16,12 +16,12 @@ use crate::{BufHandle, OptInt, WinHandle};
 extern "C" {
     // Diff functions
     fn rs_diff_buf_adjust(win: WinHandle);
-    fn foldmethodIsDiff(win: WinHandle) -> c_int;
+    fn rs_foldmethodIsDiff(win: WinHandle) -> c_int;
     fn rs_foldUpdateAll(win: WinHandle);
 
     // Fold functions
-    fn foldmethodIsSyntax(win: WinHandle) -> c_int;
-    fn foldmethodIsIndent(win: WinHandle) -> c_int;
+    fn rs_foldmethodIsSyntax(win: WinHandle) -> c_int;
+    fn rs_foldmethodIsIndent(win: WinHandle) -> c_int;
 
     // Window functions
     #[link_name = "rs_win_equal"]
@@ -145,7 +145,7 @@ fn get_helpheight() -> OptInt {
 pub unsafe extern "C" fn rs_did_set_diff(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
     rs_diff_buf_adjust(win);
-    if foldmethodIsDiff(win) != 0 {
+    if rs_foldmethodIsDiff(win) != 0 {
         rs_foldUpdateAll(win);
     }
     callback_ok()
@@ -191,7 +191,7 @@ pub unsafe extern "C" fn rs_did_set_foldminlines(args: *mut c_void) -> CallbackR
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_foldnestmax(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
-    if foldmethodIsSyntax(win) != 0 || foldmethodIsIndent(win) != 0 {
+    if rs_foldmethodIsSyntax(win) != 0 || rs_foldmethodIsIndent(win) != 0 {
         rs_foldUpdateAll(win);
     }
     callback_ok()

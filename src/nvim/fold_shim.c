@@ -91,19 +91,11 @@ static bool fold_changed;
 
 #include "fold_shim.c.generated.h"
 
-// Rust FFI declarations
-extern int rs_foldmethodIsManual(win_T *wp);
-extern int rs_foldmethodIsIndent(win_T *wp);
-extern int rs_foldmethodIsExpr(win_T *wp);
-extern int rs_foldmethodIsMarker(win_T *wp);
-extern int rs_foldmethodIsSyntax(win_T *wp);
-extern int rs_foldmethodIsDiff(win_T *wp);
+// Rust FFI declarations (internal-only; fold method checks are in fold.h)
 extern bool rs_diff_infold(win_T *wp, linenr_T lnum);
 extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
 extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
 extern void rs_foldUpdateIEMS(win_T *wp, linenr_T top, linenr_T bot);
-extern int rs_foldLevel(linenr_T lnum);
-extern int rs_lineFolded(win_T *wp, linenr_T lnum);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
 
 // Struct returned by rs_hasFoldingWin
@@ -188,69 +180,10 @@ bool hasFoldingWin(win_T *const win, const linenr_T lnum, linenr_T *const firstp
   return false;
 }
 
-// foldLevel() {{{2
-/// @return  fold level at line number "lnum" in the current window.
-static int foldLevel(linenr_T lnum)
-{
-  return rs_foldLevel(lnum);
-}
-
-// lineFolded() {{{2
-/// Low level function to check if a line is folded.  Doesn't use any caching.
-///
-/// @return  true if line is folded or,
-///          false if line is not folded.
-bool lineFolded(win_T *const win, const linenr_T lnum)
-{
-  return rs_lineFolded(win, lnum) != 0;
-}
-
 /// Wrapper for lineFolded for Rust FFI.
 int nvim_lineFolded(win_T *wp, linenr_T lnum)
 {
-  return lineFolded(wp, lnum) ? 1 : 0;
-}
-
-// foldmethodIsManual() {{{2
-/// @return  true if 'foldmethod' is "manual"
-bool foldmethodIsManual(win_T *wp)
-{
-  return rs_foldmethodIsManual(wp) != 0;
-}
-
-// foldmethodIsIndent() {{{2
-/// @return  true if 'foldmethod' is "indent"
-bool foldmethodIsIndent(win_T *wp)
-{
-  return rs_foldmethodIsIndent(wp) != 0;
-}
-
-// foldmethodIsExpr() {{{2
-/// @return  true if 'foldmethod' is "expr"
-bool foldmethodIsExpr(win_T *wp)
-{
-  return rs_foldmethodIsExpr(wp) != 0;
-}
-
-// foldmethodIsMarker() {{{2
-/// @return  true if 'foldmethod' is "marker"
-bool foldmethodIsMarker(win_T *wp)
-{
-  return rs_foldmethodIsMarker(wp) != 0;
-}
-
-// foldmethodIsSyntax() {{{2
-/// @return  true if 'foldmethod' is "syntax"
-bool foldmethodIsSyntax(win_T *wp)
-{
-  return rs_foldmethodIsSyntax(wp) != 0;
-}
-
-// foldmethodIsDiff() {{{2
-/// @return  true if 'foldmethod' is "diff"
-bool foldmethodIsDiff(win_T *wp)
-{
-  return rs_foldmethodIsDiff(wp) != 0;
+  return rs_lineFolded(wp, lnum);
 }
 
 // foldUpdate() {{{2
@@ -260,7 +193,7 @@ bool foldmethodIsDiff(win_T *wp)
 /// The changes in lines from top to bot (inclusive).
 void foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
 {
-  if (disable_fold_update || (State & MODE_INSERT && !foldmethodIsIndent(wp))) {
+  if (disable_fold_update || (State & MODE_INSERT && !rs_foldmethodIsIndent(wp))) {
     return;
   }
 
@@ -283,9 +216,9 @@ void foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
     }
   }
 
-  if (foldmethodIsIndent(wp) || foldmethodIsDiff(wp)
-      || foldmethodIsExpr(wp) || foldmethodIsMarker(wp)
-      || foldmethodIsSyntax(wp)) {
+  if (rs_foldmethodIsIndent(wp) || rs_foldmethodIsDiff(wp)
+      || rs_foldmethodIsExpr(wp) || rs_foldmethodIsMarker(wp)
+      || rs_foldmethodIsSyntax(wp)) {
     int save_got_int = got_int;
     got_int = false;
     rs_foldUpdateIEMS(wp, top, bot);
@@ -910,7 +843,7 @@ static void foldlevelSyntax(fline_T *flp)
 /// @return  FAIL if writing fails.
 int put_folds(FILE *fd, win_T *wp)
 {
-  if (foldmethodIsManual(wp)) {
+  if (rs_foldmethodIsManual(wp)) {
     if (put_line(fd, "silent! normal! zE") == FAIL
         || put_folds_recurse(fd, &wp->w_folds, 0) == FAIL
         || put_line(fd, "let &fdl = &fdl") == FAIL) {
@@ -1047,7 +980,7 @@ void f_foldlevel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   const linenr_T lnum = tv_get_lnum(argvars);
   if (lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count) {
-    rettv->vval.v_number = foldLevel(lnum);
+    rettv->vval.v_number = rs_foldLevel(lnum);
   }
 }
 

@@ -609,7 +609,7 @@ int plines_win_nofill(win_T *wp, linenr_T lnum, bool limit_winheight)
   }
 
   // Folded lines are handled just like an empty line.
-  if (lineFolded(wp, lnum)) {
+  if (rs_lineFolded(wp, lnum)) {
     return 1;
   }
 

@@ -20,4 +20,14 @@ typedef struct {
   int end;
 } FoldLevelResult_C;
 
+// Rust FFI: fold method checks and fold state queries
+extern int rs_foldLevel(linenr_T lnum);
+extern int rs_lineFolded(win_T *wp, linenr_T lnum);
+extern int rs_foldmethodIsManual(win_T *wp);
+extern int rs_foldmethodIsIndent(win_T *wp);
+extern int rs_foldmethodIsExpr(win_T *wp);
+extern int rs_foldmethodIsMarker(win_T *wp);
+extern int rs_foldmethodIsSyntax(win_T *wp);
+extern int rs_foldmethodIsDiff(win_T *wp);
+
 #include "fold_shim.h.generated.h"
