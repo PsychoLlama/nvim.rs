@@ -519,6 +519,45 @@ extern "C" {
         hisstr: *mut c_char,
         additional_data: *mut c_void,
     );
+
+    // Phase 2 (plan 11dd3cf4): shada_write_file migration accessors
+    fn nvim_shada_modname(
+        fname: *const c_char,
+        ext: *const c_char,
+        prepend_dot: bool,
+    ) -> *mut c_char;
+    fn nvim_shada_os_getperm(fname: *const c_char) -> c_int;
+    fn nvim_shada_file_open_write(
+        fd: FileDescriptorHandle,
+        fname: *const c_char,
+        flags: c_int,
+        perm: c_int,
+    ) -> c_int;
+    fn nvim_shada_path_tail_with_sep_offset(fname: *const c_char) -> usize;
+    fn nvim_shada_os_isdir(fname: *const c_char) -> c_int;
+    fn nvim_shada_os_mkdir_recurse(
+        fname: *const c_char,
+        perm: c_int,
+        out_failed_dir: *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_shada_shada_write(sd_writer: *mut c_void, sd_reader: *mut c_void) -> c_int;
+    fn nvim_shada_vim_rename(from: *const c_char, to: *const c_char) -> c_int;
+    fn nvim_shada_os_remove(fname: *const c_char);
+    fn nvim_shada_smsg_writing(fname: *const c_char);
+    fn nvim_shada_platform_check_writable(
+        fname: *const c_char,
+        sd_writer: *mut c_void,
+        tempname: *const c_char,
+    ) -> c_int;
+    fn nvim_shada_semsg_merge_read_error(fname: *const c_char, strerror_msg: *const c_char);
+    fn nvim_shada_semsg_tempfile_open_error(tempname: *const c_char, strerror_msg: *const c_char);
+    fn nvim_shada_semsg_all_tmpfiles(fname: *const c_char);
+    fn nvim_shada_semsg_mkdir_error(failed_dir: *const c_char, strerror_msg: *const c_char);
+    fn nvim_shada_semsg_write_open_error(fname: *const c_char, strerror_msg: *const c_char);
+    fn nvim_shada_semsg_rename_error(tempname: *const c_char, fname: *const c_char);
+    fn nvim_shada_semsg_not_shada(tempname: *const c_char, fname: *const c_char);
+    fn nvim_shada_semsg_write_errors(tempname: *const c_char, fname: *const c_char);
+    fn nvim_shada_semsg_remove_reminder(tempname: *const c_char, fname: *const c_char);
 }
 
 // =============================================================================
@@ -2677,6 +2716,226 @@ pub unsafe extern "C" fn rs_shada_read_file(file: *const c_char, flags: c_int) -
     nvim_shada_read(fd, flags);
     rs_close_file(fd);
     nvim_xfree(sd_reader);
+
+    OK
+}
+
+/// Write ShaDa data to a file.
+///
+/// Opens the ShaDa file for writing, optionally merging with an existing
+/// ShaDa file (unless `nomerge` is true), calls `shada_write`, and renames
+/// the temporary file into place.
+///
+/// # Safety
+///
+/// `file` must be a valid C string or NULL.
+///
+/// # Returns
+///
+/// OK (0) on success, FAIL (1) on failure.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
+    const OK: c_int = 0;
+    const FAIL: c_int = 1;
+    // libuv error codes
+    const UV_ENOENT: c_int = -2;
+    const UV_EEXIST: c_int = -17;
+    const UV_ELOOP: c_int = -40;
+    // FileOpenFlags values
+    const K_FILE_READ_ONLY: c_int = 1;
+    const K_FILE_CREATE: c_int = 2;
+    const K_FILE_NO_SYMLINK: c_int = 8;
+    const K_FILE_CREATE_ONLY: c_int = 16;
+    const K_FILE_TRUNCATE: c_int = 32;
+    // ShaDaWriteResult values
+    const K_SD_WRITE_SUCCESSFUL: c_int = 0;
+    const K_SD_WRITE_READ_NOT_SHADA: c_int = 1;
+
+    let fname = rs_shada_filename(file);
+    if fname.is_null() {
+        return FAIL;
+    }
+
+    // Allocate FileDescriptor structs on the heap (opaque C structs)
+    let fd_size = nvim_shada_file_descriptor_size();
+    let sd_writer_mem = nvim_xcalloc(1, fd_size);
+    let sd_reader_mem = nvim_xcalloc(1, fd_size);
+
+    let mut did_open_writer = false;
+    let mut did_open_reader = false;
+    let mut nomerge = nomerge;
+    let mut tempname: *mut c_char = std::ptr::null_mut();
+
+    if !nomerge {
+        let error = nvim_shada_file_open_write(
+            FileDescriptorHandle::from_ptr(sd_reader_mem),
+            fname,
+            K_FILE_READ_ONLY,
+            0,
+        );
+        if error != 0 {
+            if error != UV_ENOENT {
+                nvim_shada_semsg_merge_read_error(fname, nvim_shada_os_strerror(error));
+                // Try writing the file even if opening it emerged any issues besides
+                // file not existing: maybe writing will succeed nevertheless.
+            }
+            nomerge = true;
+        } else {
+            did_open_reader = true;
+        }
+
+        if !nomerge {
+            tempname = nvim_shada_modname(fname, c".tmp.a".as_ptr(), false);
+            if tempname.is_null() {
+                nomerge = true;
+            }
+        }
+
+        if !nomerge {
+            // Save permissions from the original file, with modifications:
+            // 1: Strip SUID bit if any.
+            // 2: Make sure that user can always read and write the result.
+            // 3: If somebody happened to delete the file after it was opened for
+            //    reading, use u=rw permissions.
+            let raw_perm = nvim_shada_os_getperm(fname);
+            let perm = if raw_perm >= 0 {
+                (raw_perm & 0o777) | 0o600
+            } else {
+                0o600
+            };
+
+            // Try opening temp file, incrementing suffix from .tmp.a to .tmp.z
+            loop {
+                let error = nvim_shada_file_open_write(
+                    FileDescriptorHandle::from_ptr(sd_writer_mem),
+                    tempname,
+                    K_FILE_CREATE_ONLY | K_FILE_NO_SYMLINK,
+                    perm,
+                );
+                if error == 0 {
+                    did_open_writer = true;
+                    break;
+                }
+                if error == UV_EEXIST || error == UV_ELOOP {
+                    // File already exists, try another name
+                    let tempname_len = libc::strlen(tempname);
+                    let wp = tempname.add(tempname_len - 1);
+                    #[allow(clippy::cast_possible_wrap)]
+                    if *wp == b'z' as c_char {
+                        // Tried names from .tmp.a to .tmp.z, all failed.
+                        nvim_shada_semsg_all_tmpfiles(fname);
+                        nvim_xfree(fname.cast::<c_void>());
+                        nvim_xfree(tempname.cast::<c_void>());
+                        if did_open_reader {
+                            rs_close_file(FileDescriptorHandle::from_ptr(sd_reader_mem));
+                        }
+                        nvim_xfree(sd_writer_mem);
+                        nvim_xfree(sd_reader_mem);
+                        return FAIL;
+                    }
+                    *wp += 1;
+                    // continue loop
+                } else {
+                    nvim_shada_semsg_tempfile_open_error(tempname, nvim_shada_os_strerror(error));
+                    break;
+                }
+            }
+        }
+    }
+
+    if nomerge {
+        // Create directory if needed
+        let tail_offset = nvim_shada_path_tail_with_sep_offset(fname);
+        if tail_offset != 0 {
+            // Temporarily null-terminate at the tail to get the directory path
+            let tail_ptr = fname.add(tail_offset).cast::<c_char>();
+            let tail_save = *tail_ptr;
+            *tail_ptr = 0;
+            if nvim_shada_os_isdir(fname) == 0 {
+                let mut failed_dir: *mut c_char = std::ptr::null_mut();
+                let ret = nvim_shada_os_mkdir_recurse(fname, 0o700, &raw mut failed_dir);
+                if ret != 0 {
+                    nvim_shada_semsg_mkdir_error(failed_dir, nvim_shada_os_strerror(ret));
+                    *tail_ptr = tail_save;
+                    nvim_xfree(fname.cast::<c_void>());
+                    nvim_xfree(failed_dir.cast::<c_void>());
+                    nvim_xfree(sd_writer_mem);
+                    nvim_xfree(sd_reader_mem);
+                    return FAIL;
+                }
+            }
+            *tail_ptr = tail_save;
+        }
+        let error = nvim_shada_file_open_write(
+            FileDescriptorHandle::from_ptr(sd_writer_mem),
+            fname,
+            K_FILE_CREATE | K_FILE_TRUNCATE,
+            0o600,
+        );
+        if error != 0 {
+            nvim_shada_semsg_write_open_error(fname, nvim_shada_os_strerror(error));
+        } else {
+            did_open_writer = true;
+        }
+    }
+
+    if !did_open_writer {
+        nvim_xfree(fname.cast::<c_void>());
+        nvim_xfree(tempname.cast::<c_void>());
+        if did_open_reader {
+            rs_close_file(FileDescriptorHandle::from_ptr(sd_reader_mem));
+        }
+        nvim_xfree(sd_writer_mem);
+        nvim_xfree(sd_reader_mem);
+        return FAIL;
+    }
+
+    if nvim_shada_get_p_verbose() > 1 {
+        nvim_shada_verbose_enter();
+        nvim_shada_smsg_writing(fname);
+        nvim_shada_verbose_leave();
+    }
+
+    let sd_reader_arg = if nomerge {
+        std::ptr::null_mut::<c_void>()
+    } else {
+        sd_reader_mem
+    };
+    let sw_ret = nvim_shada_shada_write(sd_writer_mem, sd_reader_arg);
+
+    if !nomerge {
+        if did_open_reader {
+            rs_close_file(FileDescriptorHandle::from_ptr(sd_reader_mem));
+        }
+        let mut did_remove = false;
+        if sw_ret == K_SD_WRITE_SUCCESSFUL {
+            let check_result = nvim_shada_platform_check_writable(fname, sd_writer_mem, tempname);
+            if check_result == 1 {
+                if nvim_shada_vim_rename(tempname, fname) == -1 {
+                    nvim_shada_semsg_rename_error(tempname, fname);
+                } else {
+                    did_remove = true;
+                    nvim_shada_os_remove(tempname);
+                }
+            }
+            // check_result == 0 or -1: E137/RNERR already emitted by accessor
+        } else if sw_ret == K_SD_WRITE_READ_NOT_SHADA {
+            nvim_shada_semsg_not_shada(tempname, fname);
+        } else {
+            nvim_shada_semsg_write_errors(tempname, fname);
+        }
+        if !did_remove {
+            nvim_shada_semsg_remove_reminder(tempname, fname);
+        }
+        nvim_xfree(tempname.cast::<c_void>());
+    }
+
+    rs_close_file(FileDescriptorHandle::from_ptr(sd_writer_mem));
+    nvim_xfree(fname.cast::<c_void>());
+    nvim_xfree(sd_writer_mem);
+    nvim_xfree(sd_reader_mem);
 
     OK
 }

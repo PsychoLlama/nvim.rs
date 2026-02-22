@@ -84,6 +84,7 @@ extern size_t rs_shada_init_jumps(ShadaEntry *jumps, void *removable_bufs);
 extern void rs_close_file(void *cookie);
 extern const char *rs_shada_get_default_file(void);
 extern void rs_shada_free_entry_contents(ShadaEntry *entry);
+extern int rs_shada_write_file(const char *file, bool nomerge);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
 extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
@@ -902,44 +903,6 @@ shada_read_main_cycle_end:
   set_destroy(cstr_t, &oldfiles_set);
 }
 
-
-/// Get the ShaDa file name to use
-///
-/// If "file" is given and not empty, use it (has already been expanded by
-/// cmdline functions). Otherwise use "-i file_name", value from 'shada' or the
-/// default, and expand environment variables.
-///
-/// @param[in]  file  Forced file name or NULL.
-///
-/// @return  An allocated string containing shada file name,
-///          or NULL if shada file should not be used.
-static char *shada_filename(const char *file)
-  FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (file == NULL || *file == NUL) {
-    if (p_shadafile != NULL && *p_shadafile != NUL) {
-      // Check if writing to ShaDa file was disabled ("-i NONE" or "--clean").
-      if (!strequal(p_shadafile, "NONE")) {
-        file = p_shadafile;
-      } else {
-        return NULL;
-      }
-    } else {
-      if ((file = find_shada_parameter('n')) == NULL || *file == NUL) {
-        file = rs_shada_get_default_file();
-      }
-      // XXX It used to be one level lower, so that whatever is in
-      //     `p_shadafile` was expanded. I intentionally moved it here
-      //     because various expansions must have already be done by the shell.
-      //     If shell is not performing them then they should be done in main.c
-      //     where arguments are parsed, *not here*.
-      size_t len = expand_env((char *)file, &(NameBuff[0]), MAXPATHL);
-      file = &(NameBuff[0]);
-      return xmemdupz(file, len);
-    }
-  }
-  return xstrdup(file);
-}
 
 #define KEY_NAME_(s) #s
 #define PACK_KEY(s) mpack_str(STATIC_CSTR_AS_STRING(KEY_NAME_(s)), &sbuf);
@@ -2023,187 +1986,7 @@ shada_write_exit:
 /// @return OK if writing was successful, FAIL otherwise.
 int shada_write_file(const char *const file, bool nomerge)
 {
-  char *const fname = shada_filename(file);
-  if (fname == NULL) {
-    return FAIL;
-  }
-
-  char *tempname = NULL;
-  FileDescriptor sd_writer;
-  FileDescriptor sd_reader;
-  bool did_open_writer = false;
-  bool did_open_reader = false;
-
-  if (!nomerge) {
-    int error;
-    if ((error = file_open(&sd_reader, fname, kFileReadOnly, 0)) != 0) {
-      if (error != UV_ENOENT) {
-        semsg(_(SERR "System error while opening ShaDa file %s for reading "
-                "to merge before writing it: %s"),
-              fname, os_strerror(error));
-        // Try writing the file even if opening it emerged any issues besides
-        // file not existing: maybe writing will succeed nevertheless.
-      }
-      nomerge = true;
-      goto shada_write_file_nomerge;
-    } else {
-      did_open_reader = true;
-    }
-    tempname = modname(fname, ".tmp.a", false);
-    if (tempname == NULL) {
-      nomerge = true;
-      goto shada_write_file_nomerge;
-    }
-
-    // Save permissions from the original file, with modifications:
-    int perm = (int)os_getperm(fname);
-    perm = (perm >= 0) ? ((perm & 0777) | 0600) : 0600;
-    //                 ^3         ^1       ^2      ^2,3
-    // 1: Strip SUID bit if any.
-    // 2: Make sure that user can always read and write the result.
-    // 3: If somebody happened to delete the file after it was opened for
-    //    reading use u=rw permissions.
-shada_write_file_open: {}
-    error = file_open(&sd_writer, tempname, kFileCreateOnly|kFileNoSymlink, perm);
-    if (error) {
-      if (error == UV_EEXIST || error == UV_ELOOP) {
-        // File already exists, try another name
-        char *const wp = tempname + strlen(tempname) - 1;
-        if (*wp == 'z') {
-          // Tried names from .tmp.a to .tmp.z, all failed. Something must be
-          // wrong then.
-          semsg(_("E138: All %s.tmp.X files exist, cannot write ShaDa file!"),
-                fname);
-          xfree(fname);
-          xfree(tempname);
-          if (did_open_reader) {
-            rs_close_file(&sd_reader);
-          }
-          return FAIL;
-        }
-        (*wp)++;
-        goto shada_write_file_open;
-      } else {
-        semsg(_(SERR "System error while opening temporary ShaDa file %s "
-                "for writing: %s"), tempname, os_strerror(error));
-      }
-    } else {
-      did_open_writer = true;
-    }
-  }
-  if (nomerge) {
-shada_write_file_nomerge: {}
-    char *const tail = path_tail_with_sep(fname);
-    if (tail != fname) {
-      const char tail_save = *tail;
-      *tail = NUL;
-      if (!os_isdir(fname)) {
-        int ret;
-        char *failed_dir;
-        if ((ret = os_mkdir_recurse(fname, 0700, &failed_dir, NULL)) != 0) {
-          semsg(_(SERR "Failed to create directory %s "
-                  "for writing ShaDa file: %s"),
-                failed_dir, os_strerror(ret));
-          xfree(fname);
-          xfree(failed_dir);
-          return FAIL;
-        }
-      }
-      *tail = tail_save;
-    }
-    int error = file_open(&sd_writer, fname, kFileCreate|kFileTruncate, 0600);
-    if (error) {
-      semsg(_(SERR "System error while opening ShaDa file %s for writing: %s"),
-            fname, os_strerror(error));
-    } else {
-      did_open_writer = true;
-    }
-  }
-
-  if (!did_open_writer) {
-    xfree(fname);
-    xfree(tempname);
-    if (did_open_reader) {
-      rs_close_file(&sd_reader);
-    }
-    return FAIL;
-  }
-
-  if (p_verbose > 1) {
-    verbose_enter();
-    smsg(0, _("Writing ShaDa file \"%s\""), fname);
-    verbose_leave();
-  }
-
-  const ShaDaWriteResult sw_ret = shada_write(&sd_writer, (nomerge ? NULL : &sd_reader));
-  assert(sw_ret != kSDWriteIgnError);
-  if (!nomerge) {
-    if (did_open_reader) {
-      rs_close_file(&sd_reader);
-    }
-    bool did_remove = false;
-    if (sw_ret == kSDWriteSuccessful) {
-      FileInfo old_info;
-      if (!os_fileinfo(fname, &old_info)
-          || S_ISDIR(old_info.stat.st_mode)
-#ifdef UNIX
-          // For Unix we check the owner of the file.  It's not very nice
-          // to overwrite a user's viminfo file after a "su root", with a
-          // viminfo file that the user can't read.
-          || (getuid() != ROOT_UID
-              && !(old_info.stat.st_uid == getuid()
-                   ? (old_info.stat.st_mode & 0200)
-                   : (old_info.stat.st_gid == getgid()
-                      ? (old_info.stat.st_mode & 0020)
-                      : (old_info.stat.st_mode & 0002))))
-#endif
-          ) {
-        semsg(_("E137: ShaDa file is not writable: %s"), fname);
-        goto shada_write_file_did_not_remove;
-      }
-#ifdef UNIX
-      if (getuid() == ROOT_UID) {
-        if (old_info.stat.st_uid != ROOT_UID
-            || old_info.stat.st_gid != getgid()) {
-          const uv_uid_t old_uid = (uv_uid_t)old_info.stat.st_uid;
-          const uv_gid_t old_gid = (uv_gid_t)old_info.stat.st_gid;
-          const int fchown_ret = os_fchown(file_fd(&sd_writer),
-                                           old_uid, old_gid);
-          if (fchown_ret != 0) {
-            semsg(_(RNERR "Failed setting uid and gid for file %s: %s"),
-                  tempname, os_strerror(fchown_ret));
-            goto shada_write_file_did_not_remove;
-          }
-        }
-      }
-#endif
-      if (vim_rename(tempname, fname) == -1) {
-        semsg(_(RNERR "Can't rename ShaDa file from %s to %s!"),
-              tempname, fname);
-      } else {
-        did_remove = true;
-        os_remove(tempname);
-      }
-    } else {
-      if (sw_ret == kSDWriteReadNotShada) {
-        semsg(_(RNERR "Did not rename %s because %s "
-                "does not look like a ShaDa file"), tempname, fname);
-      } else {
-        semsg(_(RNERR "Did not rename %s to %s because there were errors "
-                "during writing it"), tempname, fname);
-      }
-    }
-    if (!did_remove) {
-shada_write_file_did_not_remove:
-      semsg(_(RNERR "Do not forget to remove %s or rename it manually to %s."),
-            tempname, fname);
-    }
-    xfree(tempname);
-  }
-  rs_close_file(&sd_writer);
-
-  xfree(fname);
-  return OK;
+  return rs_shada_write_file(file, nomerge);
 }
 
 static void shada_free_shada_entry(ShadaEntry *const entry)
@@ -3337,4 +3120,187 @@ void nvim_shada_set_histentry(void *hist_array, int idx, uint64_t ts,
   he->hisstr = hisstr;
   he->hisstrlen = strlen(hisstr);
   he->additional_data = additional_data;
+}
+
+// =============================================================================
+// Phase 2 (plan 11dd3cf4): shada_write_file migration accessors
+// =============================================================================
+
+/// Wrapper for modname() used by rs_shada_write_file.
+char *nvim_shada_modname(const char *fname, const char *ext, bool prepend_dot)
+{
+  return modname(fname, ext, prepend_dot);
+}
+
+/// Wrapper for os_getperm() used by rs_shada_write_file.
+int nvim_shada_os_getperm(const char *fname)
+{
+  return (int)os_getperm(fname);
+}
+
+/// Wrapper for file_open() with write flags used by rs_shada_write_file.
+/// flags: combination of FileOpenFlags bits (int).
+int nvim_shada_file_open_write(void *fd, const char *fname, int flags, int perm)
+{
+  return file_open((FileDescriptor *)fd, fname, (int)flags, perm);
+}
+
+/// Return the byte offset from fname to path_tail_with_sep(fname).
+/// Used by rs_shada_write_file to find the directory portion.
+size_t nvim_shada_path_tail_with_sep_offset(const char *fname)
+{
+  const char *tail = path_tail_with_sep((char *)fname);
+  return (size_t)(tail - fname);
+}
+
+/// Wrapper for os_isdir() used by rs_shada_write_file.
+int nvim_shada_os_isdir(const char *fname)
+{
+  return os_isdir(fname) ? 1 : 0;
+}
+
+/// Wrapper for os_mkdir_recurse() used by rs_shada_write_file.
+/// Returns error code; sets *out_failed_dir to the failed directory (caller must free).
+int nvim_shada_os_mkdir_recurse(const char *fname, int perm, char **out_failed_dir)
+{
+  return os_mkdir_recurse(fname, (int)perm, out_failed_dir, NULL);
+}
+
+/// Wrapper for shada_write() used by rs_shada_write_file.
+/// sd_reader may be NULL (for nomerge writes). Returns ShaDaWriteResult as int.
+int nvim_shada_shada_write(void *sd_writer, void *sd_reader)
+{
+  return (int)shada_write((FileDescriptor *)sd_writer,
+                          (FileDescriptor *)sd_reader);
+}
+
+/// Wrapper for vim_rename() used by rs_shada_write_file.
+int nvim_shada_vim_rename(const char *from, const char *to)
+{
+  return vim_rename(from, to);
+}
+
+/// Wrapper for os_remove() used by rs_shada_write_file.
+void nvim_shada_os_remove(const char *fname)
+{
+  os_remove(fname);
+}
+
+/// Verbose message "Writing ShaDa file" used by rs_shada_write_file.
+void nvim_shada_smsg_writing(const char *fname)
+{
+  smsg(0, _("Writing ShaDa file \"%s\""), fname);
+}
+
+/// Composite platform check for shada_write_file rename path.
+///
+/// Checks whether the existing ShaDa file at @a fname can be replaced by the
+/// temporary file we just wrote.  Sends its own error messages on failure.
+///
+/// Returns:
+///  1 = ok to replace (go ahead with rename)
+///  0 = not writable (emit E137, skip rename)
+/// -1 = fchown failed (emit RNERR, skip rename)
+///
+/// @param fname       Path to the existing ShaDa file.
+/// @param sd_writer   Open FileDescriptor for the temporary file (for fchown).
+/// @param tempname    Temporary file name (used in error messages).
+int nvim_shada_platform_check_writable(const char *fname, void *sd_writer,
+                                       const char *tempname)
+{
+  FileInfo old_info;
+  if (!os_fileinfo(fname, &old_info) || S_ISDIR(old_info.stat.st_mode)) {
+    semsg(_("E137: ShaDa file is not writable: %s"), fname);
+    return 0;
+  }
+#ifdef UNIX
+  // For Unix we check the owner of the file.  It's not very nice to overwrite
+  // a user's viminfo file after a "su root", with a viminfo file that the
+  // user can't read.
+  if (getuid() != ROOT_UID
+      && !(old_info.stat.st_uid == getuid()
+           ? (old_info.stat.st_mode & 0200)
+           : (old_info.stat.st_gid == getgid()
+              ? (old_info.stat.st_mode & 0020)
+              : (old_info.stat.st_mode & 0002)))) {
+    semsg(_("E137: ShaDa file is not writable: %s"), fname);
+    return 0;
+  }
+  if (getuid() == ROOT_UID) {
+    if (old_info.stat.st_uid != ROOT_UID
+        || old_info.stat.st_gid != getgid()) {
+      const uv_uid_t old_uid = (uv_uid_t)old_info.stat.st_uid;
+      const uv_gid_t old_gid = (uv_gid_t)old_info.stat.st_gid;
+      const int fchown_ret = os_fchown(file_fd((FileDescriptor *)sd_writer),
+                                       old_uid, old_gid);
+      if (fchown_ret != 0) {
+        semsg(_(RNERR "Failed setting uid and gid for file %s: %s"),
+              tempname, os_strerror(fchown_ret));
+        return -1;
+      }
+    }
+  }
+#endif
+  return 1;
+}
+
+/// Error: merge reader open failed (for non-ENOENT errors)
+void nvim_shada_semsg_merge_read_error(const char *fname, const char *strerror_msg)
+{
+  semsg(_(SERR "System error while opening ShaDa file %s for reading "
+          "to merge before writing it: %s"), fname, strerror_msg);
+}
+
+/// Error: temp file open failed
+void nvim_shada_semsg_tempfile_open_error(const char *tempname, const char *strerror_msg)
+{
+  semsg(_(SERR "System error while opening temporary ShaDa file %s "
+          "for writing: %s"), tempname, strerror_msg);
+}
+
+/// Error: all .tmp.X files exist
+void nvim_shada_semsg_all_tmpfiles(const char *fname)
+{
+  semsg(_("E138: All %s.tmp.X files exist, cannot write ShaDa file!"), fname);
+}
+
+/// Error: mkdir failed
+void nvim_shada_semsg_mkdir_error(const char *failed_dir, const char *strerror_msg)
+{
+  semsg(_(SERR "Failed to create directory %s "
+          "for writing ShaDa file: %s"), failed_dir, strerror_msg);
+}
+
+/// Error: ShaDa file open for writing failed
+void nvim_shada_semsg_write_open_error(const char *fname, const char *strerror_msg)
+{
+  semsg(_(SERR "System error while opening ShaDa file %s for writing: %s"),
+        fname, strerror_msg);
+}
+
+/// Error: rename failed
+void nvim_shada_semsg_rename_error(const char *tempname, const char *fname)
+{
+  semsg(_(RNERR "Can't rename ShaDa file from %s to %s!"), tempname, fname);
+}
+
+/// Error: did not rename (not shada)
+void nvim_shada_semsg_not_shada(const char *tempname, const char *fname)
+{
+  semsg(_(RNERR "Did not rename %s because %s does not look like a ShaDa file"),
+        tempname, fname);
+}
+
+/// Error: did not rename (write errors)
+void nvim_shada_semsg_write_errors(const char *tempname, const char *fname)
+{
+  semsg(_(RNERR "Did not rename %s to %s because there were errors "
+          "during writing it"), tempname, fname);
+}
+
+/// Reminder: do not forget to remove temp file
+void nvim_shada_semsg_remove_reminder(const char *tempname, const char *fname)
+{
+  semsg(_(RNERR "Do not forget to remove %s or rename it manually to %s."),
+        tempname, fname);
 }
