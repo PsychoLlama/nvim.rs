@@ -390,6 +390,62 @@ pub extern "C" fn rs_is_valid_delimiter(c: c_int) -> c_int {
     c_int::from(is_valid_delimiter(char::from(c as u8)))
 }
 
+/// OK/FAIL constants matching C definitions
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// Check if a character is a valid regexp delimiter.
+///
+/// Returns OK (1) if valid, FAIL (0) if the character is alphabetic.
+/// Emits an error message on failure.
+///
+/// # Safety
+/// Calls C emsg function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_regexp_delim(c: c_int) -> c_int {
+    use crate::emsg;
+
+    // isalpha(c) in C -- check if ASCII alphabetic
+    if (c as u8 as char).is_ascii_alphabetic() {
+        emsg(c"E146: Regular expressions can't be delimited by letters".as_ptr());
+        return FAIL;
+    }
+    OK
+}
+
+/// Skip over the "sub" part in :s/pat/sub/ where `delimiter` is the
+/// separating character. Replaces the end delimiter with NUL.
+///
+/// Returns a pointer past the end delimiter (or to end of string).
+///
+/// # Safety
+/// `start` must point to a valid, writable null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_substitute(
+    start: *mut std::ffi::c_char,
+    delimiter: c_int,
+) -> *mut std::ffi::c_char {
+    use crate::utfc_ptr2len;
+
+    let mut p = start;
+    while *p != 0 {
+        if *p as c_int == delimiter {
+            // end delimiter found -- replace it with NUL
+            *p = 0;
+            p = p.add(1);
+            break;
+        }
+        if *p == b'\\' as i8 && *p.add(1) != 0 {
+            // skip escaped characters
+            p = p.add(1);
+        }
+        // MB_PTR_ADV(p)
+        let len = utfc_ptr2len(p) as usize;
+        p = p.add(len);
+    }
+    p
+}
+
 // =============================================================================
 // Tests
 // =============================================================================

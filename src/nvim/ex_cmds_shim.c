@@ -150,6 +150,8 @@ extern void rs_foldUpdateAll(win_T *win);
 extern int rs_magic_isset(void);
 extern void rs_diff_buf_add(buf_T *buf);
 extern void rs_diff_invalidate(buf_T *buf);
+extern int rs_check_regexp_delim(int c);
+extern char *rs_skip_substitute(char *start, int delimiter);
 
 // =============================================================================
 // ExArg accessor functions for Rust (Wave 2)
@@ -3210,35 +3212,6 @@ static char *sub_parse_flags(char *cmd, subflags_T *subflags, int *which_pat)
   return cmd;
 }
 
-/// Skip over the "sub" part in :s/pat/sub/ where "delimiter" is the separating
-/// character.
-static char *skip_substitute(char *start, int delimiter)
-{
-  char *p = start;
-
-  while (p[0]) {
-    if (p[0] == delimiter) {  // end delimiter found
-      *p++ = NUL;  // replace it with a NUL
-      break;
-    }
-    if (p[0] == '\\' && p[1] != 0) {  // skip escaped characters
-      p++;
-    }
-    MB_PTR_ADV(p);
-  }
-  return p;
-}
-
-static int check_regexp_delim(int c)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (isalpha(c)) {
-    emsg(_("E146: Regular expressions can't be delimited by letters"));
-    return FAIL;
-  }
-  return OK;
-}
-
 /// Perform a substitution from line eap->line1 to line eap->line2 using the
 /// command pointed to by eap->arg which should be of the form:
 ///
@@ -3327,7 +3300,7 @@ static int do_sub(exarg_T *eap, const proftime_T timeout, const int cmdpreview_n
   if (eap->cmd[0] == 's' && *cmd != NUL && !ascii_iswhite(*cmd)
       && vim_strchr("0123456789cegriIp|\"", (uint8_t)(*cmd)) == NULL) {
     // don't accept alphanumeric for separator
-    if (check_regexp_delim(*cmd) == FAIL) {
+    if (rs_check_regexp_delim(*cmd) == FAIL) {
       return 0;
     }
 
@@ -3362,7 +3335,7 @@ static int do_sub(exarg_T *eap, const proftime_T timeout, const int cmdpreview_n
     // Small incompatibility: vi sees '\n' as end of the command, but in
     // Vim we want to use '\n' to find/substitute a NUL.
     char *p = cmd;  // remember the start of the substitution
-    cmd = skip_substitute(cmd, delimiter);
+    cmd = rs_skip_substitute(cmd, delimiter);
     sub = xstrdup(p);
 
     if (!eap->skip && !keeppatterns && cmdpreview_ns <= 0) {
@@ -4413,7 +4386,7 @@ void ex_global(exarg_T *eap)
   } else if (*cmd == NUL) {
     emsg(_("E148: Regular expression missing from global"));
     return;
-  } else if (check_regexp_delim(*cmd) == FAIL) {
+  } else if (rs_check_regexp_delim(*cmd) == FAIL) {
     return;
   } else {
     delim = *cmd;               // get the delimiter
