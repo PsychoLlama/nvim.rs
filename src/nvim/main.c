@@ -488,7 +488,9 @@ int main(int argc, char **argv)
   // Recovery mode without a file name: List swap files.
   // Uses the 'dir' option, therefore it must be after the initializations.
   if (recoverymode && fname == NULL) {
-    recover_names(NULL, true, NULL, 0, NULL);
+    extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
+                                char **fname_out);
+    rs_recover_names(NULL, true, NULL, 0, NULL);
     os_exit(0);
   }
 

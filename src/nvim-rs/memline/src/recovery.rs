@@ -22,6 +22,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::types::BufHandle;
+
 // =============================================================================
 // C Implementation Declarations
 // =============================================================================
@@ -33,15 +35,6 @@ extern "C" {
 
     /// Recover from a swap file
     fn ml_recover(checkext: c_int);
-
-    /// Get list of swap files for recovery
-    fn recover_names(
-        fname: *const c_char,
-        do_list: c_int,
-        ret_list: *mut c_void,
-        nr: c_int,
-        fname_out: *mut *mut c_char,
-    ) -> c_int;
 
     /// Write swap file info to a dictionary
     fn swapfile_dict(fname: *const c_char, d: *mut c_void);
@@ -55,7 +48,108 @@ extern "C" {
         dir_end: *mut c_char,
         name: *const c_char,
     ) -> *mut c_char;
+
+    // -------------------------------------------------------------------------
+    // recover_names helpers (called from rs_recover_names)
+    // -------------------------------------------------------------------------
+
+    /// Get the p_dir global option string
+    fn nvim_get_p_dir() -> *mut c_char;
+
+    /// Get the swap file name of the current buffer's memfile (or NULL)
+    fn nvim_buf_get_ml_mfp_fname(buf: *mut BufHandle) -> *mut c_char;
+
+    /// Get current buffer pointer
+    fn nvim_get_curbuf() -> *mut BufHandle;
+
+    /// Iterate through comma-separated option parts
+    fn copy_option_part(
+        option: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: c_int,
+        sep_chars: *const c_char,
+    ) -> c_int;
+
+    /// Concatenate file names with optional separator
+    fn concat_fnames(fname1: *const c_char, fname2: *const c_char, sep: c_int) -> *mut c_char;
+
+    /// Generate a modified file name (change/append extension)
+    fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: c_int) -> *mut c_char;
+
+    /// Return pointer to tail of file name (past last path separator)
+    fn path_tail(fname: *const c_char) -> *mut c_char;
+
+    /// Return true if `p` points after a path separator in string starting at `b`
+    fn after_pathsep(b: *const c_char, p: *const c_char) -> c_int;
+
+    /// Compare two file paths by identity (returns FileComparison bitmask)
+    fn path_full_compare(
+        s1: *mut c_char,
+        s2: *mut c_char,
+        checkname: c_int,
+        expandenv: c_int,
+    ) -> c_int;
+
+    /// Check whether a path exists on the filesystem
+    fn os_path_exists(name: *const c_char) -> c_int;
+
+    /// Expand wildcards in a list of patterns
+    fn expand_wildcards(
+        num_pat: c_int,
+        pat: *mut *mut c_char,
+        num_files: *mut c_int,
+        files: *mut *mut *mut c_char,
+        flags: c_int,
+    ) -> c_int;
+
+    /// Free an array of file names returned by expand_wildcards
+    fn FreeWild(count: c_int, files: *mut *mut c_char);
+
+    /// Print a message to start scrolling
+    fn msg(s: *const c_char, hl_id: c_int) -> c_int;
+
+    /// Output a single character to the message area
+    fn msg_putchar(c: c_int);
+
+    /// Output a string to the message area
+    fn msg_puts(s: *const c_char);
+
+    /// Output a number to the message area
+    fn msg_outnum(n: c_int);
+
+    /// Output a file name with home directory replaced by ~
+    fn msg_home_replace(fname: *const c_char);
+
+    /// Flush the UI
+    fn ui_flush();
+
+    /// Append an allocated string to a Vim list (takes ownership)
+    fn tv_list_append_allocated_string(list: *mut c_void, s: *mut c_char);
+
+    /// Print swap file info (handles StringBuilder internally)
+    fn nvim_swapfile_info_and_print(fname: *mut c_char);
+
+    // -------------------------------------------------------------------------
+    // Memory allocation
+    // -------------------------------------------------------------------------
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 }
+
+// EW_* flags for expand_wildcards (from path.h)
+const EW_FILE: c_int = 0x02;
+const EW_KEEPALL: c_int = 0x10;
+const EW_SILENT: c_int = 0x20;
+
+/// Bitmask value indicating two files are equal (kEqualFiles from path.h)
+const K_EQUAL_FILES: c_int = 1;
+
+/// MAXPATHL constant
+const MAXPATHL: usize = 4096;
+
+// C FAIL constant
+const FAIL: c_int = 0;
 
 // =============================================================================
 // Recovery Functions
@@ -85,7 +179,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
 /// - `fname` must be a valid C string or NULL
 #[no_mangle]
 pub unsafe extern "C" fn rs_recover_names_count(fname: *const c_char) -> c_int {
-    recover_names(fname, 0, std::ptr::null_mut(), 0, std::ptr::null_mut())
+    rs_recover_names(fname, 0, std::ptr::null_mut(), 0, std::ptr::null_mut())
 }
 
 /// List all swap files for a given file name.
@@ -99,7 +193,7 @@ pub unsafe extern "C" fn rs_recover_names_count(fname: *const c_char) -> c_int {
 /// - `fname` must be a valid C string or NULL
 #[no_mangle]
 pub unsafe extern "C" fn rs_recover_names_list(fname: *const c_char) {
-    recover_names(fname, 1, std::ptr::null_mut(), 0, std::ptr::null_mut());
+    rs_recover_names(fname, 1, std::ptr::null_mut(), 0, std::ptr::null_mut());
 }
 
 /// Get the Nth swap file name for a given file.
@@ -125,7 +219,7 @@ pub unsafe extern "C" fn rs_recover_names_get(
     if fname_out.is_null() {
         return 0;
     }
-    recover_names(fname, 0, std::ptr::null_mut(), nr, fname_out)
+    rs_recover_names(fname, 0, std::ptr::null_mut(), nr, fname_out)
 }
 
 /// Get the list of swap files as a Vim list.
@@ -148,7 +242,322 @@ pub unsafe extern "C" fn rs_recover_names_to_list(
     if ret_list.is_null() {
         return 0;
     }
-    recover_names(fname, 0, ret_list, 0, std::ptr::null_mut())
+    rs_recover_names(fname, 0, ret_list, 0, std::ptr::null_mut())
+}
+
+// =============================================================================
+// Native Rust Implementation of recover_names
+// =============================================================================
+
+/// Generate swap file name patterns for wildcard matching.
+///
+/// This is the Rust port of the C `recov_file_names` static function.
+/// Fills `names` with up to 2 patterns for swap file names based on `path`.
+///
+/// If `prepend_dot` is true, also adds `modname(path, ".sw?", true)`.
+/// Always adds `concat_fnames(path, ".sw?", false)`.
+///
+/// Returns the number of patterns added.
+///
+/// # Safety
+/// - `names` must point to an array of at least 2 `*mut c_char` pointers
+/// - `path` must be a valid C string
+#[allow(clippy::cast_sign_loss)]
+unsafe fn recov_file_names(
+    names: *mut *mut c_char,
+    path: *const c_char,
+    prepend_dot: bool,
+) -> c_int {
+    let mut num_names: c_int = 0;
+
+    // May also add the file name with a dot prepended, for swapfile in same
+    // dir as original file.
+    if prepend_dot {
+        let name = modname(path, c".sw?".as_ptr(), 1);
+        if name.is_null() {
+            return num_names;
+        }
+        *names.add(num_names as usize) = name;
+        num_names += 1;
+    }
+
+    // Form the normal swapfile name pattern by appending ".sw?".
+    let new_name = concat_fnames(path, c".sw?".as_ptr(), 0);
+    if num_names >= 1 {
+        // Check if we have the same name twice
+        let prev = *names.add((num_names - 1) as usize);
+        let prev_len = libc_strlen(prev);
+        let new_len = libc_strlen(new_name);
+        // file name has been expanded to full path if prev is longer
+        let p = if prev_len > new_len {
+            prev.add(prev_len - new_len)
+        } else {
+            prev
+        };
+        if libc_strcmp(p, new_name) != 0 {
+            *names.add(num_names as usize) = new_name;
+            num_names += 1;
+        } else {
+            xfree(new_name.cast());
+        }
+    } else {
+        *names.add(num_names as usize) = new_name;
+        num_names += 1;
+    }
+
+    num_names
+}
+
+/// Portable strlen for raw C strings
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut len = 0;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
+}
+
+/// Portable strcmp for raw C strings (returns 0 if equal)
+#[allow(clippy::cast_sign_loss)]
+unsafe fn libc_strcmp(a: *const c_char, b: *const c_char) -> c_int {
+    let mut i = 0;
+    loop {
+        let ca = (*a.add(i)).unsigned_abs();
+        let cb = (*b.add(i)).unsigned_abs();
+        if ca != cb {
+            return c_int::from(ca) - c_int::from(cb);
+        }
+        if ca == 0 {
+            return 0;
+        }
+        i += 1;
+    }
+}
+
+/// Scan swap file directories and list/count/retrieve swap files for recovery.
+///
+/// This is the Rust port of the C `recover_names` function.
+///
+/// Iterates over entries in the 'directory' option (`p_dir`), generating
+/// wildcard patterns for each entry, expanding them, and either counting,
+/// listing, or retrieving the swap files found.
+///
+/// # Arguments
+/// * `fname` - File name to search for (or NULL to search all)
+/// * `do_list` - If nonzero, display swap file info to the user
+/// * `ret_list` - If non-NULL, populate this Vim list_T with swap file names
+/// * `nr` - If >0, retrieve the Nth swap file name into `fname_out`
+/// * `fname_out` - Output: the Nth swap file name (if `nr > 0`)
+///
+/// # Returns
+/// Total number of swap files found
+///
+/// # Safety
+/// - `fname` must be a valid C string or NULL
+/// - `ret_list` must be a valid list_T* or NULL
+/// - `fname_out` must be a valid `*mut *mut c_char` or NULL
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_recover_names(
+    fname: *const c_char,
+    do_list: c_int,
+    ret_list: *mut c_void,
+    nr: c_int,
+    fname_out: *mut *mut c_char,
+) -> c_int {
+    // Resolve symlink in file name if provided (swap file uses actual path)
+    let mut fname_buf = [0i8; MAXPATHL];
+    let fname_res: *const c_char = if fname.is_null() {
+        std::ptr::null()
+    } else if resolve_symlink(fname, fname_buf.as_mut_ptr()) == 1 {
+        // resolve_symlink returns OK (1) on success
+        fname_buf.as_ptr()
+    } else {
+        fname
+    };
+
+    if do_list != 0 {
+        // Use msg() to start the scrolling properly
+        msg(c"Swap files found:".as_ptr(), 0);
+        msg_putchar(c_int::from(b'\n'));
+    }
+
+    // Do the loop for every directory in 'directory'.
+    // First allocate some memory to put the directory name in.
+    let p_dir = nvim_get_p_dir();
+    let dir_name_size = libc_strlen(p_dir) + 1;
+    let dir_name = xmalloc(dir_name_size).cast::<c_char>();
+    let mut dirp = p_dir;
+    let mut file_count: c_int = 0;
+
+    while *dirp != 0 {
+        // Isolate a directory name from *dirp and put it in dir_name.
+        // Advance dirp to next directory name.
+        copy_option_part(&raw mut dirp, dir_name, 31000, c",".as_ptr());
+
+        // names[] holds up to 6 patterns
+        let mut names: [*mut c_char; 6] = [std::ptr::null_mut(); 6];
+        let num_names: c_int;
+
+        // Check if this is "." (current directory)
+        if *dir_name == b'.' as c_char && *dir_name.add(1) == 0 {
+            if fname.is_null() {
+                names[0] = xstrdup(c"*.sw?".as_ptr());
+                names[1] = xstrdup(c".*.sw?".as_ptr());
+                names[2] = xstrdup(c".sw?".as_ptr());
+                num_names = 3;
+            } else {
+                num_names = recov_file_names(names.as_mut_ptr(), fname_res, true);
+            }
+        } else {
+            // Check directory dir_name
+            if fname.is_null() {
+                names[0] = concat_fnames(dir_name, c"*.sw?".as_ptr(), 1);
+                names[1] = concat_fnames(dir_name, c".*.sw?".as_ptr(), 1);
+                names[2] = concat_fnames(dir_name, c".sw?".as_ptr(), 1);
+                num_names = 3;
+            } else {
+                let len = libc_strlen(dir_name);
+                let p = dir_name.add(len);
+                let tail = if after_pathsep(dir_name, p) != 0 && len > 1 && *p.sub(1) == *p.sub(2) {
+                    // Ends with '//', use full path for swap name
+                    make_percent_swname(dir_name, p, fname_res)
+                } else {
+                    let t = path_tail(fname_res);
+                    concat_fnames(dir_name, t, 1)
+                };
+                num_names = recov_file_names(names.as_mut_ptr(), tail, false);
+                xfree(tail.cast());
+            }
+        }
+
+        // Expand wildcards
+        let mut num_files: c_int = 0;
+        let mut files: *mut *mut c_char = std::ptr::null_mut();
+        if num_names == 0
+            || expand_wildcards(
+                num_names,
+                names.as_mut_ptr(),
+                &raw mut num_files,
+                &raw mut files,
+                EW_KEEPALL | EW_FILE | EW_SILENT,
+            ) == FAIL
+        {
+            num_files = 0;
+        }
+
+        // When no swapfile found, try simply adding ".swp" to the file name.
+        if *dirp == 0 && file_count + num_files == 0 && !fname.is_null() {
+            let swapname = modname(fname_res, c".swp".as_ptr(), 1);
+            if !swapname.is_null() {
+                if os_path_exists(swapname) != 0 {
+                    files = xmalloc(std::mem::size_of::<*mut c_char>()).cast();
+                    *files = swapname;
+                    // swapname is now owned by files[0], don't free it separately
+                    num_files = 1;
+                } else {
+                    xfree(swapname.cast());
+                }
+            }
+        }
+
+        // Remove swapfile name of the current buffer (must be ignored),
+        // but keep it for swapfilelist().
+        if ret_list.is_null() {
+            let curbuf: *mut BufHandle = nvim_get_curbuf();
+            let cur_mfp_fname = nvim_buf_get_ml_mfp_fname(curbuf);
+            if !cur_mfp_fname.is_null() {
+                let mut i = 0;
+                while i < num_files {
+                    if path_full_compare(cur_mfp_fname, *files.add(i as usize), 1, 0)
+                        & K_EQUAL_FILES
+                        != 0
+                    {
+                        // Remove this entry. Move further entries down.
+                        xfree((*files.add(i as usize)).cast());
+                        num_files -= 1;
+                        if num_files == 0 {
+                            xfree(files.cast());
+                            files = std::ptr::null_mut();
+                        } else {
+                            let mut j = i;
+                            while j < num_files {
+                                *files.add(j as usize) = *files.add((j + 1) as usize);
+                                j += 1;
+                            }
+                        }
+                        // Don't advance i — the next entry is now at position i
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+        }
+
+        if nr > 0 {
+            file_count += num_files;
+            if nr <= file_count {
+                *fname_out = xstrdup(*files.add((nr - 1 + num_files - file_count) as usize));
+                // Stop searching
+                *dirp = 0;
+            }
+        } else if do_list != 0 {
+            if *dir_name == b'.' as c_char && *dir_name.add(1) == 0 {
+                if fname.is_null() {
+                    msg_puts(c"   In current directory:\n".as_ptr());
+                } else {
+                    msg_puts(c"   Using specified name:\n".as_ptr());
+                }
+            } else {
+                msg_puts(c"   In directory ".as_ptr());
+                msg_home_replace(dir_name);
+                msg_puts(c":\n".as_ptr());
+            }
+
+            if num_files > 0 {
+                let mut i = 0;
+                while i < num_files {
+                    // print the swapfile name
+                    file_count += 1;
+                    msg_outnum(file_count);
+                    msg_puts(c".    ".as_ptr());
+                    msg_puts(path_tail(*files.add(i as usize)));
+                    msg_putchar(c_int::from(b'\n'));
+                    nvim_swapfile_info_and_print(*files.add(i as usize));
+                    i += 1;
+                }
+            } else {
+                msg_puts(c"      -- none --\n".as_ptr());
+            }
+            ui_flush();
+        } else if !ret_list.is_null() {
+            let mut i = 0;
+            while i < num_files {
+                let name = concat_fnames(dir_name, *files.add(i as usize), 1);
+                tv_list_append_allocated_string(ret_list, name);
+                i += 1;
+            }
+        } else {
+            file_count += num_files;
+        }
+
+        // Free the pattern names
+        let mut i = 0;
+        while i < num_names {
+            xfree(names[i as usize].cast());
+            i += 1;
+        }
+        if num_files > 0 && !files.is_null() {
+            FreeWild(num_files, files);
+        }
+    }
+
+    xfree(dir_name.cast());
+    file_count
 }
 
 // =============================================================================

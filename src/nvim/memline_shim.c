@@ -731,6 +731,10 @@ static int swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname)
   return os_proc_running(pid) ? pid : 0;
 }
 
+// Forward declaration for Rust implementation (migrated from C)
+extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
+                            char **fname_out);
+
 /// Try to recover curbuf from the .swp file.
 ///
 /// @param checkext  if true, check the extension and detect whether it is a swapfile.
@@ -766,7 +770,7 @@ void ml_recover(bool checkext)
     directly = false;
 
     // count the number of matching swapfiles
-    len = recover_names(fname, false, NULL, 0, NULL);
+    len = rs_recover_names(fname, false, NULL, 0, NULL);
     if (len == 0) {                 // no swapfiles found
       semsg(_("E305: No swap file found for %s"), fname);
       goto theend;
@@ -776,7 +780,7 @@ void ml_recover(bool checkext)
       i = 1;
     } else {  // several swapfiles found, choose
       // list the names of the swapfiles
-      recover_names(fname, true, NULL, 0, NULL);
+      rs_recover_names(fname, true, NULL, 0, NULL);
       msg_putchar('\n');
       i = prompt_for_input(_("Enter number of swap file to use (0 to quit): "), 0, false, NULL);
       if (i < 1 || i > len) {
@@ -784,7 +788,7 @@ void ml_recover(bool checkext)
       }
     }
     // get the swapfile name that will be used
-    recover_names(fname, false, NULL, i, &fname_used);
+    rs_recover_names(fname, false, NULL, i, &fname_used);
   }
   if (fname_used == NULL) {
     goto theend;  // user chose invalid number.
@@ -1215,197 +1219,7 @@ theend:
   }
 }
 
-/// Find the names of swapfiles in current directory and the directory given
-/// with the 'directory' option.
-///
-/// Used to:
-/// - list the swapfiles for "nvim -r"
-/// - count the number of swapfiles when recovering
-/// - list the swapfiles when recovering
-/// - list the swapfiles for swapfilelist()
-/// - find the name of the n'th swapfile when recovering
-///
-/// @param fname  base for swapfile name
-/// @param do_list  when true, list the swapfile names
-/// @param ret_list  when not NULL add file names to it
-/// @param nr  when non-zero, return nr'th swapfile name
-/// @param fname_out  result when "nr" > 0
-int recover_names(char *fname, bool do_list, list_T *ret_list, int nr, char **fname_out)
-{
-  int num_names;
-  char *(names[6]);
-  char *tail;
-  char *p;
-  int file_count = 0;
-  char **files;
-  char *fname_res = NULL;
-#ifdef HAVE_READLINK
-  char fname_buf[MAXPATHL];
-#endif
-
-  if (fname != NULL) {
-#ifdef HAVE_READLINK
-    // Expand symlink in the file name, because the swapfile is created
-    // with the actual file instead of with the symlink.
-    fname_res = (resolve_symlink(fname, fname_buf) == OK) ? fname_buf : fname;
-#else
-    fname_res = fname;
-#endif
-  }
-
-  if (do_list) {
-    // use msg() to start the scrolling properly
-    msg(_("Swap files found:"), 0);
-    msg_putchar('\n');
-  }
-
-  // Do the loop for every directory in 'directory'.
-  // First allocate some memory to put the directory name in.
-  char *dir_name = xmalloc(strlen(p_dir) + 1);
-  char *dirp = p_dir;
-  while (*dirp) {
-    // Isolate a directory name from *dirp and put it in dir_name (we know
-    // it is large enough, so use 31000 for length).
-    // Advance dirp to next directory name.
-    copy_option_part(&dirp, dir_name, 31000, ",");
-
-    if (dir_name[0] == '.' && dir_name[1] == NUL) {     // check current dir
-      if (fname == NULL) {
-        names[0] = xstrdup("*.sw?");
-        // For Unix names starting with a dot are special.  MS-Windows
-        // supports this too, on some file systems.
-        names[1] = xstrdup(".*.sw?");
-        names[2] = xstrdup(".sw?");
-        num_names = 3;
-      } else {
-        num_names = recov_file_names(names, fname_res, true);
-      }
-    } else {                      // check directory dir_name
-      if (fname == NULL) {
-        names[0] = concat_fnames(dir_name, "*.sw?", true);
-        // For Unix names starting with a dot are special.  MS-Windows
-        // supports this too, on some file systems.
-        names[1] = concat_fnames(dir_name, ".*.sw?", true);
-        names[2] = concat_fnames(dir_name, ".sw?", true);
-        num_names = 3;
-      } else {
-        int len = (int)strlen(dir_name);
-        p = dir_name + len;
-        if (after_pathsep(dir_name, p) && len > 1 && p[-1] == p[-2]) {
-          // Ends with '//', Use Full path for swap name
-          tail = make_percent_swname(dir_name, p, fname_res);
-        } else {
-          tail = path_tail(fname_res);
-          tail = concat_fnames(dir_name, tail, true);
-        }
-        num_names = recov_file_names(names, tail, false);
-        xfree(tail);
-      }
-    }
-
-    int num_files;
-    if (num_names == 0) {
-      num_files = 0;
-    } else if (expand_wildcards(num_names, names, &num_files, &files,
-                                EW_KEEPALL|EW_FILE|EW_SILENT) == FAIL) {
-      num_files = 0;
-    }
-
-    // When no swapfile found, wildcard expansion might have failed (e.g.
-    // not able to execute the shell).
-    // Try finding a swapfile by simply adding ".swp" to the file name.
-    if (*dirp == NUL && file_count + num_files == 0 && fname != NULL) {
-      char *swapname = modname(fname_res, ".swp", true);
-      if (swapname != NULL) {
-        if (os_path_exists(swapname)) {
-          files = xmalloc(sizeof(char *));
-          files[0] = swapname;
-          swapname = NULL;
-          num_files = 1;
-        }
-        xfree(swapname);
-      }
-    }
-
-    // Remove swapfile name of the current buffer, it must be ignored.
-    // But keep it for swapfilelist().
-    if (curbuf->b_ml.ml_mfp != NULL
-        && (p = curbuf->b_ml.ml_mfp->mf_fname) != NULL
-        && ret_list == NULL) {
-      for (int i = 0; i < num_files; i++) {
-        // Do not expand wildcards, on Windows would try to expand
-        // "%tmp%" in "%tmp%file"
-        if (path_full_compare(p, files[i], true, false) & kEqualFiles) {
-          // Remove the name from files[i].  Move further entries
-          // down.  When the array becomes empty free it here, since
-          // FreeWild() won't be called below.
-          xfree(files[i]);
-          if (--num_files == 0) {
-            xfree(files);
-          } else {
-            for (; i < num_files; i++) {
-              files[i] = files[i + 1];
-            }
-          }
-        }
-      }
-    }
-    if (nr > 0) {
-      file_count += num_files;
-      if (nr <= file_count) {
-        *fname_out = xstrdup(files[nr - 1 + num_files - file_count]);
-        dirp = "";                        // stop searching
-      }
-    } else if (do_list) {
-      if (dir_name[0] == '.' && dir_name[1] == NUL) {
-        if (fname == NULL) {
-          msg_puts(_("   In current directory:\n"));
-        } else {
-          msg_puts(_("   Using specified name:\n"));
-        }
-      } else {
-        msg_puts(_("   In directory "));
-        msg_home_replace(dir_name);
-        msg_puts(":\n");
-      }
-
-      if (num_files) {
-        for (int i = 0; i < num_files; i++) {
-          // print the swapfile name
-          msg_outnum(++file_count);
-          msg_puts(".    ");
-          msg_puts(path_tail(files[i]));
-          msg_putchar('\n');
-          StringBuilder msg = KV_INITIAL_VALUE;
-          kv_resize(msg, IOSIZE);
-          swapfile_info(files[i], &msg);
-          bool need_clear = false;
-          msg_multiline(cbuf_as_string(msg.items, msg.size), 0, false, false, &need_clear);
-          kv_destroy(msg);
-        }
-      } else {
-        msg_puts(_("      -- none --\n"));
-      }
-      ui_flush();
-    } else if (ret_list != NULL) {
-      for (int i = 0; i < num_files; i++) {
-        char *name = concat_fnames(dir_name, files[i], true);
-        tv_list_append_allocated_string(ret_list, name);
-      }
-    } else {
-      file_count += num_files;
-    }
-
-    for (int i = 0; i < num_names; i++) {
-      xfree(names[i]);
-    }
-    if (num_files > 0) {
-      FreeWild(num_files, files);
-    }
-  }
-  xfree(dir_name);
-  return file_count;
-}
+// recover_names and recov_file_names migrated to Rust (recovery.rs)
 
 /// Append the full path to name with path separators made into percent
 /// signs, to dir. An unnamed buffer is handled as "" (<currentdir>/"")
@@ -1624,40 +1438,7 @@ static bool swapfile_unchanged(char *fname)
   return ret;
 }
 
-static int recov_file_names(char **names, char *path, bool prepend_dot)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int num_names = 0;
-
-  // May also add the file name with a dot prepended, for swapfile in same
-  // dir as original file.
-  if (prepend_dot) {
-    names[num_names] = modname(path, ".sw?", true);
-    if (names[num_names] == NULL) {
-      return num_names;
-    }
-    num_names++;
-  }
-
-  // Form the normal swapfile name pattern by appending ".sw?".
-  names[num_names] = concat_fnames(path, ".sw?", false);
-  if (num_names >= 1) {     // check if we have the same name twice
-    char *p = names[num_names - 1];
-    int i = (int)strlen(names[num_names - 1]) - (int)strlen(names[num_names]);
-    if (i > 0) {
-      p += i;               // file name has been expanded to full path
-    }
-    if (strcmp(p, names[num_names]) != 0) {
-      num_names++;
-    } else {
-      xfree(names[num_names]);
-    }
-  } else {
-    num_names++;
-  }
-
-  return num_names;
-}
+// recov_file_names migrated to Rust (recovery.rs)
 
 /// sync all memlines
 ///
@@ -1987,6 +1768,23 @@ int nvim_buf_get_ml_chunksize_is_null(buf_T *buf) { return buf->b_ml.ml_chunksiz
 // Block header data accessor (returns void* to DataBlock)
 void *nvim_bhdr_get_bh_data(bhdr_T *hp) { return hp->bh_data; }
 
+// Swap file name accessors for recover_names (Phase 2)
+char *nvim_buf_get_ml_mfp_fname(buf_T *buf)
+{
+  return (buf->b_ml.ml_mfp != NULL) ? buf->b_ml.ml_mfp->mf_fname : NULL;
+}
+char *nvim_get_p_dir(void) { return p_dir; }
+
+// Print swapfile info (wraps swapfile_info which uses StringBuilder internally)
+void nvim_swapfile_info_and_print(char *fname)
+{
+  StringBuilder msg = KV_INITIAL_VALUE;
+  kv_resize(msg, IOSIZE);
+  swapfile_info(fname, &msg);
+  bool need_clear = false;
+  msg_multiline(cbuf_as_string(msg.items, msg.size), 0, false, false, &need_clear);
+  kv_destroy(msg);
+}
 
 // Position setters
 void nvim_pos_set_lnum(pos_T *pos, linenr_T lnum) { pos->lnum = lnum; }

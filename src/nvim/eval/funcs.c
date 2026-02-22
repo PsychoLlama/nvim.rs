@@ -7380,8 +7380,10 @@ static void f_substitute(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "swapfilelist()" function
 static void f_swapfilelist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
+  extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
+                              char **fname_out);
   tv_list_alloc_ret(rettv, kListLenUnknown);
-  recover_names(NULL, false, rettv->vval.v_list, 0, NULL);
+  rs_recover_names(NULL, false, rettv->vval.v_list, 0, NULL);
 }
 
 /// "swapinfo(swap_filename)" function
