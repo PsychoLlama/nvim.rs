@@ -436,7 +436,6 @@ void ins_ctrl_x(void)
   may_trigger_modechanged();
 }
 
-
 /// Check that the 'dictionary' or 'thesaurus' option can be used.
 ///
 /// @param  dict_opt  check 'dictionary' when true, 'thesaurus' when false.
@@ -908,7 +907,6 @@ int ins_compl_col_range_attr(linenr_T lnum, int col)
 
   return -1;
 }
-
 
 /// Reduce the longest common string for match "match".
 static void ins_compl_longest_match(compl_T *match)
