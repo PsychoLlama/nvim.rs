@@ -1504,13 +1504,184 @@ void nvim_nv_edit_impl(cmdarg_T *cap)
 // Forward declarations for search handlers
 static void nv_search_impl(cmdarg_T *cap);
 static void nv_next_impl(cmdarg_T *cap);
-static void nv_ident_impl(cmdarg_T *cap);
+// nv_ident_impl deleted -- migrated to Rust rs_nv_ident
 
 void nvim_nv_search_impl(cmdarg_T *cap) { nv_search_impl(cap); }
 
 void nvim_nv_next_impl(cmdarg_T *cap) { nv_next_impl(cap); }
 
-void nvim_nv_ident_impl(cmdarg_T *cap) { nv_ident_impl(cap); }
+// C wrappers for nv_ident Rust migration (Phase 7)
+
+/// Initialize nv_ident: determine cmdchar/g_cmd, get visual text or ident under cursor.
+/// Returns 0 on success, -1 to return early (clearop done), -2 to return early (clearopq done).
+/// On success: *cmdchar_out, *g_cmd_out, *ptr_out, *n_out are set.
+int nvim_ident_init(cmdarg_T *cap, int *cmdchar_out, int *g_cmd_out,
+                    char **ptr_out, size_t *n_out) {
+  char *ptr = NULL;
+  size_t n = 0;
+  int cmdchar;
+  bool g_cmd;
+
+  if (cap->cmdchar == 'g') {
+    cmdchar = cap->nchar;
+    g_cmd = true;
+  } else {
+    cmdchar = cap->cmdchar;
+    g_cmd = false;
+  }
+  if (cmdchar == POUND) {
+    cmdchar = '#';
+  }
+
+  // The "]", "CTRL-]" and "K" commands accept an argument in Visual mode.
+  if (cmdchar == ']' || cmdchar == Ctrl_RSB || cmdchar == 'K') {
+    if (VIsual_active && get_visual_text(cap, &ptr, &n) == false) {
+      return -2;
+    }
+    if (rs_checkclearopq(cap->oap)) {
+      return -2;
+    }
+  }
+
+  if (ptr == NULL && (n = find_ident_under_cursor(&ptr,
+                                                   ((cmdchar == '*' || cmdchar == '#')
+                                                    ? FIND_IDENT|FIND_STRING
+                                                    : FIND_IDENT))) == 0) {
+    rs_clearop(cap->oap);
+    return -1;
+  }
+
+  *cmdchar_out = cmdchar;
+  *g_cmd_out = g_cmd ? 1 : 0;
+  *ptr_out = ptr;
+  *n_out = n;
+  return 0;
+}
+
+/// Build command buffer and execute for nv_ident.
+/// This handles the entire command building + escaping + execution logic.
+void nvim_ident_build_and_exec(cmdarg_T *cap, int cmdchar, int g_cmd,
+                               char *ptr, size_t n) {
+  char *kp = *curbuf->b_p_kp == NUL ? p_kp : curbuf->b_p_kp;
+  bool kp_help = (*kp == NUL || strcmp(kp, ":he") == 0 || strcmp(kp, ":help") == 0);
+  if (kp_help && *skipwhite(ptr) == NUL) {
+    emsg(_(e_noident));
+    return;
+  }
+  bool kp_ex = (*kp == ':');
+  size_t bufsize = n * 2 + 30 + strlen(kp);
+  char *buf = xmalloc(bufsize);
+  buf[0] = NUL;
+  size_t buflen = 0;
+
+  bool tag_cmd = false;
+  switch (cmdchar) {
+  case '*':
+  case '#':
+    setpcmark();
+    curwin->w_cursor.col = (colnr_T)(ptr - get_cursor_line_ptr());
+    if (!g_cmd && vim_iswordp(ptr)) {
+      STRCPY(buf, "\\<");
+      buflen = STRLEN_LITERAL("\\<");
+    }
+    no_smartcase = true;
+    break;
+  case 'K':
+    n = nv_K_getcmd(cap, kp, kp_help, kp_ex, &ptr, n, buf, bufsize, &buflen);
+    if (n == 0) {
+      return;
+    }
+    break;
+  case ']':
+    tag_cmd = true;
+    STRCPY(buf, "ts ");
+    buflen = STRLEN_LITERAL("ts ");
+    break;
+  default:
+    tag_cmd = true;
+    if (curbuf->b_help) {
+      STRCPY(buf, "he! ");
+      buflen = STRLEN_LITERAL("he! ");
+    } else {
+      if (g_cmd) {
+        STRCPY(buf, "tj ");
+        buflen = STRLEN_LITERAL("tj ");
+      } else if (cap->count0 == 0) {
+        STRCPY(buf, "ta ");
+        buflen = STRLEN_LITERAL("ta ");
+      } else {
+        buflen = (size_t)snprintf(buf, bufsize, ":%" PRId64 "ta ", (int64_t)cap->count0);
+      }
+    }
+  }
+
+  // Grab the chars in the identifier
+  if (cmdchar == 'K' && !kp_help) {
+    ptr = xstrnsave(ptr, n);
+    char *p;
+    if (kp_ex) {
+      p = vim_strsave_fnameescape(ptr, VSE_NONE);
+    } else {
+      p = vim_strsave_shellescape(ptr, true, true);
+    }
+    xfree(ptr);
+    size_t plen = strlen(p);
+    char *newbuf = xrealloc(buf, buflen + plen + 1);
+    buf = newbuf;
+    STRCPY(buf + buflen, p);
+    buflen += plen;
+    xfree(p);
+  } else {
+    char *aux_ptr;
+    if (cmdchar == '*') {
+      aux_ptr = (rs_magic_isset() ? "/.*~[^$\\" : "/^$\\");
+    } else if (cmdchar == '#') {
+      aux_ptr = (rs_magic_isset() ? "/?.*~[^$\\" : "/?^$\\");
+    } else if (tag_cmd) {
+      if (strcmp(curbuf->b_p_ft, "help") == 0) {
+        aux_ptr = "";
+      } else {
+        aux_ptr = "\\|\"\n[";
+      }
+    } else {
+      aux_ptr = "\\|\"\n*?[";
+    }
+
+    char *p = buf + buflen;
+    while (n-- > 0) {
+      if (vim_strchr(aux_ptr, (uint8_t)(*ptr)) != NULL) {
+        *p++ = '\\';
+      }
+      const size_t len = (size_t)(utfc_ptr2len(ptr) - 1);
+      for (size_t i = 0; i < len && n > 0; i++, n--) {
+        *p++ = *ptr++;
+      }
+      *p++ = *ptr++;
+    }
+    *p = NUL;
+    buflen = (size_t)(p - buf);
+  }
+
+  // Execute the command
+  if (cmdchar == '*' || cmdchar == '#') {
+    if (!g_cmd && vim_iswordp(mb_prevptr(get_cursor_line_ptr(), ptr))) {
+      STRCPY(buf + buflen, "\\>");
+      buflen += STRLEN_LITERAL("\\>");
+    }
+    init_history();
+    add_to_history(HIST_SEARCH, buf, buflen, true, NUL);
+    normal_search(cap, cmdchar == '*' ? '/' : '?', buf, buflen, 0, NULL);
+  } else {
+    g_tag_at_cursor = true;
+    do_cmdline_cmd(buf);
+    g_tag_at_cursor = false;
+    if (cmdchar == 'K' && !kp_ex && !kp_help) {
+      restart_edit = 'i';
+      add_map("<esc>", "<Cmd>bdelete!<CR>", MODE_TERMINAL, true);
+    }
+  }
+  xfree(buf);
+}
 
 /// Wrapper for nv_gd C implementation (go to definition).
 void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
@@ -3539,190 +3710,6 @@ static size_t nv_K_getcmd(cmdarg_T *cap, char *kp, bool kp_help, bool kp_ex, cha
 }
 
 /// Implementation of nv_ident.
-static void nv_ident_impl(cmdarg_T *cap)
-{
-  char *ptr = NULL;
-  char *p;
-  size_t n = 0;                 // init for GCC
-  int cmdchar;
-  bool g_cmd;                   // "g" command
-  bool tag_cmd = false;
-
-  if (cap->cmdchar == 'g') {    // "g*", "g#", "g]" and "gCTRL-]"
-    cmdchar = cap->nchar;
-    g_cmd = true;
-  } else {
-    cmdchar = cap->cmdchar;
-    g_cmd = false;
-  }
-
-  if (cmdchar == POUND) {       // the pound sign, '#' for English keyboards
-    cmdchar = '#';
-  }
-
-  // The "]", "CTRL-]" and "K" commands accept an argument in Visual mode.
-  if (cmdchar == ']' || cmdchar == Ctrl_RSB || cmdchar == 'K') {
-    if (VIsual_active && get_visual_text(cap, &ptr, &n) == false) {
-      return;
-    }
-    if (rs_checkclearopq(cap->oap)) {
-      return;
-    }
-  }
-
-  if (ptr == NULL && (n = find_ident_under_cursor(&ptr,
-                                                  ((cmdchar == '*'
-                                                    || cmdchar == '#')
-                                                   ? FIND_IDENT|FIND_STRING
-                                                   : FIND_IDENT))) == 0) {
-    rs_clearop(cap->oap);
-    return;
-  }
-
-  // Allocate buffer to put the command in.  Inserting backslashes can
-  // double the length of the word.  p_kp / curbuf->b_p_kp could be added
-  // and some numbers.
-  char *kp = *curbuf->b_p_kp == NUL ? p_kp : curbuf->b_p_kp;  // 'keywordprg'
-  bool kp_help = (*kp == NUL || strcmp(kp, ":he") == 0 || strcmp(kp, ":help") == 0);
-  if (kp_help && *skipwhite(ptr) == NUL) {
-    emsg(_(e_noident));   // found white space only
-    return;
-  }
-  bool kp_ex = (*kp == ':');  // 'keywordprg' is an ex command
-  size_t bufsize = n * 2 + 30 + strlen(kp);
-  char *buf = xmalloc(bufsize);
-  buf[0] = NUL;
-  size_t buflen = 0;
-
-  switch (cmdchar) {
-  case '*':
-  case '#':
-    // Put cursor at start of word, makes search skip the word
-    // under the cursor.
-    // Call setpcmark() first, so "*``" puts the cursor back where
-    // it was.
-    setpcmark();
-    curwin->w_cursor.col = (colnr_T)(ptr - get_cursor_line_ptr());
-
-    if (!g_cmd && vim_iswordp(ptr)) {
-      STRCPY(buf, "\\<");
-      buflen = STRLEN_LITERAL("\\<");
-    }
-    no_smartcase = true;                // don't use 'smartcase' now
-    break;
-
-  case 'K':
-    n = nv_K_getcmd(cap, kp, kp_help, kp_ex, &ptr, n, buf, bufsize, &buflen);
-    if (n == 0) {
-      return;
-    }
-    break;
-
-  case ']':
-    tag_cmd = true;
-    STRCPY(buf, "ts ");
-    buflen = STRLEN_LITERAL("ts ");
-    break;
-
-  default:
-    tag_cmd = true;
-    if (curbuf->b_help) {
-      STRCPY(buf, "he! ");
-      buflen = STRLEN_LITERAL("he! ");
-    } else {
-      if (g_cmd) {
-        STRCPY(buf, "tj ");
-        buflen = STRLEN_LITERAL("tj ");
-      } else if (cap->count0 == 0) {
-        STRCPY(buf, "ta ");
-        buflen = STRLEN_LITERAL("ta ");
-      } else {
-        buflen = (size_t)snprintf(buf, bufsize, ":%" PRId64 "ta ", (int64_t)cap->count0);
-      }
-    }
-  }
-
-  // Now grab the chars in the identifier
-  if (cmdchar == 'K' && !kp_help) {
-    ptr = xstrnsave(ptr, n);
-    if (kp_ex) {
-      // Escape the argument properly for an Ex command
-      p = vim_strsave_fnameescape(ptr, VSE_NONE);
-    } else {
-      // Escape the argument properly for a shell command
-      p = vim_strsave_shellescape(ptr, true, true);
-    }
-    xfree(ptr);
-    size_t plen = strlen(p);
-    char *newbuf = xrealloc(buf, buflen + plen + 1);
-    buf = newbuf;
-    STRCPY(buf + buflen, p);
-    buflen += plen;
-    xfree(p);
-  } else {
-    char *aux_ptr;
-    if (cmdchar == '*') {
-      aux_ptr = (rs_magic_isset() ? "/.*~[^$\\" : "/^$\\");
-    } else if (cmdchar == '#') {
-      aux_ptr = (rs_magic_isset() ? "/?.*~[^$\\" : "/?^$\\");
-    } else if (tag_cmd) {
-      if (strcmp(curbuf->b_p_ft, "help") == 0) {
-        // ":help" handles unescaped argument
-        aux_ptr = "";
-      } else {
-        aux_ptr = "\\|\"\n[";
-      }
-    } else {
-      aux_ptr = "\\|\"\n*?[";
-    }
-
-    p = buf + buflen;
-    while (n-- > 0) {
-      // put a backslash before \ and some others
-      if (vim_strchr(aux_ptr, (uint8_t)(*ptr)) != NULL) {
-        *p++ = '\\';
-      }
-
-      // When current byte is a part of multibyte character, copy all
-      // bytes of that character.
-      const size_t len = (size_t)(utfc_ptr2len(ptr) - 1);
-      for (size_t i = 0; i < len && n > 0; i++, n--) {
-        *p++ = *ptr++;
-      }
-      *p++ = *ptr++;
-    }
-    *p = NUL;
-    buflen = (size_t)(p - buf);
-  }
-
-  // Execute the command.
-  if (cmdchar == '*' || cmdchar == '#') {
-    if (!g_cmd && vim_iswordp(mb_prevptr(get_cursor_line_ptr(), ptr))) {
-      STRCPY(buf + buflen, "\\>");
-      buflen += STRLEN_LITERAL("\\>");
-    }
-
-    // put pattern in search history
-    init_history();
-    add_to_history(HIST_SEARCH, buf, buflen, true, NUL);
-
-    normal_search(cap, cmdchar == '*' ? '/' : '?', buf, buflen, 0, NULL);
-  } else {
-    g_tag_at_cursor = true;
-    do_cmdline_cmd(buf);
-    g_tag_at_cursor = false;
-
-    if (cmdchar == 'K' && !kp_ex && !kp_help) {
-      // Start insert mode in terminal buffer
-      restart_edit = 'i';
-
-      add_map("<esc>", "<Cmd>bdelete!<CR>", MODE_TERMINAL, true);
-    }
-  }
-
-  xfree(buf);
-}
-
 /// Get visually selected text, within one line only.
 ///
 /// @param pp    return: start of selected text

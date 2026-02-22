@@ -2140,7 +2140,22 @@ extern "C" {
     // Phase 2 accessor functions
     fn nvim_nv_search_impl(cap: CapHandle);
     fn nvim_nv_next_impl(cap: CapHandle);
-    fn nvim_nv_ident_impl(cap: CapHandle);
+
+    // nv_ident C wrappers (Phase 7)
+    fn nvim_ident_init(
+        cap: CapHandle,
+        cmdchar_out: *mut c_int,
+        g_cmd_out: *mut c_int,
+        ptr_out: *mut *mut c_char,
+        n_out: *mut usize,
+    ) -> c_int;
+    fn nvim_ident_build_and_exec(
+        cap: CapHandle,
+        cmdchar: c_int,
+        g_cmd: c_int,
+        ptr: *mut c_char,
+        n: usize,
+    );
 }
 
 /// Command handler for "/" and "?" commands: Search forward/backward.
@@ -2175,8 +2190,23 @@ pub unsafe extern "C" fn rs_nv_next(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_ident(cap: CapHandle) {
-    // Delegate to C implementation which handles string manipulation
-    nvim_nv_ident_impl(cap);
+    let mut cmdchar: c_int = 0;
+    let mut g_cmd: c_int = 0;
+    let mut ptr: *mut c_char = core::ptr::null_mut();
+    let mut n: usize = 0;
+
+    let ret = nvim_ident_init(
+        cap,
+        &raw mut cmdchar,
+        &raw mut g_cmd,
+        &raw mut ptr,
+        &raw mut n,
+    );
+    if ret != 0 {
+        return;
+    }
+
+    nvim_ident_build_and_exec(cap, cmdchar, g_cmd, ptr, n);
 }
 
 // =============================================================================
