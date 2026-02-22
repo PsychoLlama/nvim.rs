@@ -113,6 +113,7 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
                                           ht_stack_T **ht_stack, list_stack_T **list_stack);
+extern int rs_eval0(char *arg, typval_T *rettv, exarg_T *eap, void *evalarg);
 extern int rs_eval1(char **arg, typval_T *rettv, void *evalarg);
 extern int rs_eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op);
 
@@ -2024,51 +2025,7 @@ void clear_evalarg(evalarg_T *evalarg, exarg_T *eap)
 /// @return OK or FAIL.
 int eval0(char *arg, typval_T *rettv, exarg_T *eap, evalarg_T *const evalarg)
 {
-  const int did_emsg_before = did_emsg;
-  const int called_emsg_before = called_emsg;
-  bool end_error = false;
-
-  char *p = skipwhite(arg);
-  int ret = eval1(&p, rettv, evalarg);
-
-  if (ret != FAIL) {
-    end_error = !ends_excmd(*p);
-  }
-  if (ret == FAIL || end_error) {
-    if (ret != FAIL) {
-      tv_clear(rettv);
-    }
-    // Report the invalid expression unless the expression evaluation has
-    // been cancelled due to an aborting error, an interrupt, or an
-    // exception, or we already gave a more specific error.
-    // Also check called_emsg for when using assert_fails().
-    if (!aborting()
-        && did_emsg == did_emsg_before
-        && called_emsg == called_emsg_before) {
-      if (end_error) {
-        semsg(_(e_trailing_arg), p);
-      } else {
-        semsg(_(e_invexpr2), arg);
-      }
-    }
-
-    if (eap != NULL && p != NULL) {
-      // Some of the expression may not have been consumed.
-      // Only execute a next command if it cannot be a "||" operator.
-      // The next command may be "catch".
-      char *nextcmd = check_nextcmd(p);
-      if (nextcmd != NULL && *nextcmd != '|') {
-        eap->nextcmd = nextcmd;
-      }
-    }
-    return FAIL;
-  }
-
-  if (eap != NULL) {
-    eap->nextcmd = check_nextcmd(p);
-  }
-
-  return ret;
+  return rs_eval0(arg, rettv, eap, evalarg);
 }
 
 /// If "arg" is a simple function call without arguments then call it and return
