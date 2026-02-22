@@ -17,6 +17,8 @@ use crate::{Frame, WinHandle, FR_LEAF};
 // External C Functions
 // =============================================================================
 
+use crate::BufHandle;
+
 extern "C" {
     /// Get curwin.
     fn nvim_get_curwin() -> WinHandle;
@@ -39,11 +41,77 @@ extern "C" {
     /// Get w_status_height from window.
     fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
 
+    /// Set w_status_height on window.
+    fn nvim_win_set_status_height(wp: WinHandle, val: c_int);
+
     /// Get w_vsep_width from window.
     fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
 
+    /// Set w_vsep_width on window.
+    fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
+
     /// Get w_hsep_height from window.
     fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
+
+    /// Set w_hsep_height on window.
+    fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
+
+    /// Check if only one non-floating window in the tab.
+    fn rs_one_window_in_tab(wp: WinHandle, tp: crate::TabpageHandle) -> c_int;
+
+    /// Check if text or buffer is locked.
+    fn nvim_text_or_buf_locked() -> c_int;
+
+    /// Emit the e_floatexchange error message.
+    fn nvim_emsg_e_floatexchange();
+
+    /// Call beep_flush().
+    fn nvim_beep_flush_wrapper();
+
+    /// Remove a window from the window list.
+    fn rs_win_remove(wp: WinHandle, tp: crate::TabpageHandle);
+
+    /// Remove a frame from the frame tree.
+    fn rs_frame_remove(frp: *mut Frame);
+
+    /// Append a window after another in the window list.
+    fn rs_win_append(after: WinHandle, wp: WinHandle, tp: crate::TabpageHandle);
+
+    /// Insert a frame before another.
+    fn rs_frame_insert(before: *mut Frame, frp: *mut Frame);
+
+    /// Append a frame after another.
+    fn rs_frame_append(after: *mut Frame, frp: *mut Frame);
+
+    /// Fix height-related frame sizes for a window's frame.
+    fn rs_frame_fix_height(wp: WinHandle);
+
+    /// Fix width-related frame sizes for a window's frame.
+    fn rs_frame_fix_width(wp: WinHandle);
+
+    /// Recompute window positions.
+    fn rs_win_comp_pos() -> c_int;
+
+    /// Get w_buffer from window.
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+
+    /// Get curbuf.
+    fn nvim_get_curbuf() -> BufHandle;
+
+    /// Get VIsual_active global.
+    fn nvim_get_VIsual_active() -> c_int;
+
+    /// Reset VIsual mode and resel.
+    fn rs_reset_VIsual_and_resel();
+
+    /// Copy cursor position from src window to dst window.
+    fn nvim_win_copy_cursor(dst: WinHandle, src: WinHandle);
+
+    /// Enter a window (triggers autocommands).
+    fn nvim_win_enter(wp: WinHandle, undo_sync: c_int);
+
+    /// Schedule redraw for a window.
+    fn nvim_redraw_later_wrapper(wp: WinHandle, r#type: c_int);
 }
 
 // =============================================================================
@@ -335,8 +403,146 @@ fn get_new_last_window_impl(first_frp: *const Frame, _upwards: bool) -> WinHandl
 }
 
 // =============================================================================
+// Full win_exchange implementation
+// =============================================================================
+
+/// Rust implementation of `win_exchange()`.
+///
+/// Exchange the current window with another window (determined by `prenum`).
+/// When `prenum` is 0, exchange with the next window (or previous if at end).
+/// When `prenum` > 0, exchange with the nth window in the parent frame.
+///
+/// # Safety
+/// Requires valid global Neovim state (curwin, frames, window list).
+unsafe fn win_exchange_impl(prenum: c_int) {
+    let curwin = nvim_get_curwin();
+    if curwin.is_null() {
+        return;
+    }
+
+    // Cannot exchange floating windows.
+    if nvim_win_get_floating(curwin) != 0 {
+        nvim_emsg_e_floatexchange();
+        return;
+    }
+
+    // Only one non-floating window in the tab — nothing to exchange.
+    if rs_one_window_in_tab(curwin, crate::TabpageHandle::null()) != 0 {
+        nvim_beep_flush_wrapper();
+        return;
+    }
+
+    // Do not exchange if text or buffer is locked.
+    if nvim_text_or_buf_locked() != 0 {
+        nvim_beep_flush_wrapper();
+        return;
+    }
+
+    // Find the target frame.
+    let curframe = nvim_win_get_frame(curwin);
+    if curframe.is_null() {
+        return;
+    }
+    let parent = (*curframe).fr_parent;
+    if parent.is_null() {
+        return;
+    }
+
+    let frp: *mut Frame = if prenum > 0 {
+        // Find the nth frame in the parent.
+        let mut f = (*parent).fr_child;
+        let mut n = prenum;
+        while !f.is_null() && n > 1 {
+            f = (*f).fr_next;
+            n -= 1;
+        }
+        f
+    } else if !(*curframe).fr_next.is_null() {
+        // Swap with next frame.
+        (*curframe).fr_next
+    } else {
+        // Swap last frame in row/col with previous.
+        (*curframe).fr_prev
+    };
+
+    // We can only exchange with another leaf frame that has a different window.
+    if frp.is_null() || (*frp).fr_win.is_null() || (*frp).fr_win == curwin {
+        return;
+    }
+    let wp = (*frp).fr_win;
+
+    // Step 1: remove curwin from the window list; remember where it was (wp2).
+    // Step 2: insert curwin before wp in the window list.
+    // Step 3 (if needed): remove wp and re-insert it after wp2.
+    // Step 4: swap separator properties.
+    let wp2 = nvim_win_get_prev(curwin);
+    let frp2 = (*curframe).fr_prev;
+
+    if nvim_win_get_prev(wp) != curwin {
+        rs_win_remove(curwin, crate::TabpageHandle::null());
+        rs_frame_remove(curframe);
+        rs_win_append(nvim_win_get_prev(wp), curwin, crate::TabpageHandle::null());
+        rs_frame_insert(frp, curframe);
+    }
+
+    if wp != wp2 {
+        rs_win_remove(wp, crate::TabpageHandle::null());
+        rs_frame_remove(nvim_win_get_frame(wp));
+        rs_win_append(wp2, wp, crate::TabpageHandle::null());
+        if frp2.is_null() {
+            // Insert wp's frame as the first child of parent.
+            let first_child = (*parent).fr_child;
+            rs_frame_insert(first_child, nvim_win_get_frame(wp));
+        } else {
+            rs_frame_append(frp2, nvim_win_get_frame(wp));
+        }
+    }
+
+    // Swap status_height, vsep_width, hsep_height between curwin and wp.
+    let temp_sh = nvim_win_get_status_height(curwin);
+    nvim_win_set_status_height(curwin, nvim_win_get_status_height(wp));
+    nvim_win_set_status_height(wp, temp_sh);
+
+    let temp_vw = nvim_win_get_vsep_width(curwin);
+    nvim_win_set_vsep_width(curwin, nvim_win_get_vsep_width(wp));
+    nvim_win_set_vsep_width(wp, temp_vw);
+
+    let old_hsep = nvim_win_get_hsep_height(curwin);
+    nvim_win_set_hsep_height(curwin, nvim_win_get_hsep_height(wp));
+    nvim_win_set_hsep_height(wp, old_hsep);
+
+    // Fix frame geometry and recompute positions.
+    rs_frame_fix_height(curwin);
+    rs_frame_fix_height(wp);
+    rs_frame_fix_width(curwin);
+    rs_frame_fix_width(wp);
+    rs_win_comp_pos();
+
+    // Handle VIsual selection.
+    if nvim_win_get_buffer(wp) != nvim_get_curbuf() {
+        rs_reset_VIsual_and_resel();
+    } else if nvim_get_VIsual_active() != 0 {
+        nvim_win_copy_cursor(wp, curwin);
+    }
+
+    // Enter the target window and mark both for redraw.
+    // UPD_NOT_VALID = 40 (verified by _Static_assert in window_shim.c).
+    nvim_win_enter(wp, 1);
+    nvim_redraw_later_wrapper(curwin, 40);
+    nvim_redraw_later_wrapper(wp, 40);
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// FFI: Exchange the current window with another.
+///
+/// Direct Rust replacement for the C `win_exchange()` function.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_win_exchange(prenum: c_int) {
+    unsafe { win_exchange_impl(prenum) }
+}
 
 /// FFI: Check if window can be exchanged.
 #[unsafe(no_mangle)]

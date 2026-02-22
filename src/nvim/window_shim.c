@@ -169,6 +169,9 @@ extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int w
 // Colorcolumn
 extern const char *rs_check_colorcolumn(const char *cc, win_T *wp);
 
+// Win exchange
+extern void rs_win_exchange(int prenum);
+
 // Snapshot lifecycle
 extern void rs_clear_snapshot(tabpage_T *tp, int idx);
 extern void rs_make_snapshot(int idx);
@@ -1164,95 +1167,10 @@ int make_windows(int count, bool vertical)
   return count - todo;
 }
 
-// Exchange current and next window
+// Exchange current and next window — implemented in Rust (rs_win_exchange).
 static void win_exchange(int Prenum)
 {
-  if (curwin->w_floating) {
-    emsg(e_floatexchange);
-    return;
-  }
-
-  if (rs_one_window_in_tab(curwin, NULL)) {
-    // just one window
-    beep_flush();
-    return;
-  }
-  if (text_or_buf_locked()) {
-    beep_flush();
-    return;
-  }
-
-  frame_T *frp;
-
-  // find window to exchange with
-  if (Prenum) {
-    frp = curwin->w_frame->fr_parent->fr_child;
-    while (frp != NULL && --Prenum > 0) {
-      frp = frp->fr_next;
-    }
-  } else if (curwin->w_frame->fr_next != NULL) {  // Swap with next
-    frp = curwin->w_frame->fr_next;
-  } else {  // Swap last window in row/col with previous
-    frp = curwin->w_frame->fr_prev;
-  }
-
-  // We can only exchange a window with another window, not with a frame
-  // containing windows.
-  if (frp == NULL || frp->fr_win == NULL || frp->fr_win == curwin) {
-    return;
-  }
-  win_T *wp = frp->fr_win;
-
-  // 1. remove curwin from the list. Remember after which window it was in wp2
-  // 2. insert curwin before wp in the list
-  // if wp != wp2
-  //    3. remove wp from the list
-  //    4. insert wp after wp2
-  // 5. exchange the status line height, winbar height, hsep height and vsep width.
-  win_T *wp2 = curwin->w_prev;
-  frame_T *frp2 = curwin->w_frame->fr_prev;
-  if (wp->w_prev != curwin) {
-    rs_win_remove(curwin, NULL);
-    rs_frame_remove(curwin->w_frame);
-    rs_win_append(wp->w_prev, curwin, NULL);
-    rs_frame_insert(frp, curwin->w_frame);
-  }
-  if (wp != wp2) {
-    rs_win_remove(wp, NULL);
-    rs_frame_remove(wp->w_frame);
-    rs_win_append(wp2, wp, NULL);
-    if (frp2 == NULL) {
-      rs_frame_insert(wp->w_frame->fr_parent->fr_child, wp->w_frame);
-    } else {
-      rs_frame_append(frp2, wp->w_frame);
-    }
-  }
-  int temp = curwin->w_status_height;
-  curwin->w_status_height = wp->w_status_height;
-  wp->w_status_height = temp;
-  temp = curwin->w_vsep_width;
-  curwin->w_vsep_width = wp->w_vsep_width;
-  wp->w_vsep_width = temp;
-  temp = curwin->w_hsep_height;
-  curwin->w_hsep_height = wp->w_hsep_height;
-  wp->w_hsep_height = temp;
-
-  rs_frame_fix_height(curwin);
-  rs_frame_fix_height(wp);
-  rs_frame_fix_width(curwin);
-  rs_frame_fix_width(wp);
-
-  rs_win_comp_pos();                 // recompute window positions
-
-  if (wp->w_buffer != curbuf) {
-    rs_reset_VIsual_and_resel();
-  } else if (VIsual_active) {
-    wp->w_cursor = curwin->w_cursor;
-  }
-
-  win_enter(wp, true);
-  redraw_later(curwin, UPD_NOT_VALID);
-  redraw_later(wp, UPD_NOT_VALID);
+  rs_win_exchange(Prenum);
 }
 
 // rotate windows: if upwards true the second window becomes the first one
@@ -4509,6 +4427,10 @@ void nvim_win_set_buffer_raw(win_T *wp, buf_T *buf) { wp->w_buffer = buf; }
 void nvim_buf_inc_nwindows(buf_T *buf) { buf->b_nwindows++; }
 void nvim_win_init_empty_wrapper(win_T *wp) { win_init_empty(wp); }
 void nvim_emsg_e_floatonly(void) { emsg(e_floatonly); }
+void nvim_emsg_e_floatexchange(void) { emsg(e_floatexchange); }
+int nvim_text_or_buf_locked(void) { return text_or_buf_locked() ? 1 : 0; }
+void nvim_win_copy_cursor(win_T *dst, win_T *src) { if (dst && src) { dst->w_cursor = src->w_cursor; } }
+void nvim_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync != 0); }
 void nvim_emsg_e_autocmd_close(void) { emsg(_(e_autocmd_close)); }
 void nvim_internal_error_othertab(void) { internal_error("win_close_othertab()"); }
 void nvim_win_new_screen_rows_wrapper(void) { win_new_screen_rows(); }
