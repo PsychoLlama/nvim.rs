@@ -3939,7 +3939,7 @@ extern "C" {
     fn nvim_set_VIsual_active(val: c_int);
 
     /// Get diff corresponding line.
-    fn nvim_diff_get_corresponding_line(buf: *mut std::ffi::c_void, lnum: LinenrT) -> LinenrT;
+    fn rs_diff_get_corresponding_line(buf: *mut std::ffi::c_void, lnum: LinenrT) -> LinenrT;
 
     /// Check cursor position (uses curwin global).
     fn nvim_check_cursor();
@@ -4026,7 +4026,7 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
         if wp != old_curwin && nvim_win_get_p_crb(wp) != 0 {
             // Set cursor line number
             if nvim_win_get_p_diff(wp) != 0 {
-                let new_lnum = nvim_diff_get_corresponding_line(old_curbuf, line);
+                let new_lnum = rs_diff_get_corresponding_line(old_curbuf, line);
                 nvim_win_set_cursor_lnum(wp, new_lnum);
             } else {
                 nvim_win_set_cursor_lnum(wp, line);

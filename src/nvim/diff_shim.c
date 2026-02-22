@@ -2205,12 +2205,6 @@ void nvim_diff_write_buffer(buf_T *buf, void *m, linenr_T start, linenr_T end)
   diff_write_buffer(buf, (mmfile_t *)m, start, end);
 }
 
-/// Wrapper for diff_get_corresponding_line for Rust FFI.
-linenr_T nvim_diff_get_corresponding_line(buf_T *buf, linenr_T lnum)
-{
-  return rs_diff_get_corresponding_line(buf, lnum);
-}
-
 /// Set a diff buffer slot in the current tab.
 void nvim_curtab_set_diffbuf(int idx, buf_T *buf)
 {
