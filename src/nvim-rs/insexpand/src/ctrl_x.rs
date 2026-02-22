@@ -49,6 +49,7 @@ const CONT_LOCAL: c_int = 32; // for ctrl_x_mode 0, ^X^P/^X^N do local expansion
 // Control key constants (ASCII)
 // =============================================================================
 
+const CTRL_C: c_int = 3;
 const CTRL_D: c_int = 4;
 const CTRL_E: c_int = 5;
 const CTRL_F: c_int = 6;
@@ -68,6 +69,10 @@ const CTRL_X: c_int = 24;
 const CTRL_Y: c_int = 25;
 const CTRL_Z: c_int = 26;
 const CTRL_RSB: c_int = 29;
+
+// ASCII special characters
+const CAR: c_int = 0x0D; // carriage return
+const NL: c_int = 0x0A; // newline
 
 // =============================================================================
 // Key code constants
@@ -141,10 +146,62 @@ extern "C" {
 
     // Phase 2: C functions called (not pure accessors)
     fn vim_is_ctrl_x_key(c: c_int) -> bool;
-    fn ins_compl_stop(c: c_int, prev_mode: c_int, retval: bool) -> bool;
     fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c_char);
     fn may_trigger_modechanged();
     fn rs_ins_compl_pum_key(c: c_int) -> c_int;
+
+    // Phase 3 state accessors
+    fn nvim_get_compl_enter_selects() -> c_int;
+    fn nvim_pum_visible() -> c_int;
+    fn nvim_get_compl_curr_match_str_data() -> *const c_char;
+    fn nvim_get_compl_shown_match_str_dup() -> *mut c_char;
+    fn nvim_get_compl_leader_data() -> *const c_char;
+    fn nvim_get_compl_leader_size() -> usize;
+    fn nvim_get_compl_orig_text_data() -> *const c_char;
+    fn nvim_get_compl_orig_text_size() -> usize;
+    fn nvim_compl_first_match_is_null() -> c_int;
+    fn nvim_set_compl_started(val: c_int);
+    fn nvim_set_compl_matches(val: c_int);
+    fn nvim_set_compl_enter_selects(val: c_int);
+    fn nvim_set_compl_autocomplete(val: c_int);
+    fn nvim_set_compl_from_nonkeyword(val: c_int);
+    fn nvim_clear_compl_best_matches();
+    fn nvim_set_compl_ins_end_col(val: c_int);
+    fn nvim_get_arrow_used() -> c_int;
+    fn nvim_get_cmdwin_type() -> c_int;
+    fn nvim_cursor_on_nul() -> c_int;
+    fn nvim_get_cursor_col() -> c_int;
+    fn nvim_get_compl_used_match() -> c_int;
+
+    // Phase 3 compound accessors
+    fn nvim_ins_apply_autocmds_completedonepre();
+    fn nvim_shortmess_completionmenu() -> bool;
+    fn nvim_in_cinkeys_key_complete(when: c_int, line_is_empty: bool) -> bool;
+    fn nvim_set_edit_submode_null_if_set();
+    fn nvim_get_curwin() -> *mut u8; // opaque curwin pointer
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
+    fn nvim_xfree(ptr: *mut u8);
+
+    // Phase 3 C functions called (not pure accessors)
+    fn rs_ins_compl_preinsert_effect() -> c_int;
+    fn rs_ins_compl_win_active(wp: *mut u8) -> c_int;
+    fn rs_ins_compl_fixRedoBufForLeader(ptr: *const c_char);
+    fn rs_ins_compl_free();
+    fn rs_get_compl_len() -> c_int;
+    fn ins_compl_delete(revert: bool);
+    fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
+    fn nvim_restore_orig_extmarks();
+    fn get_can_cindent() -> bool;
+    fn cindent_on() -> bool;
+    fn do_c_expr_indent();
+    fn dec_cursor();
+    fn inc_cursor();
+    fn ins_need_undo_get() -> bool;
+    fn insertchar(c: c_int, flags: c_int, second_indent: c_int);
+    fn redrawWinline(wp: *mut u8, lnum: c_int);
+    fn auto_format(trailblank: bool, prev_line: bool);
+    fn msg_clr_cmdline();
+    fn update_screen();
 }
 
 // =============================================================================
@@ -384,7 +441,7 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
             && rs_ins_compl_pum_key(c) == 0)
             || nvim_get_ctrl_x_mode() == CTRL_X_FINISHED
         {
-            retval = ins_compl_stop(c, prev_mode, retval);
+            retval = rs_ins_compl_stop(c, prev_mode, c_int::from(retval)) != 0;
         }
     } else if nvim_get_ctrl_x_mode() == CTRL_X_LOCAL_MSG {
         // Trigger the CompleteDone event to give scripts a chance to act upon
@@ -402,6 +459,173 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
     }
 
     c_int::from(retval)
+}
+
+// =============================================================================
+// Phase 3: rs_ins_compl_stop
+// =============================================================================
+
+/// Stop insert completion mode.
+///
+/// Finalizes completion: handles redo buffer fixup, indent correction,
+/// CTRL-Y/CTRL-E acceptance, fires CompleteDonePre/CompleteDone events,
+/// resets all completion state.
+///
+/// Returns 1 when the character should not be inserted, 0 otherwise.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c_int) -> c_int {
+    let mut retval = retval != 0;
+
+    // Remove pre-inserted text when present.
+    if rs_ins_compl_preinsert_effect() != 0 && rs_ins_compl_win_active(nvim_get_curwin()) != 0 {
+        ins_compl_delete(false);
+    }
+
+    // Get here when we have finished typing a sequence of ^N and ^P or other
+    // completion characters in CTRL-X mode. Free up memory that was used, and
+    // make sure we can redo the insert.
+    let curr_match_str = nvim_get_compl_curr_match_str_data();
+    let leader_data = nvim_get_compl_leader_data();
+    if !curr_match_str.is_null() || !leader_data.is_null() || c == CTRL_E {
+        // If any of the original typed text has been changed (e.g. when
+        // ignorecase is set), we must add back-spaces to the redo buffer.
+        // When using the longest match, edited the match or used CTRL-E then
+        // don't use the current match.
+        let ptr: *const c_char =
+            if !curr_match_str.is_null() && nvim_get_compl_used_match() != 0 && c != CTRL_E {
+                curr_match_str
+            } else {
+                std::ptr::null()
+            };
+        rs_ins_compl_fixRedoBufForLeader(ptr);
+    }
+
+    let mut want_cindent = get_can_cindent() && cindent_on();
+
+    // When completing whole lines: fix indent for 'cindent'.
+    // Otherwise, break line if it's too long.
+    if nvim_get_compl_cont_mode() == CTRL_X_WHOLE_LINE {
+        // re-indent the current line
+        if want_cindent {
+            do_c_expr_indent();
+            want_cindent = false; // don't do it again
+        }
+    } else {
+        let prev_col = nvim_get_cursor_col();
+
+        // put the cursor on the last char, for 'tw' formatting
+        if prev_col > 0 {
+            dec_cursor();
+        }
+
+        // only format when something was inserted
+        if nvim_get_arrow_used() == 0 && !ins_need_undo_get() && c != CTRL_E {
+            insertchar(0 /* NUL */, 0, -1);
+        }
+
+        if prev_col > 0 && nvim_cursor_on_nul() != 0 {
+            inc_cursor();
+        }
+    }
+
+    let mut word: *mut u8 = std::ptr::null_mut();
+
+    // If the popup menu is displayed pressing CTRL-Y means accepting the
+    // selection without inserting anything. When compl_enter_selects is set
+    // the Enter key does the same.
+    if (c == CTRL_Y
+        || (nvim_get_compl_enter_selects() != 0 && (c == CAR || c == K_KENTER || c == NL)))
+        && nvim_pum_visible() != 0
+    {
+        word = nvim_get_compl_shown_match_str_dup().cast::<u8>();
+        retval = true;
+        // May need to remove ComplMatchIns highlight.
+        redrawWinline(nvim_get_curwin(), nvim_get_curwin_cursor_lnum());
+    }
+
+    // CTRL-E means completion is Ended, go back to the typed text.
+    // but only do this if the popup is still visible.
+    if c == CTRL_E {
+        ins_compl_delete(false);
+        let mut p: *const c_char = std::ptr::null();
+        let mut plen: usize = 0;
+        let leader = nvim_get_compl_leader_data();
+        if !leader.is_null() {
+            p = leader;
+            plen = nvim_get_compl_leader_size();
+        } else if nvim_compl_first_match_is_null() == 0 {
+            p = nvim_get_compl_orig_text_data();
+            plen = nvim_get_compl_orig_text_size();
+        }
+        if !p.is_null() {
+            let compl_len = rs_get_compl_len();
+            #[allow(
+                clippy::cast_possible_wrap,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            if (plen as c_int) > compl_len {
+                nvim_ins_compl_insert_bytes(p.add(compl_len as usize), (plen as c_int) - compl_len);
+            }
+        }
+        nvim_restore_orig_extmarks();
+        retval = true;
+    }
+
+    auto_format(false, true);
+
+    // Trigger the CompleteDonePre event to give scripts a chance to act upon
+    // the completion before clearing the info, and restore ctrl_x_mode so
+    // that complete_info() can be used.
+    nvim_set_ctrl_x_mode(prev_mode);
+    nvim_ins_apply_autocmds_completedonepre();
+
+    rs_ins_compl_free();
+    nvim_set_compl_started(0);
+    nvim_set_compl_matches(0);
+    if !nvim_shortmess_completionmenu() {
+        msg_clr_cmdline(); // necessary for "noshowmode"
+    }
+    nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
+    nvim_set_compl_enter_selects(0);
+    nvim_set_edit_submode_null_if_set();
+    nvim_set_compl_autocomplete(0);
+    nvim_set_compl_from_nonkeyword(0);
+    nvim_clear_compl_best_matches();
+    nvim_set_compl_ins_end_col(0);
+
+    if c == CTRL_C && nvim_get_cmdwin_type() != 0 {
+        // Avoid the popup menu remaining displayed when leaving the command
+        // line window.
+        update_screen();
+    }
+
+    // Indent now if a key was typed that is in 'cinkeys'.
+    if want_cindent && nvim_in_cinkeys_key_complete(c_int::from(b' '), inindent(0)) {
+        do_c_expr_indent();
+    }
+
+    // Trigger the CompleteDone event to give scripts a chance to act upon the
+    // end of completion.
+    do_autocmd_completedone(c, prev_mode, word.cast::<c_char>());
+    nvim_xfree(word);
+
+    c_int::from(retval)
+}
+
+// =============================================================================
+// Phase 3: rs_ins_compl_cancel
+// =============================================================================
+
+/// Cancel completion: calls rs_ins_compl_stop(' ', ctrl_x_mode, true).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_cancel() -> c_int {
+    rs_ins_compl_stop(c_int::from(b' '), nvim_get_ctrl_x_mode(), 1)
+}
+
+extern "C" {
+    fn inindent(extra: c_int) -> bool;
 }
 
 #[cfg(test)]

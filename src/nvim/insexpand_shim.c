@@ -1965,140 +1965,13 @@ static bool set_ctrl_x_mode(const int c)
 /// Stop insert completion mode
 bool ins_compl_stop(const int c, const int prev_mode, bool retval)
 {
-  // Remove pre-inserted text when present.
-  if (rs_ins_compl_preinsert_effect() && rs_ins_compl_win_active(curwin)) {
-    ins_compl_delete(false);
-  }
-
-  // Get here when we have finished typing a sequence of ^N and
-  // ^P or other completion characters in CTRL-X mode.  Free up
-  // memory that was used, and make sure we can redo the insert.
-  if (compl_curr_match != NULL || compl_leader.data != NULL || c == Ctrl_E) {
-    // If any of the original typed text has been changed, eg when
-    // ignorecase is set, we must add back-spaces to the redo
-    // buffer.  We add as few as necessary to delete just the part
-    // of the original text that has changed.
-    // When using the longest match, edited the match or used
-    // CTRL-E then don't use the current match.
-    char *ptr = NULL;
-    if (compl_curr_match != NULL && compl_used_match && c != Ctrl_E) {
-      ptr = compl_curr_match->cp_str.data;
-    }
-    rs_ins_compl_fixRedoBufForLeader(ptr);
-  }
-
-  bool want_cindent = (get_can_cindent() && cindent_on());
-
-  // When completing whole lines: fix indent for 'cindent'.
-  // Otherwise, break line if it's too long.
-  if (compl_cont_mode == CTRL_X_WHOLE_LINE) {
-    // re-indent the current line
-    if (want_cindent) {
-      do_c_expr_indent();
-      want_cindent = false;                 // don't do it again
-    }
-  } else {
-    const int prev_col = curwin->w_cursor.col;
-
-    // put the cursor on the last char, for 'tw' formatting
-    if (prev_col > 0) {
-      dec_cursor();
-    }
-
-    // only format when something was inserted
-    if (!arrow_used && !ins_need_undo_get() && c != Ctrl_E) {
-      insertchar(NUL, 0, -1);
-    }
-
-    if (prev_col > 0
-        && get_cursor_line_ptr()[curwin->w_cursor.col] != NUL) {
-      inc_cursor();
-    }
-  }
-
-  char *word = NULL;
-  // If the popup menu is displayed pressing CTRL-Y means accepting
-  // the selection without inserting anything.  When
-  // compl_enter_selects is set the Enter key does the same.
-  if ((c == Ctrl_Y || (compl_enter_selects
-                       && (c == CAR || c == K_KENTER || c == NL)))
-      && pum_visible()) {
-    word = xstrdup(compl_shown_match->cp_str.data);
-    retval = true;
-    // May need to remove ComplMatchIns highlight.
-    redrawWinline(curwin, curwin->w_cursor.lnum);
-  }
-
-  // CTRL-E means completion is Ended, go back to the typed text.
-  // but only do this, if the Popup is still visible
-  if (c == Ctrl_E) {
-    ins_compl_delete(false);
-    char *p = NULL;
-    size_t plen = 0;
-    if (compl_leader.data != NULL) {
-      p = compl_leader.data;
-      plen = compl_leader.size;
-    } else if (compl_first_match != NULL) {
-      p = compl_orig_text.data;
-      plen = compl_orig_text.size;
-    }
-    if (p != NULL) {
-      const int compl_len = rs_get_compl_len();
-      if ((int)plen > compl_len) {
-        ins_compl_insert_bytes(p + compl_len, (int)plen - compl_len);
-      }
-    }
-    restore_orig_extmarks();
-    retval = true;
-  }
-
-  auto_format(false, true);
-
-  // Trigger the CompleteDonePre event to give scripts a chance to
-  // act upon the completion before clearing the info, and restore
-  // ctrl_x_mode, so that complete_info() can be used.
-  ctrl_x_mode = prev_mode;
-  ins_apply_autocmds(EVENT_COMPLETEDONEPRE);
-
-  rs_ins_compl_free();
-  compl_started = false;
-  compl_matches = 0;
-  if (!shortmess(SHM_COMPLETIONMENU)) {
-    msg_clr_cmdline();  // necessary for "noshowmode"
-  }
-  ctrl_x_mode = CTRL_X_NORMAL;
-  compl_enter_selects = false;
-  if (edit_submode != NULL) {
-    edit_submode = NULL;
-    redraw_mode = true;
-  }
-  compl_autocomplete = false;
-  compl_from_nonkeyword = false;
-  compl_best_matches = 0;
-  compl_ins_end_col = 0;
-
-  if (c == Ctrl_C && cmdwin_type != 0) {
-    // Avoid the popup menu remains displayed when leaving the
-    // command line window.
-    update_screen();
-  }
-
-  // Indent now if a key was typed that is in 'cinkeys'.
-  if (want_cindent && in_cinkeys(KEY_COMPLETE, ' ', inindent(0))) {
-    do_c_expr_indent();
-  }
-  // Trigger the CompleteDone event to give scripts a chance to act
-  // upon the end of completion.
-  do_autocmd_completedone(c, prev_mode, word);
-  xfree(word);
-
-  return retval;
+  return rs_ins_compl_stop(c, prev_mode, retval ? 1 : 0) != 0;
 }
 
 /// Cancel completion.
 bool ins_compl_cancel(void)
 {
-  return ins_compl_stop(' ', ctrl_x_mode, true);
+  return rs_ins_compl_cancel() != 0;
 }
 
 /// Prepare for Insert mode completion, or stop it.
@@ -5818,4 +5691,20 @@ int nvim_cursor_on_nul(void) {
   char *line = get_cursor_line_ptr();
   return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0;
 }
+// Compound accessors for ins_compl_stop (Phase 3)
+void nvim_ins_apply_autocmds_completedonepre(void) {
+  ins_apply_autocmds(EVENT_COMPLETEDONEPRE);
+}
+bool nvim_shortmess_completionmenu(void) { return shortmess(SHM_COMPLETIONMENU); }
+bool nvim_in_cinkeys_key_complete(int when, bool line_is_empty) {
+  return in_cinkeys(KEY_COMPLETE, when, line_is_empty);
+}
+void nvim_set_edit_submode_null_if_set(void) {
+  if (edit_submode != NULL) {
+    edit_submode = NULL;
+    redraw_mode = true;
+  }
+}
+void nvim_ins_compl_insert_bytes(const char *p, int len) { ins_compl_insert_bytes((char *)p, len); }
+void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
 
