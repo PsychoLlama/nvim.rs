@@ -1024,8 +1024,6 @@ static void run_linematch_algorithm(diff_T *dp)
 /// @param lnum
 /// @param[out] linestatus
 
-
-
 /// Parse the diff anchors. If "check_only" is set, will only make sure the
 /// syntax is correct.
 static int parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int *num_anchors)
@@ -1103,11 +1101,8 @@ static int parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int
   return OK;
 }
 
-
-
 /// used for simple inline diff algorithm
 static diffline_change_T simple_diffline_change;
-
 
 /// Mapping used for mapping from temporary mmfile created for inline diff back
 /// to original buffer's line/col.
@@ -1469,8 +1464,6 @@ done:
     ga_clear(&linemap[i]);
   }
 }
-
-
 
 /// "dp" and "do" commands.
 void nv_diffgetput(bool put, size_t count)
@@ -1853,8 +1846,6 @@ static void diffgetput(const int addr_count, const int idx_cur, const int idx_fr
 
 /// Checks that the buffer is in diff-mode.
 
-
-
 /// Callback function for the xdl_diff() function.
 /// Stores the diff output in a grow array.
 static int xdiff_out(int start_a, int count_a, int start_b, int count_b, void *priv)
@@ -1959,954 +1950,121 @@ void f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_number = hlID;
 }
 
-/// C accessor for the static diff_flags variable (used by Rust FFI).
-int nvim_get_diff_flags(void)
-{
-  return diff_flags;
-}
-
-/// Returns true if the 'diffexpr' option (p_dex) is empty (used by Rust FFI).
-bool nvim_is_diffexpr_empty(void)
-{
-  return *p_dex == NUL;
-}
-
-/// Get a diff buffer from the current tab's diff list.
-/// @param idx  Buffer index (0 to DB_COUNT-1)
-/// @return  Buffer pointer or NULL if invalid index
-buf_T *nvim_get_curtab_diffbuf(int idx)
-{
-  if (idx < 0 || idx >= DB_COUNT) {
-    return NULL;
-  }
-  return curtab->tp_diffbuf[idx];
-}
-
-/// Check if the current tab's diff list is invalid (needs update).
-int nvim_get_curtab_diff_invalid(void)
-{
-  return curtab->tp_diff_invalid;
-}
-
-/// Get the first diff block in the current tab.
-diff_T *nvim_get_diff_first_block(void)
-{
-  return curtab->tp_first_diff;
-}
-
-/// Get the next diff block in the linked list.
-diff_T *nvim_diffblock_get_next(diff_T *dp)
-{
-  if (dp == NULL) {
-    return NULL;
-  }
-  return dp->df_next;
-}
-
-/// Get the line number for a buffer in a diff block.
-/// @param dp   Diff block pointer
-/// @param idx  Buffer index (0 to DB_COUNT-1)
-/// @return  Line number or 0 if invalid
-linenr_T nvim_diffblock_get_lnum(diff_T *dp, int idx)
-{
-  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
-    return 0;
-  }
-  return dp->df_lnum[idx];
-}
-
-/// Get the line count for a buffer in a diff block.
-/// @param dp   Diff block pointer
-/// @param idx  Buffer index (0 to DB_COUNT-1)
-/// @return  Line count or 0 if invalid
-linenr_T nvim_diffblock_get_count(diff_T *dp, int idx)
-{
-  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
-    return 0;
-  }
-  return dp->df_count[idx];
-}
-
-/// Set line number for a diff block at buffer index.
-/// @param dp   Diff block pointer
-/// @param idx  Buffer index (0 to DB_COUNT-1)
-/// @param lnum Line number to set
-void nvim_diffblock_set_lnum(diff_T *dp, int idx, linenr_T lnum)
-{
-  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
-    return;
-  }
-  dp->df_lnum[idx] = lnum;
-}
-
-/// Set line count for a diff block at buffer index.
-/// @param dp    Diff block pointer
-/// @param idx   Buffer index (0 to DB_COUNT-1)
-/// @param count Line count to set
-void nvim_diffblock_set_count(diff_T *dp, int idx, linenr_T count)
-{
-  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
-    return;
-  }
-  dp->df_count[idx] = count;
-}
-
-/// Get DB_COUNT constant for Rust FFI.
-int nvim_get_db_count(void)
-{
-  return DB_COUNT;
-}
-
-/// Check if a diff block has been line-matched.
-/// @param dp Diff block pointer
-/// @return true if line-matched, false otherwise
-bool nvim_diffblock_is_linematched(diff_T *dp)
-{
-  if (dp == NULL) {
-    return false;
-  }
-  return dp->is_linematched;
-}
-
-/// Set the line-matched flag on a diff block.
-/// @param dp  Diff block pointer
-/// @param val Value to set
-void nvim_diffblock_set_linematched(diff_T *dp, bool val)
-{
-  if (dp == NULL) {
-    return;
-  }
-  dp->is_linematched = val;
-}
-
-/// Check if a diff block has inline changes.
-/// @param dp Diff block pointer
-/// @return true if there are changes, false otherwise
-bool nvim_diffblock_has_changes(diff_T *dp)
-{
-  if (dp == NULL) {
-    return false;
-  }
-  return dp->df_changes.ga_len > 0;
-}
-
-/// Get the first diff block for a tabpage.
-/// @param tp Tabpage pointer
-/// @return First diff block or NULL
-diff_T *nvim_tabpage_get_first_diff(tabpage_T *tp)
-{
-  if (tp == NULL) {
-    return NULL;
-  }
-  return tp->tp_first_diff;
-}
-
-/// Get a diff buffer from a tabpage by index.
-/// @param tp  Tabpage pointer
-/// @param idx Buffer index (0 to DB_COUNT-1)
-/// @return Buffer pointer or NULL
-buf_T *nvim_tabpage_get_diffbuf(tabpage_T *tp, int idx)
-{
-  if (tp == NULL || idx < 0 || idx >= DB_COUNT) {
-    return NULL;
-  }
-  return tp->tp_diffbuf[idx];
-}
-
-/// Check if a tabpage's diff list is invalid.
-/// @param tp Tabpage pointer
-/// @return true if invalid, false otherwise
-bool nvim_tabpage_is_diff_invalid(tabpage_T *tp)
-{
-  if (tp == NULL) {
-    return true;
-  }
-  return tp->tp_diff_invalid;
-}
-
-/// Set the diff_invalid flag for a tabpage.
-/// @param tp  Tabpage pointer
-/// @param val Value to set (0 = false, nonzero = true)
-void nvim_tabpage_set_diff_invalid(tabpage_T *tp, int val)
-{
-  if (tp != NULL) {
-    tp->tp_diff_invalid = val != 0;
-  }
-}
-
-/// Set the diff_update flag for a tabpage.
-/// @param tp  Tabpage pointer
-/// @param val Value to set (0 = false, nonzero = true)
-void nvim_tabpage_set_diff_update(tabpage_T *tp, int val)
-{
-  if (tp != NULL) {
-    tp->tp_diff_update = val != 0;
-  }
-}
-
-/// Allocate a new diff block and insert it into the linked list.
-/// @param tp   Tabpage pointer
-/// @param prev Previous diff block (NULL to insert at head)
-/// @param next Next diff block (NULL if at tail)
-/// @return New diff block or NULL on failure
-diff_T *nvim_diff_alloc_new(tabpage_T *tp, diff_T *prev, diff_T *next)
-{
-  diff_T *dnew = xmalloc(sizeof(diff_T));
-  CLEAR_POINTER(dnew);
-
-  dnew->df_next = next;
-  if (prev == NULL) {
-    tp->tp_first_diff = dnew;
-  } else {
-    prev->df_next = dnew;
-  }
-  return dnew;
-}
-
-/// Check if diff operations are currently busy.
-/// @return Nonzero if busy, 0 otherwise
-int nvim_diff_is_busy(void)
-{
-  return diff_busy ? 1 : 0;
-}
-
-/// Get the number of inline changes in a diff block.
-/// @param dp Diff block pointer
-/// @return Number of changes or 0
-int nvim_diffblock_get_changes_len(diff_T *dp)
-{
-  if (dp == NULL) {
-    return 0;
-  }
-  return dp->df_changes.ga_len;
-}
-
-/// Get a specific inline change from a diff block.
-/// @param dp        Diff block pointer
-/// @param change_idx Index of the change
-/// @return Pointer to the change or NULL
-diffline_change_T *nvim_diffblock_get_change(diff_T *dp, int change_idx)
-{
-  if (dp == NULL || change_idx < 0 || change_idx >= dp->df_changes.ga_len) {
-    return NULL;
-  }
-  return &((diffline_change_T *)dp->df_changes.ga_data)[change_idx];
-}
-
-/// Write buffer contents to a memory file for diff comparison.
-/// This is a wrapper for diff_write_buffer for Rust FFI.
-/// Uses void* to avoid exposing mmfile_t in generated header.
-/// @param buf   Buffer to read from
-/// @param m     Memory file structure to fill (must be mmfile_t*)
-/// @param start Start line number
-/// @param end   End line number
-void nvim_diff_write_buffer(buf_T *buf, void *m, linenr_T start, linenr_T end)
-{
-  diff_write_buffer(buf, (mmfile_t *)m, start, end);
-}
-
-/// Set a diff buffer slot in the current tab.
-void nvim_curtab_set_diffbuf(int idx, buf_T *buf)
-{
-  if (idx >= 0 && idx < DB_COUNT) {
-    curtab->tp_diffbuf[idx] = buf;
-  }
-}
-
-/// Set a diff buffer slot in a specific tabpage.
-void nvim_tabpage_set_diffbuf(tabpage_T *tp, int idx, buf_T *buf)
-{
-  if (tp != NULL && idx >= 0 && idx < DB_COUNT) {
-    tp->tp_diffbuf[idx] = buf;
-  }
-}
-
-/// Set the first diff block for a tabpage.
-void nvim_tabpage_set_first_diff(tabpage_T *tp, diff_T *dp)
-{
-  if (tp != NULL) {
-    tp->tp_first_diff = dp;
-  }
-}
-
-/// Set the df_next pointer of a diff block.
-void nvim_diff_set_next(diff_T *dp, diff_T *next)
-{
-  if (dp != NULL) {
-    dp->df_next = next;
-  }
-}
-
-/// Clear df_changes garray and free the diff block.
-void nvim_diffblock_clear_and_free(diff_T *dp)
-{
-  if (dp != NULL) {
-    ga_clear(&dp->df_changes);
-    xfree(dp);
-  }
-}
-
-/// Initialize a diff block's df_changes garray.
-void nvim_diffblock_init_changes(diff_T *dp)
-{
-  if (dp != NULL) {
-    dp->has_changes = false;
-    ga_init(&dp->df_changes, sizeof(diffline_change_T), 20);
-  }
-}
-
-/// Set the is_linematched flag on a diff block (also sets has_changes).
-void nvim_diffblock_init_new(diff_T *dp)
-{
-  if (dp != NULL) {
-    dp->is_linematched = false;
-    dp->has_changes = false;
-    ga_init(&dp->df_changes, sizeof(diffline_change_T), 20);
-  }
-}
-
-/// Set need_diff_redraw global.
-void nvim_set_need_diff_redraw(bool val)
-{
-  need_diff_redraw = val;
-}
-
-/// Get the linematch_lines setting.
-int nvim_diff_get_linematch_lines(void)
-{
-  return linematch_lines;
-}
-
-/// Get the diff_flags setting.
-int nvim_diff_get_diff_flags(void)
-{
-  return diff_flags;
-}
-
-/// Wrapper for diff_redraw() callable from Rust.
-void nvim_diff_redraw(bool dofold)
-{
-  diff_redraw(dofold);
-}
-
-/// Emit E96 error about too many buffers.
-void nvim_diff_semsg_e96(void)
-{
-  semsg(_("E96: Cannot diff more than %" PRId64 " buffers"), (int64_t)DB_COUNT);
-}
-
-/// Wrapper for redraw_later() callable from Rust.
-void nvim_redraw_later_win(win_T *wp, int type)
-{
-  if (wp != NULL) {
-    redraw_later(wp, type);
-  }
-}
-
-/// Get first window in a tabpage.
-win_T *nvim_tabpage_first_win(tabpage_T *tp)
-{
-  if (tp == NULL) {
-    return NULL;
-  }
-  if (tp == curtab) {
-    return firstwin;
-  }
-  return tp->tp_firstwin;
-}
-
-/// Get next window.
-win_T *nvim_win_next(win_T *wp)
-{
-  if (wp == NULL) {
-    return NULL;
-  }
-  return wp->w_next;
-}
-
-/// Wrapper for foldUpdate() callable from Rust.
-void nvim_diff_foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
-{
-  if (wp != NULL) {
-    foldUpdate(wp, top, bot);
-  }
-}
-
-/// Wrapper for set_option_value_give_err to set diff option for a window.
-void nvim_diff_set_diff_option(win_T *wp, bool value)
-{
-  if (wp == NULL) {
-    return;
-  }
-  win_T *old_curwin = curwin;
-  curwin = wp;
-  curbuf = curwin->w_buffer;
-  curbuf->b_ro_locked++;
-  set_option_value_give_err(kOptDiff, BOOLEAN_OPTVAL(value), OPT_LOCAL);
-  curbuf->b_ro_locked--;
-  curwin = old_curwin;
-  curbuf = curwin->w_buffer;
-}
-
-/// Wrapper for ml_get_buf() callable from Rust.
-const char *nvim_diff_ml_get_buf(buf_T *buf, linenr_T lnum)
-{
-  if (buf == NULL) {
-    return "";
-  }
-  return ml_get_buf(buf, lnum);
-}
-
-/// Wrapper for xstrdup() callable from Rust.
-char *nvim_diff_xstrdup(const char *s)
-{
-  if (s == NULL) {
-    return NULL;
-  }
-  return xstrdup(s);
-}
-
-/// Wrapper for xfree() callable from Rust.
-void nvim_diff_xfree(void *p)
-{
-  xfree(p);
-}
-
-/// Get UPD_VALID constant for Rust.
-int nvim_upd_valid(void)
-{
-  return UPD_VALID;
-}
-
-/// Get the diff_busy flag.
-bool nvim_diff_get_busy(void)
-{
-  return diff_busy;
-}
-
-/// Get diff_need_scrollbind flag.
-bool nvim_diff_get_need_scrollbind(void)
-{
-  return diff_need_scrollbind;
-}
-
-/// Set diff_need_scrollbind flag.
-void nvim_diff_set_need_scrollbind(bool val)
-{
-  diff_need_scrollbind = val;
-}
-
-/// Get MAXLNUM constant for Rust.
-linenr_T nvim_diff_maxlnum(void)
-{
-  return MAXLNUM;
-}
-
-/// Get the diff_algorithm setting.
-int nvim_diff_get_algorithm(void)
-{
-  return diff_algorithm;
-}
-
-/// Set diff option globals from parsed result.
-void nvim_diff_set_options(int flags, int context, int linematch, int foldcol, int algorithm)
-{
-  diff_flags = flags;
-  diff_context = context;
-  linematch_lines = linematch;
-  diff_foldcolumn = foldcol;
-  diff_algorithm = algorithm;
-}
-
-/// Wrapper for check_scrollbind() callable from Rust.
-void nvim_diff_check_scrollbind(void)
-{
-  check_scrollbind(0, 0);
-}
-
-/// Wrapper for parse_diffanchors() callable from Rust.
-int nvim_diff_parse_diffanchors(void)
-{
-  return parse_diffanchors(true, curbuf, NULL, NULL);
-}
-
-/// Get the p_dip (diffopt) option string.
-const char *nvim_diff_get_p_dip(void)
-{
-  return p_dip;
-}
-
-/// Create a new zero-initialized diffio_T on the heap.
-void *nvim_diffio_new(bool use_internal)
-{
-  diffio_T *dio = xcalloc(1, sizeof(diffio_T));
-  dio->dio_internal = use_internal ? 1 : 0;
-  return dio;
-}
-
-/// Free a diffio_T.
-void nvim_diffio_free(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  xfree(dio);
-}
-
-/// Get whether dio uses internal diff.
-bool nvim_diffio_is_internal(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  return dio != NULL && dio->dio_internal;
-}
-
-/// Initialize garray for internal diff output.
-void nvim_diffio_init_ga(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio != NULL) {
-    ga_init(&dio->dio_diff.dout_ga, sizeof(diffhunk_T), 100);
-  }
-}
-
-/// Allocate temp filenames for external diff.
-/// Returns false if any allocation fails.
-bool nvim_diffio_alloc_tempfiles(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio == NULL) {
-    return false;
-  }
-  dio->dio_orig.din_fname = vim_tempname();
-  dio->dio_new.din_fname = vim_tempname();
-  dio->dio_diff.dout_fname = vim_tempname();
-  return (dio->dio_orig.din_fname != NULL
-          && dio->dio_new.din_fname != NULL
-          && dio->dio_diff.dout_fname != NULL);
-}
-
-/// Free all temp filenames.
-void nvim_diffio_free_tempfiles(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio == NULL) {
-    return;
-  }
-  xfree(dio->dio_orig.din_fname);
-  xfree(dio->dio_new.din_fname);
-  xfree(dio->dio_diff.dout_fname);
-  dio->dio_orig.din_fname = NULL;
-  dio->dio_new.din_fname = NULL;
-  dio->dio_diff.dout_fname = NULL;
-}
-
-/// Write buf to the "orig" slot of dio.
-int nvim_diffio_write_orig(void *dio_ptr, buf_T *buf, linenr_T start, linenr_T end)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio == NULL || buf == NULL) {
-    return FAIL;
-  }
-  return diff_write(buf, &dio->dio_orig, start, end);
-}
-
-/// Write buf to the "new" slot of dio.
-int nvim_diffio_write_new(void *dio_ptr, buf_T *buf, linenr_T start, linenr_T end)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio == NULL || buf == NULL) {
-    return FAIL;
-  }
-  return diff_write(buf, &dio->dio_new, start, end);
-}
-
-/// Run the diff (external or internal).
-int nvim_diffio_run_diff(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio == NULL) {
-    return FAIL;
-  }
-  return diff_file(dio);
-}
-
-/// Check external diff works.
-int nvim_diffio_check_external(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio == NULL) {
-    return FAIL;
-  }
-  return check_external_diff(dio);
-}
-
-/// Clear the "new" input.
-void nvim_diffio_clear_new(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio != NULL) {
-    clear_diffin(&dio->dio_new);
-  }
-}
-
-/// Clear the diff output.
-void nvim_diffio_clear_output(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio != NULL) {
-    clear_diffout(&dio->dio_diff);
-  }
-}
-
-/// Clear the "orig" input.
-void nvim_diffio_clear_orig(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio != NULL) {
-    clear_diffin(&dio->dio_orig);
-  }
-}
-
-/// Get the number of hunks in internal diff output.
-int nvim_diffio_get_hunk_count(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio == NULL) {
-    return 0;
-  }
-  return dio->dio_diff.dout_ga.ga_len;
-}
-
-/// Get a hunk from internal diff output by index.
-/// Returns hunk fields via out params.
+// Rust FFI accessor functions
+int nvim_get_diff_flags(void) { return diff_flags; }
+bool nvim_is_diffexpr_empty(void) { return *p_dex == NUL; }
+buf_T *nvim_get_curtab_diffbuf(int idx) { if (idx < 0 || idx >= DB_COUNT) { return NULL; } return curtab->tp_diffbuf[idx]; }
+int nvim_get_curtab_diff_invalid(void) { return curtab->tp_diff_invalid; }
+diff_T *nvim_get_diff_first_block(void) { return curtab->tp_first_diff; }
+diff_T *nvim_diffblock_get_next(diff_T *dp) { if (dp == NULL) { return NULL; } return dp->df_next; }
+linenr_T nvim_diffblock_get_lnum(diff_T *dp, int idx) { if (dp == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return dp->df_lnum[idx]; }
+linenr_T nvim_diffblock_get_count(diff_T *dp, int idx) { if (dp == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return dp->df_count[idx]; }
+void nvim_diffblock_set_lnum(diff_T *dp, int idx, linenr_T lnum) { if (dp == NULL || idx < 0 || idx >= DB_COUNT) { return; } dp->df_lnum[idx] = lnum; }
+void nvim_diffblock_set_count(diff_T *dp, int idx, linenr_T count) { if (dp == NULL || idx < 0 || idx >= DB_COUNT) { return; } dp->df_count[idx] = count; }
+int nvim_get_db_count(void) { return DB_COUNT; }
+bool nvim_diffblock_is_linematched(diff_T *dp) { if (dp == NULL) { return false; } return dp->is_linematched; }
+void nvim_diffblock_set_linematched(diff_T *dp, bool val) { if (dp == NULL) { return; } dp->is_linematched = val; }
+bool nvim_diffblock_has_changes(diff_T *dp) { if (dp == NULL) { return false; } return dp->df_changes.ga_len > 0; }
+diff_T *nvim_tabpage_get_first_diff(tabpage_T *tp) { if (tp == NULL) { return NULL; } return tp->tp_first_diff; }
+buf_T *nvim_tabpage_get_diffbuf(tabpage_T *tp, int idx) { if (tp == NULL || idx < 0 || idx >= DB_COUNT) { return NULL; } return tp->tp_diffbuf[idx]; }
+bool nvim_tabpage_is_diff_invalid(tabpage_T *tp) { if (tp == NULL) { return true; } return tp->tp_diff_invalid; }
+void nvim_tabpage_set_diff_invalid(tabpage_T *tp, int val) { if (tp != NULL) { tp->tp_diff_invalid = val != 0; } }
+void nvim_tabpage_set_diff_update(tabpage_T *tp, int val) { if (tp != NULL) { tp->tp_diff_update = val != 0; } }
+diff_T *nvim_diff_alloc_new(tabpage_T *tp, diff_T *prev, diff_T *next) { diff_T *dnew = xmalloc(sizeof(diff_T)); CLEAR_POINTER(dnew); dnew->df_next = next; if (prev == NULL) { tp->tp_first_diff = dnew; } else { prev->df_next = dnew; } return dnew; }
+int nvim_diff_is_busy(void) { return diff_busy ? 1 : 0; }
+int nvim_diffblock_get_changes_len(diff_T *dp) { if (dp == NULL) { return 0; } return dp->df_changes.ga_len; }
+diffline_change_T *nvim_diffblock_get_change(diff_T *dp, int change_idx) { if (dp == NULL || change_idx < 0 || change_idx >= dp->df_changes.ga_len) { return NULL; } return &((diffline_change_T *)dp->df_changes.ga_data)[change_idx]; }
+void nvim_diff_write_buffer(buf_T *buf, void *m, linenr_T start, linenr_T end) { diff_write_buffer(buf, (mmfile_t *)m, start, end); }
+void nvim_curtab_set_diffbuf(int idx, buf_T *buf) { if (idx >= 0 && idx < DB_COUNT) { curtab->tp_diffbuf[idx] = buf; } }
+void nvim_tabpage_set_diffbuf(tabpage_T *tp, int idx, buf_T *buf) { if (tp != NULL && idx >= 0 && idx < DB_COUNT) { tp->tp_diffbuf[idx] = buf; } }
+void nvim_tabpage_set_first_diff(tabpage_T *tp, diff_T *dp) { if (tp != NULL) { tp->tp_first_diff = dp; } }
+void nvim_diff_set_next(diff_T *dp, diff_T *next) { if (dp != NULL) { dp->df_next = next; } }
+void nvim_diffblock_clear_and_free(diff_T *dp) { if (dp != NULL) { ga_clear(&dp->df_changes); xfree(dp); } }
+void nvim_diffblock_init_changes(diff_T *dp) { if (dp != NULL) { dp->has_changes = false; ga_init(&dp->df_changes, sizeof(diffline_change_T), 20); } }
+void nvim_diffblock_init_new(diff_T *dp) { if (dp != NULL) { dp->is_linematched = false; dp->has_changes = false; ga_init(&dp->df_changes, sizeof(diffline_change_T), 20); } }
+void nvim_set_need_diff_redraw(bool val) { need_diff_redraw = val; }
+int nvim_diff_get_linematch_lines(void) { return linematch_lines; }
+int nvim_diff_get_diff_flags(void) { return diff_flags; }
+void nvim_diff_redraw(bool dofold) { diff_redraw(dofold); }
+void nvim_diff_semsg_e96(void) { semsg(_("E96: Cannot diff more than %" PRId64 " buffers"), (int64_t)DB_COUNT); }
+void nvim_redraw_later_win(win_T *wp, int type) { if (wp != NULL) { redraw_later(wp, type); } }
+win_T *nvim_tabpage_first_win(tabpage_T *tp) { if (tp == NULL) { return NULL; } if (tp == curtab) { return firstwin; } return tp->tp_firstwin; }
+win_T *nvim_win_next(win_T *wp) { if (wp == NULL) { return NULL; } return wp->w_next; }
+void nvim_diff_foldUpdate(win_T *wp, linenr_T top, linenr_T bot) { if (wp != NULL) { foldUpdate(wp, top, bot); } }
+void nvim_diff_set_diff_option(win_T *wp, bool value) { if (wp == NULL) { return; } win_T *old_curwin = curwin; curwin = wp; curbuf = curwin->w_buffer; curbuf->b_ro_locked++; set_option_value_give_err(kOptDiff, BOOLEAN_OPTVAL(value), OPT_LOCAL); curbuf->b_ro_locked--; curwin = old_curwin; curbuf = curwin->w_buffer; }
+const char *nvim_diff_ml_get_buf(buf_T *buf, linenr_T lnum) { if (buf == NULL) { return ""; } return ml_get_buf(buf, lnum); }
+char *nvim_diff_xstrdup(const char *s) { if (s == NULL) { return NULL; } return xstrdup(s); }
+void nvim_diff_xfree(void *p) { xfree(p); }
+int nvim_upd_valid(void) { return UPD_VALID; }
+bool nvim_diff_get_busy(void) { return diff_busy; }
+bool nvim_diff_get_need_scrollbind(void) { return diff_need_scrollbind; }
+void nvim_diff_set_need_scrollbind(bool val) { diff_need_scrollbind = val; }
+linenr_T nvim_diff_maxlnum(void) { return MAXLNUM; }
+int nvim_diff_get_algorithm(void) { return diff_algorithm; }
+void nvim_diff_set_options(int flags, int context, int linematch, int foldcol, int algorithm) { diff_flags = flags; diff_context = context; linematch_lines = linematch; diff_foldcolumn = foldcol; diff_algorithm = algorithm; }
+void nvim_diff_check_scrollbind(void) { check_scrollbind(0, 0); }
+int nvim_diff_parse_diffanchors(void) { return parse_diffanchors(true, curbuf, NULL, NULL); }
+const char *nvim_diff_get_p_dip(void) { return p_dip; }
+void *nvim_diffio_new(bool use_internal) { diffio_T *dio = xcalloc(1, sizeof(diffio_T)); dio->dio_internal = use_internal ? 1 : 0; return dio; }
+void nvim_diffio_free(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; xfree(dio); }
+bool nvim_diffio_is_internal(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio != NULL && dio->dio_internal; }
+void nvim_diffio_init_ga(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio != NULL) { ga_init(&dio->dio_diff.dout_ga, sizeof(diffhunk_T), 100); } }
+bool nvim_diffio_alloc_tempfiles(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return false; } dio->dio_orig.din_fname = vim_tempname(); dio->dio_new.din_fname = vim_tempname(); dio->dio_diff.dout_fname = vim_tempname(); return (dio->dio_orig.din_fname != NULL && dio->dio_new.din_fname != NULL && dio->dio_diff.dout_fname != NULL); }
+void nvim_diffio_free_tempfiles(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return; } xfree(dio->dio_orig.din_fname); xfree(dio->dio_new.din_fname); xfree(dio->dio_diff.dout_fname); dio->dio_orig.din_fname = NULL; dio->dio_new.din_fname = NULL; dio->dio_diff.dout_fname = NULL; }
+int nvim_diffio_write_orig(void *dio_ptr, buf_T *buf, linenr_T start, linenr_T end) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || buf == NULL) { return FAIL; } return diff_write(buf, &dio->dio_orig, start, end); }
+int nvim_diffio_write_new(void *dio_ptr, buf_T *buf, linenr_T start, linenr_T end) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || buf == NULL) { return FAIL; } return diff_write(buf, &dio->dio_new, start, end); }
+int nvim_diffio_run_diff(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } return diff_file(dio); }
+int nvim_diffio_check_external(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } return check_external_diff(dio); }
+void nvim_diffio_clear_new(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio != NULL) { clear_diffin(&dio->dio_new); } }
+void nvim_diffio_clear_output(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio != NULL) { clear_diffout(&dio->dio_diff); } }
+void nvim_diffio_clear_orig(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio != NULL) { clear_diffin(&dio->dio_orig); } }
+int nvim_diffio_get_hunk_count(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return 0; } return dio->dio_diff.dout_ga.ga_len; }
 bool nvim_diffio_get_hunk(void *dio_ptr, int idx,
                           linenr_T *lnum_orig, int *count_orig,
-                          linenr_T *lnum_new, int *count_new)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio == NULL || idx < 0 || idx >= dio->dio_diff.dout_ga.ga_len) {
-    return false;
-  }
-  diffhunk_T *hunks = (diffhunk_T *)dio->dio_diff.dout_ga.ga_data;
-  *lnum_orig = hunks[idx].lnum_orig;
-  *count_orig = hunks[idx].count_orig;
-  *lnum_new = hunks[idx].lnum_new;
-  *count_new = hunks[idx].count_new;
-  return true;
-}
-
-/// Open the external diff output file for reading.
-/// Returns an opaque file handle (NULL on failure).
-void *nvim_diffio_open_output(void *dio_ptr)
-{
-  diffio_T *dio = (diffio_T *)dio_ptr;
-  if (dio == NULL || dio->dio_diff.dout_fname == NULL) {
-    return NULL;
-  }
-  return os_fopen(dio->dio_diff.dout_fname, "r");
-}
-
-/// Read a line from external diff output file.
-/// Returns true on EOF.
-bool nvim_diff_fgets(void *fd, char *buf, int buflen)
-{
-  if (fd == NULL) {
-    return true;
-  }
-  return vim_fgets(buf, buflen, (FILE *)fd);
-}
-
-/// Close external diff output file.
-void nvim_diff_fclose(void *fd)
-{
-  if (fd != NULL) {
-    fclose((FILE *)fd);
-  }
-}
-
-/// Check if buf is valid.
-bool nvim_diff_buf_valid(buf_T *buf)
-{
-  return buf_valid(buf);
-}
-
-/// Check buffer timestamp.
-void nvim_diff_buf_check_timestamp(buf_T *buf)
-{
-  if (buf != NULL) {
-    buf_check_timestamp(buf);
-  }
-}
-
-/// Check if buffer is loaded (ml_mfp != NULL).
-bool nvim_diff_buf_is_loaded(buf_T *buf)
-{
-  return buf != NULL && buf->b_ml.ml_mfp != NULL;
-}
-
-/// Get the curtab first diff block and set it.
-void nvim_diff_curtab_set_first_diff(diff_T *dp)
-{
-  curtab->tp_first_diff = dp;
-}
-
-/// Get curtab first diff block.
-diff_T *nvim_diff_curtab_get_first_diff(void)
-{
-  return curtab->tp_first_diff;
-}
-
-/// Check if eap is not NULL and forceit is true.
-bool nvim_eap_forceit(const exarg_T *eap)
-{
-  return eap != NULL && eap->forceit;
-}
-
-/// Get the curtab diff buffer.
-buf_T *nvim_diff_curtab_diffbuf(int idx)
-{
-  if (idx < 0 || idx >= DB_COUNT) {
-    return NULL;
-  }
-  return curtab->tp_diffbuf[idx];
-}
-
-/// Set curwin->w_valid_cursor.lnum = 0.
-void nvim_diff_invalidate_cursor(void)
-{
-  curwin->w_valid_cursor.lnum = 0;
-}
-
-/// Fire DiffUpdated autocmd.
-void nvim_diff_fire_diffupdated(void)
-{
-  apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf);
-}
-
-/// Get the diff_need_update flag.
-bool nvim_diff_get_need_update(void)
-{
-  return diff_need_update;
-}
-
-/// Set the diff_need_update flag.
-void nvim_diff_set_need_update(bool val)
-{
-  diff_need_update = val;
-}
-
-/// Set diff_busy flag.
-void nvim_diff_set_busy(bool val)
-{
-  diff_busy = val;
-}
-
-/// Get MAX_DIFF_ANCHORS constant.
-int nvim_diff_max_anchors(void)
-{
-  return MAX_DIFF_ANCHORS;
-}
-
-/// Emit E98 error.
-void nvim_diff_emsg_e98(void)
-{
-  emsg(_("E98: Cannot read diff output"));
-}
-
-/// Emit "failed to find all diff anchors" error.
-void nvim_diff_emsg_anchors(void)
-{
-  emsg(_(e_failed_to_find_all_diff_anchors));
-}
-
-/// Parse diff anchors for a specific buffer.
-/// Returns number of anchors found, -1 on error.
-int nvim_diff_parse_buf_anchors(buf_T *buf, linenr_T *anchors, int max_anchors)
-{
-  if (buf == NULL) {
-    return -1;
-  }
-  int num = 0;
-  if (parse_diffanchors(false, buf, anchors, &num) != OK) {
-    return -1;
-  }
-  return num;
-}
-
-/// Sort an array of line numbers.
-void nvim_diff_sort_lnums(linenr_T *arr, int count)
-{
-  if (arr != NULL && count > 0) {
-    qsort(arr, (size_t)count, sizeof(linenr_T), rs_lnum_compare);
-  }
-}
-
-/// Parse diff output line in ED format.
+                          linenr_T *lnum_new, int *count_new) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || idx < 0 || idx >= dio->dio_diff.dout_ga.ga_len) { return false; } diffhunk_T *hunks = (diffhunk_T *)dio->dio_diff.dout_ga.ga_data; *lnum_orig = hunks[idx].lnum_orig; *count_orig = hunks[idx].count_orig; *lnum_new = hunks[idx].lnum_new; *count_new = hunks[idx].count_new; return true; }
+void *nvim_diffio_open_output(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || dio->dio_diff.dout_fname == NULL) { return NULL; } return os_fopen(dio->dio_diff.dout_fname, "r"); }
+bool nvim_diff_fgets(void *fd, char *buf, int buflen) { if (fd == NULL) { return true; } return vim_fgets(buf, buflen, (FILE *)fd); }
+void nvim_diff_fclose(void *fd) { if (fd != NULL) { fclose((FILE *)fd); } }
+bool nvim_diff_buf_valid(buf_T *buf) { return buf_valid(buf); }
+void nvim_diff_buf_check_timestamp(buf_T *buf) { if (buf != NULL) { buf_check_timestamp(buf); } }
+bool nvim_diff_buf_is_loaded(buf_T *buf) { return buf != NULL && buf->b_ml.ml_mfp != NULL; }
+void nvim_diff_curtab_set_first_diff(diff_T *dp) { curtab->tp_first_diff = dp; }
+diff_T *nvim_diff_curtab_get_first_diff(void) { return curtab->tp_first_diff; }
+bool nvim_eap_forceit(const exarg_T *eap) { return eap != NULL && eap->forceit; }
+buf_T *nvim_diff_curtab_diffbuf(int idx) { if (idx < 0 || idx >= DB_COUNT) { return NULL; } return curtab->tp_diffbuf[idx]; }
+void nvim_diff_invalidate_cursor(void) { curwin->w_valid_cursor.lnum = 0; }
+void nvim_diff_fire_diffupdated(void) { apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf); }
+bool nvim_diff_get_need_update(void) { return diff_need_update; }
+void nvim_diff_set_need_update(bool val) { diff_need_update = val; }
+void nvim_diff_set_busy(bool val) { diff_busy = val; }
+int nvim_diff_max_anchors(void) { return MAX_DIFF_ANCHORS; }
+void nvim_diff_emsg_e98(void) { emsg(_("E98: Cannot read diff output")); }
+void nvim_diff_emsg_anchors(void) { emsg(_(e_failed_to_find_all_diff_anchors)); }
+int nvim_diff_parse_buf_anchors(buf_T *buf, linenr_T *anchors, int max_anchors) { if (buf == NULL) { return -1; } int num = 0; if (parse_diffanchors(false, buf, anchors, &num) != OK) { return -1; } return num; }
+void nvim_diff_sort_lnums(linenr_T *arr, int count) { if (arr != NULL && count > 0) { qsort(arr, (size_t)count, sizeof(linenr_T), rs_lnum_compare); } }
 int nvim_diff_parse_ed(const char *line, linenr_T *lnum_orig, int *count_orig,
-                       linenr_T *lnum_new, int *count_new)
-{
-  diffhunk_T hunk = { 0 };
-  int r = rs_parse_diff_ed(line, &hunk);
-  if (r == OK) {
-    *lnum_orig = hunk.lnum_orig;
-    *count_orig = hunk.count_orig;
-    *lnum_new = hunk.lnum_new;
-    *count_new = hunk.count_new;
-  }
-  return r;
-}
-
-/// Parse diff output line in unified format.
+                       linenr_T *lnum_new, int *count_new) { diffhunk_T hunk = { 0 }; int r = rs_parse_diff_ed(line, &hunk); if (r == OK) { *lnum_orig = hunk.lnum_orig; *count_orig = hunk.count_orig; *lnum_new = hunk.lnum_new; *count_new = hunk.count_new; } return r; }
 int nvim_diff_parse_unified(const char *line, linenr_T *lnum_orig, int *count_orig,
-                            linenr_T *lnum_new, int *count_new)
-{
-  diffhunk_T hunk = { 0 };
-  int r = rs_parse_diff_unified(line, &hunk);
-  if (r == OK) {
-    *lnum_orig = hunk.lnum_orig;
-    *count_orig = hunk.count_orig;
-    *lnum_new = hunk.lnum_new;
-    *count_new = hunk.count_new;
-  }
-  return r;
-}
-
-// Phase 4 C accessors (window accessors already exist in window.c)
-
-int nvim_diff_get_context(void)
-{
-  return diff_context;
-}
-
-bool nvim_diff_hasFolding(win_T *wp, linenr_T lnum)
-{
-  return hasFolding(wp, lnum, NULL, NULL);
-}
-
-bool nvim_diff_hasFolding_topline(win_T *wp, linenr_T lnum, linenr_T *topline)
-{
-  return hasFolding(wp, lnum, topline, NULL);
-}
-
-bool nvim_diff_decor_conceal_line(win_T *wp, linenr_T lnum)
-{
-  return decor_conceal_line(wp, lnum - 1, false);
-}
-
-void nvim_diff_invalidate_botline_win(win_T *wp)
-{
-  invalidate_botline(wp);
-}
-
-void nvim_diff_changed_line_abv_curs_win(win_T *wp)
-{
-  changed_line_abv_curs_win(wp);
-}
-
-void nvim_diff_check_topfill(win_T *wp, bool down)
-{
-  check_topfill(wp, down);
-}
-
-void nvim_diff_setpcmark(void)
-{
-  setpcmark();
-}
-
-void nvim_diff_ex_diffupdate(void)
-{
-  rs_diff_ex_diffupdate(NULL);
-}
-
-void nvim_diff_run_linematch(diff_T *dp)
-{
-  run_linematch_algorithm(dp);
-}
-
-// Phase 5 C accessors
-
-/// Check if diff block has cached inline changes (the has_changes field).
-bool nvim_diffblock_get_has_changes(diff_T *dp)
-{
-  if (dp == NULL) {
-    return false;
-  }
-  return dp->has_changes;
-}
-
-/// Set the has_changes field on a diff block.
-void nvim_diffblock_set_has_changes(diff_T *dp, bool val)
-{
-  if (dp != NULL) {
-    dp->has_changes = val;
-  }
-}
-
-/// Reset the df_changes ga_len to 0 (invalidate cache without freeing).
-void nvim_diffblock_reset_changes_len(diff_T *dp)
-{
-  if (dp != NULL) {
-    dp->df_changes.ga_len = 0;
-  }
-}
-
-/// Get pointer to the static simple_diffline_change sentinel.
-diffline_change_T *nvim_diff_get_simple_change(void)
-{
-  return &simple_diffline_change;
-}
-
-/// Compute inline diff for a diff block (calls the static function).
-void nvim_diff_compute_inline(diff_T *dp)
-{
-  if (dp != NULL) {
-    diff_find_change_inline_diff(dp);
-  }
-}
-
-/// Get the change at index from df_changes, returning start_lnum_off for idx.
-int nvim_diffchange_get_start_lnum_off(diffline_change_T *change, int idx)
-{
-  if (change == NULL || idx < 0 || idx >= DB_COUNT) {
-    return 0;
-  }
-  return change->dc_start_lnum_off[idx];
-}
-
-/// Get the change at index from df_changes, returning end_lnum_off for idx.
-int nvim_diffchange_get_end_lnum_off(diffline_change_T *change, int idx)
-{
-  if (change == NULL || idx < 0 || idx >= DB_COUNT) {
-    return 0;
-  }
-  return change->dc_end_lnum_off[idx];
-}
-
-/// Get dc_start for a change at buffer index.
-colnr_T nvim_diffchange_get_start(diffline_change_T *change, int idx)
-{
-  if (change == NULL || idx < 0 || idx >= DB_COUNT) {
-    return 0;
-  }
-  return change->dc_start[idx];
-}
-
-/// Get dc_end for a change at buffer index.
-colnr_T nvim_diffchange_get_end(diffline_change_T *change, int idx)
-{
-  if (change == NULL || idx < 0 || idx >= DB_COUNT) {
-    return 0;
-  }
-  return change->dc_end[idx];
-}
-
-/// Check if a change pointer is the simple_diffline_change sentinel.
-bool nvim_diff_is_simple_change(diffline_change_T *change)
-{
-  return change == &simple_diffline_change;
-}
-
-/// Get the skipwhite result offset.
-const char *nvim_diff_skipwhite(const char *p)
-{
-  return skipwhite(p);
-}
+                            linenr_T *lnum_new, int *count_new) { diffhunk_T hunk = { 0 }; int r = rs_parse_diff_unified(line, &hunk); if (r == OK) { *lnum_orig = hunk.lnum_orig; *count_orig = hunk.count_orig; *lnum_new = hunk.lnum_new; *count_new = hunk.count_new; } return r; }
+int nvim_diff_get_context(void) { return diff_context; }
+bool nvim_diff_hasFolding(win_T *wp, linenr_T lnum) { return hasFolding(wp, lnum, NULL, NULL); }
+bool nvim_diff_hasFolding_topline(win_T *wp, linenr_T lnum, linenr_T *topline) { return hasFolding(wp, lnum, topline, NULL); }
+bool nvim_diff_decor_conceal_line(win_T *wp, linenr_T lnum) { return decor_conceal_line(wp, lnum - 1, false); }
+void nvim_diff_invalidate_botline_win(win_T *wp) { invalidate_botline(wp); }
+void nvim_diff_changed_line_abv_curs_win(win_T *wp) { changed_line_abv_curs_win(wp); }
+void nvim_diff_check_topfill(win_T *wp, bool down) { check_topfill(wp, down); }
+void nvim_diff_setpcmark(void) { setpcmark(); }
+void nvim_diff_ex_diffupdate(void) { rs_diff_ex_diffupdate(NULL); }
+void nvim_diff_run_linematch(diff_T *dp) { run_linematch_algorithm(dp); }
+bool nvim_diffblock_get_has_changes(diff_T *dp) { if (dp == NULL) { return false; } return dp->has_changes; }
+void nvim_diffblock_set_has_changes(diff_T *dp, bool val) { if (dp != NULL) { dp->has_changes = val; } }
+void nvim_diffblock_reset_changes_len(diff_T *dp) { if (dp != NULL) { dp->df_changes.ga_len = 0; } }
+diffline_change_T *nvim_diff_get_simple_change(void) { return &simple_diffline_change; }
+void nvim_diff_compute_inline(diff_T *dp) { if (dp != NULL) { diff_find_change_inline_diff(dp); } }
+int nvim_diffchange_get_start_lnum_off(diffline_change_T *change, int idx) { if (change == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return change->dc_start_lnum_off[idx]; }
+int nvim_diffchange_get_end_lnum_off(diffline_change_T *change, int idx) { if (change == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return change->dc_end_lnum_off[idx]; }
+colnr_T nvim_diffchange_get_start(diffline_change_T *change, int idx) { if (change == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return change->dc_start[idx]; }
+colnr_T nvim_diffchange_get_end(diffline_change_T *change, int idx) { if (change == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return change->dc_end[idx]; }
+bool nvim_diff_is_simple_change(diffline_change_T *change) { return change == &simple_diffline_change; }
+const char *nvim_diff_skipwhite(const char *p) { return skipwhite(p); }
 
