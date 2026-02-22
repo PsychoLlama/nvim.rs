@@ -437,12 +437,6 @@ void ins_ctrl_x(void)
 }
 
 
-/// Accessor for Rust FFI: get curbuf->b_p_inf (infercase option).
-int nvim_curbuf_get_b_p_inf(void)
-{
-  return curbuf->b_p_inf ? 1 : 0;
-}
-
 /// Check that the 'dictionary' or 'thesaurus' option can be used.
 ///
 /// @param  dict_opt  check 'dictionary' when true, 'thesaurus' when false.
@@ -1659,30 +1653,14 @@ void *nvim_compl_get_old_match(void) { return compl_old_match; }
 void nvim_compl_set_old_match(void *m) { compl_old_match = (compl_T *)m; }
 
 // Match node accessors for Rust (using void* since compl_T is static)
-void *nvim_compl_match_get_next(void *m) {
-  return m ? ((compl_T *)m)->cp_next : NULL;
-}
-void nvim_compl_match_set_next(void *m, void *next) {
-  if (m) ((compl_T *)m)->cp_next = (compl_T *)next;
-}
-void *nvim_compl_match_get_prev(void *m) {
-  return m ? ((compl_T *)m)->cp_prev : NULL;
-}
-void nvim_compl_match_set_prev(void *m, void *prev) {
-  if (m) ((compl_T *)m)->cp_prev = (compl_T *)prev;
-}
-int nvim_compl_match_get_flags(void *m) {
-  return m ? ((compl_T *)m)->cp_flags : 0;
-}
-int nvim_compl_match_get_score(void *m) {
-  return m ? ((compl_T *)m)->cp_score : -1;
-}
-int nvim_compl_is_first_match(void *m) {
-  return m == compl_first_match ? 1 : 0;
-}
-int nvim_compl_match_at_original_text(void *m) {
-  return (m && (((compl_T *)m)->cp_flags & CP_ORIGINAL_TEXT)) ? 1 : 0;
-}
+void *nvim_compl_match_get_next(void *m) { return m ? ((compl_T *)m)->cp_next : NULL; }
+void nvim_compl_match_set_next(void *m, void *next) { if (m) ((compl_T *)m)->cp_next = (compl_T *)next; }
+void *nvim_compl_match_get_prev(void *m) { return m ? ((compl_T *)m)->cp_prev : NULL; }
+void nvim_compl_match_set_prev(void *m, void *prev) { if (m) ((compl_T *)m)->cp_prev = (compl_T *)prev; }
+int nvim_compl_match_get_flags(void *m) { return m ? ((compl_T *)m)->cp_flags : 0; }
+int nvim_compl_match_get_score(void *m) { return m ? ((compl_T *)m)->cp_score : -1; }
+int nvim_compl_is_first_match(void *m) { return m == compl_first_match ? 1 : 0; }
+int nvim_compl_match_at_original_text(void *m) { return (m && (((compl_T *)m)->cp_flags & CP_ORIGINAL_TEXT)) ? 1 : 0; }
 
 // Memory operations for Rust
 void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
@@ -1693,13 +1671,9 @@ void nvim_pum_clear(void) { pum_clear(); }
 int nvim_get_compl_match_array_exists(void) { return compl_match_array != NULL ? 1 : 0; }
 
 // Completion state accessors (used by Rust insexpand crate)
-int nvim_compl_match_get_cp_number(void *m) {
-  return m ? ((compl_T *)m)->cp_number : -1;
-}
+int nvim_compl_match_get_cp_number(void *m) { return m ? ((compl_T *)m)->cp_number : -1; }
 const char *nvim_curbuf_get_b_p_cpt(void) { return curbuf->b_p_cpt; }
-uint64_t nvim_get_cpt_start_tv(void) {
-  return cpt_sources_array[cpt_sources_index].compl_start_tv;
-}
+uint64_t nvim_get_cpt_start_tv(void) { return cpt_sources_array[cpt_sources_index].compl_start_tv; }
 uint64_t nvim_get_compl_timeout_ms(void) { return compl_timeout_ms; }
 void nvim_set_compl_time_slice_expired(int val) { compl_time_slice_expired = val != 0; }
 void nvim_decay_compl_timeout(void) { DECAY_COMPL_TIMEOUT(); }
@@ -1720,26 +1694,14 @@ void nvim_clear_edit_submode_extra(void) { edit_submode_extra = NULL; }
 void nvim_clear_compl_orig_extmarks(void) { kv_destroy(compl_orig_extmarks); }
 void nvim_compl_clear_orig_text(void) { API_CLEAR_STRING(compl_orig_text); }
 void nvim_cpt_sources_clear(void) { cpt_sources_clear(); }
-void nvim_set_completed_item_empty(void) {
-  set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
-}
+void nvim_set_completed_item_empty(void) { set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED)); }
 
 void nvim_append_char_to_redobuff(int c) { AppendCharToRedobuff(c); }
-void nvim_append_to_redobuff_lit(const char *s, int len) {
-  AppendToRedobuffLit(s, len);
-}
-int nvim_utf_head_off(const char *base, const char *p) {
-  return utf_head_off(base, p);
-}
-void nvim_compl_match_set_score(void *m, int score) {
-  if (m) { ((compl_T *)m)->cp_score = score; }
-}
-const char *nvim_compl_match_get_cp_str_data(void *m) {
-  return m ? ((compl_T *)m)->cp_str.data : NULL;
-}
-int nvim_fuzzy_match_str(char *str, const char *pat) {
-  return fuzzy_match_str(str, pat);
-}
+void nvim_append_to_redobuff_lit(const char *s, int len) { AppendToRedobuffLit(s, len); }
+int nvim_utf_head_off(const char *base, const char *p) { return utf_head_off(base, p); }
+void nvim_compl_match_set_score(void *m, int score) { if (m) { ((compl_T *)m)->cp_score = score; } }
+const char *nvim_compl_match_get_cp_str_data(void *m) { return m ? ((compl_T *)m)->cp_str.data : NULL; }
+int nvim_fuzzy_match_str(char *str, const char *pat) { return fuzzy_match_str(str, pat); }
 const char *nvim_get_leader_for_startcol_data(void *match, int cached) {
   String *s = get_leader_for_startcol((compl_T *)match, cached != 0);
   return s ? s->data : NULL;
@@ -5977,251 +5939,59 @@ void f_preinserted(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-// =============================================================================
-// Rust accessor functions for opaque handle pattern
-// =============================================================================
+// Completion state accessors (used by Rust insexpand crate)
+int nvim_get_ctrl_x_mode(void) { return ctrl_x_mode; }
+int nvim_get_compl_cont_status(void) { return compl_cont_status; }
+int nvim_get_compl_started(void) { return compl_started; }
+unsigned nvim_get_cot_flags_global(void) { return cot_flags; }
+unsigned nvim_curbuf_get_b_cot_flags(void) { return curbuf->b_cot_flags; }
+int nvim_get_compl_autocomplete(void) { return compl_autocomplete ? 1 : 0; }
+int nvim_get_compl_restarting(void) { return compl_restarting ? 1 : 0; }
+int nvim_get_compl_from_nonkeyword(void) { return compl_from_nonkeyword ? 1 : 0; }
+int nvim_get_compl_direction(void) { return compl_direction; }
+int nvim_get_compl_shows_dir(void) { return compl_shows_dir; }
+int nvim_get_p_ic(void) { return p_ic ? 1 : 0; }
+int nvim_get_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
+int nvim_get_compl_ins_end_col(void) { return compl_ins_end_col; }
+int nvim_get_p_ac(void) { return p_ac ? 1 : 0; }
+int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
+int nvim_get_compl_lnum(void) { return (int)compl_lnum; }
+int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
+const char *nvim_get_compl_leader_data(void) { return compl_leader.data; }
+size_t nvim_get_compl_leader_size(void) { return compl_leader.size; }
+const char *nvim_get_compl_orig_text_data(void) { return compl_orig_text.data; }
+size_t nvim_get_compl_orig_text_size(void) { return compl_orig_text.size; }
+int nvim_compl_shown_match_exists(void) { return compl_shown_match != NULL ? 1 : 0; }
+int nvim_get_compl_selected_item(void) { return compl_selected_item; }
+int nvim_get_pum_want_insert(void) { return pum_want.insert ? 1 : 0; }
+int nvim_pum_visible(void) { return pum_visible() ? 1 : 0; }
+int nvim_pum_get_height(void) { return pum_get_height(); }
 
-/// Get the current CTRL-X mode (accessor for Rust).
-int nvim_get_ctrl_x_mode(void)
-{
-  return ctrl_x_mode;
+// Match list and popup menu accessors (used by Rust insexpand crate)
+int nvim_compl_first_match_is_null(void) { return compl_first_match == NULL ? 1 : 0; }
+int nvim_compl_curr_match_is_null(void) { return compl_curr_match == NULL ? 1 : 0; }
+int nvim_get_compl_matches(void) { return compl_matches; }
+int nvim_get_compl_get_longest(void) { return compl_get_longest ? 1 : 0; }
+int nvim_get_compl_cont_mode(void) { return compl_cont_mode; }
+int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
+
+// Complex null-guard accessors
+int nvim_compl_shown_match_is_singular(void) {
+  return compl_shown_match ? (compl_shown_match == compl_shown_match->cp_next ? 1 : 0) : 0;
 }
-
-/// Get the completion continuation status (accessor for Rust).
-int nvim_get_compl_cont_status(void)
-{
-  return compl_cont_status;
+int nvim_compl_shown_match_is_first(void) {
+  return compl_shown_match ? (is_first_match(compl_shown_match) ? 1 : 0) : 0;
 }
-
-/// Get the completion started flag (accessor for Rust).
-int nvim_get_compl_started(void)
-{
-  return compl_started;
+size_t nvim_compl_shown_match_str_size(void) {
+  return (compl_shown_match && compl_shown_match->cp_str.data) ? compl_shown_match->cp_str.size : 0;
 }
-
-/// Get the global cot_flags value (accessor for Rust).
-unsigned nvim_get_cot_flags_global(void)
-{
-  return cot_flags;
+int nvim_compl_shown_match_has_newline(void) {
+  return (compl_shown_match && compl_shown_match->cp_str.data) ? (vim_strchr(compl_shown_match->cp_str.data, '\n') != NULL ? 1 : 0) : 0;
 }
-
-/// Get curbuf->b_cot_flags (accessor for Rust).
-unsigned nvim_curbuf_get_b_cot_flags(void)
-{
-  return curbuf->b_cot_flags;
+int nvim_compl_curr_match_at_original_text(void) {
+  return compl_curr_match ? ((compl_curr_match->cp_flags & CP_ORIGINAL_TEXT) ? 1 : 0) : 0;
 }
-
-/// Get compl_autocomplete flag (accessor for Rust).
-int nvim_get_compl_autocomplete(void)
-{
-  return compl_autocomplete ? 1 : 0;
-}
-
-/// Get compl_restarting flag (accessor for Rust).
-int nvim_get_compl_restarting(void)
-{
-  return compl_restarting ? 1 : 0;
-}
-
-/// Get compl_from_nonkeyword flag (accessor for Rust).
-int nvim_get_compl_from_nonkeyword(void)
-{
-  return compl_from_nonkeyword ? 1 : 0;
-}
-
-/// Get compl_direction (accessor for Rust).
-int nvim_get_compl_direction(void)
-{
-  return compl_direction;
-}
-
-/// Get compl_shows_dir (accessor for Rust).
-int nvim_get_compl_shows_dir(void)
-{
-  return compl_shows_dir;
-}
-
-/// Get p_ic (ignorecase option) for Rust.
-int nvim_get_p_ic(void)
-{
-  return p_ic ? 1 : 0;
-}
-
-/// Get p_inf (infercase option) for Rust.
-int nvim_get_p_inf(void)
-{
-  return curbuf->b_p_inf ? 1 : 0;
-}
-
-/// Get compl_ins_end_col for Rust.
-int nvim_get_compl_ins_end_col(void)
-{
-  return compl_ins_end_col;
-}
-
-/// Get p_ac (autocomplete global option) for Rust.
-int nvim_get_p_ac(void)
-{
-  return p_ac ? 1 : 0;
-}
-
-/// Get curbuf->b_p_ac (buffer-local autocomplete option) for Rust.
-int nvim_curbuf_get_b_p_ac(void)
-{
-  return curbuf->b_p_ac;
-}
-
-/// Get compl_lnum (line where completion started) for Rust.
-int nvim_get_compl_lnum(void)
-{
-  return (int)compl_lnum;
-}
-
-/// Get current window cursor line number for Rust.
-int nvim_get_curwin_cursor_lnum(void)
-{
-  return (int)curwin->w_cursor.lnum;
-}
-
-/// Get compl_leader data pointer for Rust.
-const char *nvim_get_compl_leader_data(void)
-{
-  return compl_leader.data;
-}
-
-/// Get compl_leader size for Rust.
-size_t nvim_get_compl_leader_size(void)
-{
-  return compl_leader.size;
-}
-
-/// Get compl_orig_text data pointer for Rust.
-const char *nvim_get_compl_orig_text_data(void)
-{
-  return compl_orig_text.data;
-}
-
-/// Get compl_orig_text size for Rust.
-size_t nvim_get_compl_orig_text_size(void)
-{
-  return compl_orig_text.size;
-}
-
-/// Check if compl_shown_match is not NULL for Rust.
-int nvim_compl_shown_match_exists(void)
-{
-  return compl_shown_match != NULL ? 1 : 0;
-}
-
-/// Check if compl_shown_match equals its cp_next (singular list check) for Rust.
-int nvim_compl_shown_match_is_singular(void)
-{
-  if (compl_shown_match == NULL) {
-    return 0;
-  }
-  return compl_shown_match == compl_shown_match->cp_next ? 1 : 0;
-}
-
-/// Check if compl_shown_match is the first match (original text) for Rust.
-int nvim_compl_shown_match_is_first(void)
-{
-  if (compl_shown_match == NULL) {
-    return 0;
-  }
-  return is_first_match(compl_shown_match) ? 1 : 0;
-}
-
-/// Get compl_shown_match->cp_str.size for Rust.
-size_t nvim_compl_shown_match_str_size(void)
-{
-  if (compl_shown_match == NULL || compl_shown_match->cp_str.data == NULL) {
-    return 0;
-  }
-  return compl_shown_match->cp_str.size;
-}
-
-/// Check if compl_shown_match->cp_str.data contains newline for Rust.
-int nvim_compl_shown_match_has_newline(void)
-{
-  if (compl_shown_match == NULL || compl_shown_match->cp_str.data == NULL) {
-    return 0;
-  }
-  return vim_strchr(compl_shown_match->cp_str.data, '\n') != NULL ? 1 : 0;
-}
-
-/// Get compl_selected_item for Rust.
-int nvim_get_compl_selected_item(void)
-{
-  return compl_selected_item;
-}
-
-/// Get pum_want.insert for Rust.
-int nvim_get_pum_want_insert(void)
-{
-  return pum_want.insert ? 1 : 0;
-}
-
-/// Check if popup menu is visible for Rust.
-int nvim_pum_visible(void)
-{
-  return pum_visible() ? 1 : 0;
-}
-
-/// Get popup menu height for Rust.
-int nvim_pum_get_height(void)
-{
-  return pum_get_height();
-}
-
-// =============================================================================
-// Match list accessors for Rust (Phase 4)
-// =============================================================================
-
-/// Check if compl_first_match is NULL for Rust.
-int nvim_compl_first_match_is_null(void)
-{
-  return compl_first_match == NULL ? 1 : 0;
-}
-
-/// Check if compl_curr_match is NULL for Rust.
-int nvim_compl_curr_match_is_null(void)
-{
-  return compl_curr_match == NULL ? 1 : 0;
-}
-
-/// Check if compl_curr_match exists and has original text flag for Rust.
-int nvim_compl_curr_match_at_original_text(void)
-{
-  if (compl_curr_match == NULL) {
-    return 0;
-  }
-  return (compl_curr_match->cp_flags & CP_ORIGINAL_TEXT) ? 1 : 0;
-}
-
-/// Get compl_matches count for Rust.
-int nvim_get_compl_matches(void)
-{
-  return compl_matches;
-}
-
-/// Get compl_get_longest flag for Rust.
-int nvim_get_compl_get_longest(void)
-{
-  return compl_get_longest ? 1 : 0;
-}
-
-/// Get compl_cont_mode for Rust.
-int nvim_get_compl_cont_mode(void)
-{
-  return compl_cont_mode;
-}
-
-/// Check if compl_curr_match->cp_str.data is not NULL for Rust.
-int nvim_compl_curr_match_has_str(void)
-{
-  if (compl_curr_match == NULL) {
-    return 0;
-  }
-  return compl_curr_match->cp_str.data != NULL ? 1 : 0;
+int nvim_compl_curr_match_has_str(void) {
+  return compl_curr_match ? (compl_curr_match->cp_str.data != NULL ? 1 : 0) : 0;
 }
 
