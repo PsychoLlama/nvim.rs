@@ -677,6 +677,12 @@ win_T *swbuf_goto_win_with_buf(buf_T *buf)
 static OptInt min_set_ch = 1;
 
 OptInt nvim_get_min_set_ch(void) { return min_set_ch; }
+void nvim_set_cmdheight_option(int64_t new_ch)
+{
+  const OptInt save_ch = min_set_ch;
+  set_option_value(kOptCmdheight, NUMBER_OPTVAL(new_ch), 0);
+  min_set_ch = save_ch;
+}
 
 extern void rs_win_equal(win_T *next_curwin, int current, int dir);
 
@@ -2332,98 +2338,10 @@ static tabpage_T *alt_tabpage(void)
 /// @param wfh       obey 'winfixheight' when there is a choice;
 ///                  may cause the height not to be set.
 /// @param set_ch    set 'cmdheight' to resize topframe.
+/// Set height of a frame (thin wrapper -- implementation is in Rust).
 void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool set_ch)
-  FUNC_ATTR_NONNULL_ALL
 {
-  if (topfrp->fr_parent == NULL && set_ch) {
-    // topframe: update the command line height, with side effects.
-    OptInt new_ch = MAX(min_set_ch, p_ch + topfrp->fr_height - height);
-    if (new_ch != p_ch) {
-      const OptInt save_ch = min_set_ch;
-      set_option_value(kOptCmdheight, NUMBER_OPTVAL(new_ch), 0);
-      min_set_ch = save_ch;
-    }
-    height = (int)MIN(ROWS_AVAIL, height);
-  }
-  if (topfrp->fr_win != NULL) {
-    // Simple case: just one window.
-    win_T *wp = topfrp->fr_win;
-    if (rs_is_bottom_win(wp)) {
-      wp->w_hsep_height = 0;
-    }
-    rs_win_new_height(wp, height - wp->w_hsep_height - wp->w_status_height);
-  } else if (topfrp->fr_layout == FR_ROW) {
-    frame_T *frp;
-    do {
-      // All frames in this row get the same new height.
-      FOR_ALL_FRAMES(frp, topfrp->fr_child) {
-        frame_new_height(frp, height, topfirst, wfh, set_ch);
-        if (frp->fr_height > height) {
-          // Could not fit the windows, make the whole row higher.
-          height = frp->fr_height;
-          break;
-        }
-      }
-    } while (frp != NULL);
-  } else {  // fr_layout == FR_COL
-    // Complicated case: Resize a column of frames.  Resize the bottom
-    // frame first, frames above that when needed.
-
-    frame_T *frp = topfrp->fr_child;
-    if (wfh) {
-      // Advance past frames with one window with 'wfh' set.
-      while (rs_frame_fixed_height(frp)) {
-        frp = frp->fr_next;
-        if (frp == NULL) {
-          return;                   // no frame without 'wfh', give up
-        }
-      }
-    }
-    if (!topfirst) {
-      // Find the bottom frame of this column
-      while (frp->fr_next != NULL) {
-        frp = frp->fr_next;
-      }
-      if (wfh) {
-        // Advance back for frames with one window with 'wfh' set.
-        while (rs_frame_fixed_height(frp)) {
-          frp = frp->fr_prev;
-        }
-      }
-    }
-
-    int extra_lines = height - topfrp->fr_height;
-    if (extra_lines < 0) {
-      // reduce height of contained frames, bottom or top frame first
-      while (frp != NULL) {
-        int h = rs_frame_minheight(frp, NULL);
-        if (frp->fr_height + extra_lines < h) {
-          extra_lines += frp->fr_height - h;
-          frame_new_height(frp, h, topfirst, wfh, set_ch);
-        } else {
-          frame_new_height(frp, frp->fr_height + extra_lines, topfirst, wfh, set_ch);
-          break;
-        }
-        if (topfirst) {
-          do {
-            frp = frp->fr_next;
-          } while (wfh && frp != NULL && rs_frame_fixed_height(frp));
-        } else {
-          do {
-            frp = frp->fr_prev;
-          } while (wfh && frp != NULL && rs_frame_fixed_height(frp));
-        }
-        // Increase "height" if we could not reduce enough frames.
-        if (frp == NULL) {
-          height -= extra_lines;
-        }
-      }
-    } else if (extra_lines > 0) {
-      // increase height of bottom or top frame
-      frame_new_height(frp, frp->fr_height + extra_lines, topfirst, wfh, set_ch);
-    }
-  }
-  topfrp->fr_height = height;
+  rs_frame_new_height(topfrp, height, topfirst, wfh, set_ch);
 }
 
 /// Set width of a frame (thin wrapper -- implementation is in Rust).

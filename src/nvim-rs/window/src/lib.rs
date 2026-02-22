@@ -1589,15 +1589,6 @@ extern "C" {
     /// Set the fr_width field of a frame.
     fn nvim_frame_set_width(frp: *mut Frame, val: c_int);
 
-    /// Wrapper for frame_new_height().
-    fn nvim_frame_new_height(
-        topfrp: *mut Frame,
-        height: c_int,
-        topfirst: bool,
-        wfh: bool,
-        set_ch: bool,
-    );
-
     /// Wrapper for win_config_float().
     fn nvim_win_config_float(wp: WinHandle);
 
@@ -1721,7 +1712,7 @@ fn frame_setheight_impl(curfrp: *mut Frame, mut height: c_int) {
         if frame.fr_parent.is_null() {
             // topframe: can only change the command line height
             if height > 0 {
-                nvim_frame_new_height(curfrp, height, false, false, true);
+                crate::resize::frame::frame_new_height_impl(curfrp, height, false, false, true);
             }
         } else if (*frame.fr_parent).fr_layout == FR_ROW {
             // Row of frames: Also need to resize frames left and right of this one.
@@ -1815,7 +1806,7 @@ fn frame_setheight_impl(curfrp: *mut Frame, mut height: c_int) {
             }
 
             // set the current frame to the new height
-            nvim_frame_new_height(curfrp, height, false, false, true);
+            crate::resize::frame::frame_new_height_impl(curfrp, height, false, false, true);
 
             // First take lines from the frames after the current frame.
             // If that is not enough, takes lines from frames above the current frame.
@@ -1840,14 +1831,26 @@ fn frame_setheight_impl(curfrp: *mut Frame, mut height: c_int) {
                                 room_reserved = fr.fr_height - take;
                             }
                             take -= fr.fr_height - room_reserved;
-                            nvim_frame_new_height(frp, room_reserved, false, false, true);
+                            crate::resize::frame::frame_new_height_impl(
+                                frp,
+                                room_reserved,
+                                false,
+                                false,
+                                true,
+                            );
                             room_reserved = 0;
                         }
                     } else if fr.fr_height - take < h {
                         take -= fr.fr_height - h;
-                        nvim_frame_new_height(frp, h, false, false, true);
+                        crate::resize::frame::frame_new_height_impl(frp, h, false, false, true);
                     } else {
-                        nvim_frame_new_height(frp, fr.fr_height - take, false, false, true);
+                        crate::resize::frame::frame_new_height_impl(
+                            frp,
+                            fr.fr_height - take,
+                            false,
+                            false,
+                            true,
+                        );
                         take = 0;
                     }
                     frp = if run == 0 { fr.fr_next } else { fr.fr_prev };
@@ -2164,7 +2167,13 @@ fn win_drag_status_line_impl(dragwin: WinHandle, mut offset: c_int) {
         // Grow frame fr by "offset" lines.
         // Doesn't happen when dragging the last status line up.
         if !fr.is_null() {
-            nvim_frame_new_height(fr, (*fr).fr_height + offset, up, false, true);
+            crate::resize::frame::frame_new_height_impl(
+                fr,
+                (*fr).fr_height + offset,
+                up,
+                false,
+                true,
+            );
         }
 
         let shrink_fr = if up {
@@ -2180,9 +2189,15 @@ fn win_drag_status_line_impl(dragwin: WinHandle, mut offset: c_int) {
             let n = frame_minheight_impl(frp, WinHandle::null());
             if (*frp).fr_height - remaining <= n {
                 remaining -= (*frp).fr_height - n;
-                nvim_frame_new_height(frp, n, !up, false, true);
+                crate::resize::frame::frame_new_height_impl(frp, n, !up, false, true);
             } else {
-                nvim_frame_new_height(frp, (*frp).fr_height - remaining, !up, false, true);
+                crate::resize::frame::frame_new_height_impl(
+                    frp,
+                    (*frp).fr_height - remaining,
+                    !up,
+                    false,
+                    true,
+                );
                 break;
             }
             frp = if up { (*frp).fr_prev } else { (*frp).fr_next };
@@ -2351,7 +2366,7 @@ pub extern "C" fn rs_win_drag_vsep_line(dragwin: WinHandle, offset: c_int) {
 }
 
 /// FFI wrapper for `frame_new_height`.
-/// Delegates to the C implementation which handles complex cmdheight logic.
+/// Calls the Rust implementation directly.
 #[no_mangle]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn rs_frame_new_height(
@@ -2361,8 +2376,19 @@ pub extern "C" fn rs_frame_new_height(
     wfh: c_int,
     set_ch: c_int,
 ) {
-    // SAFETY: nvim_frame_new_height is a C function that handles the pointer
-    unsafe { nvim_frame_new_height(topfrp, height, topfirst != 0, wfh != 0, set_ch != 0) }
+    if topfrp.is_null() {
+        return;
+    }
+    // SAFETY: topfrp is non-null and points to a valid Frame.
+    unsafe {
+        crate::resize::frame::frame_new_height_impl(
+            topfrp,
+            height,
+            topfirst != 0,
+            wfh != 0,
+            set_ch != 0,
+        );
+    }
 }
 
 /// FFI wrapper for `frame_new_width`.
@@ -2398,7 +2424,7 @@ fn frame_add_height_impl(frp: *mut Frame, n: c_int) {
     // SAFETY: Frame pointer is valid and we're calling FFI functions
     unsafe {
         let frame = &*frp;
-        nvim_frame_new_height(frp, frame.fr_height + n, false, false, false);
+        crate::resize::frame::frame_new_height_impl(frp, frame.fr_height + n, false, false, false);
 
         let mut parent = frame.fr_parent;
         while !parent.is_null() {

@@ -45,6 +45,40 @@ extern "C" {
 
     /// Set w_vsep_width on a window.
     fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
+
+    /// Check if frame has fixed height (winfixheight set).
+    fn rs_frame_fixed_height(frp: *const Frame) -> c_int;
+
+    /// Get minimum height of a frame.
+    fn rs_frame_minheight(topfrp: *const Frame, next_curwin: WinHandle) -> c_int;
+
+    /// Set new height of a window.
+    fn rs_win_new_height(wp: WinHandle, height: c_int);
+
+    /// Check if a window is at the bottom of the screen.
+    fn rs_is_bottom_win(wp: WinHandle) -> c_int;
+
+    /// Get w_hsep_height from a window.
+    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
+
+    /// Set w_hsep_height on a window.
+    fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
+
+    /// Get w_status_height from a window.
+    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
+
+    /// Set cmdheight option value, with save/restore of min_set_ch around the
+    /// set_option_value call.
+    fn nvim_set_cmdheight_option(new_ch: i64);
+
+    /// Get p_ch (global cmdheight option value).
+    fn nvim_get_window_p_ch() -> i64;
+
+    /// Get min_set_ch (minimum cmdheight as set by user).
+    fn nvim_get_min_set_ch() -> i64;
+
+    /// Get ROWS_AVAIL (usable screen rows).
+    fn nvim_get_rows_avail() -> c_int;
 }
 
 // =============================================================================
@@ -433,6 +467,146 @@ pub(crate) unsafe fn frame_new_width_impl(
     }
 
     (*topfrp).fr_width = width;
+}
+
+/// Recursively set the height of a frame tree.
+///
+/// This is the Rust implementation of `frame_new_height()` from `window_shim.c`.
+///
+/// Handles:
+/// - Top-frame + set_ch: adjusts command-line height (with save/restore of
+///   min_set_ch), then clamps height to ROWS_AVAIL
+/// - FR_LEAF (fr_win != NULL): clears `w_hsep_height` if bottom window, then
+///   calls `rs_win_new_height`
+/// - FR_ROW: propagates same height to all children, restarting if any child
+///   ends up taller
+/// - FR_COL: distributes extra lines starting from topmost or bottommost
+///   non-fixed-height frame
+///
+/// # Safety
+/// `topfrp` must be non-null and point to a valid Frame.
+pub(crate) unsafe fn frame_new_height_impl(
+    topfrp: *mut Frame,
+    mut height: c_int,
+    topfirst: bool,
+    wfh: bool,
+    set_ch: bool,
+) {
+    if (*topfrp).fr_parent.is_null() && set_ch {
+        // topframe: update the command line height, with side effects.
+        let p_ch = nvim_get_window_p_ch() as c_int;
+        let min_set_ch = nvim_get_min_set_ch() as c_int;
+        let new_ch = std::cmp::max(min_set_ch, p_ch + (*topfrp).fr_height - height);
+        if new_ch != p_ch {
+            nvim_set_cmdheight_option(i64::from(new_ch));
+        }
+        height = std::cmp::min(nvim_get_rows_avail(), height);
+    }
+
+    if !(*topfrp).fr_win.is_null() {
+        // Simple case: just one window.
+        let wp = (*topfrp).fr_win;
+        if rs_is_bottom_win(wp) != 0 {
+            nvim_win_set_hsep_height(wp, 0);
+        }
+        rs_win_new_height(
+            wp,
+            height - nvim_win_get_hsep_height(wp) - nvim_win_get_status_height(wp),
+        );
+    } else if (*topfrp).fr_layout == FR_ROW {
+        // All frames in this row get the same new height.
+        loop {
+            let mut frp = (*topfrp).fr_child;
+            let mut restart = false;
+            while !frp.is_null() {
+                frame_new_height_impl(frp, height, topfirst, wfh, set_ch);
+                if (*frp).fr_height > height {
+                    // Could not fit the windows, make the whole row higher.
+                    height = (*frp).fr_height;
+                    restart = true;
+                    break;
+                }
+                frp = (*frp).fr_next;
+            }
+            if !restart {
+                break;
+            }
+        }
+    } else {
+        // FR_COL: resize a column of frames. Resize the bottom (or top) frame
+        // first, frames above (or below) that when needed.
+        let mut frp = (*topfrp).fr_child;
+
+        if wfh {
+            // Advance past frames with 'winfixheight' set.
+            while rs_frame_fixed_height(frp) != 0 {
+                frp = (*frp).fr_next;
+                if frp.is_null() {
+                    // No frame without wfh, give up.
+                    (*topfrp).fr_height = height;
+                    return;
+                }
+            }
+        }
+
+        if !topfirst {
+            // Find the bottom frame of this column.
+            while !(*frp).fr_next.is_null() {
+                frp = (*frp).fr_next;
+            }
+            if wfh {
+                // Advance back past frames with 'winfixheight' set.
+                while rs_frame_fixed_height(frp) != 0 {
+                    frp = (*frp).fr_prev;
+                }
+            }
+        }
+
+        let mut extra_lines = height - (*topfrp).fr_height;
+        if extra_lines < 0 {
+            // Reduce height of contained frames, bottom or top frame first.
+            while !frp.is_null() {
+                let h = rs_frame_minheight(frp, WinHandle::null());
+                if (*frp).fr_height + extra_lines < h {
+                    extra_lines += (*frp).fr_height - h;
+                    frame_new_height_impl(frp, h, topfirst, wfh, set_ch);
+                } else {
+                    frame_new_height_impl(
+                        frp,
+                        (*frp).fr_height + extra_lines,
+                        topfirst,
+                        wfh,
+                        set_ch,
+                    );
+                    break;
+                }
+                if topfirst {
+                    loop {
+                        frp = (*frp).fr_next;
+                        if !(wfh && !frp.is_null() && rs_frame_fixed_height(frp) != 0) {
+                            break;
+                        }
+                    }
+                } else {
+                    loop {
+                        frp = (*frp).fr_prev;
+                        if !(wfh && !frp.is_null() && rs_frame_fixed_height(frp) != 0) {
+                            break;
+                        }
+                    }
+                }
+                // Increase "height" if we could not reduce enough frames.
+                if frp.is_null() {
+                    height -= extra_lines;
+                }
+            }
+        } else if extra_lines > 0 {
+            // Increase height of bottom or top frame.
+            frame_new_height_impl(frp, (*frp).fr_height + extra_lines, topfirst, wfh, set_ch);
+        }
+    }
+
+    (*topfrp).fr_height = height;
 }
 
 // =============================================================================

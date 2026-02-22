@@ -86,15 +86,6 @@ extern "C" {
     /// Check if frame has fixed width.
     fn rs_frame_fixed_width(frp: *const Frame) -> c_int;
 
-    /// Call frame_new_height (C wrapper).
-    fn nvim_frame_new_height(
-        topfrp: *mut Frame,
-        height: c_int,
-        topfirst: bool,
-        wfh: bool,
-        set_ch: bool,
-    );
-
     /// Call redraw_all_later (C wrapper).
     fn nvim_redraw_all_later(redraw_type: c_int);
 
@@ -515,7 +506,7 @@ fn win_equal_rec_impl(
                     || win_col != col
                 {
                     nvim_win_set_winrow(wp, row);
-                    nvim_frame_new_height(topfr, height, false, false, false);
+                    crate::resize::frame::frame_new_height_impl(topfr, height, false, false, false);
                     nvim_win_set_wincol(wp, col);
                     crate::resize::frame::frame_new_width_impl(topfr, width, false, false);
                     nvim_redraw_all_later(UPD_NOT_VALID);
