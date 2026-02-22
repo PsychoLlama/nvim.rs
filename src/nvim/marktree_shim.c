@@ -307,8 +307,8 @@ void marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_rig
     marktree_put_key(b, end_key);
     MarkTreeIter itr[1] = { 0 };
     MarkTreeIter end_itr[1] = { 0 };
-    marktree_lookup(b, mt_lookup_key(key), itr);
-    marktree_lookup(b, mt_lookup_key(end_key), end_itr);
+    rs_marktree_lookup(b, mt_lookup_key(key), itr);
+    rs_marktree_lookup(b, mt_lookup_key(end_key), end_itr);
 
     marktree_intersect_pair(b, mt_lookup_key(key), itr, end_itr, false);
   }
@@ -422,7 +422,7 @@ void marktree_intersect_pair(MarkTree *b, uint64_t id, MarkTreeIter *itr, MarkTr
         }
       }
     }
-    marktree_itr_next_skip(b, itr, skip, true, NULL, NULL);
+    rs_marktree_itr_next_skip(b, itr,skip, true, NULL, NULL);
   }
 #undef iat
 }
@@ -536,7 +536,7 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
     other = mt_lookup_key_side(raw, !mt_end(raw));
 
     MarkTreeIter other_itr[1];
-    marktree_lookup(b, other, other_itr);
+    rs_marktree_lookup(b, other, other_itr);
     rawkey(other_itr).flags |= MT_FLAG_ORPHANED;
     // Remove intersect markers. NB: must match exactly!
     if (mt_start(raw)) {
@@ -553,7 +553,7 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
       abort();
     } else {
       // steal previous node
-      marktree_itr_prev(b, itr);
+      rs_marktree_itr_prev(b, itr);
       adjustment = -1;
     }
   }
@@ -732,7 +732,7 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
   }
 
   if (itr->x && itr_dirty) {
-    marktree_itr_fix_pos(b, itr);
+    rs_marktree_itr_fix_pos(b, itr);
   }
 
   // BONUS STEP: fix the iterator, so that it points to the key afterwards
@@ -1359,8 +1359,8 @@ void marktree_restore_pair(MarkTree *b, MTKey key)
 {
   MarkTreeIter itr[1];
   MarkTreeIter end_itr[1];
-  marktree_lookup(b, mt_lookup_key_side(key, false), itr);
-  marktree_lookup(b, mt_lookup_key_side(key, true), end_itr);
+  rs_marktree_lookup(b, mt_lookup_key_side(key, false), itr);
+  rs_marktree_lookup(b, mt_lookup_key_side(key, true), end_itr);
   if (!itr->x || !end_itr->x) {
     // this could happen if the other end is waiting to be restored later
     // this function will be called again for the other end.
@@ -1372,38 +1372,14 @@ void marktree_restore_pair(MarkTree *b, MTKey key)
   marktree_intersect_pair(b, mt_lookup_key_side(key, false), itr, end_itr, false);
 }
 
-// itr functions
-
 bool marktree_itr_get(MarkTree *b, int32_t row, int col, MarkTreeIter *itr)
 {
   return rs_marktree_itr_get(b, row, col, itr);
 }
 
-bool marktree_itr_get_ext(MarkTree *b, MTPos p, MarkTreeIter *itr, bool last, bool gravity,
-                          MTPos *oldbase, MetaFilter meta_filter)
-{
-  return rs_marktree_itr_get_ext_full(b, p, itr, last, gravity, oldbase, meta_filter);
-}
-
-bool marktree_itr_first(MarkTree *b, MarkTreeIter *itr)
-{
-  return rs_marktree_itr_first(b, itr);
-}
-
-int marktree_itr_last(MarkTree *b, MarkTreeIter *itr)
-{
-  return rs_marktree_itr_last(b, itr);
-}
-
 bool marktree_itr_next(MarkTree *b, MarkTreeIter *itr)
 {
   return rs_marktree_itr_next(b, itr);
-}
-
-static bool marktree_itr_next_skip(MarkTree *b, MarkTreeIter *itr, bool skip, bool preload,
-                                   MTPos oldbase[], MetaFilter meta_filter)
-{
-  return rs_marktree_itr_next_skip(b, itr, skip, preload, oldbase, meta_filter);
 }
 
 bool marktree_itr_get_filter(MarkTree *b, int32_t row, int col, int stop_row, int stop_col,
@@ -1421,21 +1397,6 @@ bool marktree_itr_next_filter(MarkTree *b, MarkTreeIter *itr, int stop_row, int 
                               MetaFilter meta_filter)
 {
   return rs_marktree_itr_next_filter(b, itr, stop_row, stop_col, meta_filter);
-}
-
-bool marktree_itr_prev(MarkTree *b, MarkTreeIter *itr)
-{
-  return rs_marktree_itr_prev(b, itr);
-}
-
-bool marktree_itr_node_done(MarkTreeIter *itr)
-{
-  return rs_marktree_itr_node_done(itr);
-}
-
-MTPos marktree_itr_pos(MarkTreeIter *itr)
-{
-  return rs_marktree_itr_pos(itr);
 }
 
 MTKey marktree_itr_current(MarkTreeIter *itr)
@@ -1548,7 +1509,7 @@ bool marktree_splice(MarkTree *b, int32_t start_line, int start_col, int old_ext
 
   MTPos oldbase[MT_MAX_DEPTH] = { 0 };
 
-  marktree_itr_get_ext(b, start, itr, false, true, oldbase, NULL);
+  rs_marktree_itr_get_ext_full(b, start, itr, false, true, oldbase, NULL);
   if (!itr->x) {
     // den e FÄRDIG
     return false;
@@ -1557,11 +1518,11 @@ bool marktree_splice(MarkTree *b, int32_t start_line, int start_col, int old_ext
                   new_extent.col - old_extent.col };
 
   if (may_delete) {
-    MTPos ipos = marktree_itr_pos(itr);
+    MTPos ipos = rs_marktree_itr_pos(itr);
     if (!rs_pos_leq(old_extent, ipos)
         || (old_extent.row == ipos.row && old_extent.col == ipos.col
             && !mt_right(rawkey(itr)))) {
-      marktree_itr_get_ext(b, old_extent, enditr, true, true, NULL, NULL);
+      rs_marktree_itr_get_ext_full(b, old_extent, enditr, true, true, NULL, NULL);
       assert(enditr->x);
       // "assert" (itr <= enditr)
     } else {
@@ -1595,7 +1556,7 @@ continue_same_node:
       if (mt_right(rawkey(itr))) {
         while (!itr_eq(itr, enditr)
                && mt_right(rawkey(enditr))) {
-          marktree_itr_prev(b, enditr);
+          rs_marktree_itr_prev(b, enditr);
         }
         if (!mt_right(rawkey(enditr))) {
           swap_keys(b, itr, enditr, &damage);
@@ -1616,7 +1577,7 @@ continue_same_node:
         oldbase[itr->lvl + 1] = rawkey(itr).pos;
         rs_unrelative(oldbase[itr->lvl], &oldbase[itr->lvl + 1]);
         rawkey(itr).pos = loc_start;
-        marktree_itr_next_skip(b, itr, false, false, oldbase, NULL);
+        rs_marktree_itr_next_skip(b, itr,false, false, oldbase, NULL);
       } else {
         rawkey(itr).pos = loc_start;
         if (itr->i < itr->x->n - 1) {
@@ -1649,7 +1610,7 @@ past_continue_same_node:
         oldbase[itr->lvl + 1] = oldpos;
         rs_unrelative(oldbase[itr->lvl], &oldbase[itr->lvl + 1]);
 
-        marktree_itr_next_skip(b, itr, false, false, oldbase, NULL);
+        rs_marktree_itr_next_skip(b, itr,false, false, oldbase, NULL);
       } else {
         if (itr->i < itr->x->n - 1) {
           itr->i++;
@@ -1684,7 +1645,7 @@ past_continue_same_node:
     if (done) {
       break;
     }
-    marktree_itr_next_skip(b, itr, true, false, NULL, NULL);
+    rs_marktree_itr_next_skip(b, itr,true, false, NULL, NULL);
   }
 
   if (kv_size(damage)) {
@@ -1702,11 +1663,11 @@ past_continue_same_node:
           Damage d2 = kv_A(damage, i + 1);
 
           // pair
-          marktree_itr_set_node(b, itr, d.old, d.old_i);
-          marktree_itr_set_node(b, enditr, d2.old, d2.old_i);
+          rs_marktree_itr_set_node(b,itr, d.old, d.old_i);
+          rs_marktree_itr_set_node(b,enditr, d2.old, d2.old_i);
           marktree_intersect_pair(b, d.id, itr, enditr, true);
-          marktree_itr_set_node(b, itr, d.new, d.new_i);
-          marktree_itr_set_node(b, enditr, d2.new, d2.new_i);
+          rs_marktree_itr_set_node(b,itr, d.new, d.new_i);
+          rs_marktree_itr_set_node(b,enditr, d2.new, d2.new_i);
           marktree_intersect_pair(b, d.id, itr, enditr, false);
 
           i++;  // consume two items
@@ -1715,12 +1676,12 @@ past_continue_same_node:
 
         // d is lone start, end didn't move
         MarkTreeIter endpos[1];
-        marktree_lookup(b, d.id | MARKTREE_END_FLAG, endpos);
+        rs_marktree_lookup(b, d.id | MARKTREE_END_FLAG, endpos);
         if (endpos->x) {
-          marktree_itr_set_node(b, itr, d.old, d.old_i);
+          rs_marktree_itr_set_node(b,itr, d.old, d.old_i);
           *enditr = *endpos;
           marktree_intersect_pair(b, d.id, itr, enditr, true);
-          marktree_itr_set_node(b, itr, d.new, d.new_i);
+          rs_marktree_itr_set_node(b,itr, d.new, d.new_i);
           *enditr = *endpos;
           marktree_intersect_pair(b, d.id, itr, enditr, false);
         }
@@ -1729,13 +1690,13 @@ past_continue_same_node:
         MarkTreeIter startpos[1];
         uint64_t start_id = d.id & ~MARKTREE_END_FLAG;
 
-        marktree_lookup(b, start_id, startpos);
+        rs_marktree_lookup(b, start_id, startpos);
         if (startpos->x) {
           *itr = *startpos;
-          marktree_itr_set_node(b, enditr, d.old, d.old_i);
+          rs_marktree_itr_set_node(b,enditr, d.old, d.old_i);
           marktree_intersect_pair(b, start_id, itr, enditr, true);
           *itr = *startpos;
-          marktree_itr_set_node(b, enditr, d.new, d.new_i);
+          rs_marktree_itr_set_node(b,enditr, d.new, d.new_i);
           marktree_intersect_pair(b, start_id, itr, enditr, false);
         }
       }
@@ -1754,7 +1715,7 @@ void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int ext
   MTPos end = size;
   rs_unrelative(start, &end);
   MarkTreeIter itr[1] = { 0 };
-  marktree_itr_get_ext(b, start, itr, false, true, NULL, NULL);
+  rs_marktree_itr_get_ext_full(b, start, itr, false, true, NULL, NULL);
   kvec_t(MTKey) saved = KV_INITIAL_VALUE;
   while (itr->x) {
     MTKey k = marktree_itr_current(itr);
@@ -1830,31 +1791,9 @@ static uint64_t pseudo_index_for_id(MarkTree *b, uint64_t id, bool sloppy)
   return pseudo_index(n, i);
 }
 
-/// @param itr OPTIONAL. set itr to pos.
-MTKey marktree_lookup(MarkTree *b, uint64_t id, MarkTreeIter *itr)
-{
-  return rs_marktree_lookup(b, id, itr);
-}
-
-MTKey marktree_itr_set_node(MarkTree *b, MarkTreeIter *itr, MTNode *n, int i)
-{
-  return rs_marktree_itr_set_node(b, itr, n, i);
-}
-
 MTPos marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr)
 {
   return rs_marktree_get_altpos(b, mark, itr);
-}
-
-/// @return alt mark for a paired mark or mark itself for unpaired mark
-MTKey marktree_get_alt(MarkTree *b, MTKey mark, MarkTreeIter *itr)
-{
-  return rs_marktree_get_alt(b, mark, itr);
-}
-
-static void marktree_itr_fix_pos(MarkTree *b, MarkTreeIter *itr)
-{
-  rs_marktree_itr_fix_pos(b, itr);
 }
 
 // for unit test
@@ -1883,7 +1822,7 @@ void marktree_del_pair_test(MarkTree *b, uint32_t ns, uint32_t id)
 
   uint64_t other = marktree_del_itr(b, itr, false);
   assert(other);
-  marktree_lookup(b, other, itr);
+  rs_marktree_lookup(b, other, itr);
   marktree_del_itr(b, itr, false);
 }
 
@@ -1974,7 +1913,7 @@ bool marktree_check_intersections(MarkTree *b)
   // 2. iterate over all marks. for each START mark of a pair,
   // intersect the nodes between the pair
   MarkTreeIter itr[1];
-  marktree_itr_first(b, itr);
+  rs_marktree_itr_first(b, itr);
   while (true) {
     MTKey mark = marktree_itr_current(itr);
     if (mark.pos.row < 0) {
@@ -1985,7 +1924,7 @@ bool marktree_check_intersections(MarkTree *b)
       MarkTreeIter start_itr[1];
       MarkTreeIter end_itr[1];
       uint64_t end_id = mt_lookup_id(mark.ns, mark.id, true);
-      MTKey k = marktree_lookup(b, end_id, end_itr);
+      MTKey k = rs_marktree_lookup(b, end_id, end_itr);
       if (k.pos.row >= 0) {
         *start_itr = *itr;
         marktree_intersect_pair(b, mt_lookup_key(mark), start_itr, end_itr, false);
@@ -2217,9 +2156,9 @@ void nvim_mtitr_set_s_oldcol(MarkTreeIter *itr, int lvl, int oldcol) { itr->s[lv
 // Lookup and Pair Functions (for Rust FFI)
 // ============================================================================
 
-MTKey nvim_marktree_lookup(MarkTree *b, uint64_t id, MarkTreeIter *itr) { return marktree_lookup(b, id, itr); }
+MTKey nvim_marktree_lookup(MarkTree *b, uint64_t id, MarkTreeIter *itr) { return rs_marktree_lookup(b, id, itr); }
 MTKey nvim_marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool end, MarkTreeIter *itr) { return marktree_lookup_ns(b, ns, id, end, itr); }
-MTKey nvim_marktree_get_alt(MarkTree *b, MTKey mark, MarkTreeIter *itr) { return marktree_get_alt(b, mark, itr); }
+MTKey nvim_marktree_get_alt(MarkTree *b, MTKey mark, MarkTreeIter *itr) { return rs_marktree_get_alt(b, mark, itr); }
 MTPos nvim_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr) { return marktree_get_altpos(b, mark, itr); }
 
 // ============================================================================
@@ -2254,7 +2193,7 @@ void nvim_mtitr_set_intersect_idx(MarkTreeIter *itr, size_t idx) { itr->intersec
 
 bool nvim_marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeIter *itr) { return marktree_itr_get_overlap(b, row, col, itr); }
 bool nvim_marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair) { return marktree_itr_step_overlap(b, itr, pair); }
-void nvim_marktree_itr_get_ext_simple(MarkTree *b, int row, int col, MarkTreeIter *itr) { marktree_itr_get_ext(b, MTPos(row, col), itr, false, false, NULL, NULL); }
+void nvim_marktree_itr_get_ext_simple(MarkTree *b, int row, int col, MarkTreeIter *itr) { rs_marktree_itr_get_ext_full(b, MTPos(row, col), itr, false, false, NULL, NULL); }
 
 // ============================================================================
 // Node Intersection Accessor Functions (for Rust FFI)
@@ -2309,8 +2248,8 @@ uint64_t nvim_pseudo_index(MTNode *x, int i)
 }
 
 uint64_t nvim_pseudo_index_for_id(MarkTree *b, uint64_t id, bool sloppy) { return pseudo_index_for_id(b, id, sloppy); }
-MTKey nvim_marktree_itr_set_node(MarkTree *b, MarkTreeIter *itr, MTNode *n, int i) { return marktree_itr_set_node(b, itr, n, i); }
-void nvim_marktree_itr_fix_pos(MarkTree *b, MarkTreeIter *itr) { marktree_itr_fix_pos(b, itr); }
+MTKey nvim_marktree_itr_set_node(MarkTree *b, MarkTreeIter *itr, MTNode *n, int i) { return rs_marktree_itr_set_node(b, itr, n, i); }
+void nvim_marktree_itr_fix_pos(MarkTree *b, MarkTreeIter *itr) { rs_marktree_itr_fix_pos(b, itr); }
 void nvim_meta_describe_key_inc(uint32_t *meta_inc, MTKey *k) { meta_describe_key_inc(meta_inc, k); }
 void nvim_meta_describe_node(uint32_t *meta_node, MTNode *x) { meta_describe_node(meta_node, x); }
 
