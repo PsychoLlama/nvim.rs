@@ -83,6 +83,7 @@ extern ShadaEntry rs_shada_get_buflist(void *removable_bufs);
 extern size_t rs_shada_init_jumps(ShadaEntry *jumps, void *removable_bufs);
 extern void rs_close_file(void *cookie);
 extern const char *rs_shada_get_default_file(void);
+extern void rs_shada_free_entry_contents(ShadaEntry *entry);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
 extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
@@ -2207,52 +2208,7 @@ shada_write_file_did_not_remove:
 
 static void shada_free_shada_entry(ShadaEntry *const entry)
 {
-  if (entry == NULL || !entry->can_free_entry) {
-    return;
-  }
-  switch (entry->type) {
-  case kSDItemMissing:
-    break;
-  case kSDItemUnknown:
-    xfree(entry->data.unknown_item.contents);
-    break;
-  case kSDItemHeader:
-    api_free_dict(entry->data.header);
-    break;
-  case kSDItemChange:
-  case kSDItemJump:
-  case kSDItemGlobalMark:
-  case kSDItemLocalMark:
-    xfree(entry->data.filemark.fname);
-    break;
-  case kSDItemSearchPattern:
-    api_free_string(entry->data.search_pattern.pat);
-    break;
-  case kSDItemRegister:
-    for (size_t i = 0; i < entry->data.reg.contents_size; i++) {
-      api_free_string(entry->data.reg.contents[i]);
-    }
-    xfree(entry->data.reg.contents);
-    break;
-  case kSDItemHistoryEntry:
-    xfree(entry->data.history_item.string);
-    break;
-  case kSDItemVariable:
-    xfree(entry->data.global_var.name);
-    tv_clear(&entry->data.global_var.value);
-    break;
-  case kSDItemSubString:
-    xfree(entry->data.sub_string.sub);
-    break;
-  case kSDItemBufferList:
-    for (size_t i = 0; i < entry->data.buffer_list.size; i++) {
-      xfree(entry->data.buffer_list.buffers[i].fname);
-      xfree(entry->data.buffer_list.buffers[i].additional_data);
-    }
-    xfree(entry->data.buffer_list.buffers);
-    break;
-  }
-  XFREE_CLEAR(entry->additional_data);
+  rs_shada_free_entry_contents((ShadaEntry *)entry);
 }
 
 #ifndef HAVE_BE64TOH
@@ -3256,6 +3212,13 @@ void nvim_shada_siemsg(const char *msg)
 void nvim_shada_api_free_dict(Dict value)
 {
   api_free_dict(value);
+}
+
+/// Free a Header ShadaEntry's dict (api_free_dict wrapper for Header entries).
+/// Called from Rust rs_shada_free_entry_contents when entry_type == Header.
+void nvim_shada_free_header_entry(ShadaEntry *entry)
+{
+  api_free_dict(entry->data.header);
 }
 
 /// Clear a typval_T (tv_clear wrapper)

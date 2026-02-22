@@ -483,6 +483,8 @@ extern "C" {
     fn nvim_shada_tv_clear(tv: *mut c_void);
     fn nvim_shada_free_reg_contents(contents_ptr: *mut c_void, contents_size: usize);
     fn nvim_shada_free_variable(entry: *mut ShadaEntry);
+    // Phase 1 (plan 11dd3cf4): Free Header entry dict via C (Dict type mismatch prevents direct call)
+    fn nvim_shada_free_header_entry(entry: *mut ShadaEntry);
 
     // Phase 5: File I/O accessors
     fn nvim_shada_file_open(fd: FileDescriptorHandle, fname: *const c_char) -> c_int;
@@ -3297,10 +3299,13 @@ pub unsafe extern "C" fn rs_shada_free_entry_contents(entry: *mut ShadaEntry) {
                 nvim_xfree(contents.cast());
             }
         }
+        // Missing: nothing to free.
+        ShadaEntryType::Missing => {}
         // Header is a Dict (kvec_t) — layout differs between Rust and C.
-        // In practice, Header entries always have can_free_entry=false,
-        // so this branch is unreachable.
-        ShadaEntryType::Missing | ShadaEntryType::Header => {}
+        // Delegate freeing to C which knows the correct Dict layout.
+        ShadaEntryType::Header => {
+            nvim_shada_free_header_entry(entry);
+        }
         ShadaEntryType::SearchPattern => {
             let pat = read_union_field!(entry, search_pattern, pat);
             if !pat.is_null() {
