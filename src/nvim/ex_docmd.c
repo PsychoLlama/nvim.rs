@@ -387,7 +387,7 @@ void do_exmode(void)
           }
         }
         msg_col = 0;
-        print_line_no_prefix(curwin->w_cursor.lnum, false, false);
+        rs_print_line_no_prefix(curwin->w_cursor.lnum, false, false);
         msg_clr_eos();
       }
     } else if (ex_pressedreturn && !ex_no_reprint) {  // must be at EOF
@@ -3655,11 +3655,11 @@ static void ex_print(exarg_T *eap)
     emsg(_(e_empty_buffer));
   } else {
     for (linenr_T line = eap->line1; line <= eap->line2 && !got_int; os_breakcheck()) {
-      print_line(line,
-                 (eap->cmdidx == CMD_number || eap->cmdidx == CMD_pound
-                  || (eap->flags & EXFLAG_NR)),
-                 eap->cmdidx == CMD_list || (eap->flags & EXFLAG_LIST),
-                 line == eap->line1);
+      rs_print_line(line,
+                    (eap->cmdidx == CMD_number || eap->cmdidx == CMD_pound
+                     || (eap->flags & EXFLAG_NR)),
+                    eap->cmdidx == CMD_list || (eap->flags & EXFLAG_LIST),
+                    line == eap->line1);
       line++;
     }
     setpcmark();
@@ -4909,8 +4909,8 @@ static void ex_copymove(exarg_T *eap)
 void ex_may_print(exarg_T *eap)
 {
   if (eap->flags != 0) {
-    print_line(curwin->w_cursor.lnum, (eap->flags & EXFLAG_NR),
-               (eap->flags & EXFLAG_LIST), true);
+    rs_print_line(curwin->w_cursor.lnum, (eap->flags & EXFLAG_NR),
+                  (eap->flags & EXFLAG_LIST), true);
     ex_no_reprint = true;
   }
 }

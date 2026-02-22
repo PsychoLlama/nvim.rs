@@ -486,10 +486,30 @@ extern "C" {
     pub fn nvim_set_p_window(val: i64);
     /// Set curwin->w_cursor.col
     pub fn nvim_curwin_set_cursor_col(col: c_int);
-    /// Print a line to the message area
-    pub fn print_line(lnum: c_int, use_number: c_int, list: c_int, first: c_int);
     /// Put a character to the message area
     pub fn msg_putchar(c: c_int);
+
+    // print_line accessors
+    /// Get curwin->w_p_nu
+    pub fn nvim_curwin_get_w_p_nu() -> c_int;
+    /// Get number_width(curwin)
+    pub fn nvim_number_width_curwin() -> c_int;
+    /// Get silent_mode
+    pub fn nvim_get_silent_mode() -> c_int;
+    /// Set silent_mode
+    pub fn nvim_set_silent_mode(val: c_int);
+    /// Get info_message
+    pub fn nvim_get_info_message() -> c_int;
+    /// Set info_message
+    pub fn nvim_set_info_message(val: c_int);
+    /// msg_prt_line wrapper
+    pub fn nvim_msg_prt_line(s: *const c_char, list: c_int);
+    /// message_filtered wrapper
+    pub fn nvim_message_filtered(msg: *const c_char) -> c_int;
+    /// msg_ext_set_kind wrapper
+    pub fn nvim_msg_ext_set_kind_excmd(kind: *const c_char);
+    /// msg_puts_hl wrapper
+    pub fn nvim_msg_puts_hl_excmd(s: *const c_char, hl_id: c_int);
     /// Display error message, returns true
     pub fn emsg(s: *const c_char) -> c_int;
 

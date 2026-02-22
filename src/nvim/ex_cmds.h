@@ -28,5 +28,7 @@ extern void rs_ex_z(exarg_T *eap);
 
 // Rust utility functions
 extern int rs_check_secure(void);
+extern void rs_print_line(int lnum, int use_number, int list, int first);
+extern void rs_print_line_no_prefix(int lnum, int use_number, int list);
 
 #include "ex_cmds_shim.h.generated.h"

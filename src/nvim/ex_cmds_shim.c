@@ -307,6 +307,15 @@ void nvim_exarg_set_line2(exarg_T *eap, linenr_T line2)
   eap->line2 = line2;
 }
 
+// print_line accessors
+int nvim_curwin_get_w_p_nu(void) { return curwin->w_p_nu; }
+int nvim_number_width_curwin(void) { return number_width(curwin); }
+int nvim_get_info_message(void) { return info_message; }
+void nvim_msg_prt_line(const char *s, int list) { msg_prt_line((char *)s, list != 0); }
+int nvim_message_filtered(const char *msg) { return message_filtered((char *)msg); }
+void nvim_msg_ext_set_kind_excmd(const char *kind) { msg_ext_set_kind(kind); }
+void nvim_msg_puts_hl_excmd(const char *s, int hl_id) { msg_puts_hl(s, hl_id, false); }
+
 _Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS mismatch");
 _Static_assert(EOL_MAC == 2, "EOL_MAC mismatch");
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
@@ -1587,44 +1596,6 @@ void append_redir(char *const buf, const size_t buflen, const char *const opt,
   } else {
     vim_snprintf(end, (size_t)((ptrdiff_t)buflen - (end - buf)), " %s %s", opt, fname);
   }
-}
-
-void print_line_no_prefix(linenr_T lnum, bool use_number, bool list)
-{
-  char numbuf[30];
-
-  if (curwin->w_p_nu || use_number) {
-    vim_snprintf(numbuf, sizeof(numbuf), "%*" PRIdLINENR " ",
-                 number_width(curwin), lnum);
-    msg_puts_hl(numbuf, HLF_N + 1, false);  // Highlight line nrs.
-  }
-  msg_prt_line(ml_get(lnum), list);
-}
-
-/// Print a text line.  Also in silent mode ("ex -s").
-void print_line(linenr_T lnum, bool use_number, bool list, bool first)
-{
-  bool save_silent = silent_mode;
-
-  // apply :filter /pat/
-  if (message_filtered(ml_get(lnum))) {
-    return;
-  }
-
-  silent_mode = false;
-  info_message = true;  // use stdout, not stderr
-  if (first) {
-    msg_start();
-    msg_ext_set_kind("list_cmd");
-  } else if (!save_silent) {
-    msg_putchar('\n');  // don't want trailing newline with regular messaging
-  }
-  print_line_no_prefix(lnum, use_number, list);
-  if (save_silent) {
-    msg_putchar('\n');  // batch mode message should always end in newline
-    silent_mode = save_silent;
-  }
-  info_message = false;
 }
 
 int rename_buffer(char *new_fname)
@@ -3714,7 +3685,7 @@ static int do_sub(exarg_T *eap, const proftime_T timeout, const int cmdpreview_n
           // Loop until 'y', 'n', 'q', CTRL-E or CTRL-Y typed.
           while (subflags.do_ask) {
             if (exmode_active) {
-              print_line_no_prefix(lnum, subflags.do_number, subflags.do_list);
+              rs_print_line_no_prefix(lnum, subflags.do_number, subflags.do_list);
 
               colnr_T sc, ec;
               getvcol(curwin, &curwin->w_cursor, &sc, NULL, NULL);
@@ -4273,7 +4244,7 @@ skip:
       global_need_beginline = true;
     }
     if (subflags.do_print) {
-      print_line(curwin->w_cursor.lnum, subflags.do_number, subflags.do_list, true);
+      rs_print_line(curwin->w_cursor.lnum, subflags.do_number, subflags.do_list, true);
     }
   } else if (!global_busy) {
     if (got_int) {

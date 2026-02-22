@@ -619,7 +619,7 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
         nvim_curwin_get_p_scr, nvim_curwin_get_view_height, nvim_curwin_set_cursor_col,
         nvim_curwin_set_cursor_lnum, nvim_exarg_get_addr_count, nvim_exarg_get_arg,
         nvim_exarg_get_flags, nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_get_Columns,
-        nvim_get_Rows, nvim_is_one_window, nvim_set_ex_no_reprint, nvim_set_p_window, print_line,
+        nvim_get_Rows, nvim_is_one_window, nvim_set_ex_no_reprint, nvim_set_p_window,
     };
 
     let lnum = nvim_exarg_get_line2(eap);
@@ -756,7 +756,7 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
             }
         }
 
-        print_line(
+        rs_print_line(
             i,
             c_int::from(use_number),
             c_int::from(use_list),
@@ -777,6 +777,66 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
         nvim_curwin_set_cursor_col(0);
     }
     nvim_set_ex_no_reprint(1);
+}
+
+/// HLF_N + 1 highlight ID for line numbers
+const HLF_N_PLUS_1: c_int = 13;
+
+/// Print a line without prefix handling (line number + content).
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_print_line_no_prefix(lnum: c_int, use_number: c_int, list: c_int) {
+    use crate::{
+        ml_get, nvim_curwin_get_w_p_nu, nvim_msg_prt_line, nvim_msg_puts_hl_excmd,
+        nvim_number_width_curwin,
+    };
+
+    if nvim_curwin_get_w_p_nu() != 0 || use_number != 0 {
+        let width = nvim_number_width_curwin();
+        let mut numbuf = [0u8; 30];
+        use std::io::Write;
+        let mut cursor = std::io::Cursor::new(&mut numbuf[..]);
+        let _ = write!(cursor, "{:>width$} ", lnum, width = width as usize);
+        let pos = cursor.position() as usize;
+        numbuf[pos] = 0;
+        nvim_msg_puts_hl_excmd(numbuf.as_ptr().cast(), HLF_N_PLUS_1);
+    }
+    nvim_msg_prt_line(ml_get(lnum), list);
+}
+
+/// Print a text line. Also in silent mode ("ex -s").
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_print_line(lnum: c_int, use_number: c_int, list: c_int, first: c_int) {
+    use crate::{
+        ml_get, msg_putchar, msg_start, nvim_get_silent_mode, nvim_message_filtered,
+        nvim_msg_ext_set_kind_excmd, nvim_set_info_message, nvim_set_silent_mode,
+    };
+
+    // apply :filter /pat/
+    if nvim_message_filtered(ml_get(lnum)) != 0 {
+        return;
+    }
+
+    let save_silent = nvim_get_silent_mode();
+    nvim_set_silent_mode(0);
+    nvim_set_info_message(1); // use stdout, not stderr
+    if first != 0 {
+        msg_start();
+        nvim_msg_ext_set_kind_excmd(c"list_cmd".as_ptr());
+    } else if save_silent == 0 {
+        msg_putchar(b'\n' as c_int); // don't want trailing newline with regular messaging
+    }
+    rs_print_line_no_prefix(lnum, use_number, list);
+    if save_silent != 0 {
+        msg_putchar(b'\n' as c_int); // batch mode message should always end in newline
+        nvim_set_silent_mode(save_silent);
+    }
+    nvim_set_info_message(0);
 }
 
 /// Convert display mode from exarg flags.
