@@ -1683,13 +1683,111 @@ void nvim_nv_redo_or_register_impl(cmdarg_T *cap) { nv_redo_or_register_impl(cap
 // =============================================================================
 
 // Forward declarations for insert mode entry handlers
-static void nv_replace_impl(cmdarg_T *cap);
 static void nv_Replace_impl(cmdarg_T *cap);
 static void nv_vreplace_impl(cmdarg_T *cap);
 
-void nvim_nv_replace_impl(cmdarg_T *cap) { nv_replace_impl(cap); }
-
 void nvim_nv_Replace_impl(cmdarg_T *cap) { nv_Replace_impl(cap); }
+
+// C wrappers for nv_replace Rust migration (Phase 6)
+
+/// Check if buffer is a prompt buffer and cursor is not in editable area.
+int nvim_replace_check_prompt(void) {
+  return (bt_prompt(curbuf) && !prompt_curpos_editable()) ? 1 : 0;
+}
+
+/// Handle the Ctrl-V literal character input.
+/// Sets cap->nchar to the literal character, returns had_ctrl_v value.
+int nvim_replace_get_literal(cmdarg_T *cap) {
+  if (cap->nchar == Ctrl_V || cap->nchar == Ctrl_Q) {
+    int had_ctrl_v = Ctrl_V;
+    cap->nchar = get_literal(false);
+    if (cap->nchar > DEL) {
+      had_ctrl_v = NUL;
+    }
+    return had_ctrl_v;
+  }
+  return NUL;
+}
+
+/// Handle virtual edit block. Returns -1 to abort, 0 to continue.
+int nvim_replace_virtual_edit(cmdarg_T *cap) {
+  if (virtual_active(curwin)) {
+    if (u_save_cursor() == false) {
+      return -1;
+    }
+    if (gchar_cursor() == NUL) {
+      coladvance_force((colnr_T)(getviscol() + cap->count1));
+      assert(cap->count1 <= INT_MAX);
+      curwin->w_cursor.col -= (colnr_T)cap->count1;
+    } else if (gchar_cursor() == TAB) {
+      coladvance_force(getviscol());
+    }
+  }
+  return 0;
+}
+
+/// Check if there are enough characters to replace. Returns 1 if NOT enough.
+int nvim_replace_check_length(cmdarg_T *cap) {
+  return ((size_t)get_cursor_pos_len() < (unsigned)cap->count1
+          || (mb_charlen(get_cursor_pos_ptr()) < cap->count1)) ? 1 : 0;
+}
+
+/// Handle TAB with expandtab/smarttab. Returns 1 if handled (caller should return).
+int nvim_replace_tab_expand(cmdarg_T *cap, int had_ctrl_v) {
+  if (had_ctrl_v != Ctrl_V && cap->nchar == '\t' && (curbuf->b_p_et || p_sta)) {
+    stuffnumReadbuff(cap->count1);
+    stuffcharReadbuff('R');
+    stuffcharReadbuff('\t');
+    stuffcharReadbuff(ESC);
+    return 1;
+  }
+  return 0;
+}
+
+/// Handle the newline replacement path (del_chars + invoke_edit).
+void nvim_replace_newline(cmdarg_T *cap) {
+  del_chars(cap->count1, false);
+  stuffcharReadbuff('\r');
+  stuffcharReadbuff(ESC);
+  invoke_edit(cap, true, 'r', false);
+}
+
+/// Handle the character replacement loop.
+void nvim_replace_chars(cmdarg_T *cap, int had_ctrl_v) {
+  curbuf->b_op_start = curwin->w_cursor;
+  const int old_State = State;
+
+  if (cap->nchar_len > 0) {
+    AppendToRedobuff(cap->nchar_composing);
+  } else {
+    AppendCharToRedobuff(cap->nchar);
+  }
+
+  for (int n = cap->count1; n > 0; n--) {
+    State = MODE_REPLACE;
+    if (cap->nchar == Ctrl_E || cap->nchar == Ctrl_Y) {
+      int c = ins_copychar(curwin->w_cursor.lnum
+                           + (cap->nchar == Ctrl_Y ? -1 : 1));
+      if (c != NUL) {
+        ins_char(c);
+      } else {
+        curwin->w_cursor.col++;
+      }
+    } else {
+      if (cap->nchar_len) {
+        ins_char_bytes(cap->nchar_composing, (size_t)cap->nchar_len);
+      } else {
+        ins_char(cap->nchar);
+      }
+    }
+    State = old_State;
+  }
+  curwin->w_cursor.col--;
+  mb_adjust_cursor();
+  curbuf->b_op_end = curwin->w_cursor;
+  curwin->w_set_curswant = true;
+  set_last_insert(cap->nchar);
+}
 
 void nvim_nv_vreplace_impl(cmdarg_T *cap) { nv_vreplace_impl(cap); }
 
@@ -4194,153 +4292,6 @@ static void nv_undo_impl(cmdarg_T *cap)
 }
 
 /// Handle the "r" command (implementation).
-static void nv_replace_impl(cmdarg_T *cap)
-{
-  int had_ctrl_v;
-
-  if (rs_checkclearop(cap->oap)) {
-    return;
-  }
-  if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
-    rs_clearopbeep(cap->oap);
-    return;
-  }
-
-  // get another character
-  if (cap->nchar == Ctrl_V || cap->nchar == Ctrl_Q) {
-    had_ctrl_v = Ctrl_V;
-    cap->nchar = get_literal(false);
-    // Don't redo a multibyte character with CTRL-V.
-    if (cap->nchar > DEL) {
-      had_ctrl_v = NUL;
-    }
-  } else {
-    had_ctrl_v = NUL;
-  }
-
-  // Abort if the character is a special key.
-  if (IS_SPECIAL(cap->nchar)) {
-    rs_clearopbeep(cap->oap);
-    return;
-  }
-
-  // Visual mode "r"
-  if (VIsual_active) {
-    if (got_int) {
-      got_int = false;
-    }
-    if (had_ctrl_v) {
-      // Use a special (negative) number to make a difference between a
-      // literal CR or NL and a line break.
-      if (cap->nchar == CAR) {
-        cap->nchar = REPLACE_CR_NCHAR;
-      } else if (cap->nchar == NL) {
-        cap->nchar = REPLACE_NL_NCHAR;
-      }
-    }
-    rs_nv_operator(cap);
-    return;
-  }
-
-  // Break tabs, etc.
-  if (virtual_active(curwin)) {
-    if (u_save_cursor() == false) {
-      return;
-    }
-    if (gchar_cursor() == NUL) {
-      // Add extra space and put the cursor on the first one.
-      coladvance_force((colnr_T)(getviscol() + cap->count1));
-      assert(cap->count1 <= INT_MAX);
-      curwin->w_cursor.col -= (colnr_T)cap->count1;
-    } else if (gchar_cursor() == TAB) {
-      coladvance_force(getviscol());
-    }
-  }
-
-  // Abort if not enough characters to replace.
-  if ((size_t)get_cursor_pos_len() < (unsigned)cap->count1
-      || (mb_charlen(get_cursor_pos_ptr()) < cap->count1)) {
-    rs_clearopbeep(cap->oap);
-    return;
-  }
-
-  // Replacing with a TAB is done by edit() when it is complicated because
-  // 'expandtab' or 'smarttab' is set.  CTRL-V TAB inserts a literal TAB.
-  // Other characters are done below to avoid problems with things like
-  // CTRL-V 048 (for edit() this would be R CTRL-V 0 ESC).
-  if (had_ctrl_v != Ctrl_V && cap->nchar == '\t' && (curbuf->b_p_et || p_sta)) {
-    stuffnumReadbuff(cap->count1);
-    stuffcharReadbuff('R');
-    stuffcharReadbuff('\t');
-    stuffcharReadbuff(ESC);
-    return;
-  }
-
-  // save line for undo
-  if (u_save_cursor() == false) {
-    return;
-  }
-
-  if (had_ctrl_v != Ctrl_V && (cap->nchar == '\r' || cap->nchar == '\n')) {
-    // Replace character(s) by a single newline.
-    // Strange vi behaviour: Only one newline is inserted.
-    // Delete the characters here.
-    // Insert the newline with an insert command, takes care of
-    // autoindent.      The insert command depends on being on the last
-    // character of a line or not.
-    del_chars(cap->count1, false);        // delete the characters
-    stuffcharReadbuff('\r');
-    stuffcharReadbuff(ESC);
-
-    // Give 'r' to edit(), to get the redo command right.
-    invoke_edit(cap, true, 'r', false);
-  } else {
-    rs_prep_redo(cap->oap->regname, cap->count1, NUL, 'r', NUL, had_ctrl_v, 0);
-
-    curbuf->b_op_start = curwin->w_cursor;
-    const int old_State = State;
-
-    if (cap->nchar_len > 0) {
-      AppendToRedobuff(cap->nchar_composing);
-    } else {
-      AppendCharToRedobuff(cap->nchar);
-    }
-
-    // This is slow, but it handles replacing a single-byte with a
-    // multi-byte and the other way around.  Also handles adding
-    // composing characters for utf-8.
-    for (int n = cap->count1; n > 0; n--) {
-      State = MODE_REPLACE;
-      if (cap->nchar == Ctrl_E || cap->nchar == Ctrl_Y) {
-        int c = ins_copychar(curwin->w_cursor.lnum
-                             + (cap->nchar == Ctrl_Y ? -1 : 1));
-        if (c != NUL) {
-          ins_char(c);
-        } else {
-          // will be decremented further down
-          curwin->w_cursor.col++;
-        }
-      } else {
-        if (cap->nchar_len) {
-          ins_char_bytes(cap->nchar_composing, (size_t)cap->nchar_len);
-        } else {
-          ins_char(cap->nchar);
-        }
-      }
-      State = old_State;
-    }
-    curwin->w_cursor.col--;         // cursor on the last replaced char
-    // if the character on the left of the current cursor is a multi-byte
-    // character, move two characters left
-    mb_adjust_cursor();
-    curbuf->b_op_end = curwin->w_cursor;
-    curwin->w_set_curswant = true;
-    set_last_insert(cap->nchar);
-  }
-
-  rs_foldUpdateAfterInsert();
-}
-
 /// "R" (cap->arg is false) and "gR" (cap->arg is true) (implementation).
 static void nv_Replace_impl(cmdarg_T *cap)
 {

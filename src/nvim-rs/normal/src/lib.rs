@@ -2414,10 +2414,26 @@ pub unsafe extern "C" fn rs_nv_redo_or_register(cap: CapHandle) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_nv_replace_impl(cap: CapHandle);
     fn nvim_nv_Replace_impl(cap: CapHandle);
     fn nvim_nv_vreplace_impl(cap: CapHandle);
+
+    // nv_replace C wrappers
+    fn nvim_get_got_int() -> c_int;
+    fn nvim_set_got_int(val: c_int);
+    fn nvim_replace_check_prompt() -> c_int;
+    fn nvim_replace_get_literal(cap: CapHandle) -> c_int;
+    fn nvim_replace_virtual_edit(cap: CapHandle) -> c_int;
+    fn nvim_replace_check_length(cap: CapHandle) -> c_int;
+    fn nvim_replace_tab_expand(cap: CapHandle, had_ctrl_v: c_int) -> c_int;
+    fn nvim_replace_newline(cap: CapHandle);
+    fn nvim_replace_chars(cap: CapHandle, had_ctrl_v: c_int);
+    fn u_save_cursor() -> c_int;
+    fn rs_foldUpdateAfterInsert();
 }
+
+// nv_replace constants
+const REPLACE_CR_NCHAR: c_int = -1;
+const REPLACE_NL_NCHAR: c_int = -2;
 
 /// Command handler for "r" single-character replace.
 ///
@@ -2428,7 +2444,85 @@ extern "C" {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
-    nvim_nv_replace_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+
+    if rs_checkclearop(oap) {
+        return;
+    }
+    if nvim_replace_check_prompt() != 0 {
+        rs_clearopbeep(oap);
+        return;
+    }
+
+    // Get another character (handle Ctrl-V/Ctrl-Q literal input)
+    let had_ctrl_v = nvim_replace_get_literal(cap);
+
+    // Abort if the character is a special key
+    let nchar = nvim_cap_get_nchar(cap);
+    if nvim_is_special(nchar) {
+        rs_clearopbeep(oap);
+        return;
+    }
+
+    // Visual mode "r"
+    if nvim_get_VIsual_active() != 0 {
+        if nvim_get_got_int() != 0 {
+            nvim_set_got_int(0);
+        }
+        if had_ctrl_v != 0 {
+            let nchar = nvim_cap_get_nchar(cap);
+            if nchar == CAR_CHAR {
+                nvim_cap_set_nchar(cap, REPLACE_CR_NCHAR);
+            } else if nchar == NL_CHAR {
+                nvim_cap_set_nchar(cap, REPLACE_NL_NCHAR);
+            }
+        }
+        rs_nv_operator(cap);
+        return;
+    }
+
+    // Break tabs, etc. in virtual edit mode
+    if nvim_replace_virtual_edit(cap) < 0 {
+        return;
+    }
+
+    // Abort if not enough characters to replace
+    if nvim_replace_check_length(cap) != 0 {
+        rs_clearopbeep(oap);
+        return;
+    }
+
+    // TAB with expandtab/smarttab -- handled via edit()
+    if nvim_replace_tab_expand(cap, had_ctrl_v) != 0 {
+        return;
+    }
+
+    // Save line for undo
+    if u_save_cursor() == 0 {
+        return;
+    }
+
+    let nchar = nvim_cap_get_nchar(cap);
+    if had_ctrl_v != CTRL_V && (nchar == c_int::from(b'\r') || nchar == c_int::from(b'\n')) {
+        // Replace character(s) by a single newline
+        nvim_replace_newline(cap);
+    } else {
+        // Replace with typed character(s)
+        let regname = nvim_oap_get_regname_ptr(oap);
+        let count1 = nvim_cap_get_count1(cap);
+        rs_prep_redo(
+            regname,
+            count1,
+            NUL_CHAR,
+            c_int::from(b'r'),
+            NUL_CHAR,
+            had_ctrl_v,
+            0,
+        );
+        nvim_replace_chars(cap, had_ctrl_v);
+    }
+
+    rs_foldUpdateAfterInsert();
 }
 
 /// Command handler for "R" and "gR" replace mode.
