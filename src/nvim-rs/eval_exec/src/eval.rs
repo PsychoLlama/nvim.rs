@@ -1208,6 +1208,133 @@ unsafe fn free_typval(tv: TypevalHandle) {
 }
 
 // =============================================================================
+// Phase 1: eval_func migration
+// =============================================================================
+
+extern "C" {
+    // Function name resolution
+    fn check_vars(s: *const c_char, len: usize);
+    fn deref_func_name(
+        name: *const c_char,
+        lenp: *mut c_int,
+        partialp: *mut *mut c_void,
+        no_autoload: c_int,
+        found_var: *mut bool,
+    ) -> *mut c_char;
+    fn xmemdupz(src: *const c_void, len: usize) -> *mut c_char;
+
+    // Helper that constructs funcexe_T and calls get_func_tv
+    fn nvim_call_func_tv_wrapper(
+        name: *mut c_char,
+        len: c_int,
+        rettv: TypevalHandle,
+        arg: *mut *mut c_char,
+        evalarg: EvalargHandle,
+        evaluate: bool,
+        partial: *mut c_void,
+        basetv: TypevalHandle,
+        found_var: bool,
+        lnum: i32,
+    ) -> c_int;
+
+    // Cursor position accessor
+    fn nvim_curwin_get_cursor_lnum() -> i32;
+
+    // Set vval.v_string without clearing
+    fn nvim_tv_set_vstring_raw(tv: TypevalHandle, s: *mut c_char);
+
+    // Return pointer to tv_empty_string global
+    fn nvim_get_tv_empty_string() -> *const c_char;
+}
+
+/// Implementation of eval_func: resolve function name, construct funcexe, call get_func_tv.
+///
+/// Equivalent to the C `eval_func` static function.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer
+/// - `evalarg` can be null
+/// - `name` must be a valid C string of at least `name_len` bytes
+/// - `rettv` must be a valid typval handle
+/// - `basetv` can be null
+unsafe fn eval_func_impl(
+    arg: *mut *mut c_char,
+    evalarg: EvalargHandle,
+    name: *mut c_char,
+    name_len: c_int,
+    rettv: TypevalHandle,
+    flags: c_int,
+    basetv: TypevalHandle,
+) -> c_int {
+    let evaluate = (flags & EVAL_EVALUATE) != 0;
+    let mut s = name;
+    let mut len = name_len;
+    let mut found_var = false;
+    let mut partial: *mut c_void = ptr::null_mut();
+
+    if !evaluate {
+        check_vars(s, len as usize);
+    }
+
+    // If "s" is the name of a variable of type VAR_FUNC use its contents.
+    s = deref_func_name(
+        s,
+        &mut len,
+        &mut partial,
+        !evaluate as c_int,
+        &mut found_var,
+    );
+
+    // Need to make a copy, in case evaluating the arguments makes the name invalid.
+    let s_copy = xmemdupz(s as *const c_void, len as usize);
+
+    let lnum = nvim_curwin_get_cursor_lnum();
+    let ret = nvim_call_func_tv_wrapper(
+        s_copy, len, rettv, arg, evalarg, evaluate, partial, basetv, found_var, lnum,
+    );
+
+    xfree(s_copy as *mut c_void);
+
+    // If evaluate is false rettv->v_type was not set in get_func_tv, but it's
+    // needed in handle_subscript() to parse what follows. So set it here.
+    if nvim_tv_get_type(rettv) == VAR_UNKNOWN && !evaluate {
+        // Check if **arg == '('
+        let arg_ptr = *arg;
+        if !arg_ptr.is_null() && *arg_ptr == b'(' as c_char {
+            nvim_tv_set_vstring_raw(rettv, nvim_get_tv_empty_string() as *mut c_char);
+            nvim_tv_set_type(rettv, VAR_FUNC);
+        }
+    }
+
+    // Stop evaluation when immediately aborting on error, interrupt, or exception.
+    if evaluate && aborting() != 0 {
+        if ret == OK {
+            tv_clear(rettv);
+        }
+        return FAIL;
+    }
+
+    ret
+}
+
+/// FFI export for eval_func.
+///
+/// # Safety
+/// See `eval_func_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_func(
+    arg: *mut *mut c_char,
+    evalarg: EvalargHandle,
+    name: *mut c_char,
+    name_len: c_int,
+    rettv: TypevalHandle,
+    flags: c_int,
+    basetv: TypevalHandle,
+) -> c_int {
+    eval_func_impl(arg, evalarg, name, name_len, rettv, flags, basetv)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

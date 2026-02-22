@@ -116,6 +116,8 @@ extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
 extern int rs_eval0(char *arg, typval_T *rettv, exarg_T *eap, void *evalarg);
 extern int rs_eval1(char **arg, typval_T *rettv, void *evalarg);
 extern int rs_eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op);
+extern int rs_eval_func(char **arg, evalarg_T *evalarg, char *name, int name_len,
+                        typval_T *rettv, int flags, typval_T *basetv);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -1939,54 +1941,7 @@ static int eval_func(char **const arg, evalarg_T *const evalarg, char *const nam
                      typval_T *const basetv)
   FUNC_ATTR_NONNULL_ARG(1, 3, 5)
 {
-  const bool evaluate = flags & EVAL_EVALUATE;
-  char *s = name;
-  int len = name_len;
-  bool found_var = false;
-
-  if (!evaluate) {
-    check_vars(s, (size_t)len);
-  }
-
-  // If "s" is the name of a variable of type VAR_FUNC
-  // use its contents.
-  partial_T *partial;
-  s = deref_func_name(s, &len, &partial, !evaluate, &found_var);
-
-  // Need to make a copy, in case evaluating the arguments makes
-  // the name invalid.
-  s = xmemdupz(s, (size_t)len);
-
-  // Invoke the function.
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_firstline = curwin->w_cursor.lnum;
-  funcexe.fe_lastline = curwin->w_cursor.lnum;
-  funcexe.fe_evaluate = evaluate;
-  funcexe.fe_partial = partial;
-  funcexe.fe_basetv = basetv;
-  funcexe.fe_found_var = found_var;
-  int ret = get_func_tv(s, len, rettv, arg, evalarg, &funcexe);
-
-  xfree(s);
-
-  // If evaluate is false rettv->v_type was not set in
-  // get_func_tv, but it's needed in handle_subscript() to parse
-  // what follows. So set it here.
-  if (rettv->v_type == VAR_UNKNOWN && !evaluate && **arg == '(') {
-    rettv->vval.v_string = (char *)tv_empty_string;
-    rettv->v_type = VAR_FUNC;
-  }
-
-  // Stop the expression evaluation when immediately
-  // aborting on error, or when an interrupt occurred or
-  // an exception was thrown but not caught.
-  if (evaluate && aborting()) {
-    if (ret == OK) {
-      tv_clear(rettv);
-    }
-    ret = FAIL;
-  }
-  return ret;
+  return rs_eval_func(arg, evalarg, name, name_len, rettv, flags, basetv);
 }
 
 /// After using "evalarg" filled from "eap": free the memory.
@@ -5874,4 +5829,38 @@ int nvim_tv_is_func(const typval_T *tv)
 partial_T *nvim_tv_get_partial(const typval_T *tv)
 {
   return tv->vval.v_partial;
+}
+
+// =============================================================================
+// Phase 1: eval_func helpers (accessor functions for rs_eval_func)
+// =============================================================================
+
+/// Set vval.v_string in typval without clearing (raw assignment) - accessor for Rust.
+void nvim_tv_set_vstring_raw(typval_T *tv, char *s)
+{
+  tv->vval.v_string = s;
+}
+
+/// Return address of the tv_empty_string global - accessor for Rust.
+const char *nvim_get_tv_empty_string(void)
+{
+  return tv_empty_string;
+}
+
+/// Construct funcexe_T and call get_func_tv - wrapper for Rust eval_func.
+///
+/// This avoids replicating the funcexe_T struct layout in Rust.
+int nvim_call_func_tv_wrapper(char *name, int len, typval_T *rettv, char **arg,
+                              evalarg_T *evalarg, bool evaluate,
+                              partial_T *partial, typval_T *basetv,
+                              bool found_var, linenr_T lnum)
+{
+  funcexe_T funcexe = FUNCEXE_INIT;
+  funcexe.fe_firstline = lnum;
+  funcexe.fe_lastline = lnum;
+  funcexe.fe_evaluate = evaluate;
+  funcexe.fe_partial = partial;
+  funcexe.fe_basetv = basetv;
+  funcexe.fe_found_var = found_var;
+  return get_func_tv(name, len, rettv, arg, evalarg, &funcexe);
 }
