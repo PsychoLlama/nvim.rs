@@ -132,11 +132,11 @@ extern "C" {
 
     // Typval operations
     fn tv_clear(tv: TypevalHandle);
-    fn tv_get_number_chk(tv: TypevalHandle, error: *mut c_int) -> i64;
+    fn tv_get_number_chk(tv: TypevalHandle, error: *mut bool) -> i64;
     fn tv_get_string_buf(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
     fn tv_get_string_buf_chk(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
-    fn tv_check_str(tv: TypevalHandle) -> c_int;
-    fn tv_check_num(tv: TypevalHandle) -> c_int;
+    fn tv_check_str(tv: TypevalHandle) -> bool;
+    fn tv_check_num(tv: TypevalHandle) -> bool;
     fn tv2bool(tv: TypevalHandle) -> c_int;
     fn tv_copy(from: TypevalHandle, to: TypevalHandle);
     fn tv_list_concat(l1: *mut c_void, l2: *mut c_void, ret: TypevalHandle) -> c_int;
@@ -393,17 +393,17 @@ pub unsafe fn eval1_impl(
 
         let mut result = false;
         if evaluate {
-            let mut error: c_int = 0;
+            let mut error: bool = false;
 
             if op_falsy {
                 result = tv2bool(rettv) != 0;
             } else if tv_get_number_chk(rettv, &mut error) != 0 {
                 result = true;
             }
-            if error != 0 || !op_falsy || !result {
+            if error || !op_falsy || !result {
                 tv_clear(rettv);
             }
-            if error != 0 {
+            if error {
                 return FAIL;
             }
         }
@@ -535,12 +535,12 @@ pub unsafe fn eval2_impl(
         let mut result = false;
 
         if evaluate {
-            let mut error: c_int = 0;
+            let mut error: bool = false;
             if tv_get_number_chk(rettv, &mut error) != 0 {
                 result = true;
             }
             tv_clear(rettv);
-            if error != 0 {
+            if error {
                 return FAIL;
             }
         }
@@ -566,12 +566,12 @@ pub unsafe fn eval2_impl(
 
             // Compute the result
             if evaluate && !result {
-                let mut error: c_int = 0;
+                let mut error: bool = false;
                 if tv_get_number_chk(var2, &mut error) != 0 {
                     result = true;
                 }
                 tv_clear(var2);
-                if error != 0 {
+                if error {
                     free_typval(var2);
                     return FAIL;
                 }
@@ -637,12 +637,12 @@ pub unsafe fn eval3_impl(
         let mut result = true;
 
         if evaluate {
-            let mut error: c_int = 0;
+            let mut error: bool = false;
             if tv_get_number_chk(rettv, &mut error) == 0 {
                 result = false;
             }
             tv_clear(rettv);
-            if error != 0 {
+            if error {
                 return FAIL;
             }
         }
@@ -668,12 +668,12 @@ pub unsafe fn eval3_impl(
 
             // Compute the result
             if evaluate && result {
-                let mut error: c_int = 0;
+                let mut error: bool = false;
                 if tv_get_number_chk(var2, &mut error) == 0 {
                     result = false;
                 }
                 tv_clear(var2);
-                if error != 0 {
+                if error {
                     free_typval(var2);
                     return FAIL;
                 }
@@ -883,8 +883,7 @@ pub unsafe fn eval5_impl(
         if (op != b'+' || (tv_type != VAR_LIST && tv_type != VAR_BLOB))
             && (op == b'.' || tv_type != VAR_FLOAT)
             && evaluate
-            && ((op == b'.' && tv_check_str(rettv) == 0)
-                || (op != b'.' && tv_check_num(rettv) == 0))
+            && ((op == b'.' && !tv_check_str(rettv)) || (op != b'.' && !tv_check_num(rettv)))
         {
             tv_clear(rettv);
             return FAIL;
@@ -1020,7 +1019,7 @@ unsafe fn eval_addlist_impl(tv1: TypevalHandle, tv2: TypevalHandle) -> c_int {
 
 /// Add or subtract numbers "tv1" and "tv2" and store the result in "tv1".
 unsafe fn eval_addsub_number_impl(tv1: TypevalHandle, tv2: TypevalHandle, op: c_int) -> c_int {
-    let mut error: c_int = 0;
+    let mut error: bool = false;
     let n1: i64;
     let n2: i64;
     let mut f1: f64 = 0.0;
@@ -1034,7 +1033,7 @@ unsafe fn eval_addsub_number_impl(tv1: TypevalHandle, tv2: TypevalHandle, op: c_
         n1 = 0;
     } else {
         n1 = tv_get_number_chk(tv1, &mut error);
-        if error != 0 {
+        if error {
             tv_clear(tv1);
             tv_clear(tv2);
             return FAIL;
@@ -1049,7 +1048,7 @@ unsafe fn eval_addsub_number_impl(tv1: TypevalHandle, tv2: TypevalHandle, op: c_
         n2 = 0;
     } else {
         n2 = tv_get_number_chk(tv2, &mut error);
-        if error != 0 {
+        if error {
             tv_clear(tv1);
             tv_clear(tv2);
             return FAIL;
