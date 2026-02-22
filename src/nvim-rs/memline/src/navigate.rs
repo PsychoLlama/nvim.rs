@@ -21,8 +21,9 @@
 use std::ffi::c_int;
 
 use crate::types::{
-    BlockNr, BufHandle, ColNr, InfoPtrHandle, LineNr, PointerBlockHeader, PointerEntry, PosHandle,
-    ML_DELETE, ML_FIND, ML_FLUSH, ML_INSERT, STACK_INCR,
+    BlockHeaderHandle, BlockNr, BufHandle, ColNr, DataBlockHeader, InfoPtrHandle, LineNr,
+    PointerBlockHeader, PointerEntry, PosHandle, DB_INDEX_MASK, ML_DELETE, ML_FIND, ML_FLUSH,
+    ML_INSERT, STACK_INCR,
 };
 
 // =============================================================================
@@ -44,6 +45,48 @@ extern "C" {
     /// Get buffer's line count (`buf->b_ml.ml_line_count`)
     fn nvim_buf_get_ml_line_count(buf: *mut BufHandle) -> LineNr;
 
+    /// Get buffer's cached line number (`buf->b_ml.ml_line_lnum`)
+    fn nvim_buf_get_ml_line_lnum(buf: *mut BufHandle) -> LineNr;
+
+    /// Get byte offset cache value (`buf->b_ml.ml_line_offset`)
+    fn nvim_buf_get_ml_line_offset(buf: *mut BufHandle) -> usize;
+
+    /// Set byte offset cache value (`buf->b_ml.ml_line_offset = offset`)
+    fn nvim_buf_set_ml_line_offset(buf: *mut BufHandle, offset: usize);
+
+    /// Check if memfile pointer is non-null
+    fn nvim_buf_has_ml_mfp(buf: *mut BufHandle) -> c_int;
+
+    /// Get usedchunks count
+    fn nvim_buf_get_ml_usedchunks(buf: *mut BufHandle) -> c_int;
+
+    /// Get ml_locked_high (last line number in locked block)
+    fn nvim_buf_get_ml_locked_high(buf: *mut BufHandle) -> LineNr;
+
+    /// Get ml_locked_low (first line number in locked block)
+    fn nvim_buf_get_ml_locked_low(buf: *mut BufHandle) -> LineNr;
+
+    /// Get ml_chunksize[idx].mlcs_numlines
+    fn nvim_buf_get_ml_chunksize_numlines(buf: *mut BufHandle, idx: c_int) -> c_int;
+
+    /// Get ml_chunksize[idx].mlcs_totalsize
+    fn nvim_buf_get_ml_chunksize_totalsize(buf: *mut BufHandle, idx: c_int) -> c_int;
+
+    /// Check if ml_chunksize is NULL
+    fn nvim_buf_get_ml_chunksize_is_null(buf: *mut BufHandle) -> c_int;
+
+    /// Get bh_data pointer from block header
+    fn nvim_bhdr_get_bh_data(hp: *mut BlockHeaderHandle) -> *mut std::ffi::c_void;
+
+    /// Get b_p_fixeol
+    fn nvim_buf_get_b_p_fixeol(buf: *mut BufHandle) -> c_int;
+
+    /// Get b_p_bin
+    fn nvim_buf_get_b_p_bin(buf: *mut BufHandle) -> c_int;
+
+    /// Get b_p_eol
+    fn nvim_buf_get_b_p_eol(buf: *mut BufHandle) -> c_int;
+
     // -------------------------------------------------------------------------
     // Position Accessors
     // -------------------------------------------------------------------------
@@ -61,7 +104,62 @@ extern "C" {
     fn nvim_get_maxcol() -> ColNr;
 
     // -------------------------------------------------------------------------
-    // C Implementation Functions
+    // B-tree Traversal
+    // -------------------------------------------------------------------------
+
+    /// Find line in B-tree, return locked block header (public wrapper around static ml_find_line)
+    fn nvim_ml_find_line(
+        buf: *mut BufHandle,
+        lnum: LineNr,
+        action: c_int,
+    ) -> *mut BlockHeaderHandle;
+
+    /// Flush the current cached line to the data block (C implementation)
+    fn ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
+
+    // -------------------------------------------------------------------------
+    // File format
+    // -------------------------------------------------------------------------
+
+    /// Get file format (EOL_UNIX=0, EOL_DOS=1, EOL_MAC=2) from Rust buffer crate
+    fn rs_get_fileformat(buf: *mut BufHandle) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Cursor / Window Accessors (for rs_goto_byte)
+    // -------------------------------------------------------------------------
+
+    /// Set curwin->w_cursor.lnum
+    fn nvim_curwin_set_cursor_lnum(lnum: LineNr);
+
+    /// Set curwin->w_cursor.col
+    fn nvim_curwin_set_cursor_col(col: ColNr);
+
+    /// Set curwin->w_cursor.coladd
+    fn nvim_edit_set_cursor_coladd(val: ColNr);
+
+    /// Set curwin->w_set_curswant
+    fn nvim_edit_set_w_set_curswant(val: c_int);
+
+    /// Set curwin->w_curswant
+    fn nvim_edit_set_w_curswant(val: ColNr);
+
+    /// Get MAXCOL as ColNr
+    fn nvim_get_MAXCOL() -> c_int;
+
+    /// coladvance(curwin, col) wrapper
+    fn nvim_edit_coladvance(col: ColNr);
+
+    /// setpcmark()
+    fn nvim_mark_setpcmark();
+
+    /// check_cursor(curwin)
+    fn nvim_check_cursor();
+
+    /// mb_adjust_cursor()
+    fn nvim_mb_adjust_cursor();
+
+    // -------------------------------------------------------------------------
+    // C Implementation Functions (still called from wrappers below)
     // -------------------------------------------------------------------------
 
     /// Increment position (C implementation)
@@ -76,17 +174,6 @@ extern "C" {
     /// Decrement position, skipping NUL at end of non-empty lines (C implementation)
     fn decl(lp: *mut PosHandle) -> c_int;
 
-    /// Find byte offset for line, or line at byte offset (C implementation)
-    fn ml_find_line_or_offset(
-        buf: *mut BufHandle,
-        lnum: LineNr,
-        offp: *mut c_int,
-        no_ff: c_int,
-    ) -> c_int;
-
-    /// Go to a byte position in the buffer (C implementation)
-    fn goto_byte(cnt: c_int);
-
     /// Flush deleted bytes counter (C implementation)
     fn ml_flush_deleted_bytes(
         buf: *mut BufHandle,
@@ -94,6 +181,9 @@ extern "C" {
         codeunits: *mut usize,
     ) -> usize;
 }
+
+// EOL_DOS constant (matches buffer crate definition)
+const EOL_DOS: c_int = 1;
 
 // =============================================================================
 // Position Increment/Decrement Functions
@@ -162,6 +252,227 @@ pub unsafe extern "C" fn rs_decl(lp: *mut PosHandle) -> c_int {
 // Byte Offset Functions
 // =============================================================================
 
+/// Find the byte offset of a line, or find the line at a given byte offset.
+///
+/// This is the core byte-tracking function. It uses the chunk cache for O(log n)
+/// performance by skipping large chunks before doing per-block byte counting.
+///
+/// # Arguments
+/// * `buf` - Buffer to query
+/// * `lnum` - If > 0: find byte offset of this line (1-based). If == 0: find line
+///   containing byte offset `*offp`.
+/// * `offp` - If `lnum == 0`: input byte offset, output: column within found line.
+///   If `lnum > 0`: should be NULL.
+/// * `no_ff` - If non-zero: ignore 'fileformat', always count 1 byte per newline.
+///
+/// # Returns
+/// * When `lnum > 0`: byte offset of start of `lnum` (or -1 if unavailable)
+/// * When `lnum == 0`: line number containing offset (or -1 if past end)
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer (not NULL)
+/// - `offp` must be a valid pointer or NULL
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_ptr_alignment,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_ml_find_line_or_offset(
+    buf: *mut BufHandle,
+    lnum: LineNr,
+    offp: *mut c_int,
+    no_ff: c_int,
+) -> c_int {
+    let ffdos = (no_ff == 0) && (rs_get_fileformat(buf) == EOL_DOS);
+    let ffdos_int = c_int::from(ffdos);
+
+    // Take care of cached line first. Only needed if the cached line is before
+    // the requested line. Additionally cache the value for the cached line.
+    // This is used by the extmark code which needs the byte offset of the edited
+    // line. So when doing multiple small edits on the same line the value is
+    // only calculated once.
+    //
+    // NB: caching doesn't work with 'fileformat'. This is not a problem for
+    // bytetracking, as bytetracking ignores 'fileformat' option. But calling
+    // line2byte() will invalidate the cache for the time being.
+    let can_cache = lnum != 0 && !ffdos && nvim_buf_get_ml_line_lnum(buf) == lnum;
+
+    let curbuf = nvim_get_curbuf();
+    if lnum == 0 || nvim_buf_get_ml_line_lnum(buf) < lnum || no_ff == 0 {
+        ml_flush_line(curbuf, 0);
+    } else if can_cache && nvim_buf_get_ml_line_offset(buf) > 0 {
+        return nvim_buf_get_ml_line_offset(buf) as c_int;
+    }
+
+    if nvim_buf_get_ml_usedchunks(buf) == -1
+        || nvim_buf_get_ml_chunksize_is_null(buf) != 0
+        || lnum < 0
+    {
+        // memline is currently empty. Although if it is loaded,
+        // it behaves like there is one empty line.
+        if no_ff != 0 && nvim_buf_has_ml_mfp(buf) != 0 && (lnum == 1 || lnum == 2) {
+            return (lnum - 1) as c_int;
+        }
+        return -1;
+    }
+
+    let offset: c_int = if offp.is_null() { 0 } else { *offp };
+
+    if lnum == 0 && offset <= 0 {
+        return 1; // Not a "find offset" and offset 0 _must_ be in line 1
+    }
+
+    // Find the last chunk before the one containing our line. Last chunk is
+    // special because it will never qualify.
+    let mut curline: LineNr = 1;
+    let mut curix: c_int = 0;
+    let mut size: c_int = 0;
+    let used_chunks = nvim_buf_get_ml_usedchunks(buf);
+
+    while curix < used_chunks - 1 {
+        let chunk_numlines = nvim_buf_get_ml_chunksize_numlines(buf, curix);
+        let chunk_totalsize = nvim_buf_get_ml_chunksize_totalsize(buf, curix);
+
+        let lnum_skip = lnum != 0 && lnum >= curline + LineNr::from(chunk_numlines);
+        let offset_skip =
+            offset != 0 && offset > size + chunk_totalsize + ffdos_int * chunk_numlines;
+
+        if !lnum_skip && !offset_skip {
+            break;
+        }
+
+        curline += LineNr::from(chunk_numlines);
+        size += chunk_totalsize;
+        if offset != 0 && ffdos {
+            size += chunk_numlines;
+        }
+        curix += 1;
+    }
+
+    // Walk through data blocks within the identified chunk
+    let line_count = nvim_buf_get_ml_line_count(buf);
+
+    loop {
+        if lnum != 0 && curline >= lnum {
+            break;
+        }
+        if offset != 0 && size >= offset {
+            break;
+        }
+        if lnum == 0 && offset == 0 {
+            break;
+        }
+
+        if curline > line_count {
+            return -1;
+        }
+
+        let hp = nvim_ml_find_line(buf, curline, ML_FIND);
+        if hp.is_null() {
+            return -1;
+        }
+
+        let dp_raw = nvim_bhdr_get_bh_data(hp);
+        let dp = dp_raw.cast::<DataBlockHeader>();
+
+        let locked_high = nvim_buf_get_ml_locked_high(buf);
+        let locked_low = nvim_buf_get_ml_locked_low(buf);
+        let count = (locked_high - locked_low + 1) as c_int; // entries in block
+        let start_idx = (curline - locked_low) as c_int;
+        let mut idx = start_idx;
+
+        // db_index array starts immediately after the DataBlockHeader
+        let db_index: *const u32 = dp.add(1).cast();
+
+        let text_end: c_int = if idx == 0 {
+            // first line in block, text is at the end
+            (*dp).db_txt_end as c_int
+        } else {
+            (*db_index.add((idx - 1) as usize) & DB_INDEX_MASK) as c_int
+        };
+
+        // Compute index of last line to use in this block
+        if lnum != 0 {
+            if curline + LineNr::from(count - idx) >= lnum {
+                idx += (lnum - curline - 1) as c_int;
+            } else {
+                idx = count - 1;
+            }
+        } else {
+            // byte-search mode: walk forward through lines in block
+            let mut extra: c_int = 0;
+            loop {
+                let line_start = ((*db_index.add(idx as usize)) & DB_INDEX_MASK) as c_int;
+                if offset < size + text_end - line_start + ffdos_int {
+                    break;
+                }
+                if ffdos {
+                    size += 1;
+                }
+                if idx == count - 1 {
+                    extra = 1;
+                    break;
+                }
+                idx += 1;
+            }
+
+            let line_start_idx = ((*db_index.add(idx as usize)) & DB_INDEX_MASK) as c_int;
+            let len = text_end - line_start_idx;
+            size += len;
+            if size >= offset {
+                if !offp.is_null() {
+                    if size + ffdos_int == offset {
+                        *offp = 0;
+                    } else if idx == start_idx {
+                        *offp = offset - size + len;
+                    } else {
+                        let prev_start =
+                            ((*db_index.add((idx - 1) as usize)) & DB_INDEX_MASK) as c_int;
+                        *offp = offset - size + len - (text_end - prev_start);
+                    }
+                }
+                let result_lnum = curline + LineNr::from(idx - start_idx + extra);
+                if result_lnum > line_count {
+                    return -1; // exactly one byte beyond the end
+                }
+                return result_lnum as c_int;
+            }
+            curline = locked_high + 1;
+            continue;
+        }
+
+        // line-search mode: accumulate size for lines in block
+        let line_start = ((*db_index.add(idx as usize)) & DB_INDEX_MASK) as c_int;
+        let len = text_end - line_start;
+        size += len;
+        curline = locked_high + 1;
+    }
+
+    if lnum != 0 {
+        // Count extra CR characters for DOS format.
+        if ffdos {
+            size += (lnum - 1) as c_int;
+        }
+
+        // Don't count the last line break if 'noeol' and ('bin' or 'nofixeol').
+        if (nvim_buf_get_b_p_fixeol(buf) == 0 || nvim_buf_get_b_p_bin(buf) != 0)
+            && nvim_buf_get_b_p_eol(buf) == 0
+            && lnum > line_count
+        {
+            size -= ffdos_int + 1;
+        }
+    }
+
+    if can_cache && size > 0 {
+        nvim_buf_set_ml_line_offset(buf, size as usize);
+    }
+
+    size
+}
+
 /// Get the byte offset of a line in a buffer.
 ///
 /// This returns the 0-based byte offset of the start of line `lnum`.
@@ -178,7 +489,7 @@ pub unsafe extern "C" fn rs_ml_line2byte(buf: *mut BufHandle, lnum: LineNr) -> c
     if buf.is_null() {
         return -1;
     }
-    ml_find_line_or_offset(buf, lnum, std::ptr::null_mut(), 1)
+    rs_ml_find_line_or_offset(buf, lnum, std::ptr::null_mut(), 1)
 }
 
 /// Get the byte offset of a line, considering file format.
@@ -196,7 +507,7 @@ pub unsafe extern "C" fn rs_ml_line2byte_ff(buf: *mut BufHandle, lnum: LineNr) -
     if buf.is_null() {
         return -1;
     }
-    ml_find_line_or_offset(buf, lnum, std::ptr::null_mut(), 0)
+    rs_ml_find_line_or_offset(buf, lnum, std::ptr::null_mut(), 0)
 }
 
 /// Get the line number containing a byte offset.
@@ -223,7 +534,7 @@ pub unsafe extern "C" fn rs_ml_byte2line(
     }
 
     let mut offset = byte;
-    let result = ml_find_line_or_offset(buf, 0, std::ptr::addr_of_mut!(offset), 1);
+    let result = rs_ml_find_line_or_offset(buf, 0, std::ptr::addr_of_mut!(offset), 1);
 
     if result > 0 && !col_out.is_null() {
         *col_out = offset;
@@ -243,8 +554,33 @@ pub unsafe extern "C" fn rs_ml_byte2line(
 /// # Safety
 /// Modifies cursor position and buffer state.
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_goto_byte(cnt: c_int) {
-    goto_byte(cnt);
+    let mut boff = cnt;
+
+    let curbuf = nvim_get_curbuf();
+    ml_flush_line(curbuf, 0); // cached line may be dirty
+    nvim_mark_setpcmark();
+    if boff != 0 {
+        boff -= 1;
+    }
+    let lnum = LineNr::from(rs_ml_find_line_or_offset(curbuf, 0, &raw mut boff, 0));
+    let maxcol = nvim_get_MAXCOL() as ColNr;
+    if lnum < 1 {
+        // past the end
+        let line_count = nvim_buf_get_ml_line_count(curbuf);
+        nvim_curwin_set_cursor_lnum(line_count);
+        nvim_edit_set_w_curswant(maxcol);
+        nvim_edit_coladvance(maxcol);
+    } else {
+        nvim_curwin_set_cursor_lnum(lnum);
+        nvim_curwin_set_cursor_col(boff as ColNr);
+        nvim_edit_set_cursor_coladd(0);
+        nvim_edit_set_w_set_curswant(1);
+    }
+    nvim_check_cursor();
+    // Make sure the cursor is on the first byte of a multi-byte char.
+    nvim_mb_adjust_cursor();
 }
 
 // =============================================================================
@@ -366,10 +702,6 @@ pub unsafe extern "C" fn rs_ml_get_used_chunks(buf: *mut BufHandle) -> c_int {
     }
 
     nvim_buf_get_ml_usedchunks(buf)
-}
-
-extern "C" {
-    fn nvim_buf_get_ml_usedchunks(buf: *mut BufHandle) -> c_int;
 }
 
 // =============================================================================

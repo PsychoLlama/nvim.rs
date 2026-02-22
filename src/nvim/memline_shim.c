@@ -1970,6 +1970,24 @@ colnr_T nvim_get_maxcol(void) { return MAXCOL; }
 int nvim_buf_has_ml_mfp(buf_T *buf) { return buf->b_ml.ml_mfp != NULL; }
 int nvim_buf_get_ml_usedchunks(buf_T *buf) { return buf->b_ml.ml_usedchunks; }
 
+
+// Byte offset cache accessor
+size_t nvim_buf_get_ml_line_offset(buf_T *buf) { return buf->b_ml.ml_line_offset; }
+void nvim_buf_set_ml_line_offset(buf_T *buf, size_t offset) { buf->b_ml.ml_line_offset = offset; }
+
+// Locked block line range accessors
+linenr_T nvim_buf_get_ml_locked_high(buf_T *buf) { return buf->b_ml.ml_locked_high; }
+linenr_T nvim_buf_get_ml_locked_low(buf_T *buf) { return buf->b_ml.ml_locked_low; }
+
+// Chunk size accessors (index into ml_chunksize[])
+int nvim_buf_get_ml_chunksize_numlines(buf_T *buf, int idx) { return buf->b_ml.ml_chunksize[idx].mlcs_numlines; }
+int nvim_buf_get_ml_chunksize_totalsize(buf_T *buf, int idx) { return buf->b_ml.ml_chunksize[idx].mlcs_totalsize; }
+int nvim_buf_get_ml_chunksize_is_null(buf_T *buf) { return buf->b_ml.ml_chunksize == NULL; }
+
+// Block header data accessor (returns void* to DataBlock)
+void *nvim_bhdr_get_bh_data(bhdr_T *hp) { return hp->bh_data; }
+
+
 // Position setters
 void nvim_pos_set_lnum(pos_T *pos, linenr_T lnum) { pos->lnum = lnum; }
 void nvim_pos_set_col(pos_T *pos, colnr_T col) { pos->col = col; }
@@ -3167,6 +3185,12 @@ error_noblock:
   return NULL;
 }
 
+/// Public wrapper around the static ml_find_line, for Rust FFI.
+bhdr_T *nvim_ml_find_line(buf_T *buf, linenr_T lnum, int action)
+{
+  return ml_find_line(buf, lnum, action);
+}
+
 /// add an entry to the info pointer stack
 ///
 /// @return  number of the new entry
@@ -4019,187 +4043,7 @@ static void ml_updatechunk(buf_T *buf, linenr_T line, int len, int updtype)
   ml_upd_lastcurix = curix;
 }
 
-/// Find offset for line or line with offset.
-///
-/// @param buf buffer to use
-/// @param lnum if > 0, find offset of lnum, return offset
-///             if == 0, return line with offset *offp
-/// @param offp offset to use to find line, store remaining column offset
-///             Should be NULL when getting offset of line
-/// @param no_ff ignore 'fileformat' option, always use one byte for NL.
-///
-/// @return  -1 if information is not available
-int ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff)
-{
-  bhdr_T *hp;
-  int text_end;
-  int offset;
-  int ffdos = !no_ff && (rs_get_fileformat((buf_T *)buf) == EOL_DOS);
-  int extra = 0;
-
-  // take care of cached line first. Only needed if the cached line is before
-  // the requested line. Additionally cache the value for the cached line.
-  // This is used by the extmark code which needs the byte offset of the edited
-  // line. So when doing multiple small edits on the same line the value is
-  // only calculated once.
-  //
-  // NB: caching doesn't work with 'fileformat'. This is not a problem for
-  // bytetracking, as bytetracking ignores 'fileformat' option. But calling
-  // line2byte() will invalidate the cache for the time being (this function
-  // was never cached to start with anyway).
-  bool can_cache = (lnum != 0 && !ffdos && buf->b_ml.ml_line_lnum == lnum);
-  if (lnum == 0 || buf->b_ml.ml_line_lnum < lnum || !no_ff) {
-    ml_flush_line(curbuf, false);
-  } else if (can_cache && buf->b_ml.ml_line_offset > 0) {
-    return (int)buf->b_ml.ml_line_offset;
-  }
-
-  if (buf->b_ml.ml_usedchunks == -1
-      || buf->b_ml.ml_chunksize == NULL
-      || lnum < 0) {
-    // memline is currently empty. Although if it is loaded,
-    // it behaves like there is one empty line.
-    if (no_ff && buf->b_ml.ml_mfp && (lnum == 1 || lnum == 2)) {
-      return lnum - 1;
-    }
-    return -1;
-  }
-
-  if (offp == NULL) {
-    offset = 0;
-  } else {
-    offset = *offp;
-  }
-  if (lnum == 0 && offset <= 0) {
-    return 1;       // Not a "find offset" and offset 0 _must_ be in line 1
-  }
-  // Find the last chunk before the one containing our line. Last chunk is
-  // special because it will never qualify.
-  linenr_T curline = 1;
-  int curix = 0;
-  int size = 0;
-  while (curix < buf->b_ml.ml_usedchunks - 1
-         && ((lnum != 0
-              && lnum >= curline + buf->b_ml.ml_chunksize[curix].mlcs_numlines)
-             || (offset != 0
-                 && offset > size +
-                 buf->b_ml.ml_chunksize[curix].mlcs_totalsize
-                 + ffdos * buf->b_ml.ml_chunksize[curix].mlcs_numlines))) {
-    curline += buf->b_ml.ml_chunksize[curix].mlcs_numlines;
-    size += buf->b_ml.ml_chunksize[curix].mlcs_totalsize;
-    if (offset && ffdos) {
-      size += buf->b_ml.ml_chunksize[curix].mlcs_numlines;
-    }
-    curix++;
-  }
-
-  while ((lnum != 0 && curline < lnum) || (offset != 0 && size < offset)) {
-    if (curline > buf->b_ml.ml_line_count
-        || (hp = ml_find_line(buf, curline, ML_FIND)) == NULL) {
-      return -1;
-    }
-    DataBlock *dp = hp->bh_data;
-    int count
-      = buf->b_ml.ml_locked_high - buf->b_ml.ml_locked_low + 1;  // number of entries in block
-    int idx;
-    int start_idx = idx = curline - buf->b_ml.ml_locked_low;
-    if (idx == 0) {  // first line in block, text at the end
-      text_end = (int)dp->db_txt_end;
-    } else {
-      text_end = ((dp->db_index[idx - 1]) & DB_INDEX_MASK);
-    }
-    // Compute index of last line to use in this MEMLINE
-    if (lnum != 0) {
-      if (curline + (count - idx) >= lnum) {
-        idx += lnum - curline - 1;
-      } else {
-        idx = count - 1;
-      }
-    } else {
-      extra = 0;
-      while (true) {
-        if (!(offset >= size
-              + text_end - (int)((dp->db_index[idx]) & DB_INDEX_MASK)
-              + ffdos)) {
-          break;
-        }
-        if (ffdos) {
-          size++;
-        }
-        if (idx == count - 1) {
-          extra = 1;
-          break;
-        }
-        idx++;
-      }
-    }
-    int len = text_end - (int)((dp->db_index[idx]) & DB_INDEX_MASK);
-    size += len;
-    if (offset != 0 && size >= offset) {
-      if (size + ffdos == offset) {
-        *offp = 0;
-      } else if (idx == start_idx) {
-        *offp = offset - size + len;
-      } else {
-        *offp = offset - size + len
-                - (text_end - (int)((dp->db_index[idx - 1]) & DB_INDEX_MASK));
-      }
-      curline += idx - start_idx + extra;
-      if (curline > buf->b_ml.ml_line_count) {
-        return -1;              // exactly one byte beyond the end
-      }
-      return curline;
-    }
-    curline = buf->b_ml.ml_locked_high + 1;
-  }
-
-  if (lnum != 0) {
-    // Count extra CR characters.
-    if (ffdos) {
-      size += lnum - 1;
-    }
-
-    // Don't count the last line break if 'noeol' and ('bin' or
-    // 'nofixeol').
-    if ((!buf->b_p_fixeol || buf->b_p_bin) && !buf->b_p_eol
-        && lnum > buf->b_ml.ml_line_count) {
-      size -= ffdos + 1;
-    }
-  }
-
-  if (can_cache && size > 0) {
-    buf->b_ml.ml_line_offset = (size_t)size;
-  }
-
-  return size;
-}
-
-/// Goto byte in buffer with offset 'cnt'.
-void goto_byte(int cnt)
-{
-  int boff = cnt;
-
-  ml_flush_line(curbuf, false);  // cached line may be dirty
-  setpcmark();
-  if (boff) {
-    boff--;
-  }
-  linenr_T lnum = (linenr_T)ml_find_line_or_offset(curbuf, 0, &boff, false);
-  if (lnum < 1) {         // past the end
-    curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-    curwin->w_curswant = MAXCOL;
-    coladvance(curwin, MAXCOL);
-  } else {
-    curwin->w_cursor.lnum = lnum;
-    curwin->w_cursor.col = (colnr_T)boff;
-    curwin->w_cursor.coladd = 0;
-    curwin->w_set_curswant = true;
-  }
-  check_cursor(curwin);
-
-  // Make sure the cursor is on the first byte of a multi-byte char.
-  mb_adjust_cursor();
-}
+// ml_find_line_or_offset and goto_byte migrated to Rust (navigate.rs)
 
 /// Increment the line pointer "lp" crossing line boundaries as necessary.
 ///
@@ -4285,8 +4129,10 @@ int decl(pos_T *lp)
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
 // ============================================================================
 
-/// Find line or byte offset (wrapper for Rust FFI).
+extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
+
+/// Find line or byte offset (thin wrapper for extmark crate FFI).
 bcount_t nvim_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff)
 {
-  return ml_find_line_or_offset(buf, lnum, offp, no_ff);
+  return rs_ml_find_line_or_offset(buf, lnum, offp, no_ff);
 }

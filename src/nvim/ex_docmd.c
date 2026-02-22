@@ -243,6 +243,9 @@ extern int rs_get_scrolloff_value(win_T *wp);
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
 
+// Rust FFI declarations (memline crate)
+extern void rs_goto_byte(int cnt);
+
 // Rust FFI declarations (window wrappers removed)
 extern void rs_do_window(int nchar, int Prenum, int xchar);
 extern tabpage_T *rs_find_tabpage(int n);
@@ -3674,7 +3677,7 @@ static void ex_print(exarg_T *eap)
 
 static void ex_goto(exarg_T *eap)
 {
-  goto_byte(eap->line2);
+  rs_goto_byte(eap->line2);
 }
 
 /// ":preserve".

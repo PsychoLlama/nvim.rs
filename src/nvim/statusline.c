@@ -55,6 +55,9 @@
 extern win_T *rs_lastwin_nofloating(void);
 extern int rs_tabline_height(void);
 
+// Rust FFI declarations (memline crate)
+extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
+
 // Rust implementations
 extern int rs_get_fileformat(buf_T *buf);
 extern int rs_stl_connected(win_T *wp);
@@ -298,7 +301,7 @@ int nvim_stl_get_byte_offset(win_T *wp)
     return 0;
   }
   // Use ml_find_line_or_offset which is O(log n) for byte offset calculation
-  int l = ml_find_line_or_offset(wp->w_buffer, wp->w_cursor.lnum, NULL, false);
+  int l = rs_ml_find_line_or_offset(wp->w_buffer, wp->w_cursor.lnum, NULL, false);
   if (wp->w_buffer->b_ml.ml_flags & ML_EMPTY) {
     return 0;
   }

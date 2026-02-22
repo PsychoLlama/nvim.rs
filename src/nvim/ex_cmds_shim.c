@@ -136,6 +136,7 @@ typedef struct {
 #include "ex_cmds_shim.c.generated.h"
 
 // Rust FFI declarations
+extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
 extern int rs_win_valid(win_T *win);
 extern int rs_win_valid_any_tab(win_T *win);
 extern void rs_reset_VIsual(void);
@@ -313,7 +314,7 @@ void nvim_excmds_mark_adjust_nofold(linenr_T line1, linenr_T line2,
 
 int64_t nvim_excmds_ml_find_line_or_offset(linenr_T lnum)
 {
-  return (int64_t)ml_find_line_or_offset(curbuf, lnum, NULL, true);
+  return (int64_t)rs_ml_find_line_or_offset(curbuf, lnum, NULL, true);
 }
 
 int nvim_excmds_ml_delete_flags(linenr_T lnum, int flags)

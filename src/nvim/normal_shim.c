@@ -442,6 +442,9 @@ static int nv_max_linear;
 // Rust FFI declarations (non-dispatch-table)
 // =============================================================================
 
+// memline crate
+extern void rs_goto_byte(int cnt);
+
 // Normal mode state machine
 extern int rs_normal_check(void *s);
 extern int rs_normal_execute(void *s, int key);
@@ -2058,7 +2061,7 @@ void nvim_invoke_edit_g(cmdarg_T *cap) { invoke_edit(cap, false, 'g', false); }
 void nvim_nv_gotofile(cmdarg_T *cap) { nv_gotofile(cap); }
 void nvim_set_mod_mask_ctrl(void) { mod_mask = MOD_MASK_CTRL; }
 void nvim_do_mouse_g(oparg_T *oap, int nchar, int count1) { do_mouse(oap, nchar, BACKWARD, count1, 0); }
-void nvim_goto_byte_call(int count) { goto_byte(count); }
+void nvim_goto_byte_call(int count) { rs_goto_byte(count); }
 void nvim_undo_time_call(int count, bool sec, bool file, bool absolute) { undo_time(count, sec, file, absolute); }
 void nvim_show_sb_text_call(void) { show_sb_text(); }
 void nvim_show_utf8_call(void) { show_utf8(); }

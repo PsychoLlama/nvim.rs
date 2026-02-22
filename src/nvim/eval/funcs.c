@@ -150,6 +150,9 @@ typedef enum {
 
 #include "eval/funcs.c.generated.h"
 
+// Rust FFI declarations (memline crate)
+extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
+
 // Rust FFI declarations (tag module)
 extern int rs_get_tagfname(tagname_T *tnp, int first, char *buf);
 extern void rs_tagname_free(void *tnp);
@@ -642,8 +645,8 @@ static void f_byte2line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (boff < 0) {
     rettv->vval.v_number = -1;
   } else {
-    rettv->vval.v_number = (varnumber_T)ml_find_line_or_offset(curbuf, 0,
-                                                               &boff, false);
+    rettv->vval.v_number = (varnumber_T)rs_ml_find_line_or_offset(curbuf, 0,
+                                                                  &boff, false);
   }
 }
 
@@ -4092,7 +4095,7 @@ static void f_line2byte(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count + 1) {
     rettv->vval.v_number = -1;
   } else {
-    rettv->vval.v_number = ml_find_line_or_offset(curbuf, lnum, NULL, false);
+    rettv->vval.v_number = rs_ml_find_line_or_offset(curbuf, lnum, NULL, false);
   }
   if (rettv->vval.v_number >= 0) {
     rettv->vval.v_number++;

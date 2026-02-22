@@ -48,6 +48,8 @@
 
 #include "api/buffer.c.generated.h"
 
+extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
+
 // Rust FFI declarations for buffer operations
 extern int rs_buf_is_loaded(const buf_T *buf);  // From buffer crate (returns int, not bool)
 extern bool rs_range_ordered(int64_t start, int64_t end);
@@ -842,7 +844,7 @@ Integer nvim_buf_get_offset(Buffer buffer, Integer index, Error *err)
     return 0;
   });
 
-  return ml_find_line_or_offset(buf, (int)index + 1, NULL, true);
+  return rs_ml_find_line_or_offset(buf, (int)index + 1, NULL, true);
 }
 
 /// Gets a buffer-scoped (b:) variable.
