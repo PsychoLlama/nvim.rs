@@ -34,6 +34,7 @@
 // Domain-specific modules
 pub mod alloc;
 pub mod close;
+pub mod colorcolumn;
 pub mod commands;
 pub mod dispatch;
 pub mod equalize;

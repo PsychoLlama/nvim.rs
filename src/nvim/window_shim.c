@@ -166,6 +166,9 @@ extern void rs_win_new_width(win_T *wp, int width);
 extern void rs_frame_new_width(frame_T *topfrp, int width, int leftfirst, int wfw);
 extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int wfh, int set_ch);
 
+// Colorcolumn
+extern const char *rs_check_colorcolumn(const char *cc, win_T *wp);
+
 // Snapshot lifecycle
 extern void rs_clear_snapshot(tabpage_T *tp, int idx);
 extern void rs_make_snapshot(int idx);
@@ -408,6 +411,13 @@ char *nvim_get_p_cpo(void) { return p_cpo; }
 char *nvim_win_get_p_sbr(win_T *wp) { return wp->w_p_sbr; }
 char *nvim_get_p_sbr(void) { return p_sbr; }
 char *nvim_get_empty_string_option(void) { return empty_string_option; }
+// Colorcolumn accessors
+char *nvim_win_get_p_cc(win_T *wp) { return wp->w_p_cc; }
+int64_t nvim_win_get_buf_b_p_tw(win_T *wp) { return wp->w_buffer->b_p_tw; }
+int nvim_win_has_buffer(win_T *wp) { return wp->w_buffer != NULL; }
+int *nvim_win_get_p_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }
+void nvim_win_set_p_cc_cols(win_T *wp, int *cols) { wp->w_p_cc_cols = cols; }
+void nvim_win_free_p_cc_cols(win_T *wp) { xfree(wp->w_p_cc_cols); wp->w_p_cc_cols = NULL; }
 int nvim_win_get_p_list(win_T *wp) { return wp->w_p_list; }
 uint32_t nvim_win_get_lcs_prec(win_T *wp) { return wp->w_p_lcs_chars.prec; }
 int nvim_win_get_p_cul(win_T *wp) { return wp->w_p_cul; }
@@ -4283,8 +4293,7 @@ static int int_cmp(const void *pa, const void *pb)
   return a == b ? 0 : a < b ? -1 : 1;
 }
 
-/// Check "cc" as 'colorcolumn' and update the members of "wp".
-/// This is called when 'colorcolumn' or 'textwidth' is changed.
+/// Check "cc" as 'colorcolumn' and update the members of "wp" (thin wrapper).
 ///
 /// @param cc  when NULL: use "wp->w_p_cc"
 /// @param wp  when NULL: only parse "cc"
@@ -4292,88 +4301,7 @@ static int int_cmp(const void *pa, const void *pb)
 /// @return error message, NULL if it's OK.
 const char *check_colorcolumn(char *cc, win_T *wp)
 {
-  if (wp != NULL && wp->w_buffer == NULL) {
-    return NULL;      // buffer was closed
-  }
-
-  char *s = empty_string_option;
-  if (cc != NULL) {
-    s = cc;
-  } else if (wp != NULL) {
-    s = wp->w_p_cc;
-  }
-
-  OptInt tw;
-  if (wp != NULL) {
-    tw = wp->w_buffer->b_p_tw;
-  } else {
-    // buffer-local value not set, assume zero
-    tw = 0;
-  }
-
-  unsigned count = 0;
-  int color_cols[256];
-  while (*s != NUL && count < 255) {
-    int col;
-    if (*s == '-' || *s == '+') {
-      // -N and +N: add to 'textwidth'
-      col = (*s == '-') ? -1 : 1;
-      s++;
-      if (!ascii_isdigit(*s)) {
-        return e_invarg;
-      }
-      col = col * getdigits_int(&s, true, 0);
-      if (tw == 0) {
-        goto skip;          // 'textwidth' not set, skip this item
-      }
-      assert((col >= 0 && tw <= INT_MAX - col && tw + col >= INT_MIN)
-             || (col < 0 && tw >= INT_MIN - col && tw + col <= INT_MAX));
-      col += (int)tw;
-      if (col < 0) {
-        goto skip;
-      }
-    } else if (ascii_isdigit(*s)) {
-      col = getdigits_int(&s, true, 0);
-    } else {
-      return e_invarg;
-    }
-    color_cols[count++] = col - 1;      // 1-based to 0-based
-skip:
-    if (*s == NUL) {
-      break;
-    }
-    if (*s != ',') {
-      return e_invarg;
-    }
-    if (*++s == NUL) {
-      return e_invarg;        // illegal trailing comma as in "set cc=80,"
-    }
-  }
-
-  if (wp == NULL) {
-    return NULL;  // only parse "cc"
-  }
-
-  xfree(wp->w_p_cc_cols);
-  if (count == 0) {
-    wp->w_p_cc_cols = NULL;
-  } else {
-    wp->w_p_cc_cols = xmalloc(sizeof(int) * (count + 1));
-    // sort the columns for faster usage on screen redraw inside
-    // win_line()
-    qsort(color_cols, count, sizeof(int), int_cmp);
-
-    int j = 0;
-    for (unsigned i = 0; i < count; i++) {
-      // skip duplicates
-      if (j == 0 || wp->w_p_cc_cols[j - 1] != color_cols[i]) {
-        wp->w_p_cc_cols[j++] = color_cols[i];
-      }
-    }
-    wp->w_p_cc_cols[j] = -1;        // end marker
-  }
-
-  return NULL;    // no error
+  return rs_check_colorcolumn(cc, wp);
 }
 
 void win_ui_flush(bool validate)
