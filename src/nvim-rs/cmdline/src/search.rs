@@ -412,7 +412,7 @@ extern "C" {
     fn nvim_get_curwin_handle() -> c_int;
     fn nvim_get_curwin_cursor_pos(pos: *mut PosT);
     fn nvim_set_curwin_cursor_pos(pos: *const PosT);
-    fn nvim_get_magic_overruled() -> c_int;
+    fn nvim_option_get_magic_overruled() -> c_int;
     fn nvim_save_viewstate(vs: *mut ViewStateT);
     fn nvim_restore_viewstate(vs: *const ViewStateT);
     fn nvim_option_set_magic_overruled(value: c_int);
@@ -464,7 +464,7 @@ pub unsafe extern "C" fn rs_init_incsearch_state(state: *mut IncsearchStateT) {
     s.incsearch_postponed = false;
 
     // Save magic_overruled
-    s.magic_overruled_save = nvim_get_magic_overruled();
+    s.magic_overruled_save = nvim_option_get_magic_overruled();
 
     // Clear match_end
     s.match_end.clear();

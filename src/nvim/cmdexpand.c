@@ -569,8 +569,6 @@ int nvim_get_p_wmnu(void)
   return p_wmnu;
 }
 
-// nvim_get_p_fic already exists in option.c
-
 /// Wrapper for cmdline_pum_display (for Rust FFI).
 void nvim_cmdexpand_pum_display(int changed_array)
 {

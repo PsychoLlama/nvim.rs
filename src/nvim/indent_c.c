@@ -30,6 +30,7 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+extern const char *rs_skip_to_option_part(const char *p);
 extern bool rs_cindent_on(void);
 
 // Phase 137: C indentation Rust helpers
@@ -2838,7 +2839,7 @@ bool in_cinkeys(int keytyped, int when, bool line_is_empty)
     }
 
     // Skip over ", ".
-    look = skip_to_option_part(look);
+    look = (char *)rs_skip_to_option_part(look);
   }
   return false;
 }

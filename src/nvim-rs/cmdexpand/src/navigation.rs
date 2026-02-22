@@ -36,7 +36,7 @@ extern "C" {
     fn nvim_set_compl_selected(val: c_int);
     fn nvim_get_cmd_showtail() -> c_int;
     fn nvim_get_p_wmnu() -> c_int;
-    fn nvim_get_p_fic() -> c_int;
+    fn nvim_option_get_fic() -> c_int;
     fn nvim_get_pum_want_active() -> c_int;
     fn nvim_get_pum_want_item() -> c_int;
 
@@ -305,7 +305,7 @@ pub unsafe extern "C" fn rs_find_longest_match(xp: ExpandHandle, options: c_int)
         let c0 = utf_ptr2char(first_file.add(len));
 
         let ctx = nvim_expand_get_context(xp);
-        let use_icase = nvim_get_p_fic() != 0
+        let use_icase = nvim_option_get_fic() != 0
             && (ctx == ExpandContext::Directories.to_raw()
                 || ctx == ExpandContext::Files.to_raw()
                 || ctx == ExpandContext::Shellcmd.to_raw()

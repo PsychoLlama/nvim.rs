@@ -26,8 +26,8 @@ extern "C" {
     fn nvim_get_search_match_endcol() -> c_int;
 
     // Magic
-    fn nvim_get_magic_overruled() -> c_int;
-    fn nvim_get_p_magic() -> c_int;
+    fn nvim_option_get_magic_overruled() -> c_int;
+    fn nvim_option_get_magic() -> c_int;
 }
 
 // =============================================================================
@@ -208,10 +208,10 @@ pub fn set_no_smartcase(val: bool) {
 pub fn magic_isset() -> bool {
     // SAFETY: Simple global accessors
     unsafe {
-        match nvim_get_magic_overruled() {
+        match nvim_option_get_magic_overruled() {
             OPTION_MAGIC_ON => true,
             OPTION_MAGIC_OFF => false,
-            _ => nvim_get_p_magic() != 0,
+            _ => nvim_option_get_magic() != 0,
         }
     }
 }

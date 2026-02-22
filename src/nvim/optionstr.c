@@ -59,6 +59,7 @@
 #include "optionstr.c.generated.h"
 
 // Rust FFI declarations (window wrappers removed)
+extern const char *rs_skip_to_option_part(const char *p);
 extern int rs_global_stl_height(void);
 
 // Rust fold FFI declarations
@@ -923,7 +924,7 @@ const char *did_set_comments(optset_T *args)
       }
       s++;
     }
-    s = skip_to_option_part(s);
+    s = (char *)rs_skip_to_option_part(s);
   }
   return errmsg;
 }

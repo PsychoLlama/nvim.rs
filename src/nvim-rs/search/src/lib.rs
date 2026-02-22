@@ -41,10 +41,10 @@ extern "C" {
     fn nvim_regexp_get_had_eol() -> c_int;
 
     /// Get the `magic_overruled` global value.
-    fn nvim_get_magic_overruled() -> c_int;
+    fn nvim_option_get_magic_overruled() -> c_int;
 
     /// Get the `p_magic` global value.
-    fn nvim_get_p_magic() -> c_int;
+    fn nvim_option_get_magic() -> c_int;
 }
 
 /// Direction constant for FORWARD.
@@ -137,10 +137,10 @@ pub unsafe extern "C" fn rs_vim_regcomp_had_eol() -> c_int {
 #[inline]
 fn magic_isset_impl() -> bool {
     unsafe {
-        match nvim_get_magic_overruled() {
+        match nvim_option_get_magic_overruled() {
             OPTION_MAGIC_ON => true,
             OPTION_MAGIC_OFF => false,
-            _ => nvim_get_p_magic() != 0,
+            _ => nvim_option_get_magic() != 0,
         }
     }
 }

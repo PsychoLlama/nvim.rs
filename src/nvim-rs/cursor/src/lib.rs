@@ -320,7 +320,7 @@ extern "C" {
     fn nvim_validate_virtcol(wp: WinHandle);
 
     /// Get `sidescrolloff` value
-    fn nvim_get_sidescrolloff_value(wp: WinHandle) -> c_int;
+    fn rs_get_sidescrolloff_value(wp: WinHandle) -> c_int;
 
     /// Call `redraw_later`
     fn nvim_redraw_later(wp: WinHandle, r#type: c_int);
@@ -1213,7 +1213,7 @@ pub unsafe extern "C" fn rs_set_leftcol(leftcol: i32) -> bool {
 
     // If the cursor is right or left of the screen, move it to last or first
     // visible character
-    let siso = nvim_get_sidescrolloff_value(curwin);
+    let siso = rs_get_sidescrolloff_value(curwin);
     let virtcol = i64::from(nvim_win_get_virtcol(curwin));
 
     if virtcol > lastcol - i64::from(siso) {

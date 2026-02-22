@@ -104,9 +104,9 @@ extern "C" {
     /// Get line count from buffer
     fn nvim_buf_get_line_count(buf: *mut std::ffi::c_void) -> i64;
     /// Get scrolloff option value for window
-    fn nvim_get_scrolloff_value(win: WinHandle) -> c_int;
+    fn rs_get_scrolloff_value(win: WinHandle) -> c_int;
     /// Get sidescrolloff option value for window
-    fn nvim_get_sidescrolloff_value(win: WinHandle) -> c_int;
+    fn rs_get_sidescrolloff_value(win: WinHandle) -> c_int;
 }
 
 // =============================================================================
@@ -210,7 +210,7 @@ pub unsafe extern "C" fn rs_viewport_botline_valid(win: WinHandle) -> bool {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_scrolloff(win: WinHandle) -> c_int {
-    nvim_get_scrolloff_value(win)
+    rs_get_scrolloff_value(win)
 }
 
 /// Get the effective sidescrolloff value for a window.
@@ -219,7 +219,7 @@ pub unsafe extern "C" fn rs_viewport_scrolloff(win: WinHandle) -> c_int {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_sidescrolloff(win: WinHandle) -> c_int {
-    nvim_get_sidescrolloff_value(win)
+    rs_get_sidescrolloff_value(win)
 }
 
 /// Calculate the minimum topline to keep cursor visible with scrolloff.
@@ -231,7 +231,7 @@ pub unsafe extern "C" fn rs_viewport_sidescrolloff(win: WinHandle) -> c_int {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_min_topline(win: WinHandle, cursor_lnum: i64) -> i64 {
-    let scrolloff = nvim_get_scrolloff_value(win);
+    let scrolloff = rs_get_scrolloff_value(win);
     let min_top = cursor_lnum - i64::from(scrolloff);
     min_top.max(1)
 }
@@ -246,7 +246,7 @@ pub unsafe extern "C" fn rs_viewport_min_topline(win: WinHandle, cursor_lnum: i6
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_max_topline(win: WinHandle, cursor_lnum: i64) -> i64 {
     let view_height = nvim_win_get_view_height(win);
-    let scrolloff = nvim_get_scrolloff_value(win);
+    let scrolloff = rs_get_scrolloff_value(win);
 
     // topline can be at most cursor_lnum - (view_height - scrolloff - 1)
     let max_top = cursor_lnum - i64::from(view_height) + i64::from(scrolloff) + 1;
@@ -264,7 +264,7 @@ pub unsafe extern "C" fn rs_viewport_max_topline(win: WinHandle, cursor_lnum: i6
 pub unsafe extern "C" fn rs_viewport_cursor_in_margin(win: WinHandle, cursor_lnum: i64) -> bool {
     let topline = nvim_win_get_topline(win);
     let botline = nvim_win_get_botline(win);
-    let scrolloff = nvim_get_scrolloff_value(win);
+    let scrolloff = rs_get_scrolloff_value(win);
 
     let top_margin = topline + i64::from(scrolloff);
     let bot_margin = botline - i64::from(scrolloff) - 1;

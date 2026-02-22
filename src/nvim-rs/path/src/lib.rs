@@ -468,8 +468,8 @@ pub unsafe extern "C" fn rs_vim_isAbsName(name: *const c_char) -> c_int {
 // ============================================================================
 
 extern "C" {
-    fn nvim_get_p_sh() -> *const c_char;
-    fn nvim_get_p_ffs() -> *const c_char;
+    fn nvim_option_get_sh() -> *const c_char;
+    fn nvim_option_get_ffs() -> *const c_char;
 }
 
 /// Check if 'shell' option contains "csh" in the tail.
@@ -478,7 +478,7 @@ extern "C" {
 #[no_mangle]
 pub extern "C" fn rs_csh_like_shell() -> c_int {
     unsafe {
-        let p_sh = nvim_get_p_sh();
+        let p_sh = nvim_option_get_sh();
         if p_sh.is_null() {
             return 0;
         }
@@ -510,7 +510,7 @@ pub extern "C" fn rs_csh_like_shell() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_fish_like_shell() -> c_int {
     unsafe {
-        let p_sh = nvim_get_p_sh();
+        let p_sh = nvim_option_get_sh();
         if p_sh.is_null() {
             return 0;
         }
@@ -550,7 +550,7 @@ const EOL_MAC: c_int = 2;
 #[no_mangle]
 pub extern "C" fn rs_default_fileformat() -> c_int {
     unsafe {
-        let p_ffs = nvim_get_p_ffs();
+        let p_ffs = nvim_option_get_ffs();
         if p_ffs.is_null() || *p_ffs == 0 {
             return EOL_UNIX;
         }
@@ -897,7 +897,7 @@ mod after_pathsep_tests {
 
 extern "C" {
     /// Get the 'fileignorecase' option value.
-    fn nvim_get_p_fic() -> c_int;
+    fn nvim_option_get_fic() -> c_int;
 }
 
 /// Compare two file names, respecting 'fileignorecase'.
@@ -946,7 +946,7 @@ pub unsafe extern "C" fn rs_path_fnamecmp(fname1: *const c_char, fname2: *const 
     #[cfg(not(windows))]
     {
         // On Unix, use mb_strcmp_ic with p_fic
-        let fic = nvim_get_p_fic() != 0;
+        let fic = nvim_option_get_fic() != 0;
         nvim_mbyte::rs_mb_strcmp_ic(fic, fname1, fname2)
     }
 }
@@ -973,7 +973,7 @@ pub unsafe extern "C" fn rs_path_fnamencmp(
         return if fname1.is_null() { -1 } else { 1 };
     }
 
-    let fic = nvim_get_p_fic() != 0;
+    let fic = nvim_option_get_fic() != 0;
 
     #[cfg(windows)]
     {
@@ -1402,7 +1402,7 @@ pub unsafe extern "C" fn rs_pathcmp(
         return if path1.is_null() { -1 } else { 1 };
     }
 
-    let fic = nvim_get_p_fic() != 0;
+    let fic = nvim_option_get_fic() != 0;
     let mut idx1: usize = 0;
     let mut idx2: usize = 0;
     let mut shorter_path: *const c_char = std::ptr::null();
@@ -1881,7 +1881,7 @@ pub unsafe extern "C" fn rs_path_with_extension(
     }
 
     // Compare extension (skip the dot)
-    let fic = nvim_get_p_fic() != 0;
+    let fic = nvim_option_get_fic() != 0;
     let ext_start = last_dot.add(1);
     c_int::from(nvim_mbyte::rs_mb_strcmp_ic(fic, ext_start, extension) == 0)
 }

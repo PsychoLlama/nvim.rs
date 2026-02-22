@@ -163,6 +163,7 @@ static qf_info_T *ql_info;        // points to ql_info_actual after allocation
 static unsigned last_qf_id = 0;   // Last Used quickfix list id
 
 
+extern const char *rs_skip_to_option_part(const char *p);
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
                                list_stack_T **list_stack);
@@ -1899,7 +1900,7 @@ static efm_T *parse_efm_option(char *efm)
       goto parse_efm_error;
     }
     // Advance to next part
-    efm = skip_to_option_part(efm + len);       // skip comma and spaces
+    efm = (char *)rs_skip_to_option_part(efm + len);       // skip comma and spaces
   }
 
   if (fmt_first == NULL) {      // nothing found

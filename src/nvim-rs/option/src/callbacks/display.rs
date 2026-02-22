@@ -33,15 +33,16 @@ extern "C" {
     fn check_signcolumn(buf: *mut std::ffi::c_void, win: WinHandle);
 
     // State accessors
-    fn nvim_callback_get_full_screen() -> c_int;
+    fn nvim_option_get_full_screen() -> c_int;
     fn nvim_callback_get_p_ch() -> OptInt;
     fn nvim_callback_set_p_ch(value: OptInt);
-    fn nvim_callback_get_rows() -> c_int;
+    fn nvim_option_get_rows() -> c_int;
     fn nvim_callback_get_topframe() -> *mut std::ffi::c_void;
     fn nvim_callback_get_topframe_fr_height() -> c_int;
-    fn nvim_callback_tabline_height() -> c_int;
-    fn nvim_callback_global_stl_height() -> c_int;
-    fn nvim_callback_min_rows_curtab() -> c_int;
+    fn rs_tabline_height() -> c_int;
+    fn rs_global_stl_height() -> c_int;
+    fn nvim_get_curtab() -> *mut std::ffi::c_void;
+    fn rs_min_rows(tp: *mut std::ffi::c_void) -> c_int;
     fn nvim_callback_set_clear_cmdline(value: c_int);
 
     // Window accessors
@@ -80,13 +81,13 @@ fn set_cmdheight(value: OptInt) {
 /// Get Rows (screen height).
 #[inline]
 fn get_rows() -> c_int {
-    unsafe { nvim_callback_get_rows() }
+    unsafe { nvim_option_get_rows() }
 }
 
 /// Check if full screen is available.
 #[inline]
 fn full_screen() -> bool {
-    unsafe { nvim_callback_get_full_screen() != 0 }
+    unsafe { nvim_option_get_full_screen() != 0 }
 }
 
 /// Get topframe height.
@@ -98,19 +99,19 @@ fn get_topframe_height() -> c_int {
 /// Get tabline height.
 #[inline]
 fn tabline_height() -> c_int {
-    unsafe { nvim_callback_tabline_height() }
+    unsafe { rs_tabline_height() }
 }
 
 /// Get global status line height.
 #[inline]
 fn global_stl_height() -> c_int {
-    unsafe { nvim_callback_global_stl_height() }
+    unsafe { rs_global_stl_height() }
 }
 
 /// Get minimum rows for current tab.
 #[inline]
 fn min_rows_curtab() -> c_int {
-    unsafe { nvim_callback_min_rows_curtab() }
+    unsafe { rs_min_rows(nvim_get_curtab()) }
 }
 
 // =============================================================================

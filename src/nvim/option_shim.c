@@ -299,12 +299,6 @@ unsigned nvim_option_get_cb_flags(void) { return cb_flags; }
 int nvim_option_get_magic_overruled(void) { return (int)magic_overruled; }
 int nvim_option_get_secure(void) { return secure; }
 
-// Legacy accessor names (for compatibility)
-const char *nvim_get_p_sh(void) { return p_sh; }
-const char *nvim_get_p_ffs(void) { return p_ffs; }
-int nvim_get_p_fic(void) { return p_fic; }
-int nvim_get_magic_overruled(void) { return (int)magic_overruled; }
-int nvim_get_p_magic(void) { return p_magic; }
 const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
 
 // =============================================================================
@@ -396,15 +390,10 @@ void nvim_win_set_briopt_list(win_T *win, int val) { if (win) { win->w_briopt_li
 void nvim_win_set_briopt_vcol(win_T *win, int val) { if (win) { win->w_briopt_vcol = val; } }
 
 // Display callback accessors
-int nvim_callback_get_full_screen(void) { return full_screen; }
 OptInt nvim_callback_get_p_ch(void) { return p_ch; }
 void nvim_callback_set_p_ch(OptInt value) { p_ch = value; }
-int nvim_callback_get_rows(void) { return Rows; }
 frame_T *nvim_callback_get_topframe(void) { return topframe; }
 int nvim_callback_get_topframe_fr_height(void) { return topframe->fr_height; }
-int nvim_callback_tabline_height(void) { return rs_tabline_height(); }
-int nvim_callback_global_stl_height(void) { return rs_global_stl_height(); }
-int nvim_callback_min_rows_curtab(void) { return rs_min_rows(curtab); }
 void nvim_callback_set_clear_cmdline(int value) { clear_cmdline = value != 0; }
 
 // Window accessors for display callbacks
@@ -6227,12 +6216,6 @@ void set_fileformat(int eol_style, int opt_flags)
   need_maketitle = true;  // Set window title later.
 }
 
-/// Skip to next part of an option argument: skip space and comma
-char *skip_to_option_part(const char *p)
-{
-  return (char *)rs_skip_to_option_part(p);
-}
-
 /// Isolate one part of a string option separated by `sep_chars`.
 ///
 /// @param[in,out]  option    advanced to the next part
@@ -6265,7 +6248,7 @@ size_t copy_option_part(char **option, char *buf, size_t maxlen, char *sep_chars
   if (*p != NUL && *p != ',') {  // skip non-standard separator
     p++;
   }
-  p = skip_to_option_part(p);    // p points to next file name
+  p = (char *)rs_skip_to_option_part(p);    // p points to next file name
 
   *option = p;
   return len;
@@ -6292,22 +6275,6 @@ dict_T *get_winbuf_options(const int bufopt)
   }
 
   return d;
-}
-
-extern int rs_get_scrolloff_value(win_T *wp);
-extern int rs_get_sidescrolloff_value(win_T *wp);
-
-/// Return the effective 'scrolloff' value for the current window, using the
-/// Wrapper for rs_get_scrolloff_value (Rust FFI)
-int nvim_get_scrolloff_value(win_T *wp)
-{
-  return rs_get_scrolloff_value(wp);
-}
-
-/// Wrapper for rs_get_sidescrolloff_value (Rust FFI)
-int nvim_get_sidescrolloff_value(win_T *wp)
-{
-  return rs_get_sidescrolloff_value(wp);
 }
 
 Dict get_vimoption(String name, int opt_flags, buf_T *buf, win_T *win, Arena *arena, Error *err)
