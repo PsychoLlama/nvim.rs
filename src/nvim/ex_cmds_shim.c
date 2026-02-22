@@ -192,40 +192,10 @@ int nvim_exarg_get_forceit(exarg_T *eap)
   return eap->forceit ? 1 : 0;
 }
 
-/// Get skip flag from exarg_T.
-int nvim_exarg_get_skip(exarg_T *eap)
-{
-  return eap->skip ? 1 : 0;
-}
-
 /// Get flags (EXFLAG_*) from exarg_T.
 int nvim_exarg_get_flags(exarg_T *eap)
 {
   return eap->flags;
-}
-
-/// Get regname from exarg_T.
-int nvim_exarg_get_regname(exarg_T *eap)
-{
-  return eap->regname;
-}
-
-/// Get append flag from exarg_T.
-int nvim_exarg_get_append(exarg_T *eap)
-{
-  return eap->append;
-}
-
-/// Get usefilter flag from exarg_T.
-int nvim_exarg_get_usefilter(exarg_T *eap)
-{
-  return eap->usefilter ? 1 : 0;
-}
-
-/// Get address type from exarg_T.
-int nvim_exarg_get_addr_type(exarg_T *eap)
-{
-  return (int)eap->addr_type;
 }
 
 /// Get curwin->w_p_rl (right-to-left flag).
@@ -2942,12 +2912,6 @@ static void delbuf_msg(char *name)
 }
 
 static int append_indent = 0;       // autoindent for first line
-
-/// Get append_indent (used by ex_change/ex_append).
-int nvim_get_append_indent(void)
-{
-  return append_indent;
-}
 
 /// Set append_indent (used by ex_change before calling ex_append).
 void nvim_set_append_indent(int val)

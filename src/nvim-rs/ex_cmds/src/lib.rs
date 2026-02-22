@@ -403,18 +403,8 @@ extern "C" {
     pub fn nvim_exarg_get_addr_count(eap: *const ExArgHandle) -> c_int;
     /// Get forceit (! present) from exarg_T
     pub fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int;
-    /// Get skip flag from exarg_T
-    pub fn nvim_exarg_get_skip(eap: *const ExArgHandle) -> c_int;
-    /// Get append flag (>> in :write) from exarg_T
-    pub fn nvim_exarg_get_append(eap: *const ExArgHandle) -> c_int;
-    /// Get usefilter flag (! cmd in :read/:write) from exarg_T
-    pub fn nvim_exarg_get_usefilter(eap: *const ExArgHandle) -> c_int;
-    /// Get regname (register name) from exarg_T
-    pub fn nvim_exarg_get_regname(eap: *const ExArgHandle) -> c_int;
     /// Get flags (EXFLAG_*) from exarg_T
     pub fn nvim_exarg_get_flags(eap: *const ExArgHandle) -> c_int;
-    /// Get address type from exarg_T
-    pub fn nvim_exarg_get_addr_type(eap: *const ExArgHandle) -> c_int;
 
     // Buffer accessors
     /// Get the current buffer
@@ -574,8 +564,6 @@ extern "C" {
     // ex_change accessors and functions
     /// Get curbuf->b_p_ai (autoindent)
     pub fn nvim_curbuf_get_b_p_ai() -> c_int;
-    /// Get append_indent
-    pub fn nvim_get_append_indent() -> c_int;
     /// Set append_indent
     pub fn nvim_set_append_indent(val: c_int);
     /// Set eap->line2
