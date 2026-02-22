@@ -3288,8 +3288,6 @@ int nvim_qf_get_p_hh(void) { return (int)p_hh; }
 
 int nvim_qf_win_split(int size, int flags) { return win_split(size, flags); }
 
-void nvim_qf_win_setheight(int height) { rs_win_setheight(height); }
-
 void nvim_qf_clear_restart_edit(void) { restart_edit = 0; }
 
 bool nvim_qf_is_ll_stack_qi(const void *qi) { return IS_LL_STACK((const qf_info_T *)qi); }
@@ -3394,8 +3392,6 @@ void *nvim_qf_get_curbuf(void) { return curbuf; }
 
 bool nvim_qf_fdo_quickfix(void) { return (fdo_flags & kOptFdoFlagQuickfix) != 0; }
 
-void nvim_qf_fold_open_cursor(void) { rs_foldOpenCursor(); }
-
 void nvim_qf_setpcmark(void) { setpcmark(); }
 
 bool nvim_qf_curbuf_is(const void *buf) { return curbuf == (const buf_T *)buf; }
@@ -3485,13 +3481,8 @@ int nvim_qf_win_get_status_height(const void *win_void)
   return ((const win_T *)win_void)->w_status_height;
 }
 
-int nvim_qf_tabline_height(void) { return rs_tabline_height(); }
-
 int nvim_qf_cmdline_row(void) { return (int)cmdline_row; }
 
-void nvim_qf_win_setwidth(int width) { rs_win_setwidth(width); }
-
-void nvim_qf_reset_visual(void) { rs_reset_VIsual_and_resel(); }
 
 /// Wrap entire qf_open_new_cwindow
 int nvim_qf_open_new_cwindow(void *qi_void, int height)
@@ -4304,8 +4295,6 @@ int nvim_qf_buf_add_line(void *qfl, void *buf, linenr_T lnum, void *qfp,
 void nvim_ml_delete_one(linenr_T lnum) { ml_delete(lnum); }
 
 void nvim_qfga_clear(void) { qfga_clear(); }
-
-void nvim_check_lnums_true(void) { rs_check_lnums(1); }
 
 /// Set filetype, apply autocmds, and redraw for new qf buffer fill
 void nvim_qf_set_filetype_and_autocmds(void)

@@ -365,7 +365,7 @@ extern "C" {
     ) -> c_int;
     fn nvim_ml_delete_one(lnum: LinenrT);
     fn nvim_qfga_clear();
-    fn nvim_check_lnums_true();
+    fn rs_check_lnums(do_curwin: c_int);
     fn nvim_qf_set_filetype_and_autocmds();
     fn nvim_qf_get_key_typed() -> bool;
     fn nvim_qf_set_key_typed(val: bool);
@@ -474,7 +474,7 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
     }
 
     // Correct cursor position.
-    nvim_check_lnums_true();
+    rs_check_lnums(1);
 
     if old_last.is_null() {
         nvim_qf_set_filetype_and_autocmds();

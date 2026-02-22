@@ -1354,6 +1354,7 @@ pub mod jump_machinery {
         fn nvim_qf_curwin_height() -> c_int;
         fn nvim_qf_get_p_hh() -> c_int;
         fn nvim_qf_win_split(size: c_int, flags: c_int) -> c_int;
+        #[link_name = "rs_win_setheight"]
         fn nvim_qf_win_setheight(height: c_int);
         fn nvim_qf_clear_restart_edit();
         fn nvim_qf_is_ll_stack_qi(qi: *const c_void) -> bool;
@@ -1646,6 +1647,7 @@ pub mod jump_machinery {
         );
         fn nvim_qf_get_curbuf() -> BufHandle;
         fn nvim_qf_fdo_quickfix() -> bool;
+        #[link_name = "rs_foldOpenCursor"]
         fn nvim_qf_fold_open_cursor();
         fn nvim_qf_setpcmark();
         fn nvim_qf_curbuf_is(buf: *const c_void) -> bool;

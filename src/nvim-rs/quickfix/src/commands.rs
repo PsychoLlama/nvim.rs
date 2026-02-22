@@ -1577,6 +1577,7 @@ const FAIL_VAL: c_int = 0;
 const WSP_VERT: c_int = 0x02;
 
 extern "C" {
+    #[link_name = "rs_reset_VIsual_and_resel"]
     fn nvim_qf_reset_visual();
     fn nvim_qf_get_cmdmod_tab() -> c_int;
     fn nvim_qf_get_cmdmod_split() -> c_int;
@@ -1589,9 +1590,12 @@ extern "C" {
     fn nvim_qf_win_get_height(win: *const c_void) -> c_int;
     fn nvim_qf_win_get_hsep_height(win: *const c_void) -> c_int;
     fn nvim_qf_win_get_status_height(win: *const c_void) -> c_int;
+    #[link_name = "rs_tabline_height"]
     fn nvim_qf_tabline_height() -> c_int;
     fn nvim_qf_cmdline_row() -> c_int;
+    #[link_name = "rs_win_setwidth"]
     fn nvim_qf_win_setwidth(width: c_int);
+    #[link_name = "rs_win_setheight"]
     fn nvim_qf_win_setheight(height: c_int);
     fn nvim_qf_win_goto(win: *mut c_void);
     fn nvim_qf_curwin_handle() -> c_int;
