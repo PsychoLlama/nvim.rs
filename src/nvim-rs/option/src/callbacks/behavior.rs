@@ -138,16 +138,6 @@ fn get_helpheight() -> OptInt {
 // Behavior-Related Callbacks
 // =============================================================================
 
-/// Callback for 'binary' option.
-///
-/// When 'bin' is set, also set some other options and redraw titles.
-#[no_mangle]
-pub extern "C" fn rs_did_set_binary() -> CallbackResult {
-    // set_options_bin() is called from C before this callback
-    unsafe { redraw_titles() };
-    callback_ok()
-}
-
 /// Callback for 'diff' option.
 ///
 /// Adjusts diff buffer list and updates folds if using diff fold method.
@@ -238,24 +228,6 @@ pub unsafe extern "C" fn rs_did_set_swapfile(args: *mut c_void) -> CallbackResul
 }
 
 // Note: rs_did_set_textwidth is already defined in mod.rs
-
-/// Callback for 'undolevels' option.
-///
-/// Handles both global and buffer-local undolevels changes.
-#[no_mangle]
-pub unsafe extern "C" fn rs_did_set_undolevels(
-    buf: BufHandle,
-    is_global: c_int,
-    new_value: OptInt,
-    old_value: OptInt,
-) -> CallbackResult {
-    if is_global != 0 {
-        did_set_global_undolevels(new_value, old_value);
-    } else {
-        did_set_buflocal_undolevels(buf, new_value, old_value);
-    }
-    callback_ok()
-}
 
 /// Callback for 'updatecount' option.
 ///

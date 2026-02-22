@@ -155,7 +155,6 @@ extern const char *rs_did_set_smoothscroll_full(optset_T *args);
 extern const char *rs_did_set_showtabline_full(optset_T *args);
 extern const char *rs_did_set_numberwidth(optset_T *args);
 extern const char *rs_did_set_number_relativenumber(optset_T *args);
-extern const char *rs_did_set_binary(void);
 extern const char *rs_did_set_diff(optset_T *args);
 extern const char *rs_did_set_eof_eol_fixeol_bomb(optset_T *args);
 extern const char *rs_did_set_equalalways(optset_T *args);
