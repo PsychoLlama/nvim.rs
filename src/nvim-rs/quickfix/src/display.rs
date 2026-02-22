@@ -354,24 +354,208 @@ extern "C" {
     fn nvim_tv_list_first(list: *const c_void) -> ListItemPtr;
     fn nvim_tv_list_item_next(list: *const c_void, li: ListItemPtr) -> ListItemPtr;
     fn nvim_tv_list_item_string(li: ListItemPtr) -> *mut c_char;
-    fn nvim_qf_buf_add_line(
-        qfl: *mut c_void,
-        buf: BufHandle,
-        lnum: LinenrT,
-        qfp: *mut c_void,
-        dirname: *mut c_char,
-        qftf_str: *mut c_char,
-        first_in_file: bool,
-    ) -> c_int;
     fn nvim_ml_delete_one(lnum: LinenrT);
     fn nvim_qfga_clear();
     fn rs_check_lnums(do_curwin: c_int);
     fn nvim_qf_set_filetype_and_autocmds();
     fn nvim_qf_get_key_typed() -> bool;
     fn nvim_qf_set_key_typed(val: bool);
+
+    // Phase 3: qf_buf_add_line accessors
+    fn nvim_qfline_get_module(qfp: QfLinePtr) -> *const c_char;
+    fn nvim_qfline_get_text(qfp: QfLinePtr) -> *const c_char;
+    fn nvim_qfline_get_pattern(qfp: QfLinePtr) -> *const c_char;
+    fn nvim_qfline_get_lnum(qfp: QfLinePtr) -> LinenrT;
+    fn nvim_qfline_get_end_lnum(qfp: QfLinePtr) -> LinenrT;
+    fn nvim_qfline_get_col(qfp: QfLinePtr) -> c_int;
+    fn nvim_qfline_get_end_col(qfp: QfLinePtr) -> c_int;
+    fn nvim_qfline_get_type(qfp: QfLinePtr) -> c_char;
+    fn nvim_qfline_get_nr(qfp: QfLinePtr) -> c_int;
+    fn nvim_qfline_get_fname(qfp: QfLinePtr) -> *const c_char;
+    // nvim_buflist_findnr returns buf_T* (void* in Rust) - from buffer.c
+    fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
+    // nvim_buf_get_sfname takes buf_T* (void* in Rust) - from buffer.c
+    fn nvim_buf_get_sfname(buf: BufHandle) -> *const c_char;
+    fn nvim_qf_buf_get_fname(buf: BufHandle) -> *const c_char;
+    fn nvim_path_tail_buf(fname: *const c_char) -> *const c_char;
+    fn nvim_path_is_absolute(fname: *const c_char) -> bool;
+    fn nvim_os_dirname(buf: *mut c_char, size: c_int);
+    fn nvim_shorten_buf_fname(buf: BufHandle, dirname: *const c_char, force: bool);
+    fn nvim_ml_append_buf(
+        buf: BufHandle,
+        lnum: LinenrT,
+        line: *mut c_char,
+        len: c_int,
+        newfile: bool,
+    ) -> c_int;
+    fn nvim_skipwhite_const(str: *const c_char) -> *const c_char;
+    fn nvim_qf_types(c: c_int, nr: c_int) -> *const c_char;
 }
 
 const FAIL: c_int = 0;
+const OK: c_int = 1;
+
+// =============================================================================
+// Phase 3: qf_buf_add_line (migrated from quickfix_shim.c)
+// =============================================================================
+
+/// Append text to a Vec<u8>, replacing newlines with spaces and skipping
+/// subsequent whitespace (mirrors C `qf_fmt_text`).
+fn qf_fmt_text(buf: &mut Vec<u8>, text: *const c_char) {
+    // Safety: caller guarantees text is a valid C string
+    let bytes = unsafe { std::ffi::CStr::from_ptr(text).to_bytes() };
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\n' {
+            buf.push(b' ');
+            i += 1;
+            // skip following whitespace and newlines
+            while i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'\t' || bytes[i] == b'\n') {
+                i += 1;
+            }
+        } else {
+            buf.push(bytes[i]);
+            i += 1;
+        }
+    }
+}
+
+/// Format the range (lnum, end_lnum, col, end_col) into buf
+/// (mirrors C `qf_range_text`).
+fn qf_range_text(buf: &mut Vec<u8>, lnum: LinenrT, end_lnum: LinenrT, col: c_int, end_col: c_int) {
+    // Format lnum
+    let lnum_str = format!("{lnum}");
+    buf.extend_from_slice(lnum_str.as_bytes());
+
+    if end_lnum > 0 && lnum != end_lnum {
+        let s = format!("-{end_lnum}");
+        buf.extend_from_slice(s.as_bytes());
+    }
+    if col > 0 {
+        let s = format!(" col {col}");
+        buf.extend_from_slice(s.as_bytes());
+        if end_col > 0 && col != end_col {
+            let s = format!("-{end_col}");
+            buf.extend_from_slice(s.as_bytes());
+        }
+    }
+}
+
+/// Add a formatted line for a quickfix entry to the quickfix buffer.
+///
+/// Mirrors C `qf_buf_add_line`. Returns `OK` on success, `FAIL` on error.
+///
+/// # Safety
+///
+/// - All pointer arguments that are non-null must be valid
+/// - `dirname` must point to a writable `MAXPATHL`-byte buffer
+unsafe fn qf_buf_add_line(
+    buf: BufHandle,
+    lnum: LinenrT,
+    qfp: QfLinePtr,
+    dirname: &mut [u8; MAXPATHL],
+    qftf_str: *mut c_char,
+    first_bufline: bool,
+) -> c_int {
+    let mut line: Vec<u8> = Vec::with_capacity(256);
+
+    // If quickfixtextfunc returned a custom string, use it directly.
+    if !qftf_str.is_null() && *qftf_str != 0 {
+        let s = std::ffi::CStr::from_ptr(qftf_str).to_bytes();
+        line.extend_from_slice(s);
+    } else {
+        let module = nvim_qfline_get_module(qfp);
+        if !module.is_null() && *module != 0 {
+            let s = std::ffi::CStr::from_ptr(module).to_bytes();
+            line.extend_from_slice(s);
+        } else {
+            let fnum = nvim_qfline_get_fnum(qfp);
+            if fnum != 0 {
+                let errbuf = nvim_buflist_findnr(fnum);
+                if !errbuf.is_null() {
+                    let b_fname = nvim_qf_buf_get_fname(errbuf);
+                    if !b_fname.is_null() {
+                        let qf_type = nvim_qfline_get_type(qfp);
+                        if qf_type == 1 {
+                            // :helpgrep -- use filename tail only
+                            let tail = nvim_path_tail_buf(b_fname);
+                            let s = std::ffi::CStr::from_ptr(tail).to_bytes();
+                            line.extend_from_slice(s);
+                        } else {
+                            // Shorten the file name if not done already.
+                            // For optimization, only for the first entry in a buffer.
+                            if first_bufline {
+                                let sfname = nvim_buf_get_sfname(errbuf);
+                                if sfname.is_null() || nvim_path_is_absolute(sfname) {
+                                    if dirname[0] == 0 {
+                                        nvim_os_dirname(
+                                            dirname.as_mut_ptr().cast(),
+                                            c_int::try_from(MAXPATHL).unwrap_or(4096),
+                                        );
+                                    }
+                                    nvim_shorten_buf_fname(errbuf, dirname.as_ptr().cast(), false);
+                                }
+                            }
+                            let qf_fname = nvim_qfline_get_fname(qfp);
+                            let fname = if qf_fname.is_null() {
+                                b_fname
+                            } else {
+                                qf_fname
+                            };
+                            let s = std::ffi::CStr::from_ptr(fname).to_bytes();
+                            line.extend_from_slice(s);
+                        }
+                    }
+                }
+            }
+        }
+
+        line.push(b'|');
+
+        let qf_lnum = nvim_qfline_get_lnum(qfp);
+        let qf_pattern = nvim_qfline_get_pattern(qfp);
+        if qf_lnum > 0 {
+            let end_lnum = nvim_qfline_get_end_lnum(qfp);
+            let col = nvim_qfline_get_col(qfp);
+            let end_col = nvim_qfline_get_end_col(qfp);
+            qf_range_text(&mut line, qf_lnum, end_lnum, col, end_col);
+            let types_str = nvim_qf_types(
+                c_int::from(nvim_qfline_get_type(qfp)),
+                nvim_qfline_get_nr(qfp),
+            );
+            if !types_str.is_null() {
+                let s = std::ffi::CStr::from_ptr(types_str).to_bytes();
+                line.extend_from_slice(s);
+            }
+        } else if !qf_pattern.is_null() {
+            qf_fmt_text(&mut line, qf_pattern);
+        }
+        line.push(b'|');
+        line.push(b' ');
+
+        // Remove newlines and leading whitespace from the text.
+        // For an unrecognized line keep the indent, the compiler may mark a word with ^^^^.
+        let qf_text = nvim_qfline_get_text(qfp);
+        if !qf_text.is_null() {
+            let text = if line.len() > 3 {
+                nvim_skipwhite_const(qf_text)
+            } else {
+                qf_text
+            };
+            qf_fmt_text(&mut line, text);
+        }
+    }
+
+    // Append NUL terminator and write to buffer
+    line.push(0u8);
+    let len = c_int::try_from(line.len()).unwrap_or(c_int::MAX);
+    let ret = nvim_ml_append_buf(buf, lnum, line.as_mut_ptr().cast(), len, false);
+    if ret == FAIL {
+        FAIL
+    } else {
+        OK
+    }
+}
 
 /// Fill the quickfix buffer with entries.
 ///
@@ -441,12 +625,11 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
                 }
             }
 
-            if nvim_qf_buf_add_line(
-                qfl,
+            if qf_buf_add_line(
                 buf,
                 lnum,
-                qfp.cast_mut().cast(),
-                dirname.as_mut_ptr().cast(),
+                qfp,
+                &mut dirname,
                 qftf_str,
                 prev_bufnr != nvim_qfline_get_fnum(qfp),
             ) == FAIL

@@ -4140,66 +4140,7 @@ static void qf_update_buffer(qf_info_T *qi, qfline_T *old_last)
   decr_quickfix_busy();
 }
 
-// Add an error line to the quickfix buffer.
-static int qf_buf_add_line(qf_list_T *qfl, buf_T *buf, linenr_T lnum, const qfline_T *qfp,
-                           char *dirname, char *qftf_str, bool first_bufline)
-  FUNC_ATTR_NONNULL_ARG(1, 2, 4, 5)
-{
-  garray_T *gap = qfga_get();
-
-  // If the 'quickfixtextfunc' function returned a non-empty custom string
-  // for this entry, then use it.
-  if (qftf_str != NULL && *qftf_str != NUL) {
-    ga_concat(gap, qftf_str);
-  } else {
-    buf_T *errbuf;
-    if (qfp->qf_module != NULL) {
-      ga_concat(gap, qfp->qf_module);
-    } else if (qfp->qf_fnum != 0
-               && (errbuf = buflist_findnr(qfp->qf_fnum)) != NULL
-               && errbuf->b_fname != NULL) {
-      if (qfp->qf_type == 1) {  // :helpgrep
-        ga_concat(gap, path_tail(errbuf->b_fname));
-      } else {
-        // Shorten the file name if not done already.
-        // For optimization, do this only for the first entry in a
-        // buffer.
-        if (first_bufline
-            && (errbuf->b_sfname == NULL
-                || path_is_absolute(errbuf->b_sfname))) {
-          if (*dirname == NUL) {
-            os_dirname(dirname, MAXPATHL);
-          }
-          shorten_buf_fname(errbuf, dirname, false);
-        }
-        ga_concat(gap, qfp->qf_fname == NULL ? errbuf->b_fname : qfp->qf_fname);
-      }
-    }
-
-    ga_append(gap, '|');
-
-    if (qfp->qf_lnum > 0) {
-      qf_range_text(gap, qfp);
-      ga_concat(gap, qf_types(qfp->qf_type, qfp->qf_nr));
-    } else if (qfp->qf_pattern != NULL) {
-      qf_fmt_text(gap, qfp->qf_pattern);
-    }
-    ga_append(gap, '|');
-    ga_append(gap, ' ');
-
-    // Remove newlines and leading whitespace from the text.
-    // For an unrecognized line keep the indent, the compiler may
-    // mark a word with ^^^^.
-    qf_fmt_text(gap, gap->ga_len > 3 ? skipwhite(qfp->qf_text) : qfp->qf_text);
-  }
-
-  ga_append(gap, NUL);
-  if (ml_append_buf(buf, lnum, gap->ga_data, gap->ga_len, false) == FAIL) {
-    return FAIL;
-  }
-
-  return OK;
-}
+// qf_buf_add_line migrated to Rust (Phase 3) -- see rs_qf_buf_add_line in display.rs
 
 // Call the 'quickfixtextfunc' function to get the list of lines to display in
 // the quickfix window for the entries 'start_idx' to 'end_idx'.
@@ -4287,13 +4228,22 @@ char *nvim_tv_list_item_string(const void *li)
   return (char *)tv_get_string_chk(TV_LIST_ITEM_TV((const listitem_T *)li));
 }
 
-/// Call qf_buf_add_line (keeps formatting logic in C)
-int nvim_qf_buf_add_line(void *qfl, void *buf, linenr_T lnum, void *qfp,
-                         char *dirname, char *qftf_str, bool first_in_file)
+// C accessor wrappers for rs_qf_buf_add_line (Phase 3)
+// Note: nvim_buflist_findnr is in buffer.c (returns buf_T*)
+// Note: nvim_buf_get_sfname is in buffer.c (takes buf_T*)
+const char *nvim_qf_buf_get_fname(const void *buf) { return ((const buf_T *)buf)->b_fname; }
+const char *nvim_path_tail_buf(const char *fname) { return path_tail((char *)fname); }
+bool nvim_path_is_absolute(const char *fname) { return path_is_absolute(fname); }
+void nvim_os_dirname(char *buf, int size) { os_dirname(buf, (size_t)size); }
+void nvim_shorten_buf_fname(void *buf, const char *dirname, bool force)
 {
-  return qf_buf_add_line((qf_list_T *)qfl, (buf_T *)buf, lnum, (qfline_T *)qfp,
-                         dirname, qftf_str, first_in_file);
+  shorten_buf_fname((buf_T *)buf, (char *)dirname, force);
 }
+int nvim_ml_append_buf(void *buf, linenr_T lnum, char *line, int len, bool newfile)
+{
+  return ml_append_buf((buf_T *)buf, lnum, line, (colnr_T)len, newfile);
+}
+const char *nvim_skipwhite_const(const char *str) { return skipwhite(str); }
 
 void nvim_ml_delete_one(linenr_T lnum) { ml_delete(lnum); }
 
