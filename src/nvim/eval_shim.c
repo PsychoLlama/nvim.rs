@@ -114,6 +114,7 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
                                           ht_stack_T **ht_stack, list_stack_T **list_stack);
 extern int rs_eval1(char **arg, typval_T *rettv, void *evalarg);
+extern int rs_eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -2119,86 +2120,6 @@ int eval1(char **arg, typval_T *rettv, evalarg_T *const evalarg)
   return rs_eval1(arg, rettv, evalarg);
 }
 
-
-/// Multiply or divide or compute the modulo of numbers "tv1" and "tv2" and
-/// store the result in "tv1".  The numbers can be whole numbers or floats.
-static int eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op)
-  FUNC_ATTR_NO_SANITIZE_UNDEFINED
-{
-  varnumber_T n1, n2;
-  bool use_float = false;
-
-  float_T f1 = 0;
-  float_T f2 = 0;
-  bool error = false;
-  if (tv1->v_type == VAR_FLOAT) {
-    f1 = tv1->vval.v_float;
-    use_float = true;
-    n1 = 0;
-  } else {
-    n1 = tv_get_number_chk(tv1, &error);
-  }
-  tv_clear(tv1);
-  if (error) {
-    tv_clear(tv2);
-    return FAIL;
-  }
-
-  if (tv2->v_type == VAR_FLOAT) {
-    if (!use_float) {
-      f1 = (float_T)n1;
-      use_float = true;
-    }
-    f2 = tv2->vval.v_float;
-    n2 = 0;
-  } else {
-    n2 = tv_get_number_chk(tv2, &error);
-    tv_clear(tv2);
-    if (error) {
-      return FAIL;
-    }
-    if (use_float) {
-      f2 = (float_T)n2;
-    }
-  }
-
-  // Compute the result.
-  // When either side is a float the result is a float.
-  if (use_float) {
-    if (op == '*') {
-      f1 = f1 * f2;
-    } else if (op == '/') {
-      // uncrustify:off
-
-      // Division by zero triggers error from AddressSanitizer
-      f1 = (f2 == 0 ? (
-#ifdef NAN
-          f1 == 0 ? (float_T)NAN :
-#endif
-          (f1 > 0 ? (float_T)INFINITY : (float_T)-INFINITY)) : f1 / f2);
-
-      // uncrustify:on
-    } else {
-      emsg(_("E804: Cannot use '%' with Float"));
-      return FAIL;
-    }
-    tv1->v_type = VAR_FLOAT;
-    tv1->vval.v_float = f1;
-  } else {
-    if (op == '*') {
-      n1 = n1 * n2;
-    } else if (op == '/') {
-      n1 = rs_num_divide(n1, n2);
-    } else {
-      n1 = rs_num_modulus(n1, n2);
-    }
-    tv1->v_type = VAR_NUMBER;
-    tv1->vval.v_number = n1;
-  }
-
-  return OK;
-}
-
 /// Handle fifth level expression:
 ///  - *  number multiplication
 ///  - /  number division
@@ -2236,7 +2157,7 @@ int eval6(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_strin
 
     if (evaluate) {
       // Compute the result.
-      if (eval_multdiv_number(rettv, &var2, op) == FAIL) {
+      if (rs_eval_multdiv_number(rettv, &var2, op) == FAIL) {
         return FAIL;
       }
     }

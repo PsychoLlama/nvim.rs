@@ -520,6 +520,8 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            # eval_exec expression evaluators (Phase 1)
            "rs_eval0", "rs_eval1", "rs_eval2", "rs_eval3", "rs_eval4", "rs_eval5",
            "EvalargHandle", "ExargHandle",
+           # eval_exec multdiv (Phase 3)
+           "rs_eval_multdiv_number",
            # eval_exec operators (Phase 2)
            "rs_compare_numbers", "rs_compare_floats", "rs_apply_comparison", "rs_typval_compare",
            "CompareResult",

@@ -1083,6 +1083,103 @@ unsafe fn eval_addsub_number_impl(tv1: TypevalHandle, tv2: TypevalHandle, op: c_
     OK
 }
 
+/// Multiply, divide, or compute modulo of numbers "tv1" and "tv2", store result in "tv1".
+/// The numbers can be whole numbers or floats.
+unsafe fn eval_multdiv_number_impl(tv1: TypevalHandle, tv2: TypevalHandle, op: c_int) -> c_int {
+    let mut use_float = false;
+    let mut f1: f64 = 0.0;
+    let mut f2: f64 = 0.0;
+    let mut error: bool = false;
+
+    let tv1_type = nvim_tv_get_type(tv1);
+    let n1: i64;
+
+    if tv1_type == VAR_FLOAT {
+        f1 = nvim_tv_get_float(tv1);
+        use_float = true;
+        n1 = 0;
+    } else {
+        n1 = tv_get_number_chk(tv1, &mut error);
+    }
+    tv_clear(tv1);
+    if error {
+        tv_clear(tv2);
+        return FAIL;
+    }
+
+    let tv2_type = nvim_tv_get_type(tv2);
+    let n2: i64;
+
+    if tv2_type == VAR_FLOAT {
+        if !use_float {
+            f1 = n1 as f64;
+            use_float = true;
+        }
+        f2 = nvim_tv_get_float(tv2);
+        n2 = 0;
+    } else {
+        n2 = tv_get_number_chk(tv2, &mut error);
+        tv_clear(tv2);
+        if error {
+            return FAIL;
+        }
+        if use_float {
+            f2 = n2 as f64;
+        }
+    }
+
+    // Compute the result. When either side is a float, the result is a float.
+    if use_float {
+        let result = if op == b'*' as c_int {
+            f1 * f2
+        } else if op == b'/' as c_int {
+            // Division by zero: return NaN/Inf/NegInf per IEEE 754
+            if f2 == 0.0 {
+                if f1 == 0.0 {
+                    f64::NAN
+                } else if f1 > 0.0 {
+                    f64::INFINITY
+                } else {
+                    f64::NEG_INFINITY
+                }
+            } else {
+                f1 / f2
+            }
+        } else {
+            // '%' with float is an error
+            emsg(c"E804: Cannot use '%' with Float".as_ptr());
+            return FAIL;
+        };
+        nvim_tv_set_type(tv1, VAR_FLOAT);
+        nvim_tv_set_float(tv1, result);
+    } else {
+        let result = if op == b'*' as c_int {
+            n1.wrapping_mul(n2)
+        } else if op == b'/' as c_int {
+            rs_num_divide(n1, n2)
+        } else {
+            rs_num_modulus(n1, n2)
+        };
+        nvim_tv_set_type(tv1, VAR_NUMBER);
+        nvim_tv_set_number(tv1, result);
+    }
+
+    OK
+}
+
+/// FFI export for eval_multdiv_number.
+///
+/// # Safety
+/// See `eval_multdiv_number_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_multdiv_number(
+    tv1: TypevalHandle,
+    tv2: TypevalHandle,
+    op: c_int,
+) -> c_int {
+    eval_multdiv_number_impl(tv1, tv2, op)
+}
+
 // =============================================================================
 // Typval allocation helpers (temporary - will be replaced with proper C interop)
 // =============================================================================
