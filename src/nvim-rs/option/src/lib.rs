@@ -23,6 +23,7 @@ pub mod groups;
 pub mod index;
 pub mod init;
 pub mod modeline;
+pub mod opt_index;
 pub mod parsing;
 pub mod scope;
 pub mod set;
@@ -34,6 +35,7 @@ pub mod storage;
 pub mod types;
 pub mod validate;
 pub mod value;
+pub mod varp;
 
 use std::ffi::{c_char, c_int, c_uint};
 

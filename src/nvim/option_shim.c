@@ -180,6 +180,10 @@ extern const char *rs_did_set_readonly(optset_T *args);
 extern const char *rs_did_set_scrollback(optset_T *args);
 extern const char *rs_did_set_undolevels_full(optset_T *args);
 
+// Rust varp dispatch functions (from Rust varp.rs)
+extern void *rs_get_varp_from(vimoption_T *p, buf_T *buf, win_T *win);
+extern void *rs_get_varp_scope_from(vimoption_T *p, int opt_flags, buf_T *buf, win_T *win);
+
 // OptVal storage operations (from Rust storage.rs)
 extern void rs_optval_free(OptVal o);
 extern OptVal rs_optval_copy(OptVal o);
@@ -547,6 +551,193 @@ void *nvim_get_option_var(OptIndex opt_idx) {
     return NULL;
   }
   return options[opt_idx].var;
+}
+
+// =============================================================================
+// Accessor functions for rs_get_varp_from / rs_get_varp_scope_from
+// =============================================================================
+
+// Get p->var from a vimoption_T pointer
+void *nvim_vimoption_get_var(vimoption_T *p) { return p->var; }
+
+// Get the OptIndex of a vimoption_T by pointer arithmetic against the options array
+OptIndex nvim_get_opt_idx_from_ptr(vimoption_T *p) { return (OptIndex)(p - options); }
+
+// Get sizeof(winopt_T) at runtime (for GLOBAL_WO replication in Rust)
+int nvim_get_sizeof_winopt_T(void) { return (int)sizeof(winopt_T); }
+
+// Get is_option_hidden as an int (for Rust FFI)
+int nvim_opt_is_hidden(OptIndex opt_idx) { return (int)is_option_hidden(opt_idx); }
+
+// Get the address of a buf_T option field by OptIndex.
+// Returns NULL for unknown/unhandled indices.
+void *nvim_buf_get_opt_field_addr(buf_T *buf, OptIndex idx)
+{
+  if (!buf) { return NULL; }
+  switch (idx) {
+  // global-local string options (return address to buf field)
+  case kOptEqualprg: return &buf->b_p_ep;
+  case kOptKeywordprg: return &buf->b_p_kp;
+  case kOptPath: return &buf->b_p_path;
+  case kOptTags: return &buf->b_p_tags;
+  case kOptTagcase: return &buf->b_p_tc;
+  case kOptBackupcopy: return &buf->b_p_bkc;
+  case kOptDefine: return &buf->b_p_def;
+  case kOptInclude: return &buf->b_p_inc;
+  case kOptCompleteopt: return &buf->b_p_cot;
+  case kOptDictionary: return &buf->b_p_dict;
+  case kOptDiffanchors: return &buf->b_p_dia;
+  case kOptThesaurus: return &buf->b_p_tsr;
+  case kOptThesaurusfunc: return &buf->b_p_tsrfu;
+  case kOptFormatprg: return &buf->b_p_fp;
+  case kOptFindfunc: return &buf->b_p_ffu;
+  case kOptErrorformat: return &buf->b_p_efm;
+  case kOptGrepformat: return &buf->b_p_gefm;
+  case kOptGrepprg: return &buf->b_p_gp;
+  case kOptMakeprg: return &buf->b_p_mp;
+  case kOptLispwords: return &buf->b_p_lw;
+  case kOptMakeencoding: return &buf->b_p_menc;
+  // global-local numeric options
+  case kOptAutocomplete: return &buf->b_p_ac;
+  case kOptAutoread: return &buf->b_p_ar;
+  case kOptUndolevels: return &buf->b_p_ul;
+  // buf-local options (non-global-local)
+  case kOptAutoindent: return &buf->b_p_ai;
+  case kOptBinary: return &buf->b_p_bin;
+  case kOptBomb: return &buf->b_p_bomb;
+  case kOptBufhidden: return &buf->b_p_bh;
+  case kOptBuftype: return &buf->b_p_bt;
+  case kOptBuflisted: return &buf->b_p_bl;
+  case kOptBusy: return &buf->b_p_busy;
+  case kOptChannel: return &buf->b_p_channel;
+  case kOptCopyindent: return &buf->b_p_ci;
+  case kOptCindent: return &buf->b_p_cin;
+  case kOptCinkeys: return &buf->b_p_cink;
+  case kOptCinoptions: return &buf->b_p_cino;
+  case kOptCinscopedecls: return &buf->b_p_cinsd;
+  case kOptCinwords: return &buf->b_p_cinw;
+  case kOptComments: return &buf->b_p_com;
+  case kOptCommentstring: return &buf->b_p_cms;
+  case kOptComplete: return &buf->b_p_cpt;
+#ifdef BACKSLASH_IN_FILENAME
+  case kOptCompleteslash: return &buf->b_p_csl;
+#endif
+  case kOptCompletefunc: return &buf->b_p_cfu;
+  case kOptOmnifunc: return &buf->b_p_ofu;
+  case kOptEndoffile: return &buf->b_p_eof;
+  case kOptEndofline: return &buf->b_p_eol;
+  case kOptFixendofline: return &buf->b_p_fixeol;
+  case kOptExpandtab: return &buf->b_p_et;
+  case kOptFileencoding: return &buf->b_p_fenc;
+  case kOptFileformat: return &buf->b_p_ff;
+  case kOptFiletype: return &buf->b_p_ft;
+  case kOptFormatoptions: return &buf->b_p_fo;
+  case kOptFormatlistpat: return &buf->b_p_flp;
+  case kOptIminsert: return &buf->b_p_iminsert;
+  case kOptImsearch: return &buf->b_p_imsearch;
+  case kOptInfercase: return &buf->b_p_inf;
+  case kOptIskeyword: return &buf->b_p_isk;
+  case kOptIncludeexpr: return &buf->b_p_inex;
+  case kOptIndentexpr: return &buf->b_p_inde;
+  case kOptIndentkeys: return &buf->b_p_indk;
+  case kOptFormatexpr: return &buf->b_p_fex;
+  case kOptLisp: return &buf->b_p_lisp;
+  case kOptLispoptions: return &buf->b_p_lop;
+  case kOptModeline: return &buf->b_p_ml;
+  case kOptMatchpairs: return &buf->b_p_mps;
+  case kOptModifiable: return &buf->b_p_ma;
+  case kOptModified: return &buf->b_changed;
+  case kOptNrformats: return &buf->b_p_nf;
+  case kOptPreserveindent: return &buf->b_p_pi;
+  case kOptQuoteescape: return &buf->b_p_qe;
+  case kOptReadonly: return &buf->b_p_ro;
+  case kOptScrollback: return &buf->b_p_scbk;
+  case kOptSmartindent: return &buf->b_p_si;
+  case kOptSofttabstop: return &buf->b_p_sts;
+  case kOptSuffixesadd: return &buf->b_p_sua;
+  case kOptSwapfile: return &buf->b_p_swf;
+  case kOptSynmaxcol: return &buf->b_p_smc;
+  case kOptSyntax: return &buf->b_p_syn;
+  case kOptShiftwidth: return &buf->b_p_sw;
+  case kOptTagfunc: return &buf->b_p_tfu;
+  case kOptTabstop: return &buf->b_p_ts;
+  case kOptTextwidth: return &buf->b_p_tw;
+  case kOptUndofile: return &buf->b_p_udf;
+  case kOptWrapmargin: return &buf->b_p_wm;
+  case kOptVarsofttabstop: return &buf->b_p_vsts;
+  case kOptVartabstop: return &buf->b_p_vts;
+  case kOptKeymap: return &buf->b_p_keymap;
+  default: abort();
+  }
+}
+
+// Get the address of a win_T option field by OptIndex.
+// Returns NULL for unknown/unhandled indices.
+void *nvim_win_get_opt_field_addr(win_T *win, OptIndex idx)
+{
+  if (!win) { return NULL; }
+  switch (idx) {
+  // global-local numeric win options
+  case kOptSidescrolloff: return &win->w_p_siso;
+  case kOptScrolloff: return &win->w_p_so;
+  // global-local string win options
+  case kOptShowbreak: return &win->w_p_sbr;
+  case kOptStatusline: return &win->w_p_stl;
+  case kOptWinbar: return &win->w_p_wbr;
+  case kOptFillchars: return &win->w_p_fcs;
+  case kOptListchars: return &win->w_p_lcs;
+  case kOptVirtualedit: return &win->w_p_ve;
+  // win-local only options
+  case kOptArabic: return &win->w_p_arab;
+  case kOptList: return &win->w_p_list;
+  case kOptSpell: return &win->w_p_spell;
+  case kOptCursorcolumn: return &win->w_p_cuc;
+  case kOptCursorline: return &win->w_p_cul;
+  case kOptCursorlineopt: return &win->w_p_culopt;
+  case kOptColorcolumn: return &win->w_p_cc;
+  case kOptDiff: return &win->w_p_diff;
+  case kOptEventignorewin: return &win->w_p_eiw;
+  case kOptFoldcolumn: return &win->w_p_fdc;
+  case kOptFoldenable: return &win->w_p_fen;
+  case kOptFoldignore: return &win->w_p_fdi;
+  case kOptFoldlevel: return &win->w_p_fdl;
+  case kOptFoldmethod: return &win->w_p_fdm;
+  case kOptFoldminlines: return &win->w_p_fml;
+  case kOptFoldnestmax: return &win->w_p_fdn;
+  case kOptFoldexpr: return &win->w_p_fde;
+  case kOptFoldtext: return &win->w_p_fdt;
+  case kOptFoldmarker: return &win->w_p_fmr;
+  case kOptNumber: return &win->w_p_nu;
+  case kOptRelativenumber: return &win->w_p_rnu;
+  case kOptNumberwidth: return &win->w_p_nuw;
+  case kOptWinfixbuf: return &win->w_p_wfb;
+  case kOptWinfixheight: return &win->w_p_wfh;
+  case kOptWinfixwidth: return &win->w_p_wfw;
+  case kOptPreviewwindow: return &win->w_p_pvw;
+  case kOptLhistory: return &win->w_p_lhi;
+  case kOptRightleft: return &win->w_p_rl;
+  case kOptRightleftcmd: return &win->w_p_rlc;
+  case kOptScroll: return &win->w_p_scr;
+  case kOptSmoothscroll: return &win->w_p_sms;
+  case kOptWrap: return &win->w_p_wrap;
+  case kOptLinebreak: return &win->w_p_lbr;
+  case kOptBreakindent: return &win->w_p_bri;
+  case kOptBreakindentopt: return &win->w_p_briopt;
+  case kOptScrollbind: return &win->w_p_scb;
+  case kOptCursorbind: return &win->w_p_crb;
+  case kOptConcealcursor: return &win->w_p_cocu;
+  case kOptConceallevel: return &win->w_p_cole;
+  // win->w_s (synblock) fields accessed via win
+  case kOptSpellcapcheck: return &win->w_s->b_p_spc;
+  case kOptSpellfile: return &win->w_s->b_p_spf;
+  case kOptSpelllang: return &win->w_s->b_p_spl;
+  case kOptSpelloptions: return &win->w_s->b_p_spo;
+  case kOptSigncolumn: return &win->w_p_scl;
+  case kOptWinhighlight: return &win->w_p_winhl;
+  case kOptWinblend: return &win->w_p_winbl;
+  case kOptStatuscolumn: return &win->w_p_stc;
+  default: abort();
+  }
 }
 
 // Option script context accessor
@@ -4319,88 +4510,7 @@ static int put_set(FILE *fd, char *cmd, OptIndex opt_idx, void *varp)
 
 void *get_varp_scope_from(vimoption_T *p, int opt_flags, buf_T *buf, win_T *win)
 {
-  OptIndex opt_idx = get_opt_idx(p);
-
-  if ((opt_flags & OPT_GLOBAL) && !option_is_global_only(opt_idx)) {
-    if (option_is_window_local(opt_idx)) {
-      return GLOBAL_WO(get_varp_from(p, buf, win));
-    }
-    return p->var;
-  }
-
-  if ((opt_flags & OPT_LOCAL) && option_is_global_local(opt_idx)) {
-    switch (opt_idx) {
-    case kOptFormatprg:
-      return &(buf->b_p_fp);
-    case kOptFindfunc:
-      return &(buf->b_p_ffu);
-    case kOptErrorformat:
-      return &(buf->b_p_efm);
-    case kOptGrepformat:
-      return &(buf->b_p_gefm);
-    case kOptGrepprg:
-      return &(buf->b_p_gp);
-    case kOptMakeprg:
-      return &(buf->b_p_mp);
-    case kOptEqualprg:
-      return &(buf->b_p_ep);
-    case kOptKeywordprg:
-      return &(buf->b_p_kp);
-    case kOptPath:
-      return &(buf->b_p_path);
-    case kOptAutocomplete:
-      return &(buf->b_p_ac);
-    case kOptAutoread:
-      return &(buf->b_p_ar);
-    case kOptTags:
-      return &(buf->b_p_tags);
-    case kOptTagcase:
-      return &(buf->b_p_tc);
-    case kOptSidescrolloff:
-      return &(win->w_p_siso);
-    case kOptScrolloff:
-      return &(win->w_p_so);
-    case kOptDefine:
-      return &(buf->b_p_def);
-    case kOptInclude:
-      return &(buf->b_p_inc);
-    case kOptCompleteopt:
-      return &(buf->b_p_cot);
-    case kOptDictionary:
-      return &(buf->b_p_dict);
-    case kOptDiffanchors:
-      return &(buf->b_p_dia);
-    case kOptThesaurus:
-      return &(buf->b_p_tsr);
-    case kOptThesaurusfunc:
-      return &(buf->b_p_tsrfu);
-    case kOptTagfunc:
-      return &(buf->b_p_tfu);
-    case kOptShowbreak:
-      return &(win->w_p_sbr);
-    case kOptStatusline:
-      return &(win->w_p_stl);
-    case kOptWinbar:
-      return &(win->w_p_wbr);
-    case kOptUndolevels:
-      return &(buf->b_p_ul);
-    case kOptLispwords:
-      return &(buf->b_p_lw);
-    case kOptBackupcopy:
-      return &(buf->b_p_bkc);
-    case kOptMakeencoding:
-      return &(buf->b_p_menc);
-    case kOptFillchars:
-      return &(win->w_p_fcs);
-    case kOptListchars:
-      return &(win->w_p_lcs);
-    case kOptVirtualedit:
-      return &(win->w_p_ve);
-    default:
-      abort();
-    }
-  }
-  return get_varp_from(p, buf, win);
+  return rs_get_varp_scope_from(p, opt_flags, buf, win);
 }
 
 /// Get pointer to option variable, depending on local or global scope.
@@ -4420,308 +4530,7 @@ void *get_option_varp_scope_from(OptIndex opt_idx, int opt_flags, buf_T *buf, wi
 
 void *get_varp_from(vimoption_T *p, buf_T *buf, win_T *win)
 {
-  OptIndex opt_idx = get_opt_idx(p);
-
-  // Hidden options and global-only options always use the same var pointer
-  if (is_option_hidden(opt_idx) || option_is_global_only(opt_idx)) {
-    return p->var;
-  }
-
-  switch (opt_idx) {
-  // global option with local value: use local value if it's been set
-  case kOptEqualprg:
-    return *buf->b_p_ep != NUL ? &buf->b_p_ep : p->var;
-  case kOptKeywordprg:
-    return *buf->b_p_kp != NUL ? &buf->b_p_kp : p->var;
-  case kOptPath:
-    return *buf->b_p_path != NUL ? &(buf->b_p_path) : p->var;
-  case kOptAutocomplete:
-    return buf->b_p_ac >= 0 ? &(buf->b_p_ac) : p->var;
-  case kOptAutoread:
-    return buf->b_p_ar >= 0 ? &(buf->b_p_ar) : p->var;
-  case kOptTags:
-    return *buf->b_p_tags != NUL ? &(buf->b_p_tags) : p->var;
-  case kOptTagcase:
-    return *buf->b_p_tc != NUL ? &(buf->b_p_tc) : p->var;
-  case kOptSidescrolloff:
-    return win->w_p_siso >= 0 ? &(win->w_p_siso) : p->var;
-  case kOptScrolloff:
-    return win->w_p_so >= 0 ? &(win->w_p_so) : p->var;
-  case kOptBackupcopy:
-    return *buf->b_p_bkc != NUL ? &(buf->b_p_bkc) : p->var;
-  case kOptDefine:
-    return *buf->b_p_def != NUL ? &(buf->b_p_def) : p->var;
-  case kOptInclude:
-    return *buf->b_p_inc != NUL ? &(buf->b_p_inc) : p->var;
-  case kOptCompleteopt:
-    return *buf->b_p_cot != NUL ? &(buf->b_p_cot) : p->var;
-  case kOptDictionary:
-    return *buf->b_p_dict != NUL ? &(buf->b_p_dict) : p->var;
-  case kOptDiffanchors:
-    return *buf->b_p_dia != NUL ? &(buf->b_p_dia) : p->var;
-  case kOptThesaurus:
-    return *buf->b_p_tsr != NUL ? &(buf->b_p_tsr) : p->var;
-  case kOptThesaurusfunc:
-    return *buf->b_p_tsrfu != NUL ? &(buf->b_p_tsrfu) : p->var;
-  case kOptFormatprg:
-    return *buf->b_p_fp != NUL ? &(buf->b_p_fp) : p->var;
-  case kOptFindfunc:
-    return *buf->b_p_ffu != NUL ? &(buf->b_p_ffu) : p->var;
-  case kOptErrorformat:
-    return *buf->b_p_efm != NUL ? &(buf->b_p_efm) : p->var;
-  case kOptGrepformat:
-    return *buf->b_p_gefm != NUL ? &(buf->b_p_gefm) : p->var;
-  case kOptGrepprg:
-    return *buf->b_p_gp != NUL ? &(buf->b_p_gp) : p->var;
-  case kOptMakeprg:
-    return *buf->b_p_mp != NUL ? &(buf->b_p_mp) : p->var;
-  case kOptShowbreak:
-    return *win->w_p_sbr != NUL ? &(win->w_p_sbr) : p->var;
-  case kOptStatusline:
-    return *win->w_p_stl != NUL ? &(win->w_p_stl) : p->var;
-  case kOptWinbar:
-    return *win->w_p_wbr != NUL ? &(win->w_p_wbr) : p->var;
-  case kOptUndolevels:
-    return buf->b_p_ul != NO_LOCAL_UNDOLEVEL ? &(buf->b_p_ul) : p->var;
-  case kOptLispwords:
-    return *buf->b_p_lw != NUL ? &(buf->b_p_lw) : p->var;
-  case kOptMakeencoding:
-    return *buf->b_p_menc != NUL ? &(buf->b_p_menc) : p->var;
-  case kOptFillchars:
-    return *win->w_p_fcs != NUL ? &(win->w_p_fcs) : p->var;
-  case kOptListchars:
-    return *win->w_p_lcs != NUL ? &(win->w_p_lcs) : p->var;
-  case kOptVirtualedit:
-    return *win->w_p_ve != NUL ? &win->w_p_ve : p->var;
-
-  case kOptArabic:
-    return &(win->w_p_arab);
-  case kOptList:
-    return &(win->w_p_list);
-  case kOptSpell:
-    return &(win->w_p_spell);
-  case kOptCursorcolumn:
-    return &(win->w_p_cuc);
-  case kOptCursorline:
-    return &(win->w_p_cul);
-  case kOptCursorlineopt:
-    return &(win->w_p_culopt);
-  case kOptColorcolumn:
-    return &(win->w_p_cc);
-  case kOptDiff:
-    return &(win->w_p_diff);
-  case kOptEventignorewin:
-    return &(win->w_p_eiw);
-  case kOptFoldcolumn:
-    return &(win->w_p_fdc);
-  case kOptFoldenable:
-    return &(win->w_p_fen);
-  case kOptFoldignore:
-    return &(win->w_p_fdi);
-  case kOptFoldlevel:
-    return &(win->w_p_fdl);
-  case kOptFoldmethod:
-    return &(win->w_p_fdm);
-  case kOptFoldminlines:
-    return &(win->w_p_fml);
-  case kOptFoldnestmax:
-    return &(win->w_p_fdn);
-  case kOptFoldexpr:
-    return &(win->w_p_fde);
-  case kOptFoldtext:
-    return &(win->w_p_fdt);
-  case kOptFoldmarker:
-    return &(win->w_p_fmr);
-  case kOptNumber:
-    return &(win->w_p_nu);
-  case kOptRelativenumber:
-    return &(win->w_p_rnu);
-  case kOptNumberwidth:
-    return &(win->w_p_nuw);
-  case kOptWinfixbuf:
-    return &(win->w_p_wfb);
-  case kOptWinfixheight:
-    return &(win->w_p_wfh);
-  case kOptWinfixwidth:
-    return &(win->w_p_wfw);
-  case kOptPreviewwindow:
-    return &(win->w_p_pvw);
-  case kOptLhistory:
-    return &(win->w_p_lhi);
-  case kOptRightleft:
-    return &(win->w_p_rl);
-  case kOptRightleftcmd:
-    return &(win->w_p_rlc);
-  case kOptScroll:
-    return &(win->w_p_scr);
-  case kOptSmoothscroll:
-    return &(win->w_p_sms);
-  case kOptWrap:
-    return &(win->w_p_wrap);
-  case kOptLinebreak:
-    return &(win->w_p_lbr);
-  case kOptBreakindent:
-    return &(win->w_p_bri);
-  case kOptBreakindentopt:
-    return &(win->w_p_briopt);
-  case kOptScrollbind:
-    return &(win->w_p_scb);
-  case kOptCursorbind:
-    return &(win->w_p_crb);
-  case kOptConcealcursor:
-    return &(win->w_p_cocu);
-  case kOptConceallevel:
-    return &(win->w_p_cole);
-
-  case kOptAutoindent:
-    return &(buf->b_p_ai);
-  case kOptBinary:
-    return &(buf->b_p_bin);
-  case kOptBomb:
-    return &(buf->b_p_bomb);
-  case kOptBufhidden:
-    return &(buf->b_p_bh);
-  case kOptBuftype:
-    return &(buf->b_p_bt);
-  case kOptBuflisted:
-    return &(buf->b_p_bl);
-  case kOptBusy:
-    return &(buf->b_p_busy);
-  case kOptChannel:
-    return &(buf->b_p_channel);
-  case kOptCopyindent:
-    return &(buf->b_p_ci);
-  case kOptCindent:
-    return &(buf->b_p_cin);
-  case kOptCinkeys:
-    return &(buf->b_p_cink);
-  case kOptCinoptions:
-    return &(buf->b_p_cino);
-  case kOptCinscopedecls:
-    return &(buf->b_p_cinsd);
-  case kOptCinwords:
-    return &(buf->b_p_cinw);
-  case kOptComments:
-    return &(buf->b_p_com);
-  case kOptCommentstring:
-    return &(buf->b_p_cms);
-  case kOptComplete:
-    return &(buf->b_p_cpt);
-#ifdef BACKSLASH_IN_FILENAME
-  case kOptCompleteslash:
-    return &(buf->b_p_csl);
-#endif
-  case kOptCompletefunc:
-    return &(buf->b_p_cfu);
-  case kOptOmnifunc:
-    return &(buf->b_p_ofu);
-  case kOptEndoffile:
-    return &(buf->b_p_eof);
-  case kOptEndofline:
-    return &(buf->b_p_eol);
-  case kOptFixendofline:
-    return &(buf->b_p_fixeol);
-  case kOptExpandtab:
-    return &(buf->b_p_et);
-  case kOptFileencoding:
-    return &(buf->b_p_fenc);
-  case kOptFileformat:
-    return &(buf->b_p_ff);
-  case kOptFiletype:
-    return &(buf->b_p_ft);
-  case kOptFormatoptions:
-    return &(buf->b_p_fo);
-  case kOptFormatlistpat:
-    return &(buf->b_p_flp);
-  case kOptIminsert:
-    return &(buf->b_p_iminsert);
-  case kOptImsearch:
-    return &(buf->b_p_imsearch);
-  case kOptInfercase:
-    return &(buf->b_p_inf);
-  case kOptIskeyword:
-    return &(buf->b_p_isk);
-  case kOptIncludeexpr:
-    return &(buf->b_p_inex);
-  case kOptIndentexpr:
-    return &(buf->b_p_inde);
-  case kOptIndentkeys:
-    return &(buf->b_p_indk);
-  case kOptFormatexpr:
-    return &(buf->b_p_fex);
-  case kOptLisp:
-    return &(buf->b_p_lisp);
-  case kOptLispoptions:
-    return &(buf->b_p_lop);
-  case kOptModeline:
-    return &(buf->b_p_ml);
-  case kOptMatchpairs:
-    return &(buf->b_p_mps);
-  case kOptModifiable:
-    return &(buf->b_p_ma);
-  case kOptModified:
-    return &(buf->b_changed);
-  case kOptNrformats:
-    return &(buf->b_p_nf);
-  case kOptPreserveindent:
-    return &(buf->b_p_pi);
-  case kOptQuoteescape:
-    return &(buf->b_p_qe);
-  case kOptReadonly:
-    return &(buf->b_p_ro);
-  case kOptScrollback:
-    return &(buf->b_p_scbk);
-  case kOptSmartindent:
-    return &(buf->b_p_si);
-  case kOptSofttabstop:
-    return &(buf->b_p_sts);
-  case kOptSuffixesadd:
-    return &(buf->b_p_sua);
-  case kOptSwapfile:
-    return &(buf->b_p_swf);
-  case kOptSynmaxcol:
-    return &(buf->b_p_smc);
-  case kOptSyntax:
-    return &(buf->b_p_syn);
-  case kOptSpellcapcheck:
-    return &(win->w_s->b_p_spc);
-  case kOptSpellfile:
-    return &(win->w_s->b_p_spf);
-  case kOptSpelllang:
-    return &(win->w_s->b_p_spl);
-  case kOptSpelloptions:
-    return &(win->w_s->b_p_spo);
-  case kOptShiftwidth:
-    return &(buf->b_p_sw);
-  case kOptTagfunc:
-    return &(buf->b_p_tfu);
-  case kOptTabstop:
-    return &(buf->b_p_ts);
-  case kOptTextwidth:
-    return &(buf->b_p_tw);
-  case kOptUndofile:
-    return &(buf->b_p_udf);
-  case kOptWrapmargin:
-    return &(buf->b_p_wm);
-  case kOptVarsofttabstop:
-    return &(buf->b_p_vsts);
-  case kOptVartabstop:
-    return &(buf->b_p_vts);
-  case kOptKeymap:
-    return &(buf->b_p_keymap);
-  case kOptSigncolumn:
-    return &(win->w_p_scl);
-  case kOptWinhighlight:
-    return &(win->w_p_winhl);
-  case kOptWinblend:
-    return &(win->w_p_winbl);
-  case kOptStatuscolumn:
-    return &(win->w_p_stc);
-  default:
-    iemsg(_("E356: get_varp ERROR"));
-  }
-  // always return a valid pointer to avoid a crash!
-  return &(buf->b_p_wm);
+  return rs_get_varp_from(p, buf, win);
 }
 
 /// Get option index from option pointer
