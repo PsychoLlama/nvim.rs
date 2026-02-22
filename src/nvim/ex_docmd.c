@@ -164,6 +164,7 @@ extern int rs_parse_cmd_address(exarg_T *eap, const char **errormsg, bool silent
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
 extern void rs_ex_copy(linenr_T line1, linenr_T line2, linenr_T dest);
+extern int rs_do_move(linenr_T line1, linenr_T line2, linenr_T dest);
 extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
 #define loop_get_events(l) rs_loop_get_events(l)
 
@@ -4894,7 +4895,7 @@ static void ex_copymove(exarg_T *eap)
   }
 
   if (eap->cmdidx == CMD_move) {
-    if (do_move(eap->line1, eap->line2, n) == FAIL) {
+    if (rs_do_move(eap->line1, eap->line2, n) == FAIL) {
       return;
     }
   } else {

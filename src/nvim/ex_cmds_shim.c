@@ -303,6 +303,67 @@ void nvim_excmds_extmark_splice(int start_row, int start_col,
                  (ExtmarkOp)etype);
 }
 
+// --- do_move accessor functions for Rust FFI ---
+
+void nvim_excmds_mark_adjust_nofold(linenr_T line1, linenr_T line2,
+                                     int amount, int amount_after, int etype)
+{
+  mark_adjust_nofold(line1, line2, (long)amount, (long)amount_after, (ExtmarkOp)etype);
+}
+
+int64_t nvim_excmds_ml_find_line_or_offset(linenr_T lnum)
+{
+  return (int64_t)ml_find_line_or_offset(curbuf, lnum, NULL, true);
+}
+
+int nvim_excmds_ml_delete_flags(linenr_T lnum, int flags)
+{
+  return ml_delete_flags(lnum, flags);
+}
+
+void nvim_excmds_extmark_move_region(int start_row, int start_col, int64_t start_byte,
+                                      int extent_row, int extent_col, int64_t extent_byte,
+                                      int new_row, int new_col, int64_t new_byte, int etype)
+{
+  extmark_move_region(curbuf, start_row, (colnr_T)start_col, (bcount_t)start_byte,
+                      extent_row, (colnr_T)extent_col, (bcount_t)extent_byte,
+                      new_row, (colnr_T)new_col, (bcount_t)new_byte, (ExtmarkOp)etype);
+}
+
+void nvim_excmds_buf_updates_send_changes(linenr_T lnum, int64_t added, int64_t deleted)
+{
+  buf_updates_send_changes(curbuf, lnum, added, deleted);
+}
+
+// Wrap the FOR_ALL_TAB_WINDOWS loop for fold move range.
+void nvim_excmds_fold_move_range_all_wins(linenr_T line1, linenr_T line2, linenr_T dest)
+{
+  FOR_ALL_TAB_WINDOWS(tab, win) {
+    if (win->w_buffer == curbuf) {
+      rs_foldMoveRange(win, &win->w_folds, line1, line2, dest);
+    }
+  }
+}
+
+void nvim_excmds_disable_fold_update_inc(void) { disable_fold_update++; }
+void nvim_excmds_disable_fold_update_dec(void) { disable_fold_update--; }
+
+int nvim_excmds_global_busy(void) { return global_busy; }
+int64_t nvim_excmds_p_report(void) { return (int64_t)p_report; }
+
+void nvim_excmds_smsg_lines_moved(int64_t num_lines)
+{
+  smsg(0, NGETTEXT("%" PRId64 " line moved",
+                   "%" PRId64 " lines moved", (int)num_lines),
+       num_lines);
+}
+
+void nvim_excmds_emsg_e134(void) {
+  emsg(_("E134: Cannot move a range of lines into itself"));
+}
+
+_Static_assert(ML_DEL_MESSAGE == 1, "ML_DEL_MESSAGE mismatch");
+
 // Verify sort-related constants for Rust
 _Static_assert(STR2NR_BIN == (1 << 0), "STR2NR_BIN mismatch");
 _Static_assert(STR2NR_OCT == (1 << 1), "STR2NR_OCT mismatch");
@@ -325,152 +386,6 @@ _Static_assert(BL_FIX == 4, "BL_FIX mismatch");
 _Static_assert(TAB == '\011', "TAB mismatch");
 _Static_assert(EXFLAG_LIST == 0x01, "EXFLAG_LIST mismatch");
 _Static_assert(EXFLAG_NR == 0x02, "EXFLAG_NR mismatch");
-
-/// :move command - move lines line1-line2 to line dest
-///
-/// @return  FAIL for failure, OK otherwise
-int do_move(linenr_T line1, linenr_T line2, linenr_T dest)
-{
-  if (dest >= line1 && dest < line2) {
-    emsg(_("E134: Cannot move a range of lines into itself"));
-    return FAIL;
-  }
-
-  // Do nothing if we are not actually moving any lines.  This will prevent
-  // the 'modified' flag from being set without cause.
-  if (dest == line1 - 1 || dest == line2) {
-    // Move the cursor as if lines were moved (see below) to be backwards
-    // compatible.
-    curwin->w_cursor.lnum = dest >= line1
-                            ? dest
-                            : dest + (line2 - line1) + 1;
-    return OK;
-  }
-
-  bcount_t start_byte = ml_find_line_or_offset(curbuf, line1, NULL, true);
-  bcount_t end_byte = ml_find_line_or_offset(curbuf, line2 + 1, NULL, true);
-  bcount_t extent_byte = end_byte - start_byte;
-  bcount_t dest_byte = ml_find_line_or_offset(curbuf, dest + 1, NULL, true);
-
-  linenr_T num_lines = line2 - line1 + 1;  // Num lines moved
-
-  // First we copy the old text to its new location -- webb
-  // Also copy the flag that ":global" command uses.
-  if (u_save(dest, dest + 1) == FAIL) {
-    return FAIL;
-  }
-
-  linenr_T l;
-  linenr_T extra;      // Num lines added before line1
-  for (extra = 0, l = line1; l <= line2; l++) {
-    char *str = xstrnsave(ml_get(l + extra), (size_t)ml_get_len(l + extra));
-    ml_append(dest + l - line1, str, 0, false);
-    xfree(str);
-    if (dest < line1) {
-      extra++;
-    }
-  }
-
-  // Now we must be careful adjusting our marks so that we don't overlap our
-  // mark_adjust() calls.
-  //
-  // We adjust the marks within the old text so that they refer to the
-  // last lines of the file (temporarily), because we know no other marks
-  // will be set there since these line numbers did not exist until we added
-  // our new lines.
-  //
-  // Then we adjust the marks on lines between the old and new text positions
-  // (either forwards or backwards).
-  //
-  // And Finally we adjust the marks we put at the end of the file back to
-  // their final destination at the new text position -- webb
-  linenr_T last_line = curbuf->b_ml.ml_line_count;  // Last line in file after adding new text
-  mark_adjust_nofold(line1, line2, last_line - line2, 0, kExtmarkNOOP);
-
-  disable_fold_update++;
-  changed_lines(curbuf, last_line - num_lines + 1, 0, last_line + 1, num_lines, false);
-  disable_fold_update--;
-
-  int line_off = 0;
-  bcount_t byte_off = 0;
-  if (dest >= line2) {
-    mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP);
-    FOR_ALL_TAB_WINDOWS(tab, win) {
-      if (win->w_buffer == curbuf) {
-        rs_foldMoveRange(win, &win->w_folds, line1, line2, dest);
-      }
-    }
-    if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-      curbuf->b_op_start.lnum = dest - num_lines + 1;
-      curbuf->b_op_end.lnum = dest;
-    }
-    line_off = -num_lines;
-    byte_off = -extent_byte;
-  } else {
-    mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP);
-    FOR_ALL_TAB_WINDOWS(tab, win) {
-      if (win->w_buffer == curbuf) {
-        rs_foldMoveRange(win, &win->w_folds, dest + 1, line1 - 1, line2);
-      }
-    }
-    if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-      curbuf->b_op_start.lnum = dest + 1;
-      curbuf->b_op_end.lnum = dest + num_lines;
-    }
-  }
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    curbuf->b_op_start.col = curbuf->b_op_end.col = 0;
-  }
-  mark_adjust_nofold(last_line - num_lines + 1, last_line,
-                     -(last_line - dest - extra), 0, kExtmarkNOOP);
-
-  disable_fold_update++;
-  changed_lines(curbuf, last_line - num_lines + 1, 0, last_line + 1, -extra, false);
-  disable_fold_update--;
-
-  // send update regarding the new lines that were added
-  buf_updates_send_changes(curbuf, dest + 1, num_lines, 0);
-
-  // Now we delete the original text -- webb
-  if (u_save(line1 + extra - 1, line2 + extra + 1) == FAIL) {
-    return FAIL;
-  }
-
-  for (l = line1; l <= line2; l++) {
-    ml_delete_flags(line1 + extra, ML_DEL_MESSAGE);
-  }
-  if (!global_busy && num_lines > p_report) {
-    smsg(0, NGETTEXT("%" PRId64 " line moved",
-                     "%" PRId64 " lines moved", num_lines),
-         (int64_t)num_lines);
-  }
-
-  extmark_move_region(curbuf, line1 - 1, 0, start_byte,
-                      line2 - line1 + 1, 0, extent_byte,
-                      dest + line_off, 0, dest_byte + byte_off,
-                      kExtmarkUndo);
-
-  // Leave the cursor on the last of the moved lines.
-  if (dest >= line1) {
-    curwin->w_cursor.lnum = dest;
-  } else {
-    curwin->w_cursor.lnum = dest + (line2 - line1) + 1;
-  }
-
-  if (line1 < dest) {
-    dest += num_lines + 1;
-    last_line = curbuf->b_ml.ml_line_count;
-    dest = MIN(dest, last_line + 1);
-    changed_lines(curbuf, line1, 0, dest, 0, false);
-  } else {
-    changed_lines(curbuf, dest + 1, 0, line1 + num_lines, 0, false);
-  }
-
-  // send nvim_buf_lines_event regarding lines that were deleted
-  buf_updates_send_changes(curbuf, line1 + extra, 0, num_lines);
-
-  return OK;
-}
 
 static char *prevcmd = NULL;        // the previous command
 

@@ -489,6 +489,181 @@ pub unsafe extern "C" fn rs_ex_copy(line1: c_int, line2: c_int, n: c_int) {
     msgmore(count);
 }
 
+/// OK constant from vim_defs.h
+const OK: c_int = 1;
+
+/// ML_DEL_MESSAGE flag for ml_delete_flags.
+const ML_DEL_MESSAGE: c_int = 1;
+
+/// kExtmarkNOOP: extmarks shouldn't be moved.
+const KEXTMARK_NOOP_MOVE: c_int = 0;
+/// kExtmarkUndo: operation should be reversible.
+const KEXTMARK_UNDO_MOVE: c_int = 1;
+
+/// `:move` command implementation.
+///
+/// Moves lines line1-line2 to after line dest.
+/// Returns FAIL (0) for failure, OK (1) otherwise.
+///
+/// # Safety
+/// Must be called from Neovim's main thread with valid buffer state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int) -> c_int {
+    use crate::{
+        changed_lines, ml_append, ml_get, ml_get_len, nvim_cmdmod_has_lockmarks,
+        nvim_curbuf_get_b_ml_ml_line_count, nvim_curbuf_set_op_end, nvim_curbuf_set_op_start,
+        nvim_curwin_set_cursor_lnum, nvim_excmds_buf_updates_send_changes,
+        nvim_excmds_disable_fold_update_dec, nvim_excmds_disable_fold_update_inc,
+        nvim_excmds_emsg_e134, nvim_excmds_extmark_move_region,
+        nvim_excmds_fold_move_range_all_wins, nvim_excmds_global_busy,
+        nvim_excmds_mark_adjust_nofold, nvim_excmds_ml_delete_flags,
+        nvim_excmds_ml_find_line_or_offset, nvim_excmds_p_report, nvim_excmds_smsg_lines_moved,
+        nvim_get_curbuf, u_save, xfree, xstrnsave,
+    };
+
+    if dest >= line1 && dest < line2 {
+        nvim_excmds_emsg_e134();
+        return FAIL;
+    }
+
+    // Do nothing if we are not actually moving any lines.
+    if dest == line1 - 1 || dest == line2 {
+        let cursor_lnum = if dest >= line1 {
+            dest
+        } else {
+            dest + (line2 - line1) + 1
+        };
+        nvim_curwin_set_cursor_lnum(cursor_lnum);
+        return OK;
+    }
+
+    let start_byte = nvim_excmds_ml_find_line_or_offset(line1);
+    let end_byte = nvim_excmds_ml_find_line_or_offset(line2 + 1);
+    let extent_byte = end_byte - start_byte;
+    let dest_byte = nvim_excmds_ml_find_line_or_offset(dest + 1);
+
+    let num_lines = line2 - line1 + 1;
+
+    // First we copy the old text to its new location.
+    if u_save(dest, dest + 1) == FAIL {
+        return FAIL;
+    }
+
+    let mut extra: c_int = 0;
+    for l in line1..=line2 {
+        let str = xstrnsave(ml_get(l + extra), ml_get_len(l + extra) as usize);
+        ml_append(dest + l - line1, str, 0, 0);
+        xfree(str.cast());
+        if dest < line1 {
+            extra += 1;
+        }
+    }
+
+    // Adjust marks: first move marks in old text to end of file (temporarily).
+    let mut last_line = nvim_curbuf_get_b_ml_ml_line_count();
+    nvim_excmds_mark_adjust_nofold(line1, line2, last_line - line2, 0, KEXTMARK_NOOP_MOVE);
+
+    nvim_excmds_disable_fold_update_inc();
+    changed_lines(
+        nvim_get_curbuf(),
+        last_line - num_lines + 1,
+        0,
+        last_line + 1,
+        num_lines,
+        0,
+    );
+    nvim_excmds_disable_fold_update_dec();
+
+    let mut line_off: c_int = 0;
+    let mut byte_off: i64 = 0;
+    if dest >= line2 {
+        nvim_excmds_mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, KEXTMARK_NOOP_MOVE);
+        nvim_excmds_fold_move_range_all_wins(line1, line2, dest);
+        if nvim_cmdmod_has_lockmarks() == 0 {
+            nvim_curbuf_set_op_start(dest - num_lines + 1, 0);
+            nvim_curbuf_set_op_end(dest, 0);
+        }
+        line_off = -num_lines;
+        byte_off = -extent_byte;
+    } else {
+        nvim_excmds_mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, KEXTMARK_NOOP_MOVE);
+        nvim_excmds_fold_move_range_all_wins(dest + 1, line1 - 1, line2);
+        if nvim_cmdmod_has_lockmarks() == 0 {
+            nvim_curbuf_set_op_start(dest + 1, 0);
+            nvim_curbuf_set_op_end(dest + num_lines, 0);
+        }
+    }
+    nvim_excmds_mark_adjust_nofold(
+        last_line - num_lines + 1,
+        last_line,
+        -(last_line - dest - extra),
+        0,
+        KEXTMARK_NOOP_MOVE,
+    );
+
+    nvim_excmds_disable_fold_update_inc();
+    changed_lines(
+        nvim_get_curbuf(),
+        last_line - num_lines + 1,
+        0,
+        last_line + 1,
+        -extra,
+        0,
+    );
+    nvim_excmds_disable_fold_update_dec();
+
+    // Send update regarding the new lines that were added.
+    nvim_excmds_buf_updates_send_changes(dest + 1, i64::from(num_lines), 0);
+
+    // Now delete the original text.
+    if u_save(line1 + extra - 1, line2 + extra + 1) == FAIL {
+        return FAIL;
+    }
+
+    for _ in line1..=line2 {
+        nvim_excmds_ml_delete_flags(line1 + extra, ML_DEL_MESSAGE);
+    }
+    if nvim_excmds_global_busy() == 0 && i64::from(num_lines) > nvim_excmds_p_report() {
+        nvim_excmds_smsg_lines_moved(i64::from(num_lines));
+    }
+
+    nvim_excmds_extmark_move_region(
+        line1 - 1,
+        0,
+        start_byte,
+        line2 - line1 + 1,
+        0,
+        extent_byte,
+        dest + line_off,
+        0,
+        dest_byte + byte_off,
+        KEXTMARK_UNDO_MOVE,
+    );
+
+    // Leave the cursor on the last of the moved lines.
+    if dest >= line1 {
+        nvim_curwin_set_cursor_lnum(dest);
+    } else {
+        nvim_curwin_set_cursor_lnum(dest + (line2 - line1) + 1);
+    }
+
+    if line1 < dest {
+        dest += num_lines + 1;
+        last_line = nvim_curbuf_get_b_ml_ml_line_count();
+        if dest > last_line + 1 {
+            dest = last_line + 1;
+        }
+        changed_lines(nvim_get_curbuf(), line1, 0, dest, 0, 0);
+    } else {
+        changed_lines(nvim_get_curbuf(), dest + 1, 0, line1 + num_lines, 0, 0);
+    }
+
+    // Send nvim_buf_lines_event regarding lines that were deleted.
+    nvim_excmds_buf_updates_send_changes(line1 + extra, 0, i64::from(num_lines));
+
+    OK
+}
+
 /// Validate a copy operation.
 ///
 /// Returns 1 if valid, 0 if invalid.

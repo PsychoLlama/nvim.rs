@@ -672,6 +672,49 @@ extern "C" {
         etype: c_int,
     );
 
+    // --- do_move FFI functions ---
+    /// mark_adjust_nofold wrapper.
+    pub fn nvim_excmds_mark_adjust_nofold(
+        line1: c_int,
+        line2: c_int,
+        amount: c_int,
+        amount_after: c_int,
+        etype: c_int,
+    );
+    /// ml_find_line_or_offset wrapper (on curbuf).
+    pub fn nvim_excmds_ml_find_line_or_offset(lnum: c_int) -> i64;
+    /// ml_delete_flags wrapper.
+    pub fn nvim_excmds_ml_delete_flags(lnum: c_int, flags: c_int) -> c_int;
+    /// extmark_move_region wrapper (on curbuf).
+    pub fn nvim_excmds_extmark_move_region(
+        start_row: c_int,
+        start_col: c_int,
+        start_byte: i64,
+        extent_row: c_int,
+        extent_col: c_int,
+        extent_byte: i64,
+        new_row: c_int,
+        new_col: c_int,
+        new_byte: i64,
+        etype: c_int,
+    );
+    /// buf_updates_send_changes wrapper (on curbuf).
+    pub fn nvim_excmds_buf_updates_send_changes(lnum: c_int, added: i64, deleted: i64);
+    /// FOR_ALL_TAB_WINDOWS fold move range wrapper.
+    pub fn nvim_excmds_fold_move_range_all_wins(line1: c_int, line2: c_int, dest: c_int);
+    /// Increment disable_fold_update.
+    pub fn nvim_excmds_disable_fold_update_inc();
+    /// Decrement disable_fold_update.
+    pub fn nvim_excmds_disable_fold_update_dec();
+    /// Get global_busy flag.
+    pub fn nvim_excmds_global_busy() -> c_int;
+    /// Get p_report option value.
+    pub fn nvim_excmds_p_report() -> i64;
+    /// Display "N line(s) moved" message.
+    pub fn nvim_excmds_smsg_lines_moved(num_lines: i64);
+    /// Display E134 error message.
+    pub fn nvim_excmds_emsg_e134();
+
     // ex_change accessors and functions
     /// Get curbuf->b_p_ai (autoindent)
     pub fn nvim_curbuf_get_b_p_ai() -> c_int;
