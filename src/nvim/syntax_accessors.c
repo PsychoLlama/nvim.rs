@@ -3090,205 +3090,39 @@ static void syntime_report(void)
   }
 }
 
-// ============================================================================
-// Rust FFI accessor functions
-// ============================================================================
+int nvim_win_get_syn_patterns_len(win_T *win) { return win->w_s->b_syn_patterns.ga_len; }
+int nvim_win_get_syn_clusters_len(win_T *win) { return win->w_s->b_syn_clusters.ga_len; }
+int nvim_win_get_keywtab_used(win_T *win) { return (int)win->w_s->b_keywtab.ht_used; }
+int nvim_win_get_keywtab_ic_used(win_T *win) { return (int)win->w_s->b_keywtab_ic.ht_used; }
 
-/// Get the number of syntax patterns defined for a window.
-int nvim_win_get_syn_patterns_len(win_T *win)
-{
-  return win->w_s->b_syn_patterns.ga_len;
-}
-
-/// Get the number of syntax clusters defined for a window.
-int nvim_win_get_syn_clusters_len(win_T *win)
-{
-  return win->w_s->b_syn_clusters.ga_len;
-}
-
-/// Get the number of used entries in the keyword hashtab.
-int nvim_win_get_keywtab_used(win_T *win)
-{
-  return (int)win->w_s->b_keywtab.ht_used;
-}
-
-/// Get the number of used entries in the case-insensitive keyword hashtab.
-int nvim_win_get_keywtab_ic_used(win_T *win)
-{
-  return (int)win->w_s->b_keywtab_ic.ht_used;
-}
-
-// ============================================================================
-// synblock_T accessors (syntax block)
-// ============================================================================
-
-/// Get b_syn_patterns.ga_len (number of syntax patterns)
-int nvim_synblock_get_pattern_count(synblock_T *block)
-{
-  return block->b_syn_patterns.ga_len;
-}
-
-/// Get b_syn_clusters.ga_len (number of syntax clusters)
-int nvim_synblock_get_cluster_count(synblock_T *block)
-{
-  return block->b_syn_clusters.ga_len;
-}
-
-/// Get b_syn_ic (ignore case for :syn cmds)
-int nvim_synblock_get_syn_ic(synblock_T *block)
-{
-  return block->b_syn_ic;
-}
-
-/// Set b_syn_ic (ignore case for :syn cmds)
-void nvim_synblock_set_syn_ic(synblock_T *block, int ic)
-{
-  block->b_syn_ic = ic;
-}
-
-/// Get b_syn_spell (SYNSPL_ values)
-int nvim_synblock_get_syn_spell(synblock_T *block)
-{
-  return block->b_syn_spell;
-}
-
-/// Set b_syn_spell (SYNSPL_ values)
-void nvim_synblock_set_syn_spell(synblock_T *block, int spell)
-{
-  block->b_syn_spell = spell;
-}
-
-/// Get b_syn_foldlevel
-int nvim_synblock_get_syn_foldlevel(synblock_T *block)
-{
-  return block->b_syn_foldlevel;
-}
-
-/// Set b_syn_foldlevel
-void nvim_synblock_set_syn_foldlevel(synblock_T *block, int foldlevel)
-{
-  block->b_syn_foldlevel = foldlevel;
-}
-
-/// Get b_syn_containedin (true if any item has containedin)
-int nvim_synblock_get_containedin(synblock_T *block)
-{
-  return block->b_syn_containedin;
-}
-
-/// Get b_syn_sync_flags
-int nvim_synblock_get_sync_flags(synblock_T *block)
-{
-  return block->b_syn_sync_flags;
-}
-
-/// Get b_syn_sync_id
-int16_t nvim_synblock_get_sync_id(synblock_T *block)
-{
-  return block->b_syn_sync_id;
-}
-
-/// Get b_syn_sync_minlines
-int nvim_synblock_get_sync_minlines(synblock_T *block)
-{
-  return (int)block->b_syn_sync_minlines;
-}
-
-/// Get b_syn_sync_maxlines
-int nvim_synblock_get_sync_maxlines(synblock_T *block)
-{
-  return (int)block->b_syn_sync_maxlines;
-}
-
-/// Get b_syn_sync_linebreaks
-int nvim_synblock_get_sync_linebreaks(synblock_T *block)
-{
-  return (int)block->b_syn_sync_linebreaks;
-}
-
-/// Get b_syn_topgrp (for :syntax include)
-int nvim_synblock_get_topgrp(synblock_T *block)
-{
-  return block->b_syn_topgrp;
-}
-
-/// Get b_syn_conceal (auto-conceal for :syn cmds)
-int nvim_synblock_get_conceal(synblock_T *block)
-{
-  return block->b_syn_conceal;
-}
-
-/// Set b_syn_conceal (auto-conceal for :syn cmds)
-void nvim_synblock_set_conceal(synblock_T *block, int conceal)
-{
-  block->b_syn_conceal = conceal;
-}
-
-/// Get b_syn_folditems (number of patterns with HL_FOLD)
-int nvim_synblock_get_folditems(synblock_T *block)
-{
-  return block->b_syn_folditems;
-}
-
-/// Get b_sst_len (number of entries in b_sst_array)
-int nvim_synblock_get_sst_len(synblock_T *block)
-{
-  return block->b_sst_len;
-}
-
-/// Get b_sst_freecount (number of free entries)
-int nvim_synblock_get_sst_freecount(synblock_T *block)
-{
-  return block->b_sst_freecount;
-}
-
-/// Get b_sst_check_lnum (entries after this need to be checked)
-int nvim_synblock_get_sst_check_lnum(synblock_T *block)
-{
-  return (int)block->b_sst_check_lnum;
-}
-
-/// Get b_syn_error (true when error occurred in HL)
-int nvim_synblock_get_syn_error(synblock_T *block)
-{
-  return block->b_syn_error ? 1 : 0;
-}
-
-/// Get b_syn_slow (true when 'redrawtime' reached)
-int nvim_synblock_get_syn_slow(synblock_T *block)
-{
-  return block->b_syn_slow ? 1 : 0;
-}
-
-/// Get b_spell_cluster_id (@Spell cluster ID or 0)
-int nvim_synblock_get_spell_cluster_id(synblock_T *block)
-{
-  return block->b_spell_cluster_id;
-}
-
-/// Get b_nospell_cluster_id (@NoSpell cluster ID or 0)
-int nvim_synblock_get_nospell_cluster_id(synblock_T *block)
-{
-  return block->b_nospell_cluster_id;
-}
-
-/// Get b_sst_first (first used entry in state array)
-synstate_T *nvim_synblock_get_sst_first(synblock_T *block)
-{
-  return block->b_sst_first;
-}
-
-/// Get b_sst_firstfree (first free entry in state array)
-synstate_T *nvim_synblock_get_sst_firstfree(synblock_T *block)
-{
-  return block->b_sst_firstfree;
-}
-
-/// Check if b_sst_array is allocated
-int nvim_synblock_has_sst_array(synblock_T *block)
-{
-  return block->b_sst_array != NULL ? 1 : 0;
-}
+int nvim_synblock_get_pattern_count(synblock_T *block) { return block->b_syn_patterns.ga_len; }
+int nvim_synblock_get_cluster_count(synblock_T *block) { return block->b_syn_clusters.ga_len; }
+int nvim_synblock_get_syn_ic(synblock_T *block) { return block->b_syn_ic; }
+void nvim_synblock_set_syn_ic(synblock_T *block, int ic) { block->b_syn_ic = ic; }
+int nvim_synblock_get_syn_spell(synblock_T *block) { return block->b_syn_spell; }
+void nvim_synblock_set_syn_spell(synblock_T *block, int spell) { block->b_syn_spell = spell; }
+int nvim_synblock_get_syn_foldlevel(synblock_T *block) { return block->b_syn_foldlevel; }
+void nvim_synblock_set_syn_foldlevel(synblock_T *block, int foldlevel) { block->b_syn_foldlevel = foldlevel; }
+int nvim_synblock_get_containedin(synblock_T *block) { return block->b_syn_containedin; }
+int nvim_synblock_get_sync_flags(synblock_T *block) { return block->b_syn_sync_flags; }
+int16_t nvim_synblock_get_sync_id(synblock_T *block) { return block->b_syn_sync_id; }
+int nvim_synblock_get_sync_minlines(synblock_T *block) { return (int)block->b_syn_sync_minlines; }
+int nvim_synblock_get_sync_maxlines(synblock_T *block) { return (int)block->b_syn_sync_maxlines; }
+int nvim_synblock_get_sync_linebreaks(synblock_T *block) { return (int)block->b_syn_sync_linebreaks; }
+int nvim_synblock_get_topgrp(synblock_T *block) { return block->b_syn_topgrp; }
+int nvim_synblock_get_conceal(synblock_T *block) { return block->b_syn_conceal; }
+void nvim_synblock_set_conceal(synblock_T *block, int conceal) { block->b_syn_conceal = conceal; }
+int nvim_synblock_get_folditems(synblock_T *block) { return block->b_syn_folditems; }
+int nvim_synblock_get_sst_len(synblock_T *block) { return block->b_sst_len; }
+int nvim_synblock_get_sst_freecount(synblock_T *block) { return block->b_sst_freecount; }
+int nvim_synblock_get_sst_check_lnum(synblock_T *block) { return (int)block->b_sst_check_lnum; }
+int nvim_synblock_get_syn_error(synblock_T *block) { return block->b_syn_error ? 1 : 0; }
+int nvim_synblock_get_syn_slow(synblock_T *block) { return block->b_syn_slow ? 1 : 0; }
+int nvim_synblock_get_spell_cluster_id(synblock_T *block) { return block->b_spell_cluster_id; }
+int nvim_synblock_get_nospell_cluster_id(synblock_T *block) { return block->b_nospell_cluster_id; }
+synstate_T *nvim_synblock_get_sst_first(synblock_T *block) { return block->b_sst_first; }
+synstate_T *nvim_synblock_get_sst_firstfree(synblock_T *block) { return block->b_sst_firstfree; }
+int nvim_synblock_has_sst_array(synblock_T *block) { return block->b_sst_array != NULL ? 1 : 0; }
 
 /// Get synpat_T at index from b_syn_patterns
 synpat_T *nvim_synblock_get_pattern(synblock_T *block, int idx)
@@ -3308,329 +3142,61 @@ syn_cluster_T *nvim_synblock_get_cluster(synblock_T *block, int idx)
   return &SYN_CLSTR(block)[idx];
 }
 
-// ============================================================================
-// synstate_T accessors (syntax state)
-// ============================================================================
+synstate_T *nvim_synstate_get_next(synstate_T *state) { return state->sst_next; }
+int nvim_synstate_get_lnum(synstate_T *state) { return (int)state->sst_lnum; }
+int nvim_synstate_get_stacksize(synstate_T *state) { return state->sst_stacksize; }
+int nvim_synstate_get_next_flags(synstate_T *state) { return state->sst_next_flags; }
+int nvim_synstate_get_tick(synstate_T *state) { return (int)state->sst_tick; }
+int nvim_synstate_get_change_lnum(synstate_T *state) { return (int)state->sst_change_lnum; }
 
-/// Get sst_next (next entry in used or free list)
-synstate_T *nvim_synstate_get_next(synstate_T *state)
-{
-  return state->sst_next;
-}
+int nvim_synpat_get_type(synpat_T *pat) { return (int)pat->sp_type; }
+int nvim_synpat_get_syncing(synpat_T *pat) { return pat->sp_syncing ? 1 : 0; }
+int16_t nvim_synpat_get_syn_match_id(synpat_T *pat) { return pat->sp_syn_match_id; }
+int16_t nvim_synpat_get_off_flags(synpat_T *pat) { return pat->sp_off_flags; }
+int nvim_synpat_get_flags(synpat_T *pat) { return pat->sp_flags; }
+int nvim_synpat_get_cchar(synpat_T *pat) { return pat->sp_cchar; }
+int nvim_synpat_get_ic(synpat_T *pat) { return pat->sp_ic; }
+int nvim_synpat_get_sync_idx(synpat_T *pat) { return pat->sp_sync_idx; }
+char *nvim_synpat_get_pattern(synpat_T *pat) { return pat->sp_pattern; }
+int16_t nvim_synpat_get_syn_id(synpat_T *pat) { return pat->sp_syn.id; }
+int nvim_synpat_get_syn_inc_tag(synpat_T *pat) { return pat->sp_syn.inc_tag; }
 
-/// Get sst_lnum (line number for this state)
-int nvim_synstate_get_lnum(synstate_T *state)
-{
-  return (int)state->sst_lnum;
-}
+char *nvim_syncluster_get_name(syn_cluster_T *cluster) { return cluster->scl_name; }
+char *nvim_syncluster_get_name_u(syn_cluster_T *cluster) { return cluster->scl_name_u; }
 
-/// Get sst_stacksize (number of states on the stack)
-int nvim_synstate_get_stacksize(synstate_T *state)
-{
-  return state->sst_stacksize;
-}
+int nvim_stateitem_get_idx(stateitem_T *item) { return item->si_idx; }
+int nvim_stateitem_get_id(stateitem_T *item) { return item->si_id; }
+int nvim_stateitem_get_trans_id(stateitem_T *item) { return item->si_trans_id; }
+int nvim_stateitem_get_m_lnum(stateitem_T *item) { return item->si_m_lnum; }
+int nvim_stateitem_get_m_startcol(stateitem_T *item) { return item->si_m_startcol; }
+int nvim_stateitem_get_attr(stateitem_T *item) { return item->si_attr; }
+int nvim_stateitem_get_flags(stateitem_T *item) { return item->si_flags; }
+int nvim_stateitem_get_seqnr(stateitem_T *item) { return item->si_seqnr; }
+int nvim_stateitem_get_cchar(stateitem_T *item) { return item->si_cchar; }
+int nvim_stateitem_get_end_idx(stateitem_T *item) { return item->si_end_idx; }
+int nvim_stateitem_get_ends(stateitem_T *item) { return item->si_ends; }
 
-/// Get sst_next_flags (flags for sst_next_list)
-int nvim_synstate_get_next_flags(synstate_T *state)
-{
-  return state->sst_next_flags;
-}
+keyentry_T *nvim_keyentry_get_next(keyentry_T *ke) { return ke->ke_next; }
+int16_t nvim_keyentry_get_syn_id(keyentry_T *ke) { return ke->k_syn.id; }
+int nvim_keyentry_get_syn_inc_tag(keyentry_T *ke) { return ke->k_syn.inc_tag; }
+int nvim_keyentry_get_flags(keyentry_T *ke) { return ke->flags; }
+int nvim_keyentry_get_char(keyentry_T *ke) { return ke->k_char; }
+char *nvim_keyentry_get_keyword(keyentry_T *ke) { return ke->keyword; }
 
-/// Get sst_tick (tick when last displayed)
-int nvim_synstate_get_tick(synstate_T *state)
-{
-  return (int)state->sst_tick;
-}
-
-/// Get sst_change_lnum (line where change may have invalidated state)
-int nvim_synstate_get_change_lnum(synstate_T *state)
-{
-  return (int)state->sst_change_lnum;
-}
-
-// ============================================================================
-// synpat_T accessors (syntax pattern)
-// ============================================================================
-
-/// Get sp_type (SPTYPE_* values)
-int nvim_synpat_get_type(synpat_T *pat)
-{
-  return (int)pat->sp_type;
-}
-
-/// Get sp_syncing (this item used for syncing)
-int nvim_synpat_get_syncing(synpat_T *pat)
-{
-  return pat->sp_syncing ? 1 : 0;
-}
-
-/// Get sp_syn_match_id (highlight group ID of pattern)
-int16_t nvim_synpat_get_syn_match_id(synpat_T *pat)
-{
-  return pat->sp_syn_match_id;
-}
-
-/// Get sp_off_flags (offset flags)
-int16_t nvim_synpat_get_off_flags(synpat_T *pat)
-{
-  return pat->sp_off_flags;
-}
-
-/// Get sp_flags (HL_ flags)
-int nvim_synpat_get_flags(synpat_T *pat)
-{
-  return pat->sp_flags;
-}
-
-/// Get sp_cchar (conceal substitute character)
-int nvim_synpat_get_cchar(synpat_T *pat)
-{
-  return pat->sp_cchar;
-}
-
-/// Get sp_ic (ignore-case flag for sp_prog)
-int nvim_synpat_get_ic(synpat_T *pat)
-{
-  return pat->sp_ic;
-}
-
-/// Get sp_sync_idx (sync item index, syncing only)
-int nvim_synpat_get_sync_idx(synpat_T *pat)
-{
-  return pat->sp_sync_idx;
-}
-
-/// Get sp_pattern (pattern string)
-char *nvim_synpat_get_pattern(synpat_T *pat)
-{
-  return pat->sp_pattern;
-}
-
-/// Get sp_syn.id (highlight group ID)
-int16_t nvim_synpat_get_syn_id(synpat_T *pat)
-{
-  return pat->sp_syn.id;
-}
-
-/// Get sp_syn.inc_tag (include tag)
-int nvim_synpat_get_syn_inc_tag(synpat_T *pat)
-{
-  return pat->sp_syn.inc_tag;
-}
-
-// ============================================================================
-// syn_cluster_T accessors (syntax cluster)
-// ============================================================================
-
-/// Get scl_name (cluster name)
-char *nvim_syncluster_get_name(syn_cluster_T *cluster)
-{
-  return cluster->scl_name;
-}
-
-/// Get scl_name_u (uppercase cluster name)
-char *nvim_syncluster_get_name_u(syn_cluster_T *cluster)
-{
-  return cluster->scl_name_u;
-}
-
-// ============================================================================
-// stateitem_T accessors (current state item)
-// ============================================================================
-
-/// Get si_idx (index of syntax pattern or KEYWORD_IDX)
-int nvim_stateitem_get_idx(stateitem_T *item)
-{
-  return item->si_idx;
-}
-
-/// Get si_id (highlight group ID for keywords)
-int nvim_stateitem_get_id(stateitem_T *item)
-{
-  return item->si_id;
-}
-
-/// Get si_trans_id (highlight group ID, transparency removed)
-int nvim_stateitem_get_trans_id(stateitem_T *item)
-{
-  return item->si_trans_id;
-}
-
-/// Get si_m_lnum (lnum of the match)
-int nvim_stateitem_get_m_lnum(stateitem_T *item)
-{
-  return item->si_m_lnum;
-}
-
-/// Get si_m_startcol (starting column of the match)
-int nvim_stateitem_get_m_startcol(stateitem_T *item)
-{
-  return item->si_m_startcol;
-}
-
-/// Get si_attr (attributes in this state)
-int nvim_stateitem_get_attr(stateitem_T *item)
-{
-  return item->si_attr;
-}
-
-/// Get si_flags (HL_ flags and skip flags)
-int nvim_stateitem_get_flags(stateitem_T *item)
-{
-  return item->si_flags;
-}
-
-/// Get si_seqnr (sequence number)
-int nvim_stateitem_get_seqnr(stateitem_T *item)
-{
-  return item->si_seqnr;
-}
-
-/// Get si_cchar (substitution character for conceal)
-int nvim_stateitem_get_cchar(stateitem_T *item)
-{
-  return item->si_cchar;
-}
-
-/// Get si_end_idx (group ID for end pattern or zero)
-int nvim_stateitem_get_end_idx(stateitem_T *item)
-{
-  return item->si_end_idx;
-}
-
-/// Get si_ends (if match ends before si_m_endpos)
-int nvim_stateitem_get_ends(stateitem_T *item)
-{
-  return item->si_ends;
-}
-
-// ============================================================================
-// keyentry_T accessors (keyword entry)
-// ============================================================================
-
-/// Get ke_next (next entry with identical keyword)
-keyentry_T *nvim_keyentry_get_next(keyentry_T *ke)
-{
-  return ke->ke_next;
-}
-
-/// Get k_syn.id (highlight group ID)
-int16_t nvim_keyentry_get_syn_id(keyentry_T *ke)
-{
-  return ke->k_syn.id;
-}
-
-/// Get k_syn.inc_tag (include tag)
-int nvim_keyentry_get_syn_inc_tag(keyentry_T *ke)
-{
-  return ke->k_syn.inc_tag;
-}
-
-/// Get flags
-int nvim_keyentry_get_flags(keyentry_T *ke)
-{
-  return ke->flags;
-}
-
-/// Get k_char (conceal substitute character)
-int nvim_keyentry_get_char(keyentry_T *ke)
-{
-  return ke->k_char;
-}
-
-/// Get keyword string
-char *nvim_keyentry_get_keyword(keyentry_T *ke)
-{
-  return ke->keyword;
-}
-
-// ============================================================================
-// Syntax state global accessors (for Rust interop)
-// ============================================================================
-
-/// Get the current line number being processed
-int nvim_syn_get_current_lnum(void)
-{
-  return (int)current_lnum;
-}
-
-/// Get the current column being processed
-int nvim_syn_get_current_col(void)
-{
-  return (int)current_col;
-}
-
-/// Check if the current line has been finished
-int nvim_syn_is_current_finished(void)
-{
-  return current_finished ? 1 : 0;
-}
-
-/// Check if the current state has been stored
-int nvim_syn_is_current_state_stored(void)
-{
-  return current_state_stored ? 1 : 0;
-}
-
-/// Get the current state stack size (number of state items)
-int nvim_syn_get_current_state_len(void)
-{
-  return current_state.ga_len;
-}
-
-/// Check if the current state is valid
-int nvim_syn_is_current_state_valid(void)
-{
-  return VALID_STATE(&current_state) ? 1 : 0;
-}
-
-/// Get the current highlight ID
-int nvim_syn_get_current_id(void)
-{
-  return current_id;
-}
-
-/// Get the current transparent ID
-int nvim_syn_get_current_trans_id(void)
-{
-  return current_trans_id;
-}
-
-/// Get the current attribute
-int nvim_syn_get_current_attr(void)
-{
-  return current_attr;
-}
-
-/// Get the current flags
-int nvim_syn_get_current_flags(void)
-{
-  return current_flags;
-}
-
-/// Get the current sequence number
-int nvim_syn_get_current_seqnr(void)
-{
-  return current_seqnr;
-}
-
-/// Get the current substitution character
-int nvim_syn_get_current_sub_char(void)
-{
-  return current_sub_char;
-}
-
-/// Get the current next flags
-int nvim_syn_get_current_next_flags(void)
-{
-  return current_next_flags;
-}
-
-/// Get the keepend level
-int nvim_syn_get_keepend_level(void)
-{
-  return keepend_level;
-}
+int nvim_syn_get_current_lnum(void) { return (int)current_lnum; }
+int nvim_syn_get_current_col(void) { return (int)current_col; }
+int nvim_syn_is_current_finished(void) { return current_finished ? 1 : 0; }
+int nvim_syn_is_current_state_stored(void) { return current_state_stored ? 1 : 0; }
+int nvim_syn_get_current_state_len(void) { return current_state.ga_len; }
+int nvim_syn_is_current_state_valid(void) { return VALID_STATE(&current_state) ? 1 : 0; }
+int nvim_syn_get_current_id(void) { return current_id; }
+int nvim_syn_get_current_trans_id(void) { return current_trans_id; }
+int nvim_syn_get_current_attr(void) { return current_attr; }
+int nvim_syn_get_current_flags(void) { return current_flags; }
+int nvim_syn_get_current_seqnr(void) { return current_seqnr; }
+int nvim_syn_get_current_sub_char(void) { return current_sub_char; }
+int nvim_syn_get_current_next_flags(void) { return current_next_flags; }
+int nvim_syn_get_keepend_level(void) { return keepend_level; }
 
 /// Get state item at index (NULL if out of bounds)
 stateitem_T *nvim_syn_get_cur_state(int idx)
@@ -3641,11 +3207,7 @@ stateitem_T *nvim_syn_get_cur_state(int idx)
   return &CUR_STATE(idx);
 }
 
-/// Get the current synblock
-synblock_T *nvim_syn_get_synblock(void)
-{
-  return syn_block;
-}
+synblock_T *nvim_syn_get_synblock(void) { return syn_block; }
 
 /// Count items with HL_FOLD flag in current state
 int nvim_syn_count_fold_items(void)
