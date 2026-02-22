@@ -165,7 +165,7 @@ int os_expand_wildcards(int num_pat, char **pat, int *num_file, char ***file, in
   }
 
   // Don't allow any shell command in the sandbox.
-  if (sandbox != 0 && check_secure()) {
+  if (sandbox != 0 && rs_check_secure()) {
     return FAIL;
   }
 
@@ -173,7 +173,7 @@ int os_expand_wildcards(int num_pat, char **pat, int *num_file, char ***file, in
   if (secure) {
     for (i = 0; i < num_pat; i++) {
       if (vim_strchr(pat[i], '`') != NULL
-          && (check_secure())) {
+          && (rs_check_secure())) {
         return FAIL;
       }
     }
@@ -777,7 +777,7 @@ char *get_cmd_output(char *cmd, char *infile, int flags, size_t *ret_len)
 {
   char *buffer = NULL;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return NULL;
   }
 

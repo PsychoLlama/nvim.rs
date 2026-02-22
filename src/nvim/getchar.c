@@ -901,7 +901,7 @@ void openscript(char *name, bool directly)
 
   // Disallow sourcing a file in the sandbox, the commands would be executed
   // later, possibly outside of the sandbox.
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 

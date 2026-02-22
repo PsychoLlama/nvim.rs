@@ -22,7 +22,7 @@ void f_rpcstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -89,7 +89,7 @@ void f_rpcstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -130,7 +130,7 @@ void f_last_buffer_nr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "termopen(cmd[, cwd])" function
 void f_termopen(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 

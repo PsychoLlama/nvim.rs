@@ -4644,7 +4644,7 @@ static void get_system_output_as_rettv(typval_T *argvars, typval_T *rettv, bool 
   rettv->v_type = VAR_STRING;
   rettv->vval.v_string = NULL;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -5986,7 +5986,7 @@ Channel *find_job(uint64_t id, bool show_error)
 
 void script_host_eval(char *name, typval_T *argvars, typval_T *rettv)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 

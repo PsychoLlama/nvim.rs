@@ -1043,7 +1043,7 @@ void f_prompt_setcallback(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   Callback prompt_callback = { .type = kCallbackNone };
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
   buf_T *buf = tv_get_buf(&argvars[0], false);
@@ -1066,7 +1066,7 @@ void f_prompt_setinterrupt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 {
   Callback interrupt_callback = { .type = kCallbackNone };
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
   buf_T *buf = tv_get_buf(&argvars[0], false);
@@ -1087,7 +1087,7 @@ void f_prompt_setinterrupt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 /// "prompt_setprompt({buffer}, {text})" function
 void f_prompt_setprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
   buf_T *buf = tv_get_buf(&argvars[0], false);

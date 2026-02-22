@@ -1323,7 +1323,7 @@ static char *ex_let_env(char *arg, typval_T *const tv, const bool is_const,
     } else if (endchars != NULL
                && vim_strchr(endchars, (uint8_t)(*skipwhite(arg))) == NULL) {
       emsg(_(e_letunexp));
-    } else if (!check_secure()) {
+    } else if (!rs_check_secure()) {
       char *tofree = NULL;
       const char c1 = name[len];
       name[len] = NUL;
@@ -3310,7 +3310,7 @@ static void set_option_from_tv(const char *varname, typval_T *varp)
 /// "setwinvar()" and "settabwinvar()" functions
 static void setwinvar(typval_T *argvars, int off)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -3560,7 +3560,7 @@ void f_getbufvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "settabvar()" function
 void f_settabvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -3607,7 +3607,7 @@ void f_setwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "setbufvar()" function
 void f_setbufvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (check_secure()
+  if (rs_check_secure()
       || !tv_check_str_or_nr(&argvars[0])) {
     return;
   }

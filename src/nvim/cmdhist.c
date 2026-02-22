@@ -322,7 +322,7 @@ void nvim_cmdhist_rettv_set_type(typval_T *rettv, int typ)
 
 int nvim_cmdhist_check_secure(void)
 {
-  return check_secure();
+  return rs_check_secure();
 }
 
 size_t nvim_cmdhist_strlen(const char *s)

@@ -406,7 +406,7 @@ void f_chdir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 void f_delete(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   rettv->vval.v_number = -1;
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -475,7 +475,7 @@ void f_filecopy(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   rettv->vval.v_number = false;
 
-  if (check_secure()
+  if (rs_check_secure()
       || tv_check_for_string_arg(argvars, 0) == FAIL
       || tv_check_for_string_arg(argvars, 1) == FAIL) {
     return;
@@ -1050,7 +1050,7 @@ void f_mkdir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   int prot = 0755;
 
   rettv->vval.v_number = FAIL;
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -1461,7 +1461,7 @@ void f_readfile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "rename({from}, {to})" function
 void f_rename(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     rettv->vval.v_number = -1;
   } else {
     char buf[NUMBUFLEN];
@@ -1742,7 +1742,7 @@ void f_writefile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   rettv->vval.v_number = -1;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 

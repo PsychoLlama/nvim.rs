@@ -501,7 +501,6 @@ char *nvim_bw_eap_get_cmd(exarg_T *eap) { return eap ? eap->cmd : NULL; }
 int nvim_bw_eap_get_force_bin(exarg_T *eap) { return eap ? eap->force_bin : 0; }
 
 // File/Path
-int nvim_bw_check_secure(void) { return check_secure(); }
 int nvim_bw_path_fnamecmp(const char *a, const char *b) { return path_fnamecmp(a, b); }
 unsigned nvim_bw_get_bkc_flags(buf_T *buf) { return get_bkc_flags(buf); }
 int nvim_bw_set_rw_fname(char *fname, char *sfname) { return set_rw_fname(fname, sfname); }

@@ -516,7 +516,7 @@ static void f_trunc(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
 static void api_wrapper(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -716,7 +716,7 @@ static void f_chanclose(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -755,7 +755,7 @@ static void f_chansend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -1193,7 +1193,7 @@ static void f_deepcopy(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// dictwatcheradd(dict, key, funcref) function
 static void f_dictwatcheradd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -1231,7 +1231,7 @@ static void f_dictwatcheradd(typval_T *argvars, typval_T *rettv, EvalFuncData fp
 /// dictwatcherdel(dict, key, funcref) function
 static void f_dictwatcherdel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -1444,7 +1444,7 @@ void execute_common(typval_T *argvars, typval_T *rettv, int arg_off)
   const int save_msg_col = msg_col;
   bool echo_output = false;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -1749,7 +1749,7 @@ static void f_feedkeys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   // This is not allowed in the sandbox.  If the commands would still be
   // executed in the sandbox it would be OK, but it probably happens later,
   // when "sandbox" is no longer set.
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -3404,7 +3404,7 @@ static void f_jobpid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -3428,7 +3428,7 @@ static void f_jobresize(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -3584,7 +3584,7 @@ void f_jobstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -3776,7 +3776,7 @@ void f_jobstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -3809,7 +3809,7 @@ static void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
   if (argvars[0].v_type != VAR_LIST || (argvars[1].v_type != VAR_NUMBER
@@ -4000,7 +4000,7 @@ static void libcall_common(typval_T *argvars, typval_T *rettv, int out_type)
     rettv->vval.v_string = NULL;
   }
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -5798,7 +5798,7 @@ static void f_rpcnotify(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -5838,7 +5838,7 @@ static void f_rpcrequest(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_number = 0;
   const int l_provider_call_nesting = provider_call_nesting;
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -6405,7 +6405,7 @@ static void f_serverstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_STRING;
   rettv->vval.v_string = NULL;  // Address of the new server
 
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -6446,7 +6446,7 @@ static void f_serverstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "serverstop()" function
 static void f_serverstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -6554,7 +6554,7 @@ static void f_setenv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   // setting an environment variable may be dangerous, e.g. you could
   // setenv GCONV_PATH=/tmp and then have iconv() unexpectedly call
   // a shell command using some shared library:
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -7687,7 +7687,7 @@ static void f_timer_start(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   int repeat = 1;
 
   rettv->vval.v_number = -1;
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 

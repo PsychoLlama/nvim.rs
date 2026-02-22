@@ -1532,7 +1532,7 @@ void nlua_call_user_expand_func(expand_T *xp, typval_T *ret_tv)
 static void nlua_typval_exec(const char *lcmd, size_t lcmd_len, const char *name,
                              typval_T *const args, int argcount, bool special, typval_T *ret_tv)
 {
-  if (check_secure()) {
+  if (rs_check_secure()) {
     if (ret_tv) {
       ret_tv->v_type = VAR_NUMBER;
       ret_tv->vval.v_number = 0;

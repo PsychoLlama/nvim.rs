@@ -163,7 +163,7 @@ extern "C" {
     fn nvim_bw_eap_get_force_bin(eap: ExargHandle) -> c_int;
 
     // File/Path
-    fn nvim_bw_check_secure() -> c_int;
+    fn rs_check_secure() -> c_int;
     fn nvim_bw_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     fn nvim_bw_get_bkc_flags(buf: BufHandle) -> u32;
     fn nvim_bw_set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int;
@@ -432,7 +432,7 @@ pub unsafe extern "C" fn rs_buf_write(
         return FAIL;
     }
     // Disallow writing in secure mode
-    if unsafe { nvim_bw_check_secure() } != 0 {
+    if unsafe { rs_check_secure() } != 0 {
         return FAIL;
     }
     // Avoid crash for long name

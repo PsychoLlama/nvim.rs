@@ -26,4 +26,7 @@ extern void rs_ex_align(exarg_T *eap);
 extern void rs_ex_change(exarg_T *eap);
 extern void rs_ex_z(exarg_T *eap);
 
+// Rust utility functions
+extern int rs_check_secure(void);
+
 #include "ex_cmds_shim.h.generated.h"

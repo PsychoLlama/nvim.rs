@@ -1046,7 +1046,7 @@ void do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out
   int scroll_save = msg_scroll;
 
   // Disallow shell commands in secure mode
-  if (check_secure()) {
+  if (rs_check_secure()) {
     return;
   }
 
@@ -1398,7 +1398,7 @@ filterend:
 void do_shell(char *cmd, int flags)
 {
   // Disallow shell commands in secure mode
-  if (check_secure()) {
+  if (rs_check_secure()) {
     msg_end();
     return;
   }
@@ -3046,25 +3046,6 @@ void ex_append(exarg_T *eap)
 
   need_wait_return = false;     // don't use wait_return() now
   ex_no_reprint = true;
-}
-
-/// @return  true if the secure flag is set and also give an error message.
-///          Otherwise, return false.
-bool check_secure(void)
-{
-  if (secure) {
-    secure = 2;
-    emsg(_(e_curdir));
-    return true;
-  }
-
-  // In the sandbox more things are not allowed, including the things
-  // disallowed in secure mode.
-  if (sandbox != 0) {
-    emsg(_(e_sandbox));
-    return true;
-  }
-  return false;
 }
 
 /// Previous substitute replacement string
