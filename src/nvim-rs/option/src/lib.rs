@@ -9,6 +9,7 @@
 #![allow(clippy::must_use_candidate)] // Getters don't need #[must_use]
 #![allow(clippy::missing_const_for_fn)] // FFI functions can't be const
 #![allow(clippy::cast_sign_loss)] // FFI with C char types
+#![allow(clippy::cast_possible_wrap)] // FFI u8/i8 casts for c_char comparisons
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
 pub mod accessors;

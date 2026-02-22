@@ -6,6 +6,7 @@
 use std::ffi::{c_char, c_int, c_uint};
 use std::ptr;
 
+use crate::index::{val_type, OptIndex};
 use crate::{OptInt, OptScope, SetPrefix, FAIL, OK};
 
 // =============================================================================
@@ -15,6 +16,10 @@ use crate::{OptInt, OptScope, SetPrefix, FAIL, OK};
 extern "C" {
     // State accessors
     fn nvim_get_p_verbose() -> OptInt;
+    // Option metadata (also used by rs_set_context_in_set_cmd)
+    fn find_option_len(name: *const c_char, len: usize) -> OptIndex;
+    fn is_option_hidden(opt_idx: OptIndex) -> c_int;
+    fn get_special_key_code(name: *const c_char) -> c_int;
 }
 
 // =============================================================================
@@ -1104,5 +1109,379 @@ mod tests {
             rs_resolve_effective_scope(0, 0x01),
             OptScope::Global as c_int
         );
+    }
+}
+
+// =============================================================================
+// set_context_in_set_cmd migration (Phase 3)
+// =============================================================================
+
+/// Expand context constants (from cmdexpand_defs.h)
+/// Values are computed from the C enum starting at EXPAND_NOTHING=0 and
+/// incrementing by 1 for each subsequent enumerator.
+mod expand_ctx {
+    use std::ffi::c_int;
+    pub const EXPAND_UNSUCCESSFUL: c_int = -2;
+    pub const EXPAND_NOTHING: c_int = 0;
+    // EXPAND_COMMANDS = 1
+    pub const EXPAND_FILES: c_int = 2;
+    pub const EXPAND_DIRECTORIES: c_int = 3;
+    pub const EXPAND_SETTINGS: c_int = 4;
+    pub const EXPAND_BOOL_SETTINGS: c_int = 5;
+    // EXPAND_TAGS = 6
+    pub const EXPAND_OLD_SETTING: c_int = 7;
+    // ... (8 through 35 skipped)
+    pub const EXPAND_FILETYPE: c_int = 36;
+    // EXPAND_FILES_IN_PATH = 37
+    pub const EXPAND_OWNSYNTAX: c_int = 38;
+    // ... (39 through 51 skipped)
+    pub const EXPAND_STRING_SETTING: c_int = 52;
+    pub const EXPAND_SETTING_SUBTRACT: c_int = 53;
+    // EXPAND_ARGOPT = 54
+    pub const EXPAND_KEYMAP: c_int = 55;
+}
+
+/// XP_PREFIX values (from cmdexpand_defs.h)
+mod xp_prefix {
+    use std::ffi::c_int;
+    pub const XP_PREFIX_NO: c_int = 1;
+    pub const XP_PREFIX_INV: c_int = 2;
+}
+
+/// XP_BS values (from cmdexpand_defs.h)
+mod xp_bs {
+    use std::ffi::c_int;
+    pub const XP_BS_ONE: c_int = 0x1;
+    pub const XP_BS_THREE: c_int = 0x2;
+    pub const XP_BS_COMMA: c_int = 0x4;
+}
+
+/// kOptFlag* values (from option_defs.h)
+mod opt_flag {
+    pub const EXPAND: u32 = 1 << 0;
+    pub const COMMA: u32 = 1 << 10;
+    pub const COLON: u32 = 1 << 26;
+    pub const FLAG_LIST: u32 = 1 << 13;
+}
+
+/// NUL character
+const NUL: c_char = 0;
+
+extern "C" {
+    // expand_T field accessors
+    fn nvim_xp_get_context(xp: *mut std::ffi::c_void) -> c_int;
+    fn nvim_xp_set_context(xp: *mut std::ffi::c_void, val: c_int);
+    fn nvim_xp_get_pattern(xp: *mut std::ffi::c_void) -> *mut c_char;
+    fn nvim_xp_set_pattern(xp: *mut std::ffi::c_void, val: *mut c_char);
+    fn nvim_xp_set_prefix(xp: *mut std::ffi::c_void, val: c_int);
+    fn nvim_xp_get_line(xp: *mut std::ffi::c_void) -> *mut c_char;
+    fn nvim_xp_get_backslash(xp: *mut std::ffi::c_void) -> c_int;
+    fn nvim_xp_set_backslash(xp: *mut std::ffi::c_void, val: c_int);
+
+    // expand_option static variable accessors
+    fn nvim_get_expand_option_idx() -> OptIndex;
+    fn nvim_set_expand_option_idx(val: OptIndex);
+    fn nvim_set_expand_option_start_col(val: c_int);
+    fn nvim_set_expand_option_flags(val: c_int);
+    fn nvim_set_expand_option_append(val: c_int);
+    fn nvim_set_expand_option_name_chars(c2: c_char, c3: c_char);
+
+    // options[] array accessors
+    fn nvim_option_has_expand_cb(opt_idx: OptIndex) -> c_int;
+    fn nvim_opt_var_is_p_syn(opt_idx: OptIndex) -> c_int;
+    fn nvim_opt_var_is_p_ft(opt_idx: OptIndex) -> c_int;
+    fn nvim_opt_var_is_p_keymap(opt_idx: OptIndex) -> c_int;
+    fn nvim_opt_var_is_p_sps(opt_idx: OptIndex) -> c_int;
+    /// Returns: 1=dir+XP_BS_THREE, 2=dir+XP_BS_ONE, 3=file+XP_BS_THREE, 4=file+XP_BS_ONE
+    fn nvim_opt_var_expand_type(opt_idx: OptIndex) -> c_int;
+
+}
+
+/// Check if a byte is alphanumeric or underscore.
+#[inline]
+fn is_alnum_or_ident(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'_' || c == b'*'
+}
+
+/// Rust implementation of `set_context_in_set_cmd`.
+///
+/// Sets up expand context for `:set` command completion by parsing the
+/// argument string and determining expansion type.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_set_context_in_set_cmd(
+    xp: *mut std::ffi::c_void,
+    arg: *mut c_char,
+    opt_flags: c_int,
+) {
+    nvim_set_expand_option_flags(opt_flags);
+
+    nvim_xp_set_context(xp, expand_ctx::EXPAND_SETTINGS);
+    if *arg == NUL {
+        nvim_xp_set_pattern(xp, arg);
+        return;
+    }
+
+    // Find end of arg string
+    let mut len: usize = 0;
+    while *arg.add(len) != NUL {
+        len += 1;
+    }
+    let argend = arg.add(len);
+
+    let mut p = argend.sub(1);
+    if *p == b' ' as c_char && *p.sub(1) != b'\\' as c_char {
+        nvim_xp_set_pattern(xp, p.add(1));
+        return;
+    }
+
+    // Walk backwards to find start of current token (unescaped space)
+    while p > arg {
+        let s = {
+            let mut s = p;
+            if *p == b' ' as c_char || *p == b',' as c_char {
+                while s > arg && *s.sub(1) == b'\\' as c_char {
+                    s = s.sub(1);
+                }
+            }
+            s
+        };
+        if *p == b' ' as c_char && ((p.offset_from(s)) & 1) == 0 {
+            p = p.add(1);
+            break;
+        }
+        p = p.sub(1);
+    }
+
+    // Check for "no" / "inv" prefix
+    if *p == b'n' as c_char && *p.add(1) == b'o' as c_char {
+        nvim_xp_set_context(xp, expand_ctx::EXPAND_BOOL_SETTINGS);
+        nvim_xp_set_prefix(xp, xp_prefix::XP_PREFIX_NO);
+        p = p.add(2);
+    } else if *p == b'i' as c_char && *p.add(1) == b'n' as c_char && *p.add(2) == b'v' as c_char {
+        nvim_xp_set_context(xp, expand_ctx::EXPAND_BOOL_SETTINGS);
+        nvim_xp_set_prefix(xp, xp_prefix::XP_PREFIX_INV);
+        p = p.add(3);
+    }
+
+    nvim_xp_set_pattern(xp, p);
+    let arg = p;
+
+    let mut flags: u32 = 0;
+    let mut opt_idx: OptIndex = 0;
+    let mut is_term_option = false;
+
+    let nextchar: c_char;
+
+    if *arg == b'<' as c_char {
+        // Terminal key: <key>
+        while *p != b'>' as c_char {
+            if *p == NUL {
+                return; // expand terminal option name
+            }
+            p = p.add(1);
+        }
+        let key = get_special_key_code(arg.add(1));
+        if key == 0 {
+            nvim_xp_set_context(xp, expand_ctx::EXPAND_NOTHING);
+            return;
+        }
+        p = p.add(1);
+        nextchar = *p;
+        is_term_option = true;
+        // KEY2TERMCAP0(key) = (-(key)) & 0xff
+        // KEY2TERMCAP1(key) = ((-(key) as u32) >> 8) & 0xff
+        let neg_key = (-(key as i32)) as u32;
+        let c2 = (neg_key & 0xff) as u8 as c_char;
+        let c3 = ((neg_key >> 8) & 0xff) as u8 as c_char;
+        nvim_set_expand_option_name_chars(c2, c3);
+    } else if *p == b't' as c_char && *p.add(1) == b'_' as c_char {
+        // t_ terminal option
+        p = p.add(2);
+        if *p != NUL {
+            p = p.add(1);
+        }
+        if *p == NUL {
+            return; // expand option name
+        }
+        p = p.add(1);
+        nextchar = *p;
+        is_term_option = true;
+        let c2 = *p.sub(2);
+        let c3 = *p.sub(1);
+        nvim_set_expand_option_name_chars(c2, c3);
+    } else {
+        // Regular option name: walk over alphanumeric + '_' + '*'
+        while is_alnum_or_ident(*p as u8) {
+            p = p.add(1);
+        }
+        if *p == NUL {
+            return;
+        }
+        nextchar = *p;
+        let name_len = p.offset_from(arg) as usize;
+        opt_idx = find_option_len(arg, name_len);
+        if opt_idx == K_OPT_INVALID || is_option_hidden(opt_idx) != 0 {
+            nvim_xp_set_context(xp, expand_ctx::EXPAND_NOTHING);
+            return;
+        }
+        flags = nvim_get_option_flags(opt_idx);
+        if option_has_type(opt_idx, val_type::BOOLEAN) != 0 {
+            nvim_xp_set_context(xp, expand_ctx::EXPAND_NOTHING);
+            return;
+        }
+    }
+
+    // Handle "-=", "+=", "^="
+    nvim_set_expand_option_append(0);
+    let mut expand_option_subtract = false;
+    let nextchar =
+        if (nextchar == b'-' as c_char || nextchar == b'+' as c_char || nextchar == b'^' as c_char)
+            && *p.add(1) == b'=' as c_char
+        {
+            if nextchar == b'-' as c_char {
+                expand_option_subtract = true;
+            }
+            if nextchar == b'+' as c_char || nextchar == b'^' as c_char {
+                nvim_set_expand_option_append(1);
+            }
+            p = p.add(1);
+            b'=' as c_char
+        } else {
+            nextchar
+        };
+
+    if (nextchar != b'=' as c_char && nextchar != b':' as c_char)
+        || nvim_xp_get_context(xp) == expand_ctx::EXPAND_BOOL_SETTINGS
+    {
+        nvim_xp_set_context(xp, expand_ctx::EXPAND_UNSUCCESSFUL);
+        return;
+    }
+
+    // Set expand_option_idx
+    if is_term_option {
+        nvim_set_expand_option_idx(K_OPT_INVALID);
+    } else {
+        nvim_set_expand_option_idx(opt_idx);
+    }
+
+    nvim_xp_set_pattern(xp, p.add(1));
+    let xp_line = nvim_xp_get_line(xp);
+    let col = p.add(1).offset_from(xp_line);
+    nvim_set_expand_option_start_col(col as c_int);
+
+    // Special-case options that reuse expansion logic from other commands
+    if nvim_opt_var_is_p_syn(opt_idx) != 0 {
+        nvim_xp_set_context(xp, expand_ctx::EXPAND_OWNSYNTAX);
+        return;
+    }
+    if nvim_opt_var_is_p_ft(opt_idx) != 0 {
+        nvim_xp_set_context(xp, expand_ctx::EXPAND_FILETYPE);
+        return;
+    }
+    if nvim_opt_var_is_p_keymap(opt_idx) != 0 {
+        nvim_xp_set_context(xp, expand_ctx::EXPAND_KEYMAP);
+        return;
+    }
+
+    // Determine expansion context
+    let current_expand_idx = nvim_get_expand_option_idx();
+    if expand_option_subtract {
+        nvim_xp_set_context(xp, expand_ctx::EXPAND_SETTING_SUBTRACT);
+        return;
+    } else if current_expand_idx != K_OPT_INVALID
+        && nvim_option_has_expand_cb(current_expand_idx) != 0
+    {
+        nvim_xp_set_context(xp, expand_ctx::EXPAND_STRING_SETTING);
+    } else if *nvim_xp_get_pattern(xp) == NUL {
+        nvim_xp_set_context(xp, expand_ctx::EXPAND_OLD_SETTING);
+        return;
+    } else {
+        nvim_xp_set_context(xp, expand_ctx::EXPAND_NOTHING);
+    }
+
+    if is_term_option || option_has_type(opt_idx, val_type::NUMBER) != 0 {
+        return;
+    }
+
+    // Only string options below. Handle kOptFlagExpand options.
+    if flags & opt_flag::EXPAND != 0 {
+        let expand_type = nvim_opt_var_expand_type(opt_idx);
+        match expand_type {
+            1 => {
+                // EXPAND_DIRECTORIES + XP_BS_THREE (p_path or p_cdpath)
+                nvim_xp_set_context(xp, expand_ctx::EXPAND_DIRECTORIES);
+                nvim_xp_set_backslash(xp, xp_bs::XP_BS_THREE);
+            }
+            2 => {
+                // EXPAND_DIRECTORIES + XP_BS_ONE
+                nvim_xp_set_context(xp, expand_ctx::EXPAND_DIRECTORIES);
+                nvim_xp_set_backslash(xp, xp_bs::XP_BS_ONE);
+            }
+            3 => {
+                // EXPAND_FILES + XP_BS_THREE (p_tags)
+                nvim_xp_set_context(xp, expand_ctx::EXPAND_FILES);
+                nvim_xp_set_backslash(xp, xp_bs::XP_BS_THREE);
+            }
+            _ => {
+                // EXPAND_FILES + XP_BS_ONE
+                nvim_xp_set_context(xp, expand_ctx::EXPAND_FILES);
+                nvim_xp_set_backslash(xp, xp_bs::XP_BS_ONE);
+            }
+        }
+        if flags & opt_flag::COMMA != 0 {
+            nvim_xp_set_backslash(xp, nvim_xp_get_backslash(xp) | xp_bs::XP_BS_COMMA);
+        }
+    }
+
+    // For comma/colon-separated or file-list options: find start of current pattern
+    if flags & (opt_flag::EXPAND | opt_flag::COMMA | opt_flag::COLON) != 0 {
+        let xp_pattern_start = nvim_xp_get_pattern(xp);
+        let cur_backslash = nvim_xp_get_backslash(xp);
+        let mut p2 = argend.sub(1);
+        while p2 > xp_pattern_start {
+            if *p2 == b' ' as c_char
+                || *p2 == b',' as c_char
+                || (*p2 == b':' as c_char && flags & opt_flag::COLON != 0)
+            {
+                let mut s = p2;
+                while s > xp_pattern_start && *s.sub(1) == b'\\' as c_char {
+                    s = s.sub(1);
+                }
+                let bs_count = p2.offset_from(s);
+                let break_here = (*p2 == b' ' as c_char
+                    && cur_backslash & xp_bs::XP_BS_THREE != 0
+                    && bs_count < 3)
+                    || (*p2 == b',' as c_char && flags & opt_flag::COMMA != 0 && bs_count < 2)
+                    || (*p2 == b':' as c_char && flags & opt_flag::COLON != 0);
+                if break_here {
+                    nvim_xp_set_pattern(xp, p2.add(1));
+                    break;
+                }
+            }
+            p2 = p2.sub(1);
+        }
+    }
+
+    // Flag-list options always start at end
+    if flags & opt_flag::FLAG_LIST != 0 {
+        nvim_xp_set_pattern(xp, argend);
+    }
+
+    // Special case for 'spellsuggest': "file:" prefix triggers file expansion
+    if nvim_opt_var_is_p_sps(opt_idx) != 0 {
+        let xp_pat = nvim_xp_get_pattern(xp);
+        // Compare first 5 bytes with "file:"
+        let file_prefix = b"file:";
+        let matches_file = (0..5usize).all(|i| *xp_pat.add(i) == file_prefix[i] as c_char);
+        if matches_file {
+            nvim_xp_set_pattern(xp, xp_pat.add(5));
+        } else if nvim_option_has_expand_cb(current_expand_idx) != 0 {
+            nvim_xp_set_context(xp, expand_ctx::EXPAND_STRING_SETTING);
+        }
     }
 }

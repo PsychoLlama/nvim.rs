@@ -184,6 +184,9 @@ extern const char *rs_did_set_undolevels_full(optset_T *args);
 extern void *rs_get_varp_from(vimoption_T *p, buf_T *buf, win_T *win);
 extern void *rs_get_varp_scope_from(vimoption_T *p, int opt_flags, buf_T *buf, win_T *win);
 
+// Rust set_context_in_set_cmd (from Rust setcmd.rs)
+extern void rs_set_context_in_set_cmd(expand_T *xp, char *arg, int opt_flags);
+
 // OptVal storage operations (from Rust storage.rs)
 extern void rs_optval_free(OptVal o);
 extern OptVal rs_optval_copy(OptVal o);
@@ -5051,243 +5054,85 @@ static char expand_option_name[5] = { 't', '_', NUL, NUL, NUL };
 static int expand_option_flags = 0;
 static bool expand_option_append = false;
 
+// =============================================================================
+// Accessors for rs_set_context_in_set_cmd (Rust Phase 3)
+// =============================================================================
+
+// expand_T field accessors
+int nvim_xp_get_context(expand_T *xp) { return xp->xp_context; }
+void nvim_xp_set_context(expand_T *xp, int val) { xp->xp_context = val; }
+char *nvim_xp_get_pattern(expand_T *xp) { return xp->xp_pattern; }
+void nvim_xp_set_pattern(expand_T *xp, char *val) { xp->xp_pattern = val; }
+void nvim_xp_set_prefix(expand_T *xp, int val) { xp->xp_prefix = (xp_prefix_T)val; }
+char *nvim_xp_get_line(expand_T *xp) { return xp->xp_line; }
+int nvim_xp_get_backslash(expand_T *xp) { return xp->xp_backslash; }
+void nvim_xp_set_backslash(expand_T *xp, int val) { xp->xp_backslash = val; }
+
+// expand_option static variable get/set accessors
+OptIndex nvim_get_expand_option_idx(void) { return expand_option_idx; }
+void nvim_set_expand_option_idx(OptIndex val) { expand_option_idx = val; }
+int nvim_get_expand_option_start_col(void) { return expand_option_start_col; }
+void nvim_set_expand_option_start_col(int val) { expand_option_start_col = val; }
+int nvim_get_expand_option_flags(void) { return expand_option_flags; }
+void nvim_set_expand_option_flags(int val) { expand_option_flags = val; }
+int nvim_get_expand_option_append(void) { return (int)expand_option_append; }
+void nvim_set_expand_option_append(int val) { expand_option_append = (bool)val; }
+void nvim_get_expand_option_name(char out[5]) { memcpy(out, expand_option_name, 5); }
+void nvim_set_expand_option_name_chars(char c2, char c3)
+{
+  expand_option_name[2] = c2;
+  expand_option_name[3] = c3;
+}
+
+// options[opt_idx] field accessors for set_context logic
+int nvim_option_has_expand_cb(OptIndex opt_idx)
+{
+  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
+    return 0;
+  }
+  return options[opt_idx].opt_expand_cb != NULL ? 1 : 0;
+}
+
+// Pointer-comparison accessors: check if options[opt_idx].var == &p_xxx
+// Returns 1 if equal, 0 otherwise.
+int nvim_opt_var_is_p_syn(OptIndex opt_idx) {
+  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
+  return options[opt_idx].var == &p_syn ? 1 : 0;
+}
+int nvim_opt_var_is_p_ft(OptIndex opt_idx) {
+  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
+  return options[opt_idx].var == &p_ft ? 1 : 0;
+}
+int nvim_opt_var_is_p_keymap(OptIndex opt_idx) {
+  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
+  return options[opt_idx].var == &p_keymap ? 1 : 0;
+}
+int nvim_opt_var_is_p_sps(OptIndex opt_idx) {
+  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
+  return options[opt_idx].var == &p_sps ? 1 : 0;
+}
+// For the expand dir/file option var comparisons - returns an enum:
+// 0 = not a special path option, 1 = directory (XP_BS_THREE), 2 = directory (XP_BS_ONE), 3 = files (XP_BS_THREE), 4 = files (XP_BS_ONE)
+int nvim_opt_var_expand_type(OptIndex opt_idx) {
+  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
+  char *p = options[opt_idx].var;
+  if (p == (char *)&p_bdir || p == (char *)&p_dir || p == (char *)&p_pp
+      || p == (char *)&p_rtp || p == (char *)&p_vdir) {
+    return 2;  // EXPAND_DIRECTORIES + XP_BS_ONE
+  }
+  if (p == (char *)&p_path || p == (char *)&p_cdpath) {
+    return 1;  // EXPAND_DIRECTORIES + XP_BS_THREE
+  }
+  if (p == (char *)&p_tags) {
+    return 3;  // EXPAND_FILES + XP_BS_THREE
+  }
+  return 4;  // EXPAND_FILES + XP_BS_ONE
+}
+
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
 void set_context_in_set_cmd(expand_T *xp, char *arg, int opt_flags)
 {
-  expand_option_flags = opt_flags;
-
-  xp->xp_context = EXPAND_SETTINGS;
-  if (*arg == NUL) {
-    xp->xp_pattern = arg;
-    return;
-  }
-  char *const argend = arg + strlen(arg);
-  char *p = argend - 1;
-  if (*p == ' ' && *(p - 1) != '\\') {
-    xp->xp_pattern = p + 1;
-    return;
-  }
-  while (p > arg) {
-    char *s = p;
-    // count number of backslashes before ' ' or ','
-    if (*p == ' ' || *p == ',') {
-      while (s > arg && *(s - 1) == '\\') {
-        s--;
-      }
-    }
-    // break at a space with an even number of backslashes
-    if (*p == ' ' && ((p - s) & 1) == 0) {
-      p++;
-      break;
-    }
-    p--;
-  }
-  if (strncmp(p, "no", 2) == 0) {
-    xp->xp_context = EXPAND_BOOL_SETTINGS;
-    xp->xp_prefix = XP_PREFIX_NO;
-    p += 2;
-  } else if (strncmp(p, "inv", 3) == 0) {
-    xp->xp_context = EXPAND_BOOL_SETTINGS;
-    xp->xp_prefix = XP_PREFIX_INV;
-    p += 3;
-  }
-  xp->xp_pattern = p;
-  arg = p;
-
-  char nextchar;
-  uint32_t flags = 0;
-  OptIndex opt_idx = 0;
-  bool is_term_option = false;
-
-  if (*arg == '<') {
-    while (*p != '>') {
-      if (*p++ == NUL) {            // expand terminal option name
-        return;
-      }
-    }
-    int key = get_special_key_code(arg + 1);
-    if (key == 0) {                 // unknown name
-      xp->xp_context = EXPAND_NOTHING;
-      return;
-    }
-    nextchar = *++p;
-    is_term_option = true;
-    expand_option_name[2] = (char)(uint8_t)KEY2TERMCAP0(key);
-    expand_option_name[3] = (char)(uint8_t)KEY2TERMCAP1(key);
-  } else {
-    if (p[0] == 't' && p[1] == '_') {
-      p += 2;
-      if (*p != NUL) {
-        p++;
-      }
-      if (*p == NUL) {
-        return;                 // expand option name
-      }
-      nextchar = *++p;
-      is_term_option = true;
-      expand_option_name[2] = p[-2];
-      expand_option_name[3] = p[-1];
-    } else {
-      // Allow * wildcard.
-      while (ASCII_ISALNUM(*p) || *p == '_' || *p == '*') {
-        p++;
-      }
-      if (*p == NUL) {
-        return;
-      }
-      nextchar = *p;
-      opt_idx = find_option_len(arg, (size_t)(p - arg));
-      if (opt_idx == kOptInvalid || is_option_hidden(opt_idx)) {
-        xp->xp_context = EXPAND_NOTHING;
-        return;
-      }
-      flags = options[opt_idx].flags;
-      if (option_has_type(opt_idx, kOptValTypeBoolean)) {
-        xp->xp_context = EXPAND_NOTHING;
-        return;
-      }
-    }
-  }
-  // handle "-=" and "+="
-  expand_option_append = false;
-  bool expand_option_subtract = false;
-  if ((nextchar == '-' || nextchar == '+' || nextchar == '^') && p[1] == '=') {
-    if (nextchar == '-') {
-      expand_option_subtract = true;
-    }
-    if (nextchar == '+' || nextchar == '^') {
-      expand_option_append = true;
-    }
-    p++;
-    nextchar = '=';
-  }
-  if ((nextchar != '=' && nextchar != ':')
-      || xp->xp_context == EXPAND_BOOL_SETTINGS) {
-    xp->xp_context = EXPAND_UNSUCCESSFUL;
-    return;
-  }
-
-  // Below are for handling expanding a specific option's value after the '=' or ':'
-
-  if (is_term_option) {
-    expand_option_idx = kOptInvalid;
-  } else {
-    expand_option_idx = opt_idx;
-  }
-
-  xp->xp_pattern = p + 1;
-  expand_option_start_col = (int)(p + 1 - xp->xp_line);
-
-  // Certain options currently have special case handling to reuse the
-  // expansion logic with other commands.
-  if (options[opt_idx].var == &p_syn) {
-    xp->xp_context = EXPAND_OWNSYNTAX;
-    return;
-  }
-  if (options[opt_idx].var == &p_ft) {
-    xp->xp_context = EXPAND_FILETYPE;
-    return;
-  }
-  if (options[opt_idx].var == &p_keymap) {
-    xp->xp_context = EXPAND_KEYMAP;
-    return;
-  }
-
-  // Now pick. If the option has a custom expander, use that. Otherwise, just
-  // fill with the existing option value.
-  if (expand_option_subtract) {
-    xp->xp_context = EXPAND_SETTING_SUBTRACT;
-    return;
-  } else if (expand_option_idx != kOptInvalid && options[expand_option_idx].opt_expand_cb != NULL) {
-    xp->xp_context = EXPAND_STRING_SETTING;
-  } else if (*xp->xp_pattern == NUL) {
-    xp->xp_context = EXPAND_OLD_SETTING;
-    return;
-  } else {
-    xp->xp_context = EXPAND_NOTHING;
-  }
-
-  if (is_term_option || option_has_type(opt_idx, kOptValTypeNumber)) {
-    return;
-  }
-
-  // Only string options below
-
-  // Options that have kOptFlagExpand are considered to all use file/dir expansion.
-  if (flags & kOptFlagExpand) {
-    p = options[opt_idx].var;
-    if (p == (char *)&p_bdir
-        || p == (char *)&p_dir
-        || p == (char *)&p_path
-        || p == (char *)&p_pp
-        || p == (char *)&p_rtp
-        || p == (char *)&p_cdpath
-        || p == (char *)&p_vdir) {
-      xp->xp_context = EXPAND_DIRECTORIES;
-      if (p == (char *)&p_path || p == (char *)&p_cdpath) {
-        xp->xp_backslash = XP_BS_THREE;
-      } else {
-        xp->xp_backslash = XP_BS_ONE;
-      }
-    } else {
-      xp->xp_context = EXPAND_FILES;
-      // for 'tags' need three backslashes for a space
-      if (p == (char *)&p_tags) {
-        xp->xp_backslash = XP_BS_THREE;
-      } else {
-        xp->xp_backslash = XP_BS_ONE;
-      }
-    }
-    if (flags & kOptFlagComma) {
-      xp->xp_backslash |= XP_BS_COMMA;
-    }
-  }
-
-  // For an option that is a list of file names, or comma/colon-separated
-  // values, split it by the delimiter and find the start of the current
-  // pattern, while accounting for backslash-escaped space/commas/colons.
-  // Triple-backslashed escaped file names (e.g. 'path') can also be
-  // delimited by space.
-  if ((flags & kOptFlagExpand) || (flags & kOptFlagComma) || (flags & kOptFlagColon)) {
-    for (p = argend - 1; p > xp->xp_pattern; p--) {
-      // count number of backslashes before ' ' or ','
-      if (*p == ' ' || *p == ',' || (*p == ':' && (flags & kOptFlagColon))) {
-        char *s = p;
-        while (s > xp->xp_pattern && *(s - 1) == '\\') {
-          s--;
-        }
-        if ((*p == ' ' && ((xp->xp_backslash & XP_BS_THREE) && (p - s) < 3))
-#if defined(BACKSLASH_IN_FILENAME)
-            || (*p == ',' && (flags & kOptFlagComma) && (p - s) < 1)
-#else
-            || (*p == ',' && (flags & kOptFlagComma) && (p - s) < 2)
-#endif
-            || (*p == ':' && (flags & kOptFlagColon))) {
-          xp->xp_pattern = p + 1;
-          break;
-        }
-      }
-    }
-  }
-
-  // An option that is a list of single-character flags should always start
-  // at the end as we don't complete words.
-  if (flags & kOptFlagFlagList) {
-    xp->xp_pattern = argend;
-  }
-
-  // Some options can either be using file/dir expansions, or custom value
-  // expansion depending on what the user typed. Unfortunately we have to
-  // manually handle it here to make sure we have the correct xp_context set.
-  // for 'spellsuggest' start at "file:"
-  if (options[opt_idx].var == &p_sps) {
-    if (strncmp(xp->xp_pattern, "file:", 5) == 0) {
-      xp->xp_pattern += 5;
-      return;
-    } else if (options[expand_option_idx].opt_expand_cb != NULL) {
-      xp->xp_context = EXPAND_STRING_SETTING;
-    }
-  }
+  rs_set_context_in_set_cmd(xp, arg, opt_flags);
 }
 
 /// Returns true if "str" either matches "regmatch" or fuzzy matches "pat".
