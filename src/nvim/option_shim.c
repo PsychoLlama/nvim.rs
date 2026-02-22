@@ -206,45 +206,14 @@ extern void rs_win_setwidth(int width);
 // =============================================================================
 
 // optset_T field accessors for Rust callbacks
-void *nvim_optset_get_win(const void *args)
-{
-  return (void *)((const optset_T *)args)->os_win;
-}
-
-void *nvim_optset_get_buf(const void *args)
-{
-  return (void *)((const optset_T *)args)->os_buf;
-}
-
-int nvim_optset_get_oldval_boolean(const void *args)
-{
-  return (int)((const optset_T *)args)->os_oldval.boolean;
-}
-
-int64_t nvim_optset_get_oldval_number(const void *args)
-{
-  return ((const optset_T *)args)->os_oldval.number;
-}
-
-int64_t nvim_optset_get_newval_number(const void *args)
-{
-  return ((const optset_T *)args)->os_newval.number;
-}
-
-void *nvim_optset_get_varp(const void *args)
-{
-  return ((const optset_T *)args)->os_varp;
-}
-
-int nvim_optset_get_newval_boolean(const void *args)
-{
-  return (int)((const optset_T *)args)->os_newval.boolean;
-}
-
-int nvim_optset_get_flags(const void *args)
-{
-  return ((const optset_T *)args)->os_flags;
-}
+void *nvim_optset_get_win(const void *args) { return (void *)((const optset_T *)args)->os_win; }
+void *nvim_optset_get_buf(const void *args) { return (void *)((const optset_T *)args)->os_buf; }
+int nvim_optset_get_oldval_boolean(const void *args) { return (int)((const optset_T *)args)->os_oldval.boolean; }
+int64_t nvim_optset_get_oldval_number(const void *args) { return ((const optset_T *)args)->os_oldval.number; }
+int64_t nvim_optset_get_newval_number(const void *args) { return ((const optset_T *)args)->os_newval.number; }
+void *nvim_optset_get_varp(const void *args) { return ((const optset_T *)args)->os_varp; }
+int nvim_optset_get_newval_boolean(const void *args) { return (int)((const optset_T *)args)->os_newval.boolean; }
+int nvim_optset_get_flags(const void *args) { return ((const optset_T *)args)->os_flags; }
 
 // String option accessors
 const char *nvim_option_get_sh(void) { return p_sh; }
