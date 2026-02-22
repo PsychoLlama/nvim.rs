@@ -1452,13 +1452,108 @@ void nvim_nv_subst_impl(cmdarg_T *cap) { nv_subst_impl(cap); }
 // Forward declarations for text object handlers
 static void nv_object_impl(cmdarg_T *cap);
 static void nv_select_impl(cmdarg_T *cap);
-static void nv_brackets_impl(cmdarg_T *cap);
-
 void nvim_nv_object_impl(cmdarg_T *cap) { nv_object_impl(cap); }
 
 void nvim_nv_select_impl(cmdarg_T *cap) { nv_select_impl(cap); }
 
-void nvim_nv_brackets_impl(cmdarg_T *cap) { nv_brackets_impl(cap); }
+// nv_brackets_impl C accessors for Rust FFI
+static void nv_bracket_block(cmdarg_T *cap, const pos_T *old_pos);
+void nvim_nv_bracket_block_call(cmdarg_T *cap)
+{
+  nv_bracket_block(cap, &curwin->w_cursor);
+}
+void nvim_bracket_find_ident(cmdarg_T *cap)
+{
+  char *ptr;
+  size_t len;
+  if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
+    rs_clearop(cap->oap);
+  } else {
+    ptr = xmemdupz(ptr, len);
+    find_pattern_in_path(ptr, 0, len, true,
+                         cap->count0 == 0 ? !isupper(cap->nchar) : false,
+                         (((cap->nchar & 0xf) == ('d' & 0xf)) ? FIND_DEFINE : FIND_ANY),
+                         cap->count1,
+                         (isupper(cap->nchar) ? ACTION_SHOW_ALL
+                                              : islower(cap->nchar) ? ACTION_SHOW : ACTION_GOTO),
+                         (cap->cmdchar == ']' ? curwin->w_cursor.lnum + 1 : 1),
+                         MAXLNUM, false, false);
+    xfree(ptr);
+    curwin->w_set_curswant = true;
+  }
+}
+bool nvim_bracket_findpar(cmdarg_T *cap, int flag)
+{
+  curwin->w_set_curswant = true;
+  if (!findpar(&cap->oap->inclusive, cap->arg, cap->count1, flag,
+               (cap->oap->op_type != OP_NOP && cap->arg == FORWARD && flag == '{'))) {
+    return false;
+  }
+  if (cap->oap->op_type == OP_NOP) {
+    beginline(BL_WHITE | BL_FIX);
+  }
+  if ((fdo_flags & kOptFdoFlagBlock) && KeyTyped && cap->oap->op_type == OP_NOP) {
+    rs_foldOpenCursor();
+  }
+  return true;
+}
+void nvim_bracket_mark_jump(cmdarg_T *cap)
+{
+  fmark_T *fm = pos_to_mark(curbuf, NULL, curwin->w_cursor);
+  assert(fm != NULL);
+  fmark_T *prev_fm;
+  for (int n = cap->count1; n > 0; n--) {
+    prev_fm = fm;
+    fm = getnextmark(&fm->mark, cap->cmdchar == '[' ? BACKWARD : FORWARD,
+                     cap->nchar == '\'');
+    if (fm == NULL) {
+      break;
+    }
+  }
+  if (fm == NULL) {
+    fm = prev_fm;
+  }
+  MarkMove flags = kMarkContext;
+  flags |= cap->nchar == '\'' ? kMarkBeginLine : 0;
+  nv_mark_move_to(cap, flags, fm);
+}
+void nvim_bracket_do_mouse(cmdarg_T *cap)
+{
+  do_mouse(cap->oap, cap->nchar,
+           (cap->cmdchar == ']') ? FORWARD : BACKWARD,
+           cap->count1, PUT_FIXINDENT);
+}
+void nvim_bracket_fold_move(cmdarg_T *cap)
+{
+  if (rs_foldMoveTo(false, cap->cmdchar == ']' ? FORWARD : BACKWARD,
+                    cap->count1) == false) {
+    rs_clearopbeep(cap->oap);
+  }
+}
+void nvim_bracket_diff_move(cmdarg_T *cap)
+{
+  if (rs_diff_move_to(cap->cmdchar == ']' ? FORWARD : BACKWARD,
+                      cap->count1) == false) {
+    rs_clearopbeep(cap->oap);
+  }
+}
+void nvim_bracket_spell_move(cmdarg_T *cap)
+{
+  setpcmark();
+  for (int n = 0; n < cap->count1; n++) {
+    if (spell_move_to(curwin, cap->cmdchar == ']' ? FORWARD : BACKWARD,
+                      cap->nchar == 's' ? SMT_ALL
+                                        : cap->nchar == 'r' ? SMT_RARE : SMT_BAD,
+                      false, NULL) == 0) {
+      rs_clearopbeep(cap->oap);
+      break;
+    }
+    curwin->w_set_curswant = true;
+  }
+  if (cap->oap->op_type == OP_NOP && (fdo_flags & kOptFdoFlagSearch) && KeyTyped) {
+    rs_foldOpenCursor();
+  }
+}
 
 // =============================================================================
 // Undo/Redo handler accessors for Rust FFI
@@ -3976,146 +4071,6 @@ static void nv_bracket_block(cmdarg_T *cap, const pos_T *old_pos)
         && cap->oap->op_type == OP_NOP) {
       rs_foldOpenCursor();
     }
-  }
-}
-
-/// "[" and "]" commands implementation.
-/// cap->arg is BACKWARD for "[" and FORWARD for "]".
-static void nv_brackets_impl(cmdarg_T *cap)
-{
-  int flag;
-  int n;
-
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = false;
-  pos_T old_pos = curwin->w_cursor;         // cursor position before command
-  curwin->w_cursor.coladd = 0;              // TODO(Unknown): don't do this for an error.
-
-  // "[f" or "]f" : Edit file under the cursor (same as "gf")
-  if (cap->nchar == 'f') {
-    nv_gotofile(cap);
-  } else if (vim_strchr("iI\011dD\004", cap->nchar) != NULL) {
-    // Find the occurrence(s) of the identifier or define under cursor
-    // in current and included files or jump to the first occurrence.
-    //
-    //                    search       list           jump
-    //                  fwd   bwd    fwd   bwd     fwd    bwd
-    // identifier       "]i"  "[i"   "]I"  "[I"   "]^I"  "[^I"
-    // define           "]d"  "[d"   "]D"  "[D"   "]^D"  "[^D"
-    char *ptr;
-    size_t len;
-
-    if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
-      rs_clearop(cap->oap);
-    } else {
-      // Make a copy, if the line was changed it will be freed.
-      ptr = xmemdupz(ptr, len);
-      find_pattern_in_path(ptr, 0, len, true,
-                           cap->count0 == 0 ? !isupper(cap->nchar) : false,
-                           (((cap->nchar & 0xf) == ('d' & 0xf))
-                            ? FIND_DEFINE
-                            : FIND_ANY),
-                           cap->count1,
-                           (isupper(cap->nchar) ? ACTION_SHOW_ALL
-                                                : islower(cap->nchar) ? ACTION_SHOW
-                                                                      : ACTION_GOTO),
-                           (cap->cmdchar == ']'
-                            ? curwin->w_cursor.lnum + 1
-                            : 1),
-                           MAXLNUM,
-                           false, false);
-      xfree(ptr);
-      curwin->w_set_curswant = true;
-    }
-  } else if ((cap->cmdchar == '[' && vim_strchr("{(*/#mM", cap->nchar) != NULL)
-             || (cap->cmdchar == ']' && vim_strchr("})*/#mM", cap->nchar) != NULL)) {
-    // "[{", "[(", "]}" or "])": go to Nth unclosed '{', '(', '}' or ')'
-    // "[#", "]#": go to start/end of Nth innermost #if..#endif construct.
-    // "[/", "[*", "]/", "]*": go to Nth comment start/end.
-    // "[m" or "]m" search for prev/next start of (Java) method.
-    // "[M" or "]M" search for prev/next end of (Java) method.
-    nv_bracket_block(cap, &old_pos);
-  } else if (cap->nchar == '[' || cap->nchar == ']') {
-    // "[[", "[]", "]]" and "][": move to start or end of function
-    if (cap->nchar == cap->cmdchar) {               // "]]" or "[["
-      flag = '{';
-    } else {
-      flag = '}';                   // "][" or "[]"
-    }
-    curwin->w_set_curswant = true;
-    // Imitate strange Vi behaviour: When using "]]" with an operator we also stop at '}'.
-    if (!findpar(&cap->oap->inclusive, cap->arg, cap->count1, flag,
-                 (cap->oap->op_type != OP_NOP
-                  && cap->arg == FORWARD && flag == '{'))) {
-      rs_clearopbeep(cap->oap);
-    } else {
-      if (cap->oap->op_type == OP_NOP) {
-        beginline(BL_WHITE | BL_FIX);
-      }
-      if ((fdo_flags & kOptFdoFlagBlock) && KeyTyped && cap->oap->op_type == OP_NOP) {
-        rs_foldOpenCursor();
-      }
-    }
-  } else if (cap->nchar == 'p' || cap->nchar == 'P') {
-    // "[p", "[P", "]P" and "]p": put with indent adjustment
-    nv_put_opt(cap, true);
-  } else if (cap->nchar == '\'' || cap->nchar == '`') {
-    // "['", "[`", "]'" and "]`": jump to next mark
-    fmark_T *fm = pos_to_mark(curbuf, NULL, curwin->w_cursor);
-    assert(fm != NULL);
-    fmark_T *prev_fm;
-    for (n = cap->count1; n > 0; n--) {
-      prev_fm = fm;
-      fm = getnextmark(&fm->mark, cap->cmdchar == '[' ? BACKWARD : FORWARD,
-                       cap->nchar == '\'');
-      if (fm == NULL) {
-        break;
-      }
-    }
-    if (fm == NULL) {
-      fm = prev_fm;
-    }
-    MarkMove flags = kMarkContext;
-    flags |= cap->nchar == '\'' ? kMarkBeginLine : 0;
-    nv_mark_move_to(cap, flags, fm);
-  } else if (cap->nchar >= K_RIGHTRELEASE && cap->nchar <= K_LEFTMOUSE) {
-    // [ or ] followed by a middle mouse click: put selected text with
-    // indent adjustment.  Any other button just does as usual.
-    do_mouse(cap->oap, cap->nchar,
-             (cap->cmdchar == ']') ? FORWARD : BACKWARD,
-             cap->count1, PUT_FIXINDENT);
-  } else if (cap->nchar == 'z') {
-    // "[z" and "]z": move to start or end of open fold.
-    if (rs_foldMoveTo(false, cap->cmdchar == ']' ? FORWARD : BACKWARD,
-                   cap->count1) == false) {
-      rs_clearopbeep(cap->oap);
-    }
-  } else if (cap->nchar == 'c') {
-    // "[c" and "]c": move to next or previous diff-change.
-    if (rs_diff_move_to(cap->cmdchar == ']' ? FORWARD : BACKWARD,
-                     cap->count1) == false) {
-      rs_clearopbeep(cap->oap);
-    }
-  } else if (cap->nchar == 'r' || cap->nchar == 's' || cap->nchar == 'S') {
-    // "[r", "[s", "[S", "]r", "]s" and "]S": move to next spell error.
-    setpcmark();
-    for (n = 0; n < cap->count1; n++) {
-      if (spell_move_to(curwin, cap->cmdchar == ']' ? FORWARD : BACKWARD,
-                        cap->nchar == 's'
-                        ? SMT_ALL
-                        : cap->nchar == 'r' ? SMT_RARE : SMT_BAD,
-                        false, NULL) == 0) {
-        rs_clearopbeep(cap->oap);
-        break;
-      }
-      curwin->w_set_curswant = true;
-    }
-    if (cap->oap->op_type == OP_NOP && (fdo_flags & kOptFdoFlagSearch) && KeyTyped) {
-      rs_foldOpenCursor();
-    }
-  } else {
-    // Not a valid cap->nchar.
-    rs_clearopbeep(cap->oap);
   }
 }
 

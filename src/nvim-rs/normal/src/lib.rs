@@ -2117,7 +2117,16 @@ pub unsafe extern "C" fn rs_nv_subst(cap: CapHandle) {
 extern "C" {
     fn nvim_nv_object_impl(cap: CapHandle);
     fn nvim_nv_select_impl(cap: CapHandle);
-    fn nvim_nv_brackets_impl(cap: CapHandle);
+
+    // nv_brackets_impl C accessors
+    fn nvim_nv_bracket_block_call(cap: CapHandle);
+    fn nvim_bracket_find_ident(cap: CapHandle);
+    fn nvim_bracket_findpar(cap: CapHandle, flag: c_int) -> bool;
+    fn nvim_bracket_mark_jump(cap: CapHandle);
+    fn nvim_bracket_do_mouse(cap: CapHandle);
+    fn nvim_bracket_fold_move(cap: CapHandle);
+    fn nvim_bracket_diff_move(cap: CapHandle);
+    fn nvim_bracket_spell_move(cap: CapHandle);
 }
 
 /// Command handler for "a" or "i" text objects.
@@ -2159,8 +2168,59 @@ pub unsafe extern "C" fn rs_nv_select(cap: CapHandle) {
 /// # Safety
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
+#[allow(clippy::cast_lossless)]
 pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
-    nvim_nv_brackets_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
+    nvim_oap_set_inclusive(oap, false);
+    nvim_set_cursor_coladd_zero();
+
+    let nchar = nvim_cap_get_nchar(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+
+    if nchar == b'f' as c_int {
+        // "[f" or "]f": Edit file under cursor (same as "gf")
+        nvim_nv_gotofile(cap);
+    } else if nvim_vim_strchr_str(c"iI\x09dD\x04".as_ptr(), nchar) {
+        // Find the occurrence(s) of the identifier or define under cursor
+        nvim_bracket_find_ident(cap);
+    } else if (cmdchar == b'[' as c_int && nvim_vim_strchr_str(c"{(*/#mM".as_ptr(), nchar))
+        || (cmdchar == b']' as c_int && nvim_vim_strchr_str(c"})*/#mM".as_ptr(), nchar))
+    {
+        // "[{", "[(", "]}" or "])": bracket/method matching
+        nvim_nv_bracket_block_call(cap);
+    } else if nchar == b'[' as c_int || nchar == b']' as c_int {
+        // "[[", "[]", "]]" and "][": move to start or end of function
+        let flag = if nchar == cmdchar {
+            b'{' as c_int
+        } else {
+            b'}' as c_int
+        };
+        if !nvim_bracket_findpar(cap, flag) {
+            rs_clearopbeep(oap);
+        }
+    } else if nchar == b'p' as c_int || nchar == b'P' as c_int {
+        // "[p", "[P", "]P" and "]p": put with indent adjustment
+        nvim_nv_put_opt(cap, true);
+    } else if nchar == b'\'' as c_int || nchar == b'`' as c_int {
+        // "['", "[`", "]'" and "]`": jump to next mark
+        nvim_bracket_mark_jump(cap);
+    } else if (K_RIGHTRELEASE..=K_LEFTMOUSE).contains(&nchar) {
+        // Mouse click: put selected text with indent adjustment
+        nvim_bracket_do_mouse(cap);
+    } else if nchar == b'z' as c_int {
+        // "[z" and "]z": move to start or end of open fold
+        nvim_bracket_fold_move(cap);
+    } else if nchar == b'c' as c_int {
+        // "[c" and "]c": move to next or previous diff-change
+        nvim_bracket_diff_move(cap);
+    } else if nchar == b'r' as c_int || nchar == b's' as c_int || nchar == b'S' as c_int {
+        // "[r", "[s", "[S", "]r", "]s" and "]S": move to next spell error
+        nvim_bracket_spell_move(cap);
+    } else {
+        // Not a valid cap->nchar
+        rs_clearopbeep(oap);
+    }
 }
 
 // =============================================================================
