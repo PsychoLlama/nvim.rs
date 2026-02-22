@@ -202,6 +202,114 @@ int nvim_message_filtered(const char *msg) { return message_filtered((char *)msg
 void nvim_msg_ext_set_kind_excmd(const char *kind) { msg_ext_set_kind(kind); }
 void nvim_msg_puts_hl_excmd(const char *s, int hl_id) { msg_puts_hl(s, hl_id, false); }
 
+// --- Sort/uniq accessor functions for Rust FFI ---
+
+// Regex accessors (opaque regmatch_T handle)
+void *nvim_excmds_regcomp(const char *pat, int magic_val)
+{
+  regmatch_T *rm = xcalloc(1, sizeof(regmatch_T));
+  rm->regprog = vim_regcomp(pat, magic_val);
+  if (rm->regprog == NULL) {
+    xfree(rm);
+    return NULL;
+  }
+  return rm;
+}
+
+int nvim_excmds_regexec(void *rm, const char *line)
+{
+  return vim_regexec((regmatch_T *)rm, (char *)line, 0);
+}
+
+void nvim_excmds_regfree(void *rm)
+{
+  if (rm != NULL) {
+    vim_regfree(((regmatch_T *)rm)->regprog);
+    xfree(rm);
+  }
+}
+
+const char *nvim_excmds_regmatch_startp0(const void *rm)
+{
+  return ((const regmatch_T *)rm)->startp[0];
+}
+
+const char *nvim_excmds_regmatch_endp0(const void *rm)
+{
+  return ((const regmatch_T *)rm)->endp[0];
+}
+
+void nvim_excmds_regmatch_set_ic(void *rm, int ic)
+{
+  ((regmatch_T *)rm)->rm_ic = ic;
+}
+
+// Search/skip accessors
+const char *nvim_excmds_last_search_pat(void) { return last_search_pat(); }
+char *nvim_excmds_check_nextcmd(const char *p) { return check_nextcmd((char *)p); }
+char *nvim_excmds_skip_regexp_err(const char *p, int delim)
+{
+  return skip_regexp_err((char *)p, delim, true);
+}
+
+// Number parsing wrapper
+void nvim_excmds_str2nr(const char *s, int what, int64_t *result)
+{
+  varnumber_T val = 0;
+  vim_str2nr(s, NULL, NULL, what, &val, NULL, 0, false, NULL);
+  *result = (int64_t)val;
+}
+
+// Skip functions
+char *nvim_excmds_skiptohex(const char *p) { return skiptohex((char *)p); }
+char *nvim_excmds_skiptobin(const char *p) { return (char *)skiptobin((char *)p); }
+char *nvim_excmds_skiptodigit(const char *p) { return skiptodigit((char *)p); }
+
+// Interrupt check
+int nvim_excmds_got_int(void) { return got_int; }
+
+// Error message wrappers (can't call variadic semsg from Rust)
+void nvim_excmds_semsg_invarg2(const char *p) { semsg(_(e_invarg2), p); }
+void nvim_excmds_emsg_invarg(void) { emsg(_(e_invarg)); }
+void nvim_excmds_emsg_noprevre(void) { emsg(_(e_noprevre)); }
+void nvim_excmds_emsg_interr(void) { emsg(_(e_interr)); }
+
+// Global option accessor
+int nvim_excmds_get_p_ic(void) { return p_ic; }
+
+// Exarg mutation
+void nvim_exarg_set_nextcmd(exarg_T *eap, const char *p)
+{
+  eap->nextcmd = (char *)p;
+}
+
+// Mark/extmark wrappers
+void nvim_excmds_mark_adjust(linenr_T line1, linenr_T line2, int amount, int amount_after,
+                              int etype)
+{
+  mark_adjust(line1, line2, (long)amount, (long)amount_after, (ExtmarkOp)etype);
+}
+
+void nvim_excmds_extmark_splice(int start_row, int start_col,
+                                 int old_row, int old_col, int64_t old_byte,
+                                 int new_row, int new_col, int64_t new_byte,
+                                 int etype)
+{
+  extmark_splice(curbuf, start_row, start_col,
+                 old_row, old_col, (bcount_t)old_byte,
+                 new_row, new_col, (bcount_t)new_byte,
+                 (ExtmarkOp)etype);
+}
+
+// Verify sort-related constants for Rust
+_Static_assert(STR2NR_BIN == (1 << 0), "STR2NR_BIN mismatch");
+_Static_assert(STR2NR_OCT == (1 << 1), "STR2NR_OCT mismatch");
+_Static_assert(STR2NR_HEX == (1 << 2), "STR2NR_HEX mismatch");
+_Static_assert(STR2NR_FORCE == (1 << 7), "STR2NR_FORCE mismatch");
+_Static_assert(RE_MAGIC == 1, "RE_MAGIC mismatch");
+_Static_assert(kExtmarkNOOP == 0, "kExtmarkNOOP mismatch");
+_Static_assert(kExtmarkUndo == 1, "kExtmarkUndo mismatch");
+
 _Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS mismatch");
 _Static_assert(EOL_MAC == 2, "EOL_MAC mismatch");
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
@@ -216,34 +324,16 @@ _Static_assert(TAB == '\011', "TAB mismatch");
 _Static_assert(EXFLAG_LIST == 0x01, "EXFLAG_LIST mismatch");
 _Static_assert(EXFLAG_NR == 0x02, "EXFLAG_NR mismatch");
 
-// Buffer for two lines used during sorting.  They are allocated to
-// contain the longest line being sorted.
+// Buffer used during :uniq.
 static char *sortbuf1;
-static char *sortbuf2;
 
 static bool sort_lc;      ///< sort using locale
 static bool sort_ic;      ///< ignore case
-static bool sort_nr;      ///< sort on number
+static bool sort_nr;      ///< sort on number (unused after sort migration, kept for uniq)
 static bool sort_rx;      ///< sort on regex instead of skipping it
-static bool sort_flt;     ///< sort on floating number
+static bool sort_flt;     ///< sort on floating number (unused after sort migration, kept for uniq)
 
 static bool sort_abort;   ///< flag to indicate if sorting has been interrupted
-
-/// Struct to store info to be sorted.
-typedef struct {
-  linenr_T lnum;          ///< line number
-  union {
-    struct {
-      varnumber_T start_col_nr;  ///< starting column number
-      varnumber_T end_col_nr;    ///< ending column number
-    } line;
-    struct {
-      varnumber_T value;         ///< value if sorting by integer
-      bool is_number;            ///< true when line contains a number
-    } num;
-    float_T value_flt;    ///< value if sorting by float
-  } st_u;
-} sorti_T;
 
 static int string_compare(const void *s1, const void *s2) FUNC_ATTR_NONNULL_ALL
 {
@@ -253,315 +343,8 @@ static int string_compare(const void *s1, const void *s2) FUNC_ATTR_NONNULL_ALL
   return sort_ic ? STRICMP(s1, s2) : strcmp(s1, s2);
 }
 
-static int sort_compare(const void *s1, const void *s2)
-{
-  sorti_T l1 = *(sorti_T *)s1;
-  sorti_T l2 = *(sorti_T *)s2;
-  int result = 0;
-
-  // If the user interrupts, there's no way to stop qsort() immediately, but
-  // if we return 0 every time, qsort will assume it's done sorting and
-  // exit.
-  if (sort_abort) {
-    return 0;
-  }
-  fast_breakcheck();
-  if (got_int) {
-    sort_abort = true;
-  }
-
-  // When sorting numbers "start_col_nr" is the number, not the column
-  // number.
-  if (sort_nr) {
-    if (l1.st_u.num.is_number != l2.st_u.num.is_number) {
-      result = l1.st_u.num.is_number > l2.st_u.num.is_number ? 1 : -1;
-    } else {
-      result = l1.st_u.num.value == l2.st_u.num.value
-               ? 0
-               : l1.st_u.num.value > l2.st_u.num.value ? 1 : -1;
-    }
-  } else if (sort_flt) {
-    result = l1.st_u.value_flt == l2.st_u.value_flt
-             ? 0
-             : l1.st_u.value_flt > l2.st_u.value_flt ? 1 : -1;
-  } else {
-    // We need to copy one line into "sortbuf1", because there is no
-    // guarantee that the first pointer becomes invalid when obtaining the
-    // second one.
-    memcpy(sortbuf1, ml_get(l1.lnum) + l1.st_u.line.start_col_nr,
-           (size_t)(l1.st_u.line.end_col_nr - l1.st_u.line.start_col_nr + 1));
-    sortbuf1[l1.st_u.line.end_col_nr - l1.st_u.line.start_col_nr] = NUL;
-    memcpy(sortbuf2, ml_get(l2.lnum) + l2.st_u.line.start_col_nr,
-           (size_t)(l2.st_u.line.end_col_nr - l2.st_u.line.start_col_nr + 1));
-    sortbuf2[l2.st_u.line.end_col_nr - l2.st_u.line.start_col_nr] = NUL;
-
-    result = string_compare(sortbuf1, sortbuf2);
-  }
-
-  // If two lines have the same value, preserve the original line order.
-  if (result == 0) {
-    return l1.lnum - l2.lnum;
-  }
-  return result;
-}
-
-/// ":sort".
-void ex_sort(exarg_T *eap)
-{
-  regmatch_T regmatch;
-  int maxlen = 0;
-  size_t count = (size_t)(eap->line2 - eap->line1) + 1;
-  size_t i;
-  bool unique = false;
-  int sort_what = 0;
-
-  // Sorting one line is really quick!
-  if (count <= 1) {
-    return;
-  }
-
-  if (u_save((linenr_T)(eap->line1 - 1), (linenr_T)(eap->line2 + 1)) == FAIL) {
-    return;
-  }
-  sortbuf1 = NULL;
-  sortbuf2 = NULL;
-  regmatch.regprog = NULL;
-  sorti_T *nrs = xmalloc(count * sizeof(sorti_T));
-
-  sort_abort = sort_ic = sort_lc = sort_rx = sort_nr = sort_flt = false;
-  size_t format_found = 0;
-  bool change_occurred = false;   // Buffer contents changed.
-
-  for (char *p = eap->arg; *p != NUL; p++) {
-    if (ascii_iswhite(*p)) {
-      // Skip
-    } else if (*p == 'i') {
-      sort_ic = true;
-    } else if (*p == 'l') {
-      sort_lc = true;
-    } else if (*p == 'r') {
-      sort_rx = true;
-    } else if (*p == 'n') {
-      sort_nr = true;
-      format_found++;
-    } else if (*p == 'f') {
-      sort_flt = true;
-      format_found++;
-    } else if (*p == 'b') {
-      sort_what = STR2NR_BIN + STR2NR_FORCE;
-      format_found++;
-    } else if (*p == 'o') {
-      sort_what = STR2NR_OCT + STR2NR_FORCE;
-      format_found++;
-    } else if (*p == 'x') {
-      sort_what = STR2NR_HEX + STR2NR_FORCE;
-      format_found++;
-    } else if (*p == 'u') {
-      unique = true;
-    } else if (*p == '"') {  // comment start
-      break;
-    } else if (check_nextcmd(p) != NULL) {
-      eap->nextcmd = check_nextcmd(p);
-      break;
-    } else if (!ASCII_ISALPHA(*p) && regmatch.regprog == NULL) {
-      char *s = skip_regexp_err(p + 1, *p, true);
-      if (s == NULL) {
-        goto sortend;
-      }
-      *s = NUL;
-      // Use last search pattern if sort pattern is empty.
-      if (s == p + 1) {
-        if (last_search_pat() == NULL) {
-          emsg(_(e_noprevre));
-          goto sortend;
-        }
-        regmatch.regprog = vim_regcomp(last_search_pat(), RE_MAGIC);
-      } else {
-        regmatch.regprog = vim_regcomp(p + 1, RE_MAGIC);
-      }
-      if (regmatch.regprog == NULL) {
-        goto sortend;
-      }
-      p = s;                    // continue after the regexp
-      regmatch.rm_ic = p_ic;
-    } else {
-      semsg(_(e_invarg2), p);
-      goto sortend;
-    }
-  }
-
-  // Can only have one of 'n', 'b', 'o' and 'x'.
-  if (format_found > 1) {
-    emsg(_(e_invarg));
-    goto sortend;
-  }
-
-  // From here on "sort_nr" is used as a flag for any integer number
-  // sorting.
-  sort_nr |= sort_what;
-
-  // Make an array with all line numbers.  This avoids having to copy all
-  // the lines into allocated memory.
-  // When sorting on strings "start_col_nr" is the offset in the line, for
-  // numbers sorting it's the number to sort on.  This means the pattern
-  // matching and number conversion only has to be done once per line.
-  // Also get the longest line length for allocating "sortbuf".
-  for (linenr_T lnum = eap->line1; lnum <= eap->line2; lnum++) {
-    char *s = ml_get(lnum);
-    int len = ml_get_len(lnum);
-    maxlen = MAX(maxlen, len);
-
-    colnr_T start_col = 0;
-    colnr_T end_col = len;
-    if (regmatch.regprog != NULL && vim_regexec(&regmatch, s, 0)) {
-      if (sort_rx) {
-        start_col = (colnr_T)(regmatch.startp[0] - s);
-        end_col = (colnr_T)(regmatch.endp[0] - s);
-      } else {
-        start_col = (colnr_T)(regmatch.endp[0] - s);
-      }
-    } else if (regmatch.regprog != NULL) {
-      end_col = 0;
-    }
-
-    if (sort_nr || sort_flt) {
-      // Make sure vim_str2nr() doesn't read any digits past the end
-      // of the match, by temporarily terminating the string there
-      char *s2 = s + end_col;
-      char c = *s2;  // temporary character storage
-      *s2 = NUL;
-      // Sorting on number: Store the number itself.
-      char *p = s + start_col;
-      if (sort_nr) {
-        if (sort_what & STR2NR_HEX) {
-          s = skiptohex(p);
-        } else if (sort_what & STR2NR_BIN) {
-          s = (char *)skiptobin(p);
-        } else {
-          s = skiptodigit(p);
-        }
-        if (s > p && s[-1] == '-') {
-          s--;  // include preceding negative sign
-        }
-        if (*s == NUL) {
-          // line without number should sort before any number
-          nrs[lnum - eap->line1].st_u.num.is_number = false;
-          nrs[lnum - eap->line1].st_u.num.value = 0;
-        } else {
-          nrs[lnum - eap->line1].st_u.num.is_number = true;
-          vim_str2nr(s, NULL, NULL, sort_what,
-                     &nrs[lnum - eap->line1].st_u.num.value, NULL, 0, false, NULL);
-        }
-      } else {
-        s = skipwhite(p);
-        if (*s == '+') {
-          s = skipwhite(s + 1);
-        }
-
-        if (*s == NUL) {
-          // empty line should sort before any number
-          nrs[lnum - eap->line1].st_u.value_flt = -DBL_MAX;
-        } else {
-          nrs[lnum - eap->line1].st_u.value_flt = strtod(s, NULL);
-        }
-      }
-      *s2 = c;
-    } else {
-      // Store the column to sort at.
-      nrs[lnum - eap->line1].st_u.line.start_col_nr = start_col;
-      nrs[lnum - eap->line1].st_u.line.end_col_nr = end_col;
-    }
-
-    nrs[lnum - eap->line1].lnum = lnum;
-
-    if (regmatch.regprog != NULL) {
-      fast_breakcheck();
-    }
-    if (got_int) {
-      goto sortend;
-    }
-  }
-
-  // Allocate a buffer that can hold the longest line.
-  sortbuf1 = xmalloc((size_t)maxlen + 1);
-  sortbuf2 = xmalloc((size_t)maxlen + 1);
-
-  // Sort the array of line numbers.  Note: can't be interrupted!
-  qsort((void *)nrs, count, sizeof(sorti_T), sort_compare);
-
-  if (sort_abort) {
-    goto sortend;
-  }
-
-  bcount_t old_count = 0;
-  bcount_t new_count = 0;
-
-  // Insert the lines in the sorted order below the last one.
-  linenr_T lnum = eap->line2;
-  for (i = 0; i < count; i++) {
-    const linenr_T get_lnum = nrs[eap->forceit ? count - i - 1 : i].lnum;
-
-    // If the original line number of the line being placed is not the same
-    // as "lnum" (accounting for offset), we know that the buffer changed.
-    if (get_lnum + ((linenr_T)count - 1) != lnum) {
-      change_occurred = true;
-    }
-
-    char *s = ml_get(get_lnum);
-    colnr_T bytelen = ml_get_len(get_lnum) + 1;  // include EOL in bytelen
-    old_count += bytelen;
-    if (!unique || i == 0 || string_compare(s, sortbuf1) != 0) {
-      // Copy the line into a buffer, it may become invalid in
-      // ml_append(). And it's needed for "unique".
-      STRCPY(sortbuf1, s);
-      if (ml_append(lnum++, sortbuf1, 0, false) == FAIL) {
-        break;
-      }
-      new_count += bytelen;
-    }
-    fast_breakcheck();
-    if (got_int) {
-      goto sortend;
-    }
-  }
-
-  // delete the original lines if appending worked
-  if (i == count) {
-    for (i = 0; i < count; i++) {
-      ml_delete(eap->line1);
-    }
-  } else {
-    count = 0;
-  }
-
-  // Adjust marks for deleted (or added) lines and prepare for displaying.
-  linenr_T deleted = (linenr_T)count - (lnum - eap->line2);
-  if (deleted > 0) {
-    mark_adjust(eap->line2 - deleted, eap->line2, MAXLNUM, -deleted, kExtmarkNOOP);
-    msgmore(-deleted);
-  } else if (deleted < 0) {
-    mark_adjust(eap->line2, MAXLNUM, -deleted, 0, kExtmarkNOOP);
-  }
-
-  if (change_occurred || deleted != 0) {
-    extmark_splice(curbuf, eap->line1 - 1, 0,
-                   (int)count, 0, old_count,
-                   lnum - eap->line2, 0, new_count, kExtmarkUndo);
-    changed_lines(curbuf, eap->line1, 0, eap->line2 + 1, -deleted, true);
-  }
-
-  curwin->w_cursor.lnum = eap->line1;
-  beginline(BL_WHITE | BL_FIX);
-
-sortend:
-  xfree(nrs);
-  xfree(sortbuf1);
-  xfree(sortbuf2);
-  vim_regfree(regmatch.regprog);
-  if (got_int) {
-    emsg(_(e_interr));
-  }
-}
+// Rust FFI declaration for rs_ex_sort
+extern void rs_ex_sort(exarg_T *eap);
 
 /// ":uniq".
 void ex_uniq(exarg_T *eap)

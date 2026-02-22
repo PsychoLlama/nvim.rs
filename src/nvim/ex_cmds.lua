@@ -2559,7 +2559,7 @@ M.cmds = {
     command = 'sort',
     flags = bit.bor(RANGE, DFLALL, WHOLEFOLD, BANG, EXTRA, NOTRLCOM, MODIFY),
     addr_type = 'ADDR_LINES',
-    func = 'ex_sort',
+    func = 'rs_ex_sort',
   },
   {
     command = 'split',

@@ -24,6 +24,7 @@ enum {
 extern void rs_do_ascii(exarg_T *eap);
 extern void rs_ex_align(exarg_T *eap);
 extern void rs_ex_change(exarg_T *eap);
+extern void rs_ex_sort(exarg_T *eap);
 extern void rs_ex_z(exarg_T *eap);
 
 // Rust utility functions

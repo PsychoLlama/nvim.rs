@@ -21,7 +21,7 @@
 //! This module provides type definitions for sort operations.
 //! The actual sorting is performed by the C implementation using qsort.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::range::{LineNr, LineRange};
 
@@ -387,8 +387,493 @@ impl SortEntry {
 }
 
 // =============================================================================
+// Constants matching C definitions
+// =============================================================================
+
+/// STR2NR_BIN: allow binary numbers.
+const STR2NR_BIN: c_int = 1 << 0;
+/// STR2NR_OCT: allow octal numbers.
+const STR2NR_OCT: c_int = 1 << 1;
+/// STR2NR_HEX: allow hexadecimal numbers.
+const STR2NR_HEX: c_int = 1 << 2;
+/// STR2NR_FORCE: force particular base.
+const STR2NR_FORCE: c_int = 1 << 7;
+
+/// MAXLNUM: maximum (invalid) line number.
+const MAXLNUM: c_int = 0x7fff_ffff;
+
+/// RE_MAGIC: 'magic' option for regex.
+const RE_MAGIC: c_int = 1;
+
+/// kExtmarkNOOP: extmarks shouldn't be moved.
+const KEXTMARK_NOOP: c_int = 0;
+/// kExtmarkUndo: operation should be reversible.
+const KEXTMARK_UNDO: c_int = 1;
+
+/// BL_WHITE | BL_FIX for beginline().
+const BL_WHITE_FIX: c_int = 1 | 4;
+
+/// FAIL constant from vim_defs.h
+const FAIL: c_int = 0;
+
+// =============================================================================
+// Internal sort helpers
+// =============================================================================
+
+/// Compare two C strings for sorting, respecting locale and case flags.
+unsafe fn string_compare(
+    s1: *const c_char,
+    s2: *const c_char,
+    use_locale: bool,
+    ignore_case: bool,
+) -> i32 {
+    if use_locale {
+        libc::strcoll(s1, s2) as i32
+    } else if ignore_case {
+        // Case-insensitive comparison
+        let mut p1 = s1 as *const u8;
+        let mut p2 = s2 as *const u8;
+        loop {
+            let c1 = (*p1).to_ascii_uppercase();
+            let c2 = (*p2).to_ascii_uppercase();
+            if c1 != c2 {
+                return i32::from(c1) - i32::from(c2);
+            }
+            if c1 == 0 {
+                return 0;
+            }
+            p1 = p1.add(1);
+            p2 = p2.add(1);
+        }
+    } else {
+        libc::strcmp(s1, s2) as i32
+    }
+}
+
+/// Internal sort entry used during sorting.
+#[derive(Clone, Copy)]
+struct InternalSortEntry {
+    lnum: c_int,
+    key: InternalSortKey,
+}
+
+#[derive(Clone, Copy)]
+enum InternalSortKey {
+    Text { start_col: c_int, end_col: c_int },
+    Integer { value: i64, is_number: bool },
+    Float { value: f64 },
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// `:sort` command implementation.
+///
+/// # Safety
+/// `eap` must be a valid pointer to an exarg_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
+    use crate::{
+        beginline, changed_lines, fast_breakcheck, ml_append, ml_delete, ml_get, ml_get_len,
+        msgmore, nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg, nvim_exarg_get_forceit,
+        nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_nextcmd,
+        nvim_excmds_check_nextcmd, nvim_excmds_emsg_interr, nvim_excmds_emsg_invarg,
+        nvim_excmds_emsg_noprevre, nvim_excmds_extmark_splice, nvim_excmds_get_p_ic,
+        nvim_excmds_got_int, nvim_excmds_last_search_pat, nvim_excmds_mark_adjust,
+        nvim_excmds_regcomp, nvim_excmds_regexec, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
+        nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2,
+        nvim_excmds_skip_regexp_err, nvim_excmds_skiptobin, nvim_excmds_skiptodigit,
+        nvim_excmds_skiptohex, nvim_excmds_str2nr, nvim_get_curbuf, u_save,
+    };
+
+    let line1 = nvim_exarg_get_line1(eap);
+    let line2 = nvim_exarg_get_line2(eap);
+    let count = (line2 - line1 + 1) as usize;
+
+    // Sorting one line is really quick!
+    if count <= 1 {
+        return;
+    }
+
+    if u_save(line1 - 1, line2 + 1) == FAIL {
+        return;
+    }
+
+    let mut regmatch: *mut crate::RegmatchHandle = std::ptr::null_mut();
+    let mut sort_ic = false;
+    let mut sort_lc = false;
+    let mut sort_rx = false;
+    let mut sort_nr = false;
+    let mut sort_flt = false;
+    let mut unique = false;
+    let mut sort_what: c_int = 0;
+    let mut format_found: usize = 0;
+    let mut change_occurred = false;
+
+    // Parse flags from eap->arg
+    let mut p = nvim_exarg_get_arg(eap) as *mut c_char;
+    loop {
+        let c = *p;
+        if c == 0 {
+            break;
+        }
+        if c == b' ' as c_char || c == b'\t' as c_char {
+            // skip whitespace
+        } else if c == b'i' as c_char {
+            sort_ic = true;
+        } else if c == b'l' as c_char {
+            sort_lc = true;
+        } else if c == b'r' as c_char {
+            sort_rx = true;
+        } else if c == b'n' as c_char {
+            sort_nr = true;
+            format_found += 1;
+        } else if c == b'f' as c_char {
+            sort_flt = true;
+            format_found += 1;
+        } else if c == b'b' as c_char {
+            sort_what = STR2NR_BIN + STR2NR_FORCE;
+            format_found += 1;
+        } else if c == b'o' as c_char {
+            sort_what = STR2NR_OCT + STR2NR_FORCE;
+            format_found += 1;
+        } else if c == b'x' as c_char {
+            sort_what = STR2NR_HEX + STR2NR_FORCE;
+            format_found += 1;
+        } else if c == b'u' as c_char {
+            unique = true;
+        } else if c == b'"' as c_char {
+            // comment start
+            break;
+        } else if !nvim_excmds_check_nextcmd(p).is_null() {
+            nvim_exarg_set_nextcmd(eap, nvim_excmds_check_nextcmd(p));
+            break;
+        } else if !((c as u8).is_ascii_alphabetic()) && regmatch.is_null() {
+            let s = nvim_excmds_skip_regexp_err(p.add(1), c as c_int);
+            if s.is_null() {
+                return; // goto sortend equivalent -- but nothing to clean up yet
+            }
+            *s = 0; // NUL-terminate the pattern
+
+            // Use last search pattern if sort pattern is empty.
+            if std::ptr::eq(s, p.add(1)) {
+                let last_pat = nvim_excmds_last_search_pat();
+                if last_pat.is_null() {
+                    nvim_excmds_emsg_noprevre();
+                    return;
+                }
+                regmatch = nvim_excmds_regcomp(last_pat, RE_MAGIC);
+            } else {
+                regmatch = nvim_excmds_regcomp(p.add(1), RE_MAGIC);
+            }
+            if regmatch.is_null() {
+                return;
+            }
+            p = s; // continue after the regexp
+            nvim_excmds_regmatch_set_ic(regmatch, nvim_excmds_get_p_ic());
+        } else {
+            nvim_excmds_semsg_invarg2(p);
+            nvim_excmds_regfree(regmatch);
+            return;
+        }
+        p = p.add(1);
+    }
+
+    // Can only have one of 'n', 'f', 'b', 'o' and 'x'.
+    if format_found > 1 {
+        nvim_excmds_emsg_invarg();
+        nvim_excmds_regfree(regmatch);
+        return;
+    }
+
+    // From here on "sort_nr" is used as a flag for any integer number sorting.
+    if sort_what != 0 {
+        sort_nr = true;
+    }
+
+    // Build sort entries for each line.
+    let mut nrs: Vec<InternalSortEntry> = Vec::with_capacity(count);
+    let mut maxlen: c_int = 0;
+
+    for lnum in line1..=line2 {
+        let s = ml_get(lnum);
+        let len = ml_get_len(lnum);
+        if len > maxlen {
+            maxlen = len;
+        }
+
+        let mut start_col: c_int = 0;
+        let mut end_col: c_int = len;
+        if !regmatch.is_null() && nvim_excmds_regexec(regmatch, s) != 0 {
+            if sort_rx {
+                start_col = nvim_excmds_regmatch_startp0(regmatch).offset_from(s) as c_int;
+                end_col = nvim_excmds_regmatch_endp0(regmatch).offset_from(s) as c_int;
+            } else {
+                start_col = nvim_excmds_regmatch_endp0(regmatch).offset_from(s) as c_int;
+            }
+        } else if !regmatch.is_null() {
+            end_col = 0;
+        }
+
+        let key = if sort_nr || sort_flt {
+            // Temporarily NUL-terminate at end_col
+            let s2 = s.add(end_col as usize) as *mut c_char;
+            let saved_c = *s2;
+            *s2 = 0;
+
+            let key_p = s.add(start_col as usize) as *mut c_char;
+            let key = if sort_nr {
+                let skip_s = if sort_what & STR2NR_HEX != 0 {
+                    nvim_excmds_skiptohex(key_p)
+                } else if sort_what & STR2NR_BIN != 0 {
+                    nvim_excmds_skiptobin(key_p)
+                } else {
+                    nvim_excmds_skiptodigit(key_p)
+                };
+
+                // Include preceding negative sign
+                let skip_s = if skip_s > key_p && *skip_s.sub(1) == b'-' as c_char {
+                    skip_s.sub(1) as *mut c_char
+                } else {
+                    skip_s
+                };
+
+                if *skip_s == 0 {
+                    // line without number should sort before any number
+                    InternalSortKey::Integer {
+                        value: 0,
+                        is_number: false,
+                    }
+                } else {
+                    let mut val: i64 = 0;
+                    nvim_excmds_str2nr(skip_s, sort_what, &mut val);
+                    InternalSortKey::Integer {
+                        value: val,
+                        is_number: true,
+                    }
+                }
+            } else {
+                // Float sort
+                let ws = crate::skipwhite(key_p);
+                let ws = if *ws == b'+' as c_char {
+                    crate::skipwhite(ws.add(1))
+                } else {
+                    ws
+                };
+
+                if *ws == 0 {
+                    InternalSortKey::Float { value: f64::MIN }
+                } else {
+                    InternalSortKey::Float {
+                        value: libc::strtod(ws, std::ptr::null_mut()),
+                    }
+                }
+            };
+
+            *s2 = saved_c;
+            key
+        } else {
+            InternalSortKey::Text { start_col, end_col }
+        };
+
+        nrs.push(InternalSortEntry { lnum, key });
+
+        if !regmatch.is_null() {
+            fast_breakcheck();
+        }
+        if nvim_excmds_got_int() != 0 {
+            nvim_excmds_regfree(regmatch);
+            nvim_excmds_emsg_interr();
+            return;
+        }
+    }
+
+    // Allocate sort buffers for text comparison.
+    let buf_size = (maxlen as usize) + 1;
+    let mut sortbuf1: Vec<u8> = vec![0u8; buf_size];
+    let mut sortbuf2: Vec<u8> = vec![0u8; buf_size];
+
+    // Sort the array. Use stable sort for deterministic tiebreaker.
+    let mut sort_abort = false;
+    nrs.sort_by(|a, b| {
+        if sort_abort {
+            return std::cmp::Ordering::Equal;
+        }
+        fast_breakcheck();
+        if nvim_excmds_got_int() != 0 {
+            sort_abort = true;
+            return std::cmp::Ordering::Equal;
+        }
+
+        let result = match (&a.key, &b.key) {
+            (
+                InternalSortKey::Integer {
+                    value: v1,
+                    is_number: n1,
+                },
+                InternalSortKey::Integer {
+                    value: v2,
+                    is_number: n2,
+                },
+            ) => {
+                if n1 != n2 {
+                    // Lines with numbers sort after lines without
+                    n1.cmp(n2)
+                } else {
+                    v1.cmp(v2)
+                }
+            }
+            (InternalSortKey::Float { value: v1 }, InternalSortKey::Float { value: v2 }) => {
+                v1.partial_cmp(v2).unwrap_or(std::cmp::Ordering::Equal)
+            }
+            (
+                InternalSortKey::Text {
+                    start_col: sc1,
+                    end_col: ec1,
+                },
+                InternalSortKey::Text {
+                    start_col: sc2,
+                    end_col: ec2,
+                },
+            ) => {
+                // Copy line substrings into sortbufs to avoid invalidation
+                let s1_ptr = ml_get(a.lnum);
+                let len1 = (*ec1 - *sc1) as usize;
+                std::ptr::copy_nonoverlapping(
+                    s1_ptr.add(*sc1 as usize) as *const u8,
+                    sortbuf1.as_mut_ptr(),
+                    len1,
+                );
+                sortbuf1[len1] = 0;
+
+                let s2_ptr = ml_get(b.lnum);
+                let len2 = (*ec2 - *sc2) as usize;
+                std::ptr::copy_nonoverlapping(
+                    s2_ptr.add(*sc2 as usize) as *const u8,
+                    sortbuf2.as_mut_ptr(),
+                    len2,
+                );
+                sortbuf2[len2] = 0;
+
+                let cmp = string_compare(
+                    sortbuf1.as_ptr() as *const c_char,
+                    sortbuf2.as_ptr() as *const c_char,
+                    sort_lc,
+                    sort_ic,
+                );
+                cmp.cmp(&0)
+            }
+            _ => std::cmp::Ordering::Equal,
+        };
+
+        if result == std::cmp::Ordering::Equal {
+            // Preserve original line order (stable tiebreaker).
+            a.lnum.cmp(&b.lnum)
+        } else {
+            result
+        }
+    });
+
+    if sort_abort {
+        nvim_excmds_regfree(regmatch);
+        nvim_excmds_emsg_interr();
+        return;
+    }
+
+    // Insert the lines in sorted order below the last one.
+    let mut old_count: i64 = 0;
+    let mut new_count: i64 = 0;
+    let mut lnum = line2;
+    let forceit = nvim_exarg_get_forceit(eap) != 0;
+    let mut i: usize = 0;
+
+    // We need a separate sortbuf for unique comparison (reuse sortbuf1)
+    while i < count {
+        let idx = if forceit { count - i - 1 } else { i };
+        let get_lnum = nrs[idx].lnum;
+
+        // Detect if buffer order actually changed.
+        if get_lnum + (count as c_int - 1) != lnum {
+            change_occurred = true;
+        }
+
+        let s = ml_get(get_lnum);
+        let bytelen = ml_get_len(get_lnum) + 1; // include EOL in bytelen
+        old_count += i64::from(bytelen);
+
+        // For unique: compare with previous line (stored in sortbuf1)
+        let should_insert = if !unique || i == 0 {
+            true
+        } else {
+            string_compare(s, sortbuf1.as_ptr() as *const c_char, sort_lc, sort_ic) != 0
+        };
+
+        if should_insert {
+            // Copy the line into sortbuf1 (needed for unique check and because
+            // ml_append can invalidate the pointer).
+            let slen = libc::strlen(s);
+            std::ptr::copy_nonoverlapping(s as *const u8, sortbuf1.as_mut_ptr(), slen + 1);
+            if ml_append(lnum, sortbuf1.as_ptr() as *const c_char, 0, 0) == FAIL {
+                break;
+            }
+            lnum += 1;
+            new_count += i64::from(bytelen);
+        }
+
+        fast_breakcheck();
+        if nvim_excmds_got_int() != 0 {
+            nvim_excmds_regfree(regmatch);
+            nvim_excmds_emsg_interr();
+            return;
+        }
+        i += 1;
+    }
+
+    // Delete the original lines if appending worked.
+    if i == count {
+        for _ in 0..count {
+            ml_delete(line1);
+        }
+    } else {
+        // count = 0 equivalent: skip adjustment
+        nvim_excmds_regfree(regmatch);
+        return;
+    }
+
+    // Adjust marks for deleted (or added) lines.
+    let deleted = count as c_int - (lnum - line2);
+    if deleted > 0 {
+        nvim_excmds_mark_adjust(line2 - deleted, line2, MAXLNUM, -deleted, KEXTMARK_NOOP);
+        msgmore(-deleted);
+    } else if deleted < 0 {
+        nvim_excmds_mark_adjust(line2, MAXLNUM, -deleted, 0, KEXTMARK_NOOP);
+    }
+
+    if change_occurred || deleted != 0 {
+        nvim_excmds_extmark_splice(
+            line1 - 1,
+            0,
+            count as c_int,
+            0,
+            old_count,
+            lnum - line2,
+            0,
+            new_count,
+            KEXTMARK_UNDO,
+        );
+        changed_lines(nvim_get_curbuf(), line1, 0, line2 + 1, -deleted, 1);
+    }
+
+    nvim_curwin_set_cursor_lnum(line1);
+    beginline(BL_WHITE_FIX);
+
+    // Cleanup
+    nvim_excmds_regfree(regmatch);
+    if nvim_excmds_got_int() != 0 {
+        nvim_excmds_emsg_interr();
+    }
+}
 
 /// Parse sort flags from a string.
 ///

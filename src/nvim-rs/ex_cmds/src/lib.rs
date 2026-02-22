@@ -72,6 +72,14 @@ pub struct WinHandle {
     _opaque: [u8; 0],
 }
 
+/// Opaque handle to a C `regmatch_T` struct.
+///
+/// Represents a compiled regex match state.
+#[repr(C)]
+pub struct RegmatchHandle {
+    _opaque: [u8; 0],
+}
+
 // =============================================================================
 // Command Address Type
 // =============================================================================
@@ -580,6 +588,87 @@ extern "C" {
     pub fn msg_clr_eos();
     /// End message output
     pub fn msg_end() -> c_int;
+
+    // --- Sort/uniq FFI functions ---
+    // Regex (opaque regmatch_T via void*)
+    /// Compile a regex pattern. Returns opaque handle or null.
+    pub fn nvim_excmds_regcomp(pat: *const c_char, magic_val: c_int) -> *mut RegmatchHandle;
+    /// Execute regex match on a line. Returns 1 if match, 0 if not.
+    pub fn nvim_excmds_regexec(rm: *mut RegmatchHandle, line: *const c_char) -> c_int;
+    /// Free regex handle.
+    pub fn nvim_excmds_regfree(rm: *mut RegmatchHandle);
+    /// Get startp[0] from regex match.
+    pub fn nvim_excmds_regmatch_startp0(rm: *const RegmatchHandle) -> *const c_char;
+    /// Get endp[0] from regex match.
+    pub fn nvim_excmds_regmatch_endp0(rm: *const RegmatchHandle) -> *const c_char;
+    /// Set rm_ic (ignore case) on regex handle.
+    pub fn nvim_excmds_regmatch_set_ic(rm: *mut RegmatchHandle, ic: c_int);
+
+    // Search/skip
+    /// Get last search pattern (NULL if none).
+    pub fn nvim_excmds_last_search_pat() -> *const c_char;
+    /// check_nextcmd wrapper.
+    pub fn nvim_excmds_check_nextcmd(p: *const c_char) -> *mut c_char;
+    /// skip_regexp_err wrapper.
+    pub fn nvim_excmds_skip_regexp_err(p: *const c_char, delim: c_int) -> *mut c_char;
+
+    // Number parsing
+    /// Parse a number string with given flags, store result in *result.
+    pub fn nvim_excmds_str2nr(s: *const c_char, what: c_int, result: *mut i64);
+
+    // Skip functions
+    /// Skip to next hex digit.
+    pub fn nvim_excmds_skiptohex(p: *const c_char) -> *mut c_char;
+    /// Skip to next binary digit.
+    pub fn nvim_excmds_skiptobin(p: *const c_char) -> *mut c_char;
+    /// Skip to next decimal digit.
+    pub fn nvim_excmds_skiptodigit(p: *const c_char) -> *mut c_char;
+
+    // Interrupt
+    /// Check if got_int is set.
+    pub fn nvim_excmds_got_int() -> c_int;
+    /// fast_breakcheck() - check for user interrupt.
+    pub fn fast_breakcheck();
+
+    // Error messages
+    /// semsg(_(e_invarg2), p) - "Invalid argument: %s".
+    pub fn nvim_excmds_semsg_invarg2(p: *const c_char);
+    /// emsg(_(e_invarg)) - "Invalid argument".
+    pub fn nvim_excmds_emsg_invarg();
+    /// emsg(_(e_noprevre)) - "No previous regular expression".
+    pub fn nvim_excmds_emsg_noprevre();
+    /// emsg(_(e_interr)) - "Interrupted".
+    pub fn nvim_excmds_emsg_interr();
+
+    // Global option
+    /// Get p_ic (ignore case option).
+    pub fn nvim_excmds_get_p_ic() -> c_int;
+
+    // Exarg mutation
+    /// Set eap->nextcmd.
+    pub fn nvim_exarg_set_nextcmd(eap: *mut ExArgHandle, p: *const c_char);
+
+    // Mark/extmark
+    /// mark_adjust wrapper.
+    pub fn nvim_excmds_mark_adjust(
+        line1: c_int,
+        line2: c_int,
+        amount: c_int,
+        amount_after: c_int,
+        etype: c_int,
+    );
+    /// extmark_splice wrapper (operates on curbuf).
+    pub fn nvim_excmds_extmark_splice(
+        start_row: c_int,
+        start_col: c_int,
+        old_row: c_int,
+        old_col: c_int,
+        old_byte: i64,
+        new_row: c_int,
+        new_col: c_int,
+        new_byte: i64,
+        etype: c_int,
+    );
 
     // ex_change accessors and functions
     /// Get curbuf->b_p_ai (autoindent)
