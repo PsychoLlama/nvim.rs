@@ -362,6 +362,29 @@ void nvim_excmds_emsg_e134(void) {
   emsg(_("E134: Cannot move a range of lines into itself"));
 }
 
+// --- ex_append FFI accessors ---
+// Toggle curbuf->b_p_ai (autoindent)
+void nvim_excmds_toggle_b_p_ai(void) { curbuf->b_p_ai = !curbuf->b_p_ai; }
+// Get curbuf->b_p_iminsert
+int nvim_excmds_get_b_p_iminsert(void) { return curbuf->b_p_iminsert; }
+// Check if eap->ea_getline is NULL
+int nvim_excmds_ea_getline_is_null(exarg_T *eap) { return eap->ea_getline == NULL ? 1 : 0; }
+// Get eap->cstack->cs_looplevel
+int nvim_excmds_get_cstack_looplevel(exarg_T *eap) { return eap->cstack->cs_looplevel; }
+// Call eap->ea_getline(c, eap->cookie, indent, true)
+char *nvim_excmds_call_getline(exarg_T *eap, int c, int indent)
+{
+  return eap->ea_getline(c, eap->cookie, indent, true);
+}
+// Get eap->nextcmd pointer
+char *nvim_excmds_get_nextcmd(exarg_T *eap) { return eap->nextcmd; }
+// Set eap->nextcmd directly
+void nvim_excmds_set_nextcmd_direct(exarg_T *eap, char *p) { eap->nextcmd = p; }
+// Get mutable eap->arg
+char *nvim_excmds_get_arg_mut(exarg_T *eap) { return eap->arg; }
+// Get eap->cookie
+void *nvim_excmds_get_cookie(exarg_T *eap) { return eap->cookie; }
+
 _Static_assert(ML_DEL_MESSAGE == 1, "ML_DEL_MESSAGE mismatch");
 
 // Verify sort-related constants for Rust
@@ -386,6 +409,12 @@ _Static_assert(BL_FIX == 4, "BL_FIX mismatch");
 _Static_assert(TAB == '\011', "TAB mismatch");
 _Static_assert(EXFLAG_LIST == 0x01, "EXFLAG_LIST mismatch");
 _Static_assert(EXFLAG_NR == 0x02, "EXFLAG_NR mismatch");
+_Static_assert(MODE_INSERT == 0x10, "MODE_INSERT mismatch");
+_Static_assert(MODE_LANGMAP == 0x20, "MODE_LANGMAP mismatch");
+_Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE mismatch");
+_Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL mismatch");
+_Static_assert(B_IMODE_LMAP == 1, "B_IMODE_LMAP mismatch");
+_Static_assert(BL_SOL == 2, "BL_SOL mismatch");
 
 static char *prevcmd = NULL;        // the previous command
 
@@ -2238,153 +2267,10 @@ void nvim_set_append_indent(int val)
   append_indent = val;
 }
 
-/// ":insert" and ":append", also used by ":change"
-void ex_append(exarg_T *eap)
-{
-  char *theline;
-  bool did_undo = false;
-  linenr_T lnum = eap->line2;
-  int indent = 0;
-  char *p;
-  bool empty = (curbuf->b_ml.ml_flags & ML_EMPTY);
+/// Get append_indent value
+int nvim_excmds_get_append_indent(void) { return append_indent; }
 
-  // the ! flag toggles autoindent
-  if (eap->forceit) {
-    curbuf->b_p_ai = !curbuf->b_p_ai;
-  }
-
-  // First autoindent comes from the line we start on
-  if (eap->cmdidx != CMD_change && curbuf->b_p_ai && lnum > 0) {
-    append_indent = get_indent_lnum(lnum);
-  }
-
-  if (eap->cmdidx != CMD_append) {
-    lnum--;
-  }
-
-  // when the buffer is empty need to delete the dummy line
-  if (empty && lnum == 1) {
-    lnum = 0;
-  }
-
-  State = MODE_INSERT;                   // behave like in Insert mode
-  if (curbuf->b_p_iminsert == B_IMODE_LMAP) {
-    State |= MODE_LANGMAP;
-  }
-
-  while (true) {
-    msg_scroll = true;
-    need_wait_return = false;
-    if (curbuf->b_p_ai) {
-      if (append_indent >= 0) {
-        indent = append_indent;
-        append_indent = -1;
-      } else if (lnum > 0) {
-        indent = get_indent_lnum(lnum);
-      }
-    }
-    if (*eap->arg == '|') {
-      // Get the text after the trailing bar.
-      theline = xstrdup(eap->arg + 1);
-      *eap->arg = NUL;
-    } else if (eap->ea_getline == NULL) {
-      // No getline() function, use the lines that follow. This ends
-      // when there is no more.
-      if (eap->nextcmd == NULL) {
-        break;
-      }
-      p = vim_strchr(eap->nextcmd, NL);
-      if (p == NULL) {
-        p = eap->nextcmd + strlen(eap->nextcmd);
-      }
-      theline = xmemdupz(eap->nextcmd, (size_t)(p - eap->nextcmd));
-      if (*p != NUL) {
-        p++;
-      } else {
-        p = NULL;
-      }
-      eap->nextcmd = p;
-    } else {
-      int save_State = State;
-      // Set State to avoid the cursor shape to be set to MODE_INSERT
-      // state when getline() returns.
-      State = MODE_CMDLINE;
-      theline = eap->ea_getline(eap->cstack->cs_looplevel > 0 ? -1 : NUL,
-                                eap->cookie, indent, true);
-      State = save_State;
-    }
-    lines_left = Rows - 1;
-    if (theline == NULL) {
-      break;
-    }
-
-    // Look for the "." after automatic indent.
-    int vcol = 0;
-    for (p = theline; indent > vcol; p++) {
-      if (*p == ' ') {
-        vcol++;
-      } else if (*p == TAB) {
-        vcol += 8 - vcol % 8;
-      } else {
-        break;
-      }
-    }
-    if ((p[0] == '.' && p[1] == NUL)
-        || (!did_undo && u_save(lnum, lnum + 1 + (empty ? 1 : 0))
-            == FAIL)) {
-      xfree(theline);
-      break;
-    }
-
-    // don't use autoindent if nothing was typed.
-    if (p[0] == NUL) {
-      theline[0] = NUL;
-    }
-
-    did_undo = true;
-    ml_append(lnum, theline, 0, false);
-    if (empty) {
-      // there are no marks below the inserted lines
-      appended_lines(lnum, 1);
-    } else {
-      appended_lines_mark(lnum, 1);
-    }
-
-    xfree(theline);
-    lnum++;
-
-    if (empty) {
-      ml_delete(2);
-      empty = false;
-    }
-  }
-  State = MODE_NORMAL;
-  ui_cursor_shape();
-
-  if (eap->forceit) {
-    curbuf->b_p_ai = !curbuf->b_p_ai;
-  }
-
-  // "start" is set to eap->line2+1 unless that position is invalid (when
-  // eap->line2 pointed to the end of the buffer and nothing was appended)
-  // "end" is set to lnum when something has been appended, otherwise
-  // it is the same as "start"  -- Acevedo
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    curbuf->b_op_start.lnum
-      = (eap->line2 < curbuf->b_ml.ml_line_count) ? eap->line2 + 1 : curbuf->b_ml.ml_line_count;
-    if (eap->cmdidx != CMD_append) {
-      curbuf->b_op_start.lnum--;
-    }
-    curbuf->b_op_end.lnum = (eap->line2 < lnum) ? lnum : curbuf->b_op_start.lnum;
-    curbuf->b_op_start.col = curbuf->b_op_end.col = 0;
-  }
-  curwin->w_cursor.lnum = lnum;
-  check_cursor_lnum(curwin);
-  beginline(BL_SOL | BL_FIX);
-
-  need_wait_return = false;     // don't use wait_return() now
-  ex_no_reprint = true;
-}
+// ex_append has been migrated to Rust (rs_ex_append in lines.rs)
 
 /// Previous substitute replacement string
 static SubReplacementString old_sub = { NULL, 0, NULL };

@@ -732,8 +732,46 @@ extern "C" {
     pub fn ml_delete(lnum: c_int) -> c_int;
     /// Mark lines as deleted
     pub fn deleted_lines_mark(lnum: c_int, count: c_int);
-    /// Execute :append command
-    pub fn ex_append(eap: *mut ExArgHandle);
+
+    // --- ex_append FFI functions ---
+    /// Toggle curbuf->b_p_ai (autoindent)
+    pub fn nvim_excmds_toggle_b_p_ai();
+    /// Get curbuf->b_p_iminsert
+    pub fn nvim_excmds_get_b_p_iminsert() -> c_int;
+    /// Check if eap->ea_getline is NULL
+    pub fn nvim_excmds_ea_getline_is_null(eap: *mut ExArgHandle) -> c_int;
+    /// Get eap->cstack->cs_looplevel
+    pub fn nvim_excmds_get_cstack_looplevel(eap: *mut ExArgHandle) -> c_int;
+    /// Call eap->ea_getline(c, eap->cookie, indent, true)
+    pub fn nvim_excmds_call_getline(eap: *mut ExArgHandle, c: c_int, indent: c_int) -> *mut c_char;
+    /// Get eap->nextcmd pointer
+    pub fn nvim_excmds_get_nextcmd(eap: *mut ExArgHandle) -> *mut c_char;
+    /// Set eap->nextcmd directly
+    pub fn nvim_excmds_set_nextcmd_direct(eap: *mut ExArgHandle, p: *mut c_char);
+    /// Get mutable eap->arg
+    pub fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
+    /// Mark lines as appended (without mark adjustment)
+    pub fn appended_lines(lnum: c_int, count: c_int);
+    /// Get State global
+    pub fn nvim_get_State() -> c_int;
+    /// Set State global
+    pub fn nvim_set_State(val: c_int);
+    /// Set msg_scroll global
+    pub fn nvim_set_msg_scroll(val: c_int);
+    /// Set need_wait_return global
+    pub fn nvim_set_need_wait_return(val: c_int);
+    /// Set lines_left global
+    pub fn nvim_set_lines_left(val: c_int);
+    /// Call ui_cursor_shape()
+    pub fn nvim_ui_cursor_shape_wrapper();
+    /// Duplicate a string with length (allocates len+1 bytes)
+    pub fn xmemdupz(data: *const c_char, len: usize) -> *mut c_char;
+    /// Duplicate a string
+    pub fn xstrdup(s: *const c_char) -> *mut c_char;
+    /// CMD_append constant accessor
+    pub fn nvim_docmd_cmd_append() -> c_int;
+    /// CMD_change constant accessor
+    pub fn nvim_docmd_cmd_change() -> c_int;
 }
 
 // =============================================================================

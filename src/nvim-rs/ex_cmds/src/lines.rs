@@ -13,7 +13,7 @@
 //! These commands work with line ranges and optionally registers.
 //! The actual buffer modifications are performed by Neovim's core functions.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::range::{LineNr, LineRange};
 
@@ -385,7 +385,7 @@ const ML_EMPTY: c_int = 0x01;
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_change(eap: *mut crate::ExArgHandle) {
     use crate::{
-        deleted_lines_mark, ex_append, get_indent_lnum, ml_delete, nvim_check_cursor_lnum_call,
+        deleted_lines_mark, get_indent_lnum, ml_delete, nvim_check_cursor_lnum_call,
         nvim_curbuf_get_b_p_ai, nvim_curbuf_get_ml_flags, nvim_exarg_get_forceit,
         nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_line2, nvim_set_append_indent,
         u_save,
@@ -421,7 +421,224 @@ pub unsafe extern "C" fn rs_ex_change(eap: *mut crate::ExArgHandle) {
 
     // ":append" on the line above the deleted lines
     nvim_exarg_set_line2(eap, line1);
-    ex_append(eap);
+    rs_ex_append(eap);
+}
+
+/// Constants for State global.
+const MODE_INSERT: c_int = 0x10;
+const MODE_LANGMAP: c_int = 0x20;
+const MODE_CMDLINE: c_int = 0x08;
+const MODE_NORMAL: c_int = 0x01;
+
+/// B_IMODE_LMAP constant from buffer_defs.h
+const B_IMODE_LMAP: c_int = 1;
+
+/// NUL character (C NUL = '\0').
+const NUL: c_char = 0;
+
+/// NL character (newline = '\n').
+const NL: c_char = 0x0A;
+
+/// TAB character.
+const TAB: c_char = 0x09;
+
+/// BL_SOL constant for beginline.
+const BL_SOL: c_int = 2;
+/// BL_FIX constant for beginline.
+const BL_FIX: c_int = 4;
+
+/// `:insert` and `:append` command implementation, also used by `:change`.
+///
+/// # Safety
+/// `eap` must be a valid pointer to an exarg_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
+    use crate::{
+        appended_lines, appended_lines_mark, beginline, get_indent_lnum, ml_append, ml_delete,
+        nvim_check_cursor_lnum_call, nvim_cmdmod_has_lockmarks, nvim_curbuf_get_b_ml_ml_line_count,
+        nvim_curbuf_get_b_p_ai, nvim_curbuf_get_ml_flags, nvim_curbuf_set_op_end,
+        nvim_curbuf_set_op_start, nvim_curwin_set_cursor_lnum, nvim_docmd_cmd_append,
+        nvim_docmd_cmd_change, nvim_exarg_get_cmdidx, nvim_exarg_get_forceit, nvim_exarg_get_line2,
+        nvim_excmds_call_getline, nvim_excmds_ea_getline_is_null, nvim_excmds_get_arg_mut,
+        nvim_excmds_get_b_p_iminsert, nvim_excmds_get_cstack_looplevel, nvim_excmds_get_nextcmd,
+        nvim_excmds_set_nextcmd_direct, nvim_excmds_toggle_b_p_ai, nvim_get_Rows, nvim_get_State,
+        nvim_set_State, nvim_set_append_indent, nvim_set_ex_no_reprint, nvim_set_lines_left,
+        nvim_set_msg_scroll, nvim_set_need_wait_return, nvim_ui_cursor_shape_wrapper, u_save,
+        vim_strchr, xfree, xmemdupz, xstrdup,
+    };
+
+    let mut did_undo = false;
+    let mut lnum = nvim_exarg_get_line2(eap);
+    let mut indent: c_int = 0;
+    let empty = (nvim_curbuf_get_ml_flags() & ML_EMPTY) != 0;
+    let cmdidx = nvim_exarg_get_cmdidx(eap);
+    let forceit = nvim_exarg_get_forceit(eap) != 0;
+    // the ! flag toggles autoindent
+    if forceit {
+        nvim_excmds_toggle_b_p_ai();
+    }
+
+    // First autoindent comes from the line we start on
+    if cmdidx != nvim_docmd_cmd_change() && nvim_curbuf_get_b_p_ai() != 0 && lnum > 0 {
+        nvim_set_append_indent(get_indent_lnum(lnum));
+    }
+
+    if cmdidx != nvim_docmd_cmd_append() {
+        lnum -= 1;
+    }
+
+    // when the buffer is empty need to delete the dummy line
+    let mut empty_flag = empty;
+    if empty_flag && lnum == 1 {
+        lnum = 0;
+    }
+
+    // behave like in Insert mode
+    nvim_set_State(MODE_INSERT);
+    if nvim_excmds_get_b_p_iminsert() == B_IMODE_LMAP {
+        nvim_set_State(nvim_get_State() | MODE_LANGMAP);
+    }
+
+    loop {
+        nvim_set_msg_scroll(1);
+        nvim_set_need_wait_return(0);
+        if nvim_curbuf_get_b_p_ai() != 0 {
+            let append_indent_val = nvim_get_append_indent_val();
+            if append_indent_val >= 0 {
+                indent = append_indent_val;
+                nvim_set_append_indent(-1);
+            } else if lnum > 0 {
+                indent = get_indent_lnum(lnum);
+            }
+        }
+
+        let arg = nvim_excmds_get_arg_mut(eap);
+        let theline: *mut c_char;
+
+        if *arg == b'|' as c_char {
+            // Get the text after the trailing bar.
+            theline = xstrdup(arg.add(1));
+            *arg = NUL;
+        } else if nvim_excmds_ea_getline_is_null(eap) != 0 {
+            // No getline() function, use the lines that follow.
+            let nextcmd = nvim_excmds_get_nextcmd(eap);
+            if nextcmd.is_null() {
+                break;
+            }
+            let mut p = vim_strchr(nextcmd, c_int::from(NL));
+            if p.is_null() {
+                p = nextcmd.add(libc::strlen(nextcmd.cast()));
+            }
+            theline = xmemdupz(nextcmd, p.offset_from(nextcmd) as usize);
+            if *p != NUL {
+                // advance past the NL
+                nvim_excmds_set_nextcmd_direct(eap, (p as *mut c_char).add(1));
+            } else {
+                nvim_excmds_set_nextcmd_direct(eap, std::ptr::null_mut());
+            }
+        } else {
+            let save_state = nvim_get_State();
+            // Set State to avoid cursor shape being set to MODE_INSERT when getline() returns.
+            nvim_set_State(MODE_CMDLINE);
+            let c = if nvim_excmds_get_cstack_looplevel(eap) > 0 {
+                -1
+            } else {
+                c_int::from(NUL)
+            };
+            theline = nvim_excmds_call_getline(eap, c, indent);
+            nvim_set_State(save_state);
+        }
+        nvim_set_lines_left(nvim_get_Rows() - 1);
+        if theline.is_null() {
+            break;
+        }
+
+        // Look for the "." after automatic indent.
+        let mut vcol: c_int = 0;
+        let mut p = theline;
+        while indent > vcol {
+            if *p == b' ' as c_char {
+                vcol += 1;
+            } else if *p == TAB {
+                vcol += 8 - vcol % 8;
+            } else {
+                break;
+            }
+            p = p.add(1);
+        }
+        if (*p == b'.' as c_char && *p.add(1) == NUL)
+            || (!did_undo && u_save(lnum, lnum + 1 + if empty_flag { 1 } else { 0 }) == FAIL)
+        {
+            xfree(theline.cast());
+            break;
+        }
+
+        // don't use autoindent if nothing was typed.
+        if *p == NUL {
+            *theline = NUL;
+        }
+
+        did_undo = true;
+        ml_append(lnum, theline, 0, 0);
+        if empty_flag {
+            // there are no marks below the inserted lines
+            appended_lines(lnum, 1);
+        } else {
+            appended_lines_mark(lnum, 1);
+        }
+
+        xfree(theline.cast());
+        lnum += 1;
+
+        if empty_flag {
+            ml_delete(2);
+            empty_flag = false;
+        }
+    }
+    nvim_set_State(MODE_NORMAL);
+    nvim_ui_cursor_shape_wrapper();
+
+    if forceit {
+        nvim_excmds_toggle_b_p_ai();
+    }
+
+    // "start" is set to eap->line2+1 unless that position is invalid
+    // "end" is set to lnum when something has been appended, otherwise same as "start"
+    if nvim_cmdmod_has_lockmarks() == 0 {
+        let line2 = nvim_exarg_get_line2(eap);
+        let ml_line_count = nvim_curbuf_get_b_ml_ml_line_count();
+        let mut start_lnum = if line2 < ml_line_count {
+            line2 + 1
+        } else {
+            ml_line_count
+        };
+        if cmdidx != nvim_docmd_cmd_append() {
+            start_lnum -= 1;
+        }
+        let end_lnum = if line2 < lnum { lnum } else { start_lnum };
+        nvim_curbuf_set_op_start(start_lnum, 0);
+        nvim_curbuf_set_op_end(end_lnum, 0);
+    }
+    nvim_curwin_set_cursor_lnum(lnum);
+    nvim_check_cursor_lnum_call();
+    beginline(BL_SOL | BL_FIX);
+
+    nvim_set_need_wait_return(0); // don't use wait_return() now
+    nvim_set_ex_no_reprint(1);
+}
+
+/// Get the current append_indent value.
+/// This is a helper needed because append_indent is a static in C.
+/// We read it via the existing set_append_indent accessor by using a get wrapper.
+///
+/// # Safety
+/// Must be called from Neovim's main thread.
+unsafe fn nvim_get_append_indent_val() -> c_int {
+    // We need a C accessor to read append_indent. Let's use the FFI declaration.
+    extern "C" {
+        fn nvim_excmds_get_append_indent() -> c_int;
+    }
+    nvim_excmds_get_append_indent()
 }
 
 /// `:copy`/`:t` command implementation.

@@ -44,7 +44,7 @@ M.cmds = {
     command = 'append',
     flags = bit.bor(BANG, RANGE, ZEROR, TRLBAR, CMDWIN, LOCK_OK, MODIFY),
     addr_type = 'ADDR_LINES',
-    func = 'ex_append',
+    func = 'rs_ex_append',
   },
   {
     command = 'abbreviate',
@@ -1150,7 +1150,7 @@ M.cmds = {
     command = 'insert',
     flags = bit.bor(BANG, RANGE, TRLBAR, CMDWIN, LOCK_OK, MODIFY),
     addr_type = 'ADDR_LINES',
-    func = 'ex_append',
+    func = 'rs_ex_append',
   },
   {
     command = 'iabbrev',
