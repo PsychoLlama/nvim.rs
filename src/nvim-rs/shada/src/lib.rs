@@ -25,7 +25,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 // =============================================================================
 // ShaDa Entry Type Constants
@@ -558,6 +558,47 @@ extern "C" {
     fn nvim_shada_semsg_not_shada(tempname: *const c_char, fname: *const c_char);
     fn nvim_shada_semsg_write_errors(tempname: *const c_char, fname: *const c_char);
     fn nvim_shada_semsg_remove_reminder(tempname: *const c_char, fname: *const c_char);
+
+    // Phase 3 (plan 11dd3cf4): shada_read migration accessors
+    fn nvim_shada_read_next_item(
+        sd_reader: *mut c_void,
+        entry: *mut ShadaEntry,
+        srni_flags: c_uint,
+        max_kbyte: usize,
+    ) -> c_int;
+    fn nvim_shada_get_srni_flags(
+        flags: c_int,
+        local_marks: c_int,
+        get_old_files: bool,
+        argcount: c_int,
+    ) -> c_uint;
+    fn nvim_shada_fname_bufs_new() -> *mut c_void;
+    fn nvim_shada_fname_bufs_destroy(handle: *mut c_void);
+    fn nvim_shada_cl_bufs_new() -> *mut c_void;
+    fn nvim_shada_cl_bufs_destroy(handle: *mut c_void);
+    fn nvim_shada_oldfiles_set_new() -> *mut c_void;
+    fn nvim_shada_oldfiles_set_destroy(handle: *mut c_void);
+    fn nvim_shada_get_oldfiles_list() -> *mut c_void;
+    fn nvim_shada_tv_list_len(list: *mut c_void) -> c_int;
+    fn nvim_shada_create_oldfiles_list() -> *mut c_void;
+    fn nvim_shada_argcount() -> c_int;
+    fn nvim_shada_apply_entry(
+        force: bool,
+        want_marks: bool,
+        get_old_files: bool,
+        entry: *mut ShadaEntry,
+        fname_bufs: *mut c_void,
+        cl_bufs: *mut c_void,
+        oldfiles_set: *mut c_void,
+        oldfiles_list: *mut c_void,
+    ) -> c_int;
+    fn nvim_shada_for_all_tab_windows_update_changelist(cl_bufs_handle: *mut c_void);
+    fn nvim_shada_clr_history(i: c_int);
+    fn nvim_shada_hist_get_array(
+        i: c_int,
+        out_hisidx: *mut *mut c_int,
+        out_hisnum: *mut *mut c_int,
+    ) -> *mut c_void;
 }
 
 // =============================================================================
@@ -2938,6 +2979,114 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
     nvim_xfree(sd_reader_mem);
 
     OK
+}
+
+/// Read ShaDa data and merge it into Neovim's in-memory state.
+///
+/// This is the Rust replacement for the C `shada_read` function.
+///
+/// # Safety
+///
+/// `sd_reader` must be a valid `FileDescriptor *` or null.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_shada_read(sd_reader: *mut c_void, flags: c_int) {
+    let force = (flags & SHADA_FORCEIT) != 0;
+    let want_marks = (flags & SHADA_WANT_MARKS) != 0;
+    let get_old_files = (flags & (SHADA_GET_OLDFILES | SHADA_FORCEIT)) != 0 && {
+        let oldfiles_list = nvim_shada_get_oldfiles_list();
+        force || oldfiles_list.is_null() || nvim_shada_tv_list_len(oldfiles_list) == 0
+    };
+    let local_marks_param = nvim_get_shada_parameter(c_int::from(b'\''));
+    let argcount = nvim_shada_argcount();
+    let srni_flags = nvim_shada_get_srni_flags(flags, local_marks_param, get_old_files, argcount);
+    if srni_flags == 0 {
+        return;
+    }
+
+    let need_history = (srni_flags & SD_READ_HISTORY) != 0;
+    let mut hms: [HistoryMergerState; HIST_COUNT] =
+        std::array::from_fn(|_| HistoryMergerState::default());
+    if need_history {
+        let p_hi = nvim_get_p_hi();
+        for (i, hms_slot) in hms.iter_mut().enumerate() {
+            rs_hms_init(hms_slot, i as u8, p_hi as usize, true, true);
+        }
+    }
+
+    let fname_bufs = nvim_shada_fname_bufs_new();
+    let cl_bufs = nvim_shada_cl_bufs_new();
+    let oldfiles_set = nvim_shada_oldfiles_set_new();
+    // Ensure VV_OLDFILES list exists when we need to gather old files.
+    let oldfiles_list = nvim_shada_get_oldfiles_list();
+    if get_old_files && (oldfiles_list.is_null() || force) {
+        nvim_shada_create_oldfiles_list();
+    }
+
+    let mut cur_entry = ShadaEntry::default();
+    'read_loop: loop {
+        let srni_ret = nvim_shada_read_next_item(sd_reader, &raw mut cur_entry, srni_flags, 0);
+        match srni_ret {
+            r if r == SD_READ_STATUS_FINISHED => break 'read_loop,
+            r if r == SD_READ_STATUS_SUCCESS => {}
+            r if r == SD_READ_STATUS_NOT_SHADA || r == SD_READ_STATUS_READ_ERROR => {
+                break 'read_loop;
+            }
+            _ => {
+                // kSDReadStatusMalformed or unknown: skip entry
+                cur_entry = ShadaEntry::default();
+                continue 'read_loop;
+            }
+        }
+
+        if cur_entry.entry_type == ShadaEntryType::HistoryEntry && need_history {
+            let hist_ptr: *const HistoryItemData =
+                std::ptr::addr_of!(cur_entry.data.history_item).cast();
+            let histtype = (*hist_ptr).histtype as usize;
+            if histtype < HIST_COUNT {
+                rs_hms_insert(&raw mut hms[histtype], cur_entry, true);
+            } else {
+                rs_shada_free_entry_contents(&raw mut cur_entry);
+            }
+            cur_entry = ShadaEntry::default();
+            continue 'read_loop;
+        }
+
+        // Dispatch all other entry types through the C composite handler.
+        nvim_shada_apply_entry(
+            force,
+            want_marks,
+            get_old_files,
+            &raw mut cur_entry,
+            fname_bufs,
+            cl_bufs,
+            oldfiles_set,
+            nvim_shada_get_oldfiles_list(),
+        );
+        cur_entry = ShadaEntry::default();
+    }
+
+    if need_history {
+        for (i, hms_slot) in hms.iter_mut().enumerate() {
+            let i_int = i as c_int;
+            rs_hms_insert_whole_neovim_history(hms_slot);
+            nvim_shada_clr_history(i_int);
+            let mut new_hisidx: *mut c_int = std::ptr::null_mut();
+            let mut new_hisnum: *mut c_int = std::ptr::null_mut();
+            let hist = nvim_shada_hist_get_array(i_int, &raw mut new_hisidx, &raw mut new_hisnum);
+            if !hist.is_null() {
+                rs_hms_to_he_array(hms_slot, hist, new_hisidx, new_hisnum);
+            }
+            rs_hms_dealloc(hms_slot);
+        }
+    }
+
+    nvim_shada_for_all_tab_windows_update_changelist(cl_bufs);
+    nvim_shada_fname_bufs_destroy(fname_bufs);
+    nvim_shada_cl_bufs_destroy(cl_bufs);
+    nvim_shada_oldfiles_set_destroy(oldfiles_set);
 }
 
 /// Check if a file path looks like a ShaDa file.

@@ -85,6 +85,7 @@ extern void rs_close_file(void *cookie);
 extern const char *rs_shada_get_default_file(void);
 extern void rs_shada_free_entry_contents(ShadaEntry *entry);
 extern int rs_shada_write_file(const char *file, bool nomerge);
+extern void rs_shada_read(void *sd_reader, int flags);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
 extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
@@ -543,366 +544,6 @@ static buf_T *find_buffer(PMap(cstr_t) *const fname_bufs, const char *const fnam
   *ref = NULL;
   return NULL;
 }
-
-/// Read data from ShaDa file
-///
-/// @param[in]  sd_reader  Structure containing file reader definition.
-/// @param[in]  flags      What to read, see ShaDaReadFileFlags enum.
-static void shada_read(FileDescriptor *const sd_reader, const int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  list_T *oldfiles_list = get_vim_var_list(VV_OLDFILES);
-  const bool force = flags & kShaDaForceit;
-  const bool get_old_files = (flags & (kShaDaGetOldfiles | kShaDaForceit)
-                              && (force || tv_list_len(oldfiles_list) == 0));
-  const bool want_marks = flags & kShaDaWantMarks;
-  const unsigned srni_flags =
-    (unsigned)(
-               (flags & kShaDaWantInfo
-                ? (kSDReadUndisableableData
-                   | kSDReadRegisters
-                   | kSDReadGlobalMarks
-                   | (p_hi ? kSDReadHistory : 0)
-                   | (find_shada_parameter('!') != NULL
-                      ? kSDReadVariables
-                      : 0)
-                   | (find_shada_parameter('%') != NULL
-                      && ARGCOUNT == 0
-                      ? kSDReadBufferList
-                      : 0))
-                : 0)
-               | (want_marks && get_shada_parameter('\'') > 0
-                  ? kSDReadLocalMarks | kSDReadChanges
-                  : 0)
-               | (get_old_files
-                  ? kSDReadLocalMarks
-                  : 0));
-  if (srni_flags == 0) {
-    // Nothing to do.
-    return;
-  }
-  HistoryMergerState hms[HIST_COUNT];
-  if (srni_flags & kSDReadHistory) {
-    for (int i = 0; i < HIST_COUNT; i++) {
-      rs_hms_init(&hms[i], (uint8_t)i, (size_t)p_hi, 1, 1);
-    }
-  }
-  ShadaEntry cur_entry;
-  Set(ptr_t) cl_bufs = SET_INIT;
-  PMap(cstr_t) fname_bufs = MAP_INIT;
-  Set(cstr_t) oldfiles_set = SET_INIT;
-  if (get_old_files && (oldfiles_list == NULL || force)) {
-    oldfiles_list = tv_list_alloc(kListLenUnknown);
-    set_vim_var_list(VV_OLDFILES, oldfiles_list);
-  }
-  ShaDaReadResult srni_ret;
-  while ((srni_ret = shada_read_next_item(sd_reader, &cur_entry, srni_flags, 0))
-         != kSDReadStatusFinished) {
-    switch (srni_ret) {
-    case kSDReadStatusSuccess:
-      break;
-    case kSDReadStatusFinished:
-      // Should be handled by the while condition.
-      abort();
-    case kSDReadStatusNotShaDa:
-    case kSDReadStatusReadError:
-      goto shada_read_main_cycle_end;
-    case kSDReadStatusMalformed:
-      continue;
-    }
-    switch (cur_entry.type) {
-    case kSDItemMissing:
-      abort();
-    case kSDItemUnknown:
-      break;
-    case kSDItemHeader:
-      shada_free_shada_entry(&cur_entry);
-      break;
-    case kSDItemSearchPattern:
-      if (!force) {
-        SearchPattern pat;
-        if (cur_entry.data.search_pattern.is_substitute_pattern) {
-          get_substitute_pattern(&pat);
-        } else {
-          get_search_pattern(&pat);
-        }
-        if (pat.pat != NULL && pat.timestamp >= cur_entry.timestamp) {
-          shada_free_shada_entry(&cur_entry);
-          break;
-        }
-      }
-
-      SearchPattern spat = (SearchPattern) {
-        .magic = cur_entry.data.search_pattern.magic,
-        .no_scs = !cur_entry.data.search_pattern.smartcase,
-        .off = {
-          .dir = cur_entry.data.search_pattern.search_backward ? '?' : '/',
-          .line = cur_entry.data.search_pattern.has_line_offset,
-          .end = cur_entry.data.search_pattern.place_cursor_at_end,
-          .off = cur_entry.data.search_pattern.offset,
-        },
-        .pat = cur_entry.data.search_pattern.pat.data,
-        .patlen = cur_entry.data.search_pattern.pat.size,
-        .additional_data = cur_entry.additional_data,
-        .timestamp = cur_entry.timestamp,
-      };
-
-      if (cur_entry.data.search_pattern.is_substitute_pattern) {
-        set_substitute_pattern(spat);
-      } else {
-        set_search_pattern(spat);
-      }
-
-      if (cur_entry.data.search_pattern.is_last_used) {
-        set_last_used_pattern(cur_entry.data.search_pattern.is_substitute_pattern);
-        set_no_hlsearch(!cur_entry.data.search_pattern.highlighted);
-      }
-      // Do not free shada entry: its allocated memory was saved above.
-      break;
-    case kSDItemSubString:
-      if (!force) {
-        SubReplacementString sub;
-        sub_get_replacement(&sub);
-        if (sub.sub != NULL && sub.timestamp >= cur_entry.timestamp) {
-          shada_free_shada_entry(&cur_entry);
-          break;
-        }
-      }
-      sub_set_replacement((SubReplacementString) {
-        .sub = cur_entry.data.sub_string.sub,
-        .timestamp = cur_entry.timestamp,
-        .additional_data = cur_entry.additional_data,
-      });
-      // Without using regtilde and without / &cpo flag previous substitute
-      // string is close to useless: you can only use it with :& or :~ and
-      // that’s all because s//~ is not available until the first call to
-      // regtilde. Vim was not calling this for some reason.
-      regtilde(cur_entry.data.sub_string.sub, rs_magic_isset(), false);
-      // Do not free shada entry: its allocated memory was saved above.
-      break;
-    case kSDItemHistoryEntry:
-      if (cur_entry.data.history_item.histtype >= HIST_COUNT) {
-        shada_free_shada_entry(&cur_entry);
-        break;
-      }
-      rs_hms_insert(hms + cur_entry.data.history_item.histtype, cur_entry, 1);
-      // Do not free shada entry: its allocated memory was saved above.
-      break;
-    case kSDItemRegister:
-      if (cur_entry.data.reg.type != kMTCharWise
-          && cur_entry.data.reg.type != kMTLineWise
-          && cur_entry.data.reg.type != kMTBlockWise) {
-        shada_free_shada_entry(&cur_entry);
-        break;
-      }
-      if (!force) {
-        const yankreg_T *const reg = op_reg_get(cur_entry.data.reg.name);
-        if (reg == NULL || reg->timestamp >= cur_entry.timestamp) {
-          shada_free_shada_entry(&cur_entry);
-          break;
-        }
-      }
-      if (!op_reg_set(cur_entry.data.reg.name, (yankreg_T) {
-        .y_array = cur_entry.data.reg.contents,
-        .y_size = cur_entry.data.reg.contents_size,
-        .y_type = cur_entry.data.reg.type,
-        .y_width = (colnr_T)cur_entry.data.reg.width,
-        .timestamp = cur_entry.timestamp,
-        .additional_data = cur_entry.additional_data,
-      }, cur_entry.data.reg.is_unnamed)) {
-        shada_free_shada_entry(&cur_entry);
-      }
-      // Do not free shada entry: its allocated memory was saved above.
-      break;
-    case kSDItemVariable:
-      var_set_global(cur_entry.data.global_var.name,
-                     cur_entry.data.global_var.value);
-      cur_entry.data.global_var.value.v_type = VAR_UNKNOWN;
-      shada_free_shada_entry(&cur_entry);
-      break;
-    case kSDItemJump:
-    case kSDItemGlobalMark: {
-      buf_T *buf = find_buffer(&fname_bufs, cur_entry.data.filemark.fname);
-      if (buf != NULL) {
-        XFREE_CLEAR(cur_entry.data.filemark.fname);
-      }
-      xfmark_T fm = (xfmark_T) {
-        .fname = buf == NULL ? cur_entry.data.filemark.fname : NULL,
-        .fmark = {
-          .mark = cur_entry.data.filemark.mark,
-          .fnum = (buf == NULL ? 0 : buf->b_fnum),
-          .timestamp = cur_entry.timestamp,
-          .view = INIT_FMARKV,
-          .additional_data = cur_entry.additional_data,
-        },
-      };
-      if (cur_entry.type == kSDItemGlobalMark) {
-        if (!mark_set_global(cur_entry.data.filemark.name, fm, !force)) {
-          shada_free_shada_entry(&cur_entry);
-          break;
-        }
-      } else {
-        int i;
-        for (i = curwin->w_jumplistlen; i > 0; i--) {
-          const xfmark_T jl_entry = curwin->w_jumplist[i - 1];
-          if (jl_entry.fmark.timestamp <= cur_entry.timestamp) {
-            if (rs_marks_equal(jl_entry.fmark.mark, cur_entry.data.filemark.mark) != 0
-                && (buf == NULL
-                    ? (jl_entry.fname != NULL && strcmp(fm.fname, jl_entry.fname) == 0)
-                    : fm.fmark.fnum == jl_entry.fmark.fnum)) {
-              i = -1;
-            }
-            break;
-          }
-        }
-        if (i > 0 && curwin->w_jumplistlen == JUMPLISTSIZE) {
-          free_xfmark(curwin->w_jumplist[0]);
-        }
-        i = rs_marklist_insert(curwin->w_jumplist, sizeof(*curwin->w_jumplist),
-                              curwin->w_jumplistlen, i);
-
-        if (i != -1) {
-          curwin->w_jumplist[i] = fm;
-          if (curwin->w_jumplistlen < JUMPLISTSIZE) {
-            curwin->w_jumplistlen++;
-          }
-          if (curwin->w_jumplistidx >= i && curwin->w_jumplistidx + 1 <= curwin->w_jumplistlen) {
-            curwin->w_jumplistidx++;
-          }
-        } else {
-          shada_free_shada_entry(&cur_entry);
-        }
-      }
-
-      // Do not free shada entry: its allocated memory was saved above.
-      break;
-    }
-    case kSDItemBufferList:
-      for (size_t i = 0; i < cur_entry.data.buffer_list.size; i++) {
-        char *const sfname =
-          path_try_shorten_fname(cur_entry.data.buffer_list.buffers[i].fname);
-        buf_T *const buf =
-          buflist_new(cur_entry.data.buffer_list.buffers[i].fname, sfname, 0, BLN_LISTED);
-        if (buf != NULL) {
-          fmarkv_T view = INIT_FMARKV;
-          RESET_FMARK(&buf->b_last_cursor,
-                      cur_entry.data.buffer_list.buffers[i].pos, 0, view);
-          buflist_setfpos(buf, curwin, buf->b_last_cursor.mark.lnum,
-                          buf->b_last_cursor.mark.col, false);
-
-          xfree(buf->additional_data);
-          buf->additional_data = cur_entry.data.buffer_list.buffers[i].additional_data;
-          cur_entry.data.buffer_list.buffers[i].additional_data = NULL;
-        }
-      }
-      shada_free_shada_entry(&cur_entry);
-      break;
-    case kSDItemChange:
-    case kSDItemLocalMark: {
-      if (get_old_files && !set_has(cstr_t, &oldfiles_set, cur_entry.data.filemark.fname)) {
-        char *fname = cur_entry.data.filemark.fname;
-        if (want_marks) {
-          // Do not bother with allocating memory for the string if already
-          // allocated string from cur_entry can be used. It cannot be used if
-          // want_marks is set because this way it may be used for a mark.
-          fname = xstrdup(fname);
-        }
-        set_put(cstr_t, &oldfiles_set, fname);
-        tv_list_append_allocated_string(oldfiles_list, fname);
-        if (!want_marks) {
-          // Avoid free because this string was already used.
-          cur_entry.data.filemark.fname = NULL;
-        }
-      }
-      if (!want_marks) {
-        shada_free_shada_entry(&cur_entry);
-        break;
-      }
-      buf_T *buf = find_buffer(&fname_bufs, cur_entry.data.filemark.fname);
-      if (buf == NULL) {
-        shada_free_shada_entry(&cur_entry);
-        break;
-      }
-      const fmark_T fm = (fmark_T) {
-        .mark = cur_entry.data.filemark.mark,
-        .fnum = 0,
-        .timestamp = cur_entry.timestamp,
-        .view = INIT_FMARKV,
-        .additional_data = cur_entry.additional_data,
-      };
-      if (cur_entry.type == kSDItemLocalMark) {
-        if (!mark_set_local(cur_entry.data.filemark.name, buf, fm, !force)) {
-          shada_free_shada_entry(&cur_entry);
-          break;
-        }
-      } else {
-        set_put(ptr_t, &cl_bufs, buf);
-        int i;
-        for (i = buf->b_changelistlen; i > 0; i--) {
-          const fmark_T jl_entry = buf->b_changelist[i - 1];
-          if (jl_entry.timestamp <= cur_entry.timestamp) {
-            if (rs_marks_equal(jl_entry.mark, cur_entry.data.filemark.mark) != 0) {
-              i = -1;
-            }
-            break;
-          }
-        }
-        if (i > 0 && buf->b_changelistlen == JUMPLISTSIZE) {
-          free_fmark(buf->b_changelist[0]);
-        }
-        i = rs_marklist_insert(buf->b_changelist, sizeof(*buf->b_changelist), buf->b_changelistlen, i);
-        if (i != -1) {
-          buf->b_changelist[i] = fm;
-          if (buf->b_changelistlen < JUMPLISTSIZE) {
-            buf->b_changelistlen++;
-          }
-        } else {
-          xfree(fm.additional_data);
-        }
-      }
-      // only free fname part of shada entry, as additional_data was saved or freed above.
-      xfree(cur_entry.data.filemark.fname);
-      break;
-    }
-    }
-  }
-shada_read_main_cycle_end:
-  // Warning: rs_shada_hist_iter returns ShadaEntry elements which use strings from
-  //          original history list. This means that once such entry is removed
-  //          from the history Neovim array will no longer be valid. To reduce
-  //          amount of memory allocations ShaDa file reader allocates enough
-  //          memory for the history string itself and separator character which
-  //          may be assigned right away.
-  if (srni_flags & kSDReadHistory) {
-    for (int i = 0; i < HIST_COUNT; i++) {
-      rs_hms_insert_whole_neovim_history(&hms[i]);
-      clr_history(i);
-      int *new_hisidx;
-      int *new_hisnum;
-      histentry_T *hist = hist_get_array((uint8_t)i, &new_hisidx, &new_hisnum);
-      if (hist != NULL) {
-        rs_hms_to_he_array(&hms[i], hist, new_hisidx, new_hisnum);
-      }
-      rs_hms_dealloc(&hms[i]);
-    }
-  }
-  if (cl_bufs.h.n_occupied) {
-    FOR_ALL_TAB_WINDOWS(tp, wp) {
-      (void)tp;
-      if (set_has(ptr_t, &cl_bufs, wp->w_buffer)) {
-        wp->w_changelistidx = wp->w_buffer->b_changelistlen;
-      }
-    }
-  }
-  set_destroy(ptr_t, &cl_bufs);
-  const char *key;
-  map_foreach_key(&fname_bufs, key, {
-    xfree((char *)key);
-  })
-  map_destroy(cstr_t, &fname_bufs);
-  set_destroy(cstr_t, &oldfiles_set);
-}
-
 
 #define KEY_NAME_(s) #s
 #define PACK_KEY(s) mpack_str(STATIC_CSTR_AS_STRING(KEY_NAME_(s)), &sbuf);
@@ -2672,7 +2313,7 @@ void nvim_shada_read_string(String string, const int flags)
   }
   FileDescriptor sd_reader;
   file_open_buffer(&sd_reader, string.data, string.size);
-  shada_read(&sd_reader, flags);
+  rs_shada_read(&sd_reader, flags);
   rs_close_file(&sd_reader);
 }
 
@@ -3033,9 +2674,10 @@ void nvim_shada_free_variable(ShadaEntry *entry)
 int nvim_shada_file_open(void *fd, const char *fname) { return file_open((FileDescriptor *)fd, fname, kFileReadOnly, 0); }
 
 /// Read shada data from an open file descriptor.
+/// Delegates to Rust rs_shada_read implementation.
 void nvim_shada_read(void *fd, int flags)
 {
-  shada_read((FileDescriptor *)fd, flags);
+  rs_shada_read(fd, flags);
 }
 
 /// Get the os_strerror() message for an error code.
@@ -3303,4 +2945,423 @@ void nvim_shada_semsg_remove_reminder(const char *tempname, const char *fname)
 {
   semsg(_(RNERR "Do not forget to remove %s or rename it manually to %s."),
         tempname, fname);
+}
+
+// =============================================================================
+// Phase 3 (plan 11dd3cf4): shada_read migration accessors
+// =============================================================================
+
+/// Wrapper for shada_read_next_item().
+/// Returns the ShaDaReadResult as int.
+int nvim_shada_read_next_item(void *sd_reader, ShadaEntry *entry,
+                              unsigned srni_flags, size_t max_kbyte)
+{
+  return (int)shada_read_next_item((FileDescriptor *)sd_reader, entry,
+                                   srni_flags, max_kbyte);
+}
+
+/// Compute srni_flags from ShaDa read flags (same logic as C shada_read).
+/// @param flags         ShaDaReadFileFlags
+/// @param local_marks   get_shada_parameter('\'') value
+/// @param get_old_files whether oldfiles should be gathered
+/// @param argcount      ARGCOUNT value
+unsigned nvim_shada_get_srni_flags(int flags, int local_marks,
+                                   bool get_old_files, int argcount)
+{
+  const bool force = (bool)(flags & kShaDaForceit);
+  const bool want_marks = (bool)(flags & kShaDaWantMarks);
+  unsigned srni_flags = (unsigned)(
+    (flags & kShaDaWantInfo
+     ? (kSDReadUndisableableData
+        | kSDReadRegisters
+        | kSDReadGlobalMarks
+        | (p_hi ? kSDReadHistory : 0)
+        | (find_shada_parameter('!') != NULL ? kSDReadVariables : 0)
+        | (find_shada_parameter('%') != NULL && argcount == 0
+           ? kSDReadBufferList
+           : 0))
+     : 0)
+    | (want_marks && local_marks > 0
+       ? kSDReadLocalMarks | kSDReadChanges
+       : 0)
+    | (get_old_files
+       ? kSDReadLocalMarks
+       : 0));
+  (void)force;
+  return srni_flags;
+}
+
+/// Allocate and initialize a PMap(cstr_t) for fname_bufs caching.
+void *nvim_shada_fname_bufs_new(void)
+{
+  PMap(cstr_t) *m = xcalloc(1, sizeof(PMap(cstr_t)));
+  *m = (PMap(cstr_t))MAP_INIT;
+  return m;
+}
+
+/// Destroy a PMap(cstr_t) and free all keys and the struct.
+void nvim_shada_fname_bufs_destroy(void *handle)
+{
+  PMap(cstr_t) *m = (PMap(cstr_t) *)handle;
+  const char *key;
+  map_foreach_key(m, key, { xfree((char *)key); })
+  map_destroy(cstr_t, m);
+  xfree(m);
+}
+
+/// Allocate and initialize a Set(ptr_t) for cl_bufs.
+void *nvim_shada_cl_bufs_new(void)
+{
+  Set(ptr_t) *s = xcalloc(1, sizeof(Set(ptr_t)));
+  *s = (Set(ptr_t))SET_INIT;
+  return s;
+}
+
+/// Destroy a Set(ptr_t) and free the struct.
+void nvim_shada_cl_bufs_destroy(void *handle)
+{
+  Set(ptr_t) *s = (Set(ptr_t) *)handle;
+  set_destroy(ptr_t, s);
+  xfree(s);
+}
+
+/// Allocate and initialize a Set(cstr_t) for oldfiles dedup.
+void *nvim_shada_oldfiles_set_new(void)
+{
+  Set(cstr_t) *s = xcalloc(1, sizeof(Set(cstr_t)));
+  *s = (Set(cstr_t))SET_INIT;
+  return s;
+}
+
+/// Destroy a Set(cstr_t) and free the struct.
+void nvim_shada_oldfiles_set_destroy(void *handle)
+{
+  Set(cstr_t) *s = (Set(cstr_t) *)handle;
+  set_destroy(cstr_t, s);
+  xfree(s);
+}
+
+/// Get VV_OLDFILES list (returns NULL if not set).
+void *nvim_shada_get_oldfiles_list(void)
+{
+  return get_vim_var_list(VV_OLDFILES);
+}
+
+/// Get the length of a list_T.
+int nvim_shada_tv_list_len(void *list)
+{
+  return (int)tv_list_len((list_T *)list);
+}
+
+/// Allocate a new list and set it as VV_OLDFILES. Returns the new list.
+void *nvim_shada_create_oldfiles_list(void)
+{
+  list_T *list = tv_list_alloc(kListLenUnknown);
+  set_vim_var_list(VV_OLDFILES, list);
+  return list;
+}
+
+/// Return ARGCOUNT.
+int nvim_shada_argcount(void)
+{
+  return ARGCOUNT;
+}
+
+/// Main entry dispatcher for shada_read. Handles all entry types except
+/// HistoryEntry (which is handled in Rust via rs_hms_insert).
+///
+/// @param force           Whether force-read flag is set.
+/// @param want_marks      Whether marks should be read.
+/// @param get_old_files   Whether oldfiles should be gathered.
+/// @param entry           Pointer to the current ShadaEntry.
+/// @param fname_bufs      Opaque handle to PMap(cstr_t) for buffer caching.
+/// @param cl_bufs         Opaque handle to Set(ptr_t) for changelist bufs.
+/// @param oldfiles_set    Opaque handle to Set(cstr_t) for oldfiles dedup.
+/// @param oldfiles_list   Opaque handle to list_T for v:oldfiles.
+///
+/// @return  0: entry was handled and may have been freed (normal).
+///         -1: abort the read loop (fatal error / not-shada).
+int nvim_shada_apply_entry(bool force, bool want_marks, bool get_old_files,
+                           ShadaEntry *entry, void *fname_bufs_handle,
+                           void *cl_bufs_handle, void *oldfiles_set_handle,
+                           void *oldfiles_list)
+{
+  PMap(cstr_t) *fname_bufs = (PMap(cstr_t) *)fname_bufs_handle;
+  Set(ptr_t) *cl_bufs = (Set(ptr_t) *)cl_bufs_handle;
+  Set(cstr_t) *oldfiles_set = (Set(cstr_t) *)oldfiles_set_handle;
+  list_T *old_list = (list_T *)oldfiles_list;
+  ShadaEntry cur_entry = *entry;
+
+  switch (cur_entry.type) {
+  case kSDItemMissing:
+    abort();
+  case kSDItemUnknown:
+    break;
+  case kSDItemHeader:
+    rs_shada_free_entry_contents(entry);
+    break;
+  case kSDItemHistoryEntry:
+    // Handled by Rust via rs_hms_insert — should not reach here.
+    break;
+  case kSDItemSearchPattern:
+    if (!force) {
+      SearchPattern pat;
+      if (cur_entry.data.search_pattern.is_substitute_pattern) {
+        get_substitute_pattern(&pat);
+      } else {
+        get_search_pattern(&pat);
+      }
+      if (pat.pat != NULL && pat.timestamp >= cur_entry.timestamp) {
+        rs_shada_free_entry_contents(entry);
+        break;
+      }
+    }
+    {
+      SearchPattern spat = (SearchPattern) {
+        .magic = cur_entry.data.search_pattern.magic,
+        .no_scs = !cur_entry.data.search_pattern.smartcase,
+        .off = {
+          .dir = cur_entry.data.search_pattern.search_backward ? '?' : '/',
+          .line = cur_entry.data.search_pattern.has_line_offset,
+          .end = cur_entry.data.search_pattern.place_cursor_at_end,
+          .off = cur_entry.data.search_pattern.offset,
+        },
+        .pat = cur_entry.data.search_pattern.pat.data,
+        .patlen = cur_entry.data.search_pattern.pat.size,
+        .additional_data = cur_entry.additional_data,
+        .timestamp = cur_entry.timestamp,
+      };
+      if (cur_entry.data.search_pattern.is_substitute_pattern) {
+        set_substitute_pattern(spat);
+      } else {
+        set_search_pattern(spat);
+      }
+      if (cur_entry.data.search_pattern.is_last_used) {
+        set_last_used_pattern(cur_entry.data.search_pattern.is_substitute_pattern);
+        set_no_hlsearch(!cur_entry.data.search_pattern.highlighted);
+      }
+    }
+    // Do not free: allocated memory was saved above.
+    break;
+  case kSDItemSubString:
+    if (!force) {
+      SubReplacementString sub;
+      sub_get_replacement(&sub);
+      if (sub.sub != NULL && sub.timestamp >= cur_entry.timestamp) {
+        rs_shada_free_entry_contents(entry);
+        break;
+      }
+    }
+    sub_set_replacement((SubReplacementString) {
+      .sub = cur_entry.data.sub_string.sub,
+      .timestamp = cur_entry.timestamp,
+      .additional_data = cur_entry.additional_data,
+    });
+    regtilde(cur_entry.data.sub_string.sub, rs_magic_isset(), false);
+    // Do not free: allocated memory was saved above.
+    break;
+  case kSDItemRegister:
+    if (cur_entry.data.reg.type != kMTCharWise
+        && cur_entry.data.reg.type != kMTLineWise
+        && cur_entry.data.reg.type != kMTBlockWise) {
+      rs_shada_free_entry_contents(entry);
+      break;
+    }
+    if (!force) {
+      const yankreg_T *const reg = op_reg_get(cur_entry.data.reg.name);
+      if (reg == NULL || reg->timestamp >= cur_entry.timestamp) {
+        rs_shada_free_entry_contents(entry);
+        break;
+      }
+    }
+    if (!op_reg_set(cur_entry.data.reg.name, (yankreg_T) {
+      .y_array = cur_entry.data.reg.contents,
+      .y_size = cur_entry.data.reg.contents_size,
+      .y_type = cur_entry.data.reg.type,
+      .y_width = (colnr_T)cur_entry.data.reg.width,
+      .timestamp = cur_entry.timestamp,
+      .additional_data = cur_entry.additional_data,
+    }, cur_entry.data.reg.is_unnamed)) {
+      rs_shada_free_entry_contents(entry);
+    }
+    break;
+  case kSDItemVariable:
+    var_set_global(cur_entry.data.global_var.name, cur_entry.data.global_var.value);
+    cur_entry.data.global_var.value.v_type = VAR_UNKNOWN;
+    entry->data.global_var.value.v_type = VAR_UNKNOWN;
+    rs_shada_free_entry_contents(entry);
+    break;
+  case kSDItemJump:
+  case kSDItemGlobalMark: {
+    buf_T *buf = find_buffer(fname_bufs, cur_entry.data.filemark.fname);
+    if (buf != NULL) {
+      XFREE_CLEAR(entry->data.filemark.fname);
+      cur_entry.data.filemark.fname = NULL;
+    }
+    xfmark_T fm = (xfmark_T) {
+      .fname = buf == NULL ? cur_entry.data.filemark.fname : NULL,
+      .fmark = {
+        .mark = cur_entry.data.filemark.mark,
+        .fnum = (buf == NULL ? 0 : buf->b_fnum),
+        .timestamp = cur_entry.timestamp,
+        .view = INIT_FMARKV,
+        .additional_data = cur_entry.additional_data,
+      },
+    };
+    if (cur_entry.type == kSDItemGlobalMark) {
+      if (!mark_set_global(cur_entry.data.filemark.name, fm, !force)) {
+        rs_shada_free_entry_contents(entry);
+        break;
+      }
+    } else {
+      int i;
+      for (i = curwin->w_jumplistlen; i > 0; i--) {
+        const xfmark_T jl_entry = curwin->w_jumplist[i - 1];
+        if (jl_entry.fmark.timestamp <= cur_entry.timestamp) {
+          if (rs_marks_equal(jl_entry.fmark.mark, cur_entry.data.filemark.mark) != 0
+              && (buf == NULL
+                  ? (jl_entry.fname != NULL && strcmp(fm.fname, jl_entry.fname) == 0)
+                  : fm.fmark.fnum == jl_entry.fmark.fnum)) {
+            i = -1;
+          }
+          break;
+        }
+      }
+      if (i > 0 && curwin->w_jumplistlen == JUMPLISTSIZE) {
+        free_xfmark(curwin->w_jumplist[0]);
+      }
+      i = rs_marklist_insert(curwin->w_jumplist, sizeof(*curwin->w_jumplist),
+                             curwin->w_jumplistlen, i);
+      if (i != -1) {
+        curwin->w_jumplist[i] = fm;
+        if (curwin->w_jumplistlen < JUMPLISTSIZE) {
+          curwin->w_jumplistlen++;
+        }
+        if (curwin->w_jumplistidx >= i
+            && curwin->w_jumplistidx + 1 <= curwin->w_jumplistlen) {
+          curwin->w_jumplistidx++;
+        }
+      } else {
+        rs_shada_free_entry_contents(entry);
+      }
+    }
+    break;
+  }
+  case kSDItemBufferList:
+    for (size_t i = 0; i < cur_entry.data.buffer_list.size; i++) {
+      char *const sfname =
+        path_try_shorten_fname(cur_entry.data.buffer_list.buffers[i].fname);
+      buf_T *const buf =
+        buflist_new(cur_entry.data.buffer_list.buffers[i].fname, sfname, 0, BLN_LISTED);
+      if (buf != NULL) {
+        fmarkv_T view = INIT_FMARKV;
+        RESET_FMARK(&buf->b_last_cursor,
+                    cur_entry.data.buffer_list.buffers[i].pos, 0, view);
+        buflist_setfpos(buf, curwin, buf->b_last_cursor.mark.lnum,
+                        buf->b_last_cursor.mark.col, false);
+        xfree(buf->additional_data);
+        buf->additional_data = cur_entry.data.buffer_list.buffers[i].additional_data;
+        cur_entry.data.buffer_list.buffers[i].additional_data = NULL;
+        entry->data.buffer_list.buffers[i].additional_data = NULL;
+      }
+    }
+    rs_shada_free_entry_contents(entry);
+    break;
+  case kSDItemChange:
+  case kSDItemLocalMark: {
+    if (get_old_files
+        && !set_has(cstr_t, oldfiles_set, cur_entry.data.filemark.fname)) {
+      char *fname = cur_entry.data.filemark.fname;
+      if (want_marks) {
+        fname = xstrdup(fname);
+      }
+      set_put(cstr_t, oldfiles_set, fname);
+      tv_list_append_allocated_string(old_list, fname);
+      if (!want_marks) {
+        entry->data.filemark.fname = NULL;
+        cur_entry.data.filemark.fname = NULL;
+      }
+    }
+    if (!want_marks) {
+      rs_shada_free_entry_contents(entry);
+      break;
+    }
+    buf_T *buf = find_buffer(fname_bufs, cur_entry.data.filemark.fname);
+    if (buf == NULL) {
+      rs_shada_free_entry_contents(entry);
+      break;
+    }
+    const fmark_T fm = (fmark_T) {
+      .mark = cur_entry.data.filemark.mark,
+      .fnum = 0,
+      .timestamp = cur_entry.timestamp,
+      .view = INIT_FMARKV,
+      .additional_data = cur_entry.additional_data,
+    };
+    if (cur_entry.type == kSDItemLocalMark) {
+      if (!mark_set_local(cur_entry.data.filemark.name, buf, fm, !force)) {
+        rs_shada_free_entry_contents(entry);
+        break;
+      }
+    } else {
+      set_put(ptr_t, cl_bufs, buf);
+      int i;
+      for (i = buf->b_changelistlen; i > 0; i--) {
+        const fmark_T jl_entry = buf->b_changelist[i - 1];
+        if (jl_entry.timestamp <= cur_entry.timestamp) {
+          if (rs_marks_equal(jl_entry.mark, cur_entry.data.filemark.mark) != 0) {
+            i = -1;
+          }
+          break;
+        }
+      }
+      if (i > 0 && buf->b_changelistlen == JUMPLISTSIZE) {
+        free_fmark(buf->b_changelist[0]);
+      }
+      i = rs_marklist_insert(buf->b_changelist, sizeof(*buf->b_changelist),
+                             buf->b_changelistlen, i);
+      if (i != -1) {
+        buf->b_changelist[i] = fm;
+        if (buf->b_changelistlen < JUMPLISTSIZE) {
+          buf->b_changelistlen++;
+        }
+      } else {
+        xfree(fm.additional_data);
+      }
+    }
+    xfree(entry->data.filemark.fname);
+    break;
+  }
+  }
+  return 0;
+}
+
+/// Update w_changelistidx for all windows that have buffers in cl_bufs.
+/// Called after shada_read completes.
+void nvim_shada_for_all_tab_windows_update_changelist(void *cl_bufs_handle)
+{
+  Set(ptr_t) *cl_bufs = (Set(ptr_t) *)cl_bufs_handle;
+  if (!cl_bufs->h.n_occupied) {
+    return;
+  }
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    (void)tp;
+    if (set_has(ptr_t, cl_bufs, wp->w_buffer)) {
+      wp->w_changelistidx = wp->w_buffer->b_changelistlen;
+    }
+  }
+}
+
+/// Clear a history type. Wrapper for clr_history().
+void nvim_shada_clr_history(int i)
+{
+  clr_history(i);
+}
+
+/// Get the histentry_T array for history type i.
+/// Sets *out_hisidx and *out_hisnum to pointers within the array.
+/// Returns NULL if not available.
+void *nvim_shada_hist_get_array(int i, int **out_hisidx, int **out_hisnum)
+{
+  return hist_get_array((uint8_t)i, out_hisidx, out_hisnum);
 }
