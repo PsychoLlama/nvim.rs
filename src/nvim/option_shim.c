@@ -3225,26 +3225,12 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 }
 
 // =============================================================================
-// Non-static wrappers for Rust FFI (Phase 163)
+// Non-static wrappers for Rust FFI
 // =============================================================================
 
-/// Check if option is global-local (FFI wrapper).
-int nvim_option_is_global_local(OptIndex opt_idx)
-{
-  return option_is_global_local(opt_idx);
-}
-
-/// Check if option is global-only (FFI wrapper).
-int nvim_option_is_global_only(OptIndex opt_idx)
-{
-  return option_is_global_only(opt_idx);
-}
-
-/// Check if option is window-local (FFI wrapper).
-int nvim_option_is_window_local(OptIndex opt_idx)
-{
-  return option_is_window_local(opt_idx);
-}
+int nvim_option_is_global_local(OptIndex opt_idx) { return option_is_global_local(opt_idx); }
+int nvim_option_is_global_only(OptIndex opt_idx) { return option_is_global_only(opt_idx); }
+int nvim_option_is_window_local(OptIndex opt_idx) { return option_is_window_local(opt_idx); }
 
 /// Get option flags.
 ///
@@ -6242,30 +6228,11 @@ static Dict vimoption2dict(vimoption_T *opt, int opt_flags, buf_T *buf, win_T *w
 // Wrapper function implementations for Rust setcmd module
 // =============================================================================
 
-void nvim_set_options_default(int opt_flags)
-{
-  set_options_default(opt_flags);
-}
-
-void nvim_didset_options(void)
-{
-  didset_options();
-}
-
-void nvim_didset_options2(void)
-{
-  didset_options2();
-}
-
-void nvim_showoptions(int all, int opt_flags)
-{
-  showoptions(all != 0, opt_flags);
-}
-
-void nvim_showoneopt(vimoption_T *opt, int opt_flags)
-{
-  showoneopt(opt, opt_flags);
-}
+void nvim_set_options_default(int opt_flags) { set_options_default(opt_flags); }
+void nvim_didset_options(void) { didset_options(); }
+void nvim_didset_options2(void) { didset_options2(); }
+void nvim_showoptions(int all, int opt_flags) { showoptions(all != 0, opt_flags); }
+void nvim_showoneopt(vimoption_T *opt, int opt_flags) { showoneopt(opt, opt_flags); }
 
 int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                           int prefix, const char **errmsg)
@@ -6292,8 +6259,4 @@ const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
                     errbuflen);
 }
 
-/// Get the 'sidescroll' option value (accessor for Rust).
-OptInt nvim_get_p_ss(void)
-{
-  return p_ss;
-}
+OptInt nvim_get_p_ss(void) { return p_ss; }
