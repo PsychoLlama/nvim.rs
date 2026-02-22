@@ -392,14 +392,31 @@ unsafe fn strncmp_len(s1: *const c_char, s2: *const c_char, len: usize) -> bool 
 
 // Note: rs_skip_to_option_part is defined in the strings crate.
 
-/// Copy an option part from a comma-separated list.
+#[cfg(not(test))]
+extern "C" {
+    fn rs_skip_to_option_part(p: *const c_char) -> *const c_char;
+}
+
+#[cfg(test)]
+unsafe fn rs_skip_to_option_part(p: *const c_char) -> *const c_char {
+    // In tests, skip leading spaces and commas (minimal implementation)
+    let mut q = p;
+    while *q != 0 && ((*q as u8) == b' ' || (*q as u8) == b',') {
+        q = q.add(1);
+    }
+    q
+}
+
+/// Copy an option part from a comma/separator-separated list.
 ///
-/// Copies characters from `p` into `buf` until a comma, NUL, or buffer limit.
-/// Advances `p` past the copied part and any trailing comma.
+/// Full implementation matching C's `copy_option_part`:
+/// - Passes through a leading `.` (for 'suffixes' option)
+/// - Skips backslashes before separator characters
+/// - Calls `rs_skip_to_option_part` to advance past whitespace/commas
 ///
 /// # Arguments
 ///
-/// * `pp` - Pointer to string pointer (updated on return)
+/// * `pp` - Pointer to mutable string pointer (updated on return)
 /// * `buf` - Buffer to copy into
 /// * `maxlen` - Maximum number of bytes to copy (including NUL)
 /// * `sep` - Separator string (usually ",")
@@ -413,7 +430,7 @@ unsafe fn strncmp_len(s1: *const c_char, s2: *const c_char, len: usize) -> bool 
 /// `pp` and `*pp` must be valid, `buf` must have at least `maxlen` bytes.
 #[no_mangle]
 pub unsafe extern "C" fn rs_copy_option_part(
-    pp: *mut *const c_char,
+    pp: *mut *mut c_char,
     buf: *mut c_char,
     maxlen: usize,
     sep: *const c_char,
@@ -425,33 +442,52 @@ pub unsafe extern "C" fn rs_copy_option_part(
     let mut p = *pp;
     let mut len: usize = 0;
 
+    // Skip '.' at start of option part, for 'suffixes'
+    if *p as u8 == b'.' {
+        if len < maxlen - 1 {
+            *buf.add(len) = *p;
+            len += 1;
+        }
+        p = p.add(1);
+    }
+
     // Copy until separator or end
-    while *p != 0 && len < maxlen - 1 {
+    while *p != 0 {
         let c = *p as u8;
 
         // Check if current char is a separator
-        let is_sep = if sep.is_null() {
-            c == b','
-        } else {
-            !rs_vim_strchr(sep, c_int::from(c)).is_null()
-        };
+        let is_sep = !rs_vim_strchr(sep, c_int::from(c)).is_null();
 
         if is_sep {
             break;
         }
 
-        *buf.add(len) = *p;
-        len += 1;
+        // Skip backslash before a separator character
+        if c == b'\\' {
+            let next = *p.add(1) as u8;
+            if next != 0 && !rs_vim_strchr(sep, c_int::from(next)).is_null() {
+                // skip the backslash, copy the separator char as literal
+                p = p.add(1);
+            }
+        }
+
+        if len < maxlen - 1 {
+            *buf.add(len) = *p;
+            len += 1;
+        }
         p = p.add(1);
     }
 
     // NUL-terminate
     *buf.add(len) = 0;
 
-    // Skip the separator
-    if *p != 0 {
+    // Skip non-standard separator (anything other than comma at end)
+    if *p != 0 && (*p as u8) != b',' {
         p = p.add(1);
     }
+
+    // Advance past whitespace and commas to the next option part
+    p = rs_skip_to_option_part(p).cast_mut();
 
     *pp = p;
     len
@@ -568,17 +604,16 @@ mod tests {
     // Note: test_skip_to_option_part is in the strings crate
 
     #[test]
-    fn test_copy_option_part() {
+    fn test_copy_option_part_basic() {
         unsafe {
-            let input = CString::new("first,second,third").unwrap();
-            let mut p = input.as_ptr();
+            let mut input = b"first,second,third\0".to_vec();
+            let mut p: *mut c_char = input.as_mut_ptr().cast();
             let mut buf = [0i8; 32];
             let sep = CString::new(",").unwrap();
 
             // Copy first part
             let len1 = rs_copy_option_part(&raw mut p, buf.as_mut_ptr(), 32, sep.as_ptr());
             assert_eq!(len1, 5);
-            // Check the buffer content directly
             assert_eq!(buf[0] as u8, b'f');
             assert_eq!(buf[1] as u8, b'i');
             assert_eq!(buf[2] as u8, b'r');
@@ -592,6 +627,73 @@ mod tests {
             assert_eq!(len2, 6);
             assert_eq!(buf2[0] as u8, b's');
             assert_eq!(buf2[1] as u8, b'e');
+        }
+    }
+
+    #[test]
+    fn test_copy_option_part_backslash_escape() {
+        unsafe {
+            // "first\,still_first,second" with sep "," should yield "first,still_first" then "second"
+            let mut input = b"first\\,still_first,second\0".to_vec();
+            let mut p: *mut c_char = input.as_mut_ptr().cast();
+            let mut buf = [0i8; 64];
+            let sep = CString::new(",").unwrap();
+
+            let len1 = rs_copy_option_part(&raw mut p, buf.as_mut_ptr(), 64, sep.as_ptr());
+            // Should be "first,still_first" (backslash removed, comma kept as literal)
+            assert_eq!(len1, 17);
+            let result1: &[u8] = std::slice::from_raw_parts(buf.as_ptr().cast::<u8>(), len1);
+            assert_eq!(result1, b"first,still_first");
+
+            let mut buf2 = [0i8; 64];
+            let len2 = rs_copy_option_part(&raw mut p, buf2.as_mut_ptr(), 64, sep.as_ptr());
+            assert_eq!(len2, 6);
+            let result2: &[u8] = std::slice::from_raw_parts(buf2.as_ptr().cast::<u8>(), len2);
+            assert_eq!(result2, b"second");
+        }
+    }
+
+    #[test]
+    fn test_copy_option_part_leading_dot() {
+        unsafe {
+            // ".txt,.rs" with sep "," should yield ".txt" then ".rs"
+            let mut input = b".txt,.rs\0".to_vec();
+            let mut p: *mut c_char = input.as_mut_ptr().cast();
+            let mut buf = [0i8; 32];
+            let sep = CString::new(",").unwrap();
+
+            let len1 = rs_copy_option_part(&raw mut p, buf.as_mut_ptr(), 32, sep.as_ptr());
+            assert_eq!(len1, 4);
+            let result1: &[u8] = std::slice::from_raw_parts(buf.as_ptr().cast::<u8>(), len1);
+            assert_eq!(result1, b".txt");
+
+            let mut buf2 = [0i8; 32];
+            let len2 = rs_copy_option_part(&raw mut p, buf2.as_mut_ptr(), 32, sep.as_ptr());
+            assert_eq!(len2, 3);
+            let result2: &[u8] = std::slice::from_raw_parts(buf2.as_ptr().cast::<u8>(), len2);
+            assert_eq!(result2, b".rs");
+        }
+    }
+
+    #[test]
+    fn test_copy_option_part_space_sep() {
+        unsafe {
+            // "hello world" with sep " ," should yield "hello" then "world"
+            let mut input = b"hello world\0".to_vec();
+            let mut p: *mut c_char = input.as_mut_ptr().cast();
+            let mut buf = [0i8; 32];
+            let sep = CString::new(" ,").unwrap();
+
+            let len1 = rs_copy_option_part(&raw mut p, buf.as_mut_ptr(), 32, sep.as_ptr());
+            assert_eq!(len1, 5);
+            let result1: &[u8] = std::slice::from_raw_parts(buf.as_ptr().cast::<u8>(), len1);
+            assert_eq!(result1, b"hello");
+
+            let mut buf2 = [0i8; 32];
+            let len2 = rs_copy_option_part(&raw mut p, buf2.as_mut_ptr(), 32, sep.as_ptr());
+            assert_eq!(len2, 5);
+            let result2: &[u8] = std::slice::from_raw_parts(buf2.as_ptr().cast::<u8>(), len2);
+            assert_eq!(result2, b"world");
         }
     }
 }

@@ -126,6 +126,7 @@ extern const char *rs_find_tty_option_end(const char *arg);
 extern int rs_is_tty_option(const char *name);
 extern const char *rs_skip_to_option_part(const char *p);
 extern int rs_default_fileformat(void);
+extern size_t rs_copy_option_part(char **pp, char *buf, size_t maxlen, const char *sep);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
@@ -5754,32 +5755,7 @@ void set_fileformat(int eol_style, int opt_flags)
 /// @return length of `*option`
 size_t copy_option_part(char **option, char *buf, size_t maxlen, char *sep_chars)
 {
-  size_t len = 0;
-  char *p = *option;
-
-  // skip '.' at start of option part, for 'suffixes'
-  if (*p == '.') {
-    buf[len++] = *p++;
-  }
-  while (*p != NUL && vim_strchr(sep_chars, (uint8_t)(*p)) == NULL) {
-    // Skip backslash before a separator character and space.
-    if (p[0] == '\\' && vim_strchr(sep_chars, (uint8_t)p[1]) != NULL) {
-      p++;
-    }
-    if (len < maxlen - 1) {
-      buf[len++] = *p;
-    }
-    p++;
-  }
-  buf[len] = NUL;
-
-  if (*p != NUL && *p != ',') {  // skip non-standard separator
-    p++;
-  }
-  p = (char *)rs_skip_to_option_part(p);    // p points to next file name
-
-  *option = p;
-  return len;
+  return rs_copy_option_part(option, buf, maxlen, sep_chars);
 }
 
 /// Get window or buffer local options
