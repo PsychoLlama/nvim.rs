@@ -1186,7 +1186,7 @@ pub unsafe extern "C" fn rs_findtags_matchargs_init(margs: FindTagsMatchArgsHand
 
 extern "C" {
     // findtags_state_T field accessors
-    fn nvim_findtags_get_state_val(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_get_state(st: FindTagsStateHandle) -> c_int;
     fn nvim_findtags_set_state_val(st: FindTagsStateHandle, state: c_int);
     fn nvim_findtags_get_lbuf(st: FindTagsStateHandle) -> *mut c_char;
     fn nvim_findtags_get_lbuf_size(st: FindTagsStateHandle) -> c_int;
@@ -1201,7 +1201,7 @@ extern "C" {
 
     // Other field accessors
     fn nvim_findtags_get_flags(st: FindTagsStateHandle) -> c_int;
-    fn nvim_findtags_get_linear_val(st: FindTagsStateHandle) -> bool;
+    fn nvim_findtags_get_linear(st: FindTagsStateHandle) -> bool;
     fn nvim_findtags_set_linear(st: FindTagsStateHandle, linear: bool);
     fn nvim_findtags_get_sorted(st: FindTagsStateHandle) -> c_int;
     fn nvim_findtags_set_sorted(st: FindTagsStateHandle, val: c_int);
@@ -1256,7 +1256,7 @@ pub unsafe extern "C" fn rs_findtags_get_next_line(
     }
 
     let sinfo = &mut *sinfo_p;
-    let state = nvim_findtags_get_state_val(st);
+    let state = nvim_findtags_get_state(st);
 
     // For binary search: compute the next offset to use.
     if state == TS_BINARY {
@@ -1276,7 +1276,7 @@ pub unsafe extern "C" fn rs_findtags_get_next_line(
         }
     }
 
-    let state = nvim_findtags_get_state_val(st);
+    let state = nvim_findtags_get_state(st);
 
     // When jumping around in the file, first read a line to find the
     // start of the next line.
@@ -1402,7 +1402,7 @@ pub unsafe extern "C" fn rs_findtags_start_state_handler(
 
     // Headers ends.
 
-    let linear = nvim_findtags_get_linear_val(st);
+    let linear = nvim_findtags_get_linear(st);
     let tag_file_sorted = nvim_findtags_get_sorted(st);
 
     // When there is no tag head, or ignoring case, need to do a linear search.
@@ -1423,7 +1423,7 @@ pub unsafe extern "C" fn rs_findtags_start_state_handler(
         nvim_findtags_set_state_val(st, TS_LINEAR);
     }
 
-    let state = nvim_findtags_get_state_val(st);
+    let state = nvim_findtags_get_state(st);
     if state == TS_BINARY && nvim_findtags_get_orgpat_rm_ic(st) && !*sortic {
         // Binary search won't work for ignoring case, use linear search.
         nvim_findtags_set_linear(st, true);
@@ -1432,7 +1432,7 @@ pub unsafe extern "C" fn rs_findtags_start_state_handler(
 
     // When starting a binary search, get the size of the file and
     // compute the first offset.
-    let state = nvim_findtags_get_state_val(st);
+    let state = nvim_findtags_get_state(st);
     if state == TS_BINARY {
         if nvim_findtags_fseek(st, 0, SEEK_END) != 0 {
             // can't seek, don't use binary search
@@ -1502,7 +1502,7 @@ extern "C" {
     fn nvim_findtags_has_regprog(st: FindTagsStateHandle) -> bool;
 
     // State field accessors (const)
-    fn nvim_findtags_get_help_only(st: *const c_void) -> bool;
+    fn nvim_findtags_get_help_only(st: FindTagsStateHandle) -> bool;
 
     // Regex operations
     fn nvim_findtags_vim_regexec(st: FindTagsStateHandle, tagname: *const c_char) -> bool;
@@ -1522,7 +1522,7 @@ extern "C" {
     fn nvim_findtags_set_searchpat(st: FindTagsStateHandle, val: bool);
 
     // Match count
-    fn nvim_findtags_get_match_count_val(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_get_match_count(st: FindTagsStateHandle) -> c_int;
     fn nvim_findtags_inc_match_count(st: FindTagsStateHandle);
     fn nvim_findtags_set_match_count(st: FindTagsStateHandle, count: c_int);
 
@@ -1736,7 +1736,7 @@ pub unsafe extern "C" fn rs_findtags_parse_line(
         }
 
         let flags = nvim_findtags_get_flags(st);
-        let state = nvim_findtags_get_state_val(st);
+        let state = nvim_findtags_get_state(st);
 
         if (flags & TAG_REGEXP) != 0 && headlen < cmplen {
             cmplen = headlen;
@@ -1984,7 +1984,7 @@ pub unsafe extern "C" fn rs_findtags_copy_matches(
 
     let flags = nvim_findtags_get_flags(st);
     let name_only = (flags & TAG_NAMES) != 0;
-    let total_match_count = nvim_findtags_get_match_count_val(st);
+    let total_match_count = nvim_findtags_get_match_count(st);
 
     let matches: *mut *mut c_char = if total_match_count > 0 {
         xmalloc((total_match_count as usize) * std::mem::size_of::<*mut c_char>())
@@ -2015,7 +2015,7 @@ pub unsafe extern "C" fn rs_findtags_copy_matches(
                         p = p.add(1);
                     }
                 }
-                let idx = nvim_findtags_get_match_count_val(st);
+                let idx = nvim_findtags_get_match_count(st);
                 *matches.add(idx as usize) = mfp;
                 nvim_findtags_inc_match_count(st);
             }
@@ -2025,7 +2025,7 @@ pub unsafe extern "C" fn rs_findtags_copy_matches(
     }
 
     *matchesp = matches;
-    nvim_findtags_get_match_count_val(st)
+    nvim_findtags_get_match_count(st)
 }
 
 /// Helper struct matching the first few fields of `tagptrs_T` / `TagPtrs`
@@ -2094,13 +2094,8 @@ extern "C" {
     fn nvim_findtags_set_state_start(st: FindTagsStateHandle);
     fn nvim_findtags_get_mincount(st: FindTagsStateHandle) -> c_int;
     fn nvim_findtags_grow_lbuf(st: FindTagsStateHandle, sinfo: *mut c_void) -> bool;
-    fn nvim_findtags_get_help_only_val(st: FindTagsStateHandle) -> bool;
-    fn nvim_findtags_get_orgpat_len_val(st: FindTagsStateHandle) -> c_int;
     fn nvim_findtags_set_orgpat_len(st: FindTagsStateHandle, len: c_int);
     fn nvim_findtags_set_orgpat_pat(st: FindTagsStateHandle, pat: *mut c_char);
-    fn nvim_findtags_get_orgpat_headlen_val(st: FindTagsStateHandle) -> c_int;
-    fn nvim_findtags_has_regprog_val(st: FindTagsStateHandle) -> bool;
-    fn nvim_findtags_set_linear_val(st: FindTagsStateHandle, val: bool);
     fn nvim_findtags_set_stop_searching(st: FindTagsStateHandle, val: bool);
     fn nvim_findtags_get_stop_searching(st: FindTagsStateHandle) -> bool;
 
@@ -2283,7 +2278,7 @@ pub unsafe extern "C" fn rs_findtags_get_all_tags(
 
     loop {
         // Check for CTRL-C typed
-        let state = nvim_findtags_get_state_val(st);
+        let state = nvim_findtags_get_state(st);
         if state == TS_BINARY || state == TS_SKIP_BACK {
             nvim_line_breakcheck();
         } else {
@@ -2301,7 +2296,7 @@ pub unsafe extern "C" fn rs_findtags_get_all_tags(
 
         // When mincount is TAG_MANY, stop when enough matches found
         let mincount = nvim_findtags_get_mincount(st);
-        let match_count = nvim_findtags_get_match_count_val(st);
+        let match_count = nvim_findtags_get_match_count(st);
         if mincount == TAG_MANY && match_count >= TAG_MANY {
             nvim_findtags_set_stop_searching(st, true);
             break;
@@ -2329,7 +2324,7 @@ pub unsafe extern "C" fn rs_findtags_get_all_tags(
 
         // When still at the start of the file, check for Emacs tags file
         // format, and for "not sorted" flag.
-        let state = nvim_findtags_get_state_val(st);
+        let state = nvim_findtags_get_state(st);
         if state == TS_START {
             let sortic_ptr = &raw mut (*margs_typed).sortic;
             if !rs_findtags_start_state_handler(st, sortic_ptr, &raw mut sinfo) {
@@ -2432,7 +2427,7 @@ pub unsafe extern "C" fn rs_findtags_in_file(
     }
 
     // Stop searching if sufficient tags have been found.
-    let match_count = nvim_findtags_get_match_count_val(st);
+    let match_count = nvim_findtags_get_match_count(st);
     let mincount = nvim_findtags_get_mincount(st);
     if match_count >= mincount {
         nvim_findtags_set_stop_searching(st, true);

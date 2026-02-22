@@ -82,7 +82,7 @@ type TaggyHandle = *const c_void;
 /// Opaque handle to `fmark_T` (file mark)
 type FmarkHandle = *const c_void;
 /// Opaque handle to `findtags_state_T` (tag search state)
-type FindTagsStateHandle = *const c_void;
+type FindTagsStateHandle = *mut c_void;
 
 // =============================================================================
 // External C accessor functions
@@ -1417,49 +1417,49 @@ mod tests {
     #[test]
     fn test_null_search_is_linear() {
         unsafe {
-            assert!(!rs_tag_search_is_linear(std::ptr::null()));
+            assert!(!rs_tag_search_is_linear(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_search_is_binary() {
         unsafe {
-            assert!(!rs_tag_search_is_binary(std::ptr::null()));
+            assert!(!rs_tag_search_is_binary(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_search_done() {
         unsafe {
-            assert!(rs_tag_search_done(std::ptr::null()));
+            assert!(rs_tag_search_done(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_search_match_count() {
         unsafe {
-            assert_eq!(rs_tag_search_match_count(std::ptr::null()), 0);
+            assert_eq!(rs_tag_search_match_count(std::ptr::null_mut()), 0);
         }
     }
 
     #[test]
     fn test_null_search_help_only() {
         unsafe {
-            assert!(!rs_tag_search_help_only(std::ptr::null()));
+            assert!(!rs_tag_search_help_only(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_search_has_matches() {
         unsafe {
-            assert!(!rs_tag_search_has_matches(std::ptr::null()));
+            assert!(!rs_tag_search_has_matches(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_tag_file_sorted() {
         unsafe {
-            assert!(!rs_tag_file_sorted(std::ptr::null()));
+            assert!(!rs_tag_file_sorted(std::ptr::null_mut()));
         }
     }
 

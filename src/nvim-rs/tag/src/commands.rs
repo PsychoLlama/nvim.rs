@@ -947,11 +947,11 @@ extern "C" {
 
     // Tag-specific accessors
     fn nvim_tag_get_mt_name(idx: c_int) -> *const c_char;
-    fn nvim_tag_get_g_do_tagpreview() -> c_int;
+    fn nvim_get_g_do_tagpreview() -> c_int;
     fn nvim_tag_get_ptag_cur_match() -> c_int;
     fn nvim_tag_get_curwin() -> *mut c_void;
     fn nvim_tag_fm_getname(tg: *const c_void, lead_len: c_int) -> *mut c_char;
-    fn nvim_tag_taggy_fmark_fnum(tg: *const c_void) -> c_int;
+    fn nvim_taggy_get_fmark_fnum(tg: *const c_void) -> c_int;
     fn nvim_tag_list_format_entry(is_current: bool, i: c_int, mt_name: *const c_char);
     fn nvim_tag_do_tags_line(
         is_current: c_int,
@@ -1086,7 +1086,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
 
         // Determine if this is the current match
         let is_current = !new_tag
-            && ((nvim_tag_get_g_do_tagpreview() != 0 && i == nvim_tag_get_ptag_cur_match())
+            && ((nvim_get_g_do_tagpreview() != 0 && i == nvim_tag_get_ptag_cur_match())
                 || (use_tagstack && i == tagstack_cur_match));
 
         // Format and print entry header
@@ -1442,7 +1442,7 @@ pub unsafe extern "C" fn rs_do_tags() {
 
         nvim_tag_do_tags_line((i == tagstackidx) as c_int, i, cur_match, tagname, lnum);
 
-        let fmark_fnum = nvim_tag_taggy_fmark_fnum(entry);
+        let fmark_fnum = nvim_taggy_get_fmark_fnum(entry);
         let curbuf_fnum = nvim_get_curbuf_fnum();
         let attr = if fmark_fnum == curbuf_fnum { HLF_D } else { 0 };
         nvim_tag_msg_outtrans(name, attr, false);
@@ -1575,11 +1575,10 @@ extern "C" {
         key_len: usize,
         list: *mut c_void,
     );
-    fn nvim_tag_taggy_get_user_data_val(tg: *const c_void) -> *const c_char;
-    fn nvim_tag_taggy_fmark_col(tg: *const c_void) -> c_int;
+    fn nvim_taggy_get_user_data(tg: *const c_void) -> *const c_char;
+    fn nvim_taggy_get_fmark_col(tg: *const c_void) -> c_int;
     fn nvim_tag_taggy_fmark_coladd(tg: *const c_void) -> c_int;
-    fn nvim_tag_win_set_tagstackidx(wp: *mut c_void, idx: c_int);
-    fn nvim_tag_win_get_tagstacklen(wp: *const c_void) -> c_int;
+    fn nvim_win_set_tagstackidx(wp: *mut c_void, idx: c_int);
 
     // Already-migrated Rust functions callable via FFI
     fn rs_test_for_static(tagp: *const c_void) -> bool;
@@ -1858,7 +1857,7 @@ pub unsafe extern "C" fn rs_get_tag_details(entry: *const c_void, retdict: *mut 
     let tagname = nvim_taggy_get_tagname(entry);
     let cur_match = nvim_taggy_get_cur_match(entry);
     let cur_fnum = nvim_taggy_get_cur_fnum(entry);
-    let user_data = nvim_tag_taggy_get_user_data_val(entry);
+    let user_data = nvim_taggy_get_user_data(entry);
 
     nvim_tag_tv_dict_add_str(retdict, c"tagname".as_ptr(), 7, tagname.cast_mut());
     nvim_tag_tv_dict_add_nr(retdict, c"matchnr".as_ptr(), 7, (cur_match + 1) as i64);
@@ -1874,7 +1873,7 @@ pub unsafe extern "C" fn rs_get_tag_details(entry: *const c_void, retdict: *mut 
     let fmark = nvim_taggy_get_fmark(entry);
     let mark_fnum = nvim_fmark_get_fnum(fmark);
     let fmark_lnum = nvim_fmark_get_lnum(fmark) as i64;
-    let fmark_col = nvim_tag_taggy_fmark_col(entry);
+    let fmark_col = nvim_taggy_get_fmark_col(entry);
     let fmark_coladd = nvim_tag_taggy_fmark_coladd(entry);
 
     nvim_tag_tv_list_append_number(pos, if mark_fnum == -1 { 0 } else { mark_fnum as i64 });
@@ -1910,7 +1909,7 @@ pub unsafe extern "C" fn rs_get_tagstack(wp: *mut c_void, retdict: *mut c_void) 
         return;
     }
 
-    let tagstacklen = nvim_tag_win_get_tagstacklen(wp);
+    let tagstacklen = nvim_win_get_tagstacklen(wp);
     let tagstackidx = nvim_win_get_tagstackidx(wp);
 
     nvim_tag_tv_dict_add_nr(retdict, c"length".as_ptr(), 6, tagstacklen as i64);
@@ -1990,8 +1989,8 @@ pub unsafe extern "C" fn rs_set_tagstack(
         tagstack_push_items_from_list(wp, list);
 
         // set the current index after the last entry
-        let len = nvim_tag_win_get_tagstacklen(wp);
-        nvim_tag_win_set_tagstackidx(wp, len);
+        let len = nvim_win_get_tagstacklen(wp);
+        nvim_win_set_tagstackidx(wp, len);
     }
 
     OK

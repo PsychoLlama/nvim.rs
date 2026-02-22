@@ -785,13 +785,6 @@ bool nvim_get_p_tr(void)
 // Rust FFI accessor functions for search state machine
 // ============================================================================
 
-/// Get st->state
-int nvim_findtags_get_state_val(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return (int)st->state;
-}
-
 /// Set st->state
 void nvim_findtags_set_state_val(void *st_void, int state)
 {
@@ -861,13 +854,6 @@ int nvim_findtags_get_flags(const void *st_void)
 {
   const findtags_state_T *st = (const findtags_state_T *)st_void;
   return st->flags;
-}
-
-/// Get st->linear
-bool nvim_findtags_get_linear_val(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->linear;
 }
 
 /// Set st->linear
@@ -1012,13 +998,6 @@ void nvim_findtags_set_searchpat(void *st_void, bool val)
 {
   findtags_state_T *st = (findtags_state_T *)st_void;
   st->get_searchpat = val;
-}
-
-/// Get st->match_count
-int nvim_findtags_get_match_count_val(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->match_count;
 }
 
 /// Increment st->match_count
@@ -1249,20 +1228,6 @@ bool nvim_findtags_grow_lbuf(void *st_void, void *sinfo_void)
   return true;
 }
 
-/// Get help_only from findtags_state_T (same as nvim_findtags_get_help_only but named for phase 6)
-bool nvim_findtags_get_help_only_val(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->help_only;
-}
-
-/// Get st->orgpat->len (phase 6 variant)
-int nvim_findtags_get_orgpat_len_val(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->orgpat->len;
-}
-
 /// Set st->orgpat->len
 void nvim_findtags_set_orgpat_len(void *st_void, int len)
 {
@@ -1275,27 +1240,6 @@ void nvim_findtags_set_orgpat_pat(void *st_void, char *pat)
 {
   findtags_state_T *st = (findtags_state_T *)st_void;
   st->orgpat->pat = pat;
-}
-
-/// Get st->orgpat->headlen (phase 6 variant)
-int nvim_findtags_get_orgpat_headlen_val(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->orgpat->headlen;
-}
-
-/// Get st->orgpat->regmatch.regprog != NULL (phase 6 variant)
-bool nvim_findtags_has_regprog_val(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->orgpat->regmatch.regprog != NULL;
-}
-
-/// Set st->linear (phase 6 variant)
-void nvim_findtags_set_linear_val(void *st_void, bool val)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->linear = val;
 }
 
 // Global variable accessors for search orchestration
@@ -1606,13 +1550,6 @@ char *nvim_tag_fm_getname(const void *tg_void, int lead_len)
   return fm_getname(&((taggy_T *)tg)->fmark, lead_len);
 }
 
-/// Get fmark.fnum from taggy_T (for do_tags comparison)
-int nvim_tag_taggy_fmark_fnum(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->fmark.fnum;
-}
-
 /// Format print_tag_list header line into IObuff
 void nvim_tag_list_format_entry(bool is_current, int i, const char *mt_name)
 {
@@ -1649,12 +1586,6 @@ void nvim_tag_xmemcpyz(char *dst, const char *src, size_t len)
 const char *nvim_tag_gettext(const char *s)
 {
   return _(s);
-}
-
-/// Get g_do_tagpreview value
-int nvim_tag_get_g_do_tagpreview(void)
-{
-  return g_do_tagpreview;
 }
 
 /// Get ptag_entry.cur_match
@@ -1823,39 +1754,11 @@ void nvim_tag_tv_dict_add_list(void *dict, const char *key, size_t key_len, void
   tv_dict_add_list((dict_T *)dict, key, key_len, (list_T *)list);
 }
 
-/// Get taggy_T user_data field
-const char *nvim_tag_taggy_get_user_data_val(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->user_data;
-}
-
-/// Get fmark mark.col from taggy_T
-int nvim_tag_taggy_fmark_col(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->fmark.mark.col;
-}
-
 /// Get fmark mark.coladd from taggy_T
 int nvim_tag_taggy_fmark_coladd(const void *tg_void)
 {
   const taggy_T *tg = (const taggy_T *)tg_void;
   return tg->fmark.mark.coladd;
-}
-
-/// Set w_tagstackidx directly
-void nvim_tag_win_set_tagstackidx(void *wp_void, int idx)
-{
-  win_T *wp = (win_T *)wp_void;
-  wp->w_tagstackidx = idx;
-}
-
-/// Get w_tagstacklen directly
-int nvim_tag_win_get_tagstacklen(const void *wp_void)
-{
-  const win_T *wp = (const win_T *)wp_void;
-  return wp->w_tagstacklen;
 }
 
 // ============================================================================
