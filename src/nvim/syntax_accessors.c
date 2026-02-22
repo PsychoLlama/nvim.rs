@@ -3221,145 +3221,30 @@ int nvim_syn_count_fold_items(void)
   return count;
 }
 
-// ============================================================================
-// Phase 4: Pattern matching accessors
-// ============================================================================
+regprog_T *nvim_synpat_get_prog(synpat_T *pat) { return pat->sp_prog; }
+int nvim_synpat_has_prog(synpat_T *pat) { return pat->sp_prog != NULL; }
+int16_t *nvim_synpat_get_cont_list(synpat_T *pat) { return pat->sp_cont_list; }
+int16_t *nvim_synpat_get_next_list(synpat_T *pat) { return pat->sp_next_list; }
+int16_t *nvim_synpat_get_cont_in_list(synpat_T *pat) { return pat->sp_syn.cont_in_list; }
+int nvim_synpat_has_cont_list(synpat_T *pat) { return pat->sp_cont_list != NULL; }
+int nvim_synpat_has_next_list(synpat_T *pat) { return pat->sp_next_list != NULL; }
+int nvim_synpat_has_cont_in_list(synpat_T *pat) { return pat->sp_syn.cont_in_list != NULL; }
 
-/// Get sp_prog (compiled regex program) - returns NULL if not compiled
-regprog_T *nvim_synpat_get_prog(synpat_T *pat)
-{
-  return pat->sp_prog;
-}
+hashtab_T *nvim_synblock_get_keywtab(synblock_T *block) { return &block->b_keywtab; }
+hashtab_T *nvim_synblock_get_keywtab_ic(synblock_T *block) { return &block->b_keywtab_ic; }
+int nvim_synblock_has_keywords(synblock_T *block) { return block->b_keywtab.ht_used > 0; }
+int nvim_synblock_has_keywords_ic(synblock_T *block) { return block->b_keywtab_ic.ht_used > 0; }
 
-/// Check if pattern has a compiled program
-int nvim_synpat_has_prog(synpat_T *pat)
-{
-  return pat->sp_prog != NULL;
-}
+size_t nvim_synblock_keywtab_count(synblock_T *block) { return block->b_keywtab.ht_used; }
+size_t nvim_synblock_keywtab_ic_count(synblock_T *block) { return block->b_keywtab_ic.ht_used; }
 
-/// Get sp_cont_list (contains list)
-int16_t *nvim_synpat_get_cont_list(synpat_T *pat)
-{
-  return pat->sp_cont_list;
-}
+int16_t *nvim_keyentry_get_next_list(keyentry_T *ke) { return ke->next_list; }
+int16_t *nvim_keyentry_get_cont_in_list(keyentry_T *ke) { return ke->k_syn.cont_in_list; }
+int nvim_keyentry_has_next_list(keyentry_T *ke) { return ke->next_list != NULL; }
+int nvim_keyentry_has_cont_in_list(keyentry_T *ke) { return ke->k_syn.cont_in_list != NULL; }
 
-/// Get sp_next_list (nextgroup list)
-int16_t *nvim_synpat_get_next_list(synpat_T *pat)
-{
-  return pat->sp_next_list;
-}
-
-/// Get sp_syn.cont_in_list (containedin list)
-int16_t *nvim_synpat_get_cont_in_list(synpat_T *pat)
-{
-  return pat->sp_syn.cont_in_list;
-}
-
-/// Check if the pattern has a contains list
-int nvim_synpat_has_cont_list(synpat_T *pat)
-{
-  return pat->sp_cont_list != NULL;
-}
-
-/// Check if the pattern has a nextgroup list
-int nvim_synpat_has_next_list(synpat_T *pat)
-{
-  return pat->sp_next_list != NULL;
-}
-
-/// Check if the pattern has a containedin list
-int nvim_synpat_has_cont_in_list(synpat_T *pat)
-{
-  return pat->sp_syn.cont_in_list != NULL;
-}
-
-// ============================================================================
-// Phase 4: Keyword hashtable accessors
-// ============================================================================
-
-/// Get the matching-case keyword hashtable from synblock
-hashtab_T *nvim_synblock_get_keywtab(synblock_T *block)
-{
-  return &block->b_keywtab;
-}
-
-/// Get the ignore-case keyword hashtable from synblock
-hashtab_T *nvim_synblock_get_keywtab_ic(synblock_T *block)
-{
-  return &block->b_keywtab_ic;
-}
-
-/// Check if the matching-case keyword hashtable has entries
-int nvim_synblock_has_keywords(synblock_T *block)
-{
-  return block->b_keywtab.ht_used > 0;
-}
-
-/// Check if the ignore-case keyword hashtable has entries
-int nvim_synblock_has_keywords_ic(synblock_T *block)
-{
-  return block->b_keywtab_ic.ht_used > 0;
-}
-
-/// Get number of entries in matching-case keyword hashtable
-size_t nvim_synblock_keywtab_count(synblock_T *block)
-{
-  return block->b_keywtab.ht_used;
-}
-
-/// Get number of entries in ignore-case keyword hashtable
-size_t nvim_synblock_keywtab_ic_count(synblock_T *block)
-{
-  return block->b_keywtab_ic.ht_used;
-}
-
-// ============================================================================
-// Phase 4: Keyentry accessors
-// ============================================================================
-
-/// Get ke_next_list (nextgroup list for keyword)
-int16_t *nvim_keyentry_get_next_list(keyentry_T *ke)
-{
-  return ke->next_list;
-}
-
-/// Get k_syn.cont_in_list (containedin list for keyword)
-int16_t *nvim_keyentry_get_cont_in_list(keyentry_T *ke)
-{
-  return ke->k_syn.cont_in_list;
-}
-
-/// Check if keyword has a nextgroup list
-int nvim_keyentry_has_next_list(keyentry_T *ke)
-{
-  return ke->next_list != NULL;
-}
-
-/// Check if keyword has a containedin list
-int nvim_keyentry_has_cont_in_list(keyentry_T *ke)
-{
-  return ke->k_syn.cont_in_list != NULL;
-}
-
-// ============================================================================
-// Phase 4: Cluster list accessors
-// ============================================================================
-
-/// Get scl_list (cluster contains list)
-int16_t *nvim_syncluster_get_list(syn_cluster_T *cluster)
-{
-  return cluster->scl_list;
-}
-
-/// Check if cluster has a list
-int nvim_syncluster_has_list(syn_cluster_T *cluster)
-{
-  return cluster->scl_list != NULL;
-}
-
-// ============================================================================
-// Phase 4: ID list iteration helpers
-// ============================================================================
+int16_t *nvim_syncluster_get_list(syn_cluster_T *cluster) { return cluster->scl_list; }
+int nvim_syncluster_has_list(syn_cluster_T *cluster) { return cluster->scl_list != NULL; }
 
 /// Get the first item in an ID list (returns 0 if list is NULL)
 int16_t nvim_id_list_first(int16_t *list)
@@ -3370,11 +3255,7 @@ int16_t nvim_id_list_first(int16_t *list)
   return *list;
 }
 
-/// Get the item at index in an ID list (no bounds checking - caller responsibility)
-int16_t nvim_id_list_get(int16_t *list, int idx)
-{
-  return list[idx];
-}
+int16_t nvim_id_list_get(int16_t *list, int idx) { return list[idx]; }
 
 /// Check if list starts with ALLBUT/TOP/CONTAINED marker
 int nvim_id_list_is_special(int16_t *list)
@@ -3400,120 +3281,28 @@ int nvim_id_list_count(int16_t *list)
   return count;
 }
 
-// ============================================================================
-// Phase 4: Pattern matching state accessors
-// ============================================================================
+int nvim_syn_get_next_match_idx(void) { return next_match_idx; }
+int nvim_syn_get_next_match_col(void) { return next_match_col; }
+int nvim_syn_has_next_match(void) { return next_match_idx >= 0; }
+int16_t *nvim_syn_get_current_next_list(void) { return current_next_list; }
+int nvim_syn_has_current_next_list(void) { return current_next_list != NULL; }
+synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
 
-/// Get next_match_idx (index of next pattern to match)
-int nvim_syn_get_next_match_idx(void)
-{
-  return next_match_idx;
-}
+int nvim_synblock_get_spell_cluster(synblock_T *block) { return block->b_spell_cluster_id; }
+int nvim_synblock_get_nospell_cluster(synblock_T *block) { return block->b_nospell_cluster_id; }
 
-/// Get next_match_col (column where next match starts)
-int nvim_syn_get_next_match_col(void)
-{
-  return next_match_col;
-}
+int nvim_stateitem_has_trans_cont(stateitem_T *item) { return (item->si_flags & HL_TRANS_CONT) != 0; }
+int nvim_stateitem_has_match(stateitem_T *item) { return (item->si_flags & HL_MATCH) != 0; }
+int16_t *nvim_stateitem_get_cont_list(stateitem_T *item) { return item->si_cont_list; }
+int nvim_stateitem_has_cont_list(stateitem_T *item) { return item->si_cont_list != NULL; }
 
-/// Check if there is a pending next match
-int nvim_syn_has_next_match(void)
-{
-  return next_match_idx >= 0;
-}
+int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
+void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
 
-/// Get current_next_list (nextgroup list for current state)
-int16_t *nvim_syn_get_current_next_list(void)
-{
-  return current_next_list;
-}
+int nvim_synblock_get_conceal_setting(synblock_T *block) { return block->b_syn_conceal; }
+int nvim_synblock_get_ic_setting(synblock_T *block) { return block->b_syn_ic; }
 
-/// Check if there is a current nextgroup list
-int nvim_syn_has_current_next_list(void)
-{
-  return current_next_list != NULL;
-}
-
-// ============================================================================
-// Phase 5: Cluster & containedin logic accessors
-// ============================================================================
-
-
-/// Get the current synblock from curwin->w_s
-synblock_T *nvim_syn_get_curwin_synblock(void)
-{
-  return curwin->w_s;
-}
-
-/// Get the spell cluster ID from a synblock
-int nvim_synblock_get_spell_cluster(synblock_T *block)
-{
-  return block->b_spell_cluster_id;
-}
-
-/// Get the nospell cluster ID from a synblock
-int nvim_synblock_get_nospell_cluster(synblock_T *block)
-{
-  return block->b_nospell_cluster_id;
-}
-
-/// Check if a stateitem has the HL_TRANS_CONT flag
-int nvim_stateitem_has_trans_cont(stateitem_T *item)
-{
-  return (item->si_flags & HL_TRANS_CONT) != 0;
-}
-
-/// Check if a stateitem has the HL_MATCH flag
-int nvim_stateitem_has_match(stateitem_T *item)
-{
-  return (item->si_flags & HL_MATCH) != 0;
-}
-
-/// Get si_cont_list (containedin list for state item)
-int16_t *nvim_stateitem_get_cont_list(stateitem_T *item)
-{
-  return item->si_cont_list;
-}
-
-/// Check if stateitem has a containedin list
-int nvim_stateitem_has_cont_list(stateitem_T *item)
-{
-  return item->si_cont_list != NULL;
-}
-
-// ============================================================================
-// Phase 6: Command & user interface accessors
-// ============================================================================
-
-/// Get the current syntax topgrp (for :syn include)
-int nvim_syn_get_topgrp(void)
-{
-  return curwin->w_s->b_syn_topgrp;
-}
-
-/// Set the current syntax topgrp
-void nvim_syn_set_topgrp(int topgrp)
-{
-  curwin->w_s->b_syn_topgrp = topgrp;
-}
-
-/// Get the syntax block's conceal setting
-int nvim_synblock_get_conceal_setting(synblock_T *block)
-{
-  return block->b_syn_conceal;
-}
-
-/// Get the syntax block's case ignore setting
-int nvim_synblock_get_ic_setting(synblock_T *block)
-{
-  return block->b_syn_ic;
-}
-
-/// Get the number of subcommands
-int nvim_syn_get_subcommand_count(void)
-{
-  return (int)(sizeof(subcommands) / sizeof(subcommands[0]));
-}
+int nvim_syn_get_subcommand_count(void) { return (int)(sizeof(subcommands) / sizeof(subcommands[0])); }
 
 /// Get subcommand name by index
 const char *nvim_syn_get_subcommand_name(int idx)
@@ -3534,12 +3323,7 @@ int nvim_synblock_pattern_is_syncing(synblock_T *block, int idx)
   return SYN_ITEMS(block)[idx].sp_syncing;
 }
 
-/// Get the hl group name from a pattern's syn.id
-/// Note: This returns the pattern's highlight group ID minus 1
-int nvim_synpat_get_hl_group(synpat_T *pat)
-{
-  return pat->sp_syn.id - 1;
-}
+int nvim_synpat_get_hl_group(synpat_T *pat) { return pat->sp_syn.id - 1; }
 
 /// Count patterns with a specific highlight group ID
 int nvim_synblock_count_patterns_for_id(synblock_T *block, int id)
@@ -3553,21 +3337,8 @@ int nvim_synblock_count_patterns_for_id(synblock_T *block, int id)
   return count;
 }
 
-/// Get expand_what variable (for command completion)
-int nvim_syn_get_expand_what(void)
-{
-  return expand_what;
-}
-
-/// Set expand_what variable
-void nvim_syn_set_expand_what(int what)
-{
-  expand_what = what;
-}
-
-// ============================================================================
-// Cluster ID accessors (for Rust FFI)
-// ============================================================================
+int nvim_syn_get_expand_what(void) { return expand_what; }
+void nvim_syn_set_expand_what(int what) { expand_what = what; }
 
 /// Get cluster ID from synblock at index
 /// Returns the cluster ID (SYNID_CLUSTER + idx) or 0 if invalid
@@ -3597,7 +3368,6 @@ int nvim_syncluster_get_id(syn_cluster_T *cluster)
   }
   return SYNID_CLUSTER + idx;
 }
-
 // ============================================================================
 // Phase 24.1: State Management Helpers (for Rust FFI)
 // ============================================================================
