@@ -318,7 +318,6 @@ void syn_set_timeout(proftime_T *tm)
   syn_tm = tm;
 }
 
-
 // We cannot simply discard growarrays full of state_items or buf_states; we
 // have to manually release their extmatch pointers first.
 static void clear_syn_state(synstate_T *p)
@@ -332,7 +331,6 @@ static void clear_syn_state(synstate_T *p)
     }
   }
 }
-
 
 // Try to find a synchronisation point for line "lnum".
 //
@@ -725,9 +723,6 @@ static synstate_T *syn_stack_find_entry(linenr_T lnum)
   return prev;
 }
 
-
-
-
 // End of handling of the state stack.
 // **************************************
 
@@ -745,16 +740,12 @@ static void validate_current_state(void)
   ga_set_growsize(&current_state, 3);
 }
 
-
-
-
 /// Update an entry in the current_state stack for a start-skip-end pattern.
 /// This finds the end of the current item, if it's in the current line.
 ///
 /// @param startcol  where to start searching for the end
 /// @param force     when true overrule a previous end
 ///
-
 
 /// Get current line in syntax buffer.
 static char *syn_getcurline(void)
@@ -813,7 +804,6 @@ static bool syn_regexec(regmmatch_T *rmp, linenr_T lnum, colnr_T col, syn_time_T
   }
   return false;
 }
-
 
 // Handle ":syntax conceal" command.
 static void syn_cmd_conceal(exarg_T *eap, int syncing)
@@ -4042,16 +4032,6 @@ int nvim_syn_utfc_ptr2len(char *p) { return utfc_ptr2len(p); }
 void *nvim_syn_get_buf(void) { return syn_buf; }
 void nvim_syn_set_syn_buf(void *buf) { syn_buf = (buf_T *)buf; }
 
-// ============================================================================
-
-// Phase 24.4: Pattern Stack Operations Helpers (for Rust interop)
-
-// Note: push/pop_current_state, get/set_next_match_idx, get/set_keepend_level
-
-// are already defined earlier in Phase 24.2
-
-// ============================================================================
-
 int nvim_syn_current_state_len(void) { return current_state.ga_len; }
 
 /// Get a stateitem from current_state by index
@@ -4753,7 +4733,7 @@ void nvim_syn_set_next_match_state(
   next_match_extmatch = extmatch;
 
 }
-/// _Static_assert for Phase 1 constants
+
 _Static_assert(SPO_MS_OFF == 0, "SPO_MS_OFF");
 _Static_assert(SPO_ME_OFF == 1, "SPO_ME_OFF");
 _Static_assert(SPO_HS_OFF == 2, "SPO_HS_OFF");
@@ -4780,21 +4760,9 @@ _Static_assert(HL_CONTAINED == 0x01, "HL_CONTAINED");
 _Static_assert(HL_SKIPNL == 0x80, "HL_SKIPNL");
 _Static_assert(HL_SKIPEMPTY == 0x200, "HL_SKIPEMPTY");
 
-// =============================================================================
-// Phase 3 accessor functions for syn_sync migration
-// =============================================================================
+void nvim_syn_load_current_state(synstate_T *from) { rs_load_current_state(from); }
 
-/// Wrap load_current_state() for Rust.
-void nvim_syn_load_current_state(synstate_T *from)
-{
-  rs_load_current_state(from);
-}
-
-/// Wrap syn_match_linecont() for Rust.
-int nvim_syn_match_linecont(linenr_T lnum)
-{
-  return syn_match_linecont(lnum);
-}
+int nvim_syn_match_linecont(linenr_T lnum) { return syn_match_linecont(lnum); }
 
 /// Get sp_sync_idx for the current synblock pattern at index idx.
 int nvim_syn_get_pattern_sync_idx(int idx)
@@ -4805,11 +4773,7 @@ int nvim_syn_get_pattern_sync_idx(int idx)
   return SYN_ITEMS(syn_block)[idx].sp_sync_idx;
 }
 
-/// Get the line contents (ml_get) for a given lnum using syn_buf.
-char *nvim_syn_ml_get(linenr_T lnum)
-{
-  return ml_get_buf(syn_buf, lnum);
-}
+char *nvim_syn_ml_get(linenr_T lnum) { return ml_get_buf(syn_buf, lnum); }
 
 /// Handle the entire C-comment sync setup path.
 /// This saves/restores curwin, curbuf, cursor and does the find_start_comment
@@ -4859,7 +4823,6 @@ linenr_T nvim_syn_ccomment_sync_setup(win_T *wp, linenr_T start_lnum)
   return start_lnum;
 }
 
-/// _Static_assert for Phase 2 constants
 _Static_assert(HL_DISPLAY == 0x1000, "HL_DISPLAY");
 _Static_assert(HL_SKIPWHITE == 0x100, "HL_SKIPWHITE");
 _Static_assert(HL_SYNC_HERE == 0x10, "HL_SYNC_HERE");
@@ -4869,58 +4832,18 @@ _Static_assert(SYNSPL_TOP == 1, "SYNSPL_TOP");
 _Static_assert(SYNSPL_NOTOP == 2, "SYNSPL_NOTOP");
 _Static_assert(KEYWORD_IDX == -1, "KEYWORD_IDX");
 
-// =============================================================================
-// Phase 4 accessor functions for get_syn_options + get_id_list migration
-// =============================================================================
+int nvim_syn_get_current_inc_tag(void) { return current_syn_inc_tag; }
+int nvim_syn_get_b_syn_conceal(void) { return curwin->w_s->b_syn_conceal; }
+int nvim_syn_check_cluster(char *pp, int len) { return syn_check_cluster(pp, len); }
 
-/// Get current_syn_inc_tag global.
-int nvim_syn_get_current_inc_tag(void)
-{
-  return current_syn_inc_tag;
-}
+int nvim_syn_name2id_wrapper(const char *name) { return syn_name2id(name); }
 
-/// Get b_syn_conceal from curwin.
-int nvim_syn_get_b_syn_conceal(void)
-{
-  return curwin->w_s->b_syn_conceal;
-}
+int nvim_syn_check_group_wrapper(const char *name, int len) { return syn_check_group(name, (size_t)len); }
 
-/// Wrap syn_check_cluster() for Rust.
-int nvim_syn_check_cluster(char *pp, int len)
-{
-  return syn_check_cluster(pp, len);
-}
+int nvim_syn_highlight_num_groups(void) { return highlight_num_groups(); }
+char *nvim_syn_highlight_group_name(int idx) { return highlight_group_name(idx); }
 
-/// Wrap syn_name2id() for Rust.
-int nvim_syn_name2id_wrapper(const char *name)
-{
-  return syn_name2id(name);
-}
-
-/// Wrap syn_check_group() for Rust.
-int nvim_syn_check_group_wrapper(const char *name, int len)
-{
-  return syn_check_group(name, (size_t)len);
-}
-
-/// Wrap highlight_num_groups() for Rust.
-int nvim_syn_highlight_num_groups(void)
-{
-  return highlight_num_groups();
-}
-
-/// Wrap highlight_group_name() for Rust.
-char *nvim_syn_highlight_group_name(int idx)
-{
-  return highlight_group_name(idx);
-}
-
-/// Compile a regexp for group name matching.
-/// Returns opaque regprog handle, or NULL on failure.
-void *nvim_syn_vim_regcomp(char *pat, int flags)
-{
-  return vim_regcomp(pat, flags);
-}
+void *nvim_syn_vim_regcomp(char *pat, int flags) { return vim_regcomp(pat, flags); }
 
 /// Execute a regexp match against a string.
 /// regprog is from nvim_syn_vim_regcomp, ic is ignore case.
@@ -4934,23 +4857,11 @@ int nvim_syn_vim_regexec(void *regprog, int ic, char *str)
   return ret;
 }
 
-/// Free a compiled regexp.
-void nvim_syn_vim_regfree(void *regprog)
-{
-  vim_regfree(regprog);
-}
+void nvim_syn_vim_regfree(void *regprog) { vim_regfree(regprog); }
 
-/// Wrap foldmethodIsSyntax(curwin) for Rust.
-int nvim_syn_foldmethod_is_syntax_curwin(void)
-{
-  return rs_foldmethodIsSyntax(curwin);
-}
+int nvim_syn_foldmethod_is_syntax_curwin(void) { return rs_foldmethodIsSyntax(curwin); }
 
-/// Wrap rs_foldUpdateAll(curwin) for Rust.
-void nvim_syn_fold_update_all_curwin(void)
-{
-  rs_foldUpdateAll(curwin);
-}
+void nvim_syn_fold_update_all_curwin(void) { rs_foldUpdateAll(curwin); }
 
 /// Find the pattern index matching sync_id + SPTYPE_START in curwin's patterns.
 /// Returns the index, or -1 if not found.
@@ -4965,131 +4876,45 @@ int nvim_syn_find_sync_pattern_idx(int syn_id)
   return -1;
 }
 
-/// Wrap utf_ptr2char() for Rust.
-int nvim_syn_utf_ptr2char(const char *p)
-{
-  return utf_ptr2char(p);
-}
+int nvim_syn_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
 
 // nvim_syn_utfc_ptr2len already defined above (line ~6694) with char * param
 
-/// Wrap vim_isprintc() for Rust.
-int nvim_syn_vim_isprintc(int c)
-{
-  return vim_isprintc(c);
-}
+int nvim_syn_vim_isprintc(int c) { return vim_isprintc(c); }
 
-/// Wrap xstrnsave() for Rust. Caller must call nvim_syn_xfree() to free.
-char *nvim_syn_xstrnsave(const char *s, int len)
-{
-  return xstrnsave(s, (size_t)len);
-}
+char *nvim_syn_xstrnsave(const char *s, int len) { return xstrnsave(s, (size_t)len); }
 
-/// Wrap xfree() for Rust.
-void nvim_syn_xfree(void *ptr)
-{
-  xfree(ptr);
-}
+void nvim_syn_xfree(void *ptr) { xfree(ptr); }
 
-/// Wrap xmalloc() for Rust.
-void *nvim_syn_xmalloc(int size)
-{
-  return xmalloc((size_t)size);
-}
+void *nvim_syn_xmalloc(int size) { return xmalloc((size_t)size); }
 
-/// Wrap xmemcpyz() for Rust.
-void nvim_syn_xmemcpyz(char *dst, const char *src, int len)
-{
-  xmemcpyz(dst, src, (size_t)len);
-}
+void nvim_syn_xmemcpyz(char *dst, const char *src, int len) { xmemcpyz(dst, src, (size_t)len); }
 
-/// Wrap strpbrk() for Rust.
-char *nvim_syn_strpbrk(const char *s, const char *chars)
-{
-  return strpbrk(s, chars);
-}
+char *nvim_syn_strpbrk(const char *s, const char *chars) { return strpbrk(s, chars); }
 
-/// Wrap emsg() for Rust.
-void nvim_syn_emsg(const char *msg)
-{
-  emsg(msg);
-}
+void nvim_syn_emsg(const char *msg) { emsg(msg); }
 
-/// Wrap semsg() for Rust (one string arg).
-void nvim_syn_semsg_1s(const char *fmt, const char *arg)
-{
-  semsg(fmt, arg);
-}
+void nvim_syn_semsg_1s(const char *fmt, const char *arg) { semsg(fmt, arg); }
 
-/// Wrap skipwhite() for Rust.
-char *nvim_syn_skipwhite(const char *p)
-{
-  return skipwhite(p);
-}
+char *nvim_syn_skipwhite(const char *p) { return skipwhite(p); }
 
-/// Wrap skiptowhite() for Rust.
-char *nvim_syn_skiptowhite(const char *p)
-{
-  return skiptowhite(p);
-}
+char *nvim_syn_skiptowhite(const char *p) { return skiptowhite(p); }
 
-/// Wrap ends_excmd() for Rust.
-int nvim_syn_ends_excmd(int c)
-{
-  return ends_excmd(c);
-}
+int nvim_syn_ends_excmd(int c) { return ends_excmd(c); }
 
-/// Wrap ascii_iswhite() for Rust.
-int nvim_syn_ascii_iswhite_char(int c)
-{
-  return ascii_iswhite(c);
-}
+int nvim_syn_ascii_iswhite_char(int c) { return ascii_iswhite(c); }
 
-/// Wrap TOUPPER_ASC() for Rust.
-int nvim_syn_toupper_asc(int c)
-{
-  return TOUPPER_ASC(c);
-}
+int nvim_syn_toupper_asc(int c) { return TOUPPER_ASC(c); }
 
-// =============================================================================
-// Phase 5 accessor functions for syn_cmd_region + get_syn_pattern migration
-// =============================================================================
+char *nvim_syn_get_group_name(char *arg, char **name_end) { return get_group_name(arg, name_end); }
 
-/// Wrap get_group_name() for Rust.
-char *nvim_syn_get_group_name(char *arg, char **name_end)
-{
-  return get_group_name(arg, name_end);
-}
+void nvim_syn_init_patterns(void) { init_syn_patterns(); }
 
-/// Wrap init_syn_patterns() for Rust.
-void nvim_syn_init_patterns(void)
-{
-  init_syn_patterns();
-}
+char *nvim_syn_vim_strnsave_up(const char *str, int len) { return vim_strnsave_up(str, (size_t)len); }
 
-/// Wrap vim_strnsave_up() for Rust.
-char *nvim_syn_vim_strnsave_up(const char *str, int len)
-{
-  return vim_strnsave_up(str, (size_t)len);
-}
-
-/// Wrap check_nextcmd() for Rust, and set eap->nextcmd.
-void nvim_syn_set_nextcmd(exarg_T *eap, char *rest)
-{
-  eap->nextcmd = check_nextcmd(rest);
-}
-
-/// Get eap->arg.
-char *nvim_syn_get_eap_arg(const exarg_T *eap)
-{
-  return eap->arg;
-}
-
-/// Get eap->skip.
-int nvim_syn_get_eap_skip(const exarg_T *eap)
-{
-  return eap->skip;
-}
+void nvim_syn_set_nextcmd(exarg_T *eap, char *rest) { eap->nextcmd = check_nextcmd(rest); }
+char *nvim_syn_get_eap_arg(const exarg_T *eap) { return eap->arg; }
+int nvim_syn_get_eap_skip(const exarg_T *eap) { return eap->skip; }
 
 /// Allocate and compile a syntax pattern via get_syn_pattern().
 /// Returns an opaque handle to a heap-allocated synpat_T (or NULL on error).
@@ -5135,11 +4960,7 @@ void nvim_syn_free_compiled_pattern(synpat_T *pat)
   }
 }
 
-/// Wrap syn_incl_toplevel() for Rust.
-void nvim_syn_incl_toplevel(int id, int *flagsp)
-{
-  syn_incl_toplevel(id, flagsp);
-}
+void nvim_syn_incl_toplevel(int id, int *flagsp) { syn_incl_toplevel(id, flagsp); }
 
 /// Store completed region patterns into the synblock.
 /// pat_data is an array of {synpat_T *pat, int matchgroup_id, int item_type} triples.
@@ -5148,17 +4969,29 @@ void nvim_syn_incl_toplevel(int id, int *flagsp)
 /// cont_list, cont_in_list, next_list are from option parsing (ownership transferred on success).
 /// Returns 1 on success (don't free patterns), 0 on failure.
 int nvim_syn_store_region_patterns(
+
   synpat_T **pats,
+
   int *matchgroup_ids,
+
   int *item_types,
+
   int pat_count,
+
   int flags,
+
   int syn_id,
+
   int conceal_char,
+
   int16_t *cont_list,
+
   int16_t *cont_in_list,
+
   int16_t *next_list,
+
   int syncing)
+
 {
   ga_grow(&(curwin->w_s->b_syn_patterns), pat_count);
 
@@ -5194,19 +5027,14 @@ int nvim_syn_store_region_patterns(
   return 1;
 }
 
-/// _Static_assert for Phase 3 constants
 _Static_assert(SF_CCOMMENT == 0x01, "SF_CCOMMENT");
 _Static_assert(SF_MATCH == 0x02, "SF_MATCH");
-
-/// _Static_assert for Phase 4 constants
 _Static_assert(NONE_IDX == -2, "NONE_IDX");
 _Static_assert(SYNID_ALLBUT == MAX_HL_ID, "SYNID_ALLBUT");
 _Static_assert(SYNID_TOP == 21000, "SYNID_TOP");
 _Static_assert(SYNID_CONTAINED == 22000, "SYNID_CONTAINED");
 _Static_assert(HL_FOLD == 0x2000, "HL_FOLD");
 _Static_assert(HL_EXCLUDENL == 0x800, "HL_EXCLUDENL");
-
-/// _Static_assert for Phase 5 constants
 _Static_assert(HL_HAS_EOL == 0x08, "HL_HAS_EOL");
 _Static_assert(HL_INCLUDED_TOPLEVEL == 0x80000, "HL_INCLUDED_TOPLEVEL");
 _Static_assert(SPTYPE_START == 2, "SPTYPE_START");
