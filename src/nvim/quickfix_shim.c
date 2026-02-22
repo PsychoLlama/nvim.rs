@@ -296,6 +296,9 @@ extern int rs_qf_add_entries(void *qi, int qf_idx, void *list, char *title, int 
 // Display functions
 extern void rs_qf_fill_buffer(void *qfl, void *buf, void *old_last, int qf_winid);
 
+// Helpgrep functions (Phase 1)
+extern void rs_hgr_search_in_rtp(void *qfl, void *p_regmatch, const char *lang);
+
 // Init functions
 extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
                            void *tv, char *errorformat, bool newlist, linenr_T lnumfirst,
@@ -6603,106 +6606,34 @@ static qf_info_T *hgr_get_ll(bool *new_ll)
   return qi;
 }
 
-// Search for a pattern in a help file.
-static void hgr_search_file(qf_list_T *qfl, char *fname, regmatch_T *p_regmatch)
-  FUNC_ATTR_NONNULL_ARG(1, 3)
+// C accessor wrappers for rs_hgr_search_* functions (Phase 1)
+FILE *nvim_hgr_os_fopen(const char *fname) { return os_fopen(fname, "r"); }
+bool nvim_hgr_vim_fgets(char *buf, int size, FILE *fd) { return vim_fgets(buf, size, fd); }
+bool nvim_hgr_vim_regexec(void *rmp, char *line) { return vim_regexec((regmatch_T *)rmp, line, 0); }
+char *nvim_hgr_regmatch_startp(void *rmp) { return ((regmatch_T *)rmp)->startp[0]; }
+char *nvim_hgr_regmatch_endp(void *rmp) { return ((regmatch_T *)rmp)->endp[0]; }
+void nvim_hgr_fclose(FILE *fd) { fclose(fd); }
+char *nvim_hgr_get_IObuff(void) { return IObuff; }
+int nvim_hgr_get_IOSIZE(void) { return IOSIZE; }
+int nvim_hgr_get_got_int(void) { return got_int; }
+void nvim_hgr_set_got_int(int val) { got_int = val; }
+void nvim_hgr_line_breakcheck(void) { line_breakcheck(); }
+int nvim_hgr_gen_expand_wildcards(char *dirname, int *fcount_out, char ***fnames_out)
 {
-  FILE *const fd = os_fopen(fname, "r");
-  if (fd == NULL) {
-    return;
-  }
-
-  linenr_T lnum = 1;
-  while (!vim_fgets(IObuff, IOSIZE, fd) && !got_int) {
-    char *line = IObuff;
-
-    if (vim_regexec(p_regmatch, line, 0)) {
-      int l = (int)strlen(line);
-
-      // remove trailing CR, LF, spaces, etc.
-      while (l > 0 && line[l - 1] <= ' ') {
-        line[--l] = NUL;
-      }
-
-      if (rs_qf_add_entry(qfl,
-                       NULL,   // dir
-                       fname,
-                       NULL,
-                       0,
-                       line,
-                       lnum,
-                       0,
-                       (int)(p_regmatch->startp[0] - line) + 1,  // col
-                       (int)(p_regmatch->endp[0] - line)
-                       + 1,    // end_col
-                       false,  // vis_col
-                       NULL,   // search pattern
-                       0,      // nr
-                       1,      // type
-                       NULL,   // user_data
-                       true)   // valid
-          == QF_FAIL) {
-        got_int = true;
-        if (line != IObuff) {
-          xfree(line);
-        }
-        break;
-      }
-    }
-    if (line != IObuff) {
-      xfree(line);
-    }
-    lnum++;
-    line_breakcheck();
-  }
-  fclose(fd);
+  return gen_expand_wildcards(1, &dirname, fcount_out, fnames_out, EW_FILE|EW_SILENT);
 }
-
-// Search for a pattern in all the help files in the doc directory under
-// the given directory.
-static void hgr_search_files_in_dir(qf_list_T *qfl, char *dirname, regmatch_T *p_regmatch,
-                                    const char *lang)
-  FUNC_ATTR_NONNULL_ARG(1, 2, 3)
+void nvim_hgr_free_wild(int fcount, char **fnames) { FreeWild(fcount, fnames); }
+char *nvim_hgr_fname_at(char **fnames, int idx) { return fnames[idx]; }
+void nvim_hgr_add_pathsep(char *dirname) { add_pathsep(dirname); }
+void nvim_hgr_strcat_doc_glob(char *dirname) { strcat(dirname, "doc/*.\\(txt\\|??x\\)"); }  // NOLINT
+int nvim_hgr_STRNICMP(const char *a, const char *b, int n) { return STRNICMP(a, b, (size_t)n); }
+char *nvim_hgr_get_p_rtp(void) { return p_rtp; }
+void nvim_hgr_copy_option_part(char **pp, char *buf, int maxlen)
 {
-  int fcount;
-  char **fnames;
-
-  // Find all "*.txt" and "*.??x" files in the "doc" directory.
-  add_pathsep(dirname);
-  strcat(dirname, "doc/*.\\(txt\\|??x\\)");  // NOLINT
-  if (gen_expand_wildcards(1, &dirname, &fcount, &fnames, EW_FILE|EW_SILENT) == OK
-      && fcount > 0) {
-    for (int fi = 0; fi < fcount && !got_int; fi++) {
-      // Skip files for a different language.
-      if (lang != NULL
-          && STRNICMP(lang, fnames[fi] + strlen(fnames[fi]) - 3, 2) != 0
-          && !(STRNICMP(lang, "en", 2) == 0
-               && STRNICMP("txt", fnames[fi] + strlen(fnames[fi]) - 3, 3)
-               == 0)) {
-        continue;
-      }
-
-      hgr_search_file(qfl, fnames[fi], p_regmatch);
-    }
-    FreeWild(fcount, fnames);
-  }
+  copy_option_part(pp, buf, (size_t)maxlen, ",");
 }
-
-// Search for a pattern in all the help files in the 'runtimepath'
-// and add the matches to a quickfix list.
-// 'lang' is the language specifier.  If supplied, then only matches in the
-// specified language are found.
-static void hgr_search_in_rtp(qf_list_T *qfl, regmatch_T *p_regmatch, const char *lang)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  // Go through all directories in 'runtimepath'
-  char *p = p_rtp;
-  while (*p != NUL && !got_int) {
-    copy_option_part(&p, NameBuff, MAXPATHL, ",");
-
-    hgr_search_files_in_dir(qfl, NameBuff, p_regmatch, lang);
-  }
-}
+int nvim_hgr_get_MAXPATHL(void) { return MAXPATHL; }
+char *nvim_hgr_get_NameBuff(void) { return NameBuff; }
 
 /// Returns true if we should proceed, false if aborting.
 bool nvim_hgr_pre_check(void *eap_void)
@@ -6756,7 +6687,7 @@ bool nvim_hgr_compile_and_search(void *eap_void, void *qi_void)
   rs_qf_new_list(qi, qf_cmdtitle(*eap->cmdlinep));
   qf_list_T *const qfl = qf_get_curlist(qi);
 
-  hgr_search_in_rtp(qfl, &regmatch, lang);
+  rs_hgr_search_in_rtp(qfl, &regmatch, lang);
 
   vim_regfree(regmatch.regprog);
 

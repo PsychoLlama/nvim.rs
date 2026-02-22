@@ -15,6 +15,7 @@ pub mod display;
 pub mod errorformat;
 pub mod external;
 pub mod filter;
+pub mod helpgrep;
 pub mod init;
 pub mod list;
 pub mod listdo;
