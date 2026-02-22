@@ -1498,14 +1498,65 @@ void nvim_nv_vreplace_impl(cmdarg_T *cap) { nv_vreplace_impl(cap); }
 // =============================================================================
 
 // Forward declarations for scroll/screen handlers
-static void nv_zet_impl(cmdarg_T *cap);
 static void nv_scroll_impl(cmdarg_T *cap);
 static void nv_right_impl(cmdarg_T *cap);
 static void nv_left_impl(cmdarg_T *cap);
 static void nv_up_impl(cmdarg_T *cap);
 static void nv_down_impl(cmdarg_T *cap);
 
-void nvim_nv_zet_impl(cmdarg_T *cap) { nv_zet_impl(cap); }
+// z-command accessors for Rust FFI
+int nvim_get_curwin_w_p_fdl(void) { return (int)curwin->w_p_fdl; }
+void nvim_set_curwin_w_p_fdl(int val) { curwin->w_p_fdl = val; }
+bool nvim_get_curwin_w_p_fen(void) { return curwin->w_p_fen; }
+void nvim_set_curwin_w_p_fen(bool val) { curwin->w_p_fen = val; }
+void nvim_set_curwin_w_foldinvalid(bool val) { curwin->w_foldinvalid = val; }
+int nvim_get_curwin_w_view_width(void) { return curwin->w_view_width; }
+int nvim_get_curwin_w_leftcol(void) { return curwin->w_leftcol; }
+void nvim_set_curwin_w_leftcol(int val) { curwin->w_leftcol = val; }
+void nvim_validate_botline_curwin(void) { validate_botline(curwin); }
+int nvim_get_curwin_w_botline(void) { return curwin->w_botline; }
+void nvim_check_cursor_col_call(void) { check_cursor_col(curwin); }
+void nvim_scroll_cursor_top(int off, bool always) { scroll_cursor_top(curwin, off, always); }
+void nvim_scroll_cursor_bot(int off, bool always) { scroll_cursor_bot(curwin, off, always); }
+void nvim_scroll_cursor_halfway(bool atend, bool prefer_above) { scroll_cursor_halfway(curwin, atend, prefer_above); }
+void nvim_redraw_later_curwin(int type) { redraw_later(curwin, type); }
+void nvim_set_leftcol_call(int col) { set_leftcol((colnr_T)col); }
+bool nvim_hasFolding_curwin(int lnum) { return hasFolding(curwin, lnum, NULL, NULL); }
+void nvim_getvcol_curwin_cursor(int *vcol) { getvcol(curwin, &curwin->w_cursor, vcol, NULL, NULL); }
+void nvim_getvcol_curwin_cursor_end(int *vcol) { getvcol(curwin, &curwin->w_cursor, NULL, NULL, vcol); }
+int nvim_win_col_off_curwin(void) { return win_col_off(curwin); }
+void nvim_changed_window_setting_curwin(void) { changed_window_setting(curwin); }
+void nvim_changed_window_setting_win(win_T *wp) { changed_window_setting(wp); }
+void nvim_spell_suggest_call(int count) { spell_suggest(count); }
+bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
+
+/// nv_z_get_count: reads digit count for 'z' command from input.
+/// Returns true if the main z command should be processed with the new nchar.
+bool nvim_nv_z_get_count(cmdarg_T *cap, int *nchar_arg) { return nv_z_get_count(cap, nchar_arg); }
+
+/// nv_zg_zw: spell word add/remove for z commands.
+/// Returns OK or FAIL.
+int nvim_nv_zg_zw(cmdarg_T *cap, int nchar) { return nv_zg_zw(cap, nchar); }
+
+/// Sync w_p_fen in diff-synced windows for 'z' commands.
+void nvim_sync_fen_in_diff_windows(void)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp != curwin && rs_foldmethodIsDiff(wp) && wp->w_p_scb) {
+      wp->w_p_fen = curwin->w_p_fen;
+      changed_window_setting(wp);
+    }
+  }
+}
+
+/// vim_strchr wrapper for a specific string
+bool nvim_vim_strchr_str(const char *str, int c) { return vim_strchr(str, c) != NULL; }
+
+/// Check if nchar is an ASCII digit.
+bool nvim_ascii_isdigit(int c) { return ascii_isdigit(c); }
+
+/// Get translated E352 error message.
+const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with current 'foldmethod'"); }
 
 void nvim_nv_scroll_impl(cmdarg_T *cap) { nv_scroll_impl(cap); }
 
@@ -3167,394 +3218,6 @@ static int nv_zg_zw(cmdarg_T *cap, int nchar)
                  undo);
 
   return OK;
-}
-
-/// Commands that start with "z" (implementation).
-static void nv_zet_impl(cmdarg_T *cap)
-{
-  colnr_T col;
-  int nchar = cap->nchar;
-  int old_fdl = (int)curwin->w_p_fdl;
-  int old_fen = curwin->w_p_fen;
-
-  int siso = rs_get_sidescrolloff_value(curwin);
-
-  if (ascii_isdigit(nchar) && !nv_z_get_count(cap, &nchar)) {
-    return;
-  }
-
-  // "zf" and "zF" are always an operator, "zd", "zo", "zO", "zc"
-  // and "zC" only in Visual mode.  "zj" and "zk" are motion
-  // commands.
-  if (cap->nchar != 'f' && cap->nchar != 'F'
-      && !(VIsual_active && vim_strchr("dcCoO", cap->nchar))
-      && cap->nchar != 'j' && cap->nchar != 'k'
-      && rs_checkclearop(cap->oap)) {
-    return;
-  }
-
-  // For "z+", "z<CR>", "zt", "z.", "zz", "z^", "z-", "zb":
-  // If line number given, set cursor.
-  if ((vim_strchr("+\r\nt.z^-b", nchar) != NULL)
-      && cap->count0
-      && cap->count0 != curwin->w_cursor.lnum) {
-    setpcmark();
-    if (cap->count0 > curbuf->b_ml.ml_line_count) {
-      curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-    } else {
-      curwin->w_cursor.lnum = cap->count0;
-    }
-    check_cursor_col(curwin);
-  }
-
-  switch (nchar) {
-  // "z+", "z<CR>" and "zt": put cursor at top of screen
-  case '+':
-    if (cap->count0 == 0) {
-      // No count given: put cursor at the line below screen
-      validate_botline(curwin);               // make sure w_botline is valid
-      curwin->w_cursor.lnum = MIN(curwin->w_botline, curbuf->b_ml.ml_line_count);
-    }
-    FALLTHROUGH;
-  case NL:
-  case CAR:
-  case K_KENTER:
-    beginline(BL_WHITE | BL_FIX);
-    FALLTHROUGH;
-
-  case 't':
-    scroll_cursor_top(curwin, 0, true);
-    redraw_later(curwin, UPD_VALID);
-    rs_set_fraction(curwin);
-    break;
-
-  // "z." and "zz": put cursor in middle of screen
-  case '.':
-    beginline(BL_WHITE | BL_FIX);
-    FALLTHROUGH;
-
-  case 'z':
-    scroll_cursor_halfway(curwin, true, false);
-    redraw_later(curwin, UPD_VALID);
-    rs_set_fraction(curwin);
-    break;
-
-  // "z^", "z-" and "zb": put cursor at bottom of screen
-  case '^':     // Strange Vi behavior: <count>z^ finds line at top of window
-                // when <count> is at bottom of window, and puts that one at
-                // bottom of window.
-    if (cap->count0 != 0) {
-      scroll_cursor_bot(curwin, 0, true);
-      curwin->w_cursor.lnum = curwin->w_topline;
-    } else if (curwin->w_topline == 1) {
-      curwin->w_cursor.lnum = 1;
-    } else {
-      curwin->w_cursor.lnum = curwin->w_topline - 1;
-    }
-    FALLTHROUGH;
-  case '-':
-    beginline(BL_WHITE | BL_FIX);
-    FALLTHROUGH;
-
-  case 'b':
-    scroll_cursor_bot(curwin, 0, true);
-    redraw_later(curwin, UPD_VALID);
-    rs_set_fraction(curwin);
-    break;
-
-  // "zH" - scroll screen right half-page
-  case 'H':
-    cap->count1 *= curwin->w_view_width / 2;
-    FALLTHROUGH;
-
-  // "zh" - scroll screen to the right
-  case 'h':
-  case K_LEFT:
-    if (!curwin->w_p_wrap) {
-      set_leftcol((colnr_T)cap->count1 > curwin->w_leftcol
-                  ? 0 : curwin->w_leftcol - (colnr_T)cap->count1);
-    }
-    break;
-
-  // "zL" - scroll window left half-page
-  case 'L':
-    cap->count1 *= curwin->w_view_width / 2;
-    FALLTHROUGH;
-
-  // "zl" - scroll window to the left if not wrapping
-  case 'l':
-  case K_RIGHT:
-    if (!curwin->w_p_wrap) {
-      set_leftcol(curwin->w_leftcol + (colnr_T)cap->count1);
-    }
-    break;
-
-  // "zs" - scroll screen, cursor at the start
-  case 's':
-    if (!curwin->w_p_wrap) {
-      if (hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL)) {
-        col = 0;                        // like the cursor is in col 0
-      } else {
-        getvcol(curwin, &curwin->w_cursor, &col, NULL, NULL);
-      }
-      if (col > siso) {
-        col -= siso;
-      } else {
-        col = 0;
-      }
-      if (curwin->w_leftcol != col) {
-        curwin->w_leftcol = col;
-        redraw_later(curwin, UPD_NOT_VALID);
-      }
-    }
-    break;
-
-  // "ze" - scroll screen, cursor at the end
-  case 'e':
-    if (!curwin->w_p_wrap) {
-      if (hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL)) {
-        col = 0;                        // like the cursor is in col 0
-      } else {
-        getvcol(curwin, &curwin->w_cursor, NULL, NULL, &col);
-      }
-      int n = curwin->w_view_width - win_col_off(curwin);
-      if (col + siso < n) {
-        col = 0;
-      } else {
-        col = col + siso - n + 1;
-      }
-      if (curwin->w_leftcol != col) {
-        curwin->w_leftcol = col;
-        redraw_later(curwin, UPD_NOT_VALID);
-      }
-    }
-    break;
-
-  // "zp", "zP" in block mode put without adding trailing spaces
-  case 'P':
-  case 'p':
-    rs_nv_put(cap);
-    break;
-  // "zy" Yank without trailing spaces
-  case 'y':
-    rs_nv_operator(cap);
-    break;
-
-  // "zF": create fold command
-  // "zf": create fold operator
-  case 'F':
-  case 'f':
-    if (rs_foldManualAllowed(true)) {
-      cap->nchar = 'f';
-      rs_nv_operator(cap);
-      curwin->w_p_fen = true;
-
-      // "zF" is like "zfzf"
-      if (nchar == 'F' && cap->oap->op_type == OP_FOLD) {
-        rs_nv_operator(cap);
-        finish_op = true;
-      }
-    } else {
-      rs_clearopbeep(cap->oap);
-    }
-    break;
-
-  // "zd": delete fold at cursor
-  // "zD": delete fold at cursor recursively
-  case 'd':
-  case 'D':
-    if (rs_foldManualAllowed(false)) {
-      if (VIsual_active) {
-        rs_nv_operator(cap);
-      } else {
-        rs_deleteFold(curwin, curwin->w_cursor.lnum,
-                   curwin->w_cursor.lnum, nchar == 'D', false);
-      }
-    }
-    break;
-
-  // "zE": erase all folds
-  case 'E':
-    if (rs_foldmethodIsManual(curwin)) {
-      rs_clearFolding(curwin);
-      changed_window_setting(curwin);
-    } else if (rs_foldmethodIsMarker(curwin)) {
-      rs_deleteFold(curwin, 1, curbuf->b_ml.ml_line_count, true, false);
-    } else {
-      emsg(_("E352: Cannot erase folds with current 'foldmethod'"));
-    }
-    break;
-
-  // "zn": fold none: reset 'foldenable'
-  case 'n':
-    curwin->w_p_fen = false;
-    break;
-
-  // "zN": fold Normal: set 'foldenable'
-  case 'N':
-    curwin->w_p_fen = true;
-    break;
-
-  // "zi": invert folding: toggle 'foldenable'
-  case 'i':
-    curwin->w_p_fen = !curwin->w_p_fen;
-    break;
-
-  // "za": open closed fold or close open fold at cursor
-  case 'a':
-    if (hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL)) {
-      rs_setFoldRepeat(curwin->w_cursor.lnum, cap->count1, true);
-    } else {
-      rs_setFoldRepeat(curwin->w_cursor.lnum, cap->count1, false);
-      curwin->w_p_fen = true;
-    }
-    break;
-
-  // "zA": open fold at cursor recursively
-  case 'A':
-    if (hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL)) {
-      rs_setManualFold(curwin->w_cursor.lnum, true, true, NULL);
-    } else {
-      rs_setManualFold(curwin->w_cursor.lnum, false, true, NULL);
-      curwin->w_p_fen = true;
-    }
-    break;
-
-  // "zo": open fold at cursor or Visual area
-  case 'o':
-    if (VIsual_active) {
-      rs_nv_operator(cap);
-    } else {
-      rs_setFoldRepeat(curwin->w_cursor.lnum, cap->count1, true);
-    }
-    break;
-
-  // "zO": open fold recursively
-  case 'O':
-    if (VIsual_active) {
-      rs_nv_operator(cap);
-    } else {
-      rs_setManualFold(curwin->w_cursor.lnum, true, true, NULL);
-    }
-    break;
-
-  // "zc": close fold at cursor or Visual area
-  case 'c':
-    if (VIsual_active) {
-      rs_nv_operator(cap);
-    } else {
-      rs_setFoldRepeat(curwin->w_cursor.lnum, cap->count1, false);
-    }
-    curwin->w_p_fen = true;
-    break;
-
-  // "zC": close fold recursively
-  case 'C':
-    if (VIsual_active) {
-      rs_nv_operator(cap);
-    } else {
-      rs_setManualFold(curwin->w_cursor.lnum, false, true, NULL);
-    }
-    curwin->w_p_fen = true;
-    break;
-
-  // "zv": open folds at the cursor
-  case 'v':
-    rs_foldOpenCursor();
-    break;
-
-  // "zx": re-apply 'foldlevel' and open folds at the cursor
-  case 'x':
-    curwin->w_p_fen = true;
-    curwin->w_foldinvalid = true;               // recompute folds
-    rs_newFoldLevel();                             // update right now
-    rs_foldOpenCursor();
-    break;
-
-  // "zX": undo manual opens/closes, re-apply 'foldlevel'
-  case 'X':
-    curwin->w_p_fen = true;
-    curwin->w_foldinvalid = true;               // recompute folds
-    old_fdl = -1;                               // force an update
-    break;
-
-  // "zm": fold more
-  case 'm':
-    if (curwin->w_p_fdl > 0) {
-      curwin->w_p_fdl -= cap->count1;
-      curwin->w_p_fdl = MAX(curwin->w_p_fdl, 0);
-    }
-    old_fdl = -1;                       // force an update
-    curwin->w_p_fen = true;
-    break;
-
-  // "zM": close all folds
-  case 'M':
-    curwin->w_p_fdl = 0;
-    old_fdl = -1;                       // force an update
-    curwin->w_p_fen = true;
-    break;
-
-  // "zr": reduce folding
-  case 'r':
-    curwin->w_p_fdl += cap->count1;
-    {
-      int d = rs_getDeepestNesting(curwin);
-      curwin->w_p_fdl = MIN(curwin->w_p_fdl, d);
-    }
-    break;
-
-  case 'R':     //  "zR": open all folds
-    curwin->w_p_fdl = rs_getDeepestNesting(curwin);
-    old_fdl = -1;                       // force an update
-    break;
-
-  case 'j':     // "zj" move to next fold downwards
-  case 'k':     // "zk" move to next fold upwards
-    if (rs_foldMoveTo(true, nchar == 'j' ? FORWARD : BACKWARD,
-                   cap->count1) == false) {
-      rs_clearopbeep(cap->oap);
-    }
-    break;
-
-  case 'u':     // "zug" and "zuw": undo "zg" and "zw"
-  case 'g':     // "zg": add good word to word list
-  case 'w':     // "zw": add wrong word to word list
-  case 'G':     // "zG": add good word to temp word list
-  case 'W':     // "zW": add wrong word to temp word list
-    if (nv_zg_zw(cap, nchar) == FAIL) {
-      return;
-    }
-    break;
-
-  case '=':     // "z=": suggestions for a badly spelled word
-    if (!rs_checkclearop(cap->oap)) {
-      spell_suggest(cap->count0);
-    }
-    break;
-
-  default:
-    rs_clearopbeep(cap->oap);
-  }
-
-  // Redraw when 'foldenable' changed
-  if (old_fen != curwin->w_p_fen) {
-    if (rs_foldmethodIsDiff(curwin) && curwin->w_p_scb) {
-      // Adjust 'foldenable' in diff-synced windows.
-      FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-        if (wp != curwin && rs_foldmethodIsDiff(wp) && wp->w_p_scb) {
-          wp->w_p_fen = curwin->w_p_fen;
-          changed_window_setting(wp);
-        }
-      }
-    }
-    changed_window_setting(curwin);
-  }
-
-  // Redraw when 'foldlevel' changed.
-  if (old_fdl != curwin->w_p_fdl) {
-    rs_newFoldLevel();
-  }
 }
 
 /// Handle a ":" command and <Cmd> or Lua mappings.
