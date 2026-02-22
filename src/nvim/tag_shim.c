@@ -193,234 +193,40 @@ typedef struct {
   hashtab_T ht_match[MT_COUNT];  ///< stores matches by key
 } findtags_state_T;
 
-// ============================================================================
-// Rust FFI accessor functions
-// ============================================================================
-
-/// Get tag stack length from win_T for Rust
-int nvim_win_get_tagstacklen(const void *wp_void)
-{
-  const win_T *wp = (const win_T *)wp_void;
-  return wp->w_tagstacklen;
-}
-
-/// Get tag stack index from win_T for Rust
-int nvim_win_get_tagstackidx(const void *wp_void)
-{
-  const win_T *wp = (const win_T *)wp_void;
-  return wp->w_tagstackidx;
-}
-
-/// Get tag stack entry at index from win_T for Rust
-void *nvim_win_get_tagstack_entry(const void *wp_void, int idx)
-{
-  const win_T *wp = (const win_T *)wp_void;
-  return (void *)&wp->w_tagstack[idx];
-}
-
-/// Get tagname from taggy_T for Rust
-const char *nvim_taggy_get_tagname(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->tagname;
-}
-
-/// Get cur_match from taggy_T for Rust
-int nvim_taggy_get_cur_match(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->cur_match;
-}
-
-/// Get cur_fnum from taggy_T for Rust
-int nvim_taggy_get_cur_fnum(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->cur_fnum;
-}
-
-/// Get fmark pointer from taggy_T for Rust
-void *nvim_taggy_get_fmark(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return (void *)&tg->fmark;
-}
-
-/// Get user_data from taggy_T for Rust
-const char *nvim_taggy_get_user_data(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->user_data;
-}
-
-/// Get lnum from fmark_T for Rust
-linenr_T nvim_fmark_get_lnum(const void *fm_void)
-{
-  const fmark_T *fm = (const fmark_T *)fm_void;
-  return fm->mark.lnum;
-}
-
-/// Get col from fmark_T for Rust
-int nvim_fmark_get_col(const void *fm_void)
-{
-  const fmark_T *fm = (const fmark_T *)fm_void;
-  return fm->mark.col;
-}
-
-/// Get fnum from fmark_T for Rust
-int nvim_fmark_get_fnum(const void *fm_void)
-{
-  const fmark_T *fm = (const fmark_T *)fm_void;
-  return fm->fnum;
-}
-
-// ============================================================================
-// Setter functions for Rust tag stack operations
-// ============================================================================
-
-/// Set tag stack length for win_T from Rust
-void nvim_win_set_tagstacklen(void *wp_void, int len)
-{
-  win_T *wp = (win_T *)wp_void;
-  wp->w_tagstacklen = len;
-}
-
-/// Set tag stack index for win_T from Rust
-void nvim_win_set_tagstackidx(void *wp_void, int idx)
-{
-  win_T *wp = (win_T *)wp_void;
-  wp->w_tagstackidx = idx;
-}
-
-/// Set tagname in taggy_T from Rust
-void nvim_taggy_set_tagname(void *tg_void, char *name)
-{
-  taggy_T *tg = (taggy_T *)tg_void;
-  tg->tagname = name;
-}
-
-/// Set cur_match in taggy_T from Rust
-void nvim_taggy_set_cur_match(void *tg_void, int match_idx)
-{
-  taggy_T *tg = (taggy_T *)tg_void;
-  tg->cur_match = match_idx;
-}
-
-/// Set cur_fnum in taggy_T from Rust
-void nvim_taggy_set_cur_fnum(void *tg_void, int fnum)
-{
-  taggy_T *tg = (taggy_T *)tg_void;
-  tg->cur_fnum = fnum;
-}
-
-/// Set user_data in taggy_T from Rust
-void nvim_taggy_set_user_data(void *tg_void, char *data)
-{
-  taggy_T *tg = (taggy_T *)tg_void;
-  tg->user_data = data;
-}
-
-/// Get fmark lnum from taggy_T for Rust
-linenr_T nvim_taggy_get_fmark_lnum(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->fmark.mark.lnum;
-}
-
-/// Get fmark col from taggy_T for Rust
-int nvim_taggy_get_fmark_col(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->fmark.mark.col;
-}
-
-/// Get fmark fnum from taggy_T for Rust
-int nvim_taggy_get_fmark_fnum(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->fmark.fnum;
-}
-
-/// Set fmark lnum in taggy_T from Rust
-void nvim_taggy_set_fmark_lnum(void *tg_void, linenr_T lnum)
-{
-  taggy_T *tg = (taggy_T *)tg_void;
-  tg->fmark.mark.lnum = lnum;
-}
-
-/// Set fmark col in taggy_T from Rust
-void nvim_taggy_set_fmark_col(void *tg_void, int col)
-{
-  taggy_T *tg = (taggy_T *)tg_void;
-  tg->fmark.mark.col = col;
-}
-
-/// Set fmark fnum in taggy_T from Rust
-void nvim_taggy_set_fmark_fnum(void *tg_void, int fnum)
-{
-  taggy_T *tg = (taggy_T *)tg_void;
-  tg->fmark.fnum = fnum;
-}
-
-/// Get state from findtags_state_T for Rust
-int nvim_findtags_get_state(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return (int)st->state;
-}
-
-/// Get match_count from findtags_state_T for Rust
-int nvim_findtags_get_match_count(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->match_count;
-}
-
-/// Get help_only flag from findtags_state_T for Rust
-bool nvim_findtags_get_help_only(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->help_only;
-}
-
-/// Get linear flag from findtags_state_T for Rust
-bool nvim_findtags_get_linear(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->linear;
-}
-
-/// Get tag_file_sorted from findtags_state_T for Rust
-int nvim_findtags_get_tag_file_sorted(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->tag_file_sorted;
-}
-
-/// Get the 'taglength' option value for Rust
-int64_t nvim_get_p_tl(void)
-{
-  return p_tl;
-}
-
-// ============================================================================
-// Rust FFI accessor functions for findtags_state_T initialization
-// ============================================================================
-
-/// Allocate and set tag_fname field
-void nvim_findtags_init_tag_fname(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->tag_fname = xmalloc(MAXPATHL + 1);
-}
-
-/// Set fp to NULL
-void nvim_findtags_set_fp_null(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->fp = NULL;
-}
-
+// --- Rust FFI accessor functions ---
+int nvim_win_get_tagstacklen(const void *wp_void) { const win_T *wp = (const win_T *)wp_void; return wp->w_tagstacklen; }
+int nvim_win_get_tagstackidx(const void *wp_void) { const win_T *wp = (const win_T *)wp_void; return wp->w_tagstackidx; }
+void *nvim_win_get_tagstack_entry(const void *wp_void, int idx) { const win_T *wp = (const win_T *)wp_void; return (void *)&wp->w_tagstack[idx]; }
+const char *nvim_taggy_get_tagname(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->tagname; }
+int nvim_taggy_get_cur_match(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->cur_match; }
+int nvim_taggy_get_cur_fnum(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->cur_fnum; }
+void *nvim_taggy_get_fmark(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return (void *)&tg->fmark; }
+const char *nvim_taggy_get_user_data(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->user_data; }
+linenr_T nvim_fmark_get_lnum(const void *fm_void) { const fmark_T *fm = (const fmark_T *)fm_void; return fm->mark.lnum; }
+int nvim_fmark_get_col(const void *fm_void) { const fmark_T *fm = (const fmark_T *)fm_void; return fm->mark.col; }
+int nvim_fmark_get_fnum(const void *fm_void) { const fmark_T *fm = (const fmark_T *)fm_void; return fm->fnum; }
+// --- Setter functions for Rust tag stack operations ---
+void nvim_win_set_tagstacklen(void *wp_void, int len) { win_T *wp = (win_T *)wp_void; wp->w_tagstacklen = len; }
+void nvim_win_set_tagstackidx(void *wp_void, int idx) { win_T *wp = (win_T *)wp_void; wp->w_tagstackidx = idx; }
+void nvim_taggy_set_tagname(void *tg_void, char *name) { taggy_T *tg = (taggy_T *)tg_void; tg->tagname = name; }
+void nvim_taggy_set_cur_match(void *tg_void, int match_idx) { taggy_T *tg = (taggy_T *)tg_void; tg->cur_match = match_idx; }
+void nvim_taggy_set_cur_fnum(void *tg_void, int fnum) { taggy_T *tg = (taggy_T *)tg_void; tg->cur_fnum = fnum; }
+void nvim_taggy_set_user_data(void *tg_void, char *data) { taggy_T *tg = (taggy_T *)tg_void; tg->user_data = data; }
+linenr_T nvim_taggy_get_fmark_lnum(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->fmark.mark.lnum; }
+int nvim_taggy_get_fmark_col(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->fmark.mark.col; }
+int nvim_taggy_get_fmark_fnum(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->fmark.fnum; }
+void nvim_taggy_set_fmark_lnum(void *tg_void, linenr_T lnum) { taggy_T *tg = (taggy_T *)tg_void; tg->fmark.mark.lnum = lnum; }
+void nvim_taggy_set_fmark_col(void *tg_void, int col) { taggy_T *tg = (taggy_T *)tg_void; tg->fmark.mark.col = col; }
+void nvim_taggy_set_fmark_fnum(void *tg_void, int fnum) { taggy_T *tg = (taggy_T *)tg_void; tg->fmark.fnum = fnum; }
+int nvim_findtags_get_state(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return (int)st->state; }
+int nvim_findtags_get_match_count(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->match_count; }
+bool nvim_findtags_get_help_only(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->help_only; }
+bool nvim_findtags_get_linear(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->linear; }
+int nvim_findtags_get_tag_file_sorted(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->tag_file_sorted; }
+int64_t nvim_get_p_tl(void) { return p_tl; }
+// --- Rust FFI accessor functions for findtags_state_T initialization ---
+void nvim_findtags_init_tag_fname(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->tag_fname = xmalloc(MAXPATHL + 1); }
+void nvim_findtags_set_fp_null(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->fp = NULL; }
 /// Allocate orgpat and initialize it with pattern
 void nvim_findtags_init_orgpat(void *st_void, char *pat)
 {
@@ -471,10 +277,7 @@ void nvim_findtags_state_free_inner(void *st_void)
   xfree(st->orgpat);
 }
 
-// ============================================================================
-// Rust FFI accessor functions for findtags_match_args_T
-// ============================================================================
-
+// --- Rust FFI accessor functions for findtags_match_args_T ---
 /// Initialize findtags_match_args_T
 void nvim_findtags_matchargs_init(void *margs_void, int flags)
 {
@@ -487,46 +290,13 @@ void nvim_findtags_matchargs_init(void *margs_void, int flags)
   margs->sort_error = false;
 }
 
-// ============================================================================
-// Rust FFI accessor functions for tag file iteration (functions not using tag_fnames)
-// ============================================================================
-
-/// Check if the current buffer is a help buffer
-bool nvim_curbuf_is_help(void)
-{
-  return curbuf->b_help;
-}
-
-/// Get the 'helpfile' option value
-const char *nvim_get_p_hf(void)
-{
-  return p_hf;
-}
-
-/// Get the buffer-local 'tags' option
-const char *nvim_get_curbuf_tags(void)
-{
-  return curbuf->b_p_tags;
-}
-
-/// Get the global 'tags' option
-const char *nvim_get_p_tags(void)
-{
-  return p_tags;
-}
-
-/// Get path_tail for Rust
-char *nvim_path_tail(char *path)
-{
-  return path_tail(path);
-}
-
-/// Simplify filename for Rust
-void nvim_simplify_filename(char *fname)
-{
-  simplify_filename(fname);
-}
-
+// --- Rust FFI accessor functions for tag file iteration (functions not using tag_fnames) ---
+bool nvim_curbuf_is_help(void) { return curbuf->b_help; }
+const char *nvim_get_p_hf(void) { return p_hf; }
+const char *nvim_get_curbuf_tags(void) { return curbuf->b_p_tags; }
+const char *nvim_get_p_tags(void) { return p_tags; }
+char *nvim_path_tail(char *path) { return path_tail(path); }
+void nvim_simplify_filename(char *fname) { simplify_filename(fname); }
 /// Initialize vim_findfile for Rust
 void *nvim_vim_findfile_init(const char *path, const char *filename, size_t filename_len,
                               const char *stopdirs, int level, bool free_visited,
@@ -538,99 +308,22 @@ void *nvim_vim_findfile_init(const char *path, const char *filename, size_t file
                            find_what, search_ctx, tagfile, (char *)buf_ffname);
 }
 
-/// Find next file for Rust
-char *nvim_vim_findfile(void *search_ctx)
-{
-  return vim_findfile(search_ctx);
-}
-
-/// Cleanup vim_findfile context for Rust
-void nvim_vim_findfile_cleanup(void *search_ctx)
-{
-  vim_findfile_cleanup(search_ctx);
-}
-
-/// Get stop directory from path for Rust
-char *nvim_vim_findfile_stopdir(char *buf)
-{
-  return vim_findfile_stopdir(buf);
-}
-
-/// Get current buffer's full file name for Rust
-const char *nvim_get_curbuf_ffname(void)
-{
-  return curbuf->b_ffname;
-}
-
-/// Copy next part of option value for Rust
-void nvim_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep)
-{
-  copy_option_part(option, buf, maxlen, (char *)sep);
-}
-
-// ============================================================================
-// Rust FFI accessor functions for jump.rs
-// ============================================================================
-
-/// Check if a path exists for Rust (tag module)
-bool nvim_tag_path_exists(const char *path)
-{
-  return os_path_exists(path);
-}
-
-/// Check if there's a BufReadCmd autocmd for this file
-bool nvim_has_bufreadcmd(const char *fname)
-{
-  return has_autocmd(EVENT_BUFREADCMD, fname, NULL);
-}
-
-/// Get the postponed_split global
-int nvim_get_postponed_split(void)
-{
-  return postponed_split;
-}
-
-/// Set the postponed_split global
-void nvim_set_postponed_split(int val)
-{
-  postponed_split = val;
-}
-
-/// Get the g_do_tagpreview global
-int nvim_get_g_do_tagpreview(void)
-{
-  return g_do_tagpreview;
-}
-
-/// Set the g_do_tagpreview global
-void nvim_set_g_do_tagpreview(int val)
-{
-  g_do_tagpreview = val;
-}
-
-/// Check if buffer can be set (with forceit flag)
-bool nvim_check_can_set_curbuf_forceit(int forceit)
-{
-  return check_can_set_curbuf_forceit(forceit);
-}
-
-/// Set the nofile_fname (for error reporting)
-void nvim_set_nofile_fname(const char *fname)
-{
-  xfree(nofile_fname);
-  nofile_fname = fname != NULL ? xstrdup(fname) : NULL;
-}
-
-/// Get the nofile_fname (for error reporting)
-const char *nvim_get_nofile_fname(void)
-{
-  return nofile_fname;
-}
-
-// ============================================================================
-// Rust FFI function declarations
-// ============================================================================
-
+char *nvim_vim_findfile(void *search_ctx) { return vim_findfile(search_ctx); }
+void nvim_vim_findfile_cleanup(void *search_ctx) { vim_findfile_cleanup(search_ctx); }
+char *nvim_vim_findfile_stopdir(char *buf) { return vim_findfile_stopdir(buf); }
+const char *nvim_get_curbuf_ffname(void) { return curbuf->b_ffname; }
+void nvim_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep) { copy_option_part(option, buf, maxlen, (char *)sep); }
+// --- Rust FFI accessor functions for jump.rs ---
+bool nvim_tag_path_exists(const char *path) { return os_path_exists(path); }
+bool nvim_has_bufreadcmd(const char *fname) { return has_autocmd(EVENT_BUFREADCMD, fname, NULL); }
+int nvim_get_postponed_split(void) { return postponed_split; }
+void nvim_set_postponed_split(int val) { postponed_split = val; }
+int nvim_get_g_do_tagpreview(void) { return g_do_tagpreview; }
+void nvim_set_g_do_tagpreview(int val) { g_do_tagpreview = val; }
+bool nvim_check_can_set_curbuf_forceit(int forceit) { return check_can_set_curbuf_forceit(forceit); }
+void nvim_set_nofile_fname(const char *fname) { xfree(nofile_fname); nofile_fname = fname != NULL ? xstrdup(fname) : NULL; }
+const char *nvim_get_nofile_fname(void) { return nofile_fname; }
+// --- Rust FFI function declarations ---
 // Parse functions
 extern int rs_parse_match(char *lbuf, tagptrs_T *tagp);
 extern bool rs_test_for_static(const tagptrs_T *tagp);
@@ -697,68 +390,17 @@ static Callback tfu_cb;          // 'tagfunc' callback function
 // Used instead of NUL to separate tag fields in the growarrays.
 #define TAG_SEP 0x02
 
-// ============================================================================
-// Rust FFI accessor functions for tag globals
-// ============================================================================
-
-/// Free and clear the tagmatchname global
-void nvim_xfree_clear_tagmatchname(void)
-{
-  XFREE_CLEAR(tagmatchname);
-}
-
-/// Get the tagmatchname global (name of last used tag)
-const char *nvim_get_tagmatchname(void)
-{
-  return tagmatchname;
-}
-
-/// Set the tagmatchname global (takes ownership of the string)
-void nvim_set_tagmatchname(char *name)
-{
-  tagmatchname = name;
-}
-
-/// Get a pointer to the ptag_entry global
-void *nvim_get_ptag_entry(void)
-{
-  return &ptag_entry;
-}
-
-/// Wrapper for msg_advance (msg_putchar already exists in message.c)
-void nvim_tag_msg_advance(int col)
-{
-  msg_advance(col);
-}
-
-/// Wrapper for path_full_compare with kEqualFiles check
-int nvim_path_full_compare_equal(const char *s1, const char *s2)
-{
-  return (path_full_compare((char *)s1, (char *)s2, true, true) & kEqualFiles);
-}
-
-/// Check if curwin is NULL
-bool nvim_tag_curwin_is_null(void)
-{
-  return curwin == NULL;
-}
-
-/// Call do_tag with DT_FREE to free cached matches
-void nvim_do_tag_free(void)
-{
-  rs_do_tag(NULL, DT_FREE, 0, 0, 0);
-}
-
-// ============================================================================
-// Rust FFI accessor functions for expand_tag_fname
-// ============================================================================
-
-/// Check if a path has wildcards
-bool nvim_path_has_wildcard(const char *fname)
-{
-  return path_has_wildcard(fname);
-}
-
+// --- Rust FFI accessor functions for tag globals ---
+void nvim_xfree_clear_tagmatchname(void) { XFREE_CLEAR(tagmatchname); }
+const char *nvim_get_tagmatchname(void) { return tagmatchname; }
+void nvim_set_tagmatchname(char *name) { tagmatchname = name; }
+void *nvim_get_ptag_entry(void) { return &ptag_entry; }
+void nvim_tag_msg_advance(int col) { msg_advance(col); }
+int nvim_path_full_compare_equal(const char *s1, const char *s2) { return (path_full_compare((char *)s1, (char *)s2, true, true) & kEqualFiles); }
+bool nvim_tag_curwin_is_null(void) { return curwin == NULL; }
+void nvim_do_tag_free(void) { rs_do_tag(NULL, DT_FREE, 0, 0, 0); }
+// --- Rust FFI accessor functions for expand_tag_fname ---
+bool nvim_path_has_wildcard(const char *fname) { return path_has_wildcard(fname); }
 /// Expand wildcards in a filename (ExpandInit + ExpandOne)
 char *nvim_expand_one_file(char *fname)
 {
@@ -769,43 +411,12 @@ char *nvim_expand_one_file(char *fname)
                    WILD_LIST_NOTFOUND|WILD_SILENT, WILD_EXPAND_FREE);
 }
 
-/// Check if a filename is absolute
-bool nvim_vim_isAbsName(const char *fname)
-{
-  return vim_isAbsName(fname);
-}
-
-/// Get the 'tagrelative' option value
-bool nvim_get_p_tr(void)
-{
-  return p_tr;
-}
-
-// ============================================================================
-// Rust FFI accessor functions for search state machine
-// ============================================================================
-
-/// Set st->state
-void nvim_findtags_set_state_val(void *st_void, int state)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->state = (tagsearch_state_T)state;
-}
-
-/// Get st->lbuf
-char *nvim_findtags_get_lbuf(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->lbuf;
-}
-
-/// Get st->lbuf_size
-int nvim_findtags_get_lbuf_size(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->lbuf_size;
-}
-
+bool nvim_vim_isAbsName(const char *fname) { return vim_isAbsName(fname); }
+bool nvim_get_p_tr(void) { return p_tr; }
+// --- Rust FFI accessor functions for search state machine ---
+void nvim_findtags_set_state_val(void *st_void, int state) { findtags_state_T *st = (findtags_state_T *)st_void; st->state = (tagsearch_state_T)state; }
+char *nvim_findtags_get_lbuf(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->lbuf; }
+int nvim_findtags_get_lbuf_size(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->lbuf_size; }
 /// Set st->lbuf and st->lbuf_size (for string_convert swap)
 void nvim_findtags_set_lbuf(void *st_void, char *lbuf, int lbuf_size)
 {
@@ -814,224 +425,38 @@ void nvim_findtags_set_lbuf(void *st_void, char *lbuf, int lbuf_size)
   st->lbuf_size = lbuf_size;
 }
 
-/// vim_fgets on st->fp into st->lbuf
-bool nvim_findtags_fgets(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  return vim_fgets(st->lbuf, st->lbuf_size, st->fp);
-}
-
-/// vim_fseek on st->fp
-int nvim_findtags_fseek(void *st_void, int64_t offset, int whence)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  return vim_fseek(st->fp, (off_T)offset, whence);
-}
-
-/// vim_ftell on st->fp
-int64_t nvim_findtags_ftell(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return (int64_t)vim_ftell(st->fp);
-}
-
-/// fseek(st->fp, 0, SEEK_SET)
-void nvim_findtags_fseek_zero(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  fseek(st->fp, 0, SEEK_SET);
-}
-
-/// Check if st->lbuf is a blank line
-bool nvim_findtags_lbuf_is_blank(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return vim_isblankline(st->lbuf);
-}
-
-/// Get st->flags
-int nvim_findtags_get_flags(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->flags;
-}
-
-/// Set st->linear
-void nvim_findtags_set_linear(void *st_void, bool linear)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->linear = linear;
-}
-
-/// Get st->tag_file_sorted
-int nvim_findtags_get_sorted(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->tag_file_sorted;
-}
-
-/// Set st->tag_file_sorted
-void nvim_findtags_set_sorted(void *st_void, int val)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->tag_file_sorted = val;
-}
-
-/// Get st->orgpat->regmatch.rm_ic
-bool nvim_findtags_get_orgpat_rm_ic(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->orgpat->regmatch.rm_ic;
-}
-
-/// Set st->orgpat->regmatch.rm_ic
-void nvim_findtags_set_orgpat_rm_ic(void *st_void, bool ic)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->orgpat->regmatch.rm_ic = ic;
-}
-
-/// Call convert_setup on st->vimconv
-void nvim_findtags_convert_setup(void *st_void, const char *from)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  convert_setup(&st->vimconv, (char *)from, p_enc);
-}
-
-/// Call string_convert on st->vimconv with st->lbuf
-/// Returns converted string (caller must free), or NULL if no conversion.
-char *nvim_findtags_string_convert(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  return string_convert(&st->vimconv, st->lbuf, NULL);
-}
-
-// ============================================================================
-// Rust FFI accessor functions for parse line and matching
-// ============================================================================
-
-/// Get st->orgpat->headlen
-int nvim_findtags_get_orgpat_headlen(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->orgpat->headlen;
-}
-
-/// Get st->orgpat->head
-const char *nvim_findtags_get_orgpat_head(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->orgpat->head;
-}
-
-/// Get st->orgpat->pat
-const char *nvim_findtags_get_orgpat_pat(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->orgpat->pat;
-}
-
-/// Get st->orgpat->len
-int nvim_findtags_get_orgpat_len(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->orgpat->len;
-}
-
-/// Check if st->orgpat->regmatch.regprog is not NULL
-bool nvim_findtags_has_regprog(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->orgpat->regmatch.regprog != NULL;
-}
-
-/// Run vim_regexec on st->orgpat->regmatch with tagname
-bool nvim_findtags_vim_regexec(void *st_void, const char *tagname)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  return vim_regexec(&st->orgpat->regmatch, (char *)tagname, 0);
-}
-
-/// Get st->orgpat->regmatch.startp[0] offset from tagname
-int nvim_findtags_get_regmatch_startoff(const void *st_void, const char *tagname)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return (int)(st->orgpat->regmatch.startp[0] - tagname);
-}
-
-/// Call mb_strnicmp for tag comparison
-int nvim_mb_strnicmp(const char *s1, const char *s2, size_t len)
-{
-  return mb_strnicmp(s1, s2, len);
-}
-
-/// Get st->tag_fname
-const char *nvim_findtags_get_tag_fname(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->tag_fname;
-}
-
-/// Get st->help_lang (3-byte buffer)
-const char *nvim_findtags_get_help_lang(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->help_lang;
-}
-
-/// Get st->help_pri
-int nvim_findtags_get_help_pri(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->help_pri;
-}
-
-/// Get st->get_searchpat
-bool nvim_findtags_get_searchpat(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->get_searchpat;
-}
-
-/// Set st->get_searchpat
-void nvim_findtags_set_searchpat(void *st_void, bool val)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->get_searchpat = val;
-}
-
-/// Increment st->match_count
-void nvim_findtags_inc_match_count(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->match_count++;
-}
-
-/// Set st->match_count
-void nvim_findtags_set_match_count(void *st_void, int count)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->match_count = count;
-}
-
-/// Get the current State for insert mode check
-int nvim_get_current_State(void)
-{
-  return State;
-}
-
-/// Get 'showfulltag' option
-bool nvim_get_p_sft(void)
-{
-  return p_sft;
-}
-
-/// Call help_heuristic
-int nvim_help_heuristic(const char *tagname, int match_offset, bool wrong_case)
-{
-  return help_heuristic((char *)tagname, match_offset, wrong_case);
-}
-
+bool nvim_findtags_fgets(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return vim_fgets(st->lbuf, st->lbuf_size, st->fp); }
+int nvim_findtags_fseek(void *st_void, int64_t offset, int whence) { findtags_state_T *st = (findtags_state_T *)st_void; return vim_fseek(st->fp, (off_T)offset, whence); }
+int64_t nvim_findtags_ftell(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return (int64_t)vim_ftell(st->fp); }
+void nvim_findtags_fseek_zero(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; fseek(st->fp, 0, SEEK_SET); }
+bool nvim_findtags_lbuf_is_blank(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return vim_isblankline(st->lbuf); }
+int nvim_findtags_get_flags(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->flags; }
+void nvim_findtags_set_linear(void *st_void, bool linear) { findtags_state_T *st = (findtags_state_T *)st_void; st->linear = linear; }
+int nvim_findtags_get_sorted(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->tag_file_sorted; }
+void nvim_findtags_set_sorted(void *st_void, int val) { findtags_state_T *st = (findtags_state_T *)st_void; st->tag_file_sorted = val; }
+bool nvim_findtags_get_orgpat_rm_ic(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->orgpat->regmatch.rm_ic; }
+void nvim_findtags_set_orgpat_rm_ic(void *st_void, bool ic) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->regmatch.rm_ic = ic; }
+void nvim_findtags_convert_setup(void *st_void, const char *from) { findtags_state_T *st = (findtags_state_T *)st_void; convert_setup(&st->vimconv, (char *)from, p_enc); }
+char *nvim_findtags_string_convert(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return string_convert(&st->vimconv, st->lbuf, NULL); }
+// --- Rust FFI accessor functions for parse line and matching ---
+int nvim_findtags_get_orgpat_headlen(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->orgpat->headlen; }
+const char *nvim_findtags_get_orgpat_head(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->orgpat->head; }
+const char *nvim_findtags_get_orgpat_pat(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->orgpat->pat; }
+int nvim_findtags_get_orgpat_len(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->orgpat->len; }
+bool nvim_findtags_has_regprog(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->orgpat->regmatch.regprog != NULL; }
+bool nvim_findtags_vim_regexec(void *st_void, const char *tagname) { findtags_state_T *st = (findtags_state_T *)st_void; return vim_regexec(&st->orgpat->regmatch, (char *)tagname, 0); }
+int nvim_findtags_get_regmatch_startoff(const void *st_void, const char *tagname) { const findtags_state_T *st = (const findtags_state_T *)st_void; return (int)(st->orgpat->regmatch.startp[0] - tagname); }
+int nvim_mb_strnicmp(const char *s1, const char *s2, size_t len) { return mb_strnicmp(s1, s2, len); }
+const char *nvim_findtags_get_tag_fname(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->tag_fname; }
+const char *nvim_findtags_get_help_lang(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->help_lang; }
+int nvim_findtags_get_help_pri(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->help_pri; }
+bool nvim_findtags_get_searchpat(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->get_searchpat; }
+void nvim_findtags_set_searchpat(void *st_void, bool val) { findtags_state_T *st = (findtags_state_T *)st_void; st->get_searchpat = val; }
+void nvim_findtags_inc_match_count(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->match_count++; }
+void nvim_findtags_set_match_count(void *st_void, int count) { findtags_state_T *st = (findtags_state_T *)st_void; st->match_count = count; }
+int nvim_get_current_State(void) { return State; }
+bool nvim_get_p_sft(void) { return p_sft; }
+int nvim_help_heuristic(const char *tagname, int match_offset, bool wrong_case) { return help_heuristic((char *)tagname, match_offset, wrong_case); }
 // Verify hash_T size matches Rust usize assumption
 _Static_assert(sizeof(hash_T) == sizeof(size_t), "hash_T must be size_t");
 
@@ -1058,20 +483,8 @@ bool nvim_findtags_add_match_entry(void *st_void, int mtt, char *mfp, hash_T *ha
   return false;
 }
 
-/// Get ga_match[mtt].ga_len
-int nvim_findtags_ga_match_len(const void *st_void, int mtt)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->ga_match[mtt].ga_len;
-}
-
-/// Get ga_match[mtt].ga_data[idx]
-char *nvim_findtags_ga_match_get(const void *st_void, int mtt, int idx)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return ((char **)(st->ga_match[mtt].ga_data))[idx];
-}
-
+int nvim_findtags_ga_match_len(const void *st_void, int mtt) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->ga_match[mtt].ga_len; }
+char *nvim_findtags_ga_match_get(const void *st_void, int mtt, int idx) { const findtags_state_T *st = (const findtags_state_T *)st_void; return ((char **)(st->ga_match[mtt].ga_data))[idx]; }
 /// Clear ga_match[mtt] and ht_match[mtt]
 void nvim_findtags_clear_match(void *st_void, int mtt)
 {
@@ -1080,59 +493,14 @@ void nvim_findtags_clear_match(void *st_void, int mtt)
   hash_clear(&st->ht_match[mtt]);
 }
 
-/// Get st->stop_searching
-bool nvim_findtags_get_stop_searching(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->stop_searching;
-}
-
-/// Set st->stop_searching
-void nvim_findtags_set_stop_searching(void *st_void, bool val)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->stop_searching = val;
-}
-
-// ============================================================================
-// Rust FFI accessor functions for search orchestration
-// ============================================================================
-
-/// Get st->is_txt
-bool nvim_findtags_get_is_txt(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->is_txt;
-}
-
-/// Set st->is_txt
-void nvim_findtags_set_is_txt(void *st_void, bool val)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->is_txt = val;
-}
-
-/// Get st->help_lang_find (may be NULL)
-const char *nvim_findtags_get_help_lang_find(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->help_lang_find;
-}
-
-/// Set st->help_lang_find
-void nvim_findtags_set_help_lang_find(void *st_void, const char *val)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->help_lang_find = (char *)val;
-}
-
-/// Set st->help_pri
-void nvim_findtags_set_help_pri(void *st_void, int pri)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->help_pri = pri;
-}
-
+bool nvim_findtags_get_stop_searching(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->stop_searching; }
+void nvim_findtags_set_stop_searching(void *st_void, bool val) { findtags_state_T *st = (findtags_state_T *)st_void; st->stop_searching = val; }
+// --- Rust FFI accessor functions for search orchestration ---
+bool nvim_findtags_get_is_txt(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->is_txt; }
+void nvim_findtags_set_is_txt(void *st_void, bool val) { findtags_state_T *st = (findtags_state_T *)st_void; st->is_txt = val; }
+const char *nvim_findtags_get_help_lang_find(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->help_lang_find; }
+void nvim_findtags_set_help_lang_find(void *st_void, const char *val) { findtags_state_T *st = (findtags_state_T *)st_void; st->help_lang_find = (char *)val; }
+void nvim_findtags_set_help_pri(void *st_void, int pri) { findtags_state_T *st = (findtags_state_T *)st_void; st->help_pri = pri; }
 /// Set st->help_lang (copies 2 bytes + NUL)
 void nvim_findtags_set_help_lang(void *st_void, const char *lang)
 {
@@ -1142,27 +510,9 @@ void nvim_findtags_set_help_lang(void *st_void, const char *lang)
   st->help_lang[2] = NUL;
 }
 
-/// Get st->vimconv.vc_type
-int nvim_findtags_get_vimconv_type(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return (int)st->vimconv.vc_type;
-}
-
-/// Set st->vimconv.vc_type = CONV_NONE
-void nvim_findtags_set_vimconv_none(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->vimconv.vc_type = CONV_NONE;
-}
-
-/// convert_setup on st->vimconv with NULL, NULL (cleanup)
-void nvim_findtags_convert_cleanup(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  convert_setup(&st->vimconv, NULL, NULL);
-}
-
+int nvim_findtags_get_vimconv_type(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return (int)st->vimconv.vc_type; }
+void nvim_findtags_set_vimconv_none(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->vimconv.vc_type = CONV_NONE; }
+void nvim_findtags_convert_cleanup(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; convert_setup(&st->vimconv, NULL, NULL); }
 /// Open st->tag_fname for reading, set st->fp
 bool nvim_findtags_fopen(void *st_void)
 {
@@ -1181,34 +531,10 @@ void nvim_findtags_fclose(void *st_void)
   }
 }
 
-/// Set st->did_open = true
-void nvim_findtags_set_did_open(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->did_open = true;
-}
-
-/// Get st->did_open
-bool nvim_findtags_get_did_open(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->did_open;
-}
-
-/// Set st->state = TS_START
-void nvim_findtags_set_state_start(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->state = TS_START;
-}
-
-/// Get st->mincount
-int nvim_findtags_get_mincount(const void *st_void)
-{
-  const findtags_state_T *st = (const findtags_state_T *)st_void;
-  return st->mincount;
-}
-
+void nvim_findtags_set_did_open(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->did_open = true; }
+bool nvim_findtags_get_did_open(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->did_open; }
+void nvim_findtags_set_state_start(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->state = TS_START; }
+int nvim_findtags_get_mincount(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->mincount; }
 /// Grow st->lbuf and optionally re-seek to re-read the line.
 /// Returns true if a grow+re-seek was needed.
 bool nvim_findtags_grow_lbuf(void *st_void, void *sinfo_void)
@@ -1228,84 +554,22 @@ bool nvim_findtags_grow_lbuf(void *st_void, void *sinfo_void)
   return true;
 }
 
-/// Set st->orgpat->len
-void nvim_findtags_set_orgpat_len(void *st_void, int len)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->orgpat->len = len;
-}
-
-/// Set st->orgpat->pat
-void nvim_findtags_set_orgpat_pat(void *st_void, char *pat)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->orgpat->pat = pat;
-}
-
+void nvim_findtags_set_orgpat_len(void *st_void, int len) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->len = len; }
+void nvim_findtags_set_orgpat_pat(void *st_void, char *pat) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->pat = pat; }
 // Global variable accessors for search orchestration
 
-/// Set p_ic (ignorecase)
-void nvim_set_p_ic(int val)
-{
-  p_ic = val;
-}
-
-/// Get p_tbs (tagbsearch)
-bool nvim_get_p_tbs(void)
-{
-  return p_tbs;
-}
-
-/// Get tc_flags (global tagcase flags)
-int nvim_get_tc_flags(void)
-{
-  return (int)tc_flags;
-}
-
-/// Get curbuf->b_tc_flags
-int nvim_get_curbuf_tc_flags(void)
-{
-  return (int)curbuf->b_tc_flags;
-}
-
-/// Get p_hlg (helplang option)
-const char *nvim_get_p_hlg(void)
-{
-  return p_hlg;
-}
-
-/// Get curbuf->b_fname
-const char *nvim_get_curbuf_b_fname(void)
-{
-  return curbuf->b_fname;
-}
-
-/// Get curbuf->b_p_tfu
-const char *nvim_get_curbuf_p_tfu(void)
-{
-  return curbuf->b_p_tfu;
-}
-
-/// Set curbuf->b_help
-void nvim_set_curbuf_b_help(int val)
-{
-  curbuf->b_help = val;
-}
-
-/// Get curbuf->b_help
-int nvim_get_curbuf_b_help(void)
-{
-  return curbuf->b_help;
-}
-
+void nvim_set_p_ic(int val) { p_ic = val; }
+bool nvim_get_p_tbs(void) { return p_tbs; }
+int nvim_get_tc_flags(void) { return (int)tc_flags; }
+int nvim_get_curbuf_tc_flags(void) { return (int)curbuf->b_tc_flags; }
+const char *nvim_get_p_hlg(void) { return p_hlg; }
+const char *nvim_get_curbuf_b_fname(void) { return curbuf->b_fname; }
+const char *nvim_get_curbuf_p_tfu(void) { return curbuf->b_p_tfu; }
+void nvim_set_curbuf_b_help(int val) { curbuf->b_help = val; }
+int nvim_get_curbuf_b_help(void) { return curbuf->b_help; }
 // Function wrappers for search orchestration
 
-/// ins_compl_check_keys wrapper
-void nvim_ins_compl_check_keys(int interval, bool pum_wanted)
-{
-  ins_compl_check_keys(interval, pum_wanted);
-}
-
+void nvim_ins_compl_check_keys(int interval, bool pum_wanted) { ins_compl_check_keys(interval, pum_wanted); }
 /// ins_compl_interrupted wrapper
 extern int rs_ins_compl_interrupted(void);
 bool nvim_ins_compl_interrupted(void)
@@ -1321,42 +585,12 @@ void nvim_verbose_searching_tags(const char *tag_fname)
   verbose_leave();
 }
 
-/// ignorecase() wrapper
-bool nvim_ignorecase(const char *pat)
-{
-  return ignorecase((char *)pat);
-}
-
-/// ignorecase_opt() wrapper
-bool nvim_ignorecase_opt(const char *pat, bool ic_strstrp, bool ic_strstrp2)
-{
-  return ignorecase_opt((char *)pat, ic_strstrp, ic_strstrp2);
-}
-
-/// semsg E431 wrapper
-void nvim_semsg_e431(const char *tag_fname)
-{
-  semsg(_("E431: Format error in tags file \"%s\""), tag_fname);
-}
-
-/// semsg "Before byte" wrapper
-void nvim_semsg_before_byte(int64_t offset)
-{
-  semsg(_("Before byte %" PRId64), offset);
-}
-
-/// semsg E432 wrapper
-void nvim_semsg_e432(const char *tag_fname)
-{
-  semsg(_("E432: Tags file not sorted: %s"), tag_fname);
-}
-
-/// emsg E433 wrapper
-void nvim_emsg_e433(void)
-{
-  emsg(_("E433: No tags file"));
-}
-
+bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }
+bool nvim_ignorecase_opt(const char *pat, bool ic_strstrp, bool ic_strstrp2) { return ignorecase_opt((char *)pat, ic_strstrp, ic_strstrp2); }
+void nvim_semsg_e431(const char *tag_fname) { semsg(_("E431: Format error in tags file \"%s\""), tag_fname); }
+void nvim_semsg_before_byte(int64_t offset) { semsg(_("Before byte %" PRId64), offset); }
+void nvim_semsg_e432(const char *tag_fname) { semsg(_("E432: Tags file not sorted: %s"), tag_fname); }
+void nvim_emsg_e433(void) { emsg(_("E433: No tags file")); }
 /// Call find_tagfunc_tags via st->ga_match (keeps tfu_in_use in C)
 int nvim_findtags_apply_tfu(void *st_void, char *pat, char *buf_ffname)
 {
@@ -1374,17 +608,8 @@ int nvim_findtags_apply_tfu(void *st_void, char *pat, char *buf_ffname)
   return retval;
 }
 
-/// prepare_pats on st->orgpat
-void nvim_findtags_prepare_pats(void *st_void, bool has_re)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  rs_prepare_pats(st->orgpat, has_re);
-}
-
-// ============================================================================
-// Rust FFI accessor functions for tag display and location list
-// ============================================================================
-
+void nvim_findtags_prepare_pats(void *st_void, bool has_re) { findtags_state_T *st = (findtags_state_T *)st_void; rs_prepare_pats(st->orgpat, has_re); }
+// --- Rust FFI accessor functions for tag display and location list ---
 // Verify highlight constants used in Rust
 _Static_assert(HLF_T == 23, "HLF_T value for Rust");
 _Static_assert(HLF_D == 5, "HLF_D value for Rust");
@@ -1401,126 +626,26 @@ const char *nvim_tag_get_mt_name(int idx)
   return mt_names[idx];
 }
 
-/// Wrapper for msg_puts (no highlight)
-void nvim_tag_msg_puts(const char *s)
-{
-  msg_puts(s);
-}
-
-/// Wrapper for msg_puts_title
-void nvim_tag_msg_puts_title(const char *s)
-{
-  msg_puts_title(s);
-}
-
-/// Wrapper for msg_outtrans
-void nvim_tag_msg_outtrans(const char *str, int attr, bool right)
-{
-  msg_outtrans(str, attr, right);
-}
-
-/// Wrapper for msg_outtrans_len
-void nvim_tag_msg_outtrans_len(const char *str, int len, int attr, bool right)
-{
-  msg_outtrans_len(str, len, attr, right);
-}
-
-/// Wrapper for msg_outtrans_one - returns pointer to next char
-const char *nvim_tag_msg_outtrans_one(const char *p, int hl_id, bool right)
-{
-  return msg_outtrans_one((char *)p, hl_id, right);
-}
-
-/// Wrapper for msg_putchar
-void nvim_tag_msg_putchar(int c)
-{
-  msg_putchar(c);
-}
-
-/// Wrapper for msg_start
-void nvim_tag_msg_start(void)
-{
-  msg_start();
-}
-
-/// Wrapper for os_breakcheck
-void nvim_tag_os_breakcheck(void)
-{
-  os_breakcheck();
-}
-
-/// Wrapper for verbose_enter
-void nvim_tag_verbose_enter(void)
-{
-  verbose_enter();
-}
-
-/// Wrapper for verbose_leave
-void nvim_tag_verbose_leave(void)
-{
-  verbose_leave();
-}
-
-/// Wrapper for smsg with one string argument (for duplicate field name)
-void nvim_tag_smsg_dup_field(const char *field_name)
-{
-  smsg(0, _("Duplicate field name: %s"), field_name);
-}
-
-/// Get the curwin pointer for Rust
-void *nvim_tag_get_curwin(void)
-{
-  return (void *)curwin;
-}
-
-/// Wrapper for tv_dict_alloc
-void *nvim_tag_tv_dict_alloc(void)
-{
-  return (void *)tv_dict_alloc();
-}
-
-/// Wrapper for tv_dict_find - returns non-null if found
-bool nvim_tag_tv_dict_find(void *dict, const char *key, int key_len)
-{
-  return tv_dict_find((dict_T *)dict, key, key_len) != NULL;
-}
-
-/// Wrapper for tv_dict_add_str
-int nvim_tag_tv_dict_add_str(void *dict, const char *key, size_t key_len, char *val)
-{
-  return tv_dict_add_str((dict_T *)dict, key, key_len, val);
-}
-
-/// Wrapper for tv_dict_add_nr
-int nvim_tag_tv_dict_add_nr(void *dict, const char *key, size_t key_len, int64_t nr)
-{
-  return tv_dict_add_nr((dict_T *)dict, key, key_len, (varnumber_T)nr);
-}
-
-/// Wrapper for tv_list_alloc
-void *nvim_tag_tv_list_alloc(int count)
-{
-  return (void *)tv_list_alloc(count);
-}
-
-/// Wrapper for tv_list_append_dict
-void nvim_tag_tv_list_append_dict(void *list, void *dict)
-{
-  tv_list_append_dict((list_T *)list, (dict_T *)dict);
-}
-
-/// Wrapper for tv_list_free
-void nvim_tag_tv_list_free(void *list)
-{
-  tv_list_free((list_T *)list);
-}
-
-/// Wrapper for set_errorlist
-void nvim_tag_set_errorlist(void *list, const char *title)
-{
-  set_errorlist(curwin, (list_T *)list, ' ', (char *)title, NULL);
-}
-
+void nvim_tag_msg_puts(const char *s) { msg_puts(s); }
+void nvim_tag_msg_puts_title(const char *s) { msg_puts_title(s); }
+void nvim_tag_msg_outtrans(const char *str, int attr, bool right) { msg_outtrans(str, attr, right); }
+void nvim_tag_msg_outtrans_len(const char *str, int len, int attr, bool right) { msg_outtrans_len(str, len, attr, right); }
+const char *nvim_tag_msg_outtrans_one(const char *p, int hl_id, bool right) { return msg_outtrans_one((char *)p, hl_id, right); }
+void nvim_tag_msg_putchar(int c) { msg_putchar(c); }
+void nvim_tag_msg_start(void) { msg_start(); }
+void nvim_tag_os_breakcheck(void) { os_breakcheck(); }
+void nvim_tag_verbose_enter(void) { verbose_enter(); }
+void nvim_tag_verbose_leave(void) { verbose_leave(); }
+void nvim_tag_smsg_dup_field(const char *field_name) { smsg(0, _("Duplicate field name: %s"), field_name); }
+void *nvim_tag_get_curwin(void) { return (void *)curwin; }
+void *nvim_tag_tv_dict_alloc(void) { return (void *)tv_dict_alloc(); }
+bool nvim_tag_tv_dict_find(void *dict, const char *key, int key_len) { return tv_dict_find((dict_T *)dict, key, key_len) != NULL; }
+int nvim_tag_tv_dict_add_str(void *dict, const char *key, size_t key_len, char *val) { return tv_dict_add_str((dict_T *)dict, key, key_len, val); }
+int nvim_tag_tv_dict_add_nr(void *dict, const char *key, size_t key_len, int64_t nr) { return tv_dict_add_nr((dict_T *)dict, key, key_len, (varnumber_T)nr); }
+void *nvim_tag_tv_list_alloc(int count) { return (void *)tv_list_alloc(count); }
+void nvim_tag_tv_list_append_dict(void *list, void *dict) { tv_list_append_dict((list_T *)list, (dict_T *)dict); }
+void nvim_tag_tv_list_free(void *list) { tv_list_free((list_T *)list); }
+void nvim_tag_set_errorlist(void *list, const char *title) { set_errorlist(curwin, (list_T *)list, ' ', (char *)title, NULL); }
 /// Wrapper for vim_snprintf into IObuff
 void nvim_tag_snprintf_iobuff(const char *fmt, ...)
 {
@@ -1543,13 +668,7 @@ void nvim_tag_do_tags_line(int is_current, int idx, int cur_match,
   msg_outtrans(IObuff, 0, false);
 }
 
-/// Wrapper for fm_getname from taggy_T
-char *nvim_tag_fm_getname(const void *tg_void, int lead_len)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return fm_getname(&((taggy_T *)tg)->fmark, lead_len);
-}
-
+char *nvim_tag_fm_getname(const void *tg_void, int lead_len) { const taggy_T *tg = (const taggy_T *)tg_void; return fm_getname(&((taggy_T *)tg)->fmark, lead_len); }
 /// Format print_tag_list header line into IObuff
 void nvim_tag_list_format_entry(bool is_current, int i, const char *mt_name)
 {
@@ -1558,46 +677,13 @@ void nvim_tag_list_format_entry(bool is_current, int i, const char *mt_name)
   msg_puts(IObuff);
 }
 
-/// Get IOSIZE constant
-int nvim_tag_get_iosize(void)
-{
-  return IOSIZE;
-}
-
-/// Get MAXPATHL constant
-int nvim_tag_get_maxpathl(void)
-{
-  return MAXPATHL;
-}
-
-/// Wrapper for xstrlcpy
-void nvim_tag_xstrlcpy(char *dst, const char *src, size_t dstsize)
-{
-  xstrlcpy(dst, src, dstsize);
-}
-
-/// Wrapper for xmemcpyz
-void nvim_tag_xmemcpyz(char *dst, const char *src, size_t len)
-{
-  xmemcpyz(dst, src, len);
-}
-
-/// Get translate string via _() macro
-const char *nvim_tag_gettext(const char *s)
-{
-  return _(s);
-}
-
-/// Get ptag_entry.cur_match
-int nvim_tag_get_ptag_cur_match(void)
-{
-  return ptag_entry.cur_match;
-}
-
-// ============================================================================
-// Rust FFI accessor functions for VimL API and tag stack setters
-// ============================================================================
-
+int nvim_tag_get_iosize(void) { return IOSIZE; }
+int nvim_tag_get_maxpathl(void) { return MAXPATHL; }
+void nvim_tag_xstrlcpy(char *dst, const char *src, size_t dstsize) { xstrlcpy(dst, src, dstsize); }
+void nvim_tag_xmemcpyz(char *dst, const char *src, size_t len) { xmemcpyz(dst, src, len); }
+const char *nvim_tag_gettext(const char *s) { return _(s); }
+int nvim_tag_get_ptag_cur_match(void) { return ptag_entry.cur_match; }
+// --- Rust FFI accessor functions for VimL API and tag stack setters ---
 // Verify constants used in Rust
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL value for Rust");
 
@@ -1608,30 +694,10 @@ int nvim_tag_find_tags(char *pat, int *num_matches, char ***matchesp,
   return find_tags(pat, num_matches, matchesp, flags, mincount, buf_ffname);
 }
 
-/// Wrapper for FreeWild
-void nvim_tag_free_wild(int count, char **files)
-{
-  FreeWild(count, files);
-}
-
-/// Get curbuf->b_ffname
-char *nvim_tag_get_curbuf_ffname(void)
-{
-  return curbuf->b_ffname;
-}
-
-/// Wrapper for xrealloc
-void *nvim_tag_xrealloc(void *ptr, size_t size)
-{
-  return xrealloc(ptr, size);
-}
-
-/// Wrapper for memmove
-void nvim_tag_memmove(void *dest, const void *src, size_t n)
-{
-  memmove(dest, src, n);
-}
-
+void nvim_tag_free_wild(int count, char **files) { FreeWild(count, files); }
+char *nvim_tag_get_curbuf_ffname(void) { return curbuf->b_ffname; }
+void *nvim_tag_xrealloc(void *ptr, size_t size) { return xrealloc(ptr, size); }
+void nvim_tag_memmove(void *dest, const void *src, size_t n) { memmove(dest, src, n); }
 /// MB_PTR_ADV wrapper - advance pointer past one multi-byte char
 const char *nvim_tag_mb_ptr_adv(const char *p)
 {
@@ -1640,84 +706,19 @@ const char *nvim_tag_mb_ptr_adv(const char *p)
   return result;
 }
 
-/// ascii_iswhite wrapper
-bool nvim_tag_ascii_iswhite(int c)
-{
-  return ascii_iswhite(c);
-}
-
-/// Get tfu_in_use flag
-bool nvim_tag_get_tfu_in_use(void)
-{
-  return tfu_in_use;
-}
-
-/// Get e_cannot_modify_tag_stack_within_tagfunc message
-void nvim_tag_emsg_tfu_in_use(void)
-{
-  emsg(_(e_cannot_modify_tag_stack_within_tagfunc));
-}
-
-/// Get e_listreq message
-void nvim_tag_emsg_listreq(void)
-{
-  emsg(_(e_listreq));
-}
-
-/// tv_dict_find returning opaque dictitem handle (NULL if not found)
-void *nvim_tag_tv_dict_find_item(const void *dict, const char *key, int key_len)
-{
-  return (void *)tv_dict_find((const dict_T *)dict, key, key_len);
-}
-
-/// Get the typval from a dictitem
-void *nvim_tag_dictitem_tv(void *di)
-{
-  return (void *)&((dictitem_T *)di)->di_tv;
-}
-
-/// Check if typval is a list type
-bool nvim_tag_tv_is_list(const void *tv)
-{
-  return ((const typval_T *)tv)->v_type == VAR_LIST;
-}
-
-/// Get list from typval
-void *nvim_tag_tv_get_list(const void *tv)
-{
-  return (void *)((const typval_T *)tv)->vval.v_list;
-}
-
-/// Get number from typval
-int64_t nvim_tag_tv_get_number(const void *tv)
-{
-  return (int64_t)tv_get_number((const typval_T *)tv);
-}
-
-/// Wrapper for tv_dict_get_string
-char *nvim_tag_tv_dict_get_string(const void *dict, const char *key, bool save)
-{
-  return tv_dict_get_string((const dict_T *)dict, key, save);
-}
-
-/// Wrapper for tv_dict_get_number
-int64_t nvim_tag_tv_dict_get_number(const void *dict, const char *key)
-{
-  return (int64_t)tv_dict_get_number((const dict_T *)dict, key);
-}
-
-/// Wrapper for tv_list_first
-void *nvim_tag_tv_list_first(const void *list)
-{
-  return (void *)tv_list_first((const list_T *)list);
-}
-
-/// Wrapper for TV_LIST_ITEM_NEXT
-void *nvim_tag_tv_list_item_next(const void *list, const void *li)
-{
-  return (void *)TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li);
-}
-
+bool nvim_tag_ascii_iswhite(int c) { return ascii_iswhite(c); }
+bool nvim_tag_get_tfu_in_use(void) { return tfu_in_use; }
+void nvim_tag_emsg_tfu_in_use(void) { emsg(_(e_cannot_modify_tag_stack_within_tagfunc)); }
+void nvim_tag_emsg_listreq(void) { emsg(_(e_listreq)); }
+void *nvim_tag_tv_dict_find_item(const void *dict, const char *key, int key_len) { return (void *)tv_dict_find((const dict_T *)dict, key, key_len); }
+void *nvim_tag_dictitem_tv(void *di) { return (void *)&((dictitem_T *)di)->di_tv; }
+bool nvim_tag_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == VAR_LIST; }
+void *nvim_tag_tv_get_list(const void *tv) { return (void *)((const typval_T *)tv)->vval.v_list; }
+int64_t nvim_tag_tv_get_number(const void *tv) { return (int64_t)tv_get_number((const typval_T *)tv); }
+char *nvim_tag_tv_dict_get_string(const void *dict, const char *key, bool save) { return tv_dict_get_string((const dict_T *)dict, key, save); }
+int64_t nvim_tag_tv_dict_get_number(const void *dict, const char *key) { return (int64_t)tv_dict_get_number((const dict_T *)dict, key); }
+void *nvim_tag_tv_list_first(const void *list) { return (void *)tv_list_first((const list_T *)list); }
+void *nvim_tag_tv_list_item_next(const void *list, const void *li) { return (void *)TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li); }
 /// Get dict from list item (NULL if not a dict)
 void *nvim_tag_tv_list_item_dict(const void *li)
 {
@@ -1742,89 +743,19 @@ int nvim_tag_list2fpos(void *tv, int32_t *lnum, int32_t *col, int32_t *coladd, i
   return result;
 }
 
-/// Wrapper for tv_list_append_number
-void nvim_tag_tv_list_append_number(void *list, int64_t nr)
-{
-  tv_list_append_number((list_T *)list, (varnumber_T)nr);
-}
-
-/// Wrapper for tv_dict_add_list
-void nvim_tag_tv_dict_add_list(void *dict, const char *key, size_t key_len, void *list)
-{
-  tv_dict_add_list((dict_T *)dict, key, key_len, (list_T *)list);
-}
-
-/// Get fmark mark.coladd from taggy_T
-int nvim_tag_taggy_fmark_coladd(const void *tg_void)
-{
-  const taggy_T *tg = (const taggy_T *)tg_void;
-  return tg->fmark.mark.coladd;
-}
-
-// ============================================================================
-// C accessor functions for tagfunc and option management
-// ============================================================================
-
-/// Free the global tfu_cb callback
-void nvim_tag_callback_free_tfu(void)
-{
-  callback_free(&tfu_cb);
-}
-
-/// Free the buffer-local tfu callback
-void nvim_tag_callback_free_buf_tfu(void *buf_void)
-{
-  buf_T *buf = (buf_T *)buf_void;
-  callback_free(&buf->b_tfu_cb);
-}
-
-/// Check if buffer's b_p_tfu is empty (NUL)
-bool nvim_tag_buf_tfu_is_empty(const void *buf_void)
-{
-  const buf_T *buf = (const buf_T *)buf_void;
-  return *buf->b_p_tfu == NUL;
-}
-
-/// Call option_set_callback_func with buf's b_p_tfu into tfu_cb
-/// Returns FAIL or OK
-int nvim_tag_option_set_tfu_callback(void *buf_void)
-{
-  buf_T *buf = (buf_T *)buf_void;
-  return option_set_callback_func(buf->b_p_tfu, &tfu_cb);
-}
-
-/// Copy global tfu_cb to buffer-local b_tfu_cb
-void nvim_tag_callback_copy_tfu_to_buf(void *buf_void)
-{
-  buf_T *buf = (buf_T *)buf_void;
-  callback_copy(&buf->b_tfu_cb, &tfu_cb);
-}
-
-/// Check if global tfu_cb is kCallbackNone
-bool nvim_tag_tfu_cb_is_none(void)
-{
-  return tfu_cb.type == kCallbackNone;
-}
-
-/// set_ref_in_callback for global tfu_cb
-bool nvim_tag_set_ref_in_tfu_callback(int copyID)
-{
-  return rs_set_ref_in_callback(&tfu_cb, copyID, NULL, NULL);
-}
-
-/// Get the buf_T * from optset_T args (os_buf field)
-void *nvim_tag_optset_get_buf(const void *args_void)
-{
-  const optset_T *args = (const optset_T *)args_void;
-  return (void *)args->os_buf;
-}
-
-/// Get e_invarg pointer (for did_set_tagfunc return)
-const char *nvim_tag_get_e_invarg(void)
-{
-  return e_invarg;
-}
-
+void nvim_tag_tv_list_append_number(void *list, int64_t nr) { tv_list_append_number((list_T *)list, (varnumber_T)nr); }
+void nvim_tag_tv_dict_add_list(void *dict, const char *key, size_t key_len, void *list) { tv_dict_add_list((dict_T *)dict, key, key_len, (list_T *)list); }
+int nvim_tag_taggy_fmark_coladd(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->fmark.mark.coladd; }
+// --- C accessor functions for tagfunc and option management ---
+void nvim_tag_callback_free_tfu(void) { callback_free(&tfu_cb); }
+void nvim_tag_callback_free_buf_tfu(void *buf_void) { buf_T *buf = (buf_T *)buf_void; callback_free(&buf->b_tfu_cb); }
+bool nvim_tag_buf_tfu_is_empty(const void *buf_void) { const buf_T *buf = (const buf_T *)buf_void; return *buf->b_p_tfu == NUL; }
+int nvim_tag_option_set_tfu_callback(void *buf_void) { buf_T *buf = (buf_T *)buf_void; return option_set_callback_func(buf->b_p_tfu, &tfu_cb); }
+void nvim_tag_callback_copy_tfu_to_buf(void *buf_void) { buf_T *buf = (buf_T *)buf_void; callback_copy(&buf->b_tfu_cb, &tfu_cb); }
+bool nvim_tag_tfu_cb_is_none(void) { return tfu_cb.type == kCallbackNone; }
+bool nvim_tag_set_ref_in_tfu_callback(int copyID) { return rs_set_ref_in_callback(&tfu_cb, copyID, NULL, NULL); }
+void *nvim_tag_optset_get_buf(const void *args_void) { const optset_T *args = (const optset_T *)args_void; return (void *)args->os_buf; }
+const char *nvim_tag_get_e_invarg(void) { return e_invarg; }
 /// Call the tagfunc callback and validate the result.
 /// Returns:
 ///   0 (OK) with *out_list set to the returned list (caller must call nvim_tag_tv_clear_rettv)
@@ -1903,25 +834,9 @@ int nvim_tag_call_tagfunc(const char *pat, int flags, const char *buf_ffname,
   return 0;
 }
 
-/// Clear the rettv storage after tagfunc call is done
-void nvim_tag_tv_clear_rettv(void *rettv_storage)
-{
-  tv_clear((typval_T *)rettv_storage);
-}
-
-/// Get the size needed for rettv storage (sizeof(typval_T))
-size_t nvim_tag_rettv_size(void)
-{
-  return sizeof(typval_T);
-}
-
-/// Check if a list item is a dict type
-bool nvim_tag_listitem_is_dict(const void *li)
-{
-  const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li);
-  return tv->v_type == VAR_DICT;
-}
-
+void nvim_tag_tv_clear_rettv(void *rettv_storage) { tv_clear((typval_T *)rettv_storage); }
+size_t nvim_tag_rettv_size(void) { return sizeof(typval_T); }
+bool nvim_tag_listitem_is_dict(const void *li) { const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li); return tv->v_type == VAR_DICT; }
 /// Get the dict from a list item (returns dict handle, or NULL)
 void *nvim_tag_listitem_get_dict(const void *li)
 {
@@ -2032,12 +947,7 @@ size_t nvim_tag_dict_write_extra_fields(const void *dict_void, char *p)
   return (size_t)(p - start);
 }
 
-/// emsg for e_invalid_return_value_from_tagfunc
-void nvim_tag_emsg_invalid_tagfunc_return(void)
-{
-  emsg(_(e_invalid_return_value_from_tagfunc));
-}
-
+void nvim_tag_emsg_invalid_tagfunc_return(void) { emsg(_(e_invalid_return_value_from_tagfunc)); }
 /// Grow a garray_T by 1 and append a string pointer
 void nvim_tag_ga_grow_append(void *ga_void, char *mfp)
 {
@@ -2050,10 +960,7 @@ _Static_assert(TAG_INS_COMP == 64, "TAG_INS_COMP value for Rust");
 _Static_assert(TAG_REGEXP == 4, "TAG_REGEXP value for Rust");
 _Static_assert(TAG_NAMES == 2, "TAG_NAMES value for Rust");
 
-// ============================================================================
-// C accessor functions for jumpto_tag
-// ============================================================================
-
+// --- C accessor functions for jumpto_tag ---
 /// High-level executor for jumpto_tag.
 /// Rust handles preparation (parsing, filename expansion, file check).
 /// This function handles the complex execution phase:
@@ -2262,14 +1169,8 @@ erret:
   return retval;
 }
 
-// ============================================================================
-// End of jumpto_tag accessor functions
-// ============================================================================
-
-// ============================================================================
-// C accessor functions for do_tag()
-// ============================================================================
-
+// --- End of jumpto_tag accessor functions ---
+// --- C accessor functions for do_tag() ---
 // Verify constants used by Rust
 _Static_assert(HLF_W == 26, "HLF_W value for Rust");
 _Static_assert(kOptFdoFlagTag == 0x80, "kOptFdoFlagTag value for Rust");
@@ -2277,97 +1178,21 @@ _Static_assert(NOTAGFILE == 99, "NOTAGFILE value for Rust");
 _Static_assert(TAGSTACKSIZE == 20, "TAGSTACKSIZE value for Rust");
 _Static_assert(MT_IC_OFF == 4, "MT_IC_OFF value for Rust");
 
-/// Get the 'tagstack' option value
-bool nvim_tag_get_p_tgst(void)
-{
-  return p_tgst;
-}
-
-/// Get curbuf->b_fnum
-int nvim_tag_get_curbuf_fnum(void)
-{
-  return curbuf->b_fnum;
-}
-
-/// Get the got_int flag
-bool nvim_tag_get_got_int(void)
-{
-  return got_int;
-}
-
-/// Get msg_scroll flag
-int nvim_tag_get_msg_scroll(void)
-{
-  return msg_scroll;
-}
-
-/// Set msg_scroll flag
-void nvim_tag_set_msg_scroll(int val)
-{
-  msg_scroll = val;
-}
-
-/// Get msg_scrolled flag
-int nvim_tag_get_msg_scrolled(void)
-{
-  return msg_scrolled;
-}
-
-/// Get msg_silent flag
-int nvim_tag_get_msg_silent(void)
-{
-  return msg_silent;
-}
-
-/// Check if UI has kUIMessages
-bool nvim_tag_ui_has_messages(void)
-{
-  return ui_has(kUIMessages);
-}
-
-/// Call ui_flush
-void nvim_tag_ui_flush(void)
-{
-  ui_flush();
-}
-
-/// Call os_delay
-void nvim_tag_os_delay(int msec)
-{
-  os_delay(msec, true);
-}
-
-/// Wrapper for xstrdup
-char *nvim_tag_xstrdup(const char *s)
-{
-  return xstrdup(s);
-}
-
-/// Wrapper for xfree
-void nvim_tag_xfree(void *p)
-{
-  xfree(p);
-}
-
-/// Wrapper for xmemdupz
-char *nvim_tag_xmemdupz(const char *s, size_t len)
-{
-  return xmemdupz(s, len);
-}
-
-/// Wrapper for strcmp
-int nvim_tag_strcmp(const char *s1, const char *s2)
-{
-  return strcmp(s1, s2);
-}
-
-/// Get b_ffname for a buffer number (returns NULL if buffer not found)
-char *nvim_tag_buflist_findnr_ffname(int fnum)
-{
-  buf_T *buf = buflist_findnr(fnum);
-  return buf != NULL ? buf->b_ffname : NULL;
-}
-
+bool nvim_tag_get_p_tgst(void) { return p_tgst; }
+int nvim_tag_get_curbuf_fnum(void) { return curbuf->b_fnum; }
+bool nvim_tag_get_got_int(void) { return got_int; }
+int nvim_tag_get_msg_scroll(void) { return msg_scroll; }
+void nvim_tag_set_msg_scroll(int val) { msg_scroll = val; }
+int nvim_tag_get_msg_scrolled(void) { return msg_scrolled; }
+int nvim_tag_get_msg_silent(void) { return msg_silent; }
+bool nvim_tag_ui_has_messages(void) { return ui_has(kUIMessages); }
+void nvim_tag_ui_flush(void) { ui_flush(); }
+void nvim_tag_os_delay(int msec) { os_delay(msec, true); }
+char *nvim_tag_xstrdup(const char *s) { return xstrdup(s); }
+void nvim_tag_xfree(void *p) { xfree(p); }
+char *nvim_tag_xmemdupz(const char *s, size_t len) { return xmemdupz(s, len); }
+int nvim_tag_strcmp(const char *s1, const char *s2) { return strcmp(s1, s2); }
+char *nvim_tag_buflist_findnr_ffname(int fnum) { buf_T *buf = buflist_findnr(fnum); return buf != NULL ? buf->b_ffname : NULL; }
 /// Handle the DT_POP jump: restore position from saved fmark.
 /// Returns: 0 = OK, 1 = FAIL (buflist_getfile failed), 2 = at top of stack
 int nvim_tag_do_pop_jump(void *tg_void, int count, int forceit,
@@ -2404,18 +1229,8 @@ int nvim_tag_do_pop_jump(void *tg_void, int count, int forceit,
   return 0;
 }
 
-/// Check if the tagstack pointer has changed (window closed during search)
-bool nvim_tag_tagstack_changed(void *saved_tagstack)
-{
-  return saved_tagstack != curwin->w_tagstack;
-}
-
-/// Get the saved tagstack pointer for comparison
-void *nvim_tag_get_tagstack_ptr(void)
-{
-  return curwin->w_tagstack;
-}
-
+bool nvim_tag_tagstack_changed(void *saved_tagstack) { return saved_tagstack != curwin->w_tagstack; }
+void *nvim_tag_get_tagstack_ptr(void) { return curwin->w_tagstack; }
 /// Save cursor position in tagstack entry
 void nvim_tag_save_cursor_in_entry(void *tg_void, int idx)
 {
@@ -2424,46 +1239,14 @@ void nvim_tag_save_cursor_in_entry(void *tg_void, int idx)
   tg[idx].fmark.fnum = curbuf->b_fnum;
 }
 
-/// Copy fmark from tagstack entry into opaque buffer (sizeof(fmark_T) bytes)
-void nvim_tag_copy_fmark_from_entry(void *tg_void, int idx, void *out_buf)
-{
-  taggy_T *tg = (taggy_T *)tg_void;
-  memcpy(out_buf, &tg[idx].fmark, sizeof(fmark_T));
-}
-
-/// Restore fmark from opaque buffer into tagstack entry
-void nvim_tag_restore_fmark_to_entry(void *tg_void, int idx, const void *buf)
-{
-  taggy_T *tg = (taggy_T *)tg_void;
-  memcpy(&tg[idx].fmark, buf, sizeof(fmark_T));
-}
-
-/// Get sizeof(fmark_T) for Rust allocation
-size_t nvim_tag_fmark_size(void)
-{
-  return sizeof(fmark_T);
-}
+void nvim_tag_copy_fmark_from_entry(void *tg_void, int idx, void *out_buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(out_buf, &tg[idx].fmark, sizeof(fmark_T)); }
+void nvim_tag_restore_fmark_to_entry(void *tg_void, int idx, const void *buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(&tg[idx].fmark, buf, sizeof(fmark_T)); }
+size_t nvim_tag_fmark_size(void) { return sizeof(fmark_T); }
 _Static_assert(sizeof(fmark_T) <= 64, "fmark_T must fit in 64 bytes for Rust stack buffer");
 
-/// prompt_for_input(NULL, 0, false, NULL) for tag selection
-int nvim_tag_prompt_for_selection(void)
-{
-  return prompt_for_input(NULL, 0, false, NULL);
-}
-
-/// Set VV_SWAPCOMMAND with tag name
-void nvim_tag_set_swap_command(const char *name)
-{
-  vim_snprintf(IObuff, IOSIZE, ":ta %s\r", name);
-  set_vim_var_string(VV_SWAPCOMMAND, IObuff, -1);
-}
-
-/// Clear VV_SWAPCOMMAND
-void nvim_tag_clear_swap_command(void)
-{
-  set_vim_var_string(VV_SWAPCOMMAND, NULL, -1);
-}
-
+int nvim_tag_prompt_for_selection(void) { return prompt_for_input(NULL, 0, false, NULL); }
+void nvim_tag_set_swap_command(const char *name) { vim_snprintf(IObuff, IOSIZE, ":ta %s\r", name); set_vim_var_string(VV_SWAPCOMMAND, IObuff, -1); }
+void nvim_tag_clear_swap_command(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
 /// Show "tag X of Y" message with optional IC warning
 void nvim_tag_show_match_msg(int cur_match, int num_matches,
                              int max_num_matches, int prev_num_matches,
@@ -2489,91 +1272,20 @@ void nvim_tag_show_match_msg(int cur_match, int num_matches,
   }
 }
 
-/// emsg for "E73: Tag stack empty"
-void nvim_tag_emsg_stack_empty(void)
-{
-  emsg(_(e_tag_stack_empty));
-}
-
-/// emsg for "E555: At bottom of tag stack"
-void nvim_tag_emsg_at_bottom(void)
-{
-  emsg(_(e_at_bottom_of_tag_stack));
-}
-
-/// emsg for "E556: At top of tag stack"
-void nvim_tag_emsg_at_top(void)
-{
-  emsg(_(e_at_top_of_tag_stack));
-}
-
-/// semsg for "E426: Tag not found: %s"
-void nvim_tag_semsg_not_found(const char *name)
-{
-  semsg(_(e_tag_not_found_str), name);
-}
-
-/// emsg for "E425: Cannot go before first matching tag"
-void nvim_tag_emsg_before_first(void)
-{
-  emsg(_("E425: Cannot go before first matching tag"));
-}
-
-/// emsg for "E427: There is only one matching tag"
-void nvim_tag_emsg_only_one(void)
-{
-  emsg(_("E427: There is only one matching tag"));
-}
-
-/// emsg for "E428: Cannot go beyond last matching tag"
-void nvim_tag_emsg_beyond_last(void)
-{
-  emsg(_("E428: Cannot go beyond last matching tag"));
-}
-
-/// smsg for "File \"%s\" does not exist" (non-error)
-void nvim_tag_smsg_nofile(const char *fname)
-{
-  smsg(0, _("File \"%s\" does not exist"), fname);
-}
-
-/// semsg for "E429: File \"%s\" does not exist" (error)
-void nvim_tag_semsg_nofile(const char *fname)
-{
-  semsg(_("E429: File \"%s\" does not exist"), fname);
-}
-
-/// emsg for "E1299: Window unexpectedly closed while searching for tags"
-void nvim_tag_emsg_window_closed(void)
-{
-  emsg(_(e_window_unexpectedly_close_while_searching_for_tags));
-}
-
-/// free_string_option for nofile_fname and clear it
-void nvim_tag_free_nofile_fname(void)
-{
-  free_string_option(nofile_fname);
-  nofile_fname = NULL;
-}
-
-/// Check if nofile_fname is NULL
-bool nvim_tag_nofile_fname_is_null(void)
-{
-  return nofile_fname == NULL;
-}
-
-// ============================================================================
-// End of do_tag() accessor functions
-// ============================================================================
-
-/// Reads the 'tagfunc' option value and convert that to a callback value.
-/// Invoked when the 'tagfunc' option is set. The option value can be a name of
-/// a function (string), or function(<name>) or funcref(<name>) or a lambda.
-const char *did_set_tagfunc(optset_T *args)
-{
-  return rs_did_set_tagfunc(args);
-}
-
+void nvim_tag_emsg_stack_empty(void) { emsg(_(e_tag_stack_empty)); }
+void nvim_tag_emsg_at_bottom(void) { emsg(_(e_at_bottom_of_tag_stack)); }
+void nvim_tag_emsg_at_top(void) { emsg(_(e_at_top_of_tag_stack)); }
+void nvim_tag_semsg_not_found(const char *name) { semsg(_(e_tag_not_found_str), name); }
+void nvim_tag_emsg_before_first(void) { emsg(_("E425: Cannot go before first matching tag")); }
+void nvim_tag_emsg_only_one(void) { emsg(_("E427: There is only one matching tag")); }
+void nvim_tag_emsg_beyond_last(void) { emsg(_("E428: Cannot go beyond last matching tag")); }
+void nvim_tag_smsg_nofile(const char *fname) { smsg(0, _("File \"%s\" does not exist"), fname); }
+void nvim_tag_semsg_nofile(const char *fname) { semsg(_("E429: File \"%s\" does not exist"), fname); }
+void nvim_tag_emsg_window_closed(void) { emsg(_(e_window_unexpectedly_close_while_searching_for_tags)); }
+void nvim_tag_free_nofile_fname(void) { free_string_option(nofile_fname); nofile_fname = NULL; }
+bool nvim_tag_nofile_fname_is_null(void) { return nofile_fname == NULL; }
+// --- End of do_tag() accessor functions ---
+const char *did_set_tagfunc(optset_T *args) { return rs_did_set_tagfunc(args); }
 // Print the tag stack
 void do_tags(exarg_T *eap)
 {
@@ -2767,16 +1479,8 @@ findtag_end:
 
 static garray_T tag_fnames = GA_EMPTY_INIT_VALUE;
 
-// ============================================================================
-// Rust FFI accessor functions for tag_fnames
-// ============================================================================
-
-/// Get the number of tag file names in the help file list
-int nvim_tag_fnames_len(void)
-{
-  return tag_fnames.ga_len;
-}
-
+// --- Rust FFI accessor functions for tag_fnames ---
+int nvim_tag_fnames_len(void) { return tag_fnames.ga_len; }
 /// Get a tag file name from the help file list by index
 const char *nvim_tag_fnames_get(int idx)
 {
@@ -2786,32 +1490,8 @@ const char *nvim_tag_fnames_get(int idx)
   return ((char **)(tag_fnames.ga_data))[idx];
 }
 
-/// Clear the help file tag names list
-void nvim_tag_fnames_clear(void)
-{
-  ga_clear_strings(&tag_fnames);
-}
-
-/// Initialize the help file tag names list
-void nvim_tag_fnames_init(void)
-{
-  ga_init(&tag_fnames, (int)sizeof(char *), 10);
-}
-
-/// Add a tag file name to the help file list
-void nvim_tag_fnames_add(char *fname)
-{
-  GA_APPEND(char *, &tag_fnames, fname);
-}
-
-/// Do in runtimepath for tags (finds doc/tags files)
-void nvim_do_in_runtimepath_for_tags(void)
-{
-  do_in_runtimepath("doc/tags doc/tags-??", DIP_ALL, rs_found_tagfile_cb, NULL);
-}
-
-/// Expand tag filename relative to tag file (wrapper for Rust)
-char *nvim_expand_tag_fname(const char *fname, const char *tag_fname, bool expand)
-{
-  return rs_expand_tag_fname((char *)fname, (char *)tag_fname, expand);
-}
+void nvim_tag_fnames_clear(void) { ga_clear_strings(&tag_fnames); }
+void nvim_tag_fnames_init(void) { ga_init(&tag_fnames, (int)sizeof(char *), 10); }
+void nvim_tag_fnames_add(char *fname) { GA_APPEND(char *, &tag_fnames, fname); }
+void nvim_do_in_runtimepath_for_tags(void) { do_in_runtimepath("doc/tags doc/tags-??", DIP_ALL, rs_found_tagfile_cb, NULL); }
+char *nvim_expand_tag_fname(const char *fname, const char *tag_fname, bool expand) { return rs_expand_tag_fname((char *)fname, (char *)tag_fname, expand); }
