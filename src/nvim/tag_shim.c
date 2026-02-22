@@ -398,7 +398,6 @@ void *nvim_get_ptag_entry(void) { return &ptag_entry; }
 void nvim_tag_msg_advance(int col) { msg_advance(col); }
 int nvim_path_full_compare_equal(const char *s1, const char *s2) { return (path_full_compare((char *)s1, (char *)s2, true, true) & kEqualFiles); }
 bool nvim_tag_curwin_is_null(void) { return curwin == NULL; }
-void nvim_do_tag_free(void) { rs_do_tag(NULL, DT_FREE, 0, 0, 0); }
 // --- Rust FFI accessor functions for expand_tag_fname ---
 bool nvim_path_has_wildcard(const char *fname) { return path_has_wildcard(fname); }
 /// Expand wildcards in a filename (ExpandInit + ExpandOne)
@@ -1487,4 +1486,3 @@ void nvim_tag_fnames_clear(void) { ga_clear_strings(&tag_fnames); }
 void nvim_tag_fnames_init(void) { ga_init(&tag_fnames, (int)sizeof(char *), 10); }
 void nvim_tag_fnames_add(char *fname) { GA_APPEND(char *, &tag_fnames, fname); }
 void nvim_do_in_runtimepath_for_tags(void) { do_in_runtimepath("doc/tags doc/tags-??", DIP_ALL, rs_found_tagfile_cb, NULL); }
-char *nvim_expand_tag_fname(const char *fname, const char *tag_fname, bool expand) { return rs_expand_tag_fname((char *)fname, (char *)tag_fname, expand); }

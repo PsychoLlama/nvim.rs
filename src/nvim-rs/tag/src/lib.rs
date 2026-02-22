@@ -933,7 +933,7 @@ extern "C" {
 
     // curwin/do_tag
     fn nvim_tag_curwin_is_null() -> bool;
-    fn nvim_do_tag_free();
+    fn rs_do_tag(tag: *mut c_char, typ: c_int, count: c_int, forceit: c_int, verbose: bool);
 
     // Memory
     fn xfree(ptr: *mut c_void);
@@ -1027,7 +1027,7 @@ pub unsafe extern "C" fn rs_tag_strnicmp(
 pub unsafe extern "C" fn rs_free_tag_stuff() {
     nvim_tag_fnames_clear();
     if !nvim_tag_curwin_is_null() {
-        nvim_do_tag_free();
+        rs_do_tag(std::ptr::null_mut(), tag_cmd::DT_FREE, 0, 0, false);
     }
     rs_tag_freematch();
     stack::rs_tagstack_clear_entry(nvim_get_ptag_entry());
