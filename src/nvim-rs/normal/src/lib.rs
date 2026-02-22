@@ -2891,29 +2891,426 @@ pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_nv_g_cmd_impl(cap: CapHandle);
     fn nvim_nv_at_impl(cap: CapHandle);
     fn nvim_nv_join_impl(cap: CapHandle);
     fn nvim_nv_open_impl(cap: CapHandle);
+
+    // g-command C accessors
+    fn nvim_nv_addsub(cap: CapHandle);
+    fn nvim_current_search(count: c_int, forward: bool) -> bool;
+    fn nvim_cursor_up(count: c_int, upd_topline: bool) -> c_int;
+    fn nvim_cursor_down_call(count: c_int, upd_topline: bool) -> c_int;
+    fn nvim_nv_screengo_full(oap: OapHandle, dir: c_int, dist: c_int, conceal: bool) -> c_int;
+    fn nvim_linetabsize_curwin(lnum: c_int) -> c_int;
+    fn nvim_coladvance_curwin(col: c_int);
+    fn nvim_cursor_pos_info_call();
+    fn nvim_invoke_edit_g(cap: CapHandle);
+    fn nvim_nv_gotofile(cap: CapHandle);
+    fn nvim_set_mod_mask_ctrl();
+    fn nvim_do_mouse_g(oap: OapHandle, nchar: c_int, count1: c_int);
+    fn nvim_goto_byte_call(count: c_int);
+    fn nvim_undo_time_call(count: c_int, sec: bool, file: bool, absolute: bool);
+    fn nvim_show_sb_text_call();
+    fn nvim_show_utf8_call();
+    fn nvim_utf_find_illegal_call();
+    fn nvim_set_oap_cursor_start(oap: OapHandle);
+    fn nvim_set_curwin_w_set_curswant(val: bool);
+    fn nvim_nv_g_home_m_cmd_call(cap: CapHandle);
+    fn nvim_nv_g_dollar_cmd(cap: CapHandle);
+    fn nvim_nv_gd_impl(oap: OapHandle, nchar: c_int, thisblock: c_int);
+    fn nvim_do_sleep_wrapper(ms: c_int, allow_int: bool);
+    fn nvim_do_exmode_wrapper();
+    fn rs_do_ascii(eap: *mut std::ffi::c_void);
 }
 
+// g-command key constants
+const CTRL_A: c_int = 1;
+const CTRL_X: c_int = 24;
+const CTRL_H_KEY: c_int = 8;
+const CTRL_G_KEY: c_int = 7;
+const CTRL_RSB: c_int = 29;
+const K_BS: c_int = termcap2key(b'k' as c_int, b'b' as c_int);
+const K_KHOME: c_int = termcap2key(b'K' as c_int, b'1' as c_int);
+const K_KEND: c_int = termcap2key(b'K' as c_int, b'4' as c_int);
+const KE_IGNORE: c_int = 53;
+const K_IGNORE: c_int = termcap2key(KS_EXTRA, KE_IGNORE);
+const KE_LEFTMOUSE: c_int = 44;
+const KE_LEFTDRAG: c_int = 45;
+const KE_LEFTRELEASE: c_int = 46;
+const KE_MIDDLEMOUSE: c_int = 47;
+const KE_MIDDLEDRAG: c_int = 48;
+const KE_MIDDLERELEASE: c_int = 49;
+const KE_RIGHTMOUSE: c_int = 50;
+const KE_RIGHTDRAG: c_int = 51;
+const KE_RIGHTRELEASE: c_int = 52;
+const KE_X1MOUSE: c_int = 89;
+const KE_X1DRAG: c_int = 90;
+const KE_X1RELEASE: c_int = 91;
+const KE_X2MOUSE: c_int = 92;
+const KE_X2DRAG: c_int = 93;
+const KE_X2RELEASE: c_int = 94;
+const KE_MOUSEMOVE: c_int = 100;
+const K_MIDDLEMOUSE: c_int = termcap2key(KS_EXTRA, KE_MIDDLEMOUSE);
+const K_MIDDLEDRAG: c_int = termcap2key(KS_EXTRA, KE_MIDDLEDRAG);
+const K_MIDDLERELEASE: c_int = termcap2key(KS_EXTRA, KE_MIDDLERELEASE);
+const K_LEFTMOUSE: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE);
+const K_LEFTDRAG: c_int = termcap2key(KS_EXTRA, KE_LEFTDRAG);
+const K_LEFTRELEASE: c_int = termcap2key(KS_EXTRA, KE_LEFTRELEASE);
+const K_MOUSEMOVE: c_int = termcap2key(KS_EXTRA, KE_MOUSEMOVE);
+const K_RIGHTMOUSE: c_int = termcap2key(KS_EXTRA, KE_RIGHTMOUSE);
+const K_RIGHTDRAG: c_int = termcap2key(KS_EXTRA, KE_RIGHTDRAG);
+const K_RIGHTRELEASE: c_int = termcap2key(KS_EXTRA, KE_RIGHTRELEASE);
+const K_X1MOUSE: c_int = termcap2key(KS_EXTRA, KE_X1MOUSE);
+const K_X1DRAG: c_int = termcap2key(KS_EXTRA, KE_X1DRAG);
+const K_X1RELEASE: c_int = termcap2key(KS_EXTRA, KE_X1RELEASE);
+const K_X2MOUSE: c_int = termcap2key(KS_EXTRA, KE_X2MOUSE);
+const K_X2DRAG: c_int = termcap2key(KS_EXTRA, KE_X2DRAG);
+const K_X2RELEASE: c_int = termcap2key(KS_EXTRA, KE_X2RELEASE);
+const NUL_VAL: c_int = 0;
+const POUND: c_int = 0xA3;
+
 /// Command handler for "g" prefix commands.
-///
-/// Handles a large number of g-prefixed commands:
-/// - g0, g^, g$, gm, gM: screen column movement
-/// - gj, gk: display line movement
-/// - ge, gE: backward end of word
-/// - gg: go to line (default first)
-/// - gd, gD: go to definition
-/// - gf, gF: go to file under cursor
-/// - gi: go to Insert position
-/// - And many more...
 ///
 /// # Safety
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_g_cmd(cap: CapHandle) {
-    nvim_nv_g_cmd_impl(cap);
+    nv_g_cmd_impl(cap);
+}
+
+/// Implementation of the 'g' command dispatch.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[allow(
+    clippy::cast_lossless,
+    clippy::too_many_lines,
+    clippy::manual_c_str_literals
+)]
+unsafe fn nv_g_cmd_impl(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let nchar = nvim_cap_get_nchar(cap);
+
+    match nchar {
+        // "g^A/g^X": Sequentially increment visually selected region.
+        n if n == CTRL_A || n == CTRL_X => {
+            if nvim_get_VIsual_active() != 0 {
+                nvim_cap_set_arg(cap, 1); // cap->arg = true
+                nvim_cap_set_cmdchar(cap, nchar);
+                nvim_cap_set_nchar(cap, NUL_VAL);
+                nvim_nv_addsub(cap);
+            } else {
+                rs_clearopbeep(oap);
+            }
+        }
+
+        // "gR": Enter virtual replace mode.
+        n if n == b'R' as c_int => {
+            nvim_cap_set_arg(cap, 1);
+            rs_nv_Replace(cap);
+        }
+
+        n if n == b'r' as c_int => {
+            rs_nv_vreplace(cap);
+        }
+
+        n if n == b'&' as c_int => {
+            do_cmdline_cmd(c"%s//~/&".as_ptr());
+        }
+
+        // "gv": Reselect the previous Visual area.
+        n if n == b'v' as c_int => {
+            rs_nv_gv_cmd(cap);
+        }
+
+        // "gV": Don't reselect the previous Visual area.
+        n if n == b'V' as c_int => {
+            nvim_set_VIsual_reselect(false);
+        }
+
+        // "gh", "gH", "g^H": start Select mode.
+        n if n == K_BS => {
+            nvim_cap_set_nchar(cap, CTRL_H_KEY);
+            // FALLTHROUGH
+            nvim_cap_set_cmdchar(
+                cap,
+                nvim_cap_get_nchar(cap) + (b'v' as c_int - b'h' as c_int),
+            );
+            nvim_cap_set_arg(cap, 1);
+            rs_nv_visual(cap);
+        }
+        n if n == b'h' as c_int || n == b'H' as c_int || n == CTRL_H_KEY => {
+            nvim_cap_set_cmdchar(cap, nchar + (b'v' as c_int - b'h' as c_int));
+            nvim_cap_set_arg(cap, 1);
+            rs_nv_visual(cap);
+        }
+
+        // "gn", "gN" visually select next/previous search match
+        n if n == b'N' as c_int || n == b'n' as c_int => {
+            if !nvim_current_search(nvim_cap_get_count1(cap), nchar == b'n' as c_int) {
+                rs_clearopbeep(oap);
+            }
+        }
+
+        // "gj" and "gk": screen-line movement
+        n if n == b'j' as c_int || n == K_DOWN => {
+            let i = if nvim_get_curwin_w_p_wrap() {
+                nvim_nv_screengo_full(oap, FORWARD, nvim_cap_get_count1(cap), false)
+            } else {
+                nvim_oap_set_motion_type(oap, K_MT_LINEWISE);
+                nvim_cursor_down_call(
+                    nvim_cap_get_count1(cap),
+                    nvim_oap_get_op_type_ptr(oap) == OP_NOP,
+                )
+            };
+            if i == 0 {
+                rs_clearopbeep(oap);
+            }
+        }
+
+        n if n == b'k' as c_int || n == K_UP => {
+            let i = if nvim_get_curwin_w_p_wrap() {
+                nvim_nv_screengo_full(oap, BACKWARD, nvim_cap_get_count1(cap), false)
+            } else {
+                nvim_oap_set_motion_type(oap, K_MT_LINEWISE);
+                nvim_cursor_up(
+                    nvim_cap_get_count1(cap),
+                    nvim_oap_get_op_type_ptr(oap) == OP_NOP,
+                )
+            };
+            if i == 0 {
+                rs_clearopbeep(oap);
+            }
+        }
+
+        // "gJ": join two lines without inserting a space.
+        n if n == b'J' as c_int => {
+            rs_nv_join(cap);
+        }
+
+        // "g0", "g^", "gm": screen column movement
+        n if n == b'^' as c_int
+            || n == b'0' as c_int
+            || n == b'm' as c_int
+            || n == K_HOME
+            || n == K_KHOME =>
+        {
+            nvim_nv_g_home_m_cmd_call(cap);
+        }
+
+        // "gM": middle of text in the line
+        n if n == b'M' as c_int => {
+            nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
+            nvim_oap_set_inclusive(oap, false);
+            let i = nvim_linetabsize_curwin(nvim_get_cursor_lnum());
+            let count0 = nvim_cap_get_count0(cap);
+            if count0 > 0 && count0 <= 100 {
+                nvim_coladvance_curwin(i * count0 / 100);
+            } else {
+                nvim_coladvance_curwin(i / 2);
+            }
+            nvim_set_curwin_w_set_curswant(true);
+        }
+
+        // "g_": to the last non-blank character
+        n if n == b'_' as c_int => {
+            rs_nv_g_underscore_cmd(cap);
+        }
+
+        // "g$": like "$" but for screen lines
+        n if n == b'$' as c_int || n == K_END || n == K_KEND => {
+            nvim_nv_g_dollar_cmd(cap);
+        }
+
+        // "g*", "g#", CTRL-], g]
+        n if n == b'*' as c_int
+            || n == b'#' as c_int
+            || n == POUND
+            || n == CTRL_RSB
+            || n == b']' as c_int =>
+        {
+            rs_nv_ident(cap);
+        }
+
+        // ge and gE: go back to end of word
+        n if n == b'e' as c_int || n == b'E' as c_int => {
+            nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
+            nvim_set_curwin_w_set_curswant(true);
+            nvim_oap_set_inclusive(oap, true);
+            if nvim_bckend_word(nvim_cap_get_count1(cap), nchar == b'E' as c_int, false) == 0 {
+                rs_clearopbeep(oap);
+            }
+        }
+
+        // "g CTRL-G": display info about cursor position
+        n if n == CTRL_G_KEY => {
+            nvim_cursor_pos_info_call();
+        }
+
+        // "gi": start Insert at the last position.
+        n if n == b'i' as c_int => {
+            rs_nv_gi_cmd(cap);
+        }
+
+        // "gI": Start insert in column 1.
+        n if n == b'I' as c_int => {
+            nvim_beginline(0);
+            if !rs_checkclearopq(oap) {
+                nvim_invoke_edit_g(cap);
+            }
+        }
+
+        // "gf": goto file, edit file under cursor
+        n if n == b'f' as c_int || n == b'F' as c_int => {
+            nvim_nv_gotofile(cap);
+        }
+
+        // "g'm" and "g`m": jump to mark without setting pcmark
+        n if n == b'\'' as c_int => {
+            nvim_cap_set_arg(cap, 1);
+            // FALLTHROUGH
+            rs_nv_gomark(cap);
+        }
+        n if n == b'`' as c_int => {
+            rs_nv_gomark(cap);
+        }
+
+        // "gs": Goto sleep.
+        n if n == b's' as c_int => {
+            nvim_do_sleep_wrapper(nvim_cap_get_count1(cap) * 1000, false);
+        }
+
+        // "ga": Display the ascii value of the character under the cursor.
+        n if n == b'a' as c_int => {
+            rs_do_ascii(std::ptr::null_mut());
+        }
+
+        // "g8": Display UTF-8 bytes or find illegal byte sequence.
+        n if n == b'8' as c_int => {
+            if nvim_cap_get_count0(cap) == 8 {
+                nvim_utf_find_illegal_call();
+            } else {
+                nvim_show_utf8_call();
+            }
+        }
+
+        // "g<": show scrollback text
+        n if n == b'<' as c_int => {
+            nvim_show_sb_text_call();
+        }
+
+        // "gg": Goto first line or line number.
+        n if n == b'g' as c_int => {
+            nvim_cap_set_arg(cap, 0);
+            rs_nv_goto(cap);
+        }
+
+        // "gq", "gw": Format text
+        // "g~", "gu", "gU", "g?", "g@": operators
+        n if n == b'q' as c_int || n == b'w' as c_int => {
+            nvim_set_oap_cursor_start(oap);
+            // FALLTHROUGH
+            rs_nv_operator(cap);
+        }
+        n if n == b'~' as c_int
+            || n == b'u' as c_int
+            || n == b'U' as c_int
+            || n == b'?' as c_int
+            || n == b'@' as c_int =>
+        {
+            rs_nv_operator(cap);
+        }
+
+        // "gd", "gD": Find definition
+        n if n == b'd' as c_int || n == b'D' as c_int => {
+            nvim_nv_gd_impl(oap, nchar, nvim_cap_get_count0(cap));
+        }
+
+        // g<*Mouse>: <C-*mouse>
+        n if n == K_MIDDLEMOUSE
+            || n == K_MIDDLEDRAG
+            || n == K_MIDDLERELEASE
+            || n == K_LEFTMOUSE
+            || n == K_LEFTDRAG
+            || n == K_LEFTRELEASE
+            || n == K_MOUSEMOVE
+            || n == K_RIGHTMOUSE
+            || n == K_RIGHTDRAG
+            || n == K_RIGHTRELEASE
+            || n == K_X1MOUSE
+            || n == K_X1DRAG
+            || n == K_X1RELEASE
+            || n == K_X2MOUSE
+            || n == K_X2DRAG
+            || n == K_X2RELEASE =>
+        {
+            nvim_set_mod_mask_ctrl();
+            nvim_do_mouse_g(oap, nchar, nvim_cap_get_count1(cap));
+        }
+
+        n if n == K_IGNORE => {}
+
+        // "gP", "gp": same as "P" and "p" but leave cursor just after new text
+        n if n == b'p' as c_int || n == b'P' as c_int => {
+            rs_nv_put(cap);
+        }
+
+        // "go": goto byte count from start of buffer
+        n if n == b'o' as c_int => {
+            nvim_oap_set_inclusive(oap, false);
+            nvim_goto_byte_call(nvim_cap_get_count0(cap));
+        }
+
+        // "gQ": improved Ex mode
+        n if n == b'Q' as c_int => {
+            if !rs_check_text_locked(oap) && !rs_checkclearopq(oap) {
+                nvim_do_exmode_wrapper();
+            }
+        }
+
+        n if n == b',' as c_int => {
+            rs_nv_pcmark(cap);
+        }
+
+        n if n == b';' as c_int => {
+            nvim_cap_set_count1(cap, -nvim_cap_get_count1(cap));
+            rs_nv_pcmark(cap);
+        }
+
+        n if n == b't' as c_int => {
+            if !rs_checkclearop(oap) {
+                nvim_goto_tabpage(nvim_cap_get_count0(cap));
+            }
+        }
+
+        n if n == b'T' as c_int => {
+            if !rs_checkclearop(oap) {
+                nvim_goto_tabpage(-nvim_cap_get_count1(cap));
+            }
+        }
+
+        n if n == nvim_get_TAB() => {
+            if !rs_checkclearop(oap) && !nvim_goto_tabpage_lastused() {
+                rs_clearopbeep(oap);
+            }
+        }
+
+        // "g+" and "g-": undo or redo along the timeline
+        n if n == b'+' as c_int || n == b'-' as c_int => {
+            if !rs_checkclearopq(oap) {
+                let count = if nchar == b'-' as c_int {
+                    -nvim_cap_get_count1(cap)
+                } else {
+                    nvim_cap_get_count1(cap)
+                };
+                nvim_undo_time_call(count, false, false, false);
+            }
+        }
+
+        _ => {
+            rs_clearopbeep(oap);
+        }
+    }
 }
 
 /// Command handler for "@" macro execution command.
