@@ -303,6 +303,7 @@ extern "C" {
     fn nvim_set_compl_enter_selects(val: c_int);
     fn nvim_cpt_sources_clear();
     fn nvim_set_compl_autocomplete(val: c_int);
+    fn nvim_set_compl_get_longest(val: c_int);
     fn nvim_set_compl_from_nonkeyword(val: c_int);
     fn nvim_set_compl_num_bests(val: c_int);
     fn nvim_set_completed_item_empty();
@@ -335,6 +336,34 @@ pub unsafe extern "C" fn rs_ins_compl_clear() {
     nvim_set_compl_from_nonkeyword(0);
     nvim_set_compl_num_bests(0);
     nvim_set_completed_item_empty();
+}
+
+/// Clear the completion status flags (compl_cont_status = 0).
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_status_clear() {
+    nvim_set_compl_cont_status(0);
+}
+
+/// Initialize get longest common string (compl_get_longest = false).
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_init_get_longest() {
+    nvim_set_compl_get_longest(0);
+}
+
+/// Enable autocompletion (compl_autocomplete = true, compl_get_longest = false).
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_enable_autocomplete() {
+    nvim_set_compl_autocomplete(1);
+    nvim_set_compl_get_longest(0);
 }
 
 // =============================================================================

@@ -138,6 +138,9 @@ extern int rs_pum_wanted(void);
 extern unsigned rs_get_cot_flags(void);
 extern int rs_ctrl_x_mode_eval(void);
 extern void rs_ins_compl_free(void);
+extern void rs_compl_status_clear(void);
+extern void rs_ins_compl_init_get_longest(void);
+extern void rs_ins_compl_enable_autocomplete(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -444,12 +447,6 @@ int nvim_ctrl_x_mode_not_default(void)
 int nvim_curbuf_get_b_p_inf(void)
 {
   return curbuf->b_p_inf ? 1 : 0;
-}
-
-/// Clear the completion status flags
-void compl_status_clear(void)
-{
-  compl_cont_status = 0;
 }
 
 /// Check that the 'dictionary' or 'thesaurus' option can be used.
@@ -1645,12 +1642,6 @@ static void ins_compl_item_free(compl_T *match)
   xfree(match);
 }
 
-/// Initialize get longest common string.
-void ins_compl_init_get_longest(void)
-{
-  compl_get_longest = false;
-}
-
 // C accessors for completion state (used by Rust)
 int nvim_get_compl_interrupted(void) { return compl_interrupted ? 1 : 0; }
 int nvim_get_compl_time_slice_expired(void) { return compl_time_slice_expired ? 1 : 0; }
@@ -1728,6 +1719,7 @@ void nvim_clear_compl_curr_win(void) { compl_curr_win = NULL; }
 void nvim_clear_compl_curr_buf(void) { compl_curr_buf = NULL; }
 void nvim_set_compl_enter_selects(int val) { compl_enter_selects = val != 0; }
 void nvim_set_compl_autocomplete(int val) { compl_autocomplete = val != 0; }
+void nvim_set_compl_get_longest(int val) { compl_get_longest = val != 0; }
 void nvim_set_compl_from_nonkeyword(int val) { compl_from_nonkeyword = val != 0; }
 void nvim_set_compl_num_bests(int val) { compl_num_bests = val; }
 void nvim_clear_edit_submode_extra(void) { edit_submode_extra = NULL; }
@@ -1867,7 +1859,7 @@ static void ins_compl_new_leader(void)
     // Set "compl_restarting" to avoid that the first match is inserted.
     compl_restarting = true;
     if (rs_ins_compl_has_autocomplete()) {
-      ins_compl_enable_autocomplete();
+      rs_ins_compl_enable_autocomplete();
     } else {
       compl_autocomplete = false;
     }
@@ -5678,13 +5670,6 @@ int ins_complete(int c, bool enable_pum)
   compl_interrupted = false;
 
   return OK;
-}
-
-/// Enable autocompletion
-void ins_compl_enable_autocomplete(void)
-{
-  compl_autocomplete = true;
-  compl_get_longest = false;
 }
 
 /// Remove (if needed) and show the popup menu

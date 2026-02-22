@@ -115,6 +115,9 @@ extern int rs_ins_compl_preinsert_longest(void);
 extern int rs_ins_compl_has_shown_match(void);
 extern int rs_ins_compl_long_shown_match(void);
 extern int rs_pum_wanted(void);
+extern void rs_compl_status_clear(void);
+extern void rs_ins_compl_init_get_longest(void);
+extern void rs_ins_compl_enable_autocomplete(void);
 
 typedef struct {
   VimState state;
@@ -1631,7 +1634,7 @@ _Static_assert(kOptBoFlagCopy == 0x10, "kOptBoFlagCopy mismatch");
     redraw_later(curwin, UPD_VALID); \
     update_screen();  /* Show char deletion immediately */ \
     ui_flush(); \
-    ins_compl_enable_autocomplete(); \
+    rs_ins_compl_enable_autocomplete(); \
     insert_do_complete(s); \
     break; \
   } while (0)
@@ -2018,8 +2021,8 @@ static int insert_check(VimState *state)
     if (rs_ins_compl_has_autocomplete() && !char_avail() && curwin->w_cursor.col > 0) {
       s->c = char_before_cursor();
       if (vim_isprintc(s->c)) {
-        ins_compl_enable_autocomplete();
-        ins_compl_init_get_longest();
+        rs_ins_compl_enable_autocomplete();
+        rs_ins_compl_init_get_longest();
         insert_do_complete(s);
         insert_handle_key_post(s);
         return 1;
@@ -2104,7 +2107,7 @@ static int insert_execute(VimState *state, int key)
         ins_compl_delete(false);
         if (rs_ins_compl_preinsert_longest() && !rs_ins_compl_is_match_selected()) {
           ins_compl_insert(false, true);
-          ins_compl_init_get_longest();
+          rs_ins_compl_init_get_longest();
           return 1;  // continue
         } else {
           ins_compl_insert(false, false);
@@ -2118,7 +2121,7 @@ static int insert_execute(VimState *state, int key)
 
   // Prepare for or stop CTRL-X mode. This doesn't do completion, but it does
   // fix up the text when finishing completion.
-  ins_compl_init_get_longest();
+  rs_ins_compl_init_get_longest();
   if (ins_compl_prep(s->c)) {
     return 1;  // continue
   }
@@ -2751,7 +2754,7 @@ static void insert_do_complete(InsertState *s)
   compl_busy = true;
   disable_fold_update++;  // don't redraw folds here
   if (ins_complete(s->c, true) == FAIL) {
-    compl_status_clear();
+    rs_compl_status_clear();
   }
   disable_fold_update--;
   compl_busy = false;
