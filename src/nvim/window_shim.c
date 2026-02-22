@@ -206,166 +206,32 @@ extern WinCloseStructResult rs_win_close_structural(win_T *win, int help_window,
                                                      frame_T *win_frame);
 extern void rs_win_close_post_layout(int was_floating, int dir, frame_T *win_frame);
 
-// Accessor functions for Rust opaque handle pattern.
-// These provide safe access to win_T fields from Rust code.
-
-/// Get the w_locked field from a window (accessor for Rust).
-int nvim_win_get_locked(win_T *wp)
-{
-  return wp->w_locked;
-}
-
-/// Get the w_floating field from a window (accessor for Rust).
-int nvim_win_get_floating(win_T *wp)
-{
-  return wp->w_floating;
-}
-
-/// Get the w_p_pvw (preview window) field from a window (accessor for Rust).
-int nvim_win_get_pvw(win_T *wp)
-{
-  return wp->w_p_pvw;
-}
-
-/// Get the w_ns_hl (highlight namespace) field from a window (accessor for Rust).
-int nvim_win_get_ns_hl(win_T *wp)
-{
-  return wp->w_ns_hl;
-}
-
-/// Get the w_hl_attr_normal field from a window (accessor for Rust).
-int nvim_win_get_hl_attr_normal(win_T *wp)
-{
-  return wp->w_hl_attr_normal;
-}
-
-/// Get the w_hl_attr_normalnc field from a window (accessor for Rust).
-int nvim_win_get_hl_attr_normalnc(win_T *wp)
-{
-  return wp->w_hl_attr_normalnc;
-}
-
-// Accessors for update_window_hl (Phase 17)
-
-/// Get the w_ns_hl_active field from a window.
-int nvim_win_get_ns_hl_active(win_T *wp)
-{
-  return wp->w_ns_hl_active;
-}
-
-/// Set the w_ns_hl_active field of a window.
-void nvim_win_set_ns_hl_active(win_T *wp, int val)
-{
-  wp->w_ns_hl_active = val;
-}
-
-/// Get the w_ns_hl_attr pointer from a window.
-int *nvim_win_get_ns_hl_attr(win_T *wp)
-{
-  return wp->w_ns_hl_attr;
-}
-
-/// Set the w_ns_hl_attr pointer of a window.
-void nvim_win_set_ns_hl_attr(win_T *wp, int *val)
-{
-  wp->w_ns_hl_attr = val;
-}
-
-/// Get the w_hl_needs_update field from a window.
-bool nvim_win_get_hl_needs_update(win_T *wp)
-{
-  return wp->w_hl_needs_update;
-}
-
-/// Set the w_hl_needs_update field of a window.
-void nvim_win_set_hl_needs_update(win_T *wp, bool val)
-{
-  wp->w_hl_needs_update = val;
-}
-
-/// Set the w_hl_attr_normal field of a window.
-void nvim_win_set_hl_attr_normal(win_T *wp, int val)
-{
-  wp->w_hl_attr_normal = val;
-}
-
-/// Set the w_hl_attr_normalnc field of a window.
-void nvim_win_set_hl_attr_normalnc(win_T *wp, int val)
-{
-  wp->w_hl_attr_normalnc = val;
-}
-
-/// Get the w_config.external field from a window.
-bool nvim_win_get_config_external(win_T *wp)
-{
-  return wp->w_config.external;
-}
-
-/// Get the w_config.border flag from a window.
-bool nvim_win_get_config_border(win_T *wp)
-{
-  return wp->w_config.border;
-}
-
-/// Get a border highlight ID from w_config.border_hl_ids.
-int nvim_win_get_config_border_hl_id(win_T *wp, int idx)
-{
-  return wp->w_config.border_hl_ids[idx];
-}
-
-/// Set a border attribute in w_config.border_attr.
-void nvim_win_set_config_border_attr(win_T *wp, int idx, int val)
-{
-  wp->w_config.border_attr[idx] = val;
-}
-
-/// Set the w_config.shadow field of a window.
-void nvim_win_set_config_shadow(win_T *wp, bool val)
-{
-  wp->w_config.shadow = val;
-}
-
-/// Get the w_config.shadow field of a window.
-bool nvim_win_get_config_shadow(win_T *wp)
-{
-  return wp->w_config.shadow;
-}
-
-/// Get the w_p_winbl field from a window.
-int nvim_win_get_p_winbl(win_T *wp)
-{
-  return (int)wp->w_p_winbl;
-}
-
-/// Set the w_grid_alloc.blending field of a window.
-void nvim_win_set_grid_blending(win_T *wp, bool val)
-{
-  wp->w_grid_alloc.blending = val;
-}
-
-/// Get the w_next field from a window (accessor for Rust).
-win_T *nvim_win_get_next(win_T *wp)
-{
-  return wp->w_next;
-}
-
-/// Get the w_prev field from a window (accessor for Rust).
-win_T *nvim_win_get_prev(win_T *wp)
-{
-  return wp->w_prev;
-}
-
-/// Set the w_next field of a window (accessor for Rust).
-void nvim_win_set_next(win_T *wp, win_T *next)
-{
-  wp->w_next = next;
-}
-
-/// Set the w_prev field of a window (accessor for Rust).
-void nvim_win_set_prev(win_T *wp, win_T *prev)
-{
-  wp->w_prev = prev;
-}
+int nvim_win_get_locked(win_T *wp) { return wp->w_locked; }
+int nvim_win_get_floating(win_T *wp) { return wp->w_floating; }
+int nvim_win_get_pvw(win_T *wp) { return wp->w_p_pvw; }
+int nvim_win_get_ns_hl(win_T *wp) { return wp->w_ns_hl; }
+int nvim_win_get_hl_attr_normal(win_T *wp) { return wp->w_hl_attr_normal; }
+int nvim_win_get_hl_attr_normalnc(win_T *wp) { return wp->w_hl_attr_normalnc; }
+int nvim_win_get_ns_hl_active(win_T *wp) { return wp->w_ns_hl_active; }
+void nvim_win_set_ns_hl_active(win_T *wp, int val) { wp->w_ns_hl_active = val; }
+int *nvim_win_get_ns_hl_attr(win_T *wp) { return wp->w_ns_hl_attr; }
+void nvim_win_set_ns_hl_attr(win_T *wp, int *val) { wp->w_ns_hl_attr = val; }
+bool nvim_win_get_hl_needs_update(win_T *wp) { return wp->w_hl_needs_update; }
+void nvim_win_set_hl_needs_update(win_T *wp, bool val) { wp->w_hl_needs_update = val; }
+void nvim_win_set_hl_attr_normal(win_T *wp, int val) { wp->w_hl_attr_normal = val; }
+void nvim_win_set_hl_attr_normalnc(win_T *wp, int val) { wp->w_hl_attr_normalnc = val; }
+bool nvim_win_get_config_external(win_T *wp) { return wp->w_config.external; }
+bool nvim_win_get_config_border(win_T *wp) { return wp->w_config.border; }
+int nvim_win_get_config_border_hl_id(win_T *wp, int idx) { return wp->w_config.border_hl_ids[idx]; }
+void nvim_win_set_config_border_attr(win_T *wp, int idx, int val) { wp->w_config.border_attr[idx] = val; }
+void nvim_win_set_config_shadow(win_T *wp, bool val) { wp->w_config.shadow = val; }
+bool nvim_win_get_config_shadow(win_T *wp) { return wp->w_config.shadow; }
+int nvim_win_get_p_winbl(win_T *wp) { return (int)wp->w_p_winbl; }
+void nvim_win_set_grid_blending(win_T *wp, bool val) { wp->w_grid_alloc.blending = val; }
+win_T *nvim_win_get_next(win_T *wp) { return wp->w_next; }
+win_T *nvim_win_get_prev(win_T *wp) { return wp->w_prev; }
+void nvim_win_set_next(win_T *wp, win_T *next) { wp->w_next = next; }
+void nvim_win_set_prev(win_T *wp, win_T *prev) { wp->w_prev = prev; }
 
 /// Set the firstwin global variable (accessor for Rust).
 /// Also syncs curtab->tp_firstwin if curtab is not NULL.
@@ -387,56 +253,14 @@ void nvim_set_lastwin(win_T *wp)
   }
 }
 
-/// Set the tp_firstwin field of a tabpage (accessor for Rust).
-void nvim_tabpage_set_firstwin(tabpage_T *tp, win_T *wp)
-{
-  tp->tp_firstwin = wp;
-}
-
-/// Set the tp_lastwin field of a tabpage (accessor for Rust).
-void nvim_tabpage_set_lastwin(tabpage_T *tp, win_T *wp)
-{
-  tp->tp_lastwin = wp;
-}
-
-/// Get the tp_lastwin field from a tabpage (accessor for Rust).
-win_T *nvim_tabpage_get_lastwin(tabpage_T *tp)
-{
-  return tp->tp_lastwin;
-}
-
-// Global state accessors for Rust.
-// These provide safe access to global variables from Rust code.
-
-/// Get the current window (accessor for Rust).
-win_T *nvim_get_curwin(void)
-{
-  return curwin;
-}
-
-/// Get the current window's grid_alloc (accessor for Rust).
-ScreenGrid *nvim_get_curwin_grid_alloc(void)
-{
-  return curwin ? &curwin->w_grid_alloc : NULL;
-}
-
-/// Get the first window in the current tab (accessor for Rust).
-win_T *nvim_get_firstwin(void)
-{
-  return firstwin;
-}
-
-/// Get the last window in the current tab (accessor for Rust).
-win_T *nvim_get_lastwin(void)
-{
-  return lastwin;
-}
-
-/// Get the current window's handle (accessor for Rust).
-int nvim_get_curwin_handle(void)
-{
-  return curwin->handle;
-}
+void nvim_tabpage_set_firstwin(tabpage_T *tp, win_T *wp) { tp->tp_firstwin = wp; }
+void nvim_tabpage_set_lastwin(tabpage_T *tp, win_T *wp) { tp->tp_lastwin = wp; }
+win_T *nvim_tabpage_get_lastwin(tabpage_T *tp) { return tp->tp_lastwin; }
+win_T *nvim_get_curwin(void) { return curwin; }
+ScreenGrid *nvim_get_curwin_grid_alloc(void) { return curwin ? &curwin->w_grid_alloc : NULL; }
+win_T *nvim_get_firstwin(void) { return firstwin; }
+win_T *nvim_get_lastwin(void) { return lastwin; }
+int nvim_get_curwin_handle(void) { return curwin->handle; }
 
 /// Get the current window's cursor position for incsearch state (accessor for Rust).
 /// Fills the provided pos struct with lnum, col, coladd.
@@ -494,681 +318,120 @@ int nvim_equalpos(const void *pos1, const void *pos2)
   return p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2];
 }
 
-/// Validate cursor position (accessor for Rust).
-void nvim_validate_cursor(void)
-{
-  validate_cursor(curwin);
-}
-
-/// Get the current buffer (accessor for Rust).
-buf_T *nvim_get_curbuf(void)
-{
-  return curbuf;
-}
-
-/// Get the current tabpage (accessor for Rust).
-tabpage_T *nvim_get_curtab(void)
-{
-  return curtab;
-}
-
-/// Get the tp_firstwin field from a tabpage (accessor for Rust).
-win_T *nvim_tabpage_get_firstwin(tabpage_T *tp)
-{
-  return tp->tp_firstwin;
-}
-
-/// Get the tp_next field from a tabpage (accessor for Rust).
-tabpage_T *nvim_tabpage_get_next(tabpage_T *tp)
-{
-  return tp->tp_next;
-}
-
-/// Get the first tabpage (accessor for Rust).
-tabpage_T *nvim_get_first_tabpage(void)
-{
-  return first_tabpage;
-}
-
-/// Get the last used tabpage (accessor for Rust).
-tabpage_T *nvim_get_lastused_tabpage(void)
-{
-  return lastused_tabpage;
-}
-
-/// Get the tp_curwin field from a tabpage (accessor for Rust).
-win_T *nvim_tabpage_get_curwin(tabpage_T *tp)
-{
-  return tp->tp_curwin;
-}
-
-/// Get the handle field from a tabpage (accessor for Rust).
-int nvim_tabpage_get_handle(tabpage_T *tp)
-{
-  return (int)tp->handle;
-}
-
-/// Get the w_frame field from a window (accessor for Rust).
-/// The window's frame in the frame tree.
-frame_T *nvim_win_get_frame(win_T *wp)
-{
-  return wp->w_frame;
-}
-
-/// Get w_p_wfh (winfixheight) from a window (accessor for Rust).
-int nvim_win_get_wfh(win_T *wp)
-{
-  return wp->w_p_wfh;
-}
-
-/// Get w_p_wfw (winfixwidth) from a window (accessor for Rust).
-int nvim_win_get_wfw(win_T *wp)
-{
-  return wp->w_p_wfw;
-}
-
-/// Get handle field from a window (accessor for Rust).
-int nvim_win_get_handle(win_T *wp)
-{
-  return wp->handle;
-}
-
-// Accessors for fold.c migration (Phase: fold method checks)
-
-/// Get a character from the foldmethod string at the given index.
-/// Used by Rust foldmethodIs* functions to check fold method.
-char nvim_win_get_fdm_char(win_T *wp, int idx)
-{
-  return wp->w_p_fdm[idx];
-}
-
-/// Get the w_p_fen (foldenable) field from a window.
-int nvim_win_get_p_fen(win_T *wp)
-{
-  return wp->w_p_fen;
-}
-
-/// Check if window's buffer has a terminal.
-int nvim_win_buf_has_terminal(win_T *wp)
-{
-  return wp->w_buffer->terminal != NULL;
-}
-
-/// Check if window's folds growarray is empty.
-int nvim_win_folds_empty(win_T *wp)
-{
-  return GA_EMPTY(&wp->w_folds);
-}
-
-/// Get the w_valid field from a window.
-int nvim_win_get_valid(win_T *wp)
-{
-  return wp->w_valid;
-}
-
-/// Set the w_valid field of a window.
-void nvim_win_set_valid(win_T *wp, int val)
-{
-  wp->w_valid = val;
-}
-
-/// Clear specific bits from the w_valid field.
-void nvim_win_clear_valid_bits(win_T *wp, int bits)
-{
-  wp->w_valid &= ~bits;
-}
-
-/// Set the w_lines_valid field (number of valid w_lines entries).
-void nvim_win_set_lines_valid(win_T *wp, int val)
-{
-  wp->w_lines_valid = val;
-}
-
-// Accessors for plines.c migration (Phase 3: display calculations)
-
-/// Get the w_view_width field from a window.
-int nvim_win_get_view_width(win_T *wp)
-{
-  return wp->w_view_width;
-}
-
-/// Get the w_view_height field from a window.
-int nvim_win_get_view_height(win_T *wp)
-{
-  return wp->w_view_height;
-}
+void nvim_validate_cursor(void) { validate_cursor(curwin); }
+buf_T *nvim_get_curbuf(void) { return curbuf; }
+tabpage_T *nvim_get_curtab(void) { return curtab; }
+win_T *nvim_tabpage_get_firstwin(tabpage_T *tp) { return tp->tp_firstwin; }
+tabpage_T *nvim_tabpage_get_next(tabpage_T *tp) { return tp->tp_next; }
+tabpage_T *nvim_get_first_tabpage(void) { return first_tabpage; }
+tabpage_T *nvim_get_lastused_tabpage(void) { return lastused_tabpage; }
+win_T *nvim_tabpage_get_curwin(tabpage_T *tp) { return tp->tp_curwin; }
+int nvim_tabpage_get_handle(tabpage_T *tp) { return (int)tp->handle; }
+frame_T *nvim_win_get_frame(win_T *wp) { return wp->w_frame; }
+int nvim_win_get_wfh(win_T *wp) { return wp->w_p_wfh; }
+int nvim_win_get_wfw(win_T *wp) { return wp->w_p_wfw; }
+int nvim_win_get_handle(win_T *wp) { return wp->handle; }
+char nvim_win_get_fdm_char(win_T *wp, int idx) { return wp->w_p_fdm[idx]; }
+int nvim_win_get_p_fen(win_T *wp) { return wp->w_p_fen; }
+int nvim_win_buf_has_terminal(win_T *wp) { return wp->w_buffer->terminal != NULL; }
+int nvim_win_folds_empty(win_T *wp) { return GA_EMPTY(&wp->w_folds); }
+int nvim_win_get_valid(win_T *wp) { return wp->w_valid; }
+void nvim_win_set_valid(win_T *wp, int val) { wp->w_valid = val; }
+void nvim_win_clear_valid_bits(win_T *wp, int bits) { wp->w_valid &= ~bits; }
+void nvim_win_set_lines_valid(win_T *wp, int val) { wp->w_lines_valid = val; }
+int nvim_win_get_view_width(win_T *wp) { return wp->w_view_width; }
+int nvim_win_get_view_height(win_T *wp) { return wp->w_view_height; }
 
 // Note: nvim_win_get_skipcol is defined later in window.c (returns colnr_T)
 
-/// Get the w_buffer field from a window.
-buf_T *nvim_win_get_w_buffer(win_T *wp)
-{
-  return wp->w_buffer;
-}
-
-/// Get the fold column display string (w_p_fdc) from a window.
-const char *nvim_win_get_w_p_fdc(win_T *wp)
-{
-  return wp->w_p_fdc;
-}
-
-/// Check if the given window is the current window.
-int nvim_win_is_curwin(win_T *wp)
-{
-  return wp == curwin;
-}
-
-/// Get the w_p_rnu (relativenumber) field from a window.
-int nvim_win_get_p_rnu(win_T *wp)
-{
-  return wp->w_p_rnu;
-}
-
-/// Get the w_p_nu (number) field from a window.
-int nvim_win_get_p_nu(win_T *wp)
-{
-  return wp->w_p_nu;
-}
-
-/// Get the w_p_nuw (numberwidth) field from a window.
-OptInt nvim_win_get_p_nuw(win_T *wp)
-{
-  return wp->w_p_nuw;
-}
-
-/// Get the w_p_stc (statuscolumn) field from a window.
-char *nvim_win_get_p_stc(win_T *wp)
-{
-  return wp->w_p_stc;
-}
-
-/// Get the w_p_cocu (concealcursor) field from a window.
-char *nvim_win_get_p_cocu(win_T *wp)
-{
-  return wp->w_p_cocu;
-}
-
-/// Get the w_minscwidth field from a window.
-int nvim_win_get_minscwidth(win_T *wp)
-{
-  return wp->w_minscwidth;
-}
-
-/// Get the w_nrwidth_line_count field from a window.
-linenr_T nvim_win_get_nrwidth_line_count(win_T *wp)
-{
-  return wp->w_nrwidth_line_count;
-}
-
-/// Set the w_nrwidth_line_count field of a window.
-void nvim_win_set_nrwidth_line_count(win_T *wp, linenr_T val)
-{
-  wp->w_nrwidth_line_count = val;
-}
-
-/// Get the w_nrwidth_width field from a window.
-int nvim_win_get_nrwidth_width(win_T *wp)
-{
-  return wp->w_nrwidth_width;
-}
-
-/// Set the w_nrwidth_width field of a window.
-void nvim_win_set_nrwidth_width(win_T *wp, int val)
-{
-  wp->w_nrwidth_width = val;
-}
-
-/// Set the w_statuscol_line_count field of a window.
-void nvim_win_set_statuscol_line_count(win_T *wp, linenr_T val)
-{
-  wp->w_statuscol_line_count = val;
-}
-
-/// Get the buffer line count for a window.
-linenr_T nvim_win_buf_line_count(win_T *wp)
-{
-  return wp->w_buffer->b_ml.ml_line_count;
-}
-
-/// Get the sign text meta total for a window's buffer.
-int nvim_win_buf_meta_total_signtext(win_T *wp)
-{
-  return buf_meta_total(wp->w_buffer, kMTMetaSignText) > 0;
-}
-
-/// Get the global p_wmw value.
-OptInt nvim_get_p_wmw(void)
-{
-  return p_wmw;
-}
-
-/// Get the global p_wh (winheight) value.
-OptInt nvim_get_p_wh(void)
-{
-  return p_wh;
-}
-
-/// Get the global p_wmh (winminheight) value.
-OptInt nvim_get_p_wmh(void)
-{
-  return p_wmh;
-}
-
-/// Get the global p_wiw (winwidth) value.
-OptInt nvim_get_p_wiw(void)
-{
-  return p_wiw;
-}
-
-/// Get the global p_sb (splitbelow) value.
-int nvim_get_p_sb(void)
-{
-  return p_sb ? 1 : 0;
-}
-
-/// Get the global p_spr (splitright) value.
-int nvim_get_p_spr(void)
-{
-  return p_spr ? 1 : 0;
-}
-
-/// Get the global Rows value.
-int nvim_get_Rows(void)
-{
-  return Rows;
-}
-
-/// Get the global Columns value.
-int nvim_get_Columns(void)
-{
-  return Columns;
-}
-
-/// Get the w_height field from a window (raw field accessor).
-int nvim_win_field_height(win_T *wp)
-{
-  return wp->w_height;
-}
-
-/// Set the w_height field of a window (raw field accessor).
-void nvim_win_field_set_height(win_T *wp, int val)
-{
-  wp->w_height = val;
-}
-
-/// Set the w_hsep_height field of a window.
-void nvim_win_set_hsep_height(win_T *wp, int val)
-{
-  wp->w_hsep_height = val;
-}
-
-/// Set the w_status_height field of a window.
-void nvim_win_set_status_height(win_T *wp, int val)
-{
-  wp->w_status_height = val;
-}
-
-/// Get the w_width field from a window (raw field accessor).
-int nvim_win_field_width(win_T *wp)
-{
-  return wp->w_width;
-}
-
-/// Set the w_width field of a window (raw field accessor).
-void nvim_win_field_set_width(win_T *wp, int val)
-{
-  wp->w_width = val;
-}
-
-/// Set the w_vsep_width field of a window.
-void nvim_win_set_vsep_width(win_T *wp, int val)
-{
-  wp->w_vsep_width = val;
-}
-
-/// Set the fr_height field of a frame.
-void nvim_frame_set_height(frame_T *frp, int val)
-{
-  frp->fr_height = val;
-}
-
-/// Set the fr_width field of a frame.
-void nvim_frame_set_width(frame_T *frp, int val)
-{
-  frp->fr_width = val;
-}
-
-/// Wrapper for frame_new_height().
-void nvim_frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool set_ch)
-{
-  frame_new_height(topfrp, height, topfirst, wfh, set_ch);
-}
-
-/// Wrapper for frame_new_width().
-void nvim_frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw)
-{
-  frame_new_width(topfrp, width, leftfirst, wfw);
-}
-
-/// Wrapper for win_config_float().
-void nvim_win_config_float(win_T *wp)
-{
-  win_config_float(wp, wp->w_config);
-}
-
-/// Wrapper for win_fix_scroll().
-void nvim_win_fix_scroll(bool upd_topline)
-{
-  win_fix_scroll(upd_topline);
-}
-
-/// Wrapper for redraw_all_later().
-void nvim_redraw_all_later(int type)
-{
-  redraw_all_later(type);
-}
-
-/// Get w_config.height from a window.
-int nvim_win_get_config_height(win_T *wp)
-{
-  return wp->w_config.height;
-}
-
-/// Set w_config.height on a window.
-void nvim_win_set_config_height(win_T *wp, int val)
-{
-  wp->w_config.height = val;
-}
-
-/// Get w_config.width from a window.
-int nvim_win_get_config_width(win_T *wp)
-{
-  return wp->w_config.width;
-}
-
-/// Set w_config.width on a window.
-void nvim_win_set_config_width(win_T *wp, int val)
-{
-  wp->w_config.width = val;
-}
-
-/// Get the global p_ch (cmdheight) value.
-int64_t nvim_get_window_p_ch(void)
-{
-  return p_ch;
-}
-
-/// Set the global redraw_cmdline flag.
-void nvim_set_redraw_cmdline(bool val)
-{
-  redraw_cmdline = val;
-}
-
-/// Get the w_winbar_height field from a window.
-int nvim_win_get_winbar_height(win_T *wp)
-{
-  return wp->w_winbar_height;
-}
-
-/// Get the w_status_height field from a window.
-int nvim_win_get_status_height(win_T *wp)
-{
-  return wp->w_status_height;
-}
-
-/// Get the global State variable.
-int nvim_get_State(void)
-{
-  return State;
-}
-
-/// Set the global State variable.
-void nvim_set_State(int val)
-{
-  State = val;
-}
-
-/// Get the real state (calls get_real_state()).
-int nvim_get_real_state(void)
-{
-  return get_real_state();
-}
-
-/// Get the 'pumheight' option value.
-int64_t nvim_get_p_ph(void)
-{
-  return p_ph;
-}
-
-/// Get the 'pumwidth' option value.
-int64_t nvim_get_p_pw(void)
-{
-  return p_pw;
-}
-
-/// Get the 'pummaxwidth' option value.
-int64_t nvim_get_p_pmw(void)
-{
-  return p_pmw;
-}
-
-/// Get the 'diff' option value for a window.
-int nvim_win_get_p_diff(win_T *wp)
-{
-  return wp->w_p_diff;
-}
-
-/// Get the 'cursorbind' option value for a window.
-int nvim_win_get_p_crb(win_T *wp)
-{
-  return wp->w_p_crb;
-}
-
-/// Set the curwin global.
-void nvim_set_curwin(win_T *wp)
-{
-  curwin = wp;
-}
-
-/// Set the curbuf global.
-void nvim_set_curbuf(buf_T *buf)
-{
-  curbuf = buf;
-}
-
-/// Check if there are virtual lines in the window's buffer.
-int nvim_win_buf_meta_total_lines(win_T *wp)
-{
-  return buf_meta_total(wp->w_buffer, kMTMetaLines) > 0;
-}
-
-/// Check if window is the command-line window.
-int nvim_win_is_cmdwin(win_T *wp)
-{
-  return wp == cmdwin_win;
-}
-
-/// Get the signcolumn width for a window.
-int nvim_win_get_scwidth(win_T *wp)
-{
-  return wp->w_scwidth;
-}
-
-/// Get the p_cpo global option string.
-char *nvim_get_p_cpo(void)
-{
-  return p_cpo;
-}
-
-/// Get the window's showbreak option.
-char *nvim_win_get_p_sbr(win_T *wp)
-{
-  return wp->w_p_sbr;
-}
-
-/// Get the global showbreak option.
-char *nvim_get_p_sbr(void)
-{
-  return p_sbr;
-}
-
-/// Get the empty string option constant.
-char *nvim_get_empty_string_option(void)
-{
-  return empty_string_option;
-}
-
-/// Get the window's 'list' option.
-int nvim_win_get_p_list(win_T *wp)
-{
-  return wp->w_p_list;
-}
-
-/// Get the 'listchars' precedes character for window.
-uint32_t nvim_win_get_lcs_prec(win_T *wp)
-{
-  return wp->w_p_lcs_chars.prec;
-}
-
-/// Get the window's 'cursorline' option.
-int nvim_win_get_p_cul(win_T *wp)
-{
-  return wp->w_p_cul;
-}
-
-/// Get the window's 'conceallevel' option.
-OptInt nvim_win_get_p_cole(win_T *wp)
-{
-  return wp->w_p_cole;
-}
-
-/// Get the window's 'scrolloff' option.
-OptInt nvim_win_get_p_so(win_T *wp)
-{
-  return wp->w_p_so;
-}
-
-/// Get the window's 'sidescrolloff' option.
-OptInt nvim_win_get_p_siso(win_T *wp)
-{
-  return wp->w_p_siso;
-}
-
-/// Get the global 'scrolloff' option.
-OptInt nvim_get_p_so(void)
-{
-  return p_so;
-}
-
-/// Get the global 'sidescrolloff' option.
-OptInt nvim_get_p_siso(void)
-{
-  return p_siso;
-}
-
-/// Get the global 'laststatus' option.
-OptInt nvim_get_p_ls(void)
-{
-  return p_ls;
-}
-
-/// Check if global 'winbar' option is empty.
-int nvim_get_p_wbr_empty(void)
-{
-  return *p_wbr == NUL;
-}
-
-/// Get the global 'showtabline' option.
-OptInt nvim_get_p_stal(void)
-{
-  return p_stal;
-}
-
-/// Get the global 'eadirection' option (p_ead).
-const char *nvim_get_p_ead(void)
-{
-  return p_ead;
-}
-
-/// Check if there is more than one tabpage.
-int nvim_first_tabpage_has_next(void)
-{
-  return first_tabpage != NULL && first_tabpage->tp_next != NULL;
-}
-
-// Accessors for drawscreen.c migration (separator drawing)
-
-/// Get the w_winrow field from a window.
-int nvim_win_get_winrow(win_T *wp)
-{
-  return wp->w_winrow;
-}
-
-/// Get the w_wincol field from a window.
-int nvim_win_get_wincol(win_T *wp)
-{
-  return wp->w_wincol;
-}
-
-/// Get the w_winrow_off field from a window.
-int nvim_win_get_winrow_off(win_T *wp)
-{
-  return wp->w_winrow_off;
-}
-
-/// Get the w_wincol_off field from a window.
-int nvim_win_get_wincol_off(win_T *wp)
-{
-  return wp->w_wincol_off;
-}
-
-/// Set the w_winrow field of a window.
-void nvim_win_set_winrow(win_T *wp, int val)
-{
-  wp->w_winrow = val;
-}
-
-/// Set the w_wincol field of a window.
-void nvim_win_set_wincol(win_T *wp, int val)
-{
-  wp->w_wincol = val;
-}
-
-/// Set the w_redr_status field of a window.
-void nvim_win_set_redr_status(win_T *wp, int val)
-{
-  wp->w_redr_status = val;
-}
-
-/// Get the w_grid_alloc field from a window.
-ScreenGrid *nvim_win_get_grid_alloc(win_T *wp)
-{
-  return &wp->w_grid_alloc;
-}
-
-/// Get the w_config.hide field from a window.
-int nvim_win_get_config_hide(win_T *wp)
-{
-  return wp ? wp->w_config.hide : 0;
-}
-
-/// Set the w_pos_changed field of a window.
-void nvim_win_set_pos_changed(win_T *wp, int val)
-{
-  wp->w_pos_changed = val;
-}
-
-/// Get the w_config.relative field from a window.
-int nvim_win_get_config_relative(win_T *wp)
-{
-  return (int)wp->w_config.relative;
-}
-
-/// Get the w_config.window field (parent window handle).
-int nvim_win_get_config_window(win_T *wp)
-{
-  return wp ? wp->w_config.window : 0;
-}
+buf_T *nvim_win_get_w_buffer(win_T *wp) { return wp->w_buffer; }
+const char *nvim_win_get_w_p_fdc(win_T *wp) { return wp->w_p_fdc; }
+int nvim_win_is_curwin(win_T *wp) { return wp == curwin; }
+int nvim_win_get_p_rnu(win_T *wp) { return wp->w_p_rnu; }
+int nvim_win_get_p_nu(win_T *wp) { return wp->w_p_nu; }
+OptInt nvim_win_get_p_nuw(win_T *wp) { return wp->w_p_nuw; }
+char *nvim_win_get_p_stc(win_T *wp) { return wp->w_p_stc; }
+char *nvim_win_get_p_cocu(win_T *wp) { return wp->w_p_cocu; }
+int nvim_win_get_minscwidth(win_T *wp) { return wp->w_minscwidth; }
+linenr_T nvim_win_get_nrwidth_line_count(win_T *wp) { return wp->w_nrwidth_line_count; }
+void nvim_win_set_nrwidth_line_count(win_T *wp, linenr_T val) { wp->w_nrwidth_line_count = val; }
+int nvim_win_get_nrwidth_width(win_T *wp) { return wp->w_nrwidth_width; }
+void nvim_win_set_nrwidth_width(win_T *wp, int val) { wp->w_nrwidth_width = val; }
+void nvim_win_set_statuscol_line_count(win_T *wp, linenr_T val) { wp->w_statuscol_line_count = val; }
+linenr_T nvim_win_buf_line_count(win_T *wp) { return wp->w_buffer->b_ml.ml_line_count; }
+int nvim_win_buf_meta_total_signtext(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaSignText) > 0; }
+OptInt nvim_get_p_wmw(void) { return p_wmw; }
+OptInt nvim_get_p_wh(void) { return p_wh; }
+OptInt nvim_get_p_wmh(void) { return p_wmh; }
+OptInt nvim_get_p_wiw(void) { return p_wiw; }
+int nvim_get_p_sb(void) { return p_sb ? 1 : 0; }
+int nvim_get_p_spr(void) { return p_spr ? 1 : 0; }
+int nvim_get_Rows(void) { return Rows; }
+int nvim_get_Columns(void) { return Columns; }
+int nvim_win_field_height(win_T *wp) { return wp->w_height; }
+void nvim_win_field_set_height(win_T *wp, int val) { wp->w_height = val; }
+void nvim_win_set_hsep_height(win_T *wp, int val) { wp->w_hsep_height = val; }
+void nvim_win_set_status_height(win_T *wp, int val) { wp->w_status_height = val; }
+int nvim_win_field_width(win_T *wp) { return wp->w_width; }
+void nvim_win_field_set_width(win_T *wp, int val) { wp->w_width = val; }
+void nvim_win_set_vsep_width(win_T *wp, int val) { wp->w_vsep_width = val; }
+void nvim_frame_set_height(frame_T *frp, int val) { frp->fr_height = val; }
+void nvim_frame_set_width(frame_T *frp, int val) { frp->fr_width = val; }
+void nvim_frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool set_ch) { frame_new_height(topfrp, height, topfirst, wfh, set_ch); }
+void nvim_frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw) { frame_new_width(topfrp, width, leftfirst, wfw); }
+void nvim_win_config_float(win_T *wp) { win_config_float(wp, wp->w_config); }
+void nvim_win_fix_scroll(bool upd_topline) { win_fix_scroll(upd_topline); }
+void nvim_redraw_all_later(int type) { redraw_all_later(type); }
+int nvim_win_get_config_height(win_T *wp) { return wp->w_config.height; }
+void nvim_win_set_config_height(win_T *wp, int val) { wp->w_config.height = val; }
+int nvim_win_get_config_width(win_T *wp) { return wp->w_config.width; }
+void nvim_win_set_config_width(win_T *wp, int val) { wp->w_config.width = val; }
+int64_t nvim_get_window_p_ch(void) { return p_ch; }
+void nvim_set_redraw_cmdline(bool val) { redraw_cmdline = val; }
+int nvim_win_get_winbar_height(win_T *wp) { return wp->w_winbar_height; }
+int nvim_win_get_status_height(win_T *wp) { return wp->w_status_height; }
+int nvim_get_State(void) { return State; }
+void nvim_set_State(int val) { State = val; }
+int nvim_get_real_state(void) { return get_real_state(); }
+int64_t nvim_get_p_ph(void) { return p_ph; }
+int64_t nvim_get_p_pw(void) { return p_pw; }
+int64_t nvim_get_p_pmw(void) { return p_pmw; }
+int nvim_win_get_p_diff(win_T *wp) { return wp->w_p_diff; }
+int nvim_win_get_p_crb(win_T *wp) { return wp->w_p_crb; }
+void nvim_set_curwin(win_T *wp) { curwin = wp; }
+void nvim_set_curbuf(buf_T *buf) { curbuf = buf; }
+int nvim_win_buf_meta_total_lines(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaLines) > 0; }
+int nvim_win_is_cmdwin(win_T *wp) { return wp == cmdwin_win; }
+int nvim_win_get_scwidth(win_T *wp) { return wp->w_scwidth; }
+char *nvim_get_p_cpo(void) { return p_cpo; }
+char *nvim_win_get_p_sbr(win_T *wp) { return wp->w_p_sbr; }
+char *nvim_get_p_sbr(void) { return p_sbr; }
+char *nvim_get_empty_string_option(void) { return empty_string_option; }
+int nvim_win_get_p_list(win_T *wp) { return wp->w_p_list; }
+uint32_t nvim_win_get_lcs_prec(win_T *wp) { return wp->w_p_lcs_chars.prec; }
+int nvim_win_get_p_cul(win_T *wp) { return wp->w_p_cul; }
+OptInt nvim_win_get_p_cole(win_T *wp) { return wp->w_p_cole; }
+OptInt nvim_win_get_p_so(win_T *wp) { return wp->w_p_so; }
+OptInt nvim_win_get_p_siso(win_T *wp) { return wp->w_p_siso; }
+OptInt nvim_get_p_so(void) { return p_so; }
+OptInt nvim_get_p_siso(void) { return p_siso; }
+OptInt nvim_get_p_ls(void) { return p_ls; }
+int nvim_get_p_wbr_empty(void) { return *p_wbr == NUL; }
+OptInt nvim_get_p_stal(void) { return p_stal; }
+const char *nvim_get_p_ead(void) { return p_ead; }
+int nvim_first_tabpage_has_next(void) { return first_tabpage != NULL && first_tabpage->tp_next != NULL; }
+int nvim_win_get_winrow(win_T *wp) { return wp->w_winrow; }
+int nvim_win_get_wincol(win_T *wp) { return wp->w_wincol; }
+int nvim_win_get_winrow_off(win_T *wp) { return wp->w_winrow_off; }
+int nvim_win_get_wincol_off(win_T *wp) { return wp->w_wincol_off; }
+void nvim_win_set_winrow(win_T *wp, int val) { wp->w_winrow = val; }
+void nvim_win_set_wincol(win_T *wp, int val) { wp->w_wincol = val; }
+void nvim_win_set_redr_status(win_T *wp, int val) { wp->w_redr_status = val; }
+ScreenGrid *nvim_win_get_grid_alloc(win_T *wp) { return &wp->w_grid_alloc; }
+int nvim_win_get_config_hide(win_T *wp) { return wp ? wp->w_config.hide : 0; }
+void nvim_win_set_pos_changed(win_T *wp, int val) { wp->w_pos_changed = val; }
+int nvim_win_get_config_relative(win_T *wp) { return (int)wp->w_config.relative; }
+int nvim_win_get_config_window(win_T *wp) { return wp ? wp->w_config.window : 0; }
 
 /// Get the w_config.zindex field.
 int nvim_win_get_config_zindex(win_T *wp)
@@ -1176,420 +439,76 @@ int nvim_win_get_config_zindex(win_T *wp)
   return wp ? wp->w_config.zindex : 50;  // Default zindex
 }
 
-/// Get the w_config.focusable field.
-int nvim_win_get_config_focusable(win_T *wp)
-{
-  return wp ? wp->w_config.focusable : 0;
-}
-
-/// Get the topframe global.
-frame_T *nvim_get_topframe(void)
-{
-  return topframe;
-}
-
-/// Get the w_width field from a window (internal accessor).
-int nvim_win_get_w_width(win_T *wp)
-{
-  return wp->w_width;
-}
-
-/// Get the w_height field from a window (internal accessor).
-int nvim_win_get_w_height(win_T *wp)
-{
-  return wp->w_height;
-}
-
-/// Get the w_hsep_height field from a window.
-int nvim_win_get_hsep_height(win_T *wp)
-{
-  return wp->w_hsep_height;
-}
-
-/// Get the w_vsep_width field from a window.
-int nvim_win_get_vsep_width(win_T *wp)
-{
-  return wp->w_vsep_width;
-}
-
-/// Get the w_wcol field from a window (cursor column in window).
-int nvim_win_get_wcol(win_T *wp)
-{
-  return wp->w_wcol;
-}
-
-/// Set the w_wcol field in a window (cursor column in window).
-void nvim_win_set_wcol(win_T *wp, int val)
-{
-  wp->w_wcol = val;
-}
-
-/// Get the w_wrow field from a window (cursor row in window).
-int nvim_win_get_wrow(win_T *wp)
-{
-  return wp->w_wrow;
-}
-
-/// Set the w_wrow field for a window (accessor for Rust).
-void nvim_win_set_wrow(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_wrow = val;
-  }
-}
-
-/// Get the w_p_sms (smoothscroll) option for a window (accessor for Rust).
-int nvim_win_get_p_sms(win_T *wp)
-{
-  return wp ? wp->w_p_sms : 0;
-}
-
-/// Set the w_p_sms (smoothscroll) option for a window (accessor for Rust).
-void nvim_win_set_p_sms(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_p_sms = val;
-  }
-}
-
-/// Get the tp_topframe field from a tabpage (accessor for Rust).
-frame_T *nvim_tabpage_get_topframe(tabpage_T *tp)
-{
-  return tp->tp_topframe;
-}
-
-/// Get the prevwin global (accessor for Rust).
-win_T *nvim_get_prevwin(void)
-{
-  return prevwin;
-}
-
-/// Get W_ENDROW(wp) - the row after the window content.
-int nvim_win_get_endrow(win_T *wp)
-{
-  return W_ENDROW(wp);
-}
-
-size_t nvim_win_get_status_click_defs_size(win_T *wp)
-{
-  return wp ? wp->w_status_click_defs_size : 0;
-}
-
-int nvim_win_get_redr_status(win_T *wp)
-{
-  return wp ? wp->w_redr_status : 0;
-}
-
-size_t nvim_get_tab_page_click_defs_size(void)
-{
-  return tab_page_click_defs_size;
-}
-
-/// Get W_ENDCOL(wp) - the column after the window content.
-int nvim_win_get_endcol(win_T *wp)
-{
-  return W_ENDCOL(wp);
-}
-
-/// Get the vertical separator character (fcs_chars.vert).
-schar_T nvim_win_get_fcs_vert(win_T *wp)
-{
-  return wp->w_p_fcs_chars.vert;
-}
-
-/// Get the horizontal separator character (fcs_chars.horiz).
-schar_T nvim_win_get_fcs_horiz(win_T *wp)
-{
-  return wp->w_p_fcs_chars.horiz;
-}
-
-/// Get the vertical+horizontal connector character (fcs_chars.verthoriz).
-schar_T nvim_win_get_fcs_verthoriz(win_T *wp)
-{
-  return wp->w_p_fcs_chars.verthoriz;
-}
-
-/// Get the vertical-right connector character (fcs_chars.vertright).
-schar_T nvim_win_get_fcs_vertright(win_T *wp)
-{
-  return wp->w_p_fcs_chars.vertright;
-}
-
-/// Get the vertical-left connector character (fcs_chars.vertleft).
-schar_T nvim_win_get_fcs_vertleft(win_T *wp)
-{
-  return wp->w_p_fcs_chars.vertleft;
-}
-
-/// Get the horizontal-down connector character (fcs_chars.horizdown).
-schar_T nvim_win_get_fcs_horizdown(win_T *wp)
-{
-  return wp->w_p_fcs_chars.horizdown;
-}
-
-/// Get the horizontal-up connector character (fcs_chars.horizup).
-schar_T nvim_win_get_fcs_horizup(win_T *wp)
-{
-  return wp->w_p_fcs_chars.horizup;
-}
-
-/// Get the statusline fill character (fcs_chars.stl).
-schar_T nvim_win_get_fcs_stl(win_T *wp)
-{
-  return wp->w_p_fcs_chars.stl;
-}
-
-/// Get the statusline fill character for non-current windows (fcs_chars.stlnc).
-schar_T nvim_win_get_fcs_stlnc(win_T *wp)
-{
-  return wp->w_p_fcs_chars.stlnc;
-}
-
-/// Get the fold closed character (fcs_chars.foldclosed).
-schar_T nvim_win_get_fcs_foldclosed(win_T *wp)
-{
-  return wp->w_p_fcs_chars.foldclosed;
-}
-
-/// Get the fold open character (fcs_chars.foldopen).
-schar_T nvim_win_get_fcs_foldopen(win_T *wp)
-{
-  return wp->w_p_fcs_chars.foldopen;
-}
-
-/// Get the fold separator character (fcs_chars.foldsep).
-schar_T nvim_win_get_fcs_foldsep(win_T *wp)
-{
-  return wp->w_p_fcs_chars.foldsep;
-}
-
-/// Get the fold inner character (fcs_chars.foldinner).
-schar_T nvim_win_get_fcs_foldinner(win_T *wp)
-{
-  return wp->w_p_fcs_chars.foldinner;
-}
-
-/// Get the diff character (fcs_chars.diff).
-schar_T nvim_win_get_fcs_diff(win_T *wp)
-{
-  return wp->w_p_fcs_chars.diff;
-}
-
-/// Get the listchars extends character (lcs_chars.ext).
-schar_T nvim_win_get_lcs_ext(win_T *wp)
-{
-  return wp->w_p_lcs_chars.ext;
-}
-
-/// Get the window's wrap flags (w_p_wrap_flags).
-int nvim_win_get_wrap_flags(win_T *wp)
-{
-  return wp->w_p_wrap_flags;
-}
-
-/// Get the window's 'wrap' option.
-int nvim_win_get_p_wrap(win_T *wp)
-{
-  return wp->w_p_wrap;
-}
-
-/// Get the window's virtual column (w_virtcol).
-colnr_T nvim_win_get_virtcol(win_T *wp)
-{
-  return wp->w_virtcol;
-}
-
-/// Set the window's virtual column (w_virtcol).
-void nvim_win_set_virtcol(win_T *wp, colnr_T val)
-{
-  if (wp) {
-    wp->w_virtcol = val;
-  }
-}
-
-/// Get the 'cursorcolumn' option value for a window.
-int nvim_win_get_p_cuc(win_T *wp)
-{
-  return wp->w_p_cuc;
-}
-
-/// Get the window's cursorline line number (w_cursorline).
-linenr_T nvim_win_get_cursorline(win_T *wp)
-{
-  return wp->w_cursorline;
-}
-
-/// Get the window's cursorlineopt flags (w_p_culopt_flags).
-int nvim_win_get_p_culopt_flags(win_T *wp)
-{
-  return wp->w_p_culopt_flags;
-}
-
-/// Get the cursor line number for the window.
-linenr_T nvim_win_get_cursor_lnum(win_T *wp)
-{
-  return wp->w_cursor.lnum;
-}
-
-/// Get the window's topline.
-linenr_T nvim_win_get_topline(win_T *wp)
-{
-  return wp->w_topline;
-}
-
-/// Set the window's topline.
-void nvim_win_set_topline(win_T *wp, linenr_T val)
-{
-  wp->w_topline = val;
-}
-
-/// Set the window's topline_was_set flag.
-void nvim_win_set_topline_was_set(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_topline_was_set = val != 0;
-  }
-}
-
-/// Get the window's botline (line below the bottom of the window).
-linenr_T nvim_win_get_botline(win_T *wp)
-{
-  return wp->w_botline;
-}
-
-/// Get the window's redraw type.
-int nvim_win_get_redr_type(win_T *wp)
-{
-  return wp ? wp->w_redr_type : 0;
-}
-
-/// Set the window's redraw type.
-void nvim_win_set_redr_type(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_redr_type = val;
-  }
-}
-
-/// Get the number of valid w_lines entries.
-int nvim_win_get_lines_valid(win_T *wp)
-{
-  return wp ? wp->w_lines_valid : 0;
-}
+int nvim_win_get_config_focusable(win_T *wp) { return wp ? wp->w_config.focusable : 0; }
+frame_T *nvim_get_topframe(void) { return topframe; }
+int nvim_win_get_w_width(win_T *wp) { return wp->w_width; }
+int nvim_win_get_w_height(win_T *wp) { return wp->w_height; }
+int nvim_win_get_hsep_height(win_T *wp) { return wp->w_hsep_height; }
+int nvim_win_get_vsep_width(win_T *wp) { return wp->w_vsep_width; }
+int nvim_win_get_wcol(win_T *wp) { return wp->w_wcol; }
+void nvim_win_set_wcol(win_T *wp, int val) { wp->w_wcol = val; }
+int nvim_win_get_wrow(win_T *wp) { return wp->w_wrow; }
+void nvim_win_set_wrow(win_T *wp, int val) { if (wp) { wp->w_wrow = val; } }
+int nvim_win_get_p_sms(win_T *wp) { return wp ? wp->w_p_sms : 0; }
+void nvim_win_set_p_sms(win_T *wp, int val) { if (wp) { wp->w_p_sms = val; } }
+frame_T *nvim_tabpage_get_topframe(tabpage_T *tp) { return tp->tp_topframe; }
+win_T *nvim_get_prevwin(void) { return prevwin; }
+int nvim_win_get_endrow(win_T *wp) { return W_ENDROW(wp); }
+size_t nvim_win_get_status_click_defs_size(win_T *wp) { return wp ? wp->w_status_click_defs_size : 0; }
+int nvim_win_get_redr_status(win_T *wp) { return wp ? wp->w_redr_status : 0; }
+size_t nvim_get_tab_page_click_defs_size(void) { return tab_page_click_defs_size; }
+int nvim_win_get_endcol(win_T *wp) { return W_ENDCOL(wp); }
+schar_T nvim_win_get_fcs_vert(win_T *wp) { return wp->w_p_fcs_chars.vert; }
+schar_T nvim_win_get_fcs_horiz(win_T *wp) { return wp->w_p_fcs_chars.horiz; }
+schar_T nvim_win_get_fcs_verthoriz(win_T *wp) { return wp->w_p_fcs_chars.verthoriz; }
+schar_T nvim_win_get_fcs_vertright(win_T *wp) { return wp->w_p_fcs_chars.vertright; }
+schar_T nvim_win_get_fcs_vertleft(win_T *wp) { return wp->w_p_fcs_chars.vertleft; }
+schar_T nvim_win_get_fcs_horizdown(win_T *wp) { return wp->w_p_fcs_chars.horizdown; }
+schar_T nvim_win_get_fcs_horizup(win_T *wp) { return wp->w_p_fcs_chars.horizup; }
+schar_T nvim_win_get_fcs_stl(win_T *wp) { return wp->w_p_fcs_chars.stl; }
+schar_T nvim_win_get_fcs_stlnc(win_T *wp) { return wp->w_p_fcs_chars.stlnc; }
+schar_T nvim_win_get_fcs_foldclosed(win_T *wp) { return wp->w_p_fcs_chars.foldclosed; }
+schar_T nvim_win_get_fcs_foldopen(win_T *wp) { return wp->w_p_fcs_chars.foldopen; }
+schar_T nvim_win_get_fcs_foldsep(win_T *wp) { return wp->w_p_fcs_chars.foldsep; }
+schar_T nvim_win_get_fcs_foldinner(win_T *wp) { return wp->w_p_fcs_chars.foldinner; }
+schar_T nvim_win_get_fcs_diff(win_T *wp) { return wp->w_p_fcs_chars.diff; }
+schar_T nvim_win_get_lcs_ext(win_T *wp) { return wp->w_p_lcs_chars.ext; }
+int nvim_win_get_wrap_flags(win_T *wp) { return wp->w_p_wrap_flags; }
+int nvim_win_get_p_wrap(win_T *wp) { return wp->w_p_wrap; }
+colnr_T nvim_win_get_virtcol(win_T *wp) { return wp->w_virtcol; }
+void nvim_win_set_virtcol(win_T *wp, colnr_T val) { if (wp) { wp->w_virtcol = val; } }
+int nvim_win_get_p_cuc(win_T *wp) { return wp->w_p_cuc; }
+linenr_T nvim_win_get_cursorline(win_T *wp) { return wp->w_cursorline; }
+int nvim_win_get_p_culopt_flags(win_T *wp) { return wp->w_p_culopt_flags; }
+linenr_T nvim_win_get_cursor_lnum(win_T *wp) { return wp->w_cursor.lnum; }
+linenr_T nvim_win_get_topline(win_T *wp) { return wp->w_topline; }
+void nvim_win_set_topline(win_T *wp, linenr_T val) { wp->w_topline = val; }
+void nvim_win_set_topline_was_set(win_T *wp, int val) { if (wp) { wp->w_topline_was_set = val != 0; } }
+linenr_T nvim_win_get_botline(win_T *wp) { return wp->w_botline; }
+int nvim_win_get_redr_type(win_T *wp) { return wp ? wp->w_redr_type : 0; }
+void nvim_win_set_redr_type(win_T *wp, int val) { if (wp) { wp->w_redr_type = val; } }
+int nvim_win_get_lines_valid(win_T *wp) { return wp ? wp->w_lines_valid : 0; }
 
 // NOTE: nvim_win_set_lines_valid already defined earlier in this file
 
-/// Get the top line of the redraw range.
-linenr_T nvim_win_get_redraw_top(win_T *wp)
-{
-  return wp ? wp->w_redraw_top : 0;
-}
-
-/// Set the top line of the redraw range.
-void nvim_win_set_redraw_top(win_T *wp, linenr_T val)
-{
-  if (wp) {
-    wp->w_redraw_top = val;
-  }
-}
-
-/// Get the bottom line of the redraw range.
-linenr_T nvim_win_get_redraw_bot(win_T *wp)
-{
-  return wp ? wp->w_redraw_bot : 0;
-}
-
-/// Set the bottom line of the redraw range.
-void nvim_win_set_redraw_bot(win_T *wp, linenr_T val)
-{
-  if (wp) {
-    wp->w_redraw_bot = val;
-  }
-}
-
-/// Get the window's topfill (filler lines above topline).
-int nvim_win_get_topfill(win_T *wp)
-{
-  return wp->w_topfill;
-}
-
-/// Set the window's topfill (filler lines above topline).
-void nvim_win_set_topfill(win_T *wp, int val)
-{
-  wp->w_topfill = val;
-}
-
-/// Get the window's arg_idx (argument list index).
-int nvim_win_get_arg_idx(win_T *wp)
-{
-  return wp->w_arg_idx;
-}
-
-/// Check if the window's arg_idx is invalid.
-int nvim_win_get_arg_idx_invalid(win_T *wp)
-{
-  return wp->w_arg_idx_invalid;
-}
-
-/// Get the argument count for a window's argument list.
-int nvim_win_argcount(win_T *wp)
-{
-  return WARGCOUNT(wp);
-}
-
-/// Get the window's skipcol.
-colnr_T nvim_win_get_skipcol(win_T *wp)
-{
-  return wp->w_skipcol;
-}
-
-/// Set the window's skipcol.
-void nvim_win_set_skipcol(win_T *wp, colnr_T val)
-{
-  wp->w_skipcol = val;
-}
-
-/// Get the cursor column.
-colnr_T nvim_win_get_cursor_col(win_T *wp)
-{
-  return wp->w_cursor.col;
-}
-
-/// Set the cursor line number.
-void nvim_win_set_cursor_lnum(win_T *wp, linenr_T lnum)
-{
-  wp->w_cursor.lnum = lnum;
-}
-
-/// Set the cursor column.
-void nvim_win_set_cursor_col(win_T *wp, colnr_T col)
-{
-  wp->w_cursor.col = col;
-}
-
-/// Get the cursor coladd.
-colnr_T nvim_win_get_cursor_coladd(win_T *wp)
-{
-  return wp->w_cursor.coladd;
-}
-
-/// Get the valid cursor line number.
-linenr_T nvim_win_get_valid_cursor_lnum(win_T *wp)
-{
-  return wp->w_valid_cursor.lnum;
-}
-
-/// Get the valid cursor column.
-colnr_T nvim_win_get_valid_cursor_col(win_T *wp)
-{
-  return wp->w_valid_cursor.col;
-}
-
-/// Get the valid cursor coladd.
-colnr_T nvim_win_get_valid_cursor_coladd(win_T *wp)
-{
-  return wp->w_valid_cursor.coladd;
-}
+linenr_T nvim_win_get_redraw_top(win_T *wp) { return wp ? wp->w_redraw_top : 0; }
+void nvim_win_set_redraw_top(win_T *wp, linenr_T val) { if (wp) { wp->w_redraw_top = val; } }
+linenr_T nvim_win_get_redraw_bot(win_T *wp) { return wp ? wp->w_redraw_bot : 0; }
+void nvim_win_set_redraw_bot(win_T *wp, linenr_T val) { if (wp) { wp->w_redraw_bot = val; } }
+int nvim_win_get_topfill(win_T *wp) { return wp->w_topfill; }
+void nvim_win_set_topfill(win_T *wp, int val) { wp->w_topfill = val; }
+int nvim_win_get_arg_idx(win_T *wp) { return wp->w_arg_idx; }
+int nvim_win_get_arg_idx_invalid(win_T *wp) { return wp->w_arg_idx_invalid; }
+int nvim_win_argcount(win_T *wp) { return WARGCOUNT(wp); }
+colnr_T nvim_win_get_skipcol(win_T *wp) { return wp->w_skipcol; }
+void nvim_win_set_skipcol(win_T *wp, colnr_T val) { wp->w_skipcol = val; }
+colnr_T nvim_win_get_cursor_col(win_T *wp) { return wp->w_cursor.col; }
+void nvim_win_set_cursor_lnum(win_T *wp, linenr_T lnum) { wp->w_cursor.lnum = lnum; }
+void nvim_win_set_cursor_col(win_T *wp, colnr_T col) { wp->w_cursor.col = col; }
+colnr_T nvim_win_get_cursor_coladd(win_T *wp) { return wp->w_cursor.coladd; }
+linenr_T nvim_win_get_valid_cursor_lnum(win_T *wp) { return wp->w_valid_cursor.lnum; }
+colnr_T nvim_win_get_valid_cursor_col(win_T *wp) { return wp->w_valid_cursor.col; }
+colnr_T nvim_win_get_valid_cursor_coladd(win_T *wp) { return wp->w_valid_cursor.coladd; }
 
 /// Set the valid cursor position (all fields).
 void nvim_win_set_valid_cursor(win_T *wp, linenr_T lnum, colnr_T col, colnr_T coladd)
@@ -1599,188 +518,36 @@ void nvim_win_set_valid_cursor(win_T *wp, linenr_T lnum, colnr_T col, colnr_T co
   wp->w_valid_cursor.coladd = coladd;
 }
 
-/// Set just the valid cursor column.
-void nvim_win_set_valid_cursor_col(win_T *wp, colnr_T col)
-{
-  wp->w_valid_cursor.col = col;
-}
-
-/// Set just the valid cursor coladd.
-void nvim_win_set_valid_cursor_coladd(win_T *wp, colnr_T coladd)
-{
-  wp->w_valid_cursor.coladd = coladd;
-}
-
-/// Get the leftcol (horizontal scroll position).
-colnr_T nvim_win_get_leftcol(win_T *wp)
-{
-  return wp->w_leftcol;
-}
-
-/// Get the valid leftcol.
-colnr_T nvim_win_get_valid_leftcol(win_T *wp)
-{
-  return wp->w_valid_leftcol;
-}
-
-/// Set the valid leftcol.
-void nvim_win_set_valid_leftcol(win_T *wp, colnr_T val)
-{
-  wp->w_valid_leftcol = val;
-}
-
-/// Get the valid skipcol.
-colnr_T nvim_win_get_valid_skipcol(win_T *wp)
-{
-  return wp->w_valid_skipcol;
-}
-
-/// Set the valid skipcol.
-void nvim_win_set_valid_skipcol(win_T *wp, colnr_T val)
-{
-  wp->w_valid_skipcol = val;
-}
-
-/// Get the viewport_invalid flag.
-int nvim_win_get_viewport_invalid(win_T *wp)
-{
-  return wp->w_viewport_invalid ? 1 : 0;
-}
-
-/// Set the viewport_invalid flag.
-void nvim_win_set_viewport_invalid(win_T *wp, int val)
-{
-  wp->w_viewport_invalid = val != 0;
-}
-
-/// Get w_cline_row.
-int nvim_win_get_cline_row(win_T *wp)
-{
-  return wp->w_cline_row;
-}
-
-/// Set w_cline_row.
-void nvim_win_set_cline_row(win_T *wp, int val)
-{
-  wp->w_cline_row = val;
-}
-
-/// Get w_cline_height.
-int nvim_win_get_cline_height(win_T *wp)
-{
-  return wp->w_cline_height;
-}
-
-/// Set w_cline_height.
-void nvim_win_set_cline_height(win_T *wp, int val)
-{
-  wp->w_cline_height = val;
-}
-
-/// Get w_cline_folded.
-int nvim_win_get_cline_folded(win_T *wp)
-{
-  return wp->w_cline_folded ? 1 : 0;
-}
-
-/// Set w_cline_folded.
-void nvim_win_set_cline_folded(win_T *wp, int val)
-{
-  wp->w_cline_folded = val != 0;
-}
-
-/// Get w_curswant.
-colnr_T nvim_win_get_curswant(win_T *wp)
-{
-  return wp->w_curswant;
-}
-
-/// Set w_curswant.
-void nvim_win_set_curswant(win_T *wp, colnr_T val)
-{
-  wp->w_curswant = val;
-}
-
-/// Get w_set_curswant flag.
-int nvim_win_get_set_curswant(win_T *wp)
-{
-  return wp->w_set_curswant ? 1 : 0;
-}
-
-/// Set w_set_curswant flag.
-void nvim_win_set_set_curswant(win_T *wp, int val)
-{
-  wp->w_set_curswant = val != 0;
-}
-
-/// Get the window's 'breakindent' option.
-int nvim_win_get_p_bri(win_T *wp)
-{
-  return wp->w_p_bri;
-}
-
-/// Get the window's 'rightleft' option.
-int nvim_win_get_p_rl(win_T *wp)
-{
-  return wp->w_p_rl;
-}
-
-/// Set the window's 'rightleft' option.
-void nvim_win_set_p_rl(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_p_rl = val != 0;
-  }
-}
-
-/// Get the window's 'arabic' option.
-int nvim_win_get_p_arab(win_T *wp)
-{
-  return wp ? wp->w_p_arab : 0;
-}
-
-/// Get the window's grid view (for wlv_put_linebuf).
-void *nvim_win_get_w_grid(win_T *wp)
-{
-  return &wp->w_grid;
-}
-
-/// Get the window's 'listchars' tab1 character (first tab char).
-uint32_t nvim_win_get_lcs_tab1(win_T *wp)
-{
-  return wp->w_p_lcs_chars.tab1;
-}
-
-/// Get the window's 'briopt' sbr flag.
-bool nvim_win_get_briopt_sbr(win_T *wp)
-{
-  return wp->w_briopt_sbr;
-}
-
-/// Get the highlight attribute for a window's highlight group.
-/// This wraps the inline win_hl_attr function for FFI.
-int nvim_win_hl_attr(win_T *wp, int hlf)
-{
-  return win_hl_attr(wp, hlf);
-}
-
-/// Get the buffer associated with a window (for Rust FFI).
-buf_T *nvim_win_get_buffer(win_T *wp)
-{
-  return wp->w_buffer;
-}
-
-/// Get a line from a window's buffer (for Rust FFI).
-const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum)
-{
-  return ml_get_buf(wp->w_buffer, lnum);
-}
-
-/// Check if UI has tabline extension.
-int nvim_ui_has_tabline(void)
-{
-  return ui_has(kUITabline);
-}
+void nvim_win_set_valid_cursor_col(win_T *wp, colnr_T col) { wp->w_valid_cursor.col = col; }
+void nvim_win_set_valid_cursor_coladd(win_T *wp, colnr_T coladd) { wp->w_valid_cursor.coladd = coladd; }
+colnr_T nvim_win_get_leftcol(win_T *wp) { return wp->w_leftcol; }
+colnr_T nvim_win_get_valid_leftcol(win_T *wp) { return wp->w_valid_leftcol; }
+void nvim_win_set_valid_leftcol(win_T *wp, colnr_T val) { wp->w_valid_leftcol = val; }
+colnr_T nvim_win_get_valid_skipcol(win_T *wp) { return wp->w_valid_skipcol; }
+void nvim_win_set_valid_skipcol(win_T *wp, colnr_T val) { wp->w_valid_skipcol = val; }
+int nvim_win_get_viewport_invalid(win_T *wp) { return wp->w_viewport_invalid ? 1 : 0; }
+void nvim_win_set_viewport_invalid(win_T *wp, int val) { wp->w_viewport_invalid = val != 0; }
+int nvim_win_get_cline_row(win_T *wp) { return wp->w_cline_row; }
+void nvim_win_set_cline_row(win_T *wp, int val) { wp->w_cline_row = val; }
+int nvim_win_get_cline_height(win_T *wp) { return wp->w_cline_height; }
+void nvim_win_set_cline_height(win_T *wp, int val) { wp->w_cline_height = val; }
+int nvim_win_get_cline_folded(win_T *wp) { return wp->w_cline_folded ? 1 : 0; }
+void nvim_win_set_cline_folded(win_T *wp, int val) { wp->w_cline_folded = val != 0; }
+colnr_T nvim_win_get_curswant(win_T *wp) { return wp->w_curswant; }
+void nvim_win_set_curswant(win_T *wp, colnr_T val) { wp->w_curswant = val; }
+int nvim_win_get_set_curswant(win_T *wp) { return wp->w_set_curswant ? 1 : 0; }
+void nvim_win_set_set_curswant(win_T *wp, int val) { wp->w_set_curswant = val != 0; }
+int nvim_win_get_p_bri(win_T *wp) { return wp->w_p_bri; }
+int nvim_win_get_p_rl(win_T *wp) { return wp->w_p_rl; }
+void nvim_win_set_p_rl(win_T *wp, int val) { if (wp) { wp->w_p_rl = val != 0; } }
+int nvim_win_get_p_arab(win_T *wp) { return wp ? wp->w_p_arab : 0; }
+void *nvim_win_get_w_grid(win_T *wp) { return &wp->w_grid; }
+uint32_t nvim_win_get_lcs_tab1(win_T *wp) { return wp->w_p_lcs_chars.tab1; }
+bool nvim_win_get_briopt_sbr(win_T *wp) { return wp->w_briopt_sbr; }
+int nvim_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
+buf_T *nvim_win_get_buffer(win_T *wp) { return wp->w_buffer; }
+const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum) { return ml_get_buf(wp->w_buffer, lnum); }
+int nvim_ui_has_tabline(void) { return ui_has(kUITabline); }
 
 /// Get a specific border adjustment value for a window.
 int nvim_win_get_border_adj(win_T *wp, int idx)
@@ -1795,11 +562,7 @@ int nvim_win_get_border_adj(win_T *wp, int idx)
 
 #define ROWS_AVAIL (Rows - p_ch - rs_tabline_height() - rs_global_stl_height())
 
-/// Get the global ROWS_AVAIL value (Rows - p_ch - tabline_height() - global_stl_height()).
-int nvim_get_rows_avail(void)
-{
-  return ROWS_AVAIL;
-}
+int nvim_get_rows_avail(void) { return ROWS_AVAIL; }
 
 /// flags for win_enter_ext()
 typedef enum {
@@ -1912,12 +675,7 @@ win_T *swbuf_goto_win_with_buf(buf_T *buf)
 // resize the topframe to values higher than this minimum, but not lower.
 static OptInt min_set_ch = 1;
 
-/// Get the min_set_ch value (minimum command line height set by user).
-OptInt nvim_get_min_set_ch(void)
-{
-  return min_set_ch;
-}
-
+OptInt nvim_get_min_set_ch(void) { return min_set_ch; }
 
 extern void rs_win_equal(win_T *next_curwin, int current, int dir);
 
@@ -1969,7 +727,6 @@ void win_set_buf(win_T *win, buf_T *buf, Error *err)
   restore_win_noblock(&switchwin, true);
   RedrawingDisabled--;
 }
-
 
 /// Merges two window configs, freeing replaced fields if necessary.
 void merge_win_config(WinConfig *dst, const WinConfig src)
@@ -2783,12 +1540,7 @@ void win_init_empty(win_T *wp)
   wp->w_s = &wp->w_buffer->b_s;
 }
 
-/// Init the current window "curwin".
-/// Called when a new file is being edited.
-void curwin_init(void)
-{
-  win_init_empty(curwin);
-}
+void curwin_init(void) { win_init_empty(curwin); }
 
 /// Closes all windows for buffer `buf` unless there is only one non-floating window.
 ///
@@ -4731,11 +3483,7 @@ win_T *buf_jump_open_tab(buf_T *buf)
 
 static int last_win_id = LOWEST_WIN_ID - 1;
 
-/// Get the last_win_id global (accessor for Rust).
-int nvim_get_last_win_id(void)
-{
-  return last_win_id;
-}
+int nvim_get_last_win_id(void) { return last_win_id; }
 
 /// @param hidden  allocate a window structure and link it in the window if
 //                 false.
@@ -4933,7 +3681,6 @@ void win_free_grid(win_T *wp, bool reinit)
     CLEAR_FIELD(wp->w_grid_alloc);
   }
 }
-
 
 void win_new_screensize(void)
 {
@@ -5825,191 +4572,31 @@ void win_ui_flush(bool validate)
   msg_ui_flush();
 }
 
-// ============================================================================
-// Window Accessor Functions (for Rust FFI)
-// ============================================================================
-
-/// Get the number of empty rows at the bottom of a window
-int nvim_win_get_empty_rows(win_T *wp)
-{
-  return wp ? wp->w_empty_rows : 0;
-}
-
-/// Set the leftcol value for a window
-void nvim_win_set_leftcol(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_leftcol = (colnr_T)val;
-  }
-}
-
-/// Set the botline value for a window
-void nvim_win_set_botline(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_botline = (linenr_T)val;
-  }
-}
-
-/// Set the number of empty rows at the bottom of a window
-void nvim_win_set_empty_rows(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_empty_rows = val;
-  }
-}
-
-/// Check if window's buffer equals the given buffer.
-/// Returns 1 if equal, 0 otherwise.
-int nvim_win_buffer_eq(win_T *wp, buf_T *buf)
-{
-  return (wp && wp->w_buffer == buf) ? 1 : 0;
-}
-
-/// Get the grid allocation valid flag for window.
-int nvim_win_grid_alloc_valid(win_T *wp)
-{
-  return wp ? wp->w_grid_alloc.valid : 0;
-}
-
-/// Set the grid allocation valid flag for window.
-void nvim_win_grid_alloc_set_valid(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_grid_alloc.valid = (val != 0);
-  }
-}
-
-/// Get the window's w_redr_type field (for Rust FFI compatibility).
-/// This is an alias for nvim_win_get_redr_type.
-int nvim_win_get_w_redr_type(win_T *wp)
-{
-  return wp ? wp->w_redr_type : 0;
-}
-
-/// Set the window's w_redr_type field (for Rust FFI compatibility).
-/// This is an alias for nvim_win_set_redr_type.
-void nvim_win_set_w_redr_type(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_redr_type = val;
-  }
-}
-
-/// Set the window's w_lines_valid field (for Rust FFI compatibility).
-void nvim_win_set_w_lines_valid(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_lines_valid = (linenr_T)val;
-  }
-}
-
-/// Get the number of filler rows at the end of the window.
-int nvim_win_get_filler_rows(win_T *wp)
-{
-  return wp ? wp->w_filler_rows : 0;
-}
-
-/// Set the number of filler rows at the end of the window.
-void nvim_win_set_filler_rows(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_filler_rows = val;
-  }
-}
-
-/// Get the botfill flag (true when filler lines are at bottom).
-int nvim_win_get_botfill(win_T *wp)
-{
-  return wp ? (wp->w_botfill ? 1 : 0) : 0;
-}
-
-/// Set the botfill flag (true when filler lines are at bottom).
-void nvim_win_set_botfill(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_botfill = (val != 0);
-  }
-}
-
-/// Check if window's w_grid.target is non-NULL (accessor for Rust).
-int nvim_win_grid_has_target(win_T *wp)
-{
-  return (wp && wp->w_grid.target) ? 1 : 0;
-}
-
-/// Get the scroll binding position (accessor for Rust).
-int nvim_win_get_scbind_pos(win_T *wp)
-{
-  return wp ? wp->w_scbind_pos : 0;
-}
-
-/// Set the scroll binding position (accessor for Rust).
-void nvim_win_set_scbind_pos(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_scbind_pos = val;
-  }
-}
-
-/// Check if window's buffer is empty (accessor for Rust).
-int nvim_win_buf_is_empty(win_T *wp)
-{
-  return (wp && wp->w_buffer) ? buf_is_empty(wp->w_buffer) : 1;
-}
-
-// --- Phase 1 accessors ---
-
-/// Set the w_fraction field for a window (accessor for Rust).
-void nvim_win_set_fraction(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_fraction = val;
-  }
-}
-
-/// Get the tp_ch_used field from a tabpage (accessor for Rust).
-int nvim_tabpage_get_ch_used(tabpage_T *tp)
-{
-  return tp ? (int)tp->tp_ch_used : 0;
-}
-
-/// Check if window has a winnr in tabpage (accessor for Rust).
-/// Wraps win_has_winnr() from eval/window.c.
-int nvim_win_has_winnr(win_T *wp, tabpage_T *tp)
-{
-  return (wp && tp) ? (int)win_has_winnr(wp, tp) : 0;
-}
-
-// --- Phase 2 accessors ---
-
-/// Set the global p_wmh (winminheight) value.
-void nvim_set_p_wmh(int64_t val)
-{
-  p_wmh = val;
-}
-
-/// Set the global p_wmw (winminwidth) value.
-void nvim_set_p_wmw(int64_t val)
-{
-  p_wmw = val;
-}
-
-/// Emit the E36 "Not enough room" error message.
-void nvim_emsg_noroom(void)
-{
-  emsg(_(e_noroom));
-}
-
-/// Wrapper for win_set_inner_size() (stays in C).
-void nvim_win_set_inner_size(win_T *wp, int valid_cursor)
-{
-  if (wp) {
-    win_set_inner_size(wp, valid_cursor != 0);
-  }
-}
-
-// --- Phase 3 accessors ---
+int nvim_win_get_empty_rows(win_T *wp) { return wp ? wp->w_empty_rows : 0; }
+void nvim_win_set_leftcol(win_T *wp, int val) { if (wp) { wp->w_leftcol = (colnr_T)val; } }
+void nvim_win_set_botline(win_T *wp, int val) { if (wp) { wp->w_botline = (linenr_T)val; } }
+void nvim_win_set_empty_rows(win_T *wp, int val) { if (wp) { wp->w_empty_rows = val; } }
+int nvim_win_buffer_eq(win_T *wp, buf_T *buf) { return (wp && wp->w_buffer == buf) ? 1 : 0; }
+int nvim_win_grid_alloc_valid(win_T *wp) { return wp ? wp->w_grid_alloc.valid : 0; }
+void nvim_win_grid_alloc_set_valid(win_T *wp, int val) { if (wp) { wp->w_grid_alloc.valid = (val != 0); } }
+int nvim_win_get_w_redr_type(win_T *wp) { return wp ? wp->w_redr_type : 0; }
+void nvim_win_set_w_redr_type(win_T *wp, int val) { if (wp) { wp->w_redr_type = val; } }
+void nvim_win_set_w_lines_valid(win_T *wp, int val) { if (wp) { wp->w_lines_valid = (linenr_T)val; } }
+int nvim_win_get_filler_rows(win_T *wp) { return wp ? wp->w_filler_rows : 0; }
+void nvim_win_set_filler_rows(win_T *wp, int val) { if (wp) { wp->w_filler_rows = val; } }
+int nvim_win_get_botfill(win_T *wp) { return wp ? (wp->w_botfill ? 1 : 0) : 0; }
+void nvim_win_set_botfill(win_T *wp, int val) { if (wp) { wp->w_botfill = (val != 0); } }
+int nvim_win_grid_has_target(win_T *wp) { return (wp && wp->w_grid.target) ? 1 : 0; }
+int nvim_win_get_scbind_pos(win_T *wp) { return wp ? wp->w_scbind_pos : 0; }
+void nvim_win_set_scbind_pos(win_T *wp, int val) { if (wp) { wp->w_scbind_pos = val; } }
+int nvim_win_buf_is_empty(win_T *wp) { return (wp && wp->w_buffer) ? buf_is_empty(wp->w_buffer) : 1; }
+void nvim_win_set_fraction(win_T *wp, int val) { if (wp) { wp->w_fraction = val; } }
+int nvim_tabpage_get_ch_used(tabpage_T *tp) { return tp ? (int)tp->tp_ch_used : 0; }
+int nvim_win_has_winnr(win_T *wp, tabpage_T *tp) { return (wp && tp) ? (int)win_has_winnr(wp, tp) : 0; }
+void nvim_set_p_wmh(int64_t val) { p_wmh = val; }
+void nvim_set_p_wmw(int64_t val) { p_wmw = val; }
+void nvim_emsg_noroom(void) { emsg(_(e_noroom)); }
+void nvim_win_set_inner_size(win_T *wp, int valid_cursor) { if (wp) { win_set_inner_size(wp, valid_cursor != 0); } }
 
 /// Get a snapshot pointer from a tabpage.
 frame_T *nvim_tabpage_get_snapshot(tabpage_T *tp, int idx)
@@ -6020,55 +4607,15 @@ frame_T *nvim_tabpage_get_snapshot(tabpage_T *tp, int idx)
   return tp->tp_snapshot[idx];
 }
 
-/// Set a snapshot pointer in a tabpage.
-void nvim_tabpage_set_snapshot(tabpage_T *tp, int idx, frame_T *val)
-{
-  if (tp && idx >= 0 && idx < SNAP_COUNT) {
-    tp->tp_snapshot[idx] = val;
-  }
-}
-
-// --- Phase 4 accessors ---
+void nvim_tabpage_set_snapshot(tabpage_T *tp, int idx, frame_T *val) { if (tp && idx >= 0 && idx < SNAP_COUNT) { tp->tp_snapshot[idx] = val; } }
 
 // nvim_curbuf_line_count() — already defined in move.c
 
-/// Check if window's buffer is curbuf.
-int nvim_win_buf_is_curbuf(win_T *wp)
-{
-  return wp && wp->w_buffer == curbuf;
-}
-
-/// Save cursor position to w_save_cursor.w_cursor_save.
-void nvim_win_save_cursor_to_save(win_T *wp)
-{
-  if (wp) {
-    wp->w_save_cursor.w_cursor_save = wp->w_cursor;
-  }
-}
-
-/// Save topline to w_save_cursor.w_topline_save.
-void nvim_win_save_topline_to_save(win_T *wp)
-{
-  if (wp) {
-    wp->w_save_cursor.w_topline_save = wp->w_topline;
-  }
-}
-
-/// Save (corrected) cursor position to w_save_cursor.w_cursor_corr.
-void nvim_win_save_cursor_to_corr(win_T *wp)
-{
-  if (wp) {
-    wp->w_save_cursor.w_cursor_corr = wp->w_cursor;
-  }
-}
-
-/// Save (corrected) topline to w_save_cursor.w_topline_corr.
-void nvim_win_save_topline_to_corr(win_T *wp)
-{
-  if (wp) {
-    wp->w_save_cursor.w_topline_corr = wp->w_topline;
-  }
-}
+int nvim_win_buf_is_curbuf(win_T *wp) { return wp && wp->w_buffer == curbuf; }
+void nvim_win_save_cursor_to_save(win_T *wp) { if (wp) { wp->w_save_cursor.w_cursor_save = wp->w_cursor; } }
+void nvim_win_save_topline_to_save(win_T *wp) { if (wp) { wp->w_save_cursor.w_topline_save = wp->w_topline; } }
+void nvim_win_save_cursor_to_corr(win_T *wp) { if (wp) { wp->w_save_cursor.w_cursor_corr = wp->w_cursor; } }
+void nvim_win_save_topline_to_corr(win_T *wp) { if (wp) { wp->w_save_cursor.w_topline_corr = wp->w_topline; } }
 
 /// Check if w_save_cursor.w_cursor_corr equals w_cursor (via equalpos).
 int nvim_win_cursor_eq_save_corr(win_T *wp)
@@ -6106,21 +4653,8 @@ linenr_T nvim_win_get_save_topline_save(win_T *wp)
   return wp->w_save_cursor.w_topline_save;
 }
 
-/// Restore cursor from w_save_cursor.w_cursor_save.
-void nvim_win_restore_cursor_from_save(win_T *wp)
-{
-  if (wp) {
-    wp->w_cursor = wp->w_save_cursor.w_cursor_save;
-  }
-}
-
-/// Restore topline from w_save_cursor.w_topline_save.
-void nvim_win_restore_topline_from_save(win_T *wp)
-{
-  if (wp) {
-    wp->w_topline = wp->w_save_cursor.w_topline_save;
-  }
-}
+void nvim_win_restore_cursor_from_save(win_T *wp) { if (wp) { wp->w_cursor = wp->w_save_cursor.w_cursor_save; } }
+void nvim_win_restore_topline_from_save(win_T *wp) { if (wp) { wp->w_topline = wp->w_save_cursor.w_topline_save; } }
 
 /// Check if w_save_cursor.w_topline_save > buffer line count.
 int nvim_win_save_topline_gt_buf_line_count(win_T *wp)
@@ -6131,25 +4665,9 @@ int nvim_win_save_topline_gt_buf_line_count(win_T *wp)
   return wp->w_save_cursor.w_topline_save > wp->w_buffer->b_ml.ml_line_count;
 }
 
-// Growarray accessors for Rust.
-
-/// Initialize a growarray for int items.
-void nvim_ga_init_int(garray_T *gap)
-{
-  ga_init(gap, (int)sizeof(int), 1);
-}
-
-/// Grow a growarray to accommodate n more items.
-void nvim_ga_grow(garray_T *gap, int n)
-{
-  ga_grow(gap, n);
-}
-
-/// Get the current length of a growarray.
-int nvim_ga_get_len(garray_T *gap)
-{
-  return gap ? gap->ga_len : 0;
-}
+void nvim_ga_init_int(garray_T *gap) { ga_init(gap, (int)sizeof(int), 1); }
+void nvim_ga_grow(garray_T *gap, int n) { ga_grow(gap, n); }
+int nvim_ga_get_len(garray_T *gap) { return gap ? gap->ga_len : 0; }
 
 // nvim_ga_set_len() — already defined in fold.c
 
@@ -6162,21 +4680,8 @@ int nvim_ga_get_int(garray_T *gap, int idx)
   return ((int *)gap->ga_data)[idx];
 }
 
-/// Set an int item in a growarray by index.
-void nvim_ga_set_int(garray_T *gap, int idx, int val)
-{
-  if (gap && gap->ga_data && idx >= 0) {
-    ((int *)gap->ga_data)[idx] = val;
-  }
-}
-
-// --- Phase 5 accessors ---
-
-/// Wrap comp_col() from drawscreen.c.
-void nvim_comp_col(void)
-{
-  comp_col();
-}
+void nvim_ga_set_int(garray_T *gap, int idx, int val) { if (gap && gap->ga_data && idx >= 0) { ((int *)gap->ga_data)[idx] = val; } }
+void nvim_comp_col(void) { comp_col(); }
 
 /// Compound accessor: clear and free w_status_click_defs.
 void nvim_win_stl_clear_click_defs(win_T *wp)
@@ -6190,128 +4695,28 @@ void nvim_win_stl_clear_click_defs(win_T *wp)
   wp->w_status_click_defs = NULL;
 }
 
-/// Get w_prev_height from a window.
-int nvim_win_get_prev_height(win_T *wp)
-{
-  return wp ? wp->w_prev_height : 0;
-}
-
-/// Set w_prev_height for a window.
-void nvim_win_set_prev_height(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_prev_height = val;
-  }
-}
-
-/// Wrap win_float_anchor_laststatus() from winfloat.c.
-void nvim_win_float_anchor_laststatus(void)
-{
-  win_float_anchor_laststatus();
-}
-
-// --- win_split_ins migration accessors ---
-
-/// Set the w_floating field of a window.
-void nvim_win_set_floating(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_floating = val;
-  }
-}
-
-/// Get the w_fraction field from a window.
-int nvim_win_get_fraction(win_T *wp)
-{
-  return wp ? wp->w_fraction : 0;
-}
-
-/// Get the global p_ea (equalalways) value.
-int nvim_get_p_ea(void)
-{
-  return p_ea ? 1 : 0;
-}
-
-/// Get the first char of the global p_ead (eadirection) option.
-int nvim_get_p_ead_char(void)
-{
-  return (p_ead && *p_ead) ? (int)(unsigned char)*p_ead : 0;
-}
+int nvim_win_get_prev_height(win_T *wp) { return wp ? wp->w_prev_height : 0; }
+void nvim_win_set_prev_height(win_T *wp, int val) { if (wp) { wp->w_prev_height = val; } }
+void nvim_win_float_anchor_laststatus(void) { win_float_anchor_laststatus(); }
+void nvim_win_set_floating(win_T *wp, int val) { if (wp) { wp->w_floating = val; } }
+int nvim_win_get_fraction(win_T *wp) { return wp ? wp->w_fraction : 0; }
+int nvim_get_p_ea(void) { return p_ea ? 1 : 0; }
+int nvim_get_p_ead_char(void) { return (p_ead && *p_ead) ? (int)(unsigned char)*p_ead : 0; }
 
 // nvim_get_p_ch() — already defined in message.c
 // nvim_get_sc_col() — already defined in message.c
 
-/// Set the global p_wiw (winwidth) value.
-void nvim_set_p_wiw(int64_t val)
-{
-  p_wiw = val;
-}
-
-/// Set the global p_wh (winheight) value.
-void nvim_set_p_wh(int64_t val)
-{
-  p_wh = val;
-}
-
-/// Wrapper: allocate a new window via win_alloc().
-win_T *nvim_win_alloc_wrapper(win_T *after, int hidden)
-{
-  return win_alloc(after, hidden != 0);
-}
-
-/// Wrapper: call new_frame(wp) to allocate and init a frame for a window.
-void nvim_new_frame_wrapper(win_T *wp)
-{
-  new_frame(wp);
-}
-
-/// Wrapper: call win_init(wp, oldwin, flags) to init a new window.
-void nvim_win_init_wrapper(win_T *wp, win_T *oldwin, int flags)
-{
-  win_init(wp, oldwin, flags);
-}
-
-/// Wrapper: call frame_flatten(frp).
-void nvim_frame_flatten_wrapper(frame_T *frp)
-{
-  frame_flatten(frp);
-}
-
-/// Wrapper: allocate a new frame via xcalloc.
-frame_T *nvim_xcalloc_frame(void)
-{
-  return xcalloc(1, sizeof(frame_T));
-}
-
-/// Wrapper: ui_comp_remove_grid(&wp->w_grid_alloc).
-void nvim_ui_comp_remove_grid_win(win_T *wp)
-{
-  if (wp) {
-    ui_comp_remove_grid(&wp->w_grid_alloc);
-  }
-}
-
-/// Wrapper: check ui_has(kUIMultigrid).
-int nvim_ui_has_multigrid(void)
-{
-  return ui_has(kUIMultigrid) ? 1 : 0;
-}
-
-/// Wrapper: ui_call_win_hide(wp->w_grid_alloc.handle).
-void nvim_ui_call_win_hide_win(win_T *wp)
-{
-  if (wp) {
-    ui_call_win_hide(wp->w_grid_alloc.handle);
-  }
-}
-
-/// Wrapper: win_free_grid(wp, reinit).
-void nvim_win_free_grid_wrapper(win_T *wp, int reinit)
-{
-  if (wp) {
-    win_free_grid(wp, reinit != 0);
-  }
-}
+void nvim_set_p_wiw(int64_t val) { p_wiw = val; }
+void nvim_set_p_wh(int64_t val) { p_wh = val; }
+win_T *nvim_win_alloc_wrapper(win_T *after, int hidden) { return win_alloc(after, hidden != 0); }
+void nvim_new_frame_wrapper(win_T *wp) { new_frame(wp); }
+void nvim_win_init_wrapper(win_T *wp, win_T *oldwin, int flags) { win_init(wp, oldwin, flags); }
+void nvim_frame_flatten_wrapper(frame_T *frp) { frame_flatten(frp); }
+frame_T *nvim_xcalloc_frame(void) { return xcalloc(1, sizeof(frame_T)); }
+void nvim_ui_comp_remove_grid_win(win_T *wp) { if (wp) { ui_comp_remove_grid(&wp->w_grid_alloc); } }
+int nvim_ui_has_multigrid(void) { return ui_has(kUIMultigrid) ? 1 : 0; }
+void nvim_ui_call_win_hide_win(win_T *wp) { if (wp) { ui_call_win_hide(wp->w_grid_alloc.handle); } }
+void nvim_win_free_grid_wrapper(win_T *wp, int reinit) { if (wp) { win_free_grid(wp, reinit != 0); } }
 
 /// Wrapper: merge_win_config(&wp->w_config, WIN_CONFIG_INIT) + CLEAR_FIELD(wp->w_border_adj).
 void nvim_merge_win_config_init(win_T *wp)
@@ -6322,37 +4727,11 @@ void nvim_merge_win_config_init(win_T *wp)
   }
 }
 
-/// Wrapper: redraw_later(wp, type).
-void nvim_redraw_later_wrapper(win_T *wp, int type)
-{
-  if (wp) {
-    redraw_later(wp, type);
-  }
-}
-
-/// Wrapper: status_redraw_all().
-void nvim_status_redraw_all_wrapper(void)
-{
-  status_redraw_all();
-}
-
-/// Wrapper: msg_clr_eos_force().
-void nvim_msg_clr_eos_force(void)
-{
-  msg_clr_eos_force();
-}
-
-/// Wrapper: is_aucmd_win(wp).
-int nvim_is_aucmd_win(win_T *wp)
-{
-  return is_aucmd_win(wp) ? 1 : 0;
-}
-
-/// Get the w_config.external field from a window.
-int nvim_win_get_config_external_int(win_T *wp)
-{
-  return wp ? (int)wp->w_config.external : 0;
-}
+void nvim_redraw_later_wrapper(win_T *wp, int type) { if (wp) { redraw_later(wp, type); } }
+void nvim_status_redraw_all_wrapper(void) { status_redraw_all(); }
+void nvim_msg_clr_eos_force(void) { msg_clr_eos_force(); }
+int nvim_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp) ? 1 : 0; }
+int nvim_win_get_config_external_int(win_T *wp) { return wp ? (int)wp->w_config.external : 0; }
 
 /// Iterate over all tabpages, setting tp_curwin to tp_firstwin
 /// when tp != curtab && tp->tp_curwin == wp.
@@ -6365,127 +4744,25 @@ void nvim_fixup_external_curwin(win_T *wp)
   }
 }
 
-/// Set msg_row global.
-void nvim_set_msg_row_val(int val)
-{
-  msg_row = val;
-}
-
-/// Set msg_col global.
-void nvim_set_msg_col_val(int val)
-{
-  msg_col = val;
-}
-
-/// Set w_frame for a window.
-void nvim_win_set_frame(win_T *wp, frame_T *frp)
-{
-  if (wp) {
-    wp->w_frame = frp;
-  }
-}
-
-// --- Phase 2 accessors: win_close_othertab ---
-
-/// Set first_tabpage global (for Rust tabpage list manipulation).
-void nvim_set_first_tabpage(tabpage_T *tp)
-{
-  first_tabpage = tp;
-}
-
-/// Set tp_next field on a tabpage (for Rust tabpage list manipulation).
-void nvim_tabpage_set_next(tabpage_T *tp, tabpage_T *next)
-{
-  tp->tp_next = next;
-}
-
-/// Set w_buffer on a window (raw, no side effects).
-void nvim_win_set_buffer_raw(win_T *wp, buf_T *buf)
-{
-  wp->w_buffer = buf;
-}
-
-/// Increment b_nwindows on a buffer.
-void nvim_buf_inc_nwindows(buf_T *buf)
-{
-  buf->b_nwindows++;
-}
-
-/// Wrapper: win_init_empty(wp).
-void nvim_win_init_empty_wrapper(win_T *wp)
-{
-  win_init_empty(wp);
-}
-
-/// Wrapper: emsg(e_floatonly).
-void nvim_emsg_e_floatonly(void)
-{
-  emsg(e_floatonly);
-}
-
-/// Wrapper: emsg(_(e_autocmd_close)).
-void nvim_emsg_e_autocmd_close(void)
-{
-  emsg(_(e_autocmd_close));
-}
-
-/// Wrapper: internal_error("win_close_othertab()").
-void nvim_internal_error_othertab(void)
-{
-  internal_error("win_close_othertab()");
-}
-
-/// Wrapper: win_new_screen_rows().
-void nvim_win_new_screen_rows_wrapper(void)
-{
-  win_new_screen_rows();
-}
-
-/// Wrapper: win_free_mem(win, dirp, tp). Returns the window that got the space.
-win_T *nvim_win_free_mem_wrapper(win_T *win, int *dirp, tabpage_T *tp)
-{
-  return win_free_mem(win, dirp, tp);
-}
-
-// --- Phase 3 accessors: win_close ---
-
-/// Increment split_disallowed.
-void nvim_inc_split_disallowed(void)
-{
-  split_disallowed++;
-}
-
-/// Decrement split_disallowed.
-void nvim_dec_split_disallowed(void)
-{
-  split_disallowed--;
-}
-
-/// Wrapper: ui_call_win_close(wp->w_grid_alloc.handle).
-void nvim_ui_call_win_close_win(win_T *wp)
-{
-  if (wp) {
-    ui_call_win_close(wp->w_grid_alloc.handle);
-  }
-}
-
-/// Set tp_curwin on a tabpage.
-void nvim_tabpage_set_curwin(tabpage_T *tp, win_T *wp)
-{
-  tp->tp_curwin = wp;
-}
-
-/// Set curbuf = curwin->w_buffer.
-void nvim_set_curbuf_from_curwin(void)
-{
-  curbuf = curwin->w_buffer;
-}
-
-/// Wrapper: check_cursor(wp).
-void nvim_check_cursor_win_wrapper(win_T *wp)
-{
-  check_cursor(wp);
-}
+void nvim_set_msg_row_val(int val) { msg_row = val; }
+void nvim_set_msg_col_val(int val) { msg_col = val; }
+void nvim_win_set_frame(win_T *wp, frame_T *frp) { if (wp) { wp->w_frame = frp; } }
+void nvim_set_first_tabpage(tabpage_T *tp) { first_tabpage = tp; }
+void nvim_tabpage_set_next(tabpage_T *tp, tabpage_T *next) { tp->tp_next = next; }
+void nvim_win_set_buffer_raw(win_T *wp, buf_T *buf) { wp->w_buffer = buf; }
+void nvim_buf_inc_nwindows(buf_T *buf) { buf->b_nwindows++; }
+void nvim_win_init_empty_wrapper(win_T *wp) { win_init_empty(wp); }
+void nvim_emsg_e_floatonly(void) { emsg(e_floatonly); }
+void nvim_emsg_e_autocmd_close(void) { emsg(_(e_autocmd_close)); }
+void nvim_internal_error_othertab(void) { internal_error("win_close_othertab()"); }
+void nvim_win_new_screen_rows_wrapper(void) { win_new_screen_rows(); }
+win_T *nvim_win_free_mem_wrapper(win_T *win, int *dirp, tabpage_T *tp) { return win_free_mem(win, dirp, tp); }
+void nvim_inc_split_disallowed(void) { split_disallowed++; }
+void nvim_dec_split_disallowed(void) { split_disallowed--; }
+void nvim_ui_call_win_close_win(win_T *wp) { if (wp) { ui_call_win_close(wp->w_grid_alloc.handle); } }
+void nvim_tabpage_set_curwin(tabpage_T *tp, win_T *wp) { tp->tp_curwin = wp; }
+void nvim_set_curbuf_from_curwin(void) { curbuf = curwin->w_buffer; }
+void nvim_check_cursor_win_wrapper(win_T *wp) { check_cursor(wp); }
 
 /// Get w_frame->fr_parent from a window (for win_close frame comparison).
 frame_T *nvim_win_get_frame_parent(win_T *wp)
@@ -6496,87 +4773,19 @@ frame_T *nvim_win_get_frame_parent(win_T *wp)
   return NULL;
 }
 
-/// Get firstbuf global (for buffer recovery in leave_open).
-buf_T *nvim_get_firstbuf_wrapper(void)
-{
-  return firstbuf;
-}
-
-/// Wrapper: can_close_floating_windows(tp).
-int nvim_can_close_floating_windows(tabpage_T *tp)
-{
-  return can_close_floating_windows(tp) ? 1 : 0;
-}
-
-// =============================================================================
-// Phase 4: do_window wrappers
-// =============================================================================
-
-/// Wrapper for static win_exchange(Prenum).
-void nvim_win_exchange_wrapper(int Prenum)
-{
-  win_exchange(Prenum);
-}
-
-/// Wrapper for static win_rotate(upwards, count).
-void nvim_win_rotate_wrapper(int upwards, int count)
-{
-  win_rotate(upwards != 0, count);
-}
-
-/// Get swb_flags global.
-unsigned nvim_get_swb_flags(void)
-{
-  return swb_flags;
-}
-
-/// Wrapper: win_goto(wp).
-void nvim_win_goto_wrapper(win_T *wp)
-{
-  win_goto(wp);
-}
-
-/// Wrapper: win_split(size, flags).
-int nvim_win_split_wrapper(int size, int flags)
-{
-  return win_split(size, flags);
-}
-
-/// Wrapper: win_splitmove(wp, size, flags).
-int nvim_win_splitmove_wrapper(win_T *wp, int size, int flags)
-{
-  return win_splitmove(wp, size, flags);
-}
-
-/// Wrapper: rs_reset_VIsual_and_resel().
-void nvim_reset_visual_wrapper(void)
-{
-  rs_reset_VIsual_and_resel();
-}
-
-/// Wrapper: do_cmdline_cmd(cmd).
-int nvim_do_cmdline_cmd_wrapper(const char *cmd)
-{
-  return do_cmdline_cmd(cmd);
-}
-
-/// Wrapper: emsg(_(e_cmdwin)).
-void nvim_emsg_e_cmdwin(void)
-{
-  emsg(_(e_cmdwin));
-}
-
-/// Wrapper: bt_quickfix(curbuf).
-int nvim_bt_quickfix_curbuf(void)
-{
-  return bt_quickfix(curbuf) ? 1 : 0;
-}
-
-/// Wrapper: msg(_(m_onlyone), 0).
-void nvim_msg_onlyone(void)
-{
-  msg(_(m_onlyone), 0);
-}
+buf_T *nvim_get_firstbuf_wrapper(void) { return firstbuf; }
+int nvim_can_close_floating_windows(tabpage_T *tp) { return can_close_floating_windows(tp) ? 1 : 0; }
+void nvim_win_exchange_wrapper(int Prenum) { win_exchange(Prenum); }
+void nvim_win_rotate_wrapper(int upwards, int count) { win_rotate(upwards != 0, count); }
+unsigned nvim_get_swb_flags(void) { return swb_flags; }
+void nvim_win_goto_wrapper(win_T *wp) { win_goto(wp); }
+int nvim_win_split_wrapper(int size, int flags) { return win_split(size, flags); }
+int nvim_win_splitmove_wrapper(win_T *wp, int size, int flags) { return win_splitmove(wp, size, flags); }
+void nvim_reset_visual_wrapper(void) { rs_reset_VIsual_and_resel(); }
+int nvim_do_cmdline_cmd_wrapper(const char *cmd) { return do_cmdline_cmd(cmd); }
+void nvim_emsg_e_cmdwin(void) { emsg(_(e_cmdwin)); }
+int nvim_bt_quickfix_curbuf(void) { return bt_quickfix(curbuf) ? 1 : 0; }
+void nvim_msg_onlyone(void) { msg(_(m_onlyone), 0); }
 
 /// Wrapper: rs_win_valid(prevwin) check for 'p' command.
 /// Returns prevwin if valid and focusable, NULL otherwise.
@@ -6899,11 +5108,7 @@ void nvim_do_window_g(int Prenum, int xchar)
 
 extern void rs_qf_view_result(bool split);
 
-/// Wrapper: qf_view_result(true).
-void nvim_qf_view_result_split(void)
-{
-  rs_qf_view_result(true);
-}
+void nvim_qf_view_result_split(void) { rs_qf_view_result(true); }
 
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
 _Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");
