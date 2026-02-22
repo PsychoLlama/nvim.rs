@@ -924,8 +924,6 @@ int nvim_get_VIsual_mode(void) { return VIsual_mode; }
 
 bool nvim_get_VIsual_select_exclu_adj(void) { return VIsual_select_exclu_adj; }
 
-bool nvim_unadjust_for_sel(void) { return rs_unadjust_for_sel(); }
-
 int nvim_searchc(cmdarg_T *cap, bool t_cmd) { return searchc(cap, t_cmd); }
 
 bool nvim_is_special(int key) { return IS_SPECIAL(key); }
@@ -1023,8 +1021,6 @@ void nvim_set_VIsual_active(bool val) { VIsual_active = val; }
 int nvim_get_VIsual_reselect(void) { return VIsual_reselect; }
 
 void nvim_set_VIsual_reselect(bool val) { VIsual_reselect = val; }
-
-void nvim_rs_may_start_select(int val) { rs_may_start_select(val); }
 
 void nvim_setmouse(void) { setmouse(); }
 

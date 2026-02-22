@@ -1302,6 +1302,7 @@ extern "C" {
     // Character search functions
     fn nvim_get_VIsual_mode() -> c_int;
     fn nvim_get_VIsual_select_exclu_adj() -> bool;
+    #[link_name = "rs_unadjust_for_sel"]
     fn nvim_unadjust_for_sel() -> bool;
     fn nvim_searchc(cap: CapHandle, t_cmd: bool) -> c_int;
     fn nvim_is_special(key: c_int) -> bool;
