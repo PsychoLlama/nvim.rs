@@ -336,26 +336,13 @@ static regengine_T nfa_regengine;
 // Accessors for Rust FFI (static helpers exposed for the regexp crate)
 int nvim_regexp_get_char_class(char **pp) { return rs_get_char_class(pp); }
 
-unsigned int nvim_regexp_get_regflags(const regprog_T *prog);
-unsigned int nvim_regexp_get_regflags(const regprog_T *prog)
-{
-  return prog->regflags;
-}
+unsigned int nvim_regexp_get_regflags(const regprog_T *prog) { return prog->regflags; }
 
 static int reg_cpo_lit;  // 'cpoptions' contains 'l' flag
 int nvim_regexp_get_reg_cpo_lit(void) { return reg_cpo_lit; }
 void nvim_regexp_set_reg_cpo_lit(int v) { reg_cpo_lit = v; }
 
-/// Skip over a "[]" range.
-/// "p" must point to the character after the '['.
-/// The returned pointer is on the matching ']', or the terminating NUL.
-/// Skip past regular expression.
-/// Stop at end of "startp" or where "delim" is found ('/', '?', etc).
-/// Take care of characters with a backslash in front of it.
-void nvim_regexp_semsg_e654(const char *startp)
-{
-  semsg(_(e_missing_delimiter_after_search_pattern_str), startp);
-}
+void nvim_regexp_semsg_e654(const char *startp) { semsg(_(e_missing_delimiter_after_search_pattern_str), startp); }
 
 /// Skip strings inside [ and ].
 char *skip_regexp(char *startp, int delim, int magic)
@@ -494,10 +481,7 @@ int nvim_regexp_get_rex_reg_ic(void) { return rex.reg_ic; }
 int nvim_regexp_get_rex_reg_icombine(void) { return rex.reg_icombine; }
 
 void nvim_regexp_set_rc_did_emsg(int v) { rc_did_emsg = (bool)v; }
-void nvim_regexp_semsg_e888(const char *what)
-{
-  semsg(_("E888: (NFA regexp) cannot repeat %s"), what);
-}
+void nvim_regexp_semsg_e888(const char *what) { semsg(_("E888: (NFA regexp) cannot repeat %s"), what); }
 
 int nvim_regexp_emsg2_fail(const char *msg, int is_magic_all)
 {
@@ -564,7 +548,7 @@ void nvim_regexp_set_rex_need_clear_subexpr(int v) { rex.need_clear_subexpr = (b
 int nvim_regexp_get_rex_need_clear_zsubexpr(void) { return rex.need_clear_zsubexpr; }
 void nvim_regexp_set_rex_need_clear_zsubexpr(int v) { rex.need_clear_zsubexpr = (bool)v; }
 int nvim_regexp_is_reg_multi(void) { return REG_MULTI; }
-// Subexpression position/pointer array accessors for Rust FFI (Phase 2)
+// Subexpression position/pointer array accessors for Rust FFI
 lpos_T *nvim_regexp_get_rex_startpos_array(void) { return rex.reg_startpos; }
 lpos_T *nvim_regexp_get_rex_endpos_array(void) { return rex.reg_endpos; }
 uint8_t **nvim_regexp_get_rex_startp_array(void) { return (uint8_t **)rex.reg_startp; }
@@ -601,12 +585,12 @@ int nvim_regexp_get_got_int(void) { return got_int; }
 int nvim_regexp_get_rex_line_strlen(void) { return (int)strlen((char *)rex.line); }
 int32_t nvim_regexp_call_reg_getline_len(int32_t lnum) { return (int32_t)reg_getline_len((linenr_T)lnum); }
 
-// regrepeat accessors for Rust FFI (Phase 3)
+// regrepeat accessors for Rust FFI
 int nvim_regexp_get_rex_reg_line_lbr(void) { return rex.reg_line_lbr; }
 int nvim_regexp_call_vim_iswordp_buf(const char *p) { return vim_iswordp_buf(p, rex.reg_buf); }
 void nvim_regexp_iemsg_re_corr(void) { iemsg(_(e_re_corr)); }
 
-// regtry accessors for Rust FFI (Phase 4)
+// regtry accessors for Rust FFI
 uint8_t nvim_regexp_get_prog_reghasz(const void *prog) { return ((const bt_regprog_T *)prog)->reghasz; }
 uint8_t *nvim_regexp_get_prog_program(void *prog) { return ((bt_regprog_T *)prog)->program; }
 void nvim_regexp_unref_re_extmatch_out(void) { unref_extmatch(re_extmatch_out); }
@@ -635,10 +619,7 @@ int32_t nvim_regexp_get_rsm_sm_mmatch_endpos_col(int i) { return (int32_t)rsm.sm
 // reg_match_visual accessors for Rust FFI
 
 // Returns 0 if quick-reject (rex.reg_buf != curbuf || VIsual.lnum == 0 || !REG_MULTI), 1 otherwise
-int nvim_regexp_visual_quick_check(void)
-{
-  return (rex.reg_buf == curbuf && VIsual.lnum != 0 && REG_MULTI) ? 1 : 0;
-}
+int nvim_regexp_visual_quick_check(void) { return (rex.reg_buf == curbuf && VIsual.lnum != 0 && REG_MULTI) ? 1 : 0; }
 
 // Populate visual area top/bot/mode/curswant for reg_match_visual.
 // The caller passes output pointers.  Returns wp (window pointer) for getvvcol calls.
@@ -1611,45 +1592,24 @@ void nvim_regexp_emsg_nul_found(void)
   emsg(_(e_nul_found));
   rc_did_emsg = true;
 }
-void nvim_regexp_semsg_misplaced(int c)
-{
-  semsg(_(e_misplaced), (char)c);
-}
+void nvim_regexp_semsg_misplaced(int c) { semsg(_(e_misplaced), (char)c); }
 void nvim_regexp_semsg_ill_char_class(int64_t c)
 {
   semsg(_(e_ill_char_class), c);
   rc_did_emsg = true;
 }
-void nvim_regexp_siemsg_unknown_class(int64_t c)
-{
-  siemsg("INTERNAL: Unknown character class char: %" PRId64, c);
-}
-void nvim_regexp_semsg_e867_z(int c)
-{
-  semsg(_("E867: (NFA) Unknown operator '\\z%c'"), c);
-}
-void nvim_regexp_semsg_e867_pct(int c)
-{
-  semsg(_("E867: (NFA) Unknown operator '\\%%%c'"), c);
-}
-void nvim_regexp_emsg_value_too_large(void)
-{
-  emsg(_(e_value_too_large));
-}
-void nvim_regexp_semsg_missing_value(int c)
-{
-  semsg(_(e_nfa_regexp_missing_value_in_chr), c);
-}
+void nvim_regexp_siemsg_unknown_class(int64_t c) { siemsg("INTERNAL: Unknown character class char: %" PRId64, c); }
+void nvim_regexp_semsg_e867_z(int c) { semsg(_("E867: (NFA) Unknown operator '\\z%c'"), c); }
+void nvim_regexp_semsg_e867_pct(int c) { semsg(_("E867: (NFA) Unknown operator '\\%%%c'"), c); }
+void nvim_regexp_emsg_value_too_large(void) { emsg(_(e_value_too_large)); }
+void nvim_regexp_semsg_missing_value(int c) { semsg(_(e_nfa_regexp_missing_value_in_chr), c); }
 uint8_t *nvim_regexp_get_classchars(void) { return classchars; }
 int nvim_regexp_get_nfa_classcodes(int index) { return nfa_classcodes[index]; }
 char *nvim_regexp_get_regexp_inrange(void) { return REGEXP_INRANGE; }
 char *nvim_regexp_get_regexp_abbr(void) { return REGEXP_ABBR; }
 void nvim_regexp_set_rc_did_emsg_true(void) { rc_did_emsg = true; }
 
-void nvim_regexp_semsg_e869(int op)
-{
-  semsg(_("E869: (NFA) Unknown operator '\\@%c'"), op);
-}
+void nvim_regexp_semsg_e869(int op) { semsg(_("E869: (NFA) Unknown operator '\\@%c'"), op); }
 void nvim_regexp_emsg_e870(void)
 {
   emsg(_("E870: (NFA regexp) Error reading repetition limits"));
@@ -1697,10 +1657,7 @@ void **nvim_nfa_state_out_addr(void *s) { return (void **)&((nfa_state_T *)s)->o
 void **nvim_nfa_state_out1_addr(void *s) { return (void **)&((nfa_state_T *)s)->out1; }
 
 // Error messages for post2nfa
-void nvim_regexp_emsg_e874(void)
-{
-  emsg(_("E874: (NFA) Could not pop the stack!"));
-}
+void nvim_regexp_emsg_e874(void) { emsg(_("E874: (NFA) Could not pop the stack!")); }
 void nvim_regexp_emsg_e875(void)
 {
   emsg(_("E875: (NFA regexp) (While converting from postfix to NFA),"
@@ -1738,7 +1695,7 @@ void nvim_nfa_prog_set_start(void *prog, void *s) { ((nfa_regprog_T *)prog)->sta
 void nvim_nfa_prog_set_nstate(void *prog, int v) { ((nfa_regprog_T *)prog)->nstate = v; }
 char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }
 
-// --- NFA Execution accessor functions (Phase 8: execution engine) ---
+// --- NFA Execution accessor functions ---
 
 // nfa_state_T id/lastlist accessors
 int nvim_nfa_state_get_id(void *s) { return ((nfa_state_T *)s)->id; }
@@ -1756,10 +1713,7 @@ int nvim_nfa_prog_get_reganch(void *prog) { return ((nfa_regprog_T *)prog)->rega
 uint8_t *nvim_nfa_prog_get_match_text(void *prog) { return ((nfa_regprog_T *)prog)->match_text; }
 
 // siemsg wrapper for check_char_class
-void nvim_regexp_siemsg_ill_char_class(int64_t cls)
-{
-  siemsg(_(e_ill_char_class), cls);
-}
+void nvim_regexp_siemsg_ill_char_class(int64_t cls) { siemsg(_(e_ill_char_class), cls); }
 // regsub_T field accessors
 int nvim_regexp_regsub_get_in_use(void *sub) { return ((regsub_T *)sub)->in_use; }
 int32_t nvim_regexp_regsub_get_multi_start_lnum(void *sub, int idx) { return (int32_t)((regsub_T *)sub)->list.multi[idx].start_lnum; }
@@ -1824,12 +1778,12 @@ void nvim_regexp_set_rex_nfa_has_backref(int v) { rex.nfa_has_backref = v; }
 
 static nfa_state_T *state_ptr;  // points to nfa_prog->state
 
-// Phase 5 state_ptr accessors (placed after state_ptr declaration)
+// state_ptr accessors
 void *nvim_regexp_get_state_ptr(void) { return (void *)state_ptr; }
 void nvim_regexp_set_state_ptr(void *v) { state_ptr = (nfa_state_T *)v; }
 void *nvim_regexp_state_ptr_add(int index) { return (void *)&state_ptr[index]; }
 
-// Phase 7 accessor function (part 2: needs state_ptr)
+// NFA prog allocation (needs state_ptr)
 void *nvim_regexp_alloc_nfa_prog(int nstate_count)
 {
   size_t prog_size = offsetof(nfa_regprog_T, state) + sizeof(nfa_state_T) * (size_t)nstate_count;
@@ -1856,18 +1810,9 @@ void *nvim_regexp_get_nfa_endp(void) { return (void *)nfa_endp; }
 void nvim_regexp_set_nfa_endp(void *v) { nfa_endp = (save_se_T *)v; }
 
 // nfa_endp field accessors
-int32_t nvim_regexp_get_nfa_endp_pos_lnum(void)
-{
-  return nfa_endp ? (int32_t)nfa_endp->se_u.pos.lnum : -1;
-}
-int32_t nvim_regexp_get_nfa_endp_pos_col(void)
-{
-  return nfa_endp ? (int32_t)nfa_endp->se_u.pos.col : -1;
-}
-uint8_t *nvim_regexp_get_nfa_endp_ptr(void)
-{
-  return nfa_endp ? nfa_endp->se_u.ptr : NULL;
-}
+int32_t nvim_regexp_get_nfa_endp_pos_lnum(void) { return nfa_endp ? (int32_t)nfa_endp->se_u.pos.lnum : -1; }
+int32_t nvim_regexp_get_nfa_endp_pos_col(void) { return nfa_endp ? (int32_t)nfa_endp->se_u.pos.col : -1; }
+uint8_t *nvim_regexp_get_nfa_endp_ptr(void) { return nfa_endp ? nfa_endp->se_u.ptr : NULL; }
 
 // nfa_list_T memory management
 void *nvim_nfa_list_alloc_threads(int nstate)
@@ -1927,26 +1872,11 @@ void nvim_regexp_regsubs_set_multi_start(void *s, int idx, int32_t lnum, int32_t
   ((regsubs_T *)s)->norm.list.multi[idx].start_lnum = lnum;
   ((regsubs_T *)s)->norm.list.multi[idx].start_col = col;
 }
-int32_t nvim_regexp_regsubs_get_multi_start_col(void *s, int idx)
-{
-  return ((regsubs_T *)s)->norm.list.multi[idx].start_col;
-}
-int32_t nvim_regexp_regsubs_get_multi_end_col(void *s, int idx)
-{
-  return ((regsubs_T *)s)->norm.list.multi[idx].end_col;
-}
-void nvim_regexp_regsubs_set_norm_orig_start_col(void *s, int32_t v)
-{
-  ((regsubs_T *)s)->norm.orig_start_col = v;
-}
-void nvim_regexp_regsubs_set_line_start(void *s, int idx, uint8_t *ptr)
-{
-  ((regsubs_T *)s)->norm.list.line[idx].start = ptr;
-}
-uint8_t *nvim_regexp_regsubs_get_line_end(void *s, int idx)
-{
-  return ((regsubs_T *)s)->norm.list.line[idx].end;
-}
+int32_t nvim_regexp_regsubs_get_multi_start_col(void *s, int idx) { return ((regsubs_T *)s)->norm.list.multi[idx].start_col; }
+int32_t nvim_regexp_regsubs_get_multi_end_col(void *s, int idx) { return ((regsubs_T *)s)->norm.list.multi[idx].end_col; }
+void nvim_regexp_regsubs_set_norm_orig_start_col(void *s, int32_t v) { ((regsubs_T *)s)->norm.orig_start_col = v; }
+void nvim_regexp_regsubs_set_line_start(void *s, int idx, uint8_t *ptr) { ((regsubs_T *)s)->norm.list.line[idx].start = ptr; }
+uint8_t *nvim_regexp_regsubs_get_line_end(void *s, int idx) { return ((regsubs_T *)s)->norm.list.line[idx].end; }
 
 // rex execution field accessors for nfa_regmatch
 int nvim_regexp_get_rex_nfa_listid(void) { return rex.nfa_listid; }
@@ -1970,10 +1900,7 @@ void *nvim_regexp_alloc_pim(void)
   nfa_pim_T *pim = xcalloc(1, sizeof(nfa_pim_T));
   return (void *)pim;
 }
-void nvim_regexp_free_pim(void *p)
-{
-  xfree(p);
-}
+void nvim_regexp_free_pim(void *p) { xfree(p); }
 void nvim_regexp_pim_init(void *p, void *state, int result,
                           int32_t lnum, int32_t col, uint8_t *ptr,
                           int is_multi)
@@ -1993,20 +1920,11 @@ void nvim_regexp_pim_init(void *p, void *state, int result,
 
 // win_T and buffer accessors for VCOL/MARK cases
 void *nvim_regexp_get_curwin(void) { return (void *)curwin; }
-int64_t nvim_regexp_get_win_b_p_ts(void *wp)
-{
-  return (int64_t)((win_T *)wp)->w_buffer->b_p_ts;
-}
-int32_t nvim_regexp_get_win_buf_line_count(void *wp)
-{
-  return (int32_t)((win_T *)wp)->w_buffer->b_ml.ml_line_count;
-}
+int64_t nvim_regexp_get_win_b_p_ts(void *wp) { return (int64_t)((win_T *)wp)->w_buffer->b_p_ts; }
+int32_t nvim_regexp_get_win_buf_line_count(void *wp) { return (int32_t)((win_T *)wp)->w_buffer->b_ml.ml_line_count; }
 
 // Mark access for NFA_MARK cases
-void *nvim_regexp_call_mark_get_for_nfa(void *buf, void *win, int mark_val)
-{
-  return (void *)mark_get((buf_T *)buf, (win_T *)win, NULL, kMarkBufLocal, mark_val);
-}
+void *nvim_regexp_call_mark_get_for_nfa(void *buf, void *win, int mark_val) { return (void *)mark_get((buf_T *)buf, (win_T *)win, NULL, kMarkBufLocal, mark_val); }
 int nvim_regexp_fmark_is_set(void *fm) { return fm != NULL && ((fmark_T *)fm)->mark.lnum > 0; }
 int32_t nvim_regexp_fmark_get_lnum(void *fm) { return (int32_t)((fmark_T *)fm)->mark.lnum; }
 int32_t nvim_regexp_fmark_get_col(void *fm) { return (int32_t)((fmark_T *)fm)->mark.col; }
@@ -2229,7 +2147,7 @@ void nvim_regexp_call_init_regexec_multi(void *rmp, void *win, void *buf, int32_
 // nfa_regexec_both: iemsg for null prog/line
 void nvim_regexp_call_iemsg_null(void) { iemsg(_(e_null)); }
 
-// Phase 9.2: bt_regexec_both accessors
+// bt_regexec_both accessors
 
 // Init regstack and backpos if not allocated yet
 void nvim_regexp_bt_init_stacks(void) {
@@ -2263,7 +2181,7 @@ uint8_t *nvim_bt_prog_get_regmust(const void *prog) { return ((const bt_regprog_
 int nvim_bt_prog_get_regmlen(const void *prog) { return ((const bt_regprog_T *)prog)->regmlen; }
 int nvim_bt_prog_get_regstart(const void *prog) { return ((const bt_regprog_T *)prog)->regstart; }
 int nvim_bt_prog_get_reganch(const void *prog) { return ((const bt_regprog_T *)prog)->reganch; }
-// Phase 9.3: vim_regfree + free_regexp_stuff accessors
+// vim_regfree + free_regexp_stuff accessors
 void nvim_regexp_call_engine_regfree(void *prog) {
   ((regprog_T *)prog)->engine->regfree((regprog_T *)prog);
 }
@@ -2274,7 +2192,7 @@ void nvim_regexp_call_free_regexp_stuff(void) {
   xfree(reg_tofree);
   xfree(reg_prev_sub);
 }
-// Phase 9.4: vim_regexec public API accessors
+// vim_regexec public API accessors
 
 // rex save/restore: opaque buffer approach
 // Rust stack-allocates a buffer of this size to save/restore rex + rex_in_use.
@@ -2369,7 +2287,7 @@ void nvim_regexp_init_regmatch(void *buf, void *prog, int rm_ic) {
   rmp->regprog = (regprog_T *)prog;
   rmp->rm_ic = (bool)rm_ic;
 }
-// Phase 9.5: vim_regcomp accessors
+// vim_regcomp accessors
 
 // Forward declaration (defined later in file)
 static int regexp_engine;
@@ -2401,7 +2319,7 @@ void nvim_regprog_set_re_flags(void *prog, unsigned v) { ((regprog_T *)prog)->re
 void nvim_regexp_call_emsg_e864(void) {
   emsg(_("E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used "));
 }
-// Phase 9.6: bt_regcomp accessors
+// bt_regcomp accessors
 
 // Allocate bt_regprog_T with flexible array member for program bytes
 void *nvim_regexp_alloc_bt_regprog(int64_t regsize_val) {
