@@ -2118,7 +2118,7 @@ extern "C" {
     fn nvim_fast_breakcheck();
     fn nvim_get_got_int() -> c_int;
     fn nvim_ins_compl_check_keys(interval: c_int, pum_wanted: bool);
-    fn nvim_ins_compl_interrupted() -> bool;
+    fn rs_ins_compl_interrupted() -> c_int;
     fn nvim_verbose_searching_tags(tag_fname: *const c_char);
     fn nvim_ignorecase(pat: *const c_char) -> bool;
     fn nvim_ignorecase_opt(pat: *const c_char, ic_strstrp: bool, ic_strstrp2: bool) -> bool;
@@ -2289,7 +2289,7 @@ pub unsafe extern "C" fn rs_findtags_get_all_tags(
             nvim_ins_compl_check_keys(30, false);
         }
 
-        if nvim_get_got_int() != 0 || nvim_ins_compl_interrupted() {
+        if nvim_get_got_int() != 0 || rs_ins_compl_interrupted() != 0 {
             nvim_findtags_set_stop_searching(st, true);
             break;
         }
