@@ -3368,10 +3368,6 @@ int nvim_syncluster_get_id(syn_cluster_T *cluster)
   }
   return SYNID_CLUSTER + idx;
 }
-// ============================================================================
-// Phase 24.1: State Management Helpers (for Rust FFI)
-// ============================================================================
-
 /// Check if a state item at idx has a position spanning past current line
 /// Used by store_current_state to decide if state can be stored
 int nvim_syn_state_item_spans_line(int idx, int lnum)
@@ -3389,12 +3385,7 @@ int nvim_syn_state_item_spans_line(int idx, int lnum)
   return 0;
 }
 
-/// Find a state entry in the synblock at or before given line
-/// Returns the entry or NULL
-synstate_T *nvim_syn_stack_find_entry(int lnum)
-{
-  return syn_stack_find_entry((linenr_T)lnum);
-}
+synstate_T *nvim_syn_stack_find_entry(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
 
 /// Remove a state entry from the used list and move to free list
 void nvim_syn_stack_remove_entry(synstate_T *sp)
@@ -3493,11 +3484,7 @@ void nvim_syn_store_state_to_entry(synstate_T *sp)
   sp->sst_change_lnum = 0;
 }
 
-/// Mark current state as stored
-void nvim_syn_set_state_stored(int stored)
-{
-  current_state_stored = stored ? true : false;
-}
+void nvim_syn_set_state_stored(int stored) { current_state_stored = stored ? true : false; }
 
 /// Call clear_current_state()
 void nvim_syn_clear_current_state(void)
@@ -3506,53 +3493,18 @@ void nvim_syn_clear_current_state(void)
   GA_DEEP_CLEAR(&current_state, stateitem_T, UNREF_STATEITEM_EXTMATCH);
 }
 
-/// Call validate_current_state()
-void nvim_syn_validate_current_state(void)
-{
-  validate_current_state();
-}
+void nvim_syn_validate_current_state(void) { validate_current_state(); }
 
-/// Call invalidate_current_state()
-void nvim_syn_invalidate_current_state(void)
-{
-  invalidate_current_state();
-}
+void nvim_syn_invalidate_current_state(void) { invalidate_current_state(); }
 
-/// Set keepend_level
-void nvim_syn_set_keepend_level(int level)
-{
-  keepend_level = level;
-}
+void nvim_syn_set_keepend_level(int level) { keepend_level = level; }
 
-/// Grow current_state array and set item at index
-void nvim_syn_grow_current_state(int size)
-{
-  ga_grow(&current_state, size);
-}
+void nvim_syn_grow_current_state(int size) { ga_grow(&current_state, size); }
 
-/// Set current_state.ga_len
-void nvim_syn_set_current_state_len(int len)
-{
-  current_state.ga_len = len;
-}
-
-/// Set current_next_list
-void nvim_syn_set_current_next_list(int16_t *list)
-{
-  current_next_list = list;
-}
-
-/// Set current_next_flags
-void nvim_syn_set_current_next_flags(int flags)
-{
-  current_next_flags = flags;
-}
-
-/// Set current_lnum
-void nvim_syn_set_current_lnum(int lnum)
-{
-  current_lnum = (linenr_T)lnum;
-}
+void nvim_syn_set_current_state_len(int len) { current_state.ga_len = len; }
+void nvim_syn_set_current_next_list(int16_t *list) { current_next_list = list; }
+void nvim_syn_set_current_next_flags(int flags) { current_next_flags = flags; }
+void nvim_syn_set_current_lnum(int lnum) { current_lnum = (linenr_T)lnum; }
 
 /// Get sst_next_list from a synstate
 int16_t *nvim_synstate_get_next_list(synstate_T *state)
@@ -3579,54 +3531,48 @@ bufstate_T *nvim_synstate_get_bufstate(synstate_T *state, int idx)
   return &bp[idx];
 }
 
-/// Get bs_idx from bufstate
-int nvim_bufstate_get_idx(bufstate_T *bs)
-{
-  return bs ? bs->bs_idx : 0;
-}
-
-/// Get bs_flags from bufstate
-int nvim_bufstate_get_flags(bufstate_T *bs)
-{
-  return bs ? bs->bs_flags : 0;
-}
-
-/// Get bs_seqnr from bufstate
-int nvim_bufstate_get_seqnr(bufstate_T *bs)
-{
-  return bs ? bs->bs_seqnr : 0;
-}
-
-/// Get bs_cchar from bufstate
-int nvim_bufstate_get_cchar(bufstate_T *bs)
-{
-  return bs ? bs->bs_cchar : 0;
-}
-
-/// Get bs_extmatch from bufstate (opaque pointer)
-reg_extmatch_T *nvim_bufstate_get_extmatch(bufstate_T *bs)
-{
-  return bs ? bs->bs_extmatch : NULL;
-}
+int nvim_bufstate_get_idx(bufstate_T *bs) { return bs ? bs->bs_idx : 0; }
+int nvim_bufstate_get_flags(bufstate_T *bs) { return bs ? bs->bs_flags : 0; }
+int nvim_bufstate_get_seqnr(bufstate_T *bs) { return bs ? bs->bs_seqnr : 0; }
+int nvim_bufstate_get_cchar(bufstate_T *bs) { return bs ? bs->bs_cchar : 0; }
+reg_extmatch_T *nvim_bufstate_get_extmatch(bufstate_T *bs) { return bs ? bs->bs_extmatch : NULL; }
 
 /// Set stateitem fields at index (used by load_current_state)
+
 void nvim_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr,
+
                                   int si_cchar, reg_extmatch_T *extmatch)
+
 {
+
   if (idx < 0 || idx >= current_state.ga_len) {
+
     return;
+
   }
+
   CUR_STATE(idx).si_idx = si_idx;
+
   CUR_STATE(idx).si_flags = si_flags;
+
   CUR_STATE(idx).si_seqnr = si_seqnr;
+
   CUR_STATE(idx).si_cchar = si_cchar;
+
   CUR_STATE(idx).si_extmatch = ref_extmatch(extmatch);
+
   CUR_STATE(idx).si_ends = false;
+
   CUR_STATE(idx).si_m_lnum = 0;
+
   CUR_STATE(idx).si_next_list = NULL;
+
   if (si_idx >= 0) {
+
     CUR_STATE(idx).si_next_list = SYN_ITEMS(syn_block)[si_idx].sp_next_list;
+
   }
+
 }
 
 /// Call update_si_attr for item at index
@@ -3651,34 +3597,48 @@ int nvim_syn_extmatch_equal(reg_extmatch_T *a, reg_extmatch_T *b)
 }
 
 /// Compare extmatch strings at given sub-index with ignore-case from pattern
+
 /// Returns 1 if equal, 0 if different
+
 int nvim_syn_extmatch_strings_equal(reg_extmatch_T *a, reg_extmatch_T *b,
+
                                      int subidx, int pat_idx)
+
 {
+
   if (subidx < 0 || subidx >= NSUBEXP) {
+
     return 0;
+
   }
+
   if (a->matches[subidx] == b->matches[subidx]) {
+
     return 1;
+
   }
+
   if (a->matches[subidx] == NULL || b->matches[subidx] == NULL) {
+
     return 0;
+
   }
 
   int ic = 0;
+
   if (pat_idx >= 0 && syn_block != NULL && pat_idx < syn_block->b_syn_patterns.ga_len) {
+
     ic = SYN_ITEMS(syn_block)[pat_idx].sp_ic;
+
   }
 
   return mb_strcmp_ic(ic, (const char *)a->matches[subidx],
+
                       (const char *)b->matches[subidx]) == 0 ? 1 : 0;
+
 }
 
-/// Get NSUBEXP constant
-int nvim_syn_get_nsubexp(void)
-{
-  return NSUBEXP;
-}
+int nvim_syn_get_nsubexp(void) { return NSUBEXP; }
 
 /// Get the sp_ic (ignore case) flag for a pattern at index
 int nvim_synblock_pattern_ic(int pat_idx)
@@ -3698,57 +3658,14 @@ reg_extmatch_T *nvim_stateitem_get_extmatch(stateitem_T *item)
   return item->si_extmatch;
 }
 
-// ============================================================================
-// Phase 24.2: Core Pattern Matching Helpers (for Rust FFI)
-// ============================================================================
-
-/// Get si_m_endpos.lnum from stateitem
-int nvim_stateitem_get_m_endpos_lnum(stateitem_T *item)
-{
-  return item ? (int)item->si_m_endpos.lnum : 0;
-}
-
-/// Get si_m_endpos.col from stateitem
-int nvim_stateitem_get_m_endpos_col(stateitem_T *item)
-{
-  return item ? (int)item->si_m_endpos.col : 0;
-}
-
-/// Get si_h_startpos.lnum from stateitem
-int nvim_stateitem_get_h_startpos_lnum(stateitem_T *item)
-{
-  return item ? (int)item->si_h_startpos.lnum : 0;
-}
-
-/// Get si_h_startpos.col from stateitem
-int nvim_stateitem_get_h_startpos_col(stateitem_T *item)
-{
-  return item ? (int)item->si_h_startpos.col : 0;
-}
-
-/// Get si_h_endpos.lnum from stateitem
-int nvim_stateitem_get_h_endpos_lnum(stateitem_T *item)
-{
-  return item ? (int)item->si_h_endpos.lnum : 0;
-}
-
-/// Get si_h_endpos.col from stateitem
-int nvim_stateitem_get_h_endpos_col(stateitem_T *item)
-{
-  return item ? (int)item->si_h_endpos.col : 0;
-}
-
-/// Get si_eoe_pos.lnum from stateitem
-int nvim_stateitem_get_eoe_pos_lnum(stateitem_T *item)
-{
-  return item ? (int)item->si_eoe_pos.lnum : 0;
-}
-
-/// Get si_eoe_pos.col from stateitem
-int nvim_stateitem_get_eoe_pos_col(stateitem_T *item)
-{
-  return item ? (int)item->si_eoe_pos.col : 0;
-}
+int nvim_stateitem_get_m_endpos_lnum(stateitem_T *item) { return item ? (int)item->si_m_endpos.lnum : 0; }
+int nvim_stateitem_get_m_endpos_col(stateitem_T *item) { return item ? (int)item->si_m_endpos.col : 0; }
+int nvim_stateitem_get_h_startpos_lnum(stateitem_T *item) { return item ? (int)item->si_h_startpos.lnum : 0; }
+int nvim_stateitem_get_h_startpos_col(stateitem_T *item) { return item ? (int)item->si_h_startpos.col : 0; }
+int nvim_stateitem_get_h_endpos_lnum(stateitem_T *item) { return item ? (int)item->si_h_endpos.lnum : 0; }
+int nvim_stateitem_get_h_endpos_col(stateitem_T *item) { return item ? (int)item->si_h_endpos.col : 0; }
+int nvim_stateitem_get_eoe_pos_lnum(stateitem_T *item) { return item ? (int)item->si_eoe_pos.lnum : 0; }
+int nvim_stateitem_get_eoe_pos_col(stateitem_T *item) { return item ? (int)item->si_eoe_pos.col : 0; }
 
 /// Set si_m_endpos
 void nvim_stateitem_set_m_endpos(stateitem_T *item, int lnum, int col)
@@ -3857,47 +3774,14 @@ void nvim_stateitem_set_cont_list(stateitem_T *item, int16_t *list)
   }
 }
 
-/// Get next_match_idx
-int nvim_syn_get_next_match_idx_value(void)
-{
-  return next_match_idx;
-}
+int nvim_syn_get_next_match_idx_value(void) { return next_match_idx; }
+void nvim_syn_set_next_match_idx(int idx) { next_match_idx = idx; }
+void nvim_syn_set_next_match_col(int col) { next_match_col = col; }
+void nvim_syn_set_current_next_list_ptr(int16_t *list) { current_next_list = list; }
+int16_t *nvim_syn_get_current_next_list_ptr(void) { return current_next_list; }
+void nvim_syn_check_state_ends(void) { rs_check_state_ends(); }
 
-/// Set next_match_idx
-void nvim_syn_set_next_match_idx(int idx)
-{
-  next_match_idx = idx;
-}
-
-/// Set next_match_col
-void nvim_syn_set_next_match_col(int col)
-{
-  next_match_col = col;
-}
-
-/// Set current_next_list
-void nvim_syn_set_current_next_list_ptr(int16_t *list)
-{
-  current_next_list = list;
-}
-
-/// Get current_next_list
-int16_t *nvim_syn_get_current_next_list_ptr(void)
-{
-  return current_next_list;
-}
-
-/// Call check_state_ends
-void nvim_syn_check_state_ends(void)
-{
-  rs_check_state_ends();
-}
-
-/// Call update_si_attr
-void nvim_syn_call_update_si_attr(int idx)
-{
-  rs_update_si_attr(idx);
-}
+void nvim_syn_call_update_si_attr(int idx) { rs_update_si_attr(idx); }
 
 /// Call pop_current_state
 void nvim_syn_pop_current_state(void)
@@ -3923,23 +3807,11 @@ void nvim_syn_push_current_state(int idx)
   p->si_idx = idx;
 }
 
-/// Get the current line at the current column
-char nvim_syn_getcurline_at_col(void)
-{
-  return syn_getcurline()[current_col];
-}
+char nvim_syn_getcurline_at_col(void) { return syn_getcurline()[current_col]; }
 
-/// Check if current_state is empty
-int nvim_syn_current_state_is_empty(void)
-{
-  return GA_EMPTY(&current_state) ? 1 : 0;
-}
+int nvim_syn_current_state_is_empty(void) { return GA_EMPTY(&current_state) ? 1 : 0; }
 
-/// Set current_finished
-void nvim_syn_set_current_finished(int finished)
-{
-  current_finished = finished ? true : false;
-}
+void nvim_syn_set_current_finished(int finished) { current_finished = finished ? true : false; }
 
 /// Get synpat_T sp_type for pattern at index
 int nvim_synblock_pattern_type(int idx)
@@ -3995,23 +3867,11 @@ int16_t *nvim_synblock_pattern_next_list(int idx)
   return SYN_ITEMS(syn_block)[idx].sp_next_list;
 }
 
-/// Call syn_id2attr (from highlight_group.c)
-int nvim_syn_id2attr_wrapper(int syn_id)
-{
-  return syn_id2attr(syn_id);
-}
+int nvim_syn_id2attr_wrapper(int syn_id) { return syn_id2attr(syn_id); }
 
-/// Call syn_update_ends
-void nvim_syn_call_syn_update_ends(int syncing)
-{
-  syn_update_ends(syncing ? true : false);
-}
+void nvim_syn_call_syn_update_ends(int syncing) { syn_update_ends(syncing ? true : false); }
 
-/// Get si_next_list from stateitem
-int16_t *nvim_stateitem_get_next_list(stateitem_T *item)
-{
-  return item ? item->si_next_list : NULL;
-}
+int16_t *nvim_stateitem_get_next_list(stateitem_T *item) { return item ? item->si_next_list : NULL; }
 
 /// Set si_next_list for stateitem
 void nvim_stateitem_set_next_list(stateitem_T *item, int16_t *list)
@@ -4021,116 +3881,119 @@ void nvim_stateitem_set_next_list(stateitem_T *item, int16_t *list)
   }
 }
 
-/// Check if the ID_LIST_ALL constant matches a pointer
-int nvim_syn_is_id_list_all(int16_t *list)
-{
-  return list == ID_LIST_ALL ? 1 : 0;
-}
-
-/// Get the ID_LIST_ALL pointer
-int16_t *nvim_syn_get_id_list_all(void)
-{
-  return ID_LIST_ALL;
-}
-
-// ============================================================================
-// Phase 24.3: Keyword Matching Helpers (for Rust FFI)
-// ============================================================================
+int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
+int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
 
 /// Call check_keyword_id from Rust
+
 /// Returns the syntax ID if matched, 0 otherwise
+
 int nvim_syn_check_keyword_id(char *line, int startcol, int *endcolp,
+
                                int *flagsp, int16_t **next_listp,
+
                                stateitem_T *cur_si, int *ccharp)
+
 {
+
   // Find first character after the keyword.  First character was already
+
   // checked.
+
   char *const kwp = line + startcol;
+
   int kwlen = 0;
+
   do {
+
     kwlen += utfc_ptr2len(kwp + kwlen);
+
   } while (vim_iswordp_buf(kwp + kwlen, syn_buf));
 
   if (kwlen > MAXKEYWLEN) {
+
     return 0;
+
   }
 
   // Must make a copy of the keyword, so we can add a NUL and make it
+
   // lowercase.
+
   char keyword[MAXKEYWLEN + 1];         // assume max. keyword len is 80
+
   xmemcpyz(keyword, kwp, (size_t)kwlen);
 
   keyentry_T *kp = NULL;
 
   // matching case
+
   if (syn_block->b_keywtab.ht_used != 0) {
+
     kp = nvim_syn_match_keyword(keyword, 0, cur_si);
+
   }
 
   // ignoring case
+
   if (kp == NULL && syn_block->b_keywtab_ic.ht_used != 0) {
+
     str_foldcase(kwp, kwlen, keyword, MAXKEYWLEN + 1);
+
     kp = nvim_syn_match_keyword(keyword, 1, cur_si);
+
   }
 
   if (kp != NULL) {
+
     *endcolp = startcol + kwlen;
+
     *flagsp = kp->flags;
+
     *next_listp = kp->next_list;
+
     *ccharp = kp->k_char;
+
     return kp->k_syn.id;
+
   }
 
   return 0;
+
 }
 
 /// Call in_id_list from Rust
+
 /// Returns 1 if in list, 0 otherwise
+
 int nvim_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
+
                          int16_t *cont_in_list, int flags)
+
 {
+
   struct sp_syn ssp;
+
   ssp.id = (int16_t)id;
+
   ssp.inc_tag = inc_tag;
+
   ssp.cont_in_list = cont_in_list;
+
   return in_id_list(cur_si, list, &ssp, flags);
+
 }
 
-/// Check if there are keywords (case sensitive) in synblock
-int nvim_syn_has_keywords(void)
-{
-  return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0;
-}
+int nvim_syn_has_keywords(void) { return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0; }
+int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0; }
 
-/// Check if there are keywords (case insensitive) in synblock
-int nvim_syn_has_keywords_ic(void)
-{
-  return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0;
-}
+char *nvim_syn_getcurline(void) { return syn_getcurline(); }
 
-/// Get the current line from syn_getcurline
-char *nvim_syn_getcurline(void)
-{
-  return syn_getcurline();
-}
+void nvim_syn_save_chartab(char *buf) { save_chartab(buf); }
 
-/// Call save_chartab for syntax iskeyword
-void nvim_syn_save_chartab(char *buf)
-{
-  save_chartab(buf);
-}
+void nvim_syn_restore_chartab(char *buf) { restore_chartab(buf); }
 
-/// Call restore_chartab
-void nvim_syn_restore_chartab(char *buf)
-{
-  restore_chartab(buf);
-}
-
-/// Get MAXKEYWLEN constant
-int nvim_syn_get_maxkeywlen(void)
-{
-  return MAXKEYWLEN;
-}
+int nvim_syn_get_maxkeywlen(void) { return MAXKEYWLEN; }
 
 /// Call hash_find for keyword hashtab
 keyentry_T *nvim_syn_keyword_find(char *keyword, int use_ic)
@@ -4172,41 +4035,24 @@ keyentry_T *nvim_syn_match_keyword(char *keyword, int use_ic, stateitem_T *cur_s
   return NULL;
 }
 
-/// Copy and fold case for keyword
-void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen)
-{
-  str_foldcase(src, srclen, dst, dstlen);
-}
+void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen) { str_foldcase(src, srclen, dst, dstlen); }
 
-/// Get utfc_ptr2len for keyword length calculation
-int nvim_syn_utfc_ptr2len(char *p)
-{
-  return utfc_ptr2len(p);
-}
+int nvim_syn_utfc_ptr2len(char *p) { return utfc_ptr2len(p); }
 
-/// Get syn_buf pointer (for keyword char checks)
-void *nvim_syn_get_buf(void)
-{
-  return syn_buf;
-}
-
-/// Set the syn_buf pointer (for Rust FFI)
-void nvim_syn_set_syn_buf(void *buf)
-{
-  syn_buf = (buf_T *)buf;
-}
+void *nvim_syn_get_buf(void) { return syn_buf; }
+void nvim_syn_set_syn_buf(void *buf) { syn_buf = (buf_T *)buf; }
 
 // ============================================================================
+
 // Phase 24.4: Pattern Stack Operations Helpers (for Rust interop)
+
 // Note: push/pop_current_state, get/set_next_match_idx, get/set_keepend_level
+
 // are already defined earlier in Phase 24.2
+
 // ============================================================================
 
-/// Get the current_state garray length
-int nvim_syn_current_state_len(void)
-{
-  return current_state.ga_len;
-}
+int nvim_syn_current_state_len(void) { return current_state.ga_len; }
 
 /// Get a stateitem from current_state by index
 stateitem_T *nvim_syn_get_stateitem(int index)
@@ -4226,23 +4072,10 @@ stateitem_T *nvim_syn_get_top_stateitem(void)
   return &CUR_STATE(current_state.ga_len - 1);
 }
 
-/// Get next_seqnr global
-int nvim_syn_get_next_seqnr(void)
-{
-  return next_seqnr;
-}
+int nvim_syn_get_next_seqnr(void) { return next_seqnr; }
+void nvim_syn_set_next_seqnr(int seqnr) { next_seqnr = seqnr; }
 
-/// Set next_seqnr global
-void nvim_syn_set_next_seqnr(int seqnr)
-{
-  next_seqnr = seqnr;
-}
-
-/// Increment and get next_seqnr global
-int nvim_syn_incr_next_seqnr(void)
-{
-  return next_seqnr++;
-}
+int nvim_syn_incr_next_seqnr(void) { return next_seqnr++; }
 
 /// Get next_match_h_startpos
 void nvim_syn_get_next_match_h_startpos(int *lnum, int *col)
@@ -4299,43 +4132,15 @@ void nvim_syn_get_next_match_eoe_pos(int *lnum, int *col)
   }
 }
 
-/// Get next_match_flags
-int nvim_syn_get_next_match_flags(void)
-{
-  return next_match_flags;
-}
+int nvim_syn_get_next_match_flags(void) { return next_match_flags; }
+int nvim_syn_get_next_match_end_idx(void) { return next_match_end_idx; }
+reg_extmatch_T *nvim_syn_get_next_match_extmatch(void) { return next_match_extmatch; }
 
-/// Get next_match_end_idx
-int nvim_syn_get_next_match_end_idx(void)
-{
-  return next_match_end_idx;
-}
+reg_extmatch_T *nvim_syn_ref_extmatch(reg_extmatch_T *em) { return ref_extmatch(em); }
 
-/// Get next_match_extmatch
-reg_extmatch_T *nvim_syn_get_next_match_extmatch(void)
-{
-  return next_match_extmatch;
-}
+void nvim_syn_unref_extmatch(reg_extmatch_T *em) { unref_extmatch(em); }
 
-/// Call ref_extmatch
-reg_extmatch_T *nvim_syn_ref_extmatch(reg_extmatch_T *em)
-{
-  return ref_extmatch(em);
-}
-
-/// Call unref_extmatch
-void nvim_syn_unref_extmatch(reg_extmatch_T *em)
-{
-  unref_extmatch(em);
-}
-
-/// Call push_next_match from Rust
-stateitem_T *nvim_syn_push_next_match(void)
-{
-  return rs_push_next_match();
-}
-
-
+stateitem_T *nvim_syn_push_next_match(void) { return rs_push_next_match(); }
 
 /// Get synpat sp_flags by index
 int nvim_syn_get_pattern_flags(int idx)
@@ -4382,11 +4187,7 @@ int nvim_syn_get_pattern_syn_match_id(int idx)
   return SYN_ITEMS(syn_block)[idx].sp_syn_match_id;
 }
 
-/// Get GA_EMPTY(&current_state) check (Phase 24.4 - new name to avoid conflict)
-int nvim_syn_is_current_state_empty(void)
-{
-  return GA_EMPTY(&current_state) ? 1 : 0;
-}
+int nvim_syn_is_current_state_empty(void) { return GA_EMPTY(&current_state) ? 1 : 0; }
 
 /// Set si_h_startpos
 void nvim_stateitem_set_h_startpos(stateitem_T *item, int lnum, int col)
@@ -4437,42 +4238,12 @@ void nvim_stateitem_set_extmatch(stateitem_T *item, reg_extmatch_T *em)
   }
 }
 
-/// Get SPTYPE_START constant
-int nvim_syn_get_sptype_start(void)
-{
-  return SPTYPE_START;
-}
-
-/// Get HL_ONELINE constant
-int nvim_syn_get_hl_oneline(void)
-{
-  return HL_ONELINE;
-}
-
-/// Get HL_KEEPEND constant
-int nvim_syn_get_hl_keepend(void)
-{
-  return HL_KEEPEND;
-}
-
-/// Get HL_MATCH constant
-int nvim_syn_get_hl_match(void)
-{
-  return HL_MATCH;
-}
-
-/// Get HL_CONCEAL constant
-int nvim_syn_get_hl_conceal(void)
-{
-  return HL_CONCEAL;
-}
-
-/// Get HL_CONCEALENDS constant
-int nvim_syn_get_hl_concealends(void)
-{
-  return HL_CONCEALENDS;
-}
-
+int nvim_syn_get_sptype_start(void) { return SPTYPE_START; }
+int nvim_syn_get_hl_oneline(void) { return HL_ONELINE; }
+int nvim_syn_get_hl_keepend(void) { return HL_KEEPEND; }
+int nvim_syn_get_hl_match(void) { return HL_MATCH; }
+int nvim_syn_get_hl_conceal(void) { return HL_CONCEAL; }
+int nvim_syn_get_hl_concealends(void) { return HL_CONCEALENDS; }
 // =============================================================================
 // Phase 24.5: Sync and Line Operations Helpers
 // =============================================================================
