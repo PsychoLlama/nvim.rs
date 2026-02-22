@@ -68,16 +68,7 @@
 // Rust rs_* function declarations (from src/nvim-rs/shada/src/lib.rs)
 extern int rs_magic_isset(void);
 extern int rs_shada_hist_type2char(int hist_type);
-extern int rs_shada_hist_char2type(int c);
-extern int rs_get_shada_parameter(int typ);
-extern const char *rs_find_shada_parameter(int typ);
-extern int rs_shada_entry_type_valid(int entry_type);
-extern const char *rs_shada_entry_type_name(int entry_type);
 extern uint64_t rs_vim_be64toh(uint64_t big_endian_64_bits);
-extern uint64_t rs_vim_htobe64(uint64_t host_64_bits);
-extern int rs_shada_entry_type_from_raw(uint64_t raw_type);
-extern int rs_shada_is_unknown_entry(uint64_t entry_type);
-extern int rs_shada_should_write_entry(size_t packed_size, size_t max_kbyte);
 extern int rs_marks_equal(pos_T a, pos_T b);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
@@ -92,10 +83,6 @@ extern ShadaEntry rs_shada_get_buflist(void *removable_bufs);
 extern size_t rs_shada_init_jumps(ShadaEntry *jumps, void *removable_bufs);
 extern void rs_close_file(void *cookie);
 extern const char *rs_shada_get_default_file(void);
-extern int rs_shada_read_file(const char *file, int flags);
-extern int rs_shada_read_marks(void);
-extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
-extern void rs_check_marks_read(void);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
 extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
@@ -348,10 +335,6 @@ typedef struct {
 } HistoryMergerState;
 
 // Rust rs_* declarations (need HMLList, HMLListEntry, HistoryMergerState types)
-extern void rs_hmll_init(HMLList *hmll, size_t size);
-extern void rs_hmll_remove(HMLList *hmll, HMLListEntry *entry);
-extern void rs_hmll_insert(HMLList *hmll, HMLListEntry *after, ShadaEntry data);
-extern void rs_hmll_dealloc(HMLList *hmll);
 extern void rs_hms_init(HistoryMergerState *hms_p, uint8_t history_type,
                         size_t num_elements, int do_merge, int reading);
 extern void rs_hms_insert(HistoryMergerState *hms_p, ShadaEntry entry, int do_iter);
@@ -1306,76 +1289,6 @@ static ShaDaReadResult shada_check_status(uintmax_t initial_fpos, int status, si
   }
 }
 
-/// Format shada entry for debugging purposes
-///
-/// @param[in]  entry  ShaDa entry to format.
-///
-/// @return string representing ShaDa entry in a static buffer.
-static const char *shada_format_entry(const ShadaEntry entry)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_UNUSED FUNC_ATTR_NONNULL_RET
-{
-  static char ret[1024];
-  ret[0] = 0;
-  vim_snprintf(S_LEN(ret), "%s", "[ ] ts=%" PRIu64 " ");
-  //                         ^ Space for `can_free_entry`
-#define FORMAT_MARK_ENTRY(entry_name, name_fmt, name_fmt_arg) \
-  do { \
-    vim_snprintf_add(S_LEN(ret), \
-                     entry_name " {" name_fmt " file=[%zu]\"%.512s\", " \
-                     "pos={l=%" PRIdLINENR ",c=%" PRIdCOLNR ",a=%" PRIdCOLNR "}, " \
-                     "}", \
-                     name_fmt_arg, \
-                     strlen(entry.data.filemark.fname), \
-                     entry.data.filemark.fname, \
-                     entry.data.filemark.mark.lnum, \
-                     entry.data.filemark.mark.col, \
-                     entry.data.filemark.mark.coladd); \
-  } while (0)
-  switch (entry.type) {
-  case kSDItemMissing:
-    vim_snprintf_add(S_LEN(ret), "Missing");
-    break;
-  case kSDItemHeader:
-    vim_snprintf_add(S_LEN(ret), "Header { TODO }");
-    break;
-  case kSDItemBufferList:
-    vim_snprintf_add(S_LEN(ret), "BufferList { TODO }");
-    break;
-  case kSDItemUnknown:
-    vim_snprintf_add(S_LEN(ret), "Unknown { TODO }");
-    break;
-  case kSDItemSearchPattern:
-    vim_snprintf_add(S_LEN(ret), "SearchPattern { TODO }");
-    break;
-  case kSDItemSubString:
-    vim_snprintf_add(S_LEN(ret), "SubString { TODO }");
-    break;
-  case kSDItemHistoryEntry:
-    vim_snprintf_add(S_LEN(ret), "HistoryEntry { TODO }");
-    break;
-  case kSDItemRegister:
-    vim_snprintf_add(S_LEN(ret), "Register { TODO }");
-    break;
-  case kSDItemVariable:
-    vim_snprintf_add(S_LEN(ret), "Variable { TODO }");
-    break;
-  case kSDItemGlobalMark:
-    FORMAT_MARK_ENTRY("GlobalMark", " name='%c',", entry.data.filemark.name);
-    break;
-  case kSDItemChange:
-    FORMAT_MARK_ENTRY("Change", "%s", "");
-    break;
-  case kSDItemLocalMark:
-    FORMAT_MARK_ENTRY("LocalMark", " name='%c',", entry.data.filemark.name);
-    break;
-  case kSDItemJump:
-    FORMAT_MARK_ENTRY("Jump", "%s", "");
-    break;
-#undef FORMAT_MARK_ENTRY
-  }
-  ret[1] = (entry.can_free_entry ? 'T' : 'F');
-  return ret;
-}
 
 /// Read and merge in ShaDa file, used when writing
 ///
