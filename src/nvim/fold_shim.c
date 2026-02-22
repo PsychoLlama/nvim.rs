@@ -1212,7 +1212,7 @@ linenr_T nvim_wline_get_lastlnum(wline_T *wl)
 }
 
 // ============================================================================
-// Phase 1: Accessors for recursive functions
+// Accessors for recursive functions
 // ============================================================================
 
 /// Set the fd_flags field of a fold.
@@ -1244,7 +1244,7 @@ void nvim_fold_swap(garray_T *gap, int idx1, int idx2)
 }
 
 // ============================================================================
-// Phase 3: State query accessors
+// State query accessors
 // ============================================================================
 
 /// Get the w_p_fml (foldminlines) field from a window.
@@ -1260,7 +1260,7 @@ int nvim_plines_win_nofold(win_T *wp, linenr_T lnum)
 }
 
 // ============================================================================
-// Phase 1: Foundation function accessors
+// Foundation function accessors
 // ============================================================================
 
 /// Initialize the folds garray for a window (called from Rust).
@@ -1270,7 +1270,7 @@ void nvim_ga_init_folds(garray_T *gap)
 }
 
 // ============================================================================
-// Phase 2: Core query accessors
+// Core query accessors
 // ============================================================================
 
 /// Get the line count of the window's buffer.
@@ -1280,7 +1280,7 @@ linenr_T nvim_win_get_buf_line_count(win_T *wp)
 }
 
 // ============================================================================
-// Phase 1: Fold Markers accessors
+// Fold Markers accessors
 // ============================================================================
 
 /// Get the w_p_fmr (foldmarker option) field from a window.
@@ -1296,7 +1296,7 @@ char *nvim_ml_get_buf(buf_T *buf, linenr_T lnum)
 }
 
 // ============================================================================
-// Phase 2: Fold Level Calculation accessors
+// Fold Level Calculation accessors
 // ============================================================================
 
 /// Get the w_p_fdi (foldignore option) field from a window.
@@ -1342,7 +1342,7 @@ char *nvim_vim_strchr(const char *s, int c)
 }
 
 // ============================================================================
-// Phase 1: Fold Tree Manipulation accessors
+// Fold Tree Manipulation accessors
 // ============================================================================
 
 /// Grow a garray to hold at least n more fold_T entries.
@@ -1416,7 +1416,7 @@ bool nvim_get_fold_changed(void)
 }
 
 // ============================================================================
-// Phase 2: Fold State Management accessors
+// Fold State Management accessors
 // ============================================================================
 
 /// Set the w_fold_manual field in a window.
@@ -1462,7 +1462,7 @@ void nvim_win_set_p_fdl(win_T *wp, int fdl)
 }
 
 // ============================================================================
-// Phase 3: Fold Creation and Deletion accessors
+// Fold Creation and Deletion accessors
 // ============================================================================
 
 /// Initialize a garray with specified itemsize and growsize.
@@ -1490,7 +1490,7 @@ bool nvim_ga_is_empty(garray_T *gap)
 }
 
 // ============================================================================
-// Phase 1: Manual Fold Operations accessors
+// Manual Fold Operations accessors
 // ============================================================================
 
 /// Wrapper for foldCreateMarkers for Rust.
@@ -1558,7 +1558,7 @@ void nvim_redraw_curbuf_later(int redraw_type)
 }
 
 // ============================================================================
-// Phase 2: IEMS Algorithm accessors
+// IEMS Algorithm accessors
 // ============================================================================
 
 // Note: nvim_get_got_int is defined in ex_eval.c
@@ -1722,7 +1722,7 @@ int nvim_foldFind(garray_T *gap, linenr_T lnum, int *found_idx)
   return result ? 1 : 0;
 }
 
-// Accessors for fold statics used by Rust (Phase 3)
+// Accessors for fold statics
 linenr_T nvim_get_invalid_top(void) { return invalid_top; }
 void nvim_set_invalid_top(linenr_T val) { invalid_top = val; }
 linenr_T nvim_get_invalid_bot(void) { return invalid_bot; }
