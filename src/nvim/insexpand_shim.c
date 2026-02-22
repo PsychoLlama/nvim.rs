@@ -462,6 +462,11 @@ bool check_compl_option(bool dict_opt)
 }
 
 extern int rs_vim_is_ctrl_x_key(int c);
+extern int rs_set_ctrl_x_mode(int c);
+extern int rs_may_advance_cpt_index(const char *cpt);
+extern int rs_ins_compl_prep(int c);
+extern int rs_ins_compl_stop(int c, int prev_mode, int retval);
+extern int rs_ins_compl_cancel(void);
 
 /// Check that the character "c" a valid key to go to or keep us in CTRL-X mode?
 /// This depends on the current mode.
@@ -1954,126 +1959,7 @@ void ins_compl_addfrommatch(void)
 /// @return  true when the character is not to be inserted.
 static bool set_ctrl_x_mode(const int c)
 {
-  bool retval = false;
-
-  switch (c) {
-  case Ctrl_E:
-  case Ctrl_Y:
-    // scroll the window one line up or down
-    ctrl_x_mode = CTRL_X_SCROLL;
-    if (!(State & REPLACE_FLAG)) {
-      edit_submode = _(" (insert) Scroll (^E/^Y)");
-    } else {
-      edit_submode = _(" (replace) Scroll (^E/^Y)");
-    }
-    edit_submode_pre = NULL;
-    redraw_mode = true;
-    break;
-  case Ctrl_L:
-    // complete whole line
-    ctrl_x_mode = CTRL_X_WHOLE_LINE;
-    break;
-  case Ctrl_F:
-    // complete filenames
-    ctrl_x_mode = CTRL_X_FILES;
-    break;
-  case Ctrl_K:
-    // complete words from a dictionary
-    ctrl_x_mode = CTRL_X_DICTIONARY;
-    break;
-  case Ctrl_R:
-    // When CTRL-R is followed by '=', don't trigger register completion
-    // This allows expressions like <C-R>=func()<CR> to work normally
-    if (vpeekc() == '=') {
-      break;
-    }
-    ctrl_x_mode = CTRL_X_REGISTER;
-    break;
-  case Ctrl_T:
-    // complete words from a thesaurus
-    ctrl_x_mode = CTRL_X_THESAURUS;
-    break;
-  case Ctrl_U:
-    // user defined completion
-    ctrl_x_mode = CTRL_X_FUNCTION;
-    break;
-  case Ctrl_O:
-    // omni completion
-    ctrl_x_mode = CTRL_X_OMNI;
-    break;
-  case 's':
-  case Ctrl_S:
-    // complete spelling suggestions
-    ctrl_x_mode = CTRL_X_SPELL;
-    emsg_off++;  // Avoid getting the E756 error twice.
-    spell_back_to_badword();
-    emsg_off--;
-    break;
-  case Ctrl_RSB:
-    // complete tag names
-    ctrl_x_mode = CTRL_X_TAGS;
-    break;
-  case Ctrl_I:
-  case K_S_TAB:
-    // complete keywords from included files
-    ctrl_x_mode = CTRL_X_PATH_PATTERNS;
-    break;
-  case Ctrl_D:
-    // complete definitions from included files
-    ctrl_x_mode = CTRL_X_PATH_DEFINES;
-    break;
-  case Ctrl_V:
-  case Ctrl_Q:
-    // complete vim commands
-    ctrl_x_mode = CTRL_X_CMDLINE;
-    break;
-  case Ctrl_Z:
-    // stop completion
-    ctrl_x_mode = CTRL_X_NORMAL;
-    edit_submode = NULL;
-    redraw_mode = true;
-    retval = true;
-    break;
-  case Ctrl_P:
-  case Ctrl_N:
-    // ^X^P means LOCAL expansion if nothing interrupted (eg we
-    // just started ^X mode, or there were enough ^X's to cancel
-    // the previous mode, say ^X^F^X^X^P or ^P^X^X^X^P, see below)
-    // do normal expansion when interrupting a different mode (say
-    // ^X^F^X^P or ^P^X^X^P, see below)
-    // nothing changes if interrupting mode 0, (eg, the flag
-    // doesn't change when going to ADDING mode  -- Acevedo
-    if (!(compl_cont_status & CONT_INTRPT)) {
-      compl_cont_status |= CONT_LOCAL;
-    } else if (compl_cont_mode != 0) {
-      compl_cont_status &= ~CONT_LOCAL;
-    }
-    FALLTHROUGH;
-  default:
-    // If we have typed at least 2 ^X's... for modes != 0, we set
-    // compl_cont_status = 0 (eg, as if we had just started ^X
-    // mode).
-    // For mode 0, we set "compl_cont_mode" to an impossible
-    // value, in both cases ^X^X can be used to restart the same
-    // mode (avoiding ADDING mode).
-    // Undocumented feature: In a mode != 0 ^X^P and ^X^X^P start
-    // 'complete' and local ^P expansions respectively.
-    // In mode 0 an extra ^X is needed since ^X^P goes to ADDING
-    // mode  -- Acevedo
-    if (c == Ctrl_X) {
-      if (compl_cont_mode != 0) {
-        compl_cont_status = 0;
-      } else {
-        compl_cont_mode = CTRL_X_NOT_DEFINED_YET;
-      }
-    }
-    ctrl_x_mode = CTRL_X_NORMAL;
-    edit_submode = NULL;
-    redraw_mode = true;
-    break;
-  }
-
-  return retval;
+  return rs_set_ctrl_x_mode(c) != 0;
 }
 
 /// Stop insert completion mode
@@ -3132,15 +3018,7 @@ static bool thesaurus_func_complete(int type)
 /// Check if 'cpt' list index can be advanced to the next completion source.
 static bool may_advance_cpt_index(const char *cpt)
 {
-  const char *p = cpt;
-
-  if (cpt_sources_index == -1) {
-    return false;
-  }
-  while (*p == ',' || *p == ' ') {  // Skip delimiters
-    p++;
-  }
-  return (*p != NUL);
+  return rs_may_advance_cpt_index(cpt) != 0;
 }
 
 /// Return value of process_next_cpt_value()
@@ -5991,5 +5869,37 @@ int nvim_compl_curr_match_at_original_text(void) {
 }
 int nvim_compl_curr_match_has_str(void) {
   return compl_curr_match ? (compl_curr_match->cp_str.data != NULL ? 1 : 0) : 0;
+}
+
+// Accessors for set_ctrl_x_mode / may_advance_cpt_index (Phase 1)
+void nvim_set_ctrl_x_mode(int val) { ctrl_x_mode = val; }
+void nvim_set_compl_cont_mode(int val) { compl_cont_mode = val; }
+void nvim_set_edit_submode_scroll(int is_replace) {
+  edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)");
+  edit_submode_pre = NULL;
+  redraw_mode = true;
+}
+void nvim_set_edit_submode_null(void) { edit_submode = NULL; }
+void nvim_set_edit_submode_pre_null(void) { edit_submode_pre = NULL; }
+void nvim_set_redraw_mode_true(void) { redraw_mode = true; }
+int nvim_get_state_replace_flag(void) { return (State & REPLACE_FLAG) ? 1 : 0; }
+void nvim_spell_back_safe(void) { emsg_off++; spell_back_to_badword(); emsg_off--; }
+int nvim_vpeekc(void) { return vpeekc(); }
+int nvim_get_cpt_sources_index(void) { return cpt_sources_index; }
+
+// Accessor for ins_compl_prep (Phase 2)
+void nvim_set_compl_used_match(int val) { compl_used_match = val != 0; }
+
+// Accessors for ins_compl_stop (Phase 3)
+const char *nvim_get_compl_curr_match_str_data(void) {
+  return compl_curr_match ? compl_curr_match->cp_str.data : NULL;
+}
+char *nvim_get_compl_shown_match_str_dup(void) {
+  return compl_shown_match ? xstrdup(compl_shown_match->cp_str.data) : NULL;
+}
+void nvim_clear_compl_best_matches(void) { compl_best_matches = 0; }
+int nvim_cursor_on_nul(void) {
+  char *line = get_cursor_line_ptr();
+  return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0;
 }
 

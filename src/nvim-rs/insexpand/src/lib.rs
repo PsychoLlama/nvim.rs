@@ -10,6 +10,7 @@
 pub mod add;
 pub mod buffer;
 pub mod cmdline;
+pub mod ctrl_x;
 pub mod dict;
 pub mod entry;
 pub mod extmark;
