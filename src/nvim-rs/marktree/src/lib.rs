@@ -443,12 +443,6 @@ extern "C" {
     // Helper Functions
     // ========================================================================
 
-    /// Compute pseudo-index for position (x, i).
-    fn nvim_pseudo_index(x: MTNodeHandle, i: c_int) -> u64;
-
-    /// Compute pseudo-index for a mark ID.
-    fn nvim_pseudo_index_for_id(b: MarkTreeHandle, id: u64, sloppy: bool) -> u64;
-
     /// Set iterator to point at node n, index i.
     #[allow(dead_code)]
     fn nvim_marktree_itr_set_node(
@@ -461,14 +455,6 @@ extern "C" {
     /// Fix iterator position after setting node directly.
     #[allow(dead_code)]
     fn nvim_marktree_itr_fix_pos(b: MarkTreeHandle, itr: MarkTreeIterHandle);
-
-    /// Describe meta counts for a key incrementally.
-    #[allow(dead_code)]
-    fn nvim_meta_describe_key_inc(meta_inc: *mut u32, k: *mut MTKey);
-
-    /// Describe meta counts for a whole node.
-    #[allow(dead_code)]
-    fn nvim_meta_describe_node(meta_node: *mut u32, x: MTNodeHandle);
 
     // ========================================================================
     // Node Mutation Functions (Phase 4)
@@ -1857,9 +1843,25 @@ pub extern "C" fn rs_meta_describe_key_inc(meta_inc: *mut u32, k: *mut MTKey) {
 ///
 /// Pseudo-indices allow efficient ordering comparisons between positions
 /// without traversing the tree. They encode the path from root to the position.
+/// A valid pseudo-index is never zero; zero is reserved as a sentinel for "not found".
 #[must_use]
-pub fn pseudo_index(x: MTNodeHandle, i: i32) -> u64 {
-    unsafe { nvim_pseudo_index(x, i) }
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+pub fn pseudo_index(x: MTNodeHandle, mut i: i32) -> u64 {
+    let initial_level = unsafe { nvim_mtnode_get_level(x) };
+    let mut off: u32 = (MT_LOG2_BRANCH as u32) * (initial_level as u32);
+    let mut index: u64 = 0;
+    let mut cur = x;
+    while !cur.is_null() {
+        index |= ((i as u64).wrapping_add(1)) << off;
+        off += MT_LOG2_BRANCH as u32;
+        i = unsafe { nvim_mtnode_get_p_idx(cur) };
+        cur = unsafe { nvim_mtnode_get_parent(cur) };
+    }
+    index
 }
 
 /// Exported FFI version of `pseudo_index`.
@@ -1873,7 +1875,29 @@ pub extern "C" fn rs_pseudo_index(x: MTNodeHandle, i: c_int) -> u64 {
 /// If `sloppy` is true, all keys in the same leaf node get the same index.
 #[must_use]
 pub fn pseudo_index_for_id(b: MarkTreeHandle, id: u64, sloppy: bool) -> u64 {
-    unsafe { nvim_pseudo_index_for_id(b, id, sloppy) }
+    let n = marktree_id2node(b, id);
+    if n.is_null() {
+        return 0; // a valid pseudo-index is never zero!
+    }
+
+    let mut i = 0i32;
+    let level = mtnode_level(n);
+    let n_keys = mtnode_n(n);
+    if level != 0 || !sloppy {
+        while i < n_keys {
+            let key = mtnode_key(n, i);
+            if mt_lookup_key(&key) == id {
+                break;
+            }
+            i += 1;
+        }
+        // assert: i < n_keys (invariant maintained by caller)
+        if level != 0 {
+            i += 1; // internal key i comes after ptr[i]
+        }
+    }
+
+    pseudo_index(n, i)
 }
 
 /// Exported FFI version of `pseudo_index_for_id`.

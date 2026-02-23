@@ -2163,26 +2163,8 @@ MTNode *nvim_marktree_id2node(MarkTree *b, uint64_t id) { return id2node(b, id);
 // Helper Functions (for Rust FFI)
 // ============================================================================
 
-uint64_t nvim_pseudo_index(MTNode *x, int i)
-{
-  int off = MT_LOG2_BRANCH * x->level;
-  uint64_t index = 0;
-
-  while (x) {
-    index |= (uint64_t)(i + 1) << off;
-    off += MT_LOG2_BRANCH;
-    i = x->p_idx;
-    x = x->parent;
-  }
-
-  return index;
-}
-
-uint64_t nvim_pseudo_index_for_id(MarkTree *b, uint64_t id, bool sloppy) { return pseudo_index_for_id(b, id, sloppy); }
 MTKey nvim_marktree_itr_set_node(MarkTree *b, MarkTreeIter *itr, MTNode *n, int i) { return rs_marktree_itr_set_node(b, itr, n, i); }
 void nvim_marktree_itr_fix_pos(MarkTree *b, MarkTreeIter *itr) { rs_marktree_itr_fix_pos(b, itr); }
-void nvim_meta_describe_key_inc(uint32_t *meta_inc, MTKey *k) { meta_describe_key_inc(meta_inc, k); }
-void nvim_meta_describe_node(uint32_t *meta_node, MTNode *x) { meta_describe_node(meta_node, x); }
 
 // ============================================================================
 // Node Mutation Accessor Functions (for Rust FFI)
