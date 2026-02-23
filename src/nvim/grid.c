@@ -487,6 +487,10 @@ bool nvim_screengrid_get_mouse_enabled(ScreenGrid *grid)
   return grid ? grid->mouse_enabled : false;
 }
 
+void nvim_screengrid_set_zindex(ScreenGrid *grid, int val) { if (grid) { grid->zindex = val; } }
+void nvim_screengrid_set_valid(ScreenGrid *grid, bool val) { if (grid) { grid->valid = val; } }
+void nvim_screengrid_set_mouse_enabled(ScreenGrid *grid, bool val) { if (grid) { grid->mouse_enabled = val; } }
+
 // Global accessors
 ScreenGrid *nvim_get_default_grid(void)
 {

@@ -762,113 +762,11 @@ void merge_win_config(WinConfig *dst, const WinConfig src)
   *dst = src;
 }
 
+extern void rs_ui_ext_win_position(win_T *wp, bool validate);
+
 void ui_ext_win_position(win_T *wp, bool validate)
 {
-  wp->w_pos_changed = false;
-  if (!wp->w_floating) {
-    if (ui_has(kUIMultigrid)) {
-      // Windows on the default grid don't necessarily have comp_col and comp_row set
-      // But the rest of the calculations relies on it
-      wp->w_grid_alloc.comp_col = wp->w_wincol;
-      wp->w_grid_alloc.comp_row = wp->w_winrow;
-    }
-    ui_call_win_pos(wp->w_grid_alloc.handle, wp->handle, wp->w_winrow,
-                    wp->w_wincol, wp->w_width, wp->w_height);
-    return;
-  }
-
-  WinConfig c = wp->w_config;
-  if (!c.external) {
-    ScreenGrid *grid = &default_grid;
-    Float row = c.row;
-    Float col = c.col;
-    if (c.relative == kFloatRelativeWindow) {
-      Error dummy = ERROR_INIT;
-      win_T *win = find_window_by_handle(c.window, &dummy);
-      api_clear_error(&dummy);
-      if (win != NULL) {
-        // When a floating window is anchored to another window,
-        // update the position of its anchored window first.
-        if (win->w_pos_changed && win->w_grid_alloc.chars != NULL && rs_win_valid(win)) {
-          ui_ext_win_position(win, validate);
-        }
-        int row_off = 0;
-        int col_off = 0;
-        win_grid_alloc(win);
-        grid = grid_adjust(&win->w_grid, &row_off, &col_off);
-        row += row_off;
-        col += col_off;
-        if (c.bufpos.lnum >= 0) {
-          int lnum = MIN(c.bufpos.lnum + 1, win->w_buffer->b_ml.ml_line_count);
-          pos_T pos = { lnum, c.bufpos.col, 0 };
-          int trow, tcol, tcolc, tcole;
-          textpos2screenpos(win, &pos, &trow, &tcol, &tcolc, &tcole, true);
-          row += trow - 1;
-          col += tcol - 1;
-        }
-      }
-    } else if (c.relative == kFloatRelativeLaststatus) {
-      row += Rows - (int)p_ch - rs_last_stl_height(0);
-    } else if (c.relative == kFloatRelativeTabline) {
-      row += rs_tabline_height();
-    }
-
-    bool resort = wp->w_grid_alloc.comp_index != 0
-                  && wp->w_grid_alloc.zindex != wp->w_config.zindex;
-    bool raise = resort && wp->w_grid_alloc.zindex < wp->w_config.zindex;
-    wp->w_grid_alloc.zindex = wp->w_config.zindex;
-    if (resort) {
-      ui_comp_layers_adjust(wp->w_grid_alloc.comp_index, raise);
-    }
-    bool valid = (wp->w_redr_type == 0 || ui_has(kUIMultigrid));
-    if (!valid && !validate) {
-      wp->w_pos_changed = true;
-      return;
-    }
-
-    // TODO(bfredl): ideally, compositor should work like any multigrid UI
-    // and use standard win_pos events.
-    bool east = c.anchor & kFloatAnchorEast;
-    bool south = c.anchor & kFloatAnchorSouth;
-
-    int comp_row = (int)row - (south ? wp->w_height_outer : 0);
-    int comp_col = (int)col - (east ? wp->w_width_outer : 0);
-    int above_ch = wp->w_config.zindex < kZIndexMessages ? (int)p_ch : 0;
-    comp_row += grid->comp_row;
-    comp_col += grid->comp_col;
-    comp_row = MAX(MIN(comp_row, Rows - wp->w_height_outer - above_ch), 0);
-    if (!c.fixed || east) {
-      comp_col = MAX(MIN(comp_col, Columns - wp->w_width_outer), 0);
-    }
-    wp->w_winrow = comp_row;
-    wp->w_wincol = comp_col;
-
-    if (!c.hide) {
-      ui_comp_put_grid(&wp->w_grid_alloc, comp_row, comp_col,
-                       wp->w_height_outer, wp->w_width_outer, valid, false);
-      if (ui_has(kUIMultigrid)) {
-        String anchor = cstr_as_string(float_anchor_str[c.anchor]);
-        ui_call_win_float_pos(wp->w_grid_alloc.handle, wp->handle, anchor,
-                              grid->handle, row, col, c.mouse,
-                              wp->w_grid_alloc.zindex, (int)wp->w_grid_alloc.comp_index,
-                              wp->w_winrow,
-                              wp->w_wincol);
-      }
-      ui_check_cursor_grid(wp->w_grid_alloc.handle);
-      wp->w_grid_alloc.mouse_enabled = wp->w_config.mouse;
-      if (!valid) {
-        wp->w_grid_alloc.valid = false;
-        redraw_later(wp, UPD_NOT_VALID);
-      }
-    } else {
-      if (ui_has(kUIMultigrid)) {
-        ui_call_win_hide(wp->w_grid_alloc.handle);
-      }
-      ui_comp_remove_grid(&wp->w_grid_alloc);
-    }
-  } else {
-    ui_call_win_external_pos(wp->w_grid_alloc.handle, wp->handle);
-  }
+  rs_ui_ext_win_position(wp, validate);
 }
 
 void ui_ext_win_viewport(win_T *wp)
@@ -4735,3 +4633,62 @@ _Static_assert(-16715 == K_KENTER, "K_KENTER mismatch");
 _Static_assert(30 == Ctrl_HAT, "Ctrl_HAT mismatch");
 _Static_assert(29 == Ctrl_RSB, "Ctrl_RSB mismatch");
 _Static_assert(31 == Ctrl__, "Ctrl__ mismatch");
+
+// === Accessors for rs_ui_ext_win_position ===
+
+// WinConfig field accessors
+int nvim_win_get_pos_changed(win_T *wp) { return wp ? wp->w_pos_changed : 0; }
+double nvim_win_get_config_row(win_T *wp) { return wp ? wp->w_config.row : 0.0; }
+double nvim_win_get_config_col(win_T *wp) { return wp ? wp->w_config.col : 0.0; }
+int nvim_win_get_config_anchor(win_T *wp) { return wp ? (int)wp->w_config.anchor : 0; }
+int nvim_win_get_config_fixed(win_T *wp) { return wp ? wp->w_config.fixed : 0; }
+int nvim_win_get_config_mouse_flag(win_T *wp) { return wp ? wp->w_config.mouse : 0; }
+int nvim_win_get_config_bufpos_lnum(win_T *wp) { return wp ? (int)wp->w_config.bufpos.lnum : -1; }
+int nvim_win_get_config_bufpos_col(win_T *wp) { return wp ? (int)wp->w_config.bufpos.col : 0; }
+int nvim_win_get_w_height_outer(win_T *wp) { return wp ? wp->w_height_outer : 0; }
+int nvim_win_get_w_width_outer(win_T *wp) { return wp ? wp->w_width_outer : 0; }
+
+// Find a window by its integer handle (wraps find_window_by_handle)
+win_T *nvim_handle_get_window(int handle)
+{
+  Error dummy = ERROR_INIT;
+  win_T *wp = find_window_by_handle(handle, &dummy);
+  api_clear_error(&dummy);
+  return wp;
+}
+
+// Call win_grid_alloc on a window
+void nvim_win_call_win_grid_alloc(win_T *wp) { if (wp) { win_grid_alloc(wp); } }
+
+// UI call wrappers (these wrap auto-generated ui_call_* functions)
+void nvim_win_ui_call_win_pos(int grid, int win, int row, int col, int width, int height)
+{
+  ui_call_win_pos(grid, win, row, col, width, height);
+}
+
+/// Wrapper for ui_call_win_float_pos.
+/// Takes anchor as a C integer index into float_anchor_str[].
+void nvim_win_ui_call_win_float_pos(int grid_handle, int win_handle, int anchor,
+                                     int anchor_grid, double row, double col,
+                                     int mouse, int zindex, int comp_index,
+                                     int screen_row, int screen_col)
+{
+  String anchor_str = cstr_as_string(float_anchor_str[anchor]);
+  ui_call_win_float_pos(grid_handle, win_handle, anchor_str, anchor_grid,
+                        row, col, (bool)mouse, zindex, comp_index, screen_row, screen_col);
+}
+
+void nvim_win_ui_call_win_hide(int grid_handle) { ui_call_win_hide(grid_handle); }
+
+void nvim_win_ui_call_win_external_pos(int grid_handle, int win_handle)
+{
+  ui_call_win_external_pos(grid_handle, win_handle);
+}
+
+void nvim_win_ui_check_cursor_grid(int grid_handle) { ui_check_cursor_grid(grid_handle); }
+
+// Accessor: get the 'handle' integer field from a ScreenGrid pointer
+int nvim_screengrid_get_handle_from_win_grid_alloc(win_T *wp)
+{
+  return wp ? wp->w_grid_alloc.handle : 0;
+}
