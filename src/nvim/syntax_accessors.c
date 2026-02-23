@@ -194,6 +194,9 @@ extern void rs_syn_cmd_cluster(exarg_T *eap, int syncing);
 // Rust sync command FFI declaration
 extern void rs_syn_cmd_sync(exarg_T *eap, int syncing);
 
+// Rust clear command FFI declaration
+extern void rs_syn_cmd_clear(exarg_T *eap, int syncing);
+
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
 
@@ -999,6 +1002,8 @@ static void syntax_sync_clear(void)
 
   syn_stack_free_all(curwin->w_s);              // Need to recompute all syntax.
 }
+// Note: syntax_sync_clear kept in C because it touches low-level C APIs
+// (syn_remove_pattern, vim_regfree, clear_string_option, syn_stack_free_all).
 
 // Remove one pattern from the buffer's pattern list.
 static void syn_remove_pattern(synblock_T *block, int idx)
@@ -1039,63 +1044,7 @@ static void syn_clear_cluster(synblock_T *block, int i)
 /// Handle ":syntax clear" command.
 static void syn_cmd_clear(exarg_T *eap, int syncing)
 {
-  char *arg = eap->arg;
-  char *arg_end;
-  int id;
-
-  eap->nextcmd = find_nextcmd(arg);
-  if (eap->skip) {
-    return;
-  }
-
-  // We have to disable this within ":syn include @group filename",
-  // because otherwise @group would get deleted.
-  // Only required for Vim 5.x syntax files, 6.0 ones don't contain ":syn
-  // clear".
-  if (curwin->w_s->b_syn_topgrp != 0) {
-    return;
-  }
-
-  if (ends_excmd(*arg)) {
-    // No argument: Clear all syntax items.
-    if (syncing) {
-      syntax_sync_clear();
-    } else {
-      syntax_clear(curwin->w_s);
-      if (curwin->w_s == &curwin->w_buffer->b_s) {
-        do_unlet(S_LEN("b:current_syntax"), true);
-      }
-      do_unlet(S_LEN("w:current_syntax"), true);
-    }
-  } else {
-    // Clear the group IDs that are in the argument.
-    while (!ends_excmd(*arg)) {
-      arg_end = skiptowhite(arg);
-      if (*arg == '@') {
-        id = syn_scl_namen2id(arg + 1, (int)(arg_end - arg - 1));
-        if (id == 0) {
-          semsg(_("E391: No such syntax cluster: %s"), arg);
-          break;
-        }
-        // We can't physically delete a cluster without changing
-        // the IDs of other clusters, so we do the next best thing
-        // and make it empty.
-        int scl_id = id - SYNID_CLUSTER;
-
-        XFREE_CLEAR(SYN_CLSTR(curwin->w_s)[scl_id].scl_list);
-      } else {
-        id = syn_name2id_len(arg, (size_t)(arg_end - arg));
-        if (id == 0) {
-          semsg(_(e_nogroup), arg);
-          break;
-        }
-        syn_clear_one(id, syncing);
-      }
-      arg = skipwhite(arg_end);
-    }
-  }
-  redraw_curbuf_later(UPD_SOME_VALID);
-  syn_stack_free_all(curwin->w_s);              // Need to recompute all syntax.
+  rs_syn_cmd_clear(eap, syncing);
 }
 
 // Clear one syntax group for the current buffer.
@@ -4691,4 +4640,54 @@ void nvim_syn_cmd_clear_wrapper(exarg_T *eap, int syncing)
 void nvim_syn_cmd_list_wrapper(exarg_T *eap, int syncing)
 {
   syn_cmd_list(eap, syncing);
+}
+
+// =============================================================================
+// Phase 2 accessors: syn_cmd_clear migration
+// =============================================================================
+
+/// Look up a syntax cluster name+length and return its ID (with SYNID_CLUSTER offset).
+int nvim_syn_scl_namen2id(const char *arg, int len)
+{
+  return syn_scl_namen2id((char *)arg, len);
+}
+
+/// Look up a syntax group name+length and return its ID.
+int nvim_syn_name2id_len_wrapper(const char *arg, int len)
+{
+  return syn_name2id_len(arg, (size_t)len);
+}
+
+/// Clear the scl_list of a cluster (by scl_id, not offset by SYNID_CLUSTER).
+void nvim_synblock_clear_cluster_scl_list(synblock_T *block, int scl_id)
+{
+  XFREE_CLEAR(SYN_CLSTR(block)[scl_id].scl_list);
+}
+
+/// Clear one syntax group for the current buffer (wrapper around syn_clear_one).
+void nvim_syn_clear_one_wrapper(int id, int syncing)
+{
+  syn_clear_one(id, (bool)syncing);
+}
+
+/// Full syntax clear (wrapper around syntax_clear for the current synblock).
+void nvim_syntax_clear_wrapper(synblock_T *block)
+{
+  syntax_clear(block);
+}
+
+/// Sync-only clear (wrapper around syntax_sync_clear).
+void nvim_syntax_sync_clear_wrapper(void)
+{
+  syntax_sync_clear();
+}
+
+/// Unlet b:current_syntax and/or w:current_syntax after a full clear.
+/// Only unlets b:current_syntax if the synblock is the buffer's own block.
+void nvim_syn_clear_unlet_vars(synblock_T *block)
+{
+  if (block == &curwin->w_buffer->b_s) {
+    do_unlet(S_LEN("b:current_syntax"), true);
+  }
+  do_unlet(S_LEN("w:current_syntax"), true);
 }
