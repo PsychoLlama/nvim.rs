@@ -53,10 +53,31 @@ extern "C" {
 
     // optset_T field accessors
     fn nvim_optset_get_win(args: *const c_void) -> WinHandle;
+    fn nvim_optset_restore_oldval_number(args: *const c_void);
 
     // Window field accessors for wrap callback
     fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
     fn nvim_win_set_leftcol(wp: WinHandle, val: c_int);
+
+    // Lines/columns callback accessors
+    fn nvim_get_p_lines() -> OptInt;
+    fn nvim_get_p_columns() -> OptInt;
+    fn nvim_get_Rows() -> c_int;
+    fn nvim_get_Columns() -> c_int;
+    fn nvim_set_Rows(val: c_int);
+    fn nvim_set_Columns(val: c_int);
+    fn nvim_get_updating_screen() -> c_int;
+    fn nvim_get_full_screen() -> bool;
+    fn screen_resize(width: c_int, height: c_int);
+    fn check_screensize();
+    fn nvim_get_cmdline_row() -> c_int;
+    fn nvim_set_cmdline_row(val: c_int);
+    fn nvim_get_p_ch() -> i64;
+    fn nvim_get_p_sj() -> OptInt;
+    fn nvim_set_p_sj(val: OptInt);
+    fn nvim_option_was_set_window() -> c_int;
+    fn nvim_get_p_window() -> c_int;
+    fn nvim_set_p_window(val: c_int);
 }
 
 // =============================================================================
@@ -367,6 +388,54 @@ pub extern "C" fn rs_did_set_fillchars() -> CallbackResult {
 #[no_mangle]
 pub extern "C" fn rs_did_set_listchars() -> CallbackResult {
     request_redraw_all(UpdateType::NotValid);
+    callback_ok()
+}
+
+// =============================================================================
+// Lines / Columns Option Callback
+// =============================================================================
+
+/// Callback for 'lines' and 'columns' options.
+///
+/// Handles screen resize when 'lines' or 'columns' changes. Adjusts Rows/Columns
+/// globals, calls screen_resize if appropriate, and updates dependent options.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_did_set_lines_or_columns(args: *mut c_void) -> CallbackResult {
+    let p_lines = nvim_get_p_lines();
+    let p_columns = nvim_get_p_columns();
+    let rows = nvim_get_Rows();
+    let columns = nvim_get_Columns();
+
+    if p_lines != OptInt::from(rows) || p_columns != OptInt::from(columns) {
+        if nvim_get_updating_screen() != 0 {
+            // Cannot resize while updating the screen; restore old value.
+            nvim_optset_restore_oldval_number(args);
+        } else if nvim_get_full_screen() {
+            screen_resize(p_columns as c_int, p_lines as c_int);
+        } else {
+            // Postpone the resizing.
+            nvim_set_Rows(p_lines as c_int);
+            nvim_set_Columns(p_columns as c_int);
+            check_screensize();
+            let p_ch = nvim_get_p_ch();
+            let new_row = nvim_get_Rows() - std::cmp::max(p_ch as c_int, 1);
+            let cmdline_row = nvim_get_cmdline_row();
+            if cmdline_row > new_row && nvim_get_Rows() > p_ch as c_int {
+                nvim_set_cmdline_row(new_row);
+            }
+        }
+        let window = nvim_get_p_window();
+        if window >= nvim_get_Rows() || nvim_option_was_set_window() == 0 {
+            nvim_set_p_window(nvim_get_Rows() - 1);
+        }
+    }
+
+    // Adjust 'scrolljump' if needed.
+    if nvim_get_p_sj() >= OptInt::from(nvim_get_Rows()) && nvim_get_full_screen() {
+        nvim_set_p_sj(OptInt::from(nvim_get_Rows()) / 2);
+    }
+
     callback_ok()
 }
 

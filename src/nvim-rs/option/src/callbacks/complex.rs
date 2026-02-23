@@ -1009,13 +1009,101 @@ pub unsafe extern "C" fn rs_did_set_autochdir(_args: *mut c_void) -> CallbackRes
 }
 
 // =============================================================================
+// Paste Option Callback
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_p_paste() -> c_int;
+    fn nvim_get_p_sm() -> c_int;
+    fn nvim_get_p_sta() -> c_int;
+    fn nvim_get_p_ru() -> c_int;
+    fn nvim_get_p_ri() -> c_int;
+    fn nvim_paste_buf_save_and_activate(buf: *mut c_void);
+    fn nvim_paste_buf_activate_only(buf: *mut c_void);
+    fn nvim_paste_buf_restore(buf: *mut c_void);
+    fn nvim_paste_global_save();
+    fn nvim_paste_global_activate();
+    fn nvim_paste_global_restore(save_sm: c_int, save_sta: c_int, save_ru: c_int, save_ri: c_int);
+    fn nvim_paste_didset_options_sctx();
+}
+
+// Saved state for when 'paste' is toggled on.
+static mut PASTE_OLD_P_PASTE: c_int = 0;
+static mut PASTE_SAVE_SM: c_int = 0;
+static mut PASTE_SAVE_STA: c_int = 0;
+static mut PASTE_SAVE_RU: c_int = 0;
+static mut PASTE_SAVE_RI: c_int = 0;
+
+/// Per-buffer callback: save nopaste fields and activate paste mode.
+unsafe extern "C" fn paste_buf_save_and_activate_cb(buf: *mut c_void) {
+    nvim_paste_buf_save_and_activate(buf);
+}
+
+/// Per-buffer callback: activate paste mode only (no save, already saved).
+unsafe extern "C" fn paste_buf_activate_only_cb(buf: *mut c_void) {
+    nvim_paste_buf_activate_only(buf);
+}
+
+/// Per-buffer callback: restore saved nopaste fields.
+unsafe extern "C" fn paste_buf_restore_cb(buf: *mut c_void) {
+    nvim_paste_buf_restore(buf);
+}
+
+/// Callback for 'paste' option.
+///
+/// When 'paste' is set, saves current option values and forces paste-friendly
+/// settings across all buffers. When 'paste' is unset, restores the saved values.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_paste_full(_args: *mut c_void) -> CallbackResult {
+    let p_paste = nvim_get_p_paste();
+
+    if p_paste != 0 {
+        // Paste switched from off to on.
+        if PASTE_OLD_P_PASTE == 0 {
+            // First time paste is turned on: save current values.
+            nvim_for_all_buffers(paste_buf_save_and_activate_cb);
+            PASTE_SAVE_SM = nvim_get_p_sm();
+            PASTE_SAVE_STA = nvim_get_p_sta();
+            PASTE_SAVE_RU = nvim_get_p_ru();
+            PASTE_SAVE_RI = nvim_get_p_ri();
+            nvim_paste_global_save();
+        } else {
+            // Paste was already on: just enforce the paste option values again.
+            nvim_for_all_buffers(paste_buf_activate_only_cb);
+        }
+        nvim_paste_global_activate();
+    } else if PASTE_OLD_P_PASTE != 0 {
+        // Paste switched from on to off: restore saved values.
+        nvim_for_all_buffers(paste_buf_restore_cb);
+        nvim_paste_global_restore(PASTE_SAVE_SM, PASTE_SAVE_STA, PASTE_SAVE_RU, PASTE_SAVE_RI);
+    }
+
+    PASTE_OLD_P_PASTE = p_paste;
+    nvim_paste_didset_options_sctx();
+
+    callback_ok()
+}
+
+// =============================================================================
 // Shellslash Option Callback (Windows-specific)
 // =============================================================================
 
 /// Callback for 'shellslash' option.
-/// On Unix this is a no-op; on Windows it would invalidate filename paths.
+/// Adjusts path separators in buffer names, argument list, and script names.
+/// Only active on Windows (BACKSLASH_IN_FILENAME builds).
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_shellslash() -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_shellslash(_args: *mut c_void) -> CallbackResult {
+    #[cfg(target_os = "windows")]
+    {
+        extern "C" {
+            fn buflist_slash_adjust();
+            fn alist_slash_adjust();
+            fn rs_scriptnames_slash_adjust();
+        }
+        buflist_slash_adjust();
+        alist_slash_adjust();
+        rs_scriptnames_slash_adjust();
+    }
     callback_ok()
 }
 

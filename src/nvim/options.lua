@@ -1407,7 +1407,7 @@ local options = {
     },
     {
       abbreviation = 'co',
-      cb = 'did_set_lines_or_columns',
+      cb = 'rs_did_set_lines_or_columns',
       defaults = {
         if_true = macros('DFLT_COLS', 'number'),
         doc = '80 or terminal width',
@@ -5266,7 +5266,7 @@ local options = {
       type = 'boolean',
     },
     {
-      cb = 'did_set_lines_or_columns',
+      cb = 'rs_did_set_lines_or_columns',
       defaults = {
         if_true = macros('DFLT_ROWS', 'number'),
         doc = '24 or terminal height',
@@ -6443,7 +6443,7 @@ local options = {
       varname = 'p_para',
     },
     {
-      cb = 'did_set_paste',
+      cb = 'rs_did_set_paste_full',
       defaults = false,
       full_name = 'paste',
       pri_mkrc = true,
@@ -7821,7 +7821,7 @@ local options = {
     },
     {
       abbreviation = 'ssl',
-      cb = 'did_set_shellslash',
+      cb = 'rs_did_set_shellslash',
       defaults = {
         condition = 'MSWIN',
         if_true = false,

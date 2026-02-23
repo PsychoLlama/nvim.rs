@@ -70,6 +70,7 @@ OptInt nvim_get_p_sj(void)
 {
   return p_sj;
 }
+void nvim_set_p_sj(OptInt val) { p_sj = val; }
 
 /// Return how many lines "lnum" will take on the screen, taking into account
 /// whether it is the first line, whether w_skipcol is non-zero and limiting to

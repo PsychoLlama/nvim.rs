@@ -254,16 +254,6 @@ pub extern "C" fn rs_did_set_langremap(_args: *mut c_void) -> CallbackResult {
     callback_ok()
 }
 
-/// Callback for 'paste' option.
-/// When 'paste' is set, various options need adjustment.
-#[no_mangle]
-pub extern "C" fn rs_did_set_paste() -> CallbackResult {
-    // The paste option handling is complex and modifies many options.
-    // The actual implementation is done in C (paste_option_changed)
-    // This callback just signals that it happened.
-    callback_ok()
-}
-
 /// Callback for 'foldlevel' option.
 /// Recalculate fold levels when 'foldlevel' changes.
 #[no_mangle]

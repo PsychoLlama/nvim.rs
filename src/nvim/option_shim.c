@@ -192,6 +192,11 @@ extern const char *rs_did_set_previewwindow(optset_T *args);
 extern const char *rs_did_set_spell_full(optset_T *args);
 extern const char *rs_did_set_shiftwidth_tabstop(optset_T *args);
 extern const char *rs_did_set_xhistory(optset_T *args);
+extern const char *rs_did_set_lines_or_columns(optset_T *args);
+extern const char *rs_did_set_paste_full(optset_T *args);
+#ifdef BACKSLASH_IN_FILENAME
+extern const char *rs_did_set_shellslash(optset_T *args);
+#endif
 
 // Rust varp dispatch functions (from Rust varp.rs)
 extern void *rs_get_varp_from(vimoption_T *p, buf_T *buf, win_T *win);
@@ -531,6 +536,20 @@ void nvim_set_p_arshape(int val) { p_arshape = val != 0; }
 const char *nvim_get_p_enc(void) { return (const char *)p_enc; }
 void nvim_set_p_deco(int val) { p_deco = val != 0; }
 
+// Lines/columns callback accessors
+OptInt nvim_get_p_lines(void) { return p_lines; }
+OptInt nvim_get_p_columns(void) { return p_columns; }
+int nvim_option_was_set_window(void) { return option_was_set(kOptWindow); }
+
+// Paste callback accessors (nvim_get_p_paste defined in indent_c.c,
+//   nvim_get_p_ru defined in drawscreen.c, nvim_get_p_ri defined in edit.c)
+int nvim_get_p_sm(void) { return p_sm; }
+void nvim_set_p_sm(int val) { p_sm = val != 0; }
+int nvim_get_p_sta(void) { return p_sta; }
+void nvim_set_p_sta(int val) { p_sta = val != 0; }
+void nvim_set_p_ru(int val) { p_ru = val != 0; }
+void nvim_set_p_ri(int val) { p_ri = val != 0; }
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
@@ -583,6 +602,126 @@ extern void rs_foldUpdateAll(win_T *win);
 // Xhistory callback wrappers (after includes for qf_resize_stack/ll_resize_stack)
 void nvim_qf_resize_stack(int n) { qf_resize_stack(n); }
 void nvim_ll_resize_stack(win_T *win, int n) { ll_resize_stack(win, n); }
+
+// lines_or_columns callback: restore option varp to its old number value
+void nvim_optset_restore_oldval_number(const void *args)
+{
+  const optset_T *a = (const optset_T *)args;
+  OptVal oldval = (OptVal){ .type = kOptValTypeNumber, .data = a->os_oldval };
+  set_option_varp(a->os_idx, a->os_varp, oldval, false);
+}
+
+// Paste callback consolidated buffer helpers (save-and-set / restore)
+// Called via nvim_for_all_buffers from Rust.
+void nvim_paste_buf_save_and_activate(buf_T *buf)
+{
+  buf->b_p_tw_nopaste = buf->b_p_tw;
+  buf->b_p_wm_nopaste = buf->b_p_wm;
+  buf->b_p_sts_nopaste = buf->b_p_sts;
+  buf->b_p_ai_nopaste = buf->b_p_ai;
+  buf->b_p_et_nopaste = buf->b_p_et;
+  if (buf->b_p_vsts_nopaste) {
+    xfree(buf->b_p_vsts_nopaste);
+  }
+  buf->b_p_vsts_nopaste = buf->b_p_vsts && buf->b_p_vsts != empty_string_option
+                          ? xstrdup(buf->b_p_vsts) : NULL;
+  buf->b_p_tw = 0;
+  buf->b_p_wm = 0;
+  buf->b_p_sts = 0;
+  buf->b_p_ai = 0;
+  buf->b_p_et = 0;
+  if (buf->b_p_vsts) {
+    free_string_option(buf->b_p_vsts);
+  }
+  buf->b_p_vsts = empty_string_option;
+  XFREE_CLEAR(buf->b_p_vsts_array);
+}
+
+void nvim_paste_buf_activate_only(buf_T *buf)
+{
+  buf->b_p_tw = 0;
+  buf->b_p_wm = 0;
+  buf->b_p_sts = 0;
+  buf->b_p_ai = 0;
+  buf->b_p_et = 0;
+  if (buf->b_p_vsts) {
+    free_string_option(buf->b_p_vsts);
+  }
+  buf->b_p_vsts = empty_string_option;
+  XFREE_CLEAR(buf->b_p_vsts_array);
+}
+
+void nvim_paste_buf_restore(buf_T *buf)
+{
+  buf->b_p_tw = buf->b_p_tw_nopaste;
+  buf->b_p_wm = buf->b_p_wm_nopaste;
+  buf->b_p_sts = buf->b_p_sts_nopaste;
+  buf->b_p_ai = buf->b_p_ai_nopaste;
+  buf->b_p_et = buf->b_p_et_nopaste;
+  if (buf->b_p_vsts) {
+    free_string_option(buf->b_p_vsts);
+  }
+  buf->b_p_vsts = buf->b_p_vsts_nopaste ? xstrdup(buf->b_p_vsts_nopaste) : empty_string_option;
+  xfree(buf->b_p_vsts_array);
+  if (buf->b_p_vsts && buf->b_p_vsts != empty_string_option) {
+    tabstop_set(buf->b_p_vsts, &buf->b_p_vsts_array);
+  } else {
+    buf->b_p_vsts_array = NULL;
+  }
+}
+
+void nvim_paste_global_save(void)
+{
+  p_ai_nopaste = p_ai;
+  p_et_nopaste = p_et;
+  p_sts_nopaste = p_sts;
+  p_tw_nopaste = p_tw;
+  p_wm_nopaste = p_wm;
+  if (p_vsts_nopaste) {
+    xfree(p_vsts_nopaste);
+  }
+  p_vsts_nopaste = p_vsts && p_vsts != empty_string_option ? xstrdup(p_vsts) : NULL;
+}
+
+void nvim_paste_global_activate(void)
+{
+  p_sm = 0;
+  p_sta = 0;
+  if (p_ru) {
+    status_redraw_all();
+  }
+  p_ru = 0;
+  p_ri = 0;
+  p_tw = 0;
+  p_wm = 0;
+  p_sts = 0;
+  p_ai = 0;
+  p_et = 0;
+  if (p_vsts) {
+    free_string_option(p_vsts);
+  }
+  p_vsts = empty_string_option;
+}
+
+void nvim_paste_global_restore(int save_sm, int save_sta, int save_ru, int save_ri)
+{
+  p_sm = save_sm;
+  p_sta = save_sta;
+  if (p_ru != save_ru) {
+    status_redraw_all();
+  }
+  p_ru = save_ru;
+  p_ri = save_ri;
+  p_ai = p_ai_nopaste;
+  p_et = p_et_nopaste;
+  p_sts = p_sts_nopaste;
+  p_tw = p_tw_nopaste;
+  p_wm = p_wm_nopaste;
+  if (p_vsts) {
+    free_string_option(p_vsts);
+  }
+  p_vsts = p_vsts_nopaste ? xstrdup(p_vsts_nopaste) : empty_string_option;
+}
 
 // =============================================================================
 // Accessor functions for Rust setcmd module (require options array)
@@ -842,6 +981,12 @@ static int p_paste_dep_opts[] = {
   kOptAutoindent, kOptExpandtab, kOptRuler, kOptShowmatch, kOptSmarttab, kOptSofttabstop,
   kOptTextwidth, kOptWrapmargin, kOptRevins, kOptVarsofttabstop, kOptInvalid
 };
+
+// Paste callback: record sctx for all dependent options (after p_paste_dep_opts is defined)
+void nvim_paste_didset_options_sctx(void)
+{
+  didset_options_sctx((OPT_LOCAL | OPT_GLOBAL), p_paste_dep_opts);
+}
 
 void set_init_tablocal(void)
 {
@@ -2282,174 +2427,6 @@ static void apply_optionset_autocmd(OptIndex opt_idx, int opt_flags, OptVal oldv
 }
 
 
-
-
-/// Process the updated 'lines' or 'columns' option value.
-static const char *did_set_lines_or_columns(optset_T *args)
-{
-  // If the screen (shell) height has been changed, assume it is the
-  // physical screenheight.
-  if (p_lines != Rows || p_columns != Columns) {
-    // Changing the screen size is not allowed while updating the screen.
-    if (updating_screen) {
-      OptVal oldval = (OptVal){ .type = kOptValTypeNumber, .data = args->os_oldval };
-      set_option_varp(args->os_idx, args->os_varp, oldval, false);
-    } else if (full_screen) {
-      screen_resize((int)p_columns, (int)p_lines);
-    } else {
-      // TODO(bfredl): is this branch ever needed?
-      // Postpone the resizing; check the size and cmdline position for
-      // messages.
-      Rows = (int)p_lines;
-      Columns = (int)p_columns;
-      check_screensize();
-      int new_row = (int)(Rows - MAX(p_ch, 1));
-      if (cmdline_row > new_row && Rows > p_ch) {
-        assert(p_ch >= 0 && new_row <= INT_MAX);
-        cmdline_row = new_row;
-      }
-    }
-    if (p_window >= Rows || !option_was_set(kOptWindow)) {
-      p_window = Rows - 1;
-    }
-  }
-
-  // Adjust 'scrolljump' if needed.
-  if (p_sj >= Rows && full_screen) {
-    p_sj = Rows / 2;
-  }
-
-  return NULL;
-}
-
-/// Process the updated 'paste' option value.
-static const char *did_set_paste(optset_T *args FUNC_ATTR_UNUSED)
-{
-  static int old_p_paste = false;
-  static int save_sm = 0;
-  static int save_sta = 0;
-  static int save_ru = 0;
-  static int save_ri = 0;
-
-  if (p_paste) {
-    // Paste switched from off to on.
-    // Save the current values, so they can be restored later.
-    if (!old_p_paste) {
-      // save options for each buffer
-      FOR_ALL_BUFFERS(buf) {
-        buf->b_p_tw_nopaste = buf->b_p_tw;
-        buf->b_p_wm_nopaste = buf->b_p_wm;
-        buf->b_p_sts_nopaste = buf->b_p_sts;
-        buf->b_p_ai_nopaste = buf->b_p_ai;
-        buf->b_p_et_nopaste = buf->b_p_et;
-        if (buf->b_p_vsts_nopaste) {
-          xfree(buf->b_p_vsts_nopaste);
-        }
-        buf->b_p_vsts_nopaste = buf->b_p_vsts && buf->b_p_vsts != empty_string_option
-                                ? xstrdup(buf->b_p_vsts)
-                                : NULL;
-      }
-
-      // save global options
-      save_sm = p_sm;
-      save_sta = p_sta;
-      save_ru = p_ru;
-      save_ri = p_ri;
-      // save global values for local buffer options
-      p_ai_nopaste = p_ai;
-      p_et_nopaste = p_et;
-      p_sts_nopaste = p_sts;
-      p_tw_nopaste = p_tw;
-      p_wm_nopaste = p_wm;
-      if (p_vsts_nopaste) {
-        xfree(p_vsts_nopaste);
-      }
-      p_vsts_nopaste = p_vsts && p_vsts != empty_string_option ? xstrdup(p_vsts) : NULL;
-    }
-
-    // Always set the option values, also when 'paste' is set when it is
-    // already on.
-    // set options for each buffer
-    FOR_ALL_BUFFERS(buf) {
-      buf->b_p_tw = 0;              // textwidth is 0
-      buf->b_p_wm = 0;              // wrapmargin is 0
-      buf->b_p_sts = 0;             // softtabstop is 0
-      buf->b_p_ai = 0;              // no auto-indent
-      buf->b_p_et = 0;              // no expandtab
-      if (buf->b_p_vsts) {
-        free_string_option(buf->b_p_vsts);
-      }
-      buf->b_p_vsts = empty_string_option;
-      XFREE_CLEAR(buf->b_p_vsts_array);
-    }
-
-    // set global options
-    p_sm = 0;                       // no showmatch
-    p_sta = 0;                      // no smarttab
-    if (p_ru) {
-      status_redraw_all();          // redraw to remove the ruler
-    }
-    p_ru = 0;                       // no ruler
-    p_ri = 0;                       // no reverse insert
-    // set global values for local buffer options
-    p_tw = 0;
-    p_wm = 0;
-    p_sts = 0;
-    p_ai = 0;
-    p_et = 0;
-    if (p_vsts) {
-      free_string_option(p_vsts);
-    }
-    p_vsts = empty_string_option;
-  } else if (old_p_paste) {
-    // Paste switched from on to off: Restore saved values.
-
-    // restore options for each buffer
-    FOR_ALL_BUFFERS(buf) {
-      buf->b_p_tw = buf->b_p_tw_nopaste;
-      buf->b_p_wm = buf->b_p_wm_nopaste;
-      buf->b_p_sts = buf->b_p_sts_nopaste;
-      buf->b_p_ai = buf->b_p_ai_nopaste;
-      buf->b_p_et = buf->b_p_et_nopaste;
-      if (buf->b_p_vsts) {
-        free_string_option(buf->b_p_vsts);
-      }
-      buf->b_p_vsts = buf->b_p_vsts_nopaste ? xstrdup(buf->b_p_vsts_nopaste) : empty_string_option;
-      xfree(buf->b_p_vsts_array);
-      if (buf->b_p_vsts && buf->b_p_vsts != empty_string_option) {
-        tabstop_set(buf->b_p_vsts, &buf->b_p_vsts_array);
-      } else {
-        buf->b_p_vsts_array = NULL;
-      }
-    }
-
-    // restore global options
-    p_sm = save_sm;
-    p_sta = save_sta;
-    if (p_ru != save_ru) {
-      status_redraw_all();          // redraw to draw the ruler
-    }
-    p_ru = save_ru;
-    p_ri = save_ri;
-    // set global values for local buffer options
-    p_ai = p_ai_nopaste;
-    p_et = p_et_nopaste;
-    p_sts = p_sts_nopaste;
-    p_tw = p_tw_nopaste;
-    p_wm = p_wm_nopaste;
-    if (p_vsts) {
-      free_string_option(p_vsts);
-    }
-    p_vsts = p_vsts_nopaste ? xstrdup(p_vsts_nopaste) : empty_string_option;
-  }
-
-  old_p_paste = p_paste;
-
-  // Remember where the dependent options were reset
-  didset_options_sctx((OPT_LOCAL | OPT_GLOBAL), p_paste_dep_opts);
-
-  return NULL;
-}
 
 
 /// Process the new global 'undolevels' option value.
