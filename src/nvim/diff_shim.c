@@ -97,6 +97,7 @@ extern int rs_xdiff_out(int start_a, int count_a, int start_b, int count_b, void
 extern void rs_f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void rs_nv_diffgetput(bool put, size_t count);
 extern void rs_ex_diffthis(exarg_T *eap);
+extern void rs_f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -1839,88 +1840,10 @@ void f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rs_f_diff_filler(argvars, rettv, fptr);
 }
 
-/// "diff_hlID()" function
+/// "diff_hlID()" function -- thin wrapper calling Rust rs_f_diff_hlID.
 void f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  static linenr_T prev_lnum = 0;
-  static varnumber_T changedtick = 0;
-  static int fnum = 0;
-  static int prev_diff_flags = 0;
-  static int change_start = 0;
-  static int change_end = 0;
-  static hlf_T hlID = (hlf_T)0;
-
-  diffline_T diffline = { 0 };
-  // Remember the results if using simple since it's recalculated per
-  // call. Otherwise just call diff_find_change() every time since
-  // internally the result is cached internally.
-  const bool cache_results = !(diff_flags & ALL_INLINE_DIFF);
-
-  linenr_T lnum = tv_get_lnum(argvars);
-  if (lnum < 0) {       // ignore type error in {lnum} arg
-    lnum = 0;
-  }
-  if (!cache_results
-      || lnum != prev_lnum
-      || changedtick != buf_get_changedtick(curbuf)
-      || fnum != curbuf->b_fnum
-      || diff_flags != prev_diff_flags) {
-    // New line, buffer, change: need to get the values.
-    int linestatus = 0;
-    rs_diff_check_with_linestatus(curwin, lnum, &linestatus);
-    if (linestatus < 0) {
-      if (linestatus == -1) {
-        change_start = MAXCOL;
-        change_end = -1;
-        if (rs_diff_find_change(curwin, lnum, &diffline)) {
-          hlID = HLF_ADD;               // added line
-        } else {
-          hlID = HLF_CHD;               // changed line
-          if (diffline.num_changes > 0 && cache_results) {
-            change_start = diffline.changes[0].dc_start[diffline.bufidx];
-            change_end = diffline.changes[0].dc_end[diffline.bufidx];
-          }
-        }
-      } else {
-        hlID = HLF_ADD;         // added line
-      }
-    } else {
-      hlID = (hlf_T)0;
-    }
-
-    if (cache_results) {
-      prev_lnum = lnum;
-      changedtick = buf_get_changedtick(curbuf);
-      fnum = curbuf->b_fnum;
-      prev_diff_flags = diff_flags;
-    }
-  }
-
-  if (hlID == HLF_CHD || hlID == HLF_TXD) {
-    int col = (int)tv_get_number(&argvars[1]) - 1;  // Ignore type error in {col}.
-    if (cache_results) {
-      if (col >= change_start && col < change_end) {
-        hlID = HLF_TXD;  // Changed text.
-      } else {
-        hlID = HLF_CHD;  // Changed line.
-      }
-    } else {
-      hlID = HLF_CHD;
-      for (int i = 0; i < diffline.num_changes; i++) {
-        bool added = rs_diff_change_parse(&diffline, &diffline.changes[i],
-                                       &change_start, &change_end);
-        if (col >= change_start && col < change_end) {
-          hlID = added ? HLF_TXA : HLF_TXD;
-          break;
-        }
-        if (col < change_start) {
-          // the remaining changes are past this column and not relevant
-          break;
-        }
-      }
-    }
-  }
-  rettv->vval.v_number = hlID;
+  rs_f_diff_hlID(argvars, rettv, fptr);
 }
 
 // Rust FFI accessor functions
@@ -2046,4 +1969,16 @@ linenr_T nvim_diff_tv_get_lnum(typval_T *argvars) { return tv_get_lnum(argvars);
 void nvim_vim_beep_operator(void) { vim_beep(kOptBoFlagOperator); }
 void nvim_diff_win_options(win_T *wp, bool addbuf) { diff_win_options(wp, addbuf); }
 void nvim_call_ex_diffgetput(int cmdidx, const char *arg, int addr_count, linenr_T line1, linenr_T line2) { exarg_T ea; CLEAR_FIELD(ea); ea.cmdidx = (cmdidx_T)cmdidx; ea.arg = (char *)arg; ea.addr_count = addr_count; ea.line1 = line1; ea.line2 = line2; ex_diffgetput(&ea); }
+// Phase 3 accessors: f_diff_hlID
+int64_t nvim_curbuf_changedtick_i64(void) { return (int64_t)buf_get_changedtick(curbuf); }
+int nvim_diff_tv_get_number_idx(typval_T *argvars, int idx) { return (int)tv_get_number(&argvars[idx]); }
+int nvim_diff_hlf_add(void) { return (int)HLF_ADD; }
+int nvim_diff_hlf_chd(void) { return (int)HLF_CHD; }
+int nvim_diff_hlf_txd(void) { return (int)HLF_TXD; }
+int nvim_diff_hlf_txa(void) { return (int)HLF_TXA; }
+int nvim_diff_diffline_num_changes(diffline_T *dl) { return dl ? dl->num_changes : 0; }
+int nvim_diff_diffline_bufidx(diffline_T *dl) { return dl ? dl->bufidx : 0; }
+diffline_change_T *nvim_diff_diffline_get_change(diffline_T *dl, int i) { if (!dl || i < 0 || i >= dl->num_changes) { return NULL; } return &dl->changes[i]; }
+colnr_T nvim_diff_change_dc_start(diffline_change_T *dc, int idx) { if (!dc || idx < 0 || idx >= DB_COUNT) { return 0; } return dc->dc_start[idx]; }
+colnr_T nvim_diff_change_dc_end(diffline_change_T *dc, int idx) { if (!dc || idx < 0 || idx >= DB_COUNT) { return 0; } return dc->dc_end[idx]; }
 

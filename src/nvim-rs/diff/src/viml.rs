@@ -35,6 +35,28 @@ extern "C" {
     fn nvim_get_curwin() -> WinHandle;
     fn rs_diff_check_fill(wp: WinHandle, lnum: LinenrT) -> c_int;
     fn nvim_fold_rettv_set_number(rettv: *mut c_void, nr: i64);
+
+    // Phase 3: f_diff_hlID accessors
+    fn nvim_get_diff_flags() -> c_int;
+    fn nvim_curbuf_changedtick_i64() -> i64;
+    fn nvim_curbuf_fnum() -> c_int;
+    fn nvim_diff_tv_get_number_idx(argvars: *mut c_void, idx: c_int) -> c_int;
+    fn nvim_diff_hlf_add() -> c_int;
+    fn nvim_diff_hlf_chd() -> c_int;
+    fn nvim_diff_hlf_txd() -> c_int;
+    fn nvim_diff_hlf_txa() -> c_int;
+    fn nvim_diff_diffline_get_change(dl: *mut c_void, i: c_int) -> *mut c_void;
+    fn nvim_diff_change_dc_start(dc: *mut c_void, idx: c_int) -> c_int;
+    fn nvim_diff_change_dc_end(dc: *mut c_void, idx: c_int) -> c_int;
+    fn rs_diff_check_with_linestatus(wp: WinHandle, lnum: LinenrT, linestatus: *mut c_int)
+        -> c_int;
+    fn rs_diff_find_change(wp: WinHandle, lnum: LinenrT, diffline: *mut c_void) -> bool;
+    fn rs_diff_change_parse(
+        diffline: *mut c_void,
+        change: *mut c_void,
+        change_start: *mut c_int,
+        change_end: *mut c_int,
+    ) -> bool;
 }
 
 // =============================================================================
@@ -400,6 +422,27 @@ pub unsafe extern "C" fn rs_diff_get_line_vim_info(
 }
 
 // =============================================================================
+// diffline_T layout (matches C buffer_defs.h DifflineRepr)
+// =============================================================================
+
+/// Mirror of C diffline_T struct layout.
+/// Must match: { diffline_change_T *changes; int num_changes; int bufidx; int lineoff; }
+#[repr(C)]
+struct DifflineRepr {
+    changes: *mut c_void,
+    num_changes: c_int,
+    bufidx: c_int,
+    lineoff: c_int,
+}
+
+// ALL_INLINE_DIFF flag (must match C definition in diff_shim.c)
+// ALL_INLINE_DIFF = DIFF_INLINE_CHAR | DIFF_INLINE_WORD = 0x8000 | 0x10000
+const ALL_INLINE_DIFF: c_int = 0x18000;
+
+// MAXCOL value (matches C pos_defs.h)
+const MAXCOL: c_int = 0x7fff_ffff;
+
+// =============================================================================
 // Phase 1 Migrations: xdiff_out callback and f_diff_filler
 // =============================================================================
 
@@ -444,6 +487,146 @@ pub unsafe extern "C" fn rs_f_diff_filler(
     let lnum = nvim_diff_tv_get_lnum(argvars);
     let fill = rs_diff_check_fill(curwin, lnum);
     nvim_fold_rettv_set_number(rettv, i64::from(fill.max(0)));
+}
+
+// =============================================================================
+// Phase 3 Migration: f_diff_hlID
+// =============================================================================
+
+// Static cache for f_diff_hlID -- mirrors C static local variables.
+// SAFETY: Neovim is single-threaded; these are equivalent to C file-scope statics.
+static mut HLID_PREV_LNUM: LinenrT = 0;
+static mut HLID_CHANGEDTICK: i64 = 0;
+static mut HLID_FNUM: c_int = 0;
+static mut HLID_PREV_DIFF_FLAGS: c_int = 0;
+static mut HLID_CHANGE_START: c_int = 0;
+static mut HLID_CHANGE_END: c_int = 0;
+static mut HLID_VALUE: c_int = 0;
+
+/// VimL diff_hlID() function handler -- Rust implementation.
+///
+/// Contains static caching state matching the original C statics.
+///
+/// # Safety
+/// Accesses global state and static mut variables. Single-threaded Neovim only.
+#[no_mangle]
+#[allow(static_mut_refs)]
+pub unsafe extern "C" fn rs_f_diff_hlID(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let hlf_add = nvim_diff_hlf_add();
+    let hlf_chd = nvim_diff_hlf_chd();
+    let hlf_text_changed = nvim_diff_hlf_txd();
+    let hlf_text_added = nvim_diff_hlf_txa();
+
+    let diff_flags = nvim_get_diff_flags();
+    // cache_results = !(diff_flags & ALL_INLINE_DIFF)
+    let cache_results = (diff_flags & ALL_INLINE_DIFF) == 0;
+
+    let mut lnum = nvim_diff_tv_get_lnum(argvars);
+    if lnum < 0 {
+        lnum = 0;
+    }
+
+    let curwin = nvim_get_curwin();
+    let cur_changedtick = nvim_curbuf_changedtick_i64();
+    let cur_fnum = nvim_curbuf_fnum();
+
+    let need_recompute = !cache_results
+        || lnum != HLID_PREV_LNUM
+        || cur_changedtick != HLID_CHANGEDTICK
+        || cur_fnum != HLID_FNUM
+        || diff_flags != HLID_PREV_DIFF_FLAGS;
+
+    // diffline is allocated on the stack for use in both the recompute branch
+    // and the non-cache HLF_CHD column-check branch below.
+    let mut diffline = DifflineRepr {
+        changes: std::ptr::null_mut(),
+        num_changes: 0,
+        bufidx: 0,
+        lineoff: 0,
+    };
+    let diffline_ptr: *mut c_void = std::ptr::addr_of_mut!(diffline).cast();
+
+    if need_recompute {
+        let mut linestatus: c_int = 0;
+        rs_diff_check_with_linestatus(curwin, lnum, std::ptr::addr_of_mut!(linestatus));
+
+        if linestatus < 0 {
+            if linestatus == -1 {
+                HLID_CHANGE_START = MAXCOL;
+                HLID_CHANGE_END = -1;
+                if rs_diff_find_change(curwin, lnum, diffline_ptr) {
+                    HLID_VALUE = hlf_add; // added line
+                } else {
+                    HLID_VALUE = hlf_chd; // changed line
+                    if diffline.num_changes > 0 && cache_results {
+                        let bufidx = diffline.bufidx;
+                        let change0 = nvim_diff_diffline_get_change(diffline_ptr, 0);
+                        if !change0.is_null() {
+                            HLID_CHANGE_START = nvim_diff_change_dc_start(change0, bufidx);
+                            HLID_CHANGE_END = nvim_diff_change_dc_end(change0, bufidx);
+                        }
+                    }
+                }
+            } else {
+                HLID_VALUE = hlf_add; // added line (filler)
+            }
+        } else {
+            HLID_VALUE = 0; // no diff
+        }
+
+        if cache_results {
+            HLID_PREV_LNUM = lnum;
+            HLID_CHANGEDTICK = cur_changedtick;
+            HLID_FNUM = cur_fnum;
+            HLID_PREV_DIFF_FLAGS = diff_flags;
+        }
+    }
+
+    if HLID_VALUE == hlf_chd || HLID_VALUE == hlf_text_changed {
+        let col = nvim_diff_tv_get_number_idx(argvars, 1) - 1;
+
+        if cache_results {
+            if col >= HLID_CHANGE_START && col < HLID_CHANGE_END {
+                HLID_VALUE = hlf_text_changed; // Changed text
+            } else {
+                HLID_VALUE = hlf_chd; // Changed line
+            }
+        } else {
+            // Non-cache path: iterate over diffline.changes.
+            // diffline was populated above in the need_recompute block
+            // (since !cache_results implies need_recompute=true).
+            HLID_VALUE = hlf_chd;
+            let num_changes = diffline.num_changes;
+            for i in 0..num_changes {
+                let change = nvim_diff_diffline_get_change(diffline_ptr, i);
+                if change.is_null() {
+                    break;
+                }
+                let mut cs: c_int = 0;
+                let mut ce: c_int = 0;
+                let added = rs_diff_change_parse(
+                    diffline_ptr,
+                    change,
+                    std::ptr::addr_of_mut!(cs),
+                    std::ptr::addr_of_mut!(ce),
+                );
+                if col >= cs && col < ce {
+                    HLID_VALUE = if added { hlf_text_added } else { hlf_text_changed };
+                    break;
+                }
+                if col < cs {
+                    // remaining changes are past this column
+                    break;
+                }
+            }
+        }
+    }
+
+    nvim_fold_rettv_set_number(rettv, i64::from(HLID_VALUE));
 }
 
 // =============================================================================
