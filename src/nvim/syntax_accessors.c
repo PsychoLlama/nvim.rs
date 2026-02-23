@@ -200,6 +200,11 @@ extern void rs_syn_cmd_clear(exarg_T *eap, int syncing);
 // Rust include command FFI declaration
 extern void rs_syn_cmd_include(exarg_T *eap, int syncing);
 
+// Rust simple subcommand FFI declarations (Phase 4)
+extern void rs_syn_cmd_reset(exarg_T *eap, int syncing);
+extern void rs_syn_cmd_onoff(exarg_T *eap, const char *name, int syncing);
+extern void rs_syn_maybe_enable(void);
+
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
 
@@ -1074,52 +1079,37 @@ static void syn_clear_one(const int id, const bool syncing)
 // Handle ":syntax on" command.
 static void syn_cmd_on(exarg_T *eap, int syncing)
 {
-  syn_cmd_onoff(eap, "syntax");
+  rs_syn_cmd_onoff(eap, "syntax", syncing);
 }
 
 // Handle ":syntax reset" command.
 // It actually resets highlighting, not syntax.
 static void syn_cmd_reset(exarg_T *eap, int syncing)
 {
-  eap->nextcmd = check_nextcmd(eap->arg);
-  if (!eap->skip) {
-    init_highlight(true, true);
-  }
+  rs_syn_cmd_reset(eap, syncing);
 }
 
 // Handle ":syntax manual" command.
 static void syn_cmd_manual(exarg_T *eap, int syncing)
 {
-  syn_cmd_onoff(eap, "manual");
+  rs_syn_cmd_onoff(eap, "manual", syncing);
 }
 
 // Handle ":syntax off" command.
 static void syn_cmd_off(exarg_T *eap, int syncing)
 {
-  syn_cmd_onoff(eap, "nosyntax");
+  rs_syn_cmd_onoff(eap, "nosyntax", syncing);
 }
 
 static void syn_cmd_onoff(exarg_T *eap, char *name)
   FUNC_ATTR_NONNULL_ALL
 {
-  eap->nextcmd = check_nextcmd(eap->arg);
-  if (!eap->skip) {
-    did_syntax_onoff = true;
-    char buf[100];
-    memcpy(buf, "so ", 4);
-    vim_snprintf(buf + 3, sizeof(buf) - 3, SYNTAX_FNAME, name);
-    do_cmdline_cmd(buf);
-  }
+  rs_syn_cmd_onoff(eap, name, false);
 }
 
 void syn_maybe_enable(void)
 {
-  if (!did_syntax_onoff) {
-    exarg_T ea;
-    ea.arg = "";
-    ea.skip = false;
-    syn_cmd_on(&ea, false);
-  }
+  rs_syn_maybe_enable();
 }
 
 /// Handle ":syntax [list]" command: list current syntax words.
@@ -4691,4 +4681,54 @@ int nvim_syn_include_source(exarg_T *eap, int use_source)
     }
   }
   return 0;
+}
+
+// =============================================================================
+// Phase 4 accessors: simple subcommands and syn_maybe_enable migration
+// =============================================================================
+
+/// Set eap->nextcmd = check_nextcmd(arg) (accessor for rs_syn_cmd_reset).
+void nvim_syn_check_nextcmd(exarg_T *eap, char *arg)
+{
+  eap->nextcmd = check_nextcmd(arg);
+}
+
+/// Wrap init_highlight for rs_syn_cmd_reset.
+void nvim_syn_init_highlight(int reset, int init)
+{
+  init_highlight((bool)reset, (bool)init);
+}
+
+/// Getter for did_syntax_onoff.
+int nvim_syn_get_did_syntax_onoff(void)
+{
+  return did_syntax_onoff ? 1 : 0;
+}
+
+/// Execute the on/off/manual logic: set did_syntax_onoff, build "so ..." cmd, run it.
+void nvim_syn_do_onoff(exarg_T *eap, const char *name)
+{
+  eap->nextcmd = check_nextcmd(eap->arg);
+  if (!eap->skip) {
+    did_syntax_onoff = true;
+    char buf[100];
+    memcpy(buf, "so ", 4);
+    vim_snprintf(buf + 3, sizeof(buf) - 3, SYNTAX_FNAME, name);
+    do_cmdline_cmd(buf);
+  }
+}
+
+/// Enable syntax (syn_maybe_enable helper): create minimal exarg_T and call syn_cmd_on.
+void nvim_syn_do_maybe_enable(void)
+{
+  exarg_T ea;
+  ea.arg = "";
+  ea.skip = false;
+  syn_cmd_on(&ea, false);
+}
+
+/// Set syn_cmdlinep from eap->cmdlinep.
+void nvim_syn_set_cmdlinep_from_eap(exarg_T *eap)
+{
+  syn_cmdlinep = eap->cmdlinep;
 }

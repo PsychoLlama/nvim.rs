@@ -928,6 +928,66 @@ pub unsafe extern "C" fn rs_syn_cmd_foldlevel(
     -1
 }
 
+// =============================================================================
+// Phase 4: Simple subcommands and syn_maybe_enable
+// =============================================================================
+
+extern "C" {
+    // EAP accessors
+    fn nvim_syn_get_eap_arg(eap: *const c_void) -> *mut c_char;
+    fn nvim_syn_get_eap_skip(eap: *const c_void) -> c_int;
+
+    // check_nextcmd accessor (sets eap->nextcmd = check_nextcmd(arg))
+    fn nvim_syn_check_nextcmd(eap: *mut c_void, arg: *mut c_char);
+
+    // Syntax on/off/manual: sets did_syntax_onoff, builds "so ..." command, runs it
+    fn nvim_syn_do_onoff(eap: *mut c_void, name: *const c_char);
+
+    // Reset: calls init_highlight(true, true)
+    fn nvim_syn_init_highlight(reset: c_int, init: c_int);
+
+    // did_syntax_onoff flag getter
+    fn nvim_syn_get_did_syntax_onoff() -> c_int;
+
+    // Create minimal exarg_T and run syn_cmd_on (for syn_maybe_enable)
+    fn nvim_syn_do_maybe_enable();
+}
+
+/// Handle `:syntax reset` command: resets highlighting.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_reset(eap: *mut c_void, _syncing: c_int) {
+    let arg = nvim_syn_get_eap_arg(eap);
+    nvim_syn_check_nextcmd(eap, arg);
+    if nvim_syn_get_eap_skip(eap) == 0 {
+        nvim_syn_init_highlight(1, 1);
+    }
+}
+
+/// Handle `:syntax on`, `:syntax off`, `:syntax manual` commands.
+///
+/// `name` must be a NUL-terminated C string: "syntax", "nosyntax", or "manual".
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_onoff(eap: *mut c_void, name: *const c_char, _syncing: c_int) {
+    nvim_syn_do_onoff(eap, name);
+}
+
+/// Enable syntax if not already done (`syn_maybe_enable`).
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_maybe_enable() {
+    if nvim_syn_get_did_syntax_onoff() == 0 {
+        nvim_syn_do_maybe_enable();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
