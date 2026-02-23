@@ -271,7 +271,9 @@ impl FoldRecursionState {
 
 use nvim_buffer::BufHandle;
 
-use crate::level::FoldLevelResult;
+use crate::level::{
+    foldlevel_diff_result, foldlevel_expr_result, foldlevel_indent_result, foldlevel_syntax_result,
+};
 use crate::{fold_flags, tristate, FoldHandle};
 
 extern "C" {
@@ -301,19 +303,6 @@ extern "C" {
     // Fold operations
     fn nvim_changed_window_setting(wp: WinHandle);
     fn nvim_redraw_win_range_later(wp: WinHandle, top: LinenrT, bot: LinenrT);
-
-    // Level getters (call C implementations)
-    fn nvim_foldlevelIndent(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
-    fn nvim_foldlevelDiff(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
-
-    // Expr and Syntax level getters (call C implementations)
-    fn nvim_foldlevelExpr(
-        wp: WinHandle,
-        lnum: LinenrT,
-        off: LinenrT,
-        current_lvl: c_int,
-    ) -> FoldLevelResult;
-    fn nvim_foldlevelSyntax(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
 
     // Fold static variable accessors
     #[allow(dead_code)]
@@ -401,7 +390,7 @@ impl FlineT {
 
 /// Call the indent level getter
 fn call_indent_level_getter(flp: &mut FlineT) {
-    let result = unsafe { nvim_foldlevelIndent(flp.wp, flp.lnum, flp.off) };
+    let result = foldlevel_indent_result(flp.wp, flp.lnum, flp.off);
     flp.lvl = result.lvl;
     flp.lvl_next = result.lvl_next;
     flp.start = result.start;
@@ -412,7 +401,7 @@ fn call_indent_level_getter(flp: &mut FlineT) {
 
 /// Call the diff level getter
 fn call_diff_level_getter(flp: &mut FlineT) {
-    let result = unsafe { nvim_foldlevelDiff(flp.wp, flp.lnum, flp.off) };
+    let result = foldlevel_diff_result(flp.wp, flp.lnum, flp.off);
     flp.lvl = result.lvl;
     flp.lvl_next = result.lvl_next;
     flp.start = result.start;
@@ -459,17 +448,17 @@ fn call_level_getter(flp: &mut FlineT, kind: LevelGetterKind) {
 /// The expr level getter modifies `end` field (for 's' and '<' codes).
 /// It also requires the current level for 'a' and 's' codes.
 fn call_expr_level_getter(flp: &mut FlineT) {
-    let result = unsafe { nvim_foldlevelExpr(flp.wp, flp.lnum, flp.off, flp.lvl) };
+    let result = foldlevel_expr_result(flp.wp, flp.lnum, flp.off, flp.lvl);
+    flp.had_end = flp.end;
     flp.lvl = result.lvl;
     flp.lvl_next = result.lvl_next;
     flp.start = result.start;
-    flp.had_end = flp.end;
     flp.end = result.end; // expr sets end for 's' and '<' codes
 }
 
 /// Call the syntax level getter
 fn call_syntax_level_getter(flp: &mut FlineT) {
-    let result = unsafe { nvim_foldlevelSyntax(flp.wp, flp.lnum, flp.off) };
+    let result = foldlevel_syntax_result(flp.wp, flp.lnum, flp.off);
     flp.lvl = result.lvl;
     flp.lvl_next = result.lvl_next;
     flp.start = result.start;

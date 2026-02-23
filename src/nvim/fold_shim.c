@@ -538,136 +538,11 @@ char *get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume, foldinfo_T foldinfo
   return text;
 }
 
-// foldlevelIndent() {{{2
-/// Low level function to get the foldlevel for the "indent" method.
-/// Doesn't use any caching.
-///
-/// @return  a level of -1 if the foldlevel depends on surrounding lines.
-static void foldlevelIndent(fline_T *flp)
-{
-  linenr_T lnum = flp->lnum + flp->off;
+// foldlevelIndent() -- migrated to Rust (level.rs: foldlevel_indent_result)
 
-  buf_T *buf = flp->wp->w_buffer;
-  char *s = skipwhite(ml_get_buf(buf, lnum));
+// foldlevelDiff() -- migrated to Rust (level.rs: foldlevel_diff_result)
 
-  // empty line or lines starting with a character in 'foldignore': level
-  // depends on surrounding lines
-  if (*s == NUL || vim_strchr(flp->wp->w_p_fdi, (uint8_t)(*s)) != NULL) {
-    // first and last line can't be undefined, use level 0
-    flp->lvl = (lnum == 1 || lnum == buf->b_ml.ml_line_count) ? 0 : -1;
-  } else {
-    flp->lvl = get_indent_buf(buf, lnum) / get_sw_value(buf);
-  }
-  flp->lvl = MIN(flp->lvl, (int)MAX(0, flp->wp->w_p_fdn));
-}
-
-// foldlevelDiff() {{{2
-/// Low level function to get the foldlevel for the "diff" method.
-/// Doesn't use any caching.
-static void foldlevelDiff(fline_T *flp)
-{
-  flp->lvl = (rs_diff_infold(flp->wp, flp->lnum + flp->off)) ? 1 : 0;
-}
-
-// foldlevelExpr() {{{2
-/// Low level function to get the foldlevel for the "expr" method.
-/// Doesn't use any caching.
-///
-/// @return  a level of -1 if the foldlevel depends on surrounding lines.
-static void foldlevelExpr(fline_T *flp)
-{
-  linenr_T lnum = flp->lnum + flp->off;
-
-  win_T *win = curwin;
-  curwin = flp->wp;
-  curbuf = flp->wp->w_buffer;
-  set_vim_var_nr(VV_LNUM, (varnumber_T)lnum);
-
-  flp->start = 0;
-  flp->had_end = flp->end;
-  flp->end = MAX_LEVEL + 1;
-  if (lnum <= 1) {
-    flp->lvl = 0;
-  }
-
-  // KeyTyped may be reset to 0 when calling a function which invokes
-  // do_cmdline().  To make 'foldopen' work correctly restore KeyTyped.
-  const bool save_keytyped = KeyTyped;
-
-  int c;
-  const int n = eval_foldexpr(flp->wp, &c);
-  KeyTyped = save_keytyped;
-
-  switch (c) {
-  // "a1", "a2", .. : add to the fold level
-  case 'a':
-    if (flp->lvl >= 0) {
-      flp->lvl += n;
-      flp->lvl_next = flp->lvl;
-    }
-    flp->start = n;
-    break;
-
-  // "s1", "s2", .. : subtract from the fold level
-  case 's':
-    if (flp->lvl >= 0) {
-      if (n > flp->lvl) {
-        flp->lvl_next = 0;
-      } else {
-        flp->lvl_next = flp->lvl - n;
-      }
-      flp->end = flp->lvl_next + 1;
-    }
-    break;
-
-  // ">1", ">2", .. : start a fold with a certain level
-  case '>':
-    flp->lvl = n;
-    flp->lvl_next = n;
-    flp->start = 1;
-    break;
-
-  // "<1", "<2", .. : end a fold with a certain level
-  case '<':
-    // To prevent an unexpected start of a new fold, the next
-    // level must not exceed the level of the current fold.
-    flp->lvl_next = MIN(flp->lvl, n - 1);
-    flp->end = n;
-    break;
-
-  // "=": No change in level
-  case '=':
-    flp->lvl_next = flp->lvl;
-    break;
-
-  // "-1", "0", "1", ..: set fold level
-  default:
-    if (n < 0) {
-      // Use the current level for the next line, so that "a1"
-      // will work there.
-      flp->lvl_next = flp->lvl;
-    } else {
-      flp->lvl_next = n;
-    }
-    flp->lvl = n;
-    break;
-  }
-
-  // If the level is unknown for the first or the last line in the file, use
-  // level 0.
-  if (flp->lvl < 0) {
-    if (lnum <= 1) {
-      flp->lvl = 0;
-      flp->lvl_next = 0;
-    }
-    if (lnum == curbuf->b_ml.ml_line_count) {
-      flp->lvl_next = 0;
-    }
-  }
-
-  curwin = win;
-  curbuf = curwin->w_buffer;
-}
+// foldlevelExpr() -- migrated to Rust (level.rs: foldlevel_expr_result)
 
 // parseMarker() {{{2
 /// Parse 'foldmarker' and set "foldendmarker", "foldstartmarkerlen" and
@@ -680,24 +555,7 @@ static void parseMarker(win_T *wp)
   foldendmarkerlen = strlen(foldendmarker);
 }
 
-// foldlevelSyntax() {{{2
-/// Low level function to get the foldlevel for the "syntax" method.
-/// Doesn't use any caching.
-static void foldlevelSyntax(fline_T *flp)
-{
-  linenr_T lnum = flp->lnum + flp->off;
-
-  // Use the maximum fold level at the start of this line and the next.
-  flp->lvl = syn_get_foldlevel(flp->wp, lnum);
-  flp->start = 0;
-  if (lnum < flp->wp->w_buffer->b_ml.ml_line_count) {
-    int n = syn_get_foldlevel(flp->wp, lnum + 1);
-    if (n > flp->lvl) {
-      flp->start = n - flp->lvl;        // fold(s) start here
-      flp->lvl = n;
-    }
-  }
-}
+// foldlevelSyntax() -- migrated to Rust (level.rs: foldlevel_syntax_result)
 
 // functions for storing the fold state in a View {{{1
 // put_folds() {{{2
@@ -1417,102 +1275,7 @@ void nvim_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot)
   redraw_win_range_later(wp, top, bot);
 }
 
-/// Wrapper for foldlevelIndent that returns the FoldLevelResult.
-FoldLevelResult_C nvim_foldlevelIndent(win_T *wp, linenr_T lnum, linenr_T off)
-{
-  fline_T flp;
-  flp.wp = wp;
-  flp.lnum = lnum;
-  flp.off = off;
-  flp.lvl = 0;
-  flp.lvl_next = -1;
-  flp.start = 0;
-  flp.end = MAX_LEVEL + 1;
-  flp.had_end = MAX_LEVEL + 1;
-
-  foldlevelIndent(&flp);
-
-  FoldLevelResult_C result = {
-    .lvl = flp.lvl,
-    .lvl_next = flp.lvl_next,
-    .start = flp.start,
-    .end = flp.end,
-  };
-  return result;
-}
-
-/// Wrapper for foldlevelDiff that returns the FoldLevelResult.
-FoldLevelResult_C nvim_foldlevelDiff(win_T *wp, linenr_T lnum, linenr_T off)
-{
-  fline_T flp;
-  flp.wp = wp;
-  flp.lnum = lnum;
-  flp.off = off;
-  flp.lvl = 0;
-  flp.lvl_next = -1;
-  flp.start = 0;
-  flp.end = MAX_LEVEL + 1;
-  flp.had_end = MAX_LEVEL + 1;
-
-  foldlevelDiff(&flp);
-
-  FoldLevelResult_C result = {
-    .lvl = flp.lvl,
-    .lvl_next = flp.lvl_next,
-    .start = flp.start,
-    .end = flp.end,
-  };
-  return result;
-}
-
-/// Wrapper for foldlevelExpr that returns the FoldLevelResult.
-/// current_lvl must be passed in (for 'a' and 's' codes that modify the level).
-FoldLevelResult_C nvim_foldlevelExpr(win_T *wp, linenr_T lnum, linenr_T off, int current_lvl)
-{
-  fline_T flp;
-  flp.wp = wp;
-  flp.lnum = lnum;
-  flp.off = off;
-  flp.lvl = current_lvl;
-  flp.lvl_next = -1;
-  flp.start = 0;
-  flp.end = MAX_LEVEL + 1;
-  flp.had_end = MAX_LEVEL + 1;
-
-  foldlevelExpr(&flp);
-
-  FoldLevelResult_C result = {
-    .lvl = flp.lvl,
-    .lvl_next = flp.lvl_next,
-    .start = flp.start,
-    .end = flp.end,
-  };
-  return result;
-}
-
-/// Wrapper for foldlevelSyntax that returns the FoldLevelResult.
-FoldLevelResult_C nvim_foldlevelSyntax(win_T *wp, linenr_T lnum, linenr_T off)
-{
-  fline_T flp;
-  flp.wp = wp;
-  flp.lnum = lnum;
-  flp.off = off;
-  flp.lvl = 0;
-  flp.lvl_next = -1;
-  flp.start = 0;
-  flp.end = MAX_LEVEL + 1;
-  flp.had_end = MAX_LEVEL + 1;
-
-  foldlevelSyntax(&flp);
-
-  FoldLevelResult_C result = {
-    .lvl = flp.lvl,
-    .lvl_next = flp.lvl_next,
-    .start = flp.start,
-    .end = flp.end,
-  };
-  return result;
-}
+// nvim_foldlevelIndent/Diff/Expr/Syntax -- deleted (Rust calls level.rs directly)
 
 /// Wrapper for foldFind that returns index.
 /// Returns 1 if found, 0 if not found. Sets found_idx to the index.
@@ -1613,4 +1376,62 @@ char *nvim_fold_build_foldtext(const char *txt, const char *dashes, int count,
   *out_header_len = strlen(r);
   strcat(r, line_text);
   return r;
+}
+
+// ============================================================================
+// Accessors for Rust fold level calculation (Phase 1 migration)
+// ============================================================================
+
+/// Get the syntax fold level for a line (wrapper for syn_get_foldlevel).
+int nvim_syn_get_foldlevel(win_T *wp, linenr_T lnum)
+{
+  return syn_get_foldlevel(wp, lnum);
+}
+
+/// Evaluate 'foldexpr' for window wp at line v:lnum.
+/// Returns the numeric value; sets *out_char to the prefix character.
+int nvim_fold_eval_foldexpr(win_T *wp, int *out_char)
+{
+  return eval_foldexpr(wp, out_char);
+}
+
+/// Save curwin/curbuf and set them to wp/wp->w_buffer.
+/// Returns the old curwin pointer.
+win_T *nvim_fold_save_curwin(win_T *wp)
+{
+  win_T *saved = curwin;
+  curwin = wp;
+  curbuf = wp->w_buffer;
+  return saved;
+}
+
+/// Restore curwin/curbuf from saved_win.
+void nvim_fold_restore_curwin(win_T *saved_win)
+{
+  curwin = saved_win;
+  curbuf = curwin->w_buffer;
+}
+
+/// Get the current value of KeyTyped.
+int nvim_fold_get_keytyped(void)
+{
+  return (int)KeyTyped;
+}
+
+/// Set the KeyTyped global.
+void nvim_fold_set_keytyped(int val)
+{
+  KeyTyped = (bool)val;
+}
+
+/// Set v:lnum to lnum.
+void nvim_fold_set_vim_var_nr_lnum(linenr_T lnum)
+{
+  set_vim_var_nr(VV_LNUM, (varnumber_T)lnum);
+}
+
+/// Get curbuf's line count (used after curwin/curbuf have been set).
+linenr_T nvim_fold_get_curbuf_line_count_c(void)
+{
+  return curbuf->b_ml.ml_line_count;
 }
