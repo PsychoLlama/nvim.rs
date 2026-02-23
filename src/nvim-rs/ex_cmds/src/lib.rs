@@ -772,6 +772,30 @@ extern "C" {
     pub fn nvim_docmd_cmd_append() -> c_int;
     /// CMD_change constant accessor
     pub fn nvim_docmd_cmd_change() -> c_int;
+
+    // --- sub_joining_lines + sub_grow_buf FFI accessors ---
+    /// Get eap->skip flag.
+    pub fn nvim_exarg_get_skip(eap: *const ExArgHandle) -> c_int;
+    /// Set eap->flags.
+    pub fn nvim_exarg_set_flags(eap: *mut ExArgHandle, flags: c_int);
+    /// do_join wrapper (count lines, insert_space=false, save_undo=true, use_fo=false, setmark=true).
+    pub fn nvim_excmds_do_join(count: c_int) -> c_int;
+    /// Get sub_nsubs global.
+    pub fn nvim_excmds_get_sub_nsubs() -> c_int;
+    /// Set sub_nsubs global.
+    pub fn nvim_excmds_set_sub_nsubs(val: c_int);
+    /// Get sub_nlines global.
+    pub fn nvim_excmds_get_sub_nlines() -> c_int;
+    /// Set sub_nlines global.
+    pub fn nvim_excmds_set_sub_nlines(val: c_int);
+    /// Call do_sub_msg(count_only).
+    pub fn nvim_excmds_do_sub_msg(count_only: c_int) -> c_int;
+    /// Call ex_may_print(eap).
+    pub fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
+    /// Call save_re_pat(idx, pat, patlen, magic).
+    pub fn nvim_excmds_save_re_pat(idx: c_int, pat: *const c_char, patlen: usize, magic: c_int);
+    /// Call add_to_history(HIST_SEARCH, pat, patlen, true, NUL).
+    pub fn nvim_excmds_add_to_hist_search(pat: *const c_char, patlen: usize);
 }
 
 // =============================================================================

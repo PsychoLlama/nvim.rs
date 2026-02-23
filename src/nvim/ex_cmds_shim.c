@@ -386,6 +386,37 @@ char *nvim_excmds_get_arg_mut(exarg_T *eap) { return eap->arg; }
 // Get eap->cookie
 void *nvim_excmds_get_cookie(exarg_T *eap) { return eap->cookie; }
 
+// --- sub_joining_lines + sub_grow_buf FFI accessors ---
+// Get eap->skip
+int nvim_exarg_get_skip(exarg_T *eap) { return eap->skip; }
+// Set eap->flags
+void nvim_exarg_set_flags(exarg_T *eap, int flags) { eap->flags = flags; }
+// do_join wrapper (count, insert_space=false, save_undo=true, use_fo=false, setmark=true)
+int nvim_excmds_do_join(int count)
+{
+  return do_join((size_t)count, false, true, false, true);
+}
+// Get/set sub_nsubs global
+int nvim_excmds_get_sub_nsubs(void) { return sub_nsubs; }
+void nvim_excmds_set_sub_nsubs(int val) { sub_nsubs = val; }
+// Get/set sub_nlines global (linenr_T)
+int nvim_excmds_get_sub_nlines(void) { return (int)sub_nlines; }
+void nvim_excmds_set_sub_nlines(int val) { sub_nlines = (linenr_T)val; }
+// Call do_sub_msg
+bool nvim_excmds_do_sub_msg(bool count_only) { return do_sub_msg(count_only); }
+// Call ex_may_print
+void nvim_excmds_ex_may_print(exarg_T *eap) { ex_may_print(eap); }
+// Call save_re_pat
+void nvim_excmds_save_re_pat(int idx, const char *pat, size_t patlen, int magic)
+{
+  save_re_pat(idx, (char *)pat, patlen, magic);
+}
+// Call add_to_history(HIST_SEARCH, ...)
+void nvim_excmds_add_to_hist_search(const char *pat, size_t patlen)
+{
+  add_to_history(HIST_SEARCH, (char *)pat, patlen, true, NUL);
+}
+
 _Static_assert(ML_DEL_MESSAGE == 1, "ML_DEL_MESSAGE mismatch");
 
 // Verify sort-related constants for Rust
@@ -2282,107 +2313,28 @@ void sub_set_replacement(SubReplacementString sub)
   old_sub = sub;
 }
 
-/// Recognize ":%s/\n//" and turn it into a join command, which is much
-/// more efficient.
-///
-/// @param[in]  eap  Ex arguments
-/// @param[in]  pat  Search pattern
-/// @param[in]  sub  Replacement string
-/// @param[in]  cmd  Command from :s_flags
-/// @param[in]  save Save pattern to options, history
-///
-/// @returns true if :substitute can be replaced with a join command
+// sub_joining_lines and sub_grow_buf implemented in Rust.
+// See rs_sub_joining_lines and rs_sub_grow_buf in ex_cmds/src/substitute.rs.
+extern int rs_sub_joining_lines(exarg_T *eap, const char *pat, size_t patlen, const char *sub,
+                                const char *cmd, int save, int keeppatterns);
+extern char *rs_sub_grow_buf(char **new_start, int *new_start_len, int needed_len);
+
+/// Recognize ":%s/\n//" and turn it into a join command.
+/// Thin wrapper calling the Rust implementation.
 static bool sub_joining_lines(exarg_T *eap, char *pat, size_t patlen, const char *sub,
                               const char *cmd, bool save, bool keeppatterns)
   FUNC_ATTR_NONNULL_ARG(1, 4, 5)
 {
-  // TODO(vim): find a generic solution to make line-joining operations more
-  // efficient, avoid allocating a string that grows in size.
-  if (pat != NULL
-      && strcmp(pat, "\\n") == 0
-      && *sub == NUL
-      && (*cmd == NUL || (cmd[1] == NUL
-                          && (*cmd == 'g'
-                              || *cmd == 'l'
-                              || *cmd == 'p'
-                              || *cmd == '#')))) {
-    if (eap->skip) {
-      return true;
-    }
-    curwin->w_cursor.lnum = eap->line1;
-    if (*cmd == 'l') {
-      eap->flags = EXFLAG_LIST;
-    } else if (*cmd == '#') {
-      eap->flags = EXFLAG_NR;
-    } else if (*cmd == 'p') {
-      eap->flags = EXFLAG_PRINT;
-    }
-
-    // The number of lines joined is the number of lines in the range
-    linenr_T joined_lines_count = eap->line2 - eap->line1 + 1
-                                  // plus one extra line if not at the end of file.
-                                  + (eap->line2 < curbuf->b_ml.ml_line_count ? 1 : 0);
-    if (joined_lines_count > 1) {
-      do_join((size_t)joined_lines_count, false, true, false, true);
-      sub_nsubs = joined_lines_count - 1;
-      sub_nlines = 1;
-      do_sub_msg(false);
-      ex_may_print(eap);
-    }
-
-    if (save) {
-      if (!keeppatterns) {
-        save_re_pat(RE_SUBST, pat, patlen, rs_magic_isset());
-      }
-      // put pattern in history
-      add_to_history(HIST_SEARCH, pat, patlen, true, NUL);
-    }
-
-    return true;
-  }
-
-  return false;
+  return rs_sub_joining_lines(eap, pat, patlen, sub, cmd, save ? 1 : 0,
+                              keeppatterns ? 1 : 0) != 0;
 }
 
 /// Allocate memory to store the replacement text for :substitute.
-///
-/// Slightly more memory that is strictly necessary is allocated to reduce the
-/// frequency of memory (re)allocation.
-///
-/// @param[in,out]  new_start      pointer to the memory for the replacement text
-/// @param[in,out]  new_start_len  pointer to length of new_start
-/// @param[in]      needed_len     amount of memory needed
-///
-/// @returns pointer to the end of the allocated memory
+/// Thin wrapper calling the Rust implementation.
 static char *sub_grow_buf(char **new_start, int *new_start_len, int needed_len)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
-  char *new_end;
-  if (*new_start == NULL) {
-    // Get some space for a temporary buffer to do the
-    // substitution into (and some extra space to avoid
-    // too many calls to xmalloc()/free()).
-    *new_start_len = needed_len + 50;
-    *new_start = xcalloc(1, (size_t)(*new_start_len));
-    **new_start = NUL;
-    new_end = *new_start;
-  } else {
-    // Check if the temporary buffer is long enough to do the
-    // substitution into.  If not, make it larger (with a bit
-    // extra to avoid too many calls to xmalloc()/free()).
-    size_t len = strlen(*new_start);
-    needed_len += (int)len;
-    if (needed_len > *new_start_len) {
-      size_t prev_new_start_len = (size_t)(*new_start_len);
-      *new_start_len = needed_len + 50;
-      size_t added_len = (size_t)(*new_start_len) - prev_new_start_len;
-      *new_start = xrealloc(*new_start, (size_t)(*new_start_len));
-      memset(*new_start + prev_new_start_len, 0, added_len);
-    }
-    new_end = *new_start + len;
-  }
-
-  return new_end;
+  return rs_sub_grow_buf(new_start, new_start_len, needed_len);
 }
 
 /// sub_parse_flags implemented in Rust.

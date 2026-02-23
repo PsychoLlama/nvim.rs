@@ -28,6 +28,7 @@
 use std::ffi::{c_char, c_int};
 
 use crate::range::LineNr;
+use crate::ExArgHandle;
 use crate::SubIgnoreType;
 
 // =============================================================================
@@ -37,9 +38,37 @@ use crate::SubIgnoreType;
 /// Pattern type: use last used regexp (RE_LAST from search.h)
 const RE_LAST: c_int = 2;
 
+/// Pattern type: RE_SUBST (save as substitute pattern)
+const RE_SUBST: c_int = 1;
+
+/// EXFLAG constants (must match C defines)
+const EXFLAG_LIST: c_int = 0x01;
+const EXFLAG_NR: c_int = 0x02;
+const EXFLAG_PRINT: c_int = 0x04;
+
 extern "C" {
     /// Get the current value of p_gd (gdefault option).
     fn nvim_option_get_gd() -> c_int;
+
+    // sub_joining_lines FFI
+    fn nvim_exarg_get_skip(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_get_line1(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_set_flags(eap: *mut ExArgHandle, flags: c_int);
+    fn nvim_curwin_set_cursor_lnum(lnum: c_int);
+    fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
+    fn nvim_excmds_do_join(count: c_int) -> c_int;
+    fn nvim_excmds_set_sub_nsubs(val: c_int);
+    fn nvim_excmds_set_sub_nlines(val: c_int);
+    fn nvim_excmds_do_sub_msg(count_only: c_int) -> c_int;
+    fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
+    fn nvim_excmds_save_re_pat(idx: c_int, pat: *const c_char, patlen: usize, magic: c_int);
+    fn nvim_excmds_add_to_hist_search(pat: *const c_char, patlen: usize);
+    fn rs_magic_isset() -> c_int;
+
+    // sub_grow_buf FFI
+    fn xcalloc(count: usize, size: usize) -> *mut std::ffi::c_void;
+    fn xrealloc(ptr: *mut std::ffi::c_void, size: usize) -> *mut std::ffi::c_void;
 }
 
 /// C-compatible layout for subflags_T.
@@ -355,6 +384,139 @@ impl MatchRange {
     #[must_use]
     pub const fn line_span(&self) -> LineNr {
         self.end.lnum - self.start.lnum + 1
+    }
+}
+
+// =============================================================================
+// Phase 1: sub_joining_lines + sub_grow_buf
+// =============================================================================
+
+/// Recognize `:%s/\n//` and turn it into a join command, which is much
+/// more efficient. Replaces the C `sub_joining_lines` static function.
+///
+/// Returns 1 (true) if the substitute can be replaced with a join, 0 (false) otherwise.
+///
+/// # Safety
+/// All pointer arguments must be non-null and point to valid C strings.
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sub_joining_lines(
+    eap: *mut ExArgHandle,
+    pat: *const c_char,
+    patlen: usize,
+    sub: *const c_char,
+    cmd: *const c_char,
+    save: c_int,
+    keeppatterns: c_int,
+) -> c_int {
+    use std::ffi::CStr;
+
+    // pat must be non-null and equal to "\\n", sub must be NUL, and
+    // cmd must be NUL or a single one of 'g', 'l', 'p', '#'.
+    if pat.is_null() {
+        return 0;
+    }
+
+    let pat_bytes = CStr::from_ptr(pat).to_bytes();
+    if pat_bytes != b"\\n" {
+        return 0;
+    }
+
+    // *sub == NUL
+    if *sub != 0 {
+        return 0;
+    }
+
+    // cmd must be NUL or a single recognized flag
+    let cmd0 = *cmd as u8;
+    let cmd1 = if cmd0 != 0 { *cmd.add(1) as u8 } else { 0 };
+    if cmd0 != 0 && (cmd1 != 0 || !matches!(cmd0, b'g' | b'l' | b'p' | b'#')) {
+        return 0;
+    }
+
+    // Pattern matches - this is a join-optimization candidate
+    if nvim_exarg_get_skip(eap) != 0 {
+        return 1; // skip mode: pretend we handled it
+    }
+
+    let line1 = nvim_exarg_get_line1(eap);
+    let line2 = nvim_exarg_get_line2(eap);
+
+    nvim_curwin_set_cursor_lnum(line1);
+
+    // Set eap->flags based on cmd character
+    match cmd0 {
+        b'l' => nvim_exarg_set_flags(eap, EXFLAG_LIST),
+        b'#' => nvim_exarg_set_flags(eap, EXFLAG_NR),
+        b'p' => nvim_exarg_set_flags(eap, EXFLAG_PRINT),
+        _ => {}
+    }
+
+    let ml_line_count = nvim_curbuf_get_b_ml_ml_line_count();
+    let joined_lines_count = (line2 - line1 + 1) + if line2 < ml_line_count { 1 } else { 0 };
+
+    if joined_lines_count > 1 {
+        nvim_excmds_do_join(joined_lines_count);
+        nvim_excmds_set_sub_nsubs(joined_lines_count - 1);
+        nvim_excmds_set_sub_nlines(1);
+        nvim_excmds_do_sub_msg(0); // count_only = false
+        nvim_excmds_ex_may_print(eap);
+    }
+
+    if save != 0 {
+        if keeppatterns == 0 {
+            nvim_excmds_save_re_pat(RE_SUBST, pat, patlen, rs_magic_isset());
+        }
+        nvim_excmds_add_to_hist_search(pat, patlen);
+    }
+
+    1 // true: substitute was handled as join
+}
+
+/// Allocate or grow the replacement text buffer for :substitute.
+/// Replaces the C `sub_grow_buf` static function.
+///
+/// - If `*new_start` is null: allocates a new buffer of size `needed_len + 50`,
+///   zero-initialized, and returns pointer to the start.
+/// - Otherwise: if the existing buffer is too small, reallocates it.
+///   Returns pointer to the current end of the string in the buffer.
+///
+/// # Safety
+/// `new_start` and `new_start_len` must be non-null valid pointers.
+/// `*new_start` must be null or point to an xmalloc-allocated buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sub_grow_buf(
+    new_start: *mut *mut c_char,
+    new_start_len: *mut c_int,
+    needed_len: c_int,
+) -> *mut c_char {
+    if (*new_start).is_null() {
+        // Initial allocation: needed_len + 50 extra bytes, zero-initialized.
+        let alloc_len = (needed_len + 50) as usize;
+        *new_start_len = needed_len + 50;
+        let ptr = xcalloc(1, alloc_len) as *mut c_char;
+        *ptr = 0; // ensure NUL-terminated
+        *new_start = ptr;
+        ptr
+    } else {
+        // Find current length of string in the buffer (strlen).
+        let current_ptr = *new_start;
+        let mut len = 0usize;
+        while *current_ptr.add(len) != 0 {
+            len += 1;
+        }
+        let needed = needed_len + len as c_int;
+        if needed > *new_start_len {
+            let prev_len = *new_start_len as usize;
+            *new_start_len = needed + 50;
+            let new_alloc_len = *new_start_len as usize;
+            *new_start =
+                xrealloc(*new_start as *mut std::ffi::c_void, new_alloc_len) as *mut c_char;
+            // Zero out the newly added region
+            let added = new_alloc_len - prev_len;
+            std::ptr::write_bytes((*new_start).add(prev_len), 0, added);
+        }
+        (*new_start).add(len)
     }
 }
 
