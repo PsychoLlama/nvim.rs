@@ -2897,98 +2897,20 @@ void nvim_qf_restore_swb(void *old_swb, unsigned old_swb_flags)
   }
 }
 
-/// Close a specific quickfix window
-void nvim_qf_win_close(void *win_void)
-{
-  if (win_void == NULL) {
-    return;
-  }
-  win_close((win_T *)win_void, false, false);
-}
-
-/// Move cursor in a qf window to a line number (wraps qf_win_goto)
-void nvim_qf_win_goto_lnum(void *win_void, linenr_T lnum)
-{
-  if (win_void == NULL) {
-    return;
-  }
-  qf_win_goto((win_T *)win_void, lnum);
-}
-
-/// Get cursor line of a specific window
-linenr_T nvim_qf_win_get_cursor_lnum(const void *win_void)
-{
-  if (win_void == NULL) {
-    return 0;
-  }
-  return ((const win_T *)win_void)->w_cursor.lnum;
-}
-
-/// Get buffer line count from a window
-linenr_T nvim_qf_win_get_buf_line_count(const void *win_void)
-{
-  if (win_void == NULL) {
-    return 0;
-  }
-  return ((const win_T *)win_void)->w_buffer->b_ml.ml_line_count;
-}
-
-/// Get window width
-int nvim_qf_win_get_width(const void *win_void)
-{
-  if (win_void == NULL) {
-    return 0;
-  }
-  return ((const win_T *)win_void)->w_width;
-}
-
-/// Get window height
-int nvim_qf_win_get_height(const void *win_void)
-{
-  if (win_void == NULL) {
-    return 0;
-  }
-  return ((const win_T *)win_void)->w_height;
-}
-
-/// Get horizontal separator height
-int nvim_qf_win_get_hsep_height(const void *win_void)
-{
-  if (win_void == NULL) {
-    return 0;
-  }
-  return ((const win_T *)win_void)->w_hsep_height;
-}
-
-/// Get status line height
-int nvim_qf_win_get_status_height(const void *win_void)
-{
-  if (win_void == NULL) {
-    return 0;
-  }
-  return ((const win_T *)win_void)->w_status_height;
-}
+void nvim_qf_win_close(void *win_void) { if (win_void != NULL) win_close((win_T *)win_void, false, false); }
+void nvim_qf_win_goto_lnum(void *win_void, linenr_T lnum) { if (win_void != NULL) qf_win_goto((win_T *)win_void, lnum); }
+linenr_T nvim_qf_win_get_cursor_lnum(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_cursor.lnum; }
+linenr_T nvim_qf_win_get_buf_line_count(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_buffer->b_ml.ml_line_count; }
+int nvim_qf_win_get_width(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_width; }
+int nvim_qf_win_get_height(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_height; }
+int nvim_qf_win_get_hsep_height(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_hsep_height; }
+int nvim_qf_win_get_status_height(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_status_height; }
 
 int nvim_qf_cmdline_row(void) { return (int)cmdline_row; }
 
 
-/// Wrap entire qf_open_new_cwindow
-int nvim_qf_open_new_cwindow(void *qi_void, int height)
-{
-  if (qi_void == NULL) {
-    return FAIL;
-  }
-  return qf_open_new_cwindow((qf_info_T *)qi_void, height);
-}
-
-/// Wrap qf_set_title_var
-void nvim_qf_set_title_var(void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_set_title_var((qf_list_T *)qfl_void);
-}
+int nvim_qf_open_new_cwindow(void *qi_void, int height) { return qi_void == NULL ? FAIL : qf_open_new_cwindow((qf_info_T *)qi_void, height); }
+void nvim_qf_set_title_var(void *qfl_void) { if (qfl_void != NULL) qf_set_title_var((qf_list_T *)qfl_void); }
 
 void nvim_qf_curwin_set_cursor(linenr_T lnum, int col) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; }
 
@@ -2996,14 +2918,7 @@ void nvim_qf_check_cursor_curwin(void) { check_cursor(curwin); }
 
 void nvim_qf_update_topline_curwin(void) { update_topline(curwin); }
 
-/// Wrap qf_update_win_titlevar
-void nvim_qf_update_win_titlevar(void *qi_void)
-{
-  if (qi_void == NULL) {
-    return;
-  }
-  qf_update_win_titlevar((qf_info_T *)qi_void);
-}
+void nvim_qf_update_win_titlevar(void *qi_void) { if (qi_void != NULL) qf_update_win_titlevar((qf_info_T *)qi_void); }
 
 // Highlight ids used for displaying entries from the quickfix list.
 static int qfFile_hl_id;
