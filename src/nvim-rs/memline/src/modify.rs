@@ -1317,6 +1317,7 @@ pub unsafe extern "C" fn rs_ml_new_ptr(mfp: *mut c_void) -> *mut c_void {
     hp
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;

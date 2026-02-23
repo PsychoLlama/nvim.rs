@@ -262,6 +262,11 @@ extern int rs_resolve_symlink(const char *fname, char *buf);
 #endif
 extern char *rs_get_file_in_dir(char *fname, char *dname);
 extern char *rs_makeswapname(char *fname, char *ffname, buf_T *buf, char *dir_name);
+// Pass 2 Phase 3: Buffer lifecycle Rust function declarations
+extern void rs_ml_close(buf_T *buf, int del_file);
+extern void rs_check_need_swap(int newfile);
+extern void rs_ml_timestamp(buf_T *buf);
+extern size_t rs_ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -555,39 +560,13 @@ void ml_open_file(buf_T *buf)
 /// file, or reading into an existing buffer, create a swapfile now.
 ///
 /// @param newfile reading file into new buffer
-void check_need_swap(bool newfile)
-{
-  int old_msg_silent = msg_silent;  // might be reset by an E325 message
-  msg_silent = 0;  // If swap dialog prompts for input, user needs to see it!
+/// @param newfile  reading file into new buffer (thin wrapper calling Rust)
+void check_need_swap(bool newfile) { rs_check_need_swap(newfile); }
 
-  if (curbuf->b_may_swap && (!curbuf->b_p_ro || !newfile)) {
-    ml_open_file(curbuf);
-  }
-
-  msg_silent = old_msg_silent;
-}
-
-/// Close memline for buffer 'buf'.
+/// Close memline for buffer 'buf' (thin wrapper calling Rust).
 ///
 /// @param del_file  if true, delete the swapfile
-void ml_close(buf_T *buf, int del_file)
-{
-  if (buf->b_ml.ml_mfp == NULL) {               // not open
-    return;
-  }
-  mf_close(buf->b_ml.ml_mfp, del_file);       // close the .swp file
-  if (buf->b_ml.ml_line_lnum != 0
-      && (buf->b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED))) {
-    xfree(buf->b_ml.ml_line_ptr);
-  }
-  xfree(buf->b_ml.ml_stack);
-  XFREE_CLEAR(buf->b_ml.ml_chunksize);
-  buf->b_ml.ml_mfp = NULL;
-
-  // Reset the "recovered" flag, give the ATTENTION prompt the next time
-  // this buffer is loaded.
-  buf->b_flags &= ~BF_RECOVERED;
-}
+void ml_close(buf_T *buf, int del_file) { rs_ml_close(buf, del_file); }
 
 /// Close all existing memlines and memfiles.
 /// Only used when exiting.
@@ -613,12 +592,9 @@ void ml_close_notmod(void)
   }
 }
 
-/// Update the timestamp in the .swp file.
+/// Update the timestamp in the .swp file (thin wrapper calling Rust).
 /// Used when the file has been written.
-void ml_timestamp(buf_T *buf)
-{
-  ml_upd_block0(buf, UB_FNAME);
-}
+void ml_timestamp(buf_T *buf) { rs_ml_timestamp(buf); }
 
 /// Update the timestamp or the B0_SAME_DIR flag of the .swp file.
 /// Update block 0 (thin wrapper calling Rust).
@@ -1722,6 +1698,34 @@ uint64_t nvim_get_file_inode(const char *fname)
   return 0;
 }
 
+// Pass 2 Phase 3: Buffer lifecycle accessors for Rust FFI
+// ml_close accessors
+void *nvim_buf_get_ml_stack_void(buf_T *buf) { return buf->b_ml.ml_stack; }
+void nvim_buf_clear_ml_after_close(buf_T *buf)
+{
+  buf->b_ml.ml_mfp = NULL;
+  buf->b_flags &= ~BF_RECOVERED;
+}
+void nvim_buf_xfree_clear_ml_chunksize(buf_T *buf)
+{
+  xfree(buf->b_ml.ml_chunksize);
+  buf->b_ml.ml_chunksize = NULL;
+}
+// ml_flush_deleted_bytes accessors
+size_t nvim_buf_get_deleted_bytes(buf_T *buf) { return buf->deleted_bytes; }
+void nvim_buf_set_deleted_bytes(buf_T *buf, size_t val) { buf->deleted_bytes = val; }
+size_t nvim_buf_get_deleted_codepoints(buf_T *buf) { return buf->deleted_codepoints; }
+void nvim_buf_set_deleted_codepoints(buf_T *buf, size_t val) { buf->deleted_codepoints = val; }
+size_t nvim_buf_get_deleted_codeunits(buf_T *buf) { return buf->deleted_codeunits; }
+void nvim_buf_set_deleted_codeunits(buf_T *buf, size_t val) { buf->deleted_codeunits = val; }
+// check_need_swap accessors
+// nvim_get_msg_silent / nvim_set_msg_silent - already defined in message.c
+// nvim_buf_get_b_may_swap - already defined in change_ffi.c (returns bool)
+// nvim_buf_get_b_p_ro     - already defined in buffer.c (returns int)
+// ml_setflags accessors (also used by Phase 5)
+bhdr_T *nvim_mf_get_block0_hp(memfile_T *mfp) { return pmap_get(int64_t)(&mfp->mf_hash, 0); }
+void nvim_bhdr_set_bh_flags_dirty(bhdr_T *hp) { hp->bh_flags |= BH_DIRTY; }
+
 // Phase 2 accessors for Rust FFI
 uint8_t nvim_b0_get_flags_byte(const ZeroBlock *b0p) { return (uint8_t)b0p->b0_flags; }
 void nvim_b0_set_flags_byte(ZeroBlock *b0p, uint8_t val) { b0p->b0_flags = (char)val; }
@@ -2518,15 +2522,10 @@ linenr_T ml_firstmarked(void) { return rs_ml_firstmarked(); }
 /// clear all DB_MARKED flags (thin wrapper calling Rust)
 void ml_clearmarked(void) { rs_ml_clearmarked(); }
 
+/// Flush deleted byte tracking counters (thin wrapper calling Rust).
 size_t ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits)
 {
-  size_t ret = buf->deleted_bytes;
-  *codepoints = buf->deleted_codepoints;
-  *codeunits = buf->deleted_codeunits;
-  buf->deleted_bytes = 0;
-  buf->deleted_codepoints = 0;
-  buf->deleted_codeunits = 0;
-  return ret;
+  return rs_ml_flush_deleted_bytes(buf, codepoints, codeunits);
 }
 
 /// flush ml_line if necessary

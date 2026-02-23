@@ -17,7 +17,7 @@
 use std::ffi::{c_char, c_int};
 
 use crate::rs_long_to_char;
-use crate::types::{BufHandle, UB_FNAME, UB_SAME_DIR};
+use crate::types::{BF_RECOVERED, BufHandle, ML_ALLOCATED, ML_LINE_DIRTY, UB_FNAME, UB_SAME_DIR};
 
 // =============================================================================
 // C Implementation Declarations
@@ -47,20 +47,11 @@ extern "C" {
     /// Open swap file for a specific buffer
     fn ml_open_file(buf: *mut BufHandle);
 
-    /// Check if swap file needs to be created
-    fn check_need_swap(newfile: c_int);
-
-    /// Close memline for buffer
-    fn ml_close(buf: *mut BufHandle, del_file: c_int);
-
-    /// Close all memlines
+    /// Close all memlines (buffer iteration stays in C via FOR_ALL_BUFFERS)
     fn ml_close_all(del_file: c_int);
 
-    /// Close memlines for unmodified buffers
+    /// Close memlines for unmodified buffers (buffer iteration stays in C)
     fn ml_close_notmod();
-
-    /// Update timestamp in swap file
-    fn ml_timestamp(buf: *mut BufHandle);
 
     /// Sync all modified swap files
     fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: c_int);
@@ -70,6 +61,50 @@ extern "C" {
 
     /// Set memline flags for swap file
     fn ml_setflags(buf: *mut BufHandle);
+
+    // -------------------------------------------------------------------------
+    // Phase 3: Buffer lifecycle accessors
+    // -------------------------------------------------------------------------
+
+    /// Get buf->b_ml.ml_mfp as void*
+    fn nvim_buf_get_ml_mfp(buf: *mut BufHandle) -> *mut std::ffi::c_void;
+
+    /// Close a memfile
+    fn mf_close(mfp: *mut std::ffi::c_void, del_file: c_int);
+
+    /// Get buf->b_ml.ml_line_lnum
+    fn nvim_buf_get_ml_line_lnum(buf: *mut BufHandle) -> i64;
+
+    /// Get buf->b_ml.ml_flags
+    fn nvim_buf_get_ml_flags(buf: *mut BufHandle) -> c_int;
+
+    /// Get buf->b_ml.ml_line_ptr
+    fn nvim_buf_get_ml_line_ptr(buf: *mut BufHandle) -> *mut c_char;
+
+    /// Get buf->b_ml.ml_stack as void*
+    fn nvim_buf_get_ml_stack_void(buf: *mut BufHandle) -> *mut std::ffi::c_void;
+
+    /// XFREE_CLEAR buf->b_ml.ml_chunksize
+    fn nvim_buf_xfree_clear_ml_chunksize(buf: *mut BufHandle);
+
+    /// Set buf->b_ml.ml_mfp = NULL and clear BF_RECOVERED
+    fn nvim_buf_clear_ml_after_close(buf: *mut BufHandle);
+
+    /// Get current buffer
+    fn nvim_get_curbuf() -> *mut BufHandle;
+
+    /// Get msg_silent global
+    fn nvim_get_msg_silent() -> c_int;
+
+    /// Set msg_silent global
+    fn nvim_set_msg_silent(val: c_int);
+
+    /// Get buf->b_may_swap (defined in change_ffi.c, returns bool)
+    fn nvim_buf_get_b_may_swap(buf: *mut BufHandle) -> bool;
+
+    /// Get buf->b_p_ro
+    fn nvim_buf_get_b_p_ro(buf: *mut BufHandle) -> c_int;
+
 }
 
 // =============================================================================
@@ -129,6 +164,9 @@ pub unsafe extern "C" fn rs_ml_open_file(buf: *mut BufHandle) {
 
 /// Check if a swap file needs to be created for the current buffer.
 ///
+/// If the current buffer has b_may_swap set and is not read-only (or newfile is false),
+/// opens a swap file. Temporarily clears msg_silent to allow E325 prompts.
+///
 /// # Arguments
 /// * `newfile` - true if reading a file into a new buffer
 ///
@@ -136,12 +174,24 @@ pub unsafe extern "C" fn rs_ml_open_file(buf: *mut BufHandle) {
 /// Modifies current buffer state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_check_need_swap(newfile: c_int) {
-    check_need_swap(newfile);
+    let old_msg_silent = nvim_get_msg_silent();
+    nvim_set_msg_silent(0); // If swap dialog prompts for input, user needs to see it!
+
+    let curbuf = nvim_get_curbuf();
+    if !curbuf.is_null()
+        && nvim_buf_get_b_may_swap(curbuf)
+        && (nvim_buf_get_b_p_ro(curbuf) == 0 || newfile == 0)
+    {
+        ml_open_file(curbuf);
+    }
+
+    nvim_set_msg_silent(old_msg_silent);
 }
 
 /// Close the memline for a buffer.
 ///
-/// This closes and optionally deletes the swap file.
+/// Closes and optionally deletes the swap file. Frees cached line, info stack,
+/// and chunk size cache. Clears ml_mfp and the BF_RECOVERED flag.
 ///
 /// # Arguments
 /// * `buf` - Buffer to close
@@ -151,14 +201,29 @@ pub unsafe extern "C" fn rs_check_need_swap(newfile: c_int) {
 /// - `buf` must be a valid buffer pointer or NULL
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_close(buf: *mut BufHandle, del_file: c_int) {
-    if !buf.is_null() {
-        ml_close(buf, del_file);
+    if buf.is_null() {
+        return;
     }
+    let mfp = nvim_buf_get_ml_mfp(buf);
+    if mfp.is_null() {
+        return; // not open
+    }
+    mf_close(mfp, del_file); // close the .swp file
+
+    let line_lnum = nvim_buf_get_ml_line_lnum(buf);
+    let flags = nvim_buf_get_ml_flags(buf);
+    if line_lnum != 0 && (flags & (ML_LINE_DIRTY | ML_ALLOCATED)) != 0 {
+        xfree(nvim_buf_get_ml_line_ptr(buf).cast());
+    }
+    xfree(nvim_buf_get_ml_stack_void(buf));
+    nvim_buf_xfree_clear_ml_chunksize(buf);
+    nvim_buf_clear_ml_after_close(buf); // sets ml_mfp=NULL, clears BF_RECOVERED
+    let _ = BF_RECOVERED; // BF_RECOVERED cleared by nvim_buf_clear_ml_after_close
 }
 
 /// Close all existing memlines and memfiles.
 ///
-/// Only used when exiting Neovim.
+/// Only used when exiting Neovim. Buffer iteration stays in C (FOR_ALL_BUFFERS).
 ///
 /// # Arguments
 /// * `del_file` - If true, delete the swap files
@@ -172,7 +237,7 @@ pub unsafe extern "C" fn rs_ml_close_all(del_file: c_int) {
 
 /// Close all memlines for unmodified buffers.
 ///
-/// Only use just before exiting.
+/// Only use just before exiting. Buffer iteration stays in C (FOR_ALL_BUFFERS).
 ///
 /// # Safety
 /// Modifies global state, only call during exit.
@@ -188,13 +253,14 @@ pub unsafe extern "C" fn rs_ml_close_notmod() {
 /// Update the timestamp in the swap file.
 ///
 /// Called when the buffer file has been written.
+/// Delegates to rs_ml_upd_block0 with UB_FNAME to update timestamp and filename.
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_timestamp(buf: *mut BufHandle) {
     if !buf.is_null() {
-        ml_timestamp(buf);
+        rs_ml_upd_block0(buf, UB_FNAME as c_int);
     }
 }
 
@@ -843,7 +909,6 @@ pub unsafe extern "C" fn rs_add_b0_fenc(b0p: *mut c_void, buf: *mut BufHandle) {
 
 extern "C" {
     // Phase 4: set_b0_fname accessors
-    fn nvim_get_curbuf() -> *mut BufHandle;
     fn nvim_home_replace_b0_fname(buf: *const BufHandle, b0p: *mut c_void, maxlen: usize);
     fn nvim_os_get_username(buf: *mut c_char, len: usize) -> c_int;
     fn nvim_set_b0_mtime_ino(buf: *mut BufHandle, b0p: *mut c_void) -> c_int;
@@ -939,9 +1004,6 @@ pub unsafe extern "C" fn rs_set_b0_fname(b0p: *mut c_void, buf: *mut BufHandle) 
 }
 
 extern "C" {
-    /// Get memfile from buffer
-    fn nvim_buf_get_ml_mfp(buf: *mut BufHandle) -> *mut c_void;
-
     /// Get block from memfile
     fn mf_get(mfp: *mut c_void, bnum: i64, count: c_int) -> *mut c_void;
 

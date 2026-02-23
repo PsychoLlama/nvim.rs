@@ -179,12 +179,18 @@ extern "C" {
     /// mb_adjust_cursor()
     fn nvim_mb_adjust_cursor();
 
-    /// Flush deleted bytes counter (C implementation)
-    fn ml_flush_deleted_bytes(
-        buf: *mut BufHandle,
-        codepoints: *mut usize,
-        codeunits: *mut usize,
-    ) -> usize;
+    /// Get buf->deleted_bytes
+    fn nvim_buf_get_deleted_bytes(buf: *mut BufHandle) -> usize;
+    /// Set buf->deleted_bytes
+    fn nvim_buf_set_deleted_bytes(buf: *mut BufHandle, val: usize);
+    /// Get buf->deleted_codepoints
+    fn nvim_buf_get_deleted_codepoints(buf: *mut BufHandle) -> usize;
+    /// Set buf->deleted_codepoints
+    fn nvim_buf_set_deleted_codepoints(buf: *mut BufHandle, val: usize);
+    /// Get buf->deleted_codeunits
+    fn nvim_buf_get_deleted_codeunits(buf: *mut BufHandle) -> usize;
+    /// Set buf->deleted_codeunits
+    fn nvim_buf_set_deleted_codeunits(buf: *mut BufHandle, val: usize);
 }
 
 extern "C" {
@@ -745,7 +751,17 @@ pub unsafe extern "C" fn rs_ml_flush_deleted_bytes(
         return 0;
     }
 
-    ml_flush_deleted_bytes(buf, codepoints, codeunits)
+    let ret = nvim_buf_get_deleted_bytes(buf);
+    if !codepoints.is_null() {
+        *codepoints = nvim_buf_get_deleted_codepoints(buf);
+    }
+    if !codeunits.is_null() {
+        *codeunits = nvim_buf_get_deleted_codeunits(buf);
+    }
+    nvim_buf_set_deleted_bytes(buf, 0);
+    nvim_buf_set_deleted_codepoints(buf, 0);
+    nvim_buf_set_deleted_codeunits(buf, 0);
+    ret
 }
 
 // =============================================================================
