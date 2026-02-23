@@ -170,9 +170,10 @@ extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int w
 // Colorcolumn
 extern const char *rs_check_colorcolumn(const char *cc, win_T *wp);
 
-// Win exchange / rotate
+// Win exchange / rotate / move_after
 extern void rs_win_exchange(int prenum);
 extern void rs_win_rotate(int upwards, int count);
+extern void rs_win_move_after(win_T *win1, win_T *win2);
 
 // Snapshot lifecycle
 extern void rs_clear_snapshot(tabpage_T *tp, int idx);
@@ -1139,67 +1140,7 @@ int win_splitmove(win_T *wp, int size, int flags)
 // window.  Only works within the same frame!
 void win_move_after(win_T *win1, win_T *win2)
 {
-  // check if the arguments are reasonable
-  if (win1 == win2) {
-    return;
-  }
-
-  // check if there is something to do
-  if (win2->w_next != win1) {
-    if (win1->w_frame->fr_parent != win2->w_frame->fr_parent) {
-      iemsg("INTERNAL: trying to move a window into another frame");
-      return;
-    }
-
-    // may need to move the status line, window bar, horizontal or vertical separator of the last
-    // window
-    if (win1 == lastwin) {
-      int height = win1->w_prev->w_status_height;
-      win1->w_prev->w_status_height = win1->w_status_height;
-      win1->w_status_height = height;
-
-      height = win1->w_prev->w_hsep_height;
-      win1->w_prev->w_hsep_height = win1->w_hsep_height;
-      win1->w_hsep_height = height;
-
-      if (win1->w_prev->w_vsep_width == 1) {
-        // Remove the vertical separator from the last-but-one window,
-        // add it to the last window.  Adjust the frame widths.
-        win1->w_prev->w_vsep_width = 0;
-        win1->w_prev->w_frame->fr_width -= 1;
-        win1->w_vsep_width = 1;
-        win1->w_frame->fr_width += 1;
-      }
-    } else if (win2 == lastwin) {
-      int height = win1->w_status_height;
-      win1->w_status_height = win2->w_status_height;
-      win2->w_status_height = height;
-
-      height = win1->w_hsep_height;
-      win1->w_hsep_height = win2->w_hsep_height;
-      win2->w_hsep_height = height;
-
-      if (win1->w_vsep_width == 1) {
-        // Remove the vertical separator from win1, add it to the last
-        // window, win2.  Adjust the frame widths.
-        win2->w_vsep_width = 1;
-        win2->w_frame->fr_width += 1;
-        win1->w_vsep_width = 0;
-        win1->w_frame->fr_width -= 1;
-      }
-    }
-    rs_win_remove(win1, NULL);
-    rs_frame_remove(win1->w_frame);
-    rs_win_append(win2, win1, NULL);
-    rs_frame_append(win2->w_frame, win1->w_frame);
-
-    rs_win_comp_pos();  // recompute w_winrow for all windows
-    redraw_later(curwin, UPD_NOT_VALID);
-  }
-  win_enter(win1, false);
-
-  win1->w_pos_changed = true;
-  win2->w_pos_changed = true;
+  rs_win_move_after(win1, win2);
 }
 
 /// Compute maximum number of windows that can fit within "height" in frame "fr".
@@ -4167,6 +4108,7 @@ void nvim_win_init_empty_wrapper(win_T *wp) { win_init_empty(wp); }
 void nvim_emsg_e_floatonly(void) { emsg(e_floatonly); }
 void nvim_emsg_e_floatexchange(void) { emsg(e_floatexchange); }
 void nvim_emsg_e443(void) { emsg(_("E443: Cannot rotate when another window is split")); }
+void nvim_iemsg_move_other_frame(void) { iemsg("INTERNAL: trying to move a window into another frame"); }
 int nvim_text_or_buf_locked(void) { return text_or_buf_locked() ? 1 : 0; }
 void nvim_win_copy_cursor(win_T *dst, win_T *src) { if (dst && src) { dst->w_cursor = src->w_cursor; } }
 void nvim_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync != 0); }

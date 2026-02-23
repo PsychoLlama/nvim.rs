@@ -121,6 +121,12 @@ extern "C" {
 
     /// Set w_pos_changed on window.
     fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
+
+    /// Get lastwin.
+    fn nvim_get_lastwin() -> WinHandle;
+
+    /// Emit iemsg for move-to-other-frame error.
+    fn nvim_iemsg_move_other_frame();
 }
 
 // =============================================================================
@@ -674,6 +680,103 @@ unsafe fn win_rotate_impl(upwards: c_int, count: c_int) {
 }
 
 // =============================================================================
+// Full win_move_after implementation
+// =============================================================================
+
+/// Rust implementation of `win_move_after()`.
+///
+/// Moves `win1` to after `win2` in the window list and enters `win1`.
+/// Only works within the same frame.
+///
+/// # Safety
+/// Requires valid global Neovim state. win1 and win2 must be valid windows.
+unsafe fn win_move_after_impl(win1: WinHandle, win2: WinHandle) {
+    if win1 == win2 || win1.is_null() || win2.is_null() {
+        return;
+    }
+
+    // Check if there is something to do: win2->w_next != win1
+    if nvim_win_get_next(win2) != win1 {
+        // Check that win1 and win2 are in the same frame
+        let frame1 = nvim_win_get_frame(win1);
+        let frame2 = nvim_win_get_frame(win2);
+        if frame1.is_null() || frame2.is_null() {
+            return;
+        }
+        let parent1 = (*frame1).fr_parent;
+        let parent2 = (*frame2).fr_parent;
+        if parent1 != parent2 {
+            nvim_iemsg_move_other_frame();
+            return;
+        }
+
+        let lastwin = nvim_get_lastwin();
+
+        // May need to swap separators if win1 is the last window or win2 is the last window
+        if win1 == lastwin {
+            let prev1 = nvim_win_get_prev(win1);
+
+            let old_status = nvim_win_get_status_height(prev1);
+            nvim_win_set_status_height(prev1, nvim_win_get_status_height(win1));
+            nvim_win_set_status_height(win1, old_status);
+
+            let old_hsep = nvim_win_get_hsep_height(prev1);
+            nvim_win_set_hsep_height(prev1, nvim_win_get_hsep_height(win1));
+            nvim_win_set_hsep_height(win1, old_hsep);
+
+            if nvim_win_get_vsep_width(prev1) == 1 {
+                // Remove the vertical separator from the last-but-one window,
+                // add it to the last window. Adjust the frame widths.
+                nvim_win_set_vsep_width(prev1, 0);
+                let frame_prev1 = nvim_win_get_frame(prev1);
+                if !frame_prev1.is_null() {
+                    (*frame_prev1).fr_width -= 1;
+                }
+                nvim_win_set_vsep_width(win1, 1);
+                if !frame1.is_null() {
+                    (*frame1).fr_width += 1;
+                }
+            }
+        } else if win2 == lastwin {
+            let old_status = nvim_win_get_status_height(win1);
+            nvim_win_set_status_height(win1, nvim_win_get_status_height(win2));
+            nvim_win_set_status_height(win2, old_status);
+
+            let old_hsep = nvim_win_get_hsep_height(win1);
+            nvim_win_set_hsep_height(win1, nvim_win_get_hsep_height(win2));
+            nvim_win_set_hsep_height(win2, old_hsep);
+
+            if nvim_win_get_vsep_width(win1) == 1 {
+                // Remove the vertical separator from win1, add it to win2 (lastwin).
+                nvim_win_set_vsep_width(win2, 1);
+                let frame2_ptr = nvim_win_get_frame(win2);
+                if !frame2_ptr.is_null() {
+                    (*frame2_ptr).fr_width += 1;
+                }
+                nvim_win_set_vsep_width(win1, 0);
+                if !frame1.is_null() {
+                    (*frame1).fr_width -= 1;
+                }
+            }
+        }
+
+        rs_win_remove(win1, crate::TabpageHandle::null());
+        rs_frame_remove(nvim_win_get_frame(win1));
+        rs_win_append(win2, win1, crate::TabpageHandle::null());
+        rs_frame_append(nvim_win_get_frame(win2), nvim_win_get_frame(win1));
+
+        rs_win_comp_pos();
+        // UPD_NOT_VALID = 40
+        let curwin = nvim_get_curwin();
+        nvim_redraw_later_wrapper(curwin, 40);
+    }
+
+    nvim_win_enter(win1, 0);
+    nvim_win_set_pos_changed(win1, 1);
+    nvim_win_set_pos_changed(win2, 1);
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -693,6 +796,15 @@ pub extern "C" fn rs_win_exchange(prenum: c_int) {
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_win_rotate(upwards: c_int, count: c_int) {
     unsafe { win_rotate_impl(upwards, count) }
+}
+
+/// FFI: Move `win1` to after `win2` in window list and enter `win1`.
+///
+/// Direct Rust replacement for the C `win_move_after()` function.
+/// Only works within the same frame.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_win_move_after(win1: WinHandle, win2: WinHandle) {
+    unsafe { win_move_after_impl(win1, win2) }
 }
 
 /// FFI: Check if window can be exchanged.
