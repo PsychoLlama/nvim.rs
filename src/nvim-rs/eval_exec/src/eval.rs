@@ -2768,12 +2768,6 @@ pub unsafe extern "C" fn rs_eval_lit_dict(
 
 extern "C" {
     // eval7 C dependencies
-    fn eval_option(arg: *mut *const c_char, rettv: TypevalHandle, evaluate: bool) -> c_int;
-    fn nvim_eval_env_var_wrapper(
-        arg: *mut *mut c_char,
-        rettv: TypevalHandle,
-        evaluate: c_int,
-    ) -> c_int;
     fn eval_interp_string(arg: *mut *mut c_char, rettv: TypevalHandle, evaluate: bool) -> c_int;
     fn handle_subscript(
         arg: *mut *const c_char,
@@ -2954,7 +2948,7 @@ pub unsafe fn eval7_impl(
 
         // Option value: &name
         b'&' => {
-            ret = eval_option(arg as *mut *const c_char, rettv, evaluate);
+            ret = rs_eval_option(arg as *mut *const c_char, rettv, evaluate);
         }
 
         // Environment variable: $VAR or interpolated string: $"string" / $'string'
@@ -2963,7 +2957,7 @@ pub unsafe fn eval7_impl(
             if next == b'"' || next == b'\'' {
                 ret = eval_interp_string(arg, rettv, evaluate);
             } else {
-                ret = nvim_eval_env_var_wrapper(arg, rettv, if evaluate { 1 } else { 0 });
+                ret = rs_eval_env_var(arg, rettv, if evaluate { 1 } else { 0 });
             }
         }
 
@@ -3501,6 +3495,161 @@ pub unsafe extern "C" fn rs_eval_lambda(
 }
 
 // eval1_emsg implementation is in eval_top.rs (rs_eval1_emsg).
+
+// =============================================================================
+// Phase 2 (eval_shim pass 4): eval_option + eval_env_var
+// =============================================================================
+
+extern "C" {
+    // Check if a name is a tty option (from strings crate)
+    fn rs_is_tty_option(name: *const c_char) -> c_int;
+    // Get length of env var name, advancing *arg past the name (from eval crate)
+    fn rs_get_env_len(arg: *mut *const c_char) -> c_int;
+    // Parse &[g:|l:]optname from *arg, set opt_idx and opt_flags, return end pointer.
+    fn nvim_find_option_var_end(
+        arg: *mut *const c_char,
+        opt_idxp: *mut c_int,
+        opt_flagsp: *mut c_int,
+    ) -> *const c_char;
+    // Check if option is hidden (returns non-zero if hidden)
+    fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
+    // Get option value as typval (get_option_value + optval_as_tv)
+    fn nvim_get_option_value_as_tv(opt_idx: c_int, opt_flags: c_int, rettv: TypevalHandle);
+    // Get tty option value as typval
+    fn nvim_get_tty_option_as_tv(name: *const c_char, rettv: TypevalHandle);
+    // Error messages for eval_option
+    fn nvim_semsg_e112_option_name_missing(arg: *const c_char);
+    fn nvim_semsg_e113_unknown_option(arg: *const c_char);
+    // vim_getenv: returns allocated string or NULL
+    fn nvim_vim_getenv(name: *const c_char) -> *mut c_char;
+    // expand_env_save: expand $VAR from src
+    fn nvim_expand_env_save(src: *const c_char) -> *mut c_char;
+    // v_lock setter (VAR_UNLOCKED = 0)
+    fn nvim_tv_set_v_lock(tv: TypevalHandle, lock: c_int);
+}
+
+/// kOptInvalid value - must match C kOptInvalid
+const K_OPT_INVALID: c_int = -1;
+
+/// Evaluate `&option`, `&g:option`, `&l:option` expressions.
+///
+/// # Safety
+/// - `arg` must be a non-null pointer to a C string pointer pointing to `&` or `+`
+/// - `rettv` may be null (caller won't use the value)
+///
+/// # C equivalent
+/// Replaces the C `eval_option` function in eval_shim.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_option(
+    arg: *mut *const c_char,
+    rettv: TypevalHandle,
+    evaluate: bool,
+) -> c_int {
+    let working = get_byte(*arg) == b'+'; // has("+option")
+    let mut opt_idx: c_int = K_OPT_INVALID;
+    let mut opt_flags: c_int = 0;
+
+    // Parse the option name, advance *arg to option name, return end pointer.
+    let option_end = nvim_find_option_var_end(arg, &mut opt_idx, &mut opt_flags);
+
+    if option_end.is_null() {
+        if !rettv.is_null() {
+            nvim_semsg_e112_option_name_missing(*arg);
+        }
+        return FAIL;
+    }
+
+    if !evaluate {
+        *arg = option_end;
+        return OK;
+    }
+
+    // Temporarily NUL-terminate the option name for API calls that need it.
+    let c = *option_end;
+    // SAFETY: option_end is a valid mutable pointer (it points into the
+    // source buffer which is not const at this position in C).
+    let option_end_mut = option_end as *mut c_char;
+    *option_end_mut = 0;
+
+    let ret;
+    let is_tty_opt = rs_is_tty_option(*arg) != 0;
+
+    if opt_idx == K_OPT_INVALID && !is_tty_opt {
+        // Only give error if result is going to be used.
+        if !rettv.is_null() {
+            nvim_semsg_e113_unknown_option(*arg);
+        }
+        ret = FAIL;
+    } else if !rettv.is_null() {
+        if is_tty_opt {
+            nvim_get_tty_option_as_tv(*arg, rettv);
+        } else {
+            nvim_get_option_value_as_tv(opt_idx, opt_flags, rettv);
+        }
+        ret = OK;
+    } else if working && !is_tty_opt && nvim_opt_is_hidden(opt_idx) != 0 {
+        ret = FAIL;
+    } else {
+        ret = OK;
+    }
+
+    // Restore original character.
+    *option_end_mut = c;
+    *arg = option_end;
+
+    ret
+}
+
+/// Evaluate `$ENVVAR` expressions.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a C string pointer pointing to `$`
+/// - `rettv` may be null if evaluate is 0
+///
+/// # C equivalent
+/// Replaces the static C `eval_env_var` function in eval_shim.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_env_var(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evaluate: c_int,
+) -> c_int {
+    // Advance past '$'
+    *arg = (*arg).add(1);
+    let name = *arg;
+    let len = rs_get_env_len(arg as *mut *const c_char);
+
+    if evaluate != 0 {
+        if len == 0 {
+            return FAIL; // Invalid empty name.
+        }
+        let cc = *name.add(len as usize) as c_int;
+        *name.add(len as usize) = 0; // NUL-terminate temporarily
+
+        // First try vim_getenv() - fast for normal env vars.
+        let mut string = nvim_vim_getenv(name);
+        if string.is_null() || *string == 0 {
+            xfree(string as *mut c_void);
+
+            // Next try expanding things like $VIM and ${HOME}.
+            // Pass name-1 to include the '$' prefix for expand_env_save.
+            string = nvim_expand_env_save(name.sub(1));
+            if !string.is_null() && *string == b'$' as c_char {
+                xfree(string as *mut c_void);
+                string = std::ptr::null_mut();
+            }
+        }
+
+        // Restore the original character.
+        *name.add(len as usize) = cc as c_char;
+
+        nvim_tv_set_type(rettv, VAR_STRING);
+        nvim_tv_set_vstring_raw(rettv, string);
+        nvim_tv_set_v_lock(rettv, VAR_UNLOCKED);
+    }
+
+    OK
+}
 
 // =============================================================================
 // Tests

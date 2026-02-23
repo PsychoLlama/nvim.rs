@@ -147,6 +147,8 @@ extern int rs_handle_subscript(const char **arg, typval_T *rettv, evalarg_T *eva
                                bool verbose);
 extern void rs_ex_echo(exarg_T *eap);
 extern void rs_ex_execute(exarg_T *eap);
+extern int rs_eval_option(const char **arg, typval_T *rettv, bool evaluate);
+extern int rs_eval_env_var(char **arg, typval_T *rettv, int evaluate);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -1383,51 +1385,7 @@ static int eval_index_inner(typval_T *rettv, bool is_range, typval_T *var1, typv
 int eval_option(const char **const arg, typval_T *const rettv, const bool evaluate)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  const bool working = (**arg == '+');  // has("+option")
-  OptIndex opt_idx;
-  int opt_flags;
-
-  // Isolate the option name and find its value.
-  char *const option_end = (char *)find_option_var_end(arg, &opt_idx, &opt_flags);
-
-  if (option_end == NULL) {
-    if (rettv != NULL) {
-      semsg(_("E112: Option name missing: %s"), *arg);
-    }
-    return FAIL;
-  }
-
-  if (!evaluate) {
-    *arg = option_end;
-    return OK;
-  }
-
-  char c = *option_end;
-  *option_end = NUL;
-
-  int ret = OK;
-  bool is_tty_opt = rs_is_tty_option(*arg);
-
-  if (opt_idx == kOptInvalid && !is_tty_opt) {
-    // Only give error if result is going to be used.
-    if (rettv != NULL) {
-      semsg(_("E113: Unknown option: %s"), *arg);
-    }
-
-    ret = FAIL;
-  } else if (rettv != NULL) {
-    OptVal value = is_tty_opt ? get_tty_option(*arg) : get_option_value(opt_idx, opt_flags);
-    assert(value.type != kOptValTypeNil);
-
-    *rettv = optval_as_tv(value, true);
-  } else if (working && !is_tty_opt && is_option_hidden(opt_idx)) {
-    ret = FAIL;
-  }
-
-  *option_end = c;                  // put back for error messages
-  *arg = option_end;
-
-  return ret;
+  return rs_eval_option(arg, rettv, evaluate);
 }
 
 
@@ -1747,49 +1705,12 @@ static int free_unref_items(int copyID)
 /// This uses strtod().  setlocale(LC_NUMERIC, "C") has been used earlier to
 /// make sure this always uses a decimal point.
 ///
-/// Get the value of an environment variable.
-///
-/// If the environment variable was not set, silently assume it is empty.
-///
-/// @param arg  Points to the '$'.  It is advanced to after the name.
-///
-/// @return  FAIL if the name is invalid.
-static int eval_env_var(char **arg, typval_T *rettv, int evaluate)
-{
-  (*arg)++;
-  char *name = *arg;
-  int len = rs_get_env_len((const char **)arg);
+// eval_env_var: deleted -- replaced by rs_eval_env_var (Rust, Phase 2).
 
-  if (evaluate) {
-    if (len == 0) {
-      return FAIL;  // Invalid empty name.
-    }
-    int cc = (int)name[len];
-    name[len] = NUL;
-    // First try vim_getenv(), fast for normal environment vars.
-    char *string = vim_getenv(name);
-    if (string == NULL || *string == NUL) {
-      xfree(string);
-
-      // Next try expanding things like $VIM and ${HOME}.
-      string = expand_env_save(name - 1);
-      if (string != NULL && *string == '$') {
-        XFREE_CLEAR(string);
-      }
-    }
-    name[len] = (char)cc;
-    rettv->v_type = VAR_STRING;
-    rettv->vval.v_string = string;
-    rettv->v_lock = VAR_UNLOCKED;
-  }
-
-  return OK;
-}
-
-/// Non-static wrapper for static eval_env_var - accessor for Rust rs_eval7.
+/// Non-static wrapper for eval_env_var - calls Rust rs_eval_env_var.
 int nvim_eval_env_var_wrapper(char **arg, typval_T *rettv, int evaluate)
 {
-  return eval_env_var(arg, rettv, evaluate);
+  return rs_eval_env_var(arg, rettv, evaluate);
 }
 
 /// Builds a process argument vector from a Vimscript object (typval_T).
@@ -4569,5 +4490,66 @@ void nvim_tv_raw_copy_and_reset(typval_T *dst, typval_T *src)
 {
   *dst = *src;
   src->v_type = VAR_UNKNOWN;
+}
+
+// =============================================================================
+// Accessors for Phase 2 (eval_shim pass 4): eval_option + eval_env_var
+// =============================================================================
+
+/// Wraps find_option_var_end: parse &[g:|l:]optname from *arg.
+/// On success, *arg is set to "optname" and returned value is pointer after name.
+/// opt_idxp and opt_flagsp are set.
+/// Returns NULL when no option name found (error).
+const char *nvim_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flagsp)
+{
+  OptIndex opt_idx = kOptInvalid;
+  int opt_flags = 0;
+  const char *end = find_option_var_end(arg, &opt_idx, &opt_flags);
+  *opt_idxp = (int)opt_idx;
+  *opt_flagsp = opt_flags;
+  return end;
+}
+
+/// Get option value as typval using get_option_value() + optval_as_tv().
+/// opt_idx must not be kOptInvalid.
+void nvim_get_option_value_as_tv(int opt_idx, int opt_flags, typval_T *rettv)
+{
+  OptVal value = get_option_value((OptIndex)opt_idx, opt_flags);
+  assert(value.type != kOptValTypeNil);
+  *rettv = optval_as_tv(value, true);
+}
+
+/// Get tty option value as typval using get_tty_option() + optval_as_tv().
+void nvim_get_tty_option_as_tv(const char *name, typval_T *rettv)
+{
+  OptVal value = get_tty_option(name);
+  assert(value.type != kOptValTypeNil);
+  *rettv = optval_as_tv(value, true);
+}
+
+/// Emit "E112: Option name missing: %s" semsg.
+void nvim_semsg_e112_option_name_missing(const char *arg)
+{
+  semsg(_("E112: Option name missing: %s"), arg);
+}
+
+/// Emit "E113: Unknown option: %s" semsg.
+void nvim_semsg_e113_unknown_option(const char *arg)
+{
+  semsg(_("E113: Unknown option: %s"), arg);
+}
+
+/// Call vim_getenv(name) - returns allocated string or NULL.
+/// Caller must xfree the result.
+char *nvim_vim_getenv(const char *name)
+{
+  return vim_getenv(name);
+}
+
+/// Call expand_env_save(src) - expands $VAR style from src.
+/// Returns allocated string. Caller must xfree.
+char *nvim_expand_env_save(const char *src)
+{
+  return expand_env_save((char *)src);
 }
 
