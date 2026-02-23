@@ -12,6 +12,7 @@ pub mod display;
 pub mod numeric;
 pub mod string;
 pub mod string_simple;
+pub mod winhl;
 
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;

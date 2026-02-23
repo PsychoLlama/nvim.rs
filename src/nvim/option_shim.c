@@ -203,6 +203,10 @@ extern const char *rs_did_set_paste_full(optset_T *args);
 extern const char *rs_did_set_shellslash(optset_T *args);
 #endif
 
+// Phase 3: winhighlight callback (from Rust winhl.rs)
+extern const char *rs_did_set_winhighlight(optset_T *args);
+extern bool rs_parse_winhl_opt(const char *winhl, win_T *wp);
+
 // Phase 2: Medium-complexity string callbacks (from Rust string_simple.rs)
 extern const char *rs_did_set_backupcopy(optset_T *args);
 extern const char *rs_did_set_commentstring(optset_T *args);
@@ -611,6 +615,46 @@ void nvim_win_set_spo_flags(win_T *win, unsigned val) { win->w_s->b_p_spo_flags 
 const char **nvim_get_opt_bkc_values(void) { return (const char **)opt_bkc_values; }
 const char **nvim_get_opt_ssop_values(void) { return (const char **)opt_ssop_values; }
 const char **nvim_get_opt_spo_values(void) { return (const char **)opt_spo_values; }
+
+// =============================================================================
+// Phase 3 accessors for parse_winhl_opt migration
+// =============================================================================
+
+// Window ns_hl_winhl accessors
+int nvim_win_get_ns_hl_winhl(win_T *win) { return win->w_ns_hl_winhl; }
+void nvim_win_set_ns_hl_winhl(win_T *win, int val) { win->w_ns_hl_winhl = val; }
+// nvim_win_get_ns_hl is already defined in window_shim.c
+void nvim_win_set_ns_hl(win_T *win, int val) { win->w_ns_hl = val; }
+// nvim_win_set_hl_needs_update is already defined in window_shim.c (takes bool)
+// Return win->w_p_winhl (current winhighlight string)
+const char *nvim_win_get_p_winhl(win_T *win) { return win ? win->w_p_winhl : NULL; }
+// Return address of win->w_p_winhl for varp comparison
+const void *nvim_win_get_p_winhl_addr(win_T *win) { return win ? (const void *)&win->w_p_winhl : NULL; }
+// nvim_get_empty_string_option is already defined in window_shim.c (returns char*)
+// syn_check_group wrapper (reuse existing signature: name + len)
+int nvim_syn_check_group_for_winhl(const char *name, size_t len)
+{
+  return syn_check_group(name, len);
+}
+// Prepare namespace for winhighlight: create if absent, bump hl_valid if existing.
+// Returns the namespace id.
+int nvim_winhl_ns_prepare(win_T *wp)
+{
+  if (wp->w_ns_hl_winhl == 0) {
+    wp->w_ns_hl_winhl = (int)nvim_create_namespace(NULL_STRING);
+  } else {
+    DecorProvider *dp = get_decor_provider(wp->w_ns_hl_winhl, true);
+    dp->hl_valid++;
+  }
+  return wp->w_ns_hl_winhl;
+}
+// Apply winhighlight namespace highlight definition (HL_GLOBAL flag set).
+void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id)
+{
+  HlAttrs attrs = HLATTRS_INIT;
+  attrs.rgb_ae_attr |= HL_GLOBAL;
+  ns_hl_def(ns_hl, hl_id_link, attrs, hl_id, NULL);
+}
 
 // =============================================================================
 // Simple accessor functions for Rust (don't require options array)
@@ -2351,75 +2395,6 @@ void check_blending(win_T *wp)
 /// @param wp     when NULL: only parse "winhl"
 ///
 /// @return  whether the option value is valid.
-bool parse_winhl_opt(const char *winhl, win_T *wp)
-{
-  const char *p = empty_string_option;
-  if (winhl != NULL) {
-    p = winhl;
-  } else if (wp != NULL) {
-    p = wp->w_p_winhl;
-  }
-
-  if (wp != NULL && wp->w_ns_hl_winhl < 0) {
-    // 'winhighlight' shouldn't be used for this window.
-    // Only check that the value is valid.
-    wp = NULL;
-  }
-
-  if (!*p) {
-    if (wp != NULL && wp->w_ns_hl_winhl > 0 && wp->w_ns_hl == wp->w_ns_hl_winhl) {
-      wp->w_ns_hl = 0;
-      wp->w_hl_needs_update = true;
-    }
-
-    return true;
-  }
-
-  int ns_hl = 0;
-  if (wp != NULL) {
-    if (wp->w_ns_hl_winhl == 0) {
-      wp->w_ns_hl_winhl = (int)nvim_create_namespace(NULL_STRING);
-    } else {
-      // Namespace already exists. Invalidate existing items.
-      DecorProvider *dp = get_decor_provider(wp->w_ns_hl_winhl, true);
-      dp->hl_valid++;
-    }
-    wp->w_ns_hl = wp->w_ns_hl_winhl;
-    ns_hl = wp->w_ns_hl;
-  }
-
-  while (*p) {
-    const char *colon = strchr(p, ':');
-    if (!colon) {
-      return false;
-    }
-    size_t nlen = (size_t)(colon - p);
-    const char *hi = colon + 1;
-    const char *commap = xstrchrnul(hi, ',');
-    size_t len = (size_t)(commap - hi);
-    int hl_id = len ? syn_check_group(hi, len) : -1;
-    if (hl_id == 0) {
-      return false;
-    }
-    int hl_id_link = nlen ? syn_check_group(p, nlen) : 0;
-    if (hl_id_link == 0) {
-      return false;
-    }
-
-    if (wp != NULL) {
-      HlAttrs attrs = HLATTRS_INIT;
-      attrs.rgb_ae_attr |= HL_GLOBAL;
-      ns_hl_def(ns_hl, hl_id_link, attrs, hl_id, NULL);
-    }
-
-    p = *commap ? commap + 1 : "";
-  }
-
-  if (wp != NULL) {
-    wp->w_hl_needs_update = true;
-  }
-  return true;
-}
 
 /// Get the script context of global option at index opt_idx.
 sctx_T *get_option_sctx(OptIndex opt_idx)
@@ -4180,7 +4155,7 @@ void didset_window_options(win_T *wp, bool valid_cursor)
   fill_culopt_flags(NULL, wp);
   set_chars_option(wp, wp->w_p_fcs, kFillchars, true, NULL, 0);
   set_chars_option(wp, wp->w_p_lcs, kListchars, true, NULL, 0);
-  parse_winhl_opt(NULL, wp);  // sets w_hl_needs_update also for w_p_winbl
+  rs_parse_winhl_opt(NULL, wp);  // sets w_hl_needs_update also for w_p_winbl
   check_blending(wp);
   set_winbar_win(wp, false, valid_cursor);
   check_signcolumn(NULL, wp);

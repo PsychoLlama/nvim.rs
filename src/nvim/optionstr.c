@@ -1899,16 +1899,6 @@ const char *did_set_pumborder(optset_T *args)
   return NULL;
 }
 
-/// The 'winhighlight' option is changed.
-const char *did_set_winhighlight(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  char **varp = (char **)args->os_varp;
-  if (!parse_winhl_opt(*varp, varp == &win->w_p_winhl ? win : NULL)) {
-    return e_invarg;
-  }
-  return NULL;
-}
 
 int expand_set_winhighlight(optexpand_T *args, int *numMatches, char ***matches)
 {

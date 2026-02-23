@@ -34,6 +34,7 @@
 #include "nvim/winfloat.h"
 
 #include "winfloat.c.generated.h"
+extern bool rs_parse_winhl_opt(const char *winhl, win_T *wp);
 extern int rs_win_valid(win_T *win);
 extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
 
@@ -154,7 +155,7 @@ void win_set_minimal_style(win_T *wp)
                    ? xstrdup("EndOfBuffer:")
                    : concat_str(old, ",EndOfBuffer:"));
   free_string_option(old);
-  parse_winhl_opt(NULL, wp);
+  rs_parse_winhl_opt(NULL, wp);
 
   // signcolumn: use 'auto'
   if (wp->w_p_scl[0] != 'a' || strlen(wp->w_p_scl) >= 8) {

@@ -10671,7 +10671,7 @@ local options = {
     },
     {
       abbreviation = 'winhl',
-      cb = 'did_set_winhighlight',
+      cb = 'rs_did_set_winhighlight',
       defaults = '',
       deny_duplicates = true,
       desc = [=[
