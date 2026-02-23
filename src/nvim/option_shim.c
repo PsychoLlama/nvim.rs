@@ -128,8 +128,13 @@ extern const char *rs_skip_to_option_part(const char *p);
 extern int rs_default_fileformat(void);
 extern size_t rs_copy_option_part(char **pp, char *buf, size_t maxlen, const char *sep);
 extern const char *rs_validate_num_option(int opt_idx, OptInt *newval, char *errbuf, size_t errbuflen);
+extern const char *rs_find_dup_item(const char *origval, const char *newval, size_t newvallen, uint32_t flags);
 extern char *rs_stropt_get_newval(int nextchar, int opt_idx, char **argp, void *varp,
                                   const char *origval, int *op_arg, uint32_t flags);
+extern int rs_fill_culopt_flags(const char *val, win_T *wp);
+extern void rs_set_options_bin(int oldval, int newval, int opt_flags);
+extern void rs_set_fileformat(int eol_style, int opt_flags);
+extern void rs_set_helplang_default(const char *lang);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
@@ -550,6 +555,31 @@ void nvim_set_p_sta(int val) { p_sta = val != 0; }
 void nvim_set_p_ru(int val) { p_ru = val != 0; }
 void nvim_set_p_ri(int val) { p_ri = val != 0; }
 
+// fill_culopt_flags accessors
+const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
+void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }
+
+// set_fileformat accessors: nvim_set_redraw_tabline/nvim_set_need_maketitle are defined in drawscreen.c
+
+// set_options_bin global option accessors
+OptInt nvim_get_p_tw(void) { return p_tw; }
+void nvim_set_p_tw(OptInt v) { p_tw = v; }
+OptInt nvim_get_p_wm(void) { return p_wm; }
+void nvim_set_p_wm(OptInt v) { p_wm = v; }
+int nvim_get_p_ml(void) { return p_ml; }
+void nvim_set_p_ml(int v) { p_ml = v != 0; }
+int nvim_get_p_et(void) { return p_et; }
+void nvim_set_p_et(int v) { p_et = v != 0; }
+void nvim_set_p_bin(int v) { p_bin = v != 0; }
+
+// set_helplang_default accessors
+void nvim_set_p_hlg_from_code(const char *code)
+{
+  free_string_option(p_hlg);
+  // code is a 2-char null-terminated string (or empty)
+  p_hlg = (code && code[0]) ? xstrdup(code) : xstrdup("");
+}
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
@@ -598,6 +628,9 @@ extern void rs_foldUpdateAll(win_T *win);
 
 #include "options.generated.h"
 #include "options_map.generated.h"
+
+// After options[] is available:
+int nvim_option_hlg_was_set(void) { return (options[kOptHelplang].flags & kOptFlagWasSet) != 0; }
 
 // Xhistory callback wrappers (after includes for qf_resize_stack/ll_resize_stack)
 void nvim_qf_resize_stack(int n) { qf_resize_stack(n); }
@@ -988,6 +1021,49 @@ void nvim_paste_didset_options_sctx(void)
   didset_options_sctx((OPT_LOCAL | OPT_GLOBAL), p_paste_dep_opts);
 }
 
+// bin callback: record sctx for all dependent options (after p_bin_dep_opts is defined)
+void nvim_bin_didset_options_sctx(int opt_flags)
+{
+  didset_options_sctx(opt_flags, p_bin_dep_opts);
+}
+
+// set_fileformat helper: set the 'fileformat' option string and trigger redraws
+void nvim_set_fileformat_option(const char *p, int opt_flags)
+{
+  if (p != NULL) {
+    set_option_direct(kOptFileformat, CSTR_AS_OPTVAL(p), opt_flags, 0);
+  }
+  redraw_buf_status_later(curbuf);
+  redraw_tabline = true;
+  need_maketitle = true;
+}
+
+// set_options_bin helpers: accessors for curbuf binary-save fields
+int nvim_curbuf_get_b_p_tw_nobin(void) { return (int)curbuf->b_p_tw_nobin; }
+void nvim_curbuf_set_b_p_tw_nobin(OptInt v) { curbuf->b_p_tw_nobin = v; }
+int nvim_curbuf_get_b_p_wm_nobin(void) { return (int)curbuf->b_p_wm_nobin; }
+void nvim_curbuf_set_b_p_wm_nobin(OptInt v) { curbuf->b_p_wm_nobin = v; }
+int nvim_curbuf_get_b_p_ml_nobin(void) { return curbuf->b_p_ml; }
+void nvim_curbuf_set_b_p_ml_nobin(int v) { curbuf->b_p_ml_nobin = v != 0; }
+int nvim_curbuf_get_b_p_et_nobin(void) { return curbuf->b_p_et; }
+void nvim_curbuf_set_b_p_et_nobin(int v) { curbuf->b_p_et_nobin = v != 0; }
+// nvim_curbuf_get_b_p_tw/wm are defined in ex_cmds_shim.c
+void nvim_curbuf_set_b_p_tw(OptInt v) { curbuf->b_p_tw = v; }
+void nvim_curbuf_set_b_p_wm(OptInt v) { curbuf->b_p_wm = v; }
+int nvim_curbuf_get_b_p_ml(void) { return curbuf->b_p_ml; }
+void nvim_curbuf_set_b_p_ml(int v) { curbuf->b_p_ml = v != 0; }
+int nvim_curbuf_get_b_p_et(void) { return curbuf->b_p_et; }
+void nvim_curbuf_set_b_p_et(int v) { curbuf->b_p_et = v != 0; }
+// set_options_bin helpers: nobin statics
+OptInt nvim_get_p_tw_nobin(void) { return p_tw_nobin; }
+void nvim_set_p_tw_nobin(OptInt v) { p_tw_nobin = v; }
+OptInt nvim_get_p_wm_nobin(void) { return p_wm_nobin; }
+void nvim_set_p_wm_nobin(OptInt v) { p_wm_nobin = v; }
+int nvim_get_p_ml_nobin(void) { return p_ml_nobin; }
+void nvim_set_p_ml_nobin(int v) { p_ml_nobin = v != 0; }
+int nvim_get_p_et_nobin(void) { return p_et_nobin; }
+void nvim_set_p_et_nobin(int v) { p_et_nobin = v != 0; }
+
 void set_init_tablocal(void)
 {
   // susy baka: cmdheight calls itself OPT_GLOBAL but is really tablocal!
@@ -1068,7 +1144,7 @@ static void set_init_default_backupskip(void)
       size_t itemlen = (size_t)vim_snprintf(item, itemsize, "%s%s*", p,
                                             has_trailing_path_sep ? "" : PATHSEPSTR);
 
-      if (find_dup_item(ga.ga_data, item, itemlen, options[opt_idx].flags) == NULL) {
+      if (rs_find_dup_item(ga.ga_data, item, itemlen, options[opt_idx].flags) == NULL) {
         ga_grow(&ga, (int)(itemseplen + itemlen + 1));
         ga.ga_len += vim_snprintf((char *)ga.ga_data + ga.ga_len,
                                   itemseplen + itemlen + 1,
@@ -1351,37 +1427,6 @@ static void set_string_default(OptIndex opt_idx, char *val, bool allocated)
   change_option_default(opt_idx, CSTR_AS_OPTVAL(allocated ? val : xstrdup(val)));
 }
 
-/// For an option value that contains comma separated items, find "newval" in
-/// "origval".  Return NULL if not found.
-static const char *find_dup_item(const char *origval, const char *newval, const size_t newvallen,
-                                 uint32_t flags)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  if (origval == NULL) {
-    return NULL;
-  }
-
-  int bs = 0;
-
-  for (const char *s = origval; *s != NUL; s++) {
-    if ((!(flags & kOptFlagComma) || s == origval || (s[-1] == ',' && !(bs & 1)))
-        && strncmp(s, newval, newvallen) == 0
-        && (!(flags & kOptFlagComma) || s[newvallen] == ',' || s[newvallen] == NUL)) {
-      return s;
-    }
-    // Count backslashes.  Only a comma with an even number of backslashes
-    // or a single backslash preceded by a comma before it is recognized as
-    // a separator.
-    if ((s > origval + 1 && s[-1] == '\\' && s[-2] != ',')
-        || (s == origval + 1 && s[-1] == '\\')) {
-      bs++;
-    } else {
-      bs = 0;
-    }
-  }
-  return NULL;
-}
-
 #if defined(EXITFREE)
 /// Free all options.
 void free_all_options(void)
@@ -1484,30 +1529,7 @@ void set_init_3(void)
 /// Only the first two characters of "lang" are used.
 void set_helplang_default(const char *lang)
 {
-  if (lang == NULL) {
-    return;
-  }
-
-  const size_t lang_len = strlen(lang);
-  if (lang_len < 2) {  // safety check
-    return;
-  }
-  if (options[kOptHelplang].flags & kOptFlagWasSet) {
-    return;
-  }
-
-  free_string_option(p_hlg);
-  p_hlg = xmemdupz(lang, lang_len);
-  // zh_CN becomes "cn", zh_TW becomes "tw".
-  if (STRNICMP(p_hlg, "zh_", 3) == 0 && lang_len >= 5) {
-    p_hlg[0] = (char)TOLOWER_ASC(p_hlg[3]);
-    p_hlg[1] = (char)TOLOWER_ASC(p_hlg[4]);
-  } else if (lang_len && *p_hlg == 'C') {
-    // any C like setting, such as C.UTF-8, becomes "en"
-    p_hlg[0] = 'e';
-    p_hlg[1] = 'n';
-  }
-  p_hlg[2] = NUL;
+  rs_set_helplang_default(lang);
 }
 
 /// 'title' and 'icon' only default to true if they have not been set or reset
@@ -2050,54 +2072,7 @@ int string_to_key(char *arg)
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
 void set_options_bin(int oldval, int newval, int opt_flags)
 {
-  // The option values that are changed when 'bin' changes are
-  // copied when 'bin is set and restored when 'bin' is reset.
-  if (newval) {
-    if (!oldval) {              // switched on
-      if (!(opt_flags & OPT_GLOBAL)) {
-        curbuf->b_p_tw_nobin = curbuf->b_p_tw;
-        curbuf->b_p_wm_nobin = curbuf->b_p_wm;
-        curbuf->b_p_ml_nobin = curbuf->b_p_ml;
-        curbuf->b_p_et_nobin = curbuf->b_p_et;
-      }
-      if (!(opt_flags & OPT_LOCAL)) {
-        p_tw_nobin = p_tw;
-        p_wm_nobin = p_wm;
-        p_ml_nobin = p_ml;
-        p_et_nobin = p_et;
-      }
-    }
-
-    if (!(opt_flags & OPT_GLOBAL)) {
-      curbuf->b_p_tw = 0;       // no automatic line wrap
-      curbuf->b_p_wm = 0;       // no automatic line wrap
-      curbuf->b_p_ml = 0;       // no modelines
-      curbuf->b_p_et = 0;       // no expandtab
-    }
-    if (!(opt_flags & OPT_LOCAL)) {
-      p_tw = 0;
-      p_wm = 0;
-      p_ml = false;
-      p_et = false;
-      p_bin = true;             // needed when called for the "-b" argument
-    }
-  } else if (oldval) {        // switched off
-    if (!(opt_flags & OPT_GLOBAL)) {
-      curbuf->b_p_tw = curbuf->b_p_tw_nobin;
-      curbuf->b_p_wm = curbuf->b_p_wm_nobin;
-      curbuf->b_p_ml = curbuf->b_p_ml_nobin;
-      curbuf->b_p_et = curbuf->b_p_et_nobin;
-    }
-    if (!(opt_flags & OPT_LOCAL)) {
-      p_tw = p_tw_nobin;
-      p_wm = p_wm_nobin;
-      p_ml = p_ml_nobin;
-      p_et = p_et_nobin;
-    }
-  }
-
-  // Remember where the dependent option were reset
-  didset_options_sctx(opt_flags, p_bin_dep_opts);
+  rs_set_options_bin(oldval, newval, opt_flags);
 }
 
 /// Expand environment variables for some string options.
@@ -2489,20 +2464,6 @@ static void do_spelllang_source(win_T *win)
     vim_snprintf(fname, sizeof(fname), "spell/%.*s.*", (int)(p - q), q);
     source_runtime_vim_lua(fname, DIP_ALL);
   }
-}
-
-/// Validate and bound check option value.
-///
-/// @param          opt_idx    Index in options[] table. Must not be kOptInvalid.
-/// @param[in,out]  newval     Pointer to new option value. Will be set to bound checked value.
-/// @param[out]     errbuf     Buffer for error message. Cannot be NULL.
-/// @param          errbuflen  Length of error buffer.
-///
-/// @return Error message, if any.
-static const char *validate_num_option(OptIndex opt_idx, OptInt *newval, char *errbuf,
-                                       size_t errbuflen)
-{
-  return rs_validate_num_option(opt_idx, newval, errbuf, errbuflen);
 }
 
 /// Called after an option changed: check if something needs to be redrawn.
@@ -3112,7 +3073,7 @@ static const char *validate_option_value(const OptIndex opt_idx, OptVal *newval,
     errmsg = errbuf;
   } else if (newval->type == kOptValTypeNumber) {
     // Validate and bound check num option values.
-    errmsg = validate_num_option(opt_idx, &newval->data.number, errbuf, errbuflen);
+    errmsg = rs_validate_num_option(opt_idx, &newval->data.number, errbuf, errbuflen);
   }
 
   return errmsg;
@@ -4844,45 +4805,7 @@ void reset_option_was_set(OptIndex opt_idx)
 /// fill_culopt_flags() -- called when 'culopt' changes value
 int fill_culopt_flags(char *val, win_T *wp)
 {
-  char *p;
-  uint8_t culopt_flags_new = 0;
-
-  if (val == NULL) {
-    p = wp->w_p_culopt;
-  } else {
-    p = val;
-  }
-  while (*p != NUL) {
-    // Note: Keep this in sync with opt_culopt_values.
-    if (strncmp(p, "line", 4) == 0) {
-      p += 4;
-      culopt_flags_new |= kOptCuloptFlagLine;
-    } else if (strncmp(p, "both", 4) == 0) {
-      p += 4;
-      culopt_flags_new |= kOptCuloptFlagLine | kOptCuloptFlagNumber;
-    } else if (strncmp(p, "number", 6) == 0) {
-      p += 6;
-      culopt_flags_new |= kOptCuloptFlagNumber;
-    } else if (strncmp(p, "screenline", 10) == 0) {
-      p += 10;
-      culopt_flags_new |= kOptCuloptFlagScreenline;
-    }
-
-    if (*p != ',' && *p != NUL) {
-      return FAIL;
-    }
-    if (*p == ',') {
-      p++;
-    }
-  }
-
-  // Can't have both "line" and "screenline".
-  if ((culopt_flags_new & kOptCuloptFlagLine) && (culopt_flags_new & kOptCuloptFlagScreenline)) {
-    return FAIL;
-  }
-  wp->w_p_culopt_flags = culopt_flags_new;
-
-  return OK;
+  return rs_fill_culopt_flags(val, wp);
 }
 
 
@@ -5014,29 +4937,7 @@ int get_fileformat_force(const buf_T *buf, const exarg_T *eap)
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
 void set_fileformat(int eol_style, int opt_flags)
 {
-  char *p = NULL;
-
-  switch (eol_style) {
-  case EOL_UNIX:
-    p = "unix";
-    break;
-  case EOL_MAC:
-    p = "mac";
-    break;
-  case EOL_DOS:
-    p = "dos";
-    break;
-  }
-
-  // p is NULL if "eol_style" is EOL_UNKNOWN.
-  if (p != NULL) {
-    set_option_direct(kOptFileformat, CSTR_AS_OPTVAL(p), opt_flags, 0);
-  }
-
-  // This may cause the buffer to become (un)modified.
-  redraw_buf_status_later(curbuf);
-  redraw_tabline = true;
-  need_maketitle = true;  // Set window title later.
+  rs_set_fileformat(eol_style, opt_flags);
 }
 
 /// Isolate one part of a string option separated by `sep_chars`.

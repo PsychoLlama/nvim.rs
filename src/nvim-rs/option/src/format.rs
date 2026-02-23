@@ -458,6 +458,36 @@ pub unsafe extern "C" fn rs_escaped_len(s: *const u8, len: usize) -> usize {
 }
 
 // =============================================================================
+// File Format Option Setter
+// =============================================================================
+
+/// EOL style constants (from fileio.h)
+const EOL_UNIX: c_int = 0;
+const EOL_DOS: c_int = 1;
+const EOL_MAC: c_int = 2;
+
+extern "C" {
+    /// C helper: set 'fileformat' option string and trigger redraws.
+    fn nvim_set_fileformat_option(p: *const std::ffi::c_char, opt_flags: c_int);
+}
+
+/// Set the 'fileformat' option to match an EOL style, then trigger redraws.
+///
+/// Maps EOL style codes to their string names ("unix", "dos", "mac").
+/// If `eol_style` is not a recognized code, no option change is made but
+/// redraws are still triggered.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_fileformat(eol_style: c_int, opt_flags: c_int) {
+    let p: *const std::ffi::c_char = match eol_style {
+        EOL_UNIX => c"unix".as_ptr(),
+        EOL_DOS => c"dos".as_ptr(),
+        EOL_MAC => c"mac".as_ptr(),
+        _ => std::ptr::null(),
+    };
+    nvim_set_fileformat_option(p, opt_flags);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

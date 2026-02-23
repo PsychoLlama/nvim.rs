@@ -390,6 +390,39 @@ pub extern "C" fn rs_default_tmpdir() -> *const c_char {
 }
 
 // =============================================================================
+// Helplang Default
+// =============================================================================
+
+extern "C" {
+    /// Set p_hlg from a 2-char code, freeing the old value.
+    fn nvim_set_p_hlg_from_code(code: *const c_char);
+    /// Return non-zero if 'helplang' was explicitly set by the user.
+    fn nvim_option_hlg_was_set() -> c_int;
+}
+
+/// Set 'helplang' to a default value derived from a locale string, if it
+/// has not already been set by the user.
+///
+/// Converts locale strings to two-letter codes (same logic as
+/// `rs_compute_helplang`), then stores them via `nvim_set_p_hlg_from_code`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_helplang_default(lang: *const c_char) {
+    if lang.is_null() || *lang == 0 {
+        return;
+    }
+    if nvim_option_hlg_was_set() != 0 {
+        return;
+    }
+
+    let result = rs_compute_helplang(lang);
+    if result.valid == 0 {
+        return;
+    }
+
+    nvim_set_p_hlg_from_code(result.code.as_ptr());
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

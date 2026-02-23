@@ -114,6 +114,46 @@ extern "C" {
 
     // Shiftwidth buffer-local value
     fn nvim_buf_get_b_p_sw(buf: BufHandle) -> OptInt;
+
+    // fill_culopt_flags accessors
+    fn nvim_win_get_p_culopt(win: WinHandle) -> *const std::ffi::c_char;
+    fn nvim_win_set_p_culopt_flags(win: WinHandle, flags: u8);
+
+    // set_options_bin global option accessors
+    fn nvim_get_p_tw() -> OptInt;
+    fn nvim_set_p_tw(v: OptInt);
+    fn nvim_get_p_wm() -> OptInt;
+    fn nvim_set_p_wm(v: OptInt);
+    fn nvim_get_p_ml() -> c_int;
+    fn nvim_set_p_ml(v: c_int);
+    fn nvim_get_p_et() -> c_int;
+    fn nvim_set_p_et(v: c_int);
+    fn nvim_set_p_bin(v: c_int);
+    fn nvim_get_p_tw_nobin() -> OptInt;
+    fn nvim_set_p_tw_nobin(v: OptInt);
+    fn nvim_get_p_wm_nobin() -> OptInt;
+    fn nvim_set_p_wm_nobin(v: OptInt);
+    fn nvim_get_p_ml_nobin() -> c_int;
+    fn nvim_set_p_ml_nobin(v: c_int);
+    fn nvim_get_p_et_nobin() -> c_int;
+    fn nvim_set_p_et_nobin(v: c_int);
+    fn nvim_curbuf_get_b_p_tw() -> c_int;
+    fn nvim_curbuf_set_b_p_tw(v: OptInt);
+    fn nvim_curbuf_get_b_p_wm() -> c_int;
+    fn nvim_curbuf_set_b_p_wm(v: OptInt);
+    fn nvim_curbuf_get_b_p_ml() -> c_int;
+    fn nvim_curbuf_set_b_p_ml(v: c_int);
+    fn nvim_curbuf_get_b_p_et() -> c_int;
+    fn nvim_curbuf_set_b_p_et(v: c_int);
+    fn nvim_curbuf_get_b_p_tw_nobin() -> c_int;
+    fn nvim_curbuf_set_b_p_tw_nobin(v: OptInt);
+    fn nvim_curbuf_get_b_p_wm_nobin() -> c_int;
+    fn nvim_curbuf_set_b_p_wm_nobin(v: OptInt);
+    fn nvim_curbuf_get_b_p_ml_nobin() -> c_int;
+    fn nvim_curbuf_set_b_p_ml_nobin(v: c_int);
+    fn nvim_curbuf_get_b_p_et_nobin() -> c_int;
+    fn nvim_curbuf_set_b_p_et_nobin(v: c_int);
+    fn nvim_bin_didset_options_sctx(opt_flags: c_int);
 }
 
 // =============================================================================
@@ -582,6 +622,180 @@ pub extern "C" fn rs_did_set_virtualedit() -> CallbackResult {
 #[no_mangle]
 pub extern "C" fn rs_did_set_writebackup() -> CallbackResult {
     callback_ok()
+}
+
+// =============================================================================
+// Cursorlineopt Flags
+// =============================================================================
+
+/// Flag bit for 'cursorlineopt' "line" keyword
+const CULOPT_FLAG_LINE: u8 = 0x01;
+/// Flag bit for 'cursorlineopt' "screenline" keyword
+const CULOPT_FLAG_SCREENLINE: u8 = 0x02;
+/// Flag bit for 'cursorlineopt' "number" keyword
+const CULOPT_FLAG_NUMBER: u8 = 0x04;
+
+/// OK return value (matches C OK = 1)
+const OK: c_int = 1;
+/// FAIL return value (matches C FAIL = 0)
+const FAIL: c_int = 0;
+
+/// Parse 'cursorlineopt' value into flag bits and store in window.
+///
+/// If `val` is null, reads the current value from the window.
+/// Returns OK on success, FAIL if the value is invalid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fill_culopt_flags(
+    val: *const std::ffi::c_char,
+    wp: WinHandle,
+) -> c_int {
+    let p: *const u8 = if val.is_null() {
+        let culopt = nvim_win_get_p_culopt(wp);
+        if culopt.is_null() {
+            return FAIL;
+        }
+        culopt.cast()
+    } else {
+        val.cast()
+    };
+
+    let mut culopt_flags_new: u8 = 0;
+    let mut cur = p;
+
+    while *cur != 0 {
+        if *cur == b'l'
+            && *cur.add(1) == b'i'
+            && *cur.add(2) == b'n'
+            && *cur.add(3) == b'e'
+            && (*cur.add(4) == b',' || *cur.add(4) == 0)
+        {
+            cur = cur.add(4);
+            culopt_flags_new |= CULOPT_FLAG_LINE;
+        } else if *cur == b'b'
+            && *cur.add(1) == b'o'
+            && *cur.add(2) == b't'
+            && *cur.add(3) == b'h'
+            && (*cur.add(4) == b',' || *cur.add(4) == 0)
+        {
+            cur = cur.add(4);
+            culopt_flags_new |= CULOPT_FLAG_LINE | CULOPT_FLAG_NUMBER;
+        } else if *cur == b'n'
+            && *cur.add(1) == b'u'
+            && *cur.add(2) == b'm'
+            && *cur.add(3) == b'b'
+            && *cur.add(4) == b'e'
+            && *cur.add(5) == b'r'
+            && (*cur.add(6) == b',' || *cur.add(6) == 0)
+        {
+            cur = cur.add(6);
+            culopt_flags_new |= CULOPT_FLAG_NUMBER;
+        } else if *cur == b's'
+            && *cur.add(1) == b'c'
+            && *cur.add(2) == b'r'
+            && *cur.add(3) == b'e'
+            && *cur.add(4) == b'e'
+            && *cur.add(5) == b'n'
+            && *cur.add(6) == b'l'
+            && *cur.add(7) == b'i'
+            && *cur.add(8) == b'n'
+            && *cur.add(9) == b'e'
+            && (*cur.add(10) == b',' || *cur.add(10) == 0)
+        {
+            cur = cur.add(10);
+            culopt_flags_new |= CULOPT_FLAG_SCREENLINE;
+        } else {
+            return FAIL;
+        }
+
+        if *cur != b',' && *cur != 0 {
+            return FAIL;
+        }
+        if *cur == b',' {
+            cur = cur.add(1);
+        }
+    }
+
+    // Can't have both "line" and "screenline".
+    if (culopt_flags_new & CULOPT_FLAG_LINE) != 0
+        && (culopt_flags_new & CULOPT_FLAG_SCREENLINE) != 0
+    {
+        return FAIL;
+    }
+
+    nvim_win_set_p_culopt_flags(wp, culopt_flags_new);
+    OK
+}
+
+// =============================================================================
+// Binary Option Toggle
+// =============================================================================
+
+/// OPT_GLOBAL flag (matches C option.h OPT_GLOBAL = 0x01)
+const OPT_GLOBAL_BIN: c_int = 0x01;
+/// OPT_LOCAL flag (matches C option.h OPT_LOCAL = 0x02)
+const OPT_LOCAL_BIN: c_int = 0x02;
+
+/// Save/restore options when 'binary' ('bin') changes value.
+///
+/// When `newval` is non-zero (bin turned on):
+/// - If previously off, saves current local/global tw, wm, ml, et values
+/// - Forces bin-compatible values (no wrap, no modelines, no expandtab)
+///
+/// When `newval` is zero (bin turned off):
+/// - If previously on, restores the saved local/global values
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_flags: c_int) {
+    if newval != 0 {
+        if oldval == 0 {
+            // switched on
+            if (opt_flags & OPT_GLOBAL_BIN) == 0 {
+                // save local buffer options
+                nvim_curbuf_set_b_p_tw_nobin(OptInt::from(nvim_curbuf_get_b_p_tw()));
+                nvim_curbuf_set_b_p_wm_nobin(OptInt::from(nvim_curbuf_get_b_p_wm()));
+                nvim_curbuf_set_b_p_ml_nobin(nvim_curbuf_get_b_p_ml());
+                nvim_curbuf_set_b_p_et_nobin(nvim_curbuf_get_b_p_et());
+            }
+            if (opt_flags & OPT_LOCAL_BIN) == 0 {
+                // save global options
+                nvim_set_p_tw_nobin(nvim_get_p_tw());
+                nvim_set_p_wm_nobin(nvim_get_p_wm());
+                nvim_set_p_ml_nobin(nvim_get_p_ml());
+                nvim_set_p_et_nobin(nvim_get_p_et());
+            }
+        }
+
+        if (opt_flags & OPT_GLOBAL_BIN) == 0 {
+            // set bin-compatible local buffer values
+            nvim_curbuf_set_b_p_tw(0);
+            nvim_curbuf_set_b_p_wm(0);
+            nvim_curbuf_set_b_p_ml(0);
+            nvim_curbuf_set_b_p_et(0);
+        }
+        if (opt_flags & OPT_LOCAL_BIN) == 0 {
+            // set bin-compatible global values
+            nvim_set_p_tw(0);
+            nvim_set_p_wm(0);
+            nvim_set_p_ml(0);
+            nvim_set_p_et(0);
+            nvim_set_p_bin(1); // needed when called for the "-b" argument
+        }
+    } else if oldval != 0 {
+        // switched off: restore saved values
+        if (opt_flags & OPT_GLOBAL_BIN) == 0 {
+            nvim_curbuf_set_b_p_tw(OptInt::from(nvim_curbuf_get_b_p_tw_nobin()));
+            nvim_curbuf_set_b_p_wm(OptInt::from(nvim_curbuf_get_b_p_wm_nobin()));
+            nvim_curbuf_set_b_p_ml(nvim_curbuf_get_b_p_ml_nobin());
+            nvim_curbuf_set_b_p_et(nvim_curbuf_get_b_p_et_nobin());
+        }
+        if (opt_flags & OPT_LOCAL_BIN) == 0 {
+            nvim_set_p_tw(nvim_get_p_tw_nobin());
+            nvim_set_p_wm(nvim_get_p_wm_nobin());
+            nvim_set_p_ml(nvim_get_p_ml_nobin());
+            nvim_set_p_et(nvim_get_p_et_nobin());
+        }
+    }
+
+    nvim_bin_didset_options_sctx(opt_flags);
 }
 
 // =============================================================================
