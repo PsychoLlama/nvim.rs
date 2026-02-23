@@ -69,6 +69,9 @@ extern "C" {
     // Window accessor for view height
     fn nvim_option_win_get_view_height(win: *mut std::ffi::c_void) -> c_int;
 
+    // Current window (note: *const to match setcmd.rs declaration; cast to *mut for Rust APIs)
+    fn nvim_get_curwin() -> *const std::ffi::c_void;
+
     // Global option value accessors
     fn nvim_option_get_p_wmh() -> OptInt;
     fn nvim_option_get_p_wh() -> OptInt;
@@ -318,53 +321,317 @@ pub unsafe extern "C" fn rs_check_scroll_bounds(
 }
 
 // =============================================================================
-// Number Validation
+// Number Validation -- Full Implementation
 // =============================================================================
 
-/// Validate numeric option value.
-/// Returns error message or NULL if valid.
+// Option index constants (from opt_index.rs)
+use crate::opt_index::{
+    K_OPT_CHANNEL, K_OPT_CHISTORY, K_OPT_CMDHEIGHT, K_OPT_CMDWINHEIGHT, K_OPT_COLUMNS,
+    K_OPT_CONCEALLEVEL, K_OPT_FOLDLEVEL, K_OPT_HELPHEIGHT, K_OPT_HISTORY, K_OPT_IMINSERT,
+    K_OPT_IMSEARCH, K_OPT_LHISTORY, K_OPT_LINES, K_OPT_MAXCOMBINE, K_OPT_MAXSEARCHCOUNT,
+    K_OPT_NUMBERWIDTH, K_OPT_PUMBLEND, K_OPT_PYXVERSION, K_OPT_REGEXPENGINE, K_OPT_REPORT,
+    K_OPT_SCROLL, K_OPT_SCROLLBACK, K_OPT_SCROLLJUMP, K_OPT_SCROLLOFF, K_OPT_SHIFTWIDTH,
+    K_OPT_SIDESCROLL, K_OPT_SIDESCROLLOFF, K_OPT_TABSTOP, K_OPT_TEXTWIDTH, K_OPT_TIMEOUTLEN,
+    K_OPT_TITLELEN, K_OPT_UPDATECOUNT, K_OPT_UPDATETIME, K_OPT_WINHEIGHT, K_OPT_WINMINHEIGHT,
+    K_OPT_WINMINWIDTH, K_OPT_WINWIDTH, K_OPT_WRITEDELAY,
+};
+
+/// Constants matching C definitions
+const MAX_MCO: OptInt = 6;
+const B_IMODE_LAST: OptInt = 1;
+const SB_MAX: OptInt = 1_000_000;
+const TABSTOP_MAX: OptInt = 9999;
+const MAX_NUMBERWIDTH: OptInt = 20;
+const MAX_SEARCH_COUNT: OptInt = 9999;
+
+/// Static error messages for quickfix option validation
+/// (these are local to option_shim.c in C, so we define them in Rust)
+static E_CANNOT_HAVE_NEGATIVE_OR_ZERO_QUICKFIX: &[u8] =
+    b"E1542: Cannot have a negative or zero number of quickfix/location lists\0";
+static E_CANNOT_HAVE_MORE_THAN_HUNDRED_QUICKFIX: &[u8] =
+    b"E1543: Cannot have more than a hundred quickfix/location lists\0";
+
+/// Write a formatted error message to errbuf.
+/// Returns errbuf cast to *const c_char.
+unsafe fn write_errbuf(errbuf: *mut c_char, errbuflen: usize, msg: &str) -> *const c_char {
+    if errbuf.is_null() || errbuflen == 0 {
+        return errbuf.cast();
+    }
+    let bytes = msg.as_bytes();
+    let copy_len = bytes.len().min(errbuflen - 1);
+    ptr::copy_nonoverlapping(bytes.as_ptr(), errbuf.cast::<u8>(), copy_len);
+    *errbuf.add(copy_len) = 0;
+    errbuf.cast()
+}
+
+/// Validate and bounds-check a numeric option value.
+///
+/// Full implementation of C's `validate_num_option` + `check_num_option_bounds`.
+///
+/// # Arguments
+/// * `opt_idx` - Option index (matches kOpt* enum in C)
+/// * `newval` - Pointer to the new value (may be modified to clamp/correct)
+/// * `errbuf` - Buffer for formatted error messages
+/// * `errbuflen` - Size of errbuf
+///
+/// # Returns
+/// NULL on success, or pointer to error message string on failure.
 #[no_mangle]
-pub unsafe extern "C" fn rs_validate_num_option(opt_idx: c_int, value: OptInt) -> *const c_char {
-    // Check INT range
-    if value < OptInt::from(i32::MIN) || value > OptInt::from(i32::MAX) {
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_validate_num_option(
+    opt_idx: c_int,
+    newval: *mut OptInt,
+    errbuf: *mut c_char,
+    errbuflen: usize,
+) -> *const c_char {
+    if newval.is_null() {
+        return ptr::null();
+    }
+
+    let value = *newval;
+
+    // Many number options assume their value is in the signed int range.
+    if !(OptInt::from(i32::MIN)..=OptInt::from(i32::MAX)).contains(&value) {
         return E_INVARG.as_ptr().cast();
     }
 
-    // Option-specific validation is handled through option indices
-    // These match kOpt* enum values
+    // Option-specific validation switch
     match opt_idx {
-        // Options that must be >= 0
-        idx if is_nonnegative_option(idx) => {
+        // Options requiring value >= 0
+        idx if idx == K_OPT_HELPHEIGHT
+            || idx == K_OPT_TITLELEN
+            || idx == K_OPT_UPDATECOUNT
+            || idx == K_OPT_REPORT
+            || idx == K_OPT_UPDATETIME
+            || idx == K_OPT_SIDESCROLL
+            || idx == K_OPT_FOLDLEVEL
+            || idx == K_OPT_SHIFTWIDTH
+            || idx == K_OPT_TEXTWIDTH
+            || idx == K_OPT_WRITEDELAY
+            || idx == K_OPT_TIMEOUTLEN =>
+        {
             if value < 0 {
-                E_POSITIVE.as_ptr().cast()
-            } else {
-                ptr::null()
+                return E_POSITIVE.as_ptr().cast();
             }
         }
-        // Options that must be > 0
-        idx if is_positive_option(idx) => {
+
+        idx if idx == K_OPT_WINHEIGHT => {
+            if value < 1 {
+                return E_POSITIVE.as_ptr().cast();
+            } else if nvim_option_get_p_wmh() > value {
+                return E_WINHEIGHT.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_WINMINHEIGHT => {
+            if value < 0 {
+                return E_POSITIVE.as_ptr().cast();
+            } else if value > nvim_option_get_p_wh() {
+                return E_WINHEIGHT.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_WINWIDTH => {
+            if value < 1 {
+                return E_POSITIVE.as_ptr().cast();
+            } else if nvim_option_get_p_wmw() > value {
+                return E_WINWIDTH.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_WINMINWIDTH => {
+            if value < 0 {
+                return E_POSITIVE.as_ptr().cast();
+            } else if value > nvim_option_get_p_wiw() {
+                return E_WINWIDTH.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_MAXCOMBINE => {
+            *newval = MAX_MCO;
+        }
+
+        idx if idx == K_OPT_CMDHEIGHT => {
+            if value < 0 {
+                return E_POSITIVE.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_HISTORY => {
+            if value < 0 {
+                return E_POSITIVE.as_ptr().cast();
+            } else if value > 10000 {
+                return E_INVARG.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_PYXVERSION => {
+            if value == 0 {
+                *newval = 3;
+            } else if value != 3 {
+                return E_INVARG.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_REGEXPENGINE => {
+            if !(0..=2).contains(&value) {
+                return E_INVARG.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_SCROLLOFF => {
+            if value < 0 && nvim_option_get_full_screen() != 0 {
+                return E_POSITIVE.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_SIDESCROLLOFF => {
+            if value < 0 && nvim_option_get_full_screen() != 0 {
+                return E_POSITIVE.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_CMDWINHEIGHT => {
+            if value < 1 {
+                return E_POSITIVE.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_CONCEALLEVEL => {
+            if value < 0 {
+                return E_POSITIVE.as_ptr().cast();
+            } else if value > 3 {
+                return E_INVARG.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_NUMBERWIDTH => {
+            if value < 1 {
+                return E_POSITIVE.as_ptr().cast();
+            } else if value > MAX_NUMBERWIDTH {
+                return E_INVARG.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_IMINSERT => {
+            if !(0..=B_IMODE_LAST).contains(&value) {
+                return E_INVARG.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_IMSEARCH => {
+            if !(-1..=B_IMODE_LAST).contains(&value) {
+                return E_INVARG.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_CHANNEL => {
+            return E_INVARG.as_ptr().cast();
+        }
+
+        idx if idx == K_OPT_SCROLLBACK => {
+            if !(-1..=SB_MAX).contains(&value) {
+                return E_INVARG.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_TABSTOP => {
+            if value < 1 {
+                return E_POSITIVE.as_ptr().cast();
+            } else if value > TABSTOP_MAX {
+                return E_INVARG.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_CHISTORY || idx == K_OPT_LHISTORY => {
+            if value < 1 {
+                return E_CANNOT_HAVE_NEGATIVE_OR_ZERO_QUICKFIX.as_ptr().cast();
+            } else if value > 100 {
+                return E_CANNOT_HAVE_MORE_THAN_HUNDRED_QUICKFIX.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_MAXSEARCHCOUNT => {
             if value <= 0 {
-                E_POSITIVE.as_ptr().cast()
-            } else {
-                ptr::null()
+                return E_POSITIVE.as_ptr().cast();
+            } else if value > MAX_SEARCH_COUNT {
+                return E_INVARG.as_ptr().cast();
             }
         }
-        // Default: no validation
-        _ => ptr::null(),
+
+        _ => {}
     }
-}
 
-/// Check if option index requires non-negative value.
-fn is_nonnegative_option(_idx: c_int) -> bool {
-    // This would need to match against specific option indices
-    // For now, return false and let C handle specific validation
-    false
-}
+    // check_num_option_bounds inline
+    let full_screen = nvim_option_get_full_screen() != 0;
 
-/// Check if option index requires positive value.
-fn is_positive_option(_idx: c_int) -> bool {
-    // This would need to match against specific option indices
-    false
+    match opt_idx {
+        idx if idx == K_OPT_LINES => {
+            let min_rows = OptInt::from(min_rows_for_all_tabpages());
+            if *newval < min_rows && full_screen {
+                let msg = format!("E593: Need at least {min_rows} lines");
+                let errmsg = write_errbuf(errbuf, errbuflen, &msg);
+                *newval = min_rows;
+                return errmsg;
+            }
+            // Clamp to INT_MAX (true max size is defined by check_screensize())
+            if *newval > OptInt::from(i32::MAX) {
+                *newval = OptInt::from(i32::MAX);
+            }
+        }
+
+        idx if idx == K_OPT_COLUMNS => {
+            if *newval < MIN_COLUMNS && full_screen {
+                let msg = format!("E594: Need at least {MIN_COLUMNS} columns");
+                let errmsg = write_errbuf(errbuf, errbuflen, &msg);
+                *newval = MIN_COLUMNS;
+                return errmsg;
+            }
+            // Clamp to INT_MAX (true max size is defined by check_screensize())
+            if *newval > OptInt::from(i32::MAX) {
+                *newval = OptInt::from(i32::MAX);
+            }
+        }
+
+        idx if idx == K_OPT_PUMBLEND => {
+            *newval = (*newval).clamp(0, 100);
+        }
+
+        idx if idx == K_OPT_SCROLLJUMP => {
+            let rows = OptInt::from(nvim_option_get_rows());
+            if (*newval < -100 || *newval >= rows) && full_screen {
+                *newval = 1;
+                return E_SCROLL.as_ptr().cast();
+            }
+        }
+
+        idx if idx == K_OPT_SCROLL => {
+            // nvim_get_curwin returns *const but we need *mut for C calls
+            let curwin = nvim_get_curwin().cast_mut();
+            let view_height = if curwin.is_null() {
+                0
+            } else {
+                OptInt::from(nvim_option_win_get_view_height(curwin))
+            };
+            if (*newval <= 0 || (*newval > view_height && view_height > 0)) && full_screen {
+                let errmsg = if *newval != 0 {
+                    E_SCROLL.as_ptr().cast()
+                } else {
+                    ptr::null()
+                };
+                *newval = if curwin.is_null() {
+                    *newval
+                } else {
+                    win_default_scroll(curwin)
+                };
+                return errmsg;
+            }
+        }
+
+        _ => {}
+    }
+
+    ptr::null()
 }
 
 /// Validate 'winheight' against 'winminheight' with cross-check.

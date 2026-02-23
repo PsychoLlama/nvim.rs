@@ -127,6 +127,7 @@ extern int rs_is_tty_option(const char *name);
 extern const char *rs_skip_to_option_part(const char *p);
 extern int rs_default_fileformat(void);
 extern size_t rs_copy_option_part(char **pp, char *buf, size_t maxlen, const char *sep);
+extern const char *rs_validate_num_option(int opt_idx, OptInt *newval, char *errbuf, size_t errbuflen);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
@@ -491,11 +492,6 @@ static const char e_number_required_after_equal[]
   = N_("E521: Number required after =");
 static const char e_preview_window_already_exists[]
   = N_("E590: A preview window already exists");
-static const char e_cannot_have_negative_or_zero_number_of_quickfix[]
-  = N_("E1542: Cannot have a negative or zero number of quickfix/location lists");
-static const char e_cannot_have_more_than_hundred_quickfix[]
-  = N_("E1543: Cannot have more than a hundred quickfix/location lists");
-
 static char *p_term = NULL;
 static char *p_ttytype = NULL;
 
@@ -2891,65 +2887,6 @@ static void do_spelllang_source(win_T *win)
   }
 }
 
-/// Check the bounds of numeric options.
-///
-/// @param          opt_idx    Index in options[] table. Must not be kOptInvalid.
-/// @param[in,out]  newval     Pointer to new option value. Will be set to bound checked value.
-/// @param[out]     errbuf     Buffer for error message. Cannot be NULL.
-/// @param          errbuflen  Length of error buffer.
-///
-/// @return Error message, if any.
-static const char *check_num_option_bounds(OptIndex opt_idx, OptInt *newval, char *errbuf,
-                                           size_t errbuflen)
-  FUNC_ATTR_NONNULL_ARG(3)
-{
-  const char *errmsg = NULL;
-
-  switch (opt_idx) {
-  case kOptLines:
-    if (*newval < rs_min_rows_for_all_tabpages() && full_screen) {
-      vim_snprintf(errbuf, errbuflen, _("E593: Need at least %d lines"),
-                   rs_min_rows_for_all_tabpages());
-      errmsg = errbuf;
-      *newval = rs_min_rows_for_all_tabpages();
-    }
-    // True max size is defined by check_screensize().
-    *newval = MIN(*newval, INT_MAX);
-    break;
-  case kOptColumns:
-    if (*newval < MIN_COLUMNS && full_screen) {
-      vim_snprintf(errbuf, errbuflen, _("E594: Need at least %d columns"), MIN_COLUMNS);
-      errmsg = errbuf;
-      *newval = MIN_COLUMNS;
-    }
-    // True max size is defined by check_screensize().
-    *newval = MIN(*newval, INT_MAX);
-    break;
-  case kOptPumblend:
-    *newval = MAX(MIN(*newval, 100), 0);
-    break;
-  case kOptScrolljump:
-    if ((*newval < -100 || *newval >= Rows) && full_screen) {
-      errmsg = e_scroll;
-      *newval = 1;
-    }
-    break;
-  case kOptScroll:
-    if ((*newval <= 0 || (*newval > curwin->w_view_height && curwin->w_view_height > 0))
-        && full_screen) {
-      if (*newval != 0) {
-        errmsg = e_scroll;
-      }
-      *newval = rs_win_default_scroll(curwin);
-    }
-    break;
-  default:
-    break;
-  }
-
-  return errmsg;
-}
-
 /// Validate and bound check option value.
 ///
 /// @param          opt_idx    Index in options[] table. Must not be kOptInvalid.
@@ -2961,160 +2898,7 @@ static const char *check_num_option_bounds(OptIndex opt_idx, OptInt *newval, cha
 static const char *validate_num_option(OptIndex opt_idx, OptInt *newval, char *errbuf,
                                        size_t errbuflen)
 {
-  OptInt value = *newval;
-
-  // Many number options assume their value is in the signed int range.
-  if (value < INT_MIN || value > INT_MAX) {
-    return e_invarg;
-  }
-
-  // if you increase this, also increase SEARCH_STAT_BUF_LEN in search.c
-  enum { MAX_SEARCH_COUNT = 9999, };
-
-  switch (opt_idx) {
-  case kOptHelpheight:
-  case kOptTitlelen:
-  case kOptUpdatecount:
-  case kOptReport:
-  case kOptUpdatetime:
-  case kOptSidescroll:
-  case kOptFoldlevel:
-  case kOptShiftwidth:
-  case kOptTextwidth:
-  case kOptWritedelay:
-  case kOptTimeoutlen:
-    if (value < 0) {
-      return e_positive;
-    }
-    break;
-  case kOptWinheight:
-    if (value < 1) {
-      return e_positive;
-    } else if (p_wmh > value) {
-      return e_winheight;
-    }
-    break;
-  case kOptWinminheight:
-    if (value < 0) {
-      return e_positive;
-    } else if (value > p_wh) {
-      return e_winheight;
-    }
-    break;
-  case kOptWinwidth:
-    if (value < 1) {
-      return e_positive;
-    } else if (p_wmw > value) {
-      return e_winwidth;
-    }
-    break;
-  case kOptWinminwidth:
-    if (value < 0) {
-      return e_positive;
-    } else if (value > p_wiw) {
-      return e_winwidth;
-    }
-    break;
-  case kOptMaxcombine:
-    *newval = MAX_MCO;
-    break;
-  case kOptCmdheight:
-    if (value < 0) {
-      return e_positive;
-    }
-    break;
-  case kOptHistory:
-    if (value < 0) {
-      return e_positive;
-    } else if (value > 10000) {
-      return e_invarg;
-    }
-    break;
-  case kOptPyxversion:
-    if (value == 0) {
-      *newval = 3;
-    } else if (value != 3) {
-      return e_invarg;
-    }
-    break;
-  case kOptRegexpengine:
-    if (value < 0 || value > 2) {
-      return e_invarg;
-    }
-    break;
-  case kOptScrolloff:
-    if (value < 0 && full_screen) {
-      return e_positive;
-    }
-    break;
-  case kOptSidescrolloff:
-    if (value < 0 && full_screen) {
-      return e_positive;
-    }
-    break;
-  case kOptCmdwinheight:
-    if (value < 1) {
-      return e_positive;
-    }
-    break;
-  case kOptConceallevel:
-    if (value < 0) {
-      return e_positive;
-    } else if (value > 3) {
-      return e_invarg;
-    }
-    break;
-  case kOptNumberwidth:
-    if (value < 1) {
-      return e_positive;
-    } else if (value > MAX_NUMBERWIDTH) {
-      return e_invarg;
-    }
-    break;
-  case kOptIminsert:
-    if (value < 0 || value > B_IMODE_LAST) {
-      return e_invarg;
-    }
-    break;
-  case kOptImsearch:
-    if (value < -1 || value > B_IMODE_LAST) {
-      return e_invarg;
-    }
-    break;
-  case kOptChannel:
-    return e_invarg;
-  case kOptScrollback:
-    if (value < -1 || value > SB_MAX) {
-      return e_invarg;
-    }
-    break;
-  case kOptTabstop:
-    if (value < 1) {
-      return e_positive;
-    } else if (value > TABSTOP_MAX) {
-      return e_invarg;
-    }
-    break;
-  case kOptChistory:
-  case kOptLhistory:
-    if (value < 1) {
-      return e_cannot_have_negative_or_zero_number_of_quickfix;
-    } else if (value > 100) {
-      return e_cannot_have_more_than_hundred_quickfix;
-    }
-    break;
-  case kOptMaxsearchcount:
-    if (value <= 0) {
-      return e_positive;
-    } else if (value > MAX_SEARCH_COUNT) {
-      return e_invarg;
-    }
-    break;
-  default:
-    break;
-  }
-
-  return check_num_option_bounds(opt_idx, newval, errbuf, errbuflen);
+  return rs_validate_num_option(opt_idx, newval, errbuf, errbuflen);
 }
 
 /// Called after an option changed: check if something needs to be redrawn.
