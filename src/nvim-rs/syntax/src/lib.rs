@@ -25,6 +25,7 @@ pub mod cache;
 pub mod check_ends;
 pub mod cluster;
 pub mod cmd_clear;
+pub mod cmd_include;
 pub mod cmd_keyword;
 pub mod cmd_match;
 pub mod cmd_region;

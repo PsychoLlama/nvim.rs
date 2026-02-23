@@ -197,6 +197,9 @@ extern void rs_syn_cmd_sync(exarg_T *eap, int syncing);
 // Rust clear command FFI declaration
 extern void rs_syn_cmd_clear(exarg_T *eap, int syncing);
 
+// Rust include command FFI declaration
+extern void rs_syn_cmd_include(exarg_T *eap, int syncing);
+
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
 
@@ -1728,66 +1731,7 @@ static void syn_incl_toplevel(int id, int *flagsp)
 // Handle ":syntax include [@{group-name}] filename" command.
 static void syn_cmd_include(exarg_T *eap, int syncing)
 {
-  char *arg = eap->arg;
-  int sgl_id = 1;
-  char *group_name_end;
-  const char *errormsg = NULL;
-  bool source = false;
-
-  eap->nextcmd = find_nextcmd(arg);
-  if (eap->skip) {
-    return;
-  }
-
-  if (arg[0] == '@') {
-    arg++;
-    char *rest = get_group_name(arg, &group_name_end);
-    if (rest == NULL) {
-      emsg(_("E397: Filename required"));
-      return;
-    }
-    sgl_id = syn_check_cluster(arg, (int)(group_name_end - arg));
-    if (sgl_id == 0) {
-      return;
-    }
-    // separate_nextcmd() and expand_filename() depend on this
-    eap->arg = rest;
-  }
-
-  // Everything that's left, up to the next command, should be the
-  // filename to include.
-  eap->argt |= (EX_XFILE | EX_NOSPC);
-  separate_nextcmd(eap);
-  if (*eap->arg == '<' || *eap->arg == '$' || path_is_absolute(eap->arg)) {
-    // For an absolute path, "$VIM/..." or "<sfile>.." we ":source" the
-    // file.  Need to expand the file name first.  In other cases
-    // ":runtime!" is used.
-    source = true;
-    if (expand_filename(eap, syn_cmdlinep, &errormsg) == FAIL) {
-      if (errormsg != NULL) {
-        emsg(errormsg);
-      }
-      return;
-    }
-  }
-
-  // Save and restore the existing top-level grouplist id and ":syn
-  // include" tag around the actual inclusion.
-  if (running_syn_inc_tag >= MAX_SYN_INC_TAG) {
-    emsg(_("E847: Too many syntax includes"));
-    return;
-  }
-  int prev_syn_inc_tag = current_syn_inc_tag;
-  current_syn_inc_tag = ++running_syn_inc_tag;
-  int prev_toplvl_grp = curwin->w_s->b_syn_topgrp;
-  curwin->w_s->b_syn_topgrp = sgl_id;
-  if (source
-      ? do_source(eap->arg, false, DOSO_NONE, NULL) == FAIL
-      : source_runtime(eap->arg, DIP_ALL) == FAIL) {
-    semsg(_(e_notopen), eap->arg);
-  }
-  curwin->w_s->b_syn_topgrp = prev_toplvl_grp;
-  current_syn_inc_tag = prev_syn_inc_tag;
+  rs_syn_cmd_include(eap, syncing);
 }
 
 // Handle ":syntax keyword {group-name} [{option}] keyword .." command.
@@ -4690,4 +4634,61 @@ void nvim_syn_clear_unlet_vars(synblock_T *block)
     do_unlet(S_LEN("b:current_syntax"), true);
   }
   do_unlet(S_LEN("w:current_syntax"), true);
+}
+
+// =============================================================================
+// Phase 3 accessors: syn_cmd_include migration
+// =============================================================================
+
+/// Set current_syn_inc_tag.
+void nvim_syn_set_current_inc_tag(int tag)
+{
+  current_syn_inc_tag = tag;
+}
+
+/// Atomically do: current_syn_inc_tag = ++running_syn_inc_tag.
+/// Returns the new current_syn_inc_tag value.
+int nvim_syn_increment_and_set_inc_tag(void)
+{
+  current_syn_inc_tag = ++running_syn_inc_tag;
+  return current_syn_inc_tag;
+}
+
+/// Prepare for :syntax include.
+/// Sets EX_XFILE|EX_NOSPC argt flags, calls separate_nextcmd,
+/// checks if path is absolute/$/<, and optionally calls expand_filename.
+/// Returns 1 if file should be :source'd (absolute path),
+///         0 if file should be loaded via source_runtime,
+///        -1 on expand_filename failure.
+int nvim_syn_include_prepare(exarg_T *eap)
+{
+  eap->argt |= (EX_XFILE | EX_NOSPC);
+  separate_nextcmd(eap);
+  if (*eap->arg == '<' || *eap->arg == '$' || path_is_absolute(eap->arg)) {
+    const char *errormsg = NULL;
+    if (expand_filename(eap, syn_cmdlinep, &errormsg) == FAIL) {
+      if (errormsg != NULL) {
+        emsg(errormsg);
+      }
+      return -1;
+    }
+    return 1;  // use :source
+  }
+  return 0;  // use source_runtime
+}
+
+/// Execute :syntax include -- source or runtime load the file.
+/// Returns 0 on success, -1 on failure (caller should emit e_notopen).
+int nvim_syn_include_source(exarg_T *eap, int use_source)
+{
+  if (use_source) {
+    if (do_source(eap->arg, false, DOSO_NONE, NULL) == FAIL) {
+      return -1;
+    }
+  } else {
+    if (source_runtime(eap->arg, DIP_ALL) == FAIL) {
+      return -1;
+    }
+  }
+  return 0;
 }
