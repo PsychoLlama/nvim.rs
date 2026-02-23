@@ -40,6 +40,7 @@ pub mod group;
 pub mod highlight;
 pub mod item;
 pub mod keyword;
+pub mod listing;
 pub mod match_engine;
 pub mod offset;
 pub mod opt_parse;

@@ -1112,439 +1112,9 @@ void syn_maybe_enable(void)
   rs_syn_maybe_enable();
 }
 
-/// Handle ":syntax [list]" command: list current syntax words.
-///
-/// @param syncing  when true: list syncing items
-static void syn_cmd_list(exarg_T *eap, int syncing)
-{
-  char *arg = eap->arg;
-  char *arg_end;
-
-  eap->nextcmd = find_nextcmd(arg);
-  if (eap->skip) {
-    return;
-  }
-
-  if (!syntax_present(curwin)) {
-    msg(_(msg_no_items), 0);
-    return;
-  }
-
-  if (syncing) {
-    if (curwin->w_s->b_syn_sync_flags & SF_CCOMMENT) {
-      msg_puts(_("syncing on C-style comments"));
-      syn_lines_msg();
-      syn_match_msg();
-      return;
-    } else if (!(curwin->w_s->b_syn_sync_flags & SF_MATCH)) {
-      if (curwin->w_s->b_syn_sync_minlines == 0) {
-        msg_puts(_("no syncing"));
-      } else {
-        if (curwin->w_s->b_syn_sync_minlines == MAXLNUM) {
-          msg_puts(_("syncing starts at the first line"));
-        } else {
-          msg_puts(_("syncing starts "));
-          msg_outnum(curwin->w_s->b_syn_sync_minlines);
-          msg_puts(_(" lines before top line"));
-        }
-        syn_match_msg();
-      }
-      return;
-    }
-    msg_puts_title(_("\n--- Syntax sync items ---"));
-    if (curwin->w_s->b_syn_sync_minlines > 0
-        || curwin->w_s->b_syn_sync_maxlines > 0
-        || curwin->w_s->b_syn_sync_linebreaks > 0) {
-      msg_puts(_("\nsyncing on items"));
-      syn_lines_msg();
-      syn_match_msg();
-    }
-  } else {
-    msg_puts_title(_("\n--- Syntax items ---"));
-  }
-  if (ends_excmd(*arg)) {
-    // No argument: List all group IDs and all syntax clusters.
-    for (int id = 1; id <= highlight_num_groups() && !got_int; id++) {
-      syn_list_one(id, syncing, false);
-    }
-    for (int id = 0; id < curwin->w_s->b_syn_clusters.ga_len && !got_int; id++) {
-      syn_list_cluster(id);
-    }
-  } else {
-    // List the group IDs and syntax clusters that are in the argument.
-    while (!ends_excmd(*arg) && !got_int) {
-      arg_end = skiptowhite(arg);
-      if (*arg == '@') {
-        int id = syn_scl_namen2id(arg + 1, (int)(arg_end - arg - 1));
-        if (id == 0) {
-          semsg(_("E392: No such syntax cluster: %s"), arg);
-        } else {
-          syn_list_cluster(id - SYNID_CLUSTER);
-        }
-      } else {
-        int id = syn_name2id_len(arg, (size_t)(arg_end - arg));
-        if (id == 0) {
-          semsg(_(e_nogroup), arg);
-        } else {
-          syn_list_one(id, syncing, true);
-        }
-      }
-      arg = skipwhite(arg_end);
-    }
-  }
-  eap->nextcmd = check_nextcmd(arg);
-}
-
-static void syn_lines_msg(void)
-{
-  if (curwin->w_s->b_syn_sync_maxlines > 0
-      || curwin->w_s->b_syn_sync_minlines > 0) {
-    msg_puts("; ");
-    if (curwin->w_s->b_syn_sync_minlines == MAXLNUM) {
-      msg_puts(_("from the first line"));
-    } else {
-      if (curwin->w_s->b_syn_sync_minlines > 0) {
-        msg_puts(_("minimal "));
-        msg_outnum(curwin->w_s->b_syn_sync_minlines);
-        if (curwin->w_s->b_syn_sync_maxlines) {
-          msg_puts(", ");
-        }
-      }
-      if (curwin->w_s->b_syn_sync_maxlines > 0) {
-        msg_puts(_("maximal "));
-        msg_outnum(curwin->w_s->b_syn_sync_maxlines);
-      }
-      msg_puts(_(" lines before top line"));
-    }
-  }
-}
-
-static void syn_match_msg(void)
-{
-  if (curwin->w_s->b_syn_sync_linebreaks > 0) {
-    msg_puts(_("; match "));
-    msg_outnum(curwin->w_s->b_syn_sync_linebreaks);
-    msg_puts(_(" line breaks"));
-  }
-}
-
-static int last_matchgroup;
-
-/// List one syntax item, for ":syntax" or "syntax list syntax_name".
-///
-/// @param syncing    when true: list syncing items
-/// @param link_only  when true; list link-only too
-static void syn_list_one(const int id, const bool syncing, const bool link_only)
-{
-  bool did_header = false;
-  static keyvalue_T namelist1[] = {
-    KEYVALUE_ENTRY(HL_DISPLAY, "display"),
-    KEYVALUE_ENTRY(HL_CONTAINED, "contained"),
-    KEYVALUE_ENTRY(HL_ONELINE, "oneline"),
-    KEYVALUE_ENTRY(HL_KEEPEND, "keepend"),
-    KEYVALUE_ENTRY(HL_EXTEND, "extend"),
-    KEYVALUE_ENTRY(HL_EXCLUDENL, "excludenl"),
-    KEYVALUE_ENTRY(HL_TRANSP, "transparent"),
-    KEYVALUE_ENTRY(HL_FOLD, "fold"),
-    KEYVALUE_ENTRY(HL_CONCEAL, "conceal"),
-    KEYVALUE_ENTRY(HL_CONCEALENDS, "concealends"),
-  };
-  static keyvalue_T namelist2[] = {
-    KEYVALUE_ENTRY(HL_SKIPWHITE, "skipwhite"),
-    KEYVALUE_ENTRY(HL_SKIPNL, "skipnl"),
-    KEYVALUE_ENTRY(HL_SKIPEMPTY, "skipempty"),
-  };
-
-  const int hl_id = HLF_D;      // highlight like directories
-
-  // list the keywords for "id"
-  if (!syncing) {
-    did_header = syn_list_keywords(id, &curwin->w_s->b_keywtab, false, hl_id);
-    did_header = syn_list_keywords(id, &curwin->w_s->b_keywtab_ic, did_header, hl_id);
-  }
-
-  // list the patterns for "id"
-  for (int idx = 0;
-       idx < curwin->w_s->b_syn_patterns.ga_len && !got_int;
-       idx++) {
-    const synpat_T *const spp = &(SYN_ITEMS(curwin->w_s)[idx]);
-    if (spp->sp_syn.id != id || spp->sp_syncing != syncing) {
-      continue;
-    }
-
-    syn_list_header(did_header, 0, id, true);
-    did_header = true;
-    last_matchgroup = 0;
-    if (spp->sp_type == SPTYPE_MATCH) {
-      put_pattern("match", ' ', spp, hl_id);
-      msg_putchar(' ');
-    } else if (spp->sp_type == SPTYPE_START) {
-      while (SYN_ITEMS(curwin->w_s)[idx].sp_type == SPTYPE_START) {
-        put_pattern("start", '=', &SYN_ITEMS(curwin->w_s)[idx++], hl_id);
-      }
-      if (SYN_ITEMS(curwin->w_s)[idx].sp_type == SPTYPE_SKIP) {
-        put_pattern("skip", '=', &SYN_ITEMS(curwin->w_s)[idx++], hl_id);
-      }
-      while (idx < curwin->w_s->b_syn_patterns.ga_len
-             && SYN_ITEMS(curwin->w_s)[idx].sp_type == SPTYPE_END) {
-        put_pattern("end", '=', &SYN_ITEMS(curwin->w_s)[idx++], hl_id);
-      }
-      idx--;
-      msg_putchar(' ');
-    }
-    syn_list_flags(namelist1, ARRAY_SIZE(namelist1), spp->sp_flags, hl_id);
-
-    if (spp->sp_cont_list != NULL) {
-      put_id_list("contains", spp->sp_cont_list, hl_id);
-    }
-
-    if (spp->sp_syn.cont_in_list != NULL) {
-      put_id_list("containedin", spp->sp_syn.cont_in_list, hl_id);
-    }
-
-    if (spp->sp_next_list != NULL) {
-      put_id_list("nextgroup", spp->sp_next_list, hl_id);
-      syn_list_flags(namelist2, ARRAY_SIZE(namelist2), spp->sp_flags, hl_id);
-    }
-    if (spp->sp_flags & (HL_SYNC_HERE|HL_SYNC_THERE)) {
-      if (spp->sp_flags & HL_SYNC_HERE) {
-        msg_puts_hl("grouphere", hl_id, false);
-      } else {
-        msg_puts_hl("groupthere", hl_id, false);
-      }
-      msg_putchar(' ');
-      if (spp->sp_sync_idx >= 0) {
-        msg_outtrans(highlight_group_name(SYN_ITEMS(curwin->w_s)
-                                          [spp->sp_sync_idx].sp_syn.id - 1), 0, false);
-      } else {
-        msg_puts("NONE");
-      }
-      msg_putchar(' ');
-    }
-  }
-
-  // list the link, if there is one
-  if (highlight_link_id(id - 1) && (did_header || link_only) && !got_int) {
-    syn_list_header(did_header, 0, id, true);
-    msg_puts_hl("links to", hl_id, false);
-    msg_putchar(' ');
-    msg_outtrans(highlight_group_name(highlight_link_id(id - 1) - 1), 0, false);
-  }
-}
-
-static void syn_list_flags(keyvalue_T *nlist, size_t nr_entries, int flags, int hl_id)
-{
-  for (size_t i = 0; i < nr_entries; i++) {
-    if (flags & nlist[i].key) {
-      msg_puts_hl(nlist[i].value, hl_id, false);
-      msg_putchar(' ');
-    }
-  }
-}
-
-// List one syntax cluster, for ":syntax" or "syntax list syntax_name".
-static void syn_list_cluster(int id)
-{
-  int endcol = 15;
-
-  // slight hack:  roughly duplicate the guts of syn_list_header()
-  msg_putchar('\n');
-  msg_outtrans(SYN_CLSTR(curwin->w_s)[id].scl_name, 0, false);
-
-  if (msg_col >= endcol) {      // output at least one space
-    endcol = msg_col + 1;
-  }
-  if (Columns <= endcol) {      // avoid hang for tiny window
-    endcol = Columns - 1;
-  }
-
-  msg_advance(endcol);
-  if (SYN_CLSTR(curwin->w_s)[id].scl_list != NULL) {
-    put_id_list("cluster", SYN_CLSTR(curwin->w_s)[id].scl_list, HLF_D);
-  } else {
-    msg_puts_hl("cluster", HLF_D, false);
-    msg_puts("=NONE");
-  }
-}
-
-static void put_id_list(const char *const name, const int16_t *const list, const int hl_id)
-{
-  msg_puts_hl(name, hl_id, false);
-  msg_putchar('=');
-  for (const int16_t *p = list; *p; p++) {
-    if (*p >= SYNID_ALLBUT && *p < SYNID_TOP) {
-      if (p[1]) {
-        msg_puts("ALLBUT");
-      } else {
-        msg_puts("ALL");
-      }
-    } else if (*p >= SYNID_TOP && *p < SYNID_CONTAINED) {
-      msg_puts("TOP");
-    } else if (*p >= SYNID_CONTAINED && *p < SYNID_CLUSTER) {
-      msg_puts("CONTAINED");
-    } else if (*p >= SYNID_CLUSTER) {
-      int scl_id = *p - SYNID_CLUSTER;
-
-      msg_putchar('@');
-      msg_outtrans(SYN_CLSTR(curwin->w_s)[scl_id].scl_name, 0, false);
-    } else {
-      msg_outtrans(highlight_group_name(*p - 1), 0, false);
-    }
-    if (p[1]) {
-      msg_putchar(',');
-    }
-  }
-  msg_putchar(' ');
-}
-
-static void put_pattern(const char *const s, const int c, const synpat_T *const spp,
-                        const int hl_id)
-{
-  static const char *const sepchars = "/+=-#@\"|'^&";
-  int i;
-
-  // May have to write "matchgroup=group"
-  if (last_matchgroup != spp->sp_syn_match_id) {
-    last_matchgroup = spp->sp_syn_match_id;
-    msg_puts_hl("matchgroup", hl_id, false);
-    msg_putchar('=');
-    if (last_matchgroup == 0) {
-      msg_outtrans("NONE", 0, false);
-    } else {
-      msg_outtrans(highlight_group_name(last_matchgroup - 1), 0, false);
-    }
-    msg_putchar(' ');
-  }
-
-  // Output the name of the pattern and an '=' or ' '.
-  msg_puts_hl(s, hl_id, false);
-  msg_putchar(c);
-
-  // output the pattern, in between a char that is not in the pattern
-  for (i = 0; vim_strchr(spp->sp_pattern, (uint8_t)sepchars[i]) != NULL;) {
-    if (sepchars[++i] == NUL) {
-      i = 0;            // no good char found, just use the first one
-      break;
-    }
-  }
-  msg_putchar(sepchars[i]);
-  msg_outtrans(spp->sp_pattern, 0, false);
-  msg_putchar(sepchars[i]);
-
-  // output any pattern options
-  bool first = true;
-  for (i = 0; i < SPO_COUNT; i++) {
-    const int mask = (1 << i);
-    if (!(spp->sp_off_flags & (mask + (mask << SPO_COUNT)))) {
-      continue;
-    }
-    if (!first) {
-      msg_putchar(',');  // Separate with commas.
-    }
-    msg_puts(spo_name_tab[i]);
-    const int n = spp->sp_offsets[i];
-    if (i != SPO_LC_OFF) {
-      if (spp->sp_off_flags & mask) {
-        msg_putchar('s');
-      } else {
-        msg_putchar('e');
-      }
-      if (n > 0) {
-        msg_putchar('+');
-      }
-    }
-    if (n || i == SPO_LC_OFF) {
-      msg_outnum(n);
-    }
-    first = false;
-  }
-  msg_putchar(' ');
-}
-
-/// List or clear the keywords for one syntax group.
-///
-/// @param did_header  header has already been printed
-///
-/// @return            true if the header has been printed.
-static bool syn_list_keywords(const int id, const hashtab_T *const ht, bool did_header,
-                              const int hl_id)
-{
-  int prev_contained = 0;
-  const int16_t *prev_next_list = NULL;
-  const int16_t *prev_cont_in_list = NULL;
-  int prev_skipnl = 0;
-  int prev_skipwhite = 0;
-  int prev_skipempty = 0;
-
-  // Unfortunately, this list of keywords is not sorted on alphabet but on
-  // hash value...
-  size_t todo = ht->ht_used;
-  for (const hashitem_T *hi = ht->ht_array; todo > 0 && !got_int; hi++) {
-    if (HASHITEM_EMPTY(hi)) {
-      continue;
-    }
-    todo--;
-    for (keyentry_T *kp = HI2KE(hi); kp != NULL && !got_int; kp = kp->ke_next) {
-      if (kp->k_syn.id == id) {
-        int outlen = 0;
-        bool force_newline = false;
-        if (prev_contained != (kp->flags & HL_CONTAINED)
-            || prev_skipnl != (kp->flags & HL_SKIPNL)
-            || prev_skipwhite != (kp->flags & HL_SKIPWHITE)
-            || prev_skipempty != (kp->flags & HL_SKIPEMPTY)
-            || prev_cont_in_list != kp->k_syn.cont_in_list
-            || prev_next_list != kp->next_list) {
-          force_newline = true;
-        } else {
-          outlen = (int)strlen(kp->keyword);
-        }
-        // output "contained" and "nextgroup" on each line
-        if (syn_list_header(did_header, outlen, id, force_newline)) {
-          prev_contained = 0;
-          prev_next_list = NULL;
-          prev_cont_in_list = NULL;
-          prev_skipnl = 0;
-          prev_skipwhite = 0;
-          prev_skipempty = 0;
-        }
-        did_header = true;
-        if (prev_contained != (kp->flags & HL_CONTAINED)) {
-          msg_puts_hl("contained", hl_id, false);
-          msg_putchar(' ');
-          prev_contained = (kp->flags & HL_CONTAINED);
-        }
-        if (kp->k_syn.cont_in_list != prev_cont_in_list) {
-          put_id_list("containedin", kp->k_syn.cont_in_list, hl_id);
-          msg_putchar(' ');
-          prev_cont_in_list = kp->k_syn.cont_in_list;
-        }
-        if (kp->next_list != prev_next_list) {
-          put_id_list("nextgroup", kp->next_list, hl_id);
-          msg_putchar(' ');
-          prev_next_list = kp->next_list;
-          if (kp->flags & HL_SKIPNL) {
-            msg_puts_hl("skipnl", hl_id, false);
-            msg_putchar(' ');
-            prev_skipnl = (kp->flags & HL_SKIPNL);
-          }
-          if (kp->flags & HL_SKIPWHITE) {
-            msg_puts_hl("skipwhite", hl_id, false);
-            msg_putchar(' ');
-            prev_skipwhite = (kp->flags & HL_SKIPWHITE);
-          }
-          if (kp->flags & HL_SKIPEMPTY) {
-            msg_puts_hl("skipempty", hl_id, false);
-            msg_putchar(' ');
-            prev_skipempty = (kp->flags & HL_SKIPEMPTY);
-          }
-        }
-        msg_outtrans(kp->keyword, 0, false);
-      }
-    }
-  }
-
-  return did_header;
-}
+// syn_cmd_list and helper listing functions are implemented in Rust (listing.rs).
+// The C stub syn_cmd_list is at the bottom of this file.
+// Listing functions (syn_cmd_list, syn_list_one, etc.) are implemented in Rust (listing.rs).
 
 static void syn_clear_keyword(int id, hashtab_T *ht)
 {
@@ -4569,3 +4139,139 @@ void set_context_in_echohl_cmd(expand_T *xp, const char *arg)
 
 extern void rs_reset_expand_highlight(void);
 void reset_expand_highlight(void) { rs_reset_expand_highlight(); }
+
+// =============================================================================
+// Phase listing: accessors for syn_cmd_list migration
+// =============================================================================
+
+/// Get the highlight link ID for highlight group at index (0-based).
+int nvim_syn_highlight_link_id(int id) { return highlight_link_id(id); }
+
+/// Wrap syn_list_header.
+int nvim_syn_list_header(int did_header, int outlen, int id, int force_newline)
+{
+  return syn_list_header((bool)did_header, outlen, id, (bool)force_newline) ? 1 : 0;
+}
+
+/// Get msg_col.
+int nvim_get_msg_col_syn(void) { return msg_col; }
+
+/// nvim_msg_putchar already defined in message.c.
+
+/// Wrap msg_puts_hl.
+void nvim_msg_puts_hl_syn(const char *s, int hl_id, bool hist)
+{
+  msg_puts_hl(s, hl_id, hist);
+}
+
+/// Returns non-zero if character c is found in string s (wraps vim_strchr).
+int nvim_syn_vim_strchr(const char *s, int c)
+{
+  return vim_strchr(s, (uint8_t)c) != NULL ? 1 : 0;
+}
+
+/// Hashtab iteration: returns (ht_mask + 1) = array size.
+size_t nvim_ht_get_array_size(const hashtab_T *ht) { return ht->ht_mask + 1; }
+
+/// Hashtab iteration: returns used count.
+size_t nvim_ht_get_used(const hashtab_T *ht) { return ht->ht_used; }
+
+/// Hashtab iteration: returns HI2KE at index if not empty, else NULL.
+keyentry_T *nvim_ht_item_at(const hashtab_T *ht, size_t idx)
+{
+  const hashitem_T *hi = &ht->ht_array[idx];
+  if (HASHITEM_EMPTY(hi)) {
+    return NULL;
+  }
+  return HI2KE(hi);
+}
+
+/// Get b_keywtab pointer for block.
+hashtab_T *nvim_synblock_keywtab_ptr(synblock_T *block) { return &block->b_keywtab; }
+
+/// Get b_keywtab_ic pointer for block.
+hashtab_T *nvim_synblock_keywtab_ic_ptr(synblock_T *block) { return &block->b_keywtab_ic; }
+
+/// Get cluster name for curwin block at index.
+char *nvim_curwin_syncluster_name(int idx)
+{
+  if (idx < 0 || idx >= curwin->w_s->b_syn_clusters.ga_len) {
+    return NULL;
+  }
+  return SYN_CLSTR(curwin->w_s)[idx].scl_name;
+}
+
+/// Get cluster list for curwin block at index.
+int16_t *nvim_curwin_syncluster_list(int idx)
+{
+  if (idx < 0 || idx >= curwin->w_s->b_syn_clusters.ga_len) {
+    return NULL;
+  }
+  return SYN_CLSTR(curwin->w_s)[idx].scl_list;
+}
+
+/// Get curwin synblock cluster count.
+int nvim_curwin_syncluster_count(void) { return curwin->w_s->b_syn_clusters.ga_len; }
+
+/// Get curwin synblock pattern by index.
+synpat_T *nvim_curwin_synpat_at(int idx)
+{
+  if (idx < 0 || idx >= curwin->w_s->b_syn_patterns.ga_len) {
+    return NULL;
+  }
+  return &SYN_ITEMS(curwin->w_s)[idx];
+}
+
+/// Get curwin synblock pattern count.
+int nvim_curwin_synpat_count(void) { return curwin->w_s->b_syn_patterns.ga_len; }
+
+/// Get curwin synblock sync flags.
+int nvim_curwin_syn_sync_flags(void) { return curwin->w_s->b_syn_sync_flags; }
+
+/// Get curwin synblock sync minlines.
+int nvim_curwin_syn_sync_minlines(void) { return (int)curwin->w_s->b_syn_sync_minlines; }
+
+/// Get curwin synblock sync maxlines.
+int nvim_curwin_syn_sync_maxlines(void) { return (int)curwin->w_s->b_syn_sync_maxlines; }
+
+/// Get curwin synblock sync linebreaks.
+int nvim_curwin_syn_sync_linebreaks(void) { return (int)curwin->w_s->b_syn_sync_linebreaks; }
+
+/// Get the synpat at a specific index from the curwin synblock.
+/// Unlike nvim_curwin_synpat_at, used by syn_list_one for the loop.
+synpat_T *nvim_curwin_get_synpat_at(int idx)
+{
+  if (idx < 0 || idx >= curwin->w_s->b_syn_patterns.ga_len) {
+    return NULL;
+  }
+  return &SYN_ITEMS(curwin->w_s)[idx];
+}
+
+/// Call find_nextcmd on arg for eap.
+char *nvim_syn_find_nextcmd_arg(const char *arg) { return find_nextcmd(arg); }
+
+// nvim_syn_ends_excmd already defined above (as nvim_syn_ends_excmd).
+// nvim_syn_skiptowhite and nvim_syn_skipwhite already defined above.
+
+/// Wrap syn_name2id_len (int length version for listing).
+int nvim_syn_name2id_len(const char *name, int len)
+{
+  return (int)syn_name2id_len(name, (size_t)len);
+}
+
+// nvim_syn_scl_namen2id is already defined above.
+
+/// Wrap check_nextcmd and store in eap->nextcmd (for listing).
+void nvim_syn_eap_check_nextcmd(exarg_T *eap, char *arg)
+{
+  eap->nextcmd = check_nextcmd(arg);
+}
+
+// nvim_syn_get_eap_arg and nvim_syn_get_eap_skip already defined above.
+
+/// Thin wrapper: syn_cmd_list body delegated to Rust.
+extern void rs_syn_cmd_list(exarg_T *eap, int syncing);
+static void syn_cmd_list(exarg_T *eap, int syncing)
+{
+  rs_syn_cmd_list(eap, syncing);
+}
