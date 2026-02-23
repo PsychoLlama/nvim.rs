@@ -181,13 +181,7 @@ extern "C" {
     fn rs_num_divide(n1: i64, n2: i64) -> i64;
     fn rs_num_modulus(n1: i64, n2: i64) -> i64;
 
-    // Forward declaration for eval6 (still in C)
-    fn eval6(
-        arg: *mut *mut c_char,
-        rettv: TypevalHandle,
-        evalarg: EvalargHandle,
-        want_string: c_int,
-    ) -> c_int;
+    // (eval6 forward declaration removed: eval6_impl is now pure Rust)
 }
 
 // =============================================================================
@@ -862,7 +856,7 @@ pub unsafe fn eval5_impl(
     evalarg: EvalargHandle,
 ) -> c_int {
     // Get the first variable
-    if eval6(arg, rettv, evalarg, 0) == FAIL {
+    if eval6_impl(arg, rettv, evalarg, false) == FAIL {
         return FAIL;
     }
 
@@ -895,7 +889,7 @@ pub unsafe fn eval5_impl(
         *arg = skipwhite((*arg).add(1));
 
         let var2 = alloc_typval();
-        if eval6(arg, var2, evalarg, if op == b'.' { 1 } else { 0 }) == FAIL {
+        if eval6_impl(arg, var2, evalarg, op == b'.') == FAIL {
             tv_clear(rettv);
             free_typval(var2);
             return FAIL;
@@ -952,6 +946,76 @@ pub unsafe extern "C" fn rs_eval5(
     evalarg: EvalargHandle,
 ) -> c_int {
     eval5_impl(arg, rettv, evalarg)
+}
+
+// =============================================================================
+// eval6 - Multiplication, division, modulo
+// =============================================================================
+
+/// Handle fifth level expression:
+///   - `*`  number multiplication
+///   - `/`  number division
+///   - `%`  number modulo
+///
+/// Migrated from C `eval6` in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer
+/// - `rettv` must be a valid typval handle
+/// - `evalarg` can be null
+pub unsafe fn eval6_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    want_string: bool,
+) -> c_int {
+    // Get the first variable.
+    if eval7_impl(arg, rettv, evalarg, want_string) == FAIL {
+        return FAIL;
+    }
+
+    // Repeat computing, until no '*', '/' or '%' is following.
+    loop {
+        let op = get_byte(*arg);
+        if op != b'*' && op != b'/' && op != b'%' {
+            break;
+        }
+
+        let evaluate = should_evaluate(evalarg);
+
+        // Get the second variable.
+        *arg = skipwhite((*arg).add(1));
+        let var2 = alloc_typval();
+        if eval7_impl(arg, var2, evalarg, false) == FAIL {
+            free_typval(var2);
+            return FAIL;
+        }
+
+        if evaluate {
+            // Compute the result.
+            if eval_multdiv_number_impl(rettv, var2, op as c_int) == FAIL {
+                free_typval(var2);
+                return FAIL;
+            }
+        }
+        free_typval(var2);
+    }
+
+    OK
+}
+
+/// FFI export for eval6.
+///
+/// # Safety
+/// See `eval6_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval6(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    want_string: bool,
+) -> c_int {
+    eval6_impl(arg, rettv, evalarg, want_string)
 }
 
 // =============================================================================

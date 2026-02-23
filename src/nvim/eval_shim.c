@@ -135,6 +135,7 @@ extern int rs_eval_lit_string(char **arg, typval_T *rettv, bool evaluate, bool i
 extern int rs_eval_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate);
 extern int rs_eval_dict(char **arg, typval_T *rettv, evalarg_T *evalarg, bool literal);
 extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
+extern int rs_eval6(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
 extern int rs_eval7(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
 extern int rs_free_unref_items(int copyID);
 
@@ -1421,36 +1422,7 @@ int eval1(char **arg, typval_T *rettv, evalarg_T *const evalarg)
 /// @return  OK or FAIL.
 int eval6(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_string)
 {
-  // Get the first variable.
-  if (rs_eval7(arg, rettv, evalarg, want_string) == FAIL) {
-    return FAIL;
-  }
-
-  // Repeat computing, until no '*', '/' or '%' is following.
-  while (true) {
-    int op = (uint8_t)(**arg);
-    if (op != '*' && op != '/' && op != '%') {
-      break;
-    }
-
-    const bool evaluate = evalarg == NULL ? 0 : (evalarg->eval_flags & EVAL_EVALUATE);
-
-    // Get the second variable.
-    *arg = skipwhite(*arg + 1);
-    typval_T var2;
-    if (rs_eval7(arg, &var2, evalarg, false) == FAIL) {
-      return FAIL;
-    }
-
-    if (evaluate) {
-      // Compute the result.
-      if (rs_eval_multdiv_number(rettv, &var2, op) == FAIL) {
-        return FAIL;
-      }
-    }
-  }
-
-  return OK;
+  return rs_eval6(arg, rettv, evalarg, want_string);
 }
 
 // eval7 and eval7_leader migrated to Rust (rs_eval7 in eval_exec crate).
