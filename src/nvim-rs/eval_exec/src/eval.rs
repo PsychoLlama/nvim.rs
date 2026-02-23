@@ -63,6 +63,11 @@ impl TypevalHandle {
         Self(ptr::null_mut())
     }
 
+    /// Create a handle from a raw pointer
+    pub const fn from_ptr(ptr: *mut c_void) -> Self {
+        Self(ptr)
+    }
+
     /// Check if handle is null
     pub const fn is_null(self) -> bool {
         self.0.is_null()

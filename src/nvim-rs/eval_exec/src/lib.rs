@@ -862,6 +862,7 @@ impl EvalFlags {
 
 pub mod errors;
 pub mod eval;
+pub mod index;
 pub mod lval;
 pub mod operators;
 
@@ -870,6 +871,9 @@ pub use eval::{
     rs_eval0, rs_eval1, rs_eval2, rs_eval3, rs_eval4, rs_eval5, EvalargHandle, ExargHandle,
     TypevalHandle,
 };
+
+// Re-export FFI functions from the index module
+pub use index::{rs_check_can_index, rs_eval_index, rs_eval_index_inner, rs_f_slice};
 
 // Re-export FFI functions from the operators module
 pub use operators::{

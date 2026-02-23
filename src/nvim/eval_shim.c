@@ -125,6 +125,11 @@ extern void rs_set_var_lval(lval_T *lp, char *endp, typval_T *rettv, bool copy,
                             bool is_const, const char *op);
 extern int rs_eval_number(char **arg, typval_T *rettv, bool evaluate, bool want_string);
 extern int rs_eval_list(char **arg, typval_T *rettv, void *evalarg);
+extern int rs_eval_index(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
+extern int rs_check_can_index(typval_T *rettv, bool evaluate, bool verbose);
+extern int rs_eval_index_inner(typval_T *rettv, bool is_range, typval_T *var1, typval_T *var2,
+                               bool exclusive, const char *key, ptrdiff_t keylen, bool verbose);
+extern void rs_f_slice(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -2389,140 +2394,19 @@ static int eval_method(char **const arg, typval_T *const rettv, evalarg_T *const
 /// @returns FAIL or OK. "*arg" is advanced to after the ']'.
 static int eval_index(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool verbose)
 {
-  const bool evaluate = evalarg != NULL && (evalarg->eval_flags & EVAL_EVALUATE);
-  bool empty1 = false;
-  bool empty2 = false;
-  bool range = false;
-  const char *key = NULL;
-  ptrdiff_t keylen = -1;
-
-  if (check_can_index(rettv, evaluate, verbose) == FAIL) {
-    return FAIL;
-  }
-
-  typval_T var1 = TV_INITIAL_VALUE;
-  typval_T var2 = TV_INITIAL_VALUE;
-  if (**arg == '.') {
-    // dict.name
-    key = *arg + 1;
-    for (keylen = 0; rs_eval_isdictc(key[keylen]); keylen++) {}
-    if (keylen == 0) {
-      return FAIL;
-    }
-    *arg = skipwhite(key + keylen);
-  } else {
-    // something[idx]
-    //
-    // Get the (first) variable from inside the [].
-    *arg = skipwhite(*arg + 1);
-    if (**arg == ':') {
-      empty1 = true;
-    } else if (eval1(arg, &var1, evalarg) == FAIL) {  // Recursive!
-      return FAIL;
-    } else if (evaluate && !tv_check_str(&var1)) {
-      // Not a number or string.
-      tv_clear(&var1);
-      return FAIL;
-    }
-
-    // Get the second variable from inside the [:].
-    if (**arg == ':') {
-      range = true;
-      *arg = skipwhite(*arg + 1);
-      if (**arg == ']') {
-        empty2 = true;
-      } else if (eval1(arg, &var2, evalarg) == FAIL) {  // Recursive!
-        if (!empty1) {
-          tv_clear(&var1);
-        }
-        return FAIL;
-      } else if (evaluate && !tv_check_str(&var2)) {
-        // Not a number or string.
-        if (!empty1) {
-          tv_clear(&var1);
-        }
-        tv_clear(&var2);
-        return FAIL;
-      }
-    }
-
-    // Check for the ']'.
-    if (**arg != ']') {
-      if (verbose) {
-        emsg(_(e_missbrac));
-      }
-      tv_clear(&var1);
-      if (range) {
-        tv_clear(&var2);
-      }
-      return FAIL;
-    }
-    *arg = skipwhite(*arg + 1);         // skip the ']'
-  }
-
-  if (evaluate) {
-    int res = eval_index_inner(rettv, range,
-                               empty1 ? NULL : &var1, empty2 ? NULL : &var2, false,
-                               key, keylen, verbose);
-    if (!empty1) {
-      tv_clear(&var1);
-    }
-    if (range) {
-      tv_clear(&var2);
-    }
-    return res;
-  }
-  return OK;
+  return rs_eval_index(arg, rettv, evalarg, verbose);
 }
 
 /// Check if "rettv" can have an [index] or [sli:ce]
 static int check_can_index(typval_T *rettv, bool evaluate, bool verbose)
 {
-  switch (rettv->v_type) {
-  case VAR_FUNC:
-  case VAR_PARTIAL:
-    if (verbose) {
-      emsg(_(e_cannot_index_a_funcref));
-    }
-    return FAIL;
-  case VAR_FLOAT:
-    if (verbose) {
-      emsg(_(e_using_float_as_string));
-    }
-    return FAIL;
-  case VAR_BOOL:
-  case VAR_SPECIAL:
-    if (verbose) {
-      emsg(_(e_cannot_index_special_variable));
-    }
-    return FAIL;
-  case VAR_UNKNOWN:
-    if (evaluate) {
-      emsg(_(e_cannot_index_special_variable));
-      return FAIL;
-    }
-    FALLTHROUGH;
-  case VAR_STRING:
-  case VAR_NUMBER:
-  case VAR_LIST:
-  case VAR_DICT:
-  case VAR_BLOB:
-    break;
-  }
-  return OK;
+  return rs_check_can_index(rettv, evaluate, verbose);
 }
 
 /// slice() function
 void f_slice(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (check_can_index(&argvars[0], true, false) != OK) {
-    return;
-  }
-
-  tv_copy(argvars, rettv);
-  eval_index_inner(rettv, true, argvars + 1,
-                   argvars[2].v_type == VAR_UNKNOWN ? NULL : argvars + 2,
-                   true, NULL, 0, false);
+  rs_f_slice(argvars, rettv, fptr);
 }
 
 /// Apply index or range to "rettv".
@@ -5700,4 +5584,66 @@ void nvim_eval_tv_list_append_owned_tv_ptr(list_T *l, typval_T *tv)
 void nvim_eval_tv_list_set_ret(typval_T *rettv, list_T *l)
 {
   tv_list_set_ret(rettv, l);
+}
+
+// =============================================================================
+// Phase 1: eval_index / check_can_index error message accessors
+// =============================================================================
+
+/// Emit E111 Missing ']' error - accessor for Rust rs_eval_index.
+void nvim_emsg_missbrac(void)
+{
+  emsg(_(e_missbrac));
+}
+
+/// Emit E695 Cannot index a Funcref error - accessor for Rust rs_check_can_index.
+void nvim_emsg_cannot_index_funcref(void)
+{
+  emsg(_(e_cannot_index_a_funcref));
+}
+
+/// Emit E806 Using a Float as a String error - accessor for Rust rs_check_can_index.
+void nvim_emsg_using_float_as_string(void)
+{
+  emsg(_(e_using_float_as_string));
+}
+
+/// Emit E909 Cannot index a special variable error - accessor for Rust rs_check_can_index.
+void nvim_emsg_cannot_index_special(void)
+{
+  emsg(_(e_cannot_index_special_variable));
+}
+
+/// Emit E719 Cannot slice a Dictionary error - accessor for Rust rs_eval_index_inner.
+void nvim_emsg_cannot_slice_dict(void)
+{
+  emsg(_(e_cannot_slice_dictionary));
+}
+
+/// Emit E716 Key not present (with length) error - accessor for Rust rs_eval_index_inner.
+void nvim_semsg_dictkey_len(ptrdiff_t keylen, const char *key)
+{
+  semsg(_(e_dictkey_len), keylen, key);
+}
+
+/// Temporary wrapper: call C eval_index_inner from Rust rs_eval_index (Phase 1).
+/// Removed in Phase 2 when rs_eval_index calls rs_eval_index_inner directly.
+int nvim_eval_index_inner_wrapper(typval_T *rettv, bool is_range,
+                                  typval_T *var1, typval_T *var2,
+                                  bool exclusive, const char *key,
+                                  ptrdiff_t keylen, bool verbose)
+{
+  return eval_index_inner(rettv, is_range, var1, var2, exclusive, key, keylen, verbose);
+}
+
+/// Get argvars[1] pointer from argvars array - accessor for Rust rs_f_slice.
+typval_T *nvim_f_slice_get_arg1(typval_T *argvars)
+{
+  return &argvars[1];
+}
+
+/// Get argvars[2] pointer from argvars array - accessor for Rust rs_f_slice.
+typval_T *nvim_f_slice_get_arg2(typval_T *argvars)
+{
+  return &argvars[2];
 }
