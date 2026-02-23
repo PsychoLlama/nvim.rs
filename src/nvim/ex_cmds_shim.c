@@ -3182,17 +3182,6 @@ bool do_sub_msg(bool count_only)
   return rs_do_sub_msg(count_only);
 }
 
-static void global_exe_one(char *const cmd, const linenr_T lnum)
-{
-  curwin->w_cursor.lnum = lnum;
-  curwin->w_cursor.col = 0;
-  if (*cmd == NUL || *cmd == '\n') {
-    do_cmdline("p", NULL, NULL, DOCMD_NOWAIT);
-  } else {
-    do_cmdline(cmd, NULL, NULL, DOCMD_NOWAIT);
-  }
-}
-
 /// Execute a global command of the form:
 ///
 /// g/pattern/X : execute X on all lines where pattern matches
@@ -3279,7 +3268,10 @@ void ex_global(exarg_T *eap)
     lnum = curwin->w_cursor.lnum;
     int match = vim_regexec_multi(&regmatch, curwin, curbuf, lnum, 0, NULL, NULL);
     if ((type == 'g' && match) || (type == 'v' && !match)) {
-      global_exe_one(cmd, lnum);
+      // Inline global_exe_one (absorbed into Rust rs_global_exe, but ex_global
+      // handles the nested case directly here).
+      curwin->w_cursor.col = 0;
+      nvim_excmds_do_cmdline_global(cmd);
     }
   } else {
     int ndone = 0;
@@ -3314,56 +3306,13 @@ void ex_global(exarg_T *eap)
   vim_regfree(regmatch.regprog);
 }
 
-/// Execute `cmd` on lines marked with ml_setmarked().
+// global_exe + global_exe_one implemented in Rust (rs_global_exe in ex_cmds/src/global.rs)
+extern void rs_global_exe(char *cmd);
+
+/// Execute `cmd` on lines marked with ml_setmarked(). Thin wrapper calling Rust.
 void global_exe(char *cmd)
 {
-  linenr_T old_lcount;      // b_ml.ml_line_count before the command
-  buf_T *old_buf = curbuf;  // remember what buffer we started in
-  linenr_T lnum;            // line number according to old situation
-
-  // Set current position only once for a global command.
-  // If global_busy is set, setpcmark() will not do anything.
-  // If there is an error, global_busy will be incremented.
-  setpcmark();
-
-  // When the command writes a message, don't overwrite the command.
-  msg_didout = true;
-
-  sub_nsubs = 0;
-  sub_nlines = 0;
-  global_need_beginline = false;
-  global_busy = 1;
-  old_lcount = curbuf->b_ml.ml_line_count;
-
-  while (!got_int && (lnum = ml_firstmarked()) != 0 && global_busy == 1) {
-    global_exe_one(cmd, lnum);
-    os_breakcheck();
-  }
-
-  global_busy = 0;
-  if (global_need_beginline) {
-    beginline(BL_WHITE | BL_FIX);
-  } else {
-    check_cursor(curwin);  // cursor may be beyond the end of the line
-  }
-
-  // the cursor may not have moved in the text but a change in a previous
-  // line may move it on the screen
-  changed_line_abv_curs();
-
-  // If it looks like no message was written, allow overwriting the
-  // command with the report for number of changes.
-  if (msg_col == 0 && msg_scrolled == 0) {
-    msg_didout = false;
-  }
-
-  // If substitutes done, report number of substitutes, otherwise report
-  // number of extra or deleted lines.
-  // Don't report extra or deleted lines in the edge case where the buffer
-  // we are in after execution is different from the buffer we started in.
-  if (!do_sub_msg(false) && curbuf == old_buf) {
-    msgmore(curbuf->b_ml.ml_line_count - old_lcount);
-  }
+  rs_global_exe(cmd);
 }
 
 #if defined(EXITFREE)
@@ -3726,3 +3675,22 @@ void nvim_excmds_apply_autocmds_shellcmdpost(void)
 {
   apply_autocmds(EVENT_SHELLCMDPOST, NULL, NULL, false, curbuf);
 }
+
+// --- global_exe FFI accessors ---
+void nvim_excmds_setpcmark(void) { setpcmark(); }
+void nvim_excmds_set_global_busy(int val) { global_busy = val; }
+int nvim_excmds_get_global_need_beginline(void) { return global_need_beginline ? 1 : 0; }
+void nvim_excmds_set_global_need_beginline(int val) { global_need_beginline = (bool)val; }
+linenr_T nvim_excmds_ml_firstmarked(void) { return ml_firstmarked(); }
+void nvim_excmds_do_cmdline_global(const char *cmd)
+{
+  if (cmd == NULL || *cmd == NUL || *cmd == '\n') {
+    do_cmdline("p", NULL, NULL, DOCMD_NOWAIT);
+  } else {
+    do_cmdline((char *)cmd, NULL, NULL, DOCMD_NOWAIT);
+  }
+}
+void nvim_excmds_check_cursor_curwin(void) { check_cursor(curwin); }
+void nvim_excmds_changed_line_abv_curs(void) { changed_line_abv_curs(); }
+int nvim_excmds_get_msg_scrolled(void) { return msg_scrolled; }
+void *nvim_excmds_get_curbuf_ptr(void) { return (void *)curbuf; }

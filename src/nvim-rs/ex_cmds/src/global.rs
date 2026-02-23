@@ -18,9 +18,44 @@
 //! This two-phase approach is necessary because executing commands can
 //! change line numbers, so we can't simply iterate through lines.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::range::{LineNr, LineRange};
+
+extern "C" {
+    // global_exe FFI
+    fn nvim_excmds_setpcmark();
+    fn nvim_excmds_set_msg_didout(val: c_int);
+    fn nvim_excmds_set_sub_nsubs(val: c_int);
+    fn nvim_excmds_set_sub_nlines(val: c_int);
+    fn nvim_excmds_set_global_need_beginline(val: c_int);
+    fn nvim_excmds_set_global_busy(val: c_int);
+    fn nvim_excmds_global_busy() -> c_int;
+    fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
+    fn nvim_excmds_got_int() -> c_int;
+    fn nvim_excmds_ml_firstmarked() -> c_int;
+    fn nvim_curwin_set_cursor_lnum(lnum: c_int);
+    fn nvim_curwin_set_cursor_col(col: c_int);
+    fn nvim_excmds_do_cmdline_global(cmd: *const c_char);
+    fn nvim_excmds_os_breakcheck();
+    fn nvim_excmds_get_global_need_beginline() -> c_int;
+    fn beginline(flags: c_int);
+    fn nvim_excmds_check_cursor_curwin();
+    fn nvim_excmds_changed_line_abv_curs();
+    fn nvim_excmds_get_msg_col() -> c_int;
+    fn nvim_excmds_get_msg_scrolled() -> c_int;
+    fn nvim_excmds_get_curbuf_ptr() -> *mut std::ffi::c_void;
+    fn msgmore(n: c_int);
+}
+
+/// BL_WHITE | BL_FIX flags for beginline()
+const BL_WHITE: c_int = 1;
+const BL_FIX: c_int = 4;
+
+// Forward declaration - rs_do_sub_msg is in substitute.rs in this crate
+extern "C" {
+    fn rs_do_sub_msg(count_only: bool) -> bool;
+}
 
 /// Type of global command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -338,6 +373,68 @@ impl IntoIterator for MarkedLines {
 // =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Execute `cmd` on lines marked with ml_setmarked(). Replaces C `global_exe` + `global_exe_one`.
+///
+/// # Safety
+/// `cmd` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
+    // Set current position only once for a global command.
+    // If global_busy is set, setpcmark() will not do anything.
+    // If there is an error, global_busy will be incremented.
+    nvim_excmds_setpcmark();
+
+    // When the command writes a message, don't overwrite the command.
+    nvim_excmds_set_msg_didout(1);
+
+    nvim_excmds_set_sub_nsubs(0);
+    nvim_excmds_set_sub_nlines(0);
+    nvim_excmds_set_global_need_beginline(0);
+    nvim_excmds_set_global_busy(1);
+
+    let old_lcount = nvim_curbuf_get_b_ml_ml_line_count();
+    let old_buf = nvim_excmds_get_curbuf_ptr();
+
+    while nvim_excmds_got_int() == 0 {
+        let lnum = nvim_excmds_ml_firstmarked();
+        if lnum == 0 || nvim_excmds_global_busy() != 1 {
+            break;
+        }
+        // global_exe_one: set cursor position and execute command
+        nvim_curwin_set_cursor_lnum(lnum);
+        nvim_curwin_set_cursor_col(0);
+        nvim_excmds_do_cmdline_global(cmd);
+        nvim_excmds_os_breakcheck();
+    }
+
+    nvim_excmds_set_global_busy(0);
+    if nvim_excmds_get_global_need_beginline() != 0 {
+        beginline(BL_WHITE | BL_FIX);
+    } else {
+        nvim_excmds_check_cursor_curwin();
+    }
+
+    // The cursor may not have moved in the text but a change in a previous
+    // line may move it on the screen.
+    nvim_excmds_changed_line_abv_curs();
+
+    // If it looks like no message was written, allow overwriting the command
+    // with the report for number of changes.
+    if nvim_excmds_get_msg_col() == 0 && nvim_excmds_get_msg_scrolled() == 0 {
+        nvim_excmds_set_msg_didout(0);
+    }
+
+    // If substitutes done, report number of substitutes; otherwise report
+    // number of extra or deleted lines.
+    // Don't report extra or deleted lines in the edge case where the buffer
+    // we are in after execution is different from the buffer we started in.
+    let sub_reported = rs_do_sub_msg(false);
+    if !sub_reported && nvim_excmds_get_curbuf_ptr() == old_buf {
+        let new_lcount = nvim_curbuf_get_b_ml_ml_line_count();
+        msgmore(new_lcount - old_lcount);
+    }
+}
 
 /// Create a global type from bang flag.
 ///
