@@ -111,6 +111,7 @@ extern linenr_T rs_dbg_find_breakpoint(bool file, char *fname, linenr_T after);
 extern bool rs_has_profiling(bool file, char *fname, bool *fp);
 extern void rs_dbg_breakpoint(char *name, linenr_T lnum);
 extern void rs_update_has_expr_breakpoint(void);
+extern int rs_typval_compare(typval_T *typ1, typval_T *typ2, int expr_type, int ic);
 
 // =============================================================================
 // C accessor functions for Rust to call back into
@@ -638,7 +639,7 @@ typval_T *nvim_dbg_eval_expr(const char *name)
 
 int nvim_dbg_typval_compare(typval_T *tv1, typval_T *tv2, int ctype, bool ic)
 {
-  return typval_compare(tv1, tv2, (exprtype_T)ctype, ic);
+  return rs_typval_compare(tv1, tv2, ctype, (int)ic);
 }
 
 int64_t nvim_dbg_typval_get_v_number(typval_T *tv)

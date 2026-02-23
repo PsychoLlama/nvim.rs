@@ -159,9 +159,6 @@ extern "C" {
     // exarg operations
     fn exarg_set_nextcmd(eap: ExargHandle, nextcmd: *mut c_char);
 
-    // Comparison
-    fn typval_compare(tv1: TypevalHandle, tv2: TypevalHandle, typ: c_int, ic: c_int) -> c_int;
-
     // String concatenation
     fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
 
@@ -823,7 +820,7 @@ pub unsafe fn eval4_impl(
         }
 
         if !evalarg.is_null() && (evalarg_get_flags(evalarg) & EVAL_EVALUATE) != 0 {
-            let ret = typval_compare(rettv, var2, typ, ic);
+            let ret = crate::operators::typval_compare_impl(rettv, var2, typ, ic);
             tv_clear(var2);
             free_typval(var2);
             return ret;
