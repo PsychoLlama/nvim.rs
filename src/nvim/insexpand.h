@@ -22,6 +22,7 @@ extern void rs_ins_compl_check_keys(int frequency, int in_compl_func);
 extern int rs_ins_compl_bs(void);
 extern void rs_ins_compl_fuzzy_sort(void);
 extern void rs_sort_compl_match_list(int compare_type);
+extern void rs_ins_compl_new_leader(void);
 
 /// Array indexes used for cp_text[].
 typedef enum {

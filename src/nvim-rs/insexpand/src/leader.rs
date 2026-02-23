@@ -345,6 +345,122 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
     NUL
 }
 
+// =============================================================================
+// Phase 4: rs_ins_compl_new_leader
+// =============================================================================
+
+extern "C" {
+    // For ins_compl_new_leader
+    fn nvim_ins_compl_del_pum();
+    fn nvim_set_compl_used_match(val: c_int);
+    fn nvim_get_compl_used_match() -> c_int;
+    fn nvim_get_p_acl() -> c_int;
+    fn nvim_pum_undisplay(undo: c_int);
+    fn nvim_redraw_later_valid();
+    fn nvim_update_screen();
+    fn nvim_ui_flush();
+    fn rs_ins_compl_set_original_text(str_ptr: *const c_char, len: usize);
+    fn nvim_is_cpt_func_refresh_always() -> c_int;
+    fn nvim_cpt_compl_refresh();
+    fn rs_cot_fuzzy() -> c_int;
+    fn rs_ins_compl_fuzzy_sort();
+    fn nvim_set_spell_bad_len(val: c_int);
+    fn nvim_set_compl_restarting(val: c_int);
+    fn rs_ins_compl_has_autocomplete() -> c_int;
+    fn rs_ins_compl_enable_autocomplete();
+    fn nvim_set_compl_autocomplete(val: c_int);
+    fn nvim_ins_complete_ctrl_n() -> c_int;
+    fn nvim_set_compl_cont_status(val: c_int);
+    fn nvim_update_compl_enter_selects();
+    fn rs_ins_compl_show_pum();
+    fn nvim_get_compl_match_array_exists() -> c_int;
+    fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: c_int);
+    fn rs_ins_compl_preinsert_longest() -> c_int;
+    fn rs_get_compl_len() -> c_int;
+    fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
+    fn rs_ins_compl_refresh_always() -> c_int;
+    fn nvim_set_compl_enter_selects(val: c_int);
+}
+
+const FAIL: c_int = 0;
+
+/// Called after changing compl_leader.
+///
+/// Shows the popup menu with a different set of matches.
+/// May also search for matches again if the previous search was interrupted.
+///
+/// # Safety
+/// Requires valid completion list state; called from insert mode only.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_ins_compl_new_leader() {
+    nvim_ins_compl_del_pum();
+    crate::insert::rs_ins_compl_delete(1);
+    let leader_data = nvim_get_compl_leader_data();
+    if !leader_data.is_null() {
+        let compl_len = rs_get_compl_len();
+        nvim_ins_compl_insert_bytes(leader_data.add(compl_len as usize), -1);
+    }
+    nvim_set_compl_used_match(0);
+
+    if nvim_get_p_acl() > 0 {
+        nvim_pum_undisplay(1);
+        nvim_redraw_later_valid();
+        nvim_update_screen();
+        nvim_ui_flush();
+    }
+
+    if nvim_get_compl_started() != 0 {
+        let leader_data = nvim_get_compl_leader_data();
+        let leader_size = nvim_get_compl_leader_size();
+        if !leader_data.is_null() {
+            rs_ins_compl_set_original_text(leader_data, leader_size);
+        }
+        if nvim_is_cpt_func_refresh_always() != 0 {
+            nvim_cpt_compl_refresh();
+        }
+        if rs_cot_fuzzy() != 0 {
+            rs_ins_compl_fuzzy_sort();
+        }
+    } else {
+        nvim_set_spell_bad_len(0);
+        // Matches were cleared, need to search for them now.
+        // Set compl_restarting to avoid that the first match is inserted.
+        nvim_set_compl_restarting(1);
+        if rs_ins_compl_has_autocomplete() != 0 {
+            rs_ins_compl_enable_autocomplete();
+        } else {
+            nvim_set_compl_autocomplete(0);
+        }
+        if nvim_ins_complete_ctrl_n() == FAIL {
+            nvim_set_compl_cont_status(0);
+        }
+        nvim_set_compl_restarting(0);
+    }
+
+    nvim_update_compl_enter_selects();
+
+    // Show the popup menu with a different set of matches.
+    rs_ins_compl_show_pum();
+
+    // Don't let Enter select the original text when there is no popup menu.
+    if nvim_get_compl_match_array_exists() == 0 {
+        nvim_set_compl_enter_selects(0);
+    } else if rs_ins_compl_has_preinsert() != 0 && nvim_get_compl_leader_size() > 0 {
+        rs_ins_compl_insert(1, 0);
+    } else if nvim_get_compl_started() != 0
+        && rs_ins_compl_preinsert_longest() != 0
+        && nvim_get_compl_leader_size() > 0
+        && rs_ins_compl_preinsert_effect() == 0
+    {
+        rs_ins_compl_insert(1, 1);
+    }
+    // Don't let Enter select when use user function and refresh_always is set
+    if rs_ins_compl_refresh_always() != 0 {
+        nvim_set_compl_enter_selects(0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -158,6 +158,7 @@ extern void rs_ins_compl_addleader(int c);
 extern void rs_ins_compl_check_keys(int frequency, int in_compl_func);
 extern void rs_ins_compl_fuzzy_sort(void);
 extern void rs_sort_compl_match_list(int compare_type);
+extern void rs_ins_compl_new_leader(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -1592,63 +1593,7 @@ static void ins_compl_fuzzy_sort(void) { rs_ins_compl_fuzzy_sort(); }
 /// Called after changing "compl_leader".
 /// Show the popup menu with a different set of matches.
 /// May also search for matches again if the previous search was interrupted.
-static void ins_compl_new_leader(void)
-{
-  ins_compl_del_pum();
-  rs_ins_compl_delete(1);
-  ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1);
-  compl_used_match = false;
-
-  if (p_acl > 0) {
-    pum_undisplay(true);
-    redraw_later(curwin, UPD_VALID);
-    update_screen();  // Show char (deletion) immediately
-    ui_flush();
-  }
-
-  if (compl_started) {
-    rs_ins_compl_set_original_text(compl_leader.data, compl_leader.size);
-    if (is_cpt_func_refresh_always()) {
-      cpt_compl_refresh();
-    }
-    if (rs_cot_fuzzy()) {
-      ins_compl_fuzzy_sort();
-    }
-  } else {
-    spell_bad_len = 0;  // need to redetect bad word
-    // Matches were cleared, need to search for them now.
-    // Set "compl_restarting" to avoid that the first match is inserted.
-    compl_restarting = true;
-    if (rs_ins_compl_has_autocomplete()) {
-      rs_ins_compl_enable_autocomplete();
-    } else {
-      compl_autocomplete = false;
-    }
-    if (ins_complete(Ctrl_N, true) == FAIL) {
-      compl_cont_status = 0;
-    }
-    compl_restarting = false;
-  }
-
-  compl_enter_selects = !compl_used_match && compl_selected_item != -1;
-
-  // Show the popup menu with a different set of matches.
-  rs_ins_compl_show_pum();
-
-  // Don't let Enter select the original text when there is no popup menu.
-  if (compl_match_array == NULL) {
-    compl_enter_selects = false;
-  } else if (rs_ins_compl_has_preinsert() && compl_leader.size > 0) {
-    rs_ins_compl_insert(1, 0);
-  } else if (compl_started && rs_ins_compl_preinsert_longest()
-             && compl_leader.size > 0 && !rs_ins_compl_preinsert_effect()) {
-    rs_ins_compl_insert(1, 1);
-  }
-  // Don't let Enter select when use user function and refresh_always is set
-  if (rs_ins_compl_refresh_always()) {
-    compl_enter_selects = false;
-  }
-}
+static void ins_compl_new_leader(void) { rs_ins_compl_new_leader(); }
 
 /// Loops through the list of windows, loaded-buffers or non-loaded-buffers
 /// (depending on flag) starting from buf and looking for a non-scanned
@@ -5217,5 +5162,19 @@ int nvim_compl_shown_match_is_sentinel(int forward) {
   }
   void *sentinel = forward ? (void *)compl_first_match : (void *)compl_first_match->cp_prev;
   return compl_shown_match == sentinel ? 1 : 0;
+}
+
+// Accessors for Phase 4: ins_compl_new_leader migration
+int nvim_get_p_acl(void) { return (int)p_acl; }
+void nvim_pum_undisplay(int undo) { pum_undisplay(undo != 0); }
+void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
+int nvim_is_cpt_func_refresh_always(void) { return is_cpt_func_refresh_always() ? 1 : 0; }
+void nvim_cpt_compl_refresh(void) { cpt_compl_refresh(); }
+void nvim_set_spell_bad_len(int val) { spell_bad_len = val; }
+void nvim_set_compl_restarting(int val) { compl_restarting = val != 0; }
+int nvim_ins_complete_ctrl_n(void) { return ins_complete(Ctrl_N, true); }
+// Compound accessor: compl_enter_selects = !compl_used_match && compl_selected_item != -1
+void nvim_update_compl_enter_selects(void) {
+  compl_enter_selects = !compl_used_match && compl_selected_item != -1;
 }
 
