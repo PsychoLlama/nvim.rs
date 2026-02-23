@@ -11,6 +11,7 @@ pub mod complex;
 pub mod display;
 pub mod numeric;
 pub mod string;
+pub mod string_simple;
 
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;

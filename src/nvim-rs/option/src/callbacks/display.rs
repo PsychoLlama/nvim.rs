@@ -59,6 +59,12 @@ extern "C" {
     fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
     fn nvim_win_set_leftcol(wp: WinHandle, val: c_int);
 
+    // Phase 1: string_simple accessors used by concealcursor
+    fn nvim_optset_get_varp_str(args: *const c_void) -> *const c_char;
+    fn nvim_optset_get_errbuf(args: *const c_void) -> *mut c_char;
+    fn nvim_optset_get_errbuflen(args: *const c_void) -> usize;
+    fn nvim_illegal_char(errbuf: *mut c_char, errbuflen: usize, c: c_int) -> *const c_char;
+
     // Lines/columns callback accessors
     fn nvim_get_p_lines() -> OptInt;
     fn nvim_get_p_columns() -> OptInt;
@@ -364,11 +370,27 @@ pub extern "C" fn rs_did_set_conceallevel() -> CallbackResult {
     callback_ok()
 }
 
+/// All valid flags for 'concealcursor' option: n, v, i, c
+const COCU_ALL: &[u8] = b"nvic";
+
 /// Callback for 'concealcursor' option.
 ///
-/// Triggers redraw when conceal cursor mode changes.
+/// Validates that all characters are in "nvic", then triggers redraw.
 #[no_mangle]
-pub extern "C" fn rs_did_set_concealcursor() -> CallbackResult {
+pub unsafe extern "C" fn rs_did_set_concealcursor(args: *mut c_void) -> CallbackResult {
+    let val = nvim_optset_get_varp_str(args);
+    let errbuf = nvim_optset_get_errbuf(args);
+    let errbuflen = nvim_optset_get_errbuflen(args);
+    if !val.is_null() {
+        let mut p = val;
+        while *p != 0 {
+            let ch = *p as u8;
+            if !COCU_ALL.contains(&ch) {
+                return nvim_illegal_char(errbuf, errbuflen, c_int::from(ch));
+            }
+            p = p.add(1);
+        }
+    }
     request_redraw_all(UpdateType::NotValid);
     callback_ok()
 }

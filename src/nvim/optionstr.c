@@ -676,18 +676,6 @@ const char *did_set_background(optset_T *args)
   return NULL;
 }
 
-/// The 'backspace' option is changed.
-const char *did_set_backspace(optset_T *args FUNC_ATTR_UNUSED)
-{
-  if (ascii_isdigit(*p_bs)) {
-    if (*p_bs != '2') {
-      return e_invarg;
-    }
-    return NULL;
-  }
-  return did_set_str_generic(args);
-}
-
 /// The 'backupcopy' option is changed.
 const char *did_set_backupcopy(optset_T *args)
 {
@@ -750,31 +738,6 @@ const char *did_set_breakat(optset_T *args FUNC_ATTR_UNUSED)
   }
 
   return NULL;
-}
-
-/// The 'breakindentopt' option is changed.
-const char *did_set_breakindentopt(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  char **varp = (char **)args->os_varp;
-
-  if (briopt_check(*varp, varp == &win->w_p_briopt ? win : NULL) == FAIL) {
-    return e_invarg;
-  }
-
-  // list setting requires a redraw
-  if (varp == &win->w_p_briopt && win->w_briopt_list) {
-    redraw_all_later(UPD_NOT_VALID);
-  }
-
-  return NULL;
-}
-
-/// The 'bufhidden' option is changed.
-const char *did_set_bufhidden(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  return did_set_opt_flags(buf->b_p_bh, opt_bh_values, NULL, false);
 }
 
 /// The 'buftype' option is changed.
@@ -1088,25 +1051,9 @@ const char *did_set_completeslash(optset_T *args)
 }
 #endif
 
-/// The 'concealcursor' option is changed.
-const char *did_set_concealcursor(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  return did_set_option_listflag(*varp, COCU_ALL, args->os_errbuf, args->os_errbuflen);
-}
-
 int expand_set_concealcursor(optexpand_T *args, int *numMatches, char ***matches)
 {
   return expand_set_opt_listflag(args, COCU_ALL, numMatches, matches);
-}
-
-/// The 'cpoptions' option is changed.
-const char *did_set_cpoptions(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  return did_set_option_listflag(*varp, CPO_VI, args->os_errbuf, args->os_errbuflen);
 }
 
 int expand_set_cpoptions(optexpand_T *args, int *numMatches, char ***matches)
@@ -1173,18 +1120,6 @@ int expand_set_diffopt(optexpand_T *args, int *numMatches, char ***matches)
   }
 
   return expand_set_str_generic(args, numMatches, matches);
-}
-
-/// The 'display' option is changed.
-const char *did_set_display(optset_T *args)
-{
-  const char *errmsg = did_set_str_generic(args);
-  if (errmsg != NULL) {
-    return errmsg;
-  }
-  init_chartab();
-  msg_grid_validate();
-  return NULL;
 }
 
 /// One of the 'encoding', 'fileencoding' or 'makeencoding'
@@ -1384,14 +1319,6 @@ const char *did_set_foldmethod(optset_T *args)
   return NULL;
 }
 
-/// The 'formatoptions' option is changed.
-const char *did_set_formatoptions(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  return did_set_option_listflag(*varp, FO_ALL, args->os_errbuf, args->os_errbuflen);
-}
-
 int expand_set_formatoptions(optexpand_T *args, int *numMatches, char ***matches)
 {
   return expand_set_opt_listflag(args, FO_ALL, numMatches, matches);
@@ -1454,15 +1381,6 @@ const char *did_set_highlight(optset_T *args)
 const char *did_set_iconstring(optset_T *args)
 {
   return did_set_titleiconstring(args, STL_IN_ICON);
-}
-
-/// The 'inccommand' option is changed.
-const char *did_set_inccommand(optset_T *args FUNC_ATTR_UNUSED)
-{
-  if (cmdpreview) {
-    return e_invarg;
-  }
-  return did_set_str_generic(args);
 }
 
 /// The 'iskeyword' option is changed.
@@ -1560,17 +1478,6 @@ const char *did_set_keymodel(optset_T *args FUNC_ATTR_UNUSED)
   return NULL;
 }
 
-/// The 'lispoptions' option is changed.
-const char *did_set_lispoptions(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  if (**varp != NUL && strcmp(*varp, "expr:0") != 0 && strcmp(*varp, "expr:1") != 0) {
-    return e_invarg;
-  }
-  return NULL;
-}
-
 /// The 'matchpairs' option is changed.
 const char *did_set_matchpairs(optset_T *args)
 {
@@ -1614,14 +1521,6 @@ const char *did_set_mkspellmem(optset_T *args FUNC_ATTR_UNUSED)
     return e_invarg;
   }
   return NULL;
-}
-
-/// The 'mouse' option is changed.
-const char *did_set_mouse(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  return did_set_option_listflag(*varp, MOUSE_ALL, args->os_errbuf, args->os_errbuflen);
 }
 
 int expand_set_mouse(optexpand_T *args, int *numMatches, char ***matches)
@@ -1716,20 +1615,6 @@ const char *did_set_rulerformat(optset_T *args)
   return did_set_statustabline_rulerformat(args, true, false);
 }
 
-/// The 'selection' option is changed.
-const char *did_set_selection(optset_T *args FUNC_ATTR_UNUSED)
-{
-  const char *errmsg = did_set_str_generic(args);
-  if (errmsg != NULL) {
-    return errmsg;
-  }
-  if (VIsual_active) {
-    // Visual selection may be drawn differently.
-    redraw_curbuf_later(UPD_INVERTED);
-  }
-  return NULL;
-}
-
 /// The 'sessionoptions' option is changed.
 const char *did_set_sessionoptions(optset_T *args)
 {
@@ -1795,14 +1680,6 @@ const char *did_set_shada(optset_T *args)
   return NULL;
 }
 
-/// The 'shortmess' option is changed.
-const char *did_set_shortmess(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  return did_set_option_listflag(*varp, SHM_ALL, args->os_errbuf, args->os_errbuflen);
-}
-
 int expand_set_shortmess(optexpand_T *args, int *numMatches, char ***matches)
 {
   return expand_set_opt_listflag(args, SHM_ALL, numMatches, matches);
@@ -1820,18 +1697,6 @@ const char *did_set_showbreak(optset_T *args)
     MB_PTR_ADV(s);
   }
   return NULL;
-}
-
-/// The 'showcmdloc' option is changed.
-const char *did_set_showcmdloc(optset_T *args FUNC_ATTR_UNUSED)
-{
-  const char *errmsg = did_set_str_generic(args);
-
-  if (errmsg == NULL) {
-    comp_col();
-  }
-
-  return errmsg;
 }
 
 /// The 'signcolumn' option is changed.
@@ -2140,28 +2005,9 @@ const char *did_set_virtualedit(optset_T *args)
   return NULL;
 }
 
-/// The 'whichwrap' option is changed.
-const char *did_set_whichwrap(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  // Add ',' to the list flags because 'whichwrap' is a flag
-  // list that is comma-separated.
-  return did_set_option_listflag(*varp, WW_ALL ",", args->os_errbuf, args->os_errbuflen);
-}
-
 int expand_set_whichwrap(optexpand_T *args, int *numMatches, char ***matches)
 {
   return expand_set_opt_listflag(args, WW_ALL, numMatches, matches);
-}
-
-/// The 'wildmode' option is changed.
-const char *did_set_wildmode(optset_T *args FUNC_ATTR_UNUSED)
-{
-  if (check_opt_wim() == FAIL) {
-    return e_invarg;
-  }
-  return NULL;
 }
 
 /// The 'winbar' option is changed.

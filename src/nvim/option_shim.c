@@ -203,6 +203,23 @@ extern const char *rs_did_set_paste_full(optset_T *args);
 extern const char *rs_did_set_shellslash(optset_T *args);
 #endif
 
+// Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
+extern const char *rs_did_set_concealcursor(optset_T *args);
+extern const char *rs_did_set_cpoptions(optset_T *args);
+extern const char *rs_did_set_formatoptions(optset_T *args);
+extern const char *rs_did_set_mouse(optset_T *args);
+extern const char *rs_did_set_shortmess(optset_T *args);
+extern const char *rs_did_set_whichwrap(optset_T *args);
+extern const char *rs_did_set_backspace(optset_T *args);
+extern const char *rs_did_set_bufhidden(optset_T *args);
+extern const char *rs_did_set_inccommand(optset_T *args);
+extern const char *rs_did_set_lispoptions(optset_T *args);
+extern const char *rs_did_set_wildmode(optset_T *args);
+extern const char *rs_did_set_breakindentopt(optset_T *args);
+extern const char *rs_did_set_display(optset_T *args);
+extern const char *rs_did_set_showcmdloc(optset_T *args);
+extern const char *rs_did_set_selection(optset_T *args);
+
 // Rust varp dispatch functions (from Rust varp.rs)
 extern void *rs_get_varp_from(vimoption_T *p, buf_T *buf, win_T *win);
 extern void *rs_get_varp_scope_from(vimoption_T *p, int opt_flags, buf_T *buf, win_T *win);
@@ -514,6 +531,41 @@ void nvim_callback_win_set_scbind_pos(win_T *win, int value) {
 
 // Error message accessor
 const char *nvim_callback_get_e_invarg(void) { return e_invarg; }
+
+// =============================================================================
+// Phase 1 accessors for string callback migration
+// =============================================================================
+
+// Dereference varp as char** to get the current string value
+const char *nvim_optset_get_varp_str(const void *args)
+{
+  char **varp = (char **)((const optset_T *)args)->os_varp;
+  return varp ? *varp : NULL;
+}
+// Return os_errbuf for listflag error formatting
+char *nvim_optset_get_errbuf(const void *args) { return ((const optset_T *)args)->os_errbuf; }
+// Return os_errbuflen for listflag error formatting
+size_t nvim_optset_get_errbuflen(const void *args) { return ((const optset_T *)args)->os_errbuflen; }
+// Wrapper for illegal_char (formats E539 error into errbuf)
+const char *nvim_illegal_char(char *errbuf, size_t errbuflen, int c)
+{
+  return illegal_char(errbuf, errbuflen, c);
+}
+// Wrapper for did_set_str_generic (validates against option's allowed values)
+const char *nvim_did_set_str_generic(void *args) { return did_set_str_generic(args); }
+// Wrappers for side-effect functions
+void nvim_call_init_chartab(void) { init_chartab(); }
+void nvim_call_msg_grid_validate(void) { msg_grid_validate(); }
+int nvim_call_check_opt_wim(void) { return check_opt_wim(); }
+int nvim_call_briopt_check_win(const char *val, win_T *win)
+{
+  return briopt_check(val, win) == OK ? 1 : 0;
+}
+int nvim_get_cmdpreview(void) { return cmdpreview; }
+// Return address of win->w_p_briopt for varp comparison
+const void *nvim_win_get_p_briopt_addr(win_T *win) { return win ? (const void *)&win->w_p_briopt : NULL; }
+// Return varp from optset_T (as void*)
+const void *nvim_optset_get_varp_ptr(const void *args) { return ((const optset_T *)args)->os_varp; }
 
 // =============================================================================
 // Simple accessor functions for Rust (don't require options array)

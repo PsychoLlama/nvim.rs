@@ -395,7 +395,7 @@ local options = {
     },
     {
       abbreviation = 'bs',
-      cb = 'did_set_backspace',
+      cb = 'rs_did_set_backspace',
       defaults = 'indent,eol,start',
       values = { 'indent', 'eol', 'start', 'nostop' },
       deny_duplicates = true,
@@ -817,7 +817,7 @@ local options = {
     },
     {
       abbreviation = 'briopt',
-      cb = 'did_set_breakindentopt',
+      cb = 'rs_did_set_breakindentopt',
       defaults = '',
       -- Keep this in sync with briopt_check().
       values = { 'shift:', 'min:', 'sbr', 'list:', 'column:' },
@@ -880,7 +880,7 @@ local options = {
     },
     {
       abbreviation = 'bh',
-      cb = 'did_set_bufhidden',
+      cb = 'rs_did_set_bufhidden',
       defaults = '',
       values = { '', 'hide', 'unload', 'delete', 'wipe' },
       desc = [=[
@@ -1741,7 +1741,7 @@ local options = {
     },
     {
       abbreviation = 'cocu',
-      cb = 'did_set_concealcursor',
+      cb = 'rs_did_set_concealcursor',
       defaults = '',
       desc = [=[
         Sets the modes in which text in the cursor line can also be concealed.
@@ -1838,7 +1838,7 @@ local options = {
     },
     {
       abbreviation = 'cpo',
-      cb = 'did_set_cpoptions',
+      cb = 'rs_did_set_cpoptions',
       defaults = macros('CPO_VIM', 'string'),
       desc = [=[
         A sequence of single character flags.  When a character is present
@@ -2585,7 +2585,7 @@ local options = {
     },
     {
       abbreviation = 'dy',
-      cb = 'did_set_display',
+      cb = 'rs_did_set_display',
       defaults = 'lastline',
       values = { 'lastline', 'truncate', 'uhex', 'msgsep' },
       flags = true,
@@ -3754,7 +3754,7 @@ local options = {
     },
     {
       abbreviation = 'fo',
-      cb = 'did_set_formatoptions',
+      cb = 'rs_did_set_formatoptions',
       defaults = macros('DFLT_FO_VIM', 'string'),
       desc = [=[
         This is a sequence of letters which describes how automatic
@@ -4572,7 +4572,7 @@ local options = {
     },
     {
       abbreviation = 'icm',
-      cb = 'did_set_inccommand',
+      cb = 'rs_did_set_inccommand',
       defaults = 'nosplit',
       values = { 'nosplit', 'split', '' },
       desc = [=[
@@ -5332,7 +5332,7 @@ local options = {
     },
     {
       abbreviation = 'lop',
-      cb = 'did_set_lispoptions',
+      cb = 'rs_did_set_lispoptions',
       defaults = '',
       values = { 'expr:0', 'expr:1' },
       deny_duplicates = true,
@@ -5955,7 +5955,7 @@ local options = {
       varname = 'p_more',
     },
     {
-      cb = 'did_set_mouse',
+      cb = 'rs_did_set_mouse',
       defaults = 'nvi',
       desc = [=[
         Enables mouse support. For example, to enable the mouse in Normal mode
@@ -7328,7 +7328,7 @@ local options = {
     },
     {
       abbreviation = 'sel',
-      cb = 'did_set_selection',
+      cb = 'rs_did_set_selection',
       defaults = 'inclusive',
       values = { 'inclusive', 'exclusive', 'old' },
       desc = [=[
@@ -7945,7 +7945,7 @@ local options = {
     },
     {
       abbreviation = 'shm',
-      cb = 'did_set_shortmess',
+      cb = 'rs_did_set_shortmess',
       defaults = 'ltToOCF',
       desc = [=[
         This option helps to avoid all the |hit-enter| prompts caused by file
@@ -8067,7 +8067,7 @@ local options = {
     },
     {
       abbreviation = 'sloc',
-      cb = 'did_set_showcmdloc',
+      cb = 'rs_did_set_showcmdloc',
       defaults = 'last',
       values = { 'last', 'statusline', 'tabline' },
       desc = [=[
@@ -10169,7 +10169,7 @@ local options = {
     },
     {
       abbreviation = 'ww',
-      cb = 'did_set_whichwrap',
+      cb = 'rs_did_set_whichwrap',
       defaults = 'b,s',
       desc = [=[
         Allow specified keys that move the cursor left/right to move to the
@@ -10350,7 +10350,7 @@ local options = {
     },
     {
       abbreviation = 'wim',
-      cb = 'did_set_wildmode',
+      cb = 'rs_did_set_wildmode',
       defaults = 'full',
       -- Keep this in sync with check_opt_wim().
       values = { 'full', 'longest', 'list', 'lastused', 'noselect' },
