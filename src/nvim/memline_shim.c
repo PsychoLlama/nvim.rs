@@ -271,6 +271,8 @@ extern size_t rs_ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *
 extern void rs_ml_add_deleted_len(char *ptr, ssize_t len);
 extern void rs_ml_add_deleted_len_buf(buf_T *buf, char *ptr, ssize_t len);
 extern int rs_ml_add_stack(buf_T *buf);
+// Pass 2 Phase 5: ml_setflags Rust function declaration
+extern void rs_ml_setflags(buf_T *buf);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -3174,25 +3176,8 @@ static char *findswapname(buf_T *buf, char **dirp, char *old_fname, bool *found_
   return fname;
 }
 
-/// Set the flags in the first block of the swapfile:
-/// - file is modified or not: buf->b_changed
-/// - 'fileformat'
-/// - 'fileencoding'
-void ml_setflags(buf_T *buf)
-{
-  if (!buf->b_ml.ml_mfp) {
-    return;
-  }
-  bhdr_T *hp = pmap_get(int64_t)(&buf->b_ml.ml_mfp->mf_hash, 0);
-  if (hp) {
-    ZeroBlock *b0p = hp->bh_data;
-    b0p->b0_dirty = buf->b_changed ? B0_DIRTY : 0;
-    b0p->b0_flags = (char)((b0p->b0_flags & ~B0_FF_MASK) | (uint8_t)(rs_get_fileformat((buf_T *)buf) + 1));
-    rs_add_b0_fenc(b0p, buf);
-    hp->bh_flags |= BH_DIRTY;
-    mf_sync(buf->b_ml.ml_mfp, MFS_ZERO);
-  }
-}
+/// Set the flags in the first block of the swapfile. (thin wrapper calling Rust)
+void ml_setflags(buf_T *buf) { rs_ml_setflags(buf); }
 
 enum {
   MLCS_MAXL = 800,  // max no of lines in chunk

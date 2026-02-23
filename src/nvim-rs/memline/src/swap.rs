@@ -17,7 +17,10 @@
 use std::ffi::{c_char, c_int};
 
 use crate::rs_long_to_char;
-use crate::types::{BF_RECOVERED, BufHandle, ML_ALLOCATED, ML_LINE_DIRTY, UB_FNAME, UB_SAME_DIR};
+use crate::types::{
+    BufHandle, B0_DIRTY, B0_FF_MASK, BF_RECOVERED, MFS_ZERO, ML_ALLOCATED, ML_LINE_DIRTY, UB_FNAME,
+    UB_SAME_DIR,
+};
 
 // =============================================================================
 // C Implementation Declarations
@@ -58,9 +61,6 @@ extern "C" {
 
     /// Preserve buffer (write to swap file)
     fn ml_preserve(buf: *mut BufHandle, message: c_int, do_fsync: c_int);
-
-    /// Set memline flags for swap file
-    fn ml_setflags(buf: *mut BufHandle);
 
     // -------------------------------------------------------------------------
     // Phase 3: Buffer lifecycle accessors
@@ -104,6 +104,25 @@ extern "C" {
 
     /// Get buf->b_p_ro
     fn nvim_buf_get_b_p_ro(buf: *mut BufHandle) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 5: ml_setflags accessors
+    // -------------------------------------------------------------------------
+
+    /// Look up block 0 header in memfile hash: pmap_get(int64_t)(&mfp->mf_hash, 0)
+    fn nvim_mf_get_block0_hp(mfp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+
+    /// Set BH_DIRTY flag on block header: hp->bh_flags |= BH_DIRTY
+    fn nvim_bhdr_set_bh_flags_dirty(hp: *mut std::ffi::c_void);
+
+    /// Get buf->b_changed
+    fn nvim_buf_get_b_changed(buf: *mut BufHandle) -> bool;
+
+    /// Sync memfile blocks to disk
+    fn mf_sync(mfp: *mut std::ffi::c_void, flags: c_int) -> c_int;
+
+    /// Get the file format for a buffer (0=unix, 1=dos, 2=mac)
+    fn rs_get_fileformat(buf: *mut BufHandle) -> c_int;
 
 }
 
@@ -300,13 +319,51 @@ pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: c_int, do_
 
 /// Set the memline flags for swap file state.
 ///
+/// Updates the dirty flag, fileformat, and fileencoding in swap file block 0.
+/// - Sets b0_dirty based on buf->b_changed
+/// - Sets the fileformat bits in b0_flags
+/// - Calls rs_add_b0_fenc to update the fileencoding
+/// - Marks block 0 dirty and syncs it
+///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_ml_setflags(buf: *mut BufHandle) {
-    if !buf.is_null() {
-        ml_setflags(buf);
+    if buf.is_null() {
+        return;
     }
+    let mfp = nvim_buf_get_ml_mfp(buf);
+    if mfp.is_null() {
+        return;
+    }
+    let hp = nvim_mf_get_block0_hp(mfp);
+    if hp.is_null() {
+        return;
+    }
+    let b0p = nvim_bhdr_get_bh_data(hp);
+
+    // Set dirty flag based on buf->b_changed
+    let b0_fname = nvim_b0_get_fname_mut(b0p);
+    let dirty_val = if nvim_buf_get_b_changed(buf) {
+        c_int::from(B0_DIRTY)
+    } else {
+        0
+    };
+    rs_b0_set_dirty(b0_fname, crate::types::B0_FNAME_SIZE_ORG, dirty_val);
+
+    // Update fileformat bits in b0_flags: (flags & ~B0_FF_MASK) | (ff + 1)
+    let fileformat = rs_get_fileformat(buf);
+    let old_flags = nvim_b0_get_flags_byte(b0p);
+    let new_flags = (old_flags & !B0_FF_MASK) | ((fileformat + 1) as u8);
+    nvim_b0_set_flags_byte(b0p, new_flags);
+
+    // Add fileencoding if there is room
+    rs_add_b0_fenc(b0p, buf);
+
+    // Mark block 0 dirty and sync
+    nvim_bhdr_set_bh_flags_dirty(hp);
+    mf_sync(mfp, MFS_ZERO);
 }
 
 // =============================================================================
@@ -388,16 +445,13 @@ const ENOENT: c_int = 2;
 /// - `name` may be NULL (treated as "")
 /// - Returns allocated string or NULL
 #[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_make_percent_swname(
     dir: *mut c_char,
     dir_end: *mut c_char,
     name: *const c_char,
 ) -> *mut c_char {
-    let f = fix_fname(if name.is_null() {
-        c"".as_ptr()
-    } else {
-        name
-    });
+    let f = fix_fname(if name.is_null() { c"".as_ptr() } else { name });
     if f.is_null() {
         return std::ptr::null_mut();
     }
@@ -416,7 +470,9 @@ pub unsafe extern "C" fn rs_make_percent_swname(
             *d = b'%' as c_char;
         }
         let adv = utf_ptr2len(d);
-        d = d.add(adv as usize);
+        #[allow(clippy::cast_sign_loss)]
+        let adv_usize = adv as usize;
+        d = d.add(adv_usize);
     }
 
     // Remove one trailing slash from dir (dir_end[-1] = NUL)
@@ -439,8 +495,8 @@ pub unsafe extern "C" fn rs_make_percent_swname(
 /// - `buf` must be a buffer of at least MAXPATHL bytes
 #[cfg(unix)]
 #[no_mangle]
+#[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int {
-    const OK: c_int = 1;
     const FAIL: c_int = 0;
 
     if fname.is_null() {
@@ -519,10 +575,8 @@ pub unsafe extern "C" fn rs_resolve_symlink(fname: *const c_char, buf: *mut c_ch
 /// - `fname` and `dname` must be valid C strings
 /// - Returns allocated string or NULL
 #[no_mangle]
-pub unsafe extern "C" fn rs_get_file_in_dir(
-    fname: *mut c_char,
-    dname: *mut c_char,
-) -> *mut c_char {
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_char {
     if fname.is_null() || dname.is_null() {
         return std::ptr::null_mut();
     }
@@ -558,24 +612,26 @@ pub unsafe extern "C" fn rs_get_file_in_dir(
 ///
 /// Mirrors the C `makeswapname` function.
 ///
+/// When `fname` is NULL, `modname` uses the current directory (same as C).
+///
 /// # Safety
-/// - `fname`, `buf`, `dir_name` must be valid C strings or NULL for `buf`
+/// - `buf`, `dir_name` must be valid C strings; `fname` may be NULL
 /// - Returns allocated string or NULL
 #[no_mangle]
-#[allow(clippy::similar_names)]
+#[allow(clippy::similar_names, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_makeswapname(
     fname: *mut c_char,
     _ffname: *mut c_char,
     _buf: *mut BufHandle,
     dir_name: *mut c_char,
 ) -> *mut c_char {
-    if fname.is_null() || dir_name.is_null() {
+    if dir_name.is_null() {
         return std::ptr::null_mut();
     }
 
     let maxpathl = nvim_get_maxpathl();
 
-    // Resolve symlinks if supported
+    // Resolve symlinks if supported (only when fname is non-NULL)
     #[allow(unused_mut)]
     let mut fname_res = fname;
 
@@ -583,7 +639,7 @@ pub unsafe extern "C" fn rs_makeswapname(
     let mut fname_buf = vec![0i8; maxpathl];
     #[cfg(unix)]
     {
-        if rs_resolve_symlink(fname, fname_buf.as_mut_ptr()) == 1 {
+        if !fname.is_null() && rs_resolve_symlink(fname, fname_buf.as_mut_ptr()) == 1 {
             fname_res = fname_buf.as_mut_ptr();
         }
     }

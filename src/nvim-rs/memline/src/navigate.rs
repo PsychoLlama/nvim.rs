@@ -21,9 +21,8 @@
 use std::ffi::{c_char, c_int};
 
 use crate::types::{
-    BlockHeaderHandle, BlockNr, BufHandle, ColNr, DataBlockHeader, InfoPtrHandle, LineNr,
-    PointerBlockHeader, PointerEntry, PosHandle, DB_INDEX_MASK, ML_DELETE, ML_FIND, ML_FLUSH,
-    ML_INSERT, STACK_INCR,
+    BlockNr, BufHandle, ColNr, DataBlockHeader, InfoPtrHandle, LineNr, PointerBlockHeader,
+    PointerEntry, PosHandle, DB_INDEX_MASK, ML_DELETE, ML_FIND, ML_FLUSH, ML_INSERT, STACK_INCR,
 };
 
 // =============================================================================
@@ -129,11 +128,8 @@ extern "C" {
     // -------------------------------------------------------------------------
 
     /// Find line in B-tree, return locked block header (public wrapper around static ml_find_line)
-    fn nvim_ml_find_line(
-        buf: *mut BufHandle,
-        lnum: LineNr,
-        action: c_int,
-    ) -> *mut BlockHeaderHandle;
+    fn nvim_ml_find_line(buf: *mut BufHandle, lnum: LineNr, action: c_int)
+        -> *mut std::ffi::c_void;
 
     /// Flush the current cached line to the data block (C implementation)
     fn ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
@@ -515,7 +511,7 @@ pub unsafe extern "C" fn rs_ml_find_line_or_offset(
             return -1;
         }
 
-        let dp_raw = nvim_bhdr_get_bh_data(hp.cast::<std::ffi::c_void>());
+        let dp_raw = nvim_bhdr_get_bh_data(hp);
         let dp = dp_raw.cast::<DataBlockHeader>();
 
         let locked_high = nvim_buf_get_ml_locked_high(buf);

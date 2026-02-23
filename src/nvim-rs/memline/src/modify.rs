@@ -239,9 +239,7 @@ pub unsafe extern "C" fn rs_ml_adjust_lowest_marked_for_delete(lnum: LineNr) {
 #[inline]
 unsafe fn db_index_ptr(dp: *mut c_void) -> *mut u32 {
     #[allow(clippy::cast_ptr_alignment)]
-    dp.cast::<u8>()
-        .add(DATA_BLOCK_HEADER_SIZE)
-        .cast::<u32>()
+    dp.cast::<u8>().add(DATA_BLOCK_HEADER_SIZE).cast::<u32>()
 }
 
 extern "C" {
@@ -579,6 +577,11 @@ pub unsafe extern "C" fn rs_ml_add_deleted_len(ptr: *mut c_char, len: isize) {
 /// - `buf` must be a valid buffer pointer or NULL
 /// - `ptr` must be a valid C string
 #[no_mangle]
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation
+)]
 pub unsafe extern "C" fn rs_ml_add_deleted_len_buf(
     buf: *mut BufHandle,
     ptr: *mut c_char,
@@ -591,14 +594,18 @@ pub unsafe extern "C" fn rs_ml_add_deleted_len_buf(
         return;
     }
     let maxlen = strlen(ptr) as isize;
-    let actual_len = if len == -1 || len > maxlen { maxlen } else { len };
+    let actual_len = if len == -1 || len > maxlen {
+        maxlen
+    } else {
+        len
+    };
     let nbytes = actual_len as usize + 1; // +1 for NL
     nvim_buf_add_deleted_bytes(buf, nbytes);
     nvim_buf_add_deleted_bytes2(buf, nbytes);
     if nvim_buf_get_update_need_codepoints(buf) {
         let mut cp: usize = 0;
         let mut cu: usize = 0;
-        mb_utflen(ptr, actual_len as usize, &mut cp, &mut cu);
+        mb_utflen(ptr, actual_len as usize, &raw mut cp, &raw mut cu);
         nvim_buf_add_deleted_codepoints(buf, cp + 1); // +1 for NL char
         nvim_buf_add_deleted_codeunits(buf, cu + 1);
     }
@@ -612,6 +619,11 @@ pub unsafe extern "C" fn rs_ml_add_deleted_len_buf(
 /// # Safety
 /// - `buf` must be a valid buffer pointer
 #[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 pub unsafe extern "C" fn rs_ml_add_stack(buf: *mut BufHandle) -> c_int {
     let top = nvim_buf_get_ml_stack_top(buf);
     let stack_size = nvim_buf_get_ml_stack_size(buf);
@@ -642,10 +654,7 @@ pub unsafe extern "C" fn rs_ml_add_stack(buf: *mut BufHandle) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_setmarked(lnum: LineNr) {
     let buf = nvim_get_curbuf();
-    if lnum < 1
-        || lnum > nvim_buf_get_ml_line_count(buf)
-        || nvim_buf_has_ml_mfp(buf) == 0
-    {
+    if lnum < 1 || lnum > nvim_buf_get_ml_line_count(buf) || nvim_buf_has_ml_mfp(buf) == 0 {
         return;
     }
 
@@ -660,7 +669,7 @@ pub unsafe extern "C" fn rs_ml_setmarked(lnum: LineNr) {
     }
     let dp = nvim_bhdr_get_bh_data(hp);
     let db_idx = db_index_ptr(dp);
-    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     let i = (lnum - nvim_buf_get_ml_locked_low(buf)) as usize;
     *db_idx.add(i) |= DB_MARKED;
 
@@ -697,7 +706,7 @@ pub unsafe extern "C" fn rs_ml_firstmarked() -> LineNr {
         let locked_low = nvim_buf_get_ml_locked_low(buf);
         let locked_high = nvim_buf_get_ml_locked_high(buf);
 
-        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let mut i = (lnum - locked_low) as usize;
         while lnum <= locked_high {
             if (*db_idx.add(i)) & DB_MARKED != 0 {
@@ -743,7 +752,7 @@ pub unsafe extern "C" fn rs_ml_clearmarked() {
         let locked_low = nvim_buf_get_ml_locked_low(buf);
         let locked_high = nvim_buf_get_ml_locked_high(buf);
 
-        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let mut i = (lnum - locked_low) as usize;
         while lnum <= locked_high {
             if (*db_idx.add(i)) & DB_MARKED != 0 {
@@ -1402,7 +1411,6 @@ pub unsafe extern "C" fn rs_ml_new_ptr(mfp: *mut c_void) -> *mut c_void {
     std::ptr::write(pp, header);
     hp
 }
-
 
 #[cfg(test)]
 mod tests {
