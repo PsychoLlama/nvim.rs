@@ -257,6 +257,11 @@ extern const char *rs_cexpr_get_auname(int cmdidx);
 extern const char *rs_vgr_get_auname(int cmdidx);
 extern const char *rs_qf_types(int c, int nr, char *buf, size_t bufsz);
 
+// Phase 2: Format and title helpers (migrated to Rust)
+extern size_t rs_qf_fmt_text(const char *text, char *out, size_t out_size);
+extern size_t rs_qf_range_text(int32_t lnum, int32_t end_lnum, int col, int end_col, char *out, size_t out_size);
+extern size_t rs_qf_cmdtitle(const char *cmd, char *buf, size_t bufsz);
+
 /// Result of the full errorformat-to-regex conversion
 typedef struct {
   size_t bytes_written;
@@ -337,7 +342,14 @@ bool nvim_qf_get_has_user_data(const void *qfl_void) { return ((const qf_list_T 
 // Forward declarations for static functions
 static void qf_store_title(qf_list_T *qfl, const char *title);
 
-void nvim_qf_store_title(void *qfl_void, const char *title) { qf_store_title(((qf_list_T *)qfl_void), title); }
+void nvim_qf_store_title(void *qfl_void, const char *title)
+{
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  if (qfl == NULL) {
+    return;
+  }
+  qf_store_title(qfl, title);
+}
 
 void *nvim_get_ql_info(void) { return (void *)ql_info; }
 
@@ -1642,9 +1654,7 @@ static void qf_store_title(qf_list_T *qfl, const char *title)
 static char *qf_cmdtitle(char *cmd)
 {
   static char qftitle_str[IOSIZE];
-
-  snprintf(qftitle_str, IOSIZE, ":%s", cmd);
-
+  rs_qf_cmdtitle(cmd, qftitle_str, sizeof(qftitle_str));
   return qftitle_str;
 }
 
@@ -3086,43 +3096,17 @@ void qf_list(exarg_T *eap)
 static void qf_fmt_text(garray_T *gap, const char *restrict text)
   FUNC_ATTR_NONNULL_ALL
 {
-  const char *p = text;
-  while (*p != NUL) {
-    if (*p == '\n') {
-      ga_append(gap, ' ');
-      while (*++p != NUL) {
-        if (!ascii_iswhite(*p) && *p != '\n') {
-          break;
-        }
-      }
-    } else {
-      ga_append(gap, (uint8_t)(*p++));
-    }
-  }
+  char buf[IOSIZE];
+  size_t len = rs_qf_fmt_text(text, buf, sizeof(buf));
+  ga_concat_len(gap, buf, len);
 }
 
 /// of a quickfix entry to the grow array "gap".
 static void qf_range_text(garray_T *gap, const qfline_T *qfp)
 {
-  char *const buf = IObuff;
-  const size_t bufsize = IOSIZE;
-
-  vim_snprintf(buf, bufsize, "%" PRIdLINENR, qfp->qf_lnum);
-  size_t len = strlen(buf);
-
-  if (qfp->qf_end_lnum > 0 && qfp->qf_lnum != qfp->qf_end_lnum) {
-    vim_snprintf(buf + len, bufsize - len, "-%" PRIdLINENR, qfp->qf_end_lnum);
-    len += strlen(buf + len);
-  }
-  if (qfp->qf_col > 0) {
-    vim_snprintf(buf + len, bufsize - len, " col %d", qfp->qf_col);
-    len += strlen(buf + len);
-    if (qfp->qf_end_col > 0 && qfp->qf_col != qfp->qf_end_col) {
-      vim_snprintf(buf + len, bufsize - len, "-%d", qfp->qf_end_col);
-      len += strlen(buf + len);
-    }
-  }
-
+  char buf[IOSIZE];
+  size_t len = rs_qf_range_text(qfp->qf_lnum, qfp->qf_end_lnum, qfp->qf_col, qfp->qf_end_col,
+                                buf, sizeof(buf));
   ga_concat_len(gap, buf, len);
 }
 

@@ -1830,3 +1830,45 @@ pub const extern "C" fn rs_vgr_get_auname(cmdidx: c_int) -> *const std::ffi::c_c
         _ => std::ptr::null(),
     }
 }
+
+// =============================================================================
+// Phase 2: qf_cmdtitle helper
+// =============================================================================
+
+/// Write `:cmd` into `buf` (at most `bufsz` bytes including NUL terminator).
+///
+/// Returns the number of bytes written, not counting the NUL terminator.
+///
+/// # Safety
+///
+/// - `cmd` must be a valid null-terminated C string, or NULL.
+/// - `buf` must be a valid writable buffer of at least `bufsz` bytes.
+/// - `bufsz` must be > 0.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_cmdtitle(
+    cmd: *const std::ffi::c_char,
+    buf: *mut std::ffi::c_char,
+    bufsz: usize,
+) -> usize {
+    use std::io::Write;
+
+    if buf.is_null() || bufsz == 0 {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf.cast::<u8>(), bufsz);
+
+    let cmd_str = if cmd.is_null() {
+        ""
+    } else {
+        std::ffi::CStr::from_ptr(cmd).to_str().unwrap_or_default()
+    };
+
+    let mut cursor = std::io::Cursor::new(&mut slice[..]);
+    let _ = write!(cursor, ":{cmd_str}");
+    #[allow(clippy::cast_possible_truncation)]
+    let written = cursor.position() as usize;
+    let end = written.min(bufsz - 1);
+    slice[end] = 0;
+    end
+}
