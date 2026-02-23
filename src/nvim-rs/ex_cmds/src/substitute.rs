@@ -47,6 +47,53 @@ const EXFLAG_NR: c_int = 0x02;
 const EXFLAG_PRINT: c_int = 0x04;
 
 extern "C" {
+    // show_sub FFI
+    fn nvim_excmds_save_set_shortmess_F() -> *mut c_char;
+    fn nvim_excmds_restore_shortmess(saved: *mut c_char);
+    fn nvim_excmds_get_p_icm_first() -> c_int;
+    fn nvim_excmds_buflist_findnr(nr: c_int) -> *mut crate::BufHandle;
+    fn nvim_excmds_buf_ensure_loaded(buf: *mut crate::BufHandle);
+    fn nvim_excmds_ml_get_buf(buf: *mut crate::BufHandle, lnum: c_int) -> *const c_char;
+    fn nvim_excmds_ml_get_buf_len(buf: *mut crate::BufHandle, lnum: c_int) -> c_int;
+    fn nvim_excmds_ml_replace_buf(
+        buf: *mut crate::BufHandle,
+        lnum: c_int,
+        line: *mut c_char,
+        copy: bool,
+        keep_dirty: bool,
+    );
+    fn nvim_excmds_ml_append_buf(
+        buf: *mut crate::BufHandle,
+        lnum: c_int,
+        line: *mut c_char,
+        len: c_int,
+        newfile: bool,
+    );
+    fn nvim_excmds_bufhl_add_hl_pos_offset(
+        buf: *mut crate::BufHandle,
+        ns_id: c_int,
+        hl_id: c_int,
+        start_lnum: c_int,
+        start_col: c_int,
+        end_lnum: c_int,
+        end_col: c_int,
+        offset: c_int,
+    );
+    fn nvim_excmds_update_topline_curwin();
+    fn nvim_excmds_orig_buf_line_count() -> c_int;
+    fn nvim_excmds_preview_lines_size(pl: *const std::ffi::c_void) -> usize;
+    fn nvim_excmds_preview_lines_item(
+        pl: *const std::ffi::c_void,
+        idx: usize,
+        start_lnum: *mut c_int,
+        start_col: *mut c_int,
+        end_lnum: *mut c_int,
+        end_col: *mut c_int,
+        pre_match: *mut c_int,
+    );
+    fn nvim_curwin_set_cursor_col(col: c_int);
+    fn nvim_get_curbuf() -> *mut crate::BufHandle;
+
     /// Get the current value of p_gd (gdefault option).
     fn nvim_option_get_gd() -> c_int;
 
@@ -648,6 +695,246 @@ pub unsafe extern "C" fn rs_sub_parse_flags(
     }
 
     p
+}
+
+// =============================================================================
+// show_sub implementation
+// =============================================================================
+
+/// Shows the effects of the :substitute command being typed ('inccommand').
+///
+/// If inccommand=split, shows a preview window and later restores the layout.
+/// Replaces the C `show_sub` function.
+///
+/// Returns 1 if preview window isn't needed, 2 if preview window is needed.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_show_sub(
+    eap: *const ExArgHandle,
+    old_cusr_lnum: c_int,
+    _old_cusr_col: c_int,
+    preview_lines: *const std::ffi::c_void,
+    hl_id: c_int,
+    cmdpreview_ns: c_int,
+    cmdpreview_bufnr: c_int,
+) -> c_int {
+    use std::io::Write;
+
+    // Save and disable file info message
+    let save_shm_p = nvim_excmds_save_set_shortmess_F();
+
+    let orig_buf = nvim_get_curbuf();
+    let num_results = nvim_excmds_preview_lines_size(preview_lines);
+
+    // Place cursor on nearest matching line, to undo do_sub() cursor placement.
+    for i in 0..num_results {
+        let mut start_lnum: c_int = 0;
+        let mut start_col: c_int = 0;
+        let mut end_lnum: c_int = 0;
+        let mut end_col: c_int = 0;
+        let mut pre_match: c_int = 0;
+        nvim_excmds_preview_lines_item(
+            preview_lines,
+            i,
+            &mut start_lnum,
+            &mut start_col,
+            &mut end_lnum,
+            &mut end_col,
+            &mut pre_match,
+        );
+        if start_lnum >= old_cusr_lnum {
+            nvim_curwin_set_cursor_lnum(start_lnum);
+            nvim_curwin_set_cursor_col(start_col);
+            break;
+        }
+    }
+
+    // Update the topline to ensure that main window is on the correct line.
+    nvim_excmds_update_topline_curwin();
+
+    // Width of the "| lnum|..." column which displays the line numbers.
+    let mut col_width: c_int = 0;
+
+    let line1 = nvim_exarg_get_line1(eap);
+    let line2 = nvim_exarg_get_line2(eap);
+
+    // Use preview window only when inccommand=split and range is not just the current line.
+    let preview = nvim_excmds_get_p_icm_first() == b's' as c_int
+        && (line1 != old_cusr_lnum || line2 != old_cusr_lnum);
+
+    let mut cmdpreview_buf: *mut crate::BufHandle = std::ptr::null_mut();
+    if preview {
+        cmdpreview_buf = nvim_excmds_buflist_findnr(cmdpreview_bufnr);
+        // cmdpreview_buf must be non-NULL per the C assert
+        if num_results > 0 {
+            let last_idx = num_results - 1;
+            let mut sl: c_int = 0;
+            let mut sc: c_int = 0;
+            let mut el: c_int = 0;
+            let mut ec: c_int = 0;
+            let mut pm: c_int = 0;
+            nvim_excmds_preview_lines_item(
+                preview_lines,
+                last_idx,
+                &mut sl,
+                &mut sc,
+                &mut el,
+                &mut ec,
+                &mut pm,
+            );
+            let highest_lnum = sl.max(el);
+            if highest_lnum > 0 {
+                col_width = (highest_lnum as f64).log10() as c_int + 1 + 3;
+            }
+        }
+    }
+
+    let mut str_buf: *mut c_char = std::ptr::null_mut();
+    let mut str_buf_size: usize = 0;
+    let mut linenr_preview: c_int = 0;
+    let mut linenr_origbuf: c_int = 0;
+
+    for matchidx in 0..num_results {
+        let mut start_lnum: c_int = 0;
+        let mut start_col: c_int = 0;
+        let mut end_lnum: c_int = 0;
+        let mut end_col: c_int = 0;
+        let mut pre_match: c_int = 0;
+        nvim_excmds_preview_lines_item(
+            preview_lines,
+            matchidx,
+            &mut start_lnum,
+            &mut start_col,
+            &mut end_lnum,
+            &mut end_col,
+            &mut pre_match,
+        );
+
+        if !cmdpreview_buf.is_null() {
+            let mut p_start_lnum: c_int = 0;
+            let p_start_col: c_int = start_col;
+            let mut p_end_lnum: c_int = 0;
+            let p_end_col: c_int = end_col;
+
+            nvim_excmds_buf_ensure_loaded(cmdpreview_buf);
+
+            let mut next_linenr: c_int = if pre_match == 0 {
+                start_lnum
+            } else {
+                pre_match
+            };
+
+            // Don't add a line twice
+            if next_linenr == linenr_origbuf {
+                next_linenr += 1;
+                p_start_lnum = linenr_preview;
+                p_end_lnum = linenr_preview;
+            }
+
+            let orig_buf_line_count = nvim_excmds_orig_buf_line_count();
+
+            while next_linenr <= end_lnum {
+                if next_linenr == start_lnum {
+                    p_start_lnum = linenr_preview + 1;
+                }
+                if next_linenr == end_lnum {
+                    p_end_lnum = linenr_preview + 1;
+                }
+
+                let line_ptr: *const c_char;
+                let line_size: usize;
+
+                if next_linenr == orig_buf_line_count + 1 {
+                    line_ptr = c"".as_ptr();
+                    // Need enough for "|col_width| \0"
+                    line_size = (col_width as usize) + 4;
+                } else {
+                    line_ptr = nvim_excmds_ml_get_buf(orig_buf, next_linenr);
+                    let raw_len = nvim_excmds_ml_get_buf_len(orig_buf, next_linenr);
+                    line_size = raw_len as usize + col_width as usize + 2;
+                }
+
+                // Reallocate str_buf if not large enough
+                if line_size > str_buf_size {
+                    str_buf = xrealloc(
+                        str_buf as *mut std::ffi::c_void,
+                        line_size + 1,
+                    ) as *mut c_char;
+                    str_buf_size = line_size + 1;
+                }
+
+                // Format: "|{lnum:col_width-3}| {line}"
+                let line_str = std::ffi::CStr::from_ptr(line_ptr).to_bytes();
+                let num_width = (col_width - 3) as usize;
+                let mut formatted = Vec::<u8>::with_capacity(line_size + 1);
+                write!(
+                    &mut formatted,
+                    "|{:>width$}| ",
+                    next_linenr,
+                    width = num_width
+                )
+                .ok();
+                formatted.extend_from_slice(line_str);
+                formatted.push(0); // NUL terminator
+
+                // Copy to str_buf
+                let copy_len = formatted.len().min(str_buf_size);
+                std::ptr::copy_nonoverlapping(
+                    formatted.as_ptr() as *const c_char,
+                    str_buf,
+                    copy_len,
+                );
+
+                if linenr_preview == 0 {
+                    nvim_excmds_ml_replace_buf(cmdpreview_buf, 1, str_buf, true, false);
+                } else {
+                    nvim_excmds_ml_append_buf(
+                        cmdpreview_buf,
+                        linenr_preview,
+                        str_buf,
+                        line_size as c_int,
+                        false,
+                    );
+                }
+                linenr_preview += 1;
+                next_linenr += 1;
+            }
+            linenr_origbuf = end_lnum;
+
+            nvim_excmds_bufhl_add_hl_pos_offset(
+                cmdpreview_buf,
+                cmdpreview_ns,
+                hl_id,
+                p_start_lnum,
+                p_start_col,
+                p_end_lnum,
+                p_end_col,
+                col_width,
+            );
+        }
+
+        // Add highlight to original buffer for this match
+        nvim_excmds_bufhl_add_hl_pos_offset(
+            orig_buf,
+            cmdpreview_ns,
+            hl_id,
+            start_lnum,
+            start_col,
+            end_lnum,
+            end_col,
+            0,
+        );
+    }
+
+    if !str_buf.is_null() {
+        crate::xfree(str_buf as *mut std::ffi::c_void);
+    }
+
+    nvim_excmds_restore_shortmess(save_shm_p);
+
+    if preview { 2 } else { 1 }
 }
 
 /// Parse substitute flags from a string.

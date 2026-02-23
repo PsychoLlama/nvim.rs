@@ -3378,126 +3378,18 @@ bool prepare_tagpreview(bool undo_sync)
   return rs_prepare_tagpreview((int)undo_sync);
 }
 
-/// Shows the effects of the :substitute command being typed ('inccommand').
-/// If inccommand=split, shows a preview window and later restores the layout.
-///
-/// @return 1 if preview window isn't needed, 2 if preview window is needed.
+// show_sub implemented in Rust (rs_show_sub in ex_cmds/src/substitute.rs)
+extern int rs_show_sub(exarg_T *eap, linenr_T old_cusr_lnum, colnr_T old_cusr_col,
+                       const PreviewLines *preview_lines, int hl_id,
+                       int cmdpreview_ns, handle_T cmdpreview_bufnr);
+
+/// Shows the effects of :substitute for inccommand. Thin wrapper calling Rust.
 static int show_sub(exarg_T *eap, pos_T old_cusr, PreviewLines *preview_lines, int hl_id,
                     int cmdpreview_ns, handle_T cmdpreview_bufnr)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *save_shm_p = xstrdup(p_shm);
-  PreviewLines lines = *preview_lines;
-  buf_T *orig_buf = curbuf;
-  // We keep a special-purpose buffer around, but don't assume it exists.
-  buf_T *cmdpreview_buf = NULL;
-
-  // disable file info message
-  set_option_direct(kOptShortmess, STATIC_CSTR_AS_OPTVAL("F"), 0, SID_NONE);
-
-  // Place cursor on nearest matching line, to undo do_sub() cursor placement.
-  for (size_t i = 0; i < lines.subresults.size; i++) {
-    SubResult curres = lines.subresults.items[i];
-    if (curres.start.lnum >= old_cusr.lnum) {
-      curwin->w_cursor.lnum = curres.start.lnum;
-      curwin->w_cursor.col = curres.start.col;
-      break;
-    }  // Else: All matches are above, do_sub() already placed cursor.
-  }
-
-  // Update the topline to ensure that main window is on the correct line
-  update_topline(curwin);
-
-  // Width of the "| lnum|..." column which displays the line numbers.
-  int col_width = 0;
-  // Use preview window only when inccommand=split and range is not just the current line
-  bool preview = (*p_icm == 's') && (eap->line1 != old_cusr.lnum || eap->line2 != old_cusr.lnum);
-
-  if (preview) {
-    cmdpreview_buf = buflist_findnr(cmdpreview_bufnr);
-    assert(cmdpreview_buf != NULL);
-
-    if (lines.subresults.size > 0) {
-      SubResult last_match = kv_last(lines.subresults);
-      // `last_match.end.lnum` may be 0 when using 'n' flag.
-      linenr_T highest_lnum = MAX(last_match.start.lnum, last_match.end.lnum);
-      assert(highest_lnum > 0);
-      col_width = (int)log10(highest_lnum) + 1 + 3;
-    }
-  }
-
-  char *str = NULL;  // construct the line to show in here
-  colnr_T old_line_size = 0;
-  colnr_T line_size = 0;
-  linenr_T linenr_preview = 0;  // last line added to preview buffer
-  linenr_T linenr_origbuf = 0;  // last line added to original buffer
-  linenr_T next_linenr = 0;     // next line to show for the match
-
-  for (size_t matchidx = 0; matchidx < lines.subresults.size; matchidx++) {
-    SubResult match = lines.subresults.items[matchidx];
-
-    if (cmdpreview_buf) {
-      lpos_T p_start = { 0, match.start.col };  // match starts here in preview
-      lpos_T p_end = { 0, match.end.col };    // ... and ends here
-
-      // You Might Gonna Need It
-      buf_ensure_loaded(cmdpreview_buf);
-
-      if (match.pre_match == 0) {
-        next_linenr = match.start.lnum;
-      } else {
-        next_linenr = match.pre_match;
-      }
-      // Don't add a line twice
-      if (next_linenr == linenr_origbuf) {
-        next_linenr++;
-        p_start.lnum = linenr_preview;  // might be redefined below
-        p_end.lnum = linenr_preview;  // might be redefined below
-      }
-
-      for (; next_linenr <= match.end.lnum; next_linenr++) {
-        if (next_linenr == match.start.lnum) {
-          p_start.lnum = linenr_preview + 1;
-        }
-        if (next_linenr == match.end.lnum) {
-          p_end.lnum = linenr_preview + 1;
-        }
-        char *line;
-        if (next_linenr == orig_buf->b_ml.ml_line_count + 1) {
-          line = "";
-        } else {
-          line = ml_get_buf(orig_buf, next_linenr);
-          line_size = ml_get_buf_len(orig_buf, next_linenr) + col_width + 1;
-
-          // Reallocate if line not long enough
-          if (line_size > old_line_size) {
-            str = xrealloc(str, (size_t)line_size * sizeof(char));
-            old_line_size = line_size;
-          }
-        }
-        // Put "|lnum| line" into `str` and append it to the preview buffer.
-        snprintf(str, (size_t)line_size, "|%*" PRIdLINENR "| %s", col_width - 3,
-                 next_linenr, line);
-        if (linenr_preview == 0) {
-          ml_replace_buf(cmdpreview_buf, 1, str, true, false);
-        } else {
-          ml_append_buf(cmdpreview_buf, linenr_preview, str, line_size, false);
-        }
-        linenr_preview += 1;
-      }
-      linenr_origbuf = match.end.lnum;
-
-      bufhl_add_hl_pos_offset(cmdpreview_buf, cmdpreview_ns, hl_id, p_start, p_end, col_width);
-    }
-    bufhl_add_hl_pos_offset(orig_buf, cmdpreview_ns, hl_id, match.start, match.end, 0);
-  }
-
-  xfree(str);
-
-  set_option_direct(kOptShortmess, CSTR_AS_OPTVAL(save_shm_p), 0, SID_NONE);
-  xfree(save_shm_p);
-
-  return preview ? 2 : 1;
+  return rs_show_sub(eap, old_cusr.lnum, old_cusr.col, preview_lines, hl_id,
+                     cmdpreview_ns, cmdpreview_bufnr);
 }
 
 /// :substitute command.
@@ -3694,3 +3586,75 @@ void nvim_excmds_check_cursor_curwin(void) { check_cursor(curwin); }
 void nvim_excmds_changed_line_abv_curs(void) { changed_line_abv_curs(); }
 int nvim_excmds_get_msg_scrolled(void) { return msg_scrolled; }
 void *nvim_excmds_get_curbuf_ptr(void) { return (void *)curbuf; }
+
+// --- show_sub FFI accessors ---
+
+/// Save and set p_shm to "F" (disable file info message). Returns strdup of p_shm.
+char *nvim_excmds_save_set_shortmess_F(void)
+{
+  char *saved = xstrdup(p_shm);
+  set_option_direct(kOptShortmess, STATIC_CSTR_AS_OPTVAL("F"), 0, SID_NONE);
+  return saved;
+}
+/// Restore p_shm from a previously saved value (and free the saved string).
+void nvim_excmds_restore_shortmess(char *saved)
+{
+  set_option_direct(kOptShortmess, CSTR_AS_OPTVAL(saved), 0, SID_NONE);
+  xfree(saved);
+}
+/// Return first char of p_icm option.
+int nvim_excmds_get_p_icm_first(void) { return (unsigned char)p_icm[0]; }
+/// Wrapper for buflist_findnr.
+buf_T *nvim_excmds_buflist_findnr(int nr) { return buflist_findnr(nr); }
+/// Wrapper for buf_ensure_loaded.
+void nvim_excmds_buf_ensure_loaded(buf_T *buf) { buf_ensure_loaded(buf); }
+/// Wrapper for ml_get_buf.
+const char *nvim_excmds_ml_get_buf(buf_T *buf, linenr_T lnum)
+{
+  return ml_get_buf(buf, lnum);
+}
+/// Wrapper for ml_get_buf_len.
+int nvim_excmds_ml_get_buf_len(buf_T *buf, linenr_T lnum)
+{
+  return ml_get_buf_len(buf, lnum);
+}
+/// Wrapper for ml_replace_buf.
+void nvim_excmds_ml_replace_buf(buf_T *buf, linenr_T lnum, char *line, bool copy, bool keep_dirty)
+{
+  ml_replace_buf(buf, lnum, line, copy, keep_dirty);
+}
+/// Wrapper for ml_append_buf.
+void nvim_excmds_ml_append_buf(buf_T *buf, linenr_T lnum, char *line, int len, bool newfile)
+{
+  ml_append_buf(buf, lnum, line, (colnr_T)len, newfile);
+}
+/// Wrapper for bufhl_add_hl_pos_offset.
+void nvim_excmds_bufhl_add_hl_pos_offset(buf_T *buf, int ns_id, int hl_id,
+                                          linenr_T start_lnum, colnr_T start_col,
+                                          linenr_T end_lnum, colnr_T end_col,
+                                          colnr_T offset)
+{
+  lpos_T start = { start_lnum, start_col };
+  lpos_T end = { end_lnum, end_col };
+  bufhl_add_hl_pos_offset(buf, ns_id, hl_id, start, end, offset);
+}
+/// Wrapper for update_topline(curwin).
+void nvim_excmds_update_topline_curwin(void) { update_topline(curwin); }
+/// Return b_ml.ml_line_count of orig_buf (curbuf).
+int nvim_excmds_orig_buf_line_count(void) { return curbuf->b_ml.ml_line_count; }
+
+/// Accessor: preview_lines->subresults.size
+size_t nvim_excmds_preview_lines_size(const PreviewLines *pl) { return pl->subresults.size; }
+/// Accessor: preview_lines->subresults.items[idx] fields
+void nvim_excmds_preview_lines_item(const PreviewLines *pl, size_t idx,
+                                     linenr_T *start_lnum, colnr_T *start_col,
+                                     linenr_T *end_lnum, colnr_T *end_col,
+                                     linenr_T *pre_match)
+{
+  SubResult item = pl->subresults.items[idx];
+  *start_lnum = item.start.lnum;
+  *start_col = item.start.col;
+  *end_lnum = item.end.lnum;
+  *end_col = item.end.col;
+  *pre_match = item.pre_match;
+}
