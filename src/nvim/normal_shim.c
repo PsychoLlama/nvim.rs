@@ -1772,62 +1772,25 @@ bool nvim_lineempty_cursor(void) { return LINEEMPTY(curwin->w_cursor.lnum); }
 bool nvim_vim_strchr_p_ww(int c) { return vim_strchr(p_ww, c) != NULL; }
 int nvim_utfc_ptr2len_cursor(void) { return utfc_ptr2len(get_cursor_pos_ptr()); }
 int nvim_oneleft_call(void) { return oneleft(); }
-void nvim_cursor_col_inc_by_utfc(void)
-{
-  curwin->w_cursor.col += (colnr_T)utfc_ptr2len(get_cursor_pos_ptr());
-}
-void nvim_set_cursor_col_zero(void)
-{
-  curwin->w_cursor.col = 0;
-  curwin->w_cursor.coladd = 0;
-}
+void nvim_cursor_col_inc_by_utfc(void) { curwin->w_cursor.col += (colnr_T)utfc_ptr2len(get_cursor_pos_ptr()); }
+void nvim_set_cursor_col_zero(void) { curwin->w_cursor.col = 0; curwin->w_cursor.coladd = 0; }
 void nvim_cursor_lnum_dec(void) { curwin->w_cursor.lnum--; }
 
 // Phase 2 accessors: nv_object_impl
 static char *nvim_mps_save = NULL;
-void nvim_save_and_set_mps(void)
-{
-  nvim_mps_save = curbuf->b_p_mps;
-  curbuf->b_p_mps = "(:),{:},[:],<:>";
-}
+void nvim_save_and_set_mps(void) { nvim_mps_save = curbuf->b_p_mps; curbuf->b_p_mps = "(:),{:},[:],<:>"; }
 void nvim_restore_mps(void) { curbuf->b_p_mps = nvim_mps_save; }
-bool nvim_current_tagblock_call(oparg_T *oap, int count, bool include)
-{
-  return current_tagblock(oap, count, include);
-}
-bool nvim_current_quote_call(oparg_T *oap, int count, bool include, int quotechar)
-{
-  return current_quote(oap, count, include, (char)quotechar);
-}
+bool nvim_current_tagblock_call(oparg_T *oap, int count, bool include) { return current_tagblock(oap, count, include); }
+bool nvim_current_quote_call(oparg_T *oap, int count, bool include, int quotechar) { return current_quote(oap, count, include, (char)quotechar); }
 
 // Phase 4 accessors: n_swapchar
-bool nvim_swapchar_call(int op_type, int lnum, int col)
-{
-  pos_T pos = { .lnum = (linenr_T)lnum, .col = (colnr_T)col, .coladd = 0 };
-  return swapchar(op_type, &pos);
-}
+bool nvim_swapchar_call(int op_type, int lnum, int col) { pos_T pos = { .lnum = (linenr_T)lnum, .col = (colnr_T)col, .coladd = 0 }; return swapchar(op_type, &pos); }
 bool nvim_u_savesub_call(int lnum) { return u_savesub((linenr_T)lnum); }
 void nvim_u_clearline_curbuf(void) { u_clearline(curbuf); }
-void nvim_changed_lines_call(int lnum, int col, int lnum_end, bool do_concealed)
-{
-  changed_lines(curbuf, (linenr_T)lnum, (colnr_T)col, (linenr_T)lnum_end, 0, do_concealed);
-}
-void nvim_set_b_op_start(int lnum, int col, int coladd)
-{
-  curbuf->b_op_start.lnum = (linenr_T)lnum;
-  curbuf->b_op_start.col = (colnr_T)col;
-  curbuf->b_op_start.coladd = (colnr_T)coladd;
-}
-void nvim_set_b_op_end_cursor(void)
-{
-  curbuf->b_op_end = curwin->w_cursor;
-}
-void nvim_dec_b_op_end_col(void)
-{
-  if (curbuf->b_op_end.col > 0) {
-    curbuf->b_op_end.col--;
-  }
-}
+void nvim_changed_lines_call(int lnum, int col, int lnum_end, bool do_concealed) { changed_lines(curbuf, (linenr_T)lnum, (colnr_T)col, (linenr_T)lnum_end, 0, do_concealed); }
+void nvim_set_b_op_start(int lnum, int col, int coladd) { curbuf->b_op_start.lnum = (linenr_T)lnum; curbuf->b_op_start.col = (colnr_T)col; curbuf->b_op_start.coladd = (colnr_T)coladd; }
+void nvim_set_b_op_end_cursor(void) { curbuf->b_op_end = curwin->w_cursor; }
+void nvim_dec_b_op_end_col(void) { if (curbuf->b_op_end.col > 0) curbuf->b_op_end.col--; }
 
 void nvim_nv_at_impl(cmdarg_T *cap) { nv_at_impl(cap); }
 
