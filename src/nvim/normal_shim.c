@@ -561,43 +561,15 @@ void nvim_set_opcount(int val) { opcount = val; }
 
 int nvim_get_nv_max_linear(void) { return nv_max_linear; }
 
-/// Get the command character at index in nv_cmds.
-int nvim_get_nv_cmd_char(int idx)
-{
-  if (idx < 0 || (size_t)idx >= NV_CMDS_SIZE) {
-    return 0;
-  }
-  return nv_cmds[idx].cmd_char;
-}
+int nvim_get_nv_cmd_char(int idx) { return (idx >= 0 && (size_t)idx < NV_CMDS_SIZE) ? nv_cmds[idx].cmd_char : 0; }
 
 int nvim_get_nv_cmds_size(void) { return (int)NV_CMDS_SIZE; }
 
-/// Get the nv_cmd_idx value at position.
-int16_t nvim_get_nv_cmd_idx(int idx)
-{
-  if (idx < 0 || (size_t)idx >= NV_CMDS_SIZE) {
-    return 0;
-  }
-  return nv_cmd_idx[idx];
-}
+int16_t nvim_get_nv_cmd_idx(int idx) { return (idx >= 0 && (size_t)idx < NV_CMDS_SIZE) ? nv_cmd_idx[idx] : 0; }
 
-/// Get the command flags at index in nv_cmds.
-unsigned int nvim_get_nv_cmd_flags(int idx)
-{
-  if (idx < 0 || (size_t)idx >= NV_CMDS_SIZE) {
-    return 0;
-  }
-  return nv_cmds[idx].cmd_flags;
-}
+unsigned int nvim_get_nv_cmd_flags(int idx) { return (idx >= 0 && (size_t)idx < NV_CMDS_SIZE) ? nv_cmds[idx].cmd_flags : 0; }
 
-/// Get the command arg at index in nv_cmds.
-int nvim_get_nv_cmd_arg(int idx)
-{
-  if (idx < 0 || (size_t)idx >= NV_CMDS_SIZE) {
-    return 0;
-  }
-  return nv_cmds[idx].cmd_arg;
-}
+int nvim_get_nv_cmd_arg(int idx) { return (idx >= 0 && (size_t)idx < NV_CMDS_SIZE) ? nv_cmds[idx].cmd_arg : 0; }
 
 // =============================================================================
 // oparg_T pointer accessors for Rust FFI (takes explicit oap parameter)
@@ -605,61 +577,25 @@ int nvim_get_nv_cmd_arg(int idx)
 
 int nvim_oap_get_op_type_ptr(oparg_T *oap) { return oap ? oap->op_type : OP_NOP; }
 
-/// Set oap->op_type.
-void nvim_oap_set_op_type(oparg_T *oap, int val)
-{
-  if (oap) {
-    oap->op_type = val;
-  }
-}
+void nvim_oap_set_op_type(oparg_T *oap, int val) { if (oap) oap->op_type = val; }
 
 int nvim_oap_get_regname_ptr(oparg_T *oap) { return oap ? oap->regname : NUL; }
 
-/// Set oap->regname.
-void nvim_oap_set_regname(oparg_T *oap, int val)
-{
-  if (oap) {
-    oap->regname = val;
-  }
-}
+void nvim_oap_set_regname(oparg_T *oap, int val) { if (oap) oap->regname = val; }
 
 int nvim_oap_get_motion_force(oparg_T *oap) { return oap ? oap->motion_force : NUL; }
 
-/// Set oap->motion_force.
-void nvim_oap_set_motion_force(oparg_T *oap, int val)
-{
-  if (oap) {
-    oap->motion_force = val;
-  }
-}
+void nvim_oap_set_motion_force(oparg_T *oap, int val) { if (oap) oap->motion_force = val; }
 
-/// Set oap->use_reg_one.
-void nvim_oap_set_use_reg_one(oparg_T *oap, bool val)
-{
-  if (oap) {
-    oap->use_reg_one = val;
-  }
-}
+void nvim_oap_set_use_reg_one(oparg_T *oap, bool val) { if (oap) oap->use_reg_one = val; }
 
 int nvim_oap_get_motion_type(oparg_T *oap) { return oap ? oap->motion_type : kMTUnknown; }
 
-/// Set oap->motion_type.
-void nvim_oap_set_motion_type(oparg_T *oap, int val)
-{
-  if (oap) {
-    oap->motion_type = val;
-  }
-}
+void nvim_oap_set_motion_type(oparg_T *oap, int val) { if (oap) oap->motion_type = val; }
 
 bool nvim_oap_get_inclusive(oparg_T *oap) { return oap ? oap->inclusive : false; }
 
-/// Set oap->inclusive.
-void nvim_oap_set_inclusive(oparg_T *oap, bool val)
-{
-  if (oap) {
-    oap->inclusive = val;
-  }
-}
+void nvim_oap_set_inclusive(oparg_T *oap, bool val) { if (oap) oap->inclusive = val; }
 
 // =============================================================================
 // Additional oparg_T accessors for Rust ops crate
@@ -675,23 +611,11 @@ int nvim_oap_get_use_reg_one(oparg_T *oap) { return oap ? oap->use_reg_one : fal
 
 int nvim_oap_get_line_count(oparg_T *oap) { return oap ? oap->line_count : 0; }
 
-/// Set oap->line_count.
-void nvim_oap_set_line_count(oparg_T *oap, int val)
-{
-  if (oap) {
-    oap->line_count = val;
-  }
-}
+void nvim_oap_set_line_count(oparg_T *oap, int val) { if (oap) oap->line_count = val; }
 
 int nvim_oap_get_empty(oparg_T *oap) { return oap ? oap->empty : false; }
 
-/// Set oap->empty.
-void nvim_oap_set_empty(oparg_T *oap, int val)
-{
-  if (oap) {
-    oap->empty = val != 0;
-  }
-}
+void nvim_oap_set_empty(oparg_T *oap, int val) { if (oap) oap->empty = val != 0; }
 
 int nvim_oap_get_is_visual(oparg_T *oap) { return oap ? oap->is_VIsual : false; }
 
@@ -1052,17 +976,8 @@ int nvim_put_visual_flags(int flags, int *dir)
   VIsual_active = true;
   return flags;
 }
-void nvim_put_do_put(int regname, void *savereg, int dir, int count, int flags)
-{
-  do_put(regname, (yankreg_T *)savereg, dir, count, flags);
-}
-void nvim_put_free_register(void *savereg)
-{
-  if (savereg != NULL) {
-    free_register((yankreg_T *)savereg);
-    xfree(savereg);
-  }
-}
+void nvim_put_do_put(int regname, void *savereg, int dir, int count, int flags) { do_put(regname, (yankreg_T *)savereg, dir, count, flags); }
+void nvim_put_free_register(void *savereg) { if (savereg != NULL) { free_register((yankreg_T *)savereg); xfree(savereg); } }
 void nvim_put_was_visual_cleanup(bool save_fen)
 {
   if (save_fen) {
@@ -1095,13 +1010,7 @@ int nvim_get_Ctrl_Q(void) { return Ctrl_Q; }
 
 int nvim_get_Ctrl_V(void) { return Ctrl_V; }
 
-/// Set cap->cmdchar.
-void nvim_cap_set_cmdchar_call(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->cmdchar = val;
-  }
-}
+void nvim_cap_set_cmdchar_call(cmdarg_T *cap, int val) { if (cap) cap->cmdchar = val; }
 
 int nvim_get_motion_force(void) { return motion_force; }
 
@@ -1145,14 +1054,7 @@ int nvim_get_MAXCOL(void) { return MAXCOL; }
 
 void nvim_n_start_visual_mode(int cmdchar) { n_start_visual_mode(cmdchar); }
 
-/// Cap count1 decrement and access.
-int nvim_cap_dec_count1(cmdarg_T *cap)
-{
-  if (cap) {
-    return --cap->count1;
-  }
-  return 0;
-}
+int nvim_cap_dec_count1(cmdarg_T *cap) { return cap ? --cap->count1 : 0; }
 
 // =============================================================================
 // Command handler accessors for Rust FFI
@@ -1200,13 +1102,7 @@ void nvim_set_clear_cmdline(bool val) { clear_cmdline = val; }
 
 int nvim_cap_get_nchar_len(cmdarg_T *cap) { return cap ? cap->nchar_len : 0; }
 
-/// Append cap->nchar_composing to the redo buffer.
-void nvim_cap_append_nchar_composing_to_redobuff(cmdarg_T *cap)
-{
-  if (cap) {
-    AppendToRedobuff(cap->nchar_composing);
-  }
-}
+void nvim_cap_append_nchar_composing_to_redobuff(cmdarg_T *cap) { if (cap) AppendToRedobuff(cap->nchar_composing); }
 
 void nvim_set_vcount_call(int64_t count, int64_t count1, bool set_prevcount) { set_vcount(count, count1, set_prevcount); }
 
@@ -1249,16 +1145,7 @@ bool nvim_typebuf_typed(void) { return typebuf_typed(); }
 
 bool nvim_vim_strchr_p_slm(int c) { return vim_strchr(p_slm, c) != NULL; }
 
-/// Set curwin->w_cursor from curbuf->b_last_insert.mark.
-/// Returns true if b_last_insert.mark.lnum != 0.
-bool nvim_set_cursor_from_last_insert(void)
-{
-  if (curbuf->b_last_insert.mark.lnum != 0) {
-    curwin->w_cursor = curbuf->b_last_insert.mark;
-    return true;
-  }
-  return false;
-}
+bool nvim_set_cursor_from_last_insert(void) { if (curbuf->b_last_insert.mark.lnum != 0) { curwin->w_cursor = curbuf->b_last_insert.mark; return true; } return false; }
 
 void nvim_check_cursor_lnum_call(void) { check_cursor_lnum(curwin); }
 
