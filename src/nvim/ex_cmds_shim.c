@@ -3723,54 +3723,96 @@ int ex_substitute_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_b
   return 0;
 }
 
-/// List v:oldfiles in a nice way.
-void ex_oldfiles(exarg_T *eap)
+// --- ex_oldfiles FFI accessors ---
+
+// Iterate v:oldfiles list: returns opaque iterator handle, or NULL if empty.
+// Each call to nvim_excmds_oldfiles_iter_next() returns the next filename string (or NULL).
+// Call nvim_excmds_oldfiles_iter_free() to release the handle.
+typedef struct {
+  list_T *list;
+  listitem_T *item;
+  int len;
+} OldfilesIter;
+
+void *nvim_excmds_oldfiles_iter_start(int *out_len)
 {
   list_T *l = get_vim_var_list(VV_OLDFILES);
-  int nr = 0;
-
   if (l == NULL) {
-    msg(_("No old files"), 0);
-    return;
+    *out_len = 0;
+    return NULL;
   }
+  OldfilesIter *it = xmalloc(sizeof(OldfilesIter));
+  it->list = l;
+  it->item = tv_list_first(l);
+  it->len = (int)tv_list_len(l);
+  *out_len = it->len;
+  return it;
+}
 
-  msg_start();
-  msg_scroll = true;
-  TV_LIST_ITER(l, li, {
-    if (got_int) {
-      break;
-    }
-    nr++;
-    const char *fname = tv_get_string(TV_LIST_ITEM_TV(li));
-    if (!message_filtered(fname)) {
-      msg_outnum(nr);
-      msg_puts(": ");
-      msg_outtrans(tv_get_string(TV_LIST_ITEM_TV(li)), 0, false);
-      msg_clr_eos();
-      msg_putchar('\n');
-      os_breakcheck();
-    }
-  });
-
-  // Assume "got_int" was set to truncate the listing.
-  got_int = false;
-
-  // File selection prompt on ":browse oldfiles"
-  if (cmdmod.cmod_flags & CMOD_BROWSE) {
-    quit_more = false;
-    nr = prompt_for_input(NULL, 0, false, NULL);
-    msg_starthere();
-    if (nr > 0 && nr <= tv_list_len(l)) {
-      const char *const p = tv_list_find_str(l, nr - 1);
-      if (p == NULL) {
-        return;
-      }
-      char *const s = expand_env_save((char *)p);
-      eap->arg = s;
-      eap->cmdidx = CMD_edit;
-      cmdmod.cmod_flags &= ~CMOD_BROWSE;
-      do_exedit(eap, NULL);
-      xfree(s);
-    }
+const char *nvim_excmds_oldfiles_iter_next(void *handle)
+{
+  OldfilesIter *it = (OldfilesIter *)handle;
+  if (it->item == NULL) {
+    return NULL;
   }
+  const char *s = tv_get_string(TV_LIST_ITEM_TV(it->item));
+  it->item = TV_LIST_ITEM_NEXT(it->list, it->item);
+  return s;
+}
+
+void nvim_excmds_oldfiles_iter_free(void *handle)
+{
+  xfree(handle);
+}
+
+int nvim_excmds_oldfiles_list_len(void)
+{
+  list_T *l = get_vim_var_list(VV_OLDFILES);
+  return l == NULL ? 0 : (int)tv_list_len(l);
+}
+
+const char *nvim_excmds_oldfiles_find_str(int idx)
+{
+  list_T *l = get_vim_var_list(VV_OLDFILES);
+  if (l == NULL) {
+    return NULL;
+  }
+  return tv_list_find_str(l, idx);
+}
+
+void nvim_excmds_msg_start(void) { msg_start(); }
+void nvim_excmds_set_msg_scroll(int val) { msg_scroll = (bool)val; }
+void nvim_excmds_msg_outnum(int nr) { msg_outnum((long)nr); }
+void nvim_excmds_msg_outtrans(const char *s) { msg_outtrans((char *)s, 0, false); }
+void nvim_excmds_msg_clr_eos(void) { msg_clr_eos(); }
+void nvim_excmds_msg_putchar(int c) { msg_putchar(c); }
+void nvim_excmds_os_breakcheck(void) { os_breakcheck(); }
+void nvim_excmds_set_got_int(int val) { got_int = (bool)val; }
+int nvim_excmds_cmdmod_has_browse(void) { return (cmdmod.cmod_flags & CMOD_BROWSE) != 0; }
+void nvim_excmds_cmdmod_clear_browse(void) { cmdmod.cmod_flags &= ~CMOD_BROWSE; }
+void nvim_excmds_set_quit_more(int val) { quit_more = (bool)val; }
+int nvim_excmds_prompt_for_input(void) { return prompt_for_input(NULL, 0, false, NULL); }
+void nvim_excmds_msg_starthere(void) { msg_starthere(); }
+char *nvim_excmds_expand_env_save(const char *p) { return expand_env_save((char *)p); }
+void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
+{
+  char *saved_arg = eap->arg;
+  int saved_cmdidx = eap->cmdidx;
+  eap->arg = arg;
+  eap->cmdidx = CMD_edit;
+  cmdmod.cmod_flags &= ~CMOD_BROWSE;
+  do_exedit(eap, NULL);
+  eap->arg = saved_arg;
+  eap->cmdidx = saved_cmdidx;
+}
+void nvim_excmds_xfree(void *ptr) { xfree(ptr); }
+void nvim_excmds_msg_no_old_files(void) { msg(_("No old files"), 0); }
+
+// ex_oldfiles implemented in Rust (rs_ex_oldfiles in ex_cmds/src/display.rs)
+extern void rs_ex_oldfiles(exarg_T *eap);
+
+/// List v:oldfiles in a nice way. Thin wrapper calling the Rust implementation.
+void ex_oldfiles(exarg_T *eap)
+{
+  rs_ex_oldfiles(eap);
 }

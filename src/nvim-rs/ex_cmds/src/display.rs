@@ -852,6 +852,99 @@ pub extern "C" fn rs_line_number_width(max_lnum: c_int) -> c_int {
 }
 
 // =============================================================================
+// ex_oldfiles FFI
+// =============================================================================
+
+extern "C" {
+    fn nvim_excmds_oldfiles_iter_start(out_len: *mut c_int) -> *mut std::ffi::c_void;
+    fn nvim_excmds_oldfiles_iter_next(handle: *mut std::ffi::c_void) -> *const std::ffi::c_char;
+    fn nvim_excmds_oldfiles_iter_free(handle: *mut std::ffi::c_void);
+    fn nvim_excmds_oldfiles_list_len() -> c_int;
+    fn nvim_excmds_oldfiles_find_str(idx: c_int) -> *const std::ffi::c_char;
+    fn nvim_excmds_msg_start();
+    fn nvim_excmds_set_msg_scroll(val: c_int);
+    fn nvim_excmds_msg_outnum(nr: c_int);
+    fn nvim_message_filtered(msg: *const std::ffi::c_char) -> c_int;
+    fn nvim_excmds_msg_outtrans(s: *const std::ffi::c_char);
+    fn nvim_excmds_msg_clr_eos();
+    fn nvim_excmds_msg_putchar(c: c_int);
+    fn nvim_excmds_os_breakcheck();
+    fn nvim_excmds_got_int() -> c_int;
+    fn nvim_excmds_set_got_int(val: c_int);
+    fn nvim_excmds_cmdmod_has_browse() -> c_int;
+    fn nvim_excmds_set_quit_more(val: c_int);
+    fn nvim_excmds_prompt_for_input() -> c_int;
+    fn nvim_excmds_msg_starthere();
+    fn nvim_excmds_expand_env_save(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn nvim_excmds_do_exedit_edit(eap: *mut ExArgHandle, arg: *mut std::ffi::c_char);
+    fn nvim_excmds_xfree(ptr: *mut std::ffi::c_void);
+    fn nvim_excmds_msg_no_old_files();
+}
+
+/// List v:oldfiles in a nice way (`:oldfiles` command).
+///
+/// # Safety
+/// `eap` must be a valid pointer to an exarg_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
+    let mut list_len: c_int = 0;
+    let iter = nvim_excmds_oldfiles_iter_start(&mut list_len);
+
+    if iter.is_null() {
+        nvim_excmds_msg_no_old_files();
+        return;
+    }
+
+    nvim_excmds_msg_start();
+    nvim_excmds_set_msg_scroll(1);
+
+    let mut nr: c_int = 0;
+    loop {
+        if nvim_excmds_got_int() != 0 {
+            break;
+        }
+        let fname_ptr = nvim_excmds_oldfiles_iter_next(iter);
+        if fname_ptr.is_null() {
+            break;
+        }
+        nr += 1;
+        if nvim_message_filtered(fname_ptr) == 0 {
+            nvim_excmds_msg_outnum(nr);
+            // Print ": " as individual chars
+            nvim_excmds_msg_putchar(b':' as c_int);
+            nvim_excmds_msg_putchar(b' ' as c_int);
+            nvim_excmds_msg_outtrans(fname_ptr);
+            nvim_excmds_msg_clr_eos();
+            nvim_excmds_msg_putchar(b'\n' as c_int);
+            nvim_excmds_os_breakcheck();
+        }
+    }
+
+    nvim_excmds_oldfiles_iter_free(iter);
+
+    // Reset got_int (it was set to truncate listing)
+    nvim_excmds_set_got_int(0);
+
+    // File selection prompt on ":browse oldfiles"
+    if nvim_excmds_cmdmod_has_browse() != 0 {
+        nvim_excmds_set_quit_more(0);
+        let selected = nvim_excmds_prompt_for_input();
+        nvim_excmds_msg_starthere();
+        let list_len = nvim_excmds_oldfiles_list_len();
+        if selected > 0 && selected <= list_len {
+            let p = nvim_excmds_oldfiles_find_str(selected - 1);
+            if !p.is_null() {
+                let expanded = nvim_excmds_expand_env_save(p);
+                if !expanded.is_null() {
+                    nvim_excmds_do_exedit_edit(eap, expanded);
+                    nvim_excmds_xfree(expanded.cast());
+                }
+            }
+        }
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
