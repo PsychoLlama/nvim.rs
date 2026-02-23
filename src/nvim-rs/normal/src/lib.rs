@@ -3227,9 +3227,25 @@ extern "C" {
 }
 
 extern "C" {
-    fn nvim_nv_scroll_impl(cap: CapHandle);
+    // Phase 1: nv_scroll_impl accessors (window-parameterized)
+    fn nvim_validate_botline(wp: WinHandle);
+    fn nvim_cursor_correct(wp: WinHandle);
+    fn nvim_win_get_botline(wp: WinHandle) -> c_int;
+    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_empty_rows(wp: WinHandle) -> c_int;
+    fn nvim_win_get_fill(wp: WinHandle, lnum: c_int) -> c_int;
+    fn nvim_plines_win(wp: WinHandle, lnum: c_int, limit: c_int) -> c_int;
+    fn nvim_win_lines_concealed(wp: WinHandle) -> c_int;
+    fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
+    fn nvim_hasFolding(wp: WinHandle, lnum: c_int, firstp: *mut c_int, lastp: *mut c_int) -> c_int;
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: c_int);
+    fn nvim_buf_get_line_count(buf: BufHandle) -> c_int;
+    fn nvim_get_curbuf() -> BufHandle;
+
     fn nvim_nv_up_impl(cap: CapHandle);
     fn nvim_nv_down_impl(cap: CapHandle);
+    // (nvim_nv_scroll_impl removed: nv_scroll_impl migrated to Rust)
 
     // z-command C accessors
     fn nvim_get_curwin_w_p_fdl() -> c_int;
@@ -3786,7 +3802,146 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_scroll(cap: CapHandle) {
-    nvim_nv_scroll_impl(cap);
+    rs_nv_scroll_impl(cap);
+}
+
+/// Implementation of H/L/M scrolling commands.
+///
+/// H: Move cursor to top of window (with optional count).
+/// M: Move cursor to middle of window.
+/// L: Move cursor to bottom of window (with optional count).
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+unsafe fn rs_nv_scroll_impl(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    nvim_oap_set_motion_type(oap, K_MT_LINEWISE);
+    nvim_setpcmark();
+
+    let curwin = nvim_get_curwin();
+    let curbuf = nvim_get_curbuf();
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let count1 = nvim_cap_get_count1(cap);
+    let line_count = nvim_buf_get_line_count(curbuf);
+
+    if cmdchar == c_int::from(b'L') {
+        nv_scroll_bottom(curwin, count1);
+    } else if cmdchar == c_int::from(b'M') {
+        let n = nv_scroll_middle(curwin, line_count);
+        let new_lnum = (nvim_win_get_topline(curwin) + n).min(line_count);
+        nvim_win_set_cursor_lnum(curwin, new_lnum);
+    } else {
+        // H: move to top of window
+        let n = nv_scroll_top(curwin, count1);
+        let topline = nvim_win_get_topline(curwin);
+        let new_lnum = (topline + n).min(line_count);
+        nvim_win_set_cursor_lnum(curwin, new_lnum);
+    }
+
+    // Correct for 'so', except when an operator is pending.
+    if nvim_oap_get_op_type_ptr(oap) == OP_NOP {
+        nvim_cursor_correct(curwin);
+    }
+    nvim_beginline(BL_SOL | BL_FIX);
+}
+
+/// L command: move cursor to bottom of window (with optional count from bottom).
+unsafe fn nv_scroll_bottom(curwin: WinHandle, count1: c_int) {
+    nvim_validate_botline(curwin);
+    let botline = nvim_win_get_botline(curwin);
+    nvim_win_set_cursor_lnum(curwin, botline - 1);
+    let cursor_lnum = nvim_win_get_cursor_lnum(curwin);
+    if count1 > cursor_lnum {
+        nvim_win_set_cursor_lnum(curwin, 1);
+    } else if nvim_win_lines_concealed(curwin) != 0 {
+        // Count a fold for one screen line.
+        let mut remaining = count1 - 1;
+        let topline = nvim_win_get_topline(curwin);
+        while remaining > 0 && nvim_win_get_cursor_lnum(curwin) > topline {
+            let mut fold_first: c_int = 0;
+            nvim_hasFolding(
+                curwin,
+                nvim_win_get_cursor_lnum(curwin),
+                &raw mut fold_first,
+                std::ptr::null_mut(),
+            );
+            let conceal = nvim_decor_conceal_line(curwin, nvim_win_get_cursor_lnum(curwin), 1);
+            remaining -= conceal + 1;
+            if nvim_win_get_cursor_lnum(curwin) > topline {
+                nvim_win_set_cursor_lnum(curwin, nvim_win_get_cursor_lnum(curwin) - 1);
+            }
+        }
+    } else {
+        nvim_win_set_cursor_lnum(curwin, nvim_win_get_cursor_lnum(curwin) - (count1 - 1));
+    }
+}
+
+/// M command: compute line offset from topline for middle of window.
+unsafe fn nv_scroll_middle(curwin: WinHandle, line_count: c_int) -> c_int {
+    let topline = nvim_win_get_topline(curwin);
+    let topfill = nvim_win_get_topfill(curwin);
+    let mut used: c_int = -(nvim_win_get_fill(curwin, topline) - topfill);
+    nvim_validate_botline(curwin);
+    let view_height = nvim_win_get_view_height(curwin);
+    let empty_rows = nvim_win_get_empty_rows(curwin);
+    let half = (view_height - empty_rows + 1) / 2;
+    let mut n_val: c_int = 0;
+    loop {
+        if topline + n_val >= line_count {
+            break;
+        }
+        // Count half the number of filler lines to be "below this
+        // line" and half to be "above the next line".
+        if n_val > 0 && used + nvim_win_get_fill(curwin, topline + n_val) / 2 >= half {
+            n_val -= 1;
+            break;
+        }
+        used += nvim_plines_win(curwin, topline + n_val, 1);
+        if used >= half {
+            break;
+        }
+        let mut fold_last: c_int = 0;
+        if nvim_hasFolding(
+            curwin,
+            topline + n_val,
+            std::ptr::null_mut(),
+            &raw mut fold_last,
+        ) != 0
+        {
+            n_val = fold_last - topline;
+        }
+        n_val += 1;
+    }
+    if n_val > 0 && used > view_height {
+        n_val -= 1;
+    }
+    n_val
+}
+
+/// H command: compute line offset from topline for top of window (with count).
+unsafe fn nv_scroll_top(curwin: WinHandle, count1: c_int) -> c_int {
+    let mut n_val = count1 - 1;
+    if nvim_win_lines_concealed(curwin) != 0 {
+        // Count a fold for one screen line.
+        let mut lnum = nvim_win_get_topline(curwin);
+        let botline = nvim_win_get_botline(curwin);
+        loop {
+            let conceal = nvim_decor_conceal_line(curwin, lnum - 1, 1);
+            if conceal == 0 && n_val <= 0 {
+                break;
+            }
+            if lnum >= botline - 1 {
+                break;
+            }
+            let mut fold_last: c_int = 0;
+            nvim_hasFolding(curwin, lnum, std::ptr::null_mut(), &raw mut fold_last);
+            lnum = fold_last + 1;
+            n_val -= conceal + 1;
+        }
+        lnum - nvim_win_get_topline(curwin)
+    } else {
+        n_val
+    }
 }
 
 // Phase 1 constants

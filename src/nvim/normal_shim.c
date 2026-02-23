@@ -1656,7 +1656,6 @@ void nvim_nv_vreplace_impl(cmdarg_T *cap) { nv_vreplace_impl(cap); }
 // =============================================================================
 
 // Forward declarations for scroll/screen handlers
-static void nv_scroll_impl(cmdarg_T *cap);
 static void nv_up_impl(cmdarg_T *cap);
 static void nv_down_impl(cmdarg_T *cap);
 
@@ -1713,8 +1712,6 @@ bool nvim_ascii_isdigit(int c) { return ascii_isdigit(c); }
 
 /// Get translated E352 error message.
 const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with current 'foldmethod'"); }
-
-void nvim_nv_scroll_impl(cmdarg_T *cap) { nv_scroll_impl(cap); }
 
 void nvim_nv_up_impl(cmdarg_T *cap) { nv_up_impl(cap); }
 
@@ -3395,82 +3392,6 @@ bool get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp)
   }
   rs_reset_VIsual_and_resel();
   return true;
-}
-
-/// Handle scrolling command 'H', 'L' and 'M' (implementation).
-static void nv_scroll_impl(cmdarg_T *cap)
-{
-  int n;
-  linenr_T lnum;
-
-  cap->oap->motion_type = kMTLineWise;
-  setpcmark();
-
-  if (cap->cmdchar == 'L') {
-    validate_botline(curwin);          // make sure curwin->w_botline is valid
-    curwin->w_cursor.lnum = curwin->w_botline - 1;
-    if (cap->count1 - 1 >= curwin->w_cursor.lnum) {
-      curwin->w_cursor.lnum = 1;
-    } else {
-      if (win_lines_concealed(curwin)) {
-        // Count a fold for one screen line.
-        for (n = cap->count1 - 1; n > 0 && curwin->w_cursor.lnum > curwin->w_topline; n--) {
-          hasFolding(curwin, curwin->w_cursor.lnum, &curwin->w_cursor.lnum, NULL);
-          n += decor_conceal_line(curwin, curwin->w_cursor.lnum, true);
-          if (curwin->w_cursor.lnum > curwin->w_topline) {
-            curwin->w_cursor.lnum--;
-          }
-        }
-      } else {
-        curwin->w_cursor.lnum -= cap->count1 - 1;
-      }
-    }
-  } else {
-    if (cap->cmdchar == 'M') {
-      int used = 0;
-      // Don't count filler lines above the window.
-      used -= win_get_fill(curwin, curwin->w_topline) - curwin->w_topfill;
-      validate_botline(curwin);  // make sure w_empty_rows is valid
-      int half = (curwin->w_view_height - curwin->w_empty_rows + 1) / 2;
-      for (n = 0; curwin->w_topline + n < curbuf->b_ml.ml_line_count; n++) {
-        // Count half the number of filler lines to be "below this
-        // line" and half to be "above the next line".
-        if (n > 0 && used + win_get_fill(curwin, curwin->w_topline + n) / 2 >= half) {
-          n--;
-          break;
-        }
-        used += plines_win(curwin, curwin->w_topline + n, true);
-        if (used >= half) {
-          break;
-        }
-        if (hasFolding(curwin, curwin->w_topline + n, NULL, &lnum)) {
-          n = lnum - curwin->w_topline;
-        }
-      }
-      if (n > 0 && used > curwin->w_view_height) {
-        n--;
-      }
-    } else {  // (cap->cmdchar == 'H')
-      n = cap->count1 - 1;
-      if (win_lines_concealed(curwin)) {
-        // Count a fold for one screen line.
-        lnum = curwin->w_topline;
-        while ((decor_conceal_line(curwin, lnum - 1, true) || n-- > 0)
-               && lnum < curwin->w_botline - 1) {
-          hasFolding(curwin, lnum, NULL, &lnum);
-          lnum++;
-        }
-        n = lnum - curwin->w_topline;
-      }
-    }
-    curwin->w_cursor.lnum = MIN(curwin->w_topline + n, curbuf->b_ml.ml_line_count);
-  }
-
-  // Correct for 'so', except when an operator is pending.
-  if (cap->oap->op_type == OP_NOP) {
-    cursor_correct(curwin);
-  }
-  beginline(BL_SOL | BL_FIX);
 }
 
 /// Cursor up commands (implementation).
