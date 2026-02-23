@@ -26,7 +26,7 @@ pub use display::{FoldColumnChar, FoldColumnConfig, FoldDisplayInfo, FoldTextCom
 pub use methods::{FoldLevelResult, FoldMethod};
 pub use tree::{FoldRange, FoldState, FoldTreeInfo, FoldUpdateRequest, FoldUpdateType};
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use nvim_buffer::BufHandle;
 use nvim_window::WinHandle;
@@ -3766,6 +3766,107 @@ pub extern "C" fn rs_foldMoveRange(
     dest: LineNr,
 ) {
     fold_move_range_impl(wp, gap, line1, line2, dest);
+}
+
+// ============================================================================
+// Phase 5: VimL Function Wrappers
+// ============================================================================
+
+extern "C" {
+    /// Get line number from argvars[0] (tv_get_lnum).
+    fn nvim_fold_tv_get_lnum(argvars: *const c_void) -> LineNr;
+
+    /// Set rettv->vval.v_number.
+    fn nvim_fold_rettv_set_number(rettv: *mut c_void, nr: i64);
+
+    /// Set rettv->v_type = VAR_STRING and rettv->vval.v_string = s.
+    fn nvim_fold_rettv_init_string(rettv: *mut c_void, s: *mut c_char);
+
+    /// Get the line count of curbuf.
+    fn nvim_fold_get_curbuf_line_count() -> LineNr;
+
+    /// Get the Rust-implemented foldtext string.
+    fn rs_f_foldtext_impl() -> *mut c_char;
+}
+
+/// Implement `foldclosed()` or `foldclosedend()` VimL functions.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid pointers to `typval_T`.
+unsafe fn f_foldclosed_impl(argvars: *const c_void, rettv: *mut c_void, end: bool) {
+    let lnum = nvim_fold_tv_get_lnum(argvars);
+    let curbuf_lc = nvim_fold_get_curbuf_line_count();
+    let mut result: LineNr = -1;
+    if lnum >= 1 && lnum <= curbuf_lc {
+        let curwin = nvim_get_curwin();
+        let fr = rs_hasFoldingWin(curwin, lnum, false);
+        if fr.has_folding != 0 {
+            result = if end { fr.last } else { fr.first };
+        }
+    }
+    nvim_fold_rettv_set_number(rettv, i64::from(result));
+}
+
+/// FFI: `foldclosed()` VimL function - replace C `f_foldclosed`.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid `typval_T*` pointers.
+/// `fptr` is ignored.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_foldclosed(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *const c_void,
+) {
+    f_foldclosed_impl(argvars, rettv, false);
+}
+
+/// FFI: `foldclosedend()` VimL function - replace C `f_foldclosedend`.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid `typval_T*` pointers.
+/// `fptr` is ignored.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_foldclosedend(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *const c_void,
+) {
+    f_foldclosed_impl(argvars, rettv, true);
+}
+
+/// FFI: `foldlevel()` VimL function - replace C `f_foldlevel`.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid `typval_T*` pointers.
+/// `fptr` is ignored.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_foldlevel(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *const c_void,
+) {
+    let lnum = nvim_fold_tv_get_lnum(argvars);
+    let curbuf_lc = nvim_fold_get_curbuf_line_count();
+    if lnum >= 1 && lnum <= curbuf_lc {
+        let level = fold_level_impl(lnum);
+        nvim_fold_rettv_set_number(rettv, i64::from(level));
+    }
+}
+
+/// FFI: `foldtext()` VimL function - replace C `f_foldtext`.
+///
+/// # Safety
+/// `rettv` must be a valid `typval_T*` pointer.
+/// `fptr` is ignored.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_foldtext(
+    _argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *const c_void,
+) {
+    let s = rs_f_foldtext_impl();
+    nvim_fold_rettv_init_string(rettv, s);
 }
 
 #[cfg(test)]

@@ -353,47 +353,36 @@ char *get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume, foldinfo_T foldinfo
 
 // }}}1
 
-/// "foldclosed()" and "foldclosedend()" functions
-static void foldclosed_both(typval_T *argvars, typval_T *rettv, bool end)
-{
-  const linenr_T lnum = tv_get_lnum(argvars);
-  if (lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count) {
-    linenr_T first;
-    linenr_T last;
-    if (hasFoldingWin(curwin, lnum, &first, &last, false, NULL)) {
-      rettv->vval.v_number = (varnumber_T)(end ? last : first);
-      return;
-    }
-  }
-  rettv->vval.v_number = -1;
-}
+// foldclosed_both/f_foldclosed/f_foldclosedend/f_foldlevel/f_foldtext
+// -- migrated to Rust (lib.rs: rs_f_foldclosed, rs_f_foldclosedend, rs_f_foldlevel, rs_f_foldtext)
 
-/// "foldclosed()" function
+extern void rs_f_foldclosed(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_foldclosedend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_foldlevel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_foldtext(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
+/// "foldclosed()" function -- thin wrapper calling Rust.
 void f_foldclosed(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  foldclosed_both(argvars, rettv, false);
+  rs_f_foldclosed(argvars, rettv, fptr);
 }
 
-/// "foldclosedend()" function
+/// "foldclosedend()" function -- thin wrapper calling Rust.
 void f_foldclosedend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  foldclosed_both(argvars, rettv, true);
+  rs_f_foldclosedend(argvars, rettv, fptr);
 }
 
-/// "foldlevel()" function
+/// "foldlevel()" function -- thin wrapper calling Rust.
 void f_foldlevel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  const linenr_T lnum = tv_get_lnum(argvars);
-  if (lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count) {
-    rettv->vval.v_number = rs_foldLevel(lnum);
-  }
+  rs_f_foldlevel(argvars, rettv, fptr);
 }
 
-/// "foldtext()" function
+/// "foldtext()" function -- thin wrapper calling Rust.
 void f_foldtext(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = rs_f_foldtext_impl();
+  rs_f_foldtext(argvars, rettv, fptr);
 }
 
 /// "foldtextresult(lnum)" function
@@ -437,6 +426,29 @@ void f_foldtextresult(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   entered = false;
+}
+
+// ============================================================================
+// VimL function accessors (for f_foldclosed, f_foldlevel, etc.)
+// ============================================================================
+
+/// Get the line number from the first element of argvars (tv_get_lnum).
+linenr_T nvim_fold_tv_get_lnum(typval_T *argvars)
+{
+  return tv_get_lnum(argvars);
+}
+
+/// Set rettv->vval.v_number.
+void nvim_fold_rettv_set_number(typval_T *rettv, varnumber_T nr)
+{
+  rettv->vval.v_number = nr;
+}
+
+/// Set rettv type to VAR_STRING and set rettv->vval.v_string.
+void nvim_fold_rettv_init_string(typval_T *rettv, char *s)
+{
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = s;
 }
 
 // ============================================================================
