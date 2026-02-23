@@ -548,8 +548,7 @@ pub unsafe extern "C" fn rs_is_ident(line: *const std::ffi::c_char, offset: c_in
 ///
 /// # Safety
 /// All pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_find_is_eval_item(
+pub(crate) unsafe fn rs_find_is_eval_item(
     ptr: *const std::ffi::c_char,
     colp: *mut c_int,
     bnp: *mut c_int,
