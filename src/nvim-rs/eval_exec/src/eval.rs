@@ -3083,6 +3083,197 @@ pub unsafe extern "C" fn rs_eval7(
 }
 
 // =============================================================================
+// Phase 9: handle_subscript + set_selfdict
+// =============================================================================
+
+extern "C" {
+    // Get tv->vval.v_dict
+    fn nvim_tv_get_dict(tv: TypevalHandle) -> *mut c_void;
+    // Increment dict->dv_refcount
+    fn nvim_dict_refcount_inc(dict: *mut c_void);
+    // tv_dict_unref wrapper
+    fn nvim_dict_unref(dict: *mut c_void);
+    // call_func_rettv with selfdict
+    fn nvim_call_func_rettv_with_selfdict(
+        arg: *mut *mut c_char,
+        evalarg: EvalargHandle,
+        rettv: TypevalHandle,
+        evaluate: bool,
+        selfdict: *mut c_void,
+        lua_funcname: *const c_char,
+    ) -> c_int;
+    // eval_lambda (static, non-static wrapper)
+    fn nvim_eval_lambda_wrapper(
+        arg: *mut *mut c_char,
+        rettv: TypevalHandle,
+        evalarg: EvalargHandle,
+        verbose: bool,
+    ) -> c_int;
+    // make_partial wrapper
+    fn nvim_make_partial(selfdict: *mut c_void, rettv: TypevalHandle);
+    // aborting() wrapper
+    fn nvim_aborting() -> bool;
+    // Get partial->pt_auto
+    fn nvim_partial_get_pt_auto(pt: *const c_void) -> bool;
+    // Get partial->pt_dict (for set_selfdict check)
+    fn nvim_partial_get_pt_dict_handle(pt: *const c_void) -> *mut c_void;
+    // tv_is_luafunc wrapper
+    fn nvim_tv_is_luafunc_wrapper(tv: TypevalHandle) -> bool;
+    // tv_is_func wrapper (returns int, matches other declarations in this crate)
+    fn nvim_tv_is_func(tv: TypevalHandle) -> c_int;
+    // ascii_iswhite (available in normal_shim.c)
+    fn nvim_ascii_iswhite(c: c_int) -> bool;
+    // rs_check_luafunc_name is in the eval crate (different crate)
+    fn rs_check_luafunc_name(str: *const c_char, paren: bool) -> c_int;
+}
+
+/// Inline implementation of set_selfdict: bind selfdict to a funcref/partial.
+///
+/// Does nothing if `rettv` is a partial that was explicitly bound (pt_auto is false and pt_dict != NULL).
+///
+/// # Safety
+/// - `rettv` must be a valid typval handle with type VAR_PARTIAL or VAR_FUNC
+/// - `selfdict` must be a valid dict pointer (may be null)
+#[inline]
+unsafe fn set_selfdict_impl(rettv: TypevalHandle, selfdict: *mut c_void) {
+    if nvim_tv_get_type(rettv) == VAR_PARTIAL {
+        let pt = nvim_tv_get_partial(rettv);
+        if !pt.is_null()
+            && !nvim_partial_get_pt_auto(pt)
+            && !nvim_partial_get_pt_dict_handle(pt).is_null()
+        {
+            return;
+        }
+    }
+    nvim_make_partial(selfdict, rettv);
+}
+
+/// Implementation of handle_subscript: dispatch loop for subscripts, calls, lambdas, methods.
+///
+/// Migrated from C `handle_subscript` + `set_selfdict` in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a C string pointer
+/// - `rettv` must be a valid typval handle
+/// - `evalarg` can be null
+pub unsafe fn handle_subscript_impl(
+    arg: *mut *const c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    verbose: bool,
+) -> c_int {
+    let evaluate = !evalarg.is_null() && (evalarg_get_flags(evalarg) & EVAL_EVALUATE) != 0;
+    let mut ret = OK;
+    let mut selfdict: *mut c_void = std::ptr::null_mut();
+    let mut lua_funcname: *const c_char = std::ptr::null();
+
+    // The arg we mutate is `*const char *` from C perspective (const char **arg).
+    // We cast to *mut *mut c_char for internal use.
+    let arg_mut = arg as *mut *mut c_char;
+
+    if nvim_tv_is_luafunc_wrapper(rettv) {
+        if !evaluate {
+            tv_clear(rettv);
+        }
+        if get_byte(*arg_mut as *const c_char) != b'.' {
+            tv_clear(rettv);
+            ret = FAIL;
+        } else {
+            *arg_mut = (*arg_mut).add(1);
+            lua_funcname = *arg_mut;
+            let len = rs_check_luafunc_name(*arg_mut, true);
+            if len == 0 {
+                tv_clear(rettv);
+                ret = FAIL;
+            }
+            *arg_mut = (*arg_mut).add(len as usize);
+        }
+    }
+
+    // "." is ".name" lookup when we found a dict.
+    while ret == OK {
+        let ch = get_byte(*arg_mut as *const c_char);
+        let prev_ch = get_byte((*arg_mut as *const c_char).sub(1));
+        let next_ch = get_byte((*arg_mut as *const c_char).add(1));
+
+        let tv_type = nvim_tv_get_type(rettv);
+        let is_subscript = (ch == b'['
+            || (ch == b'.' && tv_type == VAR_DICT)
+            || (ch == b'(' && (!evaluate || nvim_tv_is_func(rettv) != 0)))
+            && !nvim_ascii_iswhite(c_int::from(prev_ch));
+        let is_arrow = ch == b'-' && next_ch == b'>';
+
+        if !is_subscript && !is_arrow {
+            break;
+        }
+
+        if ch == b'(' {
+            ret = nvim_call_func_rettv_with_selfdict(
+                arg_mut,
+                evalarg,
+                rettv,
+                evaluate,
+                selfdict,
+                lua_funcname,
+            );
+            // Stop on aborting (interrupt, exception, etc.)
+            if nvim_aborting() {
+                if ret == OK {
+                    tv_clear(rettv);
+                }
+                ret = FAIL;
+            }
+            nvim_dict_unref(selfdict);
+            selfdict = std::ptr::null_mut();
+        } else if ch == b'-' {
+            let after_arrow = get_byte((*arg_mut as *const c_char).add(2));
+            if after_arrow == b'{' {
+                // expr->{lambda}()
+                ret = nvim_eval_lambda_wrapper(arg_mut, rettv, evalarg, verbose);
+            } else {
+                // expr->name()
+                ret = eval_method_impl(arg_mut, rettv, evalarg, verbose);
+            }
+        } else {
+            // '[' or '.'
+            nvim_dict_unref(selfdict);
+            if nvim_tv_get_type(rettv) == VAR_DICT {
+                selfdict = nvim_tv_get_dict(rettv);
+                nvim_dict_refcount_inc(selfdict);
+            } else {
+                selfdict = std::ptr::null_mut();
+            }
+            if crate::index::eval_index_impl(arg_mut, rettv, evalarg, verbose) == FAIL {
+                tv_clear(rettv);
+                ret = FAIL;
+            }
+        }
+    }
+
+    // Turn "dict.Func" into a partial for "Func" bound to "dict".
+    if !selfdict.is_null() && nvim_tv_is_func(rettv) != 0 {
+        set_selfdict_impl(rettv, selfdict);
+    }
+
+    nvim_dict_unref(selfdict);
+    ret
+}
+
+/// FFI export for handle_subscript.
+///
+/// # Safety
+/// See `handle_subscript_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_handle_subscript(
+    arg: *mut *const c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    verbose: bool,
+) -> c_int {
+    handle_subscript_impl(arg, rettv, evalarg, verbose)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -143,6 +143,8 @@ extern bool rs_next_for_item(void *fi_void, char *arg);
 extern void rs_free_for_info(void *fi_void);
 extern bool rs_callback_call(const void *callback, int argcount, void *argvars, void *rettv);
 extern int rs_free_unref_items(int copyID);
+extern int rs_handle_subscript(const char **arg, typval_T *rettv, evalarg_T *evalarg,
+                               bool verbose);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -3008,88 +3010,12 @@ static bool tv_is_luafunc(typval_T *tv)
 int handle_subscript(const char **const arg, typval_T *rettv, evalarg_T *const evalarg,
                      bool verbose)
 {
-  const bool evaluate = evalarg != NULL && (evalarg->eval_flags & EVAL_EVALUATE);
-  int ret = OK;
-  dict_T *selfdict = NULL;
-  const char *lua_funcname = NULL;
-
-  if (tv_is_luafunc(rettv)) {
-    if (!evaluate) {
-      tv_clear(rettv);
-    }
-
-    if (**arg != '.') {
-      tv_clear(rettv);
-      ret = FAIL;
-    } else {
-      (*arg)++;
-
-      lua_funcname = *arg;
-      const int len = rs_check_luafunc_name(*arg, true);
-      if (len == 0) {
-        tv_clear(rettv);
-        ret = FAIL;
-      }
-      (*arg) += len;
-    }
-  }
-
-  // "." is ".name" lookup when we found a dict.
-  while (ret == OK
-         && (((**arg == '[' || (**arg == '.' && rettv->v_type == VAR_DICT)
-               || (**arg == '(' && (!evaluate || tv_is_func(*rettv))))
-              && !ascii_iswhite(*(*arg - 1)))
-             || (**arg == '-' && (*arg)[1] == '>'))) {
-    if (**arg == '(') {
-      ret = call_func_rettv((char **)arg, evalarg, rettv, evaluate, selfdict, NULL, lua_funcname);
-
-      // Stop the expression evaluation when immediately aborting on
-      // error, or when an interrupt occurred or an exception was thrown
-      // but not caught.
-      if (aborting()) {
-        if (ret == OK) {
-          tv_clear(rettv);
-        }
-        ret = FAIL;
-      }
-      tv_dict_unref(selfdict);
-      selfdict = NULL;
-    } else if (**arg == '-') {
-      if ((*arg)[2] == '{') {
-        // expr->{lambda}()
-        ret = eval_lambda((char **)arg, rettv, evalarg, verbose);
-      } else {
-        // expr->name()
-        ret = eval_method((char **)arg, rettv, evalarg, verbose);
-      }
-    } else {  // **arg == '[' || **arg == '.'
-      tv_dict_unref(selfdict);
-      if (rettv->v_type == VAR_DICT) {
-        selfdict = rettv->vval.v_dict;
-        if (selfdict != NULL) {
-          selfdict->dv_refcount++;
-        }
-      } else {
-        selfdict = NULL;
-      }
-      if (eval_index((char **)arg, rettv, evalarg, verbose) == FAIL) {
-        tv_clear(rettv);
-        ret = FAIL;
-      }
-    }
-  }
-
-  // Turn "dict.Func" into a partial for "Func" bound to "dict".
-  if (selfdict != NULL && tv_is_func(*rettv)) {
-    set_selfdict(rettv, selfdict);
-  }
-
-  tv_dict_unref(selfdict);
-  return ret;
+  return rs_handle_subscript(arg, rettv, evalarg, verbose);
 }
 
 void set_selfdict(typval_T *const rettv, dict_T *const selfdict)
 {
+  // Inlined into rs_handle_subscript in Rust.
   // Don't do this when "dict.Func" is already a partial that was bound
   // explicitly (pt_auto is false).
   if (rettv->v_type == VAR_PARTIAL && !rettv->vval.v_partial->pt_auto
@@ -4704,6 +4630,64 @@ bool nvim_valid_varname(const char *varname)
 bool nvim_var_wrong_func_name(const char *name, bool new_var)
 {
   return var_wrong_func_name(name, new_var);
+}
+
+// =============================================================================
+// Phase 5 (handle_subscript): new C accessor/wrapper functions
+// =============================================================================
+
+// nvim_tv_get_dict already exists in eval/typval.c -- no duplicate needed here.
+
+/// Increment dict->dv_refcount - accessor for Rust rs_handle_subscript.
+void nvim_dict_refcount_inc(dict_T *dict)
+{
+  if (dict != NULL) {
+    dict->dv_refcount++;
+  }
+}
+
+/// tv_dict_unref wrapper - accessor for Rust rs_handle_subscript.
+void nvim_dict_unref(dict_T *dict)
+{
+  tv_dict_unref(dict);
+}
+
+/// Non-static wrapper for call_func_rettv with selfdict - accessor for Rust rs_handle_subscript.
+int nvim_call_func_rettv_with_selfdict(char **arg, evalarg_T *evalarg, typval_T *rettv,
+                                       bool evaluate, dict_T *selfdict,
+                                       const char *lua_funcname)
+{
+  return call_func_rettv(arg, evalarg, rettv, evaluate, selfdict, NULL, lua_funcname);
+}
+
+/// Non-static wrapper for eval_lambda - accessor for Rust rs_handle_subscript.
+int nvim_eval_lambda_wrapper(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose)
+{
+  return eval_lambda(arg, rettv, evalarg, verbose);
+}
+
+/// make_partial wrapper - accessor for Rust rs_handle_subscript.
+void nvim_make_partial(dict_T *selfdict, typval_T *rettv)
+{
+  make_partial(selfdict, rettv);
+}
+
+/// aborting() wrapper - accessor for Rust rs_handle_subscript.
+bool nvim_aborting(void)
+{
+  return aborting();
+}
+
+/// Get partial->pt_auto - accessor for Rust rs_handle_subscript.
+bool nvim_partial_get_pt_auto(const partial_T *pt)
+{
+  return pt->pt_auto;
+}
+
+/// Get partial->pt_dict (for set_selfdict check) - accessor for Rust rs_handle_subscript.
+dict_T *nvim_partial_get_pt_dict_handle(const partial_T *pt)
+{
+  return pt->pt_dict;
 }
 
 /// Scope check for get_lval_dict_item: set key[len]=NUL, check scope, restore.
