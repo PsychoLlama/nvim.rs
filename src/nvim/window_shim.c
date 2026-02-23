@@ -127,6 +127,11 @@ typedef struct {
 } WinframeResult;
 extern WinframeResult rs_winframe_find_altwin(win_T *wp, frame_T *altfr_initial);
 
+// New Rust replacements for frame tree operations
+extern void rs_frame_flatten(frame_T *frp);
+extern win_T *rs_winframe_remove(win_T *win, int *dirp, tabpage_T *tp, frame_T **unflat_altfr);
+extern void rs_winframe_restore(win_T *wp, int dir, frame_T *unflat_altfr);
+
 extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
 extern int rs_frame_minwidth(frame_T *topfrp, win_T *next_curwin);
 extern int rs_win_comp_pos(void);
@@ -1721,51 +1726,7 @@ void win_free_all(void)
 win_T *winframe_remove(win_T *win, int *dirp, tabpage_T *tp, frame_T **unflat_altfr)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
-  frame_T *altfr;
-  win_T *wp = winframe_find_altwin(win, dirp, tp, &altfr);
-  if (wp == NULL) {
-    return NULL;
-  }
-
-  frame_T *frp_close = win->w_frame;
-
-  // Save the position of the containing frame (which will also contain the
-  // altframe) before we remove anything, to recompute window positions later.
-  const win_T *const topleft = rs_frame2win(frp_close->fr_parent);
-  int row = topleft->w_winrow;
-  int col = topleft->w_wincol;
-
-  // If this is a rightmost window, remove vertical separators to the left.
-  if (win->w_vsep_width == 0 && frp_close->fr_parent->fr_layout == FR_ROW
-      && frp_close->fr_prev != NULL) {
-    rs_frame_set_vsep(frp_close->fr_prev, 0);
-  }
-
-  // Remove this frame from the list of frames.
-  rs_frame_remove(frp_close);
-
-  if (*dirp == 'v') {
-    frame_new_height(altfr, altfr->fr_height + frp_close->fr_height,
-                     altfr == frp_close->fr_next, false, false);
-  } else {
-    assert(*dirp == 'h');
-    frame_new_width(altfr, altfr->fr_width + frp_close->fr_width,
-                    altfr == frp_close->fr_next, false);
-  }
-
-  // If the altframe wasn't adjacent and left/above, resizing it will have
-  // changed window positions within the parent frame.  Recompute them.
-  if (altfr != frp_close->fr_prev) {
-    rs_frame_comp_pos(frp_close->fr_parent, &row, &col);
-  }
-
-  if (unflat_altfr == NULL) {
-    frame_flatten(altfr);
-  } else {
-    *unflat_altfr = altfr;
-  }
-
-  return wp;
+  return rs_winframe_remove(win, dirp, tp, unflat_altfr);
 }
 
 /// Find the window that will get the freed space from a call to `winframe_remove`.
@@ -1806,62 +1767,6 @@ win_T *winframe_find_altwin(win_T *win, int *dirp, tabpage_T *tp, frame_T **altf
   return wp;
 }
 
-/// Flatten "frp" into its parent frame if it's the only child, also merging its
-/// list with the grandparent if they share the same layout.
-/// Frees "frp" if flattened; also "frp->fr_parent" if it has the same layout.
-static void frame_flatten(frame_T *frp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (frp->fr_next != NULL || frp->fr_prev != NULL) {
-    return;
-  }
-
-  // There is no other frame in this list, move its info to the parent
-  // and remove it.
-  frp->fr_parent->fr_layout = frp->fr_layout;
-  frp->fr_parent->fr_child = frp->fr_child;
-  frame_T *frp2;
-  FOR_ALL_FRAMES(frp2, frp->fr_child) {
-    frp2->fr_parent = frp->fr_parent;
-  }
-  frp->fr_parent->fr_win = frp->fr_win;
-  if (frp->fr_win != NULL) {
-    frp->fr_win->w_frame = frp->fr_parent;
-  }
-  frp2 = frp->fr_parent;
-  if (topframe->fr_child == frp) {
-    topframe->fr_child = frp2;
-  }
-  xfree(frp);
-
-  frp = frp2->fr_parent;
-  if (frp != NULL && frp->fr_layout == frp2->fr_layout) {
-    // The frame above the parent has the same layout, have to merge
-    // the frames into this list.
-    if (frp->fr_child == frp2) {
-      frp->fr_child = frp2->fr_child;
-    }
-    assert(frp2->fr_child);
-    frp2->fr_child->fr_prev = frp2->fr_prev;
-    if (frp2->fr_prev != NULL) {
-      frp2->fr_prev->fr_next = frp2->fr_child;
-    }
-    for (frame_T *frp3 = frp2->fr_child;; frp3 = frp3->fr_next) {
-      frp3->fr_parent = frp;
-      if (frp3->fr_next == NULL) {
-        frp3->fr_next = frp2->fr_next;
-        if (frp2->fr_next != NULL) {
-          frp2->fr_next->fr_prev = frp3;
-        }
-        break;
-      }
-    }
-    if (topframe->fr_child == frp2) {
-      topframe->fr_child = frp;
-    }
-    xfree(frp2);
-  }
-}
 
 /// Undo changes from a prior call to winframe_remove, also restoring lost
 /// vertical separators and statuslines, and changed window positions for
@@ -1870,48 +1775,7 @@ static void frame_flatten(frame_T *frp)
 void winframe_restore(win_T *wp, int dir, frame_T *unflat_altfr)
   FUNC_ATTR_NONNULL_ALL
 {
-  frame_T *frp = wp->w_frame;
-
-  // Put "wp"'s frame back where it was.
-  if (frp->fr_prev != NULL) {
-    rs_frame_append(frp->fr_prev, frp);
-  } else {
-    rs_frame_insert(frp->fr_next, frp);
-  }
-
-  // Vertical separators to the left may have been lost.  Restore them.
-  if (wp->w_vsep_width == 0 && frp->fr_parent->fr_layout == FR_ROW && frp->fr_prev != NULL) {
-    rs_frame_set_vsep(frp->fr_prev, 1);
-  }
-
-  // Statuslines or horizontal separators above may have been lost.  Restore them.
-  if (frp->fr_parent->fr_layout == FR_COL && frp->fr_prev != NULL) {
-    if (rs_global_stl_height() == 0 && wp->w_status_height == 0) {
-      rs_frame_add_statusline(frp->fr_prev);
-    } else if (rs_global_stl_height() > 0 && wp->w_hsep_height == 0) {
-      rs_frame_add_hsep(frp->fr_prev);
-    }
-  }
-
-  // Restore the lost room that was redistributed to the altframe.  Also
-  // adjusts window sizes to fit restored statuslines/separators, if needed.
-  if (dir == 'v') {
-    frame_new_height(unflat_altfr, unflat_altfr->fr_height - frp->fr_height,
-                     unflat_altfr == frp->fr_next, false, false);
-  } else if (dir == 'h') {
-    frame_new_width(unflat_altfr, unflat_altfr->fr_width - frp->fr_width,
-                    unflat_altfr == frp->fr_next, false);
-  }
-
-  // Recompute window positions within the parent frame to restore them.
-  // Positions were unchanged if the altframe was adjacent and left/above.
-  if (unflat_altfr != frp->fr_prev) {
-    const win_T *const topleft = rs_frame2win(frp->fr_parent);
-    int row = topleft->w_winrow;
-    int col = topleft->w_wincol;
-
-    rs_frame_comp_pos(frp->fr_parent, &row, &col);
-  }
+  rs_winframe_restore(wp, dir, unflat_altfr);
 }
 
 /// If 'splitbelow' or 'splitright' is set, the space goes above or to the left
@@ -3930,7 +3794,7 @@ void nvim_set_p_wh(int64_t val) { p_wh = val; }
 win_T *nvim_win_alloc_wrapper(win_T *after, int hidden) { return win_alloc(after, hidden != 0); }
 void nvim_new_frame_wrapper(win_T *wp) { new_frame(wp); }
 void nvim_win_init_wrapper(win_T *wp, win_T *oldwin, int flags) { win_init(wp, oldwin, flags); }
-void nvim_frame_flatten_wrapper(frame_T *frp) { frame_flatten(frp); }
+void nvim_frame_flatten_wrapper(frame_T *frp) { rs_frame_flatten(frp); }
 frame_T *nvim_xcalloc_frame(void) { return xcalloc(1, sizeof(frame_T)); }
 void nvim_ui_comp_remove_grid_win(win_T *wp) { if (wp) { ui_comp_remove_grid(&wp->w_grid_alloc); } }
 void nvim_ui_call_win_hide_win(win_T *wp) { if (wp) { ui_call_win_hide(wp->w_grid_alloc.handle); } }

@@ -32,6 +32,281 @@ extern "C" {
 
     /// Check if frame has fixed width.
     fn rs_frame_fixed_width(frp: *const Frame) -> c_int;
+
+    /// Remove a frame from its sibling list.
+    fn rs_frame_remove(frp: *mut Frame);
+
+    /// Set/clear vertical separator for frame.
+    fn rs_frame_set_vsep(frp: *const Frame, add: c_int);
+
+    /// Recompute window positions within a frame tree.
+    fn rs_frame_comp_pos(topfrp: *mut Frame, row: *mut c_int, col: *mut c_int);
+
+    /// Set frame to a new height (recursively).
+    fn rs_frame_new_height(
+        topfrp: *mut Frame,
+        height: c_int,
+        topfirst: c_int,
+        wfh: c_int,
+        set_ch: c_int,
+    );
+
+    /// Set frame to a new width (recursively).
+    fn rs_frame_new_width(topfrp: *mut Frame, width: c_int, leftfirst: c_int, wfw: c_int);
+
+    /// Get w_winrow from a window.
+    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
+
+    /// Get w_wincol from a window.
+    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
+
+    /// Get the global status-line height (0 = per-window statuslines).
+    fn rs_global_stl_height() -> c_int;
+
+    /// Add a statusline to the last window in a frame.
+    fn rs_frame_add_statusline(frp: *mut Frame);
+
+    /// Add a horizontal separator to the last window in a frame.
+    fn rs_frame_add_hsep(frp: *const Frame);
+
+    /// Append `frp` after `after` in the sibling list.
+    fn rs_frame_append(after: *mut Frame, frp: *mut Frame);
+
+    /// Insert `frp` before `before` in the sibling list.
+    fn rs_frame_insert(before: *mut Frame, frp: *mut Frame);
+
+    /// Flatten a frame into its parent (deletes frp if it's the sole child).
+    fn rs_frame_flatten(frp: *mut Frame);
+
+    /// Check if there is only one non-floating window in the tab.
+    fn rs_one_window_in_tab(win: WinHandle, tp: *mut std::ffi::c_void) -> c_int;
+
+    /// Get w_vsep_width from a window.
+    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
+
+    /// Get w_status_height from a window.
+    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
+
+    /// Get w_hsep_height from a window.
+    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
+}
+
+// =============================================================================
+// winframe_remove implementation
+// =============================================================================
+
+/// Rust implementation of `winframe_remove`.
+///
+/// Remove window `win` from the frame tree, giving its space to the best
+/// alternate frame. Sets `*dirp` to the direction of resize ('v' or 'h').
+/// If `unflat_altfr` is non-null, stores the (un-flattened) altfr there
+/// instead of calling `rs_frame_flatten`.
+///
+/// Returns the window that received the freed space, or null on failure.
+unsafe fn winframe_remove_impl(
+    win: WinHandle,
+    dirp: *mut c_int,
+    tp: *mut std::ffi::c_void,
+    unflat_altfr: *mut *mut Frame,
+) -> WinHandle {
+    if win.is_null() || dirp.is_null() {
+        return WinHandle::null();
+    }
+
+    // Guard: if there is only one non-floating window in the tab, nothing to remove.
+    if rs_one_window_in_tab(win, tp) != 0 {
+        return WinHandle::null();
+    }
+
+    let frp_close = nvim_win_get_frame(win);
+    if frp_close.is_null() {
+        return WinHandle::null();
+    }
+
+    // Get initial altfr via the splitbelow/splitright/wfh/wfw logic.
+    let frp2_initial = rs_win_altframe(win);
+
+    // Refine: find the best altfr considering wfh/wfw constraints.
+    let result = winframe_find_altwin_impl(win, frp2_initial);
+    if result.altfr.is_null() {
+        return WinHandle::null();
+    }
+
+    let altfr = result.altfr;
+    *dirp = result.dir;
+
+    let wp = rs_frame2win(altfr);
+    if wp.is_null() {
+        return WinHandle::null();
+    }
+
+    // Save the parent position before making changes.
+    let parent = (*frp_close).fr_parent;
+    if parent.is_null() {
+        return WinHandle::null();
+    }
+    let topleft = rs_frame2win(parent);
+    let mut row = nvim_win_get_winrow(topleft);
+    let mut col = nvim_win_get_wincol(topleft);
+
+    // If rightmost window, remove vertical separator to the left.
+    if nvim_win_get_vsep_width(win) == 0
+        && (*parent).fr_layout == FR_ROW
+        && !(*frp_close).fr_prev.is_null()
+    {
+        rs_frame_set_vsep((*frp_close).fr_prev, 0);
+    }
+
+    // Remove this frame from its sibling list.
+    rs_frame_remove(frp_close);
+
+    // Resize the alternate frame to fill the freed space.
+    if *dirp == c_int::from(b'v') {
+        rs_frame_new_height(
+            altfr,
+            (*altfr).fr_height + (*frp_close).fr_height,
+            c_int::from(altfr == (*frp_close).fr_next),
+            0,
+            0,
+        );
+    } else {
+        rs_frame_new_width(
+            altfr,
+            (*altfr).fr_width + (*frp_close).fr_width,
+            c_int::from(altfr == (*frp_close).fr_next),
+            0,
+        );
+    }
+
+    // Recompute positions if altfr wasn't adjacent and to the left/above.
+    if altfr != (*frp_close).fr_prev {
+        rs_frame_comp_pos(
+            (*frp_close).fr_parent,
+            std::ptr::addr_of_mut!(row),
+            std::ptr::addr_of_mut!(col),
+        );
+    }
+
+    if unflat_altfr.is_null() {
+        rs_frame_flatten(altfr);
+    } else {
+        *unflat_altfr = altfr;
+    }
+
+    wp
+}
+
+// =============================================================================
+// winframe_restore implementation
+// =============================================================================
+
+/// Rust implementation of `winframe_restore`.
+///
+/// Undo changes from a prior call to `winframe_remove`, restoring frame
+/// positions, separators, and sizes.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+unsafe fn winframe_restore_impl(wp: WinHandle, dir: c_int, unflat_altfr: *mut Frame) {
+    if wp.is_null() || unflat_altfr.is_null() {
+        return;
+    }
+
+    let frp = nvim_win_get_frame(wp);
+    if frp.is_null() {
+        return;
+    }
+
+    // Put wp's frame back where it was.
+    if !(*frp).fr_prev.is_null() {
+        rs_frame_append((*frp).fr_prev, frp);
+    } else if !(*frp).fr_next.is_null() {
+        rs_frame_insert((*frp).fr_next, frp);
+    }
+
+    let parent = (*frp).fr_parent;
+    if parent.is_null() {
+        return;
+    }
+
+    // Restore vertical separators that may have been lost.
+    if nvim_win_get_vsep_width(wp) == 0
+        && (*parent).fr_layout == FR_ROW
+        && !(*frp).fr_prev.is_null()
+    {
+        rs_frame_set_vsep((*frp).fr_prev, 1);
+    }
+
+    // Restore statuslines or horizontal separators above.
+    if (*parent).fr_layout == FR_COL && !(*frp).fr_prev.is_null() {
+        if rs_global_stl_height() == 0 && nvim_win_get_status_height(wp) == 0 {
+            rs_frame_add_statusline((*frp).fr_prev);
+        } else if rs_global_stl_height() > 0 && nvim_win_get_hsep_height(wp) == 0 {
+            rs_frame_add_hsep((*frp).fr_prev);
+        }
+    }
+
+    // Restore the size of the altframe.
+    if dir == c_int::from(b'v') {
+        rs_frame_new_height(
+            unflat_altfr,
+            (*unflat_altfr).fr_height - (*frp).fr_height,
+            c_int::from(unflat_altfr == (*frp).fr_next),
+            0,
+            0,
+        );
+    } else if dir == c_int::from(b'h') {
+        rs_frame_new_width(
+            unflat_altfr,
+            (*unflat_altfr).fr_width - (*frp).fr_width,
+            c_int::from(unflat_altfr == (*frp).fr_next),
+            0,
+        );
+    }
+
+    // Recompute positions if altframe was not adjacent and to the left/above.
+    if unflat_altfr != (*frp).fr_prev {
+        let topleft = rs_frame2win(parent);
+        let mut row = nvim_win_get_winrow(topleft);
+        let mut col = nvim_win_get_wincol(topleft);
+        rs_frame_comp_pos(
+            parent,
+            std::ptr::addr_of_mut!(row),
+            std::ptr::addr_of_mut!(col),
+        );
+    }
+}
+
+// =============================================================================
+// FFI exports for winframe_remove and winframe_restore
+// =============================================================================
+
+/// FFI: Remove window from frame tree, returning the window that gains space.
+///
+/// Replaces C `winframe_remove()`.
+///
+/// # Safety
+/// `win` must be a valid window handle. `dirp` must be a valid pointer.
+/// `tp` may be null (meaning current tabpage). `unflat_altfr` may be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_winframe_remove(
+    win: WinHandle,
+    dirp: *mut c_int,
+    tp: *mut std::ffi::c_void,
+    unflat_altfr: *mut *mut Frame,
+) -> WinHandle {
+    winframe_remove_impl(win, dirp, tp, unflat_altfr)
+}
+
+/// FFI: Undo `winframe_remove`, restoring the frame tree.
+///
+/// Replaces C `winframe_restore()`.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_winframe_restore(wp: WinHandle, dir: c_int, unflat_altfr: *mut Frame) {
+    winframe_restore_impl(wp, dir, unflat_altfr);
 }
 
 // =============================================================================

@@ -17,6 +17,124 @@ use crate::{Frame, WinHandle};
 use super::constants::{FR_COL, FR_LEAF, FR_ROW};
 
 // =============================================================================
+// External C functions for frame_flatten
+// =============================================================================
+
+extern "C" {
+    /// Get the global topframe pointer.
+    fn nvim_get_topframe() -> *mut Frame;
+
+    /// Free a frame_T (calls xfree).
+    fn nvim_xfree(ptr: *mut std::ffi::c_void);
+}
+
+// =============================================================================
+// frame_flatten implementation
+// =============================================================================
+
+/// Flatten "frp" into its parent frame if it's the only child.
+///
+/// If frp has no siblings, its layout/children are merged into the parent.
+/// Also merges with grandparent if they share the same layout.
+/// Frees "frp" (and possibly "frp->fr_parent") if flattened.
+///
+/// Port of the C `frame_flatten()` function.
+///
+/// # Safety
+/// Caller must ensure `frp` is a valid non-null pointer to a frame_T.
+unsafe fn frame_flatten_impl(frp: *mut Frame) {
+    if frp.is_null() {
+        return;
+    }
+
+    // Only flatten if frp is the sole child (no siblings).
+    if !(*frp).fr_next.is_null() || !(*frp).fr_prev.is_null() {
+        return;
+    }
+
+    // Move frp's info into the parent and remove frp.
+    let parent = (*frp).fr_parent;
+    if parent.is_null() {
+        return;
+    }
+
+    (*parent).fr_layout = (*frp).fr_layout;
+    (*parent).fr_child = (*frp).fr_child;
+
+    // Reparent all of frp's children to the parent.
+    let mut frp2 = (*frp).fr_child;
+    while !frp2.is_null() {
+        (*frp2).fr_parent = parent;
+        frp2 = (*frp2).fr_next;
+    }
+
+    (*parent).fr_win = (*frp).fr_win;
+    if !(*frp).fr_win.is_null() {
+        // Update the window's frame pointer.
+        extern "C" {
+            fn nvim_win_set_frame(wp: WinHandle, frp: *mut Frame);
+        }
+        nvim_win_set_frame((*frp).fr_win, parent);
+    }
+
+    // If topframe->fr_child was frp, update it.
+    let topframe = nvim_get_topframe();
+    let frp2 = parent;
+    if !topframe.is_null() && (*topframe).fr_child == frp {
+        (*topframe).fr_child = frp2;
+    }
+    nvim_xfree(frp.cast());
+
+    // Check if parent and grandparent share the same layout (merge lists).
+    let frp = (*frp2).fr_parent;
+    if !frp.is_null() && (*frp).fr_layout == (*frp2).fr_layout {
+        // Merge frp2's children into frp's list.
+        if (*frp).fr_child == frp2 {
+            (*frp).fr_child = (*frp2).fr_child;
+        }
+
+        let frp2_child = (*frp2).fr_child;
+        assert!(!frp2_child.is_null());
+
+        (*frp2_child).fr_prev = (*frp2).fr_prev;
+        if !(*frp2).fr_prev.is_null() {
+            (*(*frp2).fr_prev).fr_next = frp2_child;
+        }
+
+        // Walk to the last child of frp2, updating parent pointers,
+        // then splice frp2->fr_next onto the end.
+        let mut frp3 = frp2_child;
+        loop {
+            (*frp3).fr_parent = frp;
+            if (*frp3).fr_next.is_null() {
+                (*frp3).fr_next = (*frp2).fr_next;
+                if !(*frp2).fr_next.is_null() {
+                    (*(*frp2).fr_next).fr_prev = frp3;
+                }
+                break;
+            }
+            frp3 = (*frp3).fr_next;
+        }
+
+        if !topframe.is_null() && (*topframe).fr_child == frp2 {
+            (*topframe).fr_child = frp;
+        }
+        nvim_xfree(frp2.cast());
+    }
+}
+
+/// FFI: Flatten "frp" into its parent frame if it's the only child.
+///
+/// Replaces C `frame_flatten()` and `nvim_frame_flatten_wrapper()`.
+///
+/// # Safety
+/// Caller must ensure `frp` is a valid non-null pointer to a frame_T.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_flatten(frp: *mut Frame) {
+    frame_flatten_impl(frp);
+}
+
+// =============================================================================
 // Frame Initialization
 // =============================================================================
 
