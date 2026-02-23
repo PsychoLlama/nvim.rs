@@ -2026,105 +2026,9 @@ static enum {
   EXP_CLUSTER,      // expand ":syn list @cluster" arguments
 } expand_what;
 
-// Reset include_link, include_default, include_none to 0.
-// Called when we are done expanding.
-void reset_expand_highlight(void)
-{
-  include_link = include_default = include_none = 0;
-}
-
-// Handle command line completion for :match and :echohl command: Add "None"
-// as highlight group.
-void set_context_in_echohl_cmd(expand_T *xp, const char *arg)
-{
-  xp->xp_context = EXPAND_HIGHLIGHT;
-  xp->xp_pattern = (char *)arg;
-  include_none = 1;
-}
-
-// Handle command line completion for :syntax command.
-void set_context_in_syntax_cmd(expand_T *xp, const char *arg)
-{
-  // Default: expand subcommands.
-  xp->xp_context = EXPAND_SYNTAX;
-  expand_what = EXP_SUBCMD;
-  xp->xp_pattern = (char *)arg;
-  include_link = 0;
-  include_default = 0;
-
-  if (*arg == NUL) {
-    return;
-  }
-
-  // (part of) subcommand already typed
-  const char *p = skiptowhite(arg);
-  if (*p == NUL) {
-    return;
-  }
-
-  // past first world
-  xp->xp_pattern = skipwhite(p);
-  if (*skiptowhite(xp->xp_pattern) != NUL) {
-    xp->xp_context = EXPAND_NOTHING;
-  } else if (STRNICMP(arg, "case", p - arg) == 0) {
-    expand_what = EXP_CASE;
-  } else if (STRNICMP(arg, "spell", p - arg) == 0) {
-    expand_what = EXP_SPELL;
-  } else if (STRNICMP(arg, "sync", p - arg) == 0) {
-    expand_what = EXP_SYNC;
-  } else if (STRNICMP(arg, "list", p - arg) == 0) {
-    p = skipwhite(p);
-    if (*p == '@') {
-      expand_what = EXP_CLUSTER;
-    } else {
-      xp->xp_context = EXPAND_HIGHLIGHT;
-    }
-  } else if (STRNICMP(arg, "keyword", p - arg) == 0
-             || STRNICMP(arg, "region", p - arg) == 0
-             || STRNICMP(arg, "match", p - arg) == 0) {
-    xp->xp_context = EXPAND_HIGHLIGHT;
-  } else {
-    xp->xp_context = EXPAND_NOTHING;
-  }
-}
-
-// Function given to ExpandGeneric() to obtain the list syntax names for
-// expansion.
-char *get_syntax_name(expand_T *xp, int idx)
-{
-  switch (expand_what) {
-  case EXP_SUBCMD:
-    if (idx < 0 || idx >= (int)ARRAY_SIZE(subcommands)) {
-      return NULL;
-    }
-    return subcommands[idx].name;
-  case EXP_CASE: {
-    static char *case_args[] = { "match", "ignore", NULL };
-    return case_args[idx];
-  }
-  case EXP_SPELL: {
-    static char *spell_args[] =
-    { "toplevel", "notoplevel", "default", NULL };
-    return spell_args[idx];
-  }
-  case EXP_SYNC: {
-    static char *sync_args[] =
-    { "ccomment", "clear", "fromstart",
-      "linebreaks=", "linecont", "lines=", "match",
-      "maxlines=", "minlines=", "region", NULL };
-    return sync_args[idx];
-  }
-  case EXP_CLUSTER:
-    if (idx < curwin->w_s->b_syn_clusters.ga_len) {
-      vim_snprintf(xp->xp_buf, EXPAND_BUF_LEN, "@%s",
-                   SYN_CLSTR(curwin->w_s)[idx].scl_name);
-      return xp->xp_buf;
-    } else {
-      return NULL;
-    }
-  }
-  return NULL;
-}
+// set_context_in_syntax_cmd, get_syntax_name, set_context_in_echohl_cmd,
+// and reset_expand_highlight are implemented in Rust (expand.rs).
+// Their C thin wrappers are at the bottom of this file.
 
 /// Function called for expression evaluation: get syntax ID at file position.
 ///
@@ -4621,3 +4525,47 @@ void ex_syntime(exarg_T *eap) { rs_ex_syntime(eap); }
 /// Thin wrapper: get_syntime_arg body delegated to Rust.
 extern char *rs_get_syntime_arg(expand_T *xp, int idx);
 char *get_syntime_arg(expand_T *xp, int idx) { return rs_get_syntime_arg(xp, idx); }
+
+// =============================================================================
+// Phase expand: accessors for tab completion functions
+// =============================================================================
+
+void nvim_syn_set_include_link(int val) { include_link = val; }
+void nvim_syn_set_include_default(int val) { include_default = val; }
+void nvim_syn_set_include_none(int val) { include_none = val; }
+
+/// Format cluster name "@name" into xp->xp_buf and return it.
+char *nvim_syn_expand_cluster_name(expand_T *xp, int idx)
+{
+  synblock_T *block = curwin->w_s;
+  if (idx < 0 || idx >= block->b_syn_clusters.ga_len) {
+    return NULL;
+  }
+  vim_snprintf(xp->xp_buf, EXPAND_BUF_LEN, "@%s",
+               SYN_CLSTR(block)[idx].scl_name);
+  return xp->xp_buf;
+}
+
+int nvim_syn_get_expand_cluster_count(void)
+{
+  return curwin->w_s->b_syn_clusters.ga_len;
+}
+
+/// Thin wrappers: expand/context functions delegated to Rust.
+extern void rs_set_context_in_syntax_cmd(expand_T *xp, const char *arg);
+void set_context_in_syntax_cmd(expand_T *xp, const char *arg)
+{
+  rs_set_context_in_syntax_cmd(xp, arg);
+}
+
+extern char *rs_get_syntax_name(expand_T *xp, int idx);
+char *get_syntax_name(expand_T *xp, int idx) { return rs_get_syntax_name(xp, idx); }
+
+extern void rs_set_context_in_echohl_cmd(expand_T *xp, const char *arg);
+void set_context_in_echohl_cmd(expand_T *xp, const char *arg)
+{
+  rs_set_context_in_echohl_cmd(xp, arg);
+}
+
+extern void rs_reset_expand_highlight(void);
+void reset_expand_highlight(void) { rs_reset_expand_highlight(); }
