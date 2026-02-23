@@ -227,6 +227,11 @@ extern void rs_nv_g_underscore_cmd(cmdarg_T *cap);
 extern void rs_nv_gi_cmd(cmdarg_T *cap);
 extern void rs_nv_gv_cmd(cmdarg_T *cap);
 extern void rs_n_swapchar(cmdarg_T *cap);
+extern void rs_nv_addsub(cmdarg_T *cap);
+extern void rs_nv_colon(cmdarg_T *cap);
+extern void rs_nv_record(cmdarg_T *cap);
+extern void rs_nv_paste(cmdarg_T *cap);
+extern void rs_nv_event(cmdarg_T *cap);
 
 /// This table contains one entry for every Normal or Visual mode command.
 /// The order doesn't matter, init_normal_cmds() will create a sorted index.
@@ -238,7 +243,7 @@ static const struct nv_cmd {
   int16_t cmd_arg;              ///< value for ca.arg
 } nv_cmds[] = {
   { NUL,       rs_nv_error,    0,                      0 },
-  { Ctrl_A,    nv_addsub,      0,                      0 },
+  { Ctrl_A,    rs_nv_addsub,   0,                      0 },
   { Ctrl_B,    rs_nv_page,     NV_STS,                 BACKWARD },
   { Ctrl_C,    rs_nv_esc,      0,                      true },
   { Ctrl_D,    rs_nv_halfpage, 0,                      0 },
@@ -263,7 +268,7 @@ static const struct nv_cmd {
   { 'V',       rs_nv_visual,   0,                      false },
   { 'v',       rs_nv_visual,   0,                      false },
   { Ctrl_W,    rs_nv_window,   0,                      0 },
-  { Ctrl_X,    nv_addsub,      0,                      0 },
+  { Ctrl_X,    rs_nv_addsub,   0,                      0 },
   { Ctrl_Y,    rs_nv_scroll_line, 0,                   false },
   { Ctrl_Z,    rs_nv_suspend,  0,                      0 },
   { ESC,       rs_nv_esc,      0,                      false },
@@ -297,7 +302,7 @@ static const struct nv_cmd {
   { '7',       rs_nv_ignore,   0,                      0 },
   { '8',       rs_nv_ignore,   0,                      0 },
   { '9',       rs_nv_ignore,   0,                      0 },
-  { ':',       nv_colon,       0,                      0 },
+  { ':',       rs_nv_colon,    0,                      0 },
   { ';',       rs_nv_csearch,  0,                      false },
   { '<',       rs_nv_operator, NV_RL,                  0 },
   { '=',       rs_nv_operator, 0,                      0 },
@@ -351,7 +356,7 @@ static const struct nv_cmd {
   { 'n',       rs_nv_next,     0,                      0 },
   { 'o',       rs_nv_open,     0,                      0 },
   { 'p',       rs_nv_put,      0,                      0 },
-  { 'q',       nv_record,      NV_NCH,                 0 },
+  { 'q',       rs_nv_record,   NV_NCH,                 0 },
   { 'r',       rs_nv_replace,  NV_NCH_NOP|NV_LANG,     0 },
   { 's',       rs_nv_subst,    NV_KEEPREG,             0 },
   { 't',       rs_nv_csearch,  NV_NCH_ALW|NV_LANG,     FORWARD },
@@ -423,10 +428,10 @@ static const struct nv_cmd {
   { K_F1,      rs_nv_help,     NV_NCW,                 0 },
   { K_XF1,     rs_nv_help,     NV_NCW,                 0 },
   { K_SELECT,  rs_nv_select,   0,                      0 },
-  { K_PASTE_START, nv_paste,   NV_KEEPREG,             0 },
-  { K_EVENT,   nv_event,       NV_KEEPREG,             0 },
-  { K_COMMAND, nv_colon,       0,                      0 },
-  { K_LUA, nv_colon,           0,                      0 },
+  { K_PASTE_START, rs_nv_paste, NV_KEEPREG,             0 },
+  { K_EVENT,   rs_nv_event,    NV_KEEPREG,             0 },
+  { K_COMMAND, rs_nv_colon,    0,                      0 },
+  { K_LUA, rs_nv_colon,        0,                      0 },
 };
 
 // Number of commands in nv_cmds[].
@@ -1818,7 +1823,7 @@ const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with cu
 // (nv_at_impl, nv_join_impl, nv_open_impl migrated to Rust in Phases 1 and 3)
 
 // g-command C accessors for Rust FFI
-void nvim_nv_addsub(cmdarg_T *cap) { nv_addsub(cap); }
+// nvim_nv_addsub migrated to rs_nv_addsub in Rust
 bool nvim_current_search(int count, bool forward) { return current_search(count, forward); }
 int nvim_cursor_up(int count, bool upd_topline) { return cursor_up(count, upd_topline); }
 int nvim_cursor_down_call(int count, bool upd_topline) { return cursor_down(count, upd_topline); }
@@ -1886,7 +1891,7 @@ void nvim_dec_b_op_end_col(void) { if (curbuf->b_op_end.col > 0) curbuf->b_op_en
 // Window command accessors for Rust FFI
 // =============================================================================
 
-void nvim_nv_colon(cmdarg_T *cap) { nv_colon(cap); }
+// nvim_nv_colon migrated to rs_nv_colon in Rust
 
 // =============================================================================
 // find_ident_at_pos accessors for Rust FFI
@@ -3088,23 +3093,6 @@ void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
   curbuf = old_curbuf;
 }
 
-/// CTRL-A and CTRL-X: Add or subtract from letter or number under cursor.
-static void nv_addsub(cmdarg_T *cap)
-{
-  if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
-    rs_clearopbeep(cap->oap);
-  } else if (!VIsual_active && cap->oap->op_type == OP_NOP) {
-    rs_prep_redo_cmd(cap);
-    cap->oap->op_type = cap->cmdchar == Ctrl_A ? OP_NR_ADD : OP_NR_SUB;
-    op_addsub(cap->oap, cap->count1, cap->arg);
-    cap->oap->op_type = OP_NOP;
-  } else if (VIsual_active) {
-    rs_nv_operator(cap);
-  } else {
-    rs_clearop(cap->oap);
-  }
-}
-
 /// Search for variable declaration of "ptr[len]" (thin wrapper calling Rust).
 /// Used by nv_gd and the searchdecl() Vimscript function.
 bool find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_arg)
@@ -3168,60 +3156,6 @@ static bool nv_z_get_count(cmdarg_T *cap, int *nchar_arg)
   return false;
 }
 
-/// "zug" and "zuw": undo "zg" and "zw"
-/// "zg": add good word to word list
-/// "zw": add wrong word to word list
-/// "zG": add good word to temp word list
-/// "zW": add wrong word to temp word list
-/// Handle a ":" command and <Cmd> or Lua mappings.
-static void nv_colon(cmdarg_T *cap)
-{
-  bool cmd_result;
-  bool is_cmdkey = cap->cmdchar == K_COMMAND;
-  bool is_lua = cap->cmdchar == K_LUA;
-
-  if (VIsual_active && !is_cmdkey && !is_lua) {
-    rs_nv_operator(cap);
-    return;
-  }
-
-  if (cap->oap->op_type != OP_NOP) {
-    // Using ":" as a movement is charwise exclusive.
-    cap->oap->motion_type = kMTCharWise;
-    cap->oap->inclusive = false;
-  } else if (cap->count0 && !is_cmdkey && !is_lua) {
-    // translate "count:" into ":.,.+(count - 1)"
-    stuffcharReadbuff('.');
-    if (cap->count0 > 1) {
-      stuffReadbuff(",.+");
-      stuffnumReadbuff(cap->count0 - 1);
-    }
-  }
-
-  // When typing, don't type below an old message
-  if (KeyTyped) {
-    compute_cmdrow();
-  }
-
-  if (is_lua) {
-    cmd_result = map_execute_lua(true, false);
-  } else {
-    // get a command line and execute it
-    cmd_result = do_cmdline(NULL, is_cmdkey ? getcmdkeycmd : getexline, NULL,
-                            cap->oap->op_type != OP_NOP ? DOCMD_KEEPLINE : 0);
-  }
-
-  if (cmd_result == false) {
-    // The Ex command failed, do not execute the operator.
-    rs_clearop(cap->oap);
-  } else if (cap->oap->op_type != OP_NOP
-             && (cap->oap->start.lnum > curbuf->b_ml.ml_line_count
-                 || cap->oap->start.col > ml_get_len(cap->oap->start.lnum)
-                 || did_emsg)) {
-    // The start of the operator has become invalid by the Ex command.
-    rs_clearopbeep(cap->oap);
-  }
-}
 
 /// Call nv_ident() as if "c1" was used, with "c2" as next character.
 void do_nv_ident(int c1, int c2)
@@ -3709,65 +3643,7 @@ static void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln)
   }
 }
 
-/// "a" or "i" while an operator is pending or in Visual mode: object motion (implementation).
-/// "q" command: Start/stop recording.
-/// "q:", "q/", "q?": edit command-line in command-line window.
-static void nv_record(cmdarg_T *cap)
-{
-  if (cap->oap->op_type == OP_FORMAT) {
-    // "gqq" is the same as "gqgq": format line
-    cap->cmdchar = 'g';
-    cap->nchar = 'q';
-    rs_nv_operator(cap);
-    return;
-  }
-
-  if (rs_checkclearop(cap->oap)) {
-    return;
-  }
-
-  if (cap->nchar == ':' || cap->nchar == '/' || cap->nchar == '?') {
-    if (cmdwin_type != 0) {
-      emsg(_(e_cmdline_window_already_open));
-      return;
-    }
-    stuffcharReadbuff(cap->nchar);
-    stuffcharReadbuff(K_CMDWIN);
-  } else {
-    // (stop) recording into a named register, unless executing a
-    // register.
-    if (reg_executing == 0 && do_record(cap->nchar) == FAIL) {
-      rs_clearopbeep(cap->oap);
-    }
-  }
-}
-
-// nv_join_impl, nv_open_impl migrated to Rust in Phase 3
-
-static void nv_paste(cmdarg_T *cap) { paste_repeat(cap->count1); }
-
-/// Handle an arbitrary event in normal mode
-static void nv_event(cmdarg_T *cap)
-{
-  // Garbage collection should have been executed before blocking for events in
-  // the `input_get` in `state_enter`, but we also disable it here in case the
-  // `input_get` branch was not executed (!multiqueue_empty(loop.events), which
-  // could have `may_garbage_collect` set to true in `normal_check`).
-  //
-  // That is because here we may run code that calls `input_get` later
-  // (`f_confirm` or `get_keystroke` for example), but in these cases it is
-  // not safe to perform garbage collection because there could be unreferenced
-  // lists or dicts being used.
-  may_garbage_collect = false;
-  bool may_restart = (restart_edit != 0 || restart_VIsual_select != 0);
-  state_handle_k_event();
-  finish_op = false;
-  if (may_restart) {
-    // Tricky: if restart_edit was set before the handler we are in ctrl-o mode,
-    // but if not, the event should be allowed to trigger :startinsert.
-    cap->retval |= CA_COMMAND_BUSY;  // don't call edit() or restart Select now
-  }
-}
+// nv_record, nv_paste, nv_event, nv_join_impl, nv_open_impl migrated to Rust
 
 void normal_cmd(oparg_T *oap, bool toplevel)
 {
@@ -3815,3 +3691,45 @@ void nvim_ident_normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, 
 
 /// Emit the e_noident error message.
 void nvim_ident_emsg_noident(void) { emsg(_(e_noident)); }
+
+// =============================================================================
+// Phase 1 accessors: dispatch table handlers (nv_addsub, nv_colon, nv_record,
+// nv_paste, nv_event)
+// =============================================================================
+
+/// Call op_addsub(oap, count1, arg).
+void nvim_op_addsub_call(oparg_T *oap, int count1, int arg) { op_addsub(oap, count1, arg); }
+
+/// Call do_record(nchar) and return FAIL/OK.
+int nvim_do_record(int nchar) { return do_record(nchar); }
+
+/// Return paste_repeat(count).
+void nvim_paste_repeat(int count) { paste_repeat(count); }
+
+/// Call state_handle_k_event().
+void nvim_state_handle_k_event(void) { state_handle_k_event(); }
+
+/// Call do_cmdline with appropriate function pointer for colon/cmdkey.
+/// Returns false on failure (mirrors do_cmdline return).
+bool nvim_do_cmdline_for_colon(cmdarg_T *cap, bool is_cmdkey) {
+  return do_cmdline(NULL, is_cmdkey ? getcmdkeycmd : getexline, NULL,
+                    cap->oap->op_type != OP_NOP ? DOCMD_KEEPLINE : 0);
+}
+
+/// Call map_execute_lua(true, false).
+bool nvim_map_execute_lua_for_colon(void) { return map_execute_lua(true, false); }
+
+/// Get cap->oap->start.lnum.
+int nvim_get_oap_start_lnum(cmdarg_T *cap) { return (int)cap->oap->start.lnum; }
+
+/// Get cap->oap->start.col.
+int nvim_get_oap_start_col(cmdarg_T *cap) { return (int)cap->oap->start.col; }
+
+/// Return did_emsg.
+int nvim_did_emsg_check(void) { return did_emsg; }
+
+/// Return restart_VIsual_select.
+int nvim_get_restart_VIsual_select_val(void) { return restart_VIsual_select; }
+
+/// Return the translated "E1292: Command-line window is already open" message.
+const char *nvim_get_e_cmdline_window_already_open(void) { return _(e_cmdline_window_already_open); }

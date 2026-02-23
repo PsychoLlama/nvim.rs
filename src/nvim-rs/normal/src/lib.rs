@@ -1373,7 +1373,6 @@ extern "C" {
 
     // Window command functions
     fn rs_do_window(nchar: c_int, count: c_int, xchar: c_int);
-    fn nvim_nv_colon(cap: CapHandle);
 }
 
 // Phase 3 constants
@@ -1940,7 +1939,7 @@ pub unsafe extern "C" fn rs_nv_window(cap: CapHandle) {
         // "CTRL-W :" is the same as typing ":"
         nvim_cap_set_cmdchar(cap, c_int::from(b':'));
         nvim_cap_set_nchar(cap, c_int::from(NUL));
-        nvim_nv_colon(cap);
+        rs_nv_colon(cap);
     } else if !rs_checkclearop(oap) {
         let count0 = nvim_cap_get_count0(cap);
         rs_do_window(nchar, count0, c_int::from(NUL));
@@ -5023,7 +5022,6 @@ extern "C" {
     fn nvim_do_execreg_call(regname: c_int) -> bool;
 
     // g-command C accessors
-    fn nvim_nv_addsub(cap: CapHandle);
     fn nvim_current_search(count: c_int, forward: bool) -> bool;
     fn nvim_cursor_up(count: c_int, upd_topline: bool) -> c_int;
     fn nvim_cursor_down_call(count: c_int, upd_topline: bool) -> c_int;
@@ -5312,7 +5310,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
                 nvim_cap_set_arg(cap, 1); // cap->arg = true
                 nvim_cap_set_cmdchar(cap, nchar);
                 nvim_cap_set_nchar(cap, NUL_VAL);
-                nvim_nv_addsub(cap);
+                rs_nv_addsub(cap);
             } else {
                 rs_clearopbeep(oap);
             }
@@ -6362,6 +6360,196 @@ pub unsafe extern "C" fn rs_nv_percent(cap: CapHandle) {
         && nvim_get_KeyTyped()
     {
         rs_foldOpenCursor();
+    }
+}
+
+// =============================================================================
+// Phase 1: Last dispatch table handlers (nv_addsub, nv_colon, nv_record,
+// nv_paste, nv_event)
+// =============================================================================
+
+// Key constants for Phase 1
+const KE_COMMAND: c_int = 104;
+const KE_LUA: c_int = 107;
+const KE_CMDWIN: c_int = 84;
+
+const K_COMMAND: c_int = termcap2key(KS_EXTRA, KE_COMMAND);
+const K_LUA: c_int = termcap2key(KS_EXTRA, KE_LUA);
+const K_CMDWIN: c_int = termcap2key(KS_EXTRA, KE_CMDWIN);
+
+// OP_* constants for Phase 1
+const OP_NR_ADD: c_int = 28;
+const OP_NR_SUB: c_int = 29;
+const OP_FORMAT: c_int = 9;
+
+extern "C" {
+    // Phase 1: addsub
+    fn nvim_op_addsub_call(oap: OapHandle, count1: c_int, arg: c_int);
+
+    // Phase 1: colon
+    fn nvim_do_cmdline_for_colon(cap: CapHandle, is_cmdkey: bool) -> bool;
+    fn nvim_map_execute_lua_for_colon() -> bool;
+    fn nvim_compute_cmdrow();
+    fn nvim_get_oap_start_lnum(cap: CapHandle) -> c_int;
+    fn nvim_get_oap_start_col(cap: CapHandle) -> c_int;
+    fn nvim_did_emsg_check() -> c_int;
+    // nvim_ml_get_len_call already declared above (line ~299)
+
+    // Phase 1: record
+    fn nvim_do_record(nchar: c_int) -> c_int;
+    fn nvim_get_reg_executing() -> c_int;
+    fn nvim_get_e_cmdline_window_already_open() -> *const std::ffi::c_char;
+
+    // Phase 1: paste
+    fn nvim_paste_repeat(count: c_int);
+
+    // Phase 1: event
+    fn nvim_state_handle_k_event();
+    fn nvim_set_may_garbage_collect(val: bool);
+    fn nvim_get_restart_VIsual_select_val() -> c_int;
+}
+
+/// Command handler for CTRL-A and CTRL-X: Add or subtract from number/letter.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_addsub(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if nvim_bt_prompt_curbuf() && !nvim_prompt_curpos_editable() {
+        rs_clearopbeep(oap);
+    } else if nvim_get_VIsual_active() == 0 && nvim_oap_get_op_type_ptr(oap) == OP_NOP {
+        rs_prep_redo_cmd(cap);
+        let cmdchar = nvim_cap_get_cmdchar(cap);
+        nvim_oap_set_op_type(
+            oap,
+            if cmdchar == CTRL_A { OP_NR_ADD } else { OP_NR_SUB },
+        );
+        let count1 = nvim_cap_get_count1(cap);
+        let arg = nvim_cap_get_arg(cap);
+        nvim_op_addsub_call(oap, count1, arg);
+        nvim_oap_set_op_type(oap, OP_NOP);
+    } else if nvim_get_VIsual_active() != 0 {
+        rs_nv_operator(cap);
+    } else {
+        rs_clearop(oap);
+    }
+}
+
+/// Command handler for ":", K_COMMAND, and K_LUA: Execute ex command or Lua mapping.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_colon(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let is_cmdkey = cmdchar == K_COMMAND;
+    let is_lua = cmdchar == K_LUA;
+
+    if nvim_get_VIsual_active() != 0 && !is_cmdkey && !is_lua {
+        rs_nv_operator(cap);
+        return;
+    }
+
+    if nvim_oap_get_op_type_ptr(oap) != OP_NOP {
+        // Using ":" as a movement is charwise exclusive.
+        nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
+        nvim_oap_set_inclusive(oap, false);
+    } else if nvim_cap_get_count0(cap) != 0 && !is_cmdkey && !is_lua {
+        // translate "count:" into ":.,.+(count - 1)"
+        nvim_stuffcharReadbuff(c_int::from(b'.'));
+        if nvim_cap_get_count0(cap) > 1 {
+            nvim_stuffReadbuff(b",.+\0".as_ptr().cast::<std::ffi::c_char>());
+            nvim_stuffnumReadbuff(nvim_cap_get_count0(cap) - 1);
+        }
+    }
+
+    // When typing, don't type below an old message
+    if nvim_get_KeyTyped() {
+        nvim_compute_cmdrow();
+    }
+
+    let cmd_result = if is_lua {
+        nvim_map_execute_lua_for_colon()
+    } else {
+        nvim_do_cmdline_for_colon(cap, is_cmdkey)
+    };
+
+    if !cmd_result {
+        // The Ex command failed, do not execute the operator.
+        rs_clearop(oap);
+    } else if nvim_oap_get_op_type_ptr(oap) != OP_NOP
+        && (nvim_get_oap_start_lnum(cap) > nvim_get_line_count()
+            || nvim_get_oap_start_col(cap)
+                > nvim_ml_get_len_call(nvim_get_oap_start_lnum(cap))
+            || nvim_did_emsg_check() != 0)
+    {
+        // The start of the operator has become invalid by the Ex command.
+        rs_clearopbeep(oap);
+    }
+}
+
+/// Command handler for "q": Start/stop recording or open command-line window.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_record(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+
+    if nvim_oap_get_op_type_ptr(oap) == OP_FORMAT {
+        // "gqq" is the same as "gqgq": format line
+        nvim_cap_set_cmdchar(cap, c_int::from(b'g'));
+        nvim_cap_set_nchar(cap, c_int::from(b'q'));
+        rs_nv_operator(cap);
+        return;
+    }
+
+    if rs_checkclearop(oap) {
+        return;
+    }
+
+    let nchar = nvim_cap_get_nchar(cap);
+    if nchar == c_int::from(b':') || nchar == c_int::from(b'/') || nchar == c_int::from(b'?') {
+        if nvim_normal_get_cmdwin_type() != 0 {
+            nvim_emsg(nvim_get_e_cmdline_window_already_open());
+            return;
+        }
+        nvim_stuffcharReadbuff(nchar);
+        nvim_stuffcharReadbuff(K_CMDWIN);
+    } else {
+        // (stop) recording into a named register, unless executing a register.
+        if nvim_get_reg_executing() == 0 && nvim_do_record(nchar) == FAIL {
+            rs_clearopbeep(oap);
+        }
+    }
+}
+
+/// Command handler for K_PASTE_START: Repeat paste.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_paste(cap: CapHandle) {
+    nvim_paste_repeat(nvim_cap_get_count1(cap));
+}
+
+/// Command handler for K_EVENT: Handle arbitrary events in normal mode.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_event(cap: CapHandle) {
+    // Disable garbage collection during event handling (see comment in C original).
+    nvim_set_may_garbage_collect(false);
+    let may_restart = nvim_get_restart_edit() != 0 || nvim_get_restart_VIsual_select_val() != 0;
+    nvim_state_handle_k_event();
+    nvim_set_finish_op(false);
+    if may_restart {
+        // If restart_edit was set before the handler we are in ctrl-o mode,
+        // but if not, the event should be allowed to trigger :startinsert.
+        nvim_cap_or_retval(cap, CA_COMMAND_BUSY);
     }
 }
 
