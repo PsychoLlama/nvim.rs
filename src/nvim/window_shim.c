@@ -170,8 +170,9 @@ extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int w
 // Colorcolumn
 extern const char *rs_check_colorcolumn(const char *cc, win_T *wp);
 
-// Win exchange
+// Win exchange / rotate
 extern void rs_win_exchange(int prenum);
+extern void rs_win_rotate(int upwards, int count);
 
 // Snapshot lifecycle
 extern void rs_clear_snapshot(tabpage_T *tp, int idx);
@@ -1076,83 +1077,7 @@ static void win_exchange(int Prenum)
 //                 if upwards false the first window becomes the second one
 static void win_rotate(bool upwards, int count)
 {
-  if (curwin->w_floating) {
-    emsg(e_floatexchange);
-    return;
-  }
-
-  if (count <= 0 || rs_one_window_in_tab(curwin, NULL)) {
-    // nothing to do
-    beep_flush();
-    return;
-  }
-
-  // Check if all frames in this row/col have one window.
-  frame_T *frp;
-  FOR_ALL_FRAMES(frp, curwin->w_frame->fr_parent->fr_child) {
-    if (frp->fr_win == NULL) {
-      emsg(_("E443: Cannot rotate when another window is split"));
-      return;
-    }
-  }
-
-  win_T *wp1 = NULL;
-  win_T *wp2 = NULL;
-
-  while (count--) {
-    if (upwards) {              // first window becomes last window
-      // remove first window/frame from the list
-      frp = curwin->w_frame->fr_parent->fr_child;
-      assert(frp != NULL);
-      wp1 = frp->fr_win;
-      rs_win_remove(wp1, NULL);
-      rs_frame_remove(frp);
-      assert(frp->fr_parent->fr_child);
-
-      // find last frame and append removed window/frame after it
-      for (; frp->fr_next != NULL; frp = frp->fr_next) {}
-      rs_win_append(frp->fr_win, wp1, NULL);
-      rs_frame_append(frp, wp1->w_frame);
-
-      wp2 = frp->fr_win;                // previously last window
-    } else {                  // last window becomes first window
-      // find last window/frame in the list and remove it
-      for (frp = curwin->w_frame; frp->fr_next != NULL;
-           frp = frp->fr_next) {}
-      wp1 = frp->fr_win;
-      wp2 = wp1->w_prev;                    // will become last window
-      rs_win_remove(wp1, NULL);
-      rs_frame_remove(frp);
-      assert(frp->fr_parent->fr_child);
-
-      // append the removed window/frame before the first in the list
-      rs_win_append(frp->fr_parent->fr_child->fr_win->w_prev, wp1, NULL);
-      rs_frame_insert(frp->fr_parent->fr_child, frp);
-    }
-
-    // exchange status height, winbar height, hsep height and vsep width of old and new last window
-    int n = wp2->w_status_height;
-    wp2->w_status_height = wp1->w_status_height;
-    wp1->w_status_height = n;
-    n = wp2->w_hsep_height;
-    wp2->w_hsep_height = wp1->w_hsep_height;
-    wp1->w_hsep_height = n;
-    rs_frame_fix_height(wp1);
-    rs_frame_fix_height(wp2);
-    n = wp2->w_vsep_width;
-    wp2->w_vsep_width = wp1->w_vsep_width;
-    wp1->w_vsep_width = n;
-    rs_frame_fix_width(wp1);
-    rs_frame_fix_width(wp2);
-
-    // recompute w_winrow and w_wincol for all windows
-    rs_win_comp_pos();
-  }
-
-  wp1->w_pos_changed = true;
-  wp2->w_pos_changed = true;
-
-  redraw_all_later(UPD_NOT_VALID);
+  rs_win_rotate(upwards ? 1 : 0, count);
 }
 
 /// Move "wp" into a new split in a given direction, possibly relative to the
@@ -4241,6 +4166,7 @@ void nvim_buf_inc_nwindows(buf_T *buf) { buf->b_nwindows++; }
 void nvim_win_init_empty_wrapper(win_T *wp) { win_init_empty(wp); }
 void nvim_emsg_e_floatonly(void) { emsg(e_floatonly); }
 void nvim_emsg_e_floatexchange(void) { emsg(e_floatexchange); }
+void nvim_emsg_e443(void) { emsg(_("E443: Cannot rotate when another window is split")); }
 int nvim_text_or_buf_locked(void) { return text_or_buf_locked() ? 1 : 0; }
 void nvim_win_copy_cursor(win_T *dst, win_T *src) { if (dst && src) { dst->w_cursor = src->w_cursor; } }
 void nvim_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync != 0); }
@@ -4267,7 +4193,6 @@ frame_T *nvim_win_get_frame_parent(win_T *wp)
 buf_T *nvim_get_firstbuf_wrapper(void) { return firstbuf; }
 int nvim_can_close_floating_windows(tabpage_T *tp) { return can_close_floating_windows(tp) ? 1 : 0; }
 void nvim_win_exchange_wrapper(int Prenum) { win_exchange(Prenum); }
-void nvim_win_rotate_wrapper(int upwards, int count) { win_rotate(upwards != 0, count); }
 unsigned nvim_get_swb_flags(void) { return swb_flags; }
 void nvim_win_goto_wrapper(win_T *wp) { win_goto(wp); }
 int nvim_win_split_wrapper(int size, int flags) { return win_split(size, flags); }

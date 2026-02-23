@@ -143,7 +143,7 @@ extern "C" {
         count: c_int,
     ) -> WinHandle;
     // nvim_win_exchange_wrapper removed: replaced by rs_win_exchange
-    fn nvim_win_rotate_wrapper(upwards: c_int, count: c_int);
+    // nvim_win_rotate_wrapper removed: replaced by rs_win_rotate
     fn nvim_win_splitmove_wrapper(wp: WinHandle, size: c_int, flags: c_int) -> c_int;
     fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
@@ -410,7 +410,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                     return;
                 }
                 nvim_reset_visual_wrapper();
-                nvim_win_rotate_wrapper(0, prenum1);
+                crate::exchange::rs_win_rotate(0, prenum1);
             }
 
             // =================================================================
@@ -421,7 +421,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                     return;
                 }
                 nvim_reset_visual_wrapper();
-                nvim_win_rotate_wrapper(1, prenum1);
+                crate::exchange::rs_win_rotate(1, prenum1);
             }
 
             // =================================================================

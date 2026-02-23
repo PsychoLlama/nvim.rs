@@ -112,6 +112,15 @@ extern "C" {
 
     /// Schedule redraw for a window.
     fn nvim_redraw_later_wrapper(wp: WinHandle, r#type: c_int);
+
+    /// Emit E443 error: Cannot rotate when another window is split.
+    fn nvim_emsg_e443();
+
+    /// Redraw all windows later.
+    fn nvim_redraw_all_later(r#type: c_int);
+
+    /// Set w_pos_changed on window.
+    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
 }
 
 // =============================================================================
@@ -533,6 +542,138 @@ unsafe fn win_exchange_impl(prenum: c_int) {
 }
 
 // =============================================================================
+// Full win_rotate implementation
+// =============================================================================
+
+/// Rust implementation of `win_rotate()`.
+///
+/// Rotates windows in the current frame group upwards (first becomes last)
+/// or downwards (last becomes first).
+///
+/// # Safety
+/// Requires valid global Neovim state (curwin, frames, window list).
+unsafe fn win_rotate_impl(upwards: c_int, count: c_int) {
+    let curwin = nvim_get_curwin();
+    if curwin.is_null() {
+        return;
+    }
+
+    // Cannot rotate floating windows.
+    if nvim_win_get_floating(curwin) != 0 {
+        nvim_emsg_e_floatexchange();
+        return;
+    }
+
+    if count <= 0 || rs_one_window_in_tab(curwin, crate::TabpageHandle::null()) != 0 {
+        // nothing to do
+        nvim_beep_flush_wrapper();
+        return;
+    }
+
+    // Check if all frames in this row/col have one window.
+    let curframe = nvim_win_get_frame(curwin);
+    if curframe.is_null() {
+        return;
+    }
+    let parent = (*curframe).fr_parent;
+    if parent.is_null() {
+        return;
+    }
+
+    let mut frp = (*parent).fr_child;
+    while !frp.is_null() {
+        if (*frp).fr_win.is_null() {
+            nvim_emsg_e443();
+            return;
+        }
+        frp = (*frp).fr_next;
+    }
+
+    let mut wp1 = WinHandle::null();
+    let mut wp2 = WinHandle::null();
+    let mut remaining = count;
+
+    while remaining > 0 {
+        remaining -= 1;
+
+        if upwards != 0 {
+            // first window becomes last window
+            // remove first window/frame from the list
+            let first_frp = (*parent).fr_child;
+            assert!(!first_frp.is_null());
+            wp1 = (*first_frp).fr_win;
+            rs_win_remove(wp1, crate::TabpageHandle::null());
+            rs_frame_remove(first_frp);
+            assert!(!(*parent).fr_child.is_null());
+
+            // find last frame and append removed window/frame after it
+            let mut last_frp = (*parent).fr_child;
+            while !(*last_frp).fr_next.is_null() {
+                last_frp = (*last_frp).fr_next;
+            }
+            rs_win_append((*last_frp).fr_win, wp1, crate::TabpageHandle::null());
+            rs_frame_append(last_frp, nvim_win_get_frame(wp1));
+
+            wp2 = (*last_frp).fr_win; // previously last window
+        } else {
+            // last window becomes first window
+            // find last window/frame in the list and remove it
+            let mut last_frp = nvim_win_get_frame(curwin);
+            while !(*last_frp).fr_next.is_null() {
+                last_frp = (*last_frp).fr_next;
+            }
+            wp1 = (*last_frp).fr_win;
+            wp2 = nvim_win_get_prev(wp1); // will become last window
+            rs_win_remove(wp1, crate::TabpageHandle::null());
+            rs_frame_remove(last_frp);
+            assert!(!(*parent).fr_child.is_null());
+
+            // append the removed window/frame before the first in the list
+            let first_child_frp = (*parent).fr_child;
+            let first_child_win = (*first_child_frp).fr_win;
+            rs_win_append(
+                nvim_win_get_prev(first_child_win),
+                wp1,
+                crate::TabpageHandle::null(),
+            );
+            rs_frame_insert(first_child_frp, last_frp);
+        }
+
+        // Exchange status height, hsep height and vsep width of old and new last window
+        let saved_status_height = nvim_win_get_status_height(wp2);
+        nvim_win_set_status_height(wp2, nvim_win_get_status_height(wp1));
+        nvim_win_set_status_height(wp1, saved_status_height);
+
+        let saved_hsep_height = nvim_win_get_hsep_height(wp2);
+        nvim_win_set_hsep_height(wp2, nvim_win_get_hsep_height(wp1));
+        nvim_win_set_hsep_height(wp1, saved_hsep_height);
+
+        rs_frame_fix_height(wp1);
+        rs_frame_fix_height(wp2);
+
+        let saved_vsep_width = nvim_win_get_vsep_width(wp2);
+        nvim_win_set_vsep_width(wp2, nvim_win_get_vsep_width(wp1));
+        nvim_win_set_vsep_width(wp1, saved_vsep_width);
+
+        rs_frame_fix_width(wp1);
+        rs_frame_fix_width(wp2);
+
+        // Recompute w_winrow and w_wincol for all windows.
+        rs_win_comp_pos();
+    }
+
+    if !wp1.is_null() {
+        nvim_win_set_pos_changed(wp1, 1);
+    }
+    if !wp2.is_null() {
+        nvim_win_set_pos_changed(wp2, 1);
+    }
+
+    // UPD_NOT_VALID = 40
+    nvim_redraw_all_later(40);
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -542,6 +683,16 @@ unsafe fn win_exchange_impl(prenum: c_int) {
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_win_exchange(prenum: c_int) {
     unsafe { win_exchange_impl(prenum) }
+}
+
+/// FFI: Rotate windows in the current frame group.
+///
+/// Direct Rust replacement for the C `win_rotate()` function.
+/// `upwards` != 0 means the first window becomes the last.
+/// `upwards` == 0 means the last window becomes the first.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_win_rotate(upwards: c_int, count: c_int) {
+    unsafe { win_rotate_impl(upwards, count) }
 }
 
 /// FFI: Check if window can be exchanged.
