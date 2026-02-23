@@ -28,6 +28,8 @@ const CP_ICASE: c_int = 16;
 #[allow(dead_code)]
 const CP_FAST: c_int = 32;
 
+use std::os::raw::c_char;
+
 // C accessor functions
 extern "C" {
     // Match list accessors
@@ -46,8 +48,14 @@ extern "C" {
     fn nvim_compl_match_at_original_text(m: ComplMatch) -> c_int;
 
     // Match properties
-    #[allow(dead_code)]
     fn nvim_compl_match_get_flags(m: ComplMatch) -> c_int;
+    fn nvim_compl_match_get_cp_str_data(m: ComplMatch) -> *const c_char;
+
+    // Case-insensitive string comparison
+    fn nvim_vim_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
+
+    // Standard string comparison (from libc, always available)
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
 
     // Direction accessor
     fn nvim_get_compl_direction() -> c_int;
@@ -223,6 +231,47 @@ pub unsafe extern "C" fn rs_count_matches() -> c_int {
     }
 
     count
+}
+
+/// Check if a completion match's string equals a given prefix.
+///
+/// Mirrors `ins_compl_equal` in C: checks `CP_EQUAL` flag first (always
+/// matches), then `CP_ICASE` for case-insensitive comparison, then plain
+/// `strncmp`.
+///
+/// Returns 1 if match, 0 if no match.
+///
+/// # Safety
+/// `m` must be a valid completion match handle. `str` must point to a valid
+/// byte sequence of at least `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_equal(
+    m: ComplMatch,
+    str: *const c_char,
+    len: usize,
+) -> c_int {
+    if m.is_null() || str.is_null() {
+        return 0;
+    }
+
+    let flags = nvim_compl_match_get_flags(m);
+
+    if flags & CP_EQUAL != 0 {
+        return 1;
+    }
+
+    let data = nvim_compl_match_get_cp_str_data(m);
+    if data.is_null() {
+        return 0;
+    }
+
+    let result = if flags & CP_ICASE != 0 {
+        nvim_vim_strnicmp(data, str, len)
+    } else {
+        strncmp(data, str, len)
+    };
+
+    c_int::from(result == 0)
 }
 
 #[cfg(test)]

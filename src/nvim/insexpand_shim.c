@@ -143,6 +143,7 @@ extern void rs_ins_compl_init_get_longest(void);
 extern void rs_ins_compl_enable_autocomplete(void);
 extern void rs_strip_caret_numbers_in_place(char *str);
 extern unsigned rs_quote_meta(char *dest, char *src, int len);
+extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -865,13 +866,7 @@ static int ins_compl_add(char *const str, int len, char *const fname, char *cons
 static bool ins_compl_equal(compl_T *match, char *str, size_t len)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-  if (match->cp_flags & CP_EQUAL) {
-    return true;
-  }
-  if (match->cp_flags & CP_ICASE) {
-    return STRNICMP(match->cp_str.data, str, len) == 0;
-  }
-  return strncmp(match->cp_str.data, str, len) == 0;
+  return rs_ins_compl_equal(match, str, len) != 0;
 }
 
 /// when len is -1 mean use whole length of p otherwise part of p
@@ -1706,6 +1701,8 @@ void nvim_append_to_redobuff_lit(const char *s, int len) { AppendToRedobuffLit(s
 int nvim_utf_head_off(const char *base, const char *p) { return utf_head_off(base, p); }
 void nvim_compl_match_set_score(void *m, int score) { if (m) { ((compl_T *)m)->cp_score = score; } }
 const char *nvim_compl_match_get_cp_str_data(void *m) { return m ? ((compl_T *)m)->cp_str.data : NULL; }
+size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp_str.size : 0; }
+int nvim_vim_strnicmp(const char *s1, const char *s2, size_t len) { return STRNICMP(s1, s2, len); }
 int nvim_fuzzy_match_str(char *str, const char *pat) { return fuzzy_match_str(str, pat); }
 const char *nvim_get_leader_for_startcol_data(void *match, int cached) {
   String *s = get_leader_for_startcol((compl_T *)match, cached != 0);
