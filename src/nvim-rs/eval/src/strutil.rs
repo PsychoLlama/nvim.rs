@@ -361,6 +361,48 @@ pub unsafe extern "C" fn rs_string_slice(
     )
 }
 
+// =============================================================================
+// Phase 5 (eval_shim pass 4): typval_tostring
+// =============================================================================
+
+extern "C" {
+    fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
+    fn nvim_eval_tv_vstring_ro(tv: *const c_void) -> *const c_char;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+}
+
+/// VAR_STRING type constant
+const VAR_STRING_TS: c_int = 2;
+
+/// Empty string sentinel for null vstring.
+static EMPTY_STR: &[u8] = b"\0";
+
+/// Convert any typval to a string representation, never giving an error.
+///
+/// When `quotes` is true, adds quotes around string values.
+/// Returns an allocated string.
+///
+/// # Safety
+/// - `arg` may be null (returns "(does not exist)").
+/// - If non-null, must be a valid pointer to a typval_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_typval_tostring(arg: *mut c_void, quotes: bool) -> *mut c_char {
+    if arg.is_null() {
+        let msg = b"(does not exist)\0";
+        return xstrdup(msg.as_ptr() as *const c_char);
+    }
+    if !quotes && nvim_tv_get_type(arg) == VAR_STRING_TS {
+        let s = nvim_eval_tv_vstring_ro(arg.cast_const());
+        let s_nn = if s.is_null() {
+            EMPTY_STR.as_ptr() as *const c_char
+        } else {
+            s
+        };
+        return xstrdup(s_nn);
+    }
+    nvim_encode_tv2string_wrapper(arg)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

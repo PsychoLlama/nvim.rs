@@ -124,6 +124,30 @@ extern "C" {
     fn aborting() -> c_int;
     fn did_emsg_get() -> c_int;
     fn called_emsg_get() -> c_int;
+
+    // Phase 5: fill_evalarg_from_eap / clear_evalarg accessors
+    fn nvim_evalarg_init_skip(evalarg: EvalargHandle, skip: bool);
+    fn nvim_sourcing_a_script(eap: ExargHandle) -> bool;
+    fn nvim_evalarg_copy_getline_from_eap(evalarg: EvalargHandle, eap: ExargHandle);
+    fn nvim_evalarg_get_tofree(evalarg: EvalargHandle) -> *mut c_char;
+    fn nvim_evalarg_set_tofree(evalarg: EvalargHandle, val: *mut c_char);
+    fn nvim_eap_get_cmdline_tofree(eap: ExargHandle) -> *mut c_char;
+    fn nvim_eap_set_cmdline_tofree(eap: ExargHandle, val: *mut c_char);
+    fn nvim_eap_get_cmdlinep_deref(eap: ExargHandle) -> *mut c_char;
+    fn nvim_eap_set_cmdlinep_deref(eap: ExargHandle, val: *mut c_char);
+    fn xfree(ptr: *mut c_void);
+
+    // Phase 5: may_call_simple_func / eval_expr_ext accessors
+    fn nvim_call_simple_luafunc(name: *const c_char, len: usize, rettv: TypevalHandle) -> c_int;
+    fn nvim_call_simple_func(name: *const c_char, len: usize, rettv: TypevalHandle) -> c_int;
+    // These are already Rust exports (rs_skip_luafunc_name, rs_to_name_end) called via C ABI
+    fn rs_skip_luafunc_name(p: *const c_char) -> *const c_char;
+    fn rs_to_name_end(p: *const c_char, use_namespace: bool) -> *const c_char;
+    fn strstr(haystack: *const c_char, needle: *const c_char) -> *mut c_char;
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn skipdigits(p: *const c_char) -> *mut c_char;
+    /// Allocate exactly sizeof(typval_T) bytes, zeroed, for a heap typval.
+    fn nvim_alloc_typval() -> *mut c_void;
 }
 
 // eval_to_string delegates to rs_eval_to_string (defined here) -- but eval_to_string_safe
@@ -586,4 +610,175 @@ pub unsafe extern "C" fn rs_eval_expr_to_bool(expr: *const c_void, error: *mut b
     let res = tv_get_number_chk(rettv, error) != 0;
     tv_clear(rettv);
     res
+}
+
+// =============================================================================
+// Phase 5 (eval_shim pass 4): fill_evalarg_from_eap, clear_evalarg,
+//   may_call_simple_func, eval0_simple_funccal, eval_expr_ext
+// =============================================================================
+
+/// Initialize evalarg_T from exarg_T.
+///
+/// Equivalent to C `fill_evalarg_from_eap`.
+///
+/// # Safety
+/// - `evalarg` must be a valid pointer to an evalarg_T (writable).
+/// - `eap` may be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fill_evalarg_from_eap(
+    evalarg: EvalargHandle,
+    eap: ExargHandle,
+    skip: bool,
+) {
+    // Zero-init and set eval_flags based on skip.
+    nvim_evalarg_init_skip(evalarg, skip);
+    if eap.is_null() {
+        return;
+    }
+    if nvim_sourcing_a_script(eap) {
+        // Copy the getline function pointer and cookie from eap.
+        nvim_evalarg_copy_getline_from_eap(evalarg, eap);
+    }
+}
+
+/// Free evalarg resources and potentially update eap cmdline ownership.
+///
+/// Equivalent to C `clear_evalarg`.
+///
+/// # Safety
+/// - `evalarg` may be null (no-op).
+/// - `eap` may be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_evalarg(evalarg: EvalargHandle, eap: ExargHandle) {
+    if evalarg.is_null() {
+        return;
+    }
+    let tofree = nvim_evalarg_get_tofree(evalarg);
+    if tofree.is_null() {
+        return;
+    }
+    if !eap.is_null() {
+        // Keep both the old and new cmdline; nextcmd may point into the new one.
+        let old_cmdline_tofree = nvim_eap_get_cmdline_tofree(eap);
+        xfree(old_cmdline_tofree as *mut c_void);
+        let current_cmdlinep = nvim_eap_get_cmdlinep_deref(eap);
+        nvim_eap_set_cmdline_tofree(eap, current_cmdlinep);
+        nvim_eap_set_cmdlinep_deref(eap, tofree);
+    } else {
+        xfree(tofree as *mut c_void);
+    }
+    nvim_evalarg_set_tofree(evalarg, std::ptr::null_mut());
+}
+
+/// Optimization: if arg is "FuncName()" with no other args, call it directly.
+///
+/// Returns NOTDONE if the optimization doesn't apply, OK or FAIL otherwise.
+///
+/// Equivalent to C `may_call_simple_func`.
+///
+/// # Safety
+/// - `arg` must be a valid null-terminated C string.
+/// - `rettv` must be a valid typval handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_may_call_simple_func(
+    arg: *const c_char,
+    rettv: TypevalHandle,
+) -> c_int {
+    // Look for "()" in the argument string.
+    let parens_needle = b"()\0";
+    let parens = strstr(arg, parens_needle.as_ptr() as *const c_char);
+    if parens.is_null() {
+        return NOTDONE;
+    }
+
+    // After "()" there should only be whitespace then NUL.
+    let after = skipwhite(parens.add(2));
+    if *after != 0 {
+        return NOTDONE;
+    }
+
+    // Check for "v:lua.FuncName()"
+    let vlua_prefix = b"v:lua.\0";
+    if strncmp(arg, vlua_prefix.as_ptr() as *const c_char, 6) == 0 {
+        let p = arg.add(6);
+        if !std::ptr::eq(p, parens) {
+            let name_end = rs_skip_luafunc_name(p);
+            if std::ptr::eq(name_end, parens) {
+                return nvim_call_simple_luafunc(p, parens.offset_from(p) as usize, rettv);
+            }
+        }
+        return NOTDONE;
+    }
+
+    // Check for "<SNR>NNN_FuncName()" or plain "FuncName()"
+    let snr_prefix = b"<SNR>\0";
+    let p: *const c_char = if strncmp(arg, snr_prefix.as_ptr() as *const c_char, 5) == 0 {
+        skipdigits(arg.add(5))
+    } else {
+        arg
+    };
+    let name_end = rs_to_name_end(p, true);
+    if std::ptr::eq(name_end, parens as *const c_char) {
+        return nvim_call_simple_func(arg, parens.offset_from(arg) as usize, rettv);
+    }
+
+    NOTDONE
+}
+
+/// Handle zero-level expression with optimization for a simple function call.
+///
+/// Equivalent to C `eval0_simple_funccal` (static -- not exported, used internally).
+///
+/// # Safety
+/// All pointers must be valid per eval0 contract.
+unsafe fn eval0_simple_funccal_impl(
+    arg: *mut c_char,
+    rettv: TypevalHandle,
+    eap: ExargHandle,
+    evalarg: EvalargHandle,
+) -> c_int {
+    let r = rs_may_call_simple_func(arg, rettv);
+    if r == NOTDONE {
+        rs_eval0(arg, rettv, eap, evalarg)
+    } else {
+        r
+    }
+}
+
+/// Allocate a typval_T, evaluate arg into it, and return it.
+///
+/// Returns NULL if evaluation fails (FAIL result from eval0).
+///
+/// Equivalent to C `eval_expr_ext`.
+///
+/// # Safety
+/// - `arg` must be a valid null-terminated C string.
+/// - `eap` may be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_expr_ext(
+    arg: *mut c_char,
+    eap: ExargHandle,
+    use_simple_function: bool,
+) -> *mut c_void {
+    let tv = nvim_alloc_typval();
+    let tv_handle = TypevalHandle::from_ptr(tv);
+
+    let eap_skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
+
+    let evalarg = nvim_evalarg_alloc_from_eap(eap, eap_skip);
+
+    let r = if use_simple_function {
+        eval0_simple_funccal_impl(arg, tv_handle, eap, evalarg)
+    } else {
+        rs_eval0(arg, tv_handle, eap, evalarg)
+    };
+
+    if r == FAIL {
+        xfree(tv);
+        nvim_evalarg_clear_and_free(evalarg, eap);
+        return std::ptr::null_mut();
+    }
+
+    nvim_evalarg_clear_and_free(evalarg, eap);
+    tv
 }

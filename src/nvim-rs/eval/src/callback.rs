@@ -218,6 +218,64 @@ pub unsafe extern "C" fn rs_callback_from_typval(callback: CallbackHandle, arg: 
     false
 }
 
+// =============================================================================
+// Phase 5 (eval_shim pass 4): partial_free + partial_unref
+// =============================================================================
+
+extern "C" {
+    fn tv_clear(tv: TvHandleMut);
+    fn xfree(ptr: *mut c_void);
+    fn nvim_dict_unref(dict: DictHandle);
+    fn nvim_func_unref(name: *mut c_char);
+    fn nvim_func_ptr_unref(func: *mut c_void);
+    fn nvim_eval_partial_get_name(pt: PartialHandle) -> *mut c_char;
+    fn nvim_eval_partial_get_func(pt: PartialHandle) -> *mut c_void;
+    /// Decrements pt_refcount and returns true if it drops to <= 0.
+    fn nvim_partial_decref_and_check(pt: PartialHandle) -> bool;
+}
+
+/// Free all resources held by a partial_T and the partial itself.
+///
+/// Equivalent to C `partial_free` (static).
+///
+/// # Safety
+/// - `pt` must be a valid non-null pointer to a partial_T.
+unsafe fn partial_free_impl(pt: PartialHandle) {
+    let argc = nvim_eval_partial_get_argc(pt);
+    for i in 0..argc {
+        tv_clear(nvim_eval_partial_get_argv(pt, i));
+    }
+    // Free the argv array itself (pt->pt_argv).
+    // nvim_eval_partial_get_argv(pt, 0) == pt->pt_argv + 0 == pt->pt_argv.
+    xfree(nvim_eval_partial_get_argv(pt, 0));
+    nvim_dict_unref(nvim_eval_partial_get_dict(pt));
+    let name = nvim_eval_partial_get_name(pt);
+    if name.is_null() {
+        let func = nvim_eval_partial_get_func(pt);
+        nvim_func_ptr_unref(func);
+    } else {
+        nvim_func_unref(name);
+        xfree(name.cast());
+    }
+    xfree(pt);
+}
+
+/// Unreference a closure: decrement the reference count and free it when zero.
+///
+/// Equivalent to C `partial_unref`.
+///
+/// # Safety
+/// - `pt` may be null (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn rs_partial_unref(pt: PartialHandle) {
+    if pt.is_null() {
+        return;
+    }
+    if nvim_partial_decref_and_check(pt) {
+        partial_free_impl(pt);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -552,18 +552,17 @@ void eval_clear(void)
 
 #endif
 
+// Rust implementations for Phase 5 (eval_shim pass 4)
+extern void rs_fill_evalarg_from_eap(evalarg_T *evalarg, exarg_T *eap, bool skip);
+extern void rs_clear_evalarg(evalarg_T *evalarg, exarg_T *eap);
+extern int rs_may_call_simple_func(const char *arg, typval_T *rettv);
+extern typval_T *rs_eval_expr_ext(char *arg, exarg_T *eap, bool use_simple_function);
+extern void rs_partial_unref(partial_T *pt);
+extern char *rs_typval_tostring(typval_T *arg, bool quotes);
+
 void fill_evalarg_from_eap(evalarg_T *evalarg, exarg_T *eap, bool skip)
 {
-  *evalarg = (evalarg_T){ .eval_flags = skip ? 0 : EVAL_EVALUATE };
-
-  if (eap == NULL) {
-    return;
-  }
-
-  if (sourcing_a_script(eap)) {
-    evalarg->eval_getline = eap->ea_getline;
-    evalarg->eval_cookie = eap->cookie;
-  }
+  rs_fill_evalarg_from_eap(evalarg, eap, skip);
 }
 
 // Rust implementations (in eval_exec crate, eval_top module)
@@ -692,26 +691,7 @@ typval_T *eval_expr(char *arg, exarg_T *eap)
 
 typval_T *eval_expr_ext(char *arg, exarg_T *eap, const bool use_simple_function)
 {
-  typval_T *tv = xmalloc(sizeof(*tv));
-  evalarg_T evalarg;
-
-  fill_evalarg_from_eap(&evalarg, eap, eap != NULL && eap->skip);
-
-  int r = NOTDONE;
-
-  if (use_simple_function) {
-    r = eval0_simple_funccal(arg, tv, eap, &evalarg);
-  }
-  if (r == NOTDONE) {
-    r = eval0(arg, tv, eap, &evalarg);
-  }
-
-  if (r == FAIL) {
-    XFREE_CLEAR(tv);
-  }
-
-  clear_evalarg(&evalarg, eap);
-  return tv;
+  return rs_eval_expr_ext(arg, eap, use_simple_function);
 }
 
 /// Call some Vim script function and return the result in "*rettv".
@@ -1222,23 +1202,7 @@ static int eval_func(char **const arg, evalarg_T *const evalarg, char *const nam
 /// After using "evalarg" filled from "eap": free the memory.
 void clear_evalarg(evalarg_T *evalarg, exarg_T *eap)
 {
-  if (evalarg == NULL) {
-    return;
-  }
-
-  if (evalarg->eval_tofree != NULL) {
-    if (eap != NULL) {
-      // We may need to keep the original command line, e.g. for
-      // ":let" it has the variable names.  But we may also need the
-      // new one, "nextcmd" points into it.  Keep both.
-      xfree(eap->cmdline_tofree);
-      eap->cmdline_tofree = *eap->cmdlinep;
-      *eap->cmdlinep = evalarg->eval_tofree;
-    } else {
-      xfree(evalarg->eval_tofree);
-    }
-    evalarg->eval_tofree = NULL;
-  }
+  rs_clear_evalarg(evalarg, eap);
 }
 
 /// The "eval" functions have an "evalarg" argument: When NULL or
@@ -1262,32 +1226,14 @@ int eval0(char *arg, typval_T *rettv, exarg_T *eap, evalarg_T *const evalarg)
 /// the result.  Otherwise return NOTDONE.
 int may_call_simple_func(const char *arg, typval_T *rettv)
 {
-  const char *parens = strstr(arg, "()");
-  int r = NOTDONE;
-
-  // If the expression is "FuncName()" then we can skip a lot of overhead.
-  if (parens != NULL && *skipwhite(parens + 2) == NUL) {
-    if (strnequal(arg, "v:lua.", 6)) {
-      const char *p = arg + 6;
-      if (p != parens && rs_skip_luafunc_name(p) == parens) {
-        r = call_simple_luafunc(p, (size_t)(parens - p), rettv);
-      }
-    } else {
-      const char *p = strncmp(arg, "<SNR>", 5) == 0 ? skipdigits(arg + 5) : arg;
-      if (rs_to_name_end(p, true) == parens) {
-        r = call_simple_func(arg, (size_t)(parens - arg), rettv);
-      }
-    }
-  }
-  return r;
+  return rs_may_call_simple_func(arg, rettv);
 }
 
-/// Handle zero level expression with optimization for a simple function call.
-/// Same arguments and return value as eval0().
+/// Thin wrapper for remaining C callers (eval_foldexpr, eval_foldtext).
+/// Logic migrated to Rust eval0_simple_funccal_impl.
 static int eval0_simple_funccal(char *arg, typval_T *rettv, exarg_T *eap, evalarg_T *const evalarg)
 {
-  int r = may_call_simple_func(arg, rettv);
-
+  int r = rs_may_call_simple_func(arg, rettv);
   if (r == NOTDONE) {
     r = eval0(arg, rettv, eap, evalarg);
   }
@@ -1478,33 +1424,11 @@ char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
   return NULL;
 }
 
-static void partial_free(partial_T *pt)
-{
-  for (int i = 0; i < pt->pt_argc; i++) {
-    tv_clear(&pt->pt_argv[i]);
-  }
-  xfree(pt->pt_argv);
-  tv_dict_unref(pt->pt_dict);
-  if (pt->pt_name != NULL) {
-    func_unref(pt->pt_name);
-    xfree(pt->pt_name);
-  } else {
-    func_ptr_unref(pt->pt_func);
-  }
-  xfree(pt);
-}
-
 /// Unreference a closure: decrement the reference count and free it when it
 /// becomes zero.
 void partial_unref(partial_T *pt)
 {
-  if (pt == NULL) {
-    return;
-  }
-
-  if (--pt->pt_refcount <= 0) {
-    partial_free(pt);
-  }
+  rs_partial_unref(pt);
 }
 
 
@@ -2880,13 +2804,7 @@ bool invoke_prompt_interrupt(void)
 /// Returns an allocated string.
 char *typval_tostring(typval_T *arg, bool quotes)
 {
-  if (arg == NULL) {
-    return xstrdup("(does not exist)");
-  }
-  if (!quotes && arg->v_type == VAR_STRING) {
-    return xstrdup(arg->vval.v_string == NULL ? "" : arg->vval.v_string);
-  }
-  return encode_tv2string(arg, NULL);
+  return rs_typval_tostring(arg, quotes);
 }
 
 // =============================================================================
@@ -4078,7 +3996,7 @@ void nvim_eval_restore_funccal(void *entry)
 /// may_call_simple_func wrapper - accessor for Rust eval_top.
 int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv)
 {
-  return may_call_simple_func(arg, rettv);
+  return rs_may_call_simple_func(arg, rettv);
 }
 
 /// tv_list_join with newline separator - wrapper for typval2string.
@@ -4516,5 +4434,103 @@ listitem_T *nvim_list_first_item(const list_T *l)
 const char *nvim_list_item_get_string(listitem_T *item)
 {
   return tv_get_string(TV_LIST_ITEM_TV(item));
+}
+
+// =============================================================================
+// Accessors for Phase 5 (eval_shim pass 4): fill_evalarg_from_eap,
+//   clear_evalarg, may_call_simple_func, eval_expr_ext, partial_unref,
+//   typval_tostring
+// =============================================================================
+
+/// Zero-init evalarg_T and set eval_flags based on skip - accessor for Rust.
+void nvim_evalarg_init_skip(evalarg_T *evalarg, bool skip)
+{
+  *evalarg = (evalarg_T){ .eval_flags = skip ? 0 : EVAL_EVALUATE };
+}
+
+/// Check if eap is sourcing a script - accessor for Rust fill_evalarg_from_eap.
+bool nvim_sourcing_a_script(exarg_T *eap)
+{
+  return sourcing_a_script(eap);
+}
+
+/// Copy eval_getline and eval_cookie from eap to evalarg - accessor for Rust.
+void nvim_evalarg_copy_getline_from_eap(evalarg_T *evalarg, const exarg_T *eap)
+{
+  evalarg->eval_getline = eap->ea_getline;
+  evalarg->eval_cookie = eap->cookie;
+}
+
+/// Get evalarg->eval_tofree - accessor for Rust clear_evalarg.
+char *nvim_evalarg_get_tofree(evalarg_T *evalarg)
+{
+  return evalarg->eval_tofree;
+}
+
+/// Set evalarg->eval_tofree - accessor for Rust clear_evalarg.
+void nvim_evalarg_set_tofree(evalarg_T *evalarg, char *val)
+{
+  evalarg->eval_tofree = val;
+}
+
+/// Get eap->cmdline_tofree - accessor for Rust clear_evalarg.
+char *nvim_eap_get_cmdline_tofree(exarg_T *eap)
+{
+  return eap->cmdline_tofree;
+}
+
+/// Set eap->cmdline_tofree - accessor for Rust clear_evalarg.
+void nvim_eap_set_cmdline_tofree(exarg_T *eap, char *val)
+{
+  eap->cmdline_tofree = val;
+}
+
+/// Get *eap->cmdlinep (dereference the cmdlinep pointer) - accessor for Rust.
+char *nvim_eap_get_cmdlinep_deref(const exarg_T *eap)
+{
+  return *eap->cmdlinep;
+}
+
+/// Set *eap->cmdlinep = val - accessor for Rust.
+void nvim_eap_set_cmdlinep_deref(exarg_T *eap, char *val)
+{
+  *eap->cmdlinep = val;
+}
+
+/// Wrapper for call_simple_luafunc - accessor for Rust may_call_simple_func.
+int nvim_call_simple_luafunc(const char *name, size_t len, typval_T *rettv)
+{
+  return call_simple_luafunc(name, len, rettv);
+}
+
+/// Wrapper for call_simple_func - accessor for Rust may_call_simple_func.
+int nvim_call_simple_func(const char *name, size_t len, typval_T *rettv)
+{
+  return call_simple_func(name, len, rettv);
+}
+
+/// Allocate exactly sizeof(typval_T) bytes for a heap typval - accessor for Rust.
+typval_T *nvim_alloc_typval(void)
+{
+  return xmalloc(sizeof(typval_T));
+}
+
+/// Wrapper for func_unref - accessor for Rust partial_free.
+void nvim_func_unref(char *name)
+{
+  func_unref(name);
+}
+
+/// Wrapper for func_ptr_unref - accessor for Rust partial_free.
+void nvim_func_ptr_unref(ufunc_T *func)
+{
+  func_ptr_unref(func);
+}
+
+/// Decrement pt->pt_refcount and return true if it drops to <= 0.
+/// Accessor for Rust partial_unref.
+bool nvim_partial_decref_and_check(partial_T *pt)
+{
+  return --pt->pt_refcount <= 0;
 }
 
