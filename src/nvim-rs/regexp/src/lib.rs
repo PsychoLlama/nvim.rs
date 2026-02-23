@@ -167,11 +167,48 @@ static mut BRACE_COUNT: [c_int; 10] = [0; 10];
 static mut BL_MINVAL: i64 = 0;
 static mut BL_MAXVAL: i64 = 0;
 
+// --- Phase 3: NFA compiler/execution globals (moved from C to Rust) ---
+static mut POST_START: *mut c_int = std::ptr::null_mut();
+static mut POST_END: *mut c_int = std::ptr::null_mut();
+static mut POST_PTR: *mut c_int = std::ptr::null_mut();
+static mut NSTATE: c_int = 0;
+static mut ISTATE: c_int = 0;
+static mut NFA_RE_FLAGS: c_int = 0;
+static mut STATE_PTR: *mut c_void = std::ptr::null_mut();
+static mut MATCH_FOUND: c_int = 0; // C: nfa_match (renamed to avoid conflict with NFA_MATCH opcode const)
+static mut NFA_LL_INDEX: c_int = 0;
+static mut NFA_ENDP: *mut SaveSeT = std::ptr::null_mut();
+static mut NFA_TIME_LIMIT: *mut c_void = std::ptr::null_mut();
+static mut NFA_TIMED_OUT: *mut c_int = std::ptr::null_mut();
+static mut NFA_TIME_COUNT: c_int = 0;
+static mut REGEXP_ENGINE: c_int = 0;
+
 /// Expose `HAD_EOL` for external crates (e.g. search crate) that need
 /// `nvim_regexp_get_had_eol()` -- now backed by the Rust static.
 #[no_mangle]
 pub unsafe extern "C" fn nvim_regexp_get_had_eol() -> c_int {
     HAD_EOL
+}
+
+/// Called from C `nvim_regexp_alloc_nfa_prog()` to update the Rust-owned `STATE_PTR`.
+/// The C function allocates the prog struct and then calls this to set `state_ptr`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_regexp_set_state_ptr(v: *mut c_void) {
+    STATE_PTR = v;
+}
+
+/// Called from C `nvim_regexp_nfa_regtry_setup()` to set Rust-owned time globals.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_regexp_set_nfa_time_globals(tm: *mut c_void, timed_out: *mut c_int) {
+    NFA_TIME_LIMIT = tm;
+    NFA_TIMED_OUT = timed_out;
+    NFA_TIME_COUNT = 0;
+}
+
+/// Called from C `nvim_regexp_nfa_regexec_both_init_states()` to reset NSTATE.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_regexp_reset_nstate() {
+    NSTATE = 0;
 }
 
 /// Check for an equivalence class name "[=a=]".  `pp` points to the '['.
@@ -7039,22 +7076,10 @@ const FAIL: c_int = 0;
 #[allow(dead_code)]
 extern "C" {
     // NFA postfix buffer accessors
-    fn nvim_regexp_get_post_start() -> *mut c_int;
-    fn nvim_regexp_set_post_start(p: *mut c_int);
-    fn nvim_regexp_get_post_ptr() -> *mut c_int;
-    fn nvim_regexp_set_post_ptr(p: *mut c_int);
-    fn nvim_regexp_get_post_end() -> *mut c_int;
-    fn nvim_regexp_set_post_end(p: *mut c_int);
 
     // NFA state count accessors
-    fn nvim_regexp_get_nstate() -> c_int;
-    fn nvim_regexp_set_nstate(v: c_int);
-    fn nvim_regexp_get_istate() -> c_int;
-    fn nvim_regexp_set_istate(v: c_int);
 
     // NFA flags accessors
-    fn nvim_regexp_get_nfa_re_flags() -> c_int;
-    fn nvim_regexp_set_nfa_re_flags(v: c_int);
 
     // rex NFA fields
     fn nvim_regexp_set_rex_nfa_has_zend(v: c_int);
@@ -7065,14 +7090,14 @@ extern "C" {
 
 /// Emit a value into the NFA postfix buffer, growing if needed.
 unsafe fn nfa_emit(c: c_int) {
-    let post_ptr = nvim_regexp_get_post_ptr();
-    let post_end = nvim_regexp_get_post_end();
+    let post_ptr = POST_PTR;
+    let post_end = POST_END;
     if post_ptr >= post_end {
         rs_realloc_post_list();
     }
-    let post_ptr = nvim_regexp_get_post_ptr();
+    let post_ptr = POST_PTR;
     *post_ptr = c;
-    nvim_regexp_set_post_ptr(post_ptr.add(1));
+    POST_PTR = post_ptr.add(1);
 }
 
 /// Initialize regexp compile state (shared between BT and NFA engines).
@@ -7102,8 +7127,8 @@ unsafe fn regcomp_start(expr: *mut u8, re_flags: c_int) {
 /// Initialize internal variables before NFA compilation.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nfa_regcomp_start(expr: *mut u8, re_flags: c_int) {
-    nvim_regexp_set_nstate(0);
-    nvim_regexp_set_istate(0);
+    NSTATE = 0;
+    ISTATE = 0;
 
     // A reasonable estimation for maximum size
     let nstate_max = (strlen(expr.cast::<c_char>()) + 1) * 25 + 1000;
@@ -7112,9 +7137,9 @@ pub unsafe extern "C" fn rs_nfa_regcomp_start(expr: *mut u8, re_flags: c_int) {
     let postfix_size = std::mem::size_of::<c_int>() * nstate_max;
 
     let post_start = xmalloc(postfix_size).cast::<c_int>();
-    nvim_regexp_set_post_start(post_start);
-    nvim_regexp_set_post_ptr(post_start);
-    nvim_regexp_set_post_end(post_start.add(nstate_max));
+    POST_START = post_start;
+    POST_PTR = post_start;
+    POST_END = post_start.add(nstate_max);
     WANTS_NFA = 0;
     nvim_regexp_set_rex_nfa_has_zend(0);
     nvim_regexp_set_rex_nfa_has_backref(0);
@@ -7126,9 +7151,9 @@ pub unsafe extern "C" fn rs_nfa_regcomp_start(expr: *mut u8, re_flags: c_int) {
 /// Grow the NFA postfix buffer by 1.5x.
 #[no_mangle]
 pub unsafe extern "C" fn rs_realloc_post_list() {
-    let post_start = nvim_regexp_get_post_start();
-    let post_ptr = nvim_regexp_get_post_ptr();
-    let post_end = nvim_regexp_get_post_end();
+    let post_start = POST_START;
+    let post_ptr = POST_PTR;
+    let post_end = POST_END;
 
     let old_max = post_end.offset_from(post_start) as usize;
     let new_max = old_max * 3 / 2;
@@ -7139,9 +7164,9 @@ pub unsafe extern "C" fn rs_realloc_post_list() {
     .cast::<c_int>();
 
     let ptr_offset = post_ptr.offset_from(post_start) as usize;
-    nvim_regexp_set_post_ptr(new_start.add(ptr_offset));
-    nvim_regexp_set_post_end(new_start.add(new_max));
-    nvim_regexp_set_post_start(new_start);
+    POST_PTR = new_start.add(ptr_offset);
+    POST_END = new_start.add(new_max);
+    POST_START = new_start;
 }
 
 /// Emit a character followed by `NFA_CONCAT` into the postfix buffer.
@@ -8452,8 +8477,8 @@ unsafe fn nfa_handle_collection(mut extra: c_int, old_rp: *mut c_char) -> c_int 
                         nfa_emit(1);
                     } else {
                         // Remove previous NFA_CONCAT
-                        let pp = nvim_regexp_get_post_ptr();
-                        nvim_regexp_set_post_ptr(pp.sub(1));
+                        let pp = POST_PTR;
+                        POST_PTR = pp.sub(1);
                     }
                     nfa_emit(endc);
                     nfa_emit(NFA_RANGE);
@@ -9054,15 +9079,14 @@ extern "C" {
 #[inline]
 #[allow(clippy::cast_possible_truncation)] // postfix array index always fits in c_int
 unsafe fn post_pos() -> c_int {
-    let pos = (nvim_regexp_get_post_ptr() as usize - nvim_regexp_get_post_start() as usize)
-        / core::mem::size_of::<c_int>();
+    let pos = (POST_PTR as usize - POST_START as usize) / core::mem::size_of::<c_int>();
     pos as c_int
 }
 
 /// Helper: set postfix pointer to a given index from start.
 #[inline]
 unsafe fn set_post_pos(index: c_int) {
-    nvim_regexp_set_post_ptr(nvim_regexp_get_post_start().add(index as usize));
+    POST_PTR = POST_START.add(index as usize);
 }
 
 /// Parse a piece (atom + optional quantifier).
@@ -9162,7 +9186,7 @@ unsafe fn nfa_regpiece() -> c_int {
             return OK;
         } else {
             // Check if too complex for NFA engine
-            if (nvim_regexp_get_nfa_re_flags() & RE_AUTO) != 0
+            if (NFA_RE_FLAGS & RE_AUTO) != 0
                 && (maxval > 500 || maxval > minval + 200)
                 && (maxval != MAX_LIMIT && minval < 200)
                 && WANTS_NFA == 0
@@ -9368,7 +9392,7 @@ pub unsafe extern "C" fn rs_re2post() -> *mut c_int {
         return core::ptr::null_mut();
     }
     nfa_emit(NFA_MOPEN);
-    nvim_regexp_get_post_start()
+    POST_START
 }
 
 // ---------------------------------------------------------------------------
@@ -9398,8 +9422,6 @@ struct FragT {
 // ---- Phase 5 C accessors ----
 extern "C" {
     // state_ptr global (points into nfa_regprog_T.state[])
-    fn nvim_regexp_get_state_ptr() -> NfaStateHandle;
-    fn nvim_regexp_set_state_ptr(v: NfaStateHandle);
 
     // nfa_state_T field accessors
     fn nvim_nfa_state_get_c(s: NfaStateHandle) -> c_int;
@@ -9418,9 +9440,6 @@ extern "C" {
     fn nvim_nfa_state_out_addr(s: NfaStateHandle) -> *mut NfaStateHandle;
     fn nvim_nfa_state_out1_addr(s: NfaStateHandle) -> *mut NfaStateHandle;
 
-    // state_ptr[index] — returns pointer to the `index`-th state.
-    fn nvim_regexp_state_ptr_add(index: c_int) -> NfaStateHandle;
-
     // Error messages for post2nfa
     fn nvim_regexp_emsg_e874(); // E874: Could not pop the stack
     fn nvim_regexp_emsg_e875(); // E875: too many states left on stack
@@ -9429,12 +9448,15 @@ extern "C" {
 
 /// Allocate and initialize an NFA state from the pre-allocated state array.
 unsafe fn nfa_alloc_state(c: c_int, out: NfaStateHandle, out1: NfaStateHandle) -> NfaStateHandle {
-    let istate = nvim_regexp_get_istate();
-    if istate >= nvim_regexp_get_nstate() {
+    let istate = ISTATE;
+    if istate >= NSTATE {
         return core::ptr::null_mut();
     }
-    let s = nvim_regexp_state_ptr_add(istate);
-    nvim_regexp_set_istate(istate + 1);
+    let s = STATE_PTR
+        .cast::<NfaStateT>()
+        .add(istate as usize)
+        .cast::<c_void>();
+    ISTATE = istate + 1;
     nvim_nfa_state_set_c(s, c);
     nvim_nfa_state_set_out(s, out);
     nvim_nfa_state_set_out1(s, out1);
@@ -9638,7 +9660,7 @@ pub unsafe extern "C" fn rs_post2nfa(
             core::ptr::null(),
         )
     } else {
-        let nstate = nvim_regexp_get_nstate();
+        let nstate = NSTATE;
         let count = (nstate + 1) as usize;
         let s = xmalloc(count * core::mem::size_of::<FragT>()).cast::<FragT>();
         (s, s, s.add(count).cast_const())
@@ -9674,7 +9696,7 @@ pub unsafe extern "C" fn rs_post2nfa(
 
             NFA_OR => {
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    NSTATE += 1;
                     p = p.add(1);
                     continue;
                 }
@@ -9706,7 +9728,7 @@ pub unsafe extern "C" fn rs_post2nfa(
 
             NFA_STAR => {
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    NSTATE += 1;
                     p = p.add(1);
                     continue;
                 }
@@ -9732,7 +9754,7 @@ pub unsafe extern "C" fn rs_post2nfa(
 
             NFA_STAR_NONGREEDY => {
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    NSTATE += 1;
                     p = p.add(1);
                     continue;
                 }
@@ -9758,7 +9780,7 @@ pub unsafe extern "C" fn rs_post2nfa(
 
             NFA_QUEST => {
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    NSTATE += 1;
                     p = p.add(1);
                     continue;
                 }
@@ -9786,7 +9808,7 @@ pub unsafe extern "C" fn rs_post2nfa(
 
             NFA_QUEST_NONGREEDY => {
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    NSTATE += 1;
                     p = p.add(1);
                     continue;
                 }
@@ -9814,7 +9836,7 @@ pub unsafe extern "C" fn rs_post2nfa(
 
             NFA_END_COLL | NFA_END_NEG_COLL => {
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    NSTATE += 1;
                     p = p.add(1);
                     continue;
                 }
@@ -9871,7 +9893,7 @@ pub unsafe extern "C" fn rs_post2nfa(
 
             NFA_EMPTY => {
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    NSTATE += 1;
                     p = p.add(1);
                     continue;
                 }
@@ -9891,7 +9913,7 @@ pub unsafe extern "C" fn rs_post2nfa(
                 p = p.add(1);
                 let mut n = *p;
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + n);
+                    NSTATE += n;
                     p = p.add(1);
                     continue;
                 }
@@ -9945,7 +9967,7 @@ pub unsafe extern "C" fn rs_post2nfa(
                     0
                 };
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + if pattern { 4 } else { 2 });
+                    NSTATE += if pattern { 4 } else { 2 };
                     p = p.add(1);
                     continue;
                 }
@@ -10006,7 +10028,7 @@ pub unsafe extern "C" fn rs_post2nfa(
             | NFA_ZOPEN1 | NFA_ZOPEN2 | NFA_ZOPEN3 | NFA_ZOPEN4 | NFA_ZOPEN5 | NFA_ZOPEN6
             | NFA_ZOPEN7 | NFA_ZOPEN8 | NFA_ZOPEN9 | NFA_NOPEN => {
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 2);
+                    NSTATE += 2;
                     p = p.add(1);
                     continue;
                 }
@@ -10079,7 +10101,7 @@ pub unsafe extern "C" fn rs_post2nfa(
             | NFA_BACKREF6 | NFA_BACKREF7 | NFA_BACKREF8 | NFA_BACKREF9 | NFA_ZREF1 | NFA_ZREF2
             | NFA_ZREF3 | NFA_ZREF4 | NFA_ZREF5 | NFA_ZREF6 | NFA_ZREF7 | NFA_ZREF8 | NFA_ZREF9 => {
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 2);
+                    NSTATE += 2;
                     p = p.add(1);
                     continue;
                 }
@@ -10106,7 +10128,7 @@ pub unsafe extern "C" fn rs_post2nfa(
                 p = p.add(1);
                 let n = *p; // lnum, col, or mark name
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    NSTATE += 1;
                     p = p.add(1);
                     continue;
                 }
@@ -10127,7 +10149,7 @@ pub unsafe extern "C" fn rs_post2nfa(
             // NFA_ZSTART, NFA_ZEND, and all other operands
             _ => {
                 if sizing {
-                    nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+                    NSTATE += 1;
                     p = p.add(1);
                     continue;
                 }
@@ -10147,7 +10169,7 @@ pub unsafe extern "C" fn rs_post2nfa(
     }
 
     if sizing {
-        nvim_regexp_set_nstate(nvim_regexp_get_nstate() + 1);
+        NSTATE += 1;
         // Return value ignored during size-counting pass
         return core::ptr::null_mut();
     }
@@ -10166,16 +10188,19 @@ pub unsafe extern "C" fn rs_post2nfa(
         return core::ptr::null_mut();
     }
 
-    let istate = nvim_regexp_get_istate();
-    if istate >= nvim_regexp_get_nstate() {
+    let istate = ISTATE;
+    if istate >= NSTATE {
         xfree(stack.cast());
         nvim_regexp_emsg_e876();
         return core::ptr::null_mut();
     }
 
     // Create the match state
-    let matchstate = nvim_regexp_state_ptr_add(istate);
-    nvim_regexp_set_istate(istate + 1);
+    let matchstate = STATE_PTR
+        .cast::<NfaStateT>()
+        .add(istate as usize)
+        .cast::<c_void>();
+    ISTATE = istate + 1;
     nvim_nfa_state_set_c(matchstate, NFA_MATCH);
     nvim_nfa_state_set_out(matchstate, core::ptr::null_mut());
     nvim_nfa_state_set_out1(matchstate, core::ptr::null_mut());
@@ -10523,30 +10548,30 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
         return core::ptr::null_mut();
     }
 
-    nvim_regexp_set_nfa_re_flags(re_flags);
+    NFA_RE_FLAGS = re_flags;
     rs_nfa_regcomp_start(expr, re_flags);
 
     // Build postfix form of the regexp. Needed to build the NFA (and count its size).
     let postfix = rs_re2post();
     if postfix.is_null() {
         // Cascaded (syntax?) error — clean up and return NULL
-        let post_start = nvim_regexp_get_post_start();
+        let post_start = POST_START;
         xfree(post_start.cast());
-        nvim_regexp_set_post_start(core::ptr::null_mut());
-        nvim_regexp_set_post_ptr(core::ptr::null_mut());
-        nvim_regexp_set_post_end(core::ptr::null_mut());
-        nvim_regexp_set_state_ptr(core::ptr::null_mut());
+        POST_START = core::ptr::null_mut();
+        POST_PTR = core::ptr::null_mut();
+        POST_END = core::ptr::null_mut();
+        STATE_PTR = core::ptr::null_mut();
         return core::ptr::null_mut();
     }
 
-    let post_ptr_val = nvim_regexp_get_post_ptr();
+    let post_ptr_val = POST_PTR;
 
     // PASS 1: Count number of NFA states in "nstate". Do not build the NFA.
     rs_post2nfa(postfix, post_ptr_val, 1);
 
     // Allocate the regprog with space for the compiled regexp.
     // This also sets state_ptr = prog->state.
-    let nstate_val = nvim_regexp_get_nstate();
+    let nstate_val = NSTATE;
     let prog = nvim_regexp_alloc_nfa_prog(nstate_val);
     nvim_nfa_prog_set_re_in_use(prog, 0);
 
@@ -10555,12 +10580,12 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
     if start.is_null() {
         // Build failed — free prog, clean up, return NULL
         xfree(prog);
-        let post_start = nvim_regexp_get_post_start();
+        let post_start = POST_START;
         xfree(post_start.cast());
-        nvim_regexp_set_post_start(core::ptr::null_mut());
-        nvim_regexp_set_post_ptr(core::ptr::null_mut());
-        nvim_regexp_set_post_end(core::ptr::null_mut());
-        nvim_regexp_set_state_ptr(core::ptr::null_mut());
+        POST_START = core::ptr::null_mut();
+        POST_PTR = core::ptr::null_mut();
+        POST_END = core::ptr::null_mut();
+        STATE_PTR = core::ptr::null_mut();
         return core::ptr::null_mut();
     }
 
@@ -10584,12 +10609,12 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
     nvim_nfa_prog_set_pattern(prog, nvim_regexp_xstrdup(expr.cast()));
 
     // Clean up
-    let post_start = nvim_regexp_get_post_start();
+    let post_start = POST_START;
     xfree(post_start.cast());
-    nvim_regexp_set_post_start(core::ptr::null_mut());
-    nvim_regexp_set_post_ptr(core::ptr::null_mut());
-    nvim_regexp_set_post_end(core::ptr::null_mut());
-    nvim_regexp_set_state_ptr(core::ptr::null_mut());
+    POST_START = core::ptr::null_mut();
+    POST_PTR = core::ptr::null_mut();
+    POST_END = core::ptr::null_mut();
+    STATE_PTR = core::ptr::null_mut();
 
     prog
 }
@@ -10909,34 +10934,15 @@ extern "C" {
     fn nvim_nfa_list_get_id(l: NfaListHandle) -> c_int;
 
     // NFA execution globals
-    fn nvim_regexp_get_nfa_match() -> c_int;
-    fn nvim_regexp_set_nfa_match(v: c_int);
-    fn nvim_regexp_get_nfa_ll_index() -> c_int;
-    fn nvim_regexp_set_nfa_ll_index(v: c_int);
     fn nvim_regexp_get_rex_nfa_alt_listid() -> c_int;
     fn nvim_regexp_set_rex_nfa_alt_listid(v: c_int);
 
     // Memory allocation
     fn nvim_regexp_xmalloc(size: u64) -> *mut c_void;
 
-    // nfa_endp accessor
-    fn nvim_regexp_get_nfa_endp() -> *mut c_void;
-    fn nvim_regexp_set_nfa_endp(v: *mut c_void);
-    fn nvim_regexp_get_nfa_endp_pos_lnum() -> i32;
-    fn nvim_regexp_get_nfa_endp_pos_col() -> i32;
-    fn nvim_regexp_get_nfa_endp_ptr() -> *mut u8;
-
     // nfa_list_T memory management
     fn nvim_nfa_list_alloc_threads(nstate: c_int) -> *mut c_void;
     fn nvim_nfa_list_free_threads(t: *mut c_void);
-
-    // nfa_time_limit / nfa_timed_out / nfa_time_count
-    fn nvim_regexp_get_nfa_time_limit() -> *mut c_void;
-    fn nvim_regexp_set_nfa_time_limit(v: *mut c_void);
-    fn nvim_regexp_get_nfa_timed_out() -> *mut c_int;
-    fn nvim_regexp_set_nfa_timed_out(v: *mut c_int);
-    fn nvim_regexp_get_nfa_time_count() -> c_int;
-    fn nvim_regexp_set_nfa_time_count(v: c_int);
 }
 
 // ============================================================================
@@ -11335,7 +11341,7 @@ unsafe fn match_follows_t(startstate: *const NfaStateT, depth: c_int) -> bool {
 
 /// Return true if "state" is already in list "l" (typed version).
 unsafe fn state_in_list_t(l: *mut NfaListT, state: *mut NfaStateT, subs: *const RegsubsT) -> bool {
-    let ll_index = nvim_regexp_get_nfa_ll_index();
+    let ll_index = NFA_LL_INDEX;
     if (*state).lastlist[ll_index as usize] == (*l).id
         && (nvim_regexp_get_rex_nfa_has_backref() == 0
             || has_state_with_pos_t(l, state, subs, core::ptr::null()))
@@ -11392,12 +11398,17 @@ unsafe fn addstate_t(
             // "^" won't match past end-of-line, don't bother trying.
             let input = nvim_regexp_get_rex_input();
             let line = nvim_regexp_get_rex_line();
-            let nfa_endp_ptr = nvim_regexp_get_nfa_endp();
+            let nfa_endp_ptr = NFA_ENDP;
             if input > line
                 && *input != 0
                 && (nfa_endp_ptr.is_null()
                     || nvim_regexp_is_reg_multi() == 0
-                    || nvim_regexp_get_rex_lnum() == nvim_regexp_get_nfa_endp_pos_lnum())
+                    || nvim_regexp_get_rex_lnum()
+                        == (if NFA_ENDP.is_null() {
+                            -1i32
+                        } else {
+                            (*NFA_ENDP).se_u.pos.lnum
+                        }))
             {
                 // skip_add
                 ADDSTATE_DEPTH -= 1;
@@ -11509,7 +11520,7 @@ unsafe fn addstate_default_add(
     mut found: bool,
     skipped: *mut bool,
 ) -> *mut RegsubsT {
-    let ll_index = nvim_regexp_get_nfa_ll_index() as usize;
+    let ll_index = NFA_LL_INDEX as usize;
     let state_c = (*state).c;
 
     if (*state).lastlist[ll_index] == (*l).id && state_c != NFA_SKIP {
@@ -11904,7 +11915,7 @@ pub unsafe extern "C" fn rs_state_in_list(
     subs_norm: *mut c_void,
     subs_synt: *mut c_void,
 ) -> c_int {
-    let ll_index = nvim_regexp_get_nfa_ll_index();
+    let ll_index = NFA_LL_INDEX;
     if nvim_nfa_state_get_lastlist(state, ll_index) == nvim_nfa_list_get_id(l)
         && (nvim_regexp_get_rex_nfa_has_backref() == 0
             || rs_has_state_with_pos(
@@ -12108,9 +12119,9 @@ pub unsafe extern "C" fn rs_find_match_text(
 /// Migrated from C `nfa_did_time_out()`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nfa_did_time_out() -> c_int {
-    let time_limit = nvim_regexp_get_nfa_time_limit();
+    let time_limit = NFA_TIME_LIMIT;
     if !time_limit.is_null() && nvim_regexp_call_profile_passed_limit(time_limit) != 0 {
-        let timed_out = nvim_regexp_get_nfa_timed_out();
+        let timed_out = NFA_TIMED_OUT;
         if !timed_out.is_null() {
             *timed_out = 1; // true
         }
@@ -12167,9 +12178,9 @@ unsafe fn recursive_regmatch_t(
     let save_reginput_col =
         nvim_regexp_get_rex_input().offset_from(nvim_regexp_get_rex_line()) as c_int;
     let save_reglnum = nvim_regexp_get_rex_lnum();
-    let save_nfa_match = nvim_regexp_get_nfa_match();
+    let save_nfa_match = MATCH_FOUND;
     let save_nfa_listid = nvim_regexp_get_rex_nfa_listid();
-    let save_nfa_endp = nvim_regexp_get_nfa_endp();
+    let save_nfa_endp = NFA_ENDP;
 
     // Allocate endpos on the stack
     let mut endpos_storage: SaveSeT = core::mem::zeroed();
@@ -12266,7 +12277,7 @@ unsafe fn recursive_regmatch_t(
 
     // Have to clear the lastlist field of the NFA nodes, so that
     // nfa_regmatch() and addstate() can run properly after recursion.
-    let nfa_ll_index = nvim_regexp_get_nfa_ll_index();
+    let nfa_ll_index = NFA_LL_INDEX;
     if nfa_ll_index == 1 {
         // Already calling nfa_regmatch() recursively.  Save the lastlist[1]
         // values and clear them.
@@ -12284,7 +12295,7 @@ unsafe fn recursive_regmatch_t(
     } else {
         // First recursive nfa_regmatch() call, switch to the second lastlist
         // entry.
-        nvim_regexp_set_nfa_ll_index(nfa_ll_index + 1);
+        NFA_LL_INDEX = nfa_ll_index + 1;
         let listid = nvim_regexp_get_rex_nfa_listid();
         let alt_listid = nvim_regexp_get_rex_nfa_alt_listid();
         if listid <= alt_listid {
@@ -12294,14 +12305,14 @@ unsafe fn recursive_regmatch_t(
 
     // Call rs_nfa_regmatch() to check if the current concat matches at this
     // position. The concat ends with the node NFA_END_INVISIBLE.
-    nvim_regexp_set_nfa_endp(endposp.cast::<c_void>());
+    NFA_ENDP = endposp;
     let state_out = (*state_ptr).out;
     let result = rs_nfa_regmatch(prog, state_out.cast::<c_void>(), submatch, m);
 
     if need_restore {
         nfa_restore_listids_t(prog, *listids);
     } else {
-        nvim_regexp_set_nfa_ll_index(nvim_regexp_get_nfa_ll_index() - 1);
+        NFA_LL_INDEX -= 1;
         nvim_regexp_set_rex_nfa_alt_listid(nvim_regexp_get_rex_nfa_listid());
     }
 
@@ -12312,10 +12323,10 @@ unsafe fn recursive_regmatch_t(
     }
     nvim_regexp_set_rex_input(nvim_regexp_get_rex_line().offset(save_reginput_col as isize));
     if result != NFA_TOO_EXPENSIVE {
-        nvim_regexp_set_nfa_match(save_nfa_match);
+        MATCH_FOUND = save_nfa_match;
         nvim_regexp_set_rex_nfa_listid(save_nfa_listid);
     }
-    nvim_regexp_set_nfa_endp(save_nfa_endp);
+    NFA_ENDP = save_nfa_endp;
 
     result
 }
@@ -12480,7 +12491,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
         return 0; // false
     }
 
-    nvim_regexp_set_nfa_match(0); // nfa_match = false
+    MATCH_FOUND = 0; // nfa_match = false
 
     // Allocate memory for the lists of nodes.
     let nstate = nvim_nfa_prog_get_nstate(prog);
@@ -12519,14 +12530,14 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
         r = addstate_o(thislist, start, m, core::ptr::null_mut(), 0);
     }
     if r.is_null() {
-        nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+        MATCH_FOUND = NFA_TOO_EXPENSIVE;
         // goto theend
         nvim_nfa_list_free_threads(list0);
         nvim_nfa_list_free_threads(list1);
         if !listids.is_null() {
             nvim_regexp_xfree(listids as *mut c_void);
         }
-        return nvim_regexp_get_nfa_match();
+        return MATCH_FOUND;
     }
 
     // Run for each character.
@@ -12549,7 +12560,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
         let nfa_listid = nvim_regexp_get_rex_nfa_listid() + 1;
         nvim_regexp_set_rex_nfa_listid(nfa_listid);
         if nvim_nfa_prog_get_re_engine(prog) == AUTOMATIC_ENGINE && nfa_listid >= NFA_MAX_STATES {
-            nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+            MATCH_FOUND = NFA_TOO_EXPENSIVE;
             break 'outer;
         }
 
@@ -12569,11 +12580,11 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
             if nvim_regexp_get_got_int() != 0 {
                 break;
             }
-            if !nvim_regexp_get_nfa_time_limit().is_null() {
-                let tc = nvim_regexp_get_nfa_time_count() + 1;
-                nvim_regexp_set_nfa_time_count(tc);
+            if !NFA_TIME_LIMIT.is_null() {
+                let tc = NFA_TIME_COUNT + 1;
+                NFA_TIME_COUNT = tc;
                 if tc == 20 {
-                    nvim_regexp_set_nfa_time_count(0);
+                    NFA_TIME_COUNT = 0;
                     if rs_nfa_did_time_out() != 0 {
                         break;
                     }
@@ -12600,7 +12611,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     {
                         // break from match arm - continue to next state
                     } else {
-                        nvim_regexp_set_nfa_match(1); // true
+                        MATCH_FOUND = 1; // true
                         copy_sub_o(
                             nvim_regexp_regsubs_get_norm(submatch),
                             nvim_nfa_thread_get_subs_norm(thislist, listidx),
@@ -12627,20 +12638,35 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     || x == NFA_END_PATTERN =>
                 {
                     // Check if nfa_endp matches current position
-                    let endp = nvim_regexp_get_nfa_endp();
+                    let endp = NFA_ENDP;
                     if !endp.is_null() {
                         if nvim_regexp_is_reg_multi() != 0 {
-                            if nvim_regexp_get_rex_lnum() != nvim_regexp_get_nfa_endp_pos_lnum()
+                            if nvim_regexp_get_rex_lnum()
+                                != (if NFA_ENDP.is_null() {
+                                    -1i32
+                                } else {
+                                    (*NFA_ENDP).se_u.pos.lnum
+                                })
                                 || (nvim_regexp_get_rex_input() as isize
                                     - nvim_regexp_get_rex_line() as isize)
                                     as i32
-                                    != nvim_regexp_get_nfa_endp_pos_col()
+                                    != (if NFA_ENDP.is_null() {
+                                        -1i32
+                                    } else {
+                                        (*NFA_ENDP).se_u.pos.col
+                                    })
                             {
                                 // no match at required position
                                 listidx += 1;
                                 continue;
                             }
-                        } else if nvim_regexp_get_rex_input() != nvim_regexp_get_nfa_endp_ptr() {
+                        } else if nvim_regexp_get_rex_input()
+                            != (if NFA_ENDP.is_null() {
+                                core::ptr::null_mut()
+                            } else {
+                                (*NFA_ENDP).se_u.ptr
+                            })
+                        {
                             listidx += 1;
                             continue;
                         }
@@ -12658,7 +12684,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             );
                         }
                     }
-                    nvim_regexp_set_nfa_match(1); // true
+                    MATCH_FOUND = 1; // true
                     if nvim_nfa_list_get_n(nextlist) == 0 {
                         clen = 0;
                     }
@@ -12709,7 +12735,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             &mut listids_len,
                         );
                         if result == NFA_TOO_EXPENSIVE {
-                            nvim_regexp_set_nfa_match(result);
+                            MATCH_FOUND = result;
                             break 'outer;
                         }
 
@@ -12764,7 +12790,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             .is_null()
                         {
                             nvim_regexp_free_pim(pim);
-                            nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+                            MATCH_FOUND = NFA_TOO_EXPENSIVE;
                             break 'outer;
                         }
                         nvim_regexp_free_pim(pim);
@@ -12808,7 +12834,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             &mut listids_len,
                         );
                         if result == NFA_TOO_EXPENSIVE {
-                            nvim_regexp_set_nfa_match(result);
+                            MATCH_FOUND = result;
                             break 'outer;
                         }
                         if result != 0 {
@@ -13837,7 +13863,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 if r.is_null() {
-                    nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+                    MATCH_FOUND = NFA_TOO_EXPENSIVE;
                     break 'outer;
                 }
             }
@@ -13846,7 +13872,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
         } // while listidx < thislist->n
 
         // Look for the start of a match in the current position
-        if nvim_regexp_get_nfa_match() == 0
+        if MATCH_FOUND == 0
             && ((toplevel
                 && nvim_regexp_get_rex_lnum() == 0
                 && clen != 0
@@ -13854,17 +13880,35 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     || (nvim_regexp_get_rex_input() as isize
                         - nvim_regexp_get_rex_line() as isize)
                         < nvim_regexp_get_rex_reg_maxcol() as isize))
-                || (!nvim_regexp_get_nfa_endp().is_null()
+                || (!NFA_ENDP.is_null()
                     && (if nvim_regexp_is_reg_multi() != 0 {
-                        nvim_regexp_get_rex_lnum() < nvim_regexp_get_nfa_endp_pos_lnum()
-                            || (nvim_regexp_get_rex_lnum() == nvim_regexp_get_nfa_endp_pos_lnum()
+                        nvim_regexp_get_rex_lnum()
+                            < (if NFA_ENDP.is_null() {
+                                -1i32
+                            } else {
+                                (*NFA_ENDP).se_u.pos.lnum
+                            })
+                            || (nvim_regexp_get_rex_lnum()
+                                == (if NFA_ENDP.is_null() {
+                                    -1i32
+                                } else {
+                                    (*NFA_ENDP).se_u.pos.lnum
+                                })
                                 && ((nvim_regexp_get_rex_input() as isize
                                     - nvim_regexp_get_rex_line() as isize)
                                     as i32)
-                                    < nvim_regexp_get_nfa_endp_pos_col())
+                                    < (if NFA_ENDP.is_null() {
+                                        -1i32
+                                    } else {
+                                        (*NFA_ENDP).se_u.pos.col
+                                    }))
                     } else {
                         (nvim_regexp_get_rex_input() as usize)
-                            < (nvim_regexp_get_nfa_endp_ptr() as usize)
+                            < ((if NFA_ENDP.is_null() {
+                                core::ptr::null_mut()
+                            } else {
+                                (*NFA_ENDP).se_u.ptr
+                            }) as usize)
                     })))
         {
             if toplevel {
@@ -13924,12 +13968,12 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     )
                     .is_null()
                     {
-                        nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+                        MATCH_FOUND = NFA_TOO_EXPENSIVE;
                         break 'outer;
                     }
                 }
             } else if addstate_o(nextlist, start, m, core::ptr::null_mut(), clen).is_null() {
-                nvim_regexp_set_nfa_match(NFA_TOO_EXPENSIVE);
+                MATCH_FOUND = NFA_TOO_EXPENSIVE;
                 break 'outer;
             }
         }
@@ -13939,9 +13983,14 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
             let new_input = nvim_regexp_get_rex_input().offset(clen as isize);
             nvim_regexp_set_rex_input(new_input);
         } else if go_to_nextline
-            || (!nvim_regexp_get_nfa_endp().is_null()
+            || (!NFA_ENDP.is_null()
                 && nvim_regexp_is_reg_multi() != 0
-                && nvim_regexp_get_rex_lnum() < nvim_regexp_get_nfa_endp_pos_lnum())
+                && nvim_regexp_get_rex_lnum()
+                    < (if NFA_ENDP.is_null() {
+                        -1i32
+                    } else {
+                        (*NFA_ENDP).se_u.pos.lnum
+                    }))
         {
             rs_reg_nextline();
         } else {
@@ -13955,11 +14004,11 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
             break 'outer;
         }
         // Check for timeout once every twenty times
-        if !nvim_regexp_get_nfa_time_limit().is_null() {
-            let tc = nvim_regexp_get_nfa_time_count() + 1;
-            nvim_regexp_set_nfa_time_count(tc);
+        if !NFA_TIME_LIMIT.is_null() {
+            let tc = NFA_TIME_COUNT + 1;
+            NFA_TIME_COUNT = tc;
             if tc == 20 {
-                nvim_regexp_set_nfa_time_count(0);
+                NFA_TIME_COUNT = 0;
                 if rs_nfa_did_time_out() != 0 {
                     break 'outer;
                 }
@@ -13974,7 +14023,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
         nvim_regexp_xfree(listids as *mut c_void);
     }
 
-    nvim_regexp_get_nfa_match()
+    MATCH_FOUND
 }
 
 /// Helper: check if `c` is an ASCII digit (0-9).
@@ -14807,8 +14856,6 @@ pub unsafe extern "C" fn rs_vim_regexec_multi(
 const NFA_ENGINE: c_int = 2;
 
 extern "C" {
-    fn nvim_regexp_get_regexp_engine() -> c_int;
-    fn nvim_regexp_set_regexp_engine(v: c_int);
     fn nvim_regexp_set_rex_reg_buf_curbuf();
     fn nvim_regexp_get_called_emsg() -> c_int;
     fn nvim_regexp_call_nfa_regcomp(expr: *const u8, re_flags: c_int) -> *mut c_void;
@@ -14827,7 +14874,7 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
     let mut expr = expr_arg;
 
     // Set regexp_engine from p_re
-    nvim_regexp_set_regexp_engine(nvim_regexp_get_p_re());
+    REGEXP_ENGINE = nvim_regexp_get_p_re();
 
     // Check for prefix "\%#=", that sets the regexp engine
     if strncmp(expr.cast::<c_char>(), c"\\%#=".as_ptr(), 4) == 0 {
@@ -14837,11 +14884,11 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
             || newengine == BACKTRACKING_ENGINE
             || newengine == NFA_ENGINE
         {
-            nvim_regexp_set_regexp_engine(newengine);
+            REGEXP_ENGINE = newengine;
             expr = expr.add(5);
         } else {
             nvim_regexp_call_emsg_e864();
-            nvim_regexp_set_regexp_engine(AUTOMATIC_ENGINE);
+            REGEXP_ENGINE = AUTOMATIC_ENGINE;
         }
     }
 
@@ -14850,7 +14897,7 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
 
     // First try the NFA engine, unless backtracking was requested
     let called_emsg_before = nvim_regexp_get_called_emsg();
-    let regexp_engine = nvim_regexp_get_regexp_engine();
+    let regexp_engine = REGEXP_ENGINE;
 
     let mut prog = if regexp_engine == BACKTRACKING_ENGINE {
         nvim_regexp_call_bt_regcomp(expr, re_flags)
@@ -14868,14 +14915,14 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
         && regexp_engine == AUTOMATIC_ENGINE
         && nvim_regexp_get_called_emsg() == called_emsg_before
     {
-        nvim_regexp_set_regexp_engine(BACKTRACKING_ENGINE);
+        REGEXP_ENGINE = BACKTRACKING_ENGINE;
         report_re_switch(expr.cast::<c_char>());
         prog = nvim_regexp_call_bt_regcomp(expr, re_flags);
     }
 
     if !prog.is_null() {
         // Store engine and flags for later re-compilation
-        let engine = nvim_regexp_get_regexp_engine();
+        let engine = REGEXP_ENGINE;
         nvim_regprog_set_re_engine(prog, engine as c_uint);
         nvim_regprog_set_re_flags(prog, re_flags as c_uint);
     }

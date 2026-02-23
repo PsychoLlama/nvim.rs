@@ -1603,77 +1603,21 @@ void *nvim_nfa_thread_get_pim_ptr(void *l, int idx) { return (void *)&((nfa_list
 
 int nvim_regexp_get_nfa_has_zsubexpr(void) { return rex.nfa_has_zsubexpr; }
 
-// Variables only used in nfa_regcomp() and descendants.
-static int nfa_re_flags;  ///< re_flags passed to nfa_regcomp().
-static int *post_start;   ///< holds the postfix form of r.e.
-static int *post_end;
-static int *post_ptr;
-
-static int nstate;  ///< Number of states in the NFA. Also used when executing.
-static int istate;  ///< Index in the state vector, used in alloc_state()
-
-// If not NULL match must end at this position
-static save_se_T *nfa_endp = NULL;
-
-// 0 for first call to nfa_regmatch(), 1 for recursive call.
-static int nfa_ll_index = 0;
-
-// --- NFA accessor functions for Rust FFI ---
-int *nvim_regexp_get_post_start(void) { return post_start; }
-void nvim_regexp_set_post_start(int *p) { post_start = p; }
-int *nvim_regexp_get_post_ptr(void) { return post_ptr; }
-void nvim_regexp_set_post_ptr(int *p) { post_ptr = p; }
-int *nvim_regexp_get_post_end(void) { return post_end; }
-void nvim_regexp_set_post_end(int *p) { post_end = p; }
-
-int nvim_regexp_get_nstate(void) { return nstate; }
-void nvim_regexp_set_nstate(int v) { nstate = v; }
-int nvim_regexp_get_istate(void) { return istate; }
-void nvim_regexp_set_istate(int v) { istate = v; }
-
-int nvim_regexp_get_nfa_re_flags(void) { return nfa_re_flags; }
-void nvim_regexp_set_nfa_re_flags(int v) { nfa_re_flags = v; }
-
 void nvim_regexp_set_rex_nfa_has_zend(int v) { rex.nfa_has_zend = v; }
 void nvim_regexp_set_rex_nfa_has_backref(int v) { rex.nfa_has_backref = v; }
 
-static nfa_state_T *state_ptr;  // points to nfa_prog->state
-
-// state_ptr accessors
-void *nvim_regexp_get_state_ptr(void) { return (void *)state_ptr; }
-void nvim_regexp_set_state_ptr(void *v) { state_ptr = (nfa_state_T *)v; }
-void *nvim_regexp_state_ptr_add(int index) { return (void *)&state_ptr[index]; }
-
-// NFA prog allocation (needs state_ptr)
+// NFA prog allocation: allocates the prog and updates Rust-owned STATE_PTR via nvim_regexp_set_state_ptr
+extern void nvim_regexp_set_state_ptr(void *v);  // exported by Rust, sets STATE_PTR static
 void *nvim_regexp_alloc_nfa_prog(int nstate_count)
 {
   size_t prog_size = offsetof(nfa_regprog_T, state) + sizeof(nfa_state_T) * (size_t)nstate_count;
   nfa_regprog_T *prog = xmalloc(prog_size);
-  state_ptr = prog->state;
+  nvim_regexp_set_state_ptr((void *)prog->state);
   return prog;
 }
 /////////////////////////////////////////////////////////////////
 // NFA execution code.
 /////////////////////////////////////////////////////////////////
-
-// Used during execution: whether a match has been found.
-static int nfa_match;
-static proftime_T *nfa_time_limit;
-static int *nfa_timed_out;
-static int nfa_time_count;
-// NFA execution globals accessors
-int nvim_regexp_get_nfa_match(void) { return nfa_match; }
-void nvim_regexp_set_nfa_match(int v) { nfa_match = v; }
-int nvim_regexp_get_nfa_ll_index(void) { return nfa_ll_index; }
-void nvim_regexp_set_nfa_ll_index(int v) { nfa_ll_index = v; }
-// nfa_endp accessor
-void *nvim_regexp_get_nfa_endp(void) { return (void *)nfa_endp; }
-void nvim_regexp_set_nfa_endp(void *v) { nfa_endp = (save_se_T *)v; }
-
-// nfa_endp field accessors
-int32_t nvim_regexp_get_nfa_endp_pos_lnum(void) { return nfa_endp ? (int32_t)nfa_endp->se_u.pos.lnum : -1; }
-int32_t nvim_regexp_get_nfa_endp_pos_col(void) { return nfa_endp ? (int32_t)nfa_endp->se_u.pos.col : -1; }
-uint8_t *nvim_regexp_get_nfa_endp_ptr(void) { return nfa_endp ? nfa_endp->se_u.ptr : NULL; }
 
 // nfa_list_T memory management
 void *nvim_nfa_list_alloc_threads(int nstate)
@@ -1692,14 +1636,6 @@ void nvim_nfa_list_free_threads(void *l)
     xfree(l);
   }
 }
-
-// nfa_time_limit / nfa_timed_out / nfa_time_count accessors
-void *nvim_regexp_get_nfa_time_limit(void) { return (void *)nfa_time_limit; }
-void nvim_regexp_set_nfa_time_limit(void *v) { nfa_time_limit = (proftime_T *)v; }
-int *nvim_regexp_get_nfa_timed_out(void) { return nfa_timed_out; }
-void nvim_regexp_set_nfa_timed_out(int *v) { nfa_timed_out = v; }
-int nvim_regexp_get_nfa_time_count(void) { return nfa_time_count; }
-void nvim_regexp_set_nfa_time_count(int v) { nfa_time_count = v; }
 
 // Thread field accessors for the main loop
 int nvim_nfa_thread_get_state_c(void *l, int idx) { return ((nfa_list_T *)l)->t[idx].state->c; }
@@ -1816,12 +1752,11 @@ void nvim_regexp_set_rex_nfa_alt_listid(int v) { rex.nfa_alt_listid = v; }
 void *nvim_regexp_alloc_regsubs(void) { return xcalloc(1, sizeof(regsubs_T)); }
 void nvim_regexp_free_regsubs(void *s) { xfree(s); }
 
-// nfa_regtry setup: set rex.input and NFA time fields
+// nfa_regtry setup: set rex.input and NFA time fields (Rust-owned time globals set via export)
+extern void nvim_regexp_set_nfa_time_globals(void *tm, int *timed_out);  // Rust export
 void nvim_regexp_nfa_regtry_setup(void *prog, int32_t col, void *tm, int *timed_out) {
   rex.input = rex.line + col;
-  nfa_time_limit = (proftime_T *)tm;
-  nfa_timed_out = timed_out;
-  nfa_time_count = 0;
+  nvim_regexp_set_nfa_time_globals(tm, timed_out);
 }
 
 // nfa_regtry: extract submatch data from subs into rex fields (multi-line mode)
@@ -1950,9 +1885,11 @@ void nvim_regexp_nfa_regexec_both_setup_nfa(void *prog_ptr) {
 }
 
 // nfa_regexec_both: initialize state array (id and lastlist fields)
+// Rust-owned NSTATE is reset via exported nvim_regexp_reset_nstate()
+extern void nvim_regexp_reset_nstate(void);  // Rust export
 void nvim_regexp_nfa_regexec_both_init_states(void *prog_ptr) {
   nfa_regprog_T *prog = (nfa_regprog_T *)prog_ptr;
-  nstate = 0;
+  nvim_regexp_reset_nstate();
   for (int i = 0; i < prog->nstate; i++) {
     prog->state[i].id = i;
     prog->state[i].lastlist[0] = 0;
@@ -2148,15 +2085,6 @@ void nvim_regexp_init_regmatch(void *buf, void *prog, int rm_ic) {
   rmp->regprog = (regprog_T *)prog;
   rmp->rm_ic = (bool)rm_ic;
 }
-// vim_regcomp accessors
-
-// Forward declaration (defined later in file)
-static int regexp_engine;
-
-// regexp_engine variable
-int nvim_regexp_get_regexp_engine(void) { return regexp_engine; }
-void nvim_regexp_set_regexp_engine(int v) { regexp_engine = v; }
-
 // rex.reg_buf = curbuf
 void nvim_regexp_set_rex_reg_buf_curbuf(void) { rex.reg_buf = curbuf; }
 
@@ -2248,9 +2176,6 @@ static regengine_T nfa_regengine = {
   nfa_regexec_multi,
 };
 
-// Which regexp engine to use? Needed for vim_regcomp().
-// Must match with 'regexpengine'.
-static int regexp_engine = 0;
 // Compile a regular expression into internal code.
 // Returns the program in allocated memory.
 // Use vim_regfree() to free the memory.
