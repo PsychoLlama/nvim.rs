@@ -159,6 +159,7 @@ extern void rs_ins_compl_check_keys(int frequency, int in_compl_func);
 extern void rs_ins_compl_fuzzy_sort(void);
 extern void rs_sort_compl_match_list(int compare_type);
 extern void rs_ins_compl_new_leader(void);
+extern void rs_ins_compl_del_pum(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -916,15 +917,7 @@ static void ins_compl_add_matches(int num_matches, char **matches, int icase)
 }
 
 /// Remove any popup menu.
-static void ins_compl_del_pum(void)
-{
-  if (compl_match_array == NULL) {
-    return;
-  }
-
-  pum_undisplay(false);
-  XFREE_CLEAR(compl_match_array);
-}
+static void ins_compl_del_pum(void) { rs_ins_compl_del_pum(); }
 
 extern int rs_pum_enough_matches(int menuone);
 
@@ -5177,4 +5170,7 @@ int nvim_ins_complete_ctrl_n(void) { return ins_complete(Ctrl_N, true); }
 void nvim_update_compl_enter_selects(void) {
   compl_enter_selects = !compl_used_match && compl_selected_item != -1;
 }
+
+// Accessor for Phase 5: ins_compl_del_pum migration
+void nvim_xfree_compl_match_array(void) { XFREE_CLEAR(compl_match_array); }
 

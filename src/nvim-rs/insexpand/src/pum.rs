@@ -27,6 +27,10 @@ extern "C" {
 
     // Completeopt flags
     fn nvim_get_compl_autocomplete() -> c_int;
+
+    // For rs_ins_compl_del_pum
+    fn nvim_pum_undisplay(undo: c_int);
+    fn nvim_xfree_compl_match_array();
 }
 
 /// Check if a match is the first match.
@@ -300,6 +304,25 @@ pub const extern "C" fn rs_pum_calc_new_selection(
     } else {
         new_idx
     }
+}
+
+// =============================================================================
+// Phase 5: rs_ins_compl_del_pum
+// =============================================================================
+
+/// Remove the popup menu if it is displayed.
+///
+/// Calls pum_undisplay and frees the match array.
+///
+/// # Safety
+/// Requires valid completion state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_del_pum() {
+    if nvim_get_compl_match_array_exists() == 0 {
+        return;
+    }
+    nvim_pum_undisplay(0);
+    nvim_xfree_compl_match_array();
 }
 
 #[cfg(test)]
