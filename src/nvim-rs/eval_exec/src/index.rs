@@ -142,18 +142,6 @@ extern "C" {
     fn nvim_semsg_dictkey(key: *const c_char);
     fn nvim_semsg_dictkey_len(keylen: isize, key: *const c_char);
 
-    // Temporary wrapper: call C eval_index_inner from Phase 1
-    fn nvim_eval_index_inner_wrapper(
-        rettv: TypevalHandle,
-        is_range: bool,
-        var1: TypevalHandle,
-        var2: TypevalHandle,
-        exclusive: bool,
-        key: *const c_char,
-        keylen: isize,
-        verbose: bool,
-    ) -> c_int;
-
     // Typval alloc/free helpers
     fn xmalloc(size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
@@ -344,7 +332,7 @@ pub unsafe fn eval_index_impl(
     let ret = if evaluate {
         let v1 = if empty1 { TypevalHandle::null() } else { var1 };
         let v2 = if empty2 { TypevalHandle::null() } else { var2 };
-        let res = nvim_eval_index_inner_wrapper(rettv, range, v1, v2, false, key, keylen, verbose);
+        let res = eval_index_inner_impl(rettv, range, v1, v2, false, key, keylen, verbose);
         if !empty1 {
             tv_clear(var1);
         }

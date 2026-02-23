@@ -2419,127 +2419,7 @@ void f_slice(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 static int eval_index_inner(typval_T *rettv, bool is_range, typval_T *var1, typval_T *var2,
                             bool exclusive, const char *key, ptrdiff_t keylen, bool verbose)
 {
-  varnumber_T n1 = 0;
-  varnumber_T n2 = 0;
-  if (var1 != NULL && rettv->v_type != VAR_DICT) {
-    n1 = tv_get_number(var1);
-  }
-
-  if (is_range) {
-    if (rettv->v_type == VAR_DICT) {
-      if (verbose) {
-        emsg(_(e_cannot_slice_dictionary));
-      }
-      return FAIL;
-    }
-    if (var2 != NULL) {
-      n2 = tv_get_number(var2);
-    } else {
-      n2 = VARNUMBER_MAX;
-    }
-  }
-
-  switch (rettv->v_type) {
-  case VAR_BOOL:
-  case VAR_SPECIAL:
-  case VAR_FUNC:
-  case VAR_FLOAT:
-  case VAR_PARTIAL:
-  case VAR_UNKNOWN:
-    break;  // Not evaluating, skipping over subscript
-
-  case VAR_NUMBER:
-  case VAR_STRING: {
-    const char *const s = tv_get_string(rettv);
-    char *v;
-    int len = (int)strlen(s);
-    if (exclusive) {
-      if (is_range) {
-        v = rs_string_slice(s, n1, n2, exclusive);
-      } else {
-        v = rs_char_from_string(s, n1);
-      }
-    } else if (is_range) {
-      // The resulting variable is a substring.  If the indexes
-      // are out of range the result is empty.
-      if (n1 < 0) {
-        n1 = len + n1;
-        if (n1 < 0) {
-          n1 = 0;
-        }
-      }
-      if (n2 < 0) {
-        n2 = len + n2;
-      } else if (n2 >= len) {
-        n2 = len;
-      }
-      if (n1 >= len || n2 < 0 || n1 > n2) {
-        v = NULL;
-      } else {
-        v = xmemdupz(s + n1, (size_t)n2 - (size_t)n1 + 1);
-      }
-    } else {
-      // The resulting variable is a string of a single
-      // character.  If the index is too big or negative the
-      // result is empty.
-      if (n1 >= len || n1 < 0) {
-        v = NULL;
-      } else {
-        v = xmemdupz(s + n1, 1);
-      }
-    }
-    tv_clear(rettv);
-    rettv->v_type = VAR_STRING;
-    rettv->vval.v_string = v;
-    break;
-  }
-
-  case VAR_BLOB:
-    tv_blob_slice_or_index(rettv->vval.v_blob, is_range, n1, n2, exclusive, rettv);
-    break;
-
-  case VAR_LIST:
-    if (var1 == NULL) {
-      n1 = 0;
-    }
-    if (var2 == NULL) {
-      n2 = VARNUMBER_MAX;
-    }
-    if (tv_list_slice_or_index(rettv->vval.v_list,
-                               is_range, n1, n2, exclusive, rettv, verbose) == FAIL) {
-      return FAIL;
-    }
-    break;
-
-  case VAR_DICT: {
-    if (key == NULL) {
-      key = tv_get_string_chk(var1);
-      if (key == NULL) {
-        return FAIL;
-      }
-    }
-
-    dictitem_T *const item = tv_dict_find(rettv->vval.v_dict, key, keylen);
-
-    if (item == NULL && verbose) {
-      if (keylen > 0) {
-        semsg(_(e_dictkey_len), keylen, key);
-      } else {
-        semsg(_(e_dictkey), key);
-      }
-    }
-    if (item == NULL || tv_is_luafunc(&item->di_tv)) {
-      return FAIL;
-    }
-
-    typval_T tmp;
-    tv_copy(&item->di_tv, &tmp);
-    tv_clear(rettv);
-    *rettv = tmp;
-    break;
-  }
-  }
-  return OK;
+  return rs_eval_index_inner(rettv, is_range, var1, var2, exclusive, key, keylen, verbose);
 }
 
 /// Get an option value
@@ -5624,16 +5504,6 @@ void nvim_emsg_cannot_slice_dict(void)
 void nvim_semsg_dictkey_len(ptrdiff_t keylen, const char *key)
 {
   semsg(_(e_dictkey_len), keylen, key);
-}
-
-/// Temporary wrapper: call C eval_index_inner from Rust rs_eval_index (Phase 1).
-/// Removed in Phase 2 when rs_eval_index calls rs_eval_index_inner directly.
-int nvim_eval_index_inner_wrapper(typval_T *rettv, bool is_range,
-                                  typval_T *var1, typval_T *var2,
-                                  bool exclusive, const char *key,
-                                  ptrdiff_t keylen, bool verbose)
-{
-  return eval_index_inner(rettv, is_range, var1, var2, exclusive, key, keylen, verbose);
 }
 
 /// Get argvars[1] pointer from argvars array - accessor for Rust rs_f_slice.
