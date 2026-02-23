@@ -3505,7 +3505,7 @@ void nvim_do_window_find_in_path(int nchar, int Prenum, int Prenum1)
 
   size_t len;
   char *ptr;
-  if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
+  if ((len = rs_find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
     return;
   }
 

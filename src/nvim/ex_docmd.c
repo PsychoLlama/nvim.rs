@@ -159,6 +159,9 @@ extern linenr_T rs_get_address(exarg_T *eap, char **ptr, cmd_addr_T addr_type, b
                                 bool silent, int to_other_file, int address_count,
                                 const char **errormsg);
 extern int rs_parse_cmd_address(exarg_T *eap, const char **errormsg, bool silent);
+// Phase 3 normal-mode Rust exports used by ex_docmd
+extern void rs_set_cursor_for_append_to_line(void);
+extern size_t rs_find_ident_under_cursor(char **text, int find_type);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -5496,7 +5499,7 @@ static void ex_startinsert(exarg_T *eap)
     if (!curwin->w_cursor.lnum) {
       curwin->w_cursor.lnum = 1;
     }
-    set_cursor_for_append_to_line();
+    rs_set_cursor_for_append_to_line();
   }
 
   // Ignore the command when already in Insert mode.  Inserting an
@@ -5859,12 +5862,12 @@ char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnum
   if (spec_idx == SPEC_CWORD
       || spec_idx == SPEC_CCWORD
       || spec_idx == SPEC_CEXPR) {
-    resultlen = find_ident_under_cursor(&result,
-                                        spec_idx == SPEC_CWORD
-                                        ? (FIND_IDENT | FIND_STRING)
-                                        : (spec_idx == SPEC_CEXPR
-                                           ? (FIND_IDENT | FIND_STRING | FIND_EVAL)
-                                           : FIND_STRING));
+    resultlen = rs_find_ident_under_cursor(&result,
+                                           spec_idx == SPEC_CWORD
+                                           ? (FIND_IDENT | FIND_STRING)
+                                           : (spec_idx == SPEC_CEXPR
+                                              ? (FIND_IDENT | FIND_STRING | FIND_EVAL)
+                                              : FIND_STRING));
     if (resultlen == 0) {
       *errormsg = "";
       return NULL;

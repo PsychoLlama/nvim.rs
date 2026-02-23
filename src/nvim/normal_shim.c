@@ -505,6 +505,12 @@ extern int rs_diff_move_to(int dir, int count);
 extern int rs_get_vtopline(win_T *wp);
 extern int rs_get_sidescrolloff_value(win_T *wp);
 extern const char *rs_get_showbreak_value(win_T *win);
+// Phase 3 Rust exports
+extern void rs_n_start_visual_mode(int c);
+extern void rs_end_visual_mode(void);
+extern void rs_set_cursor_for_append_to_line(void);
+extern void rs_set_op_var(int optype);
+extern size_t rs_find_ident_under_cursor(char **text, int find_type);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -962,7 +968,6 @@ int nvim_get_motion_force(void) { return motion_force; }
 
 void nvim_set_finish_op(bool val) { finish_op = val; }
 
-void nvim_end_visual_mode(void) { end_visual_mode(); }
 
 void nvim_set_VIsual_mode(int val) { VIsual_mode = val; }
 
@@ -998,7 +1003,6 @@ int nvim_get_curswant(void) { return curwin->w_curswant; }
 
 int nvim_get_MAXCOL(void) { return MAXCOL; }
 
-void nvim_n_start_visual_mode(int cmdchar) { n_start_visual_mode(cmdchar); }
 
 int nvim_cap_dec_count1(cmdarg_T *cap) { return cap ? --cap->count1 : 0; }
 
@@ -1287,7 +1291,7 @@ void nvim_nv_edit_impl(cmdarg_T *cap)
   } else if (!rs_checkclearopq(cap->oap)) {
     switch (cap->cmdchar) {
     case 'A':           // "A"ppend after the line
-      set_cursor_for_append_to_line();
+      rs_set_cursor_for_append_to_line();
       break;
 
     case 'I':           // "I"nsert before the first non-blank
@@ -1371,7 +1375,7 @@ int nvim_ident_init(cmdarg_T *cap, int *cmdchar_out, int *g_cmd_out,
     }
   }
 
-  if (ptr == NULL && (n = find_ident_under_cursor(&ptr,
+  if (ptr == NULL && (n = rs_find_ident_under_cursor(&ptr,
                                                    ((cmdchar == '*' || cmdchar == '#')
                                                     ? FIND_IDENT|FIND_STRING
                                                     : FIND_IDENT))) == 0) {
@@ -1451,7 +1455,7 @@ void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
 {
   size_t len;
   char *ptr;
-  if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0
+  if ((len = rs_find_ident_under_cursor(&ptr, FIND_IDENT)) == 0
       || !rs_find_decl(ptr, len, nchar == 'd', thisblock, SEARCH_START)) {
     rs_clearopbeep(oap);
     return;
@@ -1474,11 +1478,9 @@ void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
 bool nvim_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
 bool nvim_prompt_curpos_editable(void) { return prompt_curpos_editable(); }
 bool nvim_op_is_change(int op_type) { return op_is_change(op_type); }
-void nvim_set_op_var_call(int optype) { set_op_var(optype); }
 void nvim_oap_set_start_cursor(oparg_T *oap) { oap->start = curwin->w_cursor; }
 void nvim_stuffnumReadbuff(int n) { stuffnumReadbuff(n); }
 void nvim_stuffReadbuff(const char *s) { stuffReadbuff(s); }
-static void set_op_var(int optype);
 
 // =============================================================================
 // Text object handler accessors for Rust FFI
@@ -1509,7 +1511,7 @@ void nvim_bracket_find_ident(cmdarg_T *cap)
 {
   char *ptr;
   size_t len;
-  if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
+  if ((len = rs_find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
     rs_clearop(cap->oap);
   } else {
     ptr = xmemdupz(ptr, len);
@@ -2653,53 +2655,10 @@ static int normal_check(VimState *state) { return rs_normal_check((NormalState *
 /// do_pending_operator().
 void end_visual_mode(void)
 {
-  VIsual_select_exclu_adj = false;
-  VIsual_active = false;
-  setmouse();
-  mouse_dragging = 0;
-
-  // Save the current VIsual area for '< and '> marks, and "gv"
-  curbuf->b_visual.vi_mode = VIsual_mode;
-  curbuf->b_visual.vi_start = VIsual;
-  curbuf->b_visual.vi_end = curwin->w_cursor;
-  curbuf->b_visual.vi_curswant = curwin->w_curswant;
-  curbuf->b_visual_mode_eval = VIsual_mode;
-  if (!virtual_active(curwin)) {
-    curwin->w_cursor.coladd = 0;
-  }
-
-  rs_may_clear_cmdline();
-
-  adjust_cursor_eol();
-  may_trigger_modechanged();
+  rs_end_visual_mode();
 }
 
-/// Find the identifier under or to the right of the cursor.
-/// "find_type" can have one of three values:
-/// FIND_IDENT:   find an identifier (keyword)
-/// FIND_STRING:  find any non-white text
-/// FIND_IDENT + FIND_STRING: find any non-white text, identifier preferred.
-/// FIND_EVAL:  find text useful for C program debugging
-///
-/// There are three steps:
-/// 1. Search forward for the start of an identifier/text.  Doesn't move if
-///    already on one.
-/// 2. Search backward for the start of this identifier/text.
-///    This doesn't match the real Vi but I like it a little better and it
-///    shouldn't bother anyone.
-/// 3. Search forward to the end of this identifier/text.
-///    When FIND_IDENT isn't defined, we backup until a blank.
-///
-/// @return  the length of the text, or zero if no text is found.
-///
-/// If text is found, a pointer to the text is put in "*text".  This
-/// points into the current buffer line and is not always NUL terminated.
-size_t find_ident_under_cursor(char **text, int find_type)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_find_ident_at_pos(curwin, curwin->w_cursor.lnum,
-                              curwin->w_cursor.col, text, NULL, find_type);
-}
+// find_ident_under_cursor migrated to Rust (rs_find_ident_under_cursor) in Phase 3
 
 // Routines for displaying a partly typed command
 static char old_showcmd_buf[SHOWCMD_BUFLEN];    // For push_showcmd()
@@ -3153,41 +3112,7 @@ void do_nv_ident(int c1, int c2)
 
 // nv_subst_impl, nv_optrans_impl migrated to Rust in Phase 2
 
-/// Internal implementation of nv_visual.
-/// Start Visual mode "c".
-/// Should set VIsual_select before calling this.
-static void n_start_visual_mode(int c)
-{
-  VIsual_mode = c;
-  VIsual_active = true;
-  VIsual_reselect = true;
-  // Corner case: the 0 position in a tab may change when going into
-  // virtualedit.  Recalculate curwin->w_cursor to avoid bad highlighting.
-  //
-  if (c == Ctrl_V && (get_ve_flags(curwin) & kOptVeFlagBlock) && gchar_cursor() == TAB) {
-    validate_virtcol(curwin);
-    coladvance(curwin, curwin->w_virtcol);
-  }
-  VIsual = curwin->w_cursor;
-
-  rs_foldAdjustVisual();
-
-  may_trigger_modechanged();
-  setmouse();
-  // Check for redraw after changing the state.
-  conceal_check_cursor_line();
-
-  if (p_smd && msg_silent == 0) {
-    redraw_cmdline = true;      // show visual mode later
-  }
-  // Only need to redraw this line, unless still need to redraw an old
-  // Visual area (when 'lazyredraw' is set).
-  if (curwin->w_redr_type < UPD_INVERTED) {
-    curwin->w_old_cursor_lnum = curwin->w_cursor.lnum;
-    curwin->w_old_visual_lnum = curwin->w_cursor.lnum;
-  }
-  redraw_curbuf_later(UPD_VALID);
-}
+// n_start_visual_mode migrated to Rust (rs_n_start_visual_mode) in Phase 3
 
 /// "g0", "g^" : Like "0" and "^" but for screen lines.
 /// "gm": middle of "g0" and "g$".
@@ -3342,58 +3267,9 @@ static void n_opencmd(cmdarg_T *cap)
 
 // nv_operator_impl migrated to Rust in Phase 2
 
-/// Set v:operator to the characters for "optype".
-static void set_op_var(int optype)
-{
-  if (optype == OP_NOP) {
-    set_vim_var_string(VV_OP, NULL, 0);
-  } else {
-    char opchars[3];
-    int opchar0 = get_op_char(optype);
-    assert(opchar0 >= 0 && opchar0 <= UCHAR_MAX);
-    opchars[0] = (char)opchar0;
-
-    int opchar1 = get_extra_op_char(optype);
-    assert(opchar1 >= 0 && opchar1 <= UCHAR_MAX);
-    opchars[1] = (char)opchar1;
-
-    opchars[2] = NUL;
-    set_vim_var_string(VV_OP, opchars, -1);
-  }
-}
-
-/// Handle linewise operator "dd", "yy", etc.
-///
-/// Used after a movement command: If the cursor ends up on the NUL after the
-/// end of the line, may move it back to the last character and make the motion
-/// inclusive.
-static void adjust_cursor(oparg_T *oap)
-{
-  // The cursor cannot remain on the NUL when:
-  // - the column is > 0
-  // - not in Visual mode or 'selection' is "o"
-  // - 'virtualedit' is not "all" and not "onemore".
-  if (curwin->w_cursor.col > 0 && gchar_cursor() == NUL
-      && (!VIsual_active || *p_sel == 'o')
-      && !virtual_active(curwin)
-      && (get_ve_flags(curwin) & kOptVeFlagOnemore) == 0) {
-    curwin->w_cursor.col--;
-    // prevent cursor from moving on the trail byte
-    mb_adjust_cursor();
-    oap->inclusive = true;
-  }
-}
-
-/// In exclusive Visual mode, may include the last character.
-static void adjust_for_sel(cmdarg_T *cap)
-{
-  if (VIsual_active && cap->oap->inclusive && *p_sel == 'e'
-      && gchar_cursor() != NUL && lt(VIsual, curwin->w_cursor)) {
-    inc_cursor();
-    cap->oap->inclusive = false;
-    VIsual_select_exclu_adj = true;
-  }
-}
+// set_op_var, adjust_cursor, adjust_for_sel, set_cursor_for_append_to_line
+// migrated to Rust (rs_set_op_var, rs_adjust_cursor, rs_adjust_for_sel,
+// rs_set_cursor_for_append_to_line) in Phase 3
 
 /// Move position "*pp" back one character for 'selection' == "exclusive".
 ///
@@ -3419,23 +3295,6 @@ bool unadjust_for_sel_inner(pos_T *pp)
   }
 
   return false;
-}
-
-
-/// Move the cursor for the "A" command.
-void set_cursor_for_append_to_line(void)
-{
-  curwin->w_set_curswant = true;
-  if (get_ve_flags(curwin) == kOptVeFlagAll) {
-    const int save_State = State;
-    // Pretend Insert mode here to allow the cursor on the
-    // character past the end of the line
-    State = MODE_INSERT;
-    coladvance(curwin, MAXCOL);
-    State = save_State;
-  } else {
-    curwin->w_cursor.col += (colnr_T)strlen(get_cursor_pos_ptr());
-  }
 }
 
 /// Invoke edit() and take care of "restart_edit" and the return value.
@@ -3625,3 +3484,71 @@ bool nvim_cursor_gt_VIsual(void) { return lt(VIsual, curwin->w_cursor); }
 
 /// Call mark_move_to(fm, flags). Returns MarkMoveRes as int.
 int nvim_mark_move_to_call(void *fm, int flags) { return (int)mark_move_to((fmark_T *)fm, (MarkMove)flags); }
+
+// =============================================================================
+// Phase 3 accessors: n_start_visual_mode, end_visual_mode, adjust_cursor,
+// adjust_for_sel, set_cursor_for_append_to_line, set_op_var, find_ident_under_cursor
+// =============================================================================
+
+/// Call conceal_check_cursor_line().
+void nvim_conceal_check_cursor_line(void) { conceal_check_cursor_line(); }
+
+/// Set mouse_dragging to val.
+void nvim_set_mouse_dragging(int val) { mouse_dragging = val; }
+
+/// Call adjust_cursor_eol().
+void nvim_adjust_cursor_eol(void) { adjust_cursor_eol(); }
+
+/// Save curbuf visual area and mode from current cursor/VIsual state.
+void nvim_curbuf_save_visual(void)
+{
+  curbuf->b_visual.vi_mode = VIsual_mode;
+  curbuf->b_visual.vi_start = VIsual;
+  curbuf->b_visual.vi_end = curwin->w_cursor;
+  curbuf->b_visual.vi_curswant = curwin->w_curswant;
+  curbuf->b_visual_mode_eval = VIsual_mode;
+}
+
+/// Get get_op_char(optype).
+int nvim_get_op_char(int optype) { return get_op_char(optype); }
+
+/// Get get_extra_op_char(optype).
+int nvim_get_extra_op_char(int optype) { return get_extra_op_char(optype); }
+
+/// Set v:operator to opchars string of length len. If opchars is NULL, clear it.
+void nvim_set_vim_var_string_vv_op(const char *opchars, int len)
+{
+  set_vim_var_string(VV_OP, opchars, len);
+}
+
+/// Call rs_find_ident_at_pos(curwin, cursor.lnum, cursor.col, text, NULL, find_type).
+size_t rs_find_ident_under_cursor(char **text, int find_type)
+{
+  return rs_find_ident_at_pos(curwin, curwin->w_cursor.lnum,
+                              curwin->w_cursor.col, text, NULL, find_type);
+}
+
+/// Coladvance wrapper: temporarily set State to MODE_INSERT for "A" command cursor positioning.
+void nvim_coladvance_append_mode(void)
+{
+  const int save_State = State;
+  State = MODE_INSERT;
+  coladvance(curwin, MAXCOL);
+  State = save_State;
+}
+
+/// Get length of cursor line suffix (strlen(get_cursor_pos_ptr())).
+int nvim_get_cursor_pos_ptr_len(void) { return (int)strlen(get_cursor_pos_ptr()); }
+
+/// Get curwin->w_redr_type.
+int nvim_get_curwin_w_redr_type(void) { return curwin->w_redr_type; }
+
+/// Set curwin->w_old_cursor_lnum and w_old_visual_lnum to cursor lnum.
+void nvim_curwin_set_old_visual_lnums(void)
+{
+  curwin->w_old_cursor_lnum = curwin->w_cursor.lnum;
+  curwin->w_old_visual_lnum = curwin->w_cursor.lnum;
+}
+
+/// Call redraw_curbuf_later(UPD_VALID).
+void nvim_redraw_curbuf_later_valid(void) { redraw_curbuf_later(UPD_VALID); }

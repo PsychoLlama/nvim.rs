@@ -201,7 +201,6 @@ extern "C" {
     // C functions for command handlers
     fn ex_help(eap: *mut std::ffi::c_void);
     fn do_cmdline_cmd(cmd: *const std::ffi::c_char);
-    fn end_visual_mode();
 
     // Wave 2 Phase 1: Visual state accessors
     fn nvim_redraw_curbuf_inverted();
@@ -241,7 +240,6 @@ extern "C" {
     fn nvim_stuff_empty() -> bool;
     fn nvim_typebuf_typed() -> bool;
     fn nvim_vim_strchr_p_slm(c: c_int) -> bool;
-    fn nvim_n_start_visual_mode(c: c_int);
     fn nvim_set_cursor_from_last_insert() -> bool;
     fn nvim_check_cursor_lnum_call();
     fn nvim_get_cursor_line_len() -> c_int;
@@ -997,7 +995,7 @@ pub unsafe extern "C" fn rs_nv_suspend(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     rs_clearop(oap);
     if nvim_get_VIsual_active() != 0 {
-        end_visual_mode();
+        rs_end_visual_mode();
     }
     do_cmdline_cmd(c"st".as_ptr());
 }
@@ -1821,7 +1819,7 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
         // change Visual mode
         if nvim_get_VIsual_mode() == cmdchar {
             // stop visual mode
-            end_visual_mode();
+            rs_end_visual_mode();
         } else {
             // toggle char/block mode or char/line mode
             nvim_set_VIsual_mode(cmdchar);
@@ -1897,7 +1895,7 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
                 // start Select mode when 'selectmode' contains "cmd"
                 rs_may_start_select(c_int::from(b'c'));
             }
-            nvim_n_start_visual_mode(cmdchar);
+            rs_n_start_visual_mode(cmdchar);
             if nvim_get_VIsual_mode() != c_int::from(b'V') && nvim_p_sel_is_exclusive() {
                 // include one more char
                 let c1 = nvim_cap_get_count1(cap);
@@ -2760,7 +2758,6 @@ extern "C" {
     fn nvim_bt_prompt_curbuf() -> bool;
     fn nvim_prompt_curpos_editable() -> bool;
     fn nvim_op_is_change(op_type: c_int) -> bool;
-    fn nvim_set_op_var_call(optype: c_int);
     fn nvim_oap_set_start_cursor(oap: OapHandle);
     fn nvim_stuffnumReadbuff(n: c_int);
     fn nvim_stuffReadbuff(s: *const c_char);
@@ -2794,7 +2791,7 @@ unsafe fn nv_operator_impl(cap: CapHandle) {
     } else if !rs_checkclearop(oap) {
         nvim_oap_set_start_cursor(oap);
         nvim_oap_set_op_type(oap, op_type);
-        nvim_set_op_var_call(op_type);
+        rs_set_op_var(op_type);
     }
 }
 
@@ -3962,7 +3959,6 @@ extern "C" {
     fn nvim_sync_fen_in_diff_windows();
     fn nvim_spell_move_to_wrapper(dir: c_int) -> usize;
     fn nvim_ml_get_pos_cursor() -> *mut c_char;
-    fn find_ident_under_cursor(text: *mut *mut c_char, find_type: c_int) -> usize;
     fn nvim_inc_emsg_off();
     fn nvim_dec_emsg_off();
     fn spell_add_word(word: *mut c_char, len: c_int, what: c_int, idx: c_int, undo: bool);
@@ -4074,7 +4070,14 @@ pub unsafe extern "C" fn rs_nv_zg_zw(cap: CapHandle, mut nchar: c_int) -> c_int 
     }
 
     if ptr.is_null() {
-        len = find_ident_under_cursor(&raw mut ptr, FIND_IDENT);
+        len = rs_find_ident_at_pos(
+            nvim_get_curwin(),
+            nvim_get_cursor_lnum(),
+            nvim_get_cursor_col(),
+            &raw mut ptr,
+            core::ptr::null_mut(),
+            FIND_IDENT,
+        );
         if len == 0 {
             return FAIL;
         }
@@ -5716,7 +5719,7 @@ pub unsafe extern "C" fn rs_nv_open(cap: CapHandle) {
 pub extern "C" fn rs_reset_VIsual_and_resel() {
     unsafe {
         if nvim_get_VIsual_active() != 0 {
-            end_visual_mode();
+            rs_end_visual_mode();
             nvim_redraw_curbuf_inverted();
         }
         nvim_set_VIsual_reselect(false);
@@ -5731,7 +5734,7 @@ pub extern "C" fn rs_reset_VIsual_and_resel() {
 pub extern "C" fn rs_reset_VIsual() {
     unsafe {
         if nvim_get_VIsual_active() != 0 {
-            end_visual_mode();
+            rs_end_visual_mode();
             nvim_redraw_curbuf_inverted();
             nvim_set_VIsual_reselect(false);
         }
@@ -5991,7 +5994,7 @@ pub extern "C" fn rs_may_start_select(c: c_int) {
 pub extern "C" fn rs_start_selection() {
     rs_may_start_select(c_int::from(b'k'));
     unsafe {
-        nvim_n_start_visual_mode(c_int::from(b'v'));
+        rs_n_start_visual_mode(c_int::from(b'v'));
     }
 }
 
@@ -6071,7 +6074,7 @@ pub unsafe extern "C" fn rs_nv_normal(cap: CapHandle) {
             nvim_set_cmdwin_result(CTRL_C);
         }
         if nvim_get_VIsual_active() != 0 {
-            end_visual_mode();
+            rs_end_visual_mode();
             nvim_redraw_curbuf_inverted();
         }
     } else {
@@ -6740,6 +6743,145 @@ pub unsafe extern "C" fn rs_nv_mark_move_to(cap: CapHandle, flags: c_int, fm: Fm
     nvim_oap_set_inclusive(oap, false);
     nvim_curwin_set_set_curswant(true);
     res
+}
+
+// =============================================================================
+// Phase 3: Visual mode core helpers and set_op_var
+// =============================================================================
+
+// Phase 3 constants
+// kOptVeFlagBlock == 0x05 (from option_vars.generated.h)
+const K_OPT_VE_FLAG_BLOCK: c_uint = 0x05;
+// kOptVeFlagAll == 0x04 (from option_vars.generated.h)
+const K_OPT_VE_FLAG_ALL: c_uint = 0x04;
+// UPD_INVERTED == 20
+const UPD_INVERTED: c_int = 20;
+// (CTRL_V, TAB_CHAR, UPD_VALID, MAXCOL are already defined above)
+
+extern "C" {
+    // Phase 3: n_start_visual_mode accessors
+    fn nvim_conceal_check_cursor_line();
+    fn nvim_set_mouse_dragging(val: c_int);
+    fn nvim_adjust_cursor_eol();
+    fn nvim_curbuf_save_visual();
+    fn nvim_get_op_char(optype: c_int) -> c_int;
+    fn nvim_get_extra_op_char(optype: c_int) -> c_int;
+    fn nvim_set_vim_var_string_vv_op(opchars: *const std::ffi::c_char, len: c_int);
+    fn nvim_coladvance_append_mode();
+    fn nvim_get_cursor_pos_ptr_len() -> c_int;
+    fn nvim_get_curwin_w_redr_type() -> c_int;
+    fn nvim_curwin_set_old_visual_lnums();
+    fn nvim_redraw_curbuf_later_valid();
+    fn rs_foldAdjustVisual();
+}
+
+/// Enter Visual mode `c`.
+///
+/// Rust implementation of the formerly-C `n_start_visual_mode`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
+    nvim_set_VIsual_mode(c);
+    nvim_set_VIsual_active(true);
+    nvim_set_VIsual_reselect(true);
+    // Corner case: the 0 position in a tab may change when going into
+    // virtualedit. Recalculate curwin->w_cursor to avoid bad highlighting.
+    if c == CTRL_V
+        && (nvim_get_ve_flags() & K_OPT_VE_FLAG_BLOCK) != 0
+        && nvim_gchar_cursor_call() == TAB_CHAR
+    {
+        nvim_validate_virtcol_curwin();
+        nvim_coladvance_curwin(nvim_get_curwin_w_virtcol());
+    }
+    // VIsual = curwin->w_cursor
+    let lnum = nvim_get_cursor_lnum();
+    let col = nvim_get_cursor_col();
+    let coladd = nvim_get_cursor_coladd();
+    nvim_set_VIsual_pos(lnum, col, coladd);
+
+    rs_foldAdjustVisual();
+
+    nvim_may_trigger_modechanged();
+    nvim_setmouse();
+    // Check for redraw after changing the state.
+    nvim_conceal_check_cursor_line();
+
+    if nvim_get_p_smd() != 0 && nvim_get_msg_silent() == 0 {
+        nvim_set_redraw_cmdline(true); // show visual mode later
+    }
+    // Only need to redraw this line, unless still need to redraw an old
+    // Visual area (when 'lazyredraw' is set).
+    if nvim_get_curwin_w_redr_type() < UPD_INVERTED {
+        nvim_curwin_set_old_visual_lnums();
+    }
+    nvim_redraw_curbuf_later_valid();
+}
+
+/// Exit Visual mode.
+///
+/// Rust implementation of the formerly-C `end_visual_mode`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_end_visual_mode() {
+    nvim_set_VIsual_select_exclu_adj(false);
+    nvim_set_VIsual_active(false);
+    nvim_setmouse();
+    nvim_set_mouse_dragging(0);
+
+    // Save the current VIsual area for '< and '> marks, and "gv"
+    nvim_curbuf_save_visual();
+
+    if !nvim_virtual_active() {
+        nvim_set_cursor_coladd_zero();
+    }
+
+    rs_may_clear_cmdline();
+    nvim_adjust_cursor_eol();
+    nvim_may_trigger_modechanged();
+}
+
+/// Move the cursor for the "A" command.
+///
+/// Rust implementation of the formerly-C `set_cursor_for_append_to_line`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_set_cursor_for_append_to_line() {
+    nvim_curwin_set_set_curswant(true);
+    if nvim_get_ve_flags() == K_OPT_VE_FLAG_ALL {
+        // Pretend Insert mode to allow cursor past end of line
+        nvim_coladvance_append_mode();
+    } else {
+        let extra = nvim_get_cursor_pos_ptr_len();
+        nvim_set_cursor_col(nvim_get_cursor_col() + extra);
+    }
+}
+
+/// Set v:operator variable based on optype.
+///
+/// Rust implementation of the formerly-C `set_op_var`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_set_op_var(optype: c_int) {
+    if optype == OP_NOP {
+        nvim_set_vim_var_string_vv_op(core::ptr::null(), 0);
+    } else {
+        let opchar0 = nvim_get_op_char(optype) as u8;
+        let opchar1 = nvim_get_extra_op_char(optype) as u8;
+        let opchars: [std::ffi::c_char; 3] = [
+            opchar0 as std::ffi::c_char,
+            opchar1 as std::ffi::c_char,
+            0,
+        ];
+        nvim_set_vim_var_string_vv_op(opchars.as_ptr(), -1);
+    }
 }
 
 // =============================================================================

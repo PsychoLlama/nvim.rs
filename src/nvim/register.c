@@ -1223,9 +1223,9 @@ bool get_spec_reg(int regname, char **argp, bool *allocated, bool errmsg)
     if (!errmsg) {
       return false;
     }
-    size_t cnt = find_ident_under_cursor(argp, (regname == Ctrl_W
-                                                ? (FIND_IDENT|FIND_STRING)
-                                                : FIND_STRING));
+    size_t cnt = rs_find_ident_under_cursor(argp, (regname == Ctrl_W
+                                                   ? (FIND_IDENT|FIND_STRING)
+                                                   : FIND_STRING));
     *argp = cnt ? xmemdupz(*argp, cnt) : NULL;
     *allocated = true;
     return true;
