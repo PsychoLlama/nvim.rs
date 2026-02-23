@@ -99,7 +99,6 @@ extern "C" {
     fn nvim_qf_win_get_handle(wp: *const c_void) -> c_int;
     fn nvim_qflist_valid(qi: QfInfoHandle, qf_id: u32) -> bool;
     fn nvim_qf_entry_present(qfl: QfListHandle, qf_ptr: QfLineHandle) -> bool;
-    fn nvim_qf_types(c: c_int, nr: c_int) -> *const c_char;
 }
 
 // =============================================================================
@@ -482,21 +481,6 @@ pub unsafe extern "C" fn rs_qf_restore_list(qi: QfInfoHandleMut, save_qfid: u32)
     // Set the current list
     nvim_qf_set_curlist_idx(qi, idx);
     1 // OK
-}
-
-/// Get the error type string for display.
-///
-/// Returns a formatted string like " error", " warning", " info", " note",
-/// or a custom type string. The nr parameter adds a number suffix if > 0.
-///
-/// The returned pointer points to a static buffer in C and must not be freed.
-///
-/// # Safety
-///
-/// - The returned pointer is only valid until the next call to this function
-#[no_mangle]
-pub unsafe extern "C" fn rs_qf_types(c: c_int, nr: c_int) -> *const c_char {
-    nvim_qf_types(c, nr)
 }
 
 /// Get the quickfix/location list window ID.

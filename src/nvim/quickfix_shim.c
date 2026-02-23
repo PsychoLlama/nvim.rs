@@ -249,6 +249,14 @@ extern unsigned char rs_qf_type_display_char(unsigned char type_code);
 extern int rs_qf_is_error_type(unsigned char type_code);
 extern int rs_qf_is_warning_type(unsigned char type_code);
 
+// Phase 1: Auname lookups and qf_types (migrated to Rust)
+extern const char *rs_make_get_auname(int cmdidx);
+extern const char *rs_cfile_get_auname(int cmdidx);
+extern const char *rs_cbuffer_get_auname(int cmdidx);
+extern const char *rs_cexpr_get_auname(int cmdidx);
+extern const char *rs_vgr_get_auname(int cmdidx);
+extern const char *rs_qf_types(int c, int nr, char *buf, size_t bufsz);
+
 /// Result of the full errorformat-to-regex conversion
 typedef struct {
   size_t bytes_written;
@@ -3205,35 +3213,8 @@ bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linen
 //  1         x     ""          :helpgrep
 static char *qf_types(int c, int nr)
 {
-  static char cc[3];
-  char *p;
-
-  // Use Rust functions for type classification
-  unsigned char uc = (unsigned char)c;
-  if (rs_qf_is_warning_type(uc)) {
-    p = " warning";
-  } else if (c == 'I' || c == 'i') {
-    p = " info";
-  } else if (c == 'N' || c == 'n') {
-    p = " note";
-  } else if (rs_qf_is_error_type(uc) || (c == 0 && nr > 0)) {
-    p = " error";
-  } else if (c == 0 || c == 1) {
-    p = "";
-  } else {
-    cc[0] = ' ';
-    cc[1] = (char)rs_qf_type_display_char(uc);
-    cc[2] = NUL;
-    p = cc;
-  }
-
-  if (nr <= 0) {
-    return p;
-  }
-
   static char buf[20];
-  snprintf(buf, sizeof(buf), "%s %3d", p, nr);
-  return buf;
+  return (char *)rs_qf_types(c, nr, buf, sizeof(buf));
 }
 
 // Set options for the buffer in the quickfix or location list window.
@@ -3696,27 +3677,6 @@ int grep_internal(cmdidx_T cmdidx)
          && strcmp("internal", *curbuf->b_p_gp == NUL ? p_gp : curbuf->b_p_gp) == 0;
 }
 
-// Return the make/grep autocmd name.
-static char *make_get_auname(cmdidx_T cmdidx)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  switch (cmdidx) {
-  case CMD_make:
-    return "make";
-  case CMD_lmake:
-    return "lmake";
-  case CMD_grep:
-    return "grep";
-  case CMD_lgrep:
-    return "lgrep";
-  case CMD_grepadd:
-    return "grepadd";
-  case CMD_lgrepadd:
-    return "lgrepadd";
-  default:
-    return NULL;
-  }
-}
 
 // Form the complete command line to invoke 'make'/'grep'. Quote the command
 // using 'shellquote' and append 'shellpipe'. Echo the fully formed command.
@@ -3759,7 +3719,7 @@ void ex_make(exarg_T *eap)
     return;
   }
 
-  char *const au_name = make_get_auname(eap->cmdidx);
+  char *const au_name = (char *)rs_make_get_auname(eap->cmdidx);
   if (au_name != NULL && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name,
                                         curbuf->b_fname, true, curbuf)) {
     if (aborting()) {
@@ -4052,26 +4012,6 @@ const void *nvim_qf_curwin_pos_adj(void)
 
 void *nvim_qf_get_curlist_mut(void *qi_void) { return (void *)&((qf_info_T *)qi_void)->qf_lists[((qf_info_T *)qi_void)->qf_curlist]; }
 
-/// Return the autocmd name for the :cfile Ex commands
-static char *cfile_get_auname(cmdidx_T cmdidx)
-{
-  switch (cmdidx) {
-  case CMD_cfile:
-    return "cfile";
-  case CMD_cgetfile:
-    return "cgetfile";
-  case CMD_caddfile:
-    return "caddfile";
-  case CMD_lfile:
-    return "lfile";
-  case CMD_lgetfile:
-    return "lgetfile";
-  case CMD_laddfile:
-    return "laddfile";
-  default:
-    return NULL;
-  }
-}
 
 // ":cfile"/":cgetfile"/":caddfile" commands.
 // ":lfile"/":lgetfile"/":laddfile" commands.
@@ -4080,9 +4020,8 @@ void ex_cfile(exarg_T *eap)
   win_T *wp = NULL;
   qf_info_T *qi = ql_info;
   assert(qi != NULL);
-  char *au_name = NULL;
 
-  au_name = cfile_get_auname(eap->cmdidx);
+  char *au_name = (char *)rs_cfile_get_auname(eap->cmdidx);
   if (au_name != NULL
       && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name, NULL, false, curbuf)) {
     if (aborting()) {
@@ -4137,30 +4076,6 @@ void ex_cfile(exarg_T *eap)
   decr_quickfix_busy();
 }
 
-/// Return the vimgrep autocmd name.
-static char *vgr_get_auname(cmdidx_T cmdidx)
-{
-  switch (cmdidx) {
-  case CMD_vimgrep:
-    return "vimgrep";
-  case CMD_lvimgrep:
-    return "lvimgrep";
-  case CMD_vimgrepadd:
-    return "vimgrepadd";
-  case CMD_lvimgrepadd:
-    return "lvimgrepadd";
-  case CMD_grep:
-    return "grep";
-  case CMD_lgrep:
-    return "lgrep";
-  case CMD_grepadd:
-    return "grepadd";
-  case CMD_lgrepadd:
-    return "lgrepadd";
-  default:
-    return NULL;
-  }
-}
 
 /// Initialize the regmatch used by vimgrep for pattern "s".
 static void vgr_init_regmatch(regmmatch_T *regmatch, char *s)
@@ -4266,6 +4181,36 @@ _Static_assert(VGR_GLOBAL == 1, "VGR_GLOBAL mismatch");
 _Static_assert(VGR_NOJUMP == 2, "VGR_NOJUMP mismatch");
 _Static_assert(VGR_FUZZY == 4, "VGR_FUZZY mismatch");
 _Static_assert(FUZZY_MATCH_MAX_LEN == 1024, "FUZZY_MATCH_MAX_LEN mismatch");
+
+// _Static_assert for Phase 1 CMD_* constants used in Rust auname lookups
+_Static_assert(CMD_make == 273, "CMD_make mismatch");
+_Static_assert(CMD_lmake == 248, "CMD_lmake mismatch");
+_Static_assert(CMD_grep == 172, "CMD_grep mismatch");
+_Static_assert(CMD_lgrep == 239, "CMD_lgrep mismatch");
+_Static_assert(CMD_grepadd == 173, "CMD_grepadd mismatch");
+_Static_assert(CMD_lgrepadd == 240, "CMD_lgrepadd mismatch");
+_Static_assert(CMD_cfile == 65, "CMD_cfile mismatch");
+_Static_assert(CMD_cgetfile == 68, "CMD_cgetfile mismatch");
+_Static_assert(CMD_caddfile == 51, "CMD_caddfile mismatch");
+_Static_assert(CMD_lfile == 233, "CMD_lfile mismatch");
+_Static_assert(CMD_lgetfile == 236, "CMD_lgetfile mismatch");
+_Static_assert(CMD_laddfile == 218, "CMD_laddfile mismatch");
+_Static_assert(CMD_cbuffer == 55, "CMD_cbuffer mismatch");
+_Static_assert(CMD_cgetbuffer == 69, "CMD_cgetbuffer mismatch");
+_Static_assert(CMD_caddbuffer == 49, "CMD_caddbuffer mismatch");
+_Static_assert(CMD_lbuffer == 221, "CMD_lbuffer mismatch");
+_Static_assert(CMD_lgetbuffer == 237, "CMD_lgetbuffer mismatch");
+_Static_assert(CMD_laddbuffer == 217, "CMD_laddbuffer mismatch");
+_Static_assert(CMD_cexpr == 64, "CMD_cexpr mismatch");
+_Static_assert(CMD_cgetexpr == 70, "CMD_cgetexpr mismatch");
+_Static_assert(CMD_caddexpr == 50, "CMD_caddexpr mismatch");
+_Static_assert(CMD_lexpr == 232, "CMD_lexpr mismatch");
+_Static_assert(CMD_lgetexpr == 238, "CMD_lgetexpr mismatch");
+_Static_assert(CMD_laddexpr == 216, "CMD_laddexpr mismatch");
+_Static_assert(CMD_vimgrep == 509, "CMD_vimgrep mismatch");
+_Static_assert(CMD_lvimgrep == 267, "CMD_lvimgrep mismatch");
+_Static_assert(CMD_vimgrepadd == 510, "CMD_vimgrepadd mismatch");
+_Static_assert(CMD_lvimgrepadd == 268, "CMD_lvimgrepadd mismatch");
 
 /// Jump to the first match and update the directory.
 static void vgr_jump_to_match(qf_info_T *qi, int forceit, bool *redraw_for_dummy,
@@ -4432,7 +4377,7 @@ bool nvim_vgr_pre_check(void *eap_void)
   if (!check_can_set_curbuf_forceit(eap->forceit)) {
     return false;
   }
-  char *au_name = vgr_get_auname(eap->cmdidx);
+  char *au_name = (char *)rs_vgr_get_auname(eap->cmdidx);
   if (au_name != NULL && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name,
                                         curbuf->b_fname, true, curbuf)) {
     if (aborting()) {
@@ -4510,7 +4455,7 @@ void nvim_vgr_finalize_list(void *qi_void)
 void nvim_vgr_post_autocmd(void *eap_void)
 {
   exarg_T *eap = (exarg_T *)eap_void;
-  char *au_name = vgr_get_auname(eap->cmdidx);
+  char *au_name = (char *)rs_vgr_get_auname(eap->cmdidx);
   if (au_name != NULL) {
     apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true, curbuf);
   }
@@ -5716,26 +5661,6 @@ bool set_ref_in_quickfix(int copyID)
   return false;
 }
 
-/// Return the autocmd name for the :cbuffer Ex commands
-static char *cbuffer_get_auname(cmdidx_T cmdidx)
-{
-  switch (cmdidx) {
-  case CMD_cbuffer:
-    return "cbuffer";
-  case CMD_cgetbuffer:
-    return "cgetbuffer";
-  case CMD_caddbuffer:
-    return "caddbuffer";
-  case CMD_lbuffer:
-    return "lbuffer";
-  case CMD_lgetbuffer:
-    return "lgetbuffer";
-  case CMD_laddbuffer:
-    return "laddbuffer";
-  default:
-    return NULL;
-  }
-}
 
 /// :cgetbuffer, :lbuffer, :laddbuffer, :lgetbuffer Ex commands.
 static int cbuffer_process_args(exarg_T *eap, buf_T **bufp, linenr_T *line1, linenr_T *line2)
@@ -5784,7 +5709,7 @@ static int cbuffer_process_args(exarg_T *eap, buf_T **bufp, linenr_T *line1, lin
 // ":[range]lgetbuffer [bufnr]" command.
 void ex_cbuffer(exarg_T *eap)
 {
-  char *au_name = cbuffer_get_auname(eap->cmdidx);
+  char *au_name = (char *)rs_cbuffer_get_auname(eap->cmdidx);
   if (au_name != NULL && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name,
                                         curbuf->b_fname, true, curbuf)) {
     if (aborting()) {
@@ -5846,31 +5771,11 @@ void ex_cbuffer(exarg_T *eap)
   decr_quickfix_busy();
 }
 
-/// Return the autocmd name for the :cexpr Ex commands.
-static char *cexpr_get_auname(cmdidx_T cmdidx)
-{
-  switch (cmdidx) {
-  case CMD_cexpr:
-    return "cexpr";
-  case CMD_cgetexpr:
-    return "cgetexpr";
-  case CMD_caddexpr:
-    return "caddexpr";
-  case CMD_lexpr:
-    return "lexpr";
-  case CMD_lgetexpr:
-    return "lgetexpr";
-  case CMD_laddexpr:
-    return "laddexpr";
-  default:
-    return NULL;
-  }
-}
 
 /// ":lexpr {expr}", ":lgetexpr {expr}", ":laddexpr {expr}" command.
 void ex_cexpr(exarg_T *eap)
 {
-  char *au_name = cexpr_get_auname(eap->cmdidx);
+  char *au_name = (char *)rs_cexpr_get_auname(eap->cmdidx);
   if (au_name != NULL && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name,
                                         curbuf->b_fname, true, curbuf)) {
     if (aborting()) {

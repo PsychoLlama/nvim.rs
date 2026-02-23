@@ -298,6 +298,95 @@ pub extern "C" fn rs_qf_is_warning_type(type_code: u8) -> c_int {
     c_int::from(is_warning_type(type_code))
 }
 
+// =============================================================================
+// Phase 1: qf_types — build a display string from error type char + number
+// =============================================================================
+
+/// Pure-Rust implementation: format type display bytes into `out`.
+///
+/// Returns the number of bytes written (excluding NUL terminator).
+/// `out` must have at least 20 bytes of capacity.
+pub fn qf_types_fmt(c: c_int, nr: c_int, out: &mut [u8]) -> usize {
+    use std::io::Write;
+
+    let bufsz = out.len();
+    if bufsz == 0 {
+        return 0;
+    }
+
+    let type_char = if (0..=255).contains(&c) { c as u8 } else { 0 };
+
+    let prefix: &[u8] = if is_warning_type(type_char) {
+        b" warning"
+    } else if type_char == b'I' || type_char == b'i' {
+        b" info"
+    } else if type_char == b'N' || type_char == b'n' {
+        b" note"
+    } else if is_error_type(type_char) || (c == 0 && nr > 0) {
+        b" error"
+    } else if c == 0 || c == 1 {
+        b""
+    } else {
+        // Single character like " X" or " X  42"
+        let disp = type_display_char(type_char);
+        let mut cursor = std::io::Cursor::new(&mut out[..]);
+        if nr > 0 {
+            let _ = write!(cursor, " {} {:3}", disp as char, nr);
+        } else {
+            let _ = write!(cursor, " {}", disp as char);
+        }
+        let pos = cursor.position() as usize;
+        let end = pos.min(bufsz - 1);
+        out[end] = 0;
+        return end;
+    };
+
+    if nr > 0 {
+        let mut cursor = std::io::Cursor::new(&mut out[..]);
+        // SAFETY: prefix is always valid UTF-8 (ASCII)
+        let _ = write!(
+            cursor,
+            "{} {:3}",
+            // safe: prefix is only ASCII bytes
+            unsafe { std::str::from_utf8_unchecked(prefix) },
+            nr
+        );
+        let pos = cursor.position() as usize;
+        let end = pos.min(bufsz - 1);
+        out[end] = 0;
+        end
+    } else {
+        let copy_len = prefix.len().min(bufsz - 1);
+        out[..copy_len].copy_from_slice(&prefix[..copy_len]);
+        out[copy_len] = 0;
+        copy_len
+    }
+}
+
+/// FFI export: build type display string into caller-provided buffer.
+///
+/// Writes the formatted type string into `buf` (at most `bufsz` bytes
+/// including the NUL terminator) and returns a pointer to `buf`.
+///
+/// # Safety
+///
+/// - `buf` must be a valid writable buffer of at least `bufsz` bytes.
+/// - `bufsz` must be > 0.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_types(
+    c: c_int,
+    nr: c_int,
+    buf: *mut c_char,
+    bufsz: usize,
+) -> *const c_char {
+    if bufsz == 0 || buf.is_null() {
+        return buf;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf.cast::<u8>(), bufsz);
+    qf_types_fmt(c, nr, slice);
+    buf
+}
+
 /// FFI export: Calculate scroll percent
 #[no_mangle]
 pub extern "C" fn rs_qf_display_scroll_percent(
@@ -389,7 +478,6 @@ extern "C" {
         newfile: bool,
     ) -> c_int;
     fn nvim_skipwhite_const(str: *const c_char) -> *const c_char;
-    fn nvim_qf_types(c: c_int, nr: c_int) -> *const c_char;
 }
 
 const FAIL: c_int = 0;
@@ -519,13 +607,13 @@ unsafe fn qf_buf_add_line(
             let col = nvim_qfline_get_col(qfp);
             let end_col = nvim_qfline_get_end_col(qfp);
             qf_range_text(&mut line, qf_lnum, end_lnum, col, end_col);
-            let types_str = nvim_qf_types(
-                c_int::from(nvim_qfline_get_type(qfp)),
-                nvim_qfline_get_nr(qfp),
-            );
-            if !types_str.is_null() {
-                let s = std::ffi::CStr::from_ptr(types_str).to_bytes();
-                line.extend_from_slice(s);
+            // Use pure-Rust type formatter directly (no C round-trip needed)
+            let type_c = c_int::from(nvim_qfline_get_type(qfp));
+            let type_nr = nvim_qfline_get_nr(qfp);
+            let mut type_buf = [0u8; 20];
+            let written = qf_types_fmt(type_c, type_nr, &mut type_buf);
+            if written > 0 {
+                line.extend_from_slice(&type_buf[..written]);
             }
         } else if !qf_pattern.is_null() {
             qf_fmt_text(&mut line, qf_pattern);

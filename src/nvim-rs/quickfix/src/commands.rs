@@ -1698,3 +1698,135 @@ pub unsafe extern "C" fn rs_ex_copen(eap: EapHandle) {
     nvim_qf_check_cursor_curwin();
     nvim_qf_update_topline_curwin();
 }
+
+// =============================================================================
+// Phase 1: Auname lookups — cmdidx-to-string for QuickFixCmdPre/Post autocmds
+// =============================================================================
+//
+// CMD_* constants from ex_cmds_enum.generated.h (validated with _Static_assert
+// in quickfix_shim.c).
+
+const CMD_MAKE: c_int = 273;
+const CMD_LMAKE: c_int = 248;
+const CMD_GREP: c_int = 172;
+const CMD_LGREP: c_int = 239;
+const CMD_GREPADD: c_int = 173;
+const CMD_LGREPADD: c_int = 240;
+
+const CMD_CFILE: c_int = 65;
+const CMD_CGETFILE: c_int = 68;
+const CMD_CADDFILE: c_int = 51;
+const CMD_LFILE: c_int = 233;
+const CMD_LGETFILE: c_int = 236;
+const CMD_LADDFILE: c_int = 218;
+
+const CMD_CBUFFER: c_int = 55;
+const CMD_CGETBUFFER: c_int = 69;
+const CMD_CADDBUFFER: c_int = 49;
+const CMD_LBUFFER: c_int = 221;
+const CMD_LGETBUFFER: c_int = 237;
+const CMD_LADDBUFFER: c_int = 217;
+
+const CMD_CEXPR: c_int = 64;
+const CMD_CGETEXPR: c_int = 70;
+const CMD_CADDEXPR: c_int = 50;
+const CMD_LEXPR: c_int = 232;
+const CMD_LGETEXPR: c_int = 238;
+const CMD_LADDEXPR: c_int = 216;
+
+const CMD_VIMGREP: c_int = 509;
+const CMD_LVIMGREP: c_int = 267;
+const CMD_VIMGREPADD: c_int = 510;
+const CMD_LVIMGREPADD: c_int = 268;
+
+/// Return the autocmd name for `:make`/`:grep` commands, or NULL.
+///
+/// # Safety
+///
+/// Always safe — returns a pointer to a static string literal or null.
+#[no_mangle]
+pub const extern "C" fn rs_make_get_auname(cmdidx: c_int) -> *const std::ffi::c_char {
+    match cmdidx {
+        CMD_MAKE => c"make".as_ptr(),
+        CMD_LMAKE => c"lmake".as_ptr(),
+        CMD_GREP => c"grep".as_ptr(),
+        CMD_LGREP => c"lgrep".as_ptr(),
+        CMD_GREPADD => c"grepadd".as_ptr(),
+        CMD_LGREPADD => c"lgrepadd".as_ptr(),
+        _ => std::ptr::null(),
+    }
+}
+
+/// Return the autocmd name for `:cfile`/`:lfile` commands, or NULL.
+///
+/// # Safety
+///
+/// Always safe — returns a pointer to a static string literal or null.
+#[no_mangle]
+pub const extern "C" fn rs_cfile_get_auname(cmdidx: c_int) -> *const std::ffi::c_char {
+    match cmdidx {
+        CMD_CFILE => c"cfile".as_ptr(),
+        CMD_CGETFILE => c"cgetfile".as_ptr(),
+        CMD_CADDFILE => c"caddfile".as_ptr(),
+        CMD_LFILE => c"lfile".as_ptr(),
+        CMD_LGETFILE => c"lgetfile".as_ptr(),
+        CMD_LADDFILE => c"laddfile".as_ptr(),
+        _ => std::ptr::null(),
+    }
+}
+
+/// Return the autocmd name for `:cbuffer`/`:lbuffer` commands, or NULL.
+///
+/// # Safety
+///
+/// Always safe — returns a pointer to a static string literal or null.
+#[no_mangle]
+pub const extern "C" fn rs_cbuffer_get_auname(cmdidx: c_int) -> *const std::ffi::c_char {
+    match cmdidx {
+        CMD_CBUFFER => c"cbuffer".as_ptr(),
+        CMD_CGETBUFFER => c"cgetbuffer".as_ptr(),
+        CMD_CADDBUFFER => c"caddbuffer".as_ptr(),
+        CMD_LBUFFER => c"lbuffer".as_ptr(),
+        CMD_LGETBUFFER => c"lgetbuffer".as_ptr(),
+        CMD_LADDBUFFER => c"laddbuffer".as_ptr(),
+        _ => std::ptr::null(),
+    }
+}
+
+/// Return the autocmd name for `:cexpr`/`:lexpr` commands, or NULL.
+///
+/// # Safety
+///
+/// Always safe — returns a pointer to a static string literal or null.
+#[no_mangle]
+pub const extern "C" fn rs_cexpr_get_auname(cmdidx: c_int) -> *const std::ffi::c_char {
+    match cmdidx {
+        CMD_CEXPR => c"cexpr".as_ptr(),
+        CMD_CGETEXPR => c"cgetexpr".as_ptr(),
+        CMD_CADDEXPR => c"caddexpr".as_ptr(),
+        CMD_LEXPR => c"lexpr".as_ptr(),
+        CMD_LGETEXPR => c"lgetexpr".as_ptr(),
+        CMD_LADDEXPR => c"laddexpr".as_ptr(),
+        _ => std::ptr::null(),
+    }
+}
+
+/// Return the autocmd name for `:vimgrep`/`:grep` commands, or NULL.
+///
+/// # Safety
+///
+/// Always safe — returns a pointer to a static string literal or null.
+#[no_mangle]
+pub const extern "C" fn rs_vgr_get_auname(cmdidx: c_int) -> *const std::ffi::c_char {
+    match cmdidx {
+        CMD_VIMGREP => c"vimgrep".as_ptr(),
+        CMD_LVIMGREP => c"lvimgrep".as_ptr(),
+        CMD_VIMGREPADD => c"vimgrepadd".as_ptr(),
+        CMD_LVIMGREPADD => c"lvimgrepadd".as_ptr(),
+        CMD_GREP => c"grep".as_ptr(),
+        CMD_LGREP => c"lgrep".as_ptr(),
+        CMD_GREPADD => c"grepadd".as_ptr(),
+        CMD_LGREPADD => c"lgrepadd".as_ptr(),
+        _ => std::ptr::null(),
+    }
+}
