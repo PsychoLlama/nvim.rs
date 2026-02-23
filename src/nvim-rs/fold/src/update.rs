@@ -16,6 +16,7 @@
 
 use std::ffi::c_int;
 
+use crate::markers::{foldlevel_marker_impl, parse_marker_impl, FoldMarkerInfo};
 use crate::GArrayHandle;
 use nvim_window::WinHandle;
 
@@ -304,12 +305,6 @@ extern "C" {
     // Level getters (call C implementations)
     fn nvim_foldlevelIndent(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
     fn nvim_foldlevelDiff(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
-    fn nvim_foldlevelMarker(
-        wp: WinHandle,
-        lnum: LinenrT,
-        off: LinenrT,
-        current_lvl: c_int,
-    ) -> FoldLevelResult;
 
     // Expr and Syntax level getters (call C implementations)
     fn nvim_foldlevelExpr(
@@ -319,9 +314,6 @@ extern "C" {
         current_lvl: c_int,
     ) -> FoldLevelResult;
     fn nvim_foldlevelSyntax(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
-
-    // Marker parsing
-    fn nvim_parseMarker(wp: WinHandle);
 
     // Fold static variable accessors
     #[allow(dead_code)]
@@ -375,7 +367,6 @@ const fn max(a: LinenrT, b: LinenrT) -> LinenrT {
 }
 
 /// Extended fline state that includes lnum_save
-#[repr(C)]
 #[derive(Debug, Clone)]
 struct FlineT {
     wp: WinHandle,
@@ -387,6 +378,8 @@ struct FlineT {
     start: c_int,
     end: c_int,
     had_end: c_int,
+    /// Parsed fold marker info (only valid for Marker method)
+    marker_info: FoldMarkerInfo,
 }
 
 impl FlineT {
@@ -401,6 +394,7 @@ impl FlineT {
             start: 0,
             end: MAX_LEVEL + 1,
             had_end: MAX_LEVEL + 1,
+            marker_info: FoldMarkerInfo::default(),
         }
     }
 }
@@ -430,7 +424,7 @@ fn call_diff_level_getter(flp: &mut FlineT) {
 /// Call the marker level getter
 fn call_marker_level_getter(flp: &mut FlineT) {
     // Marker method requires passing current level - it tracks fold state across lines
-    let result = unsafe { nvim_foldlevelMarker(flp.wp, flp.lnum, flp.off, flp.lvl) };
+    let result = foldlevel_marker_impl(flp.wp, flp.lnum, flp.off, flp.lvl, &flp.marker_info);
     flp.lvl = result.lvl;
     flp.lvl_next = result.lvl_next;
     flp.start = result.start;
@@ -572,7 +566,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
 
     if kind == LevelGetterKind::Marker {
         // Init marker variables to speed up foldlevelMarker()
-        unsafe { nvim_parseMarker(wp) };
+        flp.marker_info = parse_marker_impl(wp);
 
         // Need to get the level of the line above top, it is used if there is
         // no marker at the top.

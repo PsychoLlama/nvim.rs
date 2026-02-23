@@ -753,70 +753,6 @@ static void parseMarker(win_T *wp)
   foldendmarkerlen = strlen(foldendmarker);
 }
 
-// foldlevelMarker() {{{2
-/// Low level function to get the foldlevel for the "marker" method.
-/// "foldendmarker", "foldstartmarkerlen" and "foldendmarkerlen" must have been
-/// set before calling this.
-/// Requires that flp->lvl is set to the fold level of the previous line!
-/// Careful: This means you can't call this function twice on the same line.
-/// Doesn't use any caching.
-/// Sets flp->start when a start marker was found.
-static void foldlevelMarker(fline_T *flp)
-{
-  int start_lvl = flp->lvl;
-
-  // cache a few values for speed
-  char *startmarker = flp->wp->w_p_fmr;
-  char cstart = *startmarker;
-  startmarker++;
-  char cend = *foldendmarker;
-
-  // Default: no start found, next level is same as current level
-  flp->start = 0;
-  flp->lvl_next = flp->lvl;
-
-  char *s = ml_get_buf(flp->wp->w_buffer, flp->lnum + flp->off);
-  while (*s) {
-    if (*s == cstart
-        && strncmp(s + 1, startmarker, foldstartmarkerlen - 1) == 0) {
-      // found startmarker: set flp->lvl
-      s += foldstartmarkerlen;
-      if (ascii_isdigit(*s)) {
-        int n = atoi(s);
-        if (n > 0) {
-          flp->lvl = n;
-          flp->lvl_next = n;
-          flp->start = MAX(n - start_lvl, 1);
-        }
-      } else {
-        flp->lvl++;
-        flp->lvl_next++;
-        flp->start++;
-      }
-    } else if (*s == cend
-               && strncmp(s + 1, foldendmarker + 1, foldendmarkerlen - 1) == 0) {
-      // found endmarker: set flp->lvl_next
-      s += foldendmarkerlen;
-      if (ascii_isdigit(*s)) {
-        int n = atoi(s);
-        if (n > 0) {
-          flp->lvl = n;
-          flp->lvl_next = n - 1;
-          // never start a fold with an end marker
-          flp->lvl_next = MIN(flp->lvl_next, start_lvl);
-        }
-      } else {
-        flp->lvl_next--;
-      }
-    } else {
-      MB_PTR_ADV(s);
-    }
-  }
-
-  // The level can't go negative, must be missing a start marker.
-  flp->lvl_next = MAX(flp->lvl_next, 0);
-}
-
 // foldlevelSyntax() {{{2
 /// Low level function to get the foldlevel for the "syntax" method.
 /// Doesn't use any caching.
@@ -1625,34 +1561,6 @@ FoldLevelResult_C nvim_foldlevelDiff(win_T *wp, linenr_T lnum, linenr_T off)
   flp.had_end = MAX_LEVEL + 1;
 
   foldlevelDiff(&flp);
-
-  FoldLevelResult_C result = {
-    .lvl = flp.lvl,
-    .lvl_next = flp.lvl_next,
-    .start = flp.start,
-    .end = flp.end,
-  };
-  return result;
-}
-
-// Note: nvim_parseMarker is already defined above (around line 3061)
-
-/// Wrapper for foldlevelMarker that returns the FoldLevelResult.
-/// Requires nvim_parseMarker to be called first.
-/// Current level (flp.lvl) must be passed in - caller tracks state.
-FoldLevelResult_C nvim_foldlevelMarker(win_T *wp, linenr_T lnum, linenr_T off, int current_lvl)
-{
-  fline_T flp;
-  flp.wp = wp;
-  flp.lnum = lnum;
-  flp.off = off;
-  flp.lvl = current_lvl;
-  flp.lvl_next = current_lvl;
-  flp.start = 0;
-  flp.end = MAX_LEVEL + 1;
-  flp.had_end = MAX_LEVEL + 1;
-
-  foldlevelMarker(&flp);
 
   FoldLevelResult_C result = {
     .lvl = flp.lvl,

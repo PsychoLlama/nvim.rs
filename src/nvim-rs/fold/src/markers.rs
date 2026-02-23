@@ -61,7 +61,8 @@ extern "C" {
 ///
 /// Returns a `FoldMarkerInfo` struct with pointers into the original option string.
 /// The pointers are only valid as long as the window's foldmarker option is unchanged.
-fn parse_marker_impl(wp: WinHandle) -> FoldMarkerInfo {
+#[must_use]
+pub fn parse_marker_impl(wp: WinHandle) -> FoldMarkerInfo {
     if wp.is_null() {
         return FoldMarkerInfo::default();
     }
@@ -145,7 +146,8 @@ pub struct FoldLevelMarkerResult {
 /// Requires that `current_lvl` is set to the fold level of the previous line!
 /// This means you can't call this function twice on the same line without
 /// passing the updated level.
-fn foldlevel_marker_impl(
+#[must_use]
+pub fn foldlevel_marker_impl(
     wp: WinHandle,
     lnum: LineNr,
     off: LineNr,
