@@ -66,6 +66,13 @@ extern "C" {
     // Popup menu operations
     fn nvim_ins_compl_del_pum();
     fn nvim_pum_clear();
+
+    // cp_number accessors
+    fn nvim_compl_match_get_cp_number(m: ComplMatch) -> c_int;
+    fn nvim_compl_match_set_cp_number(m: ComplMatch, num: c_int);
+
+    // Direction check (from lib.rs)
+    fn rs_compl_dir_forward() -> c_int;
 }
 
 // CP flags (must match C enum) - preserved for future use
@@ -498,6 +505,68 @@ pub unsafe extern "C" fn rs_compl_is_only_match(node: *mut c_void) -> c_int {
     let next_is_orig = next.is_null() || is_first_match(next);
 
     c_int::from(prev_is_orig && next_is_orig)
+}
+
+/// Assign sequential numbers to completion matches that don't have one yet.
+///
+/// Traverses the match linked list starting from `compl_curr_match` to find
+/// the first already-numbered entry, then walks in the opposite direction
+/// assigning incrementing numbers.
+///
+/// In FORWARD mode: searches backward for a numbered entry, then walks
+/// forward assigning numbers. In BACKWARD mode: searches forward for a
+/// numbered entry, then walks backward assigning numbers.
+///
+/// # Safety
+/// Requires valid completion list state (`compl_curr_match` non-null).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_update_sequence_numbers() {
+    let curr = nvim_compl_get_curr_match();
+    if curr.is_null() {
+        return;
+    }
+
+    let mut number: c_int = 0;
+
+    if rs_compl_dir_forward() != 0 {
+        // Search backwards for the first valid (!= -1) number.
+        let mut match_ = nvim_compl_match_get_prev(curr);
+        while !match_.is_null() && !is_first_match(match_) {
+            if nvim_compl_match_get_cp_number(match_) != -1 {
+                number = nvim_compl_match_get_cp_number(match_);
+                break;
+            }
+            match_ = nvim_compl_match_get_prev(match_);
+        }
+        if !match_.is_null() {
+            // Go forward and assign all numbers which are not assigned yet
+            let mut assign = nvim_compl_match_get_next(match_);
+            while !assign.is_null() && nvim_compl_match_get_cp_number(assign) == -1 {
+                number += 1;
+                nvim_compl_match_set_cp_number(assign, number);
+                assign = nvim_compl_match_get_next(assign);
+            }
+        }
+    } else {
+        // BACKWARD: search forwards for the first valid (!= -1) number.
+        let mut match_ = nvim_compl_match_get_next(curr);
+        while !match_.is_null() && !is_first_match(match_) {
+            if nvim_compl_match_get_cp_number(match_) != -1 {
+                number = nvim_compl_match_get_cp_number(match_);
+                break;
+            }
+            match_ = nvim_compl_match_get_next(match_);
+        }
+        if !match_.is_null() {
+            // Go backward and assign all numbers which are not assigned yet
+            let mut assign = nvim_compl_match_get_prev(match_);
+            while !assign.is_null() && nvim_compl_match_get_cp_number(assign) == -1 {
+                number += 1;
+                nvim_compl_match_set_cp_number(assign, number);
+                assign = nvim_compl_match_get_prev(assign);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -144,6 +144,7 @@ extern void rs_ins_compl_enable_autocomplete(void);
 extern void rs_strip_caret_numbers_in_place(char *str);
 extern unsigned rs_quote_meta(char *dest, char *src, int len);
 extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
+extern void rs_ins_compl_update_sequence_numbers(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -1672,6 +1673,7 @@ int nvim_get_compl_match_array_exists(void) { return compl_match_array != NULL ?
 
 // Completion state accessors (used by Rust insexpand crate)
 int nvim_compl_match_get_cp_number(void *m) { return m ? ((compl_T *)m)->cp_number : -1; }
+void nvim_compl_match_set_cp_number(void *m, int num) { if (m) ((compl_T *)m)->cp_number = num; }
 const char *nvim_curbuf_get_b_p_cpt(void) { return curbuf->b_p_cpt; }
 uint64_t nvim_get_cpt_start_tv(void) { return cpt_sources_array[cpt_sources_index].compl_start_tv; }
 uint64_t nvim_get_compl_timeout_ms(void) { return compl_timeout_ms; }
@@ -2603,49 +2605,7 @@ static char *ins_compl_mode(void)
 /// one assigned yet.
 static void ins_compl_update_sequence_numbers(void)
 {
-  int number = 0;
-  compl_T *match;
-
-  if (rs_compl_dir_forward()) {
-    // Search backwards for the first valid (!= -1) number.
-    // This should normally succeed already at the first loop
-    // cycle, so it's fast!
-    for (match = compl_curr_match->cp_prev;
-         match != NULL && !is_first_match(match); match = match->cp_prev) {
-      if (match->cp_number != -1) {
-        number = match->cp_number;
-        break;
-      }
-    }
-    if (match != NULL) {
-      // go up and assign all numbers which are not assigned yet
-      for (match = match->cp_next;
-           match != NULL && match->cp_number == -1;
-           match = match->cp_next) {
-        match->cp_number = ++number;
-      }
-    }
-  } else {  // BACKWARD
-    assert(compl_direction == BACKWARD);
-    // Search forwards (upwards) for the first valid (!= -1)
-    // number.  This should normally succeed already at the
-    // first loop cycle, so it's fast!
-    for (match = compl_curr_match->cp_next;
-         match != NULL && !is_first_match(match); match = match->cp_next) {
-      if (match->cp_number != -1) {
-        number = match->cp_number;
-        break;
-      }
-    }
-    if (match != NULL) {
-      // go down and assign all numbers which are not assigned yet
-      for (match = match->cp_prev;
-           match && match->cp_number == -1;
-           match = match->cp_prev) {
-        match->cp_number = ++number;
-      }
-    }
-  }
+  rs_ins_compl_update_sequence_numbers();
 }
 
 /// Fill the dict of complete_info
