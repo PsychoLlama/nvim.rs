@@ -176,7 +176,7 @@ extern int rs_get_spell_compl_info(int startcol, int curs_col);
 // Phase 3 Rust exports
 extern void rs_ins_compl_continue_search(char *line);
 extern void rs_ins_compl_show_statusmsg(void);
-// Phase 4 Rust exports
+// Phase 4 (pass 3) Rust exports
 extern void rs_ins_compl_update_shown_match(void);
 extern void rs_find_next_match_in_menu(void);
 
@@ -1574,9 +1574,6 @@ size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp
 int nvim_vim_strnicmp(const char *s1, const char *s2, size_t len) { return STRNICMP(s1, s2, len); }
 int nvim_fuzzy_match_str(char *str, const char *pat) { return fuzzy_match_str(str, pat); }
 const char *nvim_get_leader_for_startcol_data(void *match, int cached) { String *s = get_leader_for_startcol((compl_T *)match, cached != 0); return s ? s->data : NULL; }
-size_t nvim_get_leader_for_startcol_size(void *match, int cached) { String *s = get_leader_for_startcol((compl_T *)match, cached != 0); return s ? s->size : 0; }
-int nvim_compl_match_get_in_match_array(void *m) { return m ? (((compl_T *)m)->cp_in_match_array ? 1 : 0) : 0; }
-void nvim_get_leader_for_startcol_clear_cache(void) { get_leader_for_startcol(NULL, true); }
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
@@ -4835,12 +4832,8 @@ void nvim_compl_set_shown_to_first(void) { compl_shown_match = compl_first_match
 
 // Accessors for Phase 3: sort_compl_match_list / ins_compl_fuzzy_sort migration
 // compare_type: 0 = fuzzy, 1 = nearest
-void nvim_mergesort_compl_list(int compare_type) {
-  sort_compl_match_list(compare_type == 0 ? cp_compare_fuzzy : cp_compare_nearest);
-}
-void *nvim_compl_first_match_get_prev(void) {
-  return compl_first_match ? compl_first_match->cp_prev : NULL;
-}
+void nvim_mergesort_compl_list(int compare_type) { sort_compl_match_list(compare_type == 0 ? cp_compare_fuzzy : cp_compare_nearest); }
+void *nvim_compl_first_match_get_prev(void) { return compl_first_match ? compl_first_match->cp_prev : NULL; }
 // Returns 1 if compl_shown_match equals sentinel (compl_first_match for forward,
 // compl_first_match->cp_prev for backward), 0 otherwise
 int nvim_compl_shown_match_is_sentinel(int forward) {
@@ -4861,9 +4854,7 @@ void nvim_set_spell_bad_len(int val) { spell_bad_len = val; }
 void nvim_set_compl_restarting(int val) { compl_restarting = val != 0; }
 int nvim_ins_complete_ctrl_n(void) { return ins_complete(Ctrl_N, true); }
 // Compound accessor: compl_enter_selects = !compl_used_match && compl_selected_item != -1
-void nvim_update_compl_enter_selects(void) {
-  compl_enter_selects = !compl_used_match && compl_selected_item != -1;
-}
+void nvim_update_compl_enter_selects(void) { compl_enter_selects = !compl_used_match && compl_selected_item != -1; }
 
 // Accessor for Phase 5: ins_compl_del_pum migration
 void nvim_xfree_compl_match_array(void) { XFREE_CLEAR(compl_match_array); }
