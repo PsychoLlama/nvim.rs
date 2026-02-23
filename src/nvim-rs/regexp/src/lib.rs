@@ -87,16 +87,6 @@ extern "C" {
     fn nvim_regexp_clear_reg_startzp();
     fn nvim_regexp_clear_reg_endzp();
 
-    // Compilation global accessors
-    fn nvim_regexp_get_regcode() -> *mut u8;
-    fn nvim_regexp_set_regcode(p: *mut u8);
-    fn nvim_regexp_get_regsize() -> i64;
-    fn nvim_regexp_set_regsize(v: i64);
-    fn nvim_regexp_get_reg_toolong() -> c_int;
-    fn nvim_regexp_set_reg_toolong(v: c_int);
-    fn nvim_regexp_get_just_calc_size() -> *mut u8;
-
-    // Multibyte helpers (utf_char2len/utf_char2bytes already declared below)
 }
 
 // Characters always special inside [] ranges
@@ -162,6 +152,20 @@ static mut REG_STRICT: c_int = 0;
 static mut RE_HAS_Z: c_int = 0;
 static mut WANTS_NFA: c_int = 0;
 static mut ONE_EXACTLY: c_int = 0;
+
+// --- Phase 2: Compilation globals (moved from C to Rust) ---
+// JUST_CALC_SIZE sentinel: same as C (uint8_t*)-1 = all-ones pointer
+const JUST_CALC_SIZE: *mut u8 = (-1isize as usize) as *mut u8;
+// NSUBEXP and CLASSCHARS are defined later (near their related code); see those definitions.
+static mut REGCODE: *mut u8 = std::ptr::null_mut();
+static mut REGSIZE: i64 = 0;
+static mut REG_TOOLONG: c_int = 0;
+static mut NUM_COMPLEX_BRACES: c_int = 0;
+static mut BRACE_MIN: [i64; 10] = [0i64; 10];
+static mut BRACE_MAX: [i64; 10] = [0i64; 10];
+static mut BRACE_COUNT: [c_int; 10] = [0; 10];
+static mut BL_MINVAL: i64 = 0;
+static mut BL_MAXVAL: i64 = 0;
 
 /// Expose `HAD_EOL` for external crates (e.g. search crate) that need
 /// `nvim_regexp_get_had_eol()` -- now backed by the Rust static.
@@ -1174,6 +1178,8 @@ pub unsafe extern "C" fn rs_get_cpo_flags() {
 // --- extmatch lifecycle ---
 
 const NSUBEXP: usize = 10;
+// HAD_ENDBRACE is here (after NSUBEXP is in scope) -- moved from C in Phase 2
+static mut HAD_ENDBRACE: [u8; NSUBEXP] = [0u8; NSUBEXP];
 
 /// Matches C `reg_extmatch_T` layout in `regexp_defs.h`.
 #[repr(C)]
@@ -2542,16 +2548,16 @@ pub unsafe extern "C" fn rs_re_put_uint32(p: *mut u8, val: u32) -> *mut u8 {
 /// If `regcode == JUST_CALC_SIZE`, increments `regsize` instead.
 #[no_mangle]
 pub unsafe extern "C" fn rs_regc(b: c_int) {
-    let regcode = nvim_regexp_get_regcode();
-    let just_calc_size = nvim_regexp_get_just_calc_size();
+    let regcode = REGCODE;
+    let just_calc_size = JUST_CALC_SIZE;
     if regcode == just_calc_size {
-        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 1);
+        REGSIZE += 1;
     } else {
         #[allow(clippy::cast_possible_truncation)]
         {
             *regcode = b as u8;
         }
-        nvim_regexp_set_regcode(regcode.add(1));
+        REGCODE = regcode.add(1);
     }
 }
 
@@ -2559,13 +2565,13 @@ pub unsafe extern "C" fn rs_regc(b: c_int) {
 /// If `regcode == JUST_CALC_SIZE`, adds `utf_char2len(c)` to `regsize`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_regmbc(c: c_int) {
-    let regcode = nvim_regexp_get_regcode();
-    let just_calc_size = nvim_regexp_get_just_calc_size();
+    let regcode = REGCODE;
+    let just_calc_size = JUST_CALC_SIZE;
     if regcode == just_calc_size {
-        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + utf_char2len(c) as i64);
+        REGSIZE += utf_char2len(c) as i64;
     } else {
         let written = utf_char2bytes(c, regcode.cast::<c_char>());
-        nvim_regexp_set_regcode(regcode.add(written as usize));
+        REGCODE = regcode.add(written as usize);
     }
 }
 
@@ -2578,10 +2584,10 @@ const BRACE_COMPLEX: c_int = 140; // #define BRACE_COMPLEX 140 (range 140-149)
 /// If `regcode == JUST_CALC_SIZE`, adds 3 to `regsize` and returns `JUST_CALC_SIZE`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_regnode(op: c_int) -> *mut u8 {
-    let regcode = nvim_regexp_get_regcode();
-    let just_calc_size = nvim_regexp_get_just_calc_size();
+    let regcode = REGCODE;
+    let just_calc_size = JUST_CALC_SIZE;
     if regcode == just_calc_size {
-        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 3);
+        REGSIZE += 3;
         return just_calc_size;
     }
     let ret = regcode;
@@ -2591,7 +2597,7 @@ pub unsafe extern "C" fn rs_regnode(op: c_int) -> *mut u8 {
     }
     *regcode.add(1) = 0; // NUL "next" pointer
     *regcode.add(2) = 0;
-    nvim_regexp_set_regcode(regcode.add(3));
+    REGCODE = regcode.add(3);
     ret
 }
 
@@ -2599,8 +2605,8 @@ pub unsafe extern "C" fn rs_regnode(op: c_int) -> *mut u8 {
 /// Returns NULL when calculating size, when there is no next item, or on error.
 #[no_mangle]
 pub unsafe extern "C" fn rs_regnext(p: *mut u8) -> *mut u8 {
-    let just_calc_size = nvim_regexp_get_just_calc_size();
-    if p == just_calc_size || nvim_regexp_get_reg_toolong() != 0 {
+    let just_calc_size = JUST_CALC_SIZE;
+    if p == just_calc_size || REG_TOOLONG != 0 {
         return std::ptr::null_mut();
     }
 
@@ -2624,7 +2630,7 @@ pub unsafe extern "C" fn rs_regnext(p: *mut u8) -> *mut u8 {
 /// and writes it as a 16-bit value in bytes 1-2 of that node.
 #[no_mangle]
 pub unsafe extern "C" fn rs_regtail(p: *mut u8, val: *const u8) {
-    let just_calc_size = nvim_regexp_get_just_calc_size();
+    let just_calc_size = JUST_CALC_SIZE;
     if p == just_calc_size {
         return;
     }
@@ -2653,7 +2659,7 @@ pub unsafe extern "C" fn rs_regtail(p: *mut u8, val: *const u8) {
     // When the offset uses more than 16 bits it can no longer fit in the two
     // bytes available.
     if offset > 0xffff {
-        nvim_regexp_set_reg_toolong(1);
+        REG_TOOLONG = 1;
     } else {
         #[allow(clippy::cast_possible_truncation)]
         {
@@ -2667,7 +2673,7 @@ pub unsafe extern "C" fn rs_regtail(p: *mut u8, val: *const u8) {
 /// Only acts if `OP(p)` is `BRANCH` or `BRACE_COMPLEX+0..9`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_regoptail(p: *mut u8, val: *mut u8) {
-    let just_calc_size = nvim_regexp_get_just_calc_size();
+    let just_calc_size = JUST_CALC_SIZE;
     if p.is_null() || p == just_calc_size {
         return;
     }
@@ -2684,14 +2690,14 @@ pub unsafe extern "C" fn rs_regoptail(p: *mut u8, val: *mut u8) {
 /// then writes the 3-byte operator node at `opnd`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_reginsert(op: c_int, opnd: *mut u8) {
-    let regcode = nvim_regexp_get_regcode();
-    let just_calc_size = nvim_regexp_get_just_calc_size();
+    let regcode = REGCODE;
+    let just_calc_size = JUST_CALC_SIZE;
     if regcode == just_calc_size {
-        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 3);
+        REGSIZE += 3;
         return;
     }
     let count = regcode.offset_from(opnd) as usize;
-    nvim_regexp_set_regcode(regcode.add(3));
+    REGCODE = regcode.add(3);
     // Shift bytes forward by 3 (overlapping — ptr::copy handles this)
     std::ptr::copy(opnd, opnd.add(3), count);
     // Write 3-byte operator node at opnd
@@ -2707,14 +2713,14 @@ pub unsafe extern "C" fn rs_reginsert(op: c_int, opnd: *mut u8) {
 /// Shifts existing bytes forward by 7.
 #[no_mangle]
 pub unsafe extern "C" fn rs_reginsert_nr(op: c_int, val: i64, opnd: *mut u8) {
-    let regcode = nvim_regexp_get_regcode();
-    let just_calc_size = nvim_regexp_get_just_calc_size();
+    let regcode = REGCODE;
+    let just_calc_size = JUST_CALC_SIZE;
     if regcode == just_calc_size {
-        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 7);
+        REGSIZE += 7;
         return;
     }
     let count = regcode.offset_from(opnd) as usize;
-    nvim_regexp_set_regcode(regcode.add(7));
+    REGCODE = regcode.add(7);
     std::ptr::copy(opnd, opnd.add(7), count);
     #[allow(clippy::cast_possible_truncation)]
     {
@@ -2731,14 +2737,14 @@ pub unsafe extern "C" fn rs_reginsert_nr(op: c_int, val: i64, opnd: *mut u8) {
 /// Shifts existing bytes forward by 11, then calls `rs_regtail(opnd, place)`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_reginsert_limits(op: c_int, minval: i64, maxval: i64, opnd: *mut u8) {
-    let regcode = nvim_regexp_get_regcode();
-    let just_calc_size = nvim_regexp_get_just_calc_size();
+    let regcode = REGCODE;
+    let just_calc_size = JUST_CALC_SIZE;
     if regcode == just_calc_size {
-        nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 11);
+        REGSIZE += 11;
         return;
     }
     let count = regcode.offset_from(opnd) as usize;
-    nvim_regexp_set_regcode(regcode.add(11));
+    REGCODE = regcode.add(11);
     std::ptr::copy(opnd, opnd.add(11), count);
     #[allow(clippy::cast_possible_truncation)]
     {
@@ -2920,8 +2926,6 @@ const CLASSCODES: &[c_int] = &[
 ];
 
 extern "C" {
-    fn nvim_regexp_get_num_complex_braces() -> c_int;
-    fn nvim_regexp_set_num_complex_braces(v: c_int);
     fn nvim_regexp_emsg2_e59(m: c_int);
     fn nvim_regexp_emsg2_e60(m: c_int);
     fn nvim_regexp_emsg2_e61(m: c_int);
@@ -2933,8 +2937,6 @@ extern "C" {
 extern "C" {
     // Accessors for regatom globals
     fn nvim_regexp_get_reg_do_extmatch() -> c_int;
-    fn nvim_regexp_get_had_endbrace(refnum: c_int) -> c_int;
-    fn nvim_regexp_clear_had_endbrace();
     fn nvim_regexp_get_curwin_lnum() -> i32;
     fn nvim_regexp_get_curwin_col() -> i32;
     fn nvim_regexp_get_curwin_vcol() -> i32;
@@ -3025,7 +3027,7 @@ unsafe fn coll_get_char() -> c_int {
 /// brace.
 #[allow(dead_code)]
 unsafe fn seen_endbrace(refnum: c_int) -> bool {
-    if nvim_regexp_get_had_endbrace(refnum) == 0 {
+    if HAD_ENDBRACE[refnum as usize] as c_int == 0 {
         // Trick: check if "@<=" or "@<!" follows, in which case
         // the \1 can appear before the referenced match.
         let regparse = REGPARSE as *const u8;
@@ -3293,7 +3295,7 @@ unsafe fn parse_collection(flagp: *mut c_int, extra: c_int) -> *mut u8 {
             REGPARSE = regparse;
             if *regparse == b'n' as c_char {
                 // '\n' in range: also match NL
-                let just_calc_size = nvim_regexp_get_just_calc_size();
+                let just_calc_size = JUST_CALC_SIZE;
                 if ret != just_calc_size {
                     // Using \n inside [^] does not change what matches.
                     // "[^\n]" is the same as ".".
@@ -3728,7 +3730,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
                     ret = br;
                 } else {
                     rs_regtail(lastnode, br);
-                    if nvim_regexp_get_reg_toolong() != 0 {
+                    if REG_TOOLONG != 0 {
                         return std::ptr::null_mut();
                     }
                 }
@@ -3747,7 +3749,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
             }
             let lastbranch = rs_regnode(BRANCH);
             let br = rs_regnode(NOTHING);
-            let just_calc_size = nvim_regexp_get_just_calc_size();
+            let just_calc_size = JUST_CALC_SIZE;
             if ret != just_calc_size {
                 rs_regtail(lastnode, br);
                 rs_regtail(lastbranch, br);
@@ -3756,7 +3758,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
                 while scan != lastnode {
                     if *scan as c_int == BRANCH {
                         rs_regtail(scan, lastbranch);
-                        if nvim_regexp_get_reg_toolong() != 0 {
+                        if REG_TOOLONG != 0 {
                             return std::ptr::null_mut();
                         }
                         scan = scan.add(3); // OPERAND(scan)
@@ -3838,14 +3840,14 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
                 // "\%'m", "\%<'m" and "\%>'m": Mark
                 c = rs_getchr();
                 let ret = rs_regnode(RE_MARK);
-                let just_calc_size = nvim_regexp_get_just_calc_size();
+                let just_calc_size = JUST_CALC_SIZE;
                 if ret == just_calc_size {
-                    nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 2);
+                    REGSIZE += 2;
                 } else {
-                    let regcode = nvim_regexp_get_regcode();
+                    let regcode = REGCODE;
                     *regcode = c as u8;
                     *regcode.add(1) = cmp as u8;
-                    nvim_regexp_set_regcode(regcode.add(2));
+                    REGCODE = regcode.add(2);
                 }
                 return ret;
             } else if (c == b'l' as c_int || c == b'c' as c_int || c == b'v' as c_int)
@@ -3875,14 +3877,14 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
                     }
                     ret = rs_regnode(RE_VCOL);
                 }
-                let just_calc_size = nvim_regexp_get_just_calc_size();
+                let just_calc_size = JUST_CALC_SIZE;
                 if ret == just_calc_size {
-                    nvim_regexp_set_regsize(nvim_regexp_get_regsize() + 5);
+                    REGSIZE += 5;
                 } else {
                     // put the number and the optional comparator after the opcode
-                    let regcode = rs_re_put_uint32(nvim_regexp_get_regcode(), n);
+                    let regcode = rs_re_put_uint32(REGCODE, n);
                     *regcode = cmp as u8;
-                    nvim_regexp_set_regcode(regcode.add(1));
+                    REGCODE = regcode.add(1);
                 }
                 return ret;
             }
@@ -4054,7 +4056,7 @@ pub unsafe extern "C" fn rs_regpiece(flagp: *mut c_int) -> *mut u8 {
                 rs_reginsert(BRACE_SIMPLE, ret);
                 rs_reginsert_limits(BRACE_LIMITS, minval as i64, maxval as i64, ret);
             } else {
-                let ncb = nvim_regexp_get_num_complex_braces();
+                let ncb = NUM_COMPLEX_BRACES;
                 if ncb >= 10 {
                     let reg_magic = REG_MAGIC;
                     nvim_regexp_emsg2_e60(c_int::from(reg_magic == MAGIC_ALL));
@@ -4064,7 +4066,7 @@ pub unsafe extern "C" fn rs_regpiece(flagp: *mut c_int) -> *mut u8 {
                 rs_regoptail(ret, rs_regnode(BACK));
                 rs_regoptail(ret, ret);
                 rs_reginsert_limits(BRACE_LIMITS, minval as i64, maxval as i64, ret);
-                nvim_regexp_set_num_complex_braces(ncb + 1);
+                NUM_COMPLEX_BRACES = ncb + 1;
             }
             if minval > 0 && maxval > 0 {
                 *flagp = HASWIDTH | (flags & (HASNL | HASLOOKBH));
@@ -4142,7 +4144,7 @@ pub unsafe extern "C" fn rs_regconcat(flagp: *mut c_int) -> *mut u8 {
             }
             _ => {
                 let latest = rs_regpiece(&mut flags);
-                if latest.is_null() || nvim_regexp_get_reg_toolong() != 0 {
+                if latest.is_null() || REG_TOOLONG != 0 {
                     return std::ptr::null_mut();
                 }
                 *flagp |= flags & (HASWIDTH | HASNL | HASLOOKBH);
@@ -4196,7 +4198,7 @@ pub unsafe extern "C" fn rs_regbranch(flagp: *mut c_int) -> *mut u8 {
         }
         rs_skipchr();
         rs_regtail(latest, rs_regnode(END)); // operand ends
-        if nvim_regexp_get_reg_toolong() != 0 {
+        if REG_TOOLONG != 0 {
             break;
         }
         rs_reginsert(MATCH, latest);
@@ -4207,7 +4209,6 @@ pub unsafe extern "C" fn rs_regbranch(flagp: *mut c_int) -> *mut u8 {
 }
 
 extern "C" {
-    fn nvim_regexp_set_had_endbrace(parno: c_int, v: c_int);
     fn nvim_regexp_emsg_e50();
     fn nvim_regexp_emsg2_e51(m: c_int);
     fn nvim_regexp_emsg_e52();
@@ -4278,7 +4279,7 @@ pub unsafe extern "C" fn rs_reg(paren: c_int, flagp: *mut c_int) -> *mut u8 {
     while rs_peekchr() == magic(b'|') {
         rs_skipchr();
         br = rs_regbranch(&mut flags);
-        if br.is_null() || nvim_regexp_get_reg_toolong() != 0 {
+        if br.is_null() || REG_TOOLONG != 0 {
             return std::ptr::null_mut();
         }
         rs_regtail(ret, br); // BRANCH -> BRANCH.
@@ -4330,7 +4331,7 @@ pub unsafe extern "C" fn rs_reg(paren: c_int, flagp: *mut c_int) -> *mut u8 {
     // Here we set the flag allowing back references to this set of
     // parentheses.
     if paren == REG_PAREN {
-        nvim_regexp_set_had_endbrace(parno, 1); // have seen the close paren
+        HAD_ENDBRACE[parno as usize] = 1_u8; // have seen the close paren
     }
     ret
 }
@@ -5118,17 +5119,6 @@ extern "C" {
     fn nvim_regexp_call_ga_grow_backpos(n: c_int);
 
     // Brace statics
-    fn nvim_regexp_get_brace_min(no: c_int) -> i64;
-    fn nvim_regexp_set_brace_min(no: c_int, v: i64);
-    fn nvim_regexp_get_brace_max(no: c_int) -> i64;
-    fn nvim_regexp_set_brace_max(no: c_int, v: i64);
-    fn nvim_regexp_get_brace_count(no: c_int) -> c_int;
-    fn nvim_regexp_set_brace_count(no: c_int, v: c_int);
-
-    fn nvim_regexp_get_bl_minval() -> i64;
-    fn nvim_regexp_set_bl_minval(v: i64);
-    fn nvim_regexp_get_bl_maxval() -> i64;
-    fn nvim_regexp_set_bl_maxval(v: i64);
 
     // Behind position (C returns void*, cast to RegsaveT* on Rust side)
     fn nvim_regexp_get_behind_pos() -> *mut RegsaveT;
@@ -6057,13 +6047,13 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                     // --- Phase 5: Quantifiers ---
                     BRACE_LIMITS => {
                         if op(next) == BRACE_SIMPLE {
-                            nvim_regexp_set_bl_minval(operand_min(scan));
-                            nvim_regexp_set_bl_maxval(operand_max(scan));
+                            BL_MINVAL = operand_min(scan);
+                            BL_MAXVAL = operand_max(scan);
                         } else if op(next) >= BRACE_COMPLEX && op(next) < BRACE_COMPLEX + 10 {
                             let no = op(next) - BRACE_COMPLEX;
-                            nvim_regexp_set_brace_min(no, operand_min(scan));
-                            nvim_regexp_set_brace_max(no, operand_max(scan));
-                            nvim_regexp_set_brace_count(no, 0);
+                            BRACE_MIN[no as usize] = operand_min(scan);
+                            BRACE_MAX[no as usize] = operand_max(scan);
+                            BRACE_COUNT[no as usize] = 0;
                         } else {
                             nvim_regexp_internal_error(c"BRACE_LIMITS".as_ptr());
                             status = RA_FAIL;
@@ -6072,16 +6062,15 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
 
                     x if (BRACE_COMPLEX..BRACE_COMPLEX + 10).contains(&x) => {
                         let no = opc - BRACE_COMPLEX;
-                        nvim_regexp_set_brace_count(no, nvim_regexp_get_brace_count(no) + 1);
+                        BRACE_COUNT[no as usize] += 1;
 
                         // If not matched enough times yet, try one more.
-                        let min_of_range =
-                            if nvim_regexp_get_brace_min(no) <= nvim_regexp_get_brace_max(no) {
-                                nvim_regexp_get_brace_min(no)
-                            } else {
-                                nvim_regexp_get_brace_max(no)
-                            };
-                        if i64::from(nvim_regexp_get_brace_count(no)) <= min_of_range {
+                        let min_of_range = if BRACE_MIN[no as usize] <= BRACE_MAX[no as usize] {
+                            BRACE_MIN[no as usize]
+                        } else {
+                            BRACE_MAX[no as usize]
+                        };
+                        if i64::from(BRACE_COUNT[no as usize]) <= min_of_range {
                             let rp = regstack_push(RS_BRCPLX_MORE, scan);
                             if rp.is_null() {
                                 status = RA_FAIL;
@@ -6094,11 +6083,9 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                 next = operand(scan);
                                 // Continue and handle the result when done.
                             }
-                        } else if nvim_regexp_get_brace_min(no) <= nvim_regexp_get_brace_max(no) {
+                        } else if BRACE_MIN[no as usize] <= BRACE_MAX[no as usize] {
                             // Range is the normal way around, use longest match.
-                            if i64::from(nvim_regexp_get_brace_count(no))
-                                <= nvim_regexp_get_brace_max(no)
-                            {
+                            if i64::from(BRACE_COUNT[no as usize]) <= BRACE_MAX[no as usize] {
                                 let rp = regstack_push(RS_BRCPLX_LONG, scan);
                                 if rp.is_null() {
                                     status = RA_FAIL;
@@ -6114,9 +6101,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             // else: matched enough times, continue with next item.
                         } else {
                             // Range is backwards, use shortest match first.
-                            if i64::from(nvim_regexp_get_brace_count(no))
-                                <= nvim_regexp_get_brace_min(no)
-                            {
+                            if i64::from(BRACE_COUNT[no as usize]) <= BRACE_MIN[no as usize] {
                                 let rp = regstack_push(RS_BRCPLX_SHORT, scan);
                                 if rp.is_null() {
                                     status = RA_FAIL;
@@ -6155,8 +6140,8 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         // else: rst.nextb and rst.nextb_ic are already 0 (NUL)
 
                         if opc == BRACE_SIMPLE {
-                            rst.minval = nvim_regexp_get_bl_minval();
-                            rst.maxval = nvim_regexp_get_bl_maxval();
+                            rst.minval = BL_MINVAL;
+                            rst.maxval = BL_MAXVAL;
                         } else {
                             rst.minval = i64::from(opc != STAR);
                             rst.maxval = i64::from(MAX_LIMIT);
@@ -6667,7 +6652,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
                         nvim_regexp_set_backpos_len(bp_len);
                         let no = (*rp).rs_no as c_int;
-                        nvim_regexp_set_brace_count(no, nvim_regexp_get_brace_count(no) - 1);
+                        BRACE_COUNT[no as usize] -= 1;
                     }
                     regstack_pop(&mut scan);
                 }
@@ -6680,7 +6665,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
                         nvim_regexp_set_backpos_len(bp_len);
                         let no = (*rp).rs_no as c_int;
-                        nvim_regexp_set_brace_count(no, nvim_regexp_get_brace_count(no) - 1);
+                        BRACE_COUNT[no as usize] -= 1;
                         // Continue with the items after "\{}".
                         status = RA_CONT;
                     }
@@ -7103,13 +7088,13 @@ unsafe fn regcomp_start(expr: *mut u8, re_flags: c_int) {
     REG_STRICT = re_flags & RE_STRICT;
     rs_get_cpo_flags();
 
-    nvim_regexp_set_num_complex_braces(0);
+    NUM_COMPLEX_BRACES = 0;
     REGNPAR = 1;
-    nvim_regexp_clear_had_endbrace();
+    HAD_ENDBRACE = [0u8; NSUBEXP];
     REGNZPAR = 1;
     RE_HAS_Z = 0;
-    nvim_regexp_set_regsize(0);
-    nvim_regexp_set_reg_toolong(0);
+    REGSIZE = 0;
+    REG_TOOLONG = 0;
     REGFLAGS_COMPILE = 0;
     HAD_EOL = 0;
 }
@@ -8223,10 +8208,6 @@ extern "C" {
     fn nvim_regexp_semsg_missing_value(c: c_int);
 
     // Data accessors
-    fn nvim_regexp_get_classchars() -> *mut u8;
-    fn nvim_regexp_get_nfa_classcodes(index: c_int) -> c_int;
-    fn nvim_regexp_get_regexp_inrange() -> *mut c_char;
-    fn nvim_regexp_get_regexp_abbr() -> *mut c_char;
     fn nvim_regexp_set_rc_did_emsg_true();
 }
 
@@ -8414,9 +8395,13 @@ unsafe fn nfa_handle_collection(mut extra: c_int, old_rp: *mut c_char) -> c_int 
             let rp = regparse_u8();
             if *rp == b'\\'
                 && (rp.add(1) as usize) <= (endp as usize)
-                && (!vim_strchr(nvim_regexp_get_regexp_inrange(), *rp.add(1) as c_int).is_null()
+                && (!vim_strchr(
+                    REGEXP_INRANGE.as_ptr().cast::<c_char>(),
+                    *rp.add(1) as c_int,
+                )
+                .is_null()
                     || (REG_CPO_LIT == 0
-                        && !vim_strchr(nvim_regexp_get_regexp_abbr(), *rp.add(1) as c_int)
+                        && !vim_strchr(REGEXP_ABBR.as_ptr().cast::<c_char>(), *rp.add(1) as c_int)
                             .is_null()))
             {
                 mb_ptr_adv_regparse();
@@ -8760,7 +8745,7 @@ pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
 
 /// Handle character class atoms (`.`, `\i`, `\I`, etc.) and `\_x` variants.
 unsafe fn nfa_handle_char_class(c: c_int, extra: c_int, _old_regparse: *mut c_char) -> c_int {
-    let classchars = nvim_regexp_get_classchars();
+    let classchars = CLASSCHARS.as_ptr();
     let p = vim_strchr(classchars.cast::<c_char>(), rs_no_magic(c));
     if p.is_null() {
         if extra == NFA_ADD_NL {
@@ -8780,7 +8765,7 @@ unsafe fn nfa_handle_char_class(c: c_int, extra: c_int, _old_regparse: *mut c_ch
 
     #[allow(clippy::cast_possible_truncation)]
     let index = ((p as usize) - (classchars as usize)) as c_int;
-    nfa_emit(nvim_regexp_get_nfa_classcodes(index));
+    nfa_emit(NFA_CLASSCODES[index as usize]);
     if extra == NFA_ADD_NL {
         nfa_emit(NFA_NEWL);
         nfa_emit(NFA_OR);
@@ -9367,7 +9352,7 @@ pub unsafe extern "C" fn rs_nfa_reg(paren: c_int) -> c_int {
     }
 
     if paren == REG_PAREN {
-        nvim_regexp_set_had_endbrace(parno, 1);
+        HAD_ENDBRACE[parno as usize] = 1_u8;
         nfa_emit(NFA_MOPEN + parno);
     } else if paren == REG_ZPAREN {
         nfa_emit(NFA_ZOPEN + parno);
@@ -14349,7 +14334,7 @@ pub unsafe extern "C" fn rs_bt_regexec_both(
     // Set rex.line, rex.lnum, reg_toolong
     nvim_regexp_set_rex_line(line);
     nvim_regexp_set_rex_lnum(0);
-    nvim_regexp_set_reg_toolong(0);
+    REG_TOOLONG = 0;
 
     let regstart = nvim_bt_prog_get_regstart(prog);
     let reganch = nvim_bt_prog_get_reganch(prog);
@@ -14928,7 +14913,7 @@ pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c
 
     // First pass: determine size, legality.
     regcomp_start(expr, re_flags);
-    nvim_regexp_set_regcode(nvim_regexp_get_just_calc_size());
+    REGCODE = JUST_CALC_SIZE;
     rs_regc(REGMAGIC);
     let mut flags: c_int = 0;
     if rs_reg(REG_NOPAREN, &mut flags).is_null() {
@@ -14936,16 +14921,16 @@ pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c
     }
 
     // Allocate space.
-    let regsize_val = nvim_regexp_get_regsize();
+    let regsize_val = REGSIZE;
     let r = nvim_regexp_alloc_bt_regprog(regsize_val);
 
     // Second pass: emit code.
     regcomp_start(expr, re_flags);
-    nvim_regexp_set_regcode(nvim_regexp_get_prog_program(r));
+    REGCODE = nvim_regexp_get_prog_program(r);
     rs_regc(REGMAGIC);
     flags = 0;
-    if rs_reg(REG_NOPAREN, &mut flags).is_null() || nvim_regexp_get_reg_toolong() != 0 {
-        let was_toolong = nvim_regexp_get_reg_toolong() != 0;
+    if rs_reg(REG_NOPAREN, &mut flags).is_null() || REG_TOOLONG != 0 {
+        let was_toolong = REG_TOOLONG != 0;
         nvim_regexp_xfree(r);
         if was_toolong {
             nvim_regexp_call_emsg_e339();

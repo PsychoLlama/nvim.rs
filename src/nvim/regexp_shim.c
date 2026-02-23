@@ -291,9 +291,6 @@ void nvim_regexp_emsg_resulting_text_too_long(void) { emsg(_(e_resulting_text_to
 //  \x  - Character code in hex, eg \x4a
 //  \u  - Multibyte character code, eg \u20ac
 //  \U  - Long multibyte character code, eg \U12345678
-static char REGEXP_INRANGE[] = "]^-n\\";
-static char REGEXP_ABBR[] = "nrtebdoxuU";
-
 /// Check for a character class name "[:name:]".  "pp" points to the '['.
 /// Returns one of the CLASS_ items. CLASS_NONE means that no item was
 /// recognized.  Otherwise "pp" is advanced to after the item.
@@ -968,34 +965,6 @@ static void init_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_
   rex.reg_maxcol = rmp->rmm_maxcol;
 }
 
-static int num_complex_braces;  ///< Complex \{...} count
-static uint8_t *regcode;         ///< Code-emit pointer, or JUST_CALC_SIZE
-static int64_t regsize;            ///< Code size.
-static int reg_toolong;         ///< true when offset out of range
-static uint8_t had_endbrace[NSUBEXP];  ///< flags, true if end of () found
-static int64_t brace_min[10];        ///< Minimums for complex brace repeats
-static int64_t brace_max[10];        ///< Maximums for complex brace repeats
-static int brace_count[10];       ///< Current counts for complex brace repeats
-static int one_exactly = false;   ///< only do one char for EXACTLY
-
-// When making changes to classchars also change nfa_classcodes.
-static uint8_t *classchars = (uint8_t *)".iIkKfFpPsSdDxXoOwWhHaAlLuU";
-
-// When regcode is set to this value, code is not emitted and size is computed
-// instead.
-#define JUST_CALC_SIZE  ((uint8_t *)-1)
-
-// --- Compilation global accessors for Rust FFI ---
-uint8_t *nvim_regexp_get_regcode(void) { return regcode; }
-void nvim_regexp_set_regcode(uint8_t *p) { regcode = p; }
-int64_t nvim_regexp_get_regsize(void) { return regsize; }
-void nvim_regexp_set_regsize(int64_t v) { regsize = v; }
-int nvim_regexp_get_reg_toolong(void) { return reg_toolong; }
-void nvim_regexp_set_reg_toolong(int v) { reg_toolong = v; }
-uint8_t *nvim_regexp_get_just_calc_size(void) { return JUST_CALC_SIZE; }
-int nvim_regexp_get_num_complex_braces(void) { return num_complex_braces; }
-void nvim_regexp_set_num_complex_braces(int v) { num_complex_braces = v; }
-
 // Error helpers for Rust FFI (keeps gettext _() calls in C)
 void nvim_regexp_emsg2_e59(int m)
 {
@@ -1017,7 +986,6 @@ void nvim_regexp_emsg3_e62(int m, int c)
   semsg(_("E62: Nested %s%c"), m ? "" : "\\", c);
   rc_did_emsg = true;
 }
-void nvim_regexp_set_had_endbrace(int parno, int v) { had_endbrace[parno] = (uint8_t)v; }
 void nvim_regexp_emsg_e50(void)
 {
   emsg(_("E50: Too many \\z("));
@@ -1054,8 +1022,6 @@ void nvim_regexp_emsg_e488(void)
   rc_did_emsg = true;
 }
 
-int nvim_regexp_get_had_endbrace(int refnum) { return had_endbrace[refnum]; }
-void nvim_regexp_clear_had_endbrace(void) { CLEAR_FIELD(had_endbrace); }
 // reg_do_extmatch is a global (globals.h), not a C static -- accessor kept for Rust FFI
 int nvim_regexp_get_reg_do_extmatch(void) { return reg_do_extmatch; }
 // reg_prev_sub is a C static (kept here until it is moved to Rust in a later phase)
@@ -1201,11 +1167,6 @@ static void bt_regfree(regprog_T *prog)
   xfree(prog);
 }
 
-// The arguments from BRACE_LIMITS are stored here.  They are actually local
-// to regmatch(), but they are here to reduce the amount of stack space used
-// (it can be called recursively many times).
-static int64_t bl_minval;
-static int64_t bl_maxval;
 // --- regmatch accessor functions for Rust FFI (rs_regmatch) ---
 
 // Regstack/backpos management
@@ -1219,19 +1180,6 @@ uint8_t *nvim_regexp_get_backpos_data(void) { return (uint8_t *)backpos.ga_data;
 int nvim_regexp_get_backpos_len(void) { return backpos.ga_len; }
 void nvim_regexp_set_backpos_len(int v) { backpos.ga_len = v; }
 void nvim_regexp_call_ga_grow_backpos(int n) { ga_grow(&backpos, n); }
-
-// Brace static variable access
-int64_t nvim_regexp_get_brace_min(int no) { return brace_min[no]; }
-void nvim_regexp_set_brace_min(int no, int64_t v) { brace_min[no] = v; }
-int64_t nvim_regexp_get_brace_max(int no) { return brace_max[no]; }
-void nvim_regexp_set_brace_max(int no, int64_t v) { brace_max[no] = v; }
-int nvim_regexp_get_brace_count(int no) { return brace_count[no]; }
-void nvim_regexp_set_brace_count(int no, int v) { brace_count[no] = v; }
-
-int64_t nvim_regexp_get_bl_minval(void) { return bl_minval; }
-void nvim_regexp_set_bl_minval(int64_t v) { bl_minval = v; }
-int64_t nvim_regexp_get_bl_maxval(void) { return bl_maxval; }
-void nvim_regexp_set_bl_maxval(int64_t v) { bl_maxval = v; }
 
 // Behind position (return void* to avoid exposing local regsave_T type in generated header)
 void *nvim_regexp_get_behind_pos(void) { return (void *)&behind_pos; }
@@ -1501,17 +1449,6 @@ enum {
   NFA_CLASS_FNAME,
 };
 
-// Keep in sync with classchars.
-static int nfa_classcodes[] = {
-  NFA_ANY, NFA_IDENT, NFA_SIDENT, NFA_KWORD, NFA_SKWORD,
-  NFA_FNAME, NFA_SFNAME, NFA_PRINT, NFA_SPRINT,
-  NFA_WHITE, NFA_NWHITE, NFA_DIGIT, NFA_NDIGIT,
-  NFA_HEX, NFA_NHEX, NFA_OCTAL, NFA_NOCTAL,
-  NFA_WORD, NFA_NWORD, NFA_HEAD, NFA_NHEAD,
-  NFA_ALPHA, NFA_NALPHA, NFA_LOWER, NFA_NLOWER,
-  NFA_UPPER, NFA_NUPPER
-};
-
 static const char e_nul_found[] = N_("E865: (NFA) Regexp end encountered prematurely");
 static const char e_misplaced[] = N_("E866: (NFA regexp) Misplaced %c");
 static const char e_ill_char_class[] = N_("E877: (NFA regexp) Invalid character class: %" PRId64);
@@ -1533,10 +1470,6 @@ void nvim_regexp_semsg_e867_z(int c) { semsg(_("E867: (NFA) Unknown operator '\\
 void nvim_regexp_semsg_e867_pct(int c) { semsg(_("E867: (NFA) Unknown operator '\\%%%c'"), c); }
 void nvim_regexp_emsg_value_too_large(void) { emsg(_(e_value_too_large)); }
 void nvim_regexp_semsg_missing_value(int c) { semsg(_(e_nfa_regexp_missing_value_in_chr), c); }
-uint8_t *nvim_regexp_get_classchars(void) { return classchars; }
-int nvim_regexp_get_nfa_classcodes(int index) { return nfa_classcodes[index]; }
-char *nvim_regexp_get_regexp_inrange(void) { return REGEXP_INRANGE; }
-char *nvim_regexp_get_regexp_abbr(void) { return REGEXP_ABBR; }
 void nvim_regexp_set_rc_did_emsg_true(void) { rc_did_emsg = true; }
 
 void nvim_regexp_semsg_e869(int op) { semsg(_("E869: (NFA) Unknown operator '\\@%c'"), op); }
