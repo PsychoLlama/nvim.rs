@@ -423,6 +423,184 @@ pub extern "C" fn rs_set_result_errmsg(result: c_int) -> *const c_char {
 }
 
 // =============================================================================
+// String Option New Value (stropt_get_newval migration)
+// =============================================================================
+
+#[cfg(not(test))]
+extern "C" {
+    /// Expand environment variables and ~ in an option value.
+    /// Returns a static buffer (NameBuff) if expansion occurred, or NULL.
+    fn nvim_option_expand(opt_idx: c_int, val: *const c_char) -> *mut c_char;
+
+    /// Returns the address of the p_kp (keywordprg) global as void*.
+    fn nvim_option_get_p_kp_ptr() -> *mut c_void;
+
+    /// xmalloc: allocate memory (C allocator, caller must xfree)
+    fn xmalloc(size: usize) -> *mut c_char;
+
+    /// xfree: free memory allocated with xmalloc
+    fn xfree(ptr: *mut c_char);
+
+    /// strlen of a C string
+    fn strlen(s: *const c_char) -> usize;
+}
+
+#[cfg(not(test))]
+use crate::getset::{
+    rs_stropt_concat_with_comma, rs_stropt_copy_value, rs_stropt_remove_dupflags,
+    rs_stropt_remove_val,
+};
+#[cfg(not(test))]
+use crate::parsing::rs_find_dup_item;
+#[cfg(not(test))]
+use crate::OptFlags;
+#[cfg(not(test))]
+use std::ffi::c_void;
+#[cfg(not(test))]
+use std::ptr;
+
+/// Get the string value specified for a `:set` command.
+///
+/// Full port of C's `stropt_get_newval`. Handles:
+/// - `set opt=val` (OP_NONE)
+/// - `set opt+=val` (OP_ADDING)
+/// - `set opt^=val` (OP_PREPENDING)
+/// - `set opt-=val` (OP_REMOVING)
+/// - Backslash escaping in values
+/// - Environment variable expansion
+/// - Duplicate prevention and flag deduplication
+/// - 'keywordprg' empty-value special case
+///
+/// # Returns
+/// Newly xmalloc'd string (caller must xfree).
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[cfg(not(test))]
+#[no_mangle]
+#[allow(clippy::items_after_statements)]
+pub unsafe extern "C" fn rs_stropt_get_newval(
+    _nextchar: c_int,
+    opt_idx: c_int,
+    argp: *mut *mut c_char,
+    varp: *mut c_void,
+    origval: *const c_char,
+    op_arg: *mut c_int,
+    flags: u32,
+) -> *mut c_char {
+    static HELP: &[u8] = b":help\0";
+
+    if argp.is_null() || (*argp).is_null() {
+        return ptr::null_mut();
+    }
+
+    let mut arg = *argp;
+    let mut op = *op_arg;
+    let mut save_arg: *mut c_char = ptr::null_mut();
+
+    // Jump past the '=' or ':'
+    arg = arg.add(1);
+
+    // Set 'keywordprg' to ":help" if an empty value was passed
+    let p_kp_ptr = nvim_option_get_p_kp_ptr();
+    if varp == p_kp_ptr && (*arg == 0 || (*arg as u8) == b' ') {
+        save_arg = arg;
+        // Temporarily point arg to the literal ":help" string
+        // (safe: we restore it before returning)
+        arg = HELP.as_ptr().cast_mut().cast();
+    }
+
+    // Convert op integer to SetOp enum for Rust functions
+    let set_op = match op {
+        1 => SetOp::Adding,
+        2 => SetOp::Prepending,
+        3 => SetOp::Removing,
+        _ => SetOp::None,
+    };
+
+    // Copy the new string into allocated memory (C's stropt_copy_value)
+    let copy_result = rs_stropt_copy_value(origval, arg, set_op);
+    let mut newval = copy_result.value;
+    // Update arg to past the parsed value
+    arg = copy_result.new_arg.cast_mut();
+
+    // Expand environment variables and ~
+    // Don't expand when adding without inserting a comma
+    let opt_flags = OptFlags(flags);
+    if set_op == SetOp::None || opt_flags.contains(OptFlags::COMMA) {
+        // stropt_expand_envvar inline
+        let s = nvim_option_expand(opt_idx, newval);
+        if !s.is_null() {
+            xfree(newval);
+            let s_len = strlen(s);
+            let mut newlen = s_len + 1;
+            if set_op != SetOp::None && !origval.is_null() {
+                newlen += strlen(origval) + 1;
+            }
+            newval = xmalloc(newlen);
+            // STRCPY(newval, s)
+            ptr::copy_nonoverlapping(s, newval, s_len + 1);
+        }
+    }
+
+    // Track current op as mutable (may change to None if duplicate found)
+    let mut cur_op = set_op;
+
+    // Find duplicate when removing or when NoDup flag is set
+    let mut len: usize = 0;
+    let mut s: *const c_char = ptr::null();
+    if cur_op == SetOp::Removing || opt_flags.contains(OptFlags::NO_DUP) {
+        len = strlen(newval);
+        s = rs_find_dup_item(origval, newval, len, flags);
+
+        // Do not add if already there
+        if (cur_op == SetOp::Adding || cur_op == SetOp::Prepending) && !s.is_null() {
+            cur_op = SetOp::None;
+            op = SetOp::None as c_int;
+            // STRCPY(newval, origval)
+            let orig_len = if origval.is_null() {
+                0
+            } else {
+                strlen(origval)
+            };
+            ptr::copy_nonoverlapping(origval, newval, orig_len + 1);
+        }
+
+        // If no duplicate, move pointer to end of original value
+        if s.is_null() {
+            s = if origval.is_null() {
+                newval.cast() // fallback, shouldn't happen
+            } else {
+                origval.add(strlen(origval))
+            };
+        }
+    }
+
+    // Concatenate the two strings; add a comma if needed
+    if cur_op == SetOp::Adding || cur_op == SetOp::Prepending {
+        rs_stropt_concat_with_comma(origval, newval, cur_op, flags);
+    } else if cur_op == SetOp::Removing {
+        #[allow(clippy::cast_possible_truncation)]
+        rs_stropt_remove_val(origval, newval, flags, s, len as c_int);
+    }
+
+    // Remove duplicate flags for flag-list options
+    if opt_flags.contains(OptFlags::FLAG_LIST) {
+        rs_stropt_remove_dupflags(newval, flags);
+    }
+
+    // Restore arg if it was temporarily changed for keywordprg
+    if !save_arg.is_null() {
+        arg = save_arg;
+    }
+
+    *argp = arg;
+    *op_arg = op;
+
+    newval
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

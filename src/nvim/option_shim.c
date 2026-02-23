@@ -128,6 +128,8 @@ extern const char *rs_skip_to_option_part(const char *p);
 extern int rs_default_fileformat(void);
 extern size_t rs_copy_option_part(char **pp, char *buf, size_t maxlen, const char *sep);
 extern const char *rs_validate_num_option(int opt_idx, OptInt *newval, char *errbuf, size_t errbuflen);
+extern char *rs_stropt_get_newval(int nextchar, int opt_idx, char **argp, void *varp,
+                                  const char *origval, int *op_arg, uint32_t flags);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
@@ -1345,220 +1347,16 @@ void ex_set(exarg_T *eap)
   do_set(eap->arg, flags);
 }
 
-/// Copy the new string value into allocated memory for the option.
-/// Can't use set_option_direct(), because we need to remove the backslashes.
-static char *stropt_copy_value(const char *origval, char **argp, set_op_T op,
-                               uint32_t flags FUNC_ATTR_UNUSED)
-{
-  char *arg = *argp;
-
-  // get a bit too much
-  size_t newlen = strlen(arg) + 1;
-  if (op != OP_NONE) {
-    newlen += strlen(origval) + 1;
-  }
-  char *newval = xmalloc(newlen);
-  char *s = newval;
-
-  // Copy the string, skip over escaped chars.
-  // For MS-Windows backslashes before normal file name characters
-  // are not removed, and keep backslash at start, for "\\machine\path",
-  // but do remove it for "\\\\machine\\path".
-  // The reverse is found in escape_option_str_cmdline().
-  while (*arg != NUL && !ascii_iswhite(*arg)) {
-    if (*arg == '\\' && arg[1] != NUL
-#ifdef BACKSLASH_IN_FILENAME
-        && !((flags & kOptFlagExpand)
-             && vim_isfilec((uint8_t)arg[1])
-             && !ascii_iswhite(arg[1])
-             && (arg[1] != '\\'
-                 || (s == newval && arg[2] != '\\')))
-#endif
-        ) {
-      arg++;  // remove backslash
-    }
-    int i = utfc_ptr2len(arg);
-    if (i > 1) {
-      // copy multibyte char
-      memmove(s, arg, (size_t)i);
-      arg += i;
-      s += i;
-    } else {
-      *s++ = *arg++;
-    }
-  }
-  *s = NUL;
-
-  *argp = arg;
-  return newval;
-}
-
-/// Expand environment variables and ~ in string option value 'newval'.
-static char *stropt_expand_envvar(OptIndex opt_idx, const char *origval, char *newval, set_op_T op)
-{
-  char *s = option_expand(opt_idx, newval);
-  if (s == NULL) {
-    return newval;
-  }
-
-  xfree(newval);
-  uint32_t newlen = (unsigned)strlen(s) + 1;
-  if (op != OP_NONE) {
-    newlen += (unsigned)strlen(origval) + 1;
-  }
-  newval = xmalloc(newlen);
-  STRCPY(newval, s);
-
-  return newval;
-}
-
-/// Concatenate the original and new values of a string option, adding a "," if
-/// needed.
-static void stropt_concat_with_comma(const char *origval, char *newval, set_op_T op, uint32_t flags)
-{
-  int len = 0;
-  int comma = ((flags & kOptFlagComma) && *origval != NUL && *newval != NUL);
-  if (op == OP_ADDING) {
-    len = (int)strlen(origval);
-    // Strip a trailing comma, would get 2.
-    if (comma && len > 1
-        && (flags & kOptFlagOneComma) == kOptFlagOneComma
-        && origval[len - 1] == ','
-        && origval[len - 2] != '\\') {
-      len--;
-    }
-    memmove(newval + len + comma, newval, strlen(newval) + 1);
-    memmove(newval, origval, (size_t)len);
-  } else {
-    len = (int)strlen(newval);
-    STRMOVE(newval + len + comma, origval);
-  }
-  if (comma) {
-    newval[len] = ',';
-  }
-}
-
-/// Remove a value from a string option.  Copy string option value in "origval"
-/// to "newval" and then remove the string "strval" of length "len".
-static void stropt_remove_val(const char *origval, char *newval, uint32_t flags, const char *strval,
-                              int len)
-{
-  // Remove newval[] from origval[]. (Note: "len" has been set above
-  // and is used here).
-  STRCPY(newval, origval);
-  if (*strval) {
-    // may need to remove a comma
-    if (flags & kOptFlagComma) {
-      if (strval == origval) {
-        // include comma after string
-        if (strval[len] == ',') {
-          len++;
-        }
-      } else {
-        // include comma before string
-        strval--;
-        len++;
-      }
-    }
-    STRMOVE(newval + (strval - origval), strval + len);
-  }
-}
-
-/// Remove flags that appear twice in the string option value 'newval'.
-static void stropt_remove_dupflags(char *newval, uint32_t flags)
-{
-  char *s = newval;
-  // Remove flags that appear twice.
-  for (s = newval; *s;) {
-    // if options have kOptFlagFlagList and kOptFlagOneComma such as 'whichwrap'
-    if (flags & kOptFlagOneComma) {
-      if (*s != ',' && *(s + 1) == ','
-          && vim_strchr(s + 2, (uint8_t)(*s)) != NULL) {
-        // Remove the duplicated value and the next comma.
-        STRMOVE(s, s + 2);
-        continue;
-      }
-    } else {
-      if ((!(flags & kOptFlagComma) || *s != ',')
-          && vim_strchr(s + 1, (uint8_t)(*s)) != NULL) {
-        STRMOVE(s, s + 1);
-        continue;
-      }
-    }
-    s++;
-  }
-}
-
 /// Get the string value specified for a ":set" command.  The following set options are supported:
 ///     set {opt}={val}
 ///     set {opt}:{val}
 static char *stropt_get_newval(int nextchar, OptIndex opt_idx, char **argp, void *varp,
                                const char *origval, set_op_T *op_arg, uint32_t flags)
 {
-  char *arg = *argp;
-  set_op_T op = *op_arg;
-  char *save_arg = NULL;
-  char *newval;
-  const char *s = NULL;
-
-  arg++;  // jump to after the '=' or ':'
-
-  // Set 'keywordprg' to ":help" if an empty
-  // value was passed to :set by the user.
-  if (varp == &p_kp && (*arg == NUL || *arg == ' ')) {
-    save_arg = arg;
-    arg = ":help";
-  }
-
-  // Copy the new string into allocated memory.
-  newval = stropt_copy_value(origval, &arg, op, flags);
-
-  // Expand environment variables and ~.
-  // Don't do it when adding without inserting a comma.
-  if (op == OP_NONE || (flags & kOptFlagComma)) {
-    newval = stropt_expand_envvar(opt_idx, origval, newval, op);
-  }
-
-  // locate newval[] in origval[] when removing it
-  // and when adding to avoid duplicates
-  int len = 0;
-  if (op == OP_REMOVING || (flags & kOptFlagNoDup)) {
-    len = (int)strlen(newval);
-    s = find_dup_item(origval, newval, (size_t)len, flags);
-
-    // do not add if already there
-    if ((op == OP_ADDING || op == OP_PREPENDING) && s != NULL) {
-      op = OP_NONE;
-      STRCPY(newval, origval);
-    }
-
-    // if no duplicate, move pointer to end of original value
-    if (s == NULL) {
-      s = origval + (int)strlen(origval);
-    }
-  }
-
-  // concatenate the two strings; add a ',' if needed
-  if (op == OP_ADDING || op == OP_PREPENDING) {
-    stropt_concat_with_comma(origval, newval, op, flags);
-  } else if (op == OP_REMOVING) {
-    // Remove newval[] from origval[]. (Note: "len" has been set above
-    // and is used here).
-    stropt_remove_val(origval, newval, flags, s, len);
-  }
-
-  if (flags & kOptFlagFlagList) {
-    // Remove flags that appear twice.
-    stropt_remove_dupflags(newval, flags);
-  }
-
-  if (save_arg != NULL) {
-    arg = save_arg;  // arg was temporarily changed, restore it
-  }
-  *argp = arg;
-  *op_arg = op;
-
-  return newval;
+  int op = (int)(*op_arg);
+  char *result = rs_stropt_get_newval(nextchar, opt_idx, argp, varp, origval, &op, flags);
+  *op_arg = (set_op_T)op;
+  return result;
 }
 
 static set_op_T get_op(const char *arg)
@@ -2138,6 +1936,20 @@ static char *option_expand(OptIndex opt_idx, const char *val)
   }
 
   return NameBuff;
+}
+
+/// Non-static wrapper for option_expand(), for Rust FFI.
+/// Returns expanded string (in static NameBuff), or NULL if no expansion.
+char *nvim_option_expand(OptIndex opt_idx, const char *val)
+{
+  return option_expand(opt_idx, val);
+}
+
+/// Get the address of p_kp (keywordprg global), as void*.
+/// Used by Rust stropt_get_newval to detect keywordprg option.
+void *nvim_option_get_p_kp_ptr(void)
+{
+  return (void *)&p_kp;
 }
 
 /// After setting various option values: recompute variables that depend on

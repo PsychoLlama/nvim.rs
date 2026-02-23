@@ -260,6 +260,8 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_validate_keymodel", "rs_validate_messagesopt",
            # Numeric option validation (full validate_num_option migration)
            "rs_validate_num_option",
+           # String option new value (stropt_get_newval migration)
+           "rs_stropt_get_newval",
            # Numeric option callbacks (Phase 5)
            "rs_validate_num_range", "rs_validate_num_nonnegative", "rs_validate_num_positive",
            "rs_validate_cmdheight", "rs_validate_columns", "rs_validate_lines",
