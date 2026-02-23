@@ -2404,64 +2404,16 @@ static char *sub_grow_buf(char **new_start, int *new_start_len, int needed_len)
   return new_end;
 }
 
+/// sub_parse_flags implemented in Rust.
+/// See rs_sub_parse_flags in nvim-ex-cmds/src/substitute.rs
+extern char *rs_sub_parse_flags(char *cmd, subflags_T *subflags, int *which_pat);
+
 /// Parse cmd string for :substitute's {flags} and update subflags accordingly
-///
-/// @param[in]      cmd  command string
-/// @param[in,out]  subflags  current flags defined for the :substitute command
-/// @param[in,out]  which_pat  pattern type from which to get default search
-///
-/// @returns pointer to the end of the flags, which may be the end of the string
+/// Thin shim calling the Rust implementation.
 static char *sub_parse_flags(char *cmd, subflags_T *subflags, int *which_pat)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
-  // Find trailing options.  When '&' is used, keep old options.
-  if (*cmd == '&') {
-    cmd++;
-  } else {
-    subflags->do_all = p_gd;
-    subflags->do_ask = false;
-    subflags->do_error = true;
-    subflags->do_print = false;
-    subflags->do_list = false;
-    subflags->do_count = false;
-    subflags->do_number = false;
-    subflags->do_ic = kSubHonorOptions;
-  }
-  while (*cmd) {
-    // Note that 'g' and 'c' are always inverted.
-    // 'r' is never inverted.
-    if (*cmd == 'g') {
-      subflags->do_all = !subflags->do_all;
-    } else if (*cmd == 'c') {
-      subflags->do_ask = !subflags->do_ask;
-    } else if (*cmd == 'n') {
-      subflags->do_count = true;
-    } else if (*cmd == 'e') {
-      subflags->do_error = !subflags->do_error;
-    } else if (*cmd == 'r') {  // use last used regexp
-      *which_pat = RE_LAST;
-    } else if (*cmd == 'p') {
-      subflags->do_print = true;
-    } else if (*cmd == '#') {
-      subflags->do_print = true;
-      subflags->do_number = true;
-    } else if (*cmd == 'l') {
-      subflags->do_print = true;
-      subflags->do_list = true;
-    } else if (*cmd == 'i') {  // ignore case
-      subflags->do_ic = kSubIgnoreCase;
-    } else if (*cmd == 'I') {  // don't ignore case
-      subflags->do_ic = kSubMatchCase;
-    } else {
-      break;
-    }
-    cmd++;
-  }
-  if (subflags->do_count) {
-    subflags->do_ask = false;
-  }
-
-  return cmd;
+  return rs_sub_parse_flags(cmd, subflags, which_pat);
 }
 
 /// Perform a substitution from line eap->line1 to line eap->line2 using the

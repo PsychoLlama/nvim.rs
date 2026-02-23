@@ -25,10 +25,49 @@
 //! regex matching and text replacement is performed by Neovim's core
 //! substitution engine.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::range::LineNr;
 use crate::SubIgnoreType;
+
+// =============================================================================
+// Phase 3: sub_parse_flags migration constants
+// =============================================================================
+
+/// Pattern type: use last used regexp (RE_LAST from search.h)
+const RE_LAST: c_int = 2;
+
+extern "C" {
+    /// Get the current value of p_gd (gdefault option).
+    fn nvim_option_get_gd() -> c_int;
+}
+
+/// C-compatible layout for subflags_T.
+///
+/// Must match the C struct exactly:
+/// ```c
+/// typedef struct {
+///   bool do_all;
+///   bool do_ask;
+///   bool do_count;
+///   bool do_error;
+///   bool do_print;
+///   bool do_list;
+///   bool do_number;
+///   SubIgnoreType do_ic;  // int enum, aligned to 4 bytes
+/// } subflags_T;
+/// ```
+#[repr(C)]
+pub struct CSubFlags {
+    pub do_all: bool,
+    pub do_ask: bool,
+    pub do_count: bool,
+    pub do_error: bool,
+    pub do_print: bool,
+    pub do_list: bool,
+    pub do_number: bool,
+    pub do_ic: c_int, // SubIgnoreType as int
+}
 
 /// Flags for the `:substitute` command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -322,6 +361,82 @@ impl MatchRange {
 // =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Parse :substitute flags from a C command string. Replaces the C
+/// `sub_parse_flags` function.
+///
+/// - If `*cmd == '&'`, advances cmd and keeps existing flags.
+/// - Otherwise resets flags: do_all = p_gd, do_ask = false, do_error = true, etc.
+/// - Loops through chars: toggles g/c, sets other flags, breaks on unrecognized.
+/// - If do_count, sets do_ask = false.
+/// - Returns pointer past consumed flags.
+///
+/// # Safety
+/// `cmd` must be non-null and point to a valid null-terminated C string.
+/// `subflags` must be non-null and point to a valid CSubFlags struct.
+/// `which_pat` must be non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sub_parse_flags(
+    cmd: *mut c_char,
+    subflags: *mut CSubFlags,
+    which_pat: *mut c_int,
+) -> *mut c_char {
+    let p_gd = nvim_option_get_gd() != 0;
+
+    // Find trailing options. When '&' is used, keep old options.
+    let mut p = cmd;
+    if *p == b'&' as c_char {
+        p = p.add(1);
+    } else {
+        (*subflags).do_all = p_gd;
+        (*subflags).do_ask = false;
+        (*subflags).do_error = true;
+        (*subflags).do_print = false;
+        (*subflags).do_list = false;
+        (*subflags).do_count = false;
+        (*subflags).do_number = false;
+        (*subflags).do_ic = 0; // kSubHonorOptions
+    }
+
+    loop {
+        let c = *p as u8;
+        if c == b'g' {
+            (*subflags).do_all = !(*subflags).do_all;
+        } else if c == b'c' {
+            (*subflags).do_ask = !(*subflags).do_ask;
+        } else if c == b'n' {
+            (*subflags).do_count = true;
+        } else if c == b'e' {
+            (*subflags).do_error = !(*subflags).do_error;
+        } else if c == b'r' {
+            // use last used regexp
+            *which_pat = RE_LAST;
+        } else if c == b'p' {
+            (*subflags).do_print = true;
+        } else if c == b'#' {
+            (*subflags).do_print = true;
+            (*subflags).do_number = true;
+        } else if c == b'l' {
+            (*subflags).do_print = true;
+            (*subflags).do_list = true;
+        } else if c == b'i' {
+            // ignore case
+            (*subflags).do_ic = 1; // kSubIgnoreCase
+        } else if c == b'I' {
+            // don't ignore case
+            (*subflags).do_ic = 2; // kSubMatchCase
+        } else {
+            break;
+        }
+        p = p.add(1);
+    }
+
+    if (*subflags).do_count {
+        (*subflags).do_ask = false;
+    }
+
+    p
+}
 
 /// Parse substitute flags from a string.
 ///
