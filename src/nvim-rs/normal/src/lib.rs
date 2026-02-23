@@ -2272,7 +2272,32 @@ pub unsafe extern "C" fn rs_nv_subst(cap: CapHandle) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_nv_object_impl(cap: CapHandle);
+    // Phase 2: nv_object_impl accessors
+    fn nvim_save_and_set_mps();
+    fn nvim_restore_mps();
+    fn nvim_current_tagblock_call(oap: OapHandle, count: c_int, include: bool) -> bool;
+    fn nvim_current_quote_call(
+        oap: OapHandle,
+        count: c_int,
+        include: bool,
+        quotechar: c_int,
+    ) -> bool;
+
+    // Rust text object functions (from textobject crate)
+    fn rs_current_word(oap: OapHandle, count: c_int, include: bool, bigword: bool) -> c_int;
+    fn rs_current_block(
+        oap: OapHandle,
+        count: c_int,
+        include: bool,
+        what: c_int,
+        other: c_int,
+    ) -> c_int;
+    fn rs_current_par(oap: OapHandle, count: c_int, include: bool, par_type: c_int) -> c_int;
+    fn rs_current_sent(oap: OapHandle, count: c_int, include: bool) -> c_int;
+
+    // cursor crate
+    fn adjust_cursor_col();
+
     fn nvim_nv_select_impl(cap: CapHandle);
 
     // nv_brackets_impl C accessors
@@ -2286,6 +2311,9 @@ extern "C" {
     fn nvim_bracket_spell_move(cap: CapHandle);
 }
 
+// Phase 2 constants
+const CA_NO_ADJ_OP_END_P2: c_int = 2;
+
 /// Command handler for "a" or "i" text objects.
 ///
 /// Handles text object selection when an operator is pending or in Visual mode.
@@ -2295,7 +2323,53 @@ extern "C" {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_object(cap: CapHandle) {
-    nvim_nv_object_impl(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let nchar = nvim_cap_get_nchar(cap);
+    let oap = nvim_cap_get_oap(cap);
+    let count1 = nvim_cap_get_count1(cap);
+
+    // "ix" = inner object: exclude white space
+    // "ax" = an object: include white space
+    let include = cmdchar != c_int::from(b'i');
+
+    // Make sure (), [], {} and <> are in 'matchpairs'
+    nvim_save_and_set_mps();
+
+    let flag = match nchar {
+        n if n == c_int::from(b'w') => rs_current_word(oap, count1, include, false) != 0,
+        n if n == c_int::from(b'W') => rs_current_word(oap, count1, include, true) != 0,
+        n if n == c_int::from(b'b') || n == c_int::from(b'(') || n == c_int::from(b')') => {
+            rs_current_block(oap, count1, include, c_int::from(b'('), c_int::from(b')')) != 0
+        }
+        n if n == c_int::from(b'B') || n == c_int::from(b'{') || n == c_int::from(b'}') => {
+            rs_current_block(oap, count1, include, c_int::from(b'{'), c_int::from(b'}')) != 0
+        }
+        n if n == c_int::from(b'[') || n == c_int::from(b']') => {
+            rs_current_block(oap, count1, include, c_int::from(b'['), c_int::from(b']')) != 0
+        }
+        n if n == c_int::from(b'<') || n == c_int::from(b'>') => {
+            rs_current_block(oap, count1, include, c_int::from(b'<'), c_int::from(b'>')) != 0
+        }
+        n if n == c_int::from(b't') => {
+            // Do not adjust oap->end in do_pending_operator()
+            nvim_cap_or_retval(cap, CA_NO_ADJ_OP_END_P2);
+            nvim_current_tagblock_call(oap, count1, include)
+        }
+        n if n == c_int::from(b'p') => rs_current_par(oap, count1, include, c_int::from(b'p')) != 0,
+        n if n == c_int::from(b's') => rs_current_sent(oap, count1, include) != 0,
+        n if n == c_int::from(b'"') || n == c_int::from(b'\'') || n == c_int::from(b'`') => {
+            nvim_current_quote_call(oap, count1, include, nchar)
+        }
+        _ => false,
+    };
+
+    nvim_restore_mps();
+
+    if !flag {
+        rs_clearopbeep(oap);
+    }
+    adjust_cursor_col();
+    nvim_curwin_set_curswant(true);
 }
 
 /// Command handler for SELECT key in Normal or Visual mode.

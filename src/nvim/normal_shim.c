@@ -1729,9 +1729,7 @@ void nvim_nv_subst_impl(cmdarg_T *cap) { nv_subst_impl(cap); }
 // =============================================================================
 
 // Forward declarations for text object handlers
-static void nv_object_impl(cmdarg_T *cap);
 static void nv_select_impl(cmdarg_T *cap);
-void nvim_nv_object_impl(cmdarg_T *cap) { nv_object_impl(cap); }
 
 void nvim_nv_select_impl(cmdarg_T *cap) { nv_select_impl(cap); }
 
@@ -2096,6 +2094,23 @@ void nvim_set_cursor_col_zero(void)
   curwin->w_cursor.coladd = 0;
 }
 void nvim_cursor_lnum_dec(void) { curwin->w_cursor.lnum--; }
+
+// Phase 2 accessors: nv_object_impl
+static char *nvim_mps_save = NULL;
+void nvim_save_and_set_mps(void)
+{
+  nvim_mps_save = curbuf->b_p_mps;
+  curbuf->b_p_mps = "(:),{:},[:],<:>";
+}
+void nvim_restore_mps(void) { curbuf->b_p_mps = nvim_mps_save; }
+bool nvim_current_tagblock_call(oparg_T *oap, int count, bool include)
+{
+  return current_tagblock(oap, count, include);
+}
+bool nvim_current_quote_call(oparg_T *oap, int count, bool include, int quotechar)
+{
+  return current_quote(oap, count, include, (char)quotechar);
+}
 
 void nvim_nv_at_impl(cmdarg_T *cap) { nv_at_impl(cap); }
 
@@ -4858,80 +4873,6 @@ static void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln)
 }
 
 /// "a" or "i" while an operator is pending or in Visual mode: object motion (implementation).
-static void nv_object_impl(cmdarg_T *cap)
-{
-  bool flag;
-  bool include;
-
-  if (cap->cmdchar == 'i') {
-    include = false;        // "ix" = inner object: exclude white space
-  } else {
-    include = true;         // "ax" = an object: include white space
-  }
-  // Make sure (), [], {} and <> are in 'matchpairs'
-  char *mps_save = curbuf->b_p_mps;
-  curbuf->b_p_mps = "(:),{:},[:],<:>";
-
-  switch (cap->nchar) {
-  case 'w':       // "aw" = a word
-    flag = current_word(cap->oap, cap->count1, include, false);
-    break;
-  case 'W':       // "aW" = a WORD
-    flag = current_word(cap->oap, cap->count1, include, true);
-    break;
-  case 'b':       // "ab" = a braces block
-  case '(':
-  case ')':
-    flag = current_block(cap->oap, cap->count1, include, '(', ')');
-    break;
-  case 'B':       // "aB" = a Brackets block
-  case '{':
-  case '}':
-    flag = current_block(cap->oap, cap->count1, include, '{', '}');
-    break;
-  case '[':       // "a[" = a [] block
-  case ']':
-    flag = current_block(cap->oap, cap->count1, include, '[', ']');
-    break;
-  case '<':       // "a<" = a <> block
-  case '>':
-    flag = current_block(cap->oap, cap->count1, include, '<', '>');
-    break;
-  case 't':       // "at" = a tag block (xml and html)
-    // Do not adjust oap->end in do_pending_operator()
-    // otherwise there are different results for 'dit'
-    // (note leading whitespace in last line):
-    // 1) <b>      2) <b>
-    //    foobar      foobar
-    //    </b>            </b>
-    cap->retval |= CA_NO_ADJ_OP_END;
-    flag = current_tagblock(cap->oap, cap->count1, include);
-    break;
-  case 'p':       // "ap" = a paragraph
-    flag = current_par(cap->oap, cap->count1, include, 'p');
-    break;
-  case 's':       // "as" = a sentence
-    flag = current_sent(cap->oap, cap->count1, include);
-    break;
-  case '"':       // "a"" = a double quoted string
-  case '\'':       // "a'" = a single quoted string
-  case '`':       // "a`" = a backtick quoted string
-    flag = current_quote(cap->oap, cap->count1, include,
-                         cap->nchar);
-    break;
-  default:
-    flag = false;
-    break;
-  }
-
-  curbuf->b_p_mps = mps_save;
-  if (!flag) {
-    rs_clearopbeep(cap->oap);
-  }
-  adjust_cursor_col();
-  curwin->w_set_curswant = true;
-}
-
 /// "q" command: Start/stop recording.
 /// "q:", "q/", "q?": edit command-line in command-line window.
 static void nv_record(cmdarg_T *cap)
