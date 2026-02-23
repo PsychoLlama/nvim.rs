@@ -703,6 +703,430 @@ pub extern "C" fn rs_qf_what_size() -> u32 {
 }
 
 // =============================================================================
+// Phase 3: QF_GETLIST_* constants and property flag / index resolution
+// =============================================================================
+
+/// QF_GETLIST_* flag constants (must match C enum in quickfix_shim.c)
+const QF_GETLIST_NONE: c_int = 0x0;
+const QF_GETLIST_TITLE: c_int = 0x1;
+const QF_GETLIST_ITEMS: c_int = 0x2;
+const QF_GETLIST_NR: c_int = 0x4;
+const QF_GETLIST_WINID: c_int = 0x8;
+const QF_GETLIST_CONTEXT: c_int = 0x10;
+const QF_GETLIST_ID: c_int = 0x20;
+const QF_GETLIST_IDX: c_int = 0x40;
+const QF_GETLIST_SIZE: c_int = 0x80;
+const QF_GETLIST_TICK: c_int = 0x100;
+const QF_GETLIST_FILEWINID: c_int = 0x200;
+const QF_GETLIST_QFBUFNR: c_int = 0x400;
+const QF_GETLIST_QFTF: c_int = 0x800;
+const QF_GETLIST_ALL: c_int = 0xFFF;
+
+/// INVALID_QFIDX sentinel (same as C define)
+const INVALID_QFIDX: c_int = -1;
+
+/// C return value OK
+const C_OK: c_int = 1;
+
+extern "C" {
+    // qi / qfl accessors already in lib.rs; we re-declare the subset used here.
+    fn nvim_qf_get_curlist_idx(qi: *const c_void) -> c_int;
+    fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
+
+    // dict key check
+    fn nvim_tv_dict_find_has_key(
+        dict: *const c_void,
+        key: *const std::ffi::c_char,
+        key_len: c_int,
+    ) -> bool;
+    // dict number value (returns false if key absent or wrong type)
+    fn nvim_tv_dict_find_nr(
+        dict: *const c_void,
+        key: *const std::ffi::c_char,
+        key_len: c_int,
+        out: *mut i64,
+    ) -> bool;
+    // dict string value is exactly "$"
+    fn nvim_tv_dict_find_str_is_dollar(
+        dict: *const c_void,
+        key: *const std::ffi::c_char,
+        key_len: c_int,
+    ) -> bool;
+    // dict add functions
+    fn nvim_tv_dict_add_nr_ret(
+        dict: *mut c_void,
+        key: *const std::ffi::c_char,
+        key_len: c_int,
+        nr: i64,
+    ) -> c_int;
+    fn nvim_tv_dict_add_str_copy(
+        dict: *mut c_void,
+        key: *const std::ffi::c_char,
+        key_len: c_int,
+        val: *const std::ffi::c_char,
+    ) -> c_int;
+    fn nvim_tv_dict_add_list_empty(
+        dict: *mut c_void,
+        key: *const std::ffi::c_char,
+        key_len: c_int,
+    ) -> c_int;
+    // qf window id
+    fn nvim_qf_winid(qi: *const c_void) -> c_int;
+    // qf valid buf number
+    fn nvim_qf_get_valid_bufnr(qi: *const c_void) -> c_int;
+    // id-to-index lookup (already in lib.rs but needed here)
+    fn rs_qf_id2nr(qi: *const c_void, qf_id: u32) -> c_int;
+    // stack empty check (already in lib.rs)
+    fn rs_qf_stack_empty(qi: *const c_void) -> bool;
+}
+
+/// Check if the given dict has a key, using a byte-slice key (no null terminator needed).
+///
+/// # Safety
+/// `dict` must be a valid non-null `dict_T *`.
+#[inline]
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn dict_has_key(dict: *const c_void, key: &[u8]) -> bool {
+    nvim_tv_dict_find_has_key(dict, key.as_ptr().cast(), key.len() as c_int)
+}
+
+/// Attempt to read a VAR_NUMBER value from a dict key.
+///
+/// Returns `Some(value)` if the key exists and has type VAR_NUMBER.
+///
+/// # Safety
+/// `dict` must be a valid non-null `dict_T *`.
+#[inline]
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn dict_find_nr(dict: *const c_void, key: &[u8]) -> Option<i64> {
+    let mut val: i64 = 0;
+    if nvim_tv_dict_find_nr(dict, key.as_ptr().cast(), key.len() as c_int, &raw mut val) {
+        Some(val)
+    } else {
+        None
+    }
+}
+
+/// Returns true if the dict has the given key with a VAR_STRING value equal to "$".
+///
+/// # Safety
+/// `dict` must be a valid non-null `dict_T *`.
+#[inline]
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn dict_find_str_is_dollar(dict: *const c_void, key: &[u8]) -> bool {
+    nvim_tv_dict_find_str_is_dollar(dict, key.as_ptr().cast(), key.len() as c_int)
+}
+
+/// Add a number to a dict; returns C_OK or C_FAIL.
+///
+/// # Safety
+/// `dict` must be a valid non-null `dict_T *`.
+#[inline]
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn dict_add_nr(dict: *mut c_void, key: &[u8], nr: i64) -> c_int {
+    nvim_tv_dict_add_nr_ret(dict, key.as_ptr().cast(), key.len() as c_int, nr)
+}
+
+/// Add a string copy to a dict; returns C_OK or C_FAIL.
+///
+/// # Safety
+/// `dict` must be a valid non-null `dict_T *`.
+#[inline]
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn dict_add_str(dict: *mut c_void, key: &[u8], val: *const std::ffi::c_char) -> c_int {
+    nvim_tv_dict_add_str_copy(dict, key.as_ptr().cast(), key.len() as c_int, val)
+}
+
+/// Add an empty list to a dict; returns C_OK or C_FAIL.
+///
+/// # Safety
+/// `dict` must be a valid non-null `dict_T *`.
+#[inline]
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn dict_add_list_empty(dict: *mut c_void, key: &[u8]) -> c_int {
+    nvim_tv_dict_add_list_empty(dict, key.as_ptr().cast(), key.len() as c_int)
+}
+
+/// Convert the keys in `what` dict to `QF_GETLIST_*` flag bitmask.
+///
+/// Mirrors C `qf_getprop_keys2flags`.
+///
+/// # Safety
+/// `what` must be a valid non-null `dict_T *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_getprop_keys2flags(what: *const c_void, loclist: bool) -> c_int {
+    let mut flags = QF_GETLIST_NONE;
+
+    if dict_has_key(what, b"all") {
+        flags |= QF_GETLIST_ALL;
+        if !loclist {
+            // File window ID is applicable only to location list windows
+            flags &= !QF_GETLIST_FILEWINID;
+        }
+    }
+    if dict_has_key(what, b"title") {
+        flags |= QF_GETLIST_TITLE;
+    }
+    if dict_has_key(what, b"nr") {
+        flags |= QF_GETLIST_NR;
+    }
+    if dict_has_key(what, b"winid") {
+        flags |= QF_GETLIST_WINID;
+    }
+    if dict_has_key(what, b"context") {
+        flags |= QF_GETLIST_CONTEXT;
+    }
+    if dict_has_key(what, b"id") {
+        flags |= QF_GETLIST_ID;
+    }
+    if dict_has_key(what, b"items") {
+        flags |= QF_GETLIST_ITEMS;
+    }
+    if dict_has_key(what, b"idx") {
+        flags |= QF_GETLIST_IDX;
+    }
+    if dict_has_key(what, b"size") {
+        flags |= QF_GETLIST_SIZE;
+    }
+    if dict_has_key(what, b"changedtick") {
+        flags |= QF_GETLIST_TICK;
+    }
+    if loclist && dict_has_key(what, b"filewinid") {
+        flags |= QF_GETLIST_FILEWINID;
+    }
+    if dict_has_key(what, b"qfbufnr") {
+        flags |= QF_GETLIST_QFBUFNR;
+    }
+    if dict_has_key(what, b"quickfixtextfunc") {
+        flags |= QF_GETLIST_QFTF;
+    }
+
+    flags
+}
+
+/// Resolve the quickfix list index from "nr" and "id" keys in `what` dict.
+///
+/// Returns the list index or `INVALID_QFIDX` (-1).
+/// Mirrors C `qf_getprop_qfidx`.
+///
+/// # Safety
+/// `qi` and `what` must be valid non-null pointers.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_qf_getprop_qfidx(qi: *const c_void, what: *const c_void) -> c_int {
+    let listcount = nvim_qf_get_listcount(qi);
+    let mut qf_idx = nvim_qf_get_curlist_idx(qi); // default is current list
+
+    // Check "nr" key
+    if let Some(nr) = dict_find_nr(what, b"nr") {
+        if nr != 0 {
+            qf_idx = nr as c_int - 1;
+            if qf_idx < 0 || qf_idx >= listcount {
+                return INVALID_QFIDX;
+            }
+        }
+        // nr == 0 means "use the current list" -- keep qf_idx as is
+    } else if dict_find_str_is_dollar(what, b"nr") {
+        // "$" means last list
+        qf_idx = listcount - 1;
+    } else if dict_has_key(what, b"nr") {
+        // key exists but wrong type
+        return INVALID_QFIDX;
+    }
+
+    // Check "id" key
+    if let Some(id_val) = dict_find_nr(what, b"id") {
+        // For zero, use the current list or the list specified by 'nr'
+        if id_val != 0 {
+            #[allow(clippy::cast_sign_loss)]
+            let id = id_val as u32;
+            qf_idx = rs_qf_id2nr(qi, id);
+        }
+    } else if dict_has_key(what, b"id") {
+        // id key exists but wrong type
+        return INVALID_QFIDX;
+    }
+
+    qf_idx
+}
+
+/// Return default values for quickfix list properties in `retdict`.
+///
+/// Mirrors C `qf_getprop_defaults`.
+///
+/// # Safety
+/// `qi` and `retdict` must be valid pointers (`qi` may be null for global quickfix).
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_getprop_defaults(
+    qi: *const c_void,
+    flags: c_int,
+    locstack: bool,
+    retdict: *mut c_void,
+) -> c_int {
+    let mut status = C_OK;
+
+    macro_rules! check {
+        ($expr:expr) => {
+            if status == C_OK {
+                status = $expr;
+            }
+        };
+    }
+
+    if (flags & QF_GETLIST_TITLE) != 0 {
+        status = dict_add_str(retdict, b"title", c"".as_ptr());
+    }
+    check!({
+        if (flags & QF_GETLIST_ITEMS) != 0 {
+            dict_add_list_empty(retdict, b"items")
+        } else {
+            C_OK
+        }
+    });
+    check!({
+        if (flags & QF_GETLIST_NR) != 0 {
+            dict_add_nr(retdict, b"nr", 0)
+        } else {
+            C_OK
+        }
+    });
+    check!({
+        if (flags & QF_GETLIST_WINID) != 0 {
+            let winid = nvim_qf_winid(qi);
+            dict_add_nr(retdict, b"winid", winid.into())
+        } else {
+            C_OK
+        }
+    });
+    check!({
+        if (flags & QF_GETLIST_CONTEXT) != 0 {
+            dict_add_str(retdict, b"context", c"".as_ptr())
+        } else {
+            C_OK
+        }
+    });
+    check!({
+        if (flags & QF_GETLIST_ID) != 0 {
+            dict_add_nr(retdict, b"id", 0)
+        } else {
+            C_OK
+        }
+    });
+    check!({
+        if (flags & QF_GETLIST_IDX) != 0 {
+            dict_add_nr(retdict, b"idx", 0)
+        } else {
+            C_OK
+        }
+    });
+    check!({
+        if (flags & QF_GETLIST_SIZE) != 0 {
+            dict_add_nr(retdict, b"size", 0)
+        } else {
+            C_OK
+        }
+    });
+    check!({
+        if (flags & QF_GETLIST_TICK) != 0 {
+            dict_add_nr(retdict, b"changedtick", 0)
+        } else {
+            C_OK
+        }
+    });
+    check!({
+        if locstack && (flags & QF_GETLIST_FILEWINID) != 0 {
+            dict_add_nr(retdict, b"filewinid", 0)
+        } else {
+            C_OK
+        }
+    });
+    check!({
+        if (flags & QF_GETLIST_QFBUFNR) != 0 {
+            let bufnum = nvim_qf_get_valid_bufnr(qi);
+            dict_add_nr(retdict, b"qfbufnr", bufnum.into())
+        } else {
+            C_OK
+        }
+    });
+    check!({
+        if (flags & QF_GETLIST_QFTF) != 0 {
+            dict_add_str(retdict, b"quickfixtextfunc", c"".as_ptr())
+        } else {
+            C_OK
+        }
+    });
+
+    status
+}
+
+/// Resolve the quickfix list index from "nr" and "id" for setqflist.
+///
+/// Mirrors C `qf_setprop_get_qfidx`.
+///
+/// # Safety
+/// `qi`, `what`, and `newlist` must be valid non-null pointers.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_qf_setprop_get_qfidx(
+    qi: *const c_void,
+    what: *const c_void,
+    action: c_int,
+    newlist: *mut bool,
+) -> c_int {
+    const ACTION_SPACE: c_int = b' ' as c_int;
+    const ACTION_A: c_int = b'a' as c_int;
+
+    let listcount = nvim_qf_get_listcount(qi);
+    let mut qf_idx = nvim_qf_get_curlist_idx(qi); // default is current list
+
+    if dict_has_key(what, b"nr") {
+        if let Some(nr) = dict_find_nr(what, b"nr") {
+            // for zero use the current list
+            if nr != 0 {
+                qf_idx = nr as c_int - 1;
+            }
+
+            if (action == ACTION_SPACE || action == ACTION_A) && qf_idx == listcount {
+                // When creating a new list, accept qf_idx pointing to the next
+                // non-available list and add the new list at the end of the stack.
+                *newlist = true;
+                qf_idx = if rs_qf_stack_empty(qi) {
+                    0
+                } else {
+                    listcount - 1
+                };
+            } else if qf_idx < 0 || qf_idx >= listcount {
+                return INVALID_QFIDX;
+            } else if action != ACTION_SPACE {
+                *newlist = false; // use the specified list
+            }
+        } else if dict_find_str_is_dollar(what, b"nr") {
+            if !rs_qf_stack_empty(qi) {
+                qf_idx = listcount - 1;
+            } else if *newlist {
+                qf_idx = 0;
+            } else {
+                return INVALID_QFIDX;
+            }
+        } else {
+            return INVALID_QFIDX;
+        }
+    }
+
+    if !(*newlist) && dict_has_key(what, b"id") {
+        // Use the quickfix/location list with the specified id
+        if let Some(id_val) = dict_find_nr(what, b"id") {
+            #[allow(clippy::cast_sign_loss)]
+            let id = id_val as u32;
+            return rs_qf_id2nr(qi, id);
+        }
+        return INVALID_QFIDX;
+    }
+
+    qf_idx
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
