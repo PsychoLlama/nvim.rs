@@ -27,6 +27,7 @@ pub mod cluster;
 pub mod cmd_keyword;
 pub mod cmd_match;
 pub mod cmd_region;
+pub mod cmd_sync;
 pub mod commands;
 pub mod containment;
 pub mod current_attr;

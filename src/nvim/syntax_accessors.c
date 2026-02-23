@@ -191,6 +191,9 @@ extern void rs_syn_cmd_keyword(exarg_T *eap, int syncing);
 // Rust cluster command FFI declaration
 extern void rs_syn_cmd_cluster(exarg_T *eap, int syncing);
 
+// Rust sync command FFI declaration
+extern void rs_syn_cmd_sync(exarg_T *eap, int syncing);
+
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
 
@@ -1984,126 +1987,7 @@ static char *get_syn_pattern(char *arg, synpat_T *ci)
 /// Handle ":syntax sync .." command.
 static void syn_cmd_sync(exarg_T *eap, int syncing)
 {
-  char *arg_start = eap->arg;
-  char *key = NULL;
-  bool illegal = false;
-  bool finished = false;
-
-  if (ends_excmd(*arg_start)) {
-    syn_cmd_list(eap, true);
-    return;
-  }
-
-  while (!ends_excmd(*arg_start)) {
-    char *arg_end = skiptowhite(arg_start);
-    char *next_arg = skipwhite(arg_end);
-    xfree(key);
-    key = vim_strnsave_up(arg_start, (size_t)(arg_end - arg_start));
-    if (strcmp(key, "CCOMMENT") == 0) {
-      if (!eap->skip) {
-        curwin->w_s->b_syn_sync_flags |= SF_CCOMMENT;
-      }
-      if (!ends_excmd(*next_arg)) {
-        arg_end = skiptowhite(next_arg);
-        if (!eap->skip) {
-          curwin->w_s->b_syn_sync_id =
-            (int16_t)syn_check_group(next_arg, (size_t)(arg_end - next_arg));
-        }
-        next_arg = skipwhite(arg_end);
-      } else if (!eap->skip) {
-        curwin->w_s->b_syn_sync_id = (int16_t)syn_name2id("Comment");
-      }
-    } else if (strncmp(key, "LINES", 5) == 0
-               || strncmp(key, "MINLINES", 8) == 0
-               || strncmp(key, "MAXLINES", 8) == 0
-               || strncmp(key, "LINEBREAKS", 10) == 0) {
-      if (key[4] == 'S') {
-        arg_end = key + 6;
-      } else if (key[0] == 'L') {
-        arg_end = key + 11;
-      } else {
-        arg_end = key + 9;
-      }
-      if (arg_end[-1] != '=' || !ascii_isdigit(*arg_end)) {
-        illegal = true;
-        break;
-      }
-      linenr_T n = getdigits_int32(&arg_end, false, 0);
-      if (!eap->skip) {
-        if (key[4] == 'B') {
-          curwin->w_s->b_syn_sync_linebreaks = n;
-        } else if (key[1] == 'A') {
-          curwin->w_s->b_syn_sync_maxlines = n;
-        } else {
-          curwin->w_s->b_syn_sync_minlines = n;
-        }
-      }
-    } else if (strcmp(key, "FROMSTART") == 0) {
-      if (!eap->skip) {
-        curwin->w_s->b_syn_sync_minlines = MAXLNUM;
-        curwin->w_s->b_syn_sync_maxlines = 0;
-      }
-    } else if (strcmp(key, "LINECONT") == 0) {
-      if (*next_arg == NUL) {  // missing pattern
-        illegal = true;
-        break;
-      }
-      if (curwin->w_s->b_syn_linecont_pat != NULL) {
-        emsg(_("E403: syntax sync: line continuations pattern specified twice"));
-        finished = true;
-        break;
-      }
-      arg_end = skip_regexp(next_arg + 1, *next_arg, true);
-      if (*arg_end != *next_arg) {          // end delimiter not found
-        illegal = true;
-        break;
-      }
-
-      if (!eap->skip) {
-        // store the pattern and compiled regexp program
-        curwin->w_s->b_syn_linecont_pat =
-          xstrnsave(next_arg + 1, (size_t)(arg_end - next_arg) - 1);
-        curwin->w_s->b_syn_linecont_ic = curwin->w_s->b_syn_ic;
-
-        // Make 'cpoptions' empty, to avoid the 'l' flag
-        char *cpo_save = p_cpo;
-        p_cpo = empty_string_option;
-        curwin->w_s->b_syn_linecont_prog =
-          vim_regcomp(curwin->w_s->b_syn_linecont_pat, RE_MAGIC);
-        p_cpo = cpo_save;
-        syn_clear_time(&curwin->w_s->b_syn_linecont_time);
-
-        if (curwin->w_s->b_syn_linecont_prog == NULL) {
-          XFREE_CLEAR(curwin->w_s->b_syn_linecont_pat);
-          finished = true;
-          break;
-        }
-      }
-      next_arg = skipwhite(arg_end + 1);
-    } else {
-      eap->arg = next_arg;
-      if (strcmp(key, "MATCH") == 0) {
-        syn_cmd_match(eap, true);
-      } else if (strcmp(key, "REGION") == 0) {
-        syn_cmd_region(eap, true);
-      } else if (strcmp(key, "CLEAR") == 0) {
-        syn_cmd_clear(eap, true);
-      } else {
-        illegal = true;
-      }
-      finished = true;
-      break;
-    }
-    arg_start = next_arg;
-  }
-  xfree(key);
-  if (illegal) {
-    semsg(_("E404: Illegal arguments: %s"), arg_start);
-  } else if (!finished) {
-    eap->nextcmd = check_nextcmd(arg_start);
-    redraw_curbuf_later(UPD_SOME_VALID);
-    syn_stack_free_all(curwin->w_s);            // Need to recompute all syntax.
-  }
+  rs_syn_cmd_sync(eap, syncing);
 }
 
 /// Convert a line of highlight group names into a list of group ID numbers.
@@ -4708,4 +4592,103 @@ void nvim_syn_redraw_and_free_all(void)
 void nvim_syn_find_nextcmd(exarg_T *eap, char *arg)
 {
   eap->nextcmd = find_nextcmd(arg);
+}
+
+// =============================================================================
+// Phase 1 accessors: syn_cmd_sync migration
+// =============================================================================
+
+/// Set eap->arg directly (used by sync MATCH/REGION/CLEAR sub-paths).
+void nvim_syn_set_eap_arg(exarg_T *eap, char *arg)
+{
+  eap->arg = arg;
+}
+
+/// Wrap getdigits_int32 for Rust.
+int nvim_syn_getdigits_int32(char **pp, int strict, int def)
+{
+  return getdigits_int32(pp, (bool)strict, def);
+}
+
+/// OR flags into b_syn_sync_flags.
+void nvim_synblock_or_sync_flags(synblock_T *block, int flags)
+{
+  block->b_syn_sync_flags |= flags;
+}
+
+/// Set b_syn_sync_id.
+void nvim_synblock_set_sync_id(synblock_T *block, int id)
+{
+  block->b_syn_sync_id = (int16_t)id;
+}
+
+/// Set b_syn_sync_minlines.
+void nvim_synblock_set_sync_minlines(synblock_T *block, int n)
+{
+  block->b_syn_sync_minlines = (linenr_T)n;
+}
+
+/// Set b_syn_sync_maxlines.
+void nvim_synblock_set_sync_maxlines(synblock_T *block, int n)
+{
+  block->b_syn_sync_maxlines = (linenr_T)n;
+}
+
+/// Set b_syn_sync_linebreaks.
+void nvim_synblock_set_sync_linebreaks(synblock_T *block, int n)
+{
+  block->b_syn_sync_linebreaks = (linenr_T)n;
+}
+
+/// Return 1 if b_syn_linecont_pat is set (non-NULL), else 0.
+int nvim_synblock_get_linecont_pat_is_set(synblock_T *block)
+{
+  return block->b_syn_linecont_pat != NULL ? 1 : 0;
+}
+
+/// Store linecont pattern: allocate, compile regexp, clear time.
+/// pat_start points to the pattern text (not the delimiter).
+/// pat_len is the length in bytes.
+/// Returns 1 on success, 0 on regexp compile failure.
+int nvim_synblock_set_linecont(synblock_T *block, const char *pat_start, int pat_len)
+{
+  block->b_syn_linecont_pat = xstrnsave(pat_start, (size_t)pat_len);
+  block->b_syn_linecont_ic = block->b_syn_ic;
+
+  // Make 'cpoptions' empty to avoid the 'l' flag
+  char *cpo_save = p_cpo;
+  p_cpo = empty_string_option;
+  block->b_syn_linecont_prog = vim_regcomp(block->b_syn_linecont_pat, RE_MAGIC);
+  p_cpo = cpo_save;
+  syn_clear_time(&block->b_syn_linecont_time);
+
+  if (block->b_syn_linecont_prog == NULL) {
+    XFREE_CLEAR(block->b_syn_linecont_pat);
+    return 0;
+  }
+  return 1;
+}
+
+/// Forward to syn_cmd_match (already a thin wrapper calling rs_syn_cmd_match).
+void nvim_syn_cmd_match_wrapper(exarg_T *eap, int syncing)
+{
+  syn_cmd_match(eap, syncing);
+}
+
+/// Forward to syn_cmd_region (already a thin wrapper calling rs_syn_cmd_region).
+void nvim_syn_cmd_region_wrapper(exarg_T *eap, int syncing)
+{
+  syn_cmd_region(eap, syncing);
+}
+
+/// Forward to syn_cmd_clear.
+void nvim_syn_cmd_clear_wrapper(exarg_T *eap, int syncing)
+{
+  syn_cmd_clear(eap, syncing);
+}
+
+/// Forward to syn_cmd_list.
+void nvim_syn_cmd_list_wrapper(exarg_T *eap, int syncing)
+{
+  syn_cmd_list(eap, syncing);
 }
