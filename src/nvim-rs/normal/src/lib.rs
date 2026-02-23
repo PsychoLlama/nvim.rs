@@ -1380,6 +1380,10 @@ const OP_CHANGE: c_int = 3;
 // Fold option flag for block - from build/src/nvim/auto/option_vars.generated.h
 const K_OPT_FDO_FLAG_BLOCK: c_uint = 0x02;
 
+// findmatchlimit flags (from search.h)
+const FM_BACKWARD: c_int = 0x01;
+const FM_FORWARD: c_int = 0x02;
+
 // Virtual edit flag for onemore - from build/src/nvim/auto/option_vars.generated.h
 const K_OPT_VE_FLAG_ONEMORE: c_uint = 0x08;
 
@@ -2857,8 +2861,18 @@ extern "C" {
     fn nvim_nv_select_impl(cap: CapHandle);
 
     // nv_brackets_impl C accessors
-    fn nvim_nv_bracket_block_call(cap: CapHandle);
     fn nvim_bracket_find_ident(cap: CapHandle);
+    // Phase 3: findmatchlimit accessor
+    fn nvim_findmatchlimit_call(
+        oap: OapHandle,
+        findc: c_int,
+        flags: c_int,
+        maxtravel: i64,
+        out_lnum: *mut c_int,
+        out_col: *mut c_int,
+        out_coladd: *mut c_int,
+    ) -> bool;
+    fn nvim_dec_cursor() -> c_int;
     fn nvim_bracket_findpar(cap: CapHandle, flag: c_int) -> bool;
     fn nvim_bracket_mark_jump(cap: CapHandle);
     fn nvim_bracket_do_mouse(cap: CapHandle);
@@ -2940,6 +2954,191 @@ pub unsafe extern "C" fn rs_nv_select(cap: CapHandle) {
     nvim_nv_select_impl(cap);
 }
 
+/// Helper: call findmatchlimit and return position as Option<(lnum, col, coladd)>.
+unsafe fn findmatchlimit_pos(
+    oap: OapHandle,
+    findc: c_int,
+    flags: c_int,
+) -> Option<(c_int, c_int, c_int)> {
+    let mut lnum: c_int = 0;
+    let mut col: c_int = 0;
+    let mut coladd: c_int = 0;
+    if nvim_findmatchlimit_call(
+        oap,
+        findc,
+        flags,
+        0,
+        &raw mut lnum,
+        &raw mut col,
+        &raw mut coladd,
+    ) {
+        Some((lnum, col, coladd))
+    } else {
+        None
+    }
+}
+
+/// Implement `[{`, `[(`, `]}`, `])`, `[/`, `]*`, `[m`, `]m`, `[M`, `]M` bracket motions.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_bracket_block(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let mut nchar = nvim_cap_get_nchar(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let count1 = nvim_cap_get_count1(cap);
+
+    if nchar == c_int::from(b'*') {
+        nchar = c_int::from(b'/');
+    }
+
+    let old_pos = (
+        nvim_get_cursor_lnum(),
+        nvim_get_cursor_col(),
+        nvim_get_cursor_coladd(),
+    );
+    let is_method = nchar == c_int::from(b'm') || nchar == c_int::from(b'M');
+    let findc = if is_method {
+        if cmdchar == c_int::from(b'[') {
+            c_int::from(b'{')
+        } else {
+            c_int::from(b'}')
+        }
+    } else {
+        nchar
+    };
+    let n_init = if is_method { 9999 } else { count1 };
+    let flags = if cmdchar == c_int::from(b'[') {
+        FM_BACKWARD
+    } else {
+        FM_FORWARD
+    };
+
+    let (new_pos, prev_pos) = bracket_find_loop(oap, findc, flags, n_init, is_method);
+    nvim_set_cursor_pos(old_pos.0, old_pos.1, old_pos.2);
+
+    let final_pos = if is_method {
+        bracket_method_nav(oap, findc, flags, nchar, count1, old_pos, new_pos, prev_pos)
+    } else {
+        new_pos
+    };
+
+    if let Some((lnum, col, coladd)) = final_pos {
+        nvim_setpcmark();
+        nvim_set_cursor_pos(lnum, col, coladd);
+        nvim_set_w_set_curswant(true);
+        if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
+            && nvim_get_KeyTyped()
+            && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+        {
+            rs_foldOpenCursor();
+        }
+    }
+}
+
+type BracketPos = (c_int, c_int, c_int);
+
+/// First loop: find bracket match up to n_init times.
+unsafe fn bracket_find_loop(
+    oap: OapHandle,
+    findc: c_int,
+    flags: c_int,
+    n_init: c_int,
+    is_method: bool,
+) -> (Option<BracketPos>, Option<BracketPos>) {
+    let mut new_pos: Option<BracketPos> = None;
+    let mut prev_pos: Option<BracketPos> = None;
+    let mut n = n_init;
+    while n > 0 {
+        match findmatchlimit_pos(oap, findc, flags) {
+            None => {
+                if new_pos.is_none() && !is_method {
+                    rs_clearopbeep(oap);
+                }
+                break;
+            }
+            Some(found) => {
+                prev_pos = new_pos;
+                nvim_set_cursor_pos(found.0, found.1, found.2);
+                new_pos = Some(found);
+            }
+        }
+        n -= 1;
+    }
+    (new_pos, prev_pos)
+}
+
+/// Method navigation loop for [m, ]m, [M, ]M.
+#[allow(clippy::too_many_arguments)]
+unsafe fn bracket_method_nav(
+    oap: OapHandle,
+    findc: c_int,
+    flags: c_int,
+    nchar: c_int,
+    count1: c_int,
+    old_pos: BracketPos,
+    mut new_pos: Option<BracketPos>,
+    prev_pos: Option<BracketPos>,
+) -> Option<BracketPos> {
+    let norm = (findc == c_int::from(b'{')) == (nchar == c_int::from(b'm'));
+    let mut n = prev_pos.map_or(count1, |pp| {
+        nvim_set_cursor_pos(pp.0, pp.1, pp.2);
+        if norm {
+            count1 - 1
+        } else {
+            count1
+        }
+    });
+    let mut pos: Option<BracketPos> = prev_pos;
+
+    'outer: while n > 0 {
+        loop {
+            let step = if findc == c_int::from(b'{') {
+                nvim_dec_cursor()
+            } else {
+                nvim_inc_cursor()
+            };
+            if step < 0 {
+                if pos.is_none() {
+                    rs_clearopbeep(oap);
+                }
+                break 'outer;
+            }
+            let c = nvim_gchar_cursor_call();
+            if c == c_int::from(b'{') || c == c_int::from(b'}') {
+                let cur = (
+                    nvim_get_cursor_lnum(),
+                    nvim_get_cursor_col(),
+                    nvim_get_cursor_coladd(),
+                );
+                if (c == findc && norm) || (n == 1 && !norm) {
+                    new_pos = Some(cur);
+                    pos = new_pos;
+                    break 'outer;
+                } else if new_pos.is_none() {
+                    new_pos = Some(cur);
+                    pos = new_pos;
+                } else {
+                    pos = findmatchlimit_pos(oap, findc, flags);
+                    if let Some(found) = pos {
+                        nvim_set_cursor_pos(found.0, found.1, found.2);
+                    } else {
+                        break 'outer;
+                    }
+                }
+                break;
+            }
+        }
+        n -= 1;
+    }
+    nvim_set_cursor_pos(old_pos.0, old_pos.1, old_pos.2);
+    if pos.is_none() && new_pos.is_some() {
+        rs_clearopbeep(oap);
+    }
+    pos
+}
+
 /// Command handler for `[` and `]` bracket commands.
 ///
 /// Handles various bracket-related motions and commands:
@@ -2975,7 +3174,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
         || (cmdchar == b']' as c_int && nvim_vim_strchr_str(c"})*/#mM".as_ptr(), nchar))
     {
         // "[{", "[(", "]}" or "])": bracket/method matching
-        nvim_nv_bracket_block_call(cap);
+        rs_nv_bracket_block(cap);
     } else if nchar == b'[' as c_int || nchar == b']' as c_int {
         // "[[", "[]", "]]" and "][": move to start or end of function
         let flag = if nchar == cmdchar {

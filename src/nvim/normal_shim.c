@@ -1425,8 +1425,24 @@ static void nv_select_impl(cmdarg_T *cap);
 void nvim_nv_select_impl(cmdarg_T *cap) { nv_select_impl(cap); }
 
 // nv_brackets_impl C accessors for Rust FFI
-static void nv_bracket_block(cmdarg_T *cap, const pos_T *old_pos);
-void nvim_nv_bracket_block_call(cmdarg_T *cap) { nv_bracket_block(cap, &curwin->w_cursor); }
+/// Phase 3: findmatchlimit wrapper that copies pos_T fields to output params.
+bool nvim_findmatchlimit_call(oparg_T *oap, int findc, int flags, int64_t maxtravel,
+                               int *out_lnum, int *out_col, int *out_coladd)
+{
+  pos_T *pos = findmatchlimit(oap, findc, flags, (long)maxtravel);
+  if (pos == NULL) {
+    return false;
+  }
+  *out_lnum = pos->lnum;
+  *out_col = pos->col;
+  *out_coladd = pos->coladd;
+  return true;
+}
+
+/// Phase 3: nv_bracket_block -- now calls Rust directly.
+extern void rs_nv_bracket_block(cmdarg_T *cap);
+void nvim_nv_bracket_block_call(cmdarg_T *cap) { rs_nv_bracket_block(cap); }
+// (nv_bracket_block static implementation deleted; migrated to Rust)
 void nvim_bracket_find_ident(cmdarg_T *cap)
 {
   char *ptr;
@@ -3542,124 +3558,6 @@ static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int o
   check_cursor(curwin);
 
   return i;
-}
-
-/// "[{", "[(", "]}" or "])": go to Nth unclosed '{', '(', '}' or ')'
-/// "[#", "]#": go to start/end of Nth innermost #if..#endif construct.
-/// "[/", "[*", "]/", "]*": go to Nth comment start/end.
-/// "[m" or "]m" search for prev/next start of (Java) method.
-/// "[M" or "]M" search for prev/next end of (Java) method.
-static void nv_bracket_block(cmdarg_T *cap, const pos_T *old_pos)
-{
-  pos_T new_pos = { 0, 0, 0 };
-  pos_T *pos = NULL;  // init for GCC
-  pos_T prev_pos;
-  int n;
-  int findc;
-
-  if (cap->nchar == '*') {
-    cap->nchar = '/';
-  }
-  prev_pos.lnum = 0;
-  if (cap->nchar == 'm' || cap->nchar == 'M') {
-    if (cap->cmdchar == '[') {
-      findc = '{';
-    } else {
-      findc = '}';
-    }
-    n = 9999;
-  } else {
-    findc = cap->nchar;
-    n = cap->count1;
-  }
-  for (; n > 0; n--) {
-    if ((pos = findmatchlimit(cap->oap, findc,
-                              (cap->cmdchar == '[') ? FM_BACKWARD : FM_FORWARD, 0)) == NULL) {
-      if (new_pos.lnum == 0) {        // nothing found
-        if (cap->nchar != 'm' && cap->nchar != 'M') {
-          rs_clearopbeep(cap->oap);
-        }
-      } else {
-        pos = &new_pos;               // use last one found
-      }
-      break;
-    }
-    prev_pos = new_pos;
-    curwin->w_cursor = *pos;
-    new_pos = *pos;
-  }
-  curwin->w_cursor = *old_pos;
-
-  // Handle "[m", "]m", "[M" and "[M".  The findmatchlimit() only
-  // brought us to the match for "[m" and "]M" when inside a method.
-  // Try finding the '{' or '}' we want to be at.
-  // Also repeat for the given count.
-  if (cap->nchar == 'm' || cap->nchar == 'M') {
-    int c;
-    // norm is true for "]M" and "[m"
-    bool norm = ((findc == '{') == (cap->nchar == 'm'));
-
-    n = cap->count1;
-    // found a match: we were inside a method
-    if (prev_pos.lnum != 0) {
-      pos = &prev_pos;
-      curwin->w_cursor = prev_pos;
-      if (norm) {
-        n--;
-      }
-    } else {
-      pos = NULL;
-    }
-    while (n > 0) {
-      while (true) {
-        if ((findc == '{' ? dec_cursor() : inc_cursor()) < 0) {
-          // if not found anything, that's an error
-          if (pos == NULL) {
-            rs_clearopbeep(cap->oap);
-          }
-          n = 0;
-          break;
-        }
-        c = gchar_cursor();
-        if (c == '{' || c == '}') {
-          // Must have found end/start of class: use it.
-          // Or found the place to be at.
-          if ((c == findc && norm) || (n == 1 && !norm)) {
-            new_pos = curwin->w_cursor;
-            pos = &new_pos;
-            n = 0;
-          } else if (new_pos.lnum == 0) {
-            // if no match found at all, we started outside of the
-            // class and we're inside now.  Just go on.
-            new_pos = curwin->w_cursor;
-            pos = &new_pos;
-          } else if ((pos = findmatchlimit(cap->oap, findc,
-                                           (cap->cmdchar == '[') ? FM_BACKWARD : FM_FORWARD,
-                                           0)) == NULL) {
-            // found start/end of other method: go to match
-            n = 0;
-          } else {
-            curwin->w_cursor = *pos;
-          }
-          break;
-        }
-      }
-      n--;
-    }
-    curwin->w_cursor = *old_pos;
-    if (pos == NULL && new_pos.lnum != 0) {
-      rs_clearopbeep(cap->oap);
-    }
-  }
-  if (pos != NULL) {
-    setpcmark();
-    curwin->w_cursor = *pos;
-    curwin->w_set_curswant = true;
-    if ((fdo_flags & kOptFdoFlagBlock) && KeyTyped
-        && cap->oap->op_type == OP_NOP) {
-      rs_foldOpenCursor();
-    }
-  }
 }
 
 /// "u" command: Undo or make lower case (implementation).
