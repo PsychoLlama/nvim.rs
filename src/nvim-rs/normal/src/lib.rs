@@ -2684,19 +2684,77 @@ pub unsafe extern "C" fn rs_ident_build_and_exec(
 }
 
 // =============================================================================
-// Phase 3 Command Handlers (Operators)
+// Phase 3 Command Handlers (Operators) -- now real Rust implementations
 // =============================================================================
 
 extern "C" {
-    // Phase 3 accessor functions (nv_tilde_impl migrated to Rust in Phase 1)
-    fn nvim_nv_operator_impl(cap: CapHandle);
-    fn nvim_nv_optrans_impl(cap: CapHandle);
-    fn nvim_nv_subst_impl(cap: CapHandle);
+    // Phase 3 accessors
     fn nvim_get_p_to() -> bool;
+    fn nvim_bt_prompt_curbuf() -> bool;
+    fn nvim_prompt_curpos_editable() -> bool;
+    fn nvim_op_is_change(op_type: c_int) -> bool;
+    fn nvim_set_op_var_call(optype: c_int);
+    fn nvim_oap_set_start_cursor(oap: OapHandle);
+    fn nvim_stuffnumReadbuff(n: c_int);
+    fn nvim_stuffReadbuff(s: *const c_char);
+    fn nvim_get_op_type_wrapper(c1: c_int, c2: c_int) -> c_int;
 }
 
 // OP_TILDE constant
 const OP_TILDE: c_int = 7;
+
+// Table for nv_optrans: maps command chars to replacement strings
+// Same order as the C static arrays: str="xXDCsSY&", ar={"dl","dh","d$","c$","cl","cc","yy",":s\r"}
+const OPTRANS_STR: &[u8] = b"xXDCsSY&";
+const OPTRANS_AR: [&[u8]; 8] = [b"dl", b"dh", b"d$", b"c$", b"cl", b"cc", b"yy", b":s\r"];
+
+/// Internal helper: implement the operator command setup logic.
+/// This is called by rs_nv_operator, rs_nv_tilde (when acting as operator), and rs_nv_subst.
+unsafe fn nv_operator_impl(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let nchar = nvim_cap_get_nchar(cap);
+    let op_type = nvim_get_op_type_wrapper(cmdchar, nchar);
+
+    if nvim_bt_prompt_curbuf() && nvim_op_is_change(op_type) && !nvim_prompt_curpos_editable() {
+        rs_clearopbeep(oap);
+        return;
+    }
+
+    if op_type == nvim_oap_get_op_type_ptr(oap) {
+        // double operator works on lines
+        rs_nv_lineop(cap);
+    } else if !rs_checkclearop(oap) {
+        nvim_oap_set_start_cursor(oap);
+        nvim_oap_set_op_type(oap, op_type);
+        nvim_set_op_var_call(op_type);
+    }
+}
+
+/// Internal helper: implement the command translation logic (x->dl, X->dh, etc.)
+unsafe fn nv_optrans_impl(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if !rs_checkclearopq(oap) {
+        let count0 = nvim_cap_get_count0(cap);
+        if count0 != 0 {
+            nvim_stuffnumReadbuff(count0);
+        }
+        let cmdchar_raw = nvim_cap_get_cmdchar(cap);
+        // cmdchar is always a positive ASCII byte for abbreviated commands (x,X,D,C,s,S,Y,&)
+        #[allow(clippy::cast_sign_loss)]
+        let cmdchar = (cmdchar_raw & 0xFF) as u8;
+        if let Some(idx) = OPTRANS_STR.iter().position(|&c| c == cmdchar) {
+            let replacement = OPTRANS_AR[idx];
+            // SAFETY: replacement bytes are all valid ASCII; we add a NUL terminator.
+            let mut buf = [0u8; 8]; // max length is 4 bytes ":s\r\0"
+            let len = replacement.len();
+            buf[..len].copy_from_slice(replacement);
+            buf[len] = 0;
+            nvim_stuffReadbuff(buf.as_ptr().cast::<c_char>());
+        }
+    }
+    nvim_cap_set_opcount(cap, 0);
+}
 
 /// Command handler for operator commands (d, c, y, >, <, !, =, gq, gw, g?, etc.).
 ///
@@ -2706,7 +2764,7 @@ const OP_TILDE: c_int = 7;
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_operator(cap: CapHandle) {
-    nvim_nv_operator_impl(cap);
+    nv_operator_impl(cap);
 }
 
 /// Command handler for abbreviated commands (x, X, D, C, s, S, Y, &).
@@ -2717,7 +2775,7 @@ pub unsafe extern "C" fn rs_nv_operator(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_optrans(cap: CapHandle) {
-    nvim_nv_optrans_impl(cap);
+    nv_optrans_impl(cap);
 }
 
 /// Command handler for '~' command: Toggle case.
@@ -2753,7 +2811,24 @@ pub unsafe extern "C" fn rs_nv_tilde(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_subst(cap: CapHandle) {
-    nvim_nv_subst_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    if nvim_bt_prompt_curbuf() && !nvim_prompt_curpos_editable() {
+        rs_clearopbeep(oap);
+        return;
+    }
+    if nvim_get_VIsual_active() != 0 {
+        // "vs" and "vS" are the same as "vc"
+        let cmdchar = nvim_cap_get_cmdchar(cap);
+        if cmdchar == c_int::from(b'S') {
+            let vis_mode = nvim_get_VIsual_mode();
+            nvim_set_VIsual_mode_orig(vis_mode);
+            nvim_set_VIsual_mode(c_int::from(b'V'));
+        }
+        nvim_cap_set_cmdchar(cap, c_int::from(b'c'));
+        nv_operator_impl(cap);
+    } else {
+        nv_optrans_impl(cap);
+    }
 }
 
 // =============================================================================
@@ -5629,7 +5704,7 @@ pub unsafe extern "C" fn rs_nv_abbrev(cap: CapHandle) {
     if nvim_get_VIsual_active() != 0 {
         rs_v_visop(cap);
     } else {
-        nvim_nv_optrans_impl(cap);
+        nv_optrans_impl(cap);
     }
 }
 

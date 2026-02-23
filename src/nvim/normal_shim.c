@@ -1472,16 +1472,15 @@ void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
 // Operator handler accessors for Rust FFI
 // =============================================================================
 
-// Forward declarations for operator handlers (nv_tilde_impl migrated to Rust)
-static void nv_operator_impl(cmdarg_T *cap);
-static void nv_optrans_impl(cmdarg_T *cap);
-static void nv_subst_impl(cmdarg_T *cap);
-
-void nvim_nv_operator_impl(cmdarg_T *cap) { nv_operator_impl(cap); }
-
-void nvim_nv_optrans_impl(cmdarg_T *cap) { nv_optrans_impl(cap); }
-
-void nvim_nv_subst_impl(cmdarg_T *cap) { nv_subst_impl(cap); }
+// Accessors for operator Rust implementations
+bool nvim_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
+bool nvim_prompt_curpos_editable(void) { return prompt_curpos_editable(); }
+bool nvim_op_is_change(int op_type) { return op_is_change(op_type); }
+void nvim_set_op_var_call(int optype) { set_op_var(optype); }
+void nvim_oap_set_start_cursor(oparg_T *oap) { oap->start = curwin->w_cursor; }
+void nvim_stuffnumReadbuff(int n) { stuffnumReadbuff(n); }
+void nvim_stuffReadbuff(const char *s) { stuffReadbuff(s); }
+static void set_op_var(int optype);
 
 // =============================================================================
 // Text object handler accessors for Rust FFI
@@ -3553,40 +3552,7 @@ static MarkMoveRes nv_mark_move_to(cmdarg_T *cap, MarkMove flags, fmark_T *fm)
   return res;
 }
 
-/// Implementation of "s" and "S" commands.
-static void nv_subst_impl(cmdarg_T *cap)
-{
-  if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
-    rs_clearopbeep(cap->oap);
-    return;
-  }
-  if (VIsual_active) {  // "vs" and "vS" are the same as "vc"
-    if (cap->cmdchar == 'S') {
-      VIsual_mode_orig = VIsual_mode;
-      VIsual_mode = 'V';
-    }
-    cap->cmdchar = 'c';
-    nv_operator_impl(cap);
-  } else {
-    nv_optrans_impl(cap);
-  }
-}
-
-/// Implementation of command translation.
-static void nv_optrans_impl(cmdarg_T *cap)
-{
-  static const char *(ar[]) = { "dl", "dh", "d$", "c$", "cl", "cc", "yy",
-                                ":s\r" };
-  static const char *str = "xXDCsSY&";
-
-  if (!rs_checkclearopq(cap->oap)) {
-    if (cap->count0) {
-      stuffnumReadbuff(cap->count0);
-    }
-    stuffReadbuff(ar[strchr(str, (char)cap->cmdchar) - str]);
-  }
-  cap->opcount = 0;
-}
+// nv_subst_impl, nv_optrans_impl migrated to Rust in Phase 2
 
 /// Internal implementation of nv_visual.
 /// Start Visual mode "c".
@@ -3775,25 +3741,7 @@ static void n_opencmd(cmdarg_T *cap)
 }
 
 
-/// Implementation of operator command.
-static void nv_operator_impl(cmdarg_T *cap)
-{
-  int op_type = get_op_type(cap->cmdchar, cap->nchar);
-
-  if (bt_prompt(curbuf) && op_is_change(op_type)
-      && !prompt_curpos_editable()) {
-    rs_clearopbeep(cap->oap);
-    return;
-  }
-
-  if (op_type == cap->oap->op_type) {       // double operator works on lines
-    rs_nv_lineop(cap);
-  } else if (!rs_checkclearop(cap->oap)) {
-    cap->oap->start = curwin->w_cursor;
-    cap->oap->op_type = op_type;
-    set_op_var(op_type);
-  }
-}
+// nv_operator_impl migrated to Rust in Phase 2
 
 /// Set v:operator to the characters for "optype".
 static void set_op_var(int optype)
