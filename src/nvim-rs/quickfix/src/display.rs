@@ -838,6 +838,266 @@ pub unsafe extern "C" fn rs_qf_msg(qi: QfInfoHandleConst, which: c_int, lead: *c
 }
 
 // =============================================================================
+// Phase 3: rs_qf_list_entry — display a single quickfix entry for :clist/:llist
+// =============================================================================
+
+const IOSIZE: usize = 1025; // 1024 + 1
+
+extern "C" {
+    // Phase 3: message output accessors
+    // nvim_message_filtered is defined in ex_cmds_shim.c, returns int (non-zero = filtered)
+    fn nvim_message_filtered(str: *const c_char) -> c_int;
+    fn nvim_qf_format_prefix(buf: *mut c_char, bufsz: usize, idx: c_int, name: *const c_char);
+    fn nvim_qf_list_entry_output(
+        prefix: *const c_char,
+        cursel: bool,
+        qfFile_hl_id: c_int,
+        qfSep_hl_id: c_int,
+        qfLine_hl_id: c_int,
+        lnum_nonzero: c_int,
+        range_text: *const c_char,
+        range_len: usize,
+        type_text: *const c_char,
+        has_pattern: c_int,
+        pattern_text: *const c_char,
+        pattern_len: usize,
+        body_text: *const c_char,
+        body_len: usize,
+    );
+
+    // Phase 3: qfline field accessors (already in lib.rs, re-declare locally)
+    #[link_name = "nvim_qfline_get_module"]
+    fn qfline_get_module_p3(qfp: QfLinePtr) -> *const c_char;
+    #[link_name = "nvim_qfline_get_fnum"]
+    fn qfline_get_fnum_p3(qfp: QfLinePtr) -> c_int;
+    #[link_name = "nvim_qfline_get_fname"]
+    fn qfline_get_fname_p3(qfp: QfLinePtr) -> *const c_char;
+    #[link_name = "nvim_qfline_get_type"]
+    fn qfline_get_type_p3(qfp: QfLinePtr) -> c_char;
+    #[link_name = "nvim_qfline_get_lnum"]
+    fn qfline_get_lnum_p3(qfp: QfLinePtr) -> LinenrT;
+    #[link_name = "nvim_qfline_get_end_lnum"]
+    fn qfline_get_end_lnum_p3(qfp: QfLinePtr) -> LinenrT;
+    #[link_name = "nvim_qfline_get_col"]
+    fn qfline_get_col_p3(qfp: QfLinePtr) -> c_int;
+    #[link_name = "nvim_qfline_get_end_col"]
+    fn qfline_get_end_col_p3(qfp: QfLinePtr) -> c_int;
+    #[link_name = "nvim_qfline_get_nr"]
+    fn qfline_get_nr_p3(qfp: QfLinePtr) -> c_int;
+    #[link_name = "nvim_qfline_get_pattern"]
+    fn qfline_get_pattern_p3(qfp: QfLinePtr) -> *const c_char;
+    #[link_name = "nvim_qfline_get_text"]
+    fn qfline_get_text_p3(qfp: QfLinePtr) -> *const c_char;
+    #[link_name = "nvim_buflist_findnr"]
+    fn buflist_findnr_p3(nr: c_int) -> *mut c_void;
+    #[link_name = "nvim_qf_buf_get_fname"]
+    fn buf_get_fname_p3(buf: *mut c_void) -> *const c_char;
+    #[link_name = "nvim_path_tail_buf"]
+    fn path_tail_p3(fname: *const c_char) -> *const c_char;
+    #[link_name = "nvim_skipwhite_const"]
+    fn skipwhite_p3(str: *const c_char) -> *const c_char;
+
+}
+
+/// Display a single quickfix entry for :clist/:llist.
+///
+/// Mirrors C `qf_list_entry`. Reads qfline fields via accessors, filters via
+/// `message_filtered`, then delegates message output to `nvim_qf_list_entry_output`.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_list_entry(
+    qfp: QfLinePtr,
+    qf_idx: c_int,
+    cursel: bool,
+    qf_file_hl_id: c_int,
+    qf_sep_hl_id: c_int,
+    qf_line_hl_id: c_int,
+) {
+    // --- Determine the filename or module to display as prefix ---
+    let module = qfline_get_module_p3(qfp);
+    let module_nonempty =
+        !module.is_null() && !std::ffi::CStr::from_ptr(module).to_bytes().is_empty();
+
+    // Get display name: module > qf_fname/buf->b_fname > none
+    let display_name: *const c_char = if module_nonempty {
+        module
+    } else {
+        let fnum = qfline_get_fnum_p3(qfp);
+        if fnum != 0 {
+            let buf = buflist_findnr_p3(fnum);
+            if !buf.is_null() {
+                let b_fname = buf_get_fname_p3(buf);
+                if !b_fname.is_null() {
+                    let qf_fname = qfline_get_fname_p3(qfp);
+                    let fname = if qf_fname.is_null() { b_fname } else { qf_fname };
+                    let qf_type = qfline_get_type_p3(qfp);
+                    if qf_type == 1 {
+                        // :helpgrep — use tail only
+                        path_tail_p3(fname)
+                    } else {
+                        fname
+                    }
+                } else {
+                    std::ptr::null()
+                }
+            } else {
+                std::ptr::null()
+            }
+        } else {
+            std::ptr::null()
+        }
+    };
+
+    // --- Build the prefix string (e.g. " 1 filename" or " 1") ---
+    let mut prefix_buf = [0i8; IOSIZE];
+    nvim_qf_format_prefix(
+        prefix_buf.as_mut_ptr(),
+        IOSIZE,
+        qf_idx,
+        if display_name.is_null() { std::ptr::null() } else { display_name },
+    );
+
+    // --- Filtering ---
+    // filter_entry starts true; each check ANDs in (filtered != 0).
+    // If all checks return non-zero, the entry is filtered OUT (return early).
+    let mut filter_entry = true;
+    if module_nonempty {
+        filter_entry &= nvim_message_filtered(module) != 0;
+    }
+    if filter_entry && !display_name.is_null() && !module_nonempty {
+        filter_entry &= nvim_message_filtered(display_name) != 0;
+    }
+    let pattern = qfline_get_pattern_p3(qfp);
+    if filter_entry && !pattern.is_null() {
+        filter_entry &= nvim_message_filtered(pattern) != 0;
+    }
+    let text = qfline_get_text_p3(qfp);
+    if filter_entry {
+        filter_entry &= nvim_message_filtered(text) != 0;
+    }
+    if filter_entry {
+        return;
+    }
+
+    // --- Build intermediate text buffers ---
+    let lnum = qfline_get_lnum_p3(qfp);
+    let mut range_buf = [0u8; IOSIZE];
+    let range_len = if lnum != 0 {
+        let end_lnum = qfline_get_end_lnum_p3(qfp);
+        let col = qfline_get_col_p3(qfp);
+        let end_col = qfline_get_end_col_p3(qfp);
+        // Replicate qf_range_text logic inline
+        use std::io::Write;
+        let mut cur = std::io::Cursor::new(&mut range_buf[..]);
+        let _ = write!(cur, "{lnum}");
+        if end_lnum > 0 && lnum != end_lnum {
+            let _ = write!(cur, "-{end_lnum}");
+        }
+        if col > 0 {
+            let _ = write!(cur, " col {col}");
+            if end_col > 0 && col != end_col {
+                let _ = write!(cur, "-{end_col}");
+            }
+        }
+        cur.position() as usize
+    } else {
+        0
+    };
+
+    let mut type_buf_arr = [0u8; 20];
+    // Call the pure Rust type formatter directly (no FFI round-trip needed)
+    qf_types_fmt(
+        c_int::from(qfline_get_type_p3(qfp)),
+        qfline_get_nr_p3(qfp),
+        &mut type_buf_arr,
+    );
+    // type_buf_arr is now a NUL-terminated string
+    let type_text_ptr: *const c_char = type_buf_arr.as_ptr().cast();
+
+    let mut pattern_buf = [0u8; IOSIZE];
+    let pattern_len = if !pattern.is_null() {
+        // Replicate qf_fmt_text logic: replace newlines with spaces, collapse whitespace
+        let src_bytes = std::ffi::CStr::from_ptr(pattern).to_bytes();
+        let mut i = 0usize;
+        let mut out_pos = 0usize;
+        while i < src_bytes.len() && out_pos < IOSIZE - 1 {
+            if src_bytes[i] == b'\n' {
+                pattern_buf[out_pos] = b' ';
+                out_pos += 1;
+                i += 1;
+                while i < src_bytes.len() && (src_bytes[i] == b' ' || src_bytes[i] == b'\t' || src_bytes[i] == b'\n') {
+                    i += 1;
+                }
+            } else {
+                pattern_buf[out_pos] = src_bytes[i];
+                out_pos += 1;
+                i += 1;
+            }
+        }
+        pattern_buf[out_pos] = 0;
+        out_pos
+    } else {
+        0
+    };
+
+    // body: skip leading whitespace if we have a file or line
+    let body_src = if !text.is_null() {
+        if !display_name.is_null() || lnum != 0 {
+            skipwhite_p3(text)
+        } else {
+            text
+        }
+    } else {
+        std::ptr::null()
+    };
+    let mut body_buf = [0u8; IOSIZE];
+    let body_len = if !body_src.is_null() {
+        let src_bytes = std::ffi::CStr::from_ptr(body_src).to_bytes();
+        let mut i = 0usize;
+        let mut out_pos = 0usize;
+        while i < src_bytes.len() && out_pos < IOSIZE - 1 {
+            if src_bytes[i] == b'\n' {
+                body_buf[out_pos] = b' ';
+                out_pos += 1;
+                i += 1;
+                while i < src_bytes.len() && (src_bytes[i] == b' ' || src_bytes[i] == b'\t' || src_bytes[i] == b'\n') {
+                    i += 1;
+                }
+            } else {
+                body_buf[out_pos] = src_bytes[i];
+                out_pos += 1;
+                i += 1;
+            }
+        }
+        body_buf[out_pos] = 0;
+        out_pos
+    } else {
+        0
+    };
+
+    // --- Delegate message output to C ---
+    nvim_qf_list_entry_output(
+        prefix_buf.as_ptr(),
+        cursel,
+        qf_file_hl_id,
+        qf_sep_hl_id,
+        qf_line_hl_id,
+        c_int::from(lnum != 0),
+        if range_len > 0 { range_buf.as_ptr().cast::<c_char>() } else { std::ptr::null() },
+        range_len,
+        type_text_ptr,
+        c_int::from(!pattern.is_null()),
+        if pattern_len > 0 { pattern_buf.as_ptr().cast::<c_char>() } else { std::ptr::null() },
+        pattern_len,
+        if body_len > 0 { body_buf.as_ptr().cast::<c_char>() } else { std::ptr::null() },
+        body_len,
+    );
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

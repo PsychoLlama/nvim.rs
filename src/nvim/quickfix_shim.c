@@ -393,6 +393,10 @@ void *nvim_buf_win_get_llist(const void *win_void) { return ((const win_T *)win_
 extern bool rs_qf_mark_adjust_entry(const void *buf, const void *wp, int32_t line1, int32_t line2, int32_t amount, int32_t amount_after);
 extern void rs_qf_jump_first(void *qi, unsigned save_qfid, int forceit);
 
+// Phase 3: qf_list_entry display
+extern void rs_qf_list_entry(const void *qfp, int qf_idx, bool cursel,
+                              int qfFile_hl_id, int qfSep_hl_id, int qfLine_hl_id);
+
 bool nvim_qf_get_multiline(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_multiline; }
 
 void nvim_qf_set_multiline(void *qfl_void, bool multiline) { ((qf_list_T *)qfl_void)->qf_multiline = multiline; }
@@ -2885,82 +2889,7 @@ static int qfLine_hl_id;
 /// quickfix list.
 static void qf_list_entry(qfline_T *qfp, int qf_idx, bool cursel)
 {
-  char *fname = NULL;
-  if (qfp->qf_module != NULL && *qfp->qf_module != NUL) {
-    vim_snprintf(IObuff, IOSIZE, "%2d %s", qf_idx, qfp->qf_module);
-  } else {
-    buf_T *buf;
-    if (qfp->qf_fnum != 0
-        && (buf = buflist_findnr(qfp->qf_fnum)) != NULL) {
-      fname = qfp->qf_fname == NULL ? buf->b_fname : qfp->qf_fname;
-      if (qfp->qf_type == 1) {  // :helpgrep
-        fname = path_tail(fname);
-      }
-    }
-    if (fname == NULL) {
-      snprintf(IObuff, IOSIZE, "%2d", qf_idx);
-    } else {
-      vim_snprintf(IObuff, IOSIZE, "%2d %s", qf_idx, fname);
-    }
-  }
-
-  // Support for filtering entries using :filter /pat/ clist
-  // Match against the module name, file name, search pattern and
-  // text of the entry.
-  bool filter_entry = true;
-  if (qfp->qf_module != NULL && *qfp->qf_module != NUL) {
-    filter_entry &= message_filtered(qfp->qf_module);
-  }
-  if (filter_entry && fname != NULL) {
-    filter_entry &= message_filtered(fname);
-  }
-  if (filter_entry && qfp->qf_pattern != NULL) {
-    filter_entry &= message_filtered(qfp->qf_pattern);
-  }
-  if (filter_entry) {
-    filter_entry &= message_filtered(qfp->qf_text);
-  }
-  if (filter_entry) {
-    return;
-  }
-
-  msg_putchar('\n');
-  msg_outtrans(IObuff, cursel ? HLF_QFL : qfFile_hl_id, false);
-
-  if (qfp->qf_lnum != 0) {
-    msg_puts_hl(":", qfSep_hl_id, false);
-  }
-  char rs_buf[IOSIZE];
-  garray_T *gap = qfga_get();
-  if (qfp->qf_lnum != 0) {
-    size_t rlen = rs_qf_range_text(qfp->qf_lnum, qfp->qf_end_lnum, qfp->qf_col, qfp->qf_end_col,
-                                   rs_buf, sizeof(rs_buf));
-    ga_concat_len(gap, rs_buf, rlen);
-  }
-  char qf_types_buf[20];
-  ga_concat(gap, rs_qf_types(qfp->qf_type, qfp->qf_nr, qf_types_buf, sizeof(qf_types_buf)));
-  ga_append(gap, NUL);
-  msg_puts_hl(gap->ga_data, qfLine_hl_id, false);
-  msg_puts_hl(":", qfSep_hl_id, false);
-  if (qfp->qf_pattern != NULL) {
-    gap = qfga_get();
-    size_t plen = rs_qf_fmt_text(qfp->qf_pattern, rs_buf, sizeof(rs_buf));
-    ga_concat_len(gap, rs_buf, plen);
-    ga_append(gap, NUL);
-    msg_puts(gap->ga_data);
-    msg_puts_hl(":", qfSep_hl_id, false);
-  }
-  msg_puts(" ");
-
-  // Remove newlines and leading whitespace from the text.  For an
-  // unrecognized line keep the indent, the compiler may mark a word
-  // with ^^^^.
-  gap = qfga_get();
-  const char *body = (fname != NULL || qfp->qf_lnum != 0) ? skipwhite(qfp->qf_text) : qfp->qf_text;
-  size_t blen = rs_qf_fmt_text(body, rs_buf, sizeof(rs_buf));
-  ga_concat_len(gap, rs_buf, blen);
-  ga_append(gap, NUL);
-  msg_prt_line(gap->ga_data, false);
+  rs_qf_list_entry(qfp, qf_idx, cursel, qfFile_hl_id, qfSep_hl_id, qfLine_hl_id);
 }
 
 // ":clist": list all errors
@@ -3714,6 +3643,68 @@ const void *nvim_qf_curwin_pos_adj(void)
 
 void *nvim_qf_get_curlist_mut(void *qi_void) { return (void *)&((qf_info_T *)qi_void)->qf_lists[((qf_info_T *)qi_void)->qf_curlist]; }
 
+// Phase 3: qf_list_entry accessors
+// nvim_message_filtered already exists in ex_cmds_shim.c (returns int)
+void nvim_msg_putchar_nl(void) { msg_putchar('\n'); }
+void nvim_msg_outtrans_hl(const char *str, int hl_id) { msg_outtrans(str, hl_id, false); }
+void nvim_msg_puts_hl_qf(const char *str, int hl_id) { msg_puts_hl(str, hl_id, false); }
+void nvim_msg_puts_qf(const char *str) { msg_puts(str); }
+void nvim_msg_prt_line_qf(const char *str) { msg_prt_line(str, false); }
+int nvim_get_hlf_qfl(void) { return HLF_QFL; }
+
+/// Format quickfix entry prefix into IObuff and output the range+type+pattern+body
+/// fields via message API using garray for intermediate buffers.
+/// Takes Rust-computed text for range, type, pattern, and body.
+void nvim_qf_list_entry_output(const char *prefix, bool cursel, int qfFile_hl_id_in,
+                                int qfSep_hl_id_in, int qfLine_hl_id_in,
+                                int lnum_nonzero, const char *range_text, size_t range_len,
+                                const char *type_text,
+                                int has_pattern, const char *pattern_text, size_t pattern_len,
+                                const char *body_text, size_t body_len)
+{
+  msg_putchar('\n');
+  msg_outtrans(prefix, cursel ? HLF_QFL : qfFile_hl_id_in, false);
+
+  if (lnum_nonzero) {
+    msg_puts_hl(":", qfSep_hl_id_in, false);
+  }
+
+  garray_T *gap = qfga_get();
+  if (lnum_nonzero && range_text != NULL) {
+    ga_concat_len(gap, range_text, range_len);
+  }
+  ga_concat(gap, type_text);
+  ga_append(gap, NUL);
+  msg_puts_hl(gap->ga_data, qfLine_hl_id_in, false);
+  msg_puts_hl(":", qfSep_hl_id_in, false);
+
+  if (has_pattern && pattern_text != NULL) {
+    gap = qfga_get();
+    ga_concat_len(gap, pattern_text, pattern_len);
+    ga_append(gap, NUL);
+    msg_puts(gap->ga_data);
+    msg_puts_hl(":", qfSep_hl_id_in, false);
+  }
+
+  msg_puts(" ");
+
+  gap = qfga_get();
+  if (body_text != NULL) {
+    ga_concat_len(gap, body_text, body_len);
+  }
+  ga_append(gap, NUL);
+  msg_prt_line(gap->ga_data, false);
+}
+
+/// Format quickfix entry prefix: "%2d <name>" or "%2d" into buf.
+void nvim_qf_format_prefix(char *buf, size_t bufsz, int idx, const char *name)
+{
+  if (name != NULL) {
+    vim_snprintf(buf, bufsz, "%2d %s", idx, name);
+  } else {
+    snprintf(buf, bufsz, "%2d", idx);
+  }
+}
 
 // ":cfile"/":cgetfile"/":caddfile" commands.
 // ":lfile"/":lgetfile"/":laddfile" commands.
