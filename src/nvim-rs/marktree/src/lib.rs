@@ -562,27 +562,6 @@ extern "C" {
     fn nvim_mtnode_intersect_push(x: MTNodeHandle, id: u64);
 
     // ========================================================================
-    // B-tree Operations (Phase 4)
-    // ========================================================================
-
-    /// Split a full child node during insertion.
-    fn nvim_split_node(b: MarkTreeHandle, x: MTNodeHandle, i: c_int, next: MTKey);
-
-    /// Recursive insertion helper.
-    fn nvim_marktree_putp_aux(b: MarkTreeHandle, x: MTNodeHandle, k: MTKey, meta_inc: *mut u32);
-
-    /// Insert a key into the marktree.
-    fn nvim_marktree_put_key(b: MarkTreeHandle, k: MTKey);
-
-    /// Insert a mark with optional paired end.
-    fn nvim_marktree_put(
-        b: MarkTreeHandle,
-        key: MTKey,
-        end_row: c_int,
-        end_col: c_int,
-        end_right: bool,
-    );
-
     // ========================================================================
     // B-tree Deletion Operations (Phase 5)
     // ========================================================================
@@ -629,6 +608,12 @@ extern "C" {
 
     /// AND-NOT flags on the raw key at iterator position.
     fn nvim_rawkey_clear_flags(itr: MarkTreeIterHandle, flags: u16);
+
+    /// Allocate a zeroed MarkTreeIter on the heap.
+    fn nvim_alloc_marktreeiter() -> MarkTreeIterHandle;
+
+    /// Free a heap-allocated MarkTreeIter.
+    fn nvim_free_marktreeiter(itr: MarkTreeIterHandle);
 
     // ========================================================================
     // Memory Management Operations (Phase 7)
@@ -3122,43 +3107,286 @@ pub fn bubble_up_rs(x: MTNodeHandle) {
 }
 
 // ============================================================================
-// B-tree Operations Wrappers
+// B-tree Insertion (Phase 3)
 // ============================================================================
 
 /// Split a full child node during insertion.
 ///
 /// x must be an internal node, which is not full.
 /// x->ptr[i] should be a full node, i.e. x->ptr[i]->n == 2*T-1.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::needless_range_loop,
+    clippy::many_single_char_names
+)]
 pub fn split_node(b: MarkTreeHandle, x: MTNodeHandle, i: i32, next: MTKey) {
-    unsafe { nvim_split_node(b, x, i, next) }
+    let y = unsafe { nvim_mtnode_get_ptr(x, i) };
+    let y_level = unsafe { nvim_mtnode_get_level(y) };
+    let z = marktree_alloc_node(b, y_level != 0);
+    unsafe {
+        nvim_mtnode_set_level(z, y_level);
+        nvim_mtnode_set_n(z, (T as i32) - 1);
+    }
+
+    // tricky: we might split a node in between inserting the start node and the end
+    // node of the same pair. Then we must not intersect this id yet (done later
+    // in marktree_intersect_pair).
+    let last_start = if mt_end(&next) {
+        mt_lookup_id(next.ns, next.id, false)
+    } else {
+        MARKTREE_END_FLAG
+    };
+
+    // no alloc in the common case (less than 4 intersects)
+    unsafe { nvim_kvi_copy_intersect(z, y) };
+
+    if y_level == 0 {
+        let pi = pseudo_index(y, 0); // note: sloppy pseudo-index
+        for j in 0..(T as i32) {
+            let k = unsafe { nvim_mtnode_get_key(y, j) };
+            let pi_end = pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, true), true);
+            if mt_start(&k) && pi_end > pi && mt_lookup_key(&k) != last_start {
+                intersect_node(b, z, mt_lookup_id(k.ns, k.id, false));
+            }
+        }
+
+        // note: y->key[T-1] is moved up and thus checked for both
+        for j in ((T as i32) - 1)..((T as i32) * 2 - 1) {
+            let k = unsafe { nvim_mtnode_get_key(y, j) };
+            let pi_start = pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, false), true);
+            if mt_end(&k) && pi_start > 0 && pi_start < pi {
+                intersect_node(b, y, mt_lookup_id(k.ns, k.id, false));
+            }
+        }
+    }
+
+    // Copy upper half of y's keys into z
+    unsafe { nvim_mtnode_memcpy_keys(z, 0, y, T as i32, (T as i32) - 1) };
+    for j in 0..((T as i32) - 1) {
+        marktree_refkey(b, z, j);
+    }
+
+    if y_level != 0 {
+        // Copy upper half of y's ptr and meta into z
+        unsafe { nvim_mtnode_memcpy_ptr(z, 0, y, T as i32, T as i32) };
+        unsafe { nvim_mtnode_memcpy_meta(z, 0, y, T as i32, T as i32) };
+        for j in 0..(T as i32) {
+            let child = unsafe { nvim_mtnode_get_ptr(z, j) };
+            unsafe {
+                nvim_mtnode_set_parent(child, z);
+                nvim_mtnode_set_p_idx(child, j);
+            }
+        }
+    }
+
+    unsafe { nvim_mtnode_set_n(y, (T as i32) - 1) };
+
+    let x_n = unsafe { nvim_mtnode_get_n(x) };
+    // Make room in x for z (shift ptr and meta right)
+    unsafe { nvim_mtnode_memmove_ptr(x, i + 2, i + 1, x_n - i) };
+    unsafe { nvim_mtnode_memmove_meta(x, i + 2, i + 1, x_n - i) };
+    unsafe { nvim_mtnode_set_ptr(x, i + 1, z) };
+
+    // Compute and store meta for z
+    let z_meta = meta_describe_node(z);
+    for m in 0..K_MT_META_COUNT {
+        unsafe { nvim_mtnode_set_meta(x, i + 1, m as i32, z_meta[m]) };
+    }
+
+    unsafe { nvim_mtnode_set_parent(z, x) }; // == y->parent
+
+    // Fix p_idx for all children from i+1 to x->n+1
+    for j in (i + 1)..=(x_n + 1) {
+        let child = unsafe { nvim_mtnode_get_ptr(x, j) };
+        unsafe { nvim_mtnode_set_p_idx(child, j) };
+    }
+
+    // Shift keys right to make room for promoted key
+    unsafe { nvim_mtnode_memmove_keys(x, i + 1, i, x_n - i) };
+
+    // Move key to internal layer: x->key[i] = y->key[T-1]
+    let promoted = unsafe { nvim_mtnode_get_key(y, (T as i32) - 1) };
+    unsafe { nvim_mtnode_set_key(x, i, promoted) };
+    marktree_refkey(b, x, i);
+    unsafe { nvim_mtnode_set_n(x, x_n + 1) };
+
+    let x_key_i = unsafe { nvim_mtnode_get_key(x, i) };
+    let meta_inc = meta_describe_key(&x_key_i);
+    // y used to contain all of z and x->key[i]; discount those from y's meta
+    for m in 0..K_MT_META_COUNT {
+        let old_y_meta = unsafe { nvim_mtnode_get_meta(x, i, m as i32) };
+        let z_m = unsafe { nvim_mtnode_get_meta(x, i + 1, m as i32) };
+        unsafe {
+            nvim_mtnode_set_meta(x, i, m as i32, old_y_meta - z_m - meta_inc[m]);
+        }
+    }
+
+    // Adjust relative positions for z's keys (make them relative to promoted key)
+    for j in 0..((T as i32) - 1) {
+        let mut zk = unsafe { nvim_mtnode_get_key(z, j) };
+        relative(x_key_i.pos, &mut zk.pos);
+        unsafe { nvim_mtnode_set_key(z, j, zk) };
+    }
+
+    // Adjust promoted key position (make relative to previous key in x)
+    if i > 0 {
+        let prev_key = unsafe { nvim_mtnode_get_key(x, i - 1) };
+        let mut promoted_key = unsafe { nvim_mtnode_get_key(x, i) };
+        unrelative(prev_key.pos, &mut promoted_key.pos);
+        unsafe { nvim_mtnode_set_key(x, i, promoted_key) };
+    }
+
+    if y_level != 0 {
+        bubble_up(y);
+        bubble_up(z);
+    }
 }
 
 /// Recursive insertion helper.
 ///
 /// x must not be a full node (even if there might be internal space).
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::needless_range_loop,
+    clippy::many_single_char_names
+)]
 pub fn marktree_putp_aux(
     b: MarkTreeHandle,
     x: MTNodeHandle,
-    k: MTKey,
+    mut k: MTKey,
     meta_inc: &mut [u32; K_MT_META_COUNT],
 ) {
-    unsafe { nvim_marktree_putp_aux(b, x, k, meta_inc.as_mut_ptr()) }
+    // TODO(bfredl): ugh, make sure this is the _last_ valid (pos, gravity) position,
+    // to minimize movement
+    let (getp_i, _) = marktree_getp_aux(x, &k);
+    let i = getp_i + 1;
+    let x_level = unsafe { nvim_mtnode_get_level(x) };
+    if x_level == 0 {
+        let x_n = unsafe { nvim_mtnode_get_n(x) };
+        if i != x_n {
+            unsafe { nvim_mtnode_memmove_keys(x, i + 1, i, x_n - i) };
+        }
+        unsafe { nvim_mtnode_set_key(x, i, k) };
+        marktree_refkey(b, x, i);
+        unsafe { nvim_mtnode_set_n(x, x_n + 1) };
+    } else {
+        let child_i = unsafe { nvim_mtnode_get_ptr(x, i) };
+        let child_n = unsafe { nvim_mtnode_get_n(child_i) };
+        let actual_i = if child_n == (2 * T as i32) - 1 {
+            split_node(b, x, i, k);
+            if key_cmp(&k, &unsafe { nvim_mtnode_get_key(x, i) }) > 0 {
+                i + 1
+            } else {
+                i
+            }
+        } else {
+            i
+        };
+        if actual_i > 0 {
+            let prev_key = unsafe { nvim_mtnode_get_key(x, actual_i - 1) };
+            relative(prev_key.pos, &mut k.pos);
+        }
+        marktree_putp_aux(b, unsafe { nvim_mtnode_get_ptr(x, actual_i) }, k, meta_inc);
+        for m in 0..K_MT_META_COUNT {
+            let old = unsafe { nvim_mtnode_get_meta(x, actual_i, m as i32) };
+            unsafe { nvim_mtnode_set_meta(x, actual_i, m as i32, old + meta_inc[m]) };
+        }
+    }
 }
 
 /// Insert a key into the marktree.
 ///
 /// This is the core insertion function. It handles root splitting
 /// and delegates to putp_aux for the actual insertion.
-pub fn marktree_put_key(b: MarkTreeHandle, k: MTKey) {
-    unsafe { nvim_marktree_put_key(b, k) }
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::needless_range_loop,
+    clippy::many_single_char_names
+)]
+pub fn marktree_put_key(b: MarkTreeHandle, mut k: MTKey) {
+    k.flags |= MT_FLAG_REAL; // let's be real.
+    let mut r = unsafe { nvim_marktree_get_root(b) };
+    if r.is_null() {
+        r = marktree_alloc_node(b, true);
+        marktree_set_root(b, r);
+    }
+
+    let r_n = unsafe { nvim_mtnode_get_n(r) };
+    if r_n == (2 * T as i32) - 1 {
+        let s = marktree_alloc_node(b, true);
+        marktree_set_root(b, s);
+        let r_level = unsafe { nvim_mtnode_get_level(r) };
+        unsafe { nvim_mtnode_set_level(s, r_level + 1) };
+        unsafe { nvim_mtnode_set_n(s, 0) };
+        unsafe { nvim_mtnode_set_ptr(s, 0, r) };
+        // s->meta[0] = b->meta_root
+        let meta_root = marktree_meta_root(b);
+        for m in 0..K_MT_META_COUNT {
+            unsafe { nvim_mtnode_set_meta(s, 0, m as i32, meta_root[m]) };
+        }
+        unsafe { nvim_mtnode_set_parent(r, s) };
+        unsafe { nvim_mtnode_set_p_idx(r, 0) };
+        split_node(b, s, 0, k);
+        r = s;
+    }
+
+    let mut meta_inc = meta_describe_key(&k);
+    marktree_putp_aux(b, r, k, &mut meta_inc);
+    for m in 0..K_MT_META_COUNT {
+        unsafe { nvim_marktree_add_meta_root(b, m as i32, meta_inc[m]) };
+    }
+    marktree_inc_n_keys(b);
 }
 
 /// Insert a mark with optional paired end.
 ///
 /// If end_row >= 0, creates a paired mark with the end at (end_row, end_col).
 /// The end mark will have right gravity if end_right is true.
-pub fn marktree_put(b: MarkTreeHandle, key: MTKey, end_row: i32, end_col: i32, end_right: bool) {
-    unsafe { nvim_marktree_put(b, key, end_row, end_col, end_right) }
+///
+/// # Panics
+///
+/// Panics if key.flags contains invalid external bits.
+#[allow(clippy::many_single_char_names)]
+pub fn marktree_put(
+    b: MarkTreeHandle,
+    mut key: MTKey,
+    end_row: i32,
+    end_col: i32,
+    end_right: bool,
+) {
+    assert!(key.flags & !(MT_FLAG_EXTERNAL_MASK | MT_FLAG_RIGHT_GRAVITY) == 0);
+    if end_row >= 0 {
+        key.flags |= MT_FLAG_PAIRED;
+    }
+
+    marktree_put_key(b, key);
+
+    if end_row >= 0 {
+        let mut end_key = key;
+        end_key.flags = (key.flags & !MT_FLAG_RIGHT_GRAVITY)
+            | MT_FLAG_END
+            | if end_right { MT_FLAG_RIGHT_GRAVITY } else { 0 };
+        end_key.pos = MTPos {
+            row: end_row,
+            col: end_col,
+        };
+        marktree_put_key(b, end_key);
+        let itr = unsafe { nvim_alloc_marktreeiter() };
+        let end_itr = unsafe { nvim_alloc_marktreeiter() };
+        let _ = marktree_lookup(b, mt_lookup_key(&key), itr);
+        let _ = marktree_lookup(b, mt_lookup_key(&end_key), end_itr);
+        marktree_intersect_pair(b, mt_lookup_key(&key), itr, end_itr, false);
+        unsafe {
+            nvim_free_marktreeiter(itr);
+            nvim_free_marktreeiter(end_itr);
+        }
+    }
 }
 
 /// Mark intersections between paired marks.

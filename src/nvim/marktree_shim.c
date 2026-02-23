@@ -156,6 +156,12 @@ extern int rs_marktree_getp_aux(const MTNode *x, MTKey k, bool *match);
 extern void rs_marktree_intersect_pair(MarkTree *b, uint64_t id, MarkTreeIter *itr,
                                        MarkTreeIter *end_itr, bool delete);
 
+// Insertion operations
+extern void rs_split_node(MarkTree *b, MTNode *x, int i, MTKey next);
+extern void rs_marktree_putp_aux(MarkTree *b, MTNode *x, MTKey k, uint32_t *meta_inc);
+extern void rs_marktree_put_key(MarkTree *b, MTKey k);
+extern void rs_marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right);
+
 #define T MT_BRANCH_FACTOR
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 
@@ -192,143 +198,18 @@ static MTNode *id2node(MarkTree *b, uint64_t id)
 // x->ptr[i] should be a full node, i e x->ptr[i]->n == 2*T-1
 static inline void split_node(MarkTree *b, MTNode *x, const int i, MTKey next)
 {
-  MTNode *y = x->ptr[i];
-  MTNode *z = marktree_alloc_node(b, y->level);
-  z->level = y->level;
-  z->n = T - 1;
-
-  // tricky: we might split a node in between inserting the start node and the end
-  // node of the same pair. Then we must not intersect this id yet (done later
-  // in marktree_intersect_pair).
-  uint64_t last_start = mt_end(next) ? mt_lookup_id(next.ns, next.id, false) : MARKTREE_END_FLAG;
-
-  // no alloc in the common case (less than 4 intersects)
-  kvi_copy(z->intersect, y->intersect);
-
-  if (!y->level) {
-    uint64_t pi = rs_pseudo_index(y, 0);  // note: sloppy pseudo-index
-    for (int j = 0; j < T; j++) {
-      MTKey k = y->key[j];
-      uint64_t pi_end = rs_pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, true), true);
-      if (mt_start(k) && pi_end > pi && mt_lookup_key(k) != last_start) {
-        rs_intersect_node(b, z, mt_lookup_id(k.ns, k.id, false));
-      }
-    }
-
-    // note: y->key[T-1] is moved up and thus checked for both
-    for (int j = T - 1; j < (T * 2) - 1; j++) {
-      MTKey k = y->key[j];
-      uint64_t pi_start = rs_pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, false), true);
-      if (mt_end(k) && pi_start > 0 && pi_start < pi) {
-        rs_intersect_node(b, y, mt_lookup_id(k.ns, k.id, false));
-      }
-    }
-  }
-
-  memcpy(z->key, &y->key[T], sizeof(MTKey) * (T - 1));
-  for (int j = 0; j < T - 1; j++) {
-    refkey(b, z, j);
-  }
-  if (y->level) {
-    memcpy(z->ptr, &y->ptr[T], sizeof(MTNode *) * T);
-    memcpy(z->meta, &y->meta[T], sizeof(z->meta[0]) * T);
-    for (int j = 0; j < T; j++) {
-      z->ptr[j]->parent = z;
-      z->ptr[j]->p_idx = (int16_t)j;
-    }
-  }
-  y->n = T - 1;
-  memmove(&x->ptr[i + 2], &x->ptr[i + 1], sizeof(MTNode *) * (size_t)(x->n - i));
-  memmove(&x->meta[i + 2], &x->meta[i + 1], sizeof(x->meta[0]) * (size_t)(x->n - i));
-  x->ptr[i + 1] = z;
-  rs_meta_describe_node(x->meta[i + 1], z);
-  z->parent = x;  // == y->parent
-  for (int j = i + 1; j < x->n + 2; j++) {
-    x->ptr[j]->p_idx = (int16_t)j;
-  }
-  memmove(&x->key[i + 1], &x->key[i], sizeof(MTKey) * (size_t)(x->n - i));
-
-  // move key to internal layer:
-  x->key[i] = y->key[T - 1];
-  refkey(b, x, i);
-  x->n++;
-
-  uint32_t meta_inc[kMTMetaCount];
-  rs_meta_describe_key(x->key[i], meta_inc);
-  for (int m = 0; m < kMTMetaCount; m++) {
-    // y used contain all of z and x->key[i], discount those
-    x->meta[i][m] -= (x->meta[i + 1][m] + meta_inc[m]);
-  }
-
-  for (int j = 0; j < T - 1; j++) {
-    rs_relative(x->key[i].pos, &z->key[j].pos);
-  }
-  if (i > 0) {
-    rs_unrelative(x->key[i - 1].pos, &x->key[i].pos);
-  }
-
-  if (y->level) {
-    rs_bubble_up(y);
-    rs_bubble_up(z);
-  } else {
-    // code above goose here
-  }
+  rs_split_node(b, x, i, next);
 }
 
 // x must not be a full node (even if there might be internal space)
 static inline void marktree_putp_aux(MarkTree *b, MTNode *x, MTKey k, uint32_t *meta_inc)
 {
-  // TODO(bfredl): ugh, make sure this is the _last_ valid (pos, gravity) position,
-  // to minimize movement
-  int i = rs_marktree_getp_aux(x, k, NULL) + 1;
-  if (x->level == 0) {
-    if (i != x->n) {
-      memmove(&x->key[i + 1], &x->key[i],
-              (size_t)(x->n - i) * sizeof(MTKey));
-    }
-    x->key[i] = k;
-    refkey(b, x, i);
-    x->n++;
-  } else {
-    if (x->ptr[i]->n == 2 * T - 1) {
-      split_node(b, x, i, k);
-      if (rs_key_cmp(k, x->key[i]) > 0) {
-        i++;
-      }
-    }
-    if (i > 0) {
-      rs_relative(x->key[i - 1].pos, &k.pos);
-    }
-    marktree_putp_aux(b, x->ptr[i], k, meta_inc);
-    for (int m = 0; m < kMTMetaCount; m++) {
-      x->meta[i][m] += meta_inc[m];
-    }
-  }
+  rs_marktree_putp_aux(b, x, k, meta_inc);
 }
 
 void marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right)
 {
-  assert(!(key.flags & ~(MT_FLAG_EXTERNAL_MASK | MT_FLAG_RIGHT_GRAVITY)));
-  if (end_row >= 0) {
-    key.flags |= MT_FLAG_PAIRED;
-  }
-
-  marktree_put_key(b, key);
-
-  if (end_row >= 0) {
-    MTKey end_key = key;
-    end_key.flags = (uint16_t)((uint16_t)(key.flags & ~MT_FLAG_RIGHT_GRAVITY)
-                               |(uint16_t)MT_FLAG_END
-                               |(uint16_t)(end_right ? MT_FLAG_RIGHT_GRAVITY : 0));
-    end_key.pos = (MTPos){ end_row, end_col };
-    marktree_put_key(b, end_key);
-    MarkTreeIter itr[1] = { 0 };
-    MarkTreeIter end_itr[1] = { 0 };
-    rs_marktree_lookup(b, mt_lookup_key(key), itr);
-    rs_marktree_lookup(b, mt_lookup_key(end_key), end_itr);
-
-    marktree_intersect_pair(b, mt_lookup_key(key), itr, end_itr, false);
-  }
+  rs_marktree_put(b, key, end_row, end_col, end_right);
 }
 
 
@@ -351,31 +232,7 @@ static MTNode *marktree_alloc_node(MarkTree *b, bool internal)
 
 void marktree_put_key(MarkTree *b, MTKey k)
 {
-  k.flags |= MT_FLAG_REAL;  // let's be real.
-  if (!b->root) {
-    b->root = marktree_alloc_node(b, true);
-  }
-  MTNode *r = b->root;
-  if (r->n == 2 * T - 1) {
-    MTNode *s = marktree_alloc_node(b, true);
-    b->root = s; s->level = r->level + 1; s->n = 0;
-    s->ptr[0] = r;
-    for (int m = 0; m < kMTMetaCount; m++) {
-      s->meta[0][m] = b->meta_root[m];
-    }
-    r->parent = s;
-    r->p_idx = 0;
-    split_node(b, s, 0, k);
-    r = s;
-  }
-
-  uint32_t meta_inc[kMTMetaCount];
-  rs_meta_describe_key(k, meta_inc);
-  marktree_putp_aux(b, r, k, meta_inc);
-  for (int m = 0; m < kMTMetaCount; m++) {
-    b->meta_root[m] += meta_inc[m];
-  }
-  b->n_keys++;
+  rs_marktree_put_key(b, k);
 }
 
 /// INITIATING DELETION PROTOCOL:
@@ -2036,14 +1893,11 @@ void nvim_mtnode_intersect_push(MTNode *x, uint64_t id)
   kvi_push(x->intersect, id);
 }
 
-// ============================================================================
-// B-tree Operations (for Rust FFI)
-// ============================================================================
-
-void nvim_split_node(MarkTree *b, MTNode *x, int i, MTKey next) { split_node(b, x, i, next); }
-void nvim_marktree_putp_aux(MarkTree *b, MTNode *x, MTKey k, uint32_t *meta_inc) { marktree_putp_aux(b, x, k, meta_inc); }
-void nvim_marktree_put_key(MarkTree *b, MTKey k) { marktree_put_key(b, k); }
-void nvim_marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right) { marktree_put(b, key, end_row, end_col, end_right); }
+// nvim_marktree_put is still used by the extmark Rust crate
+void nvim_marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right)
+{
+  rs_marktree_put(b, key, end_row, end_col, end_right);
+}
 
 // ============================================================================
 // B-tree Deletion Operations (for Rust FFI)
@@ -2058,6 +1912,8 @@ void nvim_pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i) { pivot_left(b,
 MTNode *nvim_merge_node(MarkTree *b, MTNode *p, int i) { return merge_node(b, p, i); }
 void nvim_marktree_del_id(MarkTree *b, uint64_t id) { pmap_del(uint64_t)(b->id2node, id, NULL); }
 void nvim_marktree_dec_n_keys(MarkTree *b) { b->n_keys--; }
+MarkTreeIter *nvim_alloc_marktreeiter(void) { return xcalloc(1, sizeof(MarkTreeIter)); }
+void nvim_free_marktreeiter(MarkTreeIter *itr) { xfree(itr); }
 void nvim_marktree_sub_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_root[m] -= val; }
 MTKey nvim_rawkey(MarkTreeIter *itr) { return rawkey(itr); }
 void nvim_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags = flags; }
