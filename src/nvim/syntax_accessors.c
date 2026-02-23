@@ -2042,118 +2042,13 @@ static void syn_cmd_region(exarg_T *eap, int syncing)
 #define ITEM_END            2
 #define ITEM_MATCHGROUP     3
 
-// A simple syntax group ID comparison function suitable for use in qsort()
-static int syn_compare_stub(const void *const v1, const void *const v2)
-{
-  const int16_t *const s1 = v1;
-  const int16_t *const s2 = v2;
-
-  return *s1 > *s2 ? 1 : *s1 < *s2 ? -1 : 0;
-}
-
 // Combines lists of syntax clusters.
 // *clstr1 and *clstr2 must both be allocated memory; they will be consumed.
+// Implemented in Rust: see rs_syn_combine_list in nvim-syntax/src/cluster.rs
+extern void rs_syn_combine_list(int16_t **clstr1, int16_t **clstr2, int list_op);
 static void syn_combine_list(int16_t **const clstr1, int16_t **const clstr2, const int list_op)
 {
-  size_t count1 = 0;
-  size_t count2 = 0;
-  const int16_t *g1;
-  const int16_t *g2;
-  int16_t *clstr = NULL;
-
-  // Handle degenerate cases.
-  if (*clstr2 == NULL) {
-    return;
-  }
-  if (*clstr1 == NULL || list_op == CLUSTER_REPLACE) {
-    if (list_op == CLUSTER_REPLACE) {
-      xfree(*clstr1);
-    }
-    if (list_op == CLUSTER_REPLACE || list_op == CLUSTER_ADD) {
-      *clstr1 = *clstr2;
-    } else {
-      xfree(*clstr2);
-    }
-    return;
-  }
-
-  for (g1 = *clstr1; *g1; g1++) {
-    count1++;
-  }
-  for (g2 = *clstr2; *g2; g2++) {
-    count2++;
-  }
-
-  // For speed purposes, sort both lists.
-  qsort(*clstr1, count1, sizeof(**clstr1), syn_compare_stub);
-  qsort(*clstr2, count2, sizeof(**clstr2), syn_compare_stub);
-
-  // We proceed in two passes; in round 1, we count the elements to place
-  // in the new list, and in round 2, we allocate and populate the new
-  // list.  For speed, we use a mergesort-like method, adding the smaller
-  // of the current elements in each list to the new list.
-  for (int round = 1; round <= 2; round++) {
-    g1 = *clstr1;
-    g2 = *clstr2;
-    int count = 0;
-
-    // First, loop through the lists until one of them is empty.
-    while (*g1 && *g2) {
-      // We always want to add from the first list.
-      if (*g1 < *g2) {
-        if (round == 2) {
-          clstr[count] = *g1;
-        }
-        count++;
-        g1++;
-        continue;
-      }
-      // We only want to add from the second list if we're adding the
-      // lists.
-      if (list_op == CLUSTER_ADD) {
-        if (round == 2) {
-          clstr[count] = *g2;
-        }
-        count++;
-      }
-      if (*g1 == *g2) {
-        g1++;
-      }
-      g2++;
-    }
-
-    // Now add the leftovers from whichever list didn't get finished
-    // first.  As before, we only want to add from the second list if
-    // we're adding the lists.
-    for (; *g1; g1++, count++) {
-      if (round == 2) {
-        clstr[count] = *g1;
-      }
-    }
-    if (list_op == CLUSTER_ADD) {
-      for (; *g2; g2++, count++) {
-        if (round == 2) {
-          clstr[count] = *g2;
-        }
-      }
-    }
-
-    if (round == 1) {
-      // If the group ended up empty, we don't need to allocate any
-      // space for it.
-      if (count == 0) {
-        clstr = NULL;
-        break;
-      }
-      clstr = xmalloc(((size_t)count + 1) * sizeof(*clstr));
-      clstr[count] = 0;
-    }
-  }
-
-  // Finally, put the new list in place.
-  xfree(*clstr1);
-  xfree(*clstr2);
-  *clstr1 = clstr;
+  rs_syn_combine_list(clstr1, clstr2, list_op);
 }
 
 /// Lookup a syntax cluster name and return its ID.

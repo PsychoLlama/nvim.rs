@@ -5,12 +5,17 @@
 //! - Cluster membership operations
 //! - Cluster-based contains/containedin logic
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::types::{
     IdListHandle, SynBlockHandle, SynClusterHandle, CLUSTER_ADD, CLUSTER_REPLACE, CLUSTER_SUBTRACT,
     SYNID_ALLBUT, SYNID_CLUSTER,
 };
+
+extern "C" {
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
+}
 
 // =============================================================================
 // FFI declarations for cluster operations
@@ -410,8 +415,6 @@ pub fn is_spell_related_cluster(block: SynBlockHandle, id: i32) -> bool {
 // FFI exports for cluster management (Phase Y3)
 // =============================================================================
 
-use std::ffi::c_void;
-
 /// Opaque pointer to synblock for FFI
 pub type SynBlockPtr = *const c_void;
 
@@ -476,6 +479,174 @@ pub struct SynblockClusterSummary {
     /// Whether @NoSpell cluster exists
     pub has_nospell: c_int,
 }
+// =============================================================================
+// Phase 1: syn_combine_list migration
+// =============================================================================
+
+/// Merge/filter two 0-terminated int16_t ID lists according to a cluster
+/// operation (Replace, Add, Subtract).
+///
+/// Both input lists are consumed (freed via xfree). Returns the new list
+/// (allocated via xmalloc), or a null handle if the result is empty.
+///
+/// Matches the semantics of the C `syn_combine_list` function exactly.
+///
+/// # Safety
+/// Both list handles must be null or point to xmalloc-allocated 0-terminated
+/// int16_t arrays. After the call, both inputs are freed and must not be used.
+unsafe fn combine_id_lists(
+    list1: IdListHandle,
+    list2: IdListHandle,
+    op: ClusterOp,
+) -> IdListHandle {
+    // Handle degenerate cases.
+    if list2.is_null() {
+        // list2 is null: nothing to do, return list1 unchanged.
+        return list1;
+    }
+    if list1.is_null() || op == ClusterOp::Replace {
+        if op == ClusterOp::Replace {
+            xfree(list1.0 as *mut c_void);
+        }
+        if op == ClusterOp::Replace || op == ClusterOp::Add {
+            return list2;
+        }
+        // Subtract with null list1: free list2 and return null.
+        xfree(list2.0 as *mut c_void);
+        return IdListHandle::null();
+    }
+
+    // Count elements in both lists.
+    let mut count1: usize = 0;
+    let mut p = list1.0;
+    while *p != 0 {
+        count1 += 1;
+        p = p.add(1);
+    }
+
+    let mut count2: usize = 0;
+    let mut p = list2.0;
+    while *p != 0 {
+        count2 += 1;
+        p = p.add(1);
+    }
+
+    // Sort both lists in place using Rust's sort (same semantics as qsort with
+    // syn_compare_stub).
+    let slice1 = std::slice::from_raw_parts_mut(list1.0, count1);
+    let slice2 = std::slice::from_raw_parts_mut(list2.0, count2);
+    slice1.sort_unstable();
+    slice2.sort_unstable();
+
+    // Two-pass merge: pass 1 counts elements, pass 2 populates the new list.
+    let mut result_ptr: *mut i16 = std::ptr::null_mut();
+
+    for round in 1..=2u32 {
+        let mut g1 = list1.0;
+        let mut g2 = list2.0;
+        let mut count: usize = 0;
+
+        // Merge while both lists have elements.
+        while *g1 != 0 && *g2 != 0 {
+            // Always take from list1 when it's smaller.
+            if *g1 < *g2 {
+                if round == 2 {
+                    *result_ptr.add(count) = *g1;
+                }
+                count += 1;
+                g1 = g1.add(1);
+                continue;
+            }
+            // Take from list2 only for Add.
+            if op == ClusterOp::Add {
+                if round == 2 {
+                    *result_ptr.add(count) = *g2;
+                }
+                count += 1;
+            }
+            if *g1 == *g2 {
+                g1 = g1.add(1);
+            }
+            g2 = g2.add(1);
+        }
+
+        // Drain remaining from list1.
+        while *g1 != 0 {
+            if round == 2 {
+                *result_ptr.add(count) = *g1;
+            }
+            count += 1;
+            g1 = g1.add(1);
+        }
+
+        // Drain remaining from list2 (only for Add).
+        if op == ClusterOp::Add {
+            while *g2 != 0 {
+                if round == 2 {
+                    *result_ptr.add(count) = *g2;
+                }
+                count += 1;
+                g2 = g2.add(1);
+            }
+        }
+
+        if round == 1 {
+            if count == 0 {
+                // Empty result: no allocation needed.
+                break;
+            }
+            // Allocate for count elements + terminating 0.
+            result_ptr = xmalloc((count + 1) * std::mem::size_of::<i16>()) as *mut i16;
+            *result_ptr.add(count) = 0;
+        }
+    }
+
+    // Free both input lists and return the new one.
+    xfree(list1.0 as *mut c_void);
+    xfree(list2.0 as *mut c_void);
+
+    if result_ptr.is_null() {
+        IdListHandle::null()
+    } else {
+        IdListHandle(result_ptr)
+    }
+}
+
+/// FFI export: combine two syntax cluster ID lists.
+///
+/// Reads `*clstr1` and `*clstr2`, calls `combine_id_lists`, writes the result
+/// back to `*clstr1`, and sets `*clstr2` to null (matching C ownership).
+///
+/// # Safety
+/// Both pointer arguments must be non-null pointers to IdListHandle values.
+/// The lists they point to must be null or xmalloc-allocated 0-terminated
+/// int16_t arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_combine_list(
+    clstr1: *mut IdListHandle,
+    clstr2: *mut IdListHandle,
+    list_op: c_int,
+) {
+    let l1 = *clstr1;
+    let l2 = *clstr2;
+
+    let op = match ClusterOp::from_c_int(list_op) {
+        Some(op) => op,
+        None => {
+            // Unknown op: just free list2, leave list1 unchanged.
+            if !l2.is_null() {
+                xfree(l2.0 as *mut c_void);
+            }
+            *clstr2 = IdListHandle::null();
+            return;
+        }
+    };
+
+    let result = combine_id_lists(l1, l2, op);
+    *clstr1 = result;
+    *clstr2 = IdListHandle::null();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
