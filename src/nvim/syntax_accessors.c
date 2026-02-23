@@ -1049,11 +1049,6 @@ static void syn_clear_cluster(synblock_T *block, int i)
   xfree(SYN_CLSTR(block)[i].scl_list);
 }
 
-/// Handle ":syntax clear" command.
-static void syn_cmd_clear(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_clear(eap, syncing);
-}
 
 // Clear one syntax group for the current buffer.
 static void syn_clear_one(const int id, const bool syncing)
@@ -1082,12 +1077,6 @@ static void syn_cmd_on(exarg_T *eap, int syncing)
   rs_syn_cmd_onoff(eap, "syntax", syncing);
 }
 
-// Handle ":syntax reset" command.
-// It actually resets highlighting, not syntax.
-static void syn_cmd_reset(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_reset(eap, syncing);
-}
 
 // Handle ":syntax manual" command.
 static void syn_cmd_manual(exarg_T *eap, int syncing)
@@ -1248,24 +1237,6 @@ static char *get_group_name(char *arg, char **name_end)
   return rest;
 }
 
-/// Check for syntax command option arguments.
-/// This can be called at any place in the list of arguments, and just picks
-/// out the arguments that are known.  Can be called several times in a row to
-/// collect all options in between other arguments.
-///
-/// @param arg   next argument to be checked
-/// @param opt   various things
-/// @param skip  true if skipping over command
-///
-/// @return      a pointer to the next argument (which isn't an option).
-///              Return NULL for any error;
-static char *get_syn_options(char *arg, syn_opt_arg_T *opt, int *conceal_char, int skip)
-{
-  return rs_get_syn_options(arg, &opt->flags, opt->keyword,
-                            opt->sync_idx, opt->has_cont_list,
-                            &opt->cont_list, &opt->cont_in_list,
-                            &opt->next_list, conceal_char, skip);
-}
 
 // Adjustments to syntax item when declared in a ":syn include"'d file.
 // Set the contained flag, and if the item is not already contained, add it
@@ -1288,36 +1259,9 @@ static void syn_incl_toplevel(int id, int *flagsp)
   }
 }
 
-// Handle ":syntax include [@{group-name}] filename" command.
-static void syn_cmd_include(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_include(eap, syncing);
-}
 
-// Handle ":syntax keyword {group-name} [{option}] keyword .." command.
-static void syn_cmd_keyword(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_keyword(eap, syncing);
-}
 
-/// Handle ":syntax match {name} [{options}] {pattern} [{options}]".
-///
-/// Also ":syntax sync match {name} [[grouphere | groupthere] {group-name}] .."
-///
-/// @param syncing  true for ":syntax sync match .. "
-static void syn_cmd_match(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_match(eap, syncing);
-}
 
-/// Handle ":syntax region {group-name} [matchgroup={group-name}]
-///              start {start} .. [skip {skip}] end {end} .. [{options}]".
-///
-/// @param syncing  true for ":syntax sync region .."
-static void syn_cmd_region(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_region(eap, syncing);
-}
 
 // Keep ITEM_* defines available for C wrappers
 #define ITEM_START          0
@@ -1414,13 +1358,6 @@ static int syn_add_cluster(char *name)
   return len + SYNID_CLUSTER;
 }
 
-// Handle ":syntax cluster {cluster-name} [contains={groupname},..]
-//              [add={groupname},..] [remove={groupname},..]".
-static void syn_cmd_cluster(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_cluster(eap, syncing);
-}
-
 // On first call for current buffer: Init growing array.
 static void init_syn_patterns(void)
 {
@@ -1437,25 +1374,7 @@ static char *get_syn_pattern(char *arg, synpat_T *ci)
   return rs_get_syn_pattern(arg, ci);
 }
 
-/// Handle ":syntax sync .." command.
-static void syn_cmd_sync(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_sync(eap, syncing);
-}
 
-/// Convert a line of highlight group names into a list of group ID numbers.
-/// "arg" should point to the "contains" or "nextgroup" keyword.
-/// "arg" is advanced to after the last group name.
-/// Careful: the argument is modified (NULs added).
-///
-/// @param keylen  length of keyword
-/// @param list    where to store the resulting list, if not NULL, the list is silently skipped!
-///
-/// @return        FAIL for some error, OK for success.
-static int get_id_list(char **const arg, const int keylen, int16_t **const list, const bool skip)
-{
-  return rs_get_id_list(arg, keylen, list, skip);
-}
 
 // Make a copy of an ID list.
 static int16_t *copy_id_list(const int16_t *const list)
@@ -1492,23 +1411,23 @@ struct subcommand {
 
 static struct subcommand subcommands[] = {
   { "case",      syn_cmd_case },
-  { "clear",     syn_cmd_clear },
-  { "cluster",   syn_cmd_cluster },
+  { "clear",     rs_syn_cmd_clear },
+  { "cluster",   rs_syn_cmd_cluster },
   { "conceal",   syn_cmd_conceal },
   { "enable",    syn_cmd_on },
   { "foldlevel", syn_cmd_foldlevel },
-  { "include",   syn_cmd_include },
+  { "include",   rs_syn_cmd_include },
   { "iskeyword", syn_cmd_iskeyword },
-  { "keyword",   syn_cmd_keyword },
+  { "keyword",   rs_syn_cmd_keyword },
   { "list",      syn_cmd_list },
   { "manual",    syn_cmd_manual },
-  { "match",     syn_cmd_match },
+  { "match",     rs_syn_cmd_match },
   { "on",        syn_cmd_on },
   { "off",       syn_cmd_off },
-  { "region",    syn_cmd_region },
-  { "reset",     syn_cmd_reset },
+  { "region",    rs_syn_cmd_region },
+  { "reset",     rs_syn_cmd_reset },
   { "spell",     syn_cmd_spell },
-  { "sync",      syn_cmd_sync },
+  { "sync",      rs_syn_cmd_sync },
   { "",          syn_cmd_list },
 };
 
@@ -3892,22 +3811,22 @@ int nvim_synblock_set_linecont(synblock_T *block, const char *pat_start, int pat
   return 1;
 }
 
-/// Forward to syn_cmd_match (already a thin wrapper calling rs_syn_cmd_match).
+/// Forward to rs_syn_cmd_match.
 void nvim_syn_cmd_match_wrapper(exarg_T *eap, int syncing)
 {
-  syn_cmd_match(eap, syncing);
+  rs_syn_cmd_match(eap, syncing);
 }
 
-/// Forward to syn_cmd_region (already a thin wrapper calling rs_syn_cmd_region).
+/// Forward to rs_syn_cmd_region.
 void nvim_syn_cmd_region_wrapper(exarg_T *eap, int syncing)
 {
-  syn_cmd_region(eap, syncing);
+  rs_syn_cmd_region(eap, syncing);
 }
 
-/// Forward to syn_cmd_clear.
+/// Forward to rs_syn_cmd_clear.
 void nvim_syn_cmd_clear_wrapper(exarg_T *eap, int syncing)
 {
-  syn_cmd_clear(eap, syncing);
+  rs_syn_cmd_clear(eap, syncing);
 }
 
 /// Forward to syn_cmd_list.
