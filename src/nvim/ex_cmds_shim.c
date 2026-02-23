@@ -402,8 +402,7 @@ void nvim_excmds_set_sub_nsubs(int val) { sub_nsubs = val; }
 // Get/set sub_nlines global (linenr_T)
 int nvim_excmds_get_sub_nlines(void) { return (int)sub_nlines; }
 void nvim_excmds_set_sub_nlines(int val) { sub_nlines = (linenr_T)val; }
-// Call do_sub_msg
-bool nvim_excmds_do_sub_msg(bool count_only) { return do_sub_msg(count_only); }
+// nvim_excmds_do_sub_msg is defined below (near do_sub_msg) as the full implementation.
 // Call ex_may_print
 void nvim_excmds_ex_may_print(exarg_T *eap) { ex_may_print(eap); }
 // Call save_re_pat
@@ -3403,18 +3402,12 @@ skip:
 #undef PUSH_PREVIEW_LINES
 }
 
-/// Give message for number of substitutions.
-/// Can also be used after a ":global" command.
+/// Format the substitution count message into msg_buf.
 ///
-/// @param count_only  used 'n' flag for ":s"
-///
-/// @return            true if a message was given.
-bool do_sub_msg(bool count_only)
+/// Returns true if the message should be reported (thresholds met and messaging on).
+/// This is a helper for rs_do_sub_msg.
+bool nvim_excmds_do_sub_msg(bool count_only)
 {
-  // Only report substitutions when:
-  // - more than 'report' substitutions
-  // - command was typed by user, or number of changed lines > 'report'
-  // - giving messages is not disabled by 'lazyredraw'
   if (((sub_nsubs > p_report && (KeyTyped || sub_nlines > 1 || p_report < 1))
        || count_only)
       && messaging()) {
@@ -3438,7 +3431,6 @@ bool do_sub_msg(bool count_only)
                      NGETTEXT(msg_single, msg_plural, sub_nlines),
                      (int64_t)sub_nsubs, (int64_t)sub_nlines);
     if (msg(msg_buf, 0)) {
-      // save message to display it after redraw
       set_keep_msg(msg_buf, 0);
     }
     return true;
@@ -3448,6 +3440,21 @@ bool do_sub_msg(bool count_only)
     return true;
   }
   return false;
+}
+
+// do_sub_msg implemented in Rust (rs_do_sub_msg in ex_cmds/src/substitute.rs).
+// The Rust implementation calls nvim_excmds_do_sub_msg (above) for formatting.
+extern bool rs_do_sub_msg(bool count_only);
+
+/// Give message for number of substitutions.
+/// Can also be used after a ":global" command.
+///
+/// @param count_only  used 'n' flag for ":s"
+///
+/// @return            true if a message was given.
+bool do_sub_msg(bool count_only)
+{
+  return rs_do_sub_msg(count_only);
 }
 
 static void global_exe_one(char *const cmd, const linenr_T lnum)

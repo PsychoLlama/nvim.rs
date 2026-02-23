@@ -60,6 +60,7 @@ extern "C" {
     fn nvim_excmds_do_join(count: c_int) -> c_int;
     fn nvim_excmds_set_sub_nsubs(val: c_int);
     fn nvim_excmds_set_sub_nlines(val: c_int);
+    /// Full do_sub_msg implementation (formatting + messaging) in C.
     fn nvim_excmds_do_sub_msg(count_only: c_int) -> c_int;
     fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
     fn nvim_excmds_save_re_pat(idx: c_int, pat: *const c_char, patlen: usize, magic: c_int);
@@ -523,6 +524,19 @@ pub unsafe extern "C" fn rs_sub_grow_buf(
 // =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Give message for number of substitutions.
+///
+/// Replaces the C `do_sub_msg` function. Delegates the formatting
+/// and messaging to the C-side `nvim_excmds_do_sub_msg` helper which handles
+/// NGETTEXT internationalization and msg_buf formatting.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_sub_msg(count_only: bool) -> bool {
+    nvim_excmds_do_sub_msg(c_int::from(count_only)) != 0
+}
 
 /// Parse :substitute flags from a C command string. Replaces the C
 /// `sub_parse_flags` function.
