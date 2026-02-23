@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 nvim-buffer = { path = "../buffer" }
+nvim-mbyte = { path = "../mbyte" }
 nvim-window = { path = "../window" }
 
 [lints]

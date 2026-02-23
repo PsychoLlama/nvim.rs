@@ -97,6 +97,7 @@ extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
 extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
 extern void rs_foldUpdateIEMS(win_T *wp, linenr_T top, linenr_T bot);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
+extern void rs_foldtext_cleanup(char *str);
 
 // Struct returned by rs_hasFoldingWin
 typedef struct {
@@ -536,81 +537,6 @@ char *get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume, foldinfo_T foldinfo
   return text;
 }
 
-// foldtext_cleanup() {{{2
-/// Remove 'foldmarker' and 'commentstring' from "str" (in-place).
-static void foldtext_cleanup(char *str)
-{
-  // Ignore leading and trailing white space in 'commentstring'.
-  char *cms_start = skipwhite(curbuf->b_p_cms);
-  size_t cms_slen = strlen(cms_start);
-  while (cms_slen > 0 && ascii_iswhite(cms_start[cms_slen - 1])) {
-    cms_slen--;
-  }
-
-  // locate "%s" in 'commentstring', use the part before and after it.
-  char *cms_end = strstr(cms_start, "%s");
-  size_t cms_elen = 0;
-  if (cms_end != NULL) {
-    cms_elen = cms_slen - (size_t)(cms_end - cms_start);
-    cms_slen = (size_t)(cms_end - cms_start);
-
-    // exclude white space before "%s"
-    while (cms_slen > 0 && ascii_iswhite(cms_start[cms_slen - 1])) {
-      cms_slen--;
-    }
-
-    // skip "%s" and white space after it
-    char *s = skipwhite(cms_end + 2);
-    cms_elen -= (size_t)(s - cms_end);
-    cms_end = s;
-  }
-  parseMarker(curwin);
-
-  bool did1 = false;
-  bool did2 = false;
-
-  for (char *s = str; *s != NUL;) {
-    size_t len = 0;
-    if (strncmp(s, curwin->w_p_fmr, foldstartmarkerlen) == 0) {
-      len = foldstartmarkerlen;
-    } else if (strncmp(s, foldendmarker, foldendmarkerlen) == 0) {
-      len = foldendmarkerlen;
-    }
-    if (len > 0) {
-      if (ascii_isdigit(s[len])) {
-        len++;
-      }
-
-      // May remove 'commentstring' start.  Useful when it's a double
-      // quote and we already removed a double quote.
-      char *p;
-      for (p = s; p > str && ascii_iswhite(p[-1]); p--) {}
-      if (p >= str + cms_slen
-          && strncmp(p - cms_slen, cms_start, cms_slen) == 0) {
-        len += (size_t)(s - p) + cms_slen;
-        s = p - cms_slen;
-      }
-    } else if (cms_end != NULL) {
-      if (!did1 && cms_slen > 0 && strncmp(s, cms_start, cms_slen) == 0) {
-        len = cms_slen;
-        did1 = true;
-      } else if (!did2 && cms_elen > 0
-                 && strncmp(s, cms_end, cms_elen) == 0) {
-        len = cms_elen;
-        did2 = true;
-      }
-    }
-    if (len != 0) {
-      while (ascii_iswhite(s[len])) {
-        len++;
-      }
-      STRMOVE(s, s + len);
-    } else {
-      MB_PTR_ADV(s);
-    }
-  }
-}
-
 // foldlevelIndent() {{{2
 /// Low level function to get the foldlevel for the "indent" method.
 /// Doesn't use any caching.
@@ -961,7 +887,7 @@ void f_foldtext(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     len = strlen(r);
     strcat(r, s);
     // remove 'foldmarker' and 'commentstring'
-    foldtext_cleanup(r + len);
+    rs_foldtext_cleanup(r + len);
     rettv->vval.v_string = r;
   }
 }
@@ -1275,6 +1201,12 @@ char *nvim_skipwhite(const char *s)
 char *nvim_vim_strchr(const char *s, int c)
 {
   return vim_strchr(s, c);
+}
+
+/// Get curbuf's commentstring option (b_p_cms).
+char *nvim_get_curbuf_b_p_cms(void)
+{
+  return curbuf->b_p_cms;
 }
 
 // ============================================================================

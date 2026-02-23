@@ -14,10 +14,29 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_sign_loss)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
+use std::ptr;
+
+use nvim_mbyte::utfc_ptr2len;
+use nvim_window::WinHandle;
+
+use crate::markers::parse_marker_impl;
 
 /// Line number type
 type LinenrT = i32;
+
+// =============================================================================
+// C accessor declarations for foldtext_cleanup
+// =============================================================================
+
+extern "C" {
+    /// Get curbuf's commentstring option (b_p_cms).
+    fn nvim_get_curbuf_b_p_cms() -> *const c_char;
+    /// Get the current window handle.
+    fn nvim_get_curwin() -> WinHandle;
+    /// Skip whitespace at the beginning of a string.
+    fn nvim_skipwhite(s: *const c_char) -> *const c_char;
+}
 
 // =============================================================================
 // Fold Display Constants
@@ -301,8 +320,200 @@ pub struct FoldHighlight {
 }
 
 // =============================================================================
+// foldtext_cleanup implementation
+// =============================================================================
+
+/// Check if a character byte is ASCII whitespace (space or tab).
+#[inline]
+const fn is_ascii_white(c: c_char) -> bool {
+    c == b' ' as c_char || c == b'\t' as c_char
+}
+
+/// Check if a character byte is an ASCII digit.
+#[inline]
+const fn is_ascii_digit(c: c_char) -> bool {
+    c >= b'0' as c_char && c <= b'9' as c_char
+}
+
+/// Compare `n` bytes starting at `s1` and `s2`.
+/// Returns true if they are equal.
+#[inline]
+unsafe fn strncmp_bytes(s1: *const c_char, s2: *const c_char, n: usize) -> bool {
+    for i in 0..n {
+        if *s1.add(i) != *s2.add(i) {
+            return false;
+        }
+        if *s1.add(i) == 0 {
+            return true;
+        }
+    }
+    true
+}
+
+/// Count bytes in a NUL-terminated string.
+unsafe fn cstr_len(s: *const c_char) -> usize {
+    let mut p = s;
+    while *p != 0 {
+        p = p.add(1);
+    }
+    #[allow(clippy::cast_sign_loss)]
+    let len = p.offset_from(s) as usize;
+    len
+}
+
+/// Find the offset of `%s` within the first `len` bytes of `s`.
+/// Returns `Some(offset)` if found, `None` otherwise.
+unsafe fn find_percent_s(s: *const c_char, len: usize) -> Option<usize> {
+    if len < 2 {
+        return None;
+    }
+    (0..=(len - 2)).find(|&i| *s.add(i) == b'%' as c_char && *s.add(i + 1) == b's' as c_char)
+}
+
+/// Remove 'foldmarker' and 'commentstring' from `str` (in-place).
+///
+/// This is the Rust reimplementation of the C `foldtext_cleanup` function.
+/// The string `str` is modified in-place: fold markers and the commentstring
+/// wrapping them are removed.
+///
+/// # Safety
+/// `str` must be a valid, NUL-terminated, mutable C string pointer.
+/// The string may be modified in-place.
+#[allow(clippy::too_many_lines)]
+unsafe fn foldtext_cleanup_impl(s: *mut c_char) {
+    if s.is_null() {
+        return;
+    }
+
+    // Get curbuf's commentstring option and skip leading whitespace.
+    let cms_raw = nvim_get_curbuf_b_p_cms();
+    if cms_raw.is_null() {
+        return;
+    }
+    let cms_start = nvim_skipwhite(cms_raw);
+
+    // Compute strlen(cms_start), then trim trailing whitespace.
+    let mut cms_slen = cstr_len(cms_start);
+    while cms_slen > 0 && is_ascii_white(*(cms_start.add(cms_slen - 1))) {
+        cms_slen -= 1;
+    }
+
+    // Locate "%s" in commentstring; split into start and end parts.
+    let cms_end_ptr: *const c_char;
+    let mut cms_end_len: usize = 0;
+    if let Some(offset) = find_percent_s(cms_start, cms_slen) {
+        let raw_cms_end = cms_start.add(offset);
+        cms_end_len = cms_slen - offset;
+        // exclude white space before "%s"
+        let mut new_slen = offset;
+        while new_slen > 0 && is_ascii_white(*(cms_start.add(new_slen - 1))) {
+            new_slen -= 1;
+        }
+        cms_slen = new_slen;
+        // skip "%s" and white space after it
+        let after_pct_s = raw_cms_end.add(2);
+        let cms_end_skip = nvim_skipwhite(after_pct_s);
+        #[allow(clippy::cast_sign_loss)]
+        let skip_count = cms_end_skip.offset_from(raw_cms_end) as usize;
+        cms_end_len -= skip_count;
+        cms_end_ptr = cms_end_skip;
+    } else {
+        cms_end_ptr = ptr::null();
+    }
+
+    // Parse fold markers for curwin
+    let wp = nvim_get_curwin();
+    let marker_info = parse_marker_impl(wp);
+
+    let mut did1 = false;
+    let mut did2 = false;
+
+    let mut cur = s;
+    while *cur != 0 {
+        // Determine if current position is a fold marker (start or end).
+        let marker_match_len: usize = if !marker_info.start_marker.is_null()
+            && marker_info.start_marker_len > 0
+            && strncmp_bytes(cur, marker_info.start_marker, marker_info.start_marker_len)
+        {
+            marker_info.start_marker_len
+        } else if !marker_info.end_marker.is_null()
+            && marker_info.end_marker_len > 0
+            && strncmp_bytes(cur, marker_info.end_marker, marker_info.end_marker_len)
+        {
+            marker_info.end_marker_len
+        } else {
+            0
+        };
+        let mut len = marker_match_len;
+
+        if len > 0 {
+            // Found a fold marker; if followed by a digit, include it
+            if is_ascii_digit(*(cur.add(len))) {
+                len += 1;
+            }
+
+            // May remove 'commentstring' start before the marker.
+            // Walk backwards past whitespace to find potential cms_start.
+            if cms_slen > 0 {
+                let mut p = cur;
+                while p > s && is_ascii_white(*(p.sub(1))) {
+                    p = p.sub(1);
+                }
+                #[allow(clippy::cast_sign_loss)]
+                let back = p.offset_from(s) as usize;
+                if back >= cms_slen && strncmp_bytes(p.sub(cms_slen), cms_start, cms_slen) {
+                    // Include the whitespace and cms_start in the removal
+                    #[allow(clippy::cast_sign_loss)]
+                    let extra = cur.offset_from(p.sub(cms_slen)) as usize;
+                    len += extra;
+                    cur = p.sub(cms_slen);
+                }
+            }
+        } else if !cms_end_ptr.is_null() {
+            // No marker found; check for commentstring parts
+            if !did1 && cms_slen > 0 && strncmp_bytes(cur, cms_start, cms_slen) {
+                len = cms_slen;
+                did1 = true;
+            } else if !did2 && cms_end_len > 0 && strncmp_bytes(cur, cms_end_ptr, cms_end_len) {
+                len = cms_end_len;
+                did2 = true;
+            }
+        }
+
+        if len != 0 {
+            // Skip trailing whitespace after the removed region
+            while is_ascii_white(*(cur.add(len))) {
+                len += 1;
+            }
+            // STRMOVE(cur, cur + len)
+            let src = cur.add(len);
+            let src_len = cstr_len(src);
+            ptr::copy(src, cur, src_len + 1);
+        } else {
+            // Advance past current character (MB_PTR_ADV)
+            let remaining = cstr_len(cur);
+            if remaining == 0 {
+                break;
+            }
+            let slice = std::slice::from_raw_parts(cur as *const u8, remaining + 1);
+            let advance = utfc_ptr2len(slice).max(1);
+            cur = cur.add(advance);
+        }
+    }
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Remove 'foldmarker' and 'commentstring' from `str` (in-place).
+///
+/// # Safety
+/// `str` must be a valid, NUL-terminated, mutable C string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_foldtext_cleanup(str: *mut c_char) {
+    foldtext_cleanup_impl(str);
+}
 
 /// FFI export: Get fold column character
 #[no_mangle]
