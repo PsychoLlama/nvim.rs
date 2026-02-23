@@ -481,42 +481,13 @@ enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
 static char *qf_types(int c, int nr);
 static win_T *qf_find_win(const qf_info_T *qi);
 
-/// This wraps rs_win_valid() from Rust
-bool nvim_win_valid(const void *wp_void)
-{
-  if (wp_void == NULL) {
-    return false;
-  }
-  return rs_win_valid((win_T *)wp_void) != 0;
-}
+bool nvim_win_valid(const void *wp_void) { return wp_void == NULL ? false : rs_win_valid((win_T *)wp_void) != 0; }
 
-/// Returns the location list (w_llist or w_llist_ref) or NULL
-void *nvim_win_get_loclist(const void *wp_void)
-{
-  if (wp_void == NULL) {
-    return NULL;
-  }
-  win_T *wp = (win_T *)wp_void;
-  return (void *)GET_LOC_LIST(wp);
-}
+void *nvim_win_get_loclist(const void *wp_void) { return wp_void == NULL ? NULL : (void *)GET_LOC_LIST((win_T *)wp_void); }
 
-/// Returns the window pointer or NULL
-void *nvim_qf_find_win_handle(const void *qi_void)
-{
-  if (qi_void == NULL) {
-    return NULL;
-  }
-  return (void *)qf_find_win((const qf_info_T *)qi_void);
-}
+void *nvim_qf_find_win_handle(const void *qi_void) { return qi_void == NULL ? NULL : (void *)qf_find_win((const qf_info_T *)qi_void); }
 
-/// Get the window handle from a window pointer for Rust quickfix
-int nvim_qf_win_get_handle(const void *wp_void)
-{
-  if (wp_void == NULL) {
-    return 0;
-  }
-  return ((win_T *)wp_void)->handle;
-}
+int nvim_qf_win_get_handle(const void *wp_void) { return wp_void == NULL ? 0 : ((const win_T *)wp_void)->handle; }
 
 /// This is equivalent to qflist_valid() but works with a quickfix stack pointer
 bool nvim_qflist_valid(const void *qi_void, unsigned qf_id)
@@ -818,94 +789,15 @@ void nvim_qf_decr_listcount(void *qi_void)
 
 static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname);
 
-/// Get the directory stack pointer from a quickfix list
-void *nvim_qf_get_dir_stack(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return NULL;
-  }
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_dir_stack;
-}
-
-/// Set the directory stack pointer for a quickfix list
-void nvim_qf_set_dir_stack(void *qfl_void, void *stack)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_dir_stack = (struct dir_stack_T *)stack;
-}
-
-/// Get the file stack pointer from a quickfix list
-void *nvim_qf_get_file_stack(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return NULL;
-  }
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_file_stack;
-}
-
-/// Set the file stack pointer for a quickfix list
-void nvim_qf_set_file_stack(void *qfl_void, void *stack)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_file_stack = (struct dir_stack_T *)stack;
-}
-
-/// Get the current directory string from a quickfix list
-const char *nvim_qf_get_directory(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return NULL;
-  }
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_directory;
-}
-
-/// Set the current directory string for a quickfix list
-void nvim_qf_set_directory(void *qfl_void, char *dir)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_directory = dir;
-}
-
-/// Get the current file string from a quickfix list
-const char *nvim_qf_get_currfile(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return NULL;
-  }
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_currfile;
-}
-
-/// Set the current file string for a quickfix list
-void nvim_qf_set_currfile(void *qfl_void, char *file)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_currfile = file;
-}
-
-/// Returns the buffer number or 0 if not found/created
-int nvim_qf_get_fnum(void *qfl_void, char *directory, char *fname)
-{
-  if (qfl_void == NULL) {
-    return 0;
-  }
-  return qf_get_fnum((qf_list_T *)qfl_void, directory, fname);
-}
+void *nvim_qf_get_dir_stack(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_dir_stack; }
+void nvim_qf_set_dir_stack(void *qfl_void, void *stack) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_dir_stack = (struct dir_stack_T *)stack; }
+void *nvim_qf_get_file_stack(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_file_stack; }
+void nvim_qf_set_file_stack(void *qfl_void, void *stack) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_file_stack = (struct dir_stack_T *)stack; }
+const char *nvim_qf_get_directory(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_directory; }
+void nvim_qf_set_directory(void *qfl_void, char *dir) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_directory = dir; }
+const char *nvim_qf_get_currfile(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_currfile; }
+void nvim_qf_set_currfile(void *qfl_void, char *file) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_currfile = file; }
+int nvim_qf_get_fnum(void *qfl_void, char *directory, char *fname) { return qfl_void == NULL ? 0 : qf_get_fnum((qf_list_T *)qfl_void, directory, fname); }
 
 static efm_T *parse_efm_option(char *efm);
 static void free_efm_list(efm_T **efm_first);
@@ -914,14 +806,7 @@ static int qf_parse_line(qf_list_T *qfl, char *linebuf, size_t linelen, efm_T *f
 
 // EfmHandle is now defined in quickfix.h
 
-/// The returned handle must be freed with nvim_qf_free_efm_list
-EfmHandle nvim_qf_parse_efm_option(char *efm)
-{
-  if (efm == NULL) {
-    return NULL;
-  }
-  return parse_efm_option(efm);
-}
+EfmHandle nvim_qf_parse_efm_option(char *efm) { return efm == NULL ? NULL : parse_efm_option(efm); }
 
 void nvim_qf_free_efm_list(EfmHandle efm_first) { efm_T *efm = (efm_T *)efm_first; free_efm_list(&efm); }
 
