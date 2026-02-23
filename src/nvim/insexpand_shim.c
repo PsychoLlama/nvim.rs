@@ -142,6 +142,7 @@ extern void rs_compl_status_clear(void);
 extern void rs_ins_compl_init_get_longest(void);
 extern void rs_ins_compl_enable_autocomplete(void);
 extern void rs_strip_caret_numbers_in_place(char *str);
+extern unsigned rs_quote_meta(char *dest, char *src, int len);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -5297,55 +5298,7 @@ static void show_pum(int prev_w_wrow, int prev_w_leftcol)
 // Returns the length (needed) of dest
 static unsigned quote_meta(char *dest, char *src, int len)
 {
-  unsigned m = (unsigned)len + 1;       // one extra for the NUL
-
-  for (; --len >= 0; src++) {
-    switch (*src) {
-    case '.':
-    case '*':
-    case '[':
-      if (rs_ctrl_x_mode_dictionary() || rs_ctrl_x_mode_thesaurus()) {
-        break;
-      }
-      FALLTHROUGH;
-    case '~':
-      if (!rs_magic_isset()) {  // quote these only if magic is set
-        break;
-      }
-      FALLTHROUGH;
-    case '\\':
-      if (rs_ctrl_x_mode_dictionary() || rs_ctrl_x_mode_thesaurus()) {
-        break;
-      }
-      FALLTHROUGH;
-    case '^':                   // currently it's not needed.
-    case '$':
-      m++;
-      if (dest != NULL) {
-        *dest++ = '\\';
-      }
-      break;
-    }
-    if (dest != NULL) {
-      *dest++ = *src;
-    }
-    // Copy remaining bytes of a multibyte character.
-    const int mb_len = utfc_ptr2len(src) - 1;
-    if (mb_len > 0 && len >= mb_len) {
-      for (int i = 0; i < mb_len; i++) {
-        len--;
-        src++;
-        if (dest != NULL) {
-          *dest++ = *src;
-        }
-      }
-    }
-  }
-  if (dest != NULL) {
-    *dest = NUL;
-  }
-
-  return m;
+  return rs_quote_meta(dest, src, len);
 }
 
 #if defined(EXITFREE)

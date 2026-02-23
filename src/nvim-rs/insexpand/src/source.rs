@@ -5,7 +5,7 @@
 
 #![allow(clippy::missing_const_for_fn)]
 
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_uint};
 
 // C accessor functions
 extern "C" {
@@ -18,6 +18,14 @@ extern "C" {
     fn nvim_set_compl_time_slice_expired(val: c_int);
     fn nvim_decay_compl_timeout();
     fn os_hrtime() -> u64;
+
+    // Multibyte helpers
+    fn rs_utfc_ptr2len(ptr: *const c_char) -> c_int;
+
+    // Mode and option checks (from lib.rs / search crate)
+    fn rs_ctrl_x_mode_dictionary() -> c_int;
+    fn rs_ctrl_x_mode_thesaurus() -> c_int;
+    fn rs_magic_isset() -> c_int;
 }
 
 // CTRL-X mode constants
@@ -146,6 +154,87 @@ pub unsafe extern "C" fn rs_check_elapsed_time() {
         nvim_set_compl_time_slice_expired(1);
         nvim_decay_compl_timeout();
     }
+}
+
+/// Escape regex metacharacters in a completion pattern string.
+///
+/// When `dest` is null, counts the number of bytes the escaped output would
+/// require (including a trailing NUL). When `dest` is non-null, writes the
+/// escaped output. Returns the number of output bytes (including NUL).
+///
+/// Characters escaped depend on the current CTRL-X mode and magic setting:
+///
+/// - `.`, `*`, `[`: escaped unless dictionary/thesaurus mode
+/// - `~`: escaped only when magic is set (and same dict/thes exception)
+/// - `\\`: escaped unless dictionary/thesaurus mode
+/// - `^`, `$`: always escaped
+///
+/// Multibyte characters are copied verbatim (remaining bytes after the first).
+///
+/// # Safety
+/// `src` must point to a valid byte sequence of at least `len` bytes.
+/// `dest`, if non-null, must have room for the returned count of bytes.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_quote_meta(dest: *mut c_char, src: *mut c_char, len: c_int) -> c_uint {
+    let mut m = len as c_uint + 1; // one extra for the NUL
+    let mut src = src;
+    let mut dest = dest;
+    let mut remaining = len;
+
+    let dict_or_thes = rs_ctrl_x_mode_dictionary() != 0 || rs_ctrl_x_mode_thesaurus() != 0;
+    let magic = rs_magic_isset() != 0;
+
+    while remaining > 0 {
+        remaining -= 1;
+        #[allow(clippy::cast_sign_loss)]
+        let ch = *src as u8;
+        let needs_escape = match ch {
+            b'~' => !dict_or_thes && magic,
+            b'.' | b'*' | b'[' | b'\\' => !dict_or_thes,
+            b'^' | b'$' => true,
+            _ => false,
+        };
+
+        if needs_escape {
+            m = m.wrapping_add(1);
+            if !dest.is_null() {
+                #[allow(clippy::cast_possible_wrap)]
+                {
+                    *dest = b'\\' as c_char;
+                }
+                dest = dest.add(1);
+            }
+        }
+
+        if !dest.is_null() {
+            *dest = *src;
+            dest = dest.add(1);
+        }
+
+        // Copy remaining bytes of a multibyte character.
+        let mb_len = rs_utfc_ptr2len(src) - 1;
+        if mb_len > 0 && remaining >= mb_len {
+            let mut i = 0;
+            while i < mb_len {
+                remaining -= 1;
+                src = src.add(1);
+                if !dest.is_null() {
+                    *dest = *src;
+                    dest = dest.add(1);
+                }
+                i += 1;
+            }
+        }
+
+        src = src.add(1);
+    }
+
+    if !dest.is_null() {
+        *dest = 0;
+    }
+
+    m
 }
 
 /// Strip `^<digits>` segments from a 'complete' option string in place.
