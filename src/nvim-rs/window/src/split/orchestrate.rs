@@ -1044,8 +1044,7 @@ unsafe fn win_split_impl(size: c_int, flags: c_int) -> c_int {
         rs_clear_snapshot(nvim_get_curtab(), SNAP_HELP_IDX);
     }
 
-    if nvim_win_split_ins_wrapper(size, flags, WinHandle::null(), 0, std::ptr::null_mut())
-        .is_null()
+    if nvim_win_split_ins_wrapper(size, flags, WinHandle::null(), 0, std::ptr::null_mut()).is_null()
     {
         FAIL
     } else {
@@ -1080,7 +1079,12 @@ unsafe fn win_splitmove_impl(wp: WinHandle, size: c_int, flags: c_int) -> c_int 
     } else {
         // Remove the window and frame from the tree of frames. Don't flatten
         // any frames yet so we can restore things if win_split_ins fails.
-        rs_winframe_remove(wp, &mut dir, TabpageHandle::null(), &mut unflat_altfr);
+        rs_winframe_remove(
+            wp,
+            std::ptr::addr_of_mut!(dir),
+            TabpageHandle::null(),
+            std::ptr::addr_of_mut!(unflat_altfr),
+        );
         rs_win_remove(wp, TabpageHandle::null());
         rs_last_status(0); // may need to remove last status line
         rs_win_comp_pos(); // recompute window positions

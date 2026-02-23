@@ -5,7 +5,7 @@
 
 use std::ffi::c_int;
 
-use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF, FR_ROW};
+use crate::{BufHandle, Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
 use crate::list::{
     frame2win_impl, nvim_get_firstwin, nvim_win_get_floating, nvim_win_get_frame, win_valid_impl,
@@ -29,6 +29,67 @@ extern "C" {
 
     /// Get the prevwin global.
     fn nvim_get_prevwin() -> WinHandle;
+
+    // --- win_goto dependencies ---
+
+    /// Get curwin global.
+    fn nvim_get_curwin() -> WinHandle;
+
+    /// Check if text or buf is locked. Returns 1 if locked.
+    fn nvim_text_or_buf_locked() -> c_int;
+
+    /// Call beep_flush().
+    fn nvim_beep_flush();
+
+    /// Get wp->w_buffer.
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+
+    /// Get curbuf.
+    fn nvim_get_curbuf() -> BufHandle;
+
+    /// Reset VIsual and resel.
+    fn rs_reset_VIsual_and_resel();
+
+    /// Get VIsual_active flag.
+    fn nvim_get_VIsual_active() -> c_int;
+
+    /// Get wp->w_cursor.lnum.
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
+
+    /// Set wp->w_cursor.lnum.
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, val: c_int);
+
+    /// Get wp->w_cursor.col.
+    fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
+
+    /// Set wp->w_cursor.col.
+    fn nvim_win_set_cursor_col(wp: WinHandle, val: c_int);
+
+    /// Get wp->w_cursor.coladd.
+    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> c_int;
+
+    /// Set wp->w_cursor.coladd.
+    fn nvim_win_set_cursor_coladd(wp: WinHandle, val: c_int);
+
+    /// Check if window is valid. Returns 1 if valid.
+    fn rs_win_valid(wp: WinHandle) -> c_int;
+
+    /// Enter window wp (calls win_enter).
+    fn nvim_win_enter(wp: WinHandle, undo_sync: c_int);
+
+    /// Get wp->w_p_cole (conceal option).
+    fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
+
+    /// Get msg_scrolled flag.
+    fn nvim_get_msg_scrolled() -> c_int;
+
+    /// Redraw window line.
+    fn nvim_redrawWinline(wp: WinHandle, lnum: c_int);
+
+    // --- can_close_in_cmdwin dependencies ---
+
+    /// Check cmdwin state; returns 0=OK, 1=set_cmdwin_result, 2=api_set_error_called.
+    fn nvim_can_close_in_cmdwin_check(win: WinHandle, err: *mut std::ffi::c_void) -> c_int;
 }
 
 /// Get the above or below neighbor window of the specified window.
@@ -336,6 +397,89 @@ pub unsafe extern "C" fn rs_leaving_window(win: WinHandle) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_entering_window(win: WinHandle) {
     entering_window_impl(win);
+}
+
+// =============================================================================
+// win_goto
+// =============================================================================
+
+/// Switch to window `wp` respecting Visual mode, conceal, and text-lock.
+///
+/// Port of C `win_goto()`.
+///
+/// # Safety
+/// Calls C accessor functions with valid window handles.
+unsafe fn win_goto_impl(wp: WinHandle) {
+    let owp = nvim_get_curwin();
+
+    if nvim_text_or_buf_locked() != 0 {
+        nvim_beep_flush();
+        return;
+    }
+
+    if nvim_win_get_buffer(wp) != nvim_get_curbuf() {
+        // careful: triggers ModeChanged autocommand
+        rs_reset_VIsual_and_resel();
+    } else if nvim_get_VIsual_active() != 0 {
+        // Set wp->w_cursor = curwin->w_cursor
+        nvim_win_set_cursor_lnum(wp, nvim_win_get_cursor_lnum(owp));
+        nvim_win_set_cursor_col(wp, nvim_win_get_cursor_col(owp));
+        nvim_win_set_cursor_coladd(wp, nvim_win_get_cursor_coladd(owp));
+    }
+
+    // autocommand may have made wp invalid
+    if rs_win_valid(wp) == 0 {
+        return;
+    }
+
+    nvim_win_enter(wp, 1);
+
+    // Conceal cursor line in previous window, unconceal in current window.
+    if rs_win_valid(owp) != 0 && nvim_win_get_p_cole(owp) > 0 && nvim_get_msg_scrolled() == 0 {
+        nvim_redrawWinline(owp, nvim_win_get_cursor_lnum(owp));
+    }
+    let curwin = nvim_get_curwin();
+    if nvim_win_get_p_cole(curwin) > 0 && nvim_get_msg_scrolled() == 0 {
+        nvim_redrawWinline(curwin, nvim_win_get_cursor_lnum(curwin));
+    }
+}
+
+/// FFI export for `win_goto`.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_goto(wp: WinHandle) {
+    win_goto_impl(wp);
+}
+
+// =============================================================================
+// can_close_in_cmdwin
+// =============================================================================
+
+/// Check if window `win` can close in a command-line window context.
+///
+/// Port of C `can_close_in_cmdwin()`. The actual cmdwin checks are delegated
+/// to `nvim_can_close_in_cmdwin_check()` which handles the C-side state.
+///
+/// Returns `true` if the window can close, `false` otherwise.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+unsafe fn can_close_in_cmdwin_impl(win: WinHandle, err: *mut std::ffi::c_void) -> bool {
+    nvim_can_close_in_cmdwin_check(win, err) == 0
+}
+
+/// FFI export for `can_close_in_cmdwin`.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_can_close_in_cmdwin(
+    win: WinHandle,
+    err: *mut std::ffi::c_void,
+) -> bool {
+    can_close_in_cmdwin_impl(win, err)
 }
 
 #[cfg(test)]

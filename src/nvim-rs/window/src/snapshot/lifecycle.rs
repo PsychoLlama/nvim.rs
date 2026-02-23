@@ -37,7 +37,15 @@ extern "C" {
         set_ch: c_int,
     );
     fn rs_frame_new_width(topfrp: *mut Frame, width: c_int, leftfirst: c_int, wfw: c_int);
+
+    // --- restore_snapshot dependencies ---
+    fn rs_win_comp_pos() -> c_int;
+    fn rs_win_goto(wp: WinHandle);
+    fn nvim_redraw_all_later(type_: c_int);
 }
+
+// UPD_NOT_VALID = 40 (matches UPD_NOT_VALID in drawscreen.h)
+const UPD_NOT_VALID: c_int = 40;
 
 // =============================================================================
 // Implementations
@@ -217,6 +225,35 @@ fn restore_snapshot_rec_impl(sn: *const Frame, fr: *mut Frame) -> WinHandle {
     wp
 }
 
+/// Restore a previously created snapshot, if there is any.
+///
+/// Only restores if the screen size matches and the window layout is the same.
+///
+/// Equivalent to C `restore_snapshot()` (window.c).
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn restore_snapshot_impl(idx: c_int, close_curwin: bool) {
+    let curtab = nvim_get_curtab();
+    let topframe = nvim_get_topframe();
+    let snapshot = nvim_tabpage_get_snapshot(curtab, idx);
+
+    if !snapshot.is_null()
+        && !topframe.is_null()
+        && (*snapshot).fr_width == (*topframe).fr_width
+        && (*snapshot).fr_height == (*topframe).fr_height
+        && check_snapshot_rec_impl(snapshot, topframe) == OK
+    {
+        let wp = restore_snapshot_rec_impl(snapshot, topframe);
+        rs_win_comp_pos();
+        if !wp.is_null() && close_curwin {
+            rs_win_goto(wp);
+        }
+        nvim_redraw_all_later(UPD_NOT_VALID);
+    }
+    clear_snapshot_impl(curtab, idx);
+}
+
 // =============================================================================
 // FFI Exports
 // =============================================================================
@@ -256,6 +293,15 @@ pub extern "C" fn rs_check_snapshot_rec(sn: *const Frame, fr: *const Frame) -> c
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_restore_snapshot_rec(sn: *const Frame, fr: *mut Frame) -> WinHandle {
     restore_snapshot_rec_impl(sn, fr)
+}
+
+/// FFI: Restore a previously created snapshot.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_restore_snapshot(idx: c_int, close_curwin: c_int) {
+    restore_snapshot_impl(idx, close_curwin != 0);
 }
 
 // =============================================================================

@@ -211,6 +211,19 @@ extern void rs_win_fix_cursor(int normal);
 extern void rs_may_make_initial_scroll_size_snapshot(void);
 extern int rs_get_did_initial_scroll_size_snapshot(void);
 
+// Phase 4: win_new_screen_rows, unuse_tabpage, use_tabpage, win_goto,
+//          restore_snapshot, do_autocmd_winclosed, can_close_in_cmdwin,
+//          set_winbar_win, set_winbar
+extern void rs_win_new_screen_rows(void);
+extern void rs_unuse_tabpage(tabpage_T *tp);
+extern void rs_use_tabpage(tabpage_T *tp);
+extern void rs_win_goto(win_T *wp);
+extern void rs_restore_snapshot(int idx, int close_curwin);
+extern void rs_do_autocmd_winclosed(win_T *win);
+extern bool rs_can_close_in_cmdwin(win_T *win, Error *err);
+extern int rs_set_winbar_win(win_T *wp, int make_room, int valid_cursor);
+extern void rs_set_winbar(int make_room);
+
 // Status line management
 extern void rs_last_status(int morewin);
 extern int rs_resize_frame_for_winbar(frame_T *fr);
@@ -1064,16 +1077,7 @@ static bool can_close_floating_windows(tabpage_T *tp)
 bool can_close_in_cmdwin(win_T *win, Error *err)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (cmdwin_type != 0) {
-    if (win == cmdwin_win) {
-      cmdwin_result = Ctrl_C;
-      return false;
-    } else if (win == cmdwin_old_curwin) {
-      api_set_error(err, kErrorTypeException, "%s", e_cmdwin);
-      return false;
-    }
-  }
-  return true;
+  return rs_can_close_in_cmdwin(win, err);
 }
 
 /// Close the possibly last window in a tab page.
@@ -1334,15 +1338,7 @@ int win_close(win_T *win, bool free_buf, bool force)
 static void do_autocmd_winclosed(win_T *win)
   FUNC_ATTR_NONNULL_ALL
 {
-  static bool recursive = false;
-  if (recursive || !has_event(EVENT_WINCLOSED)) {
-    return;
-  }
-  recursive = true;
-  char winid[NUMBUFLEN];
-  vim_snprintf(winid, sizeof(winid), "%d", win->handle);
-  apply_autocmds(EVENT_WINCLOSED, winid, winid, false, win->w_buffer);
-  recursive = false;
+  rs_do_autocmd_winclosed(win);
 }
 
 // Close window "win" in tab page "tp", which is not the current tab page.
@@ -1701,13 +1697,7 @@ void close_others(int message, int forceit)
 
 /// Store the relevant window pointers for tab page "tp".  To be used before
 /// use_tabpage().
-void unuse_tabpage(tabpage_T *tp)
-{
-  tp->tp_topframe = topframe;
-  tp->tp_firstwin = firstwin;
-  tp->tp_lastwin = lastwin;
-  tp->tp_curwin = curwin;
-}
+void unuse_tabpage(tabpage_T *tp) { rs_unuse_tabpage(tp); }
 
 // When switching tabpage, handle other side-effects in command_height(), but
 // avoid setting frame sizes which are still correct.
@@ -1715,14 +1705,7 @@ static bool command_frame_height = true;
 
 /// Set the relevant pointers to use tab page "tp".  May want to call
 /// unuse_tabpage() first.
-void use_tabpage(tabpage_T *tp)
-{
-  curtab = tp;
-  topframe = curtab->tp_topframe;
-  firstwin = curtab->tp_firstwin;
-  lastwin = curtab->tp_lastwin;
-  curwin = curtab->tp_curwin;
-}
+void use_tabpage(tabpage_T *tp) { rs_use_tabpage(tp); }
 
 // Allocate the first window and put an empty buffer in it.
 // Only called from main().
@@ -2210,37 +2193,7 @@ void tabpage_move(int nr)
 /// (note: this may trigger ModeChanged autocommand!)
 /// When jumping to another window on the same buffer, adjust its cursor
 /// position to keep the same Visual area.
-void win_goto(win_T *wp)
-{
-  win_T *owp = curwin;
-
-  if (text_or_buf_locked()) {
-    beep_flush();
-    return;
-  }
-
-  if (wp->w_buffer != curbuf) {
-    // careful: triggers ModeChanged autocommand
-    rs_reset_VIsual_and_resel();
-  } else if (VIsual_active) {
-    wp->w_cursor = curwin->w_cursor;
-  }
-
-  // autocommand may have made wp invalid
-  if (!rs_win_valid(wp)) {
-    return;
-  }
-
-  win_enter(wp, true);
-
-  // Conceal cursor line in previous window, unconceal in current window.
-  if (rs_win_valid(owp) && owp->w_p_cole > 0 && !msg_scrolled) {
-    redrawWinline(owp, owp->w_cursor.lnum);
-  }
-  if (curwin->w_p_cole > 0 && !msg_scrolled) {
-    redrawWinline(curwin, curwin->w_cursor.lnum);
-  }
-}
+void win_goto(win_T *wp) { rs_win_goto(wp); }
 
 /// Make window `wp` the current window.
 ///
@@ -2684,29 +2637,7 @@ void win_new_screensize(void) { rs_win_new_screensize(); }
 /// Called from win_new_screensize() after Rows changed.
 ///
 /// This only does the current tab page, others must be done when made active.
-void win_new_screen_rows(void)
-{
-  if (firstwin == NULL) {       // not initialized yet
-    return;
-  }
-  int h = MAX((int)ROWS_AVAIL, rs_frame_minheight(topframe, NULL));
-
-  // First try setting the heights of windows with 'winfixheight'.  If
-  // that doesn't result in the right height, forget about that option.
-  frame_new_height(topframe, h, false, true, false);
-  if (!rs_frame_check_height(topframe, h)) {
-    frame_new_height(topframe, h, false, false, false);
-  }
-
-  rs_win_comp_pos();  // recompute w_winrow and w_wincol
-  win_reconfig_floats();  // The size of floats might change
-  compute_cmdrow();
-  curtab->tp_ch_used = p_ch;
-
-  if (!skip_win_fix_scroll) {
-    win_fix_scroll(true);
-  }
-}
+void win_new_screen_rows(void) { rs_win_new_screen_rows(); }
 
 /// Called from win_new_screensize() after Columns changed.
 void win_new_screen_cols(void) { rs_win_new_screen_cols(); }
@@ -3055,45 +2986,13 @@ void command_height(void)
 /// @return Success status.
 int set_winbar_win(win_T *wp, bool make_room, bool valid_cursor)
 {
-  // Require the local value to be set in order to show winbar on a floating window.
-  int winbar_height = wp->w_floating ? ((*wp->w_p_wbr != NUL) ? 1 : 0)
-                                     : ((*p_wbr != NUL || *wp->w_p_wbr != NUL) ? 1 : 0);
-
-  if (wp->w_winbar_height != winbar_height) {
-    if (winbar_height == 1 && wp->w_view_height <= 1) {
-      if (wp->w_floating) {
-        emsg(_(e_noroom));
-        return NOTDONE;
-      } else if (!make_room || !rs_resize_frame_for_winbar(wp->w_frame)) {
-        return FAIL;
-      }
-    }
-    wp->w_winbar_height = winbar_height;
-    win_set_inner_size(wp, valid_cursor);
-
-    if (winbar_height == 0) {
-      // When removing winbar, deallocate the w_winbar_click_defs array
-      stl_clear_click_defs(wp->w_winbar_click_defs, wp->w_winbar_click_defs_size);
-      xfree(wp->w_winbar_click_defs);
-      wp->w_winbar_click_defs_size = 0;
-      wp->w_winbar_click_defs = NULL;
-    }
-  }
-
-  return OK;
+  return rs_set_winbar_win(wp, make_room ? 1 : 0, valid_cursor ? 1 : 0);
 }
 
 /// Add or remove window bars from all windows in tab depending on the value of 'winbar'.
 ///
 /// @param make_room Whether to resize frames to make room for winbar.
-void set_winbar(bool make_room)
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (set_winbar_win(wp, make_room, true) == FAIL) {
-      break;
-    }
-  }
-}
+void set_winbar(bool make_room) { rs_set_winbar(make_room ? 1 : 0); }
 
 // A snapshot of the window sizes, to restore them after closing the help
 // window.
@@ -3110,30 +3009,9 @@ void set_winbar(bool make_room)
 /// still the same.
 ///
 /// @param close_curwin  closing current window
-void restore_snapshot(int idx, int close_curwin)
-{
-  if (curtab->tp_snapshot[idx] != NULL
-      && curtab->tp_snapshot[idx]->fr_width == topframe->fr_width
-      && curtab->tp_snapshot[idx]->fr_height == topframe->fr_height
-      && rs_check_snapshot_rec(curtab->tp_snapshot[idx], topframe) == OK) {
-    win_T *wp = rs_restore_snapshot_rec(curtab->tp_snapshot[idx], topframe);
-    rs_win_comp_pos();
-    if (wp != NULL && close_curwin) {
-      win_goto(wp);
-    }
-    redraw_all_later(UPD_NOT_VALID);
-  }
-  rs_clear_snapshot(curtab, idx);
-}
+void restore_snapshot(int idx, int close_curwin) { rs_restore_snapshot(idx, close_curwin); }
 
 /// Simple int comparison function for use with qsort()
-static int int_cmp(const void *pa, const void *pb)
-{
-  const int a = *(const int *)pa;
-  const int b = *(const int *)pb;
-  return a == b ? 0 : a < b ? -1 : 1;
-}
-
 /// Check "cc" as 'colorcolumn' and update the members of "wp" (thin wrapper).
 ///
 /// @param cc  when NULL: use "wp->w_p_cc"
@@ -3852,3 +3730,52 @@ int nvim_win_get_do_win_fix_cursor(win_T *wp) { return wp ? (wp->w_do_win_fix_cu
 void nvim_win_set_do_win_fix_cursor(win_T *wp, int val) { if (wp) { wp->w_do_win_fix_cursor = val != 0; } }
 int nvim_win_get_prev_winrow(win_T *wp) { return wp ? wp->w_prev_winrow : 0; }
 void nvim_win_set_prev_winrow(win_T *wp, int val) { if (wp) { wp->w_prev_winrow = val; } }
+
+// Phase 4 accessors: win_new_screen_rows, unuse_tabpage, use_tabpage, win_goto,
+// restore_snapshot, do_autocmd_winclosed, can_close_in_cmdwin, set_winbar_win, set_winbar
+int nvim_get_skip_win_fix_scroll(void) { return skip_win_fix_scroll ? 1 : 0; }
+void nvim_set_curtab(tabpage_T *tp) { curtab = tp; }
+void nvim_set_topframe(frame_T *fr) { topframe = fr; }
+void nvim_tabpage_set_topframe(tabpage_T *tp, frame_T *fr) { if (tp) { tp->tp_topframe = fr; } }
+void nvim_tabpage_set_ch_used(tabpage_T *tp, int64_t val) { if (tp) { tp->tp_ch_used = val; } }
+void nvim_compute_cmdrow(void) { compute_cmdrow(); }
+int nvim_has_event_winclosed(void) { return has_event(EVENT_WINCLOSED) ? 1 : 0; }
+/// Apply WinClosed autocmd for window wp (wrapper for Rust do_autocmd_winclosed).
+void nvim_apply_autocmds_winclosed(win_T *win)
+{
+  char winid[NUMBUFLEN];
+  vim_snprintf(winid, sizeof(winid), "%d", win->handle);
+  apply_autocmds(EVENT_WINCLOSED, winid, winid, false, win->w_buffer);
+}
+win_T *nvim_get_cmdwin_win(void) { return cmdwin_win; }
+win_T *nvim_get_cmdwin_old_curwin(void) { return cmdwin_old_curwin; }
+/// Check if win can close in cmdwin context.
+/// Returns 0=OK, 1=set cmdwin_result (Ctrl_C), 2=api_set_error called.
+int nvim_can_close_in_cmdwin_check(win_T *win, Error *err)
+{
+  if (cmdwin_type != 0) {
+    if (win == cmdwin_win) {
+      cmdwin_result = Ctrl_C;
+      return 1;
+    } else if (win == cmdwin_old_curwin) {
+      api_set_error(err, kErrorTypeException, "%s", e_cmdwin);
+      return 2;
+    }
+  }
+  return 0;
+}
+void nvim_win_set_winbar_height(win_T *wp, int val) { if (wp) { wp->w_winbar_height = val; } }
+void nvim_win_set_inner_size_wrapper(win_T *wp, int valid_cursor) { win_set_inner_size(wp, valid_cursor != 0); }
+/// Returns 1 if local w_p_wbr is empty/NULL (for floating window check).
+int nvim_win_get_p_wbr_empty(win_T *wp) { return (!wp || !wp->w_p_wbr || *wp->w_p_wbr == NUL) ? 1 : 0; }
+/// Returns 1 if BOTH global p_wbr AND local w_p_wbr are empty (for non-floating window check).
+int nvim_win_get_p_wbr_both_empty(win_T *wp) { return (!wp || ((*p_wbr == NUL) && (!wp->w_p_wbr || *wp->w_p_wbr == NUL))) ? 1 : 0; }
+/// Free winbar click defs for a window.
+void nvim_win_clear_winbar_click_defs(win_T *wp)
+{
+  if (!wp) { return; }
+  stl_clear_click_defs(wp->w_winbar_click_defs, wp->w_winbar_click_defs_size);
+  xfree(wp->w_winbar_click_defs);
+  wp->w_winbar_click_defs_size = 0;
+  wp->w_winbar_click_defs = NULL;
+}

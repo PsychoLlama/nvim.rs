@@ -7,7 +7,7 @@
 
 use std::ffi::c_int;
 
-use crate::{TabpageHandle, WinHandle};
+use crate::{Frame, TabpageHandle, WinHandle};
 
 // Import list module functions we depend on
 use crate::list::{
@@ -55,6 +55,58 @@ extern "C" {
 
     /// Get tcl_flags (tabclose option flags).
     fn nvim_win_get_tcl_flags() -> c_int;
+
+    // --- unuse_tabpage / use_tabpage dependencies ---
+    /// Get topframe global.
+    fn nvim_get_topframe() -> *mut Frame;
+
+    /// Get firstwin global.
+    fn nvim_get_firstwin() -> WinHandle;
+
+    /// Get lastwin global.
+    fn nvim_get_lastwin() -> WinHandle;
+
+    /// Get curwin global.
+    fn nvim_get_curwin() -> WinHandle;
+
+    /// Set curtab global.
+    fn nvim_set_curtab(tp: TabpageHandle);
+
+    /// Set topframe global.
+    fn nvim_set_topframe(fr: *mut Frame);
+
+    /// Set firstwin global (and curtab->tp_firstwin).
+    fn nvim_set_firstwin(wp: WinHandle);
+
+    /// Set lastwin global (and curtab->tp_lastwin).
+    fn nvim_set_lastwin(wp: WinHandle);
+
+    /// Set curwin global.
+    fn nvim_set_curwin(wp: WinHandle);
+
+    /// Set tp->tp_topframe.
+    fn nvim_tabpage_set_topframe(tp: TabpageHandle, fr: *mut Frame);
+
+    /// Set tp->tp_firstwin.
+    fn nvim_tabpage_set_firstwin(tp: TabpageHandle, wp: WinHandle);
+
+    /// Set tp->tp_lastwin.
+    fn nvim_tabpage_set_lastwin(tp: TabpageHandle, wp: WinHandle);
+
+    /// Set tp->tp_curwin.
+    fn nvim_tabpage_set_curwin(tp: TabpageHandle, wp: WinHandle);
+
+    /// Get tp->tp_topframe.
+    fn nvim_tabpage_get_topframe(tp: TabpageHandle) -> *mut Frame;
+
+    /// Get tp->tp_firstwin.
+    fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
+
+    /// Get tp->tp_lastwin.
+    fn nvim_tabpage_get_lastwin(tp: TabpageHandle) -> WinHandle;
+
+    /// Get tp->tp_curwin.
+    fn nvim_tabpage_get_curwin(tp: TabpageHandle) -> WinHandle;
 }
 
 // =============================================================================
@@ -927,6 +979,61 @@ pub extern "C" fn rs_tabpage_transition_is_valid(tp: TabpageHandle) -> c_int {
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_tabpage_validate_transition(tp: TabpageHandle) -> TabpageHandle {
     validate_tabpage_transition_impl(tp)
+}
+
+// =============================================================================
+// unuse_tabpage / use_tabpage
+// =============================================================================
+
+/// Save current window pointers to tab page.
+///
+/// Port of C `unuse_tabpage()`.
+///
+/// # Safety
+/// tp must be a valid, non-null tabpage pointer.
+unsafe fn unuse_tabpage_impl(tp: TabpageHandle) {
+    if tp.is_null() {
+        return;
+    }
+    nvim_tabpage_set_topframe(tp, nvim_get_topframe());
+    nvim_tabpage_set_firstwin(tp, nvim_get_firstwin());
+    nvim_tabpage_set_lastwin(tp, nvim_get_lastwin());
+    nvim_tabpage_set_curwin(tp, nvim_get_curwin());
+}
+
+/// Restore window pointers from tab page.
+///
+/// Port of C `use_tabpage()`.
+///
+/// # Safety
+/// tp must be a valid, non-null tabpage pointer.
+unsafe fn use_tabpage_impl(tp: TabpageHandle) {
+    if tp.is_null() {
+        return;
+    }
+    nvim_set_curtab(tp);
+    nvim_set_topframe(nvim_tabpage_get_topframe(tp));
+    nvim_set_firstwin(nvim_tabpage_get_firstwin(tp));
+    nvim_set_lastwin(nvim_tabpage_get_lastwin(tp));
+    nvim_set_curwin(nvim_tabpage_get_curwin(tp));
+}
+
+/// FFI export for `unuse_tabpage`.
+///
+/// # Safety
+/// tp must be a valid, non-null tabpage pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_unuse_tabpage(tp: TabpageHandle) {
+    unuse_tabpage_impl(tp);
+}
+
+/// FFI export for `use_tabpage`.
+///
+/// # Safety
+/// tp must be a valid, non-null tabpage pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_use_tabpage(tp: TabpageHandle) {
+    use_tabpage_impl(tp);
 }
 
 /// FFI: Get the tabpage to transition to after closing current.

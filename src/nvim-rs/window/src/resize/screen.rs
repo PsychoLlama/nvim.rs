@@ -68,6 +68,22 @@ extern "C" {
     fn rs_frame_new_width(topfrp: *mut Frame, width: c_int, leftfirst: c_int, wfw: c_int);
     fn rs_frame_check_width(topfrp: *mut Frame, width: c_int) -> c_int;
     fn rs_win_comp_pos() -> c_int;
+
+    // --- win_new_screen_rows dependencies ---
+    fn rs_frame_minheight(topfrp: *const Frame, next_curwin: WinHandle) -> c_int;
+    fn rs_frame_check_height(topfrp: *const Frame, height: c_int) -> c_int;
+    fn rs_frame_new_height(
+        topfrp: *mut Frame,
+        height: c_int,
+        topfirst: c_int,
+        wfh: c_int,
+        set_ch: c_int,
+    );
+    fn nvim_get_p_ch() -> i64;
+    fn nvim_tabpage_set_ch_used(tp: TabpageHandle, val: i64);
+    fn nvim_compute_cmdrow();
+    fn nvim_get_skip_win_fix_scroll() -> c_int;
+    fn rs_win_fix_scroll(resize: c_int);
 }
 
 // =============================================================================
@@ -262,4 +278,53 @@ unsafe fn snapshot_windows_scroll_size_impl() {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_snapshot_windows_scroll_size() {
     snapshot_windows_scroll_size_impl();
+}
+
+// =============================================================================
+// win_new_screen_rows
+// =============================================================================
+
+/// Handle row count change: resize frame tree to new height, recompute positions,
+/// reconfigure floats, update tp_ch_used, and fix scroll positions.
+///
+/// This is the Rust equivalent of `win_new_screen_rows()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn win_new_screen_rows_impl() {
+    let firstwin = nvim_get_firstwin();
+    if firstwin.is_null() {
+        return; // not initialized yet
+    }
+
+    let topframe = nvim_get_topframe();
+    let rows_avail = nvim_get_rows_avail();
+    let h = rows_avail.max(rs_frame_minheight(topframe, WinHandle::null()));
+
+    // First try setting heights with 'winfixheight'. If that doesn't result
+    // in the right height, forget about that option.
+    rs_frame_new_height(topframe, h, 0, 1, 0);
+    if rs_frame_check_height(topframe, h) == 0 {
+        rs_frame_new_height(topframe, h, 0, 0, 0);
+    }
+
+    rs_win_comp_pos(); // recompute w_winrow and w_wincol
+    nvim_win_reconfig_floats(); // the size of floats might change
+    nvim_compute_cmdrow();
+
+    let curtab = nvim_get_curtab();
+    nvim_tabpage_set_ch_used(curtab, nvim_get_p_ch());
+
+    if nvim_get_skip_win_fix_scroll() == 0 {
+        rs_win_fix_scroll(1); // resize = true
+    }
+}
+
+/// FFI export for `win_new_screen_rows`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_new_screen_rows() {
+    win_new_screen_rows_impl();
 }

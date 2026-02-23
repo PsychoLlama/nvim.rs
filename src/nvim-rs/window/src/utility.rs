@@ -222,7 +222,7 @@ unsafe fn get_maximum_wincount_impl(fr: *const Frame, height: c_int) -> c_int {
 
     if frame.fr_layout != FR_COL {
         // Not a column: divide available height by (winminheight + status + winbar)
-        let win = frame2win(fr as *mut Frame);
+        let win = frame2win(fr.cast_mut());
         let winbar = if win.is_null() {
             0
         } else {

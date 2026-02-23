@@ -220,9 +220,7 @@ fn win_fix_scroll_impl(resize: bool) {
                 let botline = nvim_win_get_botline(wp);
                 let line_count = nvim_win_buf_line_count(wp);
 
-                if p_spk == c_int::from(b's')
-                    && winrow != prev_winrow
-                    && botline - 1 <= line_count
+                if p_spk == c_int::from(b's') && winrow != prev_winrow && botline - 1 <= line_count
                 {
                     let diff = (winrow - prev_winrow) + (height - prev_height);
                     let saved_lnum = nvim_win_get_cursor_lnum(wp);
@@ -339,7 +337,11 @@ fn win_fix_cursor_impl(normal: bool) {
             bot
         } else if lnum < top && topline != 1 {
             // If so hit the half-screen limit, use bot; otherwise use top
-            if so == view_height / 2 { bot } else { top }
+            if so == view_height / 2 {
+                bot
+            } else {
+                top
+            }
         } else {
             return; // cursor is in the valid range
         };

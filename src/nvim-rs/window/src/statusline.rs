@@ -7,7 +7,7 @@
 
 use std::ffi::c_int;
 
-use crate::{Frame, WinHandle, FR_COL, FR_LEAF};
+use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF};
 
 // =============================================================================
 // Constants
@@ -48,6 +48,22 @@ extern "C" {
     fn rs_win_comp_pos() -> c_int;
     fn rs_last_stl_height(morewin: c_int) -> c_int;
     fn rs_global_stl_height() -> c_int;
+
+    // --- set_winbar_win dependencies ---
+    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
+    fn nvim_win_set_winbar_height(wp: WinHandle, val: c_int);
+    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
+    fn nvim_win_set_inner_size_wrapper(wp: WinHandle, valid_cursor: c_int);
+    fn nvim_win_clear_winbar_click_defs(wp: WinHandle);
+    /// Returns 1 if local w_p_wbr is empty (for floating window check).
+    fn nvim_win_get_p_wbr_empty(wp: WinHandle) -> c_int;
+    /// Returns 1 if BOTH global p_wbr and local w_p_wbr are empty (for non-floating).
+    fn nvim_win_get_p_wbr_both_empty(wp: WinHandle) -> c_int;
+
+    // --- set_winbar dependencies ---
+    fn nvim_get_curtab() -> TabpageHandle;
+    fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
+    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
 }
 
 // =============================================================================
@@ -254,6 +270,99 @@ pub extern "C" fn rs_win_remove_status_line(wp: WinHandle, add_hsep: c_int) {
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_resize_frame_for_winbar(fr: *mut Frame) -> c_int {
     c_int::from(resize_frame_for_winbar_impl(fr))
+}
+
+// =============================================================================
+// set_winbar_win
+// =============================================================================
+
+/// Return codes matching C conventions.
+const SET_WINBAR_WIN_OK: c_int = 1;
+const SET_WINBAR_WIN_FAIL: c_int = 0;
+const SET_WINBAR_WIN_NOTDONE: c_int = 2;
+
+/// Add or remove a winbar from window `wp`.
+///
+/// Port of C `set_winbar_win()`.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+unsafe fn set_winbar_win_impl(wp: WinHandle, make_room: bool, valid_cursor: bool) -> c_int {
+    // Compute desired winbar height: 1 if winbar is configured, 0 otherwise.
+    // Floating windows only use local 'winbar' (w_p_wbr).
+    // Normal windows also check global 'winbar' (p_wbr).
+    // Floating: show winbar only if local w_p_wbr is non-empty.
+    // Non-floating: show winbar if global p_wbr OR local w_p_wbr is non-empty.
+    // nvim_win_get_p_wbr_empty: returns 1 if local wbr is empty.
+    // nvim_win_get_p_wbr_both_empty: returns 1 if both global and local wbr are empty.
+    let winbar_height = if nvim_win_get_floating(wp) != 0 {
+        i32::from(nvim_win_get_p_wbr_empty(wp) == 0)
+    } else {
+        i32::from(nvim_win_get_p_wbr_both_empty(wp) == 0)
+    };
+
+    if nvim_win_get_winbar_height(wp) != winbar_height {
+        if winbar_height == 1 && nvim_win_get_view_height(wp) <= 1 {
+            if nvim_win_get_floating(wp) != 0 {
+                nvim_emsg_noroom();
+                return SET_WINBAR_WIN_NOTDONE;
+            } else if !make_room || rs_resize_frame_for_winbar(nvim_win_get_frame(wp)) == 0 {
+                return SET_WINBAR_WIN_FAIL;
+            }
+        }
+        nvim_win_set_winbar_height(wp, winbar_height);
+        nvim_win_set_inner_size_wrapper(wp, c_int::from(valid_cursor));
+
+        if winbar_height == 0 {
+            // When removing winbar, deallocate the w_winbar_click_defs array.
+            nvim_win_clear_winbar_click_defs(wp);
+        }
+    }
+
+    SET_WINBAR_WIN_OK
+}
+
+/// FFI export for `set_winbar_win`.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_set_winbar_win(
+    wp: WinHandle,
+    make_room: c_int,
+    valid_cursor: c_int,
+) -> c_int {
+    set_winbar_win_impl(wp, make_room != 0, valid_cursor != 0)
+}
+
+// =============================================================================
+// set_winbar
+// =============================================================================
+
+/// Apply winbar setting to all windows in the current tab page.
+///
+/// Port of C `set_winbar()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn set_winbar_impl(make_room: bool) {
+    let curtab = nvim_get_curtab();
+    let mut wp = nvim_tabpage_get_firstwin(curtab);
+    while !wp.is_null() {
+        if set_winbar_win_impl(wp, make_room, true) == SET_WINBAR_WIN_FAIL {
+            break;
+        }
+        wp = nvim_win_get_next(wp);
+    }
+}
+
+/// FFI export for `set_winbar`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_set_winbar(make_room: c_int) {
+    set_winbar_impl(make_room != 0);
 }
 
 // =============================================================================

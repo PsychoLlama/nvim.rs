@@ -9,6 +9,7 @@
 #![allow(clippy::cast_possible_wrap)]
 
 use std::ffi::{c_double, c_int, c_void};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::WinHandle;
 
@@ -447,6 +448,46 @@ unsafe fn handle_internal_float(wp: WinHandle, validate: bool) {
             nvim_redraw_later_wrapper(wp, UPD_NOT_VALID);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// do_autocmd_winclosed
+// ---------------------------------------------------------------------------
+
+/// Recursion guard for `do_autocmd_winclosed`.
+///
+/// Replaces the C `static bool recursive` local inside `do_autocmd_winclosed`.
+static DO_AUTOCMD_WINCLOSED_RECURSIVE: AtomicBool = AtomicBool::new(false);
+
+extern "C" {
+    /// Check whether EVENT_WINCLOSED has any autocmds registered.
+    fn nvim_has_event_winclosed() -> c_int;
+
+    /// Apply WinClosed autocmds for window `win`.
+    fn nvim_apply_autocmds_winclosed(win: WinHandle);
+}
+
+/// Fire WinClosed autocmd for window `win`, with recursion guard.
+///
+/// Port of C `do_autocmd_winclosed()`.
+fn do_autocmd_winclosed_impl(win: WinHandle) {
+    if DO_AUTOCMD_WINCLOSED_RECURSIVE.load(Ordering::SeqCst) {
+        return;
+    }
+    // SAFETY: nvim_has_event_winclosed is a C accessor
+    if unsafe { nvim_has_event_winclosed() } == 0 {
+        return;
+    }
+    DO_AUTOCMD_WINCLOSED_RECURSIVE.store(true, Ordering::SeqCst);
+    // SAFETY: nvim_apply_autocmds_winclosed is a C accessor
+    unsafe { nvim_apply_autocmds_winclosed(win) };
+    DO_AUTOCMD_WINCLOSED_RECURSIVE.store(false, Ordering::SeqCst);
+}
+
+/// FFI export for `do_autocmd_winclosed`.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_do_autocmd_winclosed(win: WinHandle) {
+    do_autocmd_winclosed_impl(win);
 }
 
 // ---------------------------------------------------------------------------
