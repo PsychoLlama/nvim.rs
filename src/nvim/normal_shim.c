@@ -1617,11 +1617,7 @@ bool nvim_get_p_to(void) { return p_to; }
 // Insert mode entry handler accessors for Rust FFI
 // =============================================================================
 
-// Forward declarations for insert mode entry handlers
-static void nv_Replace_impl(cmdarg_T *cap);
-static void nv_vreplace_impl(cmdarg_T *cap);
-
-void nvim_nv_Replace_impl(cmdarg_T *cap) { nv_Replace_impl(cap); }
+// (nv_Replace_impl, nv_vreplace_impl migrated to Rust in Phase 3)
 
 // C wrappers for nv_replace Rust migration (Phase 6)
 
@@ -1724,15 +1720,30 @@ void nvim_replace_chars(cmdarg_T *cap, int had_ctrl_v) {
   set_last_insert(cap->nchar);
 }
 
-void nvim_nv_vreplace_impl(cmdarg_T *cap) { nv_vreplace_impl(cap); }
+// nvim_nv_vreplace_impl removed: nv_vreplace_impl migrated to Rust in Phase 3
 
 // =============================================================================
 // Scroll and screen handler accessors for Rust FFI
 // =============================================================================
 
-// Forward declarations for scroll/screen handlers
-static void nv_up_impl(cmdarg_T *cap);
-static void nv_down_impl(cmdarg_T *cap);
+// Phase 3 movement/mode-entry accessors for Rust FFI
+// (nv_up_impl, nv_down_impl migrated to Rust in Phase 3)
+// nvim_bt_quickfix_curbuf already defined in window_shim.c
+void nvim_qf_view_result(bool split) { rs_qf_view_result(split); }
+void nvim_prompt_invoke_callback(void) { prompt_invoke_callback(); }
+bool nvim_curbuf_modifiable(void) { return MODIFIABLE(curbuf); }
+// nvim_emsg_modifiable already defined in undo.c
+void nvim_coladvance_getviscol(void) { coladvance(curwin, getviscol()); }
+void nvim_invoke_edit_R(cmdarg_T *cap, bool repl, int cmd) { invoke_edit(cap, repl, cmd, false); }
+int nvim_get_literal_call(bool no_simplify) { return get_literal(no_simplify); }
+// nvim_stuffcharReadbuff already defined in edit.c
+void nvim_do_join_call(int count, bool insert_space) { do_join((size_t)count, insert_space, true, true, true); }
+void nvim_nv_diffgetput_call(bool put, size_t count) { nv_diffgetput(put, count); }
+void nvim_n_opencmd_call(cmdarg_T *cap) { n_opencmd(cap); }
+static void n_opencmd(cmdarg_T *cap);
+int nvim_get_b_prompt_start_lnum(void) { return curbuf->b_prompt_start.mark.lnum; }
+int nvim_cursor_count0_max2(cmdarg_T *cap) { return MAX(cap->count0, 2); }
+int nvim_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 
 // z-command accessors for Rust FFI
 int nvim_get_curwin_w_p_fdl(void) { return (int)curwin->w_p_fdl; }
@@ -1802,17 +1813,13 @@ bool nvim_ascii_isdigit(int c) { return ascii_isdigit(c); }
 /// Get translated E352 error message.
 const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with current 'foldmethod'"); }
 
-void nvim_nv_up_impl(cmdarg_T *cap) { nv_up_impl(cap); }
-
-void nvim_nv_down_impl(cmdarg_T *cap) { nv_down_impl(cap); }
+// nvim_nv_up_impl, nvim_nv_down_impl removed: nv_up/down_impl migrated to Rust in Phase 3
 
 // =============================================================================
 // Miscellaneous handler accessors for Rust FFI
 // =============================================================================
 
-// Forward declarations for miscellaneous handlers (nv_at_impl migrated to Rust)
-static void nv_join_impl(cmdarg_T *cap);
-static void nv_open_impl(cmdarg_T *cap);
+// (nv_at_impl, nv_join_impl, nv_open_impl migrated to Rust in Phases 1 and 3)
 
 // g-command C accessors for Rust FFI
 void nvim_nv_addsub(cmdarg_T *cap) { nv_addsub(cap); }
@@ -1877,11 +1884,7 @@ void nvim_set_b_op_start(int lnum, int col, int coladd) { curbuf->b_op_start.lnu
 void nvim_set_b_op_end_cursor(void) { curbuf->b_op_end = curwin->w_cursor; }
 void nvim_dec_b_op_end_col(void) { if (curbuf->b_op_end.col > 0) curbuf->b_op_end.col--; }
 
-// (nvim_nv_at_impl migrated to Rust)
-
-void nvim_nv_join_impl(cmdarg_T *cap) { nv_join_impl(cap); }
-
-void nvim_nv_open_impl(cmdarg_T *cap) { nv_open_impl(cap); }
+// (nvim_nv_at_impl, nvim_nv_join_impl, nvim_nv_open_impl migrated to Rust)
 
 // =============================================================================
 // Window command accessors for Rust FFI
@@ -3279,57 +3282,7 @@ bool get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp)
   return true;
 }
 
-/// Cursor up commands (implementation).
-/// cap->arg is true for "-": Move cursor to first non-blank.
-static void nv_up_impl(cmdarg_T *cap)
-{
-  if (mod_mask & MOD_MASK_SHIFT) {
-    // <S-Up> is page up
-    cap->arg = BACKWARD;
-    rs_nv_page(cap);
-    return;
-  }
-
-  cap->oap->motion_type = kMTLineWise;
-  if (cursor_up(cap->count1, cap->oap->op_type == OP_NOP) == false) {
-    rs_clearopbeep(cap->oap);
-  } else if (cap->arg) {
-    beginline(BL_WHITE | BL_FIX);
-  }
-}
-
-/// Cursor down commands (implementation).
-/// cap->arg is true for CR and "+": Move cursor to first non-blank.
-static void nv_down_impl(cmdarg_T *cap)
-{
-  if (mod_mask & MOD_MASK_SHIFT) {
-    // <S-Down> is page down
-    cap->arg = FORWARD;
-    rs_nv_page(cap);
-  } else if (bt_quickfix(curbuf) && cap->cmdchar == CAR) {
-    // Quickfix window only: view the result under the cursor.
-    rs_qf_view_result(false);
-  } else {
-    // In the cmdline window a <CR> executes the command.
-    if (cmdwin_type != 0 && cap->cmdchar == CAR) {
-      cmdwin_result = CAR;
-    } else if (bt_prompt(curbuf) && cap->cmdchar == CAR
-               && curwin->w_cursor.lnum == curbuf->b_ml.ml_line_count) {
-      // In a prompt buffer a <CR> in the last line invokes the callback.
-      prompt_invoke_callback();
-      if (restart_edit == 0) {
-        restart_edit = 'a';
-      }
-    } else {
-      cap->oap->motion_type = kMTLineWise;
-      if (cursor_down(cap->count1, cap->oap->op_type == OP_NOP) == false) {
-        rs_clearopbeep(cap->oap);
-      } else if (cap->arg) {
-        beginline(BL_WHITE | BL_FIX);
-      }
-    }
-  }
-}
+// nv_up_impl, nv_down_impl migrated to Rust in Phase 3
 
 /// Grab the file name under the cursor and edit it.
 static void nv_gotofile(cmdarg_T *cap)
@@ -3464,68 +3417,7 @@ static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int o
   return i;
 }
 
-
-/// Handle the "r" command (implementation).
-/// "R" (cap->arg is false) and "gR" (cap->arg is true) (implementation).
-static void nv_Replace_impl(cmdarg_T *cap)
-{
-  if (VIsual_active) {          // "R" is replace lines
-    cap->cmdchar = 'c';
-    cap->nchar = NUL;
-    VIsual_mode_orig = VIsual_mode;     // remember original area for gv
-    VIsual_mode = 'V';
-    rs_nv_operator(cap);
-    return;
-  }
-
-  if (rs_checkclearopq(cap->oap)) {
-    return;
-  }
-
-  if (!MODIFIABLE(curbuf)) {
-    emsg(_(e_modifiable));
-  } else {
-    if (virtual_active(curwin)) {
-      coladvance(curwin, getviscol());
-    }
-    invoke_edit(cap, false, cap->arg ? 'V' : 'R', false);
-  }
-}
-
-/// "gr" (implementation).
-static void nv_vreplace_impl(cmdarg_T *cap)
-{
-  if (VIsual_active) {
-    cap->cmdchar = 'r';
-    cap->nchar = cap->extra_char;
-    rs_nv_replace(cap);         // Do same as "r" in Visual mode for now
-    return;
-  }
-
-  if (rs_checkclearopq(cap->oap)) {
-    return;
-  }
-
-  if (!MODIFIABLE(curbuf)) {
-    emsg(_(e_modifiable));
-  } else {
-    if (cap->extra_char == Ctrl_V || cap->extra_char == Ctrl_Q) {
-      // get another character
-      cap->extra_char = get_literal(false);
-    }
-    if (cap->extra_char < ' ') {
-      // Prefix a control character with CTRL-V to avoid it being used as
-      // a command.
-      stuffcharReadbuff(Ctrl_V);
-    }
-    stuffcharReadbuff(cap->extra_char);
-    stuffcharReadbuff(ESC);
-    if (virtual_active(curwin)) {
-      coladvance(curwin, getviscol());
-    }
-    invoke_edit(cap, true, 'v', false);
-  }
-}
+// nv_Replace_impl, nv_vreplace_impl migrated to Rust in Phase 3
 
 /// Swap case for "~" command, when it does not work like an operator.
 /// Move the cursor to the mark position
@@ -3905,53 +3797,7 @@ static void nv_record(cmdarg_T *cap)
   }
 }
 
-
-/// Handle "J" or "gJ" command (implementation).
-static void nv_join_impl(cmdarg_T *cap)
-{
-  if (VIsual_active) {  // join the visual lines
-    rs_nv_operator(cap);
-    return;
-  }
-
-  if (rs_checkclearop(cap->oap)) {
-    return;
-  }
-
-  cap->count0 = MAX(cap->count0, 2);  // default for join is two lines!
-
-  if (curwin->w_cursor.lnum + cap->count0 - 1 >
-      curbuf->b_ml.ml_line_count) {
-    // can't join when on the last line
-    if (cap->count0 <= 2) {
-      rs_clearopbeep(cap->oap);
-      return;
-    }
-    cap->count0 = curbuf->b_ml.ml_line_count - curwin->w_cursor.lnum + 1;
-  }
-
-  rs_prep_redo(cap->oap->regname, cap->count0,
-            NUL, cap->cmdchar, NUL, NUL, cap->nchar);
-  do_join((size_t)cap->count0, cap->nchar == NUL, true, true, true);
-}
-
-/// "o" and "O" commands (implementation).
-static void nv_open_impl(cmdarg_T *cap)
-{
-  // "do" is ":diffget"
-  if (cap->oap->op_type == OP_DELETE && cap->cmdchar == 'o') {
-    rs_clearop(cap->oap);
-    assert(cap->opcount >= 0);
-    nv_diffgetput(false, (size_t)cap->opcount);
-  } else if (VIsual_active) {
-    // switch start and end of visual/
-    rs_v_swap_corners(cap->cmdchar);
-  } else if (bt_prompt(curbuf) && curwin->w_cursor.lnum < curbuf->b_prompt_start.mark.lnum) {
-    rs_clearopbeep(cap->oap);
-  } else {
-    n_opencmd(cap);
-  }
-}
+// nv_join_impl, nv_open_impl migrated to Rust in Phase 3
 
 static void nv_paste(cmdarg_T *cap) { paste_repeat(cap->count1); }
 
