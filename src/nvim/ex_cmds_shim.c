@@ -965,34 +965,15 @@ char *make_filter_cmd(char *cmd, char *itmp, char *otmp, bool do_in)
   return buf;
 }
 
-/// Append output redirection for the given file to the end of the buffer
-///
-/// @param[out]  buf  Buffer to append to.
-/// @param[in]  buflen  Buffer length.
-/// @param[in]  opt  Separator or format string to append: will append
-///                  `printf(' ' . opt, fname)` if `%s` is found in `opt` or
-///                  a space, opt, a space and then fname if `%s` is not found
-///                  there.
-/// @param[in]  fname  File name to append.
+// append_redir implemented in Rust (rs_append_redir in ex_cmds/src/shell.rs)
+extern void rs_append_redir(char *buf, size_t buflen, const char *opt, const char *fname);
+
+/// Append output redirection for the given file to the end of the buffer.
+/// Thin wrapper calling the Rust implementation.
 void append_redir(char *const buf, const size_t buflen, const char *const opt,
                   const char *const fname)
 {
-  char *const end = buf + strlen(buf);
-  // find "%s"
-  const char *p = opt;
-  for (; (p = strchr(p, '%')) != NULL; p++) {
-    if (p[1] == 's') {  // found %s
-      break;
-    } else if (p[1] == '%') {  // skip %%
-      p++;
-    }
-  }
-  if (p != NULL) {
-    *end = ' ';  // not really needed? Not with sh, ksh or bash
-    vim_snprintf(end + 1, (size_t)((ptrdiff_t)buflen - (end + 1 - buf)), opt, fname);
-  } else {
-    vim_snprintf(end, (size_t)((ptrdiff_t)buflen - (end - buf)), " %s %s", opt, fname);
-  }
+  rs_append_redir(buf, buflen, opt, fname);
 }
 
 int rename_buffer(char *new_fname)

@@ -438,6 +438,106 @@ pub unsafe extern "C" fn rs_find_unescaped_bang(cmd: *const std::ffi::c_char) ->
     }
 }
 
+/// Append output redirection for the given file to the end of the buffer.
+///
+/// Searches opt for a `%s` placeholder (skipping `%%`):
+/// - If found: appends a space then formats opt with fname substituted for `%s`
+/// - If not found: appends ` opt fname`
+///
+/// Replaces the C `append_redir` function.
+///
+/// # Safety
+/// - `buf` must be a valid, writable, null-terminated C string buffer of at least `buflen` bytes.
+/// - `opt` must be a valid null-terminated C string.
+/// - `fname` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_append_redir(
+    buf: *mut std::ffi::c_char,
+    buflen: usize,
+    opt: *const std::ffi::c_char,
+    fname: *const std::ffi::c_char,
+) {
+    use std::ffi::CStr;
+
+    let opt_bytes = CStr::from_ptr(opt).to_bytes();
+    let fname_bytes = CStr::from_ptr(fname).to_bytes();
+
+    // Find current end of buf (strlen)
+    let mut end_offset = 0usize;
+    while end_offset < buflen && *buf.add(end_offset) != 0 {
+        end_offset += 1;
+    }
+
+    // Inline helper: write bytes to buf at offset, returns new offset.
+    macro_rules! write_bytes {
+        ($bytes:expr) => {{
+            for &byte in $bytes {
+                if end_offset + 1 < buflen {
+                    *buf.add(end_offset) = byte as std::ffi::c_char;
+                    end_offset += 1;
+                }
+            }
+        }};
+    }
+
+    // Find "%s" in opt (skipping "%%"), returns byte index of the '%' in "%s" or None.
+    let percent_s_pos = {
+        let mut pos = None;
+        let mut j = 0;
+        while j < opt_bytes.len() {
+            if opt_bytes[j] == b'%' && j + 1 < opt_bytes.len() {
+                if opt_bytes[j + 1] == b's' {
+                    pos = Some(j);
+                    break;
+                } else if opt_bytes[j + 1] == b'%' {
+                    j += 2; // skip %%
+                    continue;
+                }
+            }
+            j += 1;
+        }
+        pos
+    };
+
+    // Helper to write a byte slice converting %% -> %
+    macro_rules! write_opt_section {
+        ($section:expr) => {{
+            let section: &[u8] = $section;
+            let mut k = 0;
+            while k < section.len() {
+                if section[k] == b'%' && k + 1 < section.len() && section[k + 1] == b'%' {
+                    write_bytes!(b"%");
+                    k += 2;
+                } else {
+                    write_bytes!(&section[k..k + 1]);
+                    k += 1;
+                }
+            }
+        }};
+    }
+
+    if let Some(ps) = percent_s_pos {
+        // Found %s: write ' ' then opt-before-%s then fname then opt-after-%s
+        write_bytes!(b" ");
+        write_opt_section!(&opt_bytes[..ps]);
+        write_bytes!(fname_bytes);
+        write_opt_section!(&opt_bytes[ps + 2..]);
+    } else {
+        // No %s found: write " opt fname"
+        write_bytes!(b" ");
+        write_bytes!(opt_bytes);
+        write_bytes!(b" ");
+        write_bytes!(fname_bytes);
+    }
+
+    // Null-terminate
+    if end_offset < buflen {
+        *buf.add(end_offset) = 0;
+    } else if buflen > 0 {
+        *buf.add(buflen - 1) = 0;
+    }
+}
+
 /// Check if shell escape is needed for a character.
 pub extern "C" fn rs_needs_shell_escape(c: c_int) -> c_int {
     if !(0..=127).contains(&c) {
