@@ -156,6 +156,8 @@ extern void rs_ins_compl_restart(void);
 extern void rs_ins_compl_set_original_text(const char *str, size_t len);
 extern void rs_ins_compl_addleader(int c);
 extern void rs_ins_compl_check_keys(int frequency, int in_compl_func);
+extern void rs_ins_compl_fuzzy_sort(void);
+extern void rs_sort_compl_match_list(int compare_type);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -1585,25 +1587,7 @@ _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 int ins_compl_bs(void) { return rs_ins_compl_bs(); }
 
 /// Calculate fuzzy score and sort completion matches unless sorting is disabled.
-static void ins_compl_fuzzy_sort(void)
-{
-  unsigned cur_cot_flags = rs_get_cot_flags();
-
-  // Set the fuzzy score in cp_score and sort
-  rs_set_fuzzy_score();
-  if (!(cur_cot_flags & kOptCotFlagNosort)) {
-    sort_compl_match_list(cp_compare_fuzzy);
-    // Reset the shown item since sorting reorders items
-    if ((cur_cot_flags & (kOptCotFlagNoinsert|kOptCotFlagNoselect)) == kOptCotFlagNoinsert) {
-      bool none_selected = compl_shown_match == (rs_compl_shows_dir_forward()
-                                                 ? compl_first_match : compl_first_match->cp_prev);
-      if (!none_selected) {
-        compl_shown_match = (!compl_autocomplete && rs_compl_shows_dir_forward())
-                            ? compl_first_match->cp_next : compl_first_match;
-      }
-    }
-  }
-}
+static void ins_compl_fuzzy_sort(void) { rs_ins_compl_fuzzy_sort(); }
 
 /// Called after changing "compl_leader".
 /// Show the popup menu with a different set of matches.
@@ -5216,4 +5200,22 @@ void nvim_api_clear_and_set_compl_leader(const char *data, size_t len) {
 }
 int nvim_compl_shown_match_is_null(void) { return compl_shown_match == NULL ? 1 : 0; }
 void nvim_compl_set_shown_to_first(void) { compl_shown_match = compl_first_match; }
+
+// Accessors for Phase 3: sort_compl_match_list / ins_compl_fuzzy_sort migration
+// compare_type: 0 = fuzzy, 1 = nearest
+void nvim_mergesort_compl_list(int compare_type) {
+  sort_compl_match_list(compare_type == 0 ? cp_compare_fuzzy : cp_compare_nearest);
+}
+void *nvim_compl_first_match_get_prev(void) {
+  return compl_first_match ? compl_first_match->cp_prev : NULL;
+}
+// Returns 1 if compl_shown_match equals sentinel (compl_first_match for forward,
+// compl_first_match->cp_prev for backward), 0 otherwise
+int nvim_compl_shown_match_is_sentinel(int forward) {
+  if (!compl_shown_match || !compl_first_match) {
+    return 1;
+  }
+  void *sentinel = forward ? (void *)compl_first_match : (void *)compl_first_match->cp_prev;
+  return compl_shown_match == sentinel ? 1 : 0;
+}
 

@@ -4,8 +4,7 @@
 //! completion matches, including fuzzy score and proximity-based sorting.
 
 #![allow(dead_code, unused_imports)]
-use std::cmp::Ordering;
-use std::os::raw::c_int;
+use std::os::raw::{c_char, c_int, c_uint};
 
 use crate::match_list::ComplMatch;
 
@@ -16,7 +15,15 @@ pub const FUZZY_SCORE_NONE: c_int = -1;
 const CP_EQUAL: c_int = 8;
 const CP_ICASE: c_int = 16;
 
-use std::os::raw::c_char;
+// compare_type constants for nvim_mergesort_compl_list
+const COMPARE_FUZZY: c_int = 0;
+#[allow(dead_code)]
+const COMPARE_NEAREST: c_int = 1;
+
+// cot flag constants
+const K_OPT_COT_FLAG_NOSORT: c_uint = 0x100;
+const K_OPT_COT_FLAG_NOINSERT: c_uint = 0x20;
+const K_OPT_COT_FLAG_NOSELECT: c_uint = 0x40;
 
 // C accessor functions
 extern "C" {
@@ -43,6 +50,16 @@ extern "C" {
     fn nvim_get_compl_leader_size() -> usize;
     fn nvim_get_compl_orig_text_data() -> *const c_char;
     fn nvim_get_compl_orig_text_size() -> usize;
+
+    // For rs_sort_compl_match_list and rs_ins_compl_fuzzy_sort
+    fn nvim_mergesort_compl_list(compare_type: c_int);
+    fn nvim_get_compl_autocomplete() -> c_int;
+    fn nvim_compl_get_shown_match() -> ComplMatch;
+    fn nvim_compl_set_shown_match(m: ComplMatch);
+    fn nvim_compl_shown_match_is_sentinel(forward: c_int) -> c_int;
+    fn rs_get_cot_flags() -> c_uint;
+    fn rs_compl_shows_dir_forward() -> c_int;
+    fn nvim_compl_set_first_match(m: ComplMatch);
 }
 
 /// Check if a match is the first match.
@@ -108,6 +125,65 @@ pub unsafe extern "C" fn rs_set_fuzzy_score() {
         }
         comp = next;
     }
+}
+
+// =============================================================================
+// Phase 3: rs_sort_compl_match_list and rs_ins_compl_fuzzy_sort
+// =============================================================================
+
+/// Sort completion matches using a comparator (fuzzy or nearest).
+///
+/// Delegates to the C `sort_compl_match_list` via the compound accessor
+/// `nvim_mergesort_compl_list`. The compare_type selects the comparator:
+/// COMPARE_FUZZY (0) or COMPARE_NEAREST (1).
+///
+/// # Safety
+/// Requires valid completion list state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sort_compl_match_list(compare_type: c_int) {
+    nvim_mergesort_compl_list(compare_type);
+}
+
+/// Calculate fuzzy scores and sort completion matches.
+///
+/// Sets fuzzy scores via `rs_set_fuzzy_score()`, then sorts via
+/// `rs_sort_compl_match_list(COMPARE_FUZZY)` unless nosort is set.
+/// Adjusts the shown match after sorting.
+///
+/// # Safety
+/// Requires valid completion list state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_fuzzy_sort() {
+    let cur_cot_flags = rs_get_cot_flags();
+
+    rs_set_fuzzy_score();
+    if (cur_cot_flags & K_OPT_COT_FLAG_NOSORT) != 0 {
+        return;
+    }
+
+    rs_sort_compl_match_list(COMPARE_FUZZY);
+
+    // Reset the shown item since sorting reorders items.
+    // Only adjust if the flag combination is exactly NOINSERT (not NOSELECT).
+    if (cur_cot_flags & (K_OPT_COT_FLAG_NOINSERT | K_OPT_COT_FLAG_NOSELECT))
+        != K_OPT_COT_FLAG_NOINSERT
+    {
+        return;
+    }
+
+    let forward = rs_compl_shows_dir_forward() != 0;
+    let none_selected = nvim_compl_shown_match_is_sentinel(c_int::from(forward)) != 0;
+    if none_selected {
+        return;
+    }
+
+    let first = nvim_compl_get_first_match();
+    let new_shown = if nvim_get_compl_autocomplete() == 0 && forward {
+        nvim_compl_match_get_next(first)
+    } else {
+        first
+    };
+    nvim_compl_set_shown_match(new_shown);
 }
 
 #[cfg(test)]
