@@ -1322,7 +1322,6 @@ extern "C" {
     fn nvim_setmark(name: c_int) -> bool;
     fn nvim_get_jop_flags() -> c_uint;
     fn nvim_mark_get(name: c_int) -> FmarkHandle;
-    fn nvim_nv_mark_move_to(cap: CapHandle, flags: c_int, fm: FmarkHandle) -> c_int;
     fn nvim_get_changelist(count1: c_int) -> FmarkHandle;
     fn nvim_get_jumplist(count1: c_int) -> FmarkHandle;
     fn nvim_goto_tabpage_lastused() -> bool;
@@ -1700,7 +1699,7 @@ pub unsafe extern "C" fn rs_nv_gomark(cap: CapHandle) {
     }
 
     let fm = nvim_mark_get(name);
-    let move_res = nvim_nv_mark_move_to(cap, flags, fm);
+    let move_res = rs_nv_mark_move_to(cap, flags, fm);
 
     // May need to clear the coladd that a mark includes.
     if !nvim_virtual_active() {
@@ -1760,7 +1759,7 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
     // calling nv_mark_move_to() when not found to avoid incorrect error messages.
     let move_res: c_int;
     if !fm.is_null() {
-        move_res = nvim_nv_mark_move_to(cap, flags, fm);
+        move_res = rs_nv_mark_move_to(cap, flags, fm);
     } else if cmdchar == c_int::from(b'g') {
         if nvim_get_changelistlen() == 0 {
             nvim_emsg(nvim_get_e_changelist_is_empty());
@@ -2278,16 +2277,6 @@ pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
 extern "C" {
     // Phase 4: nv_search / nv_next accessors
     fn nvim_getcmdline_for_search(cap: CapHandle) -> *mut c_char;
-    fn nvim_normal_search_call(
-        cap: CapHandle,
-        dir: c_int,
-        pat: *mut c_char,
-        patlen: usize,
-        opt: c_int,
-        wrapped: *mut c_int,
-    ) -> c_int;
-    fn nvim_hls_active_and_hl_differs() -> bool;
-
     // nv_ident C wrappers (Phase 7)
     fn nvim_ident_init(
         cap: CapHandle,
@@ -2306,13 +2295,6 @@ extern "C" {
     fn nvim_ident_vim_iswordp(p: *const c_char) -> bool;
     fn nvim_ident_mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char;
     fn nvim_ident_set_g_tag_at_cursor(val: bool);
-    fn nvim_ident_normal_search(
-        cap: CapHandle,
-        dir: c_int,
-        pat: *mut c_char,
-        patlen: usize,
-        opt: c_int,
-    );
     fn nvim_ident_emsg_noident();
 
     fn nvim_set_no_smartcase(val: c_int);
@@ -2382,7 +2364,7 @@ pub unsafe extern "C" fn rs_nv_search(cap: CapHandle) {
     };
 
     let patlen = std::ffi::CStr::from_ptr(pat).to_bytes().len();
-    nvim_normal_search_call(cap, cmdchar, pat, patlen, opt, core::ptr::null_mut());
+    rs_normal_search(cap, cmdchar, pat, patlen, opt, core::ptr::null_mut());
 }
 
 /// Command handler for "n" and "N" commands: Repeat search.
@@ -2400,7 +2382,7 @@ pub unsafe extern "C" fn rs_nv_next(cap: CapHandle) {
 
     let arg = nvim_cap_get_arg(cap);
     let mut wrapped: c_int = 0;
-    let i = nvim_normal_search_call(
+    let i = rs_normal_search(
         cap,
         0,
         core::ptr::null_mut(),
@@ -2419,7 +2401,7 @@ pub unsafe extern "C" fn rs_nv_next(cap: CapHandle) {
         // Repeat with count + 1.
         let count1 = nvim_cap_get_count1(cap);
         nvim_cap_set_count1(cap, count1 + 1);
-        nvim_normal_search_call(
+        rs_normal_search(
             cap,
             0,
             core::ptr::null_mut(),
@@ -2429,11 +2411,7 @@ pub unsafe extern "C" fn rs_nv_next(cap: CapHandle) {
         );
         nvim_cap_set_count1(cap, count1);
     }
-
-    // Redraw the window to refresh the highlighted matches.
-    if i > 0 && nvim_hls_active_and_hl_differs() {
-        nvim_redraw_later_curwin(UPD_SOME_VALID);
-    }
+    // Note: hlsearch redraw is now handled inside rs_normal_search
 }
 
 /// Command handler for identifier commands: *, #, K, CTRL-], g], g*.
@@ -2741,7 +2719,7 @@ pub unsafe extern "C" fn rs_ident_build_and_exec(
                 true,
                 0,
             );
-            nvim_ident_normal_search(
+            rs_normal_search(
                 cap,
                 if cmdchar_byte == b'*' {
                     c_int::from(b'/')
@@ -2751,6 +2729,7 @@ pub unsafe extern "C" fn rs_ident_build_and_exec(
                 buf.as_mut_ptr().cast::<c_char>(),
                 buf.len(),
                 0,
+                core::ptr::null_mut(),
             );
         } else {
             nvim_ident_set_g_tag_at_cursor(true);
@@ -3369,7 +3348,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
 
     if nchar == b'f' as c_int {
         // "[f" or "]f": Edit file under cursor (same as "gf")
-        nvim_nv_gotofile(cap);
+        rs_nv_gotofile(cap);
     } else if nvim_vim_strchr_str(c"iI\x09dD\x04".as_ptr(), nchar) {
         // Find the occurrence(s) of the identifier or define under cursor
         nvim_bracket_find_ident(cap);
@@ -3981,8 +3960,6 @@ extern "C" {
     fn nvim_get_curwin_w_p_wrap() -> bool;
     fn nvim_nv_z_get_count(cap: CapHandle, nchar_arg: *mut c_int) -> bool;
     fn nvim_sync_fen_in_diff_windows();
-    // Phase 2: nv_zg_zw accessors
-    fn nvim_get_visual_text(cap: CapHandle, pp: *mut *mut c_char, lenp: *mut usize) -> bool;
     fn nvim_spell_move_to_wrapper(dir: c_int) -> usize;
     fn nvim_ml_get_pos_cursor() -> *mut c_char;
     fn find_ident_under_cursor(text: *mut *mut c_char, find_type: c_int) -> usize;
@@ -4074,7 +4051,7 @@ pub unsafe extern "C" fn rs_nv_zg_zw(cap: CapHandle, mut nchar: c_int) -> c_int 
     let mut ptr: *mut c_char = std::ptr::null_mut();
     let mut len: usize = 0;
 
-    if nvim_get_VIsual_active() != 0 && !nvim_get_visual_text(cap, &raw mut ptr, &raw mut len) {
+    if nvim_get_VIsual_active() != 0 && !rs_get_visual_text(cap, &raw mut ptr, &raw mut len) {
         return FAIL;
     }
 
@@ -5029,7 +5006,6 @@ extern "C" {
     fn nvim_coladvance_curwin(col: c_int);
     fn nvim_cursor_pos_info_call();
     fn nvim_invoke_edit_g(cap: CapHandle);
-    fn nvim_nv_gotofile(cap: CapHandle);
     fn nvim_set_mod_mask_ctrl();
     fn nvim_do_mouse_g(oap: OapHandle, nchar: c_int, count1: c_int);
     fn nvim_goto_byte_call(count: c_int);
@@ -5474,7 +5450,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
 
         // "gf": goto file, edit file under cursor
         n if n == b'f' as c_int || n == b'F' as c_int => {
-            nvim_nv_gotofile(cap);
+            rs_nv_gotofile(cap);
         }
 
         // "g'm" and "g`m": jump to mark without setting pcmark
@@ -6551,6 +6527,219 @@ pub unsafe extern "C" fn rs_nv_event(cap: CapHandle) {
         // but if not, the event should be allowed to trigger :startinsert.
         nvim_cap_or_retval(cap, CA_COMMAND_BUSY);
     }
+}
+
+// =============================================================================
+// Phase 2: normal_search, nv_gotofile, get_visual_text, nv_mark_move_to
+// =============================================================================
+
+// kMTLineWise constant for Phase 2
+const K_MT_LINE_WISE_P2: c_int = 2;
+
+// kMarkMoveFailed bit (MarkMoveRes::kMarkMoveFailed = 0x10)
+const K_MARK_MOVED_FAILED: c_int = 0x10;
+
+// kOptFdoFlagSearch == 0x40 (from option_vars.generated.h)
+const K_OPT_FDO_FLAG_SEARCH: c_uint = 0x40;
+
+extern "C" {
+    // Phase 2: normal_search accessors
+    fn nvim_do_search_call(
+        oap: OapHandle,
+        dir: c_int,
+        pat: *mut std::ffi::c_char,
+        patlen: usize,
+        count1: c_int,
+        opt: c_int,
+        wrapped: *mut c_int,
+    ) -> c_int;
+    fn nvim_search_hls_needs_redraw(prev_lnum: c_int, prev_col: c_int, prev_coladd: c_int)
+        -> bool;
+
+    // Phase 2: nv_gotofile accessors
+    fn nvim_grab_file_name(count1: c_int, lnum_out: *mut c_int) -> *mut std::ffi::c_char;
+    fn nvim_curbuf_needs_autowrite() -> bool;
+    fn nvim_autowrite_curbuf();
+    fn nvim_check_can_set_curbuf_disabled() -> bool;
+    fn nvim_do_ecmd_for_gotofile(ptr: *mut std::ffi::c_char) -> c_int;
+
+    // Phase 2: get_visual_text accessors
+    fn nvim_ml_get_pos_visual() -> *mut std::ffi::c_char;
+    fn nvim_cursor_gt_VIsual() -> bool;
+    fn nvim_get_cursor_line_ptr() -> *mut std::ffi::c_char;
+
+    // Phase 2: nv_mark_move_to accessor
+    fn nvim_mark_move_to_call(fm: FmarkHandle, flags: c_int) -> c_int;
+}
+
+/// Search for "pat" in direction "dir" ('/' or '?', 0 for repeat).
+///
+/// Rust implementation of the formerly-C `normal_search`.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+pub unsafe fn rs_normal_search(
+    cap: CapHandle,
+    dir: c_int,
+    pat: *mut std::ffi::c_char,
+    patlen: usize,
+    opt: c_int,
+    wrapped: *mut c_int,
+) -> c_int {
+    let oap = nvim_cap_get_oap(cap);
+    let count1 = nvim_cap_get_count1(cap);
+
+    // Save cursor position for hlsearch redraw check
+    let prev_lnum = nvim_get_cursor_lnum();
+    let prev_col = nvim_get_cursor_col();
+    let prev_coladd = nvim_get_cursor_coladd();
+
+    nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
+    nvim_oap_set_inclusive(oap, false);
+    nvim_oap_set_use_reg_one(oap, true);
+    nvim_curwin_set_set_curswant(true);
+
+    let i = nvim_do_search_call(oap, dir, pat, patlen, count1, opt, wrapped);
+
+    if i == 0 {
+        rs_clearop(oap);
+    } else {
+        if i == 2 {
+            nvim_oap_set_motion_type(oap, K_MT_LINE_WISE_P2);
+        }
+        nvim_set_cursor_coladd(0);
+        if nvim_oap_get_op_type_ptr(oap) == OP_NOP
+            && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_SEARCH) != 0
+            && nvim_get_KeyTyped()
+        {
+            rs_foldOpenCursor();
+        }
+    }
+
+    if nvim_search_hls_needs_redraw(prev_lnum, prev_col, prev_coladd) {
+        nvim_redraw_later_curwin(UPD_SOME_VALID);
+    }
+
+    nvim_check_cursor();
+
+    i
+}
+
+/// Get visually selected text within one line.
+///
+/// Rust implementation of the formerly-C `get_visual_text`.
+/// Returns false if more than one line selected.
+///
+/// # Safety
+/// `cap` may be null. If non-null, must be a valid cmdarg_T pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_get_visual_text(
+    cap: CapHandle,
+    pp: *mut *mut std::ffi::c_char,
+    lenp: *mut usize,
+) -> bool {
+    let visual_mode_linewise = c_int::from(b'V');
+    if nvim_get_VIsual_mode() != visual_mode_linewise {
+        rs_unadjust_for_sel();
+    }
+    if nvim_get_VIsual_lnum() != nvim_get_cursor_lnum() {
+        if !cap.is_null() {
+            let oap = nvim_cap_get_oap(cap);
+            rs_clearopbeep(oap);
+        }
+        return false;
+    }
+    if nvim_get_VIsual_mode() == visual_mode_linewise {
+        *pp = nvim_get_cursor_line_ptr();
+        *lenp = nvim_get_cursor_line_len() as usize;
+    } else {
+        // cursor_gt_VIsual: cursor is after VIsual
+        if nvim_cursor_gt_VIsual() {
+            // text from VIsual to cursor
+            *pp = nvim_ml_get_pos_visual();
+            *lenp = (nvim_get_cursor_col() - nvim_get_VIsual_col()) as usize + 1;
+        } else {
+            // text from cursor to VIsual
+            *pp = nvim_ml_get_pos_cursor();
+            *lenp = (nvim_get_VIsual_col() - nvim_get_cursor_col()) as usize + 1;
+        }
+        if !(*pp).is_null() && (**pp as u8) == b'\0' {
+            *lenp = 0;
+        }
+        if *lenp > 0 {
+            let tail_ptr = (*pp).add(*lenp - 1);
+            let extra = (utfc_ptr2len(tail_ptr) - 1) as usize;
+            *lenp += extra;
+        }
+    }
+    rs_reset_VIsual_and_resel();
+    true
+}
+
+/// Move the cursor to the mark position (nv_gotofile).
+///
+/// Rust implementation of the formerly-C `nv_gotofile`.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+pub unsafe fn rs_nv_gotofile(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+
+    if rs_check_text_or_curbuf_locked(oap) {
+        return;
+    }
+    if !nvim_check_can_set_curbuf_disabled() {
+        return;
+    }
+
+    let count1 = nvim_cap_get_count1(cap);
+    let mut lnum: c_int = -1;
+    let ptr = nvim_grab_file_name(count1, &raw mut lnum);
+
+    if !ptr.is_null() {
+        if nvim_curbuf_needs_autowrite() {
+            nvim_autowrite_curbuf();
+        }
+        nvim_setpcmark();
+        let nchar = nvim_cap_get_nchar(cap);
+        if nvim_do_ecmd_for_gotofile(ptr) == OK && nchar == c_int::from(b'F') && lnum >= 0 {
+            nvim_set_cursor_lnum(lnum);
+            nvim_check_cursor_lnum_call();
+            nvim_beginline(BL_SOL | BL_FIX);
+        }
+        xfree(ptr.cast::<c_void>());
+    } else {
+        rs_clearop(oap);
+    }
+}
+
+/// Move cursor to a mark position and set motion type (nv_mark_move_to).
+///
+/// Rust implementation of the formerly-C `nv_mark_move_to`.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer, `fm` must be a valid fmark_T pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_nv_mark_move_to(cap: CapHandle, flags: c_int, fm: FmarkHandle) -> c_int {
+    let oap = nvim_cap_get_oap(cap);
+    let res = nvim_mark_move_to_call(fm, flags);
+    if (res & K_MARK_MOVED_FAILED) != 0 {
+        rs_clearop(oap);
+    }
+    nvim_oap_set_motion_type(
+        oap,
+        if (flags & K_MARK_BEGIN_LINE) != 0 {
+            K_MT_LINE_WISE_P2
+        } else {
+            K_MT_CHARWISE
+        },
+    );
+    if nvim_cap_get_cmdchar(cap) == c_int::from(b'`') {
+        nvim_oap_set_use_reg_one(oap, true);
+    }
+    nvim_oap_set_inclusive(oap, false);
+    nvim_curwin_set_set_curswant(true);
+    res
 }
 
 // =============================================================================

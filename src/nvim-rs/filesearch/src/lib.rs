@@ -169,7 +169,7 @@ extern "C" {
 
     // Visual mode and cursor functions
     fn VIsual_active_get() -> c_int;
-    fn get_visual_text(cmdp: *mut libc::c_void, pp: *mut *mut c_char, lenp: *mut usize) -> c_int;
+    fn rs_get_visual_text(cmdp: *mut libc::c_void, pp: *mut *mut c_char, lenp: *mut usize) -> bool;
     fn get_cursor_line_ptr() -> *mut c_char;
     fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: i32) -> i32;
     fn getdigits_long(pp: *mut *mut c_char, strict: bool, def: i64) -> i64;
@@ -2225,12 +2225,11 @@ pub unsafe extern "C" fn rs_grab_file_name(
         let mut len: usize = 0;
         let mut ptr: *mut c_char = ptr::null_mut();
 
-        if get_visual_text(
+        if !rs_get_visual_text(
             ptr::null_mut(),
             std::ptr::addr_of_mut!(ptr),
             std::ptr::addr_of_mut!(len),
-        ) == FAIL
-        {
+        ) {
             return ptr::null_mut();
         }
 

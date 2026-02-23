@@ -477,6 +477,8 @@ extern void rs_v_visop(cmdarg_T *cap);
 extern void rs_may_start_select(int c);
 extern void rs_v_swap_corners(int cmdchar);
 extern bool rs_unadjust_for_sel(void);
+extern bool rs_get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp);
+extern int rs_nv_mark_move_to(cmdarg_T *cap, int flags, fmark_T *fm);
 extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
                                    char **text, int *textcol, int find_type);
 
@@ -821,7 +823,6 @@ unsigned int nvim_get_jop_flags(void) { return jop_flags; }
 
 fmark_T *nvim_mark_get(int name) { return mark_get(curbuf, curwin, NULL, kMarkAll, name); }
 
-int nvim_nv_mark_move_to(cmdarg_T *cap, int flags, fmark_T *fm) { return nv_mark_move_to(cap, flags, fm); }
 
 fmark_T *nvim_get_changelist(int count1) { return get_changelist(curbuf, curwin, count1); }
 
@@ -1337,22 +1338,6 @@ char *nvim_getcmdline_for_search(cmdarg_T *cap)
 /// Get cap->searchbuf.
 char *nvim_cap_get_searchbuf(cmdarg_T *cap) { return cap->searchbuf; }
 
-/// Wrapper for normal_search with wrapped output parameter.
-int nvim_normal_search_call(cmdarg_T *cap, int dir, char *pat, size_t patlen,
-                            int opt, int *wrapped)
-{
-  return normal_search(cap, dir, pat, patlen, opt, wrapped);
-}
-
-/// Check: p_hls && !no_hlsearch && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L).
-bool nvim_hls_active_and_hl_differs(void)
-{
-  return p_hls && !no_hlsearch
-         && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L);
-}
-
-static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int opt, int *wrapped);
-
 // C wrappers for nv_ident Rust migration (Phase 7)
 
 /// Initialize nv_ident: determine cmdchar/g_cmd, get visual text or ident under cursor.
@@ -1378,7 +1363,7 @@ int nvim_ident_init(cmdarg_T *cap, int *cmdchar_out, int *g_cmd_out,
 
   // The "]", "CTRL-]" and "K" commands accept an argument in Visual mode.
   if (cmdchar == ']' || cmdchar == Ctrl_RSB || cmdchar == 'K') {
-    if (VIsual_active && get_visual_text(cap, &ptr, &n) == false) {
+    if (VIsual_active && rs_get_visual_text(cap, &ptr, &n) == false) {
       return -2;
     }
     if (rs_checkclearopq(cap->oap)) {
@@ -1571,9 +1556,9 @@ void nvim_bracket_mark_jump(cmdarg_T *cap)
   if (fm == NULL) {
     fm = prev_fm;
   }
-  MarkMove flags = kMarkContext;
+  int flags = kMarkContext;
   flags |= cap->nchar == '\'' ? kMarkBeginLine : 0;
-  nv_mark_move_to(cap, flags, fm);
+  rs_nv_mark_move_to(cap, flags, fm);
 }
 void nvim_bracket_do_mouse(cmdarg_T *cap)
 {
@@ -1776,13 +1761,6 @@ bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
 /// Returns true if the main z command should be processed with the new nchar.
 bool nvim_nv_z_get_count(cmdarg_T *cap, int *nchar_arg) { return nv_z_get_count(cap, nchar_arg); }
 
-/// Phase 2: nv_zg_zw accessors for Rust FFI
-
-/// Wrapper for get_visual_text for Rust FFI (get_visual_text is static).
-bool nvim_get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp)
-{
-  return get_visual_text(cap, pp, lenp);
-}
 
 /// Wrapper for spell_move_to(curwin, dir, SMT_ALL, true, NULL) for Rust FFI.
 size_t nvim_spell_move_to_wrapper(int dir) { return spell_move_to(curwin, dir, SMT_ALL, true, NULL); }
@@ -1831,7 +1809,6 @@ int nvim_linetabsize_curwin(int lnum) { return linetabsize(curwin, lnum); }
 void nvim_coladvance_curwin(int col) { coladvance(curwin, (colnr_T)col); }
 void nvim_cursor_pos_info_call(void) { cursor_pos_info(NULL); }
 void nvim_invoke_edit_g(cmdarg_T *cap) { invoke_edit(cap, false, 'g', false); }
-void nvim_nv_gotofile(cmdarg_T *cap) { nv_gotofile(cap); }
 void nvim_set_mod_mask_ctrl(void) { mod_mask = MOD_MASK_CTRL; }
 void nvim_do_mouse_g(oparg_T *oap, int nchar, int count1) { do_mouse(oap, nchar, BACKWARD, count1, 0); }
 void nvim_goto_byte_call(int count) { rs_goto_byte(count); }
@@ -3172,156 +3149,7 @@ void do_nv_ident(int c1, int c2)
 }
 
 /// Implementation of nv_ident.
-/// Get visually selected text, within one line only.
-///
-/// @param pp    return: start of selected text
-/// @param lenp  return: length of selected text
-///
-/// @return      false if more than one line selected.
-bool get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp)
-{
-  if (VIsual_mode != 'V') {
-    rs_unadjust_for_sel();
-  }
-  if (VIsual.lnum != curwin->w_cursor.lnum) {
-    if (cap != NULL) {
-      rs_clearopbeep(cap->oap);
-    }
-    return false;
-  }
-  if (VIsual_mode == 'V') {
-    *pp = get_cursor_line_ptr();
-    *lenp = (size_t)get_cursor_line_len();
-  } else {
-    if (lt(curwin->w_cursor, VIsual)) {
-      *pp = ml_get_pos(&curwin->w_cursor);
-      *lenp = (size_t)VIsual.col - (size_t)curwin->w_cursor.col + 1;
-    } else {
-      *pp = ml_get_pos(&VIsual);
-      *lenp = (size_t)curwin->w_cursor.col - (size_t)VIsual.col + 1;
-    }
-    if (**pp == NUL) {
-      *lenp = 0;
-    }
-    if (*lenp > 0) {
-      // Correct the length to include all bytes of the last character.
-      *lenp += (size_t)(utfc_ptr2len(*pp + (*lenp - 1)) - 1);
-    }
-  }
-  rs_reset_VIsual_and_resel();
-  return true;
-}
-
-// nv_up_impl, nv_down_impl migrated to Rust in Phase 3
-
-/// Grab the file name under the cursor and edit it.
-static void nv_gotofile(cmdarg_T *cap)
-{
-  linenr_T lnum = -1;
-
-  if (rs_check_text_or_curbuf_locked(cap->oap)) {
-    return;
-  }
-
-  if (!check_can_set_curbuf_disabled()) {
-    return;
-  }
-
-  char *ptr = grab_file_name(cap->count1, &lnum);
-
-  if (ptr != NULL) {
-    // do autowrite if necessary
-    if (curbufIsChanged() && curbuf->b_nwindows <= 1 && !buf_hide(curbuf)) {
-      autowrite(curbuf, false);
-    }
-    setpcmark();
-    if (do_ecmd(0, ptr, NULL, NULL, ECMD_LAST,
-                buf_hide(curbuf) ? ECMD_HIDE : 0, curwin) == OK
-        && cap->nchar == 'F' && lnum >= 0) {
-      curwin->w_cursor.lnum = lnum;
-      check_cursor_lnum(curwin);
-      beginline(BL_SOL | BL_FIX);
-    }
-    xfree(ptr);
-  } else {
-    rs_clearop(cap->oap);
-  }
-}
-
-// nv_search_impl, nv_next_impl migrated to Rust in Phase 4
-
-/// Search for "pat" in direction "dir" ('/' or '?', 0 for repeat).
-/// Uses only cap->count1 and cap->oap from "cap".
-///
-/// @param opt  extra flags for do_search()
-///
-/// @return 0 for failure, 1 for found, 2 for found and line offset added.
-static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int opt, int *wrapped)
-{
-  searchit_arg_T sia;
-  pos_T const prev_cursor = curwin->w_cursor;
-
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = false;
-  cap->oap->use_reg_one = true;
-  curwin->w_set_curswant = true;
-
-  CLEAR_FIELD(sia);
-  int i = do_search(cap->oap, dir, dir, pat, patlen, cap->count1,
-                    opt | SEARCH_OPT | SEARCH_ECHO | SEARCH_MSG, &sia);
-  if (wrapped != NULL) {
-    *wrapped = sia.sa_wrapped;
-  }
-  if (i == 0) {
-    rs_clearop(cap->oap);
-  } else {
-    if (i == 2) {
-      cap->oap->motion_type = kMTLineWise;
-    }
-    curwin->w_cursor.coladd = 0;
-    if (cap->oap->op_type == OP_NOP && (fdo_flags & kOptFdoFlagSearch) && KeyTyped) {
-      rs_foldOpenCursor();
-    }
-  }
-  // Redraw the window to refresh the highlighted matches.
-  if (!equalpos(curwin->w_cursor, prev_cursor) && p_hls && !no_hlsearch
-      && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L)) {
-    redraw_later(curwin, UPD_SOME_VALID);
-  }
-
-  // "/$" will put the cursor after the end of the line, may need to
-  // correct that here
-  check_cursor(curwin);
-
-  return i;
-}
-
-// nv_Replace_impl, nv_vreplace_impl migrated to Rust in Phase 3
-
-/// Swap case for "~" command, when it does not work like an operator.
-/// Move the cursor to the mark position
-///
-/// Wrapper to mark_move_to() that also handles normal mode command arguments.
-/// @note  It will switch the buffer if neccesarry, move the cursor and set the
-/// view depending on the given flags.
-/// @param cap  command line arguments
-/// @param flags for mark_move_to()
-/// @param mark  mark
-/// @return  The result of calling mark_move_to()
-static MarkMoveRes nv_mark_move_to(cmdarg_T *cap, MarkMove flags, fmark_T *fm)
-{
-  MarkMoveRes res = mark_move_to(fm, flags);
-  if (res & kMarkMoveFailed) {
-    rs_clearop(cap->oap);
-  }
-  cap->oap->motion_type = flags & kMarkBeginLine ? kMTLineWise : kMTCharWise;
-  if (cap->cmdchar == '`') {
-    cap->oap->use_reg_one = true;
-  }
-  cap->oap->inclusive = false;  // ignored if not kMTCharWise
-  curwin->w_set_curswant = true;
-  return res;
-}
+// get_visual_text, nv_gotofile, normal_search, nv_mark_move_to migrated to Rust in Phase 2
 
 // nv_subst_impl, nv_optrans_impl migrated to Rust in Phase 2
 
@@ -3687,7 +3515,6 @@ char *nvim_ident_mb_prevptr(char *line, char *p) { return mb_prevptr(line, p); }
 /// Set g_tag_at_cursor.
 void nvim_ident_set_g_tag_at_cursor(bool val) { g_tag_at_cursor = val; }
 
-void nvim_ident_normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int opt) { normal_search(cap, dir, pat, patlen, opt, NULL); }
 
 /// Emit the e_noident error message.
 void nvim_ident_emsg_noident(void) { emsg(_(e_noident)); }
@@ -3733,3 +3560,68 @@ int nvim_get_restart_VIsual_select_val(void) { return restart_VIsual_select; }
 
 /// Return the translated "E1292: Command-line window is already open" message.
 const char *nvim_get_e_cmdline_window_already_open(void) { return _(e_cmdline_window_already_open); }
+
+// =============================================================================
+// Phase 2 accessors: normal_search, nv_gotofile, get_visual_text, nv_mark_move_to
+// =============================================================================
+
+/// Wrapper for do_search(). Sets searchit fields and returns sa_wrapped.
+/// Returns the do_search() return value.
+int nvim_do_search_call(oparg_T *oap, int dir, char *pat, size_t patlen,
+                        int count1, int opt, int *wrapped)
+{
+  searchit_arg_T sia;
+  CLEAR_FIELD(sia);
+  int i = do_search(oap, dir, dir, pat, patlen, count1,
+                    opt | SEARCH_OPT | SEARCH_ECHO | SEARCH_MSG, &sia);
+  if (wrapped != NULL) {
+    *wrapped = sia.sa_wrapped;
+  }
+  return i;
+}
+
+/// Returns true if cursor moved and highlights need refresh.
+bool nvim_search_hls_needs_redraw(int prev_lnum, int prev_col, int prev_coladd)
+{
+  pos_T prev = { .lnum = prev_lnum, .col = (colnr_T)prev_col, .coladd = (colnr_T)prev_coladd };
+  return !equalpos(curwin->w_cursor, prev) && p_hls && !no_hlsearch
+         && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L);
+}
+
+/// Wrapper for grab_file_name(count1, &lnum). Sets *lnum_out to lnum.
+char *nvim_grab_file_name(int count1, int *lnum_out)
+{
+  linenr_T lnum = -1;
+  char *result = grab_file_name(count1, &lnum);
+  if (lnum_out != NULL) {
+    *lnum_out = (int)lnum;
+  }
+  return result;
+}
+
+/// Check curbuf changed, b_nwindows, buf_hide.
+bool nvim_curbuf_needs_autowrite(void) {
+  return curbufIsChanged() && curbuf->b_nwindows <= 1 && !buf_hide(curbuf);
+}
+
+/// Call autowrite(curbuf, false).
+void nvim_autowrite_curbuf(void) { autowrite(curbuf, false); }
+
+/// Call check_can_set_curbuf_disabled().
+bool nvim_check_can_set_curbuf_disabled(void) { return check_can_set_curbuf_disabled(); }
+
+/// Call do_ecmd for gotofile. Returns OK/FAIL (1/0).
+int nvim_do_ecmd_for_gotofile(char *ptr)
+{
+  return do_ecmd(0, ptr, NULL, NULL, ECMD_LAST,
+                 buf_hide(curbuf) ? ECMD_HIDE : 0, curwin);
+}
+
+/// Call ml_get_pos(&VIsual).
+char *nvim_ml_get_pos_visual(void) { return ml_get_pos(&VIsual); }
+
+/// Return curwin->w_cursor.lnum > VIsual.lnum, or same lnum but w_cursor.col > VIsual.col.
+bool nvim_cursor_gt_VIsual(void) { return lt(VIsual, curwin->w_cursor); }
+
+/// Call mark_move_to(fm, flags). Returns MarkMoveRes as int.
+int nvim_mark_move_to_call(void *fm, int flags) { return (int)mark_move_to((fmark_T *)fm, (MarkMove)flags); }
