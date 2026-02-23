@@ -1624,103 +1624,11 @@ void free_for_info(void *fi_void)
   xfree(fi);
 }
 
+extern void rs_set_context_for_expression(expand_T *xp, char *arg, int cmdidx);
 void set_context_for_expression(expand_T *xp, char *arg, cmdidx_T cmdidx)
   FUNC_ATTR_NONNULL_ALL
 {
-  bool got_eq = false;
-
-  if (cmdidx == CMD_let || cmdidx == CMD_const) {
-    xp->xp_context = EXPAND_USER_VARS;
-    if (strpbrk(arg, "\"'+-*/%.=!?~|&$([<>,#") == NULL) {
-      // ":let var1 var2 ...": find last space.
-      for (char *p = arg + strlen(arg); p >= arg;) {
-        xp->xp_pattern = p;
-        MB_PTR_BACK(arg, p);
-        if (ascii_iswhite(*p)) {
-          break;
-        }
-      }
-      return;
-    }
-  } else {
-    xp->xp_context = cmdidx == CMD_call ? EXPAND_FUNCTIONS
-                                        : EXPAND_EXPRESSION;
-  }
-  while ((xp->xp_pattern = strpbrk(arg, "\"'+-*/%.=!?~|&$([<>,#")) != NULL) {
-    int c = (uint8_t)(*xp->xp_pattern);
-    if (c == '&') {
-      c = (uint8_t)xp->xp_pattern[1];
-      if (c == '&') {
-        xp->xp_pattern++;
-        xp->xp_context = cmdidx != CMD_let || got_eq
-                         ? EXPAND_EXPRESSION : EXPAND_NOTHING;
-      } else if (c != ' ') {
-        xp->xp_context = EXPAND_SETTINGS;
-        if ((c == 'l' || c == 'g') && xp->xp_pattern[2] == ':') {
-          xp->xp_pattern += 2;
-        }
-      }
-    } else if (c == '$') {
-      // environment variable
-      xp->xp_context = EXPAND_ENV_VARS;
-    } else if (c == '=') {
-      got_eq = true;
-      xp->xp_context = EXPAND_EXPRESSION;
-    } else if (c == '#'
-               && xp->xp_context == EXPAND_EXPRESSION) {
-      // Autoload function/variable contains '#'
-      break;
-    } else if ((c == '<' || c == '#')
-               && xp->xp_context == EXPAND_FUNCTIONS
-               && vim_strchr(xp->xp_pattern, '(') == NULL) {
-      // Function name can start with "<SNR>" and contain '#'.
-      break;
-    } else if (cmdidx != CMD_let || got_eq) {
-      if (c == '"') {               // string
-        while ((c = (uint8_t)(*++xp->xp_pattern)) != NUL && c != '"') {
-          if (c == '\\' && xp->xp_pattern[1] != NUL) {
-            xp->xp_pattern++;
-          }
-        }
-        xp->xp_context = EXPAND_NOTHING;
-      } else if (c == '\'') {     // literal string
-        // Trick: '' is like stopping and starting a literal string.
-        while ((c = (uint8_t)(*++xp->xp_pattern)) != NUL && c != '\'') {}
-        xp->xp_context = EXPAND_NOTHING;
-      } else if (c == '|') {
-        if (xp->xp_pattern[1] == '|') {
-          xp->xp_pattern++;
-          xp->xp_context = EXPAND_EXPRESSION;
-        } else {
-          xp->xp_context = EXPAND_COMMANDS;
-        }
-      } else {
-        xp->xp_context = EXPAND_EXPRESSION;
-      }
-    } else {
-      // Doesn't look like something valid, expand as an expression
-      // anyway.
-      xp->xp_context = EXPAND_EXPRESSION;
-    }
-    arg = xp->xp_pattern;
-    if (*arg != NUL) {
-      while ((c = (uint8_t)(*++arg)) != NUL && (c == ' ' || c == '\t')) {}
-    }
-  }
-
-  // ":exe one two" completes "two"
-  if (cmd_has_expr_args(cmdidx) && xp->xp_context == EXPAND_EXPRESSION) {
-    while (true) {
-      char *const n = skiptowhite(arg);
-
-      if (n == arg || ascii_iswhite_or_nul(*skipwhite(n))) {
-        break;
-      }
-      arg = skipwhite(n);
-    }
-  }
-
-  xp->xp_pattern = arg;
+  rs_set_context_for_expression(xp, arg, (int)cmdidx);
 }
 
 /// Does not use 'cpo' and always uses 'magic'.

@@ -860,11 +860,15 @@ impl EvalFlags {
 // Expression Evaluator Module
 // =============================================================================
 
+pub mod context;
 pub mod errors;
 pub mod eval;
 pub mod index;
 pub mod lval;
 pub mod operators;
+
+// Re-export FFI functions from the context module
+pub use context::rs_set_context_for_expression;
 
 // Re-export FFI functions from the eval module
 pub use eval::{

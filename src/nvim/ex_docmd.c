@@ -6862,6 +6862,15 @@ int nvim_docmd_cmd_match(void)
   return (int)CMD_match;
 }
 
+/// Get the CMD_let enum value.
+int nvim_docmd_cmd_let(void) { return (int)CMD_let; }
+
+/// Get the CMD_const enum value.
+int nvim_docmd_cmd_const(void) { return (int)CMD_const; }
+
+/// Get the CMD_call enum value.
+int nvim_docmd_cmd_call(void) { return (int)CMD_call; }
+
 /// Get the CMD_SIZE sentinel value.
 int nvim_docmd_cmd_size(void)
 {
