@@ -1353,13 +1353,23 @@ extern "C" {
     fn nvim_put_delete_empty_line();
     fn nvim_auto_format_call();
 
-    // Visual mode functions
-    fn nvim_nv_visual_impl(cap: CapHandle);
+    // Phase 3: nv_visual_impl accessors (C functions already exist, add Rust declarations)
+    fn nvim_get_resel_VIsual_mode() -> c_int;
+    fn nvim_get_resel_VIsual_line_count() -> c_int;
+    fn nvim_get_resel_VIsual_vcol() -> c_int;
+    fn nvim_update_curswant_force();
+    fn nvim_get_p_smd() -> c_int;
+    fn nvim_get_msg_silent() -> c_int;
+    fn nvim_set_redraw_cmdline(val: bool);
+    fn nvim_cap_dec_count1(cap: CapHandle) -> c_int;
 
     // Window command functions
     fn rs_do_window(nchar: c_int, count: c_int, xchar: c_int);
     fn nvim_nv_colon(cap: CapHandle);
 }
+
+// Phase 3 constants
+const CTRL_Q_P3: c_int = 17; // Ctrl-Q (matches Ctrl_Q in ascii_defs.h)
 
 /// Opaque handle to fmark_T*.
 pub type FmarkHandle = *mut std::ffi::c_void;
@@ -1776,8 +1786,126 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
-    // Delegate to C implementation which handles the complex visual mode logic
-    nvim_nv_visual_impl(cap);
+    let mut cmdchar = nvim_cap_get_cmdchar(cap);
+    // Ctrl-Q is treated the same as Ctrl-V
+    if cmdchar == CTRL_Q_P3 {
+        cmdchar = CTRL_V;
+        nvim_cap_set_cmdchar(cap, CTRL_V);
+    }
+
+    let oap = nvim_cap_get_oap(cap);
+
+    // 'v', 'V' and CTRL-V can be used while an operator is pending
+    // to make it charwise, linewise, or blockwise.
+    if nvim_oap_get_op_type_ptr(oap) != OP_NOP {
+        nvim_oap_set_motion_force(oap, cmdchar);
+        nvim_set_motion_force(cmdchar);
+        nvim_set_finish_op(false); // operator doesn't finish now but later
+        return;
+    }
+
+    // VIsual_select = cap->arg (arg != 0 means select mode)
+    nvim_set_VIsual_select(nvim_cap_get_arg(cap) != 0);
+
+    if nvim_get_VIsual_active() != 0 {
+        // change Visual mode
+        if nvim_get_VIsual_mode() == cmdchar {
+            // stop visual mode
+            end_visual_mode();
+        } else {
+            // toggle char/block mode or char/line mode
+            nvim_set_VIsual_mode(cmdchar);
+            nvim_showmode();
+            nvim_may_trigger_modechanged();
+        }
+        nvim_redraw_curbuf_inverted(); // update the inversion
+    } else {
+        // start Visual mode
+        let count0 = nvim_cap_get_count0(cap);
+        let resel_mode = nvim_get_resel_VIsual_mode();
+        if count0 > 0 && resel_mode != 0 {
+            // use previously selected part
+            // VIsual = curwin->w_cursor
+            nvim_set_VIsual_pos(
+                nvim_get_cursor_lnum(),
+                nvim_get_cursor_col(),
+                nvim_get_cursor_coladd(),
+            );
+            nvim_set_VIsual_active(true);
+            nvim_set_VIsual_reselect(true);
+            if nvim_cap_get_arg(cap) == 0 {
+                // start Select mode when 'selectmode' contains "cmd"
+                rs_may_start_select(c_int::from(b'c'));
+            }
+            nvim_setmouse();
+            if nvim_get_p_smd() != 0 && nvim_get_msg_silent() == 0 {
+                nvim_set_redraw_cmdline(true); // show visual mode later
+            }
+            let resel_line_count = nvim_get_resel_VIsual_line_count();
+            let resel_vcol = nvim_get_resel_VIsual_vcol();
+            // For V and ^V, multiply number of lines
+            if resel_mode != c_int::from(b'v') || resel_line_count > 1 {
+                let new_lnum = nvim_get_cursor_lnum() + resel_line_count * count0 - 1;
+                nvim_set_cursor_lnum(new_lnum);
+                nvim_check_cursor();
+            }
+            nvim_set_VIsual_mode(resel_mode);
+            if resel_mode == c_int::from(b'v') {
+                if resel_line_count <= 1 {
+                    nvim_update_curswant_force();
+                    let new_cw = nvim_get_curwin_w_curswant() + resel_vcol * count0;
+                    nvim_set_curwin_w_curswant_int(new_cw);
+                    if !nvim_p_sel_is_exclusive() {
+                        nvim_set_curwin_w_curswant_int(nvim_get_curwin_w_curswant() - 1);
+                    }
+                } else {
+                    nvim_set_curwin_w_curswant_int(resel_vcol);
+                }
+                nvim_coladvance_curwin(nvim_get_curwin_w_curswant());
+            }
+            if resel_vcol == MAXCOL {
+                nvim_set_curwin_w_curswant_int(MAXCOL);
+                nvim_coladvance_curwin(MAXCOL);
+            } else if nvim_get_VIsual_mode() == CTRL_V {
+                // Update curswant on the original line (where "col" is valid)
+                let lnum = nvim_get_cursor_lnum();
+                nvim_set_cursor_lnum(nvim_get_VIsual_lnum());
+                nvim_update_curswant_force();
+                let new_cw = nvim_get_curwin_w_curswant() + resel_vcol * count0 - 1;
+                nvim_set_curwin_w_curswant_int(new_cw);
+                nvim_set_cursor_lnum(lnum);
+                if nvim_p_sel_is_exclusive() {
+                    nvim_set_curwin_w_curswant_int(nvim_get_curwin_w_curswant() + 1);
+                }
+                nvim_coladvance_curwin(nvim_get_curwin_w_curswant());
+            } else {
+                nvim_curwin_set_curswant(true);
+            }
+            nvim_redraw_curbuf_inverted(); // show the inversion
+        } else {
+            if nvim_cap_get_arg(cap) == 0 {
+                // start Select mode when 'selectmode' contains "cmd"
+                rs_may_start_select(c_int::from(b'c'));
+            }
+            nvim_n_start_visual_mode(cmdchar);
+            if nvim_get_VIsual_mode() != c_int::from(b'V') && nvim_p_sel_is_exclusive() {
+                // include one more char
+                let c1 = nvim_cap_get_count1(cap);
+                nvim_cap_set_count1(cap, c1 + 1);
+            } else {
+                nvim_set_VIsual_select_exclu_adj(false);
+            }
+            if count0 > 0 && nvim_cap_dec_count1(cap) > 0 {
+                // With a count select that many characters or lines.
+                let vmode = nvim_get_VIsual_mode();
+                if vmode == c_int::from(b'v') || vmode == CTRL_V {
+                    rs_nv_right(cap);
+                } else if vmode == c_int::from(b'V') {
+                    rs_nv_down(cap);
+                }
+            }
+        }
+    }
 }
 
 // =============================================================================

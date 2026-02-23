@@ -1153,11 +1153,6 @@ int nvim_cap_dec_count1(cmdarg_T *cap)
   return 0;
 }
 
-/// Internal nv_visual implementation (full C logic).
-static void nv_visual_impl(cmdarg_T *cap);
-
-void nvim_nv_visual_impl(cmdarg_T *cap) { nv_visual_impl(cap); }
-
 // =============================================================================
 // Command handler accessors for Rust FFI
 // =============================================================================
@@ -4348,108 +4343,6 @@ static void nv_optrans_impl(cmdarg_T *cap)
 }
 
 /// Internal implementation of nv_visual.
-static void nv_visual_impl(cmdarg_T *cap)
-{
-  if (cap->cmdchar == Ctrl_Q) {
-    cap->cmdchar = Ctrl_V;
-  }
-
-  // 'v', 'V' and CTRL-V can be used while an operator is pending to make it
-  // charwise, linewise, or blockwise.
-  if (cap->oap->op_type != OP_NOP) {
-    motion_force = cap->oap->motion_force = cap->cmdchar;
-    finish_op = false;          // operator doesn't finish now but later
-    return;
-  }
-
-  VIsual_select = cap->arg;
-  if (VIsual_active) {      // change Visual mode
-    if (VIsual_mode == cap->cmdchar) {      // stop visual mode
-      end_visual_mode();
-    } else {                                  // toggle char/block mode
-                                              //           or char/line mode
-      VIsual_mode = cap->cmdchar;
-      showmode();
-      may_trigger_modechanged();
-    }
-    redraw_curbuf_later(UPD_INVERTED);  // update the inversion
-  } else {                // start Visual mode
-    if (cap->count0 > 0 && resel_VIsual_mode != NUL) {
-      // use previously selected part
-      VIsual = curwin->w_cursor;
-
-      VIsual_active = true;
-      VIsual_reselect = true;
-      if (!cap->arg) {
-        // start Select mode when 'selectmode' contains "cmd"
-        rs_may_start_select('c');
-      }
-      setmouse();
-      if (p_smd && msg_silent == 0) {
-        redraw_cmdline = true;              // show visual mode later
-      }
-      // For V and ^V, we multiply the number of lines even if there
-      // was only one -- webb
-      if (resel_VIsual_mode != 'v' || resel_VIsual_line_count > 1) {
-        curwin->w_cursor.lnum += resel_VIsual_line_count * cap->count0 - 1;
-        check_cursor(curwin);
-      }
-      VIsual_mode = resel_VIsual_mode;
-      if (VIsual_mode == 'v') {
-        if (resel_VIsual_line_count <= 1) {
-          update_curswant_force();
-          assert(cap->count0 >= INT_MIN && cap->count0 <= INT_MAX);
-          curwin->w_curswant += resel_VIsual_vcol * cap->count0;
-          if (*p_sel != 'e') {
-            curwin->w_curswant--;
-          }
-        } else {
-          curwin->w_curswant = resel_VIsual_vcol;
-        }
-        coladvance(curwin, curwin->w_curswant);
-      }
-      if (resel_VIsual_vcol == MAXCOL) {
-        curwin->w_curswant = MAXCOL;
-        coladvance(curwin, MAXCOL);
-      } else if (VIsual_mode == Ctrl_V) {
-        // Update curswant on the original line, that is where "col" is valid.
-        linenr_T lnum = curwin->w_cursor.lnum;
-        curwin->w_cursor.lnum = VIsual.lnum;
-        update_curswant_force();
-        assert(cap->count0 >= INT_MIN && cap->count0 <= INT_MAX);
-        curwin->w_curswant += resel_VIsual_vcol * cap->count0 - 1;
-        curwin->w_cursor.lnum = lnum;
-        if (*p_sel == 'e') {
-          curwin->w_curswant++;
-        }
-        coladvance(curwin, curwin->w_curswant);
-      } else {
-        curwin->w_set_curswant = true;
-      }
-      redraw_curbuf_later(UPD_INVERTED);  // show the inversion
-    } else {
-      if (!cap->arg) {
-        // start Select mode when 'selectmode' contains "cmd"
-        rs_may_start_select('c');
-      }
-      n_start_visual_mode(cap->cmdchar);
-      if (VIsual_mode != 'V' && *p_sel == 'e') {
-        cap->count1++;          // include one more char
-      } else {
-        VIsual_select_exclu_adj = false;
-      }
-      if (cap->count0 > 0 && --cap->count1 > 0) {
-        // With a count select that many characters or lines.
-        if (VIsual_mode == 'v' || VIsual_mode == Ctrl_V) {
-          rs_nv_right(cap);
-        } else if (VIsual_mode == 'V') {
-          rs_nv_down(cap);
-        }
-      }
-    }
-  }
-}
-
 /// Start Visual mode "c".
 /// Should set VIsual_select before calling this.
 static void n_start_visual_mode(int c)
