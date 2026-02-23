@@ -467,7 +467,6 @@ bool check_compl_option(bool dict_opt)
 }
 
 extern int rs_vim_is_ctrl_x_key(int c);
-extern int rs_set_ctrl_x_mode(int c);
 extern int rs_may_advance_cpt_index(const char *cpt);
 extern int rs_ins_compl_prep(int c);
 extern int rs_ins_compl_stop(int c, int prev_mode, int retval);
@@ -899,7 +898,7 @@ static void ins_compl_longest_match(compl_T *match)
     compl_leader = copy_string(match->cp_str, NULL);
 
     bool had_match = (curwin->w_cursor.col > compl_col);
-    ins_compl_longest_insert(compl_leader.data);
+    ins_compl_delete(false); ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
 
     // When the match isn't there (to avoid matching itself) remove it
     // again after redrawing.
@@ -933,7 +932,7 @@ static void ins_compl_longest_match(compl_T *match)
     compl_leader.size = (size_t)(p - compl_leader.data);
 
     bool had_match = (curwin->w_cursor.col > compl_col);
-    ins_compl_longest_insert(compl_leader.data);
+    ins_compl_delete(false); ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
 
     // When the match isn't there (to avoid matching itself) remove it
     // again after redrawing.
@@ -1686,10 +1685,7 @@ const char *nvim_compl_match_get_cp_str_data(void *m) { return m ? ((compl_T *)m
 size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp_str.size : 0; }
 int nvim_vim_strnicmp(const char *s1, const char *s2, size_t len) { return STRNICMP(s1, s2, len); }
 int nvim_fuzzy_match_str(char *str, const char *pat) { return fuzzy_match_str(str, pat); }
-const char *nvim_get_leader_for_startcol_data(void *match, int cached) {
-  String *s = get_leader_for_startcol((compl_T *)match, cached != 0);
-  return s ? s->data : NULL;
-}
+const char *nvim_get_leader_for_startcol_data(void *match, int cached) { String *s = get_leader_for_startcol((compl_T *)match, cached != 0); return s ? s->data : NULL; }
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
@@ -1931,16 +1927,6 @@ void ins_compl_addfrommatch(void)
   p += len;
   int c = utf_ptr2char(p);
   ins_compl_addleader(c);
-}
-
-/// Set the CTRL-X completion mode based on the key "c" typed after a CTRL-X.
-/// Uses the global variables: ctrl_x_mode, edit_submode, edit_submode_pre,
-/// compl_cont_mode and compl_cont_status.
-///
-/// @return  true when the character is not to be inserted.
-static bool set_ctrl_x_mode(const int c)
-{
-  return rs_set_ctrl_x_mode(c) != 0;
 }
 
 /// Stop insert completion mode
@@ -2581,13 +2567,6 @@ static char *ins_compl_mode(void)
   return "";
 }
 
-/// Assign the sequence number to all the completion matches which don't have
-/// one assigned yet.
-static void ins_compl_update_sequence_numbers(void)
-{
-  rs_ins_compl_update_sequence_numbers();
-}
-
 /// Fill the dict of complete_info
 static void fill_complete_info_dict(dict_T *di, compl_T *match, bool add_match)
 {
@@ -2677,7 +2656,7 @@ static void get_complete_info(list_T *what_list, dict_T *retdict)
     }
     if (ret == OK && what_flag & CI_WHAT_SELECTED) {
       if (compl_curr_match != NULL && compl_curr_match->cp_number == -1) {
-        ins_compl_update_sequence_numbers();
+        rs_ins_compl_update_sequence_numbers();
       }
     }
     if (ret == OK && compl_first_match != NULL) {
@@ -2741,12 +2720,6 @@ static bool thesaurus_func_complete(int type)
 {
   return type == CTRL_X_THESAURUS
          && (*curbuf->b_p_tsrfu != NUL || *p_tsrfu != NUL);
-}
-
-/// Check if 'cpt' list index can be advanced to the next completion source.
-static bool may_advance_cpt_index(const char *cpt)
-{
-  return rs_may_advance_cpt_index(cpt) != 0;
 }
 
 /// Return value of process_next_cpt_value()
@@ -2879,7 +2852,7 @@ static int process_next_cpt_value(ins_compl_next_state_T *st, int *compl_type_ar
 
     // in any case e_cpt is advanced to the next entry
     copy_option_part(&st->e_cpt, IObuff, IOSIZE, ",");
-    *advance_cpt_idx = may_advance_cpt_index(st->e_cpt);
+    *advance_cpt_idx = rs_may_advance_cpt_index(st->e_cpt) != 0;
 
     st->found_all = true;
     if (compl_type == -1) {
@@ -2955,14 +2928,6 @@ static int compare_scores(const void *a, const void *b)
                             : (score_a > score_b ? -1 : 1);
 }
 
-/// insert prefix with redraw
-static void ins_compl_longest_insert(char *prefix)
-{
-  ins_compl_delete(false);
-  ins_compl_insert_bytes(prefix + rs_get_compl_len(), -1);
-  ins_redraw(false);
-}
-
 /// Calculate the longest common prefix among the best fuzzy matches
 /// stored in compl_best_matches, and insert it as the longest.
 static void fuzzy_longest_match(void)
@@ -2979,7 +2944,7 @@ static void fuzzy_longest_match(void)
   if (compl_num_bests == 1) {
     // no more candidates insert the match str
     if (!more_candidates) {
-      ins_compl_longest_insert(compl->cp_str.data);
+      ins_compl_delete(false); ins_compl_insert_bytes(compl->cp_str.data + rs_get_compl_len(), -1); ins_redraw(false);
       compl_num_bests = 0;
     }
     compl_num_bests = 0;
@@ -3026,7 +2991,7 @@ static void fuzzy_longest_match(void)
   }
 
   prefix = xmemdupz(prefix, (size_t)prefix_len);
-  ins_compl_longest_insert(prefix);
+  ins_compl_delete(false); ins_compl_insert_bytes(prefix + rs_get_compl_len(), -1); ins_redraw(false);
   xfree(prefix);
 
 end:
@@ -4550,10 +4515,10 @@ static int get_normal_compl_info(char *line, int startcol, colnr_T curs_col)
     }
 
     // we need up to 2 extra chars for the prefix
-    size_t n = quote_meta(NULL, line + compl_col, compl_length) + prefixlen;
+    size_t n = rs_quote_meta(NULL, line + compl_col, compl_length) + prefixlen;
     compl_pattern.data = xmalloc(n);
     STRCPY(compl_pattern.data, prefix);
-    quote_meta(compl_pattern.data + prefixlen, line + compl_col, compl_length);
+    rs_quote_meta(compl_pattern.data + prefixlen, line + compl_col, compl_length);
     compl_pattern.size = n - 1;
   } else if (--startcol < 0
              || !vim_iswordp(mb_prevptr(line, line + startcol + 1))) {
@@ -4583,14 +4548,14 @@ static int get_normal_compl_info(char *line, int startcol, colnr_T curs_col)
       // xmalloc(7) is enough  -- Acevedo
       compl_pattern.data = xmalloc(7);
       STRCPY(compl_pattern.data, "\\<");
-      quote_meta(compl_pattern.data + 2, line + compl_col, 1);
+      rs_quote_meta(compl_pattern.data + 2, line + compl_col, 1);
       strcat(compl_pattern.data, "\\k");
       compl_pattern.size = strlen(compl_pattern.data);
     } else {
-      size_t n = quote_meta(NULL, line + compl_col, compl_length) + 2;
+      size_t n = rs_quote_meta(NULL, line + compl_col, compl_length) + 2;
       compl_pattern.data = xmalloc(n);
       STRCPY(compl_pattern.data, "\\<");
-      quote_meta(compl_pattern.data + 2, line + compl_col, compl_length);
+      rs_quote_meta(compl_pattern.data + 2, line + compl_col, compl_length);
       compl_pattern.size = n - 1;
     }
   }
@@ -5062,7 +5027,7 @@ static void ins_compl_show_statusmsg(void)
     } else {
       // Update completion sequence number when needed.
       if (compl_curr_match->cp_number == -1) {
-        ins_compl_update_sequence_numbers();
+        rs_ins_compl_update_sequence_numbers();
       }
 
       // The match should always have a sequence number now, this is
@@ -5227,15 +5192,6 @@ static void show_pum(int prev_w_wrow, int prev_w_leftcol)
   ins_compl_show_pum();
   setcursor();
   RedrawingDisabled = n;
-}
-
-// Looks in the first "len" chars. of "src" for search-metachars.
-// If dest is not NULL the chars. are copied there quoting (with
-// a backslash) the metachars, and dest would be NUL terminated.
-// Returns the length (needed) of dest
-static unsigned quote_meta(char *dest, char *src, int len)
-{
-  return rs_quote_meta(dest, src, len);
 }
 
 #if defined(EXITFREE)
@@ -5454,7 +5410,7 @@ static void cpt_compl_refresh(void)
     }
 
     (void)copy_option_part(&p, IObuff, IOSIZE, ",");  // Advance p
-    if (may_advance_cpt_index(p)) {
+    if (rs_may_advance_cpt_index(p) != 0) {
       (void)advance_cpt_sources_index_safe();
     }
   }
@@ -5512,33 +5468,17 @@ int nvim_get_compl_cont_mode(void) { return compl_cont_mode; }
 int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 
 // Complex null-guard accessors
-int nvim_compl_shown_match_is_singular(void) {
-  return compl_shown_match ? (compl_shown_match == compl_shown_match->cp_next ? 1 : 0) : 0;
-}
-int nvim_compl_shown_match_is_first(void) {
-  return compl_shown_match ? (is_first_match(compl_shown_match) ? 1 : 0) : 0;
-}
-size_t nvim_compl_shown_match_str_size(void) {
-  return (compl_shown_match && compl_shown_match->cp_str.data) ? compl_shown_match->cp_str.size : 0;
-}
-int nvim_compl_shown_match_has_newline(void) {
-  return (compl_shown_match && compl_shown_match->cp_str.data) ? (vim_strchr(compl_shown_match->cp_str.data, '\n') != NULL ? 1 : 0) : 0;
-}
-int nvim_compl_curr_match_at_original_text(void) {
-  return compl_curr_match ? ((compl_curr_match->cp_flags & CP_ORIGINAL_TEXT) ? 1 : 0) : 0;
-}
-int nvim_compl_curr_match_has_str(void) {
-  return compl_curr_match ? (compl_curr_match->cp_str.data != NULL ? 1 : 0) : 0;
-}
+int nvim_compl_shown_match_is_singular(void) { return compl_shown_match ? (compl_shown_match == compl_shown_match->cp_next ? 1 : 0) : 0; }
+int nvim_compl_shown_match_is_first(void) { return compl_shown_match ? (is_first_match(compl_shown_match) ? 1 : 0) : 0; }
+size_t nvim_compl_shown_match_str_size(void) { return (compl_shown_match && compl_shown_match->cp_str.data) ? compl_shown_match->cp_str.size : 0; }
+int nvim_compl_shown_match_has_newline(void) { return (compl_shown_match && compl_shown_match->cp_str.data) ? (vim_strchr(compl_shown_match->cp_str.data, '\n') != NULL ? 1 : 0) : 0; }
+int nvim_compl_curr_match_at_original_text(void) { return compl_curr_match ? ((compl_curr_match->cp_flags & CP_ORIGINAL_TEXT) ? 1 : 0) : 0; }
+int nvim_compl_curr_match_has_str(void) { return compl_curr_match ? (compl_curr_match->cp_str.data != NULL ? 1 : 0) : 0; }
 
 // Accessors for set_ctrl_x_mode / may_advance_cpt_index (Phase 1)
 void nvim_set_ctrl_x_mode(int val) { ctrl_x_mode = val; }
 void nvim_set_compl_cont_mode(int val) { compl_cont_mode = val; }
-void nvim_set_edit_submode_scroll(int is_replace) {
-  edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)");
-  edit_submode_pre = NULL;
-  redraw_mode = true;
-}
+void nvim_set_edit_submode_scroll(int is_replace) { edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)"); edit_submode_pre = NULL; redraw_mode = true; }
 void nvim_set_edit_submode_null(void) { edit_submode = NULL; }
 void nvim_set_edit_submode_pre_null(void) { edit_submode_pre = NULL; }
 void nvim_set_redraw_mode_true(void) { redraw_mode = true; }
@@ -5551,31 +5491,15 @@ int nvim_get_cpt_sources_index(void) { return cpt_sources_index; }
 void nvim_set_compl_used_match(int val) { compl_used_match = val != 0; }
 
 // Accessors for ins_compl_stop (Phase 3)
-const char *nvim_get_compl_curr_match_str_data(void) {
-  return compl_curr_match ? compl_curr_match->cp_str.data : NULL;
-}
-char *nvim_get_compl_shown_match_str_dup(void) {
-  return compl_shown_match ? xstrdup(compl_shown_match->cp_str.data) : NULL;
-}
+const char *nvim_get_compl_curr_match_str_data(void) { return compl_curr_match ? compl_curr_match->cp_str.data : NULL; }
+char *nvim_get_compl_shown_match_str_dup(void) { return compl_shown_match ? xstrdup(compl_shown_match->cp_str.data) : NULL; }
 void nvim_clear_compl_best_matches(void) { compl_best_matches = 0; }
-int nvim_cursor_on_nul(void) {
-  char *line = get_cursor_line_ptr();
-  return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0;
-}
+int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0; }
 // Compound accessors for ins_compl_stop (Phase 3)
-void nvim_ins_apply_autocmds_completedonepre(void) {
-  ins_apply_autocmds(EVENT_COMPLETEDONEPRE);
-}
+void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_COMPLETEDONEPRE); }
 bool nvim_shortmess_completionmenu(void) { return shortmess(SHM_COMPLETIONMENU); }
-bool nvim_in_cinkeys_key_complete(int when, bool line_is_empty) {
-  return in_cinkeys(KEY_COMPLETE, when, line_is_empty);
-}
-void nvim_set_edit_submode_null_if_set(void) {
-  if (edit_submode != NULL) {
-    edit_submode = NULL;
-    redraw_mode = true;
-  }
-}
+bool nvim_in_cinkeys_key_complete(int when, bool line_is_empty) { return in_cinkeys(KEY_COMPLETE, when, line_is_empty); }
+void nvim_set_edit_submode_null_if_set(void) { if (edit_submode != NULL) { edit_submode = NULL; redraw_mode = true; } }
 void nvim_ins_compl_insert_bytes(const char *p, int len) { ins_compl_insert_bytes((char *)p, len); }
 void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
 
